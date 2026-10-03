@@ -4,7 +4,7 @@
 
 문서 상태: **규범 초안 / SPIKE 미해결 / production release 불가**. 작성일: 2026-09-07. 정책 확장 반영: 2026-09-09.
 
-**MUST [N-001]** 구현의 상위 규범은 [docs/architecture.md](architecture.md)이며, WP01 D01–D06 대조 후 이 계약의 기준본 SHA-256은 `ae9b2d026e62f77e0c9ff3f5ca0a3b6efea5b8582f0a6acaf2ecd30b325a5905`이다. 구현 시작 및 release 때 기준본 hash를 확인한다. hash 변경 시 이 계약을 자동 적용하지 않고 차이를 검토한다.
+**MUST [N-001]** 구현의 상위 규범은 [docs/architecture.md](architecture.md)이며, WP01 D01–D06 대조 후 이 계약의 기준본 SHA-256은 `aed964bea040cdbeb306c0eedd3e9401621979d711aff932cc9ae7c7895c4a29`이다. 구현 시작 및 release 때 기준본 hash를 확인한다. hash 변경 시 이 계약을 자동 적용하지 않고 차이를 검토한다.
 
 이전 기준본 `7588b31e7518ded1d439f604400ca0984cccd30936428e00eac03b6032f29fab`까지의 링크/제품 표면 변경 기록은 Git history에 보존한다. 이번 WP01은 §6 mode별 runtime gate, §7 exact old receipt 정산 순서, §12 no-op과 applied CAS 구별, §23 project binding 및 실제 적용 시점을 [D01–D06 결과](implementation/consistency-decisions.md)와 대조했다. runtime source가 이 변경을 이미 만족한다는 뜻이 아니며 지정 WP의 regression/runtime evidence 전에는 그 차이가 해소되지 않는다.
 
@@ -26,7 +26,7 @@
 
 | 파일 | 용도 |
 |---|---|
-| [implementation/schema-v1.sql](../implementation/schema-v1.sql) | 여섯 기본 DB entity의 실행 가능한 초기 DDL |
+| [implementation/schema-v3.sql](../implementation/schema-v3.sql) | 여섯 DB entity의 실행 가능한 초기 DDL |
 | [docs/implementation/integration-policy.md](implementation/integration-policy.md) | 제안 검토·tiered authority·challenge/floor·Principal packet 계약 |
 | [implementation/contracts.ts](../implementation/contracts.ts) | 모듈 및 closed IPC 타입 계약. 실행 코드 아님 |
 | [docs/verification-spec.md](verification-spec.md#qualification-계약) | 미확정 부분, 실험, release gate |
@@ -69,7 +69,7 @@ A-008은 2026-09-28 사용자 결정으로 철회했다([DR20](design-revisions.
 |---|---|---|---|
 | `cli.ts` | argv, local file 읽기, stable request, bundle 생성, receipt 출력 | actor IPC, sandbox 안 Git | host DB, systemd bus, 업무 계획 |
 | `broker.ts` | socket accept, 인증, method validation, capability, 모듈 조립 | 아래 host 모듈 | LLM task scheduling |
-| `store.ts` | 여섯 entity, migration, 동기 transaction, 쿼리 | SQLite adapter | Git·network await, 본문 저장 |
+| `store.ts` | 여섯 entity, schema 적용, 동기 transaction, 쿼리 | SQLite adapter | Git·network await, 본문 저장 |
 | `mail.ts` | eml encoding, snapshot expansion, materialize, batch handoff | store, filesystem, views, wake hint | mail 의미 평가, 승인 추론 |
 | `units.ts` | 고정 unit render/설치/start/stop/show, 사망 확인 | systemd adapter | PID polling supervisor, task state |
 | `runner.ts` | 한 sandbox Pi RPC, incarnation, 안전한 batch 전달 | trusted broker channel, sandbox, Pi adapter | 동료 배정, 다른 runner restart |
@@ -94,11 +94,11 @@ A-008은 2026-09-28 사용자 결정으로 철회했다([DR20](design-revisions.
 
 **MUST [ID-003]** Git OID는 repository의 object format에 맞는 full lowercase hex만 wire에서 받는다. symbolic revision은 CLI가 freeze한 뒤 전송한다. hash 길이를 SHA-1 40자로 고정하지 않는다. wire path는 `/` 구분 상대 경로이고 NUL, `.`/`..` component, 절대 경로를 거절한다.
 
-**MUST [CFG-001]** `config.json`은 host만 수정하며 다음 폐쇄된 정보를 가진다: schemaVersion=1, society, trusted rootfs/install path, pinned deployment manifest digest, agent profile map, 초기 population, society/lineage agent·usage cap, Principal slot/budget reserve, provider credential reference, protected path 목록, candidate check argv/env/resource profile, policy revision, storage/resource/protocol limits, optional notmuch/approval/egress flags. secret 값은 파일에 넣지 않고 host credential reference로 해석한다.
+**MUST [CFG-001]** `config.json`은 host만 수정하며 다음 폐쇄된 정보를 가진다: schemaVersion=1, society, trusted rootfs/install path, pinned deployment manifest digest, model profile map(provider·model·inference timeout·선택 thinking effort), agent profile map, 초기 population, society/lineage agent 수·storage cap, protected path 목록, candidate check argv/env/resource profile, policy revision, storage/resource/protocol limits. provider credential·가격·codec은 동봉 엔진이 소유하므로(INF-001) 이 파일의 필드가 아니며, secret 값은 파일에 넣지 않는다.
 
-**MUST [CFG-002]** 기본 quota 금액·model ID·provider 가격·기능성 검사 명령은 bootstrap 때 Human host 설정으로 필수 제공한다. missing 값을 무제한·검사 없음·가장 비싼 모델로 채우지 않는다. `requiredChecks: []`는 host가 명시적으로 선택한 경우만 허용한다. quota 계산은 최소 화폐 단위 정수이며 JS에서는 safe integer 검사 또는 bigint/decimal string 경계를 사용한다.
+**MUST [CFG-002]** 기본 quota·model ID·기능성 검사 명령은 bootstrap 때 Human host 설정으로 필수 제공한다. missing 값을 무제한·검사 없음·가장 비싼 모델로 채우지 않는다. `requiredChecks: []`는 host가 명시적으로 선택한 경우만 허용한다.
 
-**MUST [CFG-005]** `contracts.ts`의 `HostConfigV1`을 기본 profile의 폐쇄된 설정 schema로 사용한다. 숫자는 유한한 non-negative safe integer이고 slot/size/timeout은 양수다. Principal reserve는 total을 초과하지 않는다. quota는 Core v1 society 수명 누계이며 자동 월별 reset을 추가하지 않는다. 금액 단위·가격 codec은 host deployment manifest에 고정한다. `protectedPaths`는 glob이 아닌 repository 상대 literal path 또는 `/`로 끝나는 subtree prefix다. diff의 추가/수정/삭제 양쪽 path를 모두 검사한다. D02: 전체 후보를 loader와 동일한 validator로 검사하고 host/model/role/prompt/extension 선택의 의미가 바뀌면 새 policy revision을 지정하여 outstanding integrate가 재검사하게 한다. 비교에서 revision 자체를 제외하고 공백·동일 의미 재저장은 policy 변경으로 만들지 않는다. generation identity와 policy revision은 별개이며 기존 request/spec/check-profile hash recipe는 바꾸지 않는다.
+**MUST [CFG-005]** `contracts.ts`의 `HostConfigV1`을 기본 profile의 폐쇄된 설정 schema로 사용한다. 숫자는 유한한 non-negative safe integer이고 size/timeout은 양수다. quota는 Core v1 society 수명 누계이며 자동 월별 reset을 추가하지 않는다. `protectedPaths`는 glob이 아닌 repository 상대 literal path 또는 `/`로 끝나는 subtree prefix다. diff의 추가/수정/삭제 양쪽 path를 모두 검사한다. D02: 전체 후보를 loader와 동일한 validator로 검사하고 host/model/role/prompt/extension 선택의 의미가 바뀌면 새 policy revision을 지정하여 outstanding integrate가 재검사하게 한다. 비교에서 revision 자체를 제외하고 공백·동일 의미 재저장은 policy 변경으로 만들지 않는다. generation identity와 policy revision은 별개이며 기존 request/spec/check-profile hash recipe는 바꾸지 않는다.
 
 운영 파일 분리는 authoring 입력 `kind: "oma-operations-v1"`로 제공한다. host가 명시한 한 manifest snapshot에서 폐쇄형 HostConfigV1과 source layout을 함께 조합·검증한다. 수동 bundle의 다중 파일 동시 편집은 지원하지 않는다. D02의 관리형 편집은 immutable generation을 완성·flush한 뒤 기존 manifest를 마지막에 replace/parent-fsync하며, expected-version 비교부터 publication까지 한 owner가 직렬화한다. outcome-unconfirmed에서는 재관측 전 overwrite/rollback하지 않는다. role prompt는 index-root 기준이고 metadata는 wire·ledger schema나 실행 권한을 확장하지 않는다. 변경은 다음 해당 역할 engine 시작에 새 snapshot으로 읽고 accepted evidence는 다시 쓰지 않는다. old reader 호환·bounded retention·구버전 writer 금지·명시 export는 WP13 gate이며 실제 지원 여부와 수동 형식의 제한은 [운영 설정 안내](operations.md)에 구분한다. 추가 extension 실행에는 기존 PI/deployment 검증 gate가 그대로 적용된다.
 
@@ -153,15 +153,15 @@ A-008은 2026-09-28 사용자 결정으로 철회했다([DR20](design-revisions.
 
 **MUST [FS-005]** state root/DB/private/runner receipt는 기본 host mode 0700 directory, 0600 file이다. 공개 원문은 host 0444이고 모델 mount는 RO다. 같은 host UID에서 파일 mode만으로 sandbox 경계를 주장하지 않는다. staging path에는 no-follow/exclusive-create를 사용하고 agent symlink를 따라 host file을 열지 않는다.
 
-**MUST [FS-006]** 원본은 eml(본문/header), SQLite(접수·수신자·handoff·usage), Git(코드/공유 의도), systemd(실행 관측), Pi session(대화)으로 제한한다. inbox/agents/topics/notmuch를 삭제해도 원본 의미를 잃지 않아야 한다. topic 목록은 accepted operation의 logical topic 주소 및 subscriptions에서 유도하며 topics table을 추가하지 않는다.
+**MUST [FS-006]** 원본은 eml(본문/header), SQLite(접수·수신자·handoff·attestation), Git(코드/공유 의도), systemd(실행 관측), Pi session(대화)으로 제한한다. inbox/agents/topics/notmuch를 삭제해도 원본 의미를 잃지 않아야 한다. topic 목록은 accepted operation의 logical topic 주소 및 subscriptions에서 유도하며 topics table을 추가하지 않는다.
 
-**MUST [FS-007]** 게시 refs·accepted messages·완료 operation·usage를 Core v1에서 자동 삭제하지 않는다. orphan staging/object는 DB 참조 없음, active writer 없음, quiescence가 확인될 때만 host maintenance로 정리한다. GC TTL을 추측해서 추가하지 않는다. disk full 뒤에도 accepted effect의 pending 상태를 유지한다.
+**MUST [FS-007]** 게시 refs·accepted messages·완료 operation을 Core v1에서 자동 삭제하지 않는다. orphan staging/object는 DB 참조 없음, active writer 없음, quiescence가 확인될 때만 host maintenance로 정리한다. GC TTL을 추측해서 추가하지 않는다. disk full 뒤에도 accepted effect의 pending 상태를 유지한다.
 
 ## 5. DB schema, transaction, 허용 상태
 
-**MUST [DB-001; arch §14]** base entity는 `agents`, `operations`, `subscriptions`, `deliveries`, `batches`, `usage` 여섯 개뿐이다. [schema-v1.sql](../implementation/schema-v1.sql)을 base 초기 migration으로 실행한다. tiered persistence는 POL-006/S-08/S-10의 후속 계약 전 지원하지 않는다. migration version은 SQLite `user_version`을 사용하고 migrations table을 추가하지 않는다. 기존 native-v2 DB를 변환·공유하지 않는다.
+**MUST [DB-001; arch §14]** entity는 `agents`, `operations`, `attestations`, `subscriptions`, `deliveries`, `batches` 여섯 개뿐이다. [schema-v3.sql](../implementation/schema-v3.sql)을 새 DB의 초기 schema로 실행한다 — v0.1.0의 첫 공개 schema가 곧 최신이며, 이전 schema version에서의 migration 경로는 없다. `user_version`이 3이 아닌 기존 DB는 그대로 두고 열기를 거절한다. tiered persistence는 POL-006/S-08/S-10의 후속 계약 전 지원하지 않는다. schema version은 SQLite `user_version`을 사용하고 migrations table을 추가하지 않는다.
 
-**MUST [DB-002]** broker만 DB를 쓴다. 연결마다 foreign_keys=ON, synchronous=FULL, busy_timeout=5000, WAL을 확인한다. 일반 mutation은 `BEGIN IMMEDIATE`; schema migration은 `BEGIN EXCLUSIVE`다. commit 성공 전에 accepted/succeeded를 반환하지 않는다. DB_BUSY는 같은 key retry, DB 손상은 mutation 중단으로 처리한다.
+**MUST [DB-002]** broker만 DB를 쓴다. 연결마다 foreign_keys=ON, synchronous=FULL, busy_timeout=5000, WAL을 확인한다. 일반 mutation은 `BEGIN IMMEDIATE`; 새 DB의 schema 적용은 `BEGIN EXCLUSIVE`다. commit 성공 전에 accepted/succeeded를 반환하지 않는다. DB_BUSY는 같은 key retry, DB 손상은 mutation 중단으로 처리한다.
 
 **MUST [DB-003]** 아래 상태는 물리 효과에만 적용한다. business/workflow 상태로 확장하지 않는다.
 
@@ -171,7 +171,6 @@ A-008은 2026-09-28 사용자 결정으로 철회했다([DR20](design-revisions.
 | operation.state | pending → succeeded/failed/unknown; unknown → 실제 효과 대조 후 succeeded 또는 증명된 실패; terminal 결과는 변경 금지 |
 | batch.state | prepared → completed; prepared의 incarnation 소유만 검증된 복구 때 변경 |
 | delivery flags | materialized/presented/acknowledged 각각 0→1; presented가 이해·완료·승인이라는 뜻은 아님 |
-| usage.outcome | reserved → completed/cancelled/unknown; unknown은 provider의 확정 증거 있을 때만 정산 |
 
 **MUST [DB-004]** `operations.payload_json`은 normalized caller request, `plan_json`은 broker가 확정한 물리 plan, `result_json`은 receipt 결과만 담는다. `plan_json`의 허용 variant는 다음 표다. operation kind와 일치하지 않는 field를 거절한다. 다른 workflow 상태를 JSON 안에 감추지 않는다.
 
@@ -209,8 +208,7 @@ A-008은 2026-09-28 사용자 결정으로 철회했다([DR20](design-revisions.
 | T-integrate-intent | 직렬화된 repo slot 확인, base/candidate/policy pending op |
 | T-integrate-done | 실제 main 대조 뒤 op succeeded |
 | T-context-accept/done | 고정 commit/notification intent; 실제 ref/snapshot 대조 후 완료 |
-| T-usage-reserve | 전체/계통/Principal reserve 검사와 usage reserved insert. INF-001 뒤로는 production 호출자가 없다(usage 표에 쓰는 주체가 없다는 사실은 INF-009대로 validation이 기록한다) |
-| T-usage-settle | provider usage와 outcome 원자 갱신 |
+| T-attestation-append | attestation sequence의 append-only insert; operation과의 참조는 FK가 강제 |
 
 **MUST [DB-008]** prepared batch에 포함된 message IDs와 delivery.batch_id의 집합은 같아야 하며 recipient는 batch.agent와 같아야 한다. DB FK만으로 충분하지 않은 교차행 불변식은 store 함수와 integrity test에서 검증한다. completed batch는 변경·확장하지 않는다. 누락 원문, FK 손상, 실제 ref 불일치는 조용히 새 상태로 덮어쓰지 않는다.
 
@@ -236,9 +234,9 @@ A-008은 2026-09-28 사용자 결정으로 철회했다([DR20](design-revisions.
 
 큰 receipt의 조회도 IPC-006/008의 동일 actor/key 규칙을 따른다. `operation.read`는 원본 JSON의 SHA-256·전체 byte 수·offset·base64 조각·다음 offset을 반환하며 각 응답은 frame 안에 든다. 첫 조각 이후 SHA-256이 없거나 관측이 바뀌면 계속하지 않고 offset 0부터 다시 조회한다. CLI는 큰 mutation/operation.get 응답 뒤 효과를 재전송하지 않고 이 읽기로 회수한다. 조립 상한은 64 MiB이고 초과·중간 단절·해시 불일치는 결과 불명확이며 미접수 증거가 아니다. 로컬 cache 예산보다 큰 receipt는 원래 freeze를 보존하고 영수증·key와 기록 불가 경고를 출력한다. `status.get`의 일부 목록은 `next` agent-name cursor를 명시한다. `oma status --after <next>`로 계속 읽으며 각 페이지는 별도 live 관측이다. 운영 full-set 조회는 기존 진단 row/byte 예산을 재사용하고 초과를 `LIMIT_EXCEEDED`로 거절하며 일부 집합을 전체로 사용하지 않는다.
 
-**MUST [IPC-009]** trusted-only method는 actor endpoint에서 dispatch하지 않는다. runner.open/batch.prepare/batch.complete/observe는 runner channel, Principal attach/detach는 보호된 extension channel, host.principalRelay/reconcile은 host channel만 사용한다. batch.read는 trusted OMA extension helper에만 제공한다. 일반 `oma` CLI에 내부 method 호출 escape hatch를 넣지 않는다.
+**MUST [IPC-009]** trusted-only method는 actor endpoint에서 dispatch하지 않는다. runner.open/batch.prepare/batch.complete/observe는 runner channel, Principal attach/detach는 보호된 extension channel, host.principalRelay는 host channel만 사용한다. batch.read는 trusted OMA extension helper에만 제공한다. 일반 `oma` CLI에 내부 method 호출 escape hatch를 넣지 않는다.
 
-**MUST [IPC-011]** internal channel도 동일한 bounded frame/error 형식을 사용하며 `InternalRequest`/`InternalResponse`로 제한한다. runner.open은 검증된 unit invocation에만 lease를 반환하고, batch.complete의 성공 응답은 DB complete commit 뒤에만 보낸다. runner.observe는 메모리 관측값이며 durable row를 추가하지 않는다. principal.attach의 credential 발급·교환 handshake는 OMA가 소유해 직접 기동한 session에 한해 확정한다. host-only channel은 host가 broker를 spawn할 때 연 socketpair(descriptor 3)이며, host는 그 peer로 식별되므로 secret이 필요 없다. broker는 이 channel이 있을 때만 principal endpoint를 열고, 두 endpoint가 listening된 뒤에 준비를 알린다. host는 자신의 자식인 engine을 등록하고, broker는 그 engine이 실제로 host의 자식인지 확인한 뒤 credential을 channel로 돌려준다. credential과 session handle은 파일에도, 어떤 프로세스의 환경에도, 명령행에도 두지 않는다 — 셋 다 같은 UID의 다른 프로세스가 읽을 수 있기 때문이다. host→engine, trusted extension→CLI로도 socketpair로만 전달하며, pipe와 달리 socket은 `/proc/<pid>/fd`로 다시 열 수 없다. attach는 credential과 handle에 더해 연결한 프로세스가 등록된 engine의 자손일 것을 요구하므로, credential을 얻었어도 engine이 시작하지 않은 프로세스는 Principal이 아니다. attach 이전 요청과 위조·이전 run의 credential은 `AUTH_FAILED`, 다른 session handle은 `ATTACH_CONFLICT`다. 재등록과 broker 재시작은 새 credential을 발급하고 이전 것은 무효다. 권한은 attach 시점에 받은 context가 아니라 현재 등록 세대에 대한 binding이며 모든 요청과 preflight에서 재확인한다. 자손 관계도 attach 때 한 번 보고 마는 것이 아니라 요청마다 `/proc`에서 다시 계산한다 — engine이 죽으면 그 자손은 init으로 reparent되어 더 이상 어떤 engine의 자손도 아니고, attach 때의 판정을 기억해 두면 죽은 engine이 남긴 프로세스가 Principal 권한을 계속 쓰게 된다. engine이 죽었음은 pid가 아니라 pid와 시작 시각의 쌍으로 판정하며, 그 사실이 확인되면 그 session 전체를 은퇴시킨다. 은퇴는 거절을 먼저 쓴 뒤에 일어나므로 요청자는 끊김이 아니라 `AUTH_FAILED`를 받는다. 재등록·broker 교체·endpoint 종료는 이전 세대에 attach된 연결을 그 자리에서 끊으므로, 이미 연결을 들고 있던 engine도 다음 요청을 통과시키지 못한다. host endpoint는 host임을 확인한 뒤 먼저 method 표면을 판정하고(서빙하지 않는 method는 `UNKNOWN_METHOD`), 그 다음에 이 broker의 Principal 등록 유무를 본다 — method의 존재 여부는 등록 여부에 의존하지 않으며 error class가 caller의 재시도를 결정하기 때문이다. host의 channel이 닫히면 broker는 스스로 멈춘다. ptrace가 같은 UID 사이에서 제한되지 않는 host(Yama scope 0)에서는 어떤 user-space 검사도 두 프로세스를 구별하지 못하며, 이는 host의 성질로 적어 둔다. 사용자가 따로 띄운 외부 Pi session에 attach하는 경로는 여전히 확정하지 않으며 S-02의 model-facing tool 통과 기준도 그대로 남는다. host relay/reconcile 응답은 실제 처리된 개수를 반환하고 timeout은 작업 성공으로 꾸미지 않는다. 대량 Principal backlog에서 oneshot timeout/start-limit 반복이 발생하지 않는 처리량·자원 조건은 S-06 필수 시험이다.
+**MUST [IPC-011]** internal channel도 동일한 bounded frame/error 형식을 사용하며 `InternalRequest`/`InternalResponse`로 제한한다. runner.open은 검증된 unit invocation에만 lease를 반환하고, batch.complete의 성공 응답은 DB complete commit 뒤에만 보낸다. runner.observe는 메모리 관측값이며 durable row를 추가하지 않는다. principal.attach의 credential 발급·교환 handshake는 OMA가 소유해 직접 기동한 session에 한해 확정한다. host-only channel은 host가 broker를 spawn할 때 연 socketpair(descriptor 3)이며, host는 그 peer로 식별되므로 secret이 필요 없다. broker는 이 channel이 있을 때만 principal endpoint를 열고, 두 endpoint가 listening된 뒤에 준비를 알린다. host는 자신의 자식인 engine을 등록하고, broker는 그 engine이 실제로 host의 자식인지 확인한 뒤 credential을 channel로 돌려준다. credential과 session handle은 파일에도, 어떤 프로세스의 환경에도, 명령행에도 두지 않는다 — 셋 다 같은 UID의 다른 프로세스가 읽을 수 있기 때문이다. host→engine, trusted extension→CLI로도 socketpair로만 전달하며, pipe와 달리 socket은 `/proc/<pid>/fd`로 다시 열 수 없다. attach는 credential과 handle에 더해 연결한 프로세스가 등록된 engine의 자손일 것을 요구하므로, credential을 얻었어도 engine이 시작하지 않은 프로세스는 Principal이 아니다. attach 이전 요청과 위조·이전 run의 credential은 `AUTH_FAILED`, 다른 session handle은 `ATTACH_CONFLICT`다. 재등록과 broker 재시작은 새 credential을 발급하고 이전 것은 무효다. 권한은 attach 시점에 받은 context가 아니라 현재 등록 세대에 대한 binding이며 모든 요청과 preflight에서 재확인한다. 자손 관계도 attach 때 한 번 보고 마는 것이 아니라 요청마다 `/proc`에서 다시 계산한다 — engine이 죽으면 그 자손은 init으로 reparent되어 더 이상 어떤 engine의 자손도 아니고, attach 때의 판정을 기억해 두면 죽은 engine이 남긴 프로세스가 Principal 권한을 계속 쓰게 된다. engine이 죽었음은 pid가 아니라 pid와 시작 시각의 쌍으로 판정하며, 그 사실이 확인되면 그 session 전체를 은퇴시킨다. 은퇴는 거절을 먼저 쓴 뒤에 일어나므로 요청자는 끊김이 아니라 `AUTH_FAILED`를 받는다. 재등록·broker 교체·endpoint 종료는 이전 세대에 attach된 연결을 그 자리에서 끊으므로, 이미 연결을 들고 있던 engine도 다음 요청을 통과시키지 못한다. host endpoint는 host임을 확인한 뒤 먼저 method 표면을 판정하고(서빙하지 않는 method는 `UNKNOWN_METHOD`), 그 다음에 이 broker의 Principal 등록 유무를 본다 — method의 존재 여부는 등록 여부에 의존하지 않으며 error class가 caller의 재시도를 결정하기 때문이다. host의 channel이 닫히면 broker는 스스로 멈춘다. ptrace가 같은 UID 사이에서 제한되지 않는 host(Yama scope 0)에서는 어떤 user-space 검사도 두 프로세스를 구별하지 못하며, 이는 host의 성질로 적어 둔다. 사용자가 따로 띄운 외부 Pi session에 attach하는 경로는 여전히 확정하지 않으며 S-02의 model-facing tool 통과 기준도 그대로 남는다. host relay 응답은 실제 처리된 개수를 반환하고 timeout은 작업 성공으로 꾸미지 않는다. 대량 Principal backlog에서 oneshot timeout/start-limit 반복이 발생하지 않는 처리량·자원 조건은 S-06 필수 시험이다.
 
 **MUST [IPC-012]** InternalMethods의 key set은 exhaustive socket surface다. 내부 helper는 분리할 수 있지만 batch.stage 등 새 socket method/phase를 추가하지 않는다. batch.prepare는 transaction뿐 아니라 BATCH-001의 rename/fsync/view publish까지 소유한다. post-transaction 실패를 별도 stage RPC로 모델/runner가 수습하게 하지 않는다. unknown method는 side effect 전에 UNKNOWN_METHOD다.
 
@@ -310,7 +308,7 @@ pi.sendMessage(
 
 **MUST [RUN-001]** activation은 unit/invocation 확인 → 이전 run 사망 확인 → BATCH-004의 이전 시도 receipt 정산 → incarnation 발급(나머지 receipt-absent prepared는 batch를 바꾸지 않고 새 lease가 이어받는다, DR9) → sandbox/Pi resume → batch 안내 → 정상 Pi loop → boundary commit → pending 재검사 → 필요 시 다음 loop 또는 exit 0 순서다. 최초 GOAL 전에는 inference를 시작하지 않는다.
 
-**MUST [RUN-002]** inference slot이 부족하면 runner는 bounded 메모리 waiter로 기다린다. new를 남겨 둔 채 즉시 exit/restart를 반복하지 않는다. systemd·broker 취소를 받아 즉시 waiter에서 빠져야 한다. idle일 때 mail 유무를 모델에게 주기적으로 묻지 않는다.
+**MUST [RUN-002]** relay 동시성 한도에 걸리면 runner는 bounded 메모리 waiter로 기다린다. new를 남겨 둔 채 즉시 exit/restart를 반복하지 않는다. systemd·broker 취소를 받아 즉시 waiter에서 빠져야 한다. idle일 때 mail 유무를 모델에게 주기적으로 묻지 않는다.
 
 **MUST [RUN-003]** `oma agent continue --note`는 자기 앞으로 일반 message를 보내는 operation이다. continuation task entity는 없다. `oma agent wait`는 인증된 Resident 자신의 live incarnation에만 메모리 flag를 설정한다. `agent.wait {observe:true}`(`oma agent wait --observe true`)는 같은 run의 flag를 바꾸지 않고 조회한다. Principal·다른 incarnation·revoked run은 사용할 수 없다. 도구 결과가 session에 기록된 awaited `turn_end`에서 조회한 뒤 다음 모델 호출 없이 종료하며, 도구 실행이나 접수된 효과를 중간 취소하지 않는다. 조회 중에는 별도의 유한 통신 예산을 쓰고, 조회 실패는 wait 성공이나 배달 증거가 아닌 unconfirmed다. 정상 wait는 별도 control 통지이며 delivery receipt나 batch.complete를 만들지 않는다. pending mail과 prepared batch는 원본을 유지하고 재활성화 정책을 따른다. wait가 mail을 ACK하거나 desired=stopped로 바꾸지는 않으며, broker 재시작 또는 새 incarnation에 flag를 넘기지 않는다.
 
@@ -408,15 +406,15 @@ Live batch.prepare/complete는 이 broker를 시작한 host endpoint에서만 �
 
 ## 11. systemd와 lifecycle
 
-**MUST [UNIT-001; arch §§6,15]** society별 허용 unit은 broker.service, 각 Resident의 service/path, principal.path/principal-relay.service, reconcile.service/timer다. unit 이름은 `oma-<society>-broker.service`, `oma-<society>-<actor>.service/.path`, `oma-<society>-principal-relay.service`, `oma-<society>-principal.path`, `oma-<society>-reconcile.service/.timer`다. 이름 충돌 방지를 위해 Resident 이름 broker, principal-relay, reconcile도 금지한다.
+**MUST [UNIT-001; arch §§6,15]** society별 허용 unit은 각 Resident의 service/path와 principal.path/principal-relay.service다. unit 이름은 `oma-<society>-<actor>.service/.path`, `oma-<society>-principal-relay.service`, `oma-<society>-principal.path`다. broker.service와 reconcile.service/timer는 존재하지 않는다 — broker는 제품이 foreground로 직접 실행하고 주기 reconcile은 broker process 안의 sweep이다. 이름 충돌 방지를 위해 Resident 이름 broker, principal-relay, reconcile도 금지한다.
 
 **MUST [UNIT-002]** [systemd templates](implementation-spec.md#unit-renderer-계약)를 고정 renderer로 생성한다. template의 @NODE@/@LIBDIR@/@STATE@/@SOCIETY@/@AGENT@는 host 값에서만 치환한다. unit 이름과 ExecStart argv를 caller 문자열에서 만들지 않는다. `%`/공백/따옴표/newline은 systemd 문법에 맞춰 escape하고 NUL/newline이 들어간 설정은 거절한다. 템플릿은 systemd에 그대로 설치할 파일이 아니다.
 
-**MUST [UNIT-003]** 초기 reference profile은 resident MemoryMax=3G, TasksMax=128, CPUQuota=200%, OOMPolicy=kill, KillMode=control-group, TimeoutStopSec=10s, Restart=on-failure, RestartSec=3s, RestartSteps=4, RestartMaxDelaySec=12s, StartLimitIntervalSec=60s, StartLimitBurst=5다(DR27). systemd의 지수 backoff로 즉시 실패의 재시작 간격을 늘리되 다섯 간격의 합은 60초보다 짧아 연속 즉시 실패가 기존 start-limit을 우회하지 않는다. 동일 backoff를 고정 broker service에도 적용한다. 실제 host cap은 bootstrap config에 명시하고 renderer가 반영한다. resource profile이 지원되지 않으면 무제한으로 실행하지 않고 UNSUPPORTED_PROFILE이다.
+**MUST [UNIT-003]** 초기 reference profile은 resident MemoryMax=3G, TasksMax=128, CPUQuota=200%, OOMPolicy=kill, KillMode=control-group, TimeoutStopSec=10s, Restart=on-failure, RestartSec=3s, RestartSteps=4, RestartMaxDelaySec=12s, StartLimitIntervalSec=60s, StartLimitBurst=5다(DR27). systemd의 지수 backoff로 즉시 실패의 재시작 간격을 늘리되 다섯 간격의 합은 60초보다 짧아 연속 즉시 실패가 기존 start-limit을 우회하지 않는다. 실제 host cap은 bootstrap config에 명시하고 renderer가 반영한다. resource profile이 지원되지 않으면 무제한으로 실행하지 않고 UNSUPPORTED_PROFILE이다.
 
 **MUST [UNIT-007]** systemctl effect 성공은 subprocess spawn이 아니라 정상 exit status와 해당 effect의 후속 actual observation으로 판정한다. nonzero/timeout/signal/malformed 결과를 성공으로 바꾸지 않는다. daemon-reload는 정상 exit와 대상 unit의 LoadState=loaded 및 렌더링한 설정 일치, enable/disable은 unit-file 상태, path start/stop은 path 실제 상태, service stop은 inactive와 cgroup 후손 사망을 확인한다. 관측 실패는 succeeded가 아니며 accepted op는 실제 효과를 대조한다. 짧게 실행 후 정상 종료한 Resident start는 동일 InvocationID의 정상 종료와 pending 재검사를 허용하되 전혀 시작 안 된 inactive와 구분한다. 정확한 systemd property/binding 증거는 S-01/S-06에 pin한다.
 
-**MUST [UNIT-004]** D03: systemd-managed broker는 Type=notify이며 DB/open-operation 복구, 이전 Resident cgroup 정리, socket/인증 준비가 완료된 뒤에만 READY=1을 보낸다. 이 mode의 Resident는 After+BindsTo broker를 유지한다. product-owned foreground broker는 IPC-011/REC-007의 private channel·tenure를 유지하며 존재하지 않는 broker.service에 기대거나 별도 broker service를 몰래 기동하지 않는다. 이 mode의 Resident 활성화는 깨끗한 disposable user에서 동등한 revoke/quiescence/startup fencing을 검증하는 WP03 gate 전 지원 완료로 표시하지 않는다. 동등한 lifetime 경계를 제공하지 못하는 조합은 fail closed하고 systemd-managed mode의 BindsTo를 일괄 제거하지 않는다. 두 mode 모두 Type=exec runner의 Pi/shell/test 후손은 같은 cgroup에 남으며 runner 한 PID 종료를 전체 사망으로 응답하지 않는다.
+**MUST [UNIT-004]** D03: broker는 제품이 foreground로 직접 실행하는 프로세스 하나다 — systemd-managed broker.service는 존재하지 않으며 Resident unit도 어떤 broker unit에 After/BindsTo하지 않는다. product-owned foreground broker는 DB/open-operation 복구, 이전 Resident cgroup 정리, socket/인증 준비가 완료된 뒤에만 준비를 알리고, IPC-011/REC-007의 private channel·tenure를 유지하며 존재하지 않는 broker.service에 기대거나 별도 broker service를 몰래 기동하지 않는다. Type=exec runner의 Pi/shell/test 후손은 같은 cgroup에 남으며 runner 한 PID 종료를 전체 사망으로 응답하지 않는다.
 
 **MUST [UNIT-005]** .path는 inbox/new에 DirectoryNotEmpty를 사용한다. enabled+GOAL 조건이 충족될 때만 enable/start한다. prepared batch만 cur에 남은 경우 reconcile과 startup DB 조회로 service를 시작한다. path 상태만으로 pending을 판단하지 않는다. default.target에 enable된 path가 reboot 때 잘못 켜져도 broker 인증은 stopped/GOAL 없는 실행을 거절하고 reconcile이 path를 중지한다.
 
@@ -487,7 +485,7 @@ bwrap --unshare-all --new-session --die-with-parent --cap-drop ALL --seccomp 3
 
 `/run/oma-sessions`는 엔진이 session을 쓰는 유일한 경로다. SB-006이 이미 그 내용을 model-origin data로 규정하므로 mount를 명시한다.
 
-`--clearenv`가 환경 전체를 지우므로 trusted core extension이 읽는 `OMA_*`는 이 배열에 없으면 sandbox 안에 없다. builder는 caller가 준 이름/값을 검증하고(이름 문법, NUL 금지), `OMA_FRAME_BYTES`/`OMA_BATCH_MAX_MESSAGES`/`OMA_ACTOR`/`OMA_INCARNATION`를 마지막에 스스로 설정해 caller가 검증된 lease의 actor를 덮어쓰지 못하게 한다. host 환경은 상속하지 않는다.
+`--clearenv`가 환경 전체를 지우므로 trusted core extension이 읽는 `OMA_*`는 이 배열에 없으면 sandbox 안에 없다. builder는 caller가 준 이름/값을 검증하고(이름 문법, NUL 금지), `OMA_FRAME_BYTES`/`OMA_BATCH_MAX_MESSAGES`/`OMA_ACTOR`를 마지막에 스스로 설정해 caller가 검증된 lease의 actor를 덮어쓰지 못하게 한다. host 환경은 상속하지 않는다.
 
 **MUST [SB-002-C]** argv에 등장하는 host 경로는 위 mount 표를 통해서만 sandbox 경로로 번역한다. 어느 mount에도 속하지 않는 경로는 그대로 전달하지 않고 거절한다. 그렇지 않으면 host에서 검증된 파일이 sandbox 안에서 조용히 없는 파일이 되고, 설정 오류가 엔진 오류로 둔갑한다. 모델에게 보이는 경로(도구 결과, CLI 출력, 메일 안내)도 그 모델의 view로 보인다: broker는 host의 이름으로 기록·응답하고, 모델의 경계(sandbox 안 CLI는 자기 환경의 mount root, Principal의 도구는 host root)가 번역한다([DR1](design-revisions.md)).
 
@@ -534,13 +532,11 @@ relay는 자리표시자를 provider가 key를 읽는 자리에서만 진짜 key
 
 **MUST [INF-002]** 모델·provider 선택은 host가 선언한 model profile 이름으로만 지정한다. caller가 arbitrary provider URL, header, key, 가격을 지정하지 못한다는 제약은 그대로다. 엔진이 profile을 해석하며 OMA는 그 해석을 다시 구현하지 않는다.
 
-**MUST [INF-003]** Human private prompt body를 공개 mail, journal, operations, usage 필드에 기록하지 않는다. 이 금지는 relay 유무와 무관하게 유지된다.
+**MUST [INF-003]** Human private prompt body를 공개 mail, journal, operations 필드에 기록하지 않는다. 이 금지는 relay 유무와 무관하게 유지된다.
 
 **MUST NOT [INF-004]** OMA relay·broker·adapter가 결과 불명확한 inference를 자체 재전송하거나 재시도를 위해 도구가 실행된 turn 전체를 다시 시작한다. 일시적 provider 실패의 재시도 여부는 INF-001의 동봉 엔진 한 곳에서 판정한다. 연결 단절 시 서버가 이미 처리·과금했을 가능성은 남으므로, 엔진 재시도가 inference의 exactly-once 실행·과금을 보장한다고 주장하지 않는다. 취소가 과금 취소를 보장한다고 가정하지 않는다. 엔진이 보고하지 않은 비용을 0으로 간주하지 않는다.
 
-**MUST [INF-009]** multi-agent 비용 상한은 이제 OMA 계약이 집행하는 값이 아니다. `quota`의 unit 관련 필드는 host가 선언하는 운영 의도로 남지만, 실제 과금 경계는 엔진과 provider 설정이 소유한다. OMA가 집행하지 않는 것을 집행한다고 표시하지 않는다.
-
-`usage` 표와 여섯 durable entity는 DB-001 그대로 유지한다. persisted v1 schema를 이 변경으로 바꾸지 않는다. 그 표에 쓰는 주체가 없다는 사실은 [validation](implementation/validation.md)에 기록한다.
+**MUST [INF-009]** multi-agent 비용 상한은 이제 OMA 계약이 집행하는 값이 아니다. 실제 과금 경계는 엔진과 provider 설정이 소유한다. OMA가 집행하지 않는 것을 집행한다고 표시하지 않는다. usage 회계 entity는 제거되었으며 DB-001의 entity 목록에는 없다.
 
 **MUST [INF-010]** performance 검증은 Astra 단독, cheap society 단독, Principal+society의 동일 task/tool 접근/성공 기준으로 수행한다. 품질·결함·Principal 및 전체 tokens·비용·latency를 각각 기록한다. Principal tokens 감소만으로 전체 비용/품질 우위를 주장하지 않는다. 자동 평가 threshold는 S-09에서 합의한다.
 
@@ -610,13 +606,13 @@ relay는 자리표시자를 provider가 key를 읽는 자리에서만 진짜 key
 
 **MUST [REC-007]** society broker는 R 아래 고정 lock file에 process-lifetime OS advisory lock을 획득한 뒤 DB를 연다. lock 미획득 시 두 번째 writer를 시작하지 않는다. lock은 config 로드·SQLite·복구보다 먼저 잡고, 얻지 못한 broker는 '시작 실패'와 구별되는 자기 exit status로 끝난다 — host는 그 둘을 다르게 다루어야 하고(앞은 소유 포기, 뒤는 재시작), 같은 status로는 구별할 수 없기 때문이다. 소유는 broker에서 파생하지 않는다. host는 society의 **state tree**를 이름으로 삼는 자기 lease를 직접 잡고 자기 수명 내내 들고 있으며, 그 lease를 잡기 전에는 설정 생성·state 준비·broker 기동 어느 것도 하지 않는다. lease의 이름은 파일 경로가 아니라 abstract AF_UNIX namespace의 이름이며 `uid`와 state root에서 유도한다 — 경로로 이름 붙인 lock은 그 경로만큼만 배타적이어서, 같은 UID의 아무 프로세스나 그 경로를 unlink·rename하고 새 파일을 놓으면 옛 보유자는 옛 inode의 lock을 계속 쥔 채 새 `oma`가 정규 경로의 새 inode를 잡는다. 한 society에 소유자가 둘이 되고 서로를 볼 수 없으며, 잡은 뒤 경로를 다시 확인하는 것은 검사와 사용이 여전히 두 단계이므로 창을 좁힐 뿐이다 — 같은 UID에서 파일의 속성으로 경계를 주장하지 않는다는 FS-005의 규칙을 mode가 아니라 namespace에 적용한 것이다. abstract namespace에는 갈아치울 directory entry가 없고, 두 번째 bind는 `EADDRINUSE`로 거부되며, 이름은 마지막 descriptor가 닫힐 때 커널이 되돌려준다. lease가 run root가 아니라 state tree의 이름인 이유는 두 writer를 가지면 안 되는 것이 tree이기 때문이다: run root는 boot·session마다 달라지는 교체 가능한 좌표이므로, 하나의 state tree를 서로 다른 두 run root로 가리키면 lease 두 개가 각각 자유롭게 잡힌다. 이미 listening 중인 broker가 있으면 그것이 society의 쓰기를 소유한다 — systemd unit이든 손으로 띄운 것이든 host가 사라진 `oma`의 것이든. 그래서 소유의 질문은 양쪽에서 답한다. host 쪽에서는 소유를 잡은 직후, 설정을 쓰기 전에 그 broker를 먼저 찾는다. broker 쪽에서는, 제품이 시작하지 않은 broker가 society lease를 **자기가** 잡고 잡지 못하면 시작하지 않는다 — host의 확인과 그 뒤의 쓰기는 여전히 두 단계이므로, 그 사이에 올라오는 broker는 host의 probe로는 막을 수 없기 때문이다. 제품이 시작한 broker는 그 lease의 descriptor를 이미 물려받았으므로 이름을 다시 잡지 않으며, 자기가 소유자의 것임을 환경의 선언으로 안다. 선언이 있는데 그 descriptor가 lease가 아니면 시작 실패로 답한다 — 쥐지 않은 society를 쥐었다고 믿는 broker가 그대로 society를 서비스하게 되기 때문이다. `broker.lock`은 남는다: 그것이 답하는 것은 '이 프로세스가 society의 단일 SQLite writer인가'이고, lease가 답하는 것은 '이 society에 무엇이든 행위해도 되는가'다. 이 확인이 provision·repair 뒤에 오면 다른 broker가 이미 Resident의 sandbox를 짓고 있는 rootfs의 `/etc/passwd`·`/etc/group`·symlink를 고쳐 놓은 뒤에야 물러나게 된다. 물러날 때는 lease도 함께 내려놓는다 — 행동하지 않기로 한 society를 쥐고 있으면 다음 `oma`만 막는다. broker의 lock은 broker와 함께 죽으므로 재시작 back-off와 한도 소진 이후가 모두 소유의 공백이 되고, 그 공백에 다른 `oma`가 들어올 수 있기 때문이다. lease를 잡지 못함(다른 프로세스가 쥐고 있음)과 lease를 아예 잡을 수 없음(경로를 신뢰할 수 없다, 이름을 평가할 수 없다)은 다른 답이며, 뒤의 것을 앞의 것으로 보고하지 않는다. 경로에 대한 판단은 lease를 잡기 **전에** 끝난다: 신뢰할 수 없는 run root·state root를 가리킨 `oma`가 먼저 소유를 잡고 설정을 쓰고 provision과 repair까지 한 뒤에야 자기가 검사한 곳이 아님을 아는 순서는, 검사하지 않은 것과 같다. 소유가 확정되기 전에 도는 준비 단계는 이미 있는 것을 다시 쓰지 않는다. 같은 바이트를 다시 쓰는 것도 쓰기이며, 경쟁에서 진 프로세스는 소유자의 트리를 inode와 timestamp까지 그대로 둔 채 물러나야 한다. 그래서 준비와 수리는 두 개의 정책이다: 준비는 없는 것만 만들고 있으면서 다른 것은 손대지 않은 채 보고하며, 수리는 그 보고를 받아 되돌리되 lease 보유자만 실행한다. 준비가 만드는 repository는 같은 부모 아래 임시 이름으로 만든 뒤 rename으로 제자리에 놓는다 — 최종 경로에 직접 만들면 동시에 첫 시작하는 두 `oma`가 서로의 반쯤 만들어진 트리를 보고 실패하며, rename이 진 쪽은 이긴 쪽의 repository를 그대로 받아들인다. lease의 유효 범위는 이 프로세스의 수명이 아니라 **lease 덕분에 시작된 모든 프로세스의 수명**이다. 호출 순서로는 이것을 지킬 수 없다 — host가 SIGKILL로 죽으면 실행할 코드가 없고 커널은 lock을 즉시 놓는데 engine은 살아 있으며, `close()`는 죽음이 아니라 신호다. 그러므로 lease는 open file description이 드는 lock이어야 하고, engine·broker와 그것들이 시작한 모든 것이 그 descriptor를 상속해야 한다. 이름은 상속된 descriptor 중 마지막 하나가 닫힐 때 풀리므로 society는 그 전부가 죽기 전에는 다른 host에게 넘어가지 않는다. 상속은 engine에서 끝나지 않는다: engine 안의 trusted extension이 시작하는 model-facing CLI는 `<stateRoot>/principal/private`와 그 아래 request cache를 쓰는 writer이고, engine에 보낸 signal은 그 자식에게 가지 않으므로 host와 engine이 모두 죽은 뒤에도 자기 timeout 전부를 살아서 쓸 수 있다. 그래서 fence는 고정된 descriptor 번호로 내려가고 그 번호를 환경으로 **선언한다** — descriptor 번호는 비밀이 아니므로 선언해도 아무 권한을 주지 않지만, 선언이 없으면 자식은 자기 부모가 어떻게 spawn되었는지를 알아내야만 lease를 다시 물려줄 수 있다. 선언된 fence가 그 자리에 없거나 lease의 종류가 아니면 자식을 fence 없이 시작하지 않고 실패로 답한다. sandbox(bwrap) 안에서 도는 Resident는 이 규칙의 예외다: listening 이름을 confinement 안으로 넣으면 sandbox 안의 프로세스가 society 소유자를 묻는 probe에 답할 수 있게 되므로, 그 경계는 fence가 아니라 커널이 강제하는 descendant 종료(cgroup)로 닫아야 한다. 이 성질의 결과로 lease를 놓는 일은 너무 이를 수 없고 너무 늦을 수만 있으므로, 정상 종료는 engine의 실제 종료를 기다리되 상한을 두고, 상한을 넘겨 놓더라도 society는 여전히 아무에게도 넘어가지 않는다. 수리는 broker의 startup quiescence가 이전 Resident의 종료를 증명한 뒤, broker가 Resident를 깨울 수 있는 어떤 단계(recovery·listen·activate)보다도 먼저 성공해야 한다(DR16): 증명 전에 고치면 이전 broker가 멈추지 못한 Resident가 아직 돌거나 다시 시작해 sandbox를 짓는 rootfs를 고치게 되고, 늦으면 수리되지 않은 rootfs 위에서 Resident가 먼저 깨어난다. 수리에 실패하면 화면에 적는 것으로 끝내지 않는다: broker의 startup이 실패하므로 broker는 준비를 알리지 않고 engine도 시작하지 않는다. PID file 숫자를 singleton 증거로 사용하지 않는다. Node lock/peercredential binding은 S-01로 검증한다. bootstrap/maintenance도 기존 broker 경계를 우회하여 DB/Git를 동시에 쓰지 않는다.
 
-**MUST [REC-002]** reconcile timer는 reference 5초, AccuracySec=1초이며 모델을 호출하지 않는다. 한 sweep의 filesystem/provider 장애가 나머지 독립 mailbox 점검을 영구 막지 않도록 bounded work를 수행한다. 동시에 두 sweep을 실행하지 않고 이미 실행 중이면 기존 sweep에 합류/skip한다. no-progress retry는 로그와 next timer로 제한하고 tight loop를 만들지 않는다.
+**MUST [REC-002]** broker process 안의 reconcile sweep은 reference 5초 간격이며 모델을 호출하지 않는다. 외부 reconcile service/timer unit은 없다. 한 sweep의 filesystem/provider 장애가 나머지 독립 mailbox 점검을 영구 막지 않도록 bounded work를 수행한다. 동시에 두 sweep을 실행하지 않고 이미 실행 중이면 기존 sweep에 합류/skip한다. no-progress retry는 로그와 next timer로 제한하고 tight loop를 만들지 않는다.
 
 **MUST [REC-003]** 각 crash 지점의 복구는 [test matrix](verification-spec.md#oma-core-v1--검증-계약)의 oracle을 만족해야 한다. shutdown에서 새 mutation acceptance를 중단하고 진행 중 DB transaction을 마친 뒤 fd를 닫는다. 강제 kill을 피할 수 있다고 가정하지 않는다. SQLite commit과 Git ref update를 한 atomic transaction이라고 기술하지 않는다.
 
 **MUST [REC-004]** process crash 보장과 power-loss 보장을 구분한다. file/dir fsync·SQLite FULL·Git object/ref flush·지원 filesystem/장치 계약을 S-06으로 검증하기 전 '전원 장애에도 유실 없음'이라고 표시하지 않는다. 지원 외 filesystem에서 자동 weak durability로 전환하지 않는다. state는 local kernel file system에 있어야 한다: NFS·SMB/CIFS·FUSE(virtiofs 포함)·9P·Ceph·AFS·Coda·NCP 위의 state root는 시작 때 `UNSUPPORTED_PROFILE`로 거절한다. SQLite WAL은 network file system을 지원하지 않고, 사망 증명은 kernel이 `flock`을 놓는 것에 기대기 때문이다([DR18](design-revisions.md), S-06). process crash 보장은 SIGKILL 시험이 받치고, 전원 장애 보장은 powercut lane(승인된 VM) 전에는 말하지 않는다.
 
-**MUST [REC-005]** backup은 host maintenance에서 mutation acceptance와 inference dispatch를 멈추고 active cgroup을 종료/확인한 quiescent 상태에서 수행한다. outstanding usage를 보수적으로 settle/unknown 처리하고 DB checkpoint/SQLite backup을 얻는다. DB와 참조 eml/Git/context/staging/runner receipts/Pi sessions/config를 같은 quiescent 시점으로 복사한다. provider secret은 별도 host credential backup 정책이다.
+**MUST [REC-005]** backup은 host maintenance에서 mutation acceptance와 inference dispatch를 멈추고 active cgroup을 종료/확인한 quiescent 상태에서 수행한다. DB checkpoint/SQLite backup을 얻는다. DB와 참조 eml/Git/context/staging/runner receipts/Pi sessions/config를 같은 quiescent 시점으로 복사한다. provider secret은 별도 host credential backup 정책이다.
 
 **MUST [REC-006]** restore는 새 runtime root에서 socket/lease를 재발급하고 systemd 상태를 재관측한다. index/view는 재생성한다. restore 후 main/context ref와 pending operation, mail object hash, FK를 검사하기 전 READY=1을 보내지 않는다. damaged DB를 빈 DB로 바꾸고 기존 mail/Git를 알아서 재발견하는 복구를 만들지 않는다.
 
@@ -632,7 +628,7 @@ relay는 자리표시자를 provider가 key를 읽는 자리에서만 진짜 key
 | 3 | Maildir/routes/materializer/views | 0/N fanout, cur 복구, public routing, parent effect gate |
 | 4 | units/sandbox/run fencing/create/start/stop | systemd 실서비스, cgroup death, stop races, capability escape 시험 |
 | 5 | Pi extension/runner/batch/Principal relay | tool result 보존, session-boundary, offline Principal, no auto commons injection |
-| 6 | inference quota/provider/cancel | reserved slot, lineage cap, unknown accounting, private payload 비공개 |
+| 6 | inference provider/cancel | relay 동시성 한도, lineage cap, private payload 비공개 |
 | 7 | Git submit/integrate/context | hostile bundle, exact candidate checks, CAS races, ref/mail crash, GOAL activation |
 | 8 | reconcile/observability/backup | 전체 fault matrix, clean restore, resource exhaustion |
 | 9 | production audit 및 S-09 평가 | 필수 tests+spikes, LOC, packaging, no domain leakage |
@@ -686,7 +682,7 @@ session 경계를 넘지 않는 per-request 전환은 하지 않는다. inferenc
 | Resident 수 증감 | 즉시 | LIFE-001/003/004의 기존 mutation |
 | role의 model profile 내용 | 다음 runner activation | runner가 activation마다 config snapshot을 읽음 |
 | Principal model | 다음 Principal session | TUI-005 |
-| slot 수, quota cap, pricing, protected path, check argv | broker 재시작 | broker가 시작 시 config를 고정 |
+| agent·storage cap, protected path, check argv | broker 재시작 | broker가 시작 시 config를 고정 |
 | worker의 `code.integrate` (Worker integrate) | 이후 만드는 worker부터 | AUTH-001, LIFE-008, [DR4](design-revisions.md) |
 
 **MUST [TUI-008]** `initialResidents`에 대응하는 항목은 bootstrap seed로만 표시하고 실행 중 society의 Resident 수를 바꾸는 값으로 제시하지 않는다. LIFE-009에 따라 값 변경이 다음 재시작에 agent를 자동 생성·삭제·중지하지 않는다. 현재 Resident를 늘리거나 줄이는 조작은 설정 항목이 아니라 명시적 lifecycle 행위로 분리해 표시한다.
@@ -755,7 +751,7 @@ session 경계를 넘지 않는 per-request 전환은 하지 않는다. inferenc
 
 **MUST [TRACE-003]** spec 위반이 기존 requirement에 이미 금지돼 있으면 동의어 requirement를 더 만들기보다 production-path negative test와 trace를 연결한다. 계약·기계 검증과 production 통과 증거를 분리하고 누락은 unverified/blocked로 표시한다. source/spec/adapter 변경 뒤 옛 evidence를 자동 재사용하지 않는다.
 
-**MUST [REC-008]** bootstrap/create/start/stop/batch/check의 canonical 순서는 [physical-ordering.md](implementation-spec.md#production-physical-effect-ordering)를 따른다. constructor/import에서 DB open 또는 외부 effect를 실행하지 않는다. lock 확보 전 SQLite migration/reconcile을 시작하는 숨은 호출 경로를 금지한다.
+**MUST [REC-008]** bootstrap/create/start/stop/batch/check의 canonical 순서는 [physical-ordering.md](implementation-spec.md#production-physical-effect-ordering)를 따른다. constructor/import에서 DB open 또는 외부 effect를 실행하지 않는다. lock 확보 전 SQLite schema 적용/reconcile을 시작하는 숨은 호출 경로를 금지한다.
 
 **MUST [TRACE-001]** 다음 mapping으로 상위 규범 보존을 review한다. 추가 필드·검사·순서는 물리 경계 상세화이며, 새로운 철학/업무 protocol을 도입하는 근거가 아니다.
 
@@ -766,7 +762,7 @@ session 경계를 넘지 않는 per-request 전환은 하지 않는다. inferenc
 | §§6–7 lifecycle/Pi | UNIT, LIFE, RUN, PI, BATCH; S-01/03 |
 | §§8–9 Principal/attention | PR, CTX, CLI, VIEW |
 | §§10–12 Git/review | GIT, INT, APP, 확장 TIER/PUB/CHAL/VERIFY; S-05/08/10/11 |
-| §§13–14 auth/usage/DB | AUTH, INF, DB, IPC; S-01/02 |
+| §§13–14 auth/DB | AUTH, INF, DB, IPC; S-01/02 |
 | §§15–19 recovery/isolation | LIFE, SB, REC, ERR; S-06 |
 | §§20–22 implementation/evaluation | ORDER, TRACE, test matrix; S-09 |
 | §23 제품 표면/TUI (§18) | TUI; CLI-001 분리, PR-001/004, INF-001, CFG-005; S-02 |
@@ -791,7 +787,7 @@ session 경계를 넘지 않는 per-request 전환은 하지 않는다. inferenc
 
 | 경로 / production owner | MUST 순서 | MUST 실패·완료 경계 |
 |---|---|---|
-| broker entry → broker.ts / reconcile.ts | 안전한 runtime dir/lock file 준비 → lifetime OS lock 획득 → config 검증 → D04의 bounded recovery resource preflight → DB open/migration → old run fence/death 확인 → pending physical reconciliation → authenticated endpoint 준비 → READY=1 | lock loser는 DB open/migrate/reconcile/unit effect/READY 금지. 논리 quota 초과는 새 admission을 막되 기존 책임의 bounded recovery를 일괄 금지하지 않는다. 실제 공간 부족은 성공이 아니며 accepted evidence를 보존한다. startup reserve/효과별 admission은 WP22 gate, 소켓 존재는 READY 증거가 아님 |
+| broker entry → broker.ts / reconcile.ts | 안전한 runtime dir/lock file 준비 → lifetime OS lock 획득 → config 검증 → D04의 bounded recovery resource preflight → DB open/schema → old run fence/death 확인 → pending physical reconciliation → authenticated endpoint 준비 → READY=1 | lock loser는 DB open/schema/reconcile/unit effect/READY 금지. 논리 quota 초과는 새 admission을 막되 기존 책임의 bounded recovery를 일괄 금지하지 않는다. 실제 공간 부족은 성공이 아니며 accepted evidence를 보존한다. startup reserve/효과별 admission은 WP22 gate, 소켓 존재는 READY 증거가 아님 |
 | actor socket → broker create handler | auth/strict DTO/key 조회 → durable 부모에서 host 정책으로 resolved spec 계산 → T-create-intent → frozen OID clone/verify → workspace rename/fsync → mailbox/runner/unit render → daemon-reload 결과 확인 → unit LoadState/config 검증 → T-create-ready → initial mail materialize → GOAL 확인 → 필요 시 path enable/start/관측 → receipt | initialResidents에서 child를 찾지 않음. clone에서 branch를 재해석하지 않음. provisioning은 READY 아님 |
 | actor socket → broker start handler | key/auth/record 조회 → retired/provisioning 거절 → 이미 정상 enabled면 no-op → old cgroup 사망 확인 → GOAL 검증 → desired enabled+op commit → path/service effect → actual 관측 → succeeded | GOAL 없는 실패가 desired/path를 새로 바꾸지 않음. process spawn만으로 성공하지 않음 |
 | actor socket → broker stop handler | key/auth → T-stop-intent → path stop/disable 및 관측 → endpoint/inference revoke → service stop → descendants 사망 확인 → pending broker-owned effects 목록 → succeeded | unit effect 실패해도 desired=stopped의 inference 거절은 즉시 유효. catch에서 나머지 revoke/stop 안전 조치를 건너뛰지 않음. 사망 불명확이면 unknown |
@@ -800,7 +796,7 @@ session 경계를 넘지 않는 per-request 전환은 하지 않는다. inferenc
 | trusted batch.complete → mail.ts | auth/fencing → pinned adapter revision/path 확인 → trusted durable receipt 검증 → T-batch-complete/presented commit → completed:true | DTO field·file existence·agent_end boolean은 증거 아님. receipt 불일치·위조는 commit 없이 `SESSION_BOUNDARY_UNCONFIRMED` 또는 `BATCH_CONFLICT` |
 | git.integrate → git.ts / sandbox.ts | identity/auth/profile 지원 gate → 조건 검사 → pending intent → exact candidate/check-profile snapshot으로 kernel-bounded 검사 → 실제 종료 결과 → final policy/base/authority 재검사 → CAS → ref 대조 → base receipt 또는 tiered fixed mail 보충 → succeeded | resource primitive 미검증인데 nonempty checks 실행 금지. checks를 []로 대체 금지. test timeout/signal/관측 불명확을 PASS로 변환 금지 |
 
-**MUST [SEQ-003]** lock 전 허용 작업은 argv/path 문법 검사와 lock 획득에 필요한 trusted runtime directory mkdir/open뿐이다. state root 초기화, SQLite constructor/open, migration, Git/systemd effect, reconciliation을 import/constructor의 side effect로 실행하지 않는다. DB 연결 factory는 lock 획득 이후에만 호출한다. 동시 두 broker 시험에서 loser가 DB-open seam에 도달하지 않았음을 검증한다.
+**MUST [SEQ-003]** lock 전 허용 작업은 argv/path 문법 검사와 lock 획득에 필요한 trusted runtime directory mkdir/open뿐이다. state root 초기화, SQLite constructor/open, schema 적용, Git/systemd effect, reconciliation을 import/constructor의 side effect로 실행하지 않는다. DB 연결 factory는 lock 획득 이후에만 호출한다. 동시 두 broker 시험에서 loser가 DB-open seam에 도달하지 않았음을 검증한다.
 
 **MUST [SEQ-004]** create-ready는 생성 가능한 물리 자원이 준비됐다는 뜻이다. 최초 GOAL 전에는 ready/stopped 또는 enabled-with-GOAL-gate 상태에서 inference 없이 준비될 수 있다. 단, 실패한 explicit start에서 desired를 enabled로 바꾸지는 않는다. bootstrap 복구·일반 start의 성공 의미를 혼동하지 않는다. 위 표가 기존 절과 불일치하면 두 문서를 함께 정정하고 제3의 순서를 코드에 만들지 않는다.
 
@@ -816,8 +812,8 @@ Owner가 이동해도 위 SEQ 규범의 의미가 자동으로 바뀌는 것은 
 
 ## Store opening: compatibility before writer setup
 
-`src/store.ts` owns this boundary. This is a C1 correction, not a schema migration,
-a second writer, a new recovery service, or a live-authority decision. Current
+`src/store.ts` owns this boundary. This is a C1 correction, not a second writer,
+a new recovery service, or a live-authority decision. Current
 verification status belongs exclusively to [validation.md](implementation/validation.md).
 
 ## Preconditions and phases
@@ -849,11 +845,11 @@ or same-UID operator concurrently changing the files.
    unversioned database is eligible for initialization only when `sqlite_schema`
    is empty. An arbitrary version-zero database with objects is not a fresh OMA
    database. A corrupt header or unavailable native observation does not authorize
-   migration. Close the observation connection before opening the writer.
+   schema application or initialization. Close the observation connection before opening the writer.
 5. **Set up the one writer.** Only after compatibility admission, apply the
    existing foreign-key, WAL, FULL synchronous, and busy-timeout PRAGMAs, then the
-   existing v1 migration and reader/transition/journal composition. Supported-v1
-   reads still go through the existing relational decoders.
+   schema application for a fresh database, and the reader/transition/journal
+   composition. v3 reads still go through the existing relational decoders.
 6. **Transfer ownership only on successful construction.** Until then the
    constructor owns the native connection and closes it on every subsequent
    throw. The broker lifetime can retain only a successfully returned Store.
@@ -877,7 +873,7 @@ does not request repair, deletion, or renaming of a sidecar. After a supported
 database is admitted, normal SQLite writer checkpoint/sidecar behavior still
 applies, including during cleanup of a later initialization failure.
 
-Migration rollback is attempted only while the native connection still reports a
+Schema-application rollback is attempted only while the native connection still reports a
 transaction. Its primary failure and any rollback failure remain in the cause
 chain. If constructor cleanup also fails, preserve both initialization and close
 failures. A close failure does not prove termination or authorize automatic replay;
@@ -908,9 +904,9 @@ cancel an external effect already started by an invalid asynchronous callback.
 `Store.transaction` still checks newly inserted operations through the full reader
 and validates pending transitions before COMMIT. `LedgerReader` retains its row,
 operation, batch, incarnation, and delivery-link checks. No schema-version refusal
-weakens valid-v1 decoding, introduces a header-only trusted row, changes a receipt
+weakens valid-v3 decoding, introduces a header-only trusted row, changes a receipt
 format, or grants stale live authority. Normal transaction error handling outside
-constructor/migration initialization is unchanged by this work.
+constructor/schema initialization is unchanged by this work.
 
 The production-linked cases are in `test/store-open.test.ts` (V04A/V04B), alongside
 existing `r10-ledger-rows`, `r11-transactions`, `r12-ledger-transitions`,
@@ -920,11 +916,12 @@ result copied from the production preflight.
 
 ## Compatibility and rollback
 
-The v1 DDL, readable/written format registry, wire contract, and live fencing are
-unchanged. Ordinary new databases, existing supported-v1 DELETE databases, and
-supported-v1 WAL databases retain their normal path. Unknown, corrupt, aliased, or
-unavailable inputs are not silently initialized. The sidecar-preserving refusal is
-intentionally stricter than allowing SQLite to recover an unknown database first.
+The v3 DDL, readable/written format registry, wire contract, and live fencing are
+unchanged. Ordinary new databases and existing v3 DELETE or WAL databases retain
+their normal path; a pre-v3 `user_version` is refused, not migrated. Unknown,
+corrupt, aliased, or unavailable inputs are not silently initialized. The
+sidecar-preserving refusal is intentionally stricter than allowing SQLite to
+recover an unknown database first.
 
 Reverting the code is not a rollback of durable database facts. It can restore the
 old writer-PRAGMA-before-refusal behavior. Preserve the database and its sidecars
@@ -943,8 +940,8 @@ These files are normative declarations, not new services.
 **Reviewed contract change, 2026-09-19 (inference).** `InferenceModule`,
 `InferenceStart` and `InferenceEvent` were removed. INF-001 now places inference
 with the bundled engine, so OMA declares no relay port and no provider stream
-DTOs. The `usage` table and the six durable entities are unchanged; only the
-relay's own surface went away.
+DTOs. The usage-accounting table is gone entirely; the six durable entities
+of DB-001 are the current contract.
 
 **Reviewed contract change, 2026-09-19 (direction).** The four frozen reverse dependencies
 recorded in `../contract-direction-plan.json` were removed. `Capability`,
@@ -1023,7 +1020,7 @@ is not a substitute for the full pinned typecheck or runtime wire fixtures.
 
 ## Unit renderer 계약
 
-**MUST [UNIT-TPL-001]** 이 7개 `.in` 파일을 [상위 구현 계약](implementation-spec.md)의 UNIT 요구와 함께 사용한다. broker당 하나, Resident당 service/path 한 쌍, Principal relay/path 한 쌍, reconcile service/timer 한 쌍이다. Resident service는 path가 시작하며 독립 enable target은 없다.
+**MUST [UNIT-TPL-001]** 이 4개 `.in` 파일을 [상위 구현 계약](implementation-spec.md)의 UNIT 요구와 함께 사용한다: Resident당 service/path 한 쌍, Principal relay service와 principal path다. Resident service는 path가 시작하며 독립 enable target은 없다.
 
 **MUST [UNIT-TPL-002]** renderer는 user unit directory의 `oma-<society>-...` 이름으로 atomic 설치하고 `systemctl --user daemon-reload` 후 필요한 unit만 enable/start한다. state root는 config와 일치하는 절대 path다. 입력의 systemd `%` 및 ExecStart 인자 escaping을 검증한다. fixed installation Node executable과 compiled TypeScript entrypoints를 사용한다.
 
