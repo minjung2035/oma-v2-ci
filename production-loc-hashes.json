@@ -1,7 +1,6 @@
 {
-  "cloc": "2.08",
-  "manifest": "598e9a9f21c08f501bcd4adc83caaf70e5880724e26ec90286164473d7ef1ce7",
-  "report": "2d88a06145fa73c36327f2e142226bc40f596dc6bfc5573ead405d00de869147",
+  "kind": "oma-production-source-digests-v1",
+  "manifest": "4e40ab4f791dc8d99f5df5cd0a376821f45a733b80e247e6a7a724129dfefa95",
   "files": [
     {
       "path": "implementation/contracts.ts",
@@ -205,7 +204,7 @@
     },
     {
       "path": "src/config/defaults.ts",
-      "sha256": "8e61805c5bef99a148933c9d26387837e2d2a4e2bc225e3e0e3b00ed53d7c581"
+      "sha256": "a6a1605ce6acae36ae88555dd8044d1b330e995a404e36c943681adc6f3d5778"
     },
     {
       "path": "src/config/generations.ts",
@@ -218,6 +217,10 @@
     {
       "path": "src/config/policy.ts",
       "sha256": "69f36c0b478b70ab876d43ed6e2d6c78fe9694b9a2ce61f3cc1acd7d8bb903c5"
+    },
+    {
+      "path": "src/config/role-prompts.ts",
+      "sha256": "2a302311f541f06c7ce8ad4a4faf63bc7745a586a205f1ecbc7a866f54f2c0f7"
     },
     {
       "path": "src/diagnostics/files.ts",
@@ -405,7 +408,7 @@
     },
     {
       "path": "src/entry/pi-interactive-host.ts",
-      "sha256": "7cc1a7da72775f11546a71d4342c893d15b42d85aa54951b95a6d85b9625d17f"
+      "sha256": "f98a48960ce3595ac501c6d6bea1f46beca21f760f865749a0f1b20b288a5350"
     },
     {
       "path": "src/entry/pi-interactive.ts",
@@ -449,7 +452,7 @@
     },
     {
       "path": "src/extension/mail-tools.ts",
-      "sha256": "f5c4f8d47185388ccab8b803211b716d401f57a9fd320c8d34c5c3421ca2a7c8"
+      "sha256": "a7df59d71990553e3b92ca105177e19e8f7fa15befd3fe38f31f561bbdcec7f3"
     },
     {
       "path": "src/extension/principal-channel.ts",
@@ -457,11 +460,11 @@
     },
     {
       "path": "src/extension/principal-tools.ts",
-      "sha256": "3c3fda8e509f51fc4bb69652728c86dbcc624344113ea6297e0a8ec1fbf54238"
+      "sha256": "15b8c761d19f6d469f2d1cddabe644d0db673ab666ca59a114754e3db8af6b83"
     },
     {
       "path": "src/extension/review-tools.ts",
-      "sha256": "20ce6ccc2446c5332d44bbd31211a0277351cd588c15653353cc4a41f771eb59"
+      "sha256": "8b22400aa03345cd304c57da4ff2932a53b90e0e45a5ff15e6a8c6f4fc8d4bf3"
     },
     {
       "path": "src/extension/shared.ts",
@@ -1077,7 +1080,7 @@
     },
     {
       "path": "src/runtime/pi-spawn-plan.ts",
-      "sha256": "23bb7c1e153e315715384882cb7fa239c9059c1fcee4be13b3a7013e3b7b5248"
+      "sha256": "66dd7a6bdc38a37f4eff05c04a5644df58593a9231f1bd32ef2298876b92e0f4"
     },
     {
       "path": "src/runtime/principal-delivery.ts",
@@ -1333,7 +1336,7 @@
     },
     {
       "path": "src/tui/session.ts",
-      "sha256": "2b5621b7b5da682d5ddcd81158a8cd51481e27a0c634d8180a35c1e5cfe52b92"
+      "sha256": "ea6c737152b5e841f795df31a82387be1e6943caf95ca86a5615d2c2a00a5630"
     },
     {
       "path": "src/tui/sources/extensions.ts",
@@ -1413,7 +1416,7 @@
     },
     {
       "path": "src/views.ts",
-      "sha256": "38c73bb9b4aeb853b36526e8b5772849e98433fd0f174e4645d84905223d2b5c"
+      "sha256": "37f8ae9f5dcc9756647cd8c11254ac46eee07d2c7b84ac2387a0e0ef1ff168b9"
     },
     {
       "path": "src/views/pending-work.ts",

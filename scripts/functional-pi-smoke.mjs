@@ -20,6 +20,7 @@ import {
 } from "../dist/src/storage/paths.js";
 import { ALL_CAPS, storedSpec } from "../dist/test/fixtures/spec.js";
 import { TEST_VIEW_LIMITS } from "../dist/test/fixtures/limits.js";
+import { enterBoundedScript } from "./bounded-script.mjs";
 const FUNCTIONAL_LIMITS = Object.freeze({
   ...TEST_VIEW_LIMITS,
   idleStreamSeconds: 120,
@@ -27,6 +28,7 @@ const FUNCTIONAL_LIMITS = Object.freeze({
   mailBodyBytes: 1024 * 1024,
 });
 
+if (await enterBoundedScript(import.meta.url)) {
 const args = process.argv.slice(2);
 const option = (name) => {
   const at = args.indexOf(name);
@@ -175,4 +177,5 @@ try {
   store.close();
   if (!keep) rmSync(root, { recursive: true, force: true });
   else console.error(`preserved functional profile at ${root}`);
+}
 }

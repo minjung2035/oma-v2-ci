@@ -31,7 +31,6 @@ export const VERIFICATION_INPUT_ROOTS = Object.freeze([
   "tsconfig.build.json",
   "production-manifest.json",
   "production-files.txt",
-  "production-loc.json",
   "production-loc-hashes.json",
 ]);
 
