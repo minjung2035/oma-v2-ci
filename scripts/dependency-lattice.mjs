@@ -86,6 +86,9 @@ const LAYERS = Object.freeze([
       "src/broker/",
       "src/broker.ts",
       "src/runtime/",
+      // Pi-version-sensitive integration points (A7): the wire union, the
+      // settings bridge and the ambient surface the engine gives OMA.
+      "src/pi-compat/",
       "src/runner.ts",
       "src/sandbox.ts",
       // macOS host and hidden-VM guest services (docs/macos-platform.md):

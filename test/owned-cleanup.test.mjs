@@ -246,15 +246,6 @@ for (const stage of ['read', 'close']) test(`Owned cleanup engine file: ${stage}
   });
   assert.deepEqual(returned, [19, 11]);
 });
-test('Owned cleanup engine adoption: directory observation failure retains writer close failure without accessing a credential file', () => {
-  let returned = 0;
-  const api = load('src/runtime/pi-runtime.ts', {
-    '../storage/directory.js': { ensureDirectory() {} },
-    './process-lock.js': { ProcessLock: { acquire: () => ({ close() { returned++; throw secondary; } }) } },
-    'node:fs': { ...fs, readdirSync() { throw primary; }, openSync() { assert.fail('no file is opened'); } },
-  });
-  assert.throws(() => api.adoptEngineHome('/fixture/engine'), both); assert.equal(returned, 1);
-});
 
 for (const file of ['src/runtime/personal-settings.ts', 'src/runtime/pi-runtime.ts'])
   for (const failed of [false, true]) test(`Owned cleanup settings ${file}: ${failed ? 'read failure plus' : 'only'} writer close failure is not success`, t => {

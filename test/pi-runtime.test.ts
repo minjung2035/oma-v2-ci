@@ -1,11 +1,11 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { chmodSync, linkSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, utimesSync, writeFileSync } from "node:fs";
+import { chmodSync, linkSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { StoreError } from "../src/domain/errors.js";
 import {
-  ENGINE_HOME, PI_AGENT_DIR_ENV, PI_PACKAGE, adoptEngineHome,
+  ENGINE_HOME, PI_AGENT_DIR_ENV, PI_PACKAGE,
   piAgentDir, piIsolationEnv, preparePiRetry, preparePiInteractive, resolvePiRuntime,
 } from "../src/runtime/pi-runtime.js";
 import { sessionArgv, sessionEnv } from "../src/tui/session.js";
@@ -187,36 +187,6 @@ test("DR24: the engine is pointed at the Human's one OMA engine home, beside eve
   // The user's own Pi state must not appear anywhere in what we hand the engine.
   assert.doesNotMatch(runtime.agentDir, /(^|\/)\.pi(\/|$)/);
   assert.ok(runtime.agentDir.startsWith("/var/lib/oma/"));
-});
-
-test("DR24: the engine home takes on every earlier society's login, the newest where two hold one provider, and keeps its own", t => {
-  const data = scratch("oma-engine-home-"); t.after(() => rmSync(data, { recursive: true, force: true }));
-  const earlier = (society: string, auth: Record<string, unknown>, ageMs: number): void => {
-    mkdirSync(join(data, society, "pi", "bin"), { recursive: true });
-    writeFileSync(join(data, society, "pi", "auth.json"), JSON.stringify(auth));
-    writeFileSync(join(data, society, "pi", "settings.json"), JSON.stringify({ theme: society }));
-    writeFileSync(join(data, society, "pi", "bin", "rg"), "#!/bin/sh\n");
-    const when = new Date(Date.now() - ageMs);
-    utimesSync(join(data, society, "pi", "auth.json"), when, when);
-    utimesSync(join(data, society, "pi", "settings.json"), when, when);
-  };
-  earlier("first", { anthropic: { key: "old" }, groq: { key: "g" } }, 60_000);
-  earlier("second", { anthropic: { key: "new" } }, 1_000);
-  const home = join(data, ENGINE_HOME);
-  adoptEngineHome(home);
-  assert.deepEqual(JSON.parse(readFileSync(join(home, "auth.json"), "utf8")), { anthropic: { key: "new" }, groq: { key: "g" } });
-  assert.equal(JSON.parse(readFileSync(join(home, "settings.json"), "utf8")).theme, "second");
-  assert.equal(readFileSync(join(home, "bin", "rg"), "utf8"), "#!/bin/sh\n");
-  // Once the home has a login, a later start leaves it as the Human set it.
-  writeFileSync(join(home, "auth.json"), JSON.stringify({ openai: { key: "mine" } }));
-  adoptEngineHome(home);
-  assert.deepEqual(JSON.parse(readFileSync(join(home, "auth.json"), "utf8")), { openai: { key: "mine" } });
-  // A start that died after adopting the login and before the settings: the
-  // next start adopts what is still missing and leaves what was adopted.
-  rmSync(join(home, "settings.json"));
-  adoptEngineHome(home);
-  assert.equal(JSON.parse(readFileSync(join(home, "settings.json"), "utf8")).theme, "second");
-  assert.deepEqual(JSON.parse(readFileSync(join(home, "auth.json"), "utf8")), { openai: { key: "mine" } });
 });
 
 test("the Principal session carries the isolation variable to the engine", () => {

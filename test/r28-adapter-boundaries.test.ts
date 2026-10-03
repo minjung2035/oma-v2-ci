@@ -90,11 +90,11 @@ test("R28: pending stdin writes time out, reject overlap and settle on owned clo
   const child = spawn(process.execPath, ["-e", "process.stdin.resume(); setInterval(() => {}, 1000)"], { stdio: ["pipe", "pipe", "pipe"] });
   const exited = once(child, "close");
   const client = new PiRpcClient(child, limits); t.after(() => client.close());
-  await client.send({ type: "control" }); // normal control reaches the stream first
+  await client.send({ type: "get_state" }); // a normal command reaches the stream first
   blockStdinForTest(child);
-  const pending = client.send({ type: "blocked" });
+  const pending = client.send({ type: "abort" });
   const pendingCheck = assert.rejects(pending, errorCode("DEADLINE_EXCEEDED"));
-  await assert.rejects(client.send({ type: "overlap" }), errorCode("LIMIT_EXCEEDED"));
+  await assert.rejects(client.send({ type: "cycle_model" }), errorCode("LIMIT_EXCEEDED"));
   await pendingCheck;
   const ended = await client.completion;
   assert.equal(ended.state, "failed");

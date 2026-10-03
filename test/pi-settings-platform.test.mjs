@@ -10,6 +10,10 @@ import { Script } from 'node:vm';
 import ts from 'typescript';
 import { ProcessLock } from '../dist/src/runtime/process-lock.js';
 
+// The engine package is ESM-only: a CommonJS require inside the harness cannot
+// resolve it, so the real module is imported here and handed to the sandboxed
+// bridge -- its semantics stay the engine's own, only the resolution is the test's.
+const piPackage = await import('@earendil-works/pi-coding-agent');
 const require = createRequire(import.meta.url);
 function load(file, platform, replacements = {}) {
   const source = fs.readFileSync(file, 'utf8').replaceAll('import.meta.url', JSON.stringify(pathToFileURL(resolve(file)).href));
@@ -26,7 +30,13 @@ function fixture(t, platform, transform = value => value) {
   const root = fs.mkdtempSync(join(tmpdir(), 'oma-engine-settings-'));
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
   const metadata = transform(load('src/runtime/user-files.ts', platform));
-  const api = load('src/runtime/pi-runtime.ts', platform, { './user-files.js': metadata });
+  // The settings bridge is part of the platform surface under test: it is
+  // transpiled with the same fake platform and the same file metadata so a
+  // darwin assertion is not silently satisfied by the host's linux branch.
+  const bridge = load('src/pi-compat/settings.ts', platform,
+    { '../runtime/user-files.js': metadata, '@earendil-works/pi-coding-agent': piPackage });
+  const api = load('src/runtime/pi-runtime.ts', platform,
+    { './user-files.js': metadata, '../pi-compat/settings.js': bridge });
   return { root, api, path: join(root, 'settings.json'), metadata };
 }
 const json = file => JSON.parse(fs.readFileSync(file, 'utf8'));

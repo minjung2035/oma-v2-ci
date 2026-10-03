@@ -12,7 +12,7 @@ import { isValidSocietyName } from "../ids.js";
 import { StoreError } from "../domain/errors.js";
 import { DEPLOYMENT_LAYOUT } from "../domain/deployment.js";
 import { assertHostDirectoryLayout, hostLaunchLocation } from "../runtime/assets.js";
-import { adoptEngineHome, resolvePiRuntime } from "../runtime/pi-runtime.js";
+import { resolvePiRuntime } from "../runtime/pi-runtime.js";
 import { ensureDirectory, removeUnusedTree } from "../storage/directory.js";
 import { TuiApp, type AppPorts } from "../tui/app.js";
 import { codeFor, exitFor, fail as exitFailure } from "../tui/exit.js";
@@ -71,7 +71,6 @@ function usage(): never {
 async function login(dataRoot: string, project: string): Promise<never> {
   const stateRoot = join(dataRoot, project);
   const home = resolvePiRuntime({ stateRoot, override: process.env.OMA_PI_COMMAND }).agentDir;
-  adoptEngineHome(home);
   let lease: ReturnType<typeof tryHoldSociety>;
   try { lease = tryHoldSociety(home); }
   catch (error) { fail(`Could not take the engine home: ${errorWords(error)}`, codeFor(error)); }
@@ -679,9 +678,6 @@ async function main(argv: readonly string[]): Promise<void> {
     if (piRuntime.source !== "bundled")
       throw new StoreError("UNSUPPORTED_PROFILE", "The interactive UI requires the bundled engine. OMA_PI_COMMAND overrides are not supported here.");
     ensureDirectory(piRuntime.agentDir, 0o700);
-    // DR24: one engine home for the Human; the first start takes on what each
-    // society's own engine directory held before.
-    adoptEngineHome(piRuntime.agentDir);
     // PR-003/PR-004/FS-003: the model's tools and its CLI's cache work in the
     // Principal's private scratch, which provisioning created, not in the
     // private space that holds the Human's session history.

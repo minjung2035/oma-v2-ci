@@ -20,6 +20,9 @@ import { ProjectSessionDirectories } from "../tui/project-session-directories.js
 import { parseHostHistoryReference } from "../protocol/host-history.js";
 import { brandFooter, brandHeader, type OpenTuiBrand } from "../tui/open-tui-brand.js";
 import { preparePiInteractive } from "../runtime/pi-runtime.js";
+import { PI_RESUME_HINT } from "../pi-compat/env.js";
+import { PI_BUILTIN_COMMANDS } from "../pi-compat/commands.js";
+import { interactiveInternalsOf } from "../pi-compat/interactive-mode.js";
 import { ExtensionModules } from "../runtime/extension-modules.js";
 import { humanPromptFitsFrame } from "../tui/limits.js";
 import { UNSEEN, UNSEEN_EXCEPT_LAYOUT } from "../domain/unseen-text.js";
@@ -46,12 +49,9 @@ const numberEnv = (name: string): number => {
   return value;
 };
 
-/** The commands Pi's own editor handles, mirrored from the engine's
- * BUILTIN_SLASH_COMMANDS plus the ones it handles without listing them. A test
- * holds this to the engine's list, so an engine upgrade cannot drift from it. */
-export const PI_BUILTIN_COMMANDS: ReadonlySet<string> = new Set(["settings", "model", "tree", "thinking", "scoped-models",
-  "export", "import", "share", "bug", "copy", "name", "session", "changelog", "hotkeys", "fork", "clone", "trust", "login",
-  "logout", "new", "compact", "resume", "reload", "quit", "debug", "arminsayshi", "dementedelves"]);
+// The engine's own commands (A3): the mirror lives in the compat boundary and
+// is held to the engine's list by test/interactive-input.test.ts.
+export { PI_BUILTIN_COMMANDS };
 
 /** How oma describes the engine's commands whose own words name the engine as
  * the product. */
@@ -450,7 +450,7 @@ export async function runInteractive(): Promise<void> {
   // own session, so that line would name a command that does not apply.
   const write = process.stdout.write.bind(process.stdout) as (chunk: unknown, ...rest: unknown[]) => boolean;
   process.stdout.write = ((chunk: unknown, ...rest: unknown[]) =>
-    quitting && String(chunk).includes("To resume this session:") ? true : write(chunk, ...rest)) as typeof process.stdout.write;
+    quitting && String(chunk).includes(PI_RESUME_HINT) ? true : write(chunk, ...rest)) as typeof process.stdout.write;
   const rpc = new InteractiveChannel(new Socket({ fd: INTERACTIVE_RPC_FD, readable: true, writable: true }), limits, event => {
     if (!ready) { rpc.send({ type: "response", id: event.id ?? "", command: "prompt", success: false, error: "interactive UI is not ready" }); return; }
     if (event.type !== "prompt" || typeof event.message !== "string" || typeof event.id !== "string") { die(); return; }
@@ -543,9 +543,11 @@ export async function runInteractive(): Promise<void> {
   })();
   follow(owned.session);
   mode = new InteractiveMode(owned, { tuiMode: "fullscreen" });
-  const fatalOwner = mode as unknown as { handleFatalRuntimeError(prefix: string, error: unknown): Promise<void> };
-  const fatal = fatalOwner.handleFatalRuntimeError.bind(mode);
-  fatalOwner.handleFatalRuntimeError = async (prefix, error) => {
+  // Every replaced private member is named in pi-compat/interactive-mode.ts;
+  // the shapes there are what the engine implements at this version.
+  const own = interactiveInternalsOf(mode);
+  const fatal = own.handleFatalRuntimeError.bind(mode);
+  own.handleFatalRuntimeError = async (prefix, error) => {
     try { await owned.dispose(); }
     catch (cleanup) { error = new AggregateError([error, cleanup], "Interactive failure and cleanup failed"); }
     await fatal(prefix, error);
@@ -553,19 +555,13 @@ export async function runInteractive(): Promise<void> {
   // OMA loads no project resources (no project extensions, skills, prompts or
   // context files), so Pi's project-trust warning has nothing to warn about.
   // It appeared only because the engine's HOME is the Principal's scratch.
-  (mode as unknown as { renderProjectTrustWarningIfNeeded(): void }).renderProjectTrustWarningIfNeeded = () => {};
+  own.renderProjectTrustWarningIfNeeded = () => {};
   // oma is not the engine's product: no hint to report a failed turn to the
   // engine's developers, and a crash is resumed with /resume, not `pi -r`.
-  const words = mode as unknown as { suggestBugReport(): void; crashReportInstructions(): string };
-  words.suggestBugReport = () => {};
-  words.crashReportInstructions = () => "Start oma and reopen this session with /resume.";
+  own.suggestBugReport = () => {};
+  own.crashReportInstructions = () => "Start oma and reopen this session with /resume.";
   // The engine's own name and working directory are not oma's: its title,
   // its export's name and place, and its crash advice say oma's.
-  const own = mode as unknown as {
-    updateTerminalTitle(): void; ui: { terminal: { setTitle(title: string): void } };
-    handleExportCommand(text: string): Promise<void>; getPathCommandArgument(text: string, command: string): string | undefined;
-    getCrashExtensionHint(error: unknown): string | undefined;
-  };
   own.updateTerminalTitle = () => { own.ui.terminal.setTitle(omaTerminalTitle(owned.session.sessionManager.getSessionName(), projectDir)); };
   const engineExport = own.handleExportCommand.bind(mode);
   own.handleExportCommand = text =>
@@ -573,9 +569,8 @@ export async function runInteractive(): Promise<void> {
   const engineCrashHint = own.getCrashExtensionHint.bind(mode);
   own.getCrashExtensionHint = error => omaCrashHint(engineCrashHint(error));
   // Fetching the engine's search tools is not news on a start; a failure is.
-  const toolStatus = mode as unknown as { showManagedToolStatus(status: { type: string; message: string }): void };
-  const showToolStatus = toolStatus.showManagedToolStatus.bind(mode);
-  toolStatus.showManagedToolStatus = status => { if (status.type === "warning") showToolStatus(status); };
+  const showToolStatus = own.showManagedToolStatus.bind(mode);
+  own.showManagedToolStatus = status => { if (status.type === "warning") showToolStatus(status); };
   try {
     await mode.init();
     if (!editorInstalled) throw new Error("Open TUI did not install its editor");

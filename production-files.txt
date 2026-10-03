@@ -160,6 +160,12 @@ src/mail/reconcile.ts
 src/mail/routing.ts
 src/mail/serialize.ts
 src/module-ports.ts
+src/pi-compat/commands.ts
+src/pi-compat/env.ts
+src/pi-compat/interactive-mode.ts
+src/pi-compat/session.ts
+src/pi-compat/settings.ts
+src/pi-compat/wire.ts
 src/pi-extension.ts
 src/platform/guest/archive.ts
 src/platform/guest/control.ts

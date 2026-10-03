@@ -87,6 +87,8 @@ function world({ fail, close, dispose, run, construct, catalog, beforeSwitch, se
       close() { calls.push('modules-close'); moduleClose?.(); }
     } },
     '../runtime/pi-runtime.js': { PI_AGENT_DIR_ENV: 'PI_CODING_AGENT_DIR', preparePiInteractive() {}, preparePiRetry() {} },
+    '../pi-compat/env.js': { PI_RESUME_HINT: 'To resume this session:' },
+    '../pi-compat/interactive-mode.js': { interactiveInternalsOf: mode => mode },
     '../runtime/personal-models.js': { personalModels: async () => credentials },
     '../protocol/guest-history.js': { isGuestHistoryReference: value => value.startsWith('oma-guest-history:') },
     '../platform/host/guest-histories.js': { async inspectMacGuestHistory() { calls.push('guest-history'); },

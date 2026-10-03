@@ -15,6 +15,8 @@ import { readPackageIndex } from "../runtime/pi-packages.js";
 import { assertExtensionIntegrity, verifiedPaths } from "../runtime/extension-integrity.js";
 import { ExtensionModules } from "../runtime/extension-modules.js";
 import { PI_AGENT_DIR_ENV, preparePiInteractive, preparePiRetry } from "../runtime/pi-runtime.js";
+import { PI_RESUME_HINT } from "../pi-compat/env.js";
+import { interactiveInternalsOf } from "../pi-compat/interactive-mode.js";
 import { personalModels } from "../runtime/personal-models.js";
 import { isGuestHistoryReference } from "../protocol/guest-history.js";
 import { inspectMacGuestHistory, listMacGuestHistories } from "../platform/host/guest-histories.js";
@@ -56,7 +58,7 @@ async function main(): Promise<void> {
       await new Promise<void>((resolve, reject) => process.send!({ type: "switch", ...(file === undefined ? {} : { session: file }) },
         error => { if (error) reject(error); else resolve(); }));
     } catch (error) { switching = false; throw error; }
-    await (mode as unknown as { shutdown(): Promise<void> }).shutdown();
+    await interactiveInternalsOf(mode).shutdown();
   };
   const modelConfig = async (ctx: ExtensionContext, epoch: number): Promise<void> => {
     const session = runtime!.session;
@@ -174,8 +176,7 @@ async function main(): Promise<void> {
         catch (error) {
           try { services.resourceLoader.getExtensions().runtime.invalidate(); }
           catch (cleanup) { error = new AggregateError([error, cleanup], "Personal reload and cleanup failed"); }
-          if (mode !== undefined) await (mode as unknown as { handleFatalRuntimeError(prefix: string, error: unknown): Promise<void> })
-            .handleFatalRuntimeError("Personal reload failed", error);
+          if (mode !== undefined) await interactiveInternalsOf(mode).handleFatalRuntimeError("Personal reload failed", error);
           throw error;
         }
       };
@@ -236,11 +237,9 @@ async function main(): Promise<void> {
   };
   runtime.importFromJsonl = async () => { throw new StoreError("INVALID_REQUEST", "Use /resume for an OMA history; external histories have no OMA birth"); };
   mode = new InteractiveMode(runtime, { tuiMode: "fullscreen" });
-  const presentation = mode as unknown as {
-    showSessionSelector(): void; updateTerminalTitle(): void; ui: { terminal: { setTitle(value: string): void } };
-    renderProjectTrustWarningIfNeeded(): void; crashReportInstructions(): string;
-    handleFatalRuntimeError(prefix: string, error: unknown): Promise<void>;
-  };
+  // The private members replaced below are all named in
+  // pi-compat/interactive-mode.ts.
+  const presentation = interactiveInternalsOf(mode);
   const fatal = presentation.handleFatalRuntimeError.bind(presentation);
   presentation.handleFatalRuntimeError = async (prefix, error) => {
     try { await runtime!.dispose(); }
@@ -272,14 +271,14 @@ async function main(): Promise<void> {
       };
       return new SessionSelectorComponent(load, load, file => { done(); if (current(epoch)) void runtime!.switchSession(file)
         .catch(error => { if (current(epoch)) ctx.ui.notify(String(error), "error"); }); },
-        done, () => { done(); if (current(epoch)) void (mode as unknown as { shutdown(): Promise<void> }).shutdown(); }, () => tui.requestRender(),
+        done, () => { done(); if (current(epoch)) void interactiveInternalsOf(mode!).shutdown(); }, () => tui.requestRender(),
         { keybindings, showRenameHint: false }, runtime!.session.sessionFile);
     }).catch(error => { if (current(epoch)) ctx.ui.notify(String(error), "error"); });
   };
   // Upstream's exit hint refers to Pi, not the host that owns this birth.
   process.stdout.write = ((chunk: unknown, ...args: unknown[]) =>
     (write as (...values: unknown[]) => boolean).call(process.stdout,
-      String(chunk).includes("To resume this session:")
+      String(chunk).includes(PI_RESUME_HINT)
         ? "Reopen this Personal session with oma --resume " + runtime!.session.sessionFile + "\n" : chunk,
       ...args)) as typeof process.stdout.write;
   await mode.run();
