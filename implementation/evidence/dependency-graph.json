@@ -116,7 +116,6 @@
   "src/entry/pi-personal.ts",
   "src/entry/runner.ts",
   "src/extension/batch-view.ts",
-  "src/extension/cli-process.ts",
   "src/extension/contained-files.ts",
   "src/extension/contained-search.ts",
   "src/extension/contained-tools.ts",
@@ -171,6 +170,7 @@
   "src/mail/headers.ts",
   "src/mail/materializer.ts",
   "src/mail/reconcile.ts",
+  "src/mail/review-bounds.ts",
   "src/mail/routing.ts",
   "src/mail/serialize.ts",
   "src/module-ports.ts",
@@ -1813,7 +1813,7 @@
     "src/reconcile/",
     "src/review.ts"
    ],
-   "files": 41
+   "files": 42
   },
   {
    "index": 4,
@@ -1844,28 +1844,29 @@
     "src/extension/",
     "src/rpc-client.ts"
    ],
-   "files": 83
+   "files": 82
   }
  ],
  "files": 377,
- "runtimeEdges": 1607,
- "typeOnlyEdges": 424,
+ "runtimeEdges": 1608,
+ "typeOnlyEdges": 427,
  "runtimeEdgeMatrix": {
   "L1-kernel -> L1-kernel": 310,
+  "L1-kernel -> L3-workflow": 2,
   "L2-facts -> L1-kernel": 36,
   "L2-facts -> L2-facts": 5,
-  "L3-workflow -> L1-kernel": 220,
+  "L3-workflow -> L1-kernel": 221,
   "L3-workflow -> L2-facts": 14,
-  "L3-workflow -> L3-workflow": 68,
+  "L3-workflow -> L3-workflow": 69,
   "L4-orchestration -> L1-kernel": 333,
   "L4-orchestration -> L2-facts": 8,
   "L4-orchestration -> L3-workflow": 19,
   "L4-orchestration -> L4-orchestration": 166,
-  "L5-entry -> L1-kernel": 126,
+  "L5-entry -> L1-kernel": 124,
   "L5-entry -> L2-facts": 2,
   "L5-entry -> L3-workflow": 7,
   "L5-entry -> L4-orchestration": 132,
-  "L5-entry -> L5-entry": 161
+  "L5-entry -> L5-entry": 160
  },
  "upwardTypeOnlyEdges": [
   {
@@ -1898,15 +1899,15 @@
   "src/domain/derived.ts": 19,
   "src/process/run.ts": 18,
   "src/store.ts": 18,
-  "src/domain/deployment.ts": 17
+  "src/process/policies.ts": 17
  },
  "fanOut": {
   "src/entry/oma-society.ts": 40,
   "src/broker.ts": 31,
   "src/mail.ts": 29,
   "src/entry/broker.ts": 28,
+  "src/review.ts": 21,
   "src/entry/oma-mac.ts": 20,
-  "src/review.ts": 20,
   "src/runtime/client-runtime.ts": 19,
   "src/git.ts": 18,
   "src/pi-extension.ts": 18,
@@ -1924,7 +1925,7 @@
   "node:async_hooks": 4,
   "node:child_process": 8,
   "node:crypto": 45,
-  "node:fs": 115,
+  "node:fs": 114,
   "node:fs/promises": 1,
   "node:http": 1,
   "node:https": 1,

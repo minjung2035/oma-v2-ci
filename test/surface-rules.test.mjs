@@ -271,8 +271,8 @@ export async function callActor() {
   const frame = currentContext().env.OMA_FRAME_BYTES;
   return frame;
 }`;
-  // The two forwarders, shaped as the real ones are: the environment copied
-  // from the engine, and the process owner adding the credential descriptor.
+  // The forwarder, shaped as the real one is: the environment copied from the
+  // engine for the tools' client.
   const tools = copied => `
 const FRAME_BYTES = "OMA_FRAME_BYTES";
 export function cliEnvironment(home, socket) {
@@ -283,27 +283,16 @@ export function cliEnvironment(home, socket) {
   }
   return environment;
 }`;
-  const owner = setsFd => `
-export const CLI_CREDENTIAL_FD_ENV = "OMA_PRINCIPAL_CREDENTIAL_FD";
-export function runCliProcess(run) {
-  const env = { ...run.env };
-  ${setsFd ? "if (run.grant !== null) env[CLI_CREDENTIAL_FD_ENV] = \"3\";" : ""}
-  return env;
-}`;
-  const tree = ({ copied = "FRAME_BYTES", setsFd = true, producerExtra = "" } = {}) => ({
+  const tree = ({ copied = "FRAME_BYTES", producerExtra = "" } = {}) => ({
     "src/tui/session.ts": producer(producerExtra),
     "src/client/settings.ts": consumer,
     "src/extension/mail-tools.ts": tools(copied),
-    "src/extension/cli-process.ts": owner(setsFd),
   });
 
-  // Accept: everything the CLI reads at call time is put there by one of the
-  // two forwarders, and everything copied from the engine is set by the host.
+  // Accept: everything the CLI reads at call time is put there by the
+  // forwarder, and everything copied from the engine is set by the host.
   withTree(tree(), findings => clean(findings, "principal-session-env", "principal-secret-env"));
 
-  // Reject: the process owner forgets the credential descriptor -- the CLI
-  // would never attach, and nothing else in the tree would look wrong.
-  withTree(tree({ setsFd: false }), findings => clean(findings, "principal-session-env", "principal-secret-env"));
   // Reject: the tools stop copying the frame bound the CLI reads.
   withTree(tree({ copied: "" }), findings => {
     assert.ok(findings.some(value => value.rule === "principal-session-env" && value.reason.includes("OMA_FRAME_BYTES")));
@@ -322,8 +311,10 @@ export function runCliProcess(run) {
     assert.ok(findings.some(value => value.rule === "principal-secret-env" && value.file === "src/cli/extra.ts"));
   });
 
-  // Near miss: the descriptor's name shares the prefix and is not a secret.
-  withTree(tree(), findings => assert.ok(!findings.some(value => value.rule === "principal-secret-env")));
+  // Near miss: the removed descriptor's name shares the prefix and is not a
+  // secret -- the rule distinguishes a descriptor number from the credential.
+  withTree({ ...tree(), "src/cli/extra.ts": 'export const read = () => process.env["OMA_PRINCIPAL_CREDENTIAL_FD"];' },
+    findings => assert.ok(!findings.some(value => value.rule === "principal-secret-env")));
   // Near miss: names the consumer reads only to derive an endpoint are not
   // requirements of a caller that was given one.
   withTree(tree(), findings => {

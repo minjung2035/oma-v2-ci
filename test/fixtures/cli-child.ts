@@ -1,11 +1,9 @@
-import type { Socket } from "node:net";
 import { spawnOwnedRpc } from "../../src/process/async.js";
 import { inheritedFence, SOCIETY_FENCE_ENV, SOCIETY_FENCE_FD } from "../../src/client/fence.js";
-import { encodeCredential, type PrincipalGrant } from "../../src/client/codecs.js";
 
 export interface CliRun {
   node: string; cli: string; args: readonly string[]; cwd: string;
-  env: Readonly<Record<string, string>>; grant: PrincipalGrant | null;
+  env: Readonly<Record<string, string>>;
   signal?: AbortSignal | undefined; timeoutMs?: number;
 }
 export interface CliResult { code: number; stdout: string; stderr: string; finished: boolean }
@@ -14,10 +12,10 @@ export function runCliProcess(run: CliRun): Promise<CliResult> {
     throw new RangeError("CLI phase timeout must be a positive timer-safe integer");
   if (run.signal?.aborted) return Promise.resolve({ code: 1, stdout: "", stderr: "", finished: false });
   const fence = inheritedFence();
-  const env = { ...run.env, ...(run.grant === null ? {} : { OMA_PRINCIPAL_CREDENTIAL_FD: "3" }),
+  const env = { ...run.env,
     ...(fence === undefined ? {} : { [SOCIETY_FENCE_ENV]: String(SOCIETY_FENCE_FD) }) };
   return new Promise(resolve => {
-    const child = spawnOwnedRpc(run.node, [run.cli, ...run.args], run.cwd, env, run.grant !== null, fence);
+    const child = spawnOwnedRpc(run.node, [run.cli, ...run.args], run.cwd, env, false, fence);
     const stdout: Buffer[] = [], stderr: Buffer[] = [];
     let outBytes = 0, errBytes = 0, stopped = false;
     const stop = () => { stopped = true; child.kill("SIGKILL"); };
@@ -29,10 +27,6 @@ export function runCliProcess(run: CliRun): Promise<CliResult> {
     child.stdout.on("data", collect(stdout, true)); child.stderr.on("data", collect(stderr, false));
     const timer = run.timeoutMs === undefined ? undefined : setTimeout(stop, run.timeoutMs);
     if (run.signal?.aborted) stop(); else run.signal?.addEventListener("abort", stop, { once: true });
-    if (run.grant !== null) {
-      const channel = child.stdio[3] as Socket;
-      channel.on("error", stop); channel.end(encodeCredential(run.grant));
-    }
     child.once("close", code => {
       clearTimeout(timer); run.signal?.removeEventListener("abort", stop);
       resolve({ code: code ?? 1, stdout: Buffer.concat(stdout).toString("utf8"), stderr: Buffer.concat(stderr).toString("utf8"), finished: code !== null && !stopped });

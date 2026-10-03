@@ -226,13 +226,15 @@ const FRAME_BYTES = "OMA_FRAME_BYTES";
 const CONTEXT_BYTES = "OMA_CONTEXT_BYTES";
 const BUNDLE_BYTES = "OMA_BUNDLE_BYTES";
 
-/** The environment the model-facing CLI is started with.
+/** The environment the tools' client is configured with.
  *
  * It is built, never inherited, so anything else in the engine's environment
  * -- a provider key, a session path -- cannot travel with it. Nothing secret
- * is in it: a Principal credential goes to the CLI on its own private
- * descriptor (see cli-process.ts), because an environment is readable by any
- * process of this user through /proc/<pid>/environ.
+ * is in it: a Principal credential never enters an environment at all. It
+ * reaches the engine on its private host channel and lives in
+ * PrincipalChannel's module memory (the credential line is the shared codec
+ * in client/codecs.ts), because an environment is readable by any process of
+ * this user through /proc/<pid>/environ.
  */
 export function cliEnvironment(home: string, socket: string, archive: string): Record<string, string> {
   const environment: Record<string, string> = {
@@ -245,8 +247,10 @@ export function cliEnvironment(home: string, socket: string, archive: string): R
   };
   // The frame and stream bounds the broker was configured with. Without them
   // the CLI falls back to its own defaults, which are not necessarily this
-  // society's.
-  for (const name of [FRAME_BYTES, CONTEXT_BYTES, BUNDLE_BYTES, "OMA_PROJECT_GIT", "OMA_CONTEXT_GIT", "OMA_WORKER_ARCHIVE"]) {
+  // society's. OMA_ACTOR is the ambient actor identity, not a secret: the
+  // client's submit notices name the same actor a manual `oma submit` would.
+  for (const name of [FRAME_BYTES, CONTEXT_BYTES, BUNDLE_BYTES, "OMA_ACTOR",
+      "OMA_PROJECT_GIT", "OMA_CONTEXT_GIT", "OMA_WORKER_ARCHIVE"]) {
     const value = process.env[name];
     if (value !== undefined && value.length > 0) environment[name] = value;
   }

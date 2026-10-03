@@ -104,12 +104,18 @@ export class Client {
         content: { ...prepared.digest, mediaType: "application/vnd.oma.context-v1" } }, digest: prepared.digest, stream: prepared.content };
     }, () => ({ expected, goalMail: { subject } }), signal);
   }
+  /** Publish the candidate under `key`'s own frozen request, `${key}.submit`,
+   * while every recovery text names `key` -- the request the caller actually
+   * started. The two identities stay apart: the frozen request, its replay and
+   * its `operation.get` lookups keep the `.submit` key; only what the model is
+   * told to query again wears the parent's. */
   private async ensurePublished(candidate: string, key: string): Promise<void> {
     const known = await this.query("git.known", { candidate }, currentContext().signal);
     if (known.hasCandidate) return;
     const self = this.context.env.OMA_ACTOR ?? "commons";
-    const receipt = await this.requests().requestReceipt("git.submit", key, () => {
-      const prepared = runtime().submit(candidate, key, known);
+    const submitKey = `${key}.submit`;
+    const receipt = await this.requests().requestReceipt("git.submit", submitKey, () => {
+      const prepared = runtime().submit(candidate, submitKey, known);
       const params: Record<string, unknown> = { candidate, exportRef: prepared.exportRef, prerequisites: prepared.prerequisites,
         to: [self], subject: `merge candidate ${candidate.slice(0, 12)}`,
         body: "Candidate for a merge request; review happens in the request thread.", paths: [] };
@@ -117,7 +123,7 @@ export class Client {
       const digest = { bytes: prepared.content.length, sha256: sha256(prepared.content) };
       params.bundle = { ...digest, mediaType: "application/x-git-bundle" };
       return { method: "git.submit", params, digest, stream: prepared.content };
-    }, () => ({ candidate, to: [self] }));
+    }, () => ({ candidate, to: [self] }), { displayKey: key });
     if (receipt.state !== "succeeded") throw new DeferredReceipt(receipt, key);
   }
   async review(kind: "merge" | "challenge", input: ReviewInput, key: string, signal?: AbortSignal): Promise<string> {
@@ -161,7 +167,7 @@ export class Client {
         if (pair !== null) {
           if (pair.base === null) throw new ClientError("no recorded base: run `git fetch origin main` and build the candidate on it", 2, key);
           if (runtime().workspaceDirty()) process.stderr.write("oma: workspace has uncommitted changes that are not part of the candidate\n");
-          await this.ensurePublished(pair.candidate, `${key}.submit`);
+          await this.ensurePublished(pair.candidate, key);
         }
         params = { kind: `${kind}.open`, tier: input.tier, title: input.title, reason: bodyText(input.reason ?? ""),
           ...(kind === "challenge" ? { merge: input.merge } : {}), ...pair };

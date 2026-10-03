@@ -208,21 +208,107 @@ test("body and answer bounds count UTF-8 bytes; pre-abort keeps the request key 
   } finally { installClientRuntime(); rmSync(root, { recursive: true, force: true }); }
 });
 
-for (const state of ["pending", "unknown"] as const) test(`candidate publication ${state} stops review with the submit key, never opens a new effect`, async () => {
-  const root = scratch(), methods: string[] = [], candidate = "a".repeat(40), base = "b".repeat(40);
+for (const state of ["pending", "unknown"] as const) test(`candidate publication ${state} stops review naming the open key, while the frozen request stays <key>.submit`, async () => {
+  const root = scratch(), sent: { method: string; request: string | undefined; params: Record<string, unknown> }[] = [],
+    candidate = "a".repeat(40), base = "b".repeat(40);
   installRuntime({ ...CLIENT_RUNTIME, resolveOid: value => value, recordedBase: () => base, workspaceDirty: () => false,
     submit: () => ({ exportRef: "refs/oma/export/local", prerequisites: [], content: Buffer.from("bundle") }),
-    channel: () => ({ connect: async () => {}, close() {}, call: async method => {
-      methods.push(method);
+    channel: () => ({ connect: async () => {}, close() {}, call: async (method, params, options) => {
+      sent.push({ method, params: params as Record<string, unknown>, request: options?.request });
       return { ok: true, result: method === "git.known" ? { hasCandidate: false, prerequisites: [] } : { operation, state } };
     } }) });
   try {
     const client = new Client({ cwd: root, env: { HOME: root, OMA_SOCKET: join(root, "socket"), OMA_ACTOR: "alice" } });
     const done = client.review("merge", { action: "open", candidate, base, title: "t", tier: "LOW", reason: "r" }, "open");
-    if (state === "pending") assert.match(await done, /--request open\.submit/);
-    else await assert.rejects(done, error => error instanceof ClientError && error.request === "open.submit" && /open\.submit/.test(error.message));
-    assert.deepEqual(methods, ["git.known", "git.submit"]);
+    // Recovery text names the request the model actually started -- never the
+    // derived `<key>.submit` identity.
+    if (state === "pending") {
+      const text = await done;
+      assert.match(text, /--request open\b/);
+      assert.doesNotMatch(text, /open\.submit/);
+    } else await assert.rejects(done, error =>
+      error instanceof ClientError && error.request === "open" && /--request open\b/.test(error.message) && !/open\.submit/.test(error.message));
+    // The frozen request itself keeps the `.submit` key on the wire and in the
+    // request cache, so a replay looks up and resends `open.submit`.
+    assert.deepEqual(sent.map(row => row.method), ["git.known", "git.submit"]);
+    assert.equal(sent[1]!.request, "open.submit");
     assert.equal(CLIENT_RUNTIME.cache(root, 2 * 256 * 1024).read("open").kind, "absent");
     assert.equal(CLIENT_RUNTIME.cache(root, 2 * 256 * 1024).read("open.submit").kind, "present");
   } finally { installClientRuntime(); rmSync(root, { recursive: true, force: true }); }
+});
+
+test("a frozen submit is replayed under <key>.submit even though recovery text names the open key", async () => {
+  const root = scratch(), candidate = "a".repeat(40), base = "b".repeat(40);
+  const seen: { method: string; key: string | undefined; params: Record<string, unknown> }[] = [];
+  installRuntime({ ...CLIENT_RUNTIME, resolveOid: value => value, recordedBase: () => base, workspaceDirty: () => false,
+    submit: () => { throw new Error("a replay never rebuilds the frozen request"); },
+    channel: () => ({ connect: async () => {}, close() {}, call: async (method, params, options) => {
+      seen.push({ method, key: options?.request, params: params as Record<string, unknown> });
+      if (method === "git.known") return { ok: true, result: { hasCandidate: false, prerequisites: [] } };
+      if (method === "operation.get") return { ok: true, result: receiptNotFound };
+      if (method === "git.submit") return { ok: true, result: { operation, state: "succeeded",
+        result: { kind: "git.submit", candidate, publishedRef: `refs/oma/published/alice/${operation}`, message: "m-00000000-0000-4000-8000-000000000002-0", recipientCount: 1 } } };
+      return { ok: true, result: { operation, state: "succeeded",
+        result: { kind: "attest.record", request: "merge-00000002", messages: ["m-00000000-0000-4000-8000-000000000003-0"], recipientCount: 1 } } };
+    } }) });
+  // Replay: `open.submit` is frozen, the ledger answers REQUEST_NOT_FOUND, and
+  // the frozen request is resent -- under its own key, not the display key.
+  const cache = new RequestCache(root);
+  cache.freeze({ key: "open.submit", method: "git.submit", createdAtMs: 1,
+    params: { candidate, exportRef: "refs/oma/export/local", prerequisites: [], to: ["alice"],
+      subject: `merge candidate ${candidate.slice(0, 12)}`, body: "Candidate for a merge request; review happens in the request thread.", paths: [] } });
+  try {
+    const client = new Client({ cwd: root, env: { HOME: root, OMA_SOCKET: join(root, "socket"), OMA_ACTOR: "alice" } });
+    const text = await client.review("merge", { action: "open", candidate, base, title: "t", tier: "LOW", reason: "r" }, "open");
+    assert.match(text, /succeeded/);
+    const lookup = seen.find(row => row.method === "operation.get");
+    assert.deepEqual(lookup?.params, { key: "open.submit" }, "the replay lookup named the display key instead of the frozen request's");
+    assert.equal(seen.find(row => row.method === "git.submit")?.key, "open.submit");
+    assert.equal(seen.find(row => row.method === "attest.record")?.key, "open");
+  } finally { installClientRuntime(); rmSync(root, { recursive: true, force: true }); }
+});
+
+test("mail-v1/E27: the tool path's submit notice names the engine's actor, like a manual `oma submit`", async () => {
+  const root = scratch(), candidate = "a".repeat(40), base = "b".repeat(40);
+  const path = join(root, "broker.sock");
+  const frames: Record<string, unknown>[] = [];
+  const sockets = new Set<Socket>();
+  const server = createServer(socket => {
+    sockets.add(socket); socket.on("close", () => sockets.delete(socket)); socket.on("error", () => {});
+    const parser = new FrameParser(256 * 1024);
+    socket.on("data", (chunk: Buffer) => {
+      for (const frame of parser.feed(chunk)) {
+        frames.push(frame.raw);
+        const result = frame.raw.method === "git.known" ? { hasCandidate: false, prerequisites: [] }
+          : frame.raw.method === "git.submit" ? { operation, state: "succeeded",
+              result: { kind: "git.submit", candidate, publishedRef: `refs/oma/published/alice/${operation}`, message, recipientCount: 1 } }
+          : { operation, state: "succeeded",
+              result: { kind: "attest.record", request: "merge-00000002", messages: [message], recipientCount: 1 } };
+        socket.write(encodeFrame({ v: 1, id: frame.raw.id, ok: true, result }));
+      }
+    });
+  });
+  await new Promise<void>(resolve => server.listen(path, resolve));
+  installRuntime({ ...CLIENT_RUNTIME, resolveOid: value => value, recordedBase: () => base, workspaceDirty: () => false,
+    submit: () => ({ exportRef: "refs/oma/export/local", prerequisites: [] }) });
+  const previous = { ...process.env };
+  const tools = new Map<string, { execute(id: string, params: unknown): Promise<{ content: { text: string }[] }> }>();
+  try {
+    // The engine's environment, as the sandbox sets it for a Resident (or the
+    // host for the Principal): OMA_ACTOR is the ambient actor identity.
+    Object.assign(process.env, { OMA_AGENT_HOME: root, OMA_MAIL_ARCHIVE: join(root, "archive"), OMA_SOCKET: path, OMA_ACTOR: "alice" });
+    registerOmaTools({ registerTool: (tool: never) => tools.set((tool as { name: string }).name, tool) } as never, root);
+    const answer = await tools.get("oma_merge")!.execute("call-1",
+      { action: "open", tier: "LOW", title: "t", reason: "r", candidate, base, request: "open" });
+    assert.match(answer.content[0]!.text, /succeeded/);
+    const submitted = frames.find(frame => frame.method === "git.submit");
+    assert.deepEqual((submitted?.params as { to?: string[] } | undefined)?.to, ["alice"],
+      "the tool path mailed the submit notice to commons while a manual `oma submit` mails the actor");
+  } finally {
+    installClientRuntime();
+    for (const name of Object.keys(process.env)) if (!(name in previous)) delete process.env[name]; Object.assign(process.env, previous);
+    for (const socket of sockets) socket.destroy();
+    await new Promise<void>(resolve => server.close(() => resolve()));
+    rmSync(root, { recursive: true, force: true });
+  }
 });

@@ -1,6 +1,6 @@
 {
   "kind": "oma-production-source-digests-v1",
-  "manifest": "c81ba410a90e069666b2d15345957da46021a5002c8e10c95f5fd0e895546f04",
+  "manifest": "c2f489f8c78e2bda18ebfde98d7302cce39743b33de88be9a247115c918fc0a4",
   "files": [
     {
       "path": "implementation/contracts.ts",
@@ -168,7 +168,7 @@
     },
     {
       "path": "src/cli/transport.ts",
-      "sha256": "1bade3cdd98b4d60510a8f1220eb045b004dd7451f107040d79b1a5c5c116ce3"
+      "sha256": "1f109d31ee02869e48554230659cafb8a5e09d624d792f372bc48d0efb7e7008"
     },
     {
       "path": "src/client/codecs.ts",
@@ -188,7 +188,7 @@
     },
     {
       "path": "src/client/index.ts",
-      "sha256": "b209b8a78c67c0b1732fcb5f06708405c40b99e4822ef1c2516bb93928aa1bb9"
+      "sha256": "db710f22860f76578b690595dbfb042ef06159a1b047ed65218f0d639968bdd7"
     },
     {
       "path": "src/client/limits.ts",
@@ -443,10 +443,6 @@
       "sha256": "7cff25ec8f757e0c885db3b6e2d248e511a53223cabbcd8b952b8bbbe5a68e0e"
     },
     {
-      "path": "src/extension/cli-process.ts",
-      "sha256": "ed9328473003eb51d3558c1c66b2a7f6ed9f4f1b509f9bab866a5accdc3e474b"
-    },
-    {
       "path": "src/extension/contained-files.ts",
       "sha256": "3bb294fff9ee21a0537432aaea514dd349fbb5368d08f03e74fc3cda1c4116e8"
     },
@@ -468,7 +464,7 @@
     },
     {
       "path": "src/extension/mail-tools.ts",
-      "sha256": "e404c4157e74f05d67ab8d26277de3bd10582c15a5b384cccbce59b134cdf185"
+      "sha256": "b2dac66e37a1177d01a9f310deffa988756642bdfb4138c15cc0a190de736491"
     },
     {
       "path": "src/extension/principal-channel.ts",
@@ -700,7 +696,7 @@
     },
     {
       "path": "src/pi-extension.ts",
-      "sha256": "a7355e5c07d6c06a068eabc59a3f98882704065bbcc7f18ce464315024e0caff"
+      "sha256": "dfb7d210a21215fc9abbaa007bea8e9317af59e55b9f309963ff98653c06a5fb"
     },
     {
       "path": "src/platform/guest/archive.ts",

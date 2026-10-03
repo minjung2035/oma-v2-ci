@@ -3,11 +3,12 @@
  * The trusted extension may not import OMA's protocol module, so it mirrors the
  * channel's names and credential line. These tests hold the mirror to the
  * original on every line either end could see, and exercise the extension's
- * reader, the CLI's reader and the extension's bounded mail read directly.
+ * reader and bounded mail read directly, plus the CLI's indifference to the
+ * credential-descriptor contract that no longer has a producer.
  */
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { closeSync, mkdtempSync, openSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { mkdtempSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { spawn } from "node:child_process";
@@ -16,7 +17,6 @@ import {
   HOST_CHANNEL_ENV, HOST_CHANNEL_FD, HOST_CHANNEL_LINE_BYTES, HostChannelReader, decodeHostMessage, encodeHostMessage,
   type HostChannelMessage,
 } from "../src/protocol/host-channel.js";
-import { CLI_CREDENTIAL_FD_ENV as CLI_READS } from "../src/cli/transport.js";
 import { CHANNEL_FD as SPAWN_CHANNEL_FD, SOCIETY_FENCE_ENV as HOST_DECLARES, SOCIETY_FENCE_FD as HOST_PLACES } from "../src/process/async.js";
 import {
   PRINCIPAL_CHANNEL_ENV, PRINCIPAL_CHANNEL_FD, PrincipalChannel, registerOmaTools,
@@ -61,8 +61,6 @@ test("T114: the extension's channel names are the protocol's", () => {
   // may not import the protocol, and a drift between them would move the
   // credential out from under the reader waiting for it.
   assert.equal(SPAWN_CHANNEL_FD, HOST_CHANNEL_FD);
-  // The descriptor the extension names for the CLI is the one the CLI reads.
-  assert.equal(CLI_READS, "OMA_PRINCIPAL_CREDENTIAL_FD");
   // And the society lease: the extension may not import OMA's process module,
   // so it mirrors the name and the number the host places the lease on. A
   // mirror that drifted would be the worst of both -- the host would hand the
@@ -148,26 +146,20 @@ test("T114: an engine started without the product's channel holds nothing", () =
   assert.equal(PrincipalChannel.open({ [PRINCIPAL_CHANNEL_ENV]: "4" }).current(), null);
 });
 
-/** Runs the real CLI transport's reader in a child with `fd3` as descriptor 3. */
-function cliReads(fd3: "socket" | "none" | "file", line: string | null): Promise<string> {
+/** Runs the real CLI transport in a child that still has the removed
+ * credential contract's environment declared, with `fd3` on descriptor 3.
+ * The call can only fail on connecting: there is no broker at the path. */
+function cliCalls(fd3: "socket" | "none", line: string | null): Promise<string> {
   const script = `
     import { callActor } from ${JSON.stringify(join(process.cwd(), "dist/src/cli/transport.js"))};
     try { await callActor("/nonexistent/socket", "status.get", {}); process.stdout.write("no error"); }
     catch (error) { process.stdout.write(String(error.code ?? error.message) + ":" + String(error.message)); }
   `;
-  const scratch = mkdtempSync(join(tmpdir(), "oma-cli-fd-"));
-  const stdio: ("ignore" | "pipe" | "inherit" | number)[] = ["ignore", "pipe", "inherit"];
-  let fileFd: number | null = null;
+  const stdio: ("ignore" | "pipe" | "inherit")[] = ["ignore", "pipe", "inherit"];
   if (fd3 === "socket") stdio.push("pipe");
-  if (fd3 === "file") {
-    writeFileSync(join(scratch, "cred"), line ?? "");
-    fileFd = openSync(join(scratch, "cred"), "r");
-    stdio.push(fileFd);
-  }
   return new Promise(resolve => {
     const child = spawn(process.execPath, ["--input-type=module", "-e", script],
-      { env: { PATH: "/usr/bin:/bin", [CLI_READS]: "3" }, stdio });
-    if (fileFd !== null) closeSync(fileFd);
+      { env: { PATH: "/usr/bin:/bin", OMA_PRINCIPAL_CREDENTIAL_FD: "3" }, stdio });
     if (fd3 === "socket") {
       const socket = child.stdio[3] as unknown as { end(text?: string): void; on(event: string, fn: () => void): void };
       socket.on("error", () => {});
@@ -175,23 +167,18 @@ function cliReads(fd3: "socket" | "none" | "file", line: string | null): Promise
     }
     let out = "";
     child.stdout!.on("data", chunk => { out += String(chunk); });
-    child.once("close", () => { rmSync(scratch, { recursive: true, force: true }); resolve(out); });
+    child.once("close", () => resolve(out));
   });
 }
 
-test("T114: the CLI takes the credential only from a private socket, and only a well-formed one", async () => {
-  // A well-formed line on a socket is read, and the CLI goes on to connect --
-  // failing only because there is no broker at that path.
-  assert.match(await cliReads("socket", `credential ${CREDENTIAL} ${HANDLE}\n`), /BROKER_UNAVAILABLE|ENOENT|connect/);
-  // A regular file where the socket should be -- the kind of descriptor another
-  // process could have prepared -- is refused before anything is read.
-  assert.match(await cliReads("file", `credential ${CREDENTIAL} ${HANDLE}\n`), /AUTH_FAILED:.*private socket/);
-  // Declared but not attached. Descriptor 3 may be closed, or be one the runtime
-  // opened for itself; either way it is refused before anything is read.
-  assert.match(await cliReads("none", null), /AUTH_FAILED:.*(not open|not a private socket)/);
-  // Malformed, missing newline, or something other than a credential.
-  for (const bad of [`credential ${CREDENTIAL} ${HANDLE}`, "ready\n", `credential x ${HANDLE}\n`, ""])
-    assert.match(await cliReads("socket", bad), /AUTH_FAILED:.*malformed/, `accepted ${JSON.stringify(bad)}`);
+test("T114/E27: a credential descriptor named in the environment is not this CLI's credential", async () => {
+  // The contract is dead -- nothing hands a CLI process a credential; the
+  // Principal's lives in the engine's PrincipalChannel. An environment that
+  // still declares the descriptor is ignored outright, well-formed line or
+  // not, so the call fails only on connecting and never with AUTH_FAILED.
+  for (const line of [`credential ${CREDENTIAL} ${HANDLE}\n`, "not a channel message\n", ""])
+    assert.match(await cliCalls("socket", line), /BROKER_UNAVAILABLE|ENOENT|connect/, `read ${JSON.stringify(line)}`);
+  assert.match(await cliCalls("none", null), /BROKER_UNAVAILABLE|ENOENT|connect/);
 });
 
 test("T114: reading mail never returns more than its bound, even while the file grows", async () => {
@@ -276,7 +263,7 @@ test("T114: the CLI's output cap counts bytes, not decoded characters", async ()
   `;
   const result = await runCliProcess({
     node: process.execPath, cli: "--input-type=module", args: ["-e", flood],
-    cwd: process.cwd(), env: { PATH: "/usr/bin:/bin" }, grant: null, timeoutMs: 30_000,
+    cwd: process.cwd(), env: { PATH: "/usr/bin:/bin" }, timeoutMs: 30_000,
   });
   assert.ok(Buffer.byteLength(result.stdout) <= cap,
     `the CLI's output kept ${Buffer.byteLength(result.stdout)} bytes past a ${cap}-byte cap`);
