@@ -151,6 +151,10 @@ export class PublicDispatcher {
     try {
       switch (method) {
         case "status.get": {
+          // A named agent is an address like the one logs.read checks: absent
+          // is an error, not an empty list (NB-20).
+          if (params.agent !== undefined && this.deps.store.getAgent(params.agent) === null)
+            throw new StoreError("ADDRESS_NOT_FOUND", `agent ${params.agent} does not exist in this society`);
           // WP23: observed off the event loop by the shared refresh; the
           // registry rows and pending counts are read after it, current.
           const snapshot = await units.statusSnapshot();

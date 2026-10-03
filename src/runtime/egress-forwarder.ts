@@ -110,7 +110,13 @@ export class EgressForwarder {
       server.once("error", reject);
       server.listen(socketPath, () => {
         server.off("error", reject);
-        chmodSync(socketPath, 0o600);
+        // P0-4: until the forwarder is handed back it is this opener's; a
+        // permission failure returns the listener and the socket name rather
+        // than leaving an ownerless server running (AV-20261003-28).
+        try { chmodSync(socketPath, 0o600); }
+        // Reject only once the listener and its name are actually back, so a
+        // caller that gives up on this promise never observes either held.
+        catch (error) { void forwarder.close().then(() => reject(error), () => reject(error)); return; }
         resolve(forwarder);
       });
     });

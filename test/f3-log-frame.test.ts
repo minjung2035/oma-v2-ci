@@ -50,8 +50,8 @@ function dispatcher(text: string, frameBytes: number) {
       hasOperation: unused,
     },
     mail: { send: async () => unused() },
-    units: { statusSnapshot: unused },
-    views: { status: unused },
+    units: { statusSnapshot: async () => ({ observedAtMs: 1, units: new Map(), failure: null }) },
+    views: { status: () => [] },
     git: null,
     lifecycle: {
       create: async () => unused(),
@@ -179,4 +179,46 @@ test("DR27: nonexistent log target is refused instead of reported as an empty jo
   const decoded = decodeRpcReply("logs.read", response, "missing", { agent: "missing", sinceSeconds: 60 });
   assert.equal(decoded.ok, false);
   if (!decoded.ok) assert.equal(decoded.error.code, "ADDRESS_NOT_FOUND");
+});
+
+test("NB-20: status.get names an address like logs.read does", async () => {
+  const missing = await dispatcher("", limits.frameBytes).dispatch(auth,
+    { v: 1, id: "s-missing", method: "status.get", params: { agent: "missing" } }, null);
+  const decodedMissing = decodeRpcReply("status.get", missing, "s-missing", { agent: "missing" });
+  assert.equal(decodedMissing.ok, false);
+  if (!decodedMissing.ok) assert.equal(decodedMissing.error.code, "ADDRESS_NOT_FOUND");
+  // A known agent answers, and an absent one is refused before any snapshot work.
+  const present = await dispatcher("", limits.frameBytes).dispatch(auth,
+    { v: 1, id: "s-present", method: "status.get", params: { agent: "alice" } }, null);
+  const decodedPresent = decodeRpcReply("status.get", present, "s-present", { agent: "alice" });
+  assert.equal(decodedPresent.ok, true);
+});
+
+test("NB-03: a text over budget by one byte is a strict prefix, never whole text called truncated", () => {
+  const view = { text: "L".repeat(128), truncated: false, observedAtMs: 7 };
+  const sizeOf = (result: unknown) => Buffer.byteLength(JSON.stringify({ v: 1, id: "b", ok: true, result }));
+  const whole = boundedLogResponse("b", view, limits.frameBytes);
+  assert.equal(whole.result.truncated, false);
+  // frameBytes exactly one below the untruncated envelope: the truncating
+  // envelope would carry the whole text, but must not claim a cut that did
+  // not happen.
+  const budget = sizeOf(whole.result) - 1;
+  const cut = boundedLogResponse("b", view, budget);
+  assert.equal(cut.result.truncated, true);
+  assert.ok(cut.result.text.length < view.text.length, "the delivered text is a real prefix");
+  assert.ok(view.text.startsWith(cut.result.text));
+  assert.ok(sizeOf(cut.result) <= budget);
+  // A view already truncated upstream may answer whole at the same budget:
+  // its truncating envelope is the full one, so the flag stays honest either
+  // way. One byte below it, a strict prefix is what the wire carries.
+  const upstream = { ...view, truncated: true };
+  const wholeAgain = boundedLogResponse("b", upstream, budget);
+  assert.equal(wholeAgain.result.truncated, true);
+  assert.equal(wholeAgain.result.text, view.text);
+  assert.ok(sizeOf(wholeAgain.result) <= budget);
+  const tighter = boundedLogResponse("b", upstream, budget - 1);
+  assert.equal(tighter.result.truncated, true);
+  assert.ok(tighter.result.text.length < view.text.length);
+  assert.ok(view.text.startsWith(tighter.result.text));
+  assert.ok(sizeOf(tighter.result) <= budget - 1);
 });

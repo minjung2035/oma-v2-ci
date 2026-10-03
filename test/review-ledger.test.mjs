@@ -56,6 +56,10 @@ test("DR27/V32A: isolated history never certifies unstaged, staged, new or ignor
   };
   let ledger = run();
   assert.equal(ledger.get(unchanged).status, "READ_UNCHANGED");
+  // AV-20261003-30: every status derived from committed bytes is bound to
+  // them, not only the explicitly reviewed changes.
+  assert.equal(ledger.get(unchanged).sha256,
+    createHash("sha256").update(readFileSync(join(root, unchanged))).digest("hex"));
   for (const path of historical) assert.equal(ledger.get(path).status, "CHANGED_WITH_ORACLE", path);
   for (const path of ["src/unstaged.ts", "src/staged.ts", "src/bound.ts", unchanged, "src/new.ts", "src/ignored.ts"])
     put(path, "export const value = 3;\n");
@@ -80,4 +84,17 @@ test("DR27/V32A: isolated history never certifies unstaged, staged, new or ignor
   assert.equal(stale.status, 1);
   assert.match(stale.stderr, /reviewed change is stale: src\/bound.ts/);
   assert.equal(readFileSync(ledgerPath, "utf8"), before, "a stale review never overwrites the previous ledger");
+
+  // A claimed read-unchanged digest that is not the file's digest is refused
+  // like a stale reviewed change: the claim does not bind the bytes read.
+  git("checkout", "--", unchanged);
+  notes.readUnchanged = [{ path: unchanged, by: ["WP32"], oracles: ["V32A"], note: "read baseline", sha256: "0".repeat(64) }];
+  delete notes.reviewedChanges;
+  writeNotes();
+  const staleRead = spawnSync(process.execPath, [join(root, "scripts/review-ledger.mjs")],
+    { cwd: root, encoding: "utf8", timeout: 10_000 });
+  assert.equal(staleRead.error, undefined);
+  assert.equal(staleRead.status, 1);
+  assert.match(staleRead.stderr, /read-unchanged claim is stale: src\/unchanged\.ts/);
+  assert.equal(readFileSync(ledgerPath, "utf8"), before);
 });
