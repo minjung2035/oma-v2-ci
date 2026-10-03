@@ -9,6 +9,9 @@ export const KERNEL_ZONES = Object.freeze([
   {
     name: "K0-values",
     files: [
+      "src/client/errors.ts",
+      "src/client/limits.ts",
+      "src/cli/request-intent.ts",
       "src/domain/admission.ts",
       "src/domain/attestation-relations.ts",
       "src/domain/canonical-json.ts",
@@ -45,6 +48,7 @@ export const KERNEL_ZONES = Object.freeze([
   {
     name: "K1-codecs",
     files: [
+      "src/client/codecs.ts",
       "src/cli/cache-codec.ts",
       "src/domain/attestation.ts",
       "src/domain/integration-policy.ts",
@@ -81,6 +85,14 @@ export const KERNEL_ZONES = Object.freeze([
   {
     name: "K2-mechanisms",
     files: [
+      "src/client/context.ts",
+      "src/client/fence.ts",
+      "src/client/index.ts",
+      "src/client/receipts.ts",
+      "src/client/request-service.ts",
+      "src/client/runtime.ts",
+      "src/client/settings.ts",
+      "src/client/transport.ts",
       "src/config.ts",
       "src/config/policy.ts",
       "src/config/operations.ts",

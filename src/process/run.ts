@@ -4,6 +4,7 @@ import { spawnSync, type SpawnSyncOptionsWithBufferEncoding } from "node:child_p
 import { performance } from "node:perf_hooks";
 import { validateCommand, processErrorCode as errorCode, type CommandSpec, type ProcessObservation, type Capture } from "./command.js";
 import { decodeUtf8 } from "../domain/utf8.js";
+import { fencedStdio, inheritedFence, SOCIETY_FENCE_ENV, SOCIETY_FENCE_FD } from "../client/fence.js";
 export { validateCommand, snapshotCommand } from "./command.js";
 export type { CommandSpec, ProcessObservation } from "./command.js";
 export { runProcess, startProcess } from "./async.js";
@@ -34,15 +35,18 @@ export function runProcessSync(spec: CommandSpec, invoke: SyncInvoker = spawnSyn
   validateCommand(spec);
   if (inheritedFds.some(fd => !Number.isInteger(fd) || fd < 0)) throw new TypeError("invalid inherited descriptor");
   const started = performance.now();
+  const fence = inheritedFds.length === 0 ? inheritedFence() : undefined;
   let result: NativeSyncResult;
   try {
-    result = invoke(spec.executable, [...spec.argv], { env: { ...spec.env }, cwd: spec.cwd,
+    result = invoke(spec.executable, [...spec.argv], { env: { ...spec.env,
+      ...(fence === undefined ? {} : { [SOCIETY_FENCE_ENV]: String(SOCIETY_FENCE_FD) }) }, cwd: spec.cwd,
       // The output encoding "buffer" is not a valid Buffer.from string encoding.
       // Encode stdin first so native spawnSync never applies it to a string.
       input: spec.input === undefined ? undefined : Buffer.from(spec.input),
       encoding: "buffer", shell: false, timeout: spec.timeoutMs, killSignal: "SIGKILL",
       // Preserve the existing native cap, not the sum of two legacy caps.
-      maxBuffer: Math.max(1, spec.stdoutBytes, spec.stderrBytes), stdio: ["pipe", "pipe", "pipe", ...inheritedFds],
+      maxBuffer: Math.max(1, spec.stdoutBytes, spec.stderrBytes), stdio: inheritedFds.length > 0
+        ? ["pipe", "pipe", "pipe", ...inheritedFds] : fencedStdio(["pipe", "pipe", "pipe"] as const, "ignore", fence),
     });
   } catch (error) {
     return { kind: "spawn-failed", exitCode: null, signal: null, errorCode: errorCode(error), elapsedMs: performance.now() - started,

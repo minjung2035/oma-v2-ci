@@ -14,20 +14,16 @@
  */
 import { fstatSync } from "node:fs";
 import { Socket } from "node:net";
+import { decodeCredential, type PrincipalGrant } from "../client/codecs.js";
+export type { PrincipalGrant } from "../client/codecs.js";
 
 /** Mirrors `HOST_CHANNEL_ENV` and `HOST_CHANNEL_FD` in src/protocol/host-channel.ts. */
 export const PRINCIPAL_CHANNEL_ENV = "OMA_HOST_CHANNEL";
 export const PRINCIPAL_CHANNEL_FD = 3;
-/** Mirrors the credential message of the host channel grammar. */
-const CREDENTIAL_LINE = /^credential ([0-9a-f]{64}) ([0-9a-f]{32})$/;
+
 const LINE_BYTES = 128;
 /** Where this process keeps its one channel, across module instances. */
 const PROCESS_CHANNEL = Symbol.for("oma.principal-channel");
-
-export interface PrincipalGrant {
-  readonly credential: string;
-  readonly sessionHandle: string;
-}
 
 /** Holds the latest credential the host granted, or nothing. */
 export class PrincipalChannel {
@@ -82,11 +78,11 @@ export class PrincipalChannel {
       if (end < 0) break;
       const line = this.pending.slice(0, end);
       this.pending = this.pending.slice(end + 1);
-      const match = line.length <= LINE_BYTES ? CREDENTIAL_LINE.exec(line) : null;
+      const match = line.length <= LINE_BYTES ? decodeCredential(line) : null;
       // Anything else on this channel means it is not the channel it should
       // be; no credential from it is trusted afterwards.
       if (match === null) { this.broken = true; this.clear(); return; }
-      this.grant = Object.freeze({ credential: match[1]!, sessionHandle: match[2]! });
+      this.grant = Object.freeze(match);
     }
     if (this.pending.length > LINE_BYTES) { this.broken = true; this.clear(); }
   }

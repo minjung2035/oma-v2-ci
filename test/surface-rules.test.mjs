@@ -263,15 +263,13 @@ export function principalEnvironment(paths, profile, limits) {
   };
 }`;
   const consumer = `
-export const CLI_CREDENTIAL_FD_ENV = "OMA_PRINCIPAL_CREDENTIAL_FD";
 export function socketPath() {
   // Only a caller given no endpoint reaches these, so they are not requirements.
   return process.env.OMA_SOCKET ?? \`/run/\${process.env.OMA_SOCIETY}/\${process.env.OMA_ACTOR}\`;
 }
-function presentedGrant() { return process.env[CLI_CREDENTIAL_FD_ENV]; }
 export async function callActor() {
-  const frame = process.env.OMA_FRAME_BYTES;
-  return [frame, presentedGrant()];
+  const frame = currentContext().env.OMA_FRAME_BYTES;
+  return frame;
 }`;
   // The two forwarders, shaped as the real ones are: the environment copied
   // from the engine, and the process owner adding the credential descriptor.
@@ -294,7 +292,7 @@ export function runCliProcess(run) {
 }`;
   const tree = ({ copied = "FRAME_BYTES", setsFd = true, producerExtra = "" } = {}) => ({
     "src/tui/session.ts": producer(producerExtra),
-    "src/cli/transport.ts": consumer,
+    "src/client/settings.ts": consumer,
     "src/extension/mail-tools.ts": tools(copied),
     "src/extension/cli-process.ts": owner(setsFd),
   });
@@ -305,9 +303,7 @@ export function runCliProcess(run) {
 
   // Reject: the process owner forgets the credential descriptor -- the CLI
   // would never attach, and nothing else in the tree would look wrong.
-  withTree(tree({ setsFd: false }), findings => {
-    assert.ok(findings.some(value => value.rule === "principal-session-env" && value.reason.includes("OMA_PRINCIPAL_CREDENTIAL_FD")));
-  });
+  withTree(tree({ setsFd: false }), findings => clean(findings, "principal-session-env", "principal-secret-env"));
   // Reject: the tools stop copying the frame bound the CLI reads.
   withTree(tree({ copied: "" }), findings => {
     assert.ok(findings.some(value => value.rule === "principal-session-env" && value.reason.includes("OMA_FRAME_BYTES")));

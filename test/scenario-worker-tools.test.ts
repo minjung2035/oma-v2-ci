@@ -14,6 +14,7 @@
  * are captured in outer variables and asserted only after execute() resolves
  * (a throw inside a provider callback only reports "provider failed").
  */
+import "../src/runtime/client-preload.js";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";

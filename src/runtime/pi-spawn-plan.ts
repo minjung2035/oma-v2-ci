@@ -9,7 +9,8 @@
 import type { Actor, ProtocolLimits } from "../../implementation/contracts.js";
 import { verifiedPaths, type VerifiedExtension } from "./extension-integrity.js";
 import { PI_AGENT_DIR_ENV } from "./pi-runtime.js";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
+import { pathToFileURL } from "node:url";
 import { RESIDENT_INFERENCE_PORT, RESIDENT_PATHS, SANDBOX_EXECUTABLE, confinedPath, residentArgv, type ResidentDirectories, type SandboxHost } from "../sandbox.js";
 import type { ValidatedRunLease } from "../protocol/run-lease.js";
 import { StoreError } from "../domain/errors.js";
@@ -156,6 +157,7 @@ function omaEnvironment(options: PiAdapterOptions, inside: PathView): Record<str
     OMA_PROJECT_GIT: inside(options.paths.projectGit),
     OMA_AGENT_HOME: inside(options.paths.agentHome),
     OMA_CLI_PATH: inside(options.paths.cli),
+    NODE_OPTIONS: `--import=${pathToFileURL(inside(join(dirname(options.paths.coreExtension), "runtime", "client-preload.js"))).href}`,
     ...(options.profile.toolSurface === undefined
       ? {}
       : { OMA_TOOL_SURFACE: options.profile.toolSurface }),

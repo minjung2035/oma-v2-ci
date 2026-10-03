@@ -21,8 +21,9 @@ import { collectManagedGenerations, commitInlineConfiguration, createInlineConfi
 import { applyField, commitField, readSettings, WORKER_LIMIT } from "../src/tui/sources/settings.js";
 import { DurabilityFaultError, type DurabilityObserver } from "../src/storage/durable-fs.js";
 import { createCompleteConfigurationFixture } from "./fixtures/configuration.js";
-import { runCliProcess } from "../src/extension/cli-process.js";
-import { cliFailure } from "../src/extension/mail-tools.js";
+import { Client, ClientError } from "../src/client/index.js";
+import { installRuntime } from "../src/client/runtime.js";
+import { CLIENT_RUNTIME, installClientRuntime } from "../src/runtime/client-runtime.js";
 import { containWorkspaceTools } from "../src/extension/contained-tools.js";
 import { collectBindingTemporaries, observeProjectBinding, projectBindingDecision, publishProjectBinding, stateRootHasSociety } from "../src/runtime/provision.js";
 import { ERROR_METADATA, errorExit, StoreError, unobserved } from "../src/domain/errors.js";
@@ -214,22 +215,19 @@ test("DR12: a first-run configuration is created where none exists and never ove
 });
 
 test("DR13 / P0-5: a CLI a tool stopped gave no answer; the tool says the outcome is unknown and names the key", async () => {
-  const dir = mkdtempSync(join(tmpdir(), "oma-dr13-cli-"));
+  const dir = mkdtempSync(join(tmpdir(), "oma-dr13-client-"));
+  installRuntime({ ...CLIENT_RUNTIME, channel: () => ({ connect: async () => {}, close() {},
+    call: async () => { throw new Error("connection lost"); } }) });
   try {
-    const slow = join(dir, "slow.mjs"); writeFileSync(slow, "setTimeout(() => {}, 30000);\n");
-    const answered = join(dir, "answered.mjs"); writeFileSync(answered, "process.stderr.write('oma: REQUEST_KEY_REUSED: key k'); process.exit(2);\n");
-    const run = (cli: string, timeoutMs: number) => runCliProcess({ node: process.execPath, cli, args: [], cwd: dir,
-      env: { PATH: process.env.PATH ?? "/usr/bin:/bin" }, grant: null, timeoutMs });
-    const stopped = await run(slow, 200);
-    assert.equal(stopped.finished, false, "a CLI this process stopped did not answer");
-    const unknown = cliFailure(stopped, ["send", "--request", "pi-key-1", "--", "b"]);
-    assert.match(unknown!.message, /Outcome unknown/);
-    assert.match(unknown!.message, /pi-key-1/, "the key to look the outcome up with is named");
-    const done = await run(answered, 10_000);
-    assert.equal(done.finished, true);
-    assert.equal(cliFailure(done, ["send", "--request", "pi-key-2"])?.message, "oma: REQUEST_KEY_REUSED: key k", "an answer speaks for itself");
-    assert.equal(cliFailure({ code: 0, stdout: "ok", stderr: "", finished: true }, []), null);
-  } finally { rmSync(dir, { recursive: true, force: true }); }
+    const client = new Client({ cwd: dir, env: { HOME: dir, OMA_SOCKET: join(dir, "broker.sock") } });
+    await assert.rejects(() => client.sendMail({ to: ["b"], subject: "s", body: "b", kind: "message" }, "pi-key-1"), error => {
+      assert.ok(error instanceof ClientError);
+      assert.match(error.message, /Acceptance status unknown/);
+      assert.match(error.message, /pi-key-1/);
+      assert.equal(error.request, "pi-key-1");
+      return true;
+    });
+  } finally { installClientRuntime(); rmSync(dir, { recursive: true, force: true }); }
 });
 
 test("P0V-15 / P0-5: a workspace entry that cannot be observed is not zero bytes; the write is refused", { skip: process.getuid?.() === 0 }, async () => {

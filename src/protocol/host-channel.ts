@@ -13,7 +13,8 @@
  * This module is the codec both ends use, so neither can drift from what the
  * other accepts. It takes no I/O capability of its own.
  */
-import { isPrincipalCredential, isPrincipalSessionHandle } from "./principal-credential.js";
+import { isPrincipalSessionHandle } from "./principal-credential.js";
+import { decodeCredential, encodeCredential } from "../client/codecs.js";
 
 /** The descriptor the channel is attached at in the child. */
 export const HOST_CHANNEL_FD = 3;
@@ -43,15 +44,12 @@ export function encodeHostMessage(message: HostChannelMessage): string {
         throw new TypeError("invalid session registration");
       return `session ${message.sessionHandle} ${message.pid}\n`;
     case "credential":
-      if (!isPrincipalCredential(message.credential) || !isPrincipalSessionHandle(message.sessionHandle))
-        throw new TypeError("invalid credential message");
-      return `credential ${message.credential} ${message.sessionHandle}\n`;
+      return encodeCredential(message);
   }
 }
 
 const REFUSED = /^refused ([0-9a-f]{32})$/;
 const SESSION = /^session ([0-9a-f]{32}) ([1-9][0-9]{0,9})$/;
-const CREDENTIAL = /^credential ([0-9a-f]{64}) ([0-9a-f]{32})$/;
 
 export function decodeHostMessage(line: string): HostChannelMessage | null {
   if (line === "ready") return { kind: "ready" };
@@ -62,8 +60,8 @@ export function decodeHostMessage(line: string): HostChannelMessage | null {
     const pid = Number(session[2]);
     return Number.isSafeInteger(pid) && pid > 1 ? { kind: "session", sessionHandle: session[1]!, pid } : null;
   }
-  const credential = CREDENTIAL.exec(line);
-  if (credential !== null) return { kind: "credential", credential: credential[1]!, sessionHandle: credential[2]! };
+  const credential = decodeCredential(line);
+  if (credential !== null) return { kind: "credential", ...credential };
   return null;
 }
 

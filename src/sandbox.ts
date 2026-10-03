@@ -134,7 +134,7 @@ export function residentArgv(h: SandboxHost, lease: ValidatedRunLease,
     ...setenvPairs(env),
     "--setenv", "OMA_FRAME_BYTES", String(limits.frameBytes),
     "--setenv", "OMA_BATCH_MAX_MESSAGES", String(limits.batchMaxMessages),
-    "--setenv", "OMA_ACTOR", lease.actor, "--setenv", "OMA_INCARNATION", String(lease.incarnation),
+    "--setenv", "OMA_ACTOR", lease.actor,
     "--chdir", RESIDENT_PATHS.workspace, "--", RESIDENT_PATHS.node, h.pi, ...h.piModeArgs];
 }
 

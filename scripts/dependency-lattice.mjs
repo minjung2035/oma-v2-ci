@@ -45,6 +45,8 @@ const LAYERS = Object.freeze([
       "src/protocol/",
       "src/storage/",
       "src/cli/cache-codec.ts",
+      "src/cli/request-intent.ts",
+      "src/client/",
       "src/mail/addresses.ts",
       "src/mail/facts.ts",
       "src/mail/headers.ts",
@@ -86,6 +88,8 @@ const LAYERS = Object.freeze([
       "src/broker/",
       "src/broker.ts",
       "src/runtime/",
+      "src/cli/effects.ts",
+      "src/cli/effects/",
       "src/runner.ts",
       "src/sandbox.ts",
       // macOS host and hidden-VM guest services (docs/macos-platform.md):

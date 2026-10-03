@@ -1,9 +1,9 @@
 import { constants, closeSync, existsSync, fstatSync, lstatSync, openSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { contextFileCheck } from "../../domain/context-policy.js";
-import { fail } from "../exit.js";
+import { fail } from "../../client/errors.js";
 import { readBounded, sha256Hex } from "../effects.js";
-import { cliContextBytes } from "../transport.js";
+import { contextBytes as cliContextBytes } from "../../client/settings.js";
 
 type ContextFile = { path: string; bytes: number; sha256: string; data: Uint8Array };
 

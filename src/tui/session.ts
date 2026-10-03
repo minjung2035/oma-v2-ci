@@ -7,6 +7,7 @@
  */
 import { randomBytes } from "node:crypto";
 import { join } from "node:path";
+import { pathToFileURL } from "node:url";
 import type { ProtocolLimits } from "../../implementation/contracts.js";
 import { SOCIETY_FENCE_ENV, SOCIETY_FENCE_FD, stopOwnedChild, spawnOwnedRpc, spawnOwnedInteractive, type ChildProcess } from "../process/async.js";
 import { InteractiveChannel, INTERACTIVE_RPC_FD, INTERACTIVE_UI_FD } from "../runtime/interactive-channel.js";
@@ -130,6 +131,7 @@ export function principalEnvironment(
     OMA_AGENT_HOME: home,
     OMA_MAIL_ARCHIVE: join(paths.stateRoot, "mail", "archive", "cur"),
     OMA_CLI_PATH: join(paths.libdir, DEPLOYMENT_LAYOUT.cli),
+    NODE_OPTIONS: `--import=${pathToFileURL(join(paths.libdir, "dist/src/runtime/client-preload.js")).href}`,
     // DR27: fixed read-only code views, never a model-facing shell.
     OMA_PROJECT_GIT: projectGitPathAt(paths.stateRoot),
     OMA_CONTEXT_GIT: join(paths.stateRoot, "repos", "context.git"),

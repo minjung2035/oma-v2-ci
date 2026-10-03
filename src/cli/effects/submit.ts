@@ -5,9 +5,10 @@ import type { PublicMethods } from "../../../implementation/contracts.js";
 import { StoreError } from "../../domain/errors.js";
 import { exportRefForRequestKey } from "../../domain/derived.js";
 import { runGitText } from "../../process/policies.js";
-import { fail } from "../exit.js";
+import { fail } from "../../client/errors.js";
+import { currentContext } from "../../client/context.js";
 import { readBounded } from "../effects.js";
-import { cliBundleBytes } from "../transport.js";
+import { bundleBytes as cliBundleBytes } from "../../client/settings.js";
 
 function git(cwd: string, args: string[]): string {
   const result = runGitText(args, { cwd });
@@ -75,7 +76,7 @@ export function prepareSubmitEffects(
   key: string,
   known: PublicMethods["git.known"]["result"],
 ): SubmitEffects {
-  const cwd = process.cwd();
+  const cwd = currentContext().cwd;
   const exportRef = exportRefForRequestKey(key);
   const prerequisites = known.hasCandidate
     ? []

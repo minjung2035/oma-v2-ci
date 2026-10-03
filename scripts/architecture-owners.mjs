@@ -7,7 +7,6 @@ export const subprocessResponsibilities = Object.freeze({
   "src/rpc-client.ts": "long-lived Pi JSONL session with bounded framing, writes, drain and close",
   // PI-001: the trusted extension cannot import src/process, and the engine's
   // exec cannot pass a private descriptor, so the extension owns this one child.
-  "src/extension/cli-process.ts": "model-facing CLI child with an explicit environment and a private credential socket",
   // PI-001: engine grep/fd inherit global config and expose no spawn options.
   // This read-only process searches a descriptor-created copy with clean env.
   "src/extension/contained-search.ts": "bounded search-only process group over private copied inputs, with abort/timeout/output cleanup",
@@ -71,8 +70,6 @@ export const DEFAULT_POLICY = Object.freeze({
   // identifier grammars.
   identifierMirrors: Object.freeze({
     "src/extension/batch-view.ts": "trusted Pi extension mirroring the batch-view identity grammar and, for CLI-001/INV04, the address and request-key grammar of the CLI slots it fills",
-    "src/extension/principal-channel.ts": "trusted Pi extension mirroring the host channel's credential line",
-    "src/extension/cli-process.ts": "trusted Pi extension mirroring the credential and society-lease descriptor numbers",
   }),
   // The framed transport is intentionally I/O, unlike the codecs next to it.
   // This does not allow fs, process, SQLite, Store or entrypoint imports here.

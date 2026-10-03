@@ -9,6 +9,7 @@
 //
 // Every line on stdout is one JSON event, shaped like the engine's RPC events
 // where the product reads them.
+import "../../dist/src/runtime/client-preload.js";
 import { appendFileSync, readFileSync } from "node:fs";
 import { randomBytes } from "node:crypto";
 import { createInterface } from "node:readline";
