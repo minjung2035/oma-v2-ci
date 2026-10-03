@@ -47,6 +47,17 @@ src/cli/exit.ts
 src/cli/request-intent.ts
 src/cli/request-service.ts
 src/cli/transport.ts
+src/client/codecs.ts
+src/client/context.ts
+src/client/errors.ts
+src/client/fence.ts
+src/client/index.ts
+src/client/limits.ts
+src/client/receipts.ts
+src/client/request-service.ts
+src/client/runtime.ts
+src/client/settings.ts
+src/client/transport.ts
 src/config.ts
 src/config/defaults.ts
 src/config/generations.ts
@@ -254,6 +265,8 @@ src/runtime/assets.ts
 src/runtime/broker-lifetime.ts
 src/runtime/broker-supervisor.ts
 src/runtime/candidate-checks.ts
+src/runtime/client-preload.ts
+src/runtime/client-runtime.ts
 src/runtime/deployment-manifest.ts
 src/runtime/egress-forwarder.ts
 src/runtime/engine-auth.ts

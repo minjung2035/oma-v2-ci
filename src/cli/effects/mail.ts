@@ -1,6 +1,6 @@
 import { decodeSubject, parseEmlHeaders } from "../../mail/headers.js";
 import { parseMessageId } from "../../ids.js";
-import { fail } from "../exit.js";
+import { fail } from "../../client/errors.js";
 import { readLocalHead } from "../effects.js";
 import { MAIL_HEADER_BYTES } from "../../domain/mail-values.js";
 

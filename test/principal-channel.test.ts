@@ -19,9 +19,11 @@ import {
 import { CLI_CREDENTIAL_FD_ENV as CLI_READS } from "../src/cli/transport.js";
 import { CHANNEL_FD as SPAWN_CHANNEL_FD, SOCIETY_FENCE_ENV as HOST_DECLARES, SOCIETY_FENCE_FD as HOST_PLACES } from "../src/process/async.js";
 import {
-  CLI_CREDENTIAL_FD_ENV as EXTENSION_SETS, PRINCIPAL_CHANNEL_ENV, PRINCIPAL_CHANNEL_FD, PrincipalChannel, registerOmaTools,
-  SOCIETY_FENCE_ENV as EXTENSION_READS, SOCIETY_FENCE_FD as EXTENSION_PLACES, runCliProcess,
+  PRINCIPAL_CHANNEL_ENV, PRINCIPAL_CHANNEL_FD, PrincipalChannel, registerOmaTools,
+  SOCIETY_FENCE_ENV as EXTENSION_READS, SOCIETY_FENCE_FD as EXTENSION_PLACES,
 } from "../src/pi-extension.js";
+
+import { runCliProcess } from "./fixtures/cli-child.js";
 
 const CREDENTIAL = "c".repeat(64);
 const HANDLE = "d".repeat(32);
@@ -60,7 +62,7 @@ test("T114: the extension's channel names are the protocol's", () => {
   // credential out from under the reader waiting for it.
   assert.equal(SPAWN_CHANNEL_FD, HOST_CHANNEL_FD);
   // The descriptor the extension names for the CLI is the one the CLI reads.
-  assert.equal(EXTENSION_SETS, CLI_READS);
+  assert.equal(CLI_READS, "OMA_PRINCIPAL_CREDENTIAL_FD");
   // And the society lease: the extension may not import OMA's process module,
   // so it mirrors the name and the number the host places the lease on. A
   // mirror that drifted would be the worst of both -- the host would hand the

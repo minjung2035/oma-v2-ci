@@ -1,6 +1,7 @@
 /** Principal-only interactive host. Pi and Open TUI own presentation, commands
  * and settings as they ship; OMA owns only where a plain Human prompt goes and
  * how mail reaches the session. */
+import "../runtime/client-preload.js";
 import { Socket } from "node:net";
 import { readFileSync } from "node:fs";
 import { userInfo } from "node:os";

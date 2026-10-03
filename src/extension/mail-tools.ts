@@ -10,7 +10,8 @@ import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
 import { logicalFromDisplay, validAddress, validFullOid, validMessageId } from "./batch-view.js";
 export { validAddress } from "./batch-view.js";
-import { runCliProcess, type CliResult } from "./cli-process.js";
+import { Client } from "../client/index.js";
+import { decodeWaitObservation } from "../client/codecs.js";
 import { PrincipalChannel } from "./principal-channel.js";
 import { PRINCIPAL_TOOL_NAMES, registerPrincipalTools } from "./principal-tools.js";
 import { registerReviewTools } from "./review-tools.js";
@@ -244,43 +245,7 @@ export function cliEnvironment(home: string, socket: string, archive: string): R
   return environment;
 }
 
-/** The CLI owns each preparation/transport deadline. No sum-of-phases tool
- * timer may kill it between an accepted effect and its same-key lookup. */
-async function runCli(
-  cli: string,
-  cwd: string,
-  environment: Readonly<Record<string, string>>,
-  channel: PrincipalChannel,
-  args: string[],
-  signal?: AbortSignal,
-): Promise<string> {
-  const result = await runCliProcess({
-    node: process.execPath, cli, args, cwd, env: environment,
-    // Read at each call: a restarted broker replaces the credential.
-    grant: channel.current(),
-    signal,
-  });
-  const failure = cliFailure(result, args);
-  if (failure !== null) throw failure;
-  return result.stdout.trim();
-}
-/** DR13, P0-5: what a tool reports when the CLI it ran did not succeed. A CLI
- * that answered speaks for itself (it names the key when the outcome is to be
- * looked up again, CLI-003). One this tool stopped, or could not start, gave no
- * answer: the request may stand accepted, so the tool says the outcome is
- * unknown and names the request key to look it up with, never "failed". */
-export function cliFailure(result: CliResult, args: readonly string[]): Error | null {
-  const at = args.indexOf("--request");
-  const key = at >= 0 && at + 1 < args.length && args[at + 1] !== "--" ? args[at + 1] : undefined;
-  if (!result.finished)
-    return new Error(key === undefined
-      ? "Outcome unknown:The CLI stopped before replying"
-      : `Outcome unknown:The CLI stopped before replying, so the outcome is unknown. Call again with the same request "${key}" to query the outcome; do not use a new request`);
-  if (result.code === 0) return null;
-  return new Error((result.stderr || result.stdout || `CLI exited ${result.code}`).trim().slice(0, 2000));
-}
 export function registerOmaTools(pi: ExtensionAPI, cwd: string, channel: PrincipalChannel = PrincipalChannel.detached()): (() => Promise<boolean>) | undefined {
-  const cli = process.env.OMA_CLI_PATH;
   const home = process.env.OMA_AGENT_HOME;
   const archive = process.env.OMA_MAIL_ARCHIVE;
   const socket = process.env.OMA_SOCKET;
@@ -288,11 +253,9 @@ export function registerOmaTools(pi: ExtensionAPI, cwd: string, channel: Princip
   const batchView = process.env.OMA_BATCH_VIEW;
   const society = process.env.OMA_SOCIETY;
   if (
-    !cli ||
     !home ||
     !archive ||
     !socket ||
-    !isAbsolute(cli) ||
     !isAbsolute(home) ||
     !isAbsolute(archive) ||
     !isAbsolute(socket)
@@ -302,6 +265,7 @@ export function registerOmaTools(pi: ExtensionAPI, cwd: string, channel: Princip
   // command assembled later from whatever the environment happens to hold then
   // would not be the environment the engine was started with.
   const environment = cliEnvironment(home, socket, archive);
+  const client = new Client({ cwd, env: environment }, () => channel.current());
   pi.registerTool({
     name: "oma_mail_read",
     label: "Read OMA mail",
@@ -364,26 +328,14 @@ export function registerOmaTools(pi: ExtensionAPI, cwd: string, channel: Princip
       if (!SEND_KINDS.has(kind)) refused("mail kind", kind);
       const key = requestKeyOf(params.request, { id, tool: "oma_mail_send", params, context });
       const reply = params.replyTo === undefined ? null : join(archive, `${messageIdOf(params.replyTo)}:2,`);
+      if (intent !== "goal") return textResult(await client.sendMail({ to, subject: params.subject, body: params.body, kind,
+        ...(reply === null ? {} : { replyFile: reply }) }, key, signal), { request: key });
       const temporary = mkdtempSync(join(home, "oma-tool-"));
       const body = join(temporary, "body.txt");
       try {
         writeFileSync(body, params.body, { mode: 0o600 });
-        const args = [
-          "send",
-          "--subject", params.subject,
-          "--file", body,
-          ...(intent === "goal" ? ["--intent", "goal", "--expect", expected as string] : ["--kind", kind]),
-          "--request", key,
-          ...(reply === null ? [] : ["--reply", reply]),
-          "--", ...to,
-        ];
-        return textResult(
-          await runCli(cli, cwd, environment, channel, args, signal),
-          { request: key },
-        );
-      } finally {
-        rmSync(temporary, { recursive: true, force: true });
-      }
+        return textResult(await client.sendGoal(body, expected === "none" ? null : expected as string, params.subject, key, signal), { request: key });
+      } finally { rmSync(temporary, { recursive: true, force: true }); }
     },
   });
   if (!channel.attached) pi.registerTool({
@@ -398,14 +350,7 @@ export function registerOmaTools(pi: ExtensionAPI, cwd: string, channel: Princip
       const message = messageIdOf(params.messageId);
       const key = requestKeyOf(params.request, { id, tool: "oma_mail_ack", params, context });
       return textResult(
-        await runCli(
-          cli,
-          cwd,
-          environment,
-          channel,
-          ["ack", "--request", key, "--", message],
-          signal,
-        ),
+        await client.effect("mail.ack", key, () => ({ method: "mail.ack", params: { message } }), () => ({ message }), signal),
         { request: key },
       );
     },
@@ -417,15 +362,8 @@ export function registerOmaTools(pi: ExtensionAPI, cwd: string, channel: Princip
     parameters: Type.Object({ agent: Type.Optional(Type.String()) }),
     async execute(_id, params, signal) {
       return textResult(
-        await runCli(
-          cli,
-          cwd,
-          environment,
-          channel,
-          params.agent === undefined ? ["status"]
-            : ["status", "--", actorNameOf(params.agent, society, "agent")],
-          signal,
-        ),
+        await client.queryText("status.get", params.agent === undefined ? {}
+          : { agent: actorNameOf(params.agent, society, "agent") }, signal),
       );
     },
   });
@@ -433,19 +371,13 @@ export function registerOmaTools(pi: ExtensionAPI, cwd: string, channel: Princip
   // the broker's review module applies. The Principal's restricted pair of the
   // same names is registered in registerPrincipalTools.
   if (!channel.attached)
-    registerReviewTools(pi, { principal: false,
-      run: (args, signal) => runCli(cli, cwd, environment, channel, args, signal), temporaryRoot: home });
+    registerReviewTools(pi, { principal: false, client });
   // AV11: the Principal's other capabilities go through the same CLI, as the Principal.
   if (channel.attached)
-    registerPrincipalTools(pi, { run: (args, signal, at) => runCli(cli, at ?? cwd, environment, channel, args, signal),
-      workspace: cwd, society });
+    registerPrincipalTools(pi, { client, workspace: cwd, society });
   // RUN-003: observe only at a persisted tool boundary, through the same
   // authenticated CLI and frozen environment as every collaboration tool.
   if (!channel.attached) return async () => {
-    const value: unknown = JSON.parse(await runCli(cli, cwd, environment, channel, ["agent", "wait", "--observe", "true"]));
-    if (value === null || typeof value !== "object" || Array.isArray(value) ||
-      Object.keys(value).length !== 1 || !("accepted" in value) || typeof value.accepted !== "boolean")
-      throw new Error("Run wait observation was malformed");
-    return value.accepted;
+    return decodeWaitObservation(await client.query("agent.wait", { observe: true })).accepted;
   };
 }

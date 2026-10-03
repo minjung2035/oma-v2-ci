@@ -385,32 +385,26 @@ test("T114: Principal mail tools work through the real CLI without orchestration
   });
 });
 
-test("T114: the CLI receives the credential on its own socket and never in its environment", async () => {
-  await withEngine("oma-principal-probe-", async (_society, engine, grant) => {
-    // The tool starts this probe exactly as it starts the CLI.
+test("T114/E27: the engine attaches in-process; credentials never enter its environment or a CLI child", async () => {
+  await withEngine("oma-principal-probe-", async (society, engine, grant) => {
     const answer = await engine.tool("oma_mail_send", { to: ["principal"], subject: "credential probe", body: "local fixture", kind: "message" });
-    assert.ok(answer.ok, `the probe did not run: ${answer.error}`);
-    const probe = JSON.parse(answer.text!) as {
-      environ: string;
-      channel: { socket: boolean; fifo: boolean; file: boolean; reopened: string; line: string } | null;
-    };
-    assert.ok(!probe.environ.includes(grant.credential), "the credential is in the CLI's environment");
-    assert.ok(!probe.environ.includes(grant.sessionHandle), "the session handle is in the CLI's environment");
-    assert.match(probe.environ, /OMA_PRINCIPAL_CREDENTIAL_FD=3/);
-    // Only what the tools build reaches the CLI; nothing inherited leaks.
-    assert.doesNotMatch(probe.environ, /OMA_TEST_|OMA_HOST_CHANNEL|OMA_CLI_PATH/);
-    assert.deepEqual({ ...probe.channel, line: undefined },
-      { socket: true, fifo: false, file: false, reopened: "ENXIO", line: undefined });
-    assert.equal(probe.channel!.line, `credential ${grant.credential} ${grant.sessionHandle}\n`);
+    assert.ok(answer.ok, `in-process attach did not work: ${answer.error}`);
+    assert.equal(JSON.parse(answer.text!).state, "succeeded", "the CLI probe was run instead of the real client");
+    assert.equal(readdirSync(join(society.root, "mail/archive/cur")).length, 1);
+    const reading = engine.next(event => event.type === "environ" && event.id === "grant-env");
+    engine.send({ op: "environ", id: "grant-env" });
+    const environ = String((await reading).text);
+    assert.ok(!environ.includes(grant.credential));
+    assert.ok(!environ.includes(grant.sessionHandle));
+    assert.doesNotMatch(environ, /OMA_PRINCIPAL_CREDENTIAL_FD/);
   }, { OMA_CLI_PATH: PROBE });
 });
 
-test("T114: a Resident's tools start the CLI with no credential channel at all", async () => {
+test("T114/E27: a detached engine cannot invent a Principal grant from the environment", async () => {
   await withEngine("oma-principal-resident-", async (_society, engine) => {
     const answer = await engine.tool("oma_status");
-    const probe = JSON.parse(answer.text!) as { environ: string; channel: unknown };
-    assert.equal(probe.channel, null, "a descriptor 3 was opened for a caller with no session");
-    assert.doesNotMatch(probe.environ, /OMA_PRINCIPAL/);
+    assert.equal(answer.ok, false);
+    assert.match(answer.error!, /AUTH_FAILED/);
   }, { OMA_CLI_PATH: PROBE, OMA_HOST_CHANNEL: "" });
 });
 

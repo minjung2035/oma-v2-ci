@@ -3,8 +3,9 @@ import { closeSync, constants, fstatSync, openSync, readSync } from "node:fs";
 import { FULL_OID_RE } from "../ids.js";
 import { isValidFullOid } from "../domain/identifiers.js";
 import { runGitText } from "../process/policies.js";
-import { fail } from "./exit.js";
-import { cliFrameBytes } from "./transport.js";
+import { fail } from "../client/errors.js";
+import { currentContext } from "../client/context.js";
+import { frameBytes as cliFrameBytes } from "../client/settings.js";
 import { decodeUtf8 } from "../domain/utf8.js";
 
 export function sha256Hex(bytes: Uint8Array): string {
@@ -94,14 +95,14 @@ export function readBody(path: string | null): string {
  * leaves refs/remotes/origin/main), or null when it is absent. */
 export function recordedBase(): string | null {
   const result = runGitText(["rev-parse", "--verify", "--quiet", "--end-of-options", "refs/remotes/origin/main^{commit}"],
-    { cwd: process.cwd() });
+    { cwd: currentContext().cwd });
   const oid = result.status === 0 ? result.stdout.trim() : "";
   return isValidFullOid(oid) ? oid : null;
 }
 
 /** Uncommitted work is never part of a resolved candidate; `merge open` warns. */
 export function workspaceDirty(): boolean {
-  const status = runGitText(["status", "--porcelain"], { cwd: process.cwd(), maxBuffer: 256 * 1024 });
+  const status = runGitText(["status", "--porcelain"], { cwd: currentContext().cwd, maxBuffer: 256 * 1024 });
   return status.status === 0 && status.stdout.trim().length > 0;
 }
 
@@ -110,7 +111,7 @@ export function resolveOid(revision: string): string {
   // INV09: the revision is a value, and Git would read a leading `-` as an option.
   // No revision needs one, and `--end-of-options` says so to Git as well.
   if (revision.startsWith("-")) fail(`invalid revision ${revision}`, 2);
-  const result = runGitText(["rev-parse", "--verify", "--end-of-options", `${revision}^{commit}`], { cwd: process.cwd() });
+  const result = runGitText(["rev-parse", "--verify", "--end-of-options", `${revision}^{commit}`], { cwd: currentContext().cwd });
   const oid = result.stdout.trim();
   if (result.status !== 0 || !FULL_OID_RE.test(oid)) fail(`cannot resolve ${revision} to a commit`, 2);
   return oid;

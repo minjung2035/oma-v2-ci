@@ -10,8 +10,8 @@ import type { Actor, ProtocolLimits } from "../../implementation/contracts.js";
 import { verifiedPaths, type VerifiedExtension } from "./extension-integrity.js";
 import type { PackageResourcePaths } from "./pi-packages.js";
 import { PI_AGENT_DIR_ENV } from "./pi-runtime.js";
-import { PI_SESSION_ENV_NAMES } from "../pi-compat/env.js";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
+import { pathToFileURL } from "node:url";
 import { RESIDENT_INFERENCE_PORT, RESIDENT_PATHS, SANDBOX_EXECUTABLE, confinedPath, residentArgv, type ResidentDirectories, type SandboxHost } from "../sandbox.js";
 import type { ValidatedRunLease } from "../protocol/run-lease.js";
 import { StoreError } from "../domain/errors.js";
@@ -171,6 +171,9 @@ function omaEnvironment(options: PiAdapterOptions, inside: PathView): Record<str
         .filter(extension => extension !== options.paths.coreExtension)
         .map(inside),
     ]),
+    // The extension reaches the broker through the in-process client library
+    // (E27); the preload wires it before any extension module loads.
+    NODE_OPTIONS: `--import=${pathToFileURL(inside(join(dirname(options.paths.coreExtension), "runtime", "client-preload.js"))).href}`,
   };
 }
 

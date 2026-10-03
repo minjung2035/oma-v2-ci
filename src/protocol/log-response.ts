@@ -10,13 +10,8 @@ const size = (value: unknown): number =>
   Buffer.byteLength(JSON.stringify(value), "utf8");
 // Empty ID gives the smallest envelope; reserve the largest valid timestamp and
 // the longer boolean spelling. Each actual request ID is accounted for below.
-export const MIN_LOG_FRAME_BYTES = size(
-  envelope("", {
-    text: "",
-    truncated: false,
-    observedAtMs: Number.MAX_SAFE_INTEGER,
-  }),
-);
+export { MIN_LOG_FRAME_BYTES } from "../client/limits.js";
+import { MIN_LOG_FRAME_BYTES } from "../client/limits.js";
 export function isLogResponseFrameLimit(value: unknown): value is number {
   return (
     typeof value === "number" &&

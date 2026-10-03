@@ -7,6 +7,7 @@
  * tools against that CLI: a pass means the bytes a value named never left its
  * slot. The peer is a protocol fixture, not a broker.
  */
+import "../src/runtime/client-preload.js";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";

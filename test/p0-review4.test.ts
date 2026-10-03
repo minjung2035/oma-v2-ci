@@ -11,7 +11,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { ResolvedAgentSpec } from "../implementation/contracts.js";
 import { CLI_CREDENTIAL_FD_ENV } from "../src/cli/transport.js";
-import { runCliProcess } from "../src/extension/cli-process.js";
+import { runCliProcess } from "./fixtures/cli-child.js";
 import { replaceDerivedFile } from "../src/storage/durable-fs.js";
 import { StatusRefresh } from "../src/views/status-refresh.js";
 import { Broker } from "../src/broker.js";

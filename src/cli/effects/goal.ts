@@ -3,9 +3,10 @@
 import { isAbsolute } from "node:path";
 import { contextFileCheck, contextPathsCheck } from "../../domain/context-policy.js";
 import { runGitText } from "../../process/policies.js";
-import { cliContextBytes } from "../transport.js";
+import { contextBytes as cliContextBytes } from "../../client/settings.js";
+import { currentContext } from "../../client/context.js";
 import { readLocalFile, sha256Hex } from "../effects.js";
-import { fail } from "../exit.js";
+import { fail } from "../../client/errors.js";
 import type { PreparedContextEffects } from "./context.js";
 
 export function prepareGoalEffects(file: string, expected: string | null): PreparedContextEffects {
@@ -13,7 +14,7 @@ export function prepareGoalEffects(file: string, expected: string | null): Prepa
   const files = new Map<string, Buffer>([["GOAL.md", readLocalFile(file)]]);
   let total = files.get("GOAL.md")!.length;
   if (expected !== null) {
-    const repo = process.env.OMA_CONTEXT_GIT;
+    const repo = currentContext().env.OMA_CONTEXT_GIT;
     if (!repo || !isAbsolute(repo)) fail("no canonical context repository was provided", 2);
     const read = (args: string[], maxBuffer: number) => {
       const result = runGitText(["--no-pager", "-c", "core.hooksPath=/dev/null", "-c", "core.fsmonitor=false", ...args],

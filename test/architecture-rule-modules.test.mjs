@@ -181,21 +181,21 @@ test("V29A: the exit-owner rule leaves alone what only looks like process.exit",
 const fenceFindings = (root, rule) => fenceRuleFindings(root).filter(value => value.rule === rule);
 
 test("architecture fence rule accepts a child started with the society lease", () => withFixture({
-  "src/extension/cli-process.ts": `import { spawn } from "node:child_process";
+  "src/process/run.ts": `import { spawn } from "node:child_process";
 export function runCliProcess(run: CliRun, fence: number | null) {
   return spawn(run.node, run.args, { env: run.env, stdio: childStdio(fence) });
 }`,
 }, root => assert.deepEqual(fenceFindings(root, "fence-propagation"), [])));
 
 test("architecture fence rule rejects a child started without the society lease", () => withFixture({
-  "src/extension/cli-process.ts": `import { spawn } from "node:child_process";
+  "src/process/run.ts": `import { spawn } from "node:child_process";
 export function runCliProcess(run: CliRun) {
   return spawn(run.node, run.args, { env: run.env, stdio: ["ignore", "pipe", "pipe"] });
 }`,
 }, root => {
   const found = fenceFindings(root, "fence-propagation");
   assert.equal(found.length, 1, JSON.stringify(found));
-  assert.match(found[0].reason, /src\/extension\/cli-process\.ts#runCliProcess/);
+  assert.match(found[0].reason, /src\/process\/run\.ts#runCliProcess/);
 }));
 
 test("architecture fence rule names the enclosing function, not whatever declaration encloses the call", () => withFixture({
@@ -215,7 +215,7 @@ test("architecture fence rule names the enclosing function, not whatever declara
 }));
 
 test("architecture fence rule never accepts a comment as a propagated descriptor", () => withFixture({
-  "src/extension/cli-process.ts": `import { spawn } from "node:child_process";
+  "src/process/run.ts": `import { spawn } from "node:child_process";
 export function runCliProcess(run: CliRun) {
   return spawn(run.node, run.args, { /* society fence is absent */ stdio: [0, 1, 2] });
 }`,

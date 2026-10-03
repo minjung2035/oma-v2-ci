@@ -39,7 +39,7 @@ import { pathToFileURL } from "node:url";
 import type { Readable } from "node:stream";
 import { CHANNEL_FD, SOCIETY_FENCE_ENV, SOCIETY_FENCE_FD, spawnOwnedRpc, spawnSupervisedService } from "../src/process/async.js";
 import { societyLeaseName, tryHoldSociety } from "../src/runtime/society-lease.js";
-import { runCliProcess, type CliResult } from "../src/extension/cli-process.js";
+import { runCliProcess, type CliResult } from "./fixtures/cli-child.js";
 
 const scratch = (): string => mkdtempSync(join(tmpdir(), "oma-lease-"));
 
@@ -588,7 +588,7 @@ function engineStartingACli(scriptRoot: string, fence: number, declare: boolean)
   const cliScript = join(scriptRoot, "cli.mjs");
   const engineScript = join(scriptRoot, "engine.mjs");
   const reportPath = join(scriptRoot, "cli.json");
-  const module = pathToFileURL(join(process.cwd(), "dist/src/extension/cli-process.js")).href;
+  const module = pathToFileURL(join(process.cwd(), "dist/src/process/run.js")).href;
   // The CLI answers with the inode behind its own descriptor, its pid, and
   // what its environment told it -- then stays alive, which is the state the
   // attack depends on.
@@ -605,12 +605,11 @@ function engineStartingACli(scriptRoot: string, fence: number, declare: boolean)
     "setInterval(() => {}, 60000);",
   ].join("\n"));
   writeFileSync(engineScript, [
-    `import { runCliProcess } from ${JSON.stringify(module)};`,
+    `import { runProcessSync } from ${JSON.stringify(module)};`,
     'process.stdout.write("engine " + process.pid + String.fromCharCode(10));',
-    "const done = runCliProcess({ node: process.execPath, cli: process.argv[2], args: [process.argv[3]],",
-    '  cwd: "/", env: { PATH: process.env.PATH ?? "/usr/bin" }, grant: null });',
-    'done.then(result => process.stdout.write("cli-exit " + result.code + String.fromCharCode(10)),',
-    '  error => process.stdout.write("cli-error " + error.message + String.fromCharCode(10)));',
+    "const result = runProcessSync({ executable: process.execPath, argv: [process.argv[2], process.argv[3]],",
+    '  cwd: "/", env: { PATH: process.env.PATH ?? "/usr/bin" }, timeoutMs: 60000, stdoutBytes: 1024, stderrBytes: 1024 });',
+    'process.stdout.write("effect-exit " + result.exitCode + String.fromCharCode(10));',
     "setInterval(() => {}, 60000);",
   ].join("\n"));
   // Exactly how the host starts the engine: the lease on the declared

@@ -8,8 +8,7 @@
  * name goes after `--` so nothing a caller supplies can become an option. The
  * extension mirrors the CLI's request-name grammar here (PI-001 forbids the
  * runtime import); a test binds the two (INV04). */
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import type { Client, ReviewInput } from "../client/index.js";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
 import { REQUEST_PARAMETER_HELP, refused, requestKeyOf, textResult } from "./shared.js";
@@ -23,11 +22,8 @@ const NAME_RE: Readonly<Record<ReviewKind, RegExp>> = {
   challenge: /^challenge-[0-9a-f]{8}$/,
 };
 
-type Runner = (args: string[], signal?: AbortSignal) => Promise<string>;
 export interface ReviewToolContext {
-  readonly run: Runner;
-  /** Where the call's 0600 evidence files live while the CLI reads them. */
-  readonly temporaryRoot: string;
+  readonly client: Client;
   /** Principal registration carries only diff and vote. */
   readonly principal: boolean;
 }
@@ -93,7 +89,7 @@ const principalSchema = (kind: ReviewKind) => Type.Object({
 
 /** The whole pair of tools: one execute, argv assembled per action. */
 export function registerReviewTools(pi: ExtensionAPI, context: ReviewToolContext): void {
-  const { run, temporaryRoot, principal } = context;
+  const { client, principal } = context;
   const actions: readonly string[] = principal ? PRINCIPAL_ACTIONS : WORKER_ACTIONS;
   for (const kind of ["merge", "challenge"] as const) {
     const tool = `oma_${kind}`;
@@ -117,72 +113,38 @@ export function registerReviewTools(pi: ExtensionAPI, context: ReviewToolContext
         if (!actions.includes(action)) refused(`${kind} action`, action);
         only(kind, action, params);
         const key = requestKeyOf(params.request, { id, tool, params, context: engine });
-        const withFile = async (content: string, args: string[]) => {
-          const temporary = mkdtempSync(join(temporaryRoot, "oma-tool-"));
-          try {
-            const file = join(temporary, "body.md");
-            writeFileSync(file, content, { mode: 0o600 });
-            // --file is an option: it must precede the `--` that ends options.
-            const at = args.indexOf("--");
-            const argv = at < 0 ? [...args, "--file", file]
-              : [...args.slice(0, at), "--file", file, ...args.slice(at)];
-            return textResult(await run(argv, signal), { request: key });
-          } finally { rmSync(temporary, { recursive: true, force: true }); }
-        };
-        switch (action) {
-          case "open": {
-            const title = textField(params, "title", "title");
-            const reason = textField(params, "reason", "reason");
-            if (kind === "challenge") {
-              const merge = (typeof params.merge === "string" && NAME_RE.merge.test(params.merge))
-                ? params.merge : refused("target merge request name", params.merge);
-              const tier = params.tier === "LOW" || params.tier === "HIGH" ? params.tier : refused("challenge tier", params.tier);
-              const pair = params.candidate === undefined && params.base === undefined ? []
-                : params.candidate !== undefined && params.base !== undefined
-                  ? ["--candidate", String(params.candidate), "--base", String(params.base)]
-                  : refused("candidate and base go together", params);
-              return withFile(reason, ["challenge", "open", "--merge", merge, "--tier", tier, "--title", title, ...pair, "--request", key]);
-            }
-            const tier = params.tier === "LOW" || params.tier === "MEDIUM" || params.tier === "HIGH"
-              ? params.tier : refused("merge tier", params.tier);
-            const candidate = params.candidate !== undefined ? ["--candidate", String(params.candidate)] : [];
-            const base = params.base !== undefined ? ["--base", String(params.base)] : [];
-            return withFile(reason, ["merge", "open", "--tier", tier, "--title", title, ...candidate, ...base, "--request", key]);
+        const input: ReviewInput = { action };
+        if (action !== "open" && (action !== "status" || params.name !== undefined)) input.name = nameOf(kind, params);
+        if (action === "open") {
+          input.title = textField(params, "title", "title");
+          input.reason = textField(params, "reason", "reason");
+          input.tier = params.tier === "LOW" || params.tier === "HIGH" || (kind === "merge" && params.tier === "MEDIUM")
+            ? params.tier as string : refused(`${kind} tier`, params.tier);
+          if (kind === "challenge") {
+            input.merge = typeof params.merge === "string" && NAME_RE.merge.test(params.merge)
+              ? params.merge : refused("target merge request name", params.merge);
+            if ((params.candidate === undefined) !== (params.base === undefined)) refused("candidate and base go together", params);
           }
-          case "diff": {
-            const name = nameOf(kind, params);
-            const view = params.view !== undefined
-              ? ["--view", params.view === "revert" || params.view === "original" ? params.view : refused("view", params.view)] : [];
-            const path = params.path !== undefined ? ["--path", String(params.path)] : [];
-            const cursor = params.cursor !== undefined ? ["--cursor", String(params.cursor)] : [];
-            return textResult(await run([kind, "diff", ...view, ...path, ...cursor, "--", name], signal));
-          }
-          case "review": {
-            const name = nameOf(kind, params);
-            return withFile(textField(params, "review body", "body"), [kind, "review", "--request", key, "--", name]);
-          }
-          case "vote": {
-            const name = nameOf(kind, params);
-            const verdict = params.verdict === "approve" || params.verdict === "reject"
-              ? params.verdict : refused("verdict", params.verdict);
-            const approval = principal
-              ? (typeof params.approval === "string" && validMessageId(params.approval)
-                  ? params.approval : refused("approval message id", params.approval))
-              : params.approval === undefined ? undefined : refused("approval is only the Principal's field", params.approval);
-            return withFile(textField(params, "vote body", "body"),
-              [kind, "vote", "--verdict", verdict, "--request", key,
-                ...(approval === undefined ? [] : ["--approval", approval]), "--", name]);
-          }
-          case "status": {
-            const name = params.name === undefined ? [] : ["--", nameOf(kind, params)];
-            return textResult(await run([kind, "status", ...name], signal));
-          }
-          case "cancel": {
-            const name = nameOf(kind, params);
-            return withFile(textField(params, "cancel reason", "reason"), [kind, "cancel", "--request", key, "--", name]);
-          }
-          default: return refused(`${kind} action`, action);
+          if (params.candidate !== undefined) input.candidate = String(params.candidate);
+          if (params.base !== undefined) input.base = String(params.base);
         }
+        if (action === "review" || action === "vote") input.body = textField(params, `${action} body`, "body");
+        if (action === "cancel") input.reason = textField(params, "cancel reason", "reason");
+        if (action === "vote") {
+          input.verdict = params.verdict === "approve" || params.verdict === "reject" ? params.verdict : refused("verdict", params.verdict);
+          if (principal) input.approval = typeof params.approval === "string" && validMessageId(params.approval)
+            ? params.approval : refused("approval message id", params.approval);
+          else if (params.approval !== undefined) refused("approval is only the Principal's field", params.approval);
+        }
+        if (action === "diff") {
+          if (params.view !== undefined) input.view = params.view === "revert" || params.view === "original" ? params.view : refused("view", params.view);
+          if (params.path !== undefined) input.path = String(params.path);
+          if (params.cursor !== undefined) {
+            if (!/^[0-9]+$/.test(String(params.cursor)) || !Number.isSafeInteger(Number(params.cursor))) throw new Error("invalid cursor");
+            input.cursor = Number(params.cursor);
+          }
+        }
+        return textResult(await client.review(kind, input, key, signal), action === "status" || action === "diff" ? {} : { request: key });
       },
     });
   }

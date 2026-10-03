@@ -1,3 +1,4 @@
+import { encodeWaitObservation } from "../../client/codecs.js";
 import { explicitFullOid } from "../request-intent.js";
 import { keyOf, parseArguments, splitSubcommand } from "../arguments.js";
 import { readBody, resolveOid } from "../effects.js";
@@ -63,7 +64,7 @@ export async function runAgentCommand(args: string[]): Promise<never> {
     const replies = await call("agent.wait", observe ? { observe: true } : {});
     const reply = replies[0];
     if (!reply?.ok) finishFailure(reply, "wait: ");
-    console.log(observe ? JSON.stringify(reply.result) : "wait accepted; ending at the next safe tool boundary");
+    console.log(observe ? encodeWaitObservation(reply.result) : "wait accepted; ending at the next safe tool boundary");
     return succeed();
   }
   return usage();

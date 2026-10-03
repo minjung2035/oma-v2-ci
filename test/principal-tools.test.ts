@@ -1,5 +1,6 @@
 /** AV11/DR27: the Principal reviews, reads and communicates; it does not
  * orchestrate workers or write code. Real extension -> CLI -> refusing peer. */
+import "../src/runtime/client-preload.js";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";

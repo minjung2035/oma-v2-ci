@@ -1,69 +1,72 @@
 /** DR27 / P0-4: a tool owns its CLI until close, not until a sum-of-phases timer. */
 import test from "node:test";
 import assert from "node:assert/strict";
-import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { mkdtempSync, rmSync } from "node:fs";
 import { join } from "node:path";
-import { setTimeout as pause } from "node:timers/promises";
-import { runCliProcess, type CliRun } from "../src/extension/cli-process.js";
+import { Client, ClientError } from "../src/client/index.js";
+import { installRuntime } from "../src/client/runtime.js";
+import { CLIENT_RUNTIME, installClientRuntime } from "../src/runtime/client-runtime.js";
 
-const run = (script: string, more: Partial<CliRun> = {}) => runCliProcess({
-  node: process.execPath, cli: "-e", args: [script], cwd: process.cwd(), env: {}, grant: null, ...more,
-});
+const operation = "op-00000000-0000-4000-8000-000000000001";
 
-test("DR27: an ordinary CLI has no outer phase-sum timer and returns its own answer", async t => {
+test("DR27: each in-process observation owns its budget, not the whole tool", async t => {
+  const root = mkdtempSync(join(process.cwd(), ".client-lifetime-"));
   const timers: number[] = [];
   const original = globalThis.setTimeout;
   t.mock.method(globalThis, "setTimeout", (fn: (...args: unknown[]) => void, ms: number, ...args: unknown[]) => {
     timers.push(ms); return original(fn, ms, ...args);
   });
-  const result = await run("setTimeout(() => { process.stdout.write('receipt'); process.exitCode = 2; }, 150);");
-  assert.deepEqual(result, { code: 2, stdout: "receipt", stderr: "", finished: true });
-  assert.deepEqual(timers, [], "only the CLI's individual phases may own their observation timers");
+  installRuntime({ ...CLIENT_RUNTIME, channel: () => ({ connect: async () => {}, close() {},
+    call: async () => ({ ok: true, result: { operation, state: "pending" } }) }) });
+  try {
+    const client = new Client({ cwd: root, env: { HOME: root, OMA_SOCKET: join(root, "socket") } });
+    assert.match(await client.sendMail({ to: ["b"], subject: "s", body: "b", kind: "message" }, "one"), /Accepted/);
+    assert.equal(timers.length, 1);
+    assert.ok(timers[0]! > 0 && timers[0]! <= CLIENT_RUNTIME.observationSeconds * 1000);
+  } finally { installClientRuntime(); rmSync(root, { recursive: true, force: true }); }
 });
 
-test("DR27/P0: cancellation waits for actual close even when the child handles TERM and exits zero", async () => {
-  const root = mkdtempSync(join(tmpdir(), "oma-cli-cancel-"));
-  const ready = join(root, "ready"), ended = join(root, "ended");
+test("DR27/P0: abort releases the socket, preserves the freeze, and reports same-key unknown", async () => {
+  const root = mkdtempSync(join(process.cwd(), ".client-abort-"));
   const controller = new AbortController();
-  const done = run(`
-    const fs = require('node:fs');
-    process.on('SIGTERM', () => setTimeout(() => {
-      fs.writeFileSync(${JSON.stringify(ended)}, 'closed'); process.exit(0);
-    }, 150));
-    fs.writeFileSync(${JSON.stringify(ready)}, 'ready');
-    setInterval(() => {}, 1000);
-  `, { signal: controller.signal });
+  let opened!: () => void;
+  const started = new Promise<void>(resolve => { opened = resolve; });
+  let closed = 0;
+  installRuntime({ ...CLIENT_RUNTIME, channel: () => {
+    let rejectCall: ((error: unknown) => void) | undefined;
+    return { connect: async () => {}, call: () => new Promise((_, reject) => { rejectCall = reject; opened(); }),
+      close(error) { closed++; rejectCall?.(error ?? new Error("closed")); } };
+  } });
   try {
-    const deadline = performance.now() + 5000;
-    while (!existsSync(ready) && performance.now() < deadline) await pause(10);
-    assert.ok(existsSync(ready));
-    controller.abort();
-    const result = await done;
-    assert.equal(readFileSync(ended, "utf8"), "closed", "a signal request is not child death");
-    assert.equal(result.code, 0);
-    assert.equal(result.finished, false, "a cancelled CLI's zero exit is not an operation receipt");
-  } finally { controller.abort(); await done; rmSync(root, { recursive: true, force: true }); }
+    const client = new Client({ cwd: root, env: { HOME: root, OMA_SOCKET: join(root, "socket") } });
+    const done = client.sendMail({ to: ["b"], subject: "s", body: "b", kind: "message" }, "cancelled", controller.signal);
+    await started; controller.abort();
+    await assert.rejects(() => done, error => error instanceof ClientError && error.request === "cancelled" && /unknown/.test(error.message));
+    assert.ok(closed > 0);
+    assert.equal(CLIENT_RUNTIME.cache(root, 512 * 1024).read("cancelled").kind, "present");
+  } finally { installClientRuntime(); rmSync(root, { recursive: true, force: true }); }
 });
 
-test("DR27: an already aborted call does not start a child", async () => {
-  const root = mkdtempSync(join(tmpdir(), "oma-cli-aborted-"));
-  const marker = join(root, "effect");
+test("DR27: an already aborted call neither builds nor opens a socket", async () => {
+  let calls = 0;
+  installRuntime({ ...CLIENT_RUNTIME, channel: () => { calls++; throw new Error("unexpected dial"); } });
   try {
-    const result = await run(`require('node:fs').writeFileSync(${JSON.stringify(marker)}, 'effect')`, { signal: AbortSignal.abort() });
-    assert.equal(result.finished, false); assert.equal(existsSync(marker), false);
-  } finally { rmSync(root, { recursive: true, force: true }); }
+    const client = new Client({ cwd: process.cwd(), env: {} });
+    await assert.rejects(() => client.query("agent.wait", { observe: true }, AbortSignal.abort()), /unknown/);
+    assert.equal(calls, 0);
+  } finally { installClientRuntime(); }
 });
 
-for (const stream of ["stdout", "stderr"] as const) test(`DR27: ${stream} remains bounded without a whole-task deadline`, async () => {
-  const result = await run(`process.${stream}.write(Buffer.alloc(1024 * 1024 + 1)); setTimeout(() => {}, 10000);`);
-  assert.equal(result.finished, false);
-  assert.ok(Buffer.byteLength(result[stream]) <= 1024 * 1024);
-});
-
-test("DR27/P0: a spawn failure is observed and an invalid phase timer cannot become a 1ms timer", async () => {
-  const missing = await run("", { node: "/no-such-oma-test-node" });
-  assert.equal(missing.finished, false);
-  for (const timeoutMs of [0, -1, 0.5, NaN, Infinity, 2_147_483_648])
-    assert.throws(() => run("", { timeoutMs }), /positive timer-safe integer/);
+for (const state of ["pending", "unknown", "failed", "succeeded"] as const) test(`DR27: ${state} is not inferred from process exit`, async () => {
+  const root = mkdtempSync(join(process.cwd(), ".client-outcome-"));
+  const receipt = state === "failed" ? { operation, state, error: { code: "CHECK_FAILED" as const, message: "check", retry: "never" as const } }
+    : state === "succeeded" ? { operation, state, result: { kind: "route.follow" as const, topic: "commons", subscribed: true } }
+      : { operation, state };
+  installRuntime({ ...CLIENT_RUNTIME, channel: () => ({ connect: async () => {}, close() {}, call: async () => ({ ok: true, result: receipt }) }) });
+  try {
+    const client = new Client({ cwd: root, env: { HOME: root, OMA_SOCKET: join(root, "socket") } });
+    const done = () => client.effect("route.follow", "k", () => ({ method: "route.follow", params: { topic: "commons" } }), () => ({ topic: "commons" }));
+    if (state === "pending" || state === "succeeded") assert.ok((await done()).length > 0);
+    else await assert.rejects(done, error => error instanceof ClientError && error.request === "k" && error.exitCode === (state === "unknown" ? 3 : 2));
+  } finally { installClientRuntime(); rmSync(root, { recursive: true, force: true }); }
 });

@@ -146,16 +146,17 @@ function internalMethodNames(root) {
 function extensionRules(root, findings) {
   const files = extensionFiles(root);
   const members = new Set(files);
-  for (const file of files) {
+  for (const file of [...files, ...filesUnder(root, "src/client")]) {
     const source = sourceOf(root, file);
     // PI-001: the extension runs on the host and inside the sandbox from the
     // same files, so it may import nothing of OMA's runtime.
     for (const edge of edges(source)) {
       const target = normalizeRelativeImport(file, edge.specifier);
       if (target === null) {
-        if (!edge.specifier.startsWith("node:") && !EXTENSION_EXTERNALS.has(edge.specifier))
+        if (!edge.specifier.startsWith("node:") && !(members.has(file) && EXTENSION_EXTERNALS.has(edge.specifier)))
           findings.push(finding("extension-closure", file, `imports ${edge.specifier}; the extension may use only Node built-ins, the engine's extension API and typebox`));
-      } else if (!target.startsWith("src/extension/")) {
+      } else if (!(members.has(file) && target.startsWith("src/extension/")) && !target.startsWith("src/client/") &&
+        !(edge.typeOnly && (target === "implementation/contracts.ts" || target.startsWith("implementation/contracts/")))) {
         findings.push(finding("extension-closure", file, `imports ${target}; the extension imports no OMA runtime module`));
       }
     }
@@ -362,9 +363,8 @@ const ENV_PRODUCER_FUNCTION = "principalEnvironment";
 // engine's own environment, and what the process owner adds itself.
 const ENV_FORWARDERS = Object.freeze([
   { file: "src/extension/mail-tools.ts", fn: "cliEnvironment" },
-  { file: "src/extension/cli-process.ts", fn: "runCliProcess" },
 ]);
-const ENV_CONSUMER = "src/cli/transport.ts";
+const ENV_CONSUMER = "src/client/settings.ts";
 // `socketPath` reads names only to derive an endpoint when none was given; a
 // caller that was given one never reaches them, so they are not requirements.
 const ENV_CONSUMER_DERIVATION = "socketPath";
@@ -414,7 +414,8 @@ const OMA_NAME = /^OMA_[A-Z0-9_]+$/;
 const ENGINE_ONLY_ENV = new Set(["OMA_WORKER_ARCHIVE"]);
 const isProcessEnv = value =>
   ts.isPropertyAccessExpression(value) && value.name.text === "env" &&
-  ts.isIdentifier(value.expression) && value.expression.text === "process";
+  ((ts.isIdentifier(value.expression) && value.expression.text === "process") ||
+    (ts.isCallExpression(value.expression) && calleeName(value.expression) === "currentContext"));
 
 /** Names the forwarders put into the CLI's environment, and the subset they
  * copy from the engine's own environment (which the host must therefore set). */
@@ -482,6 +483,7 @@ function consumedNames(root) {
   const names = new Set();
   eachNode(source, node => {
     if (derived.has(node)) return;
+    if (ts.isStringLiteralLike(node) && OMA_NAME.test(node.text)) names.add(node.text);
     if (ts.isPropertyAccessExpression(node) && isProcessEnv(node.expression) && OMA_NAME.test(node.name.text))
       names.add(node.name.text);
     if (ts.isElementAccessExpression(node) && isProcessEnv(node.expression)) {
