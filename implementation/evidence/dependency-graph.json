@@ -1443,13 +1443,6 @@
      "coarseUpward": false
     },
     {
-     "from": "src/broker/internal-dispatcher.ts",
-     "to": "src/ports/runtime.ts",
-     "classification": "internal-port-contract",
-     "kernelUpward": false,
-     "coarseUpward": false
-    },
-    {
      "from": "src/broker/public-dispatcher.ts",
      "to": "src/ports/runtime.ts",
      "classification": "internal-port-contract",
@@ -1763,7 +1756,7 @@
  ],
  "files": 355,
  "runtimeEdges": 1537,
- "typeOnlyEdges": 417,
+ "typeOnlyEdges": 414,
  "runtimeEdgeMatrix": {
   "L1-kernel -> L1-kernel": 283,
   "L2-facts -> L1-kernel": 35,
@@ -1838,7 +1831,7 @@
   "node:async_hooks": 3,
   "node:child_process": 9,
   "node:crypto": 43,
-  "node:fs": 110,
+  "node:fs": 111,
   "node:fs/promises": 1,
   "node:http": 1,
   "node:https": 1,

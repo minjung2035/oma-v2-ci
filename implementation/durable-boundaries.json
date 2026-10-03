@@ -561,7 +561,7 @@
       "tests": [
         {
           "file": "test/r10-ledger-rows.test.ts",
-          "title": "R10: normal restart, independent acknowledgement and unknown reservations preserve exact facts",
+          "title": "R10: normal restart and independent acknowledgement preserve exact facts",
           "injection": "logical"
         }
       ]
