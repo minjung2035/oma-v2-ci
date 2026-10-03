@@ -200,4 +200,3 @@ test("R12, DR9: a later lease is the batch's next attempt, the row keeps its fir
   assert.deepEqual(store.getDelivery(MESSAGE, "alice"), beforeDelivery);
   assert.equal(beforeDelivery?.presented, 1);
 });
-

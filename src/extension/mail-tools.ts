@@ -4,7 +4,7 @@
  * access. Everything that changes state goes through the model-facing CLI with
  * a fixed argv, so the broker's request identity and receipts apply.
  */
-import { closeSync, constants, fstatSync, mkdtempSync, openSync, readSync, rmSync, writeFileSync } from "node:fs";
+import { closeSync, constants, existsSync, fstatSync, mkdtempSync, openSync, readSync, rmSync, writeFileSync } from "node:fs";
 import { isAbsolute, join } from "node:path";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
@@ -140,6 +140,18 @@ const WORKER_ARCHIVE = (): string | null => {
   const root = process.env.OMA_WORKER_ARCHIVE;
   return root === undefined || !isAbsolute(root) ? null : root.replace(/\/+$/, "");
 };
+
+/** AV-10: the file a reply targets. The normal archive is consulted first; a
+ * Resident's review thread mail lives only in the worker archive mount, so the
+ * same source the read path resolves is used here. A message in neither mount
+ * keeps the primary path -- the CLI reports the missing reply target. */
+export function replyPathFor(archive: string, id: string): string {
+  const candidate = join(archive, `${id}:2,`);
+  if (existsSync(candidate)) return candidate;
+  const worker = WORKER_ARCHIVE();
+  const mounted = worker === null ? null : join(worker, `${id}:2,`);
+  return mounted !== null && existsSync(mounted) ? mounted : candidate;
+}
 
 /** This society's RFC domain, from the environment the engine was started with. */
 const MESSAGE_DOMAIN = (): string | null => {
@@ -327,7 +339,7 @@ export function registerOmaTools(pi: ExtensionAPI, cwd: string, channel: Princip
       const kind = params.kind ?? "message";
       if (!SEND_KINDS.has(kind)) refused("mail kind", kind);
       const key = requestKeyOf(params.request, { id, tool: "oma_mail_send", params, context });
-      const reply = params.replyTo === undefined ? null : join(archive, `${messageIdOf(params.replyTo)}:2,`);
+      const reply = params.replyTo === undefined ? null : replyPathFor(archive, messageIdOf(params.replyTo));
       if (intent !== "goal") return textResult(await client.sendMail({ to, subject: params.subject, body: params.body, kind,
         ...(reply === null ? {} : { replyFile: reply }) }, key, signal), { request: key });
       const temporary = mkdtempSync(join(home, "oma-tool-"));
