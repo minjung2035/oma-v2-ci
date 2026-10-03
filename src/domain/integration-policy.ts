@@ -8,12 +8,19 @@ export const protectedPathCheck: Check = value => {
   if (value === "/") return null;
   return isValidWirePath(value.endsWith("/") ? value.slice(0, -1) : value) ? null : "invalid protected path";
 };
-export const tieredPolicyCheck = checkObject({
-  review: checkOptional(checkEnum(["mail-v1"])),
+const tieredFields = {
   repositoryFloor: riskTierCheck, highPeerFloor: checkInt({ min: 1 }), principalDelegated: checkBool(),
   rules: checkArray(checkObject({ path: protectedPathCheck, tier: riskTierCheck,
     statuses: checkArray(checkEnum(["A", "M", "D", "T"]), { min: 1 }) })),
-});
+};
+/** I48: the mail review protocol is the only review grammar — `review` may
+ * only ever say "mail-v1", and its absence in a live policy still selects it
+ * (there is nothing else a tiered society could mean). */
+export const tieredPolicyCheck = checkObject({ review: checkOptional(checkEnum(["mail-v1"])), ...tieredFields });
+/** Evidence retained inside an accepted plan decodes under the grammar the row
+ * was accepted with: `review` predates its mandatory form, so historical rows
+ * without it remain what they were. */
+const tieredPolicyEvidenceCheck = tieredPolicyCheck;
 
 const commandString: Check = value => {
   const invalid = checkString()(value);
@@ -34,5 +41,5 @@ export const integrationCheckCheck = checkObject({
 });
 
 export const integrationPolicyEvidenceCheck = checkObject({
-  tiered: tieredPolicyCheck, protectedPaths: checkArray(protectedPathCheck), checks: checkArray(integrationCheckCheck),
+  tiered: tieredPolicyEvidenceCheck, protectedPaths: checkArray(protectedPathCheck), checks: checkArray(integrationCheckCheck),
 });

@@ -8,7 +8,7 @@ import { DatabaseSync } from "node:sqlite";
 import type { AuthContext } from "../implementation/contracts.js";
 import { Store, readDiagnosticSnapshot } from "../src/store.js";
 import { MailModule } from "../src/mail.js";
-import { AttestationModule } from "../src/attestation.js";
+import { requestHash } from "../src/hash.js";
 import { inspectLedger } from "../src/diagnostics/ledger.js";
 import { ledgerTables } from "../src/storage/diagnostic-snapshot.js";
 import { ALL_CAPS, makeValidAgent } from "./fixtures/spec.js";
@@ -28,9 +28,21 @@ async function legacy(t: TestContext, version: 1 | 2) {
     await mail.prepare({ ...auth, actor: "principal", role: "principal", incarnation: 0 });
     store.transaction(tx => tx.follow("kept", "alice"));
     if (version === 2) {
-      const attestations = new AttestationModule(store, mail, { exact() {}, principal() {} });
-      await attestations.record(auth, "review", { kind: "peer", verdict: "APPROVE", evidence: "Exact reviewed bytes",
-        identity: { repo: "project", targetRef: "refs/heads/main", candidate: "2".repeat(40), expectedBase: "1".repeat(40), policyRevision: "p1" } });
+      // I48: a legacy attestation row is seeded directly -- the point under test
+      // is row preservation, and fresh legacy acceptance is refused today.
+      const fact = { kind: "peer", verdict: "APPROVE", evidence: "Exact reviewed bytes",
+        identity: { repo: "project", targetRef: "refs/heads/main", candidate: "2".repeat(40),
+          expectedBase: "1".repeat(40), policyRevision: "p1" } };
+      const id = "op-00000000-0000-4000-8000-00000000aa02"; const messageId = `m-${id.slice(3)}-0`;
+      store.transaction(tx => {
+        tx.acceptOperation({ id, actor: "alice", requestKey: "review", kind: "attest.record",
+          requestHash: requestHash("attest.record", fact), payloadJson: JSON.stringify(fact),
+          planJson: JSON.stringify({ kind: "attest.record", fact, message: { id: messageId,
+            objectPath: `mail/objects/${messageId}.eml`, sha256: "0".repeat(64), bytes: 1, dateMs: 1,
+            to: ["commons"], recipients: ["alice"], kind: "result", contextRevision: null,
+            replyHeaders: { replyTo: ["commons"], inReplyTo: null, references: [] } } }) });
+        tx.insertDeliveries([{ operationId: id, messageId, recipient: "alice" }]);
+      });
     }
   } finally { store.close(); }
   const source = new DatabaseSync(seed, { readOnly: true }); const db = new DatabaseSync(path);

@@ -224,9 +224,9 @@ node --test test/document-integrity.test.mjs test/traceability-policy.test.mjs \
 
 아래 binding은 구조 검사의 입력 identity다. digest 생성 자체가 runtime PASS를 뜻하지 않는다.
 
-verification input digest `45918479aafe880197a8ecb9b990298705d45c1e05f459f6138bc80aaca43ca2` (883 files).
+verification input digest `44fee253725092f8897f68282abea16fc5ba5d1ac78536719d4cbcbb09228865` (907 files).
 
-이번 작업에서 cloc 2.08로 재측정한 artifact: 354 files / 35,832 code LOC. 크기 제한은 없으며 값은 release proof가 아니다. [production-loc.json](../../production-loc.json), [production-files.txt](../../production-files.txt), [production-loc-hashes.json](../../production-loc-hashes.json)을 따른다.
+이번 작업에서 cloc 2.08로 재측정한 artifact: 356 files / 38,527 code LOC. 크기 제한은 없으며 값은 release proof가 아니다. [production-loc.json](../../production-loc.json), [production-files.txt](../../production-files.txt), [production-loc-hashes.json](../../production-loc-hashes.json)을 따른다.
 
 ## 재검증
 

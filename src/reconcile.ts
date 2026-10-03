@@ -102,7 +102,12 @@ export class ReconcileModule {
             break;
           case "society.set": case "agent.create": case "agent.start": case "agent.stop":
           case "git.submit": case "git.integrate": case "context.publish":
-            await this.recover(operation, allowActivation); break;
+            // AV-20: one operation's recoverable failure must not end startup;
+            // the same containment the sweep applies retains it. Corruption
+            // still propagates (retainRecoveryFailure rethrows store-blocks).
+            try { await this.recover(operation, allowActivation); }
+            catch (error) { this.retainRecoveryFailure(error); }
+            break;
           // These operations commit their complete effect within a single DB T.
           // Preserve startup's lack of a physical replay for a nonterminal row.
           case "mail.ack": case "route.follow": case "route.unfollow": break;
@@ -111,8 +116,10 @@ export class ReconcileModule {
       }
       // mail-v1 §5.4: startup advances every request that became ready while
       // the broker was down; a failure is a recovery observation, not a gate.
+      // The new effects an advance produces (refresh facts, an integration and
+      // its notice mail) pass the same resource gate as any recovery effect.
       if (this.git !== null)
-        try { await this.git.reviews.advanceAll(); }
+        try { await this.git.reviews.advanceAll(this.paths.resourceGate); }
         catch (error) { this.retainRecoveryFailure(error); }
     } catch (error) { observeStoreFailure(this.store, error); throw error; }
     finally { this.starting = false; }
@@ -154,9 +161,10 @@ export class ReconcileModule {
     const work = Promise.resolve().then(() => sweepScope.run(this, async () => {
       try {
         const counts = await this.operations.sweep();
-        // mail-v1 §5.4: the 5 s sweep retries advance for ready requests.
+        // mail-v1 §5.4: the 5 s sweep retries advance for ready requests; the
+        // refresh/integration effects it creates are newly admitted work.
         if (this.git !== null)
-          try { await this.git.reviews.advanceAll(); }
+          try { await this.git.reviews.advanceAll(this.paths.resourceGate); }
           catch (error) { this.retainRecoveryFailure(error); }
         await this.observeUnits();
         return counts;

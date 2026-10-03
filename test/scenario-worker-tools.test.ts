@@ -278,7 +278,7 @@ test("SCN-W01: a LOW merge through a Worker's own tools applies and notifies com
         { action: "open", tier: "LOW", title: "w01 change", reason: "the reason for w01", request: "w01.open" }));
       assert.equal(opened.state, "succeeded", `open: ${JSON.stringify(opened).slice(0, 300)}`);
       const name = requestNameOf(opened);
-      assert.match(name, /^merge-[0-9a-f]{8}$/);
+      assert.match(name, /^merge-[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
       // The ledger shows alice's publish, open and the review-driven integrate.
       const ops = s.operations("alice");
       assert.ok(ops.some(row => row.kind === "git.submit" && row.request_key === "w01.open.submit" && row.state === "succeeded"),
@@ -471,7 +471,7 @@ test("SCN-W06: a HIGH challenge opened by tool reverts the applied merge on the 
         { action: "open", merge: mergeName, tier: "HIGH", title: "revert w06", reason: "a regression", request: "w06.ch" }));
       assert.equal(opened.state, "succeeded");
       const challenge = requestNameOf(opened);
-      assert.match(challenge, /^challenge-[0-9a-f]{8}$/);
+      assert.match(challenge, /^challenge-[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
       for (const [worker, key] of [[bob, "w06.bob"], [carol, "w06.carol"]] as const) {
         const voted = receiptIn(await worker.call("oma_challenge",
           { action: "vote", name: challenge, verdict: "approve", body: `${worker.actor} approves the revert`, request: key }));

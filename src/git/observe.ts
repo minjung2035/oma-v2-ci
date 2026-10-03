@@ -37,27 +37,38 @@ export function observed<T>(observation: GitObservation<T>, what: string): T {
   throw new StoreError(observation.kind === "corrupt" ? "STORE_CORRUPT" : "REF_STATE_UNKNOWN", `${what}: ${observation.kind}`);
 }
 export type GitObservationRunner = (args: readonly string[], input?: string) => GitProcessEvidence;
-export type Parsed<T> = { readonly ok: true; readonly value: T } | { readonly ok: false; readonly reason: string };
+export type Parsed<T> = { readonly ok: true; readonly value: T }
+  | { readonly ok: false; readonly reason: string; readonly scope: "candidate" | "output" };
 export interface ChangedPath { readonly status: "A" | "M" | "D" | "T"; readonly path: string }
 
 /** Fixed --no-renames grammar: status NUL path NUL, never status-as-path.
  * No trimming, whitespace replacement, Unicode normalization or deduplication.
+ *
+ * Failure scope: a name the wire grammar cannot carry (non-UTF-8 bytes, or a
+ * decoded path outside it) is a property of the candidate's content, not of
+ * the output's shape — "candidate". A malformed record grammar (truncation,
+ * odd pairs, an unknown status) means the output itself is untrustworthy —
+ * "output". Callers map candidate scope to an unknown observation, never
+ * durable corruption (AV-25).
  */
 export function parseNameStatusZ(bytes: Uint8Array): Parsed<readonly ChangedPath[]> {
   if (bytes.byteLength === 0) return { ok: true, value: [] };
-  if (bytes[bytes.byteLength - 1] !== 0) return { ok: false, reason: "unterminated name-status record" };
+  if (bytes[bytes.byteLength - 1] !== 0)
+    return { ok: false, reason: "unterminated name-status record", scope: "output" };
   let text: string;
-  try { text = decodeUtf8(bytes); } catch { return { ok: false, reason: "name-status output is not UTF-8" }; }
+  try { text = decodeUtf8(bytes); }
+  catch { return { ok: false, reason: "name-status output is not UTF-8", scope: "candidate" }; }
   const fields = text.split("\0");
   fields.pop();
-  if (fields.length % 2 !== 0) return { ok: false, reason: "incomplete name-status pair" };
+  if (fields.length % 2 !== 0) return { ok: false, reason: "incomplete name-status pair", scope: "output" };
   const changes: ChangedPath[] = [];
   for (let index = 0; index < fields.length; index += 2) {
     const status = fields[index];
     const path = fields[index + 1];
     if (status !== "A" && status !== "M" && status !== "D" && status !== "T")
-      return { ok: false, reason: "unsupported status for --no-renames" };
-    if (!isValidWirePath(path)) return { ok: false, reason: "invalid repository-relative changed path" };
+      return { ok: false, reason: "unsupported status for --no-renames", scope: "output" };
+    if (!isValidWirePath(path))
+      return { ok: false, reason: "invalid repository-relative changed path", scope: "candidate" };
     changes.push({ status, path });
   }
   return { ok: true, value: changes };
@@ -151,7 +162,12 @@ export class GitObserver {
     if (uncertain(evidence) || evidence.status !== 0 || diagnostic(evidence)) return unknown(evidence, "changed-path process unavailable");
     if (evidence.stdout === null) return corrupt(evidence, "missing changed-path output");
     const parsed = parseNameStatusZ(evidence.stdout);
-    return parsed.ok ? { kind: "present", value: parsed.value, evidence } : corrupt(evidence, parsed.reason);
+    // A name the wire grammar cannot carry makes the candidate's changed-path
+    // set unobservable, not the store corrupt: the request cannot proceed, but
+    // no durable meaning was violated (AV-25).
+    return parsed.ok ? { kind: "present", value: parsed.value, evidence }
+      : parsed.scope === "candidate" ? unknown(evidence, parsed.reason)
+      : corrupt(evidence, parsed.reason);
   }
 }
 

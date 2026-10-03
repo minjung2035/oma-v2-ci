@@ -82,8 +82,13 @@ test("logical and RFC reply selection share policy without sharing grammars", ()
   assert.equal(parseMessageFileId(first), null);
   assert.equal(parseRfcMessageId(first), first);
   assert.equal(parseRfcMessageId(id), null);
-  assert.equal(headerMessageIdCheck(id), null); // retained accepted bare ancestry
+  // #28: a header Message-ID is always `id@society.oma.invalid`; the bare
+  // pre-release form is not a header identity on the wire.
+  assert.notEqual(headerMessageIdCheck(id), null);
   assert.equal(headerMessageIdCheck(first), null);
+  assert.equal(headerMessageIdCheck(`${id}@demo.oma.invalid`), null);
+  assert.notEqual(headerMessageIdCheck(`${id}@other.example`), null);
+  assert.notEqual(headerMessageIdCheck(`a@b@${id}`), null);
   assert.notEqual(exactCandidateCheck({ ...approvalFor, approved: true }), null);
 });
 
@@ -91,7 +96,7 @@ const headerFixture = [
   "fRoM: alice@demo.oma.invalid", "tO: principal@demo.oma.invalid",
   "sUbJeCt: =?UTF-8?B?7KCc66qp?=", "\tcontinued",
   `mEsSaGe-Id: <${id}@demo.oma.invalid>`, `In-Reply-To: <${second}>`,
-  `References: <${second}>`, ` <${first}> <${second}> <${id}>`,
+  `References: <${second}>`, ` <${first}> <${second}> <${id}@demo.oma.invalid>`,
   "Date: Sat, 01 Jan 2000 00:00:00 +0000", "X-OMA-Kind: message",
   "MIME-Version: 1.0", "Content-Type: text/plain; charset=utf-8",
   "Content-Transfer-Encoding: 8bit",
@@ -100,7 +105,7 @@ const headerFixture = [
 test("independent folded header fixture retains order duplicates and second precision", () => {
   const bytes = Buffer.concat([Buffer.from(`${headerFixture}\r\n\r\n`), Buffer.from([255, 0, 254])]);
   const result = parseEmlHeaders(bytes);
-  assert.deepEqual(result.references, [second, first, second, id]);
+  assert.deepEqual(result.references, [second, first, second, `${id}@demo.oma.invalid`]);
   assert.equal(result.subject, "=?UTF-8?B?7KCc66qp?=\ncontinued");
   assert.equal(result.messageId, `${id}@demo.oma.invalid`);
   assert.equal(result.dateMs, 946684800000);
@@ -110,6 +115,9 @@ test("independent folded header fixture retains order duplicates and second prec
 test("parser rejects ambiguous fields unsupported MIME invalid tuples and bounds", () => {
   for (const damage of [
     `${headerFixture}\r\nMESSAGE-ID: <${first}>`,
+    // #28: the bare pre-release form is not a header identity anywhere it appears.
+    headerFixture.replace(`<${id}@demo.oma.invalid>`, `<${id}>`),
+    headerFixture.replace(`<${second}>`, `<${second.replace("@demo.oma.invalid", "")}>`, ),
     headerFixture.replace("alice@demo.oma.invalid", "alice@another@demo.oma.invalid"),
     headerFixture.replace("alice@demo.oma.invalid", "Alice <alice@demo.oma.invalid>"),
     headerFixture.replace("text/plain; charset=utf-8", "multipart/mixed; boundary=x"),

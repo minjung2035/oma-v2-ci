@@ -20,12 +20,16 @@ const REQUEST_KEY_MAX = 96;
 const PAGE = 64 * 1024;
 
 type RequestKind = "merge" | "challenge";
-const NAME_RE = { merge: /^merge-[0-9a-f]{8}$/, challenge: /^challenge-[0-9a-f]{8}$/ } as const;
+const UUID_TAIL = "[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}";
+const NAME_RE = {
+  merge: new RegExp(`^merge-(?:[0-9a-f]{8}|${UUID_TAIL})$`),
+  challenge: new RegExp(`^challenge-(?:[0-9a-f]{8}|${UUID_TAIL})$`),
+} as const;
 const noun = { merge: "merge request", challenge: "challenge" } as const;
 
 function requestName(kind: RequestKind, parsed: ParsedArguments): string {
   const name = parsed.positional[0]!;
-  if (!NAME_RE[kind].test(name)) fail(`a ${noun[kind]} name is ${kind}-<8 lowercase hex>`, 2);
+  if (!NAME_RE[kind].test(name)) fail(`a ${noun[kind]} name is ${kind}-<request id>`, 2);
   return name;
 }
 
@@ -224,7 +228,7 @@ const CHALLENGE_OPEN_SPEC = { options: { "--merge": "value", "--tier": "value", 
 
 async function openChallenge(parsed: ParsedArguments): Promise<never> {
   const merge = parsed.value("--merge");
-  if (merge === null || !NAME_RE.merge.test(merge)) fail("--merge names a merge-<8 lowercase hex> request", 2);
+  if (merge === null || !NAME_RE.merge.test(merge)) fail("--merge names a merge-<request id> request", 2);
   const tier = parsed.value("--tier");
   if (tier !== "LOW" && tier !== "HIGH") fail("--tier must be LOW or HIGH", 2);
   const title = parsed.value("--title");

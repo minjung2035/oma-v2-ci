@@ -29,10 +29,6 @@ export function readableMail(text: string): string {
     if (!/^[A-Za-z0-9+/]*={0,2}$/.test(compact) || compact.length % 4 !== 0) return text;
     bytes = Buffer.from(compact, "base64");
     if (bytes.toString("base64") !== compact) return text;
-  } else if (encoding === "quoted-printable") {
-    const joined = encoded.split(`=${newline}`).join("");
-    if (/=(?![0-9A-F]{2})/.test(joined)) return text;
-    bytes = Buffer.from(joined.replace(/=([0-9A-F]{2})/g, (_match, hex: string) => String.fromCharCode(Number.parseInt(hex, 16))), "latin1");
   } else return text;
   let body: string;
   try { body = decodeUtf8(bytes); } catch { return text; }

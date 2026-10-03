@@ -56,15 +56,18 @@ export class PreparedContextTree implements PreacceptOwner {
 
 /** An existing root belongs to another operation and is never adopted. */
 function acquireStagingRoot(staging: string, tree: string): PreparedContextTree {
-  // R6-04: the lease first, then the tree.
+  // R6-04: the lease first, then the tree. Everything after `take` is inside
+  // the same release-on-failure guard: an opener failure must not strand the
+  // lease (AV-18).
   const lease = TreeLease.take(staging);
-  const parent = openDirectory(dirname(staging));
   try {
-    mkdirSync(entryAt(parent, basename(staging)), { mode: 0o700 });
-    const pinned = lstatSync(entryAt(parent, basename(staging)));
-    return new PreparedContextTree(tree, staging, { dev: pinned.dev, ino: pinned.ino }, lease);
+    const parent = openDirectory(dirname(staging));
+    try {
+      mkdirSync(entryAt(parent, basename(staging)), { mode: 0o700 });
+      const pinned = lstatSync(entryAt(parent, basename(staging)));
+      return new PreparedContextTree(tree, staging, { dev: pinned.dev, ino: pinned.ino }, lease);
+    } finally { closeSync(parent); }
   } catch (error) { lease.release(); throw error; }
-  finally { closeSync(parent); }
 }
 
 /** A failed preparation removes its own root only after every exact file it

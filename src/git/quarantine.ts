@@ -32,6 +32,7 @@ const SCRIPT = [
   "fail_bundle() { echo OMA_ERROR=BUNDLE_INVALID >&2; exit 71; }",
   "fail_prereq() { echo OMA_ERROR=PREREQUISITE_MISSING >&2; exit 72; }",
   "fail_internal() { echo OMA_ERROR=INTERNAL_ERROR >&2; exit 73; }",
+  "fail_refstate() { echo OMA_ERROR=REF_STATE_UNKNOWN >&2; exit 74; }",
   "mount --make-rprivate / || fail_unsupported",
   "mkdir -p \"$root/project\" \"$root/bundle\" \"$root/quarantine\"",
   "touch \"$root/bundle/input.bundle\"",
@@ -39,6 +40,9 @@ const SCRIPT = [
   "trap cleanup EXIT",
   "mount --bind \"$project\" \"$root/project\" || fail_unsupported",
   "mount -o remount,bind,ro \"$root/project\" || fail_unsupported",
+  // NB-01: the tmpfs holds the copied bundle AND the freshly written object
+  // store -- roughly twice the declared bound -- so the size argument is the
+  // tmpfs capacity, not the bundle bound alone.
   "mount -t tmpfs -o size=\"$tmp_bytes\" tmpfs \"$root/quarantine\" || fail_unsupported",
   // Read the inherited checked descriptor into the existing bounded private tmpfs.
   // A descriptor from the parent mount namespace is not a portable bind-mount source.
@@ -65,7 +69,13 @@ const SCRIPT = [
   "$git --git-dir=\"$repo\" fetch -q --no-tags \"$root/bundle/input.bundle\" \"$refspec\" >/dev/null 2>&1 || fail_bundle",
   "input=$($git --git-dir=\"$repo\" rev-parse refs/oma/input 2>/dev/null) || fail_bundle",
   "[ \"$input\" = \"$candidate\" ] || fail_bundle",
-  "$git --git-dir=\"$repo\" fsck --strict --no-reflogs >/dev/null 2>&1 || fail_bundle",
+  // NB-02: fsck traverses alternates, so canonical-side damage used to read as
+  // a bad bundle. On failure, fsck the canonical store itself: canonical damage
+  // is a state observation (REF_STATE_UNKNOWN), never a bundle defect.
+  "if ! $git --git-dir=\"$repo\" fsck --strict --no-reflogs >/dev/null 2>&1; then",
+  "  $git --git-dir=\"$root/project\" fsck --strict --no-reflogs >/dev/null 2>&1 || fail_refstate",
+  "  fail_bundle",
+  "fi",
   "for prerequisite in \"$@\"; do $git --git-dir=\"$repo\" cat-file -e \"$prerequisite^{commit}\" >/dev/null 2>&1 || fail_prereq; done",
   "mount -o remount,bind,rw \"$root/project\" || fail_unsupported",
   // Import objects only. The coordinator owns the later immutable published ref.
@@ -81,6 +91,11 @@ export class QuarantineImporter {
     if (!limits || ![limits.cpuSeconds, limits.memoryBytes, limits.tasks, limits.timeoutSeconds, this.paths.quarantineTmpBytes]
       .every(value => Number.isSafeInteger(value) && value > 0))
       throw new StoreError("UNSUPPORTED_PROFILE", "quarantine resource profile is unavailable");
+    // NB-01: the declared bound is the bundle's; the tmpfs must also hold the
+    // imported object store (~the same size again). Enlarge the mount, checked.
+    const tmpfsBytes = this.paths.quarantineTmpBytes * 2;
+    if (!Number.isSafeInteger(tmpfsBytes))
+      throw new StoreError("UNSUPPORTED_PROFILE", "quarantine tmpfs size cannot be enforced");
     const timeoutMs = limits.timeoutSeconds * 1000;
     if (!Number.isSafeInteger(timeoutMs) || timeoutMs > 0x7fffffff)
       throw new StoreError("UNSUPPORTED_PROFILE", "quarantine timeout cannot be enforced by the native timer");
@@ -108,7 +123,7 @@ export class QuarantineImporter {
         // namespace with unshare. util-linux 2.41 has no --forward-signals.
         "/usr/bin/unshare", "--user", "--map-root-user", "--mount", "--pid", "--net", "--fork",
         "--kill-child=SIGKILL", "--mount-proc", "/bin/sh", "-c", SCRIPT, "oma-quarantine",
-        "/proc/self/fd/3", this.paths.projectGit, candidate, exportRef, String(this.paths.quarantineTmpBytes), root, ...prerequisites,
+        "/proc/self/fd/3", this.paths.projectGit, candidate, exportRef, String(tmpfsBytes), root, ...prerequisites,
       ], env: GIT_ENV, timeoutMs, stdoutBytes: 4 * 1024 * 1024, stderrBytes: 4 * 1024 * 1024 }, undefined, [bundleFd, lease.descriptor]);
       if (result.kind !== "exited") throw new StoreError("REF_STATE_UNKNOWN", `quarantine import outcome is ${result.kind}`);
       settledNamespaceCommand = true;
@@ -116,8 +131,8 @@ export class QuarantineImporter {
       try { stdout = decodeProcessText(result.stdout); stderr = decodeProcessText(result.stderr); }
       catch { throw new StoreError("REF_STATE_UNKNOWN", "quarantine command output is not valid UTF-8"); }
       if (result.exitCode !== 0) {
-        const code = /OMA_ERROR=(BUNDLE_INVALID|PREREQUISITE_MISSING|INTERNAL_ERROR|UNSUPPORTED_PROFILE)/.exec(stderr)?.[1];
-        if (code === "BUNDLE_INVALID" || code === "PREREQUISITE_MISSING" || code === "INTERNAL_ERROR" || code === "UNSUPPORTED_PROFILE")
+        const code = /OMA_ERROR=(BUNDLE_INVALID|PREREQUISITE_MISSING|INTERNAL_ERROR|UNSUPPORTED_PROFILE|REF_STATE_UNKNOWN)/.exec(stderr)?.[1];
+        if (code === "BUNDLE_INVALID" || code === "PREREQUISITE_MISSING" || code === "INTERNAL_ERROR" || code === "UNSUPPORTED_PROFILE" || code === "REF_STATE_UNKNOWN")
           throw new StoreError(code, stderr.slice(0, 400) || "quarantine failed");
         throw new StoreError("UNSUPPORTED_PROFILE", "required quarantine namespace is unavailable");
       }

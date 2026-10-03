@@ -76,10 +76,8 @@ export class GitModule {
       applyMerge: operation => this.integrationCoordinator.applyMerge(operation),
       withWriter: work => this.withWriter(work),
     }, reviewBounds, paths.society);
-    this.attestations = new AttestationModule(store, mail, { exact: identity => this.integrationCoordinator.assertReviewIdentity(identity),
-      principal: () => this.integrationCoordinator.assertPrincipalDelegated() },
-      { mode: () => this.integrationCoordinator.boundPolicy()?.tiered?.review === "mail-v1",
-        record: (a, k, i) => this.reviews.record(a, k, i) });
+    this.attestations = new AttestationModule(store,
+      { record: (a, k, i) => this.reviews.record(a, k, i) });
     this.quarantine = new QuarantineImporter(paths, candidate => this.canonicalHas(candidate));
     this.submissionCoordinator = new SubmitCoordinator(paths, store, mail, {
       verifyObjectFormat: oids => { this.objectFormat(paths.projectGit, oids); },

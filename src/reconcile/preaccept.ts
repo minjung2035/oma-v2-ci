@@ -101,5 +101,22 @@ export function collectUnacceptedArtifacts(stateRoot: string, store: Pick<Store,
     if (name.startsWith("quarantine-ns-")) { leased(path, "a quarantine namespace"); continue; }
     kept.push({ path, reason: "not a name this broker derives" });
   }
+  // Context revision preparation trees (publishContextRevision's
+  // `.prepare-<oid>-<operation id>` under world/context/revisions): written and
+  // removed inside one broker call, so an unaccepted survivor under this
+  // broker's lock has no writer left; it is removed as a tree (AV-19).
+  const revisions = join(stateRoot, "world", "context", "revisions");
+  for (const name of names(revisions)) {
+    if (!name.startsWith(".prepare-")) continue;
+    const path = join(revisions, name);
+    const parsed = /^\.prepare-(?:[0-9a-f]{40}|[0-9a-f]{64})-(op-[0-9a-f-]{36})$/.exec(name);
+    const operation = parsed === null ? null : parseOperationId(parsed[1]!);
+    if (operation === null || !lstatSync(path).isDirectory()) {
+      kept.push({ path, reason: "not a name this broker derives" });
+      continue;
+    }
+    if (accepted(operation) !== null) { kept.push({ path, reason: "its operation is accepted" }); continue; }
+    remove(path, true);
+  }
   return Object.freeze({ removed: Object.freeze(removed), kept: Object.freeze(kept.map(entry => Object.freeze(entry))) });
 }

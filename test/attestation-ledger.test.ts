@@ -1,4 +1,8 @@
-import { readableBody } from "../src/mail/display.js";
+/** I48: mail-v1 is the only production review grammar. attest.record accepts
+ * only the review kinds; the legacy attestation kinds refuse UNSUPPORTED_PROFILE
+ * at fresh acceptance. Their durable rows still decode, their commons mail and
+ * recipients stay what the plan froze, and a same-key replay still returns the
+ * historical receipt -- the durable answer precedes every current-config check. */
 import test from "node:test";
 import assert from "node:assert/strict";
 import { mkdtempSync, readFileSync, rmSync } from "node:fs";
@@ -6,14 +10,18 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { DatabaseSync } from "node:sqlite";
 import type { AuthContext, ExactCandidateIdentity } from "../implementation/contracts.js";
+import type { AttestationInput } from "../implementation/contracts/attestation.js";
 import { AttestationModule } from "../src/attestation.js";
 import { MailModule } from "../src/mail.js";
 import { Store, readDiagnosticSnapshot } from "../src/store.js";
 import { StoreError } from "../src/domain/errors.js";
 import { inspectLedger } from "../src/diagnostics/ledger.js";
-import { reconcileOrdinaryMail } from "../src/mail/reconcile.js";
 import { attestationSnapshot } from "../src/git/attestation-snapshot.js";
 import { requestHash } from "../src/hash.js";
+import { messageIdForOperation } from "../src/domain/derived.js";
+import { buildFrozenMessage } from "../src/mail/serialize.js";
+import { messagePlanFrom } from "../src/mail/facts.js";
+import { operationPlanCheck } from "../src/durable.js";
 import { makeValidAgent, ALL_CAPS } from "./fixtures/spec.js";
 
 const identity: ExactCandidateIdentity = { repo: "project", targetRef: "refs/heads/main", expectedBase: "1".repeat(40),
@@ -22,112 +30,125 @@ const peer = { kind: "peer", identity, verdict: "APPROVE", evidence: "Read the e
 const isCode = (code: string) => (error: unknown) => error instanceof StoreError && error.code === code;
 function fixture() {
   const root = mkdtempSync(join(tmpdir(), "oma-attestation-")); const path = join(root, "runtime.sqlite");
-  let now = 100;
-  const store = new Store(path, 0, { society: "demo" }, () => now);
+  const store = new Store(path, 0, { society: "demo" });
   store.transaction(tx => { tx.insertAgent(makeValidAgent("principal")); tx.insertAgent(makeValidAgent("alice", { createdBy: "principal" }));
     tx.insertAgent(makeValidAgent("bob", { createdBy: "alice" })); });
   const mail = new MailModule({ stateRoot: root, society: "demo" }, store, 64);
-  let delegated = true; let exact = true; let observations = 0;
-  const module = new AttestationModule(store, mail, { exact(value) {
-    observations++; assert.equal(store.inTransaction, false); assert.deepEqual(value, identity);
-    if (!exact) throw new StoreError("STALE_BASE", "candidate changed");
-  }, principal() { if (!delegated) throw new StoreError("CAPABILITY_DENIED", "not delegated"); } });
+  const module = new AttestationModule(store);
   const auth = (actor = "alice"): AuthContext => ({ actor, role: actor === "principal" ? "principal" : "resident",
     incarnation: actor === "principal" ? 0 : 1, capabilities: new Set(ALL_CAPS), channel: "actor",
     peer: { pid: process.pid, uid: process.getuid!(), gid: process.getgid!(), cgroup: null } });
-  return { root, path, store, mail, module, auth, observations: () => observations, time: (value: number) => now = value,
-    delegation: (value: boolean) => delegated = value, exact: (value: boolean) => exact = value,
+  return { root, path, store, mail, module, auth,
     close() { store.close(); rmSync(root, { recursive: true, force: true }); } };
 }
 
-test("DR27: accepted fact, commons mail and receipt share one stable identity; retry does not reauthorize", async t => {
+test("every removed legacy attestation kind refuses at fresh acceptance and claims no key", async t => {
   const f = fixture(); t.after(() => f.close());
-  const receipt = await f.module.record(f.auth(), "review", peer);
-  assert.equal(receipt.state, "succeeded");
-  const { operation, sequence } = f.store.attestations.all()[0]!;
-  assert.equal(sequence, 1); assert.equal(operation!.actor, "alice");
-  assert.ok(!("messages" in operation!.plan));
-  assert.deepEqual(operation!.plan.message.to, ["commons"]);
-  assert.deepEqual(operation!.plan.message.recipients, ["alice", "bob"]);
-  assert.equal(f.store.deliveries.forOperation(operation!.id).length, 2);
-  assert.equal(JSON.parse(readableBody(readFileSync(f.mail.archivePath(operation!.plan.message.id), "utf8"))).evidence, "Read the exact diff");
-  assert.equal(f.observations(), 2);
-  f.store.transaction(tx => tx.updateAgent({ name: "alice", desired: "stopped" })); f.exact(false);
-  assert.deepEqual(await f.module.record(f.auth(), "review", peer), receipt);
-  assert.equal(f.store.attestations.all().length, 1);
+  const legacy = [
+    { kind: "peer", identity, verdict: "APPROVE", evidence: "x" },
+    { kind: "decision", identity, verdict: "ACCEPT", evidence: "x" },
+    { kind: "revoke", attestation: "op-00000000-0000-4000-8000-000000000001", evidence: "x" },
+    { kind: "challenge", integration: "op-00000000-0000-4000-8000-000000000001", identity, evidence: "x" },
+    { kind: "finding", challenge: "op-00000000-0000-4000-8000-000000000001", valid: true, floor: "HIGH", scope: "s", evidence: "x" },
+    { kind: "scope", finding: "op-00000000-0000-4000-8000-000000000001", identity, applies: true, evidence: "x" },
+  ] as const;
+  for (const [index, input] of legacy.entries())
+    await assert.rejects(f.module.record(f.auth(), `legacy-${index}`, input), isCode("UNSUPPORTED_PROFILE"));
+  // A refused request left no claim: the same key may still be retried or reused.
+  assert.equal(f.store.getOperation("alice", "legacy-0"), null);
+  await assert.rejects(f.module.record(f.auth(), "legacy-0", { kind: "merge.open", title: "t", reason: "r",
+    tier: "LOW", candidate: identity.candidate, base: identity.expectedBase }), isCode("UNSUPPORTED_PROFILE"));
+});
+
+test("a malformed attestation is invalid input, not a profile refusal", async t => {
+  const f = fixture(); t.after(() => f.close());
+  await assert.rejects(f.module.record(f.auth(), "bad", { kind: "bogus" } as unknown as AttestationInput),
+    isCode("INVALID_REQUEST"));
+  await assert.rejects(f.module.record(f.auth(), "bad2", "not an object" as unknown as AttestationInput),
+    isCode("INVALID_REQUEST"));
+});
+
+/** A succeeded legacy attest.record as the ledger held it: one frozen commons
+ * mail, its recipients, and the attestations order index. The object is real
+ * emitted mail so the materializer's header checks describe an actual row. */
+async function acceptedLegacyRow(f: ReturnType<typeof fixture>, id: string, key: string,
+    fact: Record<string, unknown> = peer) {
+  const messageId = messageIdForOperation(id, 0);
+  const recipients = ["alice", "bob"];
+  const eml = await buildFrozenMessage({ id: messageId, sender: "alice", society: "demo", to: ["commons"],
+    kind: "result", contextRevision: null, replyHeaders: { replyTo: ["commons"], inReplyTo: null, references: [] } },
+    { subject: "Attestation: peer", body: JSON.stringify(fact) });
+  const message = messagePlanFrom(eml, recipients);
+  f.mail.freezeObject(message.id, eml);
+  const plan = { kind: "attest.record", fact, message };
+  f.store.transaction(tx => {
+    tx.acceptOperation({ id, actor: "alice", requestKey: key, kind: "attest.record",
+      requestHash: requestHash("attest.record", fact), payloadJson: JSON.stringify(fact), planJson: JSON.stringify(plan) });
+    tx.insertDeliveries(recipients.map(recipient => ({ operationId: id, messageId, recipient })));
+    tx.setOperationSucceeded(id, JSON.stringify({ kind: "attest.record", message: messageId,
+      recipientCount: recipients.length, archivePath: `${f.root}/mail/archive/cur/${messageId}:2,` }));
+  });
+  return { messageId, plan };
+}
+
+test("an accepted legacy row keeps its receipt: same-key replay answers before the removed grammar", async t => {
+  const f = fixture(); t.after(() => f.close());
+  const id = "op-00000000-0000-4000-8000-000000000201";
+  await acceptedLegacyRow(f, id, "review");
+  const before = f.store.getOperation("alice", "review")!;
+  assert.equal(before.kind, "attest.record"); assert.equal(before.state, "succeeded");
+  // The durable answer precedes the grammar change: same key, same input ->
+  // the historical receipt even though fresh legacy acceptance is refused.
+  const replay = await f.module.record(f.auth(), "review", peer);
+  assert.equal(replay.state, "succeeded"); assert.equal(replay.operation, id);
+  assert.equal(f.store.attestations.all().length, 1, "replay created no second fact");
+  // A different payload under the same key is still a key-reuse refusal.
   await assert.rejects(f.module.record(f.auth(), "review", { ...peer, verdict: "OBJECT" }), isCode("REQUEST_KEY_REUSED"));
-  await assert.rejects(f.module.record(f.auth(), "new", peer), isCode("STALE_RUN"));
-  await assert.rejects(f.module.record({ ...f.auth(), incarnation: 0 }, "review", peer), isCode("STALE_RUN"));
-  const report = inspectLedger(readDiagnosticSnapshot(f.root), { stateRoot: f.root, society: "demo" }).report;
-  assert.equal(report.status, "PASS", JSON.stringify(report));
+  // Even after the requester is stopped, the receipt answer does not change.
+  f.store.transaction(tx => tx.updateAgent({ name: "alice", desired: "stopped" }));
+  assert.deepEqual(await f.module.record(f.auth(), "review", peer), replay);
 });
 
-test("DR27: publication failure retains the fact; recovery publishes its original recipient snapshot", async t => {
+test("durable decode and the tier evidence snapshot still read a legacy attestation row", async t => {
   const f = fixture(); t.after(() => f.close());
-  const materialize = f.mail.materialize.bind(f.mail);
-  f.mail.materialize = async () => { throw new StoreError("BROKER_UNAVAILABLE", "injected publication failure"); };
-  const first = await f.module.record(f.auth(), "pending-review", peer); assert.equal(first.state, "pending");
-  const before = f.store.attestations.all()[0]!.operation;
-  assert.equal(attestationSnapshot(f.store.attestations.all(), identity).reviews.length, 1);
-  f.store.transaction(tx => { tx.updateAgent({ name: "alice", desired: "stopped" }); tx.insertAgent(makeValidAgent("later")); });
-  f.mail.materialize = materialize;
-  const result = await reconcileOrdinaryMail(f.store, f.mail);
-  assert.equal(result.repaired, 1);
-  const after = f.store.attestations.all()[0]!.operation;
-  assert.equal(after.planJson, before.planJson); assert.equal(after.state, "succeeded");
-  assert.ok(!("messages" in after.plan));
-  assert.deepEqual(after.plan.message.recipients, ["alice", "bob"]);
-  assert.equal(f.store.deliveries.get(after.plan.message.id, "later"), null);
+  const id = "op-00000000-0000-4000-8000-000000000202";
+  const { messageId, plan } = await acceptedLegacyRow(f, id, "legacy-peer");
+  const row = f.store.getOperationById(id)!;
+  assert.equal(row.planJson, JSON.stringify(plan));
+  const check = operationPlanCheck("attest.record", { operationId: id, actor: "alice",
+    stateRoot: f.root, repositoryIdentity: { society: "demo" } });
+  assert.equal(check(JSON.parse(row.planJson)), null);
+  // Plan-level drift the plan relation itself owns: the frozen commons result
+  // mail and its operation-derived identity are checked without the payload.
+  const original = JSON.parse(row.planJson);
+  for (const mutate of [
+    (p: typeof original) => { p.message.kind = "message"; },
+    (p: typeof original) => { p.message.to = ["alice"]; },
+    (p: typeof original) => { p.message.id = "m-00000000-0000-4000-8000-000000009999-0"; },
+  ]) { const altered = structuredClone(original); mutate(altered); assert.notEqual(check(altered), null); }
+  // Drift the plan's grammar still parses but full decode owns: fact changes
+  // contradict the authenticated request bytes, and a new recipient leaves the
+  // delivery rows behind. Neither may re-read as the accepted fact.
+  const db = new DatabaseSync(f.path);
+  try {
+    for (const mutate of [
+      (p: typeof original) => { p.fact.verdict = "OBJECT"; },
+      (p: typeof original) => { p.message.recipients = ["mallory"]; },
+      (p: typeof original) => { p.fact.identity.candidate = "9".repeat(40); },
+    ]) {
+      const drifted = structuredClone(original); mutate(drifted);
+      db.prepare("UPDATE operations SET plan_json = ? WHERE id = ?").run(JSON.stringify(drifted), id);
+      assert.throws(() => f.store.getOperationById(id), isCode("STORE_CORRUPT"));
+    }
+    db.prepare("UPDATE operations SET plan_json = ? WHERE id = ?").run(JSON.stringify(original), id);
+  } finally { db.close(); }
+  const snapshot = attestationSnapshot(f.store.attestations.all(), identity);
+  assert.equal(snapshot.reviews.length, 1);
+  assert.equal(snapshot.reviews[0]!.id, id);
+  assert.equal(existsSyncLike(join(f.root, "mail", "objects", `${messageId}.eml`)), true);
 });
 
-test("DR27: only an author revokes; Principal order survives clock rollback and revocation", async t => {
-  const f = fixture(); t.after(() => f.close());
-  await f.module.record(f.auth(), "approve", peer);
-  const first = f.store.attestations.all()[0]!.operation;
-  await assert.rejects(f.module.record(f.auth("bob"), "other-revoke", { kind: "revoke", attestation: first.id, evidence: "not mine" }), isCode("INVALID_REQUEST"));
-  await f.module.record(f.auth(), "own-revoke", { kind: "revoke", attestation: first.id, evidence: "new evidence" });
-  f.time(90);
-  await f.module.record(f.auth("principal"), "accept", { kind: "decision", identity, verdict: "ACCEPT", evidence: "read" });
-  f.time(80);
-  await f.module.record(f.auth("principal"), "reject", { kind: "decision", identity, verdict: "REJECT", evidence: "found problem" });
-  const reject = f.store.attestations.all().at(-1)!.operation;
-  f.delegation(false);
-  await f.module.record(f.auth("principal"), "withdraw", { kind: "revoke", attestation: reject.id, evidence: "withdrawn, not an acceptance" });
-  const reviews = attestationSnapshot(f.store.attestations.all(), identity).reviews;
-  assert.equal(reviews[0]!.revoked, true); assert.equal(reviews.at(-1)!.value, "REJECT"); assert.equal(reviews.at(-1)!.revoked, true);
-  assert.ok(reviews.at(-1)!.sequence > reviews.at(-2)!.sequence);
-  await assert.rejects(f.module.record(f.auth("principal"), "not-delegated", { kind: "decision", identity, verdict: "ACCEPT", evidence: "read" }), isCode("CAPABILITY_DENIED"));
-  await assert.rejects(f.module.record(f.auth(), "not-principal", { kind: "decision", identity, verdict: "ACCEPT", evidence: "read" }), isCode("INVALID_REQUEST"));
-});
-
-test("DR27: challenges require actual exact successful integration; floors and scoped exemptions are explicit", async t => {
-  const f = fixture(); t.after(() => f.close());
-  const id = "op-00000000-0000-4000-8000-000000000003";
-  const payload = { candidate: identity.candidate, expected: identity.expectedBase };
-  const plan = { kind: "git.integrate", repo: "project", target: identity.targetRef, base: identity.expectedBase,
-    candidate: identity.candidate, policyRevision: identity.policyRevision, checkProfileDigest: "a".repeat(64) };
-  f.store.transaction(tx => tx.acceptOperation({ id, actor: "alice", requestKey: "integration", kind: "git.integrate",
-    requestHash: requestHash("git.integrate", payload), payloadJson: JSON.stringify(payload), planJson: JSON.stringify(plan) }));
-  const challenge = { kind: "challenge", identity, integration: id, evidence: "regression" } as const;
-  await assert.rejects(f.module.record(f.auth(), "not-integrated", challenge), isCode("INVALID_REQUEST"));
-  f.store.transaction(tx => tx.setOperationSucceeded(id, JSON.stringify({ kind: plan.kind, base: plan.base,
-    candidate: plan.candidate, target: plan.target, policyRevision: plan.policyRevision, changed: true })));
-  await assert.rejects(f.module.record(f.auth(), "wrong-identity", { ...challenge, identity: { ...identity, policyRevision: "other" } }), isCode("INVALID_REQUEST"));
-  await f.module.record(f.auth(), "challenge", challenge);
-  const challenged = f.store.attestations.all().at(-1)!.operation;
-  await f.module.record(f.auth("principal"), "finding", { kind: "finding", challenge: challenged.id,
-    valid: true, floor: "MEDIUM", scope: "Changes to the failed data migration semantics", evidence: "reproduced" });
-  const finding = f.store.attestations.all().at(-1)!.operation;
-  await f.module.record(f.auth("principal"), "outside", { kind: "scope", finding: finding.id, identity, applies: false, evidence: "unrelated semantics" });
-  await f.module.record(f.auth("principal"), "inside", { kind: "scope", finding: finding.id, identity, applies: true, evidence: "corrected assessment" });
-  const assessment = f.store.attestations.all().at(-1)!.operation;
-  await f.module.record(f.auth("principal"), "revoke-assessment", { kind: "revoke", attestation: assessment.id, evidence: "needs another review" });
-  let snapshot = attestationSnapshot(f.store.attestations.all(), identity);
-  assert.equal(snapshot.floors.length, 1); assert.equal(snapshot.scopeAssessments.length, 0, "old exemption must not reappear");
-  await assert.rejects(f.module.record(f.auth(), "remove-floor", { kind: "revoke", attestation: finding.id, evidence: "requester cannot remove floor" }), isCode("INVALID_REQUEST"));
-  await f.module.record(f.auth("principal"), "remove-floor", { kind: "revoke", attestation: finding.id, evidence: "explicitly withdrawn" });
-  snapshot = attestationSnapshot(f.store.attestations.all(), identity); assert.equal(snapshot.floors.length, 0);
-});
+function existsSyncLike(path: string): boolean { try { readFileSync(path); return true; } catch { return false; } }
 
 test("DR27: v1 migration preserves every rowid and byte, checks foreign keys, and diagnostics never migrate", t => {
   const root = mkdtempSync(join(tmpdir(), "oma-attestation-migrate-")); t.after(() => rmSync(root, { recursive: true, force: true }));
