@@ -359,7 +359,7 @@ export const lanes = Object.freeze({
       "DR12: a first-run configuration is created where none exists",
       "DR13 / P0-5: a CLI a tool stopped gave no answer; the tool says the outcome is unknown and names the key",
       "P0V-15 / P0-5: a workspace entry that cannot be observed is not zero bytes",
-      "P0V-25 / N01, P0-4: one CLI process reads its credential once",
+      "P0V-25 / N01, P0-4: a credential descriptor named in the environment is not a CLI credential source",
       "P0V-28 / N04, P0-5: a broker started as supervised whose channel cannot be established does not run on unsupervised",
       "P0V-49 / F3, P0-4: a descriptor given back is never closed again",
       "P0V-59 / R04, P0-1: a unit another state tree's society of the same name installed is that owner's",

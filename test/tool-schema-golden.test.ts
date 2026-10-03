@@ -32,7 +32,7 @@ const str = (extra: object = {}) => ({ type: "string", ...extra });
 const named = (values: readonly string[]) => ({ anyOf: values.map(v => ({ type: "string", const: v })) });
 const request = { request: str({ description: REQUEST_DESC }) };
 
-const reviewCommon = { name: str({ description: "the request's generated name (merge-/challenge- + 8 hex)" }),
+const reviewCommon = { name: str({ description: "the request's generated name (merge-/challenge- + the request's full UUID; 8-hex names minted before stay readable)" }),
   verdict: named(["approve", "reject"]), body: str(), path: str(), cursor: { type: "integer", minimum: 0 }, ...request };
 const reviewPrincipal = (extra: object = {}) => ({ type: "object", required: ["action"], properties: {
   action: named(["diff", "vote"]), approval: str({ description: "the approval message id the vote answers; required" }),
@@ -59,7 +59,7 @@ const GOLDEN = {
     oma_mail_ack: { type: "object", required: ["messageId"], properties: { messageId: str(), ...request } },
     oma_status: { type: "object", properties: { agent: str() } },
     oma_merge: reviewWorker({ tier: named(["LOW", "MEDIUM", "HIGH"]) }),
-    oma_challenge: reviewWorker({ merge: str({ description: "the applied merge-<8 hex> request this challenge reverts" }),
+    oma_challenge: reviewWorker({ merge: str({ description: "the applied merge-<UUID> request this challenge reverts" }),
       tier: named(["LOW", "HIGH"]), view: named(["revert", "original"]) }),
   },
   principal: {
