@@ -18,7 +18,7 @@
 import { lstatSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import type { OperationRow, Store } from "../store.js";
-import { parseMessageId, parseOperationId } from "../domain/identifiers.js";
+import { isValidFullOid, parseMessageId, parseOperationId } from "../domain/identifiers.js";
 import { submitBundlePathAt } from "../storage/paths.js";
 import { removeOwnedFile, removeOwnedTree } from "../storage/directory.js";
 import { collectLeasedTree } from "../storage/tree-lease.js";
@@ -100,6 +100,21 @@ export function collectUnacceptedArtifacts(stateRoot: string, store: Pick<Store,
     }
     if (name.startsWith("quarantine-ns-")) { leased(path, "a quarantine namespace"); continue; }
     kept.push({ path, reason: "not a name this broker derives" });
+  }
+  // Context revision preparations (AV-20261003-19): publishContextRevision
+  // stages `.prepare-<oid>-<operation id>` beside the revision before its
+  // atomic rename. An accepted fact names the revision itself, never this
+  // temporary, so a leftover is decided only by its lease: a free lease (or
+  // a lease whose tree is gone) collects it, a held or missing lease keeps
+  // and reports it.
+  const revisions = join(stateRoot, "world", "context", "revisions");
+  const revisionEntries = new Set(names(revisions));
+  for (const name of revisionEntries) {
+    const tree = name.endsWith(".lease") ? name.slice(0, -".lease".length) : name;
+    const prepared = /^\.prepare-([0-9a-f]+)-(.+)$/.exec(tree);
+    if (prepared === null || !isValidFullOid(prepared[1]) || parseOperationId(prepared[2]) === null) continue;
+    if (name.endsWith(".lease") && revisionEntries.has(tree)) continue; // decided with its tree
+    leased(join(revisions, tree), "an unaccepted context revision preparation");
   }
   return Object.freeze({ removed: Object.freeze(removed), kept: Object.freeze(kept.map(entry => Object.freeze(entry))) });
 }

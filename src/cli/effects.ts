@@ -40,11 +40,12 @@ function readLocal(path: string, limit: number, whole: boolean): Buffer {
     return readBounded(fd, limit, whole, refusal => fail(
       refusal === "type" ? `not a regular file: ${path}`
         : refusal === "size" ? `file is larger than a request can carry (${limit} bytes): ${path}`
-          : `file grew while it was read: ${path}`, 2));
+          : refusal === "grew" ? `file grew while it was read: ${path}`
+            : `file changed while it was read: ${path}`, 2));
   } finally { closeSync(fd); }
 }
 
-export type LocalReadRefusal = "type" | "size" | "grew";
+export type LocalReadRefusal = "type" | "size" | "grew" | "changed";
 
 /** P0V-78, INV10: the one way the CLI reads a local input -- a file a command
  * names, a context document, the bundle Git wrote. The descriptor was opened
@@ -52,16 +53,29 @@ export type LocalReadRefusal = "type" | "size" | "grew";
  * to `limit` by the size the descriptor reports before anything is allocated,
  * and a file that grows past that size while it is read is refused rather
  * than read on (a device such as /dev/zero would never end). A head read takes
- * at most `limit` bytes of a file of any size. */
+ * at most `limit` bytes of a file of any size. NB-18: a file that shrank while
+ * it was read is refused like FILE_CHANGED_DURING_READ -- never silently
+ * accepted as the strict prefix it happened to leave. */
 export function readBounded(fd: number, limit: number, whole: boolean, refuse: (refusal: LocalReadRefusal) => never): Buffer {
-  const stat = fstatSync(fd);
+  const stat = fstatSync(fd, { bigint: true });
   if (!stat.isFile()) refuse("type");
-  if (whole && stat.size > limit) refuse("size");
-  const buffer = Buffer.alloc((whole ? stat.size : Math.min(stat.size, limit)) + 1);
+  const size = Number(stat.size);
+  if (whole && size > limit) refuse("size");
+  const expected = whole ? size : Math.min(size, limit);
+  const buffer = Buffer.alloc(expected + 1);
   let filled = 0;
   for (let count = 1; count > 0 && filled < buffer.length; filled += count)
     count = readSync(fd, buffer, filled, buffer.length - filled, null);
-  if (whole && filled > stat.size) refuse("grew");
+  if (whole && filled > size) refuse("grew");
+  // A head read's buffer intentionally holds one byte past the head, so only
+  // a short read detects shrinkage there; a whole read also re-checks the
+  // descriptor so a truncation or in-place rewrite inside the read window is
+  // reported like FILE_CHANGED_DURING_READ rather than silently accepted.
+  if (filled < expected) refuse("changed");
+  if (whole) {
+    const after = fstatSync(fd, { bigint: true });
+    if (after.size !== stat.size || after.mtimeNs !== stat.mtimeNs || after.ctimeNs !== stat.ctimeNs) refuse("changed");
+  }
   return buffer.subarray(0, Math.min(filled, whole ? filled : limit));
 }
 

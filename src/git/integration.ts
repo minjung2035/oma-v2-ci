@@ -38,6 +38,9 @@ export interface IntegrationEffects {
 }
 function observed<T>(observation: GitObservation<T>, description: string): T {
   if (observation.kind === "present") return observation.value;
+  // AV-20261003-25: a candidate outside the observation grammar is refused at
+  // candidate scope -- it is never durable-store corruption.
+  if (observation.kind === "refused") throw new StoreError("INVALID_REQUEST", `${description}: ${observation.reason}`);
   throw new StoreError(observation.kind === "corrupt" ? "STORE_CORRUPT" : "REF_STATE_UNKNOWN", `${description} is ${observation.kind}`);
 }
 

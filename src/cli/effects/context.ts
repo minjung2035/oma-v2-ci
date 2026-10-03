@@ -39,7 +39,8 @@ function walk(dir: string, streamBytes: number): ContextFile[] {
           const data = readBounded(fd, streamBytes - total, true, refusal => fail(refusal === "size"
             ? `context is larger than a request can carry (${streamBytes} bytes) at ${relPath}`
             : refusal === "grew" ? `file grew while it was read: ${relPath}`
-              : `unsupported file type/link at ${relPath}`, 2));
+              : refusal === "changed" ? `file changed while it was read: ${relPath}`
+                : `unsupported file type/link at ${relPath}`, 2));
           total += data.length;
           const invalid = contextFileCheck(relPath, data);
           if (invalid) fail(`${invalid}: ${relPath}`, 2);

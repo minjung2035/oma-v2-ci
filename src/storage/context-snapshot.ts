@@ -15,7 +15,8 @@ import { assertContextDirectory, readContextEntry } from "./context-files.js";
 import { ensureDurableDirectory, fsyncDir, fsyncTree, writeExclusiveFsyncedFile } from "./durable-fs.js";
 import { publishStagedDirectory, replaceDerivedSymlink } from "./staged-tree.js";
 import { entryAt, openBeneath, openDirectory } from "./contained-fs.js";
-import { removeOwnedTree } from "./directory.js";
+import { removeOwnedFile, removeOwnedTree } from "./directory.js";
+import { TreeLease, leasePathOf } from "./tree-lease.js";
 
 /** Complete permitted tree verification; no writes or silent byte repair.
  * Mode validation is explicit because a new temporary has not been sealed yet.
@@ -78,6 +79,11 @@ export function publishContextRevision(
   const destination = contextRevisionPathAt(worldDir, candidate);
   if (!lstatSync(destination, { throwIfNoEntry: false })) {
     const temporary = join(revisions, `.prepare-${candidate}-${generateOperationId()}`);
+    // AV-20261003-19 (P0-4): the temporary is lease-owned from creation, so a
+    // publication interrupted between creation and the atomic rename leaves a
+    // residue whose quiescence startup recovery can prove -- not an ownerless
+    // tree that counts against storage quota forever.
+    const lease = TreeLease.take(temporary);
     ensureDurableDirectory(temporary);
     try {
       for (const entry of entries) {
@@ -88,7 +94,14 @@ export function publishContextRevision(
       }
       sealRevision(temporary, entries);
       publishStagedDirectory(temporary, destination, root => verifyContextRevision(root, entries, true), "context-single-link");
-    } finally { removeOwnedTree(temporary); }
+    } finally {
+      // Any residue this leaves -- tree, lease or both -- is named for the
+      // startup collector, which removes it once the lease proves quiescence.
+      try {
+        removeOwnedTree(temporary);
+        removeOwnedFile(leasePathOf(temporary));
+      } finally { lease.release(); }
+    }
   }
   sealRevision(destination, entries);
   replaceDerivedSymlink(join(worldDir, "context", "current"), contextRevisionLinkFor(candidate));

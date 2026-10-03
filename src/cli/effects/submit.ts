@@ -53,7 +53,8 @@ function submitBundle(cwd: string, exportRef: string, prerequisites: readonly st
       return readBounded(fd, bundleBytes, true, refusal => {
         throw refusal === "size"
           ? new StoreError("LIMIT_EXCEEDED", `bundle is larger than a request can carry (${bundleBytes} bytes)`)
-          : new StoreError("INVALID_REQUEST", refusal === "grew" ? "bundle output grew while it was read" : "bundle output is not an owned regular file");
+          : new StoreError("INVALID_REQUEST", refusal === "grew" ? "bundle output grew while it was read"
+            : refusal === "changed" ? "bundle output changed while it was read" : "bundle output is not an owned regular file");
       });
     } finally {
       closeSync(fd);

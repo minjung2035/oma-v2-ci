@@ -113,6 +113,9 @@ export function isValidFullOid(value: unknown): value is FullOid {
 /** General repository-relative path; context documents have a narrower policy. */
 export function isValidWirePath(value: unknown): value is RepositoryRelativePath {
   if (typeof value !== "string" || value.length === 0 || value.length > 4096) return false;
+  // AV-20261003-25: a lone surrogate cannot be represented in stored text or
+  // attestation grammar; the grammar refuses it here, not downstream.
+  if (/\p{Cs}/u.test(value)) return false;
   if (value.includes("\0") || value.startsWith("/") || value.includes("//")) return false;
   for (const part of value.split("/")) {
     if (part === "." || part === ".." || part === "") return false;
