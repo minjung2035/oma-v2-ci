@@ -145,7 +145,7 @@ test("V21B: over the storage limit recovery settles safety stages and holds new 
   f.store.transaction(tx => tx.updateAgent({ name: "bob", desired: "stopped" }));
   f.units.state.set("bob", running);
   f.overLimit();
-  const report = await answer(f.internal("host.reconcile", {}, "host"));
+  const report = await answer(f.reconcile.sweep().then(result => ({ ok: true as const, result })));
   assert.ok(report.ok, `recovery is staged, not refused as a whole: ${JSON.stringify(report)}`);
   assert.deepEqual(report.result, { examined: 1, repaired: 0, remaining: 1 });
   assert.equal(f.store.getOperation("alice", "lost")?.state, "pending", "settlement past its headroom waits");
@@ -159,7 +159,7 @@ test("V21B: within the limit the same recovery settles the mail and activates th
   const f = society(t);
   t.mock.method(f.broker as unknown as Record<string, () => void>, "requireHostUnit", () => undefined);
   await assert.rejects(sendWithStop(f.mail, f.store, auth, "lost", { to: ["carol"], subject: "held", kind: "message", body: "held" }, "accepted"));
-  const report = await answer(f.internal("host.reconcile", {}, "host"));
+  const report = await answer(f.reconcile.sweep().then(result => ({ ok: true as const, result })));
   assert.deepEqual(report, { ok: true, result: { examined: 1, repaired: 1, remaining: 0 } });
   assert.deepEqual(f.units.starts, ["carol"]);
 });

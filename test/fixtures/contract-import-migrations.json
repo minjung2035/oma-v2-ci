@@ -1,28 +1,90 @@
 {
-  "schema": 1,
-  "sourceCommit": "dd7905bd8aef1e005a8279b4a9589f3e1a854d9a",
-  "note": "sourceBlob/bodySha256 retain the P23 import migration baseline. bodyRefinements pins the later DR18 projectMirror, DR25 packages and DR29 removal of unused candidate/checkResources declarations; import bindings and aliases still use the baseline. Historical declarations and explicit owner deltas are checked independently in architecture-surfaces.json.",
-  "bodyRefinements": {
-    "src/ports/runtime.ts": "d2668e1d66ecf6e8c35076dbcef1de7fed0e99b6804860ac313bdc9d81a05692"
+ "schema": 1,
+ "sourceCommit": "dd7905bd8aef1e005a8279b4a9589f3e1a854d9a",
+ "note": "sourceBlob/bodySha256 retain the P23 import migration baseline. bodyRefinements pins the later DR18 projectMirror, DR25 packages and DR29 removal of unused candidate/checkResources declarations, and mail-v1 workerArchive; import bindings and aliases still use the baseline. Historical declarations and explicit owner deltas are checked independently in architecture-surfaces.json.",
+ "bodyRefinements": {
+  "src/ports/runtime.ts": "828a3791b579827cca13454c7f6a6f90b4fed6342c302464d83459683cdc8d47"
+ },
+ "files": {
+  "src/module-ports.ts": {
+   "sourceBlob": "2b76bc9ea1b1f563393a1c1da359de2bb771ec60",
+   "bodySha256": "4225b586213d25a16dda21e0255dfe543b575736f0f9723b9e3d8d720d17d0df",
+   "bindings": [],
+   "inline": []
   },
-  "files": {
-    "src/module-ports.ts": {
-      "sourceBlob": "2b76bc9ea1b1f563393a1c1da359de2bb771ec60",
-      "bodySha256": "4225b586213d25a16dda21e0255dfe543b575736f0f9723b9e3d8d720d17d0df",
-      "bindings": [],
-      "inline": []
-    },
-    "src/ports/ledger.ts": {
-      "sourceBlob": "0c2f34caf9345a5c930e539baec308791e98c62c",
-      "bodySha256": "6ef1f4e91a6a816712e0d21dfb7f81842f16f43fda75bffb1ea00224b58280fc",
-      "bindings": [["Actor", "Actor"], ["OperationId", "OperationId"], ["RequestKey", "RequestKey"], ["Receipt", "Receipt"], ["MutationMethod", "MutationMethod"], ["OperationResult", "OperationResult"], ["ErrorCode", "ErrorCode"]],
-      "inline": []
-    },
-    "src/ports/runtime.ts": {
-      "sourceBlob": "18ff3990b027e92a0d0dc825552d4a01578a968a",
-      "bodySha256": "661fc1ac2e176e421fc4c7cece70cf4f8dd5123f4744ca8f778c5b4063ba2180",
-      "bindings": [["Actor", "Actor"], ["AgentStatus", "AgentStatus"], ["PreparedBatch", "PreparedBatch"], ["RunLease", "RunLease"], ["SandboxPlan", "SandboxPlan"], ["UnitObservation", "UnitObservation"], ["ResourceLimits", "ResourceLimits"], ["ProtocolLimits", "ProtocolLimits"]],
-      "inline": []
-    }
+  "src/ports/ledger.ts": {
+   "sourceBlob": "0c2f34caf9345a5c930e539baec308791e98c62c",
+   "bodySha256": "6ef1f4e91a6a816712e0d21dfb7f81842f16f43fda75bffb1ea00224b58280fc",
+   "bindings": [
+    [
+     "Actor",
+     "Actor"
+    ],
+    [
+     "OperationId",
+     "OperationId"
+    ],
+    [
+     "RequestKey",
+     "RequestKey"
+    ],
+    [
+     "Receipt",
+     "Receipt"
+    ],
+    [
+     "MutationMethod",
+     "MutationMethod"
+    ],
+    [
+     "OperationResult",
+     "OperationResult"
+    ],
+    [
+     "ErrorCode",
+     "ErrorCode"
+    ]
+   ],
+   "inline": []
+  },
+  "src/ports/runtime.ts": {
+   "sourceBlob": "18ff3990b027e92a0d0dc825552d4a01578a968a",
+   "bodySha256": "661fc1ac2e176e421fc4c7cece70cf4f8dd5123f4744ca8f778c5b4063ba2180",
+   "bindings": [
+    [
+     "Actor",
+     "Actor"
+    ],
+    [
+     "AgentStatus",
+     "AgentStatus"
+    ],
+    [
+     "PreparedBatch",
+     "PreparedBatch"
+    ],
+    [
+     "RunLease",
+     "RunLease"
+    ],
+    [
+     "SandboxPlan",
+     "SandboxPlan"
+    ],
+    [
+     "UnitObservation",
+     "UnitObservation"
+    ],
+    [
+     "ResourceLimits",
+     "ResourceLimits"
+    ],
+    [
+     "ProtocolLimits",
+     "ProtocolLimits"
+    ]
+   ],
+   "inline": []
   }
+ }
 }

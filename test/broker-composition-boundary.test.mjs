@@ -131,6 +131,10 @@ function fixture() {
       store: { privateWriter: true },
       record(...args) { calls.push(["attest.record", ...args]); return Promise.resolve("attestation"); },
     },
+    reviews: {
+      store: { privateWriter: true },
+      status(...args) { calls.push(["review.status", ...args]); return "review-status"; },
+    },
     knownRefs() {
       calls.push("git.knownRefs");
       return { main: "main", published: [] };
@@ -201,6 +205,7 @@ test("P18 public composition exposes only projected capabilities and keeps looku
     "isPublished",
     "knownRefs",
     "publishContext",
+    "reviews",
     "submit",
   ]);
 
@@ -209,6 +214,10 @@ test("P18 public composition exposes only projected capabilities and keeps looku
   const auth = { actor: "alice" }, input = { kind: "peer" };
   assert.equal(await ports.git.attestations.record(auth, "key", input), "attestation");
   assert.deepEqual(calls.pop(), ["attest.record", auth, "key", input]);
+  assert.equal(ports.git.reviews === git.reviews, false, "the review owner must not escape through a nested port");
+  assert.deepEqual(Object.keys(ports.git.reviews), ["status"]);
+  assert.equal(await ports.git.reviews.status(auth, "oma_merge/cand", 16, "r1"), "review-status");
+  assert.deepEqual(calls.pop(), ["review.status", auth, "oma_merge/cand", 16, "r1"]);
   assert.equal(ports.lifecycle.setSociety({}, "closed", "request"), "society");
   assert.equal(calls.pop(), "lifecycle.setSociety");
   const view = ports.store.getAgent("alice");

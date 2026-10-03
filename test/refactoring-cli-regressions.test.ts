@@ -38,7 +38,6 @@ function validConfig() {
     limits: { frameBytes: 1024, mailBodyBytes: 1024, subjectBytes: 128, addresses: 10, replyReferences: 10,
       contextFiles: 10, contextBytes: 1024, bundleBytes: 1024, logBytes: 1024, batchMaxMessages: 10,
       idleStreamSeconds: 1, receiptWaitSeconds: 1 },
-    features: { notmuch: false, reflinkSeed: false, formalApproval: false, egress: false },
   };
 }
 function run(home: string, args: string[]) {

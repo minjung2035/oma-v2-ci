@@ -31,7 +31,7 @@ const context = { limits };
 test("public/internal registries are closed, disjoint, and classify all 13 mutations", () => {
   assert.equal(Object.keys(PUBLIC_METHODS).length, 20);
   assert.deepEqual(PUBLIC_METHODS["operation.read"].authority, ["current-actor", "own-operation"]);
-  assert.equal(Object.keys(INTERNAL_METHODS).length, 10);
+  assert.equal(Object.keys(INTERNAL_METHODS).length, 9);
   assert.equal(Object.values(PUBLIC_METHODS).filter(d => d.mode === "mutation").length, 13);
   for (const [method, descriptor] of Object.entries(PUBLIC_METHODS)) {
     assert.equal(isInternalMethod(method), false);
@@ -90,7 +90,6 @@ function configFixture() {
     quota: { societyAgents: 4, lineageAgents: 4, storageBytes: 1 },
     integration: { policyRevision: "test", protectedPaths: [], checks: [] },
     limits,
-    features: { notmuch: false, reflinkSeed: false, formalApproval: false, egress: false },
   };
 }
 

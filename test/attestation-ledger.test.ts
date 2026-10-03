@@ -129,27 +129,19 @@ test("DR27: challenges require actual exact successful integration; floors and s
   snapshot = attestationSnapshot(f.store.attestations.all(), identity); assert.equal(snapshot.floors.length, 0);
 });
 
-test("DR27: v1 migration preserves every rowid and byte, checks foreign keys, and diagnostics never migrate", t => {
+test("DR27: a pre-v3 database fails closed at open and at diagnostics; no migration is attempted", t => {
   const root = mkdtempSync(join(tmpdir(), "oma-attestation-migrate-")); t.after(() => rmSync(root, { recursive: true, force: true }));
   const path = join(root, "runtime.sqlite"); const db = new DatabaseSync(path);
-  db.exec(readFileSync(new URL("../../implementation/schema-v1.sql", import.meta.url), "utf8"));
-  const agent = makeValidAgent("alice");
-  db.prepare(`INSERT INTO agents VALUES (?,?,?,?,?,?,?,?,?,?)`).run(agent.name, agent.specHash, agent.role, agent.desired,
-    agent.incarnation!, agent.profile, null, agent.specJson, 1, 1);
-  for (const [rowid, state] of [[7, "pending"], [41, "succeeded"]] as const) {
-    const id = `op-00000000-0000-4000-8000-${String(rowid).padStart(12, "0")}`;
-    const payload = '{ "topic" : "kept" }'; const plan = '{ "kind" : "route.follow", "agent" : "alice", "topic" : "kept" }';
-    const result = state === "pending" ? null : '{ "kind" : "route.follow", "topic" : "kept", "subscribed" : true }';
-    db.prepare("INSERT INTO operations(rowid,id,actor,request_key,request_hash,kind,payload_json,plan_json,state,result_json,created_at_ms,updated_at_ms) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)")
-      .run(rowid, id, "alice", String(rowid), requestHash("route.follow", { topic: "kept" }), "route.follow", payload, plan, state, result, 1, 1);
-  }
-  const before = db.prepare("SELECT rowid,* FROM operations ORDER BY rowid").all(); db.close();
-  const old = readDiagnosticSnapshot(root); assert.equal(old.schemaVersion, 1);
-  assert.equal(inspectLedger(old, { stateRoot: root, society: "demo" }).report.status, "PASS");
-  const store = new Store(path, 0, { society: "demo" });
-  assert.equal(store.getOperation("alice", "7")!.state, "pending"); assert.equal(store.getOperation("alice", "41")!.state, "succeeded"); store.close();
+  db.exec("CREATE TABLE legacy(id TEXT PRIMARY KEY); INSERT INTO legacy VALUES ('kept'); PRAGMA user_version = 1");
+  const before = db.prepare("SELECT * FROM legacy ORDER BY id").all(); db.close();
+  // Diagnostics refuse a pre-v3 snapshot too: the unsupported version is the finding.
+  assert.throws(() => readDiagnosticSnapshot(root), isCode("STORE_CORRUPT"));
+  assert.throws(() => new Store(path, 0, { society: "demo" }), (error: unknown) =>
+    error instanceof StoreError && error.code === "STORE_CORRUPT" && /user_version 1/.test(error.message));
+  // The file is byte-for-byte untouched: nothing migrated, nothing was written.
   const after = new DatabaseSync(path);
-  assert.deepEqual(after.prepare("SELECT rowid,* FROM operations ORDER BY rowid").all(), before);
-  assert.deepEqual(after.prepare("PRAGMA foreign_key_check").all(), []);
-  assert.equal(after.prepare("PRAGMA user_version").get()!.user_version, 3); after.close();
+  try {
+    assert.deepEqual(after.prepare("SELECT * FROM legacy ORDER BY id").all(), before);
+    assert.equal(after.prepare("PRAGMA user_version").get()!.user_version, 1);
+  } finally { after.close(); }
 });

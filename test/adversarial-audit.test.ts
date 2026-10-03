@@ -151,7 +151,6 @@ test("AUD-1: unit renderer rejects unsafe values and escapes specifiers", () => 
 
 test("AUD-2: generated units preserve the fixed cgroup/lifecycle boundary", () => {
   const resident = readFileSync(join(UNIT_TPL_DIR, "resident.service.in"), "utf8");
-  const broker = readFileSync(join(UNIT_TPL_DIR, "broker.service.in"), "utf8");
   // MUST [UNIT-003]: the reference resident profile is fixed, not caller-selected.
   assert.match(resident, /^KillMode=control-group$/m);
   assert.match(resident, /^Restart=on-failure$/m);
@@ -163,25 +162,22 @@ test("AUD-2: generated units preserve the fixed cgroup/lifecycle boundary", () =
   // MUST [UNIT-002]: ExecStart is a fixed renderer template, not caller argv.
   // D03: it carries the broker's resolved launch location, never a default.
   assert.match(resident, /^ExecStart=@NODE@ @LIBDIR@\/dist\/src\/entry\/runner\.js --society @SOCIETY@ --agent @AGENT@ --config @CONFIG_ARG@ --state-root @STATE_ARG@ --run-root @RUN_ARG@$/m);
-  // D03: the only lifetime dependency is the one the broker says exists.
-  assert.match(resident, /^BindsTo=@BROKER_UNIT@$/m);
-  assert.match(resident, /^After=@BROKER_UNIT@$/m);
+  // D03/UNIT-001/004: the product owns the foreground broker itself — there is
+  // no broker.service to bind to and the unit names its own state tree instead.
+  assert.match(resident, /^X-OMA-Owner=@STATE@$/m);
+  assert.doesNotMatch(resident, /^(?:BindsTo|After|Requires|PartOf)=/m);
+  assert.doesNotMatch(resident, /BROKER_UNIT/);
   // Filesystem/network isolation is owned by the sandbox profile (SB-001/SB-002),
   // not by a systemd property; the unit must not widen it.
   assert.doesNotMatch(resident, /^(?:AmbientCapabilities|CapabilityBoundingSet|User|Group)=/m);
-  assert.match(broker, /^Restart=on-failure$/m);
-  assert.match(broker, /^Type=notify$/m);
-  for (const service of [resident, broker]) {
-    assert.match(service, /^RestartSec=3s$/m);
-    assert.match(service, /^RestartSteps=4$/m);
-    assert.match(service, /^RestartMaxDelaySec=12s$/m);
-    assert.match(service, /^StartLimitIntervalSec=60s$/m);
-    assert.match(service, /^StartLimitBurst=5$/m);
-    // systemd's geometric intervals, including the refusal-triggering attempt:
-    // 3, 4.24, 6, 8.49, 12 seconds must still fit in the rate-limit window.
-    const delays = Array.from({ length: 5 }, (_, i) => 3 * (12 / 3) ** (i / 4));
-    assert.ok(delays.reduce((sum, delay) => sum + delay, 0) < 60);
-  }
+  assert.match(resident, /^RestartSteps=4$/m);
+  assert.match(resident, /^RestartMaxDelaySec=12s$/m);
+  assert.match(resident, /^StartLimitIntervalSec=60s$/m);
+  assert.match(resident, /^StartLimitBurst=5$/m);
+  // systemd's geometric intervals, including the refusal-triggering attempt:
+  // 3, 4.24, 6, 8.49, 12 seconds must still fit in the rate-limit window.
+  const delays = Array.from({ length: 5 }, (_, i) => 3 * (12 / 3) ** (i / 4));
+  assert.ok(delays.reduce((sum, delay) => sum + delay, 0) < 60);
 });
 
 test("AUD-3: candidate sandbox argv does not inherit host environment", () => {

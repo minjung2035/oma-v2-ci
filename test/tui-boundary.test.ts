@@ -18,7 +18,7 @@ test("T95/TUI-001: the product surface adds no wire or internal socket method", 
   ]);
   assert.deepEqual(Object.keys(INTERNAL_METHODS).sort(), [
     "batch.complete", "batch.prepare", "batch.read",
-    "host.principalRelay", "host.reconcile",
+    "host.principalRelay",
     "principal.attach", "principal.detach", "runner.observe", "runner.open", "runner.pending",
   ]);
 });

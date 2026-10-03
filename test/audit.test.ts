@@ -396,7 +396,7 @@ test("B1/IPC-009: framed runner channel rejects host methods", async () => {
     const replies = await framedCall(join(env.runRoot, "admin.sock"), {
       v: 1,
       id: "h1",
-      method: "host.reconcile",
+      method: "host.principalRelay",
       params: {},
     });
     assert.equal(replies.length, 1);

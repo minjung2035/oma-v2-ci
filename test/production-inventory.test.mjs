@@ -16,7 +16,7 @@ function fixture() {
     mkdirSync(dirname(join(root, file)), { recursive: true });
     writeFileSync(join(root, file), bytes);
   };
-  const schemas = ["schema-v1.sql", "schema-v2.sql", "schema-v3.sql", "schema-v1-to-v2.sql", "schema-v2-to-v3.sql"]
+  const schemas = ["schema-v3.sql"]
     .map(name => `implementation/${name}`);
   const roots = ["implementation/contracts.ts", ...schemas, "implementation/systemd", "src"];
   put("production-manifest.json", JSON.stringify(roots));
@@ -218,7 +218,7 @@ test("R38: the verification closure includes every class of local gate input", (
   const files = verificationInputFiles(REPO);
   for (const required of [
     "src/tui/keys.ts", "test/tui-app.test.ts", "scripts/test-local.mjs",
-    "implementation/contracts.ts", "implementation/schema-v1.sql",
+    "implementation/contracts.ts", "implementation/schema-v3.sql",
     "implementation/systemd/resident.service.in", "implementation/cloc-systemd.lang",
     "implementation/source-owners.json", "implementation/traceability.json",
     "docs/implementation/validation.md", "implementation/evidence/dependency-graph.json",

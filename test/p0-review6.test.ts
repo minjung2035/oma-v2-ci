@@ -13,7 +13,7 @@ import { Store } from "../src/store.js";
 import { StoreError, errorCodeOf, publicFailure } from "../src/domain/errors.js";
 import { AdmissionGate } from "../src/domain/admission.js";
 
-const schemaPath = join(fileURLToPath(new URL(".", import.meta.url)), "..", "..", "implementation", "schema-v1.sql");
+const schemaPath = join(fileURLToPath(new URL(".", import.meta.url)), "..", "..", "implementation", "schema-v3.sql");
 
 test("P0V-75 / R6-02, P0-5: an INTEGER the driver cannot hand over is corruption the fence sees, and nothing else with that code is", t => {
   const root = mkdtempSync(join(tmpdir(), "oma-overflow-"));
@@ -622,7 +622,7 @@ test("P0V-94 / R6-17: a derived TSV field escapes every control character itself
   }
 });
 
-test("P0V-95 / R6-20: a unit that names no owner is nobody's to replace, and the manager's ExecStart format is read in one place", async t => {
+test("P0V-95 / R6-20: a unit that names no owner is nobody's to replace -- whichever tree it names -- and the manager's ExecStart format is read in one place", async t => {
   const { UnitsModule, effectiveExecArgv } = await import("../src/units.js");
   const { TEST_RESOURCES } = await import("./fixtures/spec.js");
   const dir = mkdtempSync(join(tmpdir(), "oma-unit-owner-"));
@@ -635,9 +635,13 @@ test("P0V-95 / R6-20: a unit that names no owner is nobody's to replace, and the
   assert.throws(() => units.assertResidentNamesFree("erin"),
     (error: unknown) => error instanceof StoreError && error.code === "AGENT_CONFLICT" && /names no owner/.test(error.message),
     "a unit whose owner cannot be told was taken for this society's by its Description");
-  // One that names this tree is still this owner's.
+  // One that names this tree by its watched path is equally ownerless: v0.1.0
+  // owes no compatibility with units written before the owner line existed,
+  // so a path match cannot promote it to this owner's.
   writeFileSync(join(dir, "oma-demo-fay.path"), `[Unit]\nDescription=Wake OMA demo resident fay on mail\n[Path]\nDirectoryNotEmpty=${join(dir, "tree")}/mail/inboxes/fay/new\n`);
-  assert.doesNotThrow(() => units.assertResidentNamesFree("fay"));
+  assert.throws(() => units.assertResidentNamesFree("fay"),
+    (error: unknown) => error instanceof StoreError && error.code === "AGENT_CONFLICT",
+    "an ownerless unit was promoted to this owner's by the path it watches");
   assert.equal(effectiveExecArgv("{ path=/usr/bin/node ; argv[]=/usr/bin/node /opt/oma/runner.js --agent a ; ignore_errors=no ; start_time=[n/a] }"),
     "/usr/bin/node /opt/oma/runner.js --agent a");
   assert.equal(effectiveExecArgv("/usr/bin/node /opt/oma/runner.js"), null, "an answer in another form is not read as the argv");

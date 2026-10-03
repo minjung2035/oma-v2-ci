@@ -57,8 +57,7 @@ test("V21A: every public and internal method names one closed resource category"
   }
   for (const [method, descriptor] of Object.entries(INTERNAL_METHODS)) {
     const resource = (descriptor as unknown as Record<string, unknown>).resource;
-    if (method === "host.reconcile") assert.equal(resource, "staged", "recovery classifies its own stages");
-    else assert.ok(CATEGORIES.includes(String(resource)), `${method} has a closed category`);
+    assert.ok(CATEGORIES.includes(String(resource)), `${method} has a closed category`);
   }
   const categories = Object.fromEntries([...Object.entries(PUBLIC_METHODS), ...Object.entries(INTERNAL_METHODS)]
     .map(([method, descriptor]) => [method, (descriptor as unknown as Record<string, unknown>).resource]));

@@ -66,6 +66,9 @@ async function compose(environment, { lockHeld = true, claim = "taken", cgroup =
       async start() { calls.push("listen"); } notifyReady() { calls.push("notify"); return true; }
     } },
     "../git/quarantine.js": { QUARANTINE_RESOURCES: QUARANTINE_PROFILE },
+    // Trusted candidate checks run inside this process on the product's own
+    // Git, never delegated (mail-v1): the fixture records the composition.
+    "../runtime/candidate-checks.js": { CandidateChecks: class { run() {} } },
     "../runtime/provision.js": { repairSociety: stateRoot => {
       calls.push(`repair:${stateRoot}`);
       if (repairFails) throw new Error("rootfs entry could not be corrected");

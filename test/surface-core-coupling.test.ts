@@ -117,7 +117,7 @@ test("the product surface did not widen the broker's method surface", () => {
   // mail-v1 adds review.status, the public filtered review read.
   assert.equal(Object.keys(PUBLIC_METHODS).length, 20);
   assert.equal(PUBLIC_METHODS["operation.read"].mode, "read");
-  assert.equal(Object.keys(INTERNAL_METHODS).length, 10);
+  assert.equal(Object.keys(INTERNAL_METHODS).length, 9);
   for (const name of Object.keys(PUBLIC_METHODS))
     assert.doesNotMatch(name, /tui|surface|panel|config\./i, `${name} looks like a product-surface method`);
   for (const name of Object.keys(INTERNAL_METHODS))

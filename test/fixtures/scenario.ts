@@ -127,6 +127,9 @@ export interface Scenario {
   readonly provider: ScriptedProvider;
   readonly store: Store;
   readonly broker: Broker;
+  /** The composed Git module beneath the public surface -- fixtures use it to
+   * seed durable facts a Principal cannot author over the wire today. */
+  readonly git: GitModule;
   readonly session: PrincipalSession;
   /** Everything the product's screen would have shown, in order. */
   readonly lines: string[];
@@ -202,7 +205,7 @@ export interface ScenarioOptions {
  * integration policy). It owns the Store it is given: its drain closes it, as
  * the product's broker process does on its way out. */
 function composeBroker(root: string, runRoot: string, store: Store, host: HostSide, stand: ScenarioUnits, config: HostConfigV1, configPath: string,
-    reviewBodyBytes?: number): Broker {
+    reviewBodyBytes?: number): { broker: Broker; git: GitModule } {
   const units = stand as unknown as UnitsModule;
   const mail = new MailModule({ stateRoot: root, society: SOCIETY }, store, 64, SCENARIO_LIMITS.batchMaxMessages, SCENARIO_LIMITS);
   const views = new ViewsModule(store, root, SOCIETY, "p");
@@ -220,8 +223,9 @@ function composeBroker(root: string, runRoot: string, store: Store, host: HostSi
     { stateRoot: root, projectGit: projectGitPathAt(root), society: SOCIETY, hasGoal: () => true, activationAllowed: () => true,
       residentProjectGit: residentProjectGit(config.installation.rootfs, projectGitPathAt(root)) },
     resolveSpec, mail, config.quota);
-  return new Broker(store, mail, units, views, lifecycle, git, null,
+  const broker = new Broker(store, mail, units, views, lifecycle, git, null,
     { stateRoot: root, runRoot, society: SOCIETY, hasGoal: () => true }, SCENARIO_LIMITS, undefined, host);
+  return { broker, git };
 }
 
 export async function startScenario(options: ScenarioOptions = {}): Promise<Scenario> {
@@ -272,7 +276,7 @@ export async function startScenario(options: ScenarioOptions = {}): Promise<Scen
     for (const name of options.residents ?? []) tx.insertAgent(agentRow(name));
   });
   const host = new HostSide();
-  let broker = composeBroker(root, runRoot, store, host, units, config, configPath, options.reviewBodyBytes);
+  let { broker, git } = composeBroker(root, runRoot, store, host, units, config, configPath, options.reviewBodyBytes);
   await broker.start();
 
   const runtime = resolvePiRuntime({ stateRoot: root, libdir: REPO });
@@ -338,6 +342,7 @@ export async function startScenario(options: ScenarioOptions = {}): Promise<Scen
     root, runRoot, provider, lines, events, configPath,
     get store() { return store; },
     get broker() { return broker; },
+    get git() { return git; },
     get session() { return session; },
     script: next => { provider.script(next); },
     async prompt(text, timeoutMs = 30_000) {
@@ -417,7 +422,7 @@ export async function startScenario(options: ScenarioOptions = {}): Promise<Scen
     async restartBroker() {
       await scenario.stopBroker();
       store = new Store(join(root, "runtime.sqlite"));
-      broker = composeBroker(root, runRoot, store, host, units, readCurrentHostPolicy(configPath, SOCIETY), configPath, options.reviewBodyBytes);
+      ({ broker, git } = composeBroker(root, runRoot, store, host, units, readCurrentHostPolicy(configPath, SOCIETY), configPath, options.reviewBodyBytes));
       await broker.start();
       register();
     },

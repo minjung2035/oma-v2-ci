@@ -38,14 +38,14 @@ test("SCN-B01: Principal GOAL mail preserves the exact other documents from its 
     // now change only GOAL; the real CLI must carry these other bytes forward.
     const files = [["GOAL.md", "# Before\n"], ["RATIONALE.md", "﻿Why\r\n"], ["decisions/001.md", "결정: 재시도는 세 번.\n"]] as const;
     const content = Buffer.from(files.map(([, body]) => body).join(""));
-    const seed = await s.broker.dispatch({ actor: "principal", incarnation: s.store.getAgent("principal")!.incarnation,
+    const seed = await s.git.publishContext({ actor: "principal", incarnation: s.store.getAgent("principal")!.incarnation,
       role: "principal", channel: "actor", capabilities: new Set(["context.publish"]),
       peer: { pid: process.pid, uid: process.getuid!(), gid: process.getgid!(), cgroup: null } },
-    { v: 1, id: "seed", method: "context.publish", request: "seed", params: {
+    "seed", {
       expected: null, entries: files.map(([path, body]) => ({ path, bytes: Buffer.byteLength(body), sha256: sha256Hex(Buffer.from(body)) })),
       content: { bytes: content.length, sha256: sha256Hex(content), mediaType: "application/vnd.oma.context-v1" },
-    } }, (async function* () { yield content; })()) as { ok: boolean };
-    assert.equal(seed.ok, true, JSON.stringify(seed));
+    }, (async function* () { yield content; })());
+    assert.equal(seed.state, "succeeded", JSON.stringify(seed));
     const current = join(s.root, "world", "context", "current");
     const base = readlinkSync(current).slice("revisions/".length);
     const goal = "# 목표\n결제 오류를 없앤다.\n";
