@@ -1,6 +1,6 @@
 /** Scenario tests at the boundaries the sixth review fixed, with only the
  * model scripted (fixtures/scenario.ts): the Resident's file tools on
- * the host (P0V-74), the local inputs its CLI reads (P0V-78), the shared
+ * the confined workspace (P0V-74), the inputs its CLI reads (P0V-78), the shared
  * context, and the order mail is delivered in when the clock goes back
  * (P0V-87). Each asserts durable facts -- files on the host, ledger rows,
  * what the model was handed -- for the normal path and its failure.
@@ -8,6 +8,8 @@
  * Not provider evidence (P0-5).
  */
 import test from "node:test";
+import type { AuthContext, Request } from "../implementation/contracts.js";
+import { RESIDENT_TEST_OPTIONS } from "./fixtures/resident.js";
 import assert from "node:assert/strict";
 import { closeSync, existsSync, ftruncateSync, mkdirSync, openSync, readFileSync, readlinkSync, symlinkSync, writeFileSync } from "node:fs";
 import { spawnSync } from "node:child_process";
@@ -34,17 +36,22 @@ const goalMail = (body: string, expectedRevision: string, request: string) => to
 
 test("SCN-B01: Principal GOAL mail preserves the exact other documents from its expected revision", TIMEOUT, async () => {
   await withScenario({ residents: ["worker-a"] }, async s => {
-    // A historical multi-document context is still supported. The model may
-    // now change only GOAL; the real CLI must carry these other bytes forward.
+    // The trusted host seeds historical multi-document context, not the model.
+    // The model may now change only GOAL; the CLI carries other bytes forward.
     const files = [["GOAL.md", "# Before\n"], ["RATIONALE.md", "﻿Why\r\n"], ["decisions/001.md", "결정: 재시도는 세 번.\n"]] as const;
     const content = Buffer.from(files.map(([, body]) => body).join(""));
-    const seed = await s.broker.dispatch({ actor: "principal", incarnation: s.store.getAgent("principal")!.incarnation,
+    const authority: AuthContext = { actor: "principal", incarnation: s.store.getAgent("principal")!.incarnation,
       role: "principal", channel: "actor", capabilities: new Set(["context.publish"]),
-      peer: { pid: process.pid, uid: process.getuid!(), gid: process.getgid!(), cgroup: null } },
-    { v: 1, id: "seed", method: "context.publish", request: "seed", params: {
+      peer: { pid: process.pid, uid: process.getuid!(), gid: process.getgid!(), cgroup: null } };
+    const request: Request = { v: 1, id: "seed", method: "context.publish", request: "seed", params: {
       expected: null, entries: files.map(([path, body]) => ({ path, bytes: Buffer.byteLength(body), sha256: sha256Hex(Buffer.from(body)) })),
       content: { bytes: content.length, sha256: sha256Hex(content), mediaType: "application/vnd.oma.context-v1" },
-    } }, (async function* () { yield content; })()) as { ok: boolean };
+    } };
+    const source = async function* () { yield content; };
+    const denied = await s.broker.dispatch(authority, request, source()) as { ok: boolean; error: { code: string } };
+    assert.equal(denied.ok, false); assert.equal(denied.error.code, "CAPABILITY_DENIED");
+    assert.equal(s.operations("principal").filter(row => row.kind === "context.publish").length, 0);
+    const seed = await s.broker.dispatch({ ...authority, channel: "host" }, request, source()) as { ok: boolean };
     assert.equal(seed.ok, true, JSON.stringify(seed));
     const current = join(s.root, "world", "context", "current");
     const base = readlinkSync(current).slice("revisions/".length);
@@ -79,7 +86,7 @@ test("SCN-B02: the retained context CLI input refuses an oversized stream before
   });
 });
 
-test("SCN-B03: a Worker's write through a workspace link is refused; an ordinary write succeeds (P0V-74)", TIMEOUT, async () => {
+test("SCN-B03: a Worker's write through a workspace link is refused; an ordinary write succeeds (P0V-74)", RESIDENT_TEST_OPTIONS, async () => {
   await withScenario({ residents: ["worker-a", "worker-b"] }, async s => {
     const workspace = workspacePathAt(s.root, "worker-a");
     const outside = join(s.root, "outside"); mkdirSync(outside);
@@ -101,7 +108,7 @@ test("SCN-B03: a Worker's write through a workspace link is refused; an ordinary
   });
 });
 
-test("SCN-B04: concurrent Worker writes cannot exceed the workspace quota; the one that fits lands (P0V-74, R6-18)", TIMEOUT, async () => {
+test("SCN-B04: concurrent Worker writes cannot exceed the workspace quota; the one that fits lands (P0V-74, R6-18)", RESIDENT_TEST_OPTIONS, async () => {
   await withScenario({ residents: ["worker-a", "worker-b"] }, async s => {
     const workspace = workspacePathAt(s.root, "worker-a");
     const quota = JSON.parse(s.store.getAgent("worker-a")!.specJson).resources.workspaceBytes as number;
@@ -252,7 +259,7 @@ test("SCN-B10 / S-02: a hundred commons messages reach no Principal session; the
 });
 
 
-test("DR27/INV10: a Worker cannot exhaust its workspace with empty files or parents, and can still rewrite an existing empty file", TIMEOUT, async () => {
+test("DR27/INV10: a Worker cannot exhaust its workspace with empty files or parents, and can still rewrite an existing empty file", RESIDENT_TEST_OPTIONS, async () => {
   await withScenario({ residents: ["worker-a", "worker-b"] }, async s => {
     const workspace = workspacePathAt(s.root, "worker-a");
     const quota = JSON.parse(s.store.getAgent("worker-a")!.specJson).resources.workspaceBytes as number;

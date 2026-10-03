@@ -21,7 +21,7 @@ import { sandboxSeccompFilter } from "./sandbox-seccomp.js";
 import { RESIDENT_SYSTEM_PROMPT } from "../config/role-prompts.js";
 
 /** Everything the adapter needs to run the engine inside the Resident sandbox.
- * Its absence is the unconfined profile, which the runner states explicitly. */
+ * Every Resident requires it; its absence is an unsupported profile. */
 export interface PiConfinement {
   /** `libdir` is a host path; `node` and `pi` are paths inside the sandbox. */
   readonly host: SandboxHost;
@@ -98,12 +98,12 @@ export interface PiAdapterOptions {
     | "contextBytes"
     | "bundleBytes"
   >;
-  /** When present the engine runs confined. `paths` stays host-side so the file
+  /** The engine always runs confined. `paths` stays host-side so the file
    * checks and digest verification below still read the real files; the argv
    * and environment handed to the engine are translated through the mount
    * table, so there is one authority for where a file is and one for what the
    * engine is told. */
-  readonly confinement?: PiConfinement | undefined;
+  readonly confinement: PiConfinement;
 }
 
 export interface PiSpawnPlan {
@@ -116,13 +116,12 @@ export interface PiSpawnPlan {
   readonly filter?: Uint8Array;
 }
 
-/** Maps a host path to the path the engine is told. Identity when the engine
- * runs on the host; the mount translation when it runs confined. */
+/** Maps a host path to the path the engine is told, exclusively through
+ * the confined Resident's mount translation. */
 type PathView = (hostPath: string) => string;
 
 function pathView(options: PiAdapterOptions): PathView {
   const confinement = options.confinement;
-  if (confinement === undefined) return path => path;
   return path =>
     // The lease socket is bind-mounted at a fixed path rather than under one of
     // the directory roots, so it is the one entry the table cannot resolve.
@@ -175,23 +174,9 @@ function omaEnvironment(options: PiAdapterOptions, inside: PathView): Record<str
   };
 }
 
-/** Environment for an engine spawned directly on the host. The confined spawn
- * does not use this: `--clearenv` means its environment is its argv. */
-function childEnvironment(options: PiAdapterOptions): Record<string, string> {
-  const env: Record<string, string> = {};
-  for (const [key, value] of Object.entries(process.env))
-    if (value !== undefined) env[key] = value;
-  // The names a Pi session exports into its subprocesses (pi-compat/env.ts),
-  // so an `oma` run inside one does not carry a parent session's identity into
-  // the engine it starts. The last two are OMA-side names no Pi emits; clearing
-  // them keeps the same ambient hygiene for older layouts.
-  for (const key of [...PI_SESSION_ENV_NAMES, "PI_SESSION_CWD", "PI_SESSION_REASON"])
-    delete env[key];
-  return Object.assign(env, omaEnvironment(options, path => path), {
-    ...(options.paths.piAgentDir === undefined ? {} : { [PI_AGENT_DIR_ENV]: options.paths.piAgentDir }),
-  });
-}
-function engineArgv(options: PiAdapterOptions, inside: PathView = path => path): string[] {
+/** The confined spawn uses only its explicit environment in the argv.
+ * `--clearenv` prevents inheritance from the host process. */
+function engineArgv(options: PiAdapterOptions, inside: PathView): string[] {
   const args = [
     "--mode",
     "rpc",
@@ -199,10 +184,9 @@ function engineArgv(options: PiAdapterOptions, inside: PathView = path => path):
     "--no-extensions",
     // AV13: a confined Resident works with the shell its sandbox provides
     // (SB-001: the rootfs holds Git and a shell; arch §11.1 and CLI-001: it
-    // commits and runs `oma` there, as its START tells it). An engine outside a
-    // sandbox -- an unsealed deployment -- keeps the shell excluded, like the
-    // Principal (PR-004).
-    ...(options.confinement === undefined ? ["--exclude-tools", "bash,powershell"] : []),
+    // commits and runs `oma` there, as its START tells it). Every Resident is
+    // confined; the Principal's separate host engine keeps the shell excluded
+    // through its own argv builder (PR-004).
     "--session-dir",
     inside(options.paths.sessionDir),
     // AV14, arch §7: the runner joins one Pi session to the mail queue, and an
@@ -227,7 +211,7 @@ function engineArgv(options: PiAdapterOptions, inside: PathView = path => path):
   for (const theme of options.profile.packageResources?.themes ?? []) args.push("--theme", inside(theme));
   // A confined engine resolves nothing on its own: the host named the model
   // when it resolved the credential, and that is the model it runs.
-  const relay = options.confinement?.inference;
+  const relay = options.confinement.inference;
   if (relay !== undefined) args.push("--model", `${relay.provider}/${relay.model}`);
   else if (
     !(options.profile.provider === "pi" && options.profile.model === "current")
@@ -245,22 +229,17 @@ function engineArgv(options: PiAdapterOptions, inside: PathView = path => path):
   return args;
 }
 
-/** The two branches differ only in whether the mount plan wraps the command,
- * so the argv the engine receives is built once. */
+/** Every Resident command is wrapped in the sandbox mount plan,
+ * with one builder for the argv the engine receives. */
 export function planPiSpawn(options: PiAdapterOptions): PiSpawnPlan {
+  if (options.confinement === undefined)
+    throw new StoreError("UNSUPPORTED_PROFILE", "Resident execution requires confinement");
   // PR-004/SB-006, the same rule as the Principal's: the model's workspace
   // holds none of the engine's session history, its home (the confined
   // engine's own settings live there), its batch views or its credentials.
   assertModelScope(options.paths.workspace, [options.paths.sessionDir, options.paths.agentHome, options.paths.batchView,
     ...(options.paths.piAgentDir === undefined ? [] : [options.paths.piAgentDir])]);
   const confinement = options.confinement;
-  if (confinement === undefined)
-    return {
-      command: options.paths.piCommand,
-      args: [...(options.paths.piArgs ?? []), ...engineArgv(options)],
-      cwd: options.paths.workspace,
-      env: childEnvironment(options),
-    };
   const inside = pathView(options);
   // `residentArgv` appends `node pi <piModeArgs>` itself, so the engine flags
   // travel as the host's Pi arguments and the entry is `host.pi`.

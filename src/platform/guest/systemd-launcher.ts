@@ -35,7 +35,7 @@ export function systemdSessionLauncher(options: SystemdLauncherOptions): Session
       // answer; anything else shows in the start that follows.
       await runProcess(command("/usr/bin/systemctl", ["--user", "stop", unitOf(society)], options.env, 30_000));
       await runProcess(command("/usr/bin/systemctl", ["--user", "reset-failed", unitOf(society)], options.env, 10_000));
-      const env = { ...options.env, TERM: "xterm-256color" };
+      const env = { ...options.env, TZ: "UTC", TERM: "xterm-256color", SHELL: "/bin/sh", USER: "oma", LOGNAME: "oma", TMPDIR: "/tmp" };
       delete (env as Record<string, string>)[RESUME_SESSION_ENV];
       if (resume !== undefined) (env as Record<string, string>)[RESUME_SESSION_ENV] = resume;
       const setenv = Object.entries(env).map(([key, value]) => `--setenv=${key}=${value}`);

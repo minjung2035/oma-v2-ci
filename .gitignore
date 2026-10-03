@@ -8,3 +8,4 @@ runtime.sqlite
 staging/
 production-loc.json
 production-measurement-hashes.json
+.scratch/

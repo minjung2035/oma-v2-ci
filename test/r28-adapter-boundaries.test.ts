@@ -15,6 +15,7 @@ import { StoreError } from "../src/domain/errors.js";
 import { TEST_RESOURCES } from "./fixtures/spec.js";
 
 import { PiAdapter } from "../src/runtime/pi-adapter.js";
+import { residentOptions, prepareResident, RESIDENT_TEST_OPTIONS } from "./fixtures/resident.js";
 import { PI_ADAPTER_REVISION, PI_BOUNDARY_PREFIX } from "../src/storage/delivery-receipt.js";
 const limits = { frameBytes: 4096, idleStreamSeconds: 1, receiptWaitSeconds: 1 };
 const errorCode = (expected: string) => (error: unknown) => error instanceof StoreError && error.code === expected;
@@ -176,7 +177,7 @@ test("R28: sandbox recipes bind decoded lease and private actor paths but never 
 // up at the first failed message would report a provider failure for a batch
 // the engine went on to deliver. Both shapes must end at the same boundary.
 for (const retried of [false, true]) {
-test(`R28: Pi adapter accepts only a settled pinned boundary from its owned RPC child${retried ? ", including one the run reached after a failed message" : ""}`, { timeout: 10000 }, async () => {
+test(`R28: Pi adapter accepts only a settled pinned boundary from its owned RPC child${retried ? ", including one the run reached after a failed message" : ""}`, { ...RESIDENT_TEST_OPTIONS, timeout: 10000 }, async () => {
   const root = mkdtempSync(join(tmpdir(), "oma-r28-pi-"));
   try {
     const dirs = Object.fromEntries(["workspace", "sessions", "home", "archive", "workerArchive", "projectGit", "view"].map(name => {
@@ -209,13 +210,12 @@ process.on("SIGTERM", () => process.exit(0));
     const batch = { id: "b-00000000-0000-4000-8000-000000000001", agent: "alice", incarnation: 1,
       messageIds: ["m-00000000-0000-4000-8000-000000000001-0"], sessionPath: null, deliveryMode: "followUp" as const,
       notice: "mail", indexPath: "/inbox.md" as const };
-    const adapter = new PiAdapter({ actor: "alice", society: "demo", profile: { provider: "pi", model: "current", inferenceSeconds: 600, prompt: "", extensions: [], workspaceBytes: 1024 * 1024 },
-      limits: { frameBytes: 65536, idleStreamSeconds: 5, receiptWaitSeconds: 5, batchMaxMessages: 24, mailBodyBytes: 1024 * 1024, contextBytes: 1 << 20, bundleBytes: 1 << 20 },
-      paths: { piCommand: command, coreExtension: core, cli, workspace: dirs.workspace!, sessionDir: dirs.sessions!,
-        agentHome: dirs.home!, mailArchive: dirs.archive!, workerArchive: dirs.workerArchive!, projectGit: dirs.projectGit!, batchView: dirs.view!, socket: join(root, "control.sock") } });
+    const options = residentOptions(root, root, command);
+    prepareResident(options);
+    const adapter = new PiAdapter({ ...options, paths: { ...options.paths, coreExtension: core, cli } });
     const boundary = await adapter.deliver(batch);
     assert.deepEqual(boundary, { adapterRevision: PI_ADAPTER_REVISION, batchId: batch.id, incarnation: 1,
-      sessionPath: join(dirs.sessions!, "owned.jsonl"), entryId: "0123abcd" });
+      sessionPath: join(options.paths.sessionDir, "owned.jsonl"), entryId: "0123abcd" });
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
 }

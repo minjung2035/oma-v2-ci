@@ -6,13 +6,14 @@ import { tmpdir } from "node:os";
 import { defaultHostConfig } from "../src/config/defaults.js";
 import { validateConfig } from "../src/config.js";
 import { planPiSpawn } from "../src/runtime/pi-spawn-plan.js";
+import { residentOptions } from "./fixtures/resident.js";
 import { dashboardRows } from "../src/tui/view/dashboard.js";
 import type { DashboardData } from "../src/tui/model.js";
 import {
   WORKER_MODEL, WORKER_MODEL_PROFILE, commitField, engineModelChoiceOf, readSettings, workerModelText, writeSettings,
 } from "../src/tui/sources/settings.js";
 
-const installation = { society: "demo", node: "/usr/bin/node", libdir: "/opt/oma/", rootfs: "/", deploymentDigest: "a".repeat(64) };
+const installation = { society: "demo", node: "/usr/bin/node", libdir: "/opt/oma/", rootfs: "/state/rootfs", deploymentDigest: "a".repeat(64) };
 
 test("DR24: a Worker's model and effort, chosen from the engine's list, is saved as the Worker model field", t => {
   const root = mkdtempSync(join(tmpdir(), "oma-worker-model-")); t.after(() => rmSync(root, { recursive: true, force: true }));
@@ -64,11 +65,9 @@ test("DR24: an effort is one of the engine's levels, in the configuration and fr
 });
 
 test("DR24: a Resident's engine runs the effort its profile or the engine's default names", () => {
-  const plan = (thinking?: string) => planPiSpawn({ actor: "alice", society: "demo",
-    paths: { piCommand: "/usr/bin/node", coreExtension: "/opt/oma/ext.js", cli: "/opt/oma/cli.js", workspace: "/w", sessionDir: "/s",
-      agentHome: "/h", mailArchive: "/a", batchView: "/v", socket: "/run/oma/control.sock" },
-    profile: { provider: "fake", model: "m", inferenceSeconds: 1, prompt: "", workspaceBytes: 1024, extensions: [], ...(thinking ? { thinking } : {}) },
-    limits: { frameBytes: 256 * 1024, idleStreamSeconds: 1, receiptWaitSeconds: 1, batchMaxMessages: 4, mailBodyBytes: 1024 } } as never).args;
+  const options = residentOptions("/state");
+  const plan = (thinking?: string) => planPiSpawn({ ...options,
+    profile: { ...options.profile, ...(thinking ? { thinking } : {}) } }).args;
   const high = plan("high");
   assert.equal(high[high.indexOf("--thinking") + 1], "high");
   assert.equal(plan().includes("--thinking"), false, "no effort named: the engine's own");

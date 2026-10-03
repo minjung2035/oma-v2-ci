@@ -3,6 +3,7 @@
  * and never through an authored role file, so the scenario sets it the way
  * OMA itself would, on the engine process. */
 import test from "node:test";
+import { RESIDENT_TEST_OPTIONS } from "./fixtures/resident.js";
 import assert from "node:assert/strict";
 import { withScenario } from "./fixtures/scenario.js";
 import { call, text, tools, toolResults } from "./fixtures/scripted-provider.js";
@@ -34,7 +35,7 @@ async function engineDied(session: { running: boolean }, timeoutMs = 20_000): Pr
 }
 
 for (const role of ["principal", "resident"] as const) for (const mode of ["valid", "collision", "unknown"] as const)
-  test(`DR27 / TSP / D23: ${role} ${mode} internal surface through the real engine`, { timeout: 120_000 }, async () => {
+  test(`DR27 / TSP / D23: ${role} ${mode} internal surface through the real engine`, { timeout: 120_000, ...(role === "resident" ? { skip: RESIDENT_TEST_OPTIONS.skip } : {}) }, async () => {
     await withScenario({ residents: ["worker-a"], engineEnv: { OMA_TOOL_SURFACE: plan(mode) } }, async s => {
       const seen: string[][] = [];
       s.script((request, index) => {

@@ -2,6 +2,7 @@
  * "6차 점검", P0V-74 on): each is the review's counterexample, run against
  * the code that fixed it. */
 import test from "node:test";
+import { residentOptions } from "./fixtures/resident.js";
 import assert from "node:assert/strict";
 import { DatabaseSync } from "node:sqlite";
 import { closeSync, ftruncateSync, mkdtempSync, openSync, readFileSync, rmSync } from "node:fs";
@@ -241,12 +242,10 @@ test("P0V-78 / R6-05, CFG-003: every environment the CLI runs in carries the soc
   assert.equal(principal.OMA_BUNDLE_BYTES, "67890");
   // A Resident's engine, whose shell and tools run the same CLI.
   const { planPiSpawn } = await import("../src/runtime/pi-spawn-plan.js");
-  const resident = planPiSpawn({ actor: "alice", society: "demo", paths: { piCommand: "/usr/bin/node", coreExtension: "/opt/oma/ext.js", cli: "/opt/oma/cli.js",
-    workspace: "/srv/oma/w", sessionDir: "/srv/oma/s", agentHome: "/srv/oma/h", mailArchive: "/srv/oma/m", workerArchive: "/srv/oma/wa", projectGit: "/srv/oma/git", batchView: "/srv/oma/v", socket: "/run/oma/control.sock" },
-    profile: { provider: "p", model: "m", inferenceSeconds: 1, prompt: "", workspaceBytes: 1024, extensions: [] },
-    limits: { ...limits, idleStreamSeconds: 1, receiptWaitSeconds: 1 } });
-  assert.equal(resident.env.OMA_CONTEXT_BYTES, "12345");
-  assert.equal(resident.env.OMA_BUNDLE_BYTES, "67890");
+  const options = residentOptions("/srv/oma");
+  const resident = planPiSpawn({ ...options, limits: { ...options.limits, ...limits } });
+  assert.equal(resident.args[resident.args.indexOf("OMA_CONTEXT_BYTES") + 1], "12345");
+  assert.equal(resident.args[resident.args.indexOf("OMA_BUNDLE_BYTES") + 1], "67890");
   const saved = { context: process.env.OMA_CONTEXT_BYTES, bundle: process.env.OMA_BUNDLE_BYTES };
   try {
     process.env.OMA_CONTEXT_BYTES = principal.OMA_CONTEXT_BYTES;

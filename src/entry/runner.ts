@@ -9,7 +9,7 @@ import { resolvePiRuntime } from "../runtime/pi-runtime.js";
 import { ensureDirectory } from "../storage/directory.js";
 import { realpathSync } from "node:fs";
 import { hostSystemLayout } from "../runtime/resident-rootfs.js";
-import { residentsConfined } from "../sandbox.js";
+import { requireResidentRootfs } from "../sandbox.js";
 import { packageStoreRoot } from "../runtime/pi-packages.js";
 import { DEPLOYMENT_LAYOUT } from "../domain/deployment.js";
 import { parseCanonicalResourceLimits } from "../domain/resources.js";
@@ -37,6 +37,7 @@ catch (error) { console.error(`runner: ${error instanceof Error ? error.message 
 const { stateRoot, runRoot, configPath } = location;
 const configuration = loadConfiguration(configPath);
 const cfg = configuration.config;
+requireResidentRootfs(cfg.installation.rootfs);
 if (cfg.society !== society) { console.error("runner: config society does not match the requested society"); process.exit(4); }
 const profileHex = process.env.OMA_PROFILE_HEX ?? "";
 if (!/^(?:[0-9a-f]{2})+$/.test(profileHex)) { console.error(`runner: missing broker-rendered profile for ${agent}`); process.exit(4); }
@@ -61,36 +62,29 @@ const piRuntime = resolvePiRuntime({
 });
 ensureDirectory(piRuntime.agentDir, 0o700);
 // SB-001 wants a trusted rootfs holding pinned tools and empty mount targets.
-// `installation.rootfs` names it; the value `/` means the deployment declared
-// none, because binding the host root is exactly what SB-001 forbids. That is a
-// real difference in what OMA can promise, so it is said once, out loud, rather
-// than inferred later from an absent bwrap process.
-// DR25/C18: the package store's real root, when one exists. Confined engines
-// reach it through the mount below; an unconfined one reads it where it lies,
-// so the resource paths the index names are the same either way.
-const packages = cfg.installation.packages === undefined ? undefined
-  : packageStoreRoot(cfg.installation.packages) ?? undefined;
-const confinement = !residentsConfined(cfg.installation.rootfs) ? undefined : {
+// `installation.rootfs` names it; binding the host root is what SB-001 forbids.
+// Society is confined-only, and an unsupported rootfs is refused before any
+// RunnerModule exists. Missing bubblewrap is a spawn failure, never permission
+// to execute a Resident on the host.
+const confinement = {
   rootfs: cfg.installation.rootfs,
   libdir: cfg.installation.libdir,
   // DR25: the installed packages a role's extensions may name, mounted at the
   // directory the loader pinned them in (on macOS the store is a link to it).
-  ...(packages === undefined ? {} : { packages }),
+  ...(cfg.installation.packages === undefined || packageStoreRoot(cfg.installation.packages) === null ? {}
+    : { packages: packageStoreRoot(cfg.installation.packages)! }),
   // Bound as a single file, so resolve a symlinked Node to the real binary.
   node: realpathSync(cfg.installation.node),
   systemBinds: hostSystemLayout().binds,
   tmpBytes: resources.tmpBytes,
 };
-if (confinement === undefined)
-  console.error(`runner ${agent}: no trusted rootfs is declared; the engine runs unconfined on this host`);
 const runner = new RunnerModule({ runRoot, stateRoot, society,
   piCommand: piRuntime.executable,
   piArgs: piRuntime.args,
   piAgentDir: piRuntime.agentDir,
   coreExtension: join(cfg.installation.libdir, "dist/src/pi-extension.js"),
   cli: join(cfg.installation.libdir, DEPLOYMENT_LAYOUT.cli),
-  ...(packages === undefined ? {} : { packages }),
-  ...(confinement === undefined ? {} : { confinement }) }, agent, cfg.limits, profile);
+  confinement }, agent, cfg.limits, profile);
 let stopping = false;
 const stop = (): void => {
   if (stopping) return;

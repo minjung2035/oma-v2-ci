@@ -208,7 +208,7 @@ interface WorkerRig {
   close(): Promise<void>;
 }
 /** The shared engine environment a Resident's spawn plan sets (host paths —
- * this scenario runs unconfined) held for the whole test, with each actor's
+ * this rig registers tools directly, not a Resident engine) with each actor's
  * own socket/home/view bound at that actor's registration only. */
 async function workerRig(s: Scenario, actors: readonly Actor[]): Promise<WorkerRig> {
   const previous = { ...process.env };

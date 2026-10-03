@@ -17,6 +17,9 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { PiAdapter } from "../src/runtime/pi-adapter.js";
+import { residentOptions, prepareResident, RESIDENT_TEST_OPTIONS } from "./fixtures/resident.js";
+import { spawnSandboxed } from "../src/process/async.js";
+import { RESIDENT_PATHS } from "../src/sandbox.js";
 import { resolvePiRuntime } from "../src/runtime/pi-runtime.js";
 import { sessionArgv } from "../src/tui/session.js";
 
@@ -24,8 +27,9 @@ const LIBDIR = fileURLToPath(new URL("../../", import.meta.url));
 const LIMITS = { frameBytes: 1 << 20, idleStreamSeconds: 60, receiptWaitSeconds: 30, batchMaxMessages: 4, mailBodyBytes: 1 << 16, contextBytes: 1 << 20, bundleBytes: 1 << 20 };
 
 /** Starts the engine with this argv and returns the session file it reports. */
-async function openedSession(command: string, args: readonly string[], cwd: string, env: Record<string, string>): Promise<string> {
-  const child = spawn(command, [...args], { cwd, env, stdio: ["pipe", "pipe", "pipe"] });
+async function openedSession(command: string, args: readonly string[], cwd: string, env: Record<string, string>, filter?: Uint8Array): Promise<string> {
+  const child = filter === undefined ? spawn(command, [...args], { cwd, env, stdio: ["pipe", "pipe", "pipe"] })
+    : spawnSandboxed([command, ...args], env, filter, cwd);
   try {
     let out = "";
     child.stdout.setEncoding("utf8");
@@ -61,21 +65,16 @@ function priorSession(dir: string, cwd: string): string {
   return path;
 }
 
-test("AV14 / arch §7: a Resident's activation resumes its existing session instead of starting another", { timeout: 60_000 }, async () => {
+test("AV14 / arch §7: a Resident's activation resumes its existing session instead of starting another", { ...RESIDENT_TEST_OPTIONS, timeout: 60_000 }, async () => {
   const root = mkdtempSync(join(tmpdir(), "oma-av14-resident-"));
   try {
     const runtime = resolvePiRuntime({ stateRoot: root, libdir: LIBDIR });
-    const dirs = { workspace: join(root, "workspace"), sessions: join(root, "sessions"), home: join(root, "home"), view: join(root, "view"), agent: join(root, "agent"), archive: join(root, "archive"), workerArchive: join(root, "workers") };
-    for (const path of Object.values(dirs)) mkdirSync(path, { recursive: true });
-    const adapter = new PiAdapter({ actor: "alice", society: "s", limits: LIMITS,
-      profile: { provider: "pi", model: "current", inferenceSeconds: 600, prompt: "", workspaceBytes: 1 << 20, extensions: [] },
-      paths: { piCommand: runtime.executable, piArgs: [...runtime.args], piAgentDir: dirs.agent,
-        coreExtension: join(LIBDIR, "dist/src/pi-extension.js"), cli: join(LIBDIR, "dist/src/cli.js"),
-        workspace: dirs.workspace, sessionDir: dirs.sessions, agentHome: dirs.home,
-        mailArchive: join(root, "archive"), workerArchive: join(root, "workers"), projectGit: join(root, "project.git"), batchView: dirs.view, socket: join(root, "control.sock") } });
+    const options = residentOptions(root, LIBDIR, runtime.args[0]!);
+    prepareResident(options);
+    const adapter = new PiAdapter({ ...options, limits: LIMITS });
     const plan = adapter.spawnPlan();
-    const prior = priorSession(dirs.sessions, dirs.workspace);
-    assert.equal(await openedSession(plan.command, plan.args, plan.cwd, { ...plan.env, PATH: "/usr/bin:/bin" }), prior,
+    const prior = priorSession(options.paths.sessionDir, RESIDENT_PATHS.workspace);
+    assert.equal(await openedSession(plan.command, plan.args, plan.cwd, plan.env, plan.filter), join(RESIDENT_PATHS.sessions, prior.split("/").at(-1)!),
       "the activation started a new session beside the one the Resident had");
   } finally { rmSync(root, { recursive: true, force: true }); }
 });

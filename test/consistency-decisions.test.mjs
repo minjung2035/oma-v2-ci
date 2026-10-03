@@ -57,7 +57,7 @@ test('V01B: WP01 profile review cannot imply unexecuted runtime qualification', 
   const profiles = rows(decisions()).filter(row => row[0].startsWith('profile.'));
   assert.deepEqual(profiles.map(row => row[0]).sort(), [
     'profile.confined', 'profile.engine-fixture', 'profile.foreground',
-    'profile.provider', 'profile.systemd-managed', 'profile.unconfined',
+    'profile.provider', 'profile.systemd-managed',
   ]);
   for (const row of profiles) {
     assert.equal(row.length, 5);

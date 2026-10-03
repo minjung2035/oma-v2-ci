@@ -105,6 +105,8 @@ const scriptOf = (source: Script | readonly Reply[]): Script => {
 
 /** The engine's catalog model a confined Resident runs, served here. */
 export const CONFINED_MODEL = Object.freeze({ provider: "groq", model: "llama-3.1-8b-instant" });
+export const CONFINED_MODEL_2 = Object.freeze({ provider: "groq", model: "llama-3.3-70b-versatile" });
+export const CONFINED_THINKING_MODEL = Object.freeze({ provider: "groq", model: "openai/gpt-oss-120b" });
 /** A key the engine and the relay accept as a provider credential: long
  * enough to be given a placeholder of the same shape (engine-auth). */
 export const SCRIPTED_KEY = `sk-scripted-${"k".repeat(40)}`;

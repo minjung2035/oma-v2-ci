@@ -2,6 +2,7 @@
  * the findings of the whole-codebase external review, each tested where its
  * decision takes effect, with the reading the fix removed as the control. */
 import test from "node:test";
+import { residentOptions } from "./fixtures/resident.js";
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
 import { chmodSync, closeSync, fstatSync, mkdtempSync, openSync, readdirSync, rmSync, writeFileSync } from "node:fs";
@@ -391,11 +392,8 @@ test("P0V-36 / N13, P0-2: a message whose body is within the body limit is read 
     { society: "demo", provider: "pi", model: "current", workspaceBytes: 1024, extensions: [] }, { frameBytes: 256 * 1024, mailBodyBytes: bodyBytes, batchMaxMessages: 4, contextBytes: 1 << 20, bundleBytes: 1 << 20 });
   assert.equal(Number(principal.OMA_MAIL_BYTES), storedMailBytes(bodyBytes));
   const state = "/srv/oma-n13";
-  const plan = planPiSpawn({ actor: "alice", society: "demo", paths: { piCommand: "/usr/bin/node", coreExtension: "/opt/oma/ext.js", cli: "/opt/oma/cli.js",
-    workspace: workspacePathAt(state, "alice"), sessionDir: runnerSessionDirPathAt(state, "alice"), agentHome: join(agentRootPathAt(state, "alice"), "home"),
-    mailArchive: join(state, "mail", "archive", "cur"), workerArchive: join(state, "mail", "workers", "cur"), projectGit: join(state, "repos", "project.git"), batchView: runnerViewPathAt(state, "alice"), socket: "/run/oma/control.sock" },
-    profile: { provider: "p", model: "m", inferenceSeconds: 1, prompt: "", workspaceBytes: 1024, extensions: [] },
-    limits: { frameBytes: 256 * 1024, idleStreamSeconds: 1, receiptWaitSeconds: 1, batchMaxMessages: 4, mailBodyBytes: bodyBytes } } as never);
+  const options = residentOptions(state);
+  const plan = planPiSpawn({ ...options, limits: { ...options.limits, mailBodyBytes: bodyBytes } });
   const told = plan.env.OMA_MAIL_BYTES ?? plan.args[plan.args.indexOf("OMA_MAIL_BYTES") + 1];
   assert.equal(Number(told), storedMailBytes(bodyBytes), "the Resident's engine was told the body limit");
 

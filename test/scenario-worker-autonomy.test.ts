@@ -1,6 +1,7 @@
 /** DR27: confined bundled Worker engine -> CLI -> broker -> clone and initial mail.
  * Provider and unit observations are local fixtures, not deployment evidence. */
 import test from "node:test";
+import { RESIDENT_TEST_OPTIONS } from "./fixtures/resident.js";
 import assert from "node:assert/strict";
 import { withScenario } from "./fixtures/scenario.js";
 import { call, text, tools, toolResults } from "./fixtures/scripted-provider.js";
@@ -9,7 +10,7 @@ import { resolvedSpecOf } from "../src/authority.js";
 
 const create = "printf 'Review the implementation independently.\\n' > brief.txt && oma agent create peer --from HEAD --file brief.txt --request delegate-peer";
 
-test("DR27: a Worker creates a peer without Principal orchestration, resumes its receipt and receives a reply", { timeout: 180_000 }, async () => {
+test("DR27: a Worker creates a peer without Principal orchestration, resumes its receipt and receives a reply", RESIDENT_TEST_OPTIONS, async () => {
   await withScenario({ residents: ["worker-a"], confined: true }, async s => {
     s.script([tools(call("oma_mail_send", { to: ["worker-a"], subject: "Goal", body: "Collaborate on the implementation." })), text("Assigned.")]);
     await s.prompt("Ask the Worker to collaborate.");
@@ -45,7 +46,7 @@ test("DR27: a Worker creates a peer without Principal orchestration, resumes its
   });
 });
 
-test("DR27: a Worker's quota refusal leaves no child, accepted create or initial mail", { timeout: 180_000 }, async () => {
+test("DR27: a Worker's quota refusal leaves no child, accepted create or initial mail", RESIDENT_TEST_OPTIONS, async () => {
   await withScenario({ residents: ["worker-a"], confined: true }, async s => {
     const config = readSettings(s.configPath).config;
     writeSettings(s.configPath, { ...config, quota: { ...config.quota, societyAgents: 1, lineageAgents: 1 } });

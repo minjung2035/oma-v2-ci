@@ -184,7 +184,7 @@ async function main(): Promise<void> {
     const hasGoal = (): boolean => git.hasCommittedContext();
     const lifecycle = new LifecycleModule(store, units, { stateRoot, projectGit: projectGitPathAt(stateRoot), society,
       hasGoal, activationAllowed: () => lifetime.permitsActivation,
-      residentProjectGit: residentProjectGit(cfg.installation.rootfs, projectGitPathAt(stateRoot)) }, resolveSpec, mail, cfg.quota);
+      residentProjectGit: residentProjectGit() }, resolveSpec, mail, cfg.quota);
     const reconcile = new ReconcileModule(store, mail, git, units, lifecycle, {
       projectGit: projectGitPathAt(stateRoot), hasGoal, activationAllowed: () => lifetime.permitsActivation,
       sweepBudgetSeconds: cfg.limits.receiptWaitSeconds, resourceGate: category => storage.admit(category),

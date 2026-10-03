@@ -56,8 +56,8 @@ export function dashboardData(input: DashboardInput): DashboardData {
     unread: input.unread,
     principalModel: input.principalModel,
     ...(input.workerModel === undefined ? {} : { workerModel: input.workerModel }),
-    // `/` is not a rootfs: SB-001 forbids binding the host root, so the value
-    // means none was declared.
-    rootfs: config.installation.rootfs === "/" ? null : config.installation.rootfs,
+    // Society is confined-only; the configuration validator rejects `/`.
+    // This is the declared rootfs, not runtime qualification evidence.
+    rootfs: config.installation.rootfs,
   });
 }

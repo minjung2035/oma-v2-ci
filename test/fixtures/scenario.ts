@@ -10,15 +10,15 @@
 // Stand-ins: the host's side of the supervision channel (this process is the
 // host, and registers its engine as `oma` does), and systemd: `ScenarioUnits`
 // answers what a unit manager would about the one Resident being run. A runner
-// runs unconfined (the configuration declares no rootfs); confinement has its
-// own live tests (resident-sandbox-live). A runner shares this process's
+// runs confined in the generated rootfs through bubblewrap and the relay.
+// Missing bubblewrap is explicitly NOT_RUN. A runner shares this process's
 // cgroup, which a run pins, so each Resident can be activated once per broker;
 // `restartBroker` makes it activatable again.
 //
 // Scenarios assert durable facts -- ledger rows, mailbox files, receipts, the
 // session history -- not screen text.
 import assert from "node:assert/strict";
-import { closeSync, constants, existsSync, mkdirSync, mkdtempSync, openSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { DatabaseSync } from "node:sqlite";
 import { execFileSync, spawn } from "node:child_process";
 import { createHash, randomBytes } from "node:crypto";
@@ -56,7 +56,8 @@ import { tryHoldSociety } from "../../src/runtime/society-lease.js";
 import type { PiEvent } from "../../src/runtime/pi-rpc.js";
 import { agentRootPathAt, projectGitPathAt, runnerViewPathAt, workspacePathAt } from "../../src/storage/paths.js";
 import { makeValidAgent } from "./spec.js";
-import { CONFINED_MODEL, scriptedProvider, type Reply, type Script, type ScriptedProvider } from "./scripted-provider.js";
+import { CONFINED_MODEL, CONFINED_MODEL_2, scriptedProvider, type Reply, type Script, type ScriptedProvider } from "./scripted-provider.js";
+import { RESIDENT_TEST_OPTIONS } from "./resident.js";
 
 export const SCENARIO_LIMITS: ProtocolLimits = {
   frameBytes: 262144, mailBodyBytes: 262144, subjectBytes: 512, addresses: 64,
@@ -188,7 +189,7 @@ export interface ScenarioOptions {
   /** Residents run confined, as a deployment with a rootfs runs them: under
    * bubblewrap in the society's generated rootfs, with bash, reaching the
    * (then TLS) scripted provider only through the runner's relay. */
-  readonly confined?: boolean;
+  readonly confined?: true;
   /** Withhold git.submit, as the Control Panel can (DR4): a Resident without
    * it cannot publish candidates or open a merge request. */
   readonly submit?: boolean;
@@ -222,7 +223,7 @@ function composeBroker(root: string, runRoot: string, store: Store, host: HostSi
   const resolveSpec = createChildSpecResolver(() => readCurrentHostPolicy(configPath, SOCIETY), () => store.inTransaction);
   const lifecycle = new LifecycleModule(store, units,
     { stateRoot: root, projectGit: projectGitPathAt(root), society: SOCIETY, hasGoal: () => true, activationAllowed: () => true,
-      residentProjectGit: residentProjectGit(config.installation.rootfs, projectGitPathAt(root)) },
+      residentProjectGit: residentProjectGit() },
     resolveSpec, mail, config.quota);
   return new Broker(store, mail, units, views, lifecycle, git, null,
     { stateRoot: root, runRoot, society: SOCIETY, hasGoal: () => true }, SCENARIO_LIMITS, undefined, host);
@@ -234,20 +235,19 @@ export async function startScenario(options: ScenarioOptions = {}): Promise<Scen
   const root = join(base, "oma", SOCIETY);
   const runDirectory = join(base, "run"), physicalRunRoot = join(runDirectory, "oma", SOCIETY);
   mkdirSync(root, { recursive: true }); mkdirSync(physicalRunRoot, { recursive: true });
-  // Linux Unix-socket names fit sun_path even when TMPDIR is a long scratchpad.
-  // All bytes stay under base; this descriptor is held until its children end.
-  const runFd = process.platform === "linux" ? openSync(runDirectory, constants.O_RDONLY | constants.O_DIRECTORY) : undefined;
-  const runRoot = runFd === undefined ? physicalRunRoot : `/proc/${process.pid}/fd/${runFd}/oma/${SOCIETY}`;
+  // Linux Unix-socket names must fit sun_path; use a bounded test TMPDIR.
+  // All bytes stay under base; parent /proc/fd links cannot cross bwrap's user namespace.
+  const runRoot = physicalRunRoot;
   provisionSociety(root);
   // The society's configuration: the product's defaults with the scripted
-  // model for Residents and no rootfs, so a runner runs its engine unconfined.
+  // model for Residents and the generated rootfs, so every runner is confined.
   const defaults = defaultHostConfig({ society: SOCIETY, node: process.execPath, libdir: REPO,
-    rootfs: options.confined === true ? residentRootfsPath(root) : "/", deploymentDigest: "a".repeat(64) });
+    rootfs: residentRootfsPath(root), deploymentDigest: "a".repeat(64) });
   const residentProfile = Object.keys(defaults.agentProfiles).find(name => name !== defaults.principalProfile)!;
   const config = validateConfig({ ...defaults,
-    modelProfiles: { ...defaults.modelProfiles, scripted: { ...(options.confined === true ? CONFINED_MODEL : { provider: "fake", model: "scripted" }), credentialRef: "engine-managed",
+    modelProfiles: { ...defaults.modelProfiles, scripted: { ...CONFINED_MODEL, credentialRef: "engine-managed",
       codecRevision: "scripted", pricingRevision: "unpinned", maxInputTokens: 1, maxOutputTokens: 1, inferenceTimeoutSeconds: 120 },
-      "scripted-2": { provider: "fake", model: "scripted-2", credentialRef: "engine-managed",
+      "scripted-2": { ...CONFINED_MODEL_2, credentialRef: "engine-managed",
       codecRevision: "scripted", pricingRevision: "unpinned", maxInputTokens: 1, maxOutputTokens: 1, inferenceTimeoutSeconds: 120 } },
     agentProfiles: { ...defaults.agentProfiles, [residentProfile]: { ...defaults.agentProfiles[residentProfile]!, modelProfile: "scripted",
       capabilities: [...defaults.agentProfiles[residentProfile]!.capabilities
@@ -256,7 +256,7 @@ export async function startScenario(options: ScenarioOptions = {}): Promise<Scen
   writeFileSync(configPath, JSON.stringify(config, null, 2));
   const residentResources = config.agentProfiles[residentProfile]!.resources;
   const units = new ScenarioUnits();
-  const provider = await scriptedProvider(options.script ?? [], { tls: options.confined === true });
+  const provider = await scriptedProvider(options.script ?? [], { tls: true });
   // The engines and the runner's relay trust the scripted provider's own
   // certificate; certificate checking stays on.
   const trust: Record<string, string> = provider.caFile === null ? {} : { NODE_EXTRA_CA_CERTS: provider.caFile };
@@ -448,6 +448,8 @@ export async function startScenario(options: ScenarioOptions = {}): Promise<Scen
       return readFileSync(join(root, "mail", "archive", "cur", name), "utf8");
     },
     async activate(agent, timeoutMs = 90_000) {
+      assert.equal(RESIDENT_TEST_OPTIONS.skip, false, String(RESIDENT_TEST_OPTIONS.skip));
+      assert.notEqual(readCurrentHostPolicy(configPath, SOCIETY).installation.rootfs, "/");
       // What provisioning a created Resident leaves: its home and its workspace.
       const home = join(agentRootPathAt(root, agent), "home");
       for (const path of [home, runnerViewPathAt(root, agent)]) mkdirSync(path, { recursive: true });
@@ -457,7 +459,7 @@ export async function startScenario(options: ScenarioOptions = {}): Promise<Scen
       if (!existsSync(join(workspace, ".git"))) {
         const git = (args: string[], cwd?: string): void => { execFileSync("/usr/bin/git", args, { cwd, stdio: "ignore" }); };
         git(["clone", "--no-local", "--single-branch", "--branch", "main", projectGitPathAt(root), workspace]);
-        git(["remote", "set-url", "origin", residentProjectGit(config.installation.rootfs, projectGitPathAt(root))], workspace);
+        git(["remote", "set-url", "origin", residentProjectGit()], workspace);
       }
       units.running = { agent, invocationId: randomBytes(16).toString("hex") };
       try {
@@ -484,7 +486,6 @@ export async function startScenario(options: ScenarioOptions = {}): Promise<Scen
       fence?.release();
       await broker.drainAndClose().catch(() => undefined);
       await provider.close();
-      if (runFd !== undefined) closeSync(runFd);
       try { store.close(); } catch { /* the broker's drain closed it */ }
       // Published context revisions are sealed read-only (CTX); open them to remove.
       execFileSync("chmod", ["-R", "u+rwX", base]);

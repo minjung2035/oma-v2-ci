@@ -37,7 +37,8 @@ const engineEnv = {
   XDG_DATA_HOME: dataHome,
   XDG_RUNTIME_DIR: runtimeDir,
   PATH: "/usr/local/bin:/usr/bin:/bin",
-  LANG: "C.UTF-8",
+  LANG: "C.UTF-8", LC_ALL: "C.UTF-8", TZ: "UTC", TERM: "xterm-256color",
+  SHELL: "/bin/sh", USER: "oma", LOGNAME: "oma", TMPDIR: "/tmp",
 };
 const packages = new GuestPackages({ ledger, projects, dataDir: join(dataHome, "oma"), libdir, node: process.execPath,
   entry: join(libdir, DEPLOYMENT_LAYOUT.entries.guestPackages), env: engineEnv, timeoutMs: 10 * 60_000 });

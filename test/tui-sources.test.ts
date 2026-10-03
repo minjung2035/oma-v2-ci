@@ -359,9 +359,9 @@ test("TUI-012/SB-002-E: the Dashboard says whether Residents are confined", () =
       });
       return new Map(lines.map(entry => [entry.label, entry.value])).get("Sandbox")!;
     };
-    // `/` is not a rootfs: SB-001 forbids binding the host root, so the value
-    // means none was declared. The user has to be able to read that.
-    assert.match(line({ rootfs: "/" }), /Unconfined/);
+    // Society is confined-only; `/` is rejected before startup, not displayed
+    // as a supported unconfined execution mode. The declared rootfs is visible.
+    assert.match(line({ rootfs: "/opt/oma/rootfs" }), /^Confined/);
     const confined = line({ rootfs: "/opt/oma/rootfs" });
     assert.doesNotMatch(confined, /Unconfined/);
     assert.match(confined, /\/opt\/oma\/rootfs/);

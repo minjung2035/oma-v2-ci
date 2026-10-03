@@ -23,6 +23,7 @@ import type { PiInboundEvent, RpcCommand } from "../src/pi-compat/wire.js";
 import { PiRpcClient, SKIPPED_EVENT, type PiObservedEvent } from "../src/runtime/pi-rpc.js";
 import { preparePiRetry } from "../src/runtime/pi-runtime.js";
 import { planPiSpawn, type PiAdapterOptions } from "../src/runtime/pi-spawn-plan.js";
+import { residentOptions } from "./fixtures/resident.js";
 
 const scratch = (prefix: string): string => mkdtempSync(join(tmpdir(), prefix));
 // The package's exports map hides ./package.json; the root is two levels up
@@ -66,31 +67,37 @@ test("A6: the session header probe accepts only the identity the engine could ha
   ]) assert.equal(await sessionHeaderIdentity(header, cwd), null, JSON.stringify(header));
 });
 
-function spawnOptions(overrides: Partial<PiAdapterOptions> = {}): PiAdapterOptions {
-  return {
-    actor: "alice", society: "demo",
-    profile: { provider: "pi", model: "current", inferenceSeconds: 60, prompt: "", extensions: [], workspaceBytes: 1 << 20 },
-    limits: { frameBytes: 1 << 20, idleStreamSeconds: 30, receiptWaitSeconds: 30, batchMaxMessages: 24,
-      mailBodyBytes: 1 << 20, contextBytes: 1 << 20, bundleBytes: 1 << 20 },
-    paths: { piCommand: "/bin/pi", piAgentDir: "/agent", coreExtension: "/ext.js", cli: "/cli.js",
-      workspace: "/w", sessionDir: "/s", agentHome: "/h", mailArchive: "/m", workerArchive: "/wa",
-      projectGit: "/g", batchView: "/v", socket: "/sock" },
-    ...overrides,
-  };
-}
-
-test("A7: an unconfined engine never inherits a parent Pi session's environment", () => {
-  const ambient: Record<string, string> = { OMA_KEEP: "1" };
+test("A7/U1: a Resident's confined spawn is explicit-only -- ambient process.env never reaches it", t => {
+  const root = scratch("oma-spawn-env-");
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const ambient: Record<string, string> = { OMA_KEEP: "1", HOME: "/host-home" };
   for (const name of [...PI_SESSION_ENV_NAMES, "PI_SESSION_CWD", "PI_SESSION_REASON"]) ambient[name] = "inherited";
   const saved = process.env;
   process.env = ambient;
   try {
-    const env = planPiSpawn(spawnOptions()).env;
-    for (const name of [...PI_SESSION_ENV_NAMES, "PI_SESSION_CWD", "PI_SESSION_REASON"])
-      assert.equal(env[name], undefined, `${name} reached the engine's environment`);
-    assert.equal(env.OMA_KEEP, "1");
-    assert.equal(env.PI_CODING_AGENT_DIR, "/agent");
+    const plan = planPiSpawn(residentOptions(root));
+    // The confined spawn is `bwrap --clearenv ... --setenv K V`: ambient names
+    // can only arrive if they were explicitly copied into the argv's setenvs.
+    assert.ok(plan.args.includes("--clearenv"), "the confined spawn does not clear ambient environment");
+    assert.deepEqual(plan.env, {}, "no environment is inherited around the sandbox wrapper");
+    const given = new Set<string>();
+    for (let i = 0; i < plan.args.length - 2; i++)
+      if (plan.args[i] === "--setenv") given.add(plan.args[i + 1]!);
+    for (const name of [...PI_SESSION_ENV_NAMES, "PI_SESSION_CWD", "PI_SESSION_REASON", "OMA_KEEP"])
+      assert.ok(!given.has(name), `${name} reached the engine's argv environment`);
+    assert.ok(given.has("PI_CODING_AGENT_DIR"), "the engine's agent directory is not passed through the sandbox");
+    // The confined HOME is the Resident's own home, never the host's.
+    const homeAt = plan.args.indexOf("HOME");
+    assert.ok(homeAt === -1 || !plan.args[homeAt + 1]!.startsWith("/host"), "ambient HOME leaked into the sandbox argv");
   } finally { process.env = saved; }
+});
+
+test("U1: a spawn plan without confinement is refused, not silently unconfined", () => {
+  const options = residentOptions(scratch("oma-spawn-refuse-"));
+  // Simulate the deleted unconfined arm: a caller that drops confinement must
+  // meet the refusal, never a direct host spawn.
+  const unconstrained = { ...options, confinement: undefined } as unknown as PiAdapterOptions;
+  assert.throws(() => planPiSpawn(unconstrained), /UNSUPPORTED_PROFILE/);
 });
 
 test("A4: absent settings get OMA's interactive defaults through the engine's own manager", t => {

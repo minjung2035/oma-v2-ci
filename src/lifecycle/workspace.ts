@@ -2,6 +2,7 @@ import { closeSync, constants, existsSync, lstatSync } from "node:fs";
 import { join } from "node:path";
 import type { ValidatedPlan } from "../storage/operation-codec.js";
 import { StoreError } from "../domain/errors.js";
+import { RESIDENT_PATHS } from "../sandbox.js";
 import { isValidFullOid } from "../ids.js";
 import { agentRootPathAt, isWorkspacePathFor } from "../storage/paths.js";
 import { ensureDurableDirectory, fsyncDir } from "../storage/durable-fs.js";
@@ -103,7 +104,7 @@ export class WorkspaceCoordinator {
     // Resident's: `git fetch origin <published-ref>` runs where the repository
     // is its mount. Set before the workspace is published, while only this
     // trusted preparation has touched it.
-    const origin = this.paths.residentProjectGit ?? this.paths.projectGit;
+    const origin = this.paths.residentProjectGit ?? RESIDENT_PATHS.projectGit;
     const remote = await this.prepareGit(lease, ["remote", "set-url", "origin", origin], temporary);
     if (remote.status !== 0) throw new StoreError("INTERNAL_ERROR", "private workspace origin could not be set");
     let haveBase = await this.prepareGit(lease, ["cat-file", "-e", `${identity.from}^{commit}`], temporary);

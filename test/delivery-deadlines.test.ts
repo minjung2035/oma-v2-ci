@@ -6,6 +6,7 @@ import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:f
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { PiAdapter } from "../src/runtime/pi-adapter.js";
+import { residentOptions, prepareResident, RESIDENT_TEST_OPTIONS } from "./fixtures/resident.js";
 import { errorCodeOf, primaryFailure } from "../src/domain/errors.js";
 import { alarm, PiRpcClient } from "../src/runtime/pi-rpc.js";
 import { PI_ADAPTER_REVISION, PI_BOUNDARY_PREFIX } from "../src/storage/delivery-receipt.js";
@@ -116,16 +117,13 @@ setInterval(() => {}, 1000);
 async function deliverWith(pacing: Pacing, everyMs: number, forMs: number, budgets: { idle: number; model: number; accept: number }) {
   const root = mkdtempSync(join(tmpdir(), "oma-v10a-"));
   try {
-    const dirs = Object.fromEntries(["workspace", "sessions", "home", "archive", "workerArchive", "projectGit", "view"].map(name => {
-      const path = join(root, name); mkdirSync(path, { recursive: true }); return [name, path];
-    })) as Record<string, string>;
-    const core = join(root, "extension.js"); const cli = join(root, "cli.js");
-    writeFileSync(core, "export default function() {}\n"); writeFileSync(cli, "\n");
-    const adapter = new PiAdapter({ actor: "alice", society: "demo",
-      profile: { provider: "pi", model: "current", inferenceSeconds: budgets.model, prompt: "", extensions: [], workspaceBytes: 1024 * 1024 },
-      limits: { frameBytes: 65536, idleStreamSeconds: budgets.idle, receiptWaitSeconds: budgets.accept, batchMaxMessages: 24, mailBodyBytes: 1024 * 1024, contextBytes: 1 << 20, bundleBytes: 1 << 20 },
-      paths: { piCommand: fakePi(root, pacing, everyMs, forMs), coreExtension: core, cli, workspace: dirs.workspace!, sessionDir: dirs.sessions!,
-        agentHome: dirs.home!, mailArchive: dirs.archive!, workerArchive: dirs.workerArchive!, projectGit: dirs.projectGit!, batchView: dirs.view!, socket: join(root, "control.sock") } });
+    const options = residentOptions(root, root, fakePi(root, pacing, everyMs, forMs));
+    prepareResident(options);
+    mkdirSync(join(root, "dist/src"), { recursive: true });
+    writeFileSync(options.paths.coreExtension, "export default function() {}\n"); writeFileSync(options.paths.cli, "\n");
+    const adapter = new PiAdapter({ ...options,
+      profile: { ...options.profile, inferenceSeconds: budgets.model },
+      limits: { ...options.limits, idleStreamSeconds: budgets.idle, receiptWaitSeconds: budgets.accept } });
     const batch = { id: "b-00000000-0000-4000-8000-0000000000b1", agent: "alice", incarnation: 1,
       messageIds: ["m-00000000-0000-4000-8000-000000000001-0"], sessionPath: null, deliveryMode: "followUp" as const,
       notice: "mail", indexPath: "/inbox.md" as const };
@@ -135,21 +133,21 @@ async function deliverWith(pacing: Pacing, everyMs: number, forMs: number, budge
   } finally { rmSync(root, { recursive: true, force: true }); }
 }
 
-test("V10A: a turn that keeps making progress past the idle budget still settles", { timeout: 20_000 }, async () => {
+test("V10A: a turn that keeps making progress past the idle budget still settles", { ...RESIDENT_TEST_OPTIONS, timeout: 20_000 }, async () => {
   const result = await deliverWith("steady", 200, 2_500, { idle: 1, model: 10, accept: 2 });
   assert.equal(result.error, null, String(result.error));
   assert.ok(result.ms >= 2_400, "the turn was not actually longer than the idle budget");
   assert.equal(result.outcome!.entryId, "0123abcd");
 });
 
-test("V10A: a genuinely silent engine ends the delivery at the idle budget, as idle", { timeout: 20_000 }, async () => {
+test("V10A: a genuinely silent engine ends the delivery at the idle budget, as idle", { ...RESIDENT_TEST_OPTIONS, timeout: 20_000 }, async () => {
   const result = await deliverWith("silent-after-accept", 200, 0, { idle: 1, model: 10, accept: 2 });
   assert.equal(result.error?.code, "DEADLINE_EXCEEDED");
   assert.match(result.error!.message, /idle stream budget/);
   assert.ok(result.ms < 5_000, `idle took ${result.ms} ms`);
 });
 
-test("DR27 / WP10: model progress and repeated requests are not limited by total delivery time", { timeout: 20_000 }, async () => {
+test("DR27 / WP10: model progress and repeated requests are not limited by total delivery time", { ...RESIDENT_TEST_OPTIONS, timeout: 20_000 }, async () => {
   for (const [pacing, duration] of [["steady", 2500], ["many-requests", 650]] as const) {
     const result = await deliverWith(pacing, 200, duration, { idle: 1, model: 2, accept: 2 });
     assert.equal(result.error, null, String(result.error));
@@ -158,7 +156,7 @@ test("DR27 / WP10: model progress and repeated requests are not limited by total
   }
 });
 
-test("DR27 / WP10: silent reasoning before the first token and post-response compaction are not RPC idleness", { timeout: 20_000 }, async () => {
+test("DR27 / WP10: silent reasoning before the first token and post-response compaction are not RPC idleness", { ...RESIDENT_TEST_OPTIONS, timeout: 20_000 }, async () => {
   for (const pacing of ["silent-inference", "compaction", "compaction-error"] as const) {
     const result = await deliverWith(pacing, 0, 1500, { idle: 1, model: 3, accept: 2 });
     assert.equal(result.error, null, `${pacing}: ${result.error}`);
@@ -167,7 +165,7 @@ test("DR27 / WP10: silent reasoning before the first token and post-response com
   }
 });
 
-test("DR27 / WP10: an unresponsive inference or compaction is bounded without inventing a receipt", { timeout: 20_000 }, async () => {
+test("DR27 / WP10: an unresponsive inference or compaction is bounded without inventing a receipt", { ...RESIDENT_TEST_OPTIONS, timeout: 20_000 }, async () => {
   for (const pacing of ["stuck-inference", "stuck-compaction"] as const) {
     const result = await deliverWith(pacing, 0, 0, { idle: 1, model: 2, accept: 2 });
     assert.equal(result.error?.code, "DEADLINE_EXCEEDED");
@@ -177,7 +175,7 @@ test("DR27 / WP10: an unresponsive inference or compaction is bounded without in
   }
 });
 
-test("DR27 / WP10: finishing a compaction or tool restores the control-event budget", { timeout: 20_000 }, async () => {
+test("DR27 / WP10: finishing a compaction or tool restores the control-event budget", { ...RESIDENT_TEST_OPTIONS, timeout: 20_000 }, async () => {
   for (const pacing of ["compaction-end-stall", "post-tool-stall"] as const) {
     const result = await deliverWith(pacing, 0, 1200, { idle: 1, model: 10, accept: 2 });
     assert.equal(result.error?.code, "DEADLINE_EXCEEDED");
@@ -191,21 +189,21 @@ test("DR27 / WP10: finishing a compaction or tool restores the control-event bud
  * for 30 s, the adapter read the engine as idle, and the run ended
  * DEADLINE_EXCEEDED in the middle of the tool. Builds, installs and test
  * suites are that shape. A tool the engine announced is progress. */
-test("AV24 / WP10: a silent tool the engine announced runs past the idle budget and the turn settles", { timeout: 20_000 }, async () => {
+test("AV24 / WP10: a silent tool the engine announced runs past the idle budget and the turn settles", { ...RESIDENT_TEST_OPTIONS, timeout: 20_000 }, async () => {
   const result = await deliverWith("silent-tool", 200, 2_500, { idle: 1, model: 10, accept: 2 });
   assert.equal(result.error, null, String(result.error));
   assert.ok(result.ms >= 2_400, "the tool was not actually longer than the idle budget");
   assert.equal(result.outcome!.entryId, "0123abcd");
 });
 
-test("DR27 / WP10: a tool owns its runtime, but engine loss still leaves an unconfirmed boundary", { timeout: 20_000 }, async () => {
+test("DR27 / WP10: a tool owns its runtime, but engine loss still leaves an unconfirmed boundary", { ...RESIDENT_TEST_OPTIONS, timeout: 20_000 }, async () => {
   const result = await deliverWith("unfinished-tool", 200, 2500, { idle: 1, model: 2, accept: 2 });
   assert.equal(result.error?.code, "SESSION_BOUNDARY_UNCONFIRMED");
   assert.ok(result.ms >= 2400);
   assert.equal(result.outcome, null);
 });
 
-test("INF-001 / WP10: announced retry backoff is not idle; a missing retry still times out", { timeout: 20_000 }, async () => {
+test("INF-001 / WP10: announced retry backoff is not idle; a missing retry still times out", { ...RESIDENT_TEST_OPTIONS, timeout: 20_000 }, async () => {
   const finished = await deliverWith("retry-wait", 0, 1500, { idle: 1, model: 10, accept: 2 });
   assert.equal(finished.error, null);
   const stuck = await deliverWith("stuck-retry", 0, 1500, { idle: 1, model: 10, accept: 2 });
@@ -214,7 +212,7 @@ test("INF-001 / WP10: announced retry backoff is not idle; a missing retry still
   assert.equal(retried.error, null, "announced backoff is not model silence");
 });
 
-test("V10A: an unanswered command ends at the acceptance budget, and says so", { timeout: 20_000 }, async () => {
+test("V10A: an unanswered command ends at the acceptance budget, and says so", { ...RESIDENT_TEST_OPTIONS, timeout: 20_000 }, async () => {
   const result = await deliverWith("never-accepts", 200, 0, { idle: 10, model: 10, accept: 1 });
   assert.equal(result.error?.code, "SESSION_BOUNDARY_UNCONFIRMED");
   assert.match(result.error!.message, /accept the delivery command/);
@@ -239,7 +237,7 @@ test("V10C: a budget longer than the native timer limit does not fire early, and
   assert.equal(fired, 0, "a cancelled alarm fired");
 });
 
-test("V10C: every delivery outcome leaves no timer behind", { timeout: 30_000 }, async () => {
+test("V10C: every delivery outcome leaves no timer behind", { ...RESIDENT_TEST_OPTIONS, timeout: 30_000 }, async () => {
   const timers = () => process.getActiveResourcesInfo().filter(kind => kind === "Timeout").length;
   await new Promise(resolve => setTimeout(resolve, 20));
   const before = timers();
@@ -255,7 +253,7 @@ test("V10C: every delivery outcome leaves no timer behind", { timeout: 30_000 },
   assert.equal(timers(), before, "a deadline outlived its delivery");
 });
 
-test("DR27: wait observation has its own budget and restores control idleness afterwards", { timeout: 20_000 }, async () => {
+test("DR27: wait observation has its own budget and restores control idleness afterwards", { ...RESIDENT_TEST_OPTIONS, timeout: 20_000 }, async () => {
   const budgets = { idle: 1, model: 3, accept: 2 };
   const good = await deliverWith("wait-observation", 0, 1500, budgets);
   assert.equal(good.error, null);
@@ -273,7 +271,7 @@ test("DR27: wait observation has its own budget and restores control idleness af
   assert.ok(stale.ms < 4000, "a stale incarnation cannot suspend the idle deadline");
 });
 
-test("DR27 / P0-4: EOF is not child death; adapter success waits for actual close", { timeout: 20_000 }, async t => {
+test("DR27 / P0-4: EOF is not child death; adapter success waits for actual close", { ...RESIDENT_TEST_OPTIONS, timeout: 20_000 }, async t => {
   let closed = false;
   const original = PiRpcClient.prototype.onEvent;
   t.mock.method(PiRpcClient.prototype, "onEvent", function (this: PiRpcClient, ...args: Parameters<typeof original>) {
@@ -287,7 +285,7 @@ test("DR27 / P0-4: EOF is not child death; adapter success waits for actual clos
 });
 
 for (const pacing of ["silent-after-accept", "never-accepts", "wait-observation-error", "malformed", "premature-eof"] as const) {
-  test(`DR27/P0-4: ${pacing} failure keeps the child until actual close`, { timeout: 15_000 }, async t => {
+  test(`DR27/P0-4: ${pacing} failure keeps the child until actual close`, { ...RESIDENT_TEST_OPTIONS, timeout: 15_000 }, async t => {
     let closed = false;
     const original = PiRpcClient.prototype.onEvent;
     t.mock.method(PiRpcClient.prototype, "onEvent", function (this: PiRpcClient, ...args: Parameters<typeof original>) {
@@ -305,7 +303,7 @@ for (const pacing of ["silent-after-accept", "never-accepts", "wait-observation-
 }
 
 for (const pacing of ["silent-after-accept", "never-accepts", "eof-before-close"] as const) {
-  test(`DR27/P0-5: lost ${pacing} close observation is bounded and preserves the original failure`, { timeout: 15_000 }, async t => {
+  test(`DR27/P0-5: lost ${pacing} close observation is bounded and preserves the original failure`, { ...RESIDENT_TEST_OPTIONS, timeout: 15_000 }, async t => {
     let actualClose = false;
     let lateClose: ReturnType<typeof setTimeout> | undefined;
     t.after(() => clearTimeout(lateClose));
@@ -342,7 +340,7 @@ for (const pacing of ["silent-after-accept", "never-accepts", "eof-before-close"
   });
 }
 
-test("DR27/P0-4: delivery event-registration failure returns timers and observes its child close", { timeout: 8000 }, async t => {
+test("DR27/P0-4: delivery event-registration failure returns timers and observes its child close", { ...RESIDENT_TEST_OPTIONS, timeout: 8000 }, async t => {
   const timers = new Set<ReturnType<typeof setTimeout>>();
   const schedule = globalThis.setTimeout, cancel = globalThis.clearTimeout;
   t.mock.method(globalThis, "setTimeout", (action: (...args: unknown[]) => void, ms?: number) => {

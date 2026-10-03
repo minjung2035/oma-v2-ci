@@ -26,7 +26,7 @@
  * named: `"create"` leaves anything that exists but differs alone and reports
  * it, and `"repair"` -- which only an owner runs -- puts it back.
  */
-import { closeSync, constants, fstatSync, lstatSync, readFileSync, readlinkSync, symlinkSync, unlinkSync, writeFileSync } from "node:fs";
+import { closeSync, constants, fstatSync, lstatSync, statSync, readFileSync, readlinkSync, symlinkSync, unlinkSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { StoreError, unobserved } from "../domain/errors.js";
 import { DEPLOYMENT_LAYOUT } from "../domain/deployment.js";
@@ -67,6 +67,14 @@ export function hostSystemLayout(root = "/"): SystemLayout {
     const host = join(root, path);
     const found = kind(host);
     if (found === "absent") continue;
+    if (path.startsWith("/etc/")) {
+      const target = statSync(host, { throwIfNoEntry: false });
+      if (target === undefined) continue;
+      if (!target.isFile() && !target.isDirectory())
+        throw new StoreError("UNSUPPORTED_PROFILE", `system mount ${path} is not a file or directory`);
+      binds.push(path);
+      continue;
+    }
     if (found === "link") {
       const target = readlinkSync(host);
       if (/^(\/?usr)(\/[A-Za-z0-9._-]+)*$/.test(target) && !target.includes(".."))
@@ -207,14 +215,14 @@ export function prepareResidentRootfs(
   ensureDirectory(rootfs);
   const inside = (path: string): string => join(rootfs, path);
   for (const path of ["/proc", "/dev", "/tmp", "/etc", dirname(RESIDENT_PATHS.node),
-    RESIDENT_PATHS.workspace, RESIDENT_PATHS.home, RESIDENT_PATHS.archive, RESIDENT_PATHS.selfMail,
+    RESIDENT_PATHS.workspace, RESIDENT_PATHS.home, RESIDENT_PATHS.archive, RESIDENT_PATHS.workerArchive, RESIDENT_PATHS.selfMail,
     RESIDENT_PATHS.view, RESIDENT_PATHS.world, RESIDENT_PATHS.projectGit, RESIDENT_PATHS.projectMirror, RESIDENT_PATHS.sessions,
     RESIDENT_PATHS.libdir, RESIDENT_PATHS.packages])
     ensureDirectory(inside(path));
   for (const path of [RESIDENT_PATHS.node, RESIDENT_PATHS.socket, RESIDENT_PATHS.inference])
     ensureFile(inside(path), pass);
   for (const path of layout.binds)
-    if (kind(path) === "file") ensureFile(inside(path), pass);
+    if (statSync(path).isFile()) ensureFile(inside(path), pass);
     else ensureDirectory(inside(path));
   for (const link of layout.links) ensureLink(inside(link.path), link.target, pass);
   // bwrap cannot create this on a read-only root; it must already be there.

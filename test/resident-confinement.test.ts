@@ -14,7 +14,7 @@ import { RESIDENT_SYSTEM_PROMPT } from "../src/config/role-prompts.js";
 import { TOOL_SCOPE_ENV, TOOL_SCOPE_SANDBOX, type PiConfinement } from "../src/runtime/pi-spawn-plan.js";
 import { TOOL_SCOPE_ENV as MIRRORED_ENV, TOOL_SCOPE_SANDBOX as MIRRORED_SANDBOX, guardWorkspaceTools } from "../src/extension/workspace-guard.js";
 import { containWorkspaceTools } from "../src/extension/contained-tools.js";
-import { RESIDENT_INFERENCE_PORT, RESIDENT_PATHS, confinedPath, hostSessionPath, residentArgv, residentProjectGit, residentsConfined, type ResidentDirectories } from "../src/sandbox.js";
+import { RESIDENT_INFERENCE_PORT, RESIDENT_PATHS, confinedPath, hostSessionPath, residentArgv, residentProjectGit, requireResidentRootfs, type ResidentDirectories } from "../src/sandbox.js";
 import { decodeRunLease } from "../src/protocol/run-lease.js";
 import { actorSocketPathAt, agentRootPathAt, runnerSessionDirPathAt, runnerViewPathAt, workspacePathAt } from "../src/storage/paths.js";
 import { createEditToolDefinition } from "@earendil-works/pi-coding-agent";
@@ -98,7 +98,7 @@ function fixture(): Fixture {
   return { root, stateRoot, libdir, dirs, adapter, confinement, paths };
 }
 
-function unconfinedAdapter(f: Fixture): PiAdapter {
+function missingConfinementAdapter(f: Fixture): PiAdapter {
   return new PiAdapter({
     actor: "alice", society: "s", limits: LIMITS,
     profile: {
@@ -111,8 +111,33 @@ function unconfinedAdapter(f: Fixture): PiAdapter {
       workspace: f.dirs.workspace, sessionDir: f.dirs.sessions, agentHome: f.dirs.home,
       mailArchive: f.paths.mailArchive!, workerArchive: f.paths.workerArchive!, projectGit: f.paths.projectGit!, batchView: f.dirs.view, socket: f.paths.socket!,
     },
-  });
+  } as never);
 }
+
+test("F34/F35: Resident environment is deterministic, confined, and never inherited", () => {
+  const f = fixture();
+  const saved = { ...process.env };
+  process.env.OMA_HOST_SENTINEL = "host-only";
+  process.env.LANG = "host-locale";
+  try {
+    const plan = f.adapter.spawnPlan();
+    const env: Record<string, string> = {};
+    for (let i = 0; i < plan.args.length; i++)
+      if (plan.args[i] === "--setenv") env[plan.args[i + 1]!] = plan.args[i + 2]!;
+    assert.deepEqual(Object.fromEntries(["HOME", "PATH", "LANG", "LC_ALL", "TZ", "TERM", "TMPDIR", "SHELL", "USER", "LOGNAME", "XDG_DATA_HOME", "XDG_RUNTIME_DIR"].map(key => [key, env[key]])), {
+      HOME: "/home/agent", PATH: "/opt/oma/dist/libexec:/opt/oma-node:/home/agent/.local/bin:/usr/bin:/bin",
+      LANG: "C.UTF-8", LC_ALL: "C.UTF-8", TZ: "UTC", TERM: "xterm-256color", TMPDIR: "/tmp",
+      SHELL: "/bin/sh", USER: "agent", LOGNAME: "agent", XDG_DATA_HOME: "/home/agent/.local/share", XDG_RUNTIME_DIR: "/home/agent/.run",
+    });
+    assert.equal(env.OMA_HOST_SENTINEL, undefined);
+    assert.deepEqual(plan.env, {});
+    assert.ok(plan.args.includes("--clearenv"));
+  } finally {
+    for (const key of ["LANG", "OMA_HOST_SENTINEL"])
+      if (saved[key] === undefined) delete process.env[key]; else process.env[key] = saved[key];
+    rmSync(f.root, { recursive: true, force: true });
+  }
+});
 
 test("T113 a confined Resident is spawned through the mount plan, not directly", () => {
   const f = fixture();
@@ -166,6 +191,20 @@ test("T113 every path the confined engine is told about is a path it can reach",
   } finally { rmSync(f.root, { recursive: true, force: true }); }
 });
 
+test("T113: overlapping installation roots never shadow more-specific Resident mounts", () => {
+  const f = fixture();
+  try {
+    const installation = { libdir: `${f.stateRoot}/`, packages: `${f.stateRoot}/packages` };
+    for (const [host, inside] of [[f.dirs.home, RESIDENT_PATHS.home], [f.dirs.sessions, RESIDENT_PATHS.sessions],
+      [f.dirs.workspace, RESIDENT_PATHS.workspace], [f.dirs.archive, RESIDENT_PATHS.archive],
+      [f.dirs.workerArchive, RESIDENT_PATHS.workerArchive], [f.dirs.view, RESIDENT_PATHS.view],
+      [installation.packages, RESIDENT_PATHS.packages]] as const) {
+      assert.equal(confinedPath(installation, f.dirs, `${host}/entry`), `${inside}/entry`);
+    }
+    assert.equal(confinedPath(installation, f.dirs, `${f.stateRoot}/dist/engine.js`), `${RESIDENT_PATHS.libdir}/dist/engine.js`);
+  } finally { rmSync(f.root, { recursive: true, force: true }); }
+});
+
 test("T113 the engine's system prompt is the role's, or the built-in Resident prompt", () => {
   const f = fixture();
   try {
@@ -186,6 +225,7 @@ test("T113 the engine's system prompt is the role's, or the built-in Resident pr
         workspace: f.dirs.workspace, sessionDir: f.dirs.sessions, agentHome: f.dirs.home,
         mailArchive: f.paths.mailArchive!, workerArchive: f.paths.workerArchive!, projectGit: f.paths.projectGit!, batchView: f.dirs.view, socket: f.paths.socket!,
       },
+      confinement: f.confinement,
     });
     const args = engineArgs(authored);
     assert.equal(args[args.indexOf("--system-prompt") + 1], "a role prompt");
@@ -231,8 +271,8 @@ test("T113 the engine's credential directory is never mounted into a Resident", 
     assert.equal(plan.args[at + 1], confinedPath({ libdir: f.libdir }, f.dirs, join(f.dirs.home, "engine")));
     assert.equal(plan.args.filter(value => value === "PI_CODING_AGENT_DIR").length, 1);
     assert.equal(plan.args.some(value => value.includes(f.paths.piAgentDir!)), false);
-    // Only the unconfined adapter receives the host engine state.
-    assert.equal(unconfinedAdapter(f).spawnPlan().env.PI_CODING_AGENT_DIR, f.paths.piAgentDir);
+    // An adapter without confinement is refused before receiving host engine state.
+    assert.throws(() => missingConfinementAdapter(f), { code: "UNSUPPORTED_PROFILE" });
   } finally { rmSync(f.root, { recursive: true, force: true }); }
 });
 
@@ -261,16 +301,10 @@ test("DR25: a Resident's sandbox mounts the installed packages read-only, and it
   } finally { rmSync(f.root, { recursive: true, force: true }); }
 });
 
-test("T113 an unconfined adapter is unchanged and still speaks host paths", () => {
+test("U1: an adapter without confinement is rejected rather than speaking host paths", () => {
   const f = fixture();
-  try {
-    const plan = unconfinedAdapter(f).spawnPlan();
-    assert.equal(plan.command, f.paths.piCommand);
-    assert.equal(plan.args[0], f.paths.piEntry);
-    assert.equal(plan.env.OMA_CLI_PATH, f.paths.cli);
-    assert.equal(plan.env.OMA_AGENT_HOME, f.dirs.home);
-    assert.ok(plan.args.includes(f.dirs.sessions));
-  } finally { rmSync(f.root, { recursive: true, force: true }); }
+  try { assert.throws(() => missingConfinementAdapter(f), { code: "UNSUPPORTED_PROFILE" }); }
+  finally { rmSync(f.root, { recursive: true, force: true }); }
 });
 
 test("T113 a file outside every mount is refused rather than handed over", () => {
@@ -305,7 +339,7 @@ test("T113 a hostile environment entry cannot become extra bwrap arguments", () 
   } finally { rmSync(f.root, { recursive: true, force: true }); }
 });
 
-test("AV13 / SB-001, arch §11.1, CLI-001: a confined Resident has its sandbox's shell; an engine outside a sandbox does not", () => {
+test("AV13 / SB-001, arch §11.1, CLI-001: every Resident has its sandbox's shell, never a host shell", () => {
   const f = fixture();
   try {
     const confined = f.adapter.spawnPlan();
@@ -314,9 +348,7 @@ test("AV13 / SB-001, arch §11.1, CLI-001: a confined Resident has its sandbox's
     assert.ok(confined.args.includes(`${TOOL_SCOPE_ENV}=${TOOL_SCOPE_SANDBOX}`) ||
       confined.args.some((arg, i) => arg === "--setenv" && confined.args[i + 1] === TOOL_SCOPE_ENV && confined.args[i + 2] === TOOL_SCOPE_SANDBOX),
       "the confined engine was not told it runs in the sandbox");
-    const host = unconfinedAdapter(f).spawnPlan();
-    assert.equal(host.args[host.args.indexOf("--exclude-tools") + 1], "bash,powershell", "an unsealed engine got a host shell");
-    assert.equal(host.env[TOOL_SCOPE_ENV], undefined);
+    assert.throws(() => missingConfinementAdapter(f), { code: "UNSUPPORTED_PROFILE" });
   } finally { rmSync(f.root, { recursive: true, force: true }); }
 });
 
@@ -385,11 +417,11 @@ test("AV25 / BATCH-006, TSP-009, P0V-122: an edit is judged by its exact growth 
   } finally { rmSync(workspace, { recursive: true, force: true }); }
 });
 
-test("AV27 / SB-002-E, GIT-002: a Resident reaches the canonical repository at its mount when sealed, at the host path when not", () => {
-  assert.equal(residentsConfined("/"), false);
-  assert.equal(residentsConfined("/state/rootfs"), true);
-  assert.equal(residentProjectGit("/state/rootfs", "/state/repos/project.git"), RESIDENT_PATHS.projectGit);
-  assert.equal(residentProjectGit("/", "/state/repos/project.git"), "/state/repos/project.git");
+test("AV27 / SB-002-E, GIT-002: Residents always reach Git at its mount and host-root profiles fail", () => {
+  for (const rootfs of ["/", "relative", "/state/../rootfs", "/state\u0000/rootfs"])
+    assert.throws(() => requireResidentRootfs(rootfs), { code: "UNSUPPORTED_PROFILE" });
+  assert.doesNotThrow(() => requireResidentRootfs("/state/rootfs"));
+  assert.equal(residentProjectGit(), RESIDENT_PATHS.projectGit);
 });
 
 test("mail-v1: the worker archive is a read-only Resident mount its environment names", () => {
@@ -408,9 +440,7 @@ test("mail-v1: the worker archive is a read-only Resident mount its environment 
     // PI-001: the core extension cannot import this module, so its mirrored
     // literal is bound here to the value it mirrors.
     assert.equal(RESIDENT_PATHS.workerArchive, "/mail/workers");
-    const host = unconfinedAdapter(f).spawnPlan();
-    assert.equal(host.env.OMA_WORKER_ARCHIVE, f.paths.workerArchive);
-    assert.equal(host.env.OMA_PROJECT_GIT, f.paths.projectGit);
+    assert.throws(() => missingConfinementAdapter(f), { code: "UNSUPPORTED_PROFILE" });
   } finally { rmSync(f.root, { recursive: true, force: true }); }
 });
 

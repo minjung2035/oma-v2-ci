@@ -23,7 +23,7 @@ const checkpoint = (name: string): void => {
 
 const path = join(root, "config.json");
 const seed: HostConfigV1 = defaultHostConfig({
-  society: "crash", node: process.execPath, libdir: root, rootfs: "/",
+  society: "crash", node: process.execPath, libdir: root, rootfs: join(root, "rootfs"),
   deploymentDigest: "c".repeat(64),
 });
 writeFileSync(path, `${JSON.stringify(seed, null, 2)}\n`);
