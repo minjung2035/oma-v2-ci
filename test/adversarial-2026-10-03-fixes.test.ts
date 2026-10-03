@@ -23,6 +23,7 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { prepareContextStream } from "../src/storage/context-stream.js";
+import { publishContextRevision } from "../src/storage/context-snapshot.js";
 import { contextStagingPathAt } from "../src/storage/paths.js";
 import { TreeLease, leasePathOf, treeQuiescence } from "../src/storage/tree-lease.js";
 import { generateOperationId } from "../src/ids.js";
@@ -80,6 +81,53 @@ test("AV-20261003-18: a failure after the staging lease is taken releases the le
   }
 });
 
+test("AV-20261003-18: a failed context revision preparation releases its staging lease", t => {
+  // The same leak shape as the staging-root case above: TreeLease.take() ran,
+  // then the audited code reached the tree's own directory creation OUTSIDE
+  // the guarded try. This injection fails the first mkdir whose leaf is the
+  // publication's ".prepare-*" temporary -- the very first step after the
+  // lease is taken -- so on the broken code the lease descriptor would stay
+  // open and the ".lease" would read active until process exit.
+  const worldDir = mkdtempSync(join(tmpdir(), "oma-av18-snap-"));
+  t.after(() => rmSync(worldDir, { recursive: true, force: true }));
+  const source = join(worldDir, "source");
+  mkdirSync(source, { recursive: true });
+  const body = Buffer.from("fixture goal\n");
+  writeFileSync(join(source, "GOAL.md"), body);
+  const candidate = "e".repeat(64);
+  const entries = [{ path: "GOAL.md", bytes: body.length, sha256: createHash("sha256").update(body).digest("hex") }];
+  const revisions = join(worldDir, "context", "revisions");
+  const leasedDescriptors = () => readdirSync("/proc/self/fd").flatMap(name => {
+    try { return (readlinkSync("/proc/self/fd/" + name)).includes(".prepare-") ? [Number(name)] : []; }
+    catch { return []; }
+  });
+  const original = fs.mkdirSync;
+  let injected = 0;
+  try {
+    (fs as { mkdirSync: typeof fs.mkdirSync }).mkdirSync = (...args: Parameters<typeof fs.mkdirSync>) => {
+      const leaf = String(args[0]).split("/").pop() ?? "";
+      if (leaf.startsWith(".prepare-")) {
+        injected++;
+        if (injected === 1)
+          throw Object.assign(new Error("injected temporary mkdir failure after lease acquisition"), { code: "EMFILE" });
+      }
+      return (original as (...a: Parameters<typeof fs.mkdirSync>) => ReturnType<typeof fs.mkdirSync>)(...args);
+    };
+    syncBuiltinESMExports();
+    assert.throws(() => publishContextRevision(worldDir, candidate, entries, source), { code: "EMFILE" });
+    (fs as { mkdirSync: typeof fs.mkdirSync }).mkdirSync = original;
+    syncBuiltinESMExports();
+    assert.equal(injected, 1, "the injected failure ran once, after the lease was taken");
+    assert.deepEqual(leasedDescriptors(), [], "the lease descriptor was released, not stranded open");
+    assert.equal(readdirSync(revisions).filter(name => name.startsWith(".prepare-") || name.endsWith(".lease")).length, 0,
+      "the failed preparation's tree and lease are cleaned, not left active");
+  } finally {
+    (fs as { mkdirSync: typeof fs.mkdirSync }).mkdirSync = original;
+    syncBuiltinESMExports();
+    for (const fd of leasedDescriptors()) closeSync(fd);
+  }
+});
+
 test("AV-20261003-19: startup collection owns unaccepted .prepare-* revision trees", t => {
   const stateRoot = mkdtempSync(join(tmpdir(), "oma-av19-"));
   t.after(() => rmSync(stateRoot, { recursive: true, force: true }));
@@ -117,6 +165,48 @@ test("AV-20261003-19: startup collection owns unaccepted .prepare-* revision tre
   assert.equal(existsSync(unleased), false);
   assert.equal(existsSync(accepted), true, "an accepted revision is never collected");
   assert.equal(existsSync(join(revisions, ".prepare-not-an-oid")), true, "a name the grammar does not derive is untouched");
+});
+
+test("AV-20261003-19: an orphaned lease the grammar does not derive is reported and kept", t => {
+  // The recovery contract for every other name in these directories is
+  // "unprovable = reported and kept" -- but the audited loops decided *.lease
+  // entries by whether they could be derived and simply fell through on the
+  // ones they could not, deleting the evidence silently. Every shape below
+  // fails on that code: none of them appears in `kept`.
+  const stateRoot = mkdtempSync(join(tmpdir(), "oma-av19-lease-"));
+  t.after(() => rmSync(stateRoot, { recursive: true, force: true }));
+  const staging = join(stateRoot, "staging");
+  const revisions = join(stateRoot, "world", "context", "revisions");
+  mkdirSync(staging, { recursive: true });
+  mkdirSync(revisions, { recursive: true });
+  // A lease in staging whose tree name derives from nothing the broker makes.
+  writeFileSync(join(staging, "mystery.lease"), "");
+  // A lease naming an operation that IS accepted: its tree is gone, so this
+  // cannot be reclaimed as a dead preparation, and it must not be invisible.
+  const acceptedContext = generateOperationId();
+  writeFileSync(join(staging, `context-${acceptedContext}.lease`), "");
+  // An orphaned lease of no derivable shape inside the revisions directory.
+  writeFileSync(join(revisions, "stray.lease"), "");
+  // A derivable orphan lease still collects: only the unprovable ones change.
+  const derivable = generateOperationId();
+  TreeLease.take(join(revisions, `.prepare-${"f".repeat(64)}-${derivable}`)).release();
+  const acceptedId = acceptedContext;
+  const collection = collectUnacceptedArtifacts(stateRoot, {
+    getOperationById: (id: string) => (id === acceptedId ? { id } as never : null),
+  });
+  const keptPaths = collection.kept.map(entry => entry.path);
+  const stagingMystery = join(staging, "mystery.lease");
+  const stagingAccepted = join(staging, `context-${acceptedContext}.lease`);
+  const revisionStray = join(revisions, "stray.lease");
+  assert.ok(keptPaths.includes(stagingMystery), `underivable staging lease reported: ${JSON.stringify(collection.kept)}`);
+  assert.ok(keptPaths.includes(stagingAccepted), `accepted-operation staging lease reported: ${JSON.stringify(collection.kept)}`);
+  assert.ok(keptPaths.includes(revisionStray), `underivable revisions lease reported: ${JSON.stringify(collection.kept)}`);
+  assert.equal(collection.kept.find(entry => entry.path === stagingAccepted)?.reason, "its operation is accepted");
+  assert.ok(collection.removed.includes(join(revisions, `.prepare-${"f".repeat(64)}-${derivable}`)),
+    "a derivable orphan lease still collects");
+  assert.equal(existsSync(stagingMystery), true, "reported residue is kept, not removed");
+  assert.equal(existsSync(stagingAccepted), true);
+  assert.equal(existsSync(revisionStray), true);
 });
 
 test("AV-20261003-20: startup contains a recoverable non-mail failure like the sweep does", async t => {

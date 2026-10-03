@@ -1,6 +1,11 @@
 import type { PreparedBatch } from "../../implementation/contracts.js";
 import { StoreError } from "../domain/errors.js";
 
+/** The smallest batch that can carry both established priority classes at
+ * once: one direct and one public message. A configuration below it starves
+ * an actor whose pending mail is mixed (AV-07 family). */
+export const MIN_MIXED_BATCH_MESSAGES = 2;
+
 /** Input is the ledger's oldest-first sequence. Preserve order within each
  * established priority class; direct first, public second, then alternate.
  */
@@ -15,7 +20,8 @@ export function selectBatch<T>(pending: Iterable<{ value: T; publicList: boolean
   }
   if (direct.length === 0) return publicList;
   if (publicList.length === 0) return direct;
-  if (maximum < 2) throw new StoreError("UNSUPPORTED_PROFILE", "batchMaxMessages must be at least 2 when both batch classes are pending");
+  if (maximum < MIN_MIXED_BATCH_MESSAGES)
+    throw new StoreError("UNSUPPORTED_PROFILE", `batchMaxMessages must be at least ${MIN_MIXED_BATCH_MESSAGES} when both batch classes are pending`);
   const output: T[] = [direct[0]!, publicList[0]!];
   let di = 1; let pi = 1; let takeDirect = true;
   while (output.length < maximum && (di < direct.length || pi < publicList.length)) {

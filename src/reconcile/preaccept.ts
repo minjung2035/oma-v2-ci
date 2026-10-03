@@ -77,7 +77,12 @@ export function collectUnacceptedArtifacts(stateRoot: string, store: Pick<Store,
       const tree = name.slice(0, -".lease".length);
       if (present.has(tree)) continue;
       const context = tree.startsWith("context-") ? parseOperationId(tree.slice("context-".length)) : null;
-      if (tree.startsWith("quarantine-ns-") || (context !== null && accepted(context) === null)) leased(join(staging, tree), "a preparation lease without its tree");
+      if (tree.startsWith("quarantine-ns-") || (context !== null && accepted(context) === null))
+        leased(join(staging, tree), "a preparation lease without its tree");
+      // An unprovable name is reported and kept, like every other name this
+      // collection does not derive: silently dropping it would hide residue.
+      else kept.push({ path: join(staging, name), reason: context === null
+        ? "not a name this broker derives" : "its operation is accepted" });
       continue;
     }
     const path = join(staging, name);
@@ -121,8 +126,12 @@ export function collectUnacceptedArtifacts(stateRoot: string, store: Pick<Store,
     if (operation === null || lstatSync(path, { throwIfNoEntry: false })?.isDirectory() !== true) {
       if (name.endsWith(".lease") && operation !== null && !revisionEntries.has(tree))
         leased(path, "a preparation lease without its tree");
-      else if (tree.startsWith(".prepare-"))
-        kept.push({ path, reason: "not a name this broker derives" });
+      // A revision directory is named by its oid; anything else this block
+      // reaches -- an orphaned lease of another shape, a name the grammar
+      // does not derive, a stray file wearing an oid's name -- is unprovable
+      // and is reported and kept rather than dropped invisibly.
+      else
+        kept.push({ path: join(revisions, name), reason: "not a name this broker derives" });
       continue;
     }
     if (name.endsWith(".lease")) continue; // the tree's own entry decides it and its lease

@@ -12,6 +12,8 @@ import { encodeFrame } from "../src/frame.js";
 import { readLeadingFrame, type FramedPeer } from "../src/platform/rpc.js";
 import type { SessionLauncher } from "../src/platform/guest/host.js";
 import { archiveKey, HostService } from "../src/platform/host/service.js";
+import { ProcessLock } from "../src/runtime/process-lock.js";
+import { StoreError } from "../src/domain/errors.js";
 import { newHostRecord, readHostRecord, writeHostRecord } from "../src/platform/host/record.js";
 import { HOST_GUEST_PROTOCOL, PLATFORM_FRAME_BYTES } from "../src/protocol/host-guest.js";
 import { HOST_API_VERSION } from "../src/protocol/host-api.js";
@@ -260,4 +262,23 @@ test("AV-22/P0-2: two archive-key asks on an empty store make one key, not two w
   assert.ok(first.equals(second) && second.equals(third), "every ask got the one stored key, not its own");
   assert.equal(items.size, 1, "one archive key was written");
   assert.equal(items.get("archive"), first.toString("base64"));
+});
+
+test("P0-2: an archive-key ask against a held writer lock refuses in bounded time", async t => {
+  // The audited code waited on ProcessLock.tryAcquire in an unbounded loop:
+  // a live holder that never releases spun forever and the ask never came
+  // back. The wait is now deadline-bounded like every other wait this
+  // service makes; on expiry it reports the honest unavailable.
+  const dir = mkdtempSync(join(tmpdir(), "oma-archivekey-lock-"));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  const lockPath = join(dir, "archive-key.lock");
+  const held = ProcessLock.acquire(lockPath);
+  t.after(() => held.close());
+  const keychain = memoryKeychain();
+  const started = Date.now();
+  await assert.rejects(archiveKey(keychain, lockPath, 100),
+    (error: unknown) => error instanceof StoreError && error.code === "BROKER_UNAVAILABLE",
+    "a still-held lock is a bounded refusal, not a forever wait");
+  assert.ok(Date.now() - started < 10_000, "the refusal returned promptly");
+  assert.equal(keychain.items.size, 0, "no key was generated behind a held lock");
 });

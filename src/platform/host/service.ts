@@ -71,20 +71,33 @@ function assertRoom(dir: string, incoming: number, floor: number): void {
     throw new StoreError("STORAGE_FULL", "the Mac does not have room for this; free some space and try again");
 }
 
+/** The cross-process writer-lock wait is bounded like every other wait this
+ * service makes: a live holder that never releases must surface an honest
+ * unavailable, never spin forever. */
+export const ARCHIVE_KEY_LOCK_WAIT_MS = 30_000;
+
 /** The archive key: made once on this Mac and kept in the Keychain (§8.4).
  * Its creation is the serialized create-if-absent the credentials use
  * (AV-22): one in-process writer, then the cross-process lock, then a reread
  * under it -- so two callers can never write two keys, the loser's archives
- * opening with nothing (P0-2/4). */
-export async function archiveKey(keychain: KeychainStore, lockPath: string): Promise<Buffer> {
+ * opening with nothing (P0-2/4). The lock wait itself is bounded
+ * (ARCHIVE_KEY_LOCK_WAIT_MS): contention past the deadline is
+ * BROKER_UNAVAILABLE, not a hang. */
+export async function archiveKey(keychain: KeychainStore, lockPath: string,
+    waitMs = ARCHIVE_KEY_LOCK_WAIT_MS): Promise<Buffer> {
   const stored = await keychain.get("archive");
   if (stored !== undefined) return Buffer.from(stored, "base64");
   return serialized(lockPath, async () => {
     const again = await keychain.get("archive");
     if (again !== undefined) return Buffer.from(again, "base64");
     ensureUserDirectory(dirname(lockPath));
+    const deadline = performance.now() + waitMs;
     let lock: ProcessLock | null;
-    while ((lock = ProcessLock.tryAcquire(lockPath)) === null) await pause(25);
+    while ((lock = ProcessLock.tryAcquire(lockPath)) === null) {
+      if (performance.now() >= deadline)
+        throw new StoreError("BROKER_UNAVAILABLE", "another process still holds the archive key lock");
+      await pause(25);
+    }
     const held = lock;
     return withAsyncCleanup(async () => {
       const fenced = (writer: KeychainStore): Promise<Buffer> => (async () => {

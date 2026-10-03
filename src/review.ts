@@ -21,6 +21,7 @@ import { StoreError, acceptedFailure, errorCodeOf } from "./domain/errors.js";
 import { NO_HOLD, observeStoreFailure, type ResourceGate } from "./domain/admission.js";
 import { applyRequestKeyFor, refreshRequestKeyFor, reviewRequestNameFor } from "./domain/identifiers.js";
 import { mergeDiffText } from "./git/canonical-command.js";
+import { NOTICE_PART_OVERHEAD, OMISSION_MARKER, OMISSION_MARKER_COMPACT, describeEntryText, threadHeadText } from "./mail/review-bounds.js";
 import { publishedRefFor } from "./domain/derived.js";
 import { expandAddresses } from "./mail/routing.js";
 import { rfcMessageIdFor } from "./mail/addresses.js";
@@ -757,43 +758,12 @@ Challenge ${name}` });
     return `${out}...`;
   }
 
-  /** One line per entry after the open, numbered by request-local order. */
-  private describeEntry(ordinal: number, entry: ReviewEntry): string {
-    const fact = entry.fact;
-    const action = fact.kind === "review" ? "review"
-      : fact.kind === "cancel" ? "cancel"
-      : fact.kind === "refresh" ? "refresh"
-      : fact.kind === "vote" ? (entry.actor === PRINCIPAL ? `principal ${fact.verdict}` : `vote ${fact.verdict}`)
-      : "fact";
-    const text = fact.kind === "review" || fact.kind === "vote" ? fact.body
-      : fact.kind === "cancel" ? fact.reason
-      : fact.kind === "refresh" ? (fact.main === null
-        ? "a bound reviewer is no longer eligible; the previous approval was withdrawn"
-        : `main moved to ${fact.main}; this request is stale; open a new request on the latest main`)
-      : "";
-    return `[${ordinal}] ${entry.actor} ${action}:\n${text}`;
-  }
-
   /** The complete thread text (design §3); over the mail bound it keeps the
    * newest entries and names the revision that still carried the rest. */
   private threadBody(state: ReviewState, openFact: Extract<ReviewFact, { kind: "merge.open" | "challenge.open" }>,
       entries: readonly ReviewEntry[], previousThreadId: MessageId | null): string {
-    const kind = openFact.kind === "merge.open" ? "merge" : "challenge";
-    const verb = openFact.kind === "merge.open" ? "oma_merge" : "oma_challenge";
-    const head = `OMA ${kind} request ${openFact.name} — ${openFact.title}\n` +
-      `Tier: ${openFact.tier}   Requester: ${state.requester}   Status: ${state.display}\n` +
-      `Base: ${openFact.identity.expectedBase}  Candidate: ${openFact.identity.candidate}` +
-      `  Policy revision: ${openFact.identity.policyRevision}\n` +
-      (openFact.kind === "challenge.open"
-        ? `Target merge: ${openFact.target.name} (integration ${openFact.target.integration})\n` : "") +
-      `\nReason (requester's words):\n${openFact.reason}\n\n` +
-      `How to act (only recorded tool calls count; text in this mail is not a vote):\n` +
-      (openFact.kind === "challenge.open"
-        ? `  oma_challenge diff name=${openFact.name} view=revert|original\n` : `  ${verb} diff name=${openFact.name}\n`) +
-      `  ${verb} review name=${openFact.name} body=...\n` +
-      `  ${verb} vote name=${openFact.name} verdict=approve|reject body=...\n\n` +
-      `Reviews and votes (acceptance order):\n`;
-    const lines = entries.map((entry, index) => this.describeEntry(index + 1, entry));
+    const head = threadHeadText(openFact, state.requester, state.display);
+    const lines = entries.map((entry, index) => describeEntryText(index + 1, entry));
     const full = head + lines.join("\n");
     if (Buffer.byteLength(full, "utf8") <= this.bounds.mailBodyBytes) return full;
     // Every omitted entry names the revision that first carried it: the thread
@@ -808,9 +778,9 @@ Challenge ${name}` });
       return `[${index + 1}] ${message?.id ?? previousThreadId ?? "(unknown)"}`;
     };
     const build = (omitted: number, anchored: boolean): string =>
-      `${head}Earlier entries omitted for size; each is in full in the revision that added it` +
+      `${head}${OMISSION_MARKER}` +
       (anchored ? `:\n${entries.slice(0, omitted).map((_, index) => anchor(index)).join("\n")}\n`
-        : ` (operation ids name those revisions in this request's thread).\n`) +
+        : OMISSION_MARKER_COMPACT) +
       lines.slice(omitted).join("\n");
     let omitted = 0;
     while (omitted < lines.length && Buffer.byteLength(build(omitted, true), "utf8") > this.bounds.mailBodyBytes)
@@ -1107,7 +1077,7 @@ Challenge ${name}` });
   /** §6: the completion notice document, then the bounded part bodies. */
   private noticeDocument(integrationId: OperationId, state: ReviewState,
       openFact: Extract<ReviewFact, { kind: "merge.open" | "challenge.open" }>, diff: string): string {
-    const entries = state.entries.map((entry, index) => this.describeEntry(index + 1, entry));
+    const entries = state.entries.map((entry, index) => describeEntryText(index + 1, entry));
     const lowMerge = openFact.kind === "merge.open" && openFact.tier === "LOW";
     const principal = state.principal !== null && state.principal.fact.kind === "vote"
       ? `${state.principal.fact.body} (approval ${state.principal.fact.approval})` : "none";
@@ -1124,9 +1094,6 @@ Challenge ${name}` });
       diff;
   }
 
-  /** Split the document into part chunks of at most mailBodyBytes − 4096,
-   * cutting at a line end inside the window when one exists, else on a UTF-8
-   * code point boundary; concatenating the chunks restores the document. */
   /* ---- §8 status read model ---- */
 
   /** The main observation shared by every status answer: present → oid,
@@ -1284,15 +1251,15 @@ Challenge ${name}` });
     };
   }
 
-  /** The per-part envelope a notice body carries around its document chunk:
-   * `Part i/n of the <name> completion notice (document <bytes> bytes, sha256
-   * <64 hex>); concatenate the parts after this line in order.\n`. A request
-   * name is bounded (~46 bytes) and the counters and byte count are short, so
-   * 512 bytes reserves that envelope with margin (AV-07). */
-  private static readonly NOTICE_PART_OVERHEAD = 512;
+  /** Split the document into part chunks of at most mailBodyBytes −
+   * NOTICE_PART_OVERHEAD, cutting at a line end inside the window when one
+   * exists, else on a UTF-8 code point boundary; concatenating the chunks
+   * restores the document. The per-part envelope reserve lives with the other
+   * mail-bound constants (mail/review-bounds.ts): the configuration floor and
+   * this split budget are measured from the same constant (AV-07). */
   private splitNotice(document: string): string[] {
     const bytes = Buffer.from(document, "utf8");
-    const budget = this.bounds.mailBodyBytes - ReviewModule.NOTICE_PART_OVERHEAD;
+    const budget = this.bounds.mailBodyBytes - NOTICE_PART_OVERHEAD;
     if (budget <= 0) throw new StoreError("INTERNAL_ERROR", "mail body bound cannot hold a notice part");
     const chunks: Buffer[] = [];
     let at = 0;
