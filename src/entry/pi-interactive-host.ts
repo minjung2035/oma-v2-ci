@@ -65,7 +65,7 @@ const COMMAND_WORDS: Readonly<Record<string, string>> = Object.freeze({
 /** The engine's commands that mean nothing in oma, or would mix another
  * product's state into it, and what is said instead. */
 export const NOT_IN_OMA: Readonly<Record<string, string>> = Object.freeze({
-  trust: "oma loads no project resources (extensions, skills, prompts or context files), so there is no project trust to save.",
+  trust: "oma loads no project-local resources in a Society session -- its extensions, skills, prompts and context files come from its role and the installed packages -- so there is no project trust to grant.",
   // The engine's report uploads the session -- the Principal's conversation
   // and its mail -- to the engine's developers, who do not make oma.
   bug: "oma does not send its sessions to the bundled engine's developers.",
@@ -512,9 +512,9 @@ export async function runInteractive(): Promise<void> {
     } });
     const reload = services.resourceLoader.reload.bind(services.resourceLoader);
     services.resourceLoader.reload = async options => { modules!.refresh(extensions); await reload(options); };
-    // Skills are discovered again; their commands come with them. The persisted
-    // pin in the engine's settings file predates that, so the override says on.
-    services.settingsManager.applyOverrides({ enableInstallTelemetry: false, enableAnalytics: false, enableSkillCommands: true });
+    // Skills are discovered and their commands come with them: the engine's
+    // persisted settings file carries no suppression (preparePiInteractive
+    // scrubs the old pin), so no override is needed here.
     const modelName = argv.includes("--model") ? flag("--model") : undefined;
     const split = modelName?.indexOf("/") ?? -1;
     const model = modelName === undefined ? undefined
@@ -565,9 +565,10 @@ export async function runInteractive(): Promise<void> {
     catch (cleanup) { error = new AggregateError([error, cleanup], "Interactive failure and cleanup failed"); }
     await fatal(prefix, error);
   };
-  // OMA loads no project resources (no project extensions, skills, prompts or
-  // context files), so Pi's project-trust warning has nothing to warn about.
-  // It appeared only because the engine's HOME is the Principal's scratch.
+  // A Society session never loads project-local resources -- the settings
+  // manager above is made with projectTrusted:false as its explicit decision
+  // -- so Pi's project-trust warning has nothing to warn about. It appeared
+  // only because the engine's HOME is the Principal's scratch.
   (mode as unknown as { renderProjectTrustWarningIfNeeded(): void }).renderProjectTrustWarningIfNeeded = () => {};
   // oma is not the engine's product: no hint to report a failed turn to the
   // engine's developers, and a crash is resumed with /resume, not `pi -r`.

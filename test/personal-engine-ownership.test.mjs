@@ -11,7 +11,7 @@ const code = ts.transpileModule(readFileSync('src/entry/pi-personal.ts', 'utf8')
 }).outputText.replaceAll('import.meta.url', '"file:///fixture/dist/src/entry/pi-personal.js"')
   .replace(/main\(\)\.catch\([\s\S]*$/, 'module.exports.main = main;');
 const flush = async () => { for (let i = 0; i < 30; i++) await Promise.resolve(); };
-function world({ fail, close, dispose, run, construct, catalog, beforeSwitch, sendError, resourceReload, moduleClose } = {}) {
+function world({ fail, close, dispose, run, construct, catalog, beforeSwitch, sendError, resourceReload, moduleClose, needsTrust, trusted } = {}) {
   const calls = [], hooks = {}, writes = [], commands = {}, picks = [];
   const birth = { id: 'personal-id', mode: 'personal', cwd: '/fixture/work', history: '/fixture/history' };
   const manager = { getCwd: () => birth.cwd, getSessionDir: () => birth.history };
@@ -19,7 +19,7 @@ function world({ fail, close, dispose, run, construct, catalog, beforeSwitch, se
     async emit(event) { calls.push(event.type); if (event.type === 'session_before_switch' && beforeSwitch) return beforeSwitch(event); return hooks[event.type]?.(event, context); },
   }, async abort() { calls.push('abort'); if (fail === 'abort') throw new Error('injected abort'); }, dispose() {} };
   const context = { ui: { setStatus() {}, setHeader(factory) { factory?.({}, { fg: (_color, text) => text }).render(80); }, setFooter() {}, notify(...args) { calls.push(['notice', ...args]); },
-    select() { return new Promise(resolve => picks.push({ choose: resolve })); },
+    select(_title, rows) { return new Promise(resolve => picks.push({ rows, choose: resolve })); },
     custom(factory) { return new Promise(resolve => picks.push(factory({ requestRender() {} }, {}, {}, resolve))); },
   } };
   const runtime = { session, services: undefined,
@@ -61,24 +61,32 @@ function world({ fail, close, dispose, run, construct, catalog, beforeSwitch, se
     'node:path': path, 'node:module': { createRequire: () => ({ resolve: () => '/fixture/open-tui/package.json' }) },
     '@earendil-works/pi-coding-agent': {
       VERSION: 'fixture-engine', InteractiveMode: Mode, DefaultResourceLoader: Loader,
+      // C19: the fixture records the trust decision the entry would persist.
+      ProjectTrustStore: class { constructor() { this.values = new Map(trusted === undefined ? [] : [[birth.cwd, trusted]]); } get(cwd) { return this.values.get(cwd); } set(cwd, value) { this.values.set(cwd, value); calls.push(['trust', cwd, value]); } },
+      hasTrustRequiringProjectResources: () => needsTrust === true,
       async createAgentSessionRuntime(factory) {
         calls.push('runtime-create'); if (fail === 'runtime') throw new Error('injected runtime');
         const result = await factory({ cwd: birth.cwd, sessionManager: manager }); runtime.services = result.services; return runtime;
       },
       async createAgentSessionServices(options) {
         options.resourceLoaderOptions.extensionFactories[0]({ registerCommand(name, command) { commands[name] = command; }, registerShortcut() {}, on(event, handler) { hooks[event] = handler; } });
+        calls.push(['project-trusted', options.settingsManager.createOptions?.projectTrusted]);
         if (fail === 'services') throw new Error('injected services');
         const resourceLoader = new Loader(options.resourceLoaderOptions); resourceLoader.loaded = true;
         return { settingsManager, resourceLoader, diagnostics: [] };
       },
       async createAgentSessionFromServices() { if (fail === 'session') throw new Error('injected session'); return { session }; },
-      SettingsManager: { create: () => settingsManager }, SessionManager: { create: () => manager, open: () => manager, async listAll() { return []; } },
+      SettingsManager: { create: (_cwd, _dir, opts) => Object.assign(settingsManager, { createOptions: opts, setProjectTrusted(value) { calls.push(['set-trusted', value]); } }) },
+      SessionManager: { create: () => manager, open: () => manager, async listAll() { return []; } },
       SessionSelectorComponent: class { constructor(load, _all, choose, cancel, quit) { Object.assign(this, { load, choose, cancel, quit }); } },
+      ModelSelectorComponent: class { constructor(_tui, _model, _runtime, _scoped, done) { calls.push('model-selector'); done(undefined); } },
+      ThinkingSelectorComponent: class { constructor(_level, _levels, done) { done(undefined); } },
     },
     '../domain/errors.js': { StoreError: class extends Error { constructor(code, message) { super(message); this.code = code; } } },
     '../runtime/session-mode.js': { readSessionBirth: () => birth },
     '../runtime/session-catalog.js': { async sessionBirthForHistory(file) { return catalog ? catalog(file) : birth; }, sessionHistoryDirectories: () => [] },
-    '../runtime/personal-settings.js': { personalExtensions: () => ({ extensions: [], missing: [] }), updatePersonalSettings: () => ({ extensions: [] }) },
+    '../runtime/personal-settings.js': { personalExtensions: () => ({ extensions: [], missing: [] }), updatePersonalSettings: () => ({ extensions: [] }),
+      personalExtensionEntry: input => path.isAbsolute(input) ? `local:${input}` : input },
     '../runtime/pi-packages.js': { readPackageIndex: () => [] },
     '../runtime/extension-integrity.js': { assertExtensionIntegrity() {}, verifiedPaths: () => [] },
     '../runtime/extension-modules.js': { ExtensionModules: class {
@@ -235,4 +243,53 @@ test('Personal engine: branding reads the installed package version rather than 
   w.context.ui.setHeader(() => ({ render: () => [], invalidate() {} }));
   assert.ok(w.calls.some(value => Array.isArray(value) && value[0] === 'brand' && value[1] === 'fixture-version'));
   finish(); await main;
+});
+test('#6: Personal registers only its own command -- the engine keeps /import and the rest of its surface', async () => {
+  let loader;
+  const w = world({ run: async ({ runtime }) => { loader = runtime.services.resourceLoader; } });
+  await w.main();
+  assert.deepEqual(Object.keys(w.commands), ['oma'], 'Personal must not shadow an engine command');
+  assert.equal(w.commands.import, undefined, '/import stays the engine\'s own');
+  const options = loader.options;
+  // Extensions stay pinned to the selected files; every other resource
+  // surface is the engine's ordinary discovery -- no suppression options.
+  assert.equal(options.noExtensions, true);
+  for (const key of Object.keys(options))
+    assert.ok(!/^(no|disable|exclude)/i.test(key) || key === 'noExtensions',
+      `a suppressed resource surface reached Personal: ${key}`);
+});
+test('C19: Personal\'s project trust is the recorded decision -- never silent, never default', async () => {
+  for (const [needsTrust, trusted, expected] of [
+    [false, undefined, true],   // nothing gated: trivially trusted, as Pi itself rules
+    [true, undefined, false],   // gated folder, no recorded decision: untrusted
+    [true, true, true],         // the Human trusted this folder
+    [true, false, false],       // the Human explicitly untrusted it
+  ]) {
+    const w = world({ needsTrust, trusted });
+    await w.main();
+    assert.deepEqual(w.calls.filter(c => Array.isArray(c) && c[0] === 'project-trusted'),
+      [['project-trusted', expected]], `needsTrust=${needsTrust} trusted=${trusted}`);
+  }
+});
+test('C19: the trust row appears only for a folder holding gated resources, and persists then applies', async () => {
+  // No gated resources: the menu offers no trust row, so there is nothing
+  // the decision would change.
+  let w = world({ needsTrust: false, run: async ({ commands }) => { await commands.oma.handler('', w.context); } });
+  let done = w.main(); await flush();
+  assert.deepEqual([...w.picks[0].rows].map(String), ['Model / effort', 'Extensions', 'Back']);
+  w.picks[0].choose('Back');
+  await done;
+
+  // A gated folder, untrusted: the row is offered; choosing trust persists the
+  // decision, applies it to the live settings manager and reloads.
+  w = world({ needsTrust: true, trusted: undefined, run: async ({ commands }) => { await commands.oma.handler('', w.context); } });
+  done = w.main(); await flush();
+  assert.equal(w.picks[0].rows.some(row => String(row).startsWith('Project trust')), true);
+  w.picks[0].choose(w.picks[0].rows.find(row => String(row).startsWith('Project trust')));
+  await flush();
+  w.picks[1].choose('Trust this project');
+  await done;
+  assert.deepEqual(w.calls.filter(c => Array.isArray(c) && c[0] === 'trust'), [['trust', '/fixture/work', true]]);
+  assert.deepEqual(w.calls.filter(c => Array.isArray(c) && c[0] === 'set-trusted'), [['set-trusted', true]]);
+  assert.equal(w.calls.includes('resources-bound'), true, 'the session reloads so the loader re-resolves with it');
 });

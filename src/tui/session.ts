@@ -177,8 +177,10 @@ export interface SessionSink {
   readonly onPromptUnconfirmed?: (text: string, reason: string) => void;
 }
 
-/** Mirrors the Resident adapter's discovery blocking. A flag removed here would
- * let a Pi surface reach the product UI (TUI-014).
+/** Mirrors the Resident adapter's remaining blocking: approval prompts,
+ * extension discovery and the shell/write tools stay suppressed (TUI-014).
+ * Context files, skills and prompt templates are discovered and filtered by
+ * the trusted extension instead (C15–C17).
  */
 /** TUI-004: the Principal runs under the same role contract as a Resident —
  * its model, extensions, prompt and tool surface come from its role in the

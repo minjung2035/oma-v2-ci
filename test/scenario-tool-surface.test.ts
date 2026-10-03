@@ -66,7 +66,7 @@ for (const role of ["principal", "resident"] as const) for (const mode of ["vali
           assert.notEqual(result.code, 0, "a refused surface must end the activation");
         }
         assert.equal(seen.length, 0, "the model was never asked to run a turn");
-        assert.equal(s.store.getOperation(role === "principal" ? "principal" : "worker-a", "surface-mail"), undefined,
+        assert.equal(s.store.getOperation(role === "principal" ? "principal" : "worker-a", "surface-mail"), null,
           "nothing ran under a surface that failed validation");
       }
     });

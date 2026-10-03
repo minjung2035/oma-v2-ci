@@ -65,7 +65,7 @@ new-operations/
 }
 ```
 
-각 role 파일은 다음 세 필드를 필수로 가지며, 선택 필드는 아래 "Role별 tool 표면 투영"의 `toolSurface` 하나뿐이다. 그 밖의 필드는 거절한다.
+각 role 파일은 다음 세 필드만 가진다. 그 밖의 필드는 거절한다. (이전에는 선택 필드 `toolSurface`가 있었으나, 표면 투영은 OMA의 내부 정책이므로 이제 설정에 두지 않는다 — D23.)
 
 - `agentProfile`: 기존 host 설정의 동일 프로필 객체. `modelProfile`로 `models.json`의 모델을 선택한다. capabilities/delegable/childProfile/resources는 기존 필수 계약을 유지한다.
 - `extensions`: 설치 `installation.libdir` 아래의 상대 JS/TS 파일 목록. 첫 항목은 항상 `dist/src/pi-extension.js`이며 생략·중복·자동 탐색은 허용하지 않는다. 예: `["dist/src/pi-extension.js", "extensions/verifier.js"]`.
@@ -182,37 +182,15 @@ OMA는 Pi 엔진을 함께 배포하고 그것만 실행한다. `PATH`에서 Pi�
 
 동봉 엔진은 수정하지 않는다. 제품 동작은 신뢰된 core extension이 소유한다.
 
-## Role별 tool 표면 투영
+## Tool 표면 (OMA 내부 정책)
 
-각 role 파일은 선택적으로 `toolSurface` 블록을 가질 수 있다. extension을 켜는 것과 그 extension의 tool을 모델에게 어떻게 보일지를 분리하는 설정이며, 새 권한 종류나 wire/DB schema를 만들지 않는다.
+Tool 표면 투영은 더 이상 role 설정이 아니다(D23). 모델에게 보이는 tool 집합의 표현은 OMA가 소유하는 정책이고, 신뢰된 core extension만이 `OMA_TOOL_SURFACE` 환경 변수의 인코딩된 계획을 읽어 적용한다. 어떤 role 파일 필드도 이 표면을 선언할 수 없으며, 선언된 필드가 있으면 설정 로드가 거절된다.
 
-```json
-{
-  "agentProfile": { "...": "기존과 동일" },
-  "extensions": ["dist/src/pi-extension.js", "extensions/browser.js"],
-  "promptFile": "prompts/resident.md",
-  "toolSurface": {
-    "defaultMode": "DISABLED",
-    "direct": ["read", "grep"],
-    "disabled": ["dangerous_tool"],
-    "groups": [
-      { "name": "web", "description": "웹 조회 도구", "members": [{ "tool": "fetch" }, { "group": "browser" }] },
-      { "name": "browser", "description": "브라우저 제어", "members": [{ "tool": "click" }, { "tool": "screenshot" }] }
-    ],
-    "roots": ["web"]
-  }
-}
-```
+표면 계획 자체는 변하지 않았다: `defaultMode`(`DIRECT`/`DISABLED`), `direct`/`disabled` 이름 목록, tool과 하위 group의 명시 참조로만 이루어진 `groups`, 진입점 `roots`. 모델이 group을 열면 **직계 자식만** 추가로 활성화된다. 열기는 활성화이지 실행이 아니며, 드러난 tool은 Pi가 자기 pipeline으로 직접 실행한다.
 
-- `defaultMode`는 `DIRECT` 또는 `DISABLED`이며 생략하면 `DIRECT`다. 여기 이름이 없는 tool이 따르는 기본값이다.
-- `direct`는 처음부터 보이는 tool, `disabled`는 등록되어 있어도 활성화하지 않는 tool이다.
-- `groups`의 member는 `{"tool": ...}` 또는 `{"group": ...}`의 명시 참조뿐이다. 접두사나 패턴 매칭은 없다.
-- `roots`를 생략하면 아무도 중첩하지 않은 group이 진입점이 된다.
-- 모델이 group을 열면 **직계 자식만** 추가로 활성화된다. 열기는 활성화이지 실행이 아니며, 드러난 tool은 Pi가 자기 pipeline으로 직접 실행한다.
+엔진 안에서는 시작 시점 검증이 최종 게이트다. 선언된 이름이 registry에 없거나, group 이름이 등록된 tool과 충돌하거나, 활성화가 지시한 대로 적용되지 않으면 세션은 시작되지 않고 엔진이 명시적으로 종료된다(#5). 침묵하는 축소 적용은 없다. 한편 그 호출 경계는 어떤 tool이 실제로 실행될 수 있는지를 이름이 아니라 출처로 판정한다(D25): builtin이거나, 기록된 SHA-256을 다시 확인한 뒤 spawn argv가 고정한 확장 파일에서 온 tool만 허용된다.
 
-cycle, 중복 소속, 알 수 없는 참조, 한도 초과(group 32개, group당 member 16개, 깊이 4)는 **설정을 읽는 시점에** 거절한다. 블록을 생략하면 별도 표면 설정은 적용하지 않는다. Society Principal은 [DR29](design-revisions.md#dr29--complete-candidate-checks-and-apply-principal-roles-at-execution-boundaries)의 role 제한을 먼저 적용하고 실행 시에도 검사한다. toolSurface 설정이나 동적 group 열기로 그 제한을 해제하지 않는다. 다음 merge/review 도구 설계는 [merge-review-spec](merge-review-spec.md)에 있으며 현재 도구 설정으로 구현 완료를 뜻하지 않는다.
-
-이 설정은 표면 표현만 바꾼다. 실제 권한은 sandbox mount/FD/network와 capability가 정하므로, 표면에서 감출 수 있다는 이유로 위험한 extension을 role에 추가하지 않는다. extension 파일 자체의 신뢰·SHA-256 재검증 요구는 그대로 적용된다.
+표면 표현은 권한이 아니다. 실제 권한은 sandbox mount/FD/network와 capability가 정한다. extension 파일 자체의 신뢰·SHA-256 재검증 요구는 그대로 적용된다. Society Principal은 [DR29](design-revisions.md#dr29--complete-candidate-checks-and-apply-principal-roles-at-execution-boundaries)의 role 제한을 먼저 적용하고 실행 시에도 검사한다.
 
 ## 지원과 업그레이드
 

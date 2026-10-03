@@ -126,6 +126,10 @@ export function packageCommand(args: readonly string[], macProject = false): Pac
   }
   if (!given.has("--help") && (command === "install" || command === "remove")) {
     if (positional.length !== 1) return refused(`oma pi ${name} takes one source.`);
+    // C20: a local package is used where it lies (`local:` source, never
+    // copied), so nothing it contributes can be indexed inside the store --
+    // it stays refused for every scope. Personal accepts a local extension
+    // directly instead, as a digest-pinned `local:` entry (personal-settings).
     if (command === "install" && !REMOTE_SOURCE.test(positional[0]!))
       return refused("A local path is used where it lies, which a Worker's sandbox cannot see; install an npm: or git: source.");
   }
@@ -145,7 +149,7 @@ export function packageStoreRoot(store: string): string | null {
 /** A `packages:`-prefixed normalized relative path under the store. Unlike an
  * extension entry a resource may be a directory or a file of any kind, so the
  * suffix rule does not apply; containment and spelling still do. */
-function resourceEntryProblem(entry: unknown): string | null {
+export function resourceEntryProblem(entry: unknown): string | null {
   if (typeof entry !== "string" || !entry.startsWith(PACKAGE_ENTRY_PREFIX))
     return "package resource must be a packages: path";
   const path = entry.slice(PACKAGE_ENTRY_PREFIX.length);

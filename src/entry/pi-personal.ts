@@ -11,7 +11,7 @@ import { createAgentSessionRuntime, createAgentSessionServices, createAgentSessi
 import { StoreError } from "../domain/errors.js";
 import { readSessionBirth } from "../runtime/session-mode.js";
 import { sessionBirthForHistory, sessionHistoryDirectories } from "../runtime/session-catalog.js";
-import { personalExtensions, updatePersonalSettings, type PersonalSettingsLocation } from "../runtime/personal-settings.js";
+import { personalExtensions, personalExtensionEntry, updatePersonalSettings, type PersonalSettingsLocation } from "../runtime/personal-settings.js";
 import { readPackageIndex } from "../runtime/pi-packages.js";
 import { assertExtensionIntegrity, verifiedPaths } from "../runtime/extension-integrity.js";
 import { ExtensionModules } from "../runtime/extension-modules.js";
@@ -109,8 +109,11 @@ async function main(): Promise<void> {
     const rows = entries.map(entry => `${saved.extensions.includes(entry) ? "[on]" : "[off]"} ${entry}`);
     const picked = await ctx.ui.select("Personal extensions — reload to apply", [...rows, "Add extension path", "Back"]);
     if (!current(epoch) || picked === undefined || picked === "Back") return;
-    const entry = picked === "Add extension path" ? await ctx.ui.input("Extension entry (relative to installation, or packages:...)")
+    const raw = picked === "Add extension path" ? await ctx.ui.input("Extension entry (relative to installation, packages:..., or an absolute path)")
       : entries[rows.indexOf(picked)];
+    // C20: an absolute path is stored under its local: spelling so the saved
+    // entry is unambiguous next to installation- and store-relative ones.
+    const entry = raw === undefined ? undefined : personalExtensionEntry(raw);
     if (!entry || !current(epoch)) return;
     updatePersonalSettings(location, [], { entry, enabled: !saved.extensions.includes(entry) });
     ctx.ui.notify("Personal extension choice saved. Reloading this session to apply it.", "info");
@@ -196,9 +199,9 @@ async function main(): Promise<void> {
       // loader would reuse factories from before the file's verified update.
       await reload(reloadOptions);
     };
-    // Skills are discovered again; their commands come with them. The persisted
-    // pin in the engine's settings file predates that, so the override says on.
-    services.settingsManager.applyOverrides({ enableInstallTelemetry: false, enableAnalytics: false, enableSkillCommands: true });
+    // Skills are discovered and their commands come with them: the engine's
+    // persisted settings file carries no suppression (preparePiInteractive
+    // scrubs the old pin), so no override is needed here.
     // No excludeTools, workspace guard, role prompt, proxy or Society extension.
     try {
       const created = await createAgentSessionFromServices({ services, sessionManager: options.sessionManager,

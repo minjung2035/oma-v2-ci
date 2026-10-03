@@ -95,7 +95,8 @@ current host tenure alone is not serialization. The supported writer is the
 tenure-owning host. Cross-process independent managed writers and simultaneous
 manual edits are not supported. Shared input roles expand to per-profile copies
 without changing effective meaning. Validate the entire candidate; preserve
-permitted prompt/extension/toolSurface metadata, never coerce unrelated quotas.
+permitted prompt/extension metadata, never coerce unrelated quotas. (D23: tool
+surface is OMA-internal policy now, not authored role metadata.)
 
 Generation identity uses a new internal SHA-256 recipe over logical relative
 names and exact logical contents **before** embedding generation paths; include

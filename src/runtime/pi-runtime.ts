@@ -71,11 +71,18 @@ export function preparePiInteractive(agentDir: string): void {
   // The look of Open TUI's own preview is the default; what the Human then
   // chooses in /settings or /open-tui is kept. Telemetry to Pi stays off.
   prepareEngineFile(join(agentDir, "themes"), `${OMA_THEME_NAME}.json`, () => ({ ...OMA_THEME }));
-  prepareEngineFile(agentDir, "settings.json", settings => ({ ...settings,
-    theme: settings.theme ?? OMA_THEME_NAME,
-    hideThinkingBlock: settings.hideThinkingBlock ?? true, quietStartup: settings.quietStartup ?? true,
-    enableInstallTelemetry: false, enableAnalytics: false, enableSkillCommands: false, fullscreenExitOutput: "resume-hint",
-  }));
+  prepareEngineFile(agentDir, "settings.json", settings => {
+    // C16: skill commands are Pi's ordinary surface and stay enabled; an
+    // earlier suppression persisted in this file is scrubbed once here rather
+    // than pinned over again.
+    const scrubbed = { ...settings };
+    delete scrubbed.enableSkillCommands;
+    return { ...scrubbed,
+      theme: settings.theme ?? OMA_THEME_NAME,
+      hideThinkingBlock: settings.hideThinkingBlock ?? true, quietStartup: settings.quietStartup ?? true,
+      enableInstallTelemetry: false, enableAnalytics: false, fullscreenExitOutput: "resume-hint",
+    };
+  });
   // Ctrl+X is oma's settings; the engine's copy stays on /copy, and its
   // "clear all models" in the scoped-model list is left without a key.
   prepareEngineFile(agentDir, "keybindings.json", keys => ({ ...keys, "app.message.copy": keys["app.message.copy"] ?? [],

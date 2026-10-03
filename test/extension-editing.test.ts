@@ -84,7 +84,9 @@ test("V14B: a declared optional extension whose file is gone can be removed, and
     for (const name of ["keep-z.js", "gone.js", "keep-a.js"]) writeFileSync(join(dir, name), "export {};\n");
     f.edit("roles/resident.json", role => {
       role.extensions = [CORE_EXTENSION, "extensions/keep-z.js", "extensions/gone.js", "extensions/keep-a.js"];
-      role.toolSurface = { defaultMode: "DIRECT" };
+      // D23: a preserved unmodeled field lives inside agentProfile now -- the
+      // role file's own fields are closed, and toolSurface is refused outright.
+      (role.agentProfile as Record<string, unknown>).upstreamNote = { defaultMode: "DIRECT" };
     });
     loadConfiguration(f.path);
     rmSync(join(dir, "gone.js"));
@@ -100,7 +102,7 @@ test("V14B: a declared optional extension whose file is gone can be removed, and
     const repaired = loadConfigurationSnapshot(f.path);
     assert.deepEqual(repaired.authoredRoles.resident!.value.extensions,
       [CORE_EXTENSION, "extensions/keep-z.js", "extensions/keep-a.js"], "order and the other declarations are kept");
-    assert.deepEqual(repaired.authoredRoles.resident!.value.toolSurface, { defaultMode: "DIRECT" });
+    assert.deepEqual((repaired.authoredRoles.resident!.value.agentProfile as Record<string, unknown>).upstreamNote, { defaultMode: "DIRECT" });
     assert.equal(readExtensions(f.path, "principal", "resident").mode, "full");
   } finally { f.close(); }
 });

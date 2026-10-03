@@ -230,25 +230,27 @@ test("the tool surface fails closed when the host refuses to apply it", () => {
     version: 1, defaultMode: "DISABLED", direct: ["read"], disabled: ["danger"],
     grouped: ["fetch"], groups: [{ name: "web", description: "web", children: ["fetch"] }], roots: ["web"],
   });
+  // The real `fatal` ends the engine process; here it throws so the test host survives.
+  const fatal = (message: string): never => { throw new Error(message); };
   const previous = process.env.OMA_TOOL_SURFACE;
   try {
     process.env.OMA_TOOL_SURFACE = plan;
     const refusing = fakeHost({ setActiveTools() { throw new Error("host refused"); } });
     // Loading must succeed: an extension that throws while loading never loads.
-    assert.doesNotThrow(() => registerToolSurface(refusing as never, ["oma_mail_read"]));
+    assert.doesNotThrow(() => registerToolSurface(refusing as never, ["oma_mail_read"], { fatal }));
     assert.throws(() => refusing.start(), /could not be applied/,
       "a refused projection must not be swallowed");
 
     // A malformed plan must also fail loudly rather than leaving the surface as is.
     process.env.OMA_TOOL_SURFACE = "{not json";
     const malformed = fakeHost({ setActiveTools() { throw new Error("host refused"); } });
-    registerToolSurface(malformed as never, ["oma_mail_read"]);
-    assert.throws(() => malformed.start(), /could not be applied/);
+    registerToolSurface(malformed as never, ["oma_mail_read"], { fatal });
+    assert.throws(() => malformed.start(), /malformed/);
 
     // An unreadable active set must never be treated as empty.
     process.env.OMA_TOOL_SURFACE = plan;
     const blind = fakeHost({ getAllTools() { throw new Error("no registry"); } });
-    registerToolSurface(blind as never, ["oma_mail_read"]);
+    registerToolSurface(blind as never, ["oma_mail_read"], { fatal });
     assert.throws(() => blind.start(), /could not read the registered tools/);
   } finally {
     if (previous === undefined) delete process.env.OMA_TOOL_SURFACE;
@@ -264,7 +266,7 @@ test("the tool surface applies the projection when the host accepts it", () => {
       grouped: ["fetch"], groups: [{ name: "web", description: "web", children: ["fetch"] }], roots: ["web"],
     });
     const host = fakeHost();
-    registerToolSurface(host as never, ["oma_mail_read"]);
+    registerToolSurface(host as never, ["oma_mail_read"], { fatal: message => { throw new Error(message); } });
     assert.deepEqual(host.registered, [], "groups cannot overwrite tools before the complete registry is known");
     assert.deepEqual(host.active, ["read", "fetch", "danger"], "loading must not touch the active set");
     host.start();
