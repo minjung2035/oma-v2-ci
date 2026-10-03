@@ -112,6 +112,23 @@ export function omaTerminalTitle(session: string | undefined, project: string): 
 const DELIVERY_COMMAND = "oma-deliver";
 const commandName = (text: string): string => text.trim().slice(1).split(/\s/, 1)[0] ?? "";
 
+/** True for a Human's typing of the delivery command. It is refused before it
+ * could reach the engine: only OMA's own delivery, which owns the run it
+ * starts, may send `/${DELIVERY_COMMAND}`. */
+export function isDeliveryCommand(text: string): boolean {
+  return text.trim().startsWith("/") && commandName(text) === DELIVERY_COMMAND;
+}
+
+/** The options every RPC prompt is sent with, Human's or the delivery's.
+ * Expansion is the engine's own semantics: a Human's `/skill:name` or prompt
+ * template expands the way Pi's own UI expands it, and a registered extension
+ * command -- the delivery's `/oma-deliver` -- dispatches through the same
+ * upstream flag that gates it (agent-session's prompt runs extension commands
+ * only when expansion is on). */
+export function rpcPromptOptions(_message: string): { readonly source: "rpc"; readonly expandPromptTemplates: true } {
+  return { source: "rpc", expandPromptTemplates: true };
+}
+
 /** The project as the Human knows it: under their home, written from `~`. */
 function projectDisplay(path: string): string {
   const home = userInfo().homedir;
@@ -253,7 +270,7 @@ export async function runInteractive(): Promise<void> {
   const submit = (text: string): void => {
     // The delivery command presents a broker-prepared batch; only OMA's
     // delivery, which owns the run it starts, sends it.
-    if (text.trim().startsWith("/") && commandName(text) === DELIVERY_COMMAND) {
+    if (isDeliveryCommand(text)) {
       if (context?.ui.getEditorText() === "") context.ui.setEditorText(text);
       notify(`/${DELIVERY_COMMAND} is sent only by OMA's mail delivery.`, "warning"); return;
     }
@@ -459,7 +476,7 @@ export async function runInteractive(): Promise<void> {
     if (event.type !== "prompt" || typeof event.message !== "string" || typeof event.id !== "string") { die(); return; }
     let accepted = false;
     if (!runtime) { die(); return; }
-    void runtime.session.prompt(event.message, { source: "rpc", expandPromptTemplates: event.message.startsWith(`/${DELIVERY_COMMAND} `),
+    void runtime.session.prompt(event.message, { ...rpcPromptOptions(event.message),
       preflightResult: success => {
         if (success) { accepted = true; rpc.send({ type: "response", id: event.id!, command: "prompt", success: true }); }
       },

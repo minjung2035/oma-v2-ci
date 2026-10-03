@@ -12,7 +12,7 @@ import { StoreError } from "../domain/errors.js";
 import { readSessionBirth } from "../runtime/session-mode.js";
 import { sessionBirthForHistory, sessionHistoryDirectories } from "../runtime/session-catalog.js";
 import { personalExtensions, personalExtensionEntry, updatePersonalSettings, type PersonalSettingsLocation } from "../runtime/personal-settings.js";
-import { readPackageIndex } from "../runtime/pi-packages.js";
+import { packageResourcePaths, readPackageIndex } from "../runtime/pi-packages.js";
 import { assertExtensionIntegrity, verifiedPaths } from "../runtime/extension-integrity.js";
 import { ExtensionModules } from "../runtime/extension-modules.js";
 import { PI_AGENT_DIR_ENV, preparePiInteractive, preparePiRetry } from "../runtime/pi-runtime.js";
@@ -92,7 +92,8 @@ async function main(): Promise<void> {
     if (choice === trustRow && projectNeedsTrust) {
       const trusted = trustStore.get(birth.cwd) === true;
       const picked = await ctx.ui.select(
-        `Trust ${birth.cwd}? This lets Pi load its .pi settings and resources and execute project extensions.`,
+        `Trust ${birth.cwd}? This lets Pi load the project's .pi settings and resources (skills, prompt templates, context files). ` +
+        `Extensions stay pinned to your saved list; trusting never loads a project extension.`,
         [trusted ? "Stop trusting this project" : "Trust this project", "Back"]);
       if (!current(epoch) || picked === undefined || picked === "Back") return;
       const next = !trusted;
@@ -167,6 +168,9 @@ async function main(): Promise<void> {
       throw new StoreError("INVALID_REQUEST", "Personal history cannot change its birth location");
     assertExtensionIntegrity(assets.extensions);
     const extensionPaths = [...verifiedPaths(assets.extensions), upstream];
+    // C18: the installed packages' skills, prompt templates and themes, from
+    // the store's index -- the same resources the Society engines get by flag.
+    const packageResources = packageResourcePaths(packages);
     const resources = (): ConstructorParameters<typeof DefaultResourceLoader>[0] => ({
       cwd: options.cwd, agentDir,
       // Personal keeps Pi's ordinary semantics: skills, prompt templates and
@@ -174,6 +178,11 @@ async function main(): Promise<void> {
       // Only extension discovery stays pinned to the selected files.
       noExtensions: true,
       additionalExtensionPaths: extensionPaths, extensionFactories: [boundary],
+      ...(packageResources === undefined ? {} : {
+        additionalSkillPaths: [...packageResources.skills],
+        additionalPromptTemplatePaths: [...packageResources.prompts],
+        additionalThemePaths: [...packageResources.themes],
+      }),
       extensionsOverride: loaded => {
         if (loaded.errors.length || !loaded.extensions.some(extension => extension.resolvedPath === upstream)) {
           const error = new StoreError("UNSUPPORTED_PROFILE", `Personal extensions could not load: ${loaded.errors.map(error => `${error.path}: ${error.error}`).join("; ")}`);

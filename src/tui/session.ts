@@ -15,7 +15,6 @@ import { SOCIETY_FENCE_ENV, SOCIETY_FENCE_FD, stopOwnedChild, spawnOwnedRpc, spa
 import { InteractiveChannel, INTERACTIVE_RPC_FD, INTERACTIVE_UI_FD } from "../runtime/interactive-channel.js";
 import type { FencedEngine } from "../runtime/host-tenure.js";
 import type { PiRpcStreams } from "../runtime/pi-rpc.js";
-import { DEPLOYMENT_LAYOUT } from "../domain/deployment.js";
 import type { Socket } from "node:net";
 import { HOST_CHANNEL_ENV, HOST_CHANNEL_FD, encodeHostMessage } from "../protocol/host-channel.js";
 import { assertModelScope, modelWorkspacePathAt, projectGitPathAt, runnerViewPathAt, sessionDirPathAt } from "../storage/paths.js";
@@ -26,7 +25,8 @@ import { loadConfiguration } from "../config.js";
 import { StoreError } from "../domain/errors.js";
 import { errorWords } from "./words.js";
 import { storedMailBytes } from "../domain/mail-values.js";
-import { packageResourcePaths, type PackageResourcePaths } from "../runtime/pi-packages.js";
+import { UNSEEN } from "../domain/unseen-text.js";
+import { packageResourcePaths, packageStoreRoot, type PackageResourcePaths } from "../runtime/pi-packages.js";
 import { CONVERSATION_BOUNDS, TERMINAL_BOUNDS, humanPromptFitsFrame, humanPromptRequestId } from "./limits.js";
 import type { PromptOutcome } from "./prompt.js";
 import { PRINCIPAL_SYSTEM_PROMPT } from "../config/role-prompts.js";
@@ -50,6 +50,12 @@ export interface SessionPaths {
    * is killed and runs no teardown (REC-007). Absent only where no lease
    * exists, which is every path that must not start an engine at all. */
   readonly fence?: number | undefined;
+  /** D23/TSP-005: the surface plan is runner→Resident plumbing, and no ambient
+   * or authored channel may carry it into the Principal. This field is the one
+   * explicit host-side hop -- a spawn plan that means to reach the engine sets
+   * it directly -- so a harness can still exercise the engine-side gate the
+   * way OMA's own plumbing would set it. No production caller sets it. */
+  readonly toolSurface?: string | undefined;
 }
 
 export interface SessionProfile {
@@ -65,6 +71,10 @@ export interface SessionProfile {
    * host paths inside the package store. Passed to the engine by flag, so the
    * resources reach Pi's loader rather than only being mounted. */
   readonly packageResources?: PackageResourcePaths | undefined;
+  /** DR25/C18: the package store's real host root -- the same root
+   * packageResourcePaths resolves the resources under. The trusted extension
+   * permits reads beneath it; absent means no package store exists. */
+  readonly packageStore?: string | undefined;
   /** The role's prompt, appended exactly as the Resident path appends it. A
    * Principal that silently ran without its role prompt would behave unlike the
    * configuration the operator wrote. */
@@ -109,6 +119,11 @@ export function principalWorkspace(stateRoot: string): string {
   return modelWorkspacePathAt(stateRoot, "principal");
 }
 
+/** D25-style mirror: the trusted extension reads this name
+ * (src/extension/workspace-guard.ts; PI-001 keeps it from importing this
+ * module) and a test binds the two spellings, as it does for TOOL_SCOPE_ENV. */
+export const PACKAGE_STORE_ENV = "OMA_PACKAGE_STORE";
+
 /** The environment the engine is started with.
  *
  * Nothing secret is in it. /proc/<pid>/environ is readable by any process of
@@ -133,7 +148,10 @@ export function principalEnvironment(
     OMA_SOCKET: join(paths.runRoot, "principal.sock"),
     OMA_AGENT_HOME: home,
     OMA_MAIL_ARCHIVE: join(paths.stateRoot, "mail", "archive", "cur"),
-    OMA_CLI_PATH: join(paths.libdir, DEPLOYMENT_LAYOUT.cli),
+    // C18: the package store's real root, so the trusted extension can let the
+    // model's reads reach the package skills its argv advertised -- read-only,
+    // and nothing else of the host's.
+    ...(profile.packageStore === undefined ? {} : { [PACKAGE_STORE_ENV]: profile.packageStore }),
     NODE_OPTIONS: `--import=${pathToFileURL(join(paths.libdir, "dist/src/runtime/client-preload.js")).href}`,
     // DR27: fixed read-only code views, never a model-facing shell.
     OMA_PROJECT_GIT: projectGitPathAt(paths.stateRoot),
@@ -198,10 +216,15 @@ export function principalSessionProfile(configPath: string, society: string): Se
   const workspaceBytes = config.agentProfiles[config.principalProfile]?.resources.workspaceBytes;
   if (!Number.isSafeInteger(workspaceBytes) || (workspaceBytes ?? 0) <= 0)
     throw new StoreError("UNSUPPORTED_PROFILE", "the principal role declares no workspace quota");
-  const packageResources = packageResourcePaths(config.installation.packages);
+  // The store's real root is the root the engine's reads are allowed under,
+  // and the one packageResourcePaths resolves the advertised resources from.
+  const packageStore = config.installation.packages === undefined ? undefined
+    : packageStoreRoot(config.installation.packages) ?? undefined;
+  const packageResources = packageResourcePaths(packageStore);
   return {
     society, provider: model.provider, model: model.model, inferenceSeconds: model.inferenceTimeoutSeconds, workspaceBytes: workspaceBytes!,
     extensions: (role?.extensions ?? []).map(extension => ({ path: extension.path, sha256: extension.sha256 })),
+    ...(packageStore === undefined ? {} : { packageStore }),
     ...(packageResources === undefined ? {} : { packageResources }),
     ...(prompt.length > 0 ? { prompt } : {}),
   };
@@ -242,6 +265,10 @@ export function sessionArgv(paths: SessionPaths, profile: SessionProfile): reado
  * two spellings, as it does for TOOL_SCOPE_ENV (INV04). */
 const VERIFIED_EXTENSIONS_ENV = "OMA_VERIFIED_EXTENSIONS";
 
+/** Mirrors the runner→Resident plumbing spelling in src/runtime/pi-spawn-plan.ts --
+ * the trusted extension's files may not be imported here either. */
+const TOOL_SURFACE_ENV = "OMA_TOOL_SURFACE";
+
 /** The environment only the engine sees: which extension paths were
  * digest-verified for this role, so the core extension can authorize tools by
  * provenance rather than by name (D25). The list is exactly the `-e` argv --
@@ -250,10 +277,16 @@ const VERIFIED_EXTENSIONS_ENV = "OMA_VERIFIED_EXTENSIONS";
 export function sessionEnv(
   base: Readonly<Record<string, string>>,
   profile: SessionProfile,
-  paths?: Partial<Pick<SessionPaths, "piAgentDir" | "fence" | "coreExtension">>,
+  paths?: Partial<Pick<SessionPaths, "piAgentDir" | "fence" | "coreExtension" | "toolSurface">>,
 ): Record<string, string> {
+  // D23/TSP-005: the surface plan is runner→Resident plumbing only; the one
+  // producer hop is the runner's own environment. A stray OMA_TOOL_SURFACE in
+  // the user's shell must not reach the Principal's host engine -- where a
+  // malformed plan would exit(1) at session_start and a crafted-valid one
+  // would narrow its tools -- so the inherited set never carries it.
+  const { OMA_TOOL_SURFACE: _ambientToolSurface, ...inherited } = base;
   return {
-    ...base,
+    ...inherited,
     ...(paths?.coreExtension === undefined ? {} : {
       [VERIFIED_EXTENSIONS_ENV]: JSON.stringify([
         paths.coreExtension,
@@ -269,6 +302,10 @@ export function sessionEnv(
     // carrying a secret: a process that does not already hold it gains nothing
     // by reading it in /proc.
     ...(paths?.fence === undefined ? {} : { [SOCIETY_FENCE_ENV]: String(SOCIETY_FENCE_FD) }),
+    // The explicit plumbing hop emits after the ambient strip, so a plan a
+    // spawn plan deliberately carries reaches the engine while anything merely
+    // inherited does not.
+    ...(paths?.toolSurface === undefined ? {} : { [TOOL_SURFACE_ENV]: paths.toolSurface }),
   };
 }
 
@@ -302,6 +339,14 @@ export function projectEvent(event: PiEvent): { readonly line?: string } {
     return { line: `⚠ Temporary model API error: waiting for retry ${String(event.attempt)}/${String(event.maxAttempts)}` };
   if (event.type === "auto_retry_end")
     return { line: event.success === true ? "Model API connection restored." : `⚠ Model API failed after ${String(event.attempt)} retries.` };
+  if (event.type === "extension_error") {
+    // An extension's failure is extension-provided text; what a screen cannot
+    // show as written is stripped before it reaches the transcript.
+    const clean = (value: unknown): string => (typeof value === "string" ? value : "").replace(UNSEEN, "");
+    const where = clean(event.extensionPath).split("/").filter(Boolean).pop() ?? "extension";
+    const hook = clean(event.event), detail = clean(event.error);
+    return { line: `⚠ Extension ${where} failed${hook ? ` on ${hook}` : ""}${detail ? `: ${detail}` : ""}.` };
+  }
   if (event.type === "message_end") {
     const message = event.message;
     if (message === null || typeof message !== "object" || Array.isArray(message)) return {};

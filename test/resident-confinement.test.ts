@@ -6,7 +6,7 @@
  */
 import test from "node:test";
 import assert from "node:assert/strict";
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { PiAdapter } from "../src/runtime/pi-adapter.js";
@@ -377,6 +377,50 @@ test("AV13 / TSP-009, PR-004: inside the sandbox the guard leaves the shell and 
     assert.equal(MIRRORED_ENV, TOOL_SCOPE_ENV, "the extension's mirror is not the runner's value");
     assert.equal(MIRRORED_SANDBOX, TOOL_SCOPE_SANDBOX);
   } finally { rmSync(f.root, { recursive: true, force: true }); }
+});
+
+test("C18 / PR-004: a host engine's reads reach the package store its argv advertised -- read-only, and nothing else of the host's", () => {
+  const root = mkdtempSync(join(tmpdir(), "oma-guard-store-"));
+  try {
+    const workspace = join(root, "workspace"); mkdirSync(workspace, { recursive: true });
+    writeFileSync(join(workspace, "w.txt"), "w");
+    const store = join(root, ".packages");
+    mkdirSync(join(store, "npm", "pkg", "skills", "roll"), { recursive: true });
+    writeFileSync(join(store, "npm", "pkg", "skills", "roll", "SKILL.md"), "# roll\n");
+    const outside = join(root, "host.txt"); writeFileSync(outside, "x");
+    let handler: ((event: { toolName: string; input: Record<string, unknown> }) => { block: boolean; reason: string } | undefined) | undefined;
+    guardWorkspaceTools({ on: (_name: string, fn: typeof handler) => { handler = fn; } } as never,
+      workspace, false, false, undefined, [store]);
+    const guard = handler!;
+    // The package skill the engine's --skill flag advertised is readable.
+    assert.equal(guard({ toolName: "read", input: { path: join(store, "npm", "pkg", "skills", "roll", "SKILL.md") } }), undefined);
+    assert.equal(guard({ toolName: "ls", input: { path: join(store, "npm", "pkg") } }), undefined);
+    assert.equal(guard({ toolName: "grep", input: { path: join(store, "npm") } }), undefined);
+    // Any other host path is still refused, including escapes spelled from the store.
+    assert.equal(guard({ toolName: "read", input: { path: outside } })?.block, true);
+    assert.equal(guard({ toolName: "read", input: { path: join(store, "..", "host.txt") } })?.block, true);
+    // Writes and edits stay inside the workspace: the store is read-only.
+    assert.equal(guard({ toolName: "write", input: { path: join(store, "npm", "pkg", "new.md"), content: "x" } })?.block, true);
+    assert.equal(guard({ toolName: "edit", input: { path: join(store, "npm", "pkg", "skills", "roll", "SKILL.md") } })?.block, true);
+    // A link inside the store cannot smuggle a host path into the read set.
+    symlinkSync(outside, join(store, "npm", "pkg", "link.md"));
+    assert.equal(guard({ toolName: "read", input: { path: join(store, "npm", "pkg", "link.md") } })?.block, true);
+    // The workspace rule itself is unchanged.
+    assert.equal(guard({ toolName: "read", input: { path: "w.txt" } }), undefined);
+    assert.equal(guard({ toolName: "read", input: { path: workspace } }), undefined);
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
+test("the guard's role refusal names the engine it actually guards, not another engine's role", () => {
+  for (const [readOnly, own, other] of [[false, "Resident", "Principal"], [true, "Principal", "Resident"]] as const) {
+    let handler: ((event: { toolName: string; input: Record<string, unknown> }) => { block: boolean; reason: string } | undefined) | undefined;
+    guardWorkspaceTools({ on: (_name: string, fn: typeof handler) => { handler = fn; } } as never,
+      "/tmp", false, readOnly, () => false);
+    const verdict = handler!({ toolName: "not-in-role", input: {} });
+    assert.equal(verdict?.block, true);
+    assert.match(verdict?.reason ?? "", new RegExp(own), `a ${own} refusal should name its own role`);
+    assert.doesNotMatch(verdict?.reason ?? "", new RegExp(other), `a ${own} refusal must not name ${other}`);
+  }
 });
 
 test("AV17 / D01, SB-006: a session path the confined engine reports translates back only from its session mount", () => {

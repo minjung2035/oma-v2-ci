@@ -81,12 +81,21 @@ const WRITE_TOOLS: readonly string[] = Object.freeze(["write", "edit"]);
 export const TOOL_SCOPE_ENV = "OMA_TOOL_SCOPE";
 export const TOOL_SCOPE_SANDBOX = "sandbox";
 
+/** Mirrors `PACKAGE_STORE_ENV` in src/tui/session.ts: the host engine's
+ * environment names the installed-package store's real root, so the guard can
+ * permit reads of the package skills, prompt templates and themes the
+ * engine's argv advertised (C18) without opening arbitrary host paths. */
+export const PACKAGE_STORE_ENV = "OMA_PACKAGE_STORE";
+
 export function guardWorkspaceTools(pi: ExtensionAPI, workspace: string,
   sandboxed = process.env[TOOL_SCOPE_ENV] === TOOL_SCOPE_SANDBOX, readOnly = false,
-  permitted?: (name: string) => boolean): void {
+  permitted?: (name: string) => boolean, readableRoots: readonly string[] = []): void {
+  // The Principal is the engine with the read-only host channel; every other
+  // is a Resident, and a refusal must not name another engine's role.
+  const role = readOnly ? "the Principal's read, mail, review and safety role" : "this Resident's assigned role";
   pi.on("tool_call", (event) => {
     if (permitted && !permitted(event.toolName))
-      return { block: true, reason: "this tool is outside the Principal's read, mail, review and safety role" };
+      return { block: true, reason: `this tool is outside ${role}` };
     if (readOnly && WRITE_TOOLS.includes(event.toolName))
       return { block: true, reason: "the Principal reviews code but does not write or edit files; publish GOAL through explicit mail intent" };
     if (event.toolName === "bash" || event.toolName === "powershell")
@@ -98,8 +107,13 @@ export function guardWorkspaceTools(pi: ExtensionAPI, workspace: string,
     if (sandboxed && !WRITE_TOOLS.includes(event.toolName)) return undefined;
     const input = event.input as Record<string, unknown>;
     const path = input.path ?? ".";
-    if (!allowedWorkspacePath(workspace, path))
-      return { block: true, reason: "tool path is outside the agent workspace" };
-    return undefined;
+    if (allowedWorkspacePath(workspace, path)) return undefined;
+    // C18: a read may also reach an installed-package resource root -- the
+    // same store root the engine's argv names -- under the same
+    // link-refusing containment the workspace gets. Writes and edits stay
+    // inside the workspace; no other host path is opened.
+    if (!WRITE_TOOLS.includes(event.toolName) &&
+        readableRoots.some(root => allowedWorkspacePath(root, path))) return undefined;
+    return { block: true, reason: "tool path is outside the agent workspace" };
   });
 }
