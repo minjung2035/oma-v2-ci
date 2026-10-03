@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { createHash } from "node:crypto";
 import { collectProductionFiles, writeProductionInventory, assertProductionInventory, assertMeasurementCurrent, assertSourceDigests, measureWithCloc, writeSourceDigests } from "../scripts/production-inventory.mjs";
-import { VERIFICATION_INPUT_ROOTS, VERIFICATION_OUTPUT_EXCLUSIONS, verificationInputDigest, verificationInputFiles } from "../scripts/source-digest.mjs";
+import { VERIFICATION_INPUT_ROOTS, VERIFICATION_OUTPUT_EXCLUSIONS, verificationInputDigest, verificationInputFiles, verificationSourceDigests } from "../scripts/source-digest.mjs";
 import { fileURLToPath } from "node:url";
 
 const REPO = fileURLToPath(new URL("..", import.meta.url));
@@ -274,6 +274,40 @@ test("R38: package, compiler, owner, spec and workflow changes all change the ve
     assert.deepEqual(verificationInputDigest(f.root), outputBefore, "verification outputs entered their own input digest");
     f.put("implementation/new-gate-input.json", "new input\n");
     assert.notDeepEqual(verificationInputDigest(f.root), outputBefore, "a new implementation input was omitted");
+  } finally { f.close(); }
+});
+
+test("R38: the lane's bound source is the canonical closure -- committed digests in, CI artifacts out", () => {
+  // K63/AV-20261003-30: verify-lane once listed `production-loc.json` at the
+  // repo root, where it never exists -- the binding was vacuous, and the
+  // measurement-hashes sibling was named nowhere. The lane now binds
+  // `verificationSourceDigests`: the canonical closure, raw bytes (a checker
+  // re-reads the file and must get this digest).
+  const digests = verificationSourceDigests(REPO);
+  const hashOf = path => createHash("sha256").update(readFileSync(join(REPO, path))).digest("hex");
+  for (const committed of ["production-manifest.json", "production-files.txt", "production-loc-hashes.json",
+    "package.json", "tsconfig.json", ".github/workflows/architecture-verification.yml"])
+    assert.equal(digests[committed], hashOf(committed), `${committed} must be bound by its real bytes`);
+  assert.equal(digests["production-loc.json"], undefined, "a CI artifact is never a bound input");
+  assert.equal(digests["production-measurement-hashes.json"], undefined, "a CI artifact is never a bound input");
+  assert.equal(Object.keys(digests).length, verificationInputFiles(REPO).length);
+  for (const [file, value] of Object.entries(digests)) assert.match(value, /^[0-9a-f]{64}$/, file);
+  // And verify-lane must not keep a second, divergent root list: it calls the
+  // shared closure.
+  const lane = readFileSync(new URL("../scripts/verify-lane.mjs", import.meta.url), "utf8");
+  assert.match(lane, /verificationSourceDigests\(/);
+  assert.equal(lane.includes('"production-loc.json"'), false, "the vacuous root binding is back");
+  // A declared input that is missing must fail, not bind vacuously.
+  const f = fixture();
+  try {
+    for (const root of VERIFICATION_INPUT_ROOTS) {
+      if (["src", "test", "scripts", "implementation", "docs", ".github/workflows"].includes(root))
+        f.put(`${root}/fixture.ts`);
+      else f.put(root, `${root}\n`);
+    }
+    assert.doesNotThrow(() => verificationSourceDigests(f.root));
+    rmSync(join(f.root, "production-loc-hashes.json"));
+    assert.throws(() => verificationSourceDigests(f.root), "a missing declared input bound vacuously");
   } finally { f.close(); }
 });
 

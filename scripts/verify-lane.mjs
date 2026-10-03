@@ -8,6 +8,7 @@ import { arch, platform, release } from "node:os";
 import ts from "typescript";
 import { lanes, evaluateExecution } from "./verification-lanes.mjs";
 import { extractExplorationParameters } from "./exploration-parameters.mjs";
+import { verificationInputFiles, verificationSourceDigests } from "./source-digest.mjs";
 
 const [name, ...rawArgs] = process.argv.slice(2);
 if (!Object.hasOwn(lanes, name ?? "")) throw new Error(`usage: verify-lane.mjs <${Object.keys(lanes).join("|")}> --out <new-directory> [--baseline <result.json>] [--seed N --actions N --fuzz-cases N --stress-cycles N --stress-seconds N --rss-bytes N]`);
@@ -30,14 +31,6 @@ const report = { schema: 1, lane: name, status: "BLOCKED", execution: "NOT_RUN",
   declaredTestFiles: lane.files, requiredNames: lane.requiredNames, entryQualification: null,
   commands: [], selectedFiles: [], sourceDigests: {}, sourceTestCallSites: [], runtime: null,
   limitations: ["S-03: v1 delivers each batch as a followUp; mid-run steer is not a v1 feature (DR18)", "inference is engine-owned (INF-001); v1 has no cost ceiling (DR18)", "VM power loss NOT_RUN", "host reboot and paid provider calls are outside this runner", "raw test failure does not identify product-vs-environment cause"] };
-function filesUnder(path) {
-  if (!existsSync(path)) return [];
-  const stat = lstatSync(path);
-  if (stat.isSymbolicLink()) throw new Error(`source input is a symlink: ${path}`);
-  if (stat.isFile()) return [path];
-  if (!stat.isDirectory()) throw new Error(`unsupported source input: ${path}`);
-  return readdirSync(path).sort().filter(name => name !== "evidence").flatMap(name => filesUnder(join(path, name)));
-}
 function command(executable, argv, label, seconds) {
   const stdoutPath = join(output, `${label}.stdout.log`); const stderrPath = join(output, `${label}.stderr.log`);
   const stdout = openSync(stdoutPath, "wx"); const stderr = openSync(stderrPath, "wx");
@@ -104,17 +97,18 @@ try {
   environment.NODE_OPTIONS = `--import=${new URL("./local-test-guard.mjs", import.meta.url).href}`;
   if (lane.environment !== "systemd")
     environment.DBUS_SESSION_BUS_ADDRESS = "unix:path=/nonexistent/oma-local-tests-no-user-bus";
-  // AV-20261003-30: the measurement artifacts the ledger and LOC reports are
-  // generated from are part of the bound source, not ambient context.
-  const roots = ["src", "test", "scripts", "implementation", "docs", "package.json", "package-lock.json", "tsconfig.json", "tsconfig.build.json",
-    "production-files.txt", "production-manifest.json", "production-loc.json", "production-loc-hashes.json"];
-  for (const path of roots.flatMap(name => filesUnder(join(root, name))).sort()) {
-    const rel = relative(root, path);
-    if (rel.startsWith("docs/archive/")) continue;
-    const bytes = readFileSync(path);
-    report.sourceDigests[rel] = createHash("sha256").update(bytes).digest("hex");
+  // AV-20261003-30: the bound source is the canonical verification-input
+  // closure (source-digest.mjs) -- one definition for every consumer. The
+  // committed inventory and per-file source digests the ledger and LOC checks
+  // are generated from are inputs, so their bytes are bound; the LOC report
+  // (`production-loc.json`) and measurement hashes are CI artifacts a
+  // measurement writes into an evidence directory, never committed inputs, so
+  // they are bound nowhere. A declared input that is absent throws here
+  // rather than binding vacuously.
+  report.sourceDigests = verificationSourceDigests(root);
+  for (const rel of verificationInputFiles(root)) {
     if (rel.startsWith("test/") && rel.endsWith(".ts")) {
-      const source = ts.createSourceFile(rel, bytes.toString("utf8"), ts.ScriptTarget.Latest, true);
+      const source = ts.createSourceFile(rel, readFileSync(join(root, rel), "utf8"), ts.ScriptTarget.Latest, true);
       const visit = node => {
         if (ts.isCallExpression(node) && (node.expression.getText(source) === "test" || node.expression.getText(source) === "it" || /^(?:test|it)\.(?:skip|todo|only)$/.test(node.expression.getText(source))))
           report.sourceTestCallSites.push({ file: rel, line: source.getLineAndCharacterOfPosition(node.getStart(source)).line + 1, expression: node.arguments[0]?.getText(source) ?? null });

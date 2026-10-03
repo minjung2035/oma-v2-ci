@@ -1,9 +1,10 @@
 /** TSP-001..004: model-facing tool surface projection, validated host-side.
  *
- * A role may project the tools its extensions register as DIRECT (visible),
- * DISABLED (never callable) or GROUPED (revealed only after the model opens the
- * owning group). Grouping is a DAG whose members are explicit tool or subgroup
- * references.
+ * A projection — OMA's own runtime policy, never an authored role field
+ * (D23) — marks the tools a role's extensions register as DIRECT (visible),
+ * DISABLED (never callable) or GROUPED (revealed only after the model opens
+ * the owning group). Grouping is a DAG whose members are explicit tool or
+ * subgroup references.
  *
  * This module is pure and owns validation only. It never loads an extension,
  * never registers a tool and never executes one. The flattened result is what

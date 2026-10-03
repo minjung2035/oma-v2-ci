@@ -187,7 +187,7 @@ OMA는 Pi 엔진을 함께 배포하고 그것만 실행한다. `PATH`에서 Pi�
 
 ## Tool 표면 (OMA 내부 정책)
 
-Tool 표면 투영은 더 이상 role 설정이 아니다(D23). 모델에게 보이는 tool 집합의 표현은 OMA가 소유하는 정책이고, 신뢰된 core extension만이 `OMA_TOOL_SURFACE` 환경 변수의 인코딩된 계획을 읽어 적용한다. 어떤 role 파일 필드도 이 표면을 선언할 수 없으며, 선언된 필드가 있으면 설정 로드가 거절된다.
+Tool 표면 투영은 더 이상 role 설정이 아니다(D23). 모델에게 보이는 tool 집합의 표현은 OMA가 소유하는 정책이고, 신뢰된 core extension만이 `OMA_TOOL_SURFACE` 환경 변수의 인코딩된 계획을 읽어 적용한다. 어떤 role 파일 필드도 이 표면을 선언할 수 없으며, 선언된 필드가 있으면 설정 로드가 거절된다. 현재 이 계획을 생성해 환경 변수에 싣는 production 생산자는 아직 없다 — 통로만 마련된 dormant seam이며, Resident extension은 변수가 없거나 malformed이면 fail closed한다.
 
 표면 계획 자체는 변하지 않았다: `defaultMode`(`DIRECT`/`DISABLED`), `direct`/`disabled` 이름 목록, tool과 하위 group의 명시 참조로만 이루어진 `groups`, 진입점 `roots`. 모델이 group을 열면 **직계 자식만** 추가로 활성화된다. 열기는 활성화이지 실행이 아니며, 드러난 tool은 Pi가 자기 pipeline으로 직접 실행한다.
 
