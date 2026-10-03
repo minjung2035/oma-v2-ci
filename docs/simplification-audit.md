@@ -1,11 +1,11 @@
-# 간소화 agenda 검증 — 항목별 판정 (2026-10-03, 에이전트 10개, 검증판 rev2)
+# 간소화 agenda 검증 — 항목별 판정 (2026-10-03, 에이전트 14개, 확정판 rev3)
 
 기준: 모델 surface(OMA prompt·authority·tool 표면)는 유지. 수정 대상 = ① 사용자가 납득 어려운 억제,
 ② Pi/OS 기능의 내부 재구현, ③ 과도 plumbing/과거 잔재, ④ 외부↔내부 불필요 간섭.
 판정: 확정 / 부분 / 반박. 각 항목에 핵심 근거 file:line과 수정 방향.
 
-rev2: 사용자 재검증 32개 수정사항을 별도 4개 에이전트로 코드+설치된 Pi 0.87.1 대조해 반영.
-검증 판정은 각 행의 `[rev2]`에 표기. 본 문서는 발견 보고서이며 specification이 아니다 —
+rev3: rev2 검증판 + 외부 재검토 7개 수정 + 4개 검증 에이전트 재대조를 반영한 **최종 확정판**.
+이 문서는 v0.1 simplification backlog의 기준 문서다. 구현 분류는 말미 "최종 분류" 참조.
 제품 정책 변경은 spec 개정(TSP/operations.md/arch)과 함께 진행.
 
 ## A. Pi 통합
@@ -36,13 +36,13 @@ rev2: 사용자 재검증 32개 수정사항을 별도 4개 에이전트로 코�
 
 | # | 판정 | 근거와 결론 |
 |---|---|---|
-| C15 AGENTS.md 차단 | **확정 — Personal에서 납득 불가** [rev2 보강] | 모든 엔진에 `--no-context-files`/`noContextFiles`. Personal은 sandbox 없이 사용자 프로젝트 cwd에서도 차단. 주의(rev2): `loadProjectContextFiles`는 **trust-gate 아님** — 활성화하면 AGENTS.override.md/AGENTS.md/CLAUDE.md가 ancestor discovery로 즉시 로드됨. Resident의 model-writable workspace에서 model이 AGENTS.md를 심으면 다음 reload에 주입 가능. 곧바로 취약점은 아니나 "human project instruction"과 "worker 자신이 생성한 instruction"을 동일 취급할지는 제품 정책 → **Society는 raw discovery 대신 canonical context 선정 → `agentsFilesOverride`로 OMA가 vetted 파일만 주입**하는 방식 검토. Personal은 Pi semantics 그대로 |
+| C15 AGENTS.md 차단 | **확정 — mode별 최종 정책 확정** [rev3 최종] | 최종 정책: **Personal = Pi discovery 그대로; Confined Resident = Pi discovery 그대로; Society Principal = context 활성화하되 OMA-owned boundary에서 `contextFiles` 필터링**. 근거: confined Resident의 ancestor chain은 `/workspace`→`/`(sealed rootfs)라 self-injection이 자기 durable dir로 한정 — vetting subsystem은 오버엔지니어링. 반면 Principal은 host에서 직접 실행돼 discovery가 `~/AGENTS.md`·`/AGENTS.md`·공유 `.engine/AGENTS.md`(모든 society에 영향하는 글로벌 채널)까지 도달 — OMA prompt ownership과 충돌. 구현: `agentsFilesOverride`는 in-process entry에서만 도달 가능(Pi CLI spawn 경로에 flag 없음) → **OMA core extension의 `before_agent_start`에서 `event.systemPromptOptions.contextFiles`(mutable)를 필터**해 전 Society engine에 동일 정책 적용. 참고: personal-pty sentinel 테스트가 차단을 명시 검증 중 — flip 필요 |
 | C16 skills 차단 | **확정** | `noSkills` + `enableSkillCommands:false` 이중. Personal/user-package skills까지 차단. `skillsOverride`/`additionalSkillPaths` 경로 존재. project `.pi/skills`는 `projectTrusted` 필요(OMA는 false로 설정 중 — 별도 trust 결정). Skills section은 `read` 또는 `bash`가 selectedTools에 있을 때만 렌더됨 |
 | C17 prompt templates | **확정** | `noPromptTemplates` + `expandPromptTemplates`가 `/oma-deliver` 전용(pi-interactive-host.ts:461) — 사용자 template은 미전개 literal로 전송됨 |
 | C18 package resource | **확정** | `writePackageIndex`가 `resolved.extensions`만 사용하고 skills/prompts/themes를 버림(pi-packages.ts:154-175). Pi 0.87.1 `ResolvedPaths`는 4종 모두 제공(package-manager.d.ts:13-18) — 정상 Pi 기능을 일부러 버리는 중. 게스트에 파일은 가는데 인덱싱 안 함 |
 | C19 project-local resources | **확정 — mode별 분리 필요** [rev2 수정] | Personal: `.pi/skills`/`.pi/prompts`/`.pi/themes`/`AGENTS.md`/`CLAUDE.md`는 정상 Pi 지원 복원이 맞음. Society: 리소스는 지원하되 **`.pi/SYSTEM.md`로 OMA system prompt를 대체하게 하면 안 됨** — OMA는 `--system-prompt`로 identity 소유 유지(실제로 `--system-prompt`가 discovery보다 우선승리라 이미 보호됨). `APPEND_SYSTEM.md`도 Society는 명시적 OMA 정책 하에서만. Personal의 project `.pi` 리소스는 `projectTrusted` 해결 필요(현재 false, pi-personal.ts:155) |
 | C20 local extension 거절 | **확정 — 이유 해소 가능** | `REMOTE_SOURCE`만 허용(pi-packages.ts:55,114). Worker sandbox 가시성이 이유지만 package store snapshot이면 기존 보장(inside-store/no-links/digest) 유지 가능. Personal은 Worker가 없는데도 절대경로 거부 |
-| C21 extension prompt guidance | **확정 — Society에서 silent drop, 처방 확정** [rev2 수정] | `customPrompt` 설정 시 Pi는 `tools`/`rules`/`docs` section 자체를 생성 안 함(system-prompt.js:79-94) — `promptSnippet`/`promptGuidelines`가 도달 불가 확인. OMA 자체 group tool의 promptSnippet(tool-surface.ts:146)도 유실됨. 정확한 처방: 기본 prompt 되살리기가 아니라 in-engine에서 `before_agent_start` 훅이 `systemPromptOptions.sections`(mutable, customPrompt와 공존)로 활성 tool의 guidance만 재계산·주입 — `pi.getAllTools()`로 live active set 기준. `promptGuidelines` 입력 필드 자체는 buildRules에만 연결돼 복구 불가 |
+| C21 extension prompt guidance | **확정 — Society에서 silent drop, 처방 확정** [rev3 최종] | `customPrompt` 설정 시 Pi는 `tools`/`rules`/`docs` section 자체를 생성 안 함(system-prompt.js:79-94) — `promptSnippet`/`promptGuidelines` 도달 불가, OMA 자체 group tool의 promptSnippet(tool-surface.ts:146)도 유실. 최종 구현 방향: OMA core extension이 `extensionsOverride`의 `LoadExtensionsResult.extensions[].tools[].definition`에서 promptSnippet/promptGuidelines를 수집하고, `before_agent_start`에서 **현재 active tools만**(`pi.getActiveTools()`/`systemPromptOptions.selectedTools`) OMA-owned `systemPromptOptions.sections["<oma-tag>"]`로 주입. 구현 주의 3개: ① `pi.getAllTools()`는 전체 registry이며 `ToolInfo`에 **promptSnippet이 없음**(name/description/parameters/promptGuidelines만) ② `systemPromptOptions.toolSnippets`에는 현재 selected tools의 snippet이 이미 있어 active tool은 여기서 회수 가능 ③ `before_agent_start`는 **turn이 아니라 run당 1회** — mid-run group 활성화는 다음 run에 반영. Pi 기본 prompt는 계속 차단 |
 | C22 Pi 기본 prompt 차단 | **확정 — 유지(verify only)** | 모든 Society 엔진 `--system-prompt` 적용. Personal만 Pi default 사용 |
 
 ## D. tool surface
@@ -60,7 +60,7 @@ rev2: 사용자 재검증 32개 수정사항을 별도 4개 에이전트로 코�
 |---|---|---|
 | E27 subprocess per call | **확정 — 처방은 oma-client library** [rev2 수정] | tool call당 Node spawn 1 + socket ≥1. rev1의 "persistent supervised CLI"는 중간층을 영구화할 뿐. 더 나은 구조: **extension-safe oma-client library(`src/client/` 신규 트리)를 Extension과 CLI가 공유** — freeze/replay, same-key lookup, receipt recording은 library가 유지. 차단점(rev2 확인): PI-001 closure rule이 extension에 `src/extension/*`+`node:*`+engine+typebox만 허용하고 `import type`조차 금지 — `src/client/` 도입은 **architecture rule 개정 선행** 필요(type-only edge 면제 + `src/client/` 허용). 규칙 개정 거부 시 fallback이 persistent CLI. 참고: `descendsFrom(pid,ancestor)` zero-depth 매치로 in-process attach는 오늘도 동작 |
 | E28 CLI 이중 역할 | **확정** | freeze/replay/effects(file read, git resolve, context tree, bundle build)를 CLI가 소유 — extension이 runtime import 불가(PI-001)라 CLI가 사실상 client library. oma-client library 공유가 해결책(E27과 동일 경로) |
-| E29 FD3/FD4 plumbing | **부분 — 두 FD의 성격이 다름** [rev2 수정] | FD3 credential socketpair: env/argv(`/proc/<pid>/{environ,cmdline}`) 노출 방지용 — **in-process client로 가면 제거 가능**(grant가 이미 `PrincipalChannel.current()` 메모리에 존재). FD4 society lease: subprocess plumbing이 아니라 **kernel lifetime lease — 어떤 구조든 유지 필수**. 제거 가능한 것은 argv/stdout/exit-code parsing 등 subprocess 기인 부분뿐. host↔engine FD3(HOST_CHANNEL_FD)는 별개 채널로 유지 |
+| E29 FD3/FD4 plumbing | **부분 — semantics 유지, 불필요한 propagation만 제거** [rev3 최종] | FD3 credential socketpair: env/argv 노출 방지용 — in-process client(`PrincipalChannel.current()`이 이미 grant 보유)로 가면 **별도 child FD3 불필요 → 제거 가능**. FD4 society lease: 보장은 lease 객체가 아니라 **fd-inheritance set** — "society lease의 lifetime 의미는 반드시 유지, child process가 있을 때만 FD inheritance 필요". engine이 fd4를 이미 보유하고 OS fork/exec 자식은 자연 상속하므로 in-process effects엔 명시 propagation 불필요(Node spawn이 임의 fd 상속을 못 해 슬롯이 필요했던 것). 제거 가능한 것은 argv/stdout/exit-code parsing 등 subprocess 기인 부분. host↔engine FD3(HOST_CHANNEL_FD)는 별개 유지 |
 | E30 constant mirror | **확정하나 의도적** | mirror는 INV04 test-bound 선언 메커니즘. contracts leaf를 extension closure에 열지는 정책 결정. 발견: `OMA_INCARNATION`은 producer만 있고 reader 없음(dead contract); credential line은 3곳에 철자; `agent wait --observe` stdout shape는 계약 없음 |
 
 ## F. sandbox / 개발환경
@@ -79,8 +79,8 @@ rev2: 사용자 재검증 32개 수정사항을 별도 4개 에이전트로 코�
 
 | # | 판정 | 근거와 결론 |
 |---|---|---|
-| G38 workspace quota 전수 scan | **확정 — 처방은 filesystem layer** [rev2 수정] | positive-growth write마다 전체 workspace walk(workspace-guard.ts:28-44, write queue 직렬화). incremental O(1)만으로 불충 — shell/background process write가 tool wrapper를 우회하므로. `/workspace`는 plain `--bind`(tmpfs는 /tmp만)라 kernel 경계 없음. 선례: candidate-checks.ts:76-77이 `--size --tmpfs /workspace` 사용 중. durable workspace용 정답: **loop-mounted filesystem image 또는 prjquota(state FS의 XFS/ext4 project quota)** — extension layer가 아닌 filesystem/runtime enforcement. 스캔은 admission UX(fail-fast)로 유지 |
-| G39 society admission scan | **확정 — streamed는 2번** | reserve(preflight) + admit(dispatch)가 각각 state tree 전체 walk(quota.ts:98-130). same request 안에서 관측을 넘겨줄 수 있음. 참고: 스캔은 SQLite WAL/page growth도 과소계상 — 진짜 경계는 state tree 전체 위에 있어야 함 |
+| G38 workspace quota 전수 scan | **확정 — accounting 개선 선행, kernel quota는 보류** [rev3 최종] | positive-growth write마다 전체 workspace walk(workspaceUsage, workspace-guard.ts:48-74; write queue 직렬화 contained-tools.ts:28-41). `/workspace`는 plain `--bind`. **spec이 이미 soft quota 선언**(operations.md:127-128 "tree scan quota를 kernel hard cap으로 해석하지 않는다", quota.ts:90-93) — kernel-level 경계(loop fs/prjquota)는 "hard disk quota가 product invariant인지" 결정 후 release-hardening으로. **v0.1 처방: accounting 개선 + `tool_result`(bash 구분)/`turn_end` 훅에서 reconcile scan**(await되는 훅이며 현재 미사용 — 삽입 지점 준비됨). staleness window는 bash write→reconcile 사이 — 다음 write의 scan이 유일한 관측인 현재보다 타이트. P0-5 "unknown≠zero" fail-closed 유지 필수(unobservable entry는 stopAfter+1 반환) |
+| G39 society admission scan | **확정 — 성능 후보, 단순 병합 금지** [rev3 최종] | reserve(preflight, broker.ts:387-393) + admit(dispatch, public-dispatcher.ts:127)가 각각 state tree 전체 walk — settle 경로는 최대 2 walk 추가. 윈도우 = body 스트리밍 전체(초 단위, 256MiB까지)이며 **transport spool이 scan 대상 tree 안에 착지해 요청이 자기 dispatch 동안 자신을 double-charge**(broker.ts:373-378 의도된 보수성). 두 scan은 각각 다른 시점의 실제 결정 — preflight 재사용은 stale. 처방: benchmark 후 accounting generation/reservation과 함께 최적화, correctness 없는 "한 번만 scan" 금지 |
 | G40 shell write 우회 | **확정 — confined만** | sandbox bash는 quota 미검사 후 쓰기 — 다음 scan에서야 발견. unconfined는 bash 자체가 차단. network 개방 시 background process도 쓸 수 있어 tool-layer quota는 더 무의미해짐 → G38의 FS-layer 경계 필수 |
 | G41 resource defaults | **확정 — 이미 configurable** | 2GiB/128/512MiB 실재하나 per-agentProfile 설정 가능(개별 agent는 아님). default 상향만 남음 |
 | G42 run-start freeze | **확정 — 올바른 semantics** | accepted spec에 freeze, cgroup은 incarnation 재생성 없이 resize 불가라 정당. 작업 불필요 |
@@ -103,7 +103,7 @@ rev2: 사용자 재검증 32개 수정사항을 별도 4개 에이전트로 코�
 | I49 legacy binding | **확정** | slug-only society 감지+명시 마이그레이션 UX는 live fail-mode(orphan 방지 refusal). pre-release라 삭제 가능하나 동작 변경으로서 명시적 결정 |
 | I50 engine-home adoption | **확정 — A5와 함께 삭제** [rev2] | 매 기동마다 과거 per-society pi home을 merge(pi-runtime.ts:113-157, oma-society.ts:74,684). 현재 코드는 그런 home을 생성하지 않음. 단 pre-DR24 dogfood install이 있었다면 그 로그인을 잃음 — "no pre-release external state" 선언 하에 삭제 |
 | I51 inline vs managed | **부분** | commit owner는 통합됐으나 dual layout + roleSet 변환 + `--config` 표면 남음. inline은 bootstrap 경로라 완전 삭제는 대안 필요 |
-| I52 generation machinery | **부분 — surplus는 좁다** [rev2 수정] | rev1이 과도하게 썼음: 현재 구조는 **multi-file atomic publish**(host.json+models.json+roles+prompts를 .staging 후 단일 rename, file/dir 0400/0500+fsync), **stale-edit 방지**(assertCurrent가 publish+commit window에서 재해시), **crash consistency**(journal 선기록+post-rename flush+unconfirmed 차단+torn-tail 정리)를 제공 — 단순 config.json atomic replace로 치환하면 이 계약을 잃음. "immutable snapshot dir + 하나의 atomic current pointer"가 이미 현재 설계. 진짜 surplus: legacy single-id journal 파싱(L493-499)과 previous-generation retention(rollback out-of-scope 선언 시 — 단 journal은 committed-superseded와 crash-torn publish 구분에도 필요). 처방: 단일파일 replace 금지; 필요하면 legacy record 파싱 제거 + 문서화 |
+| I52 generation machinery | **반박 — 핵심 구조 유지** [rev3 최종] | 현재 generation system은 **삭제 대상이 아님**: multi-file atomic snapshot publish(.staging→단일 rename, 0400/0500+fsync), stale-edit 방지(assertCurrent 재해시), crash consistency(journal 선기록+post-rename flush+unconfirmed 차단+torn-tail 정리)가 실제 기능. "immutable snapshot dir + 하나의 atomic current pointer"가 이미 현재 설계. 삭제 후보는 **legacy single-id journal 파싱(L493-499)뿐** — previous-generation retention도 당장 유지(journal이 committed-superseded와 crash-torn publish를 구분하는 근거). 단일파일 replace 금지 |
 | I53 project→session 복제 | **부분 — 버그 아님** | 복제는 실재하나 derived cache로 동기화됨(rederive). 비용은 machinery이지 정합성 아님 |
 | I54 dead ModelProfile | **확정 — 5개 dead required field** [rev2 확인] | `credentialRef`, `codecRevision`, `pricingRevision`, `maxInputTokens`, `maxOutputTokens`는 runtime model selection 경로에서 미독. macOS egress는 config credentialRef가 아니라 `EGRESS_ENGINE_MANAGED` 하드코딩(egress-forwarder.ts:68, resolver.ts:24). `inferenceTimeoutSeconds`는 사용됨(runner.ts:169,178,227, session.ts:195, settings.ts:432). 처방: 5개를 schema에서 제거(breaking) 또는 optional-ignored로 격하; provider/model/inferenceTimeoutSeconds/thinking 유지 |
 | I55 always-false flags | **확정 — feature baseline 시 flag 삭제** [rev2 보강] | notmuch/reflinkSeed/formalApproval/egress 모두 false만 허용(config.ts:255-264), closedRecord가 4키 전부 필수. egress가 baseline이 되면 flag를 true로 확장하는 게 아니라 **flag 자체 삭제**가 제품 철학에 부합. `features` 자체를 optional로도 고려 |
@@ -122,7 +122,7 @@ rev2: 사용자 재검증 32개 수정사항을 별도 4개 에이전트로 코�
 
 | # | 판정 | 근거와 결론 |
 |---|---|---|
-| K61 entry-only hash | **부분 — 갭은 Linux package store로 한정** [rev2 최종] | 정확한 표현: **OMA-owned compiled assets는 whole-tree content-addressed**(deployment-manifest.ts:119-121 `dist/src`+contracts+systemd)이고, **runtime dependencies는 pinned `package-lock.json` 바이트의 integrity 계약에 의존**(:126-127) — 설치된 `node_modules` byte tree 자체는 해시하지 않으므로 post-install 변조/손상은 못 잡음(잔여 gap). macOS package store는 `.packages-generations/p-<archive-sha256>` content-addressed immutable generation. 실제 갭: **Linux `.packages`는 plain dir — entry pin만, `./lib/*.js`/node_modules transitive import 미고정**. `assertExtensionIntegrity`도 "asset identification, not containment"로 문서화됨(extension-integrity.ts:9-12). 처방: Linux store를 macOS와 같은 content-addressed generation으로 + 계약 명시 |
+| K61 entry-only hash | **부분 — 정책 선택으로 격하** [rev3 최종] | 사실: OMA compiled assets는 whole-tree content-addressed(deployment-manifest.ts:119-121), runtime deps는 pinned `package-lock.json` 바이트의 integrity 계약 의존(:126-127 — 설치된 node_modules byte tree 자체는 미해시, 잔여 gap). macOS store는 `p-<archive-sha256>` content-addressed. Linux `.packages`는 plain dir — entry pin만, transitive import 미고정. **그러나 현재 contract가 이미 "asset identification, not containment"(extension-integrity.ts:9-12)이고 user extension은 trusted code — v0.1 blocker 아님.** package update atomicity/corruption detection 필요해지면 content-addressed generation으로 강화 |
 | K62 ExtensionModules | **반박 — 유지** [rev2 최종] | `registerHooks`는 `?oma-extension=<id>:<gen>`로 module URL을 재식별 — native ESM cache 회피에 실제 필요. `/reload`뿐 아니라 `/new`,`/resume`,`/fork`의 같은-process session 재생성(pi-interactive-host.ts:476)에도 필요 — 단순 /reload 편의 코드가 아니라 in-process session 경계 코드. 40줄 self-contained. **유지; Pi가 public module invalidation을 제공하면 삭제 후보** |
 | K63 LOC/hash gate | **부분 — 사실과 가치판단 분리** [rev2 수정] | `check:inventory`가 committed `production-files.txt`+per-file sha256+cloc version+report hash를 바이트 비교 — evidence integrity로 정당. committed artifact가 주는 것: diff로 리뷰되는 commit-time claim과 source hash의 상호결합 + 조기 로컬 실패. 사용자 제안 실현 가능: manifest+source digest는 유지하고 `production-loc.json`만 CI-generated evidence로 격하(잃는 건 committed-claim↔measurement binding). 어느 쪽도 방어 가능 |
 | K64 doc archaeology | **확정** | current truth 재구성에 architecture(frozen)×DR1-30×spec 삼각측량 필요. 해결: contract section마다 current-rule 요약 + DR을 provenance로 |
@@ -153,20 +153,63 @@ rev2: 사용자 재검증 32개 수정사항을 별도 4개 에이전트로 코�
 **성능/구조**
 16. unconfined `grep`/`find`가 호출마다 workspace 전체를 private snapshot으로 복사 + spawn (`contained-files.ts`, `contained-search.ts`)
 17. streamed request는 quota scan 2회 (reserve+admit)
-18. `views.refreshWorld`가 write txn마다 3 TSV 원자 재작성
+18. `views.refreshWorld`가 write txn마다 2 TSV + 1 MD(START.md) 원자 재작성 [rev3 정정]
 19. `fsck --strict`가 submit마다 canonical object store 전체 대상 — **rev2: audit 사실 맞음, 최적화는 test 후**. `git fsck --full`이 기본값이고 alternates의 object pool까지 검사하므로 quarantine repo에서 canonical store 전체가 매 submit 검사 대상. 개선 설계: startup/recovery→canonical full fsck(`assertCanonicalHealthyAsync`, reconcile.ts:228-237), submit quarantine→candidate validation만. 단 `--no-full` 즉시 적용 금지 — bundle이 thin이라 prerequisite가 alternate에만 존재하면 `--no-full`이 canonical 손상을 submit 경로에서 놓침. **candidate reachable closure 검증이 기대 보장을 유지하는지 fixture로 먼저 증명** (NB-02와 연동)
-20. `manifestOf` + tar가 export마다 society tree 2회 walk
+20. `manifestOf` + tar가 export마다 society tree 2회 walk + **전체 파일 바이트 2회 read** [rev3 정정 — 기존 표현보다 더 무거움]
 21. boot마다 VM image 전체 hash — **rev2: 삭제 금지**. Ed25519 signature→manifest→file bytes streaming SHA-256은 **release integrity proof**(image.ts:39-73). size는 hash의 fast pre-check일 뿐이고 mtime gate는 없음 — mtime/size 기반 cache는 신뢰 수준을 낮춤. 비용은 실재하나 이 검사만이 "부팅 시점 bytes = 서명된 release"를 증명(dm-verity는 최초 블록 읽기까지 발견 지연)
 22. unconfined Resident는 `process.env` 전체 상속 — 나머지는 모두 strip인데 denylist 방식 (pi-spawn-plan.ts:167-181)
 
 **코드 잔재**
 23. `settleByAcceptance` — 자기 docstring이 "no production caller"라 명시, test만 호출 — **rev2: 즉시 삭제 가능**
 24. `readAttestation` export, caller 0 — **rev2: 즉시 삭제 가능**
-25. quota config 8개 중 5개 필드 write-only (societyUnits, lineageUnits, principalReservedUnits, inferenceSlots, principalReservedSlots)
+25. quota config 8개 중 5개 필드 write-only (societyUnits, lineageUnits, principalReservedUnits, inferenceSlots, principalReservedSlots) — [rev3] 단순 dead field가 아니라 INF-009의 문서화된 과거 accounting 정책 흔적 → schema/contracts/docs-spec/tests 일괄 제거 필요
 26. MAC-240 legacy intent canonicalizer — persisted intent의 "legacy spelling" digest 재계산 전용
 27. 소유주 line 없는 unit을 위한 legacy owner 추론 (`units.ts:184-202`)
-28. legacy bare Message-ID/QP 인코딩 수용 (`mail-values.ts:48-57`)
+28. legacy bare Message-ID 수용(`mail-values.ts:48-57`) + QP read-decode(`mail-tools.ts:107-116`) [rev3 정정 — QP 위치 보정]
 29. historical `git.integrate` plan 3번째 변형 + optional result shape (`durable.ts:222-228,566-568`)
 30. `effortLevelsOf` — pi-ai의 private `getSupportedThinkingLevels`의 line-for-line 복제(public API는 active model만 답함)
-31. in-process `setInterval` sweep vs `reconcile.service` oneshot — **rev2: 의도된 dual-mode이나 절반이 dormant**. 둘 다 같은 `ReconcileModule.sweep()`을 호출 — in-process(broker.ts:162-165, 비-systemd 모드)와 외부 oneshot(`host.js reconcile`→`host.reconcile` RPC, reconcile unit cgroup gate). 그러나 `ensureReconcile`에 production caller가 없어(test만) 외부 경로는 실질 도달 불가 → wire하거나 dormant pair 삭제/문서화
-32. ~15개 committed generated store의 drift surface (production-*, implementation/*.json, evidence/dependency-graph)
+31. in-process `setInterval` sweep vs `reconcile.service` oneshot — **rev3: 삭제 방향 확정, 단 묶음 삭제**. `ensureReconcile`/`ensureBroker`에 production caller 0, 실제 product는 oma가 broker를 직접 supervise(macOS도 동일 — guest 내 foreground). 삭제 세트(묶음): reconcile.service/.timer + `ensureReconcile` + `host.js reconcile` + `host.reconcile` RPC(methods.ts:447-455, internal-dispatcher.ts:218) + `ensureBroker`/`broker.service.in` + **`systemdManaged` 분기(broker.ts:196-203 — in-process sweep를 끄므로 timer만 지우면 latent mode가 조용히 죽음)** + templateEntries/production-files.txt 핀 + 관련 test + spec 행(UNIT-001, profile.systemd-managed). Resident .path/.service와 in-process ReconcileModule은 유지
+32. ~15개 committed generated store의 drift surface (production-*, implementation/*.json, evidence/dependency-graph) — [rev3] source manifest/digest는 유지, LOC 측정치는 CI artifact로 격하 확정
+
+## 별도 제품 결정 (simplification에서 분리)
+
+**U1. unconfined Resident profile 지원 여부 — 사용자 확정: A(confined-only)**
+- 사실관계 정정(rev3): unconfined는 fallback이 아니라 `installation.rootfs:"/"` 명시적 opt-out이며, `deriveSessionSettings`가 매 세션 `installation`을 통째 재작성해 일반 UX에서 사실상 도달 불가. rootfs는 `"/"`여도 매 broker 기동 시 provision됨 — 실패 모드는 rootfs 부재가 아니라 bwrap/userns 부재뿐
+- 결정 근거: "코드 대량 삭제"가 아니라 **Society가 단일 security/runtime contract를 갖기 위해서**. 실제 삭제 범위: Resident env 전체 상속 분기, unconfined용 bash/powershell 제외, `spawnOwnedRpc` Resident 경로 일부, relay skip 분기, `"/"` git arm — contained read/write/grep/find·`OMA_TOOL_SURFACE`는 **Principal이 공유하므로 남음**
+- 비용: 시나리오 테스트 대부분이 `"/"` 기본값이고 confined suite는 bwrap 없으면 skip — **confined fixture/test infra를 항상 실행 가능하게 만드는 재배선이 선행**
+- 구현: `installation.rootfs:"/"`를 `UNSUPPORTED_PROFILE` startup failure로 전환(runner.ts:68-81) + config/docs/spec(profile.unconfined 계약 행) + 테스트 재배선
+
+## 최종 분류 (rev3 확정 — 구현 순서 기준)
+
+**1. 바로 구현 가능한 확정 작업**
+- pre-release legacy 삭제: I47 schema reset, I48 attestation(mail-v1 필수화), I49 binding, I50 adoption, MAC-240/#27/#28/#29, dead quota 5필드(INF-009 spec 포함), #23/24 dead code, `OMA_INCARNATION`, external reconcile cluster(#31)
+- dead config/schema: I54(5필드), I55(flags), I56(usage subsystem 통째)
+- Pi: A8 exact pin, A1/A2 wire types, A4 SettingsStorage+SettingsManager, A5 compat 정리, A3/A6/A7 pi-compat 격리
+- Pi resources 복원: C15-C21(mode별 정책), C16/C17/C18, #6/#7
+- tool surface: D25 provenance, D23 authored config 제거(spec 개정), #5 fail-closed start, D26 golden 강화
+- Extension→CLI 제거: E27/E28 oma-client library(PI-001 규칙 개정 선행), E29/E30, #13/#14 shared codec
+- sandbox env: F34/F35/F36 allowlist(network과 별개로 선행 가능)
+- dead contracts: #15 OMA_INCARNATION 등
+- NB 버그 수정(버그 표 전체)
+
+**2. 설계 확정, 구현 전 spike/test 필요**
+- C21 guidance composition(`before_agent_start`+`sections` — 0.87.1 .d.ts 대조 확인됨)
+- #10 typed channel(`extension_ui_request` 임의 method 통과 여부 spike)
+- #19 quarantine fsck 축소(candidate closure 보장 동등성 fixture 후 `--no-full`)
+- F31/F32 generic network namespace/NAT(큰 feature — 별도 설계)
+- H43-H46 guest-native package install(F32 network 선행 — 그 전 platform-pin interim도 가능)
+
+**3. 성능 측정 후 결정**
+- G38/G39 quota accounting 최적화(soft quota로 spec 선언됨 — 훅 삽입 지점은 준비됨)
+- #18 views.refreshWorld, #20 export double walk/read, K63 LOC evidence 격하
+
+**4. 건드리지 않는 것**
+- Mail/Merge/Review/Challenge semantics, Society ownership, P0 durability
+- Resident systemd .path/.service, in-process ReconcileModule
+- VM image integrity hash(매 boot full SHA-256 유지)
+- ExtensionModules(K62), Pi 기본 system prompt 차단(C22), F33 credential relay, G42 run-start freeze, J60 substrate 비통합
+
+**5. 별도 트랙**
+- U1 unconfined 제거(사용자 확정 A — 테스트 재배선 선행)
+- OpenTUI 정식 API(B9-B14)는 pi-open-tui repo 작업이 선행 — 이 repo에서는 workaround 유지, OpenTUI 쪽 API가 생기면 순차 교체
+- AV-01~31·NB-01~30 버그 수정은 본 backlog와 별개 트랙으로 동시 진행
