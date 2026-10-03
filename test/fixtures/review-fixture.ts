@@ -21,7 +21,6 @@ import type { OperationOf } from "../../src/storage/operation-codec.js";
 export async function* empty(): AsyncIterable<Uint8Array> {}
 
 export interface FixtureOptions {
-  readonly review?: boolean;
   readonly principalDelegated?: boolean;
   readonly protectedPaths?: readonly string[];
   readonly rules?: readonly { path: string; tier: "LOW" | "MEDIUM" | "HIGH"; statuses: ("A" | "M" | "D" | "T")[] }[];
@@ -65,9 +64,8 @@ export function fixture(options: FixtureOptions = {}) {
     society: "demo", quarantineTmpBytes: 1024 * 1024 };
   let mail = new MailModule(paths, store, 64);
   const policy: IntegrationPolicy = { policyRevision: "p1", protectedPaths: [...(options.protectedPaths ?? [])],
-    checks: [...(options.checks ?? [])], tiered: { repositoryFloor: "LOW", highPeerFloor: 2,
-      principalDelegated: options.principalDelegated ?? true, rules: [...(options.rules ?? [])],
-      ...(options.review === false ? {} : { review: "mail-v1" as const }) } };
+    checks: [...(options.checks ?? [])], tiered: { review: "mail-v1" as const, repositoryFloor: "LOW", highPeerFloor: 2,
+      principalDelegated: options.principalDelegated ?? true, rules: [...(options.rules ?? [])] } };
   const bounds = { mailBodyBytes: options.mailBodyBytes ?? 256 * 1024, subjectBytes: 512,
     bundleBytes: options.bundleBytes ?? 256 * 1024 };
   let module = new GitModule(paths, store, mail, policy,

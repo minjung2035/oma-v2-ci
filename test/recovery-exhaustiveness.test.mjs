@@ -50,7 +50,7 @@ function fixture() {
     dirname: path => path,
   });
   Object.assign(value, {
-    starting: false, inFlight: null, mail: {},
+    starting: false, inFlight: null, mail: {}, paths: {},
     activation: allowed => allowed, admit: () => () => undefined,
     lifecycle: {
       reconcileSociety: id => { calls.push(["society", id]); },

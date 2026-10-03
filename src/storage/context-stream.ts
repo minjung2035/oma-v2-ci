@@ -56,8 +56,9 @@ export class PreparedContextTree implements PreacceptOwner {
 
 /** An existing root belongs to another operation and is never adopted. */
 function acquireStagingRoot(staging: string, tree: string): PreparedContextTree {
-  // R6-04: the lease first, then the tree. From the lease on, every failure
-  // returns it -- the caller owns nothing until the prepared tree is returned.
+  // R6-04: the lease first, then the tree. Everything after `take` is inside
+  // the same release-on-failure guard: an opener failure must not strand the
+  // lease (AV-18).
   const lease = TreeLease.take(staging);
   try {
     const parent = openDirectory(dirname(staging));

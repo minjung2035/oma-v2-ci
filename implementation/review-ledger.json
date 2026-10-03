@@ -2,10 +2,10 @@
  "version": 1,
  "baseline": "b25961cc46532f5e30ff60cc381fed51c59d13ab",
  "summary": {
-  "READ_UNCHANGED": 54,
-  "REMOVED": 6,
-  "NOT_REVIEWED": 58,
-  "CHANGED_WITH_ORACLE": 237
+  "READ_UNCHANGED": 53,
+  "NOT_REVIEWED": 82,
+  "CHANGED_WITH_ORACLE": 221,
+  "REMOVED": 2
  },
  "lanes": {
   "fast": "PASS",
@@ -39,9 +39,42 @@
    "note": "read in full in the whole-codebase adversarial pass after v9; oracles are tests whose loaded module closure (or text) contains this file"
   },
   {
+   "path": "implementation/schema-v1-to-v2.sql",
+   "primary": null,
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": []
+  },
+  {
    "path": "implementation/schema-v1.sql",
    "primary": "WP04",
-   "status": "REMOVED",
+   "status": "READ_UNCHANGED",
+   "by": [
+    "AV-review"
+   ],
+   "oracles": [
+    "P01",
+    "P02",
+    "P05",
+    "R38",
+    "V01A",
+    "V01B",
+    "V31A",
+    "V31B"
+   ],
+   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are tests whose loaded module closure (or text) contains this file"
+  },
+  {
+   "path": "implementation/schema-v2-to-v3.sql",
+   "primary": null,
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": []
+  },
+  {
+   "path": "implementation/schema-v2.sql",
+   "primary": null,
+   "status": "NOT_REVIEWED",
    "by": [],
    "oracles": []
   },
@@ -55,11 +88,13 @@
   {
    "path": "implementation/systemd/broker.service.in",
    "primary": "WP03",
-   "status": "REMOVED",
+   "status": "CHANGED_WITH_ORACLE",
    "by": [
     "P0V-59"
    ],
-   "oracles": []
+   "oracles": [
+    "P0V-59"
+   ]
   },
   {
    "path": "implementation/systemd/principal-relay.service.in",
@@ -89,21 +124,27 @@
   {
    "path": "implementation/systemd/reconcile.service.in",
    "primary": "WP03",
-   "status": "REMOVED",
+   "status": "CHANGED_WITH_ORACLE",
    "by": [
     "P0V-59",
     "WP03"
    ],
-   "oracles": []
+   "oracles": [
+    "P0V-59",
+    "V03A",
+    "V03B"
+   ]
   },
   {
    "path": "implementation/systemd/reconcile.timer.in",
    "primary": "WP03",
-   "status": "REMOVED",
+   "status": "CHANGED_WITH_ORACLE",
    "by": [
     "P0V-59"
    ],
-   "oracles": []
+   "oracles": [
+    "P0V-59"
+   ]
   },
   {
    "path": "implementation/systemd/resident.path.in",
@@ -137,7 +178,8 @@
    "primary": null,
    "status": "NOT_REVIEWED",
    "by": [],
-   "oracles": []
+   "oracles": [],
+   "note": "Current working-tree bytes have no explicit byte-bound review; historical reviews do not certify these changes."
   },
   {
    "path": "src/authority.ts",
@@ -574,7 +616,8 @@
    "primary": null,
    "status": "NOT_REVIEWED",
    "by": [],
-   "oracles": []
+   "oracles": [],
+   "note": "Current working-tree bytes have no explicit byte-bound review; historical reviews do not certify these changes."
   },
   {
    "path": "src/cli/commands/routes.ts",
@@ -655,7 +698,8 @@
    "primary": null,
    "status": "NOT_REVIEWED",
    "by": [],
-   "oracles": []
+   "oracles": [],
+   "note": "Current working-tree bytes have no explicit byte-bound review; historical reviews do not certify these changes."
   },
   {
    "path": "src/cli/effects/context.ts",
@@ -1067,7 +1111,8 @@
    "primary": null,
    "status": "NOT_REVIEWED",
    "by": [],
-   "oracles": []
+   "oracles": [],
+   "note": "Current working-tree bytes have no explicit byte-bound review; historical reviews do not certify these changes."
   },
   {
    "path": "src/domain/canonical-json.ts",
@@ -1138,13 +1183,10 @@
   {
    "path": "src/domain/derived.ts",
    "primary": "WP26",
-   "status": "CHANGED_WITH_ORACLE",
-   "by": [
-    "AV3"
-   ],
-   "oracles": [
-    "AV3"
-   ]
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": [],
+   "note": "Current working-tree bytes have no explicit byte-bound review; historical reviews do not certify these changes."
   },
   {
    "path": "src/domain/errors.ts",
@@ -1222,19 +1264,10 @@
   {
    "path": "src/domain/identifiers.ts",
    "primary": "WP26",
-   "status": "READ_UNCHANGED",
-   "by": [
-    "AV-review"
-   ],
-   "oracles": [
-    "AV1",
-    "P2.5",
-    "R03",
-    "R36",
-    "V16A",
-    "V16B"
-   ],
-   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are the tests that load this module"
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": [],
+   "note": "Current working-tree bytes have no explicit byte-bound review; historical reviews do not certify these changes."
   },
   {
    "path": "src/domain/integer-fields.ts",
@@ -1260,7 +1293,8 @@
    "primary": null,
    "status": "NOT_REVIEWED",
    "by": [],
-   "oracles": []
+   "oracles": [],
+   "note": "Current working-tree bytes have no explicit byte-bound review; historical reviews do not certify these changes."
   },
   {
    "path": "src/domain/limits.ts",
@@ -1289,21 +1323,10 @@
   {
    "path": "src/domain/mail-values.ts",
    "primary": "WP20",
-   "status": "CHANGED_WITH_ORACLE",
-   "by": [
-    "P0V-36",
-    "P0V-40",
-    "P0V-41",
-    "P0V-42",
-    "P0V-43"
-   ],
-   "oracles": [
-    "P0V-36",
-    "P0V-40",
-    "P0V-41",
-    "P0V-42",
-    "P0V-43"
-   ]
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": [],
+   "note": "Current working-tree bytes have no explicit byte-bound review; historical reviews do not certify these changes."
   },
   {
    "path": "src/domain/persisted-formats.ts",
@@ -1443,21 +1466,10 @@
   {
    "path": "src/durable.ts",
    "primary": "WP29",
-   "status": "READ_UNCHANGED",
-   "by": [
-    "AV-review"
-   ],
-   "oracles": [
-    "DB-009",
-    "ID-002",
-    "M-003",
-    "P1",
-    "P2.5",
-    "P3",
-    "PI-002",
-    "R28"
-   ],
-   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are tests whose loaded module closure (or text) contains this file"
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": [],
+   "note": "Current working-tree bytes have no explicit byte-bound review; historical reviews do not certify these changes."
   },
   {
    "path": "src/entry/broker.ts",
@@ -1931,57 +1943,10 @@
   {
    "path": "src/extension/mail-tools.ts",
    "primary": "WP27",
-   "status": "CHANGED_WITH_ORACLE",
-   "by": [
-    "AV1",
-    "AV10",
-    "AV11",
-    "AV15",
-    "AV2",
-    "AV23",
-    "AV26",
-    "AV29",
-    "AV30",
-    "AV5",
-    "DR1",
-    "DR13",
-    "DR3",
-    "DR4",
-    "DR6",
-    "DR7",
-    "P0V-110",
-    "P0V-14",
-    "P0V-15",
-    "P0V-32",
-    "P0V-37",
-    "P0V-45",
-    "P0V-78",
-    "P0V-86"
-   ],
-   "oracles": [
-    "AV1",
-    "AV10",
-    "AV11",
-    "AV15",
-    "AV2",
-    "AV23",
-    "AV26",
-    "AV29",
-    "AV5",
-    "DR1",
-    "DR13",
-    "DR3",
-    "DR4",
-    "DR6",
-    "DR7",
-    "P0V-110",
-    "P0V-15",
-    "P0V-32",
-    "P0V-37",
-    "P0V-45",
-    "P0V-78",
-    "P0V-86"
-   ]
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": [],
+   "note": "Current working-tree bytes have no explicit byte-bound review; historical reviews do not certify these changes."
   },
   {
    "path": "src/extension/principal-channel.ts",
@@ -2021,7 +1986,8 @@
    "primary": null,
    "status": "NOT_REVIEWED",
    "by": [],
-   "oracles": []
+   "oracles": [],
+   "note": "Current working-tree bytes have no explicit byte-bound review; historical reviews do not certify these changes."
   },
   {
    "path": "src/extension/shared.ts",
@@ -2113,27 +2079,10 @@
   {
    "path": "src/git.ts",
    "primary": "WP24",
-   "status": "CHANGED_WITH_ORACLE",
-   "by": [
-    "DR1",
-    "DR18",
-    "DR3",
-    "DR4",
-    "DR6",
-    "DR7",
-    "P0V-16",
-    "WP18"
-   ],
-   "oracles": [
-    "DR1",
-    "DR18",
-    "DR3",
-    "DR4",
-    "DR6",
-    "DR7",
-    "V18A",
-    "V18B"
-   ]
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": [],
+   "note": "Current working-tree bytes have no explicit byte-bound review; historical reviews do not certify these changes."
   },
   {
    "path": "src/git/approval.ts",
@@ -2152,25 +2101,10 @@
   {
    "path": "src/git/canonical-command.ts",
    "primary": "WP24",
-   "status": "CHANGED_WITH_ORACLE",
-   "by": [
-    "P0V-113",
-    "P0V-114",
-    "P0V-115",
-    "P0V-116",
-    "P0V-83",
-    "P0V-84",
-    "P0V-85"
-   ],
-   "oracles": [
-    "P0V-113",
-    "P0V-114",
-    "P0V-115",
-    "P0V-116",
-    "P0V-83",
-    "P0V-84",
-    "P0V-85"
-   ]
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": [],
+   "note": "Current working-tree bytes have no explicit byte-bound review; historical reviews do not certify these changes."
   },
   {
    "path": "src/git/context-mirror.ts",
@@ -2296,94 +2230,26 @@
   {
    "path": "src/git/integration.ts",
    "primary": "WP24",
-   "status": "CHANGED_WITH_ORACLE",
-   "by": [
-    "AV27",
-    "AV28",
-    "DR1",
-    "DR13",
-    "DR3",
-    "DR4",
-    "DR6",
-    "DR7",
-    "DR8",
-    "P0V-08",
-    "P0V-64",
-    "P0V-87",
-    "P0V-88",
-    "P0V-89",
-    "P0V-90",
-    "P0V-91",
-    "P0V-92",
-    "P0V-93",
-    "P0V-94",
-    "P0V-95",
-    "WP21",
-    "WP24"
-   ],
-   "oracles": [
-    "AV27",
-    "AV28",
-    "DR1",
-    "DR13",
-    "DR3",
-    "DR4",
-    "DR6",
-    "DR7",
-    "DR8",
-    "P0V-64",
-    "P0V-87",
-    "P0V-88",
-    "P0V-90",
-    "P0V-92",
-    "P0V-93",
-    "P0V-94",
-    "P0V-95",
-    "V21A",
-    "V21B",
-    "V24A",
-    "V24B"
-   ]
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": [],
+   "note": "Current working-tree bytes have no explicit byte-bound review; historical reviews do not certify these changes."
   },
   {
    "path": "src/git/observe.ts",
    "primary": "WP24",
-   "status": "CHANGED_WITH_ORACLE",
-   "by": [
-    "DR18",
-    "P0V-113",
-    "P0V-114",
-    "P0V-115",
-    "P0V-116",
-    "P0V-86"
-   ],
-   "oracles": [
-    "DR18",
-    "P0V-113",
-    "P0V-114",
-    "P0V-115",
-    "P0V-116",
-    "P0V-86"
-   ]
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": [],
+   "note": "Current working-tree bytes have no explicit byte-bound review; historical reviews do not certify these changes."
   },
   {
    "path": "src/git/paths.ts",
    "primary": "WP24",
-   "status": "CHANGED_WITH_ORACLE",
-   "by": [
-    "P0V-28",
-    "P0V-29",
-    "P0V-38",
-    "P0V-39",
-    "P0V-51"
-   ],
-   "oracles": [
-    "P0V-28",
-    "P0V-29",
-    "P0V-38",
-    "P0V-39",
-    "P0V-51"
-   ]
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": [],
+   "note": "Current working-tree bytes have no explicit byte-bound review; historical reviews do not certify these changes."
   },
   {
    "path": "src/git/project-snapshot.ts",
@@ -2407,31 +2273,10 @@
   {
    "path": "src/git/quarantine.ts",
    "primary": "WP24",
-   "status": "CHANGED_WITH_ORACLE",
-   "by": [
-    "AV1",
-    "AV2",
-    "AV5",
-    "DR18",
-    "P0V-28",
-    "P0V-29",
-    "P0V-38",
-    "P0V-39",
-    "P0V-51",
-    "P0V-77"
-   ],
-   "oracles": [
-    "AV1",
-    "AV2",
-    "AV5",
-    "DR18",
-    "P0V-28",
-    "P0V-29",
-    "P0V-38",
-    "P0V-39",
-    "P0V-51",
-    "P0V-77"
-   ]
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": [],
+   "note": "Current working-tree bytes have no explicit byte-bound review; historical reviews do not certify these changes."
   },
   {
    "path": "src/git/submit.ts",
@@ -2715,39 +2560,10 @@
   {
    "path": "src/mail.ts",
    "primary": "WP20",
-   "status": "CHANGED_WITH_ORACLE",
-   "by": [
-    "P0V-87",
-    "P0V-88",
-    "P0V-89",
-    "P0V-90",
-    "P0V-91",
-    "P0V-92",
-    "P0V-93",
-    "P0V-94",
-    "P0V-95",
-    "WP06",
-    "WP17",
-    "WP20",
-    "WP21"
-   ],
-   "oracles": [
-    "P0V-87",
-    "P0V-88",
-    "P0V-90",
-    "P0V-92",
-    "P0V-93",
-    "P0V-94",
-    "P0V-95",
-    "V06A",
-    "V06B",
-    "V17A",
-    "V17B",
-    "V20A",
-    "V20B",
-    "V21A",
-    "V21B"
-   ]
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": [],
+   "note": "Current working-tree bytes have no explicit byte-bound review; historical reviews do not certify these changes."
   },
   {
    "path": "src/mail/addresses.ts",
@@ -2822,21 +2638,10 @@
   {
    "path": "src/mail/display.ts",
    "primary": null,
-   "status": "CHANGED_WITH_ORACLE",
-   "by": [
-    "AV26",
-    "P0V-32",
-    "P0V-37",
-    "P0V-45",
-    "P0V-86"
-   ],
-   "oracles": [
-    "AV26",
-    "P0V-32",
-    "P0V-37",
-    "P0V-45",
-    "P0V-86"
-   ]
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": [],
+   "note": "Current working-tree bytes have no explicit byte-bound review; historical reviews do not certify these changes."
   },
   {
    "path": "src/mail/facts.ts",
@@ -2886,17 +2691,10 @@
   {
    "path": "src/mail/materializer.ts",
    "primary": "WP20",
-   "status": "CHANGED_WITH_ORACLE",
-   "by": [
-    "DR10",
-    "P0V-05",
-    "WP20"
-   ],
-   "oracles": [
-    "DR10",
-    "V20A",
-    "V20B"
-   ]
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": [],
+   "note": "Current working-tree bytes have no explicit byte-bound review; historical reviews do not certify these changes."
   },
   {
    "path": "src/mail/reconcile.ts",
@@ -3118,14 +2916,28 @@
    "by": [
     "MAC-240",
     "MAC-241",
-    "MAC-420"
+    "MAC-401",
+    "MAC-403",
+    "MAC-404",
+    "MAC-411",
+    "MAC-412",
+    "MAC-420",
+    "P0V-103",
+    "P0V-104",
+    "P0V-105",
+    "P0V-106"
    ],
    "oracles": [
     "MAC-240",
-    "MAC-241"
+    "MAC-241",
+    "MAC-404",
+    "MAC-412",
+    "P0V-103",
+    "P0V-104",
+    "P0V-105",
+    "P0V-106"
    ],
-   "note": "Read in full: export() normalizes the request intent before the ledger digests it -- absent `since` and explicit `since: undefined` are one request, and neither is a JSON value the canonical encoder can name. The intent keeps every other field; validation of society/canonical/head is unchanged. MAC-240 oracles: the legacy-spelled digest is a different request that fails closed (never replayed nor re-run), and §6.4/MAC-420 export passes end-to-end under the new digest.",
-   "sha256": "f479e025e1a3dbf058d1653a8e2a9b3d2181b8c5b5ddcab074e465156992f27a"
+   "note": "clauses declared by macos-platform.md's implementation table"
   },
   {
    "path": "src/platform/guest/provision.ts",
@@ -4357,46 +4169,10 @@
   {
    "path": "src/reconcile.ts",
    "primary": "WP21",
-   "status": "CHANGED_WITH_ORACLE",
-   "by": [
-    "AV20",
-    "DR10",
-    "DR18",
-    "P0V-05",
-    "P0V-07",
-    "P0V-64",
-    "P0V-87",
-    "P0V-88",
-    "P0V-89",
-    "P0V-90",
-    "P0V-91",
-    "P0V-92",
-    "P0V-93",
-    "P0V-94",
-    "P0V-95",
-    "WP03",
-    "WP21",
-    "WP22"
-   ],
-   "oracles": [
-    "AV20",
-    "DR10",
-    "DR18",
-    "P0V-64",
-    "P0V-87",
-    "P0V-88",
-    "P0V-90",
-    "P0V-92",
-    "P0V-93",
-    "P0V-94",
-    "P0V-95",
-    "V03A",
-    "V03B",
-    "V21A",
-    "V21B",
-    "V22A",
-    "V22B"
-   ]
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": [],
+   "note": "Current working-tree bytes have no explicit byte-bound review; historical reviews do not certify these changes."
   },
   {
    "path": "src/reconcile/operations.ts",
@@ -4426,20 +4202,10 @@
   {
    "path": "src/reconcile/preaccept.ts",
    "primary": null,
-   "status": "CHANGED_WITH_ORACLE",
-   "by": [
-    "DR10",
-    "P0V-05",
-    "P0V-111",
-    "P0V-112",
-    "P0V-77"
-   ],
-   "oracles": [
-    "DR10",
-    "P0V-111",
-    "P0V-112",
-    "P0V-77"
-   ]
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": [],
+   "note": "Current working-tree bytes have no explicit byte-bound review; historical reviews do not certify these changes."
   },
   {
    "path": "src/request-cache.ts",
@@ -4467,7 +4233,8 @@
    "primary": null,
    "status": "NOT_REVIEWED",
    "by": [],
-   "oracles": []
+   "oracles": [],
+   "note": "Current working-tree bytes have no explicit byte-bound review; historical reviews do not certify these changes."
   },
   {
    "path": "src/rpc-client.ts",
@@ -4999,15 +4766,25 @@
    "primary": "WP27",
    "status": "CHANGED_WITH_ORACLE",
    "by": [
-    "DR25",
-    "DR27"
+    "AV1",
+    "AV19",
+    "AV2",
+    "AV5",
+    "DR13",
+    "DR18",
+    "P0V-19",
+    "P0V-20",
+    "P0V-21",
+    "P0V-22",
+    "P0V-23"
    ],
    "oracles": [
-    "SCN-R01",
-    "SCN-C10"
-   ],
-   "note": "Read in full: the prepared rootfs gains RESIDENT_PATHS.workerArchive so the confined engine's worker-only review archive mount target exists before any bind; the directory list otherwise unchanged, order and ensureDirectory semantics retained. SCN-R01 exercises the Worker review archive end-to-end through the confined path; SCN-C10 exercises package extension loading under the same rootfs.",
-   "sha256": "c4dee7b1cc1df25889360cc2cf7dbdcac8ba9d4d30431befc98c995a93aeab5b"
+    "AV1",
+    "AV2",
+    "AV5",
+    "DR13",
+    "DR18"
+   ]
   },
   {
    "path": "src/runtime/run-registry.ts",
@@ -5106,16 +4883,31 @@
    "primary": "WP27",
    "status": "CHANGED_WITH_ORACLE",
    "by": [
+    "AV10",
+    "AV11",
+    "AV16",
+    "AV17",
+    "AV27",
+    "AV28",
     "DR18",
-    "DR27"
+    "MAC-205",
+    "MAC-411",
+    "P0V-102",
+    "WP27"
    ],
    "oracles": [
-    "DR27",
-    "R28",
-    "SCN-C08"
+    "AV10",
+    "AV11",
+    "AV16",
+    "AV17",
+    "AV27",
+    "AV28",
+    "DR18",
+    "MAC-205",
+    "V27A",
+    "V27B"
    ],
-   "note": "Read in full: resolvedBindSource names each socket bind source by the real directory it reaches instead of a /proc/<pid>/fd anchor bubblewrap cannot traverse inside its user namespace; only the parent resolves, the leaf need not exist, and a missing parent keeps the lexical spelling (ENOENT/ENOTDIR only -- other resolution failures propagate). R28 asserts the pure recipe with fabricated dirs; SCN-C08 runs a real confined shell under the filter; DR27 private-argument tests hold the recipe's value preservation.",
-   "sha256": "839ef28cd6e2e923b89543718d0a0395eaf49d05e12ea0ecdcd97d3b67c747ce"
+   "note": "clauses declared by macos-platform.md's implementation table"
   },
   {
    "path": "src/storage/batch-view.ts",
@@ -5191,20 +4983,10 @@
   {
    "path": "src/storage/context-stream.ts",
    "primary": "WP18",
-   "status": "CHANGED_WITH_ORACLE",
-   "by": [
-    "AV5",
-    "P0V-65",
-    "P0V-77",
-    "WP18"
-   ],
-   "oracles": [
-    "AV5",
-    "P0V-65",
-    "P0V-77",
-    "V18A",
-    "V18B"
-   ]
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": [],
+   "note": "Current working-tree bytes have no explicit byte-bound review; historical reviews do not certify these changes."
   },
   {
    "path": "src/storage/delivery-receipt.ts",
@@ -5487,19 +5269,10 @@
   {
    "path": "src/storage/paths.ts",
    "primary": "WP26",
-   "status": "CHANGED_WITH_ORACLE",
-   "by": [
-    "AV10",
-    "AV11",
-    "AV3",
-    "DR18"
-   ],
-   "oracles": [
-    "AV10",
-    "AV11",
-    "AV3",
-    "DR18"
-   ]
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": [],
+   "note": "Current working-tree bytes have no explicit byte-bound review; historical reviews do not certify these changes."
   },
   {
    "path": "src/storage/preaccept-artifact.ts",
@@ -5850,27 +5623,10 @@
   {
    "path": "src/tui/limits.ts",
    "primary": "WP28",
-   "status": "CHANGED_WITH_ORACLE",
-   "by": [
-    "DR18",
-    "MAC-022",
-    "P0V-36",
-    "P0V-40",
-    "P0V-41",
-    "P0V-42",
-    "P0V-43",
-    "WP14"
-   ],
-   "oracles": [
-    "DR18",
-    "P0V-36",
-    "P0V-40",
-    "P0V-41",
-    "P0V-42",
-    "P0V-43",
-    "V14A",
-    "V14B"
-   ]
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": [],
+   "note": "Current working-tree bytes have no explicit byte-bound review; historical reviews do not certify these changes."
   },
   {
    "path": "src/tui/login.ts",
@@ -5945,15 +5701,9 @@
   {
    "path": "src/tui/open-tui-brand.ts",
    "primary": null,
-   "status": "CHANGED_WITH_ORACLE",
-   "by": [
-    "DR18"
-   ],
-   "oracles": [
-    "Open TUI"
-   ],
-   "note": "Read in full: the oma tip rewrite addresses the last command-tip cell by position (replaceColumn) instead of matching the command's text, because upstream truncates a name when an extension added a command; the cell's original SGR color is carried and the tip is width-bounded like swapText. Open TUI PTY oracles hold the branded header, tips and terminal restoration for all eight endings including reload-update with an extra registered command.",
-   "sha256": "3d12c3c57fdda3ae7974a0868831fa5a880331a3485cb285d0d63219f5c86f1e"
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": []
   },
   {
    "path": "src/tui/packages-apply.ts",
@@ -6115,35 +5865,10 @@
   {
    "path": "src/tui/sources/mail.ts",
    "primary": "WP28",
-   "status": "CHANGED_WITH_ORACLE",
-   "by": [
-    "AV26",
-    "AV7",
-    "DR13",
-    "DR18",
-    "MAC-022",
-    "P0V-19",
-    "P0V-20",
-    "P0V-21",
-    "P0V-22",
-    "P0V-23",
-    "P0V-36",
-    "P0V-40",
-    "P0V-41",
-    "P0V-42",
-    "P0V-43"
-   ],
-   "oracles": [
-    "AV26",
-    "AV7",
-    "DR13",
-    "DR18",
-    "P0V-36",
-    "P0V-40",
-    "P0V-41",
-    "P0V-42",
-    "P0V-43"
-   ]
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": [],
+   "note": "Current working-tree bytes have no explicit byte-bound review; historical reviews do not certify these changes."
   },
   {
    "path": "src/tui/sources/settings.ts",

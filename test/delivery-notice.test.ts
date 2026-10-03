@@ -14,7 +14,7 @@ import { join } from "node:path";
 import type { AuthContext, Capability } from "../implementation/contracts.js";
 import { Store } from "../src/store.js";
 import { MailModule } from "../src/mail.js";
-import { readableMail, registerOmaTools } from "../src/extension/mail-tools.js";
+import { readableMail, registerOmaTools, replyPathFor } from "../src/extension/mail-tools.js";
 import { buildEml } from "../src/mail/serialize.js";
 import { readableMail as runtimeReadableMail } from "../src/mail/display.js";
 import { parseMessage, readBody } from "../src/tui/sources/mail.js";
@@ -88,13 +88,41 @@ test("AV23 / arch §5.1, BATCH-002: a message reads back as the body its sender 
     assert.equal(shown.slice(shown.indexOf("\r\n\r\n") + 4), body);
   }
   assert.deepEqual([...encodings], ["base64"], "fresh mail preserves exact body bytes");
-  // Historical quoted-printable remains readable even though fresh mail uses base64.
+  // #28: quoted-printable is no longer decoded -- a stored QP body is shown
+  // exactly as stored, like any other encoding the reader does not own.
   const legacy = "H: v\r\nContent-Transfer-Encoding: quoted-printable\r\n\r\nold =ED=95=9C=EA=B8=80=20\r\nsoft=\r\nline";
-  assert.equal(readableMail(legacy), "H: v\r\nContent-Transfer-Encoding: quoted-printable\r\n\r\nold 한글 \r\nsoftline");
+  assert.equal(readableMail(legacy), legacy);
   // Nothing is guessed: a body that does not decode exactly is shown as stored.
   for (const stored of ["H: v\r\nContent-Transfer-Encoding: base64\r\n\r\n@@not base64@@", "H: v\r\nContent-Transfer-Encoding: quoted-printable\r\n\r\nbad =G1",
     "H: v\r\nContent-Transfer-Encoding: base64\r\n\r\n/w==", "H: v\r\n\r\nno declared encoding"])
     assert.equal(readableMail(stored), stored);
+});
+
+test("AV-10: a reply to mail that lives only in the worker archive resolves that mount", () => {
+  const root = mkdtempSync(join(tmpdir(), "oma-av10-"));
+  const previous = process.env.OMA_WORKER_ARCHIVE;
+  try {
+    const archive = join(root, "archive"); const worker = join(root, "workers");
+    mkdirSync(archive, { recursive: true }); mkdirSync(worker, { recursive: true });
+    const id = "m-00000000-0000-4000-8000-0000000000aa-0";
+    // Present only in the worker-only archive: the reply path must find it there.
+    writeFileSync(join(worker, `${id}:2,`), "thread mail");
+    process.env.OMA_WORKER_ARCHIVE = worker;
+    assert.equal(replyPathFor(archive, id), join(worker, `${id}:2,`));
+    // The normal archive still wins when the message is in both.
+    writeFileSync(join(archive, `${id}:2,`), "archived copy");
+    assert.equal(replyPathFor(archive, id), join(archive, `${id}:2,`));
+    // And in neither mount the primary path is kept for the CLI to report.
+    const missing = "m-00000000-0000-4000-8000-0000000000bb-0";
+    assert.equal(replyPathFor(archive, missing), join(archive, `${missing}:2,`));
+    // Without the worker mount (a Principal's engine) only the archive resolves.
+    delete process.env.OMA_WORKER_ARCHIVE;
+    assert.equal(replyPathFor(archive, id), join(archive, `${id}:2,`));
+    assert.equal(replyPathFor(archive, missing), join(archive, `${missing}:2,`));
+  } finally {
+    if (previous === undefined) delete process.env.OMA_WORKER_ARCHIVE; else process.env.OMA_WORKER_ARCHIVE = previous;
+    rmSync(root, { recursive: true, force: true });
+  }
 });
 
 test("AV23 / BATCH-002: the read tool shows the decoded body of an archived message", async () => {

@@ -142,6 +142,14 @@ export function mailInboxRelativePath(actor: string, messageId: string, folder: 
   const name = folder === "cur" ? maildirCurName(message) : message;
   return `mail/inboxes/${owner}/${folder}/${name}`;
 }
+/** The per-mailbox arrival journal beside new/cur: `<ms> <message id>\n`
+ * appended when a message link appears in new/. An inbox entry's inode is the
+ * immutable object's, so mtime says when the object was frozen, not when it
+ * arrived here — the journal is the delivery evidence (AV-11). */
+export function mailInboxArrivalRelativePath(actor: string): string {
+  const owner = required(actor, parseActor, "actor");
+  return `mail/inboxes/${owner}/arrival`;
+}
 
 /** Relative symlink target from the trusted world's context directory. */
 export function contextRevisionLinkFor(oid: string): string {

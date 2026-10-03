@@ -6,7 +6,7 @@
  * already owns, not a new durable flag.
  */
 import { closeSync, constants, fstatSync, lstatSync, openSync, readSync, readdirSync } from "node:fs";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import type { MailBody, MailboxRead, MailRow } from "../model.js";
 import { READ_BOUNDS } from "../limits.js";
 import { displaySubject } from "../../mail/headers.js";
@@ -120,6 +120,53 @@ type DirectoryRows = { readonly rows: readonly { row: MailRow; deliveredAtMs: nu
   readonly unreadable: string | null; readonly omitted: number };
 type Entry = { readonly name: string; readonly deliveredAtMs: number };
 
+/** The mailbox's arrival journal: `<ms> <id>\n` appended when a link appears
+ * in new/. An inbox entry's inode is the immutable object's, so its mtime
+ * says when the object was frozen — not when it arrived here (AV-11). The
+ * last line for an id wins: a republished link is the newest arrival. A
+ * missing journal predates it and falls back to inode times; one that cannot
+ * be read says the ordering evidence was not wholly read. */
+const JOURNAL_WINDOW = READ_BOUNDS.mailArrivalJournalBytes.value;
+function arrivalJournal(mailbox: string): { readonly arrivals: ReadonlyMap<string, number>; readonly unreadable: string | null } {
+  const empty = { arrivals: new Map<string, number>(), unreadable: null };
+  const journal = join(mailbox, "arrival");
+  let fd: number | undefined;
+  let text = "";
+  try {
+    fd = openSync(journal, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);
+    const stat = fstatSync(fd);
+    if (!stat.isFile()) return empty;
+    const start = Math.max(0, stat.size - JOURNAL_WINDOW);
+    const buffer = Buffer.allocUnsafe(stat.size - start);
+    let filled = 0;
+    while (filled < buffer.length) {
+      const count = readSync(fd, buffer, filled, buffer.length - filled, start + filled);
+      if (count === 0) break;
+      filled += count;
+    }
+    text = buffer.subarray(0, filled).toString("utf8");
+    if (start > 0) {
+      const boundary = text.indexOf("\n");
+      text = boundary < 0 ? "" : text.slice(boundary + 1);
+    }
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") return empty;
+    const unknown = unobserved(error, journal);
+    return unknown === null ? empty
+      : { arrivals: new Map(), unreadable: `${errorWords(unknown)}: ${journal}` };
+  } finally { if (fd !== undefined) closeSync(fd); }
+  const arrivals = new Map<string, number>();
+  for (const line of text.split("\n")) {
+    const space = line.indexOf(" ");
+    const at = space > 0 ? Number(line.slice(0, space)) : NaN;
+    const id = space > 0 ? line.slice(space + 1) : "";
+    if (id.length > 0 && Number.isSafeInteger(at) && at >= 0) arrivals.set(id, at);
+  }
+  return { arrivals, unreadable: null };
+}
+/** The journal's key for a maildir entry name: `cur` names carry `:2,`. */
+const arrivalKeyOf = (name: string): string => name.endsWith(":2,") ? name.slice(0, -3) : name;
+
 /** mail-v1: the messages of one review request (thread revisions, withdrawn/
  * decision notes, a HIGH approval and its successor) arrive separately and
  * answer each other. The screen folds a thread into one row for its latest
@@ -142,7 +189,7 @@ function threadKeyOf(headers: Readonly<Record<string, string>>): string | null {
  * symlink is not. The one derivation of "what counts as a message" for the
  * list and for the count of messages waiting. An entry that could not be
  * observed now is not known to be no message; the directory says so. */
-function entriesIn(directory: string): { readonly entries: readonly Entry[]; readonly unreadable: string | null } {
+function entriesIn(directory: string, arrivals: ReadonlyMap<string, number>): { readonly entries: readonly Entry[]; readonly unreadable: string | null } {
   const listed = listDir(directory);
   if ("unreadable" in listed) return { entries: [], unreadable: listed.unreadable };
   const entries: Entry[] = [];
@@ -156,7 +203,7 @@ function entriesIn(directory: string): { readonly entries: readonly Entry[]; rea
       if (unknown !== null) unreadable ??= errorWords(unknown);
       continue;
     }
-    if (stat.isFile()) entries.push({ name, deliveredAtMs: stat.mtimeMs });
+    if (stat.isFile()) entries.push({ name, deliveredAtMs: arrivals.get(arrivalKeyOf(name)) ?? stat.mtimeMs });
   }
   // Entries delivered in the same millisecond keep a stable order by name.
   entries.sort((left, right) => right.deliveredAtMs - left.deliveredAtMs || left.name.localeCompare(right.name));
@@ -170,19 +217,22 @@ function entriesIn(directory: string): { readonly entries: readonly Entry[]; rea
  * are counted as omitted, never shown as absent. An entry that could not be
  * read now is not known to be no message: the rows that were read are kept,
  * and the directory says it was not wholly read, as one it cannot list does. */
-function rowsIn(directory: string, unread: boolean, budget: number): DirectoryRows {
+function rowsIn(directory: string, unread: boolean, budget: number,
+    arrivals: ReadonlyMap<string, number>): DirectoryRows {
   const rows: { row: MailRow; deliveredAtMs: number; threadKey: string | null }[] = [];
-  const listed = entriesIn(directory);
+  const listed = entriesIn(directory, arrivals);
   let unreadable = listed.unreadable;
   const shown = listed.entries.slice(0, Math.max(0, budget));
-  for (const { name } of shown) {
+  for (const { name, deliveredAtMs } of shown) {
     const path = join(directory, name);
     const read = readBounded(path, HEADER_LIMIT);
     if (read.kind === "unreadable") { unreadable ??= read.reason; continue; }
     if (read.kind === "none") continue;
     const { headers } = parseMessage(read.text);
     rows.push({
-      deliveredAtMs: read.deliveredAtMs,
+      // AV-11: the link's arrival time (journal, or the inode as its fallback),
+      // not the immutable object's mtime the bounded read observed.
+      deliveredAtMs,
       threadKey: threadKeyOf(headers),
       row: Object.freeze({
         id: name,
@@ -244,8 +294,9 @@ function byArrival(rows: readonly Entry2[]): readonly MailRow[] {
 
 export function readMailbox(paths: MailboxPaths): MailboxRead {
   const budget = READ_BOUNDS.mailListRows.value;
-  const pending = rowsIn(paths.newDir, true, budget);
-  const settled = rowsIn(paths.curDir, false, budget - pending.rows.length);
+  const journal = arrivalJournal(dirname(paths.newDir));
+  const pending = rowsIn(paths.newDir, true, budget, journal.arrivals);
+  const settled = rowsIn(paths.curDir, false, budget - pending.rows.length, journal.arrivals);
   // Threads fold across both directories -- a thread can straddle them -- but
   // the screen's contract stays: unread rows first, by arrival, then read rows.
   const folded = foldThreads([...pending.rows, ...settled.rows]);
@@ -253,7 +304,7 @@ export function readMailbox(paths: MailboxPaths): MailboxRead {
   const readRows = folded.filter(entry => !entry.row.unread);
   return Object.freeze({
     rows: Object.freeze([...byArrival(unreadRows), ...byArrival(readRows)]),
-    unreadable: pending.unreadable ?? settled.unreadable,
+    unreadable: journal.unreadable ?? pending.unreadable ?? settled.unreadable,
     omitted: pending.omitted + settled.omitted,
   });
 }
@@ -262,7 +313,7 @@ export function readMailbox(paths: MailboxPaths): MailboxRead {
  * directory holding them could not be observed: never a 0 for an unread
  * mailbox. Counted by name observation alone, reading no message (P0V-43). */
 export function unreadCount(paths: MailboxPaths): number | null {
-  const pending = entriesIn(paths.newDir);
+  const pending = entriesIn(paths.newDir, new Map());
   return pending.unreadable === null ? pending.entries.length : null;
 }
 

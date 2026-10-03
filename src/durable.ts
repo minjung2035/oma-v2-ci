@@ -47,7 +47,7 @@ import {
   isValidOperationId,
   isValidSocietyName,
   isReviewRequestName,
-  reviewRequestNameFor,
+  reviewRequestNameOwnedBy,
 } from "./domain/identifiers.js";
 
 /** Split the legacy grouped kind members without changing persisted JSON. */
@@ -134,6 +134,9 @@ const integrateFields = {
 
 };
 const integrateBaseCheck = checkObject(integrateFields);
+/** Rows accepted before the plan/result split still carry the settled result
+ * inside the immutable plan. The grammar only exists for decoding them; no
+ * code path writes it now. */
 const integrateWithResultCheck = checkObject({
   ...integrateFields,
   result: operationResultCheck("git.integrate"),
@@ -404,8 +407,8 @@ export function operationPlanCheck(
             plan.publication.message.to[0] !== "commons")) return "integration publication must name commons result mail";
         if (plan.merge !== undefined) {
           if (plan.publication !== undefined) return "merge and publication are mutually exclusive";
-          if (plan.merge.name !== reviewRequestNameFor("merge", plan.merge.request) &&
-              plan.merge.name !== reviewRequestNameFor("challenge", plan.merge.request))
+          if (!reviewRequestNameOwnedBy("merge", plan.merge.request, plan.merge.name) &&
+              !reviewRequestNameOwnedBy("challenge", plan.merge.request, plan.merge.name))
             return "merge request name differs from its request operation";
           for (const [index, notice] of plan.merge.notice.entries()) {
             const meta = notice.review;
@@ -423,8 +426,8 @@ export function operationPlanCheck(
             ? null : "attestation publication must name commons as result mail";
         const fact = plan.fact;
         if (fact.kind === "merge.open" || fact.kind === "challenge.open") {
-          const derived = reviewRequestNameFor(fact.kind === "merge.open" ? "merge" : "challenge", context.operationId);
-          if (fact.name !== derived) return "request name differs from its operation identity";
+          if (!reviewRequestNameOwnedBy(fact.kind === "merge.open" ? "merge" : "challenge", context.operationId, fact.name))
+            return "request name differs from its operation identity";
         }
         const request = fact.kind === "merge.open" || fact.kind === "challenge.open"
           ? context.operationId : fact.request;
@@ -548,6 +551,8 @@ export function operationResultRelationCheck(
       ] as const)
         if (row[field] !== plan[field])
           return `integrate result ${field} differs from accepted plan`;
+      if (row.changed !== (plan.base !== plan.candidate))
+        return "integrate result changed flag differs from accepted plan";
       if (plan.publication) {
         const publication = row.publication as Record<string, unknown> | undefined;
         if (!publication || publication.message !== plan.publication.message.id ||
@@ -563,10 +568,7 @@ export function operationResultRelationCheck(
             merge.recipientCount !== plan.merge.notice.reduce((total, notice) => total + notice.recipients.length, 0))
           return "integration merge result differs from accepted plan";
       } else if (row.merge !== undefined) return "historical integration cannot gain merge notices";
-      // Preserve the historical optional result shape and its explicit changed fact.
-      return plan.result && row.changed !== plan.result.changed
-        ? "integrate changed flag differs from accepted result"
-        : null;
+      return null;
     case "context.publish":
       return row.previous === plan.base &&
         row.revision === plan.candidate &&

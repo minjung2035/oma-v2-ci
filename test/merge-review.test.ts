@@ -39,7 +39,7 @@ test("mail-v1: a LOW merge request applies itself and mails the completion notic
     assert.equal(op.kind, "attest.record");
     assert.deepEqual((op.plan as { messages: unknown[] }).messages, [], "the open owns no mail");
     const name = f.requestName("open-low");
-    assert.match(name, /^merge-[0-9a-f]{8}$/);
+    assert.match(name, /^merge-[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
     const state = f.stateOf(name);
     assert.equal(state.display, "applied"); assert.equal(state.integration?.state, "succeeded");
     // The one integration moved main and published the notice.
@@ -367,26 +367,26 @@ test("mail-v1: an undelegated Principal cannot decide", async () => {
   } finally { f.close(); }
 });
 
-test("mail-v1: review mode gates legacy attestations and direct integration, and vice versa", async () => {
+test("mail-v1 is mandatory: legacy attestation kinds and direct tiered integration are refused", async () => {
   const f = fixture(); try {
     const candidate = f.candidateWith({ "one.txt": "a" });
     await f.submit("alice", candidate);
-    await assert.rejects(f.module.attestations.record(f.auth("alice"), "legacy",
-      { kind: "peer", identity: { repo: "project", targetRef: "refs/heads/main", expectedBase: f.base, candidate,
-        policyRevision: "p1" }, verdict: "APPROVE", evidence: "x" }),
-      { code: "UNSUPPORTED_PROFILE" });
+    const identity = { repo: "project", targetRef: "refs/heads/main", expectedBase: f.base, candidate,
+      policyRevision: "p1" } as const;
+    // I48: every removed legacy kind refuses UNSUPPORTED_PROFILE at fresh
+    // acceptance, independent of which other config the society runs.
+    for (const [key, input] of [
+      ["k-peer", { kind: "peer", identity, verdict: "APPROVE", evidence: "x" }],
+      ["k-decision", { kind: "decision", identity, verdict: "ACCEPT", evidence: "x" }],
+      ["k-revoke", { kind: "revoke", attestation: "op-00000000-0000-4000-8000-000000000001", evidence: "x" }],
+      ["k-challenge", { kind: "challenge", integration: "op-00000000-0000-4000-8000-000000000001", identity, evidence: "x" }],
+      ["k-finding", { kind: "finding", challenge: "op-00000000-0000-4000-8000-000000000001", valid: true, floor: "HIGH", scope: "s", evidence: "x" }],
+      ["k-scope", { kind: "scope", finding: "op-00000000-0000-4000-8000-000000000001", identity, applies: true, evidence: "x" }],
+    ] as const)
+      await assert.rejects(f.module.attestations.record(f.auth("alice"), key, input), { code: "UNSUPPORTED_PROFILE" });
     await assert.rejects(f.module.integrate(f.auth("alice"), "direct", { candidate, expected: f.base, tier: "LOW" }),
       { code: "UNSUPPORTED_PROFILE" });
   } finally { f.close(); }
-  const g = fixture({ review: false }); try {
-    const candidate = g.candidateWith({ "one.txt": "a" });
-    await g.submit("alice", candidate);
-    await assert.rejects(g.open("alice", { tier: "LOW", candidate }, "open"), { code: "UNSUPPORTED_PROFILE" });
-    const legacy = await g.module.attestations.record(g.auth("alice"), "legacy",
-      { kind: "peer", identity: { repo: "project", targetRef: "refs/heads/main", expectedBase: g.base, candidate,
-        policyRevision: "p1" }, verdict: "APPROVE", evidence: "x" });
-    assert.equal(legacy.state, "succeeded");
-  } finally { g.close(); }
 });
 
 test("mail-v1: a LOW cancel owns no mail and closes the request", async () => {
@@ -708,7 +708,7 @@ test("mail-v1: an oversize completion notice is remembered and never recomputed"
       ancestry: (b, c) => createCanonicalObserver().ancestry(f.projectGit, b, c),
       changedPaths: (b, c) => createCanonicalObserver().changedPaths(f.projectGit, b, c),
       submitters: () => [],
-      mergeDiff: (b, c, n) => { diffs++; return `diff-${b}-${c}-${"x".repeat(200)}`; },
+      mergeDiff: (b, c, n) => { diffs++; return Buffer.from(`diff-${b}-${c}-${"x".repeat(200)}`, "utf8"); },
       applyMerge: () => Promise.resolve(),
       prepareRevert: () => { throw new StoreError("REF_STATE_UNKNOWN", "no revert in this fixture"); },
       publishCandidateRef: () => {},

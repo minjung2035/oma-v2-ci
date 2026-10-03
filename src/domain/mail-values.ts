@@ -45,13 +45,13 @@ export function logicalAddressCheck(value: unknown): string | null {
 }
 
 /** Supported OMA header identity, intentionally not a general RFC message-id
- * parser and not the internal MessageId parser. Keep accepted legacy bare IDs.
+ * parser and not the internal MessageId parser. A header id is always
+ * `id@society.oma.invalid`; the pre-release bare form is not a header identity.
  */
 export function headerMessageIdCheck(value: unknown): string | null {
   if (typeof value !== "string") return "expected message identity string";
   const at = value.indexOf("@");
-  if (at < 0) return isValidMessageId(value) ? null : "invalid message id";
-  if (value.indexOf("@", at + 1) >= 0) return "invalid message id";
+  if (at < 0 || value.indexOf("@", at + 1) >= 0) return "invalid message id";
   return isValidMessageId(value.slice(0, at)) && /^[a-z][a-z0-9-]{0,31}\.oma\.invalid$/.test(value.slice(at + 1))
     ? null : "invalid message id";
 }

@@ -1,12 +1,13 @@
-import { lstatSync } from "node:fs";
+import { closeSync, fsyncSync, lstatSync, openSync, writeSync } from "node:fs";
 import { readableBody } from "./display.js";
 import { sha256Hex } from "../domain/canonical-json.js";
 import type { Address, MessagePlan } from "../../implementation/contracts.js";
 import { Store, type DeliveryRow, type OperationRow } from "../store.js";
 import { ownedMessages } from "../durable.js";
 import { StoreError } from "../domain/errors.js";
-import { mailObjectPathAt, mailAudiencePathAt, mailInboxPathAt } from "../storage/paths.js";
+import { mailObjectPathAt, mailAudiencePathAt, mailInboxPathAt, mailInboxArrivalPathAt } from "../storage/paths.js";
 import { publishImmutableFile, readImmutableBytes } from "../storage/immutable-file.js";
+import { entryAt, withinDirectory } from "../storage/contained-fs.js";
 import { parseDisplayedAddress } from "./addresses.js";
 import { decodeSubject, parseEmlHeaders, type ParsedEmlHeaders } from "./headers.js";
 import { consumeIntegrationPublication, type IntegrationPublicationEvidence } from "../git/integration-publication.js";
@@ -142,9 +143,23 @@ export class MailMaterializer {
     const object = mailObjectPathAt(this.stateRoot, message.id);
     const current = mailInboxPathAt(this.stateRoot, delivery.recipient, message.id, "cur");
     const fresh = mailInboxPathAt(this.stateRoot, delivery.recipient, message.id, "new");
+    let arrivedNew = false;
     if (lstatSync(current, { throwIfNoEntry: false })) {
       publishImmutableFile(object, current, message.sha256);
-      if (lstatSync(fresh, { throwIfNoEntry: false })) publishImmutableFile(object, fresh, message.sha256);
-    } else publishImmutableFile(object, fresh, message.sha256);
+      if (lstatSync(fresh, { throwIfNoEntry: false })) { publishImmutableFile(object, fresh, message.sha256); arrivedNew = true; }
+    } else { publishImmutableFile(object, fresh, message.sha256); arrivedNew = true; }
+    // AV-11: a link into new/ is an arrival; its time belongs to this delivery,
+    // not to the immutable object inode it points at. The journal is appended
+    // and durable before the delivery is marked materialized.
+    if (arrivedNew) this.recordArrival(delivery.recipient, message.id);
+  }
+  private recordArrival(recipient: string, messageId: string): void {
+    // Resolve the inbox directory once and append through that descriptor: the
+    // name the journal is created under is the inode the delivery used.
+    withinDirectory(mailInboxArrivalPathAt(this.stateRoot, recipient), (parent, name) => {
+      const fd = openSync(entryAt(parent, name), "a", 0o600);
+      try { writeSync(fd, `${Date.now()} ${messageId}\n`); fsyncSync(fd); }
+      finally { closeSync(fd); }
+    });
   }
 }

@@ -186,16 +186,20 @@ for (const kind of KINDS) {
   });
 }
 
-test("legacy integrate plan.result remains a read-compatible immutable representation", () => {
+test("the historical integrate plan.result variant keeps decoding and settling (#29)", () => {
   const f = fixture("git.integrate");
-  const planJson = JSON.stringify({ ...f.plan, result: f.result }, null, 2);
-  const raw = { ...f.raw, plan_json: planJson, state: "succeeded", result_json: JSON.stringify(f.result) };
-  const decoded = decodeOperation(raw, f.context);
-  assert.equal(decoded.planJson, planJson);
+  const decoded = decodeOperation(f.raw, f.context);
   assert.equal(decoded.kind, "git.integrate");
-  if (decoded.kind !== "git.integrate") assert.fail("wrong decoded kind");
-  assert.deepEqual(decoded.plan.result, f.result);
-  corrupts({ ...raw, result_json: JSON.stringify({ ...f.result, changed: false }) }, f.context);
+  // Rows accepted before the plan/result split embed the terminal result in
+  // the immutable plan. They remain decodable and the embedded value, checked
+  // against the plan's own fields, wins when the pending row settles.
+  const embedded = decodeOperation({ ...f.raw, state: "succeeded",
+    result_json: JSON.stringify(f.result),
+    plan_json: JSON.stringify({ ...f.plan, result: f.result }) }, f.context);
+  assert.equal(embedded.kind, "git.integrate");
+  assert.equal(embedded.state, "succeeded");
+  // The operation's own terminal result still has to describe the plan's diff.
+  corrupts({ ...f.raw, state: "succeeded", result_json: JSON.stringify({ ...f.result, changed: false }) }, f.context);
 });
 
 test("delivery observations match the exact frozen message and recipient set", () => {

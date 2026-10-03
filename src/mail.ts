@@ -1,7 +1,5 @@
 // MAIL-001..010: acceptance orchestration; publication and batch views have explicit owners.
 import { ownedMessages } from "./durable.js";
-import type { LegacyAttestationInput } from "../implementation/contracts/attestation.js";
-import { canonicalJson } from "./domain/canonical-json.js";
 import { ensureDirectory, removeOwnedFile } from "./storage/directory.js";
 import { join } from "node:path";
 import type { Actor, Address, Json, MailInput, MessageId, MessagePlan, OperationId, RequestKey, AuthContext, PreparedBatch, BoundaryEvidence, Receipt } from "../implementation/contracts.js";
@@ -73,14 +71,8 @@ export class MailModule {
   async send(auth: AuthContext, key: RequestKey, input: MailInput, requestContext?: { kind: "mail.send" | "agent.continue"; params: Json }): Promise<Receipt> {
     return this.sendOwned(auth, key, input, requestContext);
   }
-  recordAttestation(auth: AuthContext, key: RequestKey, fact: LegacyAttestationInput, observeAuthority: () => void,
-    accept: () => void): Promise<Receipt> {
-    return this.sendOwned(auth, key, { to: ["commons"], kind: "result", subject: `Attestation: ${fact.kind}`,
-      body: canonicalJson(fact) }, { kind: "attest.record", params: fact, fact, observeAuthority, accept });
-  }
   private async sendOwned(auth: AuthContext, key: RequestKey, input: MailInput,
-    requestContext?: { kind: "mail.send" | "agent.continue"; params: Json } |
-      { kind: "attest.record"; params: LegacyAttestationInput; fact: LegacyAttestationInput; observeAuthority: () => void; accept: () => void }): Promise<Receipt> {
+    requestContext?: { kind: "mail.send" | "agent.continue"; params: Json }): Promise<Receipt> {
     const operationKind = requestContext?.kind ?? "mail.send";
     const requestParams = requestContext?.params ?? input as unknown as Json;
     const society = this.paths.society;
@@ -121,16 +113,13 @@ export class MailModule {
       const artifact = this.freezeObject(messageId, eml);
       scope.register({ operationId: opId, resource: artifact.path, owner: artifact,
         observe: () => frozenMessageDisposition(this.store, opId, { id: messageId, sha256: eml.sha256 }) });
-      if (requestContext?.kind === "attest.record") requestContext.observeAuthority();
       txClaim = this.store.transaction(tx => {
         assertCurrentActor(this.store, auth, "mail.send");
         const current = this.store.claimKey(auth.actor, key, newHash);
         if (current === "retry") return "retry" as const;
         if (current === "reused") throw new StoreError("REQUEST_KEY_REUSED", `request key ${key} already used with a different payload`);
         route.recipients = expandAddresses(this.store, logicalTo, society).recipients;
-        if (requestContext?.kind === "attest.record") requestContext.accept();
-        const plan = { kind: operationKind, message: messagePlanFrom(eml, route.recipients),
-          ...(requestContext?.kind === "attest.record" ? { fact: requestContext.fact } : {}) };
+        const plan = { kind: operationKind, message: messagePlanFrom(eml, route.recipients) };
         const accepted = tx.acceptOperation({ id: opId, actor: auth.actor, requestKey: key, requestHash: newHash,
           kind: operationKind, payloadJson: JSON.stringify(requestParams), planJson: JSON.stringify(plan) });
         if (accepted === "inserted") tx.insertDeliveries(route.recipients.map(recipient => ({ messageId, recipient, operationId: opId })));
@@ -163,17 +152,6 @@ export class MailModule {
     if (message === undefined) throw new StoreError("INVALID_REQUEST", "reply target message is unknown");
     return this.materializer.headers(message);
   }
-  async freezeIntegration(auth: AuthContext, operationId: string, body: string): Promise<{ message: MessagePlan; artifact: PreacceptArtifact }> {
-    const messageId = generateMessageId(operationId, 0);
-    const eml = await buildFrozenMessage({ id: messageId, sender: auth.actor, society: this.paths.society,
-      to: ["commons"], kind: "result", contextRevision: null,
-      replyHeaders: { replyTo: ["commons"], inReplyTo: null, references: [] },
-    }, { subject: "Canonical integration", body });
-    const artifact = this.freezeObject(messageId, eml);
-    // Acceptance refreshes recipients synchronously after all preparation.
-    return { message: messagePlanFrom(eml, []), artifact };
-  }
-  integrationRecipients(): string[] { return expandAddresses(this.store, ["commons"], this.paths.society).recipients; }
   async freezeCreateInitial(auth: AuthContext, operationId: string, recipient: Actor, brief: string): Promise<{ message: MessagePlan; artifact: PreacceptArtifact }> {
     const messageId = generateMessageId(operationId, 0);
     const eml = await buildFrozenMessage({ id: messageId, sender: auth.actor, society: this.paths.society,

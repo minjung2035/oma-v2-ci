@@ -110,6 +110,9 @@ export const READ_BOUNDS = Object.freeze({
   // most recent first; the rest of a large mailbox is counted, not read. (The
   // body a message may have is the society's own limit, not a copy here.)
   mailListRows: bound(200, "count", "messages one refresh reads a header for"),
+  // AV-11: the delivery-arrival journal is appended per delivery, one short
+  // `<ms> <id>` line each; a listing reads only its newest window.
+  mailArrivalJournalBytes: bound(256 * 1024, "bytes", "arrival-journal tail a mailbox listing reads"),
   extensionScanDepth: bound(3, "count", "installed extensions are not nested deeper"),
   extensionScanEntries: bound(1024, "count", "directory entries one extension scan examines before it reports a partial list"),
   // DR18 (D-1): distinct replaced texts written to the guest's log, once each.

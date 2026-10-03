@@ -217,6 +217,10 @@ test("ids: grammar, reserved names, message ids, wire paths", () => {
   assert.ok(generateBatchId().startsWith("b-"));
   assert.ok(isValidWirePath("a/b.txt"));
   for (const path of ["../etc", "/abs", "a/../b", "a\0b"]) assert.ok(!isValidWirePath(path));
+  // AV-25a: a lone surrogate is a decoding artifact, never a wire path — letting
+  // it through would re-encode as replacement bytes and rename on disk.
+  for (const path of ["a\uD800b", "a/\uDC00\uDC00.txt", "\uDFFF"]) assert.ok(!isValidWirePath(path));
+  assert.ok(isValidWirePath("a/\u00e9.txt"), "paired non-ASCII text is still a valid path");
 });
 
 test("store: batch link cross-row invariant (DB-008/BATCH-001)", async () => {

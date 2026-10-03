@@ -101,6 +101,28 @@ test("DR10: startup recovery collects before anything is admitted or bootstrappe
   } finally { f.close(); }
 });
 
+test("AV-19: a stranded context .prepare-* tree is collected; an accepted or unparseable one is kept", () => {
+  const root = mkdtempSync(join(tmpdir(), "oma-prepare-"));
+  try {
+    const revisions = join(root, "world", "context", "revisions");
+    const acceptedId = generateOperationId();
+    const orphan = join(revisions, `.prepare-${"a".repeat(64)}-${generateOperationId()}`);
+    const owned = join(revisions, `.prepare-${"b".repeat(40)}-${acceptedId}`);
+    const malformed = join(revisions, ".prepare-not-an-op");
+    const notTree = join(revisions, `.prepare-${"c".repeat(64)}-${generateOperationId()}`);
+    for (const path of [orphan, owned, malformed]) mkdirSync(path, { recursive: true });
+    writeFileSync(notTree, "not a tree");
+    const store = { getOperationById: (id: string) => (id === acceptedId ? { id } : null) } as never;
+    const collected = collectUnacceptedArtifacts(root, store);
+    assert.deepEqual(collected.removed, [orphan]);
+    assert.equal(existsSync(orphan), false);
+    assert.deepEqual(collected.kept.map(entry => entry.path).sort(), [owned, malformed, notTree].sort());
+    assert.equal(collected.kept.find(entry => entry.path === owned)!.reason, "its operation is accepted");
+    assert.ok(existsSync(owned) && existsSync(malformed) && existsSync(notTree));
+    assert.deepEqual(collectUnacceptedArtifacts(root, store).removed, [], "a second collection removes nothing");
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
 test("DR13 / P0-5: the broker's host policy reader says 'cannot be read now', never 'changed', for a policy it cannot obtain", () => {
   const config = defaultHostConfig({ society: "demo", node: "/usr/bin/node", libdir: "/opt/oma", rootfs: "/state/rootfs", deploymentDigest: "a".repeat(64) });
   assert.equal(readCurrentHostPolicy("/config.json", "demo", () => config), config);

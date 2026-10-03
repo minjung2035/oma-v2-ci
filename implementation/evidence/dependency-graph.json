@@ -1443,6 +1443,13 @@
      "coarseUpward": false
     },
     {
+     "from": "src/broker/internal-dispatcher.ts",
+     "to": "src/ports/runtime.ts",
+     "classification": "internal-port-contract",
+     "kernelUpward": false,
+     "coarseUpward": false
+    },
+    {
      "from": "src/broker/public-dispatcher.ts",
      "to": "src/ports/runtime.ts",
      "classification": "internal-port-contract",
@@ -1756,7 +1763,7 @@
  ],
  "files": 355,
  "runtimeEdges": 1537,
- "typeOnlyEdges": 414,
+ "typeOnlyEdges": 413,
  "runtimeEdgeMatrix": {
   "L1-kernel -> L1-kernel": 283,
   "L2-facts -> L1-kernel": 35,
@@ -1795,11 +1802,11 @@
   "src/domain/identifiers.ts": 62,
   "src/storage/paths.ts": 31,
   "src/protocol/host-guest.ts": 29,
-  "src/storage/contained-fs.ts": 28,
+  "src/storage/contained-fs.ts": 29,
   "src/ids.ts": 27,
   "src/storage/directory.ts": 26,
   "src/storage/durable-fs.ts": 26,
-  "src/domain/canonical-json.ts": 22,
+  "src/domain/canonical-json.ts": 21,
   "src/frame.ts": 20,
   "src/hash.ts": 20,
   "src/domain/derived.ts": 19,
@@ -1810,19 +1817,19 @@
  "fanOut": {
   "src/entry/oma-society.ts": 40,
   "src/broker.ts": 31,
-  "src/mail.ts": 30,
+  "src/mail.ts": 29,
   "src/entry/broker.ts": 28,
+  "src/review.ts": 20,
   "src/entry/oma-mac.ts": 19,
   "src/git.ts": 18,
-  "src/review.ts": 18,
   "src/git/context-repository.ts": 17,
   "src/git/context.ts": 15,
   "src/lifecycle/create.ts": 15,
   "src/reconcile.ts": 15,
   "src/tui/session.ts": 15,
-  "src/git/integration.ts": 14,
   "src/git/submit.ts": 14,
-  "src/mail/batches.ts": 14
+  "src/mail/batches.ts": 14,
+  "src/mail/materializer.ts": 14
  },
  "external": {
   "@earendil-works/pi-coding-agent": 23,
@@ -1831,7 +1838,7 @@
   "node:async_hooks": 3,
   "node:child_process": 9,
   "node:crypto": 43,
-  "node:fs": 111,
+  "node:fs": 110,
   "node:fs/promises": 1,
   "node:http": 1,
   "node:https": 1,

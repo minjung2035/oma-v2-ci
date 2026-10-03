@@ -15,11 +15,14 @@ import { REQUEST_PARAMETER_HELP, refused, requestKeyOf, textResult } from "./sha
 import { validMessageId } from "./batch-view.js";
 
 export type ReviewKind = "merge" | "challenge";
-/** Mirrors the CLI's request-name grammar (merge-/challenge- + 8 lowercase
- * hex); a test binds it to domain/identifiers.ts. */
+/** Mirrors the CLI's request-name grammar (merge-/challenge- + the request's
+ * operation UUID in full; the short 8-hex shape stays readable for facts
+ * accepted before the full-UUID mint); a test binds it to
+ * domain/identifiers.ts. */
+const UUID_TAIL = "[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}";
 const NAME_RE: Readonly<Record<ReviewKind, RegExp>> = {
-  merge: /^merge-[0-9a-f]{8}$/,
-  challenge: /^challenge-[0-9a-f]{8}$/,
+  merge: new RegExp(`^merge-(?:[0-9a-f]{8}|${UUID_TAIL})$`),
+  challenge: new RegExp(`^challenge-(?:[0-9a-f]{8}|${UUID_TAIL})$`),
 };
 
 export interface ReviewToolContext {

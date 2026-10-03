@@ -212,7 +212,7 @@ test("mail-v1 faults: a re-asked approval lost before materialization arrives ex
 test("mail-v1 faults: a crash midway through a multi-part completion notice leaves a half-state that repair completes once", async () => {
   const f = fixture({ mailBodyBytes: 6 * 1024 });
   try {
-    const big = Array.from({ length: 80 }, (_, i) => `line ${i} ${"x".repeat(50)}`).join("\n");
+    const big = Array.from({ length: 200 }, (_, i) => `line ${i} ${"x".repeat(50)}`).join("\n");
     const candidate = f.candidateWith({ "big.txt": big, "bin.dat": `hdr${String.fromCharCode(0)}${" ".repeat(4000)}` });
     await f.submit("alice", candidate);
     const recipients = expandAddresses(f.store, ["commons", "principal"], "demo").recipients;
@@ -277,7 +277,7 @@ test("mail-v1 faults: a crash between the main CAS and notice materialization re
   // multi-part notice has no archive link and no inbox link at all.
   const g = fixture({ mailBodyBytes: 6 * 1024 });
   try {
-    const big = Array.from({ length: 80 }, (_, i) => `line ${i} ${"x".repeat(50)}`).join("\n");
+    const big = Array.from({ length: 200 }, (_, i) => `line ${i} ${"x".repeat(50)}`).join("\n");
     const candidate = g.candidateWith({ "big.txt": big });
     await g.submit("alice", candidate);
     const realPublish = g.mail.publishGated.bind(g.mail);
@@ -333,7 +333,7 @@ test("mail-v1 faults: a crash between the main CAS and notice materialization re
   // archive link and one inbox link exist, no delivery is flagged.
   const h = fixture({ mailBodyBytes: 6 * 1024 });
   try {
-    const big = Array.from({ length: 80 }, (_, i) => `line ${i} ${"x".repeat(50)}`).join("\n");
+    const big = Array.from({ length: 200 }, (_, i) => `line ${i} ${"x".repeat(50)}`).join("\n");
     const candidate = h.candidateWith({ "big.txt": big });
     await h.submit("alice", candidate);
     failNthDeliveryFlag(h, "git.integrate", 1);

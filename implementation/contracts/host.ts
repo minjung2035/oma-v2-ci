@@ -24,7 +24,9 @@ export interface ResourceLimits {
 }
 
 export interface TieredPolicy {
-  /** "mail-v1" selects the mail review protocol; absent is legacy attestation. */
+  /** The mail review protocol is the only review grammar (I48). The field may
+   * be absent in a written configuration; a tiered society reviews by mail
+   * regardless, so it only ever narrows to "mail-v1". */
   review?: "mail-v1";
   repositoryFloor: RiskTier;
   highPeerFloor: number;

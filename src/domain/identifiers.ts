@@ -80,13 +80,29 @@ export function refreshKeyOrdinalOf(key: string, operationId: string): number | 
   return PLAIN_ORDINAL_RE.test(tail) && Number.isSafeInteger(Number(tail)) ? Number(tail) : null;
 }
 
-/** Review request names derive from the open operation's UUID first 8 hex. */
-const REVIEW_REQUEST_NAME_RE = /^(merge|challenge)-[0-9a-f]{8}$/;
+/** Review request names derive from the open operation's UUID in full: a
+ * name is a unique handle for exactly one immutable request, and the earlier
+ * 8-hex truncation let two distinct opens mint the same name and exchange
+ * facts meant for each other. Names accepted before the full-UUID grammar
+ * stay decodable, so the reader grammar keeps the short shape too. */
+const UUID_TAIL = UUID_V4_RE.source.slice(1, -1);
+const REVIEW_REQUEST_NAME_RE = new RegExp(`^(merge|challenge)-(?:[0-9a-f]{8}|${UUID_TAIL})$`);
 export function isReviewRequestName(value: unknown): value is string {
   return typeof value === "string" && REVIEW_REQUEST_NAME_RE.test(value);
 }
+/** The name a fresh open mints: kind + the operation's whole UUID. */
 export function reviewRequestNameFor(kind: "merge" | "challenge", operationId: string): string {
+  return `${kind}-${operationId.slice(3)}`;
+}
+/** The name shape facts accepted before the full-UUID grammar still carry. */
+export function legacyReviewRequestNameFor(kind: "merge" | "challenge", operationId: string): string {
   return `${kind}-${operationId.slice(3, 11)}`;
+}
+/** True when `name` is the request name `operationId` would own under either
+ * grammar generation: durable relation checks accept both derivations for a
+ * fact that pre-dates the minting fix, and the kinds stay exact. */
+export function reviewRequestNameOwnedBy(kind: "merge" | "challenge", operationId: string, name: string): boolean {
+  return name === reviewRequestNameFor(kind, operationId) || name === legacyReviewRequestNameFor(kind, operationId);
 }
 
 export function isValidOperationId(value: unknown): value is OperationId {
@@ -110,13 +126,26 @@ export function isValidFullOid(value: unknown): value is FullOid {
   return typeof value === "string" && FULL_OID_RE.test(value);
 }
 
+/** A code-unit scan for an unpaired surrogate: a lone surrogate is a decoding
+ * artifact, never a path this product wrote. Letting it through re-encodes as
+ * replacement bytes and renames on disk. No identifier grammar restates this;
+ * it is a well-formedness probe, so it stays a code-unit walk, not a regex. */
+const hasLoneSurrogate = (text: string): boolean => {
+  for (let index = 0; index < text.length; index++) {
+    const unit = text.charCodeAt(index);
+    if (unit < 0xd800 || unit >= 0xe000) continue;
+    if (unit >= 0xdc00) return true; // a trailing half with no leading half
+    const next = text.charCodeAt(index + 1);
+    if (next >= 0xdc00 && next < 0xe000) { index++; continue; }
+    return true; // a leading half not followed by its trailing half
+  }
+  return false;
+};
+
 /** General repository-relative path; context documents have a narrower policy. */
 export function isValidWirePath(value: unknown): value is RepositoryRelativePath {
   if (typeof value !== "string" || value.length === 0 || value.length > 4096) return false;
-  // AV-20261003-25: a lone surrogate cannot be represented in stored text or
-  // attestation grammar; the grammar refuses it here, not downstream.
-  if (/\p{Cs}/u.test(value)) return false;
-  if (value.includes("\0") || value.startsWith("/") || value.includes("//")) return false;
+  if (value.includes("\0") || value.startsWith("/") || value.includes("//") || hasLoneSurrogate(value)) return false;
   for (const part of value.split("/")) {
     if (part === "." || part === ".." || part === "") return false;
   }

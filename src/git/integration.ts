@@ -5,13 +5,14 @@ import type { TieredAcceptance } from "../../implementation/contracts/integratio
 import type { RiskTier, ExactCandidateIdentity } from "../../implementation/contracts/values.js";
 import type { MailModule } from "../mail.js";
 import { PreacceptScope } from "../storage/preaccept-artifact.js";
-import { frozenMessageDisposition } from "../mail/materializer.js";
+
 import { IntegrationPublicationObserver } from "./integration-publication.js";
 import { TieredAuthority } from "./tiered-authority.js";
-import { canonicalJson } from "../hash.js";
+
 import type { AuthContext, OperationId, Receipt, Oid } from "../../implementation/contracts.js";
 import { Store, reused } from "../store.js";
 import type { OperationOf } from "../storage/operation-codec.js";
+import type { PlanFor } from "../durable.js";
 import { assertCurrentActor, capabilitiesOf } from "../authority.js";
 import { StoreError, AcceptedFailure, type EffectKnowledge, type ErrorPhase, acceptedFailurePolicy, failureMessage } from "../domain/errors.js";
 import { requestHash } from "../hash.js";
@@ -187,19 +188,6 @@ export class IntegrationCoordinator {
     if (current.authorityDigest !== accepted.authorityDigest)
       throw new StoreError("POLICY_CHANGED", "integration authority changed after acceptance; submit a new request with fresh evidence");
   }
-  /** Called by attestation acceptance, not by historical replay. */
-  assertReviewIdentity(identity: ExactCandidateIdentity): void {
-    const policy = this.currentPolicy();
-    if (policy.tiered === null) throw new StoreError("UNSUPPORTED_PROFILE", "tiered attestation is not configured");
-    if (policy.policyRevision !== identity.policyRevision) throw new StoreError("POLICY_CHANGED", "review policy revision changed");
-    this.effects.verifyObjectFormat([identity.expectedBase, identity.candidate]);
-    if (observed(this.effects.main(), "review main") !== identity.expectedBase) throw new StoreError("STALE_BASE", "review base is not current main");
-    if (!observed(this.effects.published(), "review publication").includes(identity.candidate))
-      throw new StoreError("CANDIDATE_NOT_PUBLISHED", "review candidate is not published");
-  }
-  assertPrincipalDelegated(): void {
-    if (!this.currentPolicy().tiered?.principalDelegated) throw new StoreError("CAPABILITY_DENIED", "Human has not delegated Principal decisions");
-  }
   private hasNoopWitness(operation: OperationOf<"git.integrate">): boolean {
     const ref = operation.plan.publication?.noopRef;
     if (!ref || !this.effects.noopWitness) throw new StoreError("REF_STATE_UNKNOWN", "no-op authorization witness is unavailable");
@@ -237,7 +225,7 @@ export class IntegrationCoordinator {
     if (claim === "reused") throw reused(auth.actor, key);
     const policy = this.currentPolicy();
     assertSupportedIntegration(policy);
-    if (policy.tiered?.review === "mail-v1")
+    if (policy.tiered !== null)
       throw new StoreError("UNSUPPORTED_PROFILE", "this society reviews with oma_merge/oma_challenge");
     if (policy.tiered === null && input.tier !== undefined)
       throw new StoreError("UNSUPPORTED_PROFILE", "requested tier requires tiered integration");
@@ -254,41 +242,20 @@ export class IntegrationCoordinator {
       base: input.expected, candidate: input.candidate, policyRevision: policy.policyRevision,
       checkProfileDigest: policy.checkProfileDigest,
     };
-    const tiered = policy.tiered === null ? null : this.evaluate(policy, auth.actor, basePlan, input.tier ?? "LOW");
     const scope: PreacceptScope = new PreacceptScope();
     let accepted: "inserted" | "retry";
-    let plan: OperationOf<"git.integrate">["plan"] | typeof basePlan;
+    // I48: mail-v1 is mandatory when tiered is configured, so a fresh
+    // git.integrate accepted here is always the non-tiered plan.
+    const plan: PlanFor<"git.integrate"> = basePlan;
     try {
-      let publication: { tiered: TieredAcceptance; message: import("../../implementation/contracts.js").MessagePlan; noopRef: string | null } | undefined;
-      if (tiered !== null) {
-        if (this.mail === null) throw new StoreError("UNSUPPORTED_PROFILE", "tiered requires its publication owner");
-        const prepared = await this.mail.freezeIntegration(auth, id, canonicalJson({ integration: id,
-          identity: this.identity(basePlan), previousMain: basePlan.base, currentMain: basePlan.candidate,
-          tiered: { requested: tiered.requested, effective: tiered.effective, reasons: tiered.reasons,
-            approvers: tiered.approvers, principalDecision: tiered.principalDecision, activeFloors: tiered.activeFloors,
-            policyDigest: tiered.policyDigest, authorityDigest: tiered.authorityDigest,
-            reviews: tiered.snapshot.reviews?.map(review => review.id),
-            scopeAssessments: tiered.snapshot.scopeAssessments?.map(assessment => assessment.attestation) },
-          checkProfileDigest: basePlan.checkProfileDigest }));
-        scope.register({ operationId: id, resource: prepared.artifact.path, owner: prepared.artifact,
-          observe: () => frozenMessageDisposition(this.store, id, prepared.message) });
-        this.verifyCurrentPolicy(basePlan.policyRevision);
-        const fresh = this.evaluate(policy, auth.actor, basePlan, input.tier ?? "LOW");
-        if (fresh.authorityDigest !== tiered.authorityDigest) throw new StoreError("POLICY_CHANGED", "integration authority changed during preparation");
-        publication = { tiered, message: prepared.message, noopRef: basePlan.base === basePlan.candidate ? `refs/oma/integrations/${id}` : null };
-      }
-      plan = { ...basePlan, ...(publication === undefined ? {} : { publication }) };
       accepted = this.store.transaction(tx => {
         this.requireExecuteAuthority(auth, false);
         const current = this.store.claimKey(auth.actor, key, hash);
         if (current === "retry") return "retry" as const;
         if (current === "reused") throw reused(auth.actor, key);
         this.requireWriterSlot();
-        if (publication !== undefined) publication.message.recipients = this.mail!.integrationRecipients();
         const result = tx.acceptOperation({ id, actor: auth.actor, requestKey: key, requestHash: hash,
           kind: "git.integrate", payloadJson: JSON.stringify(input), planJson: JSON.stringify(plan) });
-        if (result === "inserted" && publication !== undefined) tx.insertDeliveries(publication.message.recipients.map(recipient =>
-          ({ operationId: id, messageId: publication.message.id, recipient })));
         return result;
       });
     } catch (error) { scope.settleFailure(error); }

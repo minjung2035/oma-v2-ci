@@ -5,7 +5,7 @@ import { isAbsolute } from "node:path";
 import { isValidFullOid, isValidWirePath } from "../../domain/identifiers.js";
 import { StoreError } from "../../domain/errors.js";
 import { GitObserver, observed } from "../../git/observe.js";
-import { CANONICAL_SAFE_ARGS } from "../../git/canonical-command.js";
+import { CANONICAL_SAFE_ARGS, mergeDiffText } from "../../git/canonical-command.js";
 import { GIT_ENV, runGitText } from "../../process/policies.js";
 import { runProcessSync } from "../../process/run.js";
 
@@ -64,6 +64,19 @@ export function readCode(repository: string, input: CodeView): { revision: strin
     case "log": args = ["log", "--no-show-signature", "--no-color", "--format=%H %s", "-n", "100", target, "--", ...path]; break;
     case "ls-tree": args = ["ls-tree", "-r", "--long", target, "--", ...path]; break;
     case "grep": args = ["grep", "--no-textconv", "--no-ext-grep", "-I", "-n", "-F", "-e", input.pattern!, target, "--", ...path]; break;
+  }
+  // merge-diff carries raw bytes (a binary patch is valid); its text view is
+  // the same owner-rendered representation the completion notice uses.
+  if (input.action === "merge-diff") {
+    const result = runProcessSync({ executable: "/usr/bin/git",
+      argv: [...SAFE, "--git-dir", repository, ...args], env: { ...GIT_ENV, GIT_LITERAL_PATHSPECS: "1" },
+      timeoutMs: 30_000, stdoutBytes: MAXIMUM, stderrBytes: 8192 });
+    if (result.kind === "output-limited") throw new StoreError("LIMIT_EXCEEDED", "merge diff exceeds its view bound");
+    if (result.kind === "timed-out") throw new StoreError("DEADLINE_EXCEEDED", "merge diff timed out");
+    if (result.kind !== "exited" || result.exitCode !== 0)
+      throw new StoreError("INVALID_REQUEST",
+        `code view could not be read: ${result.stderr.toString("utf8").trim().slice(0, 200)}`);
+    return { revision: target, ...(base === undefined ? {} : { base }), text: mergeDiffText(result.stdout) };
   }
   const result = runGitText([...SAFE, ...args], { gitDir: repository, maxBuffer: MAXIMUM, env: { GIT_LITERAL_PATHSPECS: "1" } });
   if (result.status !== 0 && !(input.action === "grep" && result.status === 1 && result.stderr === ""))

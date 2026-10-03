@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, utimesSync, writeFileSync } from "node:fs";
+import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, utimesSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { createHash } from "node:crypto";
@@ -231,6 +231,37 @@ test("T98/TUI-011: unread comes from the mailbox position, and no read state is 
     readBody(join(box.newDir, "m-1"), 4096);
     assert.deepEqual(readMailbox(box).rows, before);
     assert.equal(unreadCount(box), 1);
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
+test("AV-11: arrival order comes from the journal; inode times are only its fallback", () => {
+  const root = scratch("oma-tui-arrival-");
+  try {
+    const box = principalMailbox(root);
+    mkdirSync(box.newDir, { recursive: true });
+    const eml = (id: string, subject: string): string =>
+      ["From: worker-a@demo.oma.invalid", `Subject: ${subject}`, "X-OMA-Kind: message",
+        `Message-ID: <${id}@demo.oma.invalid>`, "", "body", ""].join("\n");
+    const a = "m-aaaaaaaa-0000-4000-8000-0000000000aa-0";
+    const b = "m-bbbbbbbb-0000-4000-8000-0000000000bb-0";
+    const at = (name: string, seconds: number): void => {
+      const path = join(box.newDir, name); writeFileSync(path, eml(name, name));
+      const when = new Date(2026, 0, 1, 0, 0, seconds); utimesSync(path, when, when);
+    };
+    at(a, 10); at(b, 20); // inode mtimes say b is newer
+    // No journal yet (pre-AV-11 mailbox): inode times order the rows.
+    assert.deepEqual(readMailbox(box).rows.map(row => row.id), [b, a]);
+    // The journal says a arrived last -- its time is the link's, not the object's.
+    const journal = join(root, "mail", "inboxes", "principal", "arrival");
+    writeFileSync(journal, `1000 ${b}\n2000 ${a}\n`);
+    assert.deepEqual(readMailbox(box).rows.map(row => row.id), [a, b]);
+    // A republished link takes the newest line for its id.
+    writeFileSync(journal, `1000 ${b}\n2000 ${a}\n3000 ${b}\n`);
+    assert.deepEqual(readMailbox(box).rows.map(row => row.id), [b, a]);
+    // A journal that cannot be read is reported, never silently treated as empty.
+    chmodSync(journal, 0o000);
+    assert.ok(readMailbox(box).unreadable !== null);
+    chmodSync(journal, 0o600);
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
 

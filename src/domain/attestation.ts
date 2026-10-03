@@ -28,6 +28,7 @@ export function attestationProblem(value: unknown, evidenceBytes = Number.MAX_SA
     default: return "unknown attestation kind";
   }
 }
+
 // ---------------------------------------------------------------------------
 // mail-v1 review grammar: caller inputs (ReviewInput) and the broker-frozen
 // facts (ReviewFact) that plan.fact carries for those operations.
@@ -42,7 +43,9 @@ const reviewTier = (value: unknown): boolean =>
   value === "LOW" || value === "MEDIUM" || value === "HIGH";
 /** A challenge names the merge request it reverts. */
 const mergeRequestName = (value: unknown): boolean =>
-  typeof value === "string" && /^merge-[0-9a-f]{8}$/.test(value);
+  typeof value === "string" && value.startsWith("merge-") && isReviewRequestName(value);
+const challengeRequestName = (value: unknown): boolean =>
+  typeof value === "string" && value.startsWith("challenge-") && isReviewRequestName(value);
 const sortedUniqueActors = (value: unknown): boolean =>
   Array.isArray(value) && value.every(actor => isValidActor(actor)) &&
   value.every((actor, index) => index === 0 || (value[index - 1] as string) < (actor as string));
@@ -111,7 +114,7 @@ export function reviewFactProblem(value: unknown): string | null {
         exactCandidateCheck((row.target as Record<string, unknown>).identity) === null &&
         reviewTier((row.target as Record<string, unknown>).tier);
       return object(row, ["kind", "version", "name", "title", "reason", "tier", "identity", "submitters", "prepared", "target"]) &&
-        typeof row.name === "string" && /^challenge-[0-9a-f]{8}$/.test(row.name) &&
+        challengeRequestName(row.name) &&
         (row.tier === "LOW" || row.tier === "HIGH") && typeof row.prepared === "boolean" &&
         boundedText(row.title, Number.MAX_SAFE_INTEGER) && boundedText(row.reason, Number.MAX_SAFE_INTEGER) &&
         exactCandidateCheck(row.identity) === null && sortedUniqueActors(row.submitters) && targetOk
@@ -137,11 +140,12 @@ export function reviewFactProblem(value: unknown): string | null {
 
 const REVIEW_INPUT_KINDS = new Set(["merge.open", "challenge.open", "review", "vote", "cancel"]);
 
-/** The one attest.record params grammar: a legacy attestation, a review input,
- * or the stored payload of a broker-derived refresh fact. The frozen refresh
- * shape is admitted so stored rows decode; no acceptance path takes `refresh`
- * from a caller (ReviewModule refuses it), and derived request keys are never
- * valid on the wire. */
+/** The one attest.record params grammar: a review input, the stored payload of
+ * a broker-derived refresh fact, or a legacy attestation shape. Legacy and
+ * refresh shapes are admitted at the wire so a same-key replay still reaches the
+ * receipt lookup (AV-03); no acceptance path takes them from a caller
+ * (AttestationModule refuses fresh legacy with UNSUPPORTED_PROFILE, ReviewModule
+ * refuses refresh), and derived request keys are never valid on the wire. */
 export function attestationInputProblem(value: unknown, limits: ReviewInputLimits): string | null {
   const legacy = attestationProblem(value, limits.mailBodyBytes);
   if (legacy === null) return null;

@@ -14,7 +14,7 @@ import { StoreError } from "../src/domain/errors.js";
 import { attestationParamsCheck, messagePlanCheck } from "../src/validate.js";
 import { reviewFactProblem } from "../src/domain/attestation.js";
 import { isDerivedRequestKey, isReviewRequestName, applyRequestKeyFor, refreshRequestKeyFor,
-  reviewRequestNameFor } from "../src/domain/identifiers.js";
+  reviewRequestNameFor, legacyReviewRequestNameFor, reviewRequestNameOwnedBy } from "../src/domain/identifiers.js";
 import { requestHash } from "../src/hash.js";
 import { generateOperationId, generateMessageId } from "../src/ids.js";
 import { makeValidAgent } from "./fixtures/spec.js";
@@ -43,8 +43,25 @@ test("identifiers: derived request keys and review request names", () => {
   assert.equal(isReviewRequestName("challenge-0000000a"), true);
   assert.equal(isReviewRequestName("merge-0000000G"), false);
   assert.equal(isReviewRequestName("merge-0000000"), false);
-  assert.equal(reviewRequestNameFor("merge", "op-0123abcd-4567-4000-8000-000000000000"), "merge-0123abcd");
-  assert.equal(reviewRequestNameFor("challenge", OP), "challenge-00000000");
+  // AV-02: a fresh name carries the operation's whole UUID -- two opens can no
+  // longer collide on an 8-hex truncation and exchange facts meant for each
+  // other. The short shape stays decodable for facts minted before the fix.
+  assert.equal(reviewRequestNameFor("merge", "op-0123abcd-4567-4000-8000-000000000000"),
+    "merge-0123abcd-4567-4000-8000-000000000000");
+  assert.equal(reviewRequestNameFor("challenge", OP), "challenge-00000000-0000-4000-8000-000000000001");
+  assert.equal(legacyReviewRequestNameFor("merge", OP), "merge-00000000");
+  assert.equal(isReviewRequestName("merge-0123abcd-4567-4000-8000-000000000000"), true);
+  assert.equal(isReviewRequestName("challenge-0123abcd-4567-4000-8000-000000000000"), true);
+  assert.equal(isReviewRequestName("merge-0123abcd-4567-4000-8000-00000000000"), false);
+  assert.equal(isReviewRequestName("merge-0123abcd-4567-4000-8000-0000000000000"), false);
+  assert.equal(isReviewRequestName("merge-0123ABCD-4567-4000-8000-000000000000"), false);
+  // Ownership admits exactly the two grammars for this operation's own name.
+  assert.equal(reviewRequestNameOwnedBy("merge", OP, "merge-00000000-0000-4000-8000-000000000001"), true);
+  assert.equal(reviewRequestNameOwnedBy("merge", OP, "merge-00000000"), true);
+  assert.equal(reviewRequestNameOwnedBy("challenge", OP, "merge-00000000"), false);
+  assert.equal(reviewRequestNameOwnedBy("merge", OP, "merge-0123abcd"), false);
+  assert.equal(reviewRequestNameOwnedBy("merge", OP, "merge-0123abcd-4567-4000-8000-000000000000"), false);
+  assert.equal(reviewRequestNameOwnedBy("challenge", OP, "challenge-00000000-0000-4000-8000-000000000001"), true);
 });
 
 test("wire: every valid ReviewInput kind is accepted", () => {

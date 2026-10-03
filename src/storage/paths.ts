@@ -11,6 +11,7 @@ export function projectSettingsPathAt(dataRoot: string, project: string): string
 import {
   agentRootFor, workspaceFor, runnerViewFor, batchViewFor, runnerReceiptFor, runnerSessionDirFor, sessionDirFor,
   mailObjectRelativePath, mailArchiveRelativePath, mailWorkersRelativePath, mailInboxRelativePath,
+  mailInboxArrivalRelativePath,
   submitStagingFor, submitBundleFor, contextStagingFor, contextRevisionFor, modelWorkspaceFor,
   actorSocketDirectoryFor, actorSocketFor,
 } from "../domain/derived.js";
@@ -77,6 +78,9 @@ export function mailAudiencePathAt(stateRoot: string, message: { id: string; aud
 }
 export function mailInboxPathAt(stateRoot: string, actor: string, messageId: string, folder: "new" | "cur"): string {
   return join(stateRoot, mailInboxRelativePath(actor, messageId, folder));
+}
+export function mailInboxArrivalPathAt(stateRoot: string, actor: string): string {
+  return join(stateRoot, mailInboxArrivalRelativePath(actor));
 }
 export function submitStagingPathAt(stateRoot: string, operationId: string): string {
   return join(stateRoot, submitStagingFor(operationId));

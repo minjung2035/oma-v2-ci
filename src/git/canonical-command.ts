@@ -2,6 +2,8 @@
 import { GIT_ENV } from "../process/policies.js";
 import { StoreError } from "../domain/errors.js";
 import { runProcessSync } from "../process/run.js";
+import { decodeUtf8 } from "../domain/utf8.js";
+import { sha256Hex } from "../hash.js";
 import { GitObserver, classifyRefAfterCas, gitOidArgument, gitRefArgument, type GitProcessEvidence, type GitObservation, type RefAfterCas } from "./observe.js";
 import { isValidFullOid } from "../domain/identifiers.js";
 
@@ -62,10 +64,12 @@ export const CANONICAL_SAFE_ARGS: readonly string[] = ["--no-pager", "-c", "core
   "-c", "core.fsmonitor=false", "-c", "core.attributesFile=/dev/null", "-c", "diff.external=",
   "-c", "protocol.allow=never"];
 
-/** mail-v1 §6: the canonical merge diff for a completion notice. Output is
+/** mail-v1 §6: the canonical merge diff for a completion notice. The returned
+ * bytes are the single authoritative diff; consumers render them through
+ * `mergeDiffText` and never substitute replacement characters. Output is
  * caller-bounded; exceeding maxBytes throws LIMIT_EXCEEDED and a non-zero or
  * unobserved exit is a REF_STATE_UNKNOWN observation failure, never a diff. */
-export function canonicalMergeDiff(repository: string, base: string, candidate: string, maxBytes: number): string {
+export function canonicalMergeDiff(repository: string, base: string, candidate: string, maxBytes: number): Buffer {
   const result = runProcessSync({ executable: GIT_BIN,
     argv: [...CANONICAL_SAFE_ARGS, "--git-dir", repository,
       "diff", "--binary", "--full-index", "--no-ext-diff", "--no-textconv", "--no-color", base, candidate],
@@ -75,8 +79,19 @@ export function canonicalMergeDiff(repository: string, base: string, candidate: 
   if (result.kind === "timed-out") throw new StoreError("DEADLINE_EXCEEDED", "merge diff timed out");
   if (result.kind !== "exited" || result.exitCode !== 0)
     throw new StoreError("REF_STATE_UNKNOWN", `canonical merge diff is ${result.kind}${result.exitCode !== null ? ` ${result.exitCode}` : ""}`);
-  try { return result.stdout.toString("utf8"); }
-  catch { throw new StoreError("INTERNAL_ERROR", "canonical merge diff is not UTF-8 text"); }
+  return result.stdout;
+}
+
+/** AV-05: the one owner rendering authoritative diff bytes for a text
+ * consumer. Valid UTF-8 renders as itself; anything else becomes an honest
+ * marker plus a base64 transcription that decodes back to the exact bytes.
+ * Replacement characters are never silently introduced. */
+export function mergeDiffText(diff: Buffer): string {
+  try { return decodeUtf8(diff); }
+  catch {
+    return `[non-UTF-8 merge diff: ${diff.byteLength} bytes, sha256 ${sha256Hex(diff)}; base64-encoded]\n` +
+      diff.toString("base64");
+  }
 }
 
 /** mail-v1 §7: the broker prepares a revert of an applied merge on canonical

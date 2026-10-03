@@ -1,13 +1,13 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { mkdirSync, mkdtempSync, readFileSync, lstatSync, rmSync, existsSync, writeFileSync, readdirSync, renameSync } from "node:fs";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { tmpdir } from "node:os";
 import { createHash } from "node:crypto";
 import type { BlobDescriptor, ContextEntry } from "../implementation/contracts.js";
 import { generateOperationId } from "../src/ids.js";
 import { ContextTextValidator, contextFileCheck } from "../src/domain/context-policy.js";
-import { TreeLease } from "../src/storage/tree-lease.js";
+import { TreeLease, treeQuiescence, leasePathOf } from "../src/storage/tree-lease.js";
 import { PreparedContextTree, prepareContextStream } from "../src/storage/context-stream.js";
 import { contextStagingPathAt } from "../src/storage/paths.js";
 
@@ -104,6 +104,26 @@ test("R21: source mutations after the first await cannot alter frozen metadata",
     const tree = await prepareContextStream(root, generateOperationId(), manifest, content, mutation());
     assert.deepEqual(readFileSync(join(tree.path, "GOAL.md")), files[0]!.data);
     assert.deepEqual(readdirSync(tree.path).sort(), ["GOAL.md", "RATIONALE.md", "decisions"]);
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
+test("AV-18: a failed staging-root acquire releases its lease -- nothing holds it after", async () => {
+  const root = mkdtempSync(join(tmpdir(), "oma-r21-lease-"));
+  try {
+    const id = generateOperationId();
+    const staging = contextStagingPathAt(root, id);
+    mkdirSync(dirname(staging), { recursive: true });
+    // Something already stands where the staging root must be created: the
+    // acquire fails after the lease is taken, and the lease must not stay held.
+    writeFileSync(staging, "existing entry, not a directory");
+    await assert.rejects(prepareContextStream(root, id, entries(), descriptor(), parts(body, 2)));
+    assert.equal(treeQuiescence(staging).kind, "quiescent",
+      "a stranded held lease would read active and keep the tree forever");
+    assert.ok(existsSync(leasePathOf(staging)), "the lease file remains; only the hold is released");
+    rmSync(staging);
+    // Recovery sees a quiescent lease: the retry is not fenced by the dead hold.
+    const retry = await prepareContextStream(root, generateOperationId(), entries(), descriptor(), parts(body, 2));
+    assert.ok(existsSync(join(retry.path, "GOAL.md")));
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
 

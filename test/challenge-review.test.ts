@@ -77,7 +77,7 @@ test("mail-v1: a prepared challenge of an applied merge reverts it by vote", asy
     const receipt = await f.challenge("alice", { merge: name, tier: "LOW", title: "bad change", reason: "it broke the build" }, "ch-1");
     assert.equal(receipt.state, "succeeded");
     const chName = f.requestName("ch-1");
-    assert.match(chName, /^challenge-[0-9a-f]{8}$/);
+    assert.match(chName, /^challenge-[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
     const fact = openFact(f, chName);
     assert.equal(fact.prepared, true);
     assert.deepEqual(fact.submitters, []);
@@ -99,8 +99,8 @@ test("mail-v1: a prepared challenge of an applied merge reverts it by vote", asy
     assert.equal(existsSync(mailInboxPathAt(f.root, "principal", thread.id, "new")), false);
     assert.equal(existsSync(mailInboxPathAt(f.root, "bob", thread.id, "new")), true);
     const body = messageText(f.root, thread.id);
-    assert.match(body, /Target merge: merge-[0-9a-f]{8}/);
-    assert.match(body, /oma_challenge diff name=challenge-[0-9a-f]{8} view=revert\|original/);
+    assert.match(body, /Target merge: merge-[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}/);
+    assert.match(body, /oma_challenge diff name=challenge-[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12} view=revert\|original/);
     // One approval is not enough (highPeerFloor = 2); requester cannot vote.
     await assert.rejects(f.vote("alice", chName, "approve", "mine"), { code: "SELF_REVIEW" });
     await f.vote("bob", chName, "approve", "revert it", "v1");

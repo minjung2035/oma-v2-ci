@@ -87,7 +87,7 @@ test("R19 / INT-004: complete check profiles are retained; missing limits are re
 
 test("TIER-004: new integrations require two HIGH peers without changing retained historical policy", () => {
   const policy = snapshotIntegrationPolicy({ policyRevision: "p1", protectedPaths: [], checks: [],
-    tiered: { repositoryFloor: "LOW", highPeerFloor: 1, principalDelegated: true, rules: [] } });
+    tiered: { review: "mail-v1", repositoryFloor: "LOW", highPeerFloor: 1, principalDelegated: true, rules: [] } });
   assert.equal(policy.tiered!.highPeerFloor, 1);
   assert.throws(() => assertSupportedIntegration(policy), code("UNSUPPORTED_PROFILE"));
   assert.doesNotThrow(() => assertSupportedIntegration(snapshotIntegrationPolicy({ policyRevision: "p2", protectedPaths: [], checks: [],
