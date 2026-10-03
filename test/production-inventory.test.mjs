@@ -4,7 +4,7 @@ import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync, symlinkSyn
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { createHash } from "node:crypto";
-import { collectProductionFiles, writeProductionInventory, assertProductionInventory, assertMeasurementCurrent, measureWithCloc } from "../scripts/production-inventory.mjs";
+import { collectProductionFiles, writeProductionInventory, assertProductionInventory, assertMeasurementCurrent, assertSourceDigests, measureWithCloc, writeSourceDigests } from "../scripts/production-inventory.mjs";
 import { VERIFICATION_INPUT_ROOTS, VERIFICATION_OUTPUT_EXCLUSIONS, verificationInputDigest, verificationInputFiles } from "../scripts/source-digest.mjs";
 import { fileURLToPath } from "node:url";
 
@@ -79,12 +79,13 @@ test("R38: the measured artifacts are bound to the source they were taken from",
     const rows = list => Object.fromEntries(list.map(file => [file, { code: 3, blank: 1, comment: 2 }]));
     // The report, then the hashes that name it -- the order loc.mjs writes them.
     const measure = (list = files, overrides = {}) => {
+      writeSourceDigests(f.root, list);
       f.put("production-loc.json", JSON.stringify({
         header: { n_files: list.length, cloc_version: "2.08", ...(overrides.header ?? {}) },
         ...rows(list),
         SUM: { code: 3 * list.length, blank: list.length, comment: 2 * list.length, nFiles: list.length, ...(overrides.sum ?? {}) },
       }));
-      f.put("production-loc-hashes.json", JSON.stringify({
+      f.put("production-measurement-hashes.json", JSON.stringify({
         cloc: "2.08", manifest: hashOf(`${list.join("\n")}\n`),
         report: hashOf(readFileSync(join(f.root, "production-loc.json"))),
         files: list.map(file => ({ path: file, sha256: hashOf(readFileSync(join(f.root, file))) })),
@@ -109,7 +110,7 @@ test("R38: the measured artifacts are bound to the source they were taken from",
       header: { n_files: files.length, cloc_version: "2.08" }, ...Object.fromEntries(forged),
       SUM: { code: 900 * files.length, blank: 0, comment: 0, nFiles: files.length },
     }));
-    f.put("production-loc-hashes.json", JSON.stringify({
+    f.put("production-measurement-hashes.json", JSON.stringify({
       cloc: "2.08", manifest: hashOf(`${files.join("\n")}\n`),
       report: hashOf(readFileSync(join(f.root, "production-loc.json"))),
       files: files.map(file => ({ path: file, sha256: hashOf(readFileSync(join(f.root, file))) })),
@@ -129,7 +130,7 @@ test("R38: the measured artifacts are bound to the source they were taken from",
     // A file whose bytes changed after measurement.
     measure();
     f.put("src/process/async.ts", "export const changed = 1;\n");
-    assert.throws(() => check(), /stale production-loc-hashes\.json/);
+    assert.throws(() => check(), /stale production source digests/);
     measure();
     assert.doesNotThrow(() => check());
 
@@ -149,6 +150,10 @@ test("R38: the measured artifacts are bound to the source they were taken from",
     // Counts and hashes taken by different tools.
     measure(files, { header: { cloc_version: "2.09" } });
     assert.throws(() => check(), /different runs/);
+    measure(files, { header: { cloc_version: "2.09" }, hashes: { cloc: "2.09" } });
+    assert.throws(() => check(), /requires pinned cloc/);
+    measure(files, { hashes: { files: files.map(() => ({ path: files[0], sha256: hashOf(readFileSync(join(f.root, files[0]))) })) } });
+    assert.throws(() => check(), /invalid production measurement source digests/);
 
     // A row outside the manifest inflating the total.
     measure();
@@ -160,7 +165,7 @@ test("R38: the measured artifacts are bound to the source they were taken from",
     // A new production file the records never saw.
     measure();
     f.put("src/process/added.ts");
-    assert.throws(() => check(), /different file list/);
+    assert.throws(() => check(), /invalid production source digests|different file list/);
   } finally { f.close(); }
 });
 
@@ -181,8 +186,9 @@ test("R38: the pinned tool re-measures real source and catches a forged count", 
       { code: 2, comment: 1 });
     const hashOf = bytes => createHash("sha256").update(bytes).digest("hex");
     const write = report => {
+      writeSourceDigests(f.root, files);
       f.put("production-loc.json", JSON.stringify(report));
-      f.put("production-loc-hashes.json", JSON.stringify({
+      f.put("production-measurement-hashes.json", JSON.stringify({
         cloc: "2.08", manifest: hashOf(`${files.join("\n")}\n`),
         report: hashOf(readFileSync(join(f.root, "production-loc.json"))),
         files: files.map(file => ({ path: file, sha256: hashOf(readFileSync(join(f.root, file))) })),
@@ -210,7 +216,7 @@ test("R38: the verification closure includes every class of local gate input", (
     "src", "test", "scripts", "implementation", "docs", ".github/workflows",
     "package.json", "package-lock.json",
     "tsconfig.json", "tsconfig.build.json", "production-manifest.json", "production-files.txt",
-    "production-loc.json", "production-loc-hashes.json",
+    "production-loc-hashes.json",
   ]);
   assert.deepEqual(VERIFICATION_OUTPUT_EXCLUSIONS, [
     "implementation/evidence/runtime-tests.log", "docs/archive/adversarial-review.md",
@@ -224,9 +230,11 @@ test("R38: the verification closure includes every class of local gate input", (
     "docs/implementation/validation.md", "implementation/evidence/dependency-graph.json",
     "implementation/tests/contracts.type-test.ts", "docs/architecture.md", "docs/implementation-spec.md",
     "package.json", "package-lock.json", "tsconfig.json", "tsconfig.build.json",
-    "production-manifest.json", "production-files.txt", "production-loc.json",
+    "production-manifest.json", "production-files.txt",
     "production-loc-hashes.json", ".github/workflows/architecture-verification.yml",
   ]) assert.ok(files.includes(required), required);
+  assert.equal(files.includes("production-loc.json"), false);
+  assert.equal(files.includes("production-measurement-hashes.json"), false);
   assert.equal(files.includes("implementation/evidence/runtime-tests.log"), false);
   assert.equal(files.some(file => file.startsWith("docs/archive/")), false);
 });
@@ -278,15 +286,18 @@ test("R38: the validation record names the verification inputs that were run, by
     "the validation record names verification inputs that are not this tree's");
 });
 
-test("R38: the figures the validation record quotes are the ones the artifact holds", () => {
-  // A record that says one number while the artifact says another is how a
-  // reader mistakes a figure from an earlier commit for the current measurement.
+test("R38: the figures the validation record quotes remain historical; current LOC is CI-generated evidence", () => {
+  // A historical number must not acquire the authority of a current source
+  // measurement when LOC evidence moves from committed input to CI artifacts.
   const record = readFileSync(new URL("../docs/implementation/validation.md", import.meta.url), "utf8");
-  const report = JSON.parse(readFileSync(new URL("../production-loc.json", import.meta.url), "utf8"));
+  const digests = JSON.parse(readFileSync(new URL("../production-loc-hashes.json", import.meta.url), "utf8"));
   const quoted = [...record.matchAll(/(\d+) files \/ ([\d,]+) code LOC/g)]
     .map(([, files, code]) => ({ files: Number(files), code: Number(code.replaceAll(",", "")) }));
   assert.ok(quoted.length > 0, "the validation record quotes no LOC figure at all");
-  for (const figure of quoted)
-    assert.deepEqual(figure, { files: report.SUM.nFiles, code: report.SUM.code },
-      `validation.md quotes ${figure.files} files / ${figure.code} LOC; the artifact holds ${report.SUM.nFiles} / ${report.SUM.code}`);
+  assert.match(record, /역사적 기록은 현재 source의 LOC claim이 아니며/);
+  assert.match(record, /CI artifact `production-loc\.json`과 `production-measurement-hashes\.json`/);
+  assert.equal(digests.kind, "oma-production-source-digests-v1");
+  assert.deepEqual(Object.keys(digests).sort(), ["files", "kind", "manifest"]);
+  assert.equal(VERIFICATION_INPUT_ROOTS.includes("production-loc.json"), false);
+  assertSourceDigests(REPO);
 });

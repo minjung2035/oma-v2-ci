@@ -70,9 +70,25 @@ test("V04 local guard rejects manager commands before execution but allows ordin
   const guard = new URL("../scripts/local-test-guard.mjs", import.meta.url)
     .href;
   const script = `import assert from 'node:assert/strict';
-    import { spawnSync } from 'node:child_process';
-    assert.throws(() => spawnSync('/usr/bin/systemctl', ['--user', 'show']), /BLOCKED/);
-    assert.throws(() => spawnSync('systemd-run', ['--user']), /BLOCKED/);
+    import cp, { spawn, spawnSync, execFile, execFileSync, exec, execSync } from 'node:child_process';
+    import { promisify } from 'node:util';
+    for (const method of [spawn, spawnSync, execFile, execFileSync]) {
+      assert.throws(() => method('/usr/bin/systemctl', ['--user', 'show']), /BLOCKED/);
+      assert.throws(() => method('systemd-run', ['--user']), /BLOCKED/);
+      for (const shell of ['/bin/sh', '/bin/bash', 'dash', 'zsh'])
+        assert.throws(() => method(shell, ['-c', 'systemctl --user show']), /BLOCKED/);
+      assert.throws(() => method('echo', ['safe'], { shell: true }), /BLOCKED/);
+      for (const wrapper of ['env', 'nice', 'timeout', 'nohup']) {
+        assert.throws(() => method(wrapper, ['systemctl', '--user', 'show']), /BLOCKED/);
+        assert.throws(() => method(wrapper, ['/bin/sh', '-c', 'echo harmless']), /BLOCKED/);
+      }
+    }
+    for (const method of [exec, execSync, cp.exec, cp.execSync]) {
+      assert.throws(() => method('systemctl --user show'), /BLOCKED/);
+      assert.throws(() => method('syste' + 'mctl --user show'), /BLOCKED/);
+      assert.throws(() => method('echo harmless'), /BLOCKED/);
+    }
+    await assert.rejects(promisify(exec)('systemctl --user show'), /BLOCKED/);
     assert.equal(spawnSync(process.execPath, ['-e', 'process.exit(0)']).status, 0);`;
   const result = spawnSync(
     process.execPath,
@@ -106,7 +122,7 @@ test("V04 S-01 qualification uses freshly built production code", () => {
         writeFileSync('dist/src/domain/' + name + '.js', result.outputText);
       }`);
     writeFileSync(join(root, "dist/src/domain/resources.js"), 'throw new Error("stale artifact used");');
-    const build = spawnSync("npm", ["run", "build"], { cwd: root, env: { ...process.env, NODE_OPTIONS: `--import=${guard}` }, encoding: "utf8", timeout: 20000 });
+    const build = spawnSync(process.execPath, ["scripts/build.mjs"], { cwd: root, env: { ...process.env, NODE_OPTIONS: `--import=${guard}` }, encoding: "utf8", timeout: 20000 });
     assert.equal(build.status, 0, build.stderr);
     const probe = spawnSync(process.execPath, [fileURLToPath(new URL("../scripts/probe-entry-qualification.mjs", import.meta.url)), root, "1048576"], {
       cwd: root, env: { ...process.env, NODE_OPTIONS: `--import=${guard}` }, encoding: "utf8", timeout: 10000,

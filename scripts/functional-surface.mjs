@@ -15,12 +15,15 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { encodeToolSurfacePlan, planToolSurface } from "../dist/src/domain/tool-surface.js";
 import { piAgentDir, resolvePiRuntime } from "../dist/src/runtime/pi-runtime.js";
-import { spawnOwnedRpc } from "../dist/src/process/async.js";
+import { spawnOwnedRpc, stopOwnedChild } from "../dist/src/process/async.js";
+import { enterBoundedScript } from "./bounded-script.mjs";
 import { PiRpcClient } from "../dist/src/runtime/pi-rpc.js";
 
+if (await enterBoundedScript(import.meta.url, { timeoutMs: 60000 })) {
 const root = resolve(import.meta.dirname, "..");
 const workdir = mkdtempSync(join(tmpdir(), "oma-functional-surface-"));
 const fail = (message) => { console.error(`FAIL ${message}`); process.exitCode = 1; };
+let child, rpc, closed;
 
 try {
   const runtime = resolvePiRuntime({ stateRoot: workdir, libdir: root });
@@ -58,7 +61,7 @@ try {
   mkdirSync(archive, { recursive: true });
   mkdirSync(home, { recursive: true });
   writeFileSync(join(workdir, "oma-cli"), "#!/bin/sh\nexit 0\n", { mode: 0o755 });
-  const child = spawnOwnedRpc(runtime.executable, argv, workdir, {
+  child = spawnOwnedRpc(runtime.executable, argv, workdir, {
     HOME: workdir,
     PATH: process.env.PATH ?? "/usr/bin:/bin",
     PI_CODING_AGENT_DIR: agentDir,
@@ -71,20 +74,22 @@ try {
     OMA_PROBE_OUT: probeOut,
   });
 
+  closed = new Promise(done => child.once("close", done));
   const limits = { frameBytes: 262144, idleStreamSeconds: 30, receiptWaitSeconds: 30 };
-  const rpc = new PiRpcClient(child, limits);
+  rpc = new PiRpcClient(child, limits);
   const seen = [];
   rpc.onEvent(event => { seen.push(event); });
 
   const reply = await new Promise((resolveReply, rejectReply) => {
-    const timer = setTimeout(() => rejectReply(new Error("engine did not answer get_state")), 25000);
+    const failReply = error => { clearTimeout(timer); stop(); rejectReply(error); };
+    const timer = setTimeout(() => failReply(new Error("engine did not answer get_state")), 25000);
     const stop = rpc.onEvent(event => {
       if (event.type !== "response" || event.id !== "probe") return;
       clearTimeout(timer);
       stop();
       resolveReply(event);
     });
-    rpc.send({ id: "probe", type: "get_state" }).catch(rejectReply);
+    rpc.send({ id: "probe", type: "get_state" }).catch(failReply);
   });
 
   if (reply.success !== true) fail("the engine did not accept the probe request");
@@ -129,12 +134,23 @@ try {
     }
   }
 
-  rpc.close();
-  child.kill("SIGKILL");
   if (process.exitCode) console.error("functional surface probe FAILED");
-  else console.log("functional surface probe PASS (not release qualification)");
 } catch (error) {
   fail(error instanceof Error ? error.message : String(error));
 } finally {
-  rmSync(workdir, { recursive: true, force: true });
+  try {
+    try { rpc?.close(); }
+    finally { if (child) stopOwnedChild(child); }
+    if (closed) {
+      let timer;
+      try {
+        await Promise.race([closed, new Promise((_, reject) => {
+          timer = setTimeout(() => reject(new Error("engine termination is unconfirmed; preserving workdir")), 5000);
+        })]);
+      } finally { clearTimeout(timer); }
+    }
+    rmSync(workdir, { recursive: true, force: true });
+  } catch (error) { fail(error instanceof Error ? error.message : String(error)); console.error(`preserved ${workdir}`); }
+}
+if (!process.exitCode) console.log("functional surface probe PASS (not release qualification)");
 }

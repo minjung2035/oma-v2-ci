@@ -395,9 +395,7 @@ export async function runInteractive(): Promise<void> {
     .filter(item => item.value !== DELIVERY_COMMAND && NOT_IN_OMA[item.value] === undefined)
     .map(item => {
       const words = COMMAND_WORDS[item.value];
-      const description = item.description === undefined ? undefined
-        : words !== undefined ? item.description.replace(/[^—]*$/, words).replace(/^(?!.*—)/, "").trim()
-        : item.description.replace(/^\[t\] ?/, "");
+      const description = words ?? item.description?.replace(/^\[t\] ?/, "");
       return { ...item, ...(description === undefined ? {} : { description }) };
     });
   const boundary: ExtensionFactory = pi => {

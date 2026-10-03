@@ -86,7 +86,7 @@ jobs:
         # letting the bridge tests skip (a skip is not a pass).
         run: sudo modprobe vsock_loopback
       - name: Install the pinned line counter
-        # The LOC gate re-measures the source and compares every count, so the
+        # CI generates LOC evidence and re-measures every count, so the
         # exact counting tool is part of the evidence. The distribution package
         # is a different version and counts differently; the release script is
         # pinned by digest instead.
@@ -121,17 +121,17 @@ jobs:
           # A stale inventory is a failure of this commit, not a note: the
           # generators run afterwards, so without this the regenerated files
           # would hide the very state the check observed.
-          # Re-measures with the pinned cloc: this is the step that shows the
-          # committed LOC is the source's, before anything regenerates it.
-          OMA_REQUIRE_MEASUREMENT=1 npm run check:inventory > "$EVIDENCE/inventory-before.log" 2>&1
+          # Checks the committed per-file source digests without cloc before
+          # measuring LOC into CI artifacts; no source claim is regenerated.
+          npm run check:inventory > "$EVIDENCE/inventory-before.log" 2>&1
           inventory_before=$?
           printf '%s\n' "$inventory_before" > "$EVIDENCE/inventory-before.exit-code"
           printf '%s\t%s\n' inventory-before "$inventory_before" >> "$EVIDENCE/exit-codes.tsv"
           if [ "$inventory_before" -ne 0 ]; then touch "$EVIDENCE/failed"; fi
-          # Measure before checking: the inventory check now verifies the LOC
-          # and hash records against the source they claim to describe, and
-          # `npm run inventory` deliberately writes only the file list.
-          run_check loc 900 node scripts/loc.mjs
+          # Measure into the evidence directory and bind the report to source
+          # digests without rewriting committed inputs. The inventory check
+          # remains independent of LOC; inventory writes only the file list.
+          run_check loc 900 node scripts/loc.mjs --out "$EVIDENCE"
           run_check check-inventory 900 npm run check:inventory
           run_check typecheck 900 npm run typecheck
           run_check build 900 npm run build
@@ -152,19 +152,13 @@ jobs:
             printf '%s\tNOT_RUN\n' "verify-$lane" >> "$EVIDENCE/exit-codes.tsv"
           done
           printf '%s\n' 'kernel, crash and all are systemd lanes. They require a disposable user with a systemd user manager and bubblewrap, which a hosted runner does not provide, and verify-lane.mjs refuses them without OMA_TEST_SYSTEMD=1. They were NOT_RUN here and this workflow certifies nothing about them.' > "$EVIDENCE/systemd-lanes.txt"
-          cp production-files.txt production-loc.json production-loc-hashes.json "$EVIDENCE/"
-          git diff -- production-files.txt production-loc.json production-loc-hashes.json > "$EVIDENCE/generated-inventory.patch"
-          # A fresh measurement that differs from what was committed means the
-          # committed figures were not this commit's. Recording the patch is not
-          # enough; the difference itself fails the run. Only the counts and the
-          # hashes are compared -- cloc's timing fields change on every run.
-          if ! node -e '
-            const fs = require("node:fs"), { execFileSync } = require("node:child_process");
-            const committed = JSON.parse(execFileSync("git", ["show", "HEAD:production-loc.json"], { encoding: "utf8" }));
-            const fresh = JSON.parse(fs.readFileSync("production-loc.json", "utf8"));
-            const strip = r => Object.fromEntries(Object.entries(r).filter(([k]) => k !== "header"));
-            process.exit(JSON.stringify(strip(committed)) === JSON.stringify(strip(fresh)) ? 0 : 1);
-          '; then
+          cp production-files.txt production-loc-hashes.json "$EVIDENCE/"
+          git diff -- production-files.txt production-loc-hashes.json > "$EVIDENCE/generated-inventory.patch"
+          # Generating evidence must not rewrite the committed source claim.
+          # Recording such a patch is not enough; the difference fails the run.
+          # LOC counts are CI artifacts, not committed inputs; only the source
+          # inventory and per-file digests are compared against the commit.
+          if ! git diff --exit-code -- production-files.txt production-loc-hashes.json; then
             printf '%s\t%s\n' generated-inventory-diff 1 >> "$EVIDENCE/exit-codes.tsv"
             touch "$EVIDENCE/failed"
           fi

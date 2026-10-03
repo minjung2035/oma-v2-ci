@@ -110,17 +110,22 @@ test("T125: the line counter is the pinned release, verified before it runs", ()
     "the inventory is checked before the tool it needs is installed");
 });
 
-test("T125: the pre-generation inventory check must re-measure, not merely agree with itself", () => {
-  // Without the pinned tool the check can only report consistency, and CI is
-  // the one place that must not accept that as a pass.
-  assert.match(workflow, /OMA_REQUIRE_MEASUREMENT=1 npm run check:inventory > "\$EVIDENCE\/inventory-before\.log"/);
+test("T125: the pre-generation inventory check asserts committed source digests before generating CI measurements", () => {
+  // Source digests are checked before generation; measuring LOC requires the
+  // pinned tool separately and must not rewrite the committed source claim.
+  assert.match(workflow, /npm run check:inventory > "\$EVIDENCE\/inventory-before\.log"/);
+  assert.doesNotMatch(workflow, /OMA_REQUIRE_MEASUREMENT=1/);
+  assert.match(workflow, /run_check loc 900 node scripts\/loc\.mjs --out "\$EVIDENCE"/);
+  assert.ok(workflow.indexOf('npm run check:inventory >') < workflow.indexOf('run_check loc 900'));
 });
 
-test("T125: a fresh measurement that differs from the commit fails the run", () => {
-  // Recording the difference as an artifact and passing anyway would let a
-  // commit carry figures from another commit indefinitely.
+test("T125: committed source artifacts cannot be regenerated into a passing claim; LOC is not a committed gate", () => {
+  // Recording rewritten source digests as an artifact and passing anyway would
+  // hide a stale claim. LOC figures themselves are no longer commit inputs.
   const section = workflow.slice(workflow.indexOf("generated-inventory.patch"));
-  assert.match(section, /git", \["show", "HEAD:production-loc\.json"\]/);
+  assert.match(section, /git diff --exit-code -- production-files\.txt production-loc-hashes\.json/);
+  assert.doesNotMatch(section, /HEAD:production-loc\.json/);
+  assert.doesNotMatch(workflow, /cp production-files\.txt production-loc\.json/);
   assert.match(section, /touch "\$EVIDENCE\/failed"/);
 });
 

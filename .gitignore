@@ -6,3 +6,5 @@ mail/
 runtime.sqlite
 .pi/
 staging/
+production-loc.json
+production-measurement-hashes.json

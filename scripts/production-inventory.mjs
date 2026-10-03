@@ -58,6 +58,25 @@ export function assertProductionInventory(root = process.cwd()) {
   return current;
 }
 const sha256 = bytes => createHash("sha256").update(bytes).digest("hex");
+export function writeSourceDigests(root = process.cwd(), files = assertProductionInventory(root)) {
+  const records = { kind: "oma-production-source-digests-v1", manifest: sha256(`${files.join("\n")}\n`),
+    files: files.map(path => ({ path, sha256: sha256(readFileSync(join(root, path))) })) };
+  writeFileSync(join(root, "production-loc-hashes.json"), JSON.stringify(records, null, 2) + "\n");
+  return records;
+}
+export function assertSourceDigests(root = process.cwd(), files = assertProductionInventory(root)) {
+  const records = JSON.parse(readFileSync(join(root, "production-loc-hashes.json"), "utf8"));
+  if (records.kind !== "oma-production-source-digests-v1" || Object.keys(records).sort().join() !== "files,kind,manifest" ||
+    !Array.isArray(records.files) || records.files.length !== files.length ||
+    records.files.some((entry, index) => !entry || Object.keys(entry).sort().join() !== "path,sha256" ||
+      entry.path !== files[index] || typeof entry.sha256 !== "string" || !/^[0-9a-f]{64}$/.test(entry.sha256)))
+    throw new Error("invalid production source digests; regenerate with node scripts/loc.mjs --source-digests");
+  if (records.manifest !== sha256(`${files.join("\n")}\n`))
+    throw new Error("production source digests name a different file list");
+  const changed = files.filter((file, index) => records.files[index].sha256 !== sha256(readFileSync(join(root, file))));
+  if (changed.length) throw new Error(`stale production source digests; changed=[${changed.join(", ")}]; regenerate with node scripts/loc.mjs --source-digests`);
+  return { files: files.length, status: "SOURCE_DIGESTS_CURRENT" };
+}
 
 /** The pinned measuring tool. A different version counts differently, so any
  * other version is treated as no tool at all rather than as a second opinion. */
@@ -68,7 +87,7 @@ export const CLOC_VERSION = "2.08";
  * a report that was not re-measured is not a measured report. */
 export function measureWithCloc(root, files, cloc = "cloc") {
   let version;
-  try { version = execFileSync(cloc, ["--version"], { encoding: "utf8" }).trim(); }
+  try { version = execFileSync(cloc, ["--version"], { encoding: "utf8", timeout: 10000, killSignal: "SIGKILL" }).trim(); }
   catch { return null; }
   if (version !== CLOC_VERSION) return null;
   const scratch = mkdtempSync(join(tmpdir(), "oma-cloc-"));
@@ -77,7 +96,7 @@ export function measureWithCloc(root, files, cloc = "cloc") {
     const out = join(scratch, "loc.json");
     writeFileSync(list, `${files.join("\n")}\n`);
     execFileSync(cloc, [`--list-file=${list}`, "--by-file", "--skip-uniqueness",
-      "--read-lang-def=implementation/cloc-systemd.lang", "--json", `--out=${out}`], { cwd: root, stdio: "ignore" });
+      "--read-lang-def=implementation/cloc-systemd.lang", "--json", `--out=${out}`], { cwd: root, stdio: "ignore", timeout: 600000, killSignal: "SIGKILL" });
     return JSON.parse(readFileSync(out, "utf8"));
   } finally { rmSync(scratch, { recursive: true, force: true }); }
 }
@@ -91,16 +110,21 @@ export function measureWithCloc(root, files, cloc = "cloc") {
  * moment it happens, and costs one hash per file rather than another cloc run.
  */
 export function assertMeasurementCurrent(root = process.cwd(), files = collectProductionFiles(root), options = {}) {
-  const records = JSON.parse(readFileSync(join(root, "production-loc-hashes.json"), "utf8"));
+  assertSourceDigests(root, files);
+  const evidenceRoot = options.evidenceRoot ?? root;
+  const records = JSON.parse(readFileSync(join(evidenceRoot, "production-measurement-hashes.json"), "utf8"));
   if (records.manifest !== sha256(`${files.join("\n")}\n`))
-    throw new Error("production-loc-hashes.json was taken from a different file list; regenerate with node scripts/loc.mjs");
-  const measured = new Map((records.files ?? []).map(entry => [entry.path, entry.sha256]));
+    throw new Error("production-measurement-hashes.json was taken from a different file list; regenerate with node scripts/loc.mjs --out <evidence-directory>");
+  if (!Array.isArray(records.files) || records.files.length !== files.length ||
+    new Set(records.files.map(entry => entry?.path)).size !== files.length)
+    throw new Error("invalid production measurement source digests");
+  const measured = new Map(records.files.map(entry => [entry.path, entry.sha256]));
   const changed = files.filter(file => measured.get(file) !== sha256(readFileSync(join(root, file))));
   const dropped = [...measured.keys()].filter(file => !files.includes(file));
   if (changed.length || dropped.length)
-    throw new Error(`stale production-loc-hashes.json; changed=[${changed.join(", ")}]; removed=[${dropped.join(", ")}]; ` +
+    throw new Error(`stale production-measurement-hashes.json; changed=[${changed.join(", ")}]; removed=[${dropped.join(", ")}]; ` +
       "regenerate with node scripts/loc.mjs");
-  const counted = JSON.parse(readFileSync(join(root, "production-loc.json"), "utf8"));
+  const counted = JSON.parse(readFileSync(join(evidenceRoot, "production-loc.json"), "utf8"));
   const missing = files.filter(file => counted[file] === undefined);
   if (missing.length || counted.header?.n_files !== files.length)
     throw new Error(`stale production-loc.json; counted ${counted.header?.n_files} of ${files.length} files; ` +
@@ -118,7 +142,7 @@ export function assertMeasurementCurrent(root = process.cwd(), files = collectPr
   const totals = { code: 0, comment: 0, blank: 0 };
   for (const [file, row] of rows) {
     for (const field of ["code", "comment", "blank"]) {
-      if (typeof row[field] !== "number" || !Number.isFinite(row[field]) || row[field] < 0)
+      if (!Number.isSafeInteger(row[field]) || row[field] < 0)
         throw new Error(`production-loc.json has no ${field} count for ${file}`);
       totals[field] += row[field];
     }
@@ -133,9 +157,10 @@ export function assertMeasurementCurrent(root = process.cwd(), files = collectPr
   if (records.cloc !== counted.header?.cloc_version)
     throw new Error(`production-loc.json (cloc ${counted.header?.cloc_version}) and its hashes (cloc ${records.cloc}) ` +
       "are from different runs; regenerate with node scripts/loc.mjs");
+  if (records.cloc !== CLOC_VERSION) throw new Error(`CI LOC evidence requires pinned cloc ${CLOC_VERSION}`);
   // The hashes name the exact report they were written beside, so the report
   // cannot be edited on its own: changing a count means changing this digest.
-  if (records.report !== sha256(readFileSync(join(root, "production-loc.json"))))
+  if (records.report !== sha256(readFileSync(join(evidenceRoot, "production-loc.json"))))
     throw new Error("production-loc.json is not the report its hashes were recorded with; regenerate with node scripts/loc.mjs");
   // Everything above holds for a report whose numbers were typed in by hand,
   // provided they add up. Only measuring the source again shows the numbers are
@@ -156,14 +181,14 @@ if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1]
     const write = args.includes("--write");
     const files = write ? writeProductionInventory() : assertProductionInventory();
     // Writing the list is deliberately not a measurement; only the check reads
-    // the measured artifacts, so `--write` can never mark them current.
-    const measured = write ? null : assertMeasurementCurrent(process.cwd(), files);
+    // the source digests, so `--write` can never mark them current.
+    const measured = write ? null : assertSourceDigests(process.cwd(), files);
     console.log(JSON.stringify({ status: write ? "SOURCE_LIST_GENERATED" : "SOURCE_LIST_CURRENT", files: files.length,
-      loc: measured === null ? "NOT_MEASURED" : measured.status, codeLines: measured?.code ?? null, runtimeProof: false }));
+      sourceDigests: measured?.status ?? "NOT_CHECKED", loc: "CI_ARTIFACT_ONLY", runtimeProof: false }));
     // A gate that could not re-measure has not bound the numbers to the source.
     // Say so in the exit status, not only in the text, so CI cannot read it as a pass.
-    if (measured !== null && measured.status !== "SOURCE_BOUND" && process.env.OMA_REQUIRE_MEASUREMENT === "1")
-      throw new Error("the pinned cloc is required here and was not available");
+    if (process.env.OMA_REQUIRE_MEASUREMENT === "1")
+      throw new Error("LOC is CI-generated evidence; run node scripts/loc.mjs --out <evidence-directory> to measure with the pinned cloc");
   } catch (error) {
     console.error(error instanceof Error ? error.message : String(error));
     process.exitCode = 1;

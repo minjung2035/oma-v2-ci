@@ -225,6 +225,31 @@ for (const path of ['/sessions/old.jsonl', '/other/old.jsonl']) {
     assert.equal((await selector.load()).length, 0);
   });
 }
+test('interactive suggestions: OMA command descriptions are structured replacements, not scraped suffixes', async () => {
+  const w = await world();
+  const items = [
+    { value: 'quit', label: 'quit', description: 'unexpected — description — format' },
+    { value: 'new', label: 'new' },
+    { value: 'resume', label: 'resume', description: '' },
+    { value: 'changelog', label: 'changelog', description: 'Show changelog' },
+    { value: 'model', label: 'model', description: '<provider/model> — Select model' },
+    { value: 'custom', label: 'custom', description: '[t] Description — with a dash' },
+    { value: 'plain', label: 'plain' },
+    { value: 'tag-inside', label: 'tag-inside', description: 'Keep [t] inside' },
+    ...['oma-deliver', 'trust', 'bug', 'import'].map(value => ({ value, label: value })),
+  ];
+  const snapshot = JSON.stringify(items);
+  const suggestions = w.commands.suggest(items);
+  assert.equal(JSON.stringify(items), snapshot);
+  assert.deepEqual(Array.from(suggestions, item => item.value), items.slice(0, 8).map(item => item.value));
+  assert.deepEqual(Array.from(suggestions, item => item.description), [
+    'Quit oma', 'Start a new oma session (its own conversation, mail, workers and repositories)',
+    'Reopen an earlier oma session of this project', "Show the bundled engine's changelog",
+    '<provider/model> — Select model', 'Description — with a dash', undefined, 'Keep [t] inside',
+  ]);
+  assert.equal(Object.hasOwn(suggestions[6], 'description'), false);
+});
+
 test('interactive owner: the current resume selector retains same-society and other-society behavior', async () => {
   const w = await world(); w.commands.extensionCommand('/resume'); w.picks.at(-1).choose('/sessions/current.jsonl'); await flush();
   assert.deepEqual(w.changes, [['switch', '/sessions/current.jsonl']]);

@@ -224,9 +224,13 @@ node --test test/document-integrity.test.mjs test/traceability-policy.test.mjs \
 
 아래 binding은 구조 검사의 입력 identity다. digest 생성 자체가 runtime PASS를 뜻하지 않는다.
 
-verification input digest `45918479aafe880197a8ecb9b990298705d45c1e05f459f6138bc80aaca43ca2` (883 files).
+verification input digest `1d0497e2ef69d2b52489f92f560d98396f1396666784bb4a1d81450b36191370` (911 files).
 
-이번 작업에서 cloc 2.08로 재측정한 artifact: 354 files / 35,832 code LOC. 크기 제한은 없으며 값은 release proof가 아니다. [production-loc.json](../../production-loc.json), [production-files.txt](../../production-files.txt), [production-loc-hashes.json](../../production-loc-hashes.json)을 따른다.
+당시 기록한 cloc 2.08 측정치: 354 files / 35,832 code LOC. 이 역사적 기록은 현재 source의 LOC claim이 아니며, 기존 artifact와의 불일치를 여기서 수리했다고 주장하지 않는다. 크기 제한은 없으며 값은 release proof가 아니다.
+
+K63: 현재 source list는 [production-files.txt](../../production-files.txt), per-file SHA-256은 [production-loc-hashes.json](../../production-loc-hashes.json)이 소유한다. 기존 digest 파일명은 최소 변경을 위해 유지하지만 내용은 `oma-production-source-digests-v1`이며 LOC/tool/report digest를 포함하지 않는다. `node scripts/loc.mjs --source-digests`로 명시적으로 갱신하고 `npm run check:inventory`는 cloc 없이 source bytes를 검증한다. `--inventory-only`는 계속 목록만 갱신한다.
+
+현재 LOC는 `node scripts/loc.mjs --out <evidence-directory>`가 cloc 2.08로 생성·재검증하는 CI artifact `production-loc.json`과 `production-measurement-hashes.json`에만 있다. 생성기는 committed source digest를 먼저 검증하며 이를 재작성하지 않는다. CI는 검증한 commit 아래 report·report digest·source digest·tool version을 함께 업로드한다. committed LOC claim과 측정치의 결박은 더 이상 제공하지 않으며, source digest 결박은 유지한다. 아래 구조 입력 identity는 W12의 제한된 검증을 위해 갱신한 것이고 이전 runtime PASS를 새 source의 PASS로 승격하지 않는다.
 
 ## 재검증
 

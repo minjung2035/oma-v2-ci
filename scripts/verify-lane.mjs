@@ -57,6 +57,30 @@ function command(executable, argv, label, seconds) {
     child.once("error", error => finish(null, null, error)); child.once("close", (code, signal) => finish(code, signal));
   });
 }
+async function packageScript(name, label, seconds) {
+  const scripts = JSON.parse(readFileSync(join(root, "package.json"), "utf8")).scripts;
+  const expand = (name, active = new Set()) => {
+    if (active.has(name) || typeof scripts[name] !== "string") throw new Error(`invalid direct package script: ${name}`);
+    return scripts[name].split(" && ").flatMap(part => {
+      if (!/^[A-Za-z0-9_./:=-]+(?: [A-Za-z0-9_./:=-]+)*$/.test(part)) throw new Error(`package script requires a shell: ${name}`);
+      const [executable, ...argv] = part.split(" ");
+      if (executable === "npm" && argv[0] === "run" && argv.length === 2) return expand(argv[1], new Set([...active, name]));
+      if (executable === "node") return [[process.execPath, argv]];
+      if (executable === "tsc") return [[process.execPath, [join(root, "node_modules/typescript/bin/tsc"), ...argv]]];
+      throw new Error(`unsupported direct package command: ${executable}`);
+    });
+  };
+  let result;
+  const deadline = performance.now() + seconds * 1000;
+  const commands = expand(name);
+  for (const [index, [executable, argv]] of commands.entries()) {
+    const remaining = (deadline - performance.now()) / 1000;
+    if (remaining <= 0) throw new Error(`direct package script exceeded its deadline: ${name}`);
+    result = await command(executable, argv, commands.length === 1 ? label : `${label}-${index + 1}`, remaining);
+    if (result.code !== 0 || result.signal || result.error) return result;
+  }
+  return result;
+}
 function requirePreflight(executable, argv) {
   const result = spawnSync(executable, argv, { env: environment, encoding: "utf8", timeout: 10000, maxBuffer: 65536, killSignal: "SIGKILL" });
   if (result.error || result.signal || result.status !== 0) throw new Error(`environment preflight failed: ${executable} ${argv.join(" ")}`);
@@ -100,7 +124,7 @@ try {
   const sha = head.stdout?.trim();
   report.environment.sourceHead = head.status === 0 && !head.error && !head.signal && /^(?:[0-9a-f]{40}|[0-9a-f]{64})$/.test(sha ?? "") ? sha : null;
   report.environment.sourceHeadStatus = report.environment.sourceHead ? "OBSERVED" : "NOT_AVAILABLE";
-  const build = await command("npm", ["run", "build"], "build", 600);
+  const build = await packageScript("build", "build", 600);
   if (build.code !== 0 || build.signal) { report.status = "BUILD_FAILED"; throw new Error("build failed; test execution did not begin"); }
   if (lane.entryStorageBytes !== undefined) {
     const module = "dist/src/domain/resources.js";
@@ -127,7 +151,7 @@ try {
   }
   if (name === "fast" || name === "all") {
     for (const script of ["typecheck", "check:architecture"]) {
-      const check = await command("npm", ["run", script], script.replace(":", "-"), 600);
+      const check = await packageScript(script, script.replace(":", "-"), 600);
       if (check.code !== 0 || check.signal) { report.status = "PRECHECK_FAILED"; throw new Error(`${script} failed; runtime tests did not begin`); }
     }
   }
