@@ -1,6 +1,5 @@
 /** Closed fact grammar shared by wire and immutable ledger decoding. */
 import { exactCandidateCheck } from "./mail-values.js";
-import type { AttestationInput } from "../../implementation/contracts/attestation.js";
 import { isValidActor, isValidFullOid, isValidMessageId, isValidOperationId, isReviewRequestName } from "./identifiers.js";
 function object(value: unknown, keys: readonly string[]): value is Record<string, unknown> {
   return value !== null && typeof value === "object" && !Array.isArray(value) &&
@@ -29,12 +28,6 @@ export function attestationProblem(value: unknown, evidenceBytes = Number.MAX_SA
     default: return "unknown attestation kind";
   }
 }
-export function readAttestation(value: unknown): AttestationInput {
-  const problem = attestationProblem(value);
-  if (problem !== null) throw new TypeError(problem);
-  return value as AttestationInput;
-}
-
 // ---------------------------------------------------------------------------
 // mail-v1 review grammar: caller inputs (ReviewInput) and the broker-frozen
 // facts (ReviewFact) that plan.fact carries for those operations.

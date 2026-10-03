@@ -194,17 +194,17 @@ test('V01A: N-001 identifies the reviewed architecture bytes', () => {
   assert.ok(rule?.includes(digest), 'N-001 architecture hash is not the reviewed source');
 });
 
-test("V01B: conceptual states do not silently become v1 SQL state or entities", () => {
-  const ddl = readFileSync(new URL("implementation/schema-v1.sql", root));
+test("V01B: conceptual states do not silently become v3 SQL state or entities", () => {
+  const ddl = readFileSync(new URL("implementation/schema-v3.sql", root));
   assert.equal(
     createHash("sha256").update(ddl).digest("hex"),
-    "c97f2a15b71c87ce6ce753f95878931ee8adb0193b341263a6d594e1d93526e4",
-    "a v1 DDL change needs separate C3 approval, not a golden refresh",
+    "b63409dbdf50d33f0bb0f443dbad1b5106ff4cba74c26fc626b7e8b9dfdabf52",
+    "a v3 DDL change needs separate C3 approval, not a golden refresh",
   );
   const db = new DatabaseSync(":memory:");
   try {
     db.exec(ddl.toString());
-    assert.equal(db.prepare("PRAGMA user_version").get().user_version, 1);
+    assert.equal(db.prepare("PRAGMA user_version").get().user_version, 3);
     assert.deepEqual(
       db
         .prepare(
@@ -214,11 +214,11 @@ test("V01B: conceptual states do not silently become v1 SQL state or entities", 
         .map((row) => row.name),
       [
         "agents",
+        "attestations",
         "batches",
         "deliveries",
         "operations",
         "subscriptions",
-        "usage",
       ],
     );
   } finally {

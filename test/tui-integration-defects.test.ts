@@ -42,15 +42,14 @@ function bundle(root: string): string {
     installation: { node: process.execPath, libdir, rootfs: libdir, deploymentDigest: digest("d") },
     principalProfile: "principal",
     initialResidents: [{ name: "a", profile: "resident", brief: "seed" }],
-    quota: { societyAgents: 8, lineageAgents: 4, societyUnits: 100, lineageUnits: 50, principalReservedUnits: 10, inferenceSlots: 4, principalReservedSlots: 1, storageBytes: 1024 },
+    quota: { societyAgents: 8, lineageAgents: 4, storageBytes: 1024 },
     integration: { policyRevision: "rev-initial", protectedPaths: [], checks: [] },
     limits: { frameBytes: 262144, mailBodyBytes: 262144, subjectBytes: 512, addresses: 64, replyReferences: 64, contextFiles: 256, contextBytes: 8388608, bundleBytes: 268435456, logBytes: 1048576, batchMaxMessages: 24, idleStreamSeconds: 1, receiptWaitSeconds: 1 },
-    features: { notmuch: false, reflinkSeed: false, formalApproval: false, egress: false },
   };
   writeFileSync(join(root, "host.json"), JSON.stringify(host, null, 2));
   writeFileSync(join(root, "models.json"), JSON.stringify({
-    cheap: { provider: "p", model: "cheap", credentialRef: "none", codecRevision: "c", pricingRevision: "r", maxInputTokens: 1, maxOutputTokens: 1, inferenceTimeoutSeconds: 1 },
-    strong: { provider: "p", model: "strong", credentialRef: "none", codecRevision: "c", pricingRevision: "r", maxInputTokens: 1, maxOutputTokens: 1, inferenceTimeoutSeconds: 1 },
+    cheap: { provider: "p", model: "cheap", inferenceTimeoutSeconds: 1 },
+    strong: { provider: "p", model: "strong", inferenceTimeoutSeconds: 1 },
   }, null, 2));
   const role = (model: string, child: string | null): Record<string, unknown> => ({
     agentProfile: { modelProfile: model, capabilities: [], delegable: [], childProfile: child, resources: TEST_RESOURCES },

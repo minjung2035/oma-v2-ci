@@ -13,7 +13,7 @@ export function lifecycleFixture(root: string, store: Store) {
   const society = `bc${sha256Hex(root).slice(0, 20)}`;
   const frozen = makeValidResolvedSpec("child");
   const units = new UnitsModule(society, {
-    node: process.execPath, libdir: process.cwd(), state: root, society, agent: "", config: join(root, "config.json"), run: join(root, "oma", society), brokerUnit: ""
+    node: process.execPath, libdir: process.cwd(), state: root, society, agent: "", config: join(root, "config.json"), run: join(root, "oma", society)
   }, join(root, "units"), { p: frozen.resources });
   const mail = new MailModule({ stateRoot: root, society }, store, 64, TEST_VIEW_LIMITS.batchMaxMessages, TEST_VIEW_LIMITS);
   const lifecycle = new LifecycleModule(store, units, {
@@ -22,7 +22,7 @@ export function lifecycleFixture(root: string, store: Store) {
   }, (_parent, input) => ({ ...frozen, ...input }), mail);
   const config: Parameters<LifecycleModule["bootstrap"]>[0] = {
     principalProfile: "p", initialResidents: [{ name: "child", profile: "p", brief: "first" }, { name: "peer", profile: "p", brief: "second" }],
-    modelProfiles: { md: { provider: "none", model: "none", credentialRef: "none", codecRevision: "none", pricingRevision: "none", maxInputTokens: 1, maxOutputTokens: 1, inferenceTimeoutSeconds: 1 } },
+    modelProfiles: { md: { provider: "none", model: "none", inferenceTimeoutSeconds: 1 } },
     agentProfiles: { p: { modelProfile: "md", capabilities: [...ALL_CAPS], delegable: [...ALL_CAPS], childProfile: "p", resources: frozen.resources } },
   };
   const cleanup = () => cleanupOwnedSystemdUnits(root, society);

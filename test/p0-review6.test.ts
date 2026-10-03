@@ -14,7 +14,7 @@ import { Store } from "../src/store.js";
 import { StoreError, errorCodeOf, publicFailure } from "../src/domain/errors.js";
 import { AdmissionGate } from "../src/domain/admission.js";
 
-const schemaPath = join(fileURLToPath(new URL(".", import.meta.url)), "..", "..", "implementation", "schema-v1.sql");
+const schemaPath = join(fileURLToPath(new URL(".", import.meta.url)), "..", "..", "implementation", "schema-v3.sql");
 
 test("P0V-75 / R6-02, P0-5: an INTEGER the driver cannot hand over is corruption the fence sees, and nothing else with that code is", t => {
   const root = mkdtempSync(join(tmpdir(), "oma-overflow-"));
@@ -559,8 +559,8 @@ test("P0V-92 / R6-15: a runner or a retried key the ledger no longer knows is re
     retainForExecution: () => () => undefined, releaseConnection: () => undefined };
   const dispatcher = new InternalDispatcher({
     store: { getAgentIdentity: () => null, pendingDeliveryCount: () => 0, getBatchAgent: () => null, preparedBatchIds: () => [] },
-    mail: { prepare: async () => null, complete: async () => {}, moveToCur: () => 0, reconcilePending: async () => ({}) } as never,
-    reconcile: null, stateRoot: "/nonexistent",
+    mail: { prepare: async () => null, complete: async () => {}, moveToCur: () => 0 } as never,
+    stateRoot: "/nonexistent",
     peers: { requireRunnerUnit: () => {}, requireHostUnit: () => {}, runnerActor: () => "alice",
       runnerAuth: () => { throw new Error("authenticated a runner the ledger does not know"); } },
     isDraining: () => false, assertAdmission: () => {}, admitResource: () => () => {},
@@ -593,7 +593,7 @@ test("P0V-93 / R6-16: a run is opened on the GOAL owner's answer, and an answer 
   t.after(() => { try { store.close(); } finally { rmSync(root, { recursive: true, force: true }); } });
   store.transaction(tx => { tx.insertAgent(makeValidAgent("alice", { desired: "enabled", incarnation: 1 })); });
   const mail = new MailModule({ stateRoot: root, society: "demo" }, store, 64);
-  const units = new UnitsModule("demo", { node: process.execPath, libdir: root, state: root, society: "demo", agent: "", config: join(root, "config.json"), run: join(root, "oma", "demo"), brokerUnit: "" }, join(root, "units"), { p: TEST_RESOURCES });
+  const units = new UnitsModule("demo", { node: process.execPath, libdir: root, state: root, society: "demo", agent: "", config: join(root, "config.json"), run: join(root, "oma", "demo") }, join(root, "units"), { p: TEST_RESOURCES });
   const views = new ViewsModule(store, root, "demo", "p");
   const lifecycle = new LifecycleModule(store, units, { stateRoot: root, projectGit: join(root, "project.git"), society: "demo", hasGoal: () => false, activationAllowed: () => true },
     (_parent, input) => makeValidResolvedSpec(input.name, "p", ALL_CAPS, input.from, input.brief), mail);
@@ -621,22 +621,26 @@ test("P0V-94 / R6-17: a derived TSV field escapes every control character itself
   }
 });
 
-test("P0V-95 / R6-20: a unit that names no owner is nobody's to replace, and the manager's ExecStart format is read in one place", async t => {
+test("P0V-95 / R6-20: a unit that names no owner is nobody's to replace -- whichever tree it names -- and the manager's ExecStart format is read in one place", async t => {
   const { UnitsModule, effectiveExecArgv } = await import("../src/units.js");
   const { TEST_RESOURCES } = await import("./fixtures/spec.js");
   const dir = mkdtempSync(join(tmpdir(), "oma-unit-owner-"));
   t.after(() => rmSync(dir, { recursive: true, force: true }));
   const values = { node: process.execPath, libdir: process.cwd(), state: join(dir, "tree"), society: "demo", agent: "",
-    config: join(dir, "tree", "config.json"), run: join(dir, "run"), brokerUnit: "" };
+    config: join(dir, "tree", "config.json"), run: join(dir, "run") };
   const units = new UnitsModule("demo", values, dir, { p: TEST_RESOURCES }, () => 1);
   // An earlier release's unit with this name and Description, naming no tree.
   writeFileSync(join(dir, "oma-demo-erin.service"), "[Unit]\nDescription=OMA demo resident erin\n[Service]\nExecStart=/n /l/runner.js --society demo --agent erin\n");
   assert.throws(() => units.assertResidentNamesFree("erin"),
     (error: unknown) => error instanceof StoreError && error.code === "AGENT_CONFLICT" && /names no owner/.test(error.message),
     "a unit whose owner cannot be told was taken for this society's by its Description");
-  // One that names this tree is still this owner's.
+  // One that names this tree by its watched path is equally ownerless: v0.1.0
+  // owes no compatibility with units written before the owner line existed,
+  // so a path match cannot promote it to this owner's.
   writeFileSync(join(dir, "oma-demo-fay.path"), `[Unit]\nDescription=Wake OMA demo resident fay on mail\n[Path]\nDirectoryNotEmpty=${join(dir, "tree")}/mail/inboxes/fay/new\n`);
-  assert.doesNotThrow(() => units.assertResidentNamesFree("fay"));
+  assert.throws(() => units.assertResidentNamesFree("fay"),
+    (error: unknown) => error instanceof StoreError && error.code === "AGENT_CONFLICT",
+    "an ownerless unit was promoted to this owner's by the path it watches");
   assert.equal(effectiveExecArgv("{ path=/usr/bin/node ; argv[]=/usr/bin/node /opt/oma/runner.js --agent a ; ignore_errors=no ; start_time=[n/a] }"),
     "/usr/bin/node /opt/oma/runner.js --agent a");
   assert.equal(effectiveExecArgv("/usr/bin/node /opt/oma/runner.js"), null, "an answer in another form is not read as the argv");
@@ -657,7 +661,7 @@ test("P0V-98 / P0V-59, P0-3: the first Resident a user installs makes the unit d
   const installDir = join(dir, "config", "systemd", "user");
   const state = join(dir, "tree");
   const units = new UnitsModule("demo", { node: process.execPath, libdir: process.cwd(), state, society: "demo", agent: "",
-    config: join(state, "config.json"), run: join(dir, "run"), brokerUnit: "" }, installDir, { p: TEST_RESOURCES }, () => 1);
+    config: join(state, "config.json"), run: join(dir, "run") }, installDir, { p: TEST_RESOURCES }, () => 1);
   // Whatever the stand-in manager then answers -- it does not report the
   // fragment it loaded, and a lane's guard refuses systemctl outright -- the
   // install stops after publishing; what matters here is that it got that far.

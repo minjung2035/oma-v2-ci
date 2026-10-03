@@ -1,8 +1,8 @@
 // Normal fixture constructors. Independent golden expectations must not call these as their oracle.
 import type { MessagePlan } from "../../implementation/contracts.js";
-import type { Store, BatchRow, UsageRow } from "../../src/store.js";
+import type { Store, BatchRow } from "../../src/store.js";
 import type { FreezeInput } from "../../src/request-cache.js";
-import { generateOperationId, generateBatchId, uuidV4 } from "../../src/ids.js";
+import { generateOperationId, generateBatchId } from "../../src/ids.js";
 import { messageIdForOperation, mailObjectRelativePath } from "../../src/domain/derived.js";
 import { requestHash, sha256Hex } from "../../src/hash.js";
 import { operationPlanCheck } from "../../src/durable.js";
@@ -38,12 +38,6 @@ export function makeValidMessagePlan(operationId: string, options: {
 export function makeValidBatch(agent = "alice", messageIds = [messageIdForOperation(generateOperationId(), 0)]): BatchRow {
   return { id: generateBatchId(), agent, incarnation: 1, messageIdsJson: JSON.stringify(messageIds), sessionPath: null,
     state: "prepared", createdAtMs: 1, completedAtMs: null };
-}
-
-export function makeValidUsage(actor = "alice"): UsageRow {
-  // usage.profile is the frozen modelProfile, not the agent profile name.
-  return { requestId: uuidV4(), actor, incarnation: actor === "principal" ? 0 : 1, profile: "md", pricingRevision: "fixture-v1",
-    reservedUnits: 1, reportedUnits: null, outcome: "reserved", detailsJson: null, createdAtMs: 1, updatedAtMs: 1 };
 }
 
 export function makeValidFrozenRequest(key = "cache-1", text = "hello"): FreezeInput {

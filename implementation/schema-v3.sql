@@ -85,20 +85,6 @@ CREATE TABLE deliveries (
   CHECK((acknowledged=0 AND acknowledged_at_ms IS NULL) OR
         (acknowledged=1 AND acknowledged_at_ms IS NOT NULL))
 );
-CREATE TABLE usage (
-  request_id TEXT PRIMARY KEY,
-  actor TEXT NOT NULL REFERENCES agents(name),
-  incarnation INTEGER NOT NULL CHECK(incarnation >= 0),
-  profile TEXT NOT NULL,
-  pricing_revision TEXT NOT NULL,
-  reserved_units INTEGER NOT NULL CHECK(reserved_units >= 0),
-  reported_units INTEGER CHECK(reported_units IS NULL OR reported_units >= 0),
-  outcome TEXT NOT NULL CHECK(outcome IN ('reserved','completed','cancelled','unknown')),
-  details_json TEXT CHECK(details_json IS NULL OR json_valid(details_json)),
-  created_at_ms INTEGER NOT NULL CHECK(created_at_ms >= 0),
-  updated_at_ms INTEGER NOT NULL CHECK(updated_at_ms >= created_at_ms),
-  CHECK(outcome <> 'completed' OR reported_units IS NOT NULL)
-);
 CREATE INDEX operations_pending ON operations(state,created_at_ms,id);
 CREATE INDEX operations_actor ON operations(actor,created_at_ms,id);
 CREATE INDEX agents_creator ON agents(created_by);
@@ -107,7 +93,6 @@ CREATE INDEX deliveries_pending ON deliveries(recipient,presented,created_at_ms,
 CREATE INDEX deliveries_operation ON deliveries(operation_id);
 CREATE INDEX deliveries_batch ON deliveries(batch_id);
 CREATE INDEX batches_agent ON batches(agent,state,created_at_ms,id);
-CREATE INDEX usage_actor ON usage(actor,created_at_ms);
 -- SPIKE [S-03]: No UNIQUE prepared-batch constraint until Pi in-flight batch
 -- semantics are verified. This does NOT authorize multiple concurrent batches.
 PRAGMA user_version = 3;

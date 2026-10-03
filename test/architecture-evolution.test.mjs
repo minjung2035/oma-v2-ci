@@ -190,6 +190,12 @@ test("P22 A: adding a public read method requires DTO, descriptor, handler and r
     "const checks = {",
     'const checks = {\n  "probe.read": checkObject({ accepted: checkBool() }),',
   );
+  // DR27: the Principal's delegation boundary is a closed method switch too.
+  changes[methods] = replaceOnce(
+    changes[methods],
+    'case "mail.ack": case "route.follow": case "route.unfollow": case "agent.create":',
+    'case "probe.read":\n    case "mail.ack": case "route.follow": case "route.unfollow": case "agent.create":',
+  );
   assert.deepEqual(
     errors(programWith(changes)).map(message),
     [],

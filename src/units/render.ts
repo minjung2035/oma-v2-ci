@@ -12,9 +12,6 @@ export interface RenderValues {
    * unit-started process never re-derives it from the manager's environment. */
   config?: string;
   run?: string;
-  /** D03: the lifetime dependency that actually exists for this deployment:
-   * the fixed broker unit when systemd runs the broker, "" when it does not. */
-  brokerUnit?: string;
   profileHex?: string;
   /** D05/WP25: hex of the accepted spec's canonical resource text. */
   resourcesHex?: string;
@@ -44,7 +41,7 @@ export function renderUnit(template: string, values: RenderValues): string {
   }
   const substitutions: Readonly<Record<string, string | number | undefined>> = {
     NODE: values.node, LIBDIR: values.libdir, STATE: values.state, STATE_ARG: values.state,
-    CONFIG_ARG: values.config, RUN_ARG: values.run, BROKER_UNIT: values.brokerUnit,
+    CONFIG_ARG: values.config, RUN_ARG: values.run,
     SOCIETY: values.society, AGENT: values.agent, PROFILE_HEX: values.profileHex, RESOURCES_HEX: values.resourcesHex,
     MEMORY_BYTES: values.memoryBytes, TASKS: values.tasks, CPU_QUOTA: values.cpuQuotaPercent,
   };
@@ -57,8 +54,6 @@ export function renderUnit(template: string, values: RenderValues): string {
     throw new StoreError("UNSUPPORTED_PROFILE", "profile must have a nonempty canonical hex encoding");
   if (values.resourcesHex !== undefined && !/^(?:[0-9a-f]{2})+$/.test(values.resourcesHex))
     throw new StoreError("UNSUPPORTED_PROFILE", "resources must have a nonempty canonical hex encoding");
-  if (values.brokerUnit !== undefined && values.brokerUnit !== "" && !/^oma-[a-z0-9-]+\.service$/.test(values.brokerUnit))
-    throw new StoreError("UNSUPPORTED_PROFILE", "broker dependency must be a fixed OMA service unit or none");
   return template.replace(/@([A-Z0-9_]+)@/g, (_placeholder, key: string) => {
     if (!Object.prototype.hasOwnProperty.call(substitutions, key) || substitutions[key] === undefined)
       throw new StoreError("UNSUPPORTED_PROFILE", `unit template input is missing: ${key}`);

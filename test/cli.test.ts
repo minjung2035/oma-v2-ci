@@ -82,7 +82,7 @@ function envOf(): Env {
       libdir: "/usr/lib/oma",
       state,
       society,
-      agent: "", config: join(state, "config.json"), run: join(state, "oma", society), brokerUnit: ""
+      agent: "", config: join(state, "config.json"), run: join(state, "oma", society)
     },
     join(dir, "xdg"),
     {

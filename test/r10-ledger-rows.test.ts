@@ -8,13 +8,12 @@ import { Store, StoreError } from "../src/store.js";
 import { requestHash } from "../src/hash.js";
 import { decodeAgentRow, decodeDeliveryRow, decodeOperationIdProjection, safeInteger } from "../src/storage/rows.js";
 import { makeValidAgent } from "./fixtures/spec.js";
-import { makeValidMessagePlan, makeValidUsage } from "./fixtures/valid.js";
+import { makeValidMessagePlan } from "./fixtures/valid.js";
 import { mutateRawRowAfterClose } from "./fixtures/corruption.js";
 
 const OP = "op-00000000-0000-4000-8000-000000000010";
 const BATCH = "b-00000000-0000-4000-8000-000000000010";
 const MESSAGE = "m-00000000-0000-4000-8000-000000000010-0";
-const USAGE = "usage-r10";
 const isCorrupt = (error: unknown) => error instanceof StoreError && error.code === "STORE_CORRUPT";
 
 function seed(path: string): Store {
@@ -31,13 +30,11 @@ function seed(path: string): Store {
     store.insertPreparedBatch({ id: BATCH, agent: "alice", incarnation: 1, messageIds: [MESSAGE], sessionPath: null });
     store.linkDeliveriesToBatch(BATCH, [MESSAGE]);
     store.follow("dev", "alice");
-    store.reserveUsage({ ...makeValidUsage(), requestId: USAGE });
   });
   assert.equal(store.getAgent("alice")?.name, "alice");
   assert.equal(store.getOperationById(OP)?.state, "pending");
   assert.equal(store.getDelivery(MESSAGE, "alice")?.batchId, BATCH);
   assert.equal(store.getBatch(BATCH)?.state, "prepared");
-  assert.equal(store.getUsage(USAGE)?.outcome, "reserved");
   assert.deepEqual(store.subscribers("dev"), ["alice"]);
   return store;
 }
@@ -69,9 +66,6 @@ test("R10: one-field durable corruption fails before validated values escape on 
     { table: "batches", column: "agent", value: "bob", where: `id='${BATCH}'`, get: s => s.getBatch(BATCH), list: s => s.preparedBatches("bob") },
     { table: "batches", column: "message_ids_json", value: JSON.stringify([MESSAGE, MESSAGE]), where: `id='${BATCH}'`, get: s => s.getBatch(BATCH), list: s => s.preparedBatches("alice") },
     { table: "batches", column: "completed_at_ms", value: 0, where: `id='${BATCH}'`, get: s => s.getBatch(BATCH), list: s => s.pendingBatchesFor("alice", 1) },
-    { table: "usage", column: "reported_units", value: 0, where: `request_id='${USAGE}'`, get: s => s.getUsage(USAGE), list: s => s.usageRows() },
-    { table: "usage", column: "details_json", value: JSON.stringify({ payload: "not accounting data" }), where: `request_id='${USAGE}'`, get: s => s.getUsage(USAGE), list: s => s.usageRows() },
-    { table: "usage", column: "profile", value: "another-model", where: `request_id='${USAGE}'`, get: s => s.getUsage(USAGE), list: s => s.usageRows() },
     { table: "subscriptions", column: "topic", value: "INVALID/TOPIC", where: "agent='alice'", get: s => s.subscribers("INVALID/TOPIC"), list: s => s.allSubscriptions() },
   ];
   for (const item of cases) {
@@ -96,7 +90,7 @@ test("R10: one-field durable corruption fails before validated values escape on 
   }
 });
 
-test("R10: normal restart, independent acknowledgement and unknown reservations preserve exact facts", () => {
+test("R10: normal restart and independent acknowledgement preserve exact facts", () => {
   const root = mkdtempSync(join(tmpdir(), "oma-row-restart-"));
   const path = join(root, "runtime.sqlite");
   seed(path).close();
@@ -106,9 +100,6 @@ test("R10: normal restart, independent acknowledgement and unknown reservations 
       store.transaction(() => store.markAcknowledged(MESSAGE, "alice"));
       assert.equal(store.getDelivery(MESSAGE, "alice")?.presented, 0);
       assert.equal(store.getDelivery(MESSAGE, "alice")?.acknowledged, 1);
-      store.transaction(() => store.settleUsage(USAGE, "unknown", null, null));
-      assert.equal(store.getUsage(USAGE)?.reservedUnits, 1);
-      assert.equal(store.getUsage(USAGE)?.reportedUnits, null);
       store.transaction(() => store.completeBatch(BATCH, [MESSAGE], "alice", 1, "/session/alice"));
       assert.equal(store.getBatch(BATCH)?.state, "completed");
       assert.equal(store.getDelivery(MESSAGE, "alice")?.presented, 1);

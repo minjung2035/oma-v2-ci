@@ -50,10 +50,8 @@ type PublicWireUnchanged = Assert<Equal<PublicMethod,
 >>;
 type InternalWireUnchanged = Assert<Equal<keyof InternalMethods,
   "runner.open" | "runner.pending" | "batch.prepare" | "batch.read" | "batch.complete" |
-  "runner.observe" | "principal.attach" | "principal.detach" | "host.principalRelay" | "host.reconcile"
+  "runner.observe" | "principal.attach" | "principal.detach" | "host.principalRelay"
 >>;
-type ReconcileWireUnchanged = Assert<Equal<InternalResults["host.reconcile"],
-  { examined: number; repaired: number; remaining: number }>>;
 
 function rejectedChanges(store: Store, units: UnitsContract, views: ViewsContract,
   reconcile: ReconcileContract, runner: RunnerContract, sandbox: SandboxContract, lease: RunLease) {
@@ -82,5 +80,5 @@ function rejectedChanges(store: Store, units: UnitsContract, views: ViewsContrac
 export type {
   RowNotReceipt, EpochRequired, StopIsObserved, ObservationIsSynchronous,
   ViewIsSynchronous, MetricsPreserved, RunnerIsBound, RunnerExitPreserved,
-  SandboxReturnsPlan, PublicWireUnchanged, InternalWireUnchanged, ReconcileWireUnchanged,
+  SandboxReturnsPlan, PublicWireUnchanged, InternalWireUnchanged,
 };

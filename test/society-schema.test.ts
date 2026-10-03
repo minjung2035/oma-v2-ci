@@ -1,100 +1,70 @@
-/** DR27/P0: schema changes preserve accepted bytes, order, and dependent facts. */
-import test, { type TestContext } from "node:test";
+/** DR27/P0: v0.1.0's first public schema is v3, the only format this build
+ * reads or writes. Every older development version fails closed at open --
+ * no migration, no rewrite -- and diagnostics refuse it the same way. */
+import test from "node:test";
 import assert from "node:assert/strict";
 import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
-import type { AuthContext } from "../implementation/contracts.js";
 import { Store, readDiagnosticSnapshot } from "../src/store.js";
-import { MailModule } from "../src/mail.js";
-import { AttestationModule } from "../src/attestation.js";
-import { inspectLedger } from "../src/diagnostics/ledger.js";
-import { ledgerTables } from "../src/storage/diagnostic-snapshot.js";
-import { ALL_CAPS, makeValidAgent } from "./fixtures/spec.js";
+import { makeValidAgent } from "./fixtures/spec.js";
 
-async function legacy(t: TestContext, version: 1 | 2) {
+function legacyAt(version: number): { root: string; path: string } {
   const root = mkdtempSync(join(tmpdir(), "oma-society-schema-"));
-  t.after(() => rmSync(root, { recursive: true, force: true }));
   const path = join(root, "runtime.sqlite");
-  const seed = join(root, "seed.sqlite");
-  const store = new Store(seed, 0, { society: "demo" });
-  try {
-    store.transaction(tx => { tx.insertAgent(makeValidAgent("principal")); tx.insertAgent(makeValidAgent("alice", { createdBy: "principal" })); });
-    const auth: AuthContext = { actor: "alice", role: "resident", incarnation: 1, capabilities: new Set(ALL_CAPS), channel: "actor",
-      peer: { pid: process.pid, uid: process.getuid!(), gid: process.getgid!(), cgroup: null } };
-    const mail = new MailModule({ stateRoot: root, society: "demo" }, store, 64, 24, { frameBytes: 1024 * 1024, batchMaxMessages: 24 });
-    await mail.send(auth, "mail", { to: ["principal"], subject: "Preserve this", body: "bytes\n", kind: "message" });
-    await mail.prepare({ ...auth, actor: "principal", role: "principal", incarnation: 0 });
-    store.transaction(tx => tx.follow("kept", "alice"));
-    if (version === 2) {
-      const attestations = new AttestationModule(store, mail, { exact() {}, principal() {} });
-      await attestations.record(auth, "review", { kind: "peer", verdict: "APPROVE", evidence: "Exact reviewed bytes",
-        identity: { repo: "project", targetRef: "refs/heads/main", candidate: "2".repeat(40), expectedBase: "1".repeat(40), policyRevision: "p1" } });
-    }
-  } finally { store.close(); }
-  const source = new DatabaseSync(seed, { readOnly: true }); const db = new DatabaseSync(path);
-  try {
-    db.exec(readFileSync(new URL(`../../implementation/schema-v${version}.sql`, import.meta.url), "utf8"));
-    db.exec("PRAGMA foreign_keys=OFF; BEGIN EXCLUSIVE");
-    for (const table of ledgerTables(version)) {
-      for (const row of source.prepare(`SELECT rowid,* FROM ${table}`).all()) {
-        const columns = Object.keys(row);
-        // Gaps in accepted order and whitespace in immutable JSON must survive.
-        if (table === "operations") {
-          row.rowid = Number(row.rowid) * 17;
-          for (const column of ["payload_json", "plan_json", "result_json"])
-            if (typeof row[column] === "string") row[column] = JSON.stringify(JSON.parse(row[column]), null, 2);
-        }
-        db.prepare(`INSERT INTO ${table}(${columns.join(",")}) VALUES (${columns.map(() => "?").join(",")})`)
-          .run(...columns.map(column => row[column]!));
-      }
-    }
-    db.exec("COMMIT; PRAGMA foreign_keys=ON");
-    assert.deepEqual(db.prepare("PRAGMA foreign_key_check").all(), []);
-  } finally { source.close(); db.close(); }
+  const store = new Store(path, 0, { society: "demo" });
+  store.transaction(tx => { tx.insertAgent(makeValidAgent("alice")); });
+  store.close();
+  const db = new DatabaseSync(path);
+  try { db.exec(`PRAGMA user_version = ${version}`); } finally { db.close(); }
   return { root, path };
 }
-function contents(path: string, version: number) {
-  const db = new DatabaseSync(path, { readOnly: true });
-  try { return Object.fromEntries(ledgerTables(version).map(table => [table, db.prepare(`SELECT rowid,* FROM ${table} ORDER BY rowid`).all()])); }
-  finally { db.close(); }
-}
-for (const version of [1, 2] as const) {
-  test(`DR27: v${version} to v3 preserves every dependent fact and diagnostic reads never migrate`, async t => {
-    const f = await legacy(t, version); const before = contents(f.path, version);
-    const old = readDiagnosticSnapshot(f.root); assert.equal(old.schemaVersion, version);
-    assert.equal(inspectLedger(old, { stateRoot: f.root, society: "demo" }).report.status, "PASS");
-    const store = new Store(f.path, 0, { society: "demo" });
-    try { assert.equal(store.societyOpen(), true); } finally { store.close(); }
-    assert.deepEqual(contents(f.path, version), before);
-    const after = readDiagnosticSnapshot(f.root); assert.equal(after.schemaVersion, 3);
-    assert.deepEqual(after.foreignKeys, []);
-    const report = inspectLedger(after, { stateRoot: f.root, society: "demo" }).report;
-    assert.equal(report.status, "PASS", JSON.stringify(report));
-    const again = new Store(f.path, 0, { society: "demo" }); again.close();
-    assert.deepEqual(contents(f.path, version), before);
-  });
-  test(`DR27: v${version} migration with broken foreign keys rolls back all tables and the version`, async t => {
-    const f = await legacy(t, version); const db = new DatabaseSync(f.path);
-    db.exec("PRAGMA foreign_keys=OFF"); db.prepare("UPDATE deliveries SET operation_id=?").run("op-00000000-0000-4000-8000-000000000999"); db.close();
-    const before = contents(f.path, version);
-    assert.throws(() => new Store(f.path, 0, { society: "demo" }), { code: "STORE_CORRUPT" });
-    assert.deepEqual(contents(f.path, version), before);
-    assert.equal(readDiagnosticSnapshot(f.root).schemaVersion, version);
+
+for (const version of [1, 2, 4, 99]) {
+  test(`DR27: a database at user_version ${version} fails closed and is never rewritten`, () => {
+    const { root, path } = legacyAt(version);
+    try {
+      const bytes = readFileSync(path);
+      assert.throws(() => new Store(path, 0, { society: "demo" }), { code: "STORE_CORRUPT" });
+      assert.deepEqual(readFileSync(path), bytes, "the refused database was modified");
+      assert.throws(() => readDiagnosticSnapshot(root), { code: "STORE_CORRUPT" });
+      const db = new DatabaseSync(path, { readOnly: true });
+      try { assert.equal(db.prepare("PRAGMA user_version").get()?.user_version, version); } finally { db.close(); }
+    } finally { rmSync(root, { recursive: true, force: true }); }
   });
 }
-test("DR27: interruption between v1-v2 and v2-v3 rolls the entire migration back", async t => {
-  const f = await legacy(t, 1); const before = contents(f.path, 1); let injected = false;
-  const exec = DatabaseSync.prototype.exec;
-  t.mock.method(DatabaseSync.prototype, "exec", function(this: DatabaseSync, sql: string) {
-    const at = sql.indexOf("CREATE TABLE operations_v3");
-    if (sql.includes("CREATE TABLE operations_v2") && at >= 0) {
-      exec.call(this, sql.slice(0, at)); injected = true; throw new Error("injected second-stage migration failure");
-    }
-    return exec.call(this, sql);
-  });
-  assert.throws(() => new Store(f.path, 0, { society: "demo" }), { code: "STORE_CORRUPT" });
-  assert.equal(injected, true); assert.deepEqual(contents(f.path, 1), before);
-  assert.equal(readDiagnosticSnapshot(f.root).schemaVersion, 1);
+
+test("DR27: an unversioned nonempty database is not mistaken for a new one", () => {
+  const root = mkdtempSync(join(tmpdir(), "oma-society-schema-"));
+  const path = join(root, "runtime.sqlite");
+  try {
+    const db = new DatabaseSync(path);
+    try { db.exec("CREATE TABLE stray (id INTEGER PRIMARY KEY)"); } finally { db.close(); }
+    const bytes = readFileSync(path);
+    assert.throws(() => new Store(path, 0, { society: "demo" }), { code: "STORE_CORRUPT" });
+    assert.deepEqual(readFileSync(path), bytes);
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
+test("DR27: a new database gets schema v3 and a v3 database reopens unchanged", () => {
+  const root = mkdtempSync(join(tmpdir(), "oma-society-schema-"));
+  const path = join(root, "runtime.sqlite");
+  try {
+    const store = new Store(path, 0, { society: "demo" });
+    store.transaction(tx => { tx.insertAgent(makeValidAgent("alice")); });
+    store.close();
+    const bytes = readFileSync(path);
+    const db = new DatabaseSync(path, { readOnly: true });
+    try { assert.equal(db.prepare("PRAGMA user_version").get()?.user_version, 3); } finally { db.close(); }
+    const snapshot = readDiagnosticSnapshot(root);
+    assert.equal(snapshot.schemaVersion, 3);
+    assert.deepEqual(snapshot.foreignKeys, []);
+    const again = new Store(path, 0, { society: "demo" });
+    try {
+      assert.equal(again.getAgent("alice")?.name, "alice");
+      assert.equal(again.societyOpen(), true);
+    } finally { again.close(); }
+    assert.deepEqual(readFileSync(path), bytes, "an open of the current schema rewrote the file");
+  } finally { rmSync(root, { recursive: true, force: true }); }
 });

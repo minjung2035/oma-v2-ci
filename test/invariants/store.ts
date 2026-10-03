@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { DatabaseSync } from "node:sqlite";
-import type { Store, AgentRow, OperationRow, DeliveryRow, BatchRow, UsageRow, SubscriptionRow } from "../../src/store.js";
+import type { Store, AgentRow, OperationRow, DeliveryRow, BatchRow, SubscriptionRow } from "../../src/store.js";
 import { LineageSnapshot } from "../../src/domain/lineage.js";
 
 export type InvariantPhase = "settled" | "accepted-before-effect" | "partial-materialization" | "unknown-external";
@@ -9,7 +9,6 @@ export interface LedgerSnapshot {
   readonly operations: readonly OperationRow[];
   readonly deliveries: readonly DeliveryRow[];
   readonly batches: readonly BatchRow[];
-  readonly usage: readonly UsageRow[];
   readonly subscriptions: readonly SubscriptionRow[];
   readonly recoverable: readonly string[];
   readonly raw: Readonly<Record<string, readonly Readonly<Record<string, unknown>>[]>>;
@@ -35,7 +34,7 @@ export function captureLedger(store: Store): LedgerSnapshot {
     assert.equal(integrity.length, 1, "STORE_INTEGRITY");
     assert.equal(Object.values(integrity[0]!)[0], "ok", "STORE_INTEGRITY");
     for (const [table, order] of [["agents", "name"], ["operations", "id"], ["deliveries", "message_id,recipient"],
-      ["batches", "id"], ["usage", "request_id"], ["subscriptions", "topic,agent"]] as const) {
+      ["batches", "id"], ["subscriptions", "topic,agent"]] as const) {
       raw[table] = Object.freeze(database.prepare(`SELECT * FROM ${table} ORDER BY ${order}`).all().map(row => Object.freeze({ ...row })));
     }
     database.exec("COMMIT");
@@ -44,16 +43,15 @@ export function captureLedger(store: Store): LedgerSnapshot {
   const operations = raw.operations!.map(row => required(store.getOperationById(text(row, "id")), "STORE_OPERATION_MISSING"));
   const deliveries = raw.deliveries!.map(row => required(store.getDelivery(text(row, "message_id"), text(row, "recipient")), "STORE_DELIVERY_MISSING"));
   const batches = raw.batches!.map(row => required(store.getBatch(text(row, "id")), "STORE_BATCH_MISSING"));
-  const usage = store.usageRows(); const subscriptions = store.allSubscriptions();
+  const subscriptions = store.allSubscriptions();
   assert.equal(agents.length, raw.agents!.length, "STORE_AGENT_PROJECTION");
-  assert.equal(usage.length, raw.usage!.length, "STORE_USAGE_PROJECTION");
   assert.equal(subscriptions.length, raw.subscriptions!.length, "STORE_SUBSCRIPTION_PROJECTION");
   const lineage = new LineageSnapshot(agents);
   for (const agent of agents) lineage.ancestors(agent.name);
   const recoverable = store.recoverableOperations();
   assert.deepEqual([...recoverable].sort(), operations.filter(operation => operation.state === "pending" || operation.state === "unknown").map(operation => operation.id).sort(), "STORE_RECOVERY_PROJECTION");
   return Object.freeze({ agents: Object.freeze(agents), operations: Object.freeze(operations), deliveries: Object.freeze(deliveries),
-    batches: Object.freeze(batches), usage: Object.freeze(usage), subscriptions: Object.freeze(subscriptions),
+    batches: Object.freeze(batches), subscriptions: Object.freeze(subscriptions),
     recoverable: Object.freeze(recoverable), raw: Object.freeze(raw) });
 }
 
@@ -70,22 +68,14 @@ export function assertAcceptedHistory(before: LedgerSnapshot, after: LedgerSnaps
       assert.equal(operation.updatedAtMs, original.updatedAtMs, `TERMINAL_TIME_CHANGED:${original.id}`);
     } else if (original.state === "unknown") assert.notEqual(operation.state, "pending", `UNKNOWN_DOWNGRADED:${original.id}`);
   }
-  for (const table of ["deliveries", "usage"] as const) {
-    const keys = table === "deliveries" ? ["message_id", "recipient"] : ["request_id"];
-    const identity = (row: Readonly<Record<string, unknown>>) => JSON.stringify(keys.map(key => row[key]));
-    const rows = new Map(after.raw[table]!.map(row => [identity(row), row]));
-    for (const original of before.raw[table]!) {
-      const row = required(rows.get(identity(original)) ?? null, `LEDGER_ROW_DELETED:${table}`);
-      if (table === "deliveries") {
-        for (const key of ["message_id", "recipient", "operation_id", "created_at_ms"])
-          assert.equal(row[key], original[key], `DELIVERY_IDENTITY_CHANGED:${key}`);
-        for (const [flag, time] of [["materialized", "materialized_at_ms"], ["presented", "presented_at_ms"], ["acknowledged", "acknowledged_at_ms"]])
-          if (original[flag!] === 1) { assert.equal(row[flag!], 1, `DELIVERY_FACT_REMOVED:${flag}`); assert.equal(row[time!], original[time!], `DELIVERY_FIRST_TIME_CHANGED:${time}`); }
-      } else {
-        for (const key of ["actor", "incarnation", "profile", "pricing_revision", "reserved_units", "created_at_ms"])
-          assert.equal(row[key], original[key], `USAGE_IDENTITY_CHANGED:${key}`);
-        if (original.outcome === "completed" || original.outcome === "cancelled") assert.deepEqual(row, original, "TERMINAL_USAGE_CHANGED");
-      }
-    }
+  const keys = ["message_id", "recipient"];
+  const identity = (row: Readonly<Record<string, unknown>>) => JSON.stringify(keys.map(key => row[key]));
+  const rows = new Map(after.raw.deliveries!.map(row => [identity(row), row]));
+  for (const original of before.raw.deliveries!) {
+    const row = required(rows.get(identity(original)) ?? null, "LEDGER_ROW_DELETED:deliveries");
+    for (const key of ["message_id", "recipient", "operation_id", "created_at_ms"])
+      assert.equal(row[key], original[key], `DELIVERY_IDENTITY_CHANGED:${key}`);
+    for (const [flag, time] of [["materialized", "materialized_at_ms"], ["presented", "presented_at_ms"], ["acknowledged", "acknowledged_at_ms"]])
+      if (original[flag!] === 1) { assert.equal(row[flag!], 1, `DELIVERY_FACT_REMOVED:${flag}`); assert.equal(row[time!], original[time!], `DELIVERY_FIRST_TIME_CHANGED:${time}`); }
   }
 }

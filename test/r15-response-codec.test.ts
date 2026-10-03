@@ -14,8 +14,8 @@ test("R15: complete public and internal responses are decoded by the requested m
   assert.deepEqual(decodeRpcReply("batch.prepare", envelope(null), id, {}), { ok: true, result: null });
   const prepared = { id: batch, agent: "alice", incarnation: 3, messageIds: [message], sessionPath: null, deliveryMode: "followUp", notice: "mail", indexPath: "/inbox.md" };
   assert.deepEqual(decodeRpcReply("batch.read", envelope(prepared), id, { batchId: batch }), { ok: true, result: prepared });
-  assert.deepEqual(decodeRpcReply("host.reconcile", envelope({ examined: 2, repaired: 1, remaining: 1 }), id, {}),
-    { ok: true, result: { examined: 2, repaired: 1, remaining: 1 } });
+  assert.deepEqual(decodeRpcReply("host.principalRelay", envelope({ moved: 2, pending: 1 }), id, {}),
+    { ok: true, result: { moved: 2, pending: 1 } });
   const receipt = { operation, state: "pending" };
   assert.deepEqual(decodeRpcReply("mail.send", envelope(receipt), id, {}), { ok: true, result: receipt });
   const failed = { v: 1, id, ok: false, error: { code: "DB_BUSY", message: "DB_BUSY", retry: "same-key" } };
@@ -39,7 +39,7 @@ test("R15: valid-looking foreign method results and unsafe facts are rejected", 
   assert.throws(() => decodeRpcReply("runner.open", envelope({ actor: "bob", incarnation: 3, socketHostPath: "/run/test" }), id, { agent: "alice" }), { code: "BROKER_UNAVAILABLE" });
   assert.throws(() => decodeRpcReply("runner.pending", envelope({ pending: Number.MAX_SAFE_INTEGER + 1, recoverableBatchIds: [] }), id, {}), { code: "BROKER_UNAVAILABLE" });
   assert.throws(() => decodeRpcReply("status.get", envelope([]), id, {}), { code: "BROKER_UNAVAILABLE" });
-  assert.throws(() => decodeRpcReply("host.reconcile", envelope({ examined: 1, repaired: 0, remaining: 1, authority: true }), id, {}), { code: "BROKER_UNAVAILABLE" });
+  assert.throws(() => decodeRpcReply("host.principalRelay", envelope({ moved: 1, pending: 0, authority: true }), id, {}), { code: "BROKER_UNAVAILABLE" });
   assert.throws(() => decodeRpcReply("mail.send", envelope({ operation, state: "succeeded", result: { kind: "route.follow", topic: "work", subscribed: true } }), id, {}), { code: "BROKER_UNAVAILABLE" });
 });
 

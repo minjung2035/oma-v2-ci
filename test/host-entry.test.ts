@@ -14,7 +14,7 @@ test("ID-001: entrypoints reject traversal before filesystem or socket effects",
   const dir = mkdtempSync(join(tmpdir(), "oma-entry-name-"));
   try {
     for (const name of ["broker", "runner", "host"]) {
-      const args = name === "host" ? ["reconcile"] : name === "runner" ? ["--agent", "a"] : [];
+      const args = name === "host" ? ["principal-relay"] : name === "runner" ? ["--agent", "a"] : [];
       const result = spawnSync(process.execPath, [entry(name), ...args, "--society", "../escape"], {
         env: { ...process.env, XDG_DATA_HOME: dir, XDG_RUNTIME_DIR: dir }, encoding: "utf8", timeout: 3000,
       });
@@ -35,14 +35,14 @@ test("PR-002: host entry reports EOF/malformed replies as failure and parses spl
       peer.on("data", (chunk) => {
         for (const frame of parser.feed(Buffer.from(chunk))) {
           const request = frame.raw as { id: string; method: string };
-          assert.equal(request.method, "host.reconcile");
+          assert.equal(request.method, "host.principalRelay");
           if (mode === "eof") return peer.end();
           if (mode === "malformed") return peer.end(Buffer.from([0, 0, 0, 1, 0xff]));
           // Protocol v1 responses carry the version like every other boundary.
           const reply = encodeFrame(mode === "denied"
             ? { v: 1, id: request.id, ok: false, error: { code: "AUTH_FAILED", message: "denied", retry: "never" } }
-            // The closed host.reconcile result schema, not a partial object.
-            : { v: 1, id: request.id, ok: true, result: { examined: 1, repaired: 1, remaining: 0 } });
+            // The closed host.principalRelay result schema, not a partial object.
+            : { v: 1, id: request.id, ok: true, result: { moved: 1, pending: 0 } });
           peer.write(reply.subarray(0, 2));
           setTimeout(() => { if (!peer.destroyed) peer.end(reply.subarray(2)); }, 20);
         }
@@ -51,7 +51,7 @@ test("PR-002: host entry reports EOF/malformed replies as failure and parses spl
     await new Promise<void>((resolve) => server.listen(join(run, "host.sock"), resolve));
     // D03: the unit renders the broker's run root; the manager's environment
     // is not consulted (it points somewhere else here on purpose).
-    const child = spawn(process.execPath, [entry("host"), "reconcile", "--society", "probe", "--run-root", run], {
+    const child = spawn(process.execPath, [entry("host"), "principal-relay", "--society", "probe", "--run-root", run], {
       env: { ...process.env, XDG_RUNTIME_DIR: join(dir, "elsewhere") }, stdio: ["ignore", "pipe", "pipe"],
     });
     let stdout = "";
@@ -61,7 +61,7 @@ test("PR-002: host entry reports EOF/malformed replies as failure and parses spl
     try {
       const [code] = await once(child, "exit");
       assert.equal(code, mode === "success" ? 0 : mode === "denied" ? 2 : 3, mode);
-      if (mode === "success") assert.deepEqual(JSON.parse(stdout), { examined: 1, repaired: 1, remaining: 0 });
+      if (mode === "success") assert.deepEqual(JSON.parse(stdout), { moved: 1, pending: 0 });
       else assert.equal(stdout, "");
     } finally {
       clearTimeout(timer);
@@ -77,7 +77,7 @@ test("D03: a host unit without the rendered run root is refused, not pointed at 
   try {
     for (const args of [[], ["--run-root", "relative/oma/probe"], ["--run-root", join(dir, "oma", "other")],
       ["--run-root", join(dir, "oma", "probe"), "--run-root", join(dir, "oma", "probe")]]) {
-      const result = spawnSync(process.execPath, [entry("host"), "reconcile", "--society", "probe", ...args], {
+      const result = spawnSync(process.execPath, [entry("host"), "principal-relay", "--society", "probe", ...args], {
         env: { ...process.env, XDG_RUNTIME_DIR: dir }, encoding: "utf8", timeout: 3000,
       });
       assert.equal(result.status, 4, `${JSON.stringify(args)}: ${result.stderr}`);

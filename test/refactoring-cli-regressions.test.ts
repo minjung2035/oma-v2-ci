@@ -30,17 +30,14 @@ function validConfig() {
   return {
     schemaVersion: 1, society: "demo",
     installation: { node: "/usr/bin/node", libdir: "/usr/lib/oma", rootfs: "/srv/rootfs", deploymentDigest: "a".repeat(64) },
-    modelProfiles: { m: { provider: "p", model: "m", credentialRef: "c", codecRevision: "c1", pricingRevision: "p1",
-      maxInputTokens: 1, maxOutputTokens: 1, inferenceTimeoutSeconds: 1 } },
+    modelProfiles: { m: { provider: "p", model: "m", inferenceTimeoutSeconds: 1 } },
     agentProfiles: { p: { modelProfile: "m", capabilities: ["mail.send"], delegable: [], childProfile: null, resources } },
     principalProfile: "p", initialResidents: [{ name: "alice", profile: "p", brief: "work" }],
-    quota: { societyAgents: 10, lineageAgents: 10, societyUnits: 10, lineageUnits: 10, principalReservedUnits: 1,
-      inferenceSlots: 2, principalReservedSlots: 1, storageBytes: 1024 },
+    quota: { societyAgents: 10, lineageAgents: 10, storageBytes: 1024 },
     integration: { policyRevision: "p1", protectedPaths: [], checks: [] },
     limits: { frameBytes: 1024, mailBodyBytes: 1024, subjectBytes: 128, addresses: 10, replyReferences: 10,
       contextFiles: 10, contextBytes: 1024, bundleBytes: 1024, logBytes: 1024, batchMaxMessages: 10,
       idleStreamSeconds: 1, receiptWaitSeconds: 1 },
-    features: { notmuch: false, reflinkSeed: false, formalApproval: false, egress: false },
   };
 }
 function run(home: string, args: string[]) {

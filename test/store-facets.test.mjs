@@ -6,12 +6,14 @@ import { join } from "node:path";
 import { execFileSync } from "node:child_process";
 import { READ_FACETS, WRITE_FACETS, WRITE_METHODS } from "../dist/src/storage/facets.js";
 import { AdmissionGate, bindAdmissionGate } from "../dist/src/domain/admission.js";
+import { generateBatchId, generateMessageId, generateOperationId } from "../dist/src/ids.js";
+import { requestHash } from "../dist/src/hash.js";
 import { ledgerFixture, routeOperation, routeResult, agentRecord } from "./helpers/ledger-fixture.mjs";
 
 const code = expected => error => error?.code === expected;
 
 test("P4 facets: frozen descriptors cover ledger entities and compatibility writes exactly once", () => {
-  const groups = ["agents", "batches", "deliveries", "operations", "subscriptions", "usage"];
+  const groups = ["agents", "batches", "deliveries", "operations", "subscriptions"];
   assert.deepEqual(Object.keys(READ_FACETS).sort(), [...groups, "attestations"].sort());
   assert.deepEqual(Object.keys(WRITE_FACETS).sort(), groups);
   for (const table of [READ_FACETS, WRITE_FACETS]) {
@@ -57,36 +59,50 @@ test("P4 facets: every escaped write and extracted function refuses a later tran
   assert.deepEqual(store.subscriptions.subscribers("live"), ["alice"]);
 });
 
-test("P4 facets: operation, agent, subscription and usage writes roll back together", t => {
-  const { store } = ledgerFixture(t), operation = routeOperation();
+test("P4 facets: operation, agent, subscription and batch writes roll back together", t => {
+  const { store } = ledgerFixture(t), operation = routeOperation(), batch = generateBatchId();
   assert.throws(() => store.transaction(tx => {
     tx.agents.insert(agentRecord("bob", "principal"));
     tx.agents.update({ name: "alice", desired: "stopped" });
     tx.operations.accept(operation);
     tx.subscriptions.follow("design", "alice");
-    tx.usage.reserve({ requestId: "usage-fixture", actor: "alice", incarnation: 0,
-      profile: "fixture-model", pricingRevision: "p1", reservedUnits: 10 });
+    tx.batches.prepare({ id: batch, agent: "alice", incarnation: 0, messageIds: [generateMessageId(operation.id, 0)], sessionPath: null });
     throw new Error("abort");
   }), /abort/);
   assert.equal(store.agents.get("bob"), null);
   assert.equal(store.agents.get("alice").desired, "enabled");
   assert.equal(store.operations.getById(operation.id), null);
   assert.deepEqual(store.subscriptions.all(), []);
-  assert.deepEqual(store.usage.all(), []);
+  assert.equal(store.batches.get(batch), null);
 });
 
 test("P4 facets: admission blocks new intents but permits explicit existing settlement", t => {
   const { store } = ledgerFixture(t), operation = routeOperation();
   store.transaction(tx => tx.operations.accept(operation));
+  const id = generateOperationId(), message = generateMessageId(id, 0);
+  const payload = { to: ["alice"], subject: "settle", body: "x", kind: "message" };
+  const plan = { kind: "mail.send", message: { id: message, objectPath: `mail/objects/${message}.eml`, sha256: "a".repeat(64), bytes: 1, dateMs: Date.now(),
+    to: ["alice"], recipients: ["alice"], kind: "message", contextRevision: null, replyHeaders: { replyTo: ["alice"], inReplyTo: null, references: [] } } };
+  store.transaction(tx => {
+    tx.operations.accept({ id, actor: "alice", requestKey: "mail", requestHash: requestHash("mail.send", payload),
+      kind: "mail.send", payloadJson: JSON.stringify(payload), planJson: JSON.stringify(plan) });
+    tx.deliveries.insert([{ messageId: message, recipient: "alice", operationId: id }]);
+  });
   const gate = new AdmissionGate();
   bindAdmissionGate(store, gate);
   gate.close();
   assert.throws(() => store.transaction(tx => tx.operations.accept(routeOperation())), code("BROKER_UNAVAILABLE"));
   assert.throws(() => store.transaction(tx => tx.batches.prepare({})), code("BROKER_UNAVAILABLE"));
-  assert.throws(() => store.transaction(tx => tx.usage.reserve({})), code("BROKER_UNAVAILABLE"));
+  // Settlement of already-accepted facts is not a new intent: delivery
+  // materialization and the explicit unknown transition remain writable
+  // under a closed gate, which is exactly what the gate is for.
+  store.transaction(tx => tx.deliveries.materialize(message, "alice"));
+  assert.equal(store.deliveries.get(message, "alice").materialized, 1);
   store.transaction(tx => tx.operations.unknown(operation.id));
   assert.equal(store.operations.getById(operation.id).state, "unknown");
-  assert.equal(store.operations.recoverableIds().length, 1);
+  // The explicit unknown and the still-pending accepted mail send are both
+  // recoverable; gate closure changed neither.
+  assert.equal(store.operations.recoverableIds().length, 2);
 });
 
 test("P4 facets: escaped asynchronous continuation never borrows fresh root authority", async t => {
@@ -122,8 +138,8 @@ test("P4 facets: compile-time method separation and argument types remain enforc
       store.operations.succeed("op", "{}");
       // @ts-expect-error transitions never invent a second read implementation
       tx.operations.getById("op");
-      // @ts-expect-error preserve concrete usage arguments
-      tx.usage.settle("id", "made-up-outcome", 0, null);
+      // @ts-expect-error preserve concrete batch arguments
+      tx.batches.complete("id", "made-up-outcome");
       // @ts-expect-error facet objects cannot be replaced on a scoped transaction
       tx.operations = store.operations;
     `);

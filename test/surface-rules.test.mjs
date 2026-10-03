@@ -107,13 +107,13 @@ test("tui-write-owner, tui-ledger, tui-transport-owner, tui-internal-method", ()
   withTree({ "src/tui/app.ts": 'import { BrokerChannel } from "../protocol/channel.js";', "src/protocol/channel.ts": "export class BrokerChannel {}" },
     findings => assert.ok(has(findings, "tui-transport-owner")));
   withTree({
-    "src/protocol/methods.ts": 'export const INTERNAL_METHODS = { "host.reconcile": {} } as const;',
-    "src/tui/transport.ts": 'export const call = "host.reconcile";',
+    "src/protocol/methods.ts": 'export const INTERNAL_METHODS = { "host.principalRelay": {} } as const;',
+    "src/tui/transport.ts": 'export const call = "host.principalRelay";',
   }, findings => assert.ok(has(findings, "tui-internal-method")));
   // Near miss: the name in a comment is prose, not a call.
   withTree({
-    "src/protocol/methods.ts": 'export const INTERNAL_METHODS = { "host.reconcile": {} } as const;',
-    "src/tui/transport.ts": "// never calls host.reconcile\nexport const x = 1;",
+    "src/protocol/methods.ts": 'export const INTERNAL_METHODS = { "host.principalRelay": {} } as const;',
+    "src/tui/transport.ts": "// never calls host.principalRelay\nexport const x = 1;",
   }, findings => clean(findings, "tui-write-owner", "tui-ledger", "tui-transport-owner", "tui-internal-method"));
 });
 

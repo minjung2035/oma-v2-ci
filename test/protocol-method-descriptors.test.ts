@@ -31,7 +31,7 @@ const context = { limits };
 test("public/internal registries are closed, disjoint, and classify all 13 mutations", () => {
   assert.equal(Object.keys(PUBLIC_METHODS).length, 20);
   assert.deepEqual(PUBLIC_METHODS["operation.read"].authority, ["current-actor", "own-operation"]);
-  assert.equal(Object.keys(INTERNAL_METHODS).length, 10);
+  assert.equal(Object.keys(INTERNAL_METHODS).length, 9);
   assert.equal(Object.values(PUBLIC_METHODS).filter(d => d.mode === "mutation").length, 13);
   for (const [method, descriptor] of Object.entries(PUBLIC_METHODS)) {
     assert.equal(isInternalMethod(method), false);
@@ -57,7 +57,7 @@ test("conditional authority and stream policy are not replaced with capability-o
   assert.equal(PUBLIC_METHODS["context.publish"].stream, "required-content");
   assert.equal(INTERNAL_METHODS["batch.complete"].evidence, "boundary");
   assert.equal(INTERNAL_METHODS["principal.attach"].channel, "extension");
-  assert.equal(INTERNAL_METHODS["host.reconcile"].lease, "host-unit");
+  assert.equal(INTERNAL_METHODS["host.principalRelay"].lease, "host-unit");
 });
 
 test("the shared params decoder is closed and consumes the caller's host limits", () => {
@@ -82,17 +82,14 @@ function configFixture() {
     schemaVersion: 1,
     society: "example",
     installation: { node: "/usr/bin/node", libdir: "/opt/oma", rootfs: "/opt/rootfs", deploymentDigest: "a".repeat(64) },
-    modelProfiles: { model: { provider: "test", model: "test", credentialRef: "test", codecRevision: "test",
-      pricingRevision: "test", maxInputTokens: 1, maxOutputTokens: 1, inferenceTimeoutSeconds: 1 } },
+    modelProfiles: { model: { provider: "test", model: "test", inferenceTimeoutSeconds: 1 } },
     agentProfiles: { resident: { modelProfile: "model", capabilities: [], delegable: [], childProfile: null,
       resources: Object.fromEntries(Object.entries(RESOURCE_FIELDS).map(([key, field]) => [key, Math.max(1, field.minInclusive)])) } },
     principalProfile: "resident",
     initialResidents: [{ name: "alice", profile: "resident", brief: "brief" }],
-    quota: { societyAgents: 4, lineageAgents: 4, societyUnits: 4, lineageUnits: 4,
-      principalReservedUnits: 1, inferenceSlots: 2, principalReservedSlots: 1, storageBytes: 1 },
+    quota: { societyAgents: 4, lineageAgents: 4, storageBytes: 1 },
     integration: { policyRevision: "test", protectedPaths: [], checks: [] },
     limits,
-    features: { notmuch: false, reflinkSeed: false, formalApproval: false, egress: false },
   };
 }
 

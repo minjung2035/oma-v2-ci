@@ -106,7 +106,12 @@ export class GuestProjects {
 
   /** §6.4: the society's canonical main, as a bundle staged for the host. */
   export(key: unknown, params: { society: unknown; since?: unknown }): Promise<Record<string, unknown>> {
-    return this.ledger.run(key, "project.export", params as Record<string, unknown>, async () => {
+    // The intent digest covers what the request was: an absent `since` and an
+    // explicit `since: undefined` are the same request, and neither is a JSON
+    // value the canonical encoder can name.
+    const intent: Record<string, unknown> = params.since === undefined
+      ? { society: params.society } : { society: params.society, since: params.since };
+    return this.ledger.run(key, "project.export", intent, async () => {
       if (!isValidSocietyName(params.society)) throw new StoreError("INVALID_REQUEST", "invalid society name");
       const canonical = projectGitPathAt(join(this.societiesDir, params.society));
       const head = git(["--git-dir", canonical, "rev-parse", "--verify", "refs/heads/main^{commit}"]);

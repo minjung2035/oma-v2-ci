@@ -39,12 +39,10 @@ export interface BrokerPaths {
   stateRoot: string; runRoot: string; society: string; hasGoal: () => boolean; storageBytes?: number;
   /** The process's storage owner when composition shares it with recovery. */
   storage?: StorageAdmission;
-  /** D03: a broker no fixed unit binds its Residents to stops them itself on
-   * drain, after every dispatched task settles and before its Store closes. */
+  /** D03: the broker's Residents are bound to no fixed unit, so it stops them
+   * itself on drain, after every dispatched task settles and before its Store
+   * closes. */
   quiesceOnDrain?: () => void;
-  /** REC-002, D03: a broker no reconcile timer unit serves runs the periodic
-   * sweep itself, for exactly its own lifetime. */
-  periodicReconcile?: boolean;
 }
 
 /** PR-001: a broker no host started opens no Principal endpoint at all, so
@@ -124,7 +122,7 @@ export class Broker {
       isDraining: () => this.draining, assertAdmission: () => this.health.assertAdmission(), admitResource: this.admitResource,
       failureAnswer: (id, error) => this.failureAnswer(id, error), refreshViews: () => this.refreshViews(),
       readLogs: (agent, sinceSeconds) => this.readLogs(agent, sinceSeconds) });
-    const internalPorts = createInternalDispatchPorts(this.store, mail, reconcile, paths.stateRoot, {
+    const internalPorts = createInternalDispatchPorts(this.store, mail, paths.stateRoot, {
       requireRunnerUnit: (peer, agent, invocationId) => this.requireRunnerUnit(peer, agent, invocationId),
       requireHostUnit: (peer, kind) => this.requireHostUnit(peer, kind), runnerActor: peer => this.runnerActor(peer),
       runnerAuth: (agent, incarnation, peer) => this.runnerAuth(agent, incarnation, peer),
@@ -159,7 +157,9 @@ export class Broker {
       this.publishStatus();
       this.statusTimer = setInterval(() => { this.publishStatus(); }, STATUS_REFRESH_MS);
       this.statusTimer.unref();
-      if (this.paths.periodicReconcile === true && this.reconcile !== null) {
+      // REC-002, D03: the broker runs the periodic sweep itself, for exactly
+      // its own lifetime -- there is no external reconcile unit.
+      if (this.reconcile !== null) {
         this.reconcileTimer = setInterval(() => { this.periodicSweep(); }, RECONCILE_INTERVAL_MS);
         this.reconcileTimer.unref();
       }
@@ -434,7 +434,7 @@ export class Broker {
     return this.publicDispatcher.dispatch(auth, request, stream);
   }
   private requireRunnerUnit(peer: BoundPeer, agent: Actor, invocationId?: string): void { this.peers.requireRunnerUnit(peer, agent, invocationId); }
-  private requireHostUnit(peer: BoundPeer, kind: "principal-relay" | "reconcile"): void { this.peers.requireHostUnit(peer, kind); }
+  private requireHostUnit(peer: BoundPeer, kind: "principal-relay"): void { this.peers.requireHostUnit(peer, kind); }
   private runnerActor(peer: BoundPeer): Actor { return this.peers.runnerActor(peer); }
   private runnerAuth(agent: Actor, incarnation: number, peer: BoundPeer): AuthContext {
     const auth = this.trustedContext(agent, peer, "trusted-runner");

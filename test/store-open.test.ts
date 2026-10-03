@@ -318,16 +318,16 @@ for (const [state, stage] of [
   ["new", "journal_mode"],
   ["new", "synchronous"],
   ["new", "busy_timeout"],
-  ["new", "migration"],
-  ["v1", "foreign_keys"],
-  ["v1", "journal_mode"],
-  ["v1", "synchronous"],
-  ["v1", "busy_timeout"],
+  ["new", "schema"],
+  ["existing", "foreign_keys"],
+  ["existing", "journal_mode"],
+  ["existing", "synchronous"],
+  ["existing", "busy_timeout"],
 ] as const) {
   test(`V04B: failed ${state} Store ${stage} setup closes its real native handle`, (t) => {
     const root = mkdtempSync(join(tmpdir(), "oma-store-open-"));
     const path = join(root, "runtime.sqlite");
-    if (state === "v1") new Store(path).close();
+    if (state === "existing") new Store(path).close();
     const unrelated = new DatabaseSync(join(root, "unrelated.sqlite"));
     unrelated.exec("CREATE TABLE preserved(value); BEGIN IMMEDIATE");
     const baseline = databaseDescriptors(root);
@@ -345,13 +345,13 @@ for (const [state, stage] of [
         owned = this;
         if (
           !injected &&
-          (stage === "migration"
+          (stage === "schema"
             ? sql.includes("CREATE TABLE agents")
             : sql.includes(`PRAGMA ${stage}`))
         ) {
           injected = true;
-          // A genuine native transaction exists when migration fails, not just a thrown callback.
-          if (stage === "migration")
+          // A genuine native transaction exists when schema application fails, not just a thrown callback.
+          if (stage === "schema")
             exec.call(this, "BEGIN EXCLUSIVE; CREATE TABLE incomplete(value)");
           throw primary;
         }
@@ -438,9 +438,9 @@ test("V04B: initialization and close failures retain both causes", (t) => {
   }
 });
 
-test("V04B: failed migration retains its rollback failure and still closes", (t) => {
+test("V04B: failed schema application retains its rollback failure and still closes", (t) => {
   const root = mkdtempSync(join(tmpdir(), "oma-store-rollback-"));
-  const primary = new StoreError("STORE_CORRUPT", "migration failed");
+  const primary = new StoreError("STORE_CORRUPT", "schema application failed");
   const rollback = new Error("rollback failed");
   const exec = DatabaseSync.prototype.exec;
   let owned: DatabaseSync | undefined;
@@ -535,11 +535,11 @@ test("V04B: busy writer setup closes its handle without releasing another connec
   }
 });
 
-for (const state of ["new", "v1"] as const)
+for (const state of ["new", "existing"] as const)
   test(`V04B: ${state} reader composition failure closes the actual Store connection`, () => {
     const root = mkdtempSync(join(tmpdir(), "oma-store-reader-"));
     try {
-      if (state === "v1") new Store(join(root, "runtime.sqlite")).close();
+      if (state === "existing") new Store(join(root, "runtime.sqlite")).close();
       const script = `
       import assert from 'node:assert/strict';
       import {mock} from 'node:test';
@@ -584,7 +584,7 @@ for (const state of ["new", "v1"] as const)
   });
 
 for (const mode of ["delete", "retained-wal"] as const) {
-  test(`V04A: supported v1 ${mode} retains its committed operation`, () => {
+  test(`V04A: supported v3 ${mode} retains its committed operation`, () => {
     const root = mkdtempSync(join(tmpdir(), "oma-store-supported-"));
     const path = join(root, "runtime.sqlite");
     const operation = makeValidOperation({

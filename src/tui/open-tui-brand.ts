@@ -129,17 +129,41 @@ export function brandHeader(lines: readonly string[], brand: OpenTuiBrand, paint
     if (tips === "Welcome") out[index] = swapText(out[index]!, "Welcome", brand.mode ?? "Society", false, divider);
     else if (tips === "Ask Pi anything") out[index] = swapText(out[index]!, "Ask Pi anything", brand.society, false, divider);
   }
-  // The last of the four command tips names oma's key instead.
+  // The last of the four command tips names oma's key instead. Upstream may
+  // truncate that command's name when an extension added one, so the cell is
+  // rewritten by position rather than by matching its text.
   const tips = out.map(line => plain(line).split("│")).findIndex(columns => columns[2]?.trim() === "Commands");
   const last = tips < 0 ? -1 : tips + 4;
-  if (last > 0 && last < out.length) {
-    const command = plain(out[last]!).split("│")[2]?.trim();
-    if (command) {
-      const divider = out[last]!.indexOf("│", out[last]!.indexOf("│") + 1);
-      out[last] = swapText(out[last]!, command, brand.tip, false, divider);
-    }
-  }
+  if (last > 0 && last < out.length && plain(out[last]!).split("│")[2]?.trim())
+    out[last] = replaceColumn(out[last]!, 2, ` ${brand.tip}`);
   return out;
+}
+
+/** `line` with the visible content of its `n`th `│`-delimited cell replaced by
+ * `text`, left-aligned in the same span. ANSI inside the cell is dropped; the
+ * borders and what lies outside the cell are byte-identical. */
+function replaceColumn(line: string, n: number, text: string): string {
+  let first = -1;
+  for (let index = 0; index < n; index += 1) {
+    first = line.indexOf("│", first + 1);
+    if (first < 0) return line;
+  }
+  const second = line.indexOf("│", first + 1);
+  if (second < 0) return line;
+  const start = first + 1 + LEADING_SGR.exec(line.slice(first + 1))![0].length;
+  const end = start + line.slice(start, second).replace(TRAILING_SGR, "").length;
+  const inner = line.slice(start, end);
+  const width = cellWidth(inner);
+  let visible = text;
+  if (cellWidth(visible) > width) {
+    let cut = visible;
+    while (cut.length > 0 && cellWidth(`${cut}…`) > width) cut = cut.slice(0, -1);
+    visible = cut.length === 0 ? "" : `${cut}…`;
+  }
+  // Keep the color the cell's text wore: its first SGR, closed after the tip.
+  const paint = /\x1b\[[0-9;]*m/.exec(inner)?.[0] ?? "";
+  const body = paint.length > 0 ? `${paint}${visible}\x1b[39m` : visible;
+  return `${line.slice(0, start)}${body}${" ".repeat(Math.max(0, width - cellWidth(visible)))}${line.slice(end)}`;
 }
 
 /** The footer's working-directory segment names the project. What the longer

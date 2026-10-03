@@ -9,7 +9,6 @@ import type {
   InternalMethods,
   PreparedBatch,
 } from "../../implementation/contracts.js";
-import type { ReconcileMetrics } from "../ports/runtime.js";
 import type { BoundPeer } from "./peer-authenticator.js";
 import { StoreError } from "../domain/errors.js";
 import { NO_HOLD, type Release, type ResourceGate } from "../domain/admission.js";
@@ -32,10 +31,6 @@ export interface InternalMailPort {
     evidence: BoundaryEvidence,
   ) => Promise<void>;
   readonly moveToCur: (agent: Actor, ids: readonly string[]) => number;
-  readonly reconcilePending: () => Promise<ReconcileMetrics>;
-}
-export interface InternalReconcilePort {
-  readonly sweep: () => Promise<ReconcileMetrics>;
 }
 export interface InternalPeerPort {
   readonly requireRunnerUnit: (
@@ -45,7 +40,7 @@ export interface InternalPeerPort {
   ) => void;
   readonly requireHostUnit: (
     peer: BoundPeer,
-    kind: "principal-relay" | "reconcile",
+    kind: "principal-relay",
   ) => void;
   readonly runnerActor: (peer: BoundPeer) => Actor;
   readonly runnerAuth: (
@@ -57,7 +52,6 @@ export interface InternalPeerPort {
 export interface InternalDispatchDependencies {
   readonly store: InternalStorePort;
   readonly mail: InternalMailPort;
-  readonly reconcile: InternalReconcilePort | null;
   readonly stateRoot: string;
   readonly peers: InternalPeerPort;
   isDraining(): boolean;
@@ -78,8 +72,7 @@ export function admitInternal(method: keyof InternalMethods, admission: Internal
   if (admission.isDraining() || (method !== "runner.pending" && method !== "runner.observe"))
     admission.assertAdmission();
   const resource = INTERNAL_METHODS[method].resource;
-  // A composite recovery pass admits each of its stages itself.
-  return resource === "staged" ? NO_HOLD : admission.admitResource(resource);
+  return admission.admitResource(resource);
 }
 type ValidatedInternalCall = {
   [M in keyof InternalMethods]: {
@@ -107,7 +100,7 @@ export class InternalDispatcher {
     stream: AsyncIterable<Uint8Array> | null,
     channel: "runner" | "host",
   ): Promise<object> {
-    const { store, mail, peers, reconcile } = this.deps;
+    const { store, mail, peers } = this.deps;
     const id = typeof raw.id === "string" ? raw.id : "x";
     const method = typeof raw.method === "string" ? raw.method : "";
     const problem = internalEnvelopeProblem(raw);
@@ -214,18 +207,6 @@ export class InternalDispatcher {
             moved: mail.moveToCur("principal", newFiles),
             pending: store.pendingDeliveryCount("principal"),
           });
-        }
-        case "host.reconcile": {
-          peers.requireHostUnit(peer, "reconcile");
-          let report;
-          if (reconcile) report = await reconcile.sweep();
-          else {
-            // Without the recovery owner only ordinary mail is settled.
-            const settlement = this.deps.admitResource("settle");
-            try { report = await mail.reconcilePending(); } finally { settlement(); }
-          }
-          this.deps.refreshViews();
-          return okAnswer(id, report);
         }
         case "batch.read":
         case "principal.attach":

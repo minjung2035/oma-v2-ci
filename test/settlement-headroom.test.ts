@@ -21,7 +21,7 @@ import { UnitsModule } from "../src/units.js";
 import { ViewsModule } from "../src/views.js";
 import { LifecycleModule } from "../src/lifecycle.js";
 import { ReconcileModule } from "../src/reconcile.js";
-import { StoreError } from "../src/domain/errors.js";
+import { StoreError, errorCodeOf } from "../src/domain/errors.js";
 import { observedStorageBytes } from "../src/storage/quota.js";
 import { parseUnitObservation } from "../src/units/observe.js";
 import { ALL_CAPS, TEST_RESOURCES, makeValidAgent, makeValidResolvedSpec } from "./fixtures/spec.js";
@@ -74,10 +74,10 @@ function society(t: TestContext, residents: readonly string[] = ["alice", "carol
   broker = new Broker(store, mail, units, views, lifecycle, null, reconcile, paths, LIMITS);
   const owner = broker;
   t.mock.method(owner as unknown as Record<string, () => void>, "requireHostUnit", () => undefined);
+  // REC-002: recovery is the broker's in-process sweep; there is no host RPC.
   const recover = async () => {
-    const answer = await (Reflect.get(owner, "dispatchInternal") as (...args: unknown[]) => Promise<{ ok: boolean; result?: unknown; error?: { code: string } }>)
-      .call(owner, { v: 1, id: "recover", method: "host.reconcile", params: {} }, { pid: process.pid, uid: process.getuid!(), gid: process.getgid!() }, null, "host");
-    return answer;
+    try { return { v: 1 as const, id: "recover", ok: true as const, result: await reconcile.sweep() }; }
+    catch (error) { return { v: 1 as const, id: "recover", ok: false as const, error: { code: errorCodeOf(error) } }; }
   };
   const send = (key: string, input: MailInput = work) =>
     owner.dispatch(auth, { v: 1, id: key, method: "mail.send", request: key, params: input } as never, null) as Promise<{ ok: boolean; error?: { code: string } }>;

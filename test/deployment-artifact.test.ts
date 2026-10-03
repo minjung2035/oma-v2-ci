@@ -34,7 +34,7 @@ function productionModules(): string[] {
 }
 
 function install(prefix: string, options: { engine?: boolean } = {}): void {
-  for (const path of ["dist", "implementation/schema-v3.sql", "implementation/schema-v1-to-v2.sql", "implementation/schema-v2-to-v3.sql", "implementation/systemd", "package.json", "package-lock.json"])
+  for (const path of ["dist", "implementation/schema-v3.sql", "implementation/systemd", "package.json", "package-lock.json"])
     cpSync(join(source, path), join(prefix, path), { recursive: true });
   for (const module of productionModules()) {
     if (options.engine === false && module === `node_modules/${ENGINE}`) continue;

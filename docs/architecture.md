@@ -20,7 +20,7 @@
 | 복제 비용 | 지속 clone, 선택적 reflink | 최초 workspace 생성 시 최적화 |
 | 진단 | journald | society에 한정한 읽기 |
 | effect/전달/비용 | SQLite | 작은 transaction·reconciliation |
-| inference | Pi provider adapter, Unix socket | credential 보호·stream 중계·quota |
+| inference | Pi provider adapter, Unix socket | credential 보호·stream 중계 |
 
 systemd가 process를 관리하므로 PID registry와 restart supervisor를 새로 만들지 않는다. Maildir가 본문을 보존하므로 Board body DB를 만들지 않는다. Git이 버전을 관리하므로 Change/Artifact lifecycle을 만들지 않는다. 단, 이 도구들이 서로 알아서 연결되는 것은 아니므로 아래 연결 코드는 필요하다.
 
@@ -134,7 +134,7 @@ v1 peer mail과 Principal에게 보내는 협업 질문은 society 공개 자료
 ```text
 ~/.local/share/oma/demo/
   config.json                      Human 소유 권한/자원 설정
-  runtime.sqlite                   effects, routing, delivery, usage
+  runtime.sqlite                   effects, routing, delivery, attestation
   repos/
     project.git/                   main + immutable 게시 refs
     context.git/                   Principal의 공유 목적과 판단
@@ -229,7 +229,7 @@ CLI request key 로컬 기록
 
 objects는 비공개여서 DB 접수 전 내용이 archive에 먼저 보이지 않는다. hardlink는 같은 filesystem에서 쓰고 원문과 모든 link를 agent에게 RO로 제공한다. 하나라도 RW 경로가 있으면 공유 inode 변경이 가능하므로 허용하지 않는다. 다른 filesystem이면 임시 복사 후 atomic publish한다.
 
-게시가 접수보다 앞서므로 **접수되지 않은 게시물의 주인은 아무도 아니다**. 같은 key를 동시에 요청한 두 호출은 둘 다 `claimKey`에서 `absent`를 보고 각자 다른 messageId를 고정할 수 있고, transaction에서 진 쪽, 거부된 쪽, linked로 흡수되어 그 message를 이름으로 갖지 않게 된 쪽은 자기가 만든 inode를 남긴다. 그래서 `freezeObject`는 void가 아니라 **pre-accept artifact**를 돌려주고, 소유 조건은 단 하나 — 그 artifact를 이름으로 가진 operation이 ledger에 접수되었는가 — 다. `mail.send`, `git.submit`, `agent.create`, `context.publish`는 모두 이 한 질문(`settleByAcceptance`)으로 정산한다. 정산은 자기가 게시한 dev/ino와 지금 그 이름이 가리키는 inode가 같을 때만 unlink하므로 교체된 이름이나 남의 artifact는 건드리지 않고, 두 번 불러도 같다. DB를 읽을 수 없어 접수 여부를 알 수 없으면 삭제하지 않고 보존한다 — 불확실성은 삭제 권한이 아니다. bundle spool(`PreparedSubmitSpool`)도 접수 전에 게시된 같은 종류의 물건이라 같은 interface(`PreacceptOwner`)를 구현하고 같은 질문으로 정산된다. 반대로 preparation artifact는 의도의 기록이므로 연결이 끊겨도 남긴다.
+게시가 접수보다 앞서므로 **접수되지 않은 게시물의 주인은 아무도 아니다**. 같은 key를 동시에 요청한 두 호출은 둘 다 `claimKey`에서 `absent`를 보고 각자 다른 messageId를 고정할 수 있고, transaction에서 진 쪽, 거부된 쪽, linked로 흡수되어 그 message를 이름으로 갖지 않게 된 쪽은 자기가 만든 inode를 남긴다. 그래서 `freezeObject`는 void가 아니라 **pre-accept artifact**를 돌려주고, 소유 조건은 단 하나 — 그 artifact를 이름으로 가진 operation이 ledger에 접수되었는가 — 다. `mail.send`, `git.submit`, `agent.create`, `context.publish`는 모두 이 한 질문(`PreacceptScope`의 정산)으로 정산한다. 정산은 자기가 게시한 dev/ino와 지금 그 이름이 가리키는 inode가 같을 때만 unlink하므로 교체된 이름이나 남의 artifact는 건드리지 않고, 두 번 불러도 같다. DB를 읽을 수 없어 접수 여부를 알 수 없으면 삭제하지 않고 보존한다 — 불확실성은 삭제 권한이 아니다. bundle spool(`PreparedSubmitSpool`)도 접수 전에 게시된 같은 종류의 물건이라 같은 interface(`PreacceptOwner`)를 구현하고 같은 질문으로 정산된다. 반대로 preparation artifact는 의도의 기록이므로 연결이 끊겨도 남긴다.
 
 ### 5.3 방송 도중 죽으면
 
@@ -254,24 +254,21 @@ presented는 본문을 읽거나 이해했다는 증거가 아니다. new→cur�
 ### 6.1 unit
 
 ```text
-oma-demo-broker.service
 oma-demo-a.path + oma-demo-a.service
 oma-demo-b.path + oma-demo-b.service
 oma-demo-principal.path + oma-demo-principal-relay.service
-oma-demo-reconcile.timer + oma-demo-reconcile.service
 ```
 
 agent 생성 시 고정 unit 파일을 쓴다. transient unit 이름에 durable agent identity를 의존하지 않는다. 검증된 slug와 상수 인자로만 unit을 생성한다.
 
-systemd-managed broker service는 `Type=notify`로 시작하여 DB 복구·이전 실행 정리·endpoint 준비 후 READY를 알린다. 기존 실행 정리가 끝나기 전에 새 Resident에 권한을 발급하지 않는다. 이 mode의 After/BindsTo가 실제 준비·수명 경계를 따르게 한다. 제품이 직접 소유한 foreground broker는 §23의 private channel과 tenure를 유지한다. D03/WP03의 깨끗한 disposable user 시험에서 그 mode의 동등한 revoke·Resident quiescence·재시작 fencing을 입증하기 전 multi-agent 지원 완료로 부르지 않는다. 존재하지 않는 broker.service 의존이나 별도 broker의 은밀한 시작으로 우회하지 않으며, 검증되지 않은 조합은 활성화를 거절한다. 아래 unit 초안은 systemd-managed mode용이며 [implementation/systemd](implementation/systemd/)의 mode별 renderer는 실제 시험을 따라야 한다.
+제품의 broker는 소유자가 foreground로 직접 실행하는 하나뿐이다. 그래서 broker.service 같은 고정 broker unit은 존재하지 않으며, Resident unit도 어떤 broker unit에 bind하지 않는다 — unit에는 자기 state tree를 가리키는 `X-OMA-Owner`와 render된 launch location만 새긴다. 주기 reconcile도 외부 service/timer가 아니라 broker process 안의 5초 sweep이다(§6.5). DB 복구·이전 실행 정리·endpoint 준비는 broker가 자기 수명 안에서 끝내고, 기존 실행 정리가 끝나기 전에 새 Resident에 권한을 발급하지 않는다. 제품이 직접 소유한 foreground broker는 §23의 private channel과 tenure를 유지한다. 존재하지 않는 broker.service 의존이나 별도 broker의 은밀한 시작으로 우회하지 않으며, 검증되지 않은 조합은 활성화를 거절한다. 아래 unit 초안은 [implementation/systemd](implementation/systemd/)의 renderer가 실제 생성하는 형식이다.
 
 ### 6.2 Resident service 초안
 
 ```ini
 [Unit]
 Description=OMA demo resident a
-BindsTo=oma-demo-broker.service
-After=oma-demo-broker.service
+X-OMA-Owner=/home/user/.local/share/oma/demo
 StartLimitIntervalSec=60
 StartLimitBurst=5
 
@@ -321,9 +318,9 @@ Pi 없음, pending 없음
 
 ### 6.4 무한 재시작 방지
 
-new를 LLM이 알아서 비우도록 두지 않는다. runner batch를 먼저 저장하고 cur로 옮긴다. 이동 직후 crash해도 batch가 남는다. inference slot 부족 시 runner는 waiting 상태로 대기하며 new를 남긴 채 반복 exit하지 않는다.
+new를 LLM이 알아서 비우도록 두지 않는다. runner batch를 먼저 저장하고 cur로 옮긴다. 이동 직후 crash해도 batch가 남는다. relay 동시성 한도에 걸리면 runner는 waiting 상태로 대기하며 new를 남긴 채 반복 exit하지 않는다.
 
-v1은 logical agent 총수에 상한을 두고 inference 동시성은 broker에서 제한한다. process별 CPU/RAM은 systemd가 제한한다. 별도 업무 우선순위 scheduler를 만들지 않는다.
+v1은 logical agent 총수에 상한을 두고 inference 동시성은 relay의 고정 한도가 제한한다. process별 CPU/RAM은 systemd가 제한한다. 별도 업무 우선순위 scheduler를 만들지 않는다.
 
 반복 crash는 systemd 시작 제한에서 멈춘다. reconcile은 실패 원인을 표시하며 start-limit을 무조건 reset하지 않는다. 명시적 start/운영 복구에서 해제한다.
 
@@ -331,7 +328,7 @@ v1은 logical agent 총수에 상한을 두고 inference 동시성은 broker에�
 
 path activation만으로 실행 중 Pi context에 mail을 넣을 수 없다. broker가 runner에 mail_available 힌트를 보내고, runner는 tool을 끊지 않고 안전한 경계에서 pending을 조회한다.
 
-힌트를 놓쳐도 agent_end, 재접속, idle 직전, broker 재시작에 pending을 대조한다. systemd reconcile timer는 초기 5초 간격으로 pending과 inactive를 확인한다. 이벤트는 빠른 반응용이며 원본이 아니다.
+힌트를 놓쳐도 agent_end, 재접속, idle 직전, broker 재시작에 pending을 대조한다. broker는 자기 process 안에서 5초 간격의 reconcile sweep으로 pending과 inactive를 확인한다 — 외부 reconcile service/timer unit은 없다. 이벤트는 빠른 반응용이며 원본이 아니다.
 
 ### 6.6 수동 stop
 
@@ -884,16 +881,9 @@ CREATE TABLE batches (
   session_path TEXT,
   state TEXT NOT NULL
 );
-CREATE TABLE usage (
-  request_id TEXT PRIMARY KEY,
-  actor TEXT NOT NULL,
-  reserved_units INTEGER NOT NULL,
-  reported_units INTEGER,
-  outcome TEXT NOT NULL
-);
 ```
 
-이 schema는 migration의 출발점이다. timestamps, FK indexes, CHECK constraints, byte count는 구현 시 보충한다. 비용은 고정된 최소 화폐 단위의 정수로 계산하며 provider usage token은 별도 상세 필드에 기록한다. base의 선택 approval/목표 tiered의 승인 기록은 authenticated attestation 확장에 둔다. tiered의 최소 floor metadata까지 허용하되 정확한 DDL과 migration은 S-08/S-10 완료 후 확정한다. 본 절의 여섯 표는 base schema이며 tiered persistence가 완성됐다는 뜻이 아니다.
+이 schema는 첫 설치의 출발점이다 — 이전 schema version에서의 migration 경로는 없다. timestamps, FK indexes, CHECK constraints, byte count는 구현 시 보충한다. base의 선택 approval/목표 tiered의 승인 기록은 authenticated attestation 확장에 둔다. tiered의 최소 floor metadata까지 허용하되 정확한 DDL은 S-08/S-10 완료 후 확정한다. 본 절의 다섯 표는 base schema sketch이며 tiered persistence가 완성됐다는 뜻이 아니다 — 실제 v3 DDL에는 attestation 순서를 보존하는 `attestations` 표가 더해져 여섯 entity다.
 
 mail body, artifact versions, focus, task ownership, review stages 테이블은 없다. agents는 실행해도 되는 논리 identity를 보존하며 process 생존의 원본은 systemd다.
 
@@ -1061,9 +1051,9 @@ principal    disconnected          pending=2  observed=...
 
 실행 중 tool 이름과 마지막 진행은 runner의 timestamp가 있는 관측값이다. CPU가 낮거나 model output이 없다는 이유로 '고장'이라고 확정하지 않는다. daemon에 연결하지 못하면 cached와 관측 시각을 표시한다.
 
-### 17.1 reconcile timer의 범위
+### 17.1 reconcile sweep의 범위
 
-timer는 다음 기계적 검사를 수행할 뿐 LLM을 호출하지 않는다.
+broker process 안의 주기 sweep은 다음 기계적 검사를 수행할 뿐 LLM을 호출하지 않는다.
 
 ```text
 pending file delivery 보충
@@ -1158,7 +1148,7 @@ batch가 준비된 뒤 새 메일이 도착하면 다음 batch에 남는다. 전
 | index 손상 | Maildir archive | index 재생성 |
 | start-limit 도달 | systemd Result | 자동 무한 reset 없이 failed 표시 |
 | DB 또는 원본 저장소 손상 | integrity 검사 | 쓰기 정지, 오류 표시, backup 복구 |
-| provider timeout | usage reservation | 비용 unknown, 임의 환불/replay 금지 |
+| provider timeout | engine observation | 임의 환불/replay 금지 |
 
 durability는 process crash와 전원 장애를 구분해 검증한다. SQLite flush 설정, file/directory fsync, Git object/ref flush, 저장장치의 실제 계약이 함께 맞아야 한다. atomic rename 하나로 power-loss 전체를 보장했다고 말하지 않는다.
 
@@ -1190,14 +1180,13 @@ Human: '로그인 갱신 오류를 고쳐줘. 기존 클라이언트 호환성�
 src/
   cli.ts                  입력/출력, stable request, bundle 생성
   broker.ts               IPC accept, capability, 모듈 조립
-  store.ts                SQLite migrations/transactions
+  store.ts                SQLite schema/transactions
   mail.ts                 eml, 주소 확장, Maildir 배달
   units.ts                고정 systemd unit 생성/start/stop/show
   runner.ts               한 Pi RPC session과 batch 연결
   pi-extension.ts         custom notice, context, provider adapter
   git.ts                  bundle 검증/수입, 게시 ref, main CAS
   sandbox.ts              bwrap argv와 mount profile
-  inference.ts            provider relay, quota, usage
   reconcile.ts            미완료 물리 효과 대조
   views.ts                inbox/agents/topics, scoped journal 조회
   approval.ts             tiered의 deterministic tier/attestation 검사 (base에서는 비활성)
@@ -1394,7 +1383,7 @@ Model            <principal model>
 Status           Ready
 ```
 
-표시값은 §17의 관측 규칙을 그대로 따른다. 각 수치는 관측 시각을 가지며, unknown이나 disconnected를 running이나 0으로 바꾸지 않는다. 비용이 확정되지 않은 inference는 unknown으로 남기므로 usage 요약도 확정분과 미확정분을 뭉개지 않는다. daemon에 연결하지 못하면 cached 값과 관측 시각을 함께 표시한다.
+표시값은 §17의 관측 규칙을 그대로 따른다. 각 수치는 관측 시각을 가지며, unknown이나 disconnected를 running이나 0으로 바꾸지 않는다. daemon에 연결하지 못하면 cached 값과 관측 시각을 함께 표시한다.
 
 ### 23.8 Config와 적용 시점
 
@@ -1419,7 +1408,7 @@ Extensions               >
 | Resident 수 증감 | 즉시. 기존 create/start/stop 경로 |
 | role의 model profile 내용 | 다음 runner activation. workspace와 session은 유지 |
 | Principal model | 다음 Principal session (TUI-005, D05) |
-| slot 수, quota cap, pricing, protected path, check 명령 | broker 재시작 |
+| agent·storage cap, protected path, check 명령 | broker 재시작 |
 
 `Initial workers`는 최초 bootstrap seed이며 실행 중인 society의 Resident 수를 바꾸지 않는다. 값을 바꿔도 다음 재시작에 agent가 자동 생성되거나 삭제되지 않는다. 지금 Resident를 늘리고 줄이는 것은 설정이 아니라 명시적인 lifecycle 행위다. UI는 이 둘을 같은 줄로 보이게 하지 않는다.
 

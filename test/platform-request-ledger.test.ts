@@ -89,7 +89,13 @@ test("MAC-240 / P0V-119: request hashing preserves existing bytes and refuses ex
 });
 
 
-test("MAC-240: legacy export intents with an explicit absent since remain replayable", async t => {
+test("MAC-240: a legacy-spelled intent digest is a different request, never replayed or re-run", async t => {
+  // v0.1.0 has no persisted format before this one: an intent digested under
+  // the old encoder, which spelled explicit undefined fields, simply does not
+  // match the same call today -- the caller's intent, spelled as JSON, digests
+  // differently. The ledger fails closed -- the stored intent is another
+  // request under this key, so the effect is neither answered from the old
+  // outcome nor run again.
   const dir = mkdtempSync(join(tmpdir(), "oma-ledger-")); t.after(() => rmSync(dir, { recursive: true, force: true }));
   const { createHash } = await import("node:crypto");
   const { writeFileSync } = await import("node:fs");
@@ -97,8 +103,9 @@ test("MAC-240: legacy export intents with an explicit absent since remain replay
   const digest = createHash("sha256").update('project.export\n{"since":undefined,"society":"demo"}').digest("hex");
   writeFileSync(join(dir, `${name}.intent.json`), JSON.stringify({ key: "export-1", method: "project.export", digest }));
   writeFileSync(join(dir, `${name}.outcome.json`), JSON.stringify({ ok: true, result: { head: "existing" } }));
-  assert.deepEqual(await new RequestLedger(dir).run("export-1", "project.export", { society: "demo", since: undefined },
-    async () => { throw new Error("a completed export must not run again"); }), { head: "existing" });
+  await assert.rejects(new RequestLedger(dir).run("export-1", "project.export", { society: "demo" },
+    async () => { throw new Error("a legacy intent must never be re-run or answered"); }),
+    (error: unknown) => error instanceof StoreError && error.code === "REQUEST_KEY_REUSED");
 });
 
 for (const code of ["DB_BUSY", "DEADLINE_EXCEEDED", "RUN_TERMINATION_UNKNOWN", "SESSION_BOUNDARY_UNCONFIRMED", "BROKER_UNAVAILABLE", "STORAGE_FULL"] as const) {

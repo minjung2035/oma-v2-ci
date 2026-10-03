@@ -67,6 +67,9 @@ async function compose(environment, { lockHeld = true, claim = "taken", cgroup =
     } },
     "../runtime/candidate-checks.js": { CandidateChecks: class { run() { throw new Error("composition must not execute candidate checks"); } } },
     "../git/quarantine.js": { QUARANTINE_RESOURCES: QUARANTINE_PROFILE },
+    // Trusted candidate checks run inside this process on the product's own
+    // Git, never delegated (mail-v1): the fixture records the composition.
+    "../runtime/candidate-checks.js": { CandidateChecks: class { run() {} } },
     "../runtime/provision.js": { repairSociety: stateRoot => {
       calls.push(`repair:${stateRoot}`);
       if (repairFails) throw new Error("rootfs entry could not be corrected");
@@ -147,11 +150,12 @@ async function compose(environment, { lockHeld = true, claim = "taken", cgroup =
   return { calls, paths, observation, constructorGoal, supervision, exits, exitCode: process.exitCode, unitValues, gitPaths, lines };
 }
 
-test("D03 composition: a broker no fixed unit runs renders unbound Residents at its location and stops them on drain", async () => {
-  const product = await compose({ OMA_HOST_CHANNEL: "3" }, { claim: "inherited", cgroup: "0::/user.slice/user@1.service/app.slice/oma-fixture-broker.service",
+test("D03 composition: the product runs the broker itself, so Residents render at its location and are stopped on drain", async () => {
+  const product = await compose({ OMA_HOST_CHANNEL: "3" }, { claim: "inherited",
     argv: ["--society", "fixture", "--config", "/c/x.json", "--state-root", "/s/oma/fixture", "--run-root", "/r/oma/fixture"] });
-  // A product child is never the fixed unit, whatever cgroup it happens to be in.
-  assert.equal(product.unitValues.brokerUnit, "");
+  // The product runs the broker itself: there is no broker unit a Resident
+  // could be bound to, whatever cgroup this process happens to be in.
+  assert.equal(Object.hasOwn(product.unitValues, "brokerUnit"), false);
   assert.deepEqual([product.unitValues.config, product.unitValues.state, product.unitValues.run], ["/c/x.json", "/s/oma/fixture", "/r/oma/fixture"]);
   const options = product.paths.find(entry => "principalHost" in entry);
   assert.equal(typeof options.quiesceOnDrain, "function");
@@ -159,18 +163,8 @@ test("D03 composition: a broker no fixed unit runs renders unbound Residents at 
   // The manager is asked before the Store is opened.
   assert.ok(product.calls.indexOf("manager") >= 0 && product.calls.indexOf("manager") < product.calls.indexOf("Store"));
   const manual = await compose();
-  assert.equal(manual.unitValues.brokerUnit, "");
+  assert.equal(Object.hasOwn(manual.unitValues, "brokerUnit"), false);
   assert.equal(manual.unitValues.config, "/data/oma/fixture/config.json");
-});
-
-test("D03 composition: only a broker running as the society's fixed unit binds its Residents to it", async () => {
-  const managed = await compose(undefined, { cgroup: "0::/user.slice/user@1.service/app.slice/oma-fixture-broker.service" });
-  assert.equal(managed.unitValues.brokerUnit, "oma-fixture-broker.service");
-  assert.equal(managed.paths.find(entry => "principalHost" in entry).quiesceOnDrain, undefined);
-  for (const cgroup of ["0::/user.slice/app.slice/oma-other-broker.service", "12:pids:/x\n0::/y/oma-fixture-broker.service", "garbage"]) {
-    const other = await compose(undefined, { cgroup });
-    assert.equal(other.unitValues.brokerUnit, "", cgroup);
-  }
 });
 
 test("P1 composition root: Git exists when Lifecycle receives its context reader", async () => {

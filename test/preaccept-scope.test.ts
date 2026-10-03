@@ -9,8 +9,8 @@ import type { CommandSpec } from "../src/process/command.js";
 import { makeValidAgent } from "./fixtures/spec.js";
 import { makeValidOperation } from "./fixtures/valid.js";
 import {
+  PreacceptScope,
   publishedArtifact,
-  settleByAcceptance,
   type PreacceptOwner,
 } from "../src/storage/preaccept-artifact.js";
 
@@ -40,17 +40,21 @@ function command(code: string): CommandSpec {
 test("V17A: one cleanup failure does not skip another owned resource", () => {
   const failing = new ObservedOwner(1);
   const remaining = new ObservedOwner();
-  assert.throws(() => settleByAcceptance([failing, remaining], () => false));
+  const scope = new PreacceptScope();
+  scope.register({ operationId: "op-a", resource: "failing", owner: failing, observe: () => "unaccepted-known" });
+  scope.register({ operationId: "op-a", resource: "remaining", owner: remaining, observe: () => "unaccepted-known" });
+  assert.throws(() => scope.settle());
   assert.equal(failing.discarded, 1);
   assert.equal(remaining.discarded, 1, "later cleanup was skipped");
 });
 
-test("V17A: DB observation uncertainty retains every preaccept resource", () => {
+test("V17A: observation uncertainty retains every preaccept resource", () => {
   const first = new ObservedOwner();
   const second = new ObservedOwner();
-  assert.doesNotThrow(() => settleByAcceptance([first, second], () => {
-    throw new Error("database unavailable");
-  }));
+  const scope = new PreacceptScope();
+  scope.register({ operationId: "op-a", resource: "first", owner: first, observe: () => "outcome-unknown" });
+  scope.register({ operationId: "op-a", resource: "second", owner: second, observe: () => "outcome-unknown" });
+  assert.deepEqual(scope.settle().map(entry => entry.disposition), ["outcome-unknown", "outcome-unknown"]);
   assert.deepEqual([first.retained, second.retained], [1, 1]);
   assert.deepEqual([first.discarded, second.discarded], [0, 0]);
 });

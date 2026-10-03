@@ -22,14 +22,13 @@ const prelude = `
 import type { Actor, OperationId, MessageId, BatchId, RequestKey } from "../src/domain/identifiers.js";
 import { parseOperationId } from "../src/domain/identifiers.js";
 import { decodeOperation } from "../src/storage/operation-codec.js";
-import { decodeDeliveryRow, decodeBatchRow, decodeAgentRow, decodeUsageRow, decodeBatchManifest } from "../src/storage/rows.js";
+import { decodeDeliveryRow, decodeBatchRow, decodeAgentRow, decodeBatchManifest } from "../src/storage/rows.js";
 import type { LedgerReader } from "../src/storage/ledger-reader.js";
 import type { Actor as WireActor, OperationId as WireOperationId } from "../implementation/contracts/identity.js";
 declare const operation: ReturnType<typeof decodeOperation>;
 declare const delivery: ReturnType<typeof decodeDeliveryRow>;
 declare const batch: ReturnType<typeof decodeBatchRow>;
 declare const agent: ReturnType<typeof decodeAgentRow>;
-declare const usage: ReturnType<typeof decodeUsageRow>;
 declare const ids: ReturnType<LedgerReader["recoverableIds"]>;
 declare function operationOnly(value: OperationId): void;
 declare function messageOnly(value: MessageId): void;
@@ -41,7 +40,7 @@ test("P2.5: validated ledger outputs preserve identity brands and wire stays str
   assert.deepEqual(diagnostics(prelude + `
 operationOnly(operation.id); operationOnly(delivery.operationId);
 messageOnly(delivery.messageId);
-batchOnly(batch.id); requestOnly(operation.requestKey); requestOnly(usage.requestId);
+batchOnly(batch.id); requestOnly(operation.requestKey);
 actorOnly(operation.actor); actorOnly(agent.name);
 for (const id of ids) operationOnly(id);
 const parsed = parseOperationId("not-an-id");

@@ -43,11 +43,6 @@ function config(root: string): HostConfigV1 {
       model: {
         provider: "fixture",
         model: "fixture",
-        credentialRef: "none",
-        codecRevision: "fixture",
-        pricingRevision: "fixture",
-        maxInputTokens: 1,
-        maxOutputTokens: 1,
         inferenceTimeoutSeconds: 1,
       },
     },
@@ -65,11 +60,6 @@ function config(root: string): HostConfigV1 {
     quota: {
       societyAgents: 1,
       lineageAgents: 1,
-      societyUnits: 1,
-      lineageUnits: 1,
-      principalReservedUnits: 0,
-      inferenceSlots: 1,
-      principalReservedSlots: 0,
       storageBytes: 1024,
     },
     integration: { policyRevision: "fixture", protectedPaths: [], checks: [] },
@@ -87,12 +77,6 @@ function config(root: string): HostConfigV1 {
       idleStreamSeconds: 1,
       receiptWaitSeconds: 1,
     },
-    features: {
-      notmuch: false,
-      reflinkSeed: false,
-      formalApproval: false,
-      egress: false,
-    },
   };
 }
 
@@ -104,8 +88,6 @@ test("P02: canonical deployment manifest pins every selected byte independent of
     "dist/implementation/contracts.js": "export {};\n",
     "implementation/systemd/resident.path.in": "[Path]\n",
     "implementation/schema-v3.sql": "schema\n",
-    "implementation/schema-v1-to-v2.sql": "migration 1\n",
-    "implementation/schema-v2-to-v3.sql": "migration 2\n",
     // AV16: the sandbox's `oma` command is pinned with the rest.
     "dist/libexec/oma": "#!/bin/sh\n",
     "package.json": "{}",
@@ -157,8 +139,6 @@ test("P02: installed broker refuses deployment mismatch BEFORE SQLite or unit ef
       "dist/implementation",
       "implementation/systemd",
       "implementation/schema-v3.sql",
-      "implementation/schema-v1-to-v2.sql",
-      "implementation/schema-v2-to-v3.sql",
       "dist/libexec",
       "package.json",
       "package-lock.json",

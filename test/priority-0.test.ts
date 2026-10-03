@@ -149,7 +149,7 @@ test("DR13 / P0-5: a unit command that did not finish is an unknown outcome, not
   process.env.PATH = `${bin}:${path ?? ""}`;
   try {
     assert.throws(() => assertUserManagerReachable(), { code: "DEADLINE_EXCEEDED" });
-    const units = new Units("demo", { node: "/usr/bin/node", libdir: "/opt/oma", state: bin, society: "demo", agent: "", config: join(bin, "c.json"), run: bin, brokerUnit: "" }, bin);
+    const units = new Units("demo", { node: "/usr/bin/node", libdir: "/opt/oma", state: bin, society: "demo", agent: "", config: join(bin, "c.json"), run: bin }, bin);
     assert.throws(() => units.start("alice", false), { code: "DEADLINE_EXCEEDED" });
   } finally { process.env.PATH = path; rmSync(bin, { recursive: true, force: true }); }
 });

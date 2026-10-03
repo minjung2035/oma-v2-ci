@@ -431,8 +431,8 @@ prompt·설정·확장은 terminal 안의 TUI가 한다. 그래서 prompt에는 
   기다리게 하지 않는다.
 - pool이 비어 있으면 egress bridge는 엔진의 연결을 곧바로 닫는다. 연결 실패다. 재시도는 엔진이 자기 정책대로 한다(INF-001). 기다리지
   않는 것은 기존 relay가 한도에서 곧바로 거절하는 것과 같은 선택이다.
-- `quota.inferenceSlots`는 지금 어떤 코드도 강제하지 않는다. 그래서 여기서 기준으로 쓰지 않는다. 그것을 강제하게 되면 그 판단은 guest의
-  broker가 하고(MAC-713), host는 따르지 않는다.
+- `quota`에 inference slot 필드는 없다 — 제거되었다. 동시성의 기준은 relay의 `concurrent: 4`이며, 이 판단은 guest의
+  broker가 한다(MAC-713). host는 따르지 않는다.
 
 egress 연결의 첫 message(guest→host)는 둘 가운데 하나다.
 
@@ -849,8 +849,8 @@ Principal 엔진은 자기 agent 디렉터리의 credential을 직접 쓰지만,
 
 **MUST [MAC-712]** Relay는 `egress.open`의 `placeholderId`가 host가 이번 `bootId`에서 발급한 자리표시자이고, 그 자리표시자의
 `credentialRef`가 host에 바인딩된 credential일 때만 연결한다. 목적지는 Resolver가 해석한 origin 하나다. guest가 목적지를 정할 수 없다.
-동시 요청 수는 자리표시자(run)마다 기존 relay의 한도(`concurrent: 4`)이고, 넘으면 곧바로 503이다(§4.7). `quota.inferenceSlots`는 쓰지
-않는다(강제하는 코드가 없다).
+동시 요청 수는 자리표시자(run)마다 기존 relay의 한도(`concurrent: 4`)이고, 넘으면 곧바로 503이다(§4.7). `quota`에
+inference slot 필드는 없다(제거되었다).
 
 **MUST [MAC-713]** 누가 어떤 profile을 쓸 수 있는지(`actor`, `incarnation`, `modelProfile`)는 guest의 broker가 판단한다. 판단 근거는
 run lease와 spec의 model profile이다. host는 이 판단을 다시 하지 않는다. `egress.open`의 attribution은 로그와 비용 표시에만 쓴다.

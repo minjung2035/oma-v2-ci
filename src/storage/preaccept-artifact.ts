@@ -206,28 +206,3 @@ export class PreacceptScope {
   }
 }
 
-/** Row-existence compatibility facade: did the journal accept the operation
- * that would own these artifacts? It cannot tell a plan that names an artifact
- * from one that does not, so no production caller uses it; coordinators
- * register plan-reference observers with PreacceptScope instead. A journal that
- * cannot be read is not evidence of non-acceptance, so uncertainty retains.
- */
-export function settleByAcceptance(
-  owners: readonly (PreacceptOwner | null)[],
-  accepted: () => boolean,
-  operationId = "legacy-preaccept",
-): void {
-  let outcome: boolean | null = null;
-  try { outcome = accepted(); } catch { /* DB uncertainty cannot authorize deletion. */ }
-  const scope = new PreacceptScope();
-  owners.forEach((owner, index) => {
-    if (owner === null) return;
-    scope.register({
-      operationId,
-      resource: `legacy-resource-${index}`,
-      owner,
-      observe: () => outcome === false ? "unaccepted-known" : outcome === true ? "accepted-referenced" : "outcome-unknown",
-    });
-  });
-  scope.settle();
-}

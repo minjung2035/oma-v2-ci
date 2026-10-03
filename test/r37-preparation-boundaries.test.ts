@@ -117,7 +117,7 @@ test("R37: creation awaits a real private workspace before unit publication and 
   const paths = { stateRoot: f.root, projectGit: f.paths.projectGit, society: "crash", hasGoal: () => false, activationAllowed: () => true };
   const workspace = new WorkspaceCoordinator(paths); const original = workspace.ensure.bind(workspace);
   workspace.ensure = async plan => { await original(plan); entered.resolve(); await release.promise; };
-  const units = new UnitsModule("crash", { node: process.execPath, libdir: process.cwd(), state: f.root, society: "crash", agent: "", config: join(f.root, "config.json"), run: join(f.root, "oma", "crash"), brokerUnit: "" }, join(f.root, "units"));
+  const units = new UnitsModule("crash", { node: process.execPath, libdir: process.cwd(), state: f.root, society: "crash", agent: "", config: join(f.root, "config.json"), run: join(f.root, "oma", "crash") }, join(f.root, "units"));
   let unitPublications = 0;
   units.ensureResident = () => { unitPublications++; throw new Error("unit publication must not be reached after revocation"); };
   const policy = new LifecyclePolicy(f.store, (_parent, input) => makeValidResolvedSpec(input.name, "p", ALL_CAPS, input.from, input.brief), null);
@@ -152,7 +152,7 @@ test("AV27 / GIT-002: a new workspace's origin is the canonical repository as it
       const paths = { stateRoot: f.root, projectGit: f.paths.projectGit, society: "crash", hasGoal: () => false, activationAllowed: () => true,
         ...(residentProjectGit === undefined ? {} : { residentProjectGit }) };
       const workspace = new WorkspaceCoordinator(paths);
-      const units = new UnitsModule("crash", { node: process.execPath, libdir: process.cwd(), state: f.root, society: "crash", agent: "", config: join(f.root, "config.json"), run: join(f.root, "oma", "crash"), brokerUnit: "" }, join(f.root, "units"));
+      const units = new UnitsModule("crash", { node: process.execPath, libdir: process.cwd(), state: f.root, society: "crash", agent: "", config: join(f.root, "config.json"), run: join(f.root, "oma", "crash") }, join(f.root, "units"));
       // Stop after the workspace: this is about what the preparation left.
       units.ensureResident = () => { throw new Error("stop after the workspace"); };
       const policy = new LifecyclePolicy(f.store, (_parent, input) => makeValidResolvedSpec(input.name, "p", ALL_CAPS, input.from, input.brief), null);

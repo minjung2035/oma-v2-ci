@@ -8,12 +8,10 @@ import type { StatusRefresh } from "../views/status-refresh.js";
 import type { ViewsModule } from "../views.js";
 import type { LifecycleModule } from "../lifecycle.js";
 import type { GitModule } from "../git.js";
-import type { ReconcileModule } from "../reconcile.js";
 import type {
   InternalDispatchDependencies,
   InternalMailPort,
   InternalPeerPort,
-  InternalReconcilePort,
   InternalStorePort,
 } from "./internal-dispatcher.js";
 import type {
@@ -108,13 +106,12 @@ export function createPublicDispatchPorts(
 
 export type InternalDispatchPorts = Pick<
   InternalDispatchDependencies,
-  "store" | "mail" | "reconcile" | "stateRoot" | "peers"
+  "store" | "mail" | "stateRoot" | "peers"
 >;
 
 export function createInternalDispatchPorts(
   store: Store,
   mail: MailModule,
-  reconcile: ReconcileModule | null,
   stateRoot: string,
   peers: InternalPeerPort,
 ): InternalDispatchPorts {
@@ -132,18 +129,10 @@ export function createInternalDispatchPorts(
     prepare: (auth) => mail.prepare(auth),
     complete: (auth, evidence) => mail.complete(auth, evidence),
     moveToCur: (agent, ids) => mail.moveToCur(agent, ids),
-    reconcilePending: () => mail.reconcilePending(),
   };
-  const internalReconcile: InternalReconcilePort | null =
-    reconcile === null
-      ? null
-      : {
-          sweep: () => reconcile.sweep(),
-        };
   return {
     store: internalStore,
     mail: internalMail,
-    reconcile: internalReconcile,
     stateRoot,
     peers: {
       requireRunnerUnit: (peer, agent, invocationId) => peers.requireRunnerUnit(peer, agent, invocationId),

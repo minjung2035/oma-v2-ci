@@ -1,2067 +1,2117 @@
 {
-  "version": 1,
-  "about": "WP32 inputs to implementation/review-ledger.json that git history cannot supply: files read in full and left unchanged, explicitly reviewed working-tree changes bound to their SHA-256 bytes and oracles, and the environment lanes as recorded in docs/implementation/validation.md. Regenerate the ledger with `npm run review:ledger`; `review-closure` checks it. Historical lane entries do not certify later working-tree changes. DR29: withdrawn stale byte-bound review claims for src/runtime/personal-settings.ts, src/entry/personal-host.ts, src/entry/oma-mac.ts. Hashes were not silently refreshed; these edited owners require fresh review. Historical readUnchanged entries apply only to unchanged committed files; changed files are NOT_REVIEWED.",
-  "reviewedChanges": [
-    {
-      "path": "src/process/cleanup.ts",
-      "by": [
-        "DR25",
-        "DR28"
-      ],
-      "oracles": [
-        "Owned cleanup"
-      ],
-      "sha256": "e623e7d1ef118be2f570564ebb4323536b610e9a18228db51e4d3bdc422d5093",
-      "note": "Read in full: sync and async effects retain exact primary/cleanup outcomes, including thrown null/undefined; cleanup runs once after the effect settles and is awaited. Outcome-matrix and nested corruption/publication-knowledge assertions pass; five source-copy controls assertion-killed. This helper assembles ownership returns, not error classification, process-death proof or publication retry policy."
-    },
-    {
-      "path": "src/runtime/process-lock.ts",
-      "by": [
-        "DR25",
-        "DR28"
-      ],
-      "oracles": [
-        "Owned cleanup ProcessLock"
-      ],
-      "sha256": "9f19f7da8a0bffaad163c31683b99ccc2b07fcf949c5981b5f67a002a782e8f6",
-      "note": "Read in full: only observed contention returns null; failed acquisition preserves primary beside close failure, contended close is not repeated, close revokes descriptor access before the fallible return. Two source-copy controls assertion-killed. Existing inode identity/fence rules retained; native Darwin flock and inherited descendant death are not proved by controlled composition."
-    },
-    {
-      "path": "src/storage/contained-fs.ts",
-      "by": [
-        "DR25",
-        "DR28"
-      ],
-      "oracles": [
-        "Owned cleanup contained"
-      ],
-      "sha256": "86c8d2242d6cfd3e3c58e32a437f79ef02f34a5cc624bda274fad9eeee5d0058",
-      "note": "Read in full: held parent/pin returns preserve original failure; if pin/root return prevents transfer, the opened result is locally returned once, retaining both failures. Untransferred-result leak control assertion-killed. openat2 containment has no fallback and is not weakened. closeEvery still reports the first close failure after attempting all returns; this review does not claim all caller finally paths are closed."
-    },
-    {
-      "path": "src/platform/host/files.ts",
-      "by": [
-        "DR25",
-        "DR28"
-      ],
-      "oracles": [
-        "Owned cleanup host"
-      ],
-      "sha256": "d81c85cf1fa77821e5a416235fb5b958b9d2ff600e7c46ae75c7e81d131240ed",
-      "note": "Read in full: HostTemporary owns one close, marks returned before close, and discard attempts temporary-name removal even after close failure. Replacement/publication preserve primary beside cleanup; an already reused descriptor number is not reclosed. Three source-copy controls assertion-killed. Existing full-file publication and host-private namespace remain; visible-name uncertainty, whole retry policy and actual Mac durability are not certified."
-    },
-    {
-      "path": "src/platform/host/archive-crypto.ts",
-      "by": [
-        "DR25",
-        "DR28"
-      ],
-      "oracles": [
-        "Owned cleanup archive"
-      ],
-      "sha256": "b676ad84432a693031b77238c227f43cb46a454faf58af00dc543c67da4f91d7",
-      "note": "Read in full: input ownership starts before output acquisition, nested cleanup returns output then input despite failure; failed sealer construction retains discard failure. Two source-copy controls assertion-killed after correcting the constructor oracle's TypeError (initial INVALID not counted). Existing archive bytes/AES-GCM/chunk authentication unchanged; real Keychain, native Mac execution and all stream-sink lifetime boundaries remain separate."
-    },
-    {
-      "path": "src/platform/host/snapshot.ts",
-      "by": [
-        "DR25",
-        "DR28"
-      ],
-      "oracles": [
-        "Owned cleanup stopped snapshot",
-        "NB-27"
-      ],
-      "sha256": "bce59d002ae5af3c82d75f83ddfb58913350201dd514a539fe6d0b582b512d44",
-      "note": "Re-read in full after NB-27: partial snapshot ownership still spans clone/publication and discard; running-snapshot now returns the maintenance latch through withAsyncCleanup on every path, so an end failure is told (primary kept, cleanup aggregated) and never silently holds society.open shut. Discard-removal control assertion-killed. Actual local-fixture snapshot regressions pass; clone/thaw failure composition unchanged. No native VM, APFS or power-cut proof."
-    },
-    {
-      "path": "src/runtime/pi-runtime.ts",
-      "by": [
-        "DR25",
-        "DR28"
-      ],
-      "oracles": [
-        "Owned cleanup engine",
-        "Owned cleanup settings",
-        "engine settings"
-      ],
-      "sha256": "6aa55fb6d1a71597999505d48fbca99f4d1a55148a6db5c94d03d2dfa200fb67",
-      "note": "Read in full: settings/adoption writer returns and nested engine-file/parent returns preserve primary failure. Parent-leak control assertion-killed; controlled adoption fails on directory observation before opening any credential file. Bundled-only engine resolution, separate engine home and one retry owner retained. No actual auth.json was read; all pre-transfer absence and native credential adoption boundaries are not certified."
-    },
-    {
-      "path": "src/runtime/user-files.ts",
-      "by": [
-        "DR28"
-      ],
-      "oracles": [
-        "user files",
-        "Darwin metadata publication"
-      ],
-      "sha256": "ed7b0c4c2fe8f9d786940ee90ec026c9d9432ba8ea9d9293a0b849336c2d76cc",
-      "note": "Read in full: an acquired reader's close/read failure is not absence; bounded UTF-8/identity/single-name checks retained. Darwin immutable publication returns its writer and temporary while preserving primary beside cleanup and flushes existing destination on retry. Post-open ENOENT-to-absence control assertion-killed. Linux contained resolution retained; native Darwin crash durability and pre-transfer pin-close absence composition are not certified."
-    },
-    {
-      "path": "src/platform/host/keychain.ts",
-      "by": [
-        "DR25",
-        "DR28"
-      ],
-      "oracles": [
-        "Owned cleanup Keychain",
-        "AV-22"
-      ],
-      "sha256": "0b862e0b6a2f39e16bafe2da57f17b2cd00847b02f394d223cede2b25abaa0a7",
-      "note": "Re-read in full after AV-22: per-account serialized() chains every mutating read->write one at a time; the cross-process writer lock is polled until held, abort and held-identity are rechecked after acquisition and before each put, and the fenced writer ends before it is returned. Two concurrent modify() calls on an empty store produce one key (AV-22 oracle). Controlled store failure beside lock close and cleanup-only failure retain exact outcomes. Native Swift helper, real Keychain and credential execution were not exercised."
-    },
-    {
-      "path": "src/tui/login.ts",
-      "by": [
-        "DR25",
-        "DR28"
-      ],
-      "oracles": [
-        "engine"
-      ],
-      "sha256": "df65171ec8d70fe01a31775cf6f58260629f327db7f26b55a482e7dce9a8c641",
-      "note": "Read in full at the 2026-10-01 host-only package checkpoint: platform-aware runtime metadata preparation completes before spawn; explicit engine/store/arguments/environment/fence, error retained until actual direct-child close, and signal/null/nonzero close not success. Fourteen controlled tests pass; eleven source-copy controls assertion-killed under complete TAP with no cancellations/skips or harness errors, including the direct exit-only oracle. Actual Mac entry/bundled package manager and installed Personal PTY pass on Linux. Actual close does not establish arbitrary descendant/cgroup death; fallible listener acquisition and native Mac execution remain open. No credential files or real provider used."
-    },
-    {
-      "path": "src/runtime/extension-modules.ts",
-      "by": [
-        "DR28"
-      ],
-      "oracles": [
-        "Extension modules"
-      ],
-      "sha256": "52e1fd12f991d418719d527feb3d0cdca22dfb7b610ad0f1532e0697eab5a187",
-      "note": "Read in full: one scoped native ESM generation owner, complete selected-path replacement before generation advance, relative/late imports retain their parent's generation, unrelated engine modules unchanged, hook deregistration on close. Seven actual bundled-loader/native-cache tests pass. Generation identity is not a byte snapshot or a bound on accumulated engine/module memory. Native Mac and hook registration/deregistration failure injection are not proved."
-    },
-    {
-      "path": "src/runtime/pi-packages.ts",
-      "by": [
-        "DR25",
-        "DR28"
-      ],
-      "oracles": [
-        "Package grammar",
-        "DR28",
-        "DR25"
-      ],
-      "sha256": "aabb51db56ded2acabd0fa5129800687349f722c4c05dfefbb581396211cceab",
-      "note": "Read in full at the 2026-10-01 host-only package checkpoint: one value-aware grammar produces an immutable explicit Mac-only local decision, strips host-only from engine argv, and refuses duplicate/value-like/project combinations and Linux use before effects. Five source-copy grammar controls assertion-killed through the actual parser imported by entry composition. Shared package index validation/publication, explicit activation and per-source reconciliation retained; actual loopback npm install/list/update/remove and ordinary package regressions pass. Installing locally does not select a Personal extension or consume an absent first-project seed. Whole index crash/retry boundaries and native Mac package durability are not certified by this limited review. No new Host API or guest protocol method/state/version."
-    },
-    {
-      "path": "src/extension/contained-search.ts",
-      "by": [
-        "P0V-122"
-      ],
-      "oracles": [
-        "G10-02",
-        "P0V-122"
-      ],
-      "sha256": "63c73b59b0c17d1293b5113e03297b5f6d32bec7f3f4ecf990083e4d07ec27cc",
-      "note": "Read in full: child owns snapshot creation, engine walker group, EOF cancellation and cleanup; parent bounds output and duration. Caller-death and uncooperative walker tests; EOF and group-cleanup mutants assertion-killed. Does not claim cleanup after the owner itself is SIGKILLed or an OS crash."
-    },
-    {
-      "path": "src/protocol/receipt-chunks.ts",
-      "by": [
-        "P0V-123"
-      ],
-      "oracles": [
-        "G03-broker-01"
-      ],
-      "sha256": "e3fe72d0c711c3db872cc636bb40a6c06e6f5c190408be51d7fe51cbb766861c",
-      "note": "Read in full: frame-bounded base64 chunks bind exact receipt JSON identity and extent; collection rejects changed digest, oversize, gaps and incomplete replies. Real broker/ledger restart test retains one effect and isolates actors; dispatcher supplies the authenticated actor, never a wire actor."
-    },
-    {
-      "path": "src/protocol/status-page.ts",
-      "by": [
-        "P0V-125"
-      ],
-      "oracles": [
-        "G02-ledger-r2"
-      ],
-      "sha256": "75bbdf12e6bd4b2fe86ea9a1bed68e084a8e870ca6369265e6f4111903293511",
-      "note": "Read in full: frame-bounded status response includes a lexicographic continuation, refuses an individually oversized row, and does not claim a cross-page snapshot. This is response pagination, not database keyset pagination."
-    },
-    {
-      "path": "src/storage/file-digest.ts",
-      "by": [
-        "DR26"
-      ],
-      "oracles": [
-        "DR25"
-      ],
-      "sha256": "371d2e7e6939c7d0a8119efd01af2e0a29449942192e3f8623c22026c7eab48b",
-      "note": "Read in full: bounded-buffer regular-file hashing retains pre/post identity and observed-size checks; large executable asset, spawn tamper and stale-generation tests pass; document-cap, spawn-digest and commit-digest mutants killed. Does not eliminate same-UID replacement after the read."
-    },
-    {
-      "path": "src/protocol/guest-history.ts",
-      "by": [
-        "DR29"
-      ],
-      "oracles": [
-        "DR29"
-      ],
-      "sha256": "c7cb54e3c276c8667a0278bfbbea953447b41fce40fc8e9c090540eaec24e7cd",
-      "note": "Read in full: canonical project/Society/basename/header identity, exact shape and round trip; traversal, added cwd, malformed references and replaced identity are rejected by DR29 guest-history tests. Pure value codec; no writer or native proof."
-    },
-    {
-      "path": "src/protocol/host-history.ts",
-      "by": [
-        "DR29"
-      ],
-      "oracles": [
-        "DR29"
-      ],
-      "sha256": "3c81d0e9658afedfcc4d9596c76421b9ee380c22a2bb557b3936b14578af6850",
-      "note": "Read in full: canonical Personal birth/basename/header identity, typed exact query and bounded metadata page validation. DR29 reference/traversal, pagination and strict successful-exit oracles pass. A reference locates facts and does not grant execution."
-    },
-    {
-      "path": "src/runtime/host-history-channel.ts",
-      "by": [
-        "DR29"
-      ],
-      "oracles": [
-        "DR29"
-      ],
-      "sha256": "bf72fb731472539fc70556a0ffd4d40b89c81e62a032194c58a118ded9c57bf2",
-      "note": "Read in full: one private duplex socket owns correlated observations, per-query monotonic timer/cancellation, late replies and one flushed final handoff. Real local socket plus actual Linux PTY holder and cancellation/partial/loss tests pass. Native Mac and systemd holder launch NOT_RUN."
-    },
-    {
-      "path": "src/platform/host/personal-histories.ts",
-      "by": [
-        "DR29"
-      ],
-      "oracles": [
-        "DR29"
-      ],
-      "sha256": "8be93d9eecb5146e842946ec7400313e7a7dd984f9c3e4c50023e7f46db5e313",
-      "note": "Read in full: existing saved Personal birth/header/cwd admission and real SDK metadata, no registry and no guest-supplied paths. Real history replacement/corruption, paginated count/preview and actual controlled holder oracles pass. Remote text search is preview-only; no native Mac execution claim."
-    },
-    {
-      "path": "src/platform/guest/histories.ts",
-      "by": [
-        "DR29"
-      ],
-      "oracles": [
-        "DR29"
-      ],
-      "sha256": "9f046919118cdd29579e8687f3a5a69b49d3d3787483b5963bfa06caca20868b",
-      "note": "Read in full: existing project binding and Society birth/header/private cwd admission, lexical bounded pagination, SDK-skipped files remain unknown. Real saved files and scripted launcher/current listening holder conflict oracles pass. Actual manager launch NOT_RUN."
-    },
-    {
-      "path": "src/platform/host/bookmark.ts",
-      "by": [
-        "DR29"
-      ],
-      "oracles": [
-        "DR29"
-      ],
-      "sha256": "e749bf5c52f3736a0ec6c6ea383fe08ce46f921b92cb52aec0ae21e5443acb62",
-      "note": "Read in full: bundle-owned one-shot helper argv/stdin, bounded output and actual-exit plus strict reply validation. Controlled helper tests pass; Foundation bookmark implementation is NOT_BUILT/NOT_RUN on this Linux host."
-    },
-    {
-      "path": "src/platform/host/personal-seed.ts",
-      "by": [
-        "DR29"
-      ],
-      "oracles": [
-        "DR29"
-      ],
-      "sha256": "53c2c40d8a2860415fbc8f494b210ba0fed0f09e38b0392f099128d71be07a92",
-      "note": "Read in full: host-record binding/bookmark/Git identity precedes already-running project settings observation; absent binding is empty, ambiguity/unknown is refusal. Real Git relocation/replacement and controlled settings tests pass. Bound first seed requires an already running app/guest, and native Mac NOT_RUN."
-    },
-    {
-      "path": "src/runtime/candidate-checks.ts",
-      "by": [
-        "DR29"
-      ],
-      "oracles": [
-        "DR29"
-      ],
-      "sha256": "69b8762f6881a80459502bc55e3caf5d3e110b26cfa125bc613514c8ecaa0305",
-      "note": "Read in full: composition callback consumes frozen exact candidate/check profile, cgroup resources, private raw checkout and confined argv/environment; controlled command/manager-outcome oracles pass. Actual systemd/cgroup probe remains independently denied and NOT_RUN; builder tests do not certify kernel enforcement."
-    }
-  ],
-  "readUnchanged": [
-    {
-      "path": "src/extension/delivery.ts",
-      "by": [
-        "WP27"
-      ],
-      "oracles": [
-        "V27A"
-      ],
-      "note": "boundary entry appended before the notice, leaf checked; the notice names the entry the session holds"
-    },
-    {
-      "path": "src/units/execute.ts",
-      "by": [
-        "WP23"
-      ],
-      "oracles": [
-        "R26"
-      ],
-      "note": "sync and async unit commands bounded in time and output; async is show-only"
-    },
-    {
-      "path": "src/units/observe.ts",
-      "by": [
-        "WP23",
-        "WP25"
-      ],
-      "oracles": [
-        "R26"
-      ],
-      "note": "observation parser: missing or malformed properties are unknown, never success"
-    },
-    {
-      "path": "src/tui/transport.ts",
-      "by": [
-        "WP23",
-        "WP28"
-      ],
-      "oracles": [
-        "T118"
-      ],
-      "note": "status view read bounded, no-follow; missing/unreadable/malformed/foreign/stale are unknown with reason"
-    },
-    {
-      "path": "src/protocol/status-view.ts",
-      "by": [
-        "WP23"
-      ],
-      "oracles": [
-        "T118",
-        "V23A"
-      ],
-      "note": "closed view codec; staleness is the reader's decision"
-    },
-    {
-      "path": "src/runtime/inference-relay.ts",
-      "by": [
-        "WP27"
-      ],
-      "oracles": [
-        "T114",
-        "V27B"
-      ],
-      "note": "fixed origin, caller authority dropped, placeholder swapped in headers and path, bounded concurrency, no resend, streamed"
-    },
-    {
-      "path": "src/protocol/channel.ts",
-      "by": [
-        "WP26"
-      ],
-      "oracles": [
-        "V26C",
-        "R15"
-      ],
-      "note": "one request in flight, encoded-byte budgets both ways, deadlines"
-    },
-    {
-      "path": "src/broker/peer-authenticator.ts",
-      "by": [
-        "WP25"
-      ],
-      "oracles": [
-        "AUTH-003"
-      ],
-      "note": "capabilities re-read at each use against incarnation, InvocationID, peer cgroup and pin"
-    },
-    {
-      "path": "src/tui/sources/mail.ts",
-      "by": [
-        "WP28"
-      ],
-      "oracles": [
-        "V28A",
-        "T98"
-      ],
-      "note": "bounded no-follow reads; new/ is not yet delivered to the Principal's session; reading writes nothing"
-    },
-    {
-      "path": "src/protocol/receipts.ts",
-      "by": [
-        "WP26"
-      ],
-      "oracles": [
-        "V26B"
-      ],
-      "note": "REQUEST_NOT_FOUND is distinct from a receipt; exit codes per state"
-    },
-    {
-      "path": "implementation/systemd/broker.service.in",
-      "by": [
-        "AV-review"
-      ],
-      "oracles": [
-        "AUD-1",
-        "AUD-2",
-        "AUD-3",
-        "AUD-4",
-        "AUD-5",
-        "AUD-6",
-        "AUD-7",
-        "AUD-8"
-      ],
-      "note": "read in full in the whole-codebase adversarial pass after v9; oracles are the tests that load this module"
-    },
-    {
-      "path": "implementation/systemd/principal.path.in",
-      "by": [
-        "AV-review"
-      ],
-      "oracles": [
-        "CREATE-003",
-        "LIFE-007",
-        "LIFE-009",
-        "REC-001",
-        "REC-007",
-        "SEQ-002",
-        "T13",
-        "T36"
-      ],
-      "note": "read in full in the whole-codebase adversarial pass after v9; oracles are the tests that load this module"
-    },
-    {
-      "path": "implementation/systemd/reconcile.timer.in",
-      "by": [
-        "AV-review"
-      ],
-      "oracles": [
-        "CREATE-003",
-        "LIFE-007",
-        "LIFE-009",
-        "REC-001",
-        "REC-007",
-        "SEQ-002",
-        "T13",
-        "T36"
-      ],
-      "note": "read in full in the whole-codebase adversarial pass after v9; oracles are the tests that load this module"
-    },
-    {
-      "path": "implementation/systemd/resident.path.in",
-      "by": [
-        "AV-review"
-      ],
-      "oracles": [
-        "CREATE-003",
-        "D03",
-        "LIFE-007",
-        "LIFE-009",
-        "P01",
-        "P02",
-        "P05",
-        "REC-001"
-      ],
-      "note": "read in full in the whole-codebase adversarial pass after v9; oracles are the tests that load this module"
-    },
-    {
-      "path": "src/authority.ts",
-      "by": [
-        "AV-review"
-      ],
-      "oracles": [
-        "A02",
-        "LIFE-008",
-        "LOC-008",
-        "P08",
-        "R02",
-        "R13",
-        "R36",
-        "SEQ-002"
-      ],
-      "note": "read in full in the whole-codebase adversarial pass after v9; oracles are the tests that load this module"
-    },
-    {
-      "path": "src/broker/connection.ts",
-      "by": [
-        "AV-review"
-      ],
-      "oracles": [
-        "R14",
-        "R21",
-        "R36",
-        "V18B"
-      ],
-      "note": "read in full in the whole-codebase adversarial pass after v9; oracles are the tests that load this module"
-    },
-    {
-      "path": "src/broker/logs.ts",
-      "by": [
-        "AV-review"
-      ],
-      "oracles": [
-        "F3",
-        "VIEW-002"
-      ],
-      "note": "read in full in the whole-codebase adversarial pass after v9; oracles are the tests that load this module"
-    },
-    {
-      "path": "src/broker/peer-pin.ts",
-      "by": [
-        "AV-review"
-      ],
-      "oracles": [
-        "R14",
-        "R21",
-        "R36",
-        "V18B"
-      ],
-      "note": "read in full in the whole-codebase adversarial pass after v9; oracles are the tests that load this module"
-    },
-    {
-      "path": "src/broker/principal-endpoint.ts",
-      "by": [
-        "AV-review"
-      ],
-      "oracles": [
-        "T114",
-        "T120",
-        "V05B",
-        "V08B",
-        "V09B"
-      ],
-      "note": "read in full in the whole-codebase adversarial pass after v9; oracles are the tests that load this module"
-    },
-    {
-      "path": "src/broker/process-ancestry.ts",
-      "by": [
-        "AV-review"
-      ],
-      "oracles": [
-        "T114",
-        "T120",
-        "V05B",
-        "V08B",
-        "V09B"
-      ],
-      "note": "read in full in the whole-codebase adversarial pass after v9; oracles are the tests that load this module"
-    },
-    {
-      "path": "src/broker/replies.ts",
-      "by": [
-        "AV-review"
-      ],
-      "oracles": [
-        "F1",
-        "F3"
-      ],
-      "note": "read in full in the whole-codebase adversarial pass after v9; oracles are the tests that load this module"
-    },
-    {
-      "path": "src/cli.ts",
-      "by": [
-        "AV-review"
-      ],
-      "oracles": [
-        "AV1",
-        "CTX-001",
-        "CTX-002",
-        "D05",
-        "F2",
-        "R01",
-        "T117",
-        "T119"
-      ],
-      "note": "read in full in the whole-codebase adversarial pass after v9; oracles are the tests that load this module"
-    },
-    {
-      "path": "src/cli/transport.ts",
-      "by": [
-        "AV-review"
-      ],
-      "oracles": [
-        "F4",
-        "T114"
-      ],
-      "note": "read in full in the whole-codebase adversarial pass after v9; oracles are the tests that load this module"
-    },
-    {
-      "path": "src/config/policy.ts",
-      "by": [
-        "AV-review"
-      ],
-      "oracles": [
-        "R13"
-      ],
-      "note": "read in full in the whole-codebase adversarial pass after v9; oracles are the tests that load this module"
-    },
-    {
-      "path": "src/domain/canonical-json.ts",
-      "by": [
-        "AV-review"
-      ],
-      "oracles": [
-        "P0",
-        "P2"
-      ],
-      "note": "read in full in the whole-codebase adversarial pass after v9; oracles are the tests that load this module"
-    },
-    {
-      "path": "src/domain/capabilities.ts",
-      "by": [
-        "AV-review"
-      ],
-      "oracles": [
-        "AV5",
-        "R02",
-        "V29A"
-      ],
-      "note": "read in full in the whole-codebase adversarial pass after v9; oracles are the tests that load this module"
-    },
-    {
-      "path": "src/domain/child-policy.ts",
-      "by": [
-        "AV-review"
-      ],
-      "oracles": [
-        "R13"
-      ],
-      "note": "read in full in the whole-codebase adversarial pass after v9; oracles are the tests that load this module"
-    },
-    {
-      "path": "src/domain/context-policy.ts",
-      "by": [
-        "AV-review"
-      ],
-      "oracles": [
-        "R21",
-        "V18A"
-      ],
-      "note": "read in full in the whole-codebase adversarial pass after v9; oracles are the tests that load this module"
-    },
-    {
-      "path": "src/domain/identifiers.ts",
-      "by": [
-        "AV-review"
-      ],
-      "oracles": [
-        "AV1",
-        "P2.5",
-        "R03",
-        "R36",
-        "V16A",
-        "V16B"
-      ],
-      "note": "read in full in the whole-codebase adversarial pass after v9; oracles are the tests that load this module"
-    },
-    {
-      "path": "src/domain/limits.ts",
-      "by": [
-        "AV-review"
-      ],
-      "oracles": [
-        "R02"
-      ],
-      "note": "read in full in the whole-codebase adversarial pass after v9; oracles are the tests that load this module"
-    },
-    {
-      "path": "src/domain/lineage.ts",
-      "by": [
-        "AV-review"
-      ],
-      "oracles": [
-        "R13"
-      ],
-      "note": "read in full in the whole-codebase adversarial pass after v9; oracles are the tests that load this module"
-    },
-    {
-      "path": "src/domain/mail-values.ts",
-      "by": [
-        "AV-review"
-      ],
-      "oracles": [
-        "AV1"
-      ],
-      "note": "read in full in the whole-codebase adversarial pass after v9; oracles are the tests that load this module"
-    },
-    {
-      "path": "src/domain/spec-identity.ts",
-      "by": [
-        "AV-review"
-      ],
-      "oracles": [
-        "A02",
-        "AUD-1",
-        "AUD-2",
-        "AUD-3",
-        "AUD-4",
-        "AUD-5",
-        "AUD-6",
-        "AUD-7"
-      ],
-      "note": "read in full in the whole-codebase adversarial pass after v9; oracles are the tests that load this module"
-    },
-    {
-      "path": "src/extension/cli-process.ts",
-      "by": [
-        "AV-review"
-      ],
-      "oracles": [
-        "T119"
-      ],
-      "note": "read in full in the whole-codebase adversarial pass after v9; oracles are the tests that load this module"
-    },
-    {
-      "path": "src/extension/workspace-guard.ts",
-      "by": [
-        "AV-review"
-      ],
-      "oracles": [
-        "AV3"
-      ],
-      "note": "read in full in the whole-codebase adversarial pass after v9; oracles are the tests that load this module"
-    },
-    {
-      "path": "src/frame.ts",
-      "by": [
-        "AV-review"
-      ],
-      "oracles": [
-        "A1",
-        "A2",
-        "A3",
-        "A4",
-        "A5",
-        "A6",
-        "AUTH-002",
-        "AUTH-003"
-      ],
-      "note": "read in full in the whole-codebase adversarial pass after v9; oracles are the tests that load this module"
-    },
-    {
-      "path": "src/git/integration-policy.ts",
-      "by": [
-        "AV-review"
-      ],
-      "oracles": [
-        "R19",
-        "V01A",
-        "V01B",
-        "V24A",
-        "V24B"
-      ],
-      "note": "read in full in the whole-codebase adversarial pass after v9; oracles are the tests that load this module"
-    },
-    {
-      "path": "src/git/observe.ts",
-      "by": [
-        "AV-review"
-      ],
-      "oracles": [
-        "R19",
-        "R20",
-        "R36"
-      ],
-      "note": "read in full in the whole-codebase adversarial pass after v9; oracles are the tests that load this module"
-    },
-    {
-      "path": "src/git/publication.ts",
-      "by": [
-        "AV-review"
-      ],
-      "oracles": [
-        "R20"
-      ],
-      "note": "read in full in the whole-codebase adversarial pass after v9; oracles are the tests that load this module"
-    },
-    {
-      "path": "src/hash.ts",
-      "by": [
-        "AV-review"
-      ],
-      "oracles": [
-        "A1",
-        "A2",
-        "A3",
-        "A4",
-        "A5",
-        "A6",
-        "AUTH-003",
-        "B1"
-      ],
-      "note": "read in full in the whole-codebase adversarial pass after v9; oracles are the tests that load this module"
-    },
-    {
-      "path": "src/ids.ts",
-      "by": [
-        "AV-review"
-      ],
-      "oracles": [
-        "A02",
-        "CREATE-003",
-        "CTX-003",
-        "DB-005",
-        "DB-009",
-        "F1",
-        "FS-005",
-        "ID-002"
-      ],
-      "note": "read in full in the whole-codebase adversarial pass after v9; oracles are the tests that load this module"
-    },
-    {
-      "path": "src/leaf.ts",
-      "by": [
-        "AV-review"
-      ],
-      "oracles": [
-        "AUTH-003",
-        "LOC-003",
-        "R36",
-        "REC-007",
-        "UNIT-004"
-      ],
-      "note": "read in full in the whole-codebase adversarial pass after v9; oracles are the tests that load this module"
-    },
-    {
-      "path": "src/lifecycle.ts",
-      "by": [
-        "AV-review"
-      ],
-      "oracles": [
-        "A02",
-        "A1",
-        "A2",
-        "A3",
-        "A4",
-        "A5",
-        "A6",
-        "AUD-1"
-      ],
-      "note": "read in full in the whole-codebase adversarial pass after v9; oracles are the tests that load this module"
-    },
-    {
-      "path": "src/lifecycle/policy.ts",
-      "by": [
-        "AV-review"
-      ],
-      "oracles": [
-        "R25",
-        "R37"
-      ],
-      "note": "read in full in the whole-codebase adversarial pass after v9; oracles are the tests that load this module"
-    },
-    {
-      "path": "src/lifecycle/registry-operations.ts",
-      "by": [
-        "AV-review"
-      ],
-      "oracles": [
-        "F1",
-        "P3",
-        "R25"
-      ],
-      "note": "read in full in the whole-codebase adversarial pass after v9; oracles are the tests that load this module"
-    },
-    {
-      "path": "src/mail/batch-policy.ts",
-      "by": [
-        "AV-review"
-      ],
-      "oracles": [
-        "R24"
-      ],
-      "note": "read in full in the whole-codebase adversarial pass after v9; oracles are the tests that load this module"
-    },
-    {
-      "path": "src/mail/facts.ts",
-      "by": [
-        "AV-review"
-      ],
-      "oracles": [
-        "DB-009",
-        "ERR-001",
-        "P01",
-        "P02",
-        "P05"
-      ],
-      "note": "read in full in the whole-codebase adversarial pass after v9; oracles are the tests that load this module"
-    },
-    {
-      "path": "src/mail/headers.ts",
-      "by": [
-        "AV-review"
-      ],
-      "oracles": [
-        "R36"
-      ],
-      "note": "read in full in the whole-codebase adversarial pass after v9; oracles are the tests that load this module"
-    },
-    {
-      "path": "src/mail/reconcile.ts",
-      "by": [
-        "AV-review"
-      ],
-      "oracles": [
-        "P3"
-      ],
-      "note": "read in full in the whole-codebase adversarial pass after v9; oracles are the tests that load this module"
-    },
-    {
-      "path": "src/mail/routing.ts",
-      "by": [
-        "AV-review"
-      ],
-      "oracles": [
-        "R31"
-      ],
-      "note": "read in full in the whole-codebase adversarial pass after v9; oracles are the tests that load this module"
-    },
-    {
-      "path": "src/mail/serialize.ts",
-      "by": [
-        "AV-review"
-      ],
-      "oracles": [
-        "DB-009",
-        "ERR-001"
-      ],
-      "note": "read in full in the whole-codebase adversarial pass after v9; oracles are the tests that load this module"
-    },
-    {
-      "path": "src/pi-extension.ts",
-      "by": [
-        "AV-review"
-      ],
-      "oracles": [
-        "D05",
-        "DB-009",
-        "ID-002",
-        "M-003",
-        "PI-002",
-        "R03",
-        "R28",
-        "T100"
-      ],
-      "note": "read in full in the whole-codebase adversarial pass after v9; oracles are the tests that load this module"
-    },
-    {
-      "path": "src/process/async.ts",
-      "by": [
-        "AV-review"
-      ],
-      "oracles": [
-        "R37",
-        "REC-007",
-        "T106",
-        "T114",
-        "T115",
-        "T116",
-        "T117",
-        "T119"
-      ],
-      "note": "read in full in the whole-codebase adversarial pass after v9; oracles are the tests that load this module"
-    },
-    {
-      "path": "src/process/command.ts",
-      "by": [
-        "AV-review"
-      ],
-      "oracles": [
-        "R37",
-        "V17A",
-        "V17B"
-      ],
-      "note": "read in full in the whole-codebase adversarial pass after v9; oracles are the tests that load this module"
-    },
-    {
-      "path": "src/process/policies.ts",
-      "by": [
-        "AV-review"
-      ],
-      "oracles": [
-        "R19"
-      ],
-      "note": "read in full in the whole-codebase adversarial pass after v9; oracles are the tests that load this module"
-    },
-    {
-      "path": "src/process/run.ts",
-      "by": [
-        "AV-review"
-      ],
-      "oracles": [
-        "P0",
-        "R19",
-        "R36"
-      ],
-      "note": "read in full in the whole-codebase adversarial pass after v9; oracles are the tests that load this module"
-    },
-    {
-      "path": "src/protocol/host-channel.ts",
-      "by": [
-        "AV-review"
-      ],
-      "oracles": [
-        "T114",
-        "T115",
-        "T119",
-        "T120",
-        "V05B",
-        "V08B",
-        "V09B"
-      ],
-      "note": "read in full in the whole-codebase adversarial pass after v9; oracles are the tests that load this module"
-    },
-    {
-      "path": "src/protocol/jsonl.ts",
-      "by": [
-        "AV-review"
-      ],
-      "oracles": [
-        "R28",
-        "R35"
-      ],
-      "note": "read in full in the whole-codebase adversarial pass after v9; oracles are the tests that load this module"
-    },
-    {
-      "path": "src/protocol/log-response.ts",
-      "by": [
-        "AV-review"
-      ],
-      "oracles": [
-        "F3",
-        "F4"
-      ],
-      "note": "read in full in the whole-codebase adversarial pass after v9; oracles are the tests that load this module"
-    },
-    {
-      "path": "src/protocol/principal-credential.ts",
-      "by": [
-        "AV-review"
-      ],
-      "oracles": [
-        "T114",
-        "T120",
-        "V05B",
-        "V08B",
-        "V09B"
-      ],
-      "note": "read in full in the whole-codebase adversarial pass after v9; oracles are the tests that load this module"
-    },
-    {
-      "path": "src/protocol/receipt-codec.ts",
-      "by": [
-        "AV-review"
-      ],
-      "oracles": [
-        "P2",
-        "P9",
-        "REC-007"
-      ],
-      "note": "read in full in the whole-codebase adversarial pass after v9; oracles are the tests that load this module"
-    },
-    {
-      "path": "src/protocol/response-codec.ts",
-      "by": [
-        "AV-review"
-      ],
-      "oracles": [
-        "F3",
-        "R15"
-      ],
-      "note": "read in full in the whole-codebase adversarial pass after v9; oracles are the tests that load this module"
-    },
-    {
-      "path": "src/protocol/run-lease.ts",
-      "by": [
-        "AV-review"
-      ],
-      "oracles": [
-        "R28",
-        "T113",
-        "T117",
-        "V27A"
-      ],
-      "note": "read in full in the whole-codebase adversarial pass after v9; oracles are the tests that load this module"
-    },
-    {
-      "path": "src/reconcile/operations.ts",
-      "by": [
-        "AV-review"
-      ],
-      "oracles": [
-        "R29",
-        "R36"
-      ],
-      "note": "read in full in the whole-codebase adversarial pass after v9; oracles are the tests that load this module"
-    },
-    {
-      "path": "src/runtime/broker-lifetime.ts",
-      "by": [
-        "AV-review"
-      ],
-      "oracles": [
-        "R17",
-        "R37"
-      ],
-      "note": "read in full in the whole-codebase adversarial pass after v9; oracles are the tests that load this module"
-    },
-    {
-      "path": "src/runtime/deployment-manifest.ts",
-      "by": [
-        "AV-review"
-      ],
-      "oracles": [
-        "A1",
-        "A2",
-        "A3",
-        "A4",
-        "A5",
-        "A6",
-        "B1",
-        "C1"
-      ],
-      "note": "read in full in the whole-codebase adversarial pass after v9; oracles are the tests that load this module"
-    },
-    {
-      "path": "src/runtime/process-lock.ts",
-      "by": [
-        "AV-review"
-      ],
-      "oracles": [
-        "A02",
-        "P01",
-        "P02",
-        "P05",
-        "P08",
-        "R17",
-        "T115",
-        "T119"
-      ],
-      "note": "read in full in the whole-codebase adversarial pass after v9; oracles are the tests that load this module"
-    },
-    {
-      "path": "src/runtime/society-lease.ts",
-      "by": [
-        "AV-review"
-      ],
-      "oracles": [
-        "AUTH-003",
-        "LOC-003",
-        "PR-002",
-        "REC-007",
-        "T115",
-        "T119",
-        "TUI-004"
-      ],
-      "note": "read in full in the whole-codebase adversarial pass after v9; oracles are the tests that load this module"
-    },
-    {
-      "path": "src/runtime/supervision-channel.ts",
-      "by": [
-        "AV-review"
-      ],
-      "oracles": [
-        "T115",
-        "T119"
-      ],
-      "note": "read in full in the whole-codebase adversarial pass after v9; oracles are the tests that load this module"
-    },
-    {
-      "path": "src/storage/staged-tree.ts",
-      "by": [
-        "AV-review"
-      ],
-      "oracles": [
-        "S-06"
-      ],
-      "note": "read in full in the whole-codebase adversarial pass after v9; oracles are the tests that load this module"
-    },
-    {
-      "path": "src/storage/transaction.ts",
-      "by": [
-        "AV-review"
-      ],
-      "oracles": [
-        "P4",
-        "T14",
-        "T15",
-        "T16",
-        "T17",
-        "T18",
-        "T19",
-        "T20"
-      ],
-      "note": "read in full in the whole-codebase adversarial pass after v9; oracles are the tests that load this module"
-    },
-    {
-      "path": "src/storage/operation-journal.ts",
-      "by": [
-        "AV-review"
-      ],
-      "oracles": [
-        "P3"
-      ],
-      "note": "read in full in the whole-codebase adversarial pass after v9; oracles are the tests that load this module"
-    },
-    {
-      "path": "src/storage/receipt-projector.ts",
-      "by": [
-        "AV-review"
-      ],
-      "oracles": [
-        "F1",
-        "P23"
-      ],
-      "note": "read in full in the whole-codebase adversarial pass after v9; oracles are the tests that load this module"
-    },
-    {
-      "path": "src/tui/view/text.ts",
-      "by": [
-        "AV-review"
-      ],
-      "oracles": [
-        "T92",
-        "T96",
-        "T97",
-        "TUI-007"
-      ],
-      "note": "read in full in the whole-codebase adversarial pass after v9; oracles are the tests that load this module"
-    },
-    {
-      "path": "src/validate.ts",
-      "by": [
-        "AV-review"
-      ],
-      "oracles": [
-        "CTX-001",
-        "CTX-002",
-        "DB-009",
-        "ID-002",
-        "M-003",
-        "MAIL-003",
-        "MAIL-011",
-        "P9"
-      ],
-      "note": "read in full in the whole-codebase adversarial pass after v9; oracles are the tests that load this module"
-    },
-    {
-      "path": "src/diagnostics/files.ts",
-      "by": [
-        "AV-review"
-      ],
-      "oracles": [
-        "P6",
-        "P7",
-        "PRE-1",
-        "PRE-2",
-        "PRE-3",
-        "PRE-4",
-        "PRE-5",
-        "PRE-6"
-      ],
-      "note": "read in full in the whole-codebase adversarial pass after v9; oracles are the tests that load this module"
-    },
-    {
-      "path": "src/cli/cache-codec.ts",
-      "by": [
-        "AV-review"
-      ],
-      "oracles": [
-        "AV1",
-        "CTX-001",
-        "CTX-002",
-        "F2",
-        "R32",
-        "REC-007",
-        "V26B",
-        "WP26"
-      ],
-      "note": "read in full in the whole-codebase adversarial pass after v9; oracles are tests whose loaded module closure contains this module"
-    },
-    {
-      "path": "src/cli/effects/context.ts",
-      "by": [
-        "AV-review"
-      ],
-      "oracles": [
-        "AV1",
-        "CTX-001",
-        "CTX-002",
-        "D05",
-        "F2",
-        "R01",
-        "T119",
-        "V10C"
-      ],
-      "note": "read in full in the whole-codebase adversarial pass after v9; oracles are tests whose loaded module closure contains this module"
-    },
-    {
-      "path": "src/cli/effects/mail.ts",
-      "by": [
-        "AV-review"
-      ],
-      "oracles": [
-        "AV1",
-        "CTX-001",
-        "CTX-002",
-        "D05",
-        "F2",
-        "R01",
-        "T119",
-        "V10C"
-      ],
-      "note": "read in full in the whole-codebase adversarial pass after v9; oracles are tests whose loaded module closure contains this module"
-    },
-    {
-      "path": "src/cli/effects/submit.ts",
-      "by": [
-        "AV-review"
-      ],
-      "oracles": [
-        "AV1",
-        "CTX-001",
-        "CTX-002",
-        "D05",
-        "F2",
-        "R01",
-        "T119",
-        "V10C"
-      ],
-      "note": "read in full in the whole-codebase adversarial pass after v9; oracles are tests whose loaded module closure contains this module"
-    },
-    {
-      "path": "src/cli/request-intent.ts",
-      "by": [
-        "AV-review"
-      ],
-      "oracles": [
-        "AV1",
-        "CTX-001",
-        "CTX-002",
-        "D05",
-        "F2",
-        "R01",
-        "T119",
-        "V10C"
-      ],
-      "note": "read in full in the whole-codebase adversarial pass after v9; oracles are tests whose loaded module closure contains this module"
-    },
-    {
-      "path": "src/domain/integer-fields.ts",
-      "by": [
-        "AV-review"
-      ],
-      "oracles": [
-        "P1",
-        "R19",
-        "R26",
-        "T111",
-        "T112",
-        "V01A",
-        "V01B",
-        "V04"
-      ],
-      "note": "read in full in the whole-codebase adversarial pass after v9; oracles are tests whose loaded module closure contains this module"
-    },
-    {
-      "path": "src/extension/inference-bridge.ts",
-      "by": [
-        "AV-review"
-      ],
-      "oracles": [
-        "T100",
-        "T101",
-        "T102",
-        "T103",
-        "T92",
-        "T96",
-        "T97",
-        "T99"
-      ],
-      "note": "read in full in the whole-codebase adversarial pass after v9; oracles are tests whose loaded module closure contains this module"
-    },
-    {
-      "path": "src/extension/principal-channel.ts",
-      "by": [
-        "AV-review"
-      ],
-      "oracles": [
-        "T100",
-        "T101",
-        "T102",
-        "T103",
-        "T119",
-        "T92",
-        "T96",
-        "T97"
-      ],
-      "note": "read in full in the whole-codebase adversarial pass after v9; oracles are tests whose loaded module closure contains this module"
-    },
-    {
-      "path": "src/extension/shared.ts",
-      "by": [
-        "AV-review"
-      ],
-      "oracles": [
-        "T100",
-        "T101",
-        "T102",
-        "T103",
-        "T92",
-        "T96",
-        "T97",
-        "T99"
-      ],
-      "note": "read in full in the whole-codebase adversarial pass after v9; oracles are tests whose loaded module closure contains this module"
-    },
-    {
-      "path": "src/extension/tool-surface.ts",
-      "by": [
-        "AV-review"
-      ],
-      "oracles": [
-        "T100",
-        "T101",
-        "T102",
-        "T103",
-        "T92",
-        "T96",
-        "T97",
-        "T99"
-      ],
-      "note": "read in full in the whole-codebase adversarial pass after v9; oracles are tests whose loaded module closure contains this module"
-    },
-    {
-      "path": "src/git/canonical-command.ts",
-      "by": [
-        "AV-review"
-      ],
-      "oracles": [
-        "CTX-003",
-        "CTX-004",
-        "DB-009",
-        "ERR-001",
-        "GIT-006",
-        "INT-003",
-        "R01",
-        "T53"
-      ],
-      "note": "read in full in the whole-codebase adversarial pass after v9; oracles are tests whose loaded module closure contains this module"
-    },
-    {
-      "path": "src/git/context-publication.ts",
-      "by": [
-        "AV-review"
-      ],
-      "oracles": [
-        "AUTH-003",
-        "R16",
-        "R20",
-        "R33",
-        "S-03",
-        "S-05",
-        "T23",
-        "T39"
-      ],
-      "note": "read in full in the whole-codebase adversarial pass after v9; oracles are tests whose loaded module closure contains this module"
-    },
-    {
-      "path": "src/git/paths.ts",
-      "by": [
-        "AV-review"
-      ],
-      "oracles": [
-        "CTX-003",
-        "CTX-004",
-        "DB-009",
-        "ERR-001",
-        "GIT-006",
-        "INT-003",
-        "R01",
-        "R37"
-      ],
-      "note": "read in full in the whole-codebase adversarial pass after v9; oracles are tests whose loaded module closure contains this module"
-    },
-    {
-      "path": "src/lifecycle/contracts.ts",
-      "by": [
-        "AV-review"
-      ],
-      "oracles": [
-        "AUTH-003",
-        "AV4",
-        "F1",
-        "MAIL-001",
-        "P3",
-        "PRE-1",
-        "PRE-2",
-        "PRE-3"
-      ],
-      "note": "read in full in the whole-codebase adversarial pass after v9; oracles are tests whose loaded module closure contains this module"
-    },
-    {
-      "path": "src/mail/addresses.ts",
-      "by": [
-        "AV-review"
-      ],
-      "oracles": [
-        "AUTH-003",
-        "P6",
-        "R16",
-        "R20",
-        "R33",
-        "S-03",
-        "S-05",
-        "T23"
-      ],
-      "note": "read in full in the whole-codebase adversarial pass after v9; oracles are tests whose loaded module closure contains this module"
-    },
-    {
-      "path": "src/protocol/byte-queue.ts",
-      "by": [
-        "AV-review"
-      ],
-      "oracles": [
-        "D03",
-        "ID-001",
-        "PR-002",
-        "R14",
-        "R37",
-        "V05A",
-        "V05B",
-        "V26C"
-      ],
-      "note": "read in full in the whole-codebase adversarial pass after v9; oracles are tests whose loaded module closure contains this module"
-    },
-    {
-      "path": "src/protocol/request-codec.ts",
-      "by": [
-        "AV-review"
-      ],
-      "oracles": [
-        "GIT-006",
-        "ID-003",
-        "P1",
-        "P2.5",
-        "P3",
-        "P6",
-        "R21",
-        "REC-007"
-      ],
-      "note": "read in full in the whole-codebase adversarial pass after v9; oracles are tests whose loaded module closure contains this module"
-    },
-    {
-      "path": "src/runtime/extension-integrity.ts",
-      "by": [
-        "AV-review"
-      ],
-      "oracles": [
-        "AV3",
-        "R28",
-        "REC-007",
-        "T106",
-        "T113",
-        "V08A",
-        "V08B",
-        "V10A"
-      ],
-      "note": "read in full in the whole-codebase adversarial pass after v9; oracles are tests whose loaded module closure contains this module"
-    },
-    {
-      "path": "src/storage/batch-view.ts",
-      "by": [
-        "AV-review"
-      ],
-      "oracles": [
-        "AUTH-003",
-        "R16",
-        "R20",
-        "R33",
-        "S-03",
-        "S-05",
-        "T118",
-        "T23"
-      ],
-      "note": "read in full in the whole-codebase adversarial pass after v9; oracles are tests whose loaded module closure contains this module"
-    },
-    {
-      "path": "src/storage/contained-fs.ts",
-      "by": [
-        "AV-review"
-      ],
-      "oracles": [
-        "AV5",
-        "R14",
-        "R20",
-        "R21",
-        "S-06",
-        "V05A",
-        "V05B",
-        "V18A"
-      ],
-      "note": "read in full in the whole-codebase adversarial pass after v9; oracles are tests whose loaded module closure contains this module"
-    },
-    {
-      "path": "src/storage/context-files.ts",
-      "by": [
-        "AV-review"
-      ],
-      "oracles": [
-        "CTX-003",
-        "CTX-004",
-        "DB-009",
-        "ERR-001",
-        "GIT-006",
-        "INT-003",
-        "R01",
-        "R37"
-      ],
-      "note": "read in full in the whole-codebase adversarial pass after v9; oracles are tests whose loaded module closure contains this module"
-    },
-    {
-      "path": "src/storage/context-snapshot.ts",
-      "by": [
-        "AV-review"
-      ],
-      "oracles": [
-        "CTX-003",
-        "CTX-004",
-        "DB-009",
-        "ERR-001",
-        "GIT-006",
-        "INT-003",
-        "R01",
-        "R37"
-      ],
-      "note": "read in full in the whole-codebase adversarial pass after v9; oracles are tests whose loaded module closure contains this module"
-    },
-    {
-      "path": "src/storage/directory.ts",
-      "by": [
-        "AV-review"
-      ],
-      "oracles": [
-        "AV5",
-        "R14",
-        "R20",
-        "R21",
-        "S-06",
-        "V05A",
-        "V05B",
-        "V18A"
-      ],
-      "note": "read in full in the whole-codebase adversarial pass after v9; oracles are tests whose loaded module closure contains this module"
-    },
-    {
-      "path": "src/storage/transitions.ts",
-      "by": [
-        "AV-review"
-      ],
-      "oracles": [
-        "DB-009",
-        "GIT-006",
-        "ID-003",
-        "P9",
-        "R10",
-        "R21",
-        "V04A",
-        "V04B"
-      ],
-      "note": "read in full in the whole-codebase adversarial pass after v9; oracles are tests whose loaded module closure contains this module"
-    },
-    {
-      "path": "src/tui/prompt.ts",
-      "by": [
-        "AV-review"
-      ],
-      "oracles": [
-        "T114",
-        "T120",
-        "T92",
-        "T96",
-        "T97",
-        "TUI-002",
-        "TUI-007",
-        "TUI-010"
-      ],
-      "note": "read in full in the whole-codebase adversarial pass after v9; oracles are tests whose loaded module closure contains this module"
-    },
-    {
-      "path": "implementation/contracts.ts",
-      "by": [
-        "AV-review"
-      ],
-      "oracles": [
-        "P1",
-        "P10",
-        "P13",
-        "P14",
-        "P15",
-        "P17",
-        "P19",
-        "P23"
-      ],
-      "note": "read in full in the whole-codebase adversarial pass after v9; oracles are tests whose loaded module closure (or text) contains this file"
-    },
-    {
-      "path": "implementation/schema-v1.sql",
-      "by": [
-        "AV-review"
-      ],
-      "oracles": [
-        "P01",
-        "P02",
-        "P05",
-        "R38",
-        "V01A",
-        "V01B",
-        "V31A",
-        "V31B"
-      ],
-      "note": "read in full in the whole-codebase adversarial pass after v9; oracles are tests whose loaded module closure (or text) contains this file"
-    },
-    {
-      "path": "src/diagnostics/integrity.ts",
-      "by": [
-        "AV-review"
-      ],
-      "oracles": [
-        "P6",
-        "P7",
-        "PRE-1",
-        "PRE-2",
-        "PRE-3",
-        "PRE-4",
-        "PRE-5",
-        "PRE-6"
-      ],
-      "note": "read in full in the whole-codebase adversarial pass after v9; oracles are tests whose loaded module closure (or text) contains this file"
-    },
-    {
-      "path": "src/diagnostics/ledger.ts",
-      "by": [
-        "AV-review"
-      ],
-      "oracles": [
-        "P6",
-        "P7",
-        "PRE-1",
-        "PRE-2",
-        "PRE-3",
-        "PRE-4",
-        "PRE-5",
-        "PRE-6"
-      ],
-      "note": "read in full in the whole-codebase adversarial pass after v9; oracles are tests whose loaded module closure (or text) contains this file"
-    },
-    {
-      "path": "src/diagnostics/mail.ts",
-      "by": [
-        "AV-review"
-      ],
-      "oracles": [
-        "P6",
-        "P7",
-        "PRE-1",
-        "PRE-2",
-        "PRE-3",
-        "PRE-4",
-        "PRE-5",
-        "PRE-6"
-      ],
-      "note": "read in full in the whole-codebase adversarial pass after v9; oracles are tests whose loaded module closure (or text) contains this file"
-    },
-    {
-      "path": "src/domain/deployment.ts",
-      "by": [
-        "AV-review"
-      ],
-      "oracles": [
-        "AUTH-003",
-        "LOC-003",
-        "PR-002",
-        "REC-007",
-        "T100",
-        "T101",
-        "T102",
-        "T103"
-      ],
-      "note": "read in full in the whole-codebase adversarial pass after v9; oracles are tests whose loaded module closure (or text) contains this file"
-    },
-    {
-      "path": "src/domain/exhaustive.ts",
-      "by": [
-        "AV-review"
-      ],
-      "oracles": [
-        "T114",
-        "T120",
-        "T92",
-        "T96",
-        "T97",
-        "TUI-002",
-        "TUI-007",
-        "TUI-010"
-      ],
-      "note": "read in full in the whole-codebase adversarial pass after v9; oracles are tests whose loaded module closure (or text) contains this file"
-    },
-    {
-      "path": "src/domain/persisted-formats.ts",
-      "by": [
-        "AV-review"
-      ],
-      "oracles": [
-        "DB-009",
-        "GIT-006",
-        "ID-003",
-        "P9",
-        "R10",
-        "R21",
-        "V04A",
-        "V04B"
-      ],
-      "note": "read in full in the whole-codebase adversarial pass after v9; oracles are tests whose loaded module closure (or text) contains this file"
-    },
-    {
-      "path": "src/domain/tool-surface.ts",
-      "by": [
-        "AV-review"
-      ],
-      "oracles": [
-        "F3",
-        "T100",
-        "T101",
-        "T102",
-        "T103",
-        "T111",
-        "T112",
-        "T99"
-      ],
-      "note": "read in full in the whole-codebase adversarial pass after v9; oracles are tests whose loaded module closure (or text) contains this file"
-    },
-    {
-      "path": "src/durable.ts",
-      "by": [
-        "AV-review"
-      ],
-      "oracles": [
-        "DB-009",
-        "ID-002",
-        "M-003",
-        "P1",
-        "P2.5",
-        "P3",
-        "PI-002",
-        "R28"
-      ],
-      "note": "read in full in the whole-codebase adversarial pass after v9; oracles are tests whose loaded module closure (or text) contains this file"
-    },
-    {
-      "path": "src/ports/ledger.ts",
-      "by": [
-        "AV-review"
-      ],
-      "oracles": [
-        "GIT-006",
-        "ID-003",
-        "P23",
-        "P9",
-        "R10",
-        "R21",
-        "V04A",
-        "V04B"
-      ],
-      "note": "read in full in the whole-codebase adversarial pass after v9; oracles are tests whose loaded module closure (or text) contains this file"
-    },
-    {
-      "path": "src/ports/runtime.ts",
-      "by": [
-        "AV-review"
-      ],
-      "oracles": [
-        "DB-009",
-        "ID-002",
-        "M-003",
-        "P23",
-        "PI-002",
-        "R28",
-        "T113",
-        "V10A"
-      ],
-      "note": "read in full in the whole-codebase adversarial pass after v9; oracles are tests whose loaded module closure (or text) contains this file"
-    },
-    {
-      "path": "src/protocol/batch-view.ts",
-      "by": [
-        "AV-review"
-      ],
-      "oracles": [
-        "DB-009",
-        "ID-002",
-        "M-003",
-        "P23",
-        "PI-002",
-        "R28",
-        "T113",
-        "V10A"
-      ],
-      "note": "read in full in the whole-codebase adversarial pass after v9; oracles are tests whose loaded module closure (or text) contains this file"
-    },
-    {
-      "path": "src/rpc-client.ts",
-      "by": [
-        "AV-review"
-      ],
-      "oracles": [
-        "R28"
-      ],
-      "note": "read in full in the whole-codebase adversarial pass after v9; oracles are tests whose loaded module closure (or text) contains this file"
-    },
-    {
-      "path": "src/storage/diagnostic-snapshot.ts",
-      "by": [
-        "AV-review"
-      ],
-      "oracles": [
-        "GIT-006",
-        "ID-003",
-        "P6",
-        "P9",
-        "R10",
-        "R21",
-        "V04A",
-        "V04B"
-      ],
-      "note": "read in full in the whole-codebase adversarial pass after v9; oracles are tests whose loaded module closure (or text) contains this file"
-    },
-    {
-      "path": "src/storage/facets.ts",
-      "by": [
-        "AV-review"
-      ],
-      "oracles": [
-        "DB-009",
-        "GIT-006",
-        "ID-003",
-        "P9",
-        "R10",
-        "R21",
-        "V04A",
-        "V04B"
-      ],
-      "note": "read in full in the whole-codebase adversarial pass after v9; oracles are tests whose loaded module closure (or text) contains this file"
-    },
-    {
-      "path": "src/storage/operation-codec.ts",
-      "by": [
-        "AV-review"
-      ],
-      "oracles": [
-        "GIT-006",
-        "ID-003",
-        "P1",
-        "P2.5",
-        "P3",
-        "P6",
-        "R21",
-        "V04A"
-      ],
-      "note": "read in full in the whole-codebase adversarial pass after v9; oracles are tests whose loaded module closure (or text) contains this file"
-    },
-    {
-      "path": "src/storage/operation-transitions.ts",
-      "by": [
-        "AV-review"
-      ],
-      "oracles": [
-        "DB-009",
-        "GIT-006",
-        "ID-003",
-        "P9",
-        "R10",
-        "R21",
-        "V04A",
-        "V04B"
-      ],
-      "note": "read in full in the whole-codebase adversarial pass after v9; oracles are tests whose loaded module closure (or text) contains this file"
-    },
-    {
-      "path": "src/storage/rows.ts",
-      "by": [
-        "AV-review"
-      ],
-      "oracles": [
-        "GIT-006",
-        "ID-003",
-        "P2.5",
-        "P6",
-        "R21",
-        "R36",
-        "V04A",
-        "V04B"
-      ],
-      "note": "read in full in the whole-codebase adversarial pass after v9; oracles are tests whose loaded module closure (or text) contains this file"
-    },
-    {
-      "path": "src/tui/exit.ts",
-      "by": [
-        "AV-review"
-      ],
-      "oracles": [
-        "D05",
-        "T117",
-        "T119",
-        "V10C",
-        "V27A",
-        "VAL-002",
-        "WP15.03"
-      ],
-      "note": "read in full in the whole-codebase adversarial pass after v9; oracles are tests whose loaded module closure (or text) contains this file"
-    },
-    {
-      "path": "src/tui/view/labels.ts",
-      "by": [
-        "AV-review"
-      ],
-      "oracles": [
-        "T114",
-        "T120",
-        "T92",
-        "T96",
-        "T97",
-        "TUI-002",
-        "TUI-007",
-        "TUI-010"
-      ],
-      "note": "read in full in the whole-codebase adversarial pass after v9; oracles are tests whose loaded module closure (or text) contains this file"
-    },
-    {
-      "path": "src/entry/module-conformance.ts",
-      "by": [
-        "AV-review"
-      ],
-      "oracles": [
-        "P23"
-      ],
-      "note": "read in full in the whole-codebase adversarial pass after v9; type-only, exercised by the tests that compile or inspect it"
-    },
-    {
-      "path": "src/module-ports.ts",
-      "by": [
-        "AV-review"
-      ],
-      "oracles": [
-        "P17/P23",
-        "P23"
-      ],
-      "note": "read in full in the whole-codebase adversarial pass after v9; type-only, exercised by the tests that compile or inspect it"
-    }
-  ],
-  "lanes": {
-    "fast": "PASS",
-    "durable": "PASS",
-    "property": "PASS",
-    "stress": "PASS",
-    "kernel": "PASS",
-    "crash": "PASS",
-    "powercut": "NOT_RUN: no approved VM",
-    "provider": "NOT_RUN: no credential authorized",
-    "ci": "NOT_RUN: repository CI unavailable (user report 2026-09-28)"
+ "version": 1,
+ "about": "WP32 inputs to implementation/review-ledger.json that git history cannot supply: files read in full and left unchanged, explicitly reviewed working-tree changes bound to their SHA-256 bytes and oracles, and the environment lanes as recorded in docs/implementation/validation.md. Regenerate the ledger with `npm run review:ledger`; `review-closure` checks it. Historical lane entries do not certify later working-tree changes. DR29: withdrawn stale byte-bound review claims for src/runtime/personal-settings.ts, src/entry/personal-host.ts, src/entry/oma-mac.ts. Hashes were not silently refreshed; these edited owners require fresh review. Historical readUnchanged entries apply only to unchanged committed files; changed files are NOT_REVIEWED.",
+ "reviewedChanges": [
+  {
+   "path": "src/process/cleanup.ts",
+   "by": [
+    "DR25",
+    "DR28"
+   ],
+   "oracles": [
+    "Owned cleanup"
+   ],
+   "sha256": "e623e7d1ef118be2f570564ebb4323536b610e9a18228db51e4d3bdc422d5093",
+   "note": "Read in full: sync and async effects retain exact primary/cleanup outcomes, including thrown null/undefined; cleanup runs once after the effect settles and is awaited. Outcome-matrix and nested corruption/publication-knowledge assertions pass; five source-copy controls assertion-killed. This helper assembles ownership returns, not error classification, process-death proof or publication retry policy."
+  },
+  {
+   "path": "src/runtime/process-lock.ts",
+   "by": [
+    "DR25",
+    "DR28"
+   ],
+   "oracles": [
+    "Owned cleanup ProcessLock"
+   ],
+   "sha256": "9f19f7da8a0bffaad163c31683b99ccc2b07fcf949c5981b5f67a002a782e8f6",
+   "note": "Read in full: only observed contention returns null; failed acquisition preserves primary beside close failure, contended close is not repeated, close revokes descriptor access before the fallible return. Two source-copy controls assertion-killed. Existing inode identity/fence rules retained; native Darwin flock and inherited descendant death are not proved by controlled composition."
+  },
+  {
+   "path": "src/storage/contained-fs.ts",
+   "by": [
+    "DR25",
+    "DR28"
+   ],
+   "oracles": [
+    "Owned cleanup contained"
+   ],
+   "sha256": "86c8d2242d6cfd3e3c58e32a437f79ef02f34a5cc624bda274fad9eeee5d0058",
+   "note": "Read in full: held parent/pin returns preserve original failure; if pin/root return prevents transfer, the opened result is locally returned once, retaining both failures. Untransferred-result leak control assertion-killed. openat2 containment has no fallback and is not weakened. closeEvery still reports the first close failure after attempting all returns; this review does not claim all caller finally paths are closed."
+  },
+  {
+   "path": "src/platform/host/files.ts",
+   "by": [
+    "DR25",
+    "DR28"
+   ],
+   "oracles": [
+    "Owned cleanup host"
+   ],
+   "sha256": "d81c85cf1fa77821e5a416235fb5b958b9d2ff600e7c46ae75c7e81d131240ed",
+   "note": "Read in full: HostTemporary owns one close, marks returned before close, and discard attempts temporary-name removal even after close failure. Replacement/publication preserve primary beside cleanup; an already reused descriptor number is not reclosed. Three source-copy controls assertion-killed. Existing full-file publication and host-private namespace remain; visible-name uncertainty, whole retry policy and actual Mac durability are not certified."
+  },
+  {
+   "path": "src/platform/host/archive-crypto.ts",
+   "by": [
+    "DR25",
+    "DR28"
+   ],
+   "oracles": [
+    "Owned cleanup archive"
+   ],
+   "sha256": "b676ad84432a693031b77238c227f43cb46a454faf58af00dc543c67da4f91d7",
+   "note": "Read in full: input ownership starts before output acquisition, nested cleanup returns output then input despite failure; failed sealer construction retains discard failure. Two source-copy controls assertion-killed after correcting the constructor oracle's TypeError (initial INVALID not counted). Existing archive bytes/AES-GCM/chunk authentication unchanged; real Keychain, native Mac execution and all stream-sink lifetime boundaries remain separate."
+  },
+  {
+   "path": "src/platform/host/snapshot.ts",
+   "by": [
+    "DR25",
+    "DR28"
+   ],
+   "oracles": [
+    "Owned cleanup stopped snapshot"
+   ],
+   "sha256": "5e516be2a64e7282df623b7add2c8da67abc0b145c69d30e23e27db9f851ce32",
+   "note": "Read in full: partial snapshot ownership spans clone/publication and discard; primary plus discard and cleanup-only outcomes are not success. Discard-removal control assertion-killed. Actual local-fixture snapshot regressions pass. Running-snapshot maintenance/control/society cleanup and clone/thaw failure composition remain open; no native VM, APFS or power-cut proof."
+  },
+  {
+   "path": "src/runtime/pi-runtime.ts",
+   "by": [
+    "DR25",
+    "DR28"
+   ],
+   "oracles": [
+    "Owned cleanup engine",
+    "Owned cleanup settings",
+    "engine settings"
+   ],
+   "sha256": "6aa55fb6d1a71597999505d48fbca99f4d1a55148a6db5c94d03d2dfa200fb67",
+   "note": "Read in full: settings/adoption writer returns and nested engine-file/parent returns preserve primary failure. Parent-leak control assertion-killed; controlled adoption fails on directory observation before opening any credential file. Bundled-only engine resolution, separate engine home and one retry owner retained. No actual auth.json was read; all pre-transfer absence and native credential adoption boundaries are not certified."
+  },
+  {
+   "path": "src/runtime/user-files.ts",
+   "by": [
+    "DR28"
+   ],
+   "oracles": [
+    "user files",
+    "Darwin metadata publication"
+   ],
+   "sha256": "ed7b0c4c2fe8f9d786940ee90ec026c9d9432ba8ea9d9293a0b849336c2d76cc",
+   "note": "Read in full: an acquired reader's close/read failure is not absence; bounded UTF-8/identity/single-name checks retained. Darwin immutable publication returns its writer and temporary while preserving primary beside cleanup and flushes existing destination on retry. Post-open ENOENT-to-absence control assertion-killed. Linux contained resolution retained; native Darwin crash durability and pre-transfer pin-close absence composition are not certified."
+  },
+  {
+   "path": "src/platform/host/keychain.ts",
+   "by": [
+    "DR25",
+    "DR28"
+   ],
+   "oracles": [
+    "Owned cleanup Keychain"
+   ],
+   "sha256": "491e36258840747fd9c7545ed1bd91fece2877d79629a8c3f99964c34534afdb",
+   "note": "Read in full: serialized per-item writer uses a cross-process lock and awaits the fenced writer before returning it; abort and identity are rechecked before write. Controlled in-memory store failure beside lock close and cleanup-only failure retain exact outcomes. Native Swift helper, real Keychain and credential execution were not exercised."
+  },
+  {
+   "path": "src/tui/login.ts",
+   "by": [
+    "DR25",
+    "DR28"
+   ],
+   "oracles": [
+    "engine"
+   ],
+   "sha256": "df65171ec8d70fe01a31775cf6f58260629f327db7f26b55a482e7dce9a8c641",
+   "note": "Read in full at the 2026-10-01 host-only package checkpoint: platform-aware runtime metadata preparation completes before spawn; explicit engine/store/arguments/environment/fence, error retained until actual direct-child close, and signal/null/nonzero close not success. Fourteen controlled tests pass; eleven source-copy controls assertion-killed under complete TAP with no cancellations/skips or harness errors, including the direct exit-only oracle. Actual Mac entry/bundled package manager and installed Personal PTY pass on Linux. Actual close does not establish arbitrary descendant/cgroup death; fallible listener acquisition and native Mac execution remain open. No credential files or real provider used."
+  },
+  {
+   "path": "src/runtime/extension-modules.ts",
+   "by": [
+    "DR28"
+   ],
+   "oracles": [
+    "Extension modules"
+   ],
+   "sha256": "52e1fd12f991d418719d527feb3d0cdca22dfb7b610ad0f1532e0697eab5a187",
+   "note": "Read in full: one scoped native ESM generation owner, complete selected-path replacement before generation advance, relative/late imports retain their parent's generation, unrelated engine modules unchanged, hook deregistration on close. Seven actual bundled-loader/native-cache tests pass. Generation identity is not a byte snapshot or a bound on accumulated engine/module memory. Native Mac and hook registration/deregistration failure injection are not proved."
+  },
+  {
+   "path": "src/runtime/pi-packages.ts",
+   "by": [
+    "DR25",
+    "DR28"
+   ],
+   "oracles": [
+    "Package grammar",
+    "DR28",
+    "DR25"
+   ],
+   "sha256": "aabb51db56ded2acabd0fa5129800687349f722c4c05dfefbb581396211cceab",
+   "note": "Read in full at the 2026-10-01 host-only package checkpoint: one value-aware grammar produces an immutable explicit Mac-only local decision, strips host-only from engine argv, and refuses duplicate/value-like/project combinations and Linux use before effects. Five source-copy grammar controls assertion-killed through the actual parser imported by entry composition. Shared package index validation/publication, explicit activation and per-source reconciliation retained; actual loopback npm install/list/update/remove and ordinary package regressions pass. Installing locally does not select a Personal extension or consume an absent first-project seed. Whole index crash/retry boundaries and native Mac package durability are not certified by this limited review. No new Host API or guest protocol method/state/version."
+  },
+  {
+   "path": "src/extension/contained-search.ts",
+   "by": [
+    "P0V-122"
+   ],
+   "oracles": [
+    "G10-02",
+    "P0V-122"
+   ],
+   "sha256": "63c73b59b0c17d1293b5113e03297b5f6d32bec7f3f4ecf990083e4d07ec27cc",
+   "note": "Read in full: child owns snapshot creation, engine walker group, EOF cancellation and cleanup; parent bounds output and duration. Caller-death and uncooperative walker tests; EOF and group-cleanup mutants assertion-killed. Does not claim cleanup after the owner itself is SIGKILLed or an OS crash."
+  },
+  {
+   "path": "src/protocol/receipt-chunks.ts",
+   "by": [
+    "P0V-123"
+   ],
+   "oracles": [
+    "G03-broker-01"
+   ],
+   "sha256": "e3fe72d0c711c3db872cc636bb40a6c06e6f5c190408be51d7fe51cbb766861c",
+   "note": "Read in full: frame-bounded base64 chunks bind exact receipt JSON identity and extent; collection rejects changed digest, oversize, gaps and incomplete replies. Real broker/ledger restart test retains one effect and isolates actors; dispatcher supplies the authenticated actor, never a wire actor."
+  },
+  {
+   "path": "src/protocol/status-page.ts",
+   "by": [
+    "P0V-125"
+   ],
+   "oracles": [
+    "G02-ledger-r2"
+   ],
+   "sha256": "75bbdf12e6bd4b2fe86ea9a1bed68e084a8e870ca6369265e6f4111903293511",
+   "note": "Read in full: frame-bounded status response includes a lexicographic continuation, refuses an individually oversized row, and does not claim a cross-page snapshot. This is response pagination, not database keyset pagination."
+  },
+  {
+   "path": "src/storage/file-digest.ts",
+   "by": [
+    "DR26"
+   ],
+   "oracles": [
+    "DR25"
+   ],
+   "sha256": "371d2e7e6939c7d0a8119efd01af2e0a29449942192e3f8623c22026c7eab48b",
+   "note": "Read in full: bounded-buffer regular-file hashing retains pre/post identity and observed-size checks; large executable asset, spawn tamper and stale-generation tests pass; document-cap, spawn-digest and commit-digest mutants killed. Does not eliminate same-UID replacement after the read."
+  },
+  {
+   "path": "src/protocol/guest-history.ts",
+   "by": [
+    "DR29"
+   ],
+   "oracles": [
+    "DR29"
+   ],
+   "sha256": "c7cb54e3c276c8667a0278bfbbea953447b41fce40fc8e9c090540eaec24e7cd",
+   "note": "Read in full: canonical project/Society/basename/header identity, exact shape and round trip; traversal, added cwd, malformed references and replaced identity are rejected by DR29 guest-history tests. Pure value codec; no writer or native proof."
+  },
+  {
+   "path": "src/protocol/host-history.ts",
+   "by": [
+    "DR29"
+   ],
+   "oracles": [
+    "DR29"
+   ],
+   "sha256": "3c81d0e9658afedfcc4d9596c76421b9ee380c22a2bb557b3936b14578af6850",
+   "note": "Read in full: canonical Personal birth/basename/header identity, typed exact query and bounded metadata page validation. DR29 reference/traversal, pagination and strict successful-exit oracles pass. A reference locates facts and does not grant execution."
+  },
+  {
+   "path": "src/runtime/host-history-channel.ts",
+   "by": [
+    "DR29"
+   ],
+   "oracles": [
+    "DR29"
+   ],
+   "sha256": "bf72fb731472539fc70556a0ffd4d40b89c81e62a032194c58a118ded9c57bf2",
+   "note": "Read in full: one private duplex socket owns correlated observations, per-query monotonic timer/cancellation, late replies and one flushed final handoff. Real local socket plus actual Linux PTY holder and cancellation/partial/loss tests pass. Native Mac and systemd holder launch NOT_RUN."
+  },
+  {
+   "path": "src/platform/host/personal-histories.ts",
+   "by": [
+    "DR29"
+   ],
+   "oracles": [
+    "DR29"
+   ],
+   "sha256": "8be93d9eecb5146e842946ec7400313e7a7dd984f9c3e4c50023e7f46db5e313",
+   "note": "Read in full: existing saved Personal birth/header/cwd admission and real SDK metadata, no registry and no guest-supplied paths. Real history replacement/corruption, paginated count/preview and actual controlled holder oracles pass. Remote text search is preview-only; no native Mac execution claim."
+  },
+  {
+   "path": "src/platform/guest/histories.ts",
+   "by": [
+    "DR29"
+   ],
+   "oracles": [
+    "DR29"
+   ],
+   "sha256": "9f046919118cdd29579e8687f3a5a69b49d3d3787483b5963bfa06caca20868b",
+   "note": "Read in full: existing project binding and Society birth/header/private cwd admission, lexical bounded pagination, SDK-skipped files remain unknown. Real saved files and scripted launcher/current listening holder conflict oracles pass. Actual manager launch NOT_RUN."
+  },
+  {
+   "path": "src/platform/host/bookmark.ts",
+   "by": [
+    "DR29"
+   ],
+   "oracles": [
+    "DR29"
+   ],
+   "sha256": "e749bf5c52f3736a0ec6c6ea383fe08ce46f921b92cb52aec0ae21e5443acb62",
+   "note": "Read in full: bundle-owned one-shot helper argv/stdin, bounded output and actual-exit plus strict reply validation. Controlled helper tests pass; Foundation bookmark implementation is NOT_BUILT/NOT_RUN on this Linux host."
+  },
+  {
+   "path": "src/platform/host/personal-seed.ts",
+   "by": [
+    "DR29"
+   ],
+   "oracles": [
+    "DR29"
+   ],
+   "sha256": "53c2c40d8a2860415fbc8f494b210ba0fed0f09e38b0392f099128d71be07a92",
+   "note": "Read in full: host-record binding/bookmark/Git identity precedes already-running project settings observation; absent binding is empty, ambiguity/unknown is refusal. Real Git relocation/replacement and controlled settings tests pass. Bound first seed requires an already running app/guest, and native Mac NOT_RUN."
+  },
+  {
+   "path": "src/runtime/candidate-checks.ts",
+   "by": [
+    "DR29"
+   ],
+   "oracles": [
+    "DR29"
+   ],
+   "sha256": "69b8762f6881a80459502bc55e3caf5d3e110b26cfa125bc613514c8ecaa0305",
+   "note": "Read in full: composition callback consumes frozen exact candidate/check profile, cgroup resources, private raw checkout and confined argv/environment; controlled command/manager-outcome oracles pass. Actual systemd/cgroup probe remains independently denied and NOT_RUN; builder tests do not certify kernel enforcement."
+  },
+  {
+   "path": "src/platform/guest/project.ts",
+   "by": [
+    "MAC-240",
+    "MAC-241",
+    "MAC-420"
+   ],
+   "oracles": [
+    "MAC-240",
+    "MAC-241"
+   ],
+   "sha256": "f479e025e1a3dbf058d1653a8e2a9b3d2181b8c5b5ddcab074e465156992f27a",
+   "note": "Read in full: export() normalizes the request intent before the ledger digests it -- absent `since` and explicit `since: undefined` are one request, and neither is a JSON value the canonical encoder can name. The intent keeps every other field; validation of society/canonical/head is unchanged. MAC-240 oracles: the legacy-spelled digest is a different request that fails closed (never replayed nor re-run), and \u00a76.4/MAC-420 export passes end-to-end under the new digest."
+  },
+  {
+   "path": "src/runtime/resident-rootfs.ts",
+   "by": [
+    "DR25",
+    "DR27"
+   ],
+   "oracles": [
+    "SCN-R01",
+    "SCN-C10"
+   ],
+   "sha256": "c4dee7b1cc1df25889360cc2cf7dbdcac8ba9d4d30431befc98c995a93aeab5b",
+   "note": "Read in full: the prepared rootfs gains RESIDENT_PATHS.workerArchive so the confined engine's worker-only review archive mount target exists before any bind; the directory list otherwise unchanged, order and ensureDirectory semantics retained. SCN-R01 exercises the Worker review archive end-to-end through the confined path; SCN-C10 exercises package extension loading under the same rootfs."
+  },
+  {
+   "path": "src/sandbox.ts",
+   "by": [
+    "DR18",
+    "DR27"
+   ],
+   "oracles": [
+    "DR27",
+    "R28",
+    "SCN-C08"
+   ],
+   "sha256": "839ef28cd6e2e923b89543718d0a0395eaf49d05e12ea0ecdcd97d3b67c747ce",
+   "note": "Read in full: resolvedBindSource names each socket bind source by the real directory it reaches instead of a /proc/<pid>/fd anchor bubblewrap cannot traverse inside its user namespace; only the parent resolves, the leaf need not exist, and a missing parent keeps the lexical spelling (ENOENT/ENOTDIR only -- other resolution failures propagate). R28 asserts the pure recipe with fabricated dirs; SCN-C08 runs a real confined shell under the filter; DR27 private-argument tests hold the recipe's value preservation."
+  },
+  {
+   "path": "src/tui/open-tui-brand.ts",
+   "by": [
+    "DR18"
+   ],
+   "oracles": [
+    "Open TUI"
+   ],
+   "sha256": "3d12c3c57fdda3ae7974a0868831fa5a880331a3485cb285d0d63219f5c86f1e",
+   "note": "Read in full: the oma tip rewrite addresses the last command-tip cell by position (replaceColumn) instead of matching the command's text, because upstream truncates a name when an extension added a command; the cell's original SGR color is carried and the tip is width-bounded like swapText. Open TUI PTY oracles hold the branded header, tips and terminal restoration for all eight endings including reload-update with an extra registered command."
   }
+ ],
+ "readUnchanged": [
+  {
+   "path": "src/extension/delivery.ts",
+   "by": [
+    "WP27"
+   ],
+   "oracles": [
+    "V27A"
+   ],
+   "note": "boundary entry appended before the notice, leaf checked; the notice names the entry the session holds"
+  },
+  {
+   "path": "src/units/execute.ts",
+   "by": [
+    "WP23"
+   ],
+   "oracles": [
+    "R26"
+   ],
+   "note": "sync and async unit commands bounded in time and output; async is show-only"
+  },
+  {
+   "path": "src/units/observe.ts",
+   "by": [
+    "WP23",
+    "WP25"
+   ],
+   "oracles": [
+    "R26"
+   ],
+   "note": "observation parser: missing or malformed properties are unknown, never success"
+  },
+  {
+   "path": "src/tui/transport.ts",
+   "by": [
+    "WP23",
+    "WP28"
+   ],
+   "oracles": [
+    "T118"
+   ],
+   "note": "status view read bounded, no-follow; missing/unreadable/malformed/foreign/stale are unknown with reason"
+  },
+  {
+   "path": "src/protocol/status-view.ts",
+   "by": [
+    "WP23"
+   ],
+   "oracles": [
+    "T118",
+    "V23A"
+   ],
+   "note": "closed view codec; staleness is the reader's decision"
+  },
+  {
+   "path": "src/runtime/inference-relay.ts",
+   "by": [
+    "WP27"
+   ],
+   "oracles": [
+    "T114",
+    "V27B"
+   ],
+   "note": "fixed origin, caller authority dropped, placeholder swapped in headers and path, bounded concurrency, no resend, streamed"
+  },
+  {
+   "path": "src/protocol/channel.ts",
+   "by": [
+    "WP26"
+   ],
+   "oracles": [
+    "V26C",
+    "R15"
+   ],
+   "note": "one request in flight, encoded-byte budgets both ways, deadlines"
+  },
+  {
+   "path": "src/broker/peer-authenticator.ts",
+   "by": [
+    "WP25"
+   ],
+   "oracles": [
+    "AUTH-003"
+   ],
+   "note": "capabilities re-read at each use against incarnation, InvocationID, peer cgroup and pin"
+  },
+  {
+   "path": "src/tui/sources/mail.ts",
+   "by": [
+    "WP28"
+   ],
+   "oracles": [
+    "V28A",
+    "T98"
+   ],
+   "note": "bounded no-follow reads; new/ is not yet delivered to the Principal's session; reading writes nothing"
+  },
+  {
+   "path": "src/protocol/receipts.ts",
+   "by": [
+    "WP26"
+   ],
+   "oracles": [
+    "V26B"
+   ],
+   "note": "REQUEST_NOT_FOUND is distinct from a receipt; exit codes per state"
+  },
+  {
+   "path": "implementation/systemd/broker.service.in",
+   "by": [
+    "AV-review"
+   ],
+   "oracles": [
+    "AUD-1",
+    "AUD-2",
+    "AUD-3",
+    "AUD-4",
+    "AUD-5",
+    "AUD-6",
+    "AUD-7",
+    "AUD-8"
+   ],
+   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are the tests that load this module"
+  },
+  {
+   "path": "implementation/systemd/principal.path.in",
+   "by": [
+    "AV-review"
+   ],
+   "oracles": [
+    "CREATE-003",
+    "LIFE-007",
+    "LIFE-009",
+    "REC-001",
+    "REC-007",
+    "SEQ-002",
+    "T13",
+    "T36"
+   ],
+   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are the tests that load this module"
+  },
+  {
+   "path": "implementation/systemd/reconcile.timer.in",
+   "by": [
+    "AV-review"
+   ],
+   "oracles": [
+    "CREATE-003",
+    "LIFE-007",
+    "LIFE-009",
+    "REC-001",
+    "REC-007",
+    "SEQ-002",
+    "T13",
+    "T36"
+   ],
+   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are the tests that load this module"
+  },
+  {
+   "path": "implementation/systemd/resident.path.in",
+   "by": [
+    "AV-review"
+   ],
+   "oracles": [
+    "CREATE-003",
+    "D03",
+    "LIFE-007",
+    "LIFE-009",
+    "P01",
+    "P02",
+    "P05",
+    "REC-001"
+   ],
+   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are the tests that load this module"
+  },
+  {
+   "path": "src/authority.ts",
+   "by": [
+    "AV-review"
+   ],
+   "oracles": [
+    "A02",
+    "LIFE-008",
+    "LOC-008",
+    "P08",
+    "R02",
+    "R13",
+    "R36",
+    "SEQ-002"
+   ],
+   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are the tests that load this module"
+  },
+  {
+   "path": "src/broker/connection.ts",
+   "by": [
+    "AV-review"
+   ],
+   "oracles": [
+    "R14",
+    "R21",
+    "R36",
+    "V18B"
+   ],
+   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are the tests that load this module"
+  },
+  {
+   "path": "src/broker/logs.ts",
+   "by": [
+    "AV-review"
+   ],
+   "oracles": [
+    "F3",
+    "VIEW-002"
+   ],
+   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are the tests that load this module"
+  },
+  {
+   "path": "src/broker/peer-pin.ts",
+   "by": [
+    "AV-review"
+   ],
+   "oracles": [
+    "R14",
+    "R21",
+    "R36",
+    "V18B"
+   ],
+   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are the tests that load this module"
+  },
+  {
+   "path": "src/broker/principal-endpoint.ts",
+   "by": [
+    "AV-review"
+   ],
+   "oracles": [
+    "T114",
+    "T120",
+    "V05B",
+    "V08B",
+    "V09B"
+   ],
+   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are the tests that load this module"
+  },
+  {
+   "path": "src/broker/process-ancestry.ts",
+   "by": [
+    "AV-review"
+   ],
+   "oracles": [
+    "T114",
+    "T120",
+    "V05B",
+    "V08B",
+    "V09B"
+   ],
+   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are the tests that load this module"
+  },
+  {
+   "path": "src/broker/replies.ts",
+   "by": [
+    "AV-review"
+   ],
+   "oracles": [
+    "F1",
+    "F3"
+   ],
+   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are the tests that load this module"
+  },
+  {
+   "path": "src/cli.ts",
+   "by": [
+    "AV-review"
+   ],
+   "oracles": [
+    "AV1",
+    "CTX-001",
+    "CTX-002",
+    "D05",
+    "F2",
+    "R01",
+    "T117",
+    "T119"
+   ],
+   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are the tests that load this module"
+  },
+  {
+   "path": "src/cli/transport.ts",
+   "by": [
+    "AV-review"
+   ],
+   "oracles": [
+    "F4",
+    "T114"
+   ],
+   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are the tests that load this module"
+  },
+  {
+   "path": "src/config/policy.ts",
+   "by": [
+    "AV-review"
+   ],
+   "oracles": [
+    "R13"
+   ],
+   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are the tests that load this module"
+  },
+  {
+   "path": "src/domain/canonical-json.ts",
+   "by": [
+    "AV-review"
+   ],
+   "oracles": [
+    "P0",
+    "P2"
+   ],
+   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are the tests that load this module"
+  },
+  {
+   "path": "src/domain/capabilities.ts",
+   "by": [
+    "AV-review"
+   ],
+   "oracles": [
+    "AV5",
+    "R02",
+    "V29A"
+   ],
+   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are the tests that load this module"
+  },
+  {
+   "path": "src/domain/child-policy.ts",
+   "by": [
+    "AV-review"
+   ],
+   "oracles": [
+    "R13"
+   ],
+   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are the tests that load this module"
+  },
+  {
+   "path": "src/domain/context-policy.ts",
+   "by": [
+    "AV-review"
+   ],
+   "oracles": [
+    "R21",
+    "V18A"
+   ],
+   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are the tests that load this module"
+  },
+  {
+   "path": "src/domain/identifiers.ts",
+   "by": [
+    "AV-review"
+   ],
+   "oracles": [
+    "AV1",
+    "P2.5",
+    "R03",
+    "R36",
+    "V16A",
+    "V16B"
+   ],
+   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are the tests that load this module"
+  },
+  {
+   "path": "src/domain/limits.ts",
+   "by": [
+    "AV-review"
+   ],
+   "oracles": [
+    "R02"
+   ],
+   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are the tests that load this module"
+  },
+  {
+   "path": "src/domain/lineage.ts",
+   "by": [
+    "AV-review"
+   ],
+   "oracles": [
+    "R13"
+   ],
+   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are the tests that load this module"
+  },
+  {
+   "path": "src/domain/mail-values.ts",
+   "by": [
+    "AV-review"
+   ],
+   "oracles": [
+    "AV1"
+   ],
+   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are the tests that load this module"
+  },
+  {
+   "path": "src/domain/spec-identity.ts",
+   "by": [
+    "AV-review"
+   ],
+   "oracles": [
+    "A02",
+    "AUD-1",
+    "AUD-2",
+    "AUD-3",
+    "AUD-4",
+    "AUD-5",
+    "AUD-6",
+    "AUD-7"
+   ],
+   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are the tests that load this module"
+  },
+  {
+   "path": "src/extension/cli-process.ts",
+   "by": [
+    "AV-review"
+   ],
+   "oracles": [
+    "T119"
+   ],
+   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are the tests that load this module"
+  },
+  {
+   "path": "src/extension/workspace-guard.ts",
+   "by": [
+    "AV-review"
+   ],
+   "oracles": [
+    "AV3"
+   ],
+   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are the tests that load this module"
+  },
+  {
+   "path": "src/frame.ts",
+   "by": [
+    "AV-review"
+   ],
+   "oracles": [
+    "A1",
+    "A2",
+    "A3",
+    "A4",
+    "A5",
+    "A6",
+    "AUTH-002",
+    "AUTH-003"
+   ],
+   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are the tests that load this module"
+  },
+  {
+   "path": "src/git/integration-policy.ts",
+   "by": [
+    "AV-review"
+   ],
+   "oracles": [
+    "R19",
+    "V01A",
+    "V01B",
+    "V24A",
+    "V24B"
+   ],
+   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are the tests that load this module"
+  },
+  {
+   "path": "src/git/observe.ts",
+   "by": [
+    "AV-review"
+   ],
+   "oracles": [
+    "R19",
+    "R20",
+    "R36"
+   ],
+   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are the tests that load this module"
+  },
+  {
+   "path": "src/git/publication.ts",
+   "by": [
+    "AV-review"
+   ],
+   "oracles": [
+    "R20"
+   ],
+   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are the tests that load this module"
+  },
+  {
+   "path": "src/hash.ts",
+   "by": [
+    "AV-review"
+   ],
+   "oracles": [
+    "A1",
+    "A2",
+    "A3",
+    "A4",
+    "A5",
+    "A6",
+    "AUTH-003",
+    "B1"
+   ],
+   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are the tests that load this module"
+  },
+  {
+   "path": "src/ids.ts",
+   "by": [
+    "AV-review"
+   ],
+   "oracles": [
+    "A02",
+    "CREATE-003",
+    "CTX-003",
+    "DB-005",
+    "DB-009",
+    "F1",
+    "FS-005",
+    "ID-002"
+   ],
+   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are the tests that load this module"
+  },
+  {
+   "path": "src/leaf.ts",
+   "by": [
+    "AV-review"
+   ],
+   "oracles": [
+    "AUTH-003",
+    "LOC-003",
+    "R36",
+    "REC-007",
+    "UNIT-004"
+   ],
+   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are the tests that load this module"
+  },
+  {
+   "path": "src/lifecycle.ts",
+   "by": [
+    "AV-review"
+   ],
+   "oracles": [
+    "A02",
+    "A1",
+    "A2",
+    "A3",
+    "A4",
+    "A5",
+    "A6",
+    "AUD-1"
+   ],
+   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are the tests that load this module"
+  },
+  {
+   "path": "src/lifecycle/policy.ts",
+   "by": [
+    "AV-review"
+   ],
+   "oracles": [
+    "R25",
+    "R37"
+   ],
+   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are the tests that load this module"
+  },
+  {
+   "path": "src/lifecycle/registry-operations.ts",
+   "by": [
+    "AV-review"
+   ],
+   "oracles": [
+    "F1",
+    "P3",
+    "R25"
+   ],
+   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are the tests that load this module"
+  },
+  {
+   "path": "src/mail/batch-policy.ts",
+   "by": [
+    "AV-review"
+   ],
+   "oracles": [
+    "R24"
+   ],
+   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are the tests that load this module"
+  },
+  {
+   "path": "src/mail/facts.ts",
+   "by": [
+    "AV-review"
+   ],
+   "oracles": [
+    "DB-009",
+    "ERR-001",
+    "P01",
+    "P02",
+    "P05"
+   ],
+   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are the tests that load this module"
+  },
+  {
+   "path": "src/mail/headers.ts",
+   "by": [
+    "AV-review"
+   ],
+   "oracles": [
+    "R36"
+   ],
+   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are the tests that load this module"
+  },
+  {
+   "path": "src/mail/reconcile.ts",
+   "by": [
+    "AV-review"
+   ],
+   "oracles": [
+    "P3"
+   ],
+   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are the tests that load this module"
+  },
+  {
+   "path": "src/mail/routing.ts",
+   "by": [
+    "AV-review"
+   ],
+   "oracles": [
+    "R31"
+   ],
+   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are the tests that load this module"
+  },
+  {
+   "path": "src/mail/serialize.ts",
+   "by": [
+    "AV-review"
+   ],
+   "oracles": [
+    "DB-009",
+    "ERR-001"
+   ],
+   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are the tests that load this module"
+  },
+  {
+   "path": "src/pi-extension.ts",
+   "by": [
+    "AV-review"
+   ],
+   "oracles": [
+    "D05",
+    "DB-009",
+    "ID-002",
+    "M-003",
+    "PI-002",
+    "R03",
+    "R28",
+    "T100"
+   ],
+   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are the tests that load this module"
+  },
+  {
+   "path": "src/process/async.ts",
+   "by": [
+    "AV-review"
+   ],
+   "oracles": [
+    "R37",
+    "REC-007",
+    "T106",
+    "T114",
+    "T115",
+    "T116",
+    "T117",
+    "T119"
+   ],
+   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are the tests that load this module"
+  },
+  {
+   "path": "src/process/command.ts",
+   "by": [
+    "AV-review"
+   ],
+   "oracles": [
+    "R37",
+    "V17A",
+    "V17B"
+   ],
+   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are the tests that load this module"
+  },
+  {
+   "path": "src/process/policies.ts",
+   "by": [
+    "AV-review"
+   ],
+   "oracles": [
+    "R19"
+   ],
+   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are the tests that load this module"
+  },
+  {
+   "path": "src/process/run.ts",
+   "by": [
+    "AV-review"
+   ],
+   "oracles": [
+    "P0",
+    "R19",
+    "R36"
+   ],
+   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are the tests that load this module"
+  },
+  {
+   "path": "src/protocol/host-channel.ts",
+   "by": [
+    "AV-review"
+   ],
+   "oracles": [
+    "T114",
+    "T115",
+    "T119",
+    "T120",
+    "V05B",
+    "V08B",
+    "V09B"
+   ],
+   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are the tests that load this module"
+  },
+  {
+   "path": "src/protocol/jsonl.ts",
+   "by": [
+    "AV-review"
+   ],
+   "oracles": [
+    "R28",
+    "R35"
+   ],
+   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are the tests that load this module"
+  },
+  {
+   "path": "src/protocol/log-response.ts",
+   "by": [
+    "AV-review"
+   ],
+   "oracles": [
+    "F3",
+    "F4"
+   ],
+   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are the tests that load this module"
+  },
+  {
+   "path": "src/protocol/principal-credential.ts",
+   "by": [
+    "AV-review"
+   ],
+   "oracles": [
+    "T114",
+    "T120",
+    "V05B",
+    "V08B",
+    "V09B"
+   ],
+   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are the tests that load this module"
+  },
+  {
+   "path": "src/protocol/receipt-codec.ts",
+   "by": [
+    "AV-review"
+   ],
+   "oracles": [
+    "P2",
+    "P9",
+    "REC-007"
+   ],
+   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are the tests that load this module"
+  },
+  {
+   "path": "src/protocol/response-codec.ts",
+   "by": [
+    "AV-review"
+   ],
+   "oracles": [
+    "F3",
+    "R15"
+   ],
+   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are the tests that load this module"
+  },
+  {
+   "path": "src/protocol/run-lease.ts",
+   "by": [
+    "AV-review"
+   ],
+   "oracles": [
+    "R28",
+    "T113",
+    "T117",
+    "V27A"
+   ],
+   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are the tests that load this module"
+  },
+  {
+   "path": "src/reconcile/operations.ts",
+   "by": [
+    "AV-review"
+   ],
+   "oracles": [
+    "R29",
+    "R36"
+   ],
+   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are the tests that load this module"
+  },
+  {
+   "path": "src/runtime/broker-lifetime.ts",
+   "by": [
+    "AV-review"
+   ],
+   "oracles": [
+    "R17",
+    "R37"
+   ],
+   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are the tests that load this module"
+  },
+  {
+   "path": "src/runtime/deployment-manifest.ts",
+   "by": [
+    "AV-review"
+   ],
+   "oracles": [
+    "A1",
+    "A2",
+    "A3",
+    "A4",
+    "A5",
+    "A6",
+    "B1",
+    "C1"
+   ],
+   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are the tests that load this module"
+  },
+  {
+   "path": "src/runtime/process-lock.ts",
+   "by": [
+    "AV-review"
+   ],
+   "oracles": [
+    "A02",
+    "P01",
+    "P02",
+    "P05",
+    "P08",
+    "R17",
+    "T115",
+    "T119"
+   ],
+   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are the tests that load this module"
+  },
+  {
+   "path": "src/runtime/society-lease.ts",
+   "by": [
+    "AV-review"
+   ],
+   "oracles": [
+    "AUTH-003",
+    "LOC-003",
+    "PR-002",
+    "REC-007",
+    "T115",
+    "T119",
+    "TUI-004"
+   ],
+   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are the tests that load this module"
+  },
+  {
+   "path": "src/runtime/supervision-channel.ts",
+   "by": [
+    "AV-review"
+   ],
+   "oracles": [
+    "T115",
+    "T119"
+   ],
+   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are the tests that load this module"
+  },
+  {
+   "path": "src/storage/staged-tree.ts",
+   "by": [
+    "AV-review"
+   ],
+   "oracles": [
+    "S-06"
+   ],
+   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are the tests that load this module"
+  },
+  {
+   "path": "src/storage/transaction.ts",
+   "by": [
+    "AV-review"
+   ],
+   "oracles": [
+    "P4",
+    "T14",
+    "T15",
+    "T16",
+    "T17",
+    "T18",
+    "T19",
+    "T20"
+   ],
+   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are the tests that load this module"
+  },
+  {
+   "path": "src/storage/operation-journal.ts",
+   "by": [
+    "AV-review"
+   ],
+   "oracles": [
+    "P3"
+   ],
+   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are the tests that load this module"
+  },
+  {
+   "path": "src/storage/receipt-projector.ts",
+   "by": [
+    "AV-review"
+   ],
+   "oracles": [
+    "F1",
+    "P23"
+   ],
+   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are the tests that load this module"
+  },
+  {
+   "path": "src/tui/view/text.ts",
+   "by": [
+    "AV-review"
+   ],
+   "oracles": [
+    "T92",
+    "T96",
+    "T97",
+    "TUI-007"
+   ],
+   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are the tests that load this module"
+  },
+  {
+   "path": "src/validate.ts",
+   "by": [
+    "AV-review"
+   ],
+   "oracles": [
+    "CTX-001",
+    "CTX-002",
+    "DB-009",
+    "ID-002",
+    "M-003",
+    "MAIL-003",
+    "MAIL-011",
+    "P9"
+   ],
+   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are the tests that load this module"
+  },
+  {
+   "path": "src/diagnostics/files.ts",
+   "by": [
+    "AV-review"
+   ],
+   "oracles": [
+    "P6",
+    "P7",
+    "PRE-1",
+    "PRE-2",
+    "PRE-3",
+    "PRE-4",
+    "PRE-5",
+    "PRE-6"
+   ],
+   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are the tests that load this module"
+  },
+  {
+   "path": "src/cli/cache-codec.ts",
+   "by": [
+    "AV-review"
+   ],
+   "oracles": [
+    "AV1",
+    "CTX-001",
+    "CTX-002",
+    "F2",
+    "R32",
+    "REC-007",
+    "V26B",
+    "WP26"
+   ],
+   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are tests whose loaded module closure contains this module"
+  },
+  {
+   "path": "src/cli/effects/context.ts",
+   "by": [
+    "AV-review"
+   ],
+   "oracles": [
+    "AV1",
+    "CTX-001",
+    "CTX-002",
+    "D05",
+    "F2",
+    "R01",
+    "T119",
+    "V10C"
+   ],
+   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are tests whose loaded module closure contains this module"
+  },
+  {
+   "path": "src/cli/effects/mail.ts",
+   "by": [
+    "AV-review"
+   ],
+   "oracles": [
+    "AV1",
+    "CTX-001",
+    "CTX-002",
+    "D05",
+    "F2",
+    "R01",
+    "T119",
+    "V10C"
+   ],
+   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are tests whose loaded module closure contains this module"
+  },
+  {
+   "path": "src/cli/effects/submit.ts",
+   "by": [
+    "AV-review"
+   ],
+   "oracles": [
+    "AV1",
+    "CTX-001",
+    "CTX-002",
+    "D05",
+    "F2",
+    "R01",
+    "T119",
+    "V10C"
+   ],
+   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are tests whose loaded module closure contains this module"
+  },
+  {
+   "path": "src/cli/request-intent.ts",
+   "by": [
+    "AV-review"
+   ],
+   "oracles": [
+    "AV1",
+    "CTX-001",
+    "CTX-002",
+    "D05",
+    "F2",
+    "R01",
+    "T119",
+    "V10C"
+   ],
+   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are tests whose loaded module closure contains this module"
+  },
+  {
+   "path": "src/domain/integer-fields.ts",
+   "by": [
+    "AV-review"
+   ],
+   "oracles": [
+    "P1",
+    "R19",
+    "R26",
+    "T111",
+    "T112",
+    "V01A",
+    "V01B",
+    "V04"
+   ],
+   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are tests whose loaded module closure contains this module"
+  },
+  {
+   "path": "src/extension/inference-bridge.ts",
+   "by": [
+    "AV-review"
+   ],
+   "oracles": [
+    "T100",
+    "T101",
+    "T102",
+    "T103",
+    "T92",
+    "T96",
+    "T97",
+    "T99"
+   ],
+   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are tests whose loaded module closure contains this module"
+  },
+  {
+   "path": "src/extension/principal-channel.ts",
+   "by": [
+    "AV-review"
+   ],
+   "oracles": [
+    "T100",
+    "T101",
+    "T102",
+    "T103",
+    "T119",
+    "T92",
+    "T96",
+    "T97"
+   ],
+   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are tests whose loaded module closure contains this module"
+  },
+  {
+   "path": "src/extension/shared.ts",
+   "by": [
+    "AV-review"
+   ],
+   "oracles": [
+    "T100",
+    "T101",
+    "T102",
+    "T103",
+    "T92",
+    "T96",
+    "T97",
+    "T99"
+   ],
+   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are tests whose loaded module closure contains this module"
+  },
+  {
+   "path": "src/extension/tool-surface.ts",
+   "by": [
+    "AV-review"
+   ],
+   "oracles": [
+    "T100",
+    "T101",
+    "T102",
+    "T103",
+    "T92",
+    "T96",
+    "T97",
+    "T99"
+   ],
+   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are tests whose loaded module closure contains this module"
+  },
+  {
+   "path": "src/git/canonical-command.ts",
+   "by": [
+    "AV-review"
+   ],
+   "oracles": [
+    "CTX-003",
+    "CTX-004",
+    "DB-009",
+    "ERR-001",
+    "GIT-006",
+    "INT-003",
+    "R01",
+    "T53"
+   ],
+   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are tests whose loaded module closure contains this module"
+  },
+  {
+   "path": "src/git/context-publication.ts",
+   "by": [
+    "AV-review"
+   ],
+   "oracles": [
+    "AUTH-003",
+    "R16",
+    "R20",
+    "R33",
+    "S-03",
+    "S-05",
+    "T23",
+    "T39"
+   ],
+   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are tests whose loaded module closure contains this module"
+  },
+  {
+   "path": "src/git/paths.ts",
+   "by": [
+    "AV-review"
+   ],
+   "oracles": [
+    "CTX-003",
+    "CTX-004",
+    "DB-009",
+    "ERR-001",
+    "GIT-006",
+    "INT-003",
+    "R01",
+    "R37"
+   ],
+   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are tests whose loaded module closure contains this module"
+  },
+  {
+   "path": "src/lifecycle/contracts.ts",
+   "by": [
+    "AV-review"
+   ],
+   "oracles": [
+    "AUTH-003",
+    "AV4",
+    "F1",
+    "MAIL-001",
+    "P3",
+    "PRE-1",
+    "PRE-2",
+    "PRE-3"
+   ],
+   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are tests whose loaded module closure contains this module"
+  },
+  {
+   "path": "src/mail/addresses.ts",
+   "by": [
+    "AV-review"
+   ],
+   "oracles": [
+    "AUTH-003",
+    "P6",
+    "R16",
+    "R20",
+    "R33",
+    "S-03",
+    "S-05",
+    "T23"
+   ],
+   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are tests whose loaded module closure contains this module"
+  },
+  {
+   "path": "src/protocol/byte-queue.ts",
+   "by": [
+    "AV-review"
+   ],
+   "oracles": [
+    "D03",
+    "ID-001",
+    "PR-002",
+    "R14",
+    "R37",
+    "V05A",
+    "V05B",
+    "V26C"
+   ],
+   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are tests whose loaded module closure contains this module"
+  },
+  {
+   "path": "src/protocol/request-codec.ts",
+   "by": [
+    "AV-review"
+   ],
+   "oracles": [
+    "GIT-006",
+    "ID-003",
+    "P1",
+    "P2.5",
+    "P3",
+    "P6",
+    "R21",
+    "REC-007"
+   ],
+   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are tests whose loaded module closure contains this module"
+  },
+  {
+   "path": "src/runtime/extension-integrity.ts",
+   "by": [
+    "AV-review"
+   ],
+   "oracles": [
+    "AV3",
+    "R28",
+    "REC-007",
+    "T106",
+    "T113",
+    "V08A",
+    "V08B",
+    "V10A"
+   ],
+   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are tests whose loaded module closure contains this module"
+  },
+  {
+   "path": "src/storage/batch-view.ts",
+   "by": [
+    "AV-review"
+   ],
+   "oracles": [
+    "AUTH-003",
+    "R16",
+    "R20",
+    "R33",
+    "S-03",
+    "S-05",
+    "T118",
+    "T23"
+   ],
+   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are tests whose loaded module closure contains this module"
+  },
+  {
+   "path": "src/storage/contained-fs.ts",
+   "by": [
+    "AV-review"
+   ],
+   "oracles": [
+    "AV5",
+    "R14",
+    "R20",
+    "R21",
+    "S-06",
+    "V05A",
+    "V05B",
+    "V18A"
+   ],
+   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are tests whose loaded module closure contains this module"
+  },
+  {
+   "path": "src/storage/context-files.ts",
+   "by": [
+    "AV-review"
+   ],
+   "oracles": [
+    "CTX-003",
+    "CTX-004",
+    "DB-009",
+    "ERR-001",
+    "GIT-006",
+    "INT-003",
+    "R01",
+    "R37"
+   ],
+   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are tests whose loaded module closure contains this module"
+  },
+  {
+   "path": "src/storage/context-snapshot.ts",
+   "by": [
+    "AV-review"
+   ],
+   "oracles": [
+    "CTX-003",
+    "CTX-004",
+    "DB-009",
+    "ERR-001",
+    "GIT-006",
+    "INT-003",
+    "R01",
+    "R37"
+   ],
+   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are tests whose loaded module closure contains this module"
+  },
+  {
+   "path": "src/storage/directory.ts",
+   "by": [
+    "AV-review"
+   ],
+   "oracles": [
+    "AV5",
+    "R14",
+    "R20",
+    "R21",
+    "S-06",
+    "V05A",
+    "V05B",
+    "V18A"
+   ],
+   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are tests whose loaded module closure contains this module"
+  },
+  {
+   "path": "src/storage/transitions.ts",
+   "by": [
+    "AV-review"
+   ],
+   "oracles": [
+    "DB-009",
+    "GIT-006",
+    "ID-003",
+    "P9",
+    "R10",
+    "R21",
+    "V04A",
+    "V04B"
+   ],
+   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are tests whose loaded module closure contains this module"
+  },
+  {
+   "path": "src/tui/prompt.ts",
+   "by": [
+    "AV-review"
+   ],
+   "oracles": [
+    "T114",
+    "T120",
+    "T92",
+    "T96",
+    "T97",
+    "TUI-002",
+    "TUI-007",
+    "TUI-010"
+   ],
+   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are tests whose loaded module closure contains this module"
+  },
+  {
+   "path": "implementation/contracts.ts",
+   "by": [
+    "AV-review"
+   ],
+   "oracles": [
+    "P1",
+    "P10",
+    "P13",
+    "P14",
+    "P15",
+    "P17",
+    "P19",
+    "P23"
+   ],
+   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are tests whose loaded module closure (or text) contains this file"
+  },
+  {
+   "path": "implementation/schema-v1.sql",
+   "by": [
+    "AV-review"
+   ],
+   "oracles": [
+    "P01",
+    "P02",
+    "P05",
+    "R38",
+    "V01A",
+    "V01B",
+    "V31A",
+    "V31B"
+   ],
+   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are tests whose loaded module closure (or text) contains this file"
+  },
+  {
+   "path": "src/diagnostics/integrity.ts",
+   "by": [
+    "AV-review"
+   ],
+   "oracles": [
+    "P6",
+    "P7",
+    "PRE-1",
+    "PRE-2",
+    "PRE-3",
+    "PRE-4",
+    "PRE-5",
+    "PRE-6"
+   ],
+   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are tests whose loaded module closure (or text) contains this file"
+  },
+  {
+   "path": "src/diagnostics/ledger.ts",
+   "by": [
+    "AV-review"
+   ],
+   "oracles": [
+    "P6",
+    "P7",
+    "PRE-1",
+    "PRE-2",
+    "PRE-3",
+    "PRE-4",
+    "PRE-5",
+    "PRE-6"
+   ],
+   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are tests whose loaded module closure (or text) contains this file"
+  },
+  {
+   "path": "src/diagnostics/mail.ts",
+   "by": [
+    "AV-review"
+   ],
+   "oracles": [
+    "P6",
+    "P7",
+    "PRE-1",
+    "PRE-2",
+    "PRE-3",
+    "PRE-4",
+    "PRE-5",
+    "PRE-6"
+   ],
+   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are tests whose loaded module closure (or text) contains this file"
+  },
+  {
+   "path": "src/domain/deployment.ts",
+   "by": [
+    "AV-review"
+   ],
+   "oracles": [
+    "AUTH-003",
+    "LOC-003",
+    "PR-002",
+    "REC-007",
+    "T100",
+    "T101",
+    "T102",
+    "T103"
+   ],
+   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are tests whose loaded module closure (or text) contains this file"
+  },
+  {
+   "path": "src/domain/exhaustive.ts",
+   "by": [
+    "AV-review"
+   ],
+   "oracles": [
+    "T114",
+    "T120",
+    "T92",
+    "T96",
+    "T97",
+    "TUI-002",
+    "TUI-007",
+    "TUI-010"
+   ],
+   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are tests whose loaded module closure (or text) contains this file"
+  },
+  {
+   "path": "src/domain/persisted-formats.ts",
+   "by": [
+    "AV-review"
+   ],
+   "oracles": [
+    "DB-009",
+    "GIT-006",
+    "ID-003",
+    "P9",
+    "R10",
+    "R21",
+    "V04A",
+    "V04B"
+   ],
+   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are tests whose loaded module closure (or text) contains this file"
+  },
+  {
+   "path": "src/domain/tool-surface.ts",
+   "by": [
+    "AV-review"
+   ],
+   "oracles": [
+    "F3",
+    "T100",
+    "T101",
+    "T102",
+    "T103",
+    "T111",
+    "T112",
+    "T99"
+   ],
+   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are tests whose loaded module closure (or text) contains this file"
+  },
+  {
+   "path": "src/durable.ts",
+   "by": [
+    "AV-review"
+   ],
+   "oracles": [
+    "DB-009",
+    "ID-002",
+    "M-003",
+    "P1",
+    "P2.5",
+    "P3",
+    "PI-002",
+    "R28"
+   ],
+   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are tests whose loaded module closure (or text) contains this file"
+  },
+  {
+   "path": "src/ports/ledger.ts",
+   "by": [
+    "AV-review"
+   ],
+   "oracles": [
+    "GIT-006",
+    "ID-003",
+    "P23",
+    "P9",
+    "R10",
+    "R21",
+    "V04A",
+    "V04B"
+   ],
+   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are tests whose loaded module closure (or text) contains this file"
+  },
+  {
+   "path": "src/ports/runtime.ts",
+   "by": [
+    "AV-review"
+   ],
+   "oracles": [
+    "DB-009",
+    "ID-002",
+    "M-003",
+    "P23",
+    "PI-002",
+    "R28",
+    "T113",
+    "V10A"
+   ],
+   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are tests whose loaded module closure (or text) contains this file"
+  },
+  {
+   "path": "src/protocol/batch-view.ts",
+   "by": [
+    "AV-review"
+   ],
+   "oracles": [
+    "DB-009",
+    "ID-002",
+    "M-003",
+    "P23",
+    "PI-002",
+    "R28",
+    "T113",
+    "V10A"
+   ],
+   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are tests whose loaded module closure (or text) contains this file"
+  },
+  {
+   "path": "src/rpc-client.ts",
+   "by": [
+    "AV-review"
+   ],
+   "oracles": [
+    "R28"
+   ],
+   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are tests whose loaded module closure (or text) contains this file"
+  },
+  {
+   "path": "src/storage/diagnostic-snapshot.ts",
+   "by": [
+    "AV-review"
+   ],
+   "oracles": [
+    "GIT-006",
+    "ID-003",
+    "P6",
+    "P9",
+    "R10",
+    "R21",
+    "V04A",
+    "V04B"
+   ],
+   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are tests whose loaded module closure (or text) contains this file"
+  },
+  {
+   "path": "src/storage/facets.ts",
+   "by": [
+    "AV-review"
+   ],
+   "oracles": [
+    "DB-009",
+    "GIT-006",
+    "ID-003",
+    "P9",
+    "R10",
+    "R21",
+    "V04A",
+    "V04B"
+   ],
+   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are tests whose loaded module closure (or text) contains this file"
+  },
+  {
+   "path": "src/storage/operation-codec.ts",
+   "by": [
+    "AV-review"
+   ],
+   "oracles": [
+    "GIT-006",
+    "ID-003",
+    "P1",
+    "P2.5",
+    "P3",
+    "P6",
+    "R21",
+    "V04A"
+   ],
+   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are tests whose loaded module closure (or text) contains this file"
+  },
+  {
+   "path": "src/storage/operation-transitions.ts",
+   "by": [
+    "AV-review"
+   ],
+   "oracles": [
+    "DB-009",
+    "GIT-006",
+    "ID-003",
+    "P9",
+    "R10",
+    "R21",
+    "V04A",
+    "V04B"
+   ],
+   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are tests whose loaded module closure (or text) contains this file"
+  },
+  {
+   "path": "src/storage/rows.ts",
+   "by": [
+    "AV-review"
+   ],
+   "oracles": [
+    "GIT-006",
+    "ID-003",
+    "P2.5",
+    "P6",
+    "R21",
+    "R36",
+    "V04A",
+    "V04B"
+   ],
+   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are tests whose loaded module closure (or text) contains this file"
+  },
+  {
+   "path": "src/tui/exit.ts",
+   "by": [
+    "AV-review"
+   ],
+   "oracles": [
+    "D05",
+    "T117",
+    "T119",
+    "V10C",
+    "V27A",
+    "VAL-002",
+    "WP15.03"
+   ],
+   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are tests whose loaded module closure (or text) contains this file"
+  },
+  {
+   "path": "src/tui/view/labels.ts",
+   "by": [
+    "AV-review"
+   ],
+   "oracles": [
+    "T114",
+    "T120",
+    "T92",
+    "T96",
+    "T97",
+    "TUI-002",
+    "TUI-007",
+    "TUI-010"
+   ],
+   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are tests whose loaded module closure (or text) contains this file"
+  },
+  {
+   "path": "src/entry/module-conformance.ts",
+   "by": [
+    "AV-review"
+   ],
+   "oracles": [
+    "P23"
+   ],
+   "note": "read in full in the whole-codebase adversarial pass after v9; type-only, exercised by the tests that compile or inspect it"
+  },
+  {
+   "path": "src/module-ports.ts",
+   "by": [
+    "AV-review"
+   ],
+   "oracles": [
+    "P17/P23",
+    "P23"
+   ],
+   "note": "read in full in the whole-codebase adversarial pass after v9; type-only, exercised by the tests that compile or inspect it"
+  }
+ ],
+ "lanes": {
+  "fast": "PASS",
+  "durable": "PASS",
+  "property": "PASS",
+  "stress": "PASS",
+  "kernel": "PASS",
+  "crash": "PASS",
+  "powercut": "NOT_RUN: no approved VM",
+  "provider": "NOT_RUN: no credential authorized",
+  "ci": "NOT_RUN: repository CI unavailable (user report 2026-09-28)"
+ }
 }

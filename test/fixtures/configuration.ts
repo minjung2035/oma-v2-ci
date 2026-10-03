@@ -29,11 +29,6 @@ export function createCompleteConfigurationFixture() {
     const model = {
       provider: "fixture",
       model: "model-a",
-      credentialRef: "host-reference",
-      codecRevision: "fixture-v1",
-      pricingRevision: "price-v1",
-      maxInputTokens: 1024,
-      maxOutputTokens: 128,
       inferenceTimeoutSeconds: 30,
     };
     const profile = {
@@ -69,21 +64,10 @@ export function createCompleteConfigurationFixture() {
       quota: {
         societyAgents: 4,
         lineageAgents: 4,
-        societyUnits: 4,
-        lineageUnits: 4,
-        principalReservedUnits: 1,
-        inferenceSlots: 2,
-        principalReservedSlots: 1,
         storageBytes: 1048576,
       },
       integration: { policyRevision: "test", protectedPaths: [], checks: [] },
       limits: { ...TEST_PROTOCOL_LIMITS },
-      features: {
-        notmuch: false,
-        reflinkSeed: false,
-        formalApproval: false,
-        egress: false,
-      },
     };
     const input = join(root, "legacy.json");
     writeFileSync(input, JSON.stringify(config));

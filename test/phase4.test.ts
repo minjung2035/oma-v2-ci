@@ -55,7 +55,7 @@ function ownedBy(env: Env, agent: string): string {
     .filter(line => line.startsWith("Description=") || line.startsWith("X-OMA-Owner="));
   const state = join(env.dir, "state");
   return renderUnit(lines.join("\n"), { node: NODE, libdir: "/usr/lib/oma", state, society: env.society, agent,
-    config: join(state, "config.json"), run: join(state, "oma", env.society), brokerUnit: "" });
+    config: join(state, "config.json"), run: join(state, "oma", env.society) });
 }
 
 function envOf(): { env: Env; cleanup: () => void } {
@@ -69,7 +69,7 @@ function envOf(): { env: Env; cleanup: () => void } {
   mkdirSync(state, { recursive: true });
   const store = new Store(join(state, "runtime.sqlite"));
   const units = new UnitsModule(society,
-    { node: NODE, libdir: "/usr/lib/oma", state, society, agent: "", config: join(state, "config.json"), run: join(state, "oma", society), brokerUnit: "" },
+    { node: NODE, libdir: "/usr/lib/oma", state, society, agent: "", config: join(state, "config.json"), run: join(state, "oma", society) },
     join(xdg, "systemd", "user"), { p: TEST_RESOURCES, child: TEST_RESOURCES });
   // Batch views require the host-configured frame and manifest limits; without
   // them the preparation boundary fails closed with UNSUPPORTED_PROFILE.
@@ -162,8 +162,8 @@ test("phase4: unit render substitutes placeholders and rejects NUL/newline", () 
 test("phase4: rendered templates pass systemd-analyze --user verify", () => {
   const { env, cleanup } = envOf();
   try {
-    const names = ["broker.service.in", "resident.service.in", "resident.path.in",
-      "principal-relay.service.in", "principal.path.in", "reconcile.service.in", "reconcile.timer.in"];
+    const names = ["resident.service.in", "resident.path.in",
+      "principal-relay.service.in", "principal.path.in"];
     // Unit dependencies (BindsTo/After) resolve through the user unit search
     // path, so the rendered set is written where systemd looks for it.
     const out = join(env.xdg, "systemd", "user");
@@ -172,30 +172,28 @@ test("phase4: rendered templates pass systemd-analyze --user verify", () => {
       const [kind, suffix] = tpl.replace(".in", "").split(".") as [string, "service" | "path" | "timer"];
       return unitName(env.society, kind === "resident" ? "a" : kind, suffix);
     };
-    // D03: both deployment modes render: bound to the fixed broker unit when
-    // systemd runs it, bound to nothing when the product does.
-    for (const brokerUnit of [unitName(env.society, "broker", "service"), ""]) {
-      const written: string[] = [];
-      for (const tpl of names) {
-        const text = readFileSync(join(UNIT_TPL_DIR, tpl), "utf8");
-        const file = fileFor(tpl);
-        writeFileSync(join(out, file), renderUnit(text, {
-          node: NODE, libdir: process.cwd(), state: join(env.dir, "state"), society: env.society, agent: "a",
-          config: join(env.dir, "config.json"), run: join(env.dir, "run", "oma", env.society), brokerUnit,
-          profileHex: Buffer.from("p").toString("hex"), resourcesHex: Buffer.from(canonicalResourceLimits(TEST_RESOURCES)).toString("hex"),
-          memoryBytes: TEST_RESOURCES.memoryBytes,
-          tasks: TEST_RESOURCES.tasks, cpuQuotaPercent: TEST_RESOURCES.cpuQuotaPercent,
-        }));
-        written.push(file);
-      }
-      process.env.XDG_CONFIG_HOME = env.xdg;
-      const r = spawnSync("systemd-analyze", ["--user", "verify", ...written.map(file => join(out, file))],
-        { encoding: "utf8", env: { ...process.env }, timeout: 30000, maxBuffer: 1048576, killSignal: "SIGKILL" });
-      assert.equal(r.error, undefined);
-      assert.equal(r.signal, null);
-      assert.equal(r.status, 0, `${brokerUnit || "no broker unit"}: ${r.stderr}`);
-      assert.equal(written.length, 7);
+    // The product runs the broker itself, so there is one deployment shape:
+    // units bound to no fixed broker unit.
+    const written: string[] = [];
+    for (const tpl of names) {
+      const text = readFileSync(join(UNIT_TPL_DIR, tpl), "utf8");
+      const file = fileFor(tpl);
+      writeFileSync(join(out, file), renderUnit(text, {
+        node: NODE, libdir: process.cwd(), state: join(env.dir, "state"), society: env.society, agent: "a",
+        config: join(env.dir, "config.json"), run: join(env.dir, "run", "oma", env.society),
+        profileHex: Buffer.from("p").toString("hex"), resourcesHex: Buffer.from(canonicalResourceLimits(TEST_RESOURCES)).toString("hex"),
+        memoryBytes: TEST_RESOURCES.memoryBytes,
+        tasks: TEST_RESOURCES.tasks, cpuQuotaPercent: TEST_RESOURCES.cpuQuotaPercent,
+      }));
+      written.push(file);
     }
+    process.env.XDG_CONFIG_HOME = env.xdg;
+    const r = spawnSync("systemd-analyze", ["--user", "verify", ...written.map(file => join(out, file))],
+      { encoding: "utf8", env: { ...process.env }, timeout: 30000, maxBuffer: 1048576, killSignal: "SIGKILL" });
+    assert.equal(r.error, undefined);
+    assert.equal(r.signal, null);
+    assert.equal(r.status, 0, r.stderr);
+    assert.equal(written.length, 4);
   } finally { cleanup(); }
 });
 
@@ -371,8 +369,7 @@ test("LIFE-009: bootstrap freezes all seeds before effects and never reseeds a r
     const from = seedProjectGit(env);
     const config: Parameters<LifecycleModule["bootstrap"]>[0] = {
       principalProfile: "p", initialResidents: [{ name: "child", profile: "p", brief: "seed" }],
-      modelProfiles: { m: { provider: "none", model: "none", credentialRef: "none", codecRevision: "none", pricingRevision: "none",
-        maxInputTokens: 1, maxOutputTokens: 1, inferenceTimeoutSeconds: 1 } },
+      modelProfiles: { m: { provider: "none", model: "none", inferenceTimeoutSeconds: 1 } },
       agentProfiles: { p: { modelProfile: "m", capabilities: ["mail.send"], delegable: [], childProfile: null,
         resources: { memoryBytes: 3221225472, tasks: 128, cpuQuotaPercent: 200, tmpBytes: 1048576,
           workspaceBytes: 1048576, stagingBytes: 1048576, checkTimeoutSeconds: 30 } } },

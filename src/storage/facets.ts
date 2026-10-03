@@ -20,7 +20,6 @@ export const READ_FACETS = freezeTable({
   subscriptions: { subscribers: "subscribers", all: "allSubscriptions" },
   deliveries: { get: "getDelivery", pending: "pendingDeliveries", forOperation: "deliveriesForOperation" },
   batches: { get: "getBatch", prepared: "preparedBatches", pending: "pendingBatchesFor" },
-  usage: { get: "getUsage", all: "usageRows" },
 } as const satisfies Table);
 
 export const WRITE_FACETS = freezeTable({
@@ -36,7 +35,6 @@ export const WRITE_FACETS = freezeTable({
     prepare: "insertPreparedBatch",
     link: "linkDeliveriesToBatch", complete: "completeBatch",
   },
-  usage: { reserve: "reserveUsage", settle: "settleUsage" },
 } as const satisfies Table);
 
 type Values<T> = T[keyof T];

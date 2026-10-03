@@ -7,11 +7,12 @@
  * timer, which nothing ever installed (`ensureReconcile` had no caller since it
  * was written). The Resident stayed `provisioning` for as long as the broker
  * ran. The product's broker is a foreground one: no timer unit can share its
- * lifetime, so the broker runs the sweep itself.
+ * lifetime, so the broker runs the sweep itself -- and v0.1.0 ships no
+ * external reconcile service or timer unit at all.
  */
 import test, { type TestContext } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, readFileSync } from "node:fs";
+import { existsSync, mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -55,7 +56,7 @@ function countingRecovery() {
   return recovery;
 }
 
-function society(t: TestContext, periodicReconcile: boolean) {
+function society(t: TestContext) {
   const root = mkdtempSync(join(tmpdir(), "oma-av20-"));
   const store = new Store(join(root, "runtime.sqlite"), 5, { society: "demo" });
   store.transaction(tx => { tx.insertAgent(makeValidAgent("principal")); });
@@ -66,7 +67,7 @@ function society(t: TestContext, periodicReconcile: boolean) {
     (_parent, input) => makeValidResolvedSpec(input.name, "p", ALL_CAPS, input.from, input.brief), mail);
   const recovery = countingRecovery();
   const broker = new Broker(store, mail, units, views, lifecycle, null, recovery as unknown as ReconcileModule,
-    { stateRoot: root, runRoot: join(root, "run"), society: "demo", hasGoal: goalPublishedAt(root), ...(periodicReconcile ? { periodicReconcile: true } : {}) });
+    { stateRoot: root, runRoot: join(root, "run"), society: "demo", hasGoal: goalPublishedAt(root) });
   let drained = false;
   const drain = async () => { if (!drained) { drained = true; await broker.drainAndClose(); } };
   t.after(async () => { try { await drain(); } finally { removeTree(root); } });
@@ -77,7 +78,7 @@ const settle = () => new Promise<void>(resolve => { setImmediate(resolve); });
 
 test("AV20 / REC-002, D03: a foreground broker sweeps once per interval while it admits work, and not after", async t => {
   t.mock.timers.enable({ apis: ["setInterval"] });
-  const f = society(t, true);
+  const f = society(t);
   await f.broker.start();
   t.mock.timers.tick(RECONCILE_INTERVAL_MS - 1);
   await settle();
@@ -96,7 +97,7 @@ test("AV20 / REC-002, D03: a foreground broker sweeps once per interval while it
 
 test("AV20 / REC-002: the drain waits for a sweep the interval started, as for any dispatched task", async t => {
   t.mock.timers.enable({ apis: ["setInterval"] });
-  const f = society(t, true);
+  const f = society(t);
   await f.broker.start();
   f.recovery.hold = true;
   t.mock.timers.tick(RECONCILE_INTERVAL_MS);
@@ -111,17 +112,12 @@ test("AV20 / REC-002: the drain waits for a sweep the interval started, as for a
   assert.equal(closed, true);
 });
 
-test("AV20 / D03: a broker a reconcile timer unit serves does not sweep on its own", async t => {
-  t.mock.timers.enable({ apis: ["setInterval"] });
-  const f = society(t, false);
-  await f.broker.start();
-  t.mock.timers.tick(3 * RECONCILE_INTERVAL_MS);
-  await settle();
-  assert.equal(f.recovery.sweeps, 0);
-});
-
-test("AV20 / REC-002, INV04: the broker's interval is the reconcile timer unit's", () => {
-  const timer = readFileSync(fileURLToPath(new URL("../../implementation/systemd/reconcile.timer.in", import.meta.url)), "utf8");
-  const seconds = /^OnUnitActiveSec=(\d+)s$/m.exec(timer)?.[1];
-  assert.equal(Number(seconds) * 1000, RECONCILE_INTERVAL_MS);
+test("AV20 / D03, INV04: no external reconcile or broker unit ships -- the in-process sweep and its five-second interval are the only owner", () => {
+  for (const name of ["reconcile.service.in", "reconcile.timer.in", "broker.service.in"]) {
+    assert.equal(existsSync(fileURLToPath(new URL(`../../implementation/systemd/${name}`, import.meta.url))), false,
+      `${name} still ships`);
+  }
+  // INV04: the interval the broker starts is REC-002's five seconds itself,
+  // bound where the unit template's interval used to be.
+  assert.equal(RECONCILE_INTERVAL_MS, 5_000);
 });

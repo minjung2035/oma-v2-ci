@@ -1,14 +1,12 @@
 # MUST [UNIT-001..004]: Resource values are rendered from the agent's accepted (frozen) spec.
 # D05/WP25: OMA_RESOURCES_HEX carries that whole spec to the runner; only the model
 # is read from the current profile at activation.
-# D03: the launch location and the broker dependency are the broker's resolved ones;
-# BROKER_UNIT is empty when no fixed broker unit exists (the product runs the broker).
+# D03: the launch location is the broker's resolved one. The product runs the
+# broker itself, so there is no fixed broker unit to bind this unit to.
 [Unit]
 Description=OMA @SOCIETY@ resident @AGENT@
 # P0V-59: the state tree this unit belongs to; systemd ignores X- keys.
 X-OMA-Owner=@STATE@
-BindsTo=@BROKER_UNIT@
-After=@BROKER_UNIT@
 StartLimitIntervalSec=60s
 StartLimitBurst=5
 [Service]

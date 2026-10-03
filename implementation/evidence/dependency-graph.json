@@ -48,17 +48,6 @@
   "src/cli/request-intent.ts",
   "src/cli/request-service.ts",
   "src/cli/transport.ts",
-  "src/client/codecs.ts",
-  "src/client/context.ts",
-  "src/client/errors.ts",
-  "src/client/fence.ts",
-  "src/client/index.ts",
-  "src/client/limits.ts",
-  "src/client/receipts.ts",
-  "src/client/request-service.ts",
-  "src/client/runtime.ts",
-  "src/client/settings.ts",
-  "src/client/transport.ts",
   "src/config.ts",
   "src/config/defaults.ts",
   "src/config/generations.ts",
@@ -260,8 +249,6 @@
   "src/runtime/broker-lifetime.ts",
   "src/runtime/broker-supervisor.ts",
   "src/runtime/candidate-checks.ts",
-  "src/runtime/client-preload.ts",
-  "src/runtime/client-runtime.ts",
   "src/runtime/deployment-manifest.ts",
   "src/runtime/egress-forwarder.ts",
   "src/runtime/engine-auth.ts",
@@ -374,9 +361,6 @@
    {
     "name": "K0-values",
     "files": [
-     "src/cli/request-intent.ts",
-     "src/client/errors.ts",
-     "src/client/limits.ts",
      "src/config/defaults.ts",
      "src/config/role-prompts.ts",
      "src/domain/admission.ts",
@@ -413,7 +397,6 @@
     "name": "K1-codecs",
     "files": [
      "src/cli/cache-codec.ts",
-     "src/client/codecs.ts",
      "src/domain/attestation.ts",
      "src/domain/integration-policy.ts",
      "src/domain/persisted-formats.ts",
@@ -449,14 +432,6 @@
    {
     "name": "K2-mechanisms",
     "files": [
-     "src/client/context.ts",
-     "src/client/fence.ts",
-     "src/client/index.ts",
-     "src/client/receipts.ts",
-     "src/client/request-service.ts",
-     "src/client/runtime.ts",
-     "src/client/settings.ts",
-     "src/client/transport.ts",
      "src/config.ts",
      "src/config/generations.ts",
      "src/config/operations.ts",
@@ -508,12 +483,12 @@
    }
   ],
   "runtimeEdgeMatrix": {
-   "K0-values -> K0-values": 29,
-   "K1-codecs -> K0-values": 66,
-   "K1-codecs -> K1-codecs": 28,
-   "K2-mechanisms -> K0-values": 67,
+   "K0-values -> K0-values": 27,
+   "K1-codecs -> K0-values": 64,
+   "K1-codecs -> K1-codecs": 27,
+   "K2-mechanisms -> K0-values": 61,
    "K2-mechanisms -> K1-codecs": 8,
-   "K2-mechanisms -> K2-mechanisms": 61,
+   "K2-mechanisms -> K2-mechanisms": 48,
    "K3-ledger -> K0-values": 22,
    "K3-ledger -> K1-codecs": 10,
    "K3-ledger -> K2-mechanisms": 1,
@@ -524,7 +499,7 @@
    "K1-codecs -> K1-codecs": 1,
    "K1-codecs -> K3-ledger": 1,
    "K2-mechanisms -> K0-values": 2,
-   "K2-mechanisms -> K1-codecs": 2,
+   "K2-mechanisms -> K1-codecs": 1,
    "K2-mechanisms -> K2-mechanisms": 3,
    "K3-ledger -> K0-values": 2,
    "K3-ledger -> K1-codecs": 1,
@@ -539,41 +514,6 @@
    {
     "from": "src/cli/cache-codec.ts",
     "to": "src/domain/identifiers.ts",
-    "kind": "runtime"
-   },
-   {
-    "from": "src/client/index.ts",
-    "to": "src/client/errors.ts",
-    "kind": "runtime"
-   },
-   {
-    "from": "src/client/index.ts",
-    "to": "src/client/errors.ts",
-    "kind": "runtime"
-   },
-   {
-    "from": "src/client/request-service.ts",
-    "to": "src/client/errors.ts",
-    "kind": "runtime"
-   },
-   {
-    "from": "src/client/runtime.ts",
-    "to": "src/client/codecs.ts",
-    "kind": "type"
-   },
-   {
-    "from": "src/client/settings.ts",
-    "to": "src/client/errors.ts",
-    "kind": "runtime"
-   },
-   {
-    "from": "src/client/settings.ts",
-    "to": "src/client/limits.ts",
-    "kind": "runtime"
-   },
-   {
-    "from": "src/client/transport.ts",
-    "to": "src/client/errors.ts",
     "kind": "runtime"
    },
    {
@@ -969,16 +909,6 @@
    {
     "from": "src/protocol/jsonl.ts",
     "to": "src/domain/utf8.ts",
-    "kind": "runtime"
-   },
-   {
-    "from": "src/protocol/log-response.ts",
-    "to": "src/client/limits.ts",
-    "kind": "runtime"
-   },
-   {
-    "from": "src/protocol/log-response.ts",
-    "to": "src/client/limits.ts",
     "kind": "runtime"
    },
    {
@@ -1513,13 +1443,6 @@
      "coarseUpward": false
     },
     {
-     "from": "src/broker/internal-dispatcher.ts",
-     "to": "src/ports/runtime.ts",
-     "classification": "internal-port-contract",
-     "kernelUpward": false,
-     "coarseUpward": false
-    },
-    {
      "from": "src/broker/public-dispatcher.ts",
      "to": "src/ports/runtime.ts",
      "classification": "internal-port-contract",
@@ -1763,14 +1686,12 @@
     "src/protocol/",
     "src/storage/",
     "src/cli/cache-codec.ts",
-    "src/cli/request-intent.ts",
-    "src/client/",
     "src/mail/addresses.ts",
     "src/mail/facts.ts",
     "src/mail/headers.ts",
     "src/store.ts"
    ],
-   "files": 115
+   "files": 103
   },
   {
    "index": 2,
@@ -1812,13 +1733,11 @@
     "src/broker/",
     "src/broker.ts",
     "src/runtime/",
-    "src/cli/effects.ts",
-    "src/cli/effects/",
     "src/runner.ts",
     "src/sandbox.ts",
     "src/platform/"
    ],
-   "files": 106
+   "files": 98
   },
   {
    "index": 5,
@@ -1832,28 +1751,28 @@
     "src/extension/",
     "src/rpc-client.ts"
    ],
-   "files": 81
+   "files": 88
   }
  ],
- "files": 368,
- "runtimeEdges": 1582,
- "typeOnlyEdges": 426,
+ "files": 355,
+ "runtimeEdges": 1537,
+ "typeOnlyEdges": 414,
  "runtimeEdgeMatrix": {
-  "L1-kernel -> L1-kernel": 307,
+  "L1-kernel -> L1-kernel": 283,
   "L2-facts -> L1-kernel": 35,
   "L2-facts -> L2-facts": 5,
   "L3-workflow -> L1-kernel": 219,
   "L3-workflow -> L2-facts": 14,
   "L3-workflow -> L3-workflow": 68,
-  "L4-orchestration -> L1-kernel": 333,
-  "L4-orchestration -> L2-facts": 8,
-  "L4-orchestration -> L3-workflow": 19,
-  "L4-orchestration -> L4-orchestration": 158,
-  "L5-entry -> L1-kernel": 125,
-  "L5-entry -> L2-facts": 2,
-  "L5-entry -> L3-workflow": 7,
-  "L5-entry -> L4-orchestration": 126,
-  "L5-entry -> L5-entry": 156
+  "L4-orchestration -> L1-kernel": 291,
+  "L4-orchestration -> L2-facts": 7,
+  "L4-orchestration -> L3-workflow": 17,
+  "L4-orchestration -> L4-orchestration": 148,
+  "L5-entry -> L1-kernel": 140,
+  "L5-entry -> L2-facts": 3,
+  "L5-entry -> L3-workflow": 9,
+  "L5-entry -> L4-orchestration": 114,
+  "L5-entry -> L5-entry": 184
  },
  "upwardTypeOnlyEdges": [
   {
@@ -1872,21 +1791,21 @@
   ]
  ],
  "fanIn": {
-  "src/domain/errors.ts": 197,
-  "src/domain/identifiers.ts": 63,
+  "src/domain/errors.ts": 196,
+  "src/domain/identifiers.ts": 62,
   "src/storage/paths.ts": 31,
   "src/protocol/host-guest.ts": 29,
   "src/storage/contained-fs.ts": 28,
-  "src/ids.ts": 26,
+  "src/ids.ts": 27,
   "src/storage/directory.ts": 26,
   "src/storage/durable-fs.ts": 26,
   "src/domain/canonical-json.ts": 22,
   "src/frame.ts": 20,
   "src/hash.ts": 20,
   "src/domain/derived.ts": 19,
+  "src/cli/exit.ts": 18,
   "src/process/run.ts": 18,
-  "src/store.ts": 18,
-  "src/domain/deployment.ts": 17
+  "src/store.ts": 18
  },
  "fanOut": {
   "src/entry/oma-society.ts": 40,
@@ -1894,7 +1813,6 @@
   "src/mail.ts": 30,
   "src/entry/broker.ts": 28,
   "src/entry/oma-mac.ts": 19,
-  "src/runtime/client-runtime.ts": 19,
   "src/git.ts": 18,
   "src/review.ts": 18,
   "src/git/context-repository.ts": 17,
@@ -1903,23 +1821,24 @@
   "src/reconcile.ts": 15,
   "src/tui/session.ts": 15,
   "src/git/integration.ts": 14,
-  "src/git/submit.ts": 14
+  "src/git/submit.ts": 14,
+  "src/mail/batches.ts": 14
  },
  "external": {
   "@earendil-works/pi-coding-agent": 23,
   "@earendil-works/pi-tui": 5,
   "koffi": 6,
-  "node:async_hooks": 4,
-  "node:child_process": 8,
-  "node:crypto": 45,
-  "node:fs": 110,
+  "node:async_hooks": 3,
+  "node:child_process": 9,
+  "node:crypto": 43,
+  "node:fs": 111,
   "node:fs/promises": 1,
   "node:http": 1,
   "node:https": 1,
   "node:module": 3,
-  "node:net": 32,
+  "node:net": 33,
   "node:os": 8,
-  "node:path": 120,
+  "node:path": 121,
   "node:perf_hooks": 5,
   "node:sqlite": 4,
   "node:stream": 3,
@@ -1927,7 +1846,7 @@
   "node:string_decoder": 1,
   "node:timers/promises": 2,
   "node:tty": 1,
-  "node:url": 9,
+  "node:url": 7,
   "node:util": 5,
   "nodemailer": 1,
   "nodemailer/lib/mime-funcs": 1,
