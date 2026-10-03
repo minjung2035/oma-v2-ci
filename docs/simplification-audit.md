@@ -100,7 +100,7 @@ rev3: rev2 검증판 + 외부 재검토 7개 수정 + 4개 검증 에이전트 �
 |---|---|---|
 | I47 v1→v3 migration | **확정 — coordinated 제거 필요** [rev2 보강] | v0.1.0 pre-release라 최초 public format을 현재 최신으로 재정의하는 게 맞음. 단 삭제는 한 묶음: 두 SQL은 deployment-manifest-pinned(assets.ts requireEntry로 boot 거부) + production-inventory 요구 + READABLE set은 wire field(`stateSchema{written,readable}`, host-guest.ts:80 — macOS image boot gate) + preflight/diagnostics 사용. ~8파일+wire contract 일괄 변경 |
 | I48 legacy attestation | **확정 — live wire path** | mail-v1 아닌 config에서는 지금도 production 경로(attestation.ts:37-45, tiered.review 생략 시 legacy). 삭제 시 mail-v1 필수화 + persisted op decode 유지 필요 |
-| I49 legacy binding | **확정** | slug-only society 감지+명시 마이그레이션 UX는 live fail-mode(orphan 방지 refusal). pre-release라 삭제 가능하나 동작 변경으로서 명시적 결정 |
+| I49 legacy binding | **유지 — fail-closed refusal로 남김** [rev4 결정] | slug-only society 감지+명시 마이그레이션 UX는 live fail-mode(orphan 방지 refusal). 삭제 가능했으나 **유지로 결정**: legacy slug society를 자동 인계하지 않고 시작을 거절해 Human이 `--society <name> --bind-project`로 명시 확인하게 한다(oma-society.ts:237-244). `--bind-project`도 같은 명시 경로로 유지 |
 | I50 engine-home adoption | **확정 — A5와 함께 삭제** [rev2] | 매 기동마다 과거 per-society pi home을 merge(pi-runtime.ts:113-157, oma-society.ts:74,684). 현재 코드는 그런 home을 생성하지 않음. 단 pre-DR24 dogfood install이 있었다면 그 로그인을 잃음 — "no pre-release external state" 선언 하에 삭제 |
 | I51 inline vs managed | **부분** | commit owner는 통합됐으나 dual layout + roleSet 변환 + `--config` 표면 남음. inline은 bootstrap 경로라 완전 삭제는 대안 필요 |
 | I52 generation machinery | **반박 — 핵심 구조 유지** [rev3 최종] | 현재 generation system은 **삭제 대상이 아님**: multi-file atomic snapshot publish(.staging→단일 rename, 0400/0500+fsync), stale-edit 방지(assertCurrent 재해시), crash consistency(journal 선기록+post-rename flush+unconfirmed 차단+torn-tail 정리)가 실제 기능. "immutable snapshot dir + 하나의 atomic current pointer"가 이미 현재 설계. 삭제 후보는 **legacy single-id journal 파싱(L493-499)뿐** — previous-generation retention도 당장 유지(journal이 committed-superseded와 crash-torn publish를 구분하는 근거). 단일파일 replace 금지 |
@@ -175,14 +175,14 @@ rev3: rev2 검증판 + 외부 재검토 7개 수정 + 4개 검증 에이전트 �
 
 **U1. unconfined Resident profile 지원 여부 — 사용자 확정: A(confined-only)**
 - 사실관계 정정(rev3): unconfined는 fallback이 아니라 `installation.rootfs:"/"` 명시적 opt-out이며, `deriveSessionSettings`가 매 세션 `installation`을 통째 재작성해 일반 UX에서 사실상 도달 불가. rootfs는 `"/"`여도 매 broker 기동 시 provision됨 — 실패 모드는 rootfs 부재가 아니라 bwrap/userns 부재뿐
-- 결정 근거: "코드 대량 삭제"가 아니라 **Society가 단일 security/runtime contract를 갖기 위해서**. 실제 삭제 범위: Resident env 전체 상속 분기, unconfined용 bash/powershell 제외, `spawnOwnedRpc` Resident 경로 일부, relay skip 분기, `"/"` git arm — contained read/write/grep/find·`OMA_TOOL_SURFACE`는 **Principal이 공유하므로 남음**
+- 결정 근거: "코드 대량 삭제"가 아니라 **Society가 단일 security/runtime contract를 갖기 위해서**. 실제 삭제 범위: Resident env 전체 상속 분기, unconfined용 bash/powershell 제외, `spawnOwnedRpc` Resident 경로 일부, relay skip 분기, `"/"` git arm — contained read/write/grep/find·`OMA_TOOL_SURFACE` env passthrough는 남음 — Principal 전용 채널이 있는 것이 아니라 runner가 env를 Resident에게 넘기는 통로가 유일한 경로이고, Principal env에는 고의로 아무것도 실리지 않는다(tui-integration-defects test가 pin). plan을 만드는 production producer는 아직 없는 dormant seam이다
 - 비용: 시나리오 테스트 대부분이 `"/"` 기본값이고 confined suite는 bwrap 없으면 skip — **confined fixture/test infra를 항상 실행 가능하게 만드는 재배선이 선행**
 - 구현: `installation.rootfs:"/"`를 `UNSUPPORTED_PROFILE` startup failure로 전환(runner.ts:68-81) + config/docs/spec(profile.unconfined 계약 행) + 테스트 재배선
 
 ## 최종 분류 (rev3 확정 — 구현 순서 기준)
 
 **1. 바로 구현 가능한 확정 작업**
-- pre-release legacy 삭제: I47 schema reset, I48 attestation(mail-v1 필수화), I49 binding, I50 adoption, MAC-240/#27/#28/#29, dead quota 5필드(INF-009 spec 포함), #23/24 dead code, `OMA_INCARNATION`, external reconcile cluster(#31)
+- pre-release legacy 삭제: I47 schema reset, I48 attestation(mail-v1 필수화), I50 adoption, MAC-240/#27/#28/#29, dead quota 5필드(INF-009 spec 포함), #23/24 dead code, `OMA_INCARNATION`, external reconcile cluster(#31). I49 binding은 삭제 목록에서 제외 — rev4에서 slug 감지 거절과 `--bind-project`를 fail-closed 확인 경로로 **유지** 결정(위 I49 행)
 - dead config/schema: I54(5필드), I55(flags), I56(usage subsystem 통째)
 - Pi: A8 exact pin, A1/A2 wire types, A4 SettingsStorage+SettingsManager, A5 compat 정리, A3/A6/A7 pi-compat 격리
 - Pi resources 복원: C15-C21(mode별 정책), C16/C17/C18, #6/#7

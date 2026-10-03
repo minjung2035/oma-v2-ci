@@ -67,8 +67,8 @@ function resolvedBindSource(path: string): string {
  *
  * `env` is the engine's whole environment: `--clearenv` drops the host's, so an
  * entry the core extension needs is present here or it is absent inside. The
- * four entries this builder owns are set last and are not overridable, because
- * they name the actor whose lease was validated above.
+ * three entries this builder owns are set last and are not overridable — the
+ * limits the run is bound to and the actor whose lease was validated above.
  */
 export function residentArgv(h: SandboxHost, lease: ValidatedRunLease,
   dirs: ResidentDirectories, env: Readonly<Record<string, string>> = {},

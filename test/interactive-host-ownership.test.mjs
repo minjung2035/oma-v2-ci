@@ -10,7 +10,7 @@ const code = ts.transpileModule(readFileSync('src/entry/pi-interactive-host.ts',
 }).outputText.replaceAll('import.meta.url', '"file:///fake/dist/src/entry/pi-interactive-host.js"');
 const flush = async () => { for (let i = 0; i < 20; i++) await Promise.resolve(); };
 async function world({ setModel, init, resourceReload, dispose, fail, moduleClose, observe } = {}) {
-  const timers = new Set(), channels = [], hooks = {}, sent = [], picks = [], changes = [], signals = [], commands = {}, modules = [];
+  const timers = new Set(), channels = [], hooks = {}, sent = [], picks = [], changes = [], signals = [], commands = {}, modules = [], notices = [];
   const session = { model: { id: 'initial', provider: 'fake' }, thinkingLevel: 'off',
     modelRuntime: {}, scopedModels: [], sessionManager: {},
     subscribe() { return () => {}; },
@@ -21,7 +21,7 @@ async function world({ setModel, init, resourceReload, dispose, fail, moduleClos
     setThinkingLevel(level) { changes.push(['effort', level]); this.thinkingLevel = level; },
   };
   const context = { ui: {
-    setEditorComponent(factory) { factory({}, {}, {}); }, setHeader() {}, setFooter() {}, notify() {},
+    setEditorComponent(factory) { factory({}, {}, {}); }, setHeader() {}, setFooter() {}, notify(message, level) { notices.push([message, level]); },
     custom(factory) { return new Promise(resolve => {
       const component = factory({ terminal: { columns: 80, rows: 24 }, requestRender() {} }, {}, {}, resolve);
       picks.push(component);
@@ -92,7 +92,7 @@ async function world({ setModel, init, resourceReload, dispose, fail, moduleClos
   observe?.({ modules, runtime, hooks });
   await module.exports.runInteractive();
   if (!observe) modules.length = 0;
-  return { timers, hooks, sent, picks, changes, channels, signals, context, runtime, commands, modules,
+  return { timers, hooks, sent, picks, changes, channels, signals, context, runtime, commands, modules, notices,
     command(command = 'principal-model') { channels[0].accept({ type: 'engine_command', command }); },
     tick() { for (const timer of [...timers]) { timers.delete(timer); timer.run(); } },
   };
@@ -254,6 +254,13 @@ test('interactive suggestions: OMA command descriptions are structured replaceme
     '<provider/model> — Select model', 'Description — with a dash', undefined, 'Keep [t] inside',
   ]);
   assert.equal(Object.hasOwn(suggestions[6], 'description'), false);
+});
+
+test('interactive owner: an image paste is refused with a visible notice, never silently', async () => {
+  const w = await world();
+  w.commands.pasteImage();
+  assert.ok(w.notices.some(([message, level]) => level === 'warning' && /image/i.test(message)),
+    `no image-paste notice reached the Human: ${JSON.stringify(w.notices)}`);
 });
 
 test('interactive owner: the current resume selector retains same-society and other-society behavior', async () => {

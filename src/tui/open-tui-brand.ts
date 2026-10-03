@@ -156,8 +156,13 @@ function replaceColumn(line: string, n: number, text: string): string {
   const width = cellWidth(inner);
   let visible = text;
   if (cellWidth(visible) > width) {
-    let cut = visible;
-    while (cut.length > 0 && cellWidth(`${cut}…`) > width) cut = cut.slice(0, -1);
+    // Grapheme-aware like swapText: a code-unit cut can split a surrogate
+    // pair or an emoji sequence and print a lone `�`.
+    let cut = "";
+    for (const entry of graphemes.segment(visible)) {
+      if (cellWidth(`${cut}${entry.segment}…`) > width) break;
+      cut += entry.segment;
+    }
     visible = cut.length === 0 ? "" : `${cut}…`;
   }
   // Keep the color the cell's text wore: its first SGR, closed after the tip.

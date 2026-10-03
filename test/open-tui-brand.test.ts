@@ -65,6 +65,42 @@ test("Open TUI brand: oma's title, logo, society, project and Ctrl+X tip, every 
   assert.deepEqual(brandHeader([], brand), []);
 });
 
+test("Open TUI brand: a crowded tips cell truncates on grapheme boundaries, never mid-emoji", () => {
+  // NB-11's swapText fix held for the last tip cell too: a UTF-16 code-unit
+  // cut stops inside a surrogate pair (visibleWidth reads a lone surrogate as
+  // 0, so the old loop halted with half a cluster written).
+  const clustersOf = (text: string): string[] =>
+    [...new Intl.Segmenter(undefined, { granularity: "grapheme" }).segment(text)].map(entry => entry.segment);
+  const isGraphemePrefix = (full: string, part: string): boolean => {
+    const prefixes = new Set([""]);
+    let acc = "";
+    for (const cluster of clustersOf(full)) { acc += cluster; prefixes.add(acc); }
+    return prefixes.has(part);
+  };
+  const tipsCell = (branded: string[]): string => plainOf(branded[9]!).split("│")[2]!.trim();
+  // Rockets: a surrogate-pair cluster must appear whole or not at all.
+  const tip = "🚀".repeat(12); // one cluster over the tips column's width
+  const branded = brandHeader(header, { ...brand, tip });
+  assert.deepEqual(branded.map(cellWidth), header.map(cellWidth), "truncation changed the box");
+  const shown = tipsCell(branded);
+  assert.match(shown, /…$/);
+  assert.ok(isGraphemePrefix(tip, shown.slice(0, -1)), `not a grapheme prefix: ${JSON.stringify(shown)}`);
+  // Flag + rockets: a flag is two regional indicators; half of one is a stray letter.
+  const flagged = brandHeader(header, { ...brand, tip: `🇫🇷${"🚀".repeat(12)}` });
+  assert.deepEqual(flagged.map(cellWidth), header.map(cellWidth));
+  const flagShown = tipsCell(flagged);
+  assert.match(flagShown, /…$/);
+  assert.ok(isGraphemePrefix(`🇫🇷${"🚀".repeat(12)}`, flagShown.slice(0, -1)), `a flag was split: ${JSON.stringify(flagShown)}`);
+  assert.doesNotMatch(plainOf(flagged[9]!), /[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/,
+    "a lone surrogate reached the screen");
+  // ASCII truncation is unchanged: a long ASCII tip still ends in the ellipsis.
+  const ascii = brandHeader(header, { ...brand, tip: "x".repeat(40) });
+  assert.deepEqual(ascii.map(cellWidth), header.map(cellWidth));
+  assert.match(tipsCell(ascii), /^x+…$/);
+  // And a tip that fits is left alone.
+  assert.equal(tipsCell(brandHeader(header, brand)), "Ctrl+X oma settings");
+});
+
 test("Open TUI brand: the footer names the project from its own gap, or leaves the line alone", () => {
   const footer = [`${accent("")} ${accent("~")}${" ".repeat(40)}${accent("[░░░] 0.0%")}`, "second"];
   const branded = brandFooter(footer, brand);

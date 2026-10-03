@@ -79,7 +79,7 @@ export const RESIDENT_ENVIRONMENT = Object.freeze({
  * before execution. The one reading of that setting. */
 export function requireResidentRootfs(rootfs: string): void {
   if (!trustedResidentPath(rootfs))
-    throw new StoreError("UNSUPPORTED_PROFILE", "UNSUPPORTED_PROFILE: Society requires a trusted non-root Resident rootfs");
+    throw new StoreError("UNSUPPORTED_PROFILE", "Society requires a trusted non-root Resident rootfs");
 }
 
 /** Where a Resident's Git reaches the canonical repository (GIT-002). */

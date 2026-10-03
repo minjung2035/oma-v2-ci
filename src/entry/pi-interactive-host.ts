@@ -419,7 +419,8 @@ export async function runInteractive(): Promise<void> {
           editorInstalled = true;
           return ownedEditor(factory(tui, theme, keys), { submit, isCommand, extensionCommand, panel: openPanel, suggest,
             frameBytes: limits.frameBytes,
-            refuse: () => ctx.ui.notify("Input exceeds the allowed size; edit the draft before submitting.", "warning") });
+            refuse: () => ctx.ui.notify("Input exceeds the allowed size; edit the draft before submitting.", "warning"),
+            pasteImage: () => ctx.ui.notify("Pasted images are not sent; an oma prompt is text only.", "warning") });
         });
         else original(factory);
       };

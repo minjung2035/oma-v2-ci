@@ -11,6 +11,7 @@ test("Open TUI: Pi keeps its commands, shell and shortcuts; only a plain prompt 
   const history: string[] = [];
   let panels = 0;
   let refusals = 0;
+  let pasteNotices = 0;
   const submitted: string[] = [];
   const original = {
     onSubmit: undefined as ((text: string) => void) | undefined,
@@ -31,6 +32,7 @@ test("Open TUI: Pi keeps its commands, shell and shortcuts; only a plain prompt 
     submit: value => submitted.push(value),
     isCommand: text => text.startsWith("!") || ["settings", "new"].includes(text.slice(1).split(" ")[0]!) && text.startsWith("/"),
     panel: () => { panels += 1; }, refuse: () => { refusals += 1; }, frameBytes: 262144,
+    pasteImage: () => { pasteNotices += 1; },
   });
   // Pi wires its own submit handler after the factory returns.
   editor.onSubmit = text => { upstream.push(text); };
@@ -41,7 +43,10 @@ test("Open TUI: Pi keeps its commands, shell and shortcuts; only a plain prompt 
   assert.deepEqual(submitted, ["Human draft", "/not-a-command here"]);
   assert.deepEqual(upstream, ["/settings", "!ls -la", "/new"]);
   assert.deepEqual(history, ["Human draft", "/not-a-command here"]);
+  // A pasted image reaches no prompt, but the refusal is told, not silent:
+  // Pi's own assignment was swallowed, so oma's notice is what fires.
   original.onPasteImage?.();
+  assert.equal(pasteNotices, 1, "an image paste must surface a notice");
   // Pi's own keys reach Pi; Ctrl+X is the control panel.
   editor.handleInput("\x03"); editor.handleInput("\x1b");
   assert.ok(keys.includes("\x03") && keys.includes("\x1b"));
@@ -146,7 +151,7 @@ test("DR24: the engine's session keys open oma's sessions, and its command list 
     setAutocompleteProvider(source: typeof provided) { provided = source; },
   };
   const editor = ownedEditor(original as unknown as EditorComponent, {
-    submit: () => {}, isCommand: () => true, panel: () => {}, refuse: () => {}, frameBytes: 262144,
+    submit: () => {}, isCommand: () => true, panel: () => {}, refuse: () => {}, frameBytes: 262144, pasteImage: () => {},
     extensionCommand: text => { hosted.push(text); return true; },
     suggest: items => items.filter(item => item.value !== "oma-deliver").map(item => ({ ...item, description: `oma: ${item.value}` })),
   });

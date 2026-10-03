@@ -67,9 +67,25 @@ test("Open TUI: the preview's look is the default, the Human's own choices are k
 test("INF-001: unreadable, malformed or linked settings cannot silently disable the retry policy", t => {
   const root = scratch("oma-retry-refuse-"); t.after(() => rmSync(root, { recursive: true, force: true }));
   const path = join(root, "settings.json"), target = join(root, "original.json");
-  for (const bytes of ["{", "[]", '{"retry":[]}', '{"retry":{"provider":null}}']) {
-    writeFileSync(path, bytes); assert.throws(() => preparePiRetry(root)); assert.equal(readFileSync(path, "utf8"), bytes);
+  // Every refusal is the taxonomy's, never a raw SyntaxError: bytes that do
+  // not parse are STORE_CORRUPT; parsed values outside the settings grammar
+  // are UNSUPPORTED_PROFILE, as settingsObject classifies them.
+  for (const [bytes, code] of [
+    ["{", "STORE_CORRUPT"], ["[]", "UNSUPPORTED_PROFILE"],
+    ['{"retry":[]}', "UNSUPPORTED_PROFILE"], ['{"retry":{"provider":null}}', "UNSUPPORTED_PROFILE"],
+  ] as const) {
+    writeFileSync(path, bytes);
+    assert.throws(() => preparePiRetry(root), (error: unknown) =>
+      error instanceof StoreError && error.code === code && !(error instanceof SyntaxError),
+      `${bytes} must fail classified`);
+    assert.equal(readFileSync(path, "utf8"), bytes);
   }
+  // A malformed sibling file fails the same way, on a settings file that
+  // parses.
+  writeFileSync(path, "{}");
+  writeFileSync(join(root, "keybindings.json"), "{");
+  assert.throws(() => preparePiInteractive(root), (error: unknown) =>
+    error instanceof StoreError && error.code === "STORE_CORRUPT");
   rmSync(path); writeFileSync(target, "{}");
   for (const link of [symlinkSync, linkSync]) {
     link(target, path); assert.throws(() => preparePiRetry(root)); assert.equal(readFileSync(target, "utf8"), "{}"); rmSync(path);

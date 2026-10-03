@@ -37,7 +37,13 @@ function prepareEngineFile(agentDir: string, name: string,
   const lock = ProcessLock.acquire(join(agentDir, "oma-settings.lock"));
   withCleanup(() => {
     const bytes = readUserFile(join(agentDir, name), 1024 * 1024, { singleName: true });
-    const settings = bytes === null ? {} : settingsObject(JSON.parse(bytes));
+    // Persisted bytes the engine owns that cannot be interpreted are store
+    // corruption, never a raw SyntaxError escaping the taxonomy.
+    let parsed: unknown = {};
+    if (bytes !== null)
+      try { parsed = JSON.parse(bytes); }
+      catch (cause) { throw new StoreError("STORE_CORRUPT", `engine file ${name} is not valid JSON`, { cause }); }
+    const settings = settingsObject(parsed);
     const next = JSON.stringify(update(settings), null, 2) + "\n";
     if (next !== bytes) replaceUserFile(join(agentDir, name), next);
   }, () => lock.close());

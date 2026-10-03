@@ -237,6 +237,9 @@ async function main(argv: readonly string[]): Promise<void> {
     if (explicitSociety === undefined && resumedSociety === null && !stateRootHasSociety(firstRoot)
       && observeProjectBinding(firstRoot).kind === "absent") {
       const legacy = societyFromDirectory(canonicalProjectPath);
+      // I49, kept on purpose (simplification-audit rev4): a legacy slug-named
+      // society is never inherited implicitly -- the fail-closed refusal makes
+      // the Human confirm the binding with --bind-project.
       if (legacy !== project && isValidSocietyName(legacy) && stateRootHasSociety(join(dataRoot, legacy))) {
         if (tenure !== null) await tenure.end();
         fail(`A legacy society '${legacy}' exists for this project name. To keep using it, verify that it belongs to this project, then run \`oma --society ${legacy} --bind-project\`. No new society was started.`, exitFor("INVALID_REQUEST"));

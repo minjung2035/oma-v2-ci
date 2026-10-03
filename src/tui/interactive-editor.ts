@@ -21,6 +21,9 @@ export interface InteractiveEditorPorts {
   extensionCommand?(text: string): boolean;
   panel(): void;
   refuse(): void;
+  /** A pasted image was offered; the text-only prompt cannot carry it, so the
+   * Human is told rather than the paste vanishing. */
+  pasteImage(): void;
   frameBytes: number;
   /** What the editor may suggest, as oma presents it. */
   suggest?(items: readonly Suggestion[]): Suggestion[];
@@ -74,8 +77,9 @@ export function ownedEditor(editor: EditorComponent, ports: InteractiveEditorPor
       }
       : action);
   }
-  // A pasted image is not part of a text prompt OMA can order.
-  target.onPasteImage = () => {};
+  // A pasted image is not part of a text prompt OMA can order; the refusal is
+  // said out loud, never a silent no-op.
+  target.onPasteImage = () => ports.pasteImage();
   target.onSubmit = route;
   return new Proxy(target, {
     set(object, name, value) {

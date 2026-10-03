@@ -32,7 +32,7 @@ export interface ReviewToolContext {
 }
 
 const request = Type.Optional(Type.String({ description: REQUEST_PARAMETER_HELP }));
-const nameField = Type.Optional(Type.String({ description: "the request's generated name (merge-/challenge- + 8 hex)" }));
+const nameField = Type.Optional(Type.String({ description: "the request's generated name (merge-/challenge- + the request's full UUID; 8-hex names minted before stay readable)" }));
 const string = Type.String();
 const verdictType = Type.Union([Type.Literal("approve"), Type.Literal("reject")]);
 const cursorType = Type.Optional(Type.Integer({ minimum: 0 }));
@@ -73,7 +73,7 @@ const workSchema = (kind: ReviewKind) => Type.Object({
     Type.Literal("vote"), Type.Literal("status"), Type.Literal("cancel")]),
   name: nameField,
   ...(kind === "challenge"
-    ? { merge: Type.Optional(Type.String({ description: "the applied merge-<8 hex> request this challenge reverts" })) } : {}),
+    ? { merge: Type.Optional(Type.String({ description: "the applied merge-<UUID> request this challenge reverts" })) } : {}),
   tier: Type.Optional(kind === "merge"
     ? Type.Union([Type.Literal("LOW"), Type.Literal("MEDIUM"), Type.Literal("HIGH")])
     : Type.Union([Type.Literal("LOW"), Type.Literal("HIGH")])),

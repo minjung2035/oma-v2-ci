@@ -88,3 +88,15 @@ export function verificationInputDigest(root = ".") {
     hash.update(`${file} ${digest(verificationBytes(root, file))}\n`);
   return { files: files.length, digest: hash.digest("hex") };
 }
+
+/** The same closure as a per-file digest map, for lane evidence that must say
+ * which bytes it bound. Raw file bytes, not `verificationBytes`: a checker
+ * re-reads the file as it stands and must get this digest (compliance.mjs).
+ * A declared input that does not exist throws inside `verificationInputFiles`
+ * rather than binding vacuously. */
+export function verificationSourceDigests(root = ".") {
+  const digests = {};
+  for (const file of verificationInputFiles(root))
+    digests[file] = digest(readFileSync(join(root, file)));
+  return digests;
+}
