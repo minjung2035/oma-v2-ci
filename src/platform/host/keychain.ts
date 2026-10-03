@@ -39,7 +39,9 @@ function parse(text: string | undefined): Blob {
 }
 
 const locks = new Map<string, Promise<unknown>>();
-function serialized<T>(account: string, run: () => Promise<T>): Promise<T> {
+/** P0-2: every mutating read→write of a Keychain item is one writer at a time
+ * in this process; `run` decides what the stored value becomes (AV-22). */
+export function serialized<T>(account: string, run: () => Promise<T>): Promise<T> {
   const previous = locks.get(account) ?? Promise.resolve();
   const next = previous.catch(() => undefined).then(run);
   locks.set(account, next);

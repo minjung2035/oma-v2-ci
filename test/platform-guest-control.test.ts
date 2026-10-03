@@ -233,3 +233,19 @@ test("P0V-82 / MAC-620: a freeze ends with the process that holds it, and after 
   assert.ok(post.includes("--thaw"), "the post-stop does not thaw");
   assert.equal(post[post.indexOf("--data") + 1], start[start.indexOf("--data") + 1], "the post-stop thaws another filesystem");
 });
+
+test("NB-24: a thaw that fails keeps the filesystem frozen, armed, and retryable; power-off is not marked accepted", t => {
+  const system = fakeSystem();
+  const control = new GuestControl(system);
+  control.freeze(5000);
+  let wedged = true;
+  t.mock.method(system, "thaw", () => { system.calls.push("thaw"); if (wedged) throw new StoreError("INTERNAL_ERROR", "thaw could not run"); });
+  assert.throws(() => control.thaw(), /thaw could not run/);
+  assert.equal(control.isFrozen, true, "a failed thaw is not a thaw");
+  assert.throws(() => control.freeze(1000), (error: unknown) => error instanceof StoreError && error.code === "BATCH_CONFLICT", "still frozen");
+  assert.throws(() => control.powerOff(), /thaw could not run/, "a failed thaw cannot be hidden under a power-off");
+  wedged = false;
+  assert.deepEqual(control.thaw(), { thawed: true });
+  assert.deepEqual(system.calls.filter(call => call === "thaw").length, 3, "each attempt thawed; only the last landed");
+  assert.deepEqual(control.powerOff(), { accepted: true });
+});

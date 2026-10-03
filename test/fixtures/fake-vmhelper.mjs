@@ -34,6 +34,9 @@ channel.on("data", chunk => {
     } else if (op === "forceStop") {
       stopAll(); say({ id, ok: true }); say({ event: "stopped", cause: "error" });
     } else if (op === "keychain.get") {
+      // FAKE_KEYCHAIN_WEDGED: the helper holds the request and answers
+      // nothing -- the channel stays open, the request just never ends.
+      if (process.env.FAKE_KEYCHAIN_WEDGED) continue;
       if (process.env.FAKE_KEYCHAIN_LOCKED) say({ id, ok: false, error: "the keychain is locked" });
       else { const value = keychain()[request.account]; say(value === undefined ? { id, ok: true } : { id, ok: true, value }); }
     } else if (op === "keychain.put") {

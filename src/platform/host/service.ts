@@ -1,7 +1,7 @@
 /** `omahostd`'s parts put together (macos-platform §2.1): the VM's state
  * machine, the guest link, egress, the Host API, and the host record. The
  * entry adds only the Mac-specific pieces (the VM helper, the paths). */
-import type { Server } from "node:net";
+import type { Server, Socket } from "node:net";
 import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { chmodSync, existsSync, mkdirSync, readdirSync, realpathSync, rmSync, statSync, statfsSync, writeFileSync } from "node:fs";
 import { basename, dirname, join } from "node:path";
@@ -16,8 +16,12 @@ import { writePackageArchive } from "../package-archive.js";
 import { sealedArchiveSink } from "./archive-crypto.js";
 import { collectTemporaries } from "./files.js";
 import { ProcessLock } from "../../runtime/process-lock.js";
+import { withAsyncCleanup } from "../../process/cleanup.js";
+import { ensureUserDirectory } from "../../runtime/user-files.js";
+import { setTimeout as pause } from "node:timers/promises";
 import { StoreError } from "../../domain/errors.js";
 import type { KeychainStore } from "./keychain.js";
+import { serialized } from "./keychain.js";
 import { PLATFORM_FRAME_BYTES } from "../../protocol/host-guest.js";
 
 export type Timings = Pick<LifecycleOptions, "handshakeDeadlineMs" | "handshakeRetryMs" | "drainDeadlineMs" | "healthEveryMs" | "hungAfterMs" | "restarts">;
@@ -67,18 +71,40 @@ function assertRoom(dir: string, incoming: number, floor: number): void {
     throw new StoreError("STORAGE_FULL", "the Mac does not have room for this; free some space and try again");
 }
 
-/** The archive key: made once on this Mac and kept in the Keychain (§8.4). */
-async function archiveKey(keychain: KeychainStore): Promise<Buffer> {
+/** The archive key: made once on this Mac and kept in the Keychain (§8.4).
+ * Its creation is the serialized create-if-absent the credentials use
+ * (AV-22): one in-process writer, then the cross-process lock, then a reread
+ * under it -- so two callers can never write two keys, the loser's archives
+ * opening with nothing (P0-2/4). */
+export async function archiveKey(keychain: KeychainStore, lockPath: string): Promise<Buffer> {
   const stored = await keychain.get("archive");
   if (stored !== undefined) return Buffer.from(stored, "base64");
-  const made = randomBytes(32);
-  await keychain.put("archive", made.toString("base64"));
-  return made;
+  return serialized(lockPath, async () => {
+    const again = await keychain.get("archive");
+    if (again !== undefined) return Buffer.from(again, "base64");
+    ensureUserDirectory(dirname(lockPath));
+    let lock: ProcessLock | null;
+    while ((lock = ProcessLock.tryAcquire(lockPath)) === null) await pause(25);
+    const held = lock;
+    return withAsyncCleanup(async () => {
+      const fenced = (writer: KeychainStore): Promise<Buffer> => (async () => {
+        // Read once more under the lock: a winner may already have written.
+        const current = await writer.get("archive");
+        if (current !== undefined) return Buffer.from(current, "base64");
+        const made = randomBytes(32);
+        held.assertHeld(lockPath);
+        await writer.put("archive", made.toString("base64"));
+        return made;
+      })();
+      return await (keychain.withWriter === undefined ? fenced(keychain) : keychain.withWriter(held.descriptor, fenced));
+    }, () => held.close());
+  });
 }
 
 export class HostService {
   private constructor(readonly lifecycle: VmLifecycle, readonly egress: EgressHost, readonly link: GuestLink,
     private readonly api: Server, readonly token: string, private readonly stopRecorded: () => Promise<"stopped" | "forced">,
+    private readonly apiConnections: Set<Socket>,
     private readonly lock: ProcessLock) {}
 
   static async start(options: HostServiceOptions): Promise<HostService> {
@@ -117,7 +143,9 @@ export class HostService {
         void egress.fill();
       }
     });
-    link.onReboot(() => { void egress.forgetBoot(); });
+    link.onReboot(() => { void egress.forgetBoot().catch(() => undefined); });
+    // §9.1: a wake the guest's clock could not be stepped for is reported by
+    // the lifecycle itself (NB-26), never swallowed here.
     options.power?.(event => { if (event === "wake") void lifecycle.woke().catch(() => undefined); });
 
     const stopRecorded = (): Promise<"stopped" | "forced"> => lifecycle.stop();
@@ -255,6 +283,11 @@ export class HostService {
             // Recheck immediately before writing the Human's repository.
             await git.verifyIdentity(repo, project);
             const fetched = await git.fetchExport(repo, file);
+            // NB-22: nothing malformed reaches the durable record -- a head
+            // that is not this repository's object id is not a head.
+            const oid = new RegExp(`^[0-9a-f]{${project.objectFormat === "sha256" ? 64 : 40}}$`);
+            if (typeof fetched.head !== "string" || !oid.test(fetched.head))
+              throw new StoreError("BROKER_UNAVAILABLE", "The export result could not be observed");
             record(current => ({ ...current, projects: current.projects.map(p => p.projectId === project.projectId
               ? { ...p, lastExport: { head: fetched.head, at: Date.now() } } : p) }));
             return { ...exported, ...fetched, ref: "refs/remotes/oma/main" };
@@ -269,7 +302,7 @@ export class HostService {
           // P0V-103: a name in the archives directory is a finished
           // publication (files.ts); an interrupted one is only a temporary.
           if (!existsSync(target)) {
-            const sealKey = await archiveKey(options.keychain);
+            const sealKey = await archiveKey(options.keychain, join(options.runDir, "archive-key.lock"));
             // MAC-621, P0V-104: sealed as it arrives -- the plain bytes are
             // never written -- into a temporary published whole.
             await getStream(await link.bytes("stream"), key, declared => {
@@ -281,13 +314,20 @@ export class HostService {
         },
       },
     });
-    return new HostService(lifecycle, egress, link, api, token, stopRecorded, lock);
+    const apiConnections = new Set<Socket>();
+    api.on("connection", socket => {
+      apiConnections.add(socket);
+      socket.once("close", () => apiConnections.delete(socket));
+    });
+    return new HostService(lifecycle, egress, link, api, token, stopRecorded, apiConnections, lock);
   }
 
   /** MAC-320/321: the service is ending (logout, restart, update). */
   async shutdown(): Promise<"stopped" | "forced"> {
     await this.egress.stop();
     const result = await this.stopRecorded();
+    // A UI connection held open must not hold the end open (NB-29).
+    for (const socket of this.apiConnections) socket.destroy();
     await new Promise<void>(resolve => { this.api.close(() => resolve()); });
     this.lock.close();
     return result;

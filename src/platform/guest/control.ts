@@ -84,7 +84,22 @@ export class GuestControl {
     const effective = Math.min(deadlineMs, ceiling);
     this.system.freeze();
     const at = this.system.wallClock();
-    const timer = this.system.schedule(effective, () => { this.end("deadline"); });
+    // NB-24: the deadline is the freeze's backstop. A thaw that fails inside
+    // it is retried at the same cadence -- a timer callback cannot report,
+    // so it neither escapes nor leaves the freeze with nothing armed.
+    const retry = (): void => {
+      try { this.end("deadline"); }
+      catch {
+        const frozen = this.frozen;
+        if (frozen === null) return;
+        let again: { cancel(): void };
+        try { again = this.system.schedule(effective, retry); }
+        catch { return; }
+        if (this.frozen === frozen) this.frozen = { at: frozen.at, timer: again };
+        else again.cancel();
+      }
+    };
+    const timer = this.system.schedule(effective, retry);
     this.frozen = { at, timer };
     return { frozenAt: at, deadlineMs: effective };
   }
@@ -96,27 +111,35 @@ export class GuestControl {
   }
 
   /** P0V-82, MAC-620: this process is ending, and the deadline timer that
-   * would have ended its freeze ends with it -- so the freeze ends now. */
+   * would have ended its freeze ends with it -- so the freeze ends now. An
+   * exit cannot be told a thaw failed: the unit's post-stop --thaw is the
+   * backstop for what this process leaves. */
   release(): void {
-    this.end("released");
+    try { this.end("released"); } catch { /* ending anyway */ }
   }
 
   private end(reason: "requested" | "deadline" | "released"): void {
     const frozen = this.frozen;
     if (frozen === null) return;
+    // NB-24: the thaw is tried while the freeze is still on the record and
+    // its deadline still armed. If it fails the filesystem stays frozen --
+    // and is still reported frozen, retried, and backstopped -- never
+    // mistaken for already thawed.
+    this.system.thaw();
     this.frozen = null;
     frozen.timer.cancel();
-    this.system.thaw();
     this.lastThaw = reason;
   }
 
   /** The host drains the societies first (MAC-320 step 2) and then asks for
-   * this; a frozen filesystem is thawed before the power goes. */
+   * this; a frozen filesystem is thawed before the power goes. A thaw or a
+   * power-off that fails is not marked done -- the power stays on and a
+   * retry does the work (a power-off asks an idempotent systemctl). */
   powerOff(): { accepted: boolean } {
     if (this.poweringOff) return { accepted: true };
-    this.poweringOff = true;
     this.end("requested");
     this.system.powerOff();
+    this.poweringOff = true;
     return { accepted: true };
   }
 

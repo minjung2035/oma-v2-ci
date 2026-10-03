@@ -36,7 +36,8 @@ const egressHello: HelloParams = { channel: "egress", protocol: { min: HOST_GUES
   hostVersion: "1.0.0", installationId: randomUUID(), instanceId: INSTANCE, expectImage: "2026.09.1" };
 const RUN = { society: "demo", actor: "alice", incarnation: 3 };
 
-async function world(t: import("node:test").TestContext, timeoutMs = 5000) {
+async function world(t: import("node:test").TestContext, timeoutMs = 5000,
+  resolve?: (credentialRef: string, provider: string, model: string) => Promise<{ provider: string; model: string; origin: string; apiKey: string; headers: Record<string, string> }>) {
   const dir = mkdtempSync(join(tmpdir(), "oma-egress-"));
   const provider: TlsProvider = await tlsProvider();
   const pool = new EgressPool();
@@ -53,11 +54,11 @@ async function world(t: import("node:test").TestContext, timeoutMs = 5000) {
       await new Promise<void>((ok, fail) => { socket.once("connect", ok); socket.once("error", fail); });
       return sendHelloForBytes(socket, egressHello, PLATFORM_FRAME_BYTES, 5000).then(({ rest }) => ({ socket, rest }));
     },
-    resolve: async (credentialRef, provider_, model) => {
+    resolve: resolve ?? (async (credentialRef, provider_, model) => {
       resolved.push(`${credentialRef}:${provider_}/${model}`);
       if (provider_ !== "anthropic") throw new StoreError("UNSUPPORTED_PROFILE", `the engine does not know ${provider_}/${model}`);
       return { provider: "anthropic", model: "claude-test", origin: `${provider.origin}/v1`, apiKey: SECRET, headers: {} };
-    },
+    }),
     limits: { concurrent: 4, timeoutMs }, frameBytes: PLATFORM_FRAME_BYTES, maxPool: 32,
   });
   t.after(async () => {
@@ -128,7 +129,9 @@ test("MAC-712: a placeholder the host did not issue, or one used for another run
   const issued = (await placeholder(serviceSocket)).result as Record<string, string>;
   assert.equal(await post(serviceSocket, { placeholderId: randomUUID(), ...RUN, modelProfile: "default" }, issued.placeholder!), "closed");
   assert.equal(await post(serviceSocket, { placeholderId: issued.placeholderId, ...RUN, actor: "mallory", modelProfile: "default" }, issued.placeholder!), "closed");
+  assert.equal(host.activeRuns, 1, "a v4 placeholder's run lives until its boot ends");
   await host.forgetBoot();
+  assert.equal(host.activeRuns, 0);
   assert.equal(await post(serviceSocket, { placeholderId: issued.placeholderId, ...RUN, modelProfile: "default" }, issued.placeholder!), "closed",
     "a placeholder of the last boot opens nothing");
   assert.equal(provider.seen.length, 0);
@@ -164,7 +167,7 @@ test("DR18 / D-10: a run in the guest asks for its placeholder and forwards the 
   const dir = mkdtempSync(join(tmpdir(), "oma-forwarder-"));
   t.after(() => rmSync(dir, { recursive: true, force: true }));
   const socketPath = join(dir, "inference.sock");
-  const forwarder = await EgressForwarder.listen(socketPath, serviceSocket, { placeholderId: issued.placeholderId, ...RUN, modelProfile: "worker" }, 4);
+  const forwarder = await EgressForwarder.listen(socketPath, serviceSocket, { placeholderId: issued.placeholderId, ...RUN, modelProfile: "worker" }, 4, issued);
   // The engine speaks HTTP to the socket it was given, with the placeholder as its key.
   const engine = (key: string) => new Promise<{ status: number; body: string } | "closed">(resolve => {
     const request = httpRequest({ socketPath, method: "POST", path: "/messages", headers: { "x-api-key": key, "content-type": "application/json" } }, response => {
@@ -214,4 +217,64 @@ test("DR27 / MAC-710: each run carries its model silence budget, not the host RP
   assert.notEqual(result, "closed");
   assert.equal((result as { status: number }).status, 504);
   assert.equal(provider.seen.length, 2, "no hidden replay after a silence timeout");
+});
+
+test("AV-14: a credential that resolves after the boot it was asked under ended creates nothing", async t => {
+  let release!: () => void;
+  const gate = new Promise<void>(r => { release = r; });
+  let resolving = false;
+  const { host, pool, serviceSocket } = await world(t, 5000, async (_credentialRef, provider_, model) => {
+    resolving = true;
+    await gate;
+    return { provider: provider_, model, origin: "https://provider.invalid", apiKey: SECRET, headers: {} };
+  });
+  await host.fill();
+  await until(() => pool.size === 2, "the pool");
+  const socket = await ask(serviceSocket, "egress.placeholder", { hold: true, credentialRef: "engine-managed", provider: "anthropic", model: "current", run: RUN });
+  const ended = new Promise(r => socket.once("close", r));
+  await until(() => resolving, "the request reached the resolver");
+  await host.forgetBoot();
+  release();
+  await ended;
+  assert.equal(host.activeRuns, 0, "the late answer made no run, no relay, and kept no credential");
+
+  // The same holds when the host itself stopped while resolving.
+  let release2!: () => void;
+  const gate2 = new Promise<void>(r => { release2 = r; });
+  let resolving2 = false;
+  const stopped = await world(t, 5000, async (_credentialRef, provider_, model) => {
+    resolving2 = true;
+    await gate2;
+    return { provider: provider_, model, origin: "https://provider.invalid", apiKey: SECRET, headers: {} };
+  });
+  await stopped.host.fill();
+  await until(() => stopped.pool.size === 2, "the pool");
+  const socket2 = await ask(stopped.serviceSocket, "egress.placeholder", { credentialRef: "engine-managed", provider: "anthropic", model: "current", run: RUN });
+  const ended2 = new Promise(r => socket2.once("close", r));
+  await until(() => resolving2, "the request reached the resolver");
+  await stopped.host.stop();
+  release2();
+  await ended2;
+  assert.equal(stopped.host.activeRuns, 0);
+});
+
+test("AV-15/§4.7 v5: the answered connection a run holds open is its lease; its end ends the run on the host", async t => {
+  const { host, pool, provider, serviceSocket } = await world(t);
+  await host.fill();
+  await until(() => pool.size === 2, "the pool");
+  const socket = await ask(serviceSocket, "egress.placeholder", { hold: true, credentialRef: "engine-managed", provider: "anthropic", model: "current", run: RUN });
+  const { frame } = await readLeadingFrame(socket, PLATFORM_FRAME_BYTES, 5000);
+  assert.equal(frame.ok, true, JSON.stringify(frame));
+  const issued = frame.result as Record<string, string>;
+  assert.notEqual(issued.placeholder, SECRET);
+  assert.equal(host.activeRuns, 1);
+  // While the lease lives the placeholder opens a connection.
+  assert.deepEqual(await post(serviceSocket, { placeholderId: issued.placeholderId, ...RUN, modelProfile: "default" }, issued.placeholder!),
+    { status: 200, body: "ab" });
+  assert.equal(provider.seen[0]!.headers["x-api-key"], SECRET);
+  // The run's own end -- whatever closed the forwarder -- releases the host's run.
+  socket.destroy();
+  await until(() => host.activeRuns === 0, "the lease's end released the run and its credential");
+  assert.equal(await post(serviceSocket, { placeholderId: issued.placeholderId, ...RUN, modelProfile: "default" }, issued.placeholder!), "closed",
+    "the ended run's placeholder opens nothing");
 });

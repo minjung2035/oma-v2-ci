@@ -7,6 +7,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { randomUUID } from "node:crypto";
 import { GuestLink } from "../src/platform/host/guest-link.js";
+import type { FramedPeer } from "../src/platform/rpc.js";
 import { openSnapshotStore, pruneSnapshots, snapshotRunning, snapshotStopped } from "../src/platform/host/snapshot.js";
 import type { SessionLauncher } from "../src/platform/guest/host.js";
 import { HOST_GUEST_PROTOCOL, PLATFORM_FRAME_BYTES } from "../src/protocol/host-guest.js";
@@ -14,7 +15,8 @@ import { LocalDriver, listenSilently } from "./fixtures/local-guest.js";
 import { holdSocketNames } from "./fixtures/socket-names.js";
 import type { Server } from "node:net";
 
-async function world(t: import("node:test").TestContext, stopResult: "stopped" | "unknown" = "stopped") {
+async function world(t: import("node:test").TestContext, stopResult: "stopped" | "unknown" = "stopped",
+  mutate?: (peer: FramedPeer) => void) {
   const dir = mkdtempSync(join(tmpdir(), "oma-snapshot-"));
   const socketNames = holdSocketNames(dir);
   let holder: Server | null = null, driver: LocalDriver | null = null;
@@ -37,7 +39,7 @@ async function world(t: import("node:test").TestContext, stopResult: "stopped" |
       return stopResult;
     } };
   const instance = randomUUID();
-  driver = new LocalDriver(dir, { dir: societiesDir, launcher }, instance);
+  driver = new LocalDriver(dir, { dir: societiesDir, launcher, ...(mutate === undefined ? {} : { mutate }) }, instance);
   await driver.start();
   const link = new GuestLink(driver, { hostVersion: "1.0.0", installationId: randomUUID(), instanceId: instance, expectImage: "2026.09.1",
     protocol: { min: HOST_GUEST_PROTOCOL, max: HOST_GUEST_PROTOCOL } }, { frameBytes: PLATFORM_FRAME_BYTES, helloDeadlineMs: 2000, requestTimeoutMs: 5000 });
@@ -101,4 +103,26 @@ test("P0V-103 (F-08): a snapshot that was not finished is a temporary, never a s
   assert.equal(readdirSync(snapshots).some(name => name.endsWith(".partial")), true);
   assert.deepEqual(openSnapshotStore(snapshots).length, 1);
   assert.deepEqual(readdirSync(snapshots), ["00000000-whole.img"]);
+});
+
+/** The guest answers every request but refuses `maintenance.end`. */
+const refuseMaintenanceEnd = (peer: FramedPeer): void => {
+  const methods = new Map<string, string>();
+  peer.onFrame(frame => { if (typeof frame.id === "string" && typeof frame.method === "string") methods.set(frame.id, frame.method); });
+  const answer = peer.answer.bind(peer);
+  peer.answer = (id, result) => {
+    if (methods.get(id) === "maintenance.end") peer.refuse(id, { code: "BROKER_UNAVAILABLE", message: "the latch could not be returned", retry: "same-key" });
+    else answer(id, result);
+  };
+};
+
+test("NB-27/P0-4: a maintenance latch whose return fails is told -- alone, and together with the snapshot's own failure", async t => {
+  const { link, snapshots, statePath } = await world(t, "stopped", refuseMaintenanceEnd);
+  // The snapshot is made; the latch's return failing is told, not swallowed.
+  await assert.rejects(snapshotRunning({ dir: snapshots, statePath, clone: copy }, link, "latch"),
+    /latch could not be returned/);
+  // Work and return of the latch both fail: the caller sees both failures.
+  const both = await snapshotRunning({ dir: snapshots, statePath, clone: () => { throw new Error("the clone could not be made"); } }, link, "both")
+    .then(() => null, (error: unknown) => error);
+  assert.ok(both instanceof AggregateError && both.errors.length === 2, `expected both failures, got ${String(both)}`);
 });

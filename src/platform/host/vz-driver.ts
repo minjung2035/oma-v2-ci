@@ -42,8 +42,19 @@ export interface HelperCommand {
   readonly env: Readonly<Record<string, string>>;
 }
 
-type Pending = { resolve(value: Record<string, unknown>): void; reject(error: Error): void };
+type Pending = { resolve(value: Record<string, unknown>): void; reject(error: Error): void; timer: NodeJS.Timeout };
 const LINE_BYTES = 1024 * 1024;
+/** P0-6: no request of the helper waits forever. A wedged helper that still
+ * holds the channel is ended by the deadlines its requests carry, not by the
+ * next request's luck (NB-29). */
+const START_DEADLINE_MS = 300_000;
+const STOP_DEADLINE_MS = 120_000;
+const KEYCHAIN_DEADLINE_MS = 60_000;
+export interface VzDeadlines {
+  readonly startMs?: number;
+  readonly stopMs?: number;
+  readonly keychainMs?: number;
+}
 
 export class VzDriver implements VmDriver, KeychainStore {
   private readonly pending = new Map<number, Pending>();
@@ -51,9 +62,12 @@ export class VzDriver implements VmDriver, KeychainStore {
   private readonly powerListeners: ((event: "sleep" | "wake") => void)[] = [];
   private sequence = 0;
   private buffered = "";
+  private readonly deadlines: Required<VzDeadlines>;
 
   private constructor(private readonly child: ChildProcess, private readonly channel: Socket,
-    private readonly socketDir: string, private readonly config: VmConfig) {
+    private readonly socketDir: string, private readonly config: VmConfig, deadlines?: VzDeadlines) {
+    this.deadlines = { startMs: deadlines?.startMs ?? START_DEADLINE_MS,
+      stopMs: deadlines?.stopMs ?? STOP_DEADLINE_MS, keychainMs: deadlines?.keychainMs ?? KEYCHAIN_DEADLINE_MS };
     channel.setEncoding("utf8");
     channel.on("data", (chunk: string) => { this.received(chunk); });
     channel.on("error", () => { channel.destroy(); });
@@ -63,12 +77,12 @@ export class VzDriver implements VmDriver, KeychainStore {
   }
 
   /** The helper runs for as long as `omahostd` does. */
-  static launch(helper: HelperCommand, socketDir: string, config: VmConfig): VzDriver {
+  static launch(helper: HelperCommand, socketDir: string, config: VmConfig, deadlines?: VzDeadlines): VzDriver {
     const child = spawnSupervisedService(helper.executable, helper.argv, helper.env, true);
     const channel = child.stdio[3];
     if (channel === null || channel === undefined || !("write" in channel))
       throw new StoreError("UNSUPPORTED_PROFILE", "the VM helper has no control channel");
-    return new VzDriver(child, channel as Socket, socketDir, config);
+    return new VzDriver(child, channel as Socket, socketDir, config, deadlines);
   }
 
   onStopped(listener: (cause: VmStopCause) => void): void { this.stopListeners.push(listener); }
@@ -93,13 +107,14 @@ export class VzDriver implements VmDriver, KeychainStore {
       const waiting = typeof message.id === "number" ? this.pending.get(message.id) : undefined;
       if (waiting === undefined) continue;
       this.pending.delete(message.id as number);
+      clearTimeout(waiting.timer);
       if (message.ok === true) waiting.resolve(message);
       else waiting.reject(new StoreError("BROKER_UNAVAILABLE", typeof message.error === "string" ? message.error : "the VM helper refused"));
     }
   }
 
   private channelGone(): void {
-    for (const waiting of this.pending.values()) waiting.reject(new StoreError("BROKER_UNAVAILABLE", "the VM helper ended"));
+    for (const waiting of this.pending.values()) { clearTimeout(waiting.timer); waiting.reject(new StoreError("BROKER_UNAVAILABLE", "the VM helper ended")); }
     this.pending.clear();
   }
 
@@ -109,27 +124,39 @@ export class VzDriver implements VmDriver, KeychainStore {
     for (const listener of this.stopListeners.splice(0)) listener("error");
   }
 
-  private ask(op: string, fields: Record<string, unknown> = {}): Promise<Record<string, unknown>> {
+  private ask(op: string, fields: Record<string, unknown> = {}, deadlineMs = KEYCHAIN_DEADLINE_MS): Promise<Record<string, unknown>> {
     const id = ++this.sequence;
     return new Promise((resolve, reject) => {
       if (this.channel.destroyed) { reject(new StoreError("BROKER_UNAVAILABLE", "the VM helper ended")); return; }
-      this.pending.set(id, { resolve, reject });
+      const timer = setTimeout(() => {
+        // The helper answered nothing in its budget; the request is not kept
+        // waiting on it. A late answer to this id is dropped as a stray line.
+        this.pending.delete(id);
+        reject(new StoreError("BROKER_UNAVAILABLE", `the VM helper did not answer ${op} in time`));
+      }, deadlineMs);
+      timer.unref();
+      this.pending.set(id, { resolve, reject, timer });
       this.channel.write(`${JSON.stringify({ op, id, ...fields })}\n`);
     });
   }
 
-  async start(): Promise<void> { await this.ask("start", { config: { ...this.config, socketDir: this.socketDir } }); }
-  async forceStop(): Promise<void> { await this.ask("forceStop"); }
+  async start(): Promise<void> { await this.ask("start", { config: { ...this.config, socketDir: this.socketDir } }, this.deadlines.startMs); }
+  async forceStop(): Promise<void> { await this.ask("forceStop", {}, this.deadlines.stopMs); }
 
   connect(port: number, deadlineMs = 10_000): Promise<Socket> {
     return connectSocket(join(this.socketDir, `port-${port}.sock`), deadlineMs);
   }
 
   async get(account: string): Promise<string | undefined> {
-    const answer = await this.ask("keychain.get", { account });
-    return typeof answer.value === "string" ? answer.value : undefined;
+    const answer = await this.ask("keychain.get", { account }, this.deadlines.keychainMs);
+    // P0-5: absent is only the omitted value. A malformed one is not "no
+    // credential" -- treating it so would let a corrupted read overwrite the
+    // stored archive key (AV-21, as in KeychainClient.get).
+    if (answer.value !== undefined && typeof answer.value !== "string")
+      throw new StoreError("BROKER_UNAVAILABLE", "the VM helper returned an invalid credential response");
+    return answer.value as string | undefined;
   }
-  async put(account: string, value: string): Promise<void> { await this.ask("keychain.put", { account, value }); }
+  async put(account: string, value: string): Promise<void> { await this.ask("keychain.put", { account, value }, this.deadlines.keychainMs); }
 
   /** Ends the helper; the VM, if any, ends with it. */
   close(): void { this.channel.destroy(); this.child.kill("SIGTERM"); }

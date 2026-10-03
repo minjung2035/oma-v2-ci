@@ -37,7 +37,7 @@ function world({ fault, noChannel = false, spawnError } = {}) {
     },
   };
   const module = { exports: {} };
-  new Script(code).runInNewContext({ module, exports: module.exports, Buffer,
+  new Script(code).runInNewContext({ module, exports: module.exports, Buffer, setTimeout, clearTimeout,
     require(name) { assert.ok(Object.hasOwn(deps, name), name); return deps[name]; } });
   return { ...module.exports, children, launches };
 }
@@ -151,4 +151,19 @@ for (const failing of [false, true]) test(`Keychain client: fenced writer ${fail
   w.children[1].child.close();
   if (failing) await refused; else assert.equal(await observed, 'finished');
   const closed = client.close(); w.children[0].child.close(); await closed;
+});
+test('NB-30 Keychain client: a request the helper never answers ends within its deadline, and the untrusted channel with it', async () => {
+  const w = world(), client = await w.KeychainClient.launch(libdir, undefined, { requestMs: 40 }), { child, channel } = w.children[0];
+  await assert.rejects(client.get('engine-managed'), error => unavailable(error) && /did not answer .* in time/.test(error.message));
+  assert.equal(channel.destroyed, true, 'a channel that cannot order answers is not trusted with the next request');
+  const closed = client.close(); child.close(); await closed;
+});
+test('NB-30 Keychain client: a wedged close ends the child rather than waiting on it forever', async () => {
+  const w = world(), client = await w.KeychainClient.launch(libdir, undefined, { closeMs: 40 }), { child } = w.children[0];
+  let returned = false;
+  const closed = client.close().then(() => { returned = true; });
+  for (let i = 0; i < 100 && !child.killed; i++) await new Promise(r => setTimeout(r, 5));
+  assert.equal(child.killed, true, 'the wedged helper was ended, not waited on');
+  assert.equal(returned, false, 'close still waits for the actual child close');
+  child.close(); await closed; assert.equal(returned, true);
 });
