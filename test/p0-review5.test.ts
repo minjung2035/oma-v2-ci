@@ -24,19 +24,31 @@ import { preparedFixture } from "./fixtures/delivery-receipt.js";
 import { TEST_VIEW_LIMITS } from "./fixtures/limits.js";
 import { TEST_RESOURCES } from "./fixtures/spec.js";
 
-test("P0V-67 / R12, P0-2: where the terminal's reads are cut does not change the text -- a U+FEFF after the cut is kept", () => {
+test("P0V-67 / R12, P0-2: where the terminal's reads are cut does not change the text -- a U+FEFF after the cut is kept", async () => {
+  const { decodeText } = await import("../src/tui/keys.js");
   const bom = [...Buffer.from("﻿", "utf8")];
+  // The decode layer still never eats a U+FEFF as a stream BOM, wherever the
+  // read cut lands...
+  const whole = [...Buffer.from("A"), ...bom, ...Buffer.from("B")];
+  assert.equal(decodeText(whole, false).text, "A﻿B");
+  assert.equal(decodeText(bom, false).text, "﻿", "a read that starts with the character is not the start of a document");
+  // ...and the key layer drops it like a paste does (NB-07): a character the
+  // screen cannot show is never sent. The drop is identical at every cut, so
+  // the cut-independence invariant holds at the draft too.
   const typed = (...reads: number[][]): string => {
     const decoder = new KeyDecoder(() => 0);
     const keys = [...reads.flatMap(read => decoder.push(Uint8Array.from(read))), ...decoder.finish()];
     return keys.map(key => (key.kind === "char" ? key.value : "")).join("");
   };
-  const whole = [...Buffer.from("A"), ...bom, ...Buffer.from("B")];
-  assert.equal(typed(whole), "A﻿B");
+  assert.equal(typed(whole), "AB");
   for (let cut = 1; cut < whole.length; cut += 1)
-    assert.equal(typed(whole.slice(0, cut), whole.slice(cut)), "A﻿B", `cut after byte ${cut}`);
-  // A read that starts with the character is not the start of a document.
-  assert.equal(typed([...bom, ...Buffer.from("x")]), "﻿x");
+    assert.equal(typed(whole.slice(0, cut), whole.slice(cut)), "AB", `cut after byte ${cut}`);
+  assert.equal(typed([...bom, ...Buffer.from("x")]), "x");
+  // A visible character still crosses every cut unchanged.
+  const han = [...Buffer.from("한", "utf8")];
+  const hanWhole = [...Buffer.from("A"), ...han, ...Buffer.from("B")];
+  for (let cut = 1; cut < hanWhole.length; cut += 1)
+    assert.equal(typed(hanWhole.slice(0, cut), hanWhole.slice(cut)), "A한B", `cut after byte ${cut}`);
 });
 
 test("P0V-68 / R13, P0-2: the last line of a long message can be scrolled to while a notice or the busy line is shown", () => {

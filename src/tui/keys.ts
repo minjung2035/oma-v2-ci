@@ -129,7 +129,11 @@ function decodeKept(kept: readonly number[]): string {
 }
 
 function chars(text: string, keys: Key[]): void {
-  for (const value of text)
+  // P0V-108, NB-07: typed input takes the same cut a paste does -- a C1
+  // control or a format character the screen cannot show must not land in
+  // the draft and be sent anyway (the layout characters survive; C0 bytes
+  // and DEL are read as keys before they ever reach text).
+  for (const value of text.replace(UNSEEN_EXCEPT_LAYOUT, ""))
     if (value >= " ") keys.push({ kind: "char", value });
 }
 
@@ -257,7 +261,12 @@ export class KeyDecoder {
         this.escape.push(byte);
         index += 1;
         textStart = index;
-        if (this.escape.length >= 3 && isCsiFinal(byte)) {
+        // NB-08: the Linux console's F1-F5 are `ESC [ [ A`-`ESC [ [ E`, so a
+        // `[` directly after `ESC [` opens that report rather than ending
+        // one; terminating there would let the real final byte land as typed
+        // text. The report ends on the next byte in the final range.
+        const linuxConsole = this.escape.length === 3 && this.escape[1] === CSI && byte === CSI;
+        if (this.escape.length >= 3 && isCsiFinal(byte) && !linuxConsole) {
           // A report is bytes the engine names, not text: one code unit per byte.
           const token = String.fromCharCode(...this.escape);
           this.escape = null;
