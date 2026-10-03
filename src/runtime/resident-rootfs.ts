@@ -207,7 +207,7 @@ export function prepareResidentRootfs(
   ensureDirectory(rootfs);
   const inside = (path: string): string => join(rootfs, path);
   for (const path of ["/proc", "/dev", "/tmp", "/etc", dirname(RESIDENT_PATHS.node),
-    RESIDENT_PATHS.workspace, RESIDENT_PATHS.home, RESIDENT_PATHS.archive, RESIDENT_PATHS.selfMail,
+    RESIDENT_PATHS.workspace, RESIDENT_PATHS.home, RESIDENT_PATHS.archive, RESIDENT_PATHS.workerArchive, RESIDENT_PATHS.selfMail,
     RESIDENT_PATHS.view, RESIDENT_PATHS.world, RESIDENT_PATHS.projectGit, RESIDENT_PATHS.projectMirror, RESIDENT_PATHS.sessions,
     RESIDENT_PATHS.libdir, RESIDENT_PATHS.packages])
     ensureDirectory(inside(path));

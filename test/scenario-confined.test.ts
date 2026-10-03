@@ -123,7 +123,9 @@ test("SCN-C05: a merge open on a base main has left is refused with the actual m
       // The workspace's origin/main stays at the fetched base; after the first
       // request applies, opening on it is stale.
       if (index === 0) return bash(`${COMMIT} && echo 첫번째 > /tmp/r1.md && oma merge open --tier LOW --title 첫번째 --file /tmp/r1.md --request mrg-c05a`);
-      if (index === 1) return bash(`${COMMIT} && echo 두번째 > /tmp/r2.md && oma merge open --tier LOW --title 두번째 --file /tmp/r2.md --base refs/remotes/origin/main --request mrg-c05b; echo "exit=$?"`);
+      // The stale-base refusal needs no new candidate: HEAD is already
+      // published, and origin/main names the base main has left.
+      if (index === 1) return bash(`echo 두번째 > /tmp/r2.md && oma merge open --tier LOW --title 두번째 --file /tmp/r2.md --base refs/remotes/origin/main --request mrg-c05b; echo "exit=$?"`);
       return text("거절됐습니다.");
     });
     const run = await s.activate("worker-a");

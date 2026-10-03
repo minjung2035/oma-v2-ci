@@ -1,6 +1,7 @@
 // SB-001..006: argv composition is NOT kernel resource-enforcement evidence.
 // Only a decoded incarnation socket and this actor's host-owned mount roots enter the plan.
-import { dirname, join } from "node:path";
+import { basename, dirname, join } from "node:path";
+import { realpathSync } from "node:fs";
 import { DEPLOYMENT_LAYOUT } from "./domain/deployment.js";
 import type { RunLease, SandboxPlan } from "../implementation/contracts.js";
 import { StoreError } from "./domain/errors.js";
@@ -94,6 +95,19 @@ export const SANDBOX_EXECUTABLE = "/usr/bin/bwrap";
 /** The descriptor bubblewrap reads the sandbox's seccomp program from. */
 export const SANDBOX_FILTER_FD = 3;
 
+/** The same mount source, named by the real directory it reaches rather than
+ * any /proc/<pid>/fd anchor the run root may carry. Only the parent resolves:
+ * the bound leaf itself need not exist yet. */
+function resolvedBindSource(path: string): string {
+  // A missing parent keeps the lexical spelling: there is nothing to resolve,
+  // and argument construction must not fail before any mount exists.
+  try { return join(realpathSync(dirname(path)), basename(path)); }
+  catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT" || (error as NodeJS.ErrnoException).code === "ENOTDIR") return path;
+    throw error;
+  }
+}
+
 export function residentArgv(h: SandboxHost, lease: ValidatedRunLease,
   dirs: ResidentDirectories, env: Readonly<Record<string, string>> = {},
   inferenceSocketHost?: string): string[] {
@@ -126,9 +140,13 @@ export function residentArgv(h: SandboxHost, lease: ValidatedRunLease,
     "--ro-bind", dirs.projectGit, RESIDENT_PATHS.projectGit,
     // DR18 (D-8): there only once a start has refreshed it from the project.
     "--ro-bind-try", dirs.projectMirror, RESIDENT_PATHS.projectMirror,
-    "--ro-bind", lease.socketHostPath, RESIDENT_PATHS.socket,
+    // P0V-95/D03: a run root may name itself through /proc/<pid>/fd (a held
+    // descriptor). bwrap resolves bind sources after unsharing its user
+    // namespace, where another process's fd links are denied; the kernel
+    // mounts the resolved inode either way, so name the real path it reaches.
+    "--ro-bind", resolvedBindSource(lease.socketHostPath), RESIDENT_PATHS.socket,
     ...(inferenceSocketHost === undefined ? []
-      : ["--ro-bind", inferenceSocketHost, RESIDENT_PATHS.inference]),
+      : ["--ro-bind", resolvedBindSource(inferenceSocketHost), RESIDENT_PATHS.inference]),
     "--symlink", `${RESIDENT_PATHS.view}/inbox.md`, "/inbox.md", "--clearenv",
     "--setenv", "HOME", RESIDENT_PATHS.home, "--setenv", "PATH", RESIDENT_PATH_ENV,
     ...setenvPairs(env),

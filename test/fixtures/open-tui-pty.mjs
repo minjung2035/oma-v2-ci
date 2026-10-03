@@ -35,8 +35,13 @@ let delivered;
 let mailId;
 const retry = ending.startsWith('retry-'), reload = ending.startsWith('reload-');
 const extension = join(dirname(side), 'reload-fixture.mjs');
+const marker = join(dirname(side), 'ext-loaded.json');
 const source = description => `import { writeFileSync } from 'node:fs';
 export default pi => {
+  // The Principal's closed tool surface never shows this extension's tool to
+  // the model, so the load itself is what the marker records: which source a
+  // running engine actually evaluated.
+  writeFileSync(${JSON.stringify(marker)}, JSON.stringify({ description: '${description}' }));
   process.once('exit', code => writeFileSync(${JSON.stringify(join(dirname(side), 'engine-exit.json'))}, JSON.stringify({ code })));
   pi.registerCommand('fixture-reload-failure', { description: 'Prepare fixture failure', handler(_args, ctx) {
     writeFileSync(${JSON.stringify(extension)}, 'export default () => { throw new Error("SOCIETY_RELOAD_FAILURE"); };\\n');
@@ -117,10 +122,11 @@ try {
     await s.session.exited;
     assert.equal(JSON.parse(readFileSync(join(dirname(side), 'engine-exit.json'), 'utf8')).code, ending === 'reload-failure' ? 1 : 0);
     assert.equal(s.provider.seen.length, ending === 'reload-update' ? 3 : 2);
-    const fixture = request => request.body.tools.find(tool => tool.function.name === 'society_fixture')?.function.description;
-    assert.equal(fixture(s.provider.seen[0]), 'before');
-    if (ending === 'reload-update') assert.equal(fixture(s.provider.seen[2]), 'after');
-    else assert.equal(readFileSync(extension, 'utf8'), 'export default () => { throw new Error("SOCIETY_RELOAD_FAILURE"); };\n');
+    // Which extension source the live engine last evaluated. 'after' proves
+    // the restarted engine picked the file the first settle rewrote; a failure
+    // fixture never evaluates, so the marker keeps its 'before' write.
+    assert.equal(JSON.parse(readFileSync(marker, 'utf8')).description, ending === 'reload-update' ? 'after' : 'before');
+    if (ending === 'reload-failure') assert.equal(readFileSync(extension, 'utf8'), 'export default () => { throw new Error("SOCIETY_RELOAD_FAILURE"); };\n');
   }
   assert.equal(s.inbox('worker-a').length, 1);
   assert.equal(s.operations('principal').filter(row => row.kind === 'mail.send').length, 1);
