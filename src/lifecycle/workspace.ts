@@ -2,7 +2,7 @@ import { closeSync, constants, existsSync, lstatSync } from "node:fs";
 import { join } from "node:path";
 import type { ValidatedPlan } from "../storage/operation-codec.js";
 import { StoreError } from "../domain/errors.js";
-import { RESIDENT_PATHS } from "../sandbox.js";
+import { RESIDENT_PATHS } from "../resident-paths.js";
 import { isValidFullOid } from "../ids.js";
 import { agentRootPathAt, isWorkspacePathFor } from "../storage/paths.js";
 import { ensureDurableDirectory, fsyncDir } from "../storage/durable-fs.js";

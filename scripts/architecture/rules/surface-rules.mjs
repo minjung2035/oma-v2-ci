@@ -22,7 +22,9 @@ const VIEW_SEAM = "src/tui/view/index.ts";
 const VIEW_CALLERS = new Set(["src/tui/app.ts", "src/tui/session-mode.ts"]);
 const VIEW_MAY_IMPORT = [VIEW, "src/tui/model.ts", "src/tui/limits.ts", "src/tui/cells.ts", "src/domain/", "implementation/contracts"];
 // TUI-006: the two declared owners of product-surface writes.
-const TUI_WRITE_OWNERS = new Set(["src/tui/sources/settings.ts", "src/tui/sources/extensions.ts"]);
+// exit.ts's writeSync targets the process's own stdout/stderr fd before
+// process.exit (NB-06: a buffered stream write can be dropped); it owns no file.
+const TUI_WRITE_OWNERS = new Set(["src/tui/sources/settings.ts", "src/tui/sources/extensions.ts", "src/tui/exit.ts"]);
 const WRITE_CALLS = new Set([
   "writeFileSync", "appendFileSync", "renameSync", "unlinkSync", "rmSync", "mkdirSync", "copyFileSync",
   "symlinkSync", "writeSync", "truncateSync", "replaceDerivedFile", "writeExclusiveFsyncedFile", "moveToCur",

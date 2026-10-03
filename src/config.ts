@@ -11,7 +11,7 @@ import {
 } from "./config/operations.js";
 import type { AgentProfile, EffortLevel, HostConfigV1, ModelProfile, ResourceLimits } from "../implementation/contracts.js";
 import { StoreError } from "./domain/errors.js";
-import { requireResidentRootfs } from "./sandbox.js";
+import { requireResidentRootfs } from "./resident-paths.js";
 import { isValidActorName, isValidSocietyName, isValidWirePath } from "./domain/identifiers.js";
 import { isCapability } from "./domain/capabilities.js";
 import { RESOURCE_FIELDS } from "./domain/resources.js";

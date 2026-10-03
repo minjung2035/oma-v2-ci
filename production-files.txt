@@ -117,6 +117,8 @@ src/extension/inference-bridge.ts
 src/extension/mail-tools.ts
 src/extension/principal-channel.ts
 src/extension/principal-tools.ts
+src/extension/prompt-boundary.ts
+src/extension/provenance.ts
 src/extension/review-tools.ts
 src/extension/shared.ts
 src/extension/tool-surface.ts
@@ -251,6 +253,7 @@ src/reconcile.ts
 src/reconcile/operations.ts
 src/reconcile/preaccept.ts
 src/request-cache.ts
+src/resident-paths.ts
 src/review.ts
 src/rpc-client.ts
 src/runner.ts

@@ -50,6 +50,9 @@ const LAYERS = Object.freeze([
       "src/mail/addresses.ts",
       "src/mail/facts.ts",
       "src/mail/headers.ts",
+      // The confined Resident's path tables and host/inside translations:
+      // pure policy the config schema and lifecycle mounts both read.
+      "src/resident-paths.ts",
       "src/store.ts",
     ],
   },

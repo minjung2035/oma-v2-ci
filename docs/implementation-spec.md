@@ -26,7 +26,7 @@
 
 | 파일 | 용도 |
 |---|---|
-| [implementation/schema-v1.sql](../implementation/schema-v1.sql) | 여섯 기본 DB entity의 실행 가능한 초기 DDL |
+| [implementation/schema-v3.sql](../implementation/schema-v3.sql) | 여섯 기본 DB entity의 실행 가능한 초기 DDL |
 | [docs/implementation/integration-policy.md](implementation/integration-policy.md) | 제안 검토·tiered authority·challenge/floor·Principal packet 계약 |
 | [implementation/contracts.ts](../implementation/contracts.ts) | 모듈 및 closed IPC 타입 계약. 실행 코드 아님 |
 | [docs/verification-spec.md](verification-spec.md#qualification-계약) | 미확정 부분, 실험, release gate |
@@ -159,7 +159,7 @@ A-008은 2026-09-28 사용자 결정으로 철회했다([DR20](design-revisions.
 
 ## 5. DB schema, transaction, 허용 상태
 
-**MUST [DB-001; arch §14]** base entity는 `agents`, `operations`, `subscriptions`, `deliveries`, `batches`, `usage` 여섯 개뿐이다. [schema-v1.sql](../implementation/schema-v1.sql)을 base 초기 migration으로 실행한다. tiered persistence는 POL-006/S-08/S-10의 후속 계약 전 지원하지 않는다. migration version은 SQLite `user_version`을 사용하고 migrations table을 추가하지 않는다. 기존 native-v2 DB를 변환·공유하지 않는다.
+**MUST [DB-001; arch §14]** base entity는 `agents`, `operations`, `subscriptions`, `deliveries`, `batches`, `attestations` 여섯 개뿐이다. [schema-v3.sql](../implementation/schema-v3.sql)을 base 초기 migration으로 실행한다. tiered persistence는 POL-006/S-08/S-10의 후속 계약 전 지원하지 않는다. migration version은 SQLite `user_version`을 사용하고 migrations table을 추가하지 않는다. 기존 native-v2 DB를 변환·공유하지 않는다.
 
 **MUST [DB-002]** broker만 DB를 쓴다. 연결마다 foreign_keys=ON, synchronous=FULL, busy_timeout=5000, WAL을 확인한다. 일반 mutation은 `BEGIN IMMEDIATE`; schema migration은 `BEGIN EXCLUSIVE`다. commit 성공 전에 accepted/succeeded를 반환하지 않는다. DB_BUSY는 같은 key retry, DB 손상은 mutation 중단으로 처리한다.
 

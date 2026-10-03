@@ -42,6 +42,7 @@ export const KERNEL_ZONES = Object.freeze([
       "src/hash.ts",
       "src/process/command.ts",
       "src/process/host-loss.ts",
+      "src/resident-paths.ts",
       "src/storage/paths.ts",
     ],
   },

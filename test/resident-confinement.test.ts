@@ -424,6 +424,21 @@ test("AV27 / SB-002-E, GIT-002: Residents always reach Git at its mount and host
   assert.equal(residentProjectGit(), RESIDENT_PATHS.projectGit);
 });
 
+test("SB-002-E: the K0 rootfs check and the run-lease predicate give one verdict", async () => {
+  const { trustedAbsolutePath } = await import("../src/protocol/run-lease.js");
+  const cases = [
+    "/", "/a", "/state/rootfs", "/a/", "//a", "/a//b", "/a/./b", "/a/../b",
+    "/a/b/.", "/a/b/..", "/a/b/.x", "/a/b/..x", "/a/x..", "a/b", "./a", "",
+    "/state/rootfs", "relative", "/state\u0000/rootfs", "/a b/c-d_e",
+  ];
+  for (const path of cases) {
+    const lease = trustedAbsolutePath(path);
+    let kernel = true;
+    try { requireResidentRootfs(path); } catch { kernel = false; }
+    assert.equal(kernel, lease, `verdicts diverge on ${JSON.stringify(path)}`);
+  }
+});
+
 test("mail-v1: the worker archive is a read-only Resident mount its environment names", () => {
   const f = fixture();
   try {
