@@ -354,7 +354,7 @@ try {
   // Constructor has already exercised both complete production loaders.
   const before = loadConfiguration(fixture.path);
   fixture.edit("roles/resident.json", role => {
-    role.toolSurface = { defaultMode: "DIRECT" };
+    role.agentProfile.upstreamNote = { defaultMode: "DIRECT" };
   });
   // `edit` is an unchecked authoring/corruption seam, never a valid-candidate claim.
   const after = loadConfiguration(fixture.path);

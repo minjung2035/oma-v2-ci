@@ -1,15 +1,19 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { mkdirSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { mkdirSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { createCompleteConfigurationFixture } from "./fixtures/configuration.js";
 import { loadConfiguration, loadConfigurationSnapshot } from "../src/config.js";
 import { DurabilityFaultError, type DurabilityFault } from "../src/storage/durable-fs.js";
 import { CORE_EXTENSION, readExtensions, toggleExtension } from "../src/tui/sources/extensions.js";
 import { commitRoleSet, deriveSessionSettings, projectBundle, readSettings, readSettingsForEditing, roleSetOf, writeSettings } from "../src/tui/sources/settings.js";
-import { packageCommand, readPackageIndex, reconciledEntries, writePackageIndex, type InstalledPackage } from "../src/runtime/pi-packages.js";
+import { PACKAGE_INDEX, packageCommand, packageResourcePaths, readPackageIndex, reconciledEntries, writePackageIndex, type InstalledPackage } from "../src/runtime/pi-packages.js";
+import { sessionArgv } from "../src/tui/session.js";
+import { planPiSpawn } from "../src/runtime/pi-spawn-plan.js";
+import { decodeRunLease } from "../src/protocol/run-lease.js";
 import { applyPackageChange } from "../src/tui/project-settings.js";
 import { RESIDENT_PATHS, confinedPath } from "../src/sandbox.js";
+import { actorSocketPathAt, agentRootPathAt, projectGitPathAt, projectMirrorPathAt, runnerSessionDirPathAt, runnerViewPathAt, workspacePathAt } from "../src/storage/paths.js";
 import { runEngineLogin } from "../src/tui/login.js";
 import { assertExtensionIntegrity } from "../src/runtime/extension-integrity.js";
 import { createHash } from "node:crypto";
@@ -82,7 +86,7 @@ test("DR25: the engine names a package's extensions; the index keeps them by pac
   try {
     const packages = store(f.root, { "oma-hello-ext": hello });
     const index = await writePackageIndex(packages);
-    assert.deepEqual(index, [{ source: "npm:oma-hello-ext", entries: [HELLO] }]);
+    assert.deepEqual(index, [{ source: "npm:oma-hello-ext", entries: [HELLO], skills: [], prompts: [], themes: [] }]);
     assert.deepEqual(readPackageIndex(packages), index);
     // The index is the engine's answer as of the last change, asked again after
     // every one: a change whose index was not written yet is picked up by the next.
@@ -286,5 +290,120 @@ test("DR26 / P0V-51: extension install accepts a valid Principal-only project wi
     const settings = readSettingsForEditing(path);
     assert.equal(settings.workerProfile, null);
     assert.ok((settings.snapshot!.authoredRoles.principal!.value.extensions as string[]).includes(HELLO));
+  } finally { f.close(); }
+});
+
+/** A package that carries every kind of resource Pi indexes: an extension by
+ * manifest, and the conventional skills/, prompts/ and themes/ directories. */
+const rich = {
+  // A pi manifest lists its resources explicitly; only a manifest-less package
+  // falls back to the conventional directories.
+  "package.json": JSON.stringify({ name: "oma-rich", version: "1.0.0",
+    pi: { extensions: ["./extensions/e.ts"], skills: ["./skills/roll/SKILL.md"],
+      prompts: ["./prompts/review.md"], themes: ["./themes/dark.json"] } }),
+  "extensions/e.ts": "export default function () {}\n",
+  "skills/roll/SKILL.md": "---\nname: roll\ndescription: Roll.\n---\n",
+  "prompts/review.md": "Review the change.\n",
+  "themes/dark.json": JSON.stringify({ name: "dark", colors: {} }),
+};
+
+test("C18: the package index keeps skills, prompts and themes, not only extensions", async () => {
+  const f = createCompleteConfigurationFixture();
+  try {
+    const packages = store(f.root, { "oma-rich": rich });
+    const index = await writePackageIndex(packages);
+    const item = index.find(entry => entry.source === "npm:oma-rich")!;
+    assert.deepEqual(item.entries, ["packages:npm/node_modules/oma-rich/extensions/e.ts"]);
+    assert.deepEqual(item.skills, ["packages:npm/node_modules/oma-rich/skills/roll/SKILL.md"]);
+    assert.deepEqual(item.prompts, ["packages:npm/node_modules/oma-rich/prompts/review.md"]);
+    assert.deepEqual(item.themes, ["packages:npm/node_modules/oma-rich/themes/dark.json"]);
+
+    // The argv-facing view resolves each entry under the store's real root.
+    const paths = packageResourcePaths(packages)!;
+    const root = realpathSync(packages);
+    assert.deepEqual(paths.skills, [join(root, "npm/node_modules/oma-rich/skills/roll/SKILL.md")]);
+    assert.deepEqual(paths.prompts, [join(root, "npm/node_modules/oma-rich/prompts/review.md")]);
+    assert.deepEqual(paths.themes, [join(root, "npm/node_modules/oma-rich/themes/dark.json")]);
+    // No extensions leak into the resource lists; a store with none yields nothing.
+    assert.equal(packageResourcePaths(join(f.root, "absent")), undefined);
+  } finally { f.close(); }
+});
+
+test("C18: an index written before resources were indexed still reads, and a malformed list is not silently none", () => {
+  const f = createCompleteConfigurationFixture();
+  try {
+    const packages = store(f.root, { "oma-hello-ext": hello });
+    // The pre-C18 shape: source + entries only.
+    writeFileSync(join(packages, PACKAGE_INDEX), JSON.stringify([{ source: "npm:oma-hello-ext", entries: [HELLO] }]));
+    const legacy = readPackageIndex(packages);
+    assert.deepEqual(legacy, [{ source: "npm:oma-hello-ext", entries: [HELLO], skills: [], prompts: [], themes: [] }]);
+    assert.equal(packageResourcePaths(packages), undefined, "no resources means no argv");
+
+    for (const content of [
+      JSON.stringify([{ source: "npm:x", entries: [], skills: ["bare.md"] }]),
+      JSON.stringify([{ source: "npm:x", entries: [], prompts: ["packages:../out.md"] }]),
+      JSON.stringify([{ source: "npm:x", entries: [], themes: ["packages:a.json", "packages:a.json"] }]),
+      JSON.stringify([{ source: "npm:x", entries: [], skills: "packages:x" }]),
+    ]) {
+      writeFileSync(join(packages, PACKAGE_INDEX), content);
+      assert.throws(() => readPackageIndex(packages), { code: "STORE_CORRUPT" }, content);
+    }
+  } finally { f.close(); }
+});
+
+test("C18: an engine's argv names the package resources -- host paths unconfined, mounted paths inside", async () => {
+  const f = createCompleteConfigurationFixture();
+  try {
+    const packages = store(f.root, { "oma-rich": rich });
+    await writePackageIndex(packages);
+    const resources = packageResourcePaths(packages)!;
+    const root = realpathSync(packages);
+    const skill = join(root, "npm/node_modules/oma-rich/skills/roll/SKILL.md");
+
+    // The Principal's argv.
+    const argv = sessionArgv({ piCommand: "/x/pi", coreExtension: "/x/core.js", sessionDir: "/s", workspace: "/w", home: "/h" },
+      { society: "s", provider: "p", model: "m", extensions: [], workspaceBytes: 1, packageResources: resources });
+    assert.deepEqual(argv.slice(argv.indexOf("--skill"), argv.indexOf("--skill") + 2), ["--skill", skill]);
+    assert.ok(argv.includes("--prompt-template")); assert.ok(argv.includes("--theme"));
+
+    // The Resident plan, unconfined and confined. Confined directories must be
+    // the canonical actor paths -- the sandbox checks them against the lease.
+    const state = join(f.root, "state"); mkdirSync(state, { recursive: true });
+    const dirs = { workspace: workspacePathAt(state, "a"), home: join(agentRootPathAt(state, "a"), "home"),
+      archive: join(state, "mail", "archive"), workerArchive: join(state, "mail", "workers"),
+      selfMail: join(state, "mail", "inboxes", "a"), view: runnerViewPathAt(state, "a"), world: join(state, "world"),
+      projectGit: projectGitPathAt(state), projectMirror: projectMirrorPathAt(state), sessions: runnerSessionDirPathAt(state, "a") };
+    for (const dir of Object.values(dirs)) mkdirSync(dir, { recursive: true });
+    const runRoot = join(f.root, "run"); mkdirSync(join(runRoot, "actors", "a", "1"), { recursive: true });
+    const paths = { piCommand: "/usr/bin/node", coreExtension: join(f.installation, CORE_EXTENSION), cli: join(f.installation, "cli.js"),
+      workspace: dirs.workspace, sessionDir: dirs.sessions, agentHome: dirs.home, mailArchive: dirs.archive,
+      workerArchive: dirs.workerArchive, projectGit: dirs.projectGit, batchView: dirs.view,
+      socket: actorSocketPathAt(runRoot, "a", 1) };
+    const profile = { provider: "pi", model: "current", inferenceSeconds: 1, prompt: "", workspaceBytes: 1,
+      extensions: [], packageResources: resources };
+    const limits = { frameBytes: 1, idleStreamSeconds: 1, receiptWaitSeconds: 1, batchMaxMessages: 1, mailBodyBytes: 1, contextBytes: 1, bundleBytes: 1 };
+
+    const host = planPiSpawn({ actor: "a", society: "s", paths, profile, limits } as never);
+    assert.deepEqual(host.args.slice(host.args.indexOf("--skill"), host.args.indexOf("--skill") + 2), ["--skill", skill]);
+
+    const confinement = {
+      host: { rootfs: join(f.root, "rootfs"), libdir: f.installation, packages: root, node: "/usr/bin/node",
+        pi: `${RESIDENT_PATHS.libdir}/engine/cli.js`, piModeArgs: [],
+        tmpBytes: 1024, stateRoot: state, runRoot: join(f.root, "run"),
+        limits: { frameBytes: 1, batchMaxMessages: 1 } },
+      lease: decodeRunLease({ actor: "a", incarnation: 1, socketHostPath: paths.socket }, { actor: "a", runRoot }),
+      directories: dirs,
+    };
+    const confined = planPiSpawn({ actor: "a", society: "s", paths, profile, limits, confinement } as never);
+    const mounted = `${RESIDENT_PATHS.packages}/npm/node_modules/oma-rich`;
+    for (const [flag, suffix] of [["--skill", "/skills/roll/SKILL.md"], ["--prompt-template", "/prompts/review.md"], ["--theme", "/themes/dark.json"]] as const) {
+      const at = confined.args.indexOf(flag);
+      assert.ok(at > 0, `${flag} was never passed`);
+      assert.equal(confined.args[at + 1], `${mounted}${suffix}`, `${flag} was not translated through the package mount`);
+    }
+    // A resource under no mount must not reach a confined engine at all.
+    const stray = { ...resources, skills: [join(f.root, "elsewhere", "SKILL.md")] };
+    assert.throws(() => planPiSpawn({ actor: "a", society: "s", paths,
+      profile: { ...profile, packageResources: stray }, limits, confinement } as never), /outside every mount/);
   } finally { f.close(); }
 });

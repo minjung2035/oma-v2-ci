@@ -34,8 +34,9 @@ function fixture(roles) {
     mkdirSync(join(complete.installation, "extensions"), { recursive: true });
     writeFileSync(join(complete.installation, "extensions/x.js"), "export {};\n");
     const role = JSON.parse(readFileSync(join(root, "roles/resident.json"), "utf8"));
-    // The screen must preserve a valid field that it does not model.
-    role.toolSurface = { defaultMode: "DIRECT" };
+    // The screen must preserve a valid field that it does not model. D23: the
+    // role file's own fields are closed, so the field lives in agentProfile.
+    role.agentProfile.upstreamNote = { defaultMode: "DIRECT" };
     const outsideBytes = JSON.stringify(role);
     writeFileSync(join(root, "role.json"), outsideBytes);
     const outside = join(complete.root, "OUTSIDE.json");
@@ -108,7 +109,7 @@ test("CFG-005: a bundle the loader accepts is the bundle the screen edits", () =
     // D02/WP13: published as a managed generation; the authored file is kept.
     const written = readConfigurationSource(f.index).authoredRoles["resident"].value;
     assert.deepEqual(written.extensions, [DEPLOYMENT_LAYOUT.extension, "extensions/x.js"]);
-    assert.deepEqual(written.toolSurface, { defaultMode: "DIRECT" },
+    assert.deepEqual(written.agentProfile.upstreamNote, { defaultMode: "DIRECT" },
       "a field the screen does not model was lost");
     assert.equal(readFileSync(join(f.root, "role.json"), "utf8"), authored, "the authored role file was edited in place");
     assert.equal(readFileSync(f.outside, "utf8"), f.outsideBytes, "the outside file was touched");

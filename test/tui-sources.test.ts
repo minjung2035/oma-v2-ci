@@ -420,7 +420,7 @@ test("TUI-021: a malformed or foreign status view is unknown, not partially show
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
 
-test("T92/TUI-004,014: the Principal session runs Pi in RPC mode with discovery switched off", () => {
+test("T92/TUI-004,014: the Principal session runs Pi in RPC mode; OMA suppresses only extension discovery", () => {
   const argv = sessionArgv(
     { piCommand: "/usr/bin/pi", coreExtension: "/lib/core.js", sessionDir: "/s", workspace: "/w", home: "/h" },
     { society: "demo", provider: "pi", model: "current", workspaceBytes: 1024,
@@ -428,8 +428,13 @@ test("T92/TUI-004,014: the Principal session runs Pi in RPC mode with discovery 
   );
   assert.equal(argv[0], "--mode");
   assert.equal(argv[1], "rpc");
-  for (const flag of ["--no-approve", "--no-context-files", "--no-skills", "--no-prompt-templates", "--no-extensions"])
+  for (const flag of ["--no-approve", "--no-extensions"])
     assert.ok(argv.includes(flag), `missing ${flag}`);
+  // C15–C17: context files, skills and prompt templates are Pi's ordinary
+  // surface; the core extension filters them rather than OMA suppressing the
+  // loader's discovery of them.
+  for (const flag of ["--no-context-files", "--no-skills", "--no-prompt-templates"])
+    assert.ok(!argv.includes(flag), `${flag} must not be passed`);
   assert.equal(argv[argv.indexOf("--exclude-tools") + 1], "bash,powershell,write,edit");
   // provider=pi/model=current uses the existing connection rather than pinning a model.
   assert.ok(!argv.includes("--model"));

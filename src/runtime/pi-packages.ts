@@ -34,10 +34,25 @@ export function packageStoreDir(stateRoot: string): string {
   return join(dirname(stateRoot), PACKAGE_STORE);
 }
 
-/** One installed package and its extension entries, as configuration entries. */
+/** One installed package and the resources it contributes: extension entries
+ * a role may name, and the skills, prompt templates and themes every engine
+ * of the installation is shown (C18). All entries are `packages:`-prefixed
+ * paths relative to the store root; files and directories both appear, and
+ * an index written before resources were indexed reads as empty lists. */
 export interface InstalledPackage {
   readonly source: string;
   readonly entries: readonly string[];
+  readonly skills?: readonly string[];
+  readonly prompts?: readonly string[];
+  readonly themes?: readonly string[];
+}
+
+/** The package resources of one store, resolved to host paths: what an
+ * engine's argv names so Pi's loader discovers them (C18). */
+export interface PackageResourcePaths {
+  readonly skills: readonly string[];
+  readonly prompts: readonly string[];
+  readonly themes: readonly string[];
 }
 
 /** The package commands `oma pi` runs, and why the others are not run. */
@@ -111,6 +126,10 @@ export function packageCommand(args: readonly string[], macProject = false): Pac
   }
   if (!given.has("--help") && (command === "install" || command === "remove")) {
     if (positional.length !== 1) return refused(`oma pi ${name} takes one source.`);
+    // C20: a local package is used where it lies (`local:` source, never
+    // copied), so nothing it contributes can be indexed inside the store --
+    // it stays refused for every scope. Personal accepts a local extension
+    // directly instead, as a digest-pinned `local:` entry (personal-settings).
     if (command === "install" && !REMOTE_SOURCE.test(positional[0]!))
       return refused("A local path is used where it lies, which a Worker's sandbox cannot see; install an npm: or git: source.");
   }
@@ -127,6 +146,28 @@ export function packageStoreRoot(store: string): string | null {
   }
 }
 
+/** A `packages:`-prefixed normalized relative path under the store. Unlike an
+ * extension entry a resource may be a directory or a file of any kind, so the
+ * suffix rule does not apply; containment and spelling still do. */
+export function resourceEntryProblem(entry: unknown): string | null {
+  if (typeof entry !== "string" || !entry.startsWith(PACKAGE_ENTRY_PREFIX))
+    return "package resource must be a packages: path";
+  const path = entry.slice(PACKAGE_ENTRY_PREFIX.length);
+  if (!path || path.includes("\0") || path.includes("\\") || isAbsolute(path) ||
+      path.split("/").some(part => !part || part === "." || part === ".."))
+    return "package resource must be a normalized relative path";
+  return null;
+}
+/** An optional list field of one index entry: absent means none (an index
+ * written before resources were indexed), anything else must be a list of
+ * unique well-formed resource entries. */
+function resourceList(value: unknown, invalid: () => never): readonly string[] {
+  if (value === undefined) return Object.freeze([]);
+  if (!Array.isArray(value) || new Set(value).size !== value.length || value.some(entry => resourceEntryProblem(entry) !== null))
+    return invalid();
+  return Object.freeze([...(value as string[])]);
+}
+
 /** The store's index as last written, or none. */
 export function readPackageIndex(store: string): readonly InstalledPackage[] {
   const root = packageStoreRoot(store);
@@ -140,37 +181,76 @@ export function readPackageIndex(store: string): readonly InstalledPackage[] {
   const packages: InstalledPackage[] = [];
   for (const entry of value) {
     if (entry === null || typeof entry !== "object") return invalid();
-    const { source, entries } = entry as { source?: unknown; entries?: unknown };
+    const { source, entries, skills, prompts, themes } = entry as
+      { source?: unknown; entries?: unknown; skills?: unknown; prompts?: unknown; themes?: unknown };
     if (typeof source !== "string" || !source || packages.some(item => item.source === source) || !Array.isArray(entries) ||
         new Set(entries).size !== entries.length || entries.some(item => typeof item !== "string" || !item.startsWith(PACKAGE_ENTRY_PREFIX) || extensionEntryProblem(item) !== null)) return invalid();
-    packages.push(Object.freeze({ source, entries: Object.freeze([...entries as string[]]) }));
+    packages.push(Object.freeze({ source, entries: Object.freeze([...entries as string[]]),
+      skills: resourceList(skills, invalid), prompts: resourceList(prompts, invalid), themes: resourceList(themes, invalid) }));
   }
   return Object.freeze(packages);
 }
 
-/** Asks the engine which files of each installed package are extensions, and
- * keeps the answer as the store's index. A file outside the store, or reached
- * through a link, is no entry: no Resident could be shown it. */
+/** Every resource the installed packages hold, as absolute paths under the
+ * store's real root -- the lists an engine's argv names (C18). Paths are the
+ * index's own, so an entry that escaped the store was refused when indexed. */
+export function packageResourcePaths(store: string | undefined): PackageResourcePaths | undefined {
+  if (store === undefined) return undefined;
+  const root = packageStoreRoot(store);
+  if (root === null) return undefined;
+  const index = readPackageIndex(root);
+  const collect = (pick: (item: InstalledPackage) => readonly string[] | undefined): readonly string[] => {
+    const paths: string[] = [];
+    for (const item of index)
+      for (const entry of pick(item) ?? [])
+        paths.push(join(root, entry.slice(PACKAGE_ENTRY_PREFIX.length)));
+    return Object.freeze(paths.sort());
+  };
+  const skills = collect(item => item.skills);
+  const prompts = collect(item => item.prompts);
+  const themes = collect(item => item.themes);
+  if (skills.length === 0 && prompts.length === 0 && themes.length === 0) return undefined;
+  return Object.freeze({ skills, prompts, themes });
+}
+
+/** Asks the engine which files of each installed package are which resource
+ * -- extensions, and (C18) skills, prompt templates and themes too -- and
+ * keeps the answer as the store's index. A path outside the store, or reached
+ * through a link, is no entry: no Resident could be shown it. Extensions
+ * additionally keep their file-and-suffix rule; a skill may be a directory. */
 export async function writePackageIndex(store: string): Promise<readonly InstalledPackage[]> {
   const sdk = await import("@earendil-works/pi-coding-agent");
   const settingsManager = sdk.SettingsManager.create(store, store, { projectTrusted: false });
   const manager = new sdk.DefaultPackageManager({ cwd: store, agentDir: store, settingsManager });
   const resolved = await manager.resolve(async () => "skip");
   const base = realpathSync(store);
-  const bySource = new Map<string, string[]>();
-  for (const resource of resolved.extensions) {
-    if (!resource.enabled || resource.metadata.scope !== "user") continue;
-    let real: string;
-    try { real = realpathSync(resource.path); } catch { continue; }
-    const inside = relative(base, real);
-    if (real !== resource.path || !inside || inside.startsWith("..") || isAbsolute(inside)) continue;
-    if (!lstatSync(real).isFile() || !/\.(?:js|mjs|ts)$/.test(real)) continue;
-    const list = bySource.get(resource.metadata.source) ?? [];
-    list.push(`${PACKAGE_ENTRY_PREFIX}${inside}`);
-    bySource.set(resource.metadata.source, list);
-  }
+  const indexed = (resources: readonly { path: string; enabled: boolean; metadata: { source: string; scope: string } }[],
+    fileOnly: boolean): Map<string, string[]> => {
+    const bySource = new Map<string, string[]>();
+    for (const resource of resources) {
+      if (!resource.enabled || resource.metadata.scope !== "user") continue;
+      let real: string;
+      try { real = realpathSync(resource.path); } catch { continue; }
+      const inside = relative(base, real);
+      if (real !== resource.path || !inside || inside.startsWith("..") || isAbsolute(inside)) continue;
+      const stat = lstatSync(real);
+      if (fileOnly && (!stat.isFile() || !/\.(?:js|mjs|ts)$/.test(real))) continue;
+      if (!fileOnly && !stat.isFile() && !stat.isDirectory()) continue;
+      const list = bySource.get(resource.metadata.source) ?? [];
+      list.push(`${PACKAGE_ENTRY_PREFIX}${inside}`);
+      bySource.set(resource.metadata.source, list);
+    }
+    return bySource;
+  };
+  const extensions = indexed(resolved.extensions, true);
+  const skills = indexed(resolved.skills, false);
+  const prompts = indexed(resolved.prompts, false);
+  const themes = indexed(resolved.themes, false);
+  const entries = (bySource: Map<string, string[]>, source: string): readonly string[] =>
+    Object.freeze([...(bySource.get(source) ?? [])].sort());
   const packages = manager.listConfiguredPackages().filter(entry => entry.scope === "user")
-    .map(entry => Object.freeze({ source: entry.source, entries: Object.freeze([...(bySource.get(entry.source) ?? [])].sort()) }));
+    .map(entry => Object.freeze({ source: entry.source, entries: entries(extensions, entry.source),
+      skills: entries(skills, entry.source), prompts: entries(prompts, entry.source), themes: entries(themes, entry.source) }));
   replaceUserFile(join(store, PACKAGE_INDEX), `${JSON.stringify(packages, null, 2)}\n`);
   return Object.freeze(packages);
 }

@@ -8,6 +8,7 @@
  */
 import type { Actor, ProtocolLimits } from "../../implementation/contracts.js";
 import { verifiedPaths, type VerifiedExtension } from "./extension-integrity.js";
+import type { PackageResourcePaths } from "./pi-packages.js";
 import { PI_AGENT_DIR_ENV } from "./pi-runtime.js";
 import { PI_SESSION_ENV_NAMES } from "../pi-compat/env.js";
 import { join } from "node:path";
@@ -56,9 +57,10 @@ export interface PiAdapterProfile {
   /** Recorded at configuration load and re-verified immediately before spawn.
    * The digest travels with the path so the check cannot be skipped here. */
   readonly extensions: readonly VerifiedExtension[];
-  /** TSP-005: the validated projection for this role, or null to show every
-   * registered tool. The adapter forwards it; it never computes one. */
-  readonly toolSurface?: string | undefined;
+  /** DR25/C18: the installed packages' skills, prompt templates and themes, as
+   * host paths inside the package store. The engine gets them by flag, so the
+   * resources reach Pi's loader rather than only being mounted. */
+  readonly packageResources?: PackageResourcePaths | undefined;
 }
 export interface PiAdapterPaths {
   readonly piCommand: string;
@@ -135,6 +137,10 @@ function pathView(options: PiAdapterOptions): PathView {
 export const TOOL_SCOPE_ENV = "OMA_TOOL_SCOPE";
 export const TOOL_SCOPE_SANDBOX = "sandbox";
 
+/** D25: mirrors `VERIFIED_EXTENSIONS_ENV` in src/extension/provenance.ts --
+ * the same mirror discipline as TOOL_SCOPE_ENV above. */
+export const VERIFIED_EXTENSIONS_ENV = "OMA_VERIFIED_EXTENSIONS";
+
 /** The entries the trusted core extension reads. Nothing else is OMA's to set. */
 function omaEnvironment(options: PiAdapterOptions, inside: PathView): Record<string, string> {
   return {
@@ -157,9 +163,15 @@ function omaEnvironment(options: PiAdapterOptions, inside: PathView): Record<str
     OMA_PROJECT_GIT: inside(options.paths.projectGit),
     OMA_AGENT_HOME: inside(options.paths.agentHome),
     OMA_CLI_PATH: inside(options.paths.cli),
-    ...(options.profile.toolSurface === undefined
-      ? {}
-      : { OMA_TOOL_SURFACE: options.profile.toolSurface }),
+    // D25: the extension paths this engine's `-e` argv carries, in the same
+    // spelling -- the trusted extension authorizes tools by this provenance,
+    // never by name (AV13 mirrors the constant; PI-001 keeps it import-free).
+    [VERIFIED_EXTENSIONS_ENV]: JSON.stringify([
+      inside(options.paths.coreExtension),
+      ...verifiedPaths(options.profile.extensions)
+        .filter(extension => extension !== options.paths.coreExtension)
+        .map(inside),
+    ]),
   };
 }
 
@@ -184,9 +196,6 @@ function engineArgv(options: PiAdapterOptions, inside: PathView = path => path):
     "--mode",
     "rpc",
     "--no-approve",
-    "--no-context-files",
-    "--no-skills",
-    "--no-prompt-templates",
     "--no-extensions",
     // AV13: a confined Resident works with the shell its sandbox provides
     // (SB-001: the rootfs holds Git and a shell; arch §11.1 and CLI-001: it
@@ -210,6 +219,12 @@ function engineArgv(options: PiAdapterOptions, inside: PathView = path => path):
   // on the host path, before translation, because that is what was verified.
   for (const extension of verifiedPaths(options.profile.extensions))
     if (extension !== options.paths.coreExtension) args.push("-e", inside(extension));
+  // C18: package skills, prompt templates and themes ride the same flags the
+  // engine's own CLI takes, so the loader owns their discovery. The mount plan
+  // translates the store's host paths for a confined engine.
+  for (const skill of options.profile.packageResources?.skills ?? []) args.push("--skill", inside(skill));
+  for (const prompt of options.profile.packageResources?.prompts ?? []) args.push("--prompt-template", inside(prompt));
+  for (const theme of options.profile.packageResources?.themes ?? []) args.push("--theme", inside(theme));
   // A confined engine resolves nothing on its own: the host named the model
   // when it resolved the credential, and that is the model it runs.
   const relay = options.confinement?.inference;

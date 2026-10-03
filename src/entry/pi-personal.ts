@@ -4,13 +4,14 @@ import { lstatSync, readFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { dirname, join } from "node:path";
 import { createAgentSessionRuntime, createAgentSessionServices, createAgentSessionFromServices,
-  DefaultResourceLoader, InteractiveMode, ModelSelectorComponent, SessionManager, SessionSelectorComponent, SettingsManager,
+  DefaultResourceLoader, hasTrustRequiringProjectResources, InteractiveMode, ModelSelectorComponent, ProjectTrustStore,
+  SessionManager, SessionSelectorComponent, SettingsManager,
   ThinkingSelectorComponent, VERSION, type AgentSession, type ExtensionContext, type ExtensionFactory,
 } from "@earendil-works/pi-coding-agent";
 import { StoreError } from "../domain/errors.js";
 import { readSessionBirth } from "../runtime/session-mode.js";
 import { sessionBirthForHistory, sessionHistoryDirectories } from "../runtime/session-catalog.js";
-import { personalExtensions, updatePersonalSettings, type PersonalSettingsLocation } from "../runtime/personal-settings.js";
+import { personalExtensions, personalExtensionEntry, updatePersonalSettings, type PersonalSettingsLocation } from "../runtime/personal-settings.js";
 import { readPackageIndex } from "../runtime/pi-packages.js";
 import { assertExtensionIntegrity, verifiedPaths } from "../runtime/extension-integrity.js";
 import { ExtensionModules } from "../runtime/extension-modules.js";
@@ -33,6 +34,12 @@ async function main(): Promise<void> {
   if (birth === null || birth.mode !== "personal" || agentDir === undefined || birth.cwd !== process.cwd())
     throw new StoreError("INVALID_REQUEST", "Personal engine requires its saved birth and cwd");
   const location: PersonalSettingsLocation = { dataRoot, libdir, packages };
+  // C19: project-local resources (.pi, .agents/skills) load only after an
+  // explicit trust decision for this exact folder, persisted the way Pi itself
+  // persists it. Nothing is trusted silently: a folder with no recorded
+  // decision runs untrusted until the Human says otherwise in /oma Config.
+  const trustStore = new ProjectTrustStore(agentDir);
+  const projectNeedsTrust = hasTrustRequiringProjectResources(birth.cwd);
   let assets = personalExtensions(location, updatePersonalSettings(location));
   assertExtensionIntegrity(assets.extensions);
   preparePiRetry(agentDir); preparePiInteractive(agentDir);
@@ -75,17 +82,40 @@ async function main(): Promise<void> {
   const config = async (ctx: ExtensionContext): Promise<void> => {
     const epoch = uiEpoch;
     if (!current(epoch)) return;
-    const choice = await ctx.ui.select("Config — Personal (fixed for this session)", ["Model / effort", "Extensions", "Back"]);
+    // The trust row appears only when the folder actually holds gated
+    // resources; otherwise there is nothing the decision would change.
+    const trustRow = `Project trust — ${trustStore.get(birth.cwd) === true ? "trusted" : "not trusted"}`;
+    const choice = await ctx.ui.select("Config — Personal (fixed for this session)",
+      ["Model / effort", "Extensions", ...(projectNeedsTrust ? [trustRow] : []), "Back"]);
     if (!current(epoch)) return;
     if (choice === "Model / effort") { await modelConfig(ctx, epoch); return; }
+    if (choice === trustRow && projectNeedsTrust) {
+      const trusted = trustStore.get(birth.cwd) === true;
+      const picked = await ctx.ui.select(
+        `Trust ${birth.cwd}? This lets Pi load its .pi settings and resources and execute project extensions.`,
+        [trusted ? "Stop trusting this project" : "Trust this project", "Back"]);
+      if (!current(epoch) || picked === undefined || picked === "Back") return;
+      const next = !trusted;
+      // The decision is persisted before it takes effect, and the session
+      // reloads so the loader re-resolves every gated resource with it.
+      trustStore.set(birth.cwd, next);
+      runtime!.services.settingsManager.setProjectTrusted(next);
+      ctx.ui.notify(next ? "Project trusted. Reloading this session to apply it."
+        : "Project no longer trusted. Reloading this session to apply it.", "info");
+      await runtime!.session.reload();
+      return;
+    }
     if (choice !== "Extensions") return;
     const saved = updatePersonalSettings(location);
     const entries = [...new Set([...saved.extensions, ...readPackageIndex(packages).flatMap(item => item.entries)])];
     const rows = entries.map(entry => `${saved.extensions.includes(entry) ? "[on]" : "[off]"} ${entry}`);
     const picked = await ctx.ui.select("Personal extensions — reload to apply", [...rows, "Add extension path", "Back"]);
     if (!current(epoch) || picked === undefined || picked === "Back") return;
-    const entry = picked === "Add extension path" ? await ctx.ui.input("Extension entry (relative to installation, or packages:...)")
+    const raw = picked === "Add extension path" ? await ctx.ui.input("Extension entry (relative to installation, packages:..., or an absolute path)")
       : entries[rows.indexOf(picked)];
+    // C20: an absolute path is stored under its local: spelling so the saved
+    // entry is unambiguous next to installation- and store-relative ones.
+    const entry = raw === undefined ? undefined : personalExtensionEntry(raw);
     if (!entry || !current(epoch)) return;
     updatePersonalSettings(location, [], { entry, enabled: !saved.extensions.includes(entry) });
     ctx.ui.notify("Personal extension choice saved. Reloading this session to apply it.", "info");
@@ -139,8 +169,10 @@ async function main(): Promise<void> {
     const extensionPaths = [...verifiedPaths(assets.extensions), upstream];
     const resources = (): ConstructorParameters<typeof DefaultResourceLoader>[0] => ({
       cwd: options.cwd, agentDir,
-      noExtensions: true, noSkills: true, noPromptTemplates: true, noContextFiles: true,
-      systemPrompt: "", systemPromptOverride: () => undefined, appendSystemPrompt: [],
+      // Personal keeps Pi's ordinary semantics: skills, prompt templates and
+      // context files are discovered, and Pi's own prompt composition runs.
+      // Only extension discovery stays pinned to the selected files.
+      noExtensions: true,
       additionalExtensionPaths: extensionPaths, extensionFactories: [boundary],
       extensionsOverride: loaded => {
         if (loaded.errors.length || !loaded.extensions.some(extension => extension.resolvedPath === upstream)) {
@@ -154,7 +186,11 @@ async function main(): Promise<void> {
     });
     const services = await createAgentSessionServices({ ...options,
       ...(credentialOwner === undefined ? {} : { modelRuntime: credentialOwner.modelRuntime }),
-      settingsManager: SettingsManager.create(options.cwd, agentDir, { projectTrusted: false }), resourceLoaderOptions: resources() });
+      // The recorded decision is the only source: absent means untrusted when
+      // the folder holds gated resources, and trivially trusted when it does
+      // not (upstream's own rule -- there is nothing the gate could hold back).
+      settingsManager: SettingsManager.create(options.cwd, agentDir,
+        { projectTrusted: !projectNeedsTrust || trustStore.get(options.cwd) === true }), resourceLoaderOptions: resources() });
     const loader = services.resourceLoader, reload = loader.reload.bind(loader);
     loader.reload = async reloadOptions => {
       assets = personalExtensions(location, updatePersonalSettings(location));
@@ -165,7 +201,9 @@ async function main(): Promise<void> {
       // loader would reuse factories from before the file's verified update.
       await reload(reloadOptions);
     };
-    services.settingsManager.applyOverrides({ enableInstallTelemetry: false, enableAnalytics: false, enableSkillCommands: false });
+    // Skills are discovered and their commands come with them: the engine's
+    // persisted settings file carries no suppression (preparePiInteractive
+    // scrubs the old pin), so no override is needed here.
     // No excludeTools, workspace guard, role prompt, proxy or Society extension.
     try {
       const created = await createAgentSessionFromServices({ services, sessionManager: options.sessionManager,
@@ -235,7 +273,8 @@ async function main(): Promise<void> {
       return { cancelled: true };
     } finally { replacing = false; }
   };
-  runtime.importFromJsonl = async () => { throw new StoreError("INVALID_REQUEST", "Use /resume for an OMA history; external histories have no OMA birth"); };
+  // Personal keeps the engine's own /import: a foreign history lands in this
+  // birth's directory under the session manager's name, like a Pi user's.
   mode = new InteractiveMode(runtime, { tuiMode: "fullscreen" });
   // The private members replaced below are all named in
   // pi-compat/interactive-mode.ts.

@@ -1,10 +1,12 @@
 /** Personal choices share extension validation, never the Principal/Worker writer. */
 import test from "node:test";
 import assert from "node:assert/strict";
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { createHash } from "node:crypto";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { updatePersonalSettings, updatePersonalSettingsAsync, readPersonalSettings, personalExtensions, reconcilePersonalSettings } from "../src/runtime/personal-settings.js";
+import { updatePersonalSettings, updatePersonalSettingsAsync, readPersonalSettings, personalExtensions, reconcilePersonalSettings,
+  personalEntryProblem, personalExtensionEntry } from "../src/runtime/personal-settings.js";
 import { assertExtensionIntegrity } from "../src/runtime/extension-integrity.js";
 import { ProcessLock } from "../src/runtime/process-lock.js";
 import { DEPLOYMENT_LAYOUT } from "../src/domain/deployment.js";
@@ -162,4 +164,75 @@ test("Personal settings: a contended writer changes nothing and releases after a
   assert.deepEqual(readPersonalSettings(w.dataRoot), before);
   assert.throws(() => updatePersonalSettings(w, [], { entry: "../no.js", enabled: true }));
   assert.deepEqual(updatePersonalSettings(w, [], { entry: w.packageEntry, enabled: true }).extensions, [w.packageEntry]);
+});
+
+test("C20: a Personal extension may be an absolute local file, digest-pinned like every other entry", t => {
+  const w = fixture(t); updatePersonalSettings(w);
+  const local = join(w.root, "elsewhere", "my-ext.ts");
+  mkdirSync(join(w.root, "elsewhere")); writeFileSync(local, "export default () => {};\n");
+  const entry = `local:${local}`;
+  // personalExtensionEntry is how the UI stores an absolute choice.
+  assert.equal(personalExtensionEntry(local), entry);
+  assert.equal(personalExtensionEntry("extensions/user.js"), "extensions/user.js");
+  assert.equal(personalEntryProblem(entry), null);
+
+  const enabled = updatePersonalSettings(w, [], { entry, enabled: true });
+  const selected = personalExtensions(w, enabled);
+  assert.deepEqual(selected.missing, []);
+  assert.equal(selected.extensions.length, 1);
+  // The pinned path is the file's real path and the digest is its bytes.
+  const real = realpathSync(local);
+  assert.equal(selected.extensions[0]!.path, real);
+  assert.equal(selected.extensions[0]!.sha256, createHash("sha256").update(readFileSync(real)).digest("hex"));
+  assertExtensionIntegrity(selected.extensions);
+  // Changing the file after the choice is caught exactly like a package file.
+  writeFileSync(local, "export default () => { throw 1 };\n");
+  assert.throws(() => assertExtensionIntegrity(selected.extensions), { code: "UNSUPPORTED_PROFILE" });
+  // Disable works the same as any other entry.
+  assert.deepEqual(updatePersonalSettings(w, [], { entry, enabled: false }).extensions, []);
+});
+
+test("C20: a local entry is judged on file-ness and spelling, and the Society core cannot sneak in through it", t => {
+  const w = fixture(t); updatePersonalSettings(w);
+  // A directory spelled like a JS file reaches the regular-file check.
+  const dir = join(w.root, "adir.js"); mkdirSync(dir);
+  const core = join(w.libdir, DEPLOYMENT_LAYOUT.extension);
+  mkdirSync(join(core, ".."), { recursive: true }); writeFileSync(core, "export default () => {};\n");
+  const link = join(w.root, "linked.js"); symlinkSync(core, link);
+  const refused = [
+    `local:relative.js`, `local:${join(w.root, "adir")}`, `local:${join(w.root, "ext.txt")}`,
+    `local:${join(w.root, "a", "..", "ext.js")}`, `local:${join(w.root, "ext.js\0")}`,
+    `local:${dir}`,           // a real directory, not a file
+    `local:${link}`,          // a link that resolves to the Society core
+    `local:${core}`,          // the core's own path, directly
+  ];
+  for (const entry of refused)
+    assert.throws(() => updatePersonalSettings(w, [], { entry, enabled: true }), () => true, entry);
+  // A missing file is observed, not refused -- it can be disabled, not enabled.
+  const gone = `local:${join(w.root, "gone.js")}`;
+  assert.throws(() => updatePersonalSettings(w, [], { entry: gone, enabled: true }), { code: "UNSUPPORTED_PROFILE" });
+  assert.deepEqual(readPersonalSettings(w.dataRoot)?.extensions, []);
+  // Malformed local: entries in a saved file are corrupt bytes, not defaults.
+  const path = join(w.dataRoot, ".personal/settings.json");
+  const saved = JSON.parse(readFileSync(path, "utf8"));
+  saved.extensions = ["local:../escape.js"];
+  writeFileSync(path, JSON.stringify(saved));
+  assert.throws(() => readPersonalSettings(w.dataRoot), { code: "STORE_CORRUPT" });
+});
+
+test("C18/C20: the package resource lists survive a Personal settings round-trip and a no-change write", t => {
+  const w = fixture(t); updatePersonalSettings(w, [w.packageEntry]);
+  // An index that carries the C18 resource lists.
+  const indexed = [{ source: "npm:fixture", entries: [w.packageEntry],
+    skills: ["packages:skill/SKILL.md"], prompts: ["packages:prompts/p.md"], themes: ["packages:themes/t.json"] }];
+  writeFileSync(join(w.packages, PACKAGE_INDEX), JSON.stringify(indexed));
+  const round = updatePersonalSettings(w);
+  // The stored package record now carries the lists -- and reading them back
+  // must not drop them, or the next write would see a phantom change and the
+  // resource metadata would be lost on every rewrite.
+  assert.deepEqual(round.packages, indexed);
+  const reread = readPersonalSettings(w.dataRoot)!;
+  assert.deepEqual(reread.packages, indexed);
+  const again = updatePersonalSettings(w);
+  assert.equal(again.revision, reread.revision, "a rewrite against the same index must not churn revisions");
 });

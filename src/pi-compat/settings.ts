@@ -104,9 +104,13 @@ export function prepareEngineInteractiveSettings(agentDir: string): void {
     manager.setQuietStartup(Boolean(stored.quietStartup ?? true));
     manager.setEnableInstallTelemetry(false);
     manager.setEnableAnalytics(false);
-    manager.setEnableSkillCommands(false);
     manager.setFullscreenExitOutput("resume-hint");
-    const next = `${JSON.stringify(manager.getGlobalSettings(), null, 2)}\n`;
+    const nextSettings = manager.getGlobalSettings() as Record<string, unknown>;
+    // C16: skill commands are Pi's ordinary surface and stay enabled; an
+    // earlier suppression persisted in this file is scrubbed once here rather
+    // than pinned over again.
+    delete nextSettings.enableSkillCommands;
+    const next = `${JSON.stringify(nextSettings, null, 2)}\n`;
     return next === current ? undefined : next;
   });
 }

@@ -45,13 +45,18 @@ test("Open TUI: the preview's look is the default, the Human's own choices are k
   assert.equal(defaultUi.thinkingPeek.lines, 0); assert.equal(defaultUi.telemetry.enabled, false);
   assert.equal(defaultUi.footerSegments, undefined, "Open TUI's own footer defaults apply");
   const root = scratch("oma-open-settings-"); t.after(() => rmSync(root, { recursive: true, force: true }));
-  writeFileSync(join(root, "settings.json"), JSON.stringify({ theme: "dark", hideThinkingBlock: false, enableAnalytics: true }));
+  writeFileSync(join(root, "settings.json"), JSON.stringify({ theme: "dark", hideThinkingBlock: false, enableAnalytics: true,
+    enableSkillCommands: false }));
   writeFileSync(join(root, "open-tui.json"), JSON.stringify({ enabled: false, thinkingPeek: { lines: 2 }, footerSegments: { model: true } }));
   preparePiInteractive(root);
   const settings = JSON.parse(readFileSync(join(root, "settings.json"), "utf8"));
   const ui = JSON.parse(readFileSync(join(root, "open-tui.json"), "utf8"));
   assert.equal(settings.theme, "dark"); assert.equal(settings.hideThinkingBlock, false);
   assert.equal(settings.enableAnalytics, false);
+  // C16: skill commands are Pi's ordinary surface. The old suppression pin is
+  // scrubbed from a persisted file, and a fresh file never gets one.
+  assert.ok(!("enableSkillCommands" in settings), "the skill-command suppression survived");
+  assert.ok(!("enableSkillCommands" in defaults), "a fresh settings file carries the suppression");
   assert.equal(ui.enabled, true); assert.equal(ui.thinkingPeek.lines, 2);
   assert.deepEqual(ui.footerSegments, { model: true });
   const before = readFileSync(join(root, "open-tui.json"), "utf8");

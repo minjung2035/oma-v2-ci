@@ -1,18 +1,50 @@
 /** P0-3 / DR25: Personal extension choices are the Human's, never a role.
  * One locked read/transform/commit; package reconciliation uses the role rule. */
-import { join, resolve } from "node:path";
+import { lstatSync, realpathSync } from "node:fs";
+import { isAbsolute, join, resolve } from "node:path";
 import { StoreError } from "../domain/errors.js";
 import { withAsyncCleanup, withCleanup } from "../process/cleanup.js";
 import { DEPLOYMENT_LAYOUT } from "../domain/deployment.js";
-import { extensionEntryProblem, observeExtensionAsset, type ExtensionRoots } from "../config/operations.js";
+import { extensionEntryProblem, observeExtensionAsset, PACKAGE_ENTRY_PREFIX, type ExtensionRoots } from "../config/operations.js";
 import { ensureUserDirectory, readUserFile, replaceUserFile } from "./user-files.js";
 import { ProcessLock } from "./process-lock.js";
-import { packageStoreRoot, readPackageIndex, reconciledEntries, type InstalledPackage } from "./pi-packages.js";
+import { packageStoreRoot, readPackageIndex, reconciledEntries, resourceEntryProblem, type InstalledPackage } from "./pi-packages.js";
 import { PERSONAL_SESSIONS } from "./session-mode.js";
+import { fileDigest } from "../storage/file-digest.js";
 import type { VerifiedExtension } from "./extension-integrity.js";
 
 const KIND = "oma-personal-settings-v1";
 const MAX_BYTES = 1024 * 1024;
+/** C20: a Personal extension may also be an absolute file path, written
+ * `local:/absolute/path.js`. Personal runs on the Human's own permissions and
+ * confinement is not its guarantee, so a path that lives outside libdir and
+ * the package store is a real extension for it -- still digest-pinned before
+ * every session, like every other entry. */
+export const LOCAL_ENTRY_PREFIX = "local:";
+/** The shape of a `local:` entry's payload: a normalized absolute JS/TS path.
+ * `..` and `.` segments are refused as everywhere else, so the entry spells
+ * one file. A symlink resolves at observation; the real path is what is
+ * pinned, so a moved link cannot silently change what runs. */
+export function localEntryProblem(path: unknown): string | null {
+  if (typeof path !== "string" || !path || path.includes("\0") || path.includes("\\") || !isAbsolute(path) ||
+      // The leading segment of an absolute path is the root's empty spelling;
+      // every segment after it must be a real name -- no `//`, `.` or `..`.
+      path.split("/").slice(1).some(part => !part || part === "." || part === "..") ||
+      !/\.(?:js|mjs|ts)$/.test(path))
+    return "a local extension entry must be a normalized absolute JS/TS path";
+  return null;
+}
+/** The entry a Personal choice is stored under: absolute input becomes a
+ * `local:` entry; anything else is the installation/package spelling as-is. */
+export function personalExtensionEntry(input: string): string {
+  return isAbsolute(input) ? `${LOCAL_ENTRY_PREFIX}${input}` : input;
+}
+/** Whether an entry is a valid Personal extension choice: relative to the
+ * installation, `packages:`-pinned, or an absolute `local:` file (C20). */
+export function personalEntryProblem(entry: string): string | null {
+  if (entry.startsWith(LOCAL_ENTRY_PREFIX)) return localEntryProblem(entry.slice(LOCAL_ENTRY_PREFIX.length));
+  return extensionEntryProblem(entry);
+}
 export interface PersonalSettings {
   readonly kind: typeof KIND;
   readonly revision: number;
@@ -26,21 +58,37 @@ export interface PersonalSettingsLocation {
 }
 const invalid = (): never => { throw new StoreError("STORE_CORRUPT", "Personal settings are malformed"); };
 const entries = (value: unknown): value is string[] => Array.isArray(value) && new Set(value).size === value.length &&
-  value.every(item => typeof item === "string" && item !== DEPLOYMENT_LAYOUT.extension && extensionEntryProblem(item) === null);
+  value.every(item => typeof item === "string" && item !== DEPLOYMENT_LAYOUT.extension && personalEntryProblem(item) === null);
 function checked(value: unknown): PersonalSettings {
   if (!value || typeof value !== "object" || Array.isArray(value)) return invalid();
   const record = value as Record<string, unknown>;
   if (Object.keys(record).sort().join(",") !== "extensions,kind,packages,revision" || record.kind !== KIND ||
       !Number.isSafeInteger(record.revision) || (record.revision as number) < 0 || !entries(record.extensions) || !Array.isArray(record.packages)) return invalid();
   const sources = new Set<string>();
+  const resourceList = (value: unknown): boolean =>
+    value === undefined || (Array.isArray(value) && new Set(value).size === value.length &&
+      value.every(entry => resourceEntryProblem(entry) === null));
   for (const item of record.packages) {
-    if (!item || typeof item !== "object" || Object.keys(item).sort().join(",") !== "entries,source" ||
+    if (!item || typeof item !== "object") return invalid();
+    // entries+source always; the C18 resource lists are optional and were
+    // absent on indexes written before they were indexed. No other keys.
+    const keys = new Set(Object.keys(item));
+    if (!keys.has("entries") || !keys.has("source") ||
+        ![...keys].every(key => ["entries", "source", "skills", "prompts", "themes"].includes(key)) ||
         typeof item.source !== "string" || !item.source || sources.has(item.source) || !entries(item.entries) ||
-        !item.entries.every((entry: string) => entry.startsWith("packages:"))) return invalid();
+        !item.entries.every((entry: string) => entry.startsWith(PACKAGE_ENTRY_PREFIX)) ||
+        !resourceList(item.skills) || !resourceList(item.prompts) || !resourceList(item.themes)) return invalid();
     sources.add(item.source);
   }
+  // The resource lists are preserved, not rebuilt away: they are what a
+  // Personal session's argv names (C18), and dropping them would also make
+  // every persisted file differ from a fresh index read.
+  const lists = (item: Record<string, unknown>, key: "skills" | "prompts" | "themes"): readonly string[] =>
+    Object.freeze([...(item[key] as string[] | undefined ?? [])]);
   return Object.freeze({ kind: KIND, revision: record.revision as number, extensions: Object.freeze([...record.extensions]),
-    packages: Object.freeze(record.packages.map(item => Object.freeze({ source: item.source as string, entries: Object.freeze([...item.entries as string[]]) }))) });
+    packages: Object.freeze(record.packages.map(item => Object.freeze({ source: item.source as string,
+      entries: Object.freeze([...item.entries as string[]]), skills: lists(item, "skills"),
+      prompts: lists(item, "prompts"), themes: lists(item, "themes") }))) });
 }
 export function readPersonalSettings(dataRoot: string): PersonalSettings | null {
   const bytes = readUserFile(join(dataRoot, PERSONAL_SESSIONS, "settings.json"), MAX_BYTES);
@@ -50,8 +98,26 @@ export function readPersonalSettings(dataRoot: string): PersonalSettings | null 
 export function personalExtensionRoots(location: PersonalSettingsLocation): ExtensionRoots {
   return { libdir: location.libdir, packages: packageStoreRoot(location.packages) ?? location.packages };
 }
+/** C20: a `local:` entry is judged on its own ground: the real file must
+ * exist and be regular, its resolved path and digest are what get pinned.
+ * There is no root to escape, so the rule is file-ness plus normalization,
+ * not containment. */
+function observeLocalAsset(entry: string): ReturnType<typeof observeExtensionAsset> {
+  const path = entry.slice(LOCAL_ENTRY_PREFIX.length);
+  const problem = localEntryProblem(path);
+  if (problem !== null) return Object.freeze({ kind: "refused", reason: problem });
+  try {
+    if (!lstatSync(path, { throwIfNoEntry: false })) return Object.freeze({ kind: "missing" });
+    const actual = realpathSync(path);
+    if (!lstatSync(actual).isFile())
+      return Object.freeze({ kind: "refused", reason: "a local extension must be a regular file" });
+    return Object.freeze({ kind: "present", path: actual, sha256: fileDigest(actual).sha256 });
+  } catch (error) {
+    return Object.freeze({ kind: "refused", reason: error instanceof Error ? error.message : String(error) });
+  }
+}
 function selectedAsset(roots: ExtensionRoots, entry: string): ReturnType<typeof observeExtensionAsset> {
-  const asset = observeExtensionAsset(roots, entry);
+  const asset = entry.startsWith(LOCAL_ENTRY_PREFIX) ? observeLocalAsset(entry) : observeExtensionAsset(roots, entry);
   if (entry === DEPLOYMENT_LAYOUT.extension || (asset.kind === "present" && asset.path === resolve(roots.libdir, DEPLOYMENT_LAYOUT.extension)))
     throw new StoreError("INVALID_REQUEST", "Personal sessions do not load the Society extension");
   return asset;
@@ -96,7 +162,7 @@ function commitPersonalSettings(location: PersonalSettingsLocation, before: Pers
       : [...reconciledEntries(before.extensions, before.packages, packages)];
     if (!entries(chosen)) return invalid();
     if (toggle !== undefined) {
-      if (extensionEntryProblem(toggle.entry) !== null || toggle.entry === DEPLOYMENT_LAYOUT.extension)
+      if (personalEntryProblem(toggle.entry) !== null || toggle.entry === DEPLOYMENT_LAYOUT.extension)
         throw new StoreError("INVALID_REQUEST", "invalid Personal extension");
       if (toggle.enabled) {
         const asset = selectedAsset(personalExtensionRoots(location), toggle.entry);

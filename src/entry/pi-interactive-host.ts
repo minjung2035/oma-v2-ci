@@ -65,7 +65,7 @@ const COMMAND_WORDS: Readonly<Record<string, string>> = Object.freeze({
 /** The engine's commands that mean nothing in oma, or would mix another
  * product's state into it, and what is said instead. */
 export const NOT_IN_OMA: Readonly<Record<string, string>> = Object.freeze({
-  trust: "oma loads no project resources (extensions, skills, prompts or context files), so there is no project trust to save.",
+  trust: "oma loads no project-local resources in a Society session -- its extensions, skills, prompts and context files come from its role and the installed packages -- so there is no project trust to grant.",
   // The engine's report uploads the session -- the Principal's conversation
   // and its mail -- to the engine's developers, who do not make oma.
   bug: "oma does not send its sessions to the bundled engine's developers.",
@@ -128,6 +128,8 @@ export async function runInteractive(): Promise<void> {
     if (index < 0 || !argv[index + 1]) throw new Error(`missing ${name}`);
     return argv[index + 1]!;
   };
+  const flags = (name: string): string[] =>
+    argv.flatMap((value, index) => value === name ? [argv[index + 1]!] : []);
   const agentDir = process.env.PI_CODING_AGENT_DIR;
   if (!agentDir) throw new Error("interactive engine needs its private agent directory");
   preparePiInteractive(agentDir);
@@ -474,8 +476,17 @@ export async function runInteractive(): Promise<void> {
     modules!.refresh(extensions);
     const services = await createAgentSessionServices({ ...options,
       settingsManager: SettingsManager.create(cwd, agentDir, { projectTrusted: false }), resourceLoaderOptions: {
-      noExtensions: true, noSkills: true, noPromptTemplates: true, noContextFiles: true,
+      // Discovery stays explicit: only the role's pinned extensions load
+      // (`-e`, never a scanned directory), while skills, prompt templates and
+      // context files are discovered as Pi ships them -- the trusted core
+      // extension then keeps only the context files inside the workspace.
+      noExtensions: true,
       additionalExtensionPaths: extensions,
+      // C18: the spawn passes each package resource as its own flag, the same
+      // spelling Pi's CLI takes.
+      additionalSkillPaths: flags("--skill"),
+      additionalPromptTemplatePaths: flags("--prompt-template"),
+      additionalThemePaths: flags("--theme"),
       extensionFactories: [boundary],
       // The role prompt replaces Pi's generated base prompt, the same as the
       // RPC session's argv does; an absent flag leaves the loader's own default.
@@ -499,7 +510,9 @@ export async function runInteractive(): Promise<void> {
     } });
     const reload = services.resourceLoader.reload.bind(services.resourceLoader);
     services.resourceLoader.reload = async options => { modules!.refresh(extensions); await reload(options); };
-    services.settingsManager.applyOverrides({ enableInstallTelemetry: false, enableAnalytics: false, enableSkillCommands: false });
+    // Skills are discovered and their commands come with them: the engine's
+    // persisted settings file carries no suppression (preparePiInteractive
+    // scrubs the old pin), so no override is needed here.
     const modelName = argv.includes("--model") ? flag("--model") : undefined;
     const split = modelName?.indexOf("/") ?? -1;
     const model = modelName === undefined ? undefined
@@ -552,9 +565,10 @@ export async function runInteractive(): Promise<void> {
     catch (cleanup) { error = new AggregateError([error, cleanup], "Interactive failure and cleanup failed"); }
     await fatal(prefix, error);
   };
-  // OMA loads no project resources (no project extensions, skills, prompts or
-  // context files), so Pi's project-trust warning has nothing to warn about.
-  // It appeared only because the engine's HOME is the Principal's scratch.
+  // A Society session never loads project-local resources -- the settings
+  // manager above is made with projectTrusted:false as its explicit decision
+  // -- so Pi's project-trust warning has nothing to warn about. It appeared
+  // only because the engine's HOME is the Principal's scratch.
   own.renderProjectTrustWarningIfNeeded = () => {};
   // oma is not the engine's product: no hint to report a failed turn to the
   // engine's developers, and a crash is resumed with /resume, not `pi -r`.
