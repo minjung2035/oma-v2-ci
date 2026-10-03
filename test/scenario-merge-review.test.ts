@@ -81,7 +81,10 @@ test("SCN-R01: HIGH merge end-to-end — approval mail, Principal diff and vote,
     const approval = pending[0]!;
     const eml = s.archived(approval);
     assert.match(eml, /X-Oma-Kind: approval_required/i);
-    assert.match(eml, new RegExp(`^Subject: \\[${name}\\] HIGH approval requested`, "m"));
+    // A merge-<uuid> subject runs past the header line width, so the stored
+    // bytes carry it folded -- unfold as the reader does before matching.
+    const unfolded = eml.replace(/\r\n[ \t]+/g, " ");
+    assert.match(unfolded, new RegExp(`^Subject: \\[${name}\\] HIGH approval requested`, "m"));
 
     // Results are captured inside the provider callback and asserted after the
     // run: a throw in there only reaches the test as "provider failed".

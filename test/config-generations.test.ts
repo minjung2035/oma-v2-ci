@@ -19,17 +19,18 @@ const withPrincipalModel = (snapshot: ConfigurationSnapshot, model: string) => v
   agentProfiles: { ...snapshot.config.agentProfiles, principal: { ...snapshot.config.agentProfiles.principal!, modelProfile: model } } });
 
 test("D02 generation identity: golden vectors pin the byte framing", () => {
-  const empty = spawnSync("sh", ["-c", "printf 'oma-config-generation-v1\\n' | sha256sum"], { encoding: "utf8" });
-  assert.equal(generationIdOf(new Map()), `g-${empty.stdout.split(" ")[0]}`);
+  // The oracle is the system's sha256sum over the same framed bytes; the local
+  // lane forbids a shell, so it is invoked with direct argv on stdin.
+  const digestOf = (bytes: string): string =>
+    spawnSync("sha256sum", [], { input: bytes, encoding: "utf8" }).stdout.split(" ")[0]!;
+  assert.equal(generationIdOf(new Map()), `g-${digestOf("oma-config-generation-v1\n")}`);
   const one = new Map([["host.json", Buffer.from("{}\n")]]);
-  const vector = spawnSync("sh", ["-c", "printf 'oma-config-generation-v1\\nhost.json\\n3\\n{}\\n\\n' | sha256sum"], { encoding: "utf8" });
-  assert.equal(generationIdOf(one), `g-${vector.stdout.split(" ")[0]}`);
+  assert.equal(generationIdOf(one), `g-${digestOf("oma-config-generation-v1\nhost.json\n3\n{}\n\n")}`);
   // Order is by name bytes, not insertion; content and names both matter.
   const ab = new Map([["b", Buffer.from("2")], ["a", Buffer.from("1")]]);
   const ba = new Map([["a", Buffer.from("1")], ["b", Buffer.from("2")]]);
   assert.equal(generationIdOf(ab), generationIdOf(ba));
-  const framed = spawnSync("sh", ["-c", "printf 'oma-config-generation-v1\\na\\n1\\n1\\nb\\n1\\n2\\n' | sha256sum"], { encoding: "utf8" });
-  assert.equal(generationIdOf(ab), `g-${framed.stdout.split(" ")[0]}`);
+  assert.equal(generationIdOf(ab), `g-${digestOf("oma-config-generation-v1\na\n1\n1\nb\n1\n2\n")}`);
   assert.notEqual(generationIdOf(new Map([["a", Buffer.from("12")]])), generationIdOf(new Map([["a", Buffer.from("1")], ["2", Buffer.alloc(0)]])));
 });
 

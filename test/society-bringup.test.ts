@@ -14,6 +14,7 @@ import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { createServer } from "node:net";
 import { provisionSociety, repairSociety } from "../src/runtime/provision.js";
+import { hostSystemLayout } from "../src/runtime/resident-rootfs.js";
 import { brokerListening, superviseBroker } from "../src/runtime/broker-supervisor.js";
 import { ProcessLock, SOCIETY_OWNED_EXIT } from "../src/runtime/process-lock.js";
 import { SOCIETY_FENCE_ENV, SOCIETY_FENCE_FD } from "../src/process/async.js";
@@ -170,7 +171,11 @@ test("T115 provisioning builds the trusted rootfs Residents are confined to", ()
     // Identity names only the agent; nothing is copied from the host's /etc.
     const passwd = readFileSync(join(rootfs, "etc", "passwd"), "utf8");
     assert.match(passwd, /^agent:x:\d+:\d+:agent:\/home\/agent:\/bin\/sh\n$/);
-    assert.equal(readdirSync(join(rootfs, "etc")).filter(name => !["passwd", "group", "ld.so.cache", "alternatives"].includes(name)).length, 0);
+    // /etc holds the two identity files plus a mount target for each support
+    // bind the host actually has (F34/F35/F36: resolv.conf, ssl/certs, &c).
+    const allowed = new Set(["passwd", "group",
+      ...hostSystemLayout().binds.filter(path => path.startsWith("/etc/")).map(path => path.split("/")[2]!)]);
+    assert.deepEqual(readdirSync(join(rootfs, "etc")).filter(name => !allowed.has(name)), []);
     // Rebuilding is harmless.
     provisionSociety(state);
   } finally { rmSync(root, { recursive: true, force: true }); }

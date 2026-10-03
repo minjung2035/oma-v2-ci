@@ -182,8 +182,11 @@ test("P0V-78 / R6-05, INV10: a context tree is read only up to the context strea
   const prepare = `
     import { prepareContextEffects } from "@../src/cli/effects/context.js";
     process.on("exit", () => process.stdout.write(JSON.stringify({ arrayBuffers: process.memoryUsage().arrayBuffers })));
-    const prepared = prepareContextEffects(${JSON.stringify(tree)});
-    process.stdout.write(JSON.stringify({ bytes: prepared.digest.bytes }) + "\\n");`;
+    // w10: fail() throws a ClientError the CLI's fatal() ends; the child ends it the same way.
+    try {
+      const prepared = prepareContextEffects(${JSON.stringify(tree)});
+      process.stdout.write(JSON.stringify({ bytes: prepared.digest.bytes }) + "\\n");
+    } catch (error) { process.stderr.write("oma: " + error.message + "\\n"); process.exit(error.exitCode ?? 1); }`;
   const refused = cliChild(prepare);
   assert.equal(refused.status, 2, refused.stderr);
   assert.match(refused.stderr, /context is larger than a request can carry \(8388608 bytes\) at RATIONALE\.md/);

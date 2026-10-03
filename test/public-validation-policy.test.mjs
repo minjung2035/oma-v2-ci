@@ -4,6 +4,9 @@ import { readFileSync } from "node:fs";
 import { Script } from "node:vm";
 import ts from "typescript";
 import { publicDetails } from "../dist/src/domain/errors.js";
+// w10 moved this constant to the client limits module; the fixture loads the
+// real compiled value rather than re-deriving the bound a second way.
+import { MIN_LOG_FRAME_BYTES } from "../dist/src/client/limits.js";
 
 /** The real dispatcher and reply construction run against controlled metadata,
  * decoder and effect boundaries. This is not a wire-schema or transport proof.
@@ -35,7 +38,8 @@ function fixture(transform = source => source) {
     return exports;
   }
   const replies = load("../src/broker/replies.ts", {});
-  const logResponse = load("../src/protocol/log-response.ts", { "../domain/errors.js": { StoreError } });
+  const logResponse = load("../src/protocol/log-response.ts", { "../domain/errors.js": { StoreError },
+    "../client/limits.js": { MIN_LOG_FRAME_BYTES } });
   const { PublicDispatcher } = load("../src/broker/public-dispatcher.ts", {
     // DR3: which facts a failure may carry has one owner, used as it is.
     "../domain/errors.js": { StoreError, publicDetails },

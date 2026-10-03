@@ -33,7 +33,11 @@ test("name-status pairs preserve filename bytes and never add status tokens as p
     assert.equal(parseNameStatusZ(input).ok, false);
 });
 
-test("AV-25: a name the wire grammar cannot carry is unknown, not corruption", () => {
+// AV-25's resolution (0ece271): a name outside the grammar is a permanent
+// defect of that candidate, classified "refused" (INVALID_REQUEST at `observed`)
+// -- neither "unknown" (the observation answered) nor "corrupt" (the store is
+// fine). An earlier title called this "unknown"; that predates the refused kind.
+test("AV-25: a name the wire grammar cannot carry is refused, not corruption", () => {
   // Candidate scope: the candidate's content cannot be represented on the wire —
   // the changed-path set is unobservable, but the output grammar itself was intact.
   for (const input of [Buffer.from([77, 0, 255, 0]), bytes("M\0../outside\0"), bytes("A\0/abs\0"),
@@ -49,7 +53,7 @@ test("AV-25: a name the wire grammar cannot carry is unknown, not corruption", (
     if (!parsed.ok) assert.equal(parsed.scope, "output", parsed.reason);
   }
   const observer = new GitObserver(() => evidence({ stdout: Buffer.from([77, 0, 255, 0]) }));
-  assert.equal(observer.changedPaths("/repo", "a".repeat(40), "b".repeat(40)).kind, "unknown");
+  assert.equal(observer.changedPaths("/repo", "a".repeat(40), "b".repeat(40)).kind, "refused");
   const corruptObserver = new GitObserver(() => evidence({ stdout: bytes("M\0x") }));
   assert.equal(corruptObserver.changedPaths("/repo", "a".repeat(40), "b".repeat(40)).kind, "corrupt");
   // Boundary: an intact empty result and a valid record still decode present.

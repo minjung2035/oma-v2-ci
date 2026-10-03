@@ -198,7 +198,13 @@ export function validateConfig(raw: unknown): ValidatedConfigCandidate {
   const agentProfiles = needRecord(cfg.agentProfiles, "agentProfiles");
   const profileNames = new Set(Object.keys(agentProfiles));
   for (const [name, value] of Object.entries(agentProfiles)) {
-    const profile = closedRecord(value, ["modelProfile", "capabilities", "delegable", "childProfile", "resources"], `agentProfiles.${name}`);
+    // D23: a role file's own fields are closed, but a profile keeps a valid
+    // field it does not model -- a bundle authored by a newer reader must
+    // survive a screen's round-trip. Unknown keys are tolerated here and are
+    // inert: only the fields below reach the validated snapshot.
+    const profile = needRecord(value, `agentProfiles.${name}`);
+    for (const key of ["modelProfile", "capabilities", "delegable", "childProfile", "resources"] as const)
+      if (!Object.hasOwn(profile, key)) err(`agentProfiles.${name}.${key} is required`);
     const modelProfile = needString(profile.modelProfile, `agentProfiles.${name}.modelProfile`);
     if (!Object.hasOwn(modelProfiles, modelProfile)) err(`agentProfiles.${name}.modelProfile unknown`);
     if (!Array.isArray(profile.capabilities) || !Array.isArray(profile.delegable)) err(`agentProfiles.${name} capabilities/delegable arrays required`);

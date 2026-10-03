@@ -339,7 +339,11 @@ test("T113 a hostile environment entry cannot become extra bwrap arguments", () 
   } finally { rmSync(f.root, { recursive: true, force: true }); }
 });
 
-test("AV13 / SB-001, arch §11.1, CLI-001: every Resident has its sandbox's shell, never a host shell", () => {
+// The durable lane's required name predates the w11 confined-only contract:
+// the "an engine outside a sandbox does not" arm is gone with the unconfined
+// profile, and missing confinement is now refused. The title keeps the
+// required prefix.
+test("AV13 / SB-001, arch §11.1, CLI-001: a confined Resident has its sandbox's shell, never a host shell", () => {
   const f = fixture();
   try {
     const confined = f.adapter.spawnPlan();
@@ -417,7 +421,10 @@ test("AV25 / BATCH-006, TSP-009, P0V-122: an edit is judged by its exact growth 
   } finally { rmSync(workspace, { recursive: true, force: true }); }
 });
 
-test("AV27 / SB-002-E, GIT-002: Residents always reach Git at its mount and host-root profiles fail", () => {
+// Required-name prefix restored (see AV13 above): w11 made confinement
+// unconditional, so "reaches at the host path when not [sealed]" became
+// "host-root profiles fail"; the mount arm is unchanged.
+test("AV27 / SB-002-E, GIT-002: a Resident reaches the canonical repository at its mount when sealed; host-root profiles fail", () => {
   for (const rootfs of ["/", "relative", "/state/../rootfs", "/state\u0000/rootfs"])
     assert.throws(() => requireResidentRootfs(rootfs), { code: "UNSUPPORTED_PROFILE" });
   assert.doesNotThrow(() => requireResidentRootfs("/state/rootfs"));

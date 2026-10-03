@@ -146,6 +146,9 @@ test("R37: creation awaits a real private workspace before unit publication and 
  * its `origin` named that path, which the sandbox does not have. GIT-002's
  * clone is from /git/project.git, the Resident's mount. */
 test("AV27 / GIT-002: a new workspace's origin is the canonical repository as its Resident reaches it", { skip: process.platform !== "linux", timeout: 30000 }, async () => {
+  // w11/U1: every Resident is confined, so the origin is always the sandbox
+  // mount -- an omitted override resolves to the default mount, never to the
+  // host path the unconfined profile once used.
   for (const residentProjectGit of ["/git/project.git", undefined]) {
     const f = fixture();
     try {
@@ -160,7 +163,7 @@ test("AV27 / GIT-002: a new workspace's origin is the canonical repository as it
       await creates.create(f.auth, { name: "child", from: f.base, brief: "child" }, "create-origin").catch(() => undefined);
       const accepted = f.store.getOperation("a", "create-origin");
       assert.ok(accepted?.kind === "agent.create");
-      assert.equal(gitCommand(accepted.plan.workspacePath, ["remote", "get-url", "origin"]), residentProjectGit ?? f.paths.projectGit);
+      assert.equal(gitCommand(accepted.plan.workspacePath, ["remote", "get-url", "origin"]), residentProjectGit ?? "/git/project.git");
       assert.equal(gitCommand(accepted.plan.workspacePath, ["rev-parse", "HEAD"]), f.base, "the base still came from the host path");
     } finally { f.close(); }
   }

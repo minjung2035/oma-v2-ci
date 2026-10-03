@@ -103,18 +103,32 @@ export function collectUnacceptedArtifacts(stateRoot: string, store: Pick<Store,
   }
   // Context revision preparations (AV-20261003-19): publishContextRevision
   // stages `.prepare-<oid>-<operation id>` beside the revision before its
-  // atomic rename. An accepted fact names the revision itself, never this
-  // temporary, so a leftover is decided only by its lease: a free lease (or
-  // a lease whose tree is gone) collects it, a held or missing lease keeps
-  // and reports it.
+  // atomic rename, lease-owned from creation. An accepted fact names the
+  // revision itself, never this temporary. A leftover is decided first by the
+  // operation binding its name carries, then by its lease when one exists:
+  // a free lease (or a lease whose tree is gone) collects it, a held one keeps
+  // it. The writer is this broker, never a native child, so an unaccepted
+  // leftover with no lease left is still proved dead by the startup broker
+  // lock and collected; an unprovable name is reported and kept, like the
+  // names the staging collection does not derive.
   const revisions = join(stateRoot, "world", "context", "revisions");
   const revisionEntries = new Set(names(revisions));
   for (const name of revisionEntries) {
     const tree = name.endsWith(".lease") ? name.slice(0, -".lease".length) : name;
     const prepared = /^\.prepare-([0-9a-f]+)-(.+)$/.exec(tree);
-    if (prepared === null || !isValidFullOid(prepared[1]) || parseOperationId(prepared[2]) === null) continue;
-    if (name.endsWith(".lease") && revisionEntries.has(tree)) continue; // decided with its tree
-    leased(join(revisions, tree), "an unaccepted context revision preparation");
+    const operation = prepared !== null && isValidFullOid(prepared[1]!) ? parseOperationId(prepared[2]!) : null;
+    const path = join(revisions, tree);
+    if (operation === null || lstatSync(path, { throwIfNoEntry: false })?.isDirectory() !== true) {
+      if (name.endsWith(".lease") && operation !== null && !revisionEntries.has(tree))
+        leased(path, "a preparation lease without its tree");
+      else if (tree.startsWith(".prepare-"))
+        kept.push({ path, reason: "not a name this broker derives" });
+      continue;
+    }
+    if (name.endsWith(".lease")) continue; // the tree's own entry decides it and its lease
+    if (accepted(operation) !== null) { kept.push({ path, reason: "its operation is accepted" }); continue; }
+    if (revisionEntries.has(`${tree}.lease`)) { leased(path, "an unaccepted context revision preparation"); continue; }
+    remove(path, true);
   }
   return Object.freeze({ removed: Object.freeze(removed), kept: Object.freeze(kept.map(entry => Object.freeze(entry))) });
 }

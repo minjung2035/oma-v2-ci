@@ -188,7 +188,7 @@
     },
     {
       "path": "src/client/index.ts",
-      "sha256": "421eb815d1d4236df0c4fb0b772f2a45799d9b7e8abd9c8a3e11123248f3c82f"
+      "sha256": "b209b8a78c67c0b1732fcb5f06708405c40b99e4822ef1c2516bb93928aa1bb9"
     },
     {
       "path": "src/client/limits.ts",
@@ -212,11 +212,11 @@
     },
     {
       "path": "src/client/transport.ts",
-      "sha256": "ebd84e9af8b77beb2a606bef3aef9039cb30e5358bff9528f341da903e53aa7e"
+      "sha256": "7376bd9afcefd80c634591ee665d1c76b584969653550e764b06c70c938ff4a6"
     },
     {
       "path": "src/config.ts",
-      "sha256": "91c43636b5677b4d3a3b592697f439599f3603168049f770c4ae6a57043d44f6"
+      "sha256": "22a0b211649d01d5f19019a7cd744664a2400cde7fac8bfb6961424613f1fce0"
     },
     {
       "path": "src/config/defaults.ts",
@@ -468,7 +468,7 @@
     },
     {
       "path": "src/extension/mail-tools.ts",
-      "sha256": "01e9b330b10f76e7bca7a9e651f07fc6df1c3d4a619f67c495d5ac515e24c1a3"
+      "sha256": "e404c4157e74f05d67ab8d26277de3bd10582c15a5b384cccbce59b134cdf185"
     },
     {
       "path": "src/extension/principal-channel.ts",
@@ -1016,7 +1016,7 @@
     },
     {
       "path": "src/reconcile/preaccept.ts",
-      "sha256": "d1a18c669a0b8a02b3ab5297d432bbbdad20c3a551a113a8e8dd3ccfdcbe2fd6"
+      "sha256": "3469132aadc6132a0da592014fc48870e7470b9d28b1772b1de6334119fab867"
     },
     {
       "path": "src/request-cache.ts",

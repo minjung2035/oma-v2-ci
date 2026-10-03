@@ -22,7 +22,15 @@ process.stdin.on("data", data => {
     // "D": the end comes first, and a descendant still holding the terminal
     // writes after it -- output the holder must not cut off at the exit.
     else if (byte === 0x44) {
-      spawn("/bin/sh", ["-c", "trap '' HUP; sleep 0.3; printf LATE"], { stdio: "inherit" });
+      // A late-writing descendant in its own session (detached): it is never
+      // in the terminal's foreground group, so this program's exit cannot HUP
+      // it, and it holds the terminal slave open while it writes late -- what
+      // the drained end must not cut off. Direct argv: the lane forbids a
+      // shell, and a `trap '' HUP` installed before exec is exactly what the
+      // detached session expresses.
+      spawn(process.execPath,
+        ["-e", "setTimeout(() => process.stdout.write('LATE'), 300)"],
+        { stdio: "inherit", detached: true });
       process.exit(0);
     }
     else out(`typed:${String.fromCharCode(byte)}`);

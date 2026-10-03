@@ -211,8 +211,11 @@ process.on("SIGTERM", () => process.exit(0));
       messageIds: ["m-00000000-0000-4000-8000-000000000001-0"], sessionPath: null, deliveryMode: "followUp" as const,
       notice: "mail", indexPath: "/inbox.md" as const };
     const options = residentOptions(root, root, command);
-    prepareResident(options);
-    const adapter = new PiAdapter({ ...options, paths: { ...options.paths, coreExtension: core, cli } });
+    // The override moves coreExtension, so the preload asset the w10 spawn
+    // plan names beside it must be prepared against the effective paths.
+    const effective = { ...options, paths: { ...options.paths, coreExtension: core, cli } };
+    prepareResident(effective);
+    const adapter = new PiAdapter(effective);
     const boundary = await adapter.deliver(batch);
     assert.deepEqual(boundary, { adapterRevision: PI_ADAPTER_REVISION, batchId: batch.id, incarnation: 1,
       sessionPath: join(options.paths.sessionDir, "owned.jsonl"), entryId: "0123abcd" });

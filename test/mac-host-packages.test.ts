@@ -46,7 +46,7 @@ test("Mac host packages: explicit local install/list/update/remove never needs a
   assert.equal(existsSync(host), false, "missing app was reinterpreted as permission for a local install");
   const installed = await result("install", "npm:oma-host-fixture", "--host-only");
   assert.equal(installed.code, 0, installed.output); assert.match(installed.output, /Society packages were not synchronized/);
-  assert.deepEqual(readPackageIndex(store), [{ source: "npm:oma-host-fixture", entries: [EXTENSION] }]);
+  assert.deepEqual(readPackageIndex(store), [{ source: "npm:oma-host-fixture", entries: [EXTENSION], skills: [], prompts: [], themes: [] }]);
   assert.equal(readPersonalSettings(host), null, "install consumed the first project's Personal seed");
   assert.equal(existsSync(join(host, "run", "token")), false); assert.equal(existsSync(join(host, "host-record.json")), false);
   // Existing settings are not a guest path or a project activation target.
@@ -57,11 +57,11 @@ test("Mac host packages: explicit local install/list/update/remove never needs a
   try {
     const refused = await result("remove", "npm:oma-host-fixture", "--host-only");
     assert.equal(refused.code, 1, refused.output); assert.match(refused.output, /Another oma pi command is running/);
-    assert.deepEqual(readPackageIndex(store), [{ source: "npm:oma-host-fixture", entries: [EXTENSION] }]);
+    assert.deepEqual(readPackageIndex(store), [{ source: "npm:oma-host-fixture", entries: [EXTENSION], skills: [], prompts: [], themes: [] }]);
   } finally { busy.close(); }
   const unavailable = await result("install", "npm:oma-missing-fixture", "--host-only");
   assert.notEqual(unavailable.code, 0, unavailable.output); assert.doesNotMatch(unavailable.output, /Host packages updated/);
-  assert.deepEqual(readPackageIndex(store), [{ source: "npm:oma-host-fixture", entries: [EXTENSION] }]);
+  assert.deepEqual(readPackageIndex(store), [{ source: "npm:oma-host-fixture", entries: [EXTENSION], skills: [], prompts: [], themes: [] }]);
   assert.equal(readPersonalSettings(host), null);
   updatePersonalSettings(preferences, [EXTENSION]);
   const project = join(root, "project"); mkdirSync(project);

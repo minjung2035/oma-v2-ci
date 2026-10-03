@@ -190,7 +190,7 @@ test("DR25/mac: packages.sync makes the Mac's packages the engine's store, turns
   assert.ok(lstatSync(store).isSymbolicLink(), "the engine's store is not a link to a generation");
   const firstGeneration = readlinkSync(store);
   assert.match(firstGeneration, new RegExp(`^${PACKAGE_GENERATIONS}/p-[0-9a-f]{64}$`));
-  assert.deepEqual(readPackageIndex(store), [{ source: "npm:oma-hello-ext", entries: [HELLO] }]);
+  assert.deepEqual(readPackageIndex(store), [{ source: "npm:oma-hello-ext", entries: [HELLO], skills: [], prompts: [], themes: [] }]);
   const settings = loadConfiguration(w.projectSettings);
   for (const role of [settings.config.principalProfile, "resident"])
     assert.ok(settings.roles[role]!.extensions.some(item => item.path.endsWith("oma-hello-ext/extensions/hello.ts")), role);
@@ -258,10 +258,10 @@ test("DR25/mac: a store that is a link to its generation is read, pinned and mou
   try {
     const generation = join(f.root, PACKAGE_GENERATIONS, `p-${"a".repeat(64)}`);
     macStore(generation, { "oma-hello-ext": hello });
-    writeFileSync(join(generation, "oma-extensions.json"), JSON.stringify([{ source: "npm:oma-hello-ext", entries: [HELLO] }]));
+    writeFileSync(join(generation, "oma-extensions.json"), JSON.stringify([{ source: "npm:oma-hello-ext", entries: [HELLO], skills: [], prompts: [], themes: [] }]));
     const store = join(f.root, PACKAGE_STORE);
     symlinkSync(`${PACKAGE_GENERATIONS}/p-${"a".repeat(64)}`, store);
-    assert.deepEqual(readPackageIndex(store), [{ source: "npm:oma-hello-ext", entries: [HELLO] }]);
+    assert.deepEqual(readPackageIndex(store), [{ source: "npm:oma-hello-ext", entries: [HELLO], skills: [], prompts: [], themes: [] }]);
     f.edit("host.json", host => { host.installation.packages = store; });
     f.edit("roles/resident.json", role => { role.extensions = ["dist/src/pi-extension.js", HELLO]; });
     const pinned = loadConfiguration(f.path).roles.resident!.extensions.find(item => item.path.endsWith("hello.ts"))!.path;
@@ -303,8 +303,8 @@ test("DR25/mac: oma pi install on the Mac installs over the Mac's store and the 
   assert.equal(installed.status, 0, installed.out);
   assert.match(installed.out, /on for this project's Principal and Workers/);
   assert.ok(existsSync(join(w.macPackages, "npm/node_modules/oma-hello-ext/extensions/hello.ts")), "the Mac's store has no package");
-  assert.deepEqual(readPackageIndex(join(w.societiesDir, PACKAGE_STORE)), [{ source: "npm:oma-hello-ext", entries: [HELLO] }]);
-  assert.deepEqual(readPackageIndex(w.macPackages), [{ source: "npm:oma-hello-ext", entries: [HELLO] }], "host Personal has no extension index");
+  assert.deepEqual(readPackageIndex(join(w.societiesDir, PACKAGE_STORE)), [{ source: "npm:oma-hello-ext", entries: [HELLO], skills: [], prompts: [], themes: [] }]);
+  assert.deepEqual(readPackageIndex(w.macPackages), [{ source: "npm:oma-hello-ext", entries: [HELLO], skills: [], prompts: [], themes: [] }], "host Personal has no extension index");
   assert.equal(readPersonalSettings(w.dir), null, "install consumed the first Personal project's seed");
   const settings = loadConfiguration(w.projectSettings);
   assert.ok(settings.roles.resident!.extensions.some(item => item.path.endsWith("oma-hello-ext/extensions/hello.ts")));
@@ -350,7 +350,7 @@ test("DR25/mac: an application stopped after any of its steps, run again for the
       /stopped after/);
     const result = await applyPackageArchive({ data, archive, libdir, mirror });
     assert.deepEqual(result.added, ["npm:oma-hello-ext"], `after a stop at ${stop} the package was not found added`);
-    assert.deepEqual(readPackageIndex(join(data, PACKAGE_STORE)), [{ source: "npm:oma-hello-ext", entries: [HELLO] }], stop);
+    assert.deepEqual(readPackageIndex(join(data, PACKAGE_STORE)), [{ source: "npm:oma-hello-ext", entries: [HELLO], skills: [], prompts: [], themes: [] }], stop);
     assert.ok(existsSync(old), `the generation an engine may still read was removed after a stop at ${stop}`);
     assert.deepEqual(readdirSync(join(data, PACKAGE_GENERATIONS)).filter(name => name.startsWith(".staging-")), [], "a staging tree was left");
     const real = realpathSync(mirror);

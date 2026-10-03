@@ -89,7 +89,10 @@ test("F34/F35/F36 live: locale, identity, temp, user-local PATH and support file
     assert.equal(code, 0, err);
     const report = JSON.parse(out);
     for (const [key, value] of Object.entries(RESIDENT_ENVIRONMENT)) assert.equal(report.env[key], value, key);
-    for (const key of ["DBUS_SESSION_BUS_ADDRESS", "SSH_AUTH_SOCK", "DISPLAY", "NODE_OPTIONS", "NODE_EXTRA_CA_CERTS"]) assert.equal(report.env[key], undefined, key);
+    // A host's NODE_OPTIONS must still be refused, but oma deliberately sets
+    // its own -- w10 loads the in-process client preload through it.
+    for (const key of ["DBUS_SESSION_BUS_ADDRESS", "SSH_AUTH_SOCK", "DISPLAY", "NODE_EXTRA_CA_CERTS"]) assert.equal(report.env[key], undefined, key);
+    assert.match(report.env.NODE_OPTIONS ?? "", /^--import=file:\/\/.*runtime\/client-preload\.js$/, "NODE_OPTIONS is oma's preload, nothing else");
     assert.equal(report.user.username, "agent"); assert.equal(report.user.shell, "/bin/sh");
     assert.equal(report.locale, "UTF-8"); assert.equal(report.local, "local-ok"); assert.equal(report.tmp, "temp");
     assert.deepEqual(report.modes, [0o700, 0o700]);

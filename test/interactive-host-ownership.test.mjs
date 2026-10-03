@@ -41,6 +41,9 @@ async function world({ setModel, init, resourceReload, dispose, fail, moduleClos
     async dispose() { modules.push('dispose'); hooks.session_shutdown({ reason: 'quit' }); await dispose?.(); } };
   const dependencies = {
     'node:net': { Socket: class {} }, 'node:fs': { readFileSync: () => '{"version":"test"}' },
+    // w10's in-process Client preload is a side-effect import; the mocked
+    // boundaries below never reach it, so the install itself is a no-op here.
+    '../runtime/client-preload.js': {},
     'node:os': { userInfo: () => ({ homedir: '/home/fake' }) }, 'node:path': path,
     'node:module': { createRequire: () => ({ resolve: () => '/fake/pi-open-tui/package.json' }) },
     '@earendil-works/pi-coding-agent': {

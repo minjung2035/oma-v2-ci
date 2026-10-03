@@ -105,7 +105,12 @@ try {
   const expected = ending === 'tools' ? 6 : projectSeed ? ending === 'project-seed-resume' ? 3 : 2
     : ['extensions', 'new', 'resume', 'fork', 'fork-ui', 'fork-cancel', 'reload-update', 'retry', 'cancel'].includes(ending) ? 2 : 1;
   assert.equal(provider.seen.length, expected, ending);
-  for (const request of provider.seen) assert.doesNotMatch(JSON.stringify(request.body), /SOCIETY_PROMPT_SENTINEL|PROJECT_CONTEXT_SENTINEL/);
+  // C19: the trust gate covers .pi resources (SYSTEM.md stays out untrusted)
+  // while AGENTS.md is ordinary project context w8 left discoverable.
+  for (const request of provider.seen) {
+    assert.doesNotMatch(JSON.stringify(request.body), /PROJECT_CONTEXT_SENTINEL/, `${ending}: a .pi resource reached the model untrusted`);
+    assert.match(JSON.stringify(request.body), /SOCIETY_PROMPT_SENTINEL/, `${ending}: project context was not discovered`);
+  }
   if (ending === 'config') {
     const chosen = JSON.parse(readFileSync(join(engine, 'settings.json'), 'utf8'));
     assert.equal(chosen.defaultModel, 'scripted-thinking'); assert.equal(chosen.defaultThinkingLevel, 'minimal');

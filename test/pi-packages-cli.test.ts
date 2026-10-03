@@ -56,7 +56,8 @@ test("DR25: oma pi install puts a package in oma's store and turns its extension
 
   const installed = await oma("install", "npm:oma-hello-ext");
   assert.equal(installed.status, 0, `${installed.stdout}\n${installed.stderr}`);
-  assert.deepEqual(readPackageIndex(store), [{ source: "npm:oma-hello-ext", entries: [entry] }]);
+  // C18: an index entry also records its skills, prompt templates and themes.
+  assert.deepEqual(readPackageIndex(store), [{ source: "npm:oma-hello-ext", entries: [entry], skills: [], prompts: [], themes: [] }]);
   assert.match(installed.stdout + installed.stderr, /on for this project's Principal and Workers/);
   const settings = loadConfiguration(settingsPath);
   for (const role of [settings.config.principalProfile, "resident"])

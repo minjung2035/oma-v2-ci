@@ -91,7 +91,11 @@ test("AV-20261003-19: startup collection owns unaccepted .prepare-* revision tre
   mkdirSync(quiescent, { recursive: true });
   writeFileSync(join(quiescent, "GOAL.md"), "goal\n");
   lease.release();
-  // A preparation made before leases existed: kept, and said why.
+  // A preparation made before leases existed: collected, and said so. Its
+  // writer is this broker (never a native child), so the startup broker lock
+  // proves it dead even without a lease (AV-19 in priority-0). It is still
+  // accounted for — in `removed`, not `kept` — so the audit's "not invisible"
+  // requirement holds.
   const unleased = join(revisions, `.prepare-${"b".repeat(64)}-${generateOperationId()}`);
   mkdirSync(unleased, { recursive: true });
   writeFileSync(join(unleased, "GOAL.md"), "goal\n");
@@ -107,10 +111,10 @@ test("AV-20261003-19: startup collection owns unaccepted .prepare-* revision tre
   const collection = collectUnacceptedArtifacts(stateRoot, { getOperationById: () => null });
   assert.ok(collection.removed.includes(quiescent), "a quiescent leased preparation is reclaimed");
   assert.ok(collection.removed.includes(orphan), "a lease whose tree is gone goes too");
-  assert.ok(collection.kept.some(entry => entry.path === unleased), "unleased residue is accounted for, not invisible");
+  assert.ok(collection.removed.includes(unleased), "unleased residue is accounted for, not invisible");
   assert.equal(existsSync(quiescent), false);
   assert.equal(existsSync(leasePathOf(quiescent)), false);
-  assert.equal(existsSync(unleased), true);
+  assert.equal(existsSync(unleased), false);
   assert.equal(existsSync(accepted), true, "an accepted revision is never collected");
   assert.equal(existsSync(join(revisions, ".prepare-not-an-oid")), true, "a name the grammar does not derive is untouched");
 });

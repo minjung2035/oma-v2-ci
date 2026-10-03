@@ -1,6 +1,6 @@
 import { spawnSync } from "node:child_process";
-import { mkdirSync, writeFileSync, realpathSync } from "node:fs";
-import { join } from "node:path";
+import { existsSync, mkdirSync, writeFileSync, realpathSync } from "node:fs";
+import { dirname, join } from "node:path";
 import { decodeRunLease } from "../../src/protocol/run-lease.js";
 import { confinedPath, type ResidentDirectories } from "../../src/sandbox.js";
 import { hostSystemLayout, prepareResidentRootfs } from "../../src/runtime/resident-rootfs.js";
@@ -45,4 +45,13 @@ export function prepareResident(options: PiAdapterOptions): void {
   writeFileSync(options.paths.socket, "");
   Object.assign(host, { systemBinds: layout.binds, node: realpathSync(process.execPath) });
   prepareResidentRootfs(host.rootfs, layout, process.getuid!(), process.getgid!());
+  // w10/E27: the confined engine's NODE_OPTIONS preloads the in-process client
+  // from `dirname(coreExtension)/runtime/client-preload.js`. A fixture libdir
+  // must hold every asset the spawn plan names, so the fake file is provided
+  // here; a real libdir already ships it and is never replaced.
+  const preload = join(dirname(options.paths.coreExtension), "runtime", "client-preload.js");
+  if (!existsSync(preload)) {
+    mkdirSync(dirname(preload), { recursive: true });
+    writeFileSync(preload, "// test asset: fake engines do not exercise the client preload\n");
+  }
 }

@@ -78,8 +78,14 @@ for (const format of ["sha1", "sha256"] as const) test(`DR29/INT-002: ${format} 
   writeFileSync(join(source, "ident.txt"), "$Id$\n");
   git("add", "."); git("commit", "-qm", "checked"); const oid = git("rev-parse", "HEAD");
   git("clone", "-q", "--bare", source, repo);
-  const result = await runProcess({ executable: "/bin/sh", argv: ["-c", CHECK_CHECKOUT, "test-check", oid, repo, work, temporary,
-    "/usr/bin/test", "-f", "checked.txt"], env: GIT_ENV, timeoutMs: 5000, stdoutBytes: 4096, stderrBytes: 4096 });
+  // CHECK_CHECKOUT is a shell program; a bare `sh` is what the local lane's
+  // guard refuses, while the production launcher is bwrap. The script is driven
+  // the way production drives it — inside bwrap — with the host tree bound so
+  // the fixture paths resolve.
+  const result = await runProcess({ executable: "/usr/bin/bwrap",
+    argv: ["--dev-bind", "/", "/", "--die-with-parent", "--", "/bin/sh", "-c", CHECK_CHECKOUT, "test-check", oid,
+      repo, work, temporary, "/usr/bin/test", "-f", "checked.txt"],
+    env: GIT_ENV, timeoutMs: 5000, stdoutBytes: 4096, stderrBytes: 4096 });
   assert.equal(result.kind, "exited"); assert.equal(result.exitCode, 0, result.stderr.toString());
   assert.deepEqual(readFileSync(join(work, "checked.txt")), readFileSync(join(source, "checked.txt")));
   assert.equal(readFileSync(join(work, "substitute.txt"), "utf8"), "$Format:%H$\n");
@@ -89,8 +95,9 @@ for (const format of ["sha1", "sha256"] as const) test(`DR29/INT-002: ${format} 
   git("update-index", "--add", "--cacheinfo", `160000,${oid},dependency`); git("commit", "-qm", "gitlink");
   const withLink = git("rev-parse", "HEAD"); git("--git-dir", repo, "fetch", "-q", source, withLink);
   const marker = join(root, "should-not-run");
-  const refused = await runProcess({ executable: "/bin/sh", argv: ["-c", CHECK_CHECKOUT, "test-check", withLink, repo,
-    join(root, "incomplete"), temporary, "/usr/bin/touch", marker], env: GIT_ENV,
-    timeoutMs: 5000, stdoutBytes: 4096, stderrBytes: 4096 });
+  const refused = await runProcess({ executable: "/usr/bin/bwrap",
+    argv: ["--dev-bind", "/", "/", "--die-with-parent", "--", "/bin/sh", "-c", CHECK_CHECKOUT, "test-check", withLink,
+      repo, join(root, "incomplete"), temporary, "/usr/bin/touch", marker],
+    env: GIT_ENV, timeoutMs: 5000, stdoutBytes: 4096, stderrBytes: 4096 });
   assert.equal(refused.kind, "exited"); assert.equal(refused.exitCode, 125); assert.equal(existsSync(marker), false);
 });

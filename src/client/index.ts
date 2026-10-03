@@ -41,7 +41,7 @@ export class Client {
   }
   private scope<T>(signal: AbortSignal | undefined, action: () => Promise<T>, request?: string): Promise<T> {
     return inContext({ ...this.context, signal }, async () => {
-      if (signal?.aborted) throw new ClientError(`Outcome unknown: observation stopped before replying${request === undefined ? "" : `; --request ${request}`}`, 3, request);
+      if (signal?.aborted) throw new ClientError(`Outcome unknown: observation stopped before replying${request === undefined ? "" : `; --request ${request}`}`, 3, request, undefined, false, "BROKER_UNAVAILABLE");
       return action();
     });
   }

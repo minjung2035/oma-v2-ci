@@ -86,7 +86,9 @@ const dead = endpoint.registeredEngine;
 await turn();
 console.log(JSON.stringify({ engine: engine.pid, registered, unobserved, answer, afterwards, ended, dead }));
 `);
-    const run = spawnSync("/bin/sh", ["-c", `ulimit -n 64 && exec "$0" "$1"`, process.execPath, script],
+    // The descriptor bound is set with prlimit's direct argv: the local lane
+    // forbids a shell, and `ulimit` exists only inside one.
+    const run = spawnSync("prlimit", ["--nofile=64:64", process.execPath, script],
       { encoding: "utf8", timeout: 20000 });
     assert.equal(run.status, 0, run.stderr);
     const seen = JSON.parse(run.stdout) as Record<string, unknown>;

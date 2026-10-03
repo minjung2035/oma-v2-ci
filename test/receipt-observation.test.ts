@@ -23,6 +23,13 @@ async function runnerConsume(t: TestContext, f: Fixture, wait = false): Promise<
   const runner = new RunnerModule({ runRoot: join(f.root, "run"), stateRoot: f.root, society: "demo" }, "alice", TEST_PROTOCOL_LIMITS);
   let deliveries = 0;
   const completions: Record<string, unknown>[] = [];
+  // w11/U1: a confined delivery opens the inference relay before the adapter.
+  // The relay is engine plumbing like the adapter, not the receipt decision
+  // under test, so it is substituted the same way.
+  t.mock.method(runner as unknown as Record<string, () => unknown>, "openRelay", async () => ({
+    inference: { socketHostPath: join(f.root, "run", "inference.sock"), provider: "pi", model: "current", placeholder: "placeholder" },
+    relay: { async close() {} },
+  }));
   t.mock.method(runner as unknown as Record<string, () => unknown>, "adapter", () => ({
     deliver: async (batch: PreparedBatch) => {
       deliveries++;

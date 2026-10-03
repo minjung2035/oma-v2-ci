@@ -366,8 +366,10 @@ test("C18: an engine's argv names the package resources -- host paths unconfined
     assert.deepEqual(argv.slice(argv.indexOf("--skill"), argv.indexOf("--skill") + 2), ["--skill", skill]);
     assert.ok(argv.includes("--prompt-template")); assert.ok(argv.includes("--theme"));
 
-    // The Resident plan, unconfined and confined. Confined directories must be
-    // the canonical actor paths -- the sandbox checks them against the lease.
+    // The Resident plan is confined only: w11/U1 retired the unconfined
+    // profile, so "host paths" argv coverage is the Principal's sessionArgv
+    // above. Confined directories must be the canonical actor paths -- the
+    // sandbox checks them against the lease.
     const state = join(f.root, "state"); mkdirSync(state, { recursive: true });
     const dirs = { workspace: workspacePathAt(state, "a"), home: join(agentRootPathAt(state, "a"), "home"),
       archive: join(state, "mail", "archive"), workerArchive: join(state, "mail", "workers"),
@@ -382,9 +384,6 @@ test("C18: an engine's argv names the package resources -- host paths unconfined
     const profile = { provider: "pi", model: "current", inferenceSeconds: 1, prompt: "", workspaceBytes: 1,
       extensions: [], packageResources: resources };
     const limits = { frameBytes: 1, idleStreamSeconds: 1, receiptWaitSeconds: 1, batchMaxMessages: 1, mailBodyBytes: 1, contextBytes: 1, bundleBytes: 1 };
-
-    const host = planPiSpawn({ actor: "a", society: "s", paths, profile, limits } as never);
-    assert.deepEqual(host.args.slice(host.args.indexOf("--skill"), host.args.indexOf("--skill") + 2), ["--skill", skill]);
 
     const confinement = {
       host: { rootfs: join(f.root, "rootfs"), libdir: f.installation, packages: root, node: "/usr/bin/node",
