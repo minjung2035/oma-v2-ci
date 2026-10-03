@@ -185,6 +185,19 @@ function runnerEntry(f: ReturnType<typeof fixture>, env: Record<string, string>)
 }
 const hex = (text: string): string => Buffer.from(text, "utf8").toString("hex");
 
+test("U1: rootfs '/' fails startup before RunnerModule can run", () => {
+  const f = fixture();
+  try {
+    const resources = loadConfiguration(f.path).config.agentProfiles.verifier!.resources;
+    f.edit("host.json", host => { host.installation.rootfs = "/"; });
+    const result = runnerEntry(f, { OMA_PROFILE_HEX: hex("verifier"), OMA_RESOURCES_HEX: hex(canonicalResourceLimits(resources)) });
+    assert.notEqual(result.status, 0);
+    assert.match(result.stderr, /UNSUPPORTED_PROFILE/);
+    assert.doesNotMatch(result.stderr, /runs unconfined/);
+    assert.equal(existsSync(join(f.root, "selected.json")), false);
+  } finally { f.close(); }
+});
+
 test("OPS config: runner entry selects the broker-rendered role at startup without executing Pi", () => {
   const f = fixture();
   try {

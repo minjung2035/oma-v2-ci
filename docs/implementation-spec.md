@@ -450,7 +450,7 @@ Live batch.prepare/complete는 이 broker를 시작한 host endpoint에서만 �
 
 **MUST [SB-001; arch §16]** baseline은 trusted rootfs RO, user/mount/PID/IPC/network/UTS/cgroup namespace 분리, cap drop, private proc/dev, new session, die-with-parent, 그리고 kernel 효과를 제한하는 seccomp filter다(bwrap `--seccomp 3`, filter 전달의 owner는 process/async다; [DR19](design-revisions.md), MAC-205). filter는 native x64·arm64 ABI만 허용하고 x32 및 다른 ABI를 거절한다. `socket()`·`socketpair()`의 `AF_VSOCK`, io_uring setup/enter/register, add_key/request_key/keyctl, bpf, perf_event_open, userfaultfd는 `EPERM`으로 거절한다. 같은 kernel 효과의 우회 진입점을 함께 막으며, 이는 syscall allow-list나 모든 kernel 자원의 격리 보장은 아니다. vsock은 network namespace로 막히지 않는 kernel이 있으므로 namespace에 기대지 않는다. rootfs에는 pinned Node/Pi/Git/shell/rg/library와 empty mount targets만 둔다. host `/` 또는 `/home` 전체를 bind하지 않는다.
 
-**MUST [SB-007; arch §16]** 기본 rootfs는 OMA가 society state root 아래에 만든다. 내용은 빈 mount target과 agent만을 이름으로 갖는 생성된 `/etc/passwd`·`/etc/group`뿐이며 host `/etc`에서 복사하지 않는다. 프로그램과 라이브러리(`SB-001`의 Node/Git/shell/rg/library)는 host 운영체제의 것을 RO bind로 겹쳐 제공하고, 그 대상은 `/usr`, `/bin`, `/sbin`, `/lib`, `/lib64`, `/etc/alternatives`, `/etc/ld.so.cache`로 닫힌다. 이 목록 밖의 host 경로 — `/`, `/home`, state root, runtime directory — 는 받아들이지 않는다. host가 merged-`/usr`로 둔 최상위 link는 rootfs 안에 같은 모양으로 재현하되 `/usr` 밖을 가리키는 link는 따라가지 않는다. Node는 실제 binary 한 파일만 고정 경로에 RO bind한다. rootfs 생성은 idempotent하며, 예상 밖의 항목은 지우지 않고 거절한다.
+**MUST [SB-007; arch §16]** 기본 rootfs는 OMA가 society state root 아래에 만든다. 내용은 빈 mount target과 agent만을 이름으로 갖는 생성된 `/etc/passwd`·`/etc/group`뿐이며 host `/etc`에서 복사하지 않는다. 프로그램과 라이브러리(`SB-001`의 Node/Git/shell/rg/library)는 host 운영체제의 것을 RO bind로 겹쳐 제공하고, 그 대상은 `/usr`, `/bin`, `/sbin`, `/lib`, `/lib64`, `/etc/alternatives`, `/etc/ld.so.cache`, `/etc/resolv.conf`, `/etc/ssl/certs`, `/etc/pki/ca-trust`, `/etc/pki/tls/certs`, `/etc/nsswitch.conf`, `/etc/hosts`, `/etc/localtime`로 닫힌다. DNS/NSS/hosts/timezone 파일과 CA 디렉터리는 존재하는 target만 RO bind하며 absent 또는 깨진 symlink는 제외한다. `/etc` 전체를 bind하지 않으며 이 준비는 network/egress를 열지 않는다([DR31](design-revisions.md)). 이 목록 밖의 host 경로 — `/`, `/home`, state root, runtime directory — 는 받아들이지 않는다. host가 merged-`/usr`로 둔 최상위 link는 rootfs 안에 같은 모양으로 재현하되 `/usr` 밖을 가리키는 link는 따라가지 않는다. Node는 실제 binary 한 파일만 고정 경로에 RO bind한다. rootfs 생성은 idempotent하며, 예상 밖의 항목은 지우지 않고 거절한다.
 
 **MUST [SB-002]** Resident argv builder는 다음 의미의 배열을 생성한다. 옵션 지원 여부와 identity 매핑은 S-01로 검증한다. rootfs 안 mount target은 배포 때 생성하고 actor가 수정하지 못한다. `/tmp` reference cap은 512 MiB이고 host가 더 제한할 수 있다.
 
@@ -468,6 +468,7 @@ bwrap --unshare-all --new-session --die-with-parent --cap-drop ALL --seccomp 3
   --bind <ownHome> /home/agent
   --bind <ownRunnerSessionDir> /run/oma-sessions
   --ro-bind <archive> /mail/archive
+  --ro-bind <workerArchive> /mail/workers
   --ro-bind <ownMailbox> /mail/self
   --ro-bind <ownRunnerViewDir> /run/oma-view
   --ro-bind <worldDir> /world
@@ -476,7 +477,11 @@ bwrap --unshare-all --new-session --die-with-parent --cap-drop ALL --seccomp 3
   --ro-bind <ownIncarnationSocket> /run/oma/control.sock
   --symlink /run/oma-view/inbox.md /inbox.md
   --clearenv --setenv HOME /home/agent
-  --setenv PATH <trusted-rootfs-PATH>
+  --setenv PATH <pinned-OMA-and-Node>:/home/agent/.local/bin:/usr/bin:/bin
+  --setenv LANG C.UTF-8 --setenv LC_ALL C.UTF-8
+  --setenv TZ UTC --setenv TERM xterm-256color --setenv TMPDIR /tmp
+  --setenv SHELL /bin/sh --setenv USER agent --setenv LOGNAME agent
+  --setenv XDG_DATA_HOME /home/agent/.local/share --setenv XDG_RUNTIME_DIR /home/agent/.run
   <--setenv OMA_* for each core-extension input, then the four the builder owns>
   --chdir /workspace -- /opt/oma-node/node /opt/oma/<engine entry> --mode rpc <verified-extension-options>
 ```
@@ -487,13 +492,13 @@ bwrap --unshare-all --new-session --die-with-parent --cap-drop ALL --seccomp 3
 
 `/run/oma-sessions`는 엔진이 session을 쓰는 유일한 경로다. SB-006이 이미 그 내용을 model-origin data로 규정하므로 mount를 명시한다.
 
-`--clearenv`가 환경 전체를 지우므로 trusted core extension이 읽는 `OMA_*`는 이 배열에 없으면 sandbox 안에 없다. builder는 caller가 준 이름/값을 검증하고(이름 문법, NUL 금지), `OMA_FRAME_BYTES`/`OMA_BATCH_MAX_MESSAGES`/`OMA_ACTOR`/`OMA_INCARNATION`를 마지막에 스스로 설정해 caller가 검증된 lease의 actor를 덮어쓰지 못하게 한다. host 환경은 상속하지 않는다.
+`--clearenv`가 환경 전체를 지우므로 trusted core extension이 읽는 `OMA_*`는 이 배열에 없으면 sandbox 안에 없다. builder는 caller가 준 이름/값을 검증하고(이름 문법, NUL 금지), `OMA_FRAME_BYTES`/`OMA_BATCH_MAX_MESSAGES`/`OMA_ACTOR`/`OMA_INCARNATION`를 마지막에 스스로 설정해 caller가 검증된 lease의 actor를 덮어쓰지 못하게 한다. host 환경은 상속하지 않는다. 위 최소 base 환경도 caller가 덮어쓰지 못하며 XDG 디렉터리는 confined home 아래에 mode 0700으로 준비한다. locale는 rootfs의 C.UTF-8 지원으로 시험한다.
 
-**MUST [SB-002-C]** argv에 등장하는 host 경로는 위 mount 표를 통해서만 sandbox 경로로 번역한다. 어느 mount에도 속하지 않는 경로는 그대로 전달하지 않고 거절한다. 그렇지 않으면 host에서 검증된 파일이 sandbox 안에서 조용히 없는 파일이 되고, 설정 오류가 엔진 오류로 둔갑한다. 모델에게 보이는 경로(도구 결과, CLI 출력, 메일 안내)도 그 모델의 view로 보인다: broker는 host의 이름으로 기록·응답하고, 모델의 경계(sandbox 안 CLI는 자기 환경의 mount root, Principal의 도구는 host root)가 번역한다([DR1](design-revisions.md)).
+**MUST [SB-002-C]** argv에 등장하는 host 경로는 위 mount 표를 통해서만 sandbox 경로로 번역한다. 중첩된 host root는 가장 구체적인 mount를 선택하며 RO installation root가 RW session/home/workspace mount를 가리지 못한다. 어느 mount에도 속하지 않는 경로는 그대로 전달하지 않고 거절한다. 그렇지 않으면 host에서 검증된 파일이 sandbox 안에서 조용히 없는 파일이 되고, 설정 오류가 엔진 오류로 둔갑한다. 모델에게 보이는 경로(도구 결과, CLI 출력, 메일 안내)도 그 모델의 view로 보인다: broker는 host의 이름으로 기록·응답하고, 모델의 경계(sandbox 안 CLI는 자기 환경의 mount root, Principal의 도구는 host root)가 번역한다([DR1](design-revisions.md)).
 
 **MUST [SB-002-D]** 엔진의 agent directory(provider credential 보관처)는 Resident mount 계획에 넣지 않는다(PR-004). 따라서 봉인된 Resident는 credential이 없고 `--unshare-all`로 network도 없다. 이 조합에서 Resident가 provider에 닿는 길은 INF-005의 relay 하나다. credential이나 network를 조용히 열어 다른 길을 만들지 않는다. architecture §16에 비용과 선택지를 적는다.
 
-**MUST [SB-002-E]** 설정 없이 시작한 society의 `installation.rootfs`는 `SB-007`의 생성된 rootfs다. 즉 기본은 봉인이다. 운영자가 `installation.rootfs`를 `/`로 명시하면 신뢰 rootfs가 없다는 선언이다(SB-001이 host `/` bind를 금지하므로 `/`는 rootfs가 될 수 없다). 그 배포에서 Resident는 봉인 없이 host에서 실행되며, runner는 시작할 때 그 사실을 한 줄로 보고하고 Dashboard가 같은 사실을 보인다. 봉인 부재를 기본값처럼 조용히 넘기지 않는다.
+**MUST [SB-002-E]** Society는 confined-only다([DR31](design-revisions.md), 사용자 확정 U1). 설정 없이 시작한 society의 `installation.rootfs`는 `SB-007`의 생성된 rootfs이며 정규화된 비-root 절대 경로여야 한다. `/`는 `UNSUPPORTED_PROFILE` startup failure로 RunnerModule 구성 전에 거절한다. bwrap/user namespace 부재나 spawn 실패는 host 실행으로 대체하지 않는다. Dashboard는 선언된 confined rootfs를 표시하되 실행 증거로 승격하지 않는다. Resident 외 `oma login`/`oma pi` 대화형 엔진과 Principal의 contained tools는 각자 기존 계약을 유지한다.
 
 **MUST [SB-003]** stdin/stdout/stderr와 명시적으로 검증한 RPC pipe 외 상속 FD를 닫는다. runner admin FD, provider socket, host credential FD, systemd bus, SSH agent, desktop socket을 전달하지 않는다. OMA actor socket에는 자기 limited API만 존재한다. 다른 actor endpoint는 mount하지 않는다. rootfs의 기존 symlink/mount target이 다른 host path를 노출하지 않는지 검사한다.
 

@@ -65,6 +65,7 @@ async function compose(environment, { lockHeld = true, claim = "taken", cgroup =
       }
       async start() { calls.push("listen"); } notifyReady() { calls.push("notify"); return true; }
     } },
+    "../runtime/candidate-checks.js": { CandidateChecks: class { run() { throw new Error("composition must not execute candidate checks"); } } },
     "../git/quarantine.js": { QUARANTINE_RESOURCES: QUARANTINE_PROFILE },
     "../runtime/provision.js": { repairSociety: stateRoot => {
       calls.push(`repair:${stateRoot}`);
@@ -118,7 +119,7 @@ async function compose(environment, { lockHeld = true, claim = "taken", cgroup =
     // AV11: the canonical repository's path has one owner.
     "../storage/paths.js": { projectGitPathAt: stateRoot => `${stateRoot}/repos/project.git` },
     // AV27: where a Resident's Git reaches that repository has one owner.
-    "../sandbox.js": { residentProjectGit: (_rootfs, hostPath) => hostPath },
+    "../sandbox.js": { residentProjectGit: () => '/git/project.git' },
     "../storage/quota.js": { StorageAdmission: class { admit() { calls.push("storage-quota"); return () => undefined; } reserve() { return () => undefined; } } },
     "../authority.js": { resolvedSpecOf: value => value },
     "../domain/errors.js": { StoreError: class extends Error {} },

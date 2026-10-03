@@ -6,3 +6,4 @@ mail/
 runtime.sqlite
 .pi/
 staging/
+.scratch/

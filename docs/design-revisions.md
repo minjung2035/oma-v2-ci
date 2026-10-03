@@ -950,3 +950,30 @@ bytes. Owner links and generated trace fingerprints use the new locations;
 changed identities remain unverified and old evidence is not promoted.
 This changes document ownership and verification paths, not runtime behavior
 or the independent permission and release boundaries recorded in validation.
+
+## DR31 — Confined-only Society and minimal sandbox environment (F34–F36, U1)
+
+The Human confirmed U1 option A: Society has one confined Resident security/runtime
+contract. This supersedes the historical rootfs='/' opt-out in SB-002-E and the
+frozen architecture §16 description; architecture.md remains byte-for-byte frozen.
+A rootfs of '/' is UNSUPPORTED_PROFILE before RunnerModule construction. Missing
+bubblewrap/user namespaces or a failed sandbox spawn never authorize host execution.
+Configuration load and generation validation reject unsupported rootfs values too;
+no previously accepted operation, spec, receipt or session is rewritten. Receipt-only
+recovery still settles durable evidence without constructing an engine.
+
+The Resident environment retains clearenv, sets deterministic C.UTF-8 locale, UTC,
+terminal, temp, shell and agent identity, and places private XDG directories under
+its confined home. The confined home's .local/bin is available after pinned OMA/Node
+on PATH. Present DNS/NSS/hosts/timezone files and CA directories enter the closed
+read-only system bind list, including existing symlink targets, but no network or
+host desktop environment is inherited. The guest package/session environment names
+UTC, /bin/sh, oma identity and /tmp explicitly.
+
+Unconfined-only Resident spawn/environment/relay/Git branches are removed. Principal
+contained tools, OMA_TOOL_SURFACE and workspaceGuard remain, as do the separate
+interactive oma login / oma pi paths. Scenario fixtures use the generated rootfs and
+TLS relay by default. Resident activation, retry/deadline and resume tests run through
+bubblewrap; missing bubblewrap is explicit NOT_RUN and the local runner already
+rejects skipped coverage as a pass. These are Linux fixture and guest-composition
+proofs, not native macOS, real-provider or systemd/cgroup qualification.

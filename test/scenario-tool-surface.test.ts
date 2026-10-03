@@ -1,12 +1,13 @@
 /** DR27 / TSP: real engine registration, invocation and persistent per-role settings. */
 import test from "node:test";
+import { RESIDENT_TEST_OPTIONS } from "./fixtures/resident.js";
 import assert from "node:assert/strict";
 import { withScenario } from "./fixtures/scenario.js";
 import { call, text, tools, toolResults } from "./fixtures/scripted-provider.js";
 import { commitRoleSet, readSettingsForEditing, roleSetOf } from "../src/tui/sources/settings.js";
 
 for (const role of ["principal", "resident"] as const) for (const mode of ["valid", "collision", "unknown"] as const)
-  test(`DR27 / TSP: ${role} ${mode} surface through the real engine and persisted settings`, { timeout: 120_000 }, async () => {
+  test(`DR27 / TSP: ${role} ${mode} surface through the real engine and persisted settings`, { timeout: 120_000, ...(role === "resident" ? { skip: RESIDENT_TEST_OPTIONS.skip } : {}) }, async () => {
     await withScenario({ residents: ["worker-a"] }, async s => {
       const settings = readSettingsForEditing(s.configPath);
       const roleName = role === "principal" ? settings.config.principalProfile : settings.workerProfile!;

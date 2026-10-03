@@ -12,7 +12,7 @@
  */
 import test from "node:test";
 import assert from "node:assert/strict";
-import { execFileSync, spawnSync } from "node:child_process";
+import { execFileSync } from "node:child_process";
 import { mkdirSync, symlinkSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { withScenario, type Scenario } from "./fixtures/scenario.js";
@@ -20,8 +20,7 @@ import { SCRIPTED_KEY, call, continuesTurn, text, textOf, toolResults, tools, ty
 import { projectGitPathAt } from "../src/storage/paths.js";
 import { commitRoleSet, readSettings, readSettingsForEditing, roleSetOf, writeSettings } from "../src/tui/sources/settings.js";
 
-const bwrap = spawnSync("bwrap", ["--version"]).status === 0;
-const OPTIONS = { timeout: 180_000, skip: bwrap ? false : "bubblewrap is not installed on this host" };
+import { RESIDENT_TEST_OPTIONS as OPTIONS } from "./fixtures/resident.js";
 const isResident = (request: ChatRequest): boolean => !(request.tools ?? []).some(tool => tool.function?.name === "oma_society");
 const lastResult = (request: ChatRequest | undefined): string => toolResults(request ?? { messages: [] }).at(-1)?.text ?? "";
 const git = (s: Scenario, ...args: string[]): string => execFileSync("git", ["--git-dir", projectGitPathAt(s.root), ...args], { encoding: "utf8" }).trim();
@@ -73,6 +72,8 @@ test("SCN-C02: inside the sandbox the provider key is only a placeholder; the re
     const resident = s.provider.seen.filter(entry => isResident(entry.body));
     const inside = lastResult(resident[1]!.body);
     assert.ok(inside.length > 0);
+    for (const line of ["LANG=C.UTF-8", "LC_ALL=C.UTF-8", "TZ=UTC", "TERM=xterm-256color", "TMPDIR=/tmp", "SHELL=/bin/sh", "USER=agent", "LOGNAME=agent", "XDG_DATA_HOME=/home/agent/.local/share", "XDG_RUNTIME_DIR=/home/agent/.run"])
+      assert.ok(inside.split("\n").includes(line), `missing normalized env: ${line}`);
     assert.ok(!inside.includes(SCRIPTED_KEY), "the real key is visible inside the sandbox");
     for (const entry of resident) assert.equal(entry.authorization, `Bearer ${SCRIPTED_KEY}`, "the provider did not receive the real key");
     assert.ok(!resident[0]!.body.messages.map(textOf).join("\n").includes(SCRIPTED_KEY));
@@ -123,7 +124,7 @@ test("SCN-C05: a merge open on a base main has left is refused with the actual m
       // The workspace's origin/main stays at the fetched base; after the first
       // request applies, opening on it is stale.
       if (index === 0) return bash(`${COMMIT} && echo 첫번째 > /tmp/r1.md && oma merge open --tier LOW --title 첫번째 --file /tmp/r1.md --request mrg-c05a`);
-      if (index === 1) return bash(`${COMMIT} && echo 두번째 > /tmp/r2.md && oma merge open --tier LOW --title 두번째 --file /tmp/r2.md --base refs/remotes/origin/main --request mrg-c05b; echo "exit=$?"`);
+      if (index === 1) return bash(`${COMMIT.replace("echo fixed", "echo second")} && echo 두번째 > /tmp/r2.md && oma merge open --tier LOW --title 두번째 --file /tmp/r2.md --base refs/remotes/origin/main --request mrg-c05b; echo "exit=$?"`);
       return text("거절됐습니다.");
     });
     const run = await s.activate("worker-a");

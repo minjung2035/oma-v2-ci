@@ -1,4 +1,5 @@
 import test from "node:test";
+import { RESIDENT_TEST_OPTIONS } from "./fixtures/resident.js";
 import assert from "node:assert/strict";
 import { chmodSync, linkSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, utimesSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
@@ -70,32 +71,23 @@ test("INF-001: unreadable, malformed or linked settings cannot silently disable 
   }
 });
 
-test("INF-001: the Resident adapter waits for five failed provider retries, then reports PROVIDER_FAILED without a boundary", { timeout: 30000 }, async t => {
-  const { PiAdapter } = await import("../src/runtime/pi-adapter.js");
-  const { scriptedProvider } = await import("./fixtures/scripted-provider.js");
-  const root = scratch("oma-resident-retry-");
-  const provider = await scriptedProvider(() => ({ kind: "cut" }));
-  t.after(async () => { await provider.close(); rmSync(root, { recursive: true, force: true }); });
-  for (const name of ["workspace", "sessions", "home", "archive", "view"]) mkdirSync(join(root, name));
-  const runtime = resolvePiRuntime({ stateRoot: root }); provider.configure(runtime.agentDir);
-  const batch = { id: "b-00000000-0000-4000-8000-000000000001", agent: "alice", incarnation: 1,
-    messageIds: [], sessionPath: null, deliveryMode: "followUp" as const, notice: "Read this mail", indexPath: "/inbox.md" as const };
-  writeFileSync(join(root, "view", `batch-${batch.id}.json`), JSON.stringify({ id: batch.id, agent: batch.agent,
-    incarnation: batch.incarnation, messageIds: batch.messageIds, deliveryMode: batch.deliveryMode, notice: batch.notice }));
-  const adapter = new PiAdapter({ actor: "alice", society: "demo",
-    profile: { provider: "fake", model: "scripted", inferenceSeconds: 20, prompt: "", extensions: [], workspaceBytes: 1 << 20 },
-    limits: { frameBytes: 1 << 20, idleStreamSeconds: 5, receiptWaitSeconds: 5, batchMaxMessages: 24, mailBodyBytes: 1 << 20, contextBytes: 1 << 20, bundleBytes: 1 << 20 },
-    paths: { piCommand: runtime.executable, piArgs: runtime.args, piAgentDir: runtime.agentDir,
-      coreExtension: join(process.cwd(), "dist/src/pi-extension.js"), cli: join(process.cwd(), "dist/src/cli.js"),
-      workspace: join(root, "workspace"), sessionDir: join(root, "sessions"), agentHome: join(root, "home"),
-      mailArchive: join(root, "archive"), workerArchive: join(root, "workers"), projectGit: join(root, "project.git"), batchView: join(root, "view"), socket: join(root, "absent.sock") } });
-  await assert.rejects(adapter.deliver(batch), { code: "PROVIDER_FAILED" });
-  assert.equal(provider.seen.length, 6);
-  provider.script([{ kind: "text", text: "Recovered" }]);
-  const boundary = await adapter.deliver(batch);
-  assert.ok(boundary);
-  assert.equal(boundary.batchId, batch.id);
-  assert.equal(provider.seen.length, 7);
+test("INF-001: the Resident adapter waits for five failed provider retries, then reports PROVIDER_FAILED without a boundary", RESIDENT_TEST_OPTIONS, async () => {
+  const { withScenario } = await import("./fixtures/scenario.js");
+  await withScenario({ residents: ["alice"] }, async s => {
+    await s.residentSends("alice", { to: ["alice"], subject: "Retry", body: "Read this mail" }, "retry-task");
+    s.script(() => ({ kind: "cut" }));
+    const failed = await s.activate("alice");
+    assert.notEqual(failed.code, 0);
+    assert.match(failed.stderr, /PROVIDER_FAILED/);
+    assert.equal(s.provider.seen.length, 6);
+    assert.equal(s.store.preparedBatches("alice").length, 1);
+    s.script([{ kind: "text", text: "Recovered" }]);
+    await s.restartBroker();
+    const recovered = await s.activate("alice");
+    assert.equal(recovered.code, 0, recovered.stderr);
+    assert.deepEqual(s.store.preparedBatches("alice"), []);
+    assert.equal(s.provider.seen.length, 7);
+  });
 });
 
 /** An installation tree that ships its own engine, like a deployed OMA. */
@@ -270,7 +262,7 @@ test("T106/TUI-019: running in a bare project needs no setup command and no hand
   try {
     const config = defaultHostConfig({
       society: societyFromDirectory("/home/someone/My Project"),
-      node: process.execPath, libdir: root, rootfs: "/", deploymentDigest: "a".repeat(64),
+      node: process.execPath, libdir: root, rootfs: join(root, "rootfs"), deploymentDigest: "a".repeat(64),
     });
     // The society follows the project directory, so two checkouts stay apart.
     assert.equal(config.society, "my-project");

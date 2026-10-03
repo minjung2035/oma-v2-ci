@@ -208,7 +208,7 @@ Recovery repeats current policy, eligibility, stop and authority checks, using t
 existing error classification. Applied non-no-op CAS is historical settlement and
 must not be re-executed or denied merely because authority changed afterwards.
 Executable nonempty checks remain gated; this is not evidence of bypassing a
-supported check profile. Preserve explicit rootfs='/' unconfined mode, no OMA cost
+supported check profile. DR31 supersedes the original rootfs='/' opt-out: Society is confined-only. Preserve no OMA cost
 cap, open S-01-CANDIDATE/tiered gates and immutable accepted facts. Every blocked
 state needs bounded reobservation or explicit diagnosis/repair; not every state
 eventually succeeds. WP24 owns no-op evidence. WP27/30/31 own actual engine, kernel,
@@ -247,7 +247,7 @@ case key is stable so a removed unknown/legacy row fails the completeness review
 | D06.acceptance-unknown | timeout releases possibly active claim | hold/fence until correlated terminal/nonacceptance/death evidence | WP09, WP10 | V09A, V10A | C1 | PR-002, IPC-007 |
 | D06.no-op | main==candidate alone appears applied | no-op repeats current eligibility/policy/stop/authority | WP24 | V24B | C1 | INT-001, INT-004 |
 | D06.applied | non-no-op observed applied CAS | historical settlement, no new CAS and no retroactive permission test | WP24 | V24A | C0 | INT-004 |
-| D06.unsupported | unqualified checks/codec/resources remain gated | reject unsupported, preserve rootfs opt-out and no cost cap | WP27, WP31 | V27A, V31B | C0 | INT-007, SB-002-E, INF-001 |
+| D06.unsupported | unqualified checks/codec/resources remain gated | reject unsupported, confined-only Society per DR31; no cost cap | WP27, WP31 | V27A, V31B | C0 | INT-007, SB-002-E, INF-001 |
 | D06.power-loss | process crash is not storage power loss | explicit VM/storage gate, retain NOT_RUN without proof | WP05, WP30 | V05C, V30B | C0 | REC-004 |
 | preaccept.acceptance-unknown | DB observation may fail during cleanup | retain exact owned artifacts on uncertain acceptance; attempt all cleanups | WP17 | V17A | C1 | FS-007, DB-009 |
 
@@ -263,7 +263,6 @@ can be an intended support contract while its release gate remains open.
 | profile.systemd-managed | fixed services/path/timer, Type=notify readiness, After/BindsTo | disposable user-manager first boot, exact config/XDG, cgroup death and restart | NOT_RUN | WP03, WP25, WP30 |
 | profile.foreground | host-owned broker and one registered Principal; private channel/tenure | no preinstalled broker.service; equivalent revoke/quiescence/fencing or activation rejected | NOT_RUN | WP03, WP10, WP25 |
 | profile.confined | bwrap private network and declared mount/FD closure; engine-owned credentials outside | actual pinned bwrap/cgroup/engine checks, not argv or module import tests | NOT_RUN | WP27, WP30, WP31 |
-| profile.unconfined | explicit rootfs='/' opt-out with visible warning, never silent fallback | actual entry and Dashboard report it; never claim confinement from this profile | NOT_RUN | WP27, WP28, WP31 |
 | profile.engine-fixture | provider-free controlled engine/extension execution | actual bundled engine boundary/tool-event semantics; not provider or disk power-loss evidence | NOT_RUN | WP27, WP30 |
 | profile.provider | host-chosen real provider through engine-owned authentication | separately authorized credential/cost/environment; no invented credential or cost cap | NOT_RUN | WP27, WP30, WP31 |
 
@@ -576,7 +575,7 @@ placeholder that differs from and does not contain the key.
 WP27.05 — containment is unchanged and separately evidenced: mount plan and relay
 path (T113), no host view or network and no product code inside (T117), the engine's
 credential directory never mounted, the explicit `rootfs = "/"` opt-out still
-announced as unconfined. Tool surface limits are not OS isolation.
+announced as unconfined in that historical WP27 run. DR31 later removes that profile: rootfs='/' is now UNSUPPORTED_PROFILE before Resident startup. Tool surface limits are not OS isolation.
 
 Negative controls: 4 mutants, all fail (unbounded placeholder retry, plan naming
 `bwrap` by PATH, relay buffering the whole answer, a boundary notice naming an entry
@@ -642,7 +641,7 @@ WP28.01 — every statement on the screen and the fact behind it:
 | Dashboard Workers / Active / Pending / Status | counts with the observation time, or `unknown (reason; time)` | the broker's status view (WP23 snapshot); missing, unreadable, malformed, foreign or stale is unknown (T118) |
 | Dashboard Mail | `N건 Principal 세션에 전달 대기 (time 관측) · 새 도착 M건`, or `unknown (reason; time) · 새 도착 M건` | N: the ledger's pending count for the Principal in the status view (in no batch, or in a prepared one); M: files in the Principal's `new/`. P0V-66 corrected the evidence recorded here earlier -- `new/` alone. A batch is prepared, and its messages move to `cur/` (`moveToCur`), before the session takes it, and a session in a turn defers it (UNIT-005) |
 | Dashboard Model | configured value, and what the running session started with | configuration and `sessionModel` (V15B); never the engine's own report |
-| Dashboard Sandbox / Usage | declared rootfs or unconfined; usage unknown | configuration; the engine owns spend (INF-001) |
+| Dashboard Sandbox / Usage | declared confined rootfs (DR31); usage unknown | configuration; the engine owns spend (INF-001) |
 | Config notices | saved (with when it applies), unchanged, saved but not read back, save failed | the managed writer's outcome (WP13/WP15) |
 | Transcript `✗ 보내지 못한 입력` | a prompt that was never written, returned once and in order | WP09 session disposition |
 | Transcript `⚠ … 확인하지 못했습니다(자동으로 다시 보내지 않음)` | a prompt written but not answered | WP09; never resent |

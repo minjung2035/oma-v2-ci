@@ -7,8 +7,8 @@
  * through the run's actor socket, publishes the receipt and completes the
  * batch. One scripted provider answers both the Principal's engine and the
  * Resident's; `isResident` tells them apart by the tools they were offered.
- * The runner runs unconfined (no rootfs is declared); confinement has its own
- * live tests. Not provider evidence (P0-5; INF-001).
+ * Every runner uses the generated rootfs and bubblewrap with the TLS relay.
+ * Not provider evidence (P0-5; INF-001).
  */
 import test from "node:test";
 import assert from "node:assert/strict";
@@ -19,7 +19,8 @@ import { call, continuesTurn, delayed, lastUserText, text, textOf, toolResults, 
 import { WORKER_MODEL, commitField, commitRoleSet, readSettings, readSettingsForEditing, roleSetOf, writeSettings } from "../src/tui/sources/settings.js";
 import { runnerReceiptPathAt, workspacePathAt } from "../src/storage/paths.js";
 
-const TIMEOUT = { timeout: 180_000 };
+import { RESIDENT_TEST_OPTIONS as TIMEOUT } from "./fixtures/resident.js";
+import { CONFINED_MODEL, CONFINED_MODEL_2, CONFINED_THINKING_MODEL } from "./fixtures/scripted-provider.js";
 const isResident = (request: ChatRequest): boolean => !(request.tools ?? []).some(tool => tool.function?.name === "oma_society");
 const lastResult = (request: ChatRequest | undefined): string => toolResults(request ?? { messages: [] }).at(-1)?.text ?? "";
 const noticed = (request: ChatRequest): string[] =>
@@ -71,7 +72,8 @@ test("SCN-R02: a Resident is offered its own tools and not the Principal's", TIM
     assert.equal(run.code, 0, run.stderr);
     const offered = (residentRequests(s)[0]!.body.tools ?? []).map(tool => tool.function?.name);
     for (const name of ["oma_mail_read", "oma_mail_send", "oma_mail_ack", "oma_status"]) assert.ok(offered.includes(name), `${name} missing`);
-    for (const name of ["oma_agent_create", "oma_agent_lifecycle", "oma_context_publish", "oma_route", "bash"])
+    assert.ok(offered.includes("bash"), "the confined Resident lost its sandbox shell");
+    for (const name of ["oma_agent_create", "oma_agent_lifecycle", "oma_context_publish", "oma_route"])
       assert.ok(!offered.includes(name), `${name} was offered to a Resident`);
     assert.match(lastResult(residentRequests(s)[1]!.body), /worker-a/);
   });
@@ -277,14 +279,14 @@ test("SCN-X01: a Worker model changed in the configuration applies from the next
     await principalSends(s, ["worker-a"], "첫째", "첫 번째", "p-x01a");
     s.script([text("첫째 완료")]);
     assert.equal((await s.activate("worker-a")).code, 0);
-    assert.equal(residentRequests(s).at(-1)!.body.model, "scripted");
+    assert.equal(residentRequests(s).at(-1)!.body.model, CONFINED_MODEL.model);
     const settings = readSettings(s.configPath);
     assert.equal(commitField(settings, WORKER_MODEL, "scripted-2").kind, "saved");
     await principalSends(s, ["worker-a"], "둘째", "두 번째", "p-x01b");
     await s.restartBroker();
     s.script([text("둘째 완료")]);
     assert.equal((await s.activate("worker-a")).code, 0);
-    assert.equal(residentRequests(s).at(-1)!.body.model, "scripted-2", "the next activation did not use the changed model");
+    assert.equal(residentRequests(s).at(-1)!.body.model, CONFINED_MODEL_2.model, "the next activation did not use the changed model");
   });
 });
 
@@ -321,13 +323,13 @@ test("SCN-X03 / DR25: an extension installed for oma and turned on for Workers i
 test("SCN-X02 / DR24: a Worker's model and effort chosen from the engine's list are what its next activation asks for", TIMEOUT, async () => {
   await withScenario({ residents: ["worker-a"] }, async s => {
     const settings = readSettings(s.configPath);
-    assert.equal(commitField(settings, WORKER_MODEL, { provider: "fake", model: "scripted-thinking", thinking: "high" }).kind, "saved");
+    assert.equal(commitField(settings, WORKER_MODEL, { ...CONFINED_THINKING_MODEL, thinking: "high" }).kind, "saved");
     await principalSends(s, ["worker-a"], "생각", "깊게 생각해 주세요", "p-x02");
     await s.restartBroker();
     s.script([text("생각 완료")]);
     assert.equal((await s.activate("worker-a")).code, 0);
     const asked = residentRequests(s).at(-1)!.body;
-    assert.equal(asked.model, "scripted-thinking");
+    assert.equal(asked.model, CONFINED_THINKING_MODEL.model);
     // Not the engine's own default (medium): the profile's effort reached the engine.
     assert.equal(asked.reasoning_effort, "high");
   });

@@ -23,7 +23,7 @@ function installedConfig(root: string): HostConfigV1 {
   writeFileSync(join(root, DEPLOYMENT_LAYOUT.extension), "export {};\n");
   return defaultHostConfig({
     society: societyFromDirectory(root), node: process.execPath,
-    libdir: root, rootfs: "/", deploymentDigest: "b".repeat(64),
+    libdir: root, rootfs: join(root, "rootfs"), deploymentDigest: "b".repeat(64),
   });
 }
 

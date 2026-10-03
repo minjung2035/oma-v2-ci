@@ -56,8 +56,8 @@ export function dashboardRows(data: DashboardData): readonly DashboardRow[] {
       : `${model.configured} (Configured; next session; current session started with ${model.session})` });
   }
   if (data.workerModel !== undefined) rows.push({ label: "Worker model", value: data.workerModel });
-  // Whether a Resident is confined changes what OMA can promise about it.
-  rows.push({ label: "Sandbox", value: data.rootfs === null ? "Unconfined (no trusted rootfs declared)" : `Confined (${data.rootfs})` });
+  // Declared confinement is not evidence that a Resident is running.
+  rows.push({ label: "Sandbox", value: data.rootfs === null ? "unknown (Rootfs not observed)" : `Confined (${data.rootfs})` });
   // The engine owns inference and never reports spend to OMA (INF-001), so a
   // usage figure here would be invented.
   rows.push({ label: "Usage", value: "unknown (Owned by the engine)" });

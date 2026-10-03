@@ -7,7 +7,7 @@ import type {
   ProtocolLimits,
 } from "../implementation/contracts.js";
 import { dirname } from "node:path";
-import { confinedPath, type ResidentDirectories } from "./sandbox.js";
+import { confinedPath, RESIDENT_ENVIRONMENT, type ResidentDirectories } from "./sandbox.js";
 import type { PiConfinement, PiInference } from "./runtime/pi-spawn-plan.js";
 import { InferenceRelay } from "./runtime/inference-relay.js";
 import { EGRESS_SOCKET_ENV, EgressForwarder, requestEgressPlaceholder } from "./runtime/egress-forwarder.js";
@@ -49,10 +49,10 @@ export interface RunnerProfile {
 }
 /** What the deployment declared about confining Residents.
  *
- * Its absence is a decision, not a default: SB-001 wants a trusted rootfs
- * holding pinned tools and empty mount targets, and an installation that has
- * none cannot confine. The runner reports that state rather than letting the
- * engine start on the host unremarked.
+ * SB-001 requires a trusted rootfs holding pinned tools and empty mount
+ * targets. Every Resident engine requires this contract, and a deployment
+ * that cannot supply it is unsupported. Receipt-only recovery does not
+ * construct an engine or require its mount plan.
  */
 export interface RunnerConfinement {
   /** Host path of the trusted rootfs, mounted read-only at `/`. */
@@ -78,7 +78,7 @@ export interface RunnerPaths {
   readonly piAgentDir?: string;
   readonly coreExtension?: string;
   readonly cli?: string;
-  /** Absent means Residents run unconfined; see RunnerConfinement. */
+  /** Required for engine execution; receipt-only recovery needs no engine. */
   readonly confinement?: RunnerConfinement;
 }
 export class RunnerModule {
@@ -146,10 +146,9 @@ export class RunnerModule {
   /** INF-005/008: a confined delivery's provider path. The engine resolves the
    * credential from its own agent directory, the relay holds it for this one
    * delivery, and the sandbox is given only a placeholder of the same shape.
-   * Unconfined runs need none of this: the engine reads its agent directory
-   * directly. */
-  private async openRelay(): Promise<{ inference: PiInference; relay: { close(): Promise<void> } } | undefined> {
-    if (this.paths.confinement === undefined) return undefined;
+   * Every Resident reaches its provider through this channel; host credentials
+   * never enter a Resident's environment or mounts. */
+  private async openRelay(): Promise<{ inference: PiInference; relay: { close(): Promise<void> } }> {
     const { piAgentDir } = this.paths;
     if (!this.lease || !this.limits || !this.profile || !piAgentDir)
       throw new StoreError("UNSUPPORTED_PROFILE", "confined inference configuration is incomplete");
@@ -199,6 +198,8 @@ export class RunnerModule {
     const root = agentRootPathAt(stateRoot, this.agent);
     const sessionDir = runnerSessionDirPathAt(stateRoot, this.agent);
     ensureDurableDirectory(sessionDir, 0o700);
+    for (const inside of [RESIDENT_ENVIRONMENT.XDG_DATA_HOME, RESIDENT_ENVIRONMENT.XDG_RUNTIME_DIR, `${RESIDENT_ENVIRONMENT.HOME}/.local/bin`])
+      ensureDurableDirectory(join(root, "home", inside.slice(RESIDENT_ENVIRONMENT.HOME.length + 1)), 0o700);
     // mail-v1: the worker archive is a Resident mount; a society provisioned
     // before it existed gets the directory before any bind can name it.
     ensureDurableDirectory(join(stateRoot, "mail", "workers"), 0o700);
@@ -251,10 +252,10 @@ export class RunnerModule {
         batchView: directories.view,
         socket: this.lease.socketHostPath,
       },
-      ...(confinement === undefined ? {} : { confinement }),
+      confinement,
     });
   }
-  /** Builds the mount plan input, or reports that the deployment declared none.
+  /** Builds the required mount plan input, refusing an incomplete deployment.
    * The engine entry is translated here because composition owns where files
    * are; the adapter only decides how the engine is started.
    */
@@ -262,9 +263,10 @@ export class RunnerModule {
     directories: ResidentDirectories,
     piArgs: readonly string[] | undefined,
     inference: PiInference | undefined,
-  ): PiConfinement | undefined {
+  ): PiConfinement {
     const declared = this.paths.confinement;
-    if (declared === undefined || !this.lease || !this.limits) return undefined;
+    if (declared === undefined || !this.lease || !this.limits)
+      throw new StoreError("UNSUPPORTED_PROFILE", "Resident execution requires confinement and a validated lease");
     const entry = piArgs?.[0];
     if (entry === undefined)
       throw new StoreError(
@@ -313,8 +315,8 @@ export class RunnerModule {
       case "present": {
         const opened = await this.openRelay();
         let boundary;
-        try { boundary = await this.adapter(batch, opened?.inference).deliver(batch); }
-        finally { await opened?.relay.close(); }
+        try { boundary = await this.adapter(batch, opened.inference).deliver(batch); }
+        finally { await opened.relay.close(); }
         // RUN-003: graceful yield leaves the prepared batch and mail untouched.
         if (boundary === null) return;
         receipt = publishDeliveryReceipt(

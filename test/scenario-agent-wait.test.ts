@@ -1,5 +1,6 @@
 /** DR27/RUN-003: local fake provider; real confined engine, CLI, broker and runner. */
 import test from "node:test";
+import { RESIDENT_TEST_OPTIONS } from "./fixtures/resident.js";
 import assert from "node:assert/strict";
 import { existsSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
@@ -8,7 +9,7 @@ import { call, text, tools, toolResults } from "./fixtures/scripted-provider.js"
 import type { AuthContext } from "../implementation/contracts.js";
 import { runnerReceiptPathAt, runnerSessionDirPathAt, workspacePathAt } from "../src/storage/paths.js";
 
-for (const ack of [false, true]) test(`DR27: wait persists tools, not delivery; explicit ACK=${ack}`, { timeout: 180_000 }, async () => {
+for (const ack of [false, true]) test(`DR27: wait persists tools, not delivery; explicit ACK=${ack}`, RESIDENT_TEST_OPTIONS, async () => {
   await withScenario({ residents: ["worker-a"], confined: true }, async s => {
     s.script([tools(call("oma_mail_send", { to: ["worker-a"], subject: "Work", body: "Do one step and yield." })), text("Sent.")]);
     await s.prompt("Send work.");
@@ -60,7 +61,7 @@ for (const ack of [false, true]) test(`DR27: wait persists tools, not delivery; 
 });
 
 for (const outcome of ["continue", "wait", "unobserved"] as const)
-  test(`DR27: delayed wait observation ${outcome} preserves the persisted tool boundary`, { timeout: 180_000 }, async t => {
+  test(`DR27: delayed wait observation ${outcome} preserves the persisted tool boundary`, RESIDENT_TEST_OPTIONS, async t => {
     await withScenario({ residents: ["worker-a"], confined: true }, async s => {
       s.script([tools(call("oma_mail_send", { to: ["worker-a"], subject: "One step", body: "Perform the requested step." })), text("Sent.")]);
       await s.prompt("Send work.");

@@ -6,8 +6,8 @@ import type { MessagePlan, OperationPlan } from "../../implementation/contracts/
 export interface LifecyclePaths {
   stateRoot: string; projectGit: string; society: string; hasGoal(): boolean; activationAllowed(): boolean;
   /** GIT-002: the canonical repository as a Resident's Git reaches it -- its
-   * sandbox mount, or the host path when Residents run unconfined. A new
-   * workspace's `origin` names it. Absent, the host path. */
+   * sandbox mount. A new workspace's `origin` names it. The host path is
+   * used only by trusted provisioning to clone the canonical repository. */
   residentProjectGit?: string;
 }
 export interface SpecResolver {

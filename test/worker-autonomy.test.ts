@@ -31,7 +31,7 @@ function fixture(t: TestContext) {
   provisionSociety(root);
   let store = new Store(join(root, "runtime.sqlite"));
   t.after(() => { store.close(); rmSync(root, { recursive: true, force: true }); });
-  const config = defaultHostConfig({ society: "demo", node: process.execPath, libdir: process.cwd(), rootfs: "/", deploymentDigest: "a".repeat(64) });
+  const config = defaultHostConfig({ society: "demo", node: process.execPath, libdir: process.cwd(), rootfs: join(root, "rootfs"), deploymentDigest: "a".repeat(64) });
   const path = join(root, "config.json"); writeFileSync(path, JSON.stringify(config));
   const units = new ScriptedUnits("demo", { node: process.execPath, libdir: root, state: root, society: "demo", agent: "" }, join(root, "units"));
   const projectGit = projectGitPathAt(root);

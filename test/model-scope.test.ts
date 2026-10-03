@@ -9,6 +9,7 @@
  * (`assertModelScope`, INV09).
  */
 import test from "node:test";
+import { residentOptions } from "./fixtures/resident.js";
 import assert from "node:assert/strict";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -71,12 +72,8 @@ test("AV3 / INV04, INV09, PR-004: an engine whose workspace overlaps what the pr
   { onLine: () => {}, onBusy: () => {}, onEnd: () => {}, onPromptFailed: () => {} }),
   (error: unknown) => code(error) === "UNSUPPORTED_PROFILE");
   // A Resident plan with the same overlap, in each direction, is refused the same way.
-  const paths = (workspace: string) => ({ piCommand: "/usr/bin/node", coreExtension: "/opt/oma/ext.js", cli: "/opt/oma/cli.js",
-    workspace, sessionDir: runnerSessionDirPathAt(state, "alice"), agentHome: join(agentRootPathAt(state, "alice"), "home"),
-    mailArchive: join(state, "mail", "archive", "cur"), workerArchive: join(state, "mail", "workers", "cur"), projectGit: join(state, "repos", "project.git"), batchView: runnerViewPathAt(state, "alice"), socket: "/run/oma/control.sock" });
-  const options = (workspace: string) => ({ actor: "alice", society: "demo", paths: paths(workspace),
-    profile: { provider: "p", model: "m", inferenceSeconds: 1, prompt: "", workspaceBytes: 1024, extensions: [] },
-    limits: { frameBytes: 1024, idleStreamSeconds: 1, receiptWaitSeconds: 1, batchMaxMessages: 4, mailBodyBytes: 1024 } }) as never;
+  const base = residentOptions(state);
+  const options = (workspace: string) => ({ ...base, paths: { ...base.paths, workspace } });
   for (const workspace of [agentRootPathAt(state, "alice"), join(runnerSessionDirPathAt(state, "alice"), "w")])
     assert.throws(() => planPiSpawn(options(workspace)), (error: unknown) => code(error) === "UNSUPPORTED_PROFILE", workspace);
   assert.doesNotThrow(() => planPiSpawn(options(workspacePathAt(state, "alice"))));

@@ -11,6 +11,7 @@ import {
 } from "./config/operations.js";
 import type { AgentProfile, EffortLevel, HostConfigV1, ModelProfile, ResourceLimits } from "../implementation/contracts.js";
 import { StoreError } from "./domain/errors.js";
+import { requireResidentRootfs } from "./sandbox.js";
 import { isValidActorName, isValidSocietyName, isValidWirePath } from "./domain/identifiers.js";
 import { isCapability } from "./domain/capabilities.js";
 import { RESOURCE_FIELDS } from "./domain/resources.js";
@@ -179,6 +180,7 @@ export function validateConfig(raw: unknown): ValidatedConfigCandidate {
   const node = needString(installation.node, "installation.node");
   const libdir = needString(installation.libdir, "installation.libdir");
   const rootfs = needString(installation.rootfs, "installation.rootfs");
+  requireResidentRootfs(rootfs);
   const deploymentDigest = needString(installation.deploymentDigest, "installation.deploymentDigest");
   if (!isDeploymentDigest(deploymentDigest)) err("installation.deploymentDigest must be a lowercase SHA-256 digest");
   // DR25: where the extensions `oma pi install` installed live, when any role may name one.

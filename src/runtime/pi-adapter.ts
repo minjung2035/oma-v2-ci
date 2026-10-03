@@ -2,7 +2,7 @@
  * hand it a prepared batch, and wait for the trusted boundary it reports.
  * How the process is started lives in `pi-spawn-plan.ts`.
  */
-import { spawnSandboxed, spawnOwnedRpc, stopOwnedChild } from "../process/async.js";
+import { spawnSandboxed, stopOwnedChild } from "../process/async.js";
 import { realpathSync } from "node:fs";
 import { basename, join } from "node:path";
 import type { PreparedBatch } from "../../implementation/contracts.js";
@@ -129,6 +129,8 @@ export function waitObservationOf(event: PiEvent, batch: PreparedBatch): "begin"
 
 export class PiAdapter {
   constructor(private readonly options: PiAdapterOptions) {
+    if (options.confinement === undefined)
+      throw failure("UNSUPPORTED_PROFILE", "Resident execution requires confinement");
     if (!Number.isSafeInteger(options.profile.inferenceSeconds) || options.profile.inferenceSeconds <= 0)
       throw failure("UNSUPPORTED_PROFILE", "Pi inference silence budget is unavailable");
     if (!Number.isSafeInteger(options.profile.workspaceBytes) || options.profile.workspaceBytes <= 0)
@@ -169,7 +171,7 @@ export class PiAdapter {
    * Resident's session mount is no boundary. */
   private hostBoundary(boundary: DeliveryBoundary | null): DeliveryBoundary | null {
     const confinement = this.options.confinement;
-    if (boundary === null || confinement === undefined) return boundary;
+    if (boundary === null) return null;
     const sessionPath = hostSessionPath(confinement.directories, boundary.sessionPath);
     return sessionPath === null ? null : { ...boundary, sessionPath };
   }
@@ -184,15 +186,11 @@ export class PiAdapter {
     // operations/README + TUI-010: the recorded digests are checked again here,
     // at the last moment before the file is handed to Pi.
     assertExtensionIntegrity(this.options.profile.extensions);
-    const agentDir = this.options.confinement === undefined ? this.options.paths.piAgentDir :
-      join(this.options.paths.agentHome, "engine");
-    if (agentDir !== undefined) preparePiRetry(agentDir);
+    preparePiRetry(join(this.options.paths.agentHome, "engine"));
     const spawn = this.spawnPlan();
     // DR18 (D-5): a confined engine's sandbox filter reaches bubblewrap on the
     // descriptor only this parent holds, and nowhere else.
-    const child = this.options.confinement === undefined
-      ? spawnOwnedRpc(spawn.command, spawn.args, spawn.cwd, spawn.env)
-      : spawnSandboxed([spawn.command, ...spawn.args], spawn.env, spawn.filter, spawn.cwd);
+    const child = spawnSandboxed([spawn.command, ...spawn.args], spawn.env, spawn.filter, spawn.cwd);
     let childClosed = false;
     let onClose!: () => void;
     const closed = new Promise<void>(resolve => {

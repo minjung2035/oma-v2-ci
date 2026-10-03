@@ -821,7 +821,7 @@ function minimalConfig(society: string): Record<string, unknown> {
       // resolve from, or the entry refuses to start. Tests run from the package
       // root, where dist/ and implementation/ live side by side.
       libdir: process.cwd(),
-      rootfs: "/",
+      rootfs: "/rootfs",
       deploymentDigest: deploymentDigest(process.cwd()),
     },
     modelProfiles: {

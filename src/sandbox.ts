@@ -33,6 +33,8 @@ export const RESIDENT_PATHS = Object.freeze({
  * state root or a runtime directory — and each is mounted read-only. */
 export const SYSTEM_BIND_CANDIDATES: readonly string[] = Object.freeze([
   "/usr", "/bin", "/sbin", "/lib", "/lib64", "/etc/alternatives", "/etc/ld.so.cache",
+  "/etc/resolv.conf", "/etc/ssl/certs", "/etc/pki/ca-trust", "/etc/pki/tls/certs",
+  "/etc/nsswitch.conf", "/etc/hosts", "/etc/localtime",
 ]);
 
 /** Loopback port the core extension serves inside the sandbox, forwarding to
@@ -77,7 +79,13 @@ function requireResidentContext(h: SandboxHost, lease: RunLease, dirs: ResidentD
 export function modelCommandScript(): string {
   return `#!/bin/sh\n# CLI-001: the model-facing OMA command inside a Resident's sandbox.\nexec ${RESIDENT_PATHS.node} ${RESIDENT_PATHS.libdir}/${DEPLOYMENT_LAYOUT.cli} "$@"\n`;
 }
-export const RESIDENT_PATH_ENV = `${RESIDENT_PATHS.libdir}/${dirname(DEPLOYMENT_LAYOUT.modelCommand)}:${dirname(RESIDENT_PATHS.node)}:/usr/bin:/bin`;
+export const RESIDENT_PATH_ENV = `${RESIDENT_PATHS.libdir}/${dirname(DEPLOYMENT_LAYOUT.modelCommand)}:${dirname(RESIDENT_PATHS.node)}:${RESIDENT_PATHS.home}/.local/bin:/usr/bin:/bin`;
+export const RESIDENT_ENVIRONMENT = Object.freeze({
+  HOME: RESIDENT_PATHS.home, PATH: RESIDENT_PATH_ENV,
+  LANG: "C.UTF-8", LC_ALL: "C.UTF-8", TZ: "UTC", TERM: "xterm-256color", TMPDIR: "/tmp",
+  SHELL: "/bin/sh", USER: "agent", LOGNAME: "agent",
+  XDG_DATA_HOME: `${RESIDENT_PATHS.home}/.local/share`, XDG_RUNTIME_DIR: `${RESIDENT_PATHS.home}/.run`,
+});
 
 /** WP27: the one bubblewrap a confined engine is started through; the same
  * binary `spawnSandboxed` pins. A plan names it absolutely, because the
@@ -130,8 +138,7 @@ export function residentArgv(h: SandboxHost, lease: ValidatedRunLease,
     ...(inferenceSocketHost === undefined ? []
       : ["--ro-bind", inferenceSocketHost, RESIDENT_PATHS.inference]),
     "--symlink", `${RESIDENT_PATHS.view}/inbox.md`, "/inbox.md", "--clearenv",
-    "--setenv", "HOME", RESIDENT_PATHS.home, "--setenv", "PATH", RESIDENT_PATH_ENV,
-    ...setenvPairs(env),
+    ...setenvPairs(env), ...setenvPairs(RESIDENT_ENVIRONMENT),
     "--setenv", "OMA_FRAME_BYTES", String(limits.frameBytes),
     "--setenv", "OMA_BATCH_MAX_MESSAGES", String(limits.batchMaxMessages),
     "--setenv", "OMA_ACTOR", lease.actor, "--setenv", "OMA_INCARNATION", String(lease.incarnation),
@@ -165,15 +172,16 @@ function residentMounts(host: MountedInstallation, dirs: ResidentDirectories): r
  * path. Only the session mount translates back -- a boundary names a session
  * file and nothing else -- and a name that is not a plain file beneath it is
  * no session path (null). */
-/** SB-002-E: `installation.rootfs` set to "/" declares no trusted rootfs, and
- * Residents run unconfined on the host; any other value is the rootfs they are
- * sealed in. The one reading of that setting. */
-export function residentsConfined(rootfs: string): boolean { return rootfs !== "/"; }
+/** SB-002-E: `installation.rootfs` must name a trusted non-root path.
+ * Society supports only confined Residents; a missing sandbox is rejected
+ * before execution. The one reading of that setting. */
+export function requireResidentRootfs(rootfs: string): void {
+  if (!trustedAbsolutePath(rootfs))
+    throw new StoreError("UNSUPPORTED_PROFILE", "UNSUPPORTED_PROFILE: Society requires a trusted non-root Resident rootfs");
+}
 
 /** Where a Resident's Git reaches the canonical repository (GIT-002). */
-export function residentProjectGit(rootfs: string, hostPath: string): string {
-  return residentsConfined(rootfs) ? RESIDENT_PATHS.projectGit : hostPath;
-}
+export function residentProjectGit(): string { return RESIDENT_PATHS.projectGit; }
 
 export function hostSessionPath(dirs: ResidentDirectories, insidePath: string): string | null {
   const prefix = `${RESIDENT_PATHS.sessions}/`;
@@ -188,7 +196,7 @@ export function hostSessionPath(dirs: ResidentDirectories, insidePath: string): 
 export type MountedInstallation = Pick<SandboxHost, "libdir" | "packages">;
 
 export function confinedPath(host: MountedInstallation, dirs: ResidentDirectories, hostPath: string): string {
-  for (const [root, inside] of residentMounts(host, dirs)) {
+  for (const [root, inside] of [...residentMounts(host, dirs)].sort(([left], [right]) => right.replace(/\/$/, "").length - left.replace(/\/$/, "").length)) {
     // A root may be written with a trailing separator (the installation path
     // `oma` records is); the comparison must not depend on that spelling.
     const host = root.length > 1 && root.endsWith("/") ? root.slice(0, -1) : root;
