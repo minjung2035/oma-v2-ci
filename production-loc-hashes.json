@@ -236,7 +236,7 @@
     },
     {
       "path": "src/config/role-prompts.ts",
-      "sha256": "2a302311f541f06c7ce8ad4a4faf63bc7745a586a205f1ecbc7a866f54f2c0f7"
+      "sha256": "79e478dd60b822d174bbc556e4cb4102067d59f18f107dc6c2c404b51f55f924"
     },
     {
       "path": "src/diagnostics/files.ts",
@@ -288,7 +288,7 @@
     },
     {
       "path": "src/domain/derived.ts",
-      "sha256": "83bbf7b07879ca660b43ef85dd28aa4fdf2d4b2e0f943215ed56720a926beb2f"
+      "sha256": "91e5123da34d65923016614374bd7669ef63d69b03c429d171c51c31f7f97bd1"
     },
     {
       "path": "src/domain/errors.ts",
@@ -1476,7 +1476,7 @@
     },
     {
       "path": "src/views.ts",
-      "sha256": "37f8ae9f5dcc9756647cd8c11254ac46eee07d2c7b84ac2387a0e0ef1ff168b9"
+      "sha256": "e3a9b071b3dd8fa1f336fa98d8111d33287cb72246115c068e8f2368990e2ae7"
     },
     {
       "path": "src/views/pending-work.ts",

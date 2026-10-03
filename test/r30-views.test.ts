@@ -1,11 +1,12 @@
 // VIEW-001/002: real validated rows are inputs; numeric expectations are independent oracles.
 import test, { type TestContext } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, statSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { AuthContext } from "../implementation/contracts.js";
 import { Store } from "../src/store.js";
+import { PRINCIPAL_MAIL_FILENAME } from "../src/domain/derived.js";
 import { MailModule } from "../src/mail.js";
 import { ViewsModule, fieldEscape } from "../src/views.js";
 import { pendingWork } from "../src/views/pending-work.js";
@@ -97,12 +98,22 @@ test("R30 rebuildable world files preserve durable receipts and exclude private 
   const receiptBefore = f.store.getOperation("alice", "r30-0")!.resultJson;
   const views = new ViewsModule(f.store, f.root, "demo", "p");
   views.refreshWorld();
-  const paths = ["agents.tsv", "topics.tsv", "START.md"];
+  const paths = ["agents.tsv", "topics.tsv", "START.md", PRINCIPAL_MAIL_FILENAME];
   const expected = paths.map(path => readFileSync(join(f.root, "world", path), "utf8"));
-  for (const path of paths) rmSync(join(f.root, "world", path));
+  for (const path of paths) {
+    // Every derived world file is read-only to its readers.
+    assert.equal(statSync(join(f.root, "world", path)).mode & 0o777, 0o444, `${path} mode`);
+    rmSync(join(f.root, "world", path));
+  }
   views.refreshWorld();
   assert.deepEqual(paths.map(path => readFileSync(join(f.root, "world", path), "utf8")), expected);
   assert.equal(expected.join("\n").includes("private-body-0"), false);
+  // The map names the guide at the one derived path the prompts also spell.
+  const start = expected[paths.indexOf("START.md")]!;
+  assert.ok(start.includes(`/world/${PRINCIPAL_MAIL_FILENAME}`), "START.md names the Principal mail guide");
+  const guide = expected[paths.indexOf(PRINCIPAL_MAIL_FILENAME)]!;
+  assert.match(guide, /most expensive resource/);
+  assert.doesNotMatch(guide, /[ᄀ-ᅟ㄰-㆏가-힯]/u, "the guide is English-only");
   assert.equal(f.store.getOperation("alice", "r30-0")!.resultJson, receiptBefore);
   // P0V-94: the carriage return is escaped, not dropped.
   assert.equal(fieldEscape("동료\tmetadata\nline\r"), "동료\\tmetadata\\nline\\r");

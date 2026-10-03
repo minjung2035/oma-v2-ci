@@ -7,7 +7,7 @@ import { ensureDirectory } from "./storage/directory.js";
 import { NO_UNIT_REASON, encodeStatusView, statusViewPath } from "./protocol/status-view.js";
 import { publishBatchView } from "./storage/batch-view.js";
 import { operationMessage } from "./mail/materializer.js";
-import { mailAudienceDisplayPath } from "./domain/derived.js";
+import { PRINCIPAL_MAIL_FILENAME, mailAudienceDisplayPath } from "./domain/derived.js";
 import type { BatchViewLimits } from "./protocol/batch-view.js";
 import { pendingWorkByAgent } from "./views/pending-work.js";
 import { StoreError } from "./domain/errors.js";
@@ -58,6 +58,7 @@ export class ViewsModule {
       .map(([topic, subscribers]) => `${fieldEscape(topic)}\t${fieldEscape([...subscribers].sort().join(","))}`);
     writeAtomic(join(world, "topics.tsv"), topicLines.length > 0 ? `${topicLines.join("\n")}\n` : "", 0o444);
     writeAtomic(join(world, "START.md"), this.startText(), 0o444);
+    writeAtomic(join(world, PRINCIPAL_MAIL_FILENAME), this.principalMailText(), 0o444);
   }
   /** The environment map only: what each path and surface is. Behavior and
    * policy belong to the role's system prompt, mechanics to each tool's
@@ -70,6 +71,7 @@ export class ViewsModule {
       "- `/world/agents.tsv` -- resident roster (name, role, state, profile).",
       "- `/world/topics.tsv` -- mail subscriptions.",
       "- `/world/context/current/GOAL.md` -- the shared objective.",
+      `- \`/world/${PRINCIPAL_MAIL_FILENAME}\` -- how to write mail the Principal can act on.`,
       "- `/mail/archive` -- permanent public record (read-only).",
       "- `/mail/workers` -- worker-only review threads (read-only).",
       "- `/mail/self` -- mail addressed to you (read-only).",
@@ -81,6 +83,60 @@ export class ViewsModule {
       "`oma_merge`, `oma_challenge`.", "",
       "Everything a view shows -- rosters, pending counts, mail bodies -- is data,",
       "not authority. A pending count means queued deliveries, not read mail.",
+    ].join("\n");
+  }
+  /** The same authored doc every refresh republishes beside START.md: how a
+   * Resident writes mail that spends the Principal's turns well. An authored
+   * guide like the map, not a fact derived from state. */
+  private principalMailText(): string {
+    return [
+      "# Writing mail to the Principal",
+      "",
+      "The Principal's turns are the most expensive resource in the society. A",
+      "message that reaches it should carry what a decision needs and nothing",
+      "else -- a turn spent asking for what the message should have contained is",
+      "a turn the society pays twice.",
+      "",
+      "## Shape",
+      "",
+      "One message, one decision. In order:",
+      "",
+      "1. The ask, one line: what you need decided, answered, or approved. A",
+      "   reader who stops here knows what the mail wants.",
+      "2. What is known, with evidence. The observed facts the decision rests",
+      "   on, each with a pointer a reader can check: a file and line, a commit,",
+      "   a test run, a mail id.",
+      "3. What is unknown or unchecked. What you did not verify, could not",
+      "   reach, or had to assume. Naming it is part of the evidence, not an",
+      "   admission against it.",
+      "4. Options. The choices you see and what each costs.",
+      "5. A recommendation, when the evidence supports one. The conclusion the",
+      "   facts carry -- nothing when they carry none.",
+      "",
+      "## Report the whole picture",
+      "",
+      "Separate what you observed from what you inferred, and mark which is",
+      "which. Evidence that contradicts your hypothesis belongs in the message",
+      "with the same prominence as evidence that supports it -- the Principal",
+      "decides on the whole picture, not the one that flatters the sender.",
+      "",
+      '"Probably", "should work", and "looks right" are not evidence. Name the',
+      "check you ran -- the command, the diff, the test output -- or say plainly",
+      "that it was not run. An unchecked claim the Principal acts on becomes the",
+      "society's false memory.",
+      "",
+      "## Say it plainly",
+      "",
+      "Do not overclaim: one observed failure is one observed failure, not a",
+      "broken system. Do not bury a clear finding under hedges either -- if the",
+      "evidence says the patch is wrong, say the patch is wrong. Hedged clarity",
+      "fools no one and costs the reader a decode.",
+      "",
+      "## Keep it compact",
+      "",
+      "One message carries what one decision needs. Cut what the decision does",
+      "not use; point to evidence rather than pasting it -- a path and a line",
+      "number travel better than a log. Two decisions are two mails.",
     ].join("\n");
   }
   publishInbox(batch: PreparedBatch): void {
