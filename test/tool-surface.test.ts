@@ -13,6 +13,7 @@ import {
 } from "../src/domain/tool-surface.js";
 import {
   OMA_TOOL_NAMES, expandedActiveTools, initialActiveTools, parseSurfacePlan, registerToolSurface,
+  type SurfaceFence,
 } from "../src/pi-extension.js";
 
 const invalid = (error: unknown): boolean => error instanceof StoreError && error.code === "INVALID_REQUEST";
@@ -186,7 +187,7 @@ test("T100/TSP-002: the plan round-trips through its transport encoding unchange
   }
 });
 
-test("T100/TSP-002: a role file may declare a projection, and a bad one fails at config load", () => {
+test("D23: a role file cannot declare a projection -- the field fails the load, whatever it holds", () => {
   const dir = mkdtempSync(join(tmpdir(), "oma-surface-cfg-"));
   try {
     const libdir = join(dir, "lib");
@@ -195,12 +196,12 @@ test("T100/TSP-002: a role file may declare a projection, and a bad one fails at
     writeFileSync(join(dir, "host.json"), JSON.stringify({ installation: { libdir } }));
     writeFileSync(join(dir, "models.json"), JSON.stringify({}));
     writeFileSync(join(dir, "prompt.md"), "");
-    const writeRole = (surface: unknown): void => {
+    const writeRole = (extra: Record<string, unknown>): void => {
       writeFileSync(join(dir, "resident.json"), JSON.stringify({
         agentProfile: { modelProfile: "m" },
         extensions: [DEPLOYMENT_LAYOUT.extension],
         promptFile: "prompt.md",
-        ...(surface === undefined ? {} : { toolSurface: surface }),
+        ...extra,
       }));
     };
     writeFileSync(join(dir, "index.json"), JSON.stringify({
@@ -208,44 +209,39 @@ test("T100/TSP-002: a role file may declare a projection, and a bad one fails at
       roles: { resident: "resident.json" },
     }));
 
-    // Absent block: the role shows every registered tool.
-    writeRole(undefined);
-    assert.equal(readConfigurationSource(join(dir, "index.json")).roles["resident"]!.toolSurface, null);
+    // A plain role file loads, with no projection anywhere in the result.
+    writeRole({});
+    const loaded = readConfigurationSource(join(dir, "index.json")).roles["resident"]!;
+    assert.ok(loaded && !Object.hasOwn(loaded, "toolSurface"), "loaded settings carry no surface");
 
-    writeRole({
-      defaultMode: "DISABLED",
-      direct: ["read"],
-      groups: [{ name: "web", description: "web tools", members: [{ tool: "fetch" }] }],
-    });
-    const loaded = readConfigurationSource(join(dir, "index.json")).roles["resident"]!.toolSurface;
-    assert.ok(loaded, "the declared projection is validated and kept");
-    assert.deepEqual(loaded.roots, ["web"]);
-    assert.deepEqual(loaded.direct, ["read"]);
+    // Even a once-valid block is rejected: the surface is internal policy, not
+    // configuration, so no spelling of it may take effect through a role file.
+    for (const surface of [
+      { defaultMode: "DISABLED", direct: ["read"],
+        groups: [{ name: "web", description: "web tools", members: [{ tool: "fetch" }] }] },
+      { surprise: true },
+      null,
+    ]) {
+      writeRole({ toolSurface: surface });
+      assert.throws(() => readConfigurationSource(join(dir, "index.json")), invalid,
+        `toolSurface ${JSON.stringify(surface)} must fail the load`);
+    }
 
-    // A cycle is rejected when the configuration loads, not when Pi starts.
-    writeRole({
-      groups: [
-        { name: "a", description: "a", members: [{ group: "b" }] },
-        { name: "b", description: "b", members: [{ group: "a" }] },
-      ],
-    });
-    assert.throws(() => readConfigurationSource(join(dir, "index.json")), invalid);
-
-    // Unknown fields stay closed, inside the block and around it.
-    writeRole({ surprise: true });
-    assert.throws(() => readConfigurationSource(join(dir, "index.json")), invalid);
-    writeFileSync(join(dir, "resident.json"), JSON.stringify({
-      agentProfile: {}, extensions: [DEPLOYMENT_LAYOUT.extension], promptFile: "prompt.md", nope: 1,
-    }));
+    // Unknown fields stay closed around it too.
+    writeRole({ nope: 1 });
     assert.throws(() => readConfigurationSource(join(dir, "index.json")), invalid);
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
 
-/** The engine catches session_start errors. Only tool_call is the execution fence. */
-function projectionHost(plan: ToolSurfaceConfig | string, refuseApply = false, permitted?: (name: string) => boolean) {
+/** The real `fatal` ends the engine process; the harness records it and throws
+ * instead, so the refusal's message and its session-stopping effect are both
+ * observable. Every startup failure takes this path -- the execution fence
+ * (tool_call) then covers the calls already possible before the exit lands. */
+function projectionHost(plan: ToolSurfaceConfig | string, refuseApply = false, fence?: SurfaceFence) {
   const registry = new Map<string, { name: string; parameters: object; execute?: () => Promise<unknown> }>(
     ["read", "fetch", "danger", "oma_mail_read"].map(name => [name, { name, parameters: {} }]));
   const handlers = new Map<string, (...args: any[]) => unknown>();
+  const exits: string[] = [];
   let active = [...registry.keys()];
   const previous = process.env.OMA_TOOL_SURFACE;
   process.env.OMA_TOOL_SURFACE = typeof plan === "string" ? plan : encodeToolSurfacePlan(planToolSurface(plan));
@@ -255,19 +251,24 @@ function projectionHost(plan: ToolSurfaceConfig | string, refuseApply = false, p
       registerTool(tool: { name: string; parameters: object }) { registry.set(tool.name, tool); },
       getAllTools: () => [...registry.values()], getActiveTools: () => active,
       setActiveTools(names: string[]) { if (refuseApply) throw new Error("injected apply failure"); active = names.filter(name => registry.has(name)); },
-    } as never, ["oma_mail_read"], permitted);
+    } as never, ["oma_mail_read"], { fatal: message => { exits.push(message); throw new Error(message); }, ...fence });
   } finally {
     if (previous === undefined) delete process.env.OMA_TOOL_SURFACE; else process.env.OMA_TOOL_SURFACE = previous;
   }
   return { registry, active: () => active, start: () => handlers.get("session_start")!(),
+    exited: () => exits,
     block: (name: string) => handlers.get("tool_call")!({ toolName: name }) as { block: boolean; reason: string } | undefined };
 }
 
-test("DR27 / TSP-001,007: colliding groups never overwrite built-in or OMA tools", () => {
+test("DR27 / TSP-001,007: colliding groups never overwrite built-in or OMA tools, and the session stops", () => {
   for (const name of ["read", "oma_mail_read"]) {
     const host = projectionHost(config({ groups: [group(name, [{ tool: "fetch" }])] }));
     const original = host.registry.get(name);
     assert.throws(() => host.start(), /conflicts with a registered tool/);
+    // The session does not continue past a refused surface: the process is
+    // told to end (recorded here; the real default exits), and the execution
+    // fence stays closed until it does.
+    assert.match(host.exited().at(-1) ?? "", /conflicts with a registered tool/);
     assert.equal(host.registry.get(name), original);
     assert.deepEqual(host.active(), ["oma_mail_read"]);
     assert.equal(host.block("read")?.block, true);
@@ -275,25 +276,31 @@ test("DR27 / TSP-001,007: colliding groups never overwrite built-in or OMA tools
   }
 });
 
-test("DR27 / TSP-007: unknown selectors refuse the projection without hiding collaboration", () => {
+test("DR27 / TSP-007 / #5: unknown selectors refuse the projection and stop the session", () => {
   for (const plan of [config({ direct: ["missing"] }), config({ disabled: ["missing"] }),
     config({ groups: [group("web", [{ tool: "missing" }])] })]) {
     const host = projectionHost(plan);
     assert.throws(() => host.start(), /references unknown tool/);
+    assert.match(host.exited().at(-1) ?? "", /references unknown tool "missing"/);
     assert.equal(host.registry.has("web"), false);
     assert.equal(host.block("danger")?.block, true);
     assert.equal(host.block("oma_mail_read"), undefined);
   }
 });
 
-test("DR27 / TSP-007: a swallowed startup failure cannot execute tools left active by a failed fallback", () => {
-  for (const plan of ["{", config({ groups: [group("web", [{ tool: "fetch" }])] })]) {
-    const host = projectionHost(plan, true);
-    assert.throws(() => host.start(), /could not be applied/);
-    assert.ok(host.active().includes("danger"), "negative control: the engine retained this tool");
-    assert.equal(host.block("danger")?.block, true);
-    assert.equal(host.block("oma_mail_read"), undefined);
-  }
+test("DR27 / TSP-007: a refused surface ends the engine even when the fallback apply also fails", () => {
+  const malformed = projectionHost("{", true);
+  assert.throws(() => malformed.start(), /malformed/);
+  assert.match(malformed.exited().at(-1) ?? "", /malformed/);
+  assert.equal(malformed.block("danger")?.block, true);
+  assert.equal(malformed.block("oma_mail_read"), undefined);
+
+  const host = projectionHost(config({ groups: [group("web", [{ tool: "fetch" }])] }), true);
+  assert.throws(() => host.start(), /could not be applied/);
+  assert.match(host.exited().at(-1) ?? "", /could not be applied/);
+  assert.ok(host.active().includes("danger"), "negative control: the engine retained this tool");
+  assert.equal(host.block("danger")?.block, true);
+  assert.equal(host.block("oma_mail_read"), undefined);
 });
 
 test("DR27 / TSP-006: group registration waits for the full registry and remains additive across session starts", async () => {
@@ -315,7 +322,7 @@ test("DR27: a Principal projection cannot activate routine tools directly or thr
   const allowed = new Set(["read", "oma_mail_read", "files"]);
   const permitted = (name: string): boolean => allowed.has(name);
   const host = projectionHost(config({ defaultMode: "DIRECT", direct: ["danger"],
-    groups: [group("files", [{ tool: "read" }, { tool: "fetch" }])] }), false, permitted);
+    groups: [group("files", [{ tool: "read" }, { tool: "fetch" }])] }), false, { permitted });
   let guard!: (event: { toolName: string; input: object }) => { block: boolean } | undefined;
   guardWorkspaceTools({ on: (_name: string, hook: typeof guard) => { guard = hook; } } as never,
     "/tmp", false, true, permitted);

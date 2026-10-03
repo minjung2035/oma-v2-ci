@@ -2,7 +2,9 @@
  *
  * The Principal uses Open TUI or the headless RPC test/adapter path. Both
  * keep run admission here; interactive rendering adds no model authority.
- * Project discovery, skills, templates and shell tools remain disabled.
+ * Skills, prompt templates and context files are discovered as Pi ships them
+ * (C15-C17); the trusted extension, not the launcher, owns what of that the
+ * model's prompt and tools may show. Shell and write tools stay excluded.
  * Peer content is never dressed as a Human turn.
  */
 import { randomBytes } from "node:crypto";
@@ -23,7 +25,7 @@ import { loadConfiguration } from "../config.js";
 import { StoreError } from "../domain/errors.js";
 import { errorWords } from "./words.js";
 import { storedMailBytes } from "../domain/mail-values.js";
-import { encodeToolSurfacePlan } from "../domain/tool-surface.js";
+import { packageResourcePaths, type PackageResourcePaths } from "../runtime/pi-packages.js";
 import { CONVERSATION_BOUNDS, TERMINAL_BOUNDS, humanPromptFitsFrame, humanPromptRequestId } from "./limits.js";
 import type { PromptOutcome } from "./prompt.js";
 import { PRINCIPAL_SYSTEM_PROMPT } from "../config/role-prompts.js";
@@ -58,9 +60,10 @@ export interface SessionProfile {
    * path does. The core extension may appear here for verification; argv never
    * passes it twice. */
   readonly extensions: readonly VerifiedExtension[];
-  /** TSP-005: the Principal role's validated tool surface plan, encoded for the
-   * core extension. Absent means the role shows every registered tool. */
-  readonly toolSurface?: string | undefined;
+  /** DR25/C18: the installed packages' skills, prompt templates and themes, as
+   * host paths inside the package store. Passed to the engine by flag, so the
+   * resources reach Pi's loader rather than only being mounted. */
+  readonly packageResources?: PackageResourcePaths | undefined;
   /** The role's prompt, appended exactly as the Resident path appends it. A
    * Principal that silently ran without its role prompt would behave unlike the
    * configuration the operator wrote. */
@@ -191,11 +194,12 @@ export function principalSessionProfile(configPath: string, society: string): Se
   const workspaceBytes = config.agentProfiles[config.principalProfile]?.resources.workspaceBytes;
   if (!Number.isSafeInteger(workspaceBytes) || (workspaceBytes ?? 0) <= 0)
     throw new StoreError("UNSUPPORTED_PROFILE", "the principal role declares no workspace quota");
+  const packageResources = packageResourcePaths(config.installation.packages);
   return {
     society, provider: model.provider, model: model.model, inferenceSeconds: model.inferenceTimeoutSeconds, workspaceBytes: workspaceBytes!,
     extensions: (role?.extensions ?? []).map(extension => ({ path: extension.path, sha256: extension.sha256 })),
+    ...(packageResources === undefined ? {} : { packageResources }),
     ...(prompt.length > 0 ? { prompt } : {}),
-    ...(role?.toolSurface ? { toolSurface: encodeToolSurfacePlan(role.toolSurface) } : {}),
   };
 }
 
@@ -203,9 +207,6 @@ export function sessionArgv(paths: SessionPaths, profile: SessionProfile): reado
   const args = [
     "--mode", "rpc",
     "--no-approve",
-    "--no-context-files",
-    "--no-skills",
-    "--no-prompt-templates",
     "--no-extensions",
     "--exclude-tools", "bash,powershell,write,edit",
     "--session-dir", paths.sessionDir,
@@ -217,6 +218,11 @@ export function sessionArgv(paths: SessionPaths, profile: SessionProfile): reado
   ];
   for (const extension of verifiedPaths(profile.extensions))
     if (extension !== paths.coreExtension) args.push("-e", extension);
+  // C18: package skills, prompt templates and themes ride the same flags the
+  // engine's own CLI takes, so the loader owns their discovery.
+  for (const skill of profile.packageResources?.skills ?? []) args.push("--skill", skill);
+  for (const prompt of profile.packageResources?.prompts ?? []) args.push("--prompt-template", prompt);
+  for (const theme of profile.packageResources?.themes ?? []) args.push("--theme", theme);
   if (!(profile.provider === "pi" && profile.model === "current"))
     args.push("--model", `${profile.provider}/${profile.model}`);
   // The role prompt replaces Pi's generated system prompt entirely: pi's base
@@ -227,17 +233,29 @@ export function sessionArgv(paths: SessionPaths, profile: SessionProfile): reado
   return Object.freeze(args);
 }
 
-/** TSP-005: the Principal role's projection reaches its Pi process the same way
- * a Resident's does. Kept separate so the wiring is testable without spawning.
- */
+/** D25: mirrors `VERIFIED_EXTENSIONS_ENV` in src/extension/provenance.ts --
+ * the trusted extension's files may not be imported here, so a test binds the
+ * two spellings, as it does for TOOL_SCOPE_ENV (INV04). */
+const VERIFIED_EXTENSIONS_ENV = "OMA_VERIFIED_EXTENSIONS";
+
+/** The environment only the engine sees: which extension paths were
+ * digest-verified for this role, so the core extension can authorize tools by
+ * provenance rather than by name (D25). The list is exactly the `-e` argv --
+ * the core extension first, then the role's extensions -- in the same
+ * spelling the engine's source metadata reports. */
 export function sessionEnv(
   base: Readonly<Record<string, string>>,
   profile: SessionProfile,
-  paths?: Pick<SessionPaths, "piAgentDir" | "fence">,
+  paths?: Partial<Pick<SessionPaths, "piAgentDir" | "fence" | "coreExtension">>,
 ): Record<string, string> {
   return {
     ...base,
-    ...(profile.toolSurface === undefined ? {} : { OMA_TOOL_SURFACE: profile.toolSurface }),
+    ...(paths?.coreExtension === undefined ? {} : {
+      [VERIFIED_EXTENSIONS_ENV]: JSON.stringify([
+        paths.coreExtension,
+        ...verifiedPaths(profile.extensions).filter(extension => extension !== paths.coreExtension),
+      ]),
+    }),
     ...(paths?.piAgentDir === undefined ? {} : { [PI_AGENT_DIR_ENV]: paths.piAgentDir }),
     // REC-007: the engine is told which of its descriptors is the society
     // lease, because the engine starts children of its own -- the model-facing

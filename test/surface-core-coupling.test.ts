@@ -12,7 +12,6 @@ import { PROTOCOL_LIMIT_FIELDS } from "../src/domain/limits.js";
 import { loadConfig } from "../src/config.js";
 import { readConfigurationSource } from "../src/config/operations.js";
 import { defaultHostConfig, societyFromDirectory } from "../src/config/defaults.js";
-import { planToolSurface } from "../src/domain/tool-surface.js";
 import { readSettings } from "../src/tui/sources/settings.js";
 import { PUBLIC_METHODS, INTERNAL_METHODS } from "../src/protocol/methods.js";
 
@@ -73,7 +72,7 @@ test("a default configuration seeds one autonomous Worker without canonical main
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
 
-test("a tool surface declared in a role reaches the loader as a validated plan", () => {
+test("D23: a tool surface declared in a role fails the load -- it is internal policy, not configuration", () => {
   const root = scratch("oma-couple-surface-");
   try {
     const libdir = join(root, "lib");
@@ -82,30 +81,30 @@ test("a tool surface declared in a role reaches the loader as a validated plan",
     writeFileSync(join(root, "prompt.md"), "");
     writeFileSync(join(root, "host.json"), JSON.stringify({ installation: { libdir } }));
     writeFileSync(join(root, "models.json"), JSON.stringify({}));
-    writeFileSync(join(root, "role.json"), JSON.stringify({
-      agentProfile: { modelProfile: "m" },
-      extensions: [DEPLOYMENT_LAYOUT.extension],
-      promptFile: "prompt.md",
-      toolSurface: { defaultMode: "DISABLED", direct: ["read"], groups: [{ name: "web", description: "w", members: [{ tool: "fetch" }] }] },
-    }));
     const index = join(root, "index.json");
     writeFileSync(index, JSON.stringify({
       kind: "oma-operations-v1", host: "host.json", models: "models.json", roles: { resident: "role.json" },
     }));
+    const writeRole = (extra: Record<string, unknown>): void => {
+      writeFileSync(join(root, "role.json"), JSON.stringify({
+        agentProfile: { modelProfile: "m" },
+        extensions: [DEPLOYMENT_LAYOUT.extension],
+        promptFile: "prompt.md",
+        ...extra,
+      }));
+    };
 
+    // Even a well-formed declaration is refused: the field is closed, so no
+    // spelling of it can take effect through configuration.
+    writeRole({ toolSurface: { defaultMode: "DISABLED", direct: ["read"],
+      groups: [{ name: "web", description: "w", members: [{ tool: "fetch" }] }] } });
+    assert.throws(() => readConfigurationSource(index),
+      (error: unknown) => error instanceof StoreError && error.code === "INVALID_REQUEST");
+
+    // Without it the same role loads, and its recorded extensions still carry
+    // the digests the spawn path re-checks.
+    writeRole({});
     const role = readConfigurationSource(index).roles["resident"]!;
-    assert.ok(role.toolSurface, "the loader keeps the validated plan");
-    // The loader's plan must be identical to planning the same declaration
-    // directly: one owner decides, and the config path does not re-derive it.
-    const direct = planToolSurface({
-      defaultMode: "DISABLED", direct: ["read"], disabled: [],
-      groups: [{ name: "web", description: "w", members: [{ tool: "fetch" }] }], roots: [],
-    });
-    assert.deepEqual(role.toolSurface!.roots, direct.roots);
-    assert.deepEqual(role.toolSurface!.grouped, direct.grouped);
-    assert.deepEqual(role.toolSurface!.groups.map(g => g.children), direct.groups.map(g => g.children));
-
-    // The role's recorded extensions carry digests the spawn path can re-check.
     for (const extension of role.extensions) assert.match(extension.sha256, /^[0-9a-f]{64}$/);
   } finally { rmSync(root, { recursive: true, force: true }); }
 });

@@ -200,7 +200,6 @@ export function roleSetOf(source: ManagedSource): Record<string, ManagedRoleSour
     set[name] = role === undefined
       ? Object.freeze({ extensions: Object.freeze([DEPLOYMENT_LAYOUT.extension]), prompt: Buffer.alloc(0) })
       : Object.freeze({ extensions: Object.freeze([...role.extensions as string[]]),
-        ...(Object.hasOwn(role, "toolSurface") ? { toolSurface: role.toolSurface } : {}),
         prompt: Buffer.from(source.roles[name]?.prompt ?? "", "utf8") });
   }
   return set;
@@ -367,7 +366,7 @@ export function commitManagedEdit(snapshot: ManagedSource, config: HostConfigV1,
 function roleRevisionInput(roles: ReturnType<typeof managedRolesOf>): Record<string, unknown> {
   return Object.fromEntries(Object.keys(roles).sort().map(name => {
     const role = roles[name]!;
-    return [name, { extensions: role.extensions, toolSurface: role.toolSurface ?? null,
+    return [name, { extensions: role.extensions,
       prompt: createHash("sha256").update(role.prompt).digest("hex") }];
   }));
 }

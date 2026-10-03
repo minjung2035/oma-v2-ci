@@ -51,16 +51,16 @@ const JOURNAL = "committed";
 export type ManagedSource = Pick<ConfigurationSnapshot, "config" | "layout" | "authoredRoles" | "sourceFiles"> &
   { readonly roles: Readonly<Record<string, { readonly prompt: string }>> };
 
-/** A role's authored parts a managed edit may carry forward or replace. */
+/** A role's authored parts a managed edit may carry forward or replace. D23:
+ * a tool surface is OMA's internal policy, so it is no part a managed edit
+ * may carry -- a role file that names one fails the load instead. */
 export interface ManagedRole {
   readonly agentProfile: unknown;
   readonly extensions: readonly string[];
-  readonly toolSurface?: unknown;
   readonly prompt: Buffer;
 }
-/** A role as a whole, for DR25's whole-role-set edits: its extension entries,
- * tool surface (absent: none) and prompt bytes. Its agent profile is the
- * candidate's. */
+/** A role as a whole, for DR25's whole-role-set edits: its extension entries
+ * and prompt bytes. Its agent profile is the candidate's. */
 export type ManagedRoleSource = Omit<ManagedRole, "agentProfile">;
 export interface ManagedEdit {
   /** The complete candidate, already validated and revised by its owner. */
@@ -98,8 +98,7 @@ function logicalFiles(config: HostConfigV1, roles: Readonly<Record<string, Manag
   return files;
 }
 function roleBody(role: ManagedRole, promptFile: string): Record<string, unknown> {
-  return { agentProfile: role.agentProfile, extensions: [...role.extensions], promptFile,
-    ...(role.toolSurface === undefined ? {} : { toolSurface: role.toolSurface }) };
+  return { agentProfile: role.agentProfile, extensions: [...role.extensions], promptFile };
 }
 
 /** Generation identity (D02, pinned by golden vectors): SHA-256 over a version
@@ -145,7 +144,7 @@ export function managedRolesOf(snapshot: ManagedSource, edits: ManagedEdit["role
       if (!Array.isArray(role.extensions) || role.extensions.some(entry => typeof entry !== "string"))
         throw new StoreError("INVALID_REQUEST", `role ${name} extensions are not a list of entries`);
       roles[name] = Object.freeze({ agentProfile: config.agentProfiles[name], extensions: Object.freeze([...role.extensions]),
-        ...(role.toolSurface === undefined ? {} : { toolSurface: role.toolSurface }), prompt: Buffer.from(role.prompt) });
+        prompt: Buffer.from(role.prompt) });
     }
     return roles;
   }
@@ -160,7 +159,6 @@ export function managedRolesOf(snapshot: ManagedSource, edits: ManagedEdit["role
     if (!Object.hasOwn(config.agentProfiles, name))
       throw new StoreError("UNSUPPORTED_PROFILE", `the candidate drops role ${name}`);
     roles[name] = Object.freeze({ agentProfile: config.agentProfiles[name], extensions: Object.freeze([...extensions as string[]]),
-      ...(Object.hasOwn(value, "toolSurface") ? { toolSurface: value.toolSurface } : {}),
       prompt: Buffer.from(settings.prompt, "utf8") });
   }
   for (const name of Object.keys(edits)) if (!Object.hasOwn(roles, name))
@@ -324,8 +322,7 @@ function assertReproduces(manifest: string, config: HostConfigV1, roles: Readonl
     const authored = source.authoredRoles[name]?.value;
     const settings = source.roles[name];
     if (!authored || !settings || !Buffer.from(settings.prompt, "utf8").equals(role.prompt) ||
-        JSON.stringify(authored.extensions) !== JSON.stringify(role.extensions) ||
-        JSON.stringify(authored.toolSurface) !== JSON.stringify(role.toolSurface))
+        JSON.stringify(authored.extensions) !== JSON.stringify(role.extensions))
       throw new StoreError("INTERNAL_ERROR", `managed generation does not reproduce role ${name}`);
   }
   if (Object.keys(source.authoredRoles).length !== Object.keys(roles).length)

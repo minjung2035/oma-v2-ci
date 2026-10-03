@@ -31,8 +31,8 @@ export interface RoleFile {
   readonly name: string;
   readonly path: string;
   readonly extensions: readonly string[];
-  /** Every other field of the authored role file, preserved verbatim. Toggling
-   * an extension must not silently drop an optional block such as toolSurface.
+  /** Every other field of the authored role file, preserved verbatim; toggling
+   * an extension must not silently drop an optional block the loader accepts.
    */
   readonly rest: Readonly<Record<string, unknown>>;
 }

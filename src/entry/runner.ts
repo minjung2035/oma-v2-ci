@@ -65,13 +65,17 @@ ensureDirectory(piRuntime.agentDir, 0o700);
 // none, because binding the host root is exactly what SB-001 forbids. That is a
 // real difference in what OMA can promise, so it is said once, out loud, rather
 // than inferred later from an absent bwrap process.
+// DR25/C18: the package store's real root, when one exists. Confined engines
+// reach it through the mount below; an unconfined one reads it where it lies,
+// so the resource paths the index names are the same either way.
+const packages = cfg.installation.packages === undefined ? undefined
+  : packageStoreRoot(cfg.installation.packages) ?? undefined;
 const confinement = !residentsConfined(cfg.installation.rootfs) ? undefined : {
   rootfs: cfg.installation.rootfs,
   libdir: cfg.installation.libdir,
   // DR25: the installed packages a role's extensions may name, mounted at the
   // directory the loader pinned them in (on macOS the store is a link to it).
-  ...(cfg.installation.packages === undefined || packageStoreRoot(cfg.installation.packages) === null ? {}
-    : { packages: packageStoreRoot(cfg.installation.packages)! }),
+  ...(packages === undefined ? {} : { packages }),
   // Bound as a single file, so resolve a symlinked Node to the real binary.
   node: realpathSync(cfg.installation.node),
   systemBinds: hostSystemLayout().binds,
@@ -85,6 +89,7 @@ const runner = new RunnerModule({ runRoot, stateRoot, society,
   piAgentDir: piRuntime.agentDir,
   coreExtension: join(cfg.installation.libdir, "dist/src/pi-extension.js"),
   cli: join(cfg.installation.libdir, DEPLOYMENT_LAYOUT.cli),
+  ...(packages === undefined ? {} : { packages }),
   ...(confinement === undefined ? {} : { confinement }) }, agent, cfg.limits, profile);
 let stopping = false;
 const stop = (): void => {

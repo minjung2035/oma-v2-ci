@@ -16,23 +16,12 @@ import { StoreError, unobserved } from "../domain/errors.js";
 import { DEPLOYMENT_LAYOUT } from "../domain/deployment.js";
 import { ACTOR_NAME_RE } from "../domain/identifiers.js";
 import { parseJsonObject } from "../frame.js";
-import {
-  planToolSurface,
-  type GroupMemberRef,
-  type GroupSpec,
-  type ToolSurfaceConfig,
-  type ToolSurfacePlan,
-} from "../domain/tool-surface.js";
 import { fileDigest } from "../storage/file-digest.js";
 import { decodeUtf8 } from "../domain/utf8.js";
 
 export interface RoleSettings {
   readonly prompt: string;
   readonly extensions: readonly Readonly<{ path: string; sha256: string }>[];
-  /** TSP-002: validated at load. null means the role shows every registered
-   * tool, which is the behaviour of a role that declares nothing.
-   */
-  readonly toolSurface: ToolSurfacePlan | null;
 }
 export interface ConfigurationFileIdentity {
   readonly path: string;
@@ -287,61 +276,13 @@ function roleSettings(
     return Object.freeze({ path, sha256: observed.sha256 });
   });
   const prompt = decodeUtf8(bytes(localPath(root, role.promptFile), closure));
-  return Object.freeze({
-    prompt,
-    extensions: Object.freeze(extensions),
-    toolSurface: toolSurfaceOf(role.toolSurface),
-  });
+  return Object.freeze({ prompt, extensions: Object.freeze(extensions) });
 }
 function stringList(value: unknown, name: string): readonly string[] {
   if (value === undefined) return [];
   if (!Array.isArray(value) || value.some((entry) => typeof entry !== "string"))
     return invalid(`${name} must be an array of strings`);
   return value as readonly string[];
-}
-/** Shape-checks the authored block, then hands the meaning to the single
- * canonical validator in src/domain/tool-surface.ts. Cycles, duplicates and
- * unknown references are that validator's decision, not this parser's.
- */
-function toolSurfaceOf(value: unknown): ToolSurfacePlan | null {
-  if (value === undefined || value === null) return null;
-  const block = closedWithOptional(
-    value,
-    [],
-    ["defaultMode", "direct", "disabled", "groups", "roots"],
-    "toolSurface",
-  );
-  const declaredMode = block.defaultMode ?? "DIRECT";
-  if (declaredMode !== "DIRECT" && declaredMode !== "DISABLED")
-    return invalid("toolSurface.defaultMode must be DIRECT or DISABLED");
-  const rawGroups = block.groups === undefined ? [] : block.groups;
-  if (!Array.isArray(rawGroups)) return invalid("toolSurface.groups must be an array");
-  const groups: GroupSpec[] = rawGroups.map((entry, index) => {
-    const group = closed(entry, ["name", "description", "members"], `toolSurface.groups[${index}]`);
-    if (typeof group.name !== "string" || typeof group.description !== "string")
-      return invalid(`toolSurface.groups[${index}] name and description must be strings`);
-    if (!Array.isArray(group.members))
-      return invalid(`toolSurface.groups[${index}].members must be an array`);
-    const members: GroupMemberRef[] = group.members.map((member, position) => {
-      const entryRecord = record(member, `toolSurface.groups[${index}].members[${position}]`);
-      const keys = Object.keys(entryRecord);
-      if (keys.length !== 1 || (keys[0] !== "tool" && keys[0] !== "group"))
-        return invalid(`toolSurface.groups[${index}].members[${position}] must be {tool} or {group}`);
-      const target = entryRecord[keys[0]!];
-      if (typeof target !== "string")
-        return invalid(`toolSurface.groups[${index}].members[${position}] target must be a string`);
-      return keys[0] === "tool" ? { tool: target } : { group: target };
-    });
-    return { name: group.name, description: group.description, members };
-  });
-  const config: ToolSurfaceConfig = {
-    defaultMode: declaredMode,
-    direct: stringList(block.direct, "toolSurface.direct"),
-    disabled: stringList(block.disabled, "toolSurface.disabled"),
-    groups,
-    roots: stringList(block.roots, "toolSurface.roots"),
-  };
-  return planToolSurface(config);
 }
 /** Resolves the manifest and nothing else. It does not read the host or role
  * files, so a bundle whose contents are wrong still has a layout -- which is
@@ -425,10 +366,13 @@ function readSource(path: string, observer: ConfigurationReadObserver | undefine
     const roles: Record<string, RoleSettings> = Object.create(null);
     const authoredRoles: Record<string, AuthoredRoleSource> = Object.create(null);
     for (const [name, file] of Object.entries(layout.roles)) {
+      // D23: a role file's fields are closed -- a tool surface is OMA's
+      // internal policy, never an authored field, so one that appears here
+      // fails the load rather than silently taking effect.
       const role = closedWithOptional(
         json(file, closure),
         ["agentProfile", "extensions", "promptFile"],
-        ["toolSurface"],
+        [],
         `role ${name}`,
       );
       profiles[name] = role.agentProfile;

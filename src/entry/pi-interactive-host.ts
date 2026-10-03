@@ -128,6 +128,8 @@ export async function runInteractive(): Promise<void> {
     if (index < 0 || !argv[index + 1]) throw new Error(`missing ${name}`);
     return argv[index + 1]!;
   };
+  const flags = (name: string): string[] =>
+    argv.flatMap((value, index) => value === name ? [argv[index + 1]!] : []);
   const agentDir = process.env.PI_CODING_AGENT_DIR;
   if (!agentDir) throw new Error("interactive engine needs its private agent directory");
   preparePiInteractive(agentDir);
@@ -476,8 +478,17 @@ export async function runInteractive(): Promise<void> {
     modules!.refresh(extensions);
     const services = await createAgentSessionServices({ ...options,
       settingsManager: SettingsManager.create(cwd, agentDir, { projectTrusted: false }), resourceLoaderOptions: {
-      noExtensions: true, noSkills: true, noPromptTemplates: true, noContextFiles: true,
+      // Discovery stays explicit: only the role's pinned extensions load
+      // (`-e`, never a scanned directory), while skills, prompt templates and
+      // context files are discovered as Pi ships them -- the trusted core
+      // extension then keeps only the context files inside the workspace.
+      noExtensions: true,
       additionalExtensionPaths: extensions,
+      // C18: the spawn passes each package resource as its own flag, the same
+      // spelling Pi's CLI takes.
+      additionalSkillPaths: flags("--skill"),
+      additionalPromptTemplatePaths: flags("--prompt-template"),
+      additionalThemePaths: flags("--theme"),
       extensionFactories: [boundary],
       // The role prompt replaces Pi's generated base prompt, the same as the
       // RPC session's argv does; an absent flag leaves the loader's own default.
@@ -501,7 +512,9 @@ export async function runInteractive(): Promise<void> {
     } });
     const reload = services.resourceLoader.reload.bind(services.resourceLoader);
     services.resourceLoader.reload = async options => { modules!.refresh(extensions); await reload(options); };
-    services.settingsManager.applyOverrides({ enableInstallTelemetry: false, enableAnalytics: false, enableSkillCommands: false });
+    // Skills are discovered again; their commands come with them. The persisted
+    // pin in the engine's settings file predates that, so the override says on.
+    services.settingsManager.applyOverrides({ enableInstallTelemetry: false, enableAnalytics: false, enableSkillCommands: true });
     const modelName = argv.includes("--model") ? flag("--model") : undefined;
     const split = modelName?.indexOf("/") ?? -1;
     const model = modelName === undefined ? undefined

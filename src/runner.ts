@@ -14,7 +14,7 @@ import { EGRESS_SOCKET_ENV, EgressForwarder, requestEgressPlaceholder } from "./
 import { placeholderFor, resolveEngineAuth } from "./runtime/engine-auth.js";
 import { productSurfaceMasks } from "./runtime/resident-rootfs.js";
 import { StoreError } from "./domain/errors.js";
-import { encodeToolSurfacePlan } from "./domain/tool-surface.js";
+import { packageResourcePaths } from "./runtime/pi-packages.js";
 import { BrokerChannel, type ChannelLimits } from "./protocol/channel.js";
 import {
   deliveryDecision,
@@ -78,6 +78,10 @@ export interface RunnerPaths {
   readonly piAgentDir?: string;
   readonly coreExtension?: string;
   readonly cli?: string;
+  /** DR25/C18: the installed-package store's real host root. Confined engines
+   * reach it through the mount; unconfined ones read it where it lies. Absent
+   * means no packages are installed. */
+  readonly packages?: string;
   /** Absent means Residents run unconfined; see RunnerConfinement. */
   readonly confinement?: RunnerConfinement;
 }
@@ -232,9 +236,9 @@ export class RunnerModule {
         // including the core extension so its digest is re-checked too.
         extensions: (this.profile.settings?.extensions ?? [])
           .map((extension) => ({ path: extension.path, sha256: extension.sha256 })),
-        ...(this.profile.settings?.toolSurface
-          ? { toolSurface: encodeToolSurfacePlan(this.profile.settings.toolSurface) }
-          : {}),
+        // C18: skills, prompt templates and themes the installed packages
+        // provide, as host paths under the store root the plan translates.
+        ...(packageResourcePaths(this.paths.packages) === undefined ? {} : { packageResources: packageResourcePaths(this.paths.packages) }),
       },
       paths: {
         piCommand,

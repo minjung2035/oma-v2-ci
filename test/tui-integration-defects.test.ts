@@ -27,13 +27,8 @@ const scratch = (prefix: string): string => mkdtempSync(join(tmpdir(), prefix));
 const readJson = (path: string): Record<string, unknown> =>
   JSON.parse(readFileSync(path, "utf8")) as Record<string, unknown>;
 
-const SURFACE = {
-  defaultMode: "DISABLED",
-  direct: ["read"],
-  groups: [{ name: "web", description: "web tools", members: [{ tool: "fetch" }] }],
-};
-
-/** A split operations bundle with a toolSurface on the resident role. */
+/** A split operations bundle. D23: role files carry no toolSurface -- the
+ * field is closed now, so writing one would make the fixture itself unloadable. */
 function bundle(root: string): string {
   const libdir = join(root, "lib");
   mkdirSync(join(libdir, "dist", "src"), { recursive: true });
@@ -61,7 +56,6 @@ function bundle(root: string): string {
     agentProfile: { modelProfile: model, capabilities: [], delegable: [], childProfile: child, resources: TEST_RESOURCES },
     extensions: [CORE],
     promptFile: "prompt.md",
-    toolSurface: SURFACE,
   });
   writeFileSync(join(root, "principal.json"), JSON.stringify(role("strong", "resident"), null, 2));
   writeFileSync(join(root, "resident.json"), JSON.stringify(role("cheap", null), null, 2));
@@ -103,14 +97,12 @@ test("toggling an extension preserves every other field of the role file", () =>
 
     const written = authored(index, "principal");
     assert.deepEqual(written.extensions, [CORE, "extensions/review.js"]);
-    // The optional projection and the prompt reference must survive the toggle.
-    assert.deepEqual(written.toolSurface, SURFACE);
+    // The prompt reference must survive the toggle.
     assert.match(String(written.promptFile), /^\.oma-config\/generations\/g-[0-9a-f]{64}\/prompts\/principal\.md$/);
     assert.ok(written.agentProfile, "agentProfile must remain");
-    // The loader still accepts the bundle, so the projection is still validated.
+    // The loader still accepts the bundle.
     const roles = readConfigurationSource(index).roles;
-    assert.ok(roles["principal"]!.toolSurface, "toolSurface survives a round trip");
-    assert.deepEqual(roles["principal"]!.toolSurface!.roots, ["web"]);
+    assert.ok(roles["principal"] !== undefined && !Object.hasOwn(roles["principal"], "toolSurface"));
   } finally { removeTree(root); }
 });
 
@@ -130,10 +122,10 @@ test("a Config edit publishes the split bundle as a generation instead of flatte
     assert.ok(manifest.roles, "roles map survives");
     assert.equal(manifest.quota, undefined, "the index must not gain flattened host fields");
 
-    // The change is the principal role's, and its projection is untouched.
+    // The change is the principal role's, and its prompt reference is untouched.
     const principal = authored(index, "principal");
     assert.equal((principal.agentProfile as Record<string, unknown>).modelProfile, "cheap");
-    assert.deepEqual(principal.toolSurface, SURFACE);
+    assert.ok(principal.promptFile, "the prompt reference survives");
 
     // CFG-005: the policy revision moved with the edit.
     assert.notEqual((hostOf(index).integration as Record<string, unknown>).policyRevision, "rev-initial");
@@ -143,7 +135,7 @@ test("a Config edit publishes the split bundle as a generation instead of flatte
     // The bundle still loads, so nothing structural was destroyed.
     const reloaded = readSettings(index);
     assert.equal(reloaded.config.agentProfiles["principal"]!.modelProfile, "cheap");
-    assert.ok(readConfigurationSource(index).roles["resident"]!.toolSurface);
+    assert.ok(readConfigurationSource(index).roles["resident"] !== undefined);
   } finally { removeTree(root); }
 });
 
@@ -154,7 +146,7 @@ test("a quota edit on a split bundle lands in the host configuration only", () =
     commitField(readSettings(index), WORKER_LIMIT, 12);
     assert.equal((hostOf(index).quota as Record<string, unknown>).societyAgents, 12);
     assert.equal(readJson(index).kind, "oma-operations-v1");
-    assert.deepEqual(authored(index, "resident").toolSurface, SURFACE);
+    assert.ok(authored(index, "resident").promptFile, "the role file is intact");
     assert.equal((authored(index, "resident").agentProfile as Record<string, unknown>).modelProfile, "cheap");
   } finally { removeTree(root); }
 });
@@ -173,18 +165,20 @@ test("a worker model edit targets the resident role, not the principal", () => {
   } finally { removeTree(root); }
 });
 
-test("the Principal session carries its role's projection into the Pi process", () => {
-  const plan = readConfigurationSource(bundle(scratch("oma-defect-env-"))).roles["principal"]!.toolSurface!;
-  const encoded = encodeToolSurfacePlan(plan);
-  const withSurface = sessionEnv({ HOME: "/h", PATH: "/usr/bin" }, {
-    society: "demo", provider: "pi", model: "current", workspaceBytes: 1024, extensions: [], toolSurface: encoded,
-  });
-  assert.equal(withSurface.OMA_TOOL_SURFACE, encoded);
-  assert.equal(withSurface.HOME, "/h");
-  const without = sessionEnv({ HOME: "/h", PATH: "/usr/bin" }, {
+test("D23: the Principal session carries no authored projection -- the surface is OMA's own", () => {
+  // A role file's fields are closed, and a session profile has no field for a
+  // plan: there is no authored way for OMA_TOOL_SURFACE to reach the engine.
+  const root = scratch("oma-defect-env-");
+  try {
+    bundle(root);
+    const role = readConfigurationSource(join(root, "index.json")).roles["principal"];
+    assert.ok(role !== undefined && !Object.hasOwn(role, "toolSurface"));
+  } finally { removeTree(root); }
+  const env = sessionEnv({ HOME: "/h", PATH: "/usr/bin" }, {
     society: "demo", provider: "pi", model: "current", workspaceBytes: 1024, extensions: [],
   });
-  assert.ok(!("OMA_TOOL_SURFACE" in without), "a role without a projection sets no variable");
+  assert.ok(!("OMA_TOOL_SURFACE" in env), "no profile field carries a projection");
+  assert.equal(env.HOME, "/h");
 });
 
 test("the Principal session is built from its role, not from defaults", () => {
@@ -199,7 +193,7 @@ test("the Principal session is built from its role, not from defaults", () => {
     assert.deepEqual(profile.extensions, role.extensions.map(extension => ({ path: extension.path, sha256: extension.sha256 })),
       "the Principal runs its role's extensions, digests included");
     assert.ok(profile.extensions.length > 0, "a role with extensions must not start with an empty list");
-    assert.equal(profile.toolSurface, encodeToolSurfacePlan(role.toolSurface!), "the role's projection travels to the engine");
+    assert.ok(!("toolSurface" in profile), "D23: no authored projection field travels to the engine");
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
 
@@ -364,7 +358,7 @@ test("the Principal and Resident spawn seams carry the same role contract", () =
     const role = readConfigurationSource(index).roles["principal"]!;
 
     // Whatever the Resident path forwards, the Principal path must forward too:
-    // extensions with digests, the projection, and the role prompt.
+    // extensions with digests and the role prompt.
     const argv = sessionArgv(
       { piCommand: "/usr/bin/node", piArgs: ["/lib/cli.js"], coreExtension: "/lib/core.js",
         sessionDir: "/s", workspace: "/w", home: "/h", piAgentDir: "/state/pi" },
@@ -372,7 +366,6 @@ test("the Principal and Resident spawn seams carry the same role contract", () =
         society: "demo", provider: "pi", model: "current", workspaceBytes: 1024,
         extensions: role.extensions.map(e => ({ path: e.path, sha256: e.sha256 })),
         prompt: "role prompt",
-        toolSurface: encodeToolSurfacePlan(role.toolSurface!),
       },
     );
     assert.equal(argv[argv.indexOf("--system-prompt") + 1], "role prompt",
@@ -380,9 +373,8 @@ test("the Principal and Resident spawn seams carry the same role contract", () =
 
     const env = sessionEnv({ HOME: "/h" }, {
       society: "demo", provider: "pi", model: "current", workspaceBytes: 1024, extensions: [],
-      toolSurface: encodeToolSurfacePlan(role.toolSurface!),
     }, { piAgentDir: "/state/pi" });
-    assert.ok(env.OMA_TOOL_SURFACE, "the projection reaches the engine");
+    assert.ok(!("OMA_TOOL_SURFACE" in env), "D23: no authored projection reaches the engine");
     assert.equal(env.PI_CODING_AGENT_DIR, "/state/pi", "the engine stays in OMA's directory");
 
     // A role without an authored prompt runs on the built-in Principal prompt,

@@ -195,6 +195,10 @@ export interface ScenarioOptions {
   /** mail-v1 notice splitting: a small bound makes applied-change notices
    * multi-part; the default keeps them whole. */
   readonly reviewBodyBytes?: number;
+  /** Extra environment for the engines -- how an internal OMA policy such as
+   * OMA_TOOL_SURFACE (D23: no longer configuration) reaches the process the
+   * way OMA's own plumbing would set it. */
+  readonly engineEnv?: Readonly<Record<string, string>>;
 }
 
 /** A broker over the society's state, composed as entry/broker.ts composes
@@ -293,7 +297,7 @@ export async function startScenario(options: ScenarioOptions = {}): Promise<Scen
         coreExtension: join(REPO, "dist/src/pi-extension.js"), sessionDir: principalSessionDir(root),
         workspace: principalWorkspace(root), home: principalWorkspace(root) },
       profile, { frameBytes: SCENARIO_LIMITS.frameBytes, idleStreamSeconds: SCENARIO_LIMITS.idleStreamSeconds, receiptWaitSeconds: SCENARIO_LIMITS.receiptWaitSeconds },
-      { ...principalEnvironment({ stateRoot: root, runRoot, libdir: REPO }, profile, SCENARIO_LIMITS), ...trust },
+      { ...principalEnvironment({ stateRoot: root, runRoot, libdir: REPO }, profile, SCENARIO_LIMITS), ...trust, ...options.engineEnv },
       { onLine: line => { lines.push(line); }, onBusy: () => {}, onEnd: reason => { lines.push(`[end] ${reason}`); },
         onUi: event => options.interactive?.onUi(event, started),
         onPromptFailed: (_text, reason) => { lines.push(`[prompt failed] ${reason}`); },
@@ -459,7 +463,7 @@ export async function startScenario(options: ScenarioOptions = {}): Promise<Scen
       try {
         const child = spawn(process.execPath, [join(REPO, "dist/src/entry/runner.js"), "--society", SOCIETY, "--agent", agent,
           "--config", configPath, "--state-root", root, "--run-root", runRoot], {
-          env: { ...trust, PATH: process.env.PATH ?? "/usr/bin:/bin", HOME: home, INVOCATION_ID: units.running.invocationId,
+          env: { ...trust, ...options.engineEnv, PATH: process.env.PATH ?? "/usr/bin:/bin", HOME: home, INVOCATION_ID: units.running.invocationId,
             OMA_PROFILE_HEX: Buffer.from(residentProfile, "utf8").toString("hex"),
             OMA_RESOURCES_HEX: Buffer.from(canonicalResourceLimits(residentResources), "utf8").toString("hex") },
           stdio: ["ignore", "ignore", "pipe"] });
