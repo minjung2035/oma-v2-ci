@@ -258,7 +258,7 @@ test("AV-14: a credential that resolves after the boot it was asked under ended 
   assert.equal(stopped.host.activeRuns, 0);
 });
 
-test("§4.7 v5 / AV-15: the answered connection a run holds open is its lease; its end ends the run on the host", async t => {
+test("AV-15/§4.7 v5: the answered connection a run holds open is its lease; its end ends the run on the host", async t => {
   const { host, pool, provider, serviceSocket } = await world(t);
   await host.fill();
   await until(() => pool.size === 2, "the pool");

@@ -152,13 +152,13 @@ for (const failing of [false, true]) test(`Keychain client: fenced writer ${fail
   if (failing) await refused; else assert.equal(await observed, 'finished');
   const closed = client.close(); w.children[0].child.close(); await closed;
 });
-test('Keychain client: a request the helper never answers ends within its deadline, and the untrusted channel with it', async () => {
+test('NB-30 Keychain client: a request the helper never answers ends within its deadline, and the untrusted channel with it', async () => {
   const w = world(), client = await w.KeychainClient.launch(libdir, undefined, { requestMs: 40 }), { child, channel } = w.children[0];
   await assert.rejects(client.get('engine-managed'), error => unavailable(error) && /did not answer .* in time/.test(error.message));
   assert.equal(channel.destroyed, true, 'a channel that cannot order answers is not trusted with the next request');
   const closed = client.close(); child.close(); await closed;
 });
-test('Keychain client: a wedged close ends the child rather than waiting on it forever', async () => {
+test('NB-30 Keychain client: a wedged close ends the child rather than waiting on it forever', async () => {
   const w = world(), client = await w.KeychainClient.launch(libdir, undefined, { closeMs: 40 }), { child } = w.children[0];
   let returned = false;
   const closed = client.close().then(() => { returned = true; });

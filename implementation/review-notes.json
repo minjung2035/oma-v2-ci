@@ -69,10 +69,11 @@
         "DR28"
       ],
       "oracles": [
-        "Owned cleanup stopped snapshot"
+        "Owned cleanup stopped snapshot",
+        "NB-27"
       ],
-      "sha256": "5e516be2a64e7282df623b7add2c8da67abc0b145c69d30e23e27db9f851ce32",
-      "note": "Read in full: partial snapshot ownership spans clone/publication and discard; primary plus discard and cleanup-only outcomes are not success. Discard-removal control assertion-killed. Actual local-fixture snapshot regressions pass. Running-snapshot maintenance/control/society cleanup and clone/thaw failure composition remain open; no native VM, APFS or power-cut proof."
+      "sha256": "bce59d002ae5af3c82d75f83ddfb58913350201dd514a539fe6d0b582b512d44",
+      "note": "Re-read in full after NB-27: partial snapshot ownership still spans clone/publication and discard; running-snapshot now returns the maintenance latch through withAsyncCleanup on every path, so an end failure is told (primary kept, cleanup aggregated) and never silently holds society.open shut. Discard-removal control assertion-killed. Actual local-fixture snapshot regressions pass; clone/thaw failure composition unchanged. No native VM, APFS or power-cut proof."
     },
     {
       "path": "src/runtime/pi-runtime.ts",
@@ -107,10 +108,11 @@
         "DR28"
       ],
       "oracles": [
-        "Owned cleanup Keychain"
+        "Owned cleanup Keychain",
+        "AV-22"
       ],
-      "sha256": "491e36258840747fd9c7545ed1bd91fece2877d79629a8c3f99964c34534afdb",
-      "note": "Read in full: serialized per-item writer uses a cross-process lock and awaits the fenced writer before returning it; abort and identity are rechecked before write. Controlled in-memory store failure beside lock close and cleanup-only failure retain exact outcomes. Native Swift helper, real Keychain and credential execution were not exercised."
+      "sha256": "0b862e0b6a2f39e16bafe2da57f17b2cd00847b02f394d223cede2b25abaa0a7",
+      "note": "Re-read in full after AV-22: per-account serialized() chains every mutating read->write one at a time; the cross-process writer lock is polled until held, abort and held-identity are rechecked after acquisition and before each put, and the fenced writer ends before it is returned. Two concurrent modify() calls on an empty store produce one key (AV-22 oracle). Controlled store failure beside lock close and cleanup-only failure retain exact outcomes. Native Swift helper, real Keychain and credential execution were not exercised."
     },
     {
       "path": "src/tui/login.ts",
