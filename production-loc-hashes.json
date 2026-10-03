@@ -216,7 +216,7 @@
     },
     {
       "path": "src/config.ts",
-      "sha256": "f2b3026cbfc998788cdab6afc155d75d952658e9f87cd9c0edc2b57a46b48058"
+      "sha256": "b5acdad487dda6fe0a8dbbcf2f4d75021533d590fb5201fbf394fcffc9cf8692"
     },
     {
       "path": "src/config/defaults.ts",
@@ -312,7 +312,7 @@
     },
     {
       "path": "src/domain/limits.ts",
-      "sha256": "0a0f8450f8756a03e4e53ff13cb7a817139d8a369a715a8f0ddc005b67f3f958"
+      "sha256": "4bd3b6e3dd6793dbb130fc31828fcbfc47833b919b9c02c524d586bceed4ca9f"
     },
     {
       "path": "src/domain/lineage.ts",
@@ -632,7 +632,7 @@
     },
     {
       "path": "src/mail/batch-policy.ts",
-      "sha256": "a1a5438f7f21ffa2d287dc0937253310e19b7128d04fef2e0f57300a46503471"
+      "sha256": "d81f1362d1bd6d3ff1b30ff74cda70fc54045a77b2477e846ddec37b69a62605"
     },
     {
       "path": "src/mail/batches.ts",

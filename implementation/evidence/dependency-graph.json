@@ -433,6 +433,7 @@
      "src/mail/addresses.ts",
      "src/mail/facts.ts",
      "src/mail/headers.ts",
+     "src/mail/review-bounds.ts",
      "src/protocol/batch-view.ts",
      "src/protocol/byte-queue.ts",
      "src/protocol/guest-history.ts",
@@ -519,10 +520,10 @@
   ],
   "runtimeEdgeMatrix": {
    "K0-values -> K0-values": 31,
-   "K1-codecs -> K0-values": 66,
+   "K1-codecs -> K0-values": 67,
    "K1-codecs -> K1-codecs": 28,
    "K2-mechanisms -> K0-values": 67,
-   "K2-mechanisms -> K1-codecs": 8,
+   "K2-mechanisms -> K1-codecs": 9,
    "K2-mechanisms -> K2-mechanisms": 62,
    "K3-ledger -> K0-values": 22,
    "K3-ledger -> K1-codecs": 10,
@@ -530,7 +531,7 @@
    "K3-ledger -> K3-ledger": 15
   },
   "typeOnlyEdgeMatrix": {
-   "K1-codecs -> K0-values": 1,
+   "K1-codecs -> K0-values": 2,
    "K1-codecs -> K1-codecs": 1,
    "K1-codecs -> K3-ledger": 1,
    "K2-mechanisms -> K0-values": 2,
@@ -624,6 +625,11 @@
    {
     "from": "src/config.ts",
     "to": "src/domain/resources.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "src/config.ts",
+    "to": "src/mail/review-bounds.ts",
     "kind": "runtime"
    },
    {
@@ -845,6 +851,16 @@
     "from": "src/mail/headers.ts",
     "to": "src/domain/utf8.ts",
     "kind": "runtime"
+   },
+   {
+    "from": "src/mail/review-bounds.ts",
+    "to": "src/domain/errors.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "src/mail/review-bounds.ts",
+    "to": "src/domain/review-evaluation.ts",
+    "kind": "type"
    },
    {
     "from": "src/process/async.ts",
@@ -1778,10 +1794,11 @@
     "src/mail/addresses.ts",
     "src/mail/facts.ts",
     "src/mail/headers.ts",
+    "src/mail/review-bounds.ts",
     "src/resident-paths.ts",
     "src/store.ts"
    ],
-   "files": 116
+   "files": 117
   },
   {
    "index": 2,
@@ -1813,7 +1830,7 @@
     "src/reconcile/",
     "src/review.ts"
    ],
-   "files": 42
+   "files": 41
   },
   {
    "index": 4,
@@ -1848,16 +1865,15 @@
   }
  ],
  "files": 377,
- "runtimeEdges": 1608,
+ "runtimeEdges": 1609,
  "typeOnlyEdges": 427,
  "runtimeEdgeMatrix": {
-  "L1-kernel -> L1-kernel": 310,
-  "L1-kernel -> L3-workflow": 2,
+  "L1-kernel -> L1-kernel": 312,
   "L2-facts -> L1-kernel": 36,
   "L2-facts -> L2-facts": 5,
-  "L3-workflow -> L1-kernel": 221,
+  "L3-workflow -> L1-kernel": 223,
   "L3-workflow -> L2-facts": 14,
-  "L3-workflow -> L3-workflow": 69,
+  "L3-workflow -> L3-workflow": 68,
   "L4-orchestration -> L1-kernel": 333,
   "L4-orchestration -> L2-facts": 8,
   "L4-orchestration -> L3-workflow": 19,
