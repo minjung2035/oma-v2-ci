@@ -6,6 +6,8 @@
 import { connect, createServer, type Server, type Socket } from "node:net";
 import { join } from "node:path";
 import { randomUUID } from "node:crypto";
+import type { FramedPeer } from "../../src/platform/rpc.js";
+import { StoreError } from "../../src/domain/errors.js";
 import { startGuestServer, type GuestIdentity } from "../../src/platform/guest/server.js";
 import { GuestControl, type GuestSystem } from "../../src/platform/guest/control.js";
 import { GuestHost, type SessionLauncher } from "../../src/platform/guest/host.js";
@@ -36,9 +38,14 @@ export class LocalDriver implements VmDriver {
   ignorePowerOff = false;
   hung = false;
   readonly calls: string[] = [];
+  /** The next this many clock steps are refused -- for the wake path's tests;
+   * a boot's own clock step after a restart is counted the same way. */
+  failTimeSets = 0;
   private readonly stopListeners: ((cause: VmStopCause) => void)[] = [];
   private silent: Server | null = null;
-  constructor(private readonly dir: string, private readonly societies: { dir: string; launcher: SessionLauncher }, private readonly instanceId: string) {}
+  constructor(private readonly dir: string,
+    private readonly societies: { dir: string; launcher: SessionLauncher; mutate?: (peer: FramedPeer) => void },
+    private readonly instanceId: string) {}
 
   onStopped(listener: (cause: VmStopCause) => void): void { this.stopListeners.push(listener); }
   private stopped(cause: VmStopCause): void { for (const listener of this.stopListeners) listener(cause); }
@@ -79,7 +86,8 @@ export class LocalDriver implements VmDriver {
     const identity = (): GuestIdentity => ({ instanceId: this.instanceId, guestImage: this.image, bootId,
       stateSchema: { written: 1, readable: [1] }, capabilities: [] });
     const system: GuestSystem = {
-      wallClock: () => 0, setWallClock: ms => { this.calls.push(`time.set:${ms > 0}`); },
+      wallClock: () => 0, setWallClock: ms => { this.calls.push(`time.set:${ms > 0}`);
+        if (this.failTimeSets > 0) { this.failTimeSets -= 1; throw new StoreError("INTERNAL_ERROR", "the guest's clock would not step"); } },
       health: () => ({ uptimeMs: 1, load: [0, 0, 0], memory: { totalBytes: 1, availableBytes: 1 }, disk: { totalBytes: 1, freeBytes: 1 }, failedUnits: 0 }),
       freeze: () => {}, thaw: () => {}, grow: async () => 0,
       powerOff: () => { this.calls.push("power.off"); if (!this.ignorePowerOff) setTimeout(() => { void this.halt("guest"); }, 10); },
@@ -104,6 +112,7 @@ export class LocalDriver implements VmDriver {
       await startGuestServer({ socketPath: join(this.dir, `s-${suffix}.sock`), identity, bridge: self, frameBytes: PLATFORM_FRAME_BYTES,
         helloDeadlineMs: 1000, requestTimeoutMs: 2000, channels: { society: { kind: "json", serve: ({ peer }) => {
           peer.onFrame(frame => { if (typeof frame.method === "string") this.calls.push(frame.method); });
+          this.societies.mutate?.(peer);
           host.serve(peer);
         } }, egress: { kind: "bytes", serve: socket => { this.pool.park(socket); } },
         stream: { kind: "bytes", serve: socket => { void serveStream(socket, { ledger, frameBytes: PLATFORM_FRAME_BYTES, deadlineMs: 5000, reserveBytes: 0, dataDir: this.dir }); } } } }),

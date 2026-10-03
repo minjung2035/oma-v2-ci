@@ -2,7 +2,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { existsSync, mkdtempSync, rmSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { parseOmaArguments, parseMacArguments } from "../src/runtime/host-arguments.js";
@@ -108,5 +108,22 @@ test("Personal resume refuses a non-OMA history before preparing any state", () 
     });
     assert.notEqual(result.status, 0, result.stderr); assert.match(result.stderr, /not an OMA session history/);
     assert.equal(existsSync(data), false); assert.equal(existsSync(home), false); assert.equal(existsSync(run), false);
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
+test("NB-25/CLI-003: the Mac CLI exits by error class -- 2 a refusal, 3 an unknown outcome, never a flat 1", () => {
+  const root = mkdtempSync(join(tmpdir(), "oma-mac-exit-"));
+  try {
+    const home = join(root, "host"), run = join(home, "run");
+    mkdirSync(run, { recursive: true });
+    writeFileSync(join(run, "token"), "fixture-token\n");
+    const entry = join(import.meta.dirname, "../src/entry/oma-mac.js");
+    const env = { ...process.env, HOME: root, OMA_HOST_HOME: home };
+    // The service is gone but its token remains: the outcome is unknown.
+    const status = spawnSync(process.execPath, [entry, "status"], { env, encoding: "utf8", timeout: 10_000 });
+    assert.equal(status.status, 3, status.stderr);
+    // A settled refusal keeps its own code.
+    const refused = spawnSync(process.execPath, [entry, "status", "extra"], { env, encoding: "utf8", timeout: 10_000 });
+    assert.equal(refused.status, 2, refused.stderr);
   } finally { rmSync(root, { recursive: true, force: true }); }
 });

@@ -58,7 +58,10 @@ export interface GuestHostOptions {
 export const listening = endpointListening;
 
 export class GuestHost {
-  private readonly maintenance = new Set<string>();
+  /** §4.5 maintenance latches, each owned by the connection that asked for
+   * it (or none, where the owner is this process's own caller). An owner's
+   * end releases its latches however it ends (AV-23, P0-4). */
+  private readonly maintenance = new Map<string, FramedPeer | null>();
   private readonly archiving = new Set<string>();
   /** P0V-106 (G13-04): one open of a society at a time. A second open waits
    * for the first and then sees what it made, instead of starting a second
@@ -157,12 +160,14 @@ export class GuestHost {
     return { state: await this.options.launcher.stop(society, this.options.stopDeadlineMs) };
   }
 
-  /** §4.5 / MAC-320: while any maintenance is open no society opens. */
-  maintenanceBegin(key: unknown): { maintenance: true } {
+  /** §4.5 / MAC-320: while any maintenance is open no society opens. The
+   * latch belongs to the connection that took it: `maintenance.end` returns
+   * it early, the connection's own end returns it however it ends. */
+  maintenanceBegin(key: unknown, owner: FramedPeer | null = null): { maintenance: true } {
     if (!isRequestKey(key)) throw new StoreError("INVALID_REQUEST", "invalid request key");
     if (this.opening.size > 0 || this.archiving.size > 0)
       throw new StoreError("BROKER_UNAVAILABLE", "a society is opening or being archived; retry maintenance shortly");
-    this.maintenance.add(key);
+    this.maintenance.set(key, owner);
     return { maintenance: true };
   }
   maintenanceEnd(key: unknown): { maintenance: boolean } {
@@ -170,14 +175,19 @@ export class GuestHost {
     this.maintenance.delete(key);
     return { maintenance: this.maintenance.size > 0 };
   }
+  /** A dead owner cannot hold the engine: its latches end with it. */
+  private reapOwner(owner: FramedPeer): void {
+    for (const [key, held] of this.maintenance) if (held === owner) this.maintenance.delete(key);
+  }
 
   serve(peer: FramedPeer): void {
+    peer.onClose(() => { this.reapOwner(peer); });
     serveRequests(peer, async (method, params, key) => {
       switch (method) {
         case "society.list": return await this.list();
         case "society.open": return await this.open(params.society, params.projectId);
         case "society.close": return await this.close(params.society, params.mode);
-        case "maintenance.begin": return this.maintenanceBegin(key);
+        case "maintenance.begin": return this.maintenanceBegin(key, peer);
         case "maintenance.end": return this.maintenanceEnd(key);
         case "project.import": return await this.need(this.options.projects, method).import(key, params);
         case "project.export": return await this.need(this.options.projects, method).export(key, { society: params.society, since: params.since });

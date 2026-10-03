@@ -437,7 +437,7 @@ prompt·설정·확장은 terminal 안의 TUI가 한다. 그래서 prompt에는 
 egress 연결의 첫 message(guest→host)는 둘 가운데 하나다.
 
 ```
-egress.placeholder { v: 1, id, method: "egress.placeholder", params: { credentialRef, provider, model, run: { society, actor, incarnation } } }
+egress.placeholder { v: 1, id, method: "egress.placeholder", params: { credentialRef, provider, model, run: { society, actor, incarnation }, hold: true } }
   → { v: 1, id, ok: true, result: { placeholderId, placeholder, provider, model } }   // 엔진을 띄우기 전, run마다 한 번. MAC-704
 
 egress.open { v: 1, id, method: "egress.open", params: { placeholderId, society, actor, incarnation, modelProfile } }
@@ -446,9 +446,11 @@ egress.open { v: 1, id, method: "egress.open", params: { placeholderId, society,
 두 message는 요청 envelope를 쓴다(§4.2). guest 안의 client(runner, `oma`)는 guesthost의 egress socket(`$XDG_RUNTIME_DIR/oma-egress.sock`)에
 같은 message를 보내고, guesthost가 pool의 연결 하나에 그대로 옮긴다. host는 `egress.open`의 run(society, actor, incarnation)이 그
 자리표시자를 받은 run과 같을 때만 연결한다. guest의 엔진은 INF-006의 bridge로 provider를 등록하고, 그 provider 이름과 자리표시자는 `egress.placeholder`의 답이다(D-10).
-`egress.placeholder`는 작은 요청과 응답으로 끝나고 연결을 닫는다. 엔진의 provider 설정에는 이 자리표시자가 들어간다(§7.4).
+`egress.placeholder`는 작은 요청과 응답으로 끝난다. `hold: true`(protocol 5)이면 그 연결이 열린 채로 run의 lease가 된다 -- run이 끝나
+forwarder가 닫히면 lease도 닫히고, host는 그 끝을 run의 끝으로 읽는다. `hold`가 없으면(v4) 응답과 함께 연결이 닫히고 run은 다음
+`bootId`까지 산다. 엔진의 provider 설정에는 이 자리표시자가 들어간다(§7.4).
 `egress.open` 뒤에는 엔진이 쓴 HTTP/1.1 byte가 그대로 흐르고, 응답 byte가 반대로 흐른다(INF-005). host의 Relay는 `placeholderId`로
-그 run의 자리표시자와 credential을 찾는다. 자리표시자는 guest가 run의 끝을 알리거나 `bootId`가 바뀌면 버린다. host 쪽 규칙은 §7.4에 있다.
+그 run의 자리표시자와 credential을 찾는다. 자리표시자는 run의 lease가 끊어지거나 `bootId`가 바뀌면 버린다. host 쪽 규칙은 §7.4에 있다.
 
 ### 4.8 stream channel
 

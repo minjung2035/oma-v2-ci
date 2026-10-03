@@ -1762,7 +1762,7 @@
   }
  ],
  "files": 355,
- "runtimeEdges": 1537,
+ "runtimeEdges": 1541,
  "typeOnlyEdges": 417,
  "runtimeEdgeMatrix": {
   "L1-kernel -> L1-kernel": 283,
@@ -1771,11 +1771,11 @@
   "L3-workflow -> L1-kernel": 219,
   "L3-workflow -> L2-facts": 14,
   "L3-workflow -> L3-workflow": 68,
-  "L4-orchestration -> L1-kernel": 291,
+  "L4-orchestration -> L1-kernel": 292,
   "L4-orchestration -> L2-facts": 7,
   "L4-orchestration -> L3-workflow": 17,
-  "L4-orchestration -> L4-orchestration": 148,
-  "L5-entry -> L1-kernel": 140,
+  "L4-orchestration -> L4-orchestration": 150,
+  "L5-entry -> L1-kernel": 141,
   "L5-entry -> L2-facts": 3,
   "L5-entry -> L3-workflow": 9,
   "L5-entry -> L4-orchestration": 114,
@@ -1798,7 +1798,7 @@
   ]
  ],
  "fanIn": {
-  "src/domain/errors.ts": 196,
+  "src/domain/errors.ts": 197,
   "src/domain/identifiers.ts": 62,
   "src/storage/paths.ts": 31,
   "src/protocol/host-guest.ts": 29,
@@ -1819,17 +1819,17 @@
   "src/broker.ts": 31,
   "src/mail.ts": 30,
   "src/entry/broker.ts": 28,
-  "src/entry/oma-mac.ts": 19,
+  "src/entry/oma-mac.ts": 20,
   "src/git.ts": 18,
   "src/review.ts": 18,
   "src/git/context-repository.ts": 17,
   "src/git/context.ts": 15,
   "src/lifecycle/create.ts": 15,
+  "src/platform/host/service.ts": 15,
   "src/reconcile.ts": 15,
   "src/tui/session.ts": 15,
   "src/git/integration.ts": 14,
-  "src/git/submit.ts": 14,
-  "src/mail/batches.ts": 14
+  "src/git/submit.ts": 14
  },
  "external": {
   "@earendil-works/pi-coding-agent": 23,
@@ -1851,7 +1851,7 @@
   "node:stream": 3,
   "node:stream/promises": 2,
   "node:string_decoder": 1,
-  "node:timers/promises": 2,
+  "node:timers/promises": 3,
   "node:tty": 1,
   "node:url": 7,
   "node:util": 5,

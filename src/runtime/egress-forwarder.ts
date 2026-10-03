@@ -35,8 +35,10 @@ export interface EgressAsk {
   readonly deadlineMs: number;
 }
 
-/** One frame from a connection that then ends. */
-function oneFrame(socket: Socket, frameBytes: number, deadlineMs: number): Promise<Record<string, unknown>> {
+/** One frame from a connection. With `keep` the answered connection is the
+ * caller's afterwards (§4.7 v5: the run's lease); without it the connection
+ * ends. An error always destroys it. */
+function oneFrame(socket: Socket, frameBytes: number, deadlineMs: number, keep = false): Promise<Record<string, unknown>> {
   return new Promise((resolve, reject) => {
     if (!Number.isSafeInteger(deadlineMs) || deadlineMs <= 0) { socket.destroy(); reject(new RangeError("Invalid egress observation deadline")); return; }
     const parser = new FrameParser(frameBytes);
@@ -46,7 +48,7 @@ function oneFrame(socket: Socket, frameBytes: number, deadlineMs: number): Promi
       settled = true;
       timer?.cancel();
       socket.removeAllListeners("data");
-      socket.destroy();
+      if (error !== null || !keep) socket.destroy();
       if (error !== null) reject(error); else resolve(frame!);
     };
     socket.on("data", (chunk: Buffer) => {
@@ -60,22 +62,33 @@ function oneFrame(socket: Socket, frameBytes: number, deadlineMs: number): Promi
   });
 }
 
+/** The run's placeholder, as the host issued it, and the lease that ends it:
+ * the connection the answer came on. `release` ends the run on the host --
+ * its relay, its placeholder, the credential that stood behind them. */
+export interface EgressLease extends EgressPlaceholderResult {
+  release(): void;
+}
+
 /** The run's placeholder, issued by the host for this society, actor and
- * incarnation and for the engine-managed credential. */
+ * incarnation and for the engine-managed credential. The connection is asked
+ * to stay open (v5 `hold`) so the host learns of the run's end from it. */
 export async function requestEgressPlaceholder(ask: EgressAsk, run: EgressPlaceholderParams["run"], provider: string,
-  model: string, inferenceSeconds: number): Promise<EgressPlaceholderResult> {
+  model: string, inferenceSeconds: number): Promise<EgressLease> {
   const socket = connect(ask.socket);
-  const params: EgressPlaceholderParams = { credentialRef: EGRESS_ENGINE_MANAGED, provider, model, run, inferenceSeconds };
+  const params: EgressPlaceholderParams = { credentialRef: EGRESS_ENGINE_MANAGED, provider, model, run, inferenceSeconds, hold: true };
   socket.once("connect", () => { socket.write(encodeFrame({ v: 1, id: randomUUID(), method: "egress.placeholder", params })); });
-  const answer = await oneFrame(socket, ask.frameBytes, ask.deadlineMs);
+  const answer = await oneFrame(socket, ask.frameBytes, ask.deadlineMs, true);
   if (answer.ok !== true) {
+    socket.destroy();
     const error = answer.error as { code?: unknown; message?: unknown } | undefined;
     throw new StoreError(error?.code === "UNSUPPORTED_PROFILE" ? "UNSUPPORTED_PROFILE" : "BROKER_UNAVAILABLE",
       `the host issued no placeholder for this run: ${typeof error?.message === "string" ? error.message : "no reason given"}`);
   }
   const problem = egressPlaceholderResultProblem(answer.result);
-  if (problem !== null) throw new StoreError("BROKER_UNAVAILABLE", `the host's placeholder answer is malformed (${problem})`);
-  return answer.result as unknown as EgressPlaceholderResult;
+  if (problem !== null) { socket.destroy(); throw new StoreError("BROKER_UNAVAILABLE", `the host's placeholder answer is malformed (${problem})`); }
+  // The lease is read no more: anything the host says after the answer ends it.
+  socket.on("data", () => { socket.destroy(); });
+  return { ...(answer.result as unknown as EgressPlaceholderResult), release: () => { socket.destroy(); } };
 }
 
 /** The engine's provider socket, forwarding each connection to one egress
@@ -84,10 +97,13 @@ export async function requestEgressPlaceholder(ask: EgressAsk, run: EgressPlaceh
 export class EgressForwarder {
   private readonly open = new Set<Socket>();
   private closing: Promise<void> | null = null;
-  private constructor(private readonly server: Server, readonly socketPath: string) {}
+  private constructor(private readonly server: Server, readonly socketPath: string, private readonly lease: { release(): void } | null) {}
 
-  static listen(socketPath: string, egressSocket: string, run: EgressOpenParams, concurrent: number): Promise<EgressForwarder> {
-    if (!Number.isSafeInteger(concurrent) || concurrent < 1) throw new StoreError("UNSUPPORTED_PROFILE", "the forwarder's connection bound is invalid");
+  /** The run's lease is the forwarder's from here: an answer it could not
+   * give ends the run the same as its close does (P0-4, AV-15). */
+  static listen(socketPath: string, egressSocket: string, run: EgressOpenParams, concurrent: number,
+    lease: { release(): void } | null = null): Promise<EgressForwarder> {
+    if (!Number.isSafeInteger(concurrent) || concurrent < 1) { lease?.release(); throw new StoreError("UNSUPPORTED_PROFILE", "the forwarder's connection bound is invalid"); }
     clearSocketName(socketPath);
     let forwarder: EgressForwarder;
     const server = createServer(engine => {
@@ -105,20 +121,26 @@ export class EgressForwarder {
         upstream.pipe(engine);
       });
     });
-    forwarder = new EgressForwarder(server, socketPath);
+    forwarder = new EgressForwarder(server, socketPath, lease);
     return new Promise((resolve, reject) => {
-      server.once("error", reject);
+      // From listener creation through permission setting, a failure is this
+      // construction's own to clean up: the bound socket and the run's lease.
+      const failed = (error: Error): void => { forwarder.lease?.release(); server.close(() => reject(error)); };
+      server.once("error", failed);
       server.listen(socketPath, () => {
-        server.off("error", reject);
-        chmodSync(socketPath, 0o600);
+        server.off("error", failed);
+        try { chmodSync(socketPath, 0o600); }
+        catch (error) { failed(error as Error); return; }
         resolve(forwarder);
       });
     });
   }
 
-  /** Stops listening and ends every forwarded connection: the run is over. */
+  /** Stops listening and ends every forwarded connection: the run is over,
+   * and the host hears it on the lease (AV-15). */
   close(): Promise<void> {
     this.closing ??= new Promise(resolve => {
+      this.lease?.release();
       for (const socket of this.open) socket.destroy();
       // The server's own close removes its name (P0V-114).
       this.server.close(() => { resolve(); });
@@ -162,8 +184,9 @@ export async function openPrincipalEgress(options: { readonly society: string; r
   const issued = await requestEgressPlaceholder({ socket: egress, frameBytes: options.frameBytes, deadlineMs: options.deadlineMs },
     run, options.provider, options.model, options.inferenceSeconds);
   const socketPath = join(options.runRoot, "principal-inference.sock");
+  // The lease is the forwarder's now: its close is the run's end on the host.
   const forwarder = await EgressForwarder.listen(socketPath, egress,
-    { placeholderId: issued.placeholderId, ...run, modelProfile: options.modelProfile }, 4);
+    { placeholderId: issued.placeholderId, ...run, modelProfile: options.modelProfile }, 4, issued);
   // P0-4: the forwarder is this call's until it is handed back inside the result.
   let port: number;
   try { port = await freeLoopbackPort(); }

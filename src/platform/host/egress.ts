@@ -30,7 +30,7 @@ export interface EgressHostOptions {
   readonly maxPool: number;
 }
 
-type Run = { readonly relay: InferenceRelay; readonly params: EgressPlaceholderParams };
+type Run = { readonly relay: InferenceRelay; readonly params: EgressPlaceholderParams; readonly lease: Socket | null };
 
 export class EgressHost {
   private readonly runs = new Map<string, Run>();
@@ -38,6 +38,9 @@ export class EgressHost {
   private waiting = 0;
   private opening = 0;
   private stopped = false;
+  /** MAC-211: which guest boot the runs belong to. A placeholder request that
+   * outlives the boot it was asked in creates nothing (AV-14). */
+  private boot = 0;
 
   constructor(private readonly options: EgressHostOptions) {}
 
@@ -85,15 +88,31 @@ export class EgressHost {
     const problem = egressPlaceholderProblem(params);
     if (problem !== null) { answer({ ok: false, error: { code: "INVALID_REQUEST", message: problem, retry: "never" } }); return; }
     const asked = params as EgressPlaceholderParams;
+    const boot = this.boot;
     try {
       const auth = await this.options.resolve(asked.credentialRef, asked.provider, asked.model);
+      // AV-14: the resolution outlived the boot it was asked in -- a stop or a
+      // reboot already released what it made, or the asker itself is gone.
+      // Nothing is created from it now; the asker learns of the end from the
+      // connection, not from an answer.
+      if (this.stopped || boot !== this.boot || socket.destroyed) { socket.destroy(); return; }
       const placeholder = placeholderFor(auth.apiKey);
       const relay = InferenceRelay.detached({ origin: auth.origin, headers: auth.headers, substitute: { placeholder, secret: auth.apiKey } },
         { ...this.options.limits, timeoutMs: asked.inferenceSeconds === undefined ? this.options.limits.timeoutMs : asked.inferenceSeconds * 1000 });
       const placeholderId = randomUUID();
-      this.runs.set(placeholderId, { relay, params: asked });
+      // A held connection is the run's lease (§4.7 v5): the run ends when it
+      // ends -- a run's own close, or a guest gone without a word. Anything it
+      // says after the answer is not a message; the run ends the same way.
+      const lease = asked.hold === true ? socket : null;
+      this.runs.set(placeholderId, { relay, params: asked, lease });
       const result: EgressPlaceholderResult = { placeholderId, placeholder, provider: auth.provider, model: auth.model };
-      answer({ ok: true, result });
+      if (lease === null) {
+        answer({ ok: true, result });
+      } else {
+        socket.once("close", () => { void this.release(placeholderId).catch(() => undefined); });
+        socket.on("data", () => { socket.destroy(); });
+        socket.write(encodeFrame({ v: 1, id, ok: true, result }));
+      }
       void this.fill();
     } catch (error) {
       answer({ ok: false, error: platformFailure(error) });
@@ -112,16 +131,21 @@ export class EgressHost {
     run.relay.accept(socket, rest);
   }
 
-  /** The run ended, or the guest rebooted: its placeholder opens nothing more. */
+  /** The run ended -- its lease closed, the guest rebooted, or the service
+   * stopped: its placeholder opens nothing more. */
   async release(placeholderId: string): Promise<void> {
     const run = this.runs.get(placeholderId);
     if (run === undefined) return;
     this.runs.delete(placeholderId);
+    run.lease?.destroy();
     await run.relay.close();
   }
 
   /** MAC-211: a new bootId means no placeholder of the last boot is valid. */
   async forgetBoot(): Promise<void> {
+    // The boot boundary first, so a resolution completing during the release
+    // is already the last boot's and creates nothing (AV-14).
+    this.boot += 1;
     await Promise.all([...this.runs.keys()].map(id => this.release(id)));
   }
 

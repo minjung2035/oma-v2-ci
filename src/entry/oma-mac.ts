@@ -13,6 +13,7 @@ import { fileURLToPath } from "node:url";
 import { join, resolve } from "node:path";
 import { constants } from "node:os";
 import { PlatformError } from "../platform/rpc.js";
+import { errorCodeOf, errorExit, isErrorCode } from "../domain/errors.js";
 import { hostApiRequest } from "../platform/host/api-client.js";
 import { attachTerminal } from "../platform/host/attach-client.js";
 import { PLATFORM_FRAME_BYTES } from "../protocol/host-guest.js";
@@ -190,7 +191,14 @@ async function main(argv: readonly string[]): Promise<void> {
   say("Disconnected from the OMA engine. The society may still be running.", 3);
 }
 main(process.argv.slice(2)).catch(error => {
-  if (error instanceof Error && "code" in error && error.code === "INVALID_REQUEST") say(`${error.message}\n${USAGE}`, 2);
-  if (error instanceof PlatformError) say(error.failure.retry === "same-key" ? "Checking the outcome. Try again shortly." : error.failure.message, 1);
-  say(error instanceof Error ? error.message : String(error), 1);
+  // CLI-003/DR13 on the Mac (NB-25): 2 a settled refusal, 3 an outcome that
+  // is not yet known, 4 a gate the app or profile will not pass.
+  if (error instanceof PlatformError) {
+    const failure = error.failure;
+    const code = isErrorCode(failure.code) ? errorExit(failure.code, failure.retry) : (failure.retry === "never" ? 4 : 3);
+    say(failure.retry === "same-key" ? "Checking the outcome. Try again shortly." : failure.message, code);
+  }
+  const code = errorCodeOf(error);
+  if (code === "INVALID_REQUEST") say(`${error instanceof Error ? error.message : String(error)}\n${USAGE}`, 2);
+  say(error instanceof Error ? error.message : String(error), errorExit(code));
 });

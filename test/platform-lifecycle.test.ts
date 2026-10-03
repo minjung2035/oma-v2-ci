@@ -17,7 +17,8 @@ import { HOST_GUEST_PROTOCOL, PLATFORM_FRAME_BYTES } from "../src/protocol/host-
 
 const INSTANCE = randomUUID();
 
-async function world(t: import("node:test").TestContext, overrides: { restarts?: { max: number; windowMs: number; backoffMs: number } } = {}) {
+async function world(t: import("node:test").TestContext,
+  overrides: { restarts?: { max: number; windowMs: number; backoffMs: number }; record?: (event: string) => void } = {}) {
   const dir = mkdtempSync(join(tmpdir(), "oma-lifecycle-"));
   const societiesDir = join(dir, "data", "oma");
   mkdirSync(join(societiesDir, "demo", "state"), { recursive: true });
@@ -42,7 +43,7 @@ async function world(t: import("node:test").TestContext, overrides: { restarts?:
     after: (ms, run) => { const timer = setTimeout(run, ms); timer.unref(); return { cancel: () => clearTimeout(timer) }; },
     handshakeDeadlineMs: 2000, handshakeRetryMs: 20, drainDeadlineMs: 800, healthEveryMs: 40, hungAfterMs: 250,
     restarts: overrides.restarts ?? { max: 3, windowMs: 60_000, backoffMs: 20 },
-    record: event => records.push(event),
+    record: event => { overrides.record?.(event); records.push(event); },
   });
   lifecycle.onState(state => states.push(state));
   t.after(async () => { await lifecycle.stop().catch(() => undefined); await driver.dispose(); await new Promise(r => holder === null ? r(null) : holder.close(r)); rmSync(dir, { recursive: true, force: true }); });
@@ -111,4 +112,61 @@ test("MAC-601/A7: a guest that reports another image is not spoken to and is not
   assert.equal(lifecycle.state, "failed");
   assert.deepEqual(records, ["failed"]);
   assert.equal(driver.starts, 1);
+});
+
+test("NB-26: a wake whose clock step cannot be made is a crash, not silence -- the power is pulled and it is recorded", async t => {
+  const { lifecycle, driver, records, until } = await world(t);
+  await lifecycle.start();
+  // The wedge outlasts the wake's own retries but not the restart's boot.
+  driver.failTimeSets = 3;
+  await lifecycle.woke();
+  await until("ready", "the crashed boot was ended and restarted");
+  assert.equal(driver.forced, 1, "the boot whose clock could not be stepped was ended, not trusted");
+  assert.equal(driver.starts, 2);
+  assert.deepEqual(records, ["crashed"]);
+});
+
+test("NB-26: a clock that never steps again fails every restart the same as it failed the wake", async t => {
+  const { lifecycle, driver, records, until } = await world(t, { restarts: { max: 2, windowMs: 60_000, backoffMs: 10 } });
+  await lifecycle.start();
+  driver.failTimeSets = 1_000;
+  await lifecycle.woke();
+  await until("failed", "every restart met the same wedge and the engine is marked for repair");
+  assert.equal(driver.forced, 3, "the wedged boot and each of its restarts was ended by force");
+  assert.deepEqual(records, ["crashed", "crashed", "crashed", "failed"]);
+});
+
+test("NB-23: a record write that fails is told to the stop's caller and never leaves the VM half-stopped", async t => {
+  const clean = await world(t, { record: event => { if (event === "clean") throw new Error("record unwritable"); } });
+  await clean.lifecycle.start();
+  await assert.rejects(clean.lifecycle.stop(), /record unwritable/);
+  assert.equal(clean.lifecycle.state, "stopped", "the power went; the bookkeeping failure was told");
+  assert.deepEqual(clean.records, []);
+
+  const forced = await world(t, { record: event => { if (event === "forced") throw new Error("record unwritable"); } });
+  await forced.lifecycle.start();
+  forced.driver.ignorePowerOff = true;
+  await assert.rejects(forced.lifecycle.stop(), /record unwritable/);
+  assert.equal(forced.driver.forced, 1, "the power was pulled before the bookkeeping ran");
+  assert.equal(forced.lifecycle.state, "stopped");
+});
+
+test("NB-23: a record write that fails inside a callback marks the engine for repair -- it never escapes the callback", async t => {
+  const { lifecycle, driver, until } = await world(t, { record: event => { if (event === "crashed") throw new Error("record unwritable"); } });
+  await lifecycle.start();
+  await driver.crash();
+  await until("failed", "a crash its record could not describe is repair, not a silent restart");
+  await new Promise(r => setTimeout(r, 60));
+  assert.equal(driver.starts, 1, "no restart hides behind the failed record");
+});
+
+test("NB-29: a stop is not kept waiting on a stopped event the helper never sends", async t => {
+  const { lifecycle, driver, records } = await world(t);
+  await lifecycle.start();
+  driver.ignorePowerOff = true;
+  t.mock.method(driver, "forceStop", async () => { driver.forced += 1; });
+  await assert.rejects(lifecycle.stop(), (error: unknown) => error instanceof PlatformError && error.failure.code === "ENGINE_UNAVAILABLE");
+  assert.equal(driver.forced, 1, "the power was still asked of the helper");
+  assert.equal(lifecycle.state, "failed", "an end that cannot be observed is repair, not a wait forever");
+  assert.deepEqual(records, ["failed"]);
 });

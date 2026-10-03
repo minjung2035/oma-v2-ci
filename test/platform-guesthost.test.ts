@@ -282,3 +282,25 @@ test("DR27/MAC-320: archive cannot begin while maintenance owns the engine", asy
     assert.equal(archive.calls(), 0);
   } finally { host.maintenanceEnd("m1"); }
 });
+
+test("AV-23/P0-4: a maintenance latch ends with the connection that took it, however it ends", async t => {
+  const archives = { async create() { return { files: 1 }; } } as unknown as GuestArchives;
+  const { open } = await setup(t, archives);
+  const owner = await open(hello());
+  const other = await open(hello());
+  await owner.request("maintenance.begin", {}, "m1");
+  await assert.rejects(other.request("archive.create", { society: "demo" }, "a1"), code("BROKER_UNAVAILABLE"),
+    "the live owner's latch bars the engine's work");
+  owner.close();
+  // The dead owner's latch is reaped when its close reaches the server: the
+  // engine is no one's to hold.
+  let unlatched: unknown = null;
+  for (let i = 0; i < 200; i++) {
+    try { unlatched = await other.request("archive.create", { society: "demo" }, `a${i}`); break; }
+    catch (error) {
+      assert.ok(error instanceof PlatformError && error.failure.code === "BROKER_UNAVAILABLE", String(error));
+      await new Promise(r => setTimeout(r, 10));
+    }
+  }
+  assert.deepEqual(unlatched, { files: 1 }, "the dead connection's latch was returned");
+});

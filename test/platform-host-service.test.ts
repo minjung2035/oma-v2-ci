@@ -9,9 +9,9 @@ import { randomUUID } from "node:crypto";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { encodeFrame } from "../src/frame.js";
-import { readLeadingFrame } from "../src/platform/rpc.js";
+import { readLeadingFrame, type FramedPeer } from "../src/platform/rpc.js";
 import type { SessionLauncher } from "../src/platform/guest/host.js";
-import { HostService } from "../src/platform/host/service.js";
+import { archiveKey, HostService } from "../src/platform/host/service.js";
 import { newHostRecord, readHostRecord, writeHostRecord } from "../src/platform/host/record.js";
 import { HOST_GUEST_PROTOCOL, PLATFORM_FRAME_BYTES } from "../src/protocol/host-guest.js";
 import { HOST_API_VERSION } from "../src/protocol/host-api.js";
@@ -27,7 +27,8 @@ function memoryKeychain() {
   return { items, get: async (account: string) => items.get(account), put: async (account: string, value: string) => { items.set(account, value); } };
 }
 
-async function world(t: import("node:test").TestContext, before?: (dir: string, runDir: string) => void) {
+async function world(t: import("node:test").TestContext, before?: (dir: string, runDir: string) => void,
+  mutate?: (peer: FramedPeer) => void, git?: () => string) {
   const dir = mkdtempSync(join(tmpdir(), "oma-hostsvc-"));
   const runDir = join(dir, "run"); mkdirSync(runDir);
   before?.(dir, runDir);
@@ -40,9 +41,9 @@ async function world(t: import("node:test").TestContext, before?: (dir: string, 
   let holder: Server | null = await listenSilently(holderPath);
   const launcher: SessionLauncher = { socketPath: () => holderPath, start: async () => {},
     stop: async () => { await new Promise(r => holder?.close(r)); holder = null; return "stopped"; } };
-  const driver = new LocalDriver(dir, { dir: societiesDir, launcher }, record.instanceId);
+  const driver = new LocalDriver(dir, { dir: societiesDir, launcher, ...(mutate === undefined ? {} : { mutate }) }, record.instanceId);
   const service = await HostService.start({
-    runDir, recordPath, driver, uid: process.getuid!(), git: "/usr/bin/git", archivesDir: join(dir, "archives"), storageFloorBytes: 0, keychain: memoryKeychain(),
+    runDir, recordPath, driver, uid: process.getuid!(), git: git?.() ?? "/usr/bin/git", archivesDir: join(dir, "archives"), storageFloorBytes: 0, keychain: memoryKeychain(),
     identity: { hostVersion: "1.0.0", installationId: record.installationId, instanceId: record.instanceId, expectImage: "2026.09.1",
       protocol: { min: HOST_GUEST_PROTOCOL, max: HOST_GUEST_PROTOCOL } },
     resolve: async () => ({ provider: "anthropic", model: "m", origin: "https://provider.invalid", apiKey: "sk-ant-api03-" + "r".repeat(40), headers: {} }),
@@ -193,4 +194,70 @@ test("P0V-103, P0V-104: at start the service removes what a dead one left -- unf
     assert.deepEqual(readdirSync(join(runDir, "transfer")), []);
     assert.equal(readdirSync(dir).some(name => name.endsWith(".partial")), false);
   });
+});
+
+/** The guest answers every request but reports a `project.import` head that
+ * is not an object id. */
+const badImportHead = (peer: FramedPeer): void => {
+  const methods = new Map<string, string>();
+  peer.onFrame(frame => { if (typeof frame.id === "string" && typeof frame.method === "string") methods.set(frame.id, frame.method); });
+  const answer = peer.answer.bind(peer);
+  peer.answer = (id, result) => { answer(id, methods.get(id) === "project.import" ? { ...result, head: "not-an-object-id" } : result); };
+};
+
+test("NB-22/P0-2: a guest answer that is not a head is an observation failure, never a durable one -- import and export", async t => {
+  // The guest's own answer is untrusted: a malformed `head` must not land in
+  // host-record.json as lastImport.
+  const bad = await world(t, undefined, badImportHead);
+  const mac = join(bad.dir, "mac"); mkdirSync(mac);
+  const git = (...args: string[]) => spawnSync("git", ["-C", mac, "-c", "user.name=t", "-c", "user.email=t@t", ...args], { encoding: "utf8" });
+  git("init", "-q", "-b", "main"); writeFileSync(join(mac, "a"), "a\n"); git("add", "a"); git("commit", "-qm", "a");
+  const bound = await bad.call("project.bind", { macRepo: mac, society: "demo" });
+  const projectId = (bound.result as { projectId: string }).projectId;
+  const imported = await bad.call("project.import", { projectId, macRepo: mac, branch: "main" }, "ui-import-bad");
+  assert.equal(imported.ok, false, JSON.stringify(imported));
+  assert.equal((imported.error as { code: string }).code, "BROKER_UNAVAILABLE");
+  assert.equal(readHostRecord(bad.recordPath)!.projects[0]!.lastImport, undefined, "a malformed head was not recorded");
+
+  // Export: the head comes from what the guest's bundle fetched, observed by
+  // the host's own git -- a git that answers a non-head is refused the same way.
+  let stubGit = "/usr/bin/git";
+  const good = await world(t, dir => {
+    stubGit = join(dir, "stubgit");
+    writeFileSync(stubGit, "#!/bin/sh\ncase \" $* \" in *\" rev-parse --verify refs/remotes/oma/main\"*) echo bogus-head; exit 0;; esac\nexec /usr/bin/git \"$@\"\n", { mode: 0o700 });
+  }, undefined, () => stubGit);
+  const mac2 = join(good.dir, "mac"); mkdirSync(mac2);
+  const git2 = (...args: string[]) => spawnSync("git", ["-C", mac2, "-c", "user.name=t", "-c", "user.email=t@t", ...args], { encoding: "utf8" });
+  git2("init", "-q", "-b", "main"); writeFileSync(join(mac2, "a"), "a\n"); git2("add", "a"); git2("commit", "-qm", "a");
+  const bound2 = await good.call("project.bind", { macRepo: mac2, society: "demo" });
+  const projectId2 = (bound2.result as { projectId: string }).projectId;
+  const imported2 = await good.call("project.import", { projectId: projectId2, macRepo: mac2, branch: "main" }, "ui-import-good");
+  assert.equal(imported2.ok, true, JSON.stringify(imported2), "the same git observing a real head is let through");
+  // The engine's canonical main, which project.export bundles for the host.
+  const canonical = join(good.dir, "data", "oma", "demo", "repos", "project.git");
+  mkdirSync(join(good.dir, "data", "oma", "demo", "repos"), { recursive: true });
+  spawnSync("git", ["init", "-q", "--bare", canonical]);
+  git2("push", "-q", canonical, "main");
+  const exported = await good.call("project.export", { society: "demo", macRepo: mac2, since: null }, "ui-export-bad");
+  assert.equal(exported.ok, false, JSON.stringify(exported));
+  assert.equal((exported.error as { code: string }).code, "BROKER_UNAVAILABLE");
+  assert.equal(readHostRecord(good.recordPath)!.projects[0]!.lastExport, undefined, "a malformed fetched head was not recorded");
+  assert.notEqual(readHostRecord(good.recordPath)!.projects[0]!.lastImport, undefined, "the earlier good import stands");
+});
+
+test("AV-22/P0-2: two archive-key asks on an empty store make one key, not two winners", async t => {
+  const dir = mkdtempSync(join(tmpdir(), "oma-archivekey-"));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  const items = new Map<string, string>();
+  const keychain = {
+    // A slow write widens the get->put window to what two processes see.
+    get: async (account: string) => items.get(account),
+    put: async (account: string, value: string) => { await new Promise(r => setTimeout(r, 30)); items.set(account, value); },
+  };
+  const lockPath = join(dir, "archive-key.lock");
+  const [first, second, third] = await Promise.all([archiveKey(keychain, lockPath), archiveKey(keychain, lockPath), archiveKey(keychain, lockPath)]);
+  assert.equal(first.length, 32);
+  assert.ok(first.equals(second) && second.equals(third), "every ask got the one stored key, not its own");
+  assert.equal(items.size, 1, "one archive key was written");
+  assert.equal(items.get("archive"), first.toString("base64"));
 });

@@ -9,7 +9,16 @@ import type { KeychainStore } from "./keychain.js";
 import { macBundleResources } from "./bundle.js";
 
 const LINE_BYTES = 1024 * 1024;
-type Pending = { resolve(value: Record<string, unknown>): void; reject(error: Error): void };
+type Pending = { resolve(value: Record<string, unknown>): void; reject(error: Error): void; timer: NodeJS.Timeout };
+
+/** P0-6: the helper channel is waited on only so long (NB-30). A wedged
+ * helper that still holds the channel answers no request; close ends it. */
+const REQUEST_DEADLINE_MS = 60_000;
+const CLOSE_DEADLINE_MS = 30_000;
+export interface KeychainDeadlines {
+  readonly requestMs?: number;
+  readonly closeMs?: number;
+}
 
 /** Resources may contain the installation; never search PATH or another bundle. */
 export function bundledKeychainHelper(libdir: string): string {
@@ -22,7 +31,10 @@ export class KeychainClient implements KeychainStore {
   private sequence = 0;
   private buffered = "";
   private ending = false;
-  private constructor(private readonly channel: Socket, private readonly libdir: string, private readonly ended: Promise<void>, child: ChildProcess) {
+  private readonly deadlines: Required<KeychainDeadlines>;
+  private constructor(private readonly channel: Socket, private readonly libdir: string, private readonly ended: Promise<void>,
+    private readonly child: ChildProcess, deadlines?: KeychainDeadlines) {
+    this.deadlines = { requestMs: deadlines?.requestMs ?? REQUEST_DEADLINE_MS, closeMs: deadlines?.closeMs ?? CLOSE_DEADLINE_MS };
     child.once("close", () => { this.fail(); });
     child.on("error", () => { this.fail(); });
     child.stderr?.resume();
@@ -33,14 +45,14 @@ export class KeychainClient implements KeychainStore {
     channel.once("close", () => { this.fail(); });
   }
 
-  static async launch(libdir: string, fence?: number): Promise<KeychainClient> {
+  static async launch(libdir: string, fence?: number, deadlines?: KeychainDeadlines): Promise<KeychainClient> {
     const child = spawnSupervisedService(bundledKeychainHelper(libdir), ["--keychain-only"], { PATH: "/usr/bin:/bin" }, true, fence);
     const ended = new Promise<void>(resolve => child.once("close", () => resolve()));
     try {
       const channel = child.stdio[3];
       if (channel === null || channel === undefined || !("write" in channel))
         throw new StoreError("UNSUPPORTED_PROFILE", "the Keychain helper has no control channel");
-      return new KeychainClient(channel as Socket, libdir, ended, child);
+      return new KeychainClient(channel as Socket, libdir, ended, child, deadlines);
     } catch (error) {
       const errors = [error];
       try { stopOwnedChild(child); } catch (cleanup) { errors.push(cleanup); }
@@ -53,7 +65,7 @@ export class KeychainClient implements KeychainStore {
   }
 
   async withWriter<T>(fence: number, run: (writer: KeychainStore) => Promise<T>): Promise<T> {
-    const writer = await KeychainClient.launch(this.libdir, fence);
+    const writer = await KeychainClient.launch(this.libdir, fence, this.deadlines);
     try { return await run(writer); }
     finally { await writer.close(); }
   }
@@ -61,7 +73,7 @@ export class KeychainClient implements KeychainStore {
   private fail(): void {
     this.ending = true;
     this.channel.destroy();
-    for (const item of this.pending.values()) item.reject(new StoreError("BROKER_UNAVAILABLE", "the Keychain helper channel ended"));
+    for (const item of this.pending.values()) { clearTimeout(item.timer); item.reject(new StoreError("BROKER_UNAVAILABLE", "the Keychain helper channel ended")); }
     this.pending.clear();
   }
 
@@ -79,6 +91,7 @@ export class KeychainClient implements KeychainStore {
       const item = this.pending.get(answer.id as number);
       if (item === undefined) { this.fail(); return; }
       this.pending.delete(answer.id as number);
+      clearTimeout(item.timer);
       if (answer.ok) item.resolve(answer);
       else item.reject(new StoreError("BROKER_UNAVAILABLE", "the Keychain could not be accessed"));
     }
@@ -92,7 +105,15 @@ export class KeychainClient implements KeychainStore {
     if (Buffer.byteLength(line) > LINE_BYTES)
       return Promise.reject(new StoreError("INVALID_REQUEST", "the credential exceeds the Keychain channel limit"));
     return new Promise((resolve, reject) => {
-      this.pending.set(id, { resolve, reject });
+      const timer = setTimeout(() => {
+        // A wedged helper is unanswerable: the request ends, and a channel
+        // that can no longer order answers ends with it (NB-30).
+        this.pending.delete(id);
+        this.fail();
+        reject(new StoreError("BROKER_UNAVAILABLE", `the Keychain helper did not answer ${op} in time`));
+      }, this.deadlines.requestMs);
+      timer.unref();
+      this.pending.set(id, { resolve, reject, timer });
       try { this.channel.write(line, error => { if (error) this.fail(); }); }
       catch { this.fail(); }
     });
@@ -108,7 +129,13 @@ export class KeychainClient implements KeychainStore {
   async put(account: string, value: string): Promise<void> { await this.ask("keychain.put", { account, value }); }
   async close(): Promise<void> {
     this.fail();
-    // The helper exits on supervision EOF. Wait for that exit, not for EOF itself.
+    // The helper exits on supervision EOF. Wait for that exit, not for EOF
+    // itself -- and only so long: a wedged child is ended, never waited on
+    // forever (NB-30). Ownership is kept until its actual close either way.
+    const endedInTime = await Promise.race([this.ended.then(() => true as const),
+      new Promise<false>(resolve => { const timer = setTimeout(() => resolve(false), this.deadlines.closeMs); timer.unref(); })]);
+    if (endedInTime) return;
+    try { stopOwnedChild(this.child); } catch { /* ending it was already tried */ }
     await this.ended;
   }
 }

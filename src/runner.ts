@@ -167,8 +167,10 @@ export class RunnerModule {
       const run = { society: this.paths.society, actor: this.lease.actor, incarnation: this.lease.incarnation };
       const issued = await requestEgressPlaceholder({ socket: egress, frameBytes: this.limits.frameBytes, deadlineMs: this.limits.receiptWaitSeconds * 1000 },
         run, this.profile.model.provider, this.profile.model.model, this.profile.model.inferenceTimeoutSeconds);
+      // AV-15: the placeholder's lease is the forwarder's -- closing the
+      // forwarder (the delivery's finally) ends the run's relay on the host.
       const forwarder = await EgressForwarder.listen(socketHostPath, egress,
-        { placeholderId: issued.placeholderId, ...run, modelProfile: this.profile.modelProfile ?? this.profile.name }, 4);
+        { placeholderId: issued.placeholderId, ...run, modelProfile: this.profile.modelProfile ?? this.profile.name }, 4, issued);
       return { relay: forwarder, inference: { socketHostPath, provider: issued.provider, model: issued.model, placeholder: issued.placeholder } };
     }
     const auth = await resolveEngineAuth(piAgentDir, this.profile.model.provider, this.profile.model.model);

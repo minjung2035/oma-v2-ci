@@ -13,7 +13,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { verifyImage, bootableWith } from "../platform/host/image.js";
 import { VzDriver } from "../platform/host/vz-driver.js";
-import { HostService } from "../platform/host/service.js";
+import { DEFAULT_TIMINGS, HostService } from "../platform/host/service.js";
 import { hostResolver } from "../platform/host/resolver.js";
 import { newHostRecord, readHostRecord, writeHostRecord } from "../platform/host/record.js";
 import { HOST_GUEST_PROTOCOL } from "../protocol/host-guest.js";
@@ -83,10 +83,16 @@ async function main(): Promise<void> {
   // MAC-321: launchd's SIGTERM at logout, restart or update -- and, AV31 and
   // P0V-81, every other way this process is asked to end.
   let ending = false;
+  const end = (code: number): void => { driver.close(); process.exit(code); };
   for (const signal of HOST_LOSS_SIGNALS) process.on(signal, () => {
     if (ending) return;
     ending = true;
-    void service.shutdown().finally(() => { driver.close(); process.exit(0); });
+    // NB-29: the drain gets its whole budget -- drain, force answer, stopped
+    // observation, and margin -- but the helper's end is never behind a wedged
+    // shutdown: the watchdog reaches driver.close() however the drain ends.
+    const watchdog = setTimeout(() => end(1), 5 * DEFAULT_TIMINGS.drainDeadlineMs);
+    watchdog.unref();
+    void service.shutdown().finally(() => { clearTimeout(watchdog); end(0); });
   });
 }
 main().catch(error => { fail(error instanceof Error ? error.message : String(error)); });

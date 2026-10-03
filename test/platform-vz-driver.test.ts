@@ -4,16 +4,16 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { createServer, type Server } from "node:net";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { StoreError } from "../src/domain/errors.js";
-import { VzDriver } from "../src/platform/host/vz-driver.js";
+import { VzDriver, type VzDeadlines } from "../src/platform/host/vz-driver.js";
 
 const fakeHelper = join(fileURLToPath(new URL(".", import.meta.url)), "..", "..", "test", "fixtures", "fake-vmhelper.mjs");
 
-async function world(t: import("node:test").TestContext, env: Record<string, string> = {}) {
+async function world(t: import("node:test").TestContext, env: Record<string, string> = {}, deadlines?: VzDeadlines) {
   const dir = mkdtempSync(join(tmpdir(), "oma-vz-"));
   // "Guest port 700": an echo service.
   const guestPath = join(dir, "guest-700.sock");
@@ -21,7 +21,7 @@ async function world(t: import("node:test").TestContext, env: Record<string, str
   await new Promise<void>(resolve => guest.listen(guestPath, resolve));
   const driver = VzDriver.launch({ executable: process.execPath, argv: [fakeHelper],
     env: { PATH: process.env.PATH ?? "/usr/bin", FAKE_GUEST_PORT_700: guestPath, FAKE_KEYCHAIN: join(dir, "keychain.json"), ...env } },
-    dir, { kernel: "k", initrd: "i", cmdline: "c", disks: [], cpus: 2, memoryBytes: 1 << 30, consoleLog: join(dir, "console.log"), ports: [700] });
+    dir, { kernel: "k", initrd: "i", cmdline: "c", disks: [], cpus: 2, memoryBytes: 1 << 30, consoleLog: join(dir, "console.log"), ports: [700] }, deadlines);
   const stops: number[] = [];
   driver.onStopped(() => stops.push(Date.now()));
   t.after(async () => { driver.close(); await new Promise(r => guest.close(r)); rmSync(dir, { recursive: true, force: true }); });
@@ -78,4 +78,20 @@ test("§9.1: the helper's sleep and wake reach the host", async t => {
   (driver as unknown as { child: { kill(signal: string): void } }).child.kill("SIGUSR2");
   await until(() => events.length === 1, "the wake arrives");
   assert.deepEqual(events, ["wake"]);
+});
+
+test("AV-21: a credential answer whose value is not a string is an error, never an absence", async t => {
+  const { driver, dir } = await world(t);
+  writeFileSync(join(dir, "keychain.json"), JSON.stringify({ malformed: 42 }));
+  await assert.rejects(driver.get("malformed"), (error: unknown) => error instanceof StoreError && error.code === "BROKER_UNAVAILABLE");
+  assert.equal(await driver.get("absent"), undefined, "only the omitted value is absent");
+});
+
+test("NB-29: a helper that answers nothing does not hold the request forever", async t => {
+  const { driver } = await world(t, { FAKE_KEYCHAIN_WEDGED: "1" }, { keychainMs: 80 });
+  await assert.rejects(driver.get("engine-managed"),
+    (error: unknown) => error instanceof StoreError && error.code === "BROKER_UNAVAILABLE" && /did not answer .* in time/.test(error.message));
+  await assert.rejects(driver.get("engine-managed"),
+    (error: unknown) => error instanceof StoreError && error.code === "BROKER_UNAVAILABLE" && /did not answer .* in time/.test(error.message),
+    "the next request is bounded the same way");
 });

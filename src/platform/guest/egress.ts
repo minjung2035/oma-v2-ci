@@ -103,15 +103,32 @@ async function serve(client: Socket, options: EgressServiceOptions): Promise<voi
     host.pipe(client);
     host.resume();
     client.resume();
-    client.once("close", () => { host.destroy(); });
-    host.once("close", () => { client.destroy(); });
+    // allowHalfOpen: a peer's end arrives as "end"; "close" waits for this
+    // end's own close. Either ending drops the connection pair.
+    const drop = (): void => { client.destroy(); host.destroy(); };
+    client.once("end", drop); client.once("close", drop);
+    host.once("end", drop); host.once("close", drop);
     return;
   }
+  let kept = false;
   try {
     const answer = await readLeadingFrame(host, options.frameBytes, options.deadlineMs);
+    // §4.7 v5: a held placeholder keeps both ends of its lease -- the client's
+    // and the host's -- so the run ends when either ends: the run's own close,
+    // or the host gone (a reboot drops every run of the last boot anyway).
+    // allowHalfOpen again: "end" is the other end's end, "close" may never come.
+    if (answer.frame.ok === true && (frame.params as { hold?: unknown }).hold === true) {
+      if (answer.rest.length > 0) { host.destroy(); client.destroy(); return; }
+      client.write(encodeFrame(answer.frame));
+      const endLease = (): void => { client.destroy(); host.destroy(); };
+      client.once("end", endLease); client.once("close", endLease);
+      host.once("end", endLease); host.once("close", endLease);
+      kept = true;
+      return;
+    }
     client.end(encodeFrame(answer.frame));
   } catch {
     // No answer: what the host did is unknown to the client, which asks again.
     client.destroy();
-  } finally { host.destroy(); }
+  } finally { if (!kept) host.destroy(); }
 }

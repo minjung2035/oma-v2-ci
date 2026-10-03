@@ -156,7 +156,18 @@ func start(_ id: Int, _ config: VmConfig) {
         guard let device = vm.socketDevices.first as? VZVirtioSocketDevice else { refuse(id, "the engine has no channel"); return }
         do {
           // MAC-201: the host never listens on vsock; it only connects out.
-          bridges = try config.ports.map { try PortBridge(port: $0, path: "\(config.socketDir)/port-\($0).sock", device: device) }
+          // P0-4 (AV-26): a bridge that cannot be made releases every bridge
+          // made before it -- the throw cannot leave a listener behind.
+          var made: [PortBridge] = []
+          do {
+            for port in config.ports {
+              made.append(try PortBridge(port: port, path: "\(config.socketDir)/port-\(port).sock", device: device))
+            }
+          } catch {
+            for bridge in made { bridge.close() }
+            throw error
+          }
+          bridges = made
           answer(id)
         } catch { refuse(id, "the engine's channel could not be opened") }
       case .failure:

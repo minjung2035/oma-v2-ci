@@ -127,7 +127,23 @@ export class VmLifecycle {
   private enter(state: VmState): void {
     if (this.current === state) return;
     this.current = state;
-    for (const listener of this.listeners) listener(state);
+    // NB-23: a listener's own bookkeeping (the record write it performs) may
+    // fail; that failure cannot be let escape into the transition that
+    // called it -- it would skip cleanup or kill the daemon from a bare
+    // timer callback. The record being unwritable is a repair matter, and
+    // "failed" is how the engine says so.
+    for (const listener of this.listeners) {
+      try { listener(state); }
+      catch { this.current = "failed"; }
+    }
+  }
+
+  /** The durable note of how a stop ended, where no caller can be told it
+   * failed. `record` throwing here must neither escape a callback nor be
+   * silent: the engine it could not describe is marked for repair (NB-23). */
+  private report(event: "clean" | "forced" | "crashed" | "failed"): void {
+    try { this.options.record(event); }
+    catch { this.enter("failed"); }
   }
 
   /** Brings the VM to `ready`. Idempotent while starting or ready. */
@@ -180,26 +196,55 @@ export class VmLifecycle {
       if (this.run === run && run.phase === phase && this.closing === null) {
         phase.cancel();
         const incompatible = error instanceof PlatformError && error.failure.code === "ENGINE_VERSION_SKEW";
-        this.enter(incompatible ? "failed" : "crashed"); this.options.record(incompatible ? "failed" : "crashed");
+        this.enter(incompatible ? "failed" : "crashed");
+        // NB-23: the record write can fail where only the caller sees it, but
+        // it must never skip the force -- the VM's power comes first, then
+        // both failures are told together.
+        let recorded: unknown = null;
+        try { this.options.record(incompatible ? "failed" : "crashed"); }
+        catch (recordError) { recorded = recordError; }
         try { await this.force(run); }
-        catch (cleanup) { throw new AggregateError([error, cleanup], "Engine startup and stop failed"); }
+        catch (cleanup) {
+          throw new AggregateError(recorded === null ? [error, cleanup] : [error, recorded, cleanup],
+            "Engine startup and stop failed");
+        }
+        if (recorded !== null) throw new AggregateError([error, recorded], "Engine startup failed and its stop could not be recorded");
+        throw error;
       }
       throw error;
     }
   }
 
-  /** §9.1: after a wake the guest's wall clock is behind. */
+  /** §9.1: after a wake the guest's wall clock is behind. A step that cannot
+   * be made is not silence -- it is the same unknown a hang is (NB-26). */
   async woke(): Promise<void> {
-    const phase = this.run?.phase;
-    if (this.current !== "ready" || !phase?.control) return;
-    await phase.request(phase.control, "time.set", { wallMs: this.options.wallClock() });
+    const run = this.run;
+    if (this.current !== "ready" || run === null) return;
+    const phase = run.phase;
+    for (let attempt = 0; attempt < 3 && phase.active; attempt++) {
+      try {
+        if (phase.control === null || phase.control.isClosed) {
+          if (phase.control !== null) phase.close(phase.control);
+          phase.control = await phase.open("control");
+        }
+        await phase.request(phase.control, "time.set", { wallMs: this.options.wallClock() });
+        return;
+      } catch {
+        if (!phase.active) return;
+        try { await phase.delay(this.options.handshakeRetryMs); } catch { return; }
+      }
+    }
+    if (!phase.active) return;
+    // The clock-step invariant could not be made: this boot cannot stand.
+    phase.cancel(); this.enter("crashed"); this.report("crashed");
+    void this.force(run).catch(() => undefined);
   }
 
   private watch(run: VmRun, phase: VmPhase): void {
     phase.after(this.options.healthEveryMs, () => {
       const hung = phase.after(this.options.hungAfterMs, () => {
         // MAC-330 authorizes a forced stop; silence is not proof of death.
-        phase.cancel(); this.enter("crashed"); this.options.record("crashed");
+        phase.cancel(); this.enter("crashed"); this.report("crashed");
         void this.force(run).catch(() => undefined); // force retains a failed owner on error.
       });
       void this.healthy(phase).then(() => {
@@ -249,11 +294,15 @@ export class VmLifecycle {
     const cause = await Promise.race([run.stopped, deadline]);
     phase.cancel();
     if (cause === null) {
-      this.enter("forced"); this.options.record("forced");
+      this.enter("forced");
+      // NB-23: the power before the bookkeeping, and the bookkeeping's own
+      // failure told to the stop's caller -- never an orphan VM.
       await this.force(run);
-    } else if (cause === "guest") this.options.record("clean");
-    else this.options.record("crashed");
-    this.enter("stopped");
+      try { this.options.record("forced"); } finally { this.enter("stopped"); }
+    } else {
+      try { this.options.record(cause === "guest" ? "clean" : "crashed"); }
+      finally { this.enter("stopped"); }
+    }
     return cause === null ? "forced" : "stopped";
   }
 
@@ -274,10 +323,20 @@ export class VmLifecycle {
     const forcing = Promise.resolve().then(async () => {
       if (run.cause === null) {
         await this.options.driver.forceStop();
-        await run.stopped; // A command reply alone is not the stopped observation.
+        // A command reply alone is not the stopped observation -- but waiting
+        // for it is bounded too: a helper that never reports is the engine
+        // being unanswerable about death, which `failed` states (NB-29).
+        const observation = { cancel: () => {} };
+        try {
+          await Promise.race([run.stopped, new Promise<never>((_, reject) => {
+            const deadline = this.options.after(this.options.drainDeadlineMs, () =>
+              reject(new PlatformError({ code: "ENGINE_UNAVAILABLE", message: "the engine's end could not be observed", retry: "same-key" })));
+            observation.cancel = () => deadline.cancel();
+          })]);
+        } finally { observation.cancel(); }
       }
     }).catch(error => {
-      if (this.run === run) { this.enter("failed"); this.options.record("failed"); }
+      if (this.run === run) { this.enter("failed"); this.report("failed"); }
       throw error;
     }).finally(() => { if (this.forcing === forcing) this.forcing = null; });
     this.forcing = forcing;
@@ -289,7 +348,7 @@ export class VmLifecycle {
     if (run === null) return;
     run.cause = cause; run.ended(cause); run.phase.cancel(); this.run = null;
     if (this.closing !== null || this.current === "failed") return;
-    if (this.current !== "crashed") { this.enter("crashed"); this.options.record("crashed"); }
+    if (this.current !== "crashed") { this.enter("crashed"); this.report("crashed"); }
     this.afterCrash();
   }
 
@@ -302,7 +361,7 @@ export class VmLifecycle {
       const now = this.options.now();
       this.restartTimes = this.restartTimes.filter(at => now - at < this.options.restarts.windowMs);
       if (this.restartTimes.length >= this.options.restarts.max) {
-        phase.cancel(); this.enter("failed"); this.options.record("failed"); return;
+        phase.cancel(); this.enter("failed"); this.report("failed"); return;
       }
       this.restartTimes.push(now);
       const backoff = this.options.restarts.backoffMs * 2 ** (this.restartTimes.length - 1);

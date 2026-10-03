@@ -20,8 +20,10 @@ import { parseGuestHistoryReference } from "./guest-history.js";
 
 /** One protocol version, raised whenever a message's shape or meaning changes
  * (MAC-250). A host speaks the version of the image it ships and the one
- * before it; a guest speaks one. */
-export const HOST_GUEST_PROTOCOL = 4;
+ * before it; a guest speaks one.
+ * v5: `egress.placeholder` may carry `hold`, keeping the answered connection
+ * open as the run's lease -- the run ends when it ends (AV-15). */
+export const HOST_GUEST_PROTOCOL = 5;
 
 /** The platform protocol's frame limit. A society's own limits
  * (`ProtocolLimits.frameBytes`) govern its broker; this governs the host-guest
@@ -274,7 +276,9 @@ export function checkedResumeHistoryReference(value: string): void {
 
 /** §4.7: the first message on an egress connection, guest → host, in the
  * request envelope. `egress.placeholder` is answered and the connection
- * closes; after `egress.open` the connection carries the engine's HTTP. */
+ * closes, unless `hold` keeps it open as the run's lease -- the run ends
+ * when the lease does (AV-15). After `egress.open` the connection carries
+ * the engine's HTTP. */
 const TOKEN = /^[A-Za-z0-9][A-Za-z0-9._:/@+-]{0,127}$/;
 export interface EgressRun { readonly society: string; readonly actor: string; readonly incarnation: number }
 /** The credential the host keeps for the engine (MAC-704): the one a run's
@@ -284,6 +288,11 @@ export interface EgressPlaceholderParams {
   readonly credentialRef: string; readonly provider: string; readonly model: string; readonly run: EgressRun;
   /** DR27: model silence, supplied by the run owner; absent only for v1 peers. */
   readonly inferenceSeconds?: number;
+  /** v5: keep the connection after the answer, as the run's lease. The run
+   * it issues ends when the held connection does, however it ends -- a run's
+   * close, its death, a guest reboot. Absent, the answer ends the connection
+   * and the run outlives it until the next boot (v4 behaviour). */
+  readonly hold?: true;
 }
 export interface EgressOpenParams {
   readonly placeholderId: string; readonly society: string; readonly actor: string; readonly incarnation: number;
@@ -301,12 +310,13 @@ function runProblem(value: unknown): string | null {
 }
 export function egressPlaceholderProblem(params: unknown): string | null {
   if (!object(params)) return "params must be an object";
-  const shape = exactKeys(params, ["credentialRef", "provider", "model", "run"], ["inferenceSeconds"]);
+  const shape = exactKeys(params, ["credentialRef", "provider", "model", "run"], ["inferenceSeconds", "hold"]);
   if (shape !== null) return shape;
   for (const key of ["credentialRef", "provider", "model"] as const)
     if (typeof params[key] !== "string" || !TOKEN.test(params[key] as string)) return `invalid ${key}`;
   if (Object.hasOwn(params, "inferenceSeconds") && (!uint(params.inferenceSeconds) || params.inferenceSeconds === 0 ||
     params.inferenceSeconds > Math.floor(Number.MAX_SAFE_INTEGER / 1000))) return "invalid inferenceSeconds";
+  if (Object.hasOwn(params, "hold") && params.hold !== true) return "invalid hold";
   return runProblem(params.run);
 }
 export function egressOpenProblem(params: unknown): string | null {

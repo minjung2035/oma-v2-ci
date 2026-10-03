@@ -66,7 +66,10 @@ export async function snapshotRunning(store: SnapshotStore, link: GuestLink, id:
   const stopped: string[] = [];
   try {
     await society.request("maintenance.begin", {}, key);
-    try {
+    // NB-27: the latch is returned on every path, and a return that fails is
+    // told -- with the snapshot's own failure kept primary -- never left
+    // silently holding society.open shut.
+    return await withAsyncCleanup(async () => {
       const listed = await society.request("society.list", {}) as { societies: { society: string; running: boolean }[] };
       for (const entry of listed.societies.filter(item => item.running)) {
         const closed = await society.request("society.close", { society: entry.society, mode: "stop" }) as { state: string };
@@ -88,7 +91,7 @@ export async function snapshotRunning(store: SnapshotStore, link: GuestLink, id:
         });
         return { path, stopped };
       } finally { control.close(); }
-    } finally { await society.request("maintenance.end", {}, key).catch(() => undefined); }
+    }, () => society.request("maintenance.end", {}, key).then(() => undefined));
   } finally { society.close(); }
 }
 
