@@ -12,10 +12,16 @@ export function isRequestNotFound(receipt: Receipt): boolean {
   return receipt.operation === "" && receipt.state === "failed" && receipt.error?.code === "REQUEST_NOT_FOUND";
 }
 
+function failedReceiptError(receipt: Receipt): NonNullable<Receipt["error"]> {
+  if (receipt.error === undefined) throw new TypeError("failed receipt has no failure");
+  return receipt.error;
+}
+
 export function receiptExit(receipt: Receipt): CliExitCode {
   if (receipt.state === "succeeded" || receipt.state === "pending") return 0;
   if (receipt.state === "unknown") return 3;
-  return receipt.error?.code === "UNSUPPORTED_PROFILE" || receipt.error?.code === "SPIKE_UNRESOLVED" ? 4 : 2;
+  const error = failedReceiptError(receipt);
+  return error.code === "UNSUPPORTED_PROFILE" || error.code === "SPIKE_UNRESOLVED" ? 4 : 2;
 }
 
 export function receiptLines(receipt: Receipt, key: string): readonly string[] {
@@ -26,6 +32,6 @@ export function receiptLines(receipt: Receipt, key: string): readonly string[] {
       `Outcome unknown: ${receipt.reason ?? "authoritative evidence required"}`,
       `Query again: use --request ${key} with the same command; do not rerun with a new key`,
     ];
-    case "failed": return [receipt.error === undefined ? "Failed:?" : `Failed: ${failureText(receipt.error)}`];
+    case "failed": return [`Failed: ${failureText(failedReceiptError(receipt))}`];
   }
 }

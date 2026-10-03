@@ -1,7 +1,7 @@
 import { basename, isAbsolute, join } from "node:path";
 import type { Receipt } from "../../implementation/contracts.js";
-import { errorExit, failureText, type CliExitCode } from "../domain/errors.js";
-import { decodeFailure } from "../protocol/receipt-codec.js";
+import { errorExit, failureMessage, failureText, normalizeStorageFailure, publicFailure, StoreError, type CliExitCode } from "../domain/errors.js";
+import { decodeFailure, decodeReceipt } from "../protocol/receipt-codec.js";
 import { receiptExit, receiptLines } from "../protocol/receipts.js";
 
 /** P0V-62, P0-4: this module ends the process, so it also owns that nothing
@@ -86,18 +86,26 @@ export function inCallerView(receipt: Receipt, root = process.env.OMA_MAIL_ARCHI
   return { ...receipt, result: shown };
 }
 
+function checkedReceipt(receipt: Receipt, key: string): Receipt {
+  const decoded = decodeReceipt(receipt, { allowNotFound: true });
+  if (!decoded.ok) fail(`invalid receipt: ${decoded.reason}; --request ${key} with the same command`, 3);
+  return decoded.value;
+}
+
 export function finishReceipt(receipt: Receipt, key: string): never {
-  for (const line of receiptLines(inCallerView(receipt), key)) console.log(line);
-  process.exit(receiptExit(receipt));
+  const checked = checkedReceipt(receipt, key);
+  for (const line of receiptLines(inCallerView(checked), key)) console.log(line);
+  process.exit(receiptExit(checked));
 }
 
 /** WP26: a receipt the request cache could not record. The receipt and the
  * key to ask again come first; an observation contradicting the cache's
  * earlier one is unknown (3), otherwise the receipt's own exit stands. */
 export function finishUnrecordedReceipt(receipt: Receipt, key: string, reason: string, contradicted: boolean): never {
-  for (const line of receiptLines(inCallerView(receipt), key)) console.log(line);
+  const checked = checkedReceipt(receipt, key);
+  for (const line of receiptLines(inCallerView(checked), key)) console.log(line);
   console.error(`oma: ${reason} (Query again: use --request ${key} with the same command; do not rerun with a new key)`);
-  process.exit(contradicted ? 3 : receiptExit(receipt));
+  process.exit(contradicted ? 3 : receiptExit(checked));
 }
 
 export function succeed(): never {
@@ -105,6 +113,10 @@ export function succeed(): never {
 }
 
 export function fatal(error: unknown): never {
-  console.error(`oma: ${(error as Error).message}`);
-  process.exit(3);
+  const normalized = normalizeStorageFailure(error);
+  if (normalized instanceof StoreError) {
+    const failure = publicFailure(normalized);
+    fail(failureText({ ...failure, message: failureMessage(normalized) ?? failure.message }), errorExit(failure.code, failure.retry));
+  }
+  fail(error instanceof Error ? error.message : String(error), 3);
 }

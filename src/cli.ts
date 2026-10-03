@@ -8,6 +8,7 @@ import { runMergeCommand, runChallengeCommand } from "./cli/commands/merge.js";
 import { runContextCommand } from "./cli/commands/context.js";
 import { runStatusCommand } from "./cli/commands/status.js";
 import { runLogsCommand } from "./cli/commands/logs.js";
+import { splitSubcommand } from "./cli/arguments.js";
 import { fatal, holdOutputUntilWritten, usage } from "./cli/exit.js";
 
 export async function main(argv: string[]): Promise<never> {
@@ -28,9 +29,11 @@ export async function main(argv: string[]): Promise<never> {
       return runAgentCommand(rest);
     case "submit":
       return runSubmitCommand(rest);
-    case "context":
-      if (rest[0] === "publish") return runContextCommand(rest.slice(1));
+    case "context": {
+      const sub = splitSubcommand(rest, { "--expect": "value", "--request": "value" });
+      if (sub.name === "publish") return runContextCommand(sub.rest);
       return usage();
+    }
     case "status":
       return runStatusCommand(rest);
     case "logs":

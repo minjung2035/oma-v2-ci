@@ -1,5 +1,5 @@
 import { explicitFullOid } from "../request-intent.js";
-import { keyOf, parseArguments } from "../arguments.js";
+import { keyOf, parseArguments, splitSubcommand } from "../arguments.js";
 import { readBody, resolveOid } from "../effects.js";
 import { fail, finishFailure, succeed, usage } from "../exit.js";
 import { effect, randKey } from "../request-service.js";
@@ -11,7 +11,7 @@ const CONTINUE = { options: { "--note": "value", "--request": "value" }, positio
 const WAIT = { options: { "--observe": "value" }, positional: { min: 1, max: 1 } } as const;
 
 export async function runAgentCommand(args: string[]): Promise<never> {
-  const sub = args[0];
+  const { name: sub } = splitSubcommand(args, { ...CREATE.options, ...CONTINUE.options, ...WAIT.options });
   if (sub === "create") {
     const parsed = parseArguments(args, CREATE);
     const name = parsed.positional[1]!;

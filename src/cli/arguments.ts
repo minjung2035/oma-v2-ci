@@ -67,6 +67,17 @@ export function parseArguments(args: readonly string[], spec: ArgumentSpec): Par
   });
 }
 
+export function splitSubcommand(args: readonly string[], options: ArgumentSpec["options"]): { name: string; rest: string[] } {
+  const parsed = parseArguments(args, { options, positional: { min: 1, max: Number.MAX_SAFE_INTEGER } });
+  for (let index = 0; index < args.length; index++) {
+    const token = args[index]!;
+    if (token === "--") index++;
+    else if (optionLike(token)) { index++; continue; }
+    return { name: parsed.positional[0]!, rest: [...args.slice(0, index), ...args.slice(index + 1)] };
+  }
+  throw new TypeError("parsed subcommand has no argument slot");
+}
+
 /** The request key a mutation was given, validated, or null. */
 export function keyOf(parsed: ParsedArguments): string | null {
   const key = parsed.value("--request");
