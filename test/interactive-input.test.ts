@@ -76,6 +76,31 @@ test("Open TUI: Pi keeps its commands, shell and shortcuts; only a plain prompt 
   assert.equal(draft, "Human draft!", "overflow recovery restores expanded paste contents, not an orphaned marker");
 });
 
+test("a Human prompt keeps the engine's own expansion semantics; /oma-deliver stays refused", async () => {
+  const { rpcPromptOptions, isDeliveryCommand } = await import("../src/entry/pi-interactive-host.js");
+  // `/skill:name` and `/template` are suggested by the engine's autocomplete;
+  // upstream's prompt expands them only when expandPromptTemplates is set --
+  // the same flag that lets a registered extension command dispatch. The
+  // delivery's `/oma-deliver` needs it too, so every RPC prompt gets it.
+  for (const text of ["/skill:review check this", "/weekly-report", "an ordinary prompt", "/oma-deliver batch-1"]) {
+    const options = rpcPromptOptions(text);
+    assert.equal(options.expandPromptTemplates, true, `${text} must reach the engine with upstream expansion on`);
+    assert.equal(options.source, "rpc");
+  }
+  // A Human's typing of the delivery command is refused before it can be sent.
+  for (const text of ["/oma-deliver batch-1", "  /oma-deliver x  ", "/oma-deliver"])
+    assert.equal(isDeliveryCommand(text), true, text);
+  for (const text of ["/oma-deliverx", "/oma", "deliver /oma-deliver", ""])
+    assert.equal(isDeliveryCommand(text), false, text);
+  // And upstream really does gate command dispatch on the flag: the engine's
+  // own source says extension commands run only when expansion is on.
+  const engine = new URL("./core/agent-session.js", import.meta.resolve("@earendil-works/pi-coding-agent"));
+  const { readFileSync } = await import("node:fs");
+  const source = readFileSync(engine, "utf8");
+  assert.match(source, /if \(expandPromptTemplates && text\.startsWith\("\/"\)\)/,
+    "upstream no longer gates extension commands on expandPromptTemplates -- /oma-deliver delivery would break");
+});
+
 test("Open TUI: every command the engine lists as built in reaches the engine, not the model", async () => {
   const { PI_BUILTIN_COMMANDS } = await import("../src/entry/pi-interactive-host.js");
   // The engine's own list, read from its file: the mirror must cover it.

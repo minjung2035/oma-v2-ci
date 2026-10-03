@@ -15,7 +15,8 @@ import {
   PRINCIPAL_MODEL, WORKER_LIMIT, WORKER_MODEL,
   commitField, readSettings,
 } from "../src/tui/sources/settings.js";
-import { principalSessionProfile, sessionArgv, sessionEnv } from "../src/tui/session.js";
+import { PACKAGE_STORE_ENV, principalEnvironment, principalSessionProfile, projectEvent, sessionArgv, sessionEnv } from "../src/tui/session.js";
+import { PACKAGE_STORE_ENV as GUARD_PACKAGE_STORE_ENV } from "../src/extension/workspace-guard.js";
 import { PRINCIPAL_SYSTEM_PROMPT } from "../src/config/role-prompts.js";
 import { loadConfiguration } from "../src/config.js";
 import { registerToolSurface } from "../src/pi-extension.js";
@@ -178,6 +179,45 @@ test("D23: the Principal session carries no authored projection -- the surface i
   });
   assert.ok(!("OMA_TOOL_SURFACE" in env), "no profile field carries a projection");
   assert.equal(env.HOME, "/h");
+});
+
+test("D23/TSP-005: a stray ambient OMA_TOOL_SURFACE never reaches the Principal's engine", () => {
+  // The plan channel is runner→Resident plumbing only. A malformed plan would
+  // exit(1) the host engine at session_start; a crafted-valid one would narrow
+  // its tools -- the inherited environment must carry neither.
+  const crafted = encodeToolSurfacePlan({
+    version: 1, defaultMode: "DISABLED", direct: ["read"], disabled: ["danger"],
+    grouped: ["fetch"], groups: [{ name: "web", description: "web", children: ["fetch"] }], roots: ["web"],
+  });
+  for (const ambient of ["{not json", crafted]) {
+    const env = sessionEnv({ HOME: "/h", PATH: "/usr/bin", OMA_TOOL_SURFACE: ambient }, {
+      society: "demo", provider: "pi", model: "current", workspaceBytes: 1024, extensions: [],
+    });
+    assert.ok(!("OMA_TOOL_SURFACE" in env), "the runner's own plumbing channel leaked into the host engine");
+    assert.equal(env.HOME, "/h");
+  }
+});
+
+test("C18: the Principal's environment names the package store root its guard may read, and the mirror spellings agree", () => {
+  const env = principalEnvironment({ stateRoot: "/state", runRoot: "/run", libdir: "/lib" },
+    { society: "demo", provider: "p", model: "m", extensions: [], workspaceBytes: 1024, packageStore: "/data/.packages" },
+    { frameBytes: 1024, mailBodyBytes: 1024, batchMaxMessages: 4, contextBytes: 4096, bundleBytes: 8192 });
+  assert.equal(env[PACKAGE_STORE_ENV], "/data/.packages", "the store root the guard permits reads under");
+  assert.equal(GUARD_PACKAGE_STORE_ENV, PACKAGE_STORE_ENV, "the extension's mirror is not the writer's spelling");
+  const without = principalEnvironment({ stateRoot: "/state", runRoot: "/run", libdir: "/lib" },
+    { society: "demo", provider: "p", model: "m", extensions: [], workspaceBytes: 1024 },
+    { frameBytes: 1024, mailBodyBytes: 1024, batchMaxMessages: 4, contextBytes: 4096, bundleBytes: 8192 });
+  assert.ok(!(PACKAGE_STORE_ENV in without), "no store means no read permission");
+});
+
+test("an engine extension_error projects as an OMA notice; extension-provided text is stripped of what a screen cannot show", () => {
+  assert.equal(projectEvent({ type: "extension_error", extensionPath: "/x/role-ext.ts", event: "tool_call", error: "boom" } as never).line,
+    "⚠ Extension role-ext.ts failed on tool_call: boom.");
+  // The event's text is the extension's: terminal control and format
+  // characters are removed before it reaches the transcript.
+  assert.equal(projectEvent({ type: "extension_error", extensionPath: "/x/e.ts", event: "s", error: "a\x1b[2Jb\u200e" } as never).line,
+    "⚠ Extension e.ts failed on s: a[2Jb.");
+  assert.equal(projectEvent({ type: "extension_error" } as never).line, "⚠ Extension extension failed.");
 });
 
 test("the Principal session is built from its role, not from defaults", () => {

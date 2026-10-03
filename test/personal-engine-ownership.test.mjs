@@ -11,7 +11,7 @@ const code = ts.transpileModule(readFileSync('src/entry/pi-personal.ts', 'utf8')
 }).outputText.replaceAll('import.meta.url', '"file:///fixture/dist/src/entry/pi-personal.js"')
   .replace(/main\(\)\.catch\([\s\S]*$/, 'module.exports.main = main;');
 const flush = async () => { for (let i = 0; i < 30; i++) await Promise.resolve(); };
-function world({ fail, close, dispose, run, construct, catalog, beforeSwitch, sendError, resourceReload, moduleClose, needsTrust, trusted } = {}) {
+function world({ fail, close, dispose, run, construct, catalog, beforeSwitch, sendError, resourceReload, moduleClose, needsTrust, trusted, packageResources } = {}) {
   const calls = [], hooks = {}, writes = [], commands = {}, picks = [];
   const birth = { id: 'personal-id', mode: 'personal', cwd: '/fixture/work', history: '/fixture/history' };
   const manager = { getCwd: () => birth.cwd, getSessionDir: () => birth.history };
@@ -19,7 +19,7 @@ function world({ fail, close, dispose, run, construct, catalog, beforeSwitch, se
     async emit(event) { calls.push(event.type); if (event.type === 'session_before_switch' && beforeSwitch) return beforeSwitch(event); return hooks[event.type]?.(event, context); },
   }, async abort() { calls.push('abort'); if (fail === 'abort') throw new Error('injected abort'); }, dispose() {} };
   const context = { ui: { setStatus() {}, setHeader(factory) { factory?.({}, { fg: (_color, text) => text }).render(80); }, setFooter() {}, notify(...args) { calls.push(['notice', ...args]); },
-    select(_title, rows) { return new Promise(resolve => picks.push({ rows, choose: resolve })); },
+    select(title, rows) { return new Promise(resolve => picks.push({ title, rows, choose: resolve })); },
     custom(factory) { return new Promise(resolve => picks.push(factory({ requestRender() {} }, {}, {}, resolve))); },
   } };
   const runtime = { session, services: undefined,
@@ -87,7 +87,7 @@ function world({ fail, close, dispose, run, construct, catalog, beforeSwitch, se
     '../runtime/session-catalog.js': { async sessionBirthForHistory(file) { return catalog ? catalog(file) : birth; }, sessionHistoryDirectories: () => [] },
     '../runtime/personal-settings.js': { personalExtensions: () => ({ extensions: [], missing: [] }), updatePersonalSettings: () => ({ extensions: [] }),
       personalExtensionEntry: input => path.isAbsolute(input) ? `local:${input}` : input },
-    '../runtime/pi-packages.js': { readPackageIndex: () => [] },
+    '../runtime/pi-packages.js': { readPackageIndex: () => [], packageResourcePaths: () => packageResources },
     '../runtime/extension-integrity.js': { assertExtensionIntegrity() {}, verifiedPaths: () => [] },
     '../runtime/extension-modules.js': { ExtensionModules: class {
       constructor() { calls.push('modules-create'); }
@@ -260,6 +260,24 @@ test('#6: Personal registers only its own command -- the engine keeps /import an
     assert.ok(!/^(no|disable|exclude)/i.test(key) || key === 'noExtensions',
       `a suppressed resource surface reached Personal: ${key}`);
 });
+test('C18: Personal loads the installed packages\' skills, prompt templates and themes, as the Society engines do', async () => {
+  const packageResources = { skills: ['/store/npm/pkg/skills/roll/SKILL.md'], prompts: ['/store/npm/pkg/prompts/review.md'], themes: ['/store/npm/pkg/themes/dark.json'] };
+  let loader;
+  const w = world({ packageResources, run: async ({ runtime }) => { loader = runtime.services.resourceLoader; } });
+  await w.main();
+  // The loader options are vm-realm arrays (the entry is transpiled and run in
+  // a Script context), so copy them out before a strict structural compare.
+  assert.deepEqual(Array.from(loader.options.additionalSkillPaths), packageResources.skills);
+  assert.deepEqual(Array.from(loader.options.additionalPromptTemplatePaths), packageResources.prompts);
+  assert.deepEqual(Array.from(loader.options.additionalThemePaths), packageResources.themes);
+  // No store means no flags: the keys stay absent, not empty lists.
+  let bare;
+  const none = world({ run: async ({ runtime }) => { bare = runtime.services.resourceLoader; } });
+  await none.main();
+  for (const key of ['additionalSkillPaths', 'additionalPromptTemplatePaths', 'additionalThemePaths'])
+    assert.equal(Object.hasOwn(bare.options, key), false, `${key} present without package resources`);
+});
+
 test('C19: Personal\'s project trust is the recorded decision -- never silent, never default', async () => {
   for (const [needsTrust, trusted, expected] of [
     [false, undefined, true],   // nothing gated: trivially trusted, as Pi itself rules
@@ -289,6 +307,13 @@ test('C19: the trust row appears only for a folder holding gated resources, and 
   assert.equal(w.picks[0].rows.some(row => String(row).startsWith('Project trust')), true);
   w.picks[0].choose(w.picks[0].rows.find(row => String(row).startsWith('Project trust')));
   await flush();
+  // The prompt promises only what trusting does: .pi settings and resources.
+  // Extension discovery is pinned (noExtensions), so a project extension is
+  // never loaded -- the words must not claim otherwise.
+  assert.doesNotMatch(String(w.picks[1].title), /execute project extensions/);
+  assert.match(String(w.picks[1].title), /settings and resources/);
+  assert.match(String(w.picks[1].title), /never loads a project extension/);
+  assert.match(String(w.picks[1].title), /[Ee]xtensions stay pinned/);
   w.picks[1].choose('Trust this project');
   await done;
   assert.deepEqual(w.calls.filter(c => Array.isArray(c) && c[0] === 'trust'), [['trust', '/fixture/work', true]]);

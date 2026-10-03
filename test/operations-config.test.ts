@@ -1,11 +1,12 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { existsSync, mkdirSync, writeFileSync, readFileSync, rmSync, symlinkSync } from "node:fs";
+import { existsSync, mkdirSync, writeFileSync, readFileSync, realpathSync, rmSync, symlinkSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { spawnSync } from "node:child_process";
 import { loadConfig, loadConfiguration } from "../src/config.js";
 import { canonicalResourceLimits } from "../src/domain/resources.js";
+import { writePackageIndex } from "../src/runtime/pi-packages.js";
 import { createCompleteConfigurationFixture as fixture } from "./fixtures/configuration.js";
 
 test("OPS config: migration preserves the closed host contract and does not overwrite input/output", () => {
@@ -157,8 +158,10 @@ function runnerEntry(f: ReturnType<typeof fixture>, env: Record<string, string>)
     preload,
     `import { writeFileSync } from 'node:fs';
     import { RunnerModule } from ${JSON.stringify(new URL("../src/runner.js", import.meta.url).href)};
+    import { packageResourcePaths } from ${JSON.stringify(new URL("../src/runtime/pi-packages.js", import.meta.url).href)};
     RunnerModule.prototype.run = async function () {
-      writeFileSync(${JSON.stringify(capture)}, JSON.stringify({ profile: this.profile, confinement: this.paths.confinement ?? null })); return 0; };`,
+      writeFileSync(${JSON.stringify(capture)}, JSON.stringify({ profile: this.profile, confinement: this.paths.confinement ?? null,
+        packages: this.paths.packages ?? null, packageResources: packageResourcePaths(this.paths.packages) ?? null })); return 0; };`,
   );
   const run = spawnSync(
     process.execPath,
@@ -214,6 +217,63 @@ test("OPS config: runner entry selects the broker-rendered role at startup witho
   } finally {
     f.close();
   }
+});
+
+/** A package store laid out as the engine's package manager installs into it. */
+function store(root: string, packages: Record<string, Record<string, string>>): string {
+  const dir = join(root, "packages");
+  for (const [name, files] of Object.entries(packages)) for (const [file, text] of Object.entries(files)) {
+    mkdirSync(join(dir, "npm", "node_modules", name, file, ".."), { recursive: true });
+    writeFileSync(join(dir, "npm", "node_modules", name, file), text);
+  }
+  writeFileSync(join(dir, "settings.json"), JSON.stringify({ packages: Object.keys(packages).map(name => `npm:${name}`) }));
+  return dir;
+}
+const richPackage = {
+  "package.json": JSON.stringify({ name: "oma-rich", version: "1.0.0",
+    pi: { skills: ["./skills/roll/SKILL.md"], prompts: ["./prompts/review.md"], themes: ["./themes/dark.json"] } }),
+  "skills/roll/SKILL.md": "---\nname: roll\ndescription: Roll.\n---\n",
+  "prompts/review.md": "Review the change.\n",
+  "themes/dark.json": JSON.stringify({ name: "dark", colors: {} }),
+};
+
+test("DR25/C18: the runner entry hands the package store to the spawn plan, so package resources reach a Resident's argv", async () => {
+  const f = fixture();
+  try {
+    const packages = store(f.root, { "oma-rich": richPackage });
+    await writePackageIndex(packages);
+    f.edit("host.json", host => { host.installation.packages = packages; });
+    const accepted = loadConfiguration(f.path).config.agentProfiles.verifier!.resources;
+    const run = runnerEntry(f, { OMA_PROFILE_HEX: hex("verifier"), OMA_RESOURCES_HEX: hex(canonicalResourceLimits(accepted)) });
+    assert.equal(run.status, 0, run.stderr);
+    // The store's real root reaches RunnerPaths.packages -- without it
+    // packageResourcePaths sees undefined and no --skill/--prompt-template/
+    // --theme flag is ever emitted for a Resident.
+    assert.equal(run.selected.packages, realpathSync(packages));
+    const root = realpathSync(packages);
+    assert.deepEqual(run.selected.packageResources, {
+      skills: [join(root, "npm/node_modules/oma-rich/skills/roll/SKILL.md")],
+      prompts: [join(root, "npm/node_modules/oma-rich/prompts/review.md")],
+      themes: [join(root, "npm/node_modules/oma-rich/themes/dark.json")],
+    });
+    // And the confinement mounts the same root read-only inside.
+    assert.equal(run.selected.confinement.packages, root);
+  } finally { f.close(); }
+});
+
+test("OMA_PI_COMMAND: an override supplies no shipped engine entry, so the runner refuses at startup -- not at first delivery", () => {
+  const f = fixture();
+  try {
+    const accepted = loadConfiguration(f.path).config.agentProfiles.verifier!.resources;
+    const run = runnerEntry(f, { OMA_PROFILE_HEX: hex("verifier"), OMA_RESOURCES_HEX: hex(canonicalResourceLimits(accepted)),
+      // A pinned executable resolves to args:[]; a confined Resident would
+      // then throw UNSUPPORTED_PROFILE on every delivery. The unit must fail
+      // immediately instead.
+      OMA_PI_COMMAND: process.execPath });
+    assert.notEqual(run.status, 0, "the unit started on an engine entry a Resident cannot run");
+    assert.match(run.stderr, /no shipped engine entry|requires the bundled engine/);
+    assert.equal(existsSync(join(f.root, "selected.json")), false, "the runner ran before the refusal");
+  } finally { f.close(); }
 });
 
 test("WP25.03 / D05: a Resident runs with its accepted resources; the current profile only names its model", () => {

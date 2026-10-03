@@ -400,6 +400,18 @@ test("C18: an engine's argv names the package resources -- host paths unconfined
       assert.ok(at > 0, `${flag} was never passed`);
       assert.equal(confined.args[at + 1], `${mounted}${suffix}`, `${flag} was not translated through the package mount`);
     }
+    // The trusted extension's readable root travels as the guest-visible
+    // mount point -- never the host path, which does not exist inside.
+    const storeEnv = confined.args.indexOf("OMA_PACKAGE_STORE");
+    assert.ok(storeEnv > 0 && confined.args[storeEnv - 1] === "--setenv", "OMA_PACKAGE_STORE was never set inside the sandbox");
+    assert.equal(confined.args[storeEnv + 1], RESIDENT_PATHS.packages);
+    // Without a mounted store the variable is absent rather than misleading.
+    // (No mount can coexist with resources beneath it: the plan would rightly
+    // refuse, so the no-store profile carries no package resources either.)
+    const unmounted = planPiSpawn({ actor: "a", society: "s", paths,
+      profile: { ...profile, packageResources: undefined }, limits,
+      confinement: { ...confinement, host: { ...confinement.host, packages: undefined } } } as never);
+    assert.equal(unmounted.args.includes("OMA_PACKAGE_STORE"), false);
     // A resource under no mount must not reach a confined engine at all.
     const stray = { ...resources, skills: [join(f.root, "elsewhere", "SKILL.md")] };
     assert.throws(() => planPiSpawn({ actor: "a", society: "s", paths,

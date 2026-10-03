@@ -165,7 +165,12 @@ function omaEnvironment(options: PiAdapterOptions, inside: PathView): Record<str
     OMA_WORKER_ARCHIVE: inside(options.paths.workerArchive),
     OMA_PROJECT_GIT: inside(options.paths.projectGit),
     OMA_AGENT_HOME: inside(options.paths.agentHome),
-    OMA_CLI_PATH: inside(options.paths.cli),
+    // DR25/C18: the package store's root as the confined engine sees it -- the
+    // same mount translation every other env path takes, so the trusted
+    // extension's readable roots are the same contract on host and inside. A
+    // store the mount plan stopped carrying is refused by `inside`, not named.
+    ...(options.confinement.host.packages === undefined ? {}
+      : { OMA_PACKAGE_STORE: inside(options.confinement.host.packages) }),
     ...(options.profile.toolSurface === undefined ? {} : { OMA_TOOL_SURFACE: options.profile.toolSurface }),
     // D25: the extension paths this engine's `-e` argv carries, in the same
     // spelling -- the trusted extension authorizes tools by this provenance,

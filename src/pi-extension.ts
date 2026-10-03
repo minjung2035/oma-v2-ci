@@ -17,7 +17,7 @@ import { PrincipalChannel } from "./extension/principal-channel.js";
 import { createToolProvenance, verifiedExtensionPaths, VERIFIED_EXTENSIONS_ENV } from "./extension/provenance.js";
 import { registerPromptBoundary } from "./extension/prompt-boundary.js";
 import { registerToolSurface } from "./extension/tool-surface.js";
-import { TOOL_SCOPE_ENV, TOOL_SCOPE_SANDBOX, guardWorkspaceTools } from "./extension/workspace-guard.js";
+import { TOOL_SCOPE_ENV, TOOL_SCOPE_SANDBOX, PACKAGE_STORE_ENV, guardWorkspaceTools } from "./extension/workspace-guard.js";
 import { containWorkspaceTools } from "./extension/contained-tools.js";
 
 export { decodeBatchViewText, readBatchView } from "./extension/batch-view.js";
@@ -63,7 +63,15 @@ export default async function extension(pi: ExtensionAPI) {
   // the active tools' guidance reaches the prompt Pi's own composition omits.
   registerPromptBoundary(pi, workspace, channel.attached);
   registerToolSurface(pi, ownTools, { permitted: provenance.permitted, own: provenance.own });
-  guardWorkspaceTools(pi, workspace, sandboxed, channel.attached, provenance.permitted);
+  // C18: the environment names the installed-package store's real root, which
+  // the engine's argv advertised resources under. A read may reach it; one
+  // that cannot be resolved permits nothing, so the guard fails closed.
+  const readableRoots: string[] = [];
+  const packageStore = process.env[PACKAGE_STORE_ENV];
+  if (packageStore !== undefined) {
+    try { readableRoots.push(realpathSync(packageStore)); } catch { /* an unobservable store root permits no reads */ }
+  }
+  guardWorkspaceTools(pi, workspace, sandboxed, channel.attached, provenance.permitted, readableRoots);
   containWorkspaceTools(pi, workspace, integerEnv("OMA_WORKSPACE_BYTES"), sandboxed, channel.attached);
   registerDelivery(pi, waitRequested);
   await startInferenceBridge(pi);

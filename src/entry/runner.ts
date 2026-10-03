@@ -60,19 +60,31 @@ const profile = Object.freeze({ name: profileName, modelProfile: modelName, mode
 const piRuntime = resolvePiRuntime({
   stateRoot, libdir: cfg.installation.libdir, override: process.env.OMA_PI_COMMAND,
 });
+// A confined Resident runs the shipped engine entry: piArgs[0] is the bundle
+// the mount plan translates. An OMA_PI_COMMAND override resolves to a bare
+// executable with no entry argument, so the unit refuses here at startup
+// rather than throwing UNSUPPORTED_PROFILE on every delivery.
+if (piRuntime.args[0] === undefined) {
+  console.error(`runner ${agent}: OMA_PI_COMMAND supplies no shipped engine entry; a Resident requires the bundled engine`);
+  process.exit(4);
+}
 ensureDirectory(piRuntime.agentDir, 0o700);
 // SB-001 wants a trusted rootfs holding pinned tools and empty mount targets.
 // `installation.rootfs` names it; binding the host root is what SB-001 forbids.
 // Society is confined-only, and an unsupported rootfs is refused before any
 // RunnerModule exists. Missing bubblewrap is a spawn failure, never permission
 // to execute a Resident on the host.
+// DR25/C18: the package store's real root, when one exists. The confinement
+// mounts it read-only inside; the runner's paths carry it too, so the spawn
+// plan can name the store's skills, prompt templates and themes on the argv.
+const packages = cfg.installation.packages === undefined ? undefined
+  : packageStoreRoot(cfg.installation.packages) ?? undefined;
 const confinement = {
   rootfs: cfg.installation.rootfs,
   libdir: cfg.installation.libdir,
   // DR25: the installed packages a role's extensions may name, mounted at the
   // directory the loader pinned them in (on macOS the store is a link to it).
-  ...(cfg.installation.packages === undefined || packageStoreRoot(cfg.installation.packages) === null ? {}
-    : { packages: packageStoreRoot(cfg.installation.packages)! }),
+  ...(packages === undefined ? {} : { packages }),
   // Bound as a single file, so resolve a symlinked Node to the real binary.
   node: realpathSync(cfg.installation.node),
   systemBinds: hostSystemLayout().binds,
@@ -84,6 +96,7 @@ const runner = new RunnerModule({ runRoot, stateRoot, society,
   piAgentDir: piRuntime.agentDir,
   coreExtension: join(cfg.installation.libdir, "dist/src/pi-extension.js"),
   cli: join(cfg.installation.libdir, DEPLOYMENT_LAYOUT.cli),
+  ...(packages === undefined ? {} : { packages }),
   confinement }, agent, cfg.limits, profile);
 let stopping = false;
 const stop = (): void => {

@@ -198,7 +198,10 @@ export interface ScenarioOptions {
   readonly reviewBodyBytes?: number;
   /** Extra environment for the engines -- how an internal OMA policy such as
    * OMA_TOOL_SURFACE (D23: no longer configuration) reaches the process the
-   * way OMA's own plumbing would set it. */
+   * way OMA's own plumbing would set it. For the Principal the channel is the
+   * spawn plan's explicit field, never the inherited environment: the same
+   * value in this record is also spread into the engine env so a sessionEnv
+   * filter still proves ambient copies are dropped. */
   readonly engineEnv?: Readonly<Record<string, string>>;
 }
 
@@ -293,7 +296,10 @@ export async function startScenario(options: ScenarioOptions = {}): Promise<Scen
       { piCommand: runtime.executable, piArgs: runtime.args, piAgentDir: runtime.agentDir,
         ...(options.interactive && fence ? { interactiveEntry: join(REPO, "dist/src/entry/pi-interactive.js"), fence: fence.fence, project: REPO } : {}),
         coreExtension: join(REPO, "dist/src/pi-extension.js"), sessionDir: principalSessionDir(root),
-        workspace: principalWorkspace(root), home: principalWorkspace(root) },
+        workspace: principalWorkspace(root), home: principalWorkspace(root),
+        // The deliberate plan travels the plumbing field, not the inherited
+        // env -- the runner's own hop, applied to the host engine.
+        ...(options.engineEnv?.OMA_TOOL_SURFACE === undefined ? {} : { toolSurface: options.engineEnv.OMA_TOOL_SURFACE }) },
       profile, { frameBytes: SCENARIO_LIMITS.frameBytes, idleStreamSeconds: SCENARIO_LIMITS.idleStreamSeconds, receiptWaitSeconds: SCENARIO_LIMITS.receiptWaitSeconds },
       { ...principalEnvironment({ stateRoot: root, runRoot, libdir: REPO }, profile, SCENARIO_LIMITS), ...trust, ...options.engineEnv },
       { onLine: line => { lines.push(line); }, onBusy: () => {}, onEnd: reason => { lines.push(`[end] ${reason}`); },
