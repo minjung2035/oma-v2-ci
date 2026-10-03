@@ -1,10 +1,174 @@
 # OMA v2 — 현재 검증 상태
 
-기준: 2026-10-02 문서 통합 작업 트리. 이 문서는 현재 판정·실행 결과·수치·로그·한계의 단일 owner다. 검증 요구는 [verification-spec](../verification-spec.md), 과거 실행은 [archive](../archive.md)가 소유한다.
+기준: 2026-10-03 적대적 검증, 생산 source checkpoint `a75c29911c077a2d2b207a48773268e2e2355ca0`. 이 문서는 현재 판정·실행 결과·수치·로그·한계의 단일 owner다. 검증 요구는 [verification-spec](../verification-spec.md), 과거 실행은 [archive](../archive.md)가 소유한다.
 
 ## 현재 source 판정
 
-**Release-blocked.** DR27/28/29의 일부 구현·집중 회귀는 존재하지만 전체 구현, 현재 입력의 전체 suite, native macOS 완료를 주장하지 않는다. 새 merge-review spec은 다음 구현 설계이며 그 새 도구·메일 workflow를 구현 완료로 표시하지 않는다. 문서 정리는 runtime 완료 판정을 올리지 않는다.
+전수 감사는 **진행 중**이다. 현재 production 356개와 추가 실행·계약·native·build/verification source 74개를
+[파일별 원장](../../test/audit/full-2026-10-03.review.json)에 고정했다. 원장의 개별 상태·P0 근거가 진행 판정이며,
+아래 세 차례의 선택 경계 coverage는 당시 snapshot으로 보존한다. 전수 정적 검토와 실제 release/플랫폼 실행은 별개다.
+
+**Release-blocked.** 최근 mail-v1 merge/review/challenge의 코드와 집중 회귀는 존재한다. 앞선 세 차례 탐색의 제품 결함 16건과 검증 artifact 불일치 1건에 이번 전수 pass의 제품 결함 1건을 더해, 현재 제품 17건 + 검증 artifact 1건이 모두 미수정이다. 전체 구현, 현재 입력의 전체 suite, native macOS 완료를 주장하지 않는다. merge-review spec의 설계안 지위나 활성 규범을 이번 감사로 변경하지 않는다. 아래 2026-10-02 문서 통합과 마지막 기능 checkpoint는 각각 당시 실행 범위를 보존한 기록이다.
+
+## 전수 감사 인계 시점
+
+2026-10-03 사용자 요청으로 [HANDOFF](../HANDOFF.md)에 완료·남은 영역과 직전 작업을 기록했다.
+현재 source 범위와 개별 판정은 [전수 원장](../../test/audit/full-2026-10-03.review.json),
+신규 결함은 [AV-18](../priority-0-audit.md#av-20261003-18--context-준비-실패가-이미-획득한-lease를-반환하지-않음-p2)을 따른다.
+
+| 항목 | 인계 시점 판정 |
+|---|---|
+| 고정 전체 정적 범위 | production 356 + 추가 source 74 = 430개. 원장 줄 수는 개행으로 센 참고치이며 cloc 측정이 아님 |
+| 전체 읽기와 파일별 P0 판정 저장 | `REVIEWED_STATIC` 392개: production 319 + 추가 73. 직접 판정 50 + 위임 pass 취합 342 |
+| 위임 pass | 7개 백그라운드 에이전트 부분 중복 분업(사용자 명시 승인), 부모가 발견 교차 확인·기록. 에이전트는 읽기 전용 |
+| 판정 미완료 잔여 | `PENDING` 38개: attestation, git 4개, protocol 3개, tui 29개, environment.d 1개 — 위임 보고에서 whole-read가 확인되지 않아 보류 |
+| source bytes | UNCHANGED: 원장의 production/추가 430개 SHA-256 모두 재대조. HEAD `a75c299` 유지 |
+| 신규 required-behavior oracle | DEFECTS REPRODUCED: 4 tests, fail 4, pass/skip/cancel 0 — AV-18(lease fd 잔류), AV-19(`.prepare-*` 잔재 수거 불가), AV-20(startup 비-mail 격리 부재: sweep은 격리·startup은 reject), AV-25(비UTF-8 파일명 → `kind:"corrupt"`) |
+| 기존 선택 회귀 | 앞선 세 pass의 361 PASS 기록 보존. 이번 인계 작업에서 다시 실행한 것은 아님 |
+| 현재 발견 | AV-01..31 총 31건: 제품 27 + 검증 도구/artifact 4, 모두 미수정 |
+| 해결된 후보 | 직전 3개 후보 모두 확정: 임시 tree 잔재(AV-19), workerStatus frame(AV-24), surrogate/비UTF-8 이름(AV-25) |
+| full evidence 마감 | NOT_COMPLETE: 새 source/oracle/log/compiled/report 결박 evidence를 마감해야 함. 첫 세 evidence는 역사적 snapshot 그대로 유지 |
+| 전체 정적 감사 / 실제 플랫폼·release | INCOMPLETE / NOT_RUN. macOS/native·systemd·powercut·전체 release lane은 여전히 NOT_RUN |
+
+[full oracle](../../test/audit/adversarial-2026-10-03-full.mjs)의 AV-18/19/20/25 실행 로그는 `/tmp/oma-full-oracles-2.log`다.
+실제 사용자 상태, manager/VM, provider는 사용하지 않았다. 문서 검사 로그는 `/tmp/oma-full-handoff-documents.log`다.
+
+## 2026-10-03 적대적 검증
+
+사용자 요청으로 clean tree에 기준 커밋 `a75c299`를 만든 뒤 빌드한 생산 코드에 검증을 실행했다.
+생산 코드 수정은 없으며, 발견·근거·수정 방향은 [감사 기록](../priority-0-audit.md#2026-10-03-적대적-검증--기준-커밋-a75c299)이 소유한다.
+재현 artifact는 [adversarial-2026-10-03.mjs](../../test/audit/adversarial-2026-10-03.mjs)다.
+source/fixture/oracle SHA-256과 실행 summary는 [감사 evidence](../../test/audit/adversarial-2026-10-03.evidence.json)에 결박했다.
+이 파일도 release qualification을 뜻하지 않는다.
+
+| 검사 | 판정 | 실제 실행 범위 |
+|---|---|---|
+| build / typecheck | PASS | `/opt/oma-test-node/bin`의 Node 24.21.0. 생산 코드와 TypeScript 시험을 현재 source로 빌드 |
+| merge/review/challenge 집중 회귀 | PASS | 6개 파일, 79 tests, fail/skip/cancel 0 |
+| grammar/evaluator fuzz/mail facts/P0/confinement 회귀 | PASS | 6개 파일, 75 tests, fail/skip/cancel 0. fuzz는 3 seeds × 170 ledgers |
+| 신규 적대적 oracle | DEFECTS REPRODUCED | 8 tests, fail 8, skip/cancel 0. 제품이 지켜야 할 동작을 assert하며 AV-01..07을 검출. AV-03은 mode/bounds 두 조건 |
+| check:architecture | FAIL | 첫 check:inventory에서 source list/LOC hashes 불일치. 이후 chain 단계는 이 aggregate 호출에서 NOT_RUN |
+| check:architecture:rules | PASS | 독립 실행, 0 findings |
+| check:boundaries | PASS | 구조 검사, 0 findings. registry strongest-injection counts는 이번 실행의 실제 kill 수가 아님 |
+| check:documents / git diff --check | PASS | 감사 문서 저장 후에도 문서 구조·링크 검사 0 findings, whitespace 오류 없음 |
+
+집중 회귀 명령과 standalone 재현 명령은 다음과 같다. `NODE_OPTIONS`의 guard 경로는 child가 cwd를
+바꾸어도 해석되도록 절대 경로로 지정했다. 상대 guard 경로로 시작한 첫 시도는 CLI child import 실패여서
+제품 실패나 위 표의 실행 결과로 세지 않고, 절대 경로로 다시 실행한 결과를 사용했다.
+
+```sh
+export PATH=/opt/oma-test-node/bin:$PATH
+export OMA_TEST_SYSTEMD=0
+export DBUS_SESSION_BUS_ADDRESS=unix:path=/nonexistent/oma-local-tests-no-user-bus
+export NODE_OPTIONS=--import=/home/dev/oma-v2/scripts/local-test-guard.mjs
+npm run build
+npm run typecheck
+node --test --test-concurrency=1 \
+  dist/test/merge-review.test.js dist/test/challenge-review.test.js \
+  dist/test/review-faults.test.js dist/test/review-concurrency.test.js \
+  dist/test/review-evaluation.test.js dist/test/merge-cli.test.js
+node --test --test-concurrency=1 \
+  dist/test/review-grammar.test.js dist/test/review-evaluation-fuzz.test.js \
+  dist/test/mail-facts-boundary.test.js dist/test/priority-0.test.js \
+  dist/test/p0-review7.test.js dist/test/resident-confinement.test.js
+node --test --test-concurrency=1 test/audit/adversarial-2026-10-03.mjs
+```
+
+standalone 재현은 현재 결함이 있는 source에서 exit 1이 정상적인 **검출 결과**다. suite PASS로 승격하지 않는다.
+독립 재현은 root-level normal suite에 자동 편입되지 않으며, 수정과 함께 정상 회귀로 옮길 수 있다.
+위 명령은 전체 `npm test`, 환경 lane, SIGKILL/powercut 검증을 실행하지 않는다.
+실제 사용자 OMA/VM·인증 정보·유료 provider는 사용하지 않았다. inherited execution exclusions는 HANDOFF에 유지한다.
+
+로그는 `/tmp/oma-adversarial-{build,typecheck,baseline,extended,reproductions,architecture,rules,boundaries,documents}.log`다.
+임시 로그는 release evidence로 등록하지 않았다. 이번 source에 과거 LOC/trace evidence를 자동 재사용하거나
+measurement 파일을 손으로 수정하지 않았다.
+
+### 2차 경계 확장
+
+같은 `a75c299` 생산 source에서 메일 read/reply/arrival, corruption fence, config generation,
+lifecycle authority와 IPC 자원 수명으로 범위를 넓혔다. 파일별 선택 경계·한계는
+[감사 기록의 2차 검증](../priority-0-audit.md#2차-검증--메일권한설정ipc-경계-확장)에 기록했다.
+새 [oracle](../../test/audit/adversarial-2026-10-03-second.mjs)과
+[evidence](../../test/audit/adversarial-2026-10-03-second.evidence.json)는 이 실행을 별도로 결박한다.
+
+| 검사 | 판정 | 실제 실행 범위 |
+|---|---|---|
+| config/mail/IPC/run/registry/TUI/contained-tools 회귀 | PASS | 아래 11개 파일, 106 tests, fail/skip/cancel 0. 1차 154개와 합해 선택 회귀 260개 |
+| 추가 적대적 oracle | DEFECTS REPRODUCED | 4 tests, fail 4, skip/cancel 0. AV-09..12 각각 required behavior assertion 실패 |
+| 초기 long-thread 탐색 | INCONCLUSIVE | 8192-byte fixture의 350-entry 시도: 3 defect assertions fail, history test 1 cancelled(timeout). history 자체는 이 결과로 확정하지 않음 |
+| 축소 long-thread 재현 | DEFECT REPRODUCED | 2048-byte supported config, 정상 접수 40개 이후 short vote와 cancel 거절, reopen 뒤 cancel도 거절. 최종 4-oracle 실행에 포함 |
+| 생산 source 변경 여부 | UNCHANGED | 같은 source digest와 HEAD. 생산 코드 수정 없음 |
+| 문서·whitespace 검사 | PASS | 추가 발견·범위·한계 저장 뒤 독립 실행 |
+
+```sh
+export PATH=/opt/oma-test-node/bin:$PATH
+export OMA_TEST_SYSTEMD=0
+export DBUS_SESSION_BUS_ADDRESS=unix:path=/nonexistent/oma-local-tests-no-user-bus
+export NODE_OPTIONS=--import=/home/dev/oma-v2/scripts/local-test-guard.mjs
+node --test \
+  dist/test/config-generations.test.js dist/test/config-snapshot.test.js \
+  dist/test/operations-config.test.js dist/test/mail-integrity.test.js \
+  dist/test/mail-recovery-integrity.test.js dist/test/mail-reply.test.js \
+  dist/test/r14-connection-lifecycle.test.js dist/test/r16-run-registry.test.js \
+  dist/test/r25-lifecycle-owners.test.js dist/test/tui-sources.test.js \
+  dist/test/contained-tools.test.js
+node --test test/audit/adversarial-2026-10-03-second.mjs
+```
+
+2차 로그: `/tmp/oma-adversarial-second-baseline.log`,
+`/tmp/oma-adversarial-second-reproductions.log`(초기 timeout 포함),
+`/tmp/oma-adversarial-thread-boundary.log`(축소 독립 재현),
+`/tmp/oma-adversarial-second-final.log`(최종 4개 oracle),
+`/tmp/oma-adversarial-second-documents.log`.
+log/source/oracle SHA-256은 2차 evidence를 따른다. initial timeout을 PASS나 새로운 결함으로 승격하지 않는다.
+직접 만든 Unix socket endpoint는 tool→CLI 재현의 로컬 fixture이며 native actor 인증 검증을 대신하지 않는다.
+실제 manager/VM/provider, 전체 suite, SIGKILL/powercut lane은 계속 NOT_RUN이다.
+
+### 3차 범위 확장과 coverage 공개
+
+같은 생산 source에서 inference relay construction/connection bounds, host/guest run 종료, late resolver와
+platform request ledger를 추가 검증했다. source는 checkpoint와 동일하고 제품 수정은 없다.
+새 [oracle](../../test/audit/adversarial-2026-10-03-third.mjs)과
+[evidence](../../test/audit/adversarial-2026-10-03-third.evidence.json)는 이 실행을 결박한다.
+발견과 파일별 경계 판정은 [감사 기록의 3차 검증](../priority-0-audit.md#3차-검증--추론-연결실행-종료영속-원장)을 따른다.
+
+| 검사 | 판정 | 실제 실행 범위 |
+|---|---|---|
+| relay/egress/tenure/history/delivery-deadlines 회귀 | PASS | 아래 5개 파일, 81 tests, fail/skip/cancel 0 |
+| guest request ledger 회귀 | PASS | 별도 1개 파일, 20 tests, fail/skip/cancel 0. 3차 총 101개, 누적 선택 회귀 361개. 임시 원장 전용 child의 during-effect/after-outcome SIGKILL 2개 포함 |
+| 추가 적대적 oracle | DEFECTS REPRODUCED | 5 tests, fail 5, skip/cancel 0. AV-13..17 required behavior 실패. 총 발견 17개 가운데 제품 16/검증 artifact 1 |
+| source와 compiled artifact 결박 | UNCHANGED / BOUND | production manifest의 현재 356 files를 1차 source hashes와 대조. 3차 oracle이 import한 compiled file과 회귀 fixture hashes도 기록 |
+| 전체 파일 review coverage | INCOMPLETE | production 356개 중 전체 파일 읽기+선택 경계 판정 19개, 선택 함수 판정 36개, 이번 감사의 경계 판정 기록 없음 301개 |
+| 문서·whitespace 검사 | PASS | 추가 발견과 범위 목록 저장 뒤 독립 실행 |
+
+coverage는 [파일별 JSON](../../test/audit/adversarial-2026-10-03.coverage.json)의 356개 행에서 계산했다.
+전체 파일을 읽었다고 모든 branch/규칙을 검증한 것은 아니다. 55개 파일의 선택 경계 기록도 전수 감사를 뜻하지 않는다.
+“기록 없음”은 이번 감사에서 개별 경계 판정을 남기지 않았다는 뜻이며, 예전 commit의 검토나 회귀 실행만으로 상태를 올리지 않는다.
+이 목록은 production source의 범위다. 시험·문서·생성 artifact는 해당 실행·hash 목록에서 별도로 다루며
+전체 repository의 모든 파일을 감사 완료했다고 주장하지 않는다.
+
+```sh
+export PATH=/opt/oma-test-node/bin:$PATH
+export OMA_TEST_SYSTEMD=0
+export DBUS_SESSION_BUS_ADDRESS=unix:path=/nonexistent/oma-local-tests-no-user-bus
+export NODE_OPTIONS=--import=/home/dev/oma-v2/scripts/local-test-guard.mjs
+node --test \
+  dist/test/inference-relay.test.js dist/test/platform-egress.test.js \
+  dist/test/host-tenure.test.js dist/test/session-history.test.js \
+  dist/test/delivery-deadlines.test.js
+node --test dist/test/platform-request-ledger.test.js
+node --test --test-concurrency=1 test/audit/adversarial-2026-10-03-third.mjs
+```
+
+3차 로그: `/tmp/oma-adversarial-third-regressions.log`, `/tmp/oma-adversarial-third-ledger-regressions.log`, `/tmp/oma-adversarial-third-oracles.log`,
+`/tmp/oma-adversarial-third-documents.log`. source/oracle/coverage/report/log hashes는 3차 evidence를 따른다.
+앞선 두 evidence의 report hashes는 당시 저장된 report snapshot이며 3차 실행 판정으로 승격하지 않는다.
+3차 fixture는 실제 임시 Unix sockets·product pool/service/parser·synthetic credential만 사용한다.
+AV-14/15의 provider 응답 대조는 endpoint 밖 경로의 relay HTTP 403이고 upstream 요청은 없다.
+기존 relay 회귀는 loopback의 self-signed TLS provider stand-in을 사용한다. 외부·유료 provider는 사용하지 않는다.
+host/guest byte channel의 hello는 fixture가 공급하므로 native VM/bridge/authentication proof를 대신하지 않는다.
+임시 ledger의 두 SIGKILL 시험을 다른 durable 경계나 전원 손실 proof로 일반화하지 않는다.
+실제 manager/VM, 전체 suite, 전체 SIGKILL/powercut lane은 계속 NOT_RUN이다.
 
 ### 마지막 기능 checkpoint
 
