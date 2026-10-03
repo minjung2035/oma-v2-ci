@@ -1536,3 +1536,50 @@ P0-3/6 위반. 정적 확정. 미수정.
 정적 완료는 결함 부재의 증명이 아니다. A1/A4/A6/A7의 일부 세부 파일별 메모는 대화 요약 단계에서
 절단되어, 해당 판정은 그룹 단위 합의와 부모의 doc-comment/헤더 검증으로 기록했다.
 실패 시 각 fd/lease를 한 번씩 반환하고 최초 실패와 반환 실패를 함께 보존한다.
+
+## 일반 버그 pass (NB-*, 2026-10-03 두 번째 위임 wave)
+
+P0 불변식과 무관한 일반 결함(로직·표시·동시성·경계값·에러 처리)을 별도 렌즈로 7개 에이전트가 탐색했다.
+NB 번호는 durable 의미 위반이 아니라 동작 결함을 뜻한다. 모두 미수정; macOS 항목은 정적 확정 + `NOT_RUN`.
+
+| ID | 심각도 | 위치 | 요약 |
+|---|---|---|---|
+| NB-01 | 중 | src/git/quarantine.ts:42,54-65 | 격리 tmpfs가 `bundleBytes` 크기인데 input.bundle + index-pack repo(~2배)를 담아야 함 → 유효한 ~bundleBytes/2+ 번들이 BUNDLE_INVALID/UNSUPPORTED_PROFILE로 파이프라인 중간 사망. 실효 상한이 명세의 절반 |
+| NB-02 | 저 | src/git/quarantine.ts:68 | `fsck --strict`가 alternates를 탐색 → canonical 측 기존 손상이 유효 번들의 BUNDLE_INVALID로 오분류 |
+| NB-03 | 저 | src/protocol/log-response.ts:49-70 | 바이너리 탐색이 전체 텍스트를 `truncated:true`로 표기 가능(프레임이 정확히 1바이트 초과 시) — 미용적이며 보수적 방향 |
+| NB-04 | 저 | src/tui/app.ts:263 | mail detail이 열린 동안 draw마다 본문을 동기 재읽기 — 키 입력·스크롤·refresh당 fs I/O |
+| NB-05 | 저 | src/tui/dashboard.ts:45 | `pending` 합계는 principal 포함, `created`/`active`는 제외 — 같은 화면에서 행 의미 불일치(이중 보고) |
+| NB-06 | 저 | src/tui/exit.ts:17-18 | `write` 직후 `process.exit` — 파이프/리다이렉트 시 실패 메시지 유실 가능 |
+| NB-07 | 중 | src/tui/keys.ts:131-134 | typed 입력은 P0V-108 sanitize를 우회 — C1(U+0080-9F)·Cf(ZWSP, U+FEFF, bidi) 문자가 화면엔 안 보이지만 draft에 들어가 전송됨. paste는 차단하는데 typed는 통과해 파일 자체 불변식("화면에 안 보이는 것은 보내지 않는다") 위반 |
+| NB-08 | 저 | src/tui/keys.ts:260 | `ESC [[ A-E`(Linux 콘솔 F1-F5)가 3바이트에서 조기 종료 → 다음 문자가 typed로 누수 |
+| NB-09 | 저 | src/tui/login.ts:25-33 | `new Promise` 이전의 동기 throw가 Promise<number> 계약을 우회 — 현재 호출처는 방어하지만 시그니처가 기만적 |
+| NB-10 | 저 | src/tui/model.ts:450-454 | control panel이 열린 동안 char/paste가 조용히 폐기 — 공지도 draft 삽입도 없는 silent drop |
+| NB-11 | 저 | src/tui/open-tui-brand.ts:69-71 | swapText 절단이 UTF-16 단위 — flag emoji 등 서로게이트 페어 분할 가능 |
+| NB-12 | 저 | src/tui/open-tui-brand.ts:144-151 | brandFooter가 가장 넓은 gap만 고려 — `~` 뒤 적합 gap이 있어도 브랜딩 누락 |
+| NB-13 | 저 | src/tui/view/screens.ts:229-232 | 최소 geometry에서 fixed rows가 footer/notice를 화면 밖으로 밀어냄 |
+| NB-14 | 저 | src/tui/view/text.ts:73-76 | wrap()이 width 초과 cluster 직전에 빈 줄 하나를 추가로 내보냄 |
+| NB-15 | 저 | src/tui/screen.ts:69, app.ts:273 | draw()의 `output.write`가 파괴된 stream에서 동기 throw → data 리스너 경유 uncaughtException |
+| NB-16 | 중 | src/cli/effects/submit.ts:54-56, effects/goal.ts:21,31, commands/context.ts:21 | builder 내부 StoreError(LIMIT_EXCEEDED/INVALID_OID/REF_STATE_UNKNOWN)가 fatal→exit 3 — 결정적 입력 오류인데 ERROR_METADATA의 cliExit=2와 불일치; "re-run a permanent failure" 유도 |
+| NB-17 | 중하 | src/cli/commands/merge.ts:51 | `ensurePublished`/`finishReceipt`가 회수 힌트로 파생 submitKey(`<K>.submit`)를 출력 → 그대로 따라 하면 신규 open이 다른 키로 동결되고 원본 replay 안 됨. 올바른 힌트는 `<K>` |
+| NB-18 | 중하 | src/cli/effects.ts:56-65 | `readBounded`가 읽는 도중 축소된 파일을 조용히 허용 — strict prefix만 전송/사용됨(grow는 거부하는데 shrink는 무시). diagnostics는 FILE_CHANGED_DURING_READ로 보고하는데 CLI는 침묵 |
+| NB-19 | 저 | src/cli/commands/send.ts:99 | `oma ack m-<id>:2,`(bare maildir 이름)를 literal id로 취급해 거절 — `basename`+suffix 제거가 path 입력에만 적용됨. `.eml`도 동일 |
+| NB-20 | 저 | src/broker/public-dispatcher.ts:153-158 | `status.get`이 없는 agent에 ADDRESS_NOT_FOUND 대신 빈 목록+exit 0 — logs.read와 불일치 |
+| NB-21 | 저 | src/cli/commands/logs.ts:33 | `oma logs`가 unit 로그 원문을 터미널에 무이스케이프 출력 — 제어 문자 중화를 하는 views.ts와 비대칭(의도 가능성 있음) |
+| NB-22 | 저 | src/platform/host/service.ts:227-229,242-243 | 게스트 응답 `result.head` 등을 검증 없이 durable 기록 → 손상/비정상 게스트 응답이 host-record를 STORE_CORRUPT로 오염시키고 omahostd 기동을 막음(AV-17 계열 truthiness/검증 부재) |
+| NB-23 | 고 | src/platform/host/service.ts:93-118 + lifecycle.ts:183,202,252-255,292 | `record()` 동기 throw가 timer/socket 콜백과 boot catch에서 탈출 → omahostd에 uncaughtException 핸들러가 없어 데몬 사망, 또는 `force()` 생략으로 사망 상태의 VM이 orphan으로 생존 |
+| NB-24 | 중 | src/platform/guest/control.ts:104-111 | `end()`가 `this.frozen=null`과 deadline 취소를 thaw 이전에 수행 → thaw 실패 시 FS는 얼어붙은 채 `thawed:false`가 아닌 "not frozen"으로 보고되고 재시도 불가(EBUSY) — deadline backstop까지 취소됨 |
+| NB-25 | 중 | src/entry/oma-mac.ts:192-195 | Mac CLI가 INVALID_REQUEST 외 모든 실패를 exit 1로 평탄화 — `errorExit` 계약(retryable=3, unsupported/gate=4)과 불일치, 스크립트가 재시도 가능/불가를 구분 못함 |
+| NB-26 | 중하 | src/platform/host/service.ts:121, lifecycle.ts:190-196 | wake 시 `time.set` 실패가 `.catch(()=>undefined)`로 침묵 — §9.1 clock-step 불변식이 보이지 않게 깨짐 |
+| NB-27 | 중하 | src/platform/host/snapshot.ts:91 | `maintenance.end` 실패를 삼킴 → maintenance latch가 잔류해 `society.open`이 계속 거부됨(현재 호출처 없는 staged 코드) |
+| NB-28 | 저 | src/cli/exit.ts:29, diagnostics/files.ts:112-114, entry/oma-mac.ts:140 vs 143, commands/send.ts, commands/agent.ts:14 | 소소한 항목 묶음: receipt error 누락 시 `Failed:?` 폴백, header-budget 구간 unknown 오분류, `oma status`가 stderr로 출력(`oma list`는 stdout), `--file`/`--reply`가 replay 비교 projection에 미포함, 서브커맨드 위치 고정 silent-gotcha |
+| NB-29 | 중상 | src/platform/host/vz-driver.ts:112-122, lifecycle.ts:249-285,300, service.ts:288-293 | `VzDriver.ask`에 deadline이 없음 — wedged한 `oma-vmhelper`가 reply 없이 살아있으면 force-stop·shutdown·engine recovery가 영구 정지. `driver.close()`(유일한 SIGTERM 탈출)가 shutdown() 해소 뒤에 있어 자기봉인 deadlock. keychain 요청도 같은 채널에서 누적 |
+| NB-30 | 중 | src/platform/host/keychain-client.ts:94-98,109-113 | `KeychainClient.ask`/`close()`도 deadline 없음 — wedged writer child가 credential op과 `withWriter` cleanup을 영구 정지(F1과 동일 결함 클래스: helper 채널의 deadline 없는 pending map) |
+
+**확정 부재**: B3(수치·경계값 전수 스위프)와 B7(mail/git/review 도메인 로직 심층)은 확정 결함 0. B4(동시성/async)는 NB-29/30과 미확정 7건(api.close half-open socket 대기, setWindowSize 동기 throw, pi-interactive-host 외부 API hang, tui/session.ts unhandled rejection 경로, half-open listenerCloses 누적, drain post-stop force 미기록 — 대부분 도달성 낮음)를 보고.
+B7 잔여 hardening 노트(결함 아님): `canonicalMergeDiff` argv에 `gitOidArgument` 미적용(도달 불가),
+succeeded 제출물의 absent ref가 `REF_STATE_UNKNOWN`(보수적이지만 review wedge), `workerStatus` kind 캐스트가
+선언 union보다 좁음, `batchMaxMessages=1`에서 양 클래스 pending 시 `UNSUPPORTED_PROFILE` config 위험,
+`describeEntry`가 challenge.open 항목을 빈 텍스트로 표기.
+
+NB-23/NB-29가 이번 pass 최고 심각도다 — 정상 VM 정지 경로에서도 손상된 host-record.json 하나로 데몬 죽음 +
+orphan VM이 재현된다. 전부 정적 확정이며 macOS lane은 `NOT_RUN`.

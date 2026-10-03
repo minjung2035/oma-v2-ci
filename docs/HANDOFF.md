@@ -16,7 +16,7 @@
 
 현재 고정 범위는 production manifest의 356개와 추가 source 74개, 총 430개다. 추가 범위는 manifest 밖 계약 모듈, native VM helper/bridge, guest 배포 파일, build/verification scripts와 toolchain 설정이다. 의존성, 생성된 `dist`, 과거 evidence, 기존 모든 시험 본문을 전체 파일 정적 검토 대상으로 포함한 것은 아니다. 관련 시험은 경계별로 따로 선택한다.
 
-인계 상태는 **판정 저장 완료 392개(생산 319 + 추가 73), 위임 보고에서 whole-read가 확인되지 않아 남긴 PENDING 38개**다. 읽은 것만으로 완료 상태를 주지 않았고, 위임 보고에서 whole-read가 확인되지 않은 파일은 판정 없이 남겼다. 앞선 선택 경계 감사와 전수 pass, 이번 위임 pass도 구분한다.
+인계 상태는 **판정 저장 전수 완료 430개(생산 356 + 추가 74)**다. 첫 위임 pass에서 whole-read 미확정으로 남긴 38개는 두 번째 위임 pass(비P0 일반버그 렌즈, B1~B7)에서 B2가 비TUI 9개·B1이 TUI 28개를 whole-read로 닫았다. 읽은 것만으로 완료 상태를 주지 않았으며, B-pass도 같은 whole-read 근거로만 기록했다. 앞선 선택 경계 감사·전수 pass·첫 위임 pass와 구분해 NB(비P0 일반 버그) 시리즈로 별도 번호를 둔다.
 
 2026-10-03 위임 pass: 사용자 승인 아래 7개 백그라운드 에이전트가 부분 중복 분업으로 파일별 전체 읽기를 수행했다. 부모 에이전트가 모든 발견을 교차 확인하고 상위 세 건을 required-behavior oracle로 재현했다. 에이전트는 원장·oracle·생산 코드를 쓰지 않았고 취합·판정 기록은 부모가 했다.
 
@@ -24,7 +24,7 @@
 
 - **전수 pass 직접 판정 50개**: `implementation/contracts.ts`, schema v1/v2/v3 + migration 2개, `implementation/contracts/` 11개, `src/{store,durable,validate}.ts`, `src/storage/` 27개, `src/domain/context-policy.ts`, `src/process/cleanup.ts`, `src/reconcile/preaccept.ts`.
 - **위임 pass 판정 342개**: RPJ 38개(domain 나머지, ids/hash/authority/leaf/module-ports/review/ports/storage-paths/socket-name/response-codec) + entry 17 + runtime 38 + broker 12 + mail 12 + git 11(4개 제외) + lifecycle 9 + process 6 + units 4 + sandbox/runner/reconcile/request-cache + platform 46 + units·extension 15 + protocol 21(3개 제외) + cli 전체 + config 7 + views/diagnostics + tui 4 + systemd 7 + scripts 47 + native 5 + package/tsconfig 3.
-- **미판정 PENDING 38개**(커버 미확정): `src/attestation.ts`, `src/git/{integration-policy,integration-publication,quarantine,submit}.ts`, `src/protocol/{log-response,principal-credential,status-view}.ts`, `src/tui/` 29개(4개만 기록), `platform/guest/environment.d/60-oma-egress.conf`.
+- **PENDING 0개** — 전수 판정 완료. 신규 발견: P0 계열은 quarantine NB-01/02만 추가(저~중), 나머지는 일반 버그 NB-01~NB-28(최고 심각도 NB-23: `record()` throw가 timer/socket 콜백에서 탈출 → omahostd 죽음 또는 orphan VM). NB 시리즈 상세는 `docs/priority-0-audit.md`의 '일반 버그 pass' 표.
 
 이 판정은 해당 파일의 전체 정적 검토 기록이다. 연결된 모든 실행 경로·native 환경·powercut 검증의 완료나 결함 부재를 뜻하지 않는다. 파일별 한계와 기존 AV 연결은 원장 행을 따른다. 위임 보고의 세부 파일별 메모 일부는 대화 요약에서 절단되어, 그룹 단위 합의와 부모의 헤더/호출자 재검증으로 기록했다.
 
@@ -61,9 +61,9 @@
 ## 재개 순서와 도구
 
 1. [PRIORITY-0](PRIORITY-0.md), [문서 지도](README.md), 최신 validation과 전수 원장을 확인한다. P0는 영속적 사실의 의미 보존이며, 현재 권한과 과거 사실 분리·해석 owner 단일화·설정 generation·자원 반환·unknown 보존·모델 재검토·kill/retry/restart의 7개 규칙을 따른다.
-2. HEAD/source SHA를 원장과 대조한다. 완료 392개를 처음부터 다시 읽거나 위임 보고의 그룹 판정을 그대로 신뢰하지 않는다 — 필요한 파일은 재검증한다.
+2. HEAD/source SHA를 원장과 대조한다. 완료 430개를 처음부터 다시 읽거나 위임 보고의 그룹 판정을 그대로 신뢰하지 않는다 — 필요한 파일은 재검증한다.
 3. 새 결함은 `-full.mjs`에 독립 required-behavior oracle로 추가하고, 실패 이유·fixture cleanup·한계를 감사 기록에 남긴다. AV-32 이후 번호는 아직 사용하지 않았다.
-4. 남은 `PENDING` 38개(attestation, git 4개, protocol 3개, tui 29개, environment.d 1개)를 파일별 전체 읽기→fact/owner→P0-1~7 근거→필요한 선택 시험 순서로 닫는다. 생산 source를 수정하지 않는 감사 작업을 이어간다. 전체 정적 완료 뒤에도 실제 환경의 NOT_RUN을 보존한다.
+4. 전수 판정은 완료됐다. 남은 것은: source/oracle/compiled fixture/log/review hashes 결박의 full evidence 마감, 확정 defect의 수정 여부 결정(별도 승인 필요 — 현재는 감사만), B4 동시성 스위프의 잔여 보고 반영. 생산 source를 수정하지 않는 감사 작업을 이어가고 실제 환경의 NOT_RUN을 보존한다.
 5. source/oracle/compiled fixture/log/review hashes를 결박할 full evidence 마감이 남아 있다. `/tmp/oma-full-record.mjs`는 수동 판정을 원장에 저장하는 임시 helper이며 committed/repository tool이 아니다. 다음 환경에 없으면 원장 schema를 따라 다시 만들면 된다. evidence 없이 파일 열람만으로 `REVIEWED_STATIC`을 자동 생성하지 않는다.
 
 로컬 Node는 기본 PATH에 없다. 아래 환경을 사용한다.

@@ -4,7 +4,7 @@
  "scope": "Every file in the current production manifest: whole-file static P0 review and selected independent runtime checks. Full static review is distinct from release qualification.",
  "status": "IN_PROGRESS",
  "total": 356,
- "reviewed": 319,
+ "reviewed": 356,
  "sourceDigest": "a8cb94866fe228e7d32ca48383e5d1a3f8c11aa86921dbb7f53804d58bdd89cf",
  "files": [
   {
@@ -323,13 +323,25 @@
    "path": "src/attestation.ts",
    "sha256": "cd84b43281c0f5dd82bafc8b5d0afafb2fbb2cc5d23cc54e0fec6e4aa5d96e86",
    "lines": 73,
-   "status": "PENDING",
-   "fact": null,
-   "owner": null,
-   "rules": null,
-   "evidence": [],
+   "status": "REVIEWED_STATIC",
+   "fact": "attest.record operation rows (legacy fact kinds); interprets attest/git.integrate rows as relation targets",
+   "owner": "module routing kind to legacy grammar or mail-v1 ReviewRoute; MailModule.sendOwned owns acceptance",
+   "rules": {
+    "P0-1": "Static: kind routing incl. refresh->review refusal verified end-to-end.",
+    "P0-2": "Static: single acceptance owner (sendOwned); requestHash parity verified both sides.",
+    "P0-3": "Static: mode gate ordering + observeAuthority pre-freeze/pre-tx sequencing verified.",
+    "P0-4": "Static: accept() pre-tx and in-tx sequencing verified; no orphan artifact path.",
+    "P0-5": "Static: relation targets interpreted only through validated grammar.",
+    "P0-6": "Static: bounded variants; no unbounded accumulation.",
+    "P0-7": "NA: codec/contract tests owned elsewhere."
+   },
+   "evidence": [
+    "src/attestation.ts:73 whole-file static read via adversarial audit agents B1/B2 (2026-10-03)"
+   ],
    "findings": [],
-   "limitations": []
+   "limitations": [
+    "Static review does not establish absence of defects or release qualification."
+   ]
   },
   {
    "path": "src/authority.ts",
@@ -594,7 +606,8 @@
     "src/broker/public-dispatcher.ts: whole-file static read (delegated audit pass, 7-agent wave); judgments recorded by consolidating parent"
    ],
    "findings": [
-    "AV-20261003-24"
+    "AV-20261003-24",
+    "NB-20"
    ],
    "limitations": [
     "Static review does not establish absence of defects or release qualification."
@@ -739,7 +752,9 @@
    "evidence": [
     "src/cli/commands/agent.ts: whole-file static read (delegated audit pass, 7-agent wave); judgments recorded by consolidating parent"
    ],
-   "findings": [],
+   "findings": [
+    "NB-28"
+   ],
    "limitations": [
     "Static review does not establish absence of defects or release qualification."
    ]
@@ -763,7 +778,9 @@
    "evidence": [
     "src/cli/commands/context.ts: whole-file static read (delegated audit pass, 7-agent wave); judgments recorded by consolidating parent"
    ],
-   "findings": [],
+   "findings": [
+    "NB-16"
+   ],
    "limitations": [
     "Static review does not establish absence of defects or release qualification."
    ]
@@ -787,7 +804,9 @@
    "evidence": [
     "src/cli/commands/logs.ts: whole-file static read (delegated audit pass, 7-agent wave); judgments recorded by consolidating parent"
    ],
-   "findings": [],
+   "findings": [
+    "NB-21"
+   ],
    "limitations": [
     "Static review does not establish absence of defects or release qualification."
    ]
@@ -812,7 +831,9 @@
     "src/cli/commands/merge.ts: whole-file static read (delegated audit pass, 7-agent wave); judgments recorded by consolidating parent"
    ],
    "findings": [
-    "AV-20261003-24"
+    "AV-20261003-24",
+    "NB-17",
+    "NB-28"
    ],
    "limitations": [
     "Static review does not establish absence of defects or release qualification."
@@ -861,7 +882,10 @@
    "evidence": [
     "src/cli/commands/send.ts: whole-file static read (delegated audit pass, 7-agent wave); judgments recorded by consolidating parent"
    ],
-   "findings": [],
+   "findings": [
+    "NB-19",
+    "NB-28"
+   ],
    "limitations": [
     "Static review does not establish absence of defects or release qualification."
    ]
@@ -957,7 +981,9 @@
    "evidence": [
     "src/cli/effects.ts: whole-file static read (delegated audit pass, 7-agent wave); judgments recorded by consolidating parent"
    ],
-   "findings": [],
+   "findings": [
+    "NB-18"
+   ],
    "limitations": [
     "Static review does not establish absence of defects or release qualification."
    ]
@@ -1029,7 +1055,9 @@
    "evidence": [
     "src/cli/effects/goal.ts: whole-file static read (delegated audit pass, 7-agent wave); judgments recorded by consolidating parent"
    ],
-   "findings": [],
+   "findings": [
+    "NB-16"
+   ],
    "limitations": [
     "Static review does not establish absence of defects or release qualification."
    ]
@@ -1077,7 +1105,9 @@
    "evidence": [
     "src/cli/effects/submit.ts: whole-file static read (delegated audit pass, 7-agent wave); judgments recorded by consolidating parent"
    ],
-   "findings": [],
+   "findings": [
+    "NB-16"
+   ],
    "limitations": [
     "Static review does not establish absence of defects or release qualification."
    ]
@@ -1101,7 +1131,9 @@
    "evidence": [
     "src/cli/exit.ts: whole-file static read (delegated audit pass, 7-agent wave); judgments recorded by consolidating parent"
    ],
-   "findings": [],
+   "findings": [
+    "NB-28"
+   ],
    "limitations": [
     "Static review does not establish absence of defects or release qualification."
    ]
@@ -1341,7 +1373,9 @@
    "evidence": [
     "src/diagnostics/files.ts: whole-file static read (delegated audit pass, 7-agent wave); judgments recorded by consolidating parent"
    ],
-   "findings": [],
+   "findings": [
+    "NB-28"
+   ],
    "limitations": [
     "Static review does not establish absence of defects or release qualification."
    ]
@@ -2338,7 +2372,10 @@
    "evidence": [
     "src/entry/oma-mac.ts: whole-file static read (delegated audit pass, 7-agent wave); judgments recorded by consolidating parent"
    ],
-   "findings": [],
+   "findings": [
+    "NB-25",
+    "NB-28"
+   ],
    "limitations": [
     "macOS/native VM path NOT_RUN in this environment; static-only judgment."
    ]
@@ -3099,25 +3136,49 @@
    "path": "src/git/integration-policy.ts",
    "sha256": "73cc379668880d1fb521510e2e6c7300549f3020839e228611dc2972bde82f74",
    "lines": 125,
-   "status": "PENDING",
-   "fact": null,
-   "owner": null,
-   "rules": null,
-   "evidence": [],
+   "status": "REVIEWED_STATIC",
+   "fact": "IntegrationSnapshot - checkProfileDigest, policyIdentity, frozen checks/tiered in tiered plans",
+   "owner": "pure policy-fact owner; execution refusal deferred to assertSupportedIntegration/assertCheckResources",
+   "rules": {
+    "P0-1": "Static: digest recipes and freeze semantics verified; revision excluded per DR8.",
+    "P0-2": "Static: designated interpreter of policy facts; no competing decode.",
+    "P0-3": "Static: historical snapshots preserved verbatim; live-only highPeerFloor<2 gate kept out of decode.",
+    "P0-4": "NA: no acquired live resource.",
+    "P0-5": "Static: resource-consistency cross-checks verified; unknown not collapsed to absent.",
+    "P0-6": "Static: deterministic tier max; deadline bound checked (timeoutSeconds*1000+60_000 <= int32).",
+    "P0-7": "NA: grammar/policy tests owned elsewhere."
+   },
+   "evidence": [
+    "src/git/integration-policy.ts:125 whole-file static read via adversarial audit agents B1/B2 (2026-10-03)"
+   ],
    "findings": [],
-   "limitations": []
+   "limitations": [
+    "Static review does not establish absence of defects or release qualification."
+   ]
   },
   {
    "path": "src/git/integration-publication.ts",
    "sha256": "0456acd8ff622ecb13b3d95319f02c334ce0ebfccb5f7489ee058f872463f735",
    "lines": 41,
-   "status": "PENDING",
-   "fact": null,
-   "owner": null,
-   "rules": null,
-   "evidence": [],
+   "status": "REVIEWED_STATIC",
+   "fact": "in-memory single-use publication capability bound to {id, actor, planJson}",
+   "owner": "issues proof only on observed canonical effect (main or noop witness ref)",
+   "rules": {
+    "P0-1": "Static: noopRef===null only when base!==candidate enforced at both production and durable decode; undefined-witness branch unreachable.",
+    "P0-2": "Static: single proof issuer; WeakMap single-use consume verified.",
+    "P0-3": "Static: state/kind gates verified; no reissue path.",
+    "P0-4": "Static: capability is in-memory; no durable artifact to orphan.",
+    "P0-5": "Static: proof issued only on observed effect; never on assumed success.",
+    "P0-6": "Static: bounded state machine.",
+    "P0-7": "NA: no verification-artifact role."
+   },
+   "evidence": [
+    "src/git/integration-publication.ts:41 whole-file static read via adversarial audit agents B1/B2 (2026-10-03)"
+   ],
    "findings": [],
-   "limitations": []
+   "limitations": [
+    "Static review does not establish absence of defects or release qualification."
+   ]
   },
   {
    "path": "src/git/integration.ts",
@@ -3247,25 +3308,52 @@
    "path": "src/git/quarantine.ts",
    "sha256": "36aed476b326a6db94eda7406875fe72897a3249d7dd2faacb36198a5bdbee0e",
    "lines": 134,
-   "status": "PENDING",
-   "fact": null,
-   "owner": null,
-   "rules": null,
-   "evidence": [],
-   "findings": [],
-   "limitations": []
+   "status": "REVIEWED_STATIC",
+   "fact": "import of bundle objects into the canonical project object store (no ref writes)",
+   "owner": "owns the disposable-namespace import recipe and its resource profile",
+   "rules": {
+    "P0-1": "Static: fd-3 bundle handoff, single-head list-heads equality vs exportRef, refs/oma/input identity check verified.",
+    "P0-2": "Static: import is the sole writer to the quarantine namespace; --refmap= object-only import verified.",
+    "P0-3": "Static: fsck+prereq gates verified before canonical import.",
+    "P0-4": "FINDING NB-01: quarantine tmpfs sized = bundleBytes but must hold input.bundle + index-packed repo (~2x); valid ~bundleBytes/2+ bundles die mid-pipeline as BUNDLE_INVALID/UNSUPPORTED_PROFILE. NB-02: fsck --strict traverses alternates so canonical-side corruption mislabels as BUNDLE_INVALID.",
+    "P0-5": "Static: refuse directions are safe (no escape from tmpfs); failures are availability/error-code defects, not containment defects.",
+    "P0-6": "Static: bounded scratch inside tmpfs.",
+    "P0-7": "NA: shell recipe; verification coverage in host-integration lane (NOT_RUN)."
+   },
+   "evidence": [
+    "src/git/quarantine.ts:134 whole-file static read via adversarial audit agents B1/B2 (2026-10-03)"
+   ],
+   "findings": [
+    "NB-01",
+    "NB-02"
+   ],
+   "limitations": [
+    "Static review does not establish absence of defects or release qualification."
+   ]
   },
   {
    "path": "src/git/submit.ts",
    "sha256": "781ca168fe45a9c507c2a8b32ef19c89ffa73b5ac8e58b4ff0b6ec7b0f0785aa",
    "lines": 180,
-   "status": "PENDING",
-   "fact": null,
-   "owner": null,
-   "rules": null,
-   "evidence": [],
+   "status": "REVIEWED_STATIC",
+   "fact": "git.submit accepted row + owned bundle/mail artifacts; publishedRef CAS; gated result mail",
+   "owner": "submit acceptance/publication coordinator; reconcileAccepted owns settlement without live lease",
+   "rules": {
+    "P0-1": "Static: key claim double-check (pre-tx + in-tx) verified.",
+    "P0-2": "Static: PreacceptScope dispositions (retry -> unaccepted cleanup) verified.",
+    "P0-3": "Static: exclusive per-op dedupe verified.",
+    "P0-4": "Static: knowledge progression none->possible->applied verified; no success guessed.",
+    "P0-5": "Static: published-ref conflict vs unknown split in reconcile verified.",
+    "P0-6": "Static: acceptedFailurePolicy mapping verified against errors.ts.",
+    "P0-7": "NA: settlement proofs owned by publication.ts."
+   },
+   "evidence": [
+    "src/git/submit.ts:180 whole-file static read via adversarial audit agents B1/B2 (2026-10-03)"
+   ],
    "findings": [],
-   "limitations": []
+   "limitations": [
+    "Static review does not establish absence of defects or release qualification."
+   ]
   },
   {
    "path": "src/git/tiered-authority.ts",
@@ -3938,7 +4026,9 @@
    "evidence": [
     "src/platform/guest/control.ts: whole-file static read (delegated audit pass, 7-agent wave); judgments recorded by consolidating parent"
    ],
-   "findings": [],
+   "findings": [
+    "NB-24"
+   ],
    "limitations": [
     "macOS/native VM path NOT_RUN in this environment; static-only judgment."
    ]
@@ -4587,6 +4677,7 @@
     "src/platform/host/keychain-client.ts: whole-file static read (delegated audit pass, 7-agent wave); judgments recorded by consolidating parent"
    ],
    "findings": [
+    "NB-30",
     "macOS/native VM path NOT_RUN in this environment; static-only judgment."
    ],
    "limitations": [
@@ -4639,6 +4730,8 @@
     "src/platform/host/lifecycle.ts: whole-file static read (delegated audit pass, 7-agent wave); judgments recorded by consolidating parent"
    ],
    "findings": [
+    "NB-23",
+    "NB-29",
     "macOS/native VM path NOT_RUN in this environment; static-only judgment."
    ],
    "limitations": [
@@ -4818,7 +4911,10 @@
    ],
    "findings": [
     "AV-20261003-21",
-    "AV-20261003-22"
+    "AV-20261003-22",
+    "NB-22",
+    "NB-23",
+    "NB-26"
    ],
    "limitations": [
     "macOS/native VM path NOT_RUN in this environment; static-only judgment."
@@ -4844,6 +4940,7 @@
     "src/platform/host/snapshot.ts: whole-file static read (delegated audit pass, 7-agent wave); judgments recorded by consolidating parent"
    ],
    "findings": [
+    "NB-27",
     "macOS/native VM path NOT_RUN in this environment; static-only judgment."
    ],
    "limitations": [
@@ -4870,7 +4967,8 @@
     "src/platform/host/vz-driver.ts: whole-file static read (delegated audit pass, 7-agent wave); judgments recorded by consolidating parent"
    ],
    "findings": [
-    "AV-20261003-21"
+    "AV-20261003-21",
+    "NB-29"
    ],
    "limitations": [
     "macOS/native VM path NOT_RUN in this environment; static-only judgment."
@@ -5480,13 +5578,27 @@
    "path": "src/protocol/log-response.ts",
    "sha256": "f14253322ddcdbca2475f4932da68c7e820e79ecff04ea0ae0d664518e83ec52",
    "lines": 72,
-   "status": "PENDING",
-   "fact": null,
-   "owner": null,
-   "rules": null,
-   "evidence": [],
-   "findings": [],
-   "limitations": []
+   "status": "REVIEWED_STATIC",
+   "fact": "nothing durable - bounds the live logs.read response frame",
+   "owner": "log-view frame bound owner",
+   "rules": {
+    "P0-1": "NA: no durable fact.",
+    "P0-2": "Static: single codec owner; envelope shape matches okAnswer.",
+    "P0-3": "NA: no historical state.",
+    "P0-4": "NA: no acquired resource.",
+    "P0-5": "Static: MIN_LOG_FRAME_BYTES reserve, surrogate-safe prefix in both probe and final verified. NB-03: binary search can emit complete text flagged truncated:true when envelope exceeds frameBytes by exactly 1 byte - cosmetic conservative-direction bug.",
+    "P0-6": "Static: binary search terminates; frameBytes <= 0xffffffff checked.",
+    "P0-7": "NA: verification owned by frame tests."
+   },
+   "evidence": [
+    "src/protocol/log-response.ts:72 whole-file static read via adversarial audit agents B1/B2 (2026-10-03)"
+   ],
+   "findings": [
+    "NB-03"
+   ],
+   "limitations": [
+    "Static review does not establish absence of defects or release qualification."
+   ]
   },
   {
    "path": "src/protocol/methods.ts",
@@ -5540,13 +5652,25 @@
    "path": "src/protocol/principal-credential.ts",
    "sha256": "bc2890b281786611f43b9b5ca5f13bdfaa9ddd2705989cb2424bcd5f7e3c1a6c",
    "lines": 74,
-   "status": "PENDING",
-   "fact": null,
-   "owner": null,
-   "rules": null,
-   "evidence": [],
+   "status": "REVIEWED_STATIC",
+   "fact": "nothing durable - the Principal session credential grammar",
+   "owner": "codec for the in-memory credential",
+   "rules": {
+    "P0-1": "NA: no durable fact.",
+    "P0-2": "Static: constant-time compare over fixed-length hex validated pre-loop.",
+    "P0-3": "Static: early-reject leaks only public grammar (documented).",
+    "P0-4": "NA: no acquired resource.",
+    "P0-5": "Static: malformed inputs rejected, never coerced.",
+    "P0-6": "Static: fixed-length grammar.",
+    "P0-7": "NA: no verification-artifact role."
+   },
+   "evidence": [
+    "src/protocol/principal-credential.ts:74 whole-file static read via adversarial audit agents B1/B2 (2026-10-03)"
+   ],
    "findings": [],
-   "limitations": []
+   "limitations": [
+    "Static review does not establish absence of defects or release qualification."
+   ]
   },
   {
    "path": "src/protocol/receipt-chunks.ts",
@@ -5720,13 +5844,25 @@
    "path": "src/protocol/status-view.ts",
    "sha256": "959fa5cec8dfbd85837e539c707cbbf00ddb9b851c2e5ac48966a4ea72685758",
    "lines": 77,
-   "status": "PENDING",
-   "fact": null,
-   "owner": null,
-   "rules": null,
-   "evidence": [],
+   "status": "REVIEWED_STATIC",
+   "fact": "status.json - the broker-written dashboard view the terminal decodes",
+   "owner": "codec owner for both writer and reader",
+   "rules": {
+    "P0-1": "Static: decode contract-faithful (AgentStatus fields/nullability, desired enum, non-negative counts, positive observedAtMs, schema/society gates).",
+    "P0-2": "Static: single codec owner both sides; extra-field tolerance is forward-compatible.",
+    "P0-3": "NA: view file, not historical fact.",
+    "P0-4": "NA: no acquired resource.",
+    "P0-5": "Static: malformed fields rejected, never defaulted.",
+    "P0-6": "Static: bounded grammar.",
+    "P0-7": "NA: no verification-artifact role."
+   },
+   "evidence": [
+    "src/protocol/status-view.ts:77 whole-file static read via adversarial audit agents B1/B2 (2026-10-03)"
+   ],
    "findings": [],
-   "limitations": []
+   "limitations": [
+    "Static review does not establish absence of defects or release qualification."
+   ]
   },
   {
    "path": "src/reconcile.ts",
@@ -7580,121 +7716,258 @@
    "path": "src/tui/app.ts",
    "sha256": "d4f6c6d89205496f49eb4500d91ddd749657aca9ece70e5926b1e87a3d7d5e1d",
    "lines": 282,
-   "status": "PENDING",
-   "fact": null,
-   "owner": null,
-   "rules": null,
-   "evidence": [],
-   "findings": [],
-   "limitations": []
+   "status": "REVIEWED_STATIC",
+   "fact": "TUI orchestrator: decoder timer lifecycle, draw scheduling, mail-detail open",
+   "owner": "app composition root for interactive society",
+   "rules": {
+    "P0-1": "NA: presentation layer; interprets broker-owned status views, creates no durable fact.",
+    "P0-2": "Static: renders/decodes broker-owned views; does not reinterpret durable semantics.",
+    "P0-3": "Static: derives screen state from observed views only; no historical rewrite or config coupling.",
+    "P0-4": "NA: holds no durable artifact; live resources limited to terminal/decoder state verified against owner paths.",
+    "P0-5": "Static: renders observed/unknown states as provided; findings noted separately are display-level, not state falsification.",
+    "P0-6": "Static: bounded buffers/loops verified. NB-04: mail body re-read on every draw (un-cached sync I/O). NB-15: output.write in draw() can throw synchronously from a data listener.",
+    "P0-7": "NA: verification artifact rules not owned by this file."
+   },
+   "evidence": [
+    "src/tui/app.ts:282 whole-file static read via adversarial audit agents B1/B2 (2026-10-03)"
+   ],
+   "findings": [
+    "NB-04",
+    "NB-15"
+   ],
+   "limitations": [
+    "Static review does not establish absence of defects or release qualification."
+   ]
   },
   {
    "path": "src/tui/cells.ts",
    "sha256": "83bf88b5f22563ee7ec3f16595273d6504b17f718eac45c3c44573a6b82da36c",
    "lines": 11,
-   "status": "PENDING",
-   "fact": null,
-   "owner": null,
-   "rules": null,
-   "evidence": [],
+   "status": "REVIEWED_STATIC",
+   "fact": "re-export of visibleWidth",
+   "owner": "cells facade",
+   "rules": {
+    "P0-1": "NA: presentation layer; interprets broker-owned status views, creates no durable fact.",
+    "P0-2": "Static: renders/decodes broker-owned views; does not reinterpret durable semantics.",
+    "P0-3": "Static: derives screen state from observed views only; no historical rewrite or config coupling.",
+    "P0-4": "NA: holds no durable artifact; live resources limited to terminal/decoder state verified against owner paths.",
+    "P0-5": "Static: renders observed/unknown states as provided; findings noted separately are display-level, not state falsification.",
+    "P0-6": "Static: bounded buffers/loops verified.",
+    "P0-7": "NA: verification artifact rules not owned by this file."
+   },
+   "evidence": [
+    "src/tui/cells.ts:11 whole-file static read via adversarial audit agents B1/B2 (2026-10-03)"
+   ],
    "findings": [],
-   "limitations": []
+   "limitations": [
+    "Static review does not establish absence of defects or release qualification."
+   ]
   },
   {
    "path": "src/tui/dashboard.ts",
    "sha256": "3c561b026bbe4a05433ee83a7a4ccb707046d26a69764b75db5f3a91e3d0e57f",
    "lines": 61,
-   "status": "PENDING",
-   "fact": null,
-   "owner": null,
-   "rules": null,
-   "evidence": [],
-   "findings": [],
-   "limitations": []
+   "status": "REVIEWED_STATIC",
+   "fact": "dashboard aggregation from statuses",
+   "owner": "dashboard rows",
+   "rules": {
+    "P0-1": "NA: presentation layer; interprets broker-owned status views, creates no durable fact.",
+    "P0-2": "Static: renders/decodes broker-owned views; does not reinterpret durable semantics.",
+    "P0-3": "Static: derives screen state from observed views only; no historical rewrite or config coupling.",
+    "P0-4": "NA: holds no durable artifact; live resources limited to terminal/decoder state verified against owner paths.",
+    "P0-5": "Static: renders observed/unknown states as provided; findings noted separately are display-level, not state falsification.",
+    "P0-6": "Static: bounded buffers/loops verified. NB-05: pending sums include principal while created/active exclude it - inconsistent row semantics.",
+    "P0-7": "NA: verification artifact rules not owned by this file."
+   },
+   "evidence": [
+    "src/tui/dashboard.ts:61 whole-file static read via adversarial audit agents B1/B2 (2026-10-03)"
+   ],
+   "findings": [
+    "NB-05"
+   ],
+   "limitations": [
+    "Static review does not establish absence of defects or release qualification."
+   ]
   },
   {
    "path": "src/tui/exit.ts",
    "sha256": "1ecb1a0c9628c2d025779eb449fd27955441b55c618fb906f87067011071839c",
    "lines": 22,
-   "status": "PENDING",
-   "fact": null,
-   "owner": null,
-   "rules": null,
-   "evidence": [],
-   "findings": [],
-   "limitations": []
+   "status": "REVIEWED_STATIC",
+   "fact": "human-facing exit writer",
+   "owner": "exit reporting",
+   "rules": {
+    "P0-1": "NA: presentation layer; interprets broker-owned status views, creates no durable fact.",
+    "P0-2": "Static: renders/decodes broker-owned views; does not reinterpret durable semantics.",
+    "P0-3": "Static: derives screen state from observed views only; no historical rewrite or config coupling.",
+    "P0-4": "NA: holds no durable artifact; live resources limited to terminal/decoder state verified against owner paths.",
+    "P0-5": "Static: renders observed/unknown states as provided; findings noted separately are display-level, not state falsification.",
+    "P0-6": "Static: bounded buffers/loops verified. NB-06: write then process.exit can drop the failure message when output is piped.",
+    "P0-7": "NA: verification artifact rules not owned by this file."
+   },
+   "evidence": [
+    "src/tui/exit.ts:22 whole-file static read via adversarial audit agents B1/B2 (2026-10-03)"
+   ],
+   "findings": [
+    "NB-06"
+   ],
+   "limitations": [
+    "Static review does not establish absence of defects or release qualification."
+   ]
   },
   {
    "path": "src/tui/interactive-editor.ts",
    "sha256": "8d19f0fb3584a820a6b13b9ffacefb692b3dec796034a28423b4a23758a891a5",
    "lines": 108,
-   "status": "PENDING",
-   "fact": null,
-   "owner": null,
-   "rules": null,
-   "evidence": [],
+   "status": "REVIEWED_STATIC",
+   "fact": "interactive prompt editor adapter",
+   "owner": "editor session",
+   "rules": {
+    "P0-1": "NA: presentation layer; interprets broker-owned status views, creates no durable fact.",
+    "P0-2": "Static: renders/decodes broker-owned views; does not reinterpret durable semantics.",
+    "P0-3": "Static: derives screen state from observed views only; no historical rewrite or config coupling.",
+    "P0-4": "NA: holds no durable artifact; live resources limited to terminal/decoder state verified against owner paths.",
+    "P0-5": "Static: renders observed/unknown states as provided; findings noted separately are display-level, not state falsification.",
+    "P0-6": "Static: bounded buffers/loops verified.",
+    "P0-7": "NA: verification artifact rules not owned by this file."
+   },
+   "evidence": [
+    "src/tui/interactive-editor.ts:108 whole-file static read via adversarial audit agents B1/B2 (2026-10-03)"
+   ],
    "findings": [],
-   "limitations": []
+   "limitations": [
+    "Static review does not establish absence of defects or release qualification."
+   ]
   },
   {
    "path": "src/tui/keys.ts",
    "sha256": "5741c7668405fbce18e99b04623142450c042defd78eb4fcea7520c515ee594d",
    "lines": 401,
-   "status": "PENDING",
-   "fact": null,
-   "owner": null,
-   "rules": null,
-   "evidence": [],
-   "findings": [],
-   "limitations": []
+   "status": "REVIEWED_STATIC",
+   "fact": "key decoder: byte stream to key events incl. paste handling",
+   "owner": "input decoder",
+   "rules": {
+    "P0-1": "NA: presentation layer; interprets broker-owned status views, creates no durable fact.",
+    "P0-2": "Static: renders/decodes broker-owned views; does not reinterpret durable semantics.",
+    "P0-3": "Static: derives screen state from observed views only; no historical rewrite or config coupling.",
+    "P0-4": "NA: holds no durable artifact; live resources limited to terminal/decoder state verified against owner paths.",
+    "P0-5": "Static: renders observed/unknown states as provided; findings noted separately are display-level, not state falsification.",
+    "P0-6": "Static: bounded buffers/loops verified. NB-07: typed C1/Cf bytes bypass P0V-108 sanitization pastes get - invisible chars enter draft and are sent. NB-08: ESC [[ X (Linux console F1-F5) leaks a typed letter.",
+    "P0-7": "NA: verification artifact rules not owned by this file."
+   },
+   "evidence": [
+    "src/tui/keys.ts:401 whole-file static read via adversarial audit agents B1/B2 (2026-10-03)"
+   ],
+   "findings": [
+    "NB-07",
+    "NB-08"
+   ],
+   "limitations": [
+    "Static review does not establish absence of defects or release qualification."
+   ]
   },
   {
    "path": "src/tui/limits.ts",
    "sha256": "80d5f15f1b2c91db96c51749b6a9c52f27eeb1787aeff00d74a86d3785b6fc9a",
    "lines": 126,
-   "status": "PENDING",
-   "fact": null,
-   "owner": null,
-   "rules": null,
-   "evidence": [],
+   "status": "REVIEWED_STATIC",
+   "fact": "worst-case frame arithmetic constants",
+   "owner": "prompt bound derivation",
+   "rules": {
+    "P0-1": "NA: presentation layer; interprets broker-owned status views, creates no durable fact.",
+    "P0-2": "Static: renders/decodes broker-owned views; does not reinterpret durable semantics.",
+    "P0-3": "Static: derives screen state from observed views only; no historical rewrite or config coupling.",
+    "P0-4": "NA: holds no durable artifact; live resources limited to terminal/decoder state verified against owner paths.",
+    "P0-5": "Static: renders observed/unknown states as provided; findings noted separately are display-level, not state falsification.",
+    "P0-6": "Static: bounded buffers/loops verified.",
+    "P0-7": "NA: verification artifact rules not owned by this file."
+   },
+   "evidence": [
+    "src/tui/limits.ts:126 whole-file static read via adversarial audit agents B1/B2 (2026-10-03)"
+   ],
    "findings": [],
-   "limitations": []
+   "limitations": [
+    "Static review does not establish absence of defects or release qualification."
+   ]
   },
   {
    "path": "src/tui/login.ts",
    "sha256": "df65171ec8d70fe01a31775cf6f58260629f327db7f26b55a482e7dce9a8c641",
    "lines": 42,
-   "status": "PENDING",
-   "fact": null,
-   "owner": null,
-   "rules": null,
-   "evidence": [],
-   "findings": [],
-   "limitations": []
+   "status": "REVIEWED_STATIC",
+   "fact": "login/session bootstrap promise",
+   "owner": "login flow",
+   "rules": {
+    "P0-1": "NA: presentation layer; interprets broker-owned status views, creates no durable fact.",
+    "P0-2": "Static: renders/decodes broker-owned views; does not reinterpret durable semantics.",
+    "P0-3": "Static: derives screen state from observed views only; no historical rewrite or config coupling.",
+    "P0-4": "NA: holds no durable artifact; live resources limited to terminal/decoder state verified against owner paths.",
+    "P0-5": "Static: renders observed/unknown states as provided; findings noted separately are display-level, not state falsification.",
+    "P0-6": "Static: bounded buffers/loops verified. NB-09: synchronous throws escape the Promise<number> contract (handled today, misleading signature).",
+    "P0-7": "NA: verification artifact rules not owned by this file."
+   },
+   "evidence": [
+    "src/tui/login.ts:42 whole-file static read via adversarial audit agents B1/B2 (2026-10-03)"
+   ],
+   "findings": [
+    "NB-09"
+   ],
+   "limitations": [
+    "Static review does not establish absence of defects or release qualification."
+   ]
   },
   {
    "path": "src/tui/model.ts",
    "sha256": "b0675f161b1883b75dd10a330200fc072746006078c13bbf0bca2e18e2d4ac8a",
    "lines": 456,
-   "status": "PENDING",
-   "fact": null,
-   "owner": null,
-   "rules": null,
-   "evidence": [],
-   "findings": [],
-   "limitations": []
+   "status": "REVIEWED_STATIC",
+   "fact": "TUI state machine",
+   "owner": "model transitions",
+   "rules": {
+    "P0-1": "NA: presentation layer; interprets broker-owned status views, creates no durable fact.",
+    "P0-2": "Static: renders/decodes broker-owned views; does not reinterpret durable semantics.",
+    "P0-3": "Static: derives screen state from observed views only; no historical rewrite or config coupling.",
+    "P0-4": "NA: holds no durable artifact; live resources limited to terminal/decoder state verified against owner paths.",
+    "P0-5": "Static: renders observed/unknown states as provided; findings noted separately are display-level, not state falsification.",
+    "P0-6": "Static: bounded buffers/loops verified. NB-10: keys silently discarded while control panel open - paste loss without notice.",
+    "P0-7": "NA: verification artifact rules not owned by this file."
+   },
+   "evidence": [
+    "src/tui/model.ts:456 whole-file static read via adversarial audit agents B1/B2 (2026-10-03)"
+   ],
+   "findings": [
+    "NB-10"
+   ],
+   "limitations": [
+    "Static review does not establish absence of defects or release qualification."
+   ]
   },
   {
    "path": "src/tui/open-tui-brand.ts",
    "sha256": "5e6e59b0157f48a402882d8ef4a70464cd3a5d7599632542a9a0b6df7ddb716f",
    "lines": 156,
-   "status": "PENDING",
-   "fact": null,
-   "owner": null,
-   "rules": null,
-   "evidence": [],
-   "findings": [],
-   "limitations": []
+   "status": "REVIEWED_STATIC",
+   "fact": "brand header/footer rendering",
+   "owner": "brand decoration",
+   "rules": {
+    "P0-1": "NA: presentation layer; interprets broker-owned status views, creates no durable fact.",
+    "P0-2": "Static: renders/decodes broker-owned views; does not reinterpret durable semantics.",
+    "P0-3": "Static: derives screen state from observed views only; no historical rewrite or config coupling.",
+    "P0-4": "NA: holds no durable artifact; live resources limited to terminal/decoder state verified against owner paths.",
+    "P0-5": "Static: renders observed/unknown states as provided; findings noted separately are display-level, not state falsification.",
+    "P0-6": "Static: bounded buffers/loops verified. NB-11: swapText truncation slices UTF-16 units - can split surrogate pairs. NB-12: brandFooter considers only the widest gap, misses adequate gap after ~.",
+    "P0-7": "NA: verification artifact rules not owned by this file."
+   },
+   "evidence": [
+    "src/tui/open-tui-brand.ts:156 whole-file static read via adversarial audit agents B1/B2 (2026-10-03)"
+   ],
+   "findings": [
+    "NB-11",
+    "NB-12"
+   ],
+   "limitations": [
+    "Static review does not establish absence of defects or release qualification."
+   ]
   },
   {
    "path": "src/tui/packages-apply.ts",
@@ -7724,85 +7997,171 @@
    "path": "src/tui/panel-style.ts",
    "sha256": "dfea8fa1f74e635d1c5c331ce8d3f819df3b7844a9534fe3d6d47888da80163f",
    "lines": 32,
-   "status": "PENDING",
-   "fact": null,
-   "owner": null,
-   "rules": null,
-   "evidence": [],
+   "status": "REVIEWED_STATIC",
+   "fact": "panel style heuristics",
+   "owner": "panel styling",
+   "rules": {
+    "P0-1": "NA: presentation layer; interprets broker-owned status views, creates no durable fact.",
+    "P0-2": "Static: renders/decodes broker-owned views; does not reinterpret durable semantics.",
+    "P0-3": "Static: derives screen state from observed views only; no historical rewrite or config coupling.",
+    "P0-4": "NA: holds no durable artifact; live resources limited to terminal/decoder state verified against owner paths.",
+    "P0-5": "Static: renders observed/unknown states as provided; findings noted separately are display-level, not state falsification.",
+    "P0-6": "Static: bounded buffers/loops verified.",
+    "P0-7": "NA: verification artifact rules not owned by this file."
+   },
+   "evidence": [
+    "src/tui/panel-style.ts:32 whole-file static read via adversarial audit agents B1/B2 (2026-10-03)"
+   ],
    "findings": [],
-   "limitations": []
+   "limitations": [
+    "Static review does not establish absence of defects or release qualification."
+   ]
   },
   {
    "path": "src/tui/panel-terminal.ts",
    "sha256": "555a455e68ecd1dae7731faf848dad8cec519fe9eb9d978f5a9b846817c1723e",
    "lines": 112,
-   "status": "PENDING",
-   "fact": null,
-   "owner": null,
-   "rules": null,
-   "evidence": [],
+   "status": "REVIEWED_STATIC",
+   "fact": "control panel terminal handoff",
+   "owner": "panel lifecycle",
+   "rules": {
+    "P0-1": "NA: presentation layer; interprets broker-owned status views, creates no durable fact.",
+    "P0-2": "Static: renders/decodes broker-owned views; does not reinterpret durable semantics.",
+    "P0-3": "Static: derives screen state from observed views only; no historical rewrite or config coupling.",
+    "P0-4": "NA: holds no durable artifact; live resources limited to terminal/decoder state verified against owner paths.",
+    "P0-5": "Static: renders observed/unknown states as provided; findings noted separately are display-level, not state falsification.",
+    "P0-6": "Static: bounded buffers/loops verified.",
+    "P0-7": "NA: verification artifact rules not owned by this file."
+   },
+   "evidence": [
+    "src/tui/panel-terminal.ts:112 whole-file static read via adversarial audit agents B1/B2 (2026-10-03)"
+   ],
    "findings": [],
-   "limitations": []
+   "limitations": [
+    "Static review does not establish absence of defects or release qualification."
+   ]
   },
   {
    "path": "src/tui/project-session-directories.ts",
    "sha256": "654a76c07c9380d1e9f81496f3a369875916f181e290a3e7b7c8dc61220c8cec",
    "lines": 70,
-   "status": "PENDING",
-   "fact": null,
-   "owner": null,
-   "rules": null,
-   "evidence": [],
+   "status": "REVIEWED_STATIC",
+   "fact": "per-project session directory settle",
+   "owner": "session directories",
+   "rules": {
+    "P0-1": "NA: presentation layer; interprets broker-owned status views, creates no durable fact.",
+    "P0-2": "Static: renders/decodes broker-owned views; does not reinterpret durable semantics.",
+    "P0-3": "Static: derives screen state from observed views only; no historical rewrite or config coupling.",
+    "P0-4": "NA: holds no durable artifact; live resources limited to terminal/decoder state verified against owner paths.",
+    "P0-5": "Static: renders observed/unknown states as provided; findings noted separately are display-level, not state falsification.",
+    "P0-6": "Static: bounded buffers/loops verified.",
+    "P0-7": "NA: verification artifact rules not owned by this file."
+   },
+   "evidence": [
+    "src/tui/project-session-directories.ts:70 whole-file static read via adversarial audit agents B1/B2 (2026-10-03)"
+   ],
    "findings": [],
-   "limitations": []
+   "limitations": [
+    "Static review does not establish absence of defects or release qualification."
+   ]
   },
   {
    "path": "src/tui/project-settings.ts",
    "sha256": "1153a07d754256154b883408197e888645785682be2ccbef8fac1b65e50c960d",
    "lines": 97,
-   "status": "PENDING",
-   "fact": null,
-   "owner": null,
-   "rules": null,
-   "evidence": [],
+   "status": "REVIEWED_STATIC",
+   "fact": "project settings reconcile",
+   "owner": "project settings",
+   "rules": {
+    "P0-1": "NA: presentation layer; interprets broker-owned status views, creates no durable fact.",
+    "P0-2": "Static: renders/decodes broker-owned views; does not reinterpret durable semantics.",
+    "P0-3": "Static: derives screen state from observed views only; no historical rewrite or config coupling.",
+    "P0-4": "NA: holds no durable artifact; live resources limited to terminal/decoder state verified against owner paths.",
+    "P0-5": "Static: renders observed/unknown states as provided; findings noted separately are display-level, not state falsification.",
+    "P0-6": "Static: bounded buffers/loops verified.",
+    "P0-7": "NA: verification artifact rules not owned by this file."
+   },
+   "evidence": [
+    "src/tui/project-settings.ts:97 whole-file static read via adversarial audit agents B1/B2 (2026-10-03)"
+   ],
    "findings": [],
-   "limitations": []
+   "limitations": [
+    "Static review does not establish absence of defects or release qualification."
+   ]
   },
   {
    "path": "src/tui/prompt.ts",
    "sha256": "8cffd45edd7e4dc219246e70b632bc13d732d6fad256e2d7ab87fbeac42ef04b",
    "lines": 105,
-   "status": "PENDING",
-   "fact": null,
-   "owner": null,
-   "rules": null,
-   "evidence": [],
+   "status": "REVIEWED_STATIC",
+   "fact": "prompt draft editing incl. overflow causes",
+   "owner": "prompt draft",
+   "rules": {
+    "P0-1": "NA: presentation layer; interprets broker-owned status views, creates no durable fact.",
+    "P0-2": "Static: renders/decodes broker-owned views; does not reinterpret durable semantics.",
+    "P0-3": "Static: derives screen state from observed views only; no historical rewrite or config coupling.",
+    "P0-4": "NA: holds no durable artifact; live resources limited to terminal/decoder state verified against owner paths.",
+    "P0-5": "Static: renders observed/unknown states as provided; findings noted separately are display-level, not state falsification.",
+    "P0-6": "Static: bounded buffers/loops verified.",
+    "P0-7": "NA: verification artifact rules not owned by this file."
+   },
+   "evidence": [
+    "src/tui/prompt.ts:105 whole-file static read via adversarial audit agents B1/B2 (2026-10-03)"
+   ],
    "findings": [],
-   "limitations": []
+   "limitations": [
+    "Static review does not establish absence of defects or release qualification."
+   ]
   },
   {
    "path": "src/tui/screen.ts",
    "sha256": "1591326491e36799a7f6441815f06d28d0a8bf326971ec0dfabb96250ac2ead7",
    "lines": 126,
-   "status": "PENDING",
-   "fact": null,
-   "owner": null,
-   "rules": null,
-   "evidence": [],
-   "findings": [],
-   "limitations": []
+   "status": "REVIEWED_STATIC",
+   "fact": "terminal screen: full-frame redraw, alt-screen",
+   "owner": "screen output",
+   "rules": {
+    "P0-1": "NA: presentation layer; interprets broker-owned status views, creates no durable fact.",
+    "P0-2": "Static: renders/decodes broker-owned views; does not reinterpret durable semantics.",
+    "P0-3": "Static: derives screen state from observed views only; no historical rewrite or config coupling.",
+    "P0-4": "NA: holds no durable artifact; live resources limited to terminal/decoder state verified against owner paths.",
+    "P0-5": "Static: renders observed/unknown states as provided; findings noted separately are display-level, not state falsification.",
+    "P0-6": "Static: bounded buffers/loops verified. NB-15: unguarded draw() write can throw from a data listener on destroyed stream.",
+    "P0-7": "NA: verification artifact rules not owned by this file."
+   },
+   "evidence": [
+    "src/tui/screen.ts:126 whole-file static read via adversarial audit agents B1/B2 (2026-10-03)"
+   ],
+   "findings": [
+    "NB-15"
+   ],
+   "limitations": [
+    "Static review does not establish absence of defects or release qualification."
+   ]
   },
   {
    "path": "src/tui/session-mode.ts",
    "sha256": "3377777d138f28096a58f6b78bdbe00436a5d4e3361cd5f61700eff46582f4ac",
    "lines": 91,
-   "status": "PENDING",
-   "fact": null,
-   "owner": null,
-   "rules": null,
-   "evidence": [],
+   "status": "REVIEWED_STATIC",
+   "fact": "session mode chrome/abort/decoder deadline",
+   "owner": "session mode",
+   "rules": {
+    "P0-1": "NA: presentation layer; interprets broker-owned status views, creates no durable fact.",
+    "P0-2": "Static: renders/decodes broker-owned views; does not reinterpret durable semantics.",
+    "P0-3": "Static: derives screen state from observed views only; no historical rewrite or config coupling.",
+    "P0-4": "NA: holds no durable artifact; live resources limited to terminal/decoder state verified against owner paths.",
+    "P0-5": "Static: renders observed/unknown states as provided; findings noted separately are display-level, not state falsification.",
+    "P0-6": "Static: bounded buffers/loops verified.",
+    "P0-7": "NA: verification artifact rules not owned by this file."
+   },
+   "evidence": [
+    "src/tui/session-mode.ts:91 whole-file static read via adversarial audit agents B1/B2 (2026-10-03)"
+   ],
    "findings": [],
-   "limitations": []
+   "limitations": [
+    "Static review does not establish absence of defects or release qualification."
+   ]
   },
   {
    "path": "src/tui/session.ts",
@@ -7856,37 +8215,73 @@
    "path": "src/tui/sources/mail.ts",
    "sha256": "f275e664138b367f11c805c656dcf253da843ca7712598b1f5a567c8cfa232d5",
    "lines": 276,
-   "status": "PENDING",
-   "fact": null,
-   "owner": null,
-   "rules": null,
-   "evidence": [],
+   "status": "REVIEWED_STATIC",
+   "fact": "mail source: bounded fd reads, thread fold, omitted counting",
+   "owner": "mail list source",
+   "rules": {
+    "P0-1": "NA: presentation layer; interprets broker-owned status views, creates no durable fact.",
+    "P0-2": "Static: renders/decodes broker-owned views; does not reinterpret durable semantics.",
+    "P0-3": "Static: derives screen state from observed views only; no historical rewrite or config coupling.",
+    "P0-4": "NA: holds no durable artifact; live resources limited to terminal/decoder state verified against owner paths.",
+    "P0-5": "Static: renders observed/unknown states as provided; findings noted separately are display-level, not state falsification.",
+    "P0-6": "Static: bounded buffers/loops verified.",
+    "P0-7": "NA: verification artifact rules not owned by this file."
+   },
+   "evidence": [
+    "src/tui/sources/mail.ts:276 whole-file static read via adversarial audit agents B1/B2 (2026-10-03)"
+   ],
    "findings": [],
-   "limitations": []
+   "limitations": [
+    "Static review does not establish absence of defects or release qualification."
+   ]
   },
   {
    "path": "src/tui/sources/settings.ts",
    "sha256": "12ab3a401df98718779cf57d6710c8b4bf928a81d6a7efebf7e2009977a75c2b",
    "lines": 537,
-   "status": "PENDING",
-   "fact": null,
-   "owner": null,
-   "rules": null,
-   "evidence": [],
+   "status": "REVIEWED_STATIC",
+   "fact": "settings source: blocked-field recheck, seed growth bound",
+   "owner": "settings source",
+   "rules": {
+    "P0-1": "NA: presentation layer; interprets broker-owned status views, creates no durable fact.",
+    "P0-2": "Static: renders/decodes broker-owned views; does not reinterpret durable semantics.",
+    "P0-3": "Static: derives screen state from observed views only; no historical rewrite or config coupling.",
+    "P0-4": "NA: holds no durable artifact; live resources limited to terminal/decoder state verified against owner paths.",
+    "P0-5": "Static: renders observed/unknown states as provided; findings noted separately are display-level, not state falsification.",
+    "P0-6": "Static: bounded buffers/loops verified.",
+    "P0-7": "NA: verification artifact rules not owned by this file."
+   },
+   "evidence": [
+    "src/tui/sources/settings.ts:537 whole-file static read via adversarial audit agents B1/B2 (2026-10-03)"
+   ],
    "findings": [],
-   "limitations": []
+   "limitations": [
+    "Static review does not establish absence of defects or release qualification."
+   ]
   },
   {
    "path": "src/tui/transcript.ts",
    "sha256": "839cded548b3b8c1017857bc5b38adba716fa4ce070c1a3e08111b897df77397",
    "lines": 94,
-   "status": "PENDING",
-   "fact": null,
-   "owner": null,
-   "rules": null,
-   "evidence": [],
+   "status": "REVIEWED_STATIC",
+   "fact": "transcript bounds: line bytes/count/total with grapheme splitting",
+   "owner": "transcript buffer",
+   "rules": {
+    "P0-1": "NA: presentation layer; interprets broker-owned status views, creates no durable fact.",
+    "P0-2": "Static: renders/decodes broker-owned views; does not reinterpret durable semantics.",
+    "P0-3": "Static: derives screen state from observed views only; no historical rewrite or config coupling.",
+    "P0-4": "NA: holds no durable artifact; live resources limited to terminal/decoder state verified against owner paths.",
+    "P0-5": "Static: renders observed/unknown states as provided; findings noted separately are display-level, not state falsification.",
+    "P0-6": "Static: bounded buffers/loops verified.",
+    "P0-7": "NA: verification artifact rules not owned by this file."
+   },
+   "evidence": [
+    "src/tui/transcript.ts:94 whole-file static read via adversarial audit agents B1/B2 (2026-10-03)"
+   ],
    "findings": [],
-   "limitations": []
+   "limitations": [
+    "Static review does not establish absence of defects or release qualification."
+   ]
   },
   {
    "path": "src/tui/transport.ts",
@@ -7916,109 +8311,221 @@
    "path": "src/tui/view/dashboard.ts",
    "sha256": "1fa546e802ba552c4b2e51d1dd7bafe6744fa694d523bbc34d75e917b60f7d40",
    "lines": 66,
-   "status": "PENDING",
-   "fact": null,
-   "owner": null,
-   "rules": null,
-   "evidence": [],
+   "status": "REVIEWED_STATIC",
+   "fact": "dashboard view rows with explicit unknowns",
+   "owner": "dashboard view",
+   "rules": {
+    "P0-1": "NA: presentation layer; interprets broker-owned status views, creates no durable fact.",
+    "P0-2": "Static: renders/decodes broker-owned views; does not reinterpret durable semantics.",
+    "P0-3": "Static: derives screen state from observed views only; no historical rewrite or config coupling.",
+    "P0-4": "NA: holds no durable artifact; live resources limited to terminal/decoder state verified against owner paths.",
+    "P0-5": "Static: renders observed/unknown states as provided; findings noted separately are display-level, not state falsification.",
+    "P0-6": "Static: bounded buffers/loops verified.",
+    "P0-7": "NA: verification artifact rules not owned by this file."
+   },
+   "evidence": [
+    "src/tui/view/dashboard.ts:66 whole-file static read via adversarial audit agents B1/B2 (2026-10-03)"
+   ],
    "findings": [],
-   "limitations": []
+   "limitations": [
+    "Static review does not establish absence of defects or release qualification."
+   ]
   },
   {
    "path": "src/tui/view/index.ts",
    "sha256": "e51f97c15a7db02cabcd0b4f433092e6aa267333f7e91a70ac8becbb5e661b4e",
    "lines": 5,
-   "status": "PENDING",
-   "fact": null,
-   "owner": null,
-   "rules": null,
-   "evidence": [],
+   "status": "REVIEWED_STATIC",
+   "fact": "view re-export seam",
+   "owner": "view index",
+   "rules": {
+    "P0-1": "NA: presentation layer; interprets broker-owned status views, creates no durable fact.",
+    "P0-2": "Static: renders/decodes broker-owned views; does not reinterpret durable semantics.",
+    "P0-3": "Static: derives screen state from observed views only; no historical rewrite or config coupling.",
+    "P0-4": "NA: holds no durable artifact; live resources limited to terminal/decoder state verified against owner paths.",
+    "P0-5": "Static: renders observed/unknown states as provided; findings noted separately are display-level, not state falsification.",
+    "P0-6": "Static: bounded buffers/loops verified.",
+    "P0-7": "NA: verification artifact rules not owned by this file."
+   },
+   "evidence": [
+    "src/tui/view/index.ts:5 whole-file static read via adversarial audit agents B1/B2 (2026-10-03)"
+   ],
    "findings": [],
-   "limitations": []
+   "limitations": [
+    "Static review does not establish absence of defects or release qualification."
+   ]
   },
   {
    "path": "src/tui/view/labels.ts",
    "sha256": "3bdb3f51b880af5c2f9fbfaeb319391adc6eed17c8f8a5e6648dcb95a61ac7bc",
    "lines": 20,
-   "status": "PENDING",
-   "fact": null,
-   "owner": null,
-   "rules": null,
-   "evidence": [],
+   "status": "REVIEWED_STATIC",
+   "fact": "static labels",
+   "owner": "labels",
+   "rules": {
+    "P0-1": "NA: presentation layer; interprets broker-owned status views, creates no durable fact.",
+    "P0-2": "Static: renders/decodes broker-owned views; does not reinterpret durable semantics.",
+    "P0-3": "Static: derives screen state from observed views only; no historical rewrite or config coupling.",
+    "P0-4": "NA: holds no durable artifact; live resources limited to terminal/decoder state verified against owner paths.",
+    "P0-5": "Static: renders observed/unknown states as provided; findings noted separately are display-level, not state falsification.",
+    "P0-6": "Static: bounded buffers/loops verified.",
+    "P0-7": "NA: verification artifact rules not owned by this file."
+   },
+   "evidence": [
+    "src/tui/view/labels.ts:20 whole-file static read via adversarial audit agents B1/B2 (2026-10-03)"
+   ],
    "findings": [],
-   "limitations": []
+   "limitations": [
+    "Static review does not establish absence of defects or release qualification."
+   ]
   },
   {
    "path": "src/tui/view/layout.ts",
    "sha256": "aaabedf5cfab9189b7ca207752b7cc10c8494591cec658a802b032e81fef470e",
    "lines": 14,
-   "status": "PENDING",
-   "fact": null,
-   "owner": null,
-   "rules": null,
-   "evidence": [],
+   "status": "REVIEWED_STATIC",
+   "fact": "layout constants",
+   "owner": "layout",
+   "rules": {
+    "P0-1": "NA: presentation layer; interprets broker-owned status views, creates no durable fact.",
+    "P0-2": "Static: renders/decodes broker-owned views; does not reinterpret durable semantics.",
+    "P0-3": "Static: derives screen state from observed views only; no historical rewrite or config coupling.",
+    "P0-4": "NA: holds no durable artifact; live resources limited to terminal/decoder state verified against owner paths.",
+    "P0-5": "Static: renders observed/unknown states as provided; findings noted separately are display-level, not state falsification.",
+    "P0-6": "Static: bounded buffers/loops verified.",
+    "P0-7": "NA: verification artifact rules not owned by this file."
+   },
+   "evidence": [
+    "src/tui/view/layout.ts:14 whole-file static read via adversarial audit agents B1/B2 (2026-10-03)"
+   ],
    "findings": [],
-   "limitations": []
+   "limitations": [
+    "Static review does not establish absence of defects or release qualification."
+   ]
   },
   {
    "path": "src/tui/view/notice.ts",
    "sha256": "b896d32ce60bfc40198667e68076998742a0a3a2e02983d73202f99a1f8a8df9",
    "lines": 55,
-   "status": "PENDING",
-   "fact": null,
-   "owner": null,
-   "rules": null,
-   "evidence": [],
+   "status": "REVIEWED_STATIC",
+   "fact": "notice rendering, exhaustive switch",
+   "owner": "notices",
+   "rules": {
+    "P0-1": "NA: presentation layer; interprets broker-owned status views, creates no durable fact.",
+    "P0-2": "Static: renders/decodes broker-owned views; does not reinterpret durable semantics.",
+    "P0-3": "Static: derives screen state from observed views only; no historical rewrite or config coupling.",
+    "P0-4": "NA: holds no durable artifact; live resources limited to terminal/decoder state verified against owner paths.",
+    "P0-5": "Static: renders observed/unknown states as provided; findings noted separately are display-level, not state falsification.",
+    "P0-6": "Static: bounded buffers/loops verified.",
+    "P0-7": "NA: verification artifact rules not owned by this file."
+   },
+   "evidence": [
+    "src/tui/view/notice.ts:55 whole-file static read via adversarial audit agents B1/B2 (2026-10-03)"
+   ],
    "findings": [],
-   "limitations": []
+   "limitations": [
+    "Static review does not establish absence of defects or release qualification."
+   ]
   },
   {
    "path": "src/tui/view/screens.ts",
    "sha256": "48d4e11a06965cf6a82e522618da7140ad09cacec76bfcc33d74ffc81afb74b5",
    "lines": 235,
-   "status": "PENDING",
-   "fact": null,
-   "owner": null,
-   "rules": null,
-   "evidence": [],
-   "findings": [],
-   "limitations": []
+   "status": "REVIEWED_STATIC",
+   "fact": "screen composition incl. fixed rows/window",
+   "owner": "screens",
+   "rules": {
+    "P0-1": "NA: presentation layer; interprets broker-owned status views, creates no durable fact.",
+    "P0-2": "Static: renders/decodes broker-owned views; does not reinterpret durable semantics.",
+    "P0-3": "Static: derives screen state from observed views only; no historical rewrite or config coupling.",
+    "P0-4": "NA: holds no durable artifact; live resources limited to terminal/decoder state verified against owner paths.",
+    "P0-5": "Static: renders observed/unknown states as provided; findings noted separately are display-level, not state falsification.",
+    "P0-6": "Static: bounded buffers/loops verified. NB-13: fixed rows can push footer/notice off-screen at minimum geometry.",
+    "P0-7": "NA: verification artifact rules not owned by this file."
+   },
+   "evidence": [
+    "src/tui/view/screens.ts:235 whole-file static read via adversarial audit agents B1/B2 (2026-10-03)"
+   ],
+   "findings": [
+    "NB-13"
+   ],
+   "limitations": [
+    "Static review does not establish absence of defects or release qualification."
+   ]
   },
   {
    "path": "src/tui/view/session-mode.ts",
    "sha256": "82e8d861cd1e4b766ed9a8c710e5d889f33a9d676591a378e2ed6a321c2b0ff3",
    "lines": 27,
-   "status": "PENDING",
-   "fact": null,
-   "owner": null,
-   "rules": null,
-   "evidence": [],
+   "status": "REVIEWED_STATIC",
+   "fact": "session-mode view scroll window",
+   "owner": "session view",
+   "rules": {
+    "P0-1": "NA: presentation layer; interprets broker-owned status views, creates no durable fact.",
+    "P0-2": "Static: renders/decodes broker-owned views; does not reinterpret durable semantics.",
+    "P0-3": "Static: derives screen state from observed views only; no historical rewrite or config coupling.",
+    "P0-4": "NA: holds no durable artifact; live resources limited to terminal/decoder state verified against owner paths.",
+    "P0-5": "Static: renders observed/unknown states as provided; findings noted separately are display-level, not state falsification.",
+    "P0-6": "Static: bounded buffers/loops verified.",
+    "P0-7": "NA: verification artifact rules not owned by this file."
+   },
+   "evidence": [
+    "src/tui/view/session-mode.ts:27 whole-file static read via adversarial audit agents B1/B2 (2026-10-03)"
+   ],
    "findings": [],
-   "limitations": []
+   "limitations": [
+    "Static review does not establish absence of defects or release qualification."
+   ]
   },
   {
    "path": "src/tui/view/text.ts",
    "sha256": "1203389546140cdda1a3a511b1a22470fedacd7e2a4af408d898454513269c26",
    "lines": 81,
-   "status": "PENDING",
-   "fact": null,
-   "owner": null,
-   "rules": null,
-   "evidence": [],
-   "findings": [],
-   "limitations": []
+   "status": "REVIEWED_STATIC",
+   "fact": "text wrap/cells helpers",
+   "owner": "text layout",
+   "rules": {
+    "P0-1": "NA: presentation layer; interprets broker-owned status views, creates no durable fact.",
+    "P0-2": "Static: renders/decodes broker-owned views; does not reinterpret durable semantics.",
+    "P0-3": "Static: derives screen state from observed views only; no historical rewrite or config coupling.",
+    "P0-4": "NA: holds no durable artifact; live resources limited to terminal/decoder state verified against owner paths.",
+    "P0-5": "Static: renders observed/unknown states as provided; findings noted separately are display-level, not state falsification.",
+    "P0-6": "Static: bounded buffers/loops verified. NB-14: wrap() emits spurious empty line before an oversized grapheme cluster.",
+    "P0-7": "NA: verification artifact rules not owned by this file."
+   },
+   "evidence": [
+    "src/tui/view/text.ts:81 whole-file static read via adversarial audit agents B1/B2 (2026-10-03)"
+   ],
+   "findings": [
+    "NB-14"
+   ],
+   "limitations": [
+    "Static review does not establish absence of defects or release qualification."
+   ]
   },
   {
    "path": "src/tui/words.ts",
    "sha256": "95bb1e06074fb08d88f4327e4d44b3a632800cac3c48c1387fd46c46a1b811e1",
    "lines": 41,
-   "status": "PENDING",
-   "fact": null,
-   "owner": null,
-   "rules": null,
-   "evidence": [],
+   "status": "REVIEWED_STATIC",
+   "fact": "product-text gate, bounded logging",
+   "owner": "word list",
+   "rules": {
+    "P0-1": "NA: presentation layer; interprets broker-owned status views, creates no durable fact.",
+    "P0-2": "Static: renders/decodes broker-owned views; does not reinterpret durable semantics.",
+    "P0-3": "Static: derives screen state from observed views only; no historical rewrite or config coupling.",
+    "P0-4": "NA: holds no durable artifact; live resources limited to terminal/decoder state verified against owner paths.",
+    "P0-5": "Static: renders observed/unknown states as provided; findings noted separately are display-level, not state falsification.",
+    "P0-6": "Static: bounded buffers/loops verified.",
+    "P0-7": "NA: verification artifact rules not owned by this file."
+   },
+   "evidence": [
+    "src/tui/words.ts:41 whole-file static read via adversarial audit agents B1/B2 (2026-10-03)"
+   ],
    "findings": [],
-   "limitations": []
+   "limitations": [
+    "Static review does not establish absence of defects or release qualification."
+   ]
   },
   {
    "path": "src/units.ts",
@@ -8532,13 +9039,25 @@
    "path": "platform/guest/environment.d/60-oma-egress.conf",
    "sha256": "a8b456cbba9a39fd0615b2bcdbbaf6a2b35f86bed627f2b5fc4264f0d8f17bc6",
    "lines": 7,
-   "status": "PENDING",
-   "fact": null,
-   "owner": null,
-   "rules": null,
-   "evidence": [],
+   "status": "REVIEWED_STATIC",
+   "fact": "guest user-manager env naming the egress socket",
+   "owner": "DR18/D-10 deployment marker",
+   "rules": {
+    "P0-1": "NA: config line, no fact semantics.",
+    "P0-2": "Static: single deployment owner; ${XDG_RUNTIME_DIR} expansion supported by environment.d.",
+    "P0-3": "Static: intended deployment is user-manager-only (XDG_RUNTIME_DIR always set).",
+    "P0-4": "NA: no acquired resource.",
+    "P0-5": "Caveat: if ever read by a manager lacking XDG_RUNTIME_DIR, value expands to /oma-egress.sock and presence (not validity) selects the forwarder path - deployment-intent assumption, not a defect in scope.",
+    "P0-6": "NA: constant line.",
+    "P0-7": "NA: verification artifact itself is a config marker."
+   },
+   "evidence": [
+    "platform/guest/environment.d/60-oma-egress.conf:7 whole-file static read via adversarial audit agents B1/B2 (2026-10-03)"
+   ],
    "findings": [],
-   "limitations": []
+   "limitations": [
+    "Static review does not establish absence of defects or release qualification."
+   ]
   },
   {
    "path": "platform/guest/systemd/oma-control.socket",
@@ -10007,7 +10526,7 @@
    ]
   }
  ],
- "supplementalReviewed": 73,
+ "supplementalReviewed": 74,
  "supplementalScope": "Transitive contracts, native helper/bridge, guest deployment, and repository build/verification scripts and toolchain configuration. Dependencies, generated dist, historical evidence and individual existing test bodies are excluded from whole-file product review; relevant tests are separately selected for boundary validation.",
  "readPendingJudgment": 0,
  "handoff": {
