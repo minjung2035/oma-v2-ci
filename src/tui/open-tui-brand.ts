@@ -36,6 +36,9 @@ const SGR = "(?:\\x1b\\[[0-9;]*m)*";
 const plain = (text: string): string => text.replace(/\x1b\[[0-9;]*m/g, "");
 const LEADING_SGR = new RegExp(`^${SGR}`);
 const TRAILING_SGR = new RegExp(`${SGR}$`);
+/** NB-11: truncation is by grapheme cluster, so a cut never leaves half a
+ * surrogate pair or half an emoji sequence on screen. */
+const graphemes = new Intl.Segmenter(undefined, { granularity: "grapheme" });
 
 /** `line` with the text between its first box border and the next rule
  * replaced by `text`, centered in that span's width. */
@@ -66,8 +69,11 @@ export function swapText(line: string, from: string, to: string, centered = fals
   const width = cellWidth(from) + room - 1;
   let text = to;
   if (cellWidth(text) > width) {
-    let cut = text;
-    while (cut.length > 0 && cellWidth(`${cut}…`) > width) cut = cut.slice(0, -1);
+    let cut = "";
+    for (const entry of graphemes.segment(text)) {
+      if (cellWidth(`${cut}${entry.segment}…`) > width) break;
+      cut += entry.segment;
+    }
     text = cut.length === 0 ? from : `${cut}…`;
   }
   const delta = cellWidth(text) - cellWidth(from);
@@ -142,9 +148,11 @@ export function brandFooter(lines: readonly string[], brand: OpenTuiBrand): stri
   return lines.map((line, index) => {
     const at = line.search(/(?<=m)~(?=\x1b\[)/);
     if (index !== 0 || at < 0) return line;
-    const gaps = [...line.matchAll(/ {2,}/g)];
-    const gap = gaps.reduce<RegExpMatchArray | null>((wide, match) => !wide || match[0].length > wide[0].length ? match : wide, null);
-    const room = gap === null || gap.index! < at ? 0 : gap[0].length - 1;
+    // NB-12: the gap must sit after the `~`; the widest one before it gives
+    // no room, so only gaps past the marker are candidates.
+    const gap = [...line.matchAll(/ {2,}/g)].reduce<RegExpMatchArray | null>((wide, match) =>
+      match.index! > at && (wide === null || match[0].length > wide[0].length) ? match : wide, null);
+    const room = gap === null ? 0 : gap[0].length - 1;
     let text = brand.project;
     if (cellWidth(text) - 1 > room) text = text.split("/").filter(Boolean).at(-1) ?? text;
     const delta = cellWidth(text) - 1;

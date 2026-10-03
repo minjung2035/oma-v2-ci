@@ -449,6 +449,10 @@ export function step(state: State, key: Key, data: PanelData, frameBytes: number
   }
   if (!state.open) return stepConversation(state, key, frameBytes);
   if (state.edit.kind !== "none") return stepEdit(state, data, key);
+  // NB-10: a char or paste the panel has no key for is not dropped -- it goes
+  // into the draft waiting behind the panel, which the Human sees again when
+  // the panel closes. Input that vanishes reads like input that went somewhere.
+  if (key.kind === "char" || key.kind === "paste") return stepConversation(state, key, frameBytes);
   if (state.detail.kind === "extensions") return stepExtensions(state, data, key, state.detail);
   if (state.detail.kind === "mail") return stepMailDetail(state, data, key, state.detail);
   return stepPanelRoot(state, data, key);

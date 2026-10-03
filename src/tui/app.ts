@@ -60,6 +60,15 @@ export class TuiApp {
   private readonly keys = new KeyDecoder();
   private pendingTimer: ReturnType<typeof setTimeout> | null = null;
   private closed = false;
+  /** The open message's body, read once per path rather than once per draw:
+   * a Maildir path names immutable content, and a different path is a
+   * different message -- so the path itself is the invalidation (NB-04). */
+  private mailBody: { readonly path: string; readonly body: MailBody | null } | null = null;
+  /** NB-15: set when the terminal's stream refused a write. A synchronous
+   * throw from `output.write` would escape through the input `data` listener
+   * as an uncaughtException; a stream that cannot take a frame is dead to
+   * draws, so they are skipped rather than thrown again. */
+  private outputDead = false;
 
   constructor(private readonly ports: AppPorts, private readonly terminal: Terminal, private readonly frameBytes: number) {}
 
@@ -169,7 +178,10 @@ export class TuiApp {
   private apply(key: Key): void {
     if (this.closed) return;
     // Ctrl-L, the terminal convention: the whole screen again, nothing else.
-    if (key.kind === "redraw") { this.terminal.repaint(); return; }
+    if (key.kind === "redraw") {
+      try { this.terminal.repaint(); } catch { this.outputDead = true; }
+      return;
+    }
     const result = step(this.state, key, this.data, this.frameBytes);
     this.state = result.state;
     for (const effect of result.effects) this.run(effect);
@@ -255,12 +267,17 @@ export class TuiApp {
   }
 
   draw(): void {
-    if (this.closed) return;
+    if (this.closed || this.outputDead) return;
     const detail = this.state.detail;
     // P0V-41: the message open is the one the Human opened, found by identity
     // in this refresh's list, not whatever now sits at its old position.
     const open = detail.kind === "mail" ? this.data.mail.find(row => mailIdentity(row) === detail.id) : undefined;
-    const body = open === undefined ? null : this.ports.body(open.path);
+    let body: MailBody | null = null;
+    if (open === undefined) this.mailBody = null;
+    else {
+      if (this.mailBody?.path !== open.path) this.mailBody = { path: open.path, body: this.ports.body(open.path) };
+      body = this.mailBody.body;
+    }
     const input: ViewInput = {
       state: this.state, data: this.data, transcript: this.transcript.lines,
       body, notice: this.notice, busy: this.busy,
@@ -270,7 +287,9 @@ export class TuiApp {
     if (detail.kind === "mail" && detail.scroll > mailScrollLimit(input)) {
       this.state = { ...this.state, detail: { ...detail, scroll: mailScrollLimit(input) } };
     }
-    this.terminal.draw(render({ ...input, state: this.state }));
+    try {
+      this.terminal.draw(render({ ...input, state: this.state }));
+    } catch { this.outputDead = true; }
   }
 
   /** Exposed for tests and for the mail detail screen's current selection. */

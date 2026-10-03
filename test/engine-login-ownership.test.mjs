@@ -56,13 +56,15 @@ for (const [code, signal, expected] of [[7, null, 7], [null, 'SIGTERM', 1], [nul
     const w = world(), done = w.runEngineLogin(w.options);
     w.child.emit('close', code, signal); assert.equal(await done, expected);
   });
-for (const packages of [false, true]) test(`engine ${packages ? 'package' : 'login'}: metadata preparation failure cannot spawn a child`, () => {
+for (const packages of [false, true]) test(`engine ${packages ? 'package' : 'login'}: metadata preparation failure cannot spawn a child`, async () => {
   const problem = new Error('fixture directory refused'), w = world({ directoryError: problem });
-  assert.throws(() => w.runEngineLogin({ ...w.options,
+  // NB-09: the failure is a rejection of the declared Promise<number>, never
+  // a synchronous throw.
+  await assert.rejects(() => w.runEngineLogin({ ...w.options,
     ...(packages ? { packages: { store: '/fixture/packages', args: ['install', 'npm:x'] } } : {}) }), error => error === problem);
   assert.deepEqual(w.directories, [packages ? '/fixture/packages' : '/fixture/engine']); assert.equal(w.launches.length, 0);
 });
-test('engine spawn: synchronous refusal creates no child owner', () => {
+test('engine spawn: refusal creates no child owner', async () => {
   const problem = new Error('fixture spawn refusal'), w = world({ spawnError: problem });
-  assert.throws(() => w.runEngineLogin(w.options), error => error === problem); assert.equal(w.launches.length, 0);
+  await assert.rejects(() => w.runEngineLogin(w.options), error => error === problem); assert.equal(w.launches.length, 0);
 });

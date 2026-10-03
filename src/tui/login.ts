@@ -20,8 +20,10 @@ export interface EngineLogin {
   readonly packages?: { readonly store: string; readonly args: readonly string[] } | undefined;
 }
 
-/** Runs the engine's interactive mode and answers with its exit status. */
-export function runEngineLogin(login: EngineLogin): Promise<number> {
+/** Runs the engine's interactive mode and answers with its exit status.
+ * Preparation failures are rejections of that answer too (NB-09): a function
+ * declared `Promise<number>` must not throw synchronously. */
+export async function runEngineLogin(login: EngineLogin): Promise<number> {
   const runtime = resolvePiRuntime({ stateRoot: login.stateRoot, libdir: login.libdir, override: login.override });
   const agentDir = login.packages?.store ?? runtime.agentDir;
   ensureUserDirectory(agentDir);

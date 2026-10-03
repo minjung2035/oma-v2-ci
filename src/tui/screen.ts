@@ -54,6 +54,12 @@ export function openTerminal(streams: TerminalStreams): Terminal {
   const { input, output } = streams;
   let restored = false;
   let previous: readonly string[] = [];
+  /** NB-15: `write` on a destroyed stream throws synchronously, which arrives
+   * as an uncaughtException through the input `data` listener. A destroyed
+   * stream cannot take a frame, so the draw is skipped before the write --
+   * while a live stream's write error still reaches the caller that owns it
+   * (the pre-session chooser rejects on it). */
+  const outputDead = (): boolean => (output as { destroyed?: boolean }).destroyed === true;
   const keyListeners: ((chunk: Buffer | string) => void)[] = [];
   const resizeListeners: (() => void)[] = [];
   const onExit = (): void => terminal.restore();
@@ -61,12 +67,12 @@ export function openTerminal(streams: TerminalStreams): Terminal {
     get columns() { return Math.max(TERMINAL_BOUNDS.minColumns.value, output.columns ?? TERMINAL_BOUNDS.assumedColumns.value); },
     get rows() { return Math.max(TERMINAL_BOUNDS.minRows.value, output.rows ?? TERMINAL_BOUNDS.assumedRows.value); },
     draw(lines) {
-      if (restored) return;
+      if (restored || outputDead()) return;
       // Redraw only when something changed, so an idle TUI does not stream
       // escape sequences at the terminal.
       if (lines.length === previous.length && lines.every((line, index) => line === previous[index])) return;
-      previous = [...lines];
       output.write(HOME + lines.join(NEWLINE));
+      previous = [...lines];
     },
     onKeys(handler) {
       if (restored) return;
@@ -76,7 +82,7 @@ export function openTerminal(streams: TerminalStreams): Terminal {
     },
     onResize(handler) { if (restored) return; resizeListeners.push(handler); output.on("resize", handler); },
     repaint() {
-      if (restored) return;
+      if (restored || outputDead()) return;
       previous = [];
       output.write(CURSOR_OFF + PASTE_ON + CURSOR_KEYS_NORMAL + CLEAR);
     },
@@ -120,6 +126,9 @@ export function restoreTerminalModes({ input, output }: TerminalStreams, mouse =
   releaseTerminalResources([
     () => { if (input.isTTY) input.setRawMode(false); },
     () => { input.pause(); },
-    () => { output.write((mouse ? `${ESC}[?1000l${ESC}[?1002l${ESC}[?1003l${ESC}[?1006l` : "") + PASTE_OFF + CURSOR_ON + ALT_OFF); },
+    // NB-15: a destroyed output cannot take the restore sequence, and the
+    // synchronous throw `write` raises on one crashes an `exit` hook. A dead
+    // stream is skipped; a live stream's error still propagates.
+    () => { if (!(output as { destroyed?: boolean }).destroyed) output.write((mouse ? `${ESC}[?1000l${ESC}[?1002l${ESC}[?1003l${ESC}[?1006l` : "") + PASTE_OFF + CURSOR_ON + ALT_OFF); },
   ]);
 }

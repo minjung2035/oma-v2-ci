@@ -168,7 +168,11 @@ function extensionsScreen(input: ViewInput, notice: string | null): string[] {
     return `${marker} ${pad(labelOf(extension.id, extension.locked, extension.missing, extension.source), nameWidth)}${pad(left, 12)}${right}`;
   });
   const footer = ["", ...(notice === null ? [] : [fit(notice, columns)]), "  Enter Toggle · ←/→ Target · Esc Back"];
-  return [...lines, ...windowed(entries, row, input.rows - lines.length - footer.length), ...footer];
+  // NB-13: a minimal screen cannot lose the footer; the head's tail is cut
+  // first, then the entries get what remains.
+  const room = Math.max(0, input.rows - footer.length);
+  const head = lines.slice(0, room);
+  return [...head, ...(room > head.length ? windowed(entries, row, room - head.length) : []), ...footer];
 }
 
 /** The open message's screen as three parts, so the body gets what the head
@@ -191,8 +195,11 @@ function mailDetailParts(input: ViewInput, notice: string | null) {
   ];
   const text = wrap(body === null ? "(Cannot read the message body)" : body.text, columns);
   const foot = ["", ...(notice === null ? [] : [fit(notice, columns)]), ""];
-  const height = Math.max(1, input.rows - head.length - foot.length);
-  return { head, text, foot, height, limit: Math.max(0, text.length - height) };
+  // NB-13: at minimal geometry the head's tail (the earlier-thread list) is
+  // what gives first, so the foot with the way back is never pushed off.
+  const shown = head.slice(0, Math.max(0, input.rows - foot.length - 1));
+  const height = Math.max(1, input.rows - shown.length - foot.length);
+  return { head: shown, text, foot, height, limit: Math.max(0, text.length - height) };
 }
 
 /** The notice line this screen shows, if any. P0V-68: one reading for the
@@ -227,8 +234,12 @@ export function render(input: ViewInput): string[] {
   const lines = header(state, columns);
   const panel = rowsFor(input);
   const foot = ["", ...(notice === null ? [] : [fit(notice, columns)]), fit("←/→ Category · ↑/↓ Item · Enter Select · Esc Back · Ctrl+X Close", columns)];
-  lines.push(...panel.fixed);
-  if (panel.rows.length > 0) lines.push(...windowed(panel.rows, panel.selected, rows - lines.length - foot.length));
+  // NB-13: fixed rows may not push the footer (and the notice it carries) off
+  // a minimal screen -- their tail is cut, and one row is kept for the list.
+  const room = Math.max(0, rows - lines.length - foot.length);
+  lines.push(...panel.fixed.slice(0, panel.rows.length > 0 ? Math.max(0, room - 1) : room));
+  const left = rows - lines.length - foot.length;
+  if (panel.rows.length > 0 && left > 0) lines.push(...windowed(panel.rows, panel.selected, left));
   lines.push(...foot);
   return frame(lines, rows, columns);
 }

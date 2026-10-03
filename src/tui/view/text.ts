@@ -70,7 +70,9 @@ export function wrap(text: string, width: number): string[] {
     let used = 0;
     for (const cluster of clusters(paragraph)) {
       const size = cellWidth(cluster);
-      if (size > 0 && used + size > width) { lines.push(line); line = ""; used = 0; }
+      // NB-14: a cluster wider than the line wraps only what precedes it --
+      // pushing `line` when nothing of width is on it would emit a blank row.
+      if (size > 0 && used > 0 && used + size > width) { lines.push(line); line = ""; used = 0; }
       line += cluster;
       used += size;
     }

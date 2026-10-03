@@ -42,7 +42,10 @@ export function dashboardData(input: DashboardInput): DashboardData {
     ? {
       kind: "observed", observedAtMs: observation.observedAtMs,
       created: createdCount(observation.statuses), active: activeCount(observation.statuses),
-      pending: observation.statuses.reduce((total, row) => total + row.pending, 0),
+      // NB-05: residents only, like `created`/`active` -- the Principal's
+      // pending count is reported separately as `principalPending`; adding it
+      // here would double-report it on one screen.
+      pending: observation.statuses.reduce((total, row) => row.agent === "principal" ? total : total + row.pending, 0),
       principalPending: observation.statuses.find(row => row.agent === "principal")?.pending ?? null,
     }
     : { kind: "unknown", observedAtMs: observation.observedAtMs, reason: surfaceWords(observation.reason, "Not observed") };
