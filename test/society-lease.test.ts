@@ -715,7 +715,7 @@ test("T119/REC-007 a declared fence that is not there stops the CLI from startin
       process.env[SOCIETY_FENCE_ENV] = declared;
       try {
         return runCliProcess({ node: process.execPath, cli: "-e", args: ["0"], cwd: "/",
-          env: { ...childEnv }, grant: null, timeoutMs: 5000 });
+          env: { ...childEnv }, timeoutMs: 5000 });
       } finally { delete process.env[SOCIETY_FENCE_ENV]; }
     };
     try {

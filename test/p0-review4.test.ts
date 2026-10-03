@@ -10,7 +10,6 @@ import { createServer, type Server } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { ResolvedAgentSpec } from "../implementation/contracts.js";
-import { CLI_CREDENTIAL_FD_ENV } from "../src/cli/transport.js";
 import { runCliProcess } from "./fixtures/cli-child.js";
 import { replaceDerivedFile } from "../src/storage/durable-fs.js";
 import { StatusRefresh } from "../src/views/status-refresh.js";
@@ -53,10 +52,11 @@ import { TEST_VIEW_LIMITS } from "./fixtures/limits.js";
 const CREDENTIAL = "c".repeat(64);
 const HANDLE = "d".repeat(32);
 
-/** Runs the real CLI transport in a child that holds `line` on descriptor 3,
- * as the trusted extension leaves it, and makes `calls` requests. Each result
- * is the failure's code and message; there is no broker at the path, so a
- * request that got past the credential fails only on connecting. */
+/** Runs the real CLI transport in a child whose environment still declares
+ * the removed credential descriptor, holding `line` on descriptor 3, and makes
+ * `calls` requests. Each result is the failure's code and message; there is no
+ * broker at the path, so a request fails only on connecting -- never on the
+ * credential, because the CLI no longer reads one from anywhere. */
 function cliCalls(line: string, calls: number): Promise<string[]> {
   const script = `
     import { callActor } from ${JSON.stringify(join(process.cwd(), "dist/src/cli/transport.js"))};
@@ -69,7 +69,7 @@ function cliCalls(line: string, calls: number): Promise<string[]> {
   `;
   return new Promise(resolve => {
     const child = spawn(process.execPath, ["--input-type=module", "-e", script],
-      { env: { PATH: "/usr/bin:/bin", [CLI_CREDENTIAL_FD_ENV]: "3" }, stdio: ["ignore", "pipe", "inherit", "pipe"] });
+      { env: { PATH: "/usr/bin:/bin", OMA_PRINCIPAL_CREDENTIAL_FD: "3" }, stdio: ["ignore", "pipe", "inherit", "pipe"] });
     const socket = child.stdio[3] as unknown as { end(text: string): void; on(event: string, fn: () => void): void };
     socket.on("error", () => {});
     socket.end(line);
@@ -79,16 +79,17 @@ function cliCalls(line: string, calls: number): Promise<string[]> {
   });
 }
 
-test("P0V-25 / N01, P0-4: one CLI process reads its credential once, and every request it makes attaches with it", async () => {
-  // A lookup and the resend it permits, or a query and the submission it
-  // prepares: the second request must not find the descriptor already spent.
+test("P0V-25 / N01, P0-4: a credential descriptor named in the environment is not a CLI credential source", async () => {
+  // E27 removed the extension-spawned CLI and with it the only producer of
+  // this contract; the Principal's credential lives in the engine's
+  // PrincipalChannel now. A leftover declaration -- even a well-formed line
+  // waiting on the descriptor -- is inert: every call the process makes goes
+  // unattached and fails only on connecting.
   const results = await cliCalls(`credential ${CREDENTIAL} ${HANDLE}\n`, 3);
   assert.equal(results.length, 3);
-  for (const result of results) assert.match(result, /BROKER_UNAVAILABLE|ENOENT|connect/, `a later request was refused: ${JSON.stringify(results)}`);
-  // A refused credential stays refused for the whole process, not "malformed"
-  // on the first request and something else on the next.
+  for (const result of results) assert.match(result, /BROKER_UNAVAILABLE|ENOENT|connect/, `a request read the descriptor: ${JSON.stringify(results)}`);
   const refused = await cliCalls("ready\n", 2);
-  for (const result of refused) assert.match(result, /AUTH_FAILED:.*malformed/, JSON.stringify(refused));
+  for (const result of refused) assert.match(result, /BROKER_UNAVAILABLE|ENOENT|connect/, JSON.stringify(refused));
 });
 
 test("P0V-27 / N03, P0-4: a broker that could not be started is reported, and the host that tried keeps running", async () => {
@@ -135,7 +136,7 @@ test("P0V-35 / N12, P0-2: a CLI's output is decoded as the bytes it wrote, where
         process.stdout.write(bytes.subarray(${cut})); process.stderr.write(bytes.subarray(${cut + 1 > bytes.length ? cut : cut + 1}));
       `);
       const result = await runCliProcess({ node: process.execPath, cli, args: [], cwd: dir,
-        env: { PATH: process.env.PATH ?? "/usr/bin:/bin" }, grant: null, timeoutMs: 10_000 });
+        env: { PATH: process.env.PATH ?? "/usr/bin:/bin" }, timeoutMs: 10_000 });
       assert.equal(result.finished, true);
       assert.equal(result.stdout, text, `stdout cut at byte ${cut}`);
       assert.equal(result.stderr, text, `stderr cut at byte ${cut + 1}`);

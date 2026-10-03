@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { surfaceRuleFindings } from "../scripts/architecture/rules/surface-rules.mjs";
 
@@ -32,8 +32,11 @@ test("PI-001 admits the shared client and erased contract shapes, not host runti
 });
 
 test("E27/E30: dead process plumbing and the unused incarnation environment are absent", () => {
-  assert.doesNotMatch(readFileSync("src/extension/cli-process.ts", "utf8"), /spawn|credential|argv|stdout|runCliProcess/);
-  assert.doesNotMatch(readFileSync("src/extension/mail-tools.ts", "utf8"), /runCliProcess|runCli\(|OMA_CLI_PATH/);
+  // The shim that re-exported fence helpers under a removed process's name.
+  assert.equal(existsSync("src/extension/cli-process.ts"), false);
+  assert.doesNotMatch(readFileSync("src/extension/mail-tools.ts", "utf8"), /runCliProcess|runCli\(|OMA_CLI_PATH|cli-process/);
+  // The credential-descriptor contract died with the extension-spawned CLI.
+  assert.doesNotMatch(readFileSync("src/cli/transport.ts", "utf8"), /OMA_PRINCIPAL_CREDENTIAL_FD|readPresentedGrant|presentedGrant/);
   assert.doesNotMatch(readFileSync("src/sandbox.ts", "utf8"), /OMA_INCARNATION/);
   for (const path of ["src/protocol/host-channel.ts", "src/extension/principal-channel.ts"])
     assert.match(readFileSync(path, "utf8"), /client\/codecs\.js/);

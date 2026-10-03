@@ -108,7 +108,6 @@ src/entry/pi-interactive.ts
 src/entry/pi-personal.ts
 src/entry/runner.ts
 src/extension/batch-view.ts
-src/extension/cli-process.ts
 src/extension/contained-files.ts
 src/extension/contained-search.ts
 src/extension/contained-tools.ts

@@ -116,7 +116,6 @@
   "src/entry/pi-personal.ts",
   "src/entry/runner.ts",
   "src/extension/batch-view.ts",
-  "src/extension/cli-process.ts",
   "src/extension/contained-files.ts",
   "src/extension/contained-search.ts",
   "src/extension/contained-tools.ts",
@@ -1844,11 +1843,11 @@
     "src/extension/",
     "src/rpc-client.ts"
    ],
-   "files": 83
+   "files": 82
   }
  ],
- "files": 377,
- "runtimeEdges": 1607,
+ "files": 376,
+ "runtimeEdges": 1604,
  "typeOnlyEdges": 425,
  "runtimeEdgeMatrix": {
   "L1-kernel -> L1-kernel": 310,
@@ -1861,11 +1860,11 @@
   "L4-orchestration -> L2-facts": 8,
   "L4-orchestration -> L3-workflow": 19,
   "L4-orchestration -> L4-orchestration": 166,
-  "L5-entry -> L1-kernel": 126,
+  "L5-entry -> L1-kernel": 124,
   "L5-entry -> L2-facts": 2,
   "L5-entry -> L3-workflow": 7,
   "L5-entry -> L4-orchestration": 132,
-  "L5-entry -> L5-entry": 161
+  "L5-entry -> L5-entry": 160
  },
  "upwardTypeOnlyEdges": [
   {
@@ -1884,7 +1883,7 @@
   ]
  ],
  "fanIn": {
-  "src/domain/errors.ts": 201,
+  "src/domain/errors.ts": 200,
   "src/domain/identifiers.ts": 62,
   "src/storage/paths.ts": 31,
   "src/protocol/host-guest.ts": 29,
@@ -1924,7 +1923,7 @@
   "node:async_hooks": 4,
   "node:child_process": 8,
   "node:crypto": 45,
-  "node:fs": 115,
+  "node:fs": 114,
   "node:fs/promises": 1,
   "node:http": 1,
   "node:https": 1,
