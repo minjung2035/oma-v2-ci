@@ -1014,12 +1014,22 @@
       ]
     },
     {
-      "owner": "src/runtime/pi-runtime.ts#adoptEngineHome",
-      "fact": "DR24: earlier societies' engine files adopted into the one engine home under one lock, each replaced atomically, and a start that died part way adopts on restart only what is still missing",
+      "owner": "src/pi-compat/settings.ts#OmaSettingsStorage.withLock",
+      "fact": "the engine home's settings.json replaced atomically under the writer's lock by the Pi SettingsManager semantics OMA wraps; a refused or dead write leaves the previous bytes",
       "tests": [
         {
-          "file": "test/pi-runtime.test.ts",
-          "title": "DR24: the engine home takes on every earlier society's login, the newest where two hold one provider, and keeps its own",
+          "file": "test/pi-compat.test.ts",
+          "title": "A4 / P0-5: a held settings lock refuses the write, keeps the bytes, and the retry after release lands",
+          "injection": "logical"
+        },
+        {
+          "file": "test/pi-compat.test.ts",
+          "title": "A4: malformed or non-object settings are refused with the bytes untouched",
+          "injection": "logical"
+        },
+        {
+          "file": "test/pi-settings-platform.test.mjs",
+          "title": "every interactive settings file enforces its own single name",
           "injection": "logical"
         },
         {

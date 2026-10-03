@@ -168,8 +168,7 @@ async function run({ brokerState = { kind: "started", pid: 1 }, credentials = ["
     "../domain/deployment.js": { DEPLOYMENT_LAYOUT: { extension: "dist/src/pi-extension.js", cli: "dist/src/cli.js",
       entries: { interactive: "dist/src/entry/pi-interactive.js", tui: "dist/src/entry/oma.js" } } },
     "../domain/mail-values.js": { storedMailBytes: bodyBytes => bodyBytes },
-    "../runtime/pi-runtime.js": { resolvePiRuntime: () => ({ executable: "node", args: [], agentDir: "/state/pi", source: "bundled" }),
-      adoptEngineHome: () => { calls.push("adoptEngineHome"); } },
+    "../runtime/pi-runtime.js": { resolvePiRuntime: () => ({ executable: "node", args: [], agentDir: "/state/pi", source: "bundled" }) },
     "../storage/directory.js": { ensureDirectory() {}, removeUnusedTree: path => { calls.push(`removeUnusedTree:${path}`); } },
     "../tui/app.js": { TuiApp: class {
       constructor(ports) { calls.push("TuiApp"); capturedPorts = ports; }
@@ -696,7 +695,6 @@ test("DR24: a start that names no society is a new session of the project, bound
   society.broker.fireReady();
   await society.settle();
   assert.equal(society.started?.paths.sessionDir, `/state/oma/fixture-new/${SESSION_DIR_FROM_OWNER}`);
-  assert.ok(calls.includes("adoptEngineHome"), "the session's engine was not given the Human's engine home");
 });
 
 test("T119 / REC-007: a broker that is already listening is found before this process writes anything", async () => {

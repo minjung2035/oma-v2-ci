@@ -67,6 +67,9 @@ async function world({ setModel, init, resourceReload, dispose, fail, moduleClos
     '../tui/project-session-directories.js': { ProjectSessionDirectories: class { close() {} async snapshot() { return { dirs: ['/sessions'], histories: [] }; } } },
     '../protocol/host-history.js': { parseHostHistoryReference() { throw new Error('No remote history in this fixture'); } },
     '../runtime/pi-runtime.js': { preparePiInteractive() {} }, '../tui/limits.js': {},
+    '../pi-compat/env.js': { PI_RESUME_HINT: 'To resume this session:' },
+    '../pi-compat/commands.js': { PI_BUILTIN_COMMANDS: new Set() },
+    '../pi-compat/interactive-mode.js': { interactiveInternalsOf: mode => mode },
     '../runtime/extension-modules.js': { ExtensionModules: class {
       refresh() { modules.push('modules-refresh'); }
       close() { modules.push('modules-close'); moduleClose?.(); }

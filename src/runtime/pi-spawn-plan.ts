@@ -9,6 +9,7 @@
 import type { Actor, ProtocolLimits } from "../../implementation/contracts.js";
 import { verifiedPaths, type VerifiedExtension } from "./extension-integrity.js";
 import { PI_AGENT_DIR_ENV } from "./pi-runtime.js";
+import { PI_SESSION_ENV_NAMES } from "../pi-compat/env.js";
 import { join } from "node:path";
 import { RESIDENT_INFERENCE_PORT, RESIDENT_PATHS, SANDBOX_EXECUTABLE, confinedPath, residentArgv, type ResidentDirectories, type SandboxHost } from "../sandbox.js";
 import type { ValidatedRunLease } from "../protocol/run-lease.js";
@@ -168,12 +169,11 @@ function childEnvironment(options: PiAdapterOptions): Record<string, string> {
   const env: Record<string, string> = {};
   for (const [key, value] of Object.entries(process.env))
     if (value !== undefined) env[key] = value;
-  for (const key of [
-    "PI_SESSION_ID",
-    "PI_SESSION_FILE",
-    "PI_SESSION_CWD",
-    "PI_SESSION_REASON",
-  ] as const)
+  // The names a Pi session exports into its subprocesses (pi-compat/env.ts),
+  // so an `oma` run inside one does not carry a parent session's identity into
+  // the engine it starts. The last two are OMA-side names no Pi emits; clearing
+  // them keeps the same ambient hygiene for older layouts.
+  for (const key of [...PI_SESSION_ENV_NAMES, "PI_SESSION_CWD", "PI_SESSION_REASON"])
     delete env[key];
   return Object.assign(env, omaEnvironment(options, path => path), {
     ...(options.paths.piAgentDir === undefined ? {} : { [PI_AGENT_DIR_ENV]: options.paths.piAgentDir }),

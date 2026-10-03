@@ -46,8 +46,8 @@
     "typescript": "5.9.3"
   },
   "dependencies": {
-    "@earendil-works/pi-coding-agent": "^0.87.1",
-    "@earendil-works/pi-tui": "^0.87.1",
+    "@earendil-works/pi-coding-agent": "0.87.1",
+    "@earendil-works/pi-tui": "0.87.1",
     "koffi": "^3.2.1",
     "nodemailer": "10.0.1",
     "pi-open-tui": "0.3.9",

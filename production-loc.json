@@ -2,8 +2,8 @@
   "header": {
     "cloc_url": "github.com/AlDanial/cloc",
     "cloc_version": "2.08",
-    "n_files": 355,
-    "n_lines": 47820,
+    "n_files": 362,
+    "n_lines": 48339,
     "report_file": "production-loc.json"
   },
   "src/review.ts": {
@@ -14,8 +14,8 @@
   },
   "src/entry/oma-society.ts": {
     "blank": 29,
-    "comment": 255,
-    "code": 690,
+    "comment": 253,
+    "code": 688,
     "language": "TypeScript"
   },
   "src/durable.ts": {
@@ -26,8 +26,8 @@
   },
   "src/entry/pi-interactive-host.ts": {
     "blank": 12,
-    "comment": 69,
-    "code": 513,
+    "comment": 72,
+    "code": 508,
     "language": "TypeScript"
   },
   "src/broker.ts": {
@@ -56,8 +56,8 @@
   },
   "src/tui/session.ts": {
     "blank": 35,
-    "comment": 208,
-    "code": 402,
+    "comment": 211,
+    "code": 403,
     "language": "TypeScript"
   },
   "src/config/operations.ts": {
@@ -105,7 +105,7 @@
   "src/extension/mail-tools.ts": {
     "blank": 12,
     "comment": 98,
-    "code": 340,
+    "code": 341,
     "language": "TypeScript"
   },
   "src/runtime/pi-adapter.ts": {
@@ -134,14 +134,14 @@
   },
   "src/runtime/pi-rpc.ts": {
     "blank": 4,
-    "comment": 25,
-    "code": 293,
+    "comment": 33,
+    "code": 297,
     "language": "TypeScript"
   },
   "src/entry/pi-personal.ts": {
     "blank": 1,
-    "comment": 11,
-    "code": 286,
+    "comment": 13,
+    "code": 283,
     "language": "TypeScript"
   },
   "src/leaf.ts": {
@@ -270,6 +270,12 @@
     "code": 219,
     "language": "TypeScript"
   },
+  "src/config/role-prompts.ts": {
+    "blank": 59,
+    "comment": 18,
+    "code": 217,
+    "language": "TypeScript"
+  },
   "src/broker/public-dispatcher.ts": {
     "blank": 3,
     "comment": 18,
@@ -360,12 +366,6 @@
     "code": 185,
     "language": "TypeScript"
   },
-  "src/runtime/pi-spawn-plan.ts": {
-    "blank": 9,
-    "comment": 80,
-    "code": 184,
-    "language": "TypeScript"
-  },
   "src/tui/view/screens.ts": {
     "blank": 15,
     "comment": 35,
@@ -382,6 +382,12 @@
     "blank": 7,
     "comment": 17,
     "code": 182,
+    "language": "TypeScript"
+  },
+  "src/runtime/pi-spawn-plan.ts": {
+    "blank": 9,
+    "comment": 87,
+    "code": 181,
     "language": "TypeScript"
   },
   "src/entry/broker.ts": {
@@ -406,12 +412,6 @@
     "blank": 3,
     "comment": 16,
     "code": 179,
-    "language": "TypeScript"
-  },
-  "src/runtime/pi-runtime.ts": {
-    "blank": 17,
-    "comment": 70,
-    "code": 176,
     "language": "TypeScript"
   },
   "src/extension/batch-view.ts": {
@@ -606,6 +606,12 @@
     "code": 129,
     "language": "TypeScript"
   },
+  "src/runtime/pi-runtime.ts": {
+    "blank": 14,
+    "comment": 65,
+    "code": 126,
+    "language": "TypeScript"
+  },
   "src/platform/host/archive-crypto.ts": {
     "blank": 8,
     "comment": 20,
@@ -654,22 +660,22 @@
     "code": 117,
     "language": "TypeScript"
   },
+  "src/config/defaults.ts": {
+    "blank": 8,
+    "comment": 45,
+    "code": 116,
+    "language": "TypeScript"
+  },
   "src/storage/snapshot-reader.ts": {
     "blank": 1,
     "comment": 9,
     "code": 116,
     "language": "TypeScript"
   },
-  "src/config/defaults.ts": {
-    "blank": 8,
-    "comment": 45,
-    "code": 115,
-    "language": "TypeScript"
-  },
   "src/views.ts": {
     "blank": 1,
-    "comment": 26,
-    "code": 115,
+    "comment": 29,
+    "code": 116,
     "language": "TypeScript"
   },
   "src/platform/host/files.ts": {
@@ -1191,6 +1197,12 @@
   "src/lifecycle/registry-operations.ts": {
     "blank": 3,
     "comment": 7,
+    "code": 62,
+    "language": "TypeScript"
+  },
+  "src/pi-compat/settings.ts": {
+    "blank": 7,
+    "comment": 43,
     "code": 62,
     "language": "TypeScript"
   },
@@ -1716,6 +1728,12 @@
     "code": 31,
     "language": "TypeScript"
   },
+  "src/pi-compat/interactive-mode.ts": {
+    "blank": 3,
+    "comment": 14,
+    "code": 31,
+    "language": "TypeScript"
+  },
   "src/domain/admission.ts": {
     "blank": 1,
     "comment": 10,
@@ -1830,6 +1848,12 @@
     "code": 23,
     "language": "TypeScript"
   },
+  "src/pi-compat/wire.ts": {
+    "blank": 2,
+    "comment": 19,
+    "code": 23,
+    "language": "TypeScript"
+  },
   "src/tui/panel-style.ts": {
     "blank": 3,
     "comment": 5,
@@ -1875,12 +1899,6 @@
   "src/protocol/request-codec.ts": {
     "blank": 2,
     "comment": 6,
-    "code": 21,
-    "language": "TypeScript"
-  },
-  "src/runtime/session-history.ts": {
-    "blank": 2,
-    "comment": 4,
     "code": 21,
     "language": "TypeScript"
   },
@@ -1944,6 +1962,12 @@
     "code": 18,
     "language": "TypeScript"
   },
+  "src/runtime/session-history.ts": {
+    "blank": 2,
+    "comment": 6,
+    "code": 18,
+    "language": "TypeScript"
+  },
   "src/platform/host/api-client.ts": {
     "blank": 1,
     "comment": 1,
@@ -1985,6 +2009,12 @@
     "comment": 2,
     "code": 12,
     "language": "OMA systemd"
+  },
+  "src/pi-compat/session.ts": {
+    "blank": 1,
+    "comment": 13,
+    "code": 12,
+    "language": "TypeScript"
   },
   "src/cli/commands/society.ts": {
     "blank": 1,
@@ -2064,6 +2094,12 @@
     "code": 8,
     "language": "TypeScript"
   },
+  "src/pi-compat/env.ts": {
+    "blank": 1,
+    "comment": 15,
+    "code": 8,
+    "language": "TypeScript"
+  },
   "src/domain/utf8.ts": {
     "blank": 2,
     "comment": 14,
@@ -2106,6 +2142,12 @@
     "code": 3,
     "language": "TypeScript"
   },
+  "src/pi-compat/commands.ts": {
+    "blank": 0,
+    "comment": 8,
+    "code": 3,
+    "language": "TypeScript"
+  },
   "src/rpc-client.ts": {
     "blank": 0,
     "comment": 1,
@@ -2137,9 +2179,9 @@
     "language": "TypeScript"
   },
   "SUM": {
-    "blank": 1945,
-    "comment": 7650,
-    "code": 38225,
-    "nFiles": 355
+    "blank": 2015,
+    "comment": 7801,
+    "code": 38523,
+    "nFiles": 362
   }
 }

@@ -4,8 +4,10 @@ import type { Readable, Writable } from "node:stream";
 import { performance } from "node:perf_hooks";
 import type { ProtocolLimits } from "../../implementation/contracts.js";
 import { StoreError } from "../domain/errors.js";
-import { JsonlReader, type PiEvent } from "../protocol/jsonl.js";
+import { JsonlReader } from "../protocol/jsonl.js";
+import type { PiInboundEvent, RpcCommand } from "../pi-compat/wire.js";
 export type { PiEvent } from "../protocol/jsonl.js";
+export type { PiInboundEvent } from "../pi-compat/wire.js";
 export type PiRpcLimits = Pick<
   ProtocolLimits,
   "frameBytes" | "idleStreamSeconds" | "receiptWaitSeconds"
@@ -18,6 +20,13 @@ export function assertPiRpcLimits(limits: PiRpcLimits): void {
 /** DR15: the event a PiRpcClient's observers receive in place of an engine
  * event whose line was larger than the frame. `bytes` is the line's size. */
 export const SKIPPED_EVENT = "oma_event_skipped";
+/** The reader's own injected marker -- the only non-wire value observers see. */
+export type OmaSkippedEvent = { readonly type: typeof SKIPPED_EVENT; readonly bytes: number };
+/** What `onEvent` delivers: the engine's wire union (pi-compat/wire.ts) plus
+ * the reader's own frame-overflow marker. A2's `RpcResponse |
+ * JsonAgentSessionEvent` is what the engine emits; `extension_ui_request` is
+ * part of that wire and OMA's boundary rides on it. */
+export type PiObservedEvent = PiInboundEvent | OmaSkippedEvent;
 export interface Timer {
   cancel(): void;
 }
@@ -77,7 +86,7 @@ export class PiRpcClient {
   private readonly streams: PiRpcStreams;
   private readonly reader: JsonlReader;
   private readonly limits: Readonly<PiRpcLimits>;
-  private readonly observers = new Set<(event: PiEvent) => void>();
+  private readonly observers = new Set<(event: PiObservedEvent) => void>();
   private state: "open" | "closed" = "open";
   private partialLineTimer: Timer | null = null;
   private pending: PendingWrite | null = null;
@@ -127,7 +136,7 @@ export class PiRpcClient {
   get diagnosticMetadata(): Readonly<{ stderrBytes: number }> {
     return { stderrBytes: this.stderrCount };
   }
-  onEvent(observer: (event: PiEvent) => void): () => void {
+  onEvent(observer: (event: PiObservedEvent) => void): () => void {
     if (this.state !== "open")
       throw new StoreError("BROKER_UNAVAILABLE", "Pi transport is closed");
     this.observers.add(observer);
@@ -135,7 +144,7 @@ export class PiRpcClient {
       this.observers.delete(observer);
     };
   }
-  private readonly dispatch = (event: PiEvent): void => {
+  private readonly dispatch = (event: PiObservedEvent): void => {
     for (const observer of [...this.observers]) {
       if (this.state !== "open") break;
       if (this.observers.has(observer)) observer(event);
@@ -151,7 +160,10 @@ export class PiRpcClient {
     }
     try {
       const ended = this.reader.endedLines;
-      this.reader.feed(data, this.dispatch);
+      // The reader's shape check is protocol-only; the wire union is what Pi
+      // promises on this channel and each decoder still validates its own
+      // fields, so an event that is not what it claims fails at its decoder.
+      this.reader.feed(data, event => this.dispatch(event as PiInboundEvent));
       if (this.state !== "open") return;
       // P0V-48, P0-5: the deadline is the partial line's own. A chunk that
       // ended a line ended that line's deadline, even when it went on to start
@@ -207,7 +219,7 @@ export class PiRpcClient {
     pending.timer.cancel();
     pending.resolve();
   }
-  send(object: Record<string, unknown>): Promise<void> {
+  send(command: RpcCommand): Promise<void> {
     if (this.state !== "open")
       return Promise.reject(unwritten(
         new StoreError("BROKER_UNAVAILABLE", "Pi transport is closed"),
@@ -218,7 +230,7 @@ export class PiRpcClient {
       ));
     let text: string;
     try {
-      const value = JSON.stringify(object);
+      const value = JSON.stringify(command);
       if (value === undefined) throw new Error("not serializable");
       text = value;
       if (Buffer.byteLength(text) > this.limits.frameBytes)

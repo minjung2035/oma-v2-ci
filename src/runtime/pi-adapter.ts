@@ -249,7 +249,7 @@ export class PiAdapter {
           observingWait = false; observationDeadline!.hold();
           if (observation === "failed") waitUnobserved = true;
         }
-        const message = event.message;
+        const message = "message" in event ? event.message : undefined;
         const assistant = message !== null && typeof message === "object" && !Array.isArray(message) &&
           (message as Record<string, unknown>).role === "assistant";
         // message_start can come only after the first provider bytes. turn_start
@@ -259,7 +259,7 @@ export class PiAdapter {
         if (event.type === "compaction_start") compacting = true;
         if (event.type === "compaction_end") compacting = false;
         if (event.type === "agent_settled") { inferring = false; compacting = false; }
-        if (typeof event.toolCallId === "string") {
+        if ("toolCallId" in event && typeof event.toolCallId === "string") {
           if (event.type === "tool_execution_start") tools.add(event.toolCallId);
           if (event.type === "tool_execution_end") tools.delete(event.toolCallId);
         }
