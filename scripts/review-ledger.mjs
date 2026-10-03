@@ -102,16 +102,23 @@ for (const path of [...new Set([...current, ...assigned.keys()])].sort()) {
       note: "Current working-tree bytes have no explicit byte-bound review; historical reviews do not certify these changes." });
     continue;
   }
+  // AV-20261003-30: every status derived from committed bytes is bound to them
+  // exactly, the way reviewedChanges is -- review-closure re-verifies sha256
+  // on every reviewed row, so a ledger that says "these bytes were reviewed"
+  // cannot drift to other bytes.
+  const sha256 = createHash("sha256").update(readFileSync(path)).digest("hex");
   const committed = changedBy(path);
   const by = [...new Set([...committed, ...(committed.length > 0 || declared.has(path) ? declared.get(path) ?? [] : [])])].sort();
   if (by.length > 0) {
     const oracles = [...new Set(by.flatMap(card => oraclesOf.get(card) ?? (/^(?:AV|DR|P0V-|MAC-)/.test(card) ? [card] : [])))]
       .filter(id => oraclePresent(names, id)).sort();
     const note = by.some(card => !committed.includes(card)) ? { note: "clauses declared by macos-platform.md's implementation table" } : {};
-    files.push({ path, primary, status: oracles.length > 0 ? "CHANGED_WITH_ORACLE" : "CHANGED_WITHOUT_ORACLE", by, oracles, ...note });
+    files.push({ path, primary, status: oracles.length > 0 ? "CHANGED_WITH_ORACLE" : "CHANGED_WITHOUT_ORACLE", by, oracles, ...note, sha256 });
   } else if (read.has(path)) {
     const note = read.get(path);
-    files.push({ path, primary, status: "READ_UNCHANGED", by: note.by, oracles: note.oracles, note: note.note });
+    if (note.sha256 !== undefined && note.sha256 !== sha256)
+      throw new Error(`read-unchanged claim is stale: ${path}`);
+    files.push({ path, primary, status: "READ_UNCHANGED", by: note.by, oracles: note.oracles, note: note.note, sha256 });
   } else files.push({ path, primary, status: "NOT_REVIEWED", by: [], oracles: [] });
 }
 const summary = {};

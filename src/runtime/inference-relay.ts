@@ -174,6 +174,12 @@ export class InferenceRelay {
     this.server.maxConnections = RELAY_CONNECTIONS_PER_REQUEST * limits.concurrent;
   }
 
+  /** Sockets handed in through `accept` and still open. net.Server enforces
+   * `maxConnections` only inside its own accept path; a socket emitted onto
+   * the HTTP server directly passes no admission check, so a detached relay
+   * counts its own (AV-20261003-16: the same bound on both paths). */
+  private detachedConnections = 0;
+
   static async open(
     socketPath: string, target: RelayTarget, limits: RelayLimits,
   ): Promise<InferenceRelay> {
@@ -188,7 +194,11 @@ export class InferenceRelay {
       relay.server.listen(socketPath, () => { relay.server.off("error", reject); resolve(); });
     });
     // Only this user may speak to the relay; the sandbox runs as the same user.
-    chmodSync(socketPath, 0o600);
+    // AV-20261003-13, P0-4: the listener and its name are this opener's until
+    // the relay is handed back, so a failure here returns them -- a rejected
+    // open leaves nothing running and no socket name behind.
+    try { chmodSync(socketPath, 0o600); }
+    catch (error) { await relay.close(); throw error; }
     return relay;
   }
 
@@ -206,6 +216,13 @@ export class InferenceRelay {
    * (the same order as any server that sniffs a connection's first bytes). */
   accept(socket: Socket, head: Buffer = Buffer.alloc(0)): void {
     if (this.closed) { socket.destroy(); return; }
+    // The same bound the listen path gets from net.Server: a connection over
+    // it is destroyed, never queued for nobody. A socket already gone is not
+    // counted: its "close" event can never arrive to decrement.
+    if (socket.destroyed || socket.closed ||
+        this.detachedConnections >= this.server.maxConnections) { socket.destroy(); return; }
+    this.detachedConnections += 1;
+    socket.once("close", () => { this.detachedConnections -= 1; });
     if (head.length > 0) socket.unshift(head);
     this.server.emit("connection", socket);
     socket.resume();

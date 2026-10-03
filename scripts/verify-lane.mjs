@@ -80,7 +80,10 @@ try {
   environment.NODE_OPTIONS = `--import=${new URL("./local-test-guard.mjs", import.meta.url).href}`;
   if (lane.environment !== "systemd")
     environment.DBUS_SESSION_BUS_ADDRESS = "unix:path=/nonexistent/oma-local-tests-no-user-bus";
-  const roots = ["src", "test", "scripts", "implementation", "docs", "package.json", "package-lock.json", "tsconfig.json", "tsconfig.build.json"];
+  // AV-20261003-30: the measurement artifacts the ledger and LOC reports are
+  // generated from are part of the bound source, not ambient context.
+  const roots = ["src", "test", "scripts", "implementation", "docs", "package.json", "package-lock.json", "tsconfig.json", "tsconfig.build.json",
+    "production-files.txt", "production-manifest.json", "production-loc.json", "production-loc-hashes.json"];
   for (const path of roots.flatMap(name => filesUnder(join(root, name))).sort()) {
     const rel = relative(root, path);
     if (rel.startsWith("docs/archive/")) continue;

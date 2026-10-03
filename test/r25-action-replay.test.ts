@@ -71,6 +71,23 @@ for (const kind of ["agent.start", "agent.stop"] as const) {
   });
 }
 
+test("AV-20261003-27/R25: a same-key terminal receipt replays over a GOAL withdrawn since acceptance", async () => {
+  const f = lifecycleReplayFixture();
+  try {
+    const accepted = await f.dispatch("agent.start", "terminal-goal");
+    assert.match(JSON.stringify(accepted), /"state":"succeeded"/);
+    f.controls.hasGoal = false;
+    const replay = await f.dispatch("agent.start", "terminal-goal");
+    assert.match(JSON.stringify(replay), /"state":"succeeded"/,
+      "the recorded terminal receipt wins over the current environment; it is not re-judged");
+    assert.deepEqual(f.units.effects, [{ kind: "start", agent: "a" }], "a replay runs no new effect");
+    // A fresh key under the same absent GOAL is still refused: the gate keeps
+    // its place over every new effect.
+    assert.match(JSON.stringify(await f.dispatch("agent.start", "new-goal")), /GOAL_REQUIRED/);
+    assert.equal(f.store.getOperation("manager", "new-goal"), null);
+  } finally { f.close(); }
+});
+
 test("R25: no GOAL, provisioning, retired and unknown death retain their own rejection boundaries", async () => {
   const f = lifecycleReplayFixture();
   try {

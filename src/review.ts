@@ -26,7 +26,7 @@ import { PreacceptScope, type PreacceptArtifact } from "./storage/preaccept-arti
 import { frozenMessageDisposition } from "./mail/materializer.js";
 import { receiptOfOperation } from "./storage/receipt-projector.js";
 import { requestHash, sha256Hex } from "./hash.js";
-import type { ReviewRequestSummary, ReviewStatusResult } from "../implementation/contracts/public-wire.js";
+import type { ReviewRequestStatus, ReviewRequestSummary, ReviewStatusEntry, ReviewStatusResult } from "../implementation/contracts/public-wire.js";
 import { generateMessageId, generateOperationId } from "./ids.js";
 import { deterministicTier, type IntegrationSnapshot } from "./git/integration-policy.js";
 import { maximumTier } from "./domain/tier-evaluation.js";
@@ -1053,7 +1053,7 @@ Challenge ${name}` });
       ReviewStatusResult {
     const main = this.mainObservation();
     if (auth.role === "principal") return this.principalStatus(name);
-    if (name !== undefined) return this.workerStatus(name, main);
+    if (name !== undefined) return this.workerStatus(name, main, frameBytes, responseId);
     const opens = [...this.openRequests()].reverse();   // newest first
     const requests: ReviewRequestSummary[] = [];
     const summaryOf = (open: { sequence: number; operation: OperationOf<"attest.record"> },
@@ -1082,7 +1082,12 @@ Challenge ${name}` });
     return result;
   }
 
-  private workerStatus(name: string, main: { oid: Oid | null; observedAtMs: number }): ReviewStatusResult {
+  /** AV-20261003-24: the detail answer is bounded like the list answer. The
+   * newest entries are kept; earlier entries that no longer fit are reported
+   * in `missing`, never dropped silently. `entries` is the only unbounded
+   * field — every other field is fixed or quota-bounded. */
+  private workerStatus(name: string, main: { oid: Oid | null; observedAtMs: number },
+      frameBytes: number, responseId: string): ReviewStatusResult {
     const open = this.requestByName(name);
     if (open === null) throw new StoreError("INVALID_REQUEST", `unknown request ${name}`);
     const inputFor = this.inputFor(open);
@@ -1105,7 +1110,7 @@ Challenge ${name}` });
       entry.messages.some(message => message.review?.role === "approval"));
     const latestPrincipal = [...state.entries].reverse()
       .find(entry => entry.fact.kind === "vote" && entry.actor === PRINCIPAL);
-    return {
+    const fixed = {
       name: state.name, kind: state.kind, tier: state.tier, title: openFact.title,
       reason: openFact.reason, requester: state.requester, identity: { ...state.identity },
       display: state.display, required: state.required,
@@ -1120,14 +1125,39 @@ Challenge ${name}` });
       integration: state.integration === null ? null
         : { operation: state.integration.operation, state: state.integration.state,
             error: state.integration.errorCode },
-      entries: state.entries.map((entry, index) => ({
-        index: index + 1, sequence: entry.sequence, actor: entry.actor,
-        kind: entry.fact.kind as "review" | "vote" | "cancel" | "refresh",
-        ...(entry.fact.kind === "vote" ? { verdict: entry.fact.verdict } : {}) })),
-      missing, main,
+      main,
       ...(openFact.kind === "challenge.open" ? { target: { name: openFact.target.name,
         integration: openFact.target.integration, identity: { ...openFact.target.identity } } } : {}),
     };
+    const projected: ReviewStatusEntry[] = state.entries.map((entry, index) => ({
+      index: index + 1, sequence: entry.sequence, actor: entry.actor,
+      kind: entry.fact.kind as ReviewStatusEntry["kind"],
+      ...(entry.fact.kind === "vote" ? { verdict: entry.fact.verdict } : {}) }));
+    const detail = (entries: ReviewStatusEntry[], omitted: number): ReviewRequestStatus => ({ ...fixed,
+      entries,
+      missing: omitted === 0 ? missing : [...missing, `${omitted} earlier ${omitted === 1 ? "entry" : "entries"} omitted for size`] });
+    const bytesOf = (result: ReviewRequestStatus): number =>
+      Buffer.byteLength(JSON.stringify({ v: 1, id: responseId, ok: true, result }));
+    let answer = detail(projected, 0);
+    if (bytesOf(answer) <= frameBytes) return answer;
+    // Marginal accounting keeps the newest entries: the floor carries the
+    // longest possible omission note, so per-entry costs are exact.
+    const floor = detail([], projected.length);
+    if (bytesOf(floor) > frameBytes)
+      throw new StoreError("FRAME_TOO_LARGE", "one review status answer exceeds the response frame budget");
+    let remaining = frameBytes - bytesOf(floor), kept = 0;
+    for (let index = projected.length - 1; index >= 0; index--) {
+      const cost = Buffer.byteLength(JSON.stringify(projected[index]!)) + (kept > 0 ? 1 : 0);
+      if (cost > remaining) break;
+      remaining -= cost; kept++;
+    }
+    answer = detail(projected.slice(projected.length - kept), projected.length - kept);
+    // Verify the exact answer the wire carries, never the estimate.
+    while (kept > 0 && bytesOf(answer) > frameBytes) {
+      kept--;
+      answer = detail(projected.slice(projected.length - kept), projected.length - kept);
+    }
+    return answer;
   }
 
   /** The Principal sees a request only when an approval mail reached it or the

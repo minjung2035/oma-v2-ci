@@ -76,7 +76,10 @@ export function startEgressService(options: EgressServiceOptions): Promise<Serve
   return new Promise((resolve, reject) => {
     server.once("error", reject);
     server.listen(options.socketPath, () => {
-      chmodSync(options.socketPath, 0o600);
+      // The listener and its name are this opener's until the server is
+      // handed back; a permission failure returns both (AV-20261003-28).
+      try { chmodSync(options.socketPath, 0o600); }
+      catch (error) { server.close(); reject(error as Error); return; }
       server.off("error", reject);
       resolve(server);
     });

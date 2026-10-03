@@ -49,7 +49,12 @@ const server = createServer({ allowHalfOpen: false }, socket => {
   if (fd === null || peerCred(fd)?.uid !== uid) { socket.destroy(); return; }
   session.accept(socket);
 });
-server.listen(socketPath, () => { chmodSync(socketPath, 0o600); });
+server.listen(socketPath, () => {
+  // The listener and its name are this holder's until it exits; a permission
+  // failure takes the same end as a server error (AV-20261003-28).
+  try { chmodSync(socketPath, 0o600); }
+  catch (error) { server.close(); session.terminate(); fail(error instanceof Error ? error.message : String(error)); }
+});
 server.on("error", error => { session.terminate(); fail(error.message); });
 
 // AV31, P0V-81: asked to end in any way, the holder asks its program to end

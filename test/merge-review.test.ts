@@ -844,6 +844,39 @@ test("mail-v1: review.status lists newest first and counts what the frame cannot
   } finally { f.close(); }
 });
 
+test("mail-v1/AV-20261003-24: a request detail keeps the newest entries inside the frame and reports the rest", async () => {
+  const f = fixture(); try {
+    const candidate = f.candidateWith({ "one.txt": "a" });
+    await f.submit("alice", candidate);
+    await f.open("alice", { tier: "MEDIUM", candidate, reason: "bounded detail" }, "open-bounded");
+    const name = f.requestName("open-bounded");
+    const actors = ["alice", "bob", "carol", "dave"];
+    for (let i = 0; i < 40; i++) await f.review(actors[i % actors.length]!, name);
+    const full = f.module.reviews.status(f.auth("bob"), name, 64 * 1024, "d0");
+    assert.ok("entries" in full);
+    assert.equal(full.entries.length, 40);
+    const fullBytes = Buffer.byteLength(JSON.stringify({ v: 1, id: "d0", ok: true, result: full }));
+    const budget = Math.floor(fullBytes / 2);
+    const bounded = f.module.reviews.status(f.auth("bob"), name, budget, "d1");
+    assert.ok("entries" in bounded);
+    const wire = Buffer.byteLength(JSON.stringify({ v: 1, id: "d1", ok: true, result: bounded }));
+    assert.ok(wire <= budget, `a ${wire}-byte detail answers inside the ${budget}-byte frame`);
+    assert.ok(bounded.entries.length > 0 && bounded.entries.length < full.entries.length,
+      `expected a partial entry list at ${budget} bytes, got ${bounded.entries.length}`);
+    // The newest tail survives; the dropped prefix is reported, never hidden.
+    assert.deepEqual(bounded.entries.map(entry => entry.index),
+      Array.from({ length: bounded.entries.length }, (_, index) => full.entries.length - bounded.entries.length + index + 1));
+    const omitted = full.entries.length - bounded.entries.length;
+    assert.equal(bounded.missing.at(-1), `${omitted} earlier ${omitted === 1 ? "entry" : "entries"} omitted for size`);
+    assert.deepEqual(bounded.missing.slice(0, -1), full.missing);
+    // The bounded answer still decodes as the Worker detail variant.
+    assert.equal(decodeRpcReply("review.status", { v: 1, id: "d1", ok: true, result: bounded }, "d1", { name }).ok, true);
+    // A frame that cannot hold even the empty detail is refused honestly,
+    // never delivered as an oversized success.
+    assert.throws(() => f.module.reviews.status(f.auth("bob"), name, 200, "d2"), { code: "FRAME_TOO_LARGE" });
+  } finally { f.close(); }
+});
+
 test("mail-v1: review.status reports an unobservable main as null", async () => {
   const f = fixture(); try {
     rmSync(f.projectGit, { recursive: true, force: true });
