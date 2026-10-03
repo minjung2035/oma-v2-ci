@@ -8,7 +8,7 @@ import { NO_HOLD, type Release, type ResourceGate } from "../domain/admission.js
 import { capabilitiesOf } from "../authority.js";
 import { isValidRequestKey } from "../ids.js";
 import { receiptNotFound } from "../protocol/receipts.js";
-import { PUBLIC_METHODS, isPublicMethod, decodePublicParams, principalRequestAllowed } from "../protocol/methods.js";
+import { PUBLIC_METHODS, isPublicMethod, decodePublicParams, principalRequestAllowed, UNBOUNDED_PUBLIC_LIMITS } from "../protocol/methods.js";
 import { errorAnswer, okAnswer } from "./replies.js";
 import { statusPage } from "../protocol/status-page.js";
 import { receiptChunk } from "../protocol/receipt-chunks.js";
@@ -115,8 +115,19 @@ export class PublicDispatcher {
     if (authority.failure) return { ok: false, id, failure: authority.failure };
     const need = descriptor.capability, actor = authority.actor;
     if (need && (!auth.capabilities.has(need) || !actor || !capabilitiesOf(actor).has(need))) return fail("CAPABILITY_DENIED", `missing capability ${need}`, { capability: need });
-    const params = this.checkParams(method, envelope.params);
-    if (!params) return fail("INVALID_REQUEST", `invalid params for ${method}`);
+    let params = this.checkParams(method, envelope.params);
+    if (params === null && descriptor.key === "required") {
+      // Live limits bound only new work. The wire's limit checks must not
+      // re-judge a durable accepted fact: a same-key request the ledger holds
+      // is classified by grammar alone and answered by the owning claim -- the
+      // recorded receipt for a true replay, REQUEST_KEY_REUSED for a different
+      // payload under that key. Malformed params stay refused before the
+      // ledger is read at all, and read/ephemeral methods have no such lookup.
+      const grammar = decodePublicParams(method, envelope.params, { limits: UNBOUNDED_PUBLIC_LIMITS });
+      if (grammar !== null && this.deps.store.hasOperation(auth.actor, envelope.request as RequestKey))
+        params = grammar;
+    }
+    if (params === null) return fail("INVALID_REQUEST", `invalid params for ${method}`);
     if (auth.role === "principal" && auth.channel === "actor" && !principalRequestAllowed(method, params))
       return fail("CAPABILITY_DENIED", "the Principal delegates routine work to Workers");
     if (hasStream && (descriptor.stream === "none" || (descriptor.stream === "optional-bundle" && !Object.hasOwn(params, "bundle")))) return fail("INVALID_REQUEST", "method does not accept this stream body");

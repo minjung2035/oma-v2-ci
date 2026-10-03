@@ -322,6 +322,20 @@ export function isPublicMethod(value: unknown): value is PublicMethod {
   return typeof value === "string" && Object.hasOwn(PUBLIC_METHODS, value);
 }
 
+/** The bound-free profile: every wire grammar check (field shape, identifier,
+ * enum and cross-field rule) with only the deployment's numeric bounds lifted.
+ * It is the grammar half of decodePublicParams -- the part a durable accepted
+ * request is classified by forever. Live limits still gate new work; they may
+ * tighten after acceptance without rewriting what a same-key lookup answers. */
+export const UNBOUNDED_PUBLIC_LIMITS: ProtocolLimits = Object.freeze({
+  frameBytes: Number.MAX_SAFE_INTEGER, mailBodyBytes: Number.MAX_SAFE_INTEGER,
+  subjectBytes: Number.MAX_SAFE_INTEGER, addresses: Number.MAX_SAFE_INTEGER,
+  replyReferences: Number.MAX_SAFE_INTEGER, contextFiles: Number.MAX_SAFE_INTEGER,
+  contextBytes: Number.MAX_SAFE_INTEGER, bundleBytes: Number.MAX_SAFE_INTEGER,
+  logBytes: Number.MAX_SAFE_INTEGER, batchMaxMessages: Number.MAX_SAFE_INTEGER,
+  idleStreamSeconds: Number.MAX_SAFE_INTEGER, receiptWaitSeconds: Number.MAX_SAFE_INTEGER,
+});
+
 /** Validation is shared by stream preflight and dispatch; no coercion or sorting. */
 export function decodePublicParams<M extends PublicMethod>(
   method: M,

@@ -25,17 +25,19 @@ export class LifecycleActions {
     const claim = this.store.claimKey(auth.actor, key, hash);
     if (claim === "reused") throw reused(auth.actor, key);
     this.policy.requireManage(auth, agent);
-    const target = this.requireTarget(agent);
     const prior = claim === "retry" ? this.store.retriedOperation(auth.actor, key) : null;
     // AV-20261003-27, P0-1: a durably accepted same-key request replays its
-    // terminal receipt whatever the current environment says. Gates on new
-    // effect (the GOAL below, release and activation checks) come only after.
+    // terminal receipt whatever the current environment says -- including a
+    // retirement or re-provisioning since acceptance, so requireTarget's
+    // desired-state fence (like the GOAL, release and activation gates below)
+    // judges only new effects, never this lookup.
     if (prior && prior.state !== "pending" && prior.state !== "unknown") return receiptOfOperation(prior);
     if (prior) {
       if (prior.kind !== "agent.start" || prior.plan.agent !== agent)
         throw new StoreError("STORE_CORRUPT", "start replay differs from accepted identity");
       if (!this.currentIntent(prior.plan, prior.id)) return this.unconfirmed(prior.id);
     }
+    const target = this.requireTarget(agent);
     if (!this.paths.hasGoal()) throw new StoreError("GOAL_REQUIRED", "shared GOAL not published yet");
     if (!prior && auth.channel === "actor" && auth.role === "principal" &&
         this.store.operations.latestAction(agent, "principal")?.kind !== "agent.stop")
@@ -81,14 +83,16 @@ export class LifecycleActions {
     const claim = this.store.claimKey(auth.actor, key, hash);
     if (claim === "reused") throw reused(auth.actor, key);
     this.policy.requireManage(auth, agent);
-    const target = this.requireTarget(agent);
     const prior = claim === "retry" ? this.store.retriedOperation(auth.actor, key) : null;
+    // Same replay precedence as start: the accepted receipt is answered before
+    // the target's current desired state can refuse the lookup.
     if (prior && prior.state !== "pending" && prior.state !== "unknown") return receiptOfOperation(prior);
     if (prior) {
       if (prior.kind !== "agent.stop" || prior.plan.agent !== agent)
         throw new StoreError("STORE_CORRUPT", "stop replay differs from accepted identity");
       if (!this.currentIntent(prior.plan, prior.id)) return this.unconfirmed(prior.id);
     }
+    const target = this.requireTarget(agent);
     const id = prior?.id ?? generateOperationId();
     const incarnation = prior?.kind === "agent.stop" ? prior.plan.previousIncarnation : target.incarnation;
     if (!prior) {
