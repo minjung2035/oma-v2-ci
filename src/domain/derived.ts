@@ -162,6 +162,10 @@ export function contextRevisionFor(oid: string): string {
 export function contextRevisionDisplayPath(oid: string): string {
   return `/world/${contextRevisionFor(oid)}`;
 }
+/** The world doc advising how to write mail the Principal can act on. The name
+ * is derived once here so the world map, the role prompts, and the file
+ * `src/views.ts` materializes cannot spell three paths. */
+export const PRINCIPAL_MAIL_FILENAME = "PRINCIPAL-MAIL.md";
 
 export function actorSocketDirectoryFor(actor: string, incarnation: number): string {
   const owner = required(actor, parseActor, "actor");
