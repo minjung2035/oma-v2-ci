@@ -38,3 +38,9 @@ export function isProtocolLimits(value: unknown): value is ProtocolLimits {
 
 /** DR27: one CLI observation, not an accepted operation or task lifetime. */
 export const CLI_OBSERVATION_SECONDS = 180;
+
+/** The smallest batch that can carry both established priority classes at
+ * once: one direct and one public message. A configuration below it starves
+ * an actor whose pending mail is mixed (AV-07 family). The domain names the
+ * floor for batchMaxMessages; mail/batch-policy.ts enforces it at selection. */
+export const MIN_MIXED_BATCH_MESSAGES = 2;

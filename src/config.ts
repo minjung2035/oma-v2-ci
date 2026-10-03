@@ -15,9 +15,8 @@ import { requireResidentRootfs } from "./resident-paths.js";
 import { isValidActorName, isValidSocietyName, isValidWirePath } from "./domain/identifiers.js";
 import { isCapability } from "./domain/capabilities.js";
 import { RESOURCE_FIELDS } from "./domain/resources.js";
-import { PROTOCOL_LIMIT_FIELDS } from "./domain/limits.js";
+import { MIN_MIXED_BATCH_MESSAGES, PROTOCOL_LIMIT_FIELDS } from "./domain/limits.js";
 import { mailBodyBytesFits, minimumMailBodyBytes } from "./mail/review-bounds.js";
-import { MIN_MIXED_BATCH_MESSAGES } from "./mail/batch-policy.js";
 import type { IntegerField } from "./domain/integer-fields.js";
 import { isDeploymentDigest } from "./domain/deployment.js";
 import { isLogResponseFrameLimit } from "./protocol/log-response.js";
@@ -258,8 +257,8 @@ export function validateConfig(raw: unknown): ValidatedConfigCandidate {
   // AV-07: bounds the grammar accepts but the runtime cannot serve are refused
   // at commit, not discovered later as INTERNAL_ERROR on accepted work. The
   // floors are measured by the same constants the emission paths use
-  // (mail/review-bounds.ts, mail/batch-policy.ts), so they track the runtime
-  // rather than duplicating it.
+  // (mail/review-bounds.ts, domain/limits.ts via mail/batch-policy.ts), so
+  // they track the runtime rather than duplicating it.
   if (!mailBodyBytesFits(limits.mailBodyBytes as number, limits.subjectBytes as number))
     err(`limits.mailBodyBytes must be at least ${minimumMailBodyBytes(limits.subjectBytes as number)} for the configured limits.subjectBytes; a smaller bound cannot always hold a review thread revision or a completion-notice part`);
   if ((limits.batchMaxMessages as number) < MIN_MIXED_BATCH_MESSAGES)

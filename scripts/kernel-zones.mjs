@@ -60,6 +60,7 @@ export const KERNEL_ZONES = Object.freeze([
       "src/mail/addresses.ts",
       "src/mail/facts.ts",
       "src/mail/headers.ts",
+      "src/mail/review-bounds.ts",
       "src/validate.ts",
       "src/protocol/batch-view.ts",
       "src/protocol/status-view.ts",

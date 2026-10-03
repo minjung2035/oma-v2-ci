@@ -1,10 +1,11 @@
 import type { PreparedBatch } from "../../implementation/contracts.js";
 import { StoreError } from "../domain/errors.js";
+import { MIN_MIXED_BATCH_MESSAGES } from "../domain/limits.js";
 
-/** The smallest batch that can carry both established priority classes at
- * once: one direct and one public message. A configuration below it starves
- * an actor whose pending mail is mixed (AV-07 family). */
-export const MIN_MIXED_BATCH_MESSAGES = 2;
+/** The mixed-batch floor lives in domain/limits with the other
+ * batchMaxMessages bounds; this module enforces it at selection and keeps
+ * the name reachable for its callers. */
+export { MIN_MIXED_BATCH_MESSAGES } from "../domain/limits.js";
 
 /** Input is the ledger's oldest-first sequence. Preserve order within each
  * established priority class; direct first, public second, then alternate.

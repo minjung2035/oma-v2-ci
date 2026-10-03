@@ -50,6 +50,9 @@ const LAYERS = Object.freeze([
       "src/mail/addresses.ts",
       "src/mail/facts.ts",
       "src/mail/headers.ts",
+      // Bound floors and thread-body measurements: pure leaf policy the
+      // config schema validates against, like the mail leaves above.
+      "src/mail/review-bounds.ts",
       // The confined Resident's path tables and host/inside translations:
       // pure policy the config schema and lifecycle mounts both read.
       "src/resident-paths.ts",
