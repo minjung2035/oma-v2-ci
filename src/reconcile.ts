@@ -102,7 +102,13 @@ export class ReconcileModule {
             break;
           case "society.set": case "agent.create": case "agent.start": case "agent.stop":
           case "git.submit": case "git.integrate": case "context.publish":
-            await this.recover(operation, allowActivation); break;
+            // AV-20261003-20: the same per-operation isolation the sweep
+            // applies -- a recoverable failure is recorded and the next
+            // operation still recovers. Only the store-scope corruption
+            // verdict retainRecoveryFailure rethrows stays fatal.
+            try { await this.recover(operation, allowActivation); }
+            catch (error) { this.retainRecoveryFailure(error); }
+            break;
           // These operations commit their complete effect within a single DB T.
           // Preserve startup's lack of a physical replay for a nonterminal row.
           case "mail.ack": case "route.follow": case "route.unfollow": break;

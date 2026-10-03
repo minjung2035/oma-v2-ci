@@ -175,6 +175,7 @@ export const lanes = Object.freeze({
   },
   durable: {
     files: [
+      "adversarial-2026-10-03-fixes.test.js",
       "argument-boundary.test.js",
       "untrusted-directories.test.js",
       "held-parent.test.js",

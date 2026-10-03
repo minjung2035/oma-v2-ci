@@ -31,33 +31,43 @@ export type GitObservation<T> =
   | { readonly kind: "present"; readonly value: T; readonly evidence: GitProcessEvidence }
   | { readonly kind: "absent"; readonly evidence: GitProcessEvidence }
   | { readonly kind: "unknown"; readonly reason: string; readonly evidence: GitProcessEvidence }
-  | { readonly kind: "corrupt"; readonly reason: string; readonly evidence: GitProcessEvidence };
+  | { readonly kind: "corrupt"; readonly reason: string; readonly evidence: GitProcessEvidence }
+  /** AV-20261003-25: the observation answered, and its answer is that the
+   * candidate's content is outside the grammar OMA can represent -- a
+   * refusal of that candidate, never a fact about the durable store. */
+  | { readonly kind: "refused"; readonly reason: string; readonly evidence: GitProcessEvidence };
 export function observed<T>(observation: GitObservation<T>, what: string): T {
   if (observation.kind === "present") return observation.value;
+  if (observation.kind === "refused") throw new StoreError("INVALID_REQUEST", `${what}: ${observation.reason}`);
   throw new StoreError(observation.kind === "corrupt" ? "STORE_CORRUPT" : "REF_STATE_UNKNOWN", `${what}: ${observation.kind}`);
 }
 export type GitObservationRunner = (args: readonly string[], input?: string) => GitProcessEvidence;
-export type Parsed<T> = { readonly ok: true; readonly value: T } | { readonly ok: false; readonly reason: string };
+/** `scope` says whose failure a refusal is: "output" is an observation that
+ * is itself malformed; "candidate" is a name the candidate's content places
+ * outside the grammar -- that candidate's defect, never store corruption. */
+export type Parsed<T> = { readonly ok: true; readonly value: T } |
+  { readonly ok: false; readonly reason: string; readonly scope: "output" | "candidate" };
 export interface ChangedPath { readonly status: "A" | "M" | "D" | "T"; readonly path: string }
 
 /** Fixed --no-renames grammar: status NUL path NUL, never status-as-path.
  * No trimming, whitespace replacement, Unicode normalization or deduplication.
- */
+ * A well-formed record whose name the grammar cannot represent (not UTF-8, or
+ * not a repository-relative path) is refused at candidate scope. */
 export function parseNameStatusZ(bytes: Uint8Array): Parsed<readonly ChangedPath[]> {
   if (bytes.byteLength === 0) return { ok: true, value: [] };
-  if (bytes[bytes.byteLength - 1] !== 0) return { ok: false, reason: "unterminated name-status record" };
+  if (bytes[bytes.byteLength - 1] !== 0) return { ok: false, reason: "unterminated name-status record", scope: "output" };
   let text: string;
-  try { text = decodeUtf8(bytes); } catch { return { ok: false, reason: "name-status output is not UTF-8" }; }
+  try { text = decodeUtf8(bytes); } catch { return { ok: false, reason: "a changed-path name is not UTF-8", scope: "candidate" }; }
   const fields = text.split("\0");
   fields.pop();
-  if (fields.length % 2 !== 0) return { ok: false, reason: "incomplete name-status pair" };
+  if (fields.length % 2 !== 0) return { ok: false, reason: "incomplete name-status pair", scope: "output" };
   const changes: ChangedPath[] = [];
   for (let index = 0; index < fields.length; index += 2) {
     const status = fields[index];
     const path = fields[index + 1];
     if (status !== "A" && status !== "M" && status !== "D" && status !== "T")
-      return { ok: false, reason: "unsupported status for --no-renames" };
-    if (!isValidWirePath(path)) return { ok: false, reason: "invalid repository-relative changed path" };
+      return { ok: false, reason: "unsupported status for --no-renames", scope: "output" };
+    if (!isValidWirePath(path)) return { ok: false, reason: "invalid repository-relative changed path", scope: "candidate" };
     changes.push({ status, path });
   }
   return { ok: true, value: changes };
@@ -79,6 +89,7 @@ function uncertain(evidence: GitProcessEvidence): boolean {
 function diagnostic(evidence: GitProcessEvidence): boolean { return evidence.stderr === null || evidence.stderr.byteLength !== 0; }
 function unknown<T>(evidence: GitProcessEvidence, reason: string): GitObservation<T> { return { kind: "unknown", reason, evidence }; }
 function corrupt<T>(evidence: GitProcessEvidence, reason: string): GitObservation<T> { return { kind: "corrupt", reason, evidence }; }
+function refused<T>(evidence: GitProcessEvidence, reason: string): GitObservation<T> { return { kind: "refused", reason, evidence }; }
 function line(value: string | null): string | null {
   if (value === null) return null;
   // Git emits one LF. Whitespace around an identity is not another spelling.
@@ -151,7 +162,8 @@ export class GitObserver {
     if (uncertain(evidence) || evidence.status !== 0 || diagnostic(evidence)) return unknown(evidence, "changed-path process unavailable");
     if (evidence.stdout === null) return corrupt(evidence, "missing changed-path output");
     const parsed = parseNameStatusZ(evidence.stdout);
-    return parsed.ok ? { kind: "present", value: parsed.value, evidence } : corrupt(evidence, parsed.reason);
+    return parsed.ok ? { kind: "present", value: parsed.value, evidence }
+      : parsed.scope === "candidate" ? refused(evidence, parsed.reason) : corrupt(evidence, parsed.reason);
   }
 }
 
@@ -162,7 +174,9 @@ export type RefAfterCas =
   | { readonly kind: "unknown"; readonly observation: GitObservation<string> };
 /** The caller must supply a NEW post-CAS observation, not the precheck. */
 export function classifyRefAfterCas(observation: GitObservation<string>, expected: string | null, candidate: string): RefAfterCas {
-  if (observation.kind === "unknown" || observation.kind === "corrupt") return { kind: "unknown", observation };
+  // A refused observation proves nothing of the ref either: it is unknown here.
+  if (observation.kind === "unknown" || observation.kind === "corrupt" || observation.kind === "refused")
+    return { kind: "unknown", observation };
   const oid = observation.kind === "absent" ? null : observation.value;
   if (oid === candidate) return { kind: "candidate", oid };
   return oid === expected ? { kind: "expected", oid } : { kind: "third", oid };
