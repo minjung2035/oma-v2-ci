@@ -156,7 +156,7 @@ test("PRE-5: an accepted linked create names no initial brief, so it owns none o
       for (const name of ["a", "b"]) tx.insertAgent(makeValidAgent(name, { from: info.base, createdBy: "principal" }));
     });
     const { mail, paths } = gitFixture(root, store);
-    const units = new UnitsModule(paths.society, { node: process.execPath, libdir: process.cwd(), state: root, society: paths.society, agent: "", config: join(root, "config.json"), run: join(root, "oma", paths.society), brokerUnit: "" });
+    const units = new UnitsModule(paths.society, { node: process.execPath, libdir: process.cwd(), state: root, society: paths.society, agent: "", config: join(root, "config.json"), run: join(root, "oma", paths.society) });
     const resolve = (name: string, from: string, brief: string) => makeValidResolvedSpec(name, "p", ALL_CAPS, from, brief);
     const lifecycle = new LifecycleModule(store, units,
       { stateRoot: root, projectGit: paths.projectGit, society: paths.society, hasGoal: () => false, activationAllowed: () => true },
@@ -532,7 +532,7 @@ function lifecycleOnly(options: { seeded?: boolean } = {}) {
     for (const name of ["a", "b"]) tx.insertAgent(makeValidAgent(name, { from: info.base, createdBy: "principal" }));
   });
   const { mail, paths } = gitFixture(root, store);
-  const units = new UnitsModule(paths.society, { node: process.execPath, libdir: process.cwd(), state: root, society: paths.society, agent: "", config: join(root, "config.json"), run: join(root, "oma", paths.society), brokerUnit: "" });
+  const units = new UnitsModule(paths.society, { node: process.execPath, libdir: process.cwd(), state: root, society: paths.society, agent: "", config: join(root, "config.json"), run: join(root, "oma", paths.society) });
   let failRefresh = false;
   const resolver = Object.assign((_parent: unknown, input: { name: string; from: string; brief: string }) =>
     makeValidResolvedSpec(input.name, "p", ALL_CAPS, input.from, input.brief), {
@@ -545,8 +545,7 @@ function lifecycleOnly(options: { seeded?: boolean } = {}) {
   const seed = (names: readonly string[], profile = (name: string) => name === "broken" ? "missing" : "p"): Parameters<LifecycleModule["bootstrap"]>[0] => ({
     principalProfile: "p",
     initialResidents: names.map(name => ({ name, profile: profile(name), brief: `brief for ${name}` })),
-    modelProfiles: { md: { provider: "none", model: "none", credentialRef: "none", codecRevision: "none", pricingRevision: "none",
-      maxInputTokens: 1, maxOutputTokens: 1, inferenceTimeoutSeconds: 1 } },
+    modelProfiles: { md: { provider: "none", model: "none", inferenceTimeoutSeconds: 1 } },
     agentProfiles: { p: { modelProfile: "md", capabilities: [...ALL_CAPS], delegable: [...ALL_CAPS], childProfile: "p", resources: { ...TEST_RESOURCES } } },
   });
   return { root, store, mail, units, lifecycle, info, seed, failRefresh: () => { failRefresh = true; },

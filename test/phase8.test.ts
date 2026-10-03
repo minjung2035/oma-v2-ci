@@ -79,7 +79,7 @@ function envOf(withGit: boolean): Env {
       libdir: "/l",
       state: join(dir, "state"),
       society,
-      agent: "", config: join(dir, "state", "config.json"), run: join(dir, "oma", society), brokerUnit: "",
+      agent: "", config: join(dir, "state", "config.json"), run: join(dir, "oma", society),
     },
     join(dir, "xdg"),
   );

@@ -117,7 +117,7 @@ async function startSociety(prefix: string, supervised = true, host?: HostChanne
     }),
   );
   const units = new UnitsModule("demo",
-    { node: process.execPath, libdir: "/opt/oma", state: root, society: "demo", agent: "", config: join(root, "config.json"), run: join(root, "oma", "demo"), brokerUnit: "" }, root);
+    { node: process.execPath, libdir: "/opt/oma", state: root, society: "demo", agent: "", config: join(root, "config.json"), run: join(root, "oma", "demo") }, root);
   const mail = new MailModule({ stateRoot: root, society: "demo" }, store, 64, LIMITS.batchMaxMessages, LIMITS);
   const views = new ViewsModule(store, root, "demo", "p");
   const lifecycle = new LifecycleModule(store, units,

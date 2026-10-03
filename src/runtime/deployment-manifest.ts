@@ -121,7 +121,6 @@ export function deploymentManifest(root: string): DeploymentManifest {
     tree(DEPLOYMENT_LAYOUT.systemd);
     for (const path of [
       DEPLOYMENT_LAYOUT.schema,
-      ...DEPLOYMENT_LAYOUT.schemaMigrations,
       DEPLOYMENT_LAYOUT.modelCommand,
       "package.json",
       "package-lock.json",

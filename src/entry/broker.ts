@@ -1,10 +1,10 @@
 // UNIT-004/LIFE-006/REC-007: composition under a single process lifetime.
 import { join } from "node:path";
-import { mkdirSync, readFileSync } from "node:fs";
+import { mkdirSync } from "node:fs";
 import { ensureDirectory } from "../storage/directory.js";
 import { Store, SCHEMA_PATH } from "../store.js";
 import { MailModule } from "../mail.js";
-import { UnitsModule, UNIT_TPL_DIR, unitName, assertUserManagerReachable } from "../units.js";
+import { UnitsModule, UNIT_TPL_DIR, assertUserManagerReachable } from "../units.js";
 import { ViewsModule } from "../views.js";
 import { LifecycleModule } from "../lifecycle.js";
 import { Broker } from "../broker.js";
@@ -48,18 +48,6 @@ try {
     : hostLaunchLocation(society, process.env, configIdx >= 0 ? args[configIdx + 1] : undefined);
 } catch (error) { console.error(`broker: ${error instanceof Error ? error.message : String(error)}`); usage(); }
 const { stateRoot, runRoot, configPath } = location;
-// D03: the lifetime dependency a Resident may name is the one that exists. Only
-// a broker systemd runs as the society's fixed unit is one a unit can bind to;
-// any other broker outlives no Resident it started, so its drain stops them.
-const brokerUnit = unitName(society, "broker", "service");
-const systemdManaged = process.env[HOST_CHANNEL_ENV] === undefined && ownServiceUnit() === brokerUnit;
-function ownServiceUnit(): string | null {
-  try {
-    const lines = readFileSync("/proc/self/cgroup", "utf8").trim().split("\n");
-    const unified = lines.length === 1 && lines[0]!.startsWith("0::/") ? lines[0]!.slice(3) : null;
-    return unified === null ? null : unified.slice(unified.lastIndexOf("/") + 1);
-  } catch { return null; }
-}
 async function main(): Promise<void> {
   assertHostDirectoryLayout(runRoot, true);
   mkdirSync(runRoot, { recursive: true });
@@ -165,7 +153,7 @@ async function main(): Promise<void> {
     lifetime.retainStore(() => store.close());
     const mail = new MailModule({ stateRoot, society }, store, cfg.limits.replyReferences, cfg.limits.batchMaxMessages, cfg.limits);
     const units = new UnitsModule(society, { node: cfg.installation.node, libdir: cfg.installation.libdir, state: stateRoot, society, agent: "",
-      config: configPath, run: runRoot, brokerUnit: systemdManaged ? brokerUnit : "" },
+      config: configPath, run: runRoot },
       undefined, Object.fromEntries(Object.entries(cfg.agentProfiles).map(([name, profile]) => [name, profile.resources])),
       agent => store.getAgent(agent)?.incarnation ?? null);
     const views = new ViewsModule(store, stateRoot, society, cfg.principalProfile, cfg.limits);
@@ -194,7 +182,7 @@ async function main(): Promise<void> {
     // never through a file, an environment or this process's own output.
     const broker = new Broker(store, mail, units, views, lifecycle, git, reconcile,
       { stateRoot, runRoot, society, hasGoal, storageBytes: cfg.quota.storageBytes, storage,
-        ...(systemdManaged ? {} : { quiesceOnDrain: () => reconcile.quiesceForShutdown(), periodicReconcile: true }) }, cfg.limits, lock,
+        quiesceOnDrain: () => reconcile.quiesceForShutdown() }, cfg.limits, lock,
       principalHost);
     lifetime.attach(broker);
     const validateStoredProfiles = () => {

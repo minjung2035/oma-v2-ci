@@ -232,7 +232,7 @@ function brokerEnv(): BrokerEnv {
       libdir: "/usr/lib/oma",
       state,
       society,
-      agent: "", config: join(state, "config.json"), run: join(state, "oma", society), brokerUnit: ""
+      agent: "", config: join(state, "config.json"), run: join(state, "oma", society)
     },
     join(dir, "xdg"),
   );
@@ -828,11 +828,6 @@ function minimalConfig(society: string): Record<string, unknown> {
       md: {
         provider: "none",
         model: "none",
-        credentialRef: "none",
-        codecRevision: "none",
-        pricingRevision: "none",
-        maxInputTokens: 1,
-        maxOutputTokens: 1,
         inferenceTimeoutSeconds: 1,
       },
     },
@@ -873,11 +868,6 @@ function minimalConfig(society: string): Record<string, unknown> {
     quota: {
       societyAgents: 8,
       lineageAgents: 4,
-      societyUnits: 1000,
-      lineageUnits: 500,
-      principalReservedUnits: 100,
-      inferenceSlots: 1,
-      principalReservedSlots: 1,
       // D04/WP22: startup stops only past the settlement headroom, so a fresh
       // society needs a quota its seeded repository and Store actually fit in.
       storageBytes: 1024 * 1024 * 1024,
@@ -896,12 +886,6 @@ function minimalConfig(society: string): Record<string, unknown> {
       batchMaxMessages: 32,
       idleStreamSeconds: 900,
       receiptWaitSeconds: 30,
-    },
-    features: {
-      notmuch: false,
-      reflinkSeed: false,
-      formalApproval: false,
-      egress: false,
     },
   };
 }
@@ -923,7 +907,7 @@ test("CFG-001/IPC-001: configuration and frames share strict JSON decoding", () 
         ),
       ),
       Buffer.from(
-        json.replace('"codecRevision":"none"', '"codecRevision":"\\ud800"'),
+        json.replace('"provider":"none"', '"provider":"\\ud800"'),
       ),
       Buffer.from(json.replace('"md":', '"\\ud800":')),
       Buffer.from(json.replace('"societyAgents":8', '"societyAgents":1e999')),

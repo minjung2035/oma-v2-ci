@@ -36,8 +36,8 @@ function recoveryCategory(kind: RecoveryRow["kind"]): ResourceCategory {
     default: return assertNever(kind);
   }
 }
-/** REC-002: the reference interval between physical reconciliation sweeps --
- * reconcile.timer.in's OnUnitActiveSec -- whichever owner runs them. */
+/** REC-002: the interval between the broker's in-process reconciliation
+ * sweeps -- the only owner of them. */
 export const RECONCILE_INTERVAL_MS = 5_000;
 export interface UnitRecoveryDiagnostic { readonly agent: string; readonly outcome: "observed" | "started" | "stopped" | "unknown"; readonly reason: string | null }
 const sweepScope = new AsyncLocalStorage<ReconcileModule>();

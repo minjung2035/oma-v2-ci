@@ -4,7 +4,7 @@ import { FrameParser, FrameError, parseJsonObject } from "../src/frame.js";
 import { parseNameStatusZ } from "../src/git/observe.js";
 import { parseProperties, parseUnitObservation, parseCgroupPopulation, parseCgroupProcs } from "../src/units/observe.js";
 import { parseEmlHeaders } from "../src/mail/headers.js";
-import { decodeAgentRow, decodeUsageRow } from "../src/storage/rows.js";
+import { decodeAgentRow } from "../src/storage/rows.js";
 import { StoreError } from "../src/domain/errors.js";
 import { makeValidAgent } from "./fixtures/spec.js";
 import { corruptValueForTest } from "./fixtures/corruption.js";
@@ -101,10 +101,6 @@ test("R36 durable decoders reject one-field mutations after a valid control", ()
   assert.equal(decodeAgentRow(raw).name, "alice");
   for (const value of ["1", -1, 1.5, Number.MAX_SAFE_INTEGER + 1, null, false])
     assert.throws(() => decodeAgentRow(corruptValueForTest(raw, "incarnation", value)), { code: "STORE_CORRUPT" });
-  const usage = { request_id: "00000000-0000-4000-8000-000000000001", actor: "alice", incarnation: 1,
-    profile: "md", pricing_revision: "fixed", reserved_units: 10, reported_units: null, outcome: "unknown", details_json: null, created_at_ms: 1, updated_at_ms: 1 };
-  assert.equal(decodeUsageRow(usage).reservedUnits, 10);
-  for (const value of [0, "0", -1, NaN]) assert.throws(() => decodeUsageRow(corruptValueForTest(usage, "reported_units", value)), { code: "STORE_CORRUPT" });
 });
 
 test("R36 parser mutation sentinel redetects duplicate-key acceptance from the saved corpus", () => {

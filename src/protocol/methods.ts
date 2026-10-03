@@ -444,15 +444,6 @@ export const INTERNAL_METHODS = {
     evidence: "none",
     paramsCheck: noParams,
   },
-  "host.reconcile": {
-    channel: "host",
-    key: "forbidden",
-    stream: "none",
-    lease: "host-unit",
-    resource: "staged",
-    evidence: "none",
-    paramsCheck: noParams,
-  },
 } as const satisfies Record<keyof InternalMethods, InternalDescriptor>;
 
 /** P0V-32, P0-2: the one reading of an internal request's envelope, for every

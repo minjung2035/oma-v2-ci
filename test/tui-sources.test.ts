@@ -32,8 +32,8 @@ function config(root: string): HostConfigV1 {
     society: "demo",
     installation: { node: process.execPath, libdir: root, rootfs: root, deploymentDigest: digest("d") },
     modelProfiles: {
-      cheap: { provider: "p", model: "cheap", credentialRef: "none", codecRevision: "c", pricingRevision: "r", maxInputTokens: 1, maxOutputTokens: 1, inferenceTimeoutSeconds: 1 },
-      strong: { provider: "p", model: "strong", credentialRef: "none", codecRevision: "c", pricingRevision: "r", maxInputTokens: 1, maxOutputTokens: 1, inferenceTimeoutSeconds: 1 },
+      cheap: { provider: "p", model: "cheap", inferenceTimeoutSeconds: 1 },
+      strong: { provider: "p", model: "strong", inferenceTimeoutSeconds: 1 },
     },
     agentProfiles: {
       principal: { modelProfile: "strong", capabilities: [], delegable: [], childProfile: "resident", resources: TEST_RESOURCES },
@@ -41,14 +41,13 @@ function config(root: string): HostConfigV1 {
     },
     principalProfile: "principal",
     initialResidents: [{ name: "a", profile: "resident", brief: "seed a" }, { name: "b", profile: "resident", brief: "seed b" }],
-    quota: { societyAgents: 8, lineageAgents: 4, societyUnits: 100, lineageUnits: 50, principalReservedUnits: 10, inferenceSlots: 4, principalReservedSlots: 1, storageBytes: 1024 },
+    quota: { societyAgents: 8, lineageAgents: 4, storageBytes: 1024 },
     integration: { policyRevision: "rev-initial", protectedPaths: [], checks: [] },
     limits: {
       frameBytes: 262144, mailBodyBytes: 262144, subjectBytes: 512, addresses: 64, replyReferences: 64,
       contextFiles: 256, contextBytes: 8388608, bundleBytes: 268435456, logBytes: 1048576,
       batchMaxMessages: 24, idleStreamSeconds: 1, receiptWaitSeconds: 1,
     },
-    features: { notmuch: false, reflinkSeed: false, formalApproval: false, egress: false },
   };
 }
 

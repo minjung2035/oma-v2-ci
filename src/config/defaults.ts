@@ -107,18 +107,11 @@ export function defaultHostConfig(input: DefaultConfigInput): HostConfigV1 {
     },
     modelProfiles: {
       // "pi/current" means the engine picks the connection, so OMA states no
-      // provider or credential of its own. The remaining fields exist only
-      // because the schema is closed; they are placeholders, not a pricing or
-      // context claim. Real usage bounds belong to the engine, and nothing
-      // reads these on this path today.
+      // provider or credential of its own. Real usage bounds belong to the
+      // engine.
       [DEFAULT_MODEL_PROFILE]: {
         provider: "pi",
         model: "current",
-        credentialRef: "engine-managed",
-        codecRevision: "engine-current",
-        pricingRevision: "unpinned",
-        maxInputTokens: 1,
-        maxOutputTokens: 1,
         inferenceTimeoutSeconds: 600,
       },
     },
@@ -148,11 +141,6 @@ export function defaultHostConfig(input: DefaultConfigInput): HostConfigV1 {
     quota: {
       societyAgents: 8,
       lineageAgents: 4,
-      societyUnits: 1000000,
-      lineageUnits: 250000,
-      principalReservedUnits: 200000,
-      inferenceSlots: 4,
-      principalReservedSlots: 1,
       storageBytes: 8 * 1024 * 1024 * 1024,
     },
     integration: {
@@ -164,6 +152,5 @@ export function defaultHostConfig(input: DefaultConfigInput): HostConfigV1 {
       checks: [],
     },
     limits: { ...LIMITS },
-    features: { notmuch: false, reflinkSeed: false, formalApproval: false, egress: false },
   };
 }

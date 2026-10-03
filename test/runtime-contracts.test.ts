@@ -29,7 +29,7 @@ test("LIFE-008: stored identity and frozen resources reject stale or mismatched 
 test("UNIT-007: unavailable unit observation is not proven cgroup death", () => {
   const society = `missing-${process.pid}`;
   const units = new UnitsModule(society, {
-    node: process.execPath, libdir: "/nonexistent", state: "/nonexistent", society, agent: "a", config: join("/nonexistent", "config.json"), run: join("/nonexistent", "oma", society), brokerUnit: ""
+    node: process.execPath, libdir: "/nonexistent", state: "/nonexistent", society, agent: "a", config: join("/nonexistent", "config.json"), run: join("/nonexistent", "oma", society)
   });
   // Fault seam: the unit command boundary reports an unavailable observation.
   // Observation uses the command boundary, not the effect `run` helper.
@@ -42,7 +42,7 @@ test("UNIT-007: unavailable unit observation is not proven cgroup death", () => 
 
 test("SEQ-002: stop attempts revocation then service termination despite earlier faults", () => {
   for (const fault of ["path", "revoke"]) {
-    const units = new UnitsModule("probe", { node: process.execPath, libdir: "/unused", state: "/unused", society: "probe", agent: "a", config: join("/unused", "config.json"), run: join("/unused", "oma", "probe"), brokerUnit: "" });
+    const units = new UnitsModule("probe", { node: process.execPath, libdir: "/unused", state: "/unused", society: "probe", agent: "a", config: join("/unused", "config.json"), run: join("/unused", "oma", "probe") });
     const steps: string[] = [];
     // Unit existence/observation goes through the command boundary; effects go
     // through `run`. Both are controlled so the ordering oracle is the subject.

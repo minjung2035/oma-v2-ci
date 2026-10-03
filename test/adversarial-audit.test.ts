@@ -267,7 +267,7 @@ test("AUD-8: actor socket paths remain under Linux sun_path", () => {
     const mail = new MailModule({ stateRoot: root, society: "demo" }, store, 64);
     const units = new UnitsModule(
       "demo",
-      { node: process.execPath, libdir: "/opt/oma", state: root, society: "demo", agent: "", config: join(root, "config.json"), run: join(root, "oma", "demo"), brokerUnit: "" },
+      { node: process.execPath, libdir: "/opt/oma", state: root, society: "demo", agent: "", config: join(root, "config.json"), run: join(root, "oma", "demo") },
       root,
     );
     const views = new ViewsModule(store, root, "demo", "p");
@@ -330,7 +330,7 @@ test("AUD-9: public dispatch rejects top-level request on read/ephemeral methods
     );
     const units = new UnitsModule(
       "demo",
-      { node: process.execPath, libdir: "/opt/oma", state: root, society: "demo", agent: "", config: join(root, "config.json"), run: join(root, "oma", "demo"), brokerUnit: "" },
+      { node: process.execPath, libdir: "/opt/oma", state: root, society: "demo", agent: "", config: join(root, "config.json"), run: join(root, "oma", "demo") },
       root,
     );
     const mail = new MailModule({ stateRoot: root, society: "demo" }, store, 64);

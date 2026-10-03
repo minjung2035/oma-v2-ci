@@ -7,10 +7,10 @@ import { StoreError } from "../domain/errors.js";
 import { resolvedSpecCheck } from "../durable.js";
 import { resolvedSpecDigest } from "../domain/spec-identity.js";
 import {
-  isValidActor, isValidActorName, isValidTopicName, isValidRequestKey,
+  isValidActor, isValidActorName, isValidTopicName,
   isValidOperationId, isValidMessageId, isValidBatchId, parseMessageId,
 } from "../domain/identifiers.js";
-import type { Actor, BatchId, MessageId, OperationId, RequestKey, TopicName } from "../domain/identifiers.js";
+import type { Actor, BatchId, MessageId, OperationId, TopicName } from "../domain/identifiers.js";
 
 export interface AgentRow {
   name: string; specHash: string; role: "resident" | "principal";
@@ -28,11 +28,6 @@ export interface BatchRow {
   id: string; agent: string; incarnation: number; messageIdsJson: string;
   sessionPath: string | null; state: "prepared" | "completed"; createdAtMs: number; completedAtMs: number | null;
 }
-export interface UsageRow {
-  requestId: string; actor: string; incarnation: number; profile: string; pricingRevision: string;
-  reservedUnits: number; reportedUnits: number | null; outcome: "reserved" | "completed" | "cancelled" | "unknown";
-  detailsJson: string | null; createdAtMs: number; updatedAtMs: number;
-}
 
 /** Output brands retain parser evidence without changing legacy producer DTOs. */
 export type DecodedAgentRow = AgentRow & { name: Actor; createdBy: Actor | null };
@@ -41,7 +36,6 @@ export type DecodedDeliveryRow = DeliveryRow & {
   messageId: MessageId; recipient: Actor; operationId: OperationId; batchId: BatchId | null;
 };
 export type DecodedBatchRow = BatchRow & { id: BatchId; agent: Actor };
-export type DecodedUsageRow = UsageRow & { requestId: RequestKey; actor: Actor };
 
 export function rowCorrupt(message: string): never { throw new StoreError("STORE_CORRUPT", message); }
 export function fullRow(value: unknown, keys: readonly string[], entity: string): Record<string, unknown> {
@@ -151,34 +145,6 @@ export function decodeBatchRow(value: unknown): DecodedBatchRow {
   const sessionPath = raw.session_path === null ? null : text(raw.session_path, "batch session path");
   return { id: identity(raw.id, isValidBatchId, "batch id"), agent: identity(raw.agent, isValidActor, "batch agent"),
     incarnation: safeInteger(raw.incarnation, "batch incarnation"), state, createdAtMs, completedAtMs, messageIdsJson, sessionPath };
-}
-
-function validateUsageDetails(json: string, pricingRevision: string): void {
-  const value = parseJson(json, "usage details");
-  if (value === null) return; // Existing producer persists both SQL NULL and JSON null.
-  if (typeof value !== "object" || Array.isArray(value)) rowCorrupt("usage details is not an accounting object");
-  for (const [key, item] of Object.entries(value)) {
-    if (["inputTokens", "outputTokens", "cachedInputTokens", "totalTokens", "reportedUnits"].includes(key)) safeInteger(item, `usage ${key}`);
-    else if (key === "providerRequestId") text(item, "provider request id");
-    else if (key === "pricingRevision") {
-      if (item !== pricingRevision) rowCorrupt("usage detail pricing revision mismatch");
-    } else rowCorrupt("usage details contains unsupported payload or token-stream data");
-  }
-}
-export function decodeUsageRow(value: unknown): DecodedUsageRow {
-  const raw = fullRow(value, ["request_id", "actor", "incarnation", "profile", "pricing_revision", "reserved_units", "reported_units", "outcome", "details_json", "created_at_ms", "updated_at_ms"], "usage");
-  const outcome = choice(raw.outcome, ["reserved", "completed", "cancelled", "unknown"] as const, "usage outcome");
-  const reportedUnits = raw.reported_units === null ? null : safeInteger(raw.reported_units, "reported units");
-  if (((outcome === "reserved" || outcome === "unknown") && reportedUnits !== null) ||
-      ((outcome === "completed" || outcome === "cancelled") && reportedUnits === null)) rowCorrupt("usage outcome/reported units mismatch");
-  const pricingRevision = text(raw.pricing_revision, "pricing revision");
-  const detailsJson = raw.details_json === null ? null : text(raw.details_json, "usage details JSON");
-  if (detailsJson !== null) validateUsageDetails(detailsJson, pricingRevision);
-  const createdAtMs = safeInteger(raw.created_at_ms, "usage creation time");
-  return { requestId: identity(raw.request_id, isValidRequestKey, "usage request id"), actor: identity(raw.actor, isValidActor, "usage actor"),
-    incarnation: safeInteger(raw.incarnation, "usage incarnation"), profile: text(raw.profile, "usage model profile"), pricingRevision,
-    reservedUnits: safeInteger(raw.reserved_units, "reserved units"), reportedUnits, outcome, detailsJson, createdAtMs,
-    updatedAtMs: safeInteger(raw.updated_at_ms, "usage update time", createdAtMs) };
 }
 
 /** Only the actual SELECT id projection is accepted, not a pretend full operation. */

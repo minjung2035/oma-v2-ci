@@ -32,7 +32,6 @@ export function assertRuntimeAssets(assets: RuntimeAssets, observed: { schema: s
     if (resolved === ".." || resolved.startsWith(`..${sep}`) || isAbsolute(resolved))
       throw new StoreError("UNSUPPORTED_PROFILE", "deployment asset escapes installation root");
   };
-  for (const migration of DEPLOYMENT_LAYOUT.schemaMigrations) requireEntry(join(assets.root, migration), false);
   requireEntry(assets.systemd, true); requireEntry(assets.schema, false); requireEntry(assets.contract, false); requireEntry(assets.extension, false);
   for (const entry of Object.values(assets.entries)) requireEntry(entry, false);
   for (const template of Object.keys(DEPLOYMENT_LAYOUT.templateEntries)) requireEntry(join(assets.systemd, template), false);

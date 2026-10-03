@@ -10,9 +10,9 @@ import type { RepositoryIdentity, OperationPlanContext } from "./durable.js";
 import type { DecodedOperation, OperationOf } from "./storage/operation-codec.js";
 import { LedgerReader, type PendingWorkRows } from "./storage/ledger-reader.js";
 import { assertDirectory } from "./storage/directory.js";
-import { LEDGER_TABLES, ledgerTables, DIAGNOSTIC_READ_LIMITS, type DiagnosticReadLimits, type DiagnosticSnapshot, type LedgerTable } from "./storage/diagnostic-snapshot.js";
-import { fullRow, safeInteger, type AgentRow, type DeliveryRow, type BatchRow, type SubscriptionRow, type UsageRow } from "./storage/rows.js";
-import { LedgerTransitions, type DeliveryIdentity, type PreparedBatchInput, type UsageReservation } from "./storage/transitions.js";
+import { LEDGER_TABLES, DIAGNOSTIC_READ_LIMITS, type DiagnosticReadLimits, type DiagnosticSnapshot, type LedgerTable } from "./storage/diagnostic-snapshot.js";
+import { fullRow, safeInteger, type AgentRow, type DeliveryRow, type BatchRow, type SubscriptionRow } from "./storage/rows.js";
+import { LedgerTransitions, type DeliveryIdentity, type PreparedBatchInput } from "./storage/transitions.js";
 import { OperationTransitions, type NewOperation } from "./storage/operation-transitions.js";
 import { OperationJournal } from "./storage/operation-journal.js";
 import { readFacets } from "./storage/facets.js";
@@ -23,7 +23,7 @@ import { SCHEMA_USER_VERSION_READABLE, SCHEMA_USER_VERSION_WRITTEN } from "./dom
 import { StoreError, normalizeStorageFailure, unobserved, sqlitePrimaryCode } from "./domain/errors.js";
 export { StoreError } from "./domain/errors.js";
 export type { DecodedOperation } from "./storage/operation-codec.js";
-export type { AgentRow, DeliveryRow, BatchRow, SubscriptionRow, UsageRow } from "./storage/rows.js";
+export type { AgentRow, DeliveryRow, BatchRow, SubscriptionRow } from "./storage/rows.js";
 export type { Transaction, StoreReads, StoreWrites } from "./storage/transaction.js";
 
 export const SCHEMA_PATH = fileURLToPath(new URL("../../implementation/schema-v3.sql", import.meta.url));
@@ -121,7 +121,7 @@ export function readDiagnosticSnapshot(stateRoot: string, limits: DiagnosticRead
     const version = safeInteger(fullRow(db.prepare("PRAGMA user_version").get(), ["user_version"], "schema version").user_version, "schema version");
     if (!SCHEMA_USER_VERSION_READABLE.includes(version))
       throw new StoreError("STORE_CORRUPT", `diagnostics require a readable schema version; found ${version} and no migration was attempted`);
-    const expectedTables = ledgerTables(version);
+    const expectedTables = LEDGER_TABLES;
     const schema = [];
     for (const row of db.prepare("SELECT name,type,sql FROM sqlite_schema WHERE name NOT LIKE 'sqlite_%' AND type IN ('table','view','trigger')").iterate()) {
       if (schema.length >= expectedTables.length) throw new StoreError("STORE_CORRUPT", "unexpected diagnostic database objects");
@@ -131,7 +131,7 @@ export function readDiagnosticSnapshot(stateRoot: string, limits: DiagnosticRead
       !expectedTables.some(table => table === row.name) || typeof row.sql !== "string" || /CREATE\s+VIRTUAL/i.test(row.sql)))
       throw new StoreError("STORE_CORRUPT", "diagnostic database entity set differs from its schema version");
     let rows = 0, bytes = 0;
-    const tables: Record<LedgerTable, unknown[]> = { agents: [], operations: [], subscriptions: [], deliveries: [], batches: [], usage: [], attestations: [] };
+    const tables: Record<LedgerTable, unknown[]> = { agents: [], operations: [], subscriptions: [], deliveries: [], batches: [], attestations: [] };
     for (const table of expectedTables) {
       // Table names come only from the closed constant, never from persisted SQL.
       for (const row of db.prepare(`SELECT * FROM ${table}`).iterate()) {
@@ -143,7 +143,6 @@ export function readDiagnosticSnapshot(stateRoot: string, limits: DiagnosticRead
       }
       Object.freeze(tables[table]);
     }
-    if (version === 1) delete (tables as Partial<typeof tables>).attestations;
     const integrity = db.prepare("PRAGMA integrity_check(100)").all().map(row => String(row.integrity_check));
     const foreignKeys: unknown[] = [];
     for (const row of db.prepare("PRAGMA foreign_key_check").iterate()) {
@@ -168,7 +167,6 @@ export class Store {
   readonly subscriptions = this.readViews.subscriptions;
   readonly deliveries = this.readViews.deliveries;
   readonly batches = this.readViews.batches;
-  readonly usage = this.readViews.usage;
   private readonly db: DatabaseSync;
   private readonly reader: LedgerReader;
   private readonly transitions: LedgerTransitions;
@@ -176,8 +174,8 @@ export class Store {
   private readonly transactions = new TransactionScope(this);
   private repositoryIdentity: RepositoryIdentity | null;
   /** P0V-126 (G02-ledger-r2-03), P0-2: the one clock every row this store
-   * writes is stamped from -- agents, operations, deliveries, subscriptions,
-   * batches and usage alike. A reading that goes backwards is clamped where it
+   * writes is stamped from -- agents, operations, deliveries, subscriptions
+   * and batches alike. A reading that goes backwards is clamped where it
    * lands (MAX(?, created_at_ms)); what the time is, is read here only. */
   private readonly now: () => number;
   constructor(readonly path: string, readonly busyRetries: number = DEFAULT_BUSY_RETRIES, identity: RepositoryIdentity | null = null,
@@ -224,41 +222,27 @@ export class Store {
   }
   private migrate(): void {
     const version = this.userVersion();
-    // P8: the readable version set is explicit. Anything else fails closed with
-    // no migration attempt and no rewrite of the existing file.
+    // P8 / v0.1.0 pre-release: the only readable version is the one this build
+    // writes. Anything else fails closed with no migration attempt and no
+    // rewrite of the existing file.
     if (version === SCHEMA_USER_VERSION_WRITTEN) return;
-    if (version !== 0 && version !== 1 && version !== 2) throw new StoreError("STORE_CORRUPT", `unexpected schema user_version ${version}; no migration was attempted`);
+    if (version !== 0) throw new StoreError("STORE_CORRUPT", `unexpected schema user_version ${version}; no migration was attempted`);
     let ddl: string;
-    try {
-      ddl = version === 0 ? readFileSync(SCHEMA_PATH, "utf8") :
-        (version === 1 ? readFileSync(fileURLToPath(new URL("../../implementation/schema-v1-to-v2.sql", import.meta.url)), "utf8")
-          .replace("PRAGMA user_version = 2;", "").replace("BEGIN EXCLUSIVE;", "") : "") +
-        readFileSync(fileURLToPath(new URL("../../implementation/schema-v2-to-v3.sql", import.meta.url)), "utf8");
-      if (version === 1) ddl = "BEGIN EXCLUSIVE;\n" + ddl.replace("BEGIN EXCLUSIVE;", "");
-    }
+    try { ddl = readFileSync(SCHEMA_PATH, "utf8"); }
     catch (error) { throw unobserved(error, "the schema file") ?? new StoreError("STORE_CORRUPT", `schema file unreadable: ${(error as Error).message}`, { cause: error }); }
-    try {
-      if (version !== 0) this.db.exec("PRAGMA foreign_keys = OFF");
-      this.db.exec(ddl);
-      if (version !== 0) {
-        if (this.db.prepare("PRAGMA foreign_key_check").get() !== undefined)
-          throw new StoreError("STORE_CORRUPT", "schema migration found a foreign-key violation");
-        this.db.exec("COMMIT");
-      }
-    }
+    try { this.db.exec(ddl); }
     catch (error) {
       let failure: unknown = error;
       if (this.db.isTransaction) {
         try { this.db.exec("ROLLBACK"); }
-        catch (rollbackError) { failure = new AggregateError([error, rollbackError], "migration and rollback failed"); }
+        catch (rollbackError) { failure = new AggregateError([error, rollbackError], "schema application and rollback failed"); }
       }
       const normalized = normalizeStorageFailure(failure);
       if (normalized instanceof StoreError) throw normalized;
-      throw new StoreError("STORE_CORRUPT", `migration failed: ${(error as Error).message}`, { cause: failure });
+      throw new StoreError("STORE_CORRUPT", `schema application failed: ${(error as Error).message}`, { cause: failure });
     }
-    finally { if (version !== 0) this.db.exec("PRAGMA foreign_keys = ON"); }
     if (this.userVersion() !== SCHEMA_USER_VERSION_WRITTEN)
-      throw new StoreError("STORE_CORRUPT", `migration did not set user_version=${SCHEMA_USER_VERSION_WRITTEN}`);
+      throw new StoreError("STORE_CORRUPT", `schema application did not set user_version=${SCHEMA_USER_VERSION_WRITTEN}`);
   }
   private userVersion(): number {
     return safeInteger(fullRow(this.db.prepare("PRAGMA user_version").get(), ["user_version"], "schema version").user_version, "schema version");
@@ -415,10 +399,6 @@ export class Store {
    * them when it opens. */
   pendingBatchesFor(agent: Actor, incarnation: number): BatchRow[] { return this.preparedBatches(agent).filter(batch => batch.incarnation <= incarnation); }
   completeBatch(batchId: string, messages: MessageId[], agent: Actor, attempt: number, sessionPath: string): void { this.transitions.completeBatch(batchId, messages, agent, attempt, sessionPath); }
-  reserveUsage(usage: UsageReservation): void { this.transitions.reserveUsage(usage); }
-  usageRows(): UsageRow[] { return this.reader.usages(); }
-  getUsage(id: string): UsageRow | null { return this.reader.usage(id); }
-  settleUsage(id: string, outcome: UsageRow["outcome"], reportedUnits: number | null, detailsJson: string | null): void { this.transitions.settleUsage(id, outcome, reportedUnits, detailsJson); }
 }
 function validDesiredTransition(from: AgentRow["desired"], to: AgentRow["desired"]): boolean {
   if (from === to) return true;

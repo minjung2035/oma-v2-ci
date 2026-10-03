@@ -104,7 +104,7 @@ export class PeerAuthenticator {
     const observed = this.units.observe(agent); const peerGroup = peerCgroup(peer.pid);
     if (!peer.alive() || !insideCgroup(peerGroup, observed.cgroup) || (invocationId !== undefined && observed.invocationId !== invocationId)) throw new StoreError("AUTH_FAILED", `caller is not the current ${unit} invocation`);
   }
-  requireHostUnit(peer: BoundPeer, kind: "principal-relay" | "reconcile"): void {
+  requireHostUnit(peer: BoundPeer, kind: "principal-relay"): void {
     const unitGroup = this.units.unitCgroup(kind); const peerGroup = peerCgroup(peer.pid);
     if (!peer.alive() || !insideCgroup(peerGroup, unitGroup)) throw new StoreError("AUTH_FAILED", `caller is not inside the ${kind} service`);
   }

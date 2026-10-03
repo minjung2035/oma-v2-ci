@@ -543,7 +543,7 @@ test("P0V-26 / N02, P0-1: a unit name that is another society's or agent's is re
   const dir = mkdtempSync(join(tmpdir(), "oma-unit-owner-"));
   try {
     const units = new Units("a-b", { node: process.execPath, libdir: process.cwd(), state: join(dir, "a-b"), society: "a-b", agent: "",
-      config: join(dir, "config.json"), run: join(dir, "run", "a-b"), brokerUnit: "" }, dir, { p: TEST_RESOURCES });
+      config: join(dir, "config.json"), run: join(dir, "run", "a-b") }, dir, { p: TEST_RESOURCES });
     const conflict = (error: unknown) => error instanceof StoreError && error.code === "AGENT_CONFLICT";
     // Society a's Resident b-c holds the name society a-b's Resident c would take.
     const theirs = "[Unit]\nDescription=OMA a resident b-c\n";
@@ -551,11 +551,6 @@ test("P0V-26 / N02, P0-1: a unit name that is another society's or agent's is re
     assert.throws(() => units.assertResidentNamesFree("c"), conflict, "a create would be accepted onto another society's unit");
     assert.throws(() => units.ensureResident("c", "p", TEST_RESOURCES), conflict);
     assert.equal(readFileSync(join(dir, "oma-a-b-c.service"), "utf8"), theirs, "another society's unit was replaced");
-    // A host unit: society a's Resident b-reconcile holds society a-b's reconcile unit.
-    const resident = "[Unit]\nDescription=OMA a resident b-reconcile\n";
-    writeFileSync(join(dir, "oma-a-b-reconcile.service"), resident);
-    assert.throws(() => units.ensureReconcile(), conflict);
-    assert.equal(readFileSync(join(dir, "oma-a-b-reconcile.service"), "utf8"), resident);
     // The owner's own unit is its to replace, and a free name is free.
     writeFileSync(join(dir, "oma-a-b-d.service"), `[Unit]\nDescription=OMA a-b resident d\nX-OMA-Owner=${join(dir, "a-b")}\n`);
     assert.doesNotThrow(() => units.assertResidentNamesFree("d"));

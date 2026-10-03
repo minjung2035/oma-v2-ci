@@ -51,13 +51,13 @@ export interface ProtocolLimits {
 export type EffortLevel = "off" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max";
 
 export interface ModelProfile {
-  provider: string; model: string; credentialRef: string; codecRevision: string;
-  pricingRevision: string; maxInputTokens: number; maxOutputTokens: number;
+  provider: string; model: string;
   inferenceTimeoutSeconds: number;
   /** DR24: the effort the model runs with; the engine's default when absent. */
   thinking?: EffortLevel;
-  // The engine owns provider selection and pricing (INF-001); these fields are
-  // deployment-declared names it resolves, not a price formula OMA evaluates.
+  // The engine owns provider selection and pricing (INF-001); provider/model
+  // are deployment-declared names it resolves, not a price formula OMA
+  // evaluates.
 }
 
 export interface AgentProfile {
@@ -74,8 +74,6 @@ export interface HostConfigV1 {
   initialResidents: { name: Actor; profile: string; brief: string }[];
   quota: {
     societyAgents: number; lineageAgents: number;
-    societyUnits: number; lineageUnits: number; principalReservedUnits: number;
-    inferenceSlots: number; principalReservedSlots: number;
     storageBytes: number;
   };
   integration: {
@@ -84,6 +82,4 @@ export interface HostConfigV1 {
     checks: { id: string; argv: string[]; env: Record<string,string>; resources: ResourceLimits }[];
   };
   limits: ProtocolLimits;
-  features: { notmuch: false; reflinkSeed: false; formalApproval: false; egress: false };
-  // MUST: Optional enabled variants require their gated, reviewed schema.
 }

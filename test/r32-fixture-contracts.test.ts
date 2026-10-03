@@ -11,7 +11,7 @@ import { parseBatchId } from "../src/ids.js";
 import { RequestCache } from "../src/request-cache.js";
 import { sha256Hex } from "../src/hash.js";
 import { makeValidAgent, makeValidResolvedSpec } from "./fixtures/spec.js";
-import { makeValidOperation, makeValidMessagePlan, makeValidBatch, makeValidUsage, makeValidFrozenRequest } from "./fixtures/valid.js";
+import { makeValidOperation, makeValidMessagePlan, makeValidBatch, makeValidFrozenRequest } from "./fixtures/valid.js";
 import { corruptOperationForTest, corruptValueForTest, mutateRawRowAfterClose } from "./fixtures/corruption.js";
 
 const OP = "op-00000000-0000-4000-8000-000000000001";
@@ -31,10 +31,6 @@ test("R32: normal primitive fixtures have valid shapes, hashes and owned identit
   const batch = makeValidBatch("alice", [message.id]);
   assert.ok(parseBatchId(batch.id));
   assert.deepEqual(JSON.parse(batch.messageIdsJson), [message.id]);
-  const usage = makeValidUsage();
-  assert.match(usage.requestId, /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
-  assert.equal(usage.outcome, "reserved");
-  assert.equal(usage.reportedUnits, null);
 });
 
 test("R32: valid ledger control decodes before exactly one raw field is corrupted", () => {

@@ -16,7 +16,6 @@ import { Seeded, PRNG_REVISION, integerParameter, minimizeSequence, replayMetada
 
 const limits = { frameBytes: 256 * 1024, batchMaxMessages: 24 };
 const key = (slot: number) => `r36-${slot}`;
-const usageId = (slot: number) => `00000000-0000-4000-8000-${(slot + 1).toString(16).padStart(12, "0")}`;
 
 async function replay(sequence: readonly Action[]): Promise<void> {
   const root = mkdtempSync(join(tmpdir(), "oma-r36-model-"));
@@ -70,15 +69,6 @@ async function replay(sequence: readonly Action[]): Promise<void> {
           store.transaction(tx => { tx.markAcknowledged(operation.plan.message.id, "alice"); }); break;
         }
         case "prepare": { const currentAuth = auth(); assertCurrentActor(store, currentAuth, "mail.send"); await mail.prepare(currentAuth); break; }
-        case "reserve": {
-          const currentAuth = auth(); assertCurrentActor(store, currentAuth, "mail.send");
-          store.transaction(tx => { tx.reserveUsage({ requestId: usageId(action.slot), actor: "alice", incarnation: currentAuth.incarnation,
-            profile: "md", pricingRevision: "r36-fixed", reservedUnits: 10 }); }); break;
-        }
-        case "settle":
-          if (!store.getUsage(usageId(action.slot))) return "noop";
-          store.transaction(tx => { tx.settleUsage(usageId(action.slot), action.outcome,
-            action.outcome === "unknown" ? null : action.outcome === "completed" ? 4 : 0, null); }); break;
       }
       return "ok";
     } catch (error) {
@@ -114,16 +104,6 @@ async function replay(sequence: readonly Action[]): Promise<void> {
         assert.equal(batch.state, "prepared"); assert.equal(batch.incarnation, model.batchIncarnation, "DR9: the batch keeps the run it was created in");
         assert.deepEqual(ledger.deliveries.filter(row => row.batchId === batch.id).map(row => slotByMessage.get(row.messageId)).sort((a, b) => a! - b!), model.batchMembers, "MODEL_BATCH_MEMBERS");
       }
-      assert.equal(ledger.usage.length, model.usage.size, "MODEL_USAGE_COUNT");
-      let expectedCharge = 0;
-      for (const [slot, usage] of model.usage) {
-        const actual = ledger.usage.find(row => row.requestId === usageId(slot))!;
-        assert.equal(actual.incarnation, usage.incarnation); assert.equal(actual.outcome, usage.outcome, "MODEL_USAGE_OUTCOME");
-        assert.equal(actual.reservedUnits, 10);
-        assert.equal(actual.reportedUnits, usage.outcome === "reserved" || usage.outcome === "unknown" ? null : usage.outcome === "completed" ? 4 : 0);
-        expectedCharge += usage.outcome === "reserved" || usage.outcome === "unknown" ? 10 : usage.outcome === "completed" ? 4 : 0;
-      }
-      assert.equal(checked.usageByActor.get("alice") ?? 0, expectedCharge, "MODEL_RESERVED_ACCOUNTING");
     }
   } finally { try { store.close(); } finally { rmSync(root, { recursive: true, force: true }); } }
 }
@@ -148,20 +128,23 @@ for (const seed of [defaultSeed, 0, 1, 0xffffffff]) {
 }
 for (const [index, sequence] of MODEL_CORPUS.entries()) test(`R36 model authored corpus ${index}`, () => replay(sequence));
 
-test("R36 minimizer and corpus rediscover injected unknown-reservation loss without a provider", async () => {
+test("R36 minimizer and corpus rediscover injected unknown-recovery loss without a provider", async () => {
   const sequence = MODEL_CORPUS[2]!;
   const buggy = async (actions: readonly Action[]) => {
     const model = initialModel();
     for (const action of actions) {
+      const recoverable = action.kind === "reconcile" &&
+        [...model.operations.values()].some(operation => operation.state === "unknown");
       advance(model, action);
-      if (action.kind === "settle" && action.outcome === "unknown" && model.usage.get(action.slot)?.outcome === "unknown") return true;
+      if (recoverable) return true;
     }
     return false;
   };
   const result = await minimizeSequence(sequence, buggy);
   assert.equal(result.oneMinimal, true);
-  assert.deepEqual(result.sequence, [{ kind: "reserve", slot: 0 }, { kind: "settle", slot: 0, outcome: "unknown" }]);
-  assert.equal(await buggy(result.sequence), true, "the injected zero-charge regression remains reproducible");
+  assert.deepEqual(result.sequence, [
+    { kind: "request", slot: 0, variant: 0, boundary: "accepted" }, { kind: "unknown", slot: 0 }, { kind: "reconcile" }]);
+  assert.equal(await buggy(result.sequence), true, "the injected unknown-recovery regression remains reproducible");
   const random = new Seeded(1);
   assert.deepEqual([random.next(), random.next(), random.next()], [1015568748, 1586005467, 2165703038], "independent PRNG golden vector");
 });

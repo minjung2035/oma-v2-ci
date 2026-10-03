@@ -184,21 +184,12 @@ export class UnitsModule {
   private sameOwner(existing: string, expected: string): "same" | "other" | "unknown" {
     if (lineOf(existing, DESCRIPTION) !== lineOf(expected, DESCRIPTION)) return "other";
     const owner = lineOf(existing, OWNER);
-    if (owner !== null) return owner === lineOf(expected, OWNER) ? "same" : "other";
-    // An earlier release wrote no owner line. Where it named the state tree --
-    // a Resident's --state-root, a path unit's watched directory -- that tree
-    // decides. P0V-95 (R6-20): a unit that names none is not known to be this
+    // P0V-95 (R6-20): a unit that names no owner is not known to be this
     // owner's by its Description -- two trees' societies share names -- so it
-    // is nobody's to replace (P0-5).
-    const lines = existing.split("\n");
-    const exec = lines.find(line => line.startsWith("ExecStart=") && line.includes(" --state-root "));
-    if (exec !== undefined) {
-      const argument = renderUnit("--state-root @STATE_ARG@", this.values);
-      return exec.endsWith(` ${argument}`) || exec.includes(` ${argument} `) ? "same" : "other";
-    }
-    const watched = lines.find(line => line.startsWith("DirectoryNotEmpty="));
-    if (watched !== undefined) return watched.startsWith(renderUnit("DirectoryNotEmpty=@STATE@/", this.values)) ? "same" : "other";
-    return "unknown";
+    // is nobody's to replace (P0-5). v0.1.0 owes no compatibility with unit
+    // files written before the owner line existed.
+    if (owner === null) return "unknown";
+    return owner === lineOf(expected, OWNER) ? "same" : "other";
   }
   /** The identity lines a unit of `template` renders for `agent`. */
   private identity(template: string, agent: string): string {
@@ -223,7 +214,7 @@ export class UnitsModule {
 
   private agentFrom(unit: string): string {
     const base = unit.slice(`oma-${this.society}-`.length);
-    const suffix = /\.(service|path|timer)$/.exec(base);
+    const suffix = /\.(service|path)$/.exec(base);
     return suffix ? base.slice(0, -suffix[0].length) : base;
   }
 
@@ -238,14 +229,9 @@ export class UnitsModule {
     });
     this.install(unitName(this.society, agent, "path"), "resident.path.in");
   }
-  ensureBroker(): void { this.install(unitName(this.society, "broker", "service"), "broker.service.in"); }
   ensurePrincipal(): void {
     this.install(unitName(this.society, "principal", "path"), "principal.path.in");
     this.install(unitName(this.society, "principal-relay", "service"), "principal-relay.service.in");
-  }
-  ensureReconcile(): void {
-    this.install(unitName(this.society, "reconcile", "service"), "reconcile.service.in");
-    this.install(unitName(this.society, "reconcile", "timer"), "reconcile.timer.in");
   }
 
   private verifyPath(agent: Actor, active: boolean): void {
@@ -316,7 +302,7 @@ export class UnitsModule {
     return observed;
   }
 
-  unitCgroup(kind: "principal-relay" | "reconcile"): string {
+  unitCgroup(kind: "principal-relay"): string {
     // P0V-59: another society's host unit of this name authenticates nothing here.
     if (this.foreign(unitName(this.society, kind, "service"), this.identity(`${kind}.service.in`, kind))) return "";
     const outcome = this.command(["show", unitName(this.society, kind, "service"), "-p", "ControlGroup"]);

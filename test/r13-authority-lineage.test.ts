@@ -88,13 +88,12 @@ test("R13: current guards re-read lease revocation, incarnation and desired stat
 function config(): HostConfigV1 {
   return {
     schemaVersion: 1, society: "demo", installation: { node: "/node", libdir: "/lib", rootfs: "/rootfs", deploymentDigest: "a".repeat(64) },
-    modelProfiles: { md: { provider: "none", model: "none", credentialRef: "none", codecRevision: "none", pricingRevision: "v1", maxInputTokens: 1, maxOutputTokens: 1, inferenceTimeoutSeconds: 1 } },
+    modelProfiles: { md: { provider: "none", model: "none", inferenceTimeoutSeconds: 1 } },
     agentProfiles: { p: { modelProfile: "md", capabilities: ["agent.create", "mail.send"], delegable: ["mail.send"], childProfile: "p", resources: { ...TEST_RESOURCES } } },
     principalProfile: "p", initialResidents: [],
-    quota: { societyAgents: 10, lineageAgents: 10, societyUnits: 10, lineageUnits: 10, principalReservedUnits: 0, inferenceSlots: 1, principalReservedSlots: 0, storageBytes: 1000 },
+    quota: { societyAgents: 10, lineageAgents: 10, storageBytes: 1000 },
     integration: { policyRevision: "v1", protectedPaths: [], checks: [] },
     limits: { frameBytes: 1000, mailBodyBytes: 1000, subjectBytes: 512, addresses: 64, replyReferences: 64, contextFiles: 10, contextBytes: 1000, bundleBytes: 1000, logBytes: 1000, batchMaxMessages: 10, idleStreamSeconds: 30, receiptWaitSeconds: 30 },
-    features: { notmuch: false, reflinkSeed: false, formalApproval: false, egress: false },
   };
 }
 

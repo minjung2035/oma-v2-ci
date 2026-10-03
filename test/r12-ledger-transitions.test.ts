@@ -7,7 +7,7 @@ import { setTimeout as delay } from "node:timers/promises";
 import { Store, StoreError } from "../src/store.js";
 import { requestHash } from "../src/hash.js";
 import { makeValidAgent } from "./fixtures/spec.js";
-import { makeValidMessagePlan, makeValidUsage } from "./fixtures/valid.js";
+import { makeValidMessagePlan } from "./fixtures/valid.js";
 import { AdmissionGate, bindAdmissionGate } from "../src/domain/admission.js";
 
 const OP = "op-00000000-0000-4000-8000-000000000012";
@@ -43,8 +43,6 @@ test("P0V-30 / N06, P0-5: a wall clock that steps back makes no state change fai
   const at = Date.UTC(2026, 8, 26, 12);
   t.mock.timers.enable({ apis: ["Date"], now: at });
   const store = fixture(t);
-  const usage = makeValidUsage("alice");
-  store.transaction(tx => tx.reserveUsage(usage));
   // NTP, a suspend on a drifting clock or an operator: the host's wall clock
   // is now an hour earlier than when these rows were created.
   t.mock.timers.setTime(at - 3_600_000);
@@ -54,7 +52,6 @@ test("P0V-30 / N06, P0-5: a wall clock that steps back makes no state change fai
   const incarnation = store.getAgent("alice")!.incarnation;
   store.transaction(tx => tx.updateAgent({ name: "alice", incarnation: incarnation + 1 }));
   store.transaction(() => store.setOperationUnknown(OP));
-  store.transaction(tx => tx.settleUsage(usage.requestId, "unknown", null, null));
   // Every row still reads as what was recorded, with no stage before its creation.
   const delivery = store.getDelivery(MESSAGE, "alice")!;
   for (const stage of [delivery.materializedAtMs, delivery.presentedAtMs, delivery.acknowledgedAtMs])
@@ -68,7 +65,6 @@ test("P0V-30 / N06, P0-5: a wall clock that steps back makes no state change fai
   const operation = store.getOperationById(OP)!;
   assert.equal(operation.state, "unknown");
   assert.ok(operation.updatedAtMs >= operation.createdAtMs);
-  assert.equal(store.getUsage(usage.requestId)?.outcome, "unknown");
 });
 
 test("P0V-56 / R01, P0-5: a clock that steps back after materialization does not make the batch's completion corrupt", t => {
@@ -205,32 +201,3 @@ test("R12, DR9: a later lease is the batch's next attempt, the row keeps its fir
   assert.equal(beforeDelivery?.presented, 1);
 });
 
-test("R12: exact usage replay preserves bytes/times; terminal and unknown evidence cannot be overwritten", async t => {
-  const store = fixture(t);
-  const reservation = { ...makeValidUsage(), requestId: "usage-completed" };
-  store.transaction(tx => {
-    tx.reserveUsage(reservation);
-    tx.reserveUsage({ ...reservation, requestId: "usage-cancelled" });
-    tx.reserveUsage({ ...reservation, requestId: "usage-unknown" });
-    tx.settleUsage("usage-completed", "completed", 1, '{ "reportedUnits": 1 }');
-    tx.settleUsage("usage-cancelled", "cancelled", 0, null);
-    tx.settleUsage("usage-unknown", "unknown", null, null);
-  });
-  const rows = store.usageRows();
-  await delay(10);
-  store.transaction(tx => {
-    tx.reserveUsage(reservation);
-    tx.settleUsage("usage-completed", "completed", 1, '{ "reportedUnits": 1 }');
-    tx.settleUsage("usage-cancelled", "cancelled", 0, null);
-    tx.settleUsage("usage-unknown", "unknown", null, null);
-  });
-  assert.deepEqual(store.usageRows(), rows);
-  assert.throws(() => store.transaction(tx => tx.reserveUsage({ ...reservation, reservedUnits: 2 })), matches("REQUEST_KEY_REUSED"));
-  assert.throws(() => store.transaction(tx => tx.settleUsage("usage-completed", "completed", 1, '{"reportedUnits":1}')), matches("STORE_CORRUPT"));
-  assert.throws(() => store.transaction(tx => tx.settleUsage("usage-completed", "unknown", null, null)), matches("STORE_CORRUPT"));
-  assert.throws(() => store.transaction(tx => tx.settleUsage("usage-cancelled", "completed", 1, null)), matches("STORE_CORRUPT"));
-  assert.throws(() => store.transaction(tx => tx.settleUsage("usage-unknown", "cancelled", 0, null)), matches("STORE_CORRUPT"));
-  assert.throws(() => store.transaction(tx => tx.settleUsage("usage-unknown", "completed", 1, null)), matches("STORE_CORRUPT"));
-  assert.throws(() => store.transaction(tx => tx.settleUsage("missing", "cancelled", 0, null)), matches("STORE_CORRUPT"));
-  assert.deepEqual(store.usageRows(), rows);
-});

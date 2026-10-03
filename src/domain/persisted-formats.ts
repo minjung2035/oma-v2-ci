@@ -8,10 +8,12 @@
 import { isValidFullOid } from "./identifiers.js";
 import { isMutationMethod } from "../protocol/receipt-codec.js";
 
-/** Versions this build reads and writes. A persisted version outside this set is
- * fail-closed: no migration is attempted and no rewrite happens. */
+/** The version this build reads and writes. v0.1.0 is a pre-release: no
+ * backward compatibility with development-time formats is owed, so the only
+ * readable version is the one this build writes. Any other persisted version
+ * is fail-closed: no migration is attempted and no rewrite happens. */
 export const SCHEMA_USER_VERSION_WRITTEN = 3;
-export const SCHEMA_USER_VERSION_READABLE: readonly number[] = Object.freeze([1, 2, 3]);
+export const SCHEMA_USER_VERSION_READABLE: readonly number[] = Object.freeze([SCHEMA_USER_VERSION_WRITTEN]);
 export const WIRE_PROTOCOL_VERSION = 1;
 /** Existing operation shapes remain v1-readable. DR27 adds a closed mutation
  * without rewriting any historical plan or declaring a new JSON envelope. */

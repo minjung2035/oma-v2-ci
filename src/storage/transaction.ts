@@ -15,7 +15,7 @@ export type StoreReads = Pick<Store,
   "societyOpen" | "getAgent" | "listAgents" | "subscribers" | "allSubscriptions" | "claimKey" |
   "getOperation" | "getOperationById" | "findPhysicalCreate" | "recoverableOperations" |
   "getDelivery" | "pendingDeliveries" | "deliveriesForOperation" | "getBatch" |
-  "preparedBatches" | "pendingBatchesFor" | "getUsage" | "usageRows"
+  "preparedBatches" | "pendingBatchesFor"
 >;
 export type Transaction = StoreWrites & WriteFacets & { readonly [BRAND]: true };
 export type SyncCallback<T> = (tx: Transaction) => SynchronousResult<T>;
@@ -59,7 +59,7 @@ export class TransactionScope {
     this.scope = scope;
     const methods = Object.fromEntries(WRITE_METHODS.map(name => [name, (...args: unknown[]) => {
       this.requireScope(scope);
-      if (name === "insertPreparedBatch" || name === "reserveUsage") assertNewAcceptance(this.store);
+      if (name === "insertPreparedBatch") assertNewAcceptance(this.store);
       return Reflect.apply(this.store[name], this.store, args);
     }]));
     // Both compatibility methods and facets retain the same captured scope.

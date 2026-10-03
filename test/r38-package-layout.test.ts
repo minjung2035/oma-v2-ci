@@ -28,15 +28,14 @@ test("R38: layout-only fixture detects missing raw SQL, template, wrong root and
   // Empty regular files model path/type facts ONLY, never full packaging or execution proof.
   const root = mkdtempSync(join(tmpdir(), "oma-layout-only-"));
   const assets = runtimeAssets(root);
-  const migrations = DEPLOYMENT_LAYOUT.schemaMigrations.map(path => join(root, path));
-  const paths = [...migrations, assets.schema, assets.contract, assets.extension, ...Object.values(assets.entries),
+  const paths = [assets.schema, assets.contract, assets.extension, ...Object.values(assets.entries),
     ...Object.keys(DEPLOYMENT_LAYOUT.templateEntries).map(name => join(assets.systemd, name))];
   const populate = (path: string) => { mkdirSync(dirname(path), { recursive: true }); writeFileSync(path, "", { flag: "wx" }); };
   try {
     for (const path of paths) populate(path);
     assert.doesNotThrow(() => assertRuntimeAssets(assets, { schema: assets.schema, systemd: assets.systemd }));
     assert.throws(() => assertRuntimeAssets(assets, { schema: join(root, "wrong.sql"), systemd: assets.systemd }), { code: "UNSUPPORTED_PROFILE" });
-    for (const missing of [...migrations, assets.schema, join(assets.systemd, "broker.service.in"), ...Object.values(assets.entries)]) {
+    for (const missing of [assets.schema, join(assets.systemd, "resident.service.in"), ...Object.values(assets.entries)]) {
       rmSync(missing);
       assert.throws(() => assertRuntimeAssets(assets, { schema: assets.schema, systemd: assets.systemd }), { code: "UNSUPPORTED_PROFILE" });
       populate(missing);

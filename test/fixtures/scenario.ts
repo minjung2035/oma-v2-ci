@@ -241,10 +241,8 @@ export async function startScenario(options: ScenarioOptions = {}): Promise<Scen
     rootfs: options.confined === true ? residentRootfsPath(root) : "/", deploymentDigest: "a".repeat(64) });
   const residentProfile = Object.keys(defaults.agentProfiles).find(name => name !== defaults.principalProfile)!;
   const config = validateConfig({ ...defaults,
-    modelProfiles: { ...defaults.modelProfiles, scripted: { ...(options.confined === true ? CONFINED_MODEL : { provider: "fake", model: "scripted" }), credentialRef: "engine-managed",
-      codecRevision: "scripted", pricingRevision: "unpinned", maxInputTokens: 1, maxOutputTokens: 1, inferenceTimeoutSeconds: 120 },
-      "scripted-2": { provider: "fake", model: "scripted-2", credentialRef: "engine-managed",
-      codecRevision: "scripted", pricingRevision: "unpinned", maxInputTokens: 1, maxOutputTokens: 1, inferenceTimeoutSeconds: 120 } },
+    modelProfiles: { ...defaults.modelProfiles, scripted: { ...(options.confined === true ? CONFINED_MODEL : { provider: "fake", model: "scripted" }), inferenceTimeoutSeconds: 120 },
+      "scripted-2": { provider: "fake", model: "scripted-2", inferenceTimeoutSeconds: 120 } },
     agentProfiles: { ...defaults.agentProfiles, [residentProfile]: { ...defaults.agentProfiles[residentProfile]!, modelProfile: "scripted",
       capabilities: [...defaults.agentProfiles[residentProfile]!.capabilities
         .filter(capability => options.submit !== false || capability !== "git.submit")] } } });

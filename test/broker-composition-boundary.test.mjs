@@ -256,14 +256,12 @@ test("P18 internal composition exposes narrow live capabilities without concrete
     runnerAuth() {
       return {};
     },
-    repair() {},
   };
-  const ports = createInternalDispatchPorts(store, mail, null, "/state", peers);
+  const ports = createInternalDispatchPorts(store, mail, "/state", peers);
 
   assert.deepEqual(Object.keys(ports).sort(), [
     "mail",
     "peers",
-    "reconcile",
     "stateRoot",
     "store",
   ]);
@@ -278,9 +276,7 @@ test("P18 internal composition exposes narrow live capabilities without concrete
     "complete",
     "moveToCur",
     "prepare",
-    "reconcilePending",
   ]);
-  assert.equal(ports.reconcile, null);
   assert.equal(ports.stateRoot, "/state");
   assert.notEqual(ports.peers, peers);
   assert.deepEqual(Object.keys(ports.peers).sort(), ["requireHostUnit", "requireRunnerUnit", "runnerActor", "runnerAuth"]);

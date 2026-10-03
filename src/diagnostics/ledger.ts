@@ -1,11 +1,11 @@
 /** P6: independent set/cross-row inspection. Never runs transitions or reconcile. */
 import { isAbsolute } from "node:path";
-import { LEDGER_TABLES, ledgerTables, type LedgerTable } from "../storage/diagnostic-snapshot.js";
+import { LEDGER_TABLES, type LedgerTable } from "../storage/diagnostic-snapshot.js";
 import { decodeOperation, type DecodedOperation } from "../storage/operation-codec.js";
 import {
-  decodeAgentRow, decodeAgentSpec, decodeSubscriptionRow, decodeDeliveryRow,
-  decodeBatchRow, decodeBatchManifest, decodeUsageRow,
-  type AgentRow, type SubscriptionRow, type DeliveryRow, type BatchRow, type UsageRow,
+  decodeAgentRow, decodeSubscriptionRow, decodeDeliveryRow,
+  decodeBatchRow, decodeBatchManifest,
+  type AgentRow, type SubscriptionRow, type DeliveryRow, type BatchRow,
 } from "../storage/rows.js";
 import { LineageSnapshot } from "../domain/lineage.js";
 import { isValidOperationId, isValidSocietyName } from "../domain/identifiers.js";
@@ -36,7 +36,6 @@ export interface LedgerFacts {
   readonly subscriptions: readonly SubscriptionRow[];
   readonly deliveries: readonly DeliveryRow[];
   readonly batches: readonly BatchRow[];
-  readonly usage: readonly UsageRow[];
 }
 export interface InspectionContext { readonly stateRoot: string; readonly society: string }
 export class DiagnosticLedger {
@@ -76,9 +75,9 @@ const messageOf = (operation: DecodedOperation, messageId: string) =>
  */
 export function inspectLedger(raw: unknown, context: InspectionContext, options: { maxRows?: number; maxIssues?: number } = {}) {
   const ledger = new DiagnosticLedger(options.maxIssues);
-  const scanned: Record<LedgerTable, number> = { agents: 0, operations: 0, subscriptions: 0, deliveries: 0, batches: 0, usage: 0, attestations: 0 };
+  const scanned: Record<LedgerTable, number> = { agents: 0, operations: 0, subscriptions: 0, deliveries: 0, batches: 0, attestations: 0 };
   const facts: { -readonly [K in keyof LedgerFacts]: LedgerFacts[K][number][] } = {
-    agents: [], operations: [], subscriptions: [], deliveries: [], batches: [], usage: [],
+    agents: [], operations: [], subscriptions: [], deliveries: [], batches: [],
   };
   const finish = () => {
     for (const rows of Object.values(facts)) { for (const row of rows) Object.freeze(row); Object.freeze(rows); }
@@ -88,13 +87,13 @@ export function inspectLedger(raw: unknown, context: InspectionContext, options:
   if (!Number.isSafeInteger(maxRows) || maxRows < 1) throw new RangeError("invalid diagnostic row budget");
   if (!isAbsolute(context.stateRoot) || !isValidSocietyName(context.society) ||
       !closed(raw, ["schemaVersion", "tables", "integrity", "foreignKeys"]) ||
-      (typeof raw.schemaVersion !== "number" || !SCHEMA_USER_VERSION_READABLE.includes(raw.schemaVersion)) || !closed(raw.tables, ledgerTables(raw.schemaVersion)) ||
+      (typeof raw.schemaVersion !== "number" || !SCHEMA_USER_VERSION_READABLE.includes(raw.schemaVersion)) || !closed(raw.tables, LEDGER_TABLES) ||
       !Array.isArray(raw.integrity) || !Array.isArray(raw.foreignKeys)) {
     ledger.add("corrupt", "UNSUPPORTED_OR_INVALID_SNAPSHOT", "snapshot"); return finish();
   }
-  const tables: Record<LedgerTable, readonly unknown[]> = { agents: [], operations: [], subscriptions: [], deliveries: [], batches: [], usage: [], attestations: [] };
+  const tables: Record<LedgerTable, readonly unknown[]> = { agents: [], operations: [], subscriptions: [], deliveries: [], batches: [], attestations: [] };
   let totalRows = 0;
-  for (const table of ledgerTables(raw.schemaVersion as number)) {
+  for (const table of LEDGER_TABLES) {
     const rows = raw.tables[table];
     if (!Array.isArray(rows)) { ledger.add("corrupt", "INVALID_TABLE_SNAPSHOT", table); return finish(); }
     totalRows += rows.length;
@@ -129,12 +128,10 @@ export function inspectLedger(raw: unknown, context: InspectionContext, options:
   facts.subscriptions = decoded("subscriptions", decodeSubscriptionRow);
   facts.deliveries = decoded("deliveries", decodeDeliveryRow);
   facts.batches = decoded("batches", decodeBatchRow);
-  facts.usage = decoded("usage", decodeUsageRow);
   const agents = unique(facts.agents, row => row.name, "agents");
   const batches = unique(facts.batches, row => row.id, "batches");
   unique(facts.subscriptions, row => `${row.topic}/${row.agent}`, "subscriptions");
   const deliveries = unique(facts.deliveries, row => `${row.messageId}/${row.recipient}`, "deliveries");
-  unique(facts.usage, row => row.requestId, "usage");
   check("agents", null, () => new LineageSnapshot(facts.agents));
   const rawAgents = new Map<string, unknown>();
   for (const row of tables.agents) if (record(row) && typeof row.name === "string" && agents.has(row.name)) rawAgents.set(row.name, row);
@@ -194,11 +191,6 @@ export function inspectLedger(raw: unknown, context: InspectionContext, options:
     const linked = facts.deliveries.filter(value => value.batchId === row.id);
     expect(linked.length === manifest.length && linked.every(value => value.recipient === row.agent) &&
       manifest.every(id => linked.some(value => value.messageId === id && value.recipient === row.agent)), "batches", row.id, "BATCH_EXACT_SET");
-  }
-  for (const row of facts.usage) {
-    const actor = agents.get(row.actor);
-    expect(actor !== undefined && row.incarnation <= actor.incarnation && row.profile === decodeAgentSpec(actor.specJson).modelProfile,
-      "usage", row.requestId, "USAGE_OWNER_PROFILE");
   }
   for (const operation of facts.operations) if (operation.kind === "mail.ack" && operation.state === "succeeded")
     expect(deliveries.get(`${operation.plan.message}/${operation.plan.recipient}`)?.acknowledged === 1,

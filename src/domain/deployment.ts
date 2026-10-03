@@ -6,7 +6,6 @@ export const DEPLOYMENT_LAYOUT = Object.freeze({
   compiledRoot: "dist/src",
   contract: "dist/implementation/contracts.js",
   schema: "implementation/schema-v3.sql",
-  schemaMigrations: Object.freeze(["implementation/schema-v1-to-v2.sql", "implementation/schema-v2-to-v3.sql"]),
   systemd: "implementation/systemd",
   extension: "dist/src/pi-extension.js",
   // The model-facing command surface, as an installed path. Every agent that
@@ -23,8 +22,8 @@ export const DEPLOYMENT_LAYOUT = Object.freeze({
     mac: "dist/src/entry/oma-mac.js",
     // DR25: the macOS engine's side of `oma pi`, run by its guest host service.
     guestPackages: "dist/src/entry/guest-packages.js" }),
-  templateEntries: Object.freeze({ "broker.service.in": "broker", "resident.service.in": "runner",
-    "principal-relay.service.in": "host", "reconcile.service.in": "host" } as const),
+  templateEntries: Object.freeze({ "resident.service.in": "runner",
+    "principal-relay.service.in": "host" } as const),
   // TUI-003: the host product's files, relative to the installation. The
   // installation is mounted into every Resident, so these are hidden there;
   // nothing a model runs may read the product surface's code.

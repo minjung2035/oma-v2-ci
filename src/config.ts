@@ -99,7 +99,6 @@ function validatedSnapshot(config: HostConfigV1): ValidatedConfigCandidate {
       checks: Object.freeze(checks),
     }),
     limits: Object.freeze({ ...config.limits }),
-    features: Object.freeze({ ...config.features }),
   };
   // The brand is type-only; validation, copying and recursive freezing above are
   // the runtime proof. No caller can construct this type without this boundary.
@@ -171,7 +170,7 @@ export function readCurrentHostPolicy(path: string, society: string, load: (path
 }
 
 export function validateConfig(raw: unknown): ValidatedConfigCandidate {
-  const cfg = closedRecord(raw, ["schemaVersion", "society", "installation", "modelProfiles", "agentProfiles", "principalProfile", "initialResidents", "quota", "integration", "limits", "features"], "root");
+  const cfg = closedRecord(raw, ["schemaVersion", "society", "installation", "modelProfiles", "agentProfiles", "principalProfile", "initialResidents", "quota", "integration", "limits"], "root");
   if (cfg.schemaVersion !== 1) err("schemaVersion must be 1");
   const society = needString(cfg.society, "society");
   if (!isValidSocietyName(society)) err("invalid society name");
@@ -188,11 +187,11 @@ export function validateConfig(raw: unknown): ValidatedConfigCandidate {
 
   const modelProfiles = needRecord(cfg.modelProfiles, "modelProfiles");
   for (const [name, value] of Object.entries(modelProfiles)) {
-    const profile = closedRecord(value, ["provider", "model", "credentialRef", "codecRevision", "pricingRevision", "maxInputTokens", "maxOutputTokens", "inferenceTimeoutSeconds"], `modelProfiles.${name}`, ["thinking"]);
+    const profile = closedRecord(value, ["provider", "model", "inferenceTimeoutSeconds"], `modelProfiles.${name}`, ["thinking"]);
     if (profile.thinking !== undefined && !(EFFORT_LEVELS as readonly unknown[]).includes(profile.thinking))
       err(`modelProfiles.${name}.thinking must be one of ${EFFORT_LEVELS.join(", ")}`);
-    for (const key of ["provider", "model", "credentialRef", "codecRevision", "pricingRevision"]) needString(profile[key], `modelProfiles.${name}.${key}`);
-    for (const key of ["maxInputTokens", "maxOutputTokens", "inferenceTimeoutSeconds"]) needInt(profile[key], `modelProfiles.${name}.${key}`, 1);
+    for (const key of ["provider", "model"]) needString(profile[key], `modelProfiles.${name}.${key}`);
+    needInt(profile.inferenceTimeoutSeconds, `modelProfiles.${name}.inferenceTimeoutSeconds`, 1);
   }
   const agentProfiles = needRecord(cfg.agentProfiles, "agentProfiles");
   const profileNames = new Set(Object.keys(agentProfiles));
@@ -220,19 +219,13 @@ export function validateConfig(raw: unknown): ValidatedConfigCandidate {
     if (!profileNames.has(profile)) err("initialResidents.profile unknown");
     needString(row.brief, "initialResidents.brief");
   }
-  const quota = closedRecord(cfg.quota, ["societyAgents", "lineageAgents", "societyUnits", "lineageUnits", "principalReservedUnits", "inferenceSlots", "principalReservedSlots", "storageBytes"], "quota");
+  const quota = closedRecord(cfg.quota, ["societyAgents", "lineageAgents", "storageBytes"], "quota");
   for (const key of Object.keys(quota)) needInt(quota[key], `quota.${key}`, 0);
   const societyAgents = needInt(quota.societyAgents, "quota.societyAgents", 0);
   const lineageAgents = needInt(quota.lineageAgents, "quota.lineageAgents", 0);
-  const societyUnits = needInt(quota.societyUnits, "quota.societyUnits", 0);
-  const principalReservedUnits = needInt(quota.principalReservedUnits, "quota.principalReservedUnits", 0);
-  const inferenceSlots = needInt(quota.inferenceSlots, "quota.inferenceSlots", 1);
-  const principalReservedSlots = needInt(quota.principalReservedSlots, "quota.principalReservedSlots", 0);
   needInt(quota.storageBytes, "quota.storageBytes", 1);
   if (lineageAgents > societyAgents) err("quota.lineageAgents exceeds quota.societyAgents");
   if (initialResidents.length > societyAgents) err("initialResidents exceed quota.societyAgents");
-  if (principalReservedUnits > societyUnits) err("quota.principalReservedUnits exceeds quota.societyUnits");
-  if (principalReservedSlots > inferenceSlots) err("quota.principalReservedSlots exceeds quota.inferenceSlots");
 
   const integration = closedRecord(cfg.integration, ["policyRevision", "protectedPaths", "checks"], "integration", ["tiered"]);
   if (integration.tiered !== undefined && tieredPolicyCheck(integration.tiered) !== null) err("integration.tiered has invalid rules or authority");
@@ -252,15 +245,12 @@ export function validateConfig(raw: unknown): ValidatedConfigCandidate {
   const limits = needRecord(cfg.limits, "limits");
   needIntegerFields(limits, PROTOCOL_LIMIT_FIELDS, "limits");
   if (!isLogResponseFrameLimit(limits.frameBytes)) err("limits.frameBytes must support a complete log response and uint32 framing");
-  const featureKeys = ["notmuch", "reflinkSeed", "formalApproval", "egress"];
-  const features = closedRecord(cfg.features, featureKeys, "features");
-  for (const key of featureKeys) if (features[key] !== false) err(`features.${key} must be false in Core v1 default build`);
   return validatedSnapshot({
     schemaVersion: 1, society, installation: { node, libdir, rootfs, deploymentDigest, ...(packages === undefined ? {} : { packages }) },
     modelProfiles: Object.assign(Object.create(null), modelProfiles) as HostConfigV1["modelProfiles"],
     agentProfiles: Object.assign(Object.create(null), agentProfiles) as HostConfigV1["agentProfiles"],
     principalProfile, initialResidents: initialResidents as HostConfigV1["initialResidents"], quota: quota as HostConfigV1["quota"],
     integration: { policyRevision, ...(integration.tiered === undefined ? {} : { tiered: integration.tiered as NonNullable<HostConfigV1["integration"]["tiered"]> }), protectedPaths: protectedPaths as string[], checks: checks as HostConfigV1["integration"]["checks"] },
-    limits: limits as unknown as HostConfigV1["limits"], features: { notmuch: false, reflinkSeed: false, formalApproval: false, egress: false },
+    limits: limits as unknown as HostConfigV1["limits"],
   });
 }

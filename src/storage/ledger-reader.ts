@@ -9,9 +9,9 @@ import { ownedMessages, type RepositoryIdentity } from "../durable.js";
 import { LineageSnapshot } from "../domain/lineage.js";
 import { decodeOperation, type DecodedOperation, type OperationDecodeContext, type OperationOf } from "./operation-codec.js";
 import {
-  decodeAgentRow, decodeAgentSpec, decodeSubscriptionRow, decodeDeliveryRow, decodeBatchRow,
-  decodeBatchManifest, decodeUsageRow, decodeOperationIdProjection, rowCorrupt, safeInteger,
-  type AgentRow, type SubscriptionRow, type DeliveryRow, type BatchRow, type UsageRow,
+  decodeAgentRow, decodeSubscriptionRow, decodeDeliveryRow, decodeBatchRow,
+  decodeBatchManifest, decodeOperationIdProjection, rowCorrupt, safeInteger,
+  type AgentRow, type SubscriptionRow, type DeliveryRow, type BatchRow,
 } from "./rows.js";
 
 export interface PendingWorkRows {
@@ -283,18 +283,5 @@ export class LedgerReader {
   }
   preparedBatches(agent: string): BatchRow[] {
     return this.all("SELECT * FROM batches WHERE agent=? AND state='prepared' ORDER BY rowid", agent).map(raw => this.batchRow(raw));
-  }
-  private usageRow(raw: unknown): UsageRow {
-    const row = decodeUsageRow(raw);
-    const actor = this.requiredAgent(row.actor);
-    if (row.incarnation > actor.incarnation || row.profile !== decodeAgentSpec(actor.specJson).modelProfile) rowCorrupt("usage actor/incarnation/model-profile identity mismatch");
-    return row;
-  }
-  usage(id: string): UsageRow | null {
-    const raw = this.db.prepare("SELECT * FROM usage WHERE request_id=?").get(id);
-    return raw === undefined ? null : this.usageRow(raw);
-  }
-  usages(): UsageRow[] {
-    return this.all("SELECT * FROM usage ORDER BY rowid").map(raw => this.usageRow(raw));
   }
 }

@@ -14,7 +14,6 @@ export interface InternalMethods {
   'principal.attach': { sessionHandle: string; credential: string };
   'principal.detach': Record<string, never>;
   'host.principalRelay': Record<string, never>;
-  'host.reconcile': Record<string, never>;
 }
 
 export interface InternalResults {
@@ -27,7 +26,6 @@ export interface InternalResults {
   'principal.attach': { actor: 'principal'; incarnation: number };
   'principal.detach': { detached: true };
   'host.principalRelay': { moved: number; pending: number };
-  'host.reconcile': { examined: number; repaired: number; remaining: number };
 }
 
 export type InternalRequest<M extends keyof InternalMethods = keyof InternalMethods> =

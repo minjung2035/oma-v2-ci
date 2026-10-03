@@ -36,37 +36,29 @@ const residentValues = {
   profileHex: "70", resourcesHex: "7b7d", memoryBytes: 1024, tasks: 8, cpuQuotaPercent: 50,
 };
 
-test("D03 resident unit: product-owned mode binds to nothing and carries the location as exact ExecStart words", () => {
+test("D03 resident unit: the product runs the broker, so nothing is bound and the location lands as exact ExecStart words", () => {
   const template = readFileSync(join(UNIT_TPL_DIR, "resident.service.in"), "utf8");
-  const product = renderUnit(template, { ...residentValues, brokerUnit: "" });
-  assert.match(product, /^BindsTo=$/m);
-  assert.match(product, /^After=$/m);
+  const product = renderUnit(template, { ...residentValues });
+  assert.doesNotMatch(product, /^(BindsTo|After|Requires)=/m);
   assert.match(product, /^ExecStart=\/n \/l\/dist\/src\/entry\/runner\.js --society demo --agent a --config \/c\\x20\$\$%%\/x\.json --state-root \/s\\x20p\/oma\/demo --run-root \/r\/oma\/demo$/m);
-  const managed = renderUnit(template, { ...residentValues, brokerUnit: "oma-demo-broker.service" });
-  assert.match(managed, /^BindsTo=oma-demo-broker\.service$/m);
   // The path unit watches the inbox under the same root, verbatim.
   assert.match(renderUnit(readFileSync(join(UNIT_TPL_DIR, "resident.path.in"), "utf8"), residentValues),
     /^DirectoryNotEmpty=\/s p\/oma\/demo\/mail\/inboxes\/a\/new$/m);
 });
 
-test("D03 resident unit: a missing location or an invented dependency is refused, never defaulted", () => {
+test("D03 resident unit: a missing location is refused, never defaulted", () => {
   const template = readFileSync(join(UNIT_TPL_DIR, "resident.service.in"), "utf8");
   const { config: _config, ...noConfig } = residentValues;
-  assert.throws(() => renderUnit(template, { ...noConfig, brokerUnit: "" }), /unit template input is missing: CONFIG_ARG/);
+  assert.throws(() => renderUnit(template, { ...noConfig }), /unit template input is missing: CONFIG_ARG/);
   const { run: _run, ...noRun } = residentValues;
-  assert.throws(() => renderUnit(template, { ...noRun, brokerUnit: "" }), /unit template input is missing: RUN_ARG/);
-  assert.throws(() => renderUnit(template, residentValues), /unit template input is missing: BROKER_UNIT/);
-  for (const brokerUnit of ["broker.service", "oma-demo-broker.service\nExecStart=/bin/sh", "oma-demo-broker.service x.service"])
-    assert.throws(() => renderUnit(template, { ...residentValues, brokerUnit }));
-  for (const name of ["principal-relay.service.in", "reconcile.service.in"]) {
-    const host = renderUnit(readFileSync(join(UNIT_TPL_DIR, name), "utf8"), { ...residentValues, brokerUnit: "" });
-    assert.match(host, /^Requires=$/m);
-    assert.match(host, / --run-root \/r\/oma\/demo$/m);
-  }
+  assert.throws(() => renderUnit(template, { ...noRun }), /unit template input is missing: RUN_ARG/);
+  const host = renderUnit(readFileSync(join(UNIT_TPL_DIR, "principal-relay.service.in"), "utf8"), { ...residentValues });
+  assert.doesNotMatch(host, /^(BindsTo|After|Requires)=/m);
+  assert.match(host, / --run-root \/r\/oma\/demo$/m);
 });
 
 test("D03 effective ExecStart: the words systemd reports are the rendered ones, escapes undone", () => {
-  const rendered = renderUnit(readFileSync(join(UNIT_TPL_DIR, "resident.service.in"), "utf8"), { ...residentValues, brokerUnit: "" });
+  const rendered = renderUnit(readFileSync(join(UNIT_TPL_DIR, "resident.service.in"), "utf8"), { ...residentValues });
   // `$$` stays until execution; C escapes and specifiers are resolved at load.
   assert.deepEqual(renderedExecArgv(rendered), ["/n", "/l/dist/src/entry/runner.js", "--society", "demo", "--agent", "a",
     "--config", "/c $$%/x.json", "--state-root", "/s p/oma/demo", "--run-root", "/r/oma/demo"]);

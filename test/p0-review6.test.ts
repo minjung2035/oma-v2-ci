@@ -560,8 +560,8 @@ test("P0V-92 / R6-15: a runner or a retried key the ledger no longer knows is re
     retainForExecution: () => () => undefined, releaseConnection: () => undefined };
   const dispatcher = new InternalDispatcher({
     store: { getAgentIdentity: () => null, pendingDeliveryCount: () => 0, getBatchAgent: () => null, preparedBatchIds: () => [] },
-    mail: { prepare: async () => null, complete: async () => {}, moveToCur: () => 0, reconcilePending: async () => ({}) } as never,
-    reconcile: null, stateRoot: "/nonexistent",
+    mail: { prepare: async () => null, complete: async () => {}, moveToCur: () => 0 } as never,
+    stateRoot: "/nonexistent",
     peers: { requireRunnerUnit: () => {}, requireHostUnit: () => {}, runnerActor: () => "alice",
       runnerAuth: () => { throw new Error("authenticated a runner the ledger does not know"); } },
     isDraining: () => false, assertAdmission: () => {}, admitResource: () => () => {},
@@ -594,7 +594,7 @@ test("P0V-93 / R6-16: a run is opened on the GOAL owner's answer, and an answer 
   t.after(() => { try { store.close(); } finally { rmSync(root, { recursive: true, force: true }); } });
   store.transaction(tx => { tx.insertAgent(makeValidAgent("alice", { desired: "enabled", incarnation: 1 })); });
   const mail = new MailModule({ stateRoot: root, society: "demo" }, store, 64);
-  const units = new UnitsModule("demo", { node: process.execPath, libdir: root, state: root, society: "demo", agent: "", config: join(root, "config.json"), run: join(root, "oma", "demo"), brokerUnit: "" }, join(root, "units"), { p: TEST_RESOURCES });
+  const units = new UnitsModule("demo", { node: process.execPath, libdir: root, state: root, society: "demo", agent: "", config: join(root, "config.json"), run: join(root, "oma", "demo") }, join(root, "units"), { p: TEST_RESOURCES });
   const views = new ViewsModule(store, root, "demo", "p");
   const lifecycle = new LifecycleModule(store, units, { stateRoot: root, projectGit: join(root, "project.git"), society: "demo", hasGoal: () => false, activationAllowed: () => true },
     (_parent, input) => makeValidResolvedSpec(input.name, "p", ALL_CAPS, input.from, input.brief), mail);
@@ -628,7 +628,7 @@ test("P0V-95 / R6-20: a unit that names no owner is nobody's to replace, and the
   const dir = mkdtempSync(join(tmpdir(), "oma-unit-owner-"));
   t.after(() => rmSync(dir, { recursive: true, force: true }));
   const values = { node: process.execPath, libdir: process.cwd(), state: join(dir, "tree"), society: "demo", agent: "",
-    config: join(dir, "tree", "config.json"), run: join(dir, "run"), brokerUnit: "" };
+    config: join(dir, "tree", "config.json"), run: join(dir, "run") };
   const units = new UnitsModule("demo", values, dir, { p: TEST_RESOURCES }, () => 1);
   // An earlier release's unit with this name and Description, naming no tree.
   writeFileSync(join(dir, "oma-demo-erin.service"), "[Unit]\nDescription=OMA demo resident erin\n[Service]\nExecStart=/n /l/runner.js --society demo --agent erin\n");
@@ -658,7 +658,7 @@ test("P0V-98 / P0V-59, P0-3: the first Resident a user installs makes the unit d
   const installDir = join(dir, "config", "systemd", "user");
   const state = join(dir, "tree");
   const units = new UnitsModule("demo", { node: process.execPath, libdir: process.cwd(), state, society: "demo", agent: "",
-    config: join(state, "config.json"), run: join(dir, "run"), brokerUnit: "" }, installDir, { p: TEST_RESOURCES }, () => 1);
+    config: join(state, "config.json"), run: join(dir, "run") }, installDir, { p: TEST_RESOURCES }, () => 1);
   // Whatever the stand-in manager then answers -- it does not report the
   // fragment it loaded, and a lane's guard refuses systemctl outright -- the
   // install stops after publishing; what matters here is that it got that far.

@@ -151,7 +151,7 @@ test("P0V-59 / R04, P0-1: a unit another state tree's society of the same name i
   t.after(() => { process.env.PATH = savedPath; rmSync(dir, { recursive: true, force: true }); });
   const resources = TEST_RESOURCES;
   const values = (state: string) => ({ node: process.execPath, libdir: process.cwd(), state, society: "demo", agent: "",
-    config: join(state, "config.json"), run: join(dir, "run"), brokerUnit: "" });
+    config: join(state, "config.json"), run: join(dir, "run") });
   const ours = new UnitsModule("demo", values(join(dir, "tree-b")), dir, { p: resources }, () => 1);
   const conflict = (error: unknown) => error instanceof StoreError && error.code === "AGENT_CONFLICT";
   // The society called demo whose state tree is tree-a installed Resident alice.

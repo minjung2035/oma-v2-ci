@@ -509,7 +509,7 @@ test("P0V-127 / G05-04: another owner's unit proves neither death nor an empty p
   const dir = mkdtempSync(join(tmpdir(), "oma-foreign-death-"));
   t.after(() => { rmSync(dir, { recursive: true, force: true }); });
   const values = { node: process.execPath, libdir: process.cwd(), state: join(dir, "ours"), society: "demo", agent: "alice",
-    config: join(dir, "config.json"), run: join(dir, "run"), brokerUnit: "" };
+    config: join(dir, "config.json"), run: join(dir, "run") };
   const units = new UnitsModule("demo", values, dir, {}, () => 1);
   let revoked = 0;
   units.onRevokeRun = () => { revoked++; };
