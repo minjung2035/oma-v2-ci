@@ -6,6 +6,7 @@ import { createHash } from "node:crypto";
 import { dirname, isAbsolute, join, parse } from "node:path";
 import { ContextTextValidator, contextEntriesCheck } from "../domain/context-policy.js";
 import { mailHeadersMatch, type MailHeaderExpectation } from "./mail.js";
+import { MAIL_HEADER_BYTES } from "../domain/mail-values.js";
 import type { ContextEntry } from "../../implementation/contracts/values.js";
 
 export type FileObservation<T = true> =
@@ -88,7 +89,7 @@ export class NodeIntegrityFiles implements IntegrityFiles {
           (expected.mode !== undefined && Number(before.mode & 0o777n) !== expected.mode)) return corrupt("FILE_SIZE_MODE_OR_LINKS");
       const hash = createHash("sha256"), buffer = Buffer.allocUnsafe(64 * 1024);
       const text = expected.contextPath === undefined ? null : new ContextTextValidator(expected.contextPath);
-      const headerLimit = 256 * 1024;
+      const headerLimit = MAIL_HEADER_BYTES;
       const header = expected.mail ? Buffer.alloc(Math.min(expected.bytes, headerLimit + 4)) : null;
       let retained = 0;
       let remaining = expected.bytes;
@@ -109,9 +110,9 @@ export class NodeIntegrityFiles implements IntegrityFiles {
       if (header && expected.mail) {
         const crlf = header.indexOf("\r\n\r\n"), lf = header.indexOf("\n\n");
         const ends = [crlf, lf].filter(value => value >= 0);
-        if (ends.length === 0 && expected.bytes > headerLimit) return unknown("HEADER_BYTE_BUDGET");
+        if (ends.length === 0 && expected.bytes > headerLimit) return corrupt("MAIL_HEADER_INVALID");
         const block = ends.length ? header.subarray(0, Math.min(...ends)) : header;
-        if (block.length > headerLimit) return unknown("HEADER_BYTE_BUDGET");
+        if (block.length > headerLimit) return corrupt("MAIL_HEADER_INVALID");
         try { if (!mailHeadersMatch(block, expected.mail)) return corrupt("MAIL_HEADER_RELATION"); }
         catch { return corrupt("MAIL_HEADER_INVALID"); }
       }

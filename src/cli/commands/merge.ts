@@ -6,7 +6,7 @@
 import type { PublicMethods } from "../../../implementation/contracts.js";
 import { isValidFullOid, isValidMessageId } from "../../domain/identifiers.js";
 import { StoreError } from "../../domain/errors.js";
-import { keyOf, parseArguments, type ParsedArguments } from "../arguments.js";
+import { keyOf, parseArguments, splitSubcommand, type ParsedArguments } from "../arguments.js";
 import { readBody, recordedBase, resolveOid, sha256Hex, workspaceDirty } from "../effects.js";
 import { prepareSubmitEffects } from "../effects/submit.js";
 import { readCode } from "../effects/code.js";
@@ -46,9 +46,10 @@ function dirtyWarn(): void {
 /** Publish the candidate through the same preparation `oma submit` uses: the
  * broker-known check, the export ref and the bundle it uploads. A receipt that
  * is not yet a success is the command's answer, with the submit key. */
-async function ensurePublished(candidate: string, submitKey: string): Promise<void> {
+async function ensurePublished(candidate: string, key: string): Promise<void> {
+  const submitKey = `${key}.submit`;
   const reply = (await call("git.known", { candidate }))[0];
-  if (!reply?.ok) finishFailure(reply, "git.known: ", submitKey);
+  if (!reply?.ok) finishFailure(reply, "git.known: ", key);
   const known = reply.result as PublicMethods["git.known"]["result"];
   if (known.hasCandidate) return;
   const self = process.env.OMA_ACTOR ?? "commons";
@@ -66,8 +67,12 @@ async function ensurePublished(candidate: string, submitKey: string): Promise<vo
       params.bundle = { ...digest, mediaType: "application/x-git-bundle" };
       return { method: "git.submit", params, digest, stream: prepared.content };
     },
-    () => isValidFullOid(candidate) ? { candidate, to: [self] } : { to: [self] });
-  if (receipt.state !== "succeeded") finishReceipt(receipt, submitKey);
+    () => isValidFullOid(candidate) ? { candidate, to: [self] } : { to: [self] },
+    { recoveryKey: key });
+  if (receipt.state !== "succeeded") {
+    console.error(`oma: Candidate publication for --request ${key} is ${receipt.state}; the open was not sent`);
+    finishReceipt(receipt, key);
+  }
 }
 
 /** Only explicitly written full-OID arguments compare on replay: a resolved
@@ -98,11 +103,11 @@ async function openMerge(parsed: ParsedArguments): Promise<never> {
         ? (recordedBase() ?? fail("no recorded base: run `git fetch origin main` and build the candidate on it", 2))
         : resolveOid(parsed.value("--base")!);
       dirtyWarn();
-      await ensurePublished(candidate, `${key}.submit`);
       return { method: "attest.record",
         params: { kind: "merge.open", tier, title, reason: readBody(file), candidate, base } };
     },
-    () => ({ kind: "merge.open", tier, title, ...explicitOids(parsed, ["--candidate", "--base"]) }));
+    () => ({ kind: "merge.open", tier, title, ...explicitOids(parsed, ["--candidate", "--base"]) }),
+    { beforeSend: frozen => ensurePublished((frozen.params as { candidate: string }).candidate, key) });
 }
 
 async function review(kind: RequestKind, parsed: ParsedArguments): Promise<never> {
@@ -205,7 +210,9 @@ const VOTE_SPEC = { options: { "--verdict": "value", "--file": "value", "--appro
 const STATUS_SPEC = { options: {}, positional: { min: 0, max: 1 } } as const;
 
 export async function runMergeCommand(args: string[]): Promise<never> {
-  const [action, ...rest] = args;
+  const { name: action, rest } = splitSubcommand(args, {
+    ...OPEN_SPEC.options, ...VOTE_SPEC.options, "--merge": "value", "--view": "value", "--path": "value", "--cursor": "value",
+  });
   switch (action) {
     case "open": return openMerge(parseArguments(rest, OPEN_SPEC));
     case "review": return review("merge", parseArguments(rest, BODY_SPEC));
@@ -238,15 +245,21 @@ async function openChallenge(parsed: ParsedArguments): Promise<never> {
     async () => {
       const pair = candidateArg === null ? null
         : { candidate: resolveOid(candidateArg), base: resolveOid(baseArg!) };
-      if (pair !== null) { dirtyWarn(); await ensurePublished(pair.candidate, `${key}.submit`); }
+      if (pair !== null) dirtyWarn();
       return { method: "attest.record",
         params: { kind: "challenge.open", merge, tier, title, reason: readBody(file), ...pair } };
     },
-    () => ({ kind: "challenge.open", merge, tier, title, ...explicitOids(parsed, ["--candidate", "--base"]) }));
+    () => ({ kind: "challenge.open", merge, tier, title, ...explicitOids(parsed, ["--candidate", "--base"]) }),
+    { beforeSend: async frozen => {
+      const params = frozen.params as { candidate?: string };
+      if (params.candidate !== undefined) await ensurePublished(params.candidate, key);
+    } });
 }
 
 export async function runChallengeCommand(args: string[]): Promise<never> {
-  const [action, ...rest] = args;
+  const { name: action, rest } = splitSubcommand(args, {
+    ...OPEN_SPEC.options, ...VOTE_SPEC.options, "--merge": "value", "--view": "value", "--path": "value", "--cursor": "value",
+  });
   switch (action) {
     case "open": return openChallenge(parseArguments(rest, CHALLENGE_OPEN_SPEC));
     case "review": return review("challenge", parseArguments(rest, BODY_SPEC));

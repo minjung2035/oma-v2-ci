@@ -137,7 +137,11 @@ async function main(argv: readonly string[]): Promise<void> {
     process.stdout.write(`${bound.projectId}\n`);
     return;
   }
-  if (command === "status") { const { state } = await call("engine.status", {}); say(`OMA engine: ${STATES[String(state)] ?? "Unknown"}`, 0); }
+  if (command === "status") {
+    const { state } = await call("engine.status", {});
+    process.stdout.write(`OMA engine: ${STATES[String(state)] ?? "Unknown"}\n`);
+    return;
+  }
   if (command === "list") {
     const societies = observedSocieties(await call("society.list", {}));
     for (const entry of societies) process.stdout.write(`${entry.society}\t${entry.running ? "Running" : "Stopped"}\n`);

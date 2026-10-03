@@ -96,7 +96,7 @@ export function runSendCommand(args: string[]): Promise<never> {
 }
 
 function parseMessageArg(value: string): string {
-  const id = value.startsWith("m-") ? value : basename(value).replace(/:2,$/, "");
+  const id = basename(value).replace(/(?:\.eml|:2,[A-Za-z]*)$/, "");
   const parsed = parseMessageFileId(id);
   if (parsed === null) fail("ack requires a message id or mail path", 2);
   return parsed;

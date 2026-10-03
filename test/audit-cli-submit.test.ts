@@ -259,7 +259,7 @@ for (const fault of ["git", "read"] as const) {
         probe(f.home, fault),
       );
       assert.equal(run.signal, null);
-      assert.equal(run.status, 3, run.stderr);
+      assert.equal(run.status, fault === "git" ? 2 : 3, run.stderr);
       assert.match(
         run.stderr,
         fault === "git" ? /git bundle/ : /controlled bundle read error/,

@@ -166,10 +166,10 @@ test("mail-v1 CLI: dirty workspace warns; known candidate skips the submit; pend
       return frame(request, { operation: generateOperationId(), state: "pending" });
     });
   assert.equal(pending.status, 0, pending.stderr);
-  assert.match(pending.stdout, /Query again: use --request K4\.submit/);
+  assert.match(pending.stdout, /Query again: use --request K4 with the same command/);
   assert.deepEqual(pending.requests.map(r => r.method), ["git.known", "git.submit"]);
   assert.equal(new RequestCache(home).read("K4.submit").kind, "present");
-  assert.equal(new RequestCache(home).read("K4").kind, "absent", "the open never froze");
+  assert.equal(new RequestCache(home).read("K4").kind, "present", "the open froze before candidate publication");
   void candidate;
 });
 
