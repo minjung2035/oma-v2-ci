@@ -16,7 +16,8 @@ const dirnameOf = (path: string): string => path.slice(0, path.lastIndexOf("/"))
  * NUL-free. A test binds the two readings to the same verdicts. */
 const trustedResidentPath = (path: unknown): path is string =>
   typeof path === "string" && path !== "/" && path.startsWith("/") && !path.includes("\0") &&
-  path.split("/").slice(1).every(part => part !== "" && part !== "." && part !== "..");
+  (path.endsWith("/") ? path.slice(0, -1) : path).split("/").slice(1)
+    .every(part => part !== "" && part !== "." && part !== "..");
 
 export const RESIDENT_PATHS = Object.freeze({
   workspace: "/workspace", home: "/home/agent", archive: "/mail/archive",

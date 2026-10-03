@@ -77,7 +77,7 @@ test("SCN-B02: the retained context CLI input refuses an oversized stream before
     // Exercise the CLI's production input owner without restoring the removed
     // model-facing directory tool or weakening the separate mail body bound.
     const result = spawnSync(process.execPath, ["--input-type=module", "-e",
-      `import { prepareContextEffects } from ${JSON.stringify(new URL("../src/cli/effects/context.js", import.meta.url).href)}; prepareContextEffects(process.argv[1]);`, directory],
+      `import { prepareContextEffects } from ${JSON.stringify(new URL("../src/cli/effects/context.js", import.meta.url).href)}; import { fatal } from ${JSON.stringify(new URL("../src/cli/exit.js", import.meta.url).href)}; try { prepareContextEffects(process.argv[1]); } catch (error) { fatal(error); }`, directory],
     { encoding: "utf8", env: { OMA_CONTEXT_BYTES: String(SCENARIO_LIMITS.contextBytes) }, timeout: 10_000 });
     assert.equal(result.status, 2, result.stderr);
     assert.match(result.stderr, /larger than a request can carry \(8388608 bytes\)/);

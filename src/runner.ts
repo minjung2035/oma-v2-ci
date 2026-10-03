@@ -241,6 +241,10 @@ export class RunnerModule {
         // C18: skills, prompt templates and themes the installed packages
         // provide, as host paths under the store root the plan translates.
         ...(packageResourcePaths(this.paths.packages) === undefined ? {} : { packageResources: packageResourcePaths(this.paths.packages) }),
+        // D23/TSP-005: the trusted runtime's surface plan reaches the confined
+        // engine through this runner's own environment, never through authored
+        // configuration; --clearenv makes the plan the only channel.
+        ...(process.env.OMA_TOOL_SURFACE === undefined ? {} : { toolSurface: process.env.OMA_TOOL_SURFACE }),
       },
       paths: {
         piCommand,

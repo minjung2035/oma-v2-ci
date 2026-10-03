@@ -97,7 +97,7 @@ test("U1: a spawn plan without confinement is refused, not silently unconfined",
   // Simulate the deleted unconfined arm: a caller that drops confinement must
   // meet the refusal, never a direct host spawn.
   const unconstrained = { ...options, confinement: undefined } as unknown as PiAdapterOptions;
-  assert.throws(() => planPiSpawn(unconstrained), /UNSUPPORTED_PROFILE/);
+  assert.throws(() => planPiSpawn(unconstrained), { code: "UNSUPPORTED_PROFILE" });
 });
 
 test("A4: absent settings get OMA's interactive defaults through the engine's own manager", t => {
@@ -110,7 +110,9 @@ test("A4: absent settings get OMA's interactive defaults through the engine's ow
   assert.equal(settings.quietStartup, true);
   assert.equal(settings.enableInstallTelemetry, false);
   assert.equal(settings.enableAnalytics, false);
-  assert.equal(settings.enableSkillCommands, false);
+  // C16: skill commands are Pi's ordinary surface -- a persisted suppression
+  // is scrubbed, not pinned over again.
+  assert.equal("enableSkillCommands" in settings, false);
   assert.equal(settings.fullscreenExitOutput, "resume-hint");
 });
 

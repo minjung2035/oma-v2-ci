@@ -61,6 +61,10 @@ export interface PiAdapterProfile {
    * host paths inside the package store. The engine gets them by flag, so the
    * resources reach Pi's loader rather than only being mounted. */
   readonly packageResources?: PackageResourcePaths | undefined;
+  /** TSP-005: the validated surface plan the trusted runtime hands the engine,
+   * encoded; absent means the role's provenance filter alone decides. It is
+   * runtime plumbing, never authored configuration (D23). */
+  readonly toolSurface?: string | undefined;
 }
 export interface PiAdapterPaths {
   readonly piCommand: string;
@@ -162,6 +166,7 @@ function omaEnvironment(options: PiAdapterOptions, inside: PathView): Record<str
     OMA_PROJECT_GIT: inside(options.paths.projectGit),
     OMA_AGENT_HOME: inside(options.paths.agentHome),
     OMA_CLI_PATH: inside(options.paths.cli),
+    ...(options.profile.toolSurface === undefined ? {} : { OMA_TOOL_SURFACE: options.profile.toolSurface }),
     // D25: the extension paths this engine's `-e` argv carries, in the same
     // spelling -- the trusted extension authorizes tools by this provenance,
     // never by name (AV13 mirrors the constant; PI-001 keeps it import-free).

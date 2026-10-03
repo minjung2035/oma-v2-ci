@@ -1024,7 +1024,7 @@
     },
     {
       "path": "src/resident-paths.ts",
-      "sha256": "b86dabb8bf7ef408c14b6fabab98eb5e00ff5d55c87a35e361c325f50bd4725a"
+      "sha256": "b4ca705deae51f5510c162cb5b43d2ecb77c39998bb981c875832f319c2c0f0e"
     },
     {
       "path": "src/review.ts",
@@ -1036,7 +1036,7 @@
     },
     {
       "path": "src/runner.ts",
-      "sha256": "5aae17c2d17d213cf0b3860554eb117898834adfaaaeb36206afc4846f148a3f"
+      "sha256": "c95ebcb7f60e55f202722cd6f730c920dc8b3042998dff3119ca3ee44f5e4119"
     },
     {
       "path": "src/runtime/assets.ts",
@@ -1140,7 +1140,7 @@
     },
     {
       "path": "src/runtime/pi-spawn-plan.ts",
-      "sha256": "7e97a25e2fc53772b415467010e2064b11ed7ce27fc954b3e80a34b2d2dc33b5"
+      "sha256": "9e344d43b573897bf6bd0301f188c5e548f5d5f0624266e6e50bba213f8c21ef"
     },
     {
       "path": "src/runtime/principal-delivery.ts",
