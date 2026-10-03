@@ -84,8 +84,11 @@ export function publishContextRevision(
     // residue whose quiescence startup recovery can prove -- not an ownerless
     // tree that counts against storage quota forever.
     const lease = TreeLease.take(temporary);
-    ensureDurableDirectory(temporary);
     try {
+      // Everything after `take` is inside the same release-on-failure guard:
+      // a failure while the tree is being made must not strand the lease fd
+      // or leave its ".lease" reading active until process exit (AV-18 shape).
+      ensureDurableDirectory(temporary);
       for (const entry of entries) {
         const bytes = readContextEntry(source, entry);
         const target = join(temporary, entry.path);
