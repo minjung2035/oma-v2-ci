@@ -227,6 +227,7 @@ src/process/host-loss.ts
 src/process/policies.ts
 src/process/preparation.ts
 src/process/run.ts
+src/protocol/alarm.ts
 src/protocol/batch-view.ts
 src/protocol/byte-queue.ts
 src/protocol/channel.ts
@@ -255,7 +256,6 @@ src/reconcile/preaccept.ts
 src/request-cache.ts
 src/resident-paths.ts
 src/review.ts
-src/rpc-client.ts
 src/runner.ts
 src/runtime/assets.ts
 src/runtime/broker-lifetime.ts
@@ -275,6 +275,7 @@ src/runtime/inference-relay.ts
 src/runtime/interactive-channel.ts
 src/runtime/interactive-display.ts
 src/runtime/local-package.ts
+src/runtime/locked-files.ts
 src/runtime/oma-theme.ts
 src/runtime/personal-models.ts
 src/runtime/personal-session.ts
