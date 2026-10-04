@@ -551,7 +551,14 @@ export function pruneLocalStage(store: string): void {
     if (directory) removeOwnedTree(path); else removeOwnedFile(path);
   };
   for (const entry of readdirSync(root, { withFileTypes: true }))
-    if (entry.name.startsWith(STAGING_PREFIX)) remove(join(root, entry.name), true);
+    if (entry.name.startsWith(STAGING_PREFIX)) {
+      // A staging area is a directory, but the prefix is only a name: a
+      // regular file or link carrying it is removed for what it is --
+      // removeOwnedTree opens its root O_DIRECTORY and a non-directory
+      // would abort the whole prune (wedging every later `oma pi` change).
+      const path = join(root, entry.name);
+      remove(path, lstatSync(path).isDirectory());
+    }
   const local = join(root, PACKAGE_LOCAL_DIR);
   if (!existsSync(local)) return;
   const inside: string[] = [];
@@ -566,6 +573,12 @@ export function pruneLocalStage(store: string): void {
   const kept = (unit: string): boolean => inside.some(path => path === unit || path.startsWith(`${unit}${sep}`));
   for (const entry of readdirSync(local, { withFileTypes: true })) {
     if (entry.name.startsWith("@") && entry.isDirectory()) {
+      // A bare "@word" is a name the resource rule accepts, so a manifest
+      // may name the package itself `@bare`: the staged copy IS the scope
+      // directory, and a configured source naming it keeps it whole. A
+      // source naming a child (`local/@scope/pkg`) keeps that child only --
+      // its dead siblings are still collected below.
+      if (inside.includes(entry.name)) continue;
       for (const child of readdirSync(join(local, entry.name))) {
         const path = join(local, entry.name, child);
         if (!kept(`${entry.name}${sep}${child}`)) remove(path, lstatSync(path).isDirectory());

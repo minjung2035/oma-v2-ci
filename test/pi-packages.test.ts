@@ -330,6 +330,63 @@ test("DR25/C20: a configured `local/..foo` source survives the prune -- `..` dec
   } finally { f.close(); }
 });
 
+test("DR25/C20: a configured `local/@bare` source survives the prune -- the scope directory itself may be the package", () => {
+  const f = createCompleteConfigurationFixture();
+  try {
+    const store = join(f.root, "packages");
+    mkdirSync(store, { recursive: true });
+    // resourceEntryProblem refuses only "", "." and ".." components, so a
+    // bare @-word is a lawful name: a manifest named "@bare" stages its copy
+    // AT local/@bare -- the scope directory is the package, not a parent of
+    // one. The old sweep descended unconditionally, deleted the children it
+    // found not kept, then removed the directory it had emptied.
+    const source = join(f.root, "src", "at-bare");
+    mkdirSync(join(source, "extensions"), { recursive: true });
+    writeFileSync(join(source, "package.json"), JSON.stringify({ name: "@bare", pi: { extensions: ["./extensions/e.ts"] } }));
+    writeFileSync(join(source, "extensions", "e.ts"), "export default function () {}\n");
+    assert.equal(stageLocalPackage(store, source), `${PACKAGE_LOCAL_DIR}/@bare`);
+
+    // Beside it: a scoped package a source names beneath its scope, a dead
+    // sibling under that same scope, and a scope no source names at all.
+    mkdirSync(join(store, "local", "@scope", "pkg"), { recursive: true });
+    writeFileSync(join(store, "local", "@scope", "pkg", "e.ts"), "export default function () {}\n");
+    mkdirSync(join(store, "local", "@scope", "dead"), { recursive: true });
+    mkdirSync(join(store, "local", "@dead", "gone"), { recursive: true });
+    writeFileSync(join(store, "settings.json"), JSON.stringify({ packages: ["local/@bare", "local/@scope/pkg"] }));
+
+    pruneLocalStage(store);
+    assert.equal(existsSync(join(store, "local", "@bare", "package.json")), true, "a source naming the scope directory itself keeps it whole");
+    assert.equal(existsSync(join(store, "local", "@bare", "extensions", "e.ts")), true, "the kept package's content survives with it");
+    assert.equal(existsSync(join(store, "local", "@scope", "pkg", "e.ts")), true, "a source beneath a scope keeps that child");
+    assert.equal(existsSync(join(store, "local", "@scope", "dead")), false, "a dead sibling under a kept scope is still collected");
+    assert.equal(existsSync(join(store, "local", "@scope")), true, "the kept child's scope directory stays");
+    assert.equal(existsSync(join(store, "local", "@dead")), false, "a scope no source names is collected whole");
+  } finally { f.close(); }
+});
+
+test("DR25/C20: a staging-prefixed file or link is collected with dead areas -- it does not abort the prune", () => {
+  const f = createCompleteConfigurationFixture();
+  try {
+    const store = join(f.root, "packages");
+    mkdirSync(join(store, "local", "live"), { recursive: true });
+    writeFileSync(join(store, "settings.json"), JSON.stringify({ packages: ["local/live"] }));
+    // The interrupted-staging prefix on an entry that is not a directory --
+    // a file an interrupted write left, a link -- used to throw inside
+    // removeOwnedTree (its root opens O_DIRECTORY), aborting the sweep and
+    // every later `oma pi` change that ends in this prune.
+    writeFileSync(join(store, ".staging-local-stray-file"), "half\n");
+    mkdirSync(join(store, ".staging-local-area"));
+    writeFileSync(join(store, ".staging-local-area", "half.ts"), "export default function () { /* half */\n");
+    symlinkSync(join(store, "gone-target"), join(store, ".staging-local-stray-link"));
+
+    pruneLocalStage(store);
+    assert.equal(existsSync(join(store, ".staging-local-stray-file")), false, "a staging-named file is collected as a file");
+    assert.equal(existsSync(join(store, ".staging-local-area")), false, "a staging area is still collected as a tree");
+    assert.equal(lstatSync(join(store, ".staging-local-stray-link"), { throwIfNoEntry: false }), undefined, "a staging-named link is collected as an entry");
+    assert.equal(existsSync(join(store, "local", "live")), true, "the sweep reaches the live package after them");
+  } finally { f.close(); }
+});
+
 test("DR25: a project's inline settings become a managed bundle that runs as it did, and every session is made from it, roles and all", () => {
   const f = createCompleteConfigurationFixture();
   try {

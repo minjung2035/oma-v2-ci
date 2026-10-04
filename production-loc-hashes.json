@@ -1108,7 +1108,7 @@
     },
     {
       "path": "src/runtime/local-package.ts",
-      "sha256": "9dabb287ee1f6b5c810c68a866469eb6facd4cde884c090782b975319e08428e"
+      "sha256": "a1fb107ef6b22547fcb4f6cfe101885f076e118cecf76facd258bc727106e562"
     },
     {
       "path": "src/runtime/locked-files.ts",
