@@ -64,9 +64,22 @@
 | UX-27 | 도구 렌더링이 TypeError로 깨질 수 있음 — `displayCopy`가 null-prototype 사본을 만들어 renderer의 `hasOwnProperty`/`toString`/템플릿 보간이 throw | 1 | 정상 프로토타입 사본으로 교체; `__proto__` own-key는 defineProperty로 데이터 유지 | interactive-display.ts; 프로토타입·`__proto__` 데이터 보존 테스트 추가 | 수정됨 |
 | UX-28 | 설정된 `local/..foo` 소스의 스테이징 복사본이 `oma pi` 변경 시 pruneLocalStage에 삭제됨 — settings.json이 가리키는 복사본을 `startsWith("..")` 접두 판정이 `local/` 탈출로 오독 | 1 | `..` 판정을 컴포넌트 단위로 — checkStoreBoundary의 `escapes()`와 같은 규칙 | `escapes()`를 모듈 스코프로 올려 pruneLocalStage가 재사용(`rel === ".." \|\| rel.startsWith("../")`); `local/..foo` 유지 + 진짜 탈출 소스는 계속 제외되는 회귀 테스트 | 수정됨 |
 | UX-29 | `+build` 접미를 가진 이미지 버전은 업데이트 후 첫 부팅이 영원히 거절됨 — manifest 버전 알파벳은 `+`를 허용하는데 스냅샷 id 알파벳이 못 받아 `update-<version>` 마커 생성이 INVALID_REQUEST | 1 | 스냅샷 id 규칙을 버전 알파벳을 포함하도록 확장(`+` 허용 — 파일명 안전); 러닝 스냅샷의 유지보수 래치 키는 id를 sha256으로 주입적으로 인코딩(request key 알파벳이 더 좁음) | `SNAPSHOT_ID` 공유 상수 도입(snapshot.ts — publish·snapshotIdOf·host-api.ts 와이어 검증이 같은 규칙), snapshotRunning의 래치 키를 `snapshot-<sha256(id)>`로; `+` 버전 부팅·`+` 사용자 id·id 파싱 회귀 테스트 | 수정됨 |
+| UX-30 | 죽은 `local/<pkg>` 디렉토리 안에 심링크·fifo 같은 비정규 엔트리가 하나만 있어도 prune이 중간에 abort — 이후 모든 `oma pi` 변경이 같은 STORE_CORRUPT로 끝나는 영구 wedge (staging이 만드는 사본은 링크를 안 가지므로 손상 경로이지만, 손상이 sweep를 마비시킴) | 1, 9 | 삭제되는 OMA 소유 트리 안의 비정규 리프는 엔트리로서 unlink — unlink는 링크를 따라가지 않으므로 안전; 거절은 지워지는 대상을 보호하지 못하고 sweep만 wedge | `removeOwnedTree`가 removeUnusedTree처럼 non-directory 리프를 unlink; `local/` 자체가 비디렉토리(파일·링크·dangling link)여도 엔트리로 수집해 ENOTDIR/containment wedge 방지; dead-dir-with-link·비디렉토리 local 회귀 테스트 | 수정됨 |
 
 *판정 메모 — 사용자 결함 아님으로 기록만:* 병합 후 회귀로 보인 `limits.mailBodyBytes` 거절은
 버그가 아니라 AV-07 바닥의 정상 동작이다. 바닥 계산(mail/review-bounds.ts)을 실측으로
 검증했을 때 subjectBytes=64·mailBodyBytes=1024 픽스처는 maximal thread revision이 1785B로
 실제 서빙 불가 — 런타임이 INTERNAL_ERROR를 던질 설정이므로 commit 시 거절이 맞고,
 깨진 것은 테스트 픽스처뿐이었다(2543B 이상으로 상향).
+
+*판정 메모 — 내부 도구 결함:* architecture-check의 set-add-membership 이름 게이트
+(5f6109b)는 비건전했다 — `{ foo: Set<string>["add"] }`처럼 다른 이름으로 해석되는
+에일리어스 callee를 건너뛰었다. 접근 이름이 아니라 해석된 시그니처 선언만이 근거이므로
+이름 게이트는 제거하고 booleanUse(checker 무쿼리)만 앞에 둔다. 분석기 자체 품질 문제이지
+사용자 동작 결함은 아님 — aliased 직접 호출 픽스처로 fail-before/pass-after 확인.
+
+*판정 메모 — 경미한 잔존물:* 설정 소스 `local/foo/sub`가 `local/foo` 전체를 유지시키던
+prune 비대칭(스코프 규칙의 일반화 누락) — 설치된 동안 죽은 sibling이 수집되지 않아 스토어에
+잔류했다. 사용자-facing wedge는 아니고 제거 시점엔 전체가 수집됐으므로 UX 행 대신 여기에
+기록; top-level 엔트리 하위에 설정된 strict descendant가 있으면 동일하게 한 단계 descend로
+일반화하고 회귀 테스트 추가.

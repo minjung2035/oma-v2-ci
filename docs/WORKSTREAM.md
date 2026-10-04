@@ -186,12 +186,25 @@ Pi/OS 기능을 다시 구현해서 생긴 중복·workaround·pre-release 잔�
   - `local/@bare` 베어 스코프 패키지가 prune에서 지워지던 구멍 + `.staging-local-*`
     파일/심링크가 removeOwnedTree의 O_DIRECTORY에서 ENOTDIR/ELOOP로 죽던 구멍 수정
     (0cc115a) — lstat 분기 + 정확한 스코프 매치로 dead sibling 수집은 유지.
+  - prune wedge 잔여분 정리: 죽은 `local/<pkg>` 안의 비정규 엔트리(링크/fifo/소켓)가
+    removeOwnedTree의 STORE_CORRUPT로 sweep 전체를 중단시키던 것 — owned 트리 삭제는
+    이제 비디렉토리 리프를 unlink(removeUnusedTree와 같은 규칙, 링크는 따라가지 않음).
+    `local/` 자체가 파일·링크·dangling link여도 엔트리로 수집(ENOTDIR/containment
+    wedge 방지), 설정 소스의 strict descendant를 가진 top-level 엔트리는 @스코프와
+    같은 한 단계 descend로 일반화(`local/foo/sub` 유지 + `local/foo/dead` 수집).
+    셋 모두 fail-before→pass-after 회귀 테스트(pi-packages)로 고정.
   - 시리얼 PTY 3종의 고정 sleep을 전부 화면 마커 expect로 전환(검증된 마커만,
     엔진 탄생은 넓은 timeout). 3× 단독 + 2× 병렬 부하 전부 통과 → SERIAL에서 제거.
   - architecture-check의 per-node 루프에 이름 기반 early-out 추가
     (Set.add 시그니처 해석 전 callee/booleanUse 게이트, 스키마 중복 검사 전
     필드명 게이트) + 소규모 fixture 프로그램의 lib 생략·checkContracts 스킵 —
     findings 불변을 합성 위반 fixture로 대조 확인. 전체 스위트 약 11.5분 → 수 분 단축.
+  - 후속 검증에서 set-add callee 이름 게이트가 비건전으로 판정돼 제거: 에일리어스된
+    callee(`{ foo: Set<string>["add"] }`, `{ m: new Set().add }`, `box["foo"]`)는
+    다른 접근 이름으로 Set.add 선언에 해석된다. `booleanUse` && `isNativeSetAdd`만
+    남김 — 해석된 시그니처 선언이 유일한 근거. 직접+에일리어스 4형태 픽스처가
+    게이트 전/후로 [4]→[4,5,6,7]임을 확인(pre-5f6109b와 parity), 회귀 테스트 고정.
+    스키마 필드 <3 게이트는 독립 검증으로 건전 확인되어 유지.
   - build.mjs: 입력 해시 스탬프로 무변경 빌드 16s → 3s (출력 목록 검증 + 변경 시
     기존 rm -rf 전체 컴파일, check-package는 매번 실행).
 
