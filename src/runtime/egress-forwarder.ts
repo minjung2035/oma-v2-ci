@@ -163,6 +163,12 @@ export interface PrincipalEgress {
   close(): Promise<void>;
 }
 
+/** What a society tenure does with a provider path it paid for (P0V-114):
+ * hold it while the lease stands, close it otherwise. */
+export interface EgressTenure {
+  hold(holding: { close(): Promise<void> }): Promise<boolean>;
+}
+
 /** A free loopback port for the extension's bridge. The Principal's engine is
  * not in a network namespace of its own, so a fixed port could collide with
  * another society's. */
@@ -199,4 +205,18 @@ export async function openPrincipalEgress(options: { readonly society: string; r
       OMA_INFERENCE_PORT: String(port), OMA_INFERENCE_KEY: issued.placeholder }),
     close: () => forwarder.close(),
   });
+}
+
+/** DR18 adoption (G04-01): the opened provider path is the tenure's from
+ * here -- held while the lease stands, closed by `hold` if the lease ended
+ * while it was opening. A configured egress (`OMA_EGRESS_SOCKET` names a
+ * service) that cannot open is a start failure, not a degradable notice:
+ * in the guest the engine has no other provider path (MAC-701 keeps the
+ * credential on the host), so the failure propagates rather than starting
+ * an engine that can only fail against it. An unconfigured environment
+ * still answers null -- no service was ever promised. */
+export async function adoptPrincipalEgress(owner: EgressTenure,
+  options: Parameters<typeof openPrincipalEgress>[0]): Promise<PrincipalEgress | null> {
+  const opened = await openPrincipalEgress(options);
+  return opened !== null && await owner.hold(opened) ? opened : null;
 }

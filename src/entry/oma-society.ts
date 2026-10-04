@@ -56,7 +56,7 @@ import type { ConfigField, ExtensionRow } from "../tui/model.js";
 import type { PromptOutcome } from "../tui/prompt.js";
 import { HOST_LOSS_SIGNALS } from "../runtime/broker-lifetime.js";
 import { runEngineLogin } from "../tui/login.js";
-import { openPrincipalEgress, type PrincipalEgress } from "../runtime/egress-forwarder.js";
+import { adoptPrincipalEgress, type PrincipalEgress } from "../runtime/egress-forwarder.js";
 
 function usage(): never {
   humanStream().write("usage: oma [--society <name>] [--config <path>] [--bind-project]\n       oma login\n" +
@@ -659,16 +659,17 @@ async function main(argv: readonly string[]): Promise<void> {
   // On Linux the environment names no egress socket and this is null.
   // P0V-114 (G04-01): it is the tenure's -- opened only by the owner, closed as
   // the tenure ends however it ends, and closed at once if the tenure ended
-  // while it was opening.
+  // while it was opening. A configured egress whose open fails is a start
+  // failure, not a degradable notice: the guest's engine has no other provider
+  // path, so the error propagates instead of starting an engine that can only
+  // fail against it.
   const egressOwner = tenure;
-  if (egressOwner !== null) try {
+  if (egressOwner !== null) {
     const egressProfile = principalSessionProfile(configPath, society);
-    const opened = await openPrincipalEgress({ society, runRoot, provider: egressProfile.provider, model: egressProfile.model, inferenceSeconds: egressProfile.inferenceSeconds,
-      modelProfile: settings.config.agentProfiles[settings.config.principalProfile]?.modelProfile ?? settings.config.principalProfile,
-      frameBytes: settings.config.limits.frameBytes, deadlineMs: settings.config.limits.receiptWaitSeconds * 1000, env: process.env });
-    if (opened !== null && await egressOwner.hold(opened)) principalEgress = opened;
-  } catch (error) {
-    notice(`⚠ Could not open the provider connection: ${errorWords(error)}`);
+    principalEgress = await adoptPrincipalEgress(egressOwner,
+      { society, runRoot, provider: egressProfile.provider, model: egressProfile.model, inferenceSeconds: egressProfile.inferenceSeconds,
+        modelProfile: settings.config.agentProfiles[settings.config.principalProfile]?.modelProfile ?? settings.config.principalProfile,
+        frameBytes: settings.config.limits.frameBytes, deadlineMs: settings.config.limits.receiptWaitSeconds * 1000, env: process.env });
   }
   // The session environment is principalEnvironment's own value, with the
   // provider path added only where there is one.
