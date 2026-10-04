@@ -14,7 +14,7 @@ import type { ProjectBookmarks } from "./bookmark.js";
 import { MacGit, fileSink, getStream, putStream, sha256File } from "./project.js";
 import { writePackageArchive } from "../package-archive.js";
 import { sealedArchiveSink } from "./archive-crypto.js";
-import { openSnapshotStore, pruneSnapshots, snapshotRunning, snapshotStopped, type SnapshotStore } from "./snapshot.js";
+import { openSnapshotStore, pruneSnapshots, snapshotIdOf, snapshotRunning, snapshotStopped, type SnapshotStore } from "./snapshot.js";
 import { collectTemporaries } from "./files.js";
 import { ProcessLock } from "../../runtime/process-lock.js";
 import { withAsyncCleanup } from "../../process/cleanup.js";
@@ -239,11 +239,13 @@ export class HostService {
      * plus the running image's own pre-update snapshot, whose protection is
      * never lifted while this image runs (the spec's three-boots-or-seven-days
      * window is its minimum, not its bound). An older update's snapshot
-     * decays by age like any other. */
+     * decays by age like any other. The marker is the snapshot's parsed id:
+     * a name's tail is no match -- a user id ending in the marker's bytes
+     * squats on nothing. */
+    const updateId = `update-${options.identity.expectImage}`;
     const updateProtection = (): ReadonlySet<string> => {
       if (snapshots === null) return new Set();
-      const marker = `-update-${options.identity.expectImage}.img`;
-      return new Set(readdirSync(snapshots.dir).filter(name => name.endsWith(marker)));
+      return new Set(readdirSync(snapshots.dir).filter(name => snapshotIdOf(name) === updateId));
     };
     const prune = (): void => { if (snapshots !== null) pruneSnapshots(snapshots.dir, SNAPSHOTS_KEPT, updateProtection()); };
     // §8.4: the update's own snapshot -- the state disk as the image that
@@ -259,9 +261,9 @@ export class HostService {
       const current = readHostRecord(options.recordPath);
       if (current === null || current.image.current === null || current.image.current === options.identity.expectImage)
         return Promise.resolve();
-      if (readdirSync(snapshots.dir).some(name => name.endsWith(`-update-${options.identity.expectImage}.img`)))
+      if (readdirSync(snapshots.dir).some(name => snapshotIdOf(name) === updateId))
         return Promise.resolve();
-      updateBackup ??= backup(() => snapshotStopped(snapshots, `update-${options.identity.expectImage}`))
+      updateBackup ??= backup(() => snapshotStopped(snapshots, updateId))
         .then(() => { prune(); }).finally(() => { updateBackup = null; });
       return updateBackup;
     };

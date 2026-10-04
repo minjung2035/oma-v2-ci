@@ -329,6 +329,37 @@ test("snapshot.create takes only an id, no replay key, and is unavailable where 
   assert.equal((answer.error as { code: string }).code, "UNSUPPORTED_PROFILE");
 });
 
+test("§8.4: a user id that merely ENDS in the update marker's bytes squats on nothing -- the rollback snapshot is still taken and the squatter's copy decays", async t => {
+  const { call, dir, recordPath, driver } = await world(t,
+    d => { writeFileSync(join(d, "state.img"), "the state disk"); },
+    undefined, undefined,
+    d => ({ snapshotsDir: join(d, "snapshots"), statePath: join(d, "state.img"),
+      snapshotClone: (from, to) => { copyFileSync(from, to); } }));
+  const snaps = join(dir, "snapshots");
+  // `x-update-2026.09.1` is a legal id (alnum first, the rest inside the
+  // alphabet) but its published name ends in the update marker's bytes. The
+  // marker checks once ran on that tail: the squatter's file read as the
+  // already-made marker AND won the update's permanent prune protection.
+  const squat = await call("snapshot.create", { id: "x-update-2026.09.1" });
+  assert.equal(squat.ok, true, JSON.stringify(squat));
+  assert.deepEqual(readdirSync(snaps), ["00000000-x-update-2026.09.1.img"]);
+
+  writeHostRecord(recordPath, { ...readHostRecord(recordPath)!, image: { current: "2026.08.0", previous: null } });
+  let atBoot: string[] | undefined;
+  const realStart = driver.start.bind(driver);
+  driver.start = async () => { atBoot = readdirSync(snaps).sort(); await realStart(); };
+  assert.deepEqual((await call("engine.start")).result, { state: "ready" });
+  assert.deepEqual(atBoot, ["00000000-x-update-2026.09.1.img", "00000001-update-2026.09.1.img"],
+    "the squatter's id is not the marker id: the real rollback snapshot was taken before the boot could write the disk");
+
+  // And it keeps no protection: the keep count still sends the oldest off,
+  // while the update's own stays.
+  for (const id of ["p1", "p2", "p3"]) await call("snapshot.create", { id });
+  assert.deepEqual(readdirSync(snaps).sort(),
+    ["00000001-update-2026.09.1.img", "00000002-p1.img", "00000003-p2.img", "00000004-p3.img"],
+    "the squatter's copy pruned like any user's; the unsettled update's stayed");
+});
+
 test("AV-22/P0-2: two archive-key asks on an empty store make one key, not two winners", async t => {
   const dir = mkdtempSync(join(tmpdir(), "oma-archivekey-"));
   t.after(() => rmSync(dir, { recursive: true, force: true }));

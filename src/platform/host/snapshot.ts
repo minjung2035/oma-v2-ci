@@ -25,12 +25,24 @@ export interface SnapshotStore {
 }
 const apfsClone = (from: string, to: string): void => { copyFileSync(from, to, constants.COPYFILE_FICLONE_FORCE); };
 
+/** A snapshot id's alphabet: a plain filename's characters. */
+export const SNAPSHOT_ID = /^[A-Za-z0-9][A-Za-z0-9._-]{0,99}$/;
+
 /** P0V-103 (F-08, G12-04): a snapshot's name carries its place in the
  * order snapshots were made -- `<sequence>-<id>.img` -- because the order is
  * what pruning keeps by, and a clone's time is the disk's, not the
  * snapshot's (and the wall clock can go back). */
 const SNAPSHOT = /^(\d{8})-(.+)\.img$/;
 function sequenceOf(name: string): number { const match = SNAPSHOT.exec(name); return match === null ? -1 : Number(match[1]); }
+
+/** The id a published snapshot's name carries, or null for a name that is
+ * not a snapshot's. Matching against this -- never the name's tail -- is
+ * what keeps a user id that merely ENDS in another id's bytes (`x-update-…`
+ * beside `update-…`) from reading as that id. */
+export function snapshotIdOf(name: string): string | null {
+  const match = SNAPSHOT.exec(name);
+  return match !== null && SNAPSHOT_ID.test(match[2]!) ? match[2]! : null;
+}
 
 /** The snapshots directory's own start, under the host lock: what a dead
  * service left of a snapshot it did not finish is removed. */
@@ -41,7 +53,7 @@ export function openSnapshotStore(dir: string): string[] { return collectTempora
  * one, and one that was not finished is a temporary the store's start
  * removes. */
 function publish(store: SnapshotStore, id: string, take: (partial: string) => Promise<boolean>): Promise<string> {
-  if (!/^[A-Za-z0-9][A-Za-z0-9._-]{0,99}$/.test(id)) return Promise.reject(new StoreError("INVALID_REQUEST", "a snapshot id is a plain name"));
+  if (!SNAPSHOT_ID.test(id)) return Promise.reject(new StoreError("INVALID_REQUEST", "a snapshot id is a plain name"));
   const sequence = 1 + Math.max(-1, ...readdirSync(store.dir).map(sequenceOf));
   const name = `${String(sequence).padStart(8, "0")}-${id}.img`;
   const partial = temporaryPath(store.dir, name);
