@@ -21,6 +21,7 @@ import { HOST_API_VERSION, hostApiHelloProblem, type HostApiHello } from "../../
 import type { VmState } from "./lifecycle.js";
 import { isValidSocietyName } from "../../domain/identifiers.js";
 import { checkedGuestHistory } from "../../protocol/guest-history.js";
+import { SNAPSHOT_ID } from "./snapshot.js";
 
 export interface HostApiBackend {
   state(): VmState;
@@ -192,7 +193,7 @@ function serve(peer: FramedPeer, backend: HostApiBackend): void {
       case "snapshot.create": {
         if (key !== undefined) throw new StoreError("INVALID_REQUEST", "snapshot.create does not accept a replay key");
         if (Object.keys(params).some(name => name !== "id") || (params.id !== undefined &&
-            (typeof params.id !== "string" || !/^[A-Za-z0-9][A-Za-z0-9._-]{0,99}$/.test(params.id))))
+            (typeof params.id !== "string" || !SNAPSHOT_ID.test(params.id))))
           throw new StoreError("INVALID_REQUEST", "snapshot.create may name the snapshot, and only that");
         // `update-<expectImage>` is the service's own pre-update marker: a
         // user snapshot in that namespace is prune-protected forever and,

@@ -8,7 +8,7 @@ import { join } from "node:path";
 import { randomUUID } from "node:crypto";
 import { GuestLink } from "../src/platform/host/guest-link.js";
 import type { FramedPeer } from "../src/platform/rpc.js";
-import { openSnapshotStore, pruneSnapshots, snapshotRunning, snapshotStopped } from "../src/platform/host/snapshot.js";
+import { openSnapshotStore, pruneSnapshots, snapshotIdOf, snapshotRunning, snapshotStopped } from "../src/platform/host/snapshot.js";
 import type { SessionLauncher } from "../src/platform/guest/host.js";
 import { HOST_GUEST_PROTOCOL, PLATFORM_FRAME_BYTES } from "../src/protocol/host-guest.js";
 import { LocalDriver, listenSilently } from "./fixtures/local-guest.js";
@@ -88,6 +88,24 @@ test("§8.4/MAC-661, P0V-103 (G12-04): old snapshots go oldest first by the orde
   assert.deepEqual(pruneSnapshots(snapshots, 3, new Set([names[0]!])), [names[1]]);
   assert.deepEqual(readdirSync(snapshots).sort(), [names[0], names[2], names[3], names[4]]);
   assert.equal(existsSync(made[0]!), true, "the update's snapshot stays");
+});
+
+test("G12-04: a published name parses back to its own id -- a tail match is no match, and a version's '+' is a legal id", async t => {
+  const { snapshots, statePath } = await world(t);
+  // An image version may carry a +build suffix (image.ts): `update-<version>`
+  // must always be an id the store accepts, or that update's first boot is
+  // refused its rollback point forever.
+  const marked = await snapshotStopped({ dir: snapshots, statePath, clone: copy }, "update-2026.09.1+build7");
+  assert.equal(marked, join(snapshots, "00000000-update-2026.09.1+build7.img"));
+  // The squat the old endsWith check fell for: `x-update-…`'s parsed id is
+  // its own, never `update-…` -- and a name that is no snapshot has no id.
+  const squatter = await snapshotStopped({ dir: snapshots, statePath, clone: copy }, "x-update-2026.09.1+build7");
+  assert.equal(snapshotIdOf(squatter.slice(snapshots.length + 1)), "x-update-2026.09.1+build7");
+  assert.equal(snapshotIdOf("00000002-update-2026.09.1+build7.img"), "update-2026.09.1+build7");
+  assert.equal(snapshotIdOf("not-a-snapshot.img"), null);
+  assert.equal(snapshotIdOf("00000002-no id chars!.img"), null);
+  // Still refused: an id the rule cannot take.
+  await assert.rejects(snapshotStopped({ dir: snapshots, statePath, clone: copy }, "-x"), /plain name/);
 });
 
 test("P0V-103 (F-08): a snapshot that was not finished is a temporary, never a snapshot, and the store's start removes it", async t => {

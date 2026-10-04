@@ -9,6 +9,7 @@
  * discarded, never kept as a snapshot (MAC-622, P0-5).
  */
 import { constants, copyFileSync, readdirSync, rmSync } from "node:fs";
+import { createHash } from "node:crypto";
 import { join } from "node:path";
 import { StoreError } from "../../domain/errors.js";
 import { withAsyncCleanup } from "../../process/cleanup.js";
@@ -25,8 +26,12 @@ export interface SnapshotStore {
 }
 const apfsClone = (from: string, to: string): void => { copyFileSync(from, to, constants.COPYFILE_FICLONE_FORCE); };
 
-/** A snapshot id's alphabet: a plain filename's characters. */
-export const SNAPSHOT_ID = /^[A-Za-z0-9][A-Za-z0-9._-]{0,99}$/;
+/** A snapshot id's alphabet: a plain filename's characters. The image
+ * version's alphabet (`image.ts`, `host-guest.ts`) is a subset -- `+`
+ * included -- so `update-<version>` is always an id this accepts, and a
+ * version's `+build` suffix cannot refuse the update's own first boot.
+ * host-api.ts checks this same constant at the wire. */
+export const SNAPSHOT_ID = /^[A-Za-z0-9][A-Za-z0-9.+_-]{0,99}$/;
 
 /** P0V-103 (F-08, G12-04): a snapshot's name carries its place in the
  * order snapshots were made -- `<sequence>-<id>.img` -- because the order is
@@ -73,7 +78,9 @@ export function snapshotStopped(store: SnapshotStore, id: string): Promise<strin
  * freeze for the clone. Answers the societies that were stopped, for the UI
  * to reopen. */
 export async function snapshotRunning(store: SnapshotStore, link: GuestLink, id: string): Promise<{ path: string; stopped: string[] }> {
-  const key = `snapshot-${id}`;
+  // The maintenance latch's key is a request key, whose alphabet is narrower
+  // than the id's ("+" is a legal id): the digest carries the id injectively.
+  const key = `snapshot-${createHash("sha256").update(id).digest("hex").slice(0, 16)}`;
   const society = await link.json("society");
   const stopped: string[] = [];
   try {

@@ -360,6 +360,31 @@ test("§8.4: a user id that merely ENDS in the update marker's bytes squats on n
     "the squatter's copy pruned like any user's; the unsettled update's stayed");
 });
 
+test("§8.4: an image version with a +build suffix is a legal snapshot id -- the update marker is made and the boot proceeds", async t => {
+  const expectImage = "2026.09.1+build7";
+  const { call, dir, recordPath, driver } = await world(t,
+    d => { writeFileSync(join(d, "state.img"), "the state disk"); },
+    undefined, undefined,
+    d => {
+      const written = readHostRecord(join(d, "host-record.json"))!;
+      return { snapshotsDir: join(d, "snapshots"), statePath: join(d, "state.img"),
+        snapshotClone: (from, to) => { copyFileSync(from, to); },
+        identity: { hostVersion: "1.0.0", installationId: written.installationId, instanceId: written.instanceId,
+          expectImage, protocol: { min: HOST_GUEST_PROTOCOL, max: HOST_GUEST_PROTOCOL } } };
+    });
+  // manifest.version (image.ts) and expectImage (host-guest.ts) accept "+";
+  // the snapshot id rule did not, so `update-<version>` was refused and the
+  // update's first boot could never be taken.
+  driver.image = expectImage;
+  writeHostRecord(recordPath, { ...readHostRecord(recordPath)!, image: { current: "2026.08.0", previous: null } });
+  assert.deepEqual((await call("engine.start")).result, { state: "ready" });
+  assert.deepEqual(readdirSync(join(dir, "snapshots")), ["00000000-update-2026.09.1+build7.img"],
+    "the pre-update snapshot was taken, '+' and all");
+  // The user-facing rule is the same one: a '+' id is accepted at the wire.
+  const named = await call("snapshot.create", { id: "pre-9.2+rc1" });
+  assert.equal(named.ok, true, JSON.stringify(named));
+});
+
 test("AV-22/P0-2: two archive-key asks on an empty store make one key, not two winners", async t => {
   const dir = mkdtempSync(join(tmpdir(), "oma-archivekey-"));
   t.after(() => rmSync(dir, { recursive: true, force: true }));
