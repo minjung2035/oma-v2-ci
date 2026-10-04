@@ -1348,7 +1348,7 @@
     },
     {
       "path": "src/tui/keys.ts",
-      "sha256": "b4f4db3080117ccf091941f826b764ad7441d9c33999622620ff4deb0e4b7a90"
+      "sha256": "9cb60b71b0e5d152b44a76b1cc6605e6ce4a323a8ed450f5c6ddbe3571095596"
     },
     {
       "path": "src/tui/limits.ts",

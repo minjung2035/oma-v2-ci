@@ -400,10 +400,5 @@ export class KeyDecoder {
   }
 }
 
-/** Decode a complete, already-bounded byte string. Stream owners must keep a
- * `KeyDecoder` instance instead; this helper is for closed fixtures only.
- */
-export function decodeKeys(chunk: Uint8Array): Key[] {
-  const decoder = new KeyDecoder();
-  return [...decoder.push(chunk), ...decoder.finish()];
-}
+/** Whole-buffer decoding for closed fixtures lives in test/fixtures/keys.ts;
+ * stream owners keep a `KeyDecoder` instance. */
