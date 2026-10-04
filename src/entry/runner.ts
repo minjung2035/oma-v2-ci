@@ -54,6 +54,8 @@ const agentProfile = cfg.agentProfiles[profileName]!;
 const modelName = agentProfile.modelProfile;
 const profile = Object.freeze({ name: profileName, modelProfile: modelName, model: Object.freeze({ ...cfg.modelProfiles[modelName]! }),
   workspaceBytes: resources.workspaceBytes,
+  // FI-5: the bounds this unit runs under, told to the Resident it starts.
+  resources: { cpuQuotaPercent: resources.cpuQuotaPercent, memoryBytes: resources.memoryBytes, tasks: resources.tasks },
   ...(configuration.roles[profileName] ? { settings: configuration.roles[profileName] } : {}) });
 // OMA runs the engine it shipped with, never one found on PATH, and points it
 // at an agent directory OMA owns so a Pi the user installed stays untouched.

@@ -6,7 +6,7 @@
  * about its paths, and what reaches its environment are all visible here, and
  * none of it depends on a process having been spawned.
  */
-import type { Actor, ProtocolLimits } from "../../implementation/contracts.js";
+import type { Actor, ProtocolLimits, ResourceLimits } from "../../implementation/contracts.js";
 import { verifiedPaths, type VerifiedExtension } from "./extension-integrity.js";
 import type { PackageResourcePaths } from "./pi-packages.js";
 import { PI_AGENT_DIR_ENV } from "./pi-runtime.js";
@@ -19,6 +19,7 @@ import { storedMailBytes } from "../domain/mail-values.js";
 import { assertModelScope } from "../storage/paths.js";
 import { sandboxSeccompFilter } from "./sandbox-seccomp.js";
 import { RESIDENT_SYSTEM_PROMPT } from "../config/role-prompts.js";
+import { actorAddress } from "../mail/addresses.js";
 
 /** Everything the adapter needs to run the engine inside the Resident sandbox.
  * Every Resident requires it; its absence is an unsupported profile. */
@@ -65,7 +66,11 @@ export interface PiAdapterProfile {
    * encoded; absent means the role's provenance filter alone decides. It is
    * runtime plumbing, never authored configuration (D23). */
   readonly toolSurface?: string | undefined;
+  /** FI-5: the accepted bounds the Resident's unit runs under, told to the
+   * Resident (residentHints). Display only: systemd enforces them. */
+  readonly resources?: ResidentResourceHints | undefined;
 }
+export type ResidentResourceHints = Pick<ResourceLimits, "cpuQuotaPercent" | "memoryBytes" | "tasks">;
 export interface PiAdapterPaths {
   readonly piCommand: string;
   /** Arguments preceding Pi's own flags, e.g. the vendored bundle entry when
@@ -187,6 +192,29 @@ function omaEnvironment(options: PiAdapterOptions, inside: PathView): Record<str
   };
 }
 
+/** What the Resident's own commands read, beside the entries above.
+ *
+ * FI-1: Git commits as the actor, at the address its mail carries, so a
+ * commit needs no `-c user.*` (the editor and prompt are RESIDENT_ENVIRONMENT's).
+ *
+ * FI-5: the unit's bounds, because nothing inside shows them honestly: there
+ * is no cpuset, so `nproc` counts the host's cores under a CPUQuota. A build
+ * tool reads `-j$OMA_CPUS`; OMA sets no tool's parallelism for it. */
+function residentHints(options: PiAdapterOptions, actor: Actor): Record<string, string> {
+  const address = actorAddress(actor, options.society);
+  const resources = options.profile.resources;
+  return {
+    GIT_AUTHOR_NAME: actor, GIT_AUTHOR_EMAIL: address, GIT_COMMITTER_NAME: actor, GIT_COMMITTER_EMAIL: address,
+    ...(resources === undefined ? {} : {
+      // A partial CPU rounds up: the quota is a share of time, not of cores,
+      // and -j1 under 150% would leave half of it idle.
+      OMA_CPUS: String(Math.max(1, Math.ceil(resources.cpuQuotaPercent / 100))),
+      OMA_MEMORY_BYTES: String(resources.memoryBytes),
+      OMA_TASKS: String(resources.tasks),
+    }),
+  };
+}
+
 /** The confined spawn uses only its explicit environment in the argv.
  * `--clearenv` prevents inheritance from the host process. */
 function engineArgv(options: PiAdapterOptions, inside: PathView): string[] {
@@ -262,6 +290,8 @@ export function planPiSpawn(options: PiAdapterOptions): PiSpawnPlan {
   // through the relay socket instead, and the credential stays on the host.
   const relay = confinement.inference;
   const environment = {
+    // The lease's actor, the one `residentArgv` sets OMA_ACTOR to.
+    ...residentHints(options, confinement.lease.actor),
     ...omaEnvironment(options, inside),
     [PI_AGENT_DIR_ENV]: inside(join(options.paths.agentHome, "engine")),
     // The trusted extension's one statement of where it runs: inside the

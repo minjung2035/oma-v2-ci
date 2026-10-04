@@ -7,7 +7,7 @@ import { StoreError } from "./domain/errors.js";
 import { assertValidatedRunLease, trustedAbsolutePath, type ValidatedRunLease } from "./protocol/run-lease.js";
 import { validBatchViewLimits } from "./protocol/batch-view.js";
 import { agentRootPathAt, projectGitPathAt, projectMirrorPathAt, workspacePathAt, runnerViewPathAt, runnerSessionDirPathAt } from "./storage/paths.js";
-import { RESIDENT_ENVIRONMENT, RESIDENT_PATHS, SANDBOX_FILTER_FD, SYSTEM_BIND_CANDIDATES } from "./resident-paths.js";
+import { RESIDENT_ENVIRONMENT, RESIDENT_PATHS, SANDBOX_FILTER_FD, SYSTEM_BIND_CANDIDATES, nodeToolchainMounts } from "./resident-paths.js";
 
 // The pure path tables and translations live in src/resident-paths.ts (kernel
 // layer); orchestration code keeps importing them through this module so the
@@ -15,7 +15,7 @@ import { RESIDENT_ENVIRONMENT, RESIDENT_PATHS, SANDBOX_FILTER_FD, SYSTEM_BIND_CA
 export {
   RESIDENT_PATHS, SYSTEM_BIND_CANDIDATES, RESIDENT_INFERENCE_PORT, SANDBOX_EXECUTABLE,
   SANDBOX_FILTER_FD, modelCommandScript, RESIDENT_PATH_ENV, RESIDENT_ENVIRONMENT,
-  requireResidentRootfs, residentProjectGit, hostSessionPath, confinedPath,
+  RESIDENT_NODE_TOOLCHAIN, nodeToolchainMounts, requireResidentRootfs, residentProjectGit, hostSessionPath, confinedPath,
   type MountedInstallation,
 } from "./resident-paths.js";
 
@@ -84,6 +84,9 @@ export function residentArgv(h: SandboxHost, lease: ValidatedRunLease,
     "--ro-bind", h.rootfs, "/",
     ...(h.systemBinds ?? []).flatMap(path => ["--ro-bind", path, path]),
     "--ro-bind", h.node, RESIDENT_PATHS.node,
+    // FI-2: the pinned Node's npm/npx/corepack, from its own prefix when it
+    // ships them there; the rootfs links them beside the Node.
+    ...nodeToolchainMounts(h.node).flatMap(([source, target]) => ["--ro-bind-try", source, target]),
     "--proc", "/proc", "--dev", "/dev",
     "--size", String(h.tmpBytes), "--tmpfs", "/tmp",
     "--ro-bind", h.libdir, RESIDENT_PATHS.libdir,

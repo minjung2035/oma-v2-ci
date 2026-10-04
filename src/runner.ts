@@ -8,7 +8,7 @@ import type {
 } from "../implementation/contracts.js";
 import { dirname } from "node:path";
 import { confinedPath, RESIDENT_ENVIRONMENT, type ResidentDirectories } from "./sandbox.js";
-import type { PiConfinement, PiInference } from "./runtime/pi-spawn-plan.js";
+import type { PiConfinement, PiInference, ResidentResourceHints } from "./runtime/pi-spawn-plan.js";
 import { InferenceRelay } from "./runtime/inference-relay.js";
 import { EGRESS_SOCKET_ENV, EgressForwarder, requestEgressPlaceholder } from "./runtime/egress-forwarder.js";
 import { placeholderFor, resolveEngineAuth } from "./runtime/engine-auth.js";
@@ -46,6 +46,8 @@ export interface RunnerProfile {
   readonly model: Readonly<ModelProfile>;
   readonly settings?: RoleSettings;
   readonly workspaceBytes?: number;
+  /** FI-5: the accepted bounds the unit was rendered with, told to the engine. */
+  readonly resources?: ResidentResourceHints;
 }
 /** What the deployment declared about confining Residents.
  *
@@ -245,6 +247,9 @@ export class RunnerModule {
         // engine through this runner's own environment, never through authored
         // configuration; --clearenv makes the plan the only channel.
         ...(process.env.OMA_TOOL_SURFACE === undefined ? {} : { toolSurface: process.env.OMA_TOOL_SURFACE }),
+        ...(this.profile.resources === undefined ? {} : { resources: {
+          cpuQuotaPercent: this.profile.resources.cpuQuotaPercent, memoryBytes: this.profile.resources.memoryBytes,
+          tasks: this.profile.resources.tasks } }),
       },
       paths: {
         piCommand,

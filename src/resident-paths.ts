@@ -35,7 +35,37 @@ export const RESIDENT_PATHS = Object.freeze({
   inference: "/run/oma/inference.sock",
   /** The pinned Node, bound as a single file so the rootfs need not carry it. */
   node: "/opt/oma-node/node",
+  /** FI-2: the pinned Node's own package managers, mounted where its
+   * distribution keeps them relative to `node` (RESIDENT_NODE_TOOLCHAIN). */
+  nodeModules: "/opt/oma-node/lib/node_modules",
 });
+
+/** FI-2: the package-manager commands a Resident has beside the pinned Node
+ * (its prompt says `npm test`). Node's distribution ships each as
+ * `<prefix>/lib/node_modules/<module>` with a `<prefix>/bin/<command>` link
+ * to `<entry>`; the rootfs reproduces the link beside RESIDENT_PATHS.node and
+ * the mount plan binds the module from the pinned Node's own prefix
+ * (nodeToolchainMounts), so the commands are the pinned Node's version. The
+ * image-side half -- the deployment's Node ships them, in its prefix or on
+ * `/usr/bin` -- is pinned by a contract test against the host's Node. */
+export const RESIDENT_NODE_TOOLCHAIN = Object.freeze([
+  Object.freeze({ command: "npm", module: "npm", entry: "bin/npm-cli.js" }),
+  Object.freeze({ command: "npx", module: "npm", entry: "bin/npx-cli.js" }),
+  Object.freeze({ command: "corepack", module: "corepack", entry: "dist/corepack.js" }),
+] as const);
+
+/** Each toolchain module's host source beside its inside target, read from
+ * the pinned Node's path: `<prefix>/bin/node` keeps them in
+ * `<prefix>/lib/node_modules`. A Node laid out otherwise (a distribution
+ * `/usr/bin/node` whose npm is packaged elsewhere) names an absent source;
+ * the plan binds with `--ro-bind-try`, the rootfs link then dangles, and a
+ * PATH lookup moves on to the operating system's `/usr/bin/<command>`. */
+export function nodeToolchainMounts(node: string): readonly (readonly [string, string])[] {
+  const prefix = dirnameOf(dirnameOf(node));
+  if (prefix.length === 0) return [];
+  return [...new Set(RESIDENT_NODE_TOOLCHAIN.map(tool => tool.module))]
+    .map(module => [`${prefix}/lib/node_modules/${module}`, `${RESIDENT_PATHS.nodeModules}/${module}`] as const);
+}
 
 /** SB-001: the only host paths a Resident may see besides its own mounts. They
  * are the operating system's programs and libraries — never `/`, `/home`, a
@@ -72,6 +102,13 @@ export const RESIDENT_ENVIRONMENT = Object.freeze({
   LANG: "C.UTF-8", LC_ALL: "C.UTF-8", TZ: "UTC", TERM: "xterm-256color", TMPDIR: "/tmp",
   SHELL: "/bin/sh", USER: "agent", LOGNAME: "agent",
   XDG_DATA_HOME: `${RESIDENT_PATHS.home}/.local/share`, XDG_RUNTIME_DIR: `${RESIDENT_PATHS.home}/.run`,
+  // FI-1: nobody is at a terminal. An amend, a merge or a `rebase --continue`
+  // keeps the message it has instead of waiting on vi, and Git never prompts
+  // for credentials it cannot have. The identity is per actor (pi-spawn-plan).
+  GIT_EDITOR: ":", EDITOR: ":", VISUAL: ":", GIT_TERMINAL_PROMPT: "0",
+  // FI-2: `npm install -g`/`npm link` land in the home's `.local`, whose bin is
+  // on PATH, not the read-only /opt; no registry check on every invocation.
+  NPM_CONFIG_PREFIX: `${RESIDENT_PATHS.home}/.local`, NPM_CONFIG_UPDATE_NOTIFIER: "false",
 });
 
 /** SB-002-E: `installation.rootfs` must name a trusted non-root path.

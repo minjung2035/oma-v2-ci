@@ -6,7 +6,7 @@ import type { CommandSpec, ProcessObservation } from "../process/command.js";
 import { runProcess } from "../process/run.js";
 import { sandboxSeccompFilter } from "./sandbox-seccomp.js";
 import { hostSystemLayout } from "./resident-rootfs.js";
-import { RESIDENT_PATHS, SYSTEM_BIND_CANDIDATES } from "../sandbox.js";
+import { RESIDENT_PATHS, SYSTEM_BIND_CANDIDATES, nodeToolchainMounts } from "../sandbox.js";
 import { trustedAbsolutePath } from "../protocol/run-lease.js";
 import { isValidFullOid } from "../ids.js";
 import { sha256Hex } from "../hash.js";
@@ -70,6 +70,8 @@ export function candidateCheckCommand(paths: GitPaths, candidate: string, check:
     "--seccomp", "0", "--ro-bind", paths.checkRootfs, "/",
     ...systemBinds.flatMap(path => ["--ro-bind", path, path]),
     "--ro-bind", paths.checkNode, RESIDENT_PATHS.node,
+    // FI-2: a check argv of `npm test` finds the same toolchain a Worker has.
+    ...nodeToolchainMounts(paths.checkNode).flatMap(([source, target]) => ["--ro-bind-try", source, target]),
     "--ro-bind", paths.checkAssetsDir, RESIDENT_PATHS.libdir,
     "--ro-bind", paths.projectGit, RESIDENT_PATHS.projectGit,
     "--proc", "/proc", "--dev", "/dev",
