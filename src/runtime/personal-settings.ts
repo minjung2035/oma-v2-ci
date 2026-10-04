@@ -8,13 +8,18 @@ import { DEPLOYMENT_LAYOUT } from "../domain/deployment.js";
 import { extensionEntryProblem, observeExtensionAsset, PACKAGE_ENTRY_PREFIX, type ExtensionRoots } from "../config/operations.js";
 import { ensureUserDirectory, readUserFile, replaceUserFile } from "./user-files.js";
 import { ProcessLock } from "./process-lock.js";
-import { packageStoreRoot, readPackageIndex, reconciledEntries, resourceEntryProblem, type InstalledPackage } from "./pi-packages.js";
+import { PACKAGE_INDEX_BYTES, packageStoreRoot, readPackageIndex, reconciledEntries, resourceEntryProblem, type InstalledPackage } from "./pi-packages.js";
 import { PERSONAL_SESSIONS } from "./session-mode.js";
 import { fileDigest } from "../storage/file-digest.js";
 import type { VerifiedExtension } from "./extension-integrity.js";
 
 const KIND = "oma-personal-settings-v1";
-const MAX_BYTES = 1024 * 1024;
+/** UX-20: the document embeds the whole package index (every package's
+ * entries and resource lists, so a Personal session's argv can name them) plus
+ * the Human's enabled entries, so its DoS ceiling is the index's twice over
+ * plus headroom -- a bound bytes placed into it can approach, never a size a
+ * real choice is meant to reach. */
+export const PERSONAL_SETTINGS_BYTES = 2 * PACKAGE_INDEX_BYTES + 1024 * 1024;
 /** C20: a Personal extension may also be an absolute file path, written
  * `local:/absolute/path.js`. Personal runs on the Human's own permissions and
  * confinement is not its guarantee, so a path that lives outside libdir and
@@ -91,7 +96,19 @@ function checked(value: unknown): PersonalSettings {
       prompts: lists(item, "prompts"), themes: lists(item, "themes") }))) });
 }
 export function readPersonalSettings(dataRoot: string): PersonalSettings | null {
-  const bytes = readUserFile(join(dataRoot, PERSONAL_SESSIONS, "settings.json"), MAX_BYTES);
+  const path = join(dataRoot, PERSONAL_SESSIONS, "settings.json");
+  let bytes: string | null;
+  try { bytes = readUserFile(path, PERSONAL_SETTINGS_BYTES); }
+  catch (error) {
+    // An oversized regular file is a limit, not corrupt bytes; the refusal
+    // names the configured bound.
+    if (error instanceof StoreError && error.code === "STORE_CORRUPT") {
+      const observed = lstatSync(path, { throwIfNoEntry: false });
+      if (observed?.isFile() && observed.size > PERSONAL_SETTINGS_BYTES)
+        throw new StoreError("LIMIT_EXCEEDED", `Personal settings exceed their ${PERSONAL_SETTINGS_BYTES}-byte bound`);
+    }
+    throw error;
+  }
   if (bytes === null) return null;
   try { return checked(JSON.parse(bytes)); } catch { return invalid(); }
 }
@@ -173,7 +190,8 @@ function commitPersonalSettings(location: PersonalSettingsLocation, before: Pers
     if (before !== null && JSON.stringify(before.extensions) === JSON.stringify(chosen) && JSON.stringify(before.packages) === JSON.stringify(packages)) return before;
     const next = checked({ kind: KIND, revision: (before?.revision ?? 0) + 1, extensions: chosen, packages });
     const bytes = `${JSON.stringify(next, null, 2)}\n`;
-    if (Buffer.byteLength(bytes) > MAX_BYTES) throw new StoreError("INVALID_REQUEST", "Personal settings exceed their document bound");
+    if (Buffer.byteLength(bytes) > PERSONAL_SETTINGS_BYTES)
+      throw new StoreError("LIMIT_EXCEEDED", `Personal settings exceed their ${PERSONAL_SETTINGS_BYTES}-byte bound`);
     lock.assertHeld(join(location.dataRoot, PERSONAL_SESSIONS, "settings.lock"));
     replaceUserFile(join(location.dataRoot, PERSONAL_SESSIONS, "settings.json"), bytes);
     return next;

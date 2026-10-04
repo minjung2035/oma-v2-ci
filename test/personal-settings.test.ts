@@ -1,11 +1,11 @@
 /** Personal choices share extension validation, never the Principal/Worker writer. */
 import test from "node:test";
 import assert from "node:assert/strict";
-import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, statSync, symlinkSync, writeFileSync } from "node:fs";
 import { createHash } from "node:crypto";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { updatePersonalSettings, updatePersonalSettingsAsync, readPersonalSettings, personalExtensions, reconcilePersonalSettings,
+import { PERSONAL_SETTINGS_BYTES, updatePersonalSettings, updatePersonalSettingsAsync, readPersonalSettings, personalExtensions, reconcilePersonalSettings,
   personalEntryProblem, personalExtensionEntry } from "../src/runtime/personal-settings.js";
 import { assertExtensionIntegrity } from "../src/runtime/extension-integrity.js";
 import { ProcessLock } from "../src/runtime/process-lock.js";
@@ -235,4 +235,27 @@ test("C18/C20: the package resource lists survive a Personal settings round-trip
   assert.deepEqual(reread.packages, indexed);
   const again = updatePersonalSettings(w);
   assert.equal(again.revision, reread.revision, "a rewrite against the same index must not churn revisions");
+});
+
+test("UX-20: Personal settings embed the whole index, so their bound tracks it -- a heavy index carries, and the refusal states the bound", t => {
+  const w = fixture(t);
+  // An index the old 1 MiB bound refused: the settings embed it whole, so the
+  // document itself is multi-megabyte for a heavy but realistic install.
+  const heavy = [{ source: "npm:fixture", entries: [w.packageEntry],
+    skills: Array.from({ length: 30_000 }, (_, i) => `packages:npm/node_modules/skills-pack/skills/skill-${i}/SKILL.md`) }];
+  writeFileSync(join(w.packages, PACKAGE_INDEX), JSON.stringify(heavy));
+  const settings = updatePersonalSettings(w);
+  assert.equal(settings.packages[0]!.skills!.length, 30_000);
+  assert.ok(statSync(join(w.dataRoot, ".personal/settings.json")).size > 1024 * 1024,
+    "the settings document itself exceeds the old 1 MiB bound");
+
+  // A write over the bound refuses and says the number.
+  const big = fixture(t);
+  const local4k = (i: number) => `local:/x/${i.toString().padStart(6, "0")}${"a".repeat(4000)}.js`;
+  assert.throws(() => updatePersonalSettings(big, Array.from({ length: 5000 }, (_, i) => local4k(i))),
+    { code: "LIMIT_EXCEEDED", message: new RegExp(`${PERSONAL_SETTINGS_BYTES}-byte`) });
+  // A persisted document over the bound reads as the same limit, not corruption.
+  writeFileSync(join(big.dataRoot, ".personal/settings.json"), " ".repeat(PERSONAL_SETTINGS_BYTES + 1));
+  assert.throws(() => readPersonalSettings(big.dataRoot),
+    { code: "LIMIT_EXCEEDED", message: new RegExp(`${PERSONAL_SETTINGS_BYTES}-byte`) });
 });
