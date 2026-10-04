@@ -65,14 +65,16 @@ export default async function extension(pi: ExtensionAPI) {
   registerToolSurface(pi, ownTools, { permitted: provenance.permitted, own: provenance.own });
   // C18: the environment names the installed-package store's real root, which
   // the engine's argv advertised resources under. A read may reach it; one
-  // that cannot be resolved permits nothing, so the guard fails closed.
+  // that cannot be resolved permits nothing, so the guard fails closed. The
+  // same roots go to the contained read tools, so a path the guard admitted
+  // under the store is the path the read effect reaches there.
   const readableRoots: string[] = [];
   const packageStore = process.env[PACKAGE_STORE_ENV];
   if (packageStore !== undefined) {
     try { readableRoots.push(realpathSync(packageStore)); } catch { /* an unobservable store root permits no reads */ }
   }
   guardWorkspaceTools(pi, workspace, sandboxed, channel.attached, provenance.permitted, readableRoots);
-  containWorkspaceTools(pi, workspace, integerEnv("OMA_WORKSPACE_BYTES"), sandboxed, channel.attached);
+  containWorkspaceTools(pi, workspace, integerEnv("OMA_WORKSPACE_BYTES"), sandboxed, channel.attached, readableRoots);
   registerDelivery(pi, waitRequested);
   await startInferenceBridge(pi);
 }

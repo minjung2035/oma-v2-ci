@@ -74,6 +74,57 @@ test("PR-004: inside the workspace the tools work as the engine's own do", async
   assert.match(await run("ls", { path: "a" }), /b\//);
 });
 
+test("C18 / PR-004: a read the guard admitted under the package-store root reaches the file, and nothing else of the host's", async t => {
+  const base = realpathSync(mkdtempSync(join(tmpdir(), "oma-contained-store-")));
+  t.after(() => rmSync(base, { recursive: true, force: true }));
+  const workspace = join(base, "workspace"); mkdirSync(workspace);
+  const outside = join(base, "host-home"); mkdirSync(outside);
+  const store = join(base, ".packages");
+  mkdirSync(join(store, "npm", "pkg", "skills", "roll"), { recursive: true });
+  writeFileSync(join(store, "npm", "pkg", "skills", "roll", "SKILL.md"), "# roll\nroll the dice\n");
+  writeFileSync(join(outside, "secret"), "host secret\n");
+  // A link sitting inside the admitted root, pointing out of it.
+  symlinkSync(join(outside, "secret"), join(store, "npm", "pkg", "link.md"));
+  const tools: Record<string, Tool> = {};
+  containWorkspaceTools({ registerTool: (tool: Tool) => { tools[tool.name] = tool; } } as never,
+    workspace, 1024 * 1024, false, false, [store]);
+  const run = async (name: string, params: Record<string, unknown>): Promise<string> => {
+    const result = await tools[name]!.execute("call", params, undefined, undefined, { cwd: workspace });
+    return result.content.map(part => part.text ?? "").join("");
+  };
+  let hook: ((event: { toolName: string; input: unknown }) => { block: boolean; reason: string } | undefined) | undefined;
+  guardWorkspaceTools({ on: (_: string, handler: typeof hook) => { hook = handler; } } as never,
+    workspace, false, false, undefined, [store]);
+  const skill = join(store, "npm", "pkg", "skills", "roll", "SKILL.md");
+  const pkg = join(store, "npm", "pkg");
+  // Every read-only tool reaches the store file its call already passed.
+  assert.equal(hook!({ toolName: "read", input: { path: skill } }), undefined);
+  assert.match(await run("read", { path: skill }), /roll the dice/);
+  assert.equal(hook!({ toolName: "ls", input: { path: pkg } }), undefined);
+  assert.match(await run("ls", { path: pkg }), /skills\//);
+  assert.equal(hook!({ toolName: "grep", input: { pattern: "dice", path: store } }), undefined);
+  assert.match(await run("grep", { pattern: "dice", path: store }), /SKILL\.md:2: roll the dice/);
+  assert.equal(hook!({ toolName: "find", input: { pattern: "*.md", path: store } }), undefined);
+  const found = await run("find", { pattern: "*.md", path: store });
+  assert.match(found, /SKILL\.md/);
+  assert.doesNotMatch(found, /link\.md/, "the copied tree never carries a link");
+  // A path under no admitted root is refused the way it always was, and the
+  // host file beside the store is not reached by escaping from it either.
+  assert.equal(hook!({ toolName: "read", input: { path: join(outside, "secret") } })?.block, true);
+  await assert.rejects(run("read", { path: join(outside, "secret") }), /outside the agent workspace/);
+  await assert.rejects(run("read", { path: join(store, "..", "host-home", "secret") }), /outside the agent workspace/);
+  await assert.rejects(run("ls", { path: outside }), /outside the agent workspace/);
+  // Writes and edits stay inside the workspace even under the admitted store.
+  await assert.rejects(run("write", { path: join(pkg, "new.md"), content: "x" }), /outside the agent workspace/);
+  await assert.rejects(run("edit", { path: skill, edits: [{ oldText: "dice", newText: "cards" }] }), /outside the agent workspace/);
+  assert.equal(existsSync(join(pkg, "new.md")), false);
+  assert.equal(readFileSync(skill, "utf8"), "# roll\nroll the dice\n");
+  // The link inside the store cannot carry any of the read tools outside.
+  for (const [name, params] of [["read", { path: join(pkg, "link.md") }], ["ls", { path: join(pkg, "link.md") }],
+    ["grep", { pattern: "secret", path: join(pkg, "link.md") }], ["find", { pattern: "*", path: join(pkg, "link.md") }]] as const)
+    await assert.rejects(run(name, params), /outside|link|not followed/, name);
+});
+
 test("P0V-74 / R6-18: the quota is decided at the write, so two writes that each fit cannot together exceed it", async t => {
   const { workspace, run } = world(t, 1000);
   const results = await Promise.allSettled([run("write", { path: "one", content: "x".repeat(600) }), run("write", { path: "two", content: "y".repeat(600) })]);
