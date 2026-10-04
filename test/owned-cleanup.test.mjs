@@ -207,12 +207,23 @@ test('Owned cleanup host staged store: removal repairs directories that lost own
   fs.symlinkSync(outside, join(root, 'link-staged'));
   api.removeHostStaged(join(root, 'link-staged'));
   assert.equal(fs.readFileSync(join(outside, 'keep'), 'utf8'), 'kept', 'the link was unlinked, never followed');
-  // A mode-000 dead copy in the publish slot goes before the rename.
+  // A mode-000 dead copy in the publish slot goes before the rename. The
+  // publish's ownedFrom is the staged store's own root: every directory the
+  // fixture made is its to repair.
   fs.mkdirSync(join(root, 'local'));
   const dead = join(root, 'local', 'pkg'); fs.mkdirSync(dead); fs.writeFileSync(join(dead, 'x'), 'x'); fs.chmodSync(dead, 0o000);
   const made = join(root, 'made'); fs.mkdirSync(made); fs.writeFileSync(join(made, 'e.ts'), 'new\n');
-  api.publishHostStaged(made, join(root, 'local'), 'pkg');
+  api.publishHostStaged(made, join(root, 'local'), 'pkg', root);
   assert.equal(fs.readFileSync(join(root, 'local', 'pkg', 'e.ts'), 'utf8'), 'new\n', 'the mode-000 copy was replaced');
+  // The same repair bounded: `local` itself at mode-000 is given its bits
+  // back before the publish's mkdir/lstat needs them, and repairHostOwnedPath
+  // answers a boundary that is not an ancestor with a refusal, never a chmod.
+  fs.chmodSync(join(root, 'local'), 0o000);
+  const made2 = join(root, 'made2'); fs.mkdirSync(made2); fs.writeFileSync(join(made2, 'e.ts'), 'two\n');
+  api.publishHostStaged(made2, join(root, 'local'), 'pkg2', root);
+  assert.equal(fs.statSync(join(root, 'local')).mode & 0o777, 0o700, 'a mode-000 `local/` cannot wedge the publish');
+  assert.equal(fs.readFileSync(join(root, 'local', 'pkg2', 'e.ts'), 'utf8'), 'two\n');
+  assert.throws(() => api.repairHostOwnedPath(join(root, 'local'), join(root, 'elsewhere')), { code: 'INTERNAL_ERROR' });
   // The listing repair keeps the special bits: setgid survives the owner-bits
   // restore (the old `& 0o777` silently stripped it to 0o700).
   const kept = join(root, 'kept');

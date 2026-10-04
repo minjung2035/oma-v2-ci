@@ -128,11 +128,43 @@ export function collectTemporaries(dir: string): string[] {
   return removed;
 }
 
+/** The owner-bits repair `removeOwnedPath` makes inside a tree, applied to
+ * the components of `path` at or below `ownedFrom` -- the directories oma
+ * itself made (its support directory, the store, `local/` and its scopes),
+ * where a same-UID stray or an interrupted writer could have dropped the
+ * bits an open, a listing or a mkdir beneath needs. The components above
+ * `ownedFrom` are the user's and are never touched; one of them being
+ * unreadable is a fact, not a wedge this repair may fix. */
+export function repairHostOwnedPath(path: string, ownedFrom: string): void {
+  const boundary = ownedFrom.split("/").filter(Boolean).length;
+  if (boundary === 0 || (path !== ownedFrom && !path.startsWith(`${ownedFrom}/`)))
+    throw new StoreError("INTERNAL_ERROR", "an owned path must be its boundary or beneath it");
+  let current = "/";
+  for (const [index, component] of path.slice(1).split("/").filter(Boolean).entries()) {
+    current = join(current, component);
+    const observed = lstatSync(current, { throwIfNoEntry: false });
+    if (observed === undefined || !observed.isDirectory()) return;
+    if (index >= boundary - 1 && (observed.mode & 0o700) !== 0o700)
+      chmodSync(current, (observed.mode & 0o7777) | 0o700);
+  }
+}
+
+/** `ensureHostUserDirectory` for a path whose tail oma owns: the owned
+ * components' owner bits are put back before the layout walk needs them --
+ * a mode-000 support directory or store cannot wedge the ensure. */
+export function ensureHostOwnedDirectory(path: string, ownedFrom: string): void {
+  repairHostOwnedPath(path, ownedFrom);
+  ensureHostUserDirectory(path);
+}
+
 /** DR25 (C20): staging a local package for `oma pi install` on the Mac host.
  * The store sits in the app's own support directory, outside any society's
  * state tree, and the host lock serializes its writers -- the effects are
- * the Linux staging's, spelled by path. */
-export function createHostStagingDirectory(parent: string, prefix: string): string {
+ * the Linux staging's, spelled by path. `ownedFrom` names the first
+ * component of `parent` oma made, so the owned tail is repaired before the
+ * mkdtemp needs its parent's bits. */
+export function createHostStagingDirectory(parent: string, prefix: string, ownedFrom: string): string {
+  repairHostOwnedPath(parent, ownedFrom);
   assertHostDirectoryLayout(parent, true);
   return mkdtempSync(join(parent, prefix));
 }
@@ -166,10 +198,12 @@ function removeOwnedPath(path: string): void {
 }
 
 /** `made` becomes `<dir>/<name>` whole: a dead copy goes first, the rename
- * lands the new one, the directory is flushed. */
-export function publishHostStaged(made: string, dir: string, name: string): void {
+ * lands the new one, the directory is flushed. `ownedFrom` bounds the
+ * owner-bits repair the destination's ancestors get -- a mode-000 `local`
+ * or scope directory cannot wedge the lstat and mkdir the publish needs. */
+export function publishHostStaged(made: string, dir: string, name: string, ownedFrom: string): void {
   const dest = join(dir, name);
-  ensureHostUserDirectory(dirname(dest));
+  ensureHostOwnedDirectory(dirname(dest), ownedFrom);
   removeOwnedPath(dest);
   renameSync(made, dest);
   fsyncDirectory(dirname(dest));

@@ -245,6 +245,36 @@ Pi/OS 기능을 다시 구현해서 생긴 중복·workaround·pre-release 잔�
     손실·build.mjs 미재빌드×2·dist mode-000 크래시 전부 재현 → 수정 후 전부
     통과. 회귀 테스트: owned-directory.test.ts 신설 4종 + pi-packages 3종 +
     owned-cleanup(host) 1종 + build-stamp 2종.
+  - 네 번째 독립 검증 잔여 3건(같은 wedge 클래스의 오픈 경로 + sweep/index
+    독해 오류) 수정:
+    (1) mode-000 `local/`·store root·스코프 디렉토리는 복구가 도달하기 전의
+      by-path ensure·오픈에서 EACCES — `oma pi` 시작(oma-society의 store·
+      agentDir ensure)·install(staging 오픈·publish)·indexing이 죽던 것.
+      owned 전용 프리미티브 신설: `openOwnedDirectoryPath`(부모는 일반 오픈,
+      리프만 O_PATH pin+복구)·`ensureOwnedDirectory`(ownedFrom 경계
+      컴포넌트부터 owned 오픈, 경계 위는 절대 손대지 않음 — 사용자 지정
+      경로는 어떤 경우에도 복구 대상이 아님)·`ensureOwnedDurableDirectory`
+      ·`ensureOwnedUserDirectory`; 사용처는 oma-society(piPackages·interactive
+      agentDir)·local-package(linuxStaging 오픈·`local/` 생성·descend)·
+      packages-apply(generations·staging)·oma-mac(store·run). Mac 측은
+      `repairHostOwnedPath`·`ensureHostOwnedDirectory` + createHostStagingDirectory/
+      publishHostStaged의 ownedFrom 경계로 구조 동일 — 이 호스트(Linux)에서는
+      실행 불가, 구조 리뷰만.
+    (2) 설정 소스가 `local` 루트 자체(`local`·`local/`·`local/.`·절대
+      `<store>/local`)를 가리키면 `relative(local, resolved)`가 ""를 답해
+      inside에 들어갈 수 없음 — stage 전체가 dead로 읽혀 prune이 전량 삭제.
+      keep-whole 판정으로 전환(hand-edit의 fail-safe 해석 — 목록 불가
+      디렉토리와 같은 "통째 보존"); 이스케이프 소스(`local/../x`)는 기존 답 유지.
+    (3) writePackageIndex가 mode-000 `local/`를 `entries: []`로 쓰던 퇴화
+      인덱스 — engine resolve 전에 `local/`와 설정된 `local/<src>` 사본을
+      owned 나열로 복구하고, 그래도 못 읽으면 BROKER_UNAVAILABLE로 쓰기를
+      거절해 마지막 정상 인덱스를 보존(사일런트 [] 대신 명시적 실패).
+      configuredPackageSources·PACKAGE_SETTINGS_BYTES를 pi-packages.ts로
+      이동해 prune·index가 같은 설정 파싱을 공유.
+      fail-before(구 dist): mode-000 `local/` install wedge·mode-000 store
+      wedge·`local` 소스 전량 삭제·index entries:[] 전부 재현 → 수정 후 통과.
+      회귀: owned-directory.test.ts +3종(pin-open·경계 복구/미침투·경계 검증),
+      pi-packages.test.ts +3종(오픈 경로 복구·keep-whole·인덱스 복구/거절).
 
 ## 6. 선행 작업 큐 (코드베이스 전체 확장 전 — 사용자 지시)
 

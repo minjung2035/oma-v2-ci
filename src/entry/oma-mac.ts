@@ -7,7 +7,7 @@
  *        oma pi install|remove|update|list ... [--project <id> | --host-only]
  */
 import { readFileSync, realpathSync } from "node:fs";
-import { ensureUserDirectory } from "../runtime/user-files.js";
+import { ensureOwnedUserDirectory } from "../runtime/user-files.js";
 import { randomUUID } from "node:crypto";
 import { fileURLToPath } from "node:url";
 import { join, resolve } from "node:path";
@@ -65,8 +65,10 @@ async function call(method: string, params: Record<string, unknown>, key?: strin
 async function packages(decision: Extract<PackageCommand, { kind: "run" }>): Promise<never> {
   const { args, projectId } = decision;
   const store = join(home, "packages");
-  ensureUserDirectory(store);
-  ensureUserDirectory(join(home, "run"));
+  // The store and the run root are oma's own under its support directory:
+  // a mode-000 `packages` or `OMA` a stray left is repaired, not wedged on.
+  ensureOwnedUserDirectory(store, home);
+  ensureOwnedUserDirectory(join(home, "run"), home);
   const lock = ProcessLock.tryAcquire(join(home, "run", "packages.lock"));
   if (lock === null) say("Another oma pi command is running.", 1);
   const code = await withAsyncCleanup(async () => {

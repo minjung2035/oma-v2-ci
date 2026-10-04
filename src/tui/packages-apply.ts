@@ -20,7 +20,7 @@ import { defaultSocietyFor } from "../config/defaults.js";
 import { sha256Hex } from "../hash.js";
 import { readPackageArchive } from "../platform/package-archive.js";
 import { PACKAGE_GENERATIONS, PACKAGE_STORE, readPackageIndex, writePackageIndex, type InstalledPackage } from "../runtime/pi-packages.js";
-import { ensureDurableDirectory, publishNoReplace } from "../storage/durable-fs.js";
+import { ensureOwnedDurableDirectory, publishNoReplace } from "../storage/durable-fs.js";
 import { removeOwnedTree } from "../storage/directory.js";
 import { publishStagedDirectory, replaceDerivedSymlink } from "../storage/staged-tree.js";
 import { applyPackageChange } from "./project-settings.js";
@@ -49,12 +49,15 @@ export async function applyPackageArchive(options: { readonly data: string; read
     previous: current === undefined ? null : readlinkSync(store).split("/").at(-1) ?? null }));
   const { before, previous } = JSON.parse(readFileSync(recorded, "utf8")) as { before: InstalledPackage[]; previous: string | null };
   after?.("recorded");
-  ensureDurableDirectory(generations, 0o700);
+  // `data` and everything beneath it is oma's own tree in the guest: the
+  // owner-bits repair runs on the walk so a mode-000 generations directory
+  // cannot wedge a packages.replace before it starts.
+  ensureOwnedDurableDirectory(generations, data, 0o700);
   const id = `p-${await digestOf(archive)}`;
   const target = join(generations, id);
   if (lstatSync(target, { throwIfNoEntry: false }) === undefined) {
     const staging = join(generations, `.staging-${randomUUID()}`);
-    ensureDurableDirectory(staging, 0o755);
+    ensureOwnedDurableDirectory(staging, data, 0o755);
     try {
       readPackageArchive(archive, staging);
       // Which files are extensions is the engine's answer, asked where they now are.

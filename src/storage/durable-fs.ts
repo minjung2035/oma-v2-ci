@@ -7,7 +7,7 @@ import {
 import { randomUUID } from "node:crypto";
 import { basename, dirname, join } from "node:path";
 import { StoreError } from "../domain/errors.js";
-import { assertDirectory, ensureDirectory } from "./directory.js";
+import { assertDirectory, ensureDirectory, ensureOwnedDirectory } from "./directory.js";
 import { entryAt, openBeneath, openDirectory, openRegularBeneath, withinDirectory } from "./contained-fs.js";
 import { lockFileDescriptor } from "../leaf.js";
 
@@ -80,10 +80,28 @@ export function fsyncDir(directory: string, faults?: DurabilityObserver): void {
  * (about 0.04 ms for a six-deep path here). */
 export function ensureDurableDirectory(directory: string, mode = 0o755, faults?: DurabilityObserver): void {
   ensureDirectory(directory, mode);
+  flushDirectoryChain(directory, faults);
+}
+
+/** The persistence barrier half of `ensureDurableDirectory`, for a caller
+ * that made or opened `directory` itself -- the owned ensure of a publish
+ * path is not re-walked by path here because its names were addressed
+ * through the directories it already held. */
+export function flushDirectoryChain(directory: string, faults?: DurabilityObserver): void {
   for (let path = directory; ; path = dirname(path)) {
     fsyncDir(path, faults);
     if (dirname(path) === path) break;
   }
+}
+
+/** `ensureDurableDirectory` for a path whose tail oma owns: `ownedFrom`
+ * names the first component oma itself made, and every component from it
+ * down gets the owner-bits repair before the open that needs it -- a
+ * mode-000 store root or data directory left by a stray cannot wedge the
+ * walk. Ancestors above `ownedFrom` are the user's and keep the plain open. */
+export function ensureOwnedDurableDirectory(directory: string, ownedFrom: string, mode = 0o700, faults?: DurabilityObserver): void {
+  ensureOwnedDirectory(directory, ownedFrom, mode);
+  flushDirectoryChain(directory, faults);
 }
 
 export function fsyncFile(path: string, faults?: DurabilityObserver): void {

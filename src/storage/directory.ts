@@ -71,15 +71,16 @@ function repairOwnerBits(pin: number): void {
     chmodSync(`/proc/self/fd/${pin}`, (observed.mode & 0o7777) | 0o700);
 }
 
-/** Opens the `name` directory beneath a held parent for a removal or listing
- * walk even when its mode lost owner bits -- the `O_RDONLY | O_DIRECTORY`
- * open this replaces throws EACCES on a mode-000 directory before any repair
- * inside the walk could run. The O_PATH pin needs no permission bits of its
- * own and keeps the RESOLVE_BENEATH | RESOLVE_NO_SYMLINKS guarantee -- a name
- * swapped for a link or an escape is refused in-kernel -- and the real
- * descriptor is opened through the pin's proc name after the repair, so every
- * step acts on the one pinned inode, never a re-resolved path. */
-function openOwnedDirectory(parent: number, name: string): number {
+/** Opens the `name` directory beneath a held parent for an open, removal or
+ * listing walk even when its mode lost owner bits -- the `O_RDONLY |
+ * O_DIRECTORY` open this replaces throws EACCES on a mode-000 directory
+ * before any repair inside the walk could run. The O_PATH pin needs no
+ * permission bits of its own and keeps the RESOLVE_BENEATH |
+ * RESOLVE_NO_SYMLINKS guarantee -- a name swapped for a link or an escape is
+ * refused in-kernel -- and the real descriptor is opened through the pin's
+ * proc name after the repair, so every step acts on the one pinned inode,
+ * never a re-resolved path. */
+export function openOwnedDirectory(parent: number, name: string): number {
   const pin = openBeneath(parent, name, 0o10000000 /* O_PATH */ | constants.O_DIRECTORY);
   let result: number | undefined;
   try {
@@ -91,6 +92,55 @@ function openOwnedDirectory(parent: number, name: string): number {
   } catch (error) {
     return withCleanup(() => { throw error; }, () => { if (result !== undefined) closeSync(result); });
   }
+}
+
+/** The same open for a directory `path` names: its parent is resolved once
+ * the ordinary way -- the ancestors above the entry are not this product's to
+ * repair -- and the one entry oma owns is pinned, given its owner bits back
+ * and opened. `path` resolves exactly once and the descriptor names that
+ * inode for as long as it is open. */
+export function openOwnedDirectoryPath(path: string): number {
+  return withinDirectory(path, (parent, name) => openOwnedDirectory(parent, name));
+}
+
+/** `ensureDirectory` for a path whose tail oma owns. `ownedFrom` names the
+ * first component of `path` oma itself made -- oma's data root, the package
+ * store root's parent -- so every component from it down is oma's own tree
+ * and gets the same owner-bits repair `openOwnedDirectory` makes before the
+ * open that needs those bits: a mode-000 store root, data directory or
+ * `local/` left by a same-UID stray or an interrupted writer can no longer
+ * wedge the walk on EACCES. The ancestors above `ownedFrom` are the user's:
+ * they are opened the plain way and their modes are never rewritten. */
+export function ensureOwnedDirectory(path: string, ownedFrom: string, mode = 0o755): readonly string[] {
+  if (!Number.isInteger(mode) || mode < 0 || mode > 0o777)
+    throw new StoreError("STORE_CORRUPT", "invalid directory mode");
+  const { root, components } = componentsOf(path);
+  const boundary = componentsOf(ownedFrom);
+  if (boundary.root !== root || boundary.components.length === 0 ||
+      boundary.components.length > components.length ||
+      boundary.components.some((part, index) => components[index] !== part))
+    throw new StoreError("STORE_CORRUPT", "an owned directory's boundary must be its own ancestor");
+  const created: string[] = [];
+  let current = root;
+  let parent = openDirectory(root);
+  try {
+    for (const [index, component] of components.entries()) {
+      current = join(current, component);
+      try { mkdirSync(entryAt(parent, component), { mode }); created.push(current); }
+      catch (error) { if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error; }
+      const owned = index >= boundary.components.length - 1;
+      let child: number;
+      try {
+        child = owned ? openOwnedDirectory(parent, component)
+          : openBeneath(parent, component, constants.O_RDONLY | constants.O_DIRECTORY);
+      } catch (error) {
+        if (error instanceof StoreError) throw error;
+        throw unobserved(error, `the directory ${current}`) ?? new StoreError("STORE_CORRUPT", `directory type mismatch: ${current}`);
+      }
+      const previous = parent; parent = child; closeSync(previous);
+    }
+    return created;
+  } finally { closeSync(parent); }
 }
 
 /** Only for caller-owned unaccepted/temporary artifacts. Never collect accepted evidence.

@@ -36,6 +36,8 @@ function world(platform, { selected = 'personal', birth, birthError, societies =
     'node:fs': {}, 'node:path': path, '../domain/errors.js': { StoreError },
     '../config/operations.js': { PACKAGE_ENTRY_PREFIX: 'packages:', extensionEntryProblem() {} },
     './user-files.js': {}, '../protocol/host-guest.js': { isUuid: value => typeof value === 'string' && /^[a-f0-9-]{36}$/.test(value) },
+    '../storage/directory.js': { listOwnedDirectory() { return null; } },
+    '../platform/host/files.js': { listHostStaged() { return null; } },
   }, host);
   const catalogue = { RESUME_SESSION_ENV: 'OMA_RESUME_SESSION', sessionBirthForHistory(...args) {
     effects.push(['birth', ...args]); if (birthError) throw birthError; return birth;
@@ -55,7 +57,8 @@ function world(platform, { selected = 'personal', birth, birthError, societies =
     './personal-host.js': { async personalMain(options) { effects.push(['personal']); personal.push(options); } },
     './oma-society.js': { loaded: effects }, './oma-mac.js': { loaded: effects },
     '../tui/exit.js': {}, '../tui/words.js': {},
-    '../runtime/user-files.js': { ensureUserDirectory(directory) { effects.push(['mkdir', directory]); } },
+    '../runtime/user-files.js': { ensureUserDirectory(directory) { effects.push(['mkdir', directory]); },
+      ensureOwnedUserDirectory(directory) { effects.push(['mkdir', directory]); } },
     '../frame.js': { encodeFrame: value => value },
     '../platform/rpc.js': { PlatformError: class extends Error {},
       async connectSocket() { effects.push(['host-api']); return { write(value) { effects.push(['request', value.method, value.params]); }, unshift() {}, destroy() {} }; },

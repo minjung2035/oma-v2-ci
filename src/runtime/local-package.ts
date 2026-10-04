@@ -40,11 +40,10 @@ import { userInfo } from "node:os";
 import { fileURLToPath } from "node:url";
 import { StoreError, unobserved } from "../domain/errors.js";
 import { PACKAGE_ENTRY_PREFIX, extensionEntryProblem } from "../config/operations.js";
-import { PACKAGE_LOCAL_DIR, packageStoreRoot, resourceEntryProblem } from "./pi-packages.js";
-import { ensureUserDirectory, readUserFile } from "./user-files.js";
-import { entryAt, openBeneath, openDirectory } from "../storage/contained-fs.js";
-import { listOwnedDirectory, removeOwnedFile, removeOwnedTree } from "../storage/directory.js";
-import { fsyncFile, fsyncTree } from "../storage/durable-fs.js";
+import { PACKAGE_LOCAL_DIR, PACKAGE_SETTINGS_BYTES, configuredPackageSources, packageStoreRoot, resourceEntryProblem } from "./pi-packages.js";
+import { entryAt, openBeneath } from "../storage/contained-fs.js";
+import { listOwnedDirectory, openOwnedDirectory, openOwnedDirectoryPath, removeOwnedFile, removeOwnedTree } from "../storage/directory.js";
+import { flushDirectoryChain, fsyncFile, fsyncTree } from "../storage/durable-fs.js";
 import { PACKAGE_ARCHIVE_BOUNDS } from "../platform/package-archive.js";
 import { createHostStagingDirectory, listHostStaged, makeHostStagedDirectories, publishHostStaged,
   removeHostStaged, writeHostStagedFile } from "../platform/host/files.js";
@@ -54,12 +53,6 @@ const STAGING_PREFIX = ".staging-local-";
  * skills, prompt templates, themes and extensions from when its `pi`
  * manifest does not declare them. */
 const RESOURCE_DIRECTORIES = Object.freeze(["extensions", "skills", "prompts", "themes"]);
-
-/** UX-20: how large the engine's package list (`settings.json` in the store)
- * may be when pruning asks it what stays. The file names one line per
- * installed package; this is a DoS ceiling, never the size a real store is
- * meant to reach. */
-export const PACKAGE_SETTINGS_BYTES = 1024 * 1024;
 
 const refuse = (message: string): never => { throw new StoreError("INVALID_REQUEST", message); };
 const errorWordsOf = (error: unknown): string => error instanceof Error ? error.message : String(error);
@@ -95,7 +88,10 @@ function descendBeneath(dir: number, rel: string, create: boolean): number {
       try { mkdirSync(entryAt(current, part)); }
       catch (error) { if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error; }
     }
-    const child = openBeneath(current, part, DIRECTORY);
+    // Every descend is inside oma's own tree -- the staging area or `local/`
+    // and its scope directories -- so an entry a stray left at mode-000 is
+    // pinned, given its owner bits back and opened, never EACCES-wedged.
+    const child = openOwnedDirectory(current, part);
     if (current !== dir) closeSync(current);
     current = child;
   }
@@ -105,7 +101,10 @@ function descendBeneath(dir: number, rel: string, create: boolean): number {
 /** Linux staging: the store root and the scratch directory are held open for
  * the whole operation and every write names an entry through them. */
 function linuxStaging(root: string): StageArea {
-  const store = openDirectory(root);
+  // The store root is oma's own tree: a mode-000 `.packages` left by a stray
+  // is given its owner bits back as it is pinned open, the same repair the
+  // sweeps make -- an `oma pi install` does not wedge on the open.
+  const store = openOwnedDirectoryPath(root);
   let dir: number | undefined;
   const tmp = `${STAGING_PREFIX}${randomUUID()}`;
   const path = join(root, tmp);
@@ -134,8 +133,16 @@ function linuxStaging(root: string): StageArea {
       const source = made === "" ? store : held;
       const leaf = made === "" ? tmp : made;
       const localPath = join(root, PACKAGE_LOCAL_DIR);
-      ensureUserDirectory(localPath);
-      const local = openBeneath(store, PACKAGE_LOCAL_DIR, DIRECTORY);
+      // `local` is oma's own slot beneath the held store root: made under it
+      // when the name is absent and opened through the same owner-bits
+      // repair the sweeps make, so a mode-000 `local/` cannot wedge the
+      // publish's open the way ensureUserDirectory's by-path walk did.
+      try { mkdirSync(entryAt(store, PACKAGE_LOCAL_DIR), { mode: 0o700 }); }
+      catch (error) { if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error; }
+      const local = openOwnedDirectory(store, PACKAGE_LOCAL_DIR);
+      // What ensureUserDirectory also gave the name: the durability barrier
+      // -- every name on the path flushed, the new `local` included.
+      flushDirectoryChain(localPath);
       try {
         const parts = name.split("/");
         const destName = parts.pop()!;
@@ -173,13 +180,17 @@ function linuxStaging(root: string): StageArea {
 /** Mac staging: the same effects by path, through the host's file owner --
  * the store is in the app's support directory, outside any state tree. */
 function hostStaging(root: string): StageArea {
-  const path = createHostStagingDirectory(root, STAGING_PREFIX);
+  // `dirname(root)` is the app's support directory -- the first component of
+  // the store path oma itself made, so the owned tail (it, the store,
+  // `local/` and its scopes) gets the owner-bits repair on the open path.
+  const ownedFrom = dirname(root);
+  const path = createHostStagingDirectory(root, STAGING_PREFIX, ownedFrom);
   let closed = false;
   return {
     path,
     make: rel => makeHostStagedDirectories(path, rel),
     write: (rel, bytes, executable) => writeHostStagedFile(path, rel, bytes, executable ? 0o755 : 0o644),
-    publish: (made, name) => publishHostStaged(made === "" ? path : join(path, made), join(root, PACKAGE_LOCAL_DIR), name),
+    publish: (made, name) => publishHostStaged(made === "" ? path : join(path, made), join(root, PACKAGE_LOCAL_DIR), name, ownedFrom),
     close() { if (closed) return; closed = true; removeHostStaged(path); },
   };
 }
@@ -521,24 +532,6 @@ function extractTar(bytes: Buffer, area: StageArea): void {
   }
 }
 
-/** The package sources the store's own `settings.json` names -- the package
- * manager's list, which is the authority on what staged copies stay. */
-function configuredPackageSources(store: string): readonly string[] {
-  const file = readUserFile(join(store, "settings.json"), PACKAGE_SETTINGS_BYTES);
-  if (file === null) return Object.freeze([]);
-  let value: unknown;
-  try { value = JSON.parse(file); } catch { throw new StoreError("STORE_CORRUPT", "the package store's settings are malformed"); }
-  if (value === null || typeof value !== "object" || Array.isArray(value))
-    throw new StoreError("STORE_CORRUPT", "the package store's settings are malformed");
-  const packages = (value as { packages?: unknown }).packages;
-  if (packages === undefined) return Object.freeze([]);
-  if (!Array.isArray(packages)) throw new StoreError("STORE_CORRUPT", "the package store's settings are malformed");
-  return Object.freeze(packages.map(pkg =>
-    typeof pkg === "string" ? pkg
-      : pkg !== null && typeof pkg === "object" && typeof (pkg as { source?: unknown }).source === "string" ? (pkg as { source: string }).source
-      : null).filter((source): source is string => source !== null));
-}
-
 /** Staged copies under `local/` -- and staging areas an interrupted install
  * left -- that no configured source still names are dead content. Runs after
  * each `oma pi` change: a removed local package's copy goes with its entry. */
@@ -601,13 +594,22 @@ export function pruneLocalStage(store: string): void {
     return;
   }
   const inside: string[] = [];
+  /** A source that resolves to `local` itself -- `local`, `local/`, `local/.`
+   * or the store's absolute `local` path, all of which `relative` answers ""
+   * for -- keeps the whole staged area: the `inside` list cannot express it
+   * (no component is "" beneath its root), so reading it as naming nothing
+   * would sweep every configured copy at once. Keeping everything is the
+   * fail-safe reading of a hand edit that names the stage itself -- the same
+   * answer an unlistable directory gets: retention beats destruction. */
+  let whole = false;
   for (const source of configuredPackageSources(root)) {
     const resolved = isAbsolute(source) ? source : join(root, source);
     const path = relative(local, resolved);
+    if (path === "") { whole = true; continue; }
     // `..foo` is a name under `local/`, not an escape from it: the component
     // test, not the two-character prefix, decides (the same `escapes` the
     // store boundary check uses).
-    if (path !== "" && !escapes(path)) inside.push(path);
+    if (!escapes(path)) inside.push(path);
   }
   /** `dir` is `rel` beneath `local/` ("" for `local` itself, which is never
    * removed). A child a configured source names exactly is kept whole -- a
@@ -639,5 +641,5 @@ export function pruneLocalStage(store: string): void {
       if (observed !== undefined) remove(path, observed.isDirectory());
     }
   };
-  sweep(local, "");
+  if (!whole) sweep(local, "");
 }

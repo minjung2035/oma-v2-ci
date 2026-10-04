@@ -13,7 +13,7 @@ import { StoreError } from "../domain/errors.js";
 import { DEPLOYMENT_LAYOUT } from "../domain/deployment.js";
 import { assertHostDirectoryLayout, hostLaunchLocation } from "../runtime/assets.js";
 import { resolvePiRuntime } from "../runtime/pi-runtime.js";
-import { ensureDirectory, removeUnusedTree } from "../storage/directory.js";
+import { ensureOwnedDirectory, removeUnusedTree } from "../storage/directory.js";
 import { TuiApp, type AppPorts } from "../tui/app.js";
 import { codeFor, exitFor, fail as exitFailure } from "../tui/exit.js";
 import { errorWords, humanStream, surfaceWords } from "../tui/words.js";
@@ -99,7 +99,10 @@ async function piPackages(dataRoot: string, project: string, decision: Extract<P
   const stateRoot = join(dataRoot, project);
   const store = packageStoreDir(stateRoot);
   const libdir = resolve(fileURLToPath(new URL("../../../", import.meta.url)));
-  ensureDirectory(store, 0o700);
+  // The store is oma's own under the data root: a mode-000 `.packages` or
+  // `oma` a same-UID stray left is given its owner bits back on the walk,
+  // not wedged on EACCES for every `oma pi` command.
+  ensureOwnedDirectory(store, dataRoot, 0o700);
   let lease: ReturnType<typeof tryHoldSociety>;
   try { lease = tryHoldSociety(store); }
   catch (error) { fail(`Could not take the package store: ${errorWords(error)}`, codeFor(error)); }
@@ -693,7 +696,8 @@ async function main(argv: readonly string[]): Promise<void> {
     });
     if (piRuntime.source !== "bundled")
       throw new StoreError("UNSUPPORTED_PROFILE", "The interactive UI requires the bundled engine. OMA_PI_COMMAND overrides are not supported here.");
-    ensureDirectory(piRuntime.agentDir, 0o700);
+    // The engine home is oma's own under the same data root as the store.
+    ensureOwnedDirectory(piRuntime.agentDir, dataRoot, 0o700);
     // PR-003/PR-004/FS-003: the model's tools and its CLI's cache work in the
     // Principal's private scratch, which provisioning created, not in the
     // private space that holds the Human's session history.

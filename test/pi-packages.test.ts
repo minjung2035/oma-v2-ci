@@ -522,6 +522,152 @@ test("DR25/C20: publish replaces a staged copy that lost its mode -- a mode-000 
   }
 });
 
+test("DR25/C20: mode-000 ancestors on the open path are repaired before they are opened -- `local/`, its scopes, the store root", () => {
+  const f = createCompleteConfigurationFixture();
+  const locked = [join(f.root, "packages"), join(f.root, "packages", "local"), join(f.root, "packages", "local", "@scope")];
+  try {
+    const store = join(f.root, "packages");
+    mkdirSync(store, { recursive: true });
+    const source = join(f.root, "src", "wedge");
+    mkdirSync(join(source, "extensions"), { recursive: true });
+    writeFileSync(join(source, "package.json"), JSON.stringify({ name: "wedge", pi: { extensions: ["./extensions/e.ts"] } }));
+    writeFileSync(join(source, "extensions", "e.ts"), "export default function () { /* v1 */ }\n");
+    assert.equal(stageLocalPackage(store, source), "local/wedge");
+
+    // The publish path used to reach `local` through a by-path
+    // ensureUserDirectory whose open threw EACCES before any repair could
+    // run: every `oma pi install <local>` failed BROKER_UNAVAILABLE until
+    // some other mutation reached the prune. The directory is made and
+    // opened beneath the held store root now, through the same owner-bits
+    // repair the sweeps make.
+    chmodSync(join(store, "local"), 0o000);
+    writeFileSync(join(source, "extensions", "e.ts"), "export default function () { /* v2 */ }\n");
+    assert.equal(stageLocalPackage(store, source), "local/wedge", "re-install over a mode-000 `local/`");
+    assert.match(readFileSync(join(store, "local", "wedge", "extensions", "e.ts"), "utf8"), /v2/);
+    assert.equal(statSync(join(store, "local")).mode & 0o777, 0o700, "the opened directory kept its repaired bits");
+
+    // A mode-000 scope directory on the descend to `local/@scope/pkg` gets
+    // the same repair -- the descend never leaves oma's own tree.
+    mkdirSync(join(store, "local", "@scope"));
+    chmodSync(join(store, "local", "@scope"), 0o000);
+    const scoped = join(f.root, "src", "scoped");
+    mkdirSync(join(scoped, "extensions"), { recursive: true });
+    writeFileSync(join(scoped, "package.json"), JSON.stringify({ name: "@scope/pkg", pi: { extensions: ["./extensions/e.ts"] } }));
+    writeFileSync(join(scoped, "extensions", "e.ts"), "export default function () {}\n");
+    assert.equal(stageLocalPackage(store, scoped), "local/@scope/pkg");
+    assert.equal(statSync(join(store, "local", "@scope")).mode & 0o777, 0o700);
+
+    // The store root itself in the same shape: the staging area's open pins
+    // and repairs it rather than dying on EACCES the way the plain
+    // openDirectory did.
+    chmodSync(store, 0o000);
+    assert.equal(stageLocalPackage(store, source), "local/wedge", "a mode-000 store root cannot wedge staging's open");
+    assert.equal(statSync(store).mode & 0o777, 0o700, "the open repaired the store root");
+    assert.match(readFileSync(join(store, "local", "wedge", "extensions", "e.ts"), "utf8"), /v2/);
+  } finally {
+    for (const path of locked) try { chmodSync(path, 0o700); } catch { /* already gone */ }
+    f.close();
+  }
+});
+
+test("DR25/C20: a source spelling `local` itself keeps the whole stage -- the sweep never reads it as naming nothing", () => {
+  const f = createCompleteConfigurationFixture();
+  try {
+    const store = join(f.root, "packages");
+    mkdirSync(join(store, "local", "keep-a"), { recursive: true });
+    mkdirSync(join(store, "local", "keep-b", "nested"), { recursive: true });
+    writeFileSync(join(store, "local", "keep-a", "e.ts"), "x\n");
+    writeFileSync(join(store, "local", "keep-b", "nested", "e.ts"), "x\n");
+    // `relative(local, resolved)` answers "" for a source that names the
+    // stage root itself, and "" was never in `inside`: every live staged
+    // copy went. `local`, `local/`, `local/.` and the absolute store path
+    // all spell the same root -- a hand edit that means "the local stage",
+    // so the fail-safe reading keeps everything under it, the same answer
+    // an unlistable directory gets: retention beats destruction.
+    for (const source of ["local", "local/", "local/.", join(store, "local")]) {
+      mkdirSync(join(store, ".staging-local-dead"), { recursive: true });
+      writeFileSync(join(store, "settings.json"), JSON.stringify({ packages: [source] }));
+      pruneLocalStage(store);
+      assert.equal(existsSync(join(store, "local", "keep-a", "e.ts")), true, `${JSON.stringify(source)} keeps the stage`);
+      assert.equal(existsSync(join(store, "local", "keep-b", "nested", "e.ts")), true, `${JSON.stringify(source)} keeps nested copies`);
+      assert.equal(existsSync(join(store, ".staging-local-dead")), false, `${JSON.stringify(source)} still sweeps dead staging areas`);
+    }
+    // A source that really escapes `local/` keeps its old answer: it names
+    // nothing inside and never switches keep-whole on, so only the copies a
+    // configured source still names are kept.
+    writeFileSync(join(store, "settings.json"), JSON.stringify({ packages: ["local/../outside", "local/keep-a", "npm:x"] }));
+    mkdirSync(join(store, "local", "dead"), { recursive: true });
+    pruneLocalStage(store);
+    assert.equal(existsSync(join(store, "local", "dead")), false, "dead content beside an escaping source is still collected");
+    assert.equal(existsSync(join(store, "local", "keep-b")), false, "a copy no source names goes too");
+    assert.equal(existsSync(join(store, "local", "keep-a")), true);
+  } finally { f.close(); }
+});
+
+test("DR25/C20: the index repairs `local/` before the engine lists it -- and refuses a write a degraded listing would make", async t => {
+  const f = createCompleteConfigurationFixture();
+  try {
+    const store = join(f.root, "packages");
+    mkdirSync(join(store, "local", "wedge", "extensions"), { recursive: true });
+    writeFileSync(join(store, "local", "wedge", "package.json"), JSON.stringify({ name: "wedge", pi: { extensions: ["./extensions/e.ts"] } }));
+    writeFileSync(join(store, "local", "wedge", "extensions", "e.ts"), "export default function () {}\n");
+    writeFileSync(join(store, "settings.json"), JSON.stringify({ packages: ["local/wedge"] }));
+    // A mode-000 `local/` used to be indexed as `entries: []`: the engine's
+    // resolve listed nothing it could not read, realpathSync failed on the
+    // same names, and the empty answer was written silently -- a degraded
+    // index a role then reconciles its entries against. The writer repairs
+    // the owned tree the way the prune's listing does, before the engine is
+    // asked.
+    chmodSync(join(store, "local"), 0o000);
+    const index = await writePackageIndex(store);
+    assert.deepEqual(index.find(item => item.source === "local/wedge")?.entries,
+      ["packages:local/wedge/extensions/e.ts"], "the repaired stage is indexed whole");
+    assert.equal(statSync(join(store, "local")).mode & 0o777, 0o700, "the repair kept its bits");
+
+    // What still cannot be listed after the repair is not written as an
+    // empty truth: the index as last written stays the record. The staged
+    // copy is forced unreadable beneath a listing that never sees the
+    // repair succeed -- the same forced-unreadable the sweep's keep-whole
+    // test uses.
+    const previous = readFileSync(join(store, PACKAGE_INDEX), "utf8");
+    const broken = join(realpathSync(store), "local", "broken");
+    mkdirSync(join(store, "local", "broken"), { recursive: true });
+    writeFileSync(join(store, "local", "broken", "package.json"), JSON.stringify({ name: "broken", pi: { extensions: ["./e.ts"] } }));
+    writeFileSync(join(store, "local", "broken", "e.ts"), "export default function () {}\n");
+    writeFileSync(join(store, "settings.json"), JSON.stringify({ packages: ["local/wedge", "local/broken"] }));
+    const named = (path: fs.PathLike): string => {
+      const given = String(path);
+      if (!given.startsWith("/proc/self/fd/")) return given;
+      try { return fs.readlinkSync(given); } catch { return given; }
+    };
+    const original = fs.readdirSync;
+    t.mock.method(fs, "readdirSync", ((path: fs.PathLike, ...rest: unknown[]) => {
+      if (named(path) === broken) throw Object.assign(new Error("forced unreadable"), { code: "EACCES" });
+      return (original as (...args: unknown[]) => unknown[])(path, ...rest);
+    }) as typeof fs.readdirSync);
+    syncBuiltinESMExports();
+    try { await assert.rejects(writePackageIndex(store), { code: "BROKER_UNAVAILABLE" }); }
+    finally { t.mock.restoreAll(); syncBuiltinESMExports(); }
+    assert.equal(readFileSync(join(store, PACKAGE_INDEX), "utf8"), previous,
+      "the degraded index was refused: the file keeps its last truth");
+    // A `local`-root source names the stage whole: `local` itself unlistable
+    // is the same refusal.
+    writeFileSync(join(store, "settings.json"), JSON.stringify({ packages: ["local"] }));
+    t.mock.method(fs, "readdirSync", ((path: fs.PathLike, ...rest: unknown[]) => {
+      if (named(path) === join(realpathSync(store), "local")) throw Object.assign(new Error("forced unreadable"), { code: "EACCES" });
+      return (original as (...args: unknown[]) => unknown[])(path, ...rest);
+    }) as typeof fs.readdirSync);
+    syncBuiltinESMExports();
+    try { await assert.rejects(writePackageIndex(store), { code: "BROKER_UNAVAILABLE" }); }
+    finally { t.mock.restoreAll(); syncBuiltinESMExports(); }
+    assert.equal(readFileSync(join(store, PACKAGE_INDEX), "utf8"), previous);
+    // Unmocked and readable, the same write succeeds again.
+    writeFileSync(join(store, "settings.json"), JSON.stringify({ packages: ["local/wedge", "local/broken"] }));
+    assert.deepEqual((await writePackageIndex(store)).find(item => item.source === "local/broken")?.entries,
+      ["packages:local/broken/e.ts"], "the next change indexes it whole");
+  } finally { f.close(); }
+});
+
 test("DR25/C20: a file or link in a strict-prefix slot is collected -- it holds no staged copies and wedges the install", () => {
   const f = createCompleteConfigurationFixture();
   try {

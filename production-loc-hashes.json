@@ -404,11 +404,11 @@
     },
     {
       "path": "src/entry/oma-mac.ts",
-      "sha256": "560b45e5d3997574b727a296f004a91bfb0fe4d7061e507475f034adc1b9ec4f"
+      "sha256": "1eac4397ede4da3f18a8b81e0f8d14524792c2c1b3dcc09df22f231c540eadbb"
     },
     {
       "path": "src/entry/oma-society.ts",
-      "sha256": "8792474ab4881afef68a525b5a2c42972b644101ed7c3b6530bfe26bdc5df78d"
+      "sha256": "13b337315cacd310f505dd666aea818ed23e712474a957daf3b4497ec20a3e9c"
     },
     {
       "path": "src/entry/oma.ts",
@@ -792,7 +792,7 @@
     },
     {
       "path": "src/platform/host/files.ts",
-      "sha256": "7c7698b72555c2b206b03cdcb8383cf89eb9c26c0c0cc6bd3be44612bdab3dff"
+      "sha256": "f9a6985d2acab85e310601af555271a2549ce15c2290342126f52a6182764542"
     },
     {
       "path": "src/platform/host/guest-histories.ts",
@@ -1108,7 +1108,7 @@
     },
     {
       "path": "src/runtime/local-package.ts",
-      "sha256": "4c0dc4830b8541ea96f8d8bb8b67b7afad7df4f0f355e54ed595b45c6febdde9"
+      "sha256": "fdd3daa1a87ebb79b3728ad1f5312ae26d0ab0566dfe2b8cb984fd4e8c2570a4"
     },
     {
       "path": "src/runtime/locked-files.ts",
@@ -1136,7 +1136,7 @@
     },
     {
       "path": "src/runtime/pi-packages.ts",
-      "sha256": "e660743a552f4e8110e3a14461bcb9613cf7a52c2cb18195842251ad61d8ef47"
+      "sha256": "7fec7015c5d95e842751a8641cd2ce233435e0342b278a0a4ef0bf4a6a02906b"
     },
     {
       "path": "src/runtime/pi-rpc.ts",
@@ -1204,7 +1204,7 @@
     },
     {
       "path": "src/runtime/user-files.ts",
-      "sha256": "58c1acf86a984be9f6492cc8f959d1a0751c841fe52bc731b44890fcd216ca68"
+      "sha256": "513ecfd6c433394e4f8861eeb6da6e629bd21871cb5af84b8b65cf65b24f4c85"
     },
     {
       "path": "src/sandbox.ts",
@@ -1240,11 +1240,11 @@
     },
     {
       "path": "src/storage/directory.ts",
-      "sha256": "e638c9c6a42b730f1eee973a9b51ceb6c3cf9a4258198c53b63ea48b1b2bfca0"
+      "sha256": "55f35c35494f8f768c92126e5e8001807bb0823f22fb1feef8caa71478f42d30"
     },
     {
       "path": "src/storage/durable-fs.ts",
-      "sha256": "bd10fae6897caef99d6c05889c0cceb657ccbe577454724ae78ab4d132e27c51"
+      "sha256": "2ba5abc4fb42dc557c9fe4874278b38e70cca8e5979538fb6d64e7c44434e458"
     },
     {
       "path": "src/storage/facets.ts",
@@ -1372,7 +1372,7 @@
     },
     {
       "path": "src/tui/packages-apply.ts",
-      "sha256": "873c1f78ecae78eeb87fa55e21c301505007ca708716a0204e7f6b7e98e19cfd"
+      "sha256": "8b27cd18bc42c8acbe1f70338c6acf1eb540959061284283b85ae78c1c0b84b2"
     },
     {
       "path": "src/tui/panel-style.ts",

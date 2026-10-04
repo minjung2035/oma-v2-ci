@@ -169,7 +169,7 @@ async function run({ brokerState = { kind: "started", pid: 1 }, credentials = ["
       entries: { interactive: "dist/src/entry/pi-interactive.js", tui: "dist/src/entry/oma.js" } } },
     "../domain/mail-values.js": { storedMailBytes: bodyBytes => bodyBytes },
     "../runtime/pi-runtime.js": { resolvePiRuntime: () => ({ executable: "node", args: [], agentDir: "/state/pi", source: "bundled" }) },
-    "../storage/directory.js": { ensureDirectory() {}, removeUnusedTree: path => { calls.push(`removeUnusedTree:${path}`); } },
+    "../storage/directory.js": { ensureDirectory() {}, ensureOwnedDirectory() {}, removeUnusedTree: path => { calls.push(`removeUnusedTree:${path}`); } },
     "../tui/app.js": { TuiApp: class {
       constructor(ports) { calls.push("TuiApp"); capturedPorts = ports; }
       close() { calls.push("app.close"); }

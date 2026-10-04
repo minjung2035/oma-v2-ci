@@ -7,10 +7,10 @@
  * the repair existed for. */
 import test from "node:test";
 import assert from "node:assert/strict";
-import { chmodSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync, symlinkSync, writeFileSync } from "node:fs";
+import { chmodSync, closeSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { listOwnedDirectory, removeOwnedTree, removeUnusedTree } from "../src/storage/directory.js";
+import { ensureOwnedDirectory, listOwnedDirectory, openOwnedDirectoryPath, removeOwnedTree, removeUnusedTree } from "../src/storage/directory.js";
 
 /** A failing case can strand mode-000 directories under the fixture root;
  * give the bits back best-effort before the recursive remove. */
@@ -88,6 +88,77 @@ test("FS-005: the owner-bits repair adds missing bits and keeps the mode's speci
     // directory in the way of removal is removed, not preserved or refused.
     removeOwnedTree(dir);
     assert.equal(existsSync(dir), false);
+  } finally { sweep(f.root); }
+});
+
+test("FS-005: an owned directory opens by path even at mode-000 -- the leaf is pinned and repaired", () => {
+  const f = fixture();
+  try {
+    const dir = join(f.root, "store");
+    mkdirSync(dir); writeFileSync(join(dir, "e.ts"), "x\n");
+    chmodSync(dir, 0o000);
+    // The `oma pi` open path used to throw EACCES out of the O_RDONLY |
+    // O_DIRECTORY walk before any repair could run -- a mode-000 store root
+    // or `local/` wedged every install. The pin needs no bits; the repair is
+    // made on the one pinned inode; the open follows it.
+    const held = openOwnedDirectoryPath(dir);
+    closeSync(held);
+    assert.equal(statSync(dir).mode & 0o777, 0o700, "the open repaired the owner bits");
+  } finally { sweep(f.root); }
+});
+
+test("FS-005: an owned ensure repairs every component at and below its boundary -- and never above it", () => {
+  const f = fixture();
+  const oma = join(f.root, "oma");
+  const store = join(oma, ".packages");
+  try {
+    // The `oma pi` startup ensure is this shape: the data root and the store
+    // are oma's own tail, everything above the data root is the user's.
+    mkdirSync(join(store, "local"), { recursive: true });
+    // Leaf first: once `oma` itself is mode-000 nothing beneath it can be
+    // touched to take its bits away.
+    chmodSync(join(store, "local"), 0o000); chmodSync(store, 0o000); chmodSync(oma, 0o000);
+    assert.throws(() => statSync(join(store, "local")), /EACCES/, "sanity: mode-000 ancestors really do hide the path");
+    ensureOwnedDirectory(store, oma, 0o700);
+    assert.equal(statSync(oma).mode & 0o777, 0o700, "the boundary component itself is repaired");
+    assert.equal(statSync(store).mode & 0o777, 0o700, "the leaf is repaired");
+    // `local` lies beneath the ensured path, not on it: reachable now, but
+    // only an ensure of its own path gives its bits back.
+    assert.equal(statSync(join(store, "local")).mode & 0o777, 0o000, "the ensure's open made `local` reachable again");
+    ensureOwnedDirectory(join(store, "local"), oma, 0o700);
+    assert.equal(statSync(join(store, "local")).mode & 0o777, 0o700);
+    // A missing owned tail is still created, as ensureDirectory made it.
+    const missing = join(f.root, "oma", "fresh", "deep");
+    ensureOwnedDirectory(missing, oma, 0o700);
+    assert.equal(statSync(missing).mode & 0o777, 0o700);
+  } finally { sweep(f.root); }
+
+  const g = fixture();
+  try {
+    // The boundary's own ancestors are the user's: a mode-000 there is a
+    // fact to report, never a mode for this product to rewrite.
+    const oma = join(g.root, "oma");
+    mkdirSync(join(oma, ".packages"), { recursive: true });
+    chmodSync(g.root, 0o000);
+    assert.throws(() => ensureOwnedDirectory(join(oma, ".packages"), oma, 0o700), { code: "BROKER_UNAVAILABLE" });
+    assert.equal(statSync(g.root).mode & 0o777, 0o000, "an ancestor above the boundary is never repaired");
+    chmodSync(g.root, 0o700);
+  } finally { sweep(g.root); }
+});
+
+test("FS-005: an owned ensure refuses a boundary that is not its own ancestor", () => {
+  const f = fixture();
+  try {
+    const oma = join(f.root, "oma");
+    mkdirSync(join(oma, ".packages"), { recursive: true });
+    for (const boundary of [join(f.root, "elsewhere"), join(f.root, "oma", ".packages", "deeper"), "/"]) {
+      assert.throws(() => ensureOwnedDirectory(join(oma, ".packages"), boundary, 0o700), { code: "STORE_CORRUPT" }, boundary);
+    }
+    // Every ancestor of the path is a lawful boundary, however far up it
+    // reaches -- the check only requires it to be one.
+    for (const boundary of [f.root, oma, join(oma, ".packages")]) {
+      assert.doesNotThrow(() => ensureOwnedDirectory(join(oma, ".packages"), boundary, 0o700), boundary);
+    }
   } finally { sweep(f.root); }
 });
 

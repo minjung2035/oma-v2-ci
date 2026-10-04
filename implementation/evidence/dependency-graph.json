@@ -1860,7 +1860,7 @@
   }
  ],
  "files": 379,
- "runtimeEdges": 1630,
+ "runtimeEdges": 1631,
  "typeOnlyEdges": 420,
  "runtimeEdgeMatrix": {
   "L1-kernel -> L1-kernel": 316,
@@ -1869,7 +1869,7 @@
   "L3-workflow -> L1-kernel": 223,
   "L3-workflow -> L2-facts": 14,
   "L3-workflow -> L3-workflow": 68,
-  "L4-orchestration -> L1-kernel": 342,
+  "L4-orchestration -> L1-kernel": 343,
   "L4-orchestration -> L2-facts": 8,
   "L4-orchestration -> L3-workflow": 19,
   "L4-orchestration -> L4-orchestration": 174,
@@ -1901,8 +1901,8 @@
   "src/storage/paths.ts": 31,
   "src/storage/contained-fs.ts": 30,
   "src/protocol/host-guest.ts": 29,
+  "src/storage/directory.ts": 27,
   "src/ids.ts": 26,
-  "src/storage/directory.ts": 26,
   "src/storage/durable-fs.ts": 26,
   "src/domain/canonical-json.ts": 21,
   "src/domain/derived.ts": 20,

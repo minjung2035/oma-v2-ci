@@ -19,6 +19,8 @@ import { StoreError, unobserved } from "../domain/errors.js";
 import { PACKAGE_ENTRY_PREFIX, extensionEntryProblem } from "../config/operations.js";
 import { readUserFile, replaceUserFile } from "./user-files.js";
 import { isUuid } from "../protocol/host-guest.js";
+import { listOwnedDirectory } from "../storage/directory.js";
+import { listHostStaged } from "../platform/host/files.js";
 
 /** The store's directory name, beside the engine home and every session. */
 export const PACKAGE_STORE = ".packages";
@@ -36,6 +38,12 @@ export const PACKAGE_INDEX = "oma-extensions.json";
  * it too, so a change that would overflow it is refused at install instead of
  * leaving a store nothing can read back. */
 export const PACKAGE_INDEX_BYTES = 8 * 1024 * 1024;
+
+/** UX-20: how large the engine's package list (`settings.json` in the store)
+ * may be when pruning asks it what stays. The file names one line per
+ * installed package; this is a DoS ceiling, never the size a real store is
+ * meant to reach. */
+export const PACKAGE_SETTINGS_BYTES = 1024 * 1024;
 
 /** Where the packages are, for a society state root under oma's data directory. */
 export function packageStoreDir(stateRoot: string): string {
@@ -171,6 +179,24 @@ export function packageCommand(args: readonly string[], macProject = false): Pac
     ...(given.has("--host-only") ? { hostOnly: true as const } : {}) });
 }
 
+/** The package sources the store's own `settings.json` names -- the package
+ * manager's list, which is the authority on what staged copies stay. */
+export function configuredPackageSources(store: string): readonly string[] {
+  const file = readUserFile(join(store, "settings.json"), PACKAGE_SETTINGS_BYTES);
+  if (file === null) return Object.freeze([]);
+  let value: unknown;
+  try { value = JSON.parse(file); } catch { throw new StoreError("STORE_CORRUPT", "the package store's settings are malformed"); }
+  if (value === null || typeof value !== "object" || Array.isArray(value))
+    throw new StoreError("STORE_CORRUPT", "the package store's settings are malformed");
+  const packages = (value as { packages?: unknown }).packages;
+  if (packages === undefined) return Object.freeze([]);
+  if (!Array.isArray(packages)) throw new StoreError("STORE_CORRUPT", "the package store's settings are malformed");
+  return Object.freeze(packages.map(pkg =>
+    typeof pkg === "string" ? pkg
+      : pkg !== null && typeof pkg === "object" && typeof (pkg as { source?: unknown }).source === "string" ? (pkg as { source: string }).source
+      : null).filter((source): source is string => source !== null));
+}
+
 /** The store's directory itself: on macOS the engine's store is a link to its
  * current generation (DR25), which the store's own files are read beneath. */
 export function packageStoreRoot(store: string): string | null {
@@ -272,6 +298,51 @@ export async function writePackageIndex(store: string): Promise<readonly Install
   const sdk = await import("@earendil-works/pi-coding-agent");
   const settingsManager = sdk.SettingsManager.create(store, store, { projectTrusted: false });
   const manager = new sdk.DefaultPackageManager({ cwd: store, agentDir: store, settingsManager });
+  // `local/` is oma's own staged tree, so before the engine lists it the
+  // directories a same-UID stray or an interrupted writer left without owner
+  // bits get them back -- the same repair the prune's listing makes, and one
+  // the engine's own readdir never could: without it a mode-000 `local/` is
+  // indexed whole as `entries: []`, a degraded index a role then reconciles
+  // against and loses what the package carried. What still cannot be listed
+  // after the repair is refused rather than written as that empty truth:
+  // the index as last written stays the record a later whole read replaces.
+  const local = join(store, PACKAGE_LOCAL_DIR);
+  const localStat = (() => {
+    try { return lstatSync(local, { throwIfNoEntry: false }); } catch { return undefined; }
+  })();
+  if (localStat?.isDirectory() === true) {
+    const list = process.platform === "darwin" ? listHostStaged : listOwnedDirectory;
+    /** `dir` and every directory beneath it, repaired then listed; false
+     * where a directory could not be listed even so. */
+    const repair = (dir: string): boolean => {
+      const entries = list(dir);
+      if (entries === null) return false;
+      let whole = true;
+      for (const entry of entries)
+        if (entry.isDirectory() && !repair(join(dir, entry.name))) whole = false;
+      return whole;
+    };
+    const sources = configuredPackageSources(store);
+    const copies = sources.filter(localPackageSource);
+    // A source spelling `local` itself names the whole stage -- the same
+    // spelling the prune reads as keep-whole -- so its truth is every staged
+    // copy at once and `local` unlistable is as much a refusal as a staged
+    // copy's own path would be.
+    const whole = sources.some(source => (isAbsolute(source) ? source : join(store, source)) === local);
+    if (list(local) === null) {
+      if (copies.length > 0 || whole)
+        throw new StoreError("BROKER_UNAVAILABLE", "the local package stage cannot be listed; the package index was not written");
+    } else {
+      for (const source of copies) {
+        const staged = join(store, source);
+        const observed = (() => {
+          try { return lstatSync(staged, { throwIfNoEntry: false }); } catch { return undefined; }
+        })();
+        if (observed?.isDirectory() === true && !repair(staged))
+          throw new StoreError("BROKER_UNAVAILABLE", `the staged copy of ${source} cannot be listed; the package index was not written`);
+      }
+    }
+  }
   const resolved = await manager.resolve(async () => "skip");
   const base = realpathSync(store);
   const indexed = (resources: readonly { path: string; enabled: boolean; metadata: { source: string; scope: string } }[],
