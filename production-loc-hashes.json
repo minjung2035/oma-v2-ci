@@ -500,7 +500,7 @@
     },
     {
       "path": "src/extension/workspace-guard.ts",
-      "sha256": "87a6e0bd7e5e0efc7f12317967b29fafcdbdd5b9d6bda493c071ca082affc8d1"
+      "sha256": "3cd57e1dfca895df7c4e2e423d43b182d7df7331131e406ebbea2f30b3280b53"
     },
     {
       "path": "src/frame.ts",
@@ -1284,7 +1284,7 @@
     },
     {
       "path": "src/storage/quota.ts",
-      "sha256": "89dcd064620f4b729ff767a3a8683fd6594699a868f3def40e1de0103f3d04ba"
+      "sha256": "fa179bf5bfc9a1eba31acf4fc584bec05ec710a2176a4628c6f835cbafe2065f"
     },
     {
       "path": "src/storage/receipt-projector.ts",

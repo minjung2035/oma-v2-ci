@@ -1,5 +1,5 @@
 import { lstatSync, readdirSync, type Stats } from "node:fs";
-import { join } from "node:path";
+import { basename, join } from "node:path";
 import { assertStorageQuotaSupported } from "../domain/resources.js";
 import { StoreError } from "../domain/errors.js";
 import { NO_HOLD, releaseOnce, type Release, type ResourceCategory } from "../domain/admission.js";
@@ -10,6 +10,17 @@ function allocatedBytes(stat: Stats): number {
   return Math.max(1, stat.size, blocks);
 }
 
+/** FI-4/UX-10b: directory names whose contents no storage observation counts.
+ * What the clone came with (`.git`) and the trees a package manager or build
+ * tool regenerates are not what the quota bounds -- it bounds what the agent
+ * authors, and those trees are shell work a real project needs (a
+ * `node_modules` alone can exceed the whole quota). The check is a name on a
+ * directory: a file of the same name is authored content and counts, and the
+ * walked root itself is never excluded. The workspace tool guard mirrors this
+ * set -- PI-001 keeps it from importing this module, and a test binds the two
+ * spellings as it does for TOOL_SCOPE_ENV (INV04). */
+export const EXCLUDED_USAGE_TREES: ReadonlySet<string> = new Set([".git", "node_modules", ".venv", "target", "dist", "build"]);
+
 /** Count an owned tree without following symlinks or charging hardlinks twice. */
 export function observedStorageBytes(
   root: string,
@@ -17,11 +28,11 @@ export function observedStorageBytes(
 ): number {
   // The root is walked like any entry: absent is 0 bytes, and a root that
   // cannot be observed is unavailable, not empty (INV02).
-  const pending = [root];
+  const pending: [path: string, top: boolean][] = [[root, true]];
   const files = new Set<string>();
   let total = 0;
   while (pending.length > 0) {
-    const path = pending.pop()!;
+    const [path, top] = pending.pop()!;
     let stat: Stats;
     try {
       stat = lstatSync(path);
@@ -39,6 +50,7 @@ export function observedStorageBytes(
         { cause: error },
       );
     }
+    if (!top && stat.isDirectory() && EXCLUDED_USAGE_TREES.has(basename(path))) continue;
     if (stat.isFile()) {
       const identity = `${stat.dev}:${stat.ino}`;
       if (files.has(identity)) continue;
@@ -57,7 +69,7 @@ export function observedStorageBytes(
         { cause: error },
       );
     }
-    for (const name of names) pending.push(join(path, name));
+    for (const name of names) pending.push([join(path, name), false]);
   }
   return total;
 }

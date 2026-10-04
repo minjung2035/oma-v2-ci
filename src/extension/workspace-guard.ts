@@ -53,8 +53,11 @@ function allowedWorkspacePath(root: string, input: unknown): boolean {
  * The check is a name on a directory: a file of the same name is authored
  * content and counts, and the root is never excluded even when its own name
  * is on this list. An agent could hide growth inside one -- but the shell is
- * the quota's already-standing blind side, not this exclusion's. */
-const EXCLUDED_TREES: ReadonlySet<string> = new Set([".git", "node_modules", ".venv", "target", "dist", "build"]);
+ * the quota's already-standing blind side, not this exclusion's.
+ * Mirrors `EXCLUDED_USAGE_TREES` in src/storage/quota.ts (UX-10b), the
+ * observed-storage owner's spelling of this same set -- PI-001 keeps the
+ * extension from importing it, and a test binds the two (INV04). */
+export const EXCLUDED_USAGE_TREES: ReadonlySet<string> = new Set([".git", "node_modules", ".venv", "target", "dist", "build"]);
 
 export function workspaceUsage(root: string, stopAfter: number): number {
   const pending: [path: string, top: boolean][] = [[root, true]];
@@ -68,7 +71,7 @@ export function workspaceUsage(root: string, stopAfter: number): number {
     // directory below.
     try { stat = lstatSync(path); }
     catch (error) { if ((error as NodeJS.ErrnoException).code === "ENOENT") continue; return stopAfter + 1; }
-    if (!top && stat.isDirectory() && EXCLUDED_TREES.has(basename(path))) continue;
+    if (!top && stat.isDirectory() && EXCLUDED_USAGE_TREES.has(basename(path))) continue;
     // Every name costs metadata, even empty files, directories and aliases.
     total += 1;
     if (total > stopAfter) return total;
