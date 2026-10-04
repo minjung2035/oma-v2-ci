@@ -38,6 +38,10 @@ Pi/OS 기능을 다시 구현해서 생긴 중복·workaround·pre-release 잔�
 12. '설명할 수 없는 복잡성' 제거 — Mail/Review/Merge/authority/durability/Git CAS
     같은 제품 필수 복잡성은 보존. "단순해 보인다"로 OMA 고유 semantics를 없애는 건
     simplification이 아니다
+13. 하드코딩된 숫자 제한(크기·시간·횟수 등) — 사용자가 정상 사용으로 도달 가능한데
+    이름도, 설정도, 설명도 없이 박혀 있으면 문제. named limit+기본값 또는 명시적 거절
+    메시지로 바꾼다. 단, Pi에도 동일하게 있는 값은 그대로 둬도 된다.
+    (사례: 확장 설치 ~1KiB 상한으로 실패, 작업 실행 중 idle 전환)
 
 ## 3. Durable invariants (P0 심장)
 
