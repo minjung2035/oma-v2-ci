@@ -111,6 +111,13 @@ test("R30 rebuildable world files preserve durable receipts and exclude private 
   // The map names the guide at the one derived path the prompts also spell.
   const start = expected[paths.indexOf("START.md")]!;
   assert.ok(start.includes(`/world/${PRINCIPAL_MAIL_FILENAME}`), "START.md names the Principal mail guide");
+  // FI-3: the map states what the sandbox does not have, so a Worker does not
+  // discover it one failed command at a time.
+  const sandbox = start.slice(start.indexOf("## Sandbox"));
+  assert.ok(start.includes("## Sandbox"), "START.md has a sandbox section");
+  for (const fact of [/no network/i, /`git push`/, /oma submit/, /`\/tmp`/, /end(s)? with the batch|end when the batch ends/i,
+    /docker/i, /submodules/i, /\$OMA_CPUS/, /`nproc`/, /\$OMA_MEMORY_BYTES/, /\$OMA_TASKS/, /`npm`/])
+    assert.match(sandbox, fact);
   const guide = expected[paths.indexOf(PRINCIPAL_MAIL_FILENAME)]!;
   assert.match(guide, /most expensive resource/);
   assert.doesNotMatch(guide, /[ᄀ-ᅟ㄰-㆏가-힯]/u, "the guide is English-only");

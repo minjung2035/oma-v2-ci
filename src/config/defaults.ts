@@ -66,8 +66,10 @@ export function societyFromDirectory(directory: string): string {
 }
 
 const RESOURCES = Object.freeze({
-  memoryBytes: 3 * 1024 * 1024 * 1024,
-  tasks: 128,
+  // FI-6: a dev workload is the engine, a shell, npm and a runner's workers —
+  // one Node alone is a dozen threads, and every thread is a task.
+  memoryBytes: 4 * 1024 * 1024 * 1024,
+  tasks: 256,
   cpuQuotaPercent: 200,
   tmpBytes: 512 * 1024 * 1024,
   workspaceBytes: 2 * 1024 * 1024 * 1024,

@@ -15,7 +15,7 @@
  * bound an edit's replacement texts give, refused edits that fit.
  */
 import { lstatSync, readdirSync } from "node:fs";
-import { isAbsolute, join, relative, resolve, sep } from "node:path";
+import { basename, isAbsolute, join, relative, resolve, sep } from "node:path";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 
 function inside(root: string, path: string): boolean {
@@ -45,18 +45,30 @@ function allowedWorkspacePath(root: string, input: unknown): boolean {
   }
   return true;
 }
+/** FI-4: directory names whose contents the quota does not count. What the
+ * clone came with (`.git`) and the trees a package manager or build tool
+ * regenerates are not what the quota bounds -- it bounds what the agent
+ * authors through the write/edit tools, and those trees are shell work a
+ * real project needs (a `node_modules` alone can exceed the whole quota).
+ * The check is a name on a directory: a file of the same name is authored
+ * content and counts, and the root is never excluded even when its own name
+ * is on this list. An agent could hide growth inside one -- but the shell is
+ * the quota's already-standing blind side, not this exclusion's. */
+const EXCLUDED_TREES: ReadonlySet<string> = new Set([".git", "node_modules", ".venv", "target", "dist", "build"]);
+
 export function workspaceUsage(root: string, stopAfter: number): number {
-  const pending = [root];
+  const pending: [path: string, top: boolean][] = [[root, true]];
   const files = new Set<string>();
   let total = 0;
   while (pending.length > 0) {
-    const path = pending.pop()!;
+    const [path, top] = pending.pop()!;
     let stat: ReturnType<typeof lstatSync>;
     // P0-5, MAINTENANCE §10 (unknown != zero): only a name that is gone is
     // nothing; one that cannot be observed is refused like an unreadable
     // directory below.
     try { stat = lstatSync(path); }
     catch (error) { if ((error as NodeJS.ErrnoException).code === "ENOENT") continue; return stopAfter + 1; }
+    if (!top && stat.isDirectory() && EXCLUDED_TREES.has(basename(path))) continue;
     // Every name costs metadata, even empty files, directories and aliases.
     total += 1;
     if (total > stopAfter) return total;
@@ -68,7 +80,7 @@ export function workspaceUsage(root: string, stopAfter: number): number {
     } else if (stat.isSymbolicLink()) total += stat.size;
     if (total > stopAfter) return total;
     if (!stat.isDirectory()) continue;
-    try { for (const name of readdirSync(path)) pending.push(join(path, name)); } catch { return stopAfter + 1; }
+    try { for (const name of readdirSync(path)) pending.push([join(path, name), false]); } catch { return stopAfter + 1; }
   }
   return total;
 }

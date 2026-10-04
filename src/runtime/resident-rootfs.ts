@@ -27,10 +27,10 @@
  * it, and `"repair"` -- which only an owner runs -- puts it back.
  */
 import { closeSync, constants, fstatSync, lstatSync, statSync, readFileSync, readlinkSync, symlinkSync, unlinkSync, writeFileSync } from "node:fs";
-import { dirname, join } from "node:path";
+import { dirname, join, relative } from "node:path";
 import { StoreError, unobserved } from "../domain/errors.js";
 import { DEPLOYMENT_LAYOUT } from "../domain/deployment.js";
-import { RESIDENT_PATHS, SYSTEM_BIND_CANDIDATES } from "../sandbox.js";
+import { RESIDENT_NODE_TOOLCHAIN, RESIDENT_PATHS, SYSTEM_BIND_CANDIDATES } from "../sandbox.js";
 import { ensureDirectory as ensureHeldDirectory } from "../storage/directory.js";
 import { entryAt, openBeneath, openRegularBeneath, withinDirectory } from "../storage/contained-fs.js";
 
@@ -221,6 +221,13 @@ export function prepareResidentRootfs(
     ensureDirectory(inside(path));
   for (const path of [RESIDENT_PATHS.node, RESIDENT_PATHS.socket, RESIDENT_PATHS.inference])
     ensureFile(inside(path), pass);
+  // FI-2: the pinned Node's package managers, laid out as its distribution's
+  // `bin/` is -- a relative link per command into a module mount target.
+  for (const { command, module, entry } of RESIDENT_NODE_TOOLCHAIN) {
+    ensureDirectory(inside(`${RESIDENT_PATHS.nodeModules}/${module}`));
+    ensureLink(inside(`${dirname(RESIDENT_PATHS.node)}/${command}`),
+      `${relative(dirname(RESIDENT_PATHS.node), RESIDENT_PATHS.nodeModules)}/${module}/${entry}`, pass);
+  }
   for (const path of layout.binds)
     if (statSync(path).isFile()) ensureFile(inside(path), pass);
     else ensureDirectory(inside(path));

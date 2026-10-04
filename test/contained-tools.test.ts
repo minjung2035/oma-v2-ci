@@ -251,6 +251,36 @@ test("DR27/INV10: aliases cost metadata once per name and data once per inode; l
   assert.equal(workspaceUsage(workspace, 100), before);
 });
 
+test("FI-4: a workspace holding a real project's Git history and installed dependencies still takes a small write", async t => {
+  // The quota bounds what the agent authors through its tools. History the
+  // clone came with and the trees a package manager or build regenerates
+  // (made through the shell, which the quota never bounded) are not that.
+  const { workspace, run } = world(t, 64 * 1024);
+  const bulk = "x".repeat(256 * 1024);
+  for (const directory of [".git/objects/pack", "node_modules/left-pad", "packages/app/node_modules/react", ".venv/lib",
+    "target/debug", "dist", "build"]) {
+    mkdirSync(join(workspace, directory), { recursive: true });
+    writeFileSync(join(workspace, directory, "artifact"), bulk);
+  }
+  await run("write", { path: "src/index.ts", content: "export const answer = 42;\n" });
+  await run("edit", { path: "src/index.ts", edits: [{ oldText: "42", newText: "43" }] });
+  assert.equal(readFileSync(join(workspace, "src/index.ts"), "utf8"), "export const answer = 43;\n");
+  // What the agent authors still counts, wherever it sits outside those trees.
+  writeFileSync(join(workspace, "src", "generated.json"), bulk);
+  await assert.rejects(run("write", { path: "src/more.ts", content: "x" }), /quota/);
+});
+
+test("FI-4: the excluded trees are skipped by directory name only, never as files or at the root", t => {
+  const { workspace } = world(t);
+  writeFileSync(join(workspace, "build"), "data");
+  mkdirSync(join(workspace, "node_modules")); writeFileSync(join(workspace, "node_modules", "pkg"), "x".repeat(50));
+  // The root (1) and a file named like an excluded tree (1 + 4) are counted;
+  // the excluded directory and everything under it are not.
+  assert.equal(workspaceUsage(workspace, 100), 6);
+  // A workspace that is itself named like an excluded tree is still counted.
+  assert.equal(workspaceUsage(join(workspace, "node_modules"), 100), 52);
+});
+
 test("DR27/P0V-122: at the exact quota an equal-size edit and a shrinking write remain allowed", async t => {
   const { workspace, run } = world(t, 5);
   await run("write", { path: "a", content: "abc" });

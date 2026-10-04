@@ -41,6 +41,16 @@ test("the Resident prompt points at the Principal mail guide as a guide, not a m
   assert.ok(RESIDENT_SYSTEM_PROMPT.includes(`/world/${PRINCIPAL_MAIL_FILENAME}`));
 });
 
+test("FI-3: the Resident prompt names the sandbox's working limits and that submit, not push, reaches main", () => {
+  const society = RESIDENT_SYSTEM_PROMPT.slice(RESIDENT_SYSTEM_PROMPT.indexOf("## The society"), RESIDENT_SYSTEM_PROMPT.indexOf("## Starting up"));
+  assert.match(society, /`git push` does not reach `main`/);
+  const execution = RESIDENT_SYSTEM_PROMPT.slice(RESIDENT_SYSTEM_PROMPT.indexOf("## Task execution"), RESIDENT_SYSTEM_PROMPT.indexOf("## The Principal"));
+  for (const fact of [/no network/i, /`\/tmp`/, /process you start/, /\/world\/START\.md/])
+    assert.match(execution, fact);
+  // The facts themselves live in the map (START.md); the prompt only points there.
+  assert.doesNotMatch(RESIDENT_SYSTEM_PROMPT, /OMA_CPUS|docker|submodule/i);
+});
+
 test("the Resident prompt asks subjects that name what the mail is about", () => {
   const direction = RESIDENT_SYSTEM_PROMPT.slice(
     RESIDENT_SYSTEM_PROMPT.indexOf("## Direction"), RESIDENT_SYSTEM_PROMPT.indexOf("## Task execution"));
