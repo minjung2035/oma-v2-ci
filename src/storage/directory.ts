@@ -109,8 +109,13 @@ export function openOwnedDirectoryPath(path: string): number {
  * and gets the same owner-bits repair `openOwnedDirectory` makes before the
  * open that needs those bits: a mode-000 store root, data directory or
  * `local/` left by a same-UID stray or an interrupted writer can no longer
- * wedge the walk on EACCES. The ancestors above `ownedFrom` are the user's:
- * they are opened the plain way and their modes are never rewritten. */
+ * wedge the walk on EACCES. And a file or a link strictly below the
+ * boundary where a directory must be is a stray -- the slot can hold
+ * nothing oma made beneath it -- so it is unlinked through the held parent
+ * and the step retried once; the boundary component itself is never
+ * collected (its parent is not oma's). The ancestors above `ownedFrom` are
+ * the user's: they are opened the plain way and their modes are never
+ * rewritten. */
 export function ensureOwnedDirectory(path: string, ownedFrom: string, mode = 0o755): readonly string[] {
   if (!Number.isInteger(mode) || mode < 0 || mode > 0o777)
     throw new StoreError("STORE_CORRUPT", "invalid directory mode");
@@ -126,16 +131,33 @@ export function ensureOwnedDirectory(path: string, ownedFrom: string, mode = 0o7
   try {
     for (const [index, component] of components.entries()) {
       current = join(current, component);
-      try { mkdirSync(entryAt(parent, component), { mode }); created.push(current); }
-      catch (error) { if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error; }
       const owned = index >= boundary.components.length - 1;
+      const make = (): number => {
+        try { mkdirSync(entryAt(parent, component), { mode }); created.push(current); }
+        catch (error) { if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error; }
+        try {
+          return owned ? openOwnedDirectory(parent, component)
+            : openBeneath(parent, component, constants.O_RDONLY | constants.O_DIRECTORY);
+        } catch (error) {
+          if (error instanceof StoreError) throw error;
+          throw unobserved(error, `the directory ${current}`) ?? new StoreError("STORE_CORRUPT", `directory type mismatch: ${current}`);
+        }
+      };
       let child: number;
-      try {
-        child = owned ? openOwnedDirectory(parent, component)
-          : openBeneath(parent, component, constants.O_RDONLY | constants.O_DIRECTORY);
-      } catch (error) {
-        if (error instanceof StoreError) throw error;
-        throw unobserved(error, `the directory ${current}`) ?? new StoreError("STORE_CORRUPT", `directory type mismatch: ${current}`);
+      try { child = make(); }
+      catch (error) {
+        // A file or a link where an owned component must be a directory can
+        // hold nothing oma made beneath it -- the same stray the stage
+        // collection and the prune answer inside the store. It is unlinked
+        // as the entry it is, through the held parent (a link is never
+        // followed), and the step retried once -- but only strictly below
+        // the boundary: the boundary component's own parent is the user's,
+        // not oma's to write, so its refusal stands.
+        if (index < boundary.components.length || !(error instanceof StoreError) || error.code !== "STORE_CORRUPT") throw error;
+        try { unlinkSync(entryAt(parent, component)); }
+        catch { throw error; }
+        try { fsyncSync(parent); } catch { /* durable, or the retry reports it */ }
+        child = make();
       }
       const previous = parent; parent = child; closeSync(previous);
     }

@@ -168,8 +168,18 @@ async function run({ brokerState = { kind: "started", pid: 1 }, credentials = ["
     "../domain/deployment.js": { DEPLOYMENT_LAYOUT: { extension: "dist/src/pi-extension.js", cli: "dist/src/cli.js",
       entries: { interactive: "dist/src/entry/pi-interactive.js", tui: "dist/src/entry/oma.js" } } },
     "../domain/mail-values.js": { storedMailBytes: bodyBytes => bodyBytes },
-    "../runtime/pi-runtime.js": { resolvePiRuntime: () => ({ executable: "node", args: [], agentDir: "/state/pi", source: "bundled" }) },
-    "../storage/directory.js": { ensureDirectory() {}, ensureOwnedDirectory() {}, removeUnusedTree: path => { calls.push(`removeUnusedTree:${path}`); } },
+    "../runtime/pi-runtime.js": { resolvePiRuntime: () => ({ executable: "node", args: [], agentDir: "/state/oma/.engine", source: "bundled" }) },
+    "../storage/directory.js": { ensureDirectory() {},
+      ensureOwnedDirectory(directory, ownedFrom, mode) {
+        // The boundary is oma's data root itself: `ensureOwnedDirectory(store,
+        // store)` or a user-rooted boundary would leave the store's own parent
+        // unowned -- and its stray slots uncollectable -- forever.
+        assert.equal(ownedFrom, "/state/oma", "the owned boundary is oma's data root, never the slot's own path");
+        assert.ok(directory === "/state/oma/.packages" || directory === "/state/oma/.engine",
+          `the owned ensure names only oma's own slots, got ${directory}`);
+        assert.equal(mode, 0o700);
+      },
+      removeUnusedTree: path => { calls.push(`removeUnusedTree:${path}`); } },
     "../tui/app.js": { TuiApp: class {
       constructor(ports) { calls.push("TuiApp"); capturedPorts = ports; }
       close() { calls.push("app.close"); }

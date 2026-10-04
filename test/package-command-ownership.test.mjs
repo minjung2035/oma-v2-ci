@@ -33,9 +33,20 @@ function world(platform, { command = 'update', args = [command, 'npm:fixture'], 
     URL, withAsyncCleanup, home: '/fixture/home', exports: {},
     process: { env: {}, stdout: { write(line) { output.push(line); } }, exit(value) { throw { exit: value }; } },
     ensureDirectory() { calls.push('directory'); },
-    ensureOwnedDirectory() { calls.push('directory'); },
+    ensureOwnedDirectory(directory, ownedFrom, mode) {
+      calls.push('directory');
+      // The store's boundary is the data root -- never the store itself or
+      // the user's tree above it.
+      assert.equal(directory, '/fixture/packages');
+      assert.equal(ownedFrom, '/fixture/home', 'the owned boundary is the data root, never the store itself');
+      assert.equal(mode, 0o700);
+    },
     ensureUserDirectory(directory) { calls.push(`directory:${directory}`); if (failure === `directory:${directory}`) throw primary; },
-    ensureOwnedUserDirectory(directory) { calls.push(`directory:${directory}`); if (failure === `directory:${directory}`) throw primary; },
+    ensureOwnedUserDirectory(directory, ownedFrom) {
+      calls.push(`directory:${directory}`);
+      assert.equal(ownedFrom, '/fixture/home', 'the owned boundary is the app home, never the slot itself');
+      if (failure === `directory:${directory}`) throw primary;
+    },
     ProcessLock: { tryAcquire() { calls.push('take'); if (lockFailure) throw lockFailure; if (contended) return null; held = true; return lock; } },
     tryHoldSociety() { held = true; calls.push('take'); return lock; },
     packageStoreDir: () => '/fixture/packages',

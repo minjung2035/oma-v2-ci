@@ -18,7 +18,7 @@
 import { randomUUID } from "node:crypto";
 import { chmodSync, closeSync, constants, fsyncSync, linkSync, lstatSync, mkdirSync, mkdtempSync, openSync, readdirSync, renameSync, rmdirSync, rmSync, unlinkSync, writeFileSync, writeSync,
   type Dirent, type Stats } from "node:fs";
-import { dirname, join } from "node:path";
+import { dirname, isAbsolute, join } from "node:path";
 import { assertHostDirectoryLayout } from "../../runtime/assets.js";
 import { StoreError } from "../../domain/errors.js";
 import { withCleanup } from "../../process/cleanup.js";
@@ -132,19 +132,50 @@ export function collectTemporaries(dir: string): string[] {
  * the components of `path` at or below `ownedFrom` -- the directories oma
  * itself made (its support directory, the store, `local/` and its scopes),
  * where a same-UID stray or an interrupted writer could have dropped the
- * bits an open, a listing or a mkdir beneath needs. The components above
- * `ownedFrom` are the user's and are never touched; one of them being
+ * bits an open, a listing or a mkdir beneath needs. And a file or a link
+ * strictly below the boundary where a directory must be is a stray -- the
+ * slot can hold nothing oma made beneath it -- so it is unlinked for what
+ * it is, never followed. The components above `ownedFrom` are the user's
+ * and are never touched -- and the boundary component itself is never
+ * collected, since its parent is not oma's to write; one of them being
  * unreadable is a fact, not a wedge this repair may fix. */
 export function repairHostOwnedPath(path: string, ownedFrom: string): void {
-  const boundary = ownedFrom.split("/").filter(Boolean).length;
-  if (boundary === 0 || (path !== ownedFrom && !path.startsWith(`${ownedFrom}/`)))
+  // Component-wise, as the Linux twin's `componentsOf`: a `.`/`..` in either
+  // spelling makes a path that textually starts with the boundary while
+  // walking above it -- `oma/../victim` passed the lexical `startsWith` and
+  // the walk then chmod'd the boundary's own parent, which is the user's,
+  // never this product's.
+  const split = (value: string): string[] => {
+    if (!isAbsolute(value) || value.includes("\0"))
+      throw new StoreError("INTERNAL_ERROR", "an owned path must be absolute");
+    const components = value.slice(1).split("/").filter(Boolean);
+    if (components.some(component => component === "." || component === ".."))
+      throw new StoreError("INTERNAL_ERROR", "an owned path must be canonical");
+    return components;
+  };
+  const components = split(path);
+  const boundary = split(ownedFrom);
+  if (boundary.length === 0 || boundary.length > components.length ||
+      boundary.some((part, index) => components[index] !== part))
     throw new StoreError("INTERNAL_ERROR", "an owned path must be its boundary or beneath it");
   let current = "/";
-  for (const [index, component] of path.slice(1).split("/").filter(Boolean).entries()) {
+  for (const [index, component] of components.entries()) {
     current = join(current, component);
     const observed = lstatSync(current, { throwIfNoEntry: false });
-    if (observed === undefined || !observed.isDirectory()) return;
-    if (index >= boundary - 1 && (observed.mode & 0o700) !== 0o700)
+    if (observed === undefined) return;
+    if (!observed.isDirectory()) {
+      // A file or a link where an owned component must be a directory can
+      // hold nothing oma made beneath it -- the same stray the staging
+      // collection and the sweep answer for the store's slots. It is
+      // unlinked as the entry it is, never followed -- but only strictly
+      // below the boundary: the boundary component's own parent is the
+      // user's, not oma's to write, so there the failure stands.
+      if (index >= boundary.length) {
+        try { unlinkSync(current); } catch { /* the ensured mkdir reports it */ }
+      }
+      return;
+    }
+    if (index >= boundary.length - 1 && (observed.mode & 0o700) !== 0o700)
       chmodSync(current, (observed.mode & 0o7777) | 0o700);
   }
 }

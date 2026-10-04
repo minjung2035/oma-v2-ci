@@ -232,6 +232,52 @@ test('Owned cleanup host staged store: removal repairs directories that lost own
   assert.equal(listed?.length, 1);
   assert.equal(fs.statSync(kept).mode & 0o7777, 0o2700, 'owner bits are added, setgid is kept');
 });
+test('Owned cleanup host repair boundary: a `..`-spelled path inside the boundary prefix is refused, never chmods above it', t => {
+  const root = fixture(t);
+  const api = load('src/platform/host/files.ts');
+  // The boundary check was a lexical `path.startsWith(ownedFrom + "/")`:
+  // `oma/../victim` textually qualifies, and the component walk then climbed
+  // -- a slot named `..` joins to the boundary's parent, whose mode is the
+  // user's, never this product's to rewrite. Components are checked for
+  // `.`/`..` before any chmod, matching the Linux twin's componentsOf.
+  const oma = join(root, 'oma');
+  fs.mkdirSync(oma);
+  fs.chmodSync(root, 0o500);
+  try {
+    assert.throws(() => api.repairHostOwnedPath(`${oma}/../victim`, oma), { code: 'INTERNAL_ERROR' });
+    assert.equal(fs.statSync(root).mode & 0o777, 0o500, 'a `..` spelling can never repair above the owned boundary');
+    assert.throws(() => api.repairHostOwnedPath(`${oma}/./victim`, oma), { code: 'INTERNAL_ERROR' });
+    assert.throws(() => api.repairHostOwnedPath(`${oma}/double/../victim`, oma), { code: 'INTERNAL_ERROR' });
+    assert.equal(fs.statSync(root).mode & 0o777, 0o500);
+  } finally { fs.chmodSync(root, 0o700); }
+});
+test('Owned cleanup host repair boundary: a stray at an owned slot is collected -- at the boundary slot it stands', t => {
+  const root = fixture(t);
+  const api = load('src/platform/host/files.ts');
+  const oma = join(root, 'oma');
+  fs.mkdirSync(oma);
+  const victim = join(root, 'victim');
+  fs.mkdirSync(victim); fs.writeFileSync(join(victim, 'keep'), 'kept');
+  // The Mac twin of the Linux ensure's collection: a file or link where an
+  // owned component must be a directory holds nothing oma made beneath it --
+  // the stray the stage collection and the sweep already answer. It is
+  // unlinked for what it is, never followed.
+  fs.symlinkSync(victim, join(oma, 'packages'));
+  api.repairHostOwnedPath(join(oma, 'packages'), oma);
+  assert.equal(fs.lstatSync(join(oma, 'packages'), { throwIfNoEntry: false }), undefined, 'the stray link is unlinked');
+  assert.equal(fs.readFileSync(join(victim, 'keep'), 'utf8'), 'kept', 'the link\'s target is never touched');
+  // And the whole ensure then makes the directory it was asked for -- the
+  // `oma pi` startup path heals rather than wedging.
+  fs.symlinkSync(victim, join(oma, 'packages'));
+  api.ensureHostOwnedDirectory(join(oma, 'packages'), oma);
+  assert.ok(fs.lstatSync(join(oma, 'packages')).isDirectory(), 'the store slot is remade in place');
+  // The boundary component itself is never collected: its parent is the
+  // user's, not oma's.
+  fs.rmSync(oma, { recursive: true });
+  fs.symlinkSync(victim, oma);
+  api.repairHostOwnedPath(join(oma, 'x'), oma);
+  assert.ok(fs.lstatSync(oma).isSymbolicLink(), 'a stray at the boundary slot is refused, never unlinked');
+});
 for (const stage of ['link', 'existing']) test(`Owned cleanup host publication: ${stage} beside removal failure is not success`, () => {
   const exists = Object.assign(new Error('fixture existing'), { code: 'EEXIST' }), returned = [], removed = [];
   const api = load('src/platform/host/files.ts', { 'node:fs': { ...fs,

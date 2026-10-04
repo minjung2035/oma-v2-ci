@@ -13,7 +13,7 @@
  * every `oma pi` change, and its answer kept as the store's index, so a screen
  * that lists extensions reads a file instead of running the engine's resolver.
  */
-import { dirname, isAbsolute, join, relative } from "node:path";
+import { dirname, isAbsolute, join, relative, sep } from "node:path";
 import { lstatSync, realpathSync } from "node:fs";
 import { StoreError, unobserved } from "../domain/errors.js";
 import { PACKAGE_ENTRY_PREFIX, extensionEntryProblem } from "../config/operations.js";
@@ -206,6 +206,15 @@ export function packageStoreRoot(store: string): string | null {
   }
 }
 
+/** `rel` (what `relative(root, x)` answered) leaves its root when it is
+ * absolute or its first component is `..` -- a name merely starting with the
+ * two characters ("..foo") stays inside. One rule for the store boundary
+ * check, the stage prune and the index's preflight, which must agree on what
+ * a configured source names. */
+export function escapes(rel: string): boolean {
+  return rel === ".." || rel.startsWith(`..${sep}`) || isAbsolute(rel);
+}
+
 /** A `packages:`-prefixed normalized relative path under the store. Unlike an
  * extension entry a resource may be a directory or a file of any kind, so the
  * suffix rule does not apply; containment and spelling still do. */
@@ -314,7 +323,11 @@ export async function writePackageIndex(store: string): Promise<readonly Install
   // as that empty truth: the index as last written stays the record a
   // later whole read replaces. A configured copy that is absent is simply
   // absent, and is indexed as such.
-  const local = join(store, PACKAGE_LOCAL_DIR);
+  // The store's real root is the spelling the sources are resolved against
+  // -- the same spelling the prune's `relative` math uses, so both sides
+  // agree on what a configured source names.
+  const base = realpathSync(store);
+  const local = join(base, PACKAGE_LOCAL_DIR);
   const list = process.platform === "darwin" ? listHostStaged : listOwnedDirectory;
   const repairEntryMode = process.platform === "darwin" ? repairHostStagedEntryMode : repairOwnedEntryMode;
   const unavailable = (what: string): never => {
@@ -328,12 +341,17 @@ export async function writePackageIndex(store: string): Promise<readonly Install
   };
   /** A staged file's owner read/write bits back where a stray dropped
    * them; false when the file is still there but cannot take them -- a
-   * copy it sits in cannot be read whole. */
+   * copy it sits in cannot be read whole. Absent is only ever the
+   * filesystem's own ENOENT answer (`throwIfNoEntry` answering undefined):
+   * an lstat error or a name that answers as another kind is "present but
+   * not the file", never "absent" -- the same split `present` keeps. */
   const repairFile = (path: string): boolean => {
-    const observed = (() => {
-      try { return lstatSync(path, { throwIfNoEntry: false }); } catch { return undefined; }
-    })();
-    if (observed === undefined || !observed.isFile() || (observed.mode & 0o600) === 0o600) return true;
+    let observed;
+    try { observed = lstatSync(path, { throwIfNoEntry: false }); }
+    catch { return false; }
+    if (observed === undefined) return true;
+    if (!observed.isFile()) return false;
+    if ((observed.mode & 0o600) === 0o600) return true;
     return repairEntryMode(path) !== null || !present(path);
   };
   /** `dir` and every directory beneath it, repaired then listed, and every
@@ -352,12 +370,22 @@ export async function writePackageIndex(store: string): Promise<readonly Install
     return intact;
   };
   const sources = configuredPackageSources(store);
-  const copies = sources.filter(localPackageSource);
-  // A source spelling `local` itself names the whole stage -- the same
-  // spelling the prune reads as keep-whole -- so its truth is every staged
-  // copy at once and `local` unlistable is as much a refusal as a staged
-  // copy's own path would be.
-  const whole = sources.some(source => (isAbsolute(source) ? source : join(store, source)) === local);
+  /** The staged copies the configured sources name, computed the way the
+   * prune computes them: the source spelling resolved against the store's
+   * real root and taken relative to `local/`. An absolute spelling,
+   * `local/../local/x`, `local/./x`, `local//x`, `local/x/` all land on the
+   * same `x` the sweep keeps and the engine resolves -- a lexical `local/`
+   * prefix read never reached them, so a degrade under one committed as the
+   * empty truth. `local` itself (relative "") is keep-whole, as it is for
+   * the sweep; a spelling escaping `local/` names nothing here. */
+  const copies: string[] = [];
+  let whole = false;
+  for (const source of sources) {
+    const resolved = isAbsolute(source) ? source : join(base, source);
+    const inside = relative(local, resolved);
+    if (inside === "") { whole = true; continue; }
+    if (!escapes(inside) && !copies.includes(inside)) copies.push(inside);
+  }
   const localStat = (() => {
     try { return lstatSync(local, { throwIfNoEntry: false }); } catch { return null; }
   })();
@@ -369,8 +397,9 @@ export async function writePackageIndex(store: string): Promise<readonly Install
     } else {
       if (whole && !repair(local))
         unavailable("the local package stage cannot be listed");
-      for (const source of copies) {
-        const components = source.slice(PACKAGE_LOCAL_DIR.length + 1).split("/");
+      for (const inside of copies) {
+        const source = `${PACKAGE_LOCAL_DIR}/${inside}`;
+        const components = inside.split("/");
         let dir = local, entries = top;
         for (const [index, component] of components.entries()) {
           const entry = entries.find(item => item.name === component);
@@ -403,7 +432,6 @@ export async function writePackageIndex(store: string): Promise<readonly Install
     // sources would be indexed as.
     unavailable(localStat === null ? "the local package stage cannot be observed" : "the local package stage is not a directory");
   const resolved = await manager.resolve(async () => "skip");
-  const base = realpathSync(store);
   const indexed = (resources: readonly { path: string; enabled: boolean; metadata: { source: string; scope: string } }[],
     fileOnly: boolean): Map<string, string[]> => {
     const bySource = new Map<string, string[]>();

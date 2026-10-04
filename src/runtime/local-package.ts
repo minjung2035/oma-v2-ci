@@ -40,8 +40,8 @@ import { userInfo } from "node:os";
 import { fileURLToPath } from "node:url";
 import { StoreError, unobserved } from "../domain/errors.js";
 import { PACKAGE_ENTRY_PREFIX, extensionEntryProblem } from "../config/operations.js";
-import { PACKAGE_LOCAL_DIR, PACKAGE_SETTINGS_BYTES, configuredPackageSources, packageStoreRoot, resourceEntryProblem } from "./pi-packages.js";
-import { entryAt, openBeneath } from "../storage/contained-fs.js";
+import { PACKAGE_LOCAL_DIR, PACKAGE_SETTINGS_BYTES, configuredPackageSources, escapes, packageStoreRoot, resourceEntryProblem } from "./pi-packages.js";
+import { entryAt, openBeneath, withinDirectory } from "../storage/contained-fs.js";
 import { listOwnedDirectory, openOwnedDirectory, openOwnedDirectoryPath, removeOwnedFile, removeOwnedTree } from "../storage/directory.js";
 import { flushDirectoryChain, fsyncFile, fsyncTree } from "../storage/durable-fs.js";
 import { PACKAGE_ARCHIVE_BOUNDS } from "../platform/package-archive.js";
@@ -270,11 +270,6 @@ function localSourcePath(given: string): string {
   catch (error) { throw unobserved(error, "the local package source") ?? refuse(`the local package source does not exist: ${given}`); }
 }
 
-/** `rel` (what `relative(root, x)` answered) leaves its root when it is
- * absolute or its first component is `..` -- a name merely starting with the
- * two characters ("..foo") stays inside. */
-const escapes = (rel: string): boolean => rel === ".." || rel.startsWith(`..${sep}`) || isAbsolute(rel);
-
 /** A source that is inside the store, or holds it, cannot be installed: the
  * first is already what an install would make, the second would copy the
  * store into itself. */
@@ -406,6 +401,27 @@ function stageFile(store: string, source: string): string {
  * install -- never the path the Human gave. */
 export function stageLocalPackage(store: string, given: string): string {
   const source = localSourcePath(given);
+  // The store's own slot is oma's: a file or a link where the store root
+  // must be a directory can hold no staged copies -- the same stray the
+  // collection answers inside `local/`. Left standing, realpath would carry
+  // every staging open into a link's target and the ensured open would
+  // wedge on a file there. Collected for what it is -- the slot alone, its
+  // parent held -- the store then answers absent and the caller's `oma pi`
+  // ensure remakes it.
+  const slot = (() => {
+    try { return lstatSync(store, { throwIfNoEntry: false }); } catch { return undefined; }
+  })();
+  if (slot !== undefined && !slot.isDirectory()) {
+    if (process.platform === "darwin") { try { removeHostStaged(store); } catch { /* checked below */ } }
+    else withinDirectory(store, (parent, name) => collectStageStray(parent, dirname(store), [name]));
+    // A stray the collection could not take stands as the corruption it is
+    // -- never resolved through to whatever a link names.
+    const held = (() => {
+      try { return lstatSync(store, { throwIfNoEntry: false }); } catch { return undefined; }
+    })();
+    if (held !== undefined && !held.isDirectory())
+      throw new StoreError("STORE_CORRUPT", "the package store is not a directory");
+  }
   const root = packageStoreRoot(store) ?? refuse("the package store does not exist");
   checkStoreBoundary(root, source);
   const observed = lstatSync(source);
@@ -596,8 +612,6 @@ function extractTar(bytes: Buffer, area: StageArea): void {
  * left -- that no configured source still names are dead content. Runs after
  * each `oma pi` change: a removed local package's copy goes with its entry. */
 export function pruneLocalStage(store: string): void {
-  const root = packageStoreRoot(store);
-  if (root === null) return;
   const darwin = process.platform === "darwin";
   /** Dead content that cannot go yet is left for the next change's sweep: a
    * single bad entry -- one that vanished or changed type as the sweep
@@ -610,6 +624,19 @@ export function pruneLocalStage(store: string): void {
       else if (directory) removeOwnedTree(path); else removeOwnedFile(path);
     } catch { /* retention beats a wedge */ }
   };
+  // The store's own slot is the sweep's too: a file or a link where the
+  // store root must be a directory can hold no staged copies -- the same
+  // stray a non-directory `local` is collected for below. Left standing,
+  // realpath carried the whole sweep (and every ensured open) into whatever
+  // a link named. The collection targets the one slot itself -- the store's
+  // own position, never the unowned space beside it.
+  const slot = (() => {
+    try { return lstatSync(store, { throwIfNoEntry: false }); } catch { return undefined; }
+  })();
+  if (slot === undefined) return;
+  if (!slot.isDirectory()) { remove(store, false); return; }
+  const root = packageStoreRoot(store);
+  if (root === null) return;
   /** `dir`'s entries, or null when it cannot be listed. The store is oma's
    * own tree, so before listing, a directory that lost its owner
    * read/write/search bits -- a mode a stray or an interrupted writer
@@ -668,7 +695,7 @@ export function pruneLocalStage(store: string): void {
     if (path === "") { whole = true; continue; }
     // `..foo` is a name under `local/`, not an escape from it: the component
     // test, not the two-character prefix, decides (the same `escapes` the
-    // store boundary check uses).
+    // store boundary check and the index's preflight share).
     if (!escapes(path)) inside.push(path);
   }
   /** `dir` is `rel` beneath `local/` ("" for `local` itself, which is never

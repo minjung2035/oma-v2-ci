@@ -162,6 +162,39 @@ test("FS-005: an owned ensure refuses a boundary that is not its own ancestor", 
   } finally { sweep(f.root); }
 });
 
+test("FS-005: a stray where an owned component must be a directory is collected -- at or above the boundary it stands", () => {
+  const f = fixture();
+  const oma = join(f.root, "oma");
+  const store = join(oma, ".packages");
+  try {
+    mkdirSync(oma);
+    // A file or link at an owned slot can hold nothing oma made beneath it
+    // -- the same stray the stage collection answers inside `local/` and the
+    // sweep answers for the store's own root. Before this, the open refused
+    // it (ENOTDIR, ELOOP) on every `oma pi` forever.
+    writeFileSync(store, "stray\n");
+    ensureOwnedDirectory(store, oma, 0o700);
+    assert.ok(lstatSync(store).isDirectory(), "a stray file at the store slot is collected and the directory made");
+
+    const victim = join(f.root, "victim");
+    mkdirSync(victim);
+    writeFileSync(join(victim, "keep.txt"), "kept\n");
+    rmSync(store, { recursive: true });
+    symlinkSync(victim, store);
+    ensureOwnedDirectory(store, oma, 0o700);
+    assert.ok(lstatSync(store).isDirectory(), "a stray link is unlinked for what it is, never followed");
+    assert.equal(readFileSync(join(victim, "keep.txt"), "utf8"), "kept\n", "the link's target is untouched");
+
+    // The boundary component itself is never collected: its parent is the
+    // user's, not oma's -- the refusal stands and the entry stays.
+    rmSync(oma, { recursive: true });
+    symlinkSync(victim, oma);
+    assert.throws(() => ensureOwnedDirectory(join(oma, ".packages"), oma, 0o700), { code: "STORE_CORRUPT" });
+    assert.ok(lstatSync(oma).isSymbolicLink(), "a stray at the boundary slot is refused, never unlinked");
+    assert.equal(readFileSync(join(victim, "keep.txt"), "utf8"), "kept\n");
+  } finally { sweep(f.root); }
+});
+
 test("DR24: an unused session tree holding owner-read-less directories still goes whole", () => {
   const f = fixture();
   try {

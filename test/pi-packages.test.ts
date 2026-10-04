@@ -986,6 +986,152 @@ test("DR25/C20: a configured source is descended to the depth it needs -- dead c
   } finally { f.close(); }
 });
 
+test("DR25/C20: a stray at the package-store slot itself is collected -- never swept into or staged into", () => {
+  const f = createCompleteConfigurationFixture();
+  try {
+    const store = join(f.root, "packages");
+    mkdirSync(store, { recursive: true });
+    const victim = join(f.root, "victim");
+    mkdirSync(victim);
+    writeFileSync(join(victim, "keep.txt"), "kept\n");
+    // The sweep and the staging opens reached the store through its real
+    // path, so a stray at the store's own slot was never in either's
+    // collection: the prune realpath'd past a link and swept inside its
+    // target, and the ensured open wedged on a file or link there for good.
+    // The slot is oma's to keep; what occupies it is collected as the entry
+    // it is -- a link is unlinked, never followed.
+    rmSync(store, { recursive: true });
+    symlinkSync(victim, store);
+    pruneLocalStage(store);
+    assert.equal(lstatSync(store, { throwIfNoEntry: false }), undefined, "the stray link is unlinked");
+    assert.equal(readFileSync(join(victim, "keep.txt"), "utf8"), "kept\n", "the link's target is never the sweep's");
+    assert.equal(existsSync(join(victim, "local")), false, "no stage is made inside a link's target");
+    writeFileSync(store, "stray\n");
+    pruneLocalStage(store);
+    assert.equal(lstatSync(store, { throwIfNoEntry: false }), undefined, "a stray file is collected the same way");
+
+    // The install path takes the same answer: the slot is collected and the
+    // store then answers absent -- the next `oma pi`'s ensure remakes it --
+    // rather than the staging opening inside whatever a link named.
+    symlinkSync(victim, store);
+    const source = join(f.root, "src", "pkg");
+    mkdirSync(source, { recursive: true });
+    writeFileSync(join(source, "package.json"), JSON.stringify({ name: "pkg", pi: { extensions: ["./e.ts"] } }));
+    writeFileSync(join(source, "e.ts"), "export default function () {}\n");
+    assert.throws(() => stageLocalPackage(store, source), /does not exist/);
+    assert.equal(lstatSync(store, { throwIfNoEntry: false }), undefined, "the stray link is collected");
+    assert.deepEqual(readdirSync(victim), ["keep.txt"], "nothing was staged into the link's target");
+  } finally { f.close(); }
+});
+
+test("DR25/C20: a staged file whose stat fails -- or answers as another kind -- refuses the index write", async t => {
+  const f = createCompleteConfigurationFixture();
+  try {
+    const store = join(f.root, "packages");
+    mkdirSync(store, { recursive: true });
+    mkdirSync(join(store, "local", "pkg"), { recursive: true });
+    writeFileSync(join(store, "local", "pkg", "package.json"),
+      JSON.stringify({ name: "pkg", pi: { extensions: ["./e.ts"] } }));
+    const leaf = join(store, "local", "pkg", "e.ts");
+    writeFileSync(leaf, "export default function () {}\n");
+    writeFileSync(join(store, "settings.json"), JSON.stringify({ packages: ["local/pkg"] }));
+    await writePackageIndex(store);
+    const previous = readFileSync(join(store, PACKAGE_INDEX), "utf8");
+    const path = realpathSync(leaf);
+    const real = fs.lstatSync;
+    // Between the listing and the stat the copy's file became something
+    // else -- or stopped answering. Either is "cannot be read whole", never
+    // the "absent" lstat's own ENOENT reports for a name that is not there.
+    const bait = join(f.root, "bait");
+    symlinkSync("nothing", bait);
+    t.mock.method(fs, "lstatSync", ((given: fs.PathLike, ...rest: unknown[]) => {
+      if (String(given) === path) return (real as (...args: unknown[]) => unknown)(bait);
+      return (real as (...args: unknown[]) => unknown)(given, ...rest);
+    }) as typeof fs.lstatSync);
+    syncBuiltinESMExports();
+    try { await assert.rejects(writePackageIndex(store), { code: "BROKER_UNAVAILABLE" }); }
+    finally { t.mock.restoreAll(); syncBuiltinESMExports(); }
+    assert.equal(readFileSync(join(store, PACKAGE_INDEX), "utf8"), previous,
+      "a leaf swapped to a link between listing and stat is no committed empty truth");
+
+    t.mock.method(fs, "lstatSync", ((given: fs.PathLike, ...rest: unknown[]) => {
+      if (String(given) === path) throw Object.assign(new Error("no answer"), { code: "EACCES" });
+      return (real as (...args: unknown[]) => unknown)(given, ...rest);
+    }) as typeof fs.lstatSync);
+    syncBuiltinESMExports();
+    try { await assert.rejects(writePackageIndex(store), { code: "BROKER_UNAVAILABLE" }); }
+    finally { t.mock.restoreAll(); syncBuiltinESMExports(); }
+    assert.equal(readFileSync(join(store, PACKAGE_INDEX), "utf8"), previous,
+      "a leaf whose stat cannot be observed is no committed empty truth");
+  } finally { f.close(); }
+});
+
+test("DR25/C20: a source spelled absolutely or denormalized still names its staged copy -- degraded, it is repaired or refused, never committed empty", async t => {
+  const f = createCompleteConfigurationFixture();
+  try {
+    const store = join(f.root, "packages");
+    mkdirSync(store, { recursive: true });
+    const copy = join(realpathSync(store), "local", "pkg");
+    mkdirSync(copy, { recursive: true });
+    writeFileSync(join(copy, "package.json"), JSON.stringify({ name: "pkg", pi: { extensions: ["./e.ts"] } }));
+    const ext = join(copy, "e.ts");
+    writeFileSync(ext, "export default function () {}\n");
+    // The engine resolves every spelling that lands on the copy -- absolute,
+    // `..`-, `.`-, `//`- or trailing-slash-spelled -- so the prune resolves
+    // them all onto the same kept path. The index's preflight asked the
+    // source's own string instead and never reached the copy: a degrade
+    // under any of these spellings committed as the empty truth.
+    const absolute = join(realpathSync(store), "local", "pkg");
+    for (const spelling of [absolute, "local/../local/pkg", "local/./pkg", "local//pkg", "local/pkg/"]) {
+      chmodSync(ext, 0o000);
+      writeFileSync(join(store, "settings.json"), JSON.stringify({ packages: [spelling] }));
+      const indexed = await writePackageIndex(store);
+      assert.equal(statSync(ext).mode & 0o777, 0o600, `${spelling}: the staged file's owner bits went back before the commit`);
+      assert.deepEqual(indexed.find(item => item.source === spelling)?.entries,
+        [`packages:local/pkg/e.ts`], `${spelling}: the copy indexed whole`);
+    }
+
+    // `local/../local` names the stage itself the way the sweep's
+    // `relative`-is-"" reading keeps it whole -- under the lexical equality
+    // that spelling never reached `whole` and the degraded stage committed.
+    mkdirSync(join(store, "local", "sub"), { recursive: true });
+    writeFileSync(join(store, "local", "package.json"),
+      JSON.stringify({ name: "stage", pi: { extensions: ["./pkg/e.ts"] } }));
+    const wholeSpelling = `${realpathSync(store)}/local/../local`;
+    writeFileSync(join(store, "settings.json"), JSON.stringify({ packages: [wholeSpelling] }));
+    chmodSync(copy, 0o000);
+    chmodSync(join(store, "local", "sub"), 0o000);
+    await writePackageIndex(store);
+    assert.equal(statSync(copy).mode & 0o777, 0o700, "the whole-stage spelling repairs `local` through every level");
+    assert.equal(statSync(join(store, "local", "sub")).mode & 0o777, 0o700);
+
+    // The same reach, degraded past repair: refused, the index keeping its
+    // last truth rather than committing an empty one.
+    const previous = readFileSync(join(store, PACKAGE_INDEX), "utf8");
+    const stagePath = join(realpathSync(store), "local");
+    const named = (given: fs.PathLike): string => {
+      const words = String(given);
+      if (!words.startsWith("/proc/self/fd/")) return words;
+      try { return fs.readlinkSync(words); } catch { return words; }
+    };
+    const listing = fs.readdirSync;
+    t.mock.method(fs, "readdirSync", ((given: fs.PathLike, ...rest: unknown[]) => {
+      if (named(given) === stagePath) throw Object.assign(new Error("forced"), { code: "EACCES" });
+      return (listing as (...args: unknown[]) => unknown)(given, ...rest);
+    }) as typeof fs.readdirSync);
+    syncBuiltinESMExports();
+    try { await assert.rejects(writePackageIndex(store), { code: "BROKER_UNAVAILABLE" }); }
+    finally { t.mock.restoreAll(); syncBuiltinESMExports(); }
+    assert.equal(readFileSync(join(store, PACKAGE_INDEX), "utf8"), previous,
+      "an unlistable stage under a whole-stage spelling refuses the write");
+  } finally {
+    try { chmodSync(join(f.root, "packages", "local", "sub"), 0o700); } catch { /* already gone */ }
+    try { chmodSync(join(f.root, "packages", "local", "pkg"), 0o700); } catch { /* already gone */ }
+    try { chmodSync(join(f.root, "packages", "local", "pkg", "e.ts"), 0o600); } catch { /* already gone */ }
+    f.close();
+  }
+});
+
 test("DR25: a project's inline settings become a managed bundle that runs as it did, and every session is made from it, roles and all", () => {
   const f = createCompleteConfigurationFixture();
   try {

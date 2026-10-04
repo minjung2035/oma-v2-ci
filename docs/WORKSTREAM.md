@@ -299,6 +299,47 @@ Pi/OS 기능을 다시 구현해서 생긴 중복·workaround·pre-release 잔�
       그래도 못 읽으면 같은 거절. fail-before(구 dist): 중간 모드-000 →
       `entries: []` 커밋·publish STORE_CORRUPT 재현 → 수정 후 통과.
       회귀: pi-packages.test.ts +2종(인덱스 워크·strict-prefix install).
+  - 여섯 번째 독립 검증 잔여 5건(같은 wedge 클래스 — 병합 버그·철자 정규화·
+    슬롯 stray·Mac 경계·구성 스텁) 수정:
+    (1) repairFile 병합 버그 — `walkAndRepair` 콜백의 lstat이 throw 또는
+      비파일을 답해도 `kind === "file"`만 아니면 부재로 병합해 결과에 안 넣음.
+      readdir→lstat 창의 스왑·관측 불가·소켓/링크 리프가 "복구 완료"로 읽혀
+      인덱스가 실재 엔트리를 빠뜨린 채 커밋됐다. repairedKind는 lstat 실패를
+      BROKER_UNAVAILABLE로 던지고 비파일은 콜백에 전달 — 머지는
+      `kind === "file" && repaired === "file"`만 완료로 인정.
+      (다섯 번째 잔여 (1)의 워크가 정확히 이 리프를 걸어 이미 복구되므로
+      자연 지점 — fail-before로 wedge·링크 잔존 재현 확인.)
+    (2) 인덱스 프리플라이트의 철자 비정규화 — 복구 워크가 `source === "local"`
+      ·`local/` 접두 스트링만 매치 — 절대 `<store>/local/pkg`·`local/../local/x`
+      ·`local/./x`·`local//x`·`local/x/`는 엔진·prune이 같은 사본을 읽는데도
+      워크가 못 닿아 mode-000 사본이 `entries: []`로 커밋되고 sweep 없음이
+      무손상으로 보고됐다. `relative(local, resolved)` 정규화로 워크와 머지가
+      prune과 같은 경로 집합을 봄 — escapes도 공유(`local/../x` 같은 엔진-외
+      소스는 양쪽에서 제외), 워크의 resolve 기준은 `<store>` 실경로.
+    (3) store 루트 슬롯의 stray — `.packages` 위치의 파일·링크는 sweep의
+      top-level lstat·stage publish·ensureOwnedDirectory 어느 곳에도 없어
+      첫 `oma pi`가 ENOTDIR로 wedge되고 stageSync가 realpath로 링크 밖을
+      쓸 수 있었다. 세 지점 모두 슬롯을 수집 — prune은 `.staging-local-*`와
+      같은 판정으로, stageSync는 `expectedKind`-없는 unstage와 동일하게,
+      ensureOwnedDirectory는 경계 아래 컴포넌트 walk 중 비디렉토리를 엔트리로
+      unlink(링크는 따라가지 않음). 경계 컴포넌트 자체(`<data>/oma`)는 수집
+      안 함 — 그 부모는 사용자 것.
+    (4) Mac `repairHostOwnedPath`의 어휘 경계 — `startsWith(ownedFrom + "/")`
+      만 검사해 `<oma>/../victim`이 경계 밖을 chmod. componentsOf와 동일하게
+      절대 경로 필수·`.`·`..` 컴포넌트 거부·strict descendant만 walk —
+      경계 위 사용자 경로는 여전히 무손상. 경계 아래 경로 중 비디렉토리는
+      엔트리로 unlink(링크는 따라가지 않음) — Linux walk와 동일. 구조
+      리뷰만, 이 호스트는 Linux.
+    (5) 구성 스텁 미검사 — `ensureOwnedDirectory`를 감싸는 stub이 호출만
+      기록해 `<data>/oma` 경계·`.packages`/`.engine` 경로·0o700 모드를
+      아무것도 단언하지 않았다. oma-composition-policy·package-command-
+      ownership·session-entry-composition의 모든 스텁이 경계·경로·모드를
+      검사 — 엔트리 포인트 잘못된 인자는 라우팅 실패로 잡히지 않으므로
+      테스트 의무였다.
+    fail-before(구 dist): repairFile wedge·링크 잔존·잘못된 인덱스 커밋·
+    슬롯 stray STORE_CORRUPT·Mac 경계 위 chmod·스텁 무검사 전부 재현 →
+    수정 후 통과. 회귀: pi-packages.test.ts +3종·owned-directory.test.ts
+    +1종·owned-cleanup.test.mjs +2종 + 구성 스텁 3종 강화.
 
 ## 6. 선행 작업 큐 (코드베이스 전체 확장 전 — 사용자 지시)
 

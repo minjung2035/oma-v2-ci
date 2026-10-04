@@ -58,7 +58,13 @@ function world(platform, { selected = 'personal', birth, birthError, societies =
     './oma-society.js': { loaded: effects }, './oma-mac.js': { loaded: effects },
     '../tui/exit.js': {}, '../tui/words.js': {},
     '../runtime/user-files.js': { ensureUserDirectory(directory) { effects.push(['mkdir', directory]); },
-      ensureOwnedUserDirectory(directory) { effects.push(['mkdir', directory]); } },
+      ensureOwnedUserDirectory(directory, ownedFrom) {
+        effects.push(['mkdir', directory]);
+        // The boundary is the app's own support directory, never the store's
+        // or run root's own path -- an owned tail only exists under `home`.
+        assert.equal(ownedFrom, '/fixture/home/Library/Application Support/OMA',
+          `the owned boundary is the app home, got ${ownedFrom}`);
+      } },
     '../frame.js': { encodeFrame: value => value },
     '../platform/rpc.js': { PlatformError: class extends Error {},
       async connectSocket() { effects.push(['host-api']); return { write(value) { effects.push(['request', value.method, value.params]); }, unshift() {}, destroy() {} }; },
