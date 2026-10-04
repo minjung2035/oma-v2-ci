@@ -10,9 +10,10 @@
  *     and for a file: executable (u8: 0 or 1), size (u32 BE high, u32 BE low), bytes
  *
  * What travels is the engine package manager's own list (`settings.json`) and
- * what it installed (`npm/`, `git/`): directories and regular files only. A
- * link (npm's `.bin`), a repository's `.git` and anything else stay behind;
- * no engine loads them. A directory comes before what is in it.
+ * what it installed (`npm/`, `git/`, and the `local/` copies staged from local
+ * paths (C20)): directories and regular files only. A link (npm's `.bin`), a
+ * repository's `.git` and anything else stay behind; no engine loads them. A
+ * directory comes before what is in it.
  */
 import { closeSync, constants, mkdirSync, openSync, readSync, writeSync } from "node:fs";
 import { entryAt, openBeneath, withinDirectory } from "../storage/contained-fs.js";
@@ -35,7 +36,7 @@ export const PACKAGE_ARCHIVE_BOUNDS = Object.freeze({
 });
 const MAGIC = Buffer.from("oma-packages-v1\n", "utf8");
 /** What of the store travels: the package manager's list and what it installed. */
-const ROOTS = Object.freeze({ files: ["settings.json"], directories: ["npm", "git"] });
+const ROOTS = Object.freeze({ files: ["settings.json"], directories: ["npm", "git", "local"] });
 const SKIPPED_DIRECTORIES = new Set([".git"]);
 
 function pathProblem(path: string): string | null {

@@ -11,6 +11,7 @@ import { StoreError } from "../../domain/errors.js";
 import { runProcess } from "../../process/run.js";
 import { decodeProcessText } from "../../process/run.js";
 import { isUuid } from "../../protocol/host-guest.js";
+import { installedPackageSource } from "../../runtime/pi-packages.js";
 import type { RequestLedger } from "./requests.js";
 import type { GuestProjects } from "./project.js";
 import { sha256File } from "./project.js";
@@ -35,7 +36,7 @@ export class GuestPackages {
   replace(key: unknown, params: Record<string, unknown>): Promise<Record<string, unknown>> {
     return this.options.ledger.run(key, "packages.replace", params, async () => {
       const activate = params.activate;
-      if (activate !== undefined && (typeof activate !== "string" || !/^(?:npm:|git:|https?:\/\/|ssh:\/\/|git@)/.test(activate)))
+      if (activate !== undefined && (typeof activate !== "string" || !installedPackageSource(activate)))
         throw new StoreError("INVALID_REQUEST", "activate must name an installed package source");
       const { archive, projectId } = params as { archive?: { bytes?: unknown; sha256?: unknown }; projectId?: unknown };
       if (projectId !== undefined && !isUuid(projectId)) throw new StoreError("INVALID_REQUEST", "projectId must be a UUID");

@@ -1,13 +1,14 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { mkdirSync, realpathSync, rmSync, statSync, symlinkSync, writeFileSync } from "node:fs";
+import { existsSync, lstatSync, mkdirSync, readdirSync, realpathSync, rmSync, statSync, symlinkSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { createCompleteConfigurationFixture } from "./fixtures/configuration.js";
 import { loadConfiguration, loadConfigurationSnapshot } from "../src/config.js";
 import { DurabilityFaultError, type DurabilityFault } from "../src/storage/durable-fs.js";
 import { CORE_EXTENSION, readExtensions, toggleExtension } from "../src/tui/sources/extensions.js";
 import { commitRoleSet, deriveSessionSettings, projectBundle, readSettings, readSettingsForEditing, roleSetOf, writeSettings } from "../src/tui/sources/settings.js";
-import { PACKAGE_INDEX, PACKAGE_INDEX_BYTES, packageCommand, packageResourcePaths, readPackageIndex, reconciledEntries, writePackageIndex, type InstalledPackage } from "../src/runtime/pi-packages.js";
+import { PACKAGE_INDEX, PACKAGE_INDEX_BYTES, PACKAGE_LOCAL_DIR, packageCommand, packageListLines, packageResourcePaths, readPackageIndex, reconciledEntries, writePackageIndex, type InstalledPackage } from "../src/runtime/pi-packages.js";
+import { pruneLocalStage, stageLocalPackage } from "../src/runtime/local-package.js";
 import { sessionArgv } from "../src/tui/session.js";
 import { planPiSpawn } from "../src/runtime/pi-spawn-plan.js";
 import { decodeRunLease } from "../src/protocol/run-lease.js";
@@ -17,6 +18,7 @@ import { actorSocketPathAt, agentRootPathAt, projectGitPathAt, projectMirrorPath
 import { runEngineLogin } from "../src/tui/login.js";
 import { assertExtensionIntegrity } from "../src/runtime/extension-integrity.js";
 import { createHash } from "node:crypto";
+import { gzipSync } from "node:zlib";
 import { chmodSync, readFileSync } from "node:fs";
 
 const HELLO = "packages:npm/node_modules/oma-hello-ext/extensions/hello.ts";
@@ -42,10 +44,17 @@ test("DR25: oma pi runs the engine's package commands over oma's store, and refu
     assert.equal(decision.kind, "run", args.join(" "));
   }
   assert.deepEqual(packageCommand(["uninstall", "npm:x"]), { kind: "run", command: "remove", args: ["uninstall", "npm:x"] });
+  // C20: a path on this machine is accepted and marked for the caller to stage
+  // into the store; it is never forwarded to the engine where it lies.
+  for (const [args, local] of [
+    [["install", "./local"], "./local"], [["install", "/abs/ext"], "/abs/ext"], [["install", "~/ext"], "~/ext"],
+    [["install", "file:///x"], "file:///x"], [["install", "pkg.tgz"], "pkg.tgz"], [["install", "ext.ts"], "ext.ts"]] as const) {
+    const decision = packageCommand(args);
+    assert.deepEqual(decision, { kind: "run", command: "install", args: ["install", local], local }, args.join(" "));
+  }
   const refusals: [string[], RegExp][] = [
     [["install", "-l", "npm:x"], /project's local packages/], [["install", "--local", "npm:x"], /project's local packages/],
-    [["remove", "-a", "npm:x"], /project's local packages/], [["install", "./local"], /local path/], [["install", "/abs/ext"], /local path/],
-    [["install", "~/ext"], /local path/], [["install", "file:///x"], /local path/], [["install"], /one source/],
+    [["remove", "-a", "npm:x"], /project's local packages/], [["install"], /one source/],
     [["update"], /updated with oma/], [["update", "pi"], /updated with oma/], [["update", "self"], /updated with oma/],
     [["update", "--self"], /updated with oma/], [["update", "--all"], /updated with oma/], [["update", "--models"], /updated with oma/],
     [["update", "npm:x", "--force"], /updated with oma/], [["config"], /Ctrl\+X > Config > Extensions/], [[], /package commands/],
@@ -101,6 +110,185 @@ test("DR25: the engine names a package's extensions; the index keeps them by pac
     assert.deepEqual(reconciledEntries([CORE_EXTENSION, "packages:a/one.ts", "extensions/own.js", "packages:b/x.ts"], before, after),
       [CORE_EXTENSION, "packages:a/two.ts", "packages:a/three.ts", "extensions/own.js"]);
     assert.deepEqual(reconciledEntries([CORE_EXTENSION], before, after), [CORE_EXTENSION], "a package a role did not use is not turned on");
+  } finally { f.close(); }
+});
+
+/** A ustar stream (as `npm pack` writes) holding the given files under `package/`. */
+function tarball(files: Record<string, string>): Buffer {
+  const parts: Buffer[] = [];
+  const header = (name: string, size: number): Buffer => {
+    const block = Buffer.alloc(512);
+    block.write(name, 0, "utf8");
+    block.write(`${(0o644).toString(8).padStart(7, "0")}\0`, 100);
+    block.write("0000000\0", 108); block.write("0000000\0", 116);
+    block.write(`${size.toString(8).padStart(11, "0")}\0`, 124);
+    block.write("00000000000\0", 136);
+    block.write("        ", 148);
+    block[156] = 0x30;
+    block.write("ustar\0", 257); block.write("00", 263);
+    let sum = 0; for (let index = 0; index < 512; index++) sum += block[index]!;
+    block.write(`${sum.toString(8).padStart(6, "0")}\0 `, 148);
+    return block;
+  };
+  for (const [name, text] of Object.entries(files)) {
+    const content = Buffer.from(text, "utf8");
+    parts.push(header(name, content.length), content, Buffer.alloc((512 - (content.length % 512)) % 512));
+  }
+  parts.push(Buffer.alloc(1024));
+  return Buffer.concat(parts);
+}
+
+test("DR25/C20: `oma pi install` of a local path copies it into the store as `local/<name>`, indexed and synced like a remote package", async () => {
+  const f = createCompleteConfigurationFixture();
+  try {
+    const store = join(f.root, "packages");
+    mkdirSync(store, { recursive: true });
+    // A directory package: manifest-declared extension + skill, conventional
+    // prompt and theme directories, a `.git` left behind and a link resolved.
+    const rich = join(f.root, "src", "rich");
+    const target = join(f.root, "target.ts");
+    writeFileSync(target, "// linked target\n");
+    mkdirSync(join(rich, "extensions"), { recursive: true });
+    mkdirSync(join(rich, "skills", "roll"), { recursive: true });
+    mkdirSync(join(rich, "prompts"), { recursive: true });
+    mkdirSync(join(rich, "themes"), { recursive: true });
+    mkdirSync(join(rich, ".git", "objects"), { recursive: true });
+    writeFileSync(join(rich, ".git", "objects", "x"), "git internals\n");
+    writeFileSync(join(rich, "package.json"), JSON.stringify({ name: "oma-local-rich", version: "1.0.0",
+      pi: { extensions: ["./extensions/e.ts"], skills: ["./skills/roll/SKILL.md"],
+        prompts: ["./prompts/review.md"], themes: ["./themes/dark.json"] } }));
+    writeFileSync(join(rich, "extensions", "e.ts"), "export default function () {}\n");
+    writeFileSync(join(rich, "skills", "roll", "SKILL.md"), "# roll\n");
+    writeFileSync(join(rich, "prompts", "review.md"), "review it\n");
+    writeFileSync(join(rich, "themes", "dark.json"), "{}\n");
+    symlinkSync(target, join(rich, "linked.ts"));
+
+    assert.equal(stageLocalPackage(store, rich), `${PACKAGE_LOCAL_DIR}/oma-local-rich`);
+    const staged = join(store, "local", "oma-local-rich");
+    assert.ok(existsSync(join(staged, "extensions", "e.ts")));
+    // A copy, never a link: the link's target's bytes are inside the store.
+    assert.equal(lstatSync(join(staged, "linked.ts")).isSymbolicLink(), false);
+    assert.equal(readFileSync(join(staged, "linked.ts"), "utf8"), "// linked target\n");
+    assert.equal(existsSync(join(staged, ".git")), false, "a repository's .git does not travel");
+    // Re-installing the source replaces the copy wholesale.
+    writeFileSync(join(rich, "extensions", "e.ts"), "export default function () { /* v2 */ }\n");
+    rmSync(join(rich, "prompts", "review.md"));
+    assert.equal(stageLocalPackage(store, rich), `${PACKAGE_LOCAL_DIR}/oma-local-rich`);
+    assert.equal(existsSync(join(staged, "prompts", "review.md")), false, "a file removed upstream stays removed");
+    assert.match(readFileSync(join(staged, "extensions", "e.ts"), "utf8"), /v2/);
+
+    // A lone extension file stages under its own name.
+    const lone = join(f.root, "src", "single.ts");
+    writeFileSync(lone, "export default function () {}\n");
+    assert.equal(stageLocalPackage(store, lone), `${PACKAGE_LOCAL_DIR}/single.ts`);
+
+    // A tarball of a package (npm pack shape: everything under `package/`).
+    const packed = join(f.root, "packed.tgz");
+    writeFileSync(packed, gzipSync(tarball({
+      "package/package.json": JSON.stringify({ name: "oma-packed",
+        pi: { extensions: ["./e.ts"], skills: ["./skills/roll/SKILL.md"] } }),
+      "package/e.ts": "export default function () {}\n",
+      "package/skills/roll/SKILL.md": "# roll\n",
+    })));
+    assert.equal(stageLocalPackage(store, packed), `${PACKAGE_LOCAL_DIR}/oma-packed`);
+    assert.ok(existsSync(join(store, "local", "oma-packed", "skills", "roll", "SKILL.md")));
+
+    // A tar without the single top directory unpacks to the name the archive had.
+    const plain = join(f.root, "plainpack.tar");
+    writeFileSync(plain, tarball({
+      "package.json": JSON.stringify({ name: "@scope/plain" }),
+      "extensions/e.ts": "export default function () {}\n",
+    }));
+    assert.equal(stageLocalPackage(store, plain), `${PACKAGE_LOCAL_DIR}/@scope/plain`);
+    assert.ok(existsSync(join(store, "local", "@scope", "plain", "package.json")));
+
+    // Refusals are loud and named: nothing there, no manifest, not a package,
+    // a source that is or contains the store, an archive that is not a tar.
+    const missing = join(f.root, "src", "missing");
+    assert.throws(() => stageLocalPackage(store, missing), /does not exist/);
+    const bare = join(f.root, "src", "bare");
+    mkdirSync(bare, { recursive: true });
+    assert.throws(() => stageLocalPackage(store, bare), /INVALID_REQUEST|no package\.json/);
+    writeFileSync(join(bare, "package.json"), "{broken");
+    assert.throws(() => stageLocalPackage(store, bare), /not readable JSON/);
+    writeFileSync(join(bare, "package.json"), JSON.stringify({ name: "bare" }));
+    assert.throws(() => stageLocalPackage(store, bare), /no pi manifest/);
+    assert.throws(() => stageLocalPackage(store, store), /inside the package store|contains the package store/);
+    assert.throws(() => stageLocalPackage(store, staged), /inside the package store/);
+    const notTar = join(f.root, "src", "not-a-tar.tgz");
+    writeFileSync(notTar, "this is not a tar archive at all, not even close\n");
+    assert.throws(() => stageLocalPackage(store, notTar), /not a tar|ustar/);
+
+    // The staged copies resolve through the engine's own pipeline: the same
+    // settings.json entry `local/<name>` the engine's `install` records, the
+    // same index, the same argv the resource sync builds.
+    writeFileSync(join(store, "settings.json"), JSON.stringify({ packages: [
+      `${PACKAGE_LOCAL_DIR}/oma-local-rich`, `${PACKAGE_LOCAL_DIR}/single.ts`, `${PACKAGE_LOCAL_DIR}/oma-packed`, `${PACKAGE_LOCAL_DIR}/@scope/plain`] }));
+    const index = await writePackageIndex(store);
+    const richIndex = index.find(item => item.source === `${PACKAGE_LOCAL_DIR}/oma-local-rich`)!;
+    assert.deepEqual(richIndex.entries, [`packages:${PACKAGE_LOCAL_DIR}/oma-local-rich/extensions/e.ts`]);
+    assert.deepEqual(richIndex.skills, [`packages:${PACKAGE_LOCAL_DIR}/oma-local-rich/skills/roll/SKILL.md`]);
+    // The prompt file removed upstream above is indexed as gone: the copy, not
+    // the source as the Human remembers it, is what the engines get.
+    assert.deepEqual(richIndex.prompts, []);
+    assert.deepEqual(richIndex.themes, [`packages:${PACKAGE_LOCAL_DIR}/oma-local-rich/themes/dark.json`]);
+    assert.deepEqual(index.find(item => item.source === `${PACKAGE_LOCAL_DIR}/single.ts`)?.entries, [`packages:${PACKAGE_LOCAL_DIR}/single.ts`]);
+    assert.deepEqual(index.find(item => item.source === `${PACKAGE_LOCAL_DIR}/oma-packed`)?.skills, [`packages:${PACKAGE_LOCAL_DIR}/oma-packed/skills/roll/SKILL.md`]);
+    const resources = packageResourcePaths(store);
+    assert.ok(resources!.skills.some(path => path.endsWith(join("oma-local-rich", "skills", "roll", "SKILL.md"))));
+    assert.ok(resources!.themes.some(path => path.endsWith(join("oma-local-rich", "themes", "dark.json"))));
+    // `oma pi list` names what each package carries.
+    assert.deepEqual(packageListLines(store), [
+      `${PACKAGE_LOCAL_DIR}/oma-local-rich: 1 extension, 1 skill, 1 theme`,
+      `${PACKAGE_LOCAL_DIR}/single.ts: 1 extension`,
+      `${PACKAGE_LOCAL_DIR}/oma-packed: 1 extension, 1 skill`,
+      `${PACKAGE_LOCAL_DIR}/@scope/plain: 1 extension`]);
+
+    // Removing a local source removes its copy; nothing else goes.
+    writeFileSync(join(store, "settings.json"), JSON.stringify({ packages: [`${PACKAGE_LOCAL_DIR}/oma-local-rich`] }));
+    pruneLocalStage(store);
+    assert.equal(existsSync(staged), true);
+    assert.equal(existsSync(join(store, "local", "single.ts")), false);
+    assert.equal(existsSync(join(store, "local", "oma-packed")), false);
+    assert.equal(existsSync(join(store, "local", "@scope")), false, "an emptied scope directory goes too");
+  } finally { f.close(); }
+});
+
+test("DR25/C20: a staging interrupted mid-copy leaves only dead content; a retry installs whole and the next change collects it", () => {
+  const f = createCompleteConfigurationFixture();
+  try {
+    const store = join(f.root, "packages");
+    mkdirSync(store, { recursive: true });
+    // A configured package that stays, and dead content beside it: a copy no
+    // settings names, a staging area an install died inside, a stray file.
+    mkdirSync(join(store, "local", "live-pkg"), { recursive: true });
+    writeFileSync(join(store, "local", "live-pkg", "e.ts"), "export default function () {}\n");
+    writeFileSync(join(store, "settings.json"), JSON.stringify({ packages: ["local/live-pkg"] }));
+    mkdirSync(join(store, "local", "dead-pkg"), { recursive: true });
+    mkdirSync(join(store, ".staging-local-interrupted"), { recursive: true });
+    writeFileSync(join(store, ".staging-local-interrupted", "half.ts"), "export default function () { /* half */\n");
+    writeFileSync(join(store, "local", "stray.txt"), "left\n");
+
+    pruneLocalStage(store);
+    assert.equal(existsSync(join(store, ".staging-local-interrupted")), false, "a dead staging area is collected");
+    assert.equal(existsSync(join(store, "local", "dead-pkg")), false, "a copy no source names is collected");
+    assert.equal(existsSync(join(store, "local", "stray.txt")), false, "a stray file is collected");
+    assert.equal(existsSync(join(store, "local", "live-pkg")), true, "a package settings still names is kept");
+
+    // A source that fails mid-copy publishes nothing: no staged name, no staging.
+    const broken = join(f.root, "src", "broken");
+    mkdirSync(join(broken, "extensions"), { recursive: true });
+    writeFileSync(join(broken, "package.json"), JSON.stringify({ name: "broken", pi: { extensions: ["./extensions/e.ts"] } }));
+    writeFileSync(join(broken, "extensions", "e.ts"), "export default function () {}\n");
+    symlinkSync(join(f.root, "missing-target"), join(broken, "gone.ts"));
+    assert.throws(() => stageLocalPackage(store, broken), /link to nothing/);
+    assert.equal(existsSync(join(store, "local", "broken")), false, "a failed install publishes no name");
+    assert.equal(readdirSync(store).some(name => name.startsWith(".staging-local-")), false, "the staging area went with it");
+
+    // The same name retried installs the whole copy.
+    rmSync(join(broken, "gone.ts"));
+    assert.equal(stageLocalPackage(store, broken), "local/broken");
+    assert.equal(readFileSync(join(store, "local", "broken", "extensions", "e.ts"), "utf8"), "export default function () {}\n");
   } finally { f.close(); }
 });
 

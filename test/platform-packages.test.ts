@@ -325,6 +325,22 @@ test("DR25/mac: oma pi install on the Mac installs over the Mac's store and the 
   assert.deepEqual(readPersonalSettings(w.dir)?.extensions, [], "removed host package remained selected");
   for (const role of Object.values(loadConfiguration(w.projectSettings).roles))
     assert.ok(!role.extensions.some(item => item.path.includes("oma-hello-ext")));
+
+  // C20 through the whole path: a local directory is staged into the Mac's
+  // store, installed there by the engine as `local/<name>`, carried by the
+  // archive and indexed identically on both sides.
+  const localInstalled = await mac("install", source, "--project", w.projectId);
+  assert.equal(localInstalled.status, 0, localInstalled.out);
+  const localIndex = [{ source: "local/oma-hello-ext", entries: ["packages:local/oma-hello-ext/extensions/hello.ts"],
+    skills: [], prompts: [], themes: [] }];
+  assert.ok(existsSync(join(w.macPackages, "local", "oma-hello-ext", "extensions", "hello.ts")), "the staged copy is not in the Mac's store");
+  assert.deepEqual(readPackageIndex(w.macPackages), localIndex);
+  assert.deepEqual(readPackageIndex(join(w.societiesDir, PACKAGE_STORE)), localIndex, "the guest indexed the carried local package differently");
+  const localRemoved = await mac("remove", "local/oma-hello-ext");
+  assert.equal(localRemoved.status, 0, localRemoved.out);
+  assert.deepEqual(readPackageIndex(w.macPackages), []);
+  assert.deepEqual(readPackageIndex(join(w.societiesDir, PACKAGE_STORE)), []);
+  assert.equal(readdirSync(join(w.macPackages, "local")).length, 0, "the removed local package's copy stayed behind");
   assert.equal(existsSync(join(home, ".pi")), false, "the user's own Pi was touched");
 });
 

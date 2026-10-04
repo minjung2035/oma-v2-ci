@@ -65,17 +65,40 @@ export interface PackageResourcePaths {
 
 /** The package commands `oma pi` runs, and why the others are not run. */
 export type PackageCommand =
-  | { readonly kind: "run"; readonly command: "install" | "remove" | "update" | "list"; readonly args: readonly string[]; readonly projectId?: string; readonly hostOnly?: true }
+  | { readonly kind: "run"; readonly command: "install" | "remove" | "update" | "list"; readonly args: readonly string[];
+      /** C20: a path on this machine `install` was given -- staged into the
+       * store by the caller (local-package.ts), never installed where it lies. */
+      readonly local?: string;
+      readonly projectId?: string; readonly hostOnly?: true }
   | { readonly kind: "refused"; readonly words: string };
 
-export const PACKAGE_USAGE = "usage: oma pi install <npm:… | git:… | https://… | ssh://…>\n" +
+export const PACKAGE_USAGE = "usage: oma pi install <npm:… | git:… | https://… | ssh://… | local dir, tarball or file>\n" +
   "       oma pi remove <source>\n" +
   "       oma pi update <source> | --extension <source> | --extensions\n" +
-  "       oma pi list";
+  "       oma pi list\n" +
+  "Packages carry extensions, skills, prompt templates and themes; a local path is copied into the store.";
 
-/** A source the store holds a copy of. A local path is used where it lies,
- * which no Resident's sandbox can see, so it is not one. */
+/** Where staged local-package copies live in the store, beside `npm/` and
+ * `git/` (C20; local-package.ts does the staging). */
+export const PACKAGE_LOCAL_DIR = "local";
+
+/** A source the engine's package manager fetches into the store itself. A
+ * local path is copied in by staging first (C20), so it is not one. */
 const REMOTE_SOURCE = /^(?:npm:|git:|https?:\/\/|ssh:\/\/|git@)/;
+
+/** The recorded name of a staged local package: `local/` followed by the
+ * normalized relative path a `packages:` resource entry would accept. */
+export function localPackageSource(source: string): boolean {
+  return source.startsWith(`${PACKAGE_LOCAL_DIR}/`) &&
+    resourceEntryProblem(`${PACKAGE_ENTRY_PREFIX}${source}`) === null;
+}
+
+/** A source the store may hold installed: a remote source the package manager
+ * fetches, or a staged local copy's `local/<name>` (C20). The name the
+ * packages.sync/packages.replace `activate` field and the index accept. */
+export function installedPackageSource(source: string): boolean {
+  return REMOTE_SOURCE.test(source) || localPackageSource(source);
+}
 
 /** DR25: what `oma pi <args>` runs. Everything the engine's package manager
  * does over the store runs as it ships; refused are only what would reach
@@ -132,16 +155,19 @@ export function packageCommand(args: readonly string[], macProject = false): Pac
         (!given.has("--help") && extension === undefined && !given.has("--extensions") && positional.length === 0))
       return refused("The engine is updated with oma itself; oma pi update updates installed packages.");
   }
+  let local: string | undefined;
   if (!given.has("--help") && (command === "install" || command === "remove")) {
     if (positional.length !== 1) return refused(`oma pi ${name} takes one source.`);
-    // C20: a local package is used where it lies (`local:` source, never
-    // copied), so nothing it contributes can be indexed inside the store --
-    // it stays refused for every scope. Personal accepts a local extension
-    // directly instead, as a digest-pinned `local:` entry (personal-settings).
-    if (command === "install" && !REMOTE_SOURCE.test(positional[0]!))
-      return refused("A local path is used where it lies, which a Worker's sandbox cannot see; install an npm: or git: source.");
+    // C20: a local path is not installed where it lies -- a Resident's
+    // sandbox could not see it there, and a store the source could edit after
+    // the fact would pin nothing. The caller copies it into the store first
+    // (local-package.ts) and the engine installs that copy as `local/<name>`,
+    // so its resources land inside the read-only mount under the same
+    // indexing and pinning as a remote package's.
+    if (command === "install" && !REMOTE_SOURCE.test(positional[0]!)) local = positional[0];
   }
-  return Object.freeze({ kind: "run", command, args: Object.freeze(forwarded), ...(projectId === undefined ? {} : { projectId }),
+  return Object.freeze({ kind: "run", command, args: Object.freeze(forwarded), ...(local === undefined ? {} : { local }),
+    ...(projectId === undefined ? {} : { projectId }),
     ...(given.has("--host-only") ? { hostOnly: true as const } : {}) });
 }
 
@@ -309,4 +335,22 @@ export function reconciledEntries(entries: readonly string[], before: readonly I
 export function packageActivation(command: PackageCommand): string | undefined {
   if (command.kind !== "run" || command.command !== "install") return undefined;
   return command.args.slice(1).find(arg => !arg.startsWith("-"));
+}
+
+/** `oma pi list` says what each installed package carries, not only that it
+ * is installed (UX-15): counts of the four resource kinds the engines get
+ * (C18), so a package that is not only extensions is visible as such. */
+export function packageListLines(store: string): readonly string[] {
+  const lines: string[] = [];
+  for (const item of readPackageIndex(store)) {
+    const kinds = ([
+      [item.entries.length, "extension"],
+      [(item.skills ?? []).length, "skill"],
+      [(item.prompts ?? []).length, "prompt template"],
+      [(item.themes ?? []).length, "theme"],
+    ] as const).filter(([count]) => count > 0)
+      .map(([count, noun]) => `${count} ${noun}${count === 1 ? "" : "s"}`);
+    lines.push(`${item.source}: ${kinds.length === 0 ? "no loadable resources" : kinds.join(", ")}`);
+  }
+  return Object.freeze(lines);
 }

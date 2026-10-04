@@ -137,11 +137,16 @@ test("DR13 / P0-5, CONFIG-CONTRACT: a committed edit whose flush failed says it 
   assert.match(toggled.last(), /Saved; durability/);
 });
 
-test("TUI-010: toggling an extension routes the role and the new state to the port", () => {
+test("TUI-010: toggling an extension routes the role and the new state to the port, and the notice says when it applies", () => {
   const h = harness();
   for (const chunk of [CTRL_X, RIGHT, DOWN, ENTER, DOWN, ENTER]) h.app.feed(chunk);
   assert.deepEqual(h.toggles, [{ id: "extensions/review.js", role: "principal", enabled: true }]);
-  assert.match(h.last(), /Principal enabled · Saved/);
+  assert.match(h.last(), /extensions\/review\.js · Principal enabled · Saved · Next session/);
+  // The Workers column applies at a Resident's next activation, not this session's.
+  for (const chunk of [RIGHT, ENTER]) h.app.feed(chunk);
+  assert.deepEqual(h.toggles, [{ id: "extensions/review.js", role: "principal", enabled: true },
+    { id: "extensions/review.js", role: "workers", enabled: true }]);
+  assert.match(h.last(), /extensions\/review\.js · Workers enabled · Saved · Next worker activation/);
 });
 
 test("arch 23.3: a submitted prompt reaches the session once and is echoed in the transcript", () => {

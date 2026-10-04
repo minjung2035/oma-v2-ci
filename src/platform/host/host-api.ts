@@ -15,6 +15,7 @@ import { FramedPeer } from "../rpc.js";
 import { HANDOFF, serveRequests, type Answer } from "../guest/server.js";
 import { peerUid } from "./peer.js";
 import { isRequestKey, isUuid, requestProblem } from "../../protocol/host-guest.js";
+import { installedPackageSource } from "../../runtime/pi-packages.js";
 import { isAbsolute } from "node:path";
 import { HOST_API_VERSION, hostApiHelloProblem, type HostApiHello } from "../../protocol/host-api.js";
 import type { VmState } from "./lifecycle.js";
@@ -177,7 +178,7 @@ function serve(peer: FramedPeer, backend: HostApiBackend): void {
       }
       case "request.status": return await forward("request.status", { key: params.key });
       case "packages.sync": {
-        if (params.activate !== undefined && (typeof params.activate !== "string" || !/^(?:npm:|git:|https?:\/\/|ssh:\/\/|git@)/.test(params.activate)))
+        if (params.activate !== undefined && (typeof params.activate !== "string" || !installedPackageSource(params.activate)))
           throw new StoreError("INVALID_REQUEST", "activate must name an installed package source");
         if (params.projectId !== undefined && !isUuid(params.projectId)) throw new StoreError("INVALID_REQUEST", "packages.sync names a project by its id, or none");
         await backend.start();

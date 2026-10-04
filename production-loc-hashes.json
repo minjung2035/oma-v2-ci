@@ -1,6 +1,6 @@
 {
   "kind": "oma-production-source-digests-v1",
-  "manifest": "4fa20602852c1fdaaf5b48348905f5d083cfd3ab04c9db46be5deab5d5d336c6",
+  "manifest": "1863ed1e9664487963e0d23f2ac47a89dcc3576f44b6024c51b8bfaf5fc0dfde",
   "files": [
     {
       "path": "implementation/contracts.ts",
@@ -404,11 +404,11 @@
     },
     {
       "path": "src/entry/oma-mac.ts",
-      "sha256": "1b940a7df59828109fbcba75af382b92358480282718ae05dc3b94db7d3f38eb"
+      "sha256": "560b45e5d3997574b727a296f004a91bfb0fe4d7061e507475f034adc1b9ec4f"
     },
     {
       "path": "src/entry/oma-society.ts",
-      "sha256": "9b022d6561ff4ad2609816c236112bd840ebb95895bf61a3ccc8e8c7138a8be7"
+      "sha256": "8792474ab4881afef68a525b5a2c42972b644101ed7c3b6530bfe26bdc5df78d"
     },
     {
       "path": "src/entry/oma.ts",
@@ -484,7 +484,7 @@
     },
     {
       "path": "src/extension/review-tools.ts",
-      "sha256": "f20e8e589a94b66bed7c38e6e00e66ace2b523fcf2cd59477c4193e5cd3c21bd"
+      "sha256": "949c004a87e546cb54e502b2a3706c2985f964ef3fdb3453bae22d514f5cd9cd"
     },
     {
       "path": "src/extension/shared.ts",
@@ -732,7 +732,7 @@
     },
     {
       "path": "src/platform/guest/packages.ts",
-      "sha256": "3e4238431ee8f99ed1261f9294bc13167724339be6a054022e3ba670fb47da6d"
+      "sha256": "0bbf92929b90915dbbdab55e92eb5f993f7a571b53a138754b0f57017816802c"
     },
     {
       "path": "src/platform/guest/project.ts",
@@ -792,7 +792,7 @@
     },
     {
       "path": "src/platform/host/files.ts",
-      "sha256": "d81c85cf1fa77821e5a416235fb5b958b9d2ff600e7c46ae75c7e81d131240ed"
+      "sha256": "d4d87e86f79689d5ab36b8750a5fe7c670287a09b9f437fb6e2f24eb2c1cbbc5"
     },
     {
       "path": "src/platform/host/guest-histories.ts",
@@ -804,7 +804,7 @@
     },
     {
       "path": "src/platform/host/host-api.ts",
-      "sha256": "3b6a80af2c1b41cd7b80dd80aea1d6b35c6b9cd6ed3f240969aabefc7085ee75"
+      "sha256": "511b0460f8b54aac26c61b2c42cc1d7686a32486aa31bb4a730d8c76ed97c874"
     },
     {
       "path": "src/platform/host/image.ts",
@@ -860,7 +860,7 @@
     },
     {
       "path": "src/platform/package-archive.ts",
-      "sha256": "6e8eb8ea6d1bbe18fe5ac7093d8b79e514a4512690816507d7edf4038ce83155"
+      "sha256": "13c4cd69564a2924772c6f9dc05a418cb89330a12883cabd892eafd7e1148531"
     },
     {
       "path": "src/platform/product-text.ts",
@@ -1107,6 +1107,10 @@
       "sha256": "d5b4feee41578128d48b096b11f055fc2f13ba740fe4bf579d8ce183fb83482f"
     },
     {
+      "path": "src/runtime/local-package.ts",
+      "sha256": "316284b154b236af18459fc4b55d2c2e21dd8b4cb4ee2cc005215ee0dddc9b4b"
+    },
+    {
       "path": "src/runtime/oma-theme.ts",
       "sha256": "aab10162e7c2cf290f387d7591b586be28d751ee50ec1a2f8849c7660f349a41"
     },
@@ -1128,7 +1132,7 @@
     },
     {
       "path": "src/runtime/pi-packages.ts",
-      "sha256": "7e484458fdf8dd88e9aa4c9afaa7b495f6c8d981efd167e1250cf00beeafce8e"
+      "sha256": "e660743a552f4e8110e3a14461bcb9613cf7a52c2cb18195842251ad61d8ef47"
     },
     {
       "path": "src/runtime/pi-rpc.ts",
@@ -1324,7 +1328,7 @@
     },
     {
       "path": "src/tui/app.ts",
-      "sha256": "6b099a75f020378a88355cf1553e43f3221388dc3c1da69b5a6c3e50dadf8f78"
+      "sha256": "f32bd12912a6704824e8d64e660f9064080a57883c482ec88680da071a06dec3"
     },
     {
       "path": "src/tui/cells.ts",
@@ -1356,7 +1360,7 @@
     },
     {
       "path": "src/tui/model.ts",
-      "sha256": "885eafa3dc441e846870c114d35ded091514c22666b009bf424108774cd40f5e"
+      "sha256": "007ecb2d49b0febd403a6849010500f666984406ae91611a4df5a9d33158fc0e"
     },
     {
       "path": "src/tui/open-tui-brand.ts",
@@ -1380,7 +1384,7 @@
     },
     {
       "path": "src/tui/project-settings.ts",
-      "sha256": "1153a07d754256154b883408197e888645785682be2ccbef8fac1b65e50c960d"
+      "sha256": "4dd30cdc5fbebff41dc76317d13acefd5879e3ee1d3dd8291e6e01ca31998024"
     },
     {
       "path": "src/tui/prompt.ts",
@@ -1436,7 +1440,7 @@
     },
     {
       "path": "src/tui/view/notice.ts",
-      "sha256": "b896d32ce60bfc40198667e68076998742a0a3a2e02983d73202f99a1f8a8df9"
+      "sha256": "271e88632093838a9276b0ebeadf1083bbbb629f2668465d6d242c821b3d57a0"
     },
     {
       "path": "src/tui/view/screens.ts",

@@ -998,6 +998,28 @@
       ]
     },
     {
+      "owner": "src/runtime/local-package.ts#linuxStaging",
+      "fact": "DR25/C20: a staged local package's copy under local/<name> is whole or absent -- published by one rename after a durable fill; a dead copy or an interrupted staging area is collected, never half-seen",
+      "tests": [
+        {
+          "file": "test/pi-packages.test.ts",
+          "title": "DR25/C20: a staging interrupted mid-copy leaves only dead content; a retry installs whole and the next change collects it",
+          "injection": "logical"
+        }
+      ]
+    },
+    {
+      "owner": "src/runtime/local-package.ts#pruneLocalStage",
+      "fact": "DR25/C20: dead staged copies and interrupted staging areas under local/ are removed -- a removal nothing accepted owns, run after every oma pi change",
+      "tests": [
+        {
+          "file": "test/pi-packages.test.ts",
+          "title": "DR25/C20: a staging interrupted mid-copy leaves only dead content; a retry installs whole and the next change collects it",
+          "injection": "logical"
+        }
+      ]
+    },
+    {
       "owner": "src/runtime/pi-packages.ts#writePackageIndex",
       "fact": "DR25: the package store's extension index, replaced atomically with the engine's answer after every oma pi change; a change whose index was not written is picked up by the next",
       "tests": [

@@ -29,8 +29,9 @@ import { readExtensions, toggleExtension } from "../tui/sources/extensions.js";
 import { PRINCIPAL_MODEL, WORKER_MODEL, bootstrapStateOf, commitField, commitManagedEdit, commitRoleSet, deriveSessionSettings,
   engineModelChoiceOf, engineName, fieldsOf, followsEngine, projectBundle, projectSettingsPath, readSettings, readSettingsForEditing,
   roleSetOf, workerModelText, writeSettings, type FieldValue, type SessionOwn, type Settings } from "../tui/sources/settings.js";
-import { PACKAGE_USAGE, packageActivation, packageCommand, packageStoreDir, readPackageIndex, writePackageIndex,
+import { PACKAGE_USAGE, packageActivation, packageCommand, packageListLines, packageStoreDir, readPackageIndex, writePackageIndex,
   type PackageCommand } from "../runtime/pi-packages.js";
+import { pruneLocalStage, stageLocalPackage } from "../runtime/local-package.js";
 import { applyPackageChange, ensureProjectSettings } from "../tui/project-settings.js";
 import { reconcilePersonalSettings } from "../runtime/personal-settings.js";
 import { collectManagedGenerations } from "../config/generations.js";
@@ -106,14 +107,24 @@ async function piPackages(dataRoot: string, project: string, decision: Extract<P
   let code: number;
   try {
     const before = readPackageIndex(store);
+    // C20: a local source is copied into the store first; the engine installs
+    // the staged `local/<name>`, never the path the Human gave.
+    let run = decision;
+    if (decision.local !== undefined)
+      run = Object.freeze({ ...decision, args: Object.freeze(["install", stageLocalPackage(store, decision.local)]) });
     code = await runEngineLogin({ stateRoot, libdir: `${libdir}/`, override: process.env.OMA_PI_COMMAND, fence: lease.fence,
-      env: process.env, packages: { store, args: decision.args } });
+      env: process.env, packages: { store, args: run.args } });
     if (code === 0 && decision.command !== "list" && !args.includes("--help") && !args.includes("-h")) {
       const after = await writePackageIndex(store);
-      const { ok, said } = applyPackageChange({ dataRoot, project, libdir, before, after, activate: packageActivation(decision) });
+      pruneLocalStage(store);
+      const { ok, said } = applyPackageChange({ dataRoot, project, libdir, before, after, activate: packageActivation(run) });
       reconcilePersonalSettings({ dataRoot, libdir, packages: store });
       if (said.length > 0) humanStream().write(`${said.join("\n")}\n`);
       code = ok ? 0 : 1;
+    }
+    if (code === 0 && decision.command === "list") {
+      const contents = packageListLines(store);
+      if (contents.length > 0) process.stdout.write(`Package contents:\n  ${contents.join("\n  ")}\n`);
     }
   } finally { lease.release(); }
   process.exit(code);
