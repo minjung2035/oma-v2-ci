@@ -1,6 +1,6 @@
 {
   "kind": "oma-production-source-digests-v1",
-  "manifest": "b541e745d8127b78753e6c74ce760fbd8273e8367d20c0f5319d6d7c556898b2",
+  "manifest": "6c1d249fd4294d6c497d451d6e2eab8b97ec332ea7acdd2971821abf76d09bbf",
   "files": [
     {
       "path": "implementation/contracts.ts",
@@ -919,6 +919,10 @@
       "sha256": "5f28cba7a5712d2876cf09238a8874efe0c0a1988efc82ac0a7d1c78fc885b63"
     },
     {
+      "path": "src/protocol/alarm.ts",
+      "sha256": "9c87bf5c2971c91efd02aa486e9bb74f59daae9d7dd070890c4003aa4a46e31e"
+    },
+    {
       "path": "src/protocol/batch-view.ts",
       "sha256": "3c9ed42d2db878a204dfa45e122bec347e8a437664dd19886bee4ff9ba9ca8f0"
     },
@@ -928,7 +932,7 @@
     },
     {
       "path": "src/protocol/channel.ts",
-      "sha256": "ee8cf3c2aeeed039a24d23e37defed957a0b8848f1cdcfaf8a6aa87577566486"
+      "sha256": "c52b4922b0fd99663e78c88545e43ea589f4cae138f008356f3859f92ba39e96"
     },
     {
       "path": "src/protocol/connection.ts",
@@ -1132,7 +1136,7 @@
     },
     {
       "path": "src/runtime/pi-rpc.ts",
-      "sha256": "61dfa4b59c9b9867f96389218dfa49657ce0473d7e444efffb4e8d481e785332"
+      "sha256": "f94c3863b910bf78b365a614b47fac0b58976916035e90de77cae6c712fb94ce"
     },
     {
       "path": "src/runtime/pi-runtime.ts",

@@ -227,6 +227,7 @@ src/process/host-loss.ts
 src/process/policies.ts
 src/process/preparation.ts
 src/process/run.ts
+src/protocol/alarm.ts
 src/protocol/batch-view.ts
 src/protocol/byte-queue.ts
 src/protocol/channel.ts
