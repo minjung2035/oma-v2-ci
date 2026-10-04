@@ -94,6 +94,23 @@ export const ARCHIVE_KEY_LOCK_WAIT_MS = 30_000;
  * BROKER_UNAVAILABLE, not a hang. */
 export async function archiveKey(keychain: KeychainStore, lockPath: string,
     waitMs = ARCHIVE_KEY_LOCK_WAIT_MS): Promise<Buffer> {
+  // A wait that is not a finite positive number cannot bound the loop below:
+  // NaN or an infinity makes `now >= now + waitMs` never true and the
+  // deadline meant to bound this wait becomes the unbounded spin it replaced.
+  // Invalid arguments are refused before the first try.
+  if (!Number.isFinite(waitMs) || waitMs <= 0)
+    throw new StoreError("INVALID_REQUEST", "the archive key lock wait must be a positive finite number of milliseconds");
+  const acquire = (): ProcessLock | null => {
+    try { return ProcessLock.tryAcquire(lockPath); }
+    catch (error) {
+      // The wait exists for transient contention: out of descriptors or of
+      // lock slots is "try later", like a held lock, never a raw errno.
+      if (["EMFILE", "ENFILE", "EAGAIN"].includes((error as NodeJS.ErrnoException).code ?? ""))
+        throw new StoreError("BROKER_UNAVAILABLE",
+          `the archive key lock could not be acquired (${(error as NodeJS.ErrnoException).code}); try again`);
+      throw error;
+    }
+  };
   const stored = await keychain.get("archive");
   if (stored !== undefined) return Buffer.from(stored, "base64");
   return serialized(lockPath, async () => {
@@ -102,7 +119,7 @@ export async function archiveKey(keychain: KeychainStore, lockPath: string,
     ensureUserDirectory(dirname(lockPath));
     const deadline = performance.now() + waitMs;
     let lock: ProcessLock | null;
-    while ((lock = ProcessLock.tryAcquire(lockPath)) === null) {
+    while ((lock = acquire()) === null) {
       if (performance.now() >= deadline)
         throw new StoreError("BROKER_UNAVAILABLE", "another process still holds the archive key lock");
       await pause(25);

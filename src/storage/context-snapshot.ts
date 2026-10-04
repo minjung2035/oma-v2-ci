@@ -16,6 +16,7 @@ import { ensureDurableDirectory, fsyncDir, fsyncTree, writeExclusiveFsyncedFile 
 import { publishStagedDirectory, replaceDerivedSymlink } from "./staged-tree.js";
 import { entryAt, openBeneath, openDirectory } from "./contained-fs.js";
 import { removeOwnedFile, removeOwnedTree } from "./directory.js";
+import { withCleanup } from "../process/cleanup.js";
 import { TreeLease, leasePathOf } from "./tree-lease.js";
 
 /** Complete permitted tree verification; no writes or silent byte repair.
@@ -84,10 +85,13 @@ export function publishContextRevision(
     // residue whose quiescence startup recovery can prove -- not an ownerless
     // tree that counts against storage quota forever.
     const lease = TreeLease.take(temporary);
-    try {
-      // Everything after `take` is inside the same release-on-failure guard:
-      // a failure while the tree is being made must not strand the lease fd
-      // or leave its ".lease" reading active until process exit (AV-18 shape).
+    // Everything after `take` is inside the same release-on-failure guard:
+    // a failure while the tree is being made must not strand the lease fd
+    // or leave its ".lease" reading active until process exit (AV-18 shape).
+    // withCleanup owns the shape: a cleanup failure beside an in-flight
+    // publish failure is retained beside it (P0-4), never substituted for it,
+    // and the release still runs exactly once.
+    withCleanup(() => {
       ensureDurableDirectory(temporary);
       for (const entry of entries) {
         const bytes = readContextEntry(source, entry);
@@ -97,14 +101,12 @@ export function publishContextRevision(
       }
       sealRevision(temporary, entries);
       publishStagedDirectory(temporary, destination, root => verifyContextRevision(root, entries, true), "context-single-link");
-    } finally {
+    }, () => withCleanup(() => {
       // Any residue this leaves -- tree, lease or both -- is named for the
       // startup collector, which removes it once the lease proves quiescence.
-      try {
-        removeOwnedTree(temporary);
-        removeOwnedFile(leasePathOf(temporary));
-      } finally { lease.release(); }
-    }
+      removeOwnedTree(temporary);
+      removeOwnedFile(leasePathOf(temporary));
+    }, () => lease.release()));
   }
   sealRevision(destination, entries);
   replaceDerivedSymlink(join(worldDir, "context", "current"), contextRevisionLinkFor(candidate));

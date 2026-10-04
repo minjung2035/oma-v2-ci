@@ -321,3 +321,60 @@ test("NB-18: a whole bounded read refuses a file that shrank or was rewritten du
   try { assert.deepEqual(readBounded(fd, 1 << 20, true, refusal({ code: null })), Buffer.alloc(64, 67), "a stable file still reads whole"); }
   finally { closeSync(fd); }
 });
+
+test("FJ-7: a cleanup failure while a context revision publish is already failing retains both errors", t => {
+  // The audited `finally` ran removeOwnedTree + removeOwnedFile inside a bare
+  // try: a failure of the owned cleanup replaced the publish error that was
+  // already propagating. The lease must still be released exactly once, and
+  // the convention is withCleanup's: both failures survive in an
+  // AggregateError, primary first.
+  const worldDir = mkdtempSync(join(tmpdir(), "oma-fj7-snap-"));
+  t.after(() => rmSync(worldDir, { recursive: true, force: true }));
+  const source = join(worldDir, "source");
+  mkdirSync(source, { recursive: true });
+  const body = Buffer.from("fixture goal\n");
+  writeFileSync(join(source, "GOAL.md"), body);
+  const candidate = "f".repeat(64);
+  const entries = [{ path: "GOAL.md", bytes: body.length, sha256: createHash("sha256").update(body).digest("hex") }];
+  const leasedDescriptors = () => readdirSync("/proc/self/fd").flatMap(name => {
+    try { return (readlinkSync("/proc/self/fd/" + name)).includes(".prepare-") ? [Number(name)] : []; }
+    catch { return []; }
+  });
+  const originalMkdir = fs.mkdirSync;
+  const originalUnlink = fs.unlinkSync;
+  try {
+    // The publish fails at the temporary's own mkdir (after the lease is
+    // taken); the lease's unlink during owned cleanup fails on top of that.
+    (fs as { mkdirSync: typeof fs.mkdirSync }).mkdirSync = (...args: Parameters<typeof fs.mkdirSync>) => {
+      if (String(args[0]).split("/").pop()!.startsWith(".prepare-"))
+        throw Object.assign(new Error("injected temporary mkdir failure"), { code: "EMFILE" });
+      return (originalMkdir as (...a: Parameters<typeof fs.mkdirSync>) => ReturnType<typeof fs.mkdirSync>)(...args);
+    };
+    (fs as { unlinkSync: typeof fs.unlinkSync }).unlinkSync = (path: fs.PathLike) => {
+      if (String(path).endsWith(".lease"))
+        throw Object.assign(new Error("injected lease cleanup failure"), { code: "EIO" });
+      originalUnlink(path);
+    };
+    syncBuiltinESMExports();
+    let failure: unknown = null;
+    try { publishContextRevision(worldDir, candidate, entries, source); }
+    catch (error) { failure = error; }
+    assert.ok(failure instanceof AggregateError, `both failures survived, got ${failure}`);
+    const codes = (failure.errors as unknown[]).map(error => (error as NodeJS.ErrnoException).code);
+    assert.deepEqual(codes, ["EMFILE", "EIO"], "the publish failure is first, the cleanup failure retained beside it");
+    assert.deepEqual(leasedDescriptors(), [], "the lease descriptor was released exactly once");
+    // The lease file the failed cleanup could not unlink reads quiescent to
+    // the next collector, not active: the release ran even while both errors
+    // propagated.
+    const stranded = readdirSync(join(worldDir, "context", "revisions"))
+      .filter(name => name.startsWith(`.prepare-${candidate}-`) && name.endsWith(".lease"));
+    assert.equal(stranded.length, 1, "the failed unlink left exactly the preparation's lease");
+    assert.equal(treeQuiescence(join(worldDir, "context", "revisions", stranded[0]!.slice(0, -".lease".length))).kind,
+      "quiescent", "the stranded lease proves its writer is gone");
+  } finally {
+    (fs as { mkdirSync: typeof fs.mkdirSync }).mkdirSync = originalMkdir;
+    (fs as { unlinkSync: typeof fs.unlinkSync }).unlinkSync = originalUnlink;
+    syncBuiltinESMExports();
+    for (const fd of leasedDescriptors()) closeSync(fd);
+  }
+});

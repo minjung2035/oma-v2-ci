@@ -5,7 +5,7 @@ import assert from "node:assert/strict";
 import { connect, type Server } from "node:net";
 import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { spawnSync } from "node:child_process";
-import { randomUUID } from "node:crypto";
+import { randomBytes, randomUUID } from "node:crypto";
 import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
 import { encodeFrame } from "../src/frame.js";
@@ -359,4 +359,55 @@ test("P0-2: an archive-key ask against a held writer lock refuses in bounded tim
     "a still-held lock is a bounded refusal, not a forever wait");
   assert.ok(Date.now() - started < 10_000, "the refusal returned promptly");
   assert.equal(keychain.items.size, 0, "no key was generated behind a held lock");
+});
+
+test("FJ-6: the archive-key wait refuses a non-finite or non-positive deadline instead of spinning", async t => {
+  // waitMs feeds only `deadline = now + waitMs`. With NaN the comparison
+  // `now >= deadline` is always false and the audited loop spun forever --
+  // the exact unbounded wait the deadline exists to bound. The deadline must
+  // be validated before the first try, and a stored key does not excuse an
+  // invalid wait either: the argument is still a lie.
+  const dir = mkdtempSync(join(tmpdir(), "oma-archivekey-wait-"));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  const lockPath = join(dir, "archive-key.lock");
+  // A lock a live process holds: every try is a miss, so a non-finite wait
+  // would never return -- the refusal is the only honest answer.
+  const held = ProcessLock.acquire(lockPath);
+  t.after(() => held.close());
+  const keychain = memoryKeychain();
+  for (const waitMs of [Number.NaN, 0, -1, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY])
+    await assert.rejects(archiveKey(keychain, lockPath, waitMs),
+      (error: unknown) => error instanceof StoreError,
+      `waitMs=${waitMs} is an invalid wait, refused before the first try`);
+  keychain.items.set("archive", randomBytes(32).toString("base64"));
+  await assert.rejects(archiveKey(keychain, lockPath, Number.NaN),
+    (error: unknown) => error instanceof StoreError, "an invalid wait is refused even when the key is already stored");
+});
+
+test("FJ-6: a transient lock-acquire errno is an unavailable, not an environment error", async t => {
+  // EMFILE/ENFILE/EAGAIN from tryAcquire mean "try later", not "someone else
+  // owns this" and not a raw syscall failure reaching the caller: the audited
+  // loop let them escape as errno-coded Errors.
+  const dir = mkdtempSync(join(tmpdir(), "oma-archivekey-errno-"));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  const lockPath = join(dir, "archive-key.lock");
+  const keychain = memoryKeychain();
+  const tryAcquire = t.mock.method(ProcessLock, "tryAcquire", (): ProcessLock | null => {
+    throw Object.assign(new Error("injected descriptor exhaustion"), { code: "EMFILE" });
+  });
+  try {
+    await assert.rejects(archiveKey(keychain, lockPath, 100),
+      (error: unknown) => error instanceof StoreError && error.code === "BROKER_UNAVAILABLE",
+      "an EMFILE acquire is a transient unavailability");
+  } finally { tryAcquire.mock.restore(); }
+  assert.equal(keychain.items.size, 0, "no key was generated");
+  // A non-transient error still surfaces as itself.
+  const other = t.mock.method(ProcessLock, "tryAcquire", (): ProcessLock | null => {
+    throw Object.assign(new Error("injected corrupt path"), { code: "ENOTDIR" });
+  });
+  try {
+    await assert.rejects(archiveKey(keychain, lockPath, 100),
+      (error: unknown) => (error as NodeJS.ErrnoException).code === "ENOTDIR",
+      "an unrelated acquire failure is not relabeled unavailable");
+  } finally { other.mock.restore(); }
 });

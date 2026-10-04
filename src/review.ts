@@ -21,7 +21,7 @@ import { StoreError, acceptedFailure, errorCodeOf } from "./domain/errors.js";
 import { NO_HOLD, observeStoreFailure, type ResourceGate } from "./domain/admission.js";
 import { applyRequestKeyFor, refreshRequestKeyFor, reviewRequestNameFor } from "./domain/identifiers.js";
 import { mergeDiffText } from "./git/canonical-command.js";
-import { NOTICE_PART_OVERHEAD, OMISSION_MARKER, OMISSION_MARKER_COMPACT, describeEntryText, threadHeadText } from "./mail/review-bounds.js";
+import { NOTICE_PART_OVERHEAD, OMISSION_MARKER, OMISSION_MARKER_COMPACT, approvalBodyText, boundVoteText, describeEntryText, threadHeadText } from "./mail/review-bounds.js";
 import { publishedRefFor } from "./domain/derived.js";
 import { expandAddresses } from "./mail/routing.js";
 import { rfcMessageIdFor } from "./mail/addresses.js";
@@ -709,10 +709,16 @@ Challenge ${name}` });
       review: { role: "withdrawn", request: open.operation.id, name: before.name, approval: effects.withdraw.id } });
     if (effects.approve !== null) {
       const approvalId = generateMessageId(id, emissions.length);
+      const body = this.approvalBody(approvalId, openFact, [...inputFor.entries, newEntry], inputFor.open.actor, effects.approve);
+      // The floor model (mail/review-bounds.ts) covers this body for the
+      // votes the configured floor binds; over it is a bounds bug, not a mail
+      // the Principal cannot read (the notice-part assert has the same shape).
+      if (Buffer.byteLength(body, "utf8") > this.bounds.mailBodyBytes)
+        throw new StoreError("INTERNAL_ERROR", "an approval request exceeds the mail body bound");
       emissions.push({
         to: [PRINCIPAL], kind: "approval_required",
         subject: this.cutSubject(`[${before.name}] HIGH approval requested: ${openFact.title}`),
-        body: this.approvalBody(approvalId, openFact, [...inputFor.entries, newEntry], inputFor.open.actor, effects.approve),
+        body,
         approvalFor: openFact.identity,
         replyHeaders: { replyTo: [PRINCIPAL], inReplyTo: null, references: [] },
         review: { role: "approval", request: open.operation.id, name: before.name, votes: [...effects.approve] } });
@@ -803,23 +809,8 @@ Challenge ${name}` });
 
   private approvalBody(approvalId: MessageId, openFact: Extract<ReviewFact, { kind: "merge.open" | "challenge.open" }>,
       entries: readonly ReviewEntry[], requester: Actor, votes: readonly OperationId[]): string {
-    const bound = votes.map(voteId => {
-      const entry = entries.find(candidate => candidate.operation === voteId);
-      return entry === null || entry === undefined || entry.fact.kind !== "vote"
-        ? `${voteId}\n(unavailable)` : `${voteId} ${entry.actor}:\n${entry.fact.body}`;
-    });
-    const verb = openFact.kind === "merge.open" ? "oma_merge" : "oma_challenge";
-    return `OMA ${openFact.kind === "merge.open" ? "merge" : "challenge"} request ${openFact.name} — ${openFact.title}\n` +
-      `Approval required: ${approvalId}\n` +
-      `Tier: ${openFact.tier}   Requester: ${requester}\n` +
-      `Base: ${openFact.identity.expectedBase}  Candidate: ${openFact.identity.candidate}` +
-      `  Policy revision: ${openFact.identity.policyRevision}\n\n` +
-      `Reason (requester's words):\n${openFact.reason}\n\n` +
-      `Bound approvals:\n${bound.join("\n\n")}\n\n` +
-      `This request carries no inline diff; review it first:\n` +
-      `  ${verb} diff name=${openFact.name}\n` +
-      `Then record the decision:\n` +
-      `  ${verb} vote name=${openFact.name} verdict=approve|reject body=... approval=${approvalId}\n`;
+    return approvalBodyText(approvalId, openFact, requester,
+      votes.map(voteId => boundVoteText(voteId, entries.find(candidate => candidate.operation === voteId))));
   }
 
   /** Freeze every emission's EML in plan order; ordinals name the messages.
