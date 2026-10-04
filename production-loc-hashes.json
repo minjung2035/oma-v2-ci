@@ -748,7 +748,7 @@
     },
     {
       "path": "src/platform/guest/requests.ts",
-      "sha256": "2a40ed074caac9337bce26fdcbd9b73e3620a30c4365c24d4b8587bdc4a7f7cd"
+      "sha256": "4d33cb49dc5d03f145a43f4e23573bb0ba1e974b037a3a98a6851e60870f7bd7"
     },
     {
       "path": "src/platform/guest/server.ts",

@@ -19,24 +19,62 @@ import { join } from "node:path";
 import { StoreError, primaryFailure, unobserved } from "../../domain/errors.js";
 import { publishNoReplace, ensureDurableDirectory } from "../../storage/durable-fs.js";
 import { PlatformError, platformFailure } from "../rpc.js";
-import { isRequestKey, type PlatformFailure } from "../../protocol/host-guest.js";
+import { isPlatformErrorCode, isRequestKey, type PlatformFailure } from "../../protocol/host-guest.js";
 
+interface Intent { readonly key: string; readonly method: string; readonly digest: string }
 type Outcome = { readonly ok: true; readonly result: Record<string, unknown> } | { readonly ok: false; readonly error: PlatformFailure };
+
+const object = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null && !Array.isArray(value);
+function exactKeys(value: Record<string, unknown>, keys: readonly string[]): string | null {
+  for (const key of keys) if (!Object.hasOwn(value, key)) return `missing ${key}`;
+  for (const key of Object.keys(value)) if (!keys.includes(key)) return `unknown field ${key}`;
+  return null;
+}
+
+/** A record is accepted only as exactly what this ledger writes; anything
+ * else is damaged, never read through truthiness (AV-20261003-17). */
+function isIntent(value: unknown): value is Intent {
+  return object(value) && exactKeys(value, ["key", "method", "digest"]) === null &&
+    typeof value.key === "string" && typeof value.method === "string" &&
+    typeof value.digest === "string" && /^[0-9a-f]{64}$/.test(value.digest);
+}
+function isPlatformFailure(value: unknown): value is PlatformFailure {
+  return object(value) && exactKeys(value, ["code", "message", "retry"]) === null &&
+    isPlatformErrorCode(value.code) &&
+    typeof value.message === "string" && value.message.length <= 1024 &&
+    (value.retry === "never" || value.retry === "same-key" || value.retry === "after-repair");
+}
+function isOutcome(value: unknown): value is Outcome {
+  if (!object(value)) return false;
+  if (value.ok === true) return exactKeys(value, ["ok", "result"]) === null && object(value.result);
+  if (value.ok !== false) return false; // "ok": "false" is damaged, not a refusal
+  return exactKeys(value, ["ok", "error"]) === null && isPlatformFailure(value.error);
+}
 
 export class RequestLedger {
   private readonly active = new Set<string>();
   constructor(private readonly dir: string) { ensureDurableDirectory(dir, 0o700); }
 
   private name(key: string): string { return sha256Hex(key); }
-  private read<T>(path: string): T | null {
+  /** Parses a record; JSON that does not parse is damaged. A file holding
+   * `null` is still a file: presence is told apart from an absent record. */
+  private read(path: string): { readonly present: boolean; readonly value: unknown } {
     let bytes: string;
     try { bytes = readFileSync(path, "utf8"); }
     catch (error) {
-      if ((error as NodeJS.ErrnoException).code === "ENOENT") return null;
+      if ((error as NodeJS.ErrnoException).code === "ENOENT") return { present: false, value: null };
       throw unobserved(error, "the request record") ?? error;
     }
-    try { return JSON.parse(bytes) as T; }
+    try { return { present: true, value: JSON.parse(bytes) as unknown }; }
     catch (cause) { throw new StoreError("STORE_CORRUPT", "a request record is damaged", { cause }); }
+  }
+  /** A record this ledger could have written, or it is not an answer at all. */
+  private readRecord<T>(path: string, is: (value: unknown) => value is T): T | null {
+    const record = this.read(path);
+    if (!record.present) return null;
+    if (!is(record.value)) throw new StoreError("STORE_CORRUPT", "a request record is damaged");
+    return record.value;
   }
   /** Where a request may keep its bytes (a staged stream), by its key. */
   staging(key: string, suffix: string): string { return join(this.dir, `${this.name(key)}.${suffix}`); }
@@ -46,10 +84,11 @@ export class RequestLedger {
     const base = join(this.dir, this.name(key));
     const digest = sha256Hex(`${method}\n${canonicalJson(params)}`);
     if (publishNoReplace(`${base}.intent.json`, JSON.stringify({ key, method, digest })) === "existing") {
-      const intent = this.read<{ key: string; method: string; digest: string }>(`${base}.intent.json`);
-      if (intent === null || intent.key !== key || intent.method !== method || intent.digest !== digest)
+      const intent = this.readRecord(`${base}.intent.json`, isIntent);
+      if (intent === null) throw new StoreError("STORE_CORRUPT", "a request record is damaged");
+      if (intent.key !== key || intent.method !== method || intent.digest !== digest)
         throw new StoreError("REQUEST_KEY_REUSED", "this request key was used for another request");
-      const outcome = this.read<Outcome>(`${base}.outcome.json`);
+      const outcome = this.readRecord(`${base}.outcome.json`, isOutcome);
       if (outcome !== null) return this.answer(outcome);
     }
     if (this.active.has(key)) throw new StoreError("BROKER_UNAVAILABLE", "this request is still running; observe or retry the same key");
@@ -67,7 +106,7 @@ export class RequestLedger {
         outcome = { ok: false, error: failure };
       }
       publishNoReplace(`${base}.outcome.json`, JSON.stringify(outcome));
-      return this.answer(this.read<Outcome>(`${base}.outcome.json`) ?? outcome);
+      return this.answer(this.readRecord(`${base}.outcome.json`, isOutcome) ?? outcome);
     } finally { this.active.delete(key); }
   }
 
@@ -80,9 +119,9 @@ export class RequestLedger {
   status(key: unknown): Record<string, unknown> {
     if (!isRequestKey(key)) throw new StoreError("INVALID_REQUEST", "invalid request key");
     const base = join(this.dir, this.name(key));
-    const intent = this.read<{ method: string }>(`${base}.intent.json`);
+    const intent = this.readRecord(`${base}.intent.json`, isIntent);
     if (intent === null) throw new StoreError("REQUEST_NOT_FOUND", "no request with this key was started");
-    const outcome = this.read<Outcome>(`${base}.outcome.json`);
+    const outcome = this.readRecord(`${base}.outcome.json`, isOutcome);
     if (outcome === null) return { state: "pending", method: intent.method };
     return outcome.ok ? { state: "done", method: intent.method, result: outcome.result } : { state: "refused", method: intent.method, error: outcome.error };
   }

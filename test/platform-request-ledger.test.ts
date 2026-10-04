@@ -3,12 +3,14 @@
  * means what the records say. */
 import test from "node:test";
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import { spawnSync } from "node:child_process";
-import fs, { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync } from "node:fs";
+import fs, { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { syncBuiltinESMExports } from "node:module";
+import { canonicalJson } from "../src/domain/canonical-json.js";
 import { StoreError } from "../src/domain/errors.js";
 import { PlatformError } from "../src/platform/rpc.js";
 import { RequestLedger } from "../src/platform/guest/requests.js";
@@ -240,4 +242,90 @@ test("DR27/MAC-240: synchronous reentry cannot take the request owner's slot", a
   });
   assert.equal(duplicate, false);
   assert.deepEqual(result, { head: "accepted" });
+});
+
+/** AV-20261003-17: plants a key's records -- as the ledger writes them, or
+ * damaged -- without going through the ledger itself. */
+function plant(dir: string, key: string, intent: unknown, outcome: unknown): void {
+  const name = createHash("sha256").update(key).digest("hex");
+  const put = (suffix: string, value: unknown) => {
+    if (value !== undefined) writeFileSync(join(dir, `${name}.${suffix}.json`), typeof value === "string" ? value : JSON.stringify(value));
+  };
+  put("intent", intent);
+  put("outcome", outcome);
+}
+const digestOf = (method: string, params: Record<string, unknown>): string =>
+  createHash("sha256").update(`${method}\n${canonicalJson(params)}`).digest("hex");
+const damaged = (error: unknown): boolean => error instanceof StoreError && error.code === "STORE_CORRUPT";
+
+test("AV-20261003-17: a refusal spelled truthy is damaged, never a success", async t => {
+  // The record a bad write left: "ok" is the string "false" -- truthy, so an
+  // outcome read by truthiness would answer this refusal as the request's
+  // result and report the request done. A durable record is checked against
+  // the shape the ledger writes before it means anything.
+  const dir = mkdtempSync(join(tmpdir(), "oma-ledger-av17-"));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  plant(dir, "k",
+    { key: "k", method: "project.import", digest: digestOf("project.import", {}) },
+    { ok: "false", error: { code: "BUNDLE_INVALID", message: "not a bundle", retry: "never" } });
+  const ledger = new RequestLedger(dir);
+  assert.throws(() => ledger.status("k"), damaged);
+  let ran = false;
+  await assert.rejects(ledger.run("k", "project.import", {}, async () => { ran = true; return { head: "new" }; }), damaged);
+  assert.equal(ran, false, "a damaged record is neither answered nor re-run");
+});
+
+test("AV-20261003-17: every malformed outcome is damaged, not classified", async t => {
+  const dir = mkdtempSync(join(tmpdir(), "oma-ledger-av17-"));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  const ledger = new RequestLedger(dir);
+  const cases: [string, unknown][] = [
+    ["\"ok\" as a number", { ok: 1, result: { head: "x" } }],
+    ["success with a non-object result", { ok: true, result: "head" }],
+    ["success missing its result", { ok: true }],
+    ["refusal missing its error", { ok: false }],
+    ["refusal with an unknown code", { ok: false, error: { code: "NOT_A_CODE", message: "m", retry: "never" } }],
+    ["refusal with an unknown retry", { ok: false, error: { code: "BUNDLE_INVALID", message: "m", retry: "later" } }],
+    ["refusal with an extra field", { ok: false, error: { code: "BUNDLE_INVALID", message: "m", retry: "never" }, note: "planted" }],
+    ["a bare string", '"ok"'],
+    ["json null", "null"],
+    ["unparseable bytes", "{not json"],
+  ];
+  let i = 0;
+  for (const [name, outcome] of cases) {
+    const key = `k${i++}`;
+    plant(dir, key, { key, method: "m", digest: digestOf("m", {}) }, outcome);
+    assert.throws(() => ledger.status(key), damaged, name);
+    let ran = false;
+    await assert.rejects(ledger.run(key, "m", {}, async () => { ran = true; return {}; }), damaged, name);
+    assert.equal(ran, false, name);
+  }
+});
+
+test("AV-20261003-17: a malformed intent is damaged; a well-formed intent for another request is reuse", async t => {
+  const dir = mkdtempSync(join(tmpdir(), "oma-ledger-av17-"));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  const ledger = new RequestLedger(dir);
+  const digest = digestOf("m", {});
+  const malformed: [string, unknown][] = [
+    ["a non-string key", { key: 5, method: "m", digest }],
+    ["a non-hex digest", { key: "k", method: "m", digest: "zzz" }],
+    ["a missing digest", { key: "k", method: "m" }],
+    ["an extra field", { key: "k", method: "m", digest, extra: 1 }],
+    ["a bare string", '"intent"'],
+    ["json null", "null"],
+    ["unparseable bytes", "!!"],
+  ];
+  let i = 0;
+  for (const [name, intent] of malformed) {
+    const key = `k${i++}`;
+    plant(dir, key, intent, undefined);
+    assert.throws(() => ledger.status(key), damaged, name);
+    await assert.rejects(ledger.run(key, "m", {}, async () => ({})), damaged, name);
+  }
+  // A record the ledger could have written, naming another key under this
+  // name's key, stays the caller's fault, not corruption.
+  plant(dir, "reused", { key: "someone-else", method: "m", digest }, { ok: true, result: {} });
+  await assert.rejects(ledger.run("reused", "m", {}, async () => ({})),
+    error => error instanceof StoreError && error.code === "REQUEST_KEY_REUSED");
 });
