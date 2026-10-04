@@ -416,7 +416,7 @@
     },
     {
       "path": "src/entry/omahostd.ts",
-      "sha256": "953422311938d4e4df0e90fe52739020caaffce08ac2968da640727a2fabe10c"
+      "sha256": "95967fb7907316c7aca0112644132bc374629869a7ad16d74233f5ac27f8fc2f"
     },
     {
       "path": "src/entry/personal-host.ts",
@@ -804,7 +804,7 @@
     },
     {
       "path": "src/platform/host/host-api.ts",
-      "sha256": "4c4a5402b25f128b0180172a515a2ac60eb450db4b2e4d346720e5b69e470d9f"
+      "sha256": "3b6a80af2c1b41cd7b80dd80aea1d6b35c6b9cd6ed3f240969aabefc7085ee75"
     },
     {
       "path": "src/platform/host/image.ts",
@@ -848,7 +848,7 @@
     },
     {
       "path": "src/platform/host/service.ts",
-      "sha256": "b34e813f50f58426c0bb6be2f3ec921f47b1ee6e093470406d07e71849d84486"
+      "sha256": "280362276c71c09326fd87615a7a0ceda9539422e4d0697e182ca6699f3cb6e2"
     },
     {
       "path": "src/platform/host/snapshot.ts",
@@ -940,7 +940,7 @@
     },
     {
       "path": "src/protocol/host-api.ts",
-      "sha256": "948ffca0c3fb70c9322dfc867c6b166c7ad70adabd6027712df63e50a6f6737a"
+      "sha256": "a512c41001d85b84a860217aa729af0d2453b4d6d72985c8830617405988002e"
     },
     {
       "path": "src/protocol/host-channel.ts",

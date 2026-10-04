@@ -39,6 +39,9 @@ export interface HostApiBackend {
   bindProject?(params: { macRepo: string; society: string }): Promise<Record<string, unknown>>;
   projectExtensions?(projectId: string): Promise<Record<string, unknown>>;
   sessions?(method: "session.list" | "session.inspect" | "session.resume", params: Record<string, unknown>): Promise<Record<string, unknown>>;
+  /** §8.4: a snapshot of the state disk at its quiescent point. Answers the
+   * published path and the societies that were stopped for it. */
+  snapshot?(params: { id?: string }): Promise<Record<string, unknown>>;
 }
 
 export interface HostApiOptions {
@@ -184,6 +187,16 @@ function serve(peer: FramedPeer, backend: HostApiBackend): void {
         if (typeof params.society !== "string") throw new StoreError("INVALID_REQUEST", "archive.create names a society");
         await backend.start();
         return await backend.archive(keyed(key), params.society);
+      }
+      case "snapshot.create": {
+        if (key !== undefined) throw new StoreError("INVALID_REQUEST", "snapshot.create does not accept a replay key");
+        if (Object.keys(params).some(name => name !== "id") || (params.id !== undefined &&
+            (typeof params.id !== "string" || !/^[A-Za-z0-9][A-Za-z0-9._-]{0,99}$/.test(params.id))))
+          throw new StoreError("INVALID_REQUEST", "snapshot.create may name the snapshot, and only that");
+        if (backend.snapshot === undefined) throw new StoreError("UNSUPPORTED_PROFILE", "Snapshots are unavailable");
+        // Observation must never start a VM: a stopped engine's disk is
+        // quiescent as it is, a running one's societies are stopped for it.
+        return await backend.snapshot(params.id === undefined ? {} : { id: params.id });
       }
       case "terminal.attach": {
         if (typeof params.society !== "string" || (params.takeover !== undefined && params.takeover !== true))
