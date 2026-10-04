@@ -16,7 +16,7 @@
  *   removed (`collectTemporaries`).
  */
 import { randomUUID } from "node:crypto";
-import { chmodSync, closeSync, constants, fsyncSync, linkSync, lstatSync, mkdirSync, mkdtempSync, openSync, readdirSync, renameSync, rmSync, unlinkSync, writeFileSync, writeSync,
+import { chmodSync, closeSync, constants, fsyncSync, linkSync, lstatSync, mkdirSync, mkdtempSync, openSync, readdirSync, renameSync, rmdirSync, rmSync, unlinkSync, writeFileSync, writeSync,
   type Dirent } from "node:fs";
 import { dirname, join } from "node:path";
 import { assertHostDirectoryLayout } from "../../runtime/assets.js";
@@ -149,19 +149,35 @@ export function writeHostStagedFile(root: string, rel: string, bytes: Buffer, mo
   writeFileSync(path, bytes, { mode });
 }
 
+/** Removes a tree this owner wrote, by path. A directory whose mode lost its
+ * owner read/write/search bits -- a stray or an interrupted writer -- gets
+ * them back before it is listed or emptied, the same repair listHostStaged
+ * makes (bits are added, never stripped: the special bits are kept), so a
+ * mode-000 directory cannot wedge the removal the way rmSync's blind listing
+ * did. Links and other non-directories are unlinked as the entries they are,
+ * never followed. */
+function removeOwnedPath(path: string): void {
+  const observed = lstatSync(path, { throwIfNoEntry: false });
+  if (observed === undefined) return;
+  if (!observed.isDirectory()) { unlinkSync(path); return; }
+  if ((observed.mode & 0o700) !== 0o700) chmodSync(path, (observed.mode & 0o7777) | 0o700);
+  for (const name of readdirSync(path)) removeOwnedPath(join(path, name));
+  rmdirSync(path);
+}
+
 /** `made` becomes `<dir>/<name>` whole: a dead copy goes first, the rename
  * lands the new one, the directory is flushed. */
 export function publishHostStaged(made: string, dir: string, name: string): void {
   const dest = join(dir, name);
   ensureHostUserDirectory(dirname(dest));
-  rmSync(dest, { recursive: true, force: true });
+  removeOwnedPath(dest);
   renameSync(made, dest);
   fsyncDirectory(dirname(dest));
 }
 
 /** A staging root given back unpublished, or a dead copy being pruned. */
 export function removeHostStaged(path: string): void {
-  rmSync(path, { recursive: true, force: true });
+  removeOwnedPath(path);
 }
 
 /** The entries of one host store directory a prune is sweeping, or null
@@ -174,7 +190,7 @@ export function listHostStaged(dir: string): Dirent[] | null {
   try {
     const observed = lstatSync(dir);
     if (!observed.isDirectory()) return null;
-    if ((observed.mode & 0o700) !== 0o700) chmodSync(dir, (observed.mode & 0o777) | 0o700);
+    if ((observed.mode & 0o700) !== 0o700) chmodSync(dir, (observed.mode & 0o7777) | 0o700);
     return readdirSync(dir, { withFileTypes: true });
   } catch { return null; }
 }
@@ -191,7 +207,7 @@ export function prepareHostProjectDirectory(path: string): ProjectPreparation {
     const check = openSync(leasePath, constants.O_RDWR | constants.O_NOFOLLOW);
     withCleanup(() => {
       if (lockFileDescriptor(check).kind === "held") {
-        rmSync(path, { recursive: true, force: true });
+        removeOwnedPath(path);
         unlinkSync(leasePath);
       }
     }, () => closeSync(check));

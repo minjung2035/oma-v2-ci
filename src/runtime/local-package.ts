@@ -615,16 +615,20 @@ export function pruneLocalStage(store: string): void {
    * directory a manifest may name itself (`local/@bare` stages AT the scope
    * dir). A child holding a strict descendant source is descended when it is
    * a directory -- to whatever depth the configured sources reach -- and a
-   * directory emptied of dead children goes with them; a prefix that is not
-   * a directory holds nothing descendable and is kept as it is. Anything
-   * else under `local/` is dead content. */
+   * directory emptied of dead children goes with them. A prefix that is not
+   * a directory holds nothing descendable, so it is dead content collected
+   * as the entry it is -- a link is unlinked, never followed -- the same
+   * answer `local`-as-non-directory gets above: keeping it wedged every
+   * later install of the configured descendant on staging's own descend
+   * (ENOTDIR, or ELOOP for the link). Anything else under `local/` is dead
+   * content. */
   const sweep = (dir: string, rel: string): void => {
     for (const entry of list(dir) ?? []) {
       const unit = rel === "" ? entry.name : `${rel}${sep}${entry.name}`;
       if (inside.includes(unit)) continue;
       const path = join(dir, entry.name);
       if (inside.some(source => source.startsWith(`${unit}${sep}`))) {
-        if (!entry.isDirectory()) continue;
+        if (!entry.isDirectory()) { remove(path, false); continue; }
         sweep(path, unit);
         if (list(path)?.length === 0) remove(path, true);
         continue;

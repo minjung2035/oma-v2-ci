@@ -450,6 +450,118 @@ test("DR25/C20: a `local` entry that is not a directory is collected, not wedged
   } finally { f.close(); }
 });
 
+test("DR25/C20: dead content that lost its owner bits is collected -- the removal walk repairs before it opens", () => {
+  const f = createCompleteConfigurationFixture();
+  const locked = [join(f.root, "packages", "local", "dead-pkg"), join(f.root, "packages", "local", "dead-tree", "locked"),
+    join(f.root, "packages", ".staging-local-zz"), join(f.root, "packages", "local", "kept-pkg")];
+  try {
+    const store = join(f.root, "packages");
+    mkdirSync(join(store, "local", "live"), { recursive: true });
+    writeFileSync(join(store, "settings.json"), JSON.stringify({ packages: ["local/live"] }));
+    // Every shape the removal walk used to keep forever: it opened each
+    // directory O_RDONLY | O_DIRECTORY and repaired owner bits only after the
+    // open, so a mode-000 directory threw EACCES out of removeOwnedTree --
+    // and the sweep's per-entry catch made that silent permanent retention.
+    mkdirSync(join(store, "local", "dead-pkg")); writeFileSync(join(store, "local", "dead-pkg", "e.ts"), "x\n");
+    chmodSync(join(store, "local", "dead-pkg"), 0o000);
+    mkdirSync(join(store, "local", "dead-tree", "locked"), { recursive: true });
+    writeFileSync(join(store, "local", "dead-tree", "locked", "x"), "x");
+    chmodSync(join(store, "local", "dead-tree", "locked"), 0o000);
+    mkdirSync(join(store, ".staging-local-zz")); writeFileSync(join(store, ".staging-local-zz", "half"), "x");
+    chmodSync(join(store, ".staging-local-zz"), 0o000);
+    mkdirSync(join(store, "local", "zzz-dead"));
+
+    pruneLocalStage(store);
+    assert.equal(lstatSync(join(store, "local", "dead-pkg"), { throwIfNoEntry: false }), undefined,
+      "a dead copy whose root is mode-000 is collected");
+    assert.equal(lstatSync(join(store, "local", "dead-tree"), { throwIfNoEntry: false }), undefined,
+      "a dead tree holding a mode-000 subdirectory is collected whole");
+    assert.equal(existsSync(join(store, ".staging-local-zz")), false, "a dead staging area at mode-000 is collected");
+    assert.equal(existsSync(join(store, "local", "zzz-dead")), false, "the sweep reaches dead content after them");
+    assert.equal(existsSync(join(store, "local", "live")), true, "a package settings still names is kept");
+
+    // A configured copy at mode-000 is kept while configured -- and goes when
+    // it stops being named, instead of becoming uncollectable.
+    mkdirSync(join(store, "local", "kept-pkg")); writeFileSync(join(store, "local", "kept-pkg", "e.ts"), "x\n");
+    chmodSync(join(store, "local", "kept-pkg"), 0o000);
+    writeFileSync(join(store, "settings.json"), JSON.stringify({ packages: ["local/live", "local/kept-pkg"] }));
+    pruneLocalStage(store);
+    assert.equal(existsSync(join(store, "local", "kept-pkg")), true, "a configured copy is kept");
+    writeFileSync(join(store, "settings.json"), JSON.stringify({ packages: ["local/live"] }));
+    pruneLocalStage(store);
+    assert.equal(lstatSync(join(store, "local", "kept-pkg"), { throwIfNoEntry: false }), undefined,
+      "un-configured, the mode-000 copy is collected");
+  } finally {
+    for (const path of locked) try { chmodSync(path, 0o700); } catch { /* already gone */ }
+    f.close();
+  }
+});
+
+test("DR25/C20: publish replaces a staged copy that lost its mode -- a mode-000 copy cannot wedge re-install", () => {
+  const f = createCompleteConfigurationFixture();
+  const staged = join(f.root, "packages", "local", "wedge");
+  try {
+    const store = join(f.root, "packages");
+    mkdirSync(store, { recursive: true });
+    const source = join(f.root, "src", "wedge");
+    mkdirSync(join(source, "extensions"), { recursive: true });
+    writeFileSync(join(source, "package.json"), JSON.stringify({ name: "wedge", pi: { extensions: ["./extensions/e.ts"] } }));
+    writeFileSync(join(source, "extensions", "e.ts"), "export default function () { /* v1 */ }\n");
+    assert.equal(stageLocalPackage(store, source), "local/wedge");
+    // A same-UID stray or an interrupted writer leaves the existing copy at
+    // mode-000: publish's removeOwnedTree threw EACCES at the open, so every
+    // `oma pi install` of the name failed until the copy was removed by hand.
+    chmodSync(staged, 0o000);
+    writeFileSync(join(source, "extensions", "e.ts"), "export default function () { /* v2 */ }\n");
+    assert.equal(stageLocalPackage(store, source), "local/wedge", "re-install over the mode-000 copy");
+    assert.match(readFileSync(join(staged, "extensions", "e.ts"), "utf8"), /v2/, "the new copy landed whole");
+    assert.equal(statSync(staged).mode & 0o777, 0o700, "the published copy has the staging root's mode");
+  } finally {
+    try { chmodSync(staged, 0o700); } catch { /* already gone */ }
+    f.close();
+  }
+});
+
+test("DR25/C20: a file or link in a strict-prefix slot is collected -- it holds no staged copies and wedges the install", () => {
+  const f = createCompleteConfigurationFixture();
+  try {
+    const store = join(f.root, "packages");
+    mkdirSync(join(store, "local"), { recursive: true });
+    writeFileSync(join(store, "settings.json"), JSON.stringify({ packages: ["local/foo/bar"] }));
+    const source = join(f.root, "src", "nested");
+    mkdirSync(join(source, "extensions"), { recursive: true });
+    writeFileSync(join(source, "package.json"), JSON.stringify({ name: "foo/bar", pi: { extensions: ["./extensions/e.ts"] } }));
+    writeFileSync(join(source, "extensions", "e.ts"), "export default function () {}\n");
+
+    // A file where the configured source needs a directory: nothing can be
+    // staged beneath it, and publish's own descend threw ENOTDIR on every
+    // retry while the sweep kept it forever as an unreachable prefix.
+    writeFileSync(join(store, "local", "foo"), "stray\n");
+    // ENOTDIR/ELOOP are reported as the one containment refusal.
+    assert.throws(() => stageLocalPackage(store, source), /containment/, "the stray file wedges the install");
+    pruneLocalStage(store);
+    assert.equal(lstatSync(join(store, "local", "foo"), { throwIfNoEntry: false }), undefined,
+      "a stray file at a strict-prefix slot is collected");
+
+    // A link in the same slot wedges the descend on ELOOP and is collected
+    // the same way -- unlinked as the entry it is, never followed.
+    const target = join(store, "real-target");
+    mkdirSync(target); writeFileSync(join(target, "keep"), "kept\n");
+    symlinkSync(target, join(store, "local", "foo"));
+    assert.throws(() => stageLocalPackage(store, source), /containment/, "the stray link wedges the install");
+    pruneLocalStage(store);
+    assert.equal(lstatSync(join(store, "local", "foo"), { throwIfNoEntry: false }), undefined,
+      "a link at a strict-prefix slot is collected");
+    assert.equal(readFileSync(join(target, "keep"), "utf8"), "kept\n", "the link's target is not the entry's");
+
+    // The slot free, the configured install proceeds.
+    assert.equal(stageLocalPackage(store, source), "local/foo/bar");
+    assert.ok(existsSync(join(store, "local", "foo", "bar", "package.json")), "the staged copy lands under the freed prefix");
+    pruneLocalStage(store);
+    assert.equal(existsSync(join(store, "local", "foo", "bar", "extensions", "e.ts")), true, "the staged copy is kept once named");
+  } finally { f.close(); }
+});
+
 test("DR25/C20: a configured `local/foo/sub` descends `local/foo` and keeps its child only -- the scope rule generalized", () => {
   const f = createCompleteConfigurationFixture();
   try {

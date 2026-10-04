@@ -185,6 +185,42 @@ for (const stage of ['write', 'file-flush', 'close', 'rename', 'directory-flush'
     assert.equal(calls.includes('rename'), ['rename', 'directory-flush'].includes(stage));
     assert.equal(returned.includes(23), stage === 'directory-flush');
   });
+test('Owned cleanup host staged store: removal repairs directories that lost owner bits before listing them', t => {
+  const root = fixture(t);
+  const api = load('src/platform/host/files.ts');
+  // The Mac store is swept and published by path: rmSync(recursive) listed
+  // each directory before touching it, so a mode-000 directory inside a dead
+  // copy or a staging root wedged the prune's removal with EACCES -- the same
+  // wedge the contained-fs removal walk had. The by-path removal now gives a
+  // directory its owner bits back (added, never stripped) before listing it.
+  const tree = join(root, 'staged');
+  fs.mkdirSync(join(tree, 'locked'), { recursive: true });
+  fs.writeFileSync(join(tree, 'locked', 'e.ts'), 'x\n');
+  fs.chmodSync(join(tree, 'locked'), 0o000);
+  fs.chmodSync(tree, 0o000);
+  api.removeHostStaged(tree);
+  assert.equal(fs.existsSync(tree), false, 'a mode-000 staging root holding a mode-000 child is removed');
+  api.removeHostStaged(tree); // gone already: nothing to do
+  // A non-directory in the slot -- a stray file, a link -- is unlinked as the
+  // entry it is, never followed.
+  const outside = join(root, 'outside'); fs.mkdirSync(outside); fs.writeFileSync(join(outside, 'keep'), 'kept');
+  fs.symlinkSync(outside, join(root, 'link-staged'));
+  api.removeHostStaged(join(root, 'link-staged'));
+  assert.equal(fs.readFileSync(join(outside, 'keep'), 'utf8'), 'kept', 'the link was unlinked, never followed');
+  // A mode-000 dead copy in the publish slot goes before the rename.
+  fs.mkdirSync(join(root, 'local'));
+  const dead = join(root, 'local', 'pkg'); fs.mkdirSync(dead); fs.writeFileSync(join(dead, 'x'), 'x'); fs.chmodSync(dead, 0o000);
+  const made = join(root, 'made'); fs.mkdirSync(made); fs.writeFileSync(join(made, 'e.ts'), 'new\n');
+  api.publishHostStaged(made, join(root, 'local'), 'pkg');
+  assert.equal(fs.readFileSync(join(root, 'local', 'pkg', 'e.ts'), 'utf8'), 'new\n', 'the mode-000 copy was replaced');
+  // The listing repair keeps the special bits: setgid survives the owner-bits
+  // restore (the old `& 0o777` silently stripped it to 0o700).
+  const kept = join(root, 'kept');
+  fs.mkdirSync(kept); fs.writeFileSync(join(kept, 'e.ts'), 'x\n'); fs.chmodSync(kept, 0o2500);
+  const listed = api.listHostStaged(kept);
+  assert.equal(listed?.length, 1);
+  assert.equal(fs.statSync(kept).mode & 0o7777, 0o2700, 'owner bits are added, setgid is kept');
+});
 for (const stage of ['link', 'existing']) test(`Owned cleanup host publication: ${stage} beside removal failure is not success`, () => {
   const exists = Object.assign(new Error('fixture existing'), { code: 'EEXIST' }), returned = [], removed = [];
   const api = load('src/platform/host/files.ts', { 'node:fs': { ...fs,

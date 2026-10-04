@@ -1,10 +1,11 @@
 /** Directory traversal uses held descriptors and kernel no-symlink resolution.
  * These capabilities protect namespace traversal, not same-inode writes or S-06 durability.
  */
-import { constants, chmodSync, closeSync, fchmodSync, fstatSync, fsyncSync, lstatSync, mkdirSync, readdirSync, rmdirSync, unlinkSync,
+import { constants, chmodSync, closeSync, fstatSync, fsyncSync, lstatSync, mkdirSync, openSync, readdirSync, rmdirSync, unlinkSync,
   type Dirent } from "node:fs";
 import { basename, dirname, isAbsolute, join, parse } from "node:path";
 import { StoreError, unobserved } from "../domain/errors.js";
+import { withCleanup } from "../process/cleanup.js";
 import { entryAt, openBeneath, openDirectory, withinDirectory } from "./contained-fs.js";
 
 function componentsOf(path: string): { root: string; components: string[] } {
@@ -58,6 +59,40 @@ export function ensureDirectory(path: string, mode = 0o755): readonly string[] {
   } finally { closeSync(parent); }
 }
 
+/** Gives a directory pinned beneath a held parent back its owner
+ * read/write/search bits where a same-UID stray or an interrupted writer
+ * dropped them. The repair runs through the O_PATH pin's own proc name --
+ * the one inode the pin names, never a replaced path -- and bits are only
+ * added, never stripped: the mode's other permission bits and its setuid,
+ * setgid and sticky bits are kept. */
+function repairOwnerBits(pin: number): void {
+  const observed = fstatSync(pin);
+  if ((observed.mode & 0o700) !== 0o700)
+    chmodSync(`/proc/self/fd/${pin}`, (observed.mode & 0o7777) | 0o700);
+}
+
+/** Opens the `name` directory beneath a held parent for a removal or listing
+ * walk even when its mode lost owner bits -- the `O_RDONLY | O_DIRECTORY`
+ * open this replaces throws EACCES on a mode-000 directory before any repair
+ * inside the walk could run. The O_PATH pin needs no permission bits of its
+ * own and keeps the RESOLVE_BENEATH | RESOLVE_NO_SYMLINKS guarantee -- a name
+ * swapped for a link or an escape is refused in-kernel -- and the real
+ * descriptor is opened through the pin's proc name after the repair, so every
+ * step acts on the one pinned inode, never a re-resolved path. */
+function openOwnedDirectory(parent: number, name: string): number {
+  const pin = openBeneath(parent, name, 0o10000000 /* O_PATH */ | constants.O_DIRECTORY);
+  let result: number | undefined;
+  try {
+    return withCleanup(() => {
+      repairOwnerBits(pin);
+      result = openSync(`/proc/self/fd/${pin}`, constants.O_RDONLY | constants.O_DIRECTORY);
+      return result;
+    }, () => closeSync(pin));
+  } catch (error) {
+    return withCleanup(() => { throw error; }, () => { if (result !== undefined) closeSync(result); });
+  }
+}
+
 /** Only for caller-owned unaccepted/temporary artifacts. Never collect accepted evidence.
  * Readdir, chmod and removal stay under held directories; links are not traversed.
  * A leaf that is not a directory or a regular file -- a link, socket or fifo an
@@ -72,18 +107,17 @@ export function removeOwnedTree(path: string): void {
   try {
     if (!lstatSync(entryAt(parent, basename(path)), { throwIfNoEntry: false })) return;
     const walk = (directory: number): void => {
-      fchmodSync(directory, 0o700);
       for (const name of readdirSync(`/proc/self/fd/${directory}`)) {
         const entry = entryAt(directory, name); const stat = lstatSync(entry);
         if (stat.isDirectory()) {
-          const child = openBeneath(directory, name, constants.O_RDONLY | constants.O_DIRECTORY);
+          const child = openOwnedDirectory(directory, name);
           try { walk(child); } finally { closeSync(child); }
           rmdirSync(entry);
         } else unlinkSync(entry);
       }
       fsyncSync(directory);
     };
-    const root = openBeneath(parent, basename(path), constants.O_RDONLY | constants.O_DIRECTORY);
+    const root = openOwnedDirectory(parent, basename(path));
     try { walk(root); } finally { closeSync(root); }
     rmdirSync(entryAt(parent, basename(path))); fsyncSync(parent);
   } finally { closeSync(parent); }
@@ -98,17 +132,16 @@ export function removeUnusedTree(path: string): void {
   try {
     if (!lstatSync(entryAt(parent, basename(path)), { throwIfNoEntry: false })?.isDirectory()) return;
     const walk = (directory: number): void => {
-      fchmodSync(directory, 0o700);
       for (const name of readdirSync(`/proc/self/fd/${directory}`)) {
         const entry = entryAt(directory, name);
         if (lstatSync(entry).isDirectory()) {
-          const child = openBeneath(directory, name, constants.O_RDONLY | constants.O_DIRECTORY);
+          const child = openOwnedDirectory(directory, name);
           try { walk(child); } finally { closeSync(child); }
           rmdirSync(entry);
         } else unlinkSync(entry);
       }
     };
-    const root = openBeneath(parent, basename(path), constants.O_RDONLY | constants.O_DIRECTORY);
+    const root = openOwnedDirectory(parent, basename(path));
     try { walk(root); } finally { closeSync(root); }
     rmdirSync(entryAt(parent, basename(path))); fsyncSync(parent);
   } finally { closeSync(parent); }
@@ -127,20 +160,17 @@ export function removeOwnedFile(path: string): void {
  * repair. An O_PATH descriptor pins the entry beneath its held parent
  * without needing its mode bits or following a link, and /proc/self/fd
  * names that one inode for the stat, the repair and the listing -- never a
- * replaced name. The repair mirrors the fchmod the removal walks above
- * make inside owned trees: owner read/write/search bits are added back
- * where a same-UID stray or an interrupted writer dropped them, never
- * stripped -- so a directory a sweep keeps loses nothing it had. */
+ * replaced name. The repair is the one the removal walks above make inside
+ * owned trees: owner read/write/search bits are added back where a same-UID
+ * stray or an interrupted writer dropped them, never stripped -- so a
+ * directory a sweep keeps loses nothing it had, special bits included. */
 export function listOwnedDirectory(path: string): Dirent[] | null {
   try {
     return withinDirectory(path, (parent, name) => {
       const pin = openBeneath(parent, name, 0o10000000 /* O_PATH */ | constants.O_DIRECTORY);
       try {
-        const pinnedFd = `/proc/self/fd/${pin}`;
-        const observed = fstatSync(pin);
-        if ((observed.mode & 0o700) !== 0o700)
-          chmodSync(pinnedFd, (observed.mode & 0o777) | 0o700);
-        return readdirSync(pinnedFd, { withFileTypes: true });
+        repairOwnerBits(pin);
+        return readdirSync(`/proc/self/fd/${pin}`, { withFileTypes: true });
       } finally { closeSync(pin); }
     });
   } catch { return null; }
