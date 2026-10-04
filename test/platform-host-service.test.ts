@@ -360,6 +360,32 @@ test("§8.4: a user id that merely ENDS in the update marker's bytes squats on n
     "the squatter's copy pruned like any user's; the unsettled update's stayed");
 });
 
+test("§8.4/UX-24: a resume as the first interaction after an update keeps the pre-update disk before the boot writes it", async t => {
+  const { call, dir, recordPath, driver } = await world(t,
+    d => { writeFileSync(join(d, "state.img"), "the state disk"); },
+    undefined, undefined,
+    d => ({ snapshotsDir: join(d, "snapshots"), statePath: join(d, "state.img"),
+      snapshotClone: (from, to) => { copyFileSync(from, to); } }));
+  const snaps = join(dir, "snapshots");
+  // A bound project to resume into, and the previous image's record: this
+  // boot is the update's first.
+  const mac = join(dir, "mac"); mkdirSync(mac);
+  const project = { projectId: "11111111-2222-4333-8444-555555555555", displayName: "demo-proj",
+    bookmark: Buffer.from(mac).toString("base64"), gitCommonDir: "/x", objectFormat: "sha1" as const,
+    rootCommits: ["0".repeat(40)], society: "demo" };
+  writeHostRecord(recordPath, { ...readHostRecord(recordPath)!, image: { current: "2026.08.0", previous: null }, projects: [project] });
+  let atBoot: string[] | undefined;
+  const realStart = driver.start.bind(driver);
+  driver.start = async () => { atBoot = readdirSync(snaps); await realStart(); };
+  // The resume itself may not finish (no saved history, no real repository):
+  // what is pinned is the disk state at the instant the driver booted.
+  await call("session.resume", { projectId: project.projectId, society: "demo", sessionId: "sess-1", file: "saved.jsonl" });
+  assert.equal(driver.starts, 1, "the resume booted the engine");
+  assert.deepEqual(atBoot, ["00000000-update-2026.09.1.img"],
+    "the update marker existed before lifecycle.start ran");
+  assert.equal(readFileSync(join(snaps, "00000000-update-2026.09.1.img"), "utf8"), "the state disk");
+});
+
 test("§8.4: an image version with a +build suffix is a legal snapshot id -- the update marker is made and the boot proceeds", async t => {
   const expectImage = "2026.09.1+build7";
   const { call, dir, recordPath, driver } = await world(t,
