@@ -43,11 +43,11 @@ import { PACKAGE_ENTRY_PREFIX, extensionEntryProblem } from "../config/operation
 import { PACKAGE_LOCAL_DIR, packageStoreRoot, resourceEntryProblem } from "./pi-packages.js";
 import { ensureUserDirectory, readUserFile } from "./user-files.js";
 import { entryAt, openBeneath, openDirectory } from "../storage/contained-fs.js";
-import { removeOwnedFile, removeOwnedTree } from "../storage/directory.js";
+import { listOwnedDirectory, removeOwnedFile, removeOwnedTree } from "../storage/directory.js";
 import { fsyncFile, fsyncTree } from "../storage/durable-fs.js";
 import { PACKAGE_ARCHIVE_BOUNDS } from "../platform/package-archive.js";
-import { createHostStagingDirectory, makeHostStagedDirectories, publishHostStaged, removeHostStaged,
-  writeHostStagedFile } from "../platform/host/files.js";
+import { createHostStagingDirectory, listHostStaged, makeHostStagedDirectories, publishHostStaged,
+  removeHostStaged, writeHostStagedFile } from "../platform/host/files.js";
 /** An interrupted staging area the next change removes. */
 const STAGING_PREFIX = ".staging-local-";
 /** The conventional directories the engine's resolver collects a package's
@@ -546,21 +546,49 @@ export function pruneLocalStage(store: string): void {
   const root = packageStoreRoot(store);
   if (root === null) return;
   const darwin = process.platform === "darwin";
+  /** Dead content that cannot go yet is left for the next change's sweep: a
+   * single bad entry -- one that vanished or changed type as the sweep
+   * reached it, one a same-UID stray made unremovable -- never aborts the
+   * run, because a throw out of this prune is thrown by every later `oma pi`
+   * change. */
   const remove = (path: string, directory: boolean): void => {
-    if (darwin) return removeHostStaged(path);
-    if (directory) removeOwnedTree(path); else removeOwnedFile(path);
+    try {
+      if (darwin) removeHostStaged(path);
+      else if (directory) removeOwnedTree(path); else removeOwnedFile(path);
+    } catch { /* retention beats a wedge */ }
   };
-  for (const entry of readdirSync(root, { withFileTypes: true }))
+  /** `dir`'s entries, or null when it cannot be listed. The store is oma's
+   * own tree, so before listing, a directory that lost its owner
+   * read/write/search bits -- a mode a stray or an interrupted writer
+   * left -- is given them back, the same repair removeOwnedTree makes
+   * inside the trees it deletes (a mode-000 copy then answers readdir; a
+   * read-only one has children removed from it). Bits are only added, so a
+   * directory that stays loses nothing. What still cannot be listed -- an
+   * entry that vanished or stopped being a directory as the sweep reached
+   * it -- is kept whole: dead content surviving one sweep beats a wedge. */
+  const list = darwin ? listHostStaged : listOwnedDirectory;
+  const top = list(root);
+  if (top === null) return;
+  for (const entry of top)
     if (entry.name.startsWith(STAGING_PREFIX)) {
       // A staging area is a directory, but the prefix is only a name: a
       // regular file or link carrying it is removed for what it is --
       // removeOwnedTree opens its root O_DIRECTORY and a non-directory
       // would abort the whole prune (wedging every later `oma pi` change).
       const path = join(root, entry.name);
-      remove(path, lstatSync(path).isDirectory());
+      const observed = (() => {
+        try { return lstatSync(path, { throwIfNoEntry: false }); } catch { return undefined; }
+      })();
+      if (observed !== undefined) remove(path, observed.isDirectory());
     }
   const local = join(root, PACKAGE_LOCAL_DIR);
-  const localEntry = lstatSync(local, { throwIfNoEntry: false });
+  // A stat that cannot answer -- `local` vanished, or a component of `root`
+  // did as the sweep turned to it -- is answered as "no `local`", the way
+  // the existsSync this check replaced answered false: nothing below a name
+  // that cannot be seen is the sweep's to collect.
+  const localEntry = (() => {
+    try { return lstatSync(local, { throwIfNoEntry: false }); } catch { return undefined; }
+  })();
   if (localEntry === undefined) return;
   if (!localEntry.isDirectory()) {
     // `local/` is only ever a directory staging made: a file, link or socket
@@ -581,22 +609,31 @@ export function pruneLocalStage(store: string): void {
     // store boundary check uses).
     if (path !== "" && !escapes(path)) inside.push(path);
   }
-  const kept = (unit: string): boolean => inside.some(path => path === unit || path.startsWith(`${unit}${sep}`));
-  for (const entry of readdirSync(local, { withFileTypes: true })) {
-    // A configured source naming the entry itself keeps it whole -- a staged
-    // copy IS `local/<name>`, including a bare "@word" scope directory a
-    // manifest may name itself (`local/@bare` stages AT the scope dir).
-    if (inside.includes(entry.name)) continue;
-    if (entry.isDirectory() && inside.some(path => path.startsWith(`${entry.name}${sep}`))) {
-      // A configured source naming a strict descendant (`local/foo/sub`, or a
-      // scoped `local/@scope/pkg`) descends the entry: only children a source
-      // still names are kept, dead siblings are collected, and a directory
-      // emptied of them goes too.
-      for (const child of readdirSync(join(local, entry.name))) {
-        const path = join(local, entry.name, child);
-        if (!kept(`${entry.name}${sep}${child}`)) remove(path, lstatSync(path).isDirectory());
+  /** `dir` is `rel` beneath `local/` ("" for `local` itself, which is never
+   * removed). A child a configured source names exactly is kept whole -- a
+   * staged copy IS its `local/<...>` path, including a bare "@word" scope
+   * directory a manifest may name itself (`local/@bare` stages AT the scope
+   * dir). A child holding a strict descendant source is descended when it is
+   * a directory -- to whatever depth the configured sources reach -- and a
+   * directory emptied of dead children goes with them; a prefix that is not
+   * a directory holds nothing descendable and is kept as it is. Anything
+   * else under `local/` is dead content. */
+  const sweep = (dir: string, rel: string): void => {
+    for (const entry of list(dir) ?? []) {
+      const unit = rel === "" ? entry.name : `${rel}${sep}${entry.name}`;
+      if (inside.includes(unit)) continue;
+      const path = join(dir, entry.name);
+      if (inside.some(source => source.startsWith(`${unit}${sep}`))) {
+        if (!entry.isDirectory()) continue;
+        sweep(path, unit);
+        if (list(path)?.length === 0) remove(path, true);
+        continue;
       }
-      if (readdirSync(join(local, entry.name)).length === 0) remove(join(local, entry.name), true);
-    } else if (!kept(entry.name)) remove(join(local, entry.name), entry.isDirectory());
-  }
+      const observed = (() => {
+        try { return lstatSync(path, { throwIfNoEntry: false }); } catch { return undefined; }
+      })();
+      if (observed !== undefined) remove(path, observed.isDirectory());
+    }
+  };
+  sweep(local, "");
 }

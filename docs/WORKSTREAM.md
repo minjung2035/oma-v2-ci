@@ -193,6 +193,21 @@ Pi/OS 기능을 다시 구현해서 생긴 중복·workaround·pre-release 잔�
     wedge 방지), 설정 소스의 strict descendant를 가진 top-level 엔트리는 @스코프와
     같은 한 단계 descend로 일반화(`local/foo/sub` 유지 + `local/foo/dead` 수집).
     셋 모두 fail-before→pass-after 회귀 테스트(pi-packages)로 고정.
+  - 후속 독립 검증 잔여 3건(같은 wedge 클래스 + 유지 결함) 수정:
+    (1) descend 대상이 mode-000이면 readdirSync EACCES로 sweep 중단,
+    mode-555면 자식 삭제에서 EACCES — 나열 전 owner rwx 비트를 복구하는
+    `listOwnedDirectory` 신설(O_PATH pin + /proc/self/fd로 stat·repair·listing이
+    같은 inode를 가리킴, 비트는 추가만; Mac은 `listHostStaged` 동등)하고,
+    복구 후에도 나열 불가면 엔트리 통째 보존 — retention > wedge.
+    `local/`·store root 나열도 같은 경로로 복구.
+    (2) `local/a/b/c` 같은 3+컴포넌트 소스의 dead grandchild 영구 유지 —
+    descend를 설정 소스가 요구하는 깊이까지 재귀로 일반화(소스 자식은 유지,
+    소스의 prefix는 descend, 나머지는 매 단계 수집, 비면 부모도 수집).
+    (3) readdir→lstat 사이 소실 ENOENT — lstat은 throwIfNoEntry+실패 스킵,
+    remove 실패도 엔트리 단위로 무시. 회귀 테스트 3종 + 스크래치 드라이버로
+    구 dist 대조(EACCES×3·ENOENT×2·유지 1건 재현 → 수정 후 전부 통과).
+    단, state-tree 규칙상 path chmodSync 불가 → O_PATH+proc-fd 또는
+    entryAt/held-parent 형태여야 함이 확인됨(architecture-check 통과).
   - 시리얼 PTY 3종의 고정 sleep을 전부 화면 마커 expect로 전환(검증된 마커만,
     엔진 탄생은 넓은 timeout). 3× 단독 + 2× 병렬 부하 전부 통과 → SERIAL에서 제거.
   - architecture-check의 per-node 루프에 이름 기반 early-out 추가

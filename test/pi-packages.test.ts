@@ -1,5 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import fs from "node:fs";
+import { syncBuiltinESMExports } from "node:module";
 import { existsSync, lstatSync, mkdirSync, readdirSync, realpathSync, rmSync, statSync, symlinkSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { createCompleteConfigurationFixture } from "./fixtures/configuration.js";
@@ -474,6 +476,136 @@ test("DR25/C20: a configured `local/foo/sub` descends `local/foo` and keeps its 
     assert.equal(existsSync(join(store, "local", "foo")), true, "the kept child's parent directory stays");
     assert.equal(existsSync(join(store, "local", "whole", "child", "x.ts")), true, "a source naming the entry itself keeps it whole");
     assert.equal(existsSync(join(store, "local", "gone")), false, "a descended directory emptied of dead children goes too");
+  } finally { f.close(); }
+});
+
+test("DR25/C20: a `local/` entry or descended directory that lost its mode is repaired in place -- it never aborts the prune", () => {
+  const f = createCompleteConfigurationFixture();
+  try {
+    const store = join(f.root, "packages");
+    mkdirSync(store, { recursive: true });
+    // The store is oma's own tree, and the descended readdirSync used to
+    // throw EACCES out of the sweep on a mode-000 entry -- wedging the prune
+    // mid-way and every later `oma pi` change with it. removeOwnedTree
+    // already repairs the same loss with fchmod inside the trees it deletes;
+    // the sweep now gives a directory its owner bits back before listing --
+    // only ever adding bits, never stripping what a kept directory has.
+    for (const [name, mode] of [["gone-read", 0o000], ["read-only", 0o555]] as const) {
+      mkdirSync(join(store, "local", name, "sub"), { recursive: true });
+      writeFileSync(join(store, "local", name, "sub", "e.ts"), "export default function () {}\n");
+      mkdirSync(join(store, "local", name, "dead"), { recursive: true });
+      chmodSync(join(store, "local", name), mode);
+    }
+    mkdirSync(join(store, "local", "zzz-dead"), { recursive: true });
+    mkdirSync(join(store, "local", "live"), { recursive: true });
+    writeFileSync(join(store, "settings.json"), JSON.stringify({ packages: ["local/gone-read/sub", "local/read-only/sub", "local/live"] }));
+
+    pruneLocalStage(store);
+    // mode 000: nothing inside could even be listed.
+    assert.equal(existsSync(join(store, "local", "gone-read", "sub", "e.ts")), true, "a kept child under a mode-000 directory stays");
+    assert.equal(existsSync(join(store, "local", "gone-read", "dead")), false, "a dead child under a mode-000 directory is collected");
+    assert.equal(statSync(join(store, "local", "gone-read")).mode & 0o777, 0o700, "the repair gives the owner its bits back");
+    // mode 555: children listed but none removable without owner write.
+    assert.equal(existsSync(join(store, "local", "read-only", "sub")), true, "a kept child under a read-only directory stays");
+    assert.equal(existsSync(join(store, "local", "read-only", "dead")), false, "a dead child under a read-only directory is collected");
+    assert.equal(statSync(join(store, "local", "read-only")).mode & 0o777, 0o755, "the repair adds the missing owner bit only");
+    assert.equal(existsSync(join(store, "local", "zzz-dead")), false, "the sweep reaches dead content after them");
+    assert.equal(existsSync(join(store, "local", "live")), true, "a package settings still names is kept");
+
+    // `local/` itself in the same shape: reading it threw EACCES before the
+    // first entry was ever seen -- the same wedge one level up.
+    mkdirSync(join(store, "local", "late-dead"), { recursive: true });
+    chmodSync(join(store, "local"), 0o000);
+    pruneLocalStage(store);
+    assert.equal(existsSync(join(store, "local", "late-dead")), false, "a mode-000 `local` is still swept");
+    assert.equal(existsSync(join(store, "local", "live")), true, "and the live package is still kept");
+    chmodSync(join(store, "local"), 0o755);
+  } finally { f.close(); }
+});
+
+test("DR25/C20: an entry the sweep cannot read or a name that vanished is skipped or kept whole -- never an abort", t => {
+  const f = createCompleteConfigurationFixture();
+  try {
+    const store = join(f.root, "packages");
+    mkdirSync(store, { recursive: true });
+    // Two ways the sweep used to die on a single entry: readdirSync on an
+    // entry it cannot list (here forced for `broken` even after the mode
+    // repair, the keep-whole fallback the repair precedes), and lstatSync
+    // ENOENT on a name that vanished between the listing and the stat --
+    // simulated as phantom names the listing reports but nothing backs.
+    mkdirSync(join(store, "local", "broken", "sub"), { recursive: true });
+    writeFileSync(join(store, "local", "broken", "sub", "e.ts"), "export default function () {}\n");
+    // A dead child beside the kept one: only a kept-whole `broken` retains it.
+    mkdirSync(join(store, "local", "broken", "dead"), { recursive: true });
+    mkdirSync(join(store, "local", "foo", "sub"), { recursive: true });
+    mkdirSync(join(store, "local", "zzz-dead"), { recursive: true });
+    writeFileSync(join(store, "settings.json"), JSON.stringify({ packages: ["local/broken/sub", "local/foo/sub"] }));
+    // The sweep reads the store by its real path -- and beneath held
+    // descriptors, so a /proc/self/fd listing name resolves back to the
+    // directory it pins -- so the keys must be resolved the same way.
+    const root = realpathSync(store);
+    const broken = join(root, "local", "broken");
+    const phantoms = new Map([[root, ".staging-local-phantom"], [join(root, "local", "foo"), "ghost-child"]]);
+    const named = (path: fs.PathLike): string => {
+      const given = String(path);
+      if (!given.startsWith("/proc/self/fd/")) return given;
+      try { return fs.readlinkSync(given); } catch { return given; }
+    };
+    const phantomDirent = (name: string, parentPath: string): fs.Dirent => ({ name, parentPath, path: parentPath,
+      isDirectory: () => false, isFile: () => true, isSymbolicLink: () => false, isBlockDevice: () => false,
+      isCharacterDevice: () => false, isFIFO: () => false, isSocket: () => false } as fs.Dirent);
+    const original = fs.readdirSync;
+    const injected: string[] = [];
+    t.mock.method(fs, "readdirSync", ((path: fs.PathLike, ...rest: unknown[]) => {
+      const dir = named(path);
+      if (dir === broken)
+        throw Object.assign(new Error("forced unreadable"), { code: "EACCES" });
+      const listed = (original as (...args: unknown[]) => unknown[])(path, ...rest);
+      const phantom = phantoms.get(dir);
+      if (phantom === undefined) return listed;
+      injected.push(dir);
+      const options = rest[0] as { withFileTypes?: boolean } | undefined;
+      return [...listed, options?.withFileTypes ? phantomDirent(phantom, dir) : phantom];
+    }) as typeof fs.readdirSync);
+    syncBuiltinESMExports();
+    try { pruneLocalStage(store); }
+    finally { t.mock.restoreAll(); syncBuiltinESMExports(); }
+    assert.deepEqual([...new Set(injected)], [root, join(root, "local", "foo")],
+      "the vanished names were really reported by their listings");
+    assert.equal(existsSync(join(store, "local", "broken", "sub", "e.ts")), true, "an unlistable entry is kept whole");
+    assert.equal(existsSync(join(store, "local", "broken", "dead")), true, "a kept-whole entry's other children stay with it");
+    assert.equal(lstatSync(join(store, "local", "zzz-dead"), { throwIfNoEntry: false }), undefined,
+      "dead content after the bad entries is still collected");
+    assert.equal(existsSync(join(store, "local", "foo", "sub")), true, "a kept child beside the vanished name stays");
+    assert.equal(existsSync(join(store, "local", "foo")), true, "the descended entry itself stays");
+  } finally { f.close(); }
+});
+
+test("DR25/C20: a configured source is descended to the depth it needs -- dead content is collected at every level", () => {
+  const f = createCompleteConfigurationFixture();
+  try {
+    const store = join(f.root, "packages");
+    mkdirSync(store, { recursive: true });
+    // The one-level descend kept `a/b` whole for `local/a/b/c`, retaining
+    // `a/b/dead` forever. The descend now follows configured sources to
+    // whatever depth they reach: children a source names are kept, prefixes
+    // of sources are descended, and the rest is collected at every level.
+    mkdirSync(join(store, "local", "a", "b", "c"), { recursive: true });
+    writeFileSync(join(store, "local", "a", "b", "c", "e.ts"), "export default function () {}\n");
+    mkdirSync(join(store, "local", "a", "b", "dead-grandchild"), { recursive: true });
+    mkdirSync(join(store, "local", "a", "dead-child"), { recursive: true });
+    // `gone/x/y` is configured but `gone` holds only dead content: the chain
+    // is emptied and collected at both levels.
+    mkdirSync(join(store, "local", "gone", "dead"), { recursive: true });
+    mkdirSync(join(store, "local", "gone", "x", "dead"), { recursive: true });
+    writeFileSync(join(store, "settings.json"), JSON.stringify({ packages: ["local/a/b/c", "local/gone/x/y"] }));
+
+    pruneLocalStage(store);
+    assert.equal(existsSync(join(store, "local", "a", "b", "c", "e.ts")), true, "the configured copy is kept");
+    assert.equal(existsSync(join(store, "local", "a", "b", "dead-grandchild")), false, "a dead grandchild is collected");
+    assert.equal(existsSync(join(store, "local", "a", "dead-child")), false, "a dead child is collected");
+    assert.equal(existsSync(join(store, "local", "a")), true, "the chain holding the copy stays");
+    assert.equal(existsSync(join(store, "local", "gone")), false, "a chain emptied of dead content goes at every level");
   } finally { f.close(); }
 });
 

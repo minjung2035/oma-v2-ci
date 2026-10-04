@@ -16,7 +16,8 @@
  *   removed (`collectTemporaries`).
  */
 import { randomUUID } from "node:crypto";
-import { closeSync, constants, fsyncSync, linkSync, mkdirSync, mkdtempSync, openSync, readdirSync, renameSync, rmSync, unlinkSync, writeFileSync, writeSync } from "node:fs";
+import { chmodSync, closeSync, constants, fsyncSync, linkSync, lstatSync, mkdirSync, mkdtempSync, openSync, readdirSync, renameSync, rmSync, unlinkSync, writeFileSync, writeSync,
+  type Dirent } from "node:fs";
 import { dirname, join } from "node:path";
 import { assertHostDirectoryLayout } from "../../runtime/assets.js";
 import { StoreError } from "../../domain/errors.js";
@@ -161,6 +162,21 @@ export function publishHostStaged(made: string, dir: string, name: string): void
 /** A staging root given back unpublished, or a dead copy being pruned. */
 export function removeHostStaged(path: string): void {
   rmSync(path, { recursive: true, force: true });
+}
+
+/** The entries of one host store directory a prune is sweeping, or null
+ * when it cannot be listed -- absent, another entry type, or unreadable
+ * even after its owner read/write/search bits are put back (the repair
+ * adds bits where a stray dropped them, never strips). By path, like the
+ * rest of this owner: the Mac store is in the app's own support
+ * directory, outside any society's state tree. */
+export function listHostStaged(dir: string): Dirent[] | null {
+  try {
+    const observed = lstatSync(dir);
+    if (!observed.isDirectory()) return null;
+    if ((observed.mode & 0o700) !== 0o700) chmodSync(dir, (observed.mode & 0o777) | 0o700);
+    return readdirSync(dir, { withFileTypes: true });
+  } catch { return null; }
 }
 
 /** DR27: a private snapshot tree in the host's transfer directory, never a

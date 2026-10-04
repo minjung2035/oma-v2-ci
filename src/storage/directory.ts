@@ -1,10 +1,11 @@
 /** Directory traversal uses held descriptors and kernel no-symlink resolution.
  * These capabilities protect namespace traversal, not same-inode writes or S-06 durability.
  */
-import { constants, closeSync, fchmodSync, fsyncSync, lstatSync, mkdirSync, readdirSync, rmdirSync, unlinkSync } from "node:fs";
+import { constants, chmodSync, closeSync, fchmodSync, fstatSync, fsyncSync, lstatSync, mkdirSync, readdirSync, rmdirSync, unlinkSync,
+  type Dirent } from "node:fs";
 import { basename, dirname, isAbsolute, join, parse } from "node:path";
 import { StoreError, unobserved } from "../domain/errors.js";
-import { entryAt, openBeneath, openDirectory } from "./contained-fs.js";
+import { entryAt, openBeneath, openDirectory, withinDirectory } from "./contained-fs.js";
 
 function componentsOf(path: string): { root: string; components: string[] } {
   if (!isAbsolute(path) || path.includes("\0"))
@@ -120,4 +121,27 @@ export function removeOwnedFile(path: string): void {
     catch (error) { if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error; }
     fsyncSync(parent);
   } finally { closeSync(parent); }
+}
+/** The entries of one caller-owned directory, or null when it cannot be
+ * listed -- absent, another entry type, or unreadable even after the mode
+ * repair. An O_PATH descriptor pins the entry beneath its held parent
+ * without needing its mode bits or following a link, and /proc/self/fd
+ * names that one inode for the stat, the repair and the listing -- never a
+ * replaced name. The repair mirrors the fchmod the removal walks above
+ * make inside owned trees: owner read/write/search bits are added back
+ * where a same-UID stray or an interrupted writer dropped them, never
+ * stripped -- so a directory a sweep keeps loses nothing it had. */
+export function listOwnedDirectory(path: string): Dirent[] | null {
+  try {
+    return withinDirectory(path, (parent, name) => {
+      const pin = openBeneath(parent, name, 0o10000000 /* O_PATH */ | constants.O_DIRECTORY);
+      try {
+        const pinnedFd = `/proc/self/fd/${pin}`;
+        const observed = fstatSync(pin);
+        if ((observed.mode & 0o700) !== 0o700)
+          chmodSync(pinnedFd, (observed.mode & 0o777) | 0o700);
+        return readdirSync(pinnedFd, { withFileTypes: true });
+      } finally { closeSync(pin); }
+    });
+  } catch { return null; }
 }
