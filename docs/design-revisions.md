@@ -977,3 +977,30 @@ TLS relay by default. Resident activation, retry/deadline and resume tests run t
 bubblewrap; missing bubblewrap is explicit NOT_RUN and the local runner already
 rejects skipped coverage as a pass. These are Linux fixture and guest-composition
 proofs, not native macOS, real-provider or systemd/cgroup qualification.
+
+## DR32 — Access to OMA-owned state assumes the state is damaged (P0-8)
+
+Four consecutive blind-verification rounds (2026-10-04) pierced the same class in the
+local-package/store layer: `readdir` listing, `removeOwnedTree` removal, the
+publish/open path (`ensureDirectory`/`descendBeneath`), and `writePackageIndex` each
+trusted metadata (permission bits, entry kinds, presence) of OMA-owned trees, and each
+fix only revealed the next call site. A same-UID stray writer or an interrupted write
+can leave owner bits cleared, non-regular entries, or strays anywhere inside owned
+state; per-callsite hardening can never converge.
+
+The root cause is a missing principle, not four bugs: **access to OMA-owned state must
+assume the state is damaged.** PRIORITY-0 gains sub-rule P0-8: every open/list/remove/
+publish of an owned path goes through the single repairing primitive set
+(`openOwnedDirectory`/`listOwnedDirectory`/`removeOwnedTree`/`ensureOwnedDirectory` and
+their host counterparts); repair adds owner bits only inside the owned boundary
+(containment is never bypassed by repair); failure after repair is *unknown* (refuse),
+never *absent* — in particular no empty index or empty listing may be committed on top
+of damage; and one bad entry must never abort a whole sweep (retention beats wedge).
+
+Enforcement: (1) the primitive set in `src/storage/directory.ts` +
+`src/platform/host/files.ts` is the only sanctioned path for owned trees;
+(2) an architecture/static check pins that owned-path accesses do not call raw
+`readdir`/`openat`/`rm`/`lstat` outside the owned-directory module — new bypasses fail
+the gate rather than waiting for the next verification round. Callers that were found
+in violation across the rounds (stage publish, prune sweep, index write) are the tests'
+subjects; the pin covers the rest of the codebase.
