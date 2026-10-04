@@ -36,7 +36,13 @@ export class Client {
     this.transport = new Transport(grant);
   }
   private requests(): RequestService {
-    return this.service ??= new RequestService(runtime().cache(this.context.env.HOME ?? "/tmp", 2 * frameBytes()),
+    // The context's home is the request cache's root (the in-guest caller's
+    // is its agent-owned OMA_AGENT_HOME). A caller whose environment has no
+    // HOME has no root; a shared /tmp guessed for it is not one.
+    const home = this.context.env.HOME;
+    if (home === undefined || home.length === 0)
+      throw new ClientError("HOME is not set; the request cache has no root", 4);
+    return this.service ??= new RequestService(runtime().cache(home, 2 * frameBytes()),
       (method, params, key, body) => this.transport.call(method, params, key, body));
   }
   private scope<T>(signal: AbortSignal | undefined, action: () => Promise<T>, request?: string): Promise<T> {

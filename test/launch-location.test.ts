@@ -3,6 +3,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
+import { StoreError } from "../src/domain/errors.js";
 import { hostLaunchLocation, launchedLocation, launchedPath, launchLocationArgv } from "../src/runtime/assets.js";
 import { renderUnit, renderedExecArgv, UNIT_TPL_DIR } from "../src/units.js";
 
@@ -12,6 +13,19 @@ test("D03 host location: XDG roots from the host's environment and an absolute c
   const fallback = hostLaunchLocation("demo", { HOME: "/h" });
   assert.deepEqual({ ...fallback }, { society: "demo", stateRoot: "/h/.local/share/oma/demo", runRoot: "/tmp/oma/demo", configPath: "/h/.local/share/oma/demo/config.json" });
   assert.deepEqual(launchedLocation(["--society", "demo", ...launchLocationArgv(custom)], "demo"), custom);
+});
+
+test("D03 host location: an environment with no data root is said, never /tmp", () => {
+  // A process whose environment holds neither XDG_DATA_HOME nor HOME has no
+  // data root at all; writing a society's state under a guessed /tmp would be
+  // a shared-space write nobody asked for. It is named instead.
+  for (const env of [{}, { HOME: "" }, { XDG_DATA_HOME: "", HOME: "" }])
+    assert.throws(() => hostLaunchLocation("demo", env),
+      (error: unknown) => error instanceof StoreError && error.code === "UNSUPPORTED_PROFILE" && /HOME/.test(error.message),
+      JSON.stringify(env));
+  // An explicit data root needs no HOME at all.
+  const rooted = hostLaunchLocation("demo", { XDG_DATA_HOME: "/d" });
+  assert.equal(rooted.stateRoot, "/d/oma/demo");
 });
 
 test("D03 launched location: every part given once, normalized, absolute and naming this society", () => {
