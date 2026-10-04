@@ -14,7 +14,7 @@ for (const ending of ["personal", "cancel"]) test(`Mac host-new real PTY: ${endi
   const result = spawnSync("python3", [join(process.cwd(), "test/fixtures/pty-harness.py"), JSON.stringify({
     argv: [process.execPath, join(process.cwd(), "test/fixtures/mac-new-handoff-pty.mjs"), root, ending], ready: hex("frame"),
     steps: [{ write: hex("N"), wait: 0.3 }, { write: hex("q"), wait: 2 },
-      ...(ending === "personal" ? [{ write: hex("\x1b[B\r"), wait: 2 },
+      ...(ending === "personal" ? [{ write: hex("\x1b[B\r"), wait: 2, expect: hex("Let's build something great") },
         { write: hex("Confirm the new host session\r"), wait: 3 }, { write: hex("\x04"), wait: 2 }]
         : [{ write: hex("\x1b"), wait: 0.5 }])],
   })], { encoding: "utf8", timeout: 55_000, maxBuffer: 16 * 1024 * 1024 });

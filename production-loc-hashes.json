@@ -1236,7 +1236,7 @@
     },
     {
       "path": "src/storage/durable-fs.ts",
-      "sha256": "af6ebb7b3f32ff4fd2a1ad0021bfddafb67c041c5279c16def47b4d868e394d7"
+      "sha256": "0af795a878092e061d3e8d7572c5aa52c86ebbdfb859a5a6e0b79d3d4fe04cfd"
     },
     {
       "path": "src/storage/facets.ts",

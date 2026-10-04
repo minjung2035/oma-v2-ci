@@ -20,7 +20,8 @@ for (const ending of ["tools", "config", "empty-extensions", "extensions", "new"
       { write: hex("scripted-thinking"), wait: 0.3 }, { write: hex("\r"), wait: 0.3 }, { write: hex("\x1b[B\r"), wait: 0.5 }, prompt]
       : ending === "empty-extensions" ? [...extensions, prompt]
       : ending === "extensions" ? [prompt, ...extensions, prompt]
-      : ending === "new" ? [prompt, { write: hex("/new\r"), wait: 2 }, { write: hex("\x1b[B\r"), wait: 2 }, prompt]
+      : ending === "new" ? [prompt, { write: hex("/new\r"), wait: 2, expect: hex("Mode is fixed for this session") },
+        { write: hex("\x1b[B\r"), wait: 2, expect: hex("Let's build something great") }, prompt]
       : ending === "project-seed-resume" ? [prompt, { write: hex("/fixture-break-project\r"), wait: 0.5 },
         { write: hex("/resume\r"), wait: 0.8 }, { write: hex("\r"), wait: 2 }, prompt]
       : ending === "resume" ? [prompt, { write: hex("/resume\r"), wait: 0.8 }, { write: hex("\r"), wait: 2 }, prompt]

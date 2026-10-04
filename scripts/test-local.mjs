@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 import { spawn } from "node:child_process";
 import { mkdtempSync, readFileSync, readdirSync, rmSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { dirname, join } from "node:path";
+import { availableParallelism, tmpdir } from "node:os";
+import { join } from "node:path";
 import { once } from "node:events";
 import { localTestFiles, systemdTestFiles, unrunDirectives, unrunTests } from "./verification-lanes.mjs";
 const compiled = readdirSync("dist/test")
@@ -21,46 +21,121 @@ const files = [
     .sort()
     .map((file) => `test/${file}`),
 ];
-console.error(
-  `LOCAL ONLY: ${files.length} files; systemd-required NOT_RUN: ${systemdTestFiles.join(", ")}`,
-);
+
+/** Test files that must not share the host with other running test files.
+ *
+ * `node --test` parallelizes across *files* in separate processes, so the only
+ * cross-file races are through host-global resources: fixed ports or socket
+ * paths, non-mkdtemp temp dirs, the abstract AF_UNIX namespace, /proc or
+ * cgroup scans that see sibling processes, repo files written in place, and
+ * wall-clock budgets that CPU contention can exhaust. A file belongs here
+ * only when one of those is inherent to what it proves -- the entry must say
+ * which resource and why it cannot be namespaced per test.
+ *
+ * The suite was audited for each of those resources and most files were found
+ * namespaced -- ephemeral ports, mkdtemp roots, abstract names hashed from
+ * unique state roots, and lock files beside the data they guard. What remains
+ * below is what a host cannot namespace: a sibling's CPU is always shared. */
+const SERIAL = new Set([
+  // The oracle is event-loop lag itself: reads must stay under 50 ms and
+  // mixed work under 100 ms. Seven sibling test processes can stall the loop
+  // past the budget without the broker doing anything wrong, so the assertion
+  // is only measurable while nothing else of ours runs.
+  "dist/test/status-responsiveness.test.js",
+  // The delayed-wait tests scale the runner's control-idle budget to 2 s and
+  // then answer after 3.5 s; under load the runner process cannot even start
+  // inside the idle window, so the observation it must issue never happens
+  // (observed === 0). The ordering margin is what is being proved, so it runs
+  // alone rather than weakened.
+  "dist/test/scenario-agent-wait.test.js",
+  // Scripted PTY steps drive a real TUI by wall-clock: a write that lands
+  // while the program is still drawing goes to the wrong screen and is lost.
+  // The harness now waits on screen markers where a transition can be marked
+  // (see "expect" in pty-harness.py), but most steps in these files still race
+  // windows as small as 0.2 s against the engine's draw and birth times, and
+  // sibling CPU stretches both. They run alone; mac-host-packages (2 s
+  // minimum window), tui-pty and session-mode-pty (one window each) stay in
+  // the parallel phase.
+  "dist/test/mac-new-handoff-pty.test.js",
+  "dist/test/open-tui-pty.test.js",
+  "dist/test/personal-pty.test.js",
+]);
+
+/** How many test files may run at once in the parallel phase. Override with
+ * OMA_TEST_CONCURRENCY; the default is the value validated on the development
+ * host, capped at the machine's parallelism so a large machine does not turn
+ * CPU contention into timing flakes. */
+const DEFAULT_CONCURRENCY = Math.min(8, availableParallelism());
+const requested = Number.parseInt(process.env.OMA_TEST_CONCURRENCY ?? "", 10);
+const concurrency = Number.isInteger(requested) && requested > 0
+  ? requested
+  : DEFAULT_CONCURRENCY;
+
+const serialFiles = files.filter((file) => SERIAL.has(file));
+const parallelFiles = files.filter((file) => !SERIAL.has(file));
 const guard = new URL("./local-test-guard.mjs", import.meta.url).href;
+const childEnv = {
+  ...process.env,
+  OMA_TEST_SYSTEMD: "0",
+  NODE_OPTIONS: `--import=${guard}`,
+  DBUS_SESSION_BUS_ADDRESS:
+    "unix:path=/nonexistent/oma-local-tests-no-user-bus",
+};
+
+console.error(
+  `LOCAL ONLY: ${files.length} files (${parallelFiles.length} parallel at concurrency ${concurrency}, ${serialFiles.length} serial); ` +
+  `systemd-required NOT_RUN: ${systemdTestFiles.join(", ")}`,
+);
+
 // The runner's own exit code says nothing about tests that did not run: a
 // suite where four sandbox tests skipped because the host has no bubblewrap
-// exits zero and reads as a pass. The summary is parsed so a run that proved
-// less than it claims fails here, the same way the verification lanes already
-// treat a skip (R35). The spec output still reaches the terminal unchanged.
-const summaryPath = join(mkdtempSync(join(tmpdir(), "oma-test-summary-")), "summary.tap");
-const child = spawn(
-  process.execPath,
-  ["--test", "--test-concurrency=1",
-    "--test-reporter=spec", "--test-reporter-destination=stdout",
-    "--test-reporter=tap", `--test-reporter-destination=${summaryPath}`,
-    ...files],
-  {
-    stdio: "inherit",
-    env: {
-      ...process.env,
-      OMA_TEST_SYSTEMD: "0",
-      NODE_OPTIONS: `--import=${guard}`,
-      DBUS_SESSION_BUS_ADDRESS:
-        "unix:path=/nonexistent/oma-local-tests-no-user-bus",
-    },
-  },
-);
-const [code, signal] = await once(child, "close");
-let unrun = [];
+// exits zero and reads as a pass. Each phase writes its own TAP summary, and
+// every summary is parsed so a run that proved less than it claims fails
+// here, the same way the verification lanes already treat a skip (R35). The
+// spec output still reaches the terminal unchanged.
+const summaryDir = mkdtempSync(join(tmpdir(), "oma-test-summary-"));
+// Serial first: its files exist on this list because host-global state or a
+// wall-clock budget is what they prove, so they run before the parallel
+// phase can put any sibling process or leftover grandchild on the host.
+const phases = [
+  { name: "serial", files: serialFiles, concurrency: 1 },
+  { name: "parallel", files: parallelFiles, concurrency },
+].filter((phase) => phase.files.length > 0);
+
+// Exit semantics match the former single-child runner: a signal or an unread
+// summary is 1, unrun tests are 1, otherwise the first nonzero phase code is
+// propagated so the suite's own answer is never rewritten here.
+let phaseCode = 0;
+let signaled = false;
+const unrun = [];
+const directives = [];
 try {
-  const summary = readFileSync(summaryPath, "utf8");
-  unrun = unrunTests(summary);
-  if (unrun.length > 0) {
-    console.error(`NOT A PASS: the suite left tests unrun (${unrun.join(", ")}).`);
-    for (const directive of unrunDirectives(summary)) console.error(`  ${directive}`);
+  for (const phase of phases) {
+    const summaryPath = join(summaryDir, `summary-${phase.name}.tap`);
+    const child = spawn(
+      process.execPath,
+      ["--test", `--test-concurrency=${phase.concurrency}`,
+        "--test-reporter=spec", "--test-reporter-destination=stdout",
+        "--test-reporter=tap", `--test-reporter-destination=${summaryPath}`,
+        ...phase.files],
+      { stdio: "inherit", env: childEnv },
+    );
+    const [code, signal] = await once(child, "close");
+    if (signal) signaled = true;
+    else if ((code ?? 1) !== 0 && phaseCode === 0) phaseCode = code ?? 1;
+    try {
+      const summary = readFileSync(summaryPath, "utf8");
+      for (const entry of unrunTests(summary)) unrun.push(`${phase.name}: ${entry}`);
+      for (const directive of unrunDirectives(summary)) directives.push(`${phase.name}: ${directive}`);
+    } catch (error) {
+      unrun.push(`${phase.name}: summary unreadable: ${error instanceof Error ? error.message : String(error)}`);
+    }
   }
-} catch (error) {
-  unrun = [`summary unreadable: ${error instanceof Error ? error.message : String(error)}`];
-  console.error(`NOT A PASS: ${unrun[0]}`);
 } finally {
-  rmSync(dirname(summaryPath), { recursive: true, force: true });
+  rmSync(summaryDir, { recursive: true, force: true });
 }
-process.exitCode = signal ? 1 : unrun.length > 0 ? 1 : (code ?? 1);
+if (unrun.length > 0) {
+  console.error(`NOT A PASS: the suite left tests unrun (${unrun.join(", ")}).`);
+  for (const directive of directives) console.error(`  ${directive}`);
+}
+process.exitCode = signaled || unrun.length > 0 ? 1 : phaseCode;

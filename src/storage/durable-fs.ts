@@ -298,38 +298,52 @@ export function replaceDerivedFile(target: string, bytes: string | Uint8Array, m
   // written and renamed somewhere else entirely. `ensureDurableDirectory`
   // having just succeeded proved nothing about the walk that followed it: it
   // was a different walk.
-  withinDirectory(target, (parent, name) => {
-    // P0V-96: what a killed writer of this name left is collected first, and
-    // this writer's temporary is locked until it is renamed away.
-    collectDeadTemporaries(parent);
-    const temporaryName = temporaryNameFor(name);
-    const temporary = join(dirname(target), temporaryName);
-    faultAt(faults, "file-create", "before", temporary);
-    const fd = createLockedTemporary(parent, temporaryName, constants.O_WRONLY, mode);
-    let renamed = false;
-    // P0V-49, P0-4: the descriptor is given back once, in the finally. The
-    // number is free the moment it is closed, and anything opened afterwards
-    // may be handed it, so nothing closes it a second time.
-    try {
-      faultAt(faults, "file-create", "after-visible", temporary);
-      faultAt(faults, "file-write", "before", temporary);
-      writeFileSync(fd, bytes);
-      faultAt(faults, "file-write", "ambiguous", temporary);
-      faultAt(faults, "file-fsync", "ambiguous", temporary);
-      fsyncSync(fd);
-      faultAt(faults, "file-fsync", "after-visible", temporary);
-      faultAt(faults, "derived-rename", "before", target);
-      renameSync(entryAt(parent, temporaryName), entryAt(parent, name));
-      renamed = true;
-      faultAt(faults, "derived-rename", "after-visible", target);
-      fsyncHeldDir(parent, dirname(target), faults);
-    } catch (error) {
-      if (!renamed) cleanupAfterFailure(parent, temporaryName, temporary, error, faults);
-      throw error;
-    } finally {
-      try { closeSync(fd); } catch { /* the kernel released it either way */ }
-    }
-  });
+  for (let attempt = 0; ; attempt++) {
+    const result = withinDirectory(target, (parent, name) => {
+      // P0V-96: what a killed writer of this name left is collected first, and
+      // this writer's temporary is locked until it is renamed away.
+      collectDeadTemporaries(parent);
+      const temporaryName = temporaryNameFor(name);
+      const temporary = join(dirname(target), temporaryName);
+      faultAt(faults, "file-create", "before", temporary);
+      const fd = createLockedTemporary(parent, temporaryName, constants.O_WRONLY, mode);
+      let renamed = false;
+      // P0V-49, P0-4: the descriptor is given back once, in the finally. The
+      // number is free the moment it is closed, and anything opened afterwards
+      // may be handed it, so nothing closes it a second time.
+      try {
+        faultAt(faults, "file-create", "after-visible", temporary);
+        faultAt(faults, "file-write", "before", temporary);
+        writeFileSync(fd, bytes);
+        faultAt(faults, "file-write", "ambiguous", temporary);
+        faultAt(faults, "file-fsync", "ambiguous", temporary);
+        fsyncSync(fd);
+        faultAt(faults, "file-fsync", "after-visible", temporary);
+        faultAt(faults, "derived-rename", "before", target);
+        try { renameSync(entryAt(parent, temporaryName), entryAt(parent, name)); }
+        catch (error) {
+          // The window the no-replace publication already answers: a
+          // temporary whose lock is free looks like a dead writer's to a
+          // concurrent collection, and the instant between this file's
+          // creation and its lock is free. A temporary taken in it is missing
+          // here -- the same answer, so the replacement starts again.
+          if ((error as NodeJS.ErrnoException).code === "ENOENT") return "restart";
+          throw error;
+        }
+        renamed = true;
+        faultAt(faults, "derived-rename", "after-visible", target);
+        fsyncHeldDir(parent, dirname(target), faults);
+      } catch (error) {
+        if (!renamed) cleanupAfterFailure(parent, temporaryName, temporary, error, faults);
+        throw error;
+      } finally {
+        try { closeSync(fd); } catch { /* the kernel released it either way */ }
+      }
+      return "replaced";
+    });
+    if (result !== "restart") return;
+    if (attempt >= 2) throw new StoreError("INTERNAL_ERROR", "a derived replacement's temporary kept being removed");
+  }
 }
 
 export type TreeFlushPolicy = "regular-files" | "context-single-link" | "workspace-links";
