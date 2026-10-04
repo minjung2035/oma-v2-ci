@@ -87,6 +87,19 @@ export function workspaceUsage(root: string, stopAfter: number): number {
 
 const PATH_TOOLS: readonly string[] = Object.freeze(["read", "write", "edit", "grep", "find", "ls"]);
 const WRITE_TOOLS: readonly string[] = Object.freeze(["write", "edit"]);
+const NO_ROOTS: readonly string[] = Object.freeze([]);
+
+/** The first root under which the early check admits `path`, tried in the
+ * order the guard itself tries them -- the workspace before every readable
+ * root. The contained read resolves under exactly the root its admission
+ * came through, so the path the guard passed is the path the effect reaches;
+ * a name no root admits hears the same refusal the guard would have said. */
+export function admittedRoot(workspace: string, readableRoots: readonly string[], path: unknown): string | null {
+  if (allowedWorkspacePath(workspace, path)) return workspace;
+  for (const root of readableRoots)
+    if (allowedWorkspacePath(root, path)) return root;
+  return null;
+}
 
 /** Mirrors `TOOL_SCOPE_ENV`/`TOOL_SCOPE_SANDBOX` in src/runtime/pi-spawn-plan.ts:
  * the runner sets it in a confined engine's environment, and nowhere else. */
@@ -119,13 +132,12 @@ export function guardWorkspaceTools(pi: ExtensionAPI, workspace: string,
     if (sandboxed && !WRITE_TOOLS.includes(event.toolName)) return undefined;
     const input = event.input as Record<string, unknown>;
     const path = input.path ?? ".";
-    if (allowedWorkspacePath(workspace, path)) return undefined;
     // C18: a read may also reach an installed-package resource root -- the
     // same store root the engine's argv names -- under the same
     // link-refusing containment the workspace gets. Writes and edits stay
     // inside the workspace; no other host path is opened.
-    if (!WRITE_TOOLS.includes(event.toolName) &&
-        readableRoots.some(root => allowedWorkspacePath(root, path))) return undefined;
+    const roots = WRITE_TOOLS.includes(event.toolName) ? NO_ROOTS : readableRoots;
+    if (admittedRoot(workspace, roots, path) !== null) return undefined;
     return { block: true, reason: "tool path is outside the agent workspace" };
   });
 }

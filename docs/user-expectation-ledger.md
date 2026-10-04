@@ -32,7 +32,7 @@
 | UX-13 | DR25 문서가 "skills/prompts는 로드하지 않는다"고 틀리게 안내 (`docs/design-revisions.md:535`) | 9 | 현재 동작으로 정정 | fix/fm 예정 | 결정 |
 | UX-14 | macOS `oma pi list`가 앱이 꺼져 있으면 실패하고 `--host-only` 대안을 안 알려줌 | 9 | 오류 문구에 `--host-only` 안내 | fix/fm 예정 | 결정 |
 | UX-15 | 확장 토글 저장 시 "Saved"만 나오고 다음 세션부터 적용된다는 걸 안 알려줌 | 9 | 저장 알림에 적용 시점 표기 | fix/fm 예정 | 결정 |
-| UX-16 | 설치한 package store 리소스를 모델 `read`/`ls`/`grep`이 읽지 못함 (guard는 허용, 실행층이 workspace만 허용) | 1 | `readableRoots`를 contained read/ls/grep/find까지 연결(쓰기는 계속 workspace만) | fix/fk 예정 | 결정 |
+| UX-16 | 설치한 package store 리소스를 모델 `read`/`ls`/`grep`이 읽지 못함 (guard는 허용, 실행층이 workspace만 허용) | 1 | `readableRoots`를 contained read/ls/grep/find까지 연결(쓰기는 계속 workspace만) | fix/fk — `admittedRoot`가 guard와 contained read가 같은 승인 순서로 root를 고름 | 수정됨 |
 
 ## 실패 방식·모델 표면
 

@@ -150,9 +150,9 @@ Pi/OS 기능을 다시 구현해서 생긴 중복·workaround·pre-release 잔�
   - 사용자-facing 명령 표면은 이미 타이트 — `oma pi`·`OMA_PI_COMMAND`는 정당한 제품/운영 표면
 
 ### fix 라운드 2 진행 상황
-- 완료: fix/fi(Worker 개발환경), fix/fh(보류 5건), fix/fj(fc 발견 9건)
+- 완료: fix/fi(Worker 개발환경), fix/fh(보류 5건), fix/fj(fc 발견 9건), fix/fk(fb readableRoots)
 - 리밋 중단·재개 대기: fix/fg, fix/fo, fix/fl, fix/fm
-- 대기: fk(readableRoots), fp(중복 제거), UX-10b, UX-18/19, UX-09
+- 대기: fp(중복 제거), UX-10b, UX-18/19, UX-09
 
 ## 6. 선행 작업 큐 (코드베이스 전체 확장 전 — 사용자 지시)
 

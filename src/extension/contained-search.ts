@@ -20,7 +20,7 @@ let output=''; let Refusal;
 try {
   const module=await import(process.argv[1]);
   const {withSearchSnapshot}=module; Refusal=module.WorkspaceRefusal;
-  output=await withSearchSnapshot(input.cwd,input.params.path??'.',input.maximum,controller.signal,async(cwd,target)=>{
+  output=await withSearchSnapshot(input.root,input.params.path??'.',input.maximum,controller.signal,async(cwd,target)=>{
     process.chdir(cwd);
     const home=(await import('node:path')).dirname(cwd);
     const {rmSync}=await import('node:fs');
@@ -44,14 +44,14 @@ finally {
   process.stdout.end(output,()=>process.kill(-process.pid,'SIGKILL'));
 }
 `;
-export function searchWorkspace<N extends "grep" | "find">(name: N, cwd: string, params: object,
+export function searchWorkspace<N extends "grep" | "find">(name: N, root: string, params: object,
   maximum: number | null, signal?: AbortSignal): Promise<SearchResult<N>> {
   if (signal?.aborted) return Promise.reject(new WorkspaceRefusal("search aborted"));
   return new Promise((resolve, reject) => {
     const child = spawn(process.execPath, ["--input-type=module", "-e", SCRIPT,
       new URL("./contained-files.js", import.meta.url).href, import.meta.resolve("@earendil-works/pi-coding-agent"),
-      JSON.stringify({ name, cwd, params, maximum, deadline: SEARCH_DEADLINE_MS })], {
-      cwd, detached: true, stdio: ["pipe", "pipe", "ignore"],
+      JSON.stringify({ name, root, params, maximum, deadline: SEARCH_DEADLINE_MS })], {
+      cwd: root, detached: true, stdio: ["pipe", "pipe", "ignore"],
       env: { PATH: `${join(getAgentDir(), "bin")}${delimiter}${process.env.PATH ?? "/usr/bin:/bin"}`,
         HOME: "/nonexistent", XDG_CONFIG_HOME: "/nonexistent", PI_CODING_AGENT_DIR: "/nonexistent", PI_OFFLINE: "1", TMPDIR: tmpdir() },
     });

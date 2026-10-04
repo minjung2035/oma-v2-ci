@@ -23,9 +23,10 @@ import {
   WorkspaceRefusal, accessWithin, existsWithin, isDirectoryWithin, mkdirWithin, readWithin, readdirWithin, writeGrowthWithin, withFileWithin, writeWithin,
 } from "./contained-files.js";
 import { searchWorkspace } from "./contained-search.js";
-import { workspaceUsage } from "./workspace-guard.js";
+import { admittedRoot, workspaceUsage } from "./workspace-guard.js";
 
-export function containWorkspaceTools(pi: ExtensionAPI, workspace: string, workspaceBytes: number | null, sandboxed: boolean, readOnly = false): void {
+export function containWorkspaceTools(pi: ExtensionAPI, workspace: string, workspaceBytes: number | null, sandboxed: boolean, readOnly = false,
+  readableRoots: readonly string[] = []): void {
   let writes: Promise<unknown> = Promise.resolve();
   const write = (path: string, content: string): Promise<void> => {
     const next = writes.catch(() => undefined).then(() => {
@@ -50,22 +51,33 @@ export function containWorkspaceTools(pi: ExtensionAPI, workspace: string, works
     access: async path => { accessWithin(workspace, path, true); },
   } }));
   if (sandboxed) return;
+  // C18: a read the guard admitted under a readable root resolves under that
+  // same root, through the same descriptor-relative no-follow containment the
+  // workspace gets -- the path the guard passed is the path the effect
+  // reaches. A name under no admitted root is refused with the guard's own
+  // words; writes and edits stay rooted at the workspace only.
+  const rootFor = (path: unknown): string => {
+    const root = admittedRoot(workspace, readableRoots, path);
+    if (root === null) throw new WorkspaceRefusal("tool path is outside the agent workspace");
+    return root;
+  };
   pi.registerTool(createReadToolDefinition(workspace, { operations: {
-    readFile: async path => readWithin(workspace, path),
-    access: async path => { accessWithin(workspace, path, false); },
-    detectImageMimeType: path => withFileWithin(workspace, path, held => detectSupportedImageMimeTypeFromFile(held)),
+    readFile: async path => readWithin(rootFor(path), path),
+    access: async path => { accessWithin(rootFor(path), path, false); },
+    detectImageMimeType: async path => withFileWithin(rootFor(path), path, held => detectSupportedImageMimeTypeFromFile(held)),
   } }));
   // G10-02: the engine's walkers only see approved copies, including the
-  // context=0 fast path which never invokes a custom readFile operation.
+  // context=0 fast path which never invokes a custom readFile operation. The
+  // snapshot's root is the one the search's own path was admitted under.
   const grep = createGrepToolDefinition(workspace);
-  pi.registerTool({ ...grep, execute: (id, params, signal, update, ctx) =>
-    searchWorkspace("grep", workspace, params, workspaceBytes, signal) });
+  pi.registerTool({ ...grep, execute: async (id, params, signal, update, ctx) =>
+    searchWorkspace("grep", rootFor(params.path ?? "."), params, workspaceBytes, signal) });
   const find = createFindToolDefinition(workspace);
-  pi.registerTool({ ...find, execute: (id, params, signal, update, ctx) =>
-    searchWorkspace("find", workspace, params, workspaceBytes, signal) });
+  pi.registerTool({ ...find, execute: async (id, params, signal, update, ctx) =>
+    searchWorkspace("find", rootFor(params.path ?? "."), params, workspaceBytes, signal) });
   pi.registerTool(createLsToolDefinition(workspace, { operations: {
-    exists: path => existsWithin(workspace, path),
-    stat: path => { const directory = isDirectoryWithin(workspace, path); return { isDirectory: () => directory }; },
-    readdir: path => readdirWithin(workspace, path),
+    exists: path => existsWithin(rootFor(path), path),
+    stat: path => { const directory = isDirectoryWithin(rootFor(path), path); return { isDirectory: () => directory }; },
+    readdir: path => readdirWithin(rootFor(path), path),
   } }));
 }
