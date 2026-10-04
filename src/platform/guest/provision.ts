@@ -15,7 +15,7 @@ import { StoreError } from "../../domain/errors.js";
 import { runProcess, type CommandSpec } from "../../process/run.js";
 import { isUuid } from "../../protocol/host-guest.js";
 import { INSTANCE_FILE, INSTANCE_KIND } from "./identity.js";
-import { ensureDurableDirectory, publishNoReplace } from "../../storage/durable-fs.js";
+import { ensureOwnedDurableDirectory, publishNoReplace } from "../../storage/durable-fs.js";
 
 export interface BootFacts {
   /** `oma.instance=` from the kernel command line. */
@@ -103,7 +103,8 @@ export function readInstance(mount: string): string | null {
  * (the core's no-replace publication) -- so an interrupted first boot leaves
  * no record rather than a damaged one, and the next boot provisions again. */
 export function writeInstance(mount: string, instance: string): void {
-  ensureDurableDirectory(mount, 0o755);
+  // P0-8/DR32: the mount point is oma's own leaf on the guest's root.
+  ensureOwnedDurableDirectory(mount, mount, 0o755);
   const path = join(mount, INSTANCE_FILE);
   const bytes = `${JSON.stringify({ kind: INSTANCE_KIND, instanceId: instance, createdAt: new Date().toISOString() })}\n`;
   if (publishNoReplace(path, bytes, 0o644) === "existing" && readInstance(mount) !== instance)

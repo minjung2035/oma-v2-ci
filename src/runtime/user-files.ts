@@ -9,7 +9,7 @@ import { withCleanup } from "../process/cleanup.js";
 import { decodeUtf8 } from "../domain/utf8.js";
 import { assertHostDirectoryLayout } from "./assets.js";
 import { openRegularBeneath, withinDirectory } from "../storage/contained-fs.js";
-import { ensureDurableDirectory, ensureOwnedDurableDirectory, publishNoReplace, replaceDerivedFile } from "../storage/durable-fs.js";
+import { ensureDurableDirectory, ensureOwnedDurableDirectory, publishNoReplace, replaceDerivedFile, type DurabilityObserver } from "../storage/durable-fs.js";
 import { createTemporary, discardTemporary, ensureHostOwnedDirectory, ensureHostUserDirectory, fsyncDirectory, publishMade, replaceFile } from "../platform/host/files.js";
 
 export function ensureUserDirectory(path: string): void {
@@ -23,9 +23,10 @@ export function ensureUserDirectory(path: string): void {
  * directory): every component from it down gets the owner-bits repair the
  * owned sweeps make, so a mode-000 store root cannot wedge the open the way
  * the plain walk did. The ancestors above it are the user's and are never
- * rewritten. */
-export function ensureOwnedUserDirectory(path: string, ownedFrom: string): void {
-  if (process.platform !== "darwin") { ensureOwnedDurableDirectory(path, ownedFrom, 0o700); return; }
+ * rewritten. `faults` is the durability-fault seam the Linux ensure carries;
+ * the host's ensure flushes the same chain without it. */
+export function ensureOwnedUserDirectory(path: string, ownedFrom: string, faults?: DurabilityObserver): void {
+  if (process.platform !== "darwin") { ensureOwnedDurableDirectory(path, ownedFrom, 0o700, faults); return; }
   ensureHostOwnedDirectory(path, ownedFrom);
 }
 

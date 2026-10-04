@@ -4,10 +4,10 @@
 // the file is written, read back and removed through that one resolution, and
 // its path is never looked up again.
 import { constants, fsyncSync, fstatSync, closeSync, unlinkSync, createReadStream, writeSync, type ReadStream } from "node:fs";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { createHash, randomUUID } from "node:crypto";
 import { StoreError } from "../domain/errors.js";
-import { ensureDirectory } from "../storage/directory.js";
+import { ensureOwnedDirectory } from "../storage/directory.js";
 import { entryAt, openBeneath, openDirectory, openRegularBeneath, closeEvery } from "../storage/contained-fs.js";
 
 export interface RawDescriptor { readonly bytes: number; readonly sha256: string }
@@ -34,7 +34,9 @@ export class TransportSpool implements ConnectionSpool {
   constructor(stagingRoot: string, private readonly descriptor: RawDescriptor) {
     if (!Number.isSafeInteger(descriptor.bytes) || descriptor.bytes < 0 || !/^[0-9a-f]{64}$/.test(descriptor.sha256))
       throw new StoreError("STREAM_INVALID", "invalid raw stream descriptor");
-    ensureDirectory(stagingRoot);
+    // P0-8: the staging root is oma's own (the state's staging directory);
+    // repair its tail rather than trusting the mode a stray left.
+    ensureOwnedDirectory(stagingRoot, dirname(stagingRoot));
     this.name = `rpc-${randomUUID()}.wire`;
     this.path = join(stagingRoot, this.name);
     this.directory = openDirectory(stagingRoot);

@@ -5,7 +5,7 @@ import { StoreError } from "../domain/errors.js";
 import { RESIDENT_PATHS } from "../resident-paths.js";
 import { isValidFullOid } from "../ids.js";
 import { agentRootPathAt, isWorkspacePathFor } from "../storage/paths.js";
-import { ensureDurableDirectory, fsyncDir } from "../storage/durable-fs.js";
+import { ensureOwnedDurableDirectory, fsyncDir } from "../storage/durable-fs.js";
 import { publishStagedDirectory } from "../storage/staged-tree.js";
 import { assertDirectory } from "../storage/directory.js";
 import { TreeLease, collectLeasedTree } from "../storage/tree-lease.js";
@@ -63,7 +63,7 @@ export class WorkspaceCoordinator {
     this.assertCanonicalBase(identity.from);
     const workspace = identity.workspacePath;
     const root = agentRootPathAt(this.paths.stateRoot, identity.name), temporary = join(root, "workspace.tmp");
-    ensureDurableDirectory(root);
+    ensureOwnedDurableDirectory(root, this.paths.stateRoot, 0o755);
     if (readinessProven) {
       // Only its presence is the host's to observe, through the parent it holds.
       withinDirectory(workspace, (parent, name) => {
@@ -94,7 +94,7 @@ export class WorkspaceCoordinator {
   }
   private async prepareLeased(lease: TreeLease, identity: Readonly<{ name: string; from: string }>, temporary: string, workspace: string,
     verify: (path: string) => void): Promise<void> {
-    ensureDurableDirectory(temporary);
+    ensureOwnedDurableDirectory(temporary, this.paths.stateRoot, 0o755);
     if (!existsSync(join(temporary, ".git"))) {
       const cloned = await this.prepareGit(lease, ["clone", "--no-local", "--single-branch", "--branch", "main", this.paths.projectGit, temporary]);
       if (cloned.status !== 0) throw new StoreError("INTERNAL_ERROR", "private workspace clone failed");

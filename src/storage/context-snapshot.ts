@@ -12,7 +12,7 @@ import { contextEntriesCheck } from "../domain/context-policy.js";
 import { StoreError } from "../domain/errors.js";
 import { contextRevisionPathAt } from "./paths.js";
 import { assertContextDirectory, readContextEntry } from "./context-files.js";
-import { ensureDurableDirectory, fsyncDir, fsyncTree, writeExclusiveFsyncedFile } from "./durable-fs.js";
+import { ensureOwnedDurableDirectory, fsyncDir, fsyncTree, writeExclusiveFsyncedFile } from "./durable-fs.js";
 import { publishStagedDirectory, replaceDerivedSymlink } from "./staged-tree.js";
 import { entryAt, openBeneath, openDirectory } from "./contained-fs.js";
 import { removeOwnedFile, removeOwnedTree } from "./directory.js";
@@ -76,7 +76,7 @@ export function publishContextRevision(
   if (invalid || !isValidFullOid(candidate)) throw new StoreError("STORE_CORRUPT", invalid ?? "invalid context revision");
   assertContextDirectory(source);
   const revisions = join(worldDir, "context", "revisions");
-  ensureDurableDirectory(revisions);
+  ensureOwnedDurableDirectory(revisions, worldDir, 0o755);
   const destination = contextRevisionPathAt(worldDir, candidate);
   if (!lstatSync(destination, { throwIfNoEntry: false })) {
     const temporary = join(revisions, `.prepare-${candidate}-${generateOperationId()}`);
@@ -92,11 +92,11 @@ export function publishContextRevision(
     // publish failure is retained beside it (P0-4), never substituted for it,
     // and the release still runs exactly once.
     withCleanup(() => {
-      ensureDurableDirectory(temporary);
+      ensureOwnedDurableDirectory(temporary, worldDir, 0o755);
       for (const entry of entries) {
         const bytes = readContextEntry(source, entry);
         const target = join(temporary, entry.path);
-        ensureDurableDirectory(dirname(target));
+        ensureOwnedDurableDirectory(dirname(target), worldDir, 0o755);
         writeExclusiveFsyncedFile(target, bytes, 0o644);
       }
       sealRevision(temporary, entries);

@@ -7,7 +7,7 @@ import { StoreError } from "../domain/errors.js";
 import { HOST_LOSS_SIGNALS } from "../process/host-loss.js";
 import { DEPLOYMENT_LAYOUT } from "../domain/deployment.js";
 import { ProcessLock } from "./process-lock.js";
-import { ensureUserDirectory } from "./user-files.js";
+import { ensureOwnedUserDirectory } from "./user-files.js";
 import { newSessionBirth, PERSONAL_SESSIONS, publishSessionBirth, readSessionBirth, type SessionBirth } from "./session-mode.js";
 import { PI_AGENT_DIR_ENV, resolvePiRuntime } from "./pi-runtime.js";
 
@@ -28,7 +28,9 @@ export async function runPersonalSession(options: { readonly root: string; reado
   readonly packages: string; readonly resume?: string; readonly env?: NodeJS.ProcessEnv }): Promise<PersonalExit> {
   const birth = readSessionBirth(options.root);
   if (birth === null || birth.mode !== "personal") throw new StoreError("INVALID_REQUEST", "Personal requires its saved birth record");
-  ensureUserDirectory(birth.history);
+  // P0-8: the history directory is inside the session's own root under the
+  // data root, all oma-made; repair rather than wedge on a stray's mode.
+  ensureOwnedUserDirectory(birth.history, options.dataRoot);
   const lockPath = join(options.root, "history.lock"), lease = ProcessLock.tryAcquire(lockPath);
   if (lease === null) throw new StoreError("BROKER_UNAVAILABLE", "That Personal session is open in another oma window");
   let child: ChildProcess;

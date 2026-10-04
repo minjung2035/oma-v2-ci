@@ -4,7 +4,7 @@
 import { mkdirSync } from "node:fs";
 import { randomUUID } from "node:crypto";
 import { join } from "node:path";
-import { ensureDirectory } from "../storage/directory.js";
+import { ensureOwnedDirectory } from "../storage/directory.js";
 import { TreeLease, collectLeasedTree } from "../storage/tree-lease.js";
 import { entryAt, withinDirectory } from "../storage/contained-fs.js";
 import type { GitPaths } from "./paths.js";
@@ -102,7 +102,7 @@ export class QuarantineImporter {
     if (this.executor.blocked) throw new StoreError("REF_STATE_UNKNOWN", "canonical quarantine preparation is active or uncertain");
     // FS-005: made under a staging directory resolved once, and removed the same way.
     const staging = join(this.paths.stateRoot, "staging");
-    ensureDirectory(staging);
+    ensureOwnedDirectory(staging, this.paths.stateRoot);
     const root = join(staging, `quarantine-ns-${randomUUID()}`);
     // R6-04: the lease first, then the tree; every process of the namespace
     // command holds it, so a later start can prove they are all gone.

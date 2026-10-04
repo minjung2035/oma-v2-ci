@@ -18,7 +18,7 @@
  */
 import { SettingsManager } from "@earendil-works/pi-coding-agent";
 import { StoreError } from "../domain/errors.js";
-import { lockedUserReplace } from "../runtime/locked-files.js";
+import { lockedOwnedReplace } from "../runtime/locked-files.js";
 import { OMA_THEME_NAME } from "../runtime/oma-theme.js";
 
 /** `SettingsStorage`/`SettingsScope` are not root-exported in 0.87.1; the
@@ -54,7 +54,9 @@ export class OmaSettingsStorage implements SettingsStorage {
         throw new StoreError("UNSUPPORTED_PROFILE", "engine project settings have no OMA storage");
       return;
     }
-    lockedUserReplace(this.agentDir, "settings.json", SETTINGS_BYTES, fn);
+    // P0-8/DR32: the engine home is oma's own; a damaged leaf mode is
+    // repaired before the locked replace rather than wedging on it.
+    lockedOwnedReplace(this.agentDir, this.agentDir, "settings.json", SETTINGS_BYTES, fn);
   }
 }
 

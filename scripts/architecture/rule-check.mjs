@@ -9,6 +9,7 @@ import { effectOwnershipFindings } from "./rules/effect-ownership-rules.mjs";
 import { surfaceRuleFindings } from "./rules/surface-rules.mjs";
 import { fenceRuleFindings } from "./rules/fence-rules.mjs";
 import { stateRootFindings, stateTreeFindings } from "./rules/state-tree-rules.mjs";
+import { ownedStateFindings } from "./rules/owned-state-rules.mjs";
 
 export const ARCHITECTURE_RULES = Object.freeze([
   ["imports", importRuleFindings],
@@ -21,6 +22,7 @@ export const ARCHITECTURE_RULES = Object.freeze([
   ["fence", fenceRuleFindings],
   ["state-tree", stateTreeFindings],
   ["state-root", stateRootFindings],
+  ["owned-state", ownedStateFindings],
 ]);
 
 export function runArchitectureRuleCheck(root = process.cwd()) {

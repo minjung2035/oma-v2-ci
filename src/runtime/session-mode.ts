@@ -5,7 +5,7 @@ import { StoreError } from "../domain/errors.js";
 import { isValidSocietyName, UUID_V4_RE } from "../domain/identifiers.js";
 import { isSessionMode, type SessionMode } from "../domain/session-mode.js";
 import { sessionDirPathAt } from "../storage/paths.js";
-import { ensureUserDirectory, publishUserFile, readUserFile } from "./user-files.js";
+import { ensureOwnedUserDirectory, publishUserFile, readUserFile } from "./user-files.js";
 
 export const SESSION_BIRTH = "session-mode.json";
 export const PERSONAL_SESSIONS = ".personal";
@@ -44,7 +44,9 @@ export function readSessionBirth(root: string): SessionBirth | null {
 export function publishSessionBirth(root: string, birth: SessionBirth): SessionBirth {
   const next = checked(root, birth), bytes = `${JSON.stringify(next)}\n`;
   if (Buffer.byteLength(bytes) > MAX_BYTES) return corrupt();
-  ensureUserDirectory(root);
+  // P0-8: a birth record's root is oma's own (a society or a Personal id
+  // under the data root); its parent's tail is repaired inside that boundary.
+  ensureOwnedUserDirectory(root, dirname(root));
   publishUserFile(join(root, SESSION_BIRTH), bytes);
   const saved = readSessionBirth(root);
   if (saved === null || JSON.stringify(saved) !== JSON.stringify(next))

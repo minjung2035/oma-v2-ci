@@ -9,7 +9,7 @@ import { isValidSocietyName } from "../domain/identifiers.js";
 import { deploymentDigest } from "../runtime/deployment-manifest.js";
 import { packageStoreDir, reconciledEntries, type InstalledPackage } from "../runtime/pi-packages.js";
 import { residentRootfsPath } from "../runtime/provision.js";
-import { ensureDirectory } from "../storage/directory.js";
+import { ensureOwnedUserDirectory } from "../runtime/user-files.js";
 import { errorWords } from "./words.js";
 import { commitManagedEdit, commitRoleSet, projectBundle, projectSettingsPath, readSettingsForEditing, roleSetOf, writeSettings,
   type Settings } from "./sources/settings.js";
@@ -22,7 +22,8 @@ export function ensureProjectSettings(dataRoot: string, project: string, libdir:
   const path = projectSettingsPath(dataRoot, project);
   const packages = packageStoreDir(join(dataRoot, project));
   if (!existsSync(path)) {
-    ensureDirectory(dirname(path), 0o700);
+    // P0-8: `.projects/<project>` is oma's own under the data root.
+    ensureOwnedUserDirectory(dirname(path), dataRoot);
     const earlier = [join(dataRoot, project, "config.json"), session].find(file => file !== undefined && existsSync(file));
     const seed = earlier === undefined ? null : readSettingsForEditing(earlier);
     const config = seed?.config ?? defaultHostConfig({ society: project, node: process.execPath, libdir: `${libdir}/`,

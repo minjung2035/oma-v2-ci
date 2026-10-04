@@ -2,10 +2,10 @@
  "version": 1,
  "baseline": "b25961cc46532f5e30ff60cc381fed51c59d13ab",
  "summary": {
-  "READ_UNCHANGED": 53,
-  "NOT_REVIEWED": 82,
-  "CHANGED_WITH_ORACLE": 221,
-  "REMOVED": 2
+  "READ_UNCHANGED": 52,
+  "REMOVED": 8,
+  "NOT_REVIEWED": 108,
+  "CHANGED_WITH_ORACLE": 213
  },
  "lanes": {
   "fast": "PASS",
@@ -36,45 +36,13 @@
     "P19",
     "P23"
    ],
-   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are tests whose loaded module closure (or text) contains this file"
-  },
-  {
-   "path": "implementation/schema-v1-to-v2.sql",
-   "primary": null,
-   "status": "NOT_REVIEWED",
-   "by": [],
-   "oracles": []
+   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are tests whose loaded module closure (or text) contains this file",
+   "sha256": "a7261bd176ca58134bb320de83459fe3f8f952e86bea1ecae94f0d439d230688"
   },
   {
    "path": "implementation/schema-v1.sql",
    "primary": "WP04",
-   "status": "READ_UNCHANGED",
-   "by": [
-    "AV-review"
-   ],
-   "oracles": [
-    "P01",
-    "P02",
-    "P05",
-    "R38",
-    "V01A",
-    "V01B",
-    "V31A",
-    "V31B"
-   ],
-   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are tests whose loaded module closure (or text) contains this file"
-  },
-  {
-   "path": "implementation/schema-v2-to-v3.sql",
-   "primary": null,
-   "status": "NOT_REVIEWED",
-   "by": [],
-   "oracles": []
-  },
-  {
-   "path": "implementation/schema-v2.sql",
-   "primary": null,
-   "status": "NOT_REVIEWED",
+   "status": "REMOVED",
    "by": [],
    "oracles": []
   },
@@ -88,13 +56,11 @@
   {
    "path": "implementation/systemd/broker.service.in",
    "primary": "WP03",
-   "status": "CHANGED_WITH_ORACLE",
+   "status": "REMOVED",
    "by": [
     "P0V-59"
    ],
-   "oracles": [
-    "P0V-59"
-   ]
+   "oracles": []
   },
   {
    "path": "implementation/systemd/principal-relay.service.in",
@@ -108,7 +74,8 @@
     "P0V-59",
     "V03A",
     "V03B"
-   ]
+   ],
+   "sha256": "3689f974d7ec1acb3468b3543549ce7abe65ecb714d6044be8391dd3c31fa1fe"
   },
   {
    "path": "implementation/systemd/principal.path.in",
@@ -119,32 +86,27 @@
    ],
    "oracles": [
     "P0V-59"
-   ]
+   ],
+   "sha256": "9c69399942851519c0a95b98f6159b5a08415cb1fce2e555b0ce44a42c0efa6c"
   },
   {
    "path": "implementation/systemd/reconcile.service.in",
    "primary": "WP03",
-   "status": "CHANGED_WITH_ORACLE",
+   "status": "REMOVED",
    "by": [
     "P0V-59",
     "WP03"
    ],
-   "oracles": [
-    "P0V-59",
-    "V03A",
-    "V03B"
-   ]
+   "oracles": []
   },
   {
    "path": "implementation/systemd/reconcile.timer.in",
    "primary": "WP03",
-   "status": "CHANGED_WITH_ORACLE",
+   "status": "REMOVED",
    "by": [
     "P0V-59"
    ],
-   "oracles": [
-    "P0V-59"
-   ]
+   "oracles": []
   },
   {
    "path": "implementation/systemd/resident.path.in",
@@ -155,7 +117,8 @@
    ],
    "oracles": [
     "P0V-59"
-   ]
+   ],
+   "sha256": "b50782156aa3dc8925595fa5b58c20c1ee5fed30512b040c0bbbf5e7891dd7a9"
   },
   {
    "path": "implementation/systemd/resident.service.in",
@@ -171,15 +134,15 @@
     "V03A",
     "V03B",
     "V25A"
-   ]
+   ],
+   "sha256": "667c1a244143a3d74926d1de861c4ac8ea516e76b83903dbf430010268ebc7d0"
   },
   {
    "path": "src/attestation.ts",
    "primary": null,
    "status": "NOT_REVIEWED",
    "by": [],
-   "oracles": [],
-   "note": "Current working-tree bytes have no explicit byte-bound review; historical reviews do not certify these changes."
+   "oracles": []
   },
   {
    "path": "src/authority.ts",
@@ -214,99 +177,16 @@
     "P0V-93",
     "P0V-94",
     "P0V-95"
-   ]
+   ],
+   "sha256": "9aea8c587b0b1e61ac405cb54efee47c10d7621c38d0cef756170348aacfffd5"
   },
   {
    "path": "src/broker.ts",
    "primary": "WP21",
-   "status": "CHANGED_WITH_ORACLE",
-   "by": [
-    "AV20",
-    "AV5",
-    "DR16",
-    "DR9",
-    "P0V-01",
-    "P0V-02",
-    "P0V-03",
-    "P0V-04",
-    "P0V-06",
-    "P0V-113",
-    "P0V-114",
-    "P0V-115",
-    "P0V-116",
-    "P0V-31",
-    "P0V-33",
-    "P0V-47",
-    "P0V-48",
-    "P0V-49",
-    "P0V-50",
-    "P0V-52",
-    "P0V-53",
-    "P0V-57",
-    "P0V-58",
-    "P0V-60",
-    "P0V-64",
-    "P0V-69",
-    "P0V-70",
-    "P0V-87",
-    "P0V-88",
-    "P0V-89",
-    "P0V-90",
-    "P0V-91",
-    "P0V-92",
-    "P0V-93",
-    "P0V-94",
-    "P0V-95",
-    "WP03",
-    "WP07",
-    "WP21",
-    "WP22",
-    "WP23",
-    "WP26"
-   ],
-   "oracles": [
-    "AV20",
-    "AV5",
-    "DR9",
-    "P0V-113",
-    "P0V-114",
-    "P0V-115",
-    "P0V-116",
-    "P0V-31",
-    "P0V-33",
-    "P0V-47",
-    "P0V-48",
-    "P0V-49",
-    "P0V-50",
-    "P0V-52",
-    "P0V-53",
-    "P0V-57",
-    "P0V-58",
-    "P0V-60",
-    "P0V-64",
-    "P0V-69",
-    "P0V-70",
-    "P0V-87",
-    "P0V-88",
-    "P0V-90",
-    "P0V-92",
-    "P0V-93",
-    "P0V-94",
-    "P0V-95",
-    "V03A",
-    "V03B",
-    "V07A",
-    "V07B",
-    "V21A",
-    "V21B",
-    "V22A",
-    "V22B",
-    "V23A",
-    "V23B",
-    "V26A",
-    "V26B",
-    "V26C"
-   ]
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": [],
+   "note": "Current working-tree bytes have no explicit byte-bound review; historical reviews do not certify these changes."
   },
   {
    "path": "src/broker/composition.ts",
@@ -318,7 +198,8 @@
    "oracles": [
     "V23A",
     "V23B"
-   ]
+   ],
+   "sha256": "1631ee070f65e0c303bee44b97b3a1e3fa419f7a6ce127e41949d9728a480bd1"
   },
   {
    "path": "src/broker/connection.ts",
@@ -334,7 +215,8 @@
     "P0V-123",
     "P0V-124",
     "P0V-126"
-   ]
+   ],
+   "sha256": "add69b5d6a3ce9fb17feb352732d91c7c2676571b3d7a975a6d40c8044425110"
   },
   {
    "path": "src/broker/internal-dispatcher.ts",
@@ -373,7 +255,8 @@
     "V21B",
     "V22A",
     "V22B"
-   ]
+   ],
+   "sha256": "e32ed899af59cc9f763c0713856429907294fa23acede35422a6df55373f9ac2"
   },
   {
    "path": "src/broker/logs.ts",
@@ -386,7 +269,8 @@
     "F3",
     "VIEW-002"
    ],
-   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are the tests that load this module"
+   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are the tests that load this module",
+   "sha256": "3f7ddfcd3380609628a34b97ba087c7aa5a5c418035080fbd3ca61df9ed1bf3c"
   },
   {
    "path": "src/broker/peer-authenticator.ts",
@@ -406,7 +290,8 @@
     "P0V-124",
     "P0V-126",
     "P0V-60"
-   ]
+   ],
+   "sha256": "387423b89b91c23a36e74002ad6b3e01d869925951a026b16fdbc2c40f56daa8"
   },
   {
    "path": "src/broker/peer-pin.ts",
@@ -417,7 +302,8 @@
    ],
    "oracles": [
     "AV6"
-   ]
+   ],
+   "sha256": "067b9ded64c3cd9f834bd816ae36f49d89e0193a6378ab83b0a8101b9362ecc2"
   },
   {
    "path": "src/broker/principal-endpoint.ts",
@@ -444,7 +330,8 @@
     "P0V-47",
     "P0V-48",
     "P0V-60"
-   ]
+   ],
+   "sha256": "c0398e7737801b46ceef81cab13e56fa7803c28ff1688714e23fffae56e1d130"
   },
   {
    "path": "src/broker/process-ancestry.ts",
@@ -455,7 +342,8 @@
    ],
    "oracles": [
     "AV6"
-   ]
+   ],
+   "sha256": "3d72cf704a21ed07dd78ed8a4e3e53f465c71fb0f38bc57829d6b2da3c281c5c"
   },
   {
    "path": "src/broker/public-dispatcher.ts",
@@ -492,7 +380,8 @@
     "V22B",
     "V23A",
     "V23B"
-   ]
+   ],
+   "sha256": "45d7f2d5b26b1ed5c31877b61b40341b8f3e3dfccbb895b7f5535f0cb9737279"
   },
   {
    "path": "src/broker/replies.ts",
@@ -505,24 +394,16 @@
    "oracles": [
     "AV27",
     "AV28"
-   ]
+   ],
+   "sha256": "67b2ec3b29cab44ff2eeab676a4b2c5d6c7ce6919d353f8ac5edea99de50d886"
   },
   {
    "path": "src/broker/transport-spool.ts",
    "primary": "WP22",
-   "status": "CHANGED_WITH_ORACLE",
-   "by": [
-    "AV1",
-    "AV2",
-    "AV5",
-    "P0V-65"
-   ],
-   "oracles": [
-    "AV1",
-    "AV2",
-    "AV5",
-    "P0V-65"
-   ]
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": [],
+   "note": "Current working-tree bytes have no explicit byte-bound review; historical reviews do not certify these changes."
   },
   {
    "path": "src/cli.ts",
@@ -533,7 +414,8 @@
    ],
    "oracles": [
     "P0V-62"
-   ]
+   ],
+   "sha256": "0305166158c1d796d022bda37ff17f001bc7a77b4006158bc475554ac41fb22c"
   },
   {
    "path": "src/cli/arguments.ts",
@@ -548,7 +430,8 @@
     "AV1",
     "AV2",
     "AV5"
-   ]
+   ],
+   "sha256": "1e6f32f32bdf2005710de12246acb9127db73efdab0cd52b1ea1c65e7355e26f"
   },
   {
    "path": "src/cli/cache-codec.ts",
@@ -567,7 +450,8 @@
     "V26B",
     "WP26"
    ],
-   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are tests whose loaded module closure contains this module"
+   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are tests whose loaded module closure contains this module",
+   "sha256": "374c4c93642b5cd34e4c6698a669eb61ccc82880da4a2291729df3953496c2a3"
   },
   {
    "path": "src/cli/commands/agent.ts",
@@ -578,7 +462,8 @@
    ],
    "oracles": [
     "AV1"
-   ]
+   ],
+   "sha256": "71201856d8b92c5c13be091890e1dfc119a02141ed02fb595877844bece0c09d"
   },
   {
    "path": "src/cli/commands/context.ts",
@@ -589,7 +474,8 @@
    ],
    "oracles": [
     "AV1"
-   ]
+   ],
+   "sha256": "1410f2fc08281429fcc609ee810ea5a3504a9e024306adf0bea179c7ffbe4ae3"
   },
   {
    "path": "src/cli/commands/integrate.ts",
@@ -609,15 +495,15 @@
    ],
    "oracles": [
     "AV1"
-   ]
+   ],
+   "sha256": "5e9ecbe03892f60fd6e1eac6e9e93a5acdde8f78e7adcfa205bc3987afbacf23"
   },
   {
    "path": "src/cli/commands/merge.ts",
    "primary": null,
    "status": "NOT_REVIEWED",
    "by": [],
-   "oracles": [],
-   "note": "Current working-tree bytes have no explicit byte-bound review; historical reviews do not certify these changes."
+   "oracles": []
   },
   {
    "path": "src/cli/commands/routes.ts",
@@ -628,7 +514,8 @@
    ],
    "oracles": [
     "AV1"
-   ]
+   ],
+   "sha256": "6231ead3d30043a97b87426e1f9b59e57137bd0b3662c75ef532090a72f2e74c"
   },
   {
    "path": "src/cli/commands/send.ts",
@@ -639,7 +526,8 @@
    ],
    "oracles": [
     "AV1"
-   ]
+   ],
+   "sha256": "ca38a6ef3bcf7bf5cf472483f8d4e5ae70199ff681a2625e5c79bdffe530fd3a"
   },
   {
    "path": "src/cli/commands/society.ts",
@@ -657,7 +545,8 @@
    ],
    "oracles": [
     "AV1"
-   ]
+   ],
+   "sha256": "1eaac672b7ae11948bf71d3f0b14a7567bad33ba82fb4aa7f2cef168562606c4"
   },
   {
    "path": "src/cli/commands/submit.ts",
@@ -668,7 +557,8 @@
    ],
    "oracles": [
     "AV1"
-   ]
+   ],
+   "sha256": "d9d3f65d4476b068ebae34adccf7385fb1ed14bcfb7fbf98296dc9ae89a0667f"
   },
   {
    "path": "src/cli/effects.ts",
@@ -691,15 +581,15 @@
     "P0V-63",
     "P0V-78",
     "P0V-86"
-   ]
+   ],
+   "sha256": "d76061225bb6151ab5a6615eca5a7b138ba2b9fcf42ec95fa63b993ae76bbd83"
   },
   {
    "path": "src/cli/effects/code.ts",
    "primary": null,
    "status": "NOT_REVIEWED",
    "by": [],
-   "oracles": [],
-   "note": "Current working-tree bytes have no explicit byte-bound review; historical reviews do not certify these changes."
+   "oracles": []
   },
   {
    "path": "src/cli/effects/context.ts",
@@ -710,7 +600,8 @@
    ],
    "oracles": [
     "P0V-78"
-   ]
+   ],
+   "sha256": "7ccb59734234687a880f5490df783ceb893366dd4892fb3a97d09bcd3d2d16a3"
   },
   {
    "path": "src/cli/effects/goal.ts",
@@ -730,7 +621,8 @@
    "oracles": [
     "AV8",
     "P0V-63"
-   ]
+   ],
+   "sha256": "0c17b4aed09506da6ca0aa7ddb887c0cf8f37c27b8be66e4318fc255932368ef"
   },
   {
    "path": "src/cli/effects/submit.ts",
@@ -741,7 +633,8 @@
    ],
    "oracles": [
     "P0V-78"
-   ]
+   ],
+   "sha256": "2a80b6c8ffe06da0bc6ea803b8322d563cf4c6c366064f543766d8be079a0f94"
   },
   {
    "path": "src/cli/exit.ts",
@@ -779,7 +672,8 @@
     "V26A",
     "V26B",
     "V26C"
-   ]
+   ],
+   "sha256": "7615133335b4df6f6ab438d99fc0d4094abcaa11722883b0b95ae651d8c99f50"
   },
   {
    "path": "src/cli/request-intent.ts",
@@ -798,7 +692,8 @@
     "T119",
     "V10C"
    ],
-   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are tests whose loaded module closure contains this module"
+   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are tests whose loaded module closure contains this module",
+   "sha256": "3afb8a13532f37b1918c17ef8aa74eb547a22029f3d989190f2fa4c13fa167f5"
   },
   {
    "path": "src/cli/request-service.ts",
@@ -827,7 +722,8 @@
     "V26A",
     "V26B",
     "V26C"
-   ]
+   ],
+   "sha256": "a0d46117dd9f887fef61bce4f7c1acc688c23b7b938d208f3b011dade9b9da18"
   },
   {
    "path": "src/cli/transport.ts",
@@ -848,7 +744,85 @@
     "P0V-27",
     "P0V-35",
     "P0V-78"
-   ]
+   ],
+   "sha256": "1f109d31ee02869e48554230659cafb8a5e09d624d792f372bc48d0efb7e7008"
+  },
+  {
+   "path": "src/client/codecs.ts",
+   "primary": null,
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": []
+  },
+  {
+   "path": "src/client/context.ts",
+   "primary": null,
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": []
+  },
+  {
+   "path": "src/client/errors.ts",
+   "primary": null,
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": []
+  },
+  {
+   "path": "src/client/fence.ts",
+   "primary": null,
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": []
+  },
+  {
+   "path": "src/client/index.ts",
+   "primary": null,
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": []
+  },
+  {
+   "path": "src/client/limits.ts",
+   "primary": null,
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": []
+  },
+  {
+   "path": "src/client/receipts.ts",
+   "primary": null,
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": []
+  },
+  {
+   "path": "src/client/request-service.ts",
+   "primary": null,
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": []
+  },
+  {
+   "path": "src/client/runtime.ts",
+   "primary": null,
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": []
+  },
+  {
+   "path": "src/client/settings.ts",
+   "primary": null,
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": []
+  },
+  {
+   "path": "src/client/transport.ts",
+   "primary": null,
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": []
   },
   {
    "path": "src/config.ts",
@@ -870,7 +844,8 @@
     "V12B",
     "V14A",
     "V14B"
-   ]
+   ],
+   "sha256": "43ff3ef4cba7756a77c1d08fd5c5315ee1c99cf641e9dc451593217d445c5db5"
   },
   {
    "path": "src/config/defaults.ts",
@@ -883,73 +858,16 @@
    "oracles": [
     "V16A",
     "V16B"
-   ]
+   ],
+   "sha256": "7ad6ced8757a06a7ef28500591c71e2ff97388599098f056f1a8d0d415e15000"
   },
   {
    "path": "src/config/generations.ts",
    "primary": null,
-   "status": "CHANGED_WITH_ORACLE",
-   "by": [
-    "AV1",
-    "AV2",
-    "AV5",
-    "AV7",
-    "DR12",
-    "DR13",
-    "P0V-12",
-    "P0V-18",
-    "P0V-19",
-    "P0V-20",
-    "P0V-21",
-    "P0V-22",
-    "P0V-23",
-    "P0V-31",
-    "P0V-33",
-    "P0V-47",
-    "P0V-48",
-    "P0V-61",
-    "P0V-72",
-    "P0V-87",
-    "P0V-88",
-    "P0V-89",
-    "P0V-90",
-    "P0V-91",
-    "P0V-92",
-    "P0V-93",
-    "P0V-94",
-    "P0V-95",
-    "P0V-96",
-    "P0V-97",
-    "WP13",
-    "WP14"
-   ],
-   "oracles": [
-    "AV1",
-    "AV2",
-    "AV5",
-    "AV7",
-    "DR12",
-    "DR13",
-    "P0V-31",
-    "P0V-33",
-    "P0V-47",
-    "P0V-48",
-    "P0V-61",
-    "P0V-72",
-    "P0V-87",
-    "P0V-88",
-    "P0V-90",
-    "P0V-92",
-    "P0V-93",
-    "P0V-94",
-    "P0V-95",
-    "P0V-96",
-    "V13A",
-    "V13B",
-    "V13C",
-    "V14A",
-    "V14B"
-   ]
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": [],
+   "note": "Current working-tree bytes have no explicit byte-bound review; historical reviews do not certify these changes."
   },
   {
    "path": "src/config/operations.ts",
@@ -973,7 +891,8 @@
     "V12B",
     "V14A",
     "V14B"
-   ]
+   ],
+   "sha256": "cc95aa8faa9be3cb284fc01498d60ca523008748af6074e2f74e66aac283bb2a"
   },
   {
    "path": "src/config/policy.ts",
@@ -985,7 +904,8 @@
    "oracles": [
     "R13"
    ],
-   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are the tests that load this module"
+   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are the tests that load this module",
+   "sha256": "69f36c0b478b70ab876d43ed6e2d6c78fe9694b9a2ce61f3cc1acd7d8bb903c5"
   },
   {
    "path": "src/config/role-prompts.ts",
@@ -1011,7 +931,8 @@
     "PRE-5",
     "PRE-6"
    ],
-   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are the tests that load this module"
+   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are the tests that load this module",
+   "sha256": "008475062a4425865c382602a8daadae606b6680f23616e552f3eecf849b367f"
   },
   {
    "path": "src/diagnostics/integrity.ts",
@@ -1030,7 +951,8 @@
     "PRE-5",
     "PRE-6"
    ],
-   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are tests whose loaded module closure (or text) contains this file"
+   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are tests whose loaded module closure (or text) contains this file",
+   "sha256": "f53e42f36d9b50c4779c3d669f86d6ba92b44dd5d9e8efe38bd731533c7044ee"
   },
   {
    "path": "src/diagnostics/ledger.ts",
@@ -1049,7 +971,8 @@
     "PRE-5",
     "PRE-6"
    ],
-   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are tests whose loaded module closure (or text) contains this file"
+   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are tests whose loaded module closure (or text) contains this file",
+   "sha256": "0841298c213f56eae1e40ee96a731f9bf6a5179a3f3b49ec3e785ddc2a26733f"
   },
   {
    "path": "src/diagnostics/mail.ts",
@@ -1068,7 +991,8 @@
     "PRE-5",
     "PRE-6"
    ],
-   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are tests whose loaded module closure (or text) contains this file"
+   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are tests whose loaded module closure (or text) contains this file",
+   "sha256": "4c6d2e5afadef662c36ffd20296e98df464e051ea88ba0b2b879fe145525a65b"
   },
   {
    "path": "src/domain/admission.ts",
@@ -1097,7 +1021,8 @@
     "V21B",
     "V22A",
     "V22B"
-   ]
+   ],
+   "sha256": "47c11ed4f1468fb327fd40f0522923f5264d16621c333c7e4a4cdc2d25693b09"
   },
   {
    "path": "src/domain/attestation-relations.ts",
@@ -1111,8 +1036,7 @@
    "primary": null,
    "status": "NOT_REVIEWED",
    "by": [],
-   "oracles": [],
-   "note": "Current working-tree bytes have no explicit byte-bound review; historical reviews do not certify these changes."
+   "oracles": []
   },
   {
    "path": "src/domain/canonical-json.ts",
@@ -1123,7 +1047,8 @@
    ],
    "oracles": [
     "P0V-119"
-   ]
+   ],
+   "sha256": "4486a308eea2d63f491775e05eeda6623197b6bde1721243caf25a0452e8d58a"
   },
   {
    "path": "src/domain/capabilities.ts",
@@ -1137,7 +1062,8 @@
     "R02",
     "V29A"
    ],
-   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are the tests that load this module"
+   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are the tests that load this module",
+   "sha256": "6d7cbf061067dfed9d330a012ec6408c78f2e2005b6e78464c53c9d5b3ac1a37"
   },
   {
    "path": "src/domain/child-policy.ts",
@@ -1156,7 +1082,8 @@
     "DR4",
     "DR6",
     "DR7"
-   ]
+   ],
+   "sha256": "1bdddbc8af35a1a0932196ceff65c0f54c7e948b400d95c7826d34773ffa093c"
   },
   {
    "path": "src/domain/context-policy.ts",
@@ -1167,7 +1094,8 @@
    ],
    "oracles": [
     "P0V-86"
-   ]
+   ],
+   "sha256": "b4d87816f0bdb491fd5162bb332f304c48d9567025ac45ead6a900f41d981e1c"
   },
   {
    "path": "src/domain/deployment.ts",
@@ -1178,15 +1106,20 @@
    ],
    "oracles": [
     "AV16"
-   ]
+   ],
+   "sha256": "65406a1b79a0784146b3dedc05284af889d3cbbfbee7110ad41b74e06cd8b98d"
   },
   {
    "path": "src/domain/derived.ts",
    "primary": "WP26",
-   "status": "NOT_REVIEWED",
-   "by": [],
-   "oracles": [],
-   "note": "Current working-tree bytes have no explicit byte-bound review; historical reviews do not certify these changes."
+   "status": "CHANGED_WITH_ORACLE",
+   "by": [
+    "AV3"
+   ],
+   "oracles": [
+    "AV3"
+   ],
+   "sha256": "91e5123da34d65923016614374bd7669ef63d69b03c429d171c51c31f7f97bd1"
   },
   {
    "path": "src/domain/errors.ts",
@@ -1240,7 +1173,8 @@
     "P0V-75",
     "V21A",
     "V21B"
-   ]
+   ],
+   "sha256": "d107e4121482110a1576e9716f87a21ca4e75d491add5b129f9012716b1df73a"
   },
   {
    "path": "src/domain/exhaustive.ts",
@@ -1259,15 +1193,26 @@
     "TUI-007",
     "TUI-010"
    ],
-   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are tests whose loaded module closure (or text) contains this file"
+   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are tests whose loaded module closure (or text) contains this file",
+   "sha256": "7edcba55dfa054c50803eaa064d076e08527ee4f3d0cba6b0b8bd0095547d1d6"
   },
   {
    "path": "src/domain/identifiers.ts",
    "primary": "WP26",
-   "status": "NOT_REVIEWED",
-   "by": [],
-   "oracles": [],
-   "note": "Current working-tree bytes have no explicit byte-bound review; historical reviews do not certify these changes."
+   "status": "READ_UNCHANGED",
+   "by": [
+    "AV-review"
+   ],
+   "oracles": [
+    "AV1",
+    "P2.5",
+    "R03",
+    "R36",
+    "V16A",
+    "V16B"
+   ],
+   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are the tests that load this module",
+   "sha256": "40fc0406b31f28f54cbb37b5c7b0ce351034ea3b457bab56e581b04b84e5dbce"
   },
   {
    "path": "src/domain/integer-fields.ts",
@@ -1286,15 +1231,15 @@
     "V01B",
     "V04"
    ],
-   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are tests whose loaded module closure contains this module"
+   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are tests whose loaded module closure contains this module",
+   "sha256": "458f4520d615d433e314f8cefc8a2490c8afc67e334329ba951240d874d051bd"
   },
   {
    "path": "src/domain/integration-policy.ts",
    "primary": null,
    "status": "NOT_REVIEWED",
    "by": [],
-   "oracles": [],
-   "note": "Current working-tree bytes have no explicit byte-bound review; historical reviews do not certify these changes."
+   "oracles": []
   },
   {
    "path": "src/domain/limits.ts",
@@ -1306,7 +1251,8 @@
    "oracles": [
     "R02"
    ],
-   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are the tests that load this module"
+   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are the tests that load this module",
+   "sha256": "4bd3b6e3dd6793dbb130fc31828fcbfc47833b919b9c02c524d586bceed4ca9f"
   },
   {
    "path": "src/domain/lineage.ts",
@@ -1318,15 +1264,28 @@
    "oracles": [
     "R13"
    ],
-   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are the tests that load this module"
+   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are the tests that load this module",
+   "sha256": "197b82108f80bea3cb9ceb11509011bc8f8cf7656861a4c04f8d59d9e46d0fc4"
   },
   {
    "path": "src/domain/mail-values.ts",
    "primary": "WP20",
-   "status": "NOT_REVIEWED",
-   "by": [],
-   "oracles": [],
-   "note": "Current working-tree bytes have no explicit byte-bound review; historical reviews do not certify these changes."
+   "status": "CHANGED_WITH_ORACLE",
+   "by": [
+    "P0V-36",
+    "P0V-40",
+    "P0V-41",
+    "P0V-42",
+    "P0V-43"
+   ],
+   "oracles": [
+    "P0V-36",
+    "P0V-40",
+    "P0V-41",
+    "P0V-42",
+    "P0V-43"
+   ],
+   "sha256": "83cffcb1c209200ea6716134096154a01c890d6aa9497153b8e38fbf6a78370b"
   },
   {
    "path": "src/domain/persisted-formats.ts",
@@ -1351,7 +1310,8 @@
     "P0V-93",
     "P0V-94",
     "P0V-95"
-   ]
+   ],
+   "sha256": "1f93c7986466e50163feff76c4334db785373b0677752a719f4d03eaaf1a6e08"
   },
   {
    "path": "src/domain/request-identity.ts",
@@ -1362,7 +1322,8 @@
    ],
    "oracles": [
     "V29A"
-   ]
+   ],
+   "sha256": "329819616f885c3ba38d7e4ae861e577c0074bc26a55b8105d6ee206ceab3edc"
   },
   {
    "path": "src/domain/resources.ts",
@@ -1373,7 +1334,8 @@
    ],
    "oracles": [
     "V25A"
-   ]
+   ],
+   "sha256": "e51c2da2e124816954c2c5b71daef7d5556d50f5f0e20ad37bad47b03b98e94f"
   },
   {
    "path": "src/domain/review-evaluation.ts",
@@ -1406,7 +1368,8 @@
     "AUD-6",
     "AUD-7"
    ],
-   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are the tests that load this module"
+   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are the tests that load this module",
+   "sha256": "624d9ecbcce801f2bc1d96db6a985813391f6c755d7a27f133a25f48b90820a6"
   },
   {
    "path": "src/domain/tier-evaluation.ts",
@@ -1437,7 +1400,8 @@
     "P0V-33",
     "P0V-47",
     "P0V-48"
-   ]
+   ],
+   "sha256": "33a02c187fc29619c8b359e19d0af7aa8f6aacc93db10822f049489a47ef3151"
   },
   {
    "path": "src/domain/unseen-text.ts",
@@ -1450,7 +1414,8 @@
    "oracles": [
     "P0V-108",
     "P0V-109"
-   ]
+   ],
+   "sha256": "82b6b15994d95012b18a6d4cee469c37d5cc7a5f8f89adb019f3b624e8e676ed"
   },
   {
    "path": "src/domain/utf8.ts",
@@ -1461,65 +1426,36 @@
    ],
    "oracles": [
     "P0V-86"
-   ]
+   ],
+   "sha256": "22c1a27131cf6c0ddb4b48cb87d8ce76340c53481a1fdf9fe7ca26337f829f62"
   },
   {
    "path": "src/durable.ts",
    "primary": "WP29",
-   "status": "NOT_REVIEWED",
-   "by": [],
-   "oracles": [],
-   "note": "Current working-tree bytes have no explicit byte-bound review; historical reviews do not certify these changes."
+   "status": "READ_UNCHANGED",
+   "by": [
+    "AV-review"
+   ],
+   "oracles": [
+    "DB-009",
+    "ID-002",
+    "M-003",
+    "P1",
+    "P2.5",
+    "P3",
+    "PI-002",
+    "R28"
+   ],
+   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are tests whose loaded module closure (or text) contains this file",
+   "sha256": "bc27e9c3a28758126639cf9025fbb1f14113b2082e8014401cad92d01709882a"
   },
   {
    "path": "src/entry/broker.ts",
    "primary": "WP03",
-   "status": "CHANGED_WITH_ORACLE",
-   "by": [
-    "AV10",
-    "AV11",
-    "AV20",
-    "AV27",
-    "AV28",
-    "AV31",
-    "AV5",
-    "DR13",
-    "DR16",
-    "DR18",
-    "P0V-08",
-    "P0V-28",
-    "P0V-29",
-    "P0V-38",
-    "P0V-39",
-    "P0V-51",
-    "P0V-58",
-    "WP03",
-    "WP21",
-    "WP22"
-   ],
-   "oracles": [
-    "AV10",
-    "AV11",
-    "AV20",
-    "AV27",
-    "AV28",
-    "AV31",
-    "AV5",
-    "DR13",
-    "DR18",
-    "P0V-28",
-    "P0V-29",
-    "P0V-38",
-    "P0V-39",
-    "P0V-51",
-    "P0V-58",
-    "V03A",
-    "V03B",
-    "V21A",
-    "V21B",
-    "V22A",
-    "V22B"
-   ]
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": [],
+   "note": "Current working-tree bytes have no explicit byte-bound review; historical reviews do not certify these changes."
   },
   {
    "path": "src/entry/guest-packages.ts",
@@ -1531,13 +1467,10 @@
   {
    "path": "src/entry/guest-provision.ts",
    "primary": null,
-   "status": "CHANGED_WITH_ORACLE",
-   "by": [
-    "MAC-303"
-   ],
-   "oracles": [
-    "MAC-303"
-   ]
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": [],
+   "note": "Current working-tree bytes have no explicit byte-bound review; historical reviews do not certify these changes."
   },
   {
    "path": "src/entry/guest-session.ts",
@@ -1569,7 +1502,8 @@
     "P0V-116",
     "P0V-81"
    ],
-   "note": "clauses declared by macos-platform.md's implementation table"
+   "note": "clauses declared by macos-platform.md's implementation table",
+   "sha256": "e3e6bfdef9682170d1b91a5968197838517c5cb5a12faa8214063198676c04b4"
   },
   {
    "path": "src/entry/guestctl.ts",
@@ -1587,7 +1521,8 @@
     "MAC-620",
     "P0V-82"
    ],
-   "note": "clauses declared by macos-platform.md's implementation table"
+   "note": "clauses declared by macos-platform.md's implementation table",
+   "sha256": "36ac8bf138d4604303edfcea799894dbd7a4c2a53da34758ccaf4f710bbe735c"
   },
   {
    "path": "src/entry/guesthost.ts",
@@ -1617,7 +1552,8 @@
     "MAC-621",
     "MAC-622"
    ],
-   "note": "clauses declared by macos-platform.md's implementation table"
+   "note": "clauses declared by macos-platform.md's implementation table",
+   "sha256": "06e14a62aa44c401a067563db11834dc7416e87a8882b54428e17dc022d49224"
   },
   {
    "path": "src/entry/host.ts",
@@ -1629,7 +1565,8 @@
    "oracles": [
     "V03A",
     "V03B"
-   ]
+   ],
+   "sha256": "87453ee974ab725d2e7a564b48faf1017676f5b65efaa67dac3fa3530bb399b0"
   },
   {
    "path": "src/entry/module-conformance.ts",
@@ -1641,7 +1578,8 @@
    "oracles": [
     "P23"
    ],
-   "note": "read in full in the whole-codebase adversarial pass after v9; type-only, exercised by the tests that compile or inspect it"
+   "note": "read in full in the whole-codebase adversarial pass after v9; type-only, exercised by the tests that compile or inspect it",
+   "sha256": "d71b8b0312dd7ec7328c7ba507f5597706c8d0870b2e86cee6d03bf8e8e68840"
   },
   {
    "path": "src/entry/oma-mac.ts",
@@ -1649,6 +1587,7 @@
    "status": "CHANGED_WITH_ORACLE",
    "by": [
     "DR17",
+    "DR25",
     "MAC-020",
     "MAC-021",
     "MAC-222",
@@ -1656,20 +1595,27 @@
     "P0V-81"
    ],
    "oracles": [
+    "DR25",
     "MAC-020",
     "MAC-021",
     "MAC-222",
     "MAC-251",
     "P0V-81"
    ],
-   "note": "clauses declared by macos-platform.md's implementation table"
+   "note": "clauses declared by macos-platform.md's implementation table",
+   "sha256": "1eac4397ede4da3f18a8b81e0f8d14524792c2c1b3dcc09df22f231c540eadbb"
   },
   {
    "path": "src/entry/oma-society.ts",
    "primary": null,
-   "status": "NOT_REVIEWED",
-   "by": [],
-   "oracles": []
+   "status": "CHANGED_WITH_ORACLE",
+   "by": [
+    "DR25"
+   ],
+   "oracles": [
+    "DR25"
+   ],
+   "sha256": "13b337315cacd310f505dd666aea818ed23e712474a957daf3b4497ec20a3e9c"
   },
   {
    "path": "src/entry/oma.ts",
@@ -1745,39 +1691,16 @@
     "V16B",
     "V28A",
     "V28B"
-   ]
+   ],
+   "sha256": "e73013febf56e34821e0dafffc7f4b239e4c94e4052fae777aa32d8a37b332c7"
   },
   {
    "path": "src/entry/omahostd.ts",
    "primary": null,
-   "status": "CHANGED_WITH_ORACLE",
-   "by": [
-    "DR17",
-    "MAC-240",
-    "MAC-241",
-    "MAC-619",
-    "MAC-620",
-    "MAC-621",
-    "MAC-622",
-    "MAC-623",
-    "P0V-103",
-    "P0V-104",
-    "P0V-105",
-    "P0V-106",
-    "P0V-81"
-   ],
-   "oracles": [
-    "MAC-240",
-    "MAC-241",
-    "MAC-620",
-    "MAC-621",
-    "MAC-622",
-    "P0V-103",
-    "P0V-104",
-    "P0V-105",
-    "P0V-106",
-    "P0V-81"
-   ]
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": [],
+   "note": "Current working-tree bytes have no explicit byte-bound review; historical reviews do not certify these changes."
   },
   {
    "path": "src/entry/personal-host.ts",
@@ -1810,27 +1733,10 @@
   {
    "path": "src/entry/runner.ts",
    "primary": "WP03",
-   "status": "CHANGED_WITH_ORACLE",
-   "by": [
-    "AV27",
-    "AV28",
-    "DR17",
-    "DR18",
-    "P0V-64",
-    "P0V-81",
-    "WP03",
-    "WP25"
-   ],
-   "oracles": [
-    "AV27",
-    "AV28",
-    "DR18",
-    "P0V-64",
-    "P0V-81",
-    "V03A",
-    "V03B",
-    "V25A"
-   ]
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": [],
+   "note": "Current working-tree bytes have no explicit byte-bound review; historical reviews do not certify these changes."
   },
   {
    "path": "src/extension/batch-view.ts",
@@ -1849,12 +1755,13 @@
     "AV11",
     "AV15",
     "P0V-86"
-   ]
+   ],
+   "sha256": "7cff25ec8f757e0c885db3b6e2d248e511a53223cabbcd8b952b8bbbe5a68e0e"
   },
   {
    "path": "src/extension/cli-process.ts",
    "primary": "WP27",
-   "status": "CHANGED_WITH_ORACLE",
+   "status": "REMOVED",
    "by": [
     "DR13",
     "P0V-14",
@@ -1863,13 +1770,7 @@
     "P0V-27",
     "P0V-35"
    ],
-   "oracles": [
-    "DR13",
-    "P0V-15",
-    "P0V-25",
-    "P0V-27",
-    "P0V-35"
-   ]
+   "oracles": []
   },
   {
    "path": "src/extension/contained-files.ts",
@@ -1880,7 +1781,8 @@
    ],
    "oracles": [
     "P0V-74"
-   ]
+   ],
+   "sha256": "3bb294fff9ee21a0537432aaea514dd349fbb5368d08f03e74fc3cda1c4116e8"
   },
   {
    "path": "src/extension/contained-search.ts",
@@ -1894,7 +1796,7 @@
     "P0V-122"
    ],
    "note": "Read in full: child owns snapshot creation, engine walker group, EOF cancellation and cleanup; parent bounds output and duration. Caller-death and uncooperative walker tests; EOF and group-cleanup mutants assertion-killed. Does not claim cleanup after the owner itself is SIGKILLed or an OS crash.",
-   "sha256": "63c73b59b0c17d1293b5113e03297b5f6d32bec7f3f4ecf990083e4d07ec27cc"
+   "sha256": "3add80febbdf8f39960cfc51d932618a15659cd65d446b354a9fabe8fdc09592"
   },
   {
    "path": "src/extension/contained-tools.ts",
@@ -1911,7 +1813,8 @@
     "P0V-121",
     "P0V-122",
     "P0V-74"
-   ]
+   ],
+   "sha256": "50a394c1006bc7e4e88c774fec9e1ba20c3ec367252af2781c145cbce7b5d113"
   },
   {
    "path": "src/extension/delivery.ts",
@@ -1923,7 +1826,8 @@
    "oracles": [
     "V27A",
     "V27B"
-   ]
+   ],
+   "sha256": "7b0b546bf367a433338a8c3fc4c37cfd4a4e493aa5c0da2b99c1006fa4d939af"
   },
   {
    "path": "src/extension/inference-bridge.ts",
@@ -1938,15 +1842,64 @@
     "P0V-120",
     "P0V-121",
     "P0V-122"
-   ]
+   ],
+   "sha256": "221c375b94d34c23f0745a12307eae7088b4405e54fa6eb964a929ef54645c73"
   },
   {
    "path": "src/extension/mail-tools.ts",
    "primary": "WP27",
-   "status": "NOT_REVIEWED",
-   "by": [],
-   "oracles": [],
-   "note": "Current working-tree bytes have no explicit byte-bound review; historical reviews do not certify these changes."
+   "status": "CHANGED_WITH_ORACLE",
+   "by": [
+    "AV1",
+    "AV10",
+    "AV11",
+    "AV15",
+    "AV2",
+    "AV23",
+    "AV26",
+    "AV29",
+    "AV30",
+    "AV5",
+    "DR1",
+    "DR13",
+    "DR3",
+    "DR4",
+    "DR6",
+    "DR7",
+    "P0V-110",
+    "P0V-14",
+    "P0V-15",
+    "P0V-32",
+    "P0V-37",
+    "P0V-45",
+    "P0V-78",
+    "P0V-86"
+   ],
+   "oracles": [
+    "AV1",
+    "AV10",
+    "AV11",
+    "AV15",
+    "AV2",
+    "AV23",
+    "AV26",
+    "AV29",
+    "AV5",
+    "DR1",
+    "DR13",
+    "DR3",
+    "DR4",
+    "DR6",
+    "DR7",
+    "P0V-110",
+    "P0V-15",
+    "P0V-32",
+    "P0V-37",
+    "P0V-45",
+    "P0V-78",
+    "P0V-86"
+   ],
+   "sha256": "b2dac66e37a1177d01a9f310deffa988756642bdfb4138c15cc0a190de736491"
   },
   {
    "path": "src/extension/principal-channel.ts",
@@ -1959,7 +1912,8 @@
    "oracles": [
     "AV10",
     "AV11"
-   ]
+   ],
+   "sha256": "3fbece2b1f8b4c5c0b9f162f4964036821b6f92db60e54ba6152148853266ad2"
   },
   {
    "path": "src/extension/principal-tools.ts",
@@ -1979,15 +1933,34 @@
     "AV29",
     "DR18",
     "P0V-110"
-   ]
+   ],
+   "sha256": "cd079b0cc9edc2c9c7071d3908bffea28ac5f56a20989d8e883f141208ad2874"
+  },
+  {
+   "path": "src/extension/prompt-boundary.ts",
+   "primary": null,
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": []
+  },
+  {
+   "path": "src/extension/provenance.ts",
+   "primary": null,
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": []
   },
   {
    "path": "src/extension/review-tools.ts",
    "primary": null,
-   "status": "NOT_REVIEWED",
-   "by": [],
-   "oracles": [],
-   "note": "Current working-tree bytes have no explicit byte-bound review; historical reviews do not certify these changes."
+   "status": "CHANGED_WITH_ORACLE",
+   "by": [
+    "DR25"
+   ],
+   "oracles": [
+    "DR25"
+   ],
+   "sha256": "949c004a87e546cb54e502b2a3706c2985f964ef3fdb3453bae22d514f5cd9cd"
   },
   {
    "path": "src/extension/shared.ts",
@@ -2005,7 +1978,8 @@
     "AV11",
     "AV29",
     "P0V-110"
-   ]
+   ],
+   "sha256": "9a6765bdb82d3809bf893068491a1c4026f7c8ebeff8784402e1a0a48943c61f"
   },
   {
    "path": "src/extension/tool-surface.ts",
@@ -2024,7 +1998,8 @@
     "T97",
     "T99"
    ],
-   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are tests whose loaded module closure contains this module"
+   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are tests whose loaded module closure contains this module",
+   "sha256": "4a4be7a456376adaa92ba1ccf631cad4f5d35fcdc4097327ba747a4c3d395b65"
   },
   {
    "path": "src/extension/utf8.ts",
@@ -2035,7 +2010,8 @@
    ],
    "oracles": [
     "P0V-86"
-   ]
+   ],
+   "sha256": "10617113abd36002abacde54fee4142bb366d4f491c13b1d62ee8c89d0b2d6b5"
   },
   {
    "path": "src/extension/workspace-guard.ts",
@@ -2061,7 +2037,8 @@
     "P0V-122",
     "P0V-15",
     "P0V-74"
-   ]
+   ],
+   "sha256": "8e313e5e6314d2a0c9b8df0656eabbd0f6aa55209edc8e5b09c067b65e31dc2f"
   },
   {
    "path": "src/frame.ts",
@@ -2074,15 +2051,34 @@
    "oracles": [
     "P0V-119",
     "P0V-86"
-   ]
+   ],
+   "sha256": "e3578394c01e393afad41ef151cf671d1b5a2a4fd15b3a0e9ca6281e6589b499"
   },
   {
    "path": "src/git.ts",
    "primary": "WP24",
-   "status": "NOT_REVIEWED",
-   "by": [],
-   "oracles": [],
-   "note": "Current working-tree bytes have no explicit byte-bound review; historical reviews do not certify these changes."
+   "status": "CHANGED_WITH_ORACLE",
+   "by": [
+    "DR1",
+    "DR18",
+    "DR3",
+    "DR4",
+    "DR6",
+    "DR7",
+    "P0V-16",
+    "WP18"
+   ],
+   "oracles": [
+    "DR1",
+    "DR18",
+    "DR3",
+    "DR4",
+    "DR6",
+    "DR7",
+    "V18A",
+    "V18B"
+   ],
+   "sha256": "4268d65dceaafb63ac5500937153b9867202855d508f6471d35207994295b757"
   },
   {
    "path": "src/git/approval.ts",
@@ -2101,10 +2097,26 @@
   {
    "path": "src/git/canonical-command.ts",
    "primary": "WP24",
-   "status": "NOT_REVIEWED",
-   "by": [],
-   "oracles": [],
-   "note": "Current working-tree bytes have no explicit byte-bound review; historical reviews do not certify these changes."
+   "status": "CHANGED_WITH_ORACLE",
+   "by": [
+    "P0V-113",
+    "P0V-114",
+    "P0V-115",
+    "P0V-116",
+    "P0V-83",
+    "P0V-84",
+    "P0V-85"
+   ],
+   "oracles": [
+    "P0V-113",
+    "P0V-114",
+    "P0V-115",
+    "P0V-116",
+    "P0V-83",
+    "P0V-84",
+    "P0V-85"
+   ],
+   "sha256": "e1a5ee054eaa4422a5e1bbda7412bf6f1989c4527703bd058beccc7fef82130e"
   },
   {
    "path": "src/git/context-mirror.ts",
@@ -2132,25 +2144,16 @@
     "T23",
     "T39"
    ],
-   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are tests whose loaded module closure contains this module"
+   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are tests whose loaded module closure contains this module",
+   "sha256": "4912fed6d362eba5c5faec71f8664bad6e26185e2ef59662abc515059d68ad1e"
   },
   {
    "path": "src/git/context-repository.ts",
    "primary": "WP18",
-   "status": "CHANGED_WITH_ORACLE",
-   "by": [
-    "P0V-65",
-    "P0V-77",
-    "P0V-86",
-    "WP18"
-   ],
-   "oracles": [
-    "P0V-65",
-    "P0V-77",
-    "P0V-86",
-    "V18A",
-    "V18B"
-   ]
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": [],
+   "note": "Current working-tree bytes have no explicit byte-bound review; historical reviews do not certify these changes."
   },
   {
    "path": "src/git/context.ts",
@@ -2203,7 +2206,8 @@
     "V20B",
     "V21A",
     "V21B"
-   ]
+   ],
+   "sha256": "4578b8c826bee9b6fc70a5d47da2c186d8143ad1d9fe74da6c7a481121e39712"
   },
   {
    "path": "src/git/integration-policy.ts",
@@ -2218,7 +2222,8 @@
     "DR18",
     "DR3",
     "DR8"
-   ]
+   ],
+   "sha256": "73cc379668880d1fb521510e2e6c7300549f3020839e228611dc2972bde82f74"
   },
   {
    "path": "src/git/integration-publication.ts",
@@ -2230,26 +2235,97 @@
   {
    "path": "src/git/integration.ts",
    "primary": "WP24",
-   "status": "NOT_REVIEWED",
-   "by": [],
-   "oracles": [],
-   "note": "Current working-tree bytes have no explicit byte-bound review; historical reviews do not certify these changes."
+   "status": "CHANGED_WITH_ORACLE",
+   "by": [
+    "AV27",
+    "AV28",
+    "DR1",
+    "DR13",
+    "DR3",
+    "DR4",
+    "DR6",
+    "DR7",
+    "DR8",
+    "P0V-08",
+    "P0V-64",
+    "P0V-87",
+    "P0V-88",
+    "P0V-89",
+    "P0V-90",
+    "P0V-91",
+    "P0V-92",
+    "P0V-93",
+    "P0V-94",
+    "P0V-95",
+    "WP21",
+    "WP24"
+   ],
+   "oracles": [
+    "AV27",
+    "AV28",
+    "DR1",
+    "DR13",
+    "DR3",
+    "DR4",
+    "DR6",
+    "DR7",
+    "DR8",
+    "P0V-64",
+    "P0V-87",
+    "P0V-88",
+    "P0V-90",
+    "P0V-92",
+    "P0V-93",
+    "P0V-94",
+    "P0V-95",
+    "V21A",
+    "V21B",
+    "V24A",
+    "V24B"
+   ],
+   "sha256": "d043352aa33219cc87a7759143cb29665703b47900d269891e31182cc9509904"
   },
   {
    "path": "src/git/observe.ts",
    "primary": "WP24",
-   "status": "NOT_REVIEWED",
-   "by": [],
-   "oracles": [],
-   "note": "Current working-tree bytes have no explicit byte-bound review; historical reviews do not certify these changes."
+   "status": "CHANGED_WITH_ORACLE",
+   "by": [
+    "DR18",
+    "P0V-113",
+    "P0V-114",
+    "P0V-115",
+    "P0V-116",
+    "P0V-86"
+   ],
+   "oracles": [
+    "DR18",
+    "P0V-113",
+    "P0V-114",
+    "P0V-115",
+    "P0V-116",
+    "P0V-86"
+   ],
+   "sha256": "96386218f9ab2909d0d773017e1b4b07804d44213b9ad9a12a6759bbabc689a7"
   },
   {
    "path": "src/git/paths.ts",
    "primary": "WP24",
-   "status": "NOT_REVIEWED",
-   "by": [],
-   "oracles": [],
-   "note": "Current working-tree bytes have no explicit byte-bound review; historical reviews do not certify these changes."
+   "status": "CHANGED_WITH_ORACLE",
+   "by": [
+    "P0V-28",
+    "P0V-29",
+    "P0V-38",
+    "P0V-39",
+    "P0V-51"
+   ],
+   "oracles": [
+    "P0V-28",
+    "P0V-29",
+    "P0V-38",
+    "P0V-39",
+    "P0V-51"
+   ],
+   "sha256": "1041fa0e8b29e7f0a4c34615ecf1a73e2e9d9b2cbd25f75de52d465b51cbdfc3"
   },
   {
    "path": "src/git/project-snapshot.ts",
@@ -2268,7 +2344,8 @@
    "oracles": [
     "R20"
    ],
-   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are the tests that load this module"
+   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are the tests that load this module",
+   "sha256": "262f731086185d9ec9a72a6b3dea9b8ed2dacd51770f4f453a4623b0e73eec67"
   },
   {
    "path": "src/git/quarantine.ts",
@@ -2312,7 +2389,8 @@
     "V20B",
     "V21A",
     "V21B"
-   ]
+   ],
+   "sha256": "781ca168fe45a9c507c2a8b32ef19c89ffa73b5ac8e58b4ff0b6ec7b0f0785aa"
   },
   {
    "path": "src/git/tiered-authority.ts",
@@ -2338,7 +2416,8 @@
     "AUTH-003",
     "B1"
    ],
-   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are the tests that load this module"
+   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are the tests that load this module",
+   "sha256": "2e6233d3a54e350deea76bfe28dcf06773ba9d52cfcc3b8d6efe3f5584997c83"
   },
   {
    "path": "src/ids.ts",
@@ -2357,7 +2436,8 @@
     "FS-005",
     "ID-002"
    ],
-   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are the tests that load this module"
+   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are the tests that load this module",
+   "sha256": "2a7cc487ccdef195507b548a1e978307d5435882632c7db96dc763ee021e1b79"
   },
   {
    "path": "src/leaf.ts",
@@ -2380,7 +2460,8 @@
     "P0V-106",
     "P0V-117",
     "P0V-118"
-   ]
+   ],
+   "sha256": "b5c79f0101179b656c8b6e08b88789e65624d9019dd3747de5cca3a0bc379ce8"
   },
   {
    "path": "src/lifecycle.ts",
@@ -2399,7 +2480,8 @@
     "A6",
     "AUD-1"
    ],
-   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are the tests that load this module"
+   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are the tests that load this module",
+   "sha256": "09a300d33a65fd26fe9117727194b2609ea8a87d1e16b2b35759aef96bd2deac"
   },
   {
    "path": "src/lifecycle/actions.ts",
@@ -2427,7 +2509,8 @@
     "P0V-95",
     "V21A",
     "V21B"
-   ]
+   ],
+   "sha256": "dceac322c21f233d25b30f2bd72e997995d424aea12d95abd97a33e6b24ddfce"
   },
   {
    "path": "src/lifecycle/contracts.ts",
@@ -2440,7 +2523,8 @@
    "oracles": [
     "AV27",
     "AV28"
-   ]
+   ],
+   "sha256": "591bc90c859338678176378e1222f901c127f75b759938217f7f8311ff9ac0b7"
   },
   {
    "path": "src/lifecycle/create-publication.ts",
@@ -2451,63 +2535,16 @@
    ],
    "oracles": [
     "AV4"
-   ]
+   ],
+   "sha256": "ea8d07c391a6d0e1697c4b03fecc9c806149374db8b8fbcc0cabac8cea3cf3fa"
   },
   {
    "path": "src/lifecycle/create.ts",
    "primary": "WP19",
-   "status": "CHANGED_WITH_ORACLE",
-   "by": [
-    "AV4",
-    "DR1",
-    "DR13",
-    "DR3",
-    "DR4",
-    "DR6",
-    "DR7",
-    "P0V-09",
-    "P0V-10",
-    "P0V-26",
-    "P0V-87",
-    "P0V-88",
-    "P0V-89",
-    "P0V-90",
-    "P0V-91",
-    "P0V-92",
-    "P0V-93",
-    "P0V-94",
-    "P0V-95",
-    "WP17",
-    "WP19",
-    "WP20",
-    "WP21"
-   ],
-   "oracles": [
-    "AV4",
-    "DR1",
-    "DR13",
-    "DR3",
-    "DR4",
-    "DR6",
-    "DR7",
-    "P0V-10",
-    "P0V-26",
-    "P0V-87",
-    "P0V-88",
-    "P0V-90",
-    "P0V-92",
-    "P0V-93",
-    "P0V-94",
-    "P0V-95",
-    "V17A",
-    "V17B",
-    "V19A",
-    "V19B",
-    "V20A",
-    "V20B",
-    "V21A",
-    "V21B"
-   ]
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": [],
+   "note": "Current working-tree bytes have no explicit byte-bound review; historical reviews do not certify these changes."
   },
   {
    "path": "src/lifecycle/policy.ts",
@@ -2520,7 +2557,8 @@
     "R25",
     "R37"
    ],
-   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are the tests that load this module"
+   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are the tests that load this module",
+   "sha256": "346fac823bfeb5be9ed3208b211307f53fd730295affe1485e5e46e270b473a0"
   },
   {
    "path": "src/lifecycle/registry-operations.ts",
@@ -2531,7 +2569,8 @@
    ],
    "oracles": [
     "DR18"
-   ]
+   ],
+   "sha256": "292a31932a4daaa247dfa32b439337386f4313006025acfc25c6aec6ea8d4482"
   },
   {
    "path": "src/lifecycle/society.ts",
@@ -2543,19 +2582,10 @@
   {
    "path": "src/lifecycle/workspace.ts",
    "primary": "WP19",
-   "status": "CHANGED_WITH_ORACLE",
-   "by": [
-    "AV27",
-    "AV28",
-    "AV4",
-    "P0V-77"
-   ],
-   "oracles": [
-    "AV27",
-    "AV28",
-    "AV4",
-    "P0V-77"
-   ]
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": [],
+   "note": "Current working-tree bytes have no explicit byte-bound review; historical reviews do not certify these changes."
   },
   {
    "path": "src/mail.ts",
@@ -2582,7 +2612,8 @@
     "S-05",
     "T23"
    ],
-   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are tests whose loaded module closure contains this module"
+   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are tests whose loaded module closure contains this module",
+   "sha256": "3632e6775095a82afa501dfb1c56b179a2771f8380a6120160bb66434249ad4c"
   },
   {
    "path": "src/mail/batch-policy.ts",
@@ -2594,54 +2625,36 @@
    "oracles": [
     "R24"
    ],
-   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are the tests that load this module"
+   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are the tests that load this module",
+   "sha256": "d81f1362d1bd6d3ff1b30ff74cda70fc54045a77b2477e846ddec37b69a62605"
   },
   {
    "path": "src/mail/batches.ts",
    "primary": "WP06",
-   "status": "CHANGED_WITH_ORACLE",
-   "by": [
-    "AV1",
-    "AV10",
-    "AV11",
-    "AV2",
-    "AV5",
-    "DR1",
-    "DR3",
-    "DR4",
-    "DR6",
-    "DR7",
-    "DR9",
-    "P0V-01",
-    "P0V-02",
-    "P0V-03",
-    "P0V-04",
-    "P0V-06",
-    "WP06"
-   ],
-   "oracles": [
-    "AV1",
-    "AV10",
-    "AV11",
-    "AV2",
-    "AV5",
-    "DR1",
-    "DR3",
-    "DR4",
-    "DR6",
-    "DR7",
-    "DR9",
-    "V06A",
-    "V06B"
-   ]
-  },
-  {
-   "path": "src/mail/display.ts",
-   "primary": null,
    "status": "NOT_REVIEWED",
    "by": [],
    "oracles": [],
    "note": "Current working-tree bytes have no explicit byte-bound review; historical reviews do not certify these changes."
+  },
+  {
+   "path": "src/mail/display.ts",
+   "primary": null,
+   "status": "CHANGED_WITH_ORACLE",
+   "by": [
+    "AV26",
+    "P0V-32",
+    "P0V-37",
+    "P0V-45",
+    "P0V-86"
+   ],
+   "oracles": [
+    "AV26",
+    "P0V-32",
+    "P0V-37",
+    "P0V-45",
+    "P0V-86"
+   ],
+   "sha256": "60eea6c12c6142737679807149b987986e32efdd234c2ca61cb32109b38bfa39"
   },
   {
    "path": "src/mail/facts.ts",
@@ -2657,7 +2670,8 @@
     "P02",
     "P05"
    ],
-   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are the tests that load this module"
+   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are the tests that load this module",
+   "sha256": "bdf614df6b018493d880cbfabec2aabb01d8e4ab16db1e173977e6c3233ae8e2"
   },
   {
    "path": "src/mail/headers.ts",
@@ -2686,15 +2700,24 @@
     "P0V-42",
     "P0V-43",
     "P0V-86"
-   ]
+   ],
+   "sha256": "c3b2ab022a56d766b380691b9bd56624a131889ca6de6226e8354cf748add0fe"
   },
   {
    "path": "src/mail/materializer.ts",
    "primary": "WP20",
-   "status": "NOT_REVIEWED",
-   "by": [],
-   "oracles": [],
-   "note": "Current working-tree bytes have no explicit byte-bound review; historical reviews do not certify these changes."
+   "status": "CHANGED_WITH_ORACLE",
+   "by": [
+    "DR10",
+    "P0V-05",
+    "WP20"
+   ],
+   "oracles": [
+    "DR10",
+    "V20A",
+    "V20B"
+   ],
+   "sha256": "c6dbdc2ac9f04bb67307d9c657567e9b3e532b232e18291a69bc8631ade92061"
   },
   {
    "path": "src/mail/reconcile.ts",
@@ -2706,7 +2729,15 @@
    "oracles": [
     "P3"
    ],
-   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are the tests that load this module"
+   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are the tests that load this module",
+   "sha256": "5272962a276d55c1f39d79c12f81d60a72f1e3fc29c907fa5ea0e4f0e1e77a04"
+  },
+  {
+   "path": "src/mail/review-bounds.ts",
+   "primary": null,
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": []
   },
   {
    "path": "src/mail/routing.ts",
@@ -2718,7 +2749,8 @@
    "oracles": [
     "R31"
    ],
-   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are the tests that load this module"
+   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are the tests that load this module",
+   "sha256": "7966cb6f83b97cf71de1a39bc7e98143993201b9ca99d2525b1ceef22413a51e"
   },
   {
    "path": "src/mail/serialize.ts",
@@ -2731,7 +2763,8 @@
    "oracles": [
     "P0V-117",
     "P0V-118"
-   ]
+   ],
+   "sha256": "dabafbfc4169431cf9f39c55828b227ac8ca130b64fa8adf14e11f1990ed1aaa"
   },
   {
    "path": "src/module-ports.ts",
@@ -2744,7 +2777,51 @@
     "P17/P23",
     "P23"
    ],
-   "note": "read in full in the whole-codebase adversarial pass after v9; type-only, exercised by the tests that compile or inspect it"
+   "note": "read in full in the whole-codebase adversarial pass after v9; type-only, exercised by the tests that compile or inspect it",
+   "sha256": "d4cc077a3f008f9632da41436db0197af9f880ff4b288a6b668fb50118c7fc1e"
+  },
+  {
+   "path": "src/pi-compat/commands.ts",
+   "primary": null,
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": []
+  },
+  {
+   "path": "src/pi-compat/env.ts",
+   "primary": null,
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": []
+  },
+  {
+   "path": "src/pi-compat/interactive-mode.ts",
+   "primary": null,
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": []
+  },
+  {
+   "path": "src/pi-compat/session.ts",
+   "primary": null,
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": []
+  },
+  {
+   "path": "src/pi-compat/settings.ts",
+   "primary": null,
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": [],
+   "note": "Current working-tree bytes have no explicit byte-bound review; historical reviews do not certify these changes."
+  },
+  {
+   "path": "src/pi-compat/wire.ts",
+   "primary": null,
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": []
   },
   {
    "path": "src/pi-extension.ts",
@@ -2761,26 +2838,16 @@
     "P0V-121",
     "P0V-122",
     "P0V-74"
-   ]
+   ],
+   "sha256": "e3bcff4d6dc0dd6d80d576566e5246b1c397c99d3c8031aa5fa5e718fbffec19"
   },
   {
    "path": "src/platform/guest/archive.ts",
    "primary": null,
-   "status": "CHANGED_WITH_ORACLE",
-   "by": [
-    "MAC-619",
-    "MAC-620",
-    "MAC-621",
-    "MAC-622",
-    "MAC-623",
-    "MAC-661"
-   ],
-   "oracles": [
-    "MAC-620",
-    "MAC-621",
-    "MAC-622"
-   ],
-   "note": "clauses declared by macos-platform.md's implementation table"
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": [],
+   "note": "Current working-tree bytes have no explicit byte-bound review; historical reviews do not certify these changes."
   },
   {
    "path": "src/platform/guest/control.ts",
@@ -2798,7 +2865,8 @@
     "MAC-620",
     "P0V-82"
    ],
-   "note": "clauses declared by macos-platform.md's implementation table"
+   "note": "clauses declared by macos-platform.md's implementation table",
+   "sha256": "bfd30ea3326c83f4fb4323c6bb5cfe11088977f0edbbc50be705b646bf81375a"
   },
   {
    "path": "src/platform/guest/egress.ts",
@@ -2823,7 +2891,8 @@
     "P0V-115",
     "P0V-116"
    ],
-   "note": "clauses declared by macos-platform.md's implementation table"
+   "note": "clauses declared by macos-platform.md's implementation table",
+   "sha256": "405bf0f8ea297ff733564aafacdad9cbdfec64b52dadc1270154df5e2fa1a637"
   },
   {
    "path": "src/platform/guest/histories.ts",
@@ -2874,7 +2943,8 @@
     "P0V-105",
     "P0V-106"
    ],
-   "note": "clauses declared by macos-platform.md's implementation table"
+   "note": "clauses declared by macos-platform.md's implementation table",
+   "sha256": "366e8c29c02a95f16eecfc30c75a9d6412c3f677c95851574781e412f4187933"
   },
   {
    "path": "src/platform/guest/identity.ts",
@@ -2887,7 +2957,8 @@
    "oracles": [
     "MAC-202",
     "MAC-620"
-   ]
+   ],
+   "sha256": "a8cc6f67d9056322a080f6fbe6bbb2db9d388af7b95aa92b6a18de83a385c383"
   },
   {
    "path": "src/platform/guest/linux-system.ts",
@@ -2900,14 +2971,20 @@
    "oracles": [
     "MAC-202",
     "MAC-620"
-   ]
+   ],
+   "sha256": "3ad1272bf31fc021ea6ef827548bc7763629adc0b0ec7d55b5f615488a3d6a5f"
   },
   {
    "path": "src/platform/guest/packages.ts",
    "primary": null,
-   "status": "NOT_REVIEWED",
-   "by": [],
-   "oracles": []
+   "status": "CHANGED_WITH_ORACLE",
+   "by": [
+    "DR25"
+   ],
+   "oracles": [
+    "DR25"
+   ],
+   "sha256": "0bbf92929b90915dbbdab55e92eb5f993f7a571b53a138754b0f57017816802c"
   },
   {
    "path": "src/platform/guest/project.ts",
@@ -2916,47 +2993,22 @@
    "by": [
     "MAC-240",
     "MAC-241",
-    "MAC-401",
-    "MAC-403",
-    "MAC-404",
-    "MAC-411",
-    "MAC-412",
-    "MAC-420",
-    "P0V-103",
-    "P0V-104",
-    "P0V-105",
-    "P0V-106"
+    "MAC-420"
    ],
    "oracles": [
     "MAC-240",
-    "MAC-241",
-    "MAC-404",
-    "MAC-412",
-    "P0V-103",
-    "P0V-104",
-    "P0V-105",
-    "P0V-106"
+    "MAC-241"
    ],
-   "note": "clauses declared by macos-platform.md's implementation table"
+   "note": "Read in full: export() normalizes the request intent before the ledger digests it -- absent `since` and explicit `since: undefined` are one request, and neither is a JSON value the canonical encoder can name. The intent keeps every other field; validation of society/canonical/head is unchanged. MAC-240 oracles: the legacy-spelled digest is a different request that fails closed (never replayed nor re-run), and §6.4/MAC-420 export passes end-to-end under the new digest.",
+   "sha256": "f479e025e1a3dbf058d1653a8e2a9b3d2181b8c5b5ddcab074e465156992f27a"
   },
   {
    "path": "src/platform/guest/provision.ts",
    "primary": null,
-   "status": "CHANGED_WITH_ORACLE",
-   "by": [
-    "MAC-303",
-    "P0V-103",
-    "P0V-104",
-    "P0V-105",
-    "P0V-106"
-   ],
-   "oracles": [
-    "MAC-303",
-    "P0V-103",
-    "P0V-104",
-    "P0V-105",
-    "P0V-106"
-   ]
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": [],
+   "note": "Current working-tree bytes have no explicit byte-bound review; historical reviews do not certify these changes."
   },
   {
    "path": "src/platform/guest/pty.ts",
@@ -2976,20 +3028,16 @@
     "MAC-412",
     "P0V-80"
    ],
-   "note": "clauses declared by macos-platform.md's implementation table"
+   "note": "clauses declared by macos-platform.md's implementation table",
+   "sha256": "0253832e6a609ea2b3b6919b0bfe86e003d02092fea6ef98e5e72f3c240e9e94"
   },
   {
    "path": "src/platform/guest/requests.ts",
    "primary": null,
-   "status": "CHANGED_WITH_ORACLE",
-   "by": [
-    "MAC-240",
-    "MAC-241"
-   ],
-   "oracles": [
-    "MAC-240",
-    "MAC-241"
-   ]
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": [],
+   "note": "Current working-tree bytes have no explicit byte-bound review; historical reviews do not certify these changes."
   },
   {
    "path": "src/platform/guest/server.ts",
@@ -3018,7 +3066,8 @@
     "P0V-114",
     "P0V-115",
     "P0V-116"
-   ]
+   ],
+   "sha256": "ce78c052feb9b6f29c9ee5c7fba146345d0faafd71e0ec815535e08816d0a200"
   },
   {
    "path": "src/platform/guest/session.ts",
@@ -3042,7 +3091,8 @@
     "MAC-251",
     "MAC-412"
    ],
-   "note": "clauses declared by macos-platform.md's implementation table"
+   "note": "clauses declared by macos-platform.md's implementation table",
+   "sha256": "ff1e1763165ea7e31103684fa53452ef1489917124ee43bedb29a7123b9b81f4"
   },
   {
    "path": "src/platform/guest/stream.ts",
@@ -3071,7 +3121,8 @@
     "P0V-104",
     "P0V-105",
     "P0V-106"
-   ]
+   ],
+   "sha256": "981f25fa414e69dd73c0ccefdafb38c33d9cbf77366ab54d7b62134313d266d2"
   },
   {
    "path": "src/platform/guest/systemd-launcher.ts",
@@ -3097,7 +3148,8 @@
     "P0V-105",
     "P0V-106"
    ],
-   "note": "clauses declared by macos-platform.md's implementation table"
+   "note": "clauses declared by macos-platform.md's implementation table",
+   "sha256": "3d295873f99994f0371998d07355d4820e1e696be15c458969aad837f7dcd4f1"
   },
   {
    "path": "src/platform/host/api-client.ts",
@@ -3138,7 +3190,8 @@
     "MAC-222",
     "MAC-251",
     "P0V-81"
-   ]
+   ],
+   "sha256": "9b0791ac53edbe60425edc646f0d58cd01996b147e698a9b485f77b3d77e30ed"
   },
   {
    "path": "src/platform/host/bookmark.ts",
@@ -3169,7 +3222,8 @@
     "MAC-404",
     "MAC-412"
    ],
-   "note": "clauses declared by macos-platform.md's implementation table"
+   "note": "clauses declared by macos-platform.md's implementation table",
+   "sha256": "782ec6339bd54a27c1654279fae771e6f07c9f2f4fdb4f832d5546452d0a8022"
   },
   {
    "path": "src/platform/host/egress.ts",
@@ -3186,7 +3240,8 @@
     "MAC-710",
     "MAC-712"
    ],
-   "note": "clauses declared by macos-platform.md's implementation table"
+   "note": "clauses declared by macos-platform.md's implementation table",
+   "sha256": "b45e8af855a3b2a050389d797de95d995e6ce0255688b657c1cb190267abaf31"
   },
   {
    "path": "src/platform/host/files.ts",
@@ -3199,8 +3254,8 @@
    "oracles": [
     "Owned cleanup host"
    ],
-   "note": "Read in full: HostTemporary owns one close, marks returned before close, and discard attempts temporary-name removal even after close failure. Replacement/publication preserve primary beside cleanup; an already reused descriptor number is not reclosed. Three source-copy controls assertion-killed. Existing full-file publication and host-private namespace remain; visible-name uncertainty, whole retry policy and actual Mac durability are not certified.",
-   "sha256": "d81c85cf1fa77821e5a416235fb5b958b9d2ff600e7c46ae75c7e81d131240ed"
+   "note": "Read in full: HostTemporary owns one close, marks returned before close, and discard attempts temporary-name removal even after close failure. Replacement/publication preserve primary beside cleanup; an already reused descriptor number is not reclosed. Three source-copy controls assertion-killed. Existing full-file publication and host-private namespace remain; visible-name uncertainty, whole retry policy and actual Mac durability are not certified. P0-8: repairHostOwnedPath/ensureHostOwnedDirectory/listHostStaged/removeHostStaged/repairHostStagedEntryMode are the host counterparts of the owned primitives -- owner bits added within the boundary, strays unlinked never followed.",
+   "sha256": "b24f748faa325da509ebe21ff5220c25bc2f21effecec25d85d02c24757b0b39"
   },
   {
    "path": "src/platform/host/guest-histories.ts",
@@ -3220,7 +3275,8 @@
     "MAC-230",
     "MAC-250"
    ],
-   "note": "clauses declared by macos-platform.md's implementation table"
+   "note": "clauses declared by macos-platform.md's implementation table",
+   "sha256": "e3a8036b7ac2570beb000ee8833830e0260abd2c805d5252aaefa18c6eaef476"
   },
   {
    "path": "src/platform/host/guest-link.ts",
@@ -3240,13 +3296,15 @@
     "MAC-331",
     "MAC-601"
    ],
-   "note": "clauses declared by macos-platform.md's implementation table"
+   "note": "clauses declared by macos-platform.md's implementation table",
+   "sha256": "7a6cf9c20529ebb47222864d550f5814cf39389dc4ee70314fd02e7f99504398"
   },
   {
    "path": "src/platform/host/host-api.ts",
    "primary": null,
    "status": "CHANGED_WITH_ORACLE",
    "by": [
+    "DR25",
     "MAC-020",
     "MAC-021",
     "MAC-222",
@@ -3264,6 +3322,7 @@
     "P0V-116"
    ],
    "oracles": [
+    "DR25",
     "MAC-020",
     "MAC-021",
     "MAC-222",
@@ -3277,7 +3336,8 @@
     "P0V-114",
     "P0V-115",
     "P0V-116"
-   ]
+   ],
+   "sha256": "eaa17a522c5df5258bc4b6aa13f6929085a4411428404ce9f15bd55d6dda23e2"
   },
   {
    "path": "src/platform/host/image.ts",
@@ -3290,7 +3350,8 @@
    "oracles": [
     "MAC-601",
     "MAC-611"
-   ]
+   ],
+   "sha256": "4ccdbe455ce3a26f0f1f173b62f06dcbac9ee6741afc1c0b27a730c9791ce954"
   },
   {
    "path": "src/platform/host/keychain-client.ts",
@@ -3310,8 +3371,8 @@
    "oracles": [
     "Owned cleanup Keychain"
    ],
-   "note": "Read in full: serialized per-item writer uses a cross-process lock and awaits the fenced writer before returning it; abort and identity are rechecked before write. Controlled in-memory store failure beside lock close and cleanup-only failure retain exact outcomes. Native Swift helper, real Keychain and credential execution were not exercised.",
-   "sha256": "491e36258840747fd9c7545ed1bd91fece2877d79629a8c3f99964c34534afdb"
+   "note": "Read in full: serialized per-item writer uses a cross-process lock and awaits the fenced writer before returning it; abort and identity are rechecked before write. Controlled in-memory store failure beside lock close and cleanup-only failure retain exact outcomes. Native Swift helper, real Keychain and credential execution were not exercised. P0-8: the per-item lock's directory is ensured through ensureOwnedUserDirectory inside its own boundary, not trusted as-is.",
+   "sha256": "ddfd2394da5d5f15a51d16e8b1053b64e3e97f331842d099859f608f817bad26"
   },
   {
    "path": "src/platform/host/lifecycle.ts",
@@ -3331,7 +3392,8 @@
     "MAC-331",
     "MAC-601"
    ],
-   "note": "clauses declared by macos-platform.md's implementation table"
+   "note": "clauses declared by macos-platform.md's implementation table",
+   "sha256": "d701c3e68a0b2b3585a2c91de4ff86cc852d40c9e6791c86b2e8e7eefc3267b0"
   },
   {
    "path": "src/platform/host/peer.ts",
@@ -3348,7 +3410,8 @@
     "MAC-021",
     "MAC-222",
     "MAC-251"
-   ]
+   ],
+   "sha256": "71471221ed0b7861216d07c26319cf82438671d2e84b5bd42478e3d412728cc3"
   },
   {
    "path": "src/platform/host/personal-histories.ts",
@@ -3379,40 +3442,10 @@
   {
    "path": "src/platform/host/project.ts",
    "primary": null,
-   "status": "CHANGED_WITH_ORACLE",
-   "by": [
-    "MAC-240",
-    "MAC-241",
-    "MAC-401",
-    "MAC-403",
-    "MAC-404",
-    "MAC-411",
-    "MAC-412",
-    "MAC-420",
-    "MAC-619",
-    "MAC-620",
-    "MAC-621",
-    "MAC-622",
-    "MAC-623",
-    "P0V-103",
-    "P0V-104",
-    "P0V-105",
-    "P0V-106"
-   ],
-   "oracles": [
-    "MAC-240",
-    "MAC-241",
-    "MAC-404",
-    "MAC-412",
-    "MAC-620",
-    "MAC-621",
-    "MAC-622",
-    "P0V-103",
-    "P0V-104",
-    "P0V-105",
-    "P0V-106"
-   ],
-   "note": "clauses declared by macos-platform.md's implementation table"
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": [],
+   "note": "Current working-tree bytes have no explicit byte-bound review; historical reviews do not certify these changes."
   },
   {
    "path": "src/platform/host/record.ts",
@@ -3448,7 +3481,8 @@
     "P0V-105",
     "P0V-106"
    ],
-   "note": "clauses declared by macos-platform.md's implementation table"
+   "note": "clauses declared by macos-platform.md's implementation table",
+   "sha256": "cf7c99d5a48250e3166ad31a22fdb1f4040cd178cc175571075397db473063b2"
   },
   {
    "path": "src/platform/host/resolver.ts",
@@ -3474,47 +3508,16 @@
     "MAC-702",
     "MAC-704"
    ],
-   "note": "clauses declared by macos-platform.md's implementation table"
+   "note": "clauses declared by macos-platform.md's implementation table",
+   "sha256": "482c528c2d2fcf95565eb4b639285f38f549e612ed95fa71b29c8fe94884d58d"
   },
   {
    "path": "src/platform/host/service.ts",
    "primary": null,
-   "status": "CHANGED_WITH_ORACLE",
-   "by": [
-    "MAC-240",
-    "MAC-241",
-    "MAC-301",
-    "MAC-320",
-    "MAC-330",
-    "MAC-331",
-    "MAC-601",
-    "MAC-619",
-    "MAC-620",
-    "MAC-621",
-    "MAC-622",
-    "MAC-623",
-    "P0V-103",
-    "P0V-104",
-    "P0V-105",
-    "P0V-106"
-   ],
-   "oracles": [
-    "MAC-240",
-    "MAC-241",
-    "MAC-301",
-    "MAC-320",
-    "MAC-330",
-    "MAC-331",
-    "MAC-601",
-    "MAC-620",
-    "MAC-621",
-    "MAC-622",
-    "P0V-103",
-    "P0V-104",
-    "P0V-105",
-    "P0V-106"
-   ],
-   "note": "clauses declared by macos-platform.md's implementation table"
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": [],
+   "note": "Current working-tree bytes have no explicit byte-bound review; historical reviews do not certify these changes."
   },
   {
    "path": "src/platform/host/snapshot.ts",
@@ -3527,8 +3530,8 @@
    "oracles": [
     "Owned cleanup stopped snapshot"
    ],
-   "note": "Read in full: partial snapshot ownership spans clone/publication and discard; primary plus discard and cleanup-only outcomes are not success. Discard-removal control assertion-killed. Actual local-fixture snapshot regressions pass. Running-snapshot maintenance/control/society cleanup and clone/thaw failure composition remain open; no native VM, APFS or power-cut proof.",
-   "sha256": "5e516be2a64e7282df623b7add2c8da67abc0b145c69d30e23e27db9f851ce32"
+   "note": "Read in full: partial snapshot ownership spans clone/publication and discard; primary plus discard and cleanup-only outcomes are not success. Discard-removal control assertion-killed. Actual local-fixture snapshot regressions pass. Running-snapshot maintenance/control/society cleanup and clone/thaw failure composition remain open; no native VM, APFS or power-cut proof. P0-8: the snapshot prune removes each staged name through removeHostStaged's owner-bits repair, not a blind rmSync.",
+   "sha256": "02356a9b963a719a83989c139fefc7813dd6da6cbfba249d5b446edb5ab4d303"
   },
   {
    "path": "src/platform/host/vz-driver.ts",
@@ -3542,14 +3545,20 @@
     "MAC-701",
     "MAC-702"
    ],
-   "note": "clauses declared by macos-platform.md's implementation table"
+   "note": "clauses declared by macos-platform.md's implementation table",
+   "sha256": "5af1a59fc21dcac48539b45fb22894e22702db9815945ea9980a2fc25eac1580"
   },
   {
    "path": "src/platform/package-archive.ts",
    "primary": null,
-   "status": "NOT_REVIEWED",
-   "by": [],
-   "oracles": []
+   "status": "CHANGED_WITH_ORACLE",
+   "by": [
+    "DR25"
+   ],
+   "oracles": [
+    "DR25"
+   ],
+   "sha256": "13c4cd69564a2924772c6f9dc05a418cb89330a12883cabd892eafd7e1148531"
   },
   {
    "path": "src/platform/product-text.ts",
@@ -3570,7 +3579,8 @@
     "MAC-241",
     "MAC-250"
    ],
-   "note": "clauses declared by macos-platform.md's implementation table"
+   "note": "clauses declared by macos-platform.md's implementation table",
+   "sha256": "a5efdc22b698db94f5d07dbc8d73ea10e2d5126e915890d11f80fa4eef069082"
   },
   {
    "path": "src/platform/rpc.ts",
@@ -3591,7 +3601,8 @@
     "MAC-241",
     "MAC-250"
    ],
-   "note": "clauses declared by macos-platform.md's implementation table"
+   "note": "clauses declared by macos-platform.md's implementation table",
+   "sha256": "ddc30ffb2825238331501fdeee4c584fbbb92c70540459108b21ce6ed2289e21"
   },
   {
    "path": "src/platform/stream-receive.ts",
@@ -3613,7 +3624,8 @@
     "P0V-105",
     "P0V-106"
    ],
-   "note": "clauses declared by macos-platform.md's implementation table"
+   "note": "clauses declared by macos-platform.md's implementation table",
+   "sha256": "7c8bd9a62c1fe3e61b31bdf697159f03a60e8cbbf43585ffe2cdd9b530cf936c"
   },
   {
    "path": "src/platform/stream-source.ts",
@@ -3627,7 +3639,8 @@
     "MAC-240",
     "MAC-241"
    ],
-   "note": "clauses declared by macos-platform.md's implementation table"
+   "note": "clauses declared by macos-platform.md's implementation table",
+   "sha256": "0dc34e6b3a7bc5c7bfcfba6ce78a9ee537e8d35c1d7aebc08073ff62d76eeb5c"
   },
   {
    "path": "src/platform/terminal-modes.ts",
@@ -3648,7 +3661,8 @@
     "MAC-251",
     "P0V-108",
     "P0V-109"
-   ]
+   ],
+   "sha256": "102e1af15b0492730df0563be0c29ad065cf08662e6f5ec0cc962ae30889c400"
   },
   {
    "path": "src/ports/ledger.ts",
@@ -3667,7 +3681,8 @@
     "V04A",
     "V04B"
    ],
-   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are tests whose loaded module closure (or text) contains this file"
+   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are tests whose loaded module closure (or text) contains this file",
+   "sha256": "1a81915fabf9162b4f64bb54504cb7abaa6817634c44dce41fc39e80cf04ab9c"
   },
   {
    "path": "src/ports/runtime.ts",
@@ -3680,7 +3695,8 @@
    "oracles": [
     "AV9",
     "DR18"
-   ]
+   ],
+   "sha256": "5a6f0fee2206cb72b51566d4b077983acb70bdf338ebce89f8df921d4f8ada07"
   },
   {
    "path": "src/process/async.ts",
@@ -3703,7 +3719,8 @@
     "DR4",
     "DR6",
     "DR7"
-   ]
+   ],
+   "sha256": "d147534d3899ba0ad0a79fddc6502a0030399dcd993e23eb47e0c38af1085b62"
   },
   {
    "path": "src/process/cleanup.ts",
@@ -3731,7 +3748,8 @@
     "V17A",
     "V17B"
    ],
-   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are the tests that load this module"
+   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are the tests that load this module",
+   "sha256": "fdead1b51733f9ef18fcab7fc580ec5be1cf45d1b9b9fab868dd2b414ca6d697"
   },
   {
    "path": "src/process/host-loss.ts",
@@ -3755,7 +3773,8 @@
     "P0V-121",
     "P0V-122",
     "P0V-77"
-   ]
+   ],
+   "sha256": "b0870a7a87a465d86ddc577b98aedc3be14039540a8a11cd5cc370808010ddd3"
   },
   {
    "path": "src/process/preparation.ts",
@@ -3767,7 +3786,8 @@
    "oracles": [
     "V17A",
     "V17B"
-   ]
+   ],
+   "sha256": "b1953d37664b614543dce5ebbd21098cb1922926d74112f8440c008690d05b5c"
   },
   {
    "path": "src/process/run.ts",
@@ -3780,7 +3800,15 @@
    "oracles": [
     "P0V-77",
     "P0V-86"
-   ]
+   ],
+   "sha256": "5f28cba7a5712d2876cf09238a8874efe0c0a1988efc82ac0a7d1c78fc885b63"
+  },
+  {
+   "path": "src/protocol/alarm.ts",
+   "primary": null,
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": []
   },
   {
    "path": "src/protocol/batch-view.ts",
@@ -3799,7 +3827,8 @@
     "T113",
     "V10A"
    ],
-   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are tests whose loaded module closure (or text) contains this file"
+   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are tests whose loaded module closure (or text) contains this file",
+   "sha256": "3c9ed42d2db878a204dfa45e122bec347e8a437664dd19886bee4ff9ba9ca8f0"
   },
   {
    "path": "src/protocol/byte-queue.ts",
@@ -3818,7 +3847,8 @@
     "V05B",
     "V26C"
    ],
-   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are tests whose loaded module closure contains this module"
+   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are tests whose loaded module closure contains this module",
+   "sha256": "c0252a32dc6a55a3ee3ca0961a4ce72476ba9e55ca165aa7968cec84da4622d5"
   },
   {
    "path": "src/protocol/channel.ts",
@@ -3831,7 +3861,8 @@
     "V26C",
     "R15"
    ],
-   "note": "one request in flight, encoded-byte budgets both ways, deadlines"
+   "note": "one request in flight, encoded-byte budgets both ways, deadlines",
+   "sha256": "c52b4922b0fd99663e78c88545e43ea589f4cae138f008356f3859f92ba39e96"
   },
   {
    "path": "src/protocol/connection.ts",
@@ -3852,7 +3883,8 @@
     "MAC-241",
     "MAC-250"
    ],
-   "note": "clauses declared by macos-platform.md's implementation table"
+   "note": "clauses declared by macos-platform.md's implementation table",
+   "sha256": "d6856a21690a9a54a193abb538da6d35b0853c8fcc5a7953610133c449e68462"
   },
   {
    "path": "src/protocol/guest-history.ts",
@@ -3894,7 +3926,8 @@
     "MAC-620",
     "MAC-621",
     "MAC-622"
-   ]
+   ],
+   "sha256": "a512c41001d85b84a860217aa729af0d2453b4d6d72985c8830617405988002e"
   },
   {
    "path": "src/protocol/host-channel.ts",
@@ -3912,7 +3945,8 @@
     "V08B",
     "V09B"
    ],
-   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are the tests that load this module"
+   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are the tests that load this module",
+   "sha256": "57d7d26d674a11797c680048f45bc27a2e646d8a655edfb21e40f23a6893dc1e"
   },
   {
    "path": "src/protocol/host-guest.ts",
@@ -3939,7 +3973,8 @@
     "MAC-250",
     "MAC-620"
    ],
-   "note": "clauses declared by macos-platform.md's implementation table"
+   "note": "clauses declared by macos-platform.md's implementation table",
+   "sha256": "db401cbd8cfdb8d735753402bcf4fa450032e3c7dc0bd4a016c1a54ca0d5cbe1"
   },
   {
    "path": "src/protocol/host-history.ts",
@@ -3973,7 +4008,8 @@
     "P0V-47",
     "P0V-48",
     "P0V-86"
-   ]
+   ],
+   "sha256": "f4d4762fa255c9c9f8fdc440f3e1b38d0c8e64b2223874eb2e0b7abed1339185"
   },
   {
    "path": "src/protocol/log-response.ts",
@@ -3986,7 +4022,8 @@
     "F3",
     "F4"
    ],
-   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are the tests that load this module"
+   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are the tests that load this module",
+   "sha256": "ea8b1768fc0be74cfd5f6d91bb8fc51b5f487814560fc8b5471cf5c81d0575ce"
   },
   {
    "path": "src/protocol/methods.ts",
@@ -4013,7 +4050,8 @@
     "P0V-45",
     "V21A",
     "V21B"
-   ]
+   ],
+   "sha256": "2b8379a7d7d0dba38180e05e37eac191e414bb706192f2c3225977bd2bbeb775"
   },
   {
    "path": "src/protocol/operation-results.ts",
@@ -4024,7 +4062,8 @@
    ],
    "oracles": [
     "V29A"
-   ]
+   ],
+   "sha256": "caf87dc387af67d623d2d6dc36651dda4f7718dd25fe731c8e5a302ec22de774"
   },
   {
    "path": "src/protocol/principal-credential.ts",
@@ -4040,7 +4079,8 @@
     "V08B",
     "V09B"
    ],
-   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are the tests that load this module"
+   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are the tests that load this module",
+   "sha256": "bc2890b281786611f43b9b5ca5f13bdfaa9ddd2705989cb2424bcd5f7e3c1a6c"
   },
   {
    "path": "src/protocol/receipt-chunks.ts",
@@ -4067,7 +4107,8 @@
     "P9",
     "REC-007"
    ],
-   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are the tests that load this module"
+   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are the tests that load this module",
+   "sha256": "9c73577c386052671990b81975382594c439f119389acc07b00f2d17df0bfd46"
   },
   {
    "path": "src/protocol/receipts.ts",
@@ -4086,7 +4127,8 @@
     "DR4",
     "DR6",
     "DR7"
-   ]
+   ],
+   "sha256": "5f1dcb6e4ff05f59051d710b14fcc45315074888b9ac27ac79427a2100214efe"
   },
   {
    "path": "src/protocol/request-codec.ts",
@@ -4104,7 +4146,8 @@
     "P0V-123",
     "P0V-124",
     "P0V-126"
-   ]
+   ],
+   "sha256": "ea011f848a165c4396ceffa41dd45e560a96eb4c20be2bbbe49f516ecd05b755"
   },
   {
    "path": "src/protocol/response-codec.ts",
@@ -4117,7 +4160,8 @@
     "F3",
     "R15"
    ],
-   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are the tests that load this module"
+   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are the tests that load this module",
+   "sha256": "77d534041712638c05f68cd71100c36bb4da56fcb5814cbc95a35e45ecd3efad"
   },
   {
    "path": "src/protocol/run-lease.ts",
@@ -4132,7 +4176,8 @@
     "T117",
     "V27A"
    ],
-   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are the tests that load this module"
+   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are the tests that load this module",
+   "sha256": "2bf0751cb6fbe7f70a4c93170a1974291048b83b938c0da493e0a595f2a5c510"
   },
   {
    "path": "src/protocol/status-page.ts",
@@ -4164,15 +4209,53 @@
     "P0V-38",
     "P0V-39",
     "P0V-51"
-   ]
+   ],
+   "sha256": "959fa5cec8dfbd85837e539c707cbbf00ddb9b851c2e5ac48966a4ea72685758"
   },
   {
    "path": "src/reconcile.ts",
    "primary": "WP21",
-   "status": "NOT_REVIEWED",
-   "by": [],
-   "oracles": [],
-   "note": "Current working-tree bytes have no explicit byte-bound review; historical reviews do not certify these changes."
+   "status": "CHANGED_WITH_ORACLE",
+   "by": [
+    "AV20",
+    "DR10",
+    "DR18",
+    "P0V-05",
+    "P0V-07",
+    "P0V-64",
+    "P0V-87",
+    "P0V-88",
+    "P0V-89",
+    "P0V-90",
+    "P0V-91",
+    "P0V-92",
+    "P0V-93",
+    "P0V-94",
+    "P0V-95",
+    "WP03",
+    "WP21",
+    "WP22"
+   ],
+   "oracles": [
+    "AV20",
+    "DR10",
+    "DR18",
+    "P0V-64",
+    "P0V-87",
+    "P0V-88",
+    "P0V-90",
+    "P0V-92",
+    "P0V-93",
+    "P0V-94",
+    "P0V-95",
+    "V03A",
+    "V03B",
+    "V21A",
+    "V21B",
+    "V22A",
+    "V22B"
+   ],
+   "sha256": "99902729d8855fcb9d6e8a908b32c67fa8761dd4b6fe6893a0445dceefa6b7a8"
   },
   {
    "path": "src/reconcile/operations.ts",
@@ -4197,7 +4280,8 @@
     "P0V-93",
     "P0V-94",
     "P0V-95"
-   ]
+   ],
+   "sha256": "5334be439deddd455f15493878094ca5db0d912cb289b7bf660ee4c5850a84ec"
   },
   {
    "path": "src/reconcile/preaccept.ts",
@@ -4210,73 +4294,39 @@
   {
    "path": "src/request-cache.ts",
    "primary": "WP26",
-   "status": "CHANGED_WITH_ORACLE",
-   "by": [
-    "P0V-111",
-    "P0V-112",
-    "P0V-59",
-    "P0V-71",
-    "WP26"
-   ],
-   "oracles": [
-    "P0V-111",
-    "P0V-112",
-    "P0V-59",
-    "P0V-71",
-    "V26A",
-    "V26B",
-    "V26C"
-   ]
-  },
-  {
-   "path": "src/review.ts",
-   "primary": null,
    "status": "NOT_REVIEWED",
    "by": [],
    "oracles": [],
    "note": "Current working-tree bytes have no explicit byte-bound review; historical reviews do not certify these changes."
   },
   {
+   "path": "src/resident-paths.ts",
+   "primary": null,
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": []
+  },
+  {
+   "path": "src/review.ts",
+   "primary": null,
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": []
+  },
+  {
    "path": "src/rpc-client.ts",
    "primary": "WP26",
-   "status": "READ_UNCHANGED",
-   "by": [
-    "AV-review"
-   ],
-   "oracles": [
-    "R28"
-   ],
-   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are tests whose loaded module closure (or text) contains this file"
+   "status": "REMOVED",
+   "by": [],
+   "oracles": []
   },
   {
    "path": "src/runner.ts",
    "primary": "WP07",
-   "status": "CHANGED_WITH_ORACLE",
-   "by": [
-    "AV10",
-    "AV11",
-    "AV21",
-    "DR18",
-    "DR9",
-    "P0V-01",
-    "P0V-02",
-    "P0V-03",
-    "P0V-04",
-    "P0V-06",
-    "WP06",
-    "WP10"
-   ],
-   "oracles": [
-    "AV10",
-    "AV11",
-    "AV21",
-    "DR18",
-    "DR9",
-    "V06A",
-    "V06B",
-    "V10A",
-    "V10C"
-   ]
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": [],
+   "note": "Current working-tree bytes have no explicit byte-bound review; historical reviews do not certify these changes."
   },
   {
    "path": "src/runtime/assets.ts",
@@ -4297,7 +4347,8 @@
     "DR18",
     "V03A",
     "V03B"
-   ]
+   ],
+   "sha256": "3d1fdecdbc990deb91f9f401090ebd8a5c0e607bcdf779dcb51cf5fb04514e9d"
   },
   {
    "path": "src/runtime/broker-lifetime.ts",
@@ -4311,7 +4362,8 @@
    "oracles": [
     "AV31",
     "P0V-81"
-   ]
+   ],
+   "sha256": "299ecd9a653d37a6a83da80e0fb7fc5c8fe6df5bbe21e494400a2342dc2dcfd3"
   },
   {
    "path": "src/runtime/broker-supervisor.ts",
@@ -4331,7 +4383,8 @@
     "P0V-35",
     "V03A",
     "V03B"
-   ]
+   ],
+   "sha256": "0c244704ef6995c9c80bfb0721a2a910b1115cd8833ece36f485b22b4221a596"
   },
   {
    "path": "src/runtime/candidate-checks.ts",
@@ -4344,7 +4397,21 @@
     "DR29"
    ],
    "note": "Read in full: composition callback consumes frozen exact candidate/check profile, cgroup resources, private raw checkout and confined argv/environment; controlled command/manager-outcome oracles pass. Actual systemd/cgroup probe remains independently denied and NOT_RUN; builder tests do not certify kernel enforcement.",
-   "sha256": "69b8762f6881a80459502bc55e3caf5d3e110b26cfa125bc613514c8ecaa0305"
+   "sha256": "83144dd0cf080739ed3d4485392f8a794c229305dfaf2f9af786aa1ddc6b31a1"
+  },
+  {
+   "path": "src/runtime/client-preload.ts",
+   "primary": null,
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": []
+  },
+  {
+   "path": "src/runtime/client-runtime.ts",
+   "primary": null,
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": []
   },
   {
    "path": "src/runtime/deployment-manifest.ts",
@@ -4362,7 +4429,8 @@
    "oracles": [
     "AV16",
     "DR13"
-   ]
+   ],
+   "sha256": "2209c5284911f062ebd09f689fb0f004fc1901eb213fed505104adcbb29deecb"
   },
   {
    "path": "src/runtime/egress-forwarder.ts",
@@ -4384,7 +4452,8 @@
     "P0V-115",
     "P0V-116"
    ],
-   "note": "clauses declared by macos-platform.md's implementation table"
+   "note": "clauses declared by macos-platform.md's implementation table",
+   "sha256": "58f68818937dec97b6bd49b8785e8b48b38e14aea12824496419b54f4b43ec1e"
   },
   {
    "path": "src/runtime/engine-auth.ts",
@@ -4404,7 +4473,8 @@
     "MAC-251",
     "V27A",
     "V27B"
-   ]
+   ],
+   "sha256": "9a25397e3a5429b18baa66987e8620b8f5a9e9b81ea457f81ef3b87387a25aa4"
   },
   {
    "path": "src/runtime/extension-integrity.ts",
@@ -4420,7 +4490,8 @@
    ],
    "oracles": [
     "DR13"
-   ]
+   ],
+   "sha256": "e6270acf9c67052cec9e187444218ad0965dc9921c95011fbdaa2e421a8186d3"
   },
   {
    "path": "src/runtime/extension-modules.ts",
@@ -4473,7 +4544,8 @@
     "P0V-116",
     "V10A",
     "V10C"
-   ]
+   ],
+   "sha256": "6ca36292d4204be5f163a76c4cf5c6de4fe71848d4feec7e9e96d65c83016714"
   },
   {
    "path": "src/runtime/inference-relay.ts",
@@ -4501,7 +4573,8 @@
     "P0V-34",
     "V27A",
     "V27B"
-   ]
+   ],
+   "sha256": "3bf3d830d8f776aaa24d6b8957c1ca690aa5356fac3bb8d3c839907a780829eb"
   },
   {
    "path": "src/runtime/interactive-channel.ts",
@@ -4516,6 +4589,26 @@
    "status": "NOT_REVIEWED",
    "by": [],
    "oracles": []
+  },
+  {
+   "path": "src/runtime/local-package.ts",
+   "primary": null,
+   "status": "CHANGED_WITH_ORACLE",
+   "by": [
+    "DR25"
+   ],
+   "oracles": [
+    "DR25"
+   ],
+   "sha256": "a5b6ca9ae060abc4d2c177d405d18dc899cd9cc74163f018ed5fd53124d27c49"
+  },
+  {
+   "path": "src/runtime/locked-files.ts",
+   "primary": null,
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": [],
+   "note": "Current working-tree bytes have no explicit byte-bound review; historical reviews do not certify these changes."
   },
   {
    "path": "src/runtime/oma-theme.ts",
@@ -4536,14 +4629,16 @@
    "primary": null,
    "status": "NOT_REVIEWED",
    "by": [],
-   "oracles": []
+   "oracles": [],
+   "note": "Current working-tree bytes have no explicit byte-bound review; historical reviews do not certify these changes."
   },
   {
    "path": "src/runtime/personal-settings.ts",
    "primary": null,
    "status": "NOT_REVIEWED",
    "by": [],
-   "oracles": []
+   "oracles": [],
+   "note": "Current working-tree bytes have no explicit byte-bound review; historical reviews do not certify these changes."
   },
   {
    "path": "src/runtime/pi-adapter.ts",
@@ -4571,7 +4666,8 @@
     "MAC-205",
     "V10A",
     "V10C"
-   ]
+   ],
+   "sha256": "c67d5be7423720b47797ffd00d15b1b377a17e3228b17c052130326eb769030f"
   },
   {
    "path": "src/runtime/pi-packages.ts",
@@ -4586,8 +4682,8 @@
     "DR28",
     "DR25"
    ],
-   "note": "Read in full at the 2026-10-01 host-only package checkpoint: one value-aware grammar produces an immutable explicit Mac-only local decision, strips host-only from engine argv, and refuses duplicate/value-like/project combinations and Linux use before effects. Five source-copy grammar controls assertion-killed through the actual parser imported by entry composition. Shared package index validation/publication, explicit activation and per-source reconciliation retained; actual loopback npm install/list/update/remove and ordinary package regressions pass. Installing locally does not select a Personal extension or consume an absent first-project seed. Whole index crash/retry boundaries and native Mac package durability are not certified by this limited review. No new Host API or guest protocol method/state/version.",
-   "sha256": "aabb51db56ded2acabd0fa5129800687349f722c4c05dfefbb581396211cceab"
+   "note": "Read in full at the 2026-10-01 host-only package checkpoint: one value-aware grammar produces an immutable explicit Mac-only local decision, strips host-only from engine argv, and refuses duplicate/value-like/project combinations and Linux use before effects. Five source-copy grammar controls assertion-killed through the actual parser imported by entry composition. Shared package index validation/publication, explicit activation and per-source reconciliation retained; actual loopback npm install/list/update/remove and ordinary package regressions pass. Installing locally does not select a Personal extension or consume an absent first-project seed. Whole index crash/retry boundaries and native Mac package durability are not certified by this limited review. No new Host API or guest protocol method/state/version. P0-8: writePackageIndex repairs the configured local stage's owner bits (directory and file) before the engine lists it; an unlistable or non-directory stage is refused, never indexed as empty.",
+   "sha256": "58ef45db164a43e013b360aaa3acac07879863375fcd50a77a268b2a31ac89cf"
   },
   {
    "path": "src/runtime/pi-rpc.ts",
@@ -4616,7 +4712,8 @@
     "V09A",
     "V09B",
     "V09C"
-   ]
+   ],
+   "sha256": "f94c3863b910bf78b365a614b47fac0b58976916035e90de77cae6c712fb94ce"
   },
   {
    "path": "src/runtime/pi-runtime.ts",
@@ -4631,8 +4728,8 @@
     "Owned cleanup settings",
     "engine settings"
    ],
-   "note": "Read in full: settings/adoption writer returns and nested engine-file/parent returns preserve primary failure. Parent-leak control assertion-killed; controlled adoption fails on directory observation before opening any credential file. Bundled-only engine resolution, separate engine home and one retry owner retained. No actual auth.json was read; all pre-transfer absence and native credential adoption boundaries are not certified.",
-   "sha256": "6aa55fb6d1a71597999505d48fbca99f4d1a55148a6db5c94d03d2dfa200fb67"
+   "note": "Read in full: settings/adoption writer returns and nested engine-file/parent returns preserve primary failure. Parent-leak control assertion-killed; controlled adoption fails on directory observation before opening any credential file. Bundled-only engine resolution, separate engine home and one retry owner retained. No actual auth.json was read; all pre-transfer absence and native credential adoption boundaries are not certified. P0-8/DR32: preparePiInteractive repairs a mode-000 .engine/themes tail through ensureOwnedUserDirectory before the locked replace, which is lockedOwnedReplace -- engine files are oma's, not a generic user path.",
+   "sha256": "2531d71f38c1fd85cfdaf76884c3951aa4c7b84ddcb4d3db03bc499c0f1434f8"
   },
   {
    "path": "src/runtime/pi-spawn-plan.ts",
@@ -4668,7 +4765,8 @@
     "V10C",
     "V27A",
     "V27B"
-   ]
+   ],
+   "sha256": "85fb1e5d3b82f9af8b19e89d4d36d52c786ddf8c96f4be6043801939ffafff95"
   },
   {
    "path": "src/runtime/principal-delivery.ts",
@@ -4696,7 +4794,8 @@
     "V09A",
     "V09B",
     "V09C"
-   ]
+   ],
+   "sha256": "e38628acab00187626f1238319096e6d48707977fbe9bd3764613d64769885ec"
   },
   {
    "path": "src/runtime/process-lock.ts",
@@ -4722,69 +4821,25 @@
   {
    "path": "src/runtime/provision.ts",
    "primary": "WP16",
-   "status": "CHANGED_WITH_ORACLE",
-   "by": [
-    "AV10",
-    "AV11",
-    "AV3",
-    "AV5",
-    "DR13",
-    "DR18",
-    "MAC-411",
-    "P0V-12",
-    "P0V-16",
-    "P0V-18",
-    "P0V-19",
-    "P0V-20",
-    "P0V-21",
-    "P0V-22",
-    "P0V-23",
-    "P0V-77",
-    "P0V-83",
-    "P0V-84",
-    "P0V-85",
-    "WP16"
-   ],
-   "oracles": [
-    "AV10",
-    "AV11",
-    "AV3",
-    "AV5",
-    "DR13",
-    "DR18",
-    "P0V-77",
-    "P0V-83",
-    "P0V-84",
-    "P0V-85",
-    "V16A",
-    "V16B"
-   ],
-   "note": "clauses declared by macos-platform.md's implementation table"
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": [],
+   "note": "Current working-tree bytes have no explicit byte-bound review; historical reviews do not certify these changes."
   },
   {
    "path": "src/runtime/resident-rootfs.ts",
    "primary": "WP27",
    "status": "CHANGED_WITH_ORACLE",
    "by": [
-    "AV1",
-    "AV19",
-    "AV2",
-    "AV5",
-    "DR13",
-    "DR18",
-    "P0V-19",
-    "P0V-20",
-    "P0V-21",
-    "P0V-22",
-    "P0V-23"
+    "DR25",
+    "DR27"
    ],
    "oracles": [
-    "AV1",
-    "AV2",
-    "AV5",
-    "DR13",
-    "DR18"
-   ]
+    "SCN-R01",
+    "SCN-C10"
+   ],
+   "note": "Read in full: the prepared rootfs gains RESIDENT_PATHS.workerArchive so the confined engine's worker-only review archive mount target exists before any bind; the directory list otherwise unchanged, order and ensureDirectory semantics retained. SCN-R01 exercises the Worker review archive end-to-end through the confined path; SCN-C10 exercises package extension loading under the same rootfs.",
+   "sha256": "403e38c09d0079482a262956b9bdd0925b3c244f90545122ef7abaae0c50b5e2"
   },
   {
    "path": "src/runtime/run-registry.ts",
@@ -4799,7 +4854,8 @@
     "V06B",
     "V07A",
     "V07B"
-   ]
+   ],
+   "sha256": "2a954563cd1305ab2bd362961f1adce8c1a4794aacc4698b72a776ea938d619c"
   },
   {
    "path": "src/runtime/sandbox-seccomp.ts",
@@ -4812,7 +4868,8 @@
    "oracles": [
     "MAC-205"
    ],
-   "note": "clauses declared by macos-platform.md's implementation table"
+   "note": "clauses declared by macos-platform.md's implementation table",
+   "sha256": "dc90818bf7987ff7de17059d7f64c1657a65feb9eab1e7d79bf9c745efcb5eaf"
   },
   {
    "path": "src/runtime/session-catalog.ts",
@@ -4840,7 +4897,8 @@
    "primary": null,
    "status": "NOT_REVIEWED",
    "by": [],
-   "oracles": []
+   "oracles": [],
+   "note": "Current working-tree bytes have no explicit byte-bound review; historical reviews do not certify these changes."
   },
   {
    "path": "src/runtime/society-lease.ts",
@@ -4851,7 +4909,8 @@
    ],
    "oracles": [
     "DR18"
-   ]
+   ],
+   "sha256": "8d27d6759361abbfbd86885d6ae17668f9b76cf13026fa92ee48faca0a9a09c8"
   },
   {
    "path": "src/runtime/supervision-channel.ts",
@@ -4862,7 +4921,8 @@
    ],
    "oracles": [
     "AV6"
-   ]
+   ],
+   "sha256": "2e2ca29cc2497d81498c4c280715e2d2fcb5131ae4a230fd0f262c1edd5bab59"
   },
   {
    "path": "src/runtime/user-files.ts",
@@ -4875,39 +4935,24 @@
     "user files",
     "Darwin metadata publication"
    ],
-   "note": "Read in full: an acquired reader's close/read failure is not absence; bounded UTF-8/identity/single-name checks retained. Darwin immutable publication returns its writer and temporary while preserving primary beside cleanup and flushes existing destination on retry. Post-open ENOENT-to-absence control assertion-killed. Linux contained resolution retained; native Darwin crash durability and pre-transfer pin-close absence composition are not certified.",
-   "sha256": "ed7b0c4c2fe8f9d786940ee90ec026c9d9432ba8ea9d9293a0b849336c2d76cc"
+   "note": "Read in full: an acquired reader's close/read failure is not absence; bounded UTF-8/identity/single-name checks retained. Darwin immutable publication returns its writer and temporary while preserving primary beside cleanup and flushes existing destination on retry. Post-open ENOENT-to-absence control assertion-killed. Linux contained resolution retained; native Darwin crash durability and pre-transfer pin-close absence composition are not certified. P0-8: ensureOwnedUserDirectory(path, ownedFrom, faults?) is the owned-tail entry point; the faults seam passes the Linux durability observer through unchanged.",
+   "sha256": "889ebc9332ec4433b58743f9ea1e03355cfe5d29177fbbd77884519db2c7210b"
   },
   {
    "path": "src/sandbox.ts",
    "primary": "WP27",
    "status": "CHANGED_WITH_ORACLE",
    "by": [
-    "AV10",
-    "AV11",
-    "AV16",
-    "AV17",
-    "AV27",
-    "AV28",
     "DR18",
-    "MAC-205",
-    "MAC-411",
-    "P0V-102",
-    "WP27"
+    "DR27"
    ],
    "oracles": [
-    "AV10",
-    "AV11",
-    "AV16",
-    "AV17",
-    "AV27",
-    "AV28",
-    "DR18",
-    "MAC-205",
-    "V27A",
-    "V27B"
+    "DR27",
+    "R28",
+    "SCN-C08"
    ],
-   "note": "clauses declared by macos-platform.md's implementation table"
+   "note": "Read in full: resolvedBindSource names each socket bind source by the real directory it reaches instead of a /proc/<pid>/fd anchor bubblewrap cannot traverse inside its user namespace; only the parent resolves, the leaf need not exist, and a missing parent keeps the lexical spelling (ENOENT/ENOTDIR only -- other resolution failures propagate). R28 asserts the pure recipe with fabricated dirs; SCN-C08 runs a real confined shell under the filter; DR27 private-argument tests hold the recipe's value preservation.",
+   "sha256": "47bf8916a1b8703a8f3e487383a4073ec083c9857ac5f18828c8c2bbd283d63f"
   },
   {
    "path": "src/storage/batch-view.ts",
@@ -4926,7 +4971,8 @@
     "DR4",
     "DR6",
     "DR7"
-   ]
+   ],
+   "sha256": "0d228bc362fdf75a9dd0653848a3f452b9f65a65a332412d8f0e008c99181d35"
   },
   {
    "path": "src/storage/contained-fs.ts",
@@ -4959,26 +5005,16 @@
     "R01",
     "R37"
    ],
-   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are tests whose loaded module closure contains this module"
+   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are tests whose loaded module closure contains this module",
+   "sha256": "965660a2e42bb06a5d047fc1bbf3f41e4cf64f566923316f36eef629a93dfa52"
   },
   {
    "path": "src/storage/context-snapshot.ts",
    "primary": "WP18",
-   "status": "READ_UNCHANGED",
-   "by": [
-    "AV-review"
-   ],
-   "oracles": [
-    "CTX-003",
-    "CTX-004",
-    "DB-009",
-    "ERR-001",
-    "GIT-006",
-    "INT-003",
-    "R01",
-    "R37"
-   ],
-   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are tests whose loaded module closure contains this module"
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": [],
+   "note": "Current working-tree bytes have no explicit byte-bound review; historical reviews do not certify these changes."
   },
   {
    "path": "src/storage/context-stream.ts",
@@ -4991,43 +5027,10 @@
   {
    "path": "src/storage/delivery-receipt.ts",
    "primary": "WP05",
-   "status": "CHANGED_WITH_ORACLE",
-   "by": [
-    "AV4",
-    "DR11",
-    "DR9",
-    "P0V-01",
-    "P0V-02",
-    "P0V-03",
-    "P0V-04",
-    "P0V-06",
-    "P0V-107",
-    "P0V-111",
-    "P0V-112",
-    "P0V-13",
-    "P0V-65",
-    "P0V-96",
-    "P0V-97",
-    "WP05",
-    "WP06",
-    "WP27"
-   ],
-   "oracles": [
-    "AV4",
-    "DR11",
-    "DR9",
-    "P0V-107",
-    "P0V-111",
-    "P0V-112",
-    "P0V-65",
-    "P0V-96",
-    "V05A",
-    "V05B",
-    "V06A",
-    "V06B",
-    "V27A",
-    "V27B"
-   ]
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": [],
+   "note": "Current working-tree bytes have no explicit byte-bound review; historical reviews do not certify these changes."
   },
   {
    "path": "src/storage/diagnostic-snapshot.ts",
@@ -5046,7 +5049,8 @@
     "V04A",
     "V04B"
    ],
-   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are tests whose loaded module closure (or text) contains this file"
+   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are tests whose loaded module closure (or text) contains this file",
+   "sha256": "4ef0ca426eaed8fd44fae6130e7aeb8e468026de8a79c3de9f40e47f6ef530f0"
   },
   {
    "path": "src/storage/directory.ts",
@@ -5070,50 +5074,16 @@
     "P0V-50",
     "P0V-52",
     "P0V-53"
-   ]
+   ],
+   "sha256": "c3f8a4e8a8691796e3506a3280b75833e20ecf2033aac07f8386b1dd973ef48c"
   },
   {
    "path": "src/storage/durable-fs.ts",
    "primary": "WP05",
-   "status": "CHANGED_WITH_ORACLE",
-   "by": [
-    "AV1",
-    "AV2",
-    "AV5",
-    "DR11",
-    "P0V-111",
-    "P0V-112",
-    "P0V-13",
-    "P0V-49",
-    "P0V-50",
-    "P0V-52",
-    "P0V-53",
-    "P0V-59",
-    "P0V-71",
-    "P0V-83",
-    "P0V-84",
-    "P0V-85",
-    "P0V-96",
-    "P0V-97"
-   ],
-   "oracles": [
-    "AV1",
-    "AV2",
-    "AV5",
-    "DR11",
-    "P0V-111",
-    "P0V-112",
-    "P0V-49",
-    "P0V-50",
-    "P0V-52",
-    "P0V-53",
-    "P0V-59",
-    "P0V-71",
-    "P0V-83",
-    "P0V-84",
-    "P0V-85",
-    "P0V-96"
-   ]
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": [],
+   "note": "Current working-tree bytes have no explicit byte-bound review; historical reviews do not certify these changes."
   },
   {
    "path": "src/storage/facets.ts",
@@ -5145,7 +5115,8 @@
     "P0V-93",
     "P0V-94",
     "P0V-95"
-   ]
+   ],
+   "sha256": "e8dd3c44d0c2d5a7e9095ed7fedf977cfeb280d9f03a589b2ec1af5373e11d1a"
   },
   {
    "path": "src/storage/file-digest.ts",
@@ -5163,29 +5134,10 @@
   {
    "path": "src/storage/immutable-file.ts",
    "primary": "WP20",
-   "status": "CHANGED_WITH_ORACLE",
-   "by": [
-    "AV1",
-    "AV2",
-    "AV5",
-    "P0V-111",
-    "P0V-112",
-    "P0V-65",
-    "P0V-96",
-    "P0V-97",
-    "WP20"
-   ],
-   "oracles": [
-    "AV1",
-    "AV2",
-    "AV5",
-    "P0V-111",
-    "P0V-112",
-    "P0V-65",
-    "P0V-96",
-    "V20A",
-    "V20B"
-   ]
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": [],
+   "note": "Current working-tree bytes have no explicit byte-bound review; historical reviews do not certify these changes."
   },
   {
    "path": "src/storage/ledger-reader.ts",
@@ -5213,7 +5165,8 @@
     "P0V-95",
     "V23A",
     "V23B"
-   ]
+   ],
+   "sha256": "3955877e3ba6cc892219f52d3800d8ef80dd863e76f995ce8ff85d30b33a2582"
   },
   {
    "path": "src/storage/operation-codec.ts",
@@ -5232,7 +5185,8 @@
     "R21",
     "V04A"
    ],
-   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are tests whose loaded module closure (or text) contains this file"
+   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are tests whose loaded module closure (or text) contains this file",
+   "sha256": "0471569bd9168ccaa204fdee7902c17c05c25c42225ee6338da50aa68f7ec4d5"
   },
   {
    "path": "src/storage/operation-journal.ts",
@@ -5244,7 +5198,8 @@
    "oracles": [
     "P3"
    ],
-   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are the tests that load this module"
+   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are the tests that load this module",
+   "sha256": "2cb03d9bf30a25926adeb1feb402ae4c5b5bb801de82ec694b7a23e4732d1f16"
   },
   {
    "path": "src/storage/operation-transitions.ts",
@@ -5264,15 +5219,26 @@
     "P0V-126",
     "P0V-30",
     "P0V-56"
-   ]
+   ],
+   "sha256": "248bc23467135e393bf43f35c6bee25a6ccd3de44cb652b5304ac130f0bf0468"
   },
   {
    "path": "src/storage/paths.ts",
    "primary": "WP26",
-   "status": "NOT_REVIEWED",
-   "by": [],
-   "oracles": [],
-   "note": "Current working-tree bytes have no explicit byte-bound review; historical reviews do not certify these changes."
+   "status": "CHANGED_WITH_ORACLE",
+   "by": [
+    "AV10",
+    "AV11",
+    "AV3",
+    "DR18"
+   ],
+   "oracles": [
+    "AV10",
+    "AV11",
+    "AV3",
+    "DR18"
+   ],
+   "sha256": "0ab4d92f30bdc5b3c7251ce024bddf461b419bfc0fd26e0de6b7d70edbcc8137"
   },
   {
    "path": "src/storage/preaccept-artifact.ts",
@@ -5287,7 +5253,8 @@
     "V17B",
     "V20A",
     "V20B"
-   ]
+   ],
+   "sha256": "eb47932c6db0cdd172e1494f2f53095721f05b8d3c51b45c729b49faee46bb1d"
   },
   {
    "path": "src/storage/project-preparation.ts",
@@ -5311,7 +5278,8 @@
     "V21B",
     "V22A",
     "V22B"
-   ]
+   ],
+   "sha256": "fa179bf5bfc9a1eba31acf4fc584bec05ec710a2176a4628c6f835cbafe2065f"
   },
   {
    "path": "src/storage/receipt-projector.ts",
@@ -5324,7 +5292,8 @@
     "F1",
     "P23"
    ],
-   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are the tests that load this module"
+   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are the tests that load this module",
+   "sha256": "64502fa1dd457a1c6f9658ff8140b89826395f318737388b2ed768a58127daee"
   },
   {
    "path": "src/storage/rows.ts",
@@ -5343,7 +5312,8 @@
     "V04A",
     "V04B"
    ],
-   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are tests whose loaded module closure (or text) contains this file"
+   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are tests whose loaded module closure (or text) contains this file",
+   "sha256": "1abb66ec3ffd4d582dc6573b37749b6d6d9f1e839a05b0cea330029b0749ca25"
   },
   {
    "path": "src/storage/snapshot-reader.ts",
@@ -5367,7 +5337,8 @@
     "P0V-114",
     "P0V-115",
     "P0V-116"
-   ]
+   ],
+   "sha256": "821f462e427e0deff94304f84021a9bb62c58d35b2dd7da548d3b50e21857889"
   },
   {
    "path": "src/storage/staged-tree.ts",
@@ -5380,19 +5351,16 @@
    "oracles": [
     "P0V-111",
     "P0V-112"
-   ]
+   ],
+   "sha256": "3175ed609818d825a307d4790336114d92146ee006e718cdc4c11d1742fe365c"
   },
   {
    "path": "src/storage/submit-spool.ts",
    "primary": "WP20",
-   "status": "CHANGED_WITH_ORACLE",
-   "by": [
-    "WP17"
-   ],
-   "oracles": [
-    "V17A",
-    "V17B"
-   ]
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": [],
+   "note": "Current working-tree bytes have no explicit byte-bound review; historical reviews do not certify these changes."
   },
   {
    "path": "src/storage/transaction.ts",
@@ -5411,7 +5379,8 @@
     "T19",
     "T20"
    ],
-   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are the tests that load this module"
+   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are the tests that load this module",
+   "sha256": "2115c847e71a579330fa672593f9c188319722b5bca1df119283357987f3ea48"
   },
   {
    "path": "src/storage/transitions.ts",
@@ -5431,7 +5400,8 @@
     "DR9",
     "P0V-30",
     "P0V-56"
-   ]
+   ],
+   "sha256": "bd20ad596e28196efe75f13298501b00ad6cf6dbd4afb7b76175192c5549b470"
   },
   {
    "path": "src/storage/tree-lease.ts",
@@ -5442,7 +5412,8 @@
    ],
    "oracles": [
     "P0V-77"
-   ]
+   ],
+   "sha256": "f12424ef0bc798b878427cdcb64172987074d8990e4e6502ee32f16c938ea33b"
   },
   {
    "path": "src/store.ts",
@@ -5502,7 +5473,8 @@
     "V04B",
     "V23A",
     "V23B"
-   ]
+   ],
+   "sha256": "172c77952d3bd5cd91341e6f2f5a5eacacc1228094df162f9b7a6fe721dd7a90"
   },
   {
    "path": "src/tui/app.ts",
@@ -5512,6 +5484,7 @@
     "AV7",
     "DR13",
     "DR18",
+    "DR25",
     "MAC-022",
     "P0V-19",
     "P0V-20",
@@ -5529,6 +5502,7 @@
     "AV7",
     "DR13",
     "DR18",
+    "DR25",
     "P0V-36",
     "P0V-40",
     "P0V-41",
@@ -5536,7 +5510,8 @@
     "P0V-43",
     "V15A",
     "V15B"
-   ]
+   ],
+   "sha256": "f32bd12912a6704824e8d64e660f9064080a57883c482ec88680da071a06dec3"
   },
   {
    "path": "src/tui/cells.ts",
@@ -5572,7 +5547,8 @@
     "P0V-66",
     "V15A",
     "V15B"
-   ]
+   ],
+   "sha256": "02942ec479ce321fa66f973fd0bb995e787ca8a88890223df8c54b9ea5453186"
   },
   {
    "path": "src/tui/exit.ts",
@@ -5588,7 +5564,8 @@
    "oracles": [
     "DR13",
     "DR18"
-   ]
+   ],
+   "sha256": "956bf76caae7170075bdddc24e3a5861c5e337168ec6759db3dc6985a63ac314"
   },
   {
    "path": "src/tui/interactive-editor.ts",
@@ -5618,15 +5595,34 @@
     "P0V-76",
     "P0V-79",
     "P0V-86"
-   ]
+   ],
+   "sha256": "9cb60b71b0e5d152b44a76b1cc6605e6ce4a323a8ed450f5c6ddbe3571095596"
   },
   {
    "path": "src/tui/limits.ts",
    "primary": "WP28",
-   "status": "NOT_REVIEWED",
-   "by": [],
-   "oracles": [],
-   "note": "Current working-tree bytes have no explicit byte-bound review; historical reviews do not certify these changes."
+   "status": "CHANGED_WITH_ORACLE",
+   "by": [
+    "DR18",
+    "MAC-022",
+    "P0V-36",
+    "P0V-40",
+    "P0V-41",
+    "P0V-42",
+    "P0V-43",
+    "WP14"
+   ],
+   "oracles": [
+    "DR18",
+    "P0V-36",
+    "P0V-40",
+    "P0V-41",
+    "P0V-42",
+    "P0V-43",
+    "V14A",
+    "V14B"
+   ],
+   "sha256": "302efb3e447b52027b184b1faef08a6fb38b0fe087084618c32d98077d8734a9"
   },
   {
    "path": "src/tui/login.ts",
@@ -5639,8 +5635,8 @@
    "oracles": [
     "engine"
    ],
-   "note": "Read in full at the 2026-10-01 host-only package checkpoint: platform-aware runtime metadata preparation completes before spawn; explicit engine/store/arguments/environment/fence, error retained until actual direct-child close, and signal/null/nonzero close not success. Fourteen controlled tests pass; eleven source-copy controls assertion-killed under complete TAP with no cancellations/skips or harness errors, including the direct exit-only oracle. Actual Mac entry/bundled package manager and installed Personal PTY pass on Linux. Actual close does not establish arbitrary descendant/cgroup death; fallible listener acquisition and native Mac execution remain open. No credential files or real provider used.",
-   "sha256": "df65171ec8d70fe01a31775cf6f58260629f327db7f26b55a482e7dce9a8c641"
+   "note": "Read in full at the 2026-10-01 host-only package checkpoint: platform-aware runtime metadata preparation completes before spawn; explicit engine/store/arguments/environment/fence, error retained until actual direct-child close, and signal/null/nonzero close not success. Fourteen controlled tests pass; eleven source-copy controls assertion-killed under complete TAP with no cancellations/skips or harness errors, including the direct exit-only oracle. Actual Mac entry/bundled package manager and installed Personal PTY pass on Linux. Actual close does not establish arbitrary descendant/cgroup death; fallible listener acquisition and native Mac execution remain open. No credential files or real provider used. P0-8: the engine directory and package store are ensured through ensureOwnedUserDirectory inside dirname(stateRoot).",
+   "sha256": "deb19402bdca4fc9d5c215c815f14a4bf4f8612321d1da3ab02cecef25d19b5d"
   },
   {
    "path": "src/tui/model.ts",
@@ -5650,6 +5646,7 @@
     "AV7",
     "DR1",
     "DR13",
+    "DR25",
     "DR3",
     "DR4",
     "DR6",
@@ -5677,6 +5674,7 @@
     "AV7",
     "DR1",
     "DR13",
+    "DR25",
     "DR3",
     "DR4",
     "DR6",
@@ -5696,14 +5694,21 @@
     "V14B",
     "V15A",
     "V15B"
-   ]
+   ],
+   "sha256": "007ecb2d49b0febd403a6849010500f666984406ae91611a4df5a9d33158fc0e"
   },
   {
    "path": "src/tui/open-tui-brand.ts",
    "primary": null,
-   "status": "NOT_REVIEWED",
-   "by": [],
-   "oracles": []
+   "status": "CHANGED_WITH_ORACLE",
+   "by": [
+    "DR18"
+   ],
+   "oracles": [
+    "Open TUI"
+   ],
+   "note": "Read in full: the oma tip rewrite addresses the last command-tip cell by position (replaceColumn) instead of matching the command's text, because upstream truncates a name when an extension added a command; the cell's original SGR color is carried and the tip is width-bounded like swapText. Open TUI PTY oracles hold the branded header, tips and terminal restoration for all eight endings including reload-update with an extra registered command.",
+   "sha256": "afe6abff7ee8b077f92d11ef66d98f36855944104b2771fc87d6b50ed2072b19"
   },
   {
    "path": "src/tui/packages-apply.ts",
@@ -5738,7 +5743,8 @@
    "primary": null,
    "status": "NOT_REVIEWED",
    "by": [],
-   "oracles": []
+   "oracles": [],
+   "note": "Current working-tree bytes have no explicit byte-bound review; historical reviews do not certify these changes."
   },
   {
    "path": "src/tui/prompt.ts",
@@ -5757,7 +5763,8 @@
     "TUI-007",
     "TUI-010"
    ],
-   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are tests whose loaded module closure contains this module"
+   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are tests whose loaded module closure contains this module",
+   "sha256": "8cffd45edd7e4dc219246e70b632bc13d732d6fad256e2d7ab87fbeac42ef04b"
   },
   {
    "path": "src/tui/screen.ts",
@@ -5774,7 +5781,8 @@
     "P0V-81",
     "V28A",
     "V28B"
-   ]
+   ],
+   "sha256": "27c4023b773a3287d8264a84e795a16a9299bd63e25e13bb1dd0dff289988859"
   },
   {
    "path": "src/tui/session-mode.ts",
@@ -5821,7 +5829,8 @@
     "V09A",
     "V09B",
     "V09C"
-   ]
+   ],
+   "sha256": "0d24d1f6bb024547abc59759b2819d0cd4b3f6abb5734129d22c1f68882a36fe"
   },
   {
    "path": "src/tui/sources/extensions.ts",
@@ -5860,15 +5869,42 @@
     "V13C",
     "V14A",
     "V14B"
-   ]
+   ],
+   "sha256": "8b9fbc9b9c4430b366f32bdeeda2d8938f0c0a7e4bfb7469f28ab504fc479746"
   },
   {
    "path": "src/tui/sources/mail.ts",
    "primary": "WP28",
-   "status": "NOT_REVIEWED",
-   "by": [],
-   "oracles": [],
-   "note": "Current working-tree bytes have no explicit byte-bound review; historical reviews do not certify these changes."
+   "status": "CHANGED_WITH_ORACLE",
+   "by": [
+    "AV26",
+    "AV7",
+    "DR13",
+    "DR18",
+    "MAC-022",
+    "P0V-19",
+    "P0V-20",
+    "P0V-21",
+    "P0V-22",
+    "P0V-23",
+    "P0V-36",
+    "P0V-40",
+    "P0V-41",
+    "P0V-42",
+    "P0V-43"
+   ],
+   "oracles": [
+    "AV26",
+    "AV7",
+    "DR13",
+    "DR18",
+    "P0V-36",
+    "P0V-40",
+    "P0V-41",
+    "P0V-42",
+    "P0V-43"
+   ],
+   "sha256": "99a9f2367a4dd67a5fc9c81bf9ad55b4271c197f7fe40946e265cbc8daac354d"
   },
   {
    "path": "src/tui/sources/settings.ts",
@@ -5917,7 +5953,8 @@
     "V14B",
     "V15A",
     "V15B"
-   ]
+   ],
+   "sha256": "601203f8072d2b910422831eabb5d99e14c8e9bc80d1419d5e709547e7278b94"
   },
   {
    "path": "src/tui/transcript.ts",
@@ -5936,7 +5973,8 @@
    "oracles": [
     "V28A",
     "V28B"
-   ]
+   ],
+   "sha256": "2a4c4a253b76cbe78eac90f6e26ddf32c1a49cb53f0252c6346e23e07a552bfe"
   },
   {
    "path": "src/tui/view/dashboard.ts",
@@ -5965,7 +6003,8 @@
     "V15B",
     "V28A",
     "V28B"
-   ]
+   ],
+   "sha256": "34db44ac4cb7f0bb7ed1e2fd99e9a3bd84b74e67d77195f2b0151842f3068fbe"
   },
   {
    "path": "src/tui/view/index.ts",
@@ -5984,7 +6023,8 @@
     "P0V-41",
     "P0V-42",
     "P0V-43"
-   ]
+   ],
+   "sha256": "e51f97c15a7db02cabcd0b4f433092e6aa267333f7e91a70ac8becbb5e661b4e"
   },
   {
    "path": "src/tui/view/labels.ts",
@@ -6003,7 +6043,8 @@
     "DR4",
     "DR6",
     "DR7"
-   ]
+   ],
+   "sha256": "3bdb3f51b880af5c2f9fbfaeb319391adc6eed17c8f8a5e6648dcb95a61ac7bc"
   },
   {
    "path": "src/tui/view/layout.ts",
@@ -6018,6 +6059,7 @@
    "status": "CHANGED_WITH_ORACLE",
    "by": [
     "DR13",
+    "DR25",
     "P0V-19",
     "P0V-20",
     "P0V-21",
@@ -6027,9 +6069,11 @@
    ],
    "oracles": [
     "DR13",
+    "DR25",
     "V15A",
     "V15B"
-   ]
+   ],
+   "sha256": "271e88632093838a9276b0ebeadf1083bbbb629f2668465d6d242c821b3d57a0"
   },
   {
    "path": "src/tui/view/screens.ts",
@@ -6063,7 +6107,8 @@
     "V15B",
     "V28A",
     "V28B"
-   ]
+   ],
+   "sha256": "7ec5c5629200016edd0eecb4dc27d2e76811cddce5297f397795e9d46b90892a"
   },
   {
    "path": "src/tui/view/session-mode.ts",
@@ -6083,7 +6128,8 @@
    "oracles": [
     "P0V-108",
     "P0V-109"
-   ]
+   ],
+   "sha256": "c6f9555ed3c5c0de44db6be7132a260c3ced57b9630e3f8216d998dc4ec0579f"
   },
   {
    "path": "src/tui/words.ts",
@@ -6095,7 +6141,8 @@
    ],
    "oracles": [
     "DR18"
-   ]
+   ],
+   "sha256": "95bb1e06074fb08d88f4327e4d44b3a632800cac3c48c1387fd46c46a1b811e1"
   },
   {
    "path": "src/units.ts",
@@ -6144,7 +6191,8 @@
     "V23A",
     "V23B",
     "V25A"
-   ]
+   ],
+   "sha256": "4d632b07f671ad07c64b68b133f9da3f651d6ac53889510ad724e1a2772fff82"
   },
   {
    "path": "src/units/execute.ts",
@@ -6156,7 +6204,8 @@
    "oracles": [
     "R26"
    ],
-   "note": "sync and async unit commands bounded in time and output; async is show-only"
+   "note": "sync and async unit commands bounded in time and output; async is show-only",
+   "sha256": "e02a694379c01200af7075449fb99274b6a8ee03c483e83487404304ce5e400a"
   },
   {
    "path": "src/units/observe.ts",
@@ -6169,7 +6218,8 @@
    "oracles": [
     "R26"
    ],
-   "note": "observation parser: missing or malformed properties are unknown, never success"
+   "note": "observation parser: missing or malformed properties are unknown, never success",
+   "sha256": "62d4162c4242f17ed73d7a2d1055bd897d53316070ec6bd30433d1e5c4f8e82f"
   },
   {
    "path": "src/units/render.ts",
@@ -6191,7 +6241,8 @@
     "V03A",
     "V03B",
     "V25A"
-   ]
+   ],
+   "sha256": "8eab9952605d28e20acae585ac24c5397e8dadb5db953590d517b6e6016ac886"
   },
   {
    "path": "src/validate.ts",
@@ -6202,51 +6253,16 @@
    ],
    "oracles": [
     "DR15"
-   ]
+   ],
+   "sha256": "2c05c44254d871fd136bae493b72ac1a6901bb9c533f6db15d9282bf72ca043c"
   },
   {
    "path": "src/views.ts",
    "primary": "WP23",
-   "status": "CHANGED_WITH_ORACLE",
-   "by": [
-    "AV5",
-    "AV9",
-    "DR18",
-    "P0V-28",
-    "P0V-29",
-    "P0V-38",
-    "P0V-39",
-    "P0V-51",
-    "P0V-87",
-    "P0V-88",
-    "P0V-89",
-    "P0V-90",
-    "P0V-91",
-    "P0V-92",
-    "P0V-93",
-    "P0V-94",
-    "P0V-95",
-    "WP23"
-   ],
-   "oracles": [
-    "AV5",
-    "AV9",
-    "DR18",
-    "P0V-28",
-    "P0V-29",
-    "P0V-38",
-    "P0V-39",
-    "P0V-51",
-    "P0V-87",
-    "P0V-88",
-    "P0V-90",
-    "P0V-92",
-    "P0V-93",
-    "P0V-94",
-    "P0V-95",
-    "V23A",
-    "V23B"
-   ]
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": [],
+   "note": "Current working-tree bytes have no explicit byte-bound review; historical reviews do not certify these changes."
   },
   {
    "path": "src/views/pending-work.ts",
@@ -6260,7 +6276,8 @@
     "DR18",
     "V23A",
     "V23B"
-   ]
+   ],
+   "sha256": "94d02ae62349026a3219a71d8483c01557f01b99a472a97b7a14958eed975732"
   },
   {
    "path": "src/views/status-refresh.ts",
@@ -6282,7 +6299,8 @@
     "P0V-53",
     "V23A",
     "V23B"
-   ]
+   ],
+   "sha256": "f7a3a1f96b671c6e0bd9b1aa7684ca47ab8cc1ffddaa8745219e03e0794c3339"
   }
  ]
 }

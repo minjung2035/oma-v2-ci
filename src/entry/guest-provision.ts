@@ -4,8 +4,9 @@
  *
  * usage: guest-provision.js --device /dev/vdc --mount /var/lib/oma
  */
-import { chownSync, mkdirSync, readFileSync } from "node:fs";
+import { chownSync, readFileSync } from "node:fs";
 import { join } from "node:path";
+import { ensureOwnedDirectory } from "../storage/directory.js";
 import { runProcess } from "../process/run.js";
 import { systemUser } from "../platform/guest/identity.js";
 import {
@@ -26,7 +27,9 @@ async function main(): Promise<void> {
   const decision = provisionDecision({ ...boot, hasFilesystem: await hasFilesystem(device), neverWritten: () => allZero(device) });
   if (decision.kind === "refuse") fail(decision.reason);
   if (decision.kind === "format") await makeFilesystem(device);
-  mkdirSync(mount, { recursive: true });
+  // P0-8/DR32: the mount point is oma's own leaf on the guest's root; the
+  // root itself is never repaired.
+  ensureOwnedDirectory(mount, mount);
   const mounted = await runProcess({ executable: "/usr/bin/mount", argv: ["-o", "errors=remount-ro,data=ordered", device, mount],
     env: { PATH: "/usr/sbin:/usr/bin" }, timeoutMs: 5 * 60_000, stdoutBytes: 64 * 1024, stderrBytes: 64 * 1024 });
   if (mounted.kind !== "exited" || mounted.exitCode !== 0) fail("the data disk could not be mounted");
@@ -36,7 +39,7 @@ async function main(): Promise<void> {
     // The oma user's parts of the disk (§5.3).
     const oma = systemUser("oma");
     for (const part of ["data", "projects", "requests", "home"]) {
-      mkdirSync(join(mount, part), { mode: 0o700 });
+      ensureOwnedDirectory(join(mount, part), mount, 0o700);
       chownSync(join(mount, part), oma.uid, oma.gid);
     }
   } else if (check !== "ok") fail(check);

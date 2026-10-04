@@ -13,7 +13,7 @@ import { sha256Hex } from "../hash.js";
 import { readContextEntry, assertContextDirectory } from "../storage/context-files.js";
 import { contextStagingPathAt, contextRevisionPathAt } from "../storage/paths.js";
 import { TreeLease } from "../storage/tree-lease.js";
-import { ensureDurableDirectory, fsyncDir, fsyncTree, writeExclusiveFsyncedFile } from "../storage/durable-fs.js";
+import { ensureOwnedDurableDirectory, fsyncDir, fsyncTree, writeExclusiveFsyncedFile } from "../storage/durable-fs.js";
 import { entryAt, openBeneath, openDirectory, closeEvery } from "../storage/contained-fs.js";
 import { publishContextRevision, verifyContextRevision } from "../storage/context-snapshot.js";
 import { runProcessSync, type ProcessObservation } from "../process/run.js";
@@ -86,7 +86,7 @@ export class ContextRepository {
   }
   private async initialize(): Promise<"sha1" | "sha256"> {
     if (!this.exists()) {
-      ensureDurableDirectory(this.paths.contextGit);
+      ensureOwnedDurableDirectory(this.paths.contextGit, this.paths.stateRoot, 0o755);
       await this.prepareSuccess(["--git-dir", this.paths.contextGit, "init", "--bare", "--object-format=sha1"], GIT_ENV);
       fsyncDir(this.paths.contextGit); fsyncDir(dirname(this.paths.contextGit));
     }
@@ -96,7 +96,7 @@ export class ContextRepository {
     if (bytes.byteLength !== entry.bytes || sha256Hex(bytes) !== entry.sha256 || contextFileCheck(entry.path, bytes))
       throw new StoreError("STORE_CORRUPT", `context file does not match frozen intent: ${entry.path}`);
     const path = join(root, entry.path);
-    ensureDurableDirectory(dirname(path), 0o700);
+    ensureOwnedDurableDirectory(dirname(path), this.paths.stateRoot, 0o700);
     writeExclusiveFsyncedFile(path, bytes, 0o644, undefined, fd => fchmodSync(fd, 0o644));
     fsyncDir(dirname(path));
   }
@@ -248,7 +248,7 @@ export class ContextRepository {
     this.ensureCandidate(operation);
     const plan = operation.plan; const work = join(plan.stagingPath, "commit-work");
     const current = lstatSync(work, { throwIfNoEntry: false });
-    if (current) assertContextDirectory(work); else ensureDurableDirectory(work, 0o700);
+    if (current) assertContextDirectory(work); else ensureOwnedDurableDirectory(work, this.paths.stateRoot, 0o700);
     const blobs = this.blobs(plan.candidate);
     for (const entry of plan.entries) {
       const path = join(work, entry.path);

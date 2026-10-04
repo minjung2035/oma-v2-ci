@@ -31,7 +31,7 @@ import { dirname, join, relative } from "node:path";
 import { StoreError, unobserved } from "../domain/errors.js";
 import { DEPLOYMENT_LAYOUT } from "../domain/deployment.js";
 import { RESIDENT_NODE_TOOLCHAIN, RESIDENT_PATHS, SYSTEM_BIND_CANDIDATES } from "../sandbox.js";
-import { ensureDirectory as ensureHeldDirectory } from "../storage/directory.js";
+import { ensureOwnedDirectory } from "../storage/directory.js";
 import { entryAt, openBeneath, openRegularBeneath, withinDirectory } from "../storage/contained-fs.js";
 
 export interface SystemLayout {
@@ -92,9 +92,11 @@ export function hostSystemLayout(root = "/"): SystemLayout {
  * existence; `"repair"` may also correct an entry that is there and wrong. */
 export type RootfsPass = "create" | "repair";
 
-function ensureDirectory(path: string): void {
-  // Created one component at a time beneath held parents, never through a link.
-  try { ensureHeldDirectory(path, 0o755); }
+function ensureOwned(path: string, ownedFrom: string): void {
+  // P0-8/DR32: every ensured path is under the rootfs, which is oma's own
+  // under the state root -- the boundary is repaired component by component,
+  // so a mode-000 skeleton directory a stray left cannot wedge provisioning.
+  try { ensureOwnedDirectory(path, ownedFrom, 0o755); }
   catch (error) {
     if (error instanceof StoreError) throw new StoreError("STORE_CORRUPT", `rootfs mount target ${path} is not a directory`);
     throw error;
@@ -109,7 +111,7 @@ function lostRace(error: unknown, retried: boolean): boolean {
 }
 
 function ensureFile(path: string, pass: Pass, content = "", retried = false): void {
-  ensureDirectory(dirname(path));
+  ensureOwned(dirname(path), pass.boundary);
   withinDirectory(path, (parent, name) => {
     const found = kindAt(parent, name);
     if (found === "file") {
@@ -150,7 +152,7 @@ function readExisting(parent: number, name: string, path: string): string {
 }
 
 function ensureLink(path: string, target: string, pass: Pass, retried = false): void {
-  ensureDirectory(dirname(path));
+  ensureOwned(dirname(path), pass.boundary);
   withinDirectory(path, (parent, name) => {
     const found = kindAt(parent, name);
     if (found === "link") {
@@ -171,6 +173,9 @@ function ensureLink(path: string, target: string, pass: Pass, retried = false): 
 
 interface Pass {
   readonly mode: RootfsPass;
+  /** The first component oma itself made on every path this pass ensures
+   * (the rootfs): the owned repair runs from it down and never above it. */
+  readonly boundary: string;
   /** Entries that exist, differ from what this module generates, and were left
    * alone because this pass may not correct them. */
   readonly differing: string[];
@@ -211,26 +216,26 @@ export function productSurfaceMasks(libdir: string): readonly { path: string; ki
 export function prepareResidentRootfs(
   rootfs: string, layout: SystemLayout, uid: number, gid: number, mode: RootfsPass = "create",
 ): RootfsOutcome {
-  const pass: Pass = { mode, differing: [], corrected: [] };
-  ensureDirectory(rootfs);
+  const pass: Pass = { mode, boundary: rootfs, differing: [], corrected: [] };
+  ensureOwned(rootfs, dirname(rootfs));
   const inside = (path: string): string => join(rootfs, path);
   for (const path of ["/proc", "/dev", "/tmp", "/etc", dirname(RESIDENT_PATHS.node),
     RESIDENT_PATHS.workspace, RESIDENT_PATHS.home, RESIDENT_PATHS.archive, RESIDENT_PATHS.workerArchive, RESIDENT_PATHS.selfMail,
     RESIDENT_PATHS.view, RESIDENT_PATHS.world, RESIDENT_PATHS.projectGit, RESIDENT_PATHS.projectMirror, RESIDENT_PATHS.sessions,
     RESIDENT_PATHS.libdir, RESIDENT_PATHS.packages])
-    ensureDirectory(inside(path));
+    ensureOwned(inside(path), pass.boundary);
   for (const path of [RESIDENT_PATHS.node, RESIDENT_PATHS.socket, RESIDENT_PATHS.inference])
     ensureFile(inside(path), pass);
   // FI-2: the pinned Node's package managers, laid out as its distribution's
   // `bin/` is -- a relative link per command into a module mount target.
   for (const { command, module, entry } of RESIDENT_NODE_TOOLCHAIN) {
-    ensureDirectory(inside(`${RESIDENT_PATHS.nodeModules}/${module}`));
+    ensureOwned(inside(`${RESIDENT_PATHS.nodeModules}/${module}`), pass.boundary);
     ensureLink(inside(`${dirname(RESIDENT_PATHS.node)}/${command}`),
       `${relative(dirname(RESIDENT_PATHS.node), RESIDENT_PATHS.nodeModules)}/${module}/${entry}`, pass);
   }
   for (const path of layout.binds)
     if (statSync(path).isFile()) ensureFile(inside(path), pass);
-    else ensureDirectory(inside(path));
+    else ensureOwned(inside(path), pass.boundary);
   for (const link of layout.links) ensureLink(inside(link.path), link.target, pass);
   // bwrap cannot create this on a read-only root; it must already be there.
   ensureLink(inside("/inbox.md"), `${RESIDENT_PATHS.view}/inbox.md`, pass);

@@ -15,9 +15,9 @@
  */
 import { canonicalJson, sha256Hex } from "../../domain/canonical-json.js";
 import { readFileSync } from "node:fs";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { StoreError, primaryFailure, unobserved } from "../../domain/errors.js";
-import { publishNoReplace, ensureDurableDirectory } from "../../storage/durable-fs.js";
+import { publishNoReplace, ensureOwnedDurableDirectory } from "../../storage/durable-fs.js";
 import { PlatformError, platformFailure } from "../rpc.js";
 import { isPlatformErrorCode, isRequestKey, type PlatformFailure } from "../../protocol/host-guest.js";
 
@@ -54,7 +54,11 @@ function isOutcome(value: unknown): value is Outcome {
 
 export class RequestLedger {
   private readonly active = new Set<string>();
-  constructor(private readonly dir: string) { ensureDurableDirectory(dir, 0o700); }
+  constructor(private readonly dir: string) {
+    // P0-8/DR32: the request ledger is oma's own; its leaf is repaired, its
+    // parent never is.
+    ensureOwnedDurableDirectory(dir, dirname(dir), 0o700);
+  }
 
   private name(key: string): string { return sha256Hex(key); }
   /** Parses a record; JSON that does not parse is damaged. A file holding

@@ -29,7 +29,7 @@ import {
 } from "./protocol/run-lease.js";
 import { PiAdapter, type EngineObservation } from "./runtime/pi-adapter.js";
 import { errorCodeOf } from "./domain/errors.js";
-import { ensureDurableDirectory } from "./storage/durable-fs.js";
+import { ensureOwnedDurableDirectory } from "./storage/durable-fs.js";
 import {
   agentRootPathAt,
   runnerReceiptPathAt,
@@ -222,12 +222,15 @@ export class RunnerModule {
       );
     const root = agentRootPathAt(stateRoot, this.agent);
     const sessionDir = runnerSessionDirPathAt(stateRoot, this.agent);
-    ensureDurableDirectory(sessionDir, 0o700);
+    // P0-8: the session directory, the Resident's home tails and the mail
+    // tree are oma's own under the state root -- each is repaired as it is
+    // ensured, so a stray's mode-000 cannot wedge the runner's directories.
+    ensureOwnedDurableDirectory(sessionDir, stateRoot, 0o700);
     for (const inside of [RESIDENT_ENVIRONMENT.XDG_DATA_HOME, RESIDENT_ENVIRONMENT.XDG_RUNTIME_DIR, `${RESIDENT_ENVIRONMENT.HOME}/.local/bin`])
-      ensureDurableDirectory(join(root, "home", inside.slice(RESIDENT_ENVIRONMENT.HOME.length + 1)), 0o700);
+      ensureOwnedDurableDirectory(join(root, "home", inside.slice(RESIDENT_ENVIRONMENT.HOME.length + 1)), stateRoot, 0o700);
     // mail-v1: the worker archive is a Resident mount; a society provisioned
     // before it existed gets the directory before any bind can name it.
-    ensureDurableDirectory(join(stateRoot, "mail", "workers"), 0o700);
+    ensureOwnedDurableDirectory(join(stateRoot, "mail", "workers"), stateRoot, 0o700);
     // Host mount roots. The builder checks each one against this actor's
     // trusted root, so a mistake here is refused rather than mounted.
     const directories: ResidentDirectories = {

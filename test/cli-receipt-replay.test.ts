@@ -190,10 +190,13 @@ test("V26B: a terminal receipt in the cache is not replaced by a later lesser ob
 
 test("WP26: a receipt the request cache cannot record is still shown, with the key to ask again", async () => {
   const s = scene();
-  const requests = join(s.home, ".local", "state", "oma", "requests");
+  // P0-8: a damaged directory *inside* oma's own tail (`.../oma/requests`)
+  // is repaired, so the fault that still makes the cache unrecordable is one
+  // oma must never repair -- the user's own shared XDG ancestor.
+  const ancestor = join(s.home, ".local", "state");
   const p = await peer(s.home, request => {
     // The cache becomes unwritable after the freeze, before the answer.
-    if (request.method === "mail.send") chmodSync(requests, 0o500);
+    if (request.method === "mail.send") chmodSync(ancestor, 0o000);
     return { ok: true, result: sent(1) };
   });
   try {
@@ -204,7 +207,7 @@ test("WP26: a receipt the request cache cannot record is still shown, with the k
     assert.ok(result.stdout.includes(OP(1)), "the broker's receipt was not shown");
     assert.ok(result.stderr.includes(`--request ${key}`), "the key needed to ask again was not shown");
     assert.match(result.stderr, /CACHE_UNAVAILABLE/);
-  } finally { chmodSync(requests, 0o700); await p.close(); s.close(); }
+  } finally { chmodSync(ancestor, 0o700); await p.close(); s.close(); }
   // A receipt that contradicts the cache's earlier observation is unknown, and still shown.
   const c = scene();
   let lookup: object = { ok: true, result: sent(1) };

@@ -11,6 +11,7 @@ import { schemaDuplicationFindings } from "../scripts/architecture/rules/schema-
 import { contractDirectionFindings } from "../scripts/architecture/rules/contract-direction-rules.mjs";
 import { effectOwnershipFindings } from "../scripts/architecture/rules/effect-ownership-rules.mjs";
 import { stateRootFindings, stateTreeFindings } from "../scripts/architecture/rules/state-tree-rules.mjs";
+import { ownedStateFindings } from "../scripts/architecture/rules/owned-state-rules.mjs";
 import { fenceRuleFindings } from "../scripts/architecture/rules/fence-rules.mjs";
 import { fenceExemptSpawnOwners } from "../scripts/architecture-owners.mjs";
 
@@ -292,4 +293,64 @@ test("state-root-judgement (DR18, S-06): a state root is judged by assertStateRo
       root => assert.ok(stateRootFindings(root).some(value => value.rule === "state-root-judgement"), text));
   const repository = fileURLToPath(new URL("..", import.meta.url));
   assert.deepEqual(stateRootFindings(repository), []);
+});
+
+test("P0-8/DR32: the owned-state rule accepts the owned primitives and held parents", () => withFixture({
+  "src/views/example.ts": `import { renameSync, unlinkSync, mkdirSync, writeFileSync, openSync, constants, readdirSync } from "node:fs";
+import { entryAt, withinDirectory } from "../storage/contained-fs.js";
+import { ensureOwnedDirectory, ensureOwnedDurableDirectory, ensureOwnedUserDirectory } from "../storage/durable-fs.js";
+export function effect(root, parent, fd) {
+  ensureOwnedDirectory(join(root, "mail"), root, 0o700);
+  ensureOwnedDurableDirectory(join(root, "mail", "inboxes"), root, 0o700);
+  ensureOwnedUserDirectory(join(root, "engine"), join(root, ".local", "state", "oma"));
+  withinDirectory(join(root, "a"), (held, name) => renameSync(entryAt(held, name), entryAt(held, "x")));
+  writeFileSync(fd, "bytes");
+  return openSync(join(root, "sockets", "lease"), constants.O_RDONLY | constants.O_NOFOLLOW);
+}`,
+}, root => assert.deepEqual(ownedStateFindings(root), [])));
+
+test("P0-8/DR32: the owned-state rule rejects a plain ensure or mutation on an oma-owned tail", () => {
+  for (const [name, body] of [
+    ["plain durable ensure", `ensureDurableDirectory(join(root, "staging"));`],
+    ["plain directory ensure", `ensureDirectory(join(root, "mail"));`],
+    ["plain user ensure", `ensureUserDirectory(agentDir);`],
+    ["plain locked replace", `lockedUserReplace(agentDir, "settings.json", 1024, fn);`],
+    ["plain mkdir", `mkdirSync(join(root, "staging"), { recursive: true });`],
+    ["plain remove", `rmSync(join(root, "tmp"), { recursive: true, force: true });`],
+    ["plain list of an owned root", `readdirSync(join(stateRoot, "mail", "inboxes"));`],
+    ["plain probe of an owned root", `lstatSync(join(paths.stateRoot, "world"));`],
+  ]) withFixture({
+    "src/views/example.ts": `import { renameSync, unlinkSync, mkdirSync, rmSync, readdirSync, lstatSync } from "node:fs";
+import { ensureDirectory, ensureDurableDirectory } from "../storage/durable-fs.js";
+import { ensureUserDirectory } from "../runtime/user-files.js";
+import { lockedUserReplace } from "../runtime/locked-files.js";
+import { join } from "node:path";
+export function effect(root, stateRoot, paths, agentDir, fn) { ${body} }`,
+  }, root => assert.ok(ownedStateFindings(root).some(value => /owned-state-(plain-helper|raw-access|raw-observation)/.test(value.rule)),
+    `${name} escaped the rule`));
+});
+
+test("P0-8/DR32: the owned-state rule leaves user-path observations and descriptors alone, but still audits mutations", () => {
+  withFixture({
+    "src/tui/example.ts": `import { existsSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
+export function effect(cwd, fd, project) {
+  if (existsSync(join(cwd, "oma.json"))) readdirSync(project);
+  readFileSync(join(cwd, "package.json"), "utf8");
+  writeFileSync(fd, "bytes");
+  return fd;
+}`,
+  }, root => assert.deepEqual(ownedStateFindings(root), []));
+  // A mutation still answers the audit: the user-path file carries its
+  // exemption in the rule's map, so a plain mutation is never invisible.
+  withFixture({
+    "src/tui/example.ts": `import { mkdtempSync, rmSync } from "node:fs";
+import { join } from "node:path";
+export function effect(cwd) { const scratch = mkdtempSync(join(cwd, "oma-")); rmSync(scratch, { recursive: true, force: true }); }`,
+  }, root => assert.ok(ownedStateFindings(root).some(value => value.rule === "owned-state-raw-access")));
+});
+
+test("P0-8/DR32: the owned-state rule reports a stale exemption", () => {
+  const repository = fileURLToPath(new URL("..", import.meta.url));
+  assert.deepEqual(ownedStateFindings(repository), []);
 });

@@ -349,7 +349,7 @@ for (const file of ['src/runtime/personal-settings.ts', 'src/runtime/pi-runtime.
     // internals instead of stubs it no longer calls.
     const internals = {
       './process-lock.js': { ProcessLock: { acquire: take, tryAcquire: take } },
-      './user-files.js': { ensureUserDirectory() {}, readUserFile() { if (failed) throw primary; return null; }, replaceUserFile() { writes++; } },
+      './user-files.js': { ensureUserDirectory() {}, ensureOwnedUserDirectory() {}, readUserFile() { if (failed) throw primary; return null; }, replaceUserFile() { writes++; } },
       './pi-packages.js': { readPackageIndex: () => [], reconciledEntries: entries => entries },
     };
     const api = load(file, file.endsWith('pi-runtime.ts')
@@ -364,7 +364,7 @@ for (const file of ['src/runtime/personal-settings.ts', 'src/runtime/pi-runtime.
 for (const failed of [false, true]) test(`Owned cleanup Keychain: controlled ${failed ? 'store failure plus' : 'only'} lock close failure retains exact outcome`, async () => {
   let returned = 0, writes = 0;
   const api = load('src/platform/host/keychain.ts', {
-    '../../runtime/user-files.js': { ensureUserDirectory() {} },
+    '../../runtime/user-files.js': { ensureOwnedUserDirectory() {} },
     '../../runtime/process-lock.js': { ProcessLock: { tryAcquire: () => ({ descriptor: 17, assertHeld() {}, close() { returned++; throw secondary; } }) } },
   });
   const store = { async get() { if (failed) throw primary; return '{}'; }, async put() { writes++; } };

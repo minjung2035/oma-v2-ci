@@ -10,7 +10,7 @@ import type { BlobDescriptor } from "../../implementation/contracts.js";
 import { StoreError } from "../domain/errors.js";
 import { entryAt, openBeneath, openDirectory, openRegularBeneath } from "./contained-fs.js";
 import { PreacceptArtifact, type PreacceptOwner, type PublishedIdentity } from "./preaccept-artifact.js";
-import { ensureDurableDirectory, fsyncDir } from "./durable-fs.js";
+import { ensureOwnedDurableDirectory, fsyncDir } from "./durable-fs.js";
 import { submitStagingPathAt, submitBundlePathAt } from "./paths.js";
 
 export interface FrozenBundle { readonly path: string; readonly bytes: number; readonly sha256: string }
@@ -42,7 +42,7 @@ export async function prepareSubmitSpool(
     throw new StoreError("STREAM_INVALID", "invalid bundle descriptor");
   const frozenDescriptor = descriptor === undefined ? null : Object.freeze({ bytes: descriptor.bytes, sha256: descriptor.sha256 });
   const staging = submitStagingPathAt(stateRoot, operationId);
-  ensureDurableDirectory(staging, 0o700);
+  ensureOwnedDurableDirectory(staging, stateRoot, 0o700);
   if (frozenDescriptor === null) {
     for await (const chunk of chunks) {
       if (!(chunk instanceof Uint8Array) || chunk.byteLength !== 0)

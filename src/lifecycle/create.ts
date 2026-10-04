@@ -9,7 +9,7 @@ import { generateOperationId } from "../ids.js";
 import { requestHash } from "../hash.js";
 import { resolvedSpecOf, assertActorIdentity, assertCurrentActor } from "../authority.js";
 import { workspacePathAt, agentRootPathAt, isWorkspacePathFor } from "../storage/paths.js";
-import { ensureDurableDirectory } from "../storage/durable-fs.js";
+import { ensureOwnedDurableDirectory } from "../storage/durable-fs.js";
 import { PreacceptScope } from "../storage/preaccept-artifact.js";
 import { frozenMessageDisposition } from "../mail/materializer.js";
 import type { MailModule } from "../mail.js";
@@ -237,8 +237,8 @@ export class CreateCoordinator {
       throw new StoreError("STORE_CORRUPT", "accepted creation changed during workspace preparation");
     if (fresh.state === "succeeded" || fresh.state === "failed") return receiptOfOperation(fresh);
     assertCurrent();
-    ensureDurableDirectory(join(agentRootPathAt(this.paths.stateRoot, plan.spec.name), "home"));
-    ensureDurableDirectory(join(this.paths.stateRoot, "mail", "inboxes", plan.spec.name));
+    ensureOwnedDurableDirectory(join(agentRootPathAt(this.paths.stateRoot, plan.spec.name), "home"), this.paths.stateRoot, 0o755);
+    ensureOwnedDurableDirectory(join(this.paths.stateRoot, "mail", "inboxes", plan.spec.name), this.paths.stateRoot, 0o755);
     // Current authority -> installation/readiness is a synchronous section.
     const proof = this.publication.ready(fresh);
     await mail.publishGated(id, proof);

@@ -9,10 +9,10 @@
  */
 import { pipeline } from "node:stream/promises";
 import { createHash } from "node:crypto";
-import { closeSync, constants, createReadStream, fstatSync, fsyncSync, openSync, realpathSync, rmSync, statSync, writeSync } from "node:fs";
+import { closeSync, constants, createReadStream, fstatSync, fsyncSync, openSync, realpathSync, statSync, writeSync } from "node:fs";
 import { dirname } from "node:path";
 import { withProjectSnapshot } from "../../git/project-snapshot.js";
-import { prepareHostProjectDirectory } from "./files.js";
+import { prepareHostProjectDirectory, removeHostStaged } from "./files.js";
 import type { Socket } from "node:net";
 import { StoreError } from "../../domain/errors.js";
 import { encodeFrame } from "../../frame.js";
@@ -165,6 +165,6 @@ export function fileSink(path: string): StreamSink {
   return {
     write: chunk => { for (let at = 0; at < chunk.length;) at += writeSync(fd, chunk, at, chunk.length - at); },
     complete: () => { try { fsyncSync(fd); } finally { close(); } },
-    abandon: () => { try { close(); } catch { /* already closed */ } rmSync(path, { force: true }); },
+    abandon: () => { try { close(); } catch { /* already closed */ } removeHostStaged(path); },
   };
 }

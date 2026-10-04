@@ -1,7 +1,7 @@
 import test from "node:test";
 import { RESIDENT_TEST_OPTIONS } from "./fixtures/resident.js";
 import assert from "node:assert/strict";
-import { chmodSync, linkSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { chmodSync, linkSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, symlinkSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { StoreError } from "../src/domain/errors.js";
@@ -90,6 +90,35 @@ test("INF-001: unreadable, malformed or linked settings cannot silently disable 
   for (const link of [symlinkSync, linkSync]) {
     link(target, path); assert.throws(() => preparePiRetry(root)); assert.equal(readFileSync(target, "utf8"), "{}"); rmSync(path);
   }
+});
+
+test("P0-8/DR32: a mode-000 agent directory or themes tail is repaired inside its boundary, never wedged on", t => {
+  // The wedge this regression names: a same-UID stray left `.engine` (or its
+  // `themes` tail) mode-000, and the plain ensure wedged on EACCES before any
+  // settings file could be written -- the Resident never spawned.
+  const root = scratch("oma-agent-dir-000-"); t.after(() => { chmodSync(root, 0o700); rmSync(root, { recursive: true, force: true }); });
+  chmodSync(root, 0o000);
+  preparePiRetry(root);
+  assert.equal(statSync(root).mode & 0o777, 0o700, "the damaged leaf is repaired to owner access");
+  assert.equal(JSON.parse(readFileSync(join(root, "settings.json"), "utf8")).retry.maxRetries, 5);
+  // The deeper tail: `.engine` is sound and `themes` alone is the stray's.
+  chmodSync(root, 0o700);
+  mkdirSync(join(root, "themes")); chmodSync(join(root, "themes"), 0o000);
+  preparePiInteractive(root);
+  assert.equal(statSync(join(root, "themes")).mode & 0o777, 0o700, "the damaged tail is repaired");
+  assert.equal(JSON.parse(readFileSync(join(root, "themes", "oma.json"), "utf8")).name, "oma");
+  assert.equal(JSON.parse(readFileSync(join(root, "open-tui.json"), "utf8")).enabled, true);
+});
+
+test("P0-8/DR32: damage above the ownership boundary is refused, never repaired or read as absent", t => {
+  // `preparePiInteractive`'s boundary is the agent directory itself: a stray
+  // mode-000 on its parent is the caller's, and oma does not touch it -- the
+  // walk refuses rather than silently claiming the directory absent.
+  const parent = scratch("oma-agent-parent-000-"); t.after(() => { chmodSync(parent, 0o700); rmSync(parent, { recursive: true, force: true }); });
+  const agentDir = join(parent, "engine");
+  mkdirSync(agentDir); chmodSync(parent, 0o000);
+  assert.throws(() => preparePiInteractive(agentDir));
+  assert.equal(statSync(parent).mode & 0o777, 0o000, "the ancestor above the boundary keeps its mode");
 });
 
 test("INF-001: the Resident adapter waits for five failed provider retries, then reports PROVIDER_FAILED without a boundary", RESIDENT_TEST_OPTIONS, async () => {

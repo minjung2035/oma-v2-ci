@@ -340,6 +340,60 @@ Pi/OS 기능을 다시 구현해서 생긴 중복·workaround·pre-release 잔�
     슬롯 stray STORE_CORRUPT·Mac 경계 위 chmod·스텁 무검사 전부 재현 →
     수정 후 통과. 회귀: pi-packages.test.ts +3종·owned-directory.test.ts
     +1종·owned-cleanup.test.mjs +2종 + 구성 스텁 3종 강화.
+  - 일곱 번째 잔여 — `.engine` 우회 + 전체 감사 스윕 + 정적 규칙 편성:
+    (1) `entry/runner.ts`가 `.engine`을 plain `ensureDirectory`로 만들던 것 —
+      mode-000 `.engine`이 headless/broker-spawn Resident를 EACCES로 죽이던
+      정확히 그 wedge. `ensureOwnedDirectory(agentDir, dirname(stateRoot))`로
+      전환(데이터 루트 리프까지 복구, 그 위 사용자 조상은 미침투).
+    (2) `.engine/themes`의 더 깊은 tail — `preparePiInteractive`의
+      `lockedUserReplace`가 plain `ensureUserDirectory`를 불러 mode-000
+      `themes`(또는 `.engine` 자체)에서 wedge. `lockedOwnedReplace(dir,
+      ownedFrom, …)` 프리미티브 신설 + `preparePiInteractive` 선두에
+      `ensureOwnedUserDirectory(themes, agentDir)` — 잠긴 치환 전에 잎을 복구.
+      `OmaSettingsStorage.withLock`도 같은 잠긴 경로.
+    (3) 감사 스윕 — OMA-owned tail을 plain fs로 만지던 곳 전부 owned
+      프리미티브로: entry/broker·broker의 run root·actor 소켓 디렉토리
+      (경계 dirname(runRoot)), transport-spool의 stagingRoot, runner.ts의
+      session/home/mail workers, mail.ts의 mail-objects 스테이징,
+      batches의 cur 부모, lifecycle create·workspace의 에이전트 루트,
+      views의 world, session-mode의 birth 루트, personal-session의
+      history·personal-settings의 `.personal`·project-settings의
+      `.projects`(경계 dataRoot), login의 `.engine`(경계 dirname(stateRoot))·
+      임의 위치에 놓일 수 있는 packages store(경계 store 자체 — 그 위
+      조상은 호출자의 것이라 절대 손대지 않음), generations의 `.oma-config`+`generations`(경계
+      dirname(root)), request-cache의 `.local/state/oma/requests` — 경계는
+      `.local/state/oma`이고 `.local`·`.local/state`는 사용자의 공유 XDG
+      이름이라 절대 손대지 않음, storage의 context-stream·context-snapshot·
+      submit-spool·delivery-receipt·immutable-file·context-repository·
+      quarantine·provision, resident-rootfs(경계 rootfs), preaccept 나열의
+      잎 복구, guest의 requests ledger·provision mount·archive 스크래치·
+      guest-provision 파트, Mac 측 omahostd 지원 디렉토리 스윕(경계 home)·
+      service의 transfer/archives/snapshots·keychain·project fileSink·
+      snapshot prune(구조 리뷰만, 이 호스트는 Linux).
+      `ensureOwnedDurableDirectory`는 이제 생성된 경로 목록을 돌려주어
+      provision의 `created` 보고가 유지되고, `ensureOwnedUserDirectory`는
+      durability observer를 받아 Linux의 fault seam을 관통시킨다.
+    (4) 정적 규칙 — `owned-state` 아키텍처 규칙 신설(scripts/architecture/
+      rules/owned-state-rules.mjs, rule-check에 등록): 경로를 받는 fs 변경과
+      plain ensure·replace 헬퍼는 지정된 프리미티브 소유자(storage/directory·
+      durable-fs·contained-fs·socket-name·runtime/user-files·locked-files·
+      platform/host/files) 밖에서 금지되고, OMA 루트 이름을 인자로 쓰는 관측은
+      면제 사유를 문서로 요구한다. 디스크립터 인자·`entryAt`·`new URL`·
+      `/proc/self/fd/`는 경로가 아니다. 면제 맵의 각 항목은 그 경로가 왜
+      OMA-owned tail이 아닌지(사용자 systemd 디렉토리·커널 /proc·/dev/pts·
+      소켓 chmod·거절이 이미 정직한 나열·확장 샌드박스 PI-001)를 말하고,
+      필요 없어진 면제는 `owned-state-exemption-stale`이 지운다 — 감사 표가
+      조용히 낡지 않는다.
+    (5) fail-before(구 dist 76f3293): mode-000 agentDir에서
+      `preparePiRetry`가 `BROKER_UNAVAILABLE: cannot be observed now
+      (EACCES)`로 죽는 것 재현 → 수정 후 복구·작성 통과. 회귀:
+      pi-runtime.test.ts +2종(잎·tail 복구, 경계 위 거절)·architecture-rule-
+      modules.test.mjs +4종(허용·거부·사용자 경로·stale 면제).
+      통제된 require seam fixture(engine-login·personal-session·owned-
+      cleanup·broker-composition)는 새 의존을 명시 목록에 추가하고,
+      cli-receipt-replay의 WP26 주입은 이제 사용자 소유 XDG 조상의
+      mode-000 — 경계 안의 손상은 복구되는 것이 계약이라 거기서는 더 이상
+      실패를 만들 수 없다.
 
 ## 6. 선행 작업 큐 (코드베이스 전체 확장 전 — 사용자 지시)
 
@@ -461,11 +515,12 @@ name collision/intended surface/hidden 미활성/idempotent reload/provenance/
   Worker 개발환경 → fix/fi. 사용자 납득 감사 3축(샌드박스·커스터마이징·오버엔지니어링).
 
 ## 10. 지금부터의 실행 순서
-0. **P0-8 강제 수단 미구현** — PRIORITY-0.md P0-8 + design-revisions DR32가 선언한
-   정적 검사(소유 트리 경로에서 raw `readdir`/`openat`/`rm`/`lstat` 등을
-   `storage/directory.ts`·`platform/host/files.ts`의 owned 프리미티브 밖에서
-   호출 금지)를 architecture-check 규칙으로 추가해야 이 부류가 구조적으로 닫힌다.
-   현재 수정 에이전트(972dd016)의 작업이 끝나고 맹검증이 지나간 뒤 편성.
+0. ~~P0-8 강제 수단 미구현~~ — 구현됨: `owned-state` 아키텍처 규칙
+   (scripts/architecture/rules/owned-state-rules.mjs)이 경로 기반 raw fs
+   변경·plain ensure 헬퍼·OMA 루트 인자 관측을 프리미티브 소유자 밖에서
+   금지하고, 면제는 사유가 적힌 맵 + stale 감지로 유지된다. §5 일곱 번째
+   잔여 참조. Mac(ensureHostOwnedDirectory 경로)은 이 호스트가 Linux라
+   실행 검증은 없고 구조 리뷰만.
 1. 검증 라운드 1 마무리(fa, tp+pg2) → 발견 전체를 fix 라운드 2 패키지로 묶기
 2. fix 라운드 2: fg·fh·fi(진행 중) + fj(fc 발견) + fk(fb readableRoots) + fl(문서/traceability
    drift + CI 검사 연결) + fm(커스터마이징 표면) — 동시 구현 최대 5

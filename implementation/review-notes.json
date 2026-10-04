@@ -47,8 +47,8 @@
    "oracles": [
     "Owned cleanup host"
    ],
-   "sha256": "d81c85cf1fa77821e5a416235fb5b958b9d2ff600e7c46ae75c7e81d131240ed",
-   "note": "Read in full: HostTemporary owns one close, marks returned before close, and discard attempts temporary-name removal even after close failure. Replacement/publication preserve primary beside cleanup; an already reused descriptor number is not reclosed. Three source-copy controls assertion-killed. Existing full-file publication and host-private namespace remain; visible-name uncertainty, whole retry policy and actual Mac durability are not certified."
+   "sha256": "b24f748faa325da509ebe21ff5220c25bc2f21effecec25d85d02c24757b0b39",
+   "note": "Read in full: HostTemporary owns one close, marks returned before close, and discard attempts temporary-name removal even after close failure. Replacement/publication preserve primary beside cleanup; an already reused descriptor number is not reclosed. Three source-copy controls assertion-killed. Existing full-file publication and host-private namespace remain; visible-name uncertainty, whole retry policy and actual Mac durability are not certified. P0-8: repairHostOwnedPath/ensureHostOwnedDirectory/listHostStaged/removeHostStaged/repairHostStagedEntryMode are the host counterparts of the owned primitives -- owner bits added within the boundary, strays unlinked never followed."
   },
   {
    "path": "src/platform/host/archive-crypto.ts",
@@ -71,8 +71,8 @@
    "oracles": [
     "Owned cleanup stopped snapshot"
    ],
-   "sha256": "5e516be2a64e7282df623b7add2c8da67abc0b145c69d30e23e27db9f851ce32",
-   "note": "Read in full: partial snapshot ownership spans clone/publication and discard; primary plus discard and cleanup-only outcomes are not success. Discard-removal control assertion-killed. Actual local-fixture snapshot regressions pass. Running-snapshot maintenance/control/society cleanup and clone/thaw failure composition remain open; no native VM, APFS or power-cut proof."
+   "sha256": "02356a9b963a719a83989c139fefc7813dd6da6cbfba249d5b446edb5ab4d303",
+   "note": "Read in full: partial snapshot ownership spans clone/publication and discard; primary plus discard and cleanup-only outcomes are not success. Discard-removal control assertion-killed. Actual local-fixture snapshot regressions pass. Running-snapshot maintenance/control/society cleanup and clone/thaw failure composition remain open; no native VM, APFS or power-cut proof. P0-8: the snapshot prune removes each staged name through removeHostStaged's owner-bits repair, not a blind rmSync."
   },
   {
    "path": "src/runtime/pi-runtime.ts",
@@ -85,8 +85,8 @@
     "Owned cleanup settings",
     "engine settings"
    ],
-   "sha256": "6aa55fb6d1a71597999505d48fbca99f4d1a55148a6db5c94d03d2dfa200fb67",
-   "note": "Read in full: settings/adoption writer returns and nested engine-file/parent returns preserve primary failure. Parent-leak control assertion-killed; controlled adoption fails on directory observation before opening any credential file. Bundled-only engine resolution, separate engine home and one retry owner retained. No actual auth.json was read; all pre-transfer absence and native credential adoption boundaries are not certified."
+   "sha256": "2531d71f38c1fd85cfdaf76884c3951aa4c7b84ddcb4d3db03bc499c0f1434f8",
+   "note": "Read in full: settings/adoption writer returns and nested engine-file/parent returns preserve primary failure. Parent-leak control assertion-killed; controlled adoption fails on directory observation before opening any credential file. Bundled-only engine resolution, separate engine home and one retry owner retained. No actual auth.json was read; all pre-transfer absence and native credential adoption boundaries are not certified. P0-8/DR32: preparePiInteractive repairs a mode-000 .engine/themes tail through ensureOwnedUserDirectory before the locked replace, which is lockedOwnedReplace -- engine files are oma's, not a generic user path."
   },
   {
    "path": "src/runtime/user-files.ts",
@@ -97,8 +97,8 @@
     "user files",
     "Darwin metadata publication"
    ],
-   "sha256": "ed7b0c4c2fe8f9d786940ee90ec026c9d9432ba8ea9d9293a0b849336c2d76cc",
-   "note": "Read in full: an acquired reader's close/read failure is not absence; bounded UTF-8/identity/single-name checks retained. Darwin immutable publication returns its writer and temporary while preserving primary beside cleanup and flushes existing destination on retry. Post-open ENOENT-to-absence control assertion-killed. Linux contained resolution retained; native Darwin crash durability and pre-transfer pin-close absence composition are not certified."
+   "sha256": "889ebc9332ec4433b58743f9ea1e03355cfe5d29177fbbd77884519db2c7210b",
+   "note": "Read in full: an acquired reader's close/read failure is not absence; bounded UTF-8/identity/single-name checks retained. Darwin immutable publication returns its writer and temporary while preserving primary beside cleanup and flushes existing destination on retry. Post-open ENOENT-to-absence control assertion-killed. Linux contained resolution retained; native Darwin crash durability and pre-transfer pin-close absence composition are not certified. P0-8: ensureOwnedUserDirectory(path, ownedFrom, faults?) is the owned-tail entry point; the faults seam passes the Linux durability observer through unchanged."
   },
   {
    "path": "src/platform/host/keychain.ts",
@@ -109,8 +109,8 @@
    "oracles": [
     "Owned cleanup Keychain"
    ],
-   "sha256": "491e36258840747fd9c7545ed1bd91fece2877d79629a8c3f99964c34534afdb",
-   "note": "Read in full: serialized per-item writer uses a cross-process lock and awaits the fenced writer before returning it; abort and identity are rechecked before write. Controlled in-memory store failure beside lock close and cleanup-only failure retain exact outcomes. Native Swift helper, real Keychain and credential execution were not exercised."
+   "sha256": "ddfd2394da5d5f15a51d16e8b1053b64e3e97f331842d099859f608f817bad26",
+   "note": "Read in full: serialized per-item writer uses a cross-process lock and awaits the fenced writer before returning it; abort and identity are rechecked before write. Controlled in-memory store failure beside lock close and cleanup-only failure retain exact outcomes. Native Swift helper, real Keychain and credential execution were not exercised. P0-8: the per-item lock's directory is ensured through ensureOwnedUserDirectory inside its own boundary, not trusted as-is."
   },
   {
    "path": "src/tui/login.ts",
@@ -121,8 +121,8 @@
    "oracles": [
     "engine"
    ],
-   "sha256": "df65171ec8d70fe01a31775cf6f58260629f327db7f26b55a482e7dce9a8c641",
-   "note": "Read in full at the 2026-10-01 host-only package checkpoint: platform-aware runtime metadata preparation completes before spawn; explicit engine/store/arguments/environment/fence, error retained until actual direct-child close, and signal/null/nonzero close not success. Fourteen controlled tests pass; eleven source-copy controls assertion-killed under complete TAP with no cancellations/skips or harness errors, including the direct exit-only oracle. Actual Mac entry/bundled package manager and installed Personal PTY pass on Linux. Actual close does not establish arbitrary descendant/cgroup death; fallible listener acquisition and native Mac execution remain open. No credential files or real provider used."
+   "sha256": "deb19402bdca4fc9d5c215c815f14a4bf4f8612321d1da3ab02cecef25d19b5d",
+   "note": "Read in full at the 2026-10-01 host-only package checkpoint: platform-aware runtime metadata preparation completes before spawn; explicit engine/store/arguments/environment/fence, error retained until actual direct-child close, and signal/null/nonzero close not success. Fourteen controlled tests pass; eleven source-copy controls assertion-killed under complete TAP with no cancellations/skips or harness errors, including the direct exit-only oracle. Actual Mac entry/bundled package manager and installed Personal PTY pass on Linux. Actual close does not establish arbitrary descendant/cgroup death; fallible listener acquisition and native Mac execution remain open. No credential files or real provider used. P0-8: the engine directory and package store are ensured through ensureOwnedUserDirectory inside dirname(stateRoot)."
   },
   {
    "path": "src/runtime/extension-modules.ts",
@@ -146,8 +146,8 @@
     "DR28",
     "DR25"
    ],
-   "sha256": "aabb51db56ded2acabd0fa5129800687349f722c4c05dfefbb581396211cceab",
-   "note": "Read in full at the 2026-10-01 host-only package checkpoint: one value-aware grammar produces an immutable explicit Mac-only local decision, strips host-only from engine argv, and refuses duplicate/value-like/project combinations and Linux use before effects. Five source-copy grammar controls assertion-killed through the actual parser imported by entry composition. Shared package index validation/publication, explicit activation and per-source reconciliation retained; actual loopback npm install/list/update/remove and ordinary package regressions pass. Installing locally does not select a Personal extension or consume an absent first-project seed. Whole index crash/retry boundaries and native Mac package durability are not certified by this limited review. No new Host API or guest protocol method/state/version."
+   "sha256": "58ef45db164a43e013b360aaa3acac07879863375fcd50a77a268b2a31ac89cf",
+   "note": "Read in full at the 2026-10-01 host-only package checkpoint: one value-aware grammar produces an immutable explicit Mac-only local decision, strips host-only from engine argv, and refuses duplicate/value-like/project combinations and Linux use before effects. Five source-copy grammar controls assertion-killed through the actual parser imported by entry composition. Shared package index validation/publication, explicit activation and per-source reconciliation retained; actual loopback npm install/list/update/remove and ordinary package regressions pass. Installing locally does not select a Personal extension or consume an absent first-project seed. Whole index crash/retry boundaries and native Mac package durability are not certified by this limited review. No new Host API or guest protocol method/state/version. P0-8: writePackageIndex repairs the configured local stage's owner bits (directory and file) before the engine lists it; an unlistable or non-directory stage is refused, never indexed as empty."
   },
   {
    "path": "src/extension/contained-search.ts",
@@ -158,7 +158,7 @@
     "G10-02",
     "P0V-122"
    ],
-   "sha256": "63c73b59b0c17d1293b5113e03297b5f6d32bec7f3f4ecf990083e4d07ec27cc",
+   "sha256": "3add80febbdf8f39960cfc51d932618a15659cd65d446b354a9fabe8fdc09592",
    "note": "Read in full: child owns snapshot creation, engine walker group, EOF cancellation and cleanup; parent bounds output and duration. Caller-death and uncooperative walker tests; EOF and group-cleanup mutants assertion-killed. Does not claim cleanup after the owner itself is SIGKILLed or an OS crash."
   },
   {
@@ -279,7 +279,7 @@
    "oracles": [
     "DR29"
    ],
-   "sha256": "69b8762f6881a80459502bc55e3caf5d3e110b26cfa125bc613514c8ecaa0305",
+   "sha256": "83144dd0cf080739ed3d4485392f8a794c229305dfaf2f9af786aa1ddc6b31a1",
    "note": "Read in full: composition callback consumes frozen exact candidate/check profile, cgroup resources, private raw checkout and confined argv/environment; controlled command/manager-outcome oracles pass. Actual systemd/cgroup probe remains independently denied and NOT_RUN; builder tests do not certify kernel enforcement."
   },
   {
@@ -294,7 +294,7 @@
     "MAC-241"
    ],
    "sha256": "f479e025e1a3dbf058d1653a8e2a9b3d2181b8c5b5ddcab074e465156992f27a",
-   "note": "Read in full: export() normalizes the request intent before the ledger digests it -- absent `since` and explicit `since: undefined` are one request, and neither is a JSON value the canonical encoder can name. The intent keeps every other field; validation of society/canonical/head is unchanged. MAC-240 oracles: the legacy-spelled digest is a different request that fails closed (never replayed nor re-run), and \u00a76.4/MAC-420 export passes end-to-end under the new digest."
+   "note": "Read in full: export() normalizes the request intent before the ledger digests it -- absent `since` and explicit `since: undefined` are one request, and neither is a JSON value the canonical encoder can name. The intent keeps every other field; validation of society/canonical/head is unchanged. MAC-240 oracles: the legacy-spelled digest is a different request that fails closed (never replayed nor re-run), and §6.4/MAC-420 export passes end-to-end under the new digest."
   },
   {
    "path": "src/runtime/resident-rootfs.ts",
@@ -306,7 +306,7 @@
     "SCN-R01",
     "SCN-C10"
    ],
-   "sha256": "c4dee7b1cc1df25889360cc2cf7dbdcac8ba9d4d30431befc98c995a93aeab5b",
+   "sha256": "403e38c09d0079482a262956b9bdd0925b3c244f90545122ef7abaae0c50b5e2",
    "note": "Read in full: the prepared rootfs gains RESIDENT_PATHS.workerArchive so the confined engine's worker-only review archive mount target exists before any bind; the directory list otherwise unchanged, order and ensureDirectory semantics retained. SCN-R01 exercises the Worker review archive end-to-end through the confined path; SCN-C10 exercises package extension loading under the same rootfs."
   },
   {
@@ -320,7 +320,7 @@
     "R28",
     "SCN-C08"
    ],
-   "sha256": "839ef28cd6e2e923b89543718d0a0395eaf49d05e12ea0ecdcd97d3b67c747ce",
+   "sha256": "47bf8916a1b8703a8f3e487383a4073ec083c9857ac5f18828c8c2bbd283d63f",
    "note": "Read in full: resolvedBindSource names each socket bind source by the real directory it reaches instead of a /proc/<pid>/fd anchor bubblewrap cannot traverse inside its user namespace; only the parent resolves, the leaf need not exist, and a missing parent keeps the lexical spelling (ENOENT/ENOTDIR only -- other resolution failures propagate). R28 asserts the pure recipe with fabricated dirs; SCN-C08 runs a real confined shell under the filter; DR27 private-argument tests hold the recipe's value preservation."
   },
   {
@@ -331,7 +331,7 @@
    "oracles": [
     "Open TUI"
    ],
-   "sha256": "3d12c3c57fdda3ae7974a0868831fa5a880331a3485cb285d0d63219f5c86f1e",
+   "sha256": "afe6abff7ee8b077f92d11ef66d98f36855944104b2771fc87d6b50ed2072b19",
    "note": "Read in full: the oma tip rewrite addresses the last command-tip cell by position (replaceColumn) instead of matching the command's text, because upstream truncates a name when an extension added a command; the cell's original SGR color is carried and the tip is width-bounded like swapText. Open TUI PTY oracles hold the branded header, tips and terminal restoration for all eight endings including reload-update with an extra registered command."
   }
  ],

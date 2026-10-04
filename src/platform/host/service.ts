@@ -3,7 +3,7 @@
  * entry adds only the Mac-specific pieces (the VM helper, the paths). */
 import type { Server, Socket } from "node:net";
 import { createHash, randomBytes, randomUUID } from "node:crypto";
-import { chmodSync, existsSync, mkdirSync, readdirSync, realpathSync, rmSync, statSync, statfsSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, readdirSync, realpathSync, statSync, statfsSync, writeFileSync } from "node:fs";
 import { basename, dirname, join } from "node:path";
 import { GuestLink, type HostIdentity } from "./guest-link.js";
 import { VmLifecycle, type LifecycleOptions, type VmDriver } from "./lifecycle.js";
@@ -15,10 +15,10 @@ import { MacGit, fileSink, getStream, putStream, sha256File } from "./project.js
 import { writePackageArchive } from "../package-archive.js";
 import { sealedArchiveSink } from "./archive-crypto.js";
 import { openSnapshotStore, pruneSnapshots, snapshotIdOf, snapshotRunning, snapshotStopped, type SnapshotStore } from "./snapshot.js";
-import { collectTemporaries } from "./files.js";
+import { collectTemporaries, ensureHostOwnedDirectory, removeHostStaged } from "./files.js";
 import { ProcessLock } from "../../runtime/process-lock.js";
 import { withAsyncCleanup } from "../../process/cleanup.js";
-import { ensureUserDirectory } from "../../runtime/user-files.js";
+import { ensureOwnedUserDirectory } from "../../runtime/user-files.js";
 import { setTimeout as pause } from "node:timers/promises";
 import { StoreError } from "../../domain/errors.js";
 import type { KeychainStore } from "./keychain.js";
@@ -116,7 +116,9 @@ export async function archiveKey(keychain: KeychainStore, lockPath: string,
   return serialized(lockPath, async () => {
     const again = await keychain.get("archive");
     if (again !== undefined) return Buffer.from(again, "base64");
-    ensureUserDirectory(dirname(lockPath));
+    // P0-8: the archive key lock lives in oma's own run directory; its leaf
+    // is repaired rather than trusted as-is.
+    ensureOwnedUserDirectory(dirname(lockPath), dirname(lockPath));
     const deadline = performance.now() + waitMs;
     let lock: ProcessLock | null;
     while ((lock = acquire()) === null) {
@@ -206,20 +208,22 @@ export class HostService {
       return repo;
     };
     const transfer = join(options.runDir, "transfer");
-    mkdirSync(transfer, { recursive: true, mode: 0o700 });
-    mkdirSync(options.archivesDir, { recursive: true, mode: 0o700 });
+    // P0-8/DR32: the transfer, archives and snapshots directories are oma's
+    // own; a damaged leaf is repaired rather than trusted as-is.
+    ensureHostOwnedDirectory(transfer, dirname(transfer));
+    ensureHostOwnedDirectory(options.archivesDir, dirname(options.archivesDir));
     // P0V-103, P0V-104: under the lock, what a dead service left is its own:
     // the temporaries of publications it did not finish, and the transfer
     // files of requests it did not finish (a same-key retry makes them again).
     collectTemporaries(options.archivesDir);
     collectTemporaries(dirname(options.recordPath));
-    for (const name of readdirSync(transfer)) rmSync(join(transfer, name), { force: true, recursive: true });
+    for (const name of readdirSync(transfer)) removeHostStaged(join(transfer, name));
     // §8.4: the snapshot store, when this OMA keeps one -- the update's own
     // snapshots and the ones the Human asks for. A dead service's unfinished
     // clone is a temporary its start removes (P0V-103, F-08).
     let snapshots: SnapshotStore | null = null;
     if (options.snapshotsDir !== undefined && options.statePath !== undefined) {
-      mkdirSync(options.snapshotsDir, { recursive: true, mode: 0o700 });
+      ensureHostOwnedDirectory(options.snapshotsDir, dirname(options.snapshotsDir));
       openSnapshotStore(options.snapshotsDir);
       snapshots = { dir: options.snapshotsDir, statePath: options.statePath,
         ...(options.snapshotClone === undefined ? {} : { clone: options.snapshotClone }) };
@@ -344,7 +348,7 @@ export class HostService {
                 ? { ...p, lastImport: { head, at: Date.now() } } : p) }));
               return result;
             } finally { society.close(); }
-          } finally { rmSync(file, { force: true }); }
+          } finally { removeHostStaged(file); }
         },
         syncPackages: async (key, params) => {
           if (options.packagesDir === undefined) throw new StoreError("UNSUPPORTED_PROFILE", "this OMA keeps no packages");
@@ -352,7 +356,7 @@ export class HostService {
           assertRoom(transfer, 0, floor);
           try {
             // The whole store, as it is now: what `oma pi` installed and the list it keeps.
-            rmSync(file, { force: true });
+            removeHostStaged(file);
             await writePackageArchive(options.packagesDir, file);
             const declared = { bytes: statSync(file).size, sha256: await sha256File(file) };
             await putStream(await link.bytes("stream"), key, file, PLATFORM_FRAME_BYTES);
@@ -361,7 +365,7 @@ export class HostService {
               return await society.request("packages.replace",
                 { archive: declared, ...(params.activate === undefined ? {} : { activate: params.activate }), ...(params.projectId === null ? {} : { projectId: params.projectId }) }, key);
             } finally { society.close(); }
-          } finally { rmSync(file, { force: true }); }
+          } finally { removeHostStaged(file); }
         },
         exportProject: async (key, params) => {
           const project = projects().find(p => p.society === params.society);
@@ -386,7 +390,7 @@ export class HostService {
             record(current => ({ ...current, projects: current.projects.map(p => p.projectId === project.projectId
               ? { ...p, lastExport: { head: fetched.head, at: Date.now() } } : p) }));
             return { ...exported, ...fetched, ref: "refs/remotes/oma/main" };
-          } finally { rmSync(file, { force: true }); }
+          } finally { removeHostStaged(file); }
         },
         archive: async (key, society) => {
           const peer = await link.json("society");

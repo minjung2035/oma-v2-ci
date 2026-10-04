@@ -13,7 +13,8 @@
 import { OMA_THEME, OMA_THEME_NAME } from "./oma-theme.js";
 import { closeSync, fstatSync, readFileSync, readSync, statSync } from "node:fs";
 import { openDirectory, openRegularBeneath } from "../storage/contained-fs.js";
-import { lockedUserReplace } from "./locked-files.js";
+import { lockedOwnedReplace } from "./locked-files.js";
+import { ensureOwnedUserDirectory } from "./user-files.js";
 import { prepareEngineInteractiveSettings, settingsObject } from "../pi-compat/settings.js";
 import { fileURLToPath } from "node:url";
 import { dirname, isAbsolute, join, resolve } from "node:path";
@@ -32,7 +33,10 @@ export const PI_PROVIDER_RETRIES = 5;
  * spawn, under the settings writer's lock; unrelated engine settings survive. */
 function prepareEngineFile(agentDir: string, name: string,
   update: (settings: Record<string, unknown>) => Record<string, unknown>): void {
-  lockedUserReplace(agentDir, name, 1024 * 1024, current => {
+  // P0-8/DR32: the directory is oma's own (the agent directory or its
+  // `themes` tail); its leaf is repaired before the locked replace -- the
+  // deeper repair of an oma-owned ancestor is the caller's owned ensure.
+  lockedOwnedReplace(agentDir, agentDir, name, 1024 * 1024, current => {
     // Persisted bytes the engine owns that cannot be interpreted are store
     // corruption, never a raw SyntaxError escaping the taxonomy.
     let parsed: unknown = {};
@@ -59,6 +63,12 @@ export function preparePiRetry(agentDir: string): void {
 /** Presentation policy persists across Pi's own settings reloads. Only the
  * society's isolated engine files are touched; unrelated choices survive. */
 export function preparePiInteractive(agentDir: string): void {
+  // P0-8: the themes directory is oma's own under the agent directory; a
+  // mode-000 `.engine/themes` left by a stray is repaired here rather than
+  // wedging the locked replace that follows. The agent directory itself is
+  // the boundary: above it is the caller's layout, already owned-ensured by
+  // the entry that resolved it.
+  ensureOwnedUserDirectory(join(agentDir, "themes"), agentDir);
   // The look of Open TUI's own preview is the default; what the Human then
   // chooses in /settings or /open-tui is kept. Telemetry to Pi stays off.
   prepareEngineFile(join(agentDir, "themes"), `${OMA_THEME_NAME}.json`, () => ({ ...OMA_THEME }));

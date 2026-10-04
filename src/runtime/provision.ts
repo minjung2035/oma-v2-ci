@@ -39,8 +39,8 @@ import { modelWorkspaceFor } from "../domain/derived.js";
 import { runGitText } from "../process/policies.js";
 import { withProjectSnapshot, SNAPSHOT_GIT_OPTIONS } from "../git/project-snapshot.js";
 import { createCanonicalObserver, createCanonicalRef } from "../git/canonical-command.js";
-import { ensureDurableDirectory, fsyncHeldDir, fsyncTree, writeExclusiveFsyncedFile } from "../storage/durable-fs.js";
-import { ensureDirectory, removeOwnedFile } from "../storage/directory.js";
+import { ensureOwnedDurableDirectory, fsyncHeldDir, fsyncTree, writeExclusiveFsyncedFile } from "../storage/durable-fs.js";
+import { ensureOwnedDirectory, removeOwnedFile } from "../storage/directory.js";
 import { TreeLease, collectLeasedTree } from "../storage/tree-lease.js";
 import { entryAt, openRegularBeneath, withinDirectory } from "../storage/contained-fs.js";
 import { hostSystemLayout, prepareResidentRootfs } from "./resident-rootfs.js";
@@ -153,7 +153,9 @@ function ensureBareRepository(path: string, format = "sha1"): boolean {
   if (format !== "sha1" && format !== "sha256")
     throw new StoreError("UNSUPPORTED_PROFILE", `the project uses an unsupported object format ${format}`);
   const parent = dirname(path);
-  ensureDirectory(parent, 0o700);
+  // P0-8: `repos` is oma's own under the state root; a stray's mode is
+  // repaired within that boundary rather than wedging the repository create.
+  ensureOwnedDirectory(parent, dirname(parent), 0o700);
   const stagingName = `.${basename(path)}.staging.${randomBytes(8).toString("hex")}`;
   const staging = join(parent, stagingName);
   // R6-04: the lease first, held by the git that makes the tree, so a start
@@ -252,11 +254,12 @@ export function provisionSociety(stateRoot: string, options: ProvisionOptions = 
   const created: string[] = [];
   for (const relative of [".", ...OWNED_DIRECTORIES]) {
     const path = relative === "." ? stateRoot : join(stateRoot, relative);
-    if (existsSync(path)) continue;
-    // Durable because a half-created tree that survives a crash would make the
-    // next start fail in a way that looks like corruption.
-    ensureDurableDirectory(path, 0o700);
-    created.push(relative);
+    // P0-8: durable because a half-created tree that survives a crash would
+    // make the next start fail in a way that looks like corruption, and owned
+    // because a mode-000 component a stray left is repaired -- never trusted
+    // and never mistaken for absent by a plain existence check.
+    const made = ensureOwnedDurableDirectory(path, dirname(stateRoot), 0o700);
+    if (made.includes(path)) created.push(relative);
   }
   const projectGit = projectGitPathAt(stateRoot);
   // The project is consulted only while the canonical repository has no main;
@@ -408,7 +411,7 @@ export function collectBindingTemporaries(stateRoot: string): readonly string[] 
   return removed;
 }
 export function publishProjectBinding(stateRoot: string, binding: Omit<ProjectBinding, "kind">): void {
-  ensureDurableDirectory(stateRoot, 0o700);
+  ensureOwnedDurableDirectory(stateRoot, dirname(stateRoot), 0o700);
   const record: ProjectBinding = { kind: BINDING_KIND, society: binding.society, canonicalProjectPath: binding.canonicalProjectPath };
   const bytes = `${JSON.stringify(record, null, 2)}\n`;
   if (Buffer.byteLength(bytes) > BINDING_MAX_BYTES) throw new StoreError("INVALID_REQUEST", "the project path is too long to bind");

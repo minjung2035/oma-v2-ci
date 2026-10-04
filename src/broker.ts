@@ -1,9 +1,8 @@
 // MUST [AUTH-001..003]/[IPC-*]/[REC-007]: authenticated transport and lifetime handoff.
 import { createServer, type Socket, type Server } from "node:net";
-import { mkdirSync } from "node:fs";
 import { clearSocketName } from "./storage/socket-name.js";
-import { removeOwnedFile } from "./storage/directory.js";
-import { join } from "node:path";
+import { ensureOwnedDirectory, removeOwnedFile } from "./storage/directory.js";
+import { dirname, join } from "node:path";
 import type { Actor, AuthContext, Failure, ProtocolLimits, Request, RunLease } from "../implementation/contracts.js";
 import { Store } from "./store.js";
 import { StoreError, publicFailure, errorCodeOf } from "./domain/errors.js";
@@ -139,7 +138,9 @@ export class Broker {
   start(): Promise<void> {
     if (this.starting) return this.starting;
     this.health.assertAdmission();
-    mkdirSync(this.paths.runRoot, { recursive: true });
+    // P0-8/DR32: the run root is oma's own (`dirname(runRoot)` is oma's, the
+    // runtime directory above it is the user's); a damaged leaf is repaired.
+    ensureOwnedDirectory(this.paths.runRoot, dirname(this.paths.runRoot), 0o700);
     const lockPath = join(this.paths.runRoot, "broker.lock");
     // Compatibility for direct domain/test construction. Production always
     // transfers the lifetime's pre-configuration/pre-Store lock token.
@@ -296,7 +297,8 @@ export class Broker {
   private listenActor(actor: Actor, incarnation = this.store.getAgent(actor)?.incarnation ?? 0): { socketHostPath: string; ready: Promise<void>; done: () => void } {
     const dir = this.actorSocketDirectoryAfterAdmission(actor, incarnation);
     const path = actorSocketPathAt(this.paths.runRoot, actor, incarnation);
-    mkdirSync(dir, { recursive: true });
+    // P0-8/DR32: the actor socket directory is oma's own under the run root.
+    ensureOwnedDirectory(dir, dirname(this.paths.runRoot), 0o700);
     clearSocketName(path);
     const sockets = new Set<Socket>(); let revoked = false;
     const server = createServer({ allowHalfOpen: true }, socket => {

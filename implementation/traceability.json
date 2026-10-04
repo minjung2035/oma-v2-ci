@@ -2,8 +2,8 @@
   {
     "requirement": "N-001",
     "source": "docs/implementation-spec.md",
-    "digest": "17b3d2617eccd8a9bbd2566106b60bda6e4b2745f25f6eef41e3149d9cf5958e",
-    "normativeText": "**MUST [N-001]** 구현의 상위 규범은 [docs/architecture.md](architecture.md)이며, WP01 D01–D06 대조 후 이 계약의 기준본 SHA-256은 `ae9b2d026e62f77e0c9ff3f5ca0a3b6efea5b8582f0a6acaf2ecd30b325a5905`이다. 구현 시작 및 release 때 기준본 hash를 확인한다. hash 변경 시 이 계약을 자동 적용하지 않고 차이를 검토한다.",
+    "digest": "eea1f8cab3a2f43caed3f7dabeaa6160f8faa2458e1888bc02d509ba5c108d8a",
+    "normativeText": "**MUST [N-001]** 구현의 상위 규범은 [docs/architecture.md](architecture.md)이며, WP01 D01–D06 대조 후 이 계약의 기준본 SHA-256은 `74ceea98494404924de5c3005390e094226b71359c9ac1eb05f85264c5f5daf1`이다. 구현 시작 및 release 때 기준본 hash를 확인한다. hash 변경 시 이 계약을 자동 적용하지 않고 차이를 검토한다.",
     "applicability": "unclassified",
     "rationale": "Requires production-path review; no inference from test names.",
     "owner": null,

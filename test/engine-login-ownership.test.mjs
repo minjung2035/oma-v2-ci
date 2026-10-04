@@ -3,6 +3,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { EventEmitter } from 'node:events';
 import { readFileSync } from 'node:fs';
+import * as path from 'node:path';
 import { Script } from 'node:vm';
 import ts from 'typescript';
 
@@ -16,7 +17,8 @@ function world({ spawnError, directoryError } = {}) {
       resolvePiRuntime: () => ({ executable: '/fixture/node', args: ['engine.js'], agentDir: '/fixture/engine' }),
       piIsolationEnv: () => ({ PI_CODING_AGENT_DIR: '/fixture/engine', PI_CODING_AGENT_SESSION_DIR: '/fixture/history' }) },
     '../process/async.js': { spawnInteractive(...args) { if (spawnError) throw spawnError; launches.push(args); return child; } },
-    '../runtime/user-files.js': { ensureUserDirectory(path) { directories.push(path); if (directoryError) throw directoryError; } },
+    '../runtime/user-files.js': { ensureOwnedUserDirectory(target) { directories.push(target); if (directoryError) throw directoryError; } },
+    'node:path': path,
   };
   const module = { exports: {} };
   new Script(code).runInNewContext({ module, exports: module.exports,

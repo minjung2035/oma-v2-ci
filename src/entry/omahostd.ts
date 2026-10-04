@@ -7,7 +7,7 @@
  * release key, the VM helper) and the support directory. macOS only; it is
  * typechecked everywhere and run on a Mac (the mac-vm lane).
  */
-import { chmodSync, closeSync, constants, ftruncateSync, mkdirSync, openSync, statSync } from "node:fs";
+import { chmodSync, closeSync, constants, ftruncateSync, openSync, statSync } from "node:fs";
 import { createPublicKey } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
@@ -19,6 +19,7 @@ import { newHostRecord, readHostRecord, writeHostRecord } from "../platform/host
 import { HOST_GUEST_PROTOCOL } from "../protocol/host-guest.js";
 import { HOST_LOSS_SIGNALS } from "../runtime/broker-lifetime.js";
 import { nativeProjectBookmarks } from "../platform/host/bookmark.js";
+import { ensureHostOwnedDirectory } from "../platform/host/files.js";
 
 const STATE_DISK_BYTES = 64 * 1024 ** 3;
 const GIB = 1024 ** 3;
@@ -39,7 +40,9 @@ const dirs = { run: join(home, "run"), vm: join(home, "vm"), engine: join(home, 
   packages: join(home, "packages"),
   // §8.4: the state disk's snapshots -- the update's own and the Human's.
   snapshots: join(home, "snapshots") };
-for (const dir of [home, ...Object.values(dirs), join(dirs.run, "vm")]) { mkdirSync(dir, { recursive: true, mode: 0o700 }); chmodSync(dir, 0o700); }
+// P0-8/DR32: the support directory and everything under it is oma's own; a
+// damaged directory is repaired, and the leaf's mode is set outright.
+for (const dir of [home, ...Object.values(dirs), join(dirs.run, "vm")]) { ensureHostOwnedDirectory(dir, home); chmodSync(dir, 0o700); }
 const recordPath = join(home, "host-record.json");
 const record = readHostRecord(recordPath) ?? (() => { const fresh = newHostRecord(); writeHostRecord(recordPath, fresh); return fresh; })();
 

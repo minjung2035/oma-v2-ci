@@ -1,7 +1,6 @@
 // UNIT-004/LIFE-006/REC-007: composition under a single process lifetime.
-import { join } from "node:path";
-import { mkdirSync } from "node:fs";
-import { ensureDirectory } from "../storage/directory.js";
+import { dirname, join } from "node:path";
+import { ensureOwnedUserDirectory } from "../runtime/user-files.js";
 import { Store, SCHEMA_PATH } from "../store.js";
 import { MailModule } from "../mail.js";
 import { UnitsModule, UNIT_TPL_DIR, assertUserManagerReachable } from "../units.js";
@@ -50,7 +49,9 @@ try {
 const { stateRoot, runRoot, configPath } = location;
 async function main(): Promise<void> {
   assertHostDirectoryLayout(runRoot, true);
-  mkdirSync(runRoot, { recursive: true });
+  // P0-8: the run root's parent (`…/oma` under the runtime dir) is oma's own;
+  // a mode-000 directory there is repaired within that boundary, not wedged on.
+  ensureOwnedUserDirectory(runRoot, dirname(runRoot));
   // The lock is the society's singleton, and it is taken before configuration,
   // SQLite or recovery. A broker that does not get it says so with a status of
   // its own rather than the generic startup failure: the host reads ownership
@@ -206,7 +207,8 @@ async function main(): Promise<void> {
           await lifecycle.bootstrap(cfg); validateStoredProfiles();
         });
         if (store.getAgent("principal")) {
-          for (const directory of ["new", "cur", "tmp"]) ensureDirectory(join(stateRoot, "mail", "inboxes", "principal", directory));
+          for (const directory of ["new", "cur", "tmp"])
+            ensureOwnedUserDirectory(join(stateRoot, "mail", "inboxes", "principal", directory), stateRoot);
           units.ensurePrincipal();
         }
       },

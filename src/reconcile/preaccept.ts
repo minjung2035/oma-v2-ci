@@ -20,7 +20,7 @@ import { join } from "node:path";
 import type { OperationRow, Store } from "../store.js";
 import { isValidFullOid, parseMessageId, parseOperationId } from "../domain/identifiers.js";
 import { submitBundlePathAt } from "../storage/paths.js";
-import { removeOwnedFile, removeOwnedTree } from "../storage/directory.js";
+import { removeOwnedFile, removeOwnedTree, repairOwnedEntryMode } from "../storage/directory.js";
 import { collectLeasedTree } from "../storage/tree-lease.js";
 import { namedMessages } from "../mail/materializer.js";
 
@@ -46,6 +46,10 @@ export function preacceptEvent(collection: PreacceptCollection, stateRoot: strin
 const PUBLICATION_TEMPORARY = /^\..+\.[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}(?:\.held)?\.tmp$/;
 
 function names(directory: string): string[] {
+  // P0-8/DR32: every directory the sweep opens is oma's own under
+  // `stateRoot`; a damaged leaf mode is repaired before it is listed, and a
+  // listing that still fails refuses rather than reading as empty.
+  repairOwnedEntryMode(directory);
   try { return readdirSync(directory); }
   catch (error) { if ((error as NodeJS.ErrnoException).code === "ENOENT") return []; throw error; }
 }

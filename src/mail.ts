@@ -1,6 +1,6 @@
 // MAIL-001..010: acceptance orchestration; publication and batch views have explicit owners.
 import { ownedMessages } from "./durable.js";
-import { ensureDirectory, removeOwnedFile } from "./storage/directory.js";
+import { ensureOwnedDirectory, removeOwnedFile } from "./storage/directory.js";
 import { join } from "node:path";
 import type { Actor, Address, Json, MailInput, MessageId, MessagePlan, OperationId, RequestKey, AuthContext, PreparedBatch, BoundaryEvidence, Receipt } from "../implementation/contracts.js";
 import { Store } from "./store.js";
@@ -187,7 +187,8 @@ export class MailModule {
    * failure after its own link removes exactly the inode it linked, and the
    * first failure stays first. */
   freezeObject(messageId: MessageId, eml: { text: string; sha256?: string }): PreacceptArtifact {
-    const stagingDir = join(this.paths.stateRoot, "staging", "mail-objects"); ensureDirectory(stagingDir);
+    const stagingDir = join(this.paths.stateRoot, "staging", "mail-objects");
+    ensureOwnedDirectory(stagingDir, this.paths.stateRoot);
     const staged = join(stagingDir, `${messageId}.${generateOperationId()}.tmp`);
     writeFsynced(staged, eml.text);
     const destination = this.objectPath(messageId);

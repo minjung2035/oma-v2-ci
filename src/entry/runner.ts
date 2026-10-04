@@ -1,12 +1,12 @@
 // RUN-001/UNIT-003: one bound runner identity with trusted Pi RPC delivery.
 // The fixed unit supplies a broker-rendered profile; this process never reads SQLite.
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { RunnerModule } from "../runner.js";
 import { loadConfiguration } from "../config.js";
 import { isValidActorName, isValidSocietyName } from "../ids.js";
 import { StoreError, errorCodeOf } from "../domain/errors.js";
 import { resolvePiRuntime } from "../runtime/pi-runtime.js";
-import { ensureDirectory } from "../storage/directory.js";
+import { ensureOwnedDirectory } from "../storage/directory.js";
 import { realpathSync } from "node:fs";
 import { hostSystemLayout } from "../runtime/resident-rootfs.js";
 import { requireResidentRootfs } from "../sandbox.js";
@@ -77,7 +77,9 @@ if (piRuntime.args[0] === undefined) {
   console.error(`runner ${agent}: OMA_PI_COMMAND supplies no shipped engine entry; a Resident requires the bundled engine`);
   process.exit(4);
 }
-ensureDirectory(piRuntime.agentDir, 0o700);
+// The engine home is oma's own beside the state root: a mode-000 `.engine`
+// left by a stray is repaired within the data root, not wedged on (P0-8).
+ensureOwnedDirectory(piRuntime.agentDir, dirname(stateRoot), 0o700);
 // SB-001 wants a trusted rootfs holding pinned tools and empty mount targets.
 // `installation.rootfs` names it; binding the host root is what SB-001 forbids.
 // Society is confined-only, and an unsupported rootfs is refused before any

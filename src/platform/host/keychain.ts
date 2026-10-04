@@ -13,7 +13,7 @@ import { StoreError } from "../../domain/errors.js";
 import { withAsyncCleanup } from "../../process/cleanup.js";
 import type { EngineCredentials } from "../../runtime/engine-auth.js";
 import { ProcessLock } from "../../runtime/process-lock.js";
-import { ensureUserDirectory } from "../../runtime/user-files.js";
+import { ensureOwnedUserDirectory } from "../../runtime/user-files.js";
 import { dirname } from "node:path";
 import { setTimeout as pause } from "node:timers/promises";
 
@@ -55,7 +55,9 @@ export function keychainCredentials(store: KeychainStore, account: string, lockP
   const write = <T>(run: (writer: KeychainStore) => Promise<T>, signal?: AbortSignal): Promise<T> => serialized(lockPath ?? account, async () => {
     signal?.throwIfAborted();
     if (lockPath === undefined) return run(store);
-    ensureUserDirectory(dirname(lockPath));
+    // P0-8: the lock's directory is oma's own (the engine or run directory);
+    // its leaf is repaired rather than trusted as-is.
+    ensureOwnedUserDirectory(dirname(lockPath), dirname(lockPath));
     let lock: ProcessLock | null;
     while ((lock = ProcessLock.tryAcquire(lockPath)) === null) await pause(25, undefined, { signal });
     const held = lock;

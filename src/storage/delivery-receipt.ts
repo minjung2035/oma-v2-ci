@@ -15,7 +15,7 @@ import { parseJsonObject } from "../frame.js";
 import {
   collectDeadTemporaries,
   createLockedTemporary,
-  ensureDurableDirectory,
+  ensureOwnedDurableDirectory,
   faultAt,
   fsyncHeldDir,
   isDurabilityFault,
@@ -394,7 +394,7 @@ export function publishDeliveryReceipt(
   if (Buffer.byteLength(encoded) > maximum)
     return invalid("encoded receipt exceeds the configured frame limit");
   const path = runnerReceiptPathAt(stateRoot, batch.agent, batch.id);
-  ensureDurableDirectory(dirname(path), 0o700, faults);
+  ensureOwnedDurableDirectory(dirname(path), stateRoot, 0o700, faults);
   const parent = openDirectory(dirname(path));
   const finalName = basename(path);
   const temporaryName = temporaryNameFor(finalName);

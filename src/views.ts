@@ -3,7 +3,7 @@ import { join } from "node:path";
 import type { Actor, AgentStatus, PreparedBatch } from "../implementation/contracts.js";
 import { Store } from "./store.js";
 import { replaceDerivedFile as writeAtomic } from "./storage/durable-fs.js";
-import { ensureDirectory } from "./storage/directory.js";
+import { ensureOwnedDirectory } from "./storage/directory.js";
 import { NO_UNIT_REASON, encodeStatusView, statusViewPath } from "./protocol/status-view.js";
 import { publishBatchView } from "./storage/batch-view.js";
 import { operationMessage } from "./mail/materializer.js";
@@ -58,7 +58,7 @@ export class ViewsModule {
   }
   refreshWorld(): void {
     const world = join(this.stateRoot, "world");
-    ensureDirectory(world);
+    ensureOwnedDirectory(world, this.stateRoot);
     const agents = this.store.listAgents();
     const tsv = agents.map(agent => [agent.name, agent.role, agent.desired, agent.profile].map(fieldEscape).join("\t"))
       .join("\n") + (agents.length > 0 ? "\n" : "");

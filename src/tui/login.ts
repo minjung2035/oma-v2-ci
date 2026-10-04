@@ -1,9 +1,10 @@
 /** DR18 (D-9) / DR25: the Human uses the bundled engine's own login or package
  * command, not an OMA authentication screen. OMA's engine directory (or package
  * store) is explicit; the caller holds its fence until the child actually closes. */
+import { dirname } from "node:path";
 import { PI_AGENT_DIR_ENV, piIsolationEnv, resolvePiRuntime } from "../runtime/pi-runtime.js";
 import { spawnInteractive } from "../process/async.js";
-import { ensureUserDirectory } from "../runtime/user-files.js";
+import { ensureOwnedUserDirectory } from "../runtime/user-files.js";
 
 export interface EngineLogin {
   readonly stateRoot: string;
@@ -26,7 +27,11 @@ export interface EngineLogin {
 export async function runEngineLogin(login: EngineLogin): Promise<number> {
   const runtime = resolvePiRuntime({ stateRoot: login.stateRoot, libdir: login.libdir, override: login.override });
   const agentDir = login.packages?.store ?? runtime.agentDir;
-  ensureUserDirectory(agentDir);
+  // P0-8: the engine home is oma's own beside the state root, and so is the
+  // package store -- but the store is the caller's spelling, which may sit
+  // anywhere, so its boundary is the store itself: the leaf's owner bits are
+  // repaired, its ancestors are the caller's and are never touched.
+  ensureOwnedUserDirectory(agentDir, login.packages === undefined ? dirname(login.stateRoot) : agentDir);
   const env: Record<string, string> = {};
   // The user's own Pi settings (its agent and session directories) are not oma's engine's.
   for (const [name, value] of Object.entries(login.env))

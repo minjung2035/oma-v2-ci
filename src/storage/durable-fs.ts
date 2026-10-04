@@ -99,9 +99,11 @@ export function flushDirectoryChain(directory: string, faults?: DurabilityObserv
  * down gets the owner-bits repair before the open that needs it -- a
  * mode-000 store root or data directory left by a stray cannot wedge the
  * walk. Ancestors above `ownedFrom` are the user's and keep the plain open. */
-export function ensureOwnedDurableDirectory(directory: string, ownedFrom: string, mode = 0o700, faults?: DurabilityObserver): void {
-  ensureOwnedDirectory(directory, ownedFrom, mode);
+export function ensureOwnedDurableDirectory(directory: string, ownedFrom: string, mode = 0o700,
+  faults?: DurabilityObserver): readonly string[] {
+  const created = ensureOwnedDirectory(directory, ownedFrom, mode);
   flushDirectoryChain(directory, faults);
+  return created;
 }
 
 export function fsyncFile(path: string, faults?: DurabilityObserver): void {

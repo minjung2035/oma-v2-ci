@@ -18,7 +18,7 @@ import { StoreError } from "../domain/errors.js";
 import {
   collectDeadTemporaries,
   createLockedTemporary,
-  ensureDurableDirectory,
+  ensureOwnedDurableDirectory,
   faultAt,
   isDurabilityFault,
   temporaryNameFor,
@@ -140,7 +140,12 @@ export function publishImmutableFile(
   try {
     sourceFd = openImmutable(sourceParent, basename(source));
     const original = checkedBytes(sourceFd, expectedHash);
-    ensureDurableDirectory(dirname(destination), 0o755, faults);
+    // P0-8: every caller's destination names an oma-owned mail directory. The
+    // boundary the callers share is not this helper's to know, so the parent
+    // itself is the boundary: its leaf is oma-made (mail/objects, an inbox's
+    // new/cur/tmp, the archive) and is repaired; a mode-000 ancestor above it
+    // refuses, and the provisioning ensure repairs those at start.
+    ensureOwnedDurableDirectory(dirname(destination), dirname(destination), 0o755, faults);
     parent = openDirectory(dirname(destination));
     // P0V-96: a copy killed before its temporary was removed left it with a
     // free lock; every publication of this name collects it first -- one

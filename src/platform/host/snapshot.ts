@@ -8,12 +8,12 @@
  * whose outcome is unknown, a freeze the deadline ended before the thaw -- is
  * discarded, never kept as a snapshot (MAC-622, P0-5).
  */
-import { constants, copyFileSync, readdirSync, rmSync } from "node:fs";
+import { constants, copyFileSync, readdirSync } from "node:fs";
 import { createHash } from "node:crypto";
 import { join } from "node:path";
 import { StoreError } from "../../domain/errors.js";
 import { withAsyncCleanup } from "../../process/cleanup.js";
-import { collectTemporaries, discardTemporary, publishMade, temporaryPath } from "./files.js";
+import { collectTemporaries, discardTemporary, publishMade, removeHostStaged, temporaryPath } from "./files.js";
 import type { GuestLink } from "./guest-link.js";
 
 export interface SnapshotStore {
@@ -126,7 +126,7 @@ export function pruneSnapshots(dir: string, keep: number, protect: ReadonlySet<s
   for (const snapshot of snapshots) {
     if (protect.has(snapshot.name)) continue;
     if (kept < keep) { kept += 1; continue; }
-    rmSync(join(dir, snapshot.name));
+    removeHostStaged(join(dir, snapshot.name));
     removed.push(snapshot.name);
   }
   return removed;

@@ -35,7 +35,7 @@ function world({ fault, spawnError, lockError, closeError, contended = false, pl
     '../domain/deployment.js': { DEPLOYMENT_LAYOUT: { entries: { personal: 'dist/src/entry/pi-personal.js' } } },
     '../process/async.js': { spawnSessionInteractive: spawn, stopOwnedChild(value) { assert.equal(value, child); child.kill('SIGKILL'); } },
     './process-lock.js': { ProcessLock: { tryAcquire() { return contended ? null : lease; } } },
-    './user-files.js': { ensureUserDirectory() {} },
+    './user-files.js': { ensureOwnedUserDirectory() {} },
     './session-mode.js': { readSessionBirth: () => ({ mode: 'personal', cwd: '/fixture/cwd', history: '/fixture/history' }) },
     './pi-runtime.js': { PI_AGENT_DIR_ENV: 'PI_CODING_AGENT_DIR', resolvePiRuntime: () => ({ agentDir: '/fixture/engine' }) },
   };

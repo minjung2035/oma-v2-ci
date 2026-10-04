@@ -12,7 +12,7 @@ import { contextStagingPathAt } from "./paths.js";
 import { assertDirectory } from "./directory.js";
 import { TreeLease, collectLeasedTree } from "./tree-lease.js";
 import { entryAt, openBeneath, openDirectory, closeEvery } from "./contained-fs.js";
-import { ensureDurableDirectory, faultAt, fsyncDir, fsyncTree, isDurabilityFault, type DurabilityObserver } from "./durable-fs.js";
+import { ensureOwnedDurableDirectory, faultAt, fsyncDir, fsyncTree, isDurabilityFault, type DurabilityObserver } from "./durable-fs.js";
 import type { PreacceptOwner } from "./preaccept-artifact.js";
 
 /** The staging root one preparation created exclusively, pinned at creation.
@@ -94,10 +94,10 @@ export async function prepareContextStream(
   const content = Object.freeze({ ...inputContent });
   const staging = contextStagingPathAt(stateRoot, operationId);
   const tree = join(staging, "tree");
-  ensureDurableDirectory(dirname(staging), 0o700, faults);
+  ensureOwnedDurableDirectory(dirname(staging), stateRoot, 0o700, faults);
   const prepared = acquireStagingRoot(staging, tree);
   let treeFd: number;
-  try { ensureDurableDirectory(tree, 0o700, faults); assertDirectory(tree); treeFd = openDirectory(tree); }
+  try { ensureOwnedDurableDirectory(tree, stateRoot, 0o700, faults); assertDirectory(tree); treeFd = openDirectory(tree); }
   catch (error) {
     if (isDurabilityFault(error)) throw error; // crash simulation: no owned cleanup
     throw discardFailedPreparation(prepared, [error]);

@@ -35,7 +35,6 @@ async function compose(environment, { lockHeld = true, claim = "taken", cgroup =
     quota: { storageBytes: 1024 }, integration: { checks: [] }, limits: { receiptWaitSeconds: 1 }, agentProfiles: {}, modelProfiles: {} };
   const modules = {
     "node:path": path,
-    "node:fs": { mkdirSync() {}, readFileSync: file => { assert.equal(file, "/proc/self/cgroup"); return `${cgroup}\n`; } },
     "../store.js": { SCHEMA_PATH: "schema", Store: class {
       constructor() { calls.push("Store"); } close() {} listAgents() { return []; } getAgent() { return null; }
     } },
@@ -117,8 +116,9 @@ async function compose(environment, { lockHeld = true, claim = "taken", cgroup =
       launchedLocation: (args, society) => ({ society, configPath: args[args.indexOf("--config") + 1],
         stateRoot: args[args.indexOf("--state-root") + 1], runRoot: args[args.indexOf("--run-root") + 1] }) },
     "../runtime/deployment-manifest.js": { assertDeploymentDigest() { calls.push("digest"); } },
-    // AV5: the Principal inbox is created through the held-parent primitive.
-    "../storage/directory.js": { ensureDirectory() {} },
+    // AV5/P0-8: the run root and the Principal inbox are ensured through the
+    // owned-repair primitive, not a plain mkdir.
+    "../runtime/user-files.js": { ensureOwnedUserDirectory() {} },
     // AV11: the canonical repository's path has one owner.
     "../storage/paths.js": { projectGitPathAt: stateRoot => `${stateRoot}/repos/project.git` },
     // AV27: where a Resident's Git reaches that repository has one owner.

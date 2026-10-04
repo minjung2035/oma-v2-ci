@@ -10,9 +10,8 @@ import { sha256Hex } from "./domain/canonical-json.js";
 import { parseJsonObject } from "./frame.js";
 import { decodeReceipt, receiptSupersession } from "./protocol/receipt-codec.js";
 import { decodeCachedRequest, decodeStreamDigest, type CachedRequest, type StreamDigest } from "./cli/cache-codec.js";
-import { ensureDurableDirectory, publishNoReplace, replaceDerivedFile as replaceReceiptFile } from "./storage/durable-fs.js";
+import { ensureOwnedDurableDirectory, publishNoReplace, replaceDerivedFile as replaceReceiptFile } from "./storage/durable-fs.js";
 import { openBeneath, withinDirectory } from "./storage/contained-fs.js";
-import { ensureDirectory } from "./storage/directory.js";
 import { lockFileDescriptor } from "./leaf.js";
 
 export type { CachedRequest, StreamDigest } from "./cli/cache-codec.js";
@@ -107,6 +106,13 @@ export class RequestCache {
     private readonly metadataBytes: number = REFERENCE_METADATA_BYTES) {}
 
   private dir(): string { return join(this.homeDir, ".local", "state", "oma", "requests"); }
+  /** P0-8: `.local/state/oma` is the first component oma itself made inside
+   * the caller's home -- `.local` and `.local/state` are the user's shared
+   * XDG names, never repaired -- and a mode-000 cache directory beneath the
+   * boundary is repaired rather than wedged on. */
+  private ensureDir(): void {
+    ensureOwnedDurableDirectory(this.dir(), join(this.homeDir, ".local", "state", "oma"), 0o700);
+  }
   private path(key: RequestKey): string {
     if (!isValidRequestKey(key)) throw new CacheError("INVALID_REQUEST", "invalid request key");
     return join(this.dir(), `${key}.json`);
@@ -153,7 +159,7 @@ export class RequestCache {
     if (frozen.digest) requirePresent(this.readBody(frozen.key, frozen.digest), "frozen body");
     // Fence a competing link even when its original publisher has not fsynced
     // yet -- and, P0V-71, the path to it, which that publisher may not have.
-    try { ensureDurableDirectory(this.dir(), 0o700); }
+    try { this.ensureDir(); }
     catch (error) { throw new CacheError("CACHE_UNAVAILABLE", `replay durability barrier failed: ${messageOf(error)}`); }
     return { kind: "existing", value: frozen };
   }
@@ -180,7 +186,7 @@ export class RequestCache {
     try {
       // P0V-71, P0-3: the first freeze in a home creates `.local/state/oma/requests`;
       // a frozen request is durable only if every name on that path is.
-      ensureDurableDirectory(this.dir(), 0o700);
+      this.ensureDir();
       if (request.digest && body !== undefined) {
         const published = publishNoReplace(this.bodyPath(request.key), body);
         if (published === "existing") {
@@ -214,7 +220,7 @@ export class RequestCache {
     const path = `${this.path(key).replace(/\.json$/, "")}.lock`;
     let fd: number;
     try {
-      ensureDirectory(this.dir(), 0o700);
+      this.ensureDir();
       fd = withinDirectory(path, (parent, name) =>
         openBeneath(parent, name, constants.O_CREAT | constants.O_RDWR | constants.O_NOFOLLOW, 0o600));
     } catch (error) { throw new CacheError("CACHE_UNAVAILABLE", `receipt lock could not be opened: ${messageOf(error)}`); }

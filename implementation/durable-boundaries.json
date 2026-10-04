@@ -834,6 +834,17 @@
       ]
     },
     {
+      "owner": "src/platform/guest/archive.ts#GuestArchives.create",
+      "fact": "the archive staging scratch under the request ledger (the manifest's scratch and the staged tar) is removed when the archive is made -- a dead archive's scratch does not survive it",
+      "tests": [
+        {
+          "file": "test/platform-archive.test.ts",
+          "title": "a stopped society's archive holds its files and their manifest",
+          "injection": "logical"
+        }
+      ]
+    },
+    {
       "owner": "src/platform/guest/provision.ts#writeInstance",
       "fact": "the data disk's instance record, written once at the first boot (MAC-303); P0V-106: published whole, never replaced by another instance's",
       "tests": [
@@ -1036,7 +1047,7 @@
       ]
     },
     {
-      "owner": "src/runtime/locked-files.ts#lockedUserReplace",
+      "owner": "src/runtime/locked-files.ts#lockedReplace",
       "fact": "the engine-owned files (the engine home's settings.json under Pi SettingsManager semantics, retry, presentation, keybindings, open-tui) merged and replaced atomically under the writer's lock by the one locked read-modify-replace; a refused or dead write leaves the previous bytes",
       "tests": [
         {

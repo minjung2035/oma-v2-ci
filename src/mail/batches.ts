@@ -7,7 +7,7 @@ import { StoreError } from "../domain/errors.js";
 import { generateBatchId } from "../ids.js";
 import { mailAudienceDisplayPath, contextRevisionDisplayPath } from "../domain/derived.js";
 import { mailObjectPathAt, mailInboxPathAt, runnerReceiptPathAt } from "../storage/paths.js";
-import { ensureDurableDirectory, fsyncHeldDir } from "../storage/durable-fs.js";
+import { ensureOwnedDurableDirectory, fsyncHeldDir } from "../storage/durable-fs.js";
 import { observeImmutableEntry, readImmutableBytes, type ImmutableObservation } from "../storage/immutable-file.js";
 import { publishBatchView } from "../storage/batch-view.js";
 import { encodeBatchView, type BatchViewLimits } from "../protocol/batch-view.js";
@@ -182,7 +182,7 @@ export class BatchCoordinator {
       try {
         const fresh = newDirectory !== null && present(observeImmutableEntry(newDirectory, basename(from), message.sha256, message.bytes));
         // Persist cur's name in the mailbox parent BEFORE removing the new link.
-        if (fresh) ensureDurableDirectory(dirname(to));
+        if (fresh) ensureOwnedDurableDirectory(dirname(to), this.stateRoot, 0o755);
         const curDirectory = heldParent(to);
         try {
           const current = curDirectory !== null && present(observeImmutableEntry(curDirectory, basename(to), message.sha256, message.bytes));

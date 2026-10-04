@@ -5,8 +5,9 @@
  * of one quiescent point -- without opening the DB. A manifest of every file's
  * sha256 goes in with them. `run/` is left out. */
 import { createHash } from "node:crypto";
-import { createReadStream, lstatSync, mkdtempSync, readdirSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { createReadStream, lstatSync, mkdtempSync, readdirSync, statSync, writeFileSync } from "node:fs";
 import { join, relative } from "node:path";
+import { removeOwnedTree } from "../../storage/directory.js";
 import { StoreError } from "../../domain/errors.js";
 import { isValidSocietyName } from "../../domain/identifiers.js";
 import { runProcess } from "../../process/run.js";
@@ -54,7 +55,7 @@ export class GuestArchives {
           env: { PATH: "/usr/bin:/bin", LC_ALL: "C" }, timeoutMs: 60 * 60_000, stdoutBytes: 64 * 1024, stderrBytes: 64 * 1024 });
         if (made.kind !== "exited" || made.exitCode !== 0) throw new StoreError("INTERNAL_ERROR", "the archive could not be made");
         return { files: Object.keys(manifest).length, bytes: statSync(staged).size, sha256: await sha256(staged) };
-      } finally { rmSync(scratch, { recursive: true, force: true }); }
+      } finally { removeOwnedTree(scratch); }
     });
   }
 }

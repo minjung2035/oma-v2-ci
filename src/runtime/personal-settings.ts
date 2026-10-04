@@ -6,7 +6,7 @@ import { StoreError } from "../domain/errors.js";
 import { withAsyncCleanup, withCleanup } from "../process/cleanup.js";
 import { DEPLOYMENT_LAYOUT } from "../domain/deployment.js";
 import { extensionEntryProblem, observeExtensionAsset, PACKAGE_ENTRY_PREFIX, type ExtensionRoots } from "../config/operations.js";
-import { ensureUserDirectory, readUserFile, replaceUserFile } from "./user-files.js";
+import { ensureOwnedUserDirectory, readUserFile, replaceUserFile } from "./user-files.js";
 import { ProcessLock } from "./process-lock.js";
 import { PACKAGE_INDEX_BYTES, packageStoreRoot, readPackageIndex, reconciledEntries, resourceEntryProblem, type InstalledPackage } from "./pi-packages.js";
 import { PERSONAL_SESSIONS } from "./session-mode.js";
@@ -144,7 +144,8 @@ function selectedAsset(roots: ExtensionRoots, entry: string): ReturnType<typeof 
 export function updatePersonalSettings(location: PersonalSettingsLocation, seed: readonly string[] | (() => readonly string[]) = [],
   toggle?: { readonly entry: string; readonly enabled: boolean }): PersonalSettings {
   const directory = join(location.dataRoot, PERSONAL_SESSIONS);
-  ensureUserDirectory(directory);
+  // P0-8: Personal's session directory is oma's own under the data root.
+  ensureOwnedUserDirectory(directory, location.dataRoot);
   const lock = ProcessLock.tryAcquire(join(directory, "settings.lock"));
   if (lock === null) throw new StoreError("BROKER_UNAVAILABLE", "Personal settings are being edited; try again");
   return withCleanup(() => {
@@ -162,7 +163,8 @@ export function updatePersonalSettings(location: PersonalSettingsLocation, seed:
 export async function updatePersonalSettingsAsync(location: PersonalSettingsLocation,
   seed: () => Promise<readonly string[]>): Promise<PersonalSettings> {
   const directory = join(location.dataRoot, PERSONAL_SESSIONS);
-  ensureUserDirectory(directory);
+  // P0-8: Personal's session directory is oma's own under the data root.
+  ensureOwnedUserDirectory(directory, location.dataRoot);
   const lock = ProcessLock.tryAcquire(join(directory, "settings.lock"));
   if (lock === null) throw new StoreError("BROKER_UNAVAILABLE", "Personal settings are being edited; try again");
   return await withAsyncCleanup(async () => {
