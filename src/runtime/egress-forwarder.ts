@@ -218,3 +218,34 @@ export async function openPrincipalEgress(options: { readonly society: string; r
     close: () => forwarder.close(),
   });
 }
+
+/** Whether an environment demands the egress path: where it names the
+ * service's socket (the guest image sets it by environment.d), the engine
+ * has no provider path of its own -- egress is the only way out, so an open
+ * that fails must fail closed, not degrade. Where it names none (Linux),
+ * the engine resolves its own credential and egress is optional. */
+export function egressRequired(env: Readonly<Record<string, string | undefined>>): boolean {
+  const socket = env[EGRESS_SOCKET_ENV];
+  return socket !== undefined && socket.length > 0;
+}
+
+/** The session's provider path under its own policy. `required` is
+ * `egressRequired` of the caller's environment: an open that fails on a
+ * required path is thrown, never degraded into a session whose engine could
+ * never reach a provider. An optional path's failure is still said, through
+ * `degrade`, beside the session that continues on the engine's own
+ * credential. `hold` is the owner's take; null stays the answer where the
+ * environment named no socket or the hold refused it. */
+export async function openSessionEgress(open: () => Promise<PrincipalEgress | null>, required: boolean,
+  hold: (egress: PrincipalEgress) => Promise<boolean>, degrade: (error: unknown) => void): Promise<PrincipalEgress | null> {
+  try {
+    const opened = await open();
+    return opened !== null && await hold(opened) ? opened : null;
+  } catch (error) {
+    if (required)
+      throw new StoreError("BROKER_UNAVAILABLE",
+        `the provider connection could not be opened: ${error instanceof Error ? error.message : String(error)}`, { cause: error });
+    degrade(error);
+    return null;
+  }
+}

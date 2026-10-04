@@ -408,7 +408,7 @@
     },
     {
       "path": "src/entry/oma-society.ts",
-      "sha256": "53250e2db27e6308c5dc89b1a86abb7b25c3df317e118dba7b3b043b83f6d891"
+      "sha256": "ff2b0a1de1b477062fde66263ea22d0dbf818fa3c8b53a2e8bf44e6bdd6b3534"
     },
     {
       "path": "src/entry/oma.ts",
@@ -1068,7 +1068,7 @@
     },
     {
       "path": "src/runtime/egress-forwarder.ts",
-      "sha256": "723917b4f913b4a3f70fbed522a9c217dfc3875f06986d6684980f47c80c6c66"
+      "sha256": "8ee01223550607f69ca02e39e56f571fa4f7510576439a00587a94f0946212f9"
     },
     {
       "path": "src/runtime/engine-auth.ts",

@@ -56,7 +56,7 @@ import type { ConfigField, ExtensionRow } from "../tui/model.js";
 import type { PromptOutcome } from "../tui/prompt.js";
 import { HOST_LOSS_SIGNALS } from "../runtime/broker-lifetime.js";
 import { runEngineLogin } from "../tui/login.js";
-import { openPrincipalEgress, type PrincipalEgress } from "../runtime/egress-forwarder.js";
+import { egressRequired, openPrincipalEgress, openSessionEgress, type PrincipalEgress } from "../runtime/egress-forwarder.js";
 
 function usage(): never {
   humanStream().write("usage: oma [--society <name>] [--config <path>] [--bind-project]\n       oma login\n" +
@@ -661,15 +661,20 @@ async function main(argv: readonly string[]): Promise<void> {
   // the tenure ends however it ends, and closed at once if the tenure ended
   // while it was opening.
   const egressOwner = tenure;
-  if (egressOwner !== null) try {
-    const egressProfile = principalSessionProfile(configPath, society);
-    const opened = await openPrincipalEgress({ society, runRoot, provider: egressProfile.provider, model: egressProfile.model, inferenceSeconds: egressProfile.inferenceSeconds,
-      modelProfile: settings.config.agentProfiles[settings.config.principalProfile]?.modelProfile ?? settings.config.principalProfile,
-      frameBytes: settings.config.limits.frameBytes, deadlineMs: settings.config.limits.receiptWaitSeconds * 1000, env: process.env });
-    if (opened !== null && await egressOwner.hold(opened)) principalEgress = opened;
-  } catch (error) {
-    notice(`⚠ Could not open the provider connection: ${errorWords(error)}`);
-  }
+  // Where the environment names an egress socket (the macOS guest), it is the
+  // engine's only provider path: an open that fails means the session's engine
+  // can never reach a provider, so it is the session's own failure -- said
+  // once, where the Human reads it -- not a notice beside a session that could
+  // not work. On Linux no egress socket is named, the engine resolves its own
+  // credential, and a path that was optional and still failed is a notice.
+  if (egressOwner !== null)
+    principalEgress = await openSessionEgress(() => {
+      const egressProfile = principalSessionProfile(configPath, society);
+      return openPrincipalEgress({ society, runRoot, provider: egressProfile.provider, model: egressProfile.model, inferenceSeconds: egressProfile.inferenceSeconds,
+        modelProfile: settings.config.agentProfiles[settings.config.principalProfile]?.modelProfile ?? settings.config.principalProfile,
+        frameBytes: settings.config.limits.frameBytes, deadlineMs: settings.config.limits.receiptWaitSeconds * 1000, env: process.env });
+    }, egressRequired(process.env), holding => egressOwner.hold(holding),
+      error => notice(`⚠ Could not open the provider connection: ${errorWords(error)}`));
   // The session environment is principalEnvironment's own value, with the
   // provider path added only where there is one.
   const withEgress = (environment: Record<string, string>): Record<string, string> =>
