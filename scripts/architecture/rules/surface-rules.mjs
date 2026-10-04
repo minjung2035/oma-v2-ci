@@ -750,9 +750,30 @@ function socketCallbackEffectRules(root, findings) {
   }
 }
 
+/** DR27: Pi owns the extension registry it loaded -- OMA wraps presentation
+ * at the render lookup (getRegisteredToolDefinition), so no source may call
+ * a mutating Map method on a `tools` property. A new map built locally is
+ * the same violation spelled differently only if it is handed to Pi's
+ * registry, and no seam exists for that either. */
+function extensionRegistryRules(root, findings) {
+  const mutators = new Set(["set", "delete", "clear"]);
+  for (const file of filesUnder(root, "src")) {
+    eachNode(sourceOf(root, file), node => {
+      if (!ts.isCallExpression(node)) return;
+      const callee = strip(node.expression);
+      if (!ts.isPropertyAccessExpression(callee) || !mutators.has(callee.name.text)) return;
+      const receiver = strip(callee.expression);
+      if (ts.isPropertyAccessExpression(receiver) && receiver.name.text === "tools")
+        findings.push(finding("extension-registry-owner", file,
+          `${receiver.getText()}.tools.${callee.name.text}(...) writes the extension registry; presentation policy wraps the render lookup, it never writes Pi's registry`));
+    });
+  }
+}
+
 export function surfaceRuleFindings(root) {
   const findings = [];
   extensionRules(root, findings);
+  extensionRegistryRules(root, findings);
   engineRules(root, findings);
   viewRules(root, findings);
   surfaceEffectRules(root, findings);

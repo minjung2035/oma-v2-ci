@@ -1,6 +1,16 @@
 /** Untrusted text is cleaned before upstream adds its own terminal styling.
  * These copies belong only to renderers: tool execution, history and receipts
- * keep their original bytes. No recursive walk on provider-controlled depth. */
+ * keep their original bytes. No recursive walk on provider-controlled depth.
+ *
+ * The engine's `getRegisteredToolDefinition` is the one lookup every render
+ * component uses, and it already merges Pi's built-in renderers over what an
+ * extension did not declare: this wraps that resolved definition. A renderer
+ * -- the extension's own or the built-in one Pi merged -- gets sanitized
+ * copies of args and result; execution keeps the original objects and Pi's
+ * registry keeps the definitions it loaded. Only a tool with no renderer at
+ * all meets the fallback here: Pi's own component fallback cannot strip the
+ * invisible-unicode class OMA's policy covers, so it cannot be the answer
+ * for untrusted bytes. */
 import type { ToolDefinition } from "@earendil-works/pi-coding-agent";
 import { Text } from "@earendil-works/pi-tui";
 import { UNSEEN_EXCEPT_LAYOUT } from "../domain/unseen-text.js";
@@ -33,7 +43,9 @@ export function safeToolPresentation(tool: ToolDefinition): ToolDefinition {
     renderResult: (value, options, theme, context) => {
       const clean = displayCopy(value);
       if (result) return result(clean, options, theme, { ...context, args: displayCopy(context.args) });
-      // Custom OMA tools have no renderer; retain Pi's default ten-line preview.
+      // No extension or built-in renderer declared one: Pi's component
+      // fallback cannot reach the UNSEEN class, so the same ten-line preview
+      // runs on the sanitized copy instead.
       const lines = clean.content.filter(block => block.type === "text").map(block => block.text).join("\n").split("\n");
       const visible = options.expanded ? lines : lines.slice(0, 10);
       if (visible.length < lines.length) visible.push(`... (${lines.length - visible.length} more lines, Ctrl+O to expand)`);
