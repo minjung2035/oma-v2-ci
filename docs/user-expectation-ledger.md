@@ -38,7 +38,8 @@
 
 | ID | 사용자가 겪는 것 | 기준 | 결정 | 수정 | 상태 |
 |---|---|---|---|---|---|
-| UX-17 | egress 실패 시 조용히 저하되어 왜 안 되는지 모름 (`oma-society.ts:~667`) | 9 | 선택 경로는 알림과 함께 저하, 필수 경로는 명시적 실패 | fix/fh | 구현 중 |
+| UX-17 | egress 실패 시 조용히 저하되어 왜 안 되는지 모름 (`oma-society.ts:~667`) | 9 | 선택 경로는 알림과 함께 저하, 필수 경로는 명시적 실패 | fix/fh `af3671c` — `egressRequired(env)`+`openSessionEgress()`: OMA_EGRESS_SOCKET 설정 시 BROKER_UNAVAILABLE, 선택 경로는 사용자에게 알림 후 진행 | 수정됨 |
+| UX-20b | HOME 미설정 시 요청 캐시가 `/tmp`로 조용히 떨어짐 — 공유 tmp에 사용자 상태 기록 | 9 | 명시적 오류로 fail-closed | fix/fh `1715ae5` — "oma: HOME is not set; the request cache has no root" (exit 4) | 수정됨 |
 | UX-18 | Principal 도구 안내문에 Principal이 할 수 없는 Worker 동작("open and review merge requests")이 들어있음 (`review-tools.ts:109`) | 11 | 역할별 안내문 분리 | 배정 예정 | 결정 |
 | UX-19 | Worker `<oma_tools>`에 Pi 상용구("PI_* env vars…")가 남아 모델 표면을 더럽힘 | 11 | 제거 | 배정 예정 | 결정 |
 
