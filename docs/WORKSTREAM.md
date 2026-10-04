@@ -196,6 +196,13 @@ name collision/intended surface/hidden 미활성/idempotent reload/provenance/
 ## 9. 진행 로그
 
 - 2026-10-03: 12브랜치 머지+통합 완료 → Phase2 검증 10개(구역별 2회) 완료,
-  실질 결함 ~20건 확정 → fix/A~E 수정 에이전트 5개 실행 중
+  실질 결함 ~20건 확정 → fix/A~E 수정 에이전트 5개 실행
   (oma-fix-a..e, fix/fa..fe). 이후 머지→재검증 5+5 루프.
   대기 중: 위 §6 선행 작업 7개 + §7 bundled extension 스펙 (계획 토론 후 구현).
+- 2026-10-03 (후반): fix/a~e 전부 완료·머지 (feat/macos-hidden-vm @ 445432f,
+  머지 5 + lattice 수정 1fa079f + evidence regen 445432f). 타깃 834 테스트 통과,
+  신규 실패 0. 남은 5 실패 = stale evidence set — V01A, V32A×2, DR27/V32A,
+  R35(fd가 지운 credential-fd 레인 이름을 바인딩 — 검증 라운드에서 정식 분류).
+  진행 중: 테스트 병렬화(fix/tp, 6b1361fb), 스위트 프로파일링(5725cd06),
+  Pi 1.0.1 실제 diff 분석(88af2adb). 다음: tp 머지 → 검증 5+5 루프
+  (최적화 스위트로).
