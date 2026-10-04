@@ -13,7 +13,8 @@ import assert from "node:assert/strict";
 import { chmodSync, linkSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { observedStorageBytes } from "../src/storage/quota.js";
+import { observedStorageBytes, EXCLUDED_USAGE_TREES } from "../src/storage/quota.js";
+import { EXCLUDED_USAGE_TREES as MIRRORED_USAGE_TREES } from "../src/extension/workspace-guard.js";
 import { StoreError } from "../src/domain/errors.js";
 import { readMailbox, unreadCount, type MailboxPaths } from "../src/tui/sources/mail.js";
 import { TuiApp, type AppPorts } from "../src/tui/app.js";
@@ -106,6 +107,28 @@ test("DR13 / INV02: a message file that cannot be read now is not 'no message'; 
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
 
+
+test("UX-10b / FI-4, INV04: regenerated trees under the state root are not charged; a same-named file is", t => {
+  const root = mkdtempSync(join(tmpdir(), "oma-av7-excluded-"));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  assert.deepEqual([...MIRRORED_USAGE_TREES].sort(), [...EXCLUDED_USAGE_TREES].sort(),
+    "the workspace guard's exclusion set is the storage owner's, mirrored");
+  const workspace = join(root, "workspaces", "alice");
+  for (const tree of EXCLUDED_USAGE_TREES) {
+    mkdirSync(join(workspace, tree), { recursive: true });
+    writeFileSync(join(workspace, tree, "bulk.bin"), "x".repeat(64 * 1024));
+  }
+  const authored = join(workspace, "src"); mkdirSync(authored, { recursive: true });
+  const measured = observedStorageBytes(root);
+  // An excluded tree contributes nothing -- not even its own directory inode.
+  writeFileSync(join(workspace, "node_modules", "big.bin"), "x".repeat(128 * 1024));
+  assert.equal(observedStorageBytes(root), measured, "growth inside an excluded tree is not charged");
+  // A file carrying an excluded name is authored content and counts.
+  writeFileSync(join(authored, "node_modules"), "z".repeat(1024));
+  assert.ok(observedStorageBytes(root) > measured, "authored bytes are still observed");
+  // The walked root itself is never excluded, even when its name is on the list.
+  assert.ok(observedStorageBytes(join(workspace, "node_modules")) > 0);
+});
 
 test("DR27/INV10: an empty stored inode has positive cost; a hardlink does not double-charge its data", t => {
   const root = mkdtempSync(join(tmpdir(), "oma-empty-storage-"));

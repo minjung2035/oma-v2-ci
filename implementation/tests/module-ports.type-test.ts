@@ -12,7 +12,7 @@ import type { ViewsModule } from "../../src/views.js";
 import type { ReconcileModule } from "../../src/reconcile.js";
 import type { RunnerModule } from "../../src/runner.js";
 import type { SandboxModule } from "../../src/sandbox.js";
-import type { AsyncUnitsOrchestrationPort, OperationReceiptPort } from "../../src/module-ports.js";
+import type { OperationReceiptPort } from "../../src/module-ports.js";
 
 type Assert<T extends true> = T;
 type Equal<A, B> = [A] extends [B] ? ([B] extends [A] ? true : false) : false;
@@ -62,7 +62,7 @@ function rejectedChanges(store: Store, units: UnitsContract, views: ViewsContrac
   // @ts-expect-error Death-proof incarnation must not be erased.
   units.stop("alice");
   // @ts-expect-error Synchronous effects cannot silently become async orchestration.
-  const asyncUnits: AsyncUnitsOrchestrationPort = units;
+  const asyncUnits: { observe(agent: Actor): Promise<UnitObservation> } = units;
   // @ts-expect-error Observation is synchronous, not a Promise-wrapped result.
   const observation: Promise<UnitObservation> = units.observe("alice");
   // @ts-expect-error Derived publication is synchronous at the current boundary.

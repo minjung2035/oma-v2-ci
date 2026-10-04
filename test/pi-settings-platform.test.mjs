@@ -30,13 +30,16 @@ function fixture(t, platform, transform = value => value) {
   const root = fs.mkdtempSync(join(tmpdir(), 'oma-engine-settings-'));
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
   const metadata = transform(load('src/runtime/user-files.ts', platform));
+  // The locked writer keeps the same seam: its imports of the file metadata
+  // are what the transform wraps, not the module's own internals.
+  const locked = load('src/runtime/locked-files.ts', platform, { './user-files.js': metadata });
   // The settings bridge is part of the platform surface under test: it is
   // transpiled with the same fake platform and the same file metadata so a
   // darwin assertion is not silently satisfied by the host's linux branch.
   const bridge = load('src/pi-compat/settings.ts', platform,
-    { '../runtime/user-files.js': metadata, '@earendil-works/pi-coding-agent': piPackage });
+    { '../runtime/locked-files.js': locked, '@earendil-works/pi-coding-agent': piPackage });
   const api = load('src/runtime/pi-runtime.ts', platform,
-    { './user-files.js': metadata, '../pi-compat/settings.js': bridge });
+    { './locked-files.js': locked, '../pi-compat/settings.js': bridge });
   return { root, api, path: join(root, 'settings.json'), metadata };
 }
 const json = file => JSON.parse(fs.readFileSync(file, 'utf8'));

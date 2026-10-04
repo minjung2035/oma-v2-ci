@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { decodeKeys, type Key } from "../src/tui/keys.js";
+import { decodeKeys } from "./fixtures/keys.js";
+import type { Key } from "../src/tui/keys.js";
 import {
   INITIAL, categoryOf, cursorOf, step,
   type ConfigField, type Effect, type PanelData, type State,

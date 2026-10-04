@@ -6,7 +6,7 @@ import { chmodSync, mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync }
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { JsonlReader, type PiEvent } from "../src/protocol/jsonl.js";
-import { PiRpcClient } from "../src/rpc-client.js";
+import { PiRpcClient } from "../src/runtime/pi-rpc.js";
 import { readBatchView } from "../src/pi-extension.js";
 import { decodeRunLease, assertValidatedRunLease } from "../src/protocol/run-lease.js";
 import { actorSocketPathAt, agentRootPathAt, workspacePathAt, runnerViewPathAt, runnerSessionDirPathAt } from "../src/storage/paths.js";
@@ -164,7 +164,8 @@ test("R28: sandbox recipes bind decoded lease and private actor paths but never 
   assert.deepEqual(plan.inheritedFds, [0, 1, 2, 3]); assert.deepEqual(plan.env, {});
   assert.deepEqual(plan.argv.slice(plan.argv.indexOf("--seccomp"), plan.argv.indexOf("--seccomp") + 2), ["--seccomp", "3"]);
   // DR18 (D-8): the project's committed history, read-only, where a start made it.
-  const mirror = plan.argv.indexOf("--ro-bind-try");
+  // FI-2 toolchain mounts also use --ro-bind-try; the mirror is the last one.
+  const mirror = plan.argv.lastIndexOf("--ro-bind-try");
   assert.deepEqual(plan.argv.slice(mirror, mirror + 3), ["--ro-bind-try", join(stateRoot, "repos/project-mirror.git"), "/git/project-mirror.git"]);
   assert.ok(plan.argv.includes("--unshare-all")); assert.ok(plan.argv.includes("--clearenv"));
   assert.ok(plan.argv.includes(lease.socketHostPath)); assert.equal(plan.argv.includes(runRoot), false);

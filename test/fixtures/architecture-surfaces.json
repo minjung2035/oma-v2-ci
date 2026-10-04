@@ -3,10 +3,6 @@
  "sourceCommit": "6b3583814e1586da1efac06559914ef5556d4ebb",
  "note": "internalPorts retains pre-P17 declarations. ownershipRefinement is the explicit P23 delta: minimal receipt lookup, synchronous query transaction and host-owned batch limits. Dispatch snapshots remain reviewed P16/P18 capabilities plus the explicit WP21 delta: both dependency sets gain the D04 admitResource gate. mail-v1 adds workerArchive to SandboxDirectories.",
  "internalPorts": {
-  "AsyncUnitsOrchestrationPort": {
-   "exported": true,
-   "sha256": "e55687bb3f9df33e0bc0857668bcc25ea48a7c77c8b3dcdedd76cc290481bbdf"
-  },
   "BoundRunnerPort": {
    "exported": true,
    "sha256": "48ab8f4ce002f8de3d18402e410cfdd29fc250cbb91c0c26c46a281fa17a5a2a"

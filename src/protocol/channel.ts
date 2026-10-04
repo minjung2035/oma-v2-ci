@@ -3,7 +3,6 @@
  */
 import { connect, type Socket } from "node:net";
 import { randomUUID } from "node:crypto";
-import { performance } from "node:perf_hooks";
 import type { ProtocolLimits } from "../../implementation/contracts.js";
 import { StoreError } from "../domain/errors.js";
 import { isValidRequestKey } from "../domain/identifiers.js";
@@ -11,26 +10,14 @@ import { snapshotJson } from "../domain/canonical-json.js";
 import { FrameParser, encodeFrame } from "../frame.js";
 import { PUBLIC_METHODS, isPublicMethod } from "./methods.js";
 import { decodeRpcReply, isRpcMethod, type RpcMethod, type RpcReply } from "./response-codec.js";
+import { alarm, type Timer } from "./alarm.js";
 export type { RpcMethod, RpcReply } from "./response-codec.js";
 export type ChannelLimits = Pick<ProtocolLimits, "frameBytes" | "idleStreamSeconds" | "receiptWaitSeconds">;
 export interface ChannelCallOptions { readonly request?: string; readonly streamBytes?: Uint8Array }
 export type SocketDialer = (path: string) => Socket;
-interface Alarm { cancel(): void }
-function alarm(seconds: number, action: () => void): Alarm {
-  const deadline = performance.now() + seconds * 1000;
-  let active = true; let timer: ReturnType<typeof setTimeout> | undefined;
-  const tick = (): void => {
-    if (!active) return;
-    const remaining = deadline - performance.now();
-    if (remaining <= 0) { active = false; action(); return; }
-    timer = setTimeout(tick, Math.max(1, Math.min(0x7fffffff, remaining)));
-  };
-  tick();
-  return { cancel() { active = false; if (timer !== undefined) clearTimeout(timer); timer = undefined; } };
-}
 interface Pending {
   readonly id: string; readonly method: RpcMethod; readonly params: Readonly<Record<string, unknown>>;
-  readonly frame: Buffer; readonly body: Uint8Array | undefined; readonly timer: Alarm;
+  readonly frame: Buffer; readonly body: Uint8Array | undefined; readonly timer: Timer;
   readonly resolve: (reply: RpcReply) => void; readonly reject: (error: unknown) => void;
   metadataSent: boolean; offset: number; waitingDrain: boolean; writeDone: boolean; flushing: boolean;
 }
@@ -38,7 +25,7 @@ interface Generation {
   readonly socket: Socket; readonly parser: FrameParser;
   readonly connected: () => void; readonly connectFailed: (error: unknown) => void;
   state: "connecting" | "ready" | "closed";
-  pending: Pending | null; idle: Alarm | null; inboundBytes: number;
+  pending: Pending | null; idle: Timer | null; inboundBytes: number;
   removeListeners: () => void;
 }
 function record(value: unknown): value is Record<string, unknown> { return value !== null && typeof value === "object" && !Array.isArray(value); }

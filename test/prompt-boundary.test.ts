@@ -115,6 +115,28 @@ test("C21: the active tools' snippets and guidelines are recomposed into OMA's o
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
 
+test("UX-19/C21: Pi's PI_* environment boilerplate never reaches the Worker, real guidelines stay", () => {
+  const dir = mkdtempSync(join(tmpdir(), "oma-pb-"));
+  try {
+    const run = boundary(dir, false, ["bash", "read"]);
+    const opts = options({
+      toolSnippets: { bash: "Run a shell command", read: "Read a file" },
+      toolGuidelines: {
+        // Pi 0.87.1 bash/powershell guideline; meaningless in a cleared environment.
+        bash: ["You can inspect PI_* environment variables for current model and session details.", "Prefer bounded output"],
+        read: ["Prefer read over cat"],
+      },
+    });
+    run(opts);
+    const section = opts.sections["oma_tools"];
+    assert.ok(section, "the guidance section still exists for the real rules");
+    assert.doesNotMatch(section, /PI_\*/, "engine boilerplate is not OMA's voice");
+    assert.match(section, /Prefer bounded output/);
+    assert.match(section, /Prefer read over cat/);
+    assert.match(section, /- bash: Run a shell command/, "the tool's own snippet is not boilerplate");
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
 test("C21: no active tool guidance means no section -- and a stale section is cleared", () => {
   const dir = mkdtempSync(join(tmpdir(), "oma-pb-"));
   try {

@@ -82,6 +82,24 @@ function checkedLimit(maximum: number): number {
   if (!Number.isSafeInteger(maximum) || maximum < 0) throw new RangeError("invalid frame byte limit");
   return Math.min(maximum, 0xffffffff);
 }
+/** B7: the three-way decision every consumer makes on the queue's head. Fewer
+ * than four header bytes or an incomplete body means wait; past the bound is
+ * the one fatal size verdict; otherwise the declared body length is ready to
+ * take. Reading the decision consumes nothing, so probe and drain paths share
+ * it. */
+type FrameHead =
+  | { readonly kind: "pending" }
+  | { readonly kind: "ready"; readonly bodyBytes: number }
+  | { readonly kind: "too-large"; readonly declared: number };
+function frameHead(queue: ByteQueue, bound: number): FrameHead {
+  if (queue.length < 4) return { kind: "pending" };
+  const length = queue.uint32BE();
+  if (length > bound) return { kind: "too-large", declared: length };
+  return queue.length < length + 4 ? { kind: "pending" } : { kind: "ready", bodyBytes: length };
+}
+function tooLarge(declared: number, maxFrameBytes: number): FrameError {
+  return new FrameError("FRAME_TOO_LARGE", `frame length ${declared} exceeds max ${maxFrameBytes}`);
+}
 /** Arbitrary byte splits; no retained body exceeds one declared frame. */
 export class FrameParser {
   private readonly bytes = new ByteQueue();
@@ -95,12 +113,12 @@ export class FrameParser {
     const frames: ParsedFrame[] = [];
     try {
       this.bytes.append(chunk);
-      while (this.bytes.length >= 4) {
-        const length = this.bytes.uint32BE();
-        if (length > this.bound) throw new FrameError("FRAME_TOO_LARGE", `frame length ${length} exceeds max ${this.maxFrameBytes}`);
-        if (this.bytes.length < length + 4) break;
+      while (true) {
+        const head = frameHead(this.bytes, this.bound);
+        if (head.kind === "pending") break;
+        if (head.kind === "too-large") throw tooLarge(head.declared, this.maxFrameBytes);
         this.bytes.take(4); // exact header, including headers split across four chunks
-        frames.push(parseJsonObject(this.bytes.take(length)));
+        frames.push(parseJsonObject(this.bytes.take(head.bodyBytes)));
       }
       this.bytes.ownRemainder(this.bound + 4);
       return frames;
@@ -179,22 +197,20 @@ export class ConnectionDecoder {
       const done = this.stream; this.stream = null;
       return [{ kind: "stream", bytes: done.chunks ? Buffer.concat(done.chunks, done.total) : Buffer.alloc(0) }];
     }
-    if (this.queue.length < 4) return [];
-    const length = this.queue.uint32BE();
-    if (length > this.bound) throw new FrameError("FRAME_TOO_LARGE", `frame length ${length} exceeds max ${this.maxFrameBytes}`);
-    if (this.queue.length < length + 4) return [];
+    const head = frameHead(this.queue, this.bound);
+    if (head.kind === "pending") return [];
+    if (head.kind === "too-large") throw tooLarge(head.declared, this.maxFrameBytes);
     this.queue.take(4); // shift() intentionally returns only one raw chunk
-    return [{ kind: "frame", frame: parseJsonObject(this.queue.take(length)) }];
+    return [{ kind: "frame", frame: parseJsonObject(this.queue.take(head.bodyBytes)) }];
   }
   /** Probe without consuming a possible next frame or accepting a raw mutation. */
   excessStatus(): "clean" | "next" | "pending" | "excess" {
     if (this.failure) return "excess";
     if (this.queue.length === 0) return "clean";
-    if (this.queue.length < 4) return "pending";
-    const length = this.queue.uint32BE();
-    if (length > this.bound) return "excess";
-    if (this.queue.length < length + 4) return "pending";
-    try { parseJsonObject(this.queue.peek(length + 4).subarray(4)); return "next"; } catch { return "excess"; }
+    const head = frameHead(this.queue, this.bound);
+    if (head.kind === "pending") return "pending";
+    if (head.kind === "too-large") return "excess";
+    try { parseJsonObject(this.queue.peek(head.bodyBytes + 4).subarray(4)); return "next"; } catch { return "excess"; }
   }
   finish(): DecoderEvent[] {
     if (this.failure) return this.invalid(this.failure);

@@ -1,10 +1,10 @@
 // Gated Pi RPC transport. This helper neither starts Runner consumption nor proves S-03.
 import type { ChildProcess, ChildProcessWithoutNullStreams } from "node:child_process";
 import type { Readable, Writable } from "node:stream";
-import { performance } from "node:perf_hooks";
 import type { ProtocolLimits } from "../../implementation/contracts.js";
 import { StoreError } from "../domain/errors.js";
 import { JsonlReader } from "../protocol/jsonl.js";
+import { alarm, type Timer } from "../protocol/alarm.js";
 import type { PiInboundEvent, RpcCommand } from "../pi-compat/wire.js";
 export type { PiEvent } from "../protocol/jsonl.js";
 export type { PiInboundEvent } from "../pi-compat/wire.js";
@@ -27,35 +27,8 @@ export type OmaSkippedEvent = { readonly type: typeof SKIPPED_EVENT; readonly by
  * JsonAgentSessionEvent` is what the engine emits; `extension_ui_request` is
  * part of that wire and OMA's boundary rides on it. */
 export type PiObservedEvent = PiInboundEvent | OmaSkippedEvent;
-export interface Timer {
-  cancel(): void;
-}
-/** WP10.02: the one deadline primitive. Measured on the monotonic clock and
- * re-armed in native-sized steps, so a budget longer than the platform timer
- * limit neither fires early nor overflows. Cancel is final. */
-export function alarm(seconds: number, action: () => void, unref = false): Timer {
-  const deadline = performance.now() + seconds * 1000;
-  let active = true;
-  let timer: ReturnType<typeof setTimeout> | undefined;
-  const tick = (): void => {
-    if (!active) return;
-    const remaining = deadline - performance.now();
-    if (remaining <= 0) {
-      active = false;
-      action();
-      return;
-    }
-    timer = setTimeout(tick, Math.max(1, Math.min(0x7fffffff, remaining)));
-    if (unref) timer.unref();
-  };
-  tick();
-  return {
-    cancel() {
-      active = false;
-      if (timer !== undefined) clearTimeout(timer);
-    },
-  };
-}
+// B5: the deadline primitive lives with the framed transport it bounds.
+export { alarm, type Timer } from "../protocol/alarm.js";
 interface PendingWrite {
   callbackDone: boolean;
   drained: boolean;

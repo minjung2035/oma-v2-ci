@@ -15,15 +15,6 @@ export interface SyncUnitsPort {
   confirmDead(agent: Actor, incarnation: number): boolean;
 }
 
-/** A distinct orchestration abstraction, NOT implemented by UnitsModule today. */
-export interface AsyncUnitsOrchestrationPort {
-  ensureResident(agent: Actor, profile?: string, frozen?: ResourceLimits): Promise<void>;
-  start(agent: Actor, explicitRepair: boolean): Promise<void>;
-  stop(agent: Actor, incarnation: number): Promise<UnitObservation>;
-  observe(agent: Actor): Promise<UnitObservation>;
-  confirmDead(agent: Actor, incarnation: number): Promise<boolean>;
-}
-
 export interface DerivedViewsPort {
   refreshWorld(): void;
   publishInbox(batch: PreparedBatch): void;

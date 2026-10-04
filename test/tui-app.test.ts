@@ -1,7 +1,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { TuiApp, type AppPorts } from "../src/tui/app.js";
-import { decodeKeys, KeyDecoder } from "../src/tui/keys.js";
+import { decodeKeys } from "./fixtures/keys.js";
+import { KeyDecoder } from "../src/tui/keys.js";
 import { StoreError } from "../src/domain/errors.js";
 import type { ConfigField, ExtensionRow, MailboxRead } from "../src/tui/model.js";
 import { unknownDashboard } from "./fixtures/dashboard.js";

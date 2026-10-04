@@ -13,8 +13,7 @@
 import { OMA_THEME, OMA_THEME_NAME } from "./oma-theme.js";
 import { closeSync, fstatSync, readFileSync, readSync, statSync } from "node:fs";
 import { openDirectory, openRegularBeneath } from "../storage/contained-fs.js";
-import { ensureUserDirectory, readUserFile, replaceUserFile } from "./user-files.js";
-import { ProcessLock } from "./process-lock.js";
+import { lockedUserReplace } from "./locked-files.js";
 import { prepareEngineInteractiveSettings, settingsObject } from "../pi-compat/settings.js";
 import { fileURLToPath } from "node:url";
 import { dirname, isAbsolute, join, resolve } from "node:path";
@@ -33,20 +32,16 @@ export const PI_PROVIDER_RETRIES = 5;
  * spawn, under the settings writer's lock; unrelated engine settings survive. */
 function prepareEngineFile(agentDir: string, name: string,
   update: (settings: Record<string, unknown>) => Record<string, unknown>): void {
-  ensureUserDirectory(agentDir);
-  const lock = ProcessLock.acquire(join(agentDir, "oma-settings.lock"));
-  withCleanup(() => {
-    const bytes = readUserFile(join(agentDir, name), 1024 * 1024, { singleName: true });
+  lockedUserReplace(agentDir, name, 1024 * 1024, current => {
     // Persisted bytes the engine owns that cannot be interpreted are store
     // corruption, never a raw SyntaxError escaping the taxonomy.
     let parsed: unknown = {};
-    if (bytes !== null)
-      try { parsed = JSON.parse(bytes); }
+    if (current !== undefined)
+      try { parsed = JSON.parse(current); }
       catch (cause) { throw new StoreError("STORE_CORRUPT", `engine file ${name} is not valid JSON`, { cause }); }
     const settings = settingsObject(parsed);
-    const next = JSON.stringify(update(settings), null, 2) + "\n";
-    if (next !== bytes) replaceUserFile(join(agentDir, name), next);
-  }, () => lock.close());
+    return JSON.stringify(update(settings), null, 2) + "\n";
+  });
 }
 
 export function preparePiRetry(agentDir: string): void {

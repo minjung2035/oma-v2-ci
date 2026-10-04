@@ -272,7 +272,8 @@ test("P0V-78 / R6-05, CFG-003: every environment the CLI runs in carries the soc
 });
 
 test("P0V-79 / R6-06: an SS3 report is one key or none, never an Escape and the characters behind it", async () => {
-  const { KeyDecoder, decodeKeys } = await import("../src/tui/keys.js");
+  const { KeyDecoder } = await import("../src/tui/keys.js");
+  const { decodeKeys } = await import("./fixtures/keys.js");
   const ss3 = (text: string) => decodeKeys(Buffer.from(`\u001bO${text}`));
   // Application cursor mode's arrows are the arrows.
   assert.deepEqual(ss3("A"), [{ kind: "up" }]);
