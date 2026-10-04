@@ -25,6 +25,12 @@ import type { ExtensionAPI, NormalizedBuildSystemPromptOptions } from "@earendil
  * section-name grammar (lowercase tag), or the prompt build refuses it. */
 const GUIDANCE_SECTION = "oma_tools";
 
+/** UX-19: Pi's own boilerplate does not hold inside OMA. A Resident's
+ * environment is cleared and carries no PI_* variables, so the engine's
+ * "inspect PI_*" guideline is dropped rather than re-spoken under OMA's
+ * section name. */
+const PI_ENV_BOILERPLATE = /PI_\*/;
+
 function inside(root: string, path: string): boolean {
   const offset = relative(root, path);
   return offset === "" || (offset !== ".." && !offset.startsWith(`..${sep}`) && !isAbsolute(offset));
@@ -55,7 +61,7 @@ function toolGuidance(pi: ExtensionAPI, options: NormalizedBuildSystemPromptOpti
   for (const name of active) {
     for (const rule of options.toolGuidelines[name] ?? []) {
       const trimmed = rule.trim();
-      if (trimmed && !dedupe.has(trimmed)) { dedupe.add(trimmed); rules.push(trimmed); }
+      if (trimmed && !PI_ENV_BOILERPLATE.test(trimmed) && !dedupe.has(trimmed)) { dedupe.add(trimmed); rules.push(trimmed); }
     }
   }
   const parts: string[] = [];

@@ -476,7 +476,7 @@
     },
     {
       "path": "src/extension/prompt-boundary.ts",
-      "sha256": "ebdb91d7c33bd9234ecda69bbbfd8276b8f7930e4e2d595b394015b0e54e6e16"
+      "sha256": "624cbd840c21c20b3703543308c83f287c6c257cac0ea1063eea76212902323c"
     },
     {
       "path": "src/extension/provenance.ts",
