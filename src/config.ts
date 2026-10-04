@@ -259,8 +259,20 @@ export function validateConfig(raw: unknown): ValidatedConfigCandidate {
   // floors are measured by the same constants the emission paths use
   // (mail/review-bounds.ts, domain/limits.ts via mail/batch-policy.ts), so
   // they track the runtime rather than duplicating it.
-  if (!mailBodyBytesFits(limits.mailBodyBytes as number, limits.subjectBytes as number))
-    err(`limits.mailBodyBytes must be at least ${minimumMailBodyBytes(limits.subjectBytes as number)} for the configured limits.subjectBytes; a smaller bound cannot always hold a review thread revision or a completion-notice part`);
+  // An approval request carries the requester's reason plus one bound vote
+  // body per vote the floor requires: the floor model must cover the votes
+  // the policy can bind (the runtime falls back to one vote when a live
+  // policy has no tiered rules -- a request opened under an earlier policy
+  // can still emit one).
+  const approvalVotes = (integration.tiered as { highPeerFloor?: number } | undefined)?.highPeerFloor ?? 1;
+  if (!mailBodyBytesFits(limits.mailBodyBytes as number, limits.subjectBytes as number, approvalVotes)) {
+    const minimum = minimumMailBodyBytes(limits.subjectBytes as number, approvalVotes);
+    if (minimum === null)
+      err(`limits.subjectBytes and integration.tiered.highPeerFloor are too large for any safe integer limits.mailBodyBytes; ` +
+        `an approval request carries the requester's reason plus a bound vote body per required vote`);
+    err(`limits.mailBodyBytes must be at least ${minimum} for the configured limits.subjectBytes and integration.tiered.highPeerFloor; ` +
+      `a smaller bound cannot always hold a review thread revision, a completion-notice part, or an approval request`);
+  }
   if ((limits.batchMaxMessages as number) < MIN_MIXED_BATCH_MESSAGES)
     err(`limits.batchMaxMessages must be at least ${MIN_MIXED_BATCH_MESSAGES}; a single-message batch starves an actor whose direct and public mail are both pending`);
   return validatedSnapshot({

@@ -211,6 +211,31 @@ test("mail-v1: MEDIUM review thread revisions stay in the worker archive and rea
 const messages0Id = (f: ReturnType<typeof fixture>, key: string): string =>
   f.store.getOperation("alice", key)!.id;
 
+test("FJ-5: an approval request over the mail body bound is refused at emission, never frozen", async () => {
+  // 3439 is the audited floor for subjectBytes 512 (the thread revision and
+  // the notice part alone): every thread revision fits it, but an approval
+  // request carrying the reason and two maximal bound votes does not. The
+  // audited emission froze that body anyway; configuration validation now
+  // refuses this bound for highPeerFloor 2, and the emission refuses it too.
+  const mailBodyBytes = 3439;
+  const quarter = Math.floor(mailBodyBytes / 4);
+  const f = fixture({ mailBodyBytes }); try {
+    const candidate = f.candidateWith({ "one.txt": "a" });
+    await f.submit("alice", candidate);
+    await f.open("alice", { tier: "HIGH", candidate, title: "t".repeat(512), reason: "r".repeat(quarter) }, "open-wide");
+    const name = f.requestName("open-wide");
+    await f.vote("bob", name, "approve", "b".repeat(quarter), "v-bob");
+    assert.deepEqual(messages(f, "bob", "v-bob").map(m => m.review?.role), ["thread"],
+      "a maximal thread revision still fits this bound");
+    await assert.rejects(f.vote("carol", name, "approve", "c".repeat(quarter), "v-carol"),
+      (error: unknown) => error instanceof StoreError && error.code === "INTERNAL_ERROR" &&
+        /approval request exceeds the mail body bound/.test(error.message),
+      "the over-bound approval request is a bounds bug, not mail the Principal cannot read");
+    assert.equal(inboxCount(f, "principal"), 0, "no approval_required body was delivered");
+    assert.equal(f.store.getOperation("carol", "v-carol"), null, "the vote was not accepted with an unreadable emission");
+  } finally { f.close(); }
+});
+
 test("mail-v1: a HIGH request asks the Principal only for a still-valid quorum, decides by bound approval", async () => {
   const f = fixture(); try {
     const candidate = f.candidateWith({ "one.txt": "a" });
