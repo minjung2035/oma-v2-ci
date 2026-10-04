@@ -278,3 +278,60 @@ test("AV-15/§4.7 v5: the answered connection a run holds open is its lease; its
   assert.equal(await post(serviceSocket, { placeholderId: issued.placeholderId, ...RUN, modelProfile: "default" }, issued.placeholder!), "closed",
     "the ended run's placeholder opens nothing");
 });
+
+/** Whether anything still accepts on a forwarder's socket. */
+const accepts = (socketPath: string) => new Promise<boolean>(resolve => {
+  const probe = connect(socketPath);
+  probe.once("connect", () => { probe.destroy(); resolve(true); });
+  probe.once("error", () => resolve(false));
+});
+const untilClosed = async (socketPath: string, what: string): Promise<void> => {
+  for (let i = 0; i < 200 && await accepts(socketPath); i++) await new Promise(r => setTimeout(r, 10));
+  assert.equal(await accepts(socketPath), false, what);
+};
+
+test("AV-15/§4.7 v5: a run the host ends ends the guest's forwarder; the lease is how it learns", async t => {
+  // The lease detects both ends of the run: the run's own close reaches the
+  // host (the previous test), and the host's end of the run -- a reboot or a
+  // stop the same way -- reaches the guest here. Without it the forwarder
+  // kept accepting engine connections for a run the host no longer had.
+  const { EgressForwarder, requestEgressPlaceholder } = await import("../src/runtime/egress-forwarder.js");
+  const { host, pool, provider, serviceSocket } = await world(t);
+  await host.fill();
+  await until(() => pool.size === 2, "the pool");
+  const ask = { socket: serviceSocket, frameBytes: PLATFORM_FRAME_BYTES, deadlineMs: 5000 };
+  const issued = await requestEgressPlaceholder(ask, RUN, "anthropic", "current", 5);
+  const dir = mkdtempSync(join(tmpdir(), "oma-forwarder-"));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  const socketPath = join(dir, "inference.sock");
+  const forwarder = await EgressForwarder.listen(socketPath, serviceSocket,
+    { placeholderId: issued.placeholderId, ...RUN, modelProfile: "worker" }, 4, issued);
+  const engine = (key: string) => new Promise<{ status: number; body: string } | "closed">(resolve => {
+    const request = httpRequest({ socketPath, method: "POST", path: "/messages", headers: { "x-api-key": key, "content-type": "application/json" } }, response => {
+      let body = "";
+      response.on("data", chunk => { body += chunk; });
+      response.on("end", () => resolve({ status: response.statusCode ?? 0, body }));
+    });
+    request.on("error", () => resolve("closed"));
+    request.end('{"hello":true}');
+  });
+  assert.deepEqual(await engine(issued.placeholder), { status: 200, body: "ab" });
+  // The host ends the run itself: its relay closes, its placeholder dies, and
+  // the lease it held is how the guest is told -- the forwarder ends with it.
+  await host.release(issued.placeholderId);
+  assert.equal(host.activeRuns, 0);
+  await untilClosed(socketPath, "the forwarder kept accepting for a run the host had ended");
+  await forwarder.close();
+  assert.equal(await engine(issued.placeholder), "closed");
+
+  // A lease that already ended still ends the forwarder it was just given to:
+  // the end is not missed by being early.
+  const issued2 = await requestEgressPlaceholder(ask, RUN, "anthropic", "current", 5);
+  issued2.release();
+  const socketPath2 = join(dir, "inference2.sock");
+  const forwarder2 = await EgressForwarder.listen(socketPath2, serviceSocket,
+    { placeholderId: issued2.placeholderId, ...RUN, modelProfile: "worker" }, 4, issued2);
+  await untilClosed(socketPath2, "a forwarder on a dead lease accepts nothing");
+  await forwarder2.close();
+  await until(() => host.activeRuns === 0, "the ended lease's run is over on the host too");
+});

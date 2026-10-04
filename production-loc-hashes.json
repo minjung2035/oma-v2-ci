@@ -1068,7 +1068,7 @@
     },
     {
       "path": "src/runtime/egress-forwarder.ts",
-      "sha256": "a7241aab79b32f639ac6edbb1db31e11b3b28e83ae0fdc9c4f535f35692b926a"
+      "sha256": "723917b4f913b4a3f70fbed522a9c217dfc3875f06986d6684980f47c80c6c66"
     },
     {
       "path": "src/runtime/engine-auth.ts",
