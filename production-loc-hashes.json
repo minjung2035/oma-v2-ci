@@ -672,7 +672,7 @@
     },
     {
       "path": "src/module-ports.ts",
-      "sha256": "70588d3b1c0083ac3831af758d03111d732c2ba3f595a293f4f6cc8a2c01b806"
+      "sha256": "d4cc077a3f008f9632da41436db0197af9f880ff4b288a6b668fb50118c7fc1e"
     },
     {
       "path": "src/pi-compat/commands.ts",

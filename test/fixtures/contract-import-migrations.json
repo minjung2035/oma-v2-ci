@@ -3,7 +3,7 @@
  "sourceCommit": "dd7905bd8aef1e005a8279b4a9589f3e1a854d9a",
  "note": "sourceBlob/bodySha256 retain the P23 import migration baseline. bodyRefinements pins the later DR18 projectMirror, DR25 packages and DR29 removal of unused candidate/checkResources declarations, and mail-v1 workerArchive; import bindings and aliases still use the baseline. Historical declarations and explicit owner deltas are checked independently in architecture-surfaces.json.",
  "bodyRefinements": {
-  "src/module-ports.ts": "70588d3b1c0083ac3831af758d03111d732c2ba3f595a293f4f6cc8a2c01b806",
+  "src/module-ports.ts": "d4cc077a3f008f9632da41436db0197af9f880ff4b288a6b668fb50118c7fc1e",
   "src/ports/runtime.ts": "3720c91f8203c725460ebebfa507d01b163c9743e6907214e0f542e0dc13fdcd"
  },
  "files": {

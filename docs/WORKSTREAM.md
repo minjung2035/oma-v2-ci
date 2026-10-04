@@ -138,6 +138,9 @@ Pi/OS 기능을 다시 구현해서 생긴 중복·workaround·pre-release 잔�
   - **바로 삭제/정리 (fix/fp 배정)**: B1 `AsyncUnitsOrchestrationPort` dead contract;
     B2 미검증 module-contracts 인터페이스(PiAdapter 선언은 이미 실구현과 어긋남);
     B3 module-ports facade; B4 rpc-client 4줄 re-export; B5 alarm() 이중 구현;
+    (B3 판정 정정: 삭제 대상으로 분류됐으나 architecture-surfaces fixture,
+    contract-import-migrations 기록, kernel-zones compatibility-facade 분류,
+    module-conformance.ts가 facade 경로 자체를 pin — pin이 있으면 유지 원칙에 따라 보존)
     A7 lockedJsonReplace 이중 경로(pi-runtime vs settings); B7 FrameParser/ConnectionDecoder
     공통 파서; decodeKeys → test helper 이동
   - **upstream 요청으로만 해결 가능 (기록, 구현 불가)**: pi-tui에 bounded StdinBuffer,

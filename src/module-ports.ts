@@ -4,6 +4,9 @@
  * Actual implementation compatibility is checked in entry/module-conformance.ts.
  * SyncUnitsPort is not the async lifecycle orchestration port; no effect, epoch,
  * return-type or host-directory trust adaptation is performed by this facade.
+ * This facade stays: the architecture surface fixture, the P2 import-migration
+ * record, the kernel-zone "compatibility-facade" classification and
+ * entry/module-conformance.ts all pin this exact path (B3).
  */
 export type {
   OperationRowsPort, StorePort, OperationReceiptPort, ReceiptProjector,
