@@ -275,6 +275,30 @@ Pi/OS 기능을 다시 구현해서 생긴 중복·workaround·pre-release 잔�
       wedge·`local` 소스 전량 삭제·index entries:[] 전부 재현 → 수정 후 통과.
       회귀: owned-directory.test.ts +3종(pin-open·경계 복구/미침투·경계 검증),
       pi-packages.test.ts +3종(오픈 경로 복구·keep-whole·인덱스 복구/거절).
+  - 다섯 번째 독립 검증 잔여 3건(같은 wedge 클래스 — 인덱스 프리플라이트의
+    중간 조상·publish 자체의 strict-prefix·staged 파일 모드) 수정:
+    (1) writePackageIndex 프리플라이트가 staged 리프의 lstat만 복구하고 오류를
+      부재로 읽음 — `local/@scope` 모드-000이면 `local/@scope/pkg`가
+      `entries: []`로 커밋됐고, `local` 자체가 파일·링크·관측 불가여도 같은
+      []였다. 설정 소스 경로를 컴포넌트 단위로 걸어 각 디렉토리를 owned
+      복구·나열로 통과: 부재(ENOENT)만 부재로 기록하고 비디렉토리 중간·
+      비디렉토리/링크 리프·관측 불가·나열 불가는 BROKER_UNAVAILABLE로 쓰기
+      거절(마지막 정상 인덱스 보존).
+    (2) strict-prefix stray의 두 번째 경로 — `local/foo`가 파일·링크일 때 설정
+      `local/foo/bar`의 publish가 ensure·descend에서 ENOTDIR/containment로
+      죽고, 그 stray를 수집하는 sweep는 성공한 변경 뒤에만 돎 — install이
+      재시도마다 영구 실패. publish가 막힌 정확한 엔트리 하나만 sweep 방식으로
+      수집(Linux는 held parent 경유 unlink + fsync, 링크는 따라가지 않음) 후
+      bounded 단계를 1회 재시도 — 나머지 stray는 여전히 sweep 소관.
+      Mac publishHostStaged는 경로 버전 동등(구조 리뷰만, 이 호스트는 Linux).
+    (3) staged 사본 안 파일(매니페스트·확장)과 리프 단독 staged 파일의
+      owner rw 소실 — 디렉토리 나열 복구가 파일 모드에는 못 닿던 잔여.
+      인덱스 워크가 이미 사본의 모든 엔트리를 방문하므로
+      `repairOwnedEntryMode`(Linux)·`repairHostStagedEntryMode`(Mac)로
+      `(mode&0o7777)|0o600` 복구 — 추가만, 특수 비트 보존, 링크는 커널 거부.
+      그래도 못 읽으면 같은 거절. fail-before(구 dist): 중간 모드-000 →
+      `entries: []` 커밋·publish STORE_CORRUPT 재현 → 수정 후 통과.
+      회귀: pi-packages.test.ts +2종(인덱스 워크·strict-prefix install).
 
 ## 6. 선행 작업 큐 (코드베이스 전체 확장 전 — 사용자 지시)
 

@@ -792,7 +792,7 @@
     },
     {
       "path": "src/platform/host/files.ts",
-      "sha256": "f9a6985d2acab85e310601af555271a2549ce15c2290342126f52a6182764542"
+      "sha256": "893794b5a6c3e3d039009d6506f14e06dd6c83af516782e4bfe1b7863967bdc5"
     },
     {
       "path": "src/platform/host/guest-histories.ts",
@@ -1108,7 +1108,7 @@
     },
     {
       "path": "src/runtime/local-package.ts",
-      "sha256": "fdd3daa1a87ebb79b3728ad1f5312ae26d0ab0566dfe2b8cb984fd4e8c2570a4"
+      "sha256": "477976f50e65dc66d8a2d2111e3e40a33047fdc85fd9e22b504f118474d2ba5c"
     },
     {
       "path": "src/runtime/locked-files.ts",
@@ -1136,7 +1136,7 @@
     },
     {
       "path": "src/runtime/pi-packages.ts",
-      "sha256": "7fec7015c5d95e842751a8641cd2ce233435e0342b278a0a4ef0bf4a6a02906b"
+      "sha256": "b323ea414c78da2a8e2bd66036d09739d2e9033c66a0163054da70abbd4b698f"
     },
     {
       "path": "src/runtime/pi-rpc.ts",
@@ -1240,7 +1240,7 @@
     },
     {
       "path": "src/storage/directory.ts",
-      "sha256": "55f35c35494f8f768c92126e5e8001807bb0823f22fb1feef8caa71478f42d30"
+      "sha256": "4273d2072829b25ad292549be2f88f8a0fb12e9baf9ca72d5c20df847aaf0ef2"
     },
     {
       "path": "src/storage/durable-fs.ts",

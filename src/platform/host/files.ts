@@ -17,7 +17,7 @@
  */
 import { randomUUID } from "node:crypto";
 import { chmodSync, closeSync, constants, fsyncSync, linkSync, lstatSync, mkdirSync, mkdtempSync, openSync, readdirSync, renameSync, rmdirSync, rmSync, unlinkSync, writeFileSync, writeSync,
-  type Dirent } from "node:fs";
+  type Dirent, type Stats } from "node:fs";
 import { dirname, join } from "node:path";
 import { assertHostDirectoryLayout } from "../../runtime/assets.js";
 import { StoreError } from "../../domain/errors.js";
@@ -197,13 +197,45 @@ function removeOwnedPath(path: string): void {
   rmdirSync(path);
 }
 
+/** The first entry the staged `name`'s path needs beneath `dir` -- `dir`
+ * itself first, then each strict-prefix slot -- that is present and not a
+ * directory is the stray the publish's ensure wedged on: a file, a link,
+ * anything a copy cannot sit beneath. It is removed for what it is, as the
+ * sweep does (a link is unlinked, never followed); false when there is no
+ * such stray, so the publish's own failure stands. */
+function collectHostStageStray(dir: string, name: string): boolean {
+  let current = dir;
+  for (const part of ["", ...name.split("/").slice(0, -1)]) {
+    if (part !== "") current = join(current, part);
+    const observed = (() => {
+      try { return lstatSync(current, { throwIfNoEntry: false }); } catch { return undefined; }
+    })();
+    if (observed === undefined) return false;
+    if (!observed.isDirectory()) {
+      try { removeOwnedPath(current); } catch { return false; }
+      return true;
+    }
+  }
+  return false;
+}
+
 /** `made` becomes `<dir>/<name>` whole: a dead copy goes first, the rename
  * lands the new one, the directory is flushed. `ownedFrom` bounds the
  * owner-bits repair the destination's ancestors get -- a mode-000 `local`
- * or scope directory cannot wedge the lstat and mkdir the publish needs. */
+ * or scope directory cannot wedge the lstat and mkdir the publish needs. A
+ * stray non-directory in `local/` or in the staged name's strict-prefix
+ * slots fails the owned ensure (ENOTDIR, or the layout refusal) -- and the
+ * sweep that collects it only runs after a successful change, so the
+ * install wedged on every retry until an unrelated `oma pi` mutation.
+ * The blocking entry is collected here, once, the way the sweep collects
+ * it. */
 export function publishHostStaged(made: string, dir: string, name: string, ownedFrom: string): void {
   const dest = join(dir, name);
-  ensureHostOwnedDirectory(dirname(dest), ownedFrom);
+  try { ensureHostOwnedDirectory(dirname(dest), ownedFrom); }
+  catch (error) {
+    if (!collectHostStageStray(dir, name)) throw error;
+    ensureHostOwnedDirectory(dirname(dest), ownedFrom);
+  }
   removeOwnedPath(dest);
   renameSync(made, dest);
   fsyncDirectory(dirname(dest));
@@ -226,6 +258,21 @@ export function listHostStaged(dir: string): Dirent[] | null {
     if (!observed.isDirectory()) return null;
     if ((observed.mode & 0o700) !== 0o700) chmodSync(dir, (observed.mode & 0o7777) | 0o700);
     return readdirSync(dir, { withFileTypes: true });
+  } catch { return null; }
+}
+
+/** The same repair for one staged-store entry that is only being observed,
+ * by path like the rest of this owner: a directory gets its owner
+ * read/write/search bits, a regular file its owner read/write bits --
+ * added only, never stripped, the special bits kept. Answers the entry's
+ * stat, or null when it cannot be observed or repaired. */
+export function repairHostStagedEntryMode(path: string): Stats | null {
+  try {
+    const observed = lstatSync(path);
+    const need = observed.isDirectory() ? 0o700 : observed.isFile() ? 0o600 : 0;
+    if (need !== 0 && (observed.mode & need) !== need)
+      chmodSync(path, (observed.mode & 0o7777) | need);
+    return observed;
   } catch { return null; }
 }
 

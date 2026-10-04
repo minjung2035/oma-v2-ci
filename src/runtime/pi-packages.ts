@@ -19,8 +19,8 @@ import { StoreError, unobserved } from "../domain/errors.js";
 import { PACKAGE_ENTRY_PREFIX, extensionEntryProblem } from "../config/operations.js";
 import { readUserFile, replaceUserFile } from "./user-files.js";
 import { isUuid } from "../protocol/host-guest.js";
-import { listOwnedDirectory } from "../storage/directory.js";
-import { listHostStaged } from "../platform/host/files.js";
+import { listOwnedDirectory, repairOwnedEntryMode } from "../storage/directory.js";
+import { listHostStaged, repairHostStagedEntryMode } from "../platform/host/files.js";
 
 /** The store's directory name, beside the engine home and every session. */
 export const PACKAGE_STORE = ".packages";
@@ -299,50 +299,109 @@ export async function writePackageIndex(store: string): Promise<readonly Install
   const settingsManager = sdk.SettingsManager.create(store, store, { projectTrusted: false });
   const manager = new sdk.DefaultPackageManager({ cwd: store, agentDir: store, settingsManager });
   // `local/` is oma's own staged tree, so before the engine lists it the
-  // directories a same-UID stray or an interrupted writer left without owner
-  // bits get them back -- the same repair the prune's listing makes, and one
-  // the engine's own readdir never could: without it a mode-000 `local/` is
-  // indexed whole as `entries: []`, a degraded index a role then reconciles
-  // against and loses what the package carried. What still cannot be listed
-  // after the repair is refused rather than written as that empty truth:
-  // the index as last written stays the record a later whole read replaces.
+  // entries a same-UID stray or an interrupted writer left without owner
+  // bits get them back -- the same repair the prune's listing makes, and
+  // one the engine's own readdir never could: without it a mode-000
+  // `local/` is indexed whole as `entries: []`, a degraded index a role
+  // then reconciles against and loses what the package carried. The walk
+  // reaches each configured copy through its intermediate directories --
+  // a mode-000 `local/@scope` above `local/@scope/pkg` is repaired, not
+  // read as absence -- and a file that lost its owner read/write bits is
+  // given them back where the walk already visits it. What a configured
+  // source needs but cannot be observed -- an unlistable directory, a
+  // non-directory where a directory must be, a stage that is no directory
+  // at all, a file that stays unreadable -- is refused rather than written
+  // as that empty truth: the index as last written stays the record a
+  // later whole read replaces. A configured copy that is absent is simply
+  // absent, and is indexed as such.
   const local = join(store, PACKAGE_LOCAL_DIR);
+  const list = process.platform === "darwin" ? listHostStaged : listOwnedDirectory;
+  const repairEntryMode = process.platform === "darwin" ? repairHostStagedEntryMode : repairOwnedEntryMode;
+  const unavailable = (what: string): never => {
+    throw new StoreError("BROKER_UNAVAILABLE", `${what}; the package index was not written`);
+  };
+  /** A name that cannot be observed keeps being present -- absence is only
+   * ever the filesystem's own answer, never an error's. */
+  const present = (path: string): boolean => {
+    try { return lstatSync(path, { throwIfNoEntry: false }) !== undefined; }
+    catch { return true; }
+  };
+  /** A staged file's owner read/write bits back where a stray dropped
+   * them; false when the file is still there but cannot take them -- a
+   * copy it sits in cannot be read whole. */
+  const repairFile = (path: string): boolean => {
+    const observed = (() => {
+      try { return lstatSync(path, { throwIfNoEntry: false }); } catch { return undefined; }
+    })();
+    if (observed === undefined || !observed.isFile() || (observed.mode & 0o600) === 0o600) return true;
+    return repairEntryMode(path) !== null || !present(path);
+  };
+  /** `dir` and every directory beneath it, repaired then listed, and every
+   * regular file's owner bits put back where a stray dropped them; false
+   * where a directory could not be listed or a file could not be repaired
+   * even so. */
+  const repair = (dir: string): boolean => {
+    const entries = list(dir);
+    if (entries === null) return false;
+    let intact = true;
+    for (const entry of entries) {
+      const path = join(dir, entry.name);
+      if (entry.isDirectory()) { if (!repair(path)) intact = false; }
+      else if (entry.isFile() && !repairFile(path)) intact = false;
+    }
+    return intact;
+  };
+  const sources = configuredPackageSources(store);
+  const copies = sources.filter(localPackageSource);
+  // A source spelling `local` itself names the whole stage -- the same
+  // spelling the prune reads as keep-whole -- so its truth is every staged
+  // copy at once and `local` unlistable is as much a refusal as a staged
+  // copy's own path would be.
+  const whole = sources.some(source => (isAbsolute(source) ? source : join(store, source)) === local);
   const localStat = (() => {
-    try { return lstatSync(local, { throwIfNoEntry: false }); } catch { return undefined; }
+    try { return lstatSync(local, { throwIfNoEntry: false }); } catch { return null; }
   })();
   if (localStat?.isDirectory() === true) {
-    const list = process.platform === "darwin" ? listHostStaged : listOwnedDirectory;
-    /** `dir` and every directory beneath it, repaired then listed; false
-     * where a directory could not be listed even so. */
-    const repair = (dir: string): boolean => {
-      const entries = list(dir);
-      if (entries === null) return false;
-      let whole = true;
-      for (const entry of entries)
-        if (entry.isDirectory() && !repair(join(dir, entry.name))) whole = false;
-      return whole;
-    };
-    const sources = configuredPackageSources(store);
-    const copies = sources.filter(localPackageSource);
-    // A source spelling `local` itself names the whole stage -- the same
-    // spelling the prune reads as keep-whole -- so its truth is every staged
-    // copy at once and `local` unlistable is as much a refusal as a staged
-    // copy's own path would be.
-    const whole = sources.some(source => (isAbsolute(source) ? source : join(store, source)) === local);
-    if (list(local) === null) {
+    const top = list(local);
+    if (top === null) {
       if (copies.length > 0 || whole)
-        throw new StoreError("BROKER_UNAVAILABLE", "the local package stage cannot be listed; the package index was not written");
+        unavailable("the local package stage cannot be listed");
     } else {
+      if (whole && !repair(local))
+        unavailable("the local package stage cannot be listed");
       for (const source of copies) {
-        const staged = join(store, source);
-        const observed = (() => {
-          try { return lstatSync(staged, { throwIfNoEntry: false }); } catch { return undefined; }
-        })();
-        if (observed?.isDirectory() === true && !repair(staged))
-          throw new StoreError("BROKER_UNAVAILABLE", `the staged copy of ${source} cannot be listed; the package index was not written`);
+        const components = source.slice(PACKAGE_LOCAL_DIR.length + 1).split("/");
+        let dir = local, entries = top;
+        for (const [index, component] of components.entries()) {
+          const entry = entries.find(item => item.name === component);
+          // A component that is not there means the configured copy is
+          // absent -- indexed as absent, the truth it is.
+          if (entry === undefined) break;
+          const path = join(dir, component);
+          if (index === components.length - 1) {
+            // The leaf is the staged copy itself: a directory is repaired
+            // and listed whole, the one file a lone extension stages as
+            // gets its owner bits back, anything else is no staged copy.
+            if (entry.isDirectory()) {
+              if (!repair(path)) unavailable(`the staged copy of ${source} cannot be listed`);
+            } else if (!entry.isFile() || !repairFile(path))
+              unavailable(`the staged copy of ${source} cannot be read`);
+            break;
+          }
+          // An intermediate that is present and not a directory holds no
+          // staged copy beneath it; the copy is unreachable, not absent.
+          if (!entry.isDirectory()) unavailable(`the staged copy of ${source} cannot be reached`);
+          const next = list(path);
+          if (next === null) unavailable(`the staged copy of ${source} cannot be listed`);
+          else { dir = path; entries = next; }
+        }
       }
     }
-  }
+  } else if (localStat !== undefined && (copies.length > 0 || whole))
+    // `local` that cannot be observed or is not a directory is the same
+    // refusal an unlistable one is -- never the empty truth its configured
+    // sources would be indexed as.
+    unavailable(localStat === null ? "the local package stage cannot be observed" : "the local package stage is not a directory");
   const resolved = await manager.resolve(async () => "skip");
   const base = realpathSync(store);
   const indexed = (resources: readonly { path: string; enabled: boolean; metadata: { source: string; scope: string } }[],

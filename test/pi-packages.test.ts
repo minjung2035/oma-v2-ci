@@ -668,7 +668,113 @@ test("DR25/C20: the index repairs `local/` before the engine lists it -- and ref
   } finally { f.close(); }
 });
 
-test("DR25/C20: a file or link in a strict-prefix slot is collected -- it holds no staged copies and wedges the install", () => {
+test("DR25/C20: the index walk reaches a configured copy through a degraded stage -- repairs what oma owns, refuses what it cannot read", async () => {
+  const f = createCompleteConfigurationFixture();
+  const locked = [join(f.root, "packages", "local", "@scope"), join(f.root, "packages", "local", "sub")];
+  try {
+    const store = join(f.root, "packages");
+    // A scoped staged copy whose intermediate directory lost its owner
+    // bits: lstatSync(local/@scope/pkg) threw EACCES, the preflight read
+    // the throw as "no copy to look at", and the engine's blind resolve
+    // answered `entries: []` -- committed as the package's truth, after
+    // which reconciliation strips the package's entries from every role
+    // that named them. The walk repairs each directory on the way, exactly
+    // as the sweep's own listing does.
+    mkdirSync(join(store, "local", "@scope", "pkg", "extensions"), { recursive: true });
+    writeFileSync(join(store, "local", "@scope", "pkg", "package.json"),
+      JSON.stringify({ name: "@scope/pkg", pi: { extensions: ["./extensions/e.ts"] } }));
+    writeFileSync(join(store, "local", "@scope", "pkg", "extensions", "e.ts"), "export default function () {}\n");
+    writeFileSync(join(store, "settings.json"), JSON.stringify({ packages: ["local/@scope/pkg"] }));
+    chmodSync(join(store, "local", "@scope"), 0o000);
+    const scoped = await writePackageIndex(store);
+    assert.deepEqual(scoped.find(item => item.source === "local/@scope/pkg")?.entries,
+      ["packages:local/@scope/pkg/extensions/e.ts"], "a mode-000 intermediate is repaired, never indexed absent");
+    assert.equal(statSync(join(store, "local", "@scope")).mode & 0o777, 0o700, "the ancestor's owner bits were put back");
+
+    // A configured copy that is absent is simply absent -- the walk never
+    // refuses a name that is not there.
+    writeFileSync(join(store, "settings.json"), JSON.stringify({ packages: ["local/gone"] }));
+    assert.deepEqual((await writePackageIndex(store)).find(item => item.source === "local/gone")?.entries, [],
+      "an absent copy indexes absent, never a refusal");
+    const previous = readFileSync(join(store, PACKAGE_INDEX), "utf8");
+
+    // `local` itself a file: the stage's slot is occupied, nothing beneath
+    // it can be observed, and the old preflight read that as "no stage" --
+    // `entries: []` was committed for every configured local source.
+    // Refused: the index keeps its last truth.
+    rmSync(join(store, "local"), { recursive: true });
+    writeFileSync(join(store, "local"), "stray\n");
+    writeFileSync(join(store, "settings.json"), JSON.stringify({ packages: ["local/foo"] }));
+    await assert.rejects(writePackageIndex(store), { code: "BROKER_UNAVAILABLE" });
+    assert.equal(readFileSync(join(store, PACKAGE_INDEX), "utf8"), previous, "a non-directory stage refuses the write");
+    // A `local` link is the same refusal -- never followed.
+    rmSync(join(store, "local"));
+    symlinkSync(join(store, "elsewhere"), join(store, "local"));
+    await assert.rejects(writePackageIndex(store), { code: "BROKER_UNAVAILABLE" });
+    assert.equal(readFileSync(join(store, PACKAGE_INDEX), "utf8"), previous, "a linked stage refuses the write");
+
+    // An intermediate that is not a directory: `local/foo` can hold no
+    // `bar` beneath it, so the configured copy is not "absent" -- it
+    // cannot be observed at all. The engine's existsSync answers false
+    // for it either way, which is exactly the silent degrade.
+    rmSync(join(store, "local"));
+    mkdirSync(join(store, "local"));
+    writeFileSync(join(store, "local", "foo"), "stray\n");
+    writeFileSync(join(store, "settings.json"), JSON.stringify({ packages: ["local/foo/bar"] }));
+    await assert.rejects(writePackageIndex(store), { code: "BROKER_UNAVAILABLE" });
+    assert.equal(readFileSync(join(store, PACKAGE_INDEX), "utf8"), previous, "a non-directory intermediate refuses the write");
+
+    // The leaf must be the staged copy itself -- a directory, or the one
+    // file a lone extension stages as. A link in its slot is no copy.
+    rmSync(join(store, "local", "foo"));
+    symlinkSync(join(store, "elsewhere"), join(store, "local", "link"));
+    writeFileSync(join(store, "settings.json"), JSON.stringify({ packages: ["local/link"] }));
+    await assert.rejects(writePackageIndex(store), { code: "BROKER_UNAVAILABLE" });
+    assert.equal(readFileSync(join(store, PACKAGE_INDEX), "utf8"), previous, "a link at the copy's own slot refuses the write");
+
+    // File-mode loss inside a staged copy and at the staged-file leaf:
+    // a mode-000 manifest or staged file indexed as absent while it sat
+    // there was the same silent degrade one level down. The walk already
+    // visits every entry of the copy, so the owner read/write bits go
+    // back where a stray dropped them.
+    rmSync(join(store, "local", "link"));
+    mkdirSync(join(store, "local", "pkg"));
+    writeFileSync(join(store, "local", "pkg", "package.json"), JSON.stringify({ name: "pkg", pi: { extensions: ["./e.ts"] } }));
+    writeFileSync(join(store, "local", "pkg", "e.ts"), "export default function () {}\n");
+    writeFileSync(join(store, "local", "single.ts"), "export default function () {}\n");
+    writeFileSync(join(store, "settings.json"), JSON.stringify({ packages: ["local/pkg", "local/single.ts"] }));
+    chmodSync(join(store, "local", "pkg", "package.json"), 0o000);
+    chmodSync(join(store, "local", "single.ts"), 0o000);
+    const healed = await writePackageIndex(store);
+    assert.deepEqual(healed.find(item => item.source === "local/pkg")?.entries, ["packages:local/pkg/e.ts"],
+      "a copy whose manifest lost its owner bits is repaired and indexed whole");
+    assert.deepEqual(healed.find(item => item.source === "local/single.ts")?.entries, ["packages:local/single.ts"],
+      "a staged file that lost its owner bits is repaired and indexed whole");
+    assert.equal(statSync(join(store, "local", "pkg", "package.json")).mode & 0o777, 0o600);
+    assert.equal(statSync(join(store, "local", "single.ts")).mode & 0o777, 0o600);
+
+    // A source spelling `local` itself makes the whole stage one
+    // package's truth: a mode-000 directory beneath it degrades the same
+    // resolve, so the whole stage gets the same repair.
+    rmSync(join(store, "local"), { recursive: true });
+    mkdirSync(join(store, "local", "sub"), { recursive: true });
+    writeFileSync(join(store, "local", "package.json"), JSON.stringify({ name: "stage", pi: { extensions: ["./sub/e.ts"] } }));
+    writeFileSync(join(store, "local", "sub", "e.ts"), "export default function () {}\n");
+    writeFileSync(join(store, "settings.json"), JSON.stringify({ packages: ["local"] }));
+    chmodSync(join(store, "local", "sub"), 0o000);
+    const stage = await writePackageIndex(store);
+    assert.deepEqual(stage.find(item => item.source === "local")?.entries, ["packages:local/sub/e.ts"],
+      "a source naming the stage is repaired at every level too");
+    assert.equal(statSync(join(store, "local", "sub")).mode & 0o777, 0o700);
+  } finally {
+    for (const path of locked) try { chmodSync(path, 0o700); } catch { /* already gone */ }
+    try { chmodSync(join(f.root, "packages", "local", "pkg", "package.json"), 0o600); } catch { /* already gone */ }
+    try { chmodSync(join(f.root, "packages", "local", "single.ts"), 0o600); } catch { /* already gone */ }
+    f.close();
+  }
+});
+
+test("DR25/C20: a file or link in a strict-prefix slot is collected by the install itself -- the wedge never reaches the user", () => {
   const f = createCompleteConfigurationFixture();
   try {
     const store = join(f.root, "packages");
@@ -679,32 +785,45 @@ test("DR25/C20: a file or link in a strict-prefix slot is collected -- it holds 
     writeFileSync(join(source, "package.json"), JSON.stringify({ name: "foo/bar", pi: { extensions: ["./extensions/e.ts"] } }));
     writeFileSync(join(source, "extensions", "e.ts"), "export default function () {}\n");
 
-    // A file where the configured source needs a directory: nothing can be
-    // staged beneath it, and publish's own descend threw ENOTDIR on every
-    // retry while the sweep kept it forever as an unreachable prefix.
+    // A file where the staged name needs a directory: the descend's open
+    // answered containment, and the sweep that collects the stray only
+    // runs after a successful engine change -- so `oma pi install` of
+    // foo/bar wedged on every retry until an unrelated mutation. The
+    // publish now collects the blocking entry exactly as the sweep does,
+    // once, and the install proceeds.
     writeFileSync(join(store, "local", "foo"), "stray\n");
-    // ENOTDIR/ELOOP are reported as the one containment refusal.
-    assert.throws(() => stageLocalPackage(store, source), /containment/, "the stray file wedges the install");
-    pruneLocalStage(store);
-    assert.equal(lstatSync(join(store, "local", "foo"), { throwIfNoEntry: false }), undefined,
-      "a stray file at a strict-prefix slot is collected");
+    writeFileSync(join(store, "local", "other"), "dead sibling\n");
+    assert.equal(stageLocalPackage(store, source), "local/foo/bar", "the stray prefix is collected by the install itself");
+    assert.equal(lstatSync(join(store, "local", "foo"), { throwIfNoEntry: false })?.isDirectory(), true,
+      "the stray file's slot is the scope directory the install needed");
+    assert.ok(existsSync(join(store, "local", "foo", "bar", "package.json")), "the staged copy landed");
+    assert.equal(readFileSync(join(store, "local", "other"), "utf8"), "dead sibling\n",
+      "the collection stays at the blocking prefix -- a stray beside it remains the sweep's");
 
-    // A link in the same slot wedges the descend on ELOOP and is collected
-    // the same way -- unlinked as the entry it is, never followed.
+    // A link in the same slot is collected the same way -- unlinked as the
+    // entry it is, never followed.
     const target = join(store, "real-target");
     mkdirSync(target); writeFileSync(join(target, "keep"), "kept\n");
+    rmSync(join(store, "local", "foo"), { recursive: true });
     symlinkSync(target, join(store, "local", "foo"));
-    assert.throws(() => stageLocalPackage(store, source), /containment/, "the stray link wedges the install");
-    pruneLocalStage(store);
-    assert.equal(lstatSync(join(store, "local", "foo"), { throwIfNoEntry: false }), undefined,
-      "a link at a strict-prefix slot is collected");
+    assert.equal(stageLocalPackage(store, source), "local/foo/bar", "the stray link is collected by the install itself");
+    assert.equal(existsSync(join(store, "local", "foo", "bar", "extensions", "e.ts")), true);
     assert.equal(readFileSync(join(target, "keep"), "utf8"), "kept\n", "the link's target is not the entry's");
 
-    // The slot free, the configured install proceeds.
-    assert.equal(stageLocalPackage(store, source), "local/foo/bar");
-    assert.ok(existsSync(join(store, "local", "foo", "bar", "package.json")), "the staged copy lands under the freed prefix");
+    // `local` itself as a stray file wedges the publish's own open the
+    // same way -- collected, remade, staged into.
+    rmSync(join(store, "local"), { recursive: true });
+    writeFileSync(join(store, "local"), "the whole stage as a file\n");
+    assert.equal(stageLocalPackage(store, source), "local/foo/bar", "a stray `local` file is collected and remade");
+    assert.equal(statSync(join(store, "local")).isDirectory(), true);
+    assert.ok(existsSync(join(store, "local", "foo", "bar", "package.json")));
+
+    // The sweep's own answers are unchanged: the now-configured copy is
+    // kept, dead content beside it is still collected.
+    writeFileSync(join(store, "local", "other"), "dead sibling\n");
     pruneLocalStage(store);
     assert.equal(existsSync(join(store, "local", "foo", "bar", "extensions", "e.ts")), true, "the staged copy is kept once named");
+    assert.equal(existsSync(join(store, "local", "other")), false, "dead content beside it is still the sweep's");
   } finally { f.close(); }
 });
 

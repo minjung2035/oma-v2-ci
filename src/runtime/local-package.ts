@@ -34,7 +34,7 @@
 import { randomUUID } from "node:crypto";
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { closeSync, constants, fsyncSync, lstatSync, mkdirSync, readdirSync, readFileSync,
-  realpathSync, renameSync, statSync, writeFileSync } from "node:fs";
+  realpathSync, renameSync, statSync, unlinkSync, writeFileSync } from "node:fs";
 import { gunzipSync } from "node:zlib";
 import { userInfo } from "node:os";
 import { fileURLToPath } from "node:url";
@@ -98,6 +98,45 @@ function descendBeneath(dir: number, rel: string, create: boolean): number {
   return current;
 }
 
+/** The first entry of `parts` beneath the held `parent` (whose path is
+ * `parentPath`) that is present and not a directory is the stray an open or
+ * a descend wedged on: unlinked as the entry it is, through the held
+ * parent -- a link is never followed, the same answer the stage sweep
+ * gives -- and the parent is flushed. Components verified as directories
+ * are descended through the same owner-bits repair the opens make.
+ * Answers false when there is no such stray -- the failure was something
+ * else, or the collection itself could not complete -- so the caller's
+ * original failure stands. */
+function collectStageStray(parent: number, parentPath: string, parts: readonly string[]): boolean {
+  let held = parent;
+  let path = parentPath;
+  const release = (fd: number): void => { if (fd !== parent) closeSync(fd); };
+  try {
+    for (const part of parts) {
+      path = join(path, part);
+      const observed = (() => {
+        try { return lstatSync(path, { throwIfNoEntry: false }); } catch { return undefined; }
+      })();
+      if (observed === undefined) return false;
+      if (!observed.isDirectory()) {
+        unlinkSync(entryAt(held, part));
+        fsyncSync(held);
+        return true;
+      }
+      const child = openOwnedDirectory(held, part);
+      release(held);
+      held = child;
+    }
+    return false;
+  } catch { return false; }
+  finally { release(held); }
+}
+
+/** The one refusal a stray non-directory leaves in a held open's way:
+ * containment rejects the entry as a link or a non-directory. */
+const isContainment = (error: unknown): boolean =>
+  error instanceof StoreError && error.code === "STORE_CORRUPT";
+
 /** Linux staging: the store root and the scratch directory are held open for
  * the whole operation and every write names an entry through them. */
 function linuxStaging(root: string): StageArea {
@@ -136,10 +175,25 @@ function linuxStaging(root: string): StageArea {
       // `local` is oma's own slot beneath the held store root: made under it
       // when the name is absent and opened through the same owner-bits
       // repair the sweeps make, so a mode-000 `local/` cannot wedge the
-      // publish's open the way ensureUserDirectory's by-path walk did.
-      try { mkdirSync(entryAt(store, PACKAGE_LOCAL_DIR), { mode: 0o700 }); }
-      catch (error) { if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error; }
-      const local = openOwnedDirectory(store, PACKAGE_LOCAL_DIR);
+      // publish's open the way ensureUserDirectory's by-path walk did. A
+      // stray non-directory where `local` or a strict-prefix slot must be a
+      // directory still fails the open and the descend below -- and the
+      // sweep that collects it only runs after a successful change, so the
+      // install wedged on every retry until an unrelated `oma pi`
+      // mutation. The blocking entry is collected here, once, the way the
+      // sweep collects it, and the bounded step is retried once; anything
+      // else stays the publish's own failure.
+      const openLocal = (): number => {
+        try { mkdirSync(entryAt(store, PACKAGE_LOCAL_DIR), { mode: 0o700 }); }
+        catch (error) { if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error; }
+        return openOwnedDirectory(store, PACKAGE_LOCAL_DIR);
+      };
+      let local: number;
+      try { local = openLocal(); }
+      catch (error) {
+        if (!isContainment(error) || !collectStageStray(store, root, [PACKAGE_LOCAL_DIR])) throw error;
+        local = openLocal();
+      }
       // What ensureUserDirectory also gave the name: the durability barrier
       // -- every name on the path flushed, the new `local` included.
       flushDirectoryChain(localPath);
@@ -147,7 +201,13 @@ function linuxStaging(root: string): StageArea {
         const parts = name.split("/");
         const destName = parts.pop()!;
         // `dest` is `local` itself when the name holds no scope.
-        const dest = descendBeneath(local, parts.join("/"), true);
+        const descend = (): number => descendBeneath(local, parts.join("/"), true);
+        let dest: number;
+        try { dest = descend(); }
+        catch (error) {
+          if (!isContainment(error) || !collectStageStray(local, localPath, parts)) throw error;
+          dest = descend();
+        }
         try {
           const destPath = join(localPath, name);
           const observed = lstatSync(destPath, { throwIfNoEntry: false });

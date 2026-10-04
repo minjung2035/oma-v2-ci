@@ -2,7 +2,7 @@
  * These capabilities protect namespace traversal, not same-inode writes or S-06 durability.
  */
 import { constants, chmodSync, closeSync, fstatSync, fsyncSync, lstatSync, mkdirSync, openSync, readdirSync, rmdirSync, unlinkSync,
-  type Dirent } from "node:fs";
+  type Dirent, type Stats } from "node:fs";
 import { basename, dirname, isAbsolute, join, parse } from "node:path";
 import { StoreError, unobserved } from "../domain/errors.js";
 import { withCleanup } from "../process/cleanup.js";
@@ -221,6 +221,28 @@ export function listOwnedDirectory(path: string): Dirent[] | null {
       try {
         repairOwnerBits(pin);
         return readdirSync(`/proc/self/fd/${pin}`, { withFileTypes: true });
+      } finally { closeSync(pin); }
+    });
+  } catch { return null; }
+}
+/** The same repair for one owned entry that is only being observed, not
+ * opened or listed: a directory gets its owner read/write/search bits, a
+ * regular file its owner read/write bits -- added only, never stripped,
+ * the mode's other bits and the special bits kept -- on the one inode the
+ * O_PATH pin names (`/proc/self/fd` addresses it, never a replaced path,
+ * and a link is refused in-kernel rather than followed). Answers the
+ * pinned entry's stat, or null when the entry cannot be observed or
+ * repaired -- absent, or a mode the chmod could not set. */
+export function repairOwnedEntryMode(path: string): Stats | null {
+  try {
+    return withinDirectory(path, (parent, name) => {
+      const pin = openBeneath(parent, name, 0o10000000 /* O_PATH */);
+      try {
+        const observed = fstatSync(pin);
+        const need = observed.isDirectory() ? 0o700 : observed.isFile() ? 0o600 : 0;
+        if (need !== 0 && (observed.mode & need) !== need)
+          chmodSync(`/proc/self/fd/${pin}`, (observed.mode & 0o7777) | need);
+        return observed;
       } finally { closeSync(pin); }
     });
   } catch { return null; }
