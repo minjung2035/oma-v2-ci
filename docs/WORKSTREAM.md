@@ -157,6 +157,29 @@ Pi/OS 기능을 다시 구현해서 생긴 중복·workaround·pre-release 잔�
 - 리밋 중단·재개 대기: fix/fg, fix/fo, fix/fl, fix/fm
 - 대기: fp(중복 제거), UX-10b, UX-18/19, UX-09
 
+#### 병합 트리 잔여 회귀 + 검증 큐 정리 (feat/macos-hidden-vm, ce74138 이후)
+- AV-07 `limits.mailBodyBytes` 바닥 — 계산 자체는 정확하다고 판정(mail/review-bounds.ts의
+  모델 = review.ts의 실제 방출 한계; subjectBytes=64·mailBodyBytes=1024에서 maximal
+  thread revision 실측 1785B, 런타임은 INTERNAL_ERROR를 던질 설정이므로 commit 거절이 맞음).
+  깨진 것은 픽스처뿐 → protocol-method-descriptors·refactoring-cli-regressions의
+  limits를 바닥 위로 상향(4096).
+- 테스트 리그 갱신(구조 이동 따라가기): owned-cleanup(pi-runtime이 locked-files의
+  lockedUserReplace를 쓰므로 실제 프리미티브를 stubbed internals로 주입),
+  recovery-exhaustiveness(preacceptEvent·console을 vm globals에 추가),
+  monotonic-elapsed(오라클을 client/transport.js+protocol/alarm.js로 재지정),
+  egress-observation-deadlines·project-session-directories(alarm 추출을
+  src/protocol/alarm.ts로 이동).
+- egress-forwarder `listen`: `clearSocketName` throw 경로에서 run lease 누수 → release 추가,
+  거절된 listen이 lease를 해제하는 platform-egress 테스트 추가.
+- guest requests ledger: `status(key)`도 `intent.key === key` 바인딩 검사(run()와 동일,
+  REQUEST_KEY_REUSED); 심은 레코드 케이스를 status에도 확장.
+- `snapshot.create`: `update-` 접두어를 사용자 id에서 예약(영구 prune 보호 + 다음
+  업데이트의 롤백 스냅샷 억제 방지) — host-api.ts 파라미터 검증 + service.ts backend 이중.
+- `displayCopy`: null-prototype 사본 → 정상 프로토타입(renderer의
+  hasOwnProperty/toString/보간 TypeError 제거); `__proto__` own-key는 defineProperty로 데이터 유지.
+- FJ-6 테스트 확장: transient lock-acquire errno를 EMFILE + ENFILE + EAGAIN으로.
+- ledger: UX-24(resume 스냅샷 갭, ce74138 수정됨 표기)·UX-25/26/27 행 추가.
+
 ## 6. 선행 작업 큐 (코드베이스 전체 확장 전 — 사용자 지시)
 
 1. **Pi 0.87.1 → 1.0.0 마이그레이션** — upstream diff 조사 후 이식(변경 작음).
