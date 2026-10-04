@@ -14,6 +14,7 @@ import type { ProjectBookmarks } from "./bookmark.js";
 import { MacGit, fileSink, getStream, putStream, sha256File } from "./project.js";
 import { writePackageArchive } from "../package-archive.js";
 import { sealedArchiveSink } from "./archive-crypto.js";
+import { openSnapshotStore, pruneSnapshots, snapshotRunning, snapshotStopped, type SnapshotStore } from "./snapshot.js";
 import { collectTemporaries } from "./files.js";
 import { ProcessLock } from "../../runtime/process-lock.js";
 import { withAsyncCleanup } from "../../process/cleanup.js";
@@ -54,10 +55,18 @@ export interface HostServiceOptions {
   readonly storageFloorBytes?: number;
   /** DR25: the package store `oma pi` installs into on the Mac. */
   readonly packagesDir?: string;
+  /** §8.4: where the state disk's snapshots are kept -- the update's own and
+   * the ones the Human asks for. Needs `statePath`; without it there is no
+   * disk to snapshot and no store is opened. */
+  readonly snapshotsDir?: string;
+  /** The clone itself, when it is not APFS's (snapshot.ts's default). */
+  readonly snapshotClone?: SnapshotStore["clone"];
   readonly bookmarks?: ProjectBookmarks;
 }
 
 const GIB = 1024 ** 3;
+/** §8.4/MAC-661: how many of the newest snapshots a prune keeps. */
+const SNAPSHOTS_KEPT = 3;
 /** MAC-660: what the Mac keeps free -- max(5 GiB, 10% of the state disk). */
 function storageFloor(options: HostServiceOptions): number {
   if (options.storageFloorBytes !== undefined) return options.storageFloorBytes;
@@ -188,6 +197,57 @@ export class HostService {
     collectTemporaries(options.archivesDir);
     collectTemporaries(dirname(options.recordPath));
     for (const name of readdirSync(transfer)) rmSync(join(transfer, name), { force: true, recursive: true });
+    // §8.4: the snapshot store, when this OMA keeps one -- the update's own
+    // snapshots and the ones the Human asks for. A dead service's unfinished
+    // clone is a temporary its start removes (P0V-103, F-08).
+    let snapshots: SnapshotStore | null = null;
+    if (options.snapshotsDir !== undefined && options.statePath !== undefined) {
+      mkdirSync(options.snapshotsDir, { recursive: true, mode: 0o700 });
+      openSnapshotStore(options.snapshotsDir);
+      snapshots = { dir: options.snapshotsDir, statePath: options.statePath,
+        ...(options.snapshotClone === undefined ? {} : { clone: options.snapshotClone }) };
+    }
+    // A backup's own condition -- the disk had no room for the clone, a copy
+    // whose consistency is not proven -- is the honest unavailable, not an
+    // internal error (MAC-622, P0-5).
+    const backup = async <T>(make: () => Promise<T>): Promise<T> => {
+      try { return await make(); }
+      catch (error) {
+        if (error instanceof StoreError) throw error;
+        throw new StoreError("BROKER_UNAVAILABLE",
+          `the backup could not be made: ${error instanceof Error ? error.message : String(error)}`);
+      }
+    };
+    /** §8.4, MAC-661: space before count -- the newest SNAPSHOTS_KEPT stay,
+     * plus the running image's own pre-update snapshot, whose protection is
+     * never lifted while this image runs (the spec's three-boots-or-seven-days
+     * window is its minimum, not its bound). An older update's snapshot
+     * decays by age like any other. */
+    const updateProtection = (): ReadonlySet<string> => {
+      if (snapshots === null) return new Set();
+      const marker = `-update-${options.identity.expectImage}.img`;
+      return new Set(readdirSync(snapshots.dir).filter(name => name.endsWith(marker)));
+    };
+    const prune = (): void => { if (snapshots !== null) pruneSnapshots(snapshots.dir, SNAPSHOTS_KEPT, updateProtection()); };
+    // §8.4: the update's own snapshot -- the state disk as the image that
+    // last booted left it -- is kept before this image's first boot can write
+    // it. The record names what last booted, `expectImage` what is about to:
+    // equal, or no image ever booted, is no update. The marker name means the
+    // snapshot was already made -- re-making it now would preserve a disk
+    // this image may already have touched. A snapshot that cannot be made
+    // refuses the boot: the update does not run its rollback point down.
+    let updateBackup: Promise<void> | null = null;
+    const updateSnapshot = (): Promise<void> => {
+      if (snapshots === null || lifecycle.state !== "stopped") return Promise.resolve();
+      const current = readHostRecord(options.recordPath);
+      if (current === null || current.image.current === null || current.image.current === options.identity.expectImage)
+        return Promise.resolve();
+      if (readdirSync(snapshots.dir).some(name => name.endsWith(`-update-${options.identity.expectImage}.img`)))
+        return Promise.resolve();
+      updateBackup ??= backup(() => snapshotStopped(snapshots, `update-${options.identity.expectImage}`))
+        .then(() => { prune(); }).finally(() => { updateBackup = null; });
+      return updateBackup;
+    };
     const floor = storageFloor(options);
     const token = randomBytes(32).toString("hex");
     const tokenPath = join(options.runDir, "token");
@@ -198,7 +258,7 @@ export class HostService {
       frameBytes: PLATFORM_FRAME_BYTES, helloDeadlineMs: 10_000, requestTimeoutMs: 120_000,
       backend: {
         state: () => lifecycle.state,
-        start: () => lifecycle.start(),
+        start: async () => { await updateSnapshot(); await lifecycle.start(); },
         stop: stopRecorded,
         society: () => link.json("society"),
         terminal: (society, takeover) => link.bytes("terminal", { society, ...(takeover ? { takeover: true as const } : {}) }),
@@ -324,6 +384,22 @@ export class HostService {
             }, PLATFORM_FRAME_BYTES, "archive");
           }
           return { ...made, path: target };
+        },
+        snapshot: async ({ id }) => {
+          if (snapshots === null) throw new StoreError("UNSUPPORTED_PROFILE", "this OMA keeps no snapshots");
+          const named = id ?? "manual";
+          // REC-005: only a quiescent point -- a stopped engine's disk as it
+          // is, or a running one's with every society stopped and the file
+          // system frozen for the clone. An engine between the two is not a
+          // point a backup can be made at.
+          const state = lifecycle.state;
+          if (state !== "stopped" && state !== "ready")
+            throw new StoreError("BROKER_UNAVAILABLE", "the engine is not at a point a backup can be made");
+          const made = state === "stopped"
+            ? { path: await backup(() => snapshotStopped(snapshots, named)), stopped: [] as string[] }
+            : await backup(() => snapshotRunning(snapshots, link, named));
+          prune();
+          return { path: made.path, stopped: made.stopped };
         },
       },
     });

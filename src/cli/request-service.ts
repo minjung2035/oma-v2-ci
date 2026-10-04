@@ -9,12 +9,20 @@ import { fail, finishReceipt, finishUnrecordedReceipt } from "./exit.js";
 export { randKey };
 export type { FreshBuild };
 
-const HOME = process.env.HOME ?? "/tmp";
+/** The caller's home is the request cache's root; a process with no HOME has
+ * none, and a shared /tmp guessed from a missing environment is not one --
+ * that is said out loud rather than silently used. */
+const cacheHome = (): string => {
+  const home = process.env.HOME;
+  if (home === undefined || home.length === 0)
+    throw new ClientError("HOME is not set; the request cache has no root", 4);
+  return home;
+};
 // P0V-112: made at first use, with the frame this CLI speaks -- a request's
 // metadata retains a two-frame cache budget. Larger recovered receipts are
 // printed without caching; the original request freeze is kept.
 let made: RequestService | undefined;
-const service = () => made ??= new RequestService(runtime().cache(HOME, 2 * cliFrameBytes()), call);
+const service = () => made ??= new RequestService(runtime().cache(cacheHome(), 2 * cliFrameBytes()), call);
 
 export interface RequestOptions {
   /** Recovery text names this key instead of the frozen request's own. */

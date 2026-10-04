@@ -312,3 +312,19 @@ test("mail-v1/E27: the tool path's submit notice names the engine's actor, like 
     rmSync(root, { recursive: true, force: true });
   }
 });
+
+test("a client whose environment has no HOME names it; no request cache is made under /tmp", async () => {
+  // The cache root is the caller's own home -- the in-guest caller's agent
+  // home. An environment that carries none has no root at all; the request
+  // names that instead of silently placing receipts in shared space.
+  const root = scratch();
+  let cached = 0;
+  installRuntime({ ...CLIENT_RUNTIME, cache: (home, budget) => { cached += 1; return CLIENT_RUNTIME.cache(home, budget); } });
+  try {
+    const client = new Client({ cwd: root, env: {} });
+    await assert.rejects(client.effect("route.follow", "k",
+      async () => ({ method: "route.follow", params: { topic: "work" } }), () => ({ topic: "work" })),
+      (error: unknown) => error instanceof ClientError && error.exitCode === 4 && /HOME is not set/.test(error.message));
+    assert.equal(cached, 0, "the cache port was never asked for a root");
+  } finally { installClientRuntime(); rmSync(root, { recursive: true, force: true }); }
+});

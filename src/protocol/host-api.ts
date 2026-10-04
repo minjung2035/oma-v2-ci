@@ -4,7 +4,7 @@
  */
 /** Raised whenever a Host API message's shape or meaning changes. A UI
  * speaks its own and the one before it; `omahostd` speaks its own (MAC-251). */
-export const HOST_API_VERSION = 3;
+export const HOST_API_VERSION = 4;
 
 export const HOST_API_METHODS = Object.freeze([
   "engine.status", "engine.start", "engine.stop",
@@ -15,6 +15,8 @@ export const HOST_API_METHODS = Object.freeze([
   "session.list", "session.inspect", "session.resume",
   // DR25: the packages `oma pi` installed on the Mac, carried to the engine.
   "packages.sync",
+  // §8.4: the state disk's snapshot the Human asks for.
+  "snapshot.create",
 ] as const);
 export type HostApiMethod = (typeof HOST_API_METHODS)[number];
 

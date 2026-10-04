@@ -14,7 +14,19 @@ import { parseProperties, parseUnitObservation, parseCgroupPopulation, parseCgro
 export { unitName, renderUnit };
 export type { RenderValues, UnitCommandOutcome };
 export const UNIT_TPL_DIR = fileURLToPath(new URL("../../implementation/systemd", import.meta.url));
-export const INSTALL_DIR = join(process.env.XDG_CONFIG_HOME ?? join(process.env.HOME ?? "/tmp", ".config"), "systemd", "user");
+/** Where the user manager takes its units from: XDG_CONFIG_HOME, else HOME's
+ * .config -- resolved where it is asked for, since a constructor may run in
+ * an environment that is not the module loader's. Neither set means this
+ * process has no config root, and a shared /tmp guessed for one is said out
+ * loud, not used. */
+export function unitsInstallDir(env: NodeJS.ProcessEnv = process.env): string {
+  const config = env.XDG_CONFIG_HOME;
+  if (config !== undefined && config.length > 0) return join(config, "systemd", "user");
+  const home = env.HOME;
+  if (home === undefined || home.length === 0)
+    throw new StoreError("UNSUPPORTED_PROFILE", "neither XDG_CONFIG_HOME nor HOME is set; the user unit directory cannot be resolved");
+  return join(home, ".config", "systemd", "user");
+}
 /** The line of a unit that names the society, the kind and the agent it was
  * rendered for (P0V-26), and the one that names the state tree (P0V-59). */
 const DESCRIPTION = "Description=";
@@ -78,7 +90,7 @@ export class UnitsModule {
   constructor(
     private readonly society: string,
     private readonly values: RenderValues,
-    private readonly installDir: string = INSTALL_DIR,
+    private readonly installDir: string = unitsInstallDir(),
     private readonly profiles: Readonly<Record<string, ResourceLimits>> = {},
     incarnationOf: IncarnationReader | null = null,
   ) { this.incarnationOf = incarnationOf; }

@@ -93,16 +93,23 @@ Pi/OS 기능을 다시 구현해서 생긴 중복·workaround·pre-release 잔�
   (TSP-002, REC-002, protocol v5, I49, OMA_TOOL_SURFACE 문구);
   verify-lane measurement-hashes 미바인딩; 에러 포맷/taxonomy
 
-### 보류→구현 전환 (사용자 지시: 전부 구현 — fix/fg, fix/fh 진행 중)
-- `runner.observe` write-only sink — consumer 배선 또는 제거 (fix/fg)
-- `OMA_TOOL_SURFACE` dormant producer + `SessionPaths.toolSurface` 무생산 채널 — 연결 또는 제거 (fix/fg)
-- `extension.tools.set` mutation + renderResult 재구현 (#11/#12 잔여) (fix/fg)
-- `assertAdmission`이 replay보다 먼저 (drain/corrupt) — 순서 구현 또는 pin (fix/fg)
-- egress 실패 시 조용한 저하(oma-society.ts:667) — 정직한 표면화 (fix/fh)
-- macOS principal-authority substrate (/proc only) — seam 구현+macOS는 NOT_RUN (fix/fh)
-- `snapshot.ts` staged dead code (NB-27) — 완성 또는 제거 (fix/fh)
-- AV-15/AV-17 미수정 detector — 구현 (fix/fh)
-- `HOME ?? "/tmp"` cache-root fallback — fail-closed (fix/fh)
+### 보류→구현 전환 (사용자 지시: 전부 구현)
+**해결됨 (fix/fh):**
+- egress 실패 시 조용한 저하 — `OMA_EGRESS_SOCKET`이 있으면(필수) `BROKER_UNAVAILABLE`로
+  닫히고, 선택 경로만 인간이 보는 notice와 함께 degrade (`af3671c`)
+- macOS principal-authority substrate — `ProcessProbe` seam: Linux는 /proc, 그 외는
+  `unavailable`(절대 `exited` 아님, INV02). macOS lane은 명시적 `NOT_RUN`
+- `snapshot.ts` staged code — HostService wiring: update snapshot(실패 시 부팅 거부),
+  `snapshot.create` Host API v4, prune 최신 3개+실행 image 보호 (`63f94f1`)
+- AV-15/AV-17 — lease 종료가 guest forwarder를 닫고(`f72a7d9`), durable intent/outcome
+  record는 shape 검증 후에만 읽힘(`e095d1d`)
+- `HOME ?? "/tmp"` — 제거: HOME 없는 process는 그 사실을 말하고 추측하지 않음(`1715ae5`)
+
+**진행 중 (fix/fg, 리밋으로 중단·재개 예정):**
+- `runner.observe` write-only sink — consumer 배선 또는 제거
+- `OMA_TOOL_SURFACE` dormant producer + `SessionPaths.toolSurface` 무생산 채널 — 연결 또는 제거
+- `extension.tools.set` mutation + renderResult 재구현 (#11/#12 잔여)
+- `assertAdmission`이 replay보다 먼저 (drain/corrupt) — 순서 구현 또는 pin
 
 ### 검증 라운드 1 발견 → fix 라운드 2 대상 (fa·tp+pg2 결과 대기 중)
 - fc 구역: preaccept가 정상 revision `<oid>` 디렉토리를 underivable로 매번 보고(MEDIUM);
@@ -141,6 +148,11 @@ Pi/OS 기능을 다시 구현해서 생긴 중복·workaround·pre-release 잔�
     KeyDecoder의 바이트 bound·UTF-8 정책(paste atomicity는 Pi에 없음),
     pi-compat mirror층, contained-* 재사용-격리 구조, panel/screen 분리
   - 사용자-facing 명령 표면은 이미 타이트 — `oma pi`·`OMA_PI_COMMAND`는 정당한 제품/운영 표면
+
+### fix 라운드 2 진행 상황
+- 완료: fix/fi(Worker 개발환경), fix/fh(보류 5건), fix/fj(fc 발견 9건)
+- 리밋 중단·재개 대기: fix/fg, fix/fo, fix/fl, fix/fm
+- 대기: fk(readableRoots), fp(중복 제거), UX-10b, UX-18/19, UX-09
 
 ## 6. 선행 작업 큐 (코드베이스 전체 확장 전 — 사용자 지시)
 

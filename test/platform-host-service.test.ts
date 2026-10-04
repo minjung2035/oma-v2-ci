@@ -3,15 +3,15 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { connect, type Server } from "node:net";
-import { mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { spawnSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { basename, join } from "node:path";
 import { encodeFrame } from "../src/frame.js";
 import { readLeadingFrame, type FramedPeer } from "../src/platform/rpc.js";
 import type { SessionLauncher } from "../src/platform/guest/host.js";
-import { archiveKey, HostService } from "../src/platform/host/service.js";
+import { archiveKey, HostService, type HostServiceOptions } from "../src/platform/host/service.js";
 import { ProcessLock } from "../src/runtime/process-lock.js";
 import { StoreError } from "../src/domain/errors.js";
 import { newHostRecord, readHostRecord, writeHostRecord } from "../src/platform/host/record.js";
@@ -30,7 +30,7 @@ function memoryKeychain() {
 }
 
 async function world(t: import("node:test").TestContext, before?: (dir: string, runDir: string) => void,
-  mutate?: (peer: FramedPeer) => void, git?: () => string) {
+  mutate?: (peer: FramedPeer) => void, git?: () => string, extra?: (dir: string) => Partial<HostServiceOptions>) {
   const dir = mkdtempSync(join(tmpdir(), "oma-hostsvc-"));
   const runDir = join(dir, "run"); mkdirSync(runDir);
   before?.(dir, runDir);
@@ -54,6 +54,7 @@ async function world(t: import("node:test").TestContext, before?: (dir: string, 
     // Controlled bookmark boundary; this is not native NSURL evidence.
     bookmarks: { create: async path => Buffer.from(path).toString("base64"),
       resolve: async bookmark => Buffer.from(bookmark, "base64").toString("utf8") },
+    ...(extra === undefined ? {} : extra(dir)),
   });
   let shut = false;
   t.after(async () => {
@@ -245,6 +246,83 @@ test("NB-22/P0-2: a guest answer that is not a head is an observation failure, n
   assert.equal((exported.error as { code: string }).code, "BROKER_UNAVAILABLE");
   assert.equal(readHostRecord(good.recordPath)!.projects[0]!.lastExport, undefined, "a malformed fetched head was not recorded");
   assert.notEqual(readHostRecord(good.recordPath)!.projects[0]!.lastImport, undefined, "the earlier good import stands");
+});
+
+test("§8.4/NB-27: snapshots are part of the service -- the update's own before a new image's first boot, snapshot.create through the Host API at each quiescent point, and pruning that keeps the newest plus the unsettled update's", async t => {
+  const { call, dir, recordPath, driver } = await world(t,
+    d => { writeFileSync(join(d, "state.img"), "the state disk"); },
+    undefined, undefined,
+    d => ({ snapshotsDir: join(d, "snapshots"), statePath: join(d, "state.img"),
+      snapshotClone: (from, to) => { copyFileSync(from, to); } }));
+  const snaps = join(dir, "snapshots");
+
+  // A stopped engine's disk is quiescent as it is; asking for a snapshot must
+  // not boot it.
+  const first = await call("snapshot.create", { id: "first" });
+  assert.equal(first.ok, true, JSON.stringify(first));
+  assert.equal((first.result as { path: string }).path, join(snaps, "00000000-first.img"));
+  assert.deepEqual((first.result as { stopped: string[] }).stopped, []);
+  assert.equal(driver.starts, 0, "a snapshot is an observation, not a boot");
+
+  // The update's own: the record names the image that last wrote this disk;
+  // a new image's first start keeps that disk before the boot can write it.
+  writeHostRecord(recordPath, { ...readHostRecord(recordPath)!, image: { current: "2026.08.0", previous: null } });
+  assert.deepEqual((await call("engine.start")).result, { state: "ready" });
+  assert.equal(readFileSync(join(snaps, "00000001-update-2026.09.1.img"), "utf8"), "the state disk",
+    "the pre-update disk was kept before the new image's first boot");
+
+  // A running engine: every society stopped, the file system frozen for the
+  // clone; the answer says which societies the UI should reopen.
+  const running = await call("snapshot.create", { id: "while-running" });
+  assert.equal(running.ok, true, JSON.stringify(running));
+  assert.match(basename((running.result as { path: string }).path), /^00000002-while-running\.img$/);
+  assert.deepEqual((running.result as { stopped: string[] }).stopped, ["demo"]);
+  // Society channel recorded; the fs.freeze/fs.thaw exchange rides the
+  // control channel -- the published clone is itself the proof a thaw found
+  // the freeze in place (MAC-622).
+  for (const step of ["maintenance.begin", "society.list", "society.close", "maintenance.end"])
+    assert.ok(driver.calls.includes(step), `the running clone went through ${step}`);
+
+  // MAC-661: past the keep count the oldest go first -- but not the snapshot
+  // of the update the record has not settled.
+  await call("snapshot.create", { id: "p1" });
+  await call("snapshot.create", { id: "p2" });
+  assert.deepEqual(readdirSync(snaps).sort(), [
+    "00000001-update-2026.09.1.img", "00000002-while-running.img", "00000003-p1.img", "00000004-p2.img"],
+    "the newest three plus the unsettled update's own stay; 00000000-first went first");
+});
+
+test("§8.4/REC-005: an update whose rollback snapshot cannot be made does not get its first boot", async t => {
+  const { call, dir, recordPath, driver } = await world(t,
+    d => { writeFileSync(join(d, "state.img"), "the state disk"); },
+    undefined, undefined,
+    d => ({ snapshotsDir: join(d, "snapshots"), statePath: join(d, "state.img"),
+      snapshotClone: () => { throw new Error("the disk had no room for the clone"); } }));
+  writeHostRecord(recordPath, { ...readHostRecord(recordPath)!, image: { current: "2026.08.0", previous: null } });
+  const started = await call("engine.start");
+  assert.equal(started.ok, false);
+  assert.equal((started.error as { code: string }).code, "BROKER_UNAVAILABLE");
+  assert.equal(driver.starts, 0, "the new image did not boot without its rollback point");
+  assert.deepEqual(readdirSync(join(dir, "snapshots")), [], "no half-made snapshot left behind");
+  // And once the update's marker exists, a later start never re-makes it over
+  // a disk this image may already have touched.
+});
+
+test("snapshot.create takes only an id, no replay key, and is unavailable where this OMA keeps no snapshots", async t => {
+  const { call } = await world(t, d => { writeFileSync(join(d, "state.img"), "x"); }, undefined, undefined,
+    d => ({ snapshotsDir: join(d, "snapshots"), statePath: join(d, "state.img") }));
+  for (const bad of [{ id: "../escape" }, { id: 7 }, { id: "a", extra: true }, { unexpected: 1 }]) {
+    const answer = await call("snapshot.create", bad);
+    assert.equal(answer.ok, false);
+    assert.equal((answer.error as { code: string }).code, "INVALID_REQUEST", JSON.stringify(bad));
+  }
+  const keyed = await call("snapshot.create", {}, "a-key");
+  assert.equal((keyed.error as { code: string }).code, "INVALID_REQUEST");
+
+  const bare = await world(t);
+  const answer = await bare.call("snapshot.create", {});
+  assert.equal(answer.ok, false);
+  assert.equal((answer.error as { code: string }).code, "UNSUPPORTED_PROFILE");
 });
 
 test("AV-22/P0-2: two archive-key asks on an empty store make one key, not two winners", async t => {

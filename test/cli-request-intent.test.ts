@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, readFileSync, rmSync, writeFileSync, unlinkSync } from "node:fs";
+import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync, unlinkSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
@@ -176,4 +176,29 @@ test("P0V-38 / N15: a missing frozen body does not stop the lookup, and without 
   assert.match(stderr, /body absent/);
   assert.doesNotMatch(stderr, /not a directory/);
   assert.deepEqual(methods, ["operation.get"], "the request was sent again without its frozen body");
+});
+
+test("a CLI with no HOME names it; receipts are never cached in shared /tmp", () => {
+  // A process-global guess of /tmp for the request cache wrote a caller's
+  // receipts into shared space. With no HOME at all the request names that
+  // instead of placing ~/.local/state/oma/requests under /tmp.
+  const root = mkdtempSync(join(tmpdir(), "oma-cli-nohome-"));
+  // Where the guess would have written: the shared /tmp the fallback named.
+  // The assertion is that nothing new lands there, whatever a previous run
+  // left behind.
+  const sharedCache = "/tmp/.local/state/oma/requests";
+  const before = existsSync(sharedCache) ? readdirSync(sharedCache).sort() : null;
+  try {
+    const env: Record<string, string | undefined> = { ...process.env, OMA_SOCKET: join(root, "never.sock") };
+    delete env.HOME; delete env.XDG_DATA_HOME; delete env.XDG_STATE_HOME;
+    const result = spawnSync(process.execPath, [cli, "unfollow", "work"], { cwd: root, env, encoding: "utf8", timeout: 15_000 });
+    assert.equal(result.status, 4, JSON.stringify({ stdout: result.stdout, stderr: result.stderr }));
+    assert.match(result.stderr, /oma: HOME is not set; the request cache has no root/);
+    const after = existsSync(sharedCache) ? readdirSync(sharedCache).sort() : null;
+    assert.deepEqual(after, before, "no request cache was written to shared space");
+  } finally {
+    if (before === null) rmSync("/tmp/.local", { recursive: true, force: true });
+    else for (const name of readdirSync(sharedCache).filter(name => !before.includes(name))) rmSync(join(sharedCache, name), { recursive: true, force: true });
+    rmSync(root, { recursive: true, force: true });
+  }
 });

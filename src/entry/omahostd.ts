@@ -36,7 +36,9 @@ if (process.env.OMA_HOST_HOME === undefined && (userHome === undefined || !userH
 const home = process.env.OMA_HOST_HOME ?? join(userHome!, "Library", "Application Support", "OMA");
 const dirs = { run: join(home, "run"), vm: join(home, "vm"), engine: join(home, "engine"), logs: join(home, "logs"), archives: join(home, "archives"),
   // DR25: the packages `oma pi` installs on the Mac, carried to the engine.
-  packages: join(home, "packages") };
+  packages: join(home, "packages"),
+  // §8.4: the state disk's snapshots -- the update's own and the Human's.
+  snapshots: join(home, "snapshots") };
 for (const dir of [home, ...Object.values(dirs), join(dirs.run, "vm")]) { mkdirSync(dir, { recursive: true, mode: 0o700 }); chmodSync(dir, 0o700); }
 const recordPath = join(home, "host-record.json");
 const record = readHostRecord(recordPath) ?? (() => { const fresh = newHostRecord(); writeHostRecord(recordPath, fresh); return fresh; })();
@@ -71,7 +73,7 @@ async function main(): Promise<void> {
       expectImage: image.version, protocol: { min: Math.max(1, HOST_GUEST_PROTOCOL - 1), max: HOST_GUEST_PROTOCOL } },
     resolve: hostResolver(dirs.engine, driver, join(bundle!, "Contents", "Resources")),
     power: listener => { driver.onPower(listener); },
-    statePath, packagesDir: dirs.packages,
+    statePath, packagesDir: dirs.packages, snapshotsDir: dirs.snapshots,
   });
   service.lifecycle.onState(state => {
     if (state !== "ready") return;

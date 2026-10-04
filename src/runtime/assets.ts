@@ -97,9 +97,16 @@ export interface LaunchLocation {
 
 /** The host's own derivation: XDG roots from its environment, the config path
  * the Human named (made absolute against the host's directory) or the state
- * root's default. Only entrypoints a Human or operator starts call this. */
+ * root's default. Only entrypoints a Human or operator starts call this.
+ * An environment with neither XDG_DATA_HOME nor HOME has no data root, and
+ * a shared /tmp guessed from a missing environment is not one -- the entry
+ * says so rather than silently writing a society's state there. */
 export function hostLaunchLocation(society: string, env: NodeJS.ProcessEnv, configPath?: string): LaunchLocation {
-  const stateRoot = join(env.XDG_DATA_HOME ?? join(env.HOME ?? "/tmp", ".local", "share"), "oma", society);
+  const dataHome = env.XDG_DATA_HOME;
+  const home = env.HOME;
+  if ((dataHome === undefined || dataHome.length === 0) && (home === undefined || home.length === 0))
+    throw new StoreError("UNSUPPORTED_PROFILE", "neither XDG_DATA_HOME nor HOME is set; the society's data root cannot be resolved");
+  const stateRoot = join(dataHome === undefined || dataHome.length === 0 ? join(home!, ".local", "share") : dataHome, "oma", society);
   const runRoot = join(env.XDG_RUNTIME_DIR ?? "/tmp", "oma", society);
   return Object.freeze({ society, stateRoot, runRoot,
     configPath: configPath === undefined ? join(stateRoot, "config.json") : resolve(configPath) });
