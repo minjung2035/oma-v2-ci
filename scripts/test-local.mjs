@@ -4,7 +4,13 @@ import { mkdtempSync, readFileSync, readdirSync, rmSync } from "node:fs";
 import { availableParallelism, tmpdir } from "node:os";
 import { join } from "node:path";
 import { once } from "node:events";
-import { localTestFiles, systemdTestFiles, unrunDirectives, unrunTests } from "./verification-lanes.mjs";
+import { localTestFiles, serialTestFiles, systemdTestFiles, unrunDirectives, unrunTests } from "./verification-lanes.mjs";
+// This runner has no selection surface: any argument is a mistake (or `npm
+// test -- foo`), and silently running the whole suite is the exact behavior
+// the mistake would not expect.
+const args = process.argv.slice(2);
+if (args.length > 0)
+  throw new Error(`test-local.mjs takes no arguments; refusing to run the suite on: ${args.join(" ")}`);
 const compiled = readdirSync("dist/test")
   .filter((file) => file.endsWith(".test.js"))
   .sort();
@@ -71,7 +77,7 @@ const concurrency = Number.isInteger(requested) && requested > 0
   ? requested
   : DEFAULT_CONCURRENCY;
 
-const serialFiles = files.filter((file) => SERIAL.has(file));
+const serialFiles = serialTestFiles(files, SERIAL);
 const parallelFiles = files.filter((file) => !SERIAL.has(file));
 const guard = new URL("./local-test-guard.mjs", import.meta.url).href;
 const childEnv = {

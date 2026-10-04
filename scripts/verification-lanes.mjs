@@ -41,6 +41,17 @@ export function localTestFiles(compiled) {
       throw new Error(`required systemd test file missing: ${required}`);
   return compiled.filter((file) => !systemdTestFiles.includes(file));
 }
+
+/** The discovered test files that must run alone, or a loud failure. An entry
+ * of `serial` that no longer names a discovered file is drift between this
+ * list and the suite -- a renamed or removed test would silently lose the
+ * protection the entry exists for, so it is refused, not filtered out. */
+export function serialTestFiles(files, serial) {
+  const missing = [...serial].filter((file) => !files.includes(file));
+  if (missing.length > 0)
+    throw new Error(`serial test files missing from the discovered suite: ${missing.join(", ")}`);
+  return files.filter((file) => serial.has(file));
+}
 // Entry lanes probe the current production quota gate after a fresh build.
 // The requested bytes match the positive entry fixture; this is not an allow flag.
 export const lanes = Object.freeze({
