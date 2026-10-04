@@ -15,7 +15,7 @@ import { UnitsModule } from "./units.js";
 import { quiesceResidents } from "./lifecycle/society.js";
 import { LifecycleModule } from "./lifecycle.js";
 import { pendingWork } from "./views/pending-work.js";
-import { collectUnacceptedArtifacts, type PreacceptCollection } from "./reconcile/preaccept.js";
+import { collectUnacceptedArtifacts, preacceptEvent, type PreacceptCollection } from "./reconcile/preaccept.js";
 import { dirname } from "node:path";
 
 export interface ReconcilePaths {
@@ -81,8 +81,8 @@ export class ReconcileModule {
       // DR10: before any request is admitted, and before bootstrap freezes its
       // own briefs. The state root is the Store's (store.ts planContext).
       this.collected = collectUnacceptedArtifacts(dirname(this.store.path), this.store);
-      if (this.collected.removed.length > 0 || this.collected.kept.length > 0)
-        console.error(JSON.stringify({ event: "reconcile.preaccept", removed: this.collected.removed.length, kept: this.collected.kept.length }));
+      const preaccept = preacceptEvent(this.collected, dirname(this.store.path));
+      if (preaccept !== null) console.error(JSON.stringify(preaccept));
       if (this.git) {
         await this.assertCanonicalHealthyAsync();
         // An earlier death observation is not a token valid across fsck's await.

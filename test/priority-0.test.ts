@@ -5,6 +5,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
+import fs from "node:fs";
+import { syncBuiltinESMExports } from "node:module";
 import { existsSync, mkdirSync, readdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { generateOperationId } from "../src/ids.js";
@@ -121,6 +123,103 @@ test("AV-19: a stranded context .prepare-* tree is collected; an accepted or unp
     assert.ok(existsSync(owned) && existsSync(malformed) && existsSync(notTree));
     assert.deepEqual(collectUnacceptedArtifacts(root, store).removed, [], "a second collection removes nothing");
   } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
+/** Runs a startup recovery pass over the fixture's state root and returns the
+ * `reconcile.preaccept` events it printed. */
+async function preacceptEvents(t: import("node:test").TestContext, f: Awaited<ReturnType<typeof preparedFixture>>) {
+  const units = { confirmDead: () => true, stop: () => undefined, observeAsync: async () => ({ activeState: "inactive" }),
+    bindIncarnationReader: () => undefined } as unknown as UnitsModule;
+  const reconcile = new ReconcileModule(f.store, f.mail, null, units, {} as LifecycleModule,
+    { projectGit: join(f.root, "repos", "project.git"), hasGoal: () => true, activationAllowed: () => false });
+  const printed: string[] = [];
+  const error = t.mock.method(console, "error", (...args: unknown[]) => { printed.push(args.map(String).join(" ")); });
+  try { await reconcile.startup(false); } finally { error.mock.restore(); }
+  const events = printed.flatMap(line => {
+    try { const parsed = JSON.parse(line) as { event?: unknown }; return parsed.event === "reconcile.preaccept" ? [parsed as Record<string, unknown>] : []; }
+    catch { return []; }
+  });
+  return { events, collected: reconcile.preacceptCollection! };
+}
+
+test("FJ-1: a published context revision is the product, not residue: only genuine residue is kept and reported", async t => {
+  // The audited collection reached every `world/context/revisions/<oid>`
+  // directory -- the name every real revision has (domain/derived.ts) -- and,
+  // finding no `.prepare-*` binding, kept it as "not a name this broker
+  // derives". Every startup then reported each published revision as residue
+  // and the reconcile.preaccept event fired permanently, hiding real residue.
+  const f = await preparedFixture();
+  try {
+    const revisions = join(f.root, "world", "context", "revisions");
+    const published = [join(revisions, "a".repeat(40)), join(revisions, "b".repeat(64))];
+    for (const path of published) { mkdirSync(path, { recursive: true }); writeFileSync(join(path, "GOAL.md"), "goal\n"); }
+    const residue = join(revisions, "not-a-revision");
+    const strayFile = join(revisions, "c".repeat(40));   // a file wearing an oid's name is still residue
+    mkdirSync(residue); writeFileSync(strayFile, "not a tree");
+    const collected = collectUnacceptedArtifacts(f.root, f.store);
+    assert.deepEqual(collected.kept.map(entry => entry.path).sort(), [residue, strayFile].sort(),
+      "only the genuinely underivable names are kept");
+    assert.deepEqual(collected.removed, []);
+    for (const path of published) assert.ok(existsSync(join(path, "GOAL.md")), "a published revision is untouched");
+
+    rmSync(residue, { recursive: true }); rmSync(strayFile);
+    assert.deepEqual(collectUnacceptedArtifacts(f.root, f.store).kept, [], "published revisions alone are nothing kept");
+    const { events } = await preacceptEvents(t, f);
+    assert.deepEqual(events, [], "with only published revisions, startup reports no preaccept residue");
+  } finally { f.close(); }
+});
+
+test("FJ-2: a name that vanishes between the listing and its stat does not fail startup collection", t => {
+  // The mail-object loop (and the staging decisions) called lstatSync without
+  // throwIfNoEntry: a name removed between readdir and lstat threw ENOENT out
+  // of startup recovery. A vanished name has nothing left to collect or keep.
+  const root = mkdtempSync(join(tmpdir(), "oma-preaccept-vanished-"));
+  try {
+    const objects = join(root, "mail", "objects");
+    const staging = join(root, "staging");
+    mkdirSync(objects, { recursive: true }); mkdirSync(staging);
+    const operation = generateOperationId();
+    const phantoms = new Map<string, string[]>([
+      [objects, [`${messageIdForOperation(operation, 0)}.eml`]],
+      [staging, ["mail-objects", `submit-${generateOperationId()}`]],
+    ]);
+    const original = fs.readdirSync;
+    t.mock.method(fs, "readdirSync", ((path: fs.PathLike, ...rest: unknown[]) => {
+      const listed = (original as (...args: unknown[]) => string[])(path, ...rest);
+      return [...listed, ...(phantoms.get(String(path)) ?? [])];
+    }) as typeof fs.readdirSync);
+    syncBuiltinESMExports();
+    let collected: ReturnType<typeof collectUnacceptedArtifacts>;
+    try { collected = collectUnacceptedArtifacts(root, { getOperationById: () => null }); }
+    finally { t.mock.restoreAll(); syncBuiltinESMExports(); }
+    assert.deepEqual({ removed: collected.removed, kept: collected.kept }, { removed: [], kept: [] },
+      "a vanished name is neither collected nor reported as kept");
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
+test("FJ-3: the reconcile.preaccept event names what it kept, bounded to the first eight entries", async t => {
+  // The audited event carried only counts: an operator could see that
+  // something was kept but not what or why.
+  const f = await preparedFixture();
+  try {
+    const staging = join(f.root, "staging");
+    mkdirSync(staging, { recursive: true });
+    for (let index = 0; index < 11; index++) writeFileSync(join(staging, `junk-${index}`), "underivable");
+    const { events, collected } = await preacceptEvents(t, f);
+    assert.equal(events.length, 1, "one event for the startup pass");
+    const event = events[0]!;
+    assert.equal(event.kept, 11, "the count still covers every kept entry");
+    assert.equal(event.removed, 0);
+    const entries = event.keptEntries as { path: string; reason: string }[];
+    assert.ok(Array.isArray(entries), "the event carries the kept entries");
+    assert.equal(entries.length, 8, "the list is bounded");
+    assert.deepEqual(entries, collected.kept.slice(0, 8).map(entry => ({
+      path: entry.path.slice(f.root.length + 1), reason: entry.reason })), "the first eight, relative to the state root, with reasons");
+    for (const entry of entries) {
+      assert.match(entry.path, /^staging\/junk-\d+$/);
+      assert.equal(entry.reason, "not a name this broker derives");
+    }
+  } finally { f.close(); }
 });
 
 test("DR13 / P0-5: the broker's host policy reader says 'cannot be read now', never 'changed', for a policy it cannot obtain", () => {

@@ -28,6 +28,19 @@ export interface PreacceptCollection {
   readonly removed: readonly string[];
   readonly kept: readonly { readonly path: string; readonly reason: string }[];
 }
+/** The most kept entries the reconcile.preaccept event names: enough to tell
+ * an operator what was kept and why, bounded so a residue storm stays one
+ * manageable event line. */
+export const PREACCEPT_EVENT_KEPT_LIMIT = 8;
+/** The event startup prints when the collection found anything: the counts,
+ * and the first kept names (relative to the state root) with their reasons. */
+export function preacceptEvent(collection: PreacceptCollection, stateRoot: string):
+    { event: "reconcile.preaccept"; removed: number; kept: number; keptEntries: { path: string; reason: string }[] } | null {
+  if (collection.removed.length === 0 && collection.kept.length === 0) return null;
+  return { event: "reconcile.preaccept", removed: collection.removed.length, kept: collection.kept.length,
+    keptEntries: collection.kept.slice(0, PREACCEPT_EVENT_KEPT_LIMIT)
+      .map(entry => ({ path: entry.path.slice(stateRoot.length + 1), reason: entry.reason })) };
+}
 /** The one-time temporary a publication names `.<target>.<uuid>.tmp`, or
  * `.<target>.<uuid>.held.tmp` when it carries its writer's lock (P0V-111). */
 const PUBLICATION_TEMPORARY = /^\..+\.[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}(?:\.held)?\.tmp$/;
@@ -57,7 +70,12 @@ export function collectUnacceptedArtifacts(stateRoot: string, store: Pick<Store,
     const path = join(objects, name);
     if (PUBLICATION_TEMPORARY.test(name)) { remove(path); continue; }
     const message = name.endsWith(".eml") ? parseMessageId(name.slice(0, -4)) : null;
-    if (message === null || !lstatSync(path).isFile()) { kept.push({ path, reason: "not a name this broker derives" }); continue; }
+    // A name that vanished between the listing and its stat has nothing left
+    // to collect or keep -- the race answers, not an underivable residue.
+    if (message === null) { kept.push({ path, reason: "not a name this broker derives" }); continue; }
+    const stat = lstatSync(path, { throwIfNoEntry: false });
+    if (stat === undefined) continue;
+    if (!stat.isFile()) { kept.push({ path, reason: "not a name this broker derives" }); continue; }
     const operation = accepted(message.operationId);
     if (operation !== null && namedMessages(operation).some(message => message.id === name.slice(0, -4))) continue;
     remove(path);
@@ -86,13 +104,15 @@ export function collectUnacceptedArtifacts(stateRoot: string, store: Pick<Store,
       continue;
     }
     const path = join(staging, name);
-    if (name === "mail-objects" && lstatSync(path).isDirectory()) {
+    const staged = lstatSync(path, { throwIfNoEntry: false });
+    if (staged === undefined) continue;
+    if (name === "mail-objects" && staged.isDirectory()) {
       for (const temporary of names(path)) if (temporary.endsWith(".tmp")) remove(join(path, temporary));
       continue;
     }
     if (/^rpc-[0-9a-f-]{36}\.wire$/.test(name)) { remove(path); continue; }
     const submit = name.startsWith("submit-") ? parseOperationId(name.slice("submit-".length)) : null;
-    if (submit !== null && lstatSync(path).isDirectory()) {
+    if (submit !== null && staged.isDirectory()) {
       const operation = accepted(submit);
       if (operation?.kind === "git.submit" && operation.plan.bundle?.path === submitBundlePathAt(stateRoot, submit)) continue;
       remove(path, true);
@@ -123,7 +143,12 @@ export function collectUnacceptedArtifacts(stateRoot: string, store: Pick<Store,
     const prepared = /^\.prepare-([0-9a-f]+)-(.+)$/.exec(tree);
     const operation = prepared !== null && isValidFullOid(prepared[1]!) ? parseOperationId(prepared[2]!) : null;
     const path = join(revisions, tree);
-    if (operation === null || lstatSync(path, { throwIfNoEntry: false })?.isDirectory() !== true) {
+    const stat = lstatSync(path, { throwIfNoEntry: false });
+    // A published revision is a directory named by its full oid -- the
+    // product itself, not residue this collection may call underivable.
+    // Anything else wearing an oid's name still reaches the checks below.
+    if (stat?.isDirectory() === true && isValidFullOid(name)) continue;
+    if (operation === null || stat?.isDirectory() !== true) {
       if (name.endsWith(".lease") && operation !== null && !revisionEntries.has(tree))
         leased(path, "a preparation lease without its tree");
       // A revision directory is named by its oid; anything else this block
