@@ -61,6 +61,8 @@ Pi/OS 기능을 다시 구현해서 생긴 중복·workaround·pre-release 잔�
 - 수정사항이 깨끗해지면 → 코드베이스 전체로 12-기준 개선점 탐색(**기록만, 수정 안 함**)
   + P0 위반/버그는 계속 찾아서 테스트와 함께 수정
 - 버그 소진 → 테스트 보강 반복 → 보강할 것 없으면 종료
+- 보류·spike로 남기지 않는다: 실험으로 확인하거나 추론으로 결정하고 결정과 근거를 기록
+- 사용자가 자리에 없을 때 blocking 질문을 띄우지 않는다: 권고안으로 진행하고 결정 지점만 기록
 - 스펙/계획 수립 시: 오케스트레이터가 직접 계획 → 반박 에이전트 1개와 토론
   → 양쪽 확정되면 최종 설계서 → 구현 시작
 - upstream/스펙 문서는 100% 신뢰하지 않고 초기 계획안으로 취급
@@ -83,15 +85,42 @@ Pi/OS 기능을 다시 구현해서 생긴 중복·workaround·pre-release 잔�
   (TSP-002, REC-002, protocol v5, I49, OMA_TOOL_SURFACE 문구);
   verify-lane measurement-hashes 미바인딩; 에러 포맷/taxonomy
 
-### 기록만 (수정 보류 — 사용자 판정 필요)
-- `runner.observe` write-only sink — consumer 의도인가 제거인가
-- `OMA_TOOL_SURFACE` dormant producer — 미래 스테이징 의도인가
-- `extension.tools.set` mutation + renderResult 재구현 (#11/#12 잔여) — 설계 결정
-- egress 실패 시 조용한 저하(oma-society.ts:667) — 방어 정책인가
-- macOS principal-authority substrate (/proc only, macOS 동등성 미검증)
-- `snapshot.ts` staged dead code (NB-27 의도적 보류)
-- AV-15/AV-17 미수정 detector (audit이 기록한 기존 미수정)
-- `HOME ?? "/tmp"` cache-root fallback (unreachable이지만 process-global 잠재 위험)
+### 보류→구현 전환 (사용자 지시: 전부 구현 — fix/fg, fix/fh 진행 중)
+- `runner.observe` write-only sink — consumer 배선 또는 제거 (fix/fg)
+- `OMA_TOOL_SURFACE` dormant producer + `SessionPaths.toolSurface` 무생산 채널 — 연결 또는 제거 (fix/fg)
+- `extension.tools.set` mutation + renderResult 재구현 (#11/#12 잔여) (fix/fg)
+- `assertAdmission`이 replay보다 먼저 (drain/corrupt) — 순서 구현 또는 pin (fix/fg)
+- egress 실패 시 조용한 저하(oma-society.ts:667) — 정직한 표면화 (fix/fh)
+- macOS principal-authority substrate (/proc only) — seam 구현+macOS는 NOT_RUN (fix/fh)
+- `snapshot.ts` staged dead code (NB-27) — 완성 또는 제거 (fix/fh)
+- AV-15/AV-17 미수정 detector — 구현 (fix/fh)
+- `HOME ?? "/tmp"` cache-root fallback — fail-closed (fix/fh)
+
+### 검증 라운드 1 발견 → fix 라운드 2 대상 (fa·tp+pg2 결과 대기 중)
+- fc 구역: preaccept가 정상 revision `<oid>` 디렉토리를 underivable로 매번 보고(MEDIUM);
+  `minimumMailBodyBytes` 선형 스캔 → 큰 subjectBytes에서 RangeError/hang(MEDIUM);
+  `approvalBody`가 highPeerFloor×vote body로 mailBodyBytes 초과(MEDIUM-LOW);
+  archiveKey `waitMs` NaN 무한 스핀·raw errno, kept 경로 미표면, snapshot finally가 1차 오류 마스킹(LOW)
+- fb 구역: `readableRoots`가 guard만 통과, contained read/ls/grep/find는 workspace만 root →
+  package store 읽기 실제 불가(MEDIUM) — 결정: contained op에 readableRoots plumbing
+- fd+fe 구역: implementation-spec.md가 삭제된 systemd broker 텍스트로 되돌아감
+  (UNIT-001/003/004/UNIT-TPL-001 — traceability.json과 의미 모순, HIGH);
+  TSP-002는 doc 맞고 stored row stale(HIGH); doc↔inventory drift를 잡는 검사가
+  CI에 없음(MEDIUM); §23.12→§23.10 cite, loadedSettings TOCTOU raw error(LOW)
+- 실험으로 닫음: `"/ oma-deliver"` — Pi 파서(agent-session.js:1460)가 commandName=""로
+  만들어 dispatch 안 됨. 우회 아님
+
+### 사용자 납득 감사 (판정 기준 = §2의 1·2·10번) → 전부 구현 대상
+- Worker 개발환경(fix/fi 진행 중): npm/npx 부재(프롬프트는 npm test 지시), git identity
+  미설정으로 첫 commit 실패, GIT_EDITOR 부재, workspace quota가 bash 산출물까지 계산,
+  리소스 한도(3GiB/128 tasks) 과소, nproc가 호스트 코어 보고, START.md에 제약 미기재
+- 네트워크: project egress(S-07) 재개 — plan §D egress 항목
+- 커스터마이징 표면: Society에서 로컬 스킬/확장 설치 경로 없음(`oma pi install <local-dir>` 거절)
+  → 결정: 로컬 디렉토리를 package store로 복사 설치 허용(기존 store 파이프라인·ro mount 재사용);
+  `oma pi` help/list가 skills/prompts/themes를 안 보여줌; DR25 535행 stale;
+  macOS `oma pi list` 오류에 `--host-only` 힌트 없음; 확장 토글 저장 시 적용 시점 미표기
+- 오버엔지니어링·Pi 중복(5441ed15 진행 중): 결과는 §2 기준으로 분류 — 사용자 납득 불가는
+  구현, 순수 내부 개선은 기록
 
 ## 6. 선행 작업 큐 (코드베이스 전체 확장 전 — 사용자 지시)
 
@@ -182,7 +211,8 @@ name collision/intended surface/hidden 미활성/idempotent reload/provenance/
 ## 8. 검증·명령 레퍼런스
 
 - 빌드: `npm run build` (tsc→dist/). 타입체크: `npm run typecheck`
-- 테스트: `node --test dist/test/<file>.test.js` / 전체 `npm test` (오래 걸림)
+- 테스트: `node --test dist/test/<file>.test.js` / 전체 `npm test` (병렬, 조용할 때 ~4.5분;
+  `OMA_TEST_CONCURRENCY=1`이면 직렬). 빌드와 동시에 돌리지 않는다(build가 dist를 지움)
 - 게이트: `npm run check:architecture` (inventory+rules+lattice+transactions+
   boundaries+documents)
 - 생성물 재생성: `node scripts/loc.mjs --source-digests`,
@@ -206,3 +236,21 @@ name collision/intended surface/hidden 미활성/idempotent reload/provenance/
   진행 중: 테스트 병렬화(fix/tp, 6b1361fb), 스위트 프로파일링(5725cd06),
   Pi 1.0.1 실제 diff 분석(88af2adb). 다음: tp 머지 → 검증 5+5 루프
   (최적화 스위트로).
+- 2026-10-04: fix/tp 머지(4922e44, durable-fs 레이스 수정 fab044f 포함), D26/R35 갱신(a23e68f),
+  설계서 확정(f5ca9b0). 검증 라운드 1 시작 — fb·fc·fd+fe 완료(위 발견), fa·tp+pg2 대기.
+  사용자 지시: 보류/spike 금지 — 실험이나 추론으로 결정하고 결정을 기록. 보류 9건 → fix/fg·fh,
+  Worker 개발환경 → fix/fi. 사용자 납득 감사 3축(샌드박스·커스터마이징·오버엔지니어링).
+
+## 10. 지금부터의 실행 순서
+1. 검증 라운드 1 마무리(fa, tp+pg2) → 발견 전체를 fix 라운드 2 패키지로 묶기
+2. fix 라운드 2: fg·fh·fi(진행 중) + fj(fc 발견) + fk(fb readableRoots) + fl(문서/traceability
+   drift + CI 검사 연결) + fm(커스터마이징 표면) — 동시 구현 최대 5
+3. 머지 에이전트: fix 브랜치 통합 → 생성물 재생성 → `npm test` 1회(빌드와 분리)
+4. 검증 라운드 2: 라운드 1과 다른 리뷰어 5+5, 모든 구역이 총 2회 이상 → 발견 있으면 2로
+5. 깨끗하면 선행 작업(plan-prereq-and-bundled.md): A Pi 1.0.1+open-tui 0.3.11+pi-tui 원자 bump
+   → B TUI 4건 병렬 → C society 게이트+execve → egress 프록시(S-07 재개) → D lsp→ask→hashline→web→mcp
+   (각 단계 뒤 검증 5+5)
+6. 코드베이스 전체 §2 12기준 탐색: 사용자 납득 불가 = 구현, 순수 내부 개선 = 기록. P0/버그는 계속 수정
+7. 버그 소진 → 테스트 보강 반복 → 보강할 것 없으면 종료
+8. 마무리: review-ledger stale(V01A·V32A×2·DR27) fresh review 후 재바인딩, validation digest 재생성,
+   NOT_RUN 레인(macOS/native·systemd·powercut·provider·release) 정직 표기

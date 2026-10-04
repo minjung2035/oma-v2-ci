@@ -13,10 +13,10 @@ A. Pi 0.87.1 → 1.0.1 마이그레이션 (open-tui 0.3.11 + pi-tui 1.0.1 원자
 B. TUI 표면 4건 (compact tools, /thinking show, 큐 메시지, 메일 역할명)
         │   ← 독립 가능
         ▼
-C. society-off 재설계 (세션 모드 전환 — 별도 설계 논점)
+C. society-off 재설계 (세션 모드 전환 — 확정: 게이트+execve, §C)
         │
         ▼
-D. bundled extension 스펙 (ask_user_question → hashline → lsp → web → mcp)
+D. bundled extension 스펙 (lsp → ask → hashline → web → mcp, §D)
 ```
 
 A를 먼저 하는 이유: compact 도구 메시지의 정석 구현(`pi.registerToolRenderer()`)은
@@ -113,10 +113,29 @@ indicator, "Done in Xs · N lines" 컨트롤 행, 인자 확장)**. 명령/silen
 **구현 순서 확정(반박)**: lsp → ask → hashline → web → mcp. lsp가 런타임 dep 0이라
 vendor harness(매니페스트/무결성/자산 복사)의 첫 연습 대상. 각각 독립 커밋+테스트.
 
-**egress 확정(사용자)**: web/lsp/mcp 도구는 **Principal과 Worker 모두에 제공** —
-Resident의 `--unshare-all` 아웃바운드 부재를 우회하는 게 아니라, **OMA host egress
-proxy**(inference relay와 같은 패턴)가 host 네트워크를 대신 나간다. guest는
-프록시 경계까지만 도달, raw host network/credential은 노출 안 함.
+**egress 확정(사용자)** — *S-07/SB-004 보류의 재개*: design-revisions.md는
+"project egress(의존성 fetch proxy)는 v1에 없다"를 기록한다(SP-07-A spike가
+결과 없이 닫힘). 이 작업은 그 보류를 사용자 지시로 되돌리는 스코프 변경이다.
+재개 시 문서상 조건(SB-004/SP-07-A, 구현이 따라야 할 MUST):
+- Human이 설정한 endpoint 외 연결 거절(allowlist가 정책의 정의)
+- OPTIONAL 노출 — `UNSUPPORTED_PROFILE` 거절을 조건부 허용으로 교체
+- S-01 escape 시험 통과 + host network 공유로 대체 금지(`--unshare-all` 유지)
+
+web/lsp/mcp 도구는 **Principal과 Worker 모두에 제공** —
+그리고 범위는 도구만이 아니다. Resident의 `--unshare-all` 아웃바운드 부재로
+`npm install`/`git clone https`/pip/cargo도 현재 전부 불가 → **OMA host egress를
+범용 HTTP CONNECT 프록시로** 설계(inference relay의 bind-mount 소켓 패턴 확장):
+- Resident env에 `HTTP_PROXY`/`HTTPS_PROXY`/`ALL_PROXY`(+npm/git proxy 설정)
+  주입 → 패키지 매니저·https git이 그대로 동작.
+- 프록시가 정책 지점: 도메인 allowlist, 사설IP/내부대역 차단(SSRF), credential
+  헤더 스트립, 감사 로그. raw host network/credential 비노출 원칙 유지.
+- SSH git clone·raw TCP/UDP는 범위 밖 — 필요 시 같은 경로에 SOCKS5 추가
+  (SSH는 ProxyCommand 경유 가능) — v0.1는 CONNECT만, SOCKS는 후속 결정.
+- 도구 트래픽(web/mcp/lsp)도 같은 프록시를 경유 — 역할별 정책 차등 가능.
+- **기반 재사용(조사 확인)**: 기존 EgressHost(`src/platform/host/egress.ts`)에
+  커넥션 풀/placeholder 수명/lease/boot 무효화가 이미 있음 — `egress.open`은
+  현재 provider-origin 하드바인딩 InferenceRelay 전용. 범용화 = `egress.connect`
+  (목적지+정책검사) 메서드 추가 + 정책 엔진 — 새 서브시스템이 아니라 확장.
 
 **반박 필수 교정 3건**:
 - workspace-guard 이름 갭: `replace`/`replace_within`/`insert`/`lsp_fix`가
