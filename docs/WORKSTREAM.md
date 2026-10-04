@@ -58,7 +58,9 @@ Pi/OS 기능을 다시 구현해서 생긴 중복·workaround·pre-release 잔�
 - 동시 에이전트 최대 5
 - 검증은 모든 구역에 서로 다른 에이전트 최소 2명
 - 루프: 검증(5+5 두 배치) → 발견 버그 분업 수정(최대 5, 테스트와 함께) → 다시 5+5 검증 → 반복
-- 수정사항이 깨끗해지면 → 코드베이스 전체로 12-기준 개선점 탐색(**기록만, 수정 안 함**)
+- 수정사항이 깨끗해지면 → 코드베이스 전체로 12-기준 개선점 탐색
+  - 사용자 기대를 충족하지 못하는 것 = **구현** (내부 문제여도 사용자가 겪으면 구현)
+  - 사용자에게 영향 없는 순수 기술개선 = **구현 제외, 기록만**
   + P0 위반/버그는 계속 찾아서 테스트와 함께 수정
 - 버그 소진 → 테스트 보강 반복 → 보강할 것 없으면 종료
 - 보류·spike로 남기지 않는다: 실험으로 확인하거나 추론으로 결정하고 결정과 근거를 기록
@@ -119,8 +121,8 @@ Pi/OS 기능을 다시 구현해서 생긴 중복·workaround·pre-release 잔�
   → 결정: 로컬 디렉토리를 package store로 복사 설치 허용(기존 store 파이프라인·ro mount 재사용);
   `oma pi` help/list가 skills/prompts/themes를 안 보여줌; DR25 535행 stale;
   macOS `oma pi list` 오류에 `--host-only` 힌트 없음; 확장 토글 저장 시 적용 시점 미표기
-- 오버엔지니어링·Pi 중복(5441ed15 진행 중): 결과는 §2 기준으로 분류 — 사용자 납득 불가는
-  구현, 순수 내부 개선은 기록
+- 오버엔지니어링·Pi 중복(5441ed15 진행 중): 결과는 §2 기준으로 분류 — 사용자 기대 미충족은
+  구현(내부 문제 포함), 순수 기술개선은 기록만
 
 ## 6. 선행 작업 큐 (코드베이스 전체 확장 전 — 사용자 지시)
 
@@ -250,7 +252,8 @@ name collision/intended surface/hidden 미활성/idempotent reload/provenance/
 5. 깨끗하면 선행 작업(plan-prereq-and-bundled.md): A Pi 1.0.1+open-tui 0.3.11+pi-tui 원자 bump
    → B TUI 4건 병렬 → C society 게이트+execve → egress 프록시(S-07 재개) → D lsp→ask→hashline→web→mcp
    (각 단계 뒤 검증 5+5)
-6. 코드베이스 전체 §2 12기준 탐색: 사용자 납득 불가 = 구현, 순수 내부 개선 = 기록. P0/버그는 계속 수정
+6. 코드베이스 전체 §2 12기준 탐색: 사용자 기대 미충족 = 구현(내부 문제 포함), 순수 기술개선 = 기록만.
+   P0/버그는 계속 수정
 7. 버그 소진 → 테스트 보강 반복 → 보강할 것 없으면 종료
 8. 마무리: review-ledger stale(V01A·V32A×2·DR27) fresh review 후 재바인딩, validation digest 재생성,
    NOT_RUN 레인(macOS/native·systemd·powercut·provider·release) 정직 표기
