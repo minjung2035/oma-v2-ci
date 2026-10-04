@@ -12,7 +12,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import {
-  appendFileSync, existsSync, lstatSync, mkdirSync, mkdtempSync,
+  appendFileSync, chmodSync, existsSync, lstatSync, mkdirSync, mkdtempSync,
   readFileSync, rmSync, statSync, symlinkSync, writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
@@ -159,4 +159,33 @@ test("build stamp: a stamp without per-output hashes cannot skip", t => {
   const before = statSync(target).ino;
   build(root);
   assert.notEqual(statSync(target).ino, before, "a name-only stamp skipped the compile");
+});
+
+test("build stamp: an edit to the build's own scripts is an input, not a free ride on the old stamp", t => {
+  const root = fixture(t);
+  build(root);
+  const target = join(root, "dist/src/sandbox.js");
+  // The hashed input set once covered sources and configs but not the build
+  // logic itself: a build.mjs or check-package.mjs edit changed what the
+  // build produces while the stamp proved "inputs unchanged".
+  for (const script of ["build.mjs", "check-package.mjs"]) {
+    const before = statSync(target).ino;
+    appendFileSync(join(root, "scripts", script), `\n// a ${script} edit\n`);
+    build(root);
+    assert.notEqual(statSync(target).ino, before, `an edit to scripts/${script} rode a stale skip`);
+  }
+});
+
+test("build stamp: a mode-000 directory inside dist cannot wedge drift recovery", t => {
+  const root = fixture(t);
+  build(root);
+  // The extra directory already fails the recorded-set check; rmSync's blind
+  // listing then died EACCES on the mode-000 subdirectory and the build could
+  // never recover. The drift removal repairs owner bits before listing.
+  const locked = join(root, "dist/src/locked");
+  mkdirSync(locked);
+  writeFileSync(join(locked, "x.js"), "x\n");
+  chmodSync(locked, 0o000);
+  build(root);
+  assert.equal(existsSync(locked), false, "the unreadable extra survived drift recovery");
 });

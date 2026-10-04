@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { chmodSync, lstatSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, lstatSync, mkdirSync, readdirSync, readFileSync, rmdirSync, unlinkSync, writeFileSync } from "node:fs";
 import { dirname, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { createRequire } from "node:module";
@@ -51,7 +51,10 @@ const listed = spawnSync(process.execPath, [tsc, "-p", join(root, "tsconfig.buil
 });
 if (listed.error || listed.signal || listed.status !== 0) process.exit(listed.status ?? 1);
 const extraInputs = ["tsconfig.json", "tsconfig.build.json", "package.json", "package-lock.json",
-  join("node_modules", "typescript", "package.json")];
+  join("node_modules", "typescript", "package.json"),
+  // The build logic itself and the checker it drives are inputs too: an edit
+  // to either changes what a build produces and must not ride a stale skip.
+  join("scripts", "build.mjs"), join("scripts", "check-package.mjs")];
 for (const name of [...listed.stdout.trim().split(/\r?\n/).sort(), ...extraInputs]) {
   const absolute = resolve(root, name);
   hash.update(relative(root, absolute).split(sep).join("/"));
@@ -77,8 +80,23 @@ if (fresh) try {
       return stat.isFile() && stat.size === entry.bytes && sha256(readFileSync(absolute)) === entry.sha256;
     });
 } catch { fresh = false; }
+// dist is this build's own product, not a state tree, so removal goes by
+// path -- but the same lost-owner-bits failure shape applies: a directory a
+// stray or a crashed tool left at mode-000 wedges a blind recursive rm on
+// the listing itself, so each directory gets its owner read/write/search
+// bits back before it is listed (added, never stripped: special bits keep),
+// the repair the owned-tree primitives make. Links are unlinked, never
+// followed.
+const removeTree = path => {
+  const observed = lstatSync(path, { throwIfNoEntry: false });
+  if (observed === undefined) return;
+  if (!observed.isDirectory()) { unlinkSync(path); return; }
+  if ((observed.mode & 0o700) !== 0o700) chmodSync(path, (observed.mode & 0o7777) | 0o700);
+  for (const name of readdirSync(path)) removeTree(join(path, name));
+  rmdirSync(path);
+};
 if (!fresh) {
-  rmSync(output, { recursive: true, force: true });
+  removeTree(output);
   const compiled = spawnSync(process.execPath, [tsc, "-p", join(root, "tsconfig.build.json")], {
     cwd: root, stdio: "inherit", timeout: 600000, killSignal: "SIGKILL",
   });
