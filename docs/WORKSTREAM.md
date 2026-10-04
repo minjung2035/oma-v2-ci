@@ -222,6 +222,29 @@ Pi/OS 기능을 다시 구현해서 생긴 중복·workaround·pre-release 잔�
     스키마 필드 <3 게이트는 독립 검증으로 건전 확인되어 유지.
   - build.mjs: 입력 해시 스탬프로 무변경 빌드 16s → 3s (출력 목록 검증 + 변경 시
     기존 rm -rf 전체 컴파일, check-package는 매번 실행).
+  - 세 번째 독립 검증 잔여 4건(같은 wedge 클래스 + 빌드 잔여) 수정:
+    (1) removeOwnedTree/removeUnusedTree가 각 디렉토리를 O_RDONLY|O_DIRECTORY로
+    먼저 열고 나서야 in-walk fchmod로 복구 — mode-000 루트·내부 디렉토리는 open
+    자체가 EACCES이라 dead `local/<pkg>`·`.staging-local-*` 영구 보존, 기존
+    mode-000 사본 위 publish는 `oma pi install` 재시도마다 영구 실패. 공통 헬퍼
+    (openOwnedDirectory: O_PATH pin으로 고정 — 모드 비트 불요·커널 containment
+    유지 — /proc/self/fd의 pin 이름으로 owner rwx 복구 후 오픈)로 교체.
+    (2) 설정 소스의 strict-prefix 위치에 비디렉토리(파일·링크)가 있으면
+    `continue`로 영구 유지 + publish descend가 ENOTDIR/ELOOP — descend 불가
+    슬롯이므로 `local`-as-non-dir와 같은 판정으로 수집.
+    (3) 모드 복구 마스크 `& 0o777`→`& 0o7777` — setuid/setgid/sticky 보존
+    (directory.ts·host/files.ts 양쪽).
+    (4) build.mjs: 해시 입력에 scripts/build.mjs·check-package.mjs 추가(빌드
+    로직 변경이 stale skip을 타지 않도록); 드리프트 복구의 rmSync(dist)는
+    mode-000 하위 디렉토리에 EACCES — dist는 owned store 트리가 아니므로
+    경로 기반 복구-삭제(removeTree, 비트 추가만)를 로컬 구현.
+    Mac 측도 같은 노출 — removeHostStaged·publishHostStaged·snapshot-prep
+    collect의 rmSync(recursive)를 경로 복구-삭제(removeOwnedPath)로 교체.
+    fail-before 스크래치(구 dist): removeOwnedTree EACCES×2·removeUnusedTree
+    EACCES·prune 무음 보존×3·strict-prefix 파일·링크 유지·0o2500→0o700 비트
+    손실·build.mjs 미재빌드×2·dist mode-000 크래시 전부 재현 → 수정 후 전부
+    통과. 회귀 테스트: owned-directory.test.ts 신설 4종 + pi-packages 3종 +
+    owned-cleanup(host) 1종 + build-stamp 2종.
 
 ## 6. 선행 작업 큐 (코드베이스 전체 확장 전 — 사용자 지시)
 
