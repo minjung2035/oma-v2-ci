@@ -162,7 +162,10 @@ test("A4: malformed or non-object settings are refused with the bytes untouched"
   const path = join(root, "settings.json");
   for (const bytes of ["{", "[]", "[1,2]", "null", Buffer.from([0xff, 0xfe])]) {
     writeFileSync(path, bytes);
-    assert.throws(() => prepareEngineInteractiveSettings(root));
+    // Bytes the engine's own parser cannot load are store corruption, not a
+    // raw engine error escaping the taxonomy (settings.ts drainErrors wrap).
+    assert.throws(() => prepareEngineInteractiveSettings(root), (error: unknown) =>
+      error instanceof StoreError && (error.code === "STORE_CORRUPT" || error.code === "UNSUPPORTED_PROFILE"));
     assert.deepEqual(readFileSync(path), Buffer.from(bytes), `bytes ${JSON.stringify(bytes)} changed`);
     // The writer lock came back: the next attempt can still be made.
     const lock = ProcessLock.tryAcquire(join(root, "oma-settings.lock"));

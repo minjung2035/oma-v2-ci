@@ -73,7 +73,7 @@ rev3: rev2 검증판 + 외부 재검토 7개 수정 + 4개 검증 에이전트 �
 | F34 clearenv 완화 | **확정 — platform별 차이 있음** [rev2 수정] | Linux resident: env가 `HOME`/`PATH`/`OMA_*`/`TOOL_SCOPE`/`OMA_INFERENCE_*`뿐 — LANG/LC_ALL/TZ/TERM/TMPDIR/XDG/SHELL/USER 전무(sandbox.ts:132-137). **macOS guest는 이미 LANG/XDG_DATA_HOME/XDG_RUNTIME_DIR/HOME/PATH/TERM 있음** — 부족은 TZ/SHELL/USER/TMPDIR. 최소 allowlist: LANG/LC_ALL(C.UTF-8, rootfs locale 확인), TZ=UTC(+`/etc/localtime` 또는 TZDIR), TERM, TMPDIR=/tmp, SHELL, USER, XDG_* under confined home. **host desktop env는 계속 배제 — `process.env` 상속 allowlist로 전환 금지** |
 | F35 PATH | **확정** | `RESIDENT_PATH_ENV`=`/opt/oma/<cli>:/opt/oma-node:/usr/bin:/bin`. user-local bin 불가. mount 정책이 실질 제한 |
 | F36 DNS/CA/NSS | **확정 — latent gap** | `SYSTEM_BIND_CANDIDATES` closed list에 resolv.conf/CA/nsswitch/localtime 없음. egress 활성화 시 추가: resolv.conf(또는 정적 파일), CA bundle, nsswitch.conf, /etc/hosts, /etc/localtime — 전부 read-only bind |
-| F37 rootfs/toolchain | **부분** | host /usr은 ro 노출이나 설치 불가·toolchain contract 없음. macOS guest image는 repo에 없어 검증 불가 |
+| F37 rootfs/toolchain | **해결 — toolchain contract 확정 (fix/fi: 51712a6, 89422c2)** | toolchain contract는 이제 존재한다: `RESIDENT_NODE_TOOLCHAIN`(src/resident-paths.ts)이 npm/npx/corepack을 manifest 상수로 고정하고 `nodeToolchainMounts`가 pinned Node의 자체 prefix에서 bind, rootfs가 `/opt/oma-node`의 distribution layout을 재현하며 contract test가 deployment Node의 제공을 pin한다. guest 쪽은 MAC-601 image manifest의 pinned package list가 "Node와 그 toolchain(npm/npx/corepack)"을 명시해 reproducible image가 조용히 빠뜨릴 수 없다. 잔여 메모: host /usr의 ro 노출·설치 불가와 "macOS guest image가 repo에 없다"는 사실 자체는 그대로 — image manifest 계약이 그 검증 경로다 |
 
 ## G. resource enforcement
 
@@ -153,7 +153,7 @@ rev3: rev2 검증판 + 외부 재검토 7개 수정 + 4개 검증 에이전트 �
 **성능/구조**
 16. unconfined `grep`/`find`가 호출마다 workspace 전체를 private snapshot으로 복사 + spawn (`contained-files.ts`, `contained-search.ts`)
 17. streamed request는 quota scan 2회 (reserve+admit)
-18. `views.refreshWorld`가 write txn마다 2 TSV + 1 MD(START.md) 원자 재작성 [rev3 정정]
+18. `views.refreshWorld`가 write txn마다 2 TSV + 2 MD(START.md, PRINCIPAL-MAIL.md) 원자 재작성 [rev3 정정, fix/pg2 반영]
 19. `fsck --strict`가 submit마다 canonical object store 전체 대상 — **rev2: audit 사실 맞음, 최적화는 test 후**. `git fsck --full`이 기본값이고 alternates의 object pool까지 검사하므로 quarantine repo에서 canonical store 전체가 매 submit 검사 대상. 개선 설계: startup/recovery→canonical full fsck(`assertCanonicalHealthyAsync`, reconcile.ts:228-237), submit quarantine→candidate validation만. 단 `--no-full` 즉시 적용 금지 — bundle이 thin이라 prerequisite가 alternate에만 존재하면 `--no-full`이 canonical 손상을 submit 경로에서 놓침. **candidate reachable closure 검증이 기대 보장을 유지하는지 fixture로 먼저 증명** (NB-02와 연동)
 20. `manifestOf` + tar가 export마다 society tree 2회 walk + **전체 파일 바이트 2회 read** [rev3 정정 — 기존 표현보다 더 무거움]
 21. boot마다 VM image 전체 hash — **rev2: 삭제 금지**. Ed25519 signature→manifest→file bytes streaming SHA-256은 **release integrity proof**(image.ts:39-73). size는 hash의 fast pre-check일 뿐이고 mtime gate는 없음 — mtime/size 기반 cache는 신뢰 수준을 낮춤. 비용은 실재하나 이 검사만이 "부팅 시점 bytes = 서명된 release"를 증명(dm-verity는 최초 블록 읽기까지 발견 지연)
