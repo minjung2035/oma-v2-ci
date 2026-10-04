@@ -2,14 +2,13 @@
  "schema": 1,
  "sourceCommit": "42e6e8d",
  "sourceBlob": "64f7098868b3149fc3a6101d75e8edf78bea1e9c",
- "declarationCount": 64,
+ "declarationCount": 63,
  "exportedNames": [
   "Actor",
   "Address",
   "AgentCreateInput",
   "AgentProfile",
   "AgentStatus",
-  "AsyncUnitsOrchestrationPort",
   "AuthContext",
   "BatchId",
   "BlobDescriptor",
@@ -68,5 +67,5 @@
   "UnitsModule",
   "ViewsModule"
  ],
- "declarationsSha256": "5bf2afe876d3d9fb8a2d807097603023ea71df3de46a77c811b535f26907dc2d"
+ "declarationsSha256": "cfe414fa91f61814094282acba7cc1a3d9a98aac7aade5cb31eb326eb487a105"
 }

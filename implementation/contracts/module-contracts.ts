@@ -23,7 +23,6 @@ export interface MailModule {
 
 export type UnitsModule = import('../../src/module-ports.js').SyncUnitsPort;
 
-export type AsyncUnitsOrchestrationPort = import('../../src/module-ports.js').AsyncUnitsOrchestrationPort;
 
 export interface GitModule {
   submit(auth: AuthContext, key: RequestKey, input: PublicMethods['git.submit']['params'], bytes?: AsyncIterable<Uint8Array>): Promise<Receipt>;

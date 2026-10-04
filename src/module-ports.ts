@@ -9,7 +9,7 @@ export type {
   OperationRowsPort, StorePort, OperationReceiptPort, ReceiptProjector,
 } from "./ports/ledger.js";
 export type {
-  SyncUnitsPort, AsyncUnitsOrchestrationPort, DerivedViewsPort, ReconcileMetrics,
+  SyncUnitsPort, DerivedViewsPort, ReconcileMetrics,
   ReconcilePort, BoundRunnerPort, SandboxDirectories, SandboxCompositionInput,
   SandboxPort, UnitObserve, SandboxHost,
 } from "./ports/runtime.js";

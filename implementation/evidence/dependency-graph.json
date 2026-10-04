@@ -1532,13 +1532,6 @@
      "coarseUpward": false
     },
     {
-     "from": "implementation/contracts/module-contracts.ts",
-     "to": "src/module-ports.ts",
-     "classification": "compatibility-facade",
-     "kernelUpward": false,
-     "coarseUpward": false
-    },
-    {
      "from": "src/broker/public-dispatcher.ts",
      "to": "src/ports/runtime.ts",
      "classification": "internal-port-contract",
@@ -1866,7 +1859,7 @@
  ],
  "files": 377,
  "runtimeEdges": 1614,
- "typeOnlyEdges": 427,
+ "typeOnlyEdges": 426,
  "runtimeEdgeMatrix": {
   "L1-kernel -> L1-kernel": 314,
   "L2-facts -> L1-kernel": 36,

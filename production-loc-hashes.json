@@ -4,7 +4,7 @@
   "files": [
     {
       "path": "implementation/contracts.ts",
-      "sha256": "10756160d9712de6c1391137d234f7a30ebc652f9add953be6fcc5b6d2efc0fa"
+      "sha256": "1d45c4f02574ca58e4b52aa73f3f46562beff9737b8f2b4de2c3a4812e70f42d"
     },
     {
       "path": "implementation/schema-v3.sql",
@@ -672,7 +672,7 @@
     },
     {
       "path": "src/module-ports.ts",
-      "sha256": "4225b586213d25a16dda21e0255dfe543b575736f0f9723b9e3d8d720d17d0df"
+      "sha256": "70588d3b1c0083ac3831af758d03111d732c2ba3f595a293f4f6cc8a2c01b806"
     },
     {
       "path": "src/pi-compat/commands.ts",
@@ -888,7 +888,7 @@
     },
     {
       "path": "src/ports/runtime.ts",
-      "sha256": "e9af61af8caa694aa830abc9754a63f0d97622bcdd3f22f97aa9a02295acede1"
+      "sha256": "5a6f0fee2206cb72b51566d4b077983acb70bdf338ebce89f8df921d4f8ada07"
     },
     {
       "path": "src/process/async.ts",
