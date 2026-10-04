@@ -4,7 +4,7 @@
   "files": [
     {
       "path": "implementation/contracts.ts",
-      "sha256": "1d45c4f02574ca58e4b52aa73f3f46562beff9737b8f2b4de2c3a4812e70f42d"
+      "sha256": "a7261bd176ca58134bb320de83459fe3f8f952e86bea1ecae94f0d439d230688"
     },
     {
       "path": "implementation/schema-v3.sql",

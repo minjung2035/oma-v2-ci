@@ -10,4 +10,4 @@ export type { AuthContext, AgentStatus, PreparedBatch, BoundaryEvidence, RunLeas
 export type { ResolvedAgentSpec, ResourceLimits, ProtocolLimits, EffortLevel, ModelProfile, AgentProfile, HostConfigV1 } from "./contracts/host.js";
 export type { PublicMethods, PublicMethod, ReadMethod, EphemeralMethod, MutationRequest, ReadRequest, EphemeralRequest, Request, Response } from "./contracts/public-wire.js";
 export type { InternalMethods, InternalResults, InternalRequest, InternalResponse, Notification } from "./contracts/internal-wire.js";
-export type { Store, OperationReceiptPort, MailModule, UnitsModule, GitModule, SandboxModule, PiAdapter, ViewsModule, ReconcileModule, BrokerModule, RunnerModule, CliModule } from "./contracts/module-contracts.js";
+export type { Store, OperationReceiptPort, UnitsModule, SandboxModule, ViewsModule, ReconcileModule, RunnerModule } from "./contracts/module-contracts.js";
