@@ -7,7 +7,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { connect, type Server, type Socket } from "node:net";
 import { request as httpRequest } from "node:http";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { randomUUID } from "node:crypto";
@@ -196,6 +196,23 @@ test("DR18 / D-10: a run in the guest asks for its placeholder and forwards the 
   assert.equal(principal.env.OMA_INFERENCE_PROVIDER, "anthropic");
   assert.notEqual(principal.env.OMA_INFERENCE_KEY, SECRET);
   await principal.close();
+});
+
+test("AV-15: a listen refused before its socket name is cleared releases the run's lease", async t => {
+  // A name clearSocketName cannot remove (not a socket) refused the audited
+  // listen before the lease became the forwarder's -- and the run leaked on
+  // the host: still held, never told it was over.
+  const { EgressForwarder } = await import("../src/runtime/egress-forwarder.js");
+  const dir = mkdtempSync(join(tmpdir(), "oma-forwarder-refused-"));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  const socketPath = join(dir, "inference.sock");
+  writeFileSync(socketPath, "not a socket");
+  let released = 0;
+  const lease = { release() { released++; } };
+  assert.throws(() => EgressForwarder.listen(socketPath, join(dir, "upstream.sock"),
+    { placeholderId: "placeholder", ...RUN, modelProfile: "worker" }, 4, lease),
+    (error: unknown) => error instanceof StoreError && error.code === "STORE_CORRUPT");
+  assert.equal(released, 1, "a forwarder that never listened ends the run it was given");
 });
 
 

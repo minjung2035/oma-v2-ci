@@ -22,14 +22,22 @@ export function displayCopy<T>(value: T): T {
     if (typeof input === "string") return input.replace(UNSEEN_EXCEPT_LAYOUT, "");
     if (input === null || typeof input !== "object") return input;
     if (seen.has(input)) return seen.get(input);
-    const output = (Array.isArray(input) ? [] : Object.create(null)) as Record<string, unknown>;
+    // A normal prototype, not null: a renderer may call the copy's
+    // hasOwnProperty/toString or interpolate it, and every one of those is a
+    // TypeError on a null-prototype record.
+    const output = (Array.isArray(input) ? [] : {}) as Record<string, unknown>;
     seen.set(input, output); pending.push({ from: input, to: output });
     return output;
   };
   const result = copy(value);
   while (pending.length) {
     const { from, to } = pending.pop()!;
-    for (const [key, item] of Object.entries(from)) to[key] = copy(item);
+    // defineProperty rather than assignment: an own "__proto__" entry in
+    // hostile args must arrive as data, not set the copy's prototype. Reading
+    // entries still runs a hostile getter once, here -- the same render-time
+    // risk a lazy copy would only postpone.
+    for (const [key, item] of Object.entries(from))
+      Object.defineProperty(to, key, { value: copy(item), writable: true, enumerable: true, configurable: true });
   }
   return result as T;
 }

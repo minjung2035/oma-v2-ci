@@ -11,6 +11,17 @@ test("DR22: render copies remove untrusted controls without changing tool or rec
   assert.equal(value.details.receipt, text);
   assert.equal(clean.content[0]!.text, "한글[2Jevil\n👩‍💻");
   assert.equal(clean.details.receipt, clean.content[0]!.text);
+  // The copy is a normal object: a renderer's hasOwnProperty, toString or
+  // template interpolation must not meet a null-prototype record.
+  assert.equal(Object.getPrototypeOf(clean), Object.prototype);
+  assert.equal(clean.hasOwnProperty("content"), true);
+  assert.doesNotThrow(() => `${clean}`);
+  // And an own "__proto__" key in hostile args arrives as data, never as the
+  // copy's prototype.
+  const hostile = JSON.parse('{"__proto__": {"polluted": true}, "safe": "a"}') as Record<string, unknown>;
+  const hostileCopy = displayCopy(hostile);
+  assert.equal(Object.getPrototypeOf(hostileCopy), Object.prototype);
+  assert.deepEqual(hostileCopy["__proto__"], { polluted: true });
   const deep: Record<string, unknown> = {};
   let leaf = deep;
   for (let i = 0; i < 20000; i++) { const next = {}; leaf.next = next; leaf = next; }

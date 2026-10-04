@@ -119,7 +119,10 @@ export class EgressForwarder {
   static listen(socketPath: string, egressSocket: string, run: EgressOpenParams, concurrent: number,
     lease: { release(): void; ended?(listener: () => void): void } | null = null): Promise<EgressForwarder> {
     if (!Number.isSafeInteger(concurrent) || concurrent < 1) { lease?.release(); throw new StoreError("UNSUPPORTED_PROFILE", "the forwarder's connection bound is invalid"); }
-    clearSocketName(socketPath);
+    // A refused listen ends the run the same as an answer it could not give:
+    // the lease is this forwarder's only once the socket name is cleared.
+    try { clearSocketName(socketPath); }
+    catch (error) { lease?.release(); throw error; }
     let forwarder: EgressForwarder;
     const server = createServer(engine => {
       if (forwarder.closing !== null || forwarder.open.size >= concurrent) { engine.destroy(); return; }
