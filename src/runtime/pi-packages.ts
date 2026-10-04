@@ -27,7 +27,15 @@ export const PACKAGE_STORE = ".packages";
 export const PACKAGE_GENERATIONS = ".packages-generations";
 /** The store's index of extension entries, by package. */
 export const PACKAGE_INDEX = "oma-extensions.json";
-const INDEX_BYTES = 1024 * 1024;
+/** UX-20: how large the index may be, written and read alike -- a DoS ceiling
+ * for bytes placed into the store, never the size a real install is meant to
+ * reach. One entry names one resource file with a `packages:` path, so this
+ * bound is the same order as the authored configuration source's
+ * (CONFIGURATION_SOURCE_LIMITS.bytes): tens of thousands of indexed
+ * extensions, skills, prompts and themes fit inside it. The writer enforces
+ * it too, so a change that would overflow it is refused at install instead of
+ * leaving a store nothing can read back. */
+export const PACKAGE_INDEX_BYTES = 8 * 1024 * 1024;
 
 /** Where the packages are, for a society state root under oma's data directory. */
 export function packageStoreDir(stateRoot: string): string {
@@ -168,11 +176,27 @@ function resourceList(value: unknown, invalid: () => never): readonly string[] {
   return Object.freeze([...(value as string[])]);
 }
 
+/** The index bytes, with a file that outgrew the bound said as the limit it
+ * is rather than as corruption: `readUserFile` reports both an irregular file
+ * and an oversized one identically, so the oversized regular file is told
+ * apart here and the refusal names the configured bound. */
+function indexBytes(path: string): string | null {
+  try { return readUserFile(path, PACKAGE_INDEX_BYTES); }
+  catch (error) {
+    if (error instanceof StoreError && error.code === "STORE_CORRUPT") {
+      const observed = lstatSync(path, { throwIfNoEntry: false });
+      if (observed?.isFile() && observed.size > PACKAGE_INDEX_BYTES)
+        throw new StoreError("LIMIT_EXCEEDED", `the installed-package index exceeds its ${PACKAGE_INDEX_BYTES}-byte bound`);
+    }
+    throw error;
+  }
+}
+
 /** The store's index as last written, or none. */
 export function readPackageIndex(store: string): readonly InstalledPackage[] {
   const root = packageStoreRoot(store);
   if (root === null) return Object.freeze([]);
-  const file = readUserFile(join(root, PACKAGE_INDEX), INDEX_BYTES);
+  const file = indexBytes(join(root, PACKAGE_INDEX));
   if (file === null) return Object.freeze([]);
   let value: unknown;
   const invalid = (): never => { throw new StoreError("STORE_CORRUPT", "the installed-package index is malformed"); };
@@ -251,7 +275,12 @@ export async function writePackageIndex(store: string): Promise<readonly Install
   const packages = manager.listConfiguredPackages().filter(entry => entry.scope === "user")
     .map(entry => Object.freeze({ source: entry.source, entries: entries(extensions, entry.source),
       skills: entries(skills, entry.source), prompts: entries(prompts, entry.source), themes: entries(themes, entry.source) }));
-  replaceUserFile(join(store, PACKAGE_INDEX), `${JSON.stringify(packages, null, 2)}\n`);
+  const text = `${JSON.stringify(packages, null, 2)}\n`;
+  // The reader's bound is the writer's too: a change whose index would not
+  // read back is refused here, never left as a store nothing can read.
+  if (Buffer.byteLength(text) > PACKAGE_INDEX_BYTES)
+    throw new StoreError("LIMIT_EXCEEDED", `the installed-package index exceeds its ${PACKAGE_INDEX_BYTES}-byte bound`);
+  replaceUserFile(join(store, PACKAGE_INDEX), text);
   return Object.freeze(packages);
 }
 

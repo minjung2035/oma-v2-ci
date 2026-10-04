@@ -1,13 +1,13 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { mkdirSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { mkdirSync, realpathSync, rmSync, statSync, symlinkSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { createCompleteConfigurationFixture } from "./fixtures/configuration.js";
 import { loadConfiguration, loadConfigurationSnapshot } from "../src/config.js";
 import { DurabilityFaultError, type DurabilityFault } from "../src/storage/durable-fs.js";
 import { CORE_EXTENSION, readExtensions, toggleExtension } from "../src/tui/sources/extensions.js";
 import { commitRoleSet, deriveSessionSettings, projectBundle, readSettings, readSettingsForEditing, roleSetOf, writeSettings } from "../src/tui/sources/settings.js";
-import { PACKAGE_INDEX, packageCommand, packageResourcePaths, readPackageIndex, reconciledEntries, writePackageIndex, type InstalledPackage } from "../src/runtime/pi-packages.js";
+import { PACKAGE_INDEX, PACKAGE_INDEX_BYTES, packageCommand, packageResourcePaths, readPackageIndex, reconciledEntries, writePackageIndex, type InstalledPackage } from "../src/runtime/pi-packages.js";
 import { sessionArgv } from "../src/tui/session.js";
 import { planPiSpawn } from "../src/runtime/pi-spawn-plan.js";
 import { decodeRunLease } from "../src/protocol/run-lease.js";
@@ -267,6 +267,30 @@ test("DR25: a corrupt installed-package index is not an empty package store", ()
       assert.throws(() => readPackageIndex(packages), { code: "STORE_CORRUPT" });
     }
     assert.deepEqual(readPackageIndex(join(f.root, "absent")), []);
+  } finally { f.close(); }
+});
+
+test("UX-20: the package index bound is a named, stated limit -- a realistic multi-megabyte index reads, an over-bound one names the bound", () => {
+  const f = createCompleteConfigurationFixture();
+  try {
+    const packages = store(f.root, { "oma-hello-ext": hello });
+    // A heavy but realistic install: tens of thousands of indexed resource files.
+    // The same document was refused as "not a bounded regular file" at 1 MiB.
+    const heavy = [{ source: "npm:skills-pack", entries: [],
+      skills: Array.from({ length: 24_000 }, (_, i) => `packages:npm/node_modules/skills-pack/skills/skill-${i}/SKILL.md`) }];
+    const text = `${JSON.stringify(heavy, null, 2)}\n`;
+    assert.ok(Buffer.byteLength(text) > 1024 * 1024, "the fixture must exceed the old 1 MiB bound");
+    assert.ok(Buffer.byteLength(text) <= PACKAGE_INDEX_BYTES, "the fixture must fit the configured bound");
+    writeFileSync(join(packages, PACKAGE_INDEX), text);
+    assert.equal(readPackageIndex(packages)[0]!.skills!.length, 24_000);
+
+    // Over the configured bound the refusal names it -- a limit, not corrupt bytes.
+    const over = [{ source: "npm:x", entries: [], skills: Array.from({ length: 200_000 },
+      (_, i) => `packages:npm/node_modules/x/skills/skill-${i}/SKILL.md`) }];
+    writeFileSync(join(packages, PACKAGE_INDEX), JSON.stringify(over));
+    assert.ok(statSync(join(packages, PACKAGE_INDEX)).size > PACKAGE_INDEX_BYTES);
+    assert.throws(() => readPackageIndex(packages),
+      { code: "LIMIT_EXCEEDED", message: new RegExp(`exceeds its ${PACKAGE_INDEX_BYTES}-byte bound`) });
   } finally { f.close(); }
 });
 
