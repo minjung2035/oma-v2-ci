@@ -10,6 +10,7 @@ import ts from "typescript";
 import { StoreError } from "../dist/src/domain/errors.js";
 import { assertNever } from "../dist/src/domain/exhaustive.js";
 import { PUBLIC_METHODS } from "../dist/src/protocol/methods.js";
+import { preacceptEvent } from "../dist/src/reconcile/preaccept.js";
 
 const kinds = Object.entries(PUBLIC_METHODS).filter(([, entry]) => entry.mode === "mutation").map(([kind]) => kind);
 function method(file, className, name) {
@@ -47,6 +48,9 @@ function fixture() {
     recoveryCategory: kind => kind,
     // DR10: startup's collection of artifacts made before an acceptance.
     collectUnacceptedArtifacts: () => { calls.push(["collect"]); return { removed: [], kept: [] }; },
+    // fix/fj: startup reports the collection through this pure event builder;
+    // the empty fixture collection returns null before console is touched.
+    preacceptEvent, console,
     dirname: path => path,
   });
   Object.assign(value, {

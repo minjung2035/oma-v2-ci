@@ -8,7 +8,8 @@ import * as histories from '../dist/src/protocol/host-history.js';
 import { StoreError } from '../dist/src/domain/errors.js';
 const source = readFileSync('src/tui/project-session-directories.ts', 'utf8');
 const code = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText;
-const deadlineSource = ts.createSourceFile('src/runtime/pi-rpc.ts', readFileSync('src/runtime/pi-rpc.ts', 'utf8'), ts.ScriptTarget.Latest, true);
+// fix/fp: alarm is declared in protocol/alarm.ts; pi-rpc.js only re-exports it.
+const deadlineSource = ts.createSourceFile('src/protocol/alarm.ts', readFileSync('src/protocol/alarm.ts', 'utf8'), ts.ScriptTarget.Latest, true);
 const deadline = deadlineSource.statements.find(node => ts.isFunctionDeclaration(node) && node.name?.text === 'alarm');
 assert.ok(deadline);
 const deadlineCode = ts.transpileModule(deadline.getText(deadlineSource), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText;

@@ -250,11 +250,18 @@ for (const stage of ['read', 'close']) test(`Owned cleanup engine file: ${stage}
 for (const file of ['src/runtime/personal-settings.ts', 'src/runtime/pi-runtime.ts'])
   for (const failed of [false, true]) test(`Owned cleanup settings ${file}: ${failed ? 'read failure plus' : 'only'} writer close failure is not success`, t => {
     const root = fixture(t); let returned = 0, writes = 0;
-    const api = load(file, {
+    // fix/fp moved pi-runtime's lock+replace behind the shared lockedUserReplace
+    // (src/runtime/locked-files.ts). The contract under test is unchanged, so
+    // pi-runtime gets the real primitive loaded with the same controlled
+    // internals instead of stubs it no longer calls.
+    const internals = {
       './process-lock.js': { ProcessLock: { acquire: take, tryAcquire: take } },
       './user-files.js': { ensureUserDirectory() {}, readUserFile() { if (failed) throw primary; return null; }, replaceUserFile() { writes++; } },
       './pi-packages.js': { readPackageIndex: () => [], reconciledEntries: entries => entries },
-    });
+    };
+    const api = load(file, file.endsWith('pi-runtime.ts')
+      ? { './locked-files.js': load('src/runtime/locked-files.ts', internals) }
+      : internals);
     function take() { return { assertHeld() {}, close() { returned++; throw secondary; } }; }
     assert.throws(() => file.endsWith('personal-settings.ts')
       ? api.updatePersonalSettings({ dataRoot: root, libdir: root, packages: root }) : api.preparePiRetry(root),

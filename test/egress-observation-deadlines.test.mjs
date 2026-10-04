@@ -12,7 +12,8 @@ const functionText = (file, name) => {
   const node = source.statements.find(node => ts.isFunctionDeclaration(node) && node.name?.text === name);
   assert.ok(node); return node.getText(source).replace(/^export /, '');
 };
-const code = ts.transpileModule(functionText('src/runtime/pi-rpc.ts', 'alarm') + '\n' +
+// fix/fp: alarm lives in protocol/alarm.ts; pi-rpc.js only re-exports it.
+const code = ts.transpileModule(functionText('src/protocol/alarm.ts', 'alarm') + '\n' +
   functionText('src/runtime/egress-forwarder.ts', 'oneFrame') + '\nexports.read = oneFrame;',
   { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText;
 function world(milliseconds) {

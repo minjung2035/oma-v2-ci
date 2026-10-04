@@ -11,7 +11,11 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const dist = join(fileURLToPath(new URL(".", import.meta.url)), "..", "src");
-for (const module of ["runtime/broker-supervisor.js", "cli/transport.js", "runtime/principal-delivery.js", "tui/keys.js"]) {
+// fix/fp: cli/transport.js is now policy-only delegation; the CLI wait's
+// deadline arithmetic lives in client/transport.js and the shared monotonic
+// timer in protocol/alarm.js -- the files held to the clock rule are the
+// ones that measure.
+for (const module of ["runtime/broker-supervisor.js", "client/transport.js", "protocol/alarm.js", "runtime/principal-delivery.js", "tui/keys.js"]) {
   test(`MAC-650: ${module} reads no wall clock to measure time`, () => {
     const source = readFileSync(join(dist, module), "utf8");
     assert.doesNotMatch(source, /Date\.now\b/);
