@@ -692,7 +692,7 @@
     },
     {
       "path": "src/pi-compat/settings.ts",
-      "sha256": "82ad9cbe6cafb87fbe1ac0ad648dbfffaa6771c0172167d3694e3390c86b179f"
+      "sha256": "b0eff8ce46ba36844badaff69826a6e231210f14aba1097b23b1847b02ba5b46"
     },
     {
       "path": "src/pi-compat/wire.ts",

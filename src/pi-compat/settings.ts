@@ -82,10 +82,15 @@ class EphemeralSettingsStorage implements SettingsStorage {
 
 /** A load that reported through `drainErrors` is no load: the malformed bytes
  * stay and the failure is the caller's, as the direct writer's `JSON.parse`
- * threw before it. */
+ * threw before it. The bytes this manager parsed came from the locked
+ * settings slot, so an error it reports is that file's corruption -- the same
+ * STORE_CORRUPT `prepareEngineFile` raises on its own read, never the raw
+ * engine error escaping the taxonomy (the file may have gone bad between the
+ * two reads). */
 function loadedSettings(manager: SettingsManager): Record<string, unknown> {
   const errors = manager.drainErrors();
-  if (errors.length > 0) throw errors[0]!.error;
+  if (errors.length > 0)
+    throw new StoreError("STORE_CORRUPT", "engine file settings.json could not be loaded", { cause: errors[0]!.error });
   return settingsObject(manager.getGlobalSettings());
 }
 

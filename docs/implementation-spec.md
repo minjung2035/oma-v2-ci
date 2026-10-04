@@ -408,15 +408,15 @@ Live batch.prepare/complete는 이 broker를 시작한 host endpoint에서만 �
 
 ## 11. systemd와 lifecycle
 
-**MUST [UNIT-001; arch §§6,15]** society별 허용 unit은 broker.service, 각 Resident의 service/path, principal.path/principal-relay.service, reconcile.service/timer다. unit 이름은 `oma-<society>-broker.service`, `oma-<society>-<actor>.service/.path`, `oma-<society>-principal-relay.service`, `oma-<society>-principal.path`, `oma-<society>-reconcile.service/.timer`다. 이름 충돌 방지를 위해 Resident 이름 broker, principal-relay, reconcile도 금지한다.
+**MUST [UNIT-001; arch §§6,15]** society별 허용 unit은 각 Resident의 service/path와 principal.path/principal-relay.service다. unit 이름은 `oma-<society>-<actor>.service/.path`, `oma-<society>-principal-relay.service`, `oma-<society>-principal.path`다. broker.service와 reconcile.service/timer는 존재하지 않는다 — broker는 제품이 foreground로 직접 실행하고 주기 reconcile은 broker process 안의 sweep이다. 이름 충돌 방지를 위해 Resident 이름 broker, principal-relay, reconcile도 금지한다.
 
 **MUST [UNIT-002]** [systemd templates](implementation-spec.md#unit-renderer-계약)를 고정 renderer로 생성한다. template의 @NODE@/@LIBDIR@/@STATE@/@SOCIETY@/@AGENT@는 host 값에서만 치환한다. unit 이름과 ExecStart argv를 caller 문자열에서 만들지 않는다. `%`/공백/따옴표/newline은 systemd 문법에 맞춰 escape하고 NUL/newline이 들어간 설정은 거절한다. 템플릿은 systemd에 그대로 설치할 파일이 아니다.
 
-**MUST [UNIT-003]** 초기 reference profile은 resident MemoryMax=4G, TasksMax=256, CPUQuota=200%, OOMPolicy=kill, KillMode=control-group, TimeoutStopSec=10s, Restart=on-failure, RestartSec=3s, RestartSteps=4, RestartMaxDelaySec=12s, StartLimitIntervalSec=60s, StartLimitBurst=5다(DR27). systemd의 지수 backoff로 즉시 실패의 재시작 간격을 늘리되 다섯 간격의 합은 60초보다 짧아 연속 즉시 실패가 기존 start-limit을 우회하지 않는다. 동일 backoff를 고정 broker service에도 적용한다. 실제 host cap은 bootstrap config에 명시하고 renderer가 반영한다. resource profile이 지원되지 않으면 무제한으로 실행하지 않고 UNSUPPORTED_PROFILE이다.
+**MUST [UNIT-003]** 초기 reference profile은 resident MemoryMax=4G, TasksMax=256, CPUQuota=200%, OOMPolicy=kill, KillMode=control-group, TimeoutStopSec=10s, Restart=on-failure, RestartSec=3s, RestartSteps=4, RestartMaxDelaySec=12s, StartLimitIntervalSec=60s, StartLimitBurst=5다(DR27). systemd의 지수 backoff로 즉시 실패의 재시작 간격을 늘리되 다섯 간격의 합은 60초보다 짧아 연속 즉시 실패가 기존 start-limit을 우회하지 않는다. 실제 host cap은 bootstrap config에 명시하고 renderer가 반영한다. resource profile이 지원되지 않으면 무제한으로 실행하지 않고 UNSUPPORTED_PROFILE이다.
 
 **MUST [UNIT-007]** systemctl effect 성공은 subprocess spawn이 아니라 정상 exit status와 해당 effect의 후속 actual observation으로 판정한다. nonzero/timeout/signal/malformed 결과를 성공으로 바꾸지 않는다. daemon-reload는 정상 exit와 대상 unit의 LoadState=loaded 및 렌더링한 설정 일치, enable/disable은 unit-file 상태, path start/stop은 path 실제 상태, service stop은 inactive와 cgroup 후손 사망을 확인한다. 관측 실패는 succeeded가 아니며 accepted op는 실제 효과를 대조한다. 짧게 실행 후 정상 종료한 Resident start는 동일 InvocationID의 정상 종료와 pending 재검사를 허용하되 전혀 시작 안 된 inactive와 구분한다. 정확한 systemd property/binding 증거는 S-01/S-06에 pin한다.
 
-**MUST [UNIT-004]** D03: systemd-managed broker는 Type=notify이며 DB/open-operation 복구, 이전 Resident cgroup 정리, socket/인증 준비가 완료된 뒤에만 READY=1을 보낸다. 이 mode의 Resident는 After+BindsTo broker를 유지한다. product-owned foreground broker는 IPC-011/REC-007의 private channel·tenure를 유지하며 존재하지 않는 broker.service에 기대거나 별도 broker service를 몰래 기동하지 않는다. 이 mode의 Resident 활성화는 깨끗한 disposable user에서 동등한 revoke/quiescence/startup fencing을 검증하는 WP03 gate 전 지원 완료로 표시하지 않는다. 동등한 lifetime 경계를 제공하지 못하는 조합은 fail closed하고 systemd-managed mode의 BindsTo를 일괄 제거하지 않는다. 두 mode 모두 Type=exec runner의 Pi/shell/test 후손은 같은 cgroup에 남으며 runner 한 PID 종료를 전체 사망으로 응답하지 않는다.
+**MUST [UNIT-004]** D03: broker는 제품이 foreground로 직접 실행하는 프로세스 하나다 — systemd-managed broker.service는 존재하지 않으며 Resident unit도 어떤 broker unit에 After/BindsTo하지 않는다. product-owned foreground broker는 DB/open-operation 복구, 이전 Resident cgroup 정리, socket/인증 준비가 완료된 뒤에만 준비를 알리고, IPC-011/REC-007의 private channel·tenure를 유지하며 존재하지 않는 broker.service에 기대거나 별도 broker service를 몰래 기동하지 않는다. Type=exec runner의 Pi/shell/test 후손은 같은 cgroup에 남으며 runner 한 PID 종료를 전체 사망으로 응답하지 않는다.
 
 **MUST [UNIT-005]** .path는 inbox/new에 DirectoryNotEmpty를 사용한다. enabled+GOAL 조건이 충족될 때만 enable/start한다. prepared batch만 cur에 남은 경우 reconcile과 startup DB 조회로 service를 시작한다. path 상태만으로 pending을 판단하지 않는다. default.target에 enable된 path가 reboot 때 잘못 켜져도 broker 인증은 stopped/GOAL 없는 실행을 거절하고 reconcile이 path를 중지한다.
 
@@ -734,7 +734,7 @@ session 경계를 넘지 않는 per-request 전환은 하지 않는다. inferenc
 
 ## 19. Extension tool 표면 투영
 
-**MUST [TSP-001; arch §23.12]** role의 tool 표면 투영은 `DIRECT`/`DISABLED`/`GROUPED` 세 모드와 group DAG로 닫는다. group member는 `{tool}` 또는 `{group}`의 명시 참조뿐이며 접두사·정규식·의미 기반 매칭을 도입하지 않는다. 다음은 모두 거절한다: 중복 group 이름, 자기 참조, cycle, 알 수 없는 group/root 참조, 한 tool의 중복 소속, disabled tool의 group 소속, 같은 tool의 direct/grouped 동시 지정, group 이름과 tool selector 충돌, 이름 문법 위반.
+**MUST [TSP-001; arch §23.10]** role의 tool 표면 투영은 `DIRECT`/`DISABLED`/`GROUPED` 세 모드와 group DAG로 닫는다. group member는 `{tool}` 또는 `{group}`의 명시 참조뿐이며 접두사·정규식·의미 기반 매칭을 도입하지 않는다. 다음은 모두 거절한다: 중복 group 이름, 자기 참조, cycle, 알 수 없는 group/root 참조, 한 tool의 중복 소속, disabled tool의 group 소속, 같은 tool의 direct/grouped 동시 지정, group 이름과 tool selector 충돌, 이름 문법 위반.
 
 **MUST [TSP-002]** 투영은 authored 설정 필드가 아니라 runtime plumbing이다. role 파일의 필드 집합은 닫혀 있으므로 `toolSurface` 키가 나타나는 role 파일은 `INVALID_REQUEST`로 config 로드를 실패시킨다(D23). 기존 닫힌 `HostConfigV1`, wire schema, ledger schema, DB entity를 확장하지 않는다. plan은 `OMA_TOOL_SURFACE` 환경 변수로만 sandbox에 도달하고, resident 안의 trusted extension이 session 시작 때 파싱해 malformed이면 fail closed한다(TSP-007).
 
@@ -1028,7 +1028,7 @@ is not a substitute for the full pinned typecheck or runtime wire fixtures.
 
 ## Unit renderer 계약
 
-**MUST [UNIT-TPL-001]** 이 7개 `.in` 파일을 [상위 구현 계약](implementation-spec.md)의 UNIT 요구와 함께 사용한다. broker당 하나, Resident당 service/path 한 쌍, Principal relay/path 한 쌍, reconcile service/timer 한 쌍이다. Resident service는 path가 시작하며 독립 enable target은 없다.
+**MUST [UNIT-TPL-001]** 이 4개 `.in` 파일을 [상위 구현 계약](implementation-spec.md)의 UNIT 요구와 함께 사용한다: Resident당 service/path 한 쌍, Principal relay service와 principal path다. Resident service는 path가 시작하며 독립 enable target은 없다.
 
 **MUST [UNIT-TPL-002]** renderer는 user unit directory의 `oma-<society>-...` 이름으로 atomic 설치하고 `systemctl --user daemon-reload` 후 필요한 unit만 enable/start한다. state root는 config와 일치하는 절대 path다. 입력의 systemd `%` 및 ExecStart 인자 escaping을 검증한다. fixed installation Node executable과 compiled TypeScript entrypoints를 사용한다.
 

@@ -137,6 +137,9 @@ jobs:
           run_check build 900 npm run build
           run_check check-package 900 npm run check:package
           run_check check-architecture 900 npm run check:architecture
+          # Doc↔inventory pairing: check:architecture runs it in its chain too;
+          # this separate evidence line names the drifted clause directly.
+          run_check spec-inventory 900 npm run check:spec-inventory
           run_check test 1800 npm test
           # Only the lanes whose environment this runner actually provides. A
           # hosted runner has no systemd user manager and no bubblewrap, so the
