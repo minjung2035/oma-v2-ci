@@ -82,6 +82,13 @@ export class PublicDispatcher {
   private checkParams<M extends PublicMethod>(method: M, rawParams: unknown): PublicMethods[M]["params"] | null {
     return decodePublicParams(method, rawParams, { limits: this.deps.limits });
   }
+  /** Whether the ledger holds a minted terminal receipt under this key --
+   * the only rows whose replay is a read. A decode failure on the durable
+   * row is corruption and is answered as STORE_CORRUPT, not silently fenced. */
+  private terminalReceiptHeld(actor: Actor, key: RequestKey): boolean {
+    const receipt = this.deps.store.getReceipt(actor, key);
+    return receipt !== null && (receipt.state === "succeeded" || receipt.state === "failed");
+  }
   private readAuthority(auth: AuthContext): { actor: PublicAgentView | null; failure: Failure | null } {
     const actor = this.deps.store.getAgent(auth.actor);
     const stale = auth.channel === "actor" && (actor?.incarnation !== auth.incarnation || actor.desired !== "enabled");
@@ -131,7 +138,22 @@ export class PublicDispatcher {
     if (auth.role === "principal" && auth.channel === "actor" && !principalRequestAllowed(method, params))
       return fail("CAPABILITY_DENIED", "the Principal delegates routine work to Workers");
     if (hasStream && (descriptor.stream === "none" || (descriptor.stream === "optional-bundle" && !Object.hasOwn(params, "bundle")))) return fail("INVALID_REQUEST", "method does not accept this stream body");
-    if (phase === "stream-preflight" || this.deps.isDraining() || descriptor.mode === "mutation") this.deps.assertAdmission();
+    if (phase === "stream-preflight" || this.deps.isDraining() || descriptor.mode === "mutation") {
+      try { this.deps.assertAdmission(); }
+      catch (error) {
+        // P0: a replay of an already-minted terminal receipt is a read, not a
+        // new claim. When the fence refuses but the ledger holds a
+        // succeeded/failed row for this actor's key, the owning method answers
+        // the recorded receipt (same payload) or REQUEST_KEY_REUSED (a
+        // different payload) -- neither mints acceptance. Pending and unknown
+        // rows are not minted receipts and keep the refusal. The lookup is a
+        // durable read, safe without admission-held resources, and runs only
+        // once the fence actually fired: a healthy mutation never inspects
+        // the operation ledger (P11).
+        if (!(descriptor.key === "required" && descriptor.mode === "mutation" &&
+          isValidRequestKey(envelope.request) && this.terminalReceiptHeld(auth.actor, envelope.request))) throw error;
+      }
+    }
     // Resources are judged once the action is known. Stream bytes are reserved by transport.
     let release: Release = NO_HOLD;
     if (phase === "dispatch") {

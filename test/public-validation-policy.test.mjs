@@ -61,6 +61,9 @@ function fixture(transform = source => source) {
       getAgent() { calls.actors++; if (state.observationError) throw state.observationError; return state.actor; },
       listAgents: () => state.actor ? [state.actor] : [],
       hasOperation() { calls.operationChecks++; calls.order.push("operation"); if (state.throwOnOperationCheck) throw new Error("unexpected operation lookup"); return false; },
+      // The terminal-replay read runs only after the admission fence fired;
+      // this fixture holds no minted receipt, so the fence's answer stands.
+      getReceipt() { calls.receiptReads = (calls.receiptReads ?? 0) + 1; return null; },
     },
     mail: { send: effect }, units: { statusSnapshot: async () => ({ observedAtMs: 1, units: new Map(), failure: null }) },
     views: { status: () => [] }, lifecycle: {}, limits: {},
