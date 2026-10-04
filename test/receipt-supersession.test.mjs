@@ -140,11 +140,29 @@ function walker(home, keys, receiptLiteral, ready, { untilDone = false } = {}) {
       if (Date.now() - start > 30_000) throw new Error("the start signal never came");
     }
     let i = 0;
+    // CACHE_UNAVAILABLE rides on the error's code, not in its message, and is
+    // the cache's defined answer when a contending process holds a receipt
+    // lock past the wait bound. A regressor takes it and moves on: its passes
+    // keep racing the other keys either way. The settler retries it a bounded
+    // number of times instead -- a skipped settle would leave the key
+    // unsettled, which reads exactly like the regression under test, and a
+    // cache that stays unavailable is a failure to report, not a pass.
+    const SETTLER_RETRIES = 10;
     const pass = () => {
       i += 1;
       for (const key of keys) {
-        try { cache.updateReceipt(key, ${receiptLiteral}); }
-        catch (error) { if (!/cannot both succeed and fail|CACHE_UNAVAILABLE/.test(String(error && error.message))) throw error; }
+        for (let attempt = 0; ; attempt++) {
+          try { cache.updateReceipt(key, ${receiptLiteral}); break; }
+          catch (error) {
+            if (error && error.code === "CACHE_UNAVAILABLE") {
+              if (${JSON.stringify(untilDone)}) break;
+              if (attempt < SETTLER_RETRIES) continue;
+              throw error;
+            }
+            if (!/cannot both succeed and fail/.test(String(error && error.message))) throw error;
+            break;
+          }
+        }
       }
     };
     if (${JSON.stringify(untilDone)}) {
