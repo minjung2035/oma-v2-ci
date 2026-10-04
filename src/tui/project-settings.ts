@@ -53,7 +53,10 @@ export function applyPackageChange(options: { readonly dataRoot: string; readonl
   let applied = false;
   let activatedRoles = "Principal and Workers";
   const added = after.filter(item => item.source === options.activate || !before.some(earlier => earlier.source === item.source));
-  for (const item of added) if (item.entries.length === 0) said.push(`${item.source} has no extension oma can load (only extensions are loaded).`);
+  for (const item of added) if (item.entries.length === 0)
+    said.push((item.skills?.length ?? 0) + (item.prompts?.length ?? 0) + (item.themes?.length ?? 0) > 0
+      ? `${item.source} has no extension to turn on; its other resources reach every engine.`
+      : `${item.source} has no extension oma can load.`);
   let names: string[] = [];
   try { names = readdirSync(join(dataRoot, ".projects")).filter(name => isValidSocietyName(name)).sort(); } catch (error) {
     if ((error as NodeJS.ErrnoException).code !== "ENOENT") {

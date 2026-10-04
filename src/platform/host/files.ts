@@ -16,7 +16,7 @@
  *   removed (`collectTemporaries`).
  */
 import { randomUUID } from "node:crypto";
-import { closeSync, constants, fsyncSync, linkSync, mkdirSync, openSync, readdirSync, renameSync, rmSync, unlinkSync, writeSync } from "node:fs";
+import { closeSync, constants, fsyncSync, linkSync, mkdirSync, mkdtempSync, openSync, readdirSync, renameSync, rmSync, unlinkSync, writeFileSync, writeSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { assertHostDirectoryLayout } from "../../runtime/assets.js";
 import { StoreError } from "../../domain/errors.js";
@@ -125,6 +125,42 @@ export function collectTemporaries(dir: string): string[] {
     removed.push(name);
   }
   return removed;
+}
+
+/** DR25 (C20): staging a local package for `oma pi install` on the Mac host.
+ * The store sits in the app's own support directory, outside any society's
+ * state tree, and the host lock serializes its writers -- the effects are
+ * the Linux staging's, spelled by path. */
+export function createHostStagingDirectory(parent: string, prefix: string): string {
+  assertHostDirectoryLayout(parent, true);
+  return mkdtempSync(join(parent, prefix));
+}
+
+/** `rel` is a directory beneath the staging root, its parents made too. */
+export function makeHostStagedDirectories(root: string, rel: string): void {
+  mkdirSync(join(root, rel), { recursive: true });
+}
+
+/** `bytes` is the file `rel` beneath the staging root, its parents made. */
+export function writeHostStagedFile(root: string, rel: string, bytes: Buffer, mode: number): void {
+  const path = join(root, rel);
+  mkdirSync(dirname(path), { recursive: true });
+  writeFileSync(path, bytes, { mode });
+}
+
+/** `made` becomes `<dir>/<name>` whole: a dead copy goes first, the rename
+ * lands the new one, the directory is flushed. */
+export function publishHostStaged(made: string, dir: string, name: string): void {
+  const dest = join(dir, name);
+  ensureHostUserDirectory(dirname(dest));
+  rmSync(dest, { recursive: true, force: true });
+  renameSync(made, dest);
+  fsyncDirectory(dirname(dest));
+}
+
+/** A staging root given back unpublished, or a dead copy being pruned. */
+export function removeHostStaged(path: string): void {
+  rmSync(path, { recursive: true, force: true });
 }
 
 /** DR27: a private snapshot tree in the host's transfer directory, never a

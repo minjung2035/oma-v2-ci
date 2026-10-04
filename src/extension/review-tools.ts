@@ -106,9 +106,16 @@ export function registerReviewTools(pi: ExtensionAPI, context: ReviewToolContext
         : kind === "merge"
           ? "Drive a merge request through peer review. open freezes candidate and base under a tier; review adds discussion; vote records the binding verdict -- recorded votes only, never your own request; status reads the ledger; cancel withdraws an unapplied request; diff pages the exact base→candidate patch. Tiers: LOW applies alone, MEDIUM needs one peer approve, HIGH needs two then the Principal."
           : "Revert a merge that already applied, through the same review path as a merge request. open prepares the revert (or takes your own candidate+base); diff's view selects the revert (default) or the original patch.",
-      promptSnippet: kind === "merge"
-        ? "open and review merge requests"
-        : "revert an applied merge",
+      // One line of the system prompt per tool. The Principal's registration
+      // carries diff and vote alone, so its snippet names those -- never the
+      // Worker verbs open/review/cancel it cannot call.
+      promptSnippet: principal
+        ? kind === "merge"
+          ? "diff and vote a HIGH merge's approval"
+          : "diff and vote a challenge's approval"
+        : kind === "merge"
+          ? "open and review merge requests"
+          : "revert an applied merge",
       parameters: principal ? principalSchema(kind) : workSchema(kind),
       async execute(id, raw, signal, _update, engine) {
         const params = raw as Record<string, unknown>;

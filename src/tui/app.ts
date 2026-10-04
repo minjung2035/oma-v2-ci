@@ -209,7 +209,8 @@ export class TuiApp {
           this.ports.setExtension(effect.id, effect.role, effect.enabled);
           this.refresh();
           const source = this.ports.extensions().find(row => row.id === effect.id)?.source;
-          this.notice = { kind: "extension", id: effect.id, role: effect.role, enabled: effect.enabled, ...(source === undefined ? {} : { source }) };
+          this.notice = { kind: "extension", id: effect.id, role: effect.role, enabled: effect.enabled,
+            apply: effect.role === "principal" ? "next-session" : "next-activation", ...(source === undefined ? {} : { source }) };
           return;
         case "submit-prompt": {
           // Taking the prompt and showing it are one step. The session answers

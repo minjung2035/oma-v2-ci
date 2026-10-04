@@ -17,7 +17,8 @@ import { errorCodeOf, errorExit, isErrorCode } from "../domain/errors.js";
 import { hostApiRequest } from "../platform/host/api-client.js";
 import { attachTerminal } from "../platform/host/attach-client.js";
 import { PLATFORM_FRAME_BYTES } from "../protocol/host-guest.js";
-import { PACKAGE_USAGE, packageActivation, packageCommand, writePackageIndex, type PackageCommand } from "../runtime/pi-packages.js";
+import { PACKAGE_USAGE, packageActivation, packageCommand, packageListLines, writePackageIndex, type PackageCommand } from "../runtime/pi-packages.js";
+import { pruneLocalStage, stageLocalPackage } from "../runtime/local-package.js";
 import { reconcilePersonalSettings } from "../runtime/personal-settings.js";
 import { parseMacArguments } from "../runtime/host-arguments.js";
 import { ProcessLock } from "../runtime/process-lock.js";
@@ -32,7 +33,7 @@ import { isValidSocietyName } from "../domain/identifiers.js";
 import { hostPersonalHistoryQuery, inspectHostPersonalHistory } from "../platform/host/personal-histories.js";
 
 function say(line: string, code: number): never { process.stderr.write(`${line}\n`); process.exit(code); }
-const USAGE = `usage: oma [--mode society|personal] [--resume <history>]\n       oma bind <society> | attach <society> [--takeover] | status | list | open <society> --project <id> | stop\n${PACKAGE_USAGE.replace(/^usage: /, "       ")} [--project <id> | --host-only]`;
+const USAGE = `usage: oma [--mode society|personal] [--resume <history>]\n       oma bind <society> | attach <society> [--takeover] | status | list | open <society> --project <id> | stop\n${PACKAGE_USAGE.replace(/^usage: /, "       ")}\n       oma pi install|remove|update|list ... [--project <id> | --host-only]`;
 let home: string, socketPath: string, token: string;
 
 const STATES: Record<string, string> = { stopped: "Stopped", booting: "Starting", handshaking: "Starting", ready: "Running",
@@ -70,20 +71,30 @@ async function packages(decision: Extract<PackageCommand, { kind: "run" }>): Pro
   if (lock === null) say("Another oma pi command is running.", 1);
   const code = await withAsyncCleanup(async () => {
     const libdir = resolve(fileURLToPath(new URL("../../../", import.meta.url)));
+    // C20: a local source is copied into the store first; the engine installs
+    // the staged `local/<name>`, never the path the Human gave.
+    let run = decision;
+    if (decision.local !== undefined)
+      run = Object.freeze({ ...decision, args: Object.freeze(["install", stageLocalPackage(store, decision.local)]) });
     let code = await runEngineLogin({ stateRoot: join(store, "oma"), libdir: `${libdir}/`,
-      override: process.env.OMA_PI_COMMAND, fence: lock.descriptor, env: process.env, packages: { store, args: decision.args } });
+      override: process.env.OMA_PI_COMMAND, fence: lock.descriptor, env: process.env, packages: { store, args: run.args } });
     if (code === 0 && decision.command !== "list" && !args.includes("--help") && !args.includes("-h")) {
       lock.assertHeld(join(home, "run", "packages.lock"));
       await writePackageIndex(store);
+      pruneLocalStage(store);
       reconcilePersonalSettings({ dataRoot: home, libdir, packages: store });
       if (decision.hostOnly) process.stdout.write("Host packages updated; Society packages were not synchronized. Select Personal extensions in Config > Extensions.\n");
       else {
-        const activate = packageActivation(decision);
+        const activate = packageActivation(run);
         const synced = await call("packages.sync", { ...(projectId === undefined ? {} : { projectId }),
           ...(activate === undefined ? {} : { activate }) }, `pi-${randomUUID()}`);
         if (Array.isArray(synced.said) && synced.said.length > 0) process.stdout.write(`${synced.said.filter(line => typeof line === "string").join("\n")}\n`);
         code = synced.ok === true ? 0 : 1;
       }
+    }
+    if (code === 0 && decision.command === "list") {
+      const contents = packageListLines(store);
+      if (contents.length > 0) process.stdout.write(`Package contents:\n  ${contents.join("\n  ")}\n`);
     }
     return code;
   }, () => lock.close());
@@ -130,7 +141,7 @@ async function main(argv: readonly string[]): Promise<void> {
   // a failed Society observation, and do not require the app's token.
   if (decision?.kind === "run" && decision.hostOnly) return packages(decision);
   try { token = readFileSync(join(home, "run", "token"), "utf8").trim(); }
-  catch { say("OMA is not running. Open the OMA app.", 3); }
+  catch { say("OMA is not running. Open the OMA app, or use --host-only for package operations without the VM.", 3); }
   if (decision?.kind === "run") return packages(decision);
   const command = parsed.kind;
   if (parsed.kind === "bind") {

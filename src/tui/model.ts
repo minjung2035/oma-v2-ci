@@ -120,7 +120,11 @@ export type Notice =
   | { readonly kind: "saved-unread"; readonly label: string; readonly value: string; readonly reason: string }
   | { readonly kind: "extension"; readonly id: string; readonly role: "principal" | "workers"; readonly enabled: boolean;
       /** DR25: the package it came from, which names it on the screen. */
-      readonly source?: string }
+      readonly source?: string;
+      /** Arch §23.6, as for every field: when the toggle takes effect -- the
+       * Principal's engine reads extensions at session start, a Resident's at
+       * its next activation. */
+      readonly apply: ApplyScope }
   | { readonly kind: "save-failed"; readonly message: string }
   /** CONFIG-CONTRACT: the edit was committed and is what the file holds; that
    * it survives a power loss is what is not known yet. */

@@ -94,6 +94,12 @@ test("D26: every OMA tool's serialized schema, label and snippet is the recorded
       assert.equal(typeof tool.label, "string", `${side} ${tool.name} carries no label`);
     }
   }
+  // The Principal's registration carries diff and vote alone; its prompt line
+  // names only actions it can actually call, never the Worker verbs.
+  assert.equal(principal.find(t => t.name === "oma_merge")!.promptSnippet, "diff and vote a HIGH merge's approval");
+  assert.equal(principal.find(t => t.name === "oma_challenge")!.promptSnippet, "diff and vote a challenge's approval");
+  assert.equal(worker.find(t => t.name === "oma_merge")!.promptSnippet, "open and review merge requests");
+  assert.equal(worker.find(t => t.name === "oma_challenge")!.promptSnippet, "revert an applied merge");
 });
 
 test("D26: the tool result envelope is one text block plus details, never bare text", async () => {

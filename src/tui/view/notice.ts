@@ -16,7 +16,7 @@ function worded(notice: Notice): string {
     case "saved-unread":
       return `${notice.label} = ${notice.value} · Saved; displayed values are unconfirmed because settings could not be read back: ${notice.reason}`;
     case "extension":
-      return `${extensionLabel(notice.id, notice.source)} · ${notice.role === "principal" ? "Principal" : "Workers"} ${notice.enabled ? "enabled" : "disabled"} · Saved`;
+      return `${extensionLabel(notice.id, notice.source)} · ${notice.role === "principal" ? "Principal" : "Workers"} ${notice.enabled ? "enabled" : "disabled"} · Saved · ${applyLabel(notice.apply)}`;
     case "saved-unconfirmed":
       return `Saved; durability is unconfirmed (will check again before the next edit): ${notice.message}`;
     case "save-failed":

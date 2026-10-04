@@ -3,7 +3,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { spawn, spawnSync } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
@@ -42,7 +42,8 @@ test("Mac host packages: explicit local install/list/update/remove never needs a
   };
   const store = join(host, "packages"), preferences = { dataRoot: host, libdir: fileURLToPath(new URL("../../", import.meta.url)), packages: store };
   const ordinary = await result("install", "npm:oma-host-fixture");
-  assert.equal(ordinary.code, 3, ordinary.output); assert.match(ordinary.output, /Open the OMA app/);
+  assert.equal(ordinary.code, 3, ordinary.output);
+  assert.equal(ordinary.output.trim(), "OMA is not running. Open the OMA app, or use --host-only for package operations without the VM.");
   assert.equal(existsSync(host), false, "missing app was reinterpreted as permission for a local install");
   const installed = await result("install", "npm:oma-host-fixture", "--host-only");
   assert.equal(installed.code, 0, installed.output); assert.match(installed.output, /Society packages were not synchronized/);
@@ -53,6 +54,7 @@ test("Mac host packages: explicit local install/list/update/remove never needs a
   const society = join(host, "society-settings.json"); writeFileSync(society, "unchanged Society choices\n");
   const listed = await result("list", "--host-only"); assert.equal(listed.code, 0, listed.output);
   assert.match(listed.output, /oma-host-fixture/); assert.doesNotMatch(listed.output, /Host packages updated/);
+  assert.match(listed.output, /Package contents:\n {2}npm:oma-host-fixture: 1 extension\n/);
   const busy = ProcessLock.tryAcquire(join(host, "run", "packages.lock")); assert.ok(busy);
   try {
     const refused = await result("remove", "npm:oma-host-fixture", "--host-only");
@@ -94,6 +96,21 @@ test("Mac host packages: explicit local install/list/update/remove never needs a
   const removed = await result("remove", "npm:oma-host-fixture", "--host-only");
   assert.equal(removed.code, 0, removed.output); assert.deepEqual(readPackageIndex(store), []);
   assert.deepEqual(readPersonalSettings(host)?.extensions, []);
+
+  // C20 on the host store: a local package directory is copied in and installed
+  // by the engine as `local/<name>`, never used where it lies; remove takes
+  // the copy away with the entry.
+  const localInstalled = await result("install", source, "--host-only");
+  assert.equal(localInstalled.code, 0, localInstalled.output);
+  assert.equal(existsSync(join(store, "local", "oma-host-fixture", "extensions", "hello.ts")), true);
+  assert.deepEqual(readPackageIndex(store), [{ source: "local/oma-host-fixture",
+    entries: ["packages:local/oma-host-fixture/extensions/hello.ts"], skills: [], prompts: [], themes: [] }]);
+  const localListed = await result("list", "--host-only");
+  assert.match(localListed.output, /local\/oma-host-fixture: 1 extension/);
+  const localRemoved = await result("remove", "local/oma-host-fixture", "--host-only");
+  assert.equal(localRemoved.code, 0, localRemoved.output);
+  assert.deepEqual(readPackageIndex(store), []);
+  assert.equal(readdirSync(join(store, "local")).length, 0, "a removed local package's copy leaves the store");
   assert.equal(readFileSync(society, "utf8"), "unchanged Society choices\n");
   assert.equal(existsSync(join(userHome, ".pi")), false); assert.equal(existsSync(join(host, "run", "hostapi.sock")), false);
   assert.equal(existsSync(join(host, ".projects")), false);

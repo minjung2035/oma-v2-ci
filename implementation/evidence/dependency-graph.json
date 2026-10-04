@@ -282,6 +282,7 @@
   "src/runtime/inference-relay.ts",
   "src/runtime/interactive-channel.ts",
   "src/runtime/interactive-display.ts",
+  "src/runtime/local-package.ts",
   "src/runtime/oma-theme.ts",
   "src/runtime/personal-models.ts",
   "src/runtime/personal-session.ts",
@@ -1847,7 +1848,7 @@
     "src/sandbox.ts",
     "src/platform/"
    ],
-   "files": 112
+   "files": 113
   },
   {
    "index": 5,
@@ -1864,8 +1865,8 @@
    "files": 82
   }
  ],
- "files": 377,
- "runtimeEdges": 1614,
+ "files": 378,
+ "runtimeEdges": 1627,
  "typeOnlyEdges": 427,
  "runtimeEdgeMatrix": {
   "L1-kernel -> L1-kernel": 314,
@@ -1874,14 +1875,14 @@
   "L3-workflow -> L1-kernel": 223,
   "L3-workflow -> L2-facts": 14,
   "L3-workflow -> L3-workflow": 68,
-  "L4-orchestration -> L1-kernel": 335,
+  "L4-orchestration -> L1-kernel": 340,
   "L4-orchestration -> L2-facts": 8,
   "L4-orchestration -> L3-workflow": 19,
-  "L4-orchestration -> L4-orchestration": 167,
+  "L4-orchestration -> L4-orchestration": 173,
   "L5-entry -> L1-kernel": 124,
   "L5-entry -> L2-facts": 2,
   "L5-entry -> L3-workflow": 7,
-  "L5-entry -> L4-orchestration": 132,
+  "L5-entry -> L4-orchestration": 134,
   "L5-entry -> L5-entry": 160
  },
  "upwardTypeOnlyEdges": [
@@ -1901,14 +1902,14 @@
   ]
  ],
  "fanIn": {
-  "src/domain/errors.ts": 202,
+  "src/domain/errors.ts": 203,
   "src/domain/identifiers.ts": 62,
   "src/storage/paths.ts": 31,
+  "src/storage/contained-fs.ts": 30,
   "src/protocol/host-guest.ts": 29,
-  "src/storage/contained-fs.ts": 29,
   "src/ids.ts": 26,
-  "src/storage/directory.ts": 25,
-  "src/storage/durable-fs.ts": 25,
+  "src/storage/directory.ts": 26,
+  "src/storage/durable-fs.ts": 26,
   "src/domain/canonical-json.ts": 21,
   "src/domain/derived.ts": 20,
   "src/frame.ts": 20,
@@ -1918,12 +1919,12 @@
   "src/process/policies.ts": 17
  },
  "fanOut": {
-  "src/entry/oma-society.ts": 40,
+  "src/entry/oma-society.ts": 41,
   "src/broker.ts": 31,
   "src/mail.ts": 29,
   "src/entry/broker.ts": 28,
+  "src/entry/oma-mac.ts": 21,
   "src/review.ts": 21,
-  "src/entry/oma-mac.ts": 20,
   "src/runtime/client-runtime.ts": 19,
   "src/git.ts": 18,
   "src/pi-extension.ts": 18,
@@ -1940,15 +1941,15 @@
   "koffi": 6,
   "node:async_hooks": 4,
   "node:child_process": 8,
-  "node:crypto": 45,
-  "node:fs": 114,
+  "node:crypto": 46,
+  "node:fs": 115,
   "node:fs/promises": 1,
   "node:http": 1,
   "node:https": 1,
   "node:module": 3,
   "node:net": 32,
-  "node:os": 8,
-  "node:path": 123,
+  "node:os": 9,
+  "node:path": 124,
   "node:perf_hooks": 5,
   "node:sqlite": 4,
   "node:stream": 3,
@@ -1956,8 +1957,9 @@
   "node:string_decoder": 1,
   "node:timers/promises": 3,
   "node:tty": 1,
-  "node:url": 10,
+  "node:url": 11,
   "node:util": 5,
+  "node:zlib": 1,
   "nodemailer": 1,
   "nodemailer/lib/mime-funcs": 1,
   "typebox": 4
