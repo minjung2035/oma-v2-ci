@@ -26,15 +26,20 @@ const codec = "src/storage/operation-codec.ts";
 const validate = "src/validate.ts";
 
 // All mutations stay in compiler memory. Production files and v1 fixtures are untouched.
+// Unchanged inputs answer the baseline's own SourceFiles: parsing, binding and
+// module resolution are functions of file content, so the shared syntax is what
+// a reparse would produce (the language service reuses SourceFiles the same way
+// across program versions). The check is unaffected -- every diagnostic below
+// is still computed by the mutation program's own checker over live sources.
 function programWith(overrides) {
   const options = baseline.getCompilerOptions();
   const host = ts.createCompilerHost(options);
   const original = host.getSourceFile.bind(host);
   host.getSourceFile = (file, version, ...rest) => {
     const key = relative(root, file).replaceAll("\\", "/");
-    return Object.hasOwn(overrides, key)
-      ? ts.createSourceFile(file, overrides[key], version, true)
-      : original(file, version, ...rest);
+    if (Object.hasOwn(overrides, key))
+      return ts.createSourceFile(file, overrides[key], version, true);
+    return baseline.getSourceFile(file) ?? original(file, version, ...rest);
   };
   return ts.createProgram({
     options,
@@ -59,6 +64,18 @@ const errors = (program) =>
   ts
     .getPreEmitDiagnostics(program)
     .filter((d) => d.category === ts.DiagnosticCategory.Error);
+// Assertions that pin one file's diagnostics pay for one file, not the whole
+// program: a full getPreEmitDiagnostics rechecks every source (~10 s) while the
+// per-file pair asks the checker only for what the assertion reads. Assertions
+// that must prove the program is error-free keep `errors` (whole program).
+const fileErrors = (program, file) => {
+  const source = program.getSourceFile(resolve(root, file));
+  assert.ok(source, `mutation program is missing ${file}`);
+  return [
+    ...program.getSyntacticDiagnostics(source),
+    ...program.getSemanticDiagnostics(source),
+  ].filter((d) => d.category === ts.DiagnosticCategory.Error);
+};
 const message = (diagnostic) =>
   ts.flattenDiagnosticMessageText(diagnostic.messageText, "\n");
 const hasError = (diagnostics, file, code, text) =>
@@ -164,7 +181,7 @@ test("P22 A: adding a public read method requires DTO, descriptor, handler and r
   );
   const changes = { [wire]: changedWire };
   assert.ok(
-    hasError(errors(programWith(changes)), methods, 1360, "probe.read"),
+    hasError(fileErrors(programWith(changes), methods), methods, 1360, "probe.read"),
     "DTO alone must not bypass descriptor closure",
   );
   changes[methods] = replaceOnce(
@@ -173,7 +190,7 @@ test("P22 A: adding a public read method requires DTO, descriptor, handler and r
     'export const PUBLIC_METHODS = {\n  "probe.read": { mode: "read", key: "forbidden", stream: "none", channel: "actor", result: "probe.read", capability: null, resource: "read", authority: ["current-actor"], paramsCheck: fixed(agentWaitParamsCheck) },',
   );
   assert.ok(
-    hasError(errors(programWith(changes)), publicDispatcher, 2345, "never"),
+    hasError(fileErrors(programWith(changes), publicDispatcher), publicDispatcher, 2345, "never"),
     "descriptor must not bypass real handler closure",
   );
   changes[publicDispatcher] = replaceOnce(
@@ -182,7 +199,7 @@ test("P22 A: adding a public read method requires DTO, descriptor, handler and r
     'case "probe.read": return okAnswer(id, { accepted: true });\n      default: return assertNever(method);',
   );
   assert.ok(
-    hasError(errors(programWith(changes)), response, 1360, "probe.read"),
+    hasError(fileErrors(programWith(changes), response), response, 1360, "probe.read"),
     "handler must not bypass response decoder closure",
   );
   changes[response] = replaceOnce(
@@ -214,7 +231,7 @@ test("P22 B: a new operation kind cannot omit result, codec or result-validator 
   const planOnly = programWith(changes);
   assert.throws(() => assertOperationClosure(planOnly), /result kind closure/);
   assert.ok(
-    hasError(errors(planOnly), codec, 1360, "probe.mutate"),
+    hasError(fileErrors(planOnly, codec), codec, 1360, "probe.mutate"),
     "actual codec registry must reject a missing kind",
   );
   changes[durable] = replaceOnce(
@@ -266,6 +283,29 @@ test("P22 C: a new kernel file fails until it receives an explicit semantic owne
 });
 
 test("P22 D: optional repair/recover/transaction capabilities cannot silently widen consumer ports", () => {
+  // One program carries every optional member: if ordinary assignability
+  // caught any single widening the whole-program diagnostic would name it,
+  // so one compile proves all six widen silently. The surface review pin
+  // stays per capability below -- it is pure syntax, no program needed.
+  const widened = {};
+  for (const [file, port] of [
+    [publicDispatcher, "PublicStorePort"],
+    ["src/broker/internal-dispatcher.ts", "InternalStorePort"],
+  ])
+    widened[file] = ["repair", "recover", "transaction"].reduce(
+      (text, capability) =>
+        replaceOnce(
+          text,
+          `export interface ${port} {`,
+          `export interface ${port} {\n  readonly ${capability}?: () => void;`,
+        ),
+      read(file),
+    );
+  assert.deepEqual(
+    errors(programWith(widened)).map(message),
+    [],
+    "optional widening is not caught by ordinary assignability",
+  );
   for (const [file, port] of [
     [publicDispatcher, "PublicStorePort"],
     ["src/broker/internal-dispatcher.ts", "InternalStorePort"],
@@ -275,11 +315,6 @@ test("P22 D: optional repair/recover/transaction capabilities cannot silently wi
         read(file),
         `export interface ${port} {`,
         `export interface ${port} {\n  readonly ${capability}?: () => void;`,
-      );
-      assert.deepEqual(
-        errors(programWith({ [file]: changed })).map(message),
-        [],
-        "optional widening is not caught by ordinary assignability",
       );
       assert.notDeepEqual(
         interfaceSurface(changed, file),
@@ -298,7 +333,7 @@ test("V29A: the request-hash set-field recipe is a closed registry of mutation m
     ["a field the method does not have", '"mail.send": ["to"],', '"mail.send": ["recipients"],'],
     ["a field that is not a set", '"mail.send": ["to"],', '"mail.send": ["subject"],'],
   ]) {
-    const diagnostics = errors(programWith({ [identity]: replaceOnce(base, before, after) }));
-    assert.ok(diagnostics.some((d) => d.file?.fileName === resolve(root, identity)), `${name} compiled`);
+    const program = programWith({ [identity]: replaceOnce(base, before, after) });
+    assert.ok(fileErrors(program, identity).length > 0, `${name} compiled`);
   }
 });

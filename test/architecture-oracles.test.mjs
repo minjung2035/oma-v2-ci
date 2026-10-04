@@ -425,6 +425,9 @@ test("P14 declaration-only ports retain pinned implementation conformance outsid
   );
   const host = ts.createCompilerHost(program.getCompilerOptions());
   const read = host.getSourceFile.bind(host);
+  // The mutated program re-reads only the port; every other input is the
+  // production program's own SourceFile -- parse and binding are functions of
+  // content, so shared syntax is what a reparse would produce.
   const portAst = ts.createSourceFile(port.fileName, port.text, ts.ScriptTarget.Latest, true);
   let returnTypeRange = null;
   const findOperationLookup = (node) => {
@@ -438,18 +441,19 @@ test("P14 declaration-only ports retain pinned implementation conformance outsid
   host.getSourceFile = (file, version, ...rest) =>
     file === port.fileName
       ? ts.createSourceFile(file, mutatedPort, version, true, ts.ScriptKind.TS)
-      : read(file, version, ...rest);
+      : (program.getSourceFile(file) ?? read(file, version, ...rest));
   const mutated = ts.createProgram({
     rootNames: [conformance.fileName],
     options: program.getCompilerOptions(),
     host,
   });
+  // The assertion reads one file's diagnostics; a whole-program preEmit pass
+  // would recheck every source for the same answer.
   assert.ok(
-    ts
-      .getPreEmitDiagnostics(mutated)
-      .some(
-        (d) => d.code === 2344 && d.file?.fileName === conformance.fileName,
-      ),
+    [
+      ...mutated.getSyntacticDiagnostics(conformance),
+      ...mutated.getSemanticDiagnostics(conformance),
+    ].some((d) => d.code === 2344),
     "incompatible Store must fail conformance, not just a caller",
   );
 });

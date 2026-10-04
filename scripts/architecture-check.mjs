@@ -709,10 +709,18 @@ export function analyzeProgram(
             );
         }
       }
+      // booleanUse walks the parent chain with no checker queries, and a
+      // member call can only resolve to Set.add when its accessed name is
+      // "add" -- both cheap gates before resolving the signature.
       if (
         ts.isCallExpression(node) &&
-        isNativeSetAdd(checker, node) &&
-        booleanUse(node)
+        booleanUse(node) &&
+        (!ts.isPropertyAccessExpression(node.expression) ||
+          node.expression.name.text === "add") &&
+        (!ts.isElementAccessExpression(node.expression) ||
+          !ts.isStringLiteralLike(node.expression.argumentExpression) ||
+          node.expression.argumentExpression.text === "add") &&
+        isNativeSetAdd(checker, node)
       )
         report(
           "set-add-membership",
@@ -801,7 +809,18 @@ export function analyzeProgram(
       }
       if (ts.isObjectLiteralExpression(node)) {
         const properties = node.properties.filter(ts.isPropertyAssignment);
-        const schemaProperties = properties.filter((property) => {
+        // Either report needs at least three schema-shaped properties whose
+        // names are all in one field table, so fewer than three properties
+        // named in the union of both tables can never fire -- skip the type
+        // queries entirely in that case.
+        const fieldNames = properties.filter((property) => {
+          const name = propertyName(property.name);
+          return (
+            name !== null &&
+            (resourceFields.has(name) || limitFields.has(name))
+          );
+        });
+        const schemaProperties = fieldNames.length < 3 ? [] : properties.filter((property) => {
           const value = strip(property.initializer);
           return (
             checker.getTypeAtLocation(value).getCallSignatures().length > 0 ||

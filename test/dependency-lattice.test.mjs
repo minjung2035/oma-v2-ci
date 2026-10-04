@@ -19,7 +19,9 @@ function analyze(files) {
       writeFileSync(absolute, contents);
       return absolute;
     });
-    const program = ts.createProgram(paths, { noEmit: true, strict: true, types: [], target: ts.ScriptTarget.ES2022,
+    // No lib files: the fixture programs only need their own modules resolved
+    // for the lattice/type-cycle graph, so parsing lib.*.d.ts is pure cost.
+    const program = ts.createProgram(paths, { noEmit: true, strict: true, types: [], lib: [], target: ts.ScriptTarget.ES2022,
       module: ts.ModuleKind.NodeNext, moduleResolution: ts.ModuleResolutionKind.NodeNext });
     return analyzeProgram(program, { rootDir: root, checkContracts: false })
       .filter(finding => LATTICE_RULES.has(finding.rule));
@@ -89,6 +91,10 @@ test("P5 lattice: one layer is one mechanism, so an intra-layer type cycle is no
 
 test("P5 lattice: the current production graph satisfies the enforced lattice", () => {
   const program = createArchitectureProgram(process.cwd());
-  const findings = analyzeProgram(program, { rootDir: process.cwd() }).filter(finding => LATTICE_RULES.has(finding.rule));
+  // The lattice, kernel and type-cycle findings are all evaluated from the
+  // import graph before the contract-exhaustiveness section runs, so disabling
+  // contract checks cannot change any finding this filter keeps.
+  const findings = analyzeProgram(program, { rootDir: process.cwd(), checkContracts: false })
+    .filter(finding => LATTICE_RULES.has(finding.rule));
   assert.deepEqual(findings, [], JSON.stringify(findings, null, 2));
 });
