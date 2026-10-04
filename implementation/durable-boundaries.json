@@ -1014,8 +1014,8 @@
       ]
     },
     {
-      "owner": "src/pi-compat/settings.ts#OmaSettingsStorage.withLock",
-      "fact": "the engine home's settings.json replaced atomically under the writer's lock by the Pi SettingsManager semantics OMA wraps; a refused or dead write leaves the previous bytes",
+      "owner": "src/runtime/locked-files.ts#lockedUserReplace",
+      "fact": "the engine-owned files (the engine home's settings.json under Pi SettingsManager semantics, retry, presentation, keybindings, open-tui) merged and replaced atomically under the writer's lock by the one locked read-modify-replace; a refused or dead write leaves the previous bytes",
       "tests": [
         {
           "file": "test/pi-compat.test.ts",
@@ -1032,17 +1032,6 @@
           "title": "every interactive settings file enforces its own single name",
           "injection": "logical"
         },
-        {
-          "file": "test/crash-kill-boundaries.test.ts",
-          "title": "P0V-96 / P0-7: a derived-file replacement SIGKILLed at any point",
-          "injection": "sigkill"
-        }
-      ]
-    },
-    {
-      "owner": "src/runtime/pi-runtime.ts#prepareEngineFile",
-      "fact": "private engine retry and presentation settings merged under one lock, replaced atomically and reapplied on restart",
-      "tests": [
         {
           "file": "test/pi-runtime.test.ts",
           "title": "INF-001: engine retry settings preserve unrelated fields and allow exactly five outer retries",
