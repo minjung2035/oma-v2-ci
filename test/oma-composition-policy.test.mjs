@@ -289,6 +289,9 @@ async function run({ brokerState = { kind: "started", pid: 1 }, credentials = ["
     "../runtime/pi-packages.js": { PACKAGE_USAGE: "usage: oma pi ...", packageStoreDir: () => PACKAGE_STORE,
       readPackageIndex: () => [], packageCommand: () => { throw new Error("a start ran oma pi"); },
       writePackageIndex: async () => { throw new Error("a start wrote the package index"); }, reconciledEntries: entries => entries },
+    // C20: local-package staging is a package command's concern; a start never touches it.
+    "../runtime/local-package.js": { stageLocalPackage: () => { throw new Error("a start staged a local package"); },
+      pruneLocalStage: () => { throw new Error("a start pruned the local stage"); } },
     "../runtime/personal-settings.js": { reconcilePersonalSettings() { throw new Error("a Society start reconciled Personal choices"); } },
     "../runtime/session-handoff.js": { requestHostNewSession() { calls.push("host-new"); return hostNew; } },
     "../runtime/host-history-channel.js": { HostHistoryChannel: { open() { return hostHistory; } } },

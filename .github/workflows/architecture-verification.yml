@@ -20,7 +20,7 @@ jobs:
     # fire after every check has had the time it was given -- otherwise a check
     # still running inside its own budget would be killed by the outer one and
     # the evidence would say "timeout" about work that was proceeding.
-    timeout-minutes: 210
+    timeout-minutes: 240
     env:
       EVIDENCE: /tmp/oma-evidence-${{ github.run_id }}-${{ github.run_attempt }}
       # The one commit this run is about. On a pull request `github.sha` names a

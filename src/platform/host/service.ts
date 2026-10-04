@@ -312,7 +312,10 @@ export class HostService {
           const project = projects().find(p => p.projectId === params.projectId);
           if (project === undefined || params.society !== undefined && params.society !== project.society)
             throw new StoreError("INVALID_REQUEST", "That history is not bound to a project on this Mac");
-          if (method === "session.resume") await lifecycle.start();
+          // A resume may be the first interaction after an update: the boot
+          // must take the same pre-update snapshot `start` takes, or the
+          // rollback point is gone before this image writes the disk.
+          if (method === "session.resume") { await updateSnapshot(); await lifecycle.start(); }
           else if (lifecycle.state !== "ready") throw new StoreError("BROKER_UNAVAILABLE", "Guest histories require an already running engine");
           await projectRepo(project);
           const peer = await link.json("society");

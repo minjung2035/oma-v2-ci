@@ -77,6 +77,8 @@ function world(platform, { selected = 'personal', birth, birthError, societies =
       assert.equal(packages, true, 'not a package test');
       return packageGrammar.packageCommand(args, true);
     }, async writePackageIndex() { effects.push(['index']); }, packageActivation() { return 'npm:fixture'; } },
+    '../runtime/local-package.js': { stageLocalPackage(_store, source) { effects.push(['stage-local', source]); return 'local/staged-fixture'; },
+      pruneLocalStage() { effects.push(['prune-local']); } },
     '../runtime/personal-settings.js': { reconcilePersonalSettings() { assert.equal(packages, true); effects.push(['reconcile']); } },
     '../runtime/process-lock.js': { ProcessLock: { tryAcquire() { effects.push(['lock']); assert.equal(packages, true);
       return { descriptor: 17, assertHeld() {}, close() { effects.push(['return']); } }; } } },
@@ -132,7 +134,7 @@ test('Linux birth router: Society admission happens only after the chooser', asy
 test('Mac birth router: explicit host-only package command requires neither token nor Host API', async () => {
   const w = world('darwin', { packages: true, tokenError: new Error('app absent') });
   await assert.rejects(w.main(['pi', 'install', 'npm:fixture', '--host-only']), error => error.exit === 0);
-  assert.deepEqual(w.effects.map(item => item[0]), ['mkdir', 'mkdir', 'lock', 'engine-login', 'index', 'reconcile', 'return']);
+  assert.deepEqual(w.effects.map(item => item[0]), ['mkdir', 'mkdir', 'lock', 'engine-login', 'index', 'prune-local', 'reconcile', 'return']);
   assert.match(w.output.join(''), /Society packages were not synchronized/); assert.equal(w.attached.length, 0);
 });
 for (const args of [['list', '--host-only', '--host-only'], ['install', 'npm:fixture', '--host-only', '--project', '00000000-0000-4000-8000-000000000001'],

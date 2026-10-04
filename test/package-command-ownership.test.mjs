@@ -40,6 +40,9 @@ function world(platform, { command = 'update', args = [command, 'npm:fixture'], 
     readPackageIndex() { assert.equal(held, true); calls.push('before'); if (failure === 'before') throw primary; return []; },
     async runEngineLogin(options) { assert.equal(options.fence, 17); await step('engine'); return code; },
     async writePackageIndex() { await step('index'); return []; },
+    stageLocalPackage(_store, source) { assert.equal(held, true); calls.push('stage'); if (failure === 'stage') throw primary; return 'local/staged'; },
+    pruneLocalStage() { assert.equal(held, true); calls.push('prune'); if (failure === 'prune') throw primary; },
+    packageListLines() { assert.equal(held, true); return []; },
     reconcilePersonalSettings(options) { assert.equal(held, true); calls.push('personal');
       assert.equal(options.dataRoot, '/fixture/home'); if (failure === 'personal') throw primary; },
     applyPackageChange() { assert.equal(held, true); calls.push('roles'); if (failure === 'roles') throw primary; return { ok: synced, said: [] }; },
@@ -57,11 +60,11 @@ for (const platform of ['linux', 'darwin']) {
   test(`Package owner ${platform}: a successful change refreshes the shared index and existing Personal preferences before returning its lock`, async () => {
     const w = world(platform); await assert.rejects(w.run(), error => error.exit === 0);
     assert.deepEqual(w.calls, platform === 'darwin'
-      ? ['directory:/fixture/home/packages', 'directory:/fixture/home/run', 'take', 'engine', 'assert-held', 'index', 'personal', 'sync', 'return']
-      : ['directory', 'take', 'before', 'engine', 'index', 'roles', 'personal', 'return']);
+      ? ['directory:/fixture/home/packages', 'directory:/fixture/home/run', 'take', 'engine', 'assert-held', 'index', 'prune', 'personal', 'sync', 'return']
+      : ['directory', 'take', 'before', 'engine', 'index', 'prune', 'roles', 'personal', 'return']);
     assert.equal(w.returns, 1); assert.equal(w.held, false);
   });
-  for (const failure of platform === 'darwin' ? ['location', 'engine', 'index', 'personal', 'sync'] : ['before', 'engine', 'index', 'roles', 'personal'])
+  for (const failure of platform === 'darwin' ? ['location', 'engine', 'index', 'prune', 'personal', 'sync'] : ['before', 'engine', 'index', 'prune', 'roles', 'personal'])
     test(`Package owner ${platform}: ${failure} failure returns the acquired lock and is not success`, async () => {
       const w = world(platform, { failure }); await assert.rejects(w.run(), error => error === w.primary);
       assert.equal(w.returns, 1); assert.equal(w.held, false); assert.equal(w.calls.at(-1), 'return');
@@ -77,7 +80,7 @@ for (const platform of ['linux', 'darwin']) {
   for (const options of [{ code: 7 }, { command: 'list', args: ['list'] }, { args: ['install', '--help'] }, { args: ['install', '-h'] }])
     test(`Package owner ${platform}: ${JSON.stringify(options)} does not reinterpret a non-change as extension selection`, async () => {
       const w = world(platform, options); await assert.rejects(w.run(), error => error.exit === (options.code ?? 0));
-      for (const effect of ['index', 'personal', 'roles', 'sync']) assert.equal(w.calls.includes(effect), false, effect);
+      for (const effect of ['index', 'prune', 'personal', 'roles', 'sync']) assert.equal(w.calls.includes(effect), false, effect);
       assert.equal(w.returns, 1);
     });
   test(`Package owner ${platform}: failed project application remains nonzero after host preferences are reconciled`, async () => {
@@ -87,7 +90,7 @@ for (const platform of ['linux', 'darwin']) {
 }
 test('Package owner darwin: explicit host-only refreshes the same store without selecting or synchronizing Society', async () => {
   const w = world('darwin', { hostOnly: true }); await assert.rejects(w.run(), error => error.exit === 0);
-  assert.deepEqual(w.calls, ['directory:/fixture/home/packages', 'directory:/fixture/home/run', 'take', 'engine', 'assert-held', 'index', 'personal', 'return']);
+  assert.deepEqual(w.calls, ['directory:/fixture/home/packages', 'directory:/fixture/home/run', 'take', 'engine', 'assert-held', 'index', 'prune', 'personal', 'return']);
   assert.match(w.output.join(''), /Society packages were not synchronized/); assert.equal(w.returns, 1);
 });
 for (const failure of ['location', 'engine', 'index', 'personal'])
