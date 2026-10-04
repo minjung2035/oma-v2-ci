@@ -1865,7 +1865,7 @@
   }
  ],
  "files": 377,
- "runtimeEdges": 1610,
+ "runtimeEdges": 1611,
  "typeOnlyEdges": 427,
  "runtimeEdgeMatrix": {
   "L1-kernel -> L1-kernel": 313,
@@ -1877,7 +1877,7 @@
   "L4-orchestration -> L1-kernel": 333,
   "L4-orchestration -> L2-facts": 8,
   "L4-orchestration -> L3-workflow": 19,
-  "L4-orchestration -> L4-orchestration": 166,
+  "L4-orchestration -> L4-orchestration": 167,
   "L5-entry -> L1-kernel": 124,
   "L5-entry -> L2-facts": 2,
   "L5-entry -> L3-workflow": 7,
@@ -1929,9 +1929,9 @@
   "src/pi-extension.ts": 18,
   "src/git/context-repository.ts": 17,
   "src/entry/pi-interactive-host.ts": 16,
+  "src/platform/host/service.ts": 16,
   "src/git/context.ts": 15,
   "src/lifecycle/create.ts": 15,
-  "src/platform/host/service.ts": 15,
   "src/reconcile.ts": 15
  },
  "external": {

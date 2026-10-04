@@ -68,7 +68,7 @@
     },
     {
       "path": "src/broker/process-ancestry.ts",
-      "sha256": "745b2a1be3ea82a60fe5f1371a1fd1775e7b6b2142e7b96c032c471da58f92d8"
+      "sha256": "3d72cf704a21ed07dd78ed8a4e3e53f465c71fb0f38bc57829d6b2da3c281c5c"
     },
     {
       "path": "src/broker/public-dispatcher.ts",

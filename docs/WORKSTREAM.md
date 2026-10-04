@@ -87,11 +87,13 @@ Pi/OS 기능을 다시 구현해서 생긴 중복·workaround·pre-release 잔�
 - `runner.observe` write-only sink — consumer 의도인가 제거인가
 - `OMA_TOOL_SURFACE` dormant producer — 미래 스테이징 의도인가
 - `extension.tools.set` mutation + renderResult 재구현 (#11/#12 잔여) — 설계 결정
-- egress 실패 시 조용한 저하(oma-society.ts:667) — 방어 정책인가
-- macOS principal-authority substrate (/proc only, macOS 동등성 미검증)
-- `snapshot.ts` staged dead code (NB-27 의도적 보류)
-- AV-15/AV-17 미수정 detector (audit이 기록한 기존 미수정)
-- `HOME ?? "/tmp"` cache-root fallback (unreachable이지만 process-global 잠재 위험)
+
+### 해결됨 (fix/fh, 사용자 지시로 전부 구현)
+- egress 실패 시 조용한 저하 — `OMA_EGRESS_SOCKET`이 있으면(필수) `BROKER_UNAVAILABLE`로 닫히고, 선택 경로만 인간이 보는 notice와 함께 degrade한다 (af3671c)
+- macOS principal-authority substrate — `ProcessProbe` seam 도입: Linux는 /proc 유지, 그 외 플랫폼은 모든 관측이 `unavailable`(절대 `exited` 아님, INV02). macOS 동등성 lane은 명시적으로 `NOT_RUN` — native substrate 미탑재·미주장
+- `snapshot.ts` staged code — HostService에 wiring 완료: start 시 `openSnapshotStore`, 새 image 첫 부팅 전 update snapshot(실패 시 부팅 거부), `snapshot.create` Host API(v4), prune은 최신 3개+실행 image의 update snapshot 보호 (63f94f1)
+- AV-15/AV-17 — 구현 완료: lease 종료가 guest forwarder를 닫고(f72a7d9), durable intent/outcome record는 shape 검증 후에만 읽힌다(e095d1d)
+- `HOME ?? "/tmp"` — 제거: HOME 없는 process는 그 사실을 말하고 아무것도 /tmp로 추측하지 않는다 (1715ae5)
 
 ## 6. 선행 작업 큐 (코드베이스 전체 확장 전 — 사용자 지시)
 
