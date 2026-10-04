@@ -127,8 +127,20 @@ Pi/OS 기능을 다시 구현해서 생긴 중복·workaround·pre-release 잔�
   → 결정: 로컬 디렉토리를 package store로 복사 설치 허용(기존 store 파이프라인·ro mount 재사용);
   `oma pi` help/list가 skills/prompts/themes를 안 보여줌; DR25 535행 stale;
   macOS `oma pi list` 오류에 `--host-only` 힌트 없음; 확장 토글 저장 시 적용 시점 미표기
-- 오버엔지니어링·Pi 중복(5441ed15 진행 중): 결과는 §2 기준으로 분류 — 사용자 기대 미충족은
-  구현(내부 문제 포함), 순수 기술개선은 기록만
+- 오버엔지니어링·Pi 중복 감사 완료(5441ed15). 판정 요약:
+  - **바로 삭제/정리 (fix/fp 배정)**: B1 `AsyncUnitsOrchestrationPort` dead contract;
+    B2 미검증 module-contracts 인터페이스(PiAdapter 선언은 이미 실구현과 어긋남);
+    B3 module-ports facade; B4 rpc-client 4줄 re-export; B5 alarm() 이중 구현;
+    A7 lockedJsonReplace 이중 경로(pi-runtime vs settings); B7 FrameParser/ConnectionDecoder
+    공통 파서; decodeKeys → test helper 이동
+  - **upstream 요청으로만 해결 가능 (기록, 구현 불가)**: pi-tui에 bounded StdinBuffer,
+    promptSink/editor hook, InteractiveMode override 포인트, builtin-command registry export,
+    session-env/session-header reader, 기본 tool-result renderer export, open-tui branding hook
+    — Pi로 bump할 때마다 재확인
+  - **유지 (더 강한 보장이라 delegation 하면 손실)**: pi-rpc/jsonl(경계·deadline·poison),
+    KeyDecoder의 바이트 bound·UTF-8 정책(paste atomicity는 Pi에 없음),
+    pi-compat mirror층, contained-* 재사용-격리 구조, panel/screen 분리
+  - 사용자-facing 명령 표면은 이미 타이트 — `oma pi`·`OMA_PI_COMMAND`는 정당한 제품/운영 표면
 
 ## 6. 선행 작업 큐 (코드베이스 전체 확장 전 — 사용자 지시)
 
