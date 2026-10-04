@@ -290,14 +290,14 @@ function publishOnce(parent: number, name: string, target: string, data: string 
  */
 export function replaceDerivedFile(target: string, bytes: string | Uint8Array, mode = 0o600, faults?: DurabilityObserver): void {
   ensureDurableDirectory(dirname(target), 0o755, faults);
-  // The directory is resolved once, and the temporary, the rename and the
-  // flush all address it through that descriptor. Creating the temporary by
-  // pathname after checking the directory -- which is what this did -- let any
-  // process of this user swap a component of the path in between, so the file
-  // the product believed it had replaced under its state tree was created,
-  // written and renamed somewhere else entirely. `ensureDurableDirectory`
-  // having just succeeded proved nothing about the walk that followed it: it
-  // was a different walk.
+  // The directory is resolved once per attempt, and the temporary, the rename
+  // and the flush all address it through that descriptor. Creating the
+  // temporary by pathname after checking the directory -- which is what this
+  // did -- let any process of this user swap a component of the path in
+  // between, so the file the product believed it had replaced under its state
+  // tree was created, written and renamed somewhere else entirely.
+  // `ensureDurableDirectory` having just succeeded proved nothing about the
+  // walk that followed it: it was a different walk.
   for (let attempt = 0; ; attempt++) {
     const result = withinDirectory(target, (parent, name) => {
       // P0V-96: what a killed writer of this name left is collected first, and
