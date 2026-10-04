@@ -804,7 +804,7 @@
     },
     {
       "path": "src/platform/host/host-api.ts",
-      "sha256": "fd8f0a8afed867802072d96c92cb042c7572dd01f1a069ff4c12312ed0894e9e"
+      "sha256": "eaa17a522c5df5258bc4b6aa13f6929085a4411428404ce9f15bd55d6dda23e2"
     },
     {
       "path": "src/platform/host/image.ts",
@@ -848,11 +848,11 @@
     },
     {
       "path": "src/platform/host/service.ts",
-      "sha256": "411c240afeaf8228b91b3f9760295fb180a9761939ab91a3479b5f3da1b179db"
+      "sha256": "cefd001b3d4dc8a14b0d9a3dfac4709a661e3b0694497199560b8abc165bddca"
     },
     {
       "path": "src/platform/host/snapshot.ts",
-      "sha256": "bce59d002ae5af3c82d75f83ddfb58913350201dd514a539fe6d0b582b512d44"
+      "sha256": "1d46dea94e0e6264c080445074d5cd9098fef4d4cdf5bbcf439e315c90b755fe"
     },
     {
       "path": "src/platform/host/vz-driver.ts",
@@ -1108,7 +1108,7 @@
     },
     {
       "path": "src/runtime/local-package.ts",
-      "sha256": "eab364061032b405a96e0226f38ab543644cf9409c35f61fbbc8f66c1ff33aee"
+      "sha256": "9dabb287ee1f6b5c810c68a866469eb6facd4cde884c090782b975319e08428e"
     },
     {
       "path": "src/runtime/locked-files.ts",
