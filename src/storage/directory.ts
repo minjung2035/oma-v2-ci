@@ -59,7 +59,11 @@ export function ensureDirectory(path: string, mode = 0o755): readonly string[] {
 
 /** Only for caller-owned unaccepted/temporary artifacts. Never collect accepted evidence.
  * Readdir, chmod and removal stay under held directories; links are not traversed.
- */
+ * A leaf that is not a directory or a regular file -- a link, socket or fifo an
+ * interrupted writer or a same-UID stray left in the owned tree -- is unlinked
+ * as the entry it is, never followed (unlink removes the name, not its target):
+ * the tree is being deleted either way, and refusing on an unexpected leaf
+ * wedges the sweep that owns the tree without protecting anything outside it. */
 export function removeOwnedTree(path: string): void {
   let parent: number;
   try { parent = openDirectory(dirname(path)); }
@@ -74,8 +78,7 @@ export function removeOwnedTree(path: string): void {
           const child = openBeneath(directory, name, constants.O_RDONLY | constants.O_DIRECTORY);
           try { walk(child); } finally { closeSync(child); }
           rmdirSync(entry);
-        } else if (stat.isFile()) unlinkSync(entry);
-        else throw new StoreError("STORE_CORRUPT", "owned staging holds a non-regular entry");
+        } else unlinkSync(entry);
       }
       fsyncSync(directory);
     };

@@ -387,6 +387,96 @@ test("DR25/C20: a staging-prefixed file or link is collected with dead areas -- 
   } finally { f.close(); }
 });
 
+test("DR25/C20: a dead copy holding a link is collected whole -- a non-regular entry does not wedge the prune", () => {
+  const f = createCompleteConfigurationFixture();
+  try {
+    const store = join(f.root, "packages");
+    mkdirSync(join(store, "local", "live"), { recursive: true });
+    writeFileSync(join(store, "settings.json"), JSON.stringify({ packages: ["local/live"] }));
+    // copyIntoStage resolves links, so a staged copy never holds one: a link
+    // inside a dead local/<pkg> directory is corruption, but it is corruption
+    // inside oma-owned content that is being deleted either way. The old
+    // removeOwnedTree refused the leaf (STORE_CORRUPT), aborting the sweep --
+    // this dead directory and everything sorted after it stayed forever, and
+    // every later `oma pi` change ended in the same throw. Owned-tree removal
+    // unlinks a non-regular leaf as the entry it is, never followed.
+    mkdirSync(join(store, "local", "dead-pkg", "sub"), { recursive: true });
+    writeFileSync(join(store, "local", "dead-pkg", "e.ts"), "export default function () {}\n");
+    symlinkSync(join(store, "elsewhere"), join(store, "local", "dead-pkg", "link.ts"));
+    symlinkSync(join(store, "gone"), join(store, "local", "dead-pkg", "sub", "nested"));
+    mkdirSync(join(store, "local", "zz-dead"), { recursive: true });
+    writeFileSync(join(store, "local", "zz-dead", "x.ts"), "x\n");
+
+    pruneLocalStage(store);
+    assert.equal(lstatSync(join(store, "local", "dead-pkg"), { throwIfNoEntry: false }), undefined,
+      "a dead copy is collected even though it held a link");
+    assert.equal(existsSync(join(store, "local", "zz-dead")), false, "the sweep reaches dead content after it");
+    assert.equal(existsSync(join(store, "local", "live")), true, "a package settings still names is kept");
+  } finally { f.close(); }
+});
+
+test("DR25/C20: a `local` entry that is not a directory is collected, not wedged on", () => {
+  const f = createCompleteConfigurationFixture();
+  try {
+    const store = join(f.root, "packages");
+    mkdirSync(store, { recursive: true });
+    writeFileSync(join(store, "settings.json"), JSON.stringify({ packages: ["local/none"] }));
+    // existsSync passes on a regular file and readdirSync threw ENOTDIR; a
+    // dangling link made existsSync answer false and was left behind for
+    // staging to fail on forever after. `local/` can hold staged copies only
+    // as a directory staging made, so a non-directory entry in its slot is
+    // dead store-root content: collected for what it is, like the
+    // staging-prefixed strays beside it.
+    writeFileSync(join(store, "local"), "not a directory\n");
+    pruneLocalStage(store);
+    assert.equal(lstatSync(join(store, "local"), { throwIfNoEntry: false }), undefined, "a `local` file is collected");
+
+    // A `local` link -- including one whose target is a real directory -- is
+    // unlinked as the entry it is; removal never follows it, so the target's
+    // contents are untouched.
+    const real = join(store, "real-dir");
+    mkdirSync(real, { recursive: true });
+    writeFileSync(join(real, "inside.txt"), "still here\n");
+    symlinkSync(real, join(store, "local"));
+    pruneLocalStage(store);
+    assert.equal(lstatSync(join(store, "local"), { throwIfNoEntry: false }), undefined, "a `local` link is collected as an entry");
+    assert.equal(readFileSync(join(real, "inside.txt"), "utf8"), "still here\n", "the link's target is not the entry's");
+
+    symlinkSync(join(store, "gone-target"), join(store, "local"));
+    pruneLocalStage(store);
+    assert.equal(lstatSync(join(store, "local"), { throwIfNoEntry: false }), undefined, "a dangling `local` link is collected");
+  } finally { f.close(); }
+});
+
+test("DR25/C20: a configured `local/foo/sub` descends `local/foo` and keeps its child only -- the scope rule generalized", () => {
+  const f = createCompleteConfigurationFixture();
+  try {
+    const store = join(f.root, "packages");
+    mkdirSync(store, { recursive: true });
+    // resourceEntryProblem accepts multi-component names, so `local/foo/sub`
+    // is a lawful configured source: the copy IS the `sub` child beneath the
+    // `foo` directory, the same shape `local/@scope/pkg` has under its scope.
+    // A bare prefix keep of `foo` held dead siblings forever; the entry is
+    // descended and only configured children stay, as under a scope.
+    mkdirSync(join(store, "local", "foo", "sub"), { recursive: true });
+    writeFileSync(join(store, "local", "foo", "sub", "e.ts"), "export default function () {}\n");
+    mkdirSync(join(store, "local", "foo", "dead"), { recursive: true });
+    mkdirSync(join(store, "local", "whole", "child"), { recursive: true });
+    writeFileSync(join(store, "local", "whole", "child", "x.ts"), "x\n");
+    // `gone/b` is configured but `gone` holds only a dead sibling: the
+    // descended directory is emptied and collected with it.
+    mkdirSync(join(store, "local", "gone", "dead"), { recursive: true });
+    writeFileSync(join(store, "settings.json"), JSON.stringify({ packages: ["local/foo/sub", "local/whole", "local/gone/b"] }));
+
+    pruneLocalStage(store);
+    assert.equal(existsSync(join(store, "local", "foo", "sub", "e.ts")), true, "the configured child is kept");
+    assert.equal(existsSync(join(store, "local", "foo", "dead")), false, "a dead sibling under a descended entry is collected");
+    assert.equal(existsSync(join(store, "local", "foo")), true, "the kept child's parent directory stays");
+    assert.equal(existsSync(join(store, "local", "whole", "child", "x.ts")), true, "a source naming the entry itself keeps it whole");
+    assert.equal(existsSync(join(store, "local", "gone")), false, "a descended directory emptied of dead children goes too");
+  } finally { f.close(); }
+});
+
 test("DR25: a project's inline settings become a managed bundle that runs as it did, and every session is made from it, roles and all", () => {
   const f = createCompleteConfigurationFixture();
   try {

@@ -33,7 +33,7 @@
  */
 import { randomUUID } from "node:crypto";
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
-import { closeSync, constants, existsSync, fsyncSync, lstatSync, mkdirSync, readdirSync, readFileSync,
+import { closeSync, constants, fsyncSync, lstatSync, mkdirSync, readdirSync, readFileSync,
   realpathSync, renameSync, statSync, writeFileSync } from "node:fs";
 import { gunzipSync } from "node:zlib";
 import { userInfo } from "node:os";
@@ -560,7 +560,18 @@ export function pruneLocalStage(store: string): void {
       remove(path, lstatSync(path).isDirectory());
     }
   const local = join(root, PACKAGE_LOCAL_DIR);
-  if (!existsSync(local)) return;
+  const localEntry = lstatSync(local, { throwIfNoEntry: false });
+  if (localEntry === undefined) return;
+  if (!localEntry.isDirectory()) {
+    // `local/` is only ever a directory staging made: a file, link or socket
+    // in its slot holds no staged copies beneath it, and reading it as a
+    // directory would throw and wedge every later `oma pi` change. The store
+    // root is oma's own, so the stray entry is collected for what it is --
+    // the same answer the staging-prefixed non-directories above get. A link
+    // is unlinked, never followed: what it pointed at is not the entry's.
+    remove(local, false);
+    return;
+  }
   const inside: string[] = [];
   for (const source of configuredPackageSources(root)) {
     const resolved = isAbsolute(source) ? source : join(root, source);
@@ -572,13 +583,15 @@ export function pruneLocalStage(store: string): void {
   }
   const kept = (unit: string): boolean => inside.some(path => path === unit || path.startsWith(`${unit}${sep}`));
   for (const entry of readdirSync(local, { withFileTypes: true })) {
-    if (entry.name.startsWith("@") && entry.isDirectory()) {
-      // A bare "@word" is a name the resource rule accepts, so a manifest
-      // may name the package itself `@bare`: the staged copy IS the scope
-      // directory, and a configured source naming it keeps it whole. A
-      // source naming a child (`local/@scope/pkg`) keeps that child only --
-      // its dead siblings are still collected below.
-      if (inside.includes(entry.name)) continue;
+    // A configured source naming the entry itself keeps it whole -- a staged
+    // copy IS `local/<name>`, including a bare "@word" scope directory a
+    // manifest may name itself (`local/@bare` stages AT the scope dir).
+    if (inside.includes(entry.name)) continue;
+    if (entry.isDirectory() && inside.some(path => path.startsWith(`${entry.name}${sep}`))) {
+      // A configured source naming a strict descendant (`local/foo/sub`, or a
+      // scoped `local/@scope/pkg`) descends the entry: only children a source
+      // still names are kept, dead siblings are collected, and a directory
+      // emptied of them goes too.
       for (const child of readdirSync(join(local, entry.name))) {
         const path = join(local, entry.name, child);
         if (!kept(`${entry.name}${sep}${child}`)) remove(path, lstatSync(path).isDirectory());

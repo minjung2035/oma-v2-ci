@@ -1108,7 +1108,7 @@
     },
     {
       "path": "src/runtime/local-package.ts",
-      "sha256": "a1fb107ef6b22547fcb4f6cfe101885f076e118cecf76facd258bc727106e562"
+      "sha256": "5b5fc63632d881e4bdee151d0e356b712b92e2bc9137d8be76d6947c378e5a22"
     },
     {
       "path": "src/runtime/locked-files.ts",
@@ -1240,7 +1240,7 @@
     },
     {
       "path": "src/storage/directory.ts",
-      "sha256": "f35d3880679e8d4b22c97aa741f4fc7130a8a7d8bce09d7a06ea497ef20eebec"
+      "sha256": "e5f3efa8a0bf71a9853e6a997a5cb74f7f5c71509dbcdefe30e1300b866d7665"
     },
     {
       "path": "src/storage/durable-fs.ts",
