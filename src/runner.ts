@@ -27,7 +27,8 @@ import {
   decodeRunLease,
   type ValidatedRunLease,
 } from "./protocol/run-lease.js";
-import { PiAdapter } from "./runtime/pi-adapter.js";
+import { PiAdapter, type EngineObservation } from "./runtime/pi-adapter.js";
+import { errorCodeOf } from "./domain/errors.js";
 import { ensureDurableDirectory } from "./storage/durable-fs.js";
 import {
   agentRootPathAt,
@@ -95,6 +96,16 @@ export class RunnerModule {
   private readonly channel: BrokerChannel;
   private lease: ValidatedRunLease | null = null;
   private stopped = false;
+  /** runner.observe: the latest engine observation not yet acknowledged by
+   * the broker. Diagnostics are memory-only on both ends, never authority:
+   * a newer one replaces a queued one, one send is ever in flight on the one
+   * channel, and a refused or unreachable observation is dropped rather
+   * than delivered as a delivery failure. */
+  private queuedObservation: EngineObservation | null = null;
+  private observationInFlight = false;
+  /** The send loop's handle: delivery completion joins it so the last thing
+   * the broker hears is the engine's settled state, before batch.complete. */
+  private observationFlush: Promise<void> | null = null;
   constructor(
     private readonly paths: RunnerPaths,
     private readonly agent: string,
@@ -311,6 +322,49 @@ export class RunnerModule {
       ...(inference === undefined ? {} : { inference }),
     };
   }
+  /** Queues the engine's latest self-report for `runner.observe`. The send
+   * loop is serialized on the one channel: while a call is in flight a newer
+   * observation replaces the queued one, so the broker's memory-only record
+   * converges on the newest report without ever stacking calls. */
+  private noteObservation(observation: EngineObservation): void {
+    this.queuedObservation = observation;
+    if (this.observationInFlight) return;
+    this.observationInFlight = true;
+    this.observationFlush = (async () => {
+      try {
+        for (;;) {
+          const next = this.queuedObservation;
+          if (next === null) return;
+          this.queuedObservation = null;
+          const params = {
+            reason: next.reason,
+            ...(next.toolName === undefined ? {} : { toolName: next.toolName }),
+            observedAtMs: Date.now(),
+          };
+          let response;
+          try { response = await this.channel.call("runner.observe", params); }
+          catch (error) {
+            // A channel idle for the delivery's length may have closed; the
+            // call's own error is the only signal to dial again, and only an
+            // unavailable channel earns a reconnect -- a refused observation
+            // is dropped like any other.
+            if (errorCodeOf(error) !== "BROKER_UNAVAILABLE") throw error;
+            await this.connect();
+            response = await this.channel.call("runner.observe", params);
+          }
+          if (!response.ok)
+            throw new StoreError(response.error.code, response.error.message);
+        }
+      } catch {
+        // Diagnostics are not the delivery's authority. A refused or
+        // unreachable observation is dropped, and the queue is abandoned
+        // rather than replayed on a channel that refused it.
+        this.queuedObservation = null;
+      } finally {
+        this.observationInFlight = false;
+      }
+    })();
+  }
   private async consume(batch: PreparedBatch): Promise<void> {
     const stateRoot = this.paths.stateRoot;
     if (!stateRoot || !this.limits)
@@ -332,10 +386,15 @@ export class RunnerModule {
       case "present": {
         const opened = await this.openRelay();
         let boundary;
-        try { boundary = await this.adapter(batch, opened.inference).deliver(batch); }
+        try {
+          boundary = await this.adapter(batch, opened.inference).deliver(batch, {
+            observe: observation => this.noteObservation(observation),
+          });
+        }
         finally { await opened.relay.close(); }
         // RUN-003: graceful yield leaves the prepared batch and mail untouched.
-        if (boundary === null) return;
+        // The "waiting" report is the last word the broker should keep.
+        if (boundary === null) { await this.observationFlush; return; }
         receipt = publishDeliveryReceipt(
           stateRoot,
           batch,
@@ -344,6 +403,9 @@ export class RunnerModule {
         );
       }
     }
+    // The delivery's last observation is part of the same picture
+    // batch.complete seals; send it first, on its own budget.
+    await this.observationFlush;
     await this.connect();
     const response = await this.channel.call("batch.complete", {
       batchId: batch.id,

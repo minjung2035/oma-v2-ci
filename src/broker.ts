@@ -131,6 +131,10 @@ export class Broker {
     this.internalDispatcher = new InternalDispatcher({ ...internalPorts, ...this.internalAdmission,
       failureAnswer: (id, error) => this.failureAnswer(id, error), refreshViews: () => this.refreshViews(),
       openRun: (actor, invocationId) => this.openRun(actor, invocationId) });
+    // runner.observe's consumer: the dispatcher keeps the memory-only
+    // diagnostic, and the status projection shows its timestamp -- never a
+    // receipt, admission input or lifecycle decision.
+    this.views.observeRunnerSource(agent => this.internalDispatcher.runnerObservation(agent));
   }
   start(): Promise<void> {
     if (this.starting) return this.starting;
