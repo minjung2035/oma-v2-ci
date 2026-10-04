@@ -35,7 +35,10 @@ function validConfig() {
     principalProfile: "p", initialResidents: [{ name: "alice", profile: "p", brief: "work" }],
     quota: { societyAgents: 10, lineageAgents: 10, storageBytes: 1024 },
     integration: { policyRevision: "p1", protectedPaths: [], checks: [] },
-    limits: { frameBytes: 1024, mailBodyBytes: 1024, subjectBytes: 128, addresses: 10, replyReferences: 10,
+    // mailBodyBytes clears the AV-07 floor for subjectBytes=128 (a maximal
+    // thread revision, mail/review-bounds.ts); the valid half of this test
+    // needs a configuration validation can accept.
+    limits: { frameBytes: 1024, mailBodyBytes: 4096, subjectBytes: 128, addresses: 10, replyReferences: 10,
       contextFiles: 10, contextBytes: 1024, bundleBytes: 1024, logBytes: 1024, batchMaxMessages: 10,
       idleStreamSeconds: 1, receiptWaitSeconds: 1 },
   };

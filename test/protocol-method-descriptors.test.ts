@@ -21,8 +21,11 @@ type DescriptorMutation = {
 }[PublicMethod];
 export type MutationsExhaustive = Assert<Equal<DescriptorMutation, MutationMethod>>;
 
+// mailBodyBytes sits above the AV-07 floor for subjectBytes=64 (the smallest
+// servable bound, mail/review-bounds.ts minimumMailBodyBytes); under it the
+// configuration is refused before the checks these tests exercise run.
 const limits: ProtocolLimits = {
-  frameBytes: 4096, mailBodyBytes: 1024, subjectBytes: 64, addresses: 8,
+  frameBytes: 4096, mailBodyBytes: 4096, subjectBytes: 64, addresses: 8,
   replyReferences: 8, contextFiles: 8, contextBytes: 4096, bundleBytes: 8192,
   logBytes: 1024, batchMaxMessages: 8, idleStreamSeconds: 1, receiptWaitSeconds: 1,
 };
