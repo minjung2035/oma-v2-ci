@@ -304,6 +304,32 @@ test("DR25/C20: a staging interrupted mid-copy leaves only dead content; a retry
   } finally { f.close(); }
 });
 
+test("DR25/C20: a configured `local/..foo` source survives the prune -- `..` decides by component, not prefix", () => {
+  const f = createCompleteConfigurationFixture();
+  try {
+    const store = join(f.root, "packages");
+    // `..foo` is a name the store's own rule accepts (resourceEntryProblem
+    // refuses only "", "." and ".." components), so a staged copy may live at
+    // local/..foo with settings.json naming it. The old startsWith("..")
+    // predicate read that relative path as an escape and deleted a copy the
+    // configuration still pointed at.
+    mkdirSync(join(store, "local", "..foo"), { recursive: true });
+    writeFileSync(join(store, "local", "..foo", "e.ts"), "export default function () {}\n");
+    mkdirSync(join(store, "local", "other"), { recursive: true });
+    writeFileSync(join(store, "settings.json"), JSON.stringify({ packages: ["local/..foo"] }));
+
+    pruneLocalStage(store);
+    assert.equal(existsSync(join(store, "local", "..foo", "e.ts")), true, "a configured source under a ..-prefixed name is kept");
+    assert.equal(existsSync(join(store, "local", "other")), false, "dead content beside it is still collected");
+    // And a source that really does escape `local/` keeps its old answer.
+    writeFileSync(join(store, "settings.json"), JSON.stringify({ packages: ["local/../outside", "npm:real-pkg"] }));
+    mkdirSync(join(store, "npm", "node_modules", "real-pkg"), { recursive: true });
+    pruneLocalStage(store);
+    assert.equal(existsSync(join(store, "local", "..foo")), false, "with no source naming it, the copy goes");
+    assert.equal(existsSync(join(store, "npm")), true, "an escaping source never names store content outside local/");
+  } finally { f.close(); }
+});
+
 test("DR25: a project's inline settings become a managed bundle that runs as it did, and every session is made from it, roles and all", () => {
   const f = createCompleteConfigurationFixture();
   try {

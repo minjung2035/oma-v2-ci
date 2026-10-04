@@ -199,13 +199,15 @@ function localSourcePath(given: string): string {
   catch (error) { throw unobserved(error, "the local package source") ?? refuse(`the local package source does not exist: ${given}`); }
 }
 
+/** `rel` (what `relative(root, x)` answered) leaves its root when it is
+ * absolute or its first component is `..` -- a name merely starting with the
+ * two characters ("..foo") stays inside. */
+const escapes = (rel: string): boolean => rel === ".." || rel.startsWith(`..${sep}`) || isAbsolute(rel);
+
 /** A source that is inside the store, or holds it, cannot be installed: the
  * first is already what an install would make, the second would copy the
  * store into itself. */
 function checkStoreBoundary(store: string, source: string): void {
-  /** `rel` leaves `root` when its first component is `..` -- a name merely
-   * starting with the two characters ("..foo") stays inside. */
-  const escapes = (rel: string): boolean => rel === ".." || rel.startsWith(`..${sep}`) || isAbsolute(rel);
   const inside = relative(store, source);
   if (!escapes(inside)) refuse("the package is already inside the package store");
   const storeInside = relative(source, store);
@@ -556,7 +558,10 @@ export function pruneLocalStage(store: string): void {
   for (const source of configuredPackageSources(root)) {
     const resolved = isAbsolute(source) ? source : join(root, source);
     const path = relative(local, resolved);
-    if (path !== "" && !path.startsWith("..") && !isAbsolute(path)) inside.push(path);
+    // `..foo` is a name under `local/`, not an escape from it: the component
+    // test, not the two-character prefix, decides (the same `escapes` the
+    // store boundary check uses).
+    if (path !== "" && !escapes(path)) inside.push(path);
   }
   const kept = (unit: string): boolean => inside.some(path => path === unit || path.startsWith(`${unit}${sep}`));
   for (const entry of readdirSync(local, { withFileTypes: true })) {
