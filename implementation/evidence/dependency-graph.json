@@ -282,6 +282,7 @@
   "src/runtime/inference-relay.ts",
   "src/runtime/interactive-channel.ts",
   "src/runtime/interactive-display.ts",
+  "src/runtime/locked-files.ts",
   "src/runtime/oma-theme.ts",
   "src/runtime/personal-models.ts",
   "src/runtime/personal-session.ts",
@@ -1840,7 +1841,7 @@
     "src/sandbox.ts",
     "src/platform/"
    ],
-   "files": 112
+   "files": 113
   },
   {
    "index": 5,
@@ -1857,7 +1858,7 @@
    "files": 82
   }
  ],
- "files": 377,
+ "files": 378,
  "runtimeEdges": 1614,
  "typeOnlyEdges": 421,
  "runtimeEdgeMatrix": {

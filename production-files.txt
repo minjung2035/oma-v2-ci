@@ -274,6 +274,7 @@ src/runtime/host-tenure.ts
 src/runtime/inference-relay.ts
 src/runtime/interactive-channel.ts
 src/runtime/interactive-display.ts
+src/runtime/locked-files.ts
 src/runtime/oma-theme.ts
 src/runtime/personal-models.ts
 src/runtime/personal-session.ts

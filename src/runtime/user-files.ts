@@ -78,3 +78,6 @@ export function replaceUserFile(path: string, bytes: string): void {
   assertHostDirectoryLayout(dirname(path));
   replaceFile(dirname(path), basename(path), bytes);
 }
+
+/** Mutable engine files serialize through locked-files.js, the one locked
+ * read-modify-replace over these guarantees (A7). */

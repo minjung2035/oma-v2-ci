@@ -17,11 +17,8 @@
  * open-tui, themes, auth) keeps its direct writer.
  */
 import { SettingsManager } from "@earendil-works/pi-coding-agent";
-import { join } from "node:path";
 import { StoreError } from "../domain/errors.js";
-import { withCleanup } from "../process/cleanup.js";
-import { ProcessLock } from "../runtime/process-lock.js";
-import { ensureUserDirectory, readUserFile, replaceUserFile } from "../runtime/user-files.js";
+import { lockedUserReplace } from "../runtime/locked-files.js";
 import { OMA_THEME_NAME } from "../runtime/oma-theme.js";
 
 /** `SettingsStorage`/`SettingsScope` are not root-exported in 0.87.1; the
@@ -57,14 +54,7 @@ export class OmaSettingsStorage implements SettingsStorage {
         throw new StoreError("UNSUPPORTED_PROFILE", "engine project settings have no OMA storage");
       return;
     }
-    ensureUserDirectory(this.agentDir);
-    const lock = ProcessLock.acquire(join(this.agentDir, "oma-settings.lock"));
-    withCleanup(() => {
-      const path = join(this.agentDir, "settings.json");
-      const current = readUserFile(path, SETTINGS_BYTES, { singleName: true });
-      const next = fn(current ?? undefined);
-      if (next !== undefined && next !== current) replaceUserFile(path, next);
-    }, () => lock.close());
+    lockedUserReplace(this.agentDir, "settings.json", SETTINGS_BYTES, fn);
   }
 }
 
