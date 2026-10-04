@@ -203,12 +203,13 @@ function localSourcePath(given: string): string {
  * first is already what an install would make, the second would copy the
  * store into itself. */
 function checkStoreBoundary(store: string, source: string): void {
+  /** `rel` leaves `root` when its first component is `..` -- a name merely
+   * starting with the two characters ("..foo") stays inside. */
+  const escapes = (rel: string): boolean => rel === ".." || rel.startsWith(`..${sep}`) || isAbsolute(rel);
   const inside = relative(store, source);
-  if (inside === "" || (!inside.startsWith("..") && !isAbsolute(inside)))
-    refuse("the package is already inside the package store");
+  if (!escapes(inside)) refuse("the package is already inside the package store");
   const storeInside = relative(source, store);
-  if (storeInside !== "" && !storeInside.startsWith("..") && !isAbsolute(storeInside))
-    refuse("the local package source contains the package store itself");
+  if (!escapes(storeInside)) refuse("the local package source contains the package store itself");
 }
 
 /** What the engine's own rule calls a package at `root`: a package.json that
@@ -222,6 +223,8 @@ function packageManifest(root: string): { readonly name: string | undefined } {
   if (observed === undefined)
     return refuse(`not a package (no package.json, the manifest a package must have): ${root}`);
   if (!observed.isFile()) return refuse(`the local package's package.json is not a file: ${root}`);
+  if (observed.size > PACKAGE_ARCHIVE_BOUNDS.fileBytes)
+    return refuse(`the local package's package.json exceeds its ${PACKAGE_ARCHIVE_BOUNDS.fileBytes}-byte bound`);
   let parsed: unknown;
   try { parsed = JSON.parse(readFileSync(file, "utf8")); }
   catch { return refuse(`the local package's package.json is not readable JSON: ${root}`); }
@@ -284,6 +287,8 @@ function copyIntoStage(source: string, area: StageArea, rel: string, budget: Sta
       continue;
     }
     if (!observed.isFile()) refuse(`the local package holds something that is not a file or a directory: ${dest}`);
+    if (observed.size > PACKAGE_ARCHIVE_BOUNDS.fileBytes)
+      refuse(`the local package's ${dest} exceeds its ${PACKAGE_ARCHIVE_BOUNDS.fileBytes}-byte file bound`);
     const bytes = readFileSync(origin);
     budgetFile(budget, dest, bytes.length);
     area.write(dest, bytes, (observed.mode & 0o111) !== 0);
@@ -312,6 +317,8 @@ function stageDirectory(store: string, source: string): string {
 
 function stageFile(store: string, source: string): string {
   const name = basename(source);
+  if (statSync(source).size > PACKAGE_ARCHIVE_BOUNDS.fileBytes)
+    refuse(`the local file exceeds its ${PACKAGE_ARCHIVE_BOUNDS.fileBytes}-byte bound`);
   const bytes = readFileSync(source);
   if (bytes.length > PACKAGE_ARCHIVE_BOUNDS.fileBytes)
     refuse(`the local file exceeds its ${PACKAGE_ARCHIVE_BOUNDS.fileBytes}-byte bound`);
@@ -344,6 +351,8 @@ export function stageLocalPackage(store: string, given: string): string {
  * carried store already keeps. A link, a device, an absolute or escaping
  * name is refused, as is anything that is not ustar. */
 function stageArchive(store: string, source: string): string {
+  if (statSync(source).size > PACKAGE_ARCHIVE_BOUNDS.fileBytes)
+    refuse(`the package archive exceeds its ${PACKAGE_ARCHIVE_BOUNDS.fileBytes}-byte bound`);
   let data: Buffer;
   try { data = readFileSync(source); }
   catch (error) { throw unobserved(error, "the local package") ?? refuse(`the package archive could not be read (${errorWordsOf(error)})`); }
@@ -429,11 +438,22 @@ function extractTar(bytes: Buffer, area: StageArea): void {
       if (part !== "" && !made.has(at)) { area.make(at); made.add(at); }
     }
   };
+  /** The directories `rel`'s parent names, made; a root-level name has none
+   * (`lastIndexOf` answers -1, which `slice` would read as "drop the last
+   * character"). */
+  const ensureParents = (rel: string): void => {
+    const cut = rel.lastIndexOf("/");
+    ensure(cut < 0 ? "" : rel.slice(0, cut));
+  };
   let position = 0, entries = 0, written = 0;
   let longName: string | undefined;
   let paxPath: string | undefined, paxSize: number | undefined;
-  const entryName = (raw: string): string => {
-    const name = raw.startsWith("./") ? raw.slice(2) : raw;
+  /** A directory member's name ends in one `/` (as `npm pack` writes it);
+   * that trailing mark is stripped before the normalized-path rule runs --
+   * every other shape (`//`, embedded empties, `.`, `..`, absolute) fails. */
+  const entryName = (raw: string, directory: boolean): string => {
+    let name = raw.startsWith("./") ? raw.slice(2) : raw;
+    if (directory && name.endsWith("/")) name = name.slice(0, -1);
     if (Buffer.byteLength(name, "utf8") === 0 || Buffer.byteLength(name, "utf8") > PACKAGE_ARCHIVE_BOUNDS.pathBytes ||
         name.includes("\0") || name.includes("\\") || isAbsolute(name) ||
         name.split("/").some(part => !part || part === "." || part === ".." || Buffer.byteLength(part, "utf8") > PACKAGE_ARCHIVE_BOUNDS.componentBytes))
@@ -478,16 +498,16 @@ function extractTar(bytes: Buffer, area: StageArea): void {
       case 0x4c: longName = tarString(content); continue; // 'L' — GNU long name
       case 0x4b: continue; // 'K' — a long link name; the link itself is refused below
       case 0x35: { // '5' — directory
-        const rel = entryName(name);
-        ensure(rel.slice(0, rel.lastIndexOf("/")));
+        const rel = entryName(name, true);
+        ensureParents(rel);
         if (made.has(rel)) fail(`a duplicate entry: ${rel}`);
         area.make(rel);
         made.add(rel);
         continue;
       }
       case 0x00: case 0x30: case 0x37: { // regular file
-        const rel = entryName(name);
-        ensure(rel.slice(0, rel.lastIndexOf("/")));
+        const rel = entryName(name, false);
+        ensureParents(rel);
         if (made.has(rel)) fail(`a duplicate entry: ${rel}`);
         area.write(rel, content, (tarNumber(header.subarray(100, 108)) & 0o111) !== 0);
         made.add(rel);

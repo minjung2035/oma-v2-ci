@@ -113,10 +113,12 @@ test("DR25: the engine names a package's extensions; the index keeps them by pac
   } finally { f.close(); }
 });
 
-/** A ustar stream (as `npm pack` writes) holding the given files under `package/`. */
-function tarball(files: Record<string, string>): Buffer {
+/** A ustar stream (as `npm pack` writes) holding the given files under
+ * `package/`; `dirs` names directory members (type '5', trailing `/`), which
+ * real `npm pack` output always carries. */
+function tarball(files: Record<string, string>, dirs: readonly string[] = []): Buffer {
   const parts: Buffer[] = [];
-  const header = (name: string, size: number): Buffer => {
+  const header = (name: string, size: number, type = 0x30): Buffer => {
     const block = Buffer.alloc(512);
     block.write(name, 0, "utf8");
     block.write(`${(0o644).toString(8).padStart(7, "0")}\0`, 100);
@@ -124,12 +126,13 @@ function tarball(files: Record<string, string>): Buffer {
     block.write(`${size.toString(8).padStart(11, "0")}\0`, 124);
     block.write("00000000000\0", 136);
     block.write("        ", 148);
-    block[156] = 0x30;
+    block[156] = type;
     block.write("ustar\0", 257); block.write("00", 263);
     let sum = 0; for (let index = 0; index < 512; index++) sum += block[index]!;
     block.write(`${sum.toString(8).padStart(6, "0")}\0 `, 148);
     return block;
   };
+  for (const name of dirs) parts.push(header(name, 0, 0x35));
   for (const [name, text] of Object.entries(files)) {
     const content = Buffer.from(text, "utf8");
     parts.push(header(name, content.length), content, Buffer.alloc((512 - (content.length % 512)) % 512));
@@ -182,16 +185,25 @@ test("DR25/C20: `oma pi install` of a local path copies it into the store as `lo
     writeFileSync(lone, "export default function () {}\n");
     assert.equal(stageLocalPackage(store, lone), `${PACKAGE_LOCAL_DIR}/single.ts`);
 
-    // A tarball of a package (npm pack shape: everything under `package/`).
+    // A tarball of a package (real npm pack shape: directory members with a
+    // trailing `/` precede the files under `package/`).
     const packed = join(f.root, "packed.tgz");
     writeFileSync(packed, gzipSync(tarball({
       "package/package.json": JSON.stringify({ name: "oma-packed",
         pi: { extensions: ["./e.ts"], skills: ["./skills/roll/SKILL.md"] } }),
       "package/e.ts": "export default function () {}\n",
       "package/skills/roll/SKILL.md": "# roll\n",
-    })));
+    }, ["package/", "package/skills/", "package/skills/roll/"])));
     assert.equal(stageLocalPackage(store, packed), `${PACKAGE_LOCAL_DIR}/oma-packed`);
     assert.ok(existsSync(join(store, "local", "oma-packed", "skills", "roll", "SKILL.md")));
+    // Still refused: a file member named with a trailing slash, a directory
+    // name that is only slashes, and `..` anywhere.
+    assert.throws(() => stageLocalPackage(store, (() => { const p = join(f.root, "bad1.tar"); writeFileSync(p, tarball({ "a/": "x" })); return p; })()),
+      /not a normalized relative path/);
+    assert.throws(() => stageLocalPackage(store, (() => { const p = join(f.root, "bad2.tar"); writeFileSync(p, tarball({}, ["//"])); return p; })()),
+      /not a normalized relative path/);
+    assert.throws(() => stageLocalPackage(store, (() => { const p = join(f.root, "bad3.tar"); writeFileSync(p, tarball({}, ["../evil/"])); return p; })()),
+      /not a normalized relative path/);
 
     // A tar without the single top directory unpacks to the name the archive had.
     const plain = join(f.root, "plainpack.tar");
