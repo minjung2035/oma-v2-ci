@@ -1688,8 +1688,8 @@
   {
     "requirement": "UNIT-003",
     "source": "docs/implementation-spec.md",
-    "digest": "9d3061ad6922031f6a1fdb38c13cdf720c82d09124a1db5ff23c3e6441a2e5dc",
-    "normativeText": "**MUST [UNIT-003]** 초기 reference profile은 resident MemoryMax=3G, TasksMax=128, CPUQuota=200%, OOMPolicy=kill, KillMode=control-group, TimeoutStopSec=10s, Restart=on-failure, RestartSec=3s, RestartSteps=4, RestartMaxDelaySec=12s, StartLimitIntervalSec=60s, StartLimitBurst=5다(DR27). systemd의 지수 backoff로 즉시 실패의 재시작 간격을 늘리되 다섯 간격의 합은 60초보다 짧아 연속 즉시 실패가 기존 start-limit을 우회하지 않는다. 실제 host cap은 bootstrap config에 명시하고 renderer가 반영한다. resource profile이 지원되지 않으면 무제한으로 실행하지 않고 UNSUPPORTED_PROFILE이다.",
+    "digest": "de1f7d5fceef7ea832766c3b20131c6c5046dd1e9d3c829490926c56b2f63161",
+    "normativeText": "**MUST [UNIT-003]** 초기 reference profile은 resident MemoryMax=4G, TasksMax=256, CPUQuota=200%, OOMPolicy=kill, KillMode=control-group, TimeoutStopSec=10s, Restart=on-failure, RestartSec=3s, RestartSteps=4, RestartMaxDelaySec=12s, StartLimitIntervalSec=60s, StartLimitBurst=5다(DR27). systemd의 지수 backoff로 즉시 실패의 재시작 간격을 늘리되 다섯 간격의 합은 60초보다 짧아 연속 즉시 실패가 기존 start-limit을 우회하지 않는다. 동일 backoff를 고정 broker service에도 적용한다. 실제 host cap은 bootstrap config에 명시하고 renderer가 반영한다. resource profile이 지원되지 않으면 무제한으로 실행하지 않고 UNSUPPORTED_PROFILE이다.",
     "applicability": "unclassified",
     "rationale": "Requires production-path review; no inference from test names.",
     "owner": null,
