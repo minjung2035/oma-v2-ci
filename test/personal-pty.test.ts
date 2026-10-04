@@ -13,25 +13,43 @@ for (const ending of ["tools", "config", "empty-extensions", "extensions", "new"
   test(`Personal installed PTY: ${ending}, isolated state and restored terminal`, { timeout: 60_000 }, t => {
     const root = mkdtempSync(join(tmpdir(), "oma-personal-pty-"));
     t.after(() => removeTree(root));
-    const prompt = { write: hex("Change the temporary user config\r"), wait: 3 };
-    const extensions = [{ write: hex("\x18"), wait: 0.3 }, { write: hex("\x1b[B\r"), wait: 0.3 },
-      { write: hex("\r"), wait: 3 }];
-    const steps = ending === "config" ? [{ write: hex("\x18"), wait: 0.3 }, { write: hex("\r"), wait: 0.3 },
-      { write: hex("scripted-thinking"), wait: 0.3 }, { write: hex("\r"), wait: 0.3 }, { write: hex("\x1b[B\r"), wait: 0.5 }, prompt]
-      : ending === "empty-extensions" ? [...extensions, prompt]
-      : ending === "extensions" ? [prompt, ...extensions, prompt]
-      : ending === "new" ? [prompt, { write: hex("/new\r"), wait: 2, expect: hex("Mode is fixed for this session") },
-        { write: hex("\x1b[B\r"), wait: 2, expect: hex("Let's build something great") }, prompt]
-      : ending === "project-seed-resume" ? [prompt, { write: hex("/fixture-break-project\r"), wait: 0.5 },
-        { write: hex("/resume\r"), wait: 0.8 }, { write: hex("\r"), wait: 2 }, prompt]
-      : ending === "resume" ? [prompt, { write: hex("/resume\r"), wait: 0.8 }, { write: hex("\r"), wait: 2 }, prompt]
-      : ending === "fork" ? [prompt, { write: hex("/fixture-fork\r"), wait: 1 }, prompt]
-      : ending === "fork-ui" ? [prompt, { write: hex("/fork\r"), wait: 0.5 }, { write: hex("\r"), wait: 1 }, { write: hex("\r"), wait: 3 }]
-      : ending === "fork-cancel" ? [prompt, { write: hex("/fork\r"), wait: 0.5 }, { write: hex("\x1b"), wait: 0.5 },
-        { write: hex("Continue after cancelled fork\r"), wait: 3 }]
-      : ending.startsWith("reload-") ? [prompt, { write: hex(`/fixture-${ending} `), wait: 0.2 }, { write: hex("\r"), wait: 0.5 }, { write: hex("/reload\r"), wait: 1 },
+    // Each write waits on the screen marker its response draws (the scripted
+    // response text, a picker title, or the redrawn transcript) instead of a
+    // fixed pause that can expire mid-draw under load. A missed expect still
+    // proceeds after expect_timeout, and the assertions below check the same
+    // screen either way. Every marker was verified against captured output:
+    // transcript redraws always reprint earlier PERSONAL_RESPONSE_COMPLETE
+    // lines once the first turn finished.
+    const step = (write: string, marker: string, wait = 0.3, timeout = 8) =>
+      ({ write: hex(write), wait, expect: hex(marker), expect_timeout: timeout });
+    // Markers behind an engine birth (session chooser picks, /new, fork) can
+    // take several seconds to draw under parallel load; they get a wider
+    // expect window than redraw-only steps.
+    const birth = (write: string, marker: string, wait = 0.3) => step(write, marker, wait, 15);
+    const responseMarker = ending === "tools" ? "PERSONAL_TOOLS_COMPLETE"
+      : ending.startsWith("project-seed") ? "EXTENSION_TOOL_COMPLETE" : "PERSONAL_RESPONSE_COMPLETE";
+    const prompt = birth("Change the temporary user config\r", responseMarker);
+    const steps = ending === "config" ? [step("\x18", "Config — Personal"), step("\r", "scripted-thinking"),
+      step("scripted-thinking", "scripted-thinking"), step("\r", "Thinking Level"), step("\x1b[B\r", "minimal effort", 0.5), prompt]
+      : ending === "empty-extensions" ? [step("\x18", "Config — Personal"), step("\x1b[B\r", "Let's build something great"),
+        step("\r", "Personal extension choice saved"), prompt]
+      : ending === "extensions" ? [prompt, step("\x18", "Config — Personal"), step("\x1b[B\r", "PERSONAL_RESPONSE_COMPLETE"),
+        step("\r", "Personal extension choice saved"), prompt]
+      : ending === "new" ? [prompt, step("/new\r", "Mode is fixed for this session", 0.5),
+        birth("\x1b[B\r", "Let's build something great", 0.5), prompt]
+      : ending === "project-seed-resume" ? [prompt, step("/fixture-break-project\r", "EXTENSION_TOOL_COMPLETE", 0.5),
+        step("/resume\r", "[Personal]", 0.5), birth("\r", "PERSONAL_RESPONSE_COMPLETE", 0.5), prompt]
+      : ending === "resume" ? [prompt, step("/resume\r", "[Personal]", 0.5), birth("\r", "PERSONAL_RESPONSE_COMPLETE", 0.5), prompt]
+      : ending === "fork" ? [prompt, birth("/fixture-fork\r", "Forked to new session", 0.5), prompt]
+      : ending === "fork-ui" ? [prompt, step("/fork\r", "Fork from Message", 0.5), birth("\r", "Forked to new session", 0.5),
+        step("\r", "PERSONAL_RESPONSE_COMPLETE")]
+      : ending === "fork-cancel" ? [prompt, step("/fork\r", "Fork from Message", 0.5), step("\x1b", "PERSONAL_RESPONSE_COMPLETE", 0.5),
+        step("Continue after cancelled fork\r", "PERSONAL_RESPONSE_COMPLETE")]
+      : ending.startsWith("reload-") ? [prompt, step(`/fixture-${ending} `, "/fixture-reload-", 0.2),
+        step("\r", "PERSONAL_RESPONSE_COMPLETE", 0.5),
+        birth("/reload\r", ending === "reload-failure" ? "FIXTURE_RELOAD_FAILURE" : "Reloaded keybindings", 0.5),
         ...(ending === "reload-update" ? [prompt] : [])]
-      : ending === "cancel" ? [{ write: hex("Cancel this turn\r"), wait: 0.5 }, { write: hex("\x1b"), wait: 0.5 }, prompt]
+      : ending === "cancel" ? [step("Cancel this turn\r", "Cancel this turn", 0.5), step("\x1b", "Operation aborted", 0.5), prompt]
       : [prompt];
     const run = spawnSync("python3", [join(fixtures, "pty-harness.py"), JSON.stringify({
       argv: [process.execPath, join(fixtures, "personal-pty.mjs"), root, ending], ready: hex("Let's build something great"),
@@ -39,7 +57,8 @@ for (const ending of ["tools", "config", "empty-extensions", "extensions", "new"
     })], { encoding: "utf8", timeout: 55_000, maxBuffer: 16 * 1024 * 1024 });
     assert.equal(run.status, 0, run.stderr);
     const result = JSON.parse(run.stdout), output = Buffer.from(result.output, "hex").toString();
-    assert.equal(result.exited, true, output.slice(-8000)); assert.equal(result.code, ending === "reload-failure" ? 1 : 0, output.slice(-8000));
+    assert.equal(result.exited, true, `${result.expectMissed} expects missed; ${output.slice(-8000)}`);
+    assert.equal(result.code, ending === "reload-failure" ? 1 : 0, output.slice(-8000));
     const engineExit = JSON.parse(readFileSync(join(root, "engine-exit.json"), "utf8"));
     assert.equal(engineExit.code, ending === "reload-failure" ? 1 : 0, output.slice(-8000)); assert.equal(engineExit.signal, null);
     assert.equal(result.echo, true); assert.equal(result.icanon, true);

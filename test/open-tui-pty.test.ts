@@ -16,18 +16,32 @@ for (const ending of ["normal", "resume", "kill", "mail", "retry-recover", "retr
     t.after(() => rmSync(root, { recursive: true, force: true }));
     const side = join(root, "facts.json");
     // `/new` and `!touch` are Pi's own and reach no model; the prompts are OMA's.
-    const steps = ending.startsWith("reload-") ? [{ write: hex("First\r"), wait: 4 },
-      ...(ending === "reload-failure" ? [{ write: hex("/fixture-reload-failure "), wait: 0.2 }, { write: hex("\r"), wait: 0.5 }] : []),
-      { write: hex("/reload\r"), wait: 1 },
-      ...(ending === "reload-update" ? [{ write: hex("Second 한글 ✅\r"), wait: 4 }, { write: hex("\x04"), wait: 3 }] : [])]
-      : ending === "kill" || ending.startsWith("retry-") ? [{ write: hex("First\r"), wait: 4 }] : [
-      ...(ending === "resume" ? [{ write: hex("/resume\r"), wait: 1 }, { write: hex("\x1b"), wait: 0.5 }] : []),
-      ...(ending === "mail" ? [] : [{ write: hex("/new\r"), wait: 0.2 },
-        { write: hex("\x15!touch forbidden\r"), wait: 0.2 },
-        { write: hex("\x15First\r"), wait: 0.3 }]),
-      { write: hex("Second 한글 ✅\r"), wait: 4 },
-      { write: hex("\x18"), wait: 0.5 }, { resize: [30, 100], wait: 0.3 },
-      { write: hex("\x18"), wait: 0.3 }, { write: hex("\x04"), wait: 3 },
+    // Each write waits on the screen marker its response draws (the settle
+    // marker the fixture prints, the panel footer, the redrawn transcript)
+    // rather than a fixed pause that can expire mid-draw under load. A missed
+    // expect still proceeds like a short wait; the screen assertions below
+    // check the same things either way.
+    const step = (write: string, marker: string, wait = 0.3, timeout = 8) =>
+      ({ write: hex(write), wait, expect: hex(marker), expect_timeout: timeout });
+    // Engine work (settle, restart, retry) can take >10s under parallel load;
+    // those markers get a wider window than redraw-only steps.
+    const settled = (write: string, marker: string, wait = 0.3) => step(write, marker, wait, 25);
+    const steps = ending.startsWith("reload-") ? [settled("First\r", "RUN_SETTLED_1"),
+      ...(ending === "reload-failure" ? [{ write: hex("/fixture-reload-failure "), wait: 0.2 }, step("\r", "Society reload failure prepared", 0.2)] : []),
+      step("/reload\r", ending === "reload-failure" ? "Interactive reload failed" : "Reloaded keybindings", 0.5, 15),
+      ...(ending === "reload-update" ? [settled("Second 한글 ✅\r", "RUN_SETTLED_2"), { write: hex("\x04"), wait: 0.3 }] : [])]
+      : ending === "kill" || ending.startsWith("retry-") ? [settled("First\r", "RUN_SETTLED_1")] : [
+      ...(ending === "resume" ? [step("/resume\r", "No sessions in current folder", 0.2),
+        step("\x1b", "Let's build something great", 0.2)] : []),
+      // `/new` only queues a keystroke; the session birth is slow and emits no
+      // marker of its own, so the queue drains into the next real marker
+      // (`$ touch forbidden`, then the fixture's settle line).
+      ...(ending === "mail" ? [] : [{ write: hex("/new\r"), wait: 0.5 },
+        step("\x15!touch forbidden\r", "$ touch forbidden", 0.2, 20),
+        settled("\x15First\r", "RUN_SETTLED_1")]),
+      settled("Second 한글 ✅\r", "RUN_SETTLED_2"),
+      step("\x18", "Ctrl+X Close", 0.2), { resize: [30, 100], wait: 0.3 },
+      step("\x18", "SECOND_RESPONSE_COMPLETE", 0.2), { write: hex("\x04"), wait: 0.3 },
     ];
     const run = spawnSync("python3", [join(fixtures, "pty-harness.py"), JSON.stringify({
       argv: [process.execPath, join(fixtures, "open-tui-pty.mjs"), side, ending], ready: hex("OPEN_TUI_READY"), steps,
@@ -35,7 +49,7 @@ for (const ending of ["normal", "resume", "kill", "mail", "retry-recover", "retr
     assert.equal(run.status, 0, run.stderr);
     const result = JSON.parse(run.stdout);
     const output = Buffer.from(result.output, "hex").toString("utf8");
-    assert.equal(result.exited, true, output.slice(-6000));
+    assert.equal(result.exited, true, `${result.expectMissed} expects missed; ${output.slice(-6000)}`);
     assert.equal(result.code, 0, output.slice(-6000));
     assert.equal(result.echo, true); assert.equal(result.icanon, true);
     assert.ok(output.includes("\x1b[?1049l"));

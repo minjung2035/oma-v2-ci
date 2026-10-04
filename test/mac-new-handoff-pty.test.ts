@@ -13,9 +13,14 @@ for (const ending of ["personal", "cancel"]) test(`Mac host-new real PTY: ${endi
   t.after(() => removeTree(root));
   const result = spawnSync("python3", [join(process.cwd(), "test/fixtures/pty-harness.py"), JSON.stringify({
     argv: [process.execPath, join(process.cwd(), "test/fixtures/mac-new-handoff-pty.mjs"), root, ending], ready: hex("frame"),
-    steps: [{ write: hex("N"), wait: 0.3 }, { write: hex("q"), wait: 2 },
-      ...(ending === "personal" ? [{ write: hex("\x1b[B\r"), wait: 2, expect: hex("Let's build something great") },
-        { write: hex("Confirm the new host session\r"), wait: 3 }, { write: hex("\x04"), wait: 2 }]
+    // The writes ride on drawn markers (the handoff notice, the chooser, the
+    // installed editor, the scripted reply) instead of fixed pauses; a missed
+    // expect still proceeds after expect_timeout like a short wait.
+    steps: [{ write: hex("N"), wait: 0.3, expect: hex("host-new-requested"), expect_timeout: 8 },
+      { write: hex("q"), wait: 0.3, expect: hex("oma — New session"), expect_timeout: 8 },
+      ...(ending === "personal" ? [{ write: hex("\x1b[B\r"), wait: 0.5, expect: hex("Let's build something great"), expect_timeout: 15 },
+        { write: hex("Confirm the new host session\r"), wait: 0.3, expect: hex("HOST_NEW_PERSONAL_COMPLETE"), expect_timeout: 8 },
+        { write: hex("\x04"), wait: 2 }]
         : [{ write: hex("\x1b"), wait: 0.5 }])],
   })], { encoding: "utf8", timeout: 55_000, maxBuffer: 16 * 1024 * 1024 });
   assert.equal(result.status, 0, result.stderr);

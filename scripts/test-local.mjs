@@ -54,17 +54,12 @@ const SERIAL = new Set([
   // (observed === 0). The ordering margin is what is being proved, so it runs
   // alone rather than weakened.
   "dist/test/scenario-agent-wait.test.js",
-  // Scripted PTY steps drive a real TUI by wall-clock: a write that lands
-  // while the program is still drawing goes to the wrong screen and is lost.
-  // The harness now waits on screen markers where a transition can be marked
-  // (see "expect" in pty-harness.py), but most steps in these files still race
-  // windows as small as 0.2 s against the engine's draw and birth times, and
-  // sibling CPU stretches both. They run alone; mac-host-packages (2 s
-  // minimum window), tui-pty and session-mode-pty (one window each) stay in
-  // the parallel phase.
-  "dist/test/mac-new-handoff-pty.test.js",
-  "dist/test/open-tui-pty.test.js",
-  "dist/test/personal-pty.test.js",
+  // The PTY files (mac-new-handoff-pty, open-tui-pty, personal-pty) used to
+  // live here because their writes raced fixed wall-clock windows against the
+  // engine's draw and birth times. Every timing-sensitive step now waits on a
+  // deterministic screen marker (see "expect" in pty-harness.py) instead of a
+  // fixed pause, so sibling CPU only stretches real work, not a lost race:
+  // each file passed 2/2 runs in a full parallel sibling batch before moving.
 ]);
 
 /** How many test files may run at once in the parallel phase. Override with
