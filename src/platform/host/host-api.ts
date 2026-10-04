@@ -194,6 +194,12 @@ function serve(peer: FramedPeer, backend: HostApiBackend): void {
         if (Object.keys(params).some(name => name !== "id") || (params.id !== undefined &&
             (typeof params.id !== "string" || !/^[A-Za-z0-9][A-Za-z0-9._-]{0,99}$/.test(params.id))))
           throw new StoreError("INVALID_REQUEST", "snapshot.create may name the snapshot, and only that");
+        // `update-<expectImage>` is the service's own pre-update marker: a
+        // user snapshot in that namespace is prune-protected forever and,
+        // worse, satisfies updateSnapshot's already-made check so the real
+        // rollback point is never taken.
+        if (typeof params.id === "string" && params.id.startsWith("update-"))
+          throw new StoreError("INVALID_REQUEST", "snapshot ids beginning update- are reserved for the service's own pre-update snapshots");
         if (backend.snapshot === undefined) throw new StoreError("UNSUPPORTED_PROFILE", "Snapshots are unavailable");
         // Observation must never start a VM: a stopped engine's disk is
         // quiescent as it is, a running one's societies are stopped for it.

@@ -407,7 +407,12 @@ export class HostService {
         },
         snapshot: async ({ id }) => {
           if (snapshots === null) throw new StoreError("UNSUPPORTED_PROFILE", "this OMA keeps no snapshots");
+          // The update- marker namespace is the service's own (host-api.ts
+          // refuses it at the wire; the same reservation holds for any other
+          // caller that reaches this backend).
           const named = id ?? "manual";
+          if (named.startsWith("update-"))
+            throw new StoreError("INVALID_REQUEST", "snapshot ids beginning update- are reserved for the service's own pre-update snapshots");
           // REC-005: only a quiescent point -- a stopped engine's disk as it
           // is, or a running one's with every society stopped and the file
           // system frozen for the clone. An engine between the two is not a

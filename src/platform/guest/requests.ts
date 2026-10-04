@@ -121,6 +121,10 @@ export class RequestLedger {
     const base = join(this.dir, this.name(key));
     const intent = this.readRecord(`${base}.intent.json`, isIntent);
     if (intent === null) throw new StoreError("REQUEST_NOT_FOUND", "no request with this key was started");
+    // The same binding run() proves: a record that does not name this key is
+    // a planted or colliding one, never the answer to this status request.
+    if (intent.key !== key)
+      throw new StoreError("REQUEST_KEY_REUSED", "this request key was used for another request");
     const outcome = this.readRecord(`${base}.outcome.json`, isOutcome);
     if (outcome === null) return { state: "pending", method: intent.method };
     return outcome.ok ? { state: "done", method: intent.method, result: outcome.result } : { state: "refused", method: intent.method, error: outcome.error };

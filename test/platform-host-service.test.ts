@@ -311,7 +311,11 @@ test("§8.4/REC-005: an update whose rollback snapshot cannot be made does not g
 test("snapshot.create takes only an id, no replay key, and is unavailable where this OMA keeps no snapshots", async t => {
   const { call } = await world(t, d => { writeFileSync(join(d, "state.img"), "x"); }, undefined, undefined,
     d => ({ snapshotsDir: join(d, "snapshots"), statePath: join(d, "state.img") }));
-  for (const bad of [{ id: "../escape" }, { id: 7 }, { id: "a", extra: true }, { unexpected: 1 }]) {
+  // The update- namespace is the service's own pre-update marker: a user id
+  // squatting there would win permanent prune protection and satisfy the
+  // update's already-made check so the real rollback point is never taken.
+  for (const bad of [{ id: "../escape" }, { id: 7 }, { id: "a", extra: true }, { unexpected: 1 },
+    { id: "update-2026.09.1" }, { id: "update-anything" }]) {
     const answer = await call("snapshot.create", bad);
     assert.equal(answer.ok, false);
     assert.equal((answer.error as { code: string }).code, "INVALID_REQUEST", JSON.stringify(bad));
@@ -392,14 +396,16 @@ test("FJ-6: a transient lock-acquire errno is an unavailable, not an environment
   t.after(() => rmSync(dir, { recursive: true, force: true }));
   const lockPath = join(dir, "archive-key.lock");
   const keychain = memoryKeychain();
-  const tryAcquire = t.mock.method(ProcessLock, "tryAcquire", (): ProcessLock | null => {
-    throw Object.assign(new Error("injected descriptor exhaustion"), { code: "EMFILE" });
-  });
-  try {
-    await assert.rejects(archiveKey(keychain, lockPath, 100),
-      (error: unknown) => error instanceof StoreError && error.code === "BROKER_UNAVAILABLE",
-      "an EMFILE acquire is a transient unavailability");
-  } finally { tryAcquire.mock.restore(); }
+  for (const code of ["EMFILE", "ENFILE", "EAGAIN"]) {
+    const tryAcquire = t.mock.method(ProcessLock, "tryAcquire", (): ProcessLock | null => {
+      throw Object.assign(new Error("injected descriptor exhaustion"), { code });
+    });
+    try {
+      await assert.rejects(archiveKey(keychain, lockPath, 100),
+        (error: unknown) => error instanceof StoreError && error.code === "BROKER_UNAVAILABLE",
+        `a ${code} acquire is a transient unavailability`);
+    } finally { tryAcquire.mock.restore(); }
+  }
   assert.equal(keychain.items.size, 0, "no key was generated");
   // A non-transient error still surfaces as itself.
   const other = t.mock.method(ProcessLock, "tryAcquire", (): ProcessLock | null => {

@@ -324,8 +324,11 @@ test("AV-20261003-17: a malformed intent is damaged; a well-formed intent for an
     await assert.rejects(ledger.run(key, "m", {}, async () => ({})), damaged, name);
   }
   // A record the ledger could have written, naming another key under this
-  // name's key, stays the caller's fault, not corruption.
+  // name's key, stays the caller's fault, not corruption. It cannot answer
+  // a status ask for this key either: run's binding holds on reads too.
   plant(dir, "reused", { key: "someone-else", method: "m", digest }, { ok: true, result: {} });
   await assert.rejects(ledger.run("reused", "m", {}, async () => ({})),
+    error => error instanceof StoreError && error.code === "REQUEST_KEY_REUSED");
+  assert.throws(() => ledger.status("reused"),
     error => error instanceof StoreError && error.code === "REQUEST_KEY_REUSED");
 });
