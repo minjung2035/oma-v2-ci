@@ -50,11 +50,14 @@ export interface SessionPaths {
    * is killed and runs no teardown (REC-007). Absent only where no lease
    * exists, which is every path that must not start an engine at all. */
   readonly fence?: number | undefined;
-  /** D23/TSP-005: the surface plan is runner→Resident plumbing, and no ambient
-   * or authored channel may carry it into the Principal. This field is the one
-   * explicit host-side hop -- a spawn plan that means to reach the engine sets
-   * it directly -- so a harness can still exercise the engine-side gate the
-   * way OMA's own plumbing would set it. No production caller sets it. */
+  /** D23/TSP-005: the surface plan's explicit hop into this engine, the same
+   * channel the Resident arm declares on `RunnerProfile.toolSurface` (its
+   * producer is the runner unit's deployment environment, read once by the
+   * runner entry). On the Principal's host engine no production caller sets
+   * it -- the Principal runs the default surface -- and the field exists so a
+   * spawn plan that means to carry a plan states so directly; the scenario
+   * harness uses it to exercise the engine-side gate the way OMA's plumbing
+   * would. It is never inherited and never authored configuration. */
   readonly toolSurface?: string | undefined;
 }
 
@@ -279,11 +282,12 @@ export function sessionEnv(
   profile: SessionProfile,
   paths?: Partial<Pick<SessionPaths, "piAgentDir" | "fence" | "coreExtension" | "toolSurface">>,
 ): Record<string, string> {
-  // D23/TSP-005: the surface plan is runner→Resident plumbing only; the one
-  // producer hop is the runner's own environment. A stray OMA_TOOL_SURFACE in
-  // the user's shell must not reach the Principal's host engine -- where a
-  // malformed plan would exit(1) at session_start and a crafted-valid one
-  // would narrow its tools -- so the inherited set never carries it.
+  // D23/TSP-005: the surface plan travels only the declared hop -- the
+  // runner unit's deployment environment for Residents, this paths field for
+  // a host engine. A stray OMA_TOOL_SURFACE in the user's shell must not
+  // reach the Principal's host engine -- where a malformed plan would exit(1)
+  // at session_start and a crafted-valid one would narrow its tools -- so
+  // the inherited set never carries it.
   const { OMA_TOOL_SURFACE: _ambientToolSurface, ...inherited } = base;
   return {
     ...inherited,

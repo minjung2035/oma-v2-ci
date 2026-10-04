@@ -54,7 +54,14 @@ const agentProfile = cfg.agentProfiles[profileName]!;
 const modelName = agentProfile.modelProfile;
 const profile = Object.freeze({ name: profileName, modelProfile: modelName, model: Object.freeze({ ...cfg.modelProfiles[modelName]! }),
   workspaceBytes: resources.workspaceBytes,
-  ...(configuration.roles[profileName] ? { settings: configuration.roles[profileName] } : {}) });
+  ...(configuration.roles[profileName] ? { settings: configuration.roles[profileName] } : {}),
+  // D23/TSP-005: the deployment renders the run's surface plan into this
+  // unit's environment; this entry is the boundary that reads it once and
+  // makes it declared profile data. The engine's spawn plan emits it and
+  // `--clearenv` makes it the only channel -- nothing inherited carries a
+  // plan into the confined engine, and the field is never authored role
+  // configuration.
+  ...(process.env.OMA_TOOL_SURFACE === undefined ? {} : { toolSurface: process.env.OMA_TOOL_SURFACE }) });
 // OMA runs the engine it shipped with, never one found on PATH, and points it
 // at an agent directory OMA owns so a Pi the user installed stays untouched.
 const piRuntime = resolvePiRuntime({

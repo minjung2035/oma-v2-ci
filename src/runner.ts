@@ -46,6 +46,13 @@ export interface RunnerProfile {
   readonly model: Readonly<ModelProfile>;
   readonly settings?: RoleSettings;
   readonly workspaceBytes?: number;
+  /** D23/TSP-005: the deployment's encoded surface plan for this run's
+   * engines. Internal OMA policy, never authored configuration: the
+   * deployment renders it into this runner's unit environment, the runner
+   * entry reads it once at its boundary, and the adapter hands it to the
+   * spawn plan -- `--clearenv` makes it the only channel, so nothing ambient
+   * or inherited can carry it. */
+  readonly toolSurface?: string;
 }
 /** What the deployment declared about confining Residents.
  *
@@ -241,10 +248,11 @@ export class RunnerModule {
         // C18: skills, prompt templates and themes the installed packages
         // provide, as host paths under the store root the plan translates.
         ...(packageResourcePaths(this.paths.packages) === undefined ? {} : { packageResources: packageResourcePaths(this.paths.packages) }),
-        // D23/TSP-005: the trusted runtime's surface plan reaches the confined
-        // engine through this runner's own environment, never through authored
-        // configuration; --clearenv makes the plan the only channel.
-        ...(process.env.OMA_TOOL_SURFACE === undefined ? {} : { toolSurface: process.env.OMA_TOOL_SURFACE }),
+        // D23/TSP-005: the surface plan is declared profile data, read once
+        // from this runner's own unit environment by the entry and carried
+        // here -- never through authored configuration, and never re-read
+        // from ambient environment at spawn time.
+        ...(this.profile.toolSurface === undefined ? {} : { toolSurface: this.profile.toolSurface }),
       },
       paths: {
         piCommand,
