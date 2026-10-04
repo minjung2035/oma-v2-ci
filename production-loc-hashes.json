@@ -748,7 +748,7 @@
     },
     {
       "path": "src/platform/guest/requests.ts",
-      "sha256": "4d33cb49dc5d03f145a43f4e23573bb0ba1e974b037a3a98a6851e60870f7bd7"
+      "sha256": "fe0b935d43d6f7743786bbb08f6049dade37ee3164960a1fab27abfeeae8c06c"
     },
     {
       "path": "src/platform/guest/server.ts",
@@ -804,7 +804,7 @@
     },
     {
       "path": "src/platform/host/host-api.ts",
-      "sha256": "511b0460f8b54aac26c61b2c42cc1d7686a32486aa31bb4a730d8c76ed97c874"
+      "sha256": "fd8f0a8afed867802072d96c92cb042c7572dd01f1a069ff4c12312ed0894e9e"
     },
     {
       "path": "src/platform/host/image.ts",
@@ -848,7 +848,7 @@
     },
     {
       "path": "src/platform/host/service.ts",
-      "sha256": "73e043ae60429dd4fd354337fef4cfc65b165cf8bac6d03bedfbbd1416621ab4"
+      "sha256": "411c240afeaf8228b91b3f9760295fb180a9761939ab91a3479b5f3da1b179db"
     },
     {
       "path": "src/platform/host/snapshot.ts",
@@ -1068,7 +1068,7 @@
     },
     {
       "path": "src/runtime/egress-forwarder.ts",
-      "sha256": "696723f4e988772cb14dae9af73df59633e698253e98981ab18f9402b824b333"
+      "sha256": "58f68818937dec97b6bd49b8785e8b48b38e14aea12824496419b54f4b43ec1e"
     },
     {
       "path": "src/runtime/engine-auth.ts",
@@ -1104,11 +1104,11 @@
     },
     {
       "path": "src/runtime/interactive-display.ts",
-      "sha256": "d5b4feee41578128d48b096b11f055fc2f13ba740fe4bf579d8ce183fb83482f"
+      "sha256": "fba4b80882c65239ecaf72244dd383d8cfa10e09d8cf331846d95bb1a528c117"
     },
     {
       "path": "src/runtime/local-package.ts",
-      "sha256": "316284b154b236af18459fc4b55d2c2e21dd8b4cb4ee2cc005215ee0dddc9b4b"
+      "sha256": "eab364061032b405a96e0226f38ab543644cf9409c35f61fbbc8f66c1ff33aee"
     },
     {
       "path": "src/runtime/locked-files.ts",
