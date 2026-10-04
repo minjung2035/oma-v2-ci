@@ -868,7 +868,7 @@ run lease와 spec의 model profile이다. host는 이 판단을 다시 하지 �
 - image 버전, protocol 버전, 읽을 수 있는 state schema 집합, 쓰는 state schema
 - 각 파일의 sha256, verity root hash
 - OMA source digest(`scripts/source-digest.mjs`의 verification input digest)와 deployment digest
-- 포함한 package의 고정 버전: Debian snapshot 날짜, kernel, systemd, bubblewrap, Node, git, 동봉 엔진
+- 포함한 package의 고정 버전: Debian snapshot 날짜, kernel, systemd, bubblewrap, Node와 그 toolchain(npm/npx/corepack), git, 동봉 엔진
 
 `manifest.json`은 release key(Ed25519)로 서명한다. 공개 key는 app binary에 들어 있다. host는 부팅 전마다 다음을 확인한다: 서명,
 각 파일의 sha256, manifest의 protocol이 자기가 말하는 범위 안에 있는지. verity root hash는 kernel cmdline(`roothash=`)으로 넘긴다.
