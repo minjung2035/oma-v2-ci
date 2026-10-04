@@ -59,9 +59,11 @@
 | ID | 사용자가 겪는 것 | 기준 | 결정 | 수정 | 상태 |
 |---|---|---|---|---|---|
 | UX-24 | 업데이트 후 첫 상호작용이 `session.resume`이면 pre-update rollback 스냅샷 없이 부팅됨 — `engine.start`만 `*-update-<image>.img`를 만들었음 | 1 | resume의 부팅도 같은 `updateSnapshot()`을 거침 | `ce74138` — sessions()의 session.resume이 lifecycle.start 전에 updateSnapshot | 수정됨 |
-| UX-25 | `snapshot.create id=update-<image>`가 update 마커 네임스페이스를 점유 — 사용자 스냅샷이 영구 prune 보호를 얻고, 다음 업데이트의 실제 롤백 스냅샷이 "이미 있음"으로 건너뛰어짐 | 1, 9 | `update-` 접두어는 서비스 전용으로 예약 | Host API 파라미터 검증 거절 + service.ts backend 방어(이중); 실제 `updateSnapshot` 경로는 직접 `snapshotStopped`을 부르므로 영향 없음 | 수정됨 |
+| UX-25 | `snapshot.create id=update-<image>`가 update 마커 네임스페이스를 점유 — 사용자 스냅샷이 영구 prune 보호를 얻고, 다음 업데이트의 실제 롤백 스냅샷이 "이미 있음"으로 건너뛰어짐 | 1, 9 | `update-` 접두어는 서비스 전용으로 예약; 마커 판정은 발행 파일명 꼬리(endsWith)가 아닌 파싱된 스냅샷 id로 강제 — `x-update-<image>` 같은 접미 일치는 어떤 사용자 id로도 성립하지 않음 | Host API 파라미터 검증 거절 + service.ts backend 방어(이중)는 사용자용 안내로 유지하고, updateProtection/updateSnapshot 양쪽 모두 `snapshotIdOf(name) === updateId`로 판정하도록 수정; 후행 일치 점유 회귀 테스트 추가 | 수정됨 |
 | UX-26 | guest forwarder가 소켓 이름 정리(`clearSocketName`) 실패로 listen을 거절하면 run lease가 해제되지 않음 — host에 run·credential이 계속 살아있음 | 9 | 거절 경로에서도 `lease.release()` (유효성 거절과 동일하게) | `EgressForwarder.listen`의 clearSocketName throw 경로에 release 추가; platform-egress 테스트로 고정 | 수정됨 |
 | UX-27 | 도구 렌더링이 TypeError로 깨질 수 있음 — `displayCopy`가 null-prototype 사본을 만들어 renderer의 `hasOwnProperty`/`toString`/템플릿 보간이 throw | 1 | 정상 프로토타입 사본으로 교체; `__proto__` own-key는 defineProperty로 데이터 유지 | interactive-display.ts; 프로토타입·`__proto__` 데이터 보존 테스트 추가 | 수정됨 |
+| UX-28 | 설정된 `local/..foo` 소스의 스테이징 복사본이 `oma pi` 변경 시 pruneLocalStage에 삭제됨 — settings.json이 가리키는 복사본을 `startsWith("..")` 접두 판정이 `local/` 탈출로 오독 | 1 | `..` 판정을 컴포넌트 단위로 — checkStoreBoundary의 `escapes()`와 같은 규칙 | `escapes()`를 모듈 스코프로 올려 pruneLocalStage가 재사용(`rel === ".." \|\| rel.startsWith("../")`); `local/..foo` 유지 + 진짜 탈출 소스는 계속 제외되는 회귀 테스트 | 수정됨 |
+| UX-29 | `+build` 접미를 가진 이미지 버전은 업데이트 후 첫 부팅이 영원히 거절됨 — manifest 버전 알파벳은 `+`를 허용하는데 스냅샷 id 알파벳이 못 받아 `update-<version>` 마커 생성이 INVALID_REQUEST | 1 | 스냅샷 id 규칙을 버전 알파벳을 포함하도록 확장(`+` 허용 — 파일명 안전); 러닝 스냅샷의 유지보수 래치 키는 id를 sha256으로 주입적으로 인코딩(request key 알파벳이 더 좁음) | `SNAPSHOT_ID` 공유 상수 도입(snapshot.ts — publish·snapshotIdOf·host-api.ts 와이어 검증이 같은 규칙), snapshotRunning의 래치 키를 `snapshot-<sha256(id)>`로; `+` 버전 부팅·`+` 사용자 id·id 파싱 회귀 테스트 | 수정됨 |
 
 *판정 메모 — 사용자 결함 아님으로 기록만:* 병합 후 회귀로 보인 `limits.mailBodyBytes` 거절은
 버그가 아니라 AV-07 바닥의 정상 동작이다. 바닥 계산(mail/review-bounds.ts)을 실측으로
