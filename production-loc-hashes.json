@@ -1,6 +1,6 @@
 {
   "kind": "oma-production-source-digests-v1",
-  "manifest": "73b300e9d179bc86367bda55d7524492d1b82e21a85382c775d6d18477655e9a",
+  "manifest": "b541e745d8127b78753e6c74ce760fbd8273e8367d20c0f5319d6d7c556898b2",
   "files": [
     {
       "path": "implementation/contracts.ts",
@@ -1029,10 +1029,6 @@
     {
       "path": "src/review.ts",
       "sha256": "8fded83bf470909dd1d9b9e86dbda620601b1429202355e87e95d488b91b4877"
-    },
-    {
-      "path": "src/rpc-client.ts",
-      "sha256": "dee98a13fc0caa2cd66e32ad21a68cd4fa526a960cd1d884b0a0fd8249ec7616"
     },
     {
       "path": "src/runner.ts",

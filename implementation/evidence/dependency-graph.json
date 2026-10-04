@@ -263,7 +263,6 @@
   "src/request-cache.ts",
   "src/resident-paths.ts",
   "src/review.ts",
-  "src/rpc-client.ts",
   "src/runner.ts",
   "src/runtime/assets.ts",
   "src/runtime/broker-lifetime.ts",
@@ -1852,15 +1851,14 @@
     "src/cli.ts",
     "src/tui/",
     "src/pi-extension.ts",
-    "src/extension/",
-    "src/rpc-client.ts"
+    "src/extension/"
    ],
-   "files": 82
+   "files": 81
   }
  ],
- "files": 378,
- "runtimeEdges": 1614,
- "typeOnlyEdges": 421,
+ "files": 377,
+ "runtimeEdges": 1612,
+ "typeOnlyEdges": 420,
  "runtimeEdgeMatrix": {
   "L1-kernel -> L1-kernel": 314,
   "L2-facts -> L1-kernel": 36,
@@ -1872,10 +1870,10 @@
   "L4-orchestration -> L2-facts": 8,
   "L4-orchestration -> L3-workflow": 19,
   "L4-orchestration -> L4-orchestration": 167,
-  "L5-entry -> L1-kernel": 124,
+  "L5-entry -> L1-kernel": 123,
   "L5-entry -> L2-facts": 2,
   "L5-entry -> L3-workflow": 7,
-  "L5-entry -> L4-orchestration": 132,
+  "L5-entry -> L4-orchestration": 131,
   "L5-entry -> L5-entry": 160
  },
  "upwardTypeOnlyEdges": [

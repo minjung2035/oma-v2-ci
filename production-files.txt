@@ -255,7 +255,6 @@ src/reconcile/preaccept.ts
 src/request-cache.ts
 src/resident-paths.ts
 src/review.ts
-src/rpc-client.ts
 src/runner.ts
 src/runtime/assets.ts
 src/runtime/broker-lifetime.ts

@@ -119,7 +119,6 @@ const LAYERS = Object.freeze([
       // The trusted extension's parts; the entry above composes them and the
       // extension-closure rule keeps them free of OMA runtime imports.
       "src/extension/",
-      "src/rpc-client.ts",
     ],
   },
 ]);
