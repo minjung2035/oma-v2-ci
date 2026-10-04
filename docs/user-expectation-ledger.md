@@ -26,12 +26,12 @@
 
 | ID | 사용자가 겪는 것 | 기준 | 결정 | 수정 | 상태 |
 |---|---|---|---|---|---|
-| UX-10 | Society에서 직접 만든 스킬을 넣을 길이 없음 (`oma pi install <local-dir>` 거절, 원격 패키지만 가능) | 1, 2 | 로컬 디렉토리를 package store로 복사 설치 허용 — 기존 store 파이프라인과 Resident ro mount 재사용 | fix/fm 예정 | 결정 |
-| UX-11 | Society에서 로컬 확장을 sideload할 수 없음 | 1, 2 | UX-10과 같은 경로(확장은 sandbox 안에서 실행되므로 경계 유지) | fix/fm 예정 | 결정 |
-| UX-12 | `oma pi` help/list가 패키지에 skills/prompts/themes가 들어있다는 걸 보여주지 않음 | 1 | help 문구 + `oma pi list`에 포함 리소스 표시 | fix/fm 예정 | 결정 |
-| UX-13 | DR25 문서가 "skills/prompts는 로드하지 않는다"고 틀리게 안내 (`docs/design-revisions.md:535`) | 9 | 현재 동작으로 정정 | fix/fm 예정 | 결정 |
-| UX-14 | macOS `oma pi list`가 앱이 꺼져 있으면 실패하고 `--host-only` 대안을 안 알려줌 | 9 | 오류 문구에 `--host-only` 안내 | fix/fm 예정 | 결정 |
-| UX-15 | 확장 토글 저장 시 "Saved"만 나오고 다음 세션부터 적용된다는 걸 안 알려줌 | 9 | 저장 알림에 적용 시점 표기 | fix/fm 예정 | 결정 |
+| UX-10 | Society에서 직접 만든 스킬을 넣을 길이 없음 (`oma pi install <local-dir>` 거절, 원격 패키지만 가능) | 1, 2 | 로컬 디렉토리를 package store로 복사 설치 허용 — 기존 store 파이프라인과 Resident ro mount 재사용 | fix/fm `8f0a5a1` | 수정됨 |
+| UX-11 | Society에서 로컬 확장을 sideload할 수 없음 | 1, 2 | UX-10과 같은 경로(확장은 sandbox 안에서 실행되므로 경계 유지) | fix/fm `8f0a5a1` | 수정됨 |
+| UX-12 | `oma pi` help/list가 패키지에 skills/prompts/themes가 들어있다는 걸 보여주지 않음 | 1 | help 문구 + `oma pi list`에 포함 리소스 표시 | fix/fm `8f0a5a1` | 수정됨 |
+| UX-13 | DR25 문서가 "skills/prompts는 로드하지 않는다"고 틀리게 안내 (`docs/design-revisions.md:535`) | 9 | 현재 동작으로 정정 | fix/fm `8f0a5a1` | 수정됨 |
+| UX-14 | macOS `oma pi list`가 앱이 꺼져 있으면 실패하고 `--host-only` 대안을 안 알려줌 | 9 | 오류 문구에 `--host-only` 안내 | fix/fm `8f0a5a1` | 수정됨 |
+| UX-15 | 확장 토글 저장 시 "Saved"만 나오고 다음 세션부터 적용된다는 걸 안 알려줌 | 9 | 저장 알림에 적용 시점 표기 | fix/fm `8f0a5a1` | 수정됨 |
 | UX-16 | 설치한 package store 리소스를 모델 `read`/`ls`/`grep`이 읽지 못함 (guard는 허용, 실행층이 workspace만 허용) | 1 | `readableRoots`를 contained read/ls/grep/find까지 연결(쓰기는 계속 workspace만) | fix/fk — `admittedRoot`가 guard와 contained read가 같은 승인 순서로 root를 고름 | 수정됨 |
 
 ## 실패 방식·모델 표면
@@ -40,16 +40,16 @@
 |---|---|---|---|---|---|
 | UX-17 | egress 실패 시 조용히 저하되어 왜 안 되는지 모름 (`oma-society.ts:~667`) | 9 | 선택 경로는 알림과 함께 저하, 필수 경로는 명시적 실패 | fix/fh `af3671c` — `egressRequired(env)`+`openSessionEgress()`: OMA_EGRESS_SOCKET 설정 시 BROKER_UNAVAILABLE, 선택 경로는 사용자에게 알림 후 진행 | 수정됨 |
 | UX-20b | HOME 미설정 시 요청 캐시가 `/tmp`로 조용히 떨어짐 — 공유 tmp에 사용자 상태 기록 | 9 | 명시적 오류로 fail-closed | fix/fh `1715ae5` — "oma: HOME is not set; the request cache has no root" (exit 4) | 수정됨 |
-| UX-18 | Principal 도구 안내문에 Principal이 할 수 없는 Worker 동작("open and review merge requests")이 들어있음 (`review-tools.ts:109`) | 11 | 역할별 안내문 분리 | 배정 예정 | 결정 |
-| UX-19 | Worker `<oma_tools>`에 Pi 상용구("PI_* env vars…")가 남아 모델 표면을 더럽힘 | 11 | 제거 | 배정 예정 | 결정 |
+| UX-18 | Principal 도구 안내문에 Principal이 할 수 없는 Worker 동작("open and review merge requests")이 들어있음 (`review-tools.ts:109`) | 11 | 역할별 안내문 분리 | fix/fm `8f0a5a1` — Principal 스니펫이 자기 surface의 동작만 이름붙임("diff and vote a HIGH merge's approval") | 수정됨 |
+| UX-19 | Worker `<oma_tools>`에 Pi 상용구("PI_* env vars…")가 남아 모델 표면을 더럽힘 | 11 | 제거 | fix/fp `8ed4b3c` — `PI_*` 언급 가이드라인 필터링, fail→pass 테스트로 실제 안내는 유지 확인 | 수정됨 |
 
 ## 하드코딩된 제한 (출처: 사용자 실제 피해 보고 + 제한값 전수 감사 진행 중)
 
 | ID | 사용자가 겪는 것 | 기준 | 결정 | 수정 | 상태 |
 |---|---|---|---|---|---|
-| UX-20 | 확장/패키지 설치가 ~1KiB 크기 제한에 걸려 실패 | 1 | 정상 패키지가 들어갈 만한 named limit으로 교체, 거절 메시지에 실제 한도 표기 | fix/fo (f9347ad1) | 구현 중 |
-| UX-21 | 압축 작업 실행 중인데 세션이 idle로 전환됨 — 무응답 타임아웃이 "도구 실행 중"과 "모델 침묵"을 구분 못함 | 1, 9 | 실행 중인 도구는 세션을 비-idle로 유지. 침묵 예산은 모델 침묵에만 적용 | fix/fo (f9347ad1) | 구현 중 |
-| UX-22+ | 하드코딩된 크기·시간 제한 전수 감사 (기준 13 — Pi에도 동일한 값은 제외, 전수 조사는 코드베이스 전체 스캔 때 마무리) | 1, 9, 13 | 사용자가 정상 사용으로 도달 가능한 제한 → 조정/명명/명시적 거절. 결과는 여기에 추가 | 감사 95516b31 | 조사 중 |
+| UX-20 | 패키지 인덱스/settings 문서가 1MiB 하드코딩 상한에 걸려 대규모 패키지 설치·로드 실패 (사용자 보고: 확장 설치 거절) | 1 | 정상 패키지가 들어갈 만한 named limit으로 교체, 거절 메시지에 실제 한도 표기 | fix/fo `578cb55` — `PACKAGE_INDEX_BYTES` 8MiB, `PERSONAL_SETTINGS_BYTES` 17MiB, 초과 시 `LIMIT_EXCEEDED`에 한도 명시 | 수정됨 |
+| UX-21 | 압축 작업 실행 중인데 세션이 idle로 전환됨 | 1, 9 | 실행 중인 도구는 세션을 비-idle로 유지 | 기존 커밋 `ab17f7a`가 이미 구현(pi-adapter.ts:239-267, tool_execution_start/end 추적 + idleDeadline.hold, AV24 테스트) — fo가 확인 | 수정됨(기존) |
+| UX-22+ | 하드코딩된 크기·시간 제한 전수 감사 (기준 13 — Pi에도 동일한 값은 제외, 전수 조사는 코드베이스 전체 스캔 때 마무리) | 1, 9, 13 | 사용자가 정상 사용으로 도달 가능한 제한 → 조정/명명/명시적 거절. 결과는 여기에 추가 | 감사는 리밋으로 중단 — 전수는 6단계 스캔에 편입 | 결정 |
 
 ## 추가 발견 (감사·검증 진행에 따라 추가)
 
