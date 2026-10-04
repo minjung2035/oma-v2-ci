@@ -79,6 +79,25 @@ test("native Set.add used for truthiness is rejected, including a local alias of
   rejects("set-add-membership", { "src/bad.ts": `const seen = new Set<string>(); const alias = seen; if (!alias.add("x")) throw new Error();` });
 });
 
+test("set-add-membership fires on aliased callees -- the resolved signature, not the accessed name, decides", () => {
+  // A callee that resolves to Set.add's declaration under another name is the
+  // same misuse spelled differently: no syntactic name gate may stand between
+  // the boolean-position test and the signature resolution.
+  const output = fixture({ "src/bad.ts": [
+    `declare const box: { foo: Set<string>["add"] };`,
+    `const direct = new Set<string>();`,
+    `const obj = { m: new Set<string>().add };`,
+    `if (direct.add("c")) {}`,
+    `if (box.foo("a")) {}`,
+    `if (obj.m("z")) {}`,
+    `if (box["foo"]("b")) {}`,
+    ``,
+  ].join("\n") });
+  assert.equal(output.status, 1);
+  const fired = output.findings.filter(finding => finding.rule === "set-add-membership");
+  assert.deepEqual(fired.map(finding => finding.line), [4, 5, 6, 7], JSON.stringify(output.findings));
+});
+
 test("executable capability, method, identifier, resource and limit schema copies are rejected", () => {
   rejects("duplicate-capability-schema", {
     "src/domain/capabilities.ts": capabilityOwner,

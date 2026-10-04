@@ -709,19 +709,14 @@ export function analyzeProgram(
             );
         }
       }
-      // booleanUse walks the parent chain with no checker queries, and a
-      // member call can only resolve to Set.add when its accessed name is
-      // "add" -- both cheap gates before resolving the signature.
-      if (
-        ts.isCallExpression(node) &&
-        booleanUse(node) &&
-        (!ts.isPropertyAccessExpression(node.expression) ||
-          node.expression.name.text === "add") &&
-        (!ts.isElementAccessExpression(node.expression) ||
-          !ts.isStringLiteralLike(node.expression.argumentExpression) ||
-          node.expression.argumentExpression.text === "add") &&
-        isNativeSetAdd(checker, node)
-      )
+      // booleanUse walks the parent chain with no checker queries, so it is
+      // the one cheap gate ahead of resolving the signature. There is no
+      // callee-name gate and cannot be one: an aliased member resolves to
+      // Set.add's declaration under any accessed name (`{ foo:
+      // Set<string>["add"] }`, `{ m: new Set().add }`, `box["foo"]`), so the
+      // resolved signature -- never the syntax's text -- decides which method
+      // a call reaches.
+      if (ts.isCallExpression(node) && booleanUse(node) && isNativeSetAdd(checker, node))
         report(
           "set-add-membership",
           node,
