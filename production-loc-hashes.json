@@ -504,7 +504,7 @@
     },
     {
       "path": "src/frame.ts",
-      "sha256": "f10f57853e1c6b452de4ad07847a61a2524bcf0f64005556df078203b2768965"
+      "sha256": "e3578394c01e393afad41ef151cf671d1b5a2a4fd15b3a0e9ca6281e6589b499"
     },
     {
       "path": "src/git.ts",
