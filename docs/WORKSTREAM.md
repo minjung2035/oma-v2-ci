@@ -179,6 +179,18 @@ Pi/OS 기능을 다시 구현해서 생긴 중복·workaround·pre-release 잔�
   hasOwnProperty/toString/보간 TypeError 제거); `__proto__` own-key는 defineProperty로 데이터 유지.
 - FJ-6 테스트 확장: transient lock-acquire errno를 EMFILE + ENFILE + EAGAIN으로.
 - ledger: UX-24(resume 스냅샷 갭, ce74138 수정됨 표기)·UX-25/26/27 행 추가.
+- 로컬 패키지 prune + 테스트 속도 (feat/macos-hidden-vm):
+  - `local/@bare` 베어 스코프 패키지가 prune에서 지워지던 구멍 + `.staging-local-*`
+    파일/심링크가 removeOwnedTree의 O_DIRECTORY에서 ENOTDIR/ELOOP로 죽던 구멍 수정
+    (0cc115a) — lstat 분기 + 정확한 스코프 매치로 dead sibling 수집은 유지.
+  - 시리얼 PTY 3종의 고정 sleep을 전부 화면 마커 expect로 전환(검증된 마커만,
+    엔진 탄생은 넓은 timeout). 3× 단독 + 2× 병렬 부하 전부 통과 → SERIAL에서 제거.
+  - architecture-check의 per-node 루프에 이름 기반 early-out 추가
+    (Set.add 시그니처 해석 전 callee/booleanUse 게이트, 스키마 중복 검사 전
+    필드명 게이트) + 소규모 fixture 프로그램의 lib 생략·checkContracts 스킵 —
+    findings 불변을 합성 위반 fixture로 대조 확인. 전체 스위트 약 11.5분 → 수 분 단축.
+  - build.mjs: 입력 해시 스탬프로 무변경 빌드 16s → 3s (출력 목록 검증 + 변경 시
+    기존 rm -rf 전체 컴파일, check-package는 매번 실행).
 
 ## 6. 선행 작업 큐 (코드베이스 전체 확장 전 — 사용자 지시)
 
