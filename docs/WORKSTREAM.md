@@ -396,6 +396,11 @@ name collision/intended surface/hidden 미활성/idempotent reload/provenance/
   Worker 개발환경 → fix/fi. 사용자 납득 감사 3축(샌드박스·커스터마이징·오버엔지니어링).
 
 ## 10. 지금부터의 실행 순서
+0. **P0-8 강제 수단 미구현** — PRIORITY-0.md P0-8 + design-revisions DR32가 선언한
+   정적 검사(소유 트리 경로에서 raw `readdir`/`openat`/`rm`/`lstat` 등을
+   `storage/directory.ts`·`platform/host/files.ts`의 owned 프리미티브 밖에서
+   호출 금지)를 architecture-check 규칙으로 추가해야 이 부류가 구조적으로 닫힌다.
+   현재 수정 에이전트(972dd016)의 작업이 끝나고 맹검증이 지나간 뒤 편성.
 1. 검증 라운드 1 마무리(fa, tp+pg2) → 발견 전체를 fix 라운드 2 패키지로 묶기
 2. fix 라운드 2: fg·fh·fi(진행 중) + fj(fc 발견) + fk(fb readableRoots) + fl(문서/traceability
    drift + CI 검사 연결) + fm(커스터마이징 표면) — 동시 구현 최대 5
