@@ -1865,7 +1865,7 @@
   }
  ],
  "files": 377,
- "runtimeEdges": 1613,
+ "runtimeEdges": 1614,
  "typeOnlyEdges": 427,
  "runtimeEdgeMatrix": {
   "L1-kernel -> L1-kernel": 314,
@@ -1874,7 +1874,7 @@
   "L3-workflow -> L1-kernel": 223,
   "L3-workflow -> L2-facts": 14,
   "L3-workflow -> L3-workflow": 68,
-  "L4-orchestration -> L1-kernel": 334,
+  "L4-orchestration -> L1-kernel": 335,
   "L4-orchestration -> L2-facts": 8,
   "L4-orchestration -> L3-workflow": 19,
   "L4-orchestration -> L4-orchestration": 167,
@@ -1901,7 +1901,7 @@
   ]
  ],
  "fanIn": {
-  "src/domain/errors.ts": 201,
+  "src/domain/errors.ts": 202,
   "src/domain/identifiers.ts": 62,
   "src/storage/paths.ts": 31,
   "src/protocol/host-guest.ts": 29,

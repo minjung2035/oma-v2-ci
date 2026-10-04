@@ -181,6 +181,12 @@ export interface PrincipalEgress {
   close(): Promise<void>;
 }
 
+/** What a society tenure does with a provider path it paid for (P0V-114):
+ * hold it while the lease stands, close it otherwise. */
+export interface EgressTenure {
+  hold(holding: { close(): Promise<void> }): Promise<boolean>;
+}
+
 /** A free loopback port for the extension's bridge. The Principal's engine is
  * not in a network namespace of its own, so a fixed port could collide with
  * another society's. */
@@ -229,23 +235,17 @@ export function egressRequired(env: Readonly<Record<string, string | undefined>>
   return socket !== undefined && socket.length > 0;
 }
 
-/** The session's provider path under its own policy. `required` is
- * `egressRequired` of the caller's environment: an open that fails on a
- * required path is thrown, never degraded into a session whose engine could
- * never reach a provider. An optional path's failure is still said, through
- * `degrade`, beside the session that continues on the engine's own
- * credential. `hold` is the owner's take; null stays the answer where the
- * environment named no socket or the hold refused it. */
-export async function openSessionEgress(open: () => Promise<PrincipalEgress | null>, required: boolean,
-  hold: (egress: PrincipalEgress) => Promise<boolean>, degrade: (error: unknown) => void): Promise<PrincipalEgress | null> {
-  try {
-    const opened = await open();
-    return opened !== null && await hold(opened) ? opened : null;
-  } catch (error) {
-    if (required)
-      throw new StoreError("BROKER_UNAVAILABLE",
-        `the provider connection could not be opened: ${error instanceof Error ? error.message : String(error)}`, { cause: error });
-    degrade(error);
-    return null;
-  }
+/** DR18 adoption (G04-01): the opened provider path is the tenure's from
+ * here -- held while the lease stands, closed by `hold` if the lease ended
+ * while it was opening. A configured egress (`OMA_EGRESS_SOCKET` names a
+ * service) that cannot open is a start failure, not a degradable notice:
+ * in the guest the engine has no other provider path (MAC-701 keeps the
+ * credential on the host), so the failure propagates with its own code
+ * rather than starting an engine that can only fail against it. An
+ * unconfigured environment still answers null -- no service was promised,
+ * and a path that does not exist cannot fail. */
+export async function adoptPrincipalEgress(owner: EgressTenure,
+  options: Parameters<typeof openPrincipalEgress>[0]): Promise<PrincipalEgress | null> {
+  const opened = await openPrincipalEgress(options);
+  return opened !== null && await owner.hold(opened) ? opened : null;
 }

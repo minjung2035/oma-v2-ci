@@ -519,9 +519,9 @@ export async function runInteractive(): Promise<void> {
           catch (cleanup) { throw new AggregateError([error, cleanup], "Interactive extension load and cleanup failed"); }
           throw error;
         }
-        for (const extension of loaded.extensions)
-          for (const [name, tool] of extension.tools)
-            extension.tools.set(name, { ...tool, definition: safeToolPresentation(tool.definition) });
+        // Presentation policy does not touch the registry: the tools Pi
+        // registered stay the objects Pi loaded, and the render seam below
+        // wraps the definition Pi resolves for display (A7).
         // The boundary must wrap the public UI before upstream installs components.
         const own = loaded.extensions.filter(extension => extension.path.startsWith("<inline:"));
         return { ...loaded, extensions: [...own, ...loaded.extensions.filter(extension => !extension.path.startsWith("<inline:"))] };
@@ -601,6 +601,17 @@ export async function runInteractive(): Promise<void> {
     engineExport(omaExportCommand(own.getPathCommandArgument(text, "/export"), projectDir, owned.session.sessionFile) ?? text);
   const engineCrashHint = own.getCrashExtensionHint.bind(mode);
   own.getCrashExtensionHint = error => omaCrashHint(engineCrashHint(error));
+  // Every render component resolves its tool's definition through this one
+  // lookup, where the engine merges its built-in renderers over what an
+  // extension did not declare. Wrapping the resolved definition is OMA's
+  // whole presentation seam: Pi's registry is never written, Pi's real
+  // renderers are used where they exist, and only a tool with no renderer at
+  // all meets OMA's own fallback.
+  const engineToolDefinition = own.getRegisteredToolDefinition.bind(mode);
+  own.getRegisteredToolDefinition = name => {
+    const definition = engineToolDefinition(name);
+    return definition === undefined ? undefined : safeToolPresentation(definition);
+  };
   // Fetching the engine's search tools is not news on a start; a failure is.
   const showToolStatus = own.showManagedToolStatus.bind(mode);
   own.showManagedToolStatus = status => { if (status.type === "warning") showToolStatus(status); };

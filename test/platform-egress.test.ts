@@ -297,43 +297,24 @@ test("DR18: the session's provider path fails closed where the environment requi
   // so the engine the session just started can never reach a provider. The
   // failure is the session's own there; only an optional path may degrade,
   // and then it is still said.
-  const { egressRequired, openSessionEgress, openPrincipalEgress } = await import("../src/runtime/egress-forwarder.js");
+  const { egressRequired, adoptPrincipalEgress } = await import("../src/runtime/egress-forwarder.js");
   assert.equal(egressRequired({}), false);
   assert.equal(egressRequired({ OMA_EGRESS_SOCKET: "" }), false);
   assert.equal(egressRequired({ OMA_EGRESS_SOCKET: "/e.sock" }), true);
-  const opened = { env: Object.freeze({}), close: async () => {} };
-  const held: unknown[] = [];
-  assert.equal(await openSessionEgress(async () => opened, false,
-    async egress => { held.push(egress); return true; }, () => { throw new Error("must not degrade"); }), opened);
-  assert.equal(held.length, 1, "the owner was asked to take the path");
-  // An open that fails on an optional path is said, and the session goes on.
-  const said: unknown[] = [];
-  const unavailable = new StoreError("BROKER_UNAVAILABLE", "the egress service is unavailable");
-  assert.equal(await openSessionEgress(async () => { throw unavailable; }, false,
-    async () => { throw new Error("nothing to hold"); }, error => { said.push(error); }), null);
-  assert.deepEqual(said, [unavailable], "an optional failure is still surfaced");
-  // The same failure on a required path is thrown, never degraded.
-  await assert.rejects(openSessionEgress(async () => { throw unavailable; }, true,
-    async () => { throw new Error("nothing to hold"); }, () => { throw new Error("a required path must not degrade"); }),
-    (error: unknown) => error instanceof StoreError && error.code === "BROKER_UNAVAILABLE" && /provider connection/.test(error.message));
-  // A path the owner refused is closed by the owner, not left open.
-  let closed = false;
-  const refused = { env: Object.freeze({}), close: async () => { closed = true; } };
-  assert.equal(await openSessionEgress(async () => refused, false,
-    async egress => { await egress.close(); return false; }, () => { throw new Error("must not degrade"); }), null);
-  assert.equal(closed, true);
-  // Through the real open: a required environment whose service is gone fails
-  // closed; the same dead socket unnamed is simply no path at all.
+  // Through the real open: a required environment whose service is gone is a
+  // start failure -- it propagates, never degrades; the same dead socket
+  // unnamed is simply no path at all.
   const dir = mkdtempSync(join(tmpdir(), "oma-egress-dead-"));
   t.after(() => rmSync(dir, { recursive: true, force: true }));
   const dead = join(dir, "gone.sock");
   const ask = { society: "demo", runRoot: dir, provider: "anthropic", model: "current", modelProfile: "default",
     inferenceSeconds: 5, frameBytes: PLATFORM_FRAME_BYTES, deadlineMs: 500 };
-  await assert.rejects(openSessionEgress(() => openPrincipalEgress({ ...ask, env: { OMA_EGRESS_SOCKET: dead } }),
-    egressRequired({ OMA_EGRESS_SOCKET: dead }), async () => true, () => { throw new Error("a required path must not degrade"); }),
-    (error: unknown) => error instanceof StoreError && error.code === "BROKER_UNAVAILABLE" && /provider connection/.test(error.message));
-  assert.equal(await openSessionEgress(() => openPrincipalEgress({ ...ask, env: {} }),
-    false, async () => true, () => { throw new Error("nothing to degrade: no path was opened"); }), null,
+  const held: unknown[] = [];
+  const owner = { hold: async (holding: unknown) => { held.push(holding); return true; } };
+  await assert.rejects(adoptPrincipalEgress(owner, { ...ask, env: { OMA_EGRESS_SOCKET: dead } }),
+    (error: unknown) => error instanceof StoreError && error.code === "BROKER_UNAVAILABLE");
+  assert.equal(held.length, 0, "a failed open adopts nothing");
+  assert.equal(await adoptPrincipalEgress(owner, { ...ask, env: {} }), null,
     "no socket named: no path, nothing said");
 });
 

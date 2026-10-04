@@ -38,10 +38,24 @@ export function fieldEscape(value: string): string {
 export class ViewsModule {
   private observations: readonly StatusUnitObservation[] = [];
   private projected: { readonly snapshot: StatusSnapshot; readonly agents: readonly AgentStatus[] } | null = null;
+  /** The broker's memory-only runner-observation sink, looked up per agent.
+   * `runner.observe` is the runner's own last word about what its engine was
+   * doing; an observation's incarnation names the run it was authenticated
+   * under, so a superseded run's report can never be read as this run's. */
+  private runnerObservedAt: ((agent: Actor) => Readonly<{ incarnation: number; observedAtMs: number }> | null) | null = null;
   constructor(private readonly store: Store, private readonly stateRoot: string,
     private readonly society: string, private readonly principalProfile: string,
     private readonly viewLimits?: BatchViewLimits) {}
   get unitObservations(): readonly StatusUnitObservation[] { return this.observations; }
+  /** Wires the diagnostic the internal dispatcher keeps into the status
+   * projection. Only `runnerObservedAtMs` reaches a view -- the timestamp of
+   * the runner's last self-report, not a claim the run is doing it now --
+   * and nothing else about an agent's state consults it. */
+  observeRunnerSource(
+    source: (agent: Actor) => Readonly<{ incarnation: number; observedAtMs: number }> | null,
+  ): void {
+    this.runnerObservedAt = source;
+  }
   refreshWorld(): void {
     const world = join(this.stateRoot, "world");
     ensureDirectory(world);
@@ -201,13 +215,19 @@ export class ViewsModule {
           unit.result !== "unknown" && Number.isSafeInteger(unit.execMainStatus) && unit.execMainStatus >= 0;
         observations.push(Object.freeze({ agent: row.name, observedAtMs,
           unknownReason: observation === null ? "unavailable" : observation === "no-unit" || known ? null : "unknown-state" }));
+        // The runner's last self-report is shown only for the run it was
+        // authenticated under: an older run's observation is a fact about
+        // that run, not this one's, so it projects as nothing rather than as
+        // stale evidence.
+        const runner = this.runnerObservedAt?.(row.name) ?? null;
         return { agent: row.name, desired: row.desired,
           activeState: known ? unit!.activeState : null, subState: known ? unit!.subState : null,
           unitResult: known ? unit!.result : null, execMainStatus: known ? unit!.execMainStatus : null,
           // Observable semantic correction: eligible unbatched messages + prepared manifest messages.
           pending: work.pendingMessages, preparedBatches: work.preparedBatchCount,
           // A unit that does not exist is said, not shown as one that ran and exited.
-          reason: observation === "no-unit" ? NO_UNIT_REASON : null, runnerObservedAtMs: null };
+          reason: observation === "no-unit" ? NO_UNIT_REASON : null,
+          runnerObservedAtMs: runner !== null && runner.incarnation === row.incarnation ? runner.observedAtMs : null };
       });
     } finally { this.observations = Object.freeze(observations); }
   }

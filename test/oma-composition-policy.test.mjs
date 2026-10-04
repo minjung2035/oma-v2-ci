@@ -374,7 +374,7 @@ async function run({ brokerState = { kind: "started", pid: 1 }, credentials = ["
     // `oma login` (DR18, D-9); a start never reaches it.
     "../tui/login.js": { runEngineLogin: () => { throw new Error("a start ran the engine's login"); } },
     // DR18 (D-10): the environment names no egress socket here, as on Linux.
-    "../runtime/egress-forwarder.js": { openPrincipalEgress: async () => { onEgress?.(handlers); return null; } },
+    "../runtime/egress-forwarder.js": { adoptPrincipalEgress: async () => { onEgress?.(handlers); return null; } },
     // DR18 (D-1): an error's words as Linux shows them.
     "../tui/words.js": { errorWords: error => (error instanceof Error ? error.message : String(error)), surfaceWords: text => text,
       humanStream: () => process.stderr },

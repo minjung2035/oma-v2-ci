@@ -10,7 +10,8 @@ const code = ts.transpileModule(readFileSync('src/entry/pi-interactive-host.ts',
 }).outputText.replaceAll('import.meta.url', '"file:///fake/dist/src/entry/pi-interactive-host.js"');
 const flush = async () => { for (let i = 0; i < 20; i++) await Promise.resolve(); };
 async function world({ setModel, init, resourceReload, dispose, fail, moduleClose, observe } = {}) {
-  const timers = new Set(), channels = [], hooks = {}, sent = [], picks = [], changes = [], signals = [], commands = {}, modules = [], notices = [];
+  const timers = new Set(), channels = [], hooks = {}, sent = [], picks = [], changes = [], signals = [], commands = {}, modules = [], notices = [],
+    modes = [], overrides = [];
   const session = { model: { id: 'initial', provider: 'fake' }, thinkingLevel: 'off',
     modelRuntime: {}, scopedModels: [], sessionManager: {},
     subscribe() { return () => {}; },
@@ -30,10 +31,13 @@ async function world({ setModel, init, resourceReload, dispose, fail, moduleClos
   } };
   class InteractiveMode {
     async init() { hooks.session_start({}, context); context.ui.setEditorComponent(() => ({})); await init?.({ hooks, channels }); }
-    constructor() { if (fail === 'constructor') throw new Error('injected constructor'); }
+    constructor() { modes.push(this); if (fail === 'constructor') throw new Error('injected constructor'); }
     stop() {}
     async handleFatalRuntimeError(_prefix, error) { modules.push(['fatal', error]); }
     handleExportCommand() {} getCrashExtensionHint() {} showManagedToolStatus() {}
+    // The engine's own render lookup: the registry's definition, merged with
+    // its built-in renderers. The fixture keeps it plainly readable.
+    getRegisteredToolDefinition(name) { return this.engineDefinitions?.[name]; }
   }
   const resourceLoader = { async reload(options) { modules.push('resources-reload'); await resourceReload?.(options); },
     getExtensions: () => ({ runtime: { invalidate() { modules.push('resources-invalidate'); } } }) };
@@ -50,6 +54,7 @@ async function world({ setModel, init, resourceReload, dispose, fail, moduleClos
       VERSION: 'test', InteractiveMode,
       async createAgentSessionRuntime(factory) { await factory({ sessionManager: {} }); return runtime; },
       async createAgentSessionServices(options) {
+        overrides.push(options.resourceLoaderOptions.extensionsOverride);
         options.resourceLoaderOptions.extensionFactories[0]({ registerMarkdownTransformer() {}, registerCommand(name, command) { commands[name] = command; }, registerShortcut() {},
           on(event, handler) { hooks[event] = handler; } });
         return { settingsManager: { applyOverrides() {} }, resourceLoader, diagnostics: {} };
@@ -65,7 +70,9 @@ async function world({ setModel, init, resourceReload, dispose, fail, moduleClos
       InteractiveChannel: class { constructor(_socket, _limits, accept, ended) { this.accept = accept; this.ended = ended; channels.push(this); }
         send(event) { sent.push(event); } } },
     '../tui/interactive-editor.js': { ownedEditor: (editor, handlers) => { Object.assign(commands, handlers); return editor; } },
-    '../runtime/interactive-display.js': { safeToolPresentation: value => value },
+    // The presentation seam marks what it wrapped so the tests can see where
+    // the policy was applied; the registry keeps the original object.
+    '../runtime/interactive-display.js': { safeToolPresentation: value => ({ ...value, __safe: true }) },
     '../tui/panel-style.js': { stylePanel: () => [] }, '../tui/open-tui-brand.js': {},
     '../tui/project-session-directories.js': { ProjectSessionDirectories: class { close() {} async snapshot() { return { dirs: ['/sessions'], histories: [] }; } } },
     '../protocol/host-history.js': { parseHostHistoryReference() { throw new Error('No remote history in this fixture'); } },
@@ -92,7 +99,7 @@ async function world({ setModel, init, resourceReload, dispose, fail, moduleClos
   observe?.({ modules, runtime, hooks });
   await module.exports.runInteractive();
   if (!observe) modules.length = 0;
-  return { timers, hooks, sent, picks, changes, channels, signals, context, runtime, commands, modules, notices,
+  return { timers, hooks, sent, picks, changes, channels, signals, context, runtime, commands, modules, notices, modes, overrides,
     command(command = 'principal-model') { channels[0].accept({ type: 'engine_command', command }); },
     tick() { for (const timer of [...timers]) { timers.delete(timer); timer.run(); } },
   };
@@ -268,4 +275,29 @@ test('interactive owner: the current resume selector retains same-society and ot
   assert.deepEqual(w.changes, [['switch', '/sessions/current.jsonl']]);
   w.commands.extensionCommand('/resume'); w.picks.at(-1).choose('/other/current.jsonl'); await flush();
   assert.ok(w.sent.some(event => event.type === 'switch' && event.session === '/other/current.jsonl'));
+});
+
+test('interactive owner: presentation wraps the render lookup and never writes the registry', async () => {
+  const w = await world();
+  // The engine resolves a definition through its own lookup; the override
+  // wraps the answer for display while the registry keeps Pi's object.
+  const raw = { renderResult() {}, execute() {} };
+  const mode = w.modes[0];
+  mode.engineDefinitions = { oma_mail_send: raw };
+  const presented = mode.getRegisteredToolDefinition('oma_mail_send');
+  assert.notEqual(presented, raw, 'the render seam hands components a wrapped definition');
+  assert.equal(presented.__safe, true, 'the wrap is OMA\u2019s presentation policy');
+  assert.equal(mode.engineDefinitions.oma_mail_send, raw, 'the registry keeps the object Pi loaded');
+  assert.equal(mode.getRegisteredToolDefinition('missing'), undefined);
+  // The load-time seam still orders OMA's boundary first and touches no tool.
+  const tools = new Map([['oma_mail_send', { definition: raw }]]);
+  const upstream = '/fake/pi-open-tui/extensions/open-tui/index.ts';
+  const loaded = { errors: [], runtime: { invalidate() {} },
+    extensions: [
+      { path: upstream, resolvedPath: upstream, tools: new Map() },
+      { path: '<inline:oma>', resolvedPath: '<inline:oma>', tools },
+    ] };
+  const result = w.overrides[0](loaded);
+  assert.equal(tools.get('oma_mail_send').definition, raw, 'extensionsOverride wrote no tool entry');
+  assert.equal(result.extensions[0].path, '<inline:oma>', 'the boundary still installs before upstream');
 });

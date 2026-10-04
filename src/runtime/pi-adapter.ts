@@ -127,6 +127,37 @@ export function waitObservationOf(event: PiEvent, batch: PreparedBatch): "begin"
   return value.phase === "begin" || value.phase === "end" || value.phase === "failed" ? value.phase : null;
 }
 
+/** What the runner last saw its engine doing -- the payload of
+ * `runner.observe` minus the send-time stamp. `"tool"` is the only reason
+ * that names the tool; the rest describe the engine's own phases. This is a
+ * diagnostic, never evidence: nothing the broker or a receipt decides reads
+ * it. */
+export interface EngineObservation {
+  readonly reason: string;
+  readonly toolName?: string;
+}
+/** One event's report of engine activity, or null when the event says none.
+ * The events a delivery already watches are its only source -- the same
+ * bytes the boundary logic trusts, reported at face value. */
+export function runnerObservationOf(
+  event: PiEvent,
+  batch: PreparedBatch,
+): EngineObservation | null {
+  if (waitOf(event, batch)) return { reason: "waiting" };
+  if (event.type === "tool_execution_start")
+    return typeof event.toolName === "string"
+      ? { reason: "tool", toolName: event.toolName }
+      : { reason: "tool" };
+  if (event.type === "turn_start") return { reason: "inference" };
+  if (event.type === "compaction_start") return { reason: "compaction" };
+  return null;
+}
+/** Optional listeners on a delivery's event stream. The adapter reports;
+ * what the runner does with an observation is its own business. */
+export interface DeliveryHooks {
+  observe?(observation: EngineObservation): void;
+}
+
 export class PiAdapter {
   constructor(private readonly options: PiAdapterOptions) {
     if (options.confinement === undefined)
@@ -176,7 +207,7 @@ export class PiAdapter {
     return sessionPath === null ? null : { ...boundary, sessionPath };
   }
   /** null is a deliberate wait after persisted tools, never delivery success. */
-  async deliver(batch: PreparedBatch): Promise<DeliveryBoundary | null> {
+  async deliver(batch: PreparedBatch, hooks?: DeliveryHooks): Promise<DeliveryBoundary | null> {
     assertPiRpcLimits(this.options.limits);
     if (batch.agent !== this.options.actor)
       throw failure(
@@ -240,6 +271,10 @@ export class PiAdapter {
       let inferring = false;
       let compacting = false;
       unsubscribe = rpc.onEvent((event) => {
+        // runner.observe's one source: report what the event says at face
+        // value before the boundary logic consumes it.
+        const seen = runnerObservationOf(event, batch);
+        if (seen !== null) hooks?.observe?.(seen);
         const observation = waitObservationOf(event, batch);
         if (observation === "begin" && !observingWait) {
           observingWait = true; observationDeadline!.rearm();

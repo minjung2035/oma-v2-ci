@@ -7,7 +7,7 @@
  * noticed at runtime. This module names the whole set and types it once;
  * `test/pi-compat.test.ts` asserts the vendored prototype still carries every
  * member as a function, so a drift fails at the boundary. */
-import type { InteractiveMode } from "@earendil-works/pi-coding-agent";
+import type { InteractiveMode, ToolDefinition } from "@earendil-works/pi-coding-agent";
 
 /** Every private member an OMA entry replaces or wraps. */
 export const PI_INTERACTIVE_PRIVATE_MEMBERS = Object.freeze([
@@ -22,6 +22,7 @@ export const PI_INTERACTIVE_PRIVATE_MEMBERS = Object.freeze([
   "showManagedToolStatus",
   "shutdown",
   "showSessionSelector",
+  "getRegisteredToolDefinition",
 ] as const);
 
 /** The private surface the entries write, typed as the engine implements it. */
@@ -37,6 +38,11 @@ export interface InteractiveModeInternals {
   handleExportCommand(text: string): Promise<void>;
   getPathCommandArgument(text: string, command: string): string | undefined;
   updateTerminalTitle(): void;
+  /** The render components' one definition lookup: the extension registry's
+   * entry, with the engine's own built-in renderers merged over what a tool
+   * did not declare. OMA wraps this seam for presentation policy rather
+   * than writing Pi's registry. */
+  getRegisteredToolDefinition(toolName: string): ToolDefinition | undefined;
   /** `ui` is public on `InteractiveMode`; it travels here so overrides that
    * replace a member can still reach the renderer through one handle. */
   readonly ui: { readonly terminal: { setTitle(title: string): void } };

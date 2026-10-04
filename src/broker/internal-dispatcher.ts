@@ -91,9 +91,26 @@ function runnerIdentity(store: InternalStorePort, agent: Actor): { readonly inca
   return identity;
 }
 
+/** What `runner.observe` last told the broker about one agent's run: the
+ * authenticated incarnation it came from plus the wire payload verbatim.
+ * Memory-only and never authority -- the status projection keeps only the
+ * timestamp, and only while the observation's run is still the ledger's. */
+export interface RunnerObservation {
+  readonly incarnation: number;
+  readonly reason: string;
+  readonly toolName?: string;
+  readonly observedAtMs: number;
+}
+
 export class InternalDispatcher {
-  private readonly observations = new Map<Actor, Readonly<{ reason: string; toolName?: string; observedAtMs: number }>>();
+  private readonly observations = new Map<Actor, RunnerObservation>();
   constructor(private readonly deps: InternalDispatchDependencies) {}
+  /** The latest diagnostic a runner volunteered, tagged with the run it was
+   * authenticated under. The status view is the consumer; it is display
+   * data, not evidence a lifecycle or admission decision may rest on. */
+  runnerObservation(agent: Actor): RunnerObservation | null {
+    return this.observations.get(agent) ?? null;
+  }
   async dispatch(
     raw: Record<string, unknown>,
     peer: BoundPeer,
@@ -158,8 +175,12 @@ export class InternalDispatcher {
         }
         case "runner.observe": {
           const agent = peers.runnerActor(peer);
-          peers.runnerAuth(agent, runnerIdentity(store, agent).incarnation, peer);
+          const identity = runnerIdentity(store, agent);
+          peers.runnerAuth(agent, identity.incarnation, peer);
           this.observations.set(agent, Object.freeze({
+            // The run an observation belongs to is the one the caller was
+            // authenticated as -- the wire payload cannot claim another.
+            incarnation: identity.incarnation,
             reason: dispatchParams.reason,
             ...(dispatchParams.toolName === undefined ? {} : { toolName: dispatchParams.toolName }),
             observedAtMs: dispatchParams.observedAtMs,

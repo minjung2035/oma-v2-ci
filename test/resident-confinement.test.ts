@@ -10,6 +10,7 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSyn
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { PiAdapter } from "../src/runtime/pi-adapter.js";
+import { RunnerModule } from "../src/runner.js";
 import { RESIDENT_SYSTEM_PROMPT } from "../src/config/role-prompts.js";
 import { TOOL_SCOPE_ENV, TOOL_SCOPE_SANDBOX, type PiConfinement } from "../src/runtime/pi-spawn-plan.js";
 import { TOOL_SCOPE_ENV as MIRRORED_ENV, TOOL_SCOPE_SANDBOX as MIRRORED_SANDBOX, guardWorkspaceTools } from "../src/extension/workspace-guard.js";
@@ -516,4 +517,48 @@ test("mail-v1: the Principal's host engine is given no worker archive", async ()
     { society: "s", provider: "pi", model: "current", workspaceBytes: 1024, extensions: [] } as never,
     { frameBytes: 1024, mailBodyBytes: 1024, batchMaxMessages: 4, contextBytes: 1 << 20, bundleBytes: 1 << 20 } as never);
   assert.equal("OMA_WORKER_ARCHIVE" in env, false);
+});
+
+// D23/TSP-005: the run's surface plan reaches the engine through exactly one
+// hop -- the deployment writes it into the runner unit's environment, the
+// runner entry reads it once at that boundary and declares it on the
+// profile, and the adapter hands the declared value to the spawn plan. An
+// OMA_TOOL_SURFACE the user's shell happened to hold is not a producer: with
+// the spawn under --clearenv it used to ride into the engine anyway, which
+// is what this test now refuses.
+test("TSP-005/D23: the surface plan is the declared profile's -- nothing ambient reaches the spawn plan", () => {
+  const f = fixture();
+  const saved = process.env.OMA_TOOL_SURFACE;
+  const runnerPaths = {
+    runRoot: join(f.root, "run"), stateRoot: f.stateRoot, society: "s",
+    piCommand: f.paths.piCommand!, piArgs: [f.paths.piEntry!], piAgentDir: f.paths.piAgentDir!,
+    coreExtension: f.paths.coreExtension!, cli: f.paths.cli!,
+    confinement: { rootfs: f.confinement.host.rootfs, libdir: f.libdir, node: "/usr/bin/node",
+      systemBinds: [], tmpBytes: RESOURCES.tmpBytes },
+  };
+  const model = { provider: "pi", model: "current", inferenceTimeoutSeconds: 600 };
+  const adapterOf = (toolSurface?: string): PiAdapter => {
+    const runner = new RunnerModule(runnerPaths, "alice",
+      { ...LIMITS, subjectBytes: 1024, addresses: 8, replyReferences: 8, contextFiles: 8, logBytes: 1 << 20 }, {
+      name: "resident", model, workspaceBytes: RESOURCES.workspaceBytes,
+      ...(toolSurface === undefined ? {} : { toolSurface }) });
+    Reflect.set(runner, "lease", f.confinement.lease);
+    return (Reflect.get(runner, "adapter") as (batch: unknown, inference?: unknown) => PiAdapter)
+      .call(runner, {}, undefined);
+  };
+  const setenv = (plan: { args: readonly string[] }, name: string): string | undefined => {
+    const at = plan.args.lastIndexOf(name);
+    return at > 0 && plan.args[at - 1] === "--setenv" ? plan.args[at + 1] : undefined;
+  };
+  try {
+    process.env.OMA_TOOL_SURFACE = "ambient-plan";
+    assert.equal(setenv(adapterOf("declared-plan").spawnPlan(), "OMA_TOOL_SURFACE"), "declared-plan",
+      "the declared profile's plan, not the ambient variable's");
+    assert.equal(setenv(adapterOf().spawnPlan(), "OMA_TOOL_SURFACE"), undefined,
+      "an ambient OMA_TOOL_SURFACE is not a producer: the engine must not see it");
+  } finally {
+    if (saved === undefined) delete process.env.OMA_TOOL_SURFACE;
+    else process.env.OMA_TOOL_SURFACE = saved;
+    rmSync(f.root, { recursive: true, force: true });
+  }
 });
