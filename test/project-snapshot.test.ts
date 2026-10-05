@@ -5,6 +5,7 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { spawnSync } from "node:child_process";
 import { withProjectSnapshot } from "../src/git/project-snapshot.js";
+import { StoreError } from "../src/domain/errors.js";
 import { SnapshotReader, copySnapshotFile } from "../src/storage/snapshot-reader.js";
 import { GIT_ENV } from "../src/process/policies.js";
 import { prepareProjectDirectory } from "../src/storage/project-preparation.js";
@@ -78,6 +79,16 @@ test("DR27: a clean project reuses HEAD, while unborn and plain projects keep th
       assert.ok(!snapshot.git(["ls-tree", "-rz", snapshot.head]).includes("\tignored\0"));
     });
   }
+});
+test("UX-09/DR27: a checked-out submodule refuses the snapshot, naming its path", t => {
+  const f = fixture(t);
+  mkdirSync(join(f.project, "dep"));
+  f.run("update-index", "--add", "--cacheinfo", `160000,${f.parent},dep`);
+  f.run("commit", "-qm", "gitlink");
+  const head = f.run("rev-parse", "HEAD");
+  assert.throws(() => withProjectSnapshot({ ...f.options, parent: head }, () => assert.fail("snapshot over a submodule")),
+    (error: unknown) => error instanceof StoreError && error.code === "UNSUPPORTED_PROFILE" &&
+      error.message === "snapshot contains a submodule: dep");
 });
 test("DR27: unreadable content and raced parent symlinks refuse a snapshot rather than omit or follow", t => {
   const f = fixture(t); const reader = new SnapshotReader(f.project); t.after(() => reader.close());

@@ -826,6 +826,9 @@ async function main(argv: readonly string[]): Promise<void> {
     // that is not news; a history the Residents cannot be shown is.
     // DR18 (D-8): the Residents see the project's committed history as of this start.
     if (provisioned?.mirrorNote) notice(`Could not refresh the project commit history for Residents: ${provisioned.mirrorNote}`);
+    // UX-09: a seeded or mirrored main carrying gitlinks is reported loudly on
+    // every start — the society works for sessions, integration is what refuses.
+    if (provisioned?.gitlinkNote) notice(provisioned.gitlinkNote);
     return started;
   };
   // PR-001/LIFE-006: each time a broker of this process's becomes ready -- at

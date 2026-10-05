@@ -1400,8 +1400,8 @@
   {
     "requirement": "INT-001",
     "source": "docs/implementation-spec.md",
-    "digest": "0856479b1050a22eb6b930c79f261223f2096314246ca1d8301e2752e9bd9944",
-    "normativeText": "**MUST [INT-001]** base 및 tiered의 공통 조건으로 integrate는 candidate가 하나 이상의 canonical published ref로 보존됨, code.integrate capability, actual main==expected, expected ancestor of candidate, protected path 조건, 현재 policy를 검사한다. v1은 fixed host checks를 돌리지 않는다: checks를 적은 설정은 broker 시작 때 `UNSUPPORTED_PROFILE`로 거절한다([DR18](design-revisions.md)). protected path `/`는 모든 변경을 보호한다. protected path는 default profile에서 Resident integrate를 거절한다. candidate==expected면 main은 변경하지 않는 검증된 no-op receipt로 처리할 수 있지만 published/권한 조건을 생략하지 않는다.",
+    "digest": "e19e1a0475d16a18acdde728d87d3f0969a5a5a944b752128851d0fae9394b39",
+    "normativeText": "**MUST [INT-001]** base 및 tiered의 공통 조건으로 integrate는 candidate가 하나 이상의 canonical published ref로 보존됨, code.integrate capability, actual main==expected, expected ancestor of candidate, protected path 조건, 현재 policy를 검사한다. UX-09([DR33](design-revisions.md)): candidate의 **전체** tree에 submodule gitlink(mode `160000`)가 없음도 같은 조건이다 — base에서 변하지 않고 물려받은 gitlink도 거절이며, diff의 changed path 목록으로 대신할 수 없다. gitlink가 관측되면 모든 경로를 `details.paths`에 실은 `UNSUPPORTED_PROFILE`로 거절하고(작성 문장이 아니라 구조화된 경로가 wire에 남는다), 관측이 불확실하면 부재로 읽지 않는다. `git.submit`/quarantine은 transport이므로 허용하고, provisioning은 gitlink를 실은 canonical `main`도 시작은 허용하되 report가 경로와 이어질 거절을 알린다. v1은 fixed host checks를 돌리지 않는다: checks를 적은 설정은 broker 시작 때 `UNSUPPORTED_PROFILE`로 거절한다([DR18](design-revisions.md)). protected path `/`는 모든 변경을 보호한다. protected path는 default profile에서 Resident integrate를 거절한다. candidate==expected면 main은 변경하지 않는 검증된 no-op receipt로 처리할 수 있지만 published/권한 조건을 생략하지 않는다.",
     "applicability": "unclassified",
     "rationale": "Requires production-path review; no inference from test names.",
     "owner": null,
@@ -1439,8 +1439,8 @@
   {
     "requirement": "INT-007",
     "source": "docs/implementation-spec.md",
-    "digest": "5f79aab1b6d200d1d1eab33f6641bf8830a32fb5fd4e80bfaefdc339b5508176",
-    "normativeText": "**MUST [INT-007]** 실제 spawn의 candidate OID/argv/env/resources는 검증된 check snapshot과 정확히 같아야 한다. builder unit test만 통과하고 production이 다른 cwd/config/default를 쓰는 것을 금지한다. timeout/signal/검사 후손 잔존/관측 불명확은 CHECK_FAILED 또는 대조 전 pending/unknown이며 PASS가 아니다. host check exit 0만으로 아직 살아 있는 background process를 무시하고 종료했다고 기록하지 않는다. 실제 candidate 출처와 kernel limits를 production entrypoint 시험에서 확인한다.",
+    "digest": "d57fd64f30f0e4626ace1499cb1e4f6948dbe94c1f3ea9993f259f94b46768ce",
+    "normativeText": "**MUST [INT-007]** 실제 spawn의 candidate OID/argv/env/resources는 검증된 check snapshot과 정확히 같아야 한다. builder unit test만 통과하고 production이 다른 cwd/config/default를 쓰는 것을 금지한다. timeout/signal/검사 후손 잔존/관측 불명확은 CHECK_FAILED 또는 대조 전 pending/unknown이며 PASS가 아니다. host check exit 0만으로 아직 살아 있는 background process를 무시하고 종료했다고 기록하지 않는다. 실제 candidate 출처와 kernel limits를 production entrypoint 시험에서 확인한다. UX-09: sandbox checkout의 gitlink 거절은 bare exit이 아니라 `OMA_ERROR=UNSUPPORTED_PROFILE`와 gitlink마다 `OMA_GITLINK=<path>`를 stderr에 남기고, host는 그 marker로만 code를 분류한다 — resource gate와 code를 공유하는 bare 125는 CHECK_FAILED로 남는다. 거절은 check argv 이전이며 경로는 sandbox 출력이 아니라 불변 candidate에서 다시 관측한다.",
     "applicability": "unclassified",
     "rationale": "Requires production-path review; no inference from test names.",
     "owner": "src/runtime/candidate-checks.ts#CandidateChecks",
@@ -2358,8 +2358,8 @@
   {
     "requirement": "ERR-001",
     "source": "docs/implementation-spec.md",
-    "digest": "55b2ad0265ff6708e8fca06b7951ea879cfe24800c42a17bde3cfc9bf5a5dfc5",
-    "normativeText": "**MUST [ERR-001]** 모든 경계는 아래 closed code 또는 contracts.ts의 동일 enum을 사용한다. `INTERNAL_ERROR`로 업무 실패를 모두 덮지 않는다. error message는 설명이며 caller 분기는 code/retry/state로 한다. retry 값이 same-key여도 authority/현재 run을 다시 인증한다. 실패가 caller에게 말하는 사실은 code마다 닫힌 `details` 필드로만 싣는다: STALE_BASE·NOT_DESCENDANT·CONTEXT_CONFLICT의 `actual`, CAPABILITY_DENIED의 `capability`, BROKER_UNAVAILABLE의 `reason`(`busy`|`draining`). 그 밖의 code와 필드는 싣지 않고, 예외에서 온 message는 code 그대로다. caller에게 보이는 설명 문장은 code마다 하나인 고정 표에서 온다([DR3](design-revisions.md)).",
+    "digest": "bbc60fb8dceebd64ef187b8c87ff4fab1c51db043650d69c81010bb446d327b4",
+    "normativeText": "**MUST [ERR-001]** 모든 경계는 아래 closed code 또는 contracts.ts의 동일 enum을 사용한다. `INTERNAL_ERROR`로 업무 실패를 모두 덮지 않는다. error message는 설명이며 caller 분기는 code/retry/state로 한다. retry 값이 same-key여도 authority/현재 run을 다시 인증한다. 실패가 caller에게 말하는 사실은 code마다 닫힌 `details` 필드로만 싣는다: STALE_BASE·NOT_DESCENDANT·CONTEXT_CONFLICT의 `actual`, CAPABILITY_DENIED의 `capability`, BROKER_UNAVAILABLE의 `reason`(`busy`|`draining`), UNSUPPORTED_PROFILE의 `paths`(배포가 거절한 gitlink 등 저장소 상대 경로 — UX-09). 그 밖의 code와 필드는 싣지 않고, 예외에서 온 message는 code 그대로다. caller에게 보이는 설명 문장은 code마다 하나인 고정 표에서 온다([DR3](design-revisions.md)).",
     "applicability": "unclassified",
     "rationale": "Requires production-path review; no inference from test names.",
     "owner": null,

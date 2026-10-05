@@ -16,7 +16,7 @@ import { mailWorkersPathAt, mailArchivePathAt, mailInboxPathAt } from "../src/st
 import type { ReviewState as RS } from "../src/domain/review-evaluation.js";
 import type { ReviewFact } from "../implementation/contracts/attestation.js";
 import { applyRequestKeyFor } from "../src/domain/identifiers.js";
-import { StoreError } from "../src/domain/errors.js";
+import { StoreError, publicFailure } from "../src/domain/errors.js";
 import { runGitText } from "../src/process/policies.js";
 import { PublicDispatcher } from "../src/broker/public-dispatcher.js";
 import { decodeRpcReply } from "../src/protocol/response-codec.js";
@@ -119,6 +119,67 @@ test("mail-v1: merge request opens observe live Git facts and refuse bad ones", 
     const receipt = await f.open("alice", { tier: "MEDIUM", candidate: stale, base: moved }, "ok");
     assert.equal(receipt.state, "succeeded");
     await assert.rejects(f.open("alice", { tier: "MEDIUM", candidate: stale, base: moved }, "dup"), { code: "REQUEST_EXISTS" });
+  } finally { f.close(); }
+});
+
+test("UX-09: merge.open refuses a candidate whose tree still carries gitlinks, naming every path", async () => {
+  const f = fixture(); try {
+    // Whole-tree gating: main already carries the gitlinks, so the diff names
+    // only one.txt — the links this candidate inherited verbatim are still
+    // refused, and every one is named in details that survive the wire.
+    const vendor = f.git(["mktree"], `160000 commit ${f.base}\tnested\n`);
+    const linkedTree = f.git(["mktree"], `160000 commit ${f.base}\tdep\n040000 tree ${vendor}\tvendor\n`);
+    const linked = f.git(["commit-tree", linkedTree, "-p", f.base, "-m", "linked base"]);
+    f.git(["update-ref", "refs/heads/main", linked]);
+    const blob = f.git(["hash-object", "-w", "--stdin"], "a");
+    const tree = f.git(["mktree"], `100644 blob ${blob}\tone.txt\n160000 commit ${f.base}\tdep\n040000 tree ${vendor}\tvendor\n`);
+    const candidate = f.git(["commit-tree", tree, "-p", linked, "-m", "gitlink candidate"]);
+    assert.deepEqual(f.git(["diff-tree", "-r", "--name-only", "--no-commit-id", linked, candidate]).split("\n"), ["one.txt"],
+      "the diff carries no gitlink path — only the whole-tree observation sees them");
+    await f.submit("alice", candidate);
+    await assert.rejects(f.open("alice", { tier: "LOW", candidate, base: linked }, "open-gitlink"), (error: unknown) => {
+      if (!(error instanceof StoreError) || error.code !== "UNSUPPORTED_PROFILE") return false;
+      assert.match(error.message, /submodule gitlink/);
+      assert.deepEqual(publicFailure(error).details, { paths: ["dep", "vendor/nested"] });
+      return true;
+    });
+    assert.equal(f.store.getOperation("alice", "open-gitlink"), null, "the refusal precedes the accepted fact");
+    assert.equal(f.git(["rev-parse", "refs/heads/main"]), linked, "main never moved");
+  } finally { f.close(); }
+});
+
+test("UX-09: a candidate that removes a gitlink from a gitlink-bearing main applies", async () => {
+  const f = fixture(); try {
+    // The removal path must work — a main carrying gitlinks refuses every
+    // merge until a candidate's tree drops them, and this one does.
+    const linked = f.git(["commit-tree", f.git(["mktree"], `160000 commit ${f.base}\tdep\n`), "-p", f.base, "-m", "linked"]);
+    f.git(["update-ref", "refs/heads/main", linked]);
+    const clean = f.candidateWith({ "one.txt": "a" }, linked);
+    await f.submit("alice", clean);
+    const receipt = await f.open("alice", { tier: "LOW", candidate: clean, base: linked }, "open-clean");
+    assert.equal(receipt.state, "succeeded");
+    assert.equal(f.git(["rev-parse", "refs/heads/main"]), clean, "main is the gitlink-free candidate");
+  } finally { f.close(); }
+});
+
+test("UX-09: a caller-built challenge candidate carrying gitlinks refuses the same way", async () => {
+  const f = fixture(); try {
+    const merged = f.candidateWith({ "merged.txt": "m" });
+    await f.submit("alice", merged);
+    const opened = await f.open("alice", { tier: "LOW", candidate: merged }, "open-applied");
+    assert.equal(opened.state, "succeeded");
+    const name = f.requestName("open-applied");
+    const main = f.git(["rev-parse", "refs/heads/main"]);
+    const tree = f.git(["mktree"], `160000 commit ${f.base}\tdep\n`);
+    const revert = f.git(["commit-tree", tree, "-p", main, "-m", "caller revert"]);
+    await f.submit("bob", revert, "submit-revert");
+    await assert.rejects(f.challenge("bob", { merge: name, tier: "LOW", candidate: revert, base: main }, "ch-gitlink"),
+      (error: unknown) => {
+        if (!(error instanceof StoreError) || error.code !== "UNSUPPORTED_PROFILE") return false;
+        assert.deepEqual(publicFailure(error).details, { paths: ["dep"] });
+        return true;
+      });
+    assert.equal(f.store.getOperation("bob", "ch-gitlink"), null);
   } finally { f.close(); }
 });
 
@@ -732,6 +793,7 @@ test("mail-v1: an oversize completion notice is remembered and never recomputed"
       published: () => createCanonicalObserver().published(f.projectGit),
       ancestry: (b, c) => createCanonicalObserver().ancestry(f.projectGit, b, c),
       changedPaths: (b, c) => createCanonicalObserver().changedPaths(f.projectGit, b, c),
+      gitlinks: c => createCanonicalObserver().gitlinks(f.projectGit, c),
       submitters: () => [],
       mergeDiff: (b, c, n) => { diffs++; return Buffer.from(`diff-${b}-${c}-${"x".repeat(200)}`, "utf8"); },
       applyMerge: () => Promise.resolve(),

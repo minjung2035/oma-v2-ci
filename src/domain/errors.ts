@@ -279,6 +279,11 @@ export const ERROR_DETAILS: Readonly<Partial<Record<ErrorCode, Readonly<Record<s
     paths: (value: unknown) => Array.isArray(value) && value.every(item => isValidWirePath(item)),
     artifact: (value: unknown) => value === "none",
   }),
+  // UX-09: an unsupported candidate names every gitlink path its tree carried;
+  // the wire keeps only the names, never the authored sentence.
+  UNSUPPORTED_PROFILE: Object.freeze({
+    paths: (value: unknown) => Array.isArray(value) && value.every(item => isValidWirePath(item)),
+  }),
 });
 /** The details a failure of this code may carry, exactly, or undefined. */
 export function publicDetails(code: ErrorCode, details: unknown): { readonly [key: string]: string | null } | undefined {

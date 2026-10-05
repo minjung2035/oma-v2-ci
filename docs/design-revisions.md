@@ -1004,3 +1004,40 @@ Enforcement: (1) the primitive set in `src/storage/directory.ts` +
 the gate rather than waiting for the next verification round. Callers that were found
 in violation across the rounds (stage publish, prune sweep, index write) are the tests'
 subjects; the pin covers the rest of the codebase.
+
+## DR33 — A candidate carrying submodule gitlinks is refused at the integration gate, naming every path (UX-09)
+
+A project containing Git submodules failed integration with an opaque runner
+exit 125: the checkout sandbox rejected the gitlink with a bare exit and the
+host decoded every nonzero exit as CHECK_FAILED — no path, no word "submodule".
+Worse, a policy without configured checks let the same candidate merge into
+canonical main silently: the checkout gate was the only gate, and it ran after
+the CAS conditions were already judged.
+
+The integration CAS cannot validate gitlink objects, so the refusal is the
+candidate's answer everywhere the CAS is contemplated, not a sandbox side
+effect. `GitObserver.gitlinks` observes `ls-tree -r -z --full-tree` over the
+candidate's *whole* tree — a gitlink inherited unchanged from base is as much
+a refusal as one the diff adds, so changed-path diffs can never stand in for
+it — and the shared `requireNoGitlinks` refusal throws UNSUPPORTED_PROFILE
+with `details.paths` naming every repository-relative path. `observe` keeps
+the P0-5 mapping: an uncertain answer is REF_STATE_UNKNOWN, malformed output
+is STORE_CORRUPT, a candidate name outside the grammar is a candidate refusal —
+never "no gitlinks". The observation runs in `requireEligible` (execute,
+applyMerge, reconcile, tier evaluation) and again at execute admission before
+a row exists, and in `ReviewModule.prepareOpen`/`prepareChallenge` so
+`oma merge open` answers synchronously. `details.paths` joins the
+ERROR_DETAILS allowlist because authored message text does not survive the
+wire.
+
+Transport stays permissive: `git submit`/quarantine is not integration, so a
+gitlink-bearing candidate can still be published and debated. Provisioning
+stays permissive too — a seeded or mirrored canonical `main` may carry
+gitlinks and the society still works for sessions — but `provisionSociety`
+reports `gitlinkNote` naming the paths and the refusal they will meet, shown
+on every start until they go. The checkout sandbox keeps its gate as defense
+in depth and now announces `OMA_ERROR=UNSUPPORTED_PROFILE` plus one
+`OMA_GITLINK=` line per path before its exit; the host treats the marker as
+the refusal's class (a bare 125, shared with the resource gate, stays a plain
+CHECK_FAILED) and re-observes the paths on the immutable candidate rather
+than trusting sandbox output.

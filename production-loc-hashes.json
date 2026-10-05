@@ -292,7 +292,7 @@
     },
     {
       "path": "src/domain/errors.ts",
-      "sha256": "d107e4121482110a1576e9716f87a21ca4e75d491add5b129f9012716b1df73a"
+      "sha256": "ad5a8137d80caf73bb9adfad43ccc25612524ddae8b76729d55e7df9a7bcaab2"
     },
     {
       "path": "src/domain/exhaustive.ts",
@@ -408,7 +408,7 @@
     },
     {
       "path": "src/entry/oma-society.ts",
-      "sha256": "f42860ceaadfadc14438ec0e02493f27979c3d2ac68bdae2c55fa71cf31af5d4"
+      "sha256": "36c333474923c7f5b581455dd6167cd1280147025c0dfe3e9af6ae857baa77da"
     },
     {
       "path": "src/entry/oma.ts",
@@ -508,7 +508,7 @@
     },
     {
       "path": "src/git.ts",
-      "sha256": "4268d65dceaafb63ac5500937153b9867202855d508f6471d35207994295b757"
+      "sha256": "b2c0535f9177aa11fbac73fe4f7dc264990093139aa4c6517856a1eb2035cf65"
     },
     {
       "path": "src/git/approval.ts",
@@ -544,11 +544,11 @@
     },
     {
       "path": "src/git/integration.ts",
-      "sha256": "d043352aa33219cc87a7759143cb29665703b47900d269891e31182cc9509904"
+      "sha256": "8b8f9d39891a2ae82b68dad46d3fe835a26a286abedab2430358ee4755023aa6"
     },
     {
       "path": "src/git/observe.ts",
-      "sha256": "96386218f9ab2909d0d773017e1b4b07804d44213b9ad9a12a6759bbabc689a7"
+      "sha256": "3ff49f6803838d0bac40e730dd5e6630d2a2d13e267d0a56c59fe1b7091133f7"
     },
     {
       "path": "src/git/paths.ts",
@@ -736,7 +736,7 @@
     },
     {
       "path": "src/platform/guest/project.ts",
-      "sha256": "f479e025e1a3dbf058d1653a8e2a9b3d2181b8c5b5ddcab074e465156992f27a"
+      "sha256": "69180dd4afa28e2e5562a61b5dab41ef681bb35726372851c4e680c4fd6e2018"
     },
     {
       "path": "src/platform/guest/provision.ts",
@@ -1032,7 +1032,7 @@
     },
     {
       "path": "src/review.ts",
-      "sha256": "8fded83bf470909dd1d9b9e86dbda620601b1429202355e87e95d488b91b4877"
+      "sha256": "91f71ebd0d564b4f1b5aebcbf7156a78d168073965b880a1598afe0a4127aac2"
     },
     {
       "path": "src/runner.ts",
@@ -1052,7 +1052,7 @@
     },
     {
       "path": "src/runtime/candidate-checks.ts",
-      "sha256": "83144dd0cf080739ed3d4485392f8a794c229305dfaf2f9af786aa1ddc6b31a1"
+      "sha256": "008b47e633a133dc922723d4254e4ce746b1663605397b8551694811109110cd"
     },
     {
       "path": "src/runtime/client-preload.ts",
@@ -1164,7 +1164,7 @@
     },
     {
       "path": "src/runtime/provision.ts",
-      "sha256": "b0ef2270892a76918653cbb1c5f5d3169399dc58225f44f028d10587685ae8e2"
+      "sha256": "9ed63d7853605e7483a6a437d6bc8a0df6bd24a110e1b4a21454485e4fbfe371"
     },
     {
       "path": "src/runtime/resident-rootfs.ts",
@@ -1484,7 +1484,7 @@
     },
     {
       "path": "src/views.ts",
-      "sha256": "3850508c4efe65c5f0e034fa38102d3ab155a362ac42639511c10dc0539838a8"
+      "sha256": "a0cd3fcc0173d7dd7673474529658407f078603a307c63fb1a5fd134b6a78701"
     },
     {
       "path": "src/views/pending-work.ts",

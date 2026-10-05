@@ -60,6 +60,29 @@ test("DR29/INT-007/P0-5: only an observed successful manager wait permits CAS", 
   }
 });
 
+test("UX-09/INT-007: only the sandbox marker turns a nonzero exit into a named refusal", async () => {
+  // A bare exit — the resource gate shares 125 — stays an unclassified failure.
+  const bare = { kind: "exited", exitCode: 125, signal: null, errorCode: null, elapsedMs: 1,
+    stdout: Buffer.alloc(0), stderr: Buffer.from("cgroup mismatch"), stdoutTruncated: false, stderrTruncated: false } as ProcessObservation;
+  await assert.rejects(new CandidateChecks(paths, async () => bare).run(candidate, check), code("CHECK_FAILED"));
+  // The marker makes the refusal explicit; the paths it names are re-observed
+  // on the immutable candidate, never parsed from sandbox output.
+  const marked = { ...bare, stderr: Buffer.from("OMA_ERROR=UNSUPPORTED_PROFILE\nOMA_GITLINK=dep\nOMA_GITLINK=vendor/nested\n") };
+  let reobserved: string | null = null;
+  const checks = new CandidateChecks(paths, async () => marked, {
+    gitlinks: (repository, oid) => {
+      assert.equal(repository, paths.projectGit); assert.equal(oid, candidate); reobserved = oid;
+      return { kind: "present", value: ["dep", "vendor/nested"], evidence: { status: 0, signal: null, stdout: Buffer.alloc(0), stderr: Buffer.alloc(0) } };
+    } });
+  await assert.rejects(checks.run(candidate, check), (error: unknown) => {
+    if (!(error instanceof StoreError) || error.code !== "UNSUPPORTED_PROFILE") return false;
+    assert.match(error.message, /submodule gitlink/);
+    assert.deepEqual(error.details, { paths: ["dep", "vendor/nested"] });
+    return true;
+  });
+  assert.equal(reobserved, candidate);
+});
+
 for (const format of ["sha1", "sha256"] as const) test(`DR29/INT-002: ${format} checkout checks exact bytes, including export-ignored files, without hooks or user filters`, async t => {
   const root = mkdtempSync(join(tmpdir(), "oma-check-tree-")); t.after(() => rmSync(root, { recursive: true, force: true }));
   const source = join(root, "source"), work = join(root, "checked"), temporary = join(root, "tmp"), repo = join(root, "project.git");
@@ -92,7 +115,11 @@ for (const format of ["sha1", "sha256"] as const) test(`DR29/INT-002: ${format} 
   for (const name of ["encoded.txt", "lines.txt", "ident.txt"])
     assert.deepEqual(readFileSync(join(work, name)), Buffer.from(git("show", `${oid}:${name}`) + "\n"), name);
   // A submodule cannot silently turn an incomplete checkout into a passing check.
-  git("update-index", "--add", "--cacheinfo", `160000,${oid},dependency`); git("commit", "-qm", "gitlink");
+  // UX-09: the refusal names its class and every gitlink path on stderr before
+  // the bare exit — the host does not have to guess which 125 it saw.
+  git("update-index", "--add", "--cacheinfo", `160000,${oid},dependency`);
+  git("update-index", "--add", "--cacheinfo", `160000,${oid},vendor/nested`);
+  git("commit", "-qm", "gitlink");
   const withLink = git("rev-parse", "HEAD"); git("--git-dir", repo, "fetch", "-q", source, withLink);
   const marker = join(root, "should-not-run");
   const refused = await runProcess({ executable: "/usr/bin/bwrap",
@@ -100,4 +127,8 @@ for (const format of ["sha1", "sha256"] as const) test(`DR29/INT-002: ${format} 
       repo, join(root, "incomplete"), temporary, "/usr/bin/touch", marker],
     env: GIT_ENV, timeoutMs: 5000, stdoutBytes: 4096, stderrBytes: 4096 });
   assert.equal(refused.kind, "exited"); assert.equal(refused.exitCode, 125); assert.equal(existsSync(marker), false);
+  const stderr = refused.stderr.toString();
+  assert.match(stderr, /^OMA_ERROR=UNSUPPORTED_PROFILE$/m);
+  assert.match(stderr, /^OMA_GITLINK=dependency$/m);
+  assert.match(stderr, /^OMA_GITLINK=vendor\/nested$/m);
 });

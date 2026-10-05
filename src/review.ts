@@ -33,7 +33,7 @@ import type { ReviewRequestStatus, ReviewRequestSummary, ReviewStatusEntry, Revi
 import { generateMessageId, generateOperationId } from "./ids.js";
 import { deterministicTier, type IntegrationSnapshot } from "./git/integration-policy.js";
 import { maximumTier } from "./domain/tier-evaluation.js";
-import { protectedPathMatches, type ChangedPath, type GitObservation } from "./git/observe.js";
+import { protectedPathMatches, requireNoGitlinks, type ChangedPath, type GitObservation } from "./git/observe.js";
 import { planEffects, reviewState, type ReviewEntry, type ReviewState, type ReviewStateInput } from "./domain/review-evaluation.js";
 
 /** Synchronous host/Git observations and writer serialization the module
@@ -50,6 +50,10 @@ export interface ReviewEffects {
   published(): GitObservation<readonly Oid[]>;
   ancestry(base: Oid, candidate: Oid): GitObservation<boolean>;
   changedPaths(base: Oid, candidate: Oid): GitObservation<readonly ChangedPath[]>;
+  /** UX-09: the candidate tree's submodule gitlinks, observed whole. `open`
+   * and `challenge` refuse them synchronously so a caller gets the named
+   * refusal now rather than a failed CAS receipt later. */
+  gitlinks(candidate: Oid): GitObservation<readonly string[]>;
   submitters(base: Oid, candidate: Oid): readonly string[];
   /** §6: the canonical merge diff for the completion notice, as raw bytes;
    * one owner renders them for text consumers (never U+FFFD substitution).
@@ -465,6 +469,7 @@ export class ReviewModule {
           { details: { actual: main } });
       if (!observed(this.effects.ancestry(expectedBase, candidate), "candidate ancestry"))
         throw new StoreError("NOT_DESCENDANT", "candidate does not descend from base");
+      requireNoGitlinks(observed(this.effects.gitlinks(candidate), "candidate gitlinks"));
       const changes = observed(this.effects.changedPaths(expectedBase, candidate), "candidate changed paths");
       if (policy.protectedPaths.some(path => changes.some(change => protectedPathMatches(change.path, path))))
         throw new StoreError("PROTECTED_PATH", "candidate touches a protected path");
@@ -482,6 +487,9 @@ export class ReviewModule {
         message: `Revert ${targetFact.name}: ${targetFact.title}
 
 Challenge ${name}` });
+      // A main carrying gitlinks makes even the broker's own revert a candidate
+      // the CAS cannot validate; refuse it the same way, naming the paths.
+      requireNoGitlinks(observed(this.effects.gitlinks(candidate), "prepared revert gitlinks"));
       const changes = observed(this.effects.changedPaths(expectedBase, candidate), "revert changed paths");
       if (policy.protectedPaths.some(path => changes.some(change => protectedPathMatches(change.path, path))))
         throw new StoreError("PROTECTED_PATH", "the prepared revert touches a protected path");
@@ -549,6 +557,7 @@ Challenge ${name}` });
         { details: { actual: main } });
     if (!observed(this.effects.ancestry(input.base, input.candidate), "candidate ancestry"))
       throw new StoreError("NOT_DESCENDANT", "candidate does not descend from base");
+    requireNoGitlinks(observed(this.effects.gitlinks(input.candidate), "candidate gitlinks"));
     const changes = observed(this.effects.changedPaths(input.base, input.candidate), "candidate changed paths");
     if (policy.protectedPaths.some(path => changes.some(change => protectedPathMatches(change.path, path))))
       throw new StoreError("PROTECTED_PATH", "candidate touches a protected path");

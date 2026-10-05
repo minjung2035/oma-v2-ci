@@ -158,7 +158,7 @@ Pi/OS 기능을 다시 구현해서 생긴 중복·workaround·pre-release 잔�
 ### fix 라운드 2 진행 상황
 - 완료: fix/fi(Worker 개발환경), fix/fh(보류 5건), fix/fj(fc 발견 9건), fix/fk(fb readableRoots)
 - 리밋 중단·재개 대기: fix/fg, fix/fo, fix/fl, fix/fm
-- 대기: fp(중복 제거), UX-10b, UX-18/19, UX-09
+- 대기: fp(중복 제거), UX-10b, UX-18/19
 
 #### 병합 트리 잔여 회귀 + 검증 큐 정리 (feat/macos-hidden-vm, ce74138 이후)
 - AV-07 `limits.mailBodyBytes` 바닥 — 계산 자체는 정확하다고 판정(mail/review-bounds.ts의
@@ -648,6 +648,12 @@ name collision/intended surface/hidden 미활성/idempotent reload/provenance/
   설계서 확정(f5ca9b0). 검증 라운드 1 시작 — fb·fc·fd+fe 완료(위 발견), fa·tp+pg2 대기.
   사용자 지시: 보류/spike 금지 — 실험이나 추론으로 결정하고 결정을 기록. 보류 9건 → fix/fg·fh,
   Worker 개발환경 → fix/fi. 사용자 납득 감사 3축(샌드박스·커스터마이징·오버엔지니어링).
+- 2026-10-05: UX-09 구현 — candidate 전체 트리의 gitlink(mode 160000)를 관측해
+  integration·review admission·sandbox checker의 세 경계에서 `UNSUPPORTED_PROFILE`+
+  `details.paths`로 거절(DR33, INT-001/INT-007/ERR-001 갱신). transport·provisioning은
+  허용 유지, provisioning notice·Mac import notCarried·START.md가 경로를 알림.
+  fail-before: 구 소스는 merge open을 받은 뒤 통합에서 `CHECK_FAILED`(bare 125)로만
+  실패하거나 gitlink main을 조용히 통합했다. review-notes 재바인딩·ledger·digest 갱신.
 
 ## 10. 지금부터의 실행 순서
 0. ~~P0-8 강제 수단 미구현~~ — 구현됨: `owned-state` 아키텍처 규칙

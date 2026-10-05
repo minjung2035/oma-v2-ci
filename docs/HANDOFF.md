@@ -38,7 +38,7 @@ OMA v2(`oma-core-v1`) 적대적 감사 + 경화 + v0.1 선행 작업. 목표 순
 | `docs/WORKSTREAM.md` | **작업 헌장.** §2=13 판별 기준, §3=P0 불변식, §4=작업 프로토콜, §5=발견/수정 이력 전체(7개 검증 라운드의 상세 기록), §6=선행 작업 큐, §7=bundled extension 스펙, §8=명령 레퍼런스, §9=진행 로그, §10=실행 순서. 상태가 바뀌면 갱신. |
 | `docs/user-expectation-ledger.md` | **사용자 기대 장부.** UX-01~30 기록됨. 최종 보고는 이 파일에서 만든다. |
 | `docs/PRIORITY-0.md` | **최상위 원칙.** 명제 + P0-1~8 하위 규칙 + 판정 질문 + 문서 적용 표 + 원칙 자체 검증 절차. **P0-8**(소유 상태 접근은 손상 전제)이 이번에 추가된 최신 규칙. |
-| `docs/design-revisions.md` | 설계 결정록 DR1~DR32. **DR32** = P0-8 도출 근거(4라운드 같은 원인 반복). DR18(egress), DR25(로컬 패키지), DR29(guest handoff), DR31(confined-only) 참조 빈도 높음. |
+| `docs/design-revisions.md` | 설계 결정록 DR1~DR33. **DR32** = P0-8 도출 근거(4라운드 같은 원인 반복), **DR33** = UX-09 gitlink 거절. DR18(egress), DR25(로컬 패키지), DR29(guest handoff), DR31(confined-only) 참조 빈도 높음. |
 | `docs/plan-prereq-and-bundled.md` | 선행 작업 설계서: Pi 1.0.1 마이그레이션 절차·TUI 4건·society 게이트·egress·bundled ext 5종. 초기 계획안 취급(100% 신뢰 금지). |
 | `docs/implementation-spec.md` + `implementation/traceability.json` | 스펙·유닛 추적. drift는 `check:spec-inventory`가 감시. |
 | `docs/priority-0-audit.md`, `test/audit/` | 1차 전수 감사(AV-01~31, NB-01~28) + oracle 재현 스크립트. |
@@ -56,8 +56,13 @@ OMA v2(`oma-core-v1`) 적대적 감사 + 경화 + v0.1 선행 작업. 목표 순
 - [ ] **방금 배치의 맹검증** — `20c3e5b`(+그 직전 `76f3293`, `7f9f02a`)은 구현
   에이전트의 자체 검증만 거쳤고 아직 독립 맹검증이 안 지나감 *(추측: 3559/3559라
   큰 문제는 없을 가능성이 높지만 규칙상 확인 필요)*.
-- [ ] **UX-09** — submodule 있는 프로젝트가 통합 단계에서 불투명한 exit 125
-  → 명시적 거절 메시지 + 문서화 (장부에 결정 기록됨, 미구현).
+- [x] **UX-09** — submodule 있는 프로젝트가 통합 단계에서 불투명한 exit 125
+  → **구현됨**(DR33): candidate 전체 트리의 gitlink(mode 160000)를 관측해
+  integration·review admission·sandbox checker에서 `UNSUPPORTED_PROFILE`+
+  `details.paths`로 거절. transport·provisioning은 허용 — provisioning notice와
+  Mac import `notCarried`·START.md가 경로를 알림. fail-before: 구 소스는
+  merge open을 받은 뒤 `CHECK_FAILED`(bare 125)로만 실패했거나 gitlink main을
+  조용히 통합했다.
 - [ ] 선행 작업 큐 (`plan-prereq-and-bundled.md` 순서, 각 단계 뒤 맹검증):
   1. Pi 0.87.1 → **1.0.1** + open-tui 0.3.11 + pi-tui 1.0.1 원자 bump
   2. TUI 4건: compact 도구 메시지(Principal OMA 도구만·표시명만), `/thinking show|hide`,
@@ -152,8 +157,8 @@ npm run evidence:graph                   # dependency-graph.json 재생성
   egress lease, ledger status 키, displayCopy, `..foo`, `+` 버전 스냅샷, 워크플로우 clock.
 - 테스트 최적화: 11.5분 → ~4.5분 (PTY 마커화, 감사 dedup, 빌드 스탬프).
 - P0-8 부류: 6라운드 수정 → 원칙 추가 → 전수 마이그레이션 → 정적 규칙.
-- 장부: UX-01~07,10~21,23~29 수정됨·UX-30(wedge 부류) 수정됨·UX-22+는 전수 스캔 편입.
-  미해결: **UX-08**(egress — 선행 작업), **UX-09**(submodule 거절 메시지).
+- 장부: UX-01~07,09~21,23~29 수정됨·UX-30(wedge 부류) 수정됨·UX-22+는 전수 스캔 편입.
+  미해결: **UX-08**(egress — 선행 작업).
 - 버그 아님 판정들: mailBodyBytes 바닥 거절(정상), `"/ oma-deliver"`(Pi 파서 실험으로 닫음).
 
 ## 9. 실행 제약

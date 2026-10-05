@@ -711,7 +711,11 @@ import는 Mac의 commit을 guest의 **project mirror**로 옮긴다. canonical r
    `git fetch <bundle> <branch>:refs/remotes/mac/<branch>`를 한다. mirror의 HEAD는 그 ref로 detach한다. mirror에서 바뀌는 것은
    `refs/remotes/mac/*`와 HEAD뿐이다.
 5. 결과를 원장에 쓰고(MAC-240) 답한다. submodule은 gitlink만, LFS는 pointer만 온다. 둘 다 결과에 "옮기지 않은 것"으로 적는다. 조용히
-   빠뜨리지 않는다.
+   빠뜨리지 않는다. gitlink의 저장소 경로를 이름으로 적는다(UX-09): 같은 경로를 canonical 저장소의 integration gate이
+   `UNSUPPORTED_PROFILE`로 거절하므로, 옮겨진 이력이 gitlink를 지니면 society 시작 notice가 그 거절까지 함께 알린다.
+   첫 import의 snapshot은 작업 트리만 구체화하므로, 등록만 되고 체크아웃되지 않은 submodule은 mirror까지 도달하지 못하고
+   `.gitmodules` 선언만으로 "submodule contents"로 보고된다; incremental bundle은 실제 객체를 옮기므로 그 경로는 이름이 붙는다
+   ([DR33](design-revisions.md)).
 
 **MUST [MAC-412]** project에 묶인 society는 **첫 import 뒤에만** 만들 수 있다. guest의 `oma`는 society를 처음 열 때 mirror의 HEAD로
 canonical을 시작한다(아래 MAC-411). mirror가 비어 있을 때 열면 기존 provision은 빈 seed로 `oma: canonical root` commit을 만들고,

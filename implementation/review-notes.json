@@ -275,31 +275,6 @@
    "note": "Read in full: host-record binding/bookmark/Git identity precedes already-running project settings observation; absent binding is empty, ambiguity/unknown is refusal. Real Git relocation/replacement and controlled settings tests pass. Bound first seed requires an already running app/guest, and native Mac NOT_RUN."
   },
   {
-   "path": "src/runtime/candidate-checks.ts",
-   "by": [
-    "DR29"
-   ],
-   "oracles": [
-    "DR29"
-   ],
-   "sha256": "83144dd0cf080739ed3d4485392f8a794c229305dfaf2f9af786aa1ddc6b31a1",
-   "note": "Read in full: composition callback consumes frozen exact candidate/check profile, cgroup resources, private raw checkout and confined argv/environment; controlled command/manager-outcome oracles pass. Actual systemd/cgroup probe remains independently denied and NOT_RUN; builder tests do not certify kernel enforcement."
-  },
-  {
-   "path": "src/platform/guest/project.ts",
-   "by": [
-    "MAC-240",
-    "MAC-241",
-    "MAC-420"
-   ],
-   "oracles": [
-    "MAC-240",
-    "MAC-241"
-   ],
-   "sha256": "f479e025e1a3dbf058d1653a8e2a9b3d2181b8c5b5ddcab074e465156992f27a",
-   "note": "Read in full: export() normalizes the request intent before the ledger digests it -- absent `since` and explicit `since: undefined` are one request, and neither is a JSON value the canonical encoder can name. The intent keeps every other field; validation of society/canonical/head is unchanged. MAC-240 oracles: the legacy-spelled digest is a different request that fails closed (never replayed nor re-run), and §6.4/MAC-420 export passes end-to-end under the new digest."
-  },
-  {
    "path": "src/runtime/resident-rootfs.ts",
    "by": [
     "DR25",
@@ -412,17 +387,115 @@
    "sha256": "c819d655c304f9f04febb29fc0e39d673e66c1cfd61b6ae6c870de3c5713e8ec"
   },
   {
-   "path": "src/entry/oma-society.ts",
+   "path": "src/domain/errors.ts",
    "by": [
-    "DR25",
-    "P0-8"
+    "DR33"
    ],
    "oracles": [
-    "DR25",
-    "P0-8"
+    "UX-09"
    ],
-   "note": "Read in full at the 2026-10-05 P0-8 residual round: deriveSessionSettings names the data root as the commit's repair boundary only when the session's configuration lives beneath it (no `--config`), and project settings field saves and extension toggles commit with the data-root boundary; a Human-placed `--config` bundle keeps `.oma-config` the boundary, so the user's ancestors are never repaired. Project binding, tenure, the rederive-on-save path and the settings surface are unchanged.",
-   "sha256": "f42860ceaadfadc14438ec0e02493f27979c3d2ac68bdae2c55fa71cf31af5d4"
+   "sha256": "ad5a8137d80caf73bb9adfad43ccc25612524ddae8b76729d55e7df9a7bcaab2",
+   "note": "Read in full: UNSUPPORTED_PROFILE gains a details.paths schema gated on isValidWirePath, so the gitlink refusal carries every repository-relative path through publicDetails and wire failure conversion; no other code gains a public field."
+  },
+  {
+   "path": "src/entry/oma-society.ts",
+   "by": [
+    "DR33"
+   ],
+   "oracles": [
+    "UX-09"
+   ],
+   "sha256": "36c333474923c7f5b581455dd6167cd1280147025c0dfe3e9af6ae857baa77da",
+   "note": "Read in full: the provision report's gitlinkNote is surfaced through the existing notice channel at society start — a loud warning that integration will refuse, while start itself stays permissive."
+  },
+  {
+   "path": "src/git.ts",
+   "by": [
+    "DR33"
+   ],
+   "oracles": [
+    "UX-09"
+   ],
+   "sha256": "b2c0535f9177aa11fbac73fe4f7dc264990093139aa4c6517856a1eb2035cf65",
+   "note": "Read in full: integration and review effect objects both wire this.observations.gitlinks(projectGit, candidate) so every admission path shares the same whole-tree observer."
+  },
+  {
+   "path": "src/git/integration.ts",
+   "by": [
+    "DR33"
+   ],
+   "oracles": [
+    "UX-09"
+   ],
+   "sha256": "8b8f9d39891a2ae82b68dad46d3fe835a26a286abedab2430358ee4755023aa6",
+   "note": "Read in full: requireEligible observes gitlinks(candidate) and calls requireNoGitlinks before protected-path checks and before CAS; the initial admission path repeats the gate before an operation row exists, and recovery/reconciliation reuse the same gate so no CAS boundary skips it."
+  },
+  {
+   "path": "src/git/observe.ts",
+   "by": [
+    "DR33"
+   ],
+   "oracles": [
+    "UX-09"
+   ],
+   "sha256": "3ff49f6803838d0bac40e730dd5e6630d2a2d13e267d0a56c59fe1b7091133f7",
+   "note": "Read in full: gitlinks() runs ls-tree -r -z --full-tree over the whole candidate tree; the NUL parser validates mode/type pairing, full oids, UTF-8 and wire-path grammar, maps malformed output to corrupt and uncertain results to unknown (never absence), and requireNoGitlinks raises UNSUPPORTED_PROFILE with details.paths listing every gitlink."
+  },
+  {
+   "path": "src/platform/guest/project.ts",
+   "by": [
+    "DR33"
+   ],
+   "oracles": [
+    "UX-09"
+   ],
+   "sha256": "69180dd4afa28e2e5562a61b5dab41ef681bb35726372851c4e680c4fd6e2018",
+   "note": "Read in full: import scans the mirror tree for 160000 entries and names every gitlink path in notCarried; when the initial snapshot dropped a registered-but-unchecked-out submodule the .gitmodules declaration still reports \"submodule contents\", preserving the previous warning coverage."
+  },
+  {
+   "path": "src/review.ts",
+   "by": [
+    "DR33"
+   ],
+   "oracles": [
+    "UX-09"
+   ],
+   "sha256": "91f71ebd0d564b4f1b5aebcbf7156a78d168073965b880a1598afe0a4127aac2",
+   "note": "Read in full: merge.open, caller-built challenge candidates and prepared revert candidates each pass through the gitlink gate and refuse synchronously with named paths before a review operation is created."
+  },
+  {
+   "path": "src/runtime/candidate-checks.ts",
+   "by": [
+    "DR33"
+   ],
+   "oracles": [
+    "UX-09"
+   ],
+   "sha256": "008b47e633a133dc922723d4254e4ce746b1663605397b8551694811109110cd",
+   "note": "Read in full: CHECK_CHECKOUT emits OMA_ERROR=UNSUPPORTED_PROFILE plus OMA_GITLINK=<path> and exits 125; run() classifies a nonzero exit as the named refusal only on the marker and re-observes the immutable candidate host-side for authoritative paths — sandbox stderr is never trusted and bare 125 stays CHECK_FAILED."
+  },
+  {
+   "path": "src/runtime/provision.ts",
+   "by": [
+    "DR33"
+   ],
+   "oracles": [
+    "UX-09"
+   ],
+   "sha256": "9ed63d7853605e7483a6a437d6bc8a0df6bd24a110e1b4a21454485e4fbfe371",
+   "note": "Read in full: after seeding/mirroring, canonical main is observed and a gitlinkNote naming every path is returned — provisioning stays permissive while telling the user integration will refuse until the links are removed."
+  },
+  {
+   "path": "src/views.ts",
+   "by": [
+    "DR33"
+   ],
+   "oracles": [
+    "UX-09",
+    "R30"
+   ],
+   "sha256": "a0cd3fcc0173d7dd7673474529658407f078603a307c63fb1a5fd134b6a78701",
+   "note": "Read in full: START.md documents that merge/integration refuses any candidate whose tree carries a gitlink with UNSUPPORTED_PROFILE and named paths, and that a main carrying a gitlink refuses every merge until a candidate removes it."
   }
  ],
  "readUnchanged": [
@@ -885,18 +958,6 @@
     "V01B",
     "V24A",
     "V24B"
-   ],
-   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are the tests that load this module"
-  },
-  {
-   "path": "src/git/observe.ts",
-   "by": [
-    "AV-review"
-   ],
-   "oracles": [
-    "R19",
-    "R20",
-    "R36"
    ],
    "note": "read in full in the whole-codebase adversarial pass after v9; oracles are the tests that load this module"
   },

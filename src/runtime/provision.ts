@@ -88,6 +88,10 @@ export interface ProvisionReport {
   /** DR18 (D-8): why the project mirror was not refreshed this start, when a
    * project directory was offered; null when it was. */
   readonly mirrorNote: string | null;
+  /** UX-09: why the canonical `main` will refuse every integration, naming the
+   * submodule gitlink paths it carries; null when it carries none or could
+   * not be observed (the integration gate is the authoritative refusal). */
+  readonly gitlinkNote: string | null;
   /** Rootfs entries that exist, are not what OMA generates, and were left
    * exactly as they are because correcting them is a write this pass is not
    * entitled to make. `repairSociety` is what puts them back. */
@@ -292,14 +296,31 @@ export function provisionSociety(stateRoot: string, options: ProvisionOptions = 
   const seeded = seedSource !== null;
   const seedNote = project !== null && "note" in project && seeded ? project.note : null;
   const mirrorNote = options.projectDir === undefined ? null : refreshProjectMirror(stateRoot, options.projectDir);
+  const gitlinkNote = gitlinksOnMain(projectGit);
   // Confinement on by default: the rootfs is built here rather than being a
   // thing the user must assemble before Residents can be sandboxed.
   const rootfs = prepareResidentRootfs(residentRootfsPath(stateRoot), hostSystemLayout(),
     process.getuid?.() ?? 0, process.getgid?.() ?? 0, "create");
   return Object.freeze({
-    created: Object.freeze(created), seeded, seedSource, seedNote, mirrorNote,
+    created: Object.freeze(created), seeded, seedSource, seedNote, mirrorNote, gitlinkNote,
     pendingRepairs: rootfs.deferred,
   });
+}
+
+/** UX-09: provisioning stays permissive — a seeded or mirrored `main` may
+ * carry submodule gitlinks and the society still works for sessions — but
+ * every later integration refuses them, so the start that can see them says
+ * so, naming the paths, instead of letting the first merge discover them.
+ * The check is advisory: anything but a clean "present" declines the note
+ * and leaves the integration gate as the authoritative refusal. */
+function gitlinksOnMain(projectGit: string): string | null {
+  const observations = createCanonicalObserver();
+  const main = observations.ref(projectGit, "refs/heads/main");
+  if (main.kind !== "present") return null;
+  const links = observations.gitlinks(projectGit, main.value);
+  if (links.kind !== "present" || links.value.length === 0) return null;
+  return `the canonical history carries submodule gitlinks (${links.value.join(", ")}): ` +
+    "Residents can work and submit, but every integration is refused while a candidate's tree contains one — remove the gitlinks for merges to pass";
 }
 
 /** DR18 (D-8): the project's committed branch history, brought into the

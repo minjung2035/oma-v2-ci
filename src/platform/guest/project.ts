@@ -95,9 +95,19 @@ export class GuestProjects {
       const head = git(["-C", mirror, "rev-parse", "--verify", `${ref}^{commit}`]).stdout.trim();
       if (git(["-C", mirror, "update-ref", "--no-deref", "HEAD", head]).status !== 0)
         throw new StoreError("INTERNAL_ERROR", "the project mirror could not be moved");
-      // What a bundle cannot carry is said, not dropped silently (§6.3).
+      // What a bundle cannot carry is said, not dropped silently (§6.3). UX-09:
+      // the gitlink paths are named — the same paths the canonical repository's
+      // integration gate will refuse while they are carried.
       const notCarried: string[] = [];
-      if (git(["-C", mirror, "cat-file", "-e", `${head}:.gitmodules`]).status === 0) notCarried.push("submodule contents");
+      const tree = git(["-C", mirror, "ls-tree", "-r", head]);
+      const gitlinks = tree.status === 0
+        ? tree.stdout.split("\n").filter(line => line.startsWith("160000 ")).map(line => line.slice(line.indexOf("\t") + 1))
+        : [];
+      if (gitlinks.length > 0) notCarried.push(`submodule contents (${gitlinks.join(", ")})`);
+      // The initial snapshot materializes the working tree, so a registered
+      // submodule that is not checked out is dropped before the mirror sees
+      // it; only the .gitmodules declaration reaches here to say so.
+      else if (git(["-C", mirror, "cat-file", "-e", `${head}:.gitmodules`]).status === 0) notCarried.push("submodule contents");
       const attributes = git(["-C", mirror, "cat-file", "-p", `${head}:.gitattributes`]);
       if (attributes.status === 0 && /filter=lfs/.test(attributes.stdout)) notCarried.push("large files (LFS)");
       return { head, ref, objectFormat: format, notCarried };

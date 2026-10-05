@@ -90,6 +90,28 @@ test("§6.3/MAC-411/MV-50: import fills the mirror's refs/remotes/mac and HEAD, 
   assert.equal(git(mirror, "rev-parse", "HEAD"), second);
 });
 
+test("UX-09/MV-50: an incremental import names the gitlink paths a bundle cannot carry", async t => {
+  const w = await world(t);
+  const projectId = randomUUID();
+  const bundled = await w.macGit.bundle(w.mac, "main", null, w.transfer("base"));
+  await putStream(await w.link.bytes("stream"), "import-base", w.transfer("base"), PLATFORM_FRAME_BYTES);
+  await w.request("project.import", { projectId, branch: "main", bundle: { bytes: bundled.bytes, sha256: bundled.sha256 } }, "import-base");
+  // A gitlink has to be built in the index: `git add` of a real submodule needs
+  // a checked-out one, but the tree entry is all the mirror (and the import's
+  // ls-tree scan) ever sees. The initial snapshot materializes the working
+  // tree and would drop it; an incremental bundle carries the real objects.
+  git(w.mac, "update-index", "--add", "--cacheinfo", `160000,${w.first},dep`);
+  git(w.mac, "commit", "-qm", "link dep");
+  const head = git(w.mac, "rev-parse", "main");
+  const incremental = await w.macGit.bundle(w.mac, "main", w.first, w.transfer("link"));
+  await putStream(await w.link.bytes("stream"), "import-link", w.transfer("link"), PLATFORM_FRAME_BYTES);
+  const imported = await w.request("project.import", { projectId, branch: "main", bundle: { bytes: incremental.bytes, sha256: incremental.sha256 } }, "import-link") as { head: string; notCarried: string[] };
+  assert.equal(imported.head, head, "the mirror took the gitlink-bearing tip");
+  assert.ok(git(join(w.projectsDir, projectId), "ls-tree", "-r", head).split("\n")
+    .includes(`160000 commit ${w.first}\tdep`), "the mirror's tree carries the gitlink");
+  assert.deepEqual(imported.notCarried, ["submodule contents (dep)"]);
+});
+
 test("MAC-240/241: a key's request is answered from its outcome, another request under it is refused, and its status is kept", async t => {
   const w = await world(t);
   const projectId = randomUUID();

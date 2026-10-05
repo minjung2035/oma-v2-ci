@@ -4,8 +4,8 @@
  "summary": {
   "READ_UNCHANGED": 53,
   "REMOVED": 8,
-  "NOT_REVIEWED": 78,
-  "CHANGED_WITH_ORACLE": 242
+  "NOT_REVIEWED": 77,
+  "CHANGED_WITH_ORACLE": 243
  },
  "lanes": {
   "fast": "PASS",
@@ -1231,55 +1231,13 @@
    "primary": "WP21",
    "status": "CHANGED_WITH_ORACLE",
    "by": [
-    "AV27",
-    "AV28",
-    "DR1",
-    "DR13",
-    "DR3",
-    "DR4",
-    "DR6",
-    "DR7",
-    "DR8",
-    "P0V-09",
-    "P0V-10",
-    "P0V-19",
-    "P0V-20",
-    "P0V-21",
-    "P0V-22",
-    "P0V-23",
-    "P0V-31",
-    "P0V-33",
-    "P0V-47",
-    "P0V-48",
-    "P0V-64",
-    "P0V-69",
-    "P0V-70",
-    "P0V-75",
-    "WP21"
+    "DR33"
    ],
    "oracles": [
-    "AV27",
-    "AV28",
-    "DR1",
-    "DR13",
-    "DR3",
-    "DR4",
-    "DR6",
-    "DR7",
-    "DR8",
-    "P0V-10",
-    "P0V-31",
-    "P0V-33",
-    "P0V-47",
-    "P0V-48",
-    "P0V-64",
-    "P0V-69",
-    "P0V-70",
-    "P0V-75",
-    "V21A",
-    "V21B"
+    "UX-09"
    ],
-   "sha256": "d107e4121482110a1576e9716f87a21ca4e75d491add5b129f9012716b1df73a"
+   "note": "Read in full: UNSUPPORTED_PROFILE gains a details.paths schema gated on isValidWirePath, so the gitlink refusal carries every repository-relative path through publicDetails and wire failure conversion; no other code gains a public field.",
+   "sha256": "ad5a8137d80caf73bb9adfad43ccc25612524ddae8b76729d55e7df9a7bcaab2"
   },
   {
    "path": "src/domain/exhaustive.ts",
@@ -1762,15 +1720,13 @@
    "primary": null,
    "status": "CHANGED_WITH_ORACLE",
    "by": [
-    "DR25",
-    "P0-8"
+    "DR33"
    ],
    "oracles": [
-    "DR25",
-    "P0-8"
+    "UX-09"
    ],
-   "note": "Read in full at the 2026-10-05 P0-8 residual round: deriveSessionSettings names the data root as the commit's repair boundary only when the session's configuration lives beneath it (no `--config`), and project settings field saves and extension toggles commit with the data-root boundary; a Human-placed `--config` bundle keeps `.oma-config` the boundary, so the user's ancestors are never repaired. Project binding, tenure, the rederive-on-save path and the settings surface are unchanged.",
-   "sha256": "f42860ceaadfadc14438ec0e02493f27979c3d2ac68bdae2c55fa71cf31af5d4"
+   "note": "Read in full: the provision report's gitlinkNote is surfaced through the existing notice channel at society start — a loud warning that integration will refuse, while start itself stays permissive.",
+   "sha256": "36c333474923c7f5b581455dd6167cd1280147025c0dfe3e9af6ae857baa77da"
   },
   {
    "path": "src/entry/oma.ts",
@@ -2257,26 +2213,13 @@
    "primary": "WP24",
    "status": "CHANGED_WITH_ORACLE",
    "by": [
-    "DR1",
-    "DR18",
-    "DR3",
-    "DR4",
-    "DR6",
-    "DR7",
-    "P0V-16",
-    "WP18"
+    "DR33"
    ],
    "oracles": [
-    "DR1",
-    "DR18",
-    "DR3",
-    "DR4",
-    "DR6",
-    "DR7",
-    "V18A",
-    "V18B"
+    "UX-09"
    ],
-   "sha256": "4268d65dceaafb63ac5500937153b9867202855d508f6471d35207994295b757"
+   "note": "Read in full: integration and review effect objects both wire this.observations.gitlinks(projectGit, candidate) so every admission path shares the same whole-tree observer.",
+   "sha256": "b2c0535f9177aa11fbac73fe4f7dc264990093139aa4c6517856a1eb2035cf65"
   },
   {
    "path": "src/git/approval.ts",
@@ -2446,75 +2389,26 @@
    "primary": "WP24",
    "status": "CHANGED_WITH_ORACLE",
    "by": [
-    "AV27",
-    "AV28",
-    "DR1",
-    "DR13",
-    "DR3",
-    "DR4",
-    "DR6",
-    "DR7",
-    "DR8",
-    "P0V-08",
-    "P0V-64",
-    "P0V-87",
-    "P0V-88",
-    "P0V-89",
-    "P0V-90",
-    "P0V-91",
-    "P0V-92",
-    "P0V-93",
-    "P0V-94",
-    "P0V-95",
-    "WP21",
-    "WP24"
+    "DR33"
    ],
    "oracles": [
-    "AV27",
-    "AV28",
-    "DR1",
-    "DR13",
-    "DR3",
-    "DR4",
-    "DR6",
-    "DR7",
-    "DR8",
-    "P0V-64",
-    "P0V-87",
-    "P0V-88",
-    "P0V-90",
-    "P0V-92",
-    "P0V-93",
-    "P0V-94",
-    "P0V-95",
-    "V21A",
-    "V21B",
-    "V24A",
-    "V24B"
+    "UX-09"
    ],
-   "sha256": "d043352aa33219cc87a7759143cb29665703b47900d269891e31182cc9509904"
+   "note": "Read in full: requireEligible observes gitlinks(candidate) and calls requireNoGitlinks before protected-path checks and before CAS; the initial admission path repeats the gate before an operation row exists, and recovery/reconciliation reuse the same gate so no CAS boundary skips it.",
+   "sha256": "8b8f9d39891a2ae82b68dad46d3fe835a26a286abedab2430358ee4755023aa6"
   },
   {
    "path": "src/git/observe.ts",
    "primary": "WP24",
    "status": "CHANGED_WITH_ORACLE",
    "by": [
-    "DR18",
-    "P0V-113",
-    "P0V-114",
-    "P0V-115",
-    "P0V-116",
-    "P0V-86"
+    "DR33"
    ],
    "oracles": [
-    "DR18",
-    "P0V-113",
-    "P0V-114",
-    "P0V-115",
-    "P0V-116",
-    "P0V-86"
+    "UX-09"
    ],
-   "sha256": "96386218f9ab2909d0d773017e1b4b07804d44213b9ad9a12a6759bbabc689a7"
+   "note": "Read in full: gitlinks() runs ls-tree -r -z --full-tree over the whole candidate tree; the NUL parser validates mode/type pairing, full oids, UTF-8 and wire-path grammar, maps malformed output to corrupt and uncertain results to unknown (never absence), and requireNoGitlinks raises UNSUPPORTED_PROFILE with details.paths listing every gitlink.",
+   "sha256": "3ff49f6803838d0bac40e730dd5e6630d2a2d13e267d0a56c59fe1b7091133f7"
   },
   {
    "path": "src/git/paths.ts",
@@ -3354,16 +3248,13 @@
    "primary": null,
    "status": "CHANGED_WITH_ORACLE",
    "by": [
-    "MAC-240",
-    "MAC-241",
-    "MAC-420"
+    "DR33"
    ],
    "oracles": [
-    "MAC-240",
-    "MAC-241"
+    "UX-09"
    ],
-   "note": "Read in full: export() normalizes the request intent before the ledger digests it -- absent `since` and explicit `since: undefined` are one request, and neither is a JSON value the canonical encoder can name. The intent keeps every other field; validation of society/canonical/head is unchanged. MAC-240 oracles: the legacy-spelled digest is a different request that fails closed (never replayed nor re-run), and §6.4/MAC-420 export passes end-to-end under the new digest.",
-   "sha256": "f479e025e1a3dbf058d1653a8e2a9b3d2181b8c5b5ddcab074e465156992f27a"
+   "note": "Read in full: import scans the mirror tree for 160000 entries and names every gitlink path in notCarried; when the initial snapshot dropped a registered-but-unchecked-out submodule the .gitmodules declaration still reports \"submodule contents\", preserving the previous warning coverage.",
+   "sha256": "69180dd4afa28e2e5562a61b5dab41ef681bb35726372851c4e680c4fd6e2018"
   },
   {
    "path": "src/platform/guest/provision.ts",
@@ -4780,9 +4671,15 @@
   {
    "path": "src/review.ts",
    "primary": null,
-   "status": "NOT_REVIEWED",
-   "by": [],
-   "oracles": []
+   "status": "CHANGED_WITH_ORACLE",
+   "by": [
+    "DR33"
+   ],
+   "oracles": [
+    "UX-09"
+   ],
+   "note": "Read in full: merge.open, caller-built challenge candidates and prepared revert candidates each pass through the gitlink gate and refuse synchronously with named paths before a review operation is created.",
+   "sha256": "91f71ebd0d564b4f1b5aebcbf7156a78d168073965b880a1598afe0a4127aac2"
   },
   {
    "path": "src/rpc-client.ts",
@@ -4885,13 +4782,13 @@
    "primary": null,
    "status": "CHANGED_WITH_ORACLE",
    "by": [
-    "DR29"
+    "DR33"
    ],
    "oracles": [
-    "DR29"
+    "UX-09"
    ],
-   "note": "Read in full: composition callback consumes frozen exact candidate/check profile, cgroup resources, private raw checkout and confined argv/environment; controlled command/manager-outcome oracles pass. Actual systemd/cgroup probe remains independently denied and NOT_RUN; builder tests do not certify kernel enforcement.",
-   "sha256": "83144dd0cf080739ed3d4485392f8a794c229305dfaf2f9af786aa1ddc6b31a1"
+   "note": "Read in full: CHECK_CHECKOUT emits OMA_ERROR=UNSUPPORTED_PROFILE plus OMA_GITLINK=<path> and exits 125; run() classifies a nonzero exit as the named refusal only on the marker and re-observes the immutable candidate host-side for authoritative paths — sandbox stderr is never trusted and bare 125 stays CHECK_FAILED.",
+   "sha256": "008b47e633a133dc922723d4254e4ce746b1663605397b8551694811109110cd"
   },
   {
    "path": "src/runtime/client-preload.ts",
@@ -5319,43 +5216,13 @@
    "primary": "WP16",
    "status": "CHANGED_WITH_ORACLE",
    "by": [
-    "AV10",
-    "AV11",
-    "AV3",
-    "AV5",
-    "DR13",
-    "DR18",
-    "MAC-411",
-    "P0V-12",
-    "P0V-16",
-    "P0V-18",
-    "P0V-19",
-    "P0V-20",
-    "P0V-21",
-    "P0V-22",
-    "P0V-23",
-    "P0V-77",
-    "P0V-83",
-    "P0V-84",
-    "P0V-85",
-    "WP16"
+    "DR33"
    ],
    "oracles": [
-    "AV10",
-    "AV11",
-    "AV3",
-    "AV5",
-    "DR13",
-    "DR18",
-    "P0V-77",
-    "P0V-83",
-    "P0V-84",
-    "P0V-85",
-    "V16A",
-    "V16B"
+    "UX-09"
    ],
-   "note": "clauses declared by macos-platform.md's implementation table",
-   "sha256": "b0ef2270892a76918653cbb1c5f5d3169399dc58225f44f028d10587685ae8e2"
+   "note": "Read in full: after seeding/mirroring, canonical main is observed and a gitlinkNote naming every path is returned — provisioning stays permissive while telling the user integration will refuse until the links are removed.",
+   "sha256": "9ed63d7853605e7483a6a437d6bc8a0df6bd24a110e1b4a21454485e4fbfe371"
   },
   {
    "path": "src/runtime/resident-rootfs.ts",
@@ -6862,45 +6729,14 @@
    "primary": "WP23",
    "status": "CHANGED_WITH_ORACLE",
    "by": [
-    "AV5",
-    "AV9",
-    "DR18",
-    "P0V-28",
-    "P0V-29",
-    "P0V-38",
-    "P0V-39",
-    "P0V-51",
-    "P0V-87",
-    "P0V-88",
-    "P0V-89",
-    "P0V-90",
-    "P0V-91",
-    "P0V-92",
-    "P0V-93",
-    "P0V-94",
-    "P0V-95",
-    "WP23"
+    "DR33"
    ],
    "oracles": [
-    "AV5",
-    "AV9",
-    "DR18",
-    "P0V-28",
-    "P0V-29",
-    "P0V-38",
-    "P0V-39",
-    "P0V-51",
-    "P0V-87",
-    "P0V-88",
-    "P0V-90",
-    "P0V-92",
-    "P0V-93",
-    "P0V-94",
-    "P0V-95",
-    "V23A",
-    "V23B"
+    "UX-09",
+    "R30"
    ],
-   "sha256": "3850508c4efe65c5f0e034fa38102d3ab155a362ac42639511c10dc0539838a8"
+   "note": "Read in full: START.md documents that merge/integration refuses any candidate whose tree carries a gitlink with UNSUPPORTED_PROFILE and named paths, and that a main carrying a gitlink refuses every merge until a candidate removes it.",
+   "sha256": "a0cd3fcc0173d7dd7673474529658407f078603a307c63fb1a5fd134b6a78701"
   },
   {
    "path": "src/views/pending-work.ts",

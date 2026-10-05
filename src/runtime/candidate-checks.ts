@@ -13,6 +13,8 @@ import { sha256Hex } from "../hash.js";
 import { StoreError } from "../domain/errors.js";
 import type { GitPaths } from "../git/paths.js";
 import { assertCheckResources, type FrozenCheck } from "../git/integration-policy.js";
+import { createCanonicalObserver } from "../git/canonical-command.js";
+import { requireNoGitlinks, type GitObserver } from "../git/observe.js";
 
 // Executed before any candidate code. A manager accepting resource properties
 // is insufficient: the running unit must observe the actual kernel bounds.
@@ -31,7 +33,10 @@ const RESOURCE_GATE = [
 
 // Fetch and checkout, rather than archive: export-ignore/export-subst must not
 // omit or rewrite tracked bytes. No user Git configuration, filters or hooks.
-// gitlinks need a separately pinned dependency contract and are refused.
+// gitlinks need a separately pinned dependency contract and are refused —
+// the refusal announces its class on stderr before the bare exit so the host
+// can name it; a 125 without the marker stays an unclassified failure (the
+// resource gate shares that code).
 export const CHECK_CHECKOUT = [
   "set -eu",
   "candidate=$1; project=$2; workspace=$3; temp=$4; shift 4",
@@ -39,7 +44,11 @@ export const CHECK_CHECKOUT = [
   "git init -q --object-format=\"$format\" \"$workspace\"",
   "git -C \"$workspace\" fetch -q --no-tags --no-write-fetch-head --no-auto-maintenance \"$project\" \"$candidate\"",
   "git -C \"$workspace\" ls-tree -r \"$candidate\" > \"$temp/oma-tree\"",
-  "if /usr/bin/grep -q '^160000 ' \"$temp/oma-tree\"; then exit 125; fi",
+  "if /usr/bin/grep -q '^160000 ' \"$temp/oma-tree\"; then",
+  "  echo OMA_ERROR=UNSUPPORTED_PROFILE >&2",
+  "  /usr/bin/awk -F '\\t' '/^160000 / { print \"OMA_GITLINK=\" $2 }' \"$temp/oma-tree\" >&2",
+  "  exit 125",
+  "fi",
   "printf '%s\\n' '* -text -filter -ident !eol !working-tree-encoding' > \"$workspace/.git/info/attributes\"",
   "git -C \"$workspace\" -c core.autocrlf=false -c core.symlinks=true checkout -q --detach \"$candidate\"",
   "cd \"$workspace\"",
@@ -99,14 +108,29 @@ export function candidateCheckCommand(paths: GitPaths, candidate: string, check:
   };
 }
 
+// UX-09: the sandbox's refusal marker — the only bytes that make a nonzero
+// exit a named refusal rather than a failed check.
+const GITLINK_REFUSAL = "OMA_ERROR=UNSUPPORTED_PROFILE";
+
 export class CandidateChecks {
   constructor(private readonly paths: GitPaths,
-    private readonly execute: (command: CommandSpec) => Promise<ProcessObservation> = runProcess) {}
+    private readonly execute: (command: CommandSpec) => Promise<ProcessObservation> = runProcess,
+    private readonly observations: Pick<GitObserver, "gitlinks"> = createCanonicalObserver()) {}
   async run(candidate: string, check: FrozenCheck): Promise<void> {
     const observation = await this.execute(candidateCheckCommand(this.paths, candidate, check));
     if (observation.kind !== "exited")
       throw new StoreError("REF_STATE_UNKNOWN", `trusted check ${check.id} outcome is ${observation.kind}`);
-    if (observation.exitCode !== 0)
-      throw new StoreError("CHECK_FAILED", `trusted check ${check.id} did not pass (runner exit ${observation.exitCode})`);
+    if (observation.exitCode === 0) return;
+    if (observation.stderr.includes(GITLINK_REFUSAL)) this.refuseGitlinks(candidate);
+    throw new StoreError("CHECK_FAILED", `trusted check ${check.id} did not pass (runner exit ${observation.exitCode})`);
+  }
+  /** The marker already proved the sandbox refused; the paths it names are
+   * re-observed on the immutable candidate, not parsed from sandbox output.
+   * Defense in depth only — requireEligible made the same refusal before the
+   * check argv could run. */
+  private refuseGitlinks(candidate: string): void {
+    const links = this.observations.gitlinks(this.paths.projectGit, candidate);
+    if (links.kind === "present") requireNoGitlinks(links.value);
+    throw new StoreError("UNSUPPORTED_PROFILE", "candidate contains submodule gitlink(s)");
   }
 }

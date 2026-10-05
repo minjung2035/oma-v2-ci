@@ -43,6 +43,7 @@ for (const path of ["M secret.txt", "A", "tab\tname", "line\nname"]) {
         if (args.includes("for-each-ref")) return response(`${CANDIDATE}\n`);
         if (args.includes("rev-parse")) return response(`${BASE}\n`);
         if (args.includes("--is-ancestor")) return response();
+        if (args.includes("ls-tree")) return response();
         if (args.includes("diff-tree")) return response(`M\0${path}\0`);
         throw new Error(`unexpected Git observation: ${JSON.stringify(args)}`);
       });

@@ -41,6 +41,18 @@ export function observed<T>(observation: GitObservation<T>, what: string): T {
   if (observation.kind === "refused") throw new StoreError("INVALID_REQUEST", `${what}: ${observation.reason}`);
   throw new StoreError(observation.kind === "corrupt" ? "STORE_CORRUPT" : "REF_STATE_UNKNOWN", `${what}: ${observation.kind}`);
 }
+/** UX-09: the refusal every integration gate makes of a candidate whose tree
+ * still carries submodule gitlinks — the CAS cannot validate gitlink objects,
+ * so the candidate names them and waits to be rebuilt without them.
+ * `details.paths` is the ERROR_DETAILS-allowlisted field that survives the
+ * wire; the message names them for whoever reads the failure text. An empty
+ * observed list is no refusal. */
+export function requireNoGitlinks(paths: readonly string[]): void {
+  if (paths.length === 0) return;
+  throw new StoreError("UNSUPPORTED_PROFILE",
+    `candidate contains submodule gitlink(s): ${paths.join(", ")}`,
+    { details: { paths: [...paths] } });
+}
 export type GitObservationRunner = (args: readonly string[], input?: string) => GitProcessEvidence;
 /** `scope` says whose failure a refusal is: "output" is an observation that
  * is itself malformed; "candidate" is a name the candidate's content places
@@ -71,6 +83,35 @@ export function parseNameStatusZ(bytes: Uint8Array): Parsed<readonly ChangedPath
     changes.push({ status, path });
   }
   return { ok: true, value: changes };
+}
+
+/** The leaf-entry types `git ls-tree -r` can name. */
+const LS_TREE_TYPES: Readonly<Record<string, string>> = {
+  "100644": "blob", "100755": "blob", "120000": "blob", "160000": "commit",
+};
+/** `ls-tree -r -z` emits one leaf record per NUL, `<mode> <type> <oid>\t<path>`
+ * — the grammar context-repository.ts and project-snapshot.ts already parse.
+ * A record outside it is corrupt output; a leaf whose name the grammar cannot
+ * represent (not UTF-8, not repository-relative) refuses that candidate. */
+export function parseGitlinksZ(bytes: Uint8Array): Parsed<readonly string[]> {
+  if (bytes.byteLength === 0) return { ok: true, value: [] };
+  if (bytes[bytes.byteLength - 1] !== 0) return { ok: false, reason: "unterminated ls-tree record", scope: "output" };
+  let text: string;
+  try { text = decodeUtf8(bytes); } catch { return { ok: false, reason: "an ls-tree path is not UTF-8", scope: "candidate" }; }
+  const fields = text.split("\0");
+  fields.pop();
+  const paths: string[] = [];
+  for (const record of fields) {
+    const header = /^(\d{6}) ([^ ]+) ([0-9a-f]+)\t/.exec(record);
+    const mode = header?.[1] ?? "";
+    const expected = LS_TREE_TYPES[mode];
+    if (header === null || expected === undefined || expected !== header[2] || !isValidFullOid(header[3] ?? ""))
+      return { ok: false, reason: "malformed ls-tree record", scope: "output" };
+    const path = record.slice(header[0].length);
+    if (!isValidWirePath(path)) return { ok: false, reason: "invalid repository-relative tree path", scope: "candidate" };
+    if (mode === "160000") paths.push(path);
+  }
+  return { ok: true, value: paths };
 }
 
 /** '/' stays gated by the production profile admission check. */
@@ -162,6 +203,19 @@ export class GitObserver {
     if (uncertain(evidence) || evidence.status !== 0 || diagnostic(evidence)) return unknown(evidence, "changed-path process unavailable");
     if (evidence.stdout === null) return corrupt(evidence, "missing changed-path output");
     const parsed = parseNameStatusZ(evidence.stdout);
+    return parsed.ok ? { kind: "present", value: parsed.value, evidence }
+      : parsed.scope === "candidate" ? refused(evidence, parsed.reason) : corrupt(evidence, parsed.reason);
+  }
+
+  /** INT-001/UX-09: every submodule gitlink path one commit's whole tree still
+   * carries, observed whole — a gitlink the diff inherited is no less a
+   * refusal than one the diff added. `-r` names only leaf entries, so the
+   * grammar knows no "tree" records; an uncertain answer is never "none". */
+  gitlinks(repository: string, oid: string): GitObservation<readonly string[]> {
+    const evidence = this.run(["--git-dir", repository, "ls-tree", "-r", "-z", "--full-tree", gitOidArgument(oid)]);
+    if (uncertain(evidence) || evidence.status !== 0 || diagnostic(evidence)) return unknown(evidence, "gitlink process unavailable");
+    if (evidence.stdout === null) return corrupt(evidence, "missing gitlink output");
+    const parsed = parseGitlinksZ(evidence.stdout);
     return parsed.ok ? { kind: "present", value: parsed.value, evidence }
       : parsed.scope === "candidate" ? refused(evidence, parsed.reason) : corrupt(evidence, parsed.reason);
   }

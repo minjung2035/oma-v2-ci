@@ -41,9 +41,10 @@ function fixture(policy: IntegrationPolicy | null = basePolicy(), reader: Integr
   const model: {
     main: GitObservation<string>; published: GitObservation<readonly string[]>;
     ancestry: GitObservation<boolean>; paths: GitObservation<readonly ChangedPath[]>;
+    links: GitObservation<readonly string[]>;
     cas: RefAfterCas | null; beforePaths: (() => void) | null;
   } = { main: present(BASE), published: present([CANDIDATE]), ancestry: present(true),
-    paths: present([{ status: "M", path: "file.txt" }]), cas: null, beforePaths: null };
+    paths: present([{ status: "M", path: "file.txt" }]), links: present([]), cas: null, beforePaths: null };
   const record = (name: string): void => {
     assert.equal(store.inTransaction, false, `physical observation ${name} must remain outside T-intent`);
     calls.push(name);
@@ -54,6 +55,7 @@ function fixture(policy: IntegrationPolicy | null = basePolicy(), reader: Integr
     published: () => { record("published"); return model.published; },
     ancestry: (base, candidate) => { record("ancestry"); assert.equal(base, BASE); assert.equal(candidate, CANDIDATE); return model.ancestry; },
     changedPaths: () => { record("paths"); model.beforePaths?.(); return model.paths; },
+    gitlinks: () => { record("gitlinks"); return model.links; },
     compareAndSwap: (base, candidate) => {
       record("cas"); assert.equal(base, BASE); assert.equal(candidate, CANDIDATE);
       if (model.cas !== null) return model.cas;
@@ -92,7 +94,8 @@ test("R19: execution writes a complete canonical plan without a redundant result
     const row = operation(f.store, "execute");
     assert.deepEqual(Object.keys(row.plan).sort(), ["base", "candidate", "checkProfileDigest", "kind", "policyRevision", "repo", "target"]);
     assert.equal(row.plan.checkProfileDigest, EMPTY_DIGEST);
-    assert.deepEqual(f.calls, ["format", "published", "main", "main", "published", "ancestry", "paths", "main", "published", "ancestry", "paths", "cas"]);
+    assert.deepEqual(f.calls, ["format", "published", "gitlinks", "main", "main", "published", "ancestry", "gitlinks", "paths",
+      "main", "published", "ancestry", "gitlinks", "paths", "cas"]);
     const before = row.resultJson; const count = f.calls.length;
     assert.deepEqual(await f.coordinator.execute(f.auth, "execute", input), receipt);
     assert.equal(f.calls.length, count); assert.equal(operation(f.store, "execute").resultJson, before);
@@ -113,6 +116,35 @@ for (const [condition, expected] of [["missing", "CANDIDATE_NOT_PUBLISHED"], ["a
       assert.equal(f.calls.includes("cas"), false); assert.deepEqual(f.model.main, present(BASE));
       if (condition === "missing") assert.equal(f.store.getOperation("alice", condition), null);
       else assert.equal(operation(f.store, condition).state, "failed");
+    } finally { f.close(); }
+  });
+}
+
+test("UX-09/INT-001: a candidate whose tree carries gitlinks is refused with their paths before a row exists", async () => {
+  const f = fixture();
+  try {
+    f.model.links = present(["dep", "vendor/nested"]);
+    await assert.rejects(f.coordinator.execute(f.auth, "gitlinks", input), (error: unknown) =>
+      error instanceof StoreError && error.code === "UNSUPPORTED_PROFILE" &&
+      error.message.includes("dep") && error.message.includes("vendor/nested") &&
+      JSON.stringify(error.details) === JSON.stringify({ paths: ["dep", "vendor/nested"] }));
+    assert.equal(f.store.getOperation("alice", "gitlinks"), null, "the refusal precedes the operation row");
+    assert.equal(f.calls.includes("cas"), false);
+    assert.equal(f.calls.includes("check"), false, "a refused candidate never reaches a check argv");
+  } finally { f.close(); }
+});
+
+for (const condition of ["unknown", "refused", "corrupt"] as const) {
+  test(`UX-09: a ${condition} gitlink observation refuses — uncertain is never "no gitlinks"`, async () => {
+    const f = fixture();
+    try {
+      f.model.links = condition === "unknown" ? unavailable()
+        : condition === "refused" ? { kind: "refused" as const, reason: "injected candidate refusal", evidence }
+        : { kind: "corrupt" as const, reason: "injected malformed output", evidence };
+      const expected = condition === "unknown" ? "REF_STATE_UNKNOWN" : condition === "refused" ? "INVALID_REQUEST" : "STORE_CORRUPT";
+      await assert.rejects(f.coordinator.execute(f.auth, `gitlinks-${condition}`, input), code(expected));
+      assert.equal(f.store.getOperation("alice", `gitlinks-${condition}`), null);
+      assert.equal(f.calls.includes("cas"), false);
     } finally { f.close(); }
   });
 }

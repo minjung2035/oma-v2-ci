@@ -19,7 +19,7 @@
 | UX-06 | `nproc`가 호스트 코어를 보고해 `make -j`·jest가 과구독 | 1 | 실제 CPU 한도 힌트 제공 + START.md 안내 | fix/fi `51712a6` — `OMA_CPUS`/`OMA_MEMORY_BYTES`/`OMA_TASKS` env 힌트 | 수정됨 |
 | UX-07 | 네트워크·push·`/tmp` 휘발·docker·서비스 수명·submodule 제약을 Worker가 모른 채 턴을 낭비 | 1, 9 | START.md/Worker 프롬프트에 현재 제약을 간결히 명시 | fix/fi `917d621` — START.md `## Sandbox` 절 + Worker 프롬프트 bullet | 수정됨 |
 | UX-08 | Worker에서 `npm install`·`git clone https`·pip 등 인터넷이 전부 불가 | 1, 10 | S-07 project egress 재개: host egress를 범용 HTTP CONNECT 프록시로 확장(allowlist·SSRF 차단·credential 비노출, `--unshare-all` 유지) | 선행작업 egress 단계 | 결정 |
-| UX-09 | submodule이 있는 프로젝트는 통합 단계에서 불투명한 exit 125로 실패 | 9 | v0.1: gitlink 경로를 밝히는 명시적 거절 메시지 + 문서화(통합 CAS가 gitlink 객체를 검증할 수 없음) | 배정 예정 | 결정 |
+| UX-09 | submodule이 있는 프로젝트는 통합 단계에서 불투명한 exit 125로 실패 | 9 | v0.1: gitlink 경로를 밝히는 명시적 거절 메시지 + 문서화(통합 CAS가 gitlink 객체를 검증할 수 없음) | feat/macos-hidden-vm(이 커밋) — 전체 트리 `ls-tree -r -z --full-tree` 관측으로 integration·review admission·sandbox checker가 `UNSUPPORTED_PROFILE`+`details.paths`로 거절(DR33, INT-001/INT-007, `ERROR_DETAILS`에 `paths` 추가). transport·provisioning 허용 유지, provisioning notice·Mac import `notCarried`·START.md가 경로를 알림. UX-09 테스트 8+1 | 수정됨 |
 | UX-10b | society 수준 StorageAdmission의 `observedStorageBytes`도 workspace 안의 node_modules 등을 세어 큰 프로젝트에서 broker admission이 막힐 수 있음 (fix/fi 발견) | 1, 9 | workspace quota와 같은 배제 정책 적용 | 다음 fix 패키지에 편성 | 결정 |
 
 ## 커스터마이징 표면 (출처: 커스터마이징 감사)

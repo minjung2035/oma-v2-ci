@@ -19,7 +19,7 @@ import { requestHash } from "../hash.js";
 import { generateOperationId } from "../ids.js";
 import { receiptOfOperation } from "../storage/receipt-projector.js";
 import { integrationResult } from "../protocol/operation-results.js";
-import { protectedPathMatches, type ChangedPath, type GitObservation, type RefAfterCas } from "./observe.js";
+import { protectedPathMatches, requireNoGitlinks, type ChangedPath, type GitObservation, type RefAfterCas } from "./observe.js";
 import {
   assertSameIntegrationPolicy, assertSupportedIntegration, snapshotIntegrationPolicy,
   type IntegrationPolicy, type IntegrationPolicyReader, type IntegrationSnapshot, type FrozenCheck,
@@ -31,6 +31,10 @@ export interface IntegrationEffects {
   published(): GitObservation<readonly Oid[]>;
   ancestry(base: Oid, candidate: Oid): GitObservation<boolean>;
   changedPaths(base: Oid, candidate: Oid): GitObservation<readonly ChangedPath[]>;
+  /** UX-09/INT-001: the candidate tree's submodule gitlinks, observed whole —
+   * a gitlink inherited from base is no less a refusal than one the diff
+   * added, so changed-path diffs cannot stand in for this observation. */
+  gitlinks(candidate: Oid): GitObservation<readonly string[]>;
   compareAndSwap(base: Oid, candidate: Oid): RefAfterCas;
   runCheck(candidate: Oid, check: FrozenCheck): Promise<void>;
   noopWitness?(ref: string): GitObservation<Oid>;
@@ -159,6 +163,7 @@ export class IntegrationCoordinator {
       throw new StoreError("CANDIDATE_NOT_PUBLISHED", "candidate is not published");
     if (!observed(this.effects.ancestry(base, candidate), "candidate ancestry"))
       throw new StoreError("NOT_DESCENDANT", "candidate is not a descendant of the accepted base");
+    requireNoGitlinks(observed(this.effects.gitlinks(candidate), "candidate gitlinks"));
     const changes = observed(this.effects.changedPaths(base, candidate), "changed paths");
     for (const change of changes) {
       if (snapshot.protectedPaths.some(path => protectedPathMatches(change.path, path)))
@@ -233,6 +238,9 @@ export class IntegrationCoordinator {
     this.effects.verifyObjectFormat([input.candidate, input.expected]);
     if (!observed(this.effects.published(), "admission published refs").includes(input.candidate))
       throw new StoreError("CANDIDATE_NOT_PUBLISHED", "candidate is not published");
+    // UX-09: refuse a gitlink-bearing candidate before a row exists — the same
+    // whole-tree refusal requireEligible repeats at every CAS boundary.
+    requireNoGitlinks(observed(this.effects.gitlinks(input.candidate), "admission candidate gitlinks"));
     const main = observed(this.effects.main(), "admission main");
     if (main !== input.expected)
       throw new StoreError("STALE_BASE", "main differs from expected", { details: { actual: main } });

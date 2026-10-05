@@ -144,6 +144,36 @@ test("DR27 the society starts from the project worktree snapshot, once", () => {
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
 
+test("UX-09 a seeded history carrying gitlinks provisions anyway and reports the refusal it will face", () => {
+  const root = scratch();
+  try {
+    const work = join(root, "work");
+    const run = (cwd: string, argv: readonly string[]): string =>
+      execFileSync("/usr/bin/git", ["-C", cwd, "-c", "user.name=t", "-c", "user.email=t@t", ...argv],
+        { encoding: "utf8", env: { GIT_CONFIG_NOSYSTEM: "1", GIT_CONFIG_GLOBAL: "/dev/null", PATH: "/usr/bin:/bin" } }).trim();
+    execFileSync("/usr/bin/git", ["init", "-q", "-b", "main", work]);
+    writeFileSync(join(work, "a.txt"), "a\n");
+    run(work, ["add", "a.txt"]); run(work, ["commit", "-qm", "first"]);
+    const head = run(work, ["rev-parse", "HEAD"]);
+    run(work, ["update-index", "--add", "--cacheinfo", `160000,${head},dep`]);
+    run(work, ["commit", "-qm", "gitlink"]);
+    const bare = join(root, "bare.git");
+    execFileSync("/usr/bin/git", ["clone", "-q", "--bare", work, bare]);
+    const state = join(root, "state");
+    // Provisioning stays permissive — the society works for sessions — but the
+    // start names every path every later integration will refuse.
+    const report = provisionSociety(state, { projectDir: bare });
+    assert.equal(report.seedSource, "project");
+    const projectGit = join(state, "repos", "project.git");
+    assert.match(git(projectGit, ["ls-tree", "-r", "refs/heads/main"]), /^160000 commit [0-9a-f]+\tdep$/m,
+      "the gitlink rode the seed into canonical history");
+    assert.match(report.gitlinkNote ?? "", /submodule gitlinks \(dep\)/);
+    assert.match(report.gitlinkNote ?? "", /integration is refused/);
+    // The next start says it again — the notice stands until the links go.
+    assert.match(provisionSociety(state, { projectDir: bare }).gitlinkNote ?? "", /\(dep\)/);
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
 test("T115 a directory with no commit starts from an empty root and says why", () => {
   const root = scratch();
   try {

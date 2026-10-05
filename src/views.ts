@@ -106,7 +106,10 @@ export class ViewsModule {
       "  carries work to `main`.",
       "- `/tmp` is a per-batch tmpfs that ends with the batch; keep work in `/workspace`.",
       "- No docker or daemons: every process you start ends when the batch ends.",
-      "- Git submodules are unsupported; checkouts containing them are refused.",
+      "- Git submodules are unsupported: `oma_merge open` / integration refuse any",
+      "  candidate whose tree still holds a gitlink (UNSUPPORTED_PROFILE names the",
+      "  paths). A `main` that carries one refuses every merge until a candidate",
+      "  removes it.",
       "- Bounds are cgroup-enforced. `nproc`/`free` report the host, not your share --",
       "  build tools get `-j$OMA_CPUS`, and `$OMA_MEMORY_BYTES`/`$OMA_TASKS` name the rest.",
     ].join("\n");
