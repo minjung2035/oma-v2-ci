@@ -224,7 +224,7 @@ node --test test/document-integrity.test.mjs test/traceability-policy.test.mjs \
 
 아래 binding은 구조 검사의 입력 identity다. digest 생성 자체가 runtime PASS를 뜻하지 않는다.
 
-verification input digest `df89412f6ed3e4d52fcde266cc47f8f5da309b9a9445b855beec69d4fad5a957` (960 files).
+verification input digest `6064436ba512431ebde811d0a3b09cd8fc004dea15bf9c53638b4cc8b8b5b166` (960 files).
 
 당시 기록한 cloc 2.08 측정치: 354 files / 35,832 code LOC. 이 역사적 기록은 현재 source의 LOC claim이 아니며, 기존 artifact와의 불일치를 여기서 수리했다고 주장하지 않는다. 크기 제한은 없으며 값은 release proof가 아니다.
 

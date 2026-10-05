@@ -208,14 +208,17 @@ export function roleSetOf(source: ManagedSource): Record<string, ManagedRoleSour
 /** DR25: commits a whole role set with the candidate -- how an inline
  * configuration becomes a managed bundle, and how a session's configuration
  * takes on its project's roles. The same writer, the same proof by the
- * loader, the same refusal of a source changed since it was read. */
+ * loader, the same refusal of a source changed since it was read.
+ * `ownedFrom` is the commit's repair boundary, named by the layer that
+ * knows where the bundle lives (P0-8); a caller that cannot vouch for an
+ * oma-owned ancestor leaves it out and only the managed tail is repaired. */
 export function commitRoleSet(snapshot: ManagedSource, config: HostConfigV1,
-  roleSet: Readonly<Record<string, ManagedRoleSource>>, faults?: DurabilityObserver): ManagedCommit {
+  roleSet: Readonly<Record<string, ManagedRoleSource>>, faults?: DurabilityObserver, ownedFrom?: string): ManagedCommit {
   const after = roleRevisionInput(managedRolesOf(snapshot, {}, config, roleSet));
   if (snapshot.layout.kind === "operations" &&
       sameMeaning(config, after, snapshot.config, roleRevisionInput(managedRolesOf(snapshot, {}, snapshot.config))))
     return Object.freeze({ kind: "unchanged", generation: null });
-  return commitManagedGeneration(snapshot, { config: revised(config, after), roleSet }, faults);
+  return commitManagedGeneration(snapshot, { config: revised(config, after), roleSet }, faults, undefined, ownedFrom);
 }
 
 /** A configuration as last committed: runnable, or -- when only a declared
@@ -231,10 +234,10 @@ export function readSettingsForEditing(path: string): Settings {
 
 /** DR25: a project's settings are a managed bundle, so each role's
  * extensions can be chosen; an inline one becomes one, running as it did. */
-export function projectBundle(path: string): Settings {
+export function projectBundle(path: string, ownedFrom?: string): Settings {
   const settings = readSettingsForEditing(path);
   if (settings.layout.kind === "operations") return settings;
-  commitRoleSet(settings.snapshot!, settings.config, roleSetOf(settings.snapshot!));
+  commitRoleSet(settings.snapshot!, settings.config, roleSetOf(settings.snapshot!), undefined, ownedFrom);
   return readSettingsForEditing(path);
 }
 
@@ -243,7 +246,7 @@ export function projectBundle(path: string): Settings {
  * session's own name, rootfs and installation. An extension the project
  * names whose file is gone is left out of the session, never loaded in its
  * place, and reported; the project keeps it until the Human turns it off. */
-export function deriveSessionSettings(project: Settings, path: string, own: SessionOwn): { readonly settings: Settings; readonly missing: readonly string[] } {
+export function deriveSessionSettings(project: Settings, path: string, own: SessionOwn, ownedFrom?: string): { readonly settings: Settings; readonly missing: readonly string[] } {
   if (project.snapshot === null) throw new StoreError("UNSUPPORTED_PROFILE", "a session is made only from the project's committed settings");
   const config = sessionConfigOf(project.config, own);
   const roots = { libdir: config.installation.libdir, packages: config.installation.packages };
@@ -256,9 +259,9 @@ export function deriveSessionSettings(project: Settings, path: string, own: Sess
     });
     roleSet[name] = Object.freeze({ ...role, extensions: Object.freeze(present) });
   }
-  if (lstatSync(path, { throwIfNoEntry: false }) === undefined) writeSettings(path, config);
+  if (lstatSync(path, { throwIfNoEntry: false }) === undefined) writeSettings(path, config, ownedFrom);
   const session = readSettingsForEditing(path);
-  commitRoleSet(session.snapshot!, config, roleSet);
+  commitRoleSet(session.snapshot!, config, roleSet, undefined, ownedFrom);
   return Object.freeze({ settings: readSettings(path), missing: Object.freeze([...missing].sort()) });
 }
 
@@ -338,7 +341,7 @@ function commitInlineEdit(snapshot: Pick<ConfigurationSnapshot, "config" | "layo
 /** Compatibility facade: arbitrary HostConfigV1 is never handed to the writer.
  * A missing file is created, never overwritten if another start made it first;
  * an existing one is committed against the version read just now. */
-export function writeSettings(path: string, config: HostConfigV1): HostConfigV1 {
+export function writeSettings(path: string, config: HostConfigV1, ownedFrom?: string): HostConfigV1 {
   const candidate = revised(validateConfig(config));
   if (lstatSync(path, { throwIfNoEntry: false }) === undefined) {
     if (createInlineConfiguration(path, candidate) === "existing") return loadConfigurationSnapshot(path).config;
@@ -346,7 +349,7 @@ export function writeSettings(path: string, config: HostConfigV1): HostConfigV1 
   }
   const snapshot = loadConfigurationSnapshot(path);
   if (snapshot.layout.kind === "inline") { commitInlineEdit(snapshot, candidate); return loadConfigurationSnapshot(path).config; }
-  commitManagedEdit(snapshot, candidate);
+  commitManagedEdit(snapshot, candidate, {}, undefined, undefined, ownedFrom);
   return loadConfigurationSnapshot(path).config;
 }
 
@@ -356,12 +359,12 @@ export function writeSettings(path: string, config: HostConfigV1): HostConfigV1 
  * to the generation writer, which refuses a snapshot that is no longer current.
  */
 export function commitManagedEdit(snapshot: ManagedSource, config: HostConfigV1, roles: ManagedEdit["roles"] = {},
-  faults?: DurabilityObserver, limits?: ManagedLimits): ManagedCommit {
+  faults?: DurabilityObserver, limits?: ManagedLimits, ownedFrom?: string): ManagedCommit {
   const before = managedRolesOf(snapshot, {}, snapshot.config);
   const after = managedRolesOf(snapshot, roles, config);
   if (sameMeaning(config, roleRevisionInput(after), snapshot.config, roleRevisionInput(before)))
     return Object.freeze({ kind: "unchanged", generation: null });
-  return commitManagedGeneration(snapshot, { config: revised(config, roleRevisionInput(after)), roles }, faults, limits);
+  return commitManagedGeneration(snapshot, { config: revised(config, roleRevisionInput(after)), roles }, faults, limits, ownedFrom);
 }
 function roleRevisionInput(roles: ReturnType<typeof managedRolesOf>): Record<string, unknown> {
   return Object.fromEntries(Object.keys(roles).sort().map(name => {
@@ -517,7 +520,8 @@ export const EDITABLE_FIELD_DESCRIPTORS = PLACEMENT;
  * published as one managed generation.
  */
 export type FieldCommit = { readonly kind: "saved" } | { readonly kind: "unchanged" };
-export function commitField(settings: Settings, field: string, value: FieldValue, bootstrap: BootstrapState = "unknown"): FieldCommit {
+export function commitField(settings: Settings, field: string, value: FieldValue, bootstrap: BootstrapState = "unknown",
+  ownedFrom?: string): FieldCommit {
   if (!Object.hasOwn(EDITABLE_FIELD_DESCRIPTORS, field))
     throw new StoreError("INVALID_REQUEST", `unknown settings field ${field}`);
   const descriptor = EDITABLE_FIELD_DESCRIPTORS[field as EditableField];
@@ -530,6 +534,6 @@ export function commitField(settings: Settings, field: string, value: FieldValue
   if (settings.snapshot === null)
     throw new StoreError("UNSUPPORTED_PROFILE", "a configuration is edited only from the snapshot it was read as");
   const committed = settings.layout.kind === "inline"
-    ? commitInlineEdit(settings.snapshot, applied) : commitManagedEdit(settings.snapshot, applied);
+    ? commitInlineEdit(settings.snapshot, applied) : commitManagedEdit(settings.snapshot, applied, {}, undefined, undefined, ownedFrom);
   return Object.freeze({ kind: committed.kind === "unchanged" ? "unchanged" : "saved" });
 }

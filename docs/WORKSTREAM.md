@@ -436,6 +436,56 @@ Pi/OS 기능을 다시 구현해서 생긴 중복·workaround·pre-release 잔�
     인자 미검출 전부 재현 → 수정 후 통과 + `check:architecture` 0 findings.
     회귀: pi-packages.test.ts +2종·config-generations.test.ts +2종·
     architecture-rule-modules.test.mjs +2종(바인딩 인지·에일리어스 이름).
+  - 아홉 번째 잔여 4건(같은 라운드의 사각 — 경계가 너무 좁은 쪽·규칙의
+    바인딩 잔여·Mac 스테이징 내용 flush·낡은 증거) 수정:
+    (1) `commitManagedGeneration`의 경계는 이제 번들을 둔 층이 이름 짓는다.
+      여덟 번째 잔여 (3)이 `.oma-config`를 경계로 고정한 것은 외부
+      `--config` 번들에는 정확했지만 oma 소유 트리 안의 번들(`<data>/.
+      projects/<project>`, 세션의 `<data>/<society>`)에는 너무 좁았다 —
+      mode-000 `<project>` 같은 oma 소유 조상이 커밋의 읽기·쓰기 전부를
+      wedge시켜도 복구할 경계가 없었다. `ownedFrom` 인자를 commitManaged-
+      Generation·commitRoleSet·projectBundle·deriveSessionSettings·
+      writeSettings·commitManagedEdit·commitField·toggleExtension까지
+      꿰었고 oma가 번들을 둔 층(project-settings·oma-society)은 데이터
+      루트를, 외부 번들은 아무것도 넘기지 않아 `.oma-config`가 경계로
+      남는다 — 사용자 공간 복구·슬롯 stray unlink 금지는 그대로. 복구는
+      확인 flush·assertCurrent보다 먼저 선다: 복구가 닿아야 할 바로 그
+      컴포넌트 아래의 읽기가 먼저 wedge되면 복구는 영영 도달하지 못한다.
+      fail-before(구 dist, 경계가 호출자 경계를 무시): mode-000 `<demo>`
+      아래 번들의 두 번째 커밋이 BROKER_UNAVAILABLE → 수정 후 복구·커밋·
+      읽기 일치. 회귀: config-generations.test.ts +1종(in-tree 복구·
+      무경계 거절·외부 부모 무손상 재확인).
+    (2) owned-state 규칙의 바인딩 잔여 3종 — 같은 호출이 아직 입을 수
+      있던 철자들: `import { default as fs } from "node:fs"`는 remote가
+      `"default"`라 네임스페이스로 결속되지 않았고, `const f =
+      writeFileSync`/`const w = fs.writeFileSync` 같은 멤버·함수 별칭은
+      네임스페이스 별칭만 추적하던 2패스를 빠져나갔으며, 콜백 철자
+      (`fs.writeFile`·`rm`·`lstat`·`mkdir` — `*Sync`와 같은 효과를
+      비동기로 답하는 면)은 해석은 되어도 집합에 없었다. `default as`는
+      네임스페이스로, `import fs = require(...)`도 같이 결속하고, 별칭은
+      고정점까지 멤버·임포트 둘 다 추적하며, 콜백 표면은 변경/관측 양팔에
+      들어갔다 — 동명 로컬 함수·미결속 객체의 멤버·외부 모듈 별칭은 여전히
+      fs가 아니다. fail-before(구 규칙): `default-as namespace import
+      escaped the rule` → 수정 후 fixture 전부 검출 + `check:architecture`
+      0 findings·stale 면제 감시 유지. 회귀: architecture-rule-modules.
+      test.mjs +1종(10개 우회 철자 + 무검출 통제군).
+    (3) Mac `publishHostStaged`가 rename 뒤 `dirname(dest)`만 fsync하던
+      것 — 스테이징 사본의 바이트는 이름만 옮겨져 어느 쪽도 flush하지
+      않았으므로 rename 직후 크래시가 인덱스가 가리킬 파일 내용을 잃을 수
+      있었다(Linux publish의 fsyncTree가 닫은 같은 창). 이제 도착한 트리의
+      정규 파일 전부와 그를 이름 짓는 디렉토리 전부, 대상 부모, 이름이
+      있던 스테이징 루트를 같은 순서로 flush한다 — 비정규 잎은 held walk의
+      pin이 거절하는 그 손상 그대로 거절. 이 호스트는 Linux라 구조만;
+      네이티브 Mac 실행은 NOT_RUN(owned-cleanup의 publish 경로는 Linux에서
+      그대로 통과).
+    (4) 과정 노트 — 증거 결박: 97c0b62가 바꾼 생산 바이트(local-package·
+      pi-packages·generations)를 새 바이트로 재독해 review-notes에 판정을
+      기록했고(files·settings·extensions·project-settings·oma-society까지
+      이번 변경 파일 전부 byte-bound), `npm run review:ledger`로 원장을
+      재생성하고 `node scripts/loc.mjs --source-digests`로 생산 digest를
+      다시 맞춘 뒤 validation.md의 검증 입력 digest를 현재 트리로
+      재결박했다 — stale digest 2건(V32A)·검증 입력 digest 불일치 1건
+      (R38) 해소.
 
 ## 6. 선행 작업 큐 (코드베이스 전체 확장 전 — 사용자 지시)
 

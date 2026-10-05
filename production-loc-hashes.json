@@ -224,7 +224,7 @@
     },
     {
       "path": "src/config/generations.ts",
-      "sha256": "4a0edcf29ad5df433ef360e460a5189a54fd64e52f3dbfd3c34764d082d27b5d"
+      "sha256": "e9c034f1776e7f624ea66ad5db971b101a86443f52f00fdc011e4594c83e7bda"
     },
     {
       "path": "src/config/operations.ts",
@@ -408,7 +408,7 @@
     },
     {
       "path": "src/entry/oma-society.ts",
-      "sha256": "13b337315cacd310f505dd666aea818ed23e712474a957daf3b4497ec20a3e9c"
+      "sha256": "f42860ceaadfadc14438ec0e02493f27979c3d2ac68bdae2c55fa71cf31af5d4"
     },
     {
       "path": "src/entry/oma.ts",
@@ -792,7 +792,7 @@
     },
     {
       "path": "src/platform/host/files.ts",
-      "sha256": "b24f748faa325da509ebe21ff5220c25bc2f21effecec25d85d02c24757b0b39"
+      "sha256": "1278562e94f3f34c2e2a9e293a95c68b27aa42afa31a132ac7e05a4b43f04620"
     },
     {
       "path": "src/platform/host/guest-histories.ts",
@@ -1388,7 +1388,7 @@
     },
     {
       "path": "src/tui/project-settings.ts",
-      "sha256": "df993b1e1507837f877b1618085d8f2878d3c0a413f138968c820b833d60c514"
+      "sha256": "204220123ee1c39d674006bb0290444b746359e8012885612504b86219e01455"
     },
     {
       "path": "src/tui/prompt.ts",
@@ -1408,7 +1408,7 @@
     },
     {
       "path": "src/tui/sources/extensions.ts",
-      "sha256": "8b9fbc9b9c4430b366f32bdeeda2d8938f0c0a7e4bfb7469f28ab504fc479746"
+      "sha256": "0083b85332a9b7145f865829fec7870f1b13ae16569f74182eaae6224d990ea4"
     },
     {
       "path": "src/tui/sources/mail.ts",
@@ -1416,7 +1416,7 @@
     },
     {
       "path": "src/tui/sources/settings.ts",
-      "sha256": "601203f8072d2b910422831eabb5d99e14c8e9bc80d1419d5e709547e7278b94"
+      "sha256": "e6d6465f0cd269fbda7cd2646732e51de480f39e92dbacf66a56617d59a4c908"
     },
     {
       "path": "src/tui/transcript.ts",

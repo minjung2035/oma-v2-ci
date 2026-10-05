@@ -333,9 +333,17 @@ function assertReproduces(manifest: string, config: HostConfigV1, roles: Readonl
  * earlier publication; otherwise publishes one generation and replaces the
  * manifest last. Success is returned only after the manifest's parent flush;
  * a failure after the rename is reported as unconfirmed and blocks the next
- * edit of this bundle until the flush succeeds. */
+ * edit of this bundle until the flush succeeds.
+ *
+ * `ownedFrom` is the caller's word for where oma's ownership of this bundle's
+ * ancestors begins -- the deepest ancestor it can vouch is oma's own. A bundle
+ * inside oma's tree (a project's settings under `.projects`, a society's
+ * configuration under the data root) repairs a degraded oma-owned ancestor on
+ * the walk, the way the stores do; a bundle the Human's `--config` placed in
+ * user space names no such ancestor and the boundary stays `.oma-config`
+ * itself. */
 export function commitManagedGeneration(snapshot: ManagedSource, edit: ManagedEdit, faults?: DurabilityObserver,
-  limits: ManagedLimits = MANAGED_LIMITS): ManagedCommit {
+  limits: ManagedLimits = MANAGED_LIMITS, ownedFrom?: string): ManagedCommit {
   const layout = snapshot.layout;
   // DR25: an inline configuration becomes a managed bundle only with a whole
   // role set, published as its first generation; its file becomes the manifest.
@@ -343,6 +351,29 @@ export function commitManagedGeneration(snapshot: ManagedSource, edit: ManagedEd
     throw new StoreError("UNSUPPORTED_PROFILE", "only an operations bundle is edited as managed generations");
   const manifest = layout.kind === "operations" ? layout.index : layout.path;
   const root = dirname(manifest);
+  const base = join(root, MANAGED_DIRECTORY);
+  const generations = join(base, "generations");
+  // P0-8: the managed tail beneath the bundle is oma's own -- a mode-000
+  // `.oma-config` or `generations` a stray left is repaired, never trusted
+  // as-is. The repair boundary is who placed the bundle, which `root` alone
+  // cannot say: for a bundle inside oma's own tree the caller names the
+  // oma-owned ancestor (`.projects` for a project's settings, the data root
+  // for a society's own), and a mode-000 `<project>` or `<society>` a stray
+  // left is repaired on the walk the way every other store's tail is. For a
+  // bundle the Human's `--config` placed under a directory that is the
+  // user's, no ancestor is oma's and the boundary is `base` itself, the
+  // first component oma makes beneath the bundle: `dirname(root)` claimed
+  // the user's parent as oma's, chmod'ing a directory that is not this
+  // product's and unlinking a stray at the bundle's own `.oma-config` slot
+  // out of the user's directory to make room. At the boundary oma's own
+  // name a stray still refuses -- its parent is not this commit's to write,
+  // the same answer the owned ensure gives at every other store's boundary.
+  // The repair stands first: the confirmation flush and every file the edit
+  // goes on to read and write live beneath the components it makes
+  // reachable, so a degraded owned ancestor of `root` refuses here, never
+  // silently observed as absent by the reads that follow.
+  ensureOwnedDurableDirectory(base, ownedFrom ?? base, 0o700, faults);
+  ensureOwnedDurableDirectory(generations, base, 0o700, faults);
   if (unconfirmed.has(root)) {
     try { fsyncDir(root); unconfirmed.delete(root); }
     catch (error) { throw storeFailure(error); }
@@ -354,22 +385,6 @@ export function commitManagedGeneration(snapshot: ManagedSource, edit: ManagedEd
   const id = generationIdOf(logical);
   const current = managedGenerationOf(snapshot);
   if (current === id) return Object.freeze({ kind: "unchanged", generation: id });
-
-  const base = join(root, MANAGED_DIRECTORY);
-  const generations = join(base, "generations");
-  // P0-8: the managed tail beneath the bundle is oma's own -- a mode-000
-  // `.oma-config` or `generations` a stray left is repaired, never trusted
-  // as-is. But the repair boundary is `base` itself, the first component oma
-  // makes beneath the bundle: `root`'s own parent is whichever directory the
-  // Human's `--config` placed the bundle under, so a boundary of
-  // `dirname(root)` would chmod a directory that is the user's, and the
-  // owned ensure would unlink a stray file sitting at the bundle's own
-  // `.oma-config` slot out of the user's directory to make room. Neither is
-  // oma's to touch: the boundary component's own parent is the user's, so
-  // `base`'s refusal on a stray there stands -- the same answer the owned
-  // ensure gives at every other store's boundary.
-  ensureOwnedDurableDirectory(base, base, 0o700, faults);
-  ensureOwnedDurableDirectory(generations, base, 0o700, faults);
   const published = new Map(logical);
   const at = (name: string): string => `${MANAGED_DIRECTORY}/generations/${id}/${name}`;
   for (const name of Object.keys(roles)) published.set(`roles/${name}.json`, json(roleBody(roles[name]!, at(`prompts/${name}.md`))));

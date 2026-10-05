@@ -250,6 +250,30 @@ function collectHostStageStray(dir: string, name: string): boolean {
   return false;
 }
 
+/** `fsyncFile` spelled by path, the way this owner spells everything on a
+ * host without openat2: the renamed staged file's own bytes flushed. */
+function fsyncStagedFile(path: string): void {
+  const fd = openSync(path, constants.O_RDONLY | constants.O_NOFOLLOW);
+  withCleanup(() => fsyncSync(fd), () => closeSync(fd));
+}
+
+/** `fsyncTree`'s regular-files policy spelled by path: every regular file of
+ * the arrived tree is flushed and every directory that names one is flushed
+ * -- the staged copy's bytes and the names that reach them must outlive a
+ * crash the way the index naming them does, the same durability the Linux
+ * publish gives the renamed name. Anything else in the tree is the
+ * corruption the held walk's regular-file pin refuses, never followed. */
+function fsyncStagedTree(dir: string): void {
+  for (const name of readdirSync(dir)) {
+    const path = join(dir, name);
+    const observed = lstatSync(path);
+    if (observed.isDirectory()) { fsyncStagedTree(path); continue; }
+    if (!observed.isFile()) throw new StoreError("STORE_CORRUPT", `a staged tree holds an entry that is not a file or a directory: ${path}`);
+    fsyncStagedFile(path);
+  }
+  fsyncDirectory(dir);
+}
+
 /** `made` becomes `<dir>/<name>` whole: a dead copy goes first, the rename
  * lands the new one, the directory is flushed. `ownedFrom` bounds the
  * owner-bits repair the destination's ancestors get -- a mode-000 `local`
@@ -269,7 +293,19 @@ export function publishHostStaged(made: string, dir: string, name: string, owned
   }
   removeOwnedPath(dest);
   renameSync(made, dest);
+  // The staged copy's own bytes are renamed, never rewritten on this side
+  // of the name: nothing else flushed them, so a crash here could keep
+  // `dest`'s dirent while losing the file contents the index goes on to
+  // name -- the window the Linux publish's fsyncTree closes. Every regular
+  // file of the arrived tree and every directory that names one is flushed,
+  // then the parent that holds the name, then the name's old home in the
+  // staging root -- the order the held-descriptor publish keeps.
+  const arrived = lstatSync(dest);
+  if (arrived.isDirectory()) fsyncStagedTree(dest);
+  else if (arrived.isFile()) fsyncStagedFile(dest);
+  else throw new StoreError("STORE_CORRUPT", `the published stage is not a file or a directory: ${dest}`);
   fsyncDirectory(dirname(dest));
+  fsyncDirectory(dirname(made));
 }
 
 /** A staging root given back unpublished, or a dead copy being pruned. */

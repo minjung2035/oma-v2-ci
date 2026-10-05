@@ -17,7 +17,10 @@ import { commitManagedEdit, commitRoleSet, projectBundle, projectSettingsPath, r
 /** The project's settings, made once -- from its first society's
  * configuration, roles and all, or the product's defaults -- and kept a
  * managed bundle that names where the installed packages are, so each role's
- * extensions can be chosen and every session is made from it. */
+ * extensions can be chosen and every session is made from it. P0-8:
+ * `.projects/<project>` is oma's own under the data root, which is the
+ * repair boundary every commit of the bundle names -- the same boundary the
+ * bundle's creation ensures with. */
 export function ensureProjectSettings(dataRoot: string, project: string, libdir: string, session?: string): Settings {
   const path = projectSettingsPath(dataRoot, project);
   const packages = packageStoreDir(join(dataRoot, project));
@@ -28,16 +31,16 @@ export function ensureProjectSettings(dataRoot: string, project: string, libdir:
     const seed = earlier === undefined ? null : readSettingsForEditing(earlier);
     const config = seed?.config ?? defaultHostConfig({ society: project, node: process.execPath, libdir: `${libdir}/`,
       rootfs: residentRootfsPath(join(dataRoot, project)), deploymentDigest: deploymentDigest(libdir) });
-    writeSettings(path, { ...config, society: project, installation: { ...config.installation, packages } });
+    writeSettings(path, { ...config, society: project, installation: { ...config.installation, packages } }, dataRoot);
     // A first society that chose its roles' extensions and prompts keeps them.
     if (seed?.snapshot && seed.layout.kind === "operations") {
       const created = readSettingsForEditing(path);
-      commitRoleSet(created.snapshot!, created.config, roleSetOf(seed.snapshot));
+      commitRoleSet(created.snapshot!, created.config, roleSetOf(seed.snapshot), undefined, dataRoot);
     }
   }
-  const settings = projectBundle(path);
+  const settings = projectBundle(path, dataRoot);
   if (settings.config.installation.packages === packages) return settings;
-  writeSettings(path, { ...settings.config, installation: { ...settings.config.installation, packages } });
+  writeSettings(path, { ...settings.config, installation: { ...settings.config.installation, packages } }, dataRoot);
   return readSettingsForEditing(path);
 }
 
@@ -72,7 +75,7 @@ export function applyPackageChange(options: { readonly dataRoot: string; readonl
     const path = projectSettingsPath(dataRoot, name);
     if (!existsSync(path) && name !== project) continue;
     try {
-      const settings = name === project ? ensureProjectSettings(dataRoot, name, libdir) : projectBundle(path);
+      const settings = name === project ? ensureProjectSettings(dataRoot, name, libdir) : projectBundle(path, dataRoot);
       const principal = settings.config.principalProfile;
       const edits: Record<string, { extensions: readonly string[] }> = {};
       for (const [role, authored] of Object.entries(settings.snapshot!.authoredRoles)) {
@@ -84,7 +87,8 @@ export function applyPackageChange(options: { readonly dataRoot: string; readonl
       if (name === project && added.some(item => item.entries.length > 0) &&
           (!settings.snapshot!.authoredRoles[principal] || (settings.workerProfile !== null && !settings.snapshot!.authoredRoles[settings.workerProfile])))
         throw new StoreError("UNSUPPORTED_PROFILE", "the project must declare its Principal and Worker roles");
-      if (Object.keys(edits).length > 0) commitManagedEdit(settings.snapshot!, settings.config, edits);
+      if (Object.keys(edits).length > 0)
+        commitManagedEdit(settings.snapshot!, settings.config, edits, undefined, undefined, dataRoot);
       if (name === project) {
         applied = true;
         activatedRoles = settings.workerProfile === null ? "Principal" : "Principal and Workers";

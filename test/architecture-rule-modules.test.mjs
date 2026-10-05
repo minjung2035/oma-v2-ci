@@ -384,6 +384,38 @@ export const f = async (p, d) => { await open(p); await readdir(d); await db.ope
   }, root => assert.deepEqual(ownedStateFindings(root), []));
 });
 
+test("P0-8/DR32: the owned-state rule reaches the callback spellings and the re-spelled bindings", () => {
+  // Three escapes the same call could wear: `import { default as fs }` names
+  // the module's namespace, not a member called "default"; `const w =
+  // fs.writeFileSync` and `const f = writeFileSync` carry the surface under a
+  // second local name; and the callback spellings `fs.writeFile`/`writeFile`
+  // answer the same effect as `writeFileSync`, asynchronously.
+  for (const [name, text] of [
+    ["default-as namespace import", `import { default as fs } from "node:fs"; export const f = p => fs.writeFileSync(p, "x");`],
+    ["default-as on promises", `import { default as fsp } from "node:fs/promises"; export const f = async p => fsp.rm(p);`],
+    ["import-equals require", `import fs = require("node:fs"); export const f = p => fs.mkdirSync(p);`],
+    ["named member alias", `import { writeFileSync } from "node:fs"; const w = writeFileSync; export const f = p => w(p, "x");`],
+    ["namespace member alias", `import * as fs from "node:fs"; const w = fs.writeFileSync; export const f = p => w(p, "x");`],
+    ["alias of an alias", `import { writeFileSync } from "node:fs"; const w = writeFileSync; const v = w; export const f = p => v(p, "x");`],
+    ["callback mutation", `import * as fs from "node:fs"; export const f = p => fs.writeFile(p, "x", () => {});`],
+    ["callback mutation named", `import { rm } from "node:fs"; export const f = p => rm(p, () => {});`],
+    ["callback observation of an owned root", `import { lstat } from "node:fs"; export const f = stateRoot => lstat(stateRoot, () => {});`],
+    ["callback mkdir", `import { mkdir } from "node:fs"; export const f = p => mkdir(p, () => {});`],
+  ]) withFixture({
+    "src/views/example.ts": text,
+  }, root => assert.ok(ownedStateFindings(root).some(value => /owned-state-(raw-access|raw-observation)/.test(value.rule)),
+    `${name} escaped the rule`));
+  // And what only wears the spelling stays unflagged: a local function, a
+  // member of an object bound to no module, and an alias of an import that
+  // came from somewhere else are never fs calls.
+  withFixture({
+    "src/views/example.ts": `const w = p => p; export const f = p => w(p);`,
+    "src/views/other.ts": `const fs = { writeFileSync: p => p }; const w = fs.writeFileSync; export const f = p => w(p);`,
+    "src/views/third.ts": `import { writeFileSync } from "somewhere-else"; const w = writeFileSync; export const f = p => w(p, "x");`,
+    "src/views/fourth.ts": `import { stat } from "node:fs"; export const f = p => stat(p, () => {});`,
+  }, root => assert.deepEqual(ownedStateFindings(root), []));
+});
+
 test("P0-8/DR32: an owned tail under its alias names still flags a raw observation", () => {
   // `stateRoot`-shaped names were not the only carriers -- the store, the
   // generations directories and the names the stage and ledger code carry

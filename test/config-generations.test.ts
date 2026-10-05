@@ -2,7 +2,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { chmodSync, existsSync, readdirSync, readFileSync, statSync, utimesSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, readdirSync, readFileSync, renameSync, statSync, utimesSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { loadConfigurationSnapshot, validateConfig, type ConfigurationSnapshot } from "../src/config.js";
 import {
@@ -109,6 +109,34 @@ test("D02/P0-8: a stray at the managed tail's boundary slot is refused, never un
     assert.throws(() => commitManagedEdit(snapshot, withPrincipalModel(snapshot, "review")),
       (error: unknown) => error instanceof StoreError && error.code === "STORE_CORRUPT");
     assert.equal(readFileSync(slot, "utf8"), "the user's own file\n", "a name at the boundary stands");
+  } finally { f.close(); }
+});
+
+test("D02/P0-8: a bundle inside oma's own tree repairs the degraded owned ancestors the caller names", () => {
+  const f = createCompleteConfigurationFixture();
+  try {
+    // `.projects/<project>` beneath the data root stands for a project's
+    // settings bundle: `.projects` and `<project>` are oma-owned components
+    // above `.oma-config`, and only the layer that placed the bundle inside
+    // oma's tree can say so. A mode-000 `<project>` a stray left wedges every
+    // read and write the commit makes; the `.oma-config` boundary a user's
+    // `--config` bundle must keep refuses to repair it, so the same commit
+    // that fails without an oma-owned ancestor commits once the caller names
+    // the data root the bundle's tree stands under.
+    const projects = join(f.root, ".projects");
+    const bundle = join(projects, "demo");
+    mkdirSync(projects, { recursive: true });
+    renameSync(f.output, bundle);
+    const snapshot = loadConfigurationSnapshot(join(bundle, "config.json"));
+    chmodSync(bundle, 0o000);
+    assert.throws(() => commitManagedEdit(snapshot, withPrincipalModel(snapshot, "review")),
+      (error: unknown) => error instanceof StoreError && error.code === "BROKER_UNAVAILABLE",
+      "with no oma-owned ancestor named the refusal stands, exactly as a user's --config is answered");
+    const committed = commitManagedEdit(snapshot, withPrincipalModel(snapshot, "review"), {}, undefined, undefined, f.root);
+    assert.equal(committed.kind, "committed");
+    assert.equal(statSync(bundle).mode & 0o777, 0o700, "a degraded oma-owned ancestor is repaired, never trusted");
+    assert.equal(loadConfigurationSnapshot(join(bundle, "config.json")).config.agentProfiles.principal!.modelProfile, "review",
+      "the edit landed after the repair");
   } finally { f.close(); }
 });
 

@@ -42,13 +42,14 @@
    "path": "src/platform/host/files.ts",
    "by": [
     "DR25",
-    "DR28"
+    "DR28",
+    "P0-8"
    ],
    "oracles": [
     "Owned cleanup host"
    ],
-   "sha256": "b24f748faa325da509ebe21ff5220c25bc2f21effecec25d85d02c24757b0b39",
-   "note": "Read in full: HostTemporary owns one close, marks returned before close, and discard attempts temporary-name removal even after close failure. Replacement/publication preserve primary beside cleanup; an already reused descriptor number is not reclosed. Three source-copy controls assertion-killed. Existing full-file publication and host-private namespace remain; visible-name uncertainty, whole retry policy and actual Mac durability are not certified. P0-8: repairHostOwnedPath/ensureHostOwnedDirectory/listHostStaged/removeHostStaged/repairHostStagedEntryMode are the host counterparts of the owned primitives -- owner bits added within the boundary, strays unlinked never followed."
+   "sha256": "1278562e94f3f34c2e2a9e293a95c68b27aa42afa31a132ac7e05a4b43f04620",
+   "note": "Read in full at the 2026-10-05 P0-8 residual round, re-binding the earlier host-owner review: publishHostStaged now flushes the renamed staged tree's regular files and every directory that names them, then the destination's parent and the staging root the name came from -- the same structural durability the Linux publish's fsyncTree keeps, so the index never names file contents a crash could lose. HostTemporary ownership, the owned-boundary repair, the one-shot stray collection at the publish slot, listHostStaged and removeHostStaged are unchanged; native Mac execution of the flush is NOT_RUN on this Linux host."
   },
   {
    "path": "src/platform/host/archive-crypto.ts",
@@ -139,15 +140,17 @@
    "path": "src/runtime/pi-packages.ts",
    "by": [
     "DR25",
-    "DR28"
+    "DR28",
+    "P0-8"
    ],
    "oracles": [
     "Package grammar",
     "DR28",
-    "DR25"
+    "DR25",
+    "P0-8"
    ],
-   "sha256": "58ef45db164a43e013b360aaa3acac07879863375fcd50a77a268b2a31ac89cf",
-   "note": "Read in full at the 2026-10-01 host-only package checkpoint: one value-aware grammar produces an immutable explicit Mac-only local decision, strips host-only from engine argv, and refuses duplicate/value-like/project combinations and Linux use before effects. Five source-copy grammar controls assertion-killed through the actual parser imported by entry composition. Shared package index validation/publication, explicit activation and per-source reconciliation retained; actual loopback npm install/list/update/remove and ordinary package regressions pass. Installing locally does not select a Personal extension or consume an absent first-project seed. Whole index crash/retry boundaries and native Mac package durability are not certified by this limited review. No new Host API or guest protocol method/state/version. P0-8: writePackageIndex repairs the configured local stage's owner bits (directory and file) before the engine lists it; an unlistable or non-directory stage is refused, never indexed as empty."
+   "sha256": "c825bf9cca23314915708b54ae03cdcf7c748945e6cd1a21957a22ee34420dd6",
+   "note": "Read in full at the 2026-10-05 P0-8 residual round, re-binding the 2026-10-01 host-only package review: writePackageIndex's resource listing treats the filesystem's own ENOENT as the only absent answer -- EACCES, EIO and every other unfinished observation refuse the write for realpath and for the lstat of the name realpath just answered, so an index is never committed without what the package still holds. One value-aware grammar produces the immutable explicit Mac-only local decision, refuses duplicate/value-like/project combinations and Linux use; index byte bound, inside-containment, symlink real-path pinning, role reconciliation and per-source entries are unchanged."
   },
   {
    "path": "src/extension/contained-search.ts",
@@ -333,6 +336,93 @@
    ],
    "sha256": "afe6abff7ee8b077f92d11ef66d98f36855944104b2771fc87d6b50ed2072b19",
    "note": "Read in full: the oma tip rewrite addresses the last command-tip cell by position (replaceColumn) instead of matching the command's text, because upstream truncates a name when an extension added a command; the cell's original SGR color is carried and the tip is width-bounded like swapText. Open TUI PTY oracles hold the branded header, tips and terminal restoration for all eight endings including reload-update with an extra registered command."
+  },
+  {
+   "path": "src/config/generations.ts",
+   "by": [
+    "DR32",
+    "P0-8"
+   ],
+   "oracles": [
+    "D02",
+    "P0-8",
+    "V13A",
+    "V13B",
+    "V13C"
+   ],
+   "note": "Read in full at the 2026-10-05 P0-8 residual round: commitManagedGeneration now repairs `.oma-config`/`generations` through ensureOwnedDurableDirectory before the confirmation flush and every read the edit makes -- a degraded owned ancestor wedges the repair's refusal, never a silent absent observation. `ownedFrom` is the caller-named oma-owned ancestor (the data root for a `.projects` bundle), `.oma-config` itself for a user's `--config`; a stray at the boundary slot still refuses and is never unlinked, while a mode-000 owned component at or below the boundary is repaired. Generation identity, publish order, rollback record before the commit point, unconfirmed blocking and the quiescent collection are unchanged.",
+   "sha256": "e9c034f1776e7f624ea66ad5db971b101a86443f52f00fdc011e4594c83e7bda"
+  },
+  {
+   "path": "src/runtime/local-package.ts",
+   "by": [
+    "DR25",
+    "P0-8"
+   ],
+   "oracles": [
+    "DR25",
+    "P0-8"
+   ],
+   "note": "Read in full at the 2026-10-05 P0-8 residual round: the staged publish fsyncs the arrived tree or file, `dest`, every intermediate scoped directory the name descended through (a `local/a/b/c` name flushes `local/a` as well as `local/a/b`), `local`, and the staging root's parent -- closing the gap where a crash kept a scope directory without the child that walks to the staged copy. Strict-prefix strays are still collected once through held descriptors, a non-regular staged leaf refused, dead copies removed whole; the Mac path delegates to publishHostStaged, now the same structural flush.",
+   "sha256": "a7d5a8b01f0dfc9697844cccf7589034e4aa041cd3938981e07e0f6db03b12b3"
+  },
+  {
+   "path": "src/tui/sources/settings.ts",
+   "by": [
+    "DR25",
+    "P0-8"
+   ],
+   "oracles": [
+    "DR25",
+    "V13A",
+    "V13B",
+    "V13C",
+    "CFG-005",
+    "P0-8"
+   ],
+   "note": "Read in full at the 2026-10-05 P0-8 residual round: the managed-commit wrappers thread a caller-named `ownedFrom` through commitRoleSet/projectBundle/deriveSessionSettings/writeSettings/commitManagedEdit/commitField into commitManagedGeneration; a caller that cannot vouch for an oma-owned ancestor omits it and `.oma-config` remains the boundary, so the user's `--config` ancestors are never repaired. Role-revision input, the unchanged short-circuit, inline-edit and field-descriptor paths are unchanged.",
+   "sha256": "e6d6465f0cd269fbda7cd2646732e51de480f39e92dbacf66a56617d59a4c908"
+  },
+  {
+   "path": "src/tui/sources/extensions.ts",
+   "by": [
+    "DR25",
+    "P0-8"
+   ],
+   "oracles": [
+    "DR25",
+    "V14A",
+    "V14B",
+    "CFG-005"
+   ],
+   "note": "Read in full at the 2026-10-05 P0-8 residual round: toggleExtension accepts the caller's `ownedFrom` and forwards it to the managed generation commit; the editable gate, the missing-file repair mode, the core-extension lock and the per-role entry rewrite (order preserved, exact declaration removed) are unchanged.",
+   "sha256": "0083b85332a9b7145f865829fec7870f1b13ae16569f74182eaae6224d990ea4"
+  },
+  {
+   "path": "src/tui/project-settings.ts",
+   "by": [
+    "DR25",
+    "P0-8"
+   ],
+   "oracles": [
+    "DR25",
+    "P0-8"
+   ],
+   "note": "Read in full at the 2026-10-05 P0-8 residual round: every project settings bundle commit names the data root the repair boundary -- the same boundary ensureOwnedUserDirectory creates `.projects/<project>` with -- so a mode-000 `.projects` or `<project>` is repaired on the commit and a stray below the data root is collected, never a user's ancestor. Package-activation reconciliation, the role-set seed and the missing-bundle path are unchanged.",
+   "sha256": "204220123ee1c39d674006bb0290444b746359e8012885612504b86219e01455"
+  },
+  {
+   "path": "src/entry/oma-society.ts",
+   "by": [
+    "DR25",
+    "P0-8"
+   ],
+   "oracles": [
+    "DR25",
+    "P0-8"
+   ],
+   "note": "Read in full at the 2026-10-05 P0-8 residual round: deriveSessionSettings names the data root as the commit's repair boundary only when the session's configuration lives beneath it (no `--config`), and project settings field saves and extension toggles commit with the data-root boundary; a Human-placed `--config` bundle keeps `.oma-config` the boundary, so the user's ancestors are never repaired. Project binding, tenure, the rederive-on-save path and the settings surface are unchanged.",
+   "sha256": "f42860ceaadfadc14438ec0e02493f27979c3d2ac68bdae2c55fa71cf31af5d4"
   }
  ],
  "readUnchanged": [

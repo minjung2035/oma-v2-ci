@@ -179,7 +179,8 @@ export function nextEntries(current: readonly string[], id: string, enabled: boo
   return Object.freeze([CORE_EXTENSION, ...rest, ...(enabled ? [id] : [])]);
 }
 
-export function toggleExtension(context: ExtensionContext, id: string, role: "principal" | "workers", enabled: boolean): void {
+export function toggleExtension(context: ExtensionContext, id: string, role: "principal" | "workers", enabled: boolean,
+  ownedFrom?: string): void {
   if (!context.editable) throw new StoreError("UNSUPPORTED_PROFILE", "Extensions cannot be changed in this configuration format");
   if (id === CORE_EXTENSION) return;
   const name = role === "principal" ? context.principalRole : context.workerRole;
@@ -205,6 +206,7 @@ export function toggleExtension(context: ExtensionContext, id: string, role: "pr
   if (problem !== null) throw new StoreError("LIMIT_EXCEEDED", problem);
   // D02/WP13: one generation from the source this screen read; the loader
   // proves the whole published candidate, and a source changed since that read
-  // is refused rather than overwritten.
-  commitManagedEdit(context.snapshot, context.snapshot.config, { [name]: { extensions: entries } });
+  // is refused rather than overwritten. `ownedFrom` is the commit's repair
+  // boundary, named by the layer that knows where the bundle lives (P0-8).
+  commitManagedEdit(context.snapshot, context.snapshot.config, { [name]: { extensions: entries } }, undefined, undefined, ownedFrom);
 }

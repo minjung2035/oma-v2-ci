@@ -296,7 +296,12 @@ async function main(argv: readonly string[]): Promise<void> {
   const deriveSettings = (): Settings => {
     // The project's settings begin as its first society's, or this one's, or the product's defaults.
     projectSettings = ensureProjectSettings(dataRoot, project, libdir, configPath);
-    const derived = deriveSessionSettings(projectSettings, configPath, own());
+    // P0-8: the bundle's repair boundary is the oma-owned ancestor this
+    // entry resolved -- the data root when the session's own configuration
+    // is being derived under it. A `--config` bundle lives where the Human
+    // put it: no ancestor there is oma's, and the managed tail's own name
+    // stays the boundary instead of a user's parent.
+    const derived = deriveSessionSettings(projectSettings, configPath, own(), configArgument === undefined ? dataRoot : undefined);
     leftOut = derived.missing;
     projectSeen = projectVersion();
     return derived.settings;
@@ -437,7 +442,10 @@ async function main(argv: readonly string[]): Promise<void> {
   const saveField = (field: string, value: FieldValue): ReturnType<AppPorts["setField"]> => {
     owning("settings");
     let committed: ReturnType<typeof commitField>;
-    try { committed = commitField(projectSettings ?? readSettings(projectPath), field, value, bootstrapStateOf(observation)); }
+    // The edit lands in the project's settings under `.projects` -- oma's
+    // own tree, so its degraded ancestors are this commit's to repair, and
+    // the data root is the boundary they stand beneath.
+    try { committed = commitField(projectSettings ?? readSettings(projectPath), field, value, bootstrapStateOf(observation), dataRoot); }
     catch (error) { rederive(); readBack(); throw error; }
     rederive();
     // WP15.03: a failed read-back does not undo the commit, and the old
@@ -479,7 +487,7 @@ async function main(argv: readonly string[]): Promise<void> {
       // so it holds in every session of the project and in the next. A toggle
       // that was committed is not reported as unsaved because the read-back
       // failed (P0-5); the fields then say the read-back failed.
-      try { toggleExtension(extensionContext, id, role, enabled); }
+      try { toggleExtension(extensionContext, id, role, enabled, dataRoot); }
       finally { rederive(); readBack(); }
     },
     submitPrompt: (text: string): PromptOutcome => {

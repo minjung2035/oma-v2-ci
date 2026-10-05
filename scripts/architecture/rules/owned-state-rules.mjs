@@ -25,13 +25,18 @@
 // URL(...)` asset is not a path-taking call.
 //
 // What counts as an fs call is resolved by binding, not by spelling: the
-// sync surface (`writeFileSync` and kin, `fs.writeFileSync`) is trusted only
-// where the callee is actually bound to "node:fs", and the async surface
-// (`open`, `readdir`, `rm` -- ordinary words a local function may carry) is
-// trusted only where the callee is bound to "node:fs/promises": a named or
-// namespace or default import, an `fs.promises.*` reach-through, a
-// `promises` named import or alias, a destructured binding, or
-// `await import(...)`. A same-named local function is never an fs call here.
+// `node:fs` surface (`writeFileSync` and kin, `fs.writeFileSync`, and the
+// callback spellings `fs.writeFile`/`writeFile` that answer the same effect
+// asynchronously) is trusted only where the callee is actually bound to
+// "node:fs", and the async surface (`open`, `readdir`, `rm` -- ordinary
+// words a local function may carry) is trusted only where the callee is
+// bound to "node:fs/promises": a named or namespace or default import --
+// `import { default as fs }` spells the namespace, not a member named
+// "default" -- an `fs.promises.*` reach-through, a `promises` named import
+// or alias, a destructured binding, an `await import(...)`, an import-equals
+// require, or a second local name for any of them (`const f = writeFileSync`,
+// `const w = fs.writeFileSync`). A same-named local function is never an fs
+// call here.
 //
 // The observation arm's bound, said once: it audits a call whose argument
 // *mentions* an owned-tail identifier (OWNED_ROOT_NAME). An owned path that
@@ -44,16 +49,24 @@
 import ts from "typescript";
 import { eachNode, filesUnder, finding, sourceOf } from "./shared.mjs";
 
-/** Path-taking fs mutations: a name oma owns is created, changed or removed. */
+/** Path-taking fs mutations: a name oma owns is created, changed or removed.
+ * The `node:fs` module carries the same effects twice -- the `*Sync` spelling
+ * and the callback spelling (`fs.writeFile` is `writeFileSync` whose answer
+ * is a callback), and an owned tail named through either is the same raw
+ * access -- so this surface holds both. */
 const MUTATIONS = new Set([
   "renameSync", "unlinkSync", "rmSync", "rmdirSync", "mkdirSync", "copyFileSync", "cpSync", "symlinkSync", "linkSync",
   "truncateSync", "chmodSync", "chownSync", "utimesSync", "lutimesSync", "mkdtempSync", "createWriteStream",
   "appendFileSync", "writeFileSync", "openSync",
+  "appendFile", "chmod", "chown", "copyFile", "cp", "lchmod", "lchown", "link", "lutimes", "mkdir", "mkdtemp",
+  "open", "rename", "rm", "rmdir", "symlink", "truncate", "unlink", "utimes", "writeFile",
 ]);
-/** Path-taking fs observations: a name oma owns is read, listed or probed. */
+/** Path-taking fs observations: a name oma owns is read, listed or probed --
+ * `*Sync` and callback spellings alike. */
 const OBSERVATIONS = new Set([
   "readdirSync", "opendirSync", "lstatSync", "statSync", "statfsSync", "existsSync", "accessSync",
   "readFileSync", "readlinkSync", "realpathSync", "globSync", "watch", "watchFile", "createReadStream", "openSync",
+  "access", "exists", "glob", "lstat", "opendir", "readdir", "readFile", "readlink", "realpath", "stat", "statfs", "open",
 ]);
 /** The same two sets for the `node:fs/promises` surface -- the promise of an
  * `open` writes or observes exactly the way `openSync`'s flags spell it. */
@@ -191,6 +204,12 @@ const collectFsBindings = source => {
   };
   // Pass 1: the import statements -- everything else resolves against them.
   for (const statement of source.statements) {
+    // `import fs = require("node:fs")` binds the namespace all the same.
+    if (ts.isImportEqualsDeclaration(statement) && ts.isExternalModuleReference(statement.moduleReference) &&
+        ts.isStringLiteralLike(statement.moduleReference.expression) && !statement.isTypeOnly) {
+      bindNamespace(statement.name.text, statement.moduleReference.expression.text);
+      continue;
+    }
     if (!ts.isImportDeclaration(statement) || !ts.isStringLiteralLike(statement.moduleSpecifier)) continue;
     const spec = statement.moduleSpecifier.text;
     const clause = statement.importClause;
@@ -203,16 +222,24 @@ const collectFsBindings = source => {
     for (const element of bound.elements) {
       if (element.isTypeOnly) continue;
       const remote = element.propertyName !== undefined ? element.propertyName.text : element.name.text;
-      if (isAsyncSpec(spec)) asyncNames.set(element.name.text, remote);
-      else if (isFsSpec(spec)) {
-        if (remote === "promises") asyncNamespaces.add(element.name.text);
+      // `import { default as fs }` spells the namespace import: the
+      // module's default is the namespace itself, not a member named
+      // "default" -- `fs.writeFileSync` still calls the fs surface.
+      if (isAsyncSpec(spec)) {
+        if (remote === "default") asyncNamespaces.add(element.name.text);
+        else asyncNames.set(element.name.text, remote);
+      } else if (isFsSpec(spec)) {
+        if (remote === "default") fsNamespaces.add(element.name.text);
+        else if (remote === "promises") asyncNamespaces.add(element.name.text);
         else syncNames.set(element.name.text, remote);
       }
     }
   }
   // Pass 2, to a fixed point: `const fsp = fs.promises` / `const fsp = promises`,
   // `const { open } = fs.promises` / `await import("node:fs/promises")` and
-  // aliases of a namespace already bound -- an alias may name an alias.
+  // aliases of a namespace or a member already bound -- an alias may name an
+  // alias, and `const f = writeFileSync` or `const w = fs.writeFileSync` calls
+  // the same fs write under a second local name.
   let grew = true;
   while (grew) {
     grew = false;
@@ -227,6 +254,22 @@ const collectFsBindings = source => {
           asyncNamespaces.add(node.name.text); grew = true;
         } else if ((initIsFs || imported !== null && isFsSpec(imported)) && !fsNamespaces.has(node.name.text)) {
           fsNamespaces.add(node.name.text); grew = true;
+        } else {
+          // A member of a bound namespace -- or one of its named imports --
+          // bound under a second name still resolves to the remote spelling:
+          // `const f = writeFileSync`, `const w = fs.writeFileSync`,
+          // `const o = fs.promises.open`.
+          const memberRemote = namespaces => ts.isPropertyAccessExpression(init) &&
+            init.name.text !== "promises" && ts.isIdentifier(init.expression) && namespaces.has(init.expression.text)
+            ? init.name.text : undefined;
+          const syncRemote = ts.isIdentifier(init) ? syncNames.get(init.text) : memberRemote(fsNamespaces);
+          const asyncRemote = ts.isIdentifier(init) ? asyncNames.get(init.text)
+            : ts.isPropertyAccessExpression(init) && promisesMember(init.expression) ? init.name.text : memberRemote(asyncNamespaces);
+          if (syncRemote !== undefined && syncNames.get(node.name.text) !== syncRemote) {
+            syncNames.set(node.name.text, syncRemote); grew = true;
+          } else if (asyncRemote !== undefined && asyncNames.get(node.name.text) !== asyncRemote) {
+            asyncNames.set(node.name.text, asyncRemote); grew = true;
+          }
         }
         return;
       }
