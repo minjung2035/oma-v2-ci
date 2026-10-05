@@ -3179,8 +3179,8 @@
    "oracles": [
     "DR34"
    ],
-   "note": "Read in full: the service validates egress.connect params before taking a pooled connection, forwards the frame, and on ok relays the answer then pipes raw -- bytes following the client's request reach the host first; a refused connect relays the framed error and closes both ends. Placeholder/open paths unchanged.",
-   "sha256": "c5919bb9054ac9404ba5828dc5911f4dab0dda7b3cd092ecb5e629de80e2f5b7"
+   "note": "Re-read in full after the second blind-verification round: egress.connect no longer requires a bare answer -- answer.rest is written to the client as the tunnel's first payload (banner-first upstreams are legal), asked.rest still goes to the host first, and riding bytes on a refused answer die with the pair. A placeholder request carrying trailing bytes dies unanswered before a pooled connection is spent on it. The held-lease pair now listens for data on both ends and resumes both, so speech or a clean FIN queued behind unread bytes ends the lease rather than going unheard.",
+   "sha256": "c69d57846b158a9bfdb156541b87f5ba88a02aac1d69bce662bba6d4244cc0d6"
   },
   {
    "path": "src/platform/guest/histories.ts",
@@ -3538,8 +3538,8 @@
    "oracles": [
     "DR34"
    ],
-   "note": "Re-read in full: connectTunnel counts one tunnel per pooled connection -- the reservation is added synchronously before await dial (a burst cannot overshoot), released on dial failure, and released-with-destroy on the run-gone-mid-dial path which now audits once (fail, 'the run ended during the dial'). A dial INVALID_REQUEST is 'refuse', operational errors 'fail' -- the same words the proxy uses. Post-dial work sits in a try that destroys both halves on any throw, and the dispatch boundary catches connectTunnel so a throwing audit sink can never surface an unhandled rejection or orphan a dialed upstream.",
-   "sha256": "ba20e01434692aff4ce10c814bdff94cb5f778f135e46551bf406e977c005756"
+   "note": "Re-read in full after the second blind-verification round: the egress.open dispatch arm now guards the synchronous connect() with try/catch -- a throw (e.g. the run's relay refusing in a connection listener) destroys the socket instead of rejecting the void-dispatched reader into an unhandled rejection. The held-placeholder lease passes readLeadingFrame's rest through: bytes that rode the request destroy the connection unanswered before a run can stand, and the lease's data listener is followed by resume() so speech in a later segment is heard. connectTunnel's reservation, audit-once and close-propagation shape unchanged.",
+   "sha256": "3f7414b3b505138b5b6238f0b06191d4d199f190f8d7250666433817a479efe2"
   },
   {
    "path": "src/platform/host/files.ts",
@@ -4785,8 +4785,8 @@
    "oracles": [
     "DR34"
    ],
-   "note": "Re-read in full after the blind-verification round: the v6 screen is now fail-closed -- embedded-v4 carriers (mapped, 64:ff9b::/96, Teredo, 6to4) unwrap to IPv4 rules, then only 2000::/3 minus its special-purpose ranges is admitted; ::/8, 64:ff9b:1::/48, 100::/64, 5f00::/16 and every unlisted range die at the gate. Audit targets are normalized host:port or the fixed redaction marker -- raw request bytes, userinfo and query strings cannot reach the journal. Non-CONNECT requests get 405 Connection: close + destroySoon, upgrade requests are destroyed, keepAlive is a bounded backstop not infinity, a dead pipelined socket dials nothing, the listener is chmod 0600 with listener+name cleanup on failure, and a post-dial throw (audit sink, dead socket write) destroys both halves.",
-   "sha256": "3ac2b381b2fc15d8b829d88453e215e8bcfe01167ead18d5c050f74a69fab547"
+   "note": "Re-read in full after the second blind-verification round: the v6 screen stays fail-closed and Teredo (2001:0000::/32) is now refused outright rather than unwrapped -- it embeds two IPv4 fields (server in bytes 4..7, bits-inverted client in the tail) and which host a Teredo name reaches depends on tunnel state, so the deprecated carrier dies at its own arm ahead of 2001::/23. The established tunnel now propagates an upstream-initiated close to the client half, so a dead target frees the tunnels slot at once instead of holding it to the idle budget. Audit hygiene, refuse/upgrade/clientError handling, 0600 listener discipline and post-dial orphan-safety unchanged.",
+   "sha256": "9a58fecfcba9c6d506e90720ae207acd8005304b819a24fbeb2dce7b84b22ebc"
   },
   {
    "path": "src/runtime/deployment-manifest.ts",
@@ -4817,8 +4817,8 @@
    "oracles": [
     "DR34"
    ],
-   "note": "Re-read in full: oneFrame now buffers bytes and slices exactly the first frame, returning {frame, rest} -- bytes riding with the answer are never fed back to the parser (the FRAME_TOO_LARGE poison) and never dropped. requestEgressConnect unshifts rest so tunnel payload survives; requestEgressPlaceholder destroys the lease on non-empty rest, so post-answer bytes still end the run (AV-15) even inside the answer's own segment.",
-   "sha256": "6d3f0455670d725825093cd4f65695e304817e76e62fa53b3202836f01f2415e"
+   "note": "Re-read in full after the second blind-verification round: oneFrame still hands the answered socket back paused with {frame, rest}, and requestEgressPlaceholder now resumes it after installing the post-answer speech listener -- a 'data' listener alone never resumes a paused socket, so late bytes (and a clean FIN behind unread bytes) previously went unheard and the lease outlived the run. requestEgressConnect's rest unshift into the tunnel is unchanged.",
+   "sha256": "913fbb630594e2b1efb3a1b251ae45fa19501a7770d01d6d5d21b16cf4fd32ba"
   },
   {
    "path": "src/runtime/engine-auth.ts",

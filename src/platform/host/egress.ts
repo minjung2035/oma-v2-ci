@@ -89,8 +89,16 @@ export class EgressHost {
     const frame = first.frame;
     const problem = requestProblem(frame);
     if (problem !== null || frame.key !== undefined) { socket.destroy(); return; }
-    if (frame.method === "egress.placeholder") { await this.placeholder(socket, frame.id as string, frame.params).catch(() => socket.destroy()); return; }
-    if (frame.method === "egress.open") { this.connect(socket, frame.params, first.rest); return; }
+    if (frame.method === "egress.placeholder") { await this.placeholder(socket, frame.id as string, frame.params, first.rest).catch(() => socket.destroy()); return; }
+    if (frame.method === "egress.open") {
+      // connect() runs synchronously at dispatch: a throw inside it -- the
+      // run's relay refusing the socket -- ends the connection the same way
+      // the async arms' .catch does; a rejection here would reach the
+      // process unhandled, because this reader is void-dispatched.
+      try { this.connect(socket, frame.params, first.rest); }
+      catch { socket.destroy(); }
+      return;
+    }
     if (frame.method === "egress.connect") {
       // The dispatch boundary owns the failure: a throw inside the request --
       // a dead socket write, a journal that refused its record -- ends the
@@ -101,7 +109,10 @@ export class EgressHost {
     socket.destroy();
   }
 
-  private async placeholder(socket: Socket, id: string, params: unknown): Promise<void> {
+  /** `rest` is whatever rode in after the request frame: the connection is
+   * read once, so any such byte is speech before an answer -- on a held
+   * lease it ends the connection before a run can stand. */
+  private async placeholder(socket: Socket, id: string, params: unknown, rest: Buffer): Promise<void> {
     const answer = (value: Record<string, unknown>): void => { socket.end(encodeFrame({ v: 1, id, ...value })); };
     const problem = egressPlaceholderProblem(params);
     if (problem !== null) { answer({ ok: false, error: { code: "INVALID_REQUEST", message: problem, retry: "never" } }); return; }
@@ -129,7 +140,15 @@ export class EgressHost {
       } else {
         socket.once("close", () => { void this.release(placeholderId).catch(() => undefined); });
         socket.on("data", () => { socket.destroy(); });
+        // Bytes that rode with the request are the same break seen from a
+        // later segment: the connection dies unanswered, the run with it
+        // (the "close" listener above releases it).
+        if (rest.length > 0) { socket.destroy(); return; }
         socket.write(encodeFrame({ v: 1, id, ok: true, result }));
+        // readLeadingFrame left the socket paused; a "data" listener alone
+        // does not resume it, so speech in a later segment would never have
+        // been heard. The lease flows now that its listeners stand.
+        socket.resume();
       }
       void this.fill();
     } catch (error) {

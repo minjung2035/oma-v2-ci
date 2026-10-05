@@ -1181,3 +1181,45 @@ written rather than where macOS would discover it. A refused HTTP request
 gets `Connection: close` and its socket's destruction with the response —
 an idle keep-alive or an `Upgrade` header cannot hold a listener slot, and
 bytes pipelined behind a refused request die unread.
+
+**Addendum (second blind-verification round, 2026-10-07).** Seven
+socket-lifecycle findings against the paused-socket seam are settled in the
+implementation; two decisions are recorded here because they generalize.
+
+*A paused socket is deaf, not dead — every `readLeadingFrame`/`oneFrame`
+consumer must resume what it still needs to hear.* The frame readers return
+their socket paused so nothing that arrives before the next reader attaches
+is lost; that is correct at handoff and wrong to leave standing. A `"data"`
+listener does not resume it, and while a bare FIN still surfaces as `"end"`
+even paused, bytes buffered ahead of a FIN are never read — so a peer that
+spoke and then closed cleanly went unheard. The rule now: whoever keeps the
+socket installs its listeners *and* resumes it. The forwarder's placeholder
+lease resumes so late post-answer speech ends the run; the host's held lease
+resumes and also judges `rest` that rode the request frame; the guest's held
+pair listens for `data` on both ends and resumes both. `receiveDeclared`,
+`egress.open` piping and `requestEgressConnect` already honored the contract
+— the audit found no other consumer that did not.
+
+*Teredo is refused, not screened.* A Teredo address embeds *two* IPv4 fields
+— the server in bytes 4–7 and the bits-inverted client in the tail — and
+which host a Teredo name actually reaches depends on the host's tunnel state
+at dial time, so screening even both fields would be fragile against a
+deprecated carrier that no public HTTPS endpoint is reached through.
+`2001:0000::/32` is refused outright at its own arm, ahead of the
+`2001::/23` arm that would catch it anyway; 6to4 keeps its single-field
+unwrap because the site IPv4 *is* the destination there.
+
+*Rest is payload for tunnels, silence for leases — decided per arm, never
+dropped.* `readLeadingFrame` returns `{frame, rest}` and `rest` semantics
+follow the request's contract: for `egress.connect` it is already tunnel
+bytes — a banner-first upstream is legal — so the guest relays `answer.rest`
+to the client and `asked.rest` to the host rather than demanding a bare
+answer; for `egress.placeholder` and the held lease anything past the frame
+is protocol speech and ends the connection unanswered, at the guest's own
+reader and at the host's alike. Two structural fixes stand behind the
+semantics: the CONNECT proxy propagates an upstream-initiated close to the
+client half (a dead target frees the tunnel slot at once instead of at the
+idle budget), and the host's `egress.open` dispatch wraps the synchronous
+`connect()` in the same fail-closed shape the async arms' `.catch` had — a
+throw inside it ends the connection, never escapes a void-dispatched reader
+as an unhandled rejection.

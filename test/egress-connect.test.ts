@@ -131,8 +131,9 @@ test("DR34: no private, loopback, link-local, CGNAT, reserved or special-use add
     "2001:4860:4860::8888", "2606:4700:4700::1111",
     "::ffff:8.8.8.8", "64:ff9b::8.8.8.8", "2002:0808:0808::"])
     assert.equal(isPublicConnectAddress(address), true, address);
-  // Teredo/6to4 wrapping a *public* IPv4 is not refused by the embedded
-  // address; the spelling itself is still carrier space the dialer may use.
+  // 6to4 wrapping a *public* IPv4 is not refused by the embedded address; the
+  // spelling itself is still carrier space the dialer may use. Teredo is the
+  // exception: refused outright, whatever it embeds (see the fail-closed test).
 });
 
 test("DR34: the v6 screen fails closed -- global unicast minus its special-purpose ranges, nothing else", () => {
@@ -162,13 +163,26 @@ test("DR34: the v6 screen fails closed -- global unicast minus its special-purpo
     "2001:db7::1",              // just past 2001:db8::/32's documentation boundary
     "3fe0::1",                  // just outside documentation 3fff::/20
     "2002:0808:0808::", "::ffff:8.8.8.8", "64:ff9b::8.8.8.8",
-    // Teredo: the embedded client IPv4 (bits-inverted tail) decides -- f7f7:f7f7 is 8.8.8.8.
-    "2001:0000:0808:0808:8000:63bf:f7f7:f7f7",
   ]) assert.equal(isPublicConnectAddress(address), true, address);
-  // Teredo/6to4 wrapping a private answer still refuse on the embedded value:
-  // f5ff:fffe embeds 10.0.0.1, 80ff:fffe embeds 127.0.0.1.
-  for (const address of ["2001:0000:0808:0808:8000:63bf:f5ff:fffe", "2001:0000:0808:0808:8000:63bf:80ff:fffe"])
-    assert.equal(isPublicConnectAddress(address), false, address);
+  // Teredo (2001:0000::/32) is refused outright, not unwrapped: it embeds TWO
+  // IPv4 fields -- the server in bytes 4..7 and the bits-inverted client in
+  // the tail -- and which host a Teredo name reaches depends on the host's
+  // tunnel state, so screening both fields is fragile. A deprecated carrier
+  // that no public HTTPS endpoint is reached through dies at the 2001::/23
+  // arm. Even a fully-public spelling (server 8.8.8.8, client 8.8.8.8 via
+  // f7f7:f7f7) refuses.
+  for (const address of [
+    "2001:0000:0808:0808:8000:63bf:f7f7:f7f7",  // both embedded fields public
+    "2001:0000:0a00:0001:8000:63bf:f7f7:f7f7",  // private server, public client
+    "2001:0000:7f00:0001:8000:63bf:f7f7:f7f7",  // loopback server, public client
+    "2001:0000:c0a8:0101:8000:63bf:f7f7:f7f7",  // RFC1918 server, public client
+    "2001:0000:0808:0808:8000:63bf:f5ff:fffe",  // public server, private client
+  ]) assert.equal(isPublicConnectAddress(address), false, address);
+  // 6to4 wrapping a private answer still refuses on the embedded value, and
+  // its public form stays admitted: the site v4 in bytes 2..5 IS the
+  // destination, so the single unwrap is sound -- unlike Teredo's.
+  assert.equal(isPublicConnectAddress("2002:0a00:0001::"), false);
+  assert.equal(isPublicConnectAddress("2002:0808:0808::"), true);
 });
 
 /* ---------------- the pinned dial ---------------- */
@@ -442,6 +456,30 @@ test("DR34: a failure after the dial ends the upstream it opened -- nothing is o
   assert.equal(dialed.length, 1, "the dial happened before the throw");
   await until(() => dialed[0]!.destroyed, "the upstream the proxy opened is destroyed with the client");
   assert.ok(socket.destroyed, "the client socket is destroyed too");
+});
+
+test("DR34: an upstream-initiated close ends the tunnel and frees its slot at once", async t => {
+  // The target's end of the tunnel dying -- here a RST from the server side
+  // of the dialed connection -- must end the client half too. Without the
+  // propagation the client stayed open and held its `tunnels` slot until the
+  // idle budget (120s) ran out: a slot the run could never reuse.
+  const upstreamPeers: Socket[] = [];
+  const server = createServer(socket => { upstreamPeers.push(socket); socket.pipe(socket); });
+  await once(server.listen(0, "127.0.0.1"), "listening");
+  t.after(() => { server.close(); });
+  const port = (server.address() as { port: number }).port;
+  const { proxy, socketPath } = await proxyWorld(t, async () => connect({ host: "127.0.0.1", port }));
+  const { status, socket } = await connectRaw(socketPath, "CONNECT registry.npmjs.org:443 HTTP/1.1\r\n\r\n");
+  assert.equal(status, 200);
+  assert.equal(proxy.activeTunnels, 1);
+  t.after(() => socket.destroy());
+  upstreamPeers[0]!.resetAndDestroy();
+  const [closed] = await Promise.race([
+    once(socket, "close").then(() => [true]),
+    new Promise<boolean[]>(r => setTimeout(() => r([false]), 3000)),
+  ]);
+  assert.equal(closed, true, "the client half followed the upstream's end");
+  await until(() => proxy.activeTunnels === 0, "the tunnel slot was freed without waiting for idleMs");
 });
 
 test("DR34: closing the proxy ends its tunnels and removes its name", async t => {

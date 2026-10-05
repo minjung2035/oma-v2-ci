@@ -106,11 +106,15 @@ export async function requestEgressPlaceholder(ask: EgressAsk, run: EgressPlaceh
   const problem = egressPlaceholderResultProblem(answer.result);
   if (problem !== null) { socket.destroy(); throw new StoreError("BROKER_UNAVAILABLE", `the host's placeholder answer is malformed (${problem})`); }
   // The lease is read no more: anything the host says after the answer ends it
-  // -- bytes that rode inside the answer's own segment included.
+  // -- bytes that rode inside the answer's own segment included, and bytes
+  // that arrive in a later segment, which reach the listener only if the
+  // socket flows again: oneFrame hands it back paused, and a "data" listener
+  // alone does not resume it.
   if (rest.length > 0) { socket.destroy(); }
   // Its end -- however it came, a break included -- is the run's end (AV-15).
   socket.on("data", () => { socket.destroy(); });
   socket.once("error", () => { socket.destroy(); });
+  if (!socket.destroyed) socket.resume();
   const endListeners = new Set<() => void>();
   socket.once("close", () => { const listeners = [...endListeners]; endListeners.clear(); for (const listener of listeners) listener(); });
   return { ...(answer.result as unknown as EgressPlaceholderResult),

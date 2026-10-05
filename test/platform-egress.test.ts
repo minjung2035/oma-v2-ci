@@ -610,3 +610,208 @@ test("DR34: bytes riding with the host's answer frame are tunnel bytes, and post
   const ended = new Promise<void>(r => lease.ended(r));
   await Promise.race([ended, new Promise<void>((_, fail) => setTimeout(() => fail(new Error("the lease outlived bytes after its answer")), 3000))]);
 });
+
+test("DR34: bytes reaching the placeholder lease in a LATER segment end it -- a paused socket never would", async t => {
+  // oneFrame hands the answered socket back paused; a "data" listener does
+  // not resume it, so speech that arrives after the answer's own segment was
+  // never observed -- the lease, and the run it stands for, lived on. The
+  // lease must hear late bytes the same way it hears bytes that rode with
+  // the answer (AV-15).
+  const { requestEgressPlaceholder } = await import("../src/runtime/egress-forwarder.js");
+  const dir = mkdtempSync(join(tmpdir(), "oma-egress-late-"));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  const serviceSocket = join(dir, "e.sock");
+  const peers: Socket[] = [];
+  const service = (await import("node:net")).createServer(client => {
+    peers.push(client);
+    client.once("data", () => {
+      client.write(encodeFrame({ v: 1, id: "e1", ok: true,
+        result: { placeholderId: randomUUID(), placeholder: "p".repeat(20), provider: "anthropic", model: "m" } }));
+      // A distinct later segment -- the arrival the paused lease was deaf to.
+      setTimeout(() => { if (!client.destroyed) client.write("the host spoke late"); }, 80);
+    });
+  });
+  await once(service.listen(serviceSocket), "listening");
+  t.after(() => { for (const peer of peers) peer.destroy(); service.close(); });
+  const lease = await requestEgressPlaceholder({ socket: serviceSocket, frameBytes: PLATFORM_FRAME_BYTES, deadlineMs: 5000 },
+    RUN, "anthropic", "current", 5);
+  t.after(() => lease.release());
+  const ended = new Promise<void>(r => lease.ended(r));
+  await Promise.race([ended,
+    new Promise<void>((_, fail) => setTimeout(() => fail(new Error("the lease never heard late post-answer bytes")), 3000))]);
+});
+
+test("DR34/AV-15: the host's held lease observes the run's end however it arrives -- speech in a later segment, or bytes that rode the request", async t => {
+  const { host, pool, serviceSocket } = await world(t);
+  await host.fill();
+  await until(() => pool.size === 2, "the pool");
+
+  // (a) Speech on the answered lease, in a later segment. readLeadingFrame
+  // left the socket paused and the "data" listener alone does not resume it,
+  // so the run never ended. Now the lease flows: anything it says is the
+  // run's end, the same as its close.
+  const held = await ask(serviceSocket, "egress.placeholder", { hold: true, credentialRef: "engine-managed", provider: "anthropic", model: "current", run: RUN });
+  t.after(() => held.destroy());
+  const { frame } = await readLeadingFrame(held, PLATFORM_FRAME_BYTES, 5000);
+  assert.equal(frame.ok, true, JSON.stringify(frame));
+  assert.equal(host.activeRuns, 1);
+  // Attach before the lease can end so a prompt close is not missed.
+  const heldClosed = once(held, "close");
+  held.write("the guest spoke on its lease");
+  held.resume();
+  await until(() => host.activeRuns === 0, "late speech on the held lease must release the run");
+  await heldClosed;
+
+  // (b) Bytes that rode in with the request frame are the same break seen at
+  // dispatch: the held connection is read once, so anything past the frame
+  // is speech before an answer -- the connection dies and no run is made.
+  const ridden = connect(serviceSocket);
+  t.after(() => ridden.destroy());
+  await once(ridden, "connect");
+  ridden.write(Buffer.concat([
+    encodeFrame({ v: 1, id: "e2", method: "egress.placeholder",
+      params: { hold: true, credentialRef: "engine-managed", provider: "anthropic", model: "current", run: RUN } }),
+    Buffer.from("bytes that are no frame"),
+  ]));
+  await assert.rejects(readLeadingFrame(ridden, PLATFORM_FRAME_BYTES, 5000),
+    (error: unknown) => error instanceof StoreError && error.code === "BROKER_UNAVAILABLE");
+  assert.equal(host.activeRuns, 0, "a request carrying trailing bytes made no run");
+  await until(() => pool.size >= 2, "the pool refilled after the broken request");
+
+  // (c) The same break at the host's own reader: bytes that rode the request
+  // on a pooled connection -- a guest that spoke past its frame -- end the
+  // connection unanswered before a run stands.
+  const dir = mkdtempSync(join(tmpdir(), "oma-egress-held-"));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  const pair = (await import("node:net")).createServer();
+  const accepted = once(pair, "connection");
+  await once(pair.listen(join(dir, "pair.sock")), "listening");
+  t.after(() => { pair.close(); });
+  const guestEnd = connect(join(dir, "pair.sock"));
+  const [hostEnd] = await accepted;
+  await once(guestEnd, "connect");
+  t.after(() => { hostEnd.destroy(); guestEnd.destroy(); });
+  type HostSeams = { await(socket: Socket, rest: Buffer): Promise<void> };
+  const settled = (host as unknown as HostSeams).await(hostEnd, Buffer.alloc(0));
+  guestEnd.write(Buffer.concat([
+    encodeFrame({ v: 1, id: "e3", method: "egress.placeholder",
+      params: { hold: true, credentialRef: "engine-managed", provider: "anthropic", model: "current", run: RUN } }),
+    Buffer.from("bytes that rode the request"),
+  ]));
+  await settled;
+  await until(() => hostEnd.destroyed && host.activeRuns === 0,
+    "a pooled request carrying trailing bytes is destroyed and its run released");
+});
+
+test("DR34: a synchronous throw inside egress.open's dispatch ends the connection -- never an unhandled rejection", async t => {
+  // connect() runs synchronously at dispatch: a throw inside it -- here a
+  // 'connection' listener on the run's relay standing in for any failure in
+  // accept -- must end the connection like the async arms' .catch does, not
+  // reject the pooled socket's reader (which is `void`-dispatched, so its
+  // rejection would reach the process unhandled). Driving the dispatch seam
+  // directly keeps the test the oracle: on the defect the await itself
+  // rejected, and the socket stayed open.
+  const { requestEgressPlaceholder } = await import("../src/runtime/egress-forwarder.js");
+  const { host, pool, serviceSocket } = await world(t);
+  await host.fill();
+  await until(() => pool.size === 2, "the pool");
+  const askOpts = { socket: serviceSocket, frameBytes: PLATFORM_FRAME_BYTES, deadlineMs: 5000 };
+  const issued = await requestEgressPlaceholder(askOpts, RUN, "anthropic", "current", 5);
+  type RelayServer = { server: { on(event: string, listener: () => void): unknown } };
+  type HostSeams = { runs: Map<string, { relay: RelayServer }>; await(socket: Socket, rest: Buffer): Promise<void> };
+  const internal = host as unknown as HostSeams;
+  const run = internal.runs.get(issued.placeholderId);
+  assert.ok(run, "the run was made");
+  run.relay.server.on("connection", () => { throw new Error("connection listener failed"); });
+  // A socket pair stands in for a pooled connection whose frame is the
+  // guest's egress.open request: the host end goes to await(), my end speaks.
+  const dir = mkdtempSync(join(tmpdir(), "oma-egress-dispatch-"));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  const pairPath = join(dir, "pair.sock");
+  const pair = (await import("node:net")).createServer();
+  const accepted = once(pair, "connection");
+  await once(pair.listen(pairPath), "listening");
+  t.after(() => { pair.close(); });
+  const guestEnd = connect(pairPath);
+  const [hostEnd] = await accepted;
+  await once(guestEnd, "connect");
+  // Destroy the pair's ends before pair.close() runs (afters unwind LIFO),
+  // so the server is never left waiting on a connection it still holds.
+  t.after(() => { hostEnd.destroy(); guestEnd.destroy(); });
+  const settled = internal.await(hostEnd, Buffer.alloc(0));
+  guestEnd.write(encodeFrame({ v: 1, id: "e1", method: "egress.open",
+    params: { placeholderId: issued.placeholderId, ...RUN, modelProfile: "default" } }));
+  // The contract: dispatch settles cleanly (never rejects to an unwatched
+  // caller) and the connection it served is destroyed.
+  await settled;
+  await until(() => (hostEnd as Socket).destroyed, "the failed dispatch destroyed the pooled connection");
+  assert.equal(host.activeRuns, 1, "the run outlives a failed dispatch");
+  guestEnd.destroy();
+});
+
+test("DR34: bytes riding the host's connect answer are the tunnel's first payload on the guest side too", async t => {
+  // §4.7/DR34 rest-semantics are symmetric: the answer frame ends the framed
+  // exchange and whatever followed it is already tunnel bytes -- a
+  // banner-first upstream (a 443 peer that speaks before being spoken to)
+  // is legal. The guest's connect arm used to require a bare answer and
+  // killed a legitimate tunnel.
+  const dir = mkdtempSync(join(tmpdir(), "oma-egress-guest-rest-"));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  const pool = new EgressPool();
+  // A socket pair stands in for the pooled host connection: the parked end
+  // is the guest's, the peer plays the host answering ok with bytes riding.
+  const pairPath = join(dir, "pair.sock");
+  const pair = (await import("node:net")).createServer(socket => { pool.park(socket); });
+  await once(pair.listen(pairPath), "listening");
+  t.after(() => { pair.close(); });
+  const hostPeer = connect(pairPath);
+  t.after(() => hostPeer.destroy());
+  await once(hostPeer, "connect");
+  await until(() => pool.size === 1, "the pooled connection parked");
+  hostPeer.once("data", () => {
+    hostPeer.write(Buffer.concat([
+      encodeFrame({ v: 1, id: "e1", ok: true, result: {} }),
+      Buffer.from("banner-first"),
+    ]));
+  });
+  const serviceSocket = join(dir, "e.sock");
+  const service = await startEgressService({ socketPath: serviceSocket, pool, frameBytes: PLATFORM_FRAME_BYTES, deadlineMs: 5000 });
+  t.after(() => { service.close(); });
+  const client = await ask(serviceSocket, "egress.connect", {
+    placeholderId: randomUUID(), run: RUN, host: "registry.npmjs.org", port: 443, role: "worker", allow: ["registry.npmjs.org"] });
+  t.after(() => client.destroy());
+  const { frame, rest } = await readLeadingFrame(client, PLATFORM_FRAME_BYTES, 5000);
+  assert.equal(frame.ok, true, JSON.stringify(frame));
+  const banner = rest.length > 0 ? Promise.resolve(String(rest)) : (async () => {
+    const got = Promise.race([
+      once(client, "data").then(chunks => String(chunks[0])),
+      once(client, "close").then(() => "CLOSED"),
+    ]);
+    client.resume();
+    return got;
+  })();
+  assert.equal(await banner, "banner-first", "bytes after the host's ok reached the client as tunnel payload");
+});
+
+test("AV-15/DR34: the guest's held lease hears its end however it arrives -- speech, or the clean FIN it precedes", async t => {
+  // The held placeholder pair ends when either end ends, and speech on it is
+  // no protocol message: it ends the lease. A socket the frame reader left
+  // paused does fire "end" on a bare FIN, but bytes buffered ahead of the
+  // FIN are never read -- the end the lease was for went unheard and the run
+  // outlived its client.
+  const { host, pool, serviceSocket } = await world(t);
+  await host.fill();
+  await until(() => pool.size === 2, "the pool");
+  const socket = await ask(serviceSocket, "egress.placeholder", { hold: true, credentialRef: "engine-managed", provider: "anthropic", model: "current", run: RUN });
+  t.after(() => socket.destroy());
+  const { frame } = await readLeadingFrame(socket, PLATFORM_FRAME_BYTES, 5000);
+  assert.equal(frame.ok, true, JSON.stringify(frame));
+  assert.equal(host.activeRuns, 1);
+  // Attach before the lease can end so a prompt close is not missed.
+  const closed = once(socket, "close");
+  socket.write("speech the lease must not ignore");
+  socket.end();
+  socket.resume();
+  await until(() => host.activeRuns === 0, "the run did not end on the client's speech and clean FIN");
+  await closed;
+});

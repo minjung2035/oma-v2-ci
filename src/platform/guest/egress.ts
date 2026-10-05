@@ -97,6 +97,11 @@ async function serve(client: Socket, options: EgressServiceOptions): Promise<voi
     : frame.method === "egress.open" ? egressOpenProblem(frame.params)
     : "the first message is egress.placeholder, egress.connect or egress.open");
   if (problem !== null || frame.key !== undefined) { client.destroy(); return; }
+  // A placeholder request is read once, as on the host: bytes that rode its
+  // frame are no message -- the request dies unanswered before a pooled
+  // connection is spent on it. (The open and connect arms instead relay
+  // `rest`: it is payload there.)
+  if (frame.method === "egress.placeholder" && asked.rest.length > 0) { client.destroy(); return; }
   const host = options.pool.take();
   if (host === null) { client.destroy(); return; }
   host.on("error", () => { host.destroy(); client.destroy(); });
@@ -109,8 +114,13 @@ async function serve(client: Socket, options: EgressServiceOptions): Promise<voi
     let connectKept = false;
     try {
       const answer = await readLeadingFrame(host, options.frameBytes, options.deadlineMs);
-      if (answer.frame.ok === true && answer.rest.length === 0) {
+      if (answer.frame.ok === true) {
         client.write(encodeFrame(answer.frame));
+        // Bytes that rode the answer are the tunnel's first payload -- a
+        // banner-first upstream speaks before it is spoken to; bytes that
+        // rode the request go to the host first. The framed exchange is
+        // over on both sides now.
+        if (answer.rest.length > 0) client.write(answer.rest);
         if (asked.rest.length > 0) host.write(asked.rest);
         client.pipe(host); host.pipe(client);
         host.resume(); client.resume();
@@ -120,8 +130,8 @@ async function serve(client: Socket, options: EgressServiceOptions): Promise<voi
         connectKept = true;
         return;
       }
-      // A refused connect still earns its framed answer; bytes after `ok`
-      // would be a protocol break, so a bare answer means close.
+      // A refused connect still earns its framed answer; bytes that rode a
+      // refusal are no tunnel and die with the pair.
       client.end(encodeFrame(answer.frame));
     } catch {
       client.destroy();
@@ -152,9 +162,15 @@ async function serve(client: Socket, options: EgressServiceOptions): Promise<voi
     if (answer.frame.ok === true && (frame.params as { hold?: unknown }).hold === true) {
       if (answer.rest.length > 0) { host.destroy(); client.destroy(); return; }
       client.write(encodeFrame(answer.frame));
+      // The lease is read no more, so speech on it is its end too -- and it
+      // must be heard: a socket the frame reader left paused fires "end" on
+      // a bare FIN, but bytes buffered ahead of a FIN are never read, so a
+      // client that spoke and then closed cleanly went unheard. The pair
+      // flows now that its listeners stand.
       const endLease = (): void => { client.destroy(); host.destroy(); };
-      client.once("end", endLease); client.once("close", endLease);
-      host.once("end", endLease); host.once("close", endLease);
+      client.once("end", endLease); client.once("close", endLease); client.on("data", endLease);
+      host.once("end", endLease); host.once("close", endLease); host.on("data", endLease);
+      client.resume(); host.resume();
       kept = true;
       return;
     }

@@ -720,7 +720,7 @@
     },
     {
       "path": "src/platform/guest/egress.ts",
-      "sha256": "c5919bb9054ac9404ba5828dc5911f4dab0dda7b3cd092ecb5e629de80e2f5b7"
+      "sha256": "c69d57846b158a9bfdb156541b87f5ba88a02aac1d69bce662bba6d4244cc0d6"
     },
     {
       "path": "src/platform/guest/histories.ts",
@@ -796,7 +796,7 @@
     },
     {
       "path": "src/platform/host/egress.ts",
-      "sha256": "ba20e01434692aff4ce10c814bdff94cb5f778f135e46551bf406e977c005756"
+      "sha256": "3f7414b3b505138b5b6238f0b06191d4d199f190f8d7250666433817a479efe2"
     },
     {
       "path": "src/platform/host/files.ts",
@@ -1072,7 +1072,7 @@
     },
     {
       "path": "src/runtime/connect-proxy.ts",
-      "sha256": "3ac2b381b2fc15d8b829d88453e215e8bcfe01167ead18d5c050f74a69fab547"
+      "sha256": "9a58fecfcba9c6d506e90720ae207acd8005304b819a24fbeb2dce7b84b22ebc"
     },
     {
       "path": "src/runtime/deployment-manifest.ts",
@@ -1080,7 +1080,7 @@
     },
     {
       "path": "src/runtime/egress-forwarder.ts",
-      "sha256": "6d3f0455670d725825093cd4f65695e304817e76e62fa53b3202836f01f2415e"
+      "sha256": "913fbb630594e2b1efb3a1b251ae45fa19501a7770d01d6d5d21b16cf4fd32ba"
     },
     {
       "path": "src/runtime/engine-auth.ts",

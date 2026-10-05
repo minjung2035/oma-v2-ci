@@ -636,6 +636,25 @@ name collision/intended surface/hidden 미활성/idempotent reload/provenance/
 
 ## 9. 진행 로그
 
+- 2026-10-07 (egress 후반 2차): DR34 맹검증 2라운드 — paused-socket seam의
+  수명주기 결함 7건을 fail→pass 회귀로 정산. ① CONNECT proxy의 upstream close가
+  client로 전파되지 않아 `tunnels` 슬롯이 idle budget까지 묶이던 것 — 양방향
+  close 전파로 즉시 해제. ② forwarder placeholder lease가 `oneFrame` 반환 뒤
+  paused로 남아 나중 세그먼트의 post-answer bytes를 못 듣던 것 — 리스너 설치 후
+  `socket.resume()`. ③ `egress.open` dispatch가 동기 `connect()` throw를 잡지
+  않아 void-dispatched reader의 unhandled rejection이 되던 것 — try/catch로
+  socket 종료. ④ Teredo는 embedded v4 두 필드(screen 불가, 도달이 tunnel 상태
+  의존)라 unwrap 대신 `2001:0000::/32`를 통째로 거절로 결정 — deprecated carrier.
+  ⑤ guest `egress.connect`가 `answer.rest`를 거절하던 것 — rest는 tunnel의 첫
+  payload라 client로 relay(`asked.rest`는 host로) — forwarder의 rest 의미와
+  대칭. ⑥ host held lease가 resume 없이 `first.rest`도 버리던 것 — rest 있는
+  요청은 unanswered로 종료, 리스너 뒤 resume. ⑦ guest held lease 쌍이 paused+
+  data-리스너 없음이라 speech 뒤 clean FIN을 놓치던 것 — 양쪽에 data/end 리스너+
+  resume. 계약 기록: `readLeadingFrame`/`oneFrame`은 paused로 반환 — 이어지는
+  소유자가 리스너와 함께 resume할 책임; `receiveDeclared`·`egress.open`·
+  `requestEgressConnect`는 이미 준수. DR34 addendum 2라운드에 pause/resume·
+  Teredo·rest 결정 기록. NOT_RUN: macOS native·systemd·kernel/powercut·
+  provider credential·release qualification 레인(로컬 환경 없음).
 - 2026-10-06 (egress): UX-08/S-07 재개 — DR34 project egress. `HostConfigV1.egress`
   (baseline `allow` + `roles.<role>`)가 유일한 Human 표면이고, 절이 없으면 socket도
   변수도 없다. runner가 delivery당 CONNECT proxy(`src/runtime/connect-proxy.ts`)를

@@ -138,8 +138,10 @@ function v6Bytes(ip: string): number[] | null {
  * unrecognizable answer is not public.
  *
  * The v6 model is fail-closed allowlist, not denylist (DR34): embedded-IPv4
- * carrier formats are unwrapped and judged by their embedded address first,
- * then only `2000::/3` -- global unicast -- is admitted, minus the
+ * carrier formats are unwrapped and judged by their embedded address first
+ * (Teredo excepted -- its two embedded fields and tunnel-state-dependent
+ * reachability make it unscreenable, so it is refused outright), then only
+ * `2000::/3` -- global unicast -- is admitted, minus the
  * special-purpose ranges the IANA registry assigns inside it. Everything
  * outside `2000::/3` dies at the gate: `::/8` (unspecified, loopback and the
  * deprecated v4-compatible space), `64:ff9b:1::/48` (RFC 8215 local-use
@@ -167,9 +169,13 @@ export function isPublicConnectAddress(address: string): boolean {
   // The admission gate: only global unicast is ever a public destination.
   if ((at(0) & 0xe0) !== 0x20) return false;
   // Inside 2000::/3, special-purpose space is refused or unwrapped:
-  // 2001::/32 Teredo -- the client's IPv4 is the last 32 bits, bits inverted.
-  if (at(0) === 0x20 && at(1) === 0x01 && at(2) === 0x00 && at(3) === 0x00)
-    return !v4AddressPrivate(`${at(12) ^ 0xff}.${at(13) ^ 0xff}.${at(14) ^ 0xff}.${at(15) ^ 0xff}`);
+  // 2001:0000::/32 Teredo is refused outright, not unwrapped -- it embeds
+  // TWO IPv4 fields (the server in bytes 4..7 and the bits-inverted client
+  // in the tail), and which host a Teredo name actually reaches depends on
+  // the host's tunnel state, so screening both fields is fragile. A
+  // deprecated carrier no public HTTPS endpoint is reached through simply
+  // dies here, ahead of the 2001::/23 arm that would catch it anyway.
+  if (at(0) === 0x20 && at(1) === 0x01 && at(2) === 0x00 && at(3) === 0x00) return false;
   // 2001::/23 IETF protocol assignments: benchmark 2001:2::/48, AMT
   // 2001:3::/32, AS112 2001:4:112::/48, ORCHID 2001:10::/28 and ORCHIDv2
   // 2001:20::/28, the anycast stubs and every sibling -- none names a host a
@@ -369,6 +375,10 @@ export class ConnectProxy {
         client.setTimeout(idleMs); dialed.setTimeout(idleMs);
         client.once("timeout", drop); dialed.once("timeout", drop);
         dialed.once("error", () => dialed.destroy());
+        // The target's end is the tunnel's too: without this a dead upstream
+        // left the client half holding its `tunnels` slot until the idle
+        // budget ran out -- a slot the run could never reuse sooner.
+        dialed.once("close", () => client.destroy());
         tunnels.add(client);
         dialed.pipe(client); client.pipe(dialed);
       })().catch(drop);
