@@ -339,6 +339,7 @@ src/tui/interactive-editor.ts
 src/tui/keys.ts
 src/tui/limits.ts
 src/tui/login.ts
+src/tui/mail-names.ts
 src/tui/model.ts
 src/tui/open-tui-brand.ts
 src/tui/packages-apply.ts

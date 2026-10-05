@@ -475,7 +475,11 @@ async function main(argv: readonly string[]): Promise<void> {
       unread: unreadCount(mailbox),
       observation,
     }),
-    mail: () => readMailbox(mailbox),
+    // B4: the mail rows name parties by the roster the broker's status view
+    // last observed -- while none has been observed, names stay what the
+    // headers say rather than inventing roles.
+    mail: () => readMailbox(mailbox,
+      observation.kind === "observed" ? observation.statuses.map(status => status.agent) : undefined),
     extensions: (): readonly ExtensionRow[] => extensionContext.rows,
     // P0V-42: a stored message is read within the most one of this society's
     // messages can take, and a longer one is shown as partial.

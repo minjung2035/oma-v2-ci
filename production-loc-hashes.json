@@ -1,6 +1,6 @@
 {
   "kind": "oma-production-source-digests-v1",
-  "manifest": "22e7f1dd2f119a200634ec8b362783a6030f4e58f5c9944d0ce63601dd97e655",
+  "manifest": "2d6875a529452c52f7f948ba956e442a6bc2e49aa86138b3d9ca0f5b837f9b32",
   "files": [
     {
       "path": "implementation/contracts.ts",
@@ -408,7 +408,7 @@
     },
     {
       "path": "src/entry/oma-society.ts",
-      "sha256": "36c333474923c7f5b581455dd6167cd1280147025c0dfe3e9af6ae857baa77da"
+      "sha256": "f823e17c0dc6446c9ee937826286ed9af63cd5ba4dde7363a2875256dec6171d"
     },
     {
       "path": "src/entry/oma.ts",
@@ -1367,8 +1367,12 @@
       "sha256": "deb19402bdca4fc9d5c215c815f14a4bf4f8612321d1da3ab02cecef25d19b5d"
     },
     {
+      "path": "src/tui/mail-names.ts",
+      "sha256": "fd01f309bbacec1630680b1df7d8e635a6550f3cb5a90eb07f3a2d00f2672d63"
+    },
+    {
       "path": "src/tui/model.ts",
-      "sha256": "007ecb2d49b0febd403a6849010500f666984406ae91611a4df5a9d33158fc0e"
+      "sha256": "37ccba5ba04c61cf8f46472e360c41da8132542b3d774a6eb28b8a5647f18c39"
     },
     {
       "path": "src/tui/open-tui-brand.ts",
@@ -1416,7 +1420,7 @@
     },
     {
       "path": "src/tui/sources/mail.ts",
-      "sha256": "99a9f2367a4dd67a5fc9c81bf9ad55b4271c197f7fe40946e265cbc8daac354d"
+      "sha256": "7b95f69d06c10107ae53e18acc45dcc3dde4c35e2a7649e87581fa97fd151f33"
     },
     {
       "path": "src/tui/sources/settings.ts",
@@ -1452,7 +1456,7 @@
     },
     {
       "path": "src/tui/view/screens.ts",
-      "sha256": "7ec5c5629200016edd0eecb4dc27d2e76811cddce5297f397795e9d46b90892a"
+      "sha256": "59c36e7b6d696999c02fd3d9fe45d9fa66081a422677e2daad907ba60ceb618d"
     },
     {
       "path": "src/tui/view/session-mode.ts",

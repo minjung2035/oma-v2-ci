@@ -185,6 +185,8 @@ function mailDetailParts(input: ViewInput, notice: string | null) {
   if (!message) return null;
   const head = [
     `From: ${message.from}`,
+    // B4: the recipients the message names, absent when it carries none.
+    ...(message.to === undefined ? [] : [`To: ${message.to}`]),
     `Kind: ${message.kind}`,
     `Subject: ${message.subject}`,
     `Path: ${message.path}`,

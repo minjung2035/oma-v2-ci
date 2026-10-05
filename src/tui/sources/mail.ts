@@ -8,6 +8,7 @@
 import { closeSync, constants, fstatSync, lstatSync, openSync, readSync, readdirSync } from "node:fs";
 import { dirname, join } from "node:path";
 import type { MailBody, MailboxRead, MailRow } from "../model.js";
+import { mailNamerFor, type MailRoster } from "../mail-names.js";
 import { READ_BOUNDS } from "../limits.js";
 import { displaySubject } from "../../mail/headers.js";
 import { headerEnd, readableBody } from "../../mail/display.js";
@@ -65,6 +66,19 @@ function addressName(value: string | undefined): string {
   const address = (angle ? angle[1]! : value).trim();
   const local = address.split("@")[0] ?? address;
   return local.length > 0 ? local : address;
+}
+
+/** The To header's recipients as the screen names them, comma-joined, or
+ * absent when the message carries none: a To can name more than one
+ * recipient, and each maps on its own. Display only -- the stored header
+ * keeps the RFC addresses the durable fact's logical addresses became. */
+function recipientNames(value: string | undefined, party: (local: string) => string): string | undefined {
+  if (value === undefined || value.trim() === "") return undefined;
+  const names = value.split(",")
+    .map(part => part.trim())
+    .filter(part => part.length > 0)
+    .map(part => party(addressName(part)));
+  return names.length === 0 ? undefined : names.join(", ");
 }
 
 /** Reads at most `limit` bytes of a regular file without following a link.
@@ -218,7 +232,7 @@ function entriesIn(directory: string, arrivals: ReadonlyMap<string, number>): { 
  * read now is not known to be no message: the rows that were read are kept,
  * and the directory says it was not wholly read, as one it cannot list does. */
 function rowsIn(directory: string, unread: boolean, budget: number,
-    arrivals: ReadonlyMap<string, number>): DirectoryRows {
+    arrivals: ReadonlyMap<string, number>, party: (local: string) => string): DirectoryRows {
   const rows: { row: MailRow; deliveredAtMs: number; threadKey: string | null }[] = [];
   const listed = entriesIn(directory, arrivals);
   let unreadable = listed.unreadable;
@@ -229,6 +243,7 @@ function rowsIn(directory: string, unread: boolean, budget: number,
     if (read.kind === "unreadable") { unreadable ??= read.reason; continue; }
     if (read.kind === "none") continue;
     const { headers } = parseMessage(read.text);
+    const to = recipientNames(headers["to"], party);
     rows.push({
       // AV-11: the link's arrival time (journal, or the inode as its fallback),
       // not the immutable object's mtime the bounded read observed.
@@ -236,7 +251,8 @@ function rowsIn(directory: string, unread: boolean, budget: number,
       threadKey: threadKeyOf(headers),
       row: Object.freeze({
         id: name,
-        from: addressName(headers["from"]),
+        from: party(addressName(headers["from"])),
+        ...(to === undefined ? {} : { to }),
         kind: headers["x-oma-kind"] ?? "message",
         subject: headers["subject"] ?? "(No subject)",
         unread,
@@ -292,11 +308,17 @@ function byArrival(rows: readonly Entry2[]): readonly MailRow[] {
     .map(entry => entry.row);
 }
 
-export function readMailbox(paths: MailboxPaths): MailboxRead {
+/** B4: `roster` is the society's agent names as last observed -- the workers
+ * the screen numbers -- and a roster that was not observed names only the
+ * fixed roles, keeping each actor's own name rather than inventing one. The
+ * roster changes display names only; the stored headers and the durable
+ * addresses they carry are untouched. */
+export function readMailbox(paths: MailboxPaths, roster?: MailRoster): MailboxRead {
+  const party = mailNamerFor(roster);
   const budget = READ_BOUNDS.mailListRows.value;
   const journal = arrivalJournal(dirname(paths.newDir));
-  const pending = rowsIn(paths.newDir, true, budget, journal.arrivals);
-  const settled = rowsIn(paths.curDir, false, budget - pending.rows.length, journal.arrivals);
+  const pending = rowsIn(paths.newDir, true, budget, journal.arrivals, party);
+  const settled = rowsIn(paths.curDir, false, budget - pending.rows.length, journal.arrivals, party);
   // Threads fold across both directories -- a thread can straddle them -- but
   // the screen's contract stays: unread rows first, by arrival, then read rows.
   const folded = foldThreads([...pending.rows, ...settled.rows]);

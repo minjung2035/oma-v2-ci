@@ -69,6 +69,10 @@ export interface ExtensionRow {
 export interface MailRow {
   readonly id: string; readonly from: string; readonly kind: string;
   readonly subject: string; readonly unread: boolean; readonly path: string;
+  /** B4: the message's recipients as the screen names them, comma-joined;
+   * absent when the message carries no To header. Display only -- the
+   * durable fact keeps the logical addresses. */
+  readonly to?: string;
   /** The total messages of this row's thread (absent/1 = no folding); earlier
    * messages' paths stay listed on the open message's detail. */
   readonly threadCount?: number;

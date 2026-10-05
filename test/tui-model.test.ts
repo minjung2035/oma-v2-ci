@@ -189,6 +189,26 @@ test("rendering keeps every line inside the terminal width for wide characters",
   }
 });
 
+test("B4: the open message names its sender and its recipients", () => {
+  // B4: the rows carry the screen's names already; the detail shows From and To.
+  const named: PanelData = Object.freeze({ ...data,
+    mail: Object.freeze([
+      { id: "m1", from: "worker1", to: "worker", kind: "question", subject: "API 선택 필요", unread: true, path: "/tmp/m1" },
+    ]) });
+  let state = step(INITIAL, KEY.panel, named, FRAME_BYTES).state;
+  for (const key of [KEY.right, KEY.right, KEY.enter]) state = step(state, key, named, FRAME_BYTES).state;
+  const detail = render({ state, data: named, transcript: [], body: null, notice: null, busy: false, columns: 100, rows: 14 }).join("\n");
+  assert.match(detail, /^From: worker1\s*$/m);
+  assert.match(detail, /^To: worker\s*$/m);
+
+  // A message whose header named no recipients gets no To line.
+  state = step(INITIAL, KEY.panel, data, FRAME_BYTES).state;
+  for (const key of [KEY.right, KEY.right, KEY.enter]) state = step(state, key, data, FRAME_BYTES).state;
+  const without = render({ state, data, transcript: [], body: null, notice: null, busy: false, columns: 100, rows: 14 }).join("\n");
+  assert.match(without, /^From: worker-a\s*$/m);
+  assert.doesNotMatch(without, /^To:/m);
+});
+
 test("TUI-007: the panel always shows when a setting takes effect", () => {
   const open = step(INITIAL, KEY.panel, data, FRAME_BYTES).state;
   const config = step(open, KEY.right, data, FRAME_BYTES).state;

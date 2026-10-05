@@ -234,6 +234,44 @@ test("T98/TUI-011: unread comes from the mailbox position, and no read state is 
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
 
+test("B4: mail rows name parties by the roster, and keep the header's names without one", () => {
+  const root = scratch("oma-tui-names-");
+  try {
+    const box = principalMailbox(root);
+    mkdirSync(box.newDir, { recursive: true });
+    mkdirSync(box.curDir, { recursive: true });
+    const eml = (from: string, to: string | null): string =>
+      [`From: ${from}`, ...(to === null ? [] : [`To: ${to}`]), "Subject: 제목", "X-OMA-Kind: message", "", "body", ""].join("\n");
+    writeFileSync(join(box.newDir, "m-1"), eml("worker-a@demo.oma.invalid", "residents@demo.oma.invalid"));
+    writeFileSync(join(box.newDir, "m-2"), eml("worker-b@demo.oma.invalid", "worker-b@demo.oma.invalid, worker-a@demo.oma.invalid"));
+    writeFileSync(join(box.newDir, "m-3"), eml("worker-c@demo.oma.invalid", "topic-plan@demo.oma.invalid, principal@demo.oma.invalid"));
+    writeFileSync(join(box.newDir, "m-4"), eml("principal@demo.oma.invalid", null));
+
+    const rows = readMailbox(box, ["principal", "worker-a", "worker-b"]).rows;
+    const byId = new Map(rows.map(row => [row.id, row]));
+    assert.equal(byId.get("m-1")!.from, "worker1");
+    assert.equal(byId.get("m-1")!.to, "worker");
+    assert.equal(byId.get("m-2")!.from, "worker2");
+    assert.equal(byId.get("m-2")!.to, "worker2, worker1");
+    // An actor the roster does not know keeps its name; a topic keeps its label.
+    assert.equal(byId.get("m-3")!.from, "worker-c");
+    assert.equal(byId.get("m-3")!.to, "topic/plan, principal");
+    assert.equal(byId.get("m-4")!.from, "principal");
+    assert.equal(byId.get("m-4")!.to, undefined, "no To header: no recipients line");
+
+    // Without an observed roster the fixed names still map -- a broadcast is
+    // `worker` by the mail protocol, not by the roster -- but no worker is
+    // numbered: actors keep the names the header wrote.
+    const raw = readMailbox(box).rows;
+    const rawById = new Map(raw.map(row => [row.id, row]));
+    assert.equal(rawById.get("m-1")!.from, "worker-a");
+    assert.equal(rawById.get("m-1")!.to, "worker");
+    assert.equal(rawById.get("m-2")!.to, "worker-b, worker-a");
+    assert.equal(rawById.get("m-3")!.to, "topic/plan, principal");
+    assert.equal(rawById.get("m-4")!.to, undefined);
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
 test("AV-11: arrival order comes from the journal; inode times are only its fallback", () => {
   const root = scratch("oma-tui-arrival-");
   try {

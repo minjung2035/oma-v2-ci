@@ -347,6 +347,7 @@
   "src/tui/keys.ts",
   "src/tui/limits.ts",
   "src/tui/login.ts",
+  "src/tui/mail-names.ts",
   "src/tui/model.ts",
   "src/tui/open-tui-brand.ts",
   "src/tui/packages-apply.ts",
@@ -1857,11 +1858,11 @@
     "src/pi-extension.ts",
     "src/extension/"
    ],
-   "files": 82
+   "files": 83
   }
  ],
- "files": 380,
- "runtimeEdges": 1639,
+ "files": 381,
+ "runtimeEdges": 1640,
  "typeOnlyEdges": 420,
  "runtimeEdgeMatrix": {
   "L1-kernel -> L1-kernel": 316,
@@ -1878,7 +1879,7 @@
   "L5-entry -> L2-facts": 2,
   "L5-entry -> L3-workflow": 7,
   "L5-entry -> L4-orchestration": 136,
-  "L5-entry -> L5-entry": 162
+  "L5-entry -> L5-entry": 163
  },
  "upwardTypeOnlyEdges": [
   {
