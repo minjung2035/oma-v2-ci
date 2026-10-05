@@ -224,7 +224,7 @@ export function prepareResidentRootfs(
     RESIDENT_PATHS.view, RESIDENT_PATHS.world, RESIDENT_PATHS.projectGit, RESIDENT_PATHS.projectMirror, RESIDENT_PATHS.sessions,
     RESIDENT_PATHS.libdir, RESIDENT_PATHS.packages])
     ensureOwned(inside(path), pass.boundary);
-  for (const path of [RESIDENT_PATHS.node, RESIDENT_PATHS.socket, RESIDENT_PATHS.inference])
+  for (const path of [RESIDENT_PATHS.node, RESIDENT_PATHS.socket, RESIDENT_PATHS.inference, RESIDENT_PATHS.egress])
     ensureFile(inside(path), pass);
   // FI-2: the pinned Node's package managers, laid out as its distribution's
   // `bin/` is -- a relative link per command into a module mount target.

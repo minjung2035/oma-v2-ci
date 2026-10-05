@@ -395,7 +395,7 @@ DR29 `/resume`: host Personal history는 `oma-host-history:` 참조(birth UUID·
 
 선택된 host 이력은 outgoing writer를 종료하기 전에 관측한다. outgoing engine의 실제 exit(ordinary quit의 bounded tenure grace와 구별), owned broker 반환 뒤 한 번의 strict `{next: "resume", history: <opaque reference>}`와 private EOF를 보낸다. holder는 child의 정상 실제 종료와 terminal drain도 확인한 뒤 exit를 내보낸다. host attach cleanup 뒤 Personal birth/header/cwd를 다시 확인하고 기존 Personal writer lock을 통해 재개한다. guest Society의 다른 saved history로 옮길 때도 host에 참조를 반환한다. guest execve는 private descriptor를 보존하지 않으므로 새 holder가 새 채널을 소유한다. 실패·손상·관측 불명확은 새 birth/resume 권한이 아니다. `/new`의 기존 선택창 의미와 Linux 직접 실행의 로컬 resume은 유지된다. native macOS 실행 증거는 아직 없다.
 
-DR28에서 이 전환은 guest protocol 3 / Host API 2로 도입됐다. DR29의 project binding·설정 관측 추가가 guest protocol을 4로 올렸고, `egress.placeholder`의 `hold` 필드(AV-15)가 현재 **5**다(MAC-250/251). Host API는 **3**이다. 이전 guest의 `next` 없는 exit는 기존 종료 의미를 유지하고 새 전환으로 추정하지 않는다. Linux 직접 실행에는 이 holder descriptor가 없으므로 기존 execve 경로를 유지한다.
+DR28에서 이 전환은 guest protocol 3 / Host API 2로 도입됐다. DR29의 project binding·설정 관측 추가가 guest protocol을 4로 올렸고, `egress.placeholder`의 `hold` 필드(AV-15)가 5였다(MAC-250/251). `egress.connect`(DR34, UX-08)가 현재 **6**다. Host API는 **3**이다. 이전 guest의 `next` 없는 exit는 기존 종료 의미를 유지하고 새 전환으로 추정하지 않는다. Linux 직접 실행에는 이 holder descriptor가 없으므로 기존 execve 경로를 유지한다.
 
 **attach.** attach는 `resize`로 시작한다. holder는 이렇게 한다.
 
@@ -441,6 +441,9 @@ egress.placeholder { v: 1, id, method: "egress.placeholder", params: { credentia
   → { v: 1, id, ok: true, result: { placeholderId, placeholder, provider, model } }   // 엔진을 띄우기 전, run마다 한 번. MAC-704
 
 egress.open { v: 1, id, method: "egress.open", params: { placeholderId, society, actor, incarnation, modelProfile } }
+
+egress.connect { v: 1, id, method: "egress.connect", params: { placeholderId, run: { society, actor, incarnation }, host, port, role, allow } }
+  → { v: 1, id, ok: true, result: {} }   // ok 뒤 같은 연결이 raw tunnel이 된다 (protocol 6, DR34)
 ```
 
 두 message는 요청 envelope를 쓴다(§4.2). guest 안의 client(runner, `oma`)는 guesthost의 egress socket(`$XDG_RUNTIME_DIR/oma-egress.sock`)에
@@ -451,6 +454,13 @@ forwarder가 닫히면 lease도 닫히고, host는 그 끝을 run의 끝으로 �
 `bootId`까지 산다. 엔진의 provider 설정에는 이 자리표시자가 들어간다(§7.4).
 `egress.open` 뒤에는 엔진이 쓴 HTTP/1.1 byte가 그대로 흐르고, 응답 byte가 반대로 흐른다(INF-005). host의 Relay는 `placeholderId`로
 그 run의 자리표시자와 credential을 찾는다. 자리표시자는 run의 lease가 끊어지거나 `bootId`가 바뀌면 버린다. host 쪽 규칙은 §7.4에 있다.
+
+`egress.connect`(protocol 6, DR34/UX-08)는 run의 CONNECT tunnel 하나를 연다. guest의 runner가 세운 per-delivery CONNECT proxy가
+Resident의 `HTTPS_PROXY` 요청을 받으면 이 message로 host에 다이얼을 청한다. `role`/`allow`는 그 role로 해석된 allowlist를
+그대로 싣는다 — society의 config는 guest의 디스크에 있어 host가 읽을 수 없으므로, host는 문법을 다시 검사하고 선언된 목록을
+그대로 집행한 뒤 이름을 스스로 resolve해 모든 answer를 private/special-use 대역으로 screen하고 literal을 pin한다. `port`는
+443뿐이다. run 검사는 `egress.open`과 같고, run이 낸 tunnel은 run과 함께 끝난다(`release`/`forgetBoot`). ok 응답 뒤의 byte는
+터널의 byte다. 거절은 framed error다.
 
 ### 4.8 stream channel
 

@@ -13,6 +13,7 @@ import { requireResidentRootfs } from "../sandbox.js";
 import { packageStoreRoot } from "../runtime/pi-packages.js";
 import { DEPLOYMENT_LAYOUT } from "../domain/deployment.js";
 import { parseCanonicalResourceLimits } from "../domain/resources.js";
+import { egressPolicyFor } from "../domain/egress.js";
 import { launchedLocation, type LaunchLocation } from "../runtime/assets.js";
 import { stopOnHostLoss } from "../runtime/broker-lifetime.js";
 
@@ -52,11 +53,16 @@ const resources = /^(?:[0-9a-f]{2})+$/.test(resourcesHex) ? parseCanonicalResour
 if (resources === null) { console.error(`runner: missing or malformed broker-rendered resources for ${agent}`); process.exit(4); }
 const agentProfile = cfg.agentProfiles[profileName]!;
 const modelName = agentProfile.modelProfile;
+// UX-08/DR34: the egress clause resolves against this role here, once, from
+// the unit's own configuration -- a role whose resolved allowlist is empty
+// gets no proxy, and a Human's edit lands on the next runner.
+const egressPolicy = egressPolicyFor(cfg.egress, profileName);
 const profile = Object.freeze({ name: profileName, modelProfile: modelName, model: Object.freeze({ ...cfg.modelProfiles[modelName]! }),
   workspaceBytes: resources.workspaceBytes,
   // FI-5: the bounds this unit runs under, told to the Resident it starts.
   resources: { cpuQuotaPercent: resources.cpuQuotaPercent, memoryBytes: resources.memoryBytes, tasks: resources.tasks },
   ...(configuration.roles[profileName] ? { settings: configuration.roles[profileName] } : {}),
+  ...(egressPolicy === null ? {} : { egress: egressPolicy }),
   // D23/TSP-005: the deployment renders the run's surface plan into this
   // unit's environment; this entry is the boundary that reads it once and
   // makes it declared profile data. The engine's spawn plan emits it and

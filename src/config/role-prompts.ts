@@ -217,7 +217,8 @@ probe for it.
  * 본문을 알게 짧게 쓴다. "update"·"question" 같은 일반 제목은 아무 말도 하지 않는다.
  *
  * 실행: 긴 명령(빌드, `npm test`)은 turn을 막는다 — society가 기다린다. 유한한 단계로 나누고
- * 사이에 게시판 일을 한다. 샌드박스의 한계는 사실이다 — 네트워크가 없고(아직), `/tmp`는
+ * 사이에 게시판 일을 한다. 샌드박스의 한계는 사실이다 — 네트워크는 Human이 설정한 egress
+ * 프록시의 allowlist 뿐(`HTTPS_PROXY`가 있을 때만, 허용된 HTTPS endpoint만), `/tmp`는
  * 배치와 함께 죽고, 한 턴을 넘기는 서비스도 없다 — 띄우는 프로세스는 배치가 끝나면 끝난다.
  * 툴체인과 자원 한도는 `/world/START.md`에 있다. 리뷰는 `/mail/workers` 스레드로 오고, `diff`가 진짜 패치,
  * `review`는 논의, `vote`는 결정 — 자기 요청은 승인 불가. LOW 단독, MEDIUM 1표, HIGH
@@ -301,9 +302,10 @@ and keep it short. "update" and "question" say nothing.
 * Long commands (builds, \`npm test\`) block your turn — the society waits while you wait. Split
   them into bounded steps and do board work between steps: pending mail, open requests, peers'
   questions.
-* The sandbox's limits are facts, not surprises: no network yet, \`/tmp\` dies with the batch, no
-  services that outlive a turn — every process you start ends when the batch ends. The toolchain
-  and your resource bounds are in \`/world/START.md\`.
+* The sandbox's limits are facts, not surprises: network is only the egress proxy's allowlist
+  when the Human configured one (\`HTTPS_PROXY\` is set for you then, and only allowlisted HTTPS
+  endpoints answer), \`/tmp\` dies with the batch, no services that outlive a turn — every process
+  you start ends when the batch ends. The toolchain and your resource bounds are in \`/world/START.md\`.
 * Merge review: requests arrive as threads under \`/mail/workers\`; \`oma_merge diff\` shows the real
   patch; \`review\` discusses, \`vote\` decides; you cannot approve your own request. LOW applies
   alone, MEDIUM needs one peer approve, HIGH needs two then the Principal. Wrong but applied:

@@ -11,6 +11,7 @@ import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { randomUUID } from "node:crypto";
+import { once } from "node:events";
 import { encodeFrame } from "../src/frame.js";
 import { StoreError } from "../src/domain/errors.js";
 import { readLeadingFrame, sendHelloForBytes } from "../src/platform/rpc.js";
@@ -37,7 +38,8 @@ const egressHello: HelloParams = { channel: "egress", protocol: { min: HOST_GUES
 const RUN = { society: "demo", actor: "alice", incarnation: 3 };
 
 async function world(t: import("node:test").TestContext, timeoutMs = 5000,
-  resolve?: (credentialRef: string, provider: string, model: string) => Promise<{ provider: string; model: string; origin: string; apiKey: string; headers: Record<string, string> }>) {
+  resolve?: (credentialRef: string, provider: string, model: string) => Promise<{ provider: string; model: string; origin: string; apiKey: string; headers: Record<string, string> }>,
+  extras?: { dial?: import("../src/runtime/connect-proxy.js").ConnectDial; audit?: (entry: import("../src/runtime/connect-proxy.js").EgressAudit) => void }) {
   const dir = mkdtempSync(join(tmpdir(), "oma-egress-"));
   const provider: TlsProvider = await tlsProvider();
   const pool = new EgressPool();
@@ -59,6 +61,8 @@ async function world(t: import("node:test").TestContext, timeoutMs = 5000,
       if (provider_ !== "anthropic") throw new StoreError("UNSUPPORTED_PROFILE", `the engine does not know ${provider_}/${model}`);
       return { provider: "anthropic", model: "claude-test", origin: `${provider.origin}/v1`, apiKey: SECRET, headers: {} };
     }),
+    ...(extras?.dial === undefined ? {} : { dial: extras.dial }),
+    ...(extras?.audit === undefined ? {} : { audit: extras.audit }),
     limits: { concurrent: 4, timeoutMs }, frameBytes: PLATFORM_FRAME_BYTES, maxPool: 32,
   });
   t.after(async () => {
@@ -379,4 +383,67 @@ test("AV-15/§4.7 v5: a run the host ends ends the guest's forwarder; the lease 
   await untilClosed(socketPath2, "a forwarder on a dead lease accepts nothing");
   await forwarder2.close();
   await until(() => host.activeRuns === 0, "the ended lease's run is over on the host too");
+});
+
+/* ---- DR34 / UX-08: egress.connect -- the run's CONNECT tunnels through the
+ * same pool, declared policy and all. The host re-checks run identity,
+ * enforces the declared allowlist, owns resolution and the address screen. */
+
+const CONNECT_POLICY = Object.freeze({ role: "worker", allow: Object.freeze(["registry.npmjs.org", "*.github.com"]) });
+
+/** A plain TCP echo on loopback stands in for the outside TLS endpoint; the
+ * injected `dial` is the oracle, so no DNS runs in these tests. */
+async function echoServer(t: import("node:test").TestContext): Promise<number> {
+  const server = (await import("node:net")).createServer(socket => socket.pipe(socket));
+  await once(server.listen(0, "127.0.0.1"), "listening");
+  t.after(() => { server.close(); });
+  return (server.address() as { port: number }).port;
+}
+
+test("DR34: egress.connect tunnels a declared allowlisted target through the pool; the rest are refused", async t => {
+  const { requestEgressConnect, requestEgressPlaceholder } = await import("../src/runtime/egress-forwarder.js");
+  const port = await echoServer(t);
+  const audits: import("../src/runtime/connect-proxy.js").EgressAudit[] = [];
+  const { host, pool, serviceSocket } = await world(t, 5000, undefined,
+    { dial: async () => connect({ host: "127.0.0.1", port }), audit: entry => audits.push(entry) });
+  await host.fill();
+  await until(() => pool.size === 2, "the pool");
+  const ask = { socket: serviceSocket, frameBytes: PLATFORM_FRAME_BYTES, deadlineMs: 5000 };
+  const issued = await requestEgressPlaceholder(ask, RUN, "anthropic", "current", 5);
+
+  // The allowlisted CONNECT goes through: one frame out, ok back, raw bytes.
+  const tunnel = await requestEgressConnect(ask, issued, RUN, "registry.npmjs.org", 443, CONNECT_POLICY);
+  tunnel.write("through-the-host");
+  const [echoed] = await once(tunnel, "data");
+  assert.equal(String(echoed), "through-the-host");
+  tunnel.destroy();
+  assert.ok(audits.some(e => e.decision === "allow" && e.target === "registry.npmjs.org:443" && e.actor === "alice" && e.role === "worker"));
+
+  // Everything off the declared list, off the one port, or for a run that is
+  // not this boot's is refused -- and never dials.
+  for (const [host_, port_, code] of [
+    ["pypi.org", 443, "INVALID_REQUEST"],            // not on the allowlist
+    ["registry.npmjs.org", 22, "INVALID_REQUEST"],   // not HTTPS's port
+    ["registry.npmjs.org", 443, "STALE_RUN"],        // a run the placeholder does not stand for
+  ] as const) {
+    await assert.rejects(
+      requestEgressConnect(ask, issued, host_ === "registry.npmjs.org" && code === "STALE_RUN" ? { ...RUN, actor: "mallory" } : RUN,
+        host_, port_, CONNECT_POLICY),
+      (error: unknown) => error instanceof StoreError && error.code === code, `${host_}:${port_} -> ${code}`);
+  }
+
+  // A malformed declaration (an entry that is no egress entry) never leaves
+  // the service's own validation.
+  const malformed = connect(serviceSocket);
+  await once(malformed, "connect");
+  malformed.write(encodeFrame({ v: 1, id: "e1", method: "egress.connect",
+    params: { placeholderId: issued.placeholderId, run: RUN, host: "registry.npmjs.org", port: 443, role: "worker", allow: ["10.0.0.1"] } }));
+  await once(malformed, "close");
+
+  // The run's end ends its tunnels: release the lease, the next connect is a
+  // stale run, and a reboot forgets every run of the last boot.
+  issued.release();
+  await until(() => host.activeRuns === 0, "the released run is over on the host");
+  await assert.rejects(requestEgressConnect(ask, issued, RUN, "registry.npmjs.org", 443, CONNECT_POLICY),
+    (error: unknown) => error instanceof StoreError && (error as StoreError).code === "STALE_RUN");
 });

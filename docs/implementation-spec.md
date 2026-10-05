@@ -502,7 +502,7 @@ bwrap --unshare-all --new-session --die-with-parent --cap-drop ALL --seccomp 3
 
 **MUST [SB-003]** stdin/stdout/stderr와 명시적으로 검증한 RPC pipe 외 상속 FD를 닫는다. runner admin FD, provider socket, host credential FD, systemd bus, SSH agent, desktop socket을 전달하지 않는다. OMA actor socket에는 자기 limited API만 존재한다. 다른 actor endpoint는 mount하지 않는다. rootfs의 기존 symlink/mount target이 다른 host path를 노출하지 않는지 검사한다.
 
-**MUST [SB-004]** private network가 기본이다. provider는 actor inference stream→broker만 사용한다. dependency fetch 같은 project egress(Human-configured proxy/cache profile)는 v1에 없다([DR18](design-revisions.md), S-07). 뒤에 더할 때는 OPTIONAL로 노출하고 별도 S-01 escape 시험을 통과한다. host network 공유로 대체하지 않는다.
+**MUST [SB-004]** private network가 기본이다. provider는 actor inference stream→broker만 사용한다. project egress는 v0.1에서 OPTIONAL로 도입됐다([DR34](design-revisions.md), UX-08): `HostConfigV1.egress`가 endpoint allowlist를 선언하면 runner는 delivery당 하나의 HTTP CONNECT proxy unix socket을 `--ro-bind`로 `/run/oma/egress.sock`에 두고, trusted extension이 loopback `HTTP(S)_PROXY`/`ALL_PROXY`를 세운다. CONNECT·authority-form·443만 허용하고, request header는 proxy에서 끝나며, 이름은 host 측에서 resolve해 모든 answer를 private/special-use 대역으로 screen하고 literal을 pin한다. 절(節)이 없거나 role의 해석이 비면 socket도 변수도 없고, 그 부재로 profile이 `UNSUPPORTED_PROFILE`이 되지는 않는다. host network 공유로 대체하지 않고, SSH·raw TCP/UDP·SOCKS5는 v0.1 밖이다. 별도 S-01 escape 시험은 egress-connect suite가 담당한다.
 
 **MUST [SB-005]** candidate-check sandbox는 staged candidate checkout만 RW, trusted check assets RO, tmp cap, private network, no actor/admin/inference socket이다. Git quarantine은 필요한 broker objects만 RO와 자기 staging만 RW다. Principal tools는 public world/mail/Git RO+자기 scratch RW만 갖고 Human session directory는 없다.
 

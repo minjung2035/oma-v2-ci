@@ -33,6 +33,10 @@ export const RESIDENT_PATHS = Object.freeze({
   /** INF-006: the relay's host end. The confined engine reaches a provider
    * through this socket, so the network namespace stays unshared. */
   inference: "/run/oma/inference.sock",
+  /** UX-08/DR34: the CONNECT proxy's end. Present only when the Human's
+   * egress clause names endpoints for this role; a Resident's proxy
+   * variables point at the loopback forwarder of it. */
+  egress: "/run/oma/egress.sock",
   /** The pinned Node, bound as a single file so the rootfs need not carry it. */
   node: "/opt/oma-node/node",
   /** FI-2: the pinned Node's own package managers, mounted where its
@@ -80,6 +84,9 @@ export const SYSTEM_BIND_CANDIDATES: readonly string[] = Object.freeze([
  * the relay socket. A constant is safe because the network namespace is
  * private: nothing else can listen there or reach it. */
 export const RESIDENT_INFERENCE_PORT = 8317;
+/** UX-08/DR34: the same arrangement for the CONNECT proxy -- the extension's
+ * loopback forwarder standard tools reach through HTTP_PROXY et al. */
+export const RESIDENT_EGRESS_PORT = 8318;
 
 /** WP27: the one bubblewrap a confined engine is started through; the same
  * binary `spawnSandboxed` pins. A plan names it absolutely, because the

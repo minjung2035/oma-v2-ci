@@ -10,6 +10,7 @@ import { realpathSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { registerDelivery } from "./extension/delivery.js";
+import { startEgressBridge } from "./extension/egress-bridge.js";
 import { startInferenceBridge } from "./extension/inference-bridge.js";
 import { omaToolNames, registerOmaTools } from "./extension/mail-tools.js";
 import { integerEnv } from "./extension/shared.js";
@@ -77,4 +78,5 @@ export default async function extension(pi: ExtensionAPI) {
   containWorkspaceTools(pi, workspace, integerEnv("OMA_WORKSPACE_BYTES"), sandboxed, channel.attached, readableRoots);
   registerDelivery(pi, waitRequested);
   await startInferenceBridge(pi);
+  await startEgressBridge(pi);
 }

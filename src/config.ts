@@ -9,7 +9,8 @@ import {
   type ConfigurationReadObserver,
   type RoleSettings,
 } from "./config/operations.js";
-import type { AgentProfile, EffortLevel, HostConfigV1, ModelProfile, ResourceLimits } from "../implementation/contracts.js";
+import type { AgentProfile, EffortLevel, HostConfigV1, HostEgressConfig, ModelProfile, ResourceLimits } from "../implementation/contracts.js";
+import { egressEntryProblem } from "./domain/egress.js";
 import { StoreError } from "./domain/errors.js";
 import { requireResidentRootfs } from "./resident-paths.js";
 import { isValidActorName, isValidSocietyName, isValidWirePath } from "./domain/identifiers.js";
@@ -101,6 +102,11 @@ function validatedSnapshot(config: HostConfigV1): ValidatedConfigCandidate {
       checks: Object.freeze(checks),
     }),
     limits: Object.freeze({ ...config.limits }),
+    ...(config.egress === undefined ? {} : { egress: Object.freeze({
+      allow: Object.freeze([...config.egress.allow]),
+      roles: Object.freeze(Object.fromEntries(Object.entries(config.egress.roles ?? {})
+        .map(([role, entries]) => [role, Object.freeze([...entries])]))),
+    }) }),
   };
   // The brand is type-only; validation, copying and recursive freezing above are
   // the runtime proof. No caller can construct this type without this boundary.
@@ -172,7 +178,7 @@ export function readCurrentHostPolicy(path: string, society: string, load: (path
 }
 
 export function validateConfig(raw: unknown): ValidatedConfigCandidate {
-  const cfg = closedRecord(raw, ["schemaVersion", "society", "installation", "modelProfiles", "agentProfiles", "principalProfile", "initialResidents", "quota", "integration", "limits"], "root");
+  const cfg = closedRecord(raw, ["schemaVersion", "society", "installation", "modelProfiles", "agentProfiles", "principalProfile", "initialResidents", "quota", "integration", "limits"], "root", ["egress"]);
   if (cfg.schemaVersion !== 1) err("schemaVersion must be 1");
   const society = needString(cfg.society, "society");
   if (!isValidSocietyName(society)) err("invalid society name");
@@ -275,6 +281,35 @@ export function validateConfig(raw: unknown): ValidatedConfigCandidate {
   }
   if ((limits.batchMaxMessages as number) < MIN_MIXED_BATCH_MESSAGES)
     err(`limits.batchMaxMessages must be at least ${MIN_MIXED_BATCH_MESSAGES}; a single-message batch starves an actor whose direct and public mail are both pending`);
+  // UX-08/DR34: the egress clause is the CONNECT proxy's whole policy --
+  // endpoint names only, so it can be checked whole at commit. A present
+  // clause with no endpoints admits nothing; a named role is checked against
+  // the profiles that exist, so a typo is refused rather than silently
+  // meaning "no one".
+  let egress: HostEgressConfig | undefined;
+  if (cfg.egress !== undefined) {
+    const clause = closedRecord(cfg.egress, ["allow"], "egress", ["roles"]);
+    const allow = needArray(clause.allow, "egress.allow");
+    for (const entry of allow) {
+      const problem = egressEntryProblem(entry);
+      if (problem !== null) err(`egress.allow: ${problem}`);
+    }
+    const roles: Record<string, string[]> = Object.create(null);
+    if (clause.roles !== undefined) {
+      for (const [role, entries] of Object.entries(needRecord(clause.roles, "egress.roles"))) {
+        if (!profileNames.has(role)) err(`egress.roles.${role} is not a configured profile`);
+        const list = needArray(entries, `egress.roles.${role}`);
+        for (const entry of list) {
+          const problem = egressEntryProblem(entry);
+          if (problem !== null) err(`egress.roles.${role}: ${problem}`);
+        }
+        roles[role] = [...list] as string[];
+      }
+    }
+    if (allow.length + Object.values(roles).reduce((sum, list) => sum + list.length, 0) === 0)
+      err("egress names no endpoint; remove the clause rather than configure egress to nothing");
+    egress = { allow: allow as string[], roles };
+  }
   return validatedSnapshot({
     schemaVersion: 1, society, installation: { node, libdir, rootfs, deploymentDigest, ...(packages === undefined ? {} : { packages }) },
     modelProfiles: Object.assign(Object.create(null), modelProfiles) as HostConfigV1["modelProfiles"],
@@ -282,5 +317,6 @@ export function validateConfig(raw: unknown): ValidatedConfigCandidate {
     principalProfile, initialResidents: initialResidents as HostConfigV1["initialResidents"], quota: quota as HostConfigV1["quota"],
     integration: { policyRevision, ...(integration.tiered === undefined ? {} : { tiered: integration.tiered as NonNullable<HostConfigV1["integration"]["tiered"]> }), protectedPaths: protectedPaths as string[], checks: checks as HostConfigV1["integration"]["checks"] },
     limits: limits as unknown as HostConfigV1["limits"],
+    ...(egress === undefined ? {} : { egress }),
   });
 }

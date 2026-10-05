@@ -70,6 +70,7 @@ src/domain/child-policy.ts
 src/domain/context-policy.ts
 src/domain/deployment.ts
 src/domain/derived.ts
+src/domain/egress.ts
 src/domain/errors.ts
 src/domain/exhaustive.ts
 src/domain/identifiers.ts
@@ -112,6 +113,7 @@ src/extension/contained-files.ts
 src/extension/contained-search.ts
 src/extension/contained-tools.ts
 src/extension/delivery.ts
+src/extension/egress-bridge.ts
 src/extension/inference-bridge.ts
 src/extension/mail-tools.ts
 src/extension/principal-channel.ts
@@ -263,6 +265,7 @@ src/runtime/broker-supervisor.ts
 src/runtime/candidate-checks.ts
 src/runtime/client-preload.ts
 src/runtime/client-runtime.ts
+src/runtime/connect-proxy.ts
 src/runtime/deployment-manifest.ts
 src/runtime/egress-forwarder.ts
 src/runtime/engine-auth.ts

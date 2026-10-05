@@ -132,7 +132,10 @@ Pi/OS 기능을 다시 구현해서 생긴 중복·workaround·pre-release 잔�
 - Worker 개발환경(fix/fi 진행 중): npm/npx 부재(프롬프트는 npm test 지시), git identity
   미설정으로 첫 commit 실패, GIT_EDITOR 부재, workspace quota가 bash 산출물까지 계산,
   리소스 한도(3GiB/128 tasks) 과소, nproc가 호스트 코어 보고, START.md에 제약 미기재
-- 네트워크: project egress(S-07) 재개 — plan §D egress 항목
+- 네트워크: project egress(S-07) — 완료(DR34): `HostConfigV1.egress` allowlist → delivery당
+  HTTP CONNECT proxy(`/run/oma/egress.sock` bind + loopback `HTTP(S)_PROXY`), SSRF screen,
+  credential header 소멸, macOS는 `egress.connect`(protocol 6)로 host 다이얼. SSH/raw TCP·UDP·
+  SOCKS5는 v0.1 밖
 - 커스터마이징 표면: Society에서 로컬 스킬/확장 설치 경로 없음(`oma pi install <local-dir>` 거절)
   → 결정: 로컬 디렉토리를 package store로 복사 설치 허용(기존 store 파이프라인·ro mount 재사용);
   `oma pi` help/list가 skills/prompts/themes를 안 보여줌; DR25 535행 stale;
@@ -633,6 +636,19 @@ name collision/intended surface/hidden 미활성/idempotent reload/provenance/
 
 ## 9. 진행 로그
 
+- 2026-10-06 (egress): UX-08/S-07 재개 — DR34 project egress. `HostConfigV1.egress`
+  (baseline `allow` + `roles.<role>`)가 유일한 Human 표면이고, 절이 없으면 socket도
+  변수도 없다. runner가 delivery당 CONNECT proxy(`src/runtime/connect-proxy.ts`)를
+  `/run/oma/egress.sock`로 `--ro-bind`하고 extension bridge(`egress-bridge.ts`)가
+  loopback 8318로 `HTTP_PROXY`/`HTTPS_PROXY`/`ALL_PROXY`를 세운다. 정책은 순수 모듈
+  `src/domain/egress.ts`(이름/`*.suffix` 문법, authority parse, role 해석). 프록시는
+  CONNECT·authority-form·443만 받고 요청 header는 거기서 끝난다. 다이얼은 이름을 한 번
+  resolve하고 모든 answer를 private/loopback/link-local/CGNAT/docs/reserved/multicast·
+  인코딩(v4-mapped/NAT64/Teredo/6to4) 대역으로 screen한 뒤 literal을 pin한다. macOS는
+  `egress.connect`(host↔guest protocol 6)가 같은 pool 위에서 host 다이얼을 청한다 —
+  선언된 allowlist를 싣고 host가 문법+목록+SSRF를 다시 집행. Linux는 같은 screen의
+  직접 다이얼. CONNECT마다 actor/role/target/verdict 한 줄 journal. 신규
+  `test/egress-connect.test.ts` 17 + `platform-egress` connect e2e.
 - 2026-10-05 (C): plan §C society-off 재설계 구현 — Personal 세션의 `/society`가
   프로젝트 자신의 Society 슬롯(`<data>/<projectSociety(cwd)>`)을 읽기 전용으로
   게이트하고(bound·unreadable·unavailable·binding 없는 기록·다른 birth record·

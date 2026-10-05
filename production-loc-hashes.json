@@ -1,10 +1,10 @@
 {
   "kind": "oma-production-source-digests-v1",
-  "manifest": "9c3336ae7dc7a7312c3b98ad70987850b024c91a1a70bb9ccdeaa98615db6c8b",
+  "manifest": "779c4b7f641c7abe38462c6c1bfd427aaaa630d46c0c491db749a5abea7cf906",
   "files": [
     {
       "path": "implementation/contracts.ts",
-      "sha256": "a7261bd176ca58134bb320de83459fe3f8f952e86bea1ecae94f0d439d230688"
+      "sha256": "66d8fc9256a99ba41d686196986878262beef8feaaa1f338dab7965984f2488a"
     },
     {
       "path": "implementation/schema-v3.sql",
@@ -216,7 +216,7 @@
     },
     {
       "path": "src/config.ts",
-      "sha256": "43ff3ef4cba7756a77c1d08fd5c5315ee1c99cf641e9dc451593217d445c5db5"
+      "sha256": "c562494056c6a0d006223ead22989c8b08770848107282c55699c39f688620a3"
     },
     {
       "path": "src/config/defaults.ts",
@@ -236,7 +236,7 @@
     },
     {
       "path": "src/config/role-prompts.ts",
-      "sha256": "4d83da3f5a0a0bcbcc6c356a45a5e2997acea68f1897bf0f7b467f23f9838476"
+      "sha256": "cbd91e1ffc294534e9e5cbcd723155991401cd0f04e85e379d9eefeade753238"
     },
     {
       "path": "src/diagnostics/files.ts",
@@ -289,6 +289,10 @@
     {
       "path": "src/domain/derived.ts",
       "sha256": "91e5123da34d65923016614374bd7669ef63d69b03c429d171c51c31f7f97bd1"
+    },
+    {
+      "path": "src/domain/egress.ts",
+      "sha256": "b70183a1e7da4a12109527b80901d32a1f62bbd201adc91d3bd4d9bc7208b87b"
     },
     {
       "path": "src/domain/errors.ts",
@@ -436,7 +440,7 @@
     },
     {
       "path": "src/entry/runner.ts",
-      "sha256": "c7f032a1dcb6630bf6fe7b6b27f1dfd4856ce5b7f7cbd2c867ecbd9eed13a760"
+      "sha256": "60532cd3fe05ecc0c591dd1eca5ae03007c3a9855c6dad461d7907dfb482fa34"
     },
     {
       "path": "src/extension/batch-view.ts",
@@ -457,6 +461,10 @@
     {
       "path": "src/extension/delivery.ts",
       "sha256": "71c5187f9f684336bb911c5f0ed45f2f3b53bae606d288dc7ab26e9aebc2f990"
+    },
+    {
+      "path": "src/extension/egress-bridge.ts",
+      "sha256": "84e81dee3b3de623e158fd1d58ff9d58e92f333ab3d93cc4bf4bf924e9a80408"
     },
     {
       "path": "src/extension/inference-bridge.ts",
@@ -700,7 +708,7 @@
     },
     {
       "path": "src/pi-extension.ts",
-      "sha256": "e3bcff4d6dc0dd6d80d576566e5246b1c397c99d3c8031aa5fa5e718fbffec19"
+      "sha256": "aee4955810197a111a6a888ad3c4215f67919a91a3f60b9c12b1d93505546521"
     },
     {
       "path": "src/platform/guest/archive.ts",
@@ -712,7 +720,7 @@
     },
     {
       "path": "src/platform/guest/egress.ts",
-      "sha256": "405bf0f8ea297ff733564aafacdad9cbdfec64b52dadc1270154df5e2fa1a637"
+      "sha256": "c5919bb9054ac9404ba5828dc5911f4dab0dda7b3cd092ecb5e629de80e2f5b7"
     },
     {
       "path": "src/platform/guest/histories.ts",
@@ -788,7 +796,7 @@
     },
     {
       "path": "src/platform/host/egress.ts",
-      "sha256": "b45e8af855a3b2a050389d797de95d995e6ce0255688b657c1cb190267abaf31"
+      "sha256": "60d95ecc5e9c7d25c0602f21025caea81d5bf18895453eb03bb8823f669d160b"
     },
     {
       "path": "src/platform/host/files.ts",
@@ -848,7 +856,7 @@
     },
     {
       "path": "src/platform/host/service.ts",
-      "sha256": "b89df10e4e878700abcf6d142327aa6d2bf48e048c0a8719cfcf770d06323e3c"
+      "sha256": "14db37a7b7e2ee7ebab15e11481866235c7cb698d29671ea3a841aaf9b749142"
     },
     {
       "path": "src/platform/host/snapshot.ts",
@@ -952,7 +960,7 @@
     },
     {
       "path": "src/protocol/host-guest.ts",
-      "sha256": "db401cbd8cfdb8d735753402bcf4fa450032e3c7dc0bd4a016c1a54ca0d5cbe1"
+      "sha256": "c45b5799bb6b8785b4658c5459a536d1b13c3480b07bfe79dd29e9c9563a6c6c"
     },
     {
       "path": "src/protocol/host-history.ts",
@@ -1028,7 +1036,7 @@
     },
     {
       "path": "src/resident-paths.ts",
-      "sha256": "4db3218289e320a1be4bcf6c337a03d4ab37618447bee07cfa4f3362dcc8b98e"
+      "sha256": "a0b7dd8e466ed3be4efdc8a718de208bf25ecefb56cae9c0c93723d9102c06ec"
     },
     {
       "path": "src/review.ts",
@@ -1036,7 +1044,7 @@
     },
     {
       "path": "src/runner.ts",
-      "sha256": "5837de72ca0a2ddadb46fa6a5b866d00e53705bddef38121a6c2257c5d29cb5d"
+      "sha256": "14933b6a327aab9d51d74e09cb624d4abfd416bcbb79100a544c7c127e3c8ca0"
     },
     {
       "path": "src/runtime/assets.ts",
@@ -1063,12 +1071,16 @@
       "sha256": "75830f91d451fe6d96ad870736617deecd05d0e805ef9aebca63300d36c13df6"
     },
     {
+      "path": "src/runtime/connect-proxy.ts",
+      "sha256": "81c2df6eaa1d8227a383aef936d79500d7479f79b216b81e527b7e65a397053d"
+    },
+    {
       "path": "src/runtime/deployment-manifest.ts",
       "sha256": "2209c5284911f062ebd09f689fb0f004fc1901eb213fed505104adcbb29deecb"
     },
     {
       "path": "src/runtime/egress-forwarder.ts",
-      "sha256": "58f68818937dec97b6bd49b8785e8b48b38e14aea12824496419b54f4b43ec1e"
+      "sha256": "fa563ac13b1ca3803b61f9c2a290dea0da23bf25e2866619f1308f15b55d86f5"
     },
     {
       "path": "src/runtime/engine-auth.ts",
@@ -1148,7 +1160,7 @@
     },
     {
       "path": "src/runtime/pi-spawn-plan.ts",
-      "sha256": "85fb1e5d3b82f9af8b19e89d4d36d52c786ddf8c96f4be6043801939ffafff95"
+      "sha256": "144a85714ed782f4aefa94014b4f93f56936e335bf245a3b18981b8966cfef83"
     },
     {
       "path": "src/runtime/principal-delivery.ts",
@@ -1168,7 +1180,7 @@
     },
     {
       "path": "src/runtime/resident-rootfs.ts",
-      "sha256": "403e38c09d0079482a262956b9bdd0925b3c244f90545122ef7abaae0c50b5e2"
+      "sha256": "e4fe3426105edfc56f99efb2a406050fb3606c0979984f5b66ef9aa4348ee608"
     },
     {
       "path": "src/runtime/run-registry.ts",
@@ -1212,7 +1224,7 @@
     },
     {
       "path": "src/sandbox.ts",
-      "sha256": "47bf8916a1b8703a8f3e487383a4073ec083c9857ac5f18828c8c2bbd283d63f"
+      "sha256": "b757f4f5f8b8eed58bab6cb476d35b1ec489e8fc2d245a5783a5e1b480b1f410"
     },
     {
       "path": "src/storage/batch-view.ts",
@@ -1496,7 +1508,7 @@
     },
     {
       "path": "src/views.ts",
-      "sha256": "a0cd3fcc0173d7dd7673474529658407f078603a307c63fb1a5fd134b6a78701"
+      "sha256": "1113d5ba0e63ab363546160df2c88599006848a601905c6fc4c032016e63d1b9"
     },
     {
       "path": "src/views/pending-work.ts",

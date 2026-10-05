@@ -8,9 +8,11 @@ import type {
 } from "../implementation/contracts.js";
 import { dirname } from "node:path";
 import { confinedPath, RESIDENT_ENVIRONMENT, type ResidentDirectories } from "./sandbox.js";
-import type { PiConfinement, PiInference, ResidentResourceHints } from "./runtime/pi-spawn-plan.js";
+import type { PiConfinement, PiEgress, PiInference, ResidentResourceHints } from "./runtime/pi-spawn-plan.js";
 import { InferenceRelay } from "./runtime/inference-relay.js";
-import { EGRESS_SOCKET_ENV, EgressForwarder, requestEgressPlaceholder } from "./runtime/egress-forwarder.js";
+import { ConnectProxy, makePublicDial, type ConnectDial, type EgressAudit } from "./runtime/connect-proxy.js";
+import type { EgressPolicy } from "./domain/egress.js";
+import { EGRESS_SOCKET_ENV, EgressForwarder, requestEgressConnect, requestEgressPlaceholder } from "./runtime/egress-forwarder.js";
 import { placeholderFor, resolveEngineAuth } from "./runtime/engine-auth.js";
 import { productSurfaceMasks } from "./runtime/resident-rootfs.js";
 import { StoreError } from "./domain/errors.js";
@@ -56,6 +58,11 @@ export interface RunnerProfile {
    * spawn plan -- `--clearenv` makes it the only channel, so nothing ambient
    * or inherited can carry it. */
   readonly toolSurface?: string;
+  /** UX-08/DR34: this role's resolved CONNECT allowlist, from the host's
+   * egress clause at runner start -- absent means the Resident gets no proxy
+   * variables and no socket. A Human's mid-session edit lands on the next
+   * runner, as the model profile's edits do. */
+  readonly egress?: EgressPolicy;
 }
 /** What the deployment declared about confining Residents.
  *
@@ -105,6 +112,9 @@ export class RunnerModule {
    * than delivered as a delivery failure. */
   private queuedObservation: EngineObservation | null = null;
   private observationInFlight = false;
+  /** DR34: the Linux-side CONNECT dial (resolve + screen + pin). In the guest
+   * the dial is the host's `egress.connect` instead, bound per delivery. */
+  private readonly publicDial = makePublicDial();
   /** The send loop's handle: delivery completion joins it so the last thing
    * the broker hears is the engine's settled state, before batch.complete. */
   private observationFlush: Promise<void> | null = null;
@@ -171,7 +181,7 @@ export class RunnerModule {
    * delivery, and the sandbox is given only a placeholder of the same shape.
    * Every Resident reaches its provider through this channel; host credentials
    * never enter a Resident's environment or mounts. */
-  private async openRelay(): Promise<{ inference: PiInference; relay: { close(): Promise<void> } }> {
+  private async openRelay(): Promise<{ inference: PiInference; relay: { close(): Promise<void> }; connectDial: ConnectDial }> {
     const { piAgentDir } = this.paths;
     if (!this.lease || !this.limits || !this.profile || !piAgentDir)
       throw new StoreError("UNSUPPORTED_PROFILE", "confined inference configuration is incomplete");
@@ -193,16 +203,46 @@ export class RunnerModule {
       // forwarder (the delivery's finally) ends the run's relay on the host.
       const forwarder = await EgressForwarder.listen(socketHostPath, egress,
         { placeholderId: issued.placeholderId, ...run, modelProfile: this.profile.modelProfile ?? this.profile.name }, 4, issued);
-      return { relay: forwarder, inference: { socketHostPath, provider: issued.provider, model: issued.model, placeholder: issued.placeholder } };
+      // DR34: the same lease's run carries the proxy's tunnels -- each CONNECT
+      // asks the host to dial for it, carrying this role's resolved policy
+      // (the host cannot read the guest's config; it enforces the declared
+      // list and screens the resolved address with its own resolver).
+      const connectDial: ConnectDial = (host, port) => {
+        const policy = this.profile?.egress;
+        if (policy === undefined)
+          return Promise.reject(new StoreError("UNSUPPORTED_PROFILE", "this role has no egress policy"));
+        return requestEgressConnect({ socket: egress, frameBytes: this.limits!.frameBytes, deadlineMs: this.limits!.receiptWaitSeconds * 1000 },
+          issued, run, host, port, policy);
+      };
+      return { relay: forwarder, connectDial, inference: { socketHostPath, provider: issued.provider, model: issued.model, placeholder: issued.placeholder } };
     }
     const auth = await resolveEngineAuth(piAgentDir, this.profile.model.provider, this.profile.model.model);
     const placeholder = placeholderFor(auth.apiKey);
     const relay = await InferenceRelay.open(socketHostPath,
       { origin: auth.origin, headers: auth.headers, substitute: { placeholder, secret: auth.apiKey } },
       { concurrent: 4, timeoutMs: this.profile.model.inferenceTimeoutSeconds * 1000 });
-    return { relay, inference: { socketHostPath, provider: auth.provider, model: auth.model, placeholder, thinking: auth.thinking } };
+    return { relay, connectDial: this.publicDial, inference: { socketHostPath, provider: auth.provider, model: auth.model, placeholder, thinking: auth.thinking } };
   }
-  private adapter(batch: PreparedBatch, inference?: PiInference): PiAdapter {
+
+  /** DR34/UX-08: the per-delivery CONNECT proxy, opened beside the relay when
+   * this role's policy names endpoints. In the guest its dial asks the host
+   * (`egress.connect` on the run's lease); on Linux it dials directly -- both
+   * go through the same resolved-address screening. One audit line per
+   * CONNECT lands on this runner's stderr, the journal's record. */
+  private async openConnectProxy(connectDial: ConnectDial): Promise<ConnectProxy | null> {
+    const policy = this.profile?.egress;
+    if (policy === undefined || !this.lease) return null;
+    const socketHostPath = join(dirname(this.lease.socketHostPath), "egress.sock");
+    if (Buffer.byteLength(socketHostPath) > 107)
+      throw new StoreError("UNSUPPORTED_PROFILE", "egress proxy socket path exceeds Linux sun_path");
+    return ConnectProxy.open({
+      socketPath: socketHostPath, policy, actor: this.agent, dial: connectDial,
+      audit: (entry: EgressAudit) => {
+        console.error(`egress ${entry.actor} role=${entry.role} CONNECT ${entry.target} ${entry.decision} ${entry.reason}`);
+      },
+    });
+  }
+  private adapter(batch: PreparedBatch, inference?: PiInference, egress?: PiEgress): PiAdapter {
     const { stateRoot, society, piCommand, piArgs, piAgentDir, coreExtension, cli } = this.paths;
     if (
       !this.lease ||
@@ -245,7 +285,7 @@ export class RunnerModule {
       projectMirror: projectMirrorPathAt(stateRoot),
       sessions: sessionDir,
     };
-    const confinement = this.confinement(directories, piArgs, inference);
+    const confinement = this.confinement(directories, piArgs, inference, egress);
     return new PiAdapter({
       actor: this.agent,
       society,
@@ -299,6 +339,7 @@ export class RunnerModule {
     directories: ResidentDirectories,
     piArgs: readonly string[] | undefined,
     inference: PiInference | undefined,
+    egress: PiEgress | undefined,
   ): PiConfinement {
     const declared = this.paths.confinement;
     if (declared === undefined || !this.lease || !this.limits)
@@ -328,6 +369,7 @@ export class RunnerModule {
       lease: this.lease,
       directories,
       ...(inference === undefined ? {} : { inference }),
+      ...(egress === undefined ? {} : { egress }),
     };
   }
   /** Queues the engine's latest self-report for `runner.observe`. The send
@@ -393,13 +435,25 @@ export class RunnerModule {
       case "settle": receipt = decision.receipt; break;
       case "present": {
         const opened = await this.openRelay();
+        // DR34/UX-08: the CONNECT proxy is the delivery's too -- it opens once
+        // the relay path stands, and it closes with it, so a Resident's proxy
+        // variables never outlive the run's sockets. A proxy that cannot open
+        // returns the relay first; the delivery gets no half-opened provider
+        // path it was never told about.
+        let proxy: ConnectProxy | null;
+        try { proxy = await this.openConnectProxy(opened.connectDial); }
+        catch (error) { await opened.relay.close(); throw error; }
         let boundary;
         try {
-          boundary = await this.adapter(batch, opened.inference).deliver(batch, {
+          boundary = await this.adapter(batch, opened.inference,
+            proxy === null ? undefined : { socketHostPath: proxy.socketPath }).deliver(batch, {
             observe: observation => this.noteObservation(observation),
           });
         }
-        finally { await opened.relay.close(); }
+        finally {
+          if (proxy !== null) await proxy.close();
+          await opened.relay.close();
+        }
         // RUN-003: graceful yield leaves the prepared batch and mail untouched.
         // The "waiting" report is the last word the broker should keep.
         if (boundary === null) { await this.observationFlush; return; }

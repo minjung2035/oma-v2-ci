@@ -13,7 +13,7 @@ import { RESIDENT_ENVIRONMENT, RESIDENT_PATHS, SANDBOX_FILTER_FD, SYSTEM_BIND_CA
 // layer); orchestration code keeps importing them through this module so the
 // mount plan and its readers share one spelling.
 export {
-  RESIDENT_PATHS, SYSTEM_BIND_CANDIDATES, RESIDENT_INFERENCE_PORT, SANDBOX_EXECUTABLE,
+  RESIDENT_PATHS, SYSTEM_BIND_CANDIDATES, RESIDENT_INFERENCE_PORT, RESIDENT_EGRESS_PORT, SANDBOX_EXECUTABLE,
   SANDBOX_FILTER_FD, modelCommandScript, RESIDENT_PATH_ENV, RESIDENT_ENVIRONMENT,
   RESIDENT_NODE_TOOLCHAIN, nodeToolchainMounts, requireResidentRootfs, residentProjectGit, hostSessionPath, confinedPath,
   type MountedInstallation,
@@ -72,10 +72,12 @@ function resolvedBindSource(path: string): string {
  */
 export function residentArgv(h: SandboxHost, lease: ValidatedRunLease,
   dirs: ResidentDirectories, env: Readonly<Record<string, string>> = {},
-  inferenceSocketHost?: string): string[] {
+  inferenceSocketHost?: string, egressSocketHost?: string): string[] {
   requireResidentContext(h, lease, dirs);
   if (inferenceSocketHost !== undefined && !trustedAbsolutePath(inferenceSocketHost))
     throw new StoreError("UNSUPPORTED_PROFILE", "relay socket path is not a trusted absolute path");
+  if (egressSocketHost !== undefined && !trustedAbsolutePath(egressSocketHost))
+    throw new StoreError("UNSUPPORTED_PROFILE", "egress proxy socket path is not a trusted absolute path");
   const limits = h.limits!;
   return ["bwrap", "--unshare-all", "--new-session", "--die-with-parent", "--cap-drop", "ALL",
     // SB-001, MAC-205: the kernel objects no namespace confines are refused by
@@ -112,6 +114,10 @@ export function residentArgv(h: SandboxHost, lease: ValidatedRunLease,
     "--ro-bind", resolvedBindSource(lease.socketHostPath), RESIDENT_PATHS.socket,
     ...(inferenceSocketHost === undefined ? []
       : ["--ro-bind", resolvedBindSource(inferenceSocketHost), RESIDENT_PATHS.inference]),
+    // UX-08/DR34: the CONNECT proxy the same way -- a ro-bound unix socket, so
+    // a process inside reaches the runner's proxy and nothing beyond it.
+    ...(egressSocketHost === undefined ? []
+      : ["--ro-bind", resolvedBindSource(egressSocketHost), RESIDENT_PATHS.egress]),
     "--symlink", `${RESIDENT_PATHS.view}/inbox.md`, "/inbox.md", "--clearenv",
     ...setenvPairs(env), ...setenvPairs(RESIDENT_ENVIRONMENT),
     "--setenv", "OMA_FRAME_BYTES", String(limits.frameBytes),

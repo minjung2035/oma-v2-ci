@@ -417,14 +417,14 @@ topic follow(도구는 있고 규범은 막는다), 설치 명령(C2), 로그인
 | S-03 | v1은 followUp만 쓴다. batch는 activation 때 준비되고 terminal boundary(`agent_settled`)의 receipt로 완료한다. run 도중 도착한 mail은 다음 run의 batch다. run 중 `steer`는 v1 기능이 아니다: pinned 엔진에서 run 중에 넣은 custom message를 batch에 durable하게 귀속시킬 경계가 receipt 하나(`agent_settled`)뿐이기 때문이다. 대가는 지연(현재 run의 남은 시간)이며, 순서와 정확히 한 번의 귀속은 지켜진다. steer는 SP-03-T의 항목을 진입 조건으로 하는 v2 후보다 | architecture §7의 steer 문장은 N-001로 고치지 않는다. 이 DR이 v1과의 차이다 | `S-03: only the pinned durable Pi boundary receipt…`, T31-neg, SCN-S03, SCN-F16, crash-kill의 receipt 경계 | — |
 | S-05 | 닫는다. 손상 pack, `fsck --strict`가 거절하는 object, 압축이 큰 blob(object는 압축된 채 저장되므로 저장소는 pack만큼 자란다), 추가 ref가 든 bundle을 거절하거나 한도 안에 둔다. bundle 크기는 CLI의 `OMA_BUNDLE_BYTES`가 묶는다 | git 자체의 quarantine과 fsck | `S-05:` 세 시험, GIT-006 시험, durable-boundaries의 git 경계 | `ac477da` |
 | S-06 | process crash는 닫는다: durable 경계 64개 가운데 44개가 SIGKILL로 시험된다. state는 local kernel file system에 있어야 한다. NFS·SMB/CIFS·FUSE(virtiofs 포함)·9P·Ceph·AFS·Coda·NCP는 시작 때 `UNSUPPORTED_PROFILE`로 거절한다(SQLite WAL은 network file system을 지원하지 않고, 사망 증명은 kernel이 `flock`을 놓는 것에 기댄다). 전원 장애·ENOSPC·read-only remount는 release gate로 남고(powercut lane, 승인된 VM 필요), 그 전에는 REC-004대로 "전원 장애에도 유실 없음"을 말하지 않는다 | SQLite 문서의 WAL 조건 | `DR18 / S-06:`, `state-root-judgement`, durable lane | `f4b7276` |
-| S-07 | notmuch와 reflink는 v1에 없다(꺼 둔다). project egress(의존성 fetch proxy)도 v1에 없다. provider로 가는 길은 relay(INF-005)와 macOS의 §4.7뿐이다 | SP-07-A의 "결과가 없으면 꺼 둔다" | — | — |
+| S-07 | notmuch와 reflink는 v1에 없다(꺼 둔다). project egress(의존성 fetch proxy)도 v1에 없다. provider로 가는 길은 relay(INF-005)와 macOS의 §4.7뿐이다 — project egress 부분은 DR34(UX-08)가 v0.1의 OPTIONAL CONNECT proxy로 supersede한다 | SP-07-A의 "결과가 없으면 꺼 둔다" | — | — |
 | S-08, S-10, S-11 | tiered integration, attestation, challenge·floor, fresh verifier는 v1에 없다. base profile의 보호 경로 거절이 그대로 남는다 | integration-policy | 기존 base profile 시험 | — |
 | S-09 | v1은 성능 주장을 하지 않는다. 문서는 Principal token 감소나 품질을 달성한 것으로 말하지 않는다. 평가 protocol은 v2의 측정 과제다 | SP-09-A | — | — |
 | 비용 상한 | v1에는 없다. OMA는 relay에서 요청 수와 동시성을 쥐지만 돈을 세지 않는다. provider 계정의 한도가 적용된다 | INF-001(해석은 엔진의 것) | — | — |
 | macOS 규격 | [macos-platform](macos-platform.md)을 수용한다(상태 ACCEPTED). traceability의 `normativeSources`에 넣는다. MV oracle은 그 ID로 남기고 [test-matrix](verification-spec.md#oma-core-v1--검증-계약)의 platform 절이 lane과 시험에 잇는다. `platform` lane을 등록한다 | 규격 머리의 수용 절차 | `verify:platform` | 이 문서 |
 
 **바꾸는 규범.** SP-001(모든 항목 `OPEN` → 항목별 판정), S-01-CANDIDATE와 INT-001의 "fixed host checks"(v1은 checks를 거절한다),
-S-03과 PI-003(followUp만), SB-001(seccomp filter), SB-002(mirror mount), SB-004(project egress는 v1에 없다), INF-001(credential
+S-03과 PI-003(followUp만), SB-001(seccomp filter), SB-002(mirror mount), SB-004(project egress는 v1에 없다 — 이후 DR34가 OPTIONAL CONNECT egress로 다시 고쳤다), INF-001(credential
 저장소), REC-004(지원 file system), PRODUCT·README의 설치·로그인·비용 문장, macos-platform §12·§13.
 architecture §7의 steer 문장과 §16의 candidate 검사 문장은 N-001 때문에 고치지 않고 여기에 차이를 적는다.
 
@@ -1082,3 +1082,61 @@ marker disproved itself, so the nonzero exit stays a plain CHECK_FAILED. The
 quarantine importer's `OMA_ERROR=` failure words follow the same whole-line
 rule (a quarantine stderr line is unreachable by user argv, but the bytes are
 still the spawned command's output, not the class).
+
+## DR34 — Project egress is an HTTP CONNECT proxy per delivery, allowlisted per role (UX-08)
+
+UX-08 was the standing complaint: a confined Resident could not `npm install`,
+`git clone https`, or pip anything, because `--unshare-all` leaves no outbound
+at all. SB-004's "private network, always" was never meant to keep that — it
+said a dependency-fetch path, when added, is OPTIONAL and passes its own S-01
+escape tests rather than sharing the host's network.
+
+The design keeps every existing invariant and adds one narrow channel. A
+confined Resident still runs `--unshare-all`; the only thing that changed is
+that the runner now owns a small HTTP CONNECT proxy on one unix socket beside
+the run's lease socket, bound into the sandbox at `/run/oma/egress.sock`, and
+only when the Human configured egress for that role. The trusted extension
+forwards a loopback port to it inside the sandbox, and the spawn plan exports
+`HTTP_PROXY`/`HTTPS_PROXY`/`ALL_PROXY` (and lowercase) at
+`http://127.0.0.1:8318` — the spellings npm, Git, pip, curl and Node all read.
+`NO_PROXY` names loopback only, so the engine's own inference bridge is never
+proxied. Unsetting the variables inside buys nothing: there is still no route
+around the socket.
+
+Policy is `HostConfigV1.egress`: `allow` is the baseline endpoint list and
+`roles.<role>` adds per role; a clause present with no endpoints is refused at
+commit, and an absent clause means no socket and no variables. Entries are DNS
+names or `*.suffix` wildcards — two labels minimum, and never ports, schemes,
+paths or address literals — so the whole clause can be checked in one place.
+The proxy accepts CONNECT only, only authority-form, only port 443: HTTPS end
+to end in v0.1, and SSH/22, raw TCP/UDP and SOCKS5 stay out. The request's
+headers die at the proxy — `Proxy-Authorization`, `Authorization`, `Cookie`,
+whatever a tool or Resident invented — so nothing credential-shaped crosses
+into the tunnel; after the 200 the socket is raw bytes and nothing re-parses.
+
+The SSRF boundary sits where the name becomes a connection. The dial resolves
+once on the host side, screens every answer against private, loopback,
+link-local, CGNAT, documentation, reserved, multicast and encoded space
+(v4-mapped, NAT64, Teredo, 6to4 are unwrapped before judging), and pins the
+chosen literal — a DNS answer flipped after the check connects nowhere. A
+name resolving only to private space refuses as INVALID_REQUEST, which the
+tool sees as a clean 403, not a hang.
+
+On macOS the guest has no NIC (MAC-203), so the same proxy's `dial` is the
+host's `egress.connect` — protocol v6 — on the run's pooled lease: the request
+carries the role's resolved allowlist because the host cannot read the
+society's config on the guest's disk; the host grammar-checks the declared
+list, enforces it verbatim, and applies its own resolve-and-screen on top.
+The run↔lease check is the same one `egress.open` uses, a run's tunnels die
+with it, and `forgetBoot` ends every run of the last boot. On Linux the dial
+is direct with the identical screen, so the policy point and the tests are
+shared. Audit is one line per CONNECT — actor, role, target, verdict, reason
+— on the deciding side's journal; never request bytes or headers.
+
+Deliberately unchanged: the inference relay's own channel and credential
+substitution are untouched, the egress pool/lease/boot semantics are the same
+ones the relay already used, and a Resident's failure mode stays a refusal,
+not host networking (SB-004, S-01). The clause ships unset by default; a
+deployment that configures nothing sees no proxy socket and no variables, and
+`egressRequired`/`openPrincipalEgress` semantics for the *required* inference
+path are not renegotiated by making egress optional.

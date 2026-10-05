@@ -68,8 +68,9 @@ OMA v2(`oma-core-v1`) 적대적 감사 + 경화 + v0.1 선행 작업. 목표 순
   2. TUI 4건: compact 도구 메시지(Principal OMA 도구만·표시명만), `/thinking show|hide`,
      미전송 큐 표시, 메일 역할명(worker1/2·principal)+Worker 메일 제목 지시
   3. society-off 재설계 — 확정: 게이트+execve (plan §C)
-  4. **egress 프록시**(S-07 재개): host egress를 범용 HTTP CONNECT 프록시 —
-     allowlist·SSRF 차단·credential 비노출·`--unshare-all` 유지 (UX-08 해결책)
+  4. ~~**egress 프록시**(S-07 재개): host egress를 범용 HTTP CONNECT 프록시 —
+     allowlist·SSRF 차단·credential 비노출·`--unshare-all` 유지 (UX-08 해결책)~~ —
+     완료: DR34 + protocol v6 `egress.connect`로 구현됨(현재 브랜치 작업).
   5. bundled extension: lsp → ask → hashline → web → mcp (WORKSTREAM §7 스펙,
      vendor 원칙: 소스 내장·offline 즉시 로드·runtime fetch 금지·경계 어댑터만 얇게)
 - [ ] 코드베이스 전체 **13기준 전수 탐색** — 하드코딩 숫자 제한 감사 포함
@@ -157,8 +158,8 @@ npm run evidence:graph                   # dependency-graph.json 재생성
   egress lease, ledger status 키, displayCopy, `..foo`, `+` 버전 스냅샷, 워크플로우 clock.
 - 테스트 최적화: 11.5분 → ~4.5분 (PTY 마커화, 감사 dedup, 빌드 스탬프).
 - P0-8 부류: 6라운드 수정 → 원칙 추가 → 전수 마이그레이션 → 정적 규칙.
-- 장부: UX-01~07,09~21,23~29 수정됨·UX-30(wedge 부류) 수정됨·UX-22+는 전수 스캔 편입.
-  미해결: **UX-08**(egress — 선행 작업).
+- 장부: UX-01~21,23~29 수정됨·UX-30(wedge 부류) 수정됨·UX-22+는 전수 스캔 편입.
+  UX-08도 DR34 CONNECT egress로 구현됨(현재 브랜치 작업).
 - 버그 아님 판정들: mailBodyBytes 바닥 거절(정상), `"/ oma-deliver"`(Pi 파서 실험으로 닫음).
 
 ## 9. 실행 제약

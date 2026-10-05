@@ -67,6 +67,15 @@ export interface AgentProfile {
   childProfile: string | null; resources: ResourceLimits;
 }
 
+/** UX-08, DR34: the Human's HTTP CONNECT egress clause. `allow` is the
+ * baseline endpoint list (DNS names, `*.suffix` wildcards); `roles` adds
+ * per-role entries. Absent means Residents get no proxy at all -- the SB-004
+ * private network stays whole. */
+export interface HostEgressConfig {
+  allow: string[];
+  roles?: { [role: string]: string[] };
+}
+
 export interface HostConfigV1 {
   schemaVersion: 1; society: string;
   installation: { node: string; libdir: string; rootfs: string; deploymentDigest: string; packages?: string };
@@ -84,4 +93,5 @@ export interface HostConfigV1 {
     checks: { id: string; argv: string[]; env: Record<string,string>; resources: ResourceLimits }[];
   };
   limits: ProtocolLimits;
+  egress?: HostEgressConfig;
 }

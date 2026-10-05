@@ -13,7 +13,7 @@ import { chmodSync } from "node:fs";
 import { clearSocketName } from "../../storage/socket-name.js";
 import { encodeFrame } from "../../frame.js";
 import { readLeadingFrame } from "../rpc.js";
-import { egressOpenProblem, egressPlaceholderProblem, requestProblem } from "../../protocol/host-guest.js";
+import { egressConnectProblem, egressOpenProblem, egressPlaceholderProblem, requestProblem } from "../../protocol/host-guest.js";
 
 export class EgressPool {
   private readonly idle: Socket[] = [];
@@ -93,12 +93,41 @@ async function serve(client: Socket, options: EgressServiceOptions): Promise<voi
   catch { client.destroy(); return; }
   const frame = asked.frame;
   const problem = requestProblem(frame) ?? (frame.method === "egress.placeholder" ? egressPlaceholderProblem(frame.params)
-    : frame.method === "egress.open" ? egressOpenProblem(frame.params) : "the first message is egress.placeholder or egress.open");
+    : frame.method === "egress.connect" ? egressConnectProblem(frame.params)
+    : frame.method === "egress.open" ? egressOpenProblem(frame.params)
+    : "the first message is egress.placeholder, egress.connect or egress.open");
   if (problem !== null || frame.key !== undefined) { client.destroy(); return; }
   const host = options.pool.take();
   if (host === null) { client.destroy(); return; }
   host.on("error", () => { host.destroy(); client.destroy(); });
   host.write(encodeFrame(frame));
+  if (frame.method === "egress.connect") {
+    // DR34: the host's answer decides the tunnel. `ok` relays the answer to
+    // the client, then this connection is the raw pipe; a refusal relays the
+    // framed error and both ends close. Bytes that followed the client's
+    // request (the TLS ClientHello racing the answer) go to the host first.
+    let connectKept = false;
+    try {
+      const answer = await readLeadingFrame(host, options.frameBytes, options.deadlineMs);
+      if (answer.frame.ok === true && answer.rest.length === 0) {
+        client.write(encodeFrame(answer.frame));
+        if (asked.rest.length > 0) host.write(asked.rest);
+        client.pipe(host); host.pipe(client);
+        host.resume(); client.resume();
+        const drop = (): void => { client.destroy(); host.destroy(); };
+        client.once("end", drop); client.once("close", drop);
+        host.once("end", drop); host.once("close", drop);
+        connectKept = true;
+        return;
+      }
+      // A refused connect still earns its framed answer; bytes after `ok`
+      // would be a protocol break, so a bare answer means close.
+      client.end(encodeFrame(answer.frame));
+    } catch {
+      client.destroy();
+    } finally { if (!connectKept) host.destroy(); }
+    return;
+  }
   if (frame.method === "egress.open") {
     // From here the connection is the engine's; nothing is read or kept.
     if (asked.rest.length > 0) host.write(asked.rest);

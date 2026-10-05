@@ -2054,8 +2054,8 @@
   {
     "requirement": "SB-004",
     "source": "docs/implementation-spec.md",
-    "digest": "4be47573d5808f8227b22a8ef43bf7865df3f40791c6dc62ed5394bddebcc987",
-    "normativeText": "**MUST [SB-004]** private network가 기본이다. provider는 actor inference stream→broker만 사용한다. dependency fetch 같은 project egress(Human-configured proxy/cache profile)는 v1에 없다([DR18](design-revisions.md), S-07). 뒤에 더할 때는 OPTIONAL로 노출하고 별도 S-01 escape 시험을 통과한다. host network 공유로 대체하지 않는다.",
+    "digest": "2aaed6e7ea0e2467c5a0d134567ebfd46241a5738a87cdc680f704358cc31902",
+    "normativeText": "**MUST [SB-004]** private network가 기본이다. provider는 actor inference stream→broker만 사용한다. project egress는 v0.1에서 OPTIONAL로 도입됐다([DR34](design-revisions.md), UX-08): `HostConfigV1.egress`가 endpoint allowlist를 선언하면 runner는 delivery당 하나의 HTTP CONNECT proxy unix socket을 `--ro-bind`로 `/run/oma/egress.sock`에 두고, trusted extension이 loopback `HTTP(S)_PROXY`/`ALL_PROXY`를 세운다. CONNECT·authority-form·443만 허용하고, request header는 proxy에서 끝나며, 이름은 host 측에서 resolve해 모든 answer를 private/special-use 대역으로 screen하고 literal을 pin한다. 절(節)이 없거나 role의 해석이 비면 socket도 변수도 없고, 그 부재로 profile이 `UNSUPPORTED_PROFILE`이 되지는 않는다. host network 공유로 대체하지 않고, SSH·raw TCP/UDP·SOCKS5는 v0.1 밖이다. 별도 S-01 escape 시험은 egress-connect suite가 담당한다.",
     "applicability": "unclassified",
     "rationale": "Requires production-path review; no inference from test names.",
     "owner": null,

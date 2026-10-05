@@ -24,6 +24,7 @@ import { StoreError } from "../../domain/errors.js";
 import type { KeychainStore } from "./keychain.js";
 import { serialized } from "./keychain.js";
 import { PLATFORM_FRAME_BYTES } from "../../protocol/host-guest.js";
+import { makePublicDial } from "../../runtime/connect-proxy.js";
 
 export type Timings = Pick<LifecycleOptions, "handshakeDeadlineMs" | "handshakeRetryMs" | "drainDeadlineMs" | "healthEveryMs" | "hungAfterMs" | "restarts">;
 /** The spec's values: MAC-320 (60 s drain), MAC-330 (10 s / 30 s), MAC-331 (3 in 10 min). */
@@ -176,6 +177,15 @@ export class HostService {
       // v1 guests supplied no model budget. v2 carries it per run, not as a
       // host-wide RPC timeout. The compatibility value is the old model default.
       limits: { concurrent: 4, timeoutMs: 600_000 }, frameBytes: PLATFORM_FRAME_BYTES, maxPool: 32,
+      // DR34: `egress.connect` dials through here. The host resolves the name
+      // itself, screens every answer against private and special-use space,
+      // and pins the literal it connects to; the per-role allowlist travels
+      // with the guest's request (the society's config is not the host's to
+      // read), and the host enforces the list it was given.
+      dial: makePublicDial(),
+      // A connect decision lands in the host's journal -- the stderr of the
+      // service process -- once per tunnel the guest asks for.
+      audit: entry => { console.error(`egress ${entry.actor} role=${entry.role} CONNECT ${entry.target} ${entry.decision} ${entry.reason}`); },
     });
     lifecycle.onState(state => {
       if (state === "ready") {

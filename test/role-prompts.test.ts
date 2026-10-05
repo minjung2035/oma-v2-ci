@@ -45,7 +45,7 @@ test("FI-3: the Resident prompt names the sandbox's working limits and that subm
   const society = RESIDENT_SYSTEM_PROMPT.slice(RESIDENT_SYSTEM_PROMPT.indexOf("## The society"), RESIDENT_SYSTEM_PROMPT.indexOf("## Starting up"));
   assert.match(society, /`git push` does not reach `main`/);
   const execution = RESIDENT_SYSTEM_PROMPT.slice(RESIDENT_SYSTEM_PROMPT.indexOf("## Task execution"), RESIDENT_SYSTEM_PROMPT.indexOf("## The Principal"));
-  for (const fact of [/no network/i, /`\/tmp`/, /process you start/, /\/world\/START\.md/])
+  for (const fact of [/egress proxy/i, /allowlist/i, /`\/tmp`/, /process\s+you\s+start/, /\/world\/START\.md/])
     assert.match(execution, fact);
   // The facts themselves live in the map (START.md); the prompt only points there.
   assert.doesNotMatch(RESIDENT_SYSTEM_PROMPT, /OMA_CPUS|docker|submodule/i);

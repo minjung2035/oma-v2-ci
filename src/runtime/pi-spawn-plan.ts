@@ -12,7 +12,7 @@ import type { PackageResourcePaths } from "./pi-packages.js";
 import { PI_AGENT_DIR_ENV } from "./pi-runtime.js";
 import { dirname, join } from "node:path";
 import { pathToFileURL } from "node:url";
-import { RESIDENT_INFERENCE_PORT, RESIDENT_PATHS, SANDBOX_EXECUTABLE, confinedPath, residentArgv, type ResidentDirectories, type SandboxHost } from "../sandbox.js";
+import { RESIDENT_EGRESS_PORT, RESIDENT_INFERENCE_PORT, RESIDENT_PATHS, SANDBOX_EXECUTABLE, confinedPath, residentArgv, type ResidentDirectories, type SandboxHost } from "../sandbox.js";
 import type { ValidatedRunLease } from "../protocol/run-lease.js";
 import { StoreError } from "../domain/errors.js";
 import { storedMailBytes } from "../domain/mail-values.js";
@@ -32,6 +32,13 @@ export interface PiConfinement {
   /** INF-005/006/008: the relay's host socket, the provider and model it
    * stands in for, and the placeholder key the engine inside is given. */
   readonly inference?: PiInference | undefined;
+  /** UX-08/DR34: the CONNECT proxy's socket this delivery opened, bound at
+   * RESIDENT_PATHS.egress. Absent -- a Human configured no egress for this
+   * role -- and the Resident gets no proxy variables at all. */
+  readonly egress?: PiEgress | undefined;
+}
+export interface PiEgress {
+  readonly socketHostPath: string;
 }
 export interface PiInference {
   readonly socketHostPath: string;
@@ -303,9 +310,26 @@ export function planPiSpawn(options: PiAdapterOptions): PiSpawnPlan {
       OMA_INFERENCE_PORT: String(RESIDENT_INFERENCE_PORT),
       OMA_INFERENCE_KEY: relay.placeholder,
     }),
+    // UX-08/DR34: the proxy variables every package manager and HTTPS Git
+    // read -- the extension's loopback forwarder of the bound proxy socket.
+    // NO_PROXY keeps the engine's own loopback (the inference bridge) direct;
+    // a Resident's unsetting of any of this gets it no network, never a route
+    // around the proxy, because the socket is the only way out.
+    ...(confinement.egress === undefined ? {} : {
+      OMA_EGRESS_PROXY_SOCKET: RESIDENT_PATHS.egress,
+      OMA_EGRESS_PROXY_PORT: String(RESIDENT_EGRESS_PORT),
+      HTTP_PROXY: `http://127.0.0.1:${RESIDENT_EGRESS_PORT}`,
+      http_proxy: `http://127.0.0.1:${RESIDENT_EGRESS_PORT}`,
+      HTTPS_PROXY: `http://127.0.0.1:${RESIDENT_EGRESS_PORT}`,
+      https_proxy: `http://127.0.0.1:${RESIDENT_EGRESS_PORT}`,
+      ALL_PROXY: `http://127.0.0.1:${RESIDENT_EGRESS_PORT}`,
+      all_proxy: `http://127.0.0.1:${RESIDENT_EGRESS_PORT}`,
+      NO_PROXY: "127.0.0.1,localhost,::1",
+      no_proxy: "127.0.0.1,localhost,::1",
+    }),
   };
   const plan = residentArgv(host, confinement.lease, confinement.directories,
-    environment, relay?.socketHostPath);
+    environment, relay?.socketHostPath, confinement.egress?.socketHostPath);
   // WP27: the delivery path starts this plan through the owned spawn, which
   // takes only an absolute executable; a bare `bwrap` was refused there, so no
   // confined Resident could ever deliver a batch.

@@ -2,10 +2,10 @@
  "version": 1,
  "baseline": "b25961cc46532f5e30ff60cc381fed51c59d13ab",
  "summary": {
-  "READ_UNCHANGED": 53,
+  "CHANGED_WITH_ORACLE": 262,
   "REMOVED": 8,
-  "NOT_REVIEWED": 67,
-  "CHANGED_WITH_ORACLE": 256
+  "NOT_REVIEWED": 65,
+  "READ_UNCHANGED": 52
  },
  "lanes": {
   "fast": "PASS",
@@ -22,22 +22,15 @@
   {
    "path": "implementation/contracts.ts",
    "primary": "WP29",
-   "status": "READ_UNCHANGED",
+   "status": "CHANGED_WITH_ORACLE",
    "by": [
-    "AV-review"
+    "DR34"
    ],
    "oracles": [
-    "P1",
-    "P10",
-    "P13",
-    "P14",
-    "P15",
-    "P17",
-    "P19",
-    "P23"
+    "DR34"
    ],
-   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are tests whose loaded module closure (or text) contains this file",
-   "sha256": "a7261bd176ca58134bb320de83459fe3f8f952e86bea1ecae94f0d439d230688"
+   "note": "Read in full: re-exports HostEgressConfig alongside the host contract; HostConfigV1.egress is optional so existing configs validate unchanged.",
+   "sha256": "66d8fc9256a99ba41d686196986878262beef8feaaa1f338dab7965984f2488a"
   },
   {
    "path": "implementation/schema-v1.sql",
@@ -924,23 +917,13 @@
    "primary": "WP11",
    "status": "CHANGED_WITH_ORACLE",
    "by": [
-    "DR13",
-    "P0V-08",
-    "WP11",
-    "WP12",
-    "WP14"
+    "DR34"
    ],
    "oracles": [
-    "DR13",
-    "V11A",
-    "V11B",
-    "V11C",
-    "V12A",
-    "V12B",
-    "V14A",
-    "V14B"
+    "DR34"
    ],
-   "sha256": "43ff3ef4cba7756a77c1d08fd5c5315ee1c99cf641e9dc451593217d445c5db5"
+   "note": "Read in full: egress is a closed optional clause -- allow required, each entry checked by egressEntryProblem, role names checked against configured profiles, an empty effective clause refused; the snapshot freezes the copies.",
+   "sha256": "c562494056c6a0d006223ead22989c8b08770848107282c55699c39f688620a3"
   },
   {
    "path": "src/config/defaults.ts",
@@ -1015,9 +998,15 @@
   {
    "path": "src/config/role-prompts.ts",
    "primary": null,
-   "status": "NOT_REVIEWED",
-   "by": [],
-   "oracles": []
+   "status": "CHANGED_WITH_ORACLE",
+   "by": [
+    "DR34"
+   ],
+   "oracles": [
+    "DR34"
+   ],
+   "note": "Read in full: the Worker prompt now says network reaches the sandbox only through the egress proxy's allowlist when configured (HTTPS_PROXY set then), replacing 'no network yet'; the Korean and English texts agree.",
+   "sha256": "cbd91e1ffc294534e9e5cbcd723155991401cd0f04e85e379d9eefeade753238"
   },
   {
    "path": "src/diagnostics/files.ts",
@@ -1225,6 +1214,19 @@
     "AV3"
    ],
    "sha256": "91e5123da34d65923016614374bd7669ef63d69b03c429d171c51c31f7f97bd1"
+  },
+  {
+   "path": "src/domain/egress.ts",
+   "primary": null,
+   "status": "CHANGED_WITH_ORACLE",
+   "by": [
+    "DR34"
+   ],
+   "oracles": [
+    "DR34"
+   ],
+   "note": "Read in full: pure policy -- entries are normalized DNS names or *.suffix (two-label minimum); literals, ports, schemes, paths and malformed spellings refuse at grammar. parseConnectTarget accepts only authority-form host:port/[literal]:port with bounded lengths; egressPolicyFor unions baseline+role and returns null on empty; matching is suffix-with-dot or exact. No IO anywhere.",
+   "sha256": "b70183a1e7da4a12109527b80901d32a1f62bbd201adc91d3bd4d9bc7208b87b"
   },
   {
    "path": "src/domain/errors.ts",
@@ -1900,26 +1902,13 @@
    "primary": "WP03",
    "status": "CHANGED_WITH_ORACLE",
    "by": [
-    "AV27",
-    "AV28",
-    "DR17",
-    "DR18",
-    "P0V-64",
-    "P0V-81",
-    "WP03",
-    "WP25"
+    "DR34"
    ],
    "oracles": [
-    "AV27",
-    "AV28",
-    "DR18",
-    "P0V-64",
-    "P0V-81",
-    "V03A",
-    "V03B",
-    "V25A"
+    "DR34"
    ],
-   "sha256": "c7f032a1dcb6630bf6fe7b6b27f1dfd4856ce5b7f7cbd2c867ecbd9eed13a760"
+   "note": "Read in full: the egress clause resolves once against the rendered profile name; a null policy simply omits profile.egress -- no UNSUPPORTED_PROFILE, no proxy surface.",
+   "sha256": "60532cd3fe05ecc0c591dd1eca5ae03007c3a9855c6dad461d7907dfb482fa34"
   },
   {
    "path": "src/extension/batch-view.ts",
@@ -2014,6 +2003,19 @@
    ],
    "note": "Read in full: PI_ADAPTER_REVISION advanced to oma-pi-rpc-v1@1.0.1 following ENG1 -- the revision names the engine the adapter was verified against. Boundary emission, prefixes and the completion contract are byte-identical otherwise; unsettled 0.87.1 receipts stay conflicting on upgrade.",
    "sha256": "71c5187f9f684336bb911c5f0ed45f2f3b53bae606d288dc7ab26e9aebc2f990"
+  },
+  {
+   "path": "src/extension/egress-bridge.ts",
+   "primary": null,
+   "status": "CHANGED_WITH_ORACLE",
+   "by": [
+    "DR34"
+   ],
+   "oracles": [
+    "DR34"
+   ],
+   "note": "Read in full: a loopback port forwards bytes to the bound proxy socket, unread; without the env pair it starts nothing. No policy knowledge or credentials inside -- the socket end decides.",
+   "sha256": "84e81dee3b3de623e158fd1d58ff9d58e92f333ab3d93cc4bf4bf924e9a80408"
   },
   {
    "path": "src/extension/inference-bridge.ts",
@@ -3120,18 +3122,13 @@
    "primary": "WP27",
    "status": "CHANGED_WITH_ORACLE",
    "by": [
-    "P0V-120",
-    "P0V-121",
-    "P0V-122",
-    "P0V-74"
+    "DR34"
    ],
    "oracles": [
-    "P0V-120",
-    "P0V-121",
-    "P0V-122",
-    "P0V-74"
+    "DR34"
    ],
-   "sha256": "e3bcff4d6dc0dd6d80d576566e5246b1c397c99d3c8031aa5fa5e718fbffec19"
+   "note": "Read in full: startEgressBridge is composed beside startInferenceBridge; the extension closure rule still holds (builtins + local modules only).",
+   "sha256": "aee4955810197a111a6a888ad3c4215f67919a91a3f60b9c12b1d93505546521"
   },
   {
    "path": "src/platform/guest/archive.ts",
@@ -3177,26 +3174,13 @@
    "primary": null,
    "status": "CHANGED_WITH_ORACLE",
    "by": [
-    "MAC-225",
-    "MAC-710",
-    "MAC-711",
-    "MAC-712",
-    "P0V-113",
-    "P0V-114",
-    "P0V-115",
-    "P0V-116"
+    "DR34"
    ],
    "oracles": [
-    "MAC-225",
-    "MAC-710",
-    "MAC-712",
-    "P0V-113",
-    "P0V-114",
-    "P0V-115",
-    "P0V-116"
+    "DR34"
    ],
-   "note": "clauses declared by macos-platform.md's implementation table",
-   "sha256": "405bf0f8ea297ff733564aafacdad9cbdfec64b52dadc1270154df5e2fa1a637"
+   "note": "Read in full: the service validates egress.connect params before taking a pooled connection, forwards the frame, and on ok relays the answer then pipes raw -- bytes following the client's request reach the host first; a refused connect relays the framed error and closes both ends. Placeholder/open paths unchanged.",
+   "sha256": "c5919bb9054ac9404ba5828dc5911f4dab0dda7b3cd092ecb5e629de80e2f5b7"
   },
   {
    "path": "src/platform/guest/histories.ts",
@@ -3549,18 +3533,13 @@
    "primary": null,
    "status": "CHANGED_WITH_ORACLE",
    "by": [
-    "MAC-225",
-    "MAC-710",
-    "MAC-711",
-    "MAC-712"
+    "DR34"
    ],
    "oracles": [
-    "MAC-225",
-    "MAC-710",
-    "MAC-712"
+    "DR34"
    ],
-   "note": "clauses declared by macos-platform.md's implementation table",
-   "sha256": "b45e8af855a3b2a050389d797de95d995e6ce0255688b657c1cb190267abaf31"
+   "note": "Read in full: connectTunnel validates params, binds the request to this boot's run (same check as egress.open), enforces port 443, the declared allowlist and the per-run tunnel bound, then dials through the screened dialer and pipes raw after the ok frame; tunnels die with the run and with forgetBoot. Audit emits actor/role/target/verdict once per decision.",
+   "sha256": "60d95ecc5e9c7d25c0602f21025caea81d5bf18895453eb03bb8823f669d160b"
   },
   {
    "path": "src/platform/host/files.ts",
@@ -3867,41 +3846,13 @@
    "primary": null,
    "status": "CHANGED_WITH_ORACLE",
    "by": [
-    "MAC-240",
-    "MAC-241",
-    "MAC-301",
-    "MAC-320",
-    "MAC-330",
-    "MAC-331",
-    "MAC-601",
-    "MAC-619",
-    "MAC-620",
-    "MAC-621",
-    "MAC-622",
-    "MAC-623",
-    "P0V-103",
-    "P0V-104",
-    "P0V-105",
-    "P0V-106"
+    "DR34"
    ],
    "oracles": [
-    "MAC-240",
-    "MAC-241",
-    "MAC-301",
-    "MAC-320",
-    "MAC-330",
-    "MAC-331",
-    "MAC-601",
-    "MAC-620",
-    "MAC-621",
-    "MAC-622",
-    "P0V-103",
-    "P0V-104",
-    "P0V-105",
-    "P0V-106"
+    "DR34"
    ],
-   "note": "clauses declared by macos-platform.md's implementation table",
-   "sha256": "b89df10e4e878700abcf6d142327aa6d2bf48e048c0a8719cfcf770d06323e3c"
+   "note": "Read in full: EgressHost gains dial=makePublicDial() so egress.connect resolves/screens/pins on the host, and the audit callback logs one journal line per decision; the placeholder/open lifecycle is untouched.",
+   "sha256": "14db37a7b7e2ee7ebab15e11481866235c7cb698d29671ea3a841aaf9b749142"
   },
   {
    "path": "src/platform/host/snapshot.ts",
@@ -4337,28 +4288,13 @@
    "primary": null,
    "status": "CHANGED_WITH_ORACLE",
    "by": [
-    "DR18",
-    "MAC-202",
-    "MAC-210",
-    "MAC-211",
-    "MAC-230",
-    "MAC-231",
-    "MAC-241",
-    "MAC-250",
-    "MAC-620"
+    "DR34"
    ],
    "oracles": [
-    "DR18",
-    "MAC-202",
-    "MAC-211",
-    "MAC-230",
-    "MAC-231",
-    "MAC-241",
-    "MAC-250",
-    "MAC-620"
+    "DR34"
    ],
-   "note": "clauses declared by macos-platform.md's implementation table",
-   "sha256": "db401cbd8cfdb8d735753402bcf4fa450032e3c7dc0bd4a016c1a54ca0d5cbe1"
+   "note": "Read in full: v6 adds egress.connect -- validator enforces placeholderId/run/host/port plus declared role and a bounded, grammar-checked allow list; the host re-checks all of it. egressOpenProblem binds incarnation to the run's lease check as before.",
+   "sha256": "c45b5799bb6b8785b4658c5459a536d1b13c3480b07bfe79dd29e9c9563a6c6c"
   },
   {
    "path": "src/protocol/host-history.ts",
@@ -4711,9 +4647,15 @@
   {
    "path": "src/resident-paths.ts",
    "primary": null,
-   "status": "NOT_REVIEWED",
-   "by": [],
-   "oracles": []
+   "status": "CHANGED_WITH_ORACLE",
+   "by": [
+    "DR34"
+   ],
+   "oracles": [
+    "DR34"
+   ],
+   "note": "Read in full: RESIDENT_PATHS.egress and RESIDENT_EGRESS_PORT join the path table as constants only -- no behavior change.",
+   "sha256": "a0b7dd8e466ed3be4efdc8a718de208bf25ecefb56cae9c0c93723d9102c06ec"
   },
   {
    "path": "src/review.ts",
@@ -4740,31 +4682,13 @@
    "primary": "WP07",
    "status": "CHANGED_WITH_ORACLE",
    "by": [
-    "AV10",
-    "AV11",
-    "AV21",
-    "DR18",
-    "DR9",
-    "P0V-01",
-    "P0V-02",
-    "P0V-03",
-    "P0V-04",
-    "P0V-06",
-    "WP06",
-    "WP10"
+    "DR34"
    ],
    "oracles": [
-    "AV10",
-    "AV11",
-    "AV21",
-    "DR18",
-    "DR9",
-    "V06A",
-    "V06B",
-    "V10A",
-    "V10C"
+    "DR34"
    ],
-   "sha256": "5837de72ca0a2ddadb46fa6a5b866d00e53705bddef38121a6c2257c5d29cb5d"
+   "note": "Read in full: openRelay still opens inference first; openConnectProxy runs only when profile.egress resolved, beside the lease socket, closed in the delivery's finally before the relay's. The guest-path connectDial carries the run's placeholder lease and this role's resolved policy into requestEgressConnect; a proxy failure still closes the relay.",
+   "sha256": "14933b6a327aab9d51d74e09cb624d4abfd416bcbb79100a544c7c127e3c8ca0"
   },
   {
    "path": "src/runtime/assets.ts",
@@ -4852,6 +4776,19 @@
    "oracles": []
   },
   {
+   "path": "src/runtime/connect-proxy.ts",
+   "primary": null,
+   "status": "CHANGED_WITH_ORACLE",
+   "by": [
+    "DR34"
+   ],
+   "oracles": [
+    "DR34"
+   ],
+   "note": "Read in full: the SSRF screen covers v4 private/loopback/link-local/CGNAT/docs/reserved/multicast and v6 unspecified/loopback/ULA/link-local/site-local/multicast/discard/docs plus mapped/NAT64/Teredo/6to4 unwrapping; makePublicDial resolves once, drops non-public answers, and pins the literal it dials (rebinding-safe). ConnectProxy is CONNECT-only, 443-only, allowlist-gated, headers die at the proxy, refusal is 403/502 with audit, close() destroys tracked tunnels and removes the socket name. DR34 tests pin grammar, screen, pinning, refusal, headers and teardown.",
+   "sha256": "81c2df6eaa1d8227a383aef936d79500d7479f79b216b81e527b7e65a397053d"
+  },
+  {
    "path": "src/runtime/deployment-manifest.ts",
    "primary": "WP31",
    "status": "CHANGED_WITH_ORACLE",
@@ -4875,23 +4812,13 @@
    "primary": null,
    "status": "CHANGED_WITH_ORACLE",
    "by": [
-    "DR18",
-    "MAC-710",
-    "P0V-113",
-    "P0V-114",
-    "P0V-115",
-    "P0V-116"
+    "DR34"
    ],
    "oracles": [
-    "DR18",
-    "MAC-710",
-    "P0V-113",
-    "P0V-114",
-    "P0V-115",
-    "P0V-116"
+    "DR34"
    ],
-   "note": "clauses declared by macos-platform.md's implementation table",
-   "sha256": "58f68818937dec97b6bd49b8785e8b48b38e14aea12824496419b54f4b43ec1e"
+   "note": "Read in full: requestEgressConnect frames one request on the run's lease carrying the resolved role/allowlist; ok yields the raw tunnel socket, refusal throws with the host's code. EgressForwarder placeholder/open semantics unchanged; a refused listen still releases the lease (AV-15).",
+   "sha256": "fa563ac13b1ca3803b61f9c2a290dea0da23bf25e2866619f1308f15b55d86f5"
   },
   {
    "path": "src/runtime/engine-auth.ts",
@@ -5182,37 +5109,13 @@
    "primary": "WP27",
    "status": "CHANGED_WITH_ORACLE",
    "by": [
-    "AV13",
-    "AV3",
-    "DR18",
-    "MAC-205",
-    "P0V-102",
-    "P0V-36",
-    "P0V-40",
-    "P0V-41",
-    "P0V-42",
-    "P0V-43",
-    "P0V-78",
-    "WP10",
-    "WP27"
+    "DR34"
    ],
    "oracles": [
-    "AV13",
-    "AV3",
-    "DR18",
-    "MAC-205",
-    "P0V-36",
-    "P0V-40",
-    "P0V-41",
-    "P0V-42",
-    "P0V-43",
-    "P0V-78",
-    "V10A",
-    "V10C",
-    "V27A",
-    "V27B"
+    "DR34"
    ],
-   "sha256": "85fb1e5d3b82f9af8b19e89d4d36d52c786ddf8c96f4be6043801939ffafff95"
+   "note": "Read in full: confinement.egress gates both the mount argument and the whole proxy environment block; without it no proxy variables exist. NO_PROXY keeps the engine's own loopback bridge direct. DR34 test pins env values and the mount triple, and the absent-policy case.",
+   "sha256": "144a85714ed782f4aefa94014b4f93f56936e335bf245a3b18981b8966cfef83"
   },
   {
    "path": "src/runtime/principal-delivery.ts",
@@ -5283,14 +5186,16 @@
    "status": "CHANGED_WITH_ORACLE",
    "by": [
     "DR25",
-    "DR27"
+    "DR27",
+    "DR34"
    ],
    "oracles": [
-    "SCN-R01",
-    "SCN-C10"
+    "DR34",
+    "SCN-C10",
+    "SCN-R01"
    ],
-   "note": "Read in full: the prepared rootfs gains RESIDENT_PATHS.workerArchive so the confined engine's worker-only review archive mount target exists before any bind; the directory list otherwise unchanged, order and ensureDirectory semantics retained. SCN-R01 exercises the Worker review archive end-to-end through the confined path; SCN-C10 exercises package extension loading under the same rootfs.",
-   "sha256": "403e38c09d0079482a262956b9bdd0925b3c244f90545122ef7abaae0c50b5e2"
+   "note": "Read in full: the prepared rootfs gains RESIDENT_PATHS.workerArchive so the confined engine's worker-only review archive mount target exists before any bind; the directory list otherwise unchanged, order and ensureDirectory semantics retained. SCN-R01 exercises the Worker review archive end-to-end through the confined path; SCN-C10 exercises package extension loading under the same rootfs. DR34 rider: /run/oma/egress.sock gains an empty mount target alongside the relay's.",
+   "sha256": "e4fe3426105edfc56f99efb2a406050fb3606c0979984f5b66ef9aa4348ee608"
   },
   {
    "path": "src/runtime/run-registry.ts",
@@ -5407,15 +5312,17 @@
    "status": "CHANGED_WITH_ORACLE",
    "by": [
     "DR18",
-    "DR27"
+    "DR27",
+    "DR34"
    ],
    "oracles": [
     "DR27",
+    "DR34",
     "R28",
     "SCN-C08"
    ],
-   "note": "Read in full: resolvedBindSource names each socket bind source by the real directory it reaches instead of a /proc/<pid>/fd anchor bubblewrap cannot traverse inside its user namespace; only the parent resolves, the leaf need not exist, and a missing parent keeps the lexical spelling (ENOENT/ENOTDIR only -- other resolution failures propagate). R28 asserts the pure recipe with fabricated dirs; SCN-C08 runs a real confined shell under the filter; DR27 private-argument tests hold the recipe's value preservation.",
-   "sha256": "47bf8916a1b8703a8f3e487383a4073ec083c9857ac5f18828c8c2bbd283d63f"
+   "note": "Read in full: resolvedBindSource names each socket bind source by the real directory it reaches instead of a /proc/<pid>/fd anchor bubblewrap cannot traverse inside its user namespace; only the parent resolves, the leaf need not exist, and a missing parent keeps the lexical spelling (ENOENT/ENOTDIR only -- other resolution failures propagate). R28 asserts the pure recipe with fabricated dirs; SCN-C08 runs a real confined shell under the filter; DR27 private-argument tests hold the recipe's value preservation. DR34 rider: the egress proxy socket binds the same way as the relay socket -- ro-bound at RESIDENT_PATHS.egress only when a trusted absolute host path is given; an untrusted or absent path mounts nothing (UNSUPPORTED_PROFILE for the former). The CONNECT environment lives in pi-spawn-plan's env composition, gated on the same presence.",
+   "sha256": "b757f4f5f8b8eed58bab6cb476d35b1ec489e8fc2d245a5783a5e1b480b1f410"
   },
   {
    "path": "src/storage/batch-view.ts",
@@ -6673,14 +6580,16 @@
    "primary": "WP23",
    "status": "CHANGED_WITH_ORACLE",
    "by": [
-    "DR33"
+    "DR33",
+    "DR34"
    ],
    "oracles": [
-    "UX-09",
-    "R30"
+    "DR34",
+    "R30",
+    "UX-09"
    ],
-   "note": "Read in full: START.md documents that merge/integration refuses any candidate whose tree carries a gitlink with UNSUPPORTED_PROFILE and named paths, and that a main carrying a gitlink refuses every merge until a candidate removes it.",
-   "sha256": "a0cd3fcc0173d7dd7673474529658407f078603a307c63fb1a5fd134b6a78701"
+   "note": "Read in full: START.md documents that merge/integration refuses any candidate whose tree carries a gitlink with UNSUPPORTED_PROFILE and named paths, and that a main carrying a gitlink refuses every merge until a candidate removes it. DR34 rider: START.md now says network reaches the sandbox only through the egress proxy's allowlist when the Human configured one (HTTPS_PROXY set then, allowlisted HTTPS only), keeping 'no git push' and the other sandbox facts.",
+   "sha256": "1113d5ba0e63ab363546160df2c88599006848a601905c6fc4c032016e63d1b9"
   },
   {
    "path": "src/views/pending-work.ts",

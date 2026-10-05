@@ -12,25 +12,35 @@ import type { Socket } from "node:net";
 import { randomUUID } from "node:crypto";
 import { encodeFrame } from "../../frame.js";
 import { InferenceRelay, type RelayLimits } from "../../runtime/inference-relay.js";
+import { makePublicDial, EGRESS_CONNECT_PORT, type ConnectDial, type EgressAudit } from "../../runtime/connect-proxy.js";
 import { placeholderFor, type EngineAuth } from "../../runtime/engine-auth.js";
 import { platformFailure, readLeadingFrame } from "../rpc.js";
 import {
-  egressOpenProblem, egressPlaceholderProblem, requestProblem,
-  type EgressOpenParams, type EgressPlaceholderParams, type EgressPlaceholderResult,
+  egressConnectProblem, egressOpenProblem, egressPlaceholderProblem, requestProblem,
+  type EgressConnectParams, type EgressOpenParams, type EgressPlaceholderParams, type EgressPlaceholderResult,
 } from "../../protocol/host-guest.js";
+import { allowsEgressEndpoint, normalizeEgressHost } from "../../domain/egress.js";
 
 export interface EgressHostOptions {
   /** Opens one egress connection to the guest and completes its hello. */
   readonly open: () => Promise<{ readonly socket: Socket; readonly rest: Buffer }>;
   /** MAC-704: this host's engine state, never the guest's. */
   readonly resolve: (credentialRef: string, provider: string, model: string) => Promise<EngineAuth>;
+  /** DR34: how an `egress.connect` reaches its target. The default resolves
+   * the name here, screens every answer for private/special-use space, and
+   * pins the chosen address -- the host owns its own network boundary; the
+   * guest's allowlist is the Human's policy at the proxy. */
+  readonly dial?: ConnectDial;
+  /** One record per connect decision -- actor, target, verdict, reason. */
+  readonly audit?: (entry: EgressAudit) => void;
   readonly limits: RelayLimits;
   readonly frameBytes: number;
   /** The most connections kept waiting, whatever the runs ask (MAC-225). */
   readonly maxPool: number;
 }
 
-type Run = { readonly relay: InferenceRelay; readonly params: EgressPlaceholderParams; readonly lease: Socket | null };
+type Run = { readonly relay: InferenceRelay; readonly params: EgressPlaceholderParams; readonly lease: Socket | null;
+  readonly tunnels: Set<Socket> };
 
 export class EgressHost {
   private readonly runs = new Map<string, Run>();
@@ -80,6 +90,7 @@ export class EgressHost {
     if (problem !== null || frame.key !== undefined) { socket.destroy(); return; }
     if (frame.method === "egress.placeholder") { await this.placeholder(socket, frame.id as string, frame.params); return; }
     if (frame.method === "egress.open") { this.connect(socket, frame.params, first.rest); return; }
+    if (frame.method === "egress.connect") { await this.connectTunnel(socket, frame.id as string, frame.params, first.rest); return; }
     socket.destroy();
   }
 
@@ -104,7 +115,7 @@ export class EgressHost {
       // ends -- a run's own close, or a guest gone without a word. Anything it
       // says after the answer is not a message; the run ends the same way.
       const lease = asked.hold === true ? socket : null;
-      this.runs.set(placeholderId, { relay, params: asked, lease });
+      this.runs.set(placeholderId, { relay, params: asked, lease, tunnels: new Set() });
       const result: EgressPlaceholderResult = { placeholderId, placeholder, provider: auth.provider, model: auth.model };
       if (lease === null) {
         answer({ ok: true, result });
@@ -131,13 +142,81 @@ export class EgressHost {
     run.relay.accept(socket, rest);
   }
 
+  /** DR34/UX-08: `egress.connect` -- the guest's CONNECT proxy asked the host
+   * to dial `host:port` for one of its runs. The run is checked the way
+   * `egress.open` checks it, then the wire's one port (443) is enforced and
+   * the dial resolves, screens and pins here. An answered `ok` makes the
+   * connection the tunnel; a refusal is a framed error, and either way the
+   * pooled connection ends -- like `egress.open`, a second request on it is
+   * not possible. Every tunnel a run still holds dies with the run. */
+  private async connectTunnel(socket: Socket, id: string, params: unknown, rest: Buffer): Promise<void> {
+    const audit = (actor: string, role: string, target: string, decision: EgressAudit["decision"], reason: string): void =>
+      this.options.audit?.({ actor, role, target, decision, reason });
+    const answer = (value: Record<string, unknown>): void => { socket.end(encodeFrame({ v: 1, id, ...value })); };
+    const problem = egressConnectProblem(params);
+    if (problem !== null) { audit("?", "?", "", "refuse", problem); answer({ ok: false, error: { code: "INVALID_REQUEST", message: problem, retry: "never" } }); return; }
+    const asked = params as EgressConnectParams;
+    const target = `${asked.host}:${asked.port}`;
+    const run = this.runs.get(asked.placeholderId);
+    if (run === undefined || asked.run.society !== run.params.run.society || asked.run.actor !== run.params.run.actor ||
+        asked.run.incarnation !== run.params.run.incarnation) {
+      audit(asked.run.actor, asked.role, target, "refuse", "not this boot's run");
+      answer({ ok: false, error: { code: "STALE_RUN", message: "not this boot's run", retry: "never" } });
+      return;
+    }
+    if (asked.port !== EGRESS_CONNECT_PORT) {
+      audit(asked.run.actor, asked.role, target, "refuse", "port other than 443");
+      answer({ ok: false, error: { code: "INVALID_REQUEST", message: "egress.connect is HTTPS (443) only", retry: "never" } });
+      return;
+    }
+    // The declared policy is the guest's own: the host cannot read the
+    // society's config, so it enforces the allowlist the request carried --
+    // grammar-checked above -- verbatim, then screens the resolved address
+    // itself in the dial. A host that refused to take the guest's word at
+    // all would have no list to enforce.
+    if (!allowsEgressEndpoint({ role: asked.role, allow: asked.allow }, normalizeEgressHost(asked.host))) {
+      audit(asked.run.actor, asked.role, target, "refuse", "not on the declared allowlist");
+      answer({ ok: false, error: { code: "INVALID_REQUEST", message: "the run's egress policy does not allow this endpoint", retry: "never" } });
+      return;
+    }
+    if (run.tunnels.size >= this.options.limits.concurrent) {
+      audit(asked.run.actor, asked.role, target, "refuse", "tunnel limit");
+      answer({ ok: false, error: { code: "BROKER_UNAVAILABLE", message: "the run's tunnel budget is spent", retry: "after-repair" } });
+      return;
+    }
+    const dial = this.options.dial ?? makePublicDial();
+    let upstream: Socket;
+    try { upstream = await dial(asked.host, asked.port); }
+    catch (error) {
+      audit(asked.run.actor, asked.role, target, "fail", (error instanceof Error ? error.message : String(error)).slice(0, 120));
+      answer({ ok: false, error: platformFailure(error) });
+      return;
+    }
+    if (!this.runs.has(asked.placeholderId)) {
+      // The run ended under the dial; the tunnel it would have owned is dropped.
+      upstream.destroy();
+      socket.destroy();
+      return;
+    }
+    audit(asked.run.actor, asked.role, target, "allow", "connected");
+    socket.write(encodeFrame({ v: 1, id, ok: true, result: {} }));
+    if (rest.length > 0) upstream.write(rest);
+    run.tunnels.add(socket); run.tunnels.add(upstream);
+    socket.once("close", () => { run.tunnels.delete(socket); upstream.destroy(); });
+    upstream.once("close", () => { run.tunnels.delete(upstream); socket.destroy(); });
+    socket.once("error", () => socket.destroy());
+    upstream.once("error", () => upstream.destroy());
+    socket.pipe(upstream); upstream.pipe(socket);
+  }
+
   /** The run ended -- its lease closed, the guest rebooted, or the service
-   * stopped: its placeholder opens nothing more. */
+   * stopped: its placeholder opens nothing more and its tunnels die with it. */
   async release(placeholderId: string): Promise<void> {
     const run = this.runs.get(placeholderId);
     if (run === undefined) return;
     this.runs.delete(placeholderId);
     run.lease?.destroy();
+    for (const socket of run.tunnels) socket.destroy();
     await run.relay.close();
   }
 

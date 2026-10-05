@@ -17,13 +17,14 @@ import { chmodSync } from "node:fs";
 import { clearSocketName } from "../storage/socket-name.js";
 import { connect, createServer, type Server, type Socket } from "node:net";
 import { join } from "node:path";
-import { StoreError } from "../domain/errors.js";
+import { isErrorCode, StoreError } from "../domain/errors.js";
 import { FrameParser, encodeFrame } from "../frame.js";
 import { alarm, type Timer } from "./pi-rpc.js";
 import {
   EGRESS_ENGINE_MANAGED, egressPlaceholderResultProblem,
-  type EgressOpenParams, type EgressPlaceholderParams, type EgressPlaceholderResult,
+  type EgressConnectParams, type EgressOpenParams, type EgressPlaceholderParams, type EgressPlaceholderResult,
 } from "../protocol/host-guest.js";
+import type { EgressPolicy } from "../domain/egress.js";
 
 /** The environment name the guest image sets (environment.d) for the egress
  * service's socket. Its absence is the Linux distribution. */
@@ -100,6 +101,30 @@ export async function requestEgressPlaceholder(ask: EgressAsk, run: EgressPlaceh
   return { ...(answer.result as unknown as EgressPlaceholderResult),
     release: () => { socket.destroy(); },
     ended: listener => { if (socket.destroyed) queueMicrotask(listener); else endListeners.add(listener); } };
+}
+
+/** DR34/UX-08: one CONNECT through the host for the run the lease stands for.
+ * The service hands a pooled egress connection, carries the request, and
+ * relays the host's answer: `ok` makes this socket the raw tunnel to the
+ * already-dialed target, a refusal carries the host's own error code.
+ * `policy` is this role's resolved allowlist -- it travels with the request
+ * because the host cannot read the guest's configuration; the host checks
+ * its grammar, enforces it verbatim, and screens the resolved address with
+ * its own resolver on top. */
+export async function requestEgressConnect(ask: EgressAsk, lease: { readonly placeholderId: string },
+  run: EgressConnectParams["run"], host: string, port: number, policy: EgressPolicy): Promise<Socket> {
+  const socket = connect(ask.socket);
+  const params: EgressConnectParams = { placeholderId: lease.placeholderId, run, host, port, role: policy.role, allow: [...policy.allow] };
+  socket.once("connect", () => { socket.write(encodeFrame({ v: 1, id: randomUUID(), method: "egress.connect", params })); });
+  const answer = await oneFrame(socket, ask.frameBytes, ask.deadlineMs, true);
+  if (answer.ok !== true) {
+    socket.destroy();
+    const error = answer.error as { code?: unknown; message?: unknown } | undefined;
+    throw new StoreError(isErrorCode(error?.code) ? error.code : "BROKER_UNAVAILABLE",
+      `the host refused the egress tunnel to ${host}:${port}: ${typeof error?.message === "string" ? error.message : "no reason given"}`);
+  }
+  socket.once("error", () => { socket.destroy(); });
+  return socket;
 }
 
 /** The engine's provider socket, forwarding each connection to one egress

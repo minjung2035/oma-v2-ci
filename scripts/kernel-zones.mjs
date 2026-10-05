@@ -22,6 +22,7 @@ export const KERNEL_ZONES = Object.freeze([
       "src/domain/context-policy.ts",
       "src/domain/deployment.ts",
       "src/domain/derived.ts",
+      "src/domain/egress.ts",
       "src/domain/errors.ts",
       "src/domain/exhaustive.ts",
       "src/domain/identifiers.ts",

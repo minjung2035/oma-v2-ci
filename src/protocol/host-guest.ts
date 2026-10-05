@@ -12,6 +12,7 @@
  * it adds are its own (`PlatformErrorCode`).
  */
 import type { ErrorCode } from "../../implementation/contracts/errors.js";
+import { connectHostProblem, egressEntryProblem } from "../domain/egress.js";
 import { isErrorCode } from "../domain/errors.js";
 import { isPlatformUuid, isValidSocietyName } from "../domain/identifiers.js";
 import { parseJsonObject } from "../frame.js";
@@ -22,8 +23,11 @@ import { parseGuestHistoryReference } from "./guest-history.js";
  * (MAC-250). A host speaks the version of the image it ships and the one
  * before it; a guest speaks one.
  * v5: `egress.placeholder` may carry `hold`, keeping the answered connection
- * open as the run's lease -- the run ends when it ends (AV-15). */
-export const HOST_GUEST_PROTOCOL = 5;
+ * open as the run's lease -- the run ends when it ends (AV-15).
+ * v6: `egress.connect` (UX-08/DR34) -- one framed request on a pooled egress
+ * connection asks the host to dial `host:port` for that run; an answered
+ * `ok:true` is followed by the raw tunnel on the same connection. */
+export const HOST_GUEST_PROTOCOL = 6;
 
 /** The platform protocol's frame limit. A society's own limits
  * (`ProtocolLimits.frameBytes`) govern its broker; this governs the host-guest
@@ -327,6 +331,43 @@ export function egressOpenProblem(params: unknown): string | null {
   if (typeof params.modelProfile !== "string" || !TOKEN.test(params.modelProfile)) return "invalid modelProfile";
   return runProblem({ society: params.society, actor: params.actor, incarnation: params.incarnation });
 }
+/** DR34: the first (and only) framed request of `egress.connect` on a pooled
+ * connection -- the run the placeholder stands for, the CONNECT target, and
+ * the role's resolved allowlist. The allowlist is the guest's own statement
+ * of its configured policy: the host cannot read the society's config (it
+ * lives on the guest's disk), so it re-checks the entry grammar, enforces
+ * the declared list verbatim, and screens every resolved address itself.
+ * An `ok` answer is followed by the raw tunnel; a refused one by the framed
+ * error and close. */
+export interface EgressConnectParams {
+  readonly placeholderId: string;
+  readonly run: EgressRun;
+  readonly host: string;
+  readonly port: number;
+  /** The profile name the guest resolved the policy for (audit). */
+  readonly role: string;
+  /** The role's allowlist entries, exactly as configured (DR34 grammar). */
+  readonly allow: readonly string[];
+}
+export function egressConnectProblem(params: unknown): string | null {
+  if (!object(params)) return "params must be an object";
+  const shape = exactKeys(params, ["placeholderId", "run", "host", "port", "role", "allow"]);
+  if (shape !== null) return shape;
+  if (!isUuid(params.placeholderId)) return "invalid placeholderId";
+  const host = connectHostProblem(params.host);
+  if (host !== null) return host;
+  if (!uint(params.port) || params.port === 0 || (params.port as number) > 65535) return "invalid port";
+  if (typeof params.role !== "string" || !TOKEN.test(params.role)) return "invalid role";
+  // The declared allowlist: at least one entry, bounded, each entry of the
+  // egress grammar -- a malformed declaration is refused, not narrowed.
+  if (!Array.isArray(params.allow) || params.allow.length === 0 || params.allow.length > 256) return "invalid allow";
+  for (const entry of params.allow) {
+    const problem = egressEntryProblem(entry);
+    if (problem !== null) return `allow: ${problem}`;
+  }
+  return runProblem(params.run);
+}
+
 export function egressPlaceholderResultProblem(result: unknown): string | null {
   if (!object(result) || exactKeys(result, ["placeholderId", "placeholder", "provider", "model"]) !== null) return "invalid placeholder answer";
   if (!isUuid(result.placeholderId)) return "invalid placeholderId";
