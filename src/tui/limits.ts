@@ -52,6 +52,12 @@ export const CONVERSATION_BOUNDS = Object.freeze({
   // without a ceiling a long run decides how many of them accumulate.
   promptBytes: bound(16 * 1024, "bytes", "one Human prompt before its Pi command envelope"),
   waitingPrompts: bound(16, "count", "prompts already typed that the running turn has not reached yet"),
+  // B3: the waiting queue's picture for the above-editor widget. The wire
+  // snapshot is bounded before it is serialized -- a full queue is still one
+  // small frame -- and the widget lines stay under the engine's own cap with
+  // room for the header and a remainder line.
+  queuePreviewPrompts: bound(8, "count", "queued prompts sent to the widget; header plus these plus a remainder stay under the engine's ten-line widget cap"),
+  queuePreviewCells: bound(160, "cells", "one queued prompt is one widget line; longer is cut, never wrapped"),
 });
 
 /** Human request ids are decimal safe integers, so this is the largest command

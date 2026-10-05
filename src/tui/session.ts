@@ -25,7 +25,7 @@ import { loadConfiguration } from "../config.js";
 import { StoreError } from "../domain/errors.js";
 import { errorWords } from "./words.js";
 import { storedMailBytes } from "../domain/mail-values.js";
-import { UNSEEN } from "../domain/unseen-text.js";
+import { UNSEEN, UNSEEN_EXCEPT_LAYOUT } from "../domain/unseen-text.js";
 import { packageResourcePaths, packageStoreRoot, type PackageResourcePaths } from "../runtime/pi-packages.js";
 import { CONVERSATION_BOUNDS, TERMINAL_BOUNDS, humanPromptFitsFrame, humanPromptRequestId } from "./limits.js";
 import type { PromptOutcome } from "./prompt.js";
@@ -369,6 +369,15 @@ export function projectEvent(event: PiEvent): { readonly line?: string } {
   return {};
 }
 
+/** B3: one queued prompt as one widget line -- unseen text out, line breaks
+ * and runs of space folded, bounded cells. The queue keeps the real text;
+ * only its picture is folded. */
+function queuePreviewLine(text: string): string {
+  const flat = text.replace(UNSEEN_EXCEPT_LAYOUT, "").replace(/[\x00-\x1f\x7f]/gu, " ").replace(/\s+/gu, " ").trim();
+  const cells = CONVERSATION_BOUNDS.queuePreviewCells.value;
+  return flat.length > cells ? `${flat.slice(0, cells - 1).trimEnd()}…` : flat;
+}
+
 export class PrincipalSession {
   private readonly rpc: PiRpcClient;
   private ui: InteractiveChannel | null = null;
@@ -573,12 +582,23 @@ export class PrincipalSession {
     this.sink.onBusy(this.busy);
   }
 
+  /** B3: the waiting queue's picture for the screen's above-editor widget.
+   * The queue itself is the fact; this is only a bounded, single-line copy
+   * sent on every change, so the widget never shows a stale count. Empty
+   * clears the widget; a session without the interactive channel has no
+   * screen to tell. */
+  private emitQueue(): void {
+    this.ui?.send({ type: "queued_prompts", total: this.waiting.length,
+      prompts: this.waiting.slice(0, CONVERSATION_BOUNDS.queuePreviewPrompts.value).map(queuePreviewLine) });
+  }
+
   /** The run is over. A Human prompt that was waiting takes the session here,
    * synchronously, so nothing can start between the two steps. */
   private free(): void {
     if (this.closed) return;
     this.unanswered = null;
     const next = this.waiting.shift();
+    this.emitQueue();
     if (next === undefined) { this.own(null); return; }
     this.own("human");
     this.write(next);
@@ -606,6 +626,7 @@ export class PrincipalSession {
     this.unanswered = null;
     if (unanswered !== null && unanswered.role === "human") this.sink.onPromptUnconfirmed?.(unanswered.text, reason);
     for (const text of this.waiting.splice(0)) this.sink.onPromptFailed(text, reason);
+    this.emitQueue();
   }
 
   private nextRequestId(): string {
@@ -701,6 +722,7 @@ export class PrincipalSession {
       if (this.waiting.length >= PrincipalSession.WAITING)
         return { kind: "refused", reason: `Only ${PrincipalSession.WAITING} prompts may wait. Try again after the current response finishes.` };
       this.waiting.push(text);
+      this.emitQueue();
       return { kind: "accepted" };
     }
     this.own("human");

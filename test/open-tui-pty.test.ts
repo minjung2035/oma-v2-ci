@@ -73,6 +73,12 @@ for (const ending of ["normal", "resume", "kill", "mail", "retry-recover", "retr
     // B2: the intercepted command answered on the real screen.
     if (ending !== "kill" && !ending.startsWith("retry-") && !ending.startsWith("reload-"))
       assert.match(output, /Thinking blocks: hidden/);
+    // B3: in the mail ending the second prompt was typed while the delivery
+    // owned the run, so OMA's own queue showed it above the editor.
+    if (ending === "mail") {
+      assert.match(output, /Queued \(1\)/);
+      assert.match(output, /1\. Second 한글/);
+    }
     const facts = JSON.parse(readFileSync(side, "utf8"));
     assert.equal(facts.requests, ending.startsWith("retry-") ? 7 : ending === "kill" || ending === "reload-failure" ? 2 : 3);
     if (ending === "reload-update") assert.match(output, /Reloaded keybindings/);

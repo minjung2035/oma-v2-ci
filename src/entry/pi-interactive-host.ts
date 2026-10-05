@@ -190,6 +190,22 @@ export async function runInteractive(): Promise<void> {
   let redraw: (() => void) | undefined;
   let inputSequence = 0;
   let pendingInput: { id: string; text: string } | undefined;
+  // B3: the waiting queue is the session's fact; these are only its latest
+  // picture, repainted on every snapshot and re-applied across reloads.
+  let queuedPrompts: readonly string[] = [];
+  let queuedTotal = 0;
+  const applyQueueWidget = (): void => {
+    if (!context) return;
+    const prompts = queuedPrompts, total = queuedTotal;
+    context.ui.setWidget("oma-queue", prompts.length === 0 ? undefined : (_tui, theme) => {
+      const rows = [`Queued (${total}) — sent in order:`,
+        ...prompts.map((text, index) => ` ${index + 1}. ${text}`),
+        ...(total > prompts.length ? [` +${total - prompts.length} more`] : [])];
+      return { render: (width: number) => rows.map(row => theme.fg("muted",
+          row.length > width ? `${row.slice(0, Math.max(0, width - 1))}…` : row)),
+        invalidate() {} };
+    }, { placement: "aboveEditor" });
+  };
   let stopping = false;
   let quitting = false;
   // P0-4: deferred UI work belongs to one session, never its replacement.
@@ -233,6 +249,12 @@ export async function runInteractive(): Promise<void> {
         if (context?.ui.getEditorText() === "") context.ui.setEditorText(text);
         notify(typeof event.reason === "string" ? event.reason : "Input was not accepted", "error");
       } else if (event.queued === true) notify("Queued; it runs after the current response.", "info");
+    } else if (event.type === "queued_prompts" && Array.isArray(event.prompts)
+        && event.prompts.every((line: unknown) => typeof line === "string")) {
+      queuedPrompts = event.prompts;
+      const total = event.total;
+      queuedTotal = typeof total === "number" && total >= queuedPrompts.length ? total : queuedPrompts.length;
+      applyQueueWidget();
     } else if (event.type === "notice" && typeof event.text === "string") notify(event.text, "info");
     else if (event.type === "return_prompt" && typeof event.text === "string") {
       notify(`Unsent input: ${event.text}`, "error");
@@ -466,6 +488,7 @@ export async function runInteractive(): Promise<void> {
       if (stopping || quitting) return;
       leaveUi();
       context = ctx;
+      applyQueueWidget();
       if (runtime) { follow(runtime.session); if (ready) reportEngine(); }
       const original = ctx.ui.setEditorComponent.bind(ctx.ui);
       ctx.ui.setEditorComponent = factory => {

@@ -119,6 +119,45 @@ test("V09C: after the session ends, a late settle frees nothing and starts nothi
   } finally { await s.close(); }
 });
 
+test("B3: the waiting queue's snapshot is emitted on every change, folded and cleared at handback", async () => {
+  const s = scripted();
+  const sent: { type: string; total?: unknown; prompts?: unknown }[] = [];
+  // The interactive channel is a socket in production; here the same event
+  // stream is collected from the seam it is sent through.
+  const stubUi = () => ({ send: (event: unknown) => sent.push(event as (typeof sent)[number]), close: () => {} });
+  (s.session as unknown as { ui: ReturnType<typeof stubUi> | null }).ui = stubUi();
+  try {
+    assert.deepEqual(s.session.submit("hold: first"), { kind: "accepted" });
+    await until("the first prompt to be written", () => s.written().length === 1);
+    assert.equal(sent.length, 0, "a prompt written straight to the engine draws no queue");
+    assert.deepEqual(s.session.submit("queued one"), { kind: "accepted" });
+    assert.deepEqual(s.session.submit("queued two \u200b\u200bwith marks"), { kind: "accepted" });
+    assert.deepEqual(sent, [
+      { type: "queued_prompts", total: 1, prompts: ["queued one"] },
+      { type: "queued_prompts", total: 2, prompts: ["queued one", "queued two with marks"] },
+    ], "each push emits the whole bounded snapshot, unseen text folded out");
+    process.kill(s.pid(), "SIGUSR2");
+    // Each settle hands the session to the next waiter and re-emits, until empty.
+    await until("the queue to drain", () => s.written().length === 3 &&
+      sent.length >= 2 && (sent.at(-1) as { total: number }).total === 0);
+    assert.deepEqual(s.written(), ["hold: first", "queued one", "queued two \u200b\u200bwith marks"],
+      "the queue keeps the real text; only its picture is folded");
+  } finally { await s.close(); }
+
+  const late = scripted();
+  (late.session as unknown as { ui: ReturnType<typeof stubUi> | null }).ui = stubUi();
+  try {
+    assert.deepEqual(late.session.submit("silent: unanswered run"), { kind: "accepted" });
+    await until("the unanswered prompt to be written", () => late.written().length === 1);
+    assert.deepEqual(late.session.submit("still waiting"), { kind: "accepted" });
+    late.session.close();
+    await late.session.exited;
+    assert.deepEqual(sent.at(-1), { type: "queued_prompts", total: 0, prompts: [] },
+      "handback empties the widget so a dead session shows no stale queue");
+    assert.deepEqual(late.events.failed.map(entry => entry.text), ["still waiting"]);
+  } finally { await late.close(); }
+});
+
 test("P0V-73 / F6, P0-4: a Principal engine that could not be spawned has ended, and nothing else ends it early", async () => {
   const root = mkdtempSync(join(tmpdir(), "oma-spawn-failed-"));
   try {
