@@ -23,6 +23,14 @@ export const PI_INTERACTIVE_PRIVATE_MEMBERS = Object.freeze([
   "shutdown",
   "showSessionSelector",
   "getRegisteredToolDefinition",
+  "toggleThinkingBlockVisibility",
+] as const);
+
+/** Private instance fields OMA reads. They live on instances rather than the
+ * prototype, so `test/pi-compat.test.ts` pins them against the vendored
+ * source instead. */
+export const PI_INTERACTIVE_PRIVATE_FIELDS = Object.freeze([
+  "hideThinkingBlock",
 ] as const);
 
 /** The private surface the entries write, typed as the engine implements it. */
@@ -43,6 +51,12 @@ export interface InteractiveModeInternals {
    * did not declare. OMA wraps this seam for presentation policy rather
    * than writing Pi's registry. */
   getRegisteredToolDefinition(toolName: string): ToolDefinition | undefined;
+  /** B2: 1.0.1's visibility surface is this field plus a toggle that flips
+   * it, persists it through the settings manager and repaints. OMA reads the
+   * field and calls the toggle only on a difference, so `/thinking show` and
+   * `/thinking hide` are sets, never an inversion of what was showing. */
+  hideThinkingBlock: boolean;
+  toggleThinkingBlockVisibility(): void;
   /** `ui` is public on `InteractiveMode`; it travels here so overrides that
    * replace a member can still reach the renderer through one handle. */
   readonly ui: { readonly terminal: { setTitle(title: string): void } };

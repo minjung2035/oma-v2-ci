@@ -81,6 +81,66 @@ test("Open TUI: Pi keeps its commands, shell and shortcuts; only a plain prompt 
   assert.equal(draft, "Human draft!", "overflow recovery restores expanded paste contents, not an orphaned marker");
 });
 
+test("B2: /thinking show and /thinking hide are OMA's; every other /thinking stays the engine's", () => {
+  let draft = "";
+  const upstream: string[] = [];
+  const history: string[] = [];
+  const submitted: string[] = [];
+  const visibility: string[] = [];
+  const original = {
+    onSubmit: undefined as ((text: string) => void) | undefined,
+    actionHandlers: new Map<string, () => void>(),
+    addToHistory: (text: string) => { history.push(text); },
+    getText: () => draft, getExpandedText: () => draft,
+    setText: (value: string) => { draft = value; },
+    render: () => [], invalidate: () => {},
+    handleInput(value: string) {
+      if (value === "\r") { const text = draft.trim(); draft = ""; this.onSubmit?.(text); }
+      else if (!value.startsWith("\x1b") && !/[\x00-\x1f]/.test(value)) draft += value;
+    },
+  };
+  const editor = ownedEditor(original as unknown as EditorComponent, {
+    submit: value => submitted.push(value),
+    // The engine claims every slash line here: `thinking` is its builtin.
+    isCommand: text => text.startsWith("/"),
+    thinkingVisibility: text => {
+      const trimmed = text.trim();
+      if (trimmed !== "/thinking show" && trimmed !== "/thinking hide") return false;
+      visibility.push(trimmed); return true;
+    },
+    panel: () => {}, refuse: () => {}, frameBytes: 262144, pasteImage: () => {},
+  });
+  editor.onSubmit = text => { upstream.push(text); };
+  for (const line of ["/thinking show", "  /thinking hide  ", "/thinking", "/thinking high",
+    "/thinking  show", "/thinking showall", "thinking show"]) {
+    editor.handleInput(line); editor.handleInput("\r");
+  }
+  assert.deepEqual(visibility, ["/thinking show", "/thinking hide"],
+    "the exact pair is consumed before built-in routing, whitespace around it tolerated");
+  assert.deepEqual(upstream, ["/thinking", "/thinking high", "/thinking  show", "/thinking showall"],
+    "bare /thinking, a level, and malformed variants still reach the engine");
+  assert.deepEqual(submitted, ["thinking show"], "a bare word is still a prompt");
+  assert.deepEqual(history, ["/thinking show", "/thinking hide", "thinking show"],
+    "consumed commands land in the editor's history like any prompt does");
+});
+
+test("B2: the deterministic set flips the engine's toggle only on a difference", async () => {
+  const { setThinkingBlockHidden } = await import("../src/entry/pi-interactive-host.js");
+  let toggles = 0;
+  const internals = { hideThinkingBlock: true, toggleThinkingBlockVisibility() { toggles += 1; this.hideThinkingBlock = !this.hideThinkingBlock; } };
+  // OMA's default settings hide thinking; asking to hide again must not invert it.
+  assert.equal(setThinkingBlockHidden(internals, true), false);
+  assert.equal(toggles, 0);
+  assert.equal(internals.hideThinkingBlock, true);
+  assert.equal(setThinkingBlockHidden(internals, false), true);
+  assert.equal(internals.hideThinkingBlock, false);
+  // And asking twice never accumulates: the second show is a no-op too.
+  assert.equal(setThinkingBlockHidden(internals, false), false);
+  assert.equal(toggles, 1);
+  assert.equal(setThinkingBlockHidden(internals, true), true);
+  assert.equal(internals.hideThinkingBlock, true);
+});
+
 test("a Human prompt keeps the engine's own expansion semantics; /oma-deliver stays refused", async () => {
   const { rpcPromptOptions, isDeliveryCommand } = await import("../src/entry/pi-interactive-host.js");
   // `/skill:name` and `/template` are suggested by the engine's autocomplete;

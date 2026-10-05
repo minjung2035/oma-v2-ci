@@ -424,7 +424,7 @@
     },
     {
       "path": "src/entry/pi-interactive-host.ts",
-      "sha256": "2764556c5c74499ea51c4e87909acab66f4c55215ff3cc979f50c706e6e3c54a"
+      "sha256": "369373ff5237fb3956b694dd0a5b3988dbd48f19428f5dd8ef00cf5069ba4800"
     },
     {
       "path": "src/entry/pi-interactive.ts",
@@ -684,7 +684,7 @@
     },
     {
       "path": "src/pi-compat/interactive-mode.ts",
-      "sha256": "a1cf7ee78a13a450b0d762e8736b75ec45f0d894790e8249681058ca5a22fbbd"
+      "sha256": "8bc91b61cd9b1301f411169fa7a29248d2bd0363457b1928edc56301a383aace"
     },
     {
       "path": "src/pi-compat/session.ts",
@@ -1352,7 +1352,7 @@
     },
     {
       "path": "src/tui/interactive-editor.ts",
-      "sha256": "121acb3f27d104d401659d153be5537959cd6e811f68411f28dc05f9421794e8"
+      "sha256": "6e55a26b1e8e8c9368dc9a0a131f0a79cba6022c24843aa1b29666848490a24b"
     },
     {
       "path": "src/tui/keys.ts",

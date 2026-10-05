@@ -16,7 +16,7 @@ import { fileURLToPath } from "node:url";
 import { StoreError } from "../src/domain/errors.js";
 import { ProcessLock } from "../src/runtime/process-lock.js";
 import { PI_RESUME_HINT, PI_SESSION_ENV_NAMES } from "../src/pi-compat/env.js";
-import { PI_INTERACTIVE_PRIVATE_MEMBERS } from "../src/pi-compat/interactive-mode.js";
+import { PI_INTERACTIVE_PRIVATE_MEMBERS, PI_INTERACTIVE_PRIVATE_FIELDS } from "../src/pi-compat/interactive-mode.js";
 import { sessionHeaderIdentity } from "../src/pi-compat/session.js";
 import { OmaSettingsStorage, prepareEngineInteractiveSettings } from "../src/pi-compat/settings.js";
 import type { PiInboundEvent, RpcCommand } from "../src/pi-compat/wire.js";
@@ -51,6 +51,16 @@ test("A7 oracle: every private InteractiveMode member OMA overrides still exists
   for (const name of PI_INTERACTIVE_PRIVATE_MEMBERS)
     assert.equal(typeof (InteractiveMode.prototype as unknown as Record<string, unknown>)[name], "function",
       `the engine's InteractiveMode no longer carries ${name}; the overrides in the entries now write a member nothing calls`);
+});
+
+test("B2 oracle: the thinking-visibility field OMA reads is still the vendored engine's own", () => {
+  // Instance fields never reach the prototype; the vendored source is the
+  // only place they can be pinned. `toggleThinkingBlockVisibility` itself is
+  // a prototype method, covered by the members oracle above.
+  const mode = readFileSync(join(PI_ROOT, "dist", "modes", "interactive", "interactive-mode.js"), "utf8");
+  for (const field of PI_INTERACTIVE_PRIVATE_FIELDS)
+    assert.ok(mode.includes(`this.${field}`),
+      `the engine no longer carries ${field}; the /thinking show|hide set would read a member nothing writes`);
 });
 
 test("A6: the session header probe accepts only the identity the engine could have written", async () => {

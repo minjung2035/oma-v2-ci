@@ -16,6 +16,11 @@ export interface InteractiveEditorPorts {
   submit(text: string): void;
   /** Whether Pi's own editor handles this text: a built-in command or `!` shell. */
   isCommand(text: string): boolean;
+  /** B2: `/thinking show` and `/thinking hide`, exactly -- OMA's visibility
+   * set, claimed before built-in routing because the engine reads a
+   * `/thinking` argument as a level name and would fail the pair. Anything
+   * else stays the engine's, bare `/thinking` included. */
+  thinkingVisibility?(text: string): boolean;
   /** Runs `text` if it names an extension's command, and says whether it did.
    * Pi's editor would leave such a command for a prompt loop oma does not run. */
   extensionCommand?(text: string): boolean;
@@ -56,6 +61,7 @@ export function ownedEditor(editor: EditorComponent, ports: InteractiveEditorPor
   const route = (text: string): void => {
     if (overflow) { target.setText(text); ports.refuse(); return; }
     if (!text.trim()) return;
+    if (ports.thinkingVisibility?.(text)) { target.addToHistory?.(text); return; }
     if (ports.isCommand(text)) { upstream?.(text); return; }
     target.addToHistory?.(text);
     if (ports.extensionCommand?.(text)) return;

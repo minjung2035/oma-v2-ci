@@ -24,7 +24,7 @@ import { brandFooter, brandHeader, type OpenTuiBrand } from "../tui/open-tui-bra
 import { preparePiInteractive } from "../runtime/pi-runtime.js";
 import { PI_RESUME_HINT } from "../pi-compat/env.js";
 import { PI_BUILTIN_COMMANDS } from "../pi-compat/commands.js";
-import { interactiveInternalsOf } from "../pi-compat/interactive-mode.js";
+import { interactiveInternalsOf, type InteractiveModeInternals } from "../pi-compat/interactive-mode.js";
 import { ExtensionModules } from "../runtime/extension-modules.js";
 import { humanPromptFitsFrame } from "../tui/limits.js";
 import { UNSEEN, UNSEEN_EXCEPT_LAYOUT } from "../domain/unseen-text.js";
@@ -128,6 +128,19 @@ export function isDeliveryCommand(text: string): boolean {
  * only when expansion is on). */
 export function rpcPromptOptions(_message: string): { readonly source: "rpc"; readonly expandPromptTemplates: true } {
   return { source: "rpc", expandPromptTemplates: true };
+}
+
+/** B2: 1.0.1 gives a field and a toggle, not a setter -- the toggle flips,
+ * persists and repaints. Reading the field and flipping only on a difference
+ * makes `/thinking show` and `/thinking hide` a set rather than an inversion
+ * of whatever was showing. True when the toggle ran; false is the caller's
+ * cue to confirm the state that was already there. */
+export function setThinkingBlockHidden(
+  internals: Pick<InteractiveModeInternals, "hideThinkingBlock" | "toggleThinkingBlockVisibility">,
+  hidden: boolean): boolean {
+  if (internals.hideThinkingBlock === hidden) return false;
+  internals.toggleThinkingBlockVisibility();
+  return true;
 }
 
 /** The project as the Human knows it: under their home, written from `~`. */
@@ -409,6 +422,20 @@ export async function runInteractive(): Promise<void> {
     void runtime.session.prompt(trimmed).catch(error => { notify(String(error), "error"); });
     return true;
   };
+  // B2: the exact pair is OMA's; the engine reads a `/thinking` argument as a
+  // thinking level and would fail it. Bare `/thinking` and every other form
+  // still reach the engine unchanged.
+  const thinkingVisibility = (text: string): boolean => {
+    const trimmed = text.trim();
+    if (trimmed !== "/thinking show" && trimmed !== "/thinking hide") return false;
+    const hidden = trimmed === "/thinking hide";
+    // The editor can only exist after init built the mode, but a refused
+    // claim still routes the line to the engine, so nothing is stranded.
+    if (mode === undefined) return false;
+    if (!setThinkingBlockHidden(interactiveInternalsOf(mode), hidden))
+      notify(`Thinking blocks: ${hidden ? "hidden" : "visible"}`, "info");
+    return true;
+  };
   // The command list says oma, lists nothing a Human cannot send, and drops
   // the `[t]` tag the engine gives extensions only because oma loads them from
   // its command line.
@@ -444,7 +471,7 @@ export async function runInteractive(): Promise<void> {
       ctx.ui.setEditorComponent = factory => {
         if (factory) original((tui, theme, keys) => {
           editorInstalled = true;
-          return ownedEditor(factory(tui, theme, keys), { submit, isCommand, extensionCommand, panel: openPanel, suggest,
+          return ownedEditor(factory(tui, theme, keys), { submit, isCommand, thinkingVisibility, extensionCommand, panel: openPanel, suggest,
             frameBytes: limits.frameBytes,
             refuse: () => ctx.ui.notify("Input exceeds the allowed size; edit the draft before submitting.", "warning"),
             pasteImage: () => ctx.ui.notify("Pasted images are not sent; an oma prompt is text only.", "warning") });

@@ -40,6 +40,10 @@ for (const ending of ["normal", "resume", "kill", "mail", "retry-recover", "retr
         step("\x15!touch forbidden\r", "$ touch forbidden", 0.2, 20),
         settled("\x15First\r", "RUN_SETTLED_1")]),
       settled("Second 한글 ✅\r", "RUN_SETTLED_2"),
+      // B2: `/thinking hide` is OMA's exact command; the setting is already
+      // hidden, so the deterministic set confirms the state without ever
+      // revealing the sentinel that `/thinking show` would draw.
+      step("/thinking hide\r", "Thinking blocks: hidden", 0.2),
       step("\x18", "Ctrl+X Close", 0.2), { resize: [30, 100], wait: 0.3 },
       step("\x18", "SECOND_RESPONSE_COMPLETE", 0.2), { write: hex("\x04"), wait: 0.3 },
     ];
@@ -66,6 +70,9 @@ for (const ending of ["normal", "resume", "kill", "mail", "retry-recover", "retr
     assert.match(output, /mail send/);
     assert.match(output, /Done in [0-9.]+(m )?s/);
     assert.doesNotMatch(output, /oma_mail_send/);
+    // B2: the intercepted command answered on the real screen.
+    if (ending !== "kill" && !ending.startsWith("retry-") && !ending.startsWith("reload-"))
+      assert.match(output, /Thinking blocks: hidden/);
     const facts = JSON.parse(readFileSync(side, "utf8"));
     assert.equal(facts.requests, ending.startsWith("retry-") ? 7 : ending === "kill" || ending === "reload-failure" ? 2 : 3);
     if (ending === "reload-update") assert.match(output, /Reloaded keybindings/);
