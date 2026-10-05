@@ -1,7 +1,7 @@
 /** A7/A4: the Pi compatibility boundary, held to the vendored engine itself.
  *
  * The oracle tests do not mirror Pi's literals: they read them out of the
- * installed 0.87.1 package, so an upstream change in the session-environment
+ * installed 1.0.1 package, so an upstream change in the session-environment
  * names, the exit hint or the wire emission fails here rather than drifting
  * past the boundary silently.
  */
@@ -139,6 +139,17 @@ test("A4: the Human's choices are kept, telemetry is always off, and fields the 
   const before = readFileSync(path, "utf8");
   prepareEngineInteractiveSettings(root);
   assert.equal(readFileSync(path, "utf8"), before);
+});
+
+test("A4: quietStartup 'header' survives as the literal Pi 1.0.1 widened in, not flattened to true", t => {
+  const root = scratch("oma-compat-settings-");
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const path = join(root, "settings.json");
+  // "header" shows the startup header while still hiding the details; it is
+  // not truthy-for-quiet, so the bridge must keep the literal, not Boolean() it.
+  writeFileSync(path, JSON.stringify({ quietStartup: "header" }));
+  prepareEngineInteractiveSettings(root);
+  assert.equal(JSON.parse(readFileSync(path, "utf8")).quietStartup, "header");
 });
 
 test("A4: the settings bridge and the retry owner compose in both orders under one lock", t => {

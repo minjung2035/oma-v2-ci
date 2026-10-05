@@ -1,7 +1,7 @@
 /** A3/A7: the commands Pi's own editor handles, mirrored from the engine's
  * BUILTIN_SLASH_COMMANDS plus the ones it handles without listing them.
  *
- * 0.87.1 has no public builtin-command registry (the audit's upstream-export
+ * 1.0.1 has no public builtin-command registry (the audit's upstream-export
  * request stands), so this is a mirror; `test/interactive-input.test.ts` holds
  * it to the engine's own `core/slash-commands.js` list, and an engine upgrade
  * that changes the set fails there rather than drifting silently.

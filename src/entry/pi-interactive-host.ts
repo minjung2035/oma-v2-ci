@@ -478,8 +478,13 @@ export async function runInteractive(): Promise<void> {
     let accepted = false;
     if (!runtime) { die(); return; }
     void runtime.session.prompt(event.message, { ...rpcPromptOptions(event.message),
-      preflightResult: success => {
-        if (success) { accepted = true; rpc.send({ type: "response", id: event.id!, command: "prompt", success: true }); }
+      preflightResult: disposition => {
+        // 1.0.1: the callback fires once, only on acceptance, carrying how the
+        // accepted prompt was dispatched -- the same shape the engine's own
+        // RPC mode answers with (`data.disposition`). Rejection is the prompt
+        // promise rejecting, so every disposition is a success here.
+        accepted = true;
+        rpc.send({ type: "response", id: event.id!, command: "prompt", success: true, data: { disposition } });
       },
     }).catch(error => {
       if (!accepted) rpc.send({ type: "response", id: event.id!, command: "prompt", success: false, error: String(error) });

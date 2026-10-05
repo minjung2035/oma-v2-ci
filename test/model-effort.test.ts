@@ -75,8 +75,11 @@ test("DR24: a Resident's engine runs the effort its profile or the engine's defa
 
 test("DR24: the effort levels offered for a Worker's model are the engine's own for that model", async () => {
   const { effortLevelsOf } = await import("../src/entry/pi-interactive-host.js");
-  const engine = new URL("../node_modules/@earendil-works/pi-ai/dist/models.js", import.meta.resolve("@earendil-works/pi-coding-agent"));
-  const { getSupportedThinkingLevels } = await import(engine.href) as { getSupportedThinkingLevels(model: unknown): string[] };
+  // Resolve pi-ai the way the engine does -- parented at the engine package so a
+  // hoisted or nested install layout finds the same copy the engine loads.
+  const models = await import(import.meta.resolve("@earendil-works/pi-ai/models", import.meta.resolve("@earendil-works/pi-coding-agent"))) as {
+    getSupportedThinkingLevels(model: unknown): string[] };
+  const { getSupportedThinkingLevels } = models;
   for (const model of [{ reasoning: false }, { reasoning: true }, { reasoning: true, thinkingLevelMap: { xhigh: "x" } },
     { reasoning: true, thinkingLevelMap: { minimal: null, max: "m" } }, { reasoning: true, thinkingLevelMap: { xhigh: null, low: "l" } }])
     assert.deepEqual(effortLevelsOf(model), getSupportedThinkingLevels(model), JSON.stringify(model));

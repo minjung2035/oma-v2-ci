@@ -27,9 +27,9 @@ function uiFactory() {
   return { ui, requests };
 }
 
-test("#10 spike: Pi 0.87.1 exposes only fixed UI RPC methods, not arbitrary method/params", async () => {
+test("#10 spike: Pi 1.0.1 exposes only fixed UI RPC methods, not arbitrary method/params", async () => {
   const manifest = JSON.parse(readFileSync(join(dist, "../package.json"), "utf8"));
-  assert.equal(manifest.version, "0.87.1", "repeat the spike when upgrading Pi");
+  assert.equal(manifest.version, "1.0.1", "repeat the spike when upgrading Pi");
   const { ui, requests } = uiFactory();
   const message = 'OMA_PI_BOUNDARY_V1 {"batchId":"batch"}';
   ui.notify(message, "info");

@@ -122,7 +122,7 @@ test("UX-19/C21: Pi's PI_* environment boilerplate never reaches the Worker, rea
     const opts = options({
       toolSnippets: { bash: "Run a shell command", read: "Read a file" },
       toolGuidelines: {
-        // Pi 0.87.1 bash/powershell guideline; meaningless in a cleared environment.
+        // Pi 1.0.1 bash/powershell guideline; meaningless in a cleared environment.
         bash: ["You can inspect PI_* environment variables for current model and session details.", "Prefer bounded output"],
         read: ["Prefer read over cat"],
       },

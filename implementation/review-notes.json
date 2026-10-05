@@ -520,19 +520,114 @@
    ],
    "sha256": "4a1186e6995efb7ef028f71c3bb12320ea96b6733d7136a60a3a7debbd0c60cd",
    "note": "Read in full: a nonzero namespace exit classifies through OMA_ERROR=<code> only when the failure word owns a whole stderr line exactly as the script's echo emits it — the same bytes inside a longer line are command output, not the class, and an unclassified exit stays the honest UNSUPPORTED_PROFILE namespace refusal. A non-exited observation is REF_STATE_UNKNOWN, non-UTF-8 output is REF_STATE_UNKNOWN, and success is believed only when stdout echoes the candidate exactly and canonicalHas confirms it landed. Staging is leased before the namespace runs and collected only once the command settled."
-  }
- ],
- "readUnchanged": [
+  },
+  {
+   "path": "src/entry/pi-interactive-host.ts",
+   "by": [
+    "ENG2"
+   ],
+   "oracles": [
+    "interactive owner",
+    "Open TUI",
+    "a Human prompt",
+    "oma's identity"
+   ],
+   "sha256": "2763605db7ff4b31d07f222b5d0354ae042cda01923b5b8832e856754dc26a09",
+   "note": "Read in full for the 1.0.1 port: the prompt command's preflightResult now carries the engine's PromptDisposition and the acceptance answer sends success with data.disposition, the same shape rpc-mode.js writes. The accepted flag still fences the catch so a rejection after acceptance cannot send a second answer; rejection stays the prompt() promise rejecting, so every disposition is an admission. OMA's admission boundary is unchanged -- the host still turns only a Human prompt into an engine prompt and engine extension commands still never reach it."
+  },
+  {
+   "path": "src/pi-compat/wire.ts",
+   "by": [
+    "ENG2"
+   ],
+   "oracles": [
+    "A7",
+    "A6",
+    "A7 oracle"
+   ],
+   "sha256": "047e7e879536f76f86e3cbfb2b70a69d83a12cd13cddb9de29c48602e625c9ff",
+   "note": "Read in full: docstrings re-pinned from 0.87.1 to 1.0.1. The wire surface itself is unchanged -- extension_error fields, RpcCommand/RpcResponse imports and the extension-failure emission all still match the installed package (the oracle reads the package, not the comment)."
+  },
+  {
+   "path": "src/pi-compat/env.ts",
+   "by": [
+    "ENG2"
+   ],
+   "oracles": [
+    "A7 oracle",
+    "A7/U1",
+    "UX-19"
+   ],
+   "sha256": "529df80bf209cbb5fe8ba14454531509917d0dfa8bb42e0e48af381830c9ab69",
+   "note": "Read in full: docstring re-pinned to 1.0.1 only. The strip list is verified against the installed engine's bash.js deletions by the A7 oracle; no list entry changed."
+  },
+  {
+   "path": "src/pi-compat/commands.ts",
+   "by": [
+    "ENG2"
+   ],
+   "oracles": [
+    "Open TUI",
+    "a Human prompt"
+   ],
+   "sha256": "e0873928513432809d7b082054f83dc1ea6e17c2f9135f9f9cd33401580bf6ab",
+   "note": "Read in full: docstring re-pinned to 1.0.1 only. PI_BUILTIN_COMMANDS still mirrors the engine's builtin set; the interactive-input oracle holds it to the installed package's slash-commands list."
+  },
+  {
+   "path": "src/pi-compat/interactive-mode.ts",
+   "by": [
+    "ENG2"
+   ],
+   "oracles": [
+    "A7 oracle",
+    "oma's identity",
+    "interactive owner",
+    "DR24"
+   ],
+   "sha256": "a1cf7ee78a13a450b0d762e8736b75ec45f0d894790e8249681058ca5a22fbbd",
+   "note": "Read in full: docstring re-pinned to 1.0.1 only. All twelve pinned private members exist as functions on the installed 1.0.1 prototype (verified directly and by the A7 oracle); the removed handleDaxnuts/checkDaxnutsEasterEgg were never in this list."
+  },
+  {
+   "path": "src/pi-compat/settings.ts",
+   "by": [
+    "ENG2"
+   ],
+   "oracles": [
+    "A4"
+   ],
+   "sha256": "359c70ef2fd79ca403febeb29c340086cb190f54cdf774634c88c338f2241113",
+   "note": "Read in full: setQuietStartup now passes a stored \"header\" literal through instead of flattening it to true -- 1.0.1 widened QuietStartup to boolean | \"header\" and the literal is the Human's choice, not truthiness. The new A4 regression asserts the literal survives the bridge. Other comments re-pinned to 1.0.1."
+  },
   {
    "path": "src/extension/delivery.ts",
    "by": [
-    "WP27"
+    "ENG2"
    ],
    "oracles": [
-    "V27A"
+    "S-03",
+    "V05A",
+    "DR11",
+    "V30A"
    ],
-   "note": "boundary entry appended before the notice, leaf checked; the notice names the entry the session holds"
+   "sha256": "71c5187f9f684336bb911c5f0ed45f2f3b53bae606d288dc7ab26e9aebc2f990",
+   "note": "Read in full: PI_ADAPTER_REVISION advanced to oma-pi-rpc-v1@1.0.1 following ENG1 -- the revision names the engine the adapter was verified against. Boundary emission, prefixes and the completion contract are byte-identical otherwise; unsettled 0.87.1 receipts stay conflicting on upgrade."
   },
+  {
+   "path": "src/storage/delivery-receipt.ts",
+   "by": [
+    "ENG2"
+   ],
+   "oracles": [
+    "S-03",
+    "V05A",
+    "V05B",
+    "DR11"
+   ],
+   "sha256": "9fd1ac995fdf21bfd96dce10be562c57bb52ddde80746f1083772cefcfd35038",
+   "note": "Read in full: the same revision string advanced to oma-pi-rpc-v1@1.0.1. Receipt validation still requires adapterRevision === PI_ADAPTER_REVISION, so a 0.87.1 receipt cannot complete a 1.0.1 batch and vice versa; publication/fencing semantics unchanged."
+  }
+ ],
+ "readUnchanged": [
   {
    "path": "src/units/execute.ts",
    "by": [

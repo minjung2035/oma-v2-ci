@@ -424,7 +424,7 @@
     },
     {
       "path": "src/entry/pi-interactive-host.ts",
-      "sha256": "91954dce2f181025f3bd13c98c8df0bbb3265031d5f015c3a5d42e3e56079a59"
+      "sha256": "2763605db7ff4b31d07f222b5d0354ae042cda01923b5b8832e856754dc26a09"
     },
     {
       "path": "src/entry/pi-interactive.ts",
@@ -456,7 +456,7 @@
     },
     {
       "path": "src/extension/delivery.ts",
-      "sha256": "7b0b546bf367a433338a8c3fc4c37cfd4a4e493aa5c0da2b99c1006fa4d939af"
+      "sha256": "71c5187f9f684336bb911c5f0ed45f2f3b53bae606d288dc7ab26e9aebc2f990"
     },
     {
       "path": "src/extension/inference-bridge.ts",
@@ -676,15 +676,15 @@
     },
     {
       "path": "src/pi-compat/commands.ts",
-      "sha256": "79ac06533478290bfb7cad1e77f1074e11f8a84239a364c22fb2762d7bff1e82"
+      "sha256": "e0873928513432809d7b082054f83dc1ea6e17c2f9135f9f9cd33401580bf6ab"
     },
     {
       "path": "src/pi-compat/env.ts",
-      "sha256": "b3786565a8ab4ba495c5e4b94c68386170d3fa8d3b3ea0aa4318d846c148e1f4"
+      "sha256": "529df80bf209cbb5fe8ba14454531509917d0dfa8bb42e0e48af381830c9ab69"
     },
     {
       "path": "src/pi-compat/interactive-mode.ts",
-      "sha256": "70f18ccecf0d1a3dab49075a2d7835784f8a00cb862083c5e4a5c59cb88f7583"
+      "sha256": "a1cf7ee78a13a450b0d762e8736b75ec45f0d894790e8249681058ca5a22fbbd"
     },
     {
       "path": "src/pi-compat/session.ts",
@@ -692,11 +692,11 @@
     },
     {
       "path": "src/pi-compat/settings.ts",
-      "sha256": "b287bb1d87f01f7a6c17775a5186f68192bcbf774c36dd2eedf45c93d047fad7"
+      "sha256": "359c70ef2fd79ca403febeb29c340086cb190f54cdf774634c88c338f2241113"
     },
     {
       "path": "src/pi-compat/wire.ts",
-      "sha256": "35335a03e4940fd56c6e6470b1c84973fcd2b4971b1c17a0b9cbd9ae4c7659fb"
+      "sha256": "047e7e879536f76f86e3cbfb2b70a69d83a12cd13cddb9de29c48602e625c9ff"
     },
     {
       "path": "src/pi-extension.ts",
@@ -1232,7 +1232,7 @@
     },
     {
       "path": "src/storage/delivery-receipt.ts",
-      "sha256": "16fe102565a022ebf496503935b20391e24e9d1ef7a15e6c56677744a64d91b4"
+      "sha256": "9fd1ac995fdf21bfd96dce10be562c57bb52ddde80746f1083772cefcfd35038"
     },
     {
       "path": "src/storage/diagnostic-snapshot.ts",

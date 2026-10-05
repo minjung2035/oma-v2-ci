@@ -119,8 +119,12 @@ test("V31A: an installation without its engine is refused, not handed another in
   try {
     const prefix = join(work, "install");
     install(prefix, { engine: false });
-    // Another installation's engine, where directory-walking resolution would find it.
-    cpSync(join(source, "node_modules", ENGINE), join(work, "node_modules", ENGINE), { recursive: true, verbatimSymlinks: true });
+    // Another installation's engine, where directory-walking resolution would
+    // find it. 1.0.1 does not vendor its dependencies inside the package, so a
+    // real foreign installation is the whole production closure, not the engine
+    // directory alone.
+    for (const module of productionModules())
+        cpSync(join(source, module), join(work, module), { recursive: true, verbatimSymlinks: true });
     const run = guarded(work, `
 const { resolvePiRuntime } = await import(${JSON.stringify(prefix)} + "/dist/src/runtime/pi-runtime.js");
 try { const runtime = resolvePiRuntime({ stateRoot: ${JSON.stringify(join(work, "state"))}, libdir: ${JSON.stringify(prefix)} }); console.log(JSON.stringify({ bundle: runtime.bundle })); }

@@ -1,7 +1,7 @@
 /** A4/A7: Pi owns the semantics of `settings.json` fields it has setters for;
  * OMA owns how those bytes persist.
  *
- * `SettingsManager` 0.87.1 parses, migrates, merges and knows the setters. Its
+ * `SettingsManager` 1.0.1 parses, migrates, merges and knows the setters. Its
  * own `FileSettingsStorage` replaces the file with an in-place `writeFileSync`
  * on an async queue whose failures only surface through `drainErrors()` --
  * OMA's settings write is a locked read-modify-replace that reports
@@ -21,7 +21,7 @@ import { StoreError } from "../domain/errors.js";
 import { lockedOwnedReplace } from "../runtime/locked-files.js";
 import { OMA_THEME_NAME } from "../runtime/oma-theme.js";
 
-/** `SettingsStorage`/`SettingsScope` are not root-exported in 0.87.1; the
+/** `SettingsStorage`/`SettingsScope` are not root-exported in 1.0.1; the
  * interface is named through the public factory's parameter, as A4 states. */
 type SettingsStorage = Parameters<typeof SettingsManager.fromStorage>[0];
 type SettingsScope = Parameters<SettingsStorage["withLock"]>[0];
@@ -98,7 +98,10 @@ export function prepareEngineInteractiveSettings(agentDir: string): void {
     // `?? true` keeps the direct writer's reading: absent (or null) chooses
     // the default, a present value keeps its truthiness as Pi's getters do.
     manager.setHideThinkingBlock(Boolean(stored.hideThinkingBlock ?? true));
-    manager.setQuietStartup(Boolean(stored.quietStartup ?? true));
+    // `QuietStartup` widened to `boolean | "header"` in Pi 1.0.1 -- the literal
+    // shows the startup header but still hides the details, so it is not
+    // truthiness: passing it through keeps the choice the Human made.
+    manager.setQuietStartup(stored.quietStartup === "header" ? "header" : Boolean(stored.quietStartup ?? true));
     manager.setEnableInstallTelemetry(false);
     manager.setEnableAnalytics(false);
     manager.setFullscreenExitOutput("resume-hint");

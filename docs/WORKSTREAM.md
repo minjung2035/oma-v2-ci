@@ -666,6 +666,20 @@ name collision/intended surface/hidden 미활성/idempotent reload/provenance/
   present:[]는 마커가 스스로 거짓임을 증명한 것이므로 plain CHECK_FAILED로
   떨어진다. quarantine의 `OMA_ERROR=` 분류도 같은 전체-행 앵커를 따른다
   (해당 stderr는 user argv가 닿지 못하지만 같은 종류). DR33에 판정 기록.
+- 2026-10-05 (심야): 선행 작업 A 완료 — Pi 0.87.1→1.0.1 + pi-tui 1.0.1 +
+  pi-open-tui 0.3.9→0.3.11 원자 bump. 1.0.1 전용 API(`registerToolRenderer`,
+  `ToolExposure`)는 확보됐고 이후 단계(B compact tools 등)가 그 위에 놓인다.
+  실제 이식 변경은 두 곳뿐: RPC `prompt` 응답이 `data.disposition`을 싣고
+  `preflightResult` 콜백이 disposition을 받는 계약(수용=성공, 거절=promise
+  reject, `input_result.queued` 의미론 불변), `quietStartup`이 `boolean|"header"`
+  로 넓어져 `"header"` literal을 통과시킨다. 나머지는 pin 재바인딩 — private
+  member 12개 전원 존재, 내장 명령 집합 동일, open-tui의 wheel-scroll 삭제는
+  Pi `fullscreenWheelScrollLines`+pi-tui 네이티브가 소유(OMA shim 없음),
+  header/peek/state/runtime은 byte-identical이라 brand 래핑 anchor 그대로.
+  `PI_ADAPTER_REVISION`→`oma-pi-rpc-v1@1.0.1`(spec·traceability 동반, 미정산
+  영수증은 업그레이드 후 conflicting — 정산 뒤 올리는 기존 절차 유지).
+  상세는 plan-prereq-and-bundled.md §A 실행 결과. npm ls로 pi-tui 단일 설치
+  확인, 타겟+full suite 전부 PASS.
 
 ## 10. 지금부터의 실행 순서
 0. ~~P0-8 강제 수단 미구현~~ — 구현됨: `owned-state` 아키텍처 규칙

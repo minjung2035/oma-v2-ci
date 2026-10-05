@@ -1099,3 +1099,51 @@ These extend existing owners/principles, not new per-defect principles. Reposito
 - P0V-51 → a valid Principal-only project remains installable; activation names only roles present → regression PASS, `principal-only` mutant KILLED.
 - P0V-119/IPC-005 → guest request hashing retains its legacy encoder for persisted explicit-undefined fields and shares `JSON_NESTING_LIMIT`, rejecting excess nesting before publication → regression PASS, `ledger-depth` mutant KILLED.
 - CFG-001/TUI-007 → numeric editing uses the safe-integer domain, not a nine-digit/4096 cap; Worker quota accepts zero subject to normal configuration validation → regression PASS, `number-digits` mutant KILLED. Bootstrap population construction bounds remain under review.
+## ENG2 -- engine upgrade 0.87.1 -> 1.0.1 + pi-tui 1.0.1 + pi-open-tui 0.3.11 (2026-10-05)
+
+Pre-requisite work item A of `docs/plan-prereq-and-bundled.md`: later v0.1 work needs
+1.0-only APIs (`registerToolRenderer`, `ToolExposure`) and pi-open-tui 0.3.11 peers
+`>=1.0.0`, so the three pins moved atomically rather than risking a dual pi-tui
+install. `npm ls @earendil-works/pi-tui` resolves one top-level 1.0.1; the engine
+package no longer vendors a nested engine closure (its nested `node_modules` now
+holds only third-party packages), so `pi-ai`/`pi-agent-core` dedupe to top-level
+1.0.3 under their `^1.0.1` ranges.
+
+Review (actual 0.87.1↔1.0.1 and 0.3.9↔0.3.11 npm tarballs, plus the installed
+dist). Two contract ports and one regression test:
+- RPC `prompt`: `preflightResult` now reports the `PromptDisposition`
+  (`handled`/`queued`/`started`) and the success response carries
+  `data.disposition`, the same shape the engine's own `--mode rpc` writes. OMA
+  treats every disposition as acceptance (rejection is still the prompt promise
+  rejecting) and its `accepted` fence keeps a later failure from sending a second
+  answer. OMA admission semantics are unchanged -- consumers read only `success`.
+- `quietStartup` widened to `boolean | "header"`: the settings bridge now passes
+  the `"header"` literal through instead of flattening it to `true`, held by a new
+  A4 regression.
+- pi-open-tui 0.3.11 deletes `fullscreen-scroll.ts` and its `fullscreen` config:
+  wheel scroll is owned by Pi's `fullscreenWheelScrollLines` setting and pi-tui's
+  `TuiAltScreen.setWheelScrollLines`, which OMA never shimmed. `unicode` icon mode
+  and the footer status sanitizer that preserves SGR are additive for OMA (plain
+  statuses only). `header.ts`/`peek.ts`/`state.ts`/`runtime.ts` are byte-identical,
+  so the brandHeader/brandFooter anchors and the thinkingPeek tree-walk stand.
+- The twelve pinned `InteractiveMode` private members all exist on the 1.0.1
+  prototype; the removed `handleDaxnuts`/`checkDaxnutsEasterEgg` were never in
+  OMA's list. The builtin-command mirror, selector constructors, SessionManager
+  statics and the ToolDefinition render contract typecheck unchanged.
+
+`PI_ADAPTER_REVISION` is `oma-pi-rpc-v1@1.0.1` in both places that state it, and
+BATCH-006 pins that value (INV12; ENG1's rule). `implementation/traceability.json`'s
+BATCH-006 row was re-inventoried with the new normative text; the rest is left as it
+was found, per ENG1.
+
+Evidence on 1.0.1: the pi-compat oracles read the installed package (strip list,
+resume hint, private members); interactive-input holds the builtin-command mirror;
+open-tui-pty and personal-pty drive the real 1.0.1 InteractiveMode through /new,
+/resume, /fork, /reload, kill, retry and restoration; the local suite passes in
+full. systemd-required files, powercut, provider, CI and the macOS lanes are
+NOT_RUN as before -- see `docs/implementation/validation.md`.
+
+Stated, not changed. A receipt the 0.87.1 adapter wrote for a batch not yet settled
+is `conflicting` after the upgrade, exactly as ENG1 recorded for 0.85.1: an existing
+society upgrades only after every prepared batch has settled. The `fullscreen` key
+an old open-tui.json may still carry is inert under 0.3.11.

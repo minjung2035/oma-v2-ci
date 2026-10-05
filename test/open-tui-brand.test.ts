@@ -17,7 +17,7 @@ const WIDTH = 72;
 const row = (left: string, right: string): string => `${accent("│")}${pad(left, 44)} ${accent("│")} ${pad(right, 23)}${accent("│")}`;
 const logo = (cells: string): string => center(accent(cells), 44);
 const header = [
-  `${accent("╭")}${accent("─── ")}${accent("Pi")} v0.87.1${accent(" ─────")}${accent("─".repeat(WIDTH - 22))}${accent("╮")}`,
+  `${accent("╭")}${accent("─── ")}${accent("Pi")} v1.0.1${accent(" ─────")}${accent("─".repeat(WIDTH - 21))}${accent("╮")}`,
   row(logo(""), ""),
   row(logo(""), accent("Welcome")),
   row(logo("█████████"), "Ask Pi anything"),
@@ -30,7 +30,7 @@ const header = [
   row(center(dim("~"), 44), ""),
   `${accent("╰")}${accent("─".repeat(WIDTH - 2))}${accent("╯")}`,
 ];
-const brand = { title: "oma", version: "0.1.0", engineVersion: "0.87.1", project: "~/work/demo", tip: "Ctrl+X oma settings",
+const brand = { title: "oma", version: "0.1.0", engineVersion: "1.0.1", project: "~/work/demo", tip: "Ctrl+X oma settings",
   society: "demo-9017360114-2" };
 const plainOf = (line: string): string => line.replace(/\x1b\[[0-9;]*m/g, "");
 

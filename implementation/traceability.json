@@ -1061,8 +1061,8 @@
   {
     "requirement": "BATCH-006",
     "source": "docs/implementation-spec.md",
-    "digest": "99553ca6a8d562905bb388ac474feee58c74b1209d01b9dc0b40ec10427197f9",
-    "normativeText": "**MUST [BATCH-006]** 기본 followUp 경로의 production batch.complete는 validation record에 pin된 `oma-pi-rpc-v1@0.87.1` receipt만 허용한다. trusted runner가 소유한 정확한 state-root receipt path, batch ID/incarnation/message manifest, adapter revision, runner session root 안의 sessionPath가 모두 일치해야 completed/presented를 같은 transaction에서 commit한다. session boundary의 내구성은 receipt 게시 전에 확인한다. 게시된 receipt를 정산할 때는 session 파일의 현재 존재·내용·권한을 다시 완료 조건으로 요구하지 않는다(과거 사실은 receipt 자체로 판정, DR19). 타입이나 문자열만 맞춘 evidence, model writable 경로, mock completion, 환경 변수 우회는 거절한다. v1은 followUp만 쓰므로 이 경계가 v1의 유일한 완료 경계다([DR18](design-revisions.md)).",
+    "digest": "51d38d8c6576e0ca58d28e6e09b4748e2fb84090dc4635e0b3b6f99aa0d0d504",
+    "normativeText": "**MUST [BATCH-006]** 기본 followUp 경로의 production batch.complete는 validation record에 pin된 `oma-pi-rpc-v1@1.0.1` receipt만 허용한다. trusted runner가 소유한 정확한 state-root receipt path, batch ID/incarnation/message manifest, adapter revision, runner session root 안의 sessionPath가 모두 일치해야 completed/presented를 같은 transaction에서 commit한다. session boundary의 내구성은 receipt 게시 전에 확인한다. 게시된 receipt를 정산할 때는 session 파일의 현재 존재·내용·권한을 다시 완료 조건으로 요구하지 않는다(과거 사실은 receipt 자체로 판정, DR19). 타입이나 문자열만 맞춘 evidence, model writable 경로, mock completion, 환경 변수 우회는 거절한다. v1은 followUp만 쓰므로 이 경계가 v1의 유일한 완료 경계다([DR18](design-revisions.md)).",
     "applicability": "unclassified",
     "rationale": "Requires production-path review; no inference from test names.",
     "owner": null,

@@ -1,6 +1,6 @@
 /** A7: the `InteractiveMode` private members OMA overrides, stated once.
  *
- * 0.87.1 declares every one of these `private` in its own
+ * 1.0.1 declares every one of these `private` in its own
  * `interactive-mode.d.ts`, so the entries that replace them hold no typed
  * surface for them: each site used to cast `mode as unknown as { ... }` with
  * the member's shape spelled inline, and a rename upstream could only be

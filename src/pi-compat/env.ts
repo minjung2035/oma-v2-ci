@@ -1,7 +1,7 @@
 /** A7: the engine's ambient surface -- the environment names it exports into
  * subprocesses it starts, and the exit text its interactive UI prints.
  *
- * Pi 0.87.1 names a session to the commands it runs (`core/tools/bash.js`
+ * Pi 1.0.1 names a session to the commands it runs (`core/tools/bash.js`
  * deletes each of these from a subprocess's inherited environment, then
  * re-exports them when session context is asked for). An `oma` started from
  * inside such a command inherits them, and an engine spawned without clearing

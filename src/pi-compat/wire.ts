@@ -1,4 +1,4 @@
-/** A7: the wire contract OMA shares with Pi 0.87.1, stated once.
+/** A7: the wire contract OMA shares with Pi 1.0.1, stated once.
  *
  * The transport stays OMA's (`runtime/pi-rpc.ts`): drain-based writes, poison
  * framing, frame bounds, owned child streams. These names describe only what
@@ -18,7 +18,7 @@ import type {
   RpcResponse,
 } from "@earendil-works/pi-coding-agent";
 
-/** Pi's `--mode rpc` writes this on an extension failure. 0.87.1 emits it
+/** Pi's `--mode rpc` writes this on an extension failure. 1.0.1 emits it
  * (`rpc-mode.js`: `output({ type: "extension_error", ...err })`) but exports
  * no named type for it; the fields are the root-exported `ExtensionError`
  * body's, spelled out so the literal keeps its implicit index signature. */

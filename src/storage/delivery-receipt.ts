@@ -25,7 +25,7 @@ import {
 import { entryAt, linkDescriptor, openBeneath, openDirectory, openRegularBeneath, closeEvery } from "./contained-fs.js";
 import { runnerReceiptPathAt, sessionDirPathAt } from "./paths.js";
 
-export const PI_ADAPTER_REVISION = "oma-pi-rpc-v1@0.87.1";
+export const PI_ADAPTER_REVISION = "oma-pi-rpc-v1@1.0.1";
 export const PI_BOUNDARY_PREFIX = "OMA_PI_BOUNDARY_V1 ";
 export interface DeliveryBoundary {
   readonly batchId: string;

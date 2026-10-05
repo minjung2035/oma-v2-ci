@@ -49,6 +49,81 @@ OMA programmatic 경로와 `--no-extensions` 양쪽에서 구조적으로 배제
 6. 오라클 유지: `pi-compat.test.ts` private member 목록 — `checkDaxnutsEasterEgg`/
    `handleDaxnuts` 제거 반영 여부 확인(우리가 override 안 하지만 oracle이 pin할 수 있음).
 
+### A 실행 결과 (1.0.1/0.3.11 이식 완료)
+
+**버전**: `pi-coding-agent@1.0.1` + `pi-tui@1.0.1` + `pi-open-tui@0.3.11` 원자 bump
+완료. `npm ls @earendil-works/pi-tui`는 단일 1.0.1을 상위에 dedupe로 둔다 —
+pi-coding-agent의 중첩 `node_modules`에는 제3자 패키지만 남고 pi-tui/@earendil-works
+사본은 없다(이중 설치 위험 제거). pi-agent-core/pi-ai는 `^1.0.1` 범위로 1.0.3에
+묶였다(lockfile 고정).
+
+**실제 upstream delta vs 예측 (§A 작업과 대조)**:
+- 예측대로: `preflightResult`가 `boolean` → `PromptDisposition`(`"handled"|"queued"|"started"`)으로
+  바뀌고 성공 `RpcResponse`에 `data:{disposition}`가 생겼다. `QuietStartup`은
+  `boolean | "header"`. `handleDaxnuts`/`checkDaxnutsEasterEgg`는 실제로 0.87.1
+  private 선언에 있었고 1.0.1에서 제거됐다 — 둘 다 OMA pin 목록에 없어서 무관.
+  `registerToolRenderer`/`ToolExposure`/`ToolRendererResolver`는 root export에 있다.
+- 예측과 달랐던 점: InteractiveMode private surface의 11개 pin은 **전부 그대로**
+  (실측: `shutdown` 등 12개 전원 function으로 존재). `InteractiveMode.d.ts`의 다른
+  변화는 신규 private(shouldShowStartupHeader/shouldShowStartupDetails/
+  offerRadiusMcpServer 등) 추가뿐 — OMA가 override하는 member는 하나도 안 바뀌었다.
+  내장 명령 집합(`BUILTIN_SLASH_COMMANDS` + `/debug`/`/arminsayshi`/`/dementedelves`
+  unlisted)도 동일 — `PI_BUILTIN_COMMANDS` 미러 그대로. `SessionSelectorComponent`/
+  `ModelSelectorComponent`/`ThinkingSelectorComponent` 생성자, `SessionManager`
+  static(create/open/continueRecent/listAll), `ToolDefinition`의 render 계약,
+  `ResourceLoader`/`ProjectTrustStore` 생성자 전부 호환 — typecheck 0 오류.
+- 신규 관찰: `SessionManager._hasConversation()` 추가(setup-only entry는 대화로
+  세지 않아 빈 session 파일 생성 억제). `loadFinalExtensionSet`은 pre-trust 결과
+  인자/`loadExtensionPaths`/replacement warning/runtime 반환으로 재작성됐으나
+  `extensionsOverride`는 최종 로딩 뒤에 적용되는 타이밍 그대로 — OMA의 override가
+  여전히 마지막 재배열 지점. pi-tui 1.0.1은 `TuiAltScreen.wheelScrollLines`와
+  `TuiMouseEvent.wheelDelta`를 추가했다.
+- **한계**: 88af2adb/8e36fc5a 두 분석 커밋은 이 clone의 object database에 없어
+  그 diff 자체를 재독할 수 없었다. 위 판정은 실제 npm tarball(0.87.1↔1.0.1,
+  open-tui 0.3.9↔0.3.11)을 직접 diff해 낸 것이다.
+
+**포팅 결정**:
+1. RPC (`pi-interactive-host.ts`): 콜백 인자를 `disposition`으로 받고 성공 응답에
+   `data:{disposition}`를 실는다 — upstream `rpc-mode.js`가 같은 지점에서
+   `success(id,"prompt",{disposition})`를 쓴다. 세 disposition 전부 수용=성공
+   (거절은 prompt() promise reject로만 온다). OMA 소비자(adapter/delivery/session)는
+   `success===true`만 읽으므로 `data`는 additive. `input_result.queued`는 여전히
+   `session.ts`의 `busy` 스냅샷 — disposition이 응답보다 늦게 오므로 그 의미 그대로.
+2. `quietStartup`: 저장값 `"header"`를 Boolean으로 평탄화하던 것을 literal 통과로
+   교체(`1.0.1`에서 `"header"`는 header만 보이고 details는 숨기는 세 번째 값).
+   회귀 시험 추가(pi-compat.test.ts).
+3. open-tui 0.3.9→0.3.11: OMA는 vendored 사본이 없고 `pi-open-tui/extensions/open-tui/index.ts`를
+   그대로 resolve한다. 0.3.11 diff는: `fullscreen-scroll.ts`와 `fullscreen` config
+   삭제(휠 스크롤은 Pi 1.0.1의 `fullscreenWheelScrollLines` 설정 필드 — InteractiveMode가
+   `renderer.setWheelScrollLines(settings.getFullscreenWheelScrollLines())`로 읽고
+   비수치/미설정은 `"auto"` — + pi-tui 네이티브가 소유; OMA shim은 원래 없었고 추가할 것도 없다.
+   `editor.ts`의 `applyFullscreenWheelScrollLines` plumbing과 open-tui 소유
+   `setWheelScrollLines` setter도 함께 사라졌다 — OMA editor proxy는 그 계약을
+   호출한 적이 없다),
+   `icons.ts`에 `"unicode"` IconMode + SSH 자동 선택, `footer.ts`가
+   `sanitizeStatusPreservingStyles`로 교체(확장이 칠한 SGR 유지 — OMA는 plain status만
+   쓰므로 무영향), `settings-command.ts`에서 휠 UI 제거. `header.ts`/`peek.ts`/
+   `state.ts`/`runtime.ts`/`session-lifecycle.ts`/`git.ts`/`telemetry.ts`는 byte-identical —
+   `brandHeader`의 anchor(`Pi v{VERSION}` top border, tagline, Welcome, tips)와
+   `brandFooter`의 `~` cwd는 그대로이고 `thinkingPeek` tree-walk 가정도 유효.
+   open-tui.json에 남은 옛 `fullscreen` 키는 0.3.11이 읽지 않는 inert 키.
+4. `PI_ADAPTER_REVISION` → `oma-pi-rpc-v1@1.0.1` (delivery.ts + delivery-receipt.ts +
+   spec BATCH-006 + traceability 재지문) — ENG1(a218a0f)의 관례대로 "검증한 엔진"을
+   이름에 박는다. 미정산 영수증은 업그레이드 뒤 conflicting — 기존 society는 정산 뒤
+   올리는 절차가 그대로 적용된다.
+5. 오라클: `PI_INTERACTIVE_PRIVATE_MEMBERS` 12개 전원이 1.0.1 prototype에 function으로
+   존재해 목록 변경 없음 — 문서상 버전 문자열만 1.0.1로 갱신. `#10 spike`의 version pin도
+   1.0.1로 옮기며 `createExtensionUIContext`가 여전히 고정 메서드만 노출함을 재확인.
+
+**must-test 결과**: typecheck 0 오류; `pi-compat` 오라클 전부 PASS(환경 스트립 목록·
+resume hint·private member 존재); interactive-input 내장 명령 미러 PASS;
+open-tui-pty 8 ending + personal-pty 15 ending이 실제 1.0.1 InteractiveMode +
+0.3.11 확장 + ownedEditor 프록시로 `/new`·`/resume`·`/fork`·`/reload`
+(update·failure 양쪽)·kill·retry 통과 — loader lifecycle(`extensionsOverride`
+재배열, upstream 필수 검증), ownedEditor E2E, session replace/reload,
+`_hasConversation`(빈 session 미생성), SessionSelectorComponent 실경로를
+커버한다. pi-tui 단일 설치 확인은 위.
+
 ## B. TUI 표면 4건 (A 이후, 상호 독립 — 병렬 분업 가능)
 
 ### B1. compact 도구 메시지 — **확정: 외형+핵심 동작** (pi-compact-tools 이식, OMA 네이티브)
