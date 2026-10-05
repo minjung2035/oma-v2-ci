@@ -471,8 +471,8 @@
    "oracles": [
     "UX-09"
    ],
-   "sha256": "4447a5b17d2427accba675ea1282a69bd7667023d6ef5f8b3c3f4ccd2f6ad178",
-   "note": "Read in full: CHECK_CHECKOUT emits OMA_ERROR=UNSUPPORTED_PROFILE plus OMA_GITLINK=<path> and exits 125; run() classifies a nonzero exit as the named refusal only when the marker owns a whole stderr line — the same bytes inside a longer line or on stdout stay CHECK_FAILED — and re-observes the immutable candidate host-side for authoritative paths; sandbox stderr is never trusted and bare 125 stays CHECK_FAILED."
+   "sha256": "836359fc39bd9ecb9100d951f126dffc83f31c4e0d3d1c29f665f858c5da06ef",
+   "note": "Read in full: CHECK_CHECKOUT emits OMA_ERROR=UNSUPPORTED_PROFILE plus OMA_GITLINK=<path> and exits 125; run() classifies a nonzero exit as the named refusal only when the marker owns a whole stderr line — the same bytes inside a longer line or on stdout stay CHECK_FAILED — and re-observes the immutable candidate host-side rather than trusting sandbox output. The marker is only a claim: refuseGitlinks routes the re-observation through observed() so unknown stays REF_STATE_UNKNOWN (reconcilable, never terminal failed), corrupt stays STORE_CORRUPT, refused stays the candidate-scope INVALID_REQUEST, and a present answer with no gitlinks — the marker disproved itself — falls through to the unclassified CHECK_FAILED. Only present-with-paths earns UNSUPPORTED_PROFILE with details.paths."
   },
   {
    "path": "src/runtime/provision.ts",
@@ -507,6 +507,19 @@
    ],
    "sha256": "6910618c06fb58c2247296178ee3fca9c796a12ab6a7be1e12e03ddca787d6c7",
    "note": "Read in full: the canonical adapter owns every observation byte budget; GITLINKS_OBSERVATION_BYTES (256 MiB) is the named bound the gitlinks() whole-tree ls-tree enumeration gets instead of the shared 4 MiB that wedged ~70k-entry trees into REF_STATE_UNKNOWN. Over the bound the answer stays output-limited → unknown, never a truncated 'no gitlinks'; the spawn model is one pinned executable plus argv, so no server-side filtering exists and the record grammar stays whole for the parser."
+  },
+  {
+   "path": "src/git/quarantine.ts",
+   "by": [
+    "DR33",
+    "P0-5"
+   ],
+   "oracles": [
+    "NB-02",
+    "S-05"
+   ],
+   "sha256": "4a1186e6995efb7ef028f71c3bb12320ea96b6733d7136a60a3a7debbd0c60cd",
+   "note": "Read in full: a nonzero namespace exit classifies through OMA_ERROR=<code> only when the failure word owns a whole stderr line exactly as the script's echo emits it — the same bytes inside a longer line are command output, not the class, and an unclassified exit stays the honest UNSUPPORTED_PROFILE namespace refusal. A non-exited observation is REF_STATE_UNKNOWN, non-UTF-8 output is REF_STATE_UNKNOWN, and success is believed only when stdout echoes the candidate exactly and canonicalHas confirms it landed. Staging is leased before the namespace runs and collected only once the command settled."
   }
  ],
  "readUnchanged": [

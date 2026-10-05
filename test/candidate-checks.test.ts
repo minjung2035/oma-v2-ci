@@ -5,6 +5,7 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { CandidateChecks, candidateCheckCommand, CHECK_CHECKOUT } from "../src/runtime/candidate-checks.js";
 import { snapshotIntegrationPolicy } from "../src/git/integration-policy.js";
+import type { GitObservation } from "../src/git/observe.js";
 import { StoreError } from "../src/domain/errors.js";
 import { GIT_ENV, runGitText } from "../src/process/policies.js";
 import { runProcess, type ProcessObservation } from "../src/process/run.js";
@@ -113,6 +114,37 @@ test("UX-09: the refusal marker must own its whole stderr line — the same byte
     await assert.rejects(new CandidateChecks(paths, async () => exit(stderr), links).run(candidate, check),
       (error: unknown) => error instanceof StoreError && error.code === "UNSUPPORTED_PROFILE" &&
         (error.details as { paths?: string[] }).paths?.join() === "dep");
+});
+
+test("UX-09/P0-5: the marker only asks the host to look — the re-observation's own kind settles the failure", async () => {
+  // stderr is output the check argv controls, so the marker is a claim, not
+  // content: whatever the re-observation of the same immutable commit answers
+  // (or fails to answer) is the honest settlement — never the gitlink claim
+  // the sandbox emitted. Only present-with-paths earns the named refusal.
+  const marked = { kind: "exited", exitCode: 125, signal: null, errorCode: null, elapsedMs: 1,
+    stdout: Buffer.alloc(0), stderr: Buffer.from("OMA_ERROR=UNSUPPORTED_PROFILE\nOMA_GITLINK=dep\n"),
+    stdoutTruncated: false, stderrTruncated: false } as ProcessObservation;
+  const evidence = { status: 0, signal: null, stdout: Buffer.alloc(0), stderr: Buffer.alloc(0) };
+  const checks = (links: GitObservation<readonly string[]>) =>
+    new CandidateChecks(paths, async () => marked, { gitlinks: () => links });
+  // An inconclusive look is reconcilable unknown — not terminal failed with a
+  // content claim the host never observed.
+  await assert.rejects(checks({ kind: "unknown", reason: "gitlink process unavailable", evidence })
+    .run(candidate, check), code("REF_STATE_UNKNOWN"));
+  // ls-tree answers "absent" for nothing about a whole tree; even if it did,
+  // an unanswered look is unknown, not "no gitlinks".
+  await assert.rejects(checks({ kind: "absent", evidence }).run(candidate, check), code("REF_STATE_UNKNOWN"));
+  // Malformed observer output is store corruption, not a refusal.
+  await assert.rejects(checks({ kind: "corrupt", reason: "malformed ls-tree record", evidence })
+    .run(candidate, check), code("STORE_CORRUPT"));
+  // A tree name outside the wire grammar is the candidate's own refusal, the
+  // same candidate-scope answer every admission gate gives.
+  await assert.rejects(checks({ kind: "refused", reason: "an ls-tree path is not UTF-8", evidence })
+    .run(candidate, check), code("INVALID_REQUEST"));
+  // present with zero paths: the marker bytes lied — the immutable commit
+  // carries no gitlinks, so the nonzero exit stays the unclassified failure a
+  // bare 125 always was, not a refusal of content nobody observed.
+  await assert.rejects(checks({ kind: "present", value: [], evidence }).run(candidate, check), code("CHECK_FAILED"));
 });
 
 for (const format of ["sha1", "sha256"] as const) test(`DR29/INT-002: ${format} checkout checks exact bytes, including export-ignored files, without hooks or user filters`, async t => {

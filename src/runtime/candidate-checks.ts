@@ -14,7 +14,7 @@ import { StoreError } from "../domain/errors.js";
 import type { GitPaths } from "../git/paths.js";
 import { assertCheckResources, type FrozenCheck } from "../git/integration-policy.js";
 import { createCanonicalObserver } from "../git/canonical-command.js";
-import { requireNoGitlinks, type GitObserver } from "../git/observe.js";
+import { observed, requireNoGitlinks, type GitObserver } from "../git/observe.js";
 
 // Executed before any candidate code. A manager accepting resource properties
 // is insufficient: the running unit must observe the actual kernel bounds.
@@ -127,13 +127,18 @@ export class CandidateChecks {
     if (GITLINK_REFUSAL.test(observation.stderr.toString("utf8"))) this.refuseGitlinks(candidate);
     throw new StoreError("CHECK_FAILED", `trusted check ${check.id} did not pass (runner exit ${observation.exitCode})`);
   }
-  /** The marker already proved the sandbox refused; the paths it names are
-   * re-observed on the immutable candidate, not parsed from sandbox output.
-   * Defense in depth only — requireEligible made the same refusal before the
-   * check argv could run. */
+  /** The marker is check-controlled output — a claim, not content: the paths
+   * it asserts are re-observed on the immutable candidate, and only a
+   * `present` answer carrying at least one earns the gitlink refusal. Every
+   * other observation kind settles as itself through observed(), exactly as
+   * the admission gates read it — an unanswered look stays REF_STATE_UNKNOWN
+   * (reconcilable, never terminal failed), corrupt output stays STORE_CORRUPT,
+   * and a candidate name outside the grammar stays the candidate-scope
+   * INVALID_REQUEST. A `present` answer with no gitlinks means the marker
+   * disproved itself: the run falls through to the unclassified CHECK_FAILED
+   * the nonzero exit already is. Defense in depth only — requireEligible made
+   * the same refusal before the check argv could run. */
   private refuseGitlinks(candidate: string): void {
-    const links = this.observations.gitlinks(this.paths.projectGit, candidate);
-    if (links.kind === "present") requireNoGitlinks(links.value);
-    throw new StoreError("UNSUPPORTED_PROFILE", "candidate contains submodule gitlink(s)");
+    requireNoGitlinks(observed(this.observations.gitlinks(this.paths.projectGit, candidate), "candidate gitlinks"));
   }
 }

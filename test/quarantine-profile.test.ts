@@ -102,3 +102,34 @@ test("NB-02: a namespace failure with no classified word is unsupported, never a
       .then(() => undefined),
   );
 });
+
+test("S-05: the failure word must own its whole stderr line — inside a longer line it classifies nothing", async () => {
+  // The script's echo emits `OMA_ERROR=<code>` as its own line; the same bytes
+  // inside a longer line are the command's own output, not the failure class —
+  // an unclassified exit stays the honest namespace refusal.
+  for (const stderr of [
+    "mount failed: OMA_ERROR=BUNDLE_INVALID was here\n",
+    "OMA_ERROR=BUNDLE_INVALID trailing words\n",
+    "prefix OMA_ERROR=PREREQUISITE_MISSING\n",
+    "OMA_ERROR=BUNDLE_INVALIDE\nOMA_ERROR=BUNDLE_INVALI\n",
+    "OMA_ERROR=BUNDLE_INVALID\r\n",
+  ])
+    await withStubbedRun(
+      async () => exited(1, "", stderr),
+      importer => assert.rejects(importer.importBundle(0, CANDIDATE, "refs/oma/export/x", []),
+        (error: unknown) => error instanceof StoreError && error.code === "UNSUPPORTED_PROFILE"
+          && /required quarantine namespace is unavailable/.test(error.message), JSON.stringify(stderr))
+        .then(() => undefined),
+    );
+  // Positive controls: the marker line mid-stream and at EOF still decode.
+  for (const [stderr, expected] of [
+    ["diagnostic first\nOMA_ERROR=BUNDLE_INVALID\nmore\n", "BUNDLE_INVALID"],
+    ["OMA_ERROR=REF_STATE_UNKNOWN", "REF_STATE_UNKNOWN"],
+  ] as const)
+    await withStubbedRun(
+      async () => exited(74, "", stderr),
+      importer => assert.rejects(importer.importBundle(0, CANDIDATE, "refs/oma/export/x", []),
+        (error: unknown) => error instanceof StoreError && error.code === expected, JSON.stringify(stderr))
+        .then(() => undefined),
+    );
+});

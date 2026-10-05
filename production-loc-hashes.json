@@ -564,7 +564,7 @@
     },
     {
       "path": "src/git/quarantine.ts",
-      "sha256": "5c0b6721f1cfeff07a5437a4cc484ae735b30b3a0f506b9eff19f1da13bee64a"
+      "sha256": "4a1186e6995efb7ef028f71c3bb12320ea96b6733d7136a60a3a7debbd0c60cd"
     },
     {
       "path": "src/git/submit.ts",
@@ -1052,7 +1052,7 @@
     },
     {
       "path": "src/runtime/candidate-checks.ts",
-      "sha256": "4447a5b17d2427accba675ea1282a69bd7667023d6ef5f8b3c3f4ccd2f6ad178"
+      "sha256": "836359fc39bd9ecb9100d951f126dffc83f31c4e0d3d1c29f665f858c5da06ef"
     },
     {
       "path": "src/runtime/client-preload.ts",

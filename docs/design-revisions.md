@@ -1057,4 +1057,14 @@ executable plus argv — there is no shell to pipe `ls-tree` through — and
 was rejected because it would strip the mode/type/oid grammar the parser
 validates. The marker protocol also tightened: `OMA_ERROR=UNSUPPORTED_PROFILE`
 classifies the refusal only as a whole stderr line, so a check argv that
-prints the same bytes inside a longer line stays a plain CHECK_FAILED.
+prints the same bytes inside a longer line stays a plain CHECK_FAILED. And
+the marker is still only a claim — it asks the host to look, and the
+re-observation's own kind settles the failure through the same `observed`
+mapping the admission gates use: only `present` carrying at least one path
+earns the refusal, an unanswered or corrupt look stays
+REF_STATE_UNKNOWN / STORE_CORRUPT rather than terminal-failed with content
+the host never observed, and a `present` answer with no gitlinks means the
+marker disproved itself, so the nonzero exit stays a plain CHECK_FAILED. The
+quarantine importer's `OMA_ERROR=` failure words follow the same whole-line
+rule (a quarantine stderr line is unreachable by user argv, but the bytes are
+still the spawned command's output, not the class).

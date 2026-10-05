@@ -660,6 +660,12 @@ name collision/intended surface/hidden 미활성/idempotent reload/provenance/
   이름 있는 bound로 분리 — 초과는 여전히 output-limited→unknown이며 잘린
   "gitlink 없음"은 아님(DR33에 사유 기록). `parseGitlinksZ` 적대 입력 시험과
   prepared-revert 게이트 직접 시험을 보강했다.
+- 2026-10-05 (꼬리): UX-09 거절-정직 잔여 닫힘 — 마커는 "봐 달라"는 주장일
+  뿐, 호스트 재관측의 종류가 그대로 정산한다(unknown·absent→REF_STATE_UNKNOWN,
+  corrupt→STORE_CORRUPT, refused→INVALID_REQUEST, present+경로만 거절).
+  present:[]는 마커가 스스로 거짓임을 증명한 것이므로 plain CHECK_FAILED로
+  떨어진다. quarantine의 `OMA_ERROR=` 분류도 같은 전체-행 앵커를 따른다
+  (해당 stderr는 user argv가 닿지 못하지만 같은 종류). DR33에 판정 기록.
 
 ## 10. 지금부터의 실행 순서
 0. ~~P0-8 강제 수단 미구현~~ — 구현됨: `owned-state` 아키텍처 규칙

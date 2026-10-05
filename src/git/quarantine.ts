@@ -131,7 +131,11 @@ export class QuarantineImporter {
       try { stdout = decodeProcessText(result.stdout); stderr = decodeProcessText(result.stderr); }
       catch { throw new StoreError("REF_STATE_UNKNOWN", "quarantine command output is not valid UTF-8"); }
       if (result.exitCode !== 0) {
-        const code = /OMA_ERROR=(BUNDLE_INVALID|PREREQUISITE_MISSING|INTERNAL_ERROR|UNSUPPORTED_PROFILE|REF_STATE_UNKNOWN)/.exec(stderr)?.[1];
+        // A failure word classifies only as a whole stderr line, exactly as
+        // the script's echo emits it — the same bytes inside a longer line
+        // are the command's own output, never the named class (the checker's
+        // refusal marker follows the same rule in candidate-checks).
+        const code = /(?:^|\n)OMA_ERROR=(BUNDLE_INVALID|PREREQUISITE_MISSING|INTERNAL_ERROR|UNSUPPORTED_PROFILE|REF_STATE_UNKNOWN)(?:\n|$)/.exec(stderr)?.[1];
         if (code === "BUNDLE_INVALID" || code === "PREREQUISITE_MISSING" || code === "INTERNAL_ERROR" || code === "UNSUPPORTED_PROFILE" || code === "REF_STATE_UNKNOWN")
           throw new StoreError(code, stderr.slice(0, 400) || "quarantine failed");
         throw new StoreError("UNSUPPORTED_PROFILE", "required quarantine namespace is unavailable");
