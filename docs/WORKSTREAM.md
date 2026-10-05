@@ -654,6 +654,12 @@ name collision/intended surface/hidden 미활성/idempotent reload/provenance/
   허용 유지, provisioning notice·Mac import notCarried·START.md가 경로를 알림.
   fail-before: 구 소스는 merge open을 받은 뒤 통합에서 `CHECK_FAILED`(bare 125)로만
   실패하거나 gitlink main을 조용히 통합했다. review-notes 재바인딩·ledger·digest 갱신.
+- 2026-10-05 (후반): UX-09 맹검증 잔여 3건 — 거절 마커를 stderr 전체-행 앵커로
+  좁히고(더 긴 행 안의 같은 바이트는 CHECK_FAILED 유지), 전체 트리 열거가 공유
+  4MiB를 쓰던 것을 `GITLINKS_OBSERVATION_BYTES`(256MiB, ~1M leaf 기준)라는
+  이름 있는 bound로 분리 — 초과는 여전히 output-limited→unknown이며 잘린
+  "gitlink 없음"은 아님(DR33에 사유 기록). `parseGitlinksZ` 적대 입력 시험과
+  prepared-revert 게이트 직접 시험을 보강했다.
 
 ## 10. 지금부터의 실행 순서
 0. ~~P0-8 강제 수단 미구현~~ — 구현됨: `owned-state` 아키텍처 규칙

@@ -4,9 +4,10 @@ import { mkdtempSync, writeFileSync, unlinkSync, symlinkSync, rmSync } from "nod
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { spawnSync } from "node:child_process";
-import { GitObserver, parseNameStatusZ, protectedPathMatches, classifyRefAfterCas,
+import { GitObserver, parseNameStatusZ, parseGitlinksZ, protectedPathMatches, classifyRefAfterCas,
   type GitProcessEvidence, type GitObservation } from "../src/git/observe.js";
-import { canonicalMergeDiff, mergeDiffText } from "../src/git/canonical-command.js";
+import { canonicalMergeDiff, mergeDiffText, createCanonicalObserver, CANONICAL_PROCESS_LIMITS,
+  GITLINKS_OBSERVATION_BYTES } from "../src/git/canonical-command.js";
 
 const bytes = (text: string): Buffer => Buffer.from(text, "utf8");
 function evidence(patch: Partial<GitProcessEvidence> = {}): GitProcessEvidence {
@@ -124,6 +125,129 @@ test("AV-05: canonicalMergeDiff returns the authoritative bytes -- non-UTF-8 con
     assert.match(rendered, /^\[non-UTF-8 merge diff:/);
     assert.ok(!rendered.includes("�"));
     assert.equal(Buffer.from(rendered.slice(rendered.indexOf("\n") + 1), "base64").equals(diff), true);
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
+// UX-09: the same hostile-input discipline as parseNameStatusZ — `ls-tree -r
+// -z` output is one `<mode> <type> <oid>\t<path>` record per NUL, and only a
+// strict grammar may decode it: malformed bytes are corrupt output, a leaf
+// name outside the wire grammar refuses that candidate, and neither is ever
+// "no gitlinks".
+test("UX-09: gitlink records parse only the strict ls-tree grammar; hostile bytes corrupt or refuse", () => {
+  const oid = "a".repeat(40);
+  const record = (mode: string, type: string, path: string, oidText = oid) =>
+    bytes(`${mode} ${type} ${oidText}\t${path}\0`);
+  // Well-formed leaf entries: only 160000 rows are collected; nested paths,
+  // tabs, newlines and spaces inside names are preserved exactly.
+  const parsed = parseGitlinksZ(Buffer.concat([
+    record("100644", "blob", "file.txt"), record("120000", "blob", "link"),
+    record("100755", "blob", "sub/run.sh"), record("160000", "commit", "dep"),
+    record("160000", "commit", "vendor/nested"), record("100644", "blob", "M secret.txt"),
+    record("160000", "commit", "tab\tname"), record("160000", "commit", "line\nname"),
+  ]));
+  assert.deepEqual(parsed, { ok: true, value: ["dep", "vendor/nested", "tab\tname", "line\nname"] });
+  assert.deepEqual(parseGitlinksZ(bytes("")), { ok: true, value: [] });
+  // Output scope — the record grammar itself is broken, so the answer cannot
+  // be trusted: unterminated records, missing fields, a tree row `-r` never
+  // emits, unknown or short modes, mode/type mismatches and non-full oids.
+  for (const input of [
+    record("100644", "blob", "x").subarray(0, -1),       // unterminated record
+    Buffer.concat([record("100644", "blob", "x"), bytes("partial-record")]), // trailing junk after the last NUL
+    bytes(`100644 ${oid}\tx\0`),                          // missing the type field
+    bytes(`100644 blob ${oid} x\0`),                      // missing the tab
+    bytes(`040000 tree ${oid}\tdir\0`),                   // a tree row, impossible under -r
+    bytes(`100664 blob ${oid}\tx\0`),                     // a mode git never writes
+    bytes(`160000 blob ${oid}\tdep\0`),                   // gitlink mode naming a blob
+    bytes(`100644 commit ${oid}\tx\0`),                   // blob mode naming a commit
+    bytes(`160000 commit ${"a".repeat(39)}\tdep\0`),      // short oid
+    bytes(`160000 commit ${"a".repeat(41)}\tdep\0`),      // long oid
+    bytes(`160000 commit ${"A".repeat(40)}\tdep\0`),      // non-lowercase-hex oid
+    bytes(`160000 commit ${"g".repeat(40)}\tdep\0`),      // non-hex oid
+    bytes(` 100644 blob ${oid}\tx\0`),                    // leading whitespace
+    bytes(`100644  blob ${oid}\tx\0`),                    // double space in the header
+    bytes(`garbage\0`), bytes(`\0`),
+  ]) {
+    const result = parseGitlinksZ(input);
+    assert.equal(result.ok, false, JSON.stringify(input.toString()));
+    if (!result.ok) assert.equal(result.scope, "output", result.reason);
+  }
+  // Candidate scope — the record is well-formed but the leaf's name cannot be
+  // represented on the wire; that candidate is refused, not the store.
+  for (const input of [
+    record("100644", "blob", "../outside"), record("100644", "blob", "/abs"),
+    record("160000", "commit", "a//b"), record("160000", "commit", ""),
+    record("100644", "blob", "x/./y"), record("160000", "commit", "x/../y"),
+    Buffer.concat([record("160000", "commit", "").subarray(0, -1), Buffer.from([0xff, 0])]),
+  ]) {
+    const result = parseGitlinksZ(input);
+    assert.equal(result.ok, false, JSON.stringify(input.toString()));
+    if (!result.ok) assert.equal(result.scope, "candidate", result.reason);
+  }
+  // The sha256 object format is equally valid: 64-hex oids parse.
+  assert.deepEqual(parseGitlinksZ(record("160000", "commit", "dep", "b".repeat(64))), { ok: true, value: ["dep"] });
+  // And the observer maps each scope honestly: refused, corrupt, unknown —
+  // never a silent empty list.
+  const refusal = new GitObserver(() => evidence({
+    stdout: Buffer.concat([record("160000", "commit", "").subarray(0, -1), Buffer.from([0xff, 0])]) }));
+  assert.equal(refusal.gitlinks("/repo", oid).kind, "refused");
+  const corruptObserved = new GitObserver(() => evidence({ stdout: record("160000", "blob", "dep") }));
+  assert.equal(corruptObserved.gitlinks("/repo", oid).kind, "corrupt");
+  for (const uncertain of [
+    evidence({ status: null, signal: "SIGKILL" }),                                        // output-limited/timed-out shape
+    evidence({ status: 128 }),                                                           // nonzero exit
+    evidence({ stderr: bytes("warning: something\n") }),                                 // stderr diagnostics
+    evidence({ stdout: null }),                                                          // missing output
+  ]) {
+    const kind = new GitObserver(() => uncertain).gitlinks("/repo", oid).kind;
+    assert.equal(kind, uncertain.stdout === null ? "corrupt" : "unknown");
+  }
+});
+
+// UX-09: the whole-tree enumeration is the only observation that scales with
+// leaf count; it carries its own named bound instead of the shared 4 MiB that
+// would wedge a ~70k-entry tree into unknown at every gate. The bound stays a
+// bound — the 4 MiB run still answers unknown rather than a truncated list.
+test("UX-09: a tree larger than the shared bound still observes gitlinks whole", () => {
+  assert.ok(GITLINKS_OBSERVATION_BYTES > CANONICAL_PROCESS_LIMITS.maxBuffer);
+  const root = mkdtempSync(join(tmpdir(), "oma-gitlinks-bound-"));
+  const env = { HOME: "/nonexistent", PATH: "/usr/bin:/bin", LANG: "C", LC_ALL: "C",
+    GIT_CONFIG_NOSYSTEM: "1", GIT_CONFIG_GLOBAL: "/dev/null", GIT_CONFIG_SYSTEM: "/dev/null",
+    GIT_AUTHOR_NAME: "O", GIT_AUTHOR_EMAIL: "o@localhost", GIT_COMMITTER_NAME: "O", GIT_COMMITTER_EMAIL: "o@localhost" };
+  const run = (args: string[], input?: string): string => {
+    const result = spawnSync("/usr/bin/git", ["-C", root, ...args],
+      { env, encoding: "utf8", timeout: 30000, ...(input === undefined ? {} : { input }) });
+    assert.equal(result.error, undefined); assert.equal(result.status, 0, result.stderr);
+    return result.stdout.trim();
+  };
+  try {
+    run(["init", "-q", "-b", "main"]);
+    const blob = run(["hash-object", "-w", "--stdin"], "x");
+    const base = run(["commit-tree", run(["mktree"], ""), "-m", "base"]);
+    // ~22k leaf entries at ~210 bytes each — past the shared 4 MiB bound.
+    const lines = [];
+    for (let index = 0; index < 22000; index += 1)
+      lines.push(`100644 blob ${blob}\t${"p".repeat(150)}${String(index).padStart(5, "0")}`);
+    lines.push(`160000 commit ${base}\tzzzz-dep`);
+    lines.sort();
+    const tree = run(["mktree"], `${lines.join("\n")}\n`);
+    const commit = run(["commit-tree", tree, "-p", base, "-m", "wide tree"]);
+    const repository = join(root, ".git");
+    const raw = spawnSync("/usr/bin/git", ["--git-dir", repository, "ls-tree", "-r", "-z", "--full-tree", commit],
+      { env, timeout: 30000, maxBuffer: GITLINKS_OBSERVATION_BYTES });
+    assert.ok(raw.stdout.byteLength > CANONICAL_PROCESS_LIMITS.maxBuffer,
+      `fixture must exceed the shared bound: ${raw.stdout.byteLength}`);
+    // Fail-before: under the shared bound this same answer is output-limited
+    // → unknown → REF_STATE_UNKNOWN at every gate. Under the named bound the
+    // whole enumeration lands and names the one gitlink.
+    const sharedBound = new GitObserver(args => {
+      const result = spawnSync("/usr/bin/git", [...args], { env, timeout: 30000,
+        maxBuffer: CANONICAL_PROCESS_LIMITS.maxBuffer });
+      return { status: result.status, signal: result.signal, stdout: result.stdout, stderr: result.stderr,
+        ...(result.error === undefined ? {} : { error: result.error }) };
+    });
+    assert.equal(sharedBound.gitlinks(repository, commit).kind, "unknown");
+    const observedTree = createCanonicalObserver().gitlinks(repository, commit);
+    assert.deepEqual(observedTree.kind === "present" ? observedTree.value : null, ["zzzz-dep"]);
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
 

@@ -471,8 +471,8 @@
    "oracles": [
     "UX-09"
    ],
-   "sha256": "008b47e633a133dc922723d4254e4ce746b1663605397b8551694811109110cd",
-   "note": "Read in full: CHECK_CHECKOUT emits OMA_ERROR=UNSUPPORTED_PROFILE plus OMA_GITLINK=<path> and exits 125; run() classifies a nonzero exit as the named refusal only on the marker and re-observes the immutable candidate host-side for authoritative paths — sandbox stderr is never trusted and bare 125 stays CHECK_FAILED."
+   "sha256": "4447a5b17d2427accba675ea1282a69bd7667023d6ef5f8b3c3f4ccd2f6ad178",
+   "note": "Read in full: CHECK_CHECKOUT emits OMA_ERROR=UNSUPPORTED_PROFILE plus OMA_GITLINK=<path> and exits 125; run() classifies a nonzero exit as the named refusal only when the marker owns a whole stderr line — the same bytes inside a longer line or on stdout stay CHECK_FAILED — and re-observes the immutable candidate host-side for authoritative paths; sandbox stderr is never trusted and bare 125 stays CHECK_FAILED."
   },
   {
    "path": "src/runtime/provision.ts",
@@ -496,6 +496,17 @@
    ],
    "sha256": "a0cd3fcc0173d7dd7673474529658407f078603a307c63fb1a5fd134b6a78701",
    "note": "Read in full: START.md documents that merge/integration refuses any candidate whose tree carries a gitlink with UNSUPPORTED_PROFILE and named paths, and that a main carrying a gitlink refuses every merge until a candidate removes it."
+  },
+  {
+   "path": "src/git/canonical-command.ts",
+   "by": [
+    "DR33"
+   ],
+   "oracles": [
+    "UX-09"
+   ],
+   "sha256": "6910618c06fb58c2247296178ee3fca9c796a12ab6a7be1e12e03ddca787d6c7",
+   "note": "Read in full: the canonical adapter owns every observation byte budget; GITLINKS_OBSERVATION_BYTES (256 MiB) is the named bound the gitlinks() whole-tree ls-tree enumeration gets instead of the shared 4 MiB that wedged ~70k-entry trees into REF_STATE_UNKNOWN. Over the bound the answer stays output-limited → unknown, never a truncated 'no gitlinks'; the spawn model is one pinned executable plus argv, so no server-side filtering exists and the record grammar stays whole for the parser."
   }
  ],
  "readUnchanged": [
@@ -1625,23 +1636,6 @@
     "T96",
     "T97",
     "T99"
-   ],
-   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are tests whose loaded module closure contains this module"
-  },
-  {
-   "path": "src/git/canonical-command.ts",
-   "by": [
-    "AV-review"
-   ],
-   "oracles": [
-    "CTX-003",
-    "CTX-004",
-    "DB-009",
-    "ERR-001",
-    "GIT-006",
-    "INT-003",
-    "R01",
-    "T53"
    ],
    "note": "read in full in the whole-codebase adversarial pass after v9; oracles are tests whose loaded module closure contains this module"
   },

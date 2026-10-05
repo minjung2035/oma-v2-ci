@@ -520,7 +520,7 @@
     },
     {
       "path": "src/git/canonical-command.ts",
-      "sha256": "e1a5ee054eaa4422a5e1bbda7412bf6f1989c4527703bd058beccc7fef82130e"
+      "sha256": "6910618c06fb58c2247296178ee3fca9c796a12ab6a7be1e12e03ddca787d6c7"
     },
     {
       "path": "src/git/context-publication.ts",
@@ -1052,7 +1052,7 @@
     },
     {
       "path": "src/runtime/candidate-checks.ts",
-      "sha256": "008b47e633a133dc922723d4254e4ce746b1663605397b8551694811109110cd"
+      "sha256": "4447a5b17d2427accba675ea1282a69bd7667023d6ef5f8b3c3f4ccd2f6ad178"
     },
     {
       "path": "src/runtime/client-preload.ts",

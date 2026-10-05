@@ -245,6 +245,35 @@ test("mail-v1: a prepared revert that touches a protected path refuses at open",
   } finally { f.close(); }
 });
 
+test("UX-09: a broker-prepared revert carrying a gitlink refuses at open, naming the path", async () => {
+  const f = fixture(); try {
+    const { name } = await appliedMerge(f, "revert-me");
+    // A seeded or mirrored canonical main may carry a gitlink (DR33 keeps
+    // provisioning permissive). The prepared revert restores the merge's base
+    // over that main — so its tree still carries the link, and the gate that
+    // refuses a caller-built candidate refuses the broker's own revert the
+    // same way, before any request row or published ref exists.
+    const appliedMain = f.git(["rev-parse", "refs/heads/main"]);
+    // mktree stores entries in input order; a tree's canonical order compares
+    // entry names, so the gitlink line sorts in by path.
+    const entries = f.git(["ls-tree", appliedMain]).split("\n").concat(`160000 commit ${f.base}\tdep`);
+    const byPath = (line: string): string => line.slice(line.indexOf("\t") + 1);
+    entries.sort((left, right) => byPath(left) < byPath(right) ? -1 : 1);
+    const linkedTree = f.git(["mktree"], `${entries.join("\n")}\n`);
+    f.git(["update-ref", "refs/heads/main",
+      f.git(["commit-tree", linkedTree, "-p", appliedMain, "-m", "mirrored main carries a gitlink"])]);
+    await assert.rejects(f.challenge("bob", { merge: name, tier: "LOW" }, "ch-gitlink"), (error: unknown) => {
+      if (!(error instanceof StoreError) || error.code !== "UNSUPPORTED_PROFILE") return false;
+      assert.match(error.message, /submodule gitlink/);
+      assert.deepEqual((error as { details?: { paths?: string[] } }).details?.paths, ["dep"]);
+      return true;
+    });
+    assert.equal(f.store.getOperation("bob", "ch-gitlink"), null);
+    assert.equal(publishedRefs(f).split("\n").filter(l => l.includes("bob/")).length, 0,
+      "the refused revert was never published");
+  } finally { f.close(); }
+});
+
 test("mail-v1: a caller-provided revert candidate excludes its submitters from approval", async () => {
   const f = fixture(); try {
     const { name } = await appliedMerge(f, "supplied");

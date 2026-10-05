@@ -9,6 +9,19 @@ import { isValidFullOid } from "../domain/identifiers.js";
 
 export const GIT_BIN = "/usr/bin/git";
 export const CANONICAL_PROCESS_LIMITS = { timeout: 120000, maxBuffer: 4 * 1024 * 1024 } as const;
+/** UX-09/DR33: `GitObserver.gitlinks` is the one observation that enumerates a
+ * candidate's *whole* tree (`ls-tree -r -z --full-tree`), so its output scales
+ * with leaf count, not with a diff or a ref set — a sha256 record is ~80 bytes
+ * plus the path. Under the shared 4 MiB bound a ~70k-entry tree overflows into
+ * output-limited → unknown → REF_STATE_UNKNOWN at every gate, a permanent
+ * integration wedge even with zero gitlinks. 256 MiB admits ~1M leaf records
+ * with ~180 bytes of average path (or ~2.6M at typical depths) — and it stays
+ * a bound: beyond it the observation is still output-limited → unknown, never
+ * a truncated "no gitlinks". Server-side filtering was rejected: the canonical
+ * spawn model is one pinned executable plus argv (no shell pipeline) and
+ * `ls-tree` has no mode filter; shrinking records via `--format` was rejected
+ * because it would strip the mode/type/oid grammar the parser validates. */
+export const GITLINKS_OBSERVATION_BYTES = 256 * 1024 * 1024;
 /** Native execution is owned by process/run.ts. Both byte budgets are the same
  * single bound, so the native combined stdout+stderr cap is unchanged. */
 function evidence(argv: readonly string[], timeoutMs: number, maxBuffer: number, input?: string): GitProcessEvidence {
@@ -22,8 +35,10 @@ export function createCanonicalObserver(): GitObserver {
   return new GitObserver((args, input) => {
     const format = args.includes("--show-object-format");
     const commit = args.includes("--batch-check=%(objecttype)");
+    const wholeTree = args.includes("ls-tree");
     return evidence([...args], format ? 30000 : commit ? 10000 : CANONICAL_PROCESS_LIMITS.timeout,
-      format ? 1024 : commit ? 64 * 1024 : CANONICAL_PROCESS_LIMITS.maxBuffer, input);
+      format ? 1024 : commit ? 64 * 1024 : wholeTree ? GITLINKS_OBSERVATION_BYTES
+        : CANONICAL_PROCESS_LIMITS.maxBuffer, input);
   });
 }
 export function compareAndSwapCanonicalRef(observations: GitObserver, repository: string, ref: string,

@@ -83,6 +83,38 @@ test("UX-09/INT-007: only the sandbox marker turns a nonzero exit into a named r
   assert.equal(reobserved, candidate);
 });
 
+test("UX-09: the refusal marker must own its whole stderr line — the same bytes inside a longer line stay CHECK_FAILED", async () => {
+  // stderr is output the check argv controls; only the exact line the sandbox
+  // emits names the refusal. The host-side re-observation must not run for a
+  // substring, so a probe that would fire proves the marker never decoded.
+  const never = { gitlinks: () => { throw new Error("re-observation without the marker line"); } };
+  const exit = (stderr: string, stdout = ""): ProcessObservation => ({ kind: "exited", exitCode: 125,
+    signal: null, errorCode: null, elapsedMs: 1, stdout: Buffer.from(stdout), stderr: Buffer.from(stderr),
+    stdoutTruncated: false, stderrTruncated: false });
+  for (const stderr of [
+    "check said OMA_ERROR=UNSUPPORTED_PROFILE while failing\n",
+    "prefix OMA_ERROR=UNSUPPORTED_PROFILE\n",
+    "OMA_ERROR=UNSUPPORTED_PROFILE extra\n",
+    "OMA_ERROR=UNSUPPORTED_PROFILE\r\n",
+    "OMA_ERROR=UNSUPPORTED_PROFIL\nOMA_ERROR=UNSUPPORTED_PROFILEE\n",
+    "OMA_GITLINK=dep\n",
+  ])
+    await assert.rejects(new CandidateChecks(paths, async () => exit(stderr), never).run(candidate, check),
+      code("CHECK_FAILED"), JSON.stringify(stderr));
+  // The marker belongs to stderr; the same bytes on stdout name nothing.
+  await assert.rejects(
+    new CandidateChecks(paths, async () => exit("", "OMA_ERROR=UNSUPPORTED_PROFILE\n"), never).run(candidate, check),
+    code("CHECK_FAILED"));
+  // Positive controls: the exact line mid-stream, and at EOF without a
+  // trailing newline, decode — and still re-observe the immutable candidate.
+  const links = { gitlinks: () => ({ kind: "present" as const, value: ["dep"],
+    evidence: { status: 0, signal: null, stdout: Buffer.alloc(0), stderr: Buffer.alloc(0) } }) };
+  for (const stderr of ["check output\nOMA_ERROR=UNSUPPORTED_PROFILE\nOMA_GITLINK=dep\n", "OMA_ERROR=UNSUPPORTED_PROFILE"])
+    await assert.rejects(new CandidateChecks(paths, async () => exit(stderr), links).run(candidate, check),
+      (error: unknown) => error instanceof StoreError && error.code === "UNSUPPORTED_PROFILE" &&
+        (error.details as { paths?: string[] }).paths?.join() === "dep");
+});
+
 for (const format of ["sha1", "sha256"] as const) test(`DR29/INT-002: ${format} checkout checks exact bytes, including export-ignored files, without hooks or user filters`, async t => {
   const root = mkdtempSync(join(tmpdir(), "oma-check-tree-")); t.after(() => rmSync(root, { recursive: true, force: true }));
   const source = join(root, "source"), work = join(root, "checked"), temporary = join(root, "tmp"), repo = join(root, "project.git");

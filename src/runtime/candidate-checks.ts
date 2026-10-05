@@ -109,8 +109,11 @@ export function candidateCheckCommand(paths: GitPaths, candidate: string, check:
 }
 
 // UX-09: the sandbox's refusal marker — the only bytes that make a nonzero
-// exit a named refusal rather than a failed check.
-const GITLINK_REFUSAL = "OMA_ERROR=UNSUPPORTED_PROFILE";
+// exit a named refusal rather than a failed check. The marker must own its
+// whole line exactly as `echo` emits it (`OMA_ERROR=UNSUPPORTED_PROFILE\n`):
+// the same bytes inside a longer line are a check's own output, not the
+// refusal class — stderr is bytes a check argv controls.
+const GITLINK_REFUSAL = /(?:^|\n)OMA_ERROR=UNSUPPORTED_PROFILE(?:\n|$)/;
 
 export class CandidateChecks {
   constructor(private readonly paths: GitPaths,
@@ -121,7 +124,7 @@ export class CandidateChecks {
     if (observation.kind !== "exited")
       throw new StoreError("REF_STATE_UNKNOWN", `trusted check ${check.id} outcome is ${observation.kind}`);
     if (observation.exitCode === 0) return;
-    if (observation.stderr.includes(GITLINK_REFUSAL)) this.refuseGitlinks(candidate);
+    if (GITLINK_REFUSAL.test(observation.stderr.toString("utf8"))) this.refuseGitlinks(candidate);
     throw new StoreError("CHECK_FAILED", `trusted check ${check.id} did not pass (runner exit ${observation.exitCode})`);
   }
   /** The marker already proved the sandbox refused; the paths it names are
