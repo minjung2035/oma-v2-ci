@@ -297,6 +297,7 @@ src/runtime/session-handoff.ts
 src/runtime/session-history.ts
 src/runtime/session-mode.ts
 src/runtime/society-lease.ts
+src/runtime/society-slot.ts
 src/runtime/supervision-channel.ts
 src/runtime/user-files.ts
 src/sandbox.ts

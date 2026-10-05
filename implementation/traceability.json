@@ -2701,8 +2701,8 @@
   {
     "requirement": "MODE-005",
     "source": "docs/implementation-spec.md",
-    "digest": "64988ebb39a39bdfe3790f18b48ca8a55671c236a950e23538f2c2aef2ac05b7",
-    "normativeText": "**MUST [MODE-005]** `/resume`는 저장된 모드로 열며 변환하지 않고, fork도 출처 모드를 유지한다. `/new`만 새 birth 선택을 허용한다. 모드를 구분해 표시하고 다른 엔진 경로로 이동할 때 현재 history writer의 실제 종료를 관측한 뒤 시작한다. IPC EOF나 timeout만으로 writer 종료를 인정하지 않는다. legacy Society는 관측된 기존 project binding으로만 식별하며 경로 형태만으로 외부 Pi history를 수입하지 않는다. Society open/close는 협업 상태이며 Personal 시작은 다른 Society나 개별 force-stop 사실을 바꾸지 않는다.",
+    "digest": "2532a8112d2706e877dbbbea8b710ef6513e511d8f68dfc33834b5fdd815f820",
+    "normativeText": "**MUST [MODE-005]** `/resume`는 저장된 모드로 열며 변환하지 않고, fork도 출처 모드를 유지한다. `/new`와 Personal 세션의 `/society`만 새 birth 선택을 허용한다. `/society`는 실행 중인 엔진을 바꾸지 않는다: 프로젝트 자신의 Society 슬롯(`<data>/<project>`)에 binding·Society 기록·다른 birth record가 없을 때만 통과하고 — bound·unreadable·unavailable 관측·binding 없는 기록·legacy Society는 그 기록을 이유로 거절하며 관측 불가를 부재로 승격하지 않는다 — 통과 시 현재 writer의 실제 종료를 관측한 뒤 `oma --society <project>`로 execve 재진입해 표준 binding·provisioning의 새 Society를 birth한다. 이 재진입은 `RESUME_SESSION_ENV`도 저장 history의 재개도 아니다. 게이트와 재진입 요청은 아무 기록도 쓰지 않으므로 그 사이의 종료·전원손실은 다음 `/society`가 같은 슬롯을 다시 관측하는 것으로 끝나며, binding이 게시된 뒤의 재시작은 그 Society를 born으로 인식한다. macOS Personal의 `/society`는 전환 없이 거절한다. 모드를 구분해 표시하고 다른 엔진 경로로 이동할 때 현재 history writer의 실제 종료를 관측한 뒤 시작한다. IPC EOF이나 timeout만으로 writer 종료를 인정하지 않는다. legacy Society는 관측된 기존 project binding으로만 식별하며 경로 형태만으로 외부 Pi history를 수입하지 않는다. Society open/close는 협업 상태이며 Personal 시작은 다른 Society나 개별 force-stop 사실을 바꾸지 않는다.",
     "applicability": "unclassified",
     "rationale": "Requires production-path review; no inference from test names.",
     "owner": "src/runtime/personal-session.ts#runPersonalSession",

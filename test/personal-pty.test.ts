@@ -9,7 +9,7 @@ import { removeTree } from "./fixtures/cleanup.js";
 
 const hex = (value: string): string => Buffer.from(value).toString("hex");
 const fixtures = join(process.cwd(), "test/fixtures");
-for (const ending of ["tools", "config", "empty-extensions", "extensions", "new", "resume", "fork", "fork-ui", "fork-cancel", "reload-update", "reload-failure", "retry", "cancel", "project-seed", "project-seed-resume"]) {
+for (const ending of ["tools", "config", "empty-extensions", "extensions", "new", "resume", "fork", "fork-ui", "fork-cancel", "reload-update", "reload-failure", "retry", "cancel", "project-seed", "project-seed-resume", "society-bound"]) {
   test(`Personal installed PTY: ${ending}, isolated state and restored terminal`, { timeout: 60_000 }, t => {
     const root = mkdtempSync(join(tmpdir(), "oma-personal-pty-"));
     t.after(() => removeTree(root));
@@ -37,6 +37,7 @@ for (const ending of ["tools", "config", "empty-extensions", "extensions", "new"
         step("\r", "Personal extension choice saved"), prompt]
       : ending === "new" ? [prompt, step("/new\r", "Mode is fixed for this session", 0.5),
         birth("\x1b[B\r", "Let's build something great", 0.5), prompt]
+      : ending === "society-bound" ? [step("/society\r", "already on for this project", 0.5), prompt]
       : ending === "project-seed-resume" ? [prompt, step("/fixture-break-project\r", "EXTENSION_TOOL_COMPLETE", 0.5),
         step("/resume\r", "[Personal]", 0.5), birth("\r", "PERSONAL_RESPONSE_COMPLETE", 0.5), prompt]
       : ending === "resume" ? [prompt, step("/resume\r", "[Personal]", 0.5), birth("\r", "PERSONAL_RESPONSE_COMPLETE", 0.5), prompt]
@@ -68,6 +69,7 @@ for (const ending of ["tools", "config", "empty-extensions", "extensions", "new"
     if (ending === "config") { assert.match(output, /Config — Personal/); assert.match(output, /Thinking Level/); }
     if (ending.includes("extensions")) assert.match(output, /Personal extension choice saved/);
     if (ending === "new") assert.match(output, /Mode is fixed for this session/);
+    if (ending === "society-bound") assert.match(output, /already on for this project/);
     if (ending.endsWith("resume")) assert.match(output, /\[Personal\]/);
     if (ending.startsWith("project-seed")) assert.match(output, /EXTENSION_TOOL_COMPLETE/);
     if (ending.startsWith("fork-")) assert.match(output, /Fork from Message/);

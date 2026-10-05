@@ -835,6 +835,20 @@ acquisition, shutdown and concurrent history-writer evidence, Mac packages and g
 history integration remain open. DR27 and its independent permission/release boundaries
 are not cleared by this decision. Current evidence belongs to validation.md.
 
+2026-10-05 addendum — `/society`: the Human confirmed a record-free Personal session
+turns Society on with one command. The gate is the project's own Society slot
+(`<data>/<project>`): only an observed-free slot proceeds — bound, unreadable,
+unverifiable, binding-free or legacy-slug records each refuse by name, and an
+unobservable slot is never promoted to absent. A free slot ends the Personal writer,
+its actual exit is observed, and the host re-enters `oma --society <project>` through
+execve — standard binding publication, birth record and provisioning. It is not a
+resume (no `RESUME_SESSION_ENV`, no history import) and never an in-process mode
+change. The gate and the handoff write nothing: a kill or power loss between them
+ends in the next `/society` re-observing the same slot, and once the binding is
+published a restart recognizes the Society as born. macOS Personal refuses the
+transition without exiting — a Society there is the app's hidden VM. MODE-005
+carries the contract; validation.md owns the evidence.
+
 ## DR29 — Complete candidate checks and apply Principal roles at execution boundaries
 
 The Human requested the unfinished handoff in full and authorized proceeding when

@@ -237,7 +237,7 @@ interface RowState {
 }
 
 interface Timing { startedAt: number; endedAt?: number }
-interface Indicator { invalidate: () => void; drawnAt: number }
+interface Indicator { invalidate: () => void }
 
 /** What a runtime exposes to the host's wiring. Events are what the engine
  * already reports to extensions; a row reads them, it never polls. */
@@ -298,8 +298,8 @@ export function createCompactToolRuntime(clock: () => number = () => Date.now())
       return frame;
     }
     const existing = indicators.get(id);
-    if (existing !== undefined) { existing.invalidate = invalidate; existing.drawnAt = clock(); }
-    else indicators.set(id, { invalidate, drawnAt: clock() });
+    if (existing !== undefined) existing.invalidate = invalidate;
+    else indicators.set(id, { invalidate });
     if (timer === undefined) {
       timer = setInterval(tick, COMPACT_TOOL_BOUNDS.indicatorMs.value);
       (timer as { unref?(): void }).unref?.();

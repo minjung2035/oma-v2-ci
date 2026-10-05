@@ -11,7 +11,7 @@ const code = ts.transpileModule(readFileSync('src/entry/pi-personal.ts', 'utf8')
 }).outputText.replaceAll('import.meta.url', '"file:///fixture/dist/src/entry/pi-personal.js"')
   .replace(/main\(\)\.catch\([\s\S]*$/, 'module.exports.main = main;');
 const flush = async () => { for (let i = 0; i < 30; i++) await Promise.resolve(); };
-function world({ fail, close, dispose, run, construct, catalog, beforeSwitch, sendError, resourceReload, moduleClose, needsTrust, trusted, packageResources } = {}) {
+function world({ fail, close, dispose, run, construct, catalog, beforeSwitch, sendError, resourceReload, moduleClose, needsTrust, trusted, packageResources, slot, platform } = {}) {
   const calls = [], hooks = {}, writes = [], commands = {}, picks = [];
   const birth = { id: 'personal-id', mode: 'personal', cwd: '/fixture/work', history: '/fixture/history' };
   const manager = { getCwd: () => birth.cwd, getSessionDir: () => birth.history };
@@ -98,12 +98,14 @@ function world({ fail, close, dispose, run, construct, catalog, beforeSwitch, se
     '../pi-compat/env.js': { PI_RESUME_HINT: 'To resume this session:' },
     '../pi-compat/interactive-mode.js': { interactiveInternalsOf: mode => mode },
     '../runtime/personal-models.js': { personalModels: async () => credentials },
+    '../runtime/society-slot.js': { checkSocietySlot(data, cwd) { calls.push(['slot', data, cwd]); return typeof slot === 'function' ? slot() : slot ?? { kind: 'free', society: 'fixture-society' }; } },
     '../protocol/guest-history.js': { isGuestHistoryReference: value => value.startsWith('oma-guest-history:') },
     '../platform/host/guest-histories.js': { async inspectMacGuestHistory() { calls.push('guest-history'); },
       async listMacGuestHistories() { return []; } },
     '../tui/open-tui-brand.js': { brandHeader(lines, brand) { calls.push(['brand', brand.version]); return lines; }, brandFooter: lines => lines },
   };
   const module = { exports: {} }, process = { argv: ['node', 'entry', '--root', '/fixture/root', '--data-root', '/fixture/data', '--libdir', '/fixture/install', '--packages', '/fixture/packages'],
+    platform: platform ?? 'linux',
     env: { PI_CODING_AGENT_DIR: '/fixture/engine' }, cwd: () => birth.cwd, stdout, stderr: { write() {} }, send(message, done) { calls.push(['switch', message]); done(sendError); } };
   new Script(code).runInNewContext({ module, exports: module.exports, URL, process,
     require(name) { assert.ok(Object.hasOwn(dependencies, name), `unexpected Personal dependency ${name}`); return dependencies[name]; } });
@@ -229,6 +231,76 @@ test('Personal engine: extension replacement failure returns owners before upstr
   assert.equal(w.calls.filter(value => value === 'dispose').length, 1);
   assert.equal(w.calls.filter(value => value === 'credentials-close').length, 1);
 });
+test('Personal engine: /society on a free slot hands the project Society to the host and ends the writer', async () => {
+  let finish;
+  const w = world({ run: async () => new Promise(resolve => { finish = resolve; }) });
+  const main = w.main(); await flush();
+  await w.commands.society.handler('', w.context);
+  assert.deepEqual(w.calls.find(value => Array.isArray(value) && value[0] === 'slot'), ['slot', '/fixture/data', '/fixture/work']);
+  const sent = w.calls.find(value => Array.isArray(value) && value[0] === 'switch');
+  assert.equal(sent?.[1]?.type, 'switch'); assert.equal(sent?.[1]?.society, 'fixture-society'); assert.equal(sent?.[1]?.session, undefined);
+  assert.equal(w.calls.includes('upstream-exit'), true);
+  finish(); await main;
+});
+test('Personal engine: a refused slot is reported and never reaches the host or the writer', async () => {
+  let finish;
+  const w = world({ slot: { kind: 'refused', reason: 'injected durable record' }, run: async () => new Promise(resolve => { finish = resolve; }) });
+  const main = w.main(); await flush();
+  await w.commands.society.handler('', w.context);
+  assert.deepEqual(w.calls.find(value => Array.isArray(value) && value[0] === 'notice'), ['notice', 'injected durable record', 'warning']);
+  assert.equal(w.calls.some(value => Array.isArray(value) && value[0] === 'switch'), false);
+  assert.equal(w.calls.includes('upstream-exit'), false); assert.equal(w.calls.includes('dispose'), false);
+  finish(); await main;
+});
+test('Personal engine: an observation failure refuses without treating the slot as absent', async () => {
+  let finish;
+  const w = world({ slot() { throw new Error('injected observation'); }, run: async () => new Promise(resolve => { finish = resolve; }) });
+  const main = w.main(); await flush();
+  await w.commands.society.handler('', w.context);
+  assert.equal(w.calls.some(value => Array.isArray(value) && value[0] === 'notice' && value[2] === 'error'), true);
+  assert.equal(w.calls.some(value => Array.isArray(value) && value[0] === 'switch'), false);
+  finish(); await main;
+});
+test('Personal engine: /society on macOS refuses without a transition — the host contract has no meaning for it', async () => {
+  let finish;
+  const w = world({ platform: 'darwin', run: async () => new Promise(resolve => { finish = resolve; }) });
+  const main = w.main(); await flush();
+  await w.commands.society.handler('', w.context);
+  assert.equal(w.calls.some(value => Array.isArray(value) && value[0] === 'notice'), true);
+  assert.equal(w.calls.some(value => Array.isArray(value) && value[0] === 'slot'), false, 'the gate is not asked on a platform that cannot take the answer');
+  assert.equal(w.calls.some(value => Array.isArray(value) && value[0] === 'switch'), false);
+  finish(); await main;
+});
+test('Personal engine: a cancelled before-switch keeps the /society session Personal', async () => {
+  let finish;
+  const w = world({ beforeSwitch: async () => ({ cancel: true }), run: async () => new Promise(resolve => { finish = resolve; }) });
+  const main = w.main(); await flush();
+  await w.commands.society.handler('', w.context);
+  assert.equal(w.calls.some(value => Array.isArray(value) && value[0] === 'switch'), false);
+  assert.equal(w.calls.includes('upstream-exit'), false);
+  finish(); await main;
+});
+test('Personal engine: a second /society while one is transitioning cannot double-enter', async () => {
+  let finish, accept;
+  const w = world({ beforeSwitch: () => new Promise(resolve => { accept = resolve; }),
+    run: async () => new Promise(resolve => { finish = resolve; }) });
+  const main = w.main(); await flush();
+  const first = w.commands.society.handler('', w.context); await flush();
+  await w.commands.society.handler('', w.context);
+  assert.equal(w.calls.filter(value => Array.isArray(value) && value[0] === 'slot').length, 1);
+  accept({ cancel: false }); await first;
+  assert.equal(w.calls.filter(value => Array.isArray(value) && value[0] === 'switch').length, 1);
+  finish(); await main;
+});
+test('Personal engine: an IPC send failure on /society returns the transition slot for an explicit retry', async () => {
+  let finish;
+  const problem = new Error('injected send'), w = world({ sendError: problem, run: async () => new Promise(resolve => { finish = resolve; }) });
+  const main = w.main(); await flush();
+  await assert.rejects(w.commands.society.handler('', w.context), error => error === problem);
+  await assert.rejects(w.commands.society.handler('', w.context), error => error === problem);
+  assert.equal(w.calls.filter(value => Array.isArray(value) && value[0] === 'switch').length, 2);
+  assert.equal(w.calls.includes('upstream-exit'), false); finish(); await main;
+});
 test('Personal engine: module-hook cleanup failure still closes credentials and retains the startup failure', async () => {
   const cleanup = new Error('injected module cleanup');
   const w = world({ fail: 'init', moduleClose: () => { throw cleanup; } });
@@ -250,7 +322,7 @@ test('#6: Personal registers only its own command -- the engine keeps /import an
   let loader;
   const w = world({ run: async ({ runtime }) => { loader = runtime.services.resourceLoader; } });
   await w.main();
-  assert.deepEqual(Object.keys(w.commands), ['oma'], 'Personal must not shadow an engine command');
+  assert.deepEqual(Object.keys(w.commands), ['oma', 'society'], 'Personal must not shadow an engine command');
   assert.equal(w.commands.import, undefined, '/import stays the engine\'s own');
   const options = loader.options;
   // Extensions stay pinned to the selected files; every other resource

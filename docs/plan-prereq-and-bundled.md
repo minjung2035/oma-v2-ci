@@ -211,6 +211,46 @@ indicator, "Done in Xs · N lines" 컨트롤 행, 인자 확장)**. 명령/silen
   기록이 durable한 시점에 정직하게 답한다.
 - 명령 표면: `/society` 하나. `oma society` CLI 별칭은 후속 — v0.1 범위 밖.
 
+### C 실행 결과 (게이트 + execve 재진입 구현)
+
+- **명령 확정 — `/society`**: 표면 조사 결과 Personal 경계는 이미 `/oma`(Config)
+  하나를 등록하고 엔진 명령(`/import` 등)을 섀도하지 않는다. `/society`는
+  Personal birth의 `boundary` 팩토리가 등록하는 두 번째 명령 — Society TUI나
+  Pi 내장 명령과 충돌 없음. `oma society` CLI 별칭은 계획대로 v0.1 범위 밖.
+- **게이트 — `src/runtime/society-slot.ts`**: 프로젝트 자신의 슬롯
+  `<data>/<projectSociety(cwd)>`(`projectSociety` = `defaultSocietyFor(cwd,
+  sha256(cwd))` — DR24의 프로젝트 명칭 그대로)를 읽기 전용으로 판정한다.
+  `observeProjectBinding`이 bound면 그 기록을 이름으로 거절, unreadable·
+  unavailable은 부재로 승격하지 않고 거절, `stateRootHasSociety`(unused
+  cleanup이 쓰는 동일 술어)가 참이면 binding 없는 pre-binding 상태로 거절.
+  birth record(`session-mode.json`)는 unused-cleanup이 무시하는 잔여이지만
+  birth로서는 내구 기록이므로 재진입이 게시할 것과 같은 것만 잔여로
+  인정하고 다른 것은 거절. legacy slug 슬롯은 I49의 fail-closed 거절과 같은
+  선. 게이트 자체는 아무것도 쓰지 않는다.
+- **전환**: `/society` → 게이트 free → `session_before_switch`(cancel 가능)
+  → IPC `{type:"switch", society}` → `InteractiveMode.shutdown()`의 실제
+  종료 → host(`personal-host.ts`)는 자식 종료 후에만 프로젝트 명칭과
+  일치하는지 검증하고 `process.chdir(세션의 birth cwd)` 뒤
+  `process.execve(… oma.js --society <project>)`. `RESUME_SESSION_ENV`는
+  삭제되고 저장 history는 재개되지 않는다 — 재진입한 `oma --society`가
+  표준 binding 게시·`publishSessionBirth`·provisioning을 그대로 수행한다.
+- **내구 경계**: 게이트↔재진입 사이는 무기록 구간이다. kill/powercut은
+  다음 `/society`가 같은 슬롯을 재관측하는 것으로 끝난다. 슬롯에 binding이
+  게시된 뒤(`publishProjectBinding` — no-replace link + fsync + reread)의
+  재시작은 그 Society를 born으로 인식하고 `/society`는 거절, 직접
+  `oma --society`는 기존 재개 경로를 탄다. 미확정 게시는 성공으로 승격하지
+  않는다(`publishProjectBinding`이 그대로 실패로 돌린다).
+- **macOS**: Personal의 `/society`는 전환 없이 거절한다(숨은 VM의 Society는
+  앱이 소유 — MODE-006 계약 변경 없음).
+- **테스트**: 게이트 실파일 8종(test/society-slot.test.ts — free/바인딩
+  게시 전환/다른 프로젝트 바인딩/손상 바인딩/관측 불가/pre-binding 기록/
+  동일 birth 잔여·다른 birth/legacy), wire 문법(society 전용·혼합 거절·
+  실패 종료 시 handoff 없음 — personal-session-ownership), host 합성(execve
+  인자·no RESUME·실제 종료 후·이름 불일치 거절·execve 불가 —
+  personal-host-composition), 엔진 합성(등록·free 전환·거절 통지·darwin 거절·
+  cancel·직렬화·send 실패 재시도 — personal-engine-ownership).
+- **라이더**: `Indicator.drawnAt` 제거 — 아무 곳에서도 읽지 않던 장부.
+
 ## D. Bundled extension 스펙 (원문 = WORKSTREAM §7 — 초기 계획안 취급)
 
 **구현 순서 확정(반박)**: lsp → ask → hashline → web → mcp. lsp가 런타임 dep 0이라

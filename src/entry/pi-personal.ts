@@ -19,6 +19,7 @@ import { PI_AGENT_DIR_ENV, preparePiInteractive, preparePiRetry } from "../runti
 import { PI_RESUME_HINT } from "../pi-compat/env.js";
 import { interactiveInternalsOf } from "../pi-compat/interactive-mode.js";
 import { personalModels } from "../runtime/personal-models.js";
+import { checkSocietySlot } from "../runtime/society-slot.js";
 import { isGuestHistoryReference } from "../protocol/guest-history.js";
 import { inspectMacGuestHistory, listMacGuestHistories } from "../platform/host/guest-histories.js";
 import { brandHeader, brandFooter, type OpenTuiBrand } from "../tui/open-tui-brand.js";
@@ -56,16 +57,44 @@ async function main(): Promise<void> {
       ...(file === undefined ? {} : { targetSessionFile: file }) });
     return result?.cancel !== true;
   };
-  const transition = async (epoch: number, file?: string): Promise<void> => {
+  const transition = async (epoch: number, file?: string, society?: string): Promise<void> => {
     if (!current(epoch)) return;
+    if (file !== undefined && society !== undefined) throw new StoreError("INVALID_REQUEST", "A switch carries one target");
     if (file !== undefined && !lstatSync(file).isFile()) throw new StoreError("INVALID_REQUEST", "Session history is not a regular file");
     if (process.send === undefined || mode === undefined) throw new StoreError("BROKER_UNAVAILABLE", "Personal host channel is unavailable");
     switching = true;
     try {
-      await new Promise<void>((resolve, reject) => process.send!({ type: "switch", ...(file === undefined ? {} : { session: file }) },
+      // The host owns the meaning of these fields: `session` reopens a saved
+      // history, `society` re-enters as `oma --society <name>` — a new birth.
+      await new Promise<void>((resolve, reject) => process.send!({ type: "switch",
+        ...(file === undefined ? {} : { session: file }), ...(society === undefined ? {} : { society }) },
         error => { if (error) reject(error); else resolve(); }));
     } catch (error) { switching = false; throw error; }
     await interactiveInternalsOf(mode).shutdown();
+  };
+  /** `/society`: turn this project's own Society on. The gate is read-only
+   * and answers before anything exits; a refused answer names the durable
+   * record that stands. A free slot hands the name to the host, which
+   * re-enters as `oma --society` — standard binding and provisioning, a new
+   * Society birth rather than this session resumed, and never an in-process
+   * mode change. */
+  const society = async (ctx: ExtensionContext): Promise<void> => {
+    const epoch = uiEpoch;
+    if (!current(epoch) || replacing) return;
+    // On macOS a Society lives in the app's hidden VM; a Personal session
+    // never forks one on the host (MODE-006). The answer is refusal, not a
+    // transition the host contract has no meaning for.
+    if (process.platform === "darwin") {
+      ctx.ui.notify("A Society runs in the OMA app on this Mac — open this project there to start it. This session stays Personal.", "info");
+      return;
+    }
+    let slot;
+    try { slot = checkSocietySlot(dataRoot, birth.cwd); }
+    catch (error) { ctx.ui.notify(`Cannot inspect this project's Society records: ${String(error)}`, "error"); return; }
+    if (slot.kind === "refused") { ctx.ui.notify(slot.reason, "warning"); return; }
+    replacing = true;
+    try { if (await beforeSwitch("new")) await transition(epoch, undefined, slot.society); }
+    finally { replacing = false; }
   };
   const modelConfig = async (ctx: ExtensionContext, epoch: number): Promise<void> => {
     const session = runtime!.session;
@@ -127,6 +156,7 @@ async function main(): Promise<void> {
   const branded = new WeakSet<object>();
   const boundary: ExtensionFactory = pi => {
     pi.registerCommand("oma", { description: "Personal Config: model, effort and extensions", handler: async (_args, ctx) => config(ctx) });
+    pi.registerCommand("society", { description: "Turn Society on for this project (leaves this Personal session)", handler: async (_args, ctx) => society(ctx) });
     pi.registerShortcut("ctrl+x", { description: "Personal Config", handler: config });
     pi.on("session_start", (_event, ctx) => {
       uiEpoch++; context = ctx;

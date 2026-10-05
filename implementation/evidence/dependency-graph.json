@@ -305,6 +305,7 @@
   "src/runtime/session-history.ts",
   "src/runtime/session-mode.ts",
   "src/runtime/society-lease.ts",
+  "src/runtime/society-slot.ts",
   "src/runtime/supervision-channel.ts",
   "src/runtime/user-files.ts",
   "src/sandbox.ts",
@@ -1845,7 +1846,7 @@
     "src/sandbox.ts",
     "src/platform/"
    ],
-   "files": 114
+   "files": 115
   },
   {
    "index": 5,
@@ -1861,8 +1862,8 @@
    "files": 83
   }
  ],
- "files": 381,
- "runtimeEdges": 1640,
+ "files": 382,
+ "runtimeEdges": 1647,
  "typeOnlyEdges": 420,
  "runtimeEdgeMatrix": {
   "L1-kernel -> L1-kernel": 316,
@@ -1871,14 +1872,14 @@
   "L3-workflow -> L1-kernel": 223,
   "L3-workflow -> L2-facts": 14,
   "L3-workflow -> L3-workflow": 68,
-  "L4-orchestration -> L1-kernel": 344,
+  "L4-orchestration -> L1-kernel": 347,
   "L4-orchestration -> L2-facts": 8,
   "L4-orchestration -> L3-workflow": 21,
-  "L4-orchestration -> L4-orchestration": 175,
+  "L4-orchestration -> L4-orchestration": 178,
   "L5-entry -> L1-kernel": 123,
   "L5-entry -> L2-facts": 2,
   "L5-entry -> L3-workflow": 7,
-  "L5-entry -> L4-orchestration": 136,
+  "L5-entry -> L4-orchestration": 137,
   "L5-entry -> L5-entry": 163
  },
  "upwardTypeOnlyEdges": [
@@ -1903,13 +1904,13 @@
   "src/storage/paths.ts": 31,
   "src/storage/contained-fs.ts": 30,
   "src/protocol/host-guest.ts": 29,
-  "src/ids.ts": 26,
+  "src/ids.ts": 27,
   "src/storage/directory.ts": 26,
   "src/storage/durable-fs.ts": 26,
   "src/domain/canonical-json.ts": 21,
+  "src/hash.ts": 21,
   "src/domain/derived.ts": 20,
   "src/frame.ts": 20,
-  "src/hash.ts": 20,
   "src/process/run.ts": 18,
   "src/store.ts": 18,
   "src/process/policies.ts": 17
@@ -1927,9 +1928,9 @@
   "src/entry/pi-interactive-host.ts": 17,
   "src/git/context-repository.ts": 17,
   "src/platform/host/service.ts": 16,
+  "src/entry/pi-personal.ts": 15,
   "src/git/context.ts": 15,
-  "src/lifecycle/create.ts": 15,
-  "src/reconcile.ts": 15
+  "src/lifecycle/create.ts": 15
  },
  "external": {
   "@earendil-works/pi-coding-agent": 29,
@@ -1945,7 +1946,7 @@
   "node:module": 3,
   "node:net": 32,
   "node:os": 9,
-  "node:path": 125,
+  "node:path": 126,
   "node:perf_hooks": 4,
   "node:sqlite": 4,
   "node:stream": 3,

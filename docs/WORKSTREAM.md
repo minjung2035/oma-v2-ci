@@ -633,6 +633,16 @@ name collision/intended surface/hidden 미활성/idempotent reload/provenance/
 
 ## 9. 진행 로그
 
+- 2026-10-05 (C): plan §C society-off 재설계 구현 — Personal 세션의 `/society`가
+  프로젝트 자신의 Society 슬롯(`<data>/<projectSociety(cwd)>`)을 읽기 전용으로
+  게이트하고(bound·unreadable·unavailable·binding 없는 기록·다른 birth record·
+  legacy slug는 그 기록을 이유로 거절), free면 writer의 실제 종료를 관측한 뒤
+  host가 `oma --society <project>`로 execve 재진입 — `RESUME_SESSION_ENV` 없는
+  새 Society birth. 게이트↔재진입 사이는 아무 기록도 쓰지 않아 kill/powercut이
+  다음 `/society`의 재관측으로 끝나고, binding 게시 뒤 재시작은 born으로 인식.
+  신규 `src/runtime/society-slot.ts`, wire `{type:"switch", society}`,
+  pi-personal boundary 명령, personal-host execve 분기. 라이더:
+  `Indicator.drawnAt` 제거. UX-35. macOS Personal은 전환 없이 거절.
 - 2026-10-03: 12브랜치 머지+통합 완료 → Phase2 검증 10개(구역별 2회) 완료,
   실질 결함 ~20건 확정 → fix/A~E 수정 에이전트 5개 실행
   (oma-fix-a..e, fix/fa..fe). 이후 머지→재검증 5+5 루프.

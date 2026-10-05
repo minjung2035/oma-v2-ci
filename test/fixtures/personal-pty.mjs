@@ -49,6 +49,14 @@ export default pi => {
 };\n`);
 writeFileSync(join(store, 'oma-extensions.json'), JSON.stringify([{ source: 'npm:local-fixture', entries: ['packages:fixture.mjs'] }]));
 const projectSeed = ending.startsWith('project-seed');
+// /society's gate: a slot that already carries this project's binding must be
+// refused by name while the Personal session stays alive.
+if (ending === 'society-bound') {
+  const project = defaultSocietyFor(realpathSync(cwd), sha256Hex(realpathSync(cwd))), slot = join(data, project);
+  mkdirSync(slot, { recursive: true });
+  writeFileSync(join(slot, 'project-binding.json'), JSON.stringify({ kind: 'oma-project-binding-v1', society: project,
+    canonicalProjectPath: realpathSync(cwd) }) + '\n', { mode: 0o600 });
+}
 let projectSettings;
 if (projectSeed) {
   const project = defaultSocietyFor(realpathSync(cwd), sha256Hex(realpathSync(cwd)));
@@ -152,7 +160,10 @@ try {
     else assert.deepEqual(readFileSync(config), projectSettings, 'Personal may observe but not rewrite the project');
   }
   assert.ok(names.every(name => !name.startsWith('oma_')));
-  assert.deepEqual(readdirSync(data).sort(), projectSeed ? ['.engine', '.packages', '.personal', '.projects'] : ['.engine', '.packages', '.personal']);
+  const dataEntries = ['.engine', '.packages', '.personal'];
+  if (projectSeed) dataEntries.push('.projects');
+  if (ending === 'society-bound') dataEntries.push(defaultSocietyFor(realpathSync(cwd), sha256Hex(realpathSync(cwd))));
+  assert.deepEqual(readdirSync(data).sort(), dataEntries.sort());
   writeFileSync(join(root, 'facts.json'), JSON.stringify({ requests: provider.seen.length, births: births.length, names }));
 } finally { await provider.close(); }
 process.exitCode = code ?? 1;

@@ -91,6 +91,22 @@ test('Personal child: only the first valid switch is accepted', async () => {
   w.child.emit('message', { type: 'switch', session: '/fixture/second.jsonl' });
   w.child.finish(); assert.equal((await run).next.session, '/fixture/first.jsonl'); released(w);
 });
+test('Personal child: a society switch is one target and never both', async () => {
+  const w = world(), run = w.runPersonalSession(options);
+  for (const message of [{ type: 'switch', session: '/fixture/x.jsonl', society: 'two-targets' }, { type: 'switch', society: 42 },
+    { type: 'switch', society: 'named', extra: true }])
+    w.child.emit('message', message);
+  w.child.emit('message', { type: 'switch', society: 'fixture-society' });
+  w.child.finish();
+  const ended = await run;
+  assert.equal(ended.next.society, 'fixture-society'); assert.equal(ended.next.session, undefined); released(w);
+});
+test('Personal child: a society switch on a failed exit is not a handoff', async () => {
+  const w = world(), run = w.runPersonalSession(options);
+  w.child.emit('message', { type: 'switch', society: 'fixture-society' });
+  w.child.finish(1);
+  assert.equal((await run).next, undefined); released(w);
+});
 test('Personal child: all host-loss signals forward while the history writer is alive', async () => {
   const w = world(), run = w.runPersonalSession(options);
   for (const name of signals) w.host.emit(name);

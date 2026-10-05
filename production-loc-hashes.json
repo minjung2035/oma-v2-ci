@@ -1,6 +1,6 @@
 {
   "kind": "oma-production-source-digests-v1",
-  "manifest": "2d6875a529452c52f7f948ba956e442a6bc2e49aa86138b3d9ca0f5b837f9b32",
+  "manifest": "9c3336ae7dc7a7312c3b98ad70987850b024c91a1a70bb9ccdeaa98615db6c8b",
   "files": [
     {
       "path": "implementation/contracts.ts",
@@ -420,7 +420,7 @@
     },
     {
       "path": "src/entry/personal-host.ts",
-      "sha256": "8b1ceeea22cfd97af4e7d369dd9ded81506f67695a76ad6e3be2c08b0722e965"
+      "sha256": "70f2aec4bae1312faadf8448984792fa2dd697321df5619218978d9b5f9a457e"
     },
     {
       "path": "src/entry/pi-interactive-host.ts",
@@ -432,7 +432,7 @@
     },
     {
       "path": "src/entry/pi-personal.ts",
-      "sha256": "c0a86be7a78039200d6a630600be45baeee0cdc12e37ce0577c58c912e1d7c77"
+      "sha256": "3082d34665e75009d041b57861fab75f9ca9d046427a955345d6e09930f19efb"
     },
     {
       "path": "src/entry/runner.ts",
@@ -1124,7 +1124,7 @@
     },
     {
       "path": "src/runtime/personal-session.ts",
-      "sha256": "05e9fbb29a1e2ed7d37d707a19b3465e4d2349732c08ca19fc58df4b303eca9c"
+      "sha256": "f2833b3289e4dfebd17bfd35094373a3a9b21f5d020a1795017840c2bb69ee22"
     },
     {
       "path": "src/runtime/personal-settings.ts",
@@ -1197,6 +1197,10 @@
     {
       "path": "src/runtime/society-lease.ts",
       "sha256": "8d27d6759361abbfbd86885d6ae17668f9b76cf13026fa92ee48faca0a9a09c8"
+    },
+    {
+      "path": "src/runtime/society-slot.ts",
+      "sha256": "c14d0aa0d6c7c090535d813817423b5cb1ad4a19abb1752ee8c50f0f7f0ba060"
     },
     {
       "path": "src/runtime/supervision-channel.ts",
@@ -1340,7 +1344,7 @@
     },
     {
       "path": "src/tui/compact-tools.ts",
-      "sha256": "2169c13c5dae2d27ce6b2898d2c2f2aa825337be627bb4daa62f2054b6a2a5b0"
+      "sha256": "443d7d9f0dae8c3d7bf3e61719e4129b4482c23c851c26100858bc388475d2f5"
     },
     {
       "path": "src/tui/dashboard.ts",

@@ -127,6 +127,28 @@ for (const [label, next, target] of [['new', {}, undefined], ['Personal resume',
     assert.equal(env.OMA_RESUME_SESSION, next.session); assert.equal(env.OMA_HOST_HOME, '/fixture/data');
     assert.deepEqual(w.effects.filter(item => item[0] === 'chdir'), target?.mode === 'personal' ? [['chdir', target.cwd]] : []);
   });
+test('Personal host: /society re-enters as a fresh `oma --society` birth after the actual child exit', async () => {
+  let finish; const w = world({ run: () => new Promise(resolve => { finish = resolve; }) });
+  const pending = w.personalMain(options); pending.catch(() => {}); await flush();
+  assert.equal(w.effects.some(item => ['exec', 'chdir'].includes(item[0])), false, 'no replacement before the writer actually exits');
+  finish({ code: 0, next: { society: 'fixture-project' } }); await pending;
+  assert.ok(w.effects.findIndex(item => item[0] === 'engine-return') < w.effects.findIndex(item => item[0] === 'exec'));
+  assert.deepEqual(w.effects.filter(item => item[0] === 'chdir'), [['chdir', '/fixture/project']]);
+  const [executable, argv, env] = w.replacements[0];
+  assert.equal(executable, '/fixture/node');
+  assert.deepEqual(Array.from(argv), ['/fixture/node', '--fixture-node-arg', '/fixture/dist/src/entry/oma.js', '--society', 'fixture-project']);
+  assert.equal(env.OMA_RESUME_SESSION, undefined, 'a fresh Society birth is never a resume');
+});
+test('Personal host: /society names only this project\'s own Society', async () => {
+  const w = world({ run: async () => ({ code: 0, next: { society: 'not-this-project' } }) });
+  await assert.rejects(w.personalMain(options), { code: 'INVALID_REQUEST' });
+  assert.equal(w.replacements.length, 0);
+});
+test('Personal host: Node without in-place restart refuses the /society transition', async () => {
+  const w = world({ exec: false, run: async () => ({ code: 0, next: { society: 'fixture-project' } }) });
+  await assert.rejects(w.personalMain(options), { code: 'UNSUPPORTED_PROFILE' });
+  assert.equal(w.replacements.length, 0);
+});
 test('Personal host: child-owner failure never authorizes a replacement', async () => {
   const problem = new Error('writer return failed'), w = world({ run: async () => { throw problem; } });
   await assert.rejects(w.personalMain(options), error => error === problem); assert.equal(w.replacements.length, 0);

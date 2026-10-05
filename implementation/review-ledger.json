@@ -4,8 +4,8 @@
  "summary": {
   "READ_UNCHANGED": 53,
   "REMOVED": 8,
-  "NOT_REVIEWED": 70,
-  "CHANGED_WITH_ORACLE": 252
+  "NOT_REVIEWED": 67,
+  "CHANGED_WITH_ORACLE": 256
  },
  "lanes": {
   "fast": "PASS",
@@ -1843,9 +1843,15 @@
   {
    "path": "src/entry/personal-host.ts",
    "primary": null,
-   "status": "NOT_REVIEWED",
-   "by": [],
-   "oracles": []
+   "status": "CHANGED_WITH_ORACLE",
+   "by": [
+    "C"
+   ],
+   "oracles": [
+    "Personal host"
+   ],
+   "note": "Read in full at the 2026-10-05 C round: a society handoff runs only after the child owner's actual exit, re-derives the project's canonical society name itself, refuses any other name with INVALID_REQUEST, chdirs to the session's birth cwd (a resumed window's cwd may differ) and execves 'oma --society <project>' with RESUME_SESSION_ENV deleted -- a fresh Society birth, not a resume.",
+   "sha256": "70f2aec4bae1312faadf8448984792fa2dd697321df5619218978d9b5f9a457e"
   },
   {
    "path": "src/entry/pi-interactive-host.ts",
@@ -1878,9 +1884,16 @@
   {
    "path": "src/entry/pi-personal.ts",
    "primary": null,
-   "status": "NOT_REVIEWED",
-   "by": [],
-   "oracles": []
+   "status": "CHANGED_WITH_ORACLE",
+   "by": [
+    "C"
+   ],
+   "oracles": [
+    "Personal engine",
+    "society slot"
+   ],
+   "note": "Read in full at the 2026-10-05 C round: the boundary registers /society beside /oma; on darwin it refuses without touching the gate or the host contract (MODE-006), elsewhere a refused slot is a warning notification that leaves the Personal session alone, and a free slot goes through the existing before-switch/transition path -- switching latch, IPC {type:'switch', society}, then the InteractiveMode's own shutdown. A send failure returns the slot for retry.",
+   "sha256": "3082d34665e75009d041b57861fab75f9ca9d046427a955345d6e09930f19efb"
   },
   {
    "path": "src/entry/runner.ts",
@@ -5054,9 +5067,15 @@
   {
    "path": "src/runtime/personal-session.ts",
    "primary": null,
-   "status": "NOT_REVIEWED",
-   "by": [],
-   "oracles": []
+   "status": "CHANGED_WITH_ORACLE",
+   "by": [
+    "C"
+   ],
+   "oracles": [
+    "Personal child"
+   ],
+   "note": "Read in full at the 2026-10-05 C round: the switch wire now admits society as a second target -- one target only, first valid message wins, still attached to the exit only when the child closed with status 0. Extra keys, a session+society mix and a mistyped society are ignored.",
+   "sha256": "f2833b3289e4dfebd17bfd35094373a3a9b21f5d020a1795017840c2bb69ee22"
   },
   {
    "path": "src/runtime/personal-settings.ts",
@@ -5342,6 +5361,19 @@
     "DR18"
    ],
    "sha256": "8d27d6759361abbfbd86885d6ae17668f9b76cf13026fa92ee48faca0a9a09c8"
+  },
+  {
+   "path": "src/runtime/society-slot.ts",
+   "primary": null,
+   "status": "CHANGED_WITH_ORACLE",
+   "by": [
+    "C"
+   ],
+   "oracles": [
+    "society slot"
+   ],
+   "note": "Read in full: /society's read-only admission judges the project's own Society slot <data>/<projectSociety(cwd)> -- bound/unreadable/unavailable binding, society content without a binding, a birth record different from the one the re-entry would publish, and a legacy-slug Society each refuse by name; absent means free. Nothing is written, so a kill between gate and re-entry leaves the next /society observing the same slot. The refused answers are the same decision oma --society computes after execve, surfaced while the session is still alive.",
+   "sha256": "c14d0aa0d6c7c090535d813817423b5cb1ad4a19abb1752ee8c50f0f7f0ba060"
   },
   {
    "path": "src/runtime/supervision-channel.ts",
@@ -6053,8 +6085,8 @@
    "oracles": [
     "B1"
    ],
-   "note": "Read in full at the 2026-10-05 B round: OMA-owned compact tool runtime registered through Pi's public registerToolRenderer with renderShell \"self\" -- live indicator, one-line argument summary, Done-in-Xs control row, author renderers preserved for expansion; oma_ is dropped from display names only, wire names and the registry untouched; timings and summaries bounded by COMPACT_TOOL_BOUNDS and the shared state is keyed through a WeakMap, never written.",
-   "sha256": "2169c13c5dae2d27ce6b2898d2c2f2aa825337be627bb4daa62f2054b6a2a5b0"
+   "note": "Read in full at the 2026-10-05 B round: OMA-owned compact tool runtime registered through Pi's public registerToolRenderer with renderShell \"self\" -- live indicator, one-line argument summary, Done-in-Xs control row, author renderers preserved for expansion; oma_ is dropped from display names only, wire names and the registry untouched; timings and summaries bounded by COMPACT_TOOL_BOUNDS and the shared state is keyed through a WeakMap, never written. 2026-10-05 C rider: the unused Indicator.drawnAt bookkeeping is removed -- the field was written on every sync and never read; indicators still hold only their invalidate callback.",
+   "sha256": "443d7d9f0dae8c3d7bf3e61719e4129b4482c23c851c26100858bc388475d2f5"
   },
   {
    "path": "src/tui/dashboard.ts",
