@@ -636,6 +636,18 @@ name collision/intended surface/hidden 미활성/idempotent reload/provenance/
 
 ## 9. 진행 로그
 
+- 2026-10-07 (egress 후반 3차 — 잔여 부류 기록): 3라운드 수정으로 egress 시리즈
+  수렴(366d257 CLEAN). 맹검증이 남긴 **전신성 부류 — 13기준 전수 스캔에서 다룰 것**:
+  post-listen `server`에 영구 `'error'` 리스너가 없음(`server.once("error",
+  reject)`를 listen 성공 후 `.off`로 해제하는 패턴 — accept 계열 에러 EMFILE/
+  ENFILE이 오면 리스너 0개의 'error' 이벤트 → EventEmitter throw →
+  uncaughtException → 프로세스 사망). 노드: `connect-proxy.ts:398`,
+  `egress-forwarder.ts:195`, `guest/egress.ts:77`, `inference-relay.ts:193` 등
+  트리 전반 동일 패턴 — 조각 수정이 아니라 전수 스캔에서 전체 열거 후 영구
+  리스너(best-effort journal + close) 방향 또는 "의도된 crash-acceptable" 판정을
+  내린다. 미세 관찰 2건도 스캔 입력으로: `rpc.ts:298` `new FrameParser`가 'data'
+  emit 안 try 밖(오설정 시에만 도달), `egress-bridge.ts:41` 영구 'error' 리스너
+  안 `process.stderr.write`(stderr 사망+bind 실패 동시 시 emit 탈출).
 - 2026-10-07 (egress 후반 3차): DR34 맹검증 잔여 1건 정산 — CONNECT proxy의
   동기 `request`/`upgrade` 리스너가 emit 안에서 `audit()`를 직접 호출해
   journal throw(stderr EPIPE 등)가 `server.emit`을 escape → uncaughtException
