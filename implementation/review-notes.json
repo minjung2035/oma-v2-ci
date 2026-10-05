@@ -400,13 +400,15 @@
   {
    "path": "src/entry/oma-society.ts",
    "by": [
-    "DR33"
+    "DR33",
+    "B4"
    ],
    "oracles": [
-    "UX-09"
+    "UX-09",
+    "B4"
    ],
-   "sha256": "36c333474923c7f5b581455dd6167cd1280147025c0dfe3e9af6ae857baa77da",
-   "note": "Read in full: the provision report's gitlinkNote is surfaced through the existing notice channel at society start — a loud warning that integration will refuse, while start itself stays permissive."
+   "sha256": "f823e17c0dc6446c9ee937826286ed9af63cd5ba4dde7363a2875256dec6171d",
+   "note": "Read in full: the provision report's gitlinkNote is surfaced through the existing notice channel at society start — a loud warning that integration will refuse, while start itself stays permissive. 2026-10-05 B4: the mail port feeds readMailbox the agent names the broker's status view last observed -- before any observation the roster is undefined and the rows keep the headers' own names."
   },
   {
    "path": "src/git.ts",
@@ -524,16 +526,21 @@
   {
    "path": "src/entry/pi-interactive-host.ts",
    "by": [
-    "ENG2"
+    "ENG2",
+    "B1",
+    "B2",
+    "B3"
    ],
    "oracles": [
     "interactive owner",
     "Open TUI",
     "a Human prompt",
-    "oma's identity"
+    "oma's identity",
+    "B2",
+    "B3"
    ],
-   "sha256": "2763605db7ff4b31d07f222b5d0354ae042cda01923b5b8832e856754dc26a09",
-   "note": "Read in full for the 1.0.1 port: the prompt command's preflightResult now carries the engine's PromptDisposition and the acceptance answer sends success with data.disposition, the same shape rpc-mode.js writes. The accepted flag still fences the catch so a rejection after acceptance cannot send a second answer; rejection stays the prompt() promise rejecting, so every disposition is an admission. OMA's admission boundary is unchanged -- the host still turns only a Human prompt into an engine prompt and engine extension commands still never reach it."
+   "sha256": "8577d5e426b5d678185d14397c009584bc897a31a5dbafb3a4b31ac606b5eec8",
+   "note": "Read in full for the 1.0.1 port: the prompt command's preflightResult now carries the engine's PromptDisposition and the acceptance answer sends success with data.disposition, the same shape rpc-mode.js writes. The accepted flag still fences the catch so a rejection after acceptance cannot send a second answer; rejection stays the prompt() promise rejecting, so every disposition is an admission. OMA's admission boundary is unchanged -- the host still turns only a Human prompt into an engine prompt and engine extension commands still never reach it. 2026-10-05 B round: the boundary registers the compact-tool resolver through the public registerToolRenderer seam (B1), routes the intercepted thinking commands to a deterministic setter through the compat internals (B2), and mirrors the session's waiting[] snapshots into a bounded aboveEditor widget that is cleared when empty and reapplied on session_start (B3)."
   },
   {
    "path": "src/pi-compat/wire.ts",
@@ -576,16 +583,19 @@
   {
    "path": "src/pi-compat/interactive-mode.ts",
    "by": [
-    "ENG2"
+    "ENG2",
+    "B2"
    ],
    "oracles": [
     "A7 oracle",
     "oma's identity",
     "interactive owner",
-    "DR24"
+    "DR24",
+    "B2 oracle",
+    "B2"
    ],
-   "sha256": "a1cf7ee78a13a450b0d762e8736b75ec45f0d894790e8249681058ca5a22fbbd",
-   "note": "Read in full: docstring re-pinned to 1.0.1 only. All twelve pinned private members exist as functions on the installed 1.0.1 prototype (verified directly and by the A7 oracle); the removed handleDaxnuts/checkDaxnutsEasterEgg were never in this list."
+   "sha256": "8bc91b61cd9b1301f411169fa7a29248d2bd0363457b1928edc56301a383aace",
+   "note": "Read in full: docstring re-pinned to 1.0.1 only. All twelve pinned private members exist as functions on the installed 1.0.1 prototype (verified directly and by the A7 oracle); the removed handleDaxnuts/checkDaxnutsEasterEgg were never in this list. 2026-10-05 B2: the compat surface pins toggleThinkingBlockVisibility among the private members and hideThinkingBlock among the private fields, typed on InteractiveModeInternals for the deterministic setter -- the oracle verifies the method on the vendored prototype and the field in the vendored source."
   },
   {
    "path": "src/pi-compat/settings.ts",
@@ -625,6 +635,96 @@
    ],
    "sha256": "9fd1ac995fdf21bfd96dce10be562c57bb52ddde80746f1083772cefcfd35038",
    "note": "Read in full: the same revision string advanced to oma-pi-rpc-v1@1.0.1. Receipt validation still requires adapterRevision === PI_ADAPTER_REVISION, so a 0.87.1 receipt cannot complete a 1.0.1 batch and vice versa; publication/fencing semantics unchanged."
+  },
+  {
+   "path": "src/tui/compact-tools.ts",
+   "by": [
+    "B1"
+   ],
+   "oracles": [
+    "B1"
+   ],
+   "note": "Read in full at the 2026-10-05 B round: OMA-owned compact tool runtime registered through Pi's public registerToolRenderer with renderShell \"self\" -- live indicator, one-line argument summary, Done-in-Xs control row, author renderers preserved for expansion; oma_ is dropped from display names only, wire names and the registry untouched; timings and summaries bounded by COMPACT_TOOL_BOUNDS and the shared state is keyed through a WeakMap, never written.",
+   "sha256": "2169c13c5dae2d27ce6b2898d2c2f2aa825337be627bb4daa62f2054b6a2a5b0"
+  },
+  {
+   "path": "src/tui/interactive-editor.ts",
+   "by": [
+    "B2"
+   ],
+   "oracles": [
+    "B2"
+   ],
+   "note": "Read in full at the 2026-10-05 B round: the submit chain intercepts exactly '/thinking show' and '/thinking hide' before isCommand routing -- bare /thinking and every other argument still reach Pi; setThinkingBlockHidden reads hideThinkingBlock and calls the engine's toggle only on a difference, so the request is deterministic.",
+   "sha256": "6e55a26b1e8e8c9368dc9a0a131f0a79cba6022c24843aa1b29666848490a24b"
+  },
+  {
+   "path": "src/tui/limits.ts",
+   "by": [
+    "B1",
+    "B3"
+   ],
+   "oracles": [
+    "B1",
+    "B3"
+   ],
+   "note": "Read in full at the 2026-10-05 B round: declares the B-round bounds -- COMPACT_TOOL_BOUNDS for tool-row timing/summary and the queued-prompt preview counts/cells -- alongside the existing declared limits; every new bound is a named entry, no literal.",
+   "sha256": "95247d36c0c9903c613d55d9f1fd0ea6293a94fa5be70265c4f9bbb71567236a"
+  },
+  {
+   "path": "src/tui/model.ts",
+   "by": [
+    "B4"
+   ],
+   "oracles": [
+    "B4"
+   ],
+   "note": "Read in full at the 2026-10-05 B round: MailRow gains an optional `to` carrying the recipients' display names; it is display-only data the source fills, absent when the message names no recipients -- durable mail facts are unchanged.",
+   "sha256": "37ccba5ba04c61cf8f46472e360c41da8132542b3d774a6eb28b8a5647f18c39"
+  },
+  {
+   "path": "src/tui/session.ts",
+   "by": [
+    "B3"
+   ],
+   "oracles": [
+    "B3"
+   ],
+   "note": "Read in full at the 2026-10-05 B round: waiting[] stays the only queue; emitQueue sends a bounded, folded, sanitized queued_prompts snapshot on enqueue/free/handBack and clears the widget when empty -- the submitted prompt text itself is never rewritten.",
+   "sha256": "501cd8c0431987022295754107a0cafd9fab507b33c541135016357aa4c51b36"
+  },
+  {
+   "path": "src/tui/mail-names.ts",
+   "by": [
+    "B4"
+   ],
+   "oracles": [
+    "B4"
+   ],
+   "note": "Read in full: pure party-name mapping for the mail screens -- residents/commons -> worker, principal -> principal, roster actors -> worker<N> in the roster's name order, topic-<x> -> topic/<x>; without a roster (or for a name it does not know) the header's own name is kept rather than an invented role.",
+   "sha256": "fd01f309bbacec1630680b1df7d8e635a6550f3cb5a90eb07f3a2d00f2672d63"
+  },
+  {
+   "path": "src/tui/sources/mail.ts",
+   "by": [
+    "B4"
+   ],
+   "oracles": [
+    "B4"
+   ],
+   "note": "Read in full at the 2026-10-05 B round: readMailbox takes the observed roster and names each row's sender, and parses the To header into comma-joined display names via the shared namer; the stored bytes and the durable logical addresses are read, never rewritten -- a missing To leaves the field absent.",
+   "sha256": "7b95f69d06c10107ae53e18acc45dcc3dde4c35e2a7649e87581fa97fd151f33"
+  },
+  {
+   "path": "src/tui/view/screens.ts",
+   "by": [
+    "B4"
+   ],
+   "oracles": [
+    "B4"
+   ],
+   "note": "Read in full at the 2026-10-05 B round: the open message's head gains a `To:` line between From and Kind, emitted only when the row carries recipients; the list's sender column is unchanged -- the names it prints arrive already mapped from the source.",
+   "sha256": "59c36e7b6d696999c02fd3d9fe45d9fa66081a422677e2daad907ba60ceb618d"
   }
  ],
  "readUnchanged": [
@@ -702,17 +802,6 @@
     "AUTH-003"
    ],
    "note": "capabilities re-read at each use against incarnation, InvocationID, peer cgroup and pin"
-  },
-  {
-   "path": "src/tui/sources/mail.ts",
-   "by": [
-    "WP28"
-   ],
-   "oracles": [
-    "V28A",
-    "T98"
-   ],
-   "note": "bounded no-follow reads; new/ is not yet delivered to the Principal's session; reading writes nothing"
   },
   {
    "path": "src/protocol/receipts.ts",

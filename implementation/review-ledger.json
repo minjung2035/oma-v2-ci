@@ -4,8 +4,8 @@
  "summary": {
   "READ_UNCHANGED": 53,
   "REMOVED": 8,
-  "NOT_REVIEWED": 71,
-  "CHANGED_WITH_ORACLE": 249
+  "NOT_REVIEWED": 70,
+  "CHANGED_WITH_ORACLE": 252
  },
  "lanes": {
   "fast": "PASS",
@@ -1720,13 +1720,15 @@
    "primary": null,
    "status": "CHANGED_WITH_ORACLE",
    "by": [
-    "DR33"
+    "DR33",
+    "B4"
    ],
    "oracles": [
-    "UX-09"
+    "UX-09",
+    "B4"
    ],
-   "note": "Read in full: the provision report's gitlinkNote is surfaced through the existing notice channel at society start — a loud warning that integration will refuse, while start itself stays permissive.",
-   "sha256": "36c333474923c7f5b581455dd6167cd1280147025c0dfe3e9af6ae857baa77da"
+   "note": "Read in full: the provision report's gitlinkNote is surfaced through the existing notice channel at society start — a loud warning that integration will refuse, while start itself stays permissive. 2026-10-05 B4: the mail port feeds readMailbox the agent names the broker's status view last observed -- before any observation the roster is undefined and the rows keep the headers' own names.",
+   "sha256": "f823e17c0dc6446c9ee937826286ed9af63cd5ba4dde7363a2875256dec6171d"
   },
   {
    "path": "src/entry/oma.ts",
@@ -1850,16 +1852,21 @@
    "primary": null,
    "status": "CHANGED_WITH_ORACLE",
    "by": [
-    "ENG2"
+    "ENG2",
+    "B1",
+    "B2",
+    "B3"
    ],
    "oracles": [
     "interactive owner",
     "Open TUI",
     "a Human prompt",
-    "oma's identity"
+    "oma's identity",
+    "B2",
+    "B3"
    ],
-   "note": "Read in full for the 1.0.1 port: the prompt command's preflightResult now carries the engine's PromptDisposition and the acceptance answer sends success with data.disposition, the same shape rpc-mode.js writes. The accepted flag still fences the catch so a rejection after acceptance cannot send a second answer; rejection stays the prompt() promise rejecting, so every disposition is an admission. OMA's admission boundary is unchanged -- the host still turns only a Human prompt into an engine prompt and engine extension commands still never reach it.",
-   "sha256": "2763605db7ff4b31d07f222b5d0354ae042cda01923b5b8832e856754dc26a09"
+   "note": "Read in full for the 1.0.1 port: the prompt command's preflightResult now carries the engine's PromptDisposition and the acceptance answer sends success with data.disposition, the same shape rpc-mode.js writes. The accepted flag still fences the catch so a rejection after acceptance cannot send a second answer; rejection stays the prompt() promise rejecting, so every disposition is an admission. OMA's admission boundary is unchanged -- the host still turns only a Human prompt into an engine prompt and engine extension commands still never reach it. 2026-10-05 B round: the boundary registers the compact-tool resolver through the public registerToolRenderer seam (B1), routes the intercepted thinking commands to a deterministic setter through the compat internals (B2), and mirrors the session's waiting[] snapshots into a bounded aboveEditor widget that is cleared when empty and reapplied on session_start (B3).",
+   "sha256": "8577d5e426b5d678185d14397c009584bc897a31a5dbafb3a4b31ac606b5eec8"
   },
   {
    "path": "src/entry/pi-interactive.ts",
@@ -3046,16 +3053,19 @@
    "primary": null,
    "status": "CHANGED_WITH_ORACLE",
    "by": [
-    "ENG2"
+    "ENG2",
+    "B2"
    ],
    "oracles": [
     "A7 oracle",
     "oma's identity",
     "interactive owner",
-    "DR24"
+    "DR24",
+    "B2 oracle",
+    "B2"
    ],
-   "note": "Read in full: docstring re-pinned to 1.0.1 only. All twelve pinned private members exist as functions on the installed 1.0.1 prototype (verified directly and by the A7 oracle); the removed handleDaxnuts/checkDaxnutsEasterEgg were never in this list.",
-   "sha256": "a1cf7ee78a13a450b0d762e8736b75ec45f0d894790e8249681058ca5a22fbbd"
+   "note": "Read in full: docstring re-pinned to 1.0.1 only. All twelve pinned private members exist as functions on the installed 1.0.1 prototype (verified directly and by the A7 oracle); the removed handleDaxnuts/checkDaxnutsEasterEgg were never in this list. 2026-10-05 B2: the compat surface pins toggleThinkingBlockVisibility among the private members and hideThinkingBlock among the private fields, typed on InteractiveModeInternals for the deterministic setter -- the oracle verifies the method on the vendored prototype and the field in the vendored source.",
+   "sha256": "8bc91b61cd9b1301f411169fa7a29248d2bd0363457b1928edc56301a383aace"
   },
   {
    "path": "src/pi-compat/session.ts",
@@ -6034,6 +6044,19 @@
    "oracles": []
   },
   {
+   "path": "src/tui/compact-tools.ts",
+   "primary": null,
+   "status": "CHANGED_WITH_ORACLE",
+   "by": [
+    "B1"
+   ],
+   "oracles": [
+    "B1"
+   ],
+   "note": "Read in full at the 2026-10-05 B round: OMA-owned compact tool runtime registered through Pi's public registerToolRenderer with renderShell \"self\" -- live indicator, one-line argument summary, Done-in-Xs control row, author renderers preserved for expansion; oma_ is dropped from display names only, wire names and the registry untouched; timings and summaries bounded by COMPACT_TOOL_BOUNDS and the shared state is keyed through a WeakMap, never written.",
+   "sha256": "2169c13c5dae2d27ce6b2898d2c2f2aa825337be627bb4daa62f2054b6a2a5b0"
+  },
+  {
    "path": "src/tui/dashboard.ts",
    "primary": "WP28",
    "status": "CHANGED_WITH_ORACLE",
@@ -6083,9 +6106,15 @@
   {
    "path": "src/tui/interactive-editor.ts",
    "primary": null,
-   "status": "NOT_REVIEWED",
-   "by": [],
-   "oracles": []
+   "status": "CHANGED_WITH_ORACLE",
+   "by": [
+    "B2"
+   ],
+   "oracles": [
+    "B2"
+   ],
+   "note": "Read in full at the 2026-10-05 B round: the submit chain intercepts exactly '/thinking show' and '/thinking hide' before isCommand routing -- bare /thinking and every other argument still reach Pi; setThinkingBlockHidden reads hideThinkingBlock and calls the engine's toggle only on a difference, so the request is deterministic.",
+   "sha256": "6e55a26b1e8e8c9368dc9a0a131f0a79cba6022c24843aa1b29666848490a24b"
   },
   {
    "path": "src/tui/keys.ts",
@@ -6116,26 +6145,15 @@
    "primary": "WP28",
    "status": "CHANGED_WITH_ORACLE",
    "by": [
-    "DR18",
-    "MAC-022",
-    "P0V-36",
-    "P0V-40",
-    "P0V-41",
-    "P0V-42",
-    "P0V-43",
-    "WP14"
+    "B1",
+    "B3"
    ],
    "oracles": [
-    "DR18",
-    "P0V-36",
-    "P0V-40",
-    "P0V-41",
-    "P0V-42",
-    "P0V-43",
-    "V14A",
-    "V14B"
+    "B1",
+    "B3"
    ],
-   "sha256": "302efb3e447b52027b184b1faef08a6fb38b0fe087084618c32d98077d8734a9"
+   "note": "Read in full at the 2026-10-05 B round: declares the B-round bounds -- COMPACT_TOOL_BOUNDS for tool-row timing/summary and the queued-prompt preview counts/cells -- alongside the existing declared limits; every new bound is a named entry, no literal.",
+   "sha256": "95247d36c0c9903c613d55d9f1fd0ea6293a94fa5be70265c4f9bbb71567236a"
   },
   {
    "path": "src/tui/login.ts",
@@ -6152,63 +6170,30 @@
    "sha256": "deb19402bdca4fc9d5c215c815f14a4bf4f8612321d1da3ab02cecef25d19b5d"
   },
   {
+   "path": "src/tui/mail-names.ts",
+   "primary": null,
+   "status": "CHANGED_WITH_ORACLE",
+   "by": [
+    "B4"
+   ],
+   "oracles": [
+    "B4"
+   ],
+   "note": "Read in full: pure party-name mapping for the mail screens -- residents/commons -> worker, principal -> principal, roster actors -> worker<N> in the roster's name order, topic-<x> -> topic/<x>; without a roster (or for a name it does not know) the header's own name is kept rather than an invented role.",
+   "sha256": "fd01f309bbacec1630680b1df7d8e635a6550f3cb5a90eb07f3a2d00f2672d63"
+  },
+  {
    "path": "src/tui/model.ts",
    "primary": "WP28",
    "status": "CHANGED_WITH_ORACLE",
    "by": [
-    "AV7",
-    "DR1",
-    "DR13",
-    "DR25",
-    "DR3",
-    "DR4",
-    "DR6",
-    "DR7",
-    "P0V-19",
-    "P0V-20",
-    "P0V-21",
-    "P0V-22",
-    "P0V-23",
-    "P0V-28",
-    "P0V-29",
-    "P0V-36",
-    "P0V-38",
-    "P0V-39",
-    "P0V-40",
-    "P0V-41",
-    "P0V-42",
-    "P0V-43",
-    "P0V-51",
-    "P0V-66",
-    "WP14",
-    "WP15"
+    "B4"
    ],
    "oracles": [
-    "AV7",
-    "DR1",
-    "DR13",
-    "DR25",
-    "DR3",
-    "DR4",
-    "DR6",
-    "DR7",
-    "P0V-28",
-    "P0V-29",
-    "P0V-36",
-    "P0V-38",
-    "P0V-39",
-    "P0V-40",
-    "P0V-41",
-    "P0V-42",
-    "P0V-43",
-    "P0V-51",
-    "P0V-66",
-    "V14A",
-    "V14B",
-    "V15A",
-    "V15B"
+    "B4"
    ],
-   "sha256": "007ecb2d49b0febd403a6849010500f666984406ae91611a4df5a9d33158fc0e"
+   "note": "Read in full at the 2026-10-05 B round: MailRow gains an optional `to` carrying the recipients' display names; it is display-only data the source fills, absent when the message names no recipients -- durable mail facts are unchanged.",
+   "sha256": "37ccba5ba04c61cf8f46472e360c41da8132542b3d774a6eb28b8a5647f18c39"
   },
   {
    "path": "src/tui/open-tui-brand.ts",
@@ -6316,41 +6301,13 @@
    "primary": "WP09",
    "status": "CHANGED_WITH_ORACLE",
    "by": [
-    "AV10",
-    "AV11",
-    "AV14",
-    "AV3",
-    "DR15",
-    "DR18",
-    "MAC-022",
-    "P0V-36",
-    "P0V-40",
-    "P0V-41",
-    "P0V-42",
-    "P0V-43",
-    "P0V-73",
-    "P0V-78",
-    "WP09"
+    "B3"
    ],
    "oracles": [
-    "AV10",
-    "AV11",
-    "AV14",
-    "AV3",
-    "DR15",
-    "DR18",
-    "P0V-36",
-    "P0V-40",
-    "P0V-41",
-    "P0V-42",
-    "P0V-43",
-    "P0V-73",
-    "P0V-78",
-    "V09A",
-    "V09B",
-    "V09C"
+    "B3"
    ],
-   "sha256": "0d24d1f6bb024547abc59759b2819d0cd4b3f6abb5734129d22c1f68882a36fe"
+   "note": "Read in full at the 2026-10-05 B round: waiting[] stays the only queue; emitQueue sends a bounded, folded, sanitized queued_prompts snapshot on enqueue/free/handBack and clears the widget when empty -- the submitted prompt text itself is never rewritten.",
+   "sha256": "501cd8c0431987022295754107a0cafd9fab507b33c541135016357aa4c51b36"
   },
   {
    "path": "src/tui/sources/extensions.ts",
@@ -6374,34 +6331,13 @@
    "primary": "WP28",
    "status": "CHANGED_WITH_ORACLE",
    "by": [
-    "AV26",
-    "AV7",
-    "DR13",
-    "DR18",
-    "MAC-022",
-    "P0V-19",
-    "P0V-20",
-    "P0V-21",
-    "P0V-22",
-    "P0V-23",
-    "P0V-36",
-    "P0V-40",
-    "P0V-41",
-    "P0V-42",
-    "P0V-43"
+    "B4"
    ],
    "oracles": [
-    "AV26",
-    "AV7",
-    "DR13",
-    "DR18",
-    "P0V-36",
-    "P0V-40",
-    "P0V-41",
-    "P0V-42",
-    "P0V-43"
+    "B4"
    ],
-   "sha256": "99a9f2367a4dd67a5fc9c81bf9ad55b4271c197f7fe40946e265cbc8daac354d"
+   "note": "Read in full at the 2026-10-05 B round: readMailbox takes the observed roster and names each row's sender, and parses the To header into comma-joined display names via the shared namer; the stored bytes and the durable logical addresses are read, never rewritten -- a missing To leaves the field absent.",
+   "sha256": "7b95f69d06c10107ae53e18acc45dcc3dde4c35e2a7649e87581fa97fd151f33"
   },
   {
    "path": "src/tui/sources/settings.ts",
@@ -6546,35 +6482,13 @@
    "primary": "WP28",
    "status": "CHANGED_WITH_ORACLE",
    "by": [
-    "AV7",
-    "P0V-36",
-    "P0V-40",
-    "P0V-41",
-    "P0V-42",
-    "P0V-43",
-    "P0V-66",
-    "P0V-68",
-    "WP14",
-    "WP15",
-    "WP28"
+    "B4"
    ],
    "oracles": [
-    "AV7",
-    "P0V-36",
-    "P0V-40",
-    "P0V-41",
-    "P0V-42",
-    "P0V-43",
-    "P0V-66",
-    "P0V-68",
-    "V14A",
-    "V14B",
-    "V15A",
-    "V15B",
-    "V28A",
-    "V28B"
+    "B4"
    ],
-   "sha256": "7ec5c5629200016edd0eecb4dc27d2e76811cddce5297f397795e9d46b90892a"
+   "note": "Read in full at the 2026-10-05 B round: the open message's head gains a `To:` line between From and Kind, emitted only when the row carries recipients; the list's sender column is unchanged -- the names it prints arrive already mapped from the source.",
+   "sha256": "59c36e7b6d696999c02fd3d9fe45d9fa66081a422677e2daad907ba60ceb618d"
   },
   {
    "path": "src/tui/view/session-mode.ts",

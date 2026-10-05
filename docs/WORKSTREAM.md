@@ -680,6 +680,16 @@ name collision/intended surface/hidden 미활성/idempotent reload/provenance/
   영수증은 업그레이드 후 conflicting — 정산 뒤 올리는 기존 절차 유지).
   상세는 plan-prereq-and-bundled.md §A 실행 결과. npm ls로 pi-tui 단일 설치
   확인, 타겟+full suite 전부 PASS.
+- 2026-10-05 (B 라운드): TUI 표면 4건 전부 구현·커밋 분리 — B1 compact 도구
+  행(88ea1be, `registerToolRenderer` 공개 seam + `renderShell:"self"` + 인디케이터/
+  컨트롤 행, `oma_` 접두어는 표시만 제거), B2 `/thinking show|hide` 정확 일치
+  인터셉트(c1e6f10, `hideThinkingBlock` 읽고 상태 다를 때만 Pi private toggle),
+  B3 미전송 큐 표시(f72bc6f, `waiting[]`→`queued_prompts`→`setWidget` aboveEditor,
+  빈 큐 제거·문장 불변), B4 메일 역할명(617dce1, roster 이름순 `worker<N>`·
+  전체전송 `worker`·`principal`·`topic/<x>`, 상세 `To:` 행, 미관측 roster는
+  원문 유지). fixture 보수 6c91bef(B1/B3 seam 선언 누락). 표시만 변경 —
+  wire 이름·durable mail facts·reply 라우팅 불변. 상세는
+  plan-prereq-and-bundled.md §B 실행 결과.
 
 ## 10. 지금부터의 실행 순서
 0. ~~P0-8 강제 수단 미구현~~ — 구현됨: `owned-state` 아키텍처 규칙

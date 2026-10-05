@@ -169,6 +169,34 @@ indicator, "Done in Xs · N lines" 컨트롤 행, 인자 확장)**. 명령/silen
   위치: `src/tui/` 메일 뷰어(transcript/mail 패널) + 표시명 유틸 — 조사 후 확정.
 - (별도 완료) Worker 프롬프트의 메일 제목 지시는 fix/pg2가 처리.
 
+### B 실행 결과 (B1–B4 구현 완료, 커밋 분리)
+
+- **B1 — `88ea1be`**: `pi.registerToolRenderer()` 공개 seam으로 `renderShell:"self"`
+  compact renderer 등록(`src/tui/compact-tools.ts`). live 상태 점·한 줄 인자 요약·
+  `Done in Xs · N lines` 컨트롤 행·인자/출력 확장, `oma_` 접두어는 표시만 제거 —
+  wire/registry 이름 불변. author result renderer는 확장 본문에 보존, 인디케이터
+  리페인트는 보이지 않는 belowEditor 위젯의 `requestRender()`로 구동. 타이밍은
+  `COMPACT_TOOL_BOUNDS`로 한정.
+- **B2 — `c1e6f10`**: `ownedEditor` submit 체인이 `isCommand` 라우팅 **앞에서**
+  정확히 `/thinking show`·`/thinking hide`만 가로챈다 — bare `/thinking`과 다른
+  인자는 Pi에 통과. Pi가 setter를 안 노출하므로 `hideThinkingBlock` 필드를 읽고
+  `toggleThinkingBlockVisibility()`는 상태가 다를 때만 호출 — deterministic.
+  private member+field는 compat 선언과 oracle 테스트로 pin.
+- **B3 — `f72bc6f`**: OMA 자체 `waiting[]`가 단일 출처. 큐 변이마다
+  `queued_prompts` 스냅샷을 interactive channel로 송신하고 엔진은
+  `ctx.ui.setWidget("oma-queue", …, {placement:"aboveEditor"})`로 표시, 빈 큐·
+  handback·shutdown에서 `undefined`로 제거. 위젯 행은 한정·sanitized, 실제
+  제출 문장은 불변.
+- **B4 — `617dce1`**: 메일 목록/상세 발신자와 상세의 새 `To:` 행이 roster
+  기반 표시명(`src/tui/mail-names.ts` 순수 매핑): `residents`/`commons`→
+  `worker`(전체 전송), roster의 `worker<N>`(이름순, `principal` 제외)는 개별
+  발신/수신자, `principal`, `topic-<x>`→`topic/<x>`. roster는 broker 발행
+  status view의 agent 목록 — 미관측 시 actor명은 헤더 원문 유지(추측 금지).
+  `readMailbox(paths, roster)`가 표시명을 만들고 내구 EML/logical `to` facts는
+  불변. To 없는 메시지는 `To:` 행 자체가 없다.
+- **보수 — `6c91bef`**: host-ownership fixture의 dependency map에 B1의
+  `compact-tools` import와 B3의 `setWidget` seam이 누락돼 있던 것을 보강.
+
 ## C. society-off 재설계 — **확정: 게이트 + execve 재진입**
 
 - 사용자 확정: **기록 없는 미사용 세션 → 게이트 → 표준 provisioning → 정상 종료 →
