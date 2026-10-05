@@ -18,6 +18,11 @@ const EGRESS_LABEL = "[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?";
 export const EGRESS_NAME_RE = new RegExp(`^${EGRESS_LABEL}(?:\\.${EGRESS_LABEL})*$`);
 /** The wire limit on one name is 253 bytes; entries are ASCII so length is bytes. */
 export const EGRESS_ENTRY_BYTES = 253;
+/** The wire limit on one request's declared allowlist -- the `allow` array
+ * `egress.connect` carries on macOS. A role's *resolved* list (baseline plus
+ * its own entries) is what rides the wire, so the bound is checked on the
+ * resolved list at commit, never only on the baseline. */
+export const EGRESS_ALLOW_MAX = 256;
 /** CONNECT's authority grammar admits this charset for a name; every other
  * byte (a second colon, `@`, `/`, `%`, whitespace) is malformed, never a
  * misspelled entry. */

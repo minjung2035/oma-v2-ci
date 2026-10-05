@@ -18,7 +18,7 @@ import { clearSocketName } from "../storage/socket-name.js";
 import { connect, createServer, type Server, type Socket } from "node:net";
 import { join } from "node:path";
 import { isErrorCode, StoreError } from "../domain/errors.js";
-import { FrameParser, encodeFrame } from "../frame.js";
+import { FrameError, FrameParser, encodeFrame } from "../frame.js";
 import { alarm, type Timer } from "./pi-rpc.js";
 import {
   EGRESS_ENGINE_MANAGED, egressPlaceholderResultProblem,
@@ -36,26 +36,39 @@ export interface EgressAsk {
   readonly deadlineMs: number;
 }
 
-/** One frame from a connection. With `keep` the answered connection is the
- * caller's afterwards (§4.7 v5: the run's lease); without it the connection
- * ends. An error always destroys it. */
-function oneFrame(socket: Socket, frameBytes: number, deadlineMs: number, keep = false): Promise<Record<string, unknown>> {
+/** One frame from a connection, and every byte that rode in after it. The
+ * protocol is one answer per request, so what follows the frame is never a
+ * second frame: tunnel payload for `egress.connect`, or the host speaking on
+ * a lease that reads no more -- the caller decides what the bytes mean, and
+ * none are lost or fed back to the parser. The answered connection is the
+ * caller's afterwards (§4.7 v5: the run's lease). An error always destroys
+ * it. */
+function oneFrame(socket: Socket, frameBytes: number, deadlineMs: number): Promise<{ readonly frame: Record<string, unknown>; readonly rest: Buffer }> {
   return new Promise((resolve, reject) => {
     if (!Number.isSafeInteger(deadlineMs) || deadlineMs <= 0) { socket.destroy(); reject(new RangeError("Invalid egress observation deadline")); return; }
-    const parser = new FrameParser(frameBytes);
+    let buffered = Buffer.alloc(0);
     let timer: Timer | undefined, settled = false;
-    const done = (error: Error | null, frame?: Record<string, unknown>): void => {
+    const done = (error: Error | null, value?: { frame: Record<string, unknown>; rest: Buffer }): void => {
       if (settled) return;
       settled = true;
       timer?.cancel();
       socket.removeAllListeners("data");
-      if (error !== null || !keep) socket.destroy();
-      if (error !== null) reject(error); else resolve(frame!);
+      socket.pause();
+      if (error !== null) { socket.destroy(); reject(error); } else resolve(value!);
     };
     socket.on("data", (chunk: Buffer) => {
-      let frames;
-      try { frames = parser.feed(chunk); } catch (error) { done(error as Error); return; }
-      if (frames.length > 0) done(null, frames[0]!.raw);
+      // Only the frame's own bytes are parsed; the declared length is checked
+      // before the body is awaited, so a lie cannot grow the buffer, and a
+      // socket read cannot grow it past one frame plus what arrived with it.
+      buffered = Buffer.concat([buffered, chunk]);
+      if (buffered.length < 4) return;
+      const length = buffered.readUInt32BE(0);
+      if (length > frameBytes) { done(new FrameError("FRAME_TOO_LARGE", `frame length ${length} exceeds max ${frameBytes}`)); return; }
+      if (buffered.length < 4 + length) return;
+      let frame: Record<string, unknown>;
+      try { frame = new FrameParser(frameBytes).feed(buffered.subarray(0, 4 + length))[0]!.raw; }
+      catch (error) { done(error as Error); return; }
+      done(null, { frame, rest: buffered.subarray(4 + length) });
     });
     socket.once("error", () => { done(new StoreError("BROKER_UNAVAILABLE", "the egress service is unavailable")); });
     socket.once("close", () => { done(new StoreError("BROKER_UNAVAILABLE", "the egress service closed without an answer")); });
@@ -83,7 +96,7 @@ export async function requestEgressPlaceholder(ask: EgressAsk, run: EgressPlaceh
   const socket = connect(ask.socket);
   const params: EgressPlaceholderParams = { credentialRef: EGRESS_ENGINE_MANAGED, provider, model, run, inferenceSeconds, hold: true };
   socket.once("connect", () => { socket.write(encodeFrame({ v: 1, id: randomUUID(), method: "egress.placeholder", params })); });
-  const answer = await oneFrame(socket, ask.frameBytes, ask.deadlineMs, true);
+  const { frame: answer, rest } = await oneFrame(socket, ask.frameBytes, ask.deadlineMs);
   if (answer.ok !== true) {
     socket.destroy();
     const error = answer.error as { code?: unknown; message?: unknown } | undefined;
@@ -92,7 +105,9 @@ export async function requestEgressPlaceholder(ask: EgressAsk, run: EgressPlaceh
   }
   const problem = egressPlaceholderResultProblem(answer.result);
   if (problem !== null) { socket.destroy(); throw new StoreError("BROKER_UNAVAILABLE", `the host's placeholder answer is malformed (${problem})`); }
-  // The lease is read no more: anything the host says after the answer ends it.
+  // The lease is read no more: anything the host says after the answer ends it
+  // -- bytes that rode inside the answer's own segment included.
+  if (rest.length > 0) { socket.destroy(); }
   // Its end -- however it came, a break included -- is the run's end (AV-15).
   socket.on("data", () => { socket.destroy(); });
   socket.once("error", () => { socket.destroy(); });
@@ -116,7 +131,7 @@ export async function requestEgressConnect(ask: EgressAsk, lease: { readonly pla
   const socket = connect(ask.socket);
   const params: EgressConnectParams = { placeholderId: lease.placeholderId, run, host, port, role: policy.role, allow: [...policy.allow] };
   socket.once("connect", () => { socket.write(encodeFrame({ v: 1, id: randomUUID(), method: "egress.connect", params })); });
-  const answer = await oneFrame(socket, ask.frameBytes, ask.deadlineMs, true);
+  const { frame: answer, rest } = await oneFrame(socket, ask.frameBytes, ask.deadlineMs);
   if (answer.ok !== true) {
     socket.destroy();
     const error = answer.error as { code?: unknown; message?: unknown } | undefined;
@@ -124,6 +139,10 @@ export async function requestEgressConnect(ask: EgressAsk, lease: { readonly pla
       `the host refused the egress tunnel to ${host}:${port}: ${typeof error?.message === "string" ? error.message : "no reason given"}`);
   }
   socket.once("error", () => { socket.destroy(); });
+  // Bytes that rode with the ok frame are the tunnel's first payload; they go
+  // back on the socket so the reader sees them as ordinary data.
+  if (rest.length > 0) socket.unshift(rest);
+  socket.resume();
   return socket;
 }
 

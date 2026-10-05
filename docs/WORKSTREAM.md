@@ -649,6 +649,27 @@ name collision/intended surface/hidden 미활성/idempotent reload/provenance/
   선언된 allowlist를 싣고 host가 문법+목록+SSRF를 다시 집행. Linux는 같은 screen의
   직접 다이얼. CONNECT마다 actor/role/target/verdict 한 줄 journal. 신규
   `test/egress-connect.test.ts` 17 + `platform-egress` connect e2e.
+- 2026-10-06 (egress 후반): DR34 맹검증 9건 정산 — 전부 fail→pass 증거付
+  회귀 테스트로 고정. ① run의 tunnel 단위는 pooled connection 하나(client만
+  count), check+예약을 dial 전 동기 단계로 합쳐 burst overshoot 제거 —
+  4개 standing + 5번째 BROKER_UNAVAILABLE + close가 slot 반환을 e2e로 확인.
+  ② v6 screen을 denylist에서 fail-closed allowlist(`2000::/3` − 특수용도,
+  embedded-v4 carrier는 unwrap 뒤 IPv4 규칙)로 재작성 — `64:ff9b:1::/48`·
+  `::/8`·`2001::/23`·`5f00::/16`·`3fff::/20` 등 목록 전부 거절 확인.
+  ③ 거절된 비-CONNECT/upgrade socket이 linger하던 것 — `Connection: close`+
+  destroy, pipelined CONNECT는 dead socket에서 dial되지 않음. ④ audit target을
+  raw request slice에서 정규화된 `host:port`/`(request-target redacted)`로 —
+  userinfo·query·credential이 journal에 닿지 않음을 직렬화 단언. ⑤ proxy
+  socket `chmod 0600` + 실패 시 listener·name 회수(P0-4/AV-20261003-28 패턴).
+  ⑥ wire 256-entry bound를 commit에서 resolved list(baseline+role)에 집행
+  (`EGRESS_ALLOW_MAX` 공유 상수). ⑦ dial 중 run 종료 경로에 "fail" audit 한 줄
+  추가 — silent drop 없음. ⑧ INVALID_REQUEST(dial screen 포함)는 `"refuse"`,
+  운영 실패만 `"fail"` — host↔proxy 라벨 정렬. ⑨ `oneFrame`이 응답 frame 뒤의
+  raw bytes를 parser에 재공급하던 것 — `{frame, rest}` 반환으로 바꿔 tunnel
+  payload 보존 + lease의 post-answer bytes 감지 유지; audit sink throw는
+  dispatch boundary에서 catch해 host 생존 + upstream 회수. DR34 addendum에
+  v6 모델·audit·bound 결정 기록. NOT_RUN: macOS native·systemd·kernel/
+  powercut·provider credential·release qualification 레인(로컬 환경 없음).
 - 2026-10-05 (C): plan §C society-off 재설계 구현 — Personal 세션의 `/society`가
   프로젝트 자신의 Society 슬롯(`<data>/<projectSociety(cwd)>`)을 읽기 전용으로
   게이트하고(bound·unreadable·unavailable·binding 없는 기록·다른 birth record·

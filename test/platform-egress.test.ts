@@ -447,3 +447,166 @@ test("DR34: egress.connect tunnels a declared allowlisted target through the poo
   await assert.rejects(requestEgressConnect(ask, issued, RUN, "registry.npmjs.org", 443, CONNECT_POLICY),
     (error: unknown) => error instanceof StoreError && (error as StoreError).code === "STALE_RUN");
 });
+
+test("DR34: the run's tunnel bound counts tunnels -- four stand, the fifth is refused, a close frees its slot", async t => {
+  const { requestEgressConnect, requestEgressPlaceholder } = await import("../src/runtime/egress-forwarder.js");
+  const port = await echoServer(t);
+  const { host, pool, serviceSocket } = await world(t, 5000, undefined,
+    { dial: async () => connect({ host: "127.0.0.1", port }) });
+  await host.fill();
+  const ask = { socket: serviceSocket, frameBytes: PLATFORM_FRAME_BYTES, deadlineMs: 5000 };
+  const issued = await requestEgressPlaceholder(ask, RUN, "anthropic", "current", 5);
+  await until(() => pool.size >= 6, "the pool grew for the run");
+
+  // limits.concurrent is 4: four tunnels stand at once. Each tunnel is ONE
+  // unit (its pooled connection); counting socket halves would halve the
+  // declared bound and refuse the third.
+  const held: Socket[] = [];
+  for (let i = 0; i < 4; i++) held.push(await requestEgressConnect(ask, issued, RUN, "registry.npmjs.org", 443, CONNECT_POLICY));
+  assert.equal(held.length, 4, "four tunnels at the declared concurrent bound");
+  held[0]!.write("live");
+  await once(held[0]!, "data");
+  await assert.rejects(requestEgressConnect(ask, issued, RUN, "registry.npmjs.org", 443, CONNECT_POLICY),
+    (error: unknown) => error instanceof StoreError && (error as StoreError).code === "BROKER_UNAVAILABLE",
+    "the fifth tunnel is refused at the bound");
+
+  // A closed tunnel returns its slot: destroy one, then the same connect
+  // succeeds once the host has observed the close.
+  held[0]!.destroy();
+  let reopened: Socket | undefined;
+  for (let i = 0; i < 100 && reopened === undefined; i++) {
+    try { reopened = await requestEgressConnect(ask, issued, RUN, "registry.npmjs.org", 443, CONNECT_POLICY); }
+    catch (error) { assert.ok(error instanceof StoreError && (error as StoreError).code === "BROKER_UNAVAILABLE"); await new Promise(r => setTimeout(r, 10)); }
+  }
+  assert.ok(reopened, "a closed tunnel frees its slot");
+
+  // The bound check and the slot reservation are one synchronous step: a
+  // burst cannot pass the check together and only then dial. On a fresh run
+  // (the first run's closed sockets take no deterministic time to release),
+  // one more than the bound at once yields exactly the bound standing.
+  for (const socket of held) socket.destroy();
+  issued.release();
+  await until(() => host.activeRuns === 0, "the first run is over on the host");
+  const issued2 = await requestEgressPlaceholder(ask, RUN, "anthropic", "current", 5);
+  await until(() => pool.size >= 6, "the pool refilled for the burst");
+  const burst = await Promise.allSettled(Array.from({ length: 5 },
+    () => requestEgressConnect(ask, issued2, RUN, "registry.npmjs.org", 443, CONNECT_POLICY)));
+  const admitted = burst.filter((r): r is PromiseFulfilledResult<Socket> => r.status === "fulfilled");
+  const refused = burst.filter(r => r.status === "rejected" && r.reason instanceof StoreError && r.reason.code === "BROKER_UNAVAILABLE");
+  assert.equal(admitted.length, 4, "four free slots admit four tunnels");
+  assert.equal(refused.length, 1, "the fifth is refused -- no overshoot past the bound");
+  for (const socket of admitted.map(r => r.value)) socket.destroy();
+  issued2.release();
+});
+
+test("DR34: every connect decision audits once -- the refused, the failed, and the run that ended mid-dial", async t => {
+  const { requestEgressConnect, requestEgressPlaceholder } = await import("../src/runtime/egress-forwarder.js");
+  const port = await echoServer(t);
+  const audits: import("../src/runtime/connect-proxy.js").EgressAudit[] = [];
+  let openGate!: () => void;
+  const gate = new Promise<void>(r => { openGate = r; });
+  let dialledSlow = false;
+  const { host, pool, serviceSocket } = await world(t, 5000, undefined, {
+    audit: entry => audits.push(entry),
+    dial: async (host_, port_) => {
+      if (host_ === "private.github.com") throw new StoreError("INVALID_REQUEST", "resolves only to private space");
+      if (host_ === "wedge.github.com") throw new StoreError("BROKER_UNAVAILABLE", "connection refused");
+      if (host_ === "slow.github.com") { dialledSlow = true; await gate; return connect({ host: "127.0.0.1", port }); }
+      return connect({ host: "127.0.0.1", port });
+    },
+  });
+  await host.fill();
+  const ask = { socket: serviceSocket, frameBytes: PLATFORM_FRAME_BYTES, deadlineMs: 5000 };
+  const issued = await requestEgressPlaceholder(ask, RUN, "anthropic", "current", 5);
+  await until(() => pool.size >= 6, "the pool grew for the run");
+
+  // An INVALID_REQUEST dial is a policy refusal, not an operational failure --
+  // the same word the guest-side proxy uses for it.
+  await assert.rejects(requestEgressConnect(ask, issued, RUN, "private.github.com", 443, CONNECT_POLICY),
+    (error: unknown) => error instanceof StoreError && error.code === "INVALID_REQUEST");
+  await assert.rejects(requestEgressConnect(ask, issued, RUN, "wedge.github.com", 443, CONNECT_POLICY),
+    (error: unknown) => error instanceof StoreError && error.code === "BROKER_UNAVAILABLE");
+  assert.equal(audits.find(e => e.target === "private.github.com:443")!.decision, "refuse");
+  assert.equal(audits.find(e => e.target === "wedge.github.com:443")!.decision, "fail");
+
+  // The run ending under the dial drops the dialed socket -- and still writes
+  // its one audit line; a decision path cannot pass silently.
+  const pending = requestEgressConnect(ask, issued, RUN, "slow.github.com", 443, CONNECT_POLICY);
+  const rejection = assert.rejects(pending, (error: unknown) => error instanceof StoreError && error.code === "BROKER_UNAVAILABLE");
+  await until(() => dialledSlow, "the dial is in flight");
+  issued.release();
+  await until(() => host.activeRuns === 0, "the run is over on the host");
+  openGate();
+  await rejection;
+  await until(() => audits.some(e => e.target === "slow.github.com:443"), "the dropped tunnel was audited");
+  const dropped = audits.find(e => e.target === "slow.github.com:443")!;
+  assert.equal(dropped.decision, "fail");
+  assert.match(dropped.reason, /run ended|no longer exists|ended during/i, dropped.reason);
+});
+
+test("DR34: an audit sink that throws cannot crash the host or orphan the dialed upstream", async t => {
+  const { requestEgressConnect, requestEgressPlaceholder } = await import("../src/runtime/egress-forwarder.js");
+  const port = await echoServer(t);
+  const dialedSockets: Socket[] = [];
+  const { host, pool, serviceSocket } = await world(t, 5000, undefined, {
+    audit: () => { throw new Error("journal unavailable"); },
+    dial: async () => { const s = connect({ host: "127.0.0.1", port }); dialedSockets.push(s); return s; },
+  });
+  await host.fill();
+  const ask = { socket: serviceSocket, frameBytes: PLATFORM_FRAME_BYTES, deadlineMs: 5000 };
+  const issued = await requestEgressPlaceholder(ask, RUN, "anthropic", "current", 5);
+  await until(() => pool.size >= 6, "the pool grew for the run");
+
+  // The throw lands after the dial succeeded: the connect request dies with
+  // its upstream rather than becoming an unhandled rejection on the host.
+  await assert.rejects(requestEgressConnect(ask, issued, RUN, "registry.npmjs.org", 443, CONNECT_POLICY),
+    (error: unknown) => error instanceof StoreError);
+  assert.equal(dialedSockets.length, 1);
+  await until(() => dialedSockets[0]!.destroyed, "the upstream of the half-built tunnel was destroyed");
+  // The host keeps serving: the run still stands and the next request is
+  // processed (refused at the allowlist -- and its audit throw handled too).
+  assert.equal(host.activeRuns, 1);
+  await assert.rejects(requestEgressConnect(ask, issued, RUN, "pypi.org", 443, CONNECT_POLICY),
+    (error: unknown) => error instanceof StoreError);
+  await until(() => pool.size >= 2, "the pool refilled after the failed requests");
+  issued.release();
+});
+
+test("DR34: bytes riding with the host's answer frame are tunnel bytes, and post-answer bytes still end the lease", async t => {
+  const { requestEgressConnect, requestEgressPlaceholder } = await import("../src/runtime/egress-forwarder.js");
+  const dir = mkdtempSync(join(tmpdir(), "oma-egress-race-"));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  const serviceSocket = join(dir, "e.sock");
+  // A stub egress service: reads the client's first frame, answers with the
+  // ok frame and the tunnel's first bytes in one segment.
+  const service = (await import("node:net")).createServer(client => {
+    client.once("data", () => {
+      client.write(Buffer.concat([encodeFrame({ v: 1, id: "e1", ok: true, result: {} }), Buffer.from("raced-bytes")]));
+    });
+  });
+  await once(service.listen(serviceSocket), "listening");
+  t.after(() => { service.close(); });
+  const ask = { socket: serviceSocket, frameBytes: PLATFORM_FRAME_BYTES, deadlineMs: 5000 };
+  const tunnel = await requestEgressConnect(ask, { placeholderId: randomUUID() }, RUN, "registry.npmjs.org", 443, CONNECT_POLICY);
+  const [first] = await once(tunnel, "data");
+  assert.equal(String(first), "raced-bytes",
+    "bytes that rode with the answer frame reach the tunnel unchanged -- not swallowed inside the frame parser");
+  tunnel.destroy();
+
+  // The placeholder lease: bytes after the answer -- even in the same
+  // segment -- are the host speaking on the lease, and that ends the run.
+  const placeholderSocket = join(dir, "p.sock");
+  const placeholderService = (await import("node:net")).createServer(client => {
+    client.once("data", () => {
+      client.write(Buffer.concat([
+        encodeFrame({ v: 1, id: "e1", ok: true, result: { placeholderId: randomUUID(), placeholder: "p".repeat(20), provider: "anthropic", model: "m" } }),
+        Buffer.from("the host kept talking"),
+      ]));
+    });
+  });
+  await once(placeholderService.listen(placeholderSocket), "listening");
+  t.after(() => { placeholderService.close(); });
+  const lease = await requestEgressPlaceholder({ ...ask, socket: placeholderSocket }, RUN, "anthropic", "current", 5);
+  const ended = new Promise<void>(r => lease.ended(r));
+  await Promise.race([ended, new Promise<void>((_, fail) => setTimeout(() => fail(new Error("the lease outlived bytes after its answer")), 3000))]);
+});

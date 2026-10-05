@@ -24,6 +24,7 @@
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
 import { connect as netConnect, isIP, type Socket } from "node:net";
 import { lookup as dnsLookup } from "node:dns";
+import { chmodSync } from "node:fs";
 import { allowsEgressEndpoint, parseConnectTarget, type EgressPolicy } from "../domain/egress.js";
 import { clearSocketName } from "../storage/socket-name.js";
 import { StoreError } from "../domain/errors.js";
@@ -42,11 +43,17 @@ export const CONNECT_IDLE_MS = 120_000;
 export const CONNECT_DIAL_MS = 15_000;
 /** CONNECT needs no headers beyond Host; this still admits a verbose client. */
 const CONNECT_HEADER_BYTES = 8192;
+/** Backstop for an idle keep-alive socket: every response path already sends
+ * `Connection: close`, so nothing legitimately reaches this state -- a
+ * socket that somehow does is still bounded rather than free to wedge a
+ * `maxConnections` slot forever. */
+const CONNECT_KEEPALIVE_MS = 5_000;
 
 export interface EgressAudit {
   readonly actor: string;
   readonly role: string;
-  /** `host:port` normalized, or the refused request's own wording of it. */
+  /** `host:port` normalized, or a fixed marker when the request's own bytes
+   * never parsed as an authority -- caller content never lands here. */
   readonly target: string;
   readonly decision: "allow" | "refuse" | "fail";
   /** One machine word or refusal sentence; never bytes the caller sent. */
@@ -128,7 +135,18 @@ function v6Bytes(ip: string): number[] | null {
 /** Whether an address a resolver returned may be dialed for a Resident. This
  * is the rebinding and encoding backstop: whatever name was asked, the
  * address actually connected is screened here. An unparseable or
- * unrecognizable answer is not public. */
+ * unrecognizable answer is not public.
+ *
+ * The v6 model is fail-closed allowlist, not denylist (DR34): embedded-IPv4
+ * carrier formats are unwrapped and judged by their embedded address first,
+ * then only `2000::/3` -- global unicast -- is admitted, minus the
+ * special-purpose ranges the IANA registry assigns inside it. Everything
+ * outside `2000::/3` dies at the gate: `::/8` (unspecified, loopback and the
+ * deprecated v4-compatible space), `64:ff9b:1::/48` (RFC 8215 local-use
+ * NAT64 -- it exists to translate non-global answers, so it can never name a
+ * public destination), `100::/64` discard, `5f00::/16` SRv6 SIDs, `fc00::/7`
+ * ULA, `fe80::/10` link-local, `fec0::/10` site-local and `ff00::/8`
+ * multicast. Anything the rules below do not recognize is refused. */
 export function isPublicConnectAddress(address: string): boolean {
   const family = isIP(address);
   if (family === 4) return !v4AddressPrivate(address);
@@ -138,26 +156,32 @@ export function isPublicConnectAddress(address: string): boolean {
   // v6Bytes proves sixteen bytes; the index is exact, not unchecked input.
   const at = (index: number): number => b[index]!;
   const last4 = `${at(12)}.${at(13)}.${at(14)}.${at(15)}`;
-  // ::ffff:0:0/96 -- an IPv4 answer in v6 spelling is the IPv4 answer.
+  // Embedded-IPv4 carriers are the IPv4 answer in another spelling; the
+  // embedded address decides, never the carrier.
+  // ::ffff:0:0/96 v4-mapped.
   if (b.slice(0, 10).every(byte => byte === 0) && at(10) === 0xff && at(11) === 0xff)
     return !v4AddressPrivate(last4);
-  // ::/96: unspecified, loopback and deprecated IPv4-compatible space.
-  if (b.slice(0, 12).every(byte => byte === 0)) return false;
-  // 64:ff9b::/96 NAT64: the embedded IPv4 decides.
+  // 64:ff9b::/96 NAT64 well-known prefix: the embedded IPv4 decides.
   if (at(0) === 0x00 && at(1) === 0x64 && at(2) === 0xff && at(3) === 0x9b && b.slice(4, 12).every(byte => byte === 0))
     return !v4AddressPrivate(last4);
-  if (at(0) === 0x20 && at(1) === 0x01 && at(2) === 0x0d && at(3) === 0xb8) return false; // 2001:db8::/32 documentation
-  // 2001::/32 Teredo: the client's IPv4 is the last 32 bits, bits inverted.
+  // The admission gate: only global unicast is ever a public destination.
+  if ((at(0) & 0xe0) !== 0x20) return false;
+  // Inside 2000::/3, special-purpose space is refused or unwrapped:
+  // 2001::/32 Teredo -- the client's IPv4 is the last 32 bits, bits inverted.
   if (at(0) === 0x20 && at(1) === 0x01 && at(2) === 0x00 && at(3) === 0x00)
     return !v4AddressPrivate(`${at(12) ^ 0xff}.${at(13) ^ 0xff}.${at(14) ^ 0xff}.${at(15) ^ 0xff}`);
+  // 2001::/23 IETF protocol assignments: benchmark 2001:2::/48, AMT
+  // 2001:3::/32, AS112 2001:4:112::/48, ORCHID 2001:10::/28 and ORCHIDv2
+  // 2001:20::/28, the anycast stubs and every sibling -- none names a host a
+  // Resident may reach.
+  if (at(0) === 0x20 && at(1) === 0x01 && at(2) <= 0x01) return false;
+  if (at(0) === 0x20 && at(1) === 0x01 && at(2) === 0x0d && at(3) === 0xb8) return false; // 2001:db8::/32 documentation
   // 2002::/16 6to4: the site's IPv4 sits in bytes 2..5.
   if (at(0) === 0x20 && at(1) === 0x02)
     return !v4AddressPrivate(`${at(2)}.${at(3)}.${at(4)}.${at(5)}`);
-  if (at(0) === 0x01 && at(1) === 0x00 && b.slice(2, 8).every(byte => byte === 0)) return false; // 100::/64 discard-only
-  if ((at(0) & 0xfe) === 0xfc) return false;        // fc00::/7 unique-local
-  if (at(0) === 0xfe && (at(1) & 0xc0) === 0x80) return false; // fe80::/10 link-local
-  if (at(0) === 0xfe && (at(1) & 0xc0) === 0xc0) return false; // fec0::/10 deprecated site-local
-  if (at(0) === 0xff) return false;                 // ff00::/8 multicast
+  // 2620:4f:8000::/48 direct-delegation AS112 and 3fff::/20 documentation.
+  if (at(0) === 0x26 && at(1) === 0x20 && at(2) === 0x00 && at(3) === 0x4f && at(4) === 0x80 && at(5) === 0x00) return false;
+  if (at(0) === 0x3f && (at(1) & 0xf0) === 0xf0) return false;
   return true;
 }
 
@@ -226,8 +250,28 @@ export interface ConnectProxyOptions {
   readonly audit?: (entry: EgressAudit) => void;
 }
 
+/** The journal's target field. Only two spellings ever appear: a parsed
+ * authority in its normalized `host:port`, or a fixed marker. The request's
+ * own bytes are caller content -- a URL's query, an authority's userinfo, a
+ * credential -- and never reach the journal. */
+function auditTarget(url: unknown, fallback: string): string {
+  const { target } = parseConnectTarget(url);
+  return target === null ? fallback : `${target.host}:${target.port}`;
+}
+/** The target marker for a request that never produced a parseable
+ * authority: what was refused, redacted down to the decision itself. */
+const AUDIT_NO_TARGET = "(request-target redacted)";
+
+/** A refused socket gets its whole answer, then dies: the writable side ends
+ * with the response and the socket is destroyed once the bytes have flushed,
+ * so no refusal can idle holding a listener slot. A socket already ended --
+ * one pipelined behind a refused request -- is destroyed without a write. */
 function refuse(socket: Socket, status: number): void {
-  socket.end(`HTTP/1.1 ${status} ${status === 403 ? "Forbidden" : "Bad Gateway"}\r\nConnection: close\r\nContent-Length: 0\r\n\r\n`);
+  const text = status === 403 ? "Forbidden" : status === 405 ? "Method Not Allowed" : "Bad Gateway";
+  if (socket.destroyed || socket.writableEnded) { socket.destroy(); return; }
+  socket.once("finish", () => socket.destroy());
+  try { socket.end(`HTTP/1.1 ${status} ${text}\r\nConnection: close\r\nContent-Length: 0\r\n\r\n`); }
+  catch { socket.destroy(); }
 }
 
 export class ConnectProxy {
@@ -249,57 +293,101 @@ export class ConnectProxy {
       maxHeaderSize: CONNECT_HEADER_BYTES,
       headersTimeout: options.handshakeMs ?? CONNECT_HANDSHAKE_MS,
       requestTimeout: options.handshakeMs ?? CONNECT_HANDSHAKE_MS,
-      keepAliveTimeout: 0,
+      // Not infinite: a refusal always ends its connection, so keep-alive
+      // state is only a backstop -- and backstops still have a bound.
+      keepAliveTimeout: CONNECT_KEEPALIVE_MS,
       insecureHTTPParser: false,
     });
     // The same per-delivery bound the pool provisions for: sockets beyond it
     // are refused by the kernel listener rather than queued into memory.
     server.maxConnections = options.tunnels ?? CONNECT_TUNNELS;
-    server.on("request", (_req: IncomingMessage, res: ServerResponse) => {
-      // Only CONNECT exists here: a plain request gets a refusal with words.
-      audit(typeof _req.url === "string" ? _req.url.slice(0, 256) : "", "refuse", "not a CONNECT request");
-      res.writeHead(405, { "Content-Length": 0 });
+    server.on("request", (req: IncomingMessage, res: ServerResponse) => {
+      // Only CONNECT exists here: a plain request gets a refusal with words,
+      // and the socket goes with it -- an unanswered connection idling in
+      // keep-alive would wedge a listener slot for as long as the peer wants.
+      audit(auditTarget(req.url, req.method ?? AUDIT_NO_TARGET), "refuse", "not a CONNECT request");
+      res.writeHead(405, { "Connection": "close", "Content-Length": 0 });
       res.end();
+      // The response is flushed, then the socket is destroyed -- pipelined
+      // bytes behind a refused request die unread with it.
+      req.socket.destroySoon();
+    });
+    // An `Upgrade:` request is not a CONNECT and there is no protocol to
+    // switch to -- destroy the socket rather than let it linger.
+    server.on("upgrade", (req: IncomingMessage, socket: Socket) => {
+      audit(auditTarget(req.url, "(upgrade)"), "refuse", "an upgrade is not a CONNECT request");
+      socket.destroy();
     });
     server.on("clientError", (_error, socket) => socket.destroy());
     server.on("connect", (req: IncomingMessage, client: Socket, head: Buffer) => {
       const idleMs = options.idleMs ?? CONNECT_IDLE_MS;
+      // The socket is the proxy's from this event, not the server's: a late
+      // error on it must never surface unhandled. `upstream` outlives the
+      // dial's own scope so the catch can end a connection that was already
+      // opened when a later step (audit, the 200 write) threw.
+      let upstream: Socket | undefined;
+      const drop = (): void => { client.destroy(); upstream?.destroy(); };
+      client.on("error", drop);
+      client.once("close", () => { tunnels.delete(client); upstream?.destroy(); });
       void (async () => {
         const { target, problem } = parseConnectTarget(req.url);
         if (problem !== null) {
-          audit(typeof req.url === "string" ? req.url.slice(0, 256) : "", "refuse", problem);
+          audit(AUDIT_NO_TARGET, "refuse", problem);
           return refuse(client, 403);
         }
         const name = `${target.host}:${target.port}`;
         if (target.literal) { audit(name, "refuse", "address literal"); return refuse(client, 403); }
         if (target.port !== EGRESS_CONNECT_PORT) { audit(name, "refuse", "port other than 443"); return refuse(client, 403); }
         if (!allowsEgressEndpoint(policy, target.host)) { audit(name, "refuse", "not on the egress allowlist"); return refuse(client, 403); }
-        let upstream: Socket;
-        try { upstream = await options.dial(target.host, target.port); }
+        // Node emits a pipelined request even on a socket the refusal before
+        // it already closed: the CONNECT is still judged, but a dead socket
+        // dials nothing.
+        if (client.destroyed || client.writableEnded) {
+          audit(name, "refuse", "the connection was already closed");
+          client.destroy();
+          return;
+        }
+        let dialed: Socket;
+        try { dialed = await options.dial(target.host, target.port); }
         catch (error) {
           const reason = error instanceof StoreError && error.code === "INVALID_REQUEST" ? error.message : "dial failed";
           audit(name, error instanceof StoreError && error.code === "INVALID_REQUEST" ? "refuse" : "fail", reason.slice(0, 120));
           return refuse(client, error instanceof StoreError && error.code === "INVALID_REQUEST" ? 403 : 502);
         }
+        upstream = dialed;
+        // The client may have died under the dial; its tunnel is dropped.
+        if (client.destroyed || client.writableEnded) {
+          audit(name, "fail", "the connection closed during the dial");
+          dialed.destroy();
+          return;
+        }
         audit(name, "allow", "connected");
         client.write("HTTP/1.1 200 Connection Established\r\n\r\n");
-        if (head.length > 0) upstream.write(head);
-        const drop = (): void => { client.destroy(); upstream.destroy(); };
+        if (head.length > 0) dialed.write(head);
         // Silence ends the tunnel; each side's end ends the pair. P0-4: the
         // proxy owns both halves of every tunnel it opened.
-        client.setTimeout(idleMs); upstream.setTimeout(idleMs);
-        client.once("timeout", drop); upstream.once("timeout", drop);
-        client.once("error", () => {}); upstream.once("error", () => {});
-        client.once("close", () => { tunnels.delete(client); upstream.destroy(); });
-        upstream.once("close", () => client.destroy());
+        client.setTimeout(idleMs); dialed.setTimeout(idleMs);
+        client.once("timeout", drop); dialed.once("timeout", drop);
+        dialed.once("error", () => dialed.destroy());
         tunnels.add(client);
-        upstream.pipe(client); client.pipe(upstream);
-      })().catch(() => client.destroy());
+        dialed.pipe(client); client.pipe(dialed);
+      })().catch(drop);
     });
     await new Promise<void>((resolve, reject) => {
       server.once("error", reject);
       server.listen(options.socketPath, () => { server.off("error", reject); resolve(); });
     });
+    // Only this user may speak to the proxy; the sandbox runs as the same
+    // user. P0-4/AV-20261003-28: the listener and its name are this opener's
+    // until the proxy is handed back, so a permission failure returns both
+    // rather than leaving an ownerless server behind.
+    try { chmodSync(options.socketPath, 0o600); }
+    catch (error) {
+      for (const socket of tunnels) socket.destroy();
+      server.closeAllConnections();
+      await new Promise<void>(resolve => { server.close(() => resolve()); });
+      throw error;
+    }
     return new ConnectProxy(options.socketPath, server, tunnels);
   }
 

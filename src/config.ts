@@ -10,7 +10,7 @@ import {
   type RoleSettings,
 } from "./config/operations.js";
 import type { AgentProfile, EffortLevel, HostConfigV1, HostEgressConfig, ModelProfile, ResourceLimits } from "../implementation/contracts.js";
-import { egressEntryProblem } from "./domain/egress.js";
+import { egressEntryProblem, EGRESS_ALLOW_MAX } from "./domain/egress.js";
 import { StoreError } from "./domain/errors.js";
 import { requireResidentRootfs } from "./resident-paths.js";
 import { isValidActorName, isValidSocietyName, isValidWirePath } from "./domain/identifiers.js";
@@ -308,6 +308,16 @@ export function validateConfig(raw: unknown): ValidatedConfigCandidate {
     }
     if (allow.length + Object.values(roles).reduce((sum, list) => sum + list.length, 0) === 0)
       err("egress names no endpoint; remove the clause rather than configure egress to nothing");
+    // The wire bound is on what egress.connect carries -- the resolved list.
+    // The baseline alone is every unnamed role's list, and each named role's
+    // is baseline plus its own: any resolved list over the bound is refused
+    // at commit, so a config that macOS could only refuse cannot exist.
+    if (allow.length > EGRESS_ALLOW_MAX)
+      err(`egress.allow exceeds ${EGRESS_ALLOW_MAX} entries, the wire's bound for one role's resolved list`);
+    for (const [role, list] of Object.entries(roles)) {
+      if (allow.length + list.length > EGRESS_ALLOW_MAX)
+        err(`egress.roles.${role} resolves to ${allow.length + list.length} entries, past the wire's ${EGRESS_ALLOW_MAX}-entry bound`);
+    }
     egress = { allow: allow as string[], roles };
   }
   return validatedSnapshot({

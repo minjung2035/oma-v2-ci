@@ -20,6 +20,7 @@ import {
   type EgressConnectParams, type EgressOpenParams, type EgressPlaceholderParams, type EgressPlaceholderResult,
 } from "../../protocol/host-guest.js";
 import { allowsEgressEndpoint, normalizeEgressHost } from "../../domain/egress.js";
+import { StoreError } from "../../domain/errors.js";
 
 export interface EgressHostOptions {
   /** Opens one egress connection to the guest and completes its hello. */
@@ -88,9 +89,15 @@ export class EgressHost {
     const frame = first.frame;
     const problem = requestProblem(frame);
     if (problem !== null || frame.key !== undefined) { socket.destroy(); return; }
-    if (frame.method === "egress.placeholder") { await this.placeholder(socket, frame.id as string, frame.params); return; }
+    if (frame.method === "egress.placeholder") { await this.placeholder(socket, frame.id as string, frame.params).catch(() => socket.destroy()); return; }
     if (frame.method === "egress.open") { this.connect(socket, frame.params, first.rest); return; }
-    if (frame.method === "egress.connect") { await this.connectTunnel(socket, frame.id as string, frame.params, first.rest); return; }
+    if (frame.method === "egress.connect") {
+      // The dispatch boundary owns the failure: a throw inside the request --
+      // a dead socket write, a journal that refused its record -- ends the
+      // connection and is never an unhandled rejection on the host.
+      await this.connectTunnel(socket, frame.id as string, frame.params, first.rest).catch(() => socket.destroy());
+      return;
+    }
     socket.destroy();
   }
 
@@ -179,34 +186,62 @@ export class EgressHost {
       answer({ ok: false, error: { code: "INVALID_REQUEST", message: "the run's egress policy does not allow this endpoint", retry: "never" } });
       return;
     }
+    // A tunnel is ONE unit -- its pooled connection -- not its two sockets;
+    // counting both halves would halve the declared bound. The check and the
+    // reservation are one synchronous step before the first await, so a burst
+    // cannot all pass the check and only then dial. The reservation also
+    // carries ownership: a release while the dial is in flight already
+    // destroys this socket.
     if (run.tunnels.size >= this.options.limits.concurrent) {
       audit(asked.run.actor, asked.role, target, "refuse", "tunnel limit");
       answer({ ok: false, error: { code: "BROKER_UNAVAILABLE", message: "the run's tunnel budget is spent", retry: "after-repair" } });
       return;
     }
+    run.tunnels.add(socket);
     const dial = this.options.dial ?? makePublicDial();
     let upstream: Socket;
     try { upstream = await dial(asked.host, asked.port); }
     catch (error) {
-      audit(asked.run.actor, asked.role, target, "fail", (error instanceof Error ? error.message : String(error)).slice(0, 120));
-      answer({ ok: false, error: platformFailure(error) });
+      run.tunnels.delete(socket);
+      // The dial's own INVALID_REQUEST is the host's screen speaking -- a
+      // policy refusal, the same word the guest-side proxy uses. Everything
+      // else is an operational failure.
+      const refused = error instanceof StoreError && error.code === "INVALID_REQUEST";
+      audit(asked.run.actor, asked.role, target, refused ? "refuse" : "fail",
+        (error instanceof Error ? error.message : String(error)).slice(0, 120));
+      answer(refused
+        ? { ok: false, error: { code: "INVALID_REQUEST", message: (error as Error).message, retry: "never" } }
+        : { ok: false, error: platformFailure(error) });
       return;
     }
-    if (!this.runs.has(asked.placeholderId)) {
-      // The run ended under the dial; the tunnel it would have owned is dropped.
+    // From here anything that throws -- a dead socket write, a journal that
+    // refused its record -- ends both halves; a dialed connection is never
+    // orphaned to failure bookkeeping.
+    try {
+      if (!this.runs.has(asked.placeholderId) || socket.destroyed) {
+        // The run ended under the dial, or its connection did; the tunnel
+        // it would have owned is dropped, and the decision is still
+        // written once.
+        const runGone = !this.runs.has(asked.placeholderId);
+        upstream.destroy();
+        socket.destroy();
+        audit(asked.run.actor, asked.role, target, "fail",
+          runGone ? "the run ended during the dial" : "the connection closed during the dial");
+        return;
+      }
+      audit(asked.run.actor, asked.role, target, "allow", "connected");
+      socket.write(encodeFrame({ v: 1, id, ok: true, result: {} }));
+      if (rest.length > 0) upstream.write(rest);
+      socket.once("close", () => { run.tunnels.delete(socket); upstream.destroy(); });
+      upstream.once("close", () => { socket.destroy(); });
+      socket.once("error", () => socket.destroy());
+      upstream.once("error", () => upstream.destroy());
+      socket.pipe(upstream); upstream.pipe(socket);
+    } catch {
+      run.tunnels.delete(socket);
       upstream.destroy();
       socket.destroy();
-      return;
     }
-    audit(asked.run.actor, asked.role, target, "allow", "connected");
-    socket.write(encodeFrame({ v: 1, id, ok: true, result: {} }));
-    if (rest.length > 0) upstream.write(rest);
-    run.tunnels.add(socket); run.tunnels.add(upstream);
-    socket.once("close", () => { run.tunnels.delete(socket); upstream.destroy(); });
-    upstream.once("close", () => { run.tunnels.delete(upstream); socket.destroy(); });
-    socket.once("error", () => socket.destroy());
-    upstream.once("error", () => upstream.destroy());
-    socket.pipe(upstream); upstream.pipe(socket);
   }
 
   /** The run ended -- its lease closed, the guest rebooted, or the service

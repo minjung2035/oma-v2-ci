@@ -5,7 +5,7 @@ import { readFileSync } from 'node:fs';
 import { EventEmitter } from 'node:events';
 import { Script } from 'node:vm';
 import ts from 'typescript';
-import { FrameParser, encodeFrame } from '../dist/src/frame.js';
+import { FrameError, FrameParser, encodeFrame } from '../dist/src/frame.js';
 import { StoreError } from '../dist/src/domain/errors.js';
 const functionText = (file, name) => {
   const source = ts.createSourceFile(file, readFileSync(file, 'utf8'), ts.ScriptTarget.Latest, true);
@@ -18,8 +18,8 @@ const code = ts.transpileModule(functionText('src/protocol/alarm.ts', 'alarm') +
   { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText;
 function world(milliseconds) {
   const timers = new Set(), exports = {}; let now = 0, destroys = 0;
-  const socket = Object.assign(new EventEmitter(), { destroy() { destroys++; this.emit('close'); } });
-  new Script(code).runInNewContext({ exports, FrameParser, StoreError, Promise, Number, RangeError,
+  const socket = Object.assign(new EventEmitter(), { destroy() { destroys++; this.emit('close'); }, pause() {} });
+  new Script(code).runInNewContext({ exports, FrameError, FrameParser, StoreError, Promise, Number, RangeError, Buffer,
     performance: { now: () => now },
     setTimeout(run, ms) { assert.ok(ms > 0 && ms <= 0x7fffffff); const timer = { run, ms, at: now + ms, unref() {} }; timers.add(timer); return timer; },
     clearTimeout(timer) { timers.delete(timer); },
@@ -32,9 +32,13 @@ test('DR29: a long egress observation cannot clamp to one millisecond or synthes
   const w = world(0x7fffffff + 5000); let settled = false; void w.pending.then(() => { settled = true; });
   assert.equal(w.fire().ms, 0x7fffffff); await Promise.resolve(); assert.equal(settled, false);
   assert.equal([...w.timers][0].ms, 5000);
-  w.socket.emit('data', encodeFrame({ ok: true, result: { placeholder: 'controlled' } }));
-  assert.deepEqual(await w.pending, { ok: true, result: { placeholder: 'controlled' } });
-  assert.equal(w.timers.size, 0); assert.equal(w.destroys(), 1);
+  // oneFrame returns the frame and the bytes that rode in after it -- the
+  // socket stays the caller's on success, so nothing is destroyed here.
+  w.socket.emit('data', Buffer.concat([encodeFrame({ ok: true, result: { placeholder: 'controlled' } }), Buffer.from('tail')]));
+  const answer = await w.pending;
+  assert.deepEqual(answer.frame, { ok: true, result: { placeholder: 'controlled' } });
+  assert.equal(String(answer.rest), 'tail');
+  assert.equal(w.timers.size, 0); assert.equal(w.destroys(), 0);
 });
 test('DR29: egress deadline and socket loss remain unknown and return their timer exactly once', async () => {
   for (const event of ['timeout', 'error', 'close']) {

@@ -1140,3 +1140,44 @@ not host networking (SB-004, S-01). The clause ships unset by default; a
 deployment that configures nothing sees no proxy socket and no variables, and
 `egressRequired`/`openPrincipalEgress` semantics for the *required* inference
 path are not renegotiated by making egress optional.
+
+**Addendum (blind-verification round, 2026-10-06).** Nine findings against the
+first cut are settled in the implementation; three decisions are recorded
+here because they are the kind that would otherwise be re-litigated.
+
+*The IPv6 screen is an allowlist, not a denylist.* The first cut denied the
+special-purpose ranges it remembered (documentation, ULA, link-local,
+multicast, the NAT64 well-known prefix) and admitted the rest — which let
+`64:ff9b:1::/48` (RFC 8215 local-use NAT64, a prefix that exists to carry
+*non-global* answers), `::/8`, `2001::/23` (benchmark, AMT, AS112, ORCHID,
+ORCHIDv2 and every sibling protocol assignment), `5f00::/16`, `2620:4f:8000::/48`
+and `3fff::/20` through. The rule is now: embedded-IPv4 carriers are unwrapped
+first and judged by the embedded address under the IPv4 rules — v4-mapped,
+NAT64 `64:ff9b::/96`, Teredo (whose client address is the last 32 bits,
+inverted) and 6to4 (whose site address sits in bytes 2–5) — then only
+`2000::/3`, global unicast, is admitted, minus its special-purpose members.
+Anything else, recognized or not, is refused. Local-use NAT64 dies at that
+gate: a prefix that translates non-global space can never name a public
+destination, so unwrapping it would unwrap a lie. Teredo and 6to4 carrier
+space stays reachable only where the embedded IPv4 is itself public — the
+carrier is the *transport*, the embedded address is the destination.
+
+*The audit target is a normalized field, not a request excerpt.* The journal
+carries `host:port` as `parseConnectTarget` normalized it, or a fixed
+`(request-target redacted)` marker when no authority ever parsed. The
+request's own bytes — a URL's query, an authority's userinfo, any
+credential-shaped payload — can never appear, so no redaction rule has to be
+trusted to find them.
+
+*Bounds counted on the same unit at both ends.* A run's tunnel budget is four
+*tunnels*: the pooled connection is the unit on the host (counting both
+socket halves would silently halve it), and the reservation is taken
+synchronously before the dial so a burst cannot all pass the check and only
+then compete for slots. The wire's 256-entry bound on `egress.connect`'s
+`allow` is mirrored at config commit, and on the *resolved* list — baseline
+plus the role's own — because that is what the request carries; a baseline
+alone over the bound, or baseline-plus-role over it, is refused where it is
+written rather than where macOS would discover it. A refused HTTP request
+gets `Connection: close` and its socket's destruction with the response —
+an idle keep-alive or an `Upgrade` header cannot hold a listener slot, and
+bytes pipelined behind a refused request die unread.

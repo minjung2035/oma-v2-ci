@@ -785,8 +785,8 @@
    "oracles": [
     "DR34"
    ],
-   "sha256": "b70183a1e7da4a12109527b80901d32a1f62bbd201adc91d3bd4d9bc7208b87b",
-   "note": "Read in full: pure policy -- entries are normalized DNS names or *.suffix (two-label minimum); literals, ports, schemes, paths and malformed spellings refuse at grammar. parseConnectTarget accepts only authority-form host:port/[literal]:port with bounded lengths; egressPolicyFor unions baseline+role and returns null on empty; matching is suffix-with-dot or exact. No IO anywhere."
+   "sha256": "3ed3e87d6964412a527123511912e4392549fcf22f3667217ce0e72a5d58b3fb",
+   "note": "Read in full: pure policy unchanged -- entries are normalized DNS names or *.suffix (two-label minimum); literals, ports, schemes, paths and malformed spellings refuse at grammar. New: EGRESS_ALLOW_MAX = 256 is the shared wire/commit bound, named here so host-guest.ts and config.ts cannot drift. No IO anywhere."
   },
   {
    "path": "src/runtime/connect-proxy.ts",
@@ -796,8 +796,8 @@
    "oracles": [
     "DR34"
    ],
-   "sha256": "81c2df6eaa1d8227a383aef936d79500d7479f79b216b81e527b7e65a397053d",
-   "note": "Read in full: the SSRF screen covers v4 private/loopback/link-local/CGNAT/docs/reserved/multicast and v6 unspecified/loopback/ULA/link-local/site-local/multicast/discard/docs plus mapped/NAT64/Teredo/6to4 unwrapping; makePublicDial resolves once, drops non-public answers, and pins the literal it dials (rebinding-safe). ConnectProxy is CONNECT-only, 443-only, allowlist-gated, headers die at the proxy, refusal is 403/502 with audit, close() destroys tracked tunnels and removes the socket name. DR34 tests pin grammar, screen, pinning, refusal, headers and teardown."
+   "sha256": "3ac2b381b2fc15d8b829d88453e215e8bcfe01167ead18d5c050f74a69fab547",
+   "note": "Re-read in full after the blind-verification round: the v6 screen is now fail-closed -- embedded-v4 carriers (mapped, 64:ff9b::/96, Teredo, 6to4) unwrap to IPv4 rules, then only 2000::/3 minus its special-purpose ranges is admitted; ::/8, 64:ff9b:1::/48, 100::/64, 5f00::/16 and every unlisted range die at the gate. Audit targets are normalized host:port or the fixed redaction marker -- raw request bytes, userinfo and query strings cannot reach the journal. Non-CONNECT requests get 405 Connection: close + destroySoon, upgrade requests are destroyed, keepAlive is a bounded backstop not infinity, a dead pipelined socket dials nothing, the listener is chmod 0600 with listener+name cleanup on failure, and a post-dial throw (audit sink, dead socket write) destroys both halves."
   },
   {
    "path": "src/extension/egress-bridge.ts",
@@ -818,8 +818,8 @@
    "oracles": [
     "DR34"
    ],
-   "sha256": "c45b5799bb6b8785b4658c5459a536d1b13c3480b07bfe79dd29e9c9563a6c6c",
-   "note": "Read in full: v6 adds egress.connect -- validator enforces placeholderId/run/host/port plus declared role and a bounded, grammar-checked allow list; the host re-checks all of it. egressOpenProblem binds incarnation to the run's lease check as before."
+   "sha256": "29bf451fbf911f5b1d7072f8da8f01e8646b7bb2c399aefed950c1528f5ee4b3",
+   "note": "Read in full: v6 egress.connect validator unchanged in shape -- placeholderId/run/host/port plus declared role and a bounded grammar-checked allow list; the >256 check now reads EGRESS_ALLOW_MAX so the wire bound and the commit bound share one constant."
   },
   {
    "path": "src/runtime/egress-forwarder.ts",
@@ -829,8 +829,8 @@
    "oracles": [
     "DR34"
    ],
-   "sha256": "fa563ac13b1ca3803b61f9c2a290dea0da23bf25e2866619f1308f15b55d86f5",
-   "note": "Read in full: requestEgressConnect frames one request on the run's lease carrying the resolved role/allowlist; ok yields the raw tunnel socket, refusal throws with the host's code. EgressForwarder placeholder/open semantics unchanged; a refused listen still releases the lease (AV-15)."
+   "sha256": "6d3f0455670d725825093cd4f65695e304817e76e62fa53b3202836f01f2415e",
+   "note": "Re-read in full: oneFrame now buffers bytes and slices exactly the first frame, returning {frame, rest} -- bytes riding with the answer are never fed back to the parser (the FRAME_TOO_LARGE poison) and never dropped. requestEgressConnect unshifts rest so tunnel payload survives; requestEgressPlaceholder destroys the lease on non-empty rest, so post-answer bytes still end the run (AV-15) even inside the answer's own segment."
   },
   {
    "path": "src/platform/host/egress.ts",
@@ -840,8 +840,8 @@
    "oracles": [
     "DR34"
    ],
-   "sha256": "60d95ecc5e9c7d25c0602f21025caea81d5bf18895453eb03bb8823f669d160b",
-   "note": "Read in full: connectTunnel validates params, binds the request to this boot's run (same check as egress.open), enforces port 443, the declared allowlist and the per-run tunnel bound, then dials through the screened dialer and pipes raw after the ok frame; tunnels die with the run and with forgetBoot. Audit emits actor/role/target/verdict once per decision."
+   "sha256": "ba20e01434692aff4ce10c814bdff94cb5f778f135e46551bf406e977c005756",
+   "note": "Re-read in full: connectTunnel counts one tunnel per pooled connection -- the reservation is added synchronously before await dial (a burst cannot overshoot), released on dial failure, and released-with-destroy on the run-gone-mid-dial path which now audits once (fail, 'the run ended during the dial'). A dial INVALID_REQUEST is 'refuse', operational errors 'fail' -- the same words the proxy uses. Post-dial work sits in a try that destroys both halves on any throw, and the dispatch boundary catches connectTunnel so a throwing audit sink can never surface an unhandled rejection or orphan a dialed upstream."
   },
   {
    "path": "src/platform/guest/egress.ts",
@@ -917,8 +917,8 @@
    "oracles": [
     "DR34"
    ],
-   "sha256": "c562494056c6a0d006223ead22989c8b08770848107282c55699c39f688620a3",
-   "note": "Read in full: egress is a closed optional clause -- allow required, each entry checked by egressEntryProblem, role names checked against configured profiles, an empty effective clause refused; the snapshot freezes the copies."
+   "sha256": "52e77d08fa8549787f594191fb6bd6845b29d027455081c5cb868672fc20deb4",
+   "note": "Read in full: egress stays a closed optional clause -- allow required, each entry checked by egressEntryProblem, role names checked against configured profiles, an empty effective clause refused. New: the wire's 256-entry bound is enforced at commit on the resolved list -- baseline alone over the bound is refused, and each named role's baseline-plus-own over the bound is refused, so a config macOS could only reject cannot be written."
   },
   {
    "path": "implementation/contracts.ts",

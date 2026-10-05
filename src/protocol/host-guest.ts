@@ -12,7 +12,7 @@
  * it adds are its own (`PlatformErrorCode`).
  */
 import type { ErrorCode } from "../../implementation/contracts/errors.js";
-import { connectHostProblem, egressEntryProblem } from "../domain/egress.js";
+import { connectHostProblem, egressEntryProblem, EGRESS_ALLOW_MAX } from "../domain/egress.js";
 import { isErrorCode } from "../domain/errors.js";
 import { isPlatformUuid, isValidSocietyName } from "../domain/identifiers.js";
 import { parseJsonObject } from "../frame.js";
@@ -360,7 +360,7 @@ export function egressConnectProblem(params: unknown): string | null {
   if (typeof params.role !== "string" || !TOKEN.test(params.role)) return "invalid role";
   // The declared allowlist: at least one entry, bounded, each entry of the
   // egress grammar -- a malformed declaration is refused, not narrowed.
-  if (!Array.isArray(params.allow) || params.allow.length === 0 || params.allow.length > 256) return "invalid allow";
+  if (!Array.isArray(params.allow) || params.allow.length === 0 || params.allow.length > EGRESS_ALLOW_MAX) return "invalid allow";
   for (const entry of params.allow) {
     const problem = egressEntryProblem(entry);
     if (problem !== null) return `allow: ${problem}`;

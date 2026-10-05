@@ -216,7 +216,7 @@
     },
     {
       "path": "src/config.ts",
-      "sha256": "c562494056c6a0d006223ead22989c8b08770848107282c55699c39f688620a3"
+      "sha256": "52e77d08fa8549787f594191fb6bd6845b29d027455081c5cb868672fc20deb4"
     },
     {
       "path": "src/config/defaults.ts",
@@ -292,7 +292,7 @@
     },
     {
       "path": "src/domain/egress.ts",
-      "sha256": "b70183a1e7da4a12109527b80901d32a1f62bbd201adc91d3bd4d9bc7208b87b"
+      "sha256": "3ed3e87d6964412a527123511912e4392549fcf22f3667217ce0e72a5d58b3fb"
     },
     {
       "path": "src/domain/errors.ts",
@@ -796,7 +796,7 @@
     },
     {
       "path": "src/platform/host/egress.ts",
-      "sha256": "60d95ecc5e9c7d25c0602f21025caea81d5bf18895453eb03bb8823f669d160b"
+      "sha256": "ba20e01434692aff4ce10c814bdff94cb5f778f135e46551bf406e977c005756"
     },
     {
       "path": "src/platform/host/files.ts",
@@ -960,7 +960,7 @@
     },
     {
       "path": "src/protocol/host-guest.ts",
-      "sha256": "c45b5799bb6b8785b4658c5459a536d1b13c3480b07bfe79dd29e9c9563a6c6c"
+      "sha256": "29bf451fbf911f5b1d7072f8da8f01e8646b7bb2c399aefed950c1528f5ee4b3"
     },
     {
       "path": "src/protocol/host-history.ts",
@@ -1072,7 +1072,7 @@
     },
     {
       "path": "src/runtime/connect-proxy.ts",
-      "sha256": "81c2df6eaa1d8227a383aef936d79500d7479f79b216b81e527b7e65a397053d"
+      "sha256": "3ac2b381b2fc15d8b829d88453e215e8bcfe01167ead18d5c050f74a69fab547"
     },
     {
       "path": "src/runtime/deployment-manifest.ts",
@@ -1080,7 +1080,7 @@
     },
     {
       "path": "src/runtime/egress-forwarder.ts",
-      "sha256": "fa563ac13b1ca3803b61f9c2a290dea0da23bf25e2866619f1308f15b55d86f5"
+      "sha256": "6d3f0455670d725825093cd4f65695e304817e76e62fa53b3202836f01f2415e"
     },
     {
       "path": "src/runtime/engine-auth.ts",

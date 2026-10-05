@@ -8,7 +8,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { connect, createServer, Socket } from "node:net";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, rmSync, statSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { once } from "node:events";
@@ -133,6 +133,42 @@ test("DR34: no private, loopback, link-local, CGNAT, reserved or special-use add
     assert.equal(isPublicConnectAddress(address), true, address);
   // Teredo/6to4 wrapping a *public* IPv4 is not refused by the embedded
   // address; the spelling itself is still carrier space the dialer may use.
+});
+
+test("DR34: the v6 screen fails closed -- global unicast minus its special-purpose ranges, nothing else", () => {
+  const refused = [
+    // ::/8 remnants beyond the unwrapped forms: unspecified, loopback,
+    // deprecated v4-compatible and never-assigned early space.
+    "::", "::1", "::2", "::0a00:0001", "::ffff", "0:0:0:0:0:0:0:2",
+    // RFC 8215 local-use NAT64: its whole purpose is translating non-global
+    // answers, so the range can never name a public destination -- refused
+    // outright rather than by embedded address.
+    "64:ff9b:1::1", "64:ff9b:1:0a00:0001::1", "64:ff9b:1:ffff:ffff:ffff:ffff:ffff",
+    // 2001::/23 IETF protocol assignments other than Teredo: ORCHID v1/v2,
+    // benchmarking, AMT, AS112-v6, DECT-ULE, anycast stubs and the rest.
+    "2001:1::1", "2001:2::1", "2001:3::1", "2001:4:112::1", "2001:10::1",
+    "2001:20::1", "2001:30::1", "2001:1ff::1",
+    // Documentation space in both spellings, AS112, SRv6 SIDs.
+    "2001:db8::1", "3fff::1", "3fff:fff0::1", "2620:4f:8000::1", "5f00::1", "5f00:ffff::1",
+    // NAT64 well-known prefix and mapped forms carrying private answers.
+    "64:ff9b::10.0.0.1", "64:ff9b::7f00:1", "::ffff:ac10:0001",
+    // Everything outside 2000::/3 is not global unicast at all.
+    "100::1", "fc00::1", "fd12:3456::1", "fe80::1", "fec0::1", "ff02::1",
+  ];
+  for (const address of refused) assert.equal(isPublicConnectAddress(address), false, address);
+  for (const address of [
+    "2001:4860:4860::8888", "2606:4700:4700::1111",
+    "2001:200::1",              // ordinary global unicast just past 2001::/23
+    "2001:db7::1",              // just past 2001:db8::/32's documentation boundary
+    "3fe0::1",                  // just outside documentation 3fff::/20
+    "2002:0808:0808::", "::ffff:8.8.8.8", "64:ff9b::8.8.8.8",
+    // Teredo: the embedded client IPv4 (bits-inverted tail) decides -- f7f7:f7f7 is 8.8.8.8.
+    "2001:0000:0808:0808:8000:63bf:f7f7:f7f7",
+  ]) assert.equal(isPublicConnectAddress(address), true, address);
+  // Teredo/6to4 wrapping a private answer still refuse on the embedded value:
+  // f5ff:fffe embeds 10.0.0.1, 80ff:fffe embeds 127.0.0.1.
+  for (const address of ["2001:0000:0808:0808:8000:63bf:f5ff:fffe", "2001:0000:0808:0808:8000:63bf:80ff:fffe"])
+    assert.equal(isPublicConnectAddress(address), false, address);
 });
 
 /* ---------------- the pinned dial ---------------- */
@@ -318,6 +354,96 @@ test("DR34: bytes written with the CONNECT (a racing ClientHello) are forwarded"
   socket.destroy();
 });
 
+/** Poll a condition with a bounded deadline, then assert it. */
+const until = async (condition: () => boolean, what: string): Promise<void> => {
+  for (let i = 0; i < 200 && !condition(); i++) await new Promise(r => setTimeout(r, 10));
+  assert.ok(condition(), what);
+};
+
+test("DR34: a refused request dies with its answer -- no socket lingers in keep-alive or upgrade state", async t => {
+  const dials: string[] = [];
+  const audits: EgressAudit[] = [];
+  const { socketPath } = await proxyWorld(t, async host => { dials.push(host); return new Socket(); }, e => audits.push(e));
+
+  // A plain request gets its 405 and the socket is gone -- it cannot idle on
+  // keep-alive holding a maxConnections slot (the refusal says close, and the
+  // proxy enforces it rather than trusting the peer to leave).
+  const get = connect(socketPath);
+  await once(get, "connect");
+  get.write("GET http://registry.npmjs.org/?api_key=SECRET HTTP/1.1\r\nHost: registry.npmjs.org\r\n\r\n");
+  let getBytes = Buffer.alloc(0);
+  get.on("data", (chunk: Buffer) => { getBytes = Buffer.concat([getBytes, chunk]); });
+  const [getClosed] = await Promise.race([once(get, "close").then(() => [true]), new Promise<boolean[]>(r => setTimeout(() => r([false]), 2000))]);
+  assert.equal(getClosed, true, "the 405 connection must close, not linger");
+  assert.match(getBytes.toString("latin1"), /^HTTP\/1\.1 405 .*\r\n(.*\r\n)*?[Cc]onnection: close\r\n/s,
+    "the refusal carries Connection: close");
+
+  // An Upgrade: request is not a CONNECT either: refused and destroyed.
+  const up = connect(socketPath);
+  await once(up, "connect");
+  up.write("GET / HTTP/1.1\r\nHost: registry.npmjs.org\r\nConnection: upgrade\r\nUpgrade: websocket\r\n\r\n");
+  const [upClosed] = await Promise.race([once(up, "close").then(() => [true]), new Promise<boolean[]>(r => setTimeout(() => r([false]), 2000))]);
+  assert.equal(upClosed, true, "an upgrade request is refused and destroyed, not left open");
+
+  // A CONNECT pipelined behind a refused request is still policy-checked and
+  // refused -- the socket the refusal closed cannot smuggle it into a dial.
+  const both = connect(socketPath);
+  await once(both, "connect");
+  both.write("GET / HTTP/1.1\r\nHost: registry.npmjs.org\r\n\r\nCONNECT registry.npmjs.org:443 HTTP/1.1\r\nHost: registry.npmjs.org:443\r\n\r\n");
+  let bothBytes = Buffer.alloc(0);
+  both.on("data", (chunk: Buffer) => { bothBytes = Buffer.concat([bothBytes, chunk]); });
+  const [bothClosed] = await Promise.race([once(both, "close").then(() => [true]), new Promise<boolean[]>(r => setTimeout(() => r([false]), 2000))]);
+  assert.equal(bothClosed, true, "the refused connection closes");
+  assert.equal(bothBytes.includes("200 Connection Established"), false, "no tunnel was established behind the refused request");
+  await until(() => audits.some(e => e.decision === "refuse"), "the pipelined CONNECT is audited");
+  assert.equal(dials.length, 0, "nothing was dialed -- every request on the refused socket stayed refused");
+});
+
+test("DR34: the audit journal carries the normalized host:port or a redaction marker -- never request bytes", async t => {
+  const audits: EgressAudit[] = [];
+  const { socketPath } = await proxyWorld(t, async () => new Socket(), e => audits.push(e));
+  // A credential-bearing authority is refused at the grammar and must not
+  // leave the password in the journal.
+  const withCredentials = await connectRaw(socketPath, "CONNECT user:passw0rd@evil.com:443 HTTP/1.1\r\nHost: x\r\n\r\n");
+  assert.equal(withCredentials.status, 403);
+  // A query string on a plain request is request content the same way.
+  const withQuery = await connectRaw(socketPath, "GET http://registry.npmjs.org/x?api_key=SECRET HTTP/1.1\r\nHost: registry.npmjs.org\r\n\r\n");
+  assert.equal(withQuery.status, 405);
+  // A policy refusal still names its normalized target.
+  const offList = await connectRaw(socketPath, "CONNECT pypi.org:443 HTTP/1.1\r\n\r\n");
+  assert.equal(offList.status, 403);
+  const journal = JSON.stringify(audits);
+  assert.ok(!journal.includes("passw0rd") && !journal.includes("SECRET") && !journal.includes("api_key"),
+    `request bytes must never reach the journal: ${journal}`);
+  assert.equal(audits.find(e => e.reason === "not on the egress allowlist")!.target, "pypi.org:443",
+    "a parsed refusal still records the normalized host:port");
+  assert.ok(audits.filter(e => e.decision === "refuse").every(e => e.target.length > 0 && e.target.length < 300));
+});
+
+test("DR34: the proxy socket obeys the same 0600 ownership discipline as every sibling listener", async t => {
+  const dir = mkdtempSync(join(tmpdir(), "oma-connect-"));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  const socketPath = join(dir, "egress.sock");
+  const proxy = await ConnectProxy.open({ socketPath, policy: POLICY, actor: "alice", dial: async () => new Socket() });
+  t.after(() => proxy.close());
+  assert.equal(statSync(socketPath).mode & 0o777, 0o600,
+    "the unix listener is private to this user whatever the umask");
+});
+
+test("DR34: a failure after the dial ends the upstream it opened -- nothing is orphaned", async t => {
+  const port = await echo(t);
+  const dialed: Socket[] = [];
+  // The audit callback throws on the allow line -- the tunnel is half-built.
+  const { socketPath } = await proxyWorld(t,
+    async () => { const s = connect({ host: "127.0.0.1", port }); dialed.push(s); return s; },
+    () => { throw new Error("journal unavailable"); });
+  const { status, socket } = await connectRaw(socketPath, "CONNECT registry.npmjs.org:443 HTTP/1.1\r\n\r\n");
+  assert.notEqual(status, 200, "no tunnel was handed out");
+  assert.equal(dialed.length, 1, "the dial happened before the throw");
+  await until(() => dialed[0]!.destroyed, "the upstream the proxy opened is destroyed with the client");
+  assert.ok(socket.destroyed, "the client socket is destroyed too");
+});
+
 test("DR34: closing the proxy ends its tunnels and removes its name", async t => {
   const port = await echo(t);
   const dir = mkdtempSync(join(tmpdir(), "oma-connect-"));
@@ -393,4 +519,16 @@ test("DR34: the egress clause is Human configuration -- closed, checked whole at
   assert.throws(() => validateConfig(hostWith({ allow: ["x.com"], roles: { ghost: ["y.com"] } })), /not a configured profile/);
   assert.throws(() => validateConfig(hostWith({ allow: ["x.com"], roles: { [role]: "notalist" } })), /egress\.roles/);
   assert.throws(() => validateConfig(hostWith({ allow: "registry.npmjs.org" })), /egress\.allow/);
+});
+
+test("DR34: the wire's 256-entry bound holds at commit -- the resolved list is what egress.connect carries", () => {
+  const role = Object.keys(defaultHostConfig({ society: "demo", node: process.execPath, libdir: "/opt/oma", rootfs: "/rootfs", deploymentDigest: "a".repeat(64) }).agentProfiles)[0]!;
+  // One baseline past the wire bound is refused at commit -- on macOS the
+  // resolved list rides egress.connect, which refuses a longer list, so a
+  // config Linux would run must not be committable.
+  assert.throws(() => validateConfig(hostWith({ allow: Array(257).fill("a.example") })), /256/);
+  // The bound counts the resolved list: baseline + this role's own entries.
+  assert.throws(() => validateConfig(hostWith({ allow: Array(200).fill("a.example"), roles: { [role]: Array(57).fill("b.example") } })), /256/);
+  const atBound = validateConfig(hostWith({ allow: Array(200).fill("a.example"), roles: { [role]: Array(56).fill("b.example") } }));
+  assert.equal(atBound.egress!.allow.length + atBound.egress!.roles![role]!.length, 256);
 });

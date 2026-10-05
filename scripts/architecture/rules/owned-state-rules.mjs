@@ -140,6 +140,7 @@ export const OWNED_STATE_EXEMPTIONS = Object.freeze({
   "src/platform/host/service.ts": "the login token under the run directory and the socket chmod -- writes under directories the owned ensures already repaired",
   "src/platform/host/snapshot.ts": "the APFS clone between snapshot names under the directory the service's owned ensure repaired",
   "src/runtime/egress-forwarder.ts": "the forwarder's own socket in the run's run-root directory -- chmod of the name oma just made is the point (DR18, D-10)",
+  "src/runtime/connect-proxy.ts": "the delivery proxy's own socket beside the run's lease socket -- chmod of the name oma just made is the point (DR34)",
   "src/runtime/inference-relay.ts": "the relay's own socket in the run's run-root directory -- chmod of the name oma just made is the point",
   "src/runtime/process-lock.ts": "a lock file beside a directory its caller ensured owned -- the O_EXCL acquire refuses loudly",
   "src/runtime/provision.ts": "probes beside the owned ensures under the state root and the society layout -- a probe failure refuses, never reads as absent",
