@@ -458,6 +458,36 @@ test("DR34: a failure after the dial ends the upstream it opened -- nothing is o
   assert.ok(socket.destroyed, "the client socket is destroyed too");
 });
 
+test("DR34: an audit sink that throws cannot crash the proxy's synchronous listeners -- the refusal still stands", async t => {
+  // The "request" and "upgrade" listeners run inside `server.emit`: a sink
+  // throw there escaped whole and took the runner -- every tunnel and relay
+  // of the delivery -- down with it. Now the journal is best-effort at
+  // these boundaries: refused, destroyed, and the listener keeps serving.
+  const { socketPath } = await proxyWorld(t, async () => new Socket(), () => { throw new Error("journal unavailable"); });
+  const get = await connectRaw(socketPath, "GET http://registry.npmjs.org/ HTTP/1.1\r\nHost: registry.npmjs.org\r\n\r\n");
+  assert.equal(get.status, 405, "the refusal still answers with the journal dead");
+  await until(() => get.socket.destroyed, "the refused socket is destroyed");
+  // The upgrade listener the same way: refused, destroyed, no escape.
+  const up = connect(socketPath);
+  await once(up, "connect");
+  up.write("GET / HTTP/1.1\r\nHost: registry.npmjs.org\r\nConnection: upgrade\r\nUpgrade: websocket\r\n\r\n");
+  const [upClosed] = await Promise.race([once(up, "close").then(() => [true]), new Promise<boolean[]>(r => setTimeout(() => r([false]), 2000))]);
+  assert.equal(upClosed, true, "an upgrade is refused and destroyed with the journal dead");
+  // A refused CONNECT dies through the connect handler's own boundary --
+  // refused and destroyed, still no escape. (A dead journal means no 403
+  // frame either: the refusal's record is gone with the socket.)
+  const refused = connect(socketPath);
+  await once(refused, "connect");
+  refused.write("CONNECT pypi.org:443 HTTP/1.1\r\n\r\n");
+  const [rClosed] = await Promise.race([once(refused, "close").then(() => [true]), new Promise<boolean[]>(r => setTimeout(() => r([false]), 2000))]);
+  assert.equal(rClosed, true, "a refused CONNECT dies through its own boundary");
+  // This test itself still running is the process-survives proof; the
+  // listener also kept answering -- a second non-CONNECT refusal lands.
+  const again = await connectRaw(socketPath, "GET http://pypi.org/ HTTP/1.1\r\nHost: pypi.org\r\n\r\n");
+  assert.equal(again.status, 405, "the proxy kept refusing past the dead journal");
+  await until(() => again.socket.destroyed, "the second refused socket is destroyed too");
+});
+
 test("DR34: an upstream-initiated close ends the tunnel and frees its slot at once", async t => {
   // The target's end of the tunnel dying -- here a RST from the server side
   // of the dialed connection -- must end the client half too. Without the

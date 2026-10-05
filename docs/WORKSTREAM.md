@@ -636,6 +636,18 @@ name collision/intended surface/hidden 미활성/idempotent reload/provenance/
 
 ## 9. 진행 로그
 
+- 2026-10-07 (egress 후반 3차): DR34 맹검증 잔여 1건 정산 — CONNECT proxy의
+  동기 `request`/`upgrade` 리스너가 emit 안에서 `audit()`를 직접 호출해
+  journal throw(stderr EPIPE 등)가 `server.emit`을 escape → uncaughtException
+  → runner 사망(delivery의 tunnel/relay 전부 동반)하던 결함. host/egress의
+  dispatch boundary("journal이 record를 거절" 모델)를 거울해 이 경계들의
+  journal은 best-effort — sink throw가 거절을 거부하거나 프로세스에 닿지
+  못하고, 리스너 안의 다른 실패는 연결만 끝낸다. 같은 클래스 sweep:
+  host/egress의 audit 8곳은 `connectTunnel`의 `.catch` boundary 안(안전),
+  egress-forwarder·guest/egress는 audit 호출 자체가 없음(해당 없음). fail→pass
+  회귀(throwing sink + GET/upgrade/refused CONNECT → 405 유지·소켓 파괴·
+  listener 생존) 추가. NOT_RUN: macOS native·systemd·kernel/powercut·
+  provider credential·release qualification 레인(로컬 환경 없음).
 - 2026-10-07 (egress 후반 2차): DR34 맹검증 2라운드 — paused-socket seam의
   수명주기 결함 7건을 fail→pass 회귀로 정산. ① CONNECT proxy의 upstream close가
   client로 전파되지 않아 `tunnels` 슬롯이 idle budget까지 묶이던 것 — 양방향

@@ -4785,8 +4785,8 @@
    "oracles": [
     "DR34"
    ],
-   "note": "Re-read in full after the second blind-verification round: the v6 screen stays fail-closed and Teredo (2001:0000::/32) is now refused outright rather than unwrapped -- it embeds two IPv4 fields (server in bytes 4..7, bits-inverted client in the tail) and which host a Teredo name reaches depends on tunnel state, so the deprecated carrier dies at its own arm ahead of 2001::/23. The established tunnel now propagates an upstream-initiated close to the client half, so a dead target frees the tunnels slot at once instead of holding it to the idle budget. Audit hygiene, refuse/upgrade/clientError handling, 0600 listener discipline and post-dial orphan-safety unchanged.",
-   "sha256": "9a58fecfcba9c6d506e90720ae207acd8005304b819a24fbeb2dce7b84b22ebc"
+   "note": "Re-read in full after the third blind-verification round: the synchronous \"request\" and \"upgrade\" listeners now treat the journal as best-effort -- a sink throw inside `server.emit` escaped whole and took the runner (every tunnel/relay of the delivery) with it, so the audit call is caught at the boundary, the refusal proceeds whatever the journal's health, and any other failure inside the listener ends the connection rather than the process. The connect handler's own audits stay under its async `.catch(drop)` boundary unchanged. Teredo refusal, upstream-close propagation, audit hygiene, 0600 listener discipline and post-dial orphan-safety unchanged.",
+   "sha256": "ac3124c4eb8637c900faad29fcee21f8a875dff1db2bd907e8a0454c12851535"
   },
   {
    "path": "src/runtime/deployment-manifest.ts",

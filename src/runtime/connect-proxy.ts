@@ -307,21 +307,32 @@ export class ConnectProxy {
     // The same per-delivery bound the pool provisions for: sockets beyond it
     // are refused by the kernel listener rather than queued into memory.
     server.maxConnections = options.tunnels ?? CONNECT_TUNNELS;
+    // The "request" and "upgrade" listeners run synchronously inside
+    // `server.emit`: a throw escapes it whole and takes the runner -- the
+    // same class the host's dispatch boundary already owns for egress
+    // (host/egress). So the journal is best-effort at these boundaries: a
+    // sink that throws neither vetoes the refusal nor reaches the process,
+    // and whatever else fails inside one ends the connection, never the
+    // process.
     server.on("request", (req: IncomingMessage, res: ServerResponse) => {
       // Only CONNECT exists here: a plain request gets a refusal with words,
       // and the socket goes with it -- an unanswered connection idling in
       // keep-alive would wedge a listener slot for as long as the peer wants.
-      audit(auditTarget(req.url, req.method ?? AUDIT_NO_TARGET), "refuse", "not a CONNECT request");
-      res.writeHead(405, { "Connection": "close", "Content-Length": 0 });
-      res.end();
-      // The response is flushed, then the socket is destroyed -- pipelined
-      // bytes behind a refused request die unread with it.
-      req.socket.destroySoon();
+      try { audit(auditTarget(req.url, req.method ?? AUDIT_NO_TARGET), "refuse", "not a CONNECT request"); }
+      catch { /* a journal that refused its record does not stop the refusal */ }
+      try {
+        res.writeHead(405, { "Connection": "close", "Content-Length": 0 });
+        res.end();
+        // The response is flushed, then the socket is destroyed -- pipelined
+        // bytes behind a refused request die unread with it.
+        req.socket.destroySoon();
+      } catch { req.socket.destroy(); }
     });
     // An `Upgrade:` request is not a CONNECT and there is no protocol to
     // switch to -- destroy the socket rather than let it linger.
     server.on("upgrade", (req: IncomingMessage, socket: Socket) => {
-      audit(auditTarget(req.url, "(upgrade)"), "refuse", "an upgrade is not a CONNECT request");
+      try { audit(auditTarget(req.url, "(upgrade)"), "refuse", "an upgrade is not a CONNECT request"); }
+      catch { /* a journal that refused its record does not stop the refusal */ }
       socket.destroy();
     });
     server.on("clientError", (_error, socket) => socket.destroy());

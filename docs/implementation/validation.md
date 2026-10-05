@@ -273,7 +273,7 @@ kill/powercut은 다음 `/society`의 재관측으로 끝나고, binding 게시 
 
 아래 binding은 구조 검사의 입력 identity다. digest 생성 자체가 runtime PASS를 뜻하지 않는다.
 
-verification input digest `6eac42641f51ef03ff131218ed02b74bf87f8f704f4cae38486b4fecc1c976d1` (971 files).
+verification input digest `213c2198e0035ab9a821516887451d39cdba8be533e8fff05d05188a1bc6f6a1` (971 files).
 
 당시 기록한 cloc 2.08 측정치: 354 files / 35,832 code LOC. 이 역사적 기록은 현재 source의 LOC claim이 아니며, 기존 artifact와의 불일치를 여기서 수리했다고 주장하지 않는다. 크기 제한은 없으며 값은 release proof가 아니다.
 

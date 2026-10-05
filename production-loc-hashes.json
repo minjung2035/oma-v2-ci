@@ -1072,7 +1072,7 @@
     },
     {
       "path": "src/runtime/connect-proxy.ts",
-      "sha256": "9a58fecfcba9c6d506e90720ae207acd8005304b819a24fbeb2dce7b84b22ebc"
+      "sha256": "ac3124c4eb8637c900faad29fcee21f8a875dff1db2bd907e8a0454c12851535"
     },
     {
       "path": "src/runtime/deployment-manifest.ts",
