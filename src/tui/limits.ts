@@ -104,6 +104,20 @@ export const CONFIG_BOUNDS = Object.freeze({
   engineNameChars: bound(200, "count", "a provider, model or effort name the engine's screen reports"),
 });
 
+/** Time-unit conversions for duration text — groupings, not caps; declared
+ * here because the surface declares its numbers rather than inlining them. */
+export const DURATION_UNITS = Object.freeze({ msPerSecond: 1000, perMinute: 60, perHour: 60 });
+
+/** B1: the compact tool row's own bounds. A row is one line collapsed; what
+ * expansion reveals is bounded by the transcript's own caps, not here. */
+export const COMPACT_TOOL_BOUNDS = Object.freeze({
+  indicatorMs: bound(80, "count", "milliseconds between repaints of a running row's status dot"),
+  indicatorFrames: bound(14, "count", "the dot's pulse phases per cycle; the cosine walks them"),
+  summaryCells: bound(160, "cells", "a call row's one-line argument summary before the ellipsis"),
+  failureCells: bound(140, "cells", "the one-line reason a failed row carries on its status line"),
+  trackedCalls: bound(2000, "count", "tool-call timings kept before the oldest finished is dropped"),
+});
+
 export const READ_BOUNDS = Object.freeze({
   mailHeaderBytes: bound(64 * 1024, "bytes", "headers are read, not whole attachments"),
   // P0V-43: one refresh reads the headers of at most this many messages, the
@@ -124,5 +138,6 @@ export const SURFACE_BOUNDS = Object.freeze({
   ...TERMINAL_BOUNDS,
   ...CONVERSATION_BOUNDS,
   ...CONFIG_BOUNDS,
+  ...COMPACT_TOOL_BOUNDS,
   ...READ_BOUNDS,
 });

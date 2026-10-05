@@ -60,6 +60,12 @@ for (const ending of ["normal", "resume", "kill", "mail", "retry-recover", "retr
     // Open TUI's own header, named for oma, with oma's key among its tips.
     assert.match(output, /oma.{0,40}v0\.1\.0/); assert.match(output, /Let's build something great/);
     assert.match(output, /Ctrl\+X oma settings/);
+    // B1: the compact row — the tool's display name and its control row; the
+    // wire name `oma_mail_send` never reaches the screen (a renderer throw
+    // would surface it through Pi's call fallback, so this covers both).
+    assert.match(output, /mail send/);
+    assert.match(output, /Done in [0-9.]+(m )?s/);
+    assert.doesNotMatch(output, /oma_mail_send/);
     const facts = JSON.parse(readFileSync(side, "utf8"));
     assert.equal(facts.requests, ending.startsWith("retry-") ? 7 : ending === "kill" || ending === "reload-failure" ? 2 : 3);
     if (ending === "reload-update") assert.match(output, /Reloaded keybindings/);

@@ -14,6 +14,10 @@ const ENGINE_PRIMITIVE_OWNERS = Object.freeze({
   "src/tui/keys.ts": Object.freeze(["parseKey"]),
   // DR22: upstream owns the conversation; these adapters own input and lifetime, not layout.
   "src/tui/interactive-editor.ts": Object.freeze(["EditorComponent", "matchesKey"]),
+  // B1: ANSI-aware fitting and wrapping for the compact tool rows, and the
+  // Component contract they are drawn through; the engine's own types are
+  // met structurally, so the surface never imports the coding-agent package.
+  "src/tui/compact-tools.ts": Object.freeze(["Component", "truncateToWidth", "wrapTextWithAnsi"]),
   "src/runtime/interactive-display.ts": Object.freeze(["Text"]),
 });
 const VIEW = "src/tui/view/";

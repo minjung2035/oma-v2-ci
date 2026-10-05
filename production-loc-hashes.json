@@ -1,6 +1,6 @@
 {
   "kind": "oma-production-source-digests-v1",
-  "manifest": "033f2ade5198bb4f1dbcd0e39bbddb8f6a46b7420d57d0783894643fd120714c",
+  "manifest": "22e7f1dd2f119a200634ec8b362783a6030f4e58f5c9944d0ce63601dd97e655",
   "files": [
     {
       "path": "implementation/contracts.ts",
@@ -424,7 +424,7 @@
     },
     {
       "path": "src/entry/pi-interactive-host.ts",
-      "sha256": "2763605db7ff4b31d07f222b5d0354ae042cda01923b5b8832e856754dc26a09"
+      "sha256": "2764556c5c74499ea51c4e87909acab66f4c55215ff3cc979f50c706e6e3c54a"
     },
     {
       "path": "src/entry/pi-interactive.ts",
@@ -1339,6 +1339,10 @@
       "sha256": "83bf88b5f22563ee7ec3f16595273d6504b17f718eac45c3c44573a6b82da36c"
     },
     {
+      "path": "src/tui/compact-tools.ts",
+      "sha256": "2169c13c5dae2d27ce6b2898d2c2f2aa825337be627bb4daa62f2054b6a2a5b0"
+    },
+    {
       "path": "src/tui/dashboard.ts",
       "sha256": "02942ec479ce321fa66f973fd0bb995e787ca8a88890223df8c54b9ea5453186"
     },
@@ -1356,7 +1360,7 @@
     },
     {
       "path": "src/tui/limits.ts",
-      "sha256": "302efb3e447b52027b184b1faef08a6fb38b0fe087084618c32d98077d8734a9"
+      "sha256": "cc8db57bdcb0f34f6296cd239ffe680b5c23a0e8c91dfce711b1f06142a555d1"
     },
     {
       "path": "src/tui/login.ts",

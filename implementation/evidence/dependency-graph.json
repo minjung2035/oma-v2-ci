@@ -340,6 +340,7 @@
   "src/store.ts",
   "src/tui/app.ts",
   "src/tui/cells.ts",
+  "src/tui/compact-tools.ts",
   "src/tui/dashboard.ts",
   "src/tui/exit.ts",
   "src/tui/interactive-editor.ts",
@@ -1856,11 +1857,11 @@
     "src/pi-extension.ts",
     "src/extension/"
    ],
-   "files": 81
+   "files": 82
   }
  ],
- "files": 379,
- "runtimeEdges": 1636,
+ "files": 380,
+ "runtimeEdges": 1639,
  "typeOnlyEdges": 420,
  "runtimeEdgeMatrix": {
   "L1-kernel -> L1-kernel": 316,
@@ -1873,11 +1874,11 @@
   "L4-orchestration -> L2-facts": 8,
   "L4-orchestration -> L3-workflow": 21,
   "L4-orchestration -> L4-orchestration": 175,
-  "L5-entry -> L1-kernel": 122,
+  "L5-entry -> L1-kernel": 123,
   "L5-entry -> L2-facts": 2,
   "L5-entry -> L3-workflow": 7,
   "L5-entry -> L4-orchestration": 136,
-  "L5-entry -> L5-entry": 160
+  "L5-entry -> L5-entry": 162
  },
  "upwardTypeOnlyEdges": [
   {
@@ -1922,8 +1923,8 @@
   "src/runtime/client-runtime.ts": 19,
   "src/git.ts": 18,
   "src/pi-extension.ts": 18,
+  "src/entry/pi-interactive-host.ts": 17,
   "src/git/context-repository.ts": 17,
-  "src/entry/pi-interactive-host.ts": 16,
   "src/platform/host/service.ts": 16,
   "src/git/context.ts": 15,
   "src/lifecycle/create.ts": 15,
@@ -1931,7 +1932,7 @@
  },
  "external": {
   "@earendil-works/pi-coding-agent": 29,
-  "@earendil-works/pi-tui": 5,
+  "@earendil-works/pi-tui": 6,
   "koffi": 6,
   "node:async_hooks": 4,
   "node:child_process": 8,

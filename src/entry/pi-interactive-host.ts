@@ -15,6 +15,7 @@ import { createAgentSessionRuntime, createAgentSessionServices, createAgentSessi
 import { InteractiveChannel, INTERACTIVE_RPC_FD, INTERACTIVE_UI_FD } from "../runtime/interactive-channel.js";
 import type { PiEvent } from "../runtime/pi-rpc.js";
 import { ownedEditor, type Suggestion } from "../tui/interactive-editor.js";
+import { createCompactToolRuntime } from "../tui/compact-tools.js";
 import { safeToolPresentation } from "../runtime/interactive-display.js";
 import { stylePanel } from "../tui/panel-style.js";
 import { ProjectSessionDirectories } from "../tui/project-session-directories.js";
@@ -419,6 +420,15 @@ export async function runInteractive(): Promise<void> {
       return { ...item, ...(description === undefined ? {} : { description }) };
     });
   const boundary: ExtensionFactory = pi => {
+    // B1: OMA's own compact tool rows, through the public renderer seam. The
+    // wire names and the registry stay the engine's; only the drawing is
+    // OMA's, and Pi's own renderers still draw a row's opened body.
+    const compact = createCompactToolRuntime();
+    pi.registerToolRenderer(compact.resolver);
+    pi.on("agent_start", () => compact.agentStarted());
+    pi.on("agent_end", () => compact.agentEnded());
+    pi.on("tool_execution_start", event => compact.toolStarted(event.toolCallId));
+    pi.on("tool_execution_end", event => compact.toolEnded(event.toolCallId));
     pi.registerMarkdownTransformer(markdown => markdown.replace(UNSEEN_EXCEPT_LAYOUT, ""));
     pi.registerCommand("oma", { description: "Open oma settings: Dashboard, Config, Mail (also Ctrl+X)", handler: async () => { openPanel(); } });
     // Listed by the engine's /hotkeys; the editor itself answers the key first.
@@ -460,8 +470,17 @@ export async function runInteractive(): Promise<void> {
           rpc.send({ type: "extension_ui_request", method: "notify", message, notifyType: level ?? "info" });
         } else upstreamNotify(message, level);
       };
+      // An invisible widget is the extension API's one path to the terminal's
+      // frame request; bound, a running tool row repaints its dot instead of
+      // being rebuilt each pulse.
+      ctx.ui.setWidget("oma-compact-frame", tui => {
+        compact.bindRender(() => tui.requestRender());
+        return { render: () => [], invalidate() {}, dispose() { compact.bindRender(undefined); } };
+      }, { placement: "belowEditor" });
     });
     pi.on("session_shutdown", event => {
+      compact.bindRender(undefined);
+      compact.reset(event.reason !== "reload");
       leaveUi();
       // Leaving Pi (Ctrl+C twice, Ctrl+D, /quit) is leaving oma.
       if (event.reason === "quit") { quitting = true; sessionDirs.close(); ui.send({ type: "quit" }); }
