@@ -23,6 +23,24 @@
 //
 // A descriptor argument, an `entryAt(...)` of a held parent, or a `new
 // URL(...)` asset is not a path-taking call.
+//
+// What counts as an fs call is resolved by binding, not by spelling: the
+// sync surface (`writeFileSync` and kin, `fs.writeFileSync`) is trusted only
+// where the callee is actually bound to "node:fs", and the async surface
+// (`open`, `readdir`, `rm` -- ordinary words a local function may carry) is
+// trusted only where the callee is bound to "node:fs/promises": a named or
+// namespace or default import, an `fs.promises.*` reach-through, a
+// `promises` named import or alias, a destructured binding, or
+// `await import(...)`. A same-named local function is never an fs call here.
+//
+// The observation arm's bound, said once: it audits a call whose argument
+// *mentions* an owned-tail identifier (OWNED_ROOT_NAME). An owned path that
+// reaches a raw probe under a generic name -- `path`, `dir`, `root` -- is
+// beyond what a name rule can see; the mutation arm audits the file's whole
+// surface regardless of names. An owned tail in new code should travel under
+// an owned name, and a rename of one into a generic identifier hides it from
+// this arm -- the written answer for that is the exemption table, not the
+// rename.
 import ts from "typescript";
 import { eachNode, filesUnder, finding, sourceOf } from "./shared.mjs";
 
@@ -36,6 +54,15 @@ const MUTATIONS = new Set([
 const OBSERVATIONS = new Set([
   "readdirSync", "opendirSync", "lstatSync", "statSync", "statfsSync", "existsSync", "accessSync",
   "readFileSync", "readlinkSync", "realpathSync", "globSync", "watch", "watchFile", "createReadStream", "openSync",
+]);
+/** The same two sets for the `node:fs/promises` surface -- the promise of an
+ * `open` writes or observes exactly the way `openSync`'s flags spell it. */
+const ASYNC_MUTATIONS = new Set([
+  "rename", "unlink", "rm", "rmdir", "mkdir", "copyFile", "cp", "symlink", "link", "truncate", "chmod", "chown",
+  "lchmod", "lchown", "utimes", "lutimes", "mkdtemp", "appendFile", "writeFile", "open",
+]);
+const ASYNC_OBSERVATIONS = new Set([
+  "readdir", "opendir", "lstat", "stat", "statfs", "access", "readFile", "readlink", "realpath", "glob", "watch", "open",
 ]);
 /** The pre-P0-8 helpers that ensured or replaced without an owner repair. */
 const PLAIN_HELPERS = new Set([
@@ -56,6 +83,17 @@ export const OWNED_STATE_OWNERS = Object.freeze([
   "src/runtime/user-files.ts",
   "src/runtime/locked-files.ts",
   "src/platform/host/files.ts",
+  // The per-store owners: the only modules that may touch their owned tail
+  // raw, because their calls are the store's own protocol -- the package
+  // store's stage/prune/index walk, the archive's format reads under the
+  // store it is handed, the managed tail's generation accounting, and the
+  // Mac store's whole-generation publish path (structural twin of the Linux
+  // staging owner; executed only on the Mac side).
+  "src/runtime/pi-packages.ts",
+  "src/runtime/local-package.ts",
+  "src/config/generations.ts",
+  "src/tui/packages-apply.ts",
+  "src/platform/package-archive.ts",
 ]);
 
 /** Files whose remaining path-taking calls name a user-owned or otherwise
@@ -71,12 +109,16 @@ export const OWNED_STATE_EXEMPTIONS = Object.freeze({
   "src/entry/omahostd.ts": "the support directory's chmod -- the leaf's mode is set outright after the owned ensure -- and the state disk's O_EXCL create under it",
   "src/extension/mail-tools.ts": "a fresh mkdtemp under the model's own working directory -- the extension's own scratch (PI-001 keeps it off the storage imports)",
   "src/git/context-repository.ts": "the context repository's own probes beside its owned ensures -- lstat answers the work tree's shape and a failure refuses loudly",
+  "src/pi-extension.ts": "the store root's realpath into the sandbox's read admissions -- a failure closes the admission (the store permits nothing), never opens it",
   "src/platform/guest/archive.ts": "the archive scratch mkdtemp inside the request ledger the guest owns -- ensured owned by the ledger's constructor",
   "src/platform/guest/egress.ts": "guesthost's own egress socket in the oma runtime directory -- chmod of the name oma just made is the point",
   "src/platform/guest/host.ts": "the guest's societies listing whose failure propagates as the request's refusal -- never read as empty",
   "src/platform/guest/linux-system.ts": "the guest's own /proc and /sys names and its societies listing -- kernel paths are never repaired; a listing failure refuses",
+  "src/platform/guest/packages.ts": "the staged archive and project mirror probes inside the guest's oma-owned ledger -- existsSync's false refuses the replace, and a statSync failure refuses; never read as absent and applied anyway",
+  "src/platform/guest/project.ts": "the staged bundle and project mirror probes inside the guest's oma-owned ledger -- existsSync's false refuses the import, and a statSync failure refuses; never accepts a bundle that did not verify",
   "src/platform/guest/pty.ts": "the pseudo-terminal slave under /dev/pts this process just made -- a kernel path, never repaired",
   "src/platform/guest/server.ts": "the guest service's own listening socket in its systemd RuntimeDirectory -- chmod/chown of the name oma just made is the point",
+  "src/platform/guest/stream.ts": "the data directory's statfs probe -- a failure refuses the put, never reads as free space",
   "src/platform/host/archive-crypto.ts": "the archive's own O_EXCL output under the archives directory the service's owned ensure repaired",
   "src/platform/host/guest-histories.ts": "the run token under the oma home read after the service's owned ensures, and the Human's own bookmarks -- resolved, never repaired",
   "src/platform/host/host-api.ts": "omahostd's own Host API socket under its run directory -- chmod of the name oma just made is the point",
@@ -89,13 +131,21 @@ export const OWNED_STATE_EXEMPTIONS = Object.freeze({
   "src/runtime/process-lock.ts": "a lock file beside a directory its caller ensured owned -- the O_EXCL acquire refuses loudly",
   "src/runtime/provision.ts": "probes beside the owned ensures under the state root and the society layout -- a probe failure refuses, never reads as absent",
   "src/tui/project-settings.ts": "the `.projects` listing under the data root whose non-ENOENT failure already refuses to the Human",
+  "src/tui/sources/mail.ts": "the mailbox's journal and message reads under the state root -- an open or listing failure is rendered as the row's `unreadable` marker, never read as absent (arch §23.5)",
   "src/units.ts": "the caller's own systemd user directory -- ~/.config/systemd/user is the user's, never repaired",
 });
 
 
 /** Identifiers whose use in a path-taking call's argument names an OMA-owned
- * root rather than a user path -- the owned tails this rule guards. */
-const OWNED_ROOT_NAME = /^(?:stateRoot|dataRoot|worldDir|runRoot|agentDir|piAgentDir|agentHome|societiesDir|contextGit|projectGit|stagingRoot|stagingDir|archivesDir|snapshotsDir|packagesDir|storeDir|engineDir|sessionsDir|revisionsDir)$/;
+ * root rather than a user path -- the owned tails this rule guards. Besides
+ * the layout roots the first arm listed, it carries the names the stores and
+ * stage code actually hold them under: `store` (the `.packages` store and the
+ * snapshot store alike), `generations`, the stage's `local`/`dest`/`staged`,
+ * the project `mirror`, the maildir `journal`, a realpath's `real`. The bound
+ * stays the header's: a generic `path`/`dir`/`root` cannot be told apart from
+ * a user path by name, and is left to the mutation arm and the file's own
+ * honesty. */
+const OWNED_ROOT_NAME = /^(?:stateRoot|dataRoot|worldDir|runRoot|agentDir|piAgentDir|agentHome|societiesDir|contextGit|projectGit|stagingRoot|stagingDir|archivesDir|snapshotsDir|packagesDir|storeDir|engineDir|sessionsDir|revisionsDir|store|storeRoot|storePath|packageStore|packagesStore|generations|generationsDir|local|localDir|dest|destPath|destDir|staged|staging|mirror|journal|maildir|dataDir|real)$/;
 
 /** A descriptor, not a path: `fd`, `this.fd`, `active.fd`, `temporaryFd`. */
 const descriptorLike = node => {
@@ -112,7 +162,122 @@ const calleeName = node => ts.isIdentifier(node.expression) ? node.expression.te
 const fsModuleCall = node => !ts.isPropertyAccessExpression(node.expression)
   || ts.isIdentifier(node.expression.expression) && node.expression.expression.text === "fs";
 
-/** `openSync` changes state only when its flags create, write or truncate. */
+/** The fs-module bindings a file spells. The rule trusts a path-taking name
+ * only where the callee is actually bound to "node:fs" or
+ * "node:fs/promises" -- a same-named local function or an object with an
+ * `open` method is never an fs call -- so `bare(x)` resolves through the
+ * file's named imports and `through.name(x)` through a namespace binding:
+ * `import * as fsp`, a default import, `fs.promises.*`, `import { promises }`
+ * or an alias of it, `const { open } = fs.promises` and
+ * `const { open } = await import("node:fs/promises")`. */
+const collectFsBindings = source => {
+  const fsNamespaces = new Set();      // bound to "node:fs" itself
+  const asyncNamespaces = new Set();   // bound to "node:fs/promises" or to `x.promises`
+  const syncNames = new Map();         // local -> remote, a named node:fs import
+  const asyncNames = new Map();        // local -> remote, a named node:fs/promises import
+  const isFsSpec = text => text === "node:fs" || text === "fs";
+  const isAsyncSpec = text => text === "node:fs/promises" || text === "fs/promises";
+  const promisesMember = node => ts.isPropertyAccessExpression(node) && node.name.text === "promises"
+    && ts.isIdentifier(node.expression) && fsNamespaces.has(node.expression.text);
+  const dynamicImport = node => {
+    const inner = ts.isAwaitExpression(node) ? node.expression : node;
+    return ts.isCallExpression(inner) && inner.expression.kind === ts.SyntaxKind.ImportKeyword
+      && inner.arguments[0] !== undefined && ts.isStringLiteralLike(inner.arguments[0])
+      ? inner.arguments[0].text : null;
+  };
+  const bindNamespace = (name, spec) => {
+    if (isAsyncSpec(spec)) asyncNamespaces.add(name);
+    else if (isFsSpec(spec)) fsNamespaces.add(name);
+  };
+  // Pass 1: the import statements -- everything else resolves against them.
+  for (const statement of source.statements) {
+    if (!ts.isImportDeclaration(statement) || !ts.isStringLiteralLike(statement.moduleSpecifier)) continue;
+    const spec = statement.moduleSpecifier.text;
+    const clause = statement.importClause;
+    if (clause === undefined || clause.isTypeOnly) continue;
+    if (clause.name !== undefined) bindNamespace(clause.name.text, spec);
+    const bound = clause.namedBindings;
+    if (bound === undefined) continue;
+    if (ts.isNamespaceImport(bound)) { bindNamespace(bound.name.text, spec); continue; }
+    if (!ts.isNamedImports(bound)) continue;
+    for (const element of bound.elements) {
+      if (element.isTypeOnly) continue;
+      const remote = element.propertyName !== undefined ? element.propertyName.text : element.name.text;
+      if (isAsyncSpec(spec)) asyncNames.set(element.name.text, remote);
+      else if (isFsSpec(spec)) {
+        if (remote === "promises") asyncNamespaces.add(element.name.text);
+        else syncNames.set(element.name.text, remote);
+      }
+    }
+  }
+  // Pass 2, to a fixed point: `const fsp = fs.promises` / `const fsp = promises`,
+  // `const { open } = fs.promises` / `await import("node:fs/promises")` and
+  // aliases of a namespace already bound -- an alias may name an alias.
+  let grew = true;
+  while (grew) {
+    grew = false;
+    eachNode(source, node => {
+      if (!ts.isVariableDeclaration(node) || node.initializer === undefined) return;
+      const init = node.initializer;
+      const initIsPromises = promisesMember(init) || (ts.isIdentifier(init) && asyncNamespaces.has(init.text));
+      const initIsFs = ts.isIdentifier(init) && fsNamespaces.has(init.text);
+      const imported = dynamicImport(init);
+      if (ts.isIdentifier(node.name)) {
+        if ((initIsPromises || imported !== null && isAsyncSpec(imported)) && !asyncNamespaces.has(node.name.text)) {
+          asyncNamespaces.add(node.name.text); grew = true;
+        } else if ((initIsFs || imported !== null && isFsSpec(imported)) && !fsNamespaces.has(node.name.text)) {
+          fsNamespaces.add(node.name.text); grew = true;
+        }
+        return;
+      }
+      if (!ts.isObjectBindingPattern(node.name)) return;
+      for (const element of node.name.elements) {
+        if (!ts.isIdentifier(element.name)) continue;
+        const remote = element.propertyName !== undefined && ts.isIdentifier(element.propertyName)
+          ? element.propertyName.text : element.name.text;
+        const local = element.name.text;
+        if (initIsPromises || imported !== null && isAsyncSpec(imported)) {
+          if (!asyncNames.has(local)) { asyncNames.set(local, remote); grew = true; }
+        } else if (initIsFs || imported !== null && isFsSpec(imported)) {
+          if (remote === "promises") { if (!asyncNamespaces.has(local)) { asyncNamespaces.add(local); grew = true; } }
+          else if (!syncNames.has(local)) { syncNames.set(local, remote); grew = true; }
+        }
+      }
+    });
+  }
+  return { fsNamespaces, asyncNamespaces, syncNames, asyncNames };
+};
+
+/** The fs call a call expression actually is, resolved through the file's
+ * bindings: `{ name, isAsync }`, or null when the callee names nothing the
+ * fs modules export under that spelling. */
+const resolveFsCall = (node, bindings) => {
+  const expression = node.expression;
+  if (ts.isIdentifier(expression)) {
+    const remote = bindings.syncNames.get(expression.text);
+    if (remote !== undefined) return { name: remote, isAsync: false };
+    const asyncRemote = bindings.asyncNames.get(expression.text);
+    if (asyncRemote !== undefined) return { name: asyncRemote, isAsync: true };
+    return null;
+  }
+  if (ts.isPropertyAccessExpression(expression)) {
+    const through = expression.expression;
+    const name = expression.name.text;
+    if (ts.isIdentifier(through)) {
+      if (bindings.fsNamespaces.has(through.text)) return { name, isAsync: false };
+      if (bindings.asyncNamespaces.has(through.text)) return { name, isAsync: true };
+      return null;
+    }
+    // `fs.promises.open(...)` reaches the promise surface through the module.
+    if (ts.isPropertyAccessExpression(through) && through.name.text === "promises" &&
+        ts.isIdentifier(through.expression) && bindings.fsNamespaces.has(through.expression.text))
+      return { name, isAsync: true };
+  }
+  return null;
+};
+
+/** `openSync`/`open` change state only when their flags create, write or
+ * truncate; a read-only open is an observation. */
 const writingOpen = node => {
   const flags = node.arguments[1];
   if (flags === undefined) return true; // an omitted mode on an omitted flag still names a path
@@ -131,23 +296,32 @@ const namesOwnedRoot = node => {
   return owned;
 };
 
-/** `symlinkSync(target, path)` -- the first argument is link content, never a
- * path it touches; the created name is the second, held through `entryAt`. */
-const touchedArgument = node => node.expression.text === "symlinkSync" ||
-  ts.isPropertyAccessExpression(node.expression) && node.expression.name.text === "symlinkSync"
-  ? node.arguments[1] ?? null : node.arguments[0] ?? null;
+/** Calls that touch two paths at once (rename/link/copy name both ends);
+ * `symlink`'s first argument is link content, never a path it touches. */
+const TWO_PATHS = new Set(["renameSync", "rename", "linkSync", "link", "copyFileSync", "copyFile", "cpSync", "cp"]);
+const SYMLINK = new Set(["symlinkSync", "symlink"]);
+
+/** The call's path arguments: every name it touches on the filesystem, less
+ * the arguments that name something else -- a held `entryAt`, a descriptor, a
+ * URL asset, a `/proc/self/fd` name. A call whose arguments are all of those
+ * touches no path. */
+const touchedArguments = (node, name) =>
+  node.arguments.slice(SYMLINK.has(name) ? 1 : 0, SYMLINK.has(name) || TWO_PATHS.has(name) ? 2 : 1)
+    .filter(argument => !(heldEntry(argument) || descriptorLike(argument) || urlAsset(argument) || procDescriptor(argument)));
 
 export function ownedStateFindings(root) {
   const findings = [];
   for (const file of filesUnder(root, "src")) {
     if (OWNED_STATE_OWNERS.includes(file)) continue;
     const exempted = Object.hasOwn(OWNED_STATE_EXEMPTIONS, file);
+    const source = sourceOf(root, file);
+    const bindings = collectFsBindings(source);
     let flagged = 0;
-    eachNode(sourceOf(root, file), node => {
+    eachNode(source, node => {
       if (!ts.isCallExpression(node)) return;
       const name = calleeName(node);
-      if (name === null || !fsModuleCall(node)) return;
-      if (PLAIN_HELPERS.has(name)) {
+      if (name === null) return;
+      if (PLAIN_HELPERS.has(name) && fsModuleCall(node)) {
         // A plain helper is a path-taking call by definition; its path is the
         // first argument whatever it looks like.
         if (node.arguments[0] === undefined) return;
@@ -157,24 +331,27 @@ export function ownedStateFindings(root) {
             `${name} ensures without an owner repair; on an OMA-owned tail use the owned variant, or write down which user path this names`));
         return;
       }
-      const touched = touchedArgument(node);
-      const first = touched === null ? null : heldEntry(touched) || descriptorLike(touched) || urlAsset(touched) || procDescriptor(touched) ? null : touched;
-      if (first === null) return;
-      if (MUTATIONS.has(name)) {
-        if (name === "openSync" && !writingOpen(node)) { /* read probes are observations */ }
+      const resolved = resolveFsCall(node, bindings);
+      if (resolved === null) return;
+      const touched = touchedArguments(node, resolved.name);
+      if (touched.length === 0) return;
+      const mutations = resolved.isAsync ? ASYNC_MUTATIONS : MUTATIONS;
+      const observations = resolved.isAsync ? ASYNC_OBSERVATIONS : OBSERVATIONS;
+      if (mutations.has(resolved.name)) {
+        if ((resolved.name === "openSync" || resolved.name === "open") && !writingOpen(node)) { /* read opens are observations */ }
         else {
           flagged += 1;
           if (!exempted)
             findings.push(finding("owned-state-raw-access", file,
-              `${name} names a path; OMA-owned tails go through the owned primitives (or the file says whose user path this is)`));
+              `${resolved.name} names a path; OMA-owned tails go through the owned primitives (or the file says whose user path this is)`));
           return;
         }
       }
-      if (OBSERVATIONS.has(name) && namesOwnedRoot(first)) {
+      if (observations.has(resolved.name) && touched.some(namesOwnedRoot)) {
         flagged += 1;
         if (!exempted)
           findings.push(finding("owned-state-raw-observation", file,
-            `${name} observes an OMA-owned root; list or probe it through the owned primitives, or write down why this refusal is honest`));
+            `${resolved.name} observes an OMA-owned root; list or probe it through the owned primitives, or write down why this refusal is honest`));
       }
     });
     if (exempted && flagged === 0)

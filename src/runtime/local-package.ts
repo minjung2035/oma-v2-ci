@@ -43,7 +43,7 @@ import { PACKAGE_ENTRY_PREFIX, extensionEntryProblem } from "../config/operation
 import { PACKAGE_LOCAL_DIR, PACKAGE_SETTINGS_BYTES, configuredPackageSources, escapes, packageStoreRoot, resourceEntryProblem } from "./pi-packages.js";
 import { entryAt, openBeneath, withinDirectory } from "../storage/contained-fs.js";
 import { listOwnedDirectory, openOwnedDirectory, openOwnedDirectoryPath, removeOwnedFile, removeOwnedTree } from "../storage/directory.js";
-import { flushDirectoryChain, fsyncFile, fsyncTree } from "../storage/durable-fs.js";
+import { flushDirectoryChain, fsyncDir, fsyncFile, fsyncTree } from "../storage/durable-fs.js";
 import { PACKAGE_ARCHIVE_BOUNDS } from "../platform/package-archive.js";
 import { createHostStagingDirectory, listHostStaged, makeHostStagedDirectories, publishHostStaged,
   removeHostStaged, writeHostStagedFile } from "../platform/host/files.js";
@@ -222,6 +222,16 @@ function linuxStaging(root: string): StageArea {
             try { fsyncTree(tree, "regular-files"); } finally { closeSync(tree); }
           } else fsyncFile(destPath);
           fsyncSync(dest);
+          // Every directory the name descended through holds the next
+          // component's dirent: `local` and `dest` are flushed on every
+          // publish, but a three-or-more-component name makes intermediates
+          // (`local/a` for `a/b/c`) nothing else flushes -- a crash after the
+          // rename kept `a` without the `b` that walks to the staged copy.
+          // The descend just repaired each one, so a flush by path cannot be
+          // refused the way a first open could; the name is fsynced the way
+          // `flushDirectoryChain` names every directory it persists.
+          for (let depth = 1; depth < parts.length; depth++)
+            fsyncDir(join(localPath, ...parts.slice(0, depth)));
         } finally { if (dest !== local) closeSync(dest); }
         fsyncSync(local);
       } finally { closeSync(local); }

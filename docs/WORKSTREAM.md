@@ -394,6 +394,48 @@ Pi/OS 기능을 다시 구현해서 생긴 중복·workaround·pre-release 잔�
       cli-receipt-replay의 WP26 주입은 이제 사용자 소유 XDG 조상의
       mode-000 — 경계 안의 손상은 복구되는 것이 계약이라 거기서는 더 이상
       실패를 만들 수 없다.
+  - 여덟 번째 잔여 4건(같은 wedge 클래스 — 부재로 읽힌 관측 실패·flush되지
+    않은 중간 디렉토리·경계 위 사용자 디렉토리 복구·규칙의 이름 매칭 공백)
+    수정:
+    (1) `writePackageIndex`의 `realpathSync(resource.path)` `catch {
+      continue` — EACCES·EIO 따위의 미완료 관측이 부재로 읽혀 엔진이 나열한
+      리소스를 뺀 `entries: []`가 커밋됐다(mode-000 `local/`와 같은 퇴화
+      진실). ENOENT만 부재이고 나머지는 BROKER_UNAVAILABLE로 거절 — 직후의
+      lstat도 같은 절(split 유지: realpath↔lstat 사이에 사라진 이름은
+      부재). fail-before(구 dist): 강제 EACCES에 Missing expected rejection
+      → 수정 후 거절 + 마지막 정상 인덱스 보존 확인.
+    (2) Linux stage publish가 `local/a/b/c` 같은 3+컴포넌트 이름의 중간
+      디렉토리를 mkdir로 만들고 fsync하지 않음 — `local`과 최종 부모는
+      flush됐지만 `local/a`는 아니라서 rename 직후의 크래시가 `a` 안의
+      `b` dirent을 잃을 수 있었다. rename·swap 후 descend가 지나간 모든
+      디렉토리를 경로 fsync(fsyncDir — flushDirectoryChain과 같은
+      방식; descend가 방금 owner 비트를 복구했으므로 경로 오픈은 거절될 수
+      없다). fail-before: fsyncSync 계측에서 `local/deep` 미flush 확인 →
+      수정 후 local·deep·inside 전부 flush.
+    (3) `generations.ts`의 owned 경계 감사 — `dirname(root)`는 번들을 둔
+      사용자 디렉토리여서(`--config`는 임의 경로를 허용) 경계 위 디렉토리의
+      mode가 복구됐고 `.oma-config` 슬롯의 사용자 파일이 unlink로 수집될 수
+      있었다. 경계는 oma가 만드는 첫 컴포넌트 `.oma-config` 자체(`base`) —
+      경계의 부모는 사용자 것이라 거기의 stray는 거절이 답. fail-before:
+      mode-0555 부모가 0o755로 바뀌고 슬롯 파일이 지워진 것 재현 → 수정 후
+      부모 무손상·슬롯 보존 확인.
+    (4) `owned-state` 규칙의 커버리지 — `node:fs/promises`(`open`·`readdir`·
+      `lstat`·`rename`·`rm`…)가 세트에 없었고 callee는 철자가 아니라 바인딩
+      기준으로만 해석한다고 문서화됐다(동명 로컬 함수·`db.open()`은 fs가
+      아님). 관측 팔의 OWNED_ROOT_NAME도 `store`·`generations`·`real`·
+      `local`·`destPath`·`staged`·`staging`·`mirror`·`journal`·`dataDir`
+      따위의 실제 운반 이름으로 넓혔고, 나머지 한계(`path`·`dir`·`root` 같은
+      제네릭 이름 아래로 흐르는 owned tail은 이름 규칙이 못 봄 — 변경 팔은
+      파일 전체를 감사)을 헤더에 명문으로 적었다. 새로 걸린 파일들은 소유
+      관계로 정리: pi-packages·local-package·generations·packages-apply·
+      package-archive는 per-store 소유자로, guest의 staged/mirror·stream의
+      statfs·pi-extension의 fail-closed realpath·mail.ts의 `unreadable`
+      표면은 사유 있는 면제로.
+    fail-before(구 dist·구 규칙): (1) 무거절 커밋·(2) 중간 미flush·
+    (3) 사용자 부모 복구·슬롯 unlink·(4) `open` named import·`store`
+    인자 미검출 전부 재현 → 수정 후 통과 + `check:architecture` 0 findings.
+    회귀: pi-packages.test.ts +2종·config-generations.test.ts +2종·
+    architecture-rule-modules.test.mjs +2종(바인딩 인지·에일리어스 이름).
 
 ## 6. 선행 작업 큐 (코드베이스 전체 확장 전 — 사용자 지시)
 

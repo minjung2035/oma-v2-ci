@@ -774,6 +774,69 @@ test("DR25/C20: the index walk reaches a configured copy through a degraded stag
   }
 });
 
+test("DR25/C20: a resource the index cannot observe is refused, never indexed as absent", async t => {
+  const f = createCompleteConfigurationFixture();
+  try {
+    const store = join(f.root, "packages");
+    mkdirSync(join(store, "local", "wedge", "extensions"), { recursive: true });
+    writeFileSync(join(store, "local", "wedge", "package.json"), JSON.stringify({ name: "wedge", pi: { extensions: ["./extensions/e.ts"] } }));
+    writeFileSync(join(store, "local", "wedge", "extensions", "e.ts"), "export default function () {}\n");
+    writeFileSync(join(store, "settings.json"), JSON.stringify({ packages: ["local/wedge"] }));
+    await writePackageIndex(store);
+    const previous = readFileSync(join(store, PACKAGE_INDEX), "utf8");
+    // The engine names a resource the write then realpath's. A realpath that
+    // does not answer -- EACCES on a component, an I/O error -- was `continue`d
+    // past, so a still-installed package was committed as `entries: []`: the
+    // same degraded truth a mode-000 `local/` used to write. Only the
+    // filesystem's own ENOENT names nothing; every other failure is an
+    // observation that did not finish, and the write is refused.
+    const resource = join(realpathSync(store), "local", "wedge", "extensions", "e.ts");
+    const original = fs.realpathSync;
+    t.mock.method(fs, "realpathSync", ((path: fs.PathLike, ...rest: unknown[]) => {
+      if (String(path) === resource) throw Object.assign(new Error("forced unobservable"), { code: "EACCES" });
+      return (original as (...args: unknown[]) => unknown)(path, ...rest);
+    }) as typeof fs.realpathSync);
+    syncBuiltinESMExports();
+    try { await assert.rejects(writePackageIndex(store), { code: "BROKER_UNAVAILABLE" }); }
+    finally { t.mock.restoreAll(); syncBuiltinESMExports(); }
+    assert.equal(readFileSync(join(store, PACKAGE_INDEX), "utf8"), previous,
+      "the write was refused: the index keeps its last truth");
+    // Unmocked and observable, the same write answers the package whole again.
+    assert.deepEqual((await writePackageIndex(store)).find(item => item.source === "local/wedge")?.entries,
+      ["packages:local/wedge/extensions/e.ts"]);
+  } finally { f.close(); }
+});
+
+test("DR25/C20: a staged name of three or more components flushes every directory that names it", t => {
+  const f = createCompleteConfigurationFixture();
+  try {
+    const store = join(f.root, "packages");
+    mkdirSync(store, { recursive: true });
+    const source = join(f.root, "src", "deep");
+    mkdirSync(join(source, "extensions"), { recursive: true });
+    writeFileSync(join(source, "package.json"), JSON.stringify({ name: "deep/inside/pkg", pi: { extensions: ["./extensions/e.ts"] } }));
+    writeFileSync(join(source, "extensions", "e.ts"), "export default function () {}\n");
+    // `local/deep` is made by the publish's descend and holds `inside`'s
+    // dirent; `local` and `local/deep/inside` were flushed, it was not -- a
+    // crash after the rename could keep the directory without the name that
+    // walks to the staged copy. Every directory the name passed through is
+    // flushed before the publish answers.
+    const flushed = new Set<string>();
+    const native = fs.fsyncSync;
+    t.mock.method(fs, "fsyncSync", (fd: number) => {
+      native(fd);
+      try { flushed.add(fs.readlinkSync(`/proc/self/fd/${fd}`)); } catch { /* a descriptor that names nothing on disk */ }
+    });
+    syncBuiltinESMExports();
+    try { assert.equal(stageLocalPackage(store, source), "local/deep/inside/pkg"); }
+    finally { t.mock.restoreAll(); syncBuiltinESMExports(); }
+    const root = realpathSync(store);
+    for (const dir of ["local", "local/deep", "local/deep/inside"])
+      assert.ok(flushed.has(join(root, dir)), `the directory holding the next name was never flushed: ${dir}`);
+    assert.ok(existsSync(join(root, "local", "deep", "inside", "pkg", "package.json")));
+  } finally { f.close(); }
+});
+
 test("DR25/C20: a file or link in a strict-prefix slot is collected by the install itself -- the wedge never reaches the user", () => {
   const f = createCompleteConfigurationFixture();
   try {

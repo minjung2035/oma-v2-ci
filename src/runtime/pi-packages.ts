@@ -438,10 +438,29 @@ export async function writePackageIndex(store: string): Promise<readonly Install
     for (const resource of resources) {
       if (!resource.enabled || resource.metadata.scope !== "user") continue;
       let real: string;
-      try { real = realpathSync(resource.path); } catch { continue; }
+      try { real = realpathSync(resource.path); }
+      catch (error) {
+        // Only the filesystem's own ENOENT names nothing -- a resource the
+        // engine listed that is not there indexes as absent, the truth it
+        // is. Every other failure -- EACCES on a component, an I/O error --
+        // is an observation that did not finish, and the write is refused
+        // rather than committed without what the package still holds.
+        if ((error as NodeJS.ErrnoException).code !== "ENOENT")
+          unavailable(`a resource of ${resource.metadata.source} cannot be observed`);
+        continue;
+      }
       const inside = relative(base, real);
       if (real !== resource.path || !inside || inside.startsWith("..") || isAbsolute(inside)) continue;
-      const stat = lstatSync(real);
+      let stat;
+      try { stat = lstatSync(real); }
+      catch (error) {
+        // The name the realpath just answered vanished between the two
+        // observations -- absent, the truth it is. Anything else did not
+        // finish, and the write is refused the same way.
+        if ((error as NodeJS.ErrnoException).code !== "ENOENT")
+          unavailable(`a resource of ${resource.metadata.source} cannot be observed`);
+        continue;
+      }
       if (fileOnly && (!stat.isFile() || !/\.(?:js|mjs|ts)$/.test(real))) continue;
       if (!fileOnly && !stat.isFile() && !stat.isDirectory()) continue;
       const list = bySource.get(resource.metadata.source) ?? [];

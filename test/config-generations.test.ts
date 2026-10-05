@@ -2,7 +2,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { existsSync, readdirSync, readFileSync, utimesSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, readdirSync, readFileSync, statSync, utimesSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { loadConfigurationSnapshot, validateConfig, type ConfigurationSnapshot } from "../src/config.js";
 import {
@@ -75,6 +75,41 @@ test("V13A: a crash at any point of a managed commit leaves the complete old or 
       assert.doesNotThrow(() => loadConfigurationSnapshot(f.path));
     } finally { f.close(); }
   }
+});
+
+test("D02/P0-8: the managed tail's repair boundary is the first name oma made -- the bundle's own parent is never repaired", () => {
+  const f = createCompleteConfigurationFixture();
+  try {
+    // `f.root` is whichever directory the Human's `--config` happened to place
+    // the bundle under -- the user's own, not oma's. A boundary of
+    // `dirname(root)` claimed it as oma's: a mode-0555 parent was silently
+    // given owner bits it never granted, and a stray at the bundle's own slot
+    // was collectible. The boundary is `.oma-config` itself -- the first
+    // component oma makes beneath the user's directory -- so the commit still
+    // succeeds and the user's parent keeps exactly the mode it had.
+    chmodSync(f.root, 0o555);
+    const snapshot = loadConfigurationSnapshot(f.path);
+    commitManagedEdit(snapshot, withPrincipalModel(snapshot, "review"));
+    assert.equal(statSync(f.root).mode & 0o777, 0o555,
+      "a directory above the managed tail is the user's -- never repaired");
+  } finally { f.close(); }
+});
+
+test("D02/P0-8: a stray at the managed tail's boundary slot is refused, never unlinked from a user's directory", () => {
+  const f = createCompleteConfigurationFixture();
+  try {
+    // `.oma-config` names the boundary itself: its parent is the user's bundle
+    // directory, so a file or link in the slot is answered with a refusal, not
+    // collected the way a stray strictly below the boundary is. The owned
+    // ensure's collection used to reach it when the boundary was the bundle's
+    // parent -- a user's file at `.oma-config` was unlinked to make room.
+    const slot = join(f.output, MANAGED_DIRECTORY);
+    writeFileSync(slot, "the user's own file\n");
+    const snapshot = loadConfigurationSnapshot(f.path);
+    assert.throws(() => commitManagedEdit(snapshot, withPrincipalModel(snapshot, "review")),
+      (error: unknown) => error instanceof StoreError && error.code === "STORE_CORRUPT");
+    assert.equal(readFileSync(slot, "utf8"), "the user's own file\n", "a name at the boundary stands");
+  } finally { f.close(); }
 });
 
 test("V13A negative control: the old role-then-host in-place writer is caught by the mixed-state oracle", () => {

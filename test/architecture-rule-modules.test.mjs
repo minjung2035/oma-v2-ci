@@ -350,6 +350,59 @@ export function effect(cwd) { const scratch = mkdtempSync(join(cwd, "oma-")); rm
   }, root => assert.ok(ownedStateFindings(root).some(value => value.rule === "owned-state-raw-access")));
 });
 
+test("P0-8/DR32: the owned-state rule reaches node:fs/promises bindings, not look-alike names", () => {
+  // The async names are ordinary words (`open`, `readdir`, `stat`), so unlike
+  // the *Sync names they are only trusted where the callee is actually bound
+  // to the module: a named import, a namespace or default import, an
+  // `fs.promises.*` reach-through, a `promises` named import or alias, a
+  // destructured binding, or `await import`.
+  for (const [name, text] of [
+    ["named import create", `import { open } from "node:fs/promises"; export const f = async p => (await open(p, "w")).close();`],
+    ["named import renamed", `import { rm as remove } from "node:fs/promises"; export const f = async p => remove(p);`],
+    ["namespace import", `import * as fsp from "node:fs/promises"; export const f = async p => fsp.rm(p, { recursive: true });`],
+    ["default import", `import fsp from "node:fs/promises"; export const f = async p => fsp.unlink(p);`],
+    ["fs.promises member", `import fs from "node:fs"; export const f = async p => fs.promises.writeFile(p, "x");`],
+    ["fs namespace promises", `import * as fs from "node:fs"; export const f = async p => fs.promises.mkdir(p);`],
+    ["named promises import", `import { promises as fsp } from "node:fs"; export const f = async p => fsp.rename(p, p);`],
+    ["promises alias", `import { promises } from "node:fs"; const fsp = promises; export const f = async p => fsp.truncate(p);`],
+    ["destructured promises", `import * as fs from "node:fs"; const { rmdir } = fs.promises; export const f = async p => rmdir(p);`],
+    ["await import", `export const f = async p => { const { open } = await import("node:fs/promises"); (await open(p, "w")).close(); };`],
+    ["async symlink's created name", `import { symlink } from "node:fs/promises"; export const f = async (target, staged) => symlink(target, staged);`],
+    ["async observation of an owned root", `import { readdir } from "node:fs/promises"; export const f = async store => readdir(store);`],
+  ]) withFixture({
+    "src/views/example.ts": text,
+  }, root => assert.ok(ownedStateFindings(root).some(value => /owned-state-(raw-access|raw-observation)/.test(value.rule)),
+    `${name} escaped the rule`));
+  // And what only looks like the module is left alone: local functions with
+  // the same names, methods on an object that is not the promises namespace,
+  // and an async observation of a caller-owned path.
+  withFixture({
+    "src/views/example.ts": `const open = async p => p; const readdir = async d => [];
+const db = { open: async p => p, mkdir: async p => p };
+export const f = async (p, d) => { await open(p); await readdir(d); await db.open(p); await db.mkdir(p); };`,
+    "src/views/other.ts": `import * as fsp from "node:fs/promises"; export const f = async path => fsp.readdir(path);`,
+  }, root => assert.deepEqual(ownedStateFindings(root), []));
+});
+
+test("P0-8/DR32: an owned tail under its alias names still flags a raw observation", () => {
+  // `stateRoot`-shaped names were not the only carriers -- the store, the
+  // generations directories and the names the stage and ledger code carry
+  // them under are the same owned tails, and a raw observation of them is
+  // audited the same way.
+  for (const name of ["store", "generations", "real", "local", "destPath", "staged", "mirror", "packageStore", "dataDir", "journal"])
+    withFixture({
+      "src/views/example.ts": `import { lstatSync } from "node:fs";
+export function probe(${name}) { return lstatSync(${name}); }`,
+    }, root => assert.ok(ownedStateFindings(root).some(value => value.rule === "owned-state-raw-observation"),
+      `${name} escaped the rule`));
+  // A name the rule does not claim -- `path`, `dir`, `root` -- stays out of
+  // the observation arm's reach; the mutation arm audits the file regardless.
+  withFixture({
+    "src/views/example.ts": `import { lstatSync } from "node:fs";
+export function probe(path) { return lstatSync(path); }`,
+  }, root => assert.deepEqual(ownedStateFindings(root), []));
+});
+
 test("P0-8/DR32: the owned-state rule reports a stale exemption", () => {
   const repository = fileURLToPath(new URL("..", import.meta.url));
   assert.deepEqual(ownedStateFindings(repository), []);

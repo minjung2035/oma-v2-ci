@@ -357,11 +357,19 @@ export function commitManagedGeneration(snapshot: ManagedSource, edit: ManagedEd
 
   const base = join(root, MANAGED_DIRECTORY);
   const generations = join(base, "generations");
-  // P0-8: the managed tail beneath the settings directory is oma's own -- a
-  // mode-000 `.oma-config` or `generations` a stray left is repaired within
-  // the bundle's boundary, never trusted as-is.
-  ensureOwnedDurableDirectory(base, dirname(root), 0o700, faults);
-  ensureOwnedDurableDirectory(generations, dirname(root), 0o700, faults);
+  // P0-8: the managed tail beneath the bundle is oma's own -- a mode-000
+  // `.oma-config` or `generations` a stray left is repaired, never trusted
+  // as-is. But the repair boundary is `base` itself, the first component oma
+  // makes beneath the bundle: `root`'s own parent is whichever directory the
+  // Human's `--config` placed the bundle under, so a boundary of
+  // `dirname(root)` would chmod a directory that is the user's, and the
+  // owned ensure would unlink a stray file sitting at the bundle's own
+  // `.oma-config` slot out of the user's directory to make room. Neither is
+  // oma's to touch: the boundary component's own parent is the user's, so
+  // `base`'s refusal on a stray there stands -- the same answer the owned
+  // ensure gives at every other store's boundary.
+  ensureOwnedDurableDirectory(base, base, 0o700, faults);
+  ensureOwnedDurableDirectory(generations, base, 0o700, faults);
   const published = new Map(logical);
   const at = (name: string): string => `${MANAGED_DIRECTORY}/generations/${id}/${name}`;
   for (const name of Object.keys(roles)) published.set(`roles/${name}.json`, json(roleBody(roles[name]!, at(`prompts/${name}.md`))));
