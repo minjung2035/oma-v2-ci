@@ -23,6 +23,9 @@ async function world({ setModel, init, resourceReload, dispose, fail, moduleClos
   };
   const context = { ui: {
     setEditorComponent(factory) { factory({}, {}, {}); }, setHeader() {}, setFooter() {}, notify(message, level) { notices.push([message, level]); },
+    // B3: the host mirrors OMA's waiting queue above the editor; the fixture
+    // keeps the seam, not the widget.
+    setWidget() {},
     custom(factory) { return new Promise(resolve => {
       const component = factory({ terminal: { columns: 80, rows: 24 }, requestRender() {} }, {}, {}, resolve);
       picks.push(component);
@@ -56,7 +59,7 @@ async function world({ setModel, init, resourceReload, dispose, fail, moduleClos
       async createAgentSessionServices(options) {
         overrides.push(options.resourceLoaderOptions.extensionsOverride);
         options.resourceLoaderOptions.extensionFactories[0]({ registerMarkdownTransformer() {}, registerCommand(name, command) { commands[name] = command; }, registerShortcut() {},
-          on(event, handler) { hooks[event] = handler; } });
+          registerToolRenderer() {}, on(event, handler) { hooks[event] = handler; } });
         return { settingsManager: { applyOverrides() {} }, resourceLoader, diagnostics: {} };
       },
       async createAgentSessionFromServices() { if (fail === 'session') throw new Error('injected session'); return { session }; },
@@ -70,6 +73,11 @@ async function world({ setModel, init, resourceReload, dispose, fail, moduleClos
       InteractiveChannel: class { constructor(_socket, _limits, accept, ended) { this.accept = accept; this.ended = ended; channels.push(this); }
         send(event) { sent.push(event); } } },
     '../tui/interactive-editor.js': { ownedEditor: (editor, handlers) => { Object.assign(commands, handlers); return editor; } },
+    // B1: the compact-rows runtime is the host's own presentation seam; the
+    // fixture keeps its wiring -- resolver plus lifecycle -- without drawing.
+    '../tui/compact-tools.js': { createCompactToolRuntime: () => ({
+      resolver: (_name, next) => next(), bindRender() {}, reset() {},
+      agentStarted() {}, agentEnded() {}, toolStarted() {}, toolEnded() {} }) },
     // The presentation seam marks what it wrapped so the tests can see where
     // the policy was applied; the registry keeps the original object.
     '../runtime/interactive-display.js': { safeToolPresentation: value => ({ ...value, __safe: true }) },
