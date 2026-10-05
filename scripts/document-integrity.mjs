@@ -71,7 +71,11 @@ export function brokenLinks(root, files) {
 }
 
 /** Authored Markdown, including new/untracked files, with immutable archives
- * retained as records rather than evaluated as current guidance. */
+ * retained as records rather than evaluated as current guidance. The
+ * vendored bundled-extension payload under src/extension/vendor/ is
+ * byte-pinned upstream data, reviewed through its manifest digest -- its
+ * README and docs/ travel with the snapshot and are not authored project
+ * documentation. */
 export function projectDocuments(root = ".") {
   const ignored = new Set([".git", "node_modules", "dist", "data"]);
   const files = [];
@@ -79,7 +83,7 @@ export function projectDocuments(root = ".") {
     for (const entry of readdirSync(join(root, relative), { withFileTypes: true })) {
       if (ignored.has(entry.name)) continue;
       const path = relative ? `${relative}/${entry.name}` : entry.name;
-      if (entry.isDirectory()) walk(path);
+      if (entry.isDirectory()) { if (path !== "src/extension/vendor") walk(path); }
       else if (entry.name.endsWith(".md")) files.push(path);
     }
   };

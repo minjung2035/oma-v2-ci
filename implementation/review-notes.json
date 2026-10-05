@@ -405,14 +405,16 @@
    "path": "src/entry/oma-society.ts",
    "by": [
     "DR33",
-    "B4"
+    "B4",
+    "BL1"
    ],
    "oracles": [
     "UX-09",
-    "B4"
+    "B4",
+    "BL1"
    ],
-   "sha256": "f823e17c0dc6446c9ee937826286ed9af63cd5ba4dde7363a2875256dec6171d",
-   "note": "Read in full: the provision report's gitlinkNote is surfaced through the existing notice channel at society start — a loud warning that integration will refuse, while start itself stays permissive. 2026-10-05 B4: the mail port feeds readMailbox the agent names the broker's status view last observed -- before any observation the roster is undefined and the rows keep the headers' own names."
+   "sha256": "e1778109feb28f141b3e96e34c31311819c184ba4f0e8dcd4766a30018fbe9da",
+   "note": "Read in full: the provision report's gitlinkNote is surfaced through the existing notice channel at society start — a loud warning that integration will refuse, while start itself stays permissive. 2026-10-05 B4: the mail port feeds readMailbox the agent names the broker's status view last observed -- before any observation the roster is undefined and the rows keep the headers' own names. BL1 review -- the Principal engine receives the encoded principal surface plan through its session environment."
   },
   {
    "path": "src/git.ts",
@@ -691,13 +693,15 @@
   {
    "path": "src/tui/session.ts",
    "by": [
-    "B3"
+    "B3",
+    "BL1"
    ],
    "oracles": [
-    "B3"
+    "B3",
+    "BL1"
    ],
-   "note": "Read in full at the 2026-10-05 B round: waiting[] stays the only queue; emitQueue sends a bounded, folded, sanitized queued_prompts snapshot on enqueue/free/handBack and clears the widget when empty -- the submitted prompt text itself is never rewritten.",
-   "sha256": "501cd8c0431987022295754107a0cafd9fab507b33c541135016357aa4c51b36"
+   "note": "Read in full at the 2026-10-05 B round: waiting[] stays the only queue; emitQueue sends a bounded, folded, sanitized queued_prompts snapshot on enqueue/free/handBack and clears the widget when empty -- the submitted prompt text itself is never rewritten. BL1 review -- principal sessions carry the encoded principal tool-surface plan (paths.toolSurface -> OMA_TOOL_SURFACE).",
+   "sha256": "c661f33595663170ec26322da5afea0e352b63a64951c29e93b172617cae6019"
   },
   {
    "path": "src/tui/mail-names.ts",
@@ -879,13 +883,15 @@
   {
    "path": "src/pi-extension.ts",
    "by": [
-    "DR34"
+    "DR34",
+    "BL1"
    ],
    "oracles": [
-    "DR34"
+    "DR34",
+    "BL1"
    ],
-   "sha256": "aee4955810197a111a6a888ad3c4215f67919a91a3f60b9c12b1d93505546521",
-   "note": "Read in full: startEgressBridge is composed beside startInferenceBridge; the extension closure rule still holds (builtins + local modules only)."
+   "sha256": "171532b27581e5e7b30a9c458eac2289b6d3c9d23323aab5803daf6ce1e4832c",
+   "note": "Read in full: startEgressBridge is composed beside startInferenceBridge; the extension closure rule still holds (builtins + local modules only). BL1 review -- registerLspTools wired with the pinned realpath workspace, the shared contained writer, and the role read-only flag."
   },
   {
    "path": "src/runner.ts",
@@ -901,13 +907,15 @@
   {
    "path": "src/entry/runner.ts",
    "by": [
-    "DR34"
+    "DR34",
+    "BL1"
    ],
    "oracles": [
-    "DR34"
+    "DR34",
+    "BL1"
    ],
-   "sha256": "60532cd3fe05ecc0c591dd1eca5ae03007c3a9855c6dad461d7907dfb482fa34",
-   "note": "Read in full: the egress clause resolves once against the rendered profile name; a null policy simply omits profile.egress -- no UNSUPPORTED_PROFILE, no proxy surface."
+   "sha256": "a1cf57d6535f717a846015c447978a20917637473b6b54c0d849971f346edcb5",
+   "note": "Read in full: the egress clause resolves once against the rendered profile name; a null policy simply omits profile.egress -- no UNSUPPORTED_PROFILE, no proxy surface. BL1 review -- OMA_TOOL_SURFACE_HEX decoded with the same strict-hex rule as profile/resources; missing or malformed refuses startup (exit 4); the decoded plan lands on the spawn profile as toolSurface."
   },
   {
    "path": "src/config.ts",
@@ -952,6 +960,715 @@
    ],
    "sha256": "cbd91e1ffc294534e9e5cbcd723155991401cd0f04e85e379d9eefeade753238",
    "note": "Read in full: the Worker prompt now says network reaches the sandbox only through the egress proxy's allowlist when configured (HTTPS_PROXY set then), replacing 'no network yet'; the Korean and English texts agree."
+  },
+  {
+   "path": "implementation/systemd/resident.service.in",
+   "by": [
+    "BL1",
+    "P0V-59",
+    "WP03",
+    "WP25"
+   ],
+   "oracles": [
+    "BL1",
+    "P0V-59",
+    "V03A",
+    "V03B",
+    "V25A"
+   ],
+   "sha256": "50d2f29590a8f00611e6fc0b48aaf72ce87c60328fd15d85df830c4df5f9e324",
+   "note": "BL1 review -- the unit now carries OMA_TOOL_SURFACE_HEX=<hex> so the broker-rendered code_intel plan reaches the confined Resident beside profile/resources."
+  },
+  {
+   "path": "src/domain/tool-surface.ts",
+   "by": [
+    "AV-review",
+    "BL1",
+    "P0V-31",
+    "P0V-33",
+    "P0V-47",
+    "P0V-48"
+   ],
+   "oracles": [
+    "BL1",
+    "F3",
+    "P0V-31",
+    "P0V-33",
+    "P0V-47",
+    "P0V-48",
+    "T100",
+    "T101",
+    "T102",
+    "T103",
+    "T111",
+    "T112",
+    "T99"
+   ],
+   "sha256": "61f5939b718fae8d1606058e8ebdf72af01256a764203535ed4a42602b680831",
+   "note": "BL1 review -- residentToolSurfaceConfig()/principalToolSurfaceConfig() declare the code_intel group (lsp_diagnostics, lsp_fix, lsp_status); encodedResidentToolSurface()/encodedPrincipalToolSurface() emit the canonical hex plans."
+  },
+  {
+   "path": "src/extension/contained-tools.ts",
+   "by": [
+    "BL1",
+    "P0V-120",
+    "P0V-121",
+    "P0V-122",
+    "P0V-74"
+   ],
+   "oracles": [
+    "BL1",
+    "P0V-120",
+    "P0V-121",
+    "P0V-122",
+    "P0V-74"
+   ],
+   "sha256": "f2e3e85fcd03eea7a5c8c459133cce2c300eaa5315b16e70a3d925eba8db77f1",
+   "note": "BL1 review -- createContainedWriter extracted: write/edit and lsp_fix share one serialized quota-decided workspace writer."
+  },
+  {
+   "path": "src/extension/workspace-guard.ts",
+   "by": [
+    "AV-review",
+    "AV13",
+    "AV25",
+    "BL1",
+    "DR13",
+    "P0V-120",
+    "P0V-121",
+    "P0V-122",
+    "P0V-14",
+    "P0V-15",
+    "P0V-74"
+   ],
+   "oracles": [
+    "AV13",
+    "AV25",
+    "AV3",
+    "BL1",
+    "DR13",
+    "P0V-120",
+    "P0V-121",
+    "P0V-122",
+    "P0V-15",
+    "P0V-74"
+   ],
+   "sha256": "f44cec14d14f9d5b395a60d401ee6b021051c65baa50e905ac404e8022ae4e3f",
+   "note": "BL1 review -- lsp_diagnostics/lsp_fix join the path gate, replace/replace_within/insert join the write gate, every paths[] entry is gated, malformed path values refuse instead of defaulting to \".\", lsp_fix is conditional-write (blocked for read-only roles only when write/force is true)."
+  },
+  {
+   "path": "src/units.ts",
+   "by": [
+    "AV12",
+    "AV9",
+    "BL1",
+    "DR13",
+    "P0V-100",
+    "P0V-101",
+    "P0V-11",
+    "P0V-26",
+    "P0V-59",
+    "P0V-87",
+    "P0V-88",
+    "P0V-89",
+    "P0V-90",
+    "P0V-91",
+    "P0V-92",
+    "P0V-93",
+    "P0V-94",
+    "P0V-95",
+    "P0V-98",
+    "P0V-99",
+    "WP03",
+    "WP23",
+    "WP25"
+   ],
+   "oracles": [
+    "AV12",
+    "AV9",
+    "BL1",
+    "DR13",
+    "P0V-26",
+    "P0V-59",
+    "P0V-87",
+    "P0V-88",
+    "P0V-90",
+    "P0V-92",
+    "P0V-93",
+    "P0V-94",
+    "P0V-95",
+    "P0V-98",
+    "V03A",
+    "V03B",
+    "V23A",
+    "V23B",
+    "V25A"
+   ],
+   "sha256": "b9dad2ab2f8194b5ad549d59bd74c503809f2171553ad8f8605089261ac693e6",
+   "note": "BL1 review -- generated Resident units render toolSurfaceHex = encodedResidentToolSurface() into the template."
+  },
+  {
+   "path": "src/units/render.ts",
+   "by": [
+    "BL1",
+    "P0V-113",
+    "P0V-114",
+    "P0V-115",
+    "P0V-116",
+    "WP03",
+    "WP25"
+   ],
+   "oracles": [
+    "BL1",
+    "P0V-113",
+    "P0V-114",
+    "P0V-115",
+    "P0V-116",
+    "V03A",
+    "V03B",
+    "V25A"
+   ],
+   "sha256": "925156547e11d0dfcdf91d9cb7ade01e906f2946884ba32d8752e7e5026b5913",
+   "note": "BL1 review -- TOOL_SURFACE_HEX substitution added; values validated as nonempty lowercase hex."
+  },
+  {
+   "path": "src/extension/lsp-tools.ts",
+   "by": [
+    "BL1"
+   ],
+   "oracles": [
+    "BL1"
+   ],
+   "sha256": "d91c918b172805b34d571df39a3e7c70a4fce9b6c0d42d6ffeee44773ae15a43",
+   "note": "OMA adapter for the vendored pi-lsp runtime: exactly lsp_diagnostics/lsp_fix/lsp_status; pins the engine realpath workspace (no root param), reuses upstream per-call lifecycle via LspSessionScope, scrubs OMA_*/NODE_OPTIONS from child env, clamps server/path/file/byte/timeout bounds, reports missing commands unavailable-never-clean, routes lsp_fix writes solely through the contained writer (preview default; read-only roles refused). lspChildEnvironment exported as the env-boundary test seam."
+  },
+  {
+   "path": "src/extension/vendor-bundle.ts",
+   "by": [
+    "BL1"
+   ],
+   "oracles": [
+    "BL1"
+   ],
+   "sha256": "5851a613fcd41e1dc3688a908bd173c34d7cccd2fb7d3adec51fe0f2fca62bec",
+   "note": "Fail-closed bundle verifier: manifest shape, exact file set (missing/changed/unlisted/symlink all refuse), per-file SHA-256, whole-bundle digest; trailing-slash roots normalized. Node built-ins only; identical on host and inside a Resident sandbox."
+  },
+  {
+   "path": "src/extension/vendor/pi-lsp/LICENSE",
+   "by": [
+    "BL1"
+   ],
+   "oracles": [
+    "BL1"
+   ],
+   "sha256": "5293e92f073f47012e723990a8605431b438757e9c6eb00c89868b1203e157da",
+   "note": "MIT license text kept beside the vendored payload (license condition of reuse)."
+  },
+  {
+   "path": "src/extension/vendor/pi-lsp/NOTICE",
+   "by": [
+    "BL1"
+   ],
+   "oracles": [
+    "BL1"
+   ],
+   "sha256": "1e9854e853b66bdc1acb084439408ef794a1a1a14a7e3dad3a723509210093c9",
+   "note": "OMA-authored provenance notice: upstream identity, pinned commit, tarball coordinates, generated-vs-copied inventory."
+  },
+  {
+   "path": "src/extension/vendor/pi-lsp/manifest.json",
+   "by": [
+    "BL1"
+   ],
+   "oracles": [
+    "BL1"
+   ],
+   "sha256": "7153011e60722ca7127b6e342bcecffbd79b6f871039698f2ed36afe5514861e",
+   "note": "Bundle self-description generated by scripts/vendor-pi-lsp.mjs: package identity (name/version/license/repo/commit), npm tarball URL+integrity+shasum, file list with bytes+sha256, and the bundleSha256 digest the verifier enforces."
+  },
+  {
+   "path": "src/extension/vendor/pi-lsp/runtime/adapters.d.ts",
+   "by": [
+    "BL1"
+   ],
+   "oracles": [
+    "BL1"
+   ],
+   "sha256": "ac25ec9a9ad9b4cfd77054e3739c95f466959400262447ba6a604ccd4b332738",
+   "note": "Vendored pi-lsp payload member (@narumitw/pi-lsp@0.49.9). Byte-exact with npm tarball shasum 6643cec0b716bc5dc1834bdf836285b3c7569dce / integrity sha512-YQ49sPiz3sDq5+l9YuPsOcn7YC2kdRbzQr/5pBpsUi0giUqIymHEHB+G0bKx6PmOjhvStCzCSHJxU/qfTLj/yA== or upstream commit 55d784704cdec1ec1534b59f78f07f139539119e (upstream-tests come from the git source); byte-pinned by manifest.json per-file SHA-256 and the bundle digest; verifyVendorBundle refuses the session on any deviation (BL1 tests)."
+  },
+  {
+   "path": "src/extension/vendor/pi-lsp/runtime/adapters.js",
+   "by": [
+    "BL1"
+   ],
+   "oracles": [
+    "BL1"
+   ],
+   "sha256": "689cdd8140084addefe95967bb429900e527ea47fded3210c05309251f2d358a",
+   "note": "Vendored pi-lsp payload member (@narumitw/pi-lsp@0.49.9). Byte-exact with npm tarball shasum 6643cec0b716bc5dc1834bdf836285b3c7569dce / integrity sha512-YQ49sPiz3sDq5+l9YuPsOcn7YC2kdRbzQr/5pBpsUi0giUqIymHEHB+G0bKx6PmOjhvStCzCSHJxU/qfTLj/yA== or upstream commit 55d784704cdec1ec1534b59f78f07f139539119e (upstream-tests come from the git source); byte-pinned by manifest.json per-file SHA-256 and the bundle digest; verifyVendorBundle refuses the session on any deviation (BL1 tests)."
+  },
+  {
+   "path": "src/extension/vendor/pi-lsp/runtime/command.d.ts",
+   "by": [
+    "BL1"
+   ],
+   "oracles": [
+    "BL1"
+   ],
+   "sha256": "f00e763e076819d38914d20d547430115fe651a68d3e66847447b9044ea2d54e",
+   "note": "Vendored pi-lsp payload member (@narumitw/pi-lsp@0.49.9). Byte-exact with npm tarball shasum 6643cec0b716bc5dc1834bdf836285b3c7569dce / integrity sha512-YQ49sPiz3sDq5+l9YuPsOcn7YC2kdRbzQr/5pBpsUi0giUqIymHEHB+G0bKx6PmOjhvStCzCSHJxU/qfTLj/yA== or upstream commit 55d784704cdec1ec1534b59f78f07f139539119e (upstream-tests come from the git source); byte-pinned by manifest.json per-file SHA-256 and the bundle digest; verifyVendorBundle refuses the session on any deviation (BL1 tests)."
+  },
+  {
+   "path": "src/extension/vendor/pi-lsp/runtime/command.js",
+   "by": [
+    "BL1"
+   ],
+   "oracles": [
+    "BL1"
+   ],
+   "sha256": "11cbece496b5a4d3902e7650e4f51515f90c0b53cda40b26623dd665b9241da8",
+   "note": "Vendored pi-lsp payload member (@narumitw/pi-lsp@0.49.9). Byte-exact with npm tarball shasum 6643cec0b716bc5dc1834bdf836285b3c7569dce / integrity sha512-YQ49sPiz3sDq5+l9YuPsOcn7YC2kdRbzQr/5pBpsUi0giUqIymHEHB+G0bKx6PmOjhvStCzCSHJxU/qfTLj/yA== or upstream commit 55d784704cdec1ec1534b59f78f07f139539119e (upstream-tests come from the git source); byte-pinned by manifest.json per-file SHA-256 and the bundle digest; verifyVendorBundle refuses the session on any deviation (BL1 tests)."
+  },
+  {
+   "path": "src/extension/vendor/pi-lsp/runtime/files.d.ts",
+   "by": [
+    "BL1"
+   ],
+   "oracles": [
+    "BL1"
+   ],
+   "sha256": "4edf4fa86873e8bd6597f1988ecc38f00c9a9bd364389f4462fcb6f857e99584",
+   "note": "Vendored pi-lsp payload member (@narumitw/pi-lsp@0.49.9). Byte-exact with npm tarball shasum 6643cec0b716bc5dc1834bdf836285b3c7569dce / integrity sha512-YQ49sPiz3sDq5+l9YuPsOcn7YC2kdRbzQr/5pBpsUi0giUqIymHEHB+G0bKx6PmOjhvStCzCSHJxU/qfTLj/yA== or upstream commit 55d784704cdec1ec1534b59f78f07f139539119e (upstream-tests come from the git source); byte-pinned by manifest.json per-file SHA-256 and the bundle digest; verifyVendorBundle refuses the session on any deviation (BL1 tests)."
+  },
+  {
+   "path": "src/extension/vendor/pi-lsp/runtime/files.js",
+   "by": [
+    "BL1"
+   ],
+   "oracles": [
+    "BL1"
+   ],
+   "sha256": "19e5015c3699c91e4fe5868cb933a0a7db60ab95b410d427c75028faade807d4",
+   "note": "Vendored pi-lsp payload member (@narumitw/pi-lsp@0.49.9). Byte-exact with npm tarball shasum 6643cec0b716bc5dc1834bdf836285b3c7569dce / integrity sha512-YQ49sPiz3sDq5+l9YuPsOcn7YC2kdRbzQr/5pBpsUi0giUqIymHEHB+G0bKx6PmOjhvStCzCSHJxU/qfTLj/yA== or upstream commit 55d784704cdec1ec1534b59f78f07f139539119e (upstream-tests come from the git source); byte-pinned by manifest.json per-file SHA-256 and the bundle digest; verifyVendorBundle refuses the session on any deviation (BL1 tests)."
+  },
+  {
+   "path": "src/extension/vendor/pi-lsp/runtime/lsp-client.d.ts",
+   "by": [
+    "BL1"
+   ],
+   "oracles": [
+    "BL1"
+   ],
+   "sha256": "93736f06ffb2e3cc54cf9819f5facb93bc00478aa7714d48225bb48119d65540",
+   "note": "Vendored pi-lsp payload member (@narumitw/pi-lsp@0.49.9). Byte-exact with npm tarball shasum 6643cec0b716bc5dc1834bdf836285b3c7569dce / integrity sha512-YQ49sPiz3sDq5+l9YuPsOcn7YC2kdRbzQr/5pBpsUi0giUqIymHEHB+G0bKx6PmOjhvStCzCSHJxU/qfTLj/yA== or upstream commit 55d784704cdec1ec1534b59f78f07f139539119e (upstream-tests come from the git source); byte-pinned by manifest.json per-file SHA-256 and the bundle digest; verifyVendorBundle refuses the session on any deviation (BL1 tests)."
+  },
+  {
+   "path": "src/extension/vendor/pi-lsp/runtime/lsp-client.js",
+   "by": [
+    "BL1"
+   ],
+   "oracles": [
+    "BL1"
+   ],
+   "sha256": "91ad10710238997515245976fd756b30f1ac10f23f6d23cda59cea5c2ed9d2e9",
+   "note": "Vendored pi-lsp payload member (@narumitw/pi-lsp@0.49.9). Byte-exact with npm tarball shasum 6643cec0b716bc5dc1834bdf836285b3c7569dce / integrity sha512-YQ49sPiz3sDq5+l9YuPsOcn7YC2kdRbzQr/5pBpsUi0giUqIymHEHB+G0bKx6PmOjhvStCzCSHJxU/qfTLj/yA== or upstream commit 55d784704cdec1ec1534b59f78f07f139539119e (upstream-tests come from the git source); byte-pinned by manifest.json per-file SHA-256 and the bundle digest; verifyVendorBundle refuses the session on any deviation (BL1 tests)."
+  },
+  {
+   "path": "src/extension/vendor/pi-lsp/runtime/routes.d.ts",
+   "by": [
+    "BL1"
+   ],
+   "oracles": [
+    "BL1"
+   ],
+   "sha256": "251f5d189ea249e2baf59242cd25d5b03a0de64a12d6cc315fedd40debf3fe76",
+   "note": "Vendored pi-lsp payload member (@narumitw/pi-lsp@0.49.9). Byte-exact with npm tarball shasum 6643cec0b716bc5dc1834bdf836285b3c7569dce / integrity sha512-YQ49sPiz3sDq5+l9YuPsOcn7YC2kdRbzQr/5pBpsUi0giUqIymHEHB+G0bKx6PmOjhvStCzCSHJxU/qfTLj/yA== or upstream commit 55d784704cdec1ec1534b59f78f07f139539119e (upstream-tests come from the git source); byte-pinned by manifest.json per-file SHA-256 and the bundle digest; verifyVendorBundle refuses the session on any deviation (BL1 tests)."
+  },
+  {
+   "path": "src/extension/vendor/pi-lsp/runtime/routes.js",
+   "by": [
+    "BL1"
+   ],
+   "oracles": [
+    "BL1"
+   ],
+   "sha256": "1eea1ab0de2d4937b8d26f88ca611a16dec107eceeaa1606090912b5bf5b239a",
+   "note": "Vendored pi-lsp payload member (@narumitw/pi-lsp@0.49.9). Byte-exact with npm tarball shasum 6643cec0b716bc5dc1834bdf836285b3c7569dce / integrity sha512-YQ49sPiz3sDq5+l9YuPsOcn7YC2kdRbzQr/5pBpsUi0giUqIymHEHB+G0bKx6PmOjhvStCzCSHJxU/qfTLj/yA== or upstream commit 55d784704cdec1ec1534b59f78f07f139539119e (upstream-tests come from the git source); byte-pinned by manifest.json per-file SHA-256 and the bundle digest; verifyVendorBundle refuses the session on any deviation (BL1 tests)."
+  },
+  {
+   "path": "src/extension/vendor/pi-lsp/runtime/runner.d.ts",
+   "by": [
+    "BL1"
+   ],
+   "oracles": [
+    "BL1"
+   ],
+   "sha256": "0c59656cfd302cf6d988351ff1714945311ec5ac923d8781a5bbb6fa1a6a7b5c",
+   "note": "Vendored pi-lsp payload member (@narumitw/pi-lsp@0.49.9). Byte-exact with npm tarball shasum 6643cec0b716bc5dc1834bdf836285b3c7569dce / integrity sha512-YQ49sPiz3sDq5+l9YuPsOcn7YC2kdRbzQr/5pBpsUi0giUqIymHEHB+G0bKx6PmOjhvStCzCSHJxU/qfTLj/yA== or upstream commit 55d784704cdec1ec1534b59f78f07f139539119e (upstream-tests come from the git source); byte-pinned by manifest.json per-file SHA-256 and the bundle digest; verifyVendorBundle refuses the session on any deviation (BL1 tests)."
+  },
+  {
+   "path": "src/extension/vendor/pi-lsp/runtime/runner.js",
+   "by": [
+    "BL1"
+   ],
+   "oracles": [
+    "BL1"
+   ],
+   "sha256": "2ac3700d00f642a0b63e22a2e31c7e57642e537f628714e4fe565d4ed81b93ee",
+   "note": "Vendored pi-lsp payload member (@narumitw/pi-lsp@0.49.9). Byte-exact with npm tarball shasum 6643cec0b716bc5dc1834bdf836285b3c7569dce / integrity sha512-YQ49sPiz3sDq5+l9YuPsOcn7YC2kdRbzQr/5pBpsUi0giUqIymHEHB+G0bKx6PmOjhvStCzCSHJxU/qfTLj/yA== or upstream commit 55d784704cdec1ec1534b59f78f07f139539119e (upstream-tests come from the git source); byte-pinned by manifest.json per-file SHA-256 and the bundle digest; verifyVendorBundle refuses the session on any deviation (BL1 tests)."
+  },
+  {
+   "path": "src/extension/vendor/pi-lsp/runtime/session-lifecycle.d.ts",
+   "by": [
+    "BL1"
+   ],
+   "oracles": [
+    "BL1"
+   ],
+   "sha256": "02dfc4227d52b536256e12f5b4fa9cf4465d8b8478f1c9f46c301ecea9f8e89e",
+   "note": "Vendored pi-lsp payload member (@narumitw/pi-lsp@0.49.9). Byte-exact with npm tarball shasum 6643cec0b716bc5dc1834bdf836285b3c7569dce / integrity sha512-YQ49sPiz3sDq5+l9YuPsOcn7YC2kdRbzQr/5pBpsUi0giUqIymHEHB+G0bKx6PmOjhvStCzCSHJxU/qfTLj/yA== or upstream commit 55d784704cdec1ec1534b59f78f07f139539119e (upstream-tests come from the git source); byte-pinned by manifest.json per-file SHA-256 and the bundle digest; verifyVendorBundle refuses the session on any deviation (BL1 tests)."
+  },
+  {
+   "path": "src/extension/vendor/pi-lsp/runtime/session-lifecycle.js",
+   "by": [
+    "BL1"
+   ],
+   "oracles": [
+    "BL1"
+   ],
+   "sha256": "1f08570ba313dfc57a7c4d09a5a51f53308eefefda97ac387eb6e548f5084c8e",
+   "note": "Vendored pi-lsp payload member (@narumitw/pi-lsp@0.49.9). Byte-exact with npm tarball shasum 6643cec0b716bc5dc1834bdf836285b3c7569dce / integrity sha512-YQ49sPiz3sDq5+l9YuPsOcn7YC2kdRbzQr/5pBpsUi0giUqIymHEHB+G0bKx6PmOjhvStCzCSHJxU/qfTLj/yA== or upstream commit 55d784704cdec1ec1534b59f78f07f139539119e (upstream-tests come from the git source); byte-pinned by manifest.json per-file SHA-256 and the bundle digest; verifyVendorBundle refuses the session on any deviation (BL1 tests)."
+  },
+  {
+   "path": "src/extension/vendor/pi-lsp/runtime/text-edits.d.ts",
+   "by": [
+    "BL1"
+   ],
+   "oracles": [
+    "BL1"
+   ],
+   "sha256": "88a0310a6814b16870563bd5c4b9e79847cf927a0a7af61eaf8b2dd075279b57",
+   "note": "Vendored pi-lsp payload member (@narumitw/pi-lsp@0.49.9). Byte-exact with npm tarball shasum 6643cec0b716bc5dc1834bdf836285b3c7569dce / integrity sha512-YQ49sPiz3sDq5+l9YuPsOcn7YC2kdRbzQr/5pBpsUi0giUqIymHEHB+G0bKx6PmOjhvStCzCSHJxU/qfTLj/yA== or upstream commit 55d784704cdec1ec1534b59f78f07f139539119e (upstream-tests come from the git source); byte-pinned by manifest.json per-file SHA-256 and the bundle digest; verifyVendorBundle refuses the session on any deviation (BL1 tests)."
+  },
+  {
+   "path": "src/extension/vendor/pi-lsp/runtime/text-edits.js",
+   "by": [
+    "BL1"
+   ],
+   "oracles": [
+    "BL1"
+   ],
+   "sha256": "08ce28d8c67ed1f36185ddf835640f8cec450199c33dbf4acde72a0752a3027e",
+   "note": "Vendored pi-lsp payload member (@narumitw/pi-lsp@0.49.9). Byte-exact with npm tarball shasum 6643cec0b716bc5dc1834bdf836285b3c7569dce / integrity sha512-YQ49sPiz3sDq5+l9YuPsOcn7YC2kdRbzQr/5pBpsUi0giUqIymHEHB+G0bKx6PmOjhvStCzCSHJxU/qfTLj/yA== or upstream commit 55d784704cdec1ec1534b59f78f07f139539119e (upstream-tests come from the git source); byte-pinned by manifest.json per-file SHA-256 and the bundle digest; verifyVendorBundle refuses the session on any deviation (BL1 tests)."
+  },
+  {
+   "path": "src/extension/vendor/pi-lsp/runtime/types.d.ts",
+   "by": [
+    "BL1"
+   ],
+   "oracles": [
+    "BL1"
+   ],
+   "sha256": "af3a53419f013a19668fe291bd8e0fd0dc347e5becdbe93bb762dd9cb6afacdc",
+   "note": "Vendored pi-lsp payload member (@narumitw/pi-lsp@0.49.9). Byte-exact with npm tarball shasum 6643cec0b716bc5dc1834bdf836285b3c7569dce / integrity sha512-YQ49sPiz3sDq5+l9YuPsOcn7YC2kdRbzQr/5pBpsUi0giUqIymHEHB+G0bKx6PmOjhvStCzCSHJxU/qfTLj/yA== or upstream commit 55d784704cdec1ec1534b59f78f07f139539119e (upstream-tests come from the git source); byte-pinned by manifest.json per-file SHA-256 and the bundle digest; verifyVendorBundle refuses the session on any deviation (BL1 tests)."
+  },
+  {
+   "path": "src/extension/vendor/pi-lsp/runtime/types.js",
+   "by": [
+    "BL1"
+   ],
+   "oracles": [
+    "BL1"
+   ],
+   "sha256": "8e609bb71c20b858c77f0e9f90bb1319db8477b13f9f965f1a1e18524bf50881",
+   "note": "Vendored pi-lsp payload member (@narumitw/pi-lsp@0.49.9). Byte-exact with npm tarball shasum 6643cec0b716bc5dc1834bdf836285b3c7569dce / integrity sha512-YQ49sPiz3sDq5+l9YuPsOcn7YC2kdRbzQr/5pBpsUi0giUqIymHEHB+G0bKx6PmOjhvStCzCSHJxU/qfTLj/yA== or upstream commit 55d784704cdec1ec1534b59f78f07f139539119e (upstream-tests come from the git source); byte-pinned by manifest.json per-file SHA-256 and the bundle digest; verifyVendorBundle refuses the session on any deviation (BL1 tests)."
+  },
+  {
+   "path": "src/extension/vendor/pi-lsp/upstream-tests/build-runtime.test.ts",
+   "by": [
+    "BL1"
+   ],
+   "oracles": [
+    "BL1"
+   ],
+   "sha256": "c9fd077843fec713eace3fb7bcd15c1be8ddb1415bc8568c4f0b388edce51a44",
+   "note": "Vendored pi-lsp payload member (@narumitw/pi-lsp@0.49.9). Byte-exact with npm tarball shasum 6643cec0b716bc5dc1834bdf836285b3c7569dce / integrity sha512-YQ49sPiz3sDq5+l9YuPsOcn7YC2kdRbzQr/5pBpsUi0giUqIymHEHB+G0bKx6PmOjhvStCzCSHJxU/qfTLj/yA== or upstream commit 55d784704cdec1ec1534b59f78f07f139539119e (upstream-tests come from the git source); byte-pinned by manifest.json per-file SHA-256 and the bundle digest; verifyVendorBundle refuses the session on any deviation (BL1 tests)."
+  },
+  {
+   "path": "src/extension/vendor/pi-lsp/upstream-tests/fixtures/diagnostics-server.mjs",
+   "by": [
+    "BL1"
+   ],
+   "oracles": [
+    "BL1"
+   ],
+   "sha256": "e3d23aebe8fe0ef15ce4bec76e5e307c1eca916bed937454c3cc0fd587c080dc",
+   "note": "Vendored pi-lsp payload member (@narumitw/pi-lsp@0.49.9). Byte-exact with npm tarball shasum 6643cec0b716bc5dc1834bdf836285b3c7569dce / integrity sha512-YQ49sPiz3sDq5+l9YuPsOcn7YC2kdRbzQr/5pBpsUi0giUqIymHEHB+G0bKx6PmOjhvStCzCSHJxU/qfTLj/yA== or upstream commit 55d784704cdec1ec1534b59f78f07f139539119e (upstream-tests come from the git source); byte-pinned by manifest.json per-file SHA-256 and the bundle digest; verifyVendorBundle refuses the session on any deviation (BL1 tests)."
+  },
+  {
+   "path": "src/extension/vendor/pi-lsp/upstream-tests/fixtures/package-smoke.mjs",
+   "by": [
+    "BL1"
+   ],
+   "oracles": [
+    "BL1"
+   ],
+   "sha256": "f8507d0b35d0c668d1556449bf087c4e37745db7ab1b85a891e1554cd51a7d14",
+   "note": "Vendored pi-lsp payload member (@narumitw/pi-lsp@0.49.9). Byte-exact with npm tarball shasum 6643cec0b716bc5dc1834bdf836285b3c7569dce / integrity sha512-YQ49sPiz3sDq5+l9YuPsOcn7YC2kdRbzQr/5pBpsUi0giUqIymHEHB+G0bKx6PmOjhvStCzCSHJxU/qfTLj/yA== or upstream commit 55d784704cdec1ec1534b59f78f07f139539119e (upstream-tests come from the git source); byte-pinned by manifest.json per-file SHA-256 and the bundle digest; verifyVendorBundle refuses the session on any deviation (BL1 tests)."
+  },
+  {
+   "path": "src/extension/vendor/pi-lsp/upstream-tests/generated-entry.test.ts",
+   "by": [
+    "BL1"
+   ],
+   "oracles": [
+    "BL1"
+   ],
+   "sha256": "e9f68c2736874fe9e421f14fd07313c1dac9da45e8dbba935031143b8cd4533a",
+   "note": "Vendored pi-lsp payload member (@narumitw/pi-lsp@0.49.9). Byte-exact with npm tarball shasum 6643cec0b716bc5dc1834bdf836285b3c7569dce / integrity sha512-YQ49sPiz3sDq5+l9YuPsOcn7YC2kdRbzQr/5pBpsUi0giUqIymHEHB+G0bKx6PmOjhvStCzCSHJxU/qfTLj/yA== or upstream commit 55d784704cdec1ec1534b59f78f07f139539119e (upstream-tests come from the git source); byte-pinned by manifest.json per-file SHA-256 and the bundle digest; verifyVendorBundle refuses the session on any deviation (BL1 tests)."
+  },
+  {
+   "path": "src/extension/vendor/pi-lsp/upstream-tests/generated-lifecycle.test.ts",
+   "by": [
+    "BL1"
+   ],
+   "oracles": [
+    "BL1"
+   ],
+   "sha256": "e207c47a6b9f73787ee7a59af28a05cac849c4d2cc0dfb4eac6059d4fd7979c9",
+   "note": "Vendored pi-lsp payload member (@narumitw/pi-lsp@0.49.9). Byte-exact with npm tarball shasum 6643cec0b716bc5dc1834bdf836285b3c7569dce / integrity sha512-YQ49sPiz3sDq5+l9YuPsOcn7YC2kdRbzQr/5pBpsUi0giUqIymHEHB+G0bKx6PmOjhvStCzCSHJxU/qfTLj/yA== or upstream commit 55d784704cdec1ec1534b59f78f07f139539119e (upstream-tests come from the git source); byte-pinned by manifest.json per-file SHA-256 and the bundle digest; verifyVendorBundle refuses the session on any deviation (BL1 tests)."
+  },
+  {
+   "path": "src/extension/vendor/pi-lsp/upstream-tests/lifecycle-support.ts",
+   "by": [
+    "BL1"
+   ],
+   "oracles": [
+    "BL1"
+   ],
+   "sha256": "4f9b86663dd242d00336b19b3bc33c8bdd5cdcf29370a15e7020b9d12f34f183",
+   "note": "Vendored pi-lsp payload member (@narumitw/pi-lsp@0.49.9). Byte-exact with npm tarball shasum 6643cec0b716bc5dc1834bdf836285b3c7569dce / integrity sha512-YQ49sPiz3sDq5+l9YuPsOcn7YC2kdRbzQr/5pBpsUi0giUqIymHEHB+G0bKx6PmOjhvStCzCSHJxU/qfTLj/yA== or upstream commit 55d784704cdec1ec1534b59f78f07f139539119e (upstream-tests come from the git source); byte-pinned by manifest.json per-file SHA-256 and the bundle digest; verifyVendorBundle refuses the session on any deviation (BL1 tests)."
+  },
+  {
+   "path": "src/extension/vendor/pi-lsp/upstream-tests/lsp-client.test.ts",
+   "by": [
+    "BL1"
+   ],
+   "oracles": [
+    "BL1"
+   ],
+   "sha256": "83f5b885468a61f00d75ea691ec4d89b3acc82a74136d61c506aaab55b6da699",
+   "note": "Vendored pi-lsp payload member (@narumitw/pi-lsp@0.49.9). Byte-exact with npm tarball shasum 6643cec0b716bc5dc1834bdf836285b3c7569dce / integrity sha512-YQ49sPiz3sDq5+l9YuPsOcn7YC2kdRbzQr/5pBpsUi0giUqIymHEHB+G0bKx6PmOjhvStCzCSHJxU/qfTLj/yA== or upstream commit 55d784704cdec1ec1534b59f78f07f139539119e (upstream-tests come from the git source); byte-pinned by manifest.json per-file SHA-256 and the bundle digest; verifyVendorBundle refuses the session on any deviation (BL1 tests)."
+  },
+  {
+   "path": "src/extension/vendor/pi-lsp/upstream-tests/lsp.test.ts",
+   "by": [
+    "BL1"
+   ],
+   "oracles": [
+    "BL1"
+   ],
+   "sha256": "af99383ee139c94534f66a17819783a13411648db5004e3730266a2d43de37a4",
+   "note": "Vendored pi-lsp payload member (@narumitw/pi-lsp@0.49.9). Byte-exact with npm tarball shasum 6643cec0b716bc5dc1834bdf836285b3c7569dce / integrity sha512-YQ49sPiz3sDq5+l9YuPsOcn7YC2kdRbzQr/5pBpsUi0giUqIymHEHB+G0bKx6PmOjhvStCzCSHJxU/qfTLj/yA== or upstream commit 55d784704cdec1ec1534b59f78f07f139539119e (upstream-tests come from the git source); byte-pinned by manifest.json per-file SHA-256 and the bundle digest; verifyVendorBundle refuses the session on any deviation (BL1 tests)."
+  },
+  {
+   "path": "src/extension/vendor/pi-lsp/upstream-tests/runner-lifecycle.test.ts",
+   "by": [
+    "BL1"
+   ],
+   "oracles": [
+    "BL1"
+   ],
+   "sha256": "1e7eaff2f463d835266835ea1a23c8a4996a890c18d7630a54447141892f9f27",
+   "note": "Vendored pi-lsp payload member (@narumitw/pi-lsp@0.49.9). Byte-exact with npm tarball shasum 6643cec0b716bc5dc1834bdf836285b3c7569dce / integrity sha512-YQ49sPiz3sDq5+l9YuPsOcn7YC2kdRbzQr/5pBpsUi0giUqIymHEHB+G0bKx6PmOjhvStCzCSHJxU/qfTLj/yA== or upstream commit 55d784704cdec1ec1534b59f78f07f139539119e (upstream-tests come from the git source); byte-pinned by manifest.json per-file SHA-256 and the bundle digest; verifyVendorBundle refuses the session on any deviation (BL1 tests)."
+  },
+  {
+   "path": "src/extension/vendor/pi-lsp/upstream-tests/session-context.test.ts",
+   "by": [
+    "BL1"
+   ],
+   "oracles": [
+    "BL1"
+   ],
+   "sha256": "2c1898e6fbc73bcae43d9f0cfacc7bc383e7ab24b196433669d944a458f4ad5d",
+   "note": "Vendored pi-lsp payload member (@narumitw/pi-lsp@0.49.9). Byte-exact with npm tarball shasum 6643cec0b716bc5dc1834bdf836285b3c7569dce / integrity sha512-YQ49sPiz3sDq5+l9YuPsOcn7YC2kdRbzQr/5pBpsUi0giUqIymHEHB+G0bKx6PmOjhvStCzCSHJxU/qfTLj/yA== or upstream commit 55d784704cdec1ec1534b59f78f07f139539119e (upstream-tests come from the git source); byte-pinned by manifest.json per-file SHA-256 and the bundle digest; verifyVendorBundle refuses the session on any deviation (BL1 tests)."
+  },
+  {
+   "path": "src/extension/vendor/pi-lsp/upstream-tests/session-lifecycle.test.ts",
+   "by": [
+    "BL1"
+   ],
+   "oracles": [
+    "BL1"
+   ],
+   "sha256": "59cbe48241fbf4a37a8616b202ce7b55528d78c9114aed9671c04884af5291eb",
+   "note": "Vendored pi-lsp payload member (@narumitw/pi-lsp@0.49.9). Byte-exact with npm tarball shasum 6643cec0b716bc5dc1834bdf836285b3c7569dce / integrity sha512-YQ49sPiz3sDq5+l9YuPsOcn7YC2kdRbzQr/5pBpsUi0giUqIymHEHB+G0bKx6PmOjhvStCzCSHJxU/qfTLj/yA== or upstream commit 55d784704cdec1ec1534b59f78f07f139539119e (upstream-tests come from the git source); byte-pinned by manifest.json per-file SHA-256 and the bundle digest; verifyVendorBundle refuses the session on any deviation (BL1 tests)."
+  },
+  {
+   "path": "src/extension/vendor/pi-lsp/upstream/LICENSE",
+   "by": [
+    "BL1"
+   ],
+   "oracles": [
+    "BL1"
+   ],
+   "sha256": "5293e92f073f47012e723990a8605431b438757e9c6eb00c89868b1203e157da",
+   "note": "Vendored pi-lsp payload member (@narumitw/pi-lsp@0.49.9). Byte-exact with npm tarball shasum 6643cec0b716bc5dc1834bdf836285b3c7569dce / integrity sha512-YQ49sPiz3sDq5+l9YuPsOcn7YC2kdRbzQr/5pBpsUi0giUqIymHEHB+G0bKx6PmOjhvStCzCSHJxU/qfTLj/yA== or upstream commit 55d784704cdec1ec1534b59f78f07f139539119e (upstream-tests come from the git source); byte-pinned by manifest.json per-file SHA-256 and the bundle digest; verifyVendorBundle refuses the session on any deviation (BL1 tests)."
+  },
+  {
+   "path": "src/extension/vendor/pi-lsp/upstream/dist/index.ts",
+   "by": [
+    "BL1"
+   ],
+   "oracles": [
+    "BL1"
+   ],
+   "sha256": "da4b7cdee9eeae7d7d3e45f2852cf4d612403cd490bb8bf79c426552f8e7d593",
+   "note": "Vendored pi-lsp payload member (@narumitw/pi-lsp@0.49.9). Byte-exact with npm tarball shasum 6643cec0b716bc5dc1834bdf836285b3c7569dce / integrity sha512-YQ49sPiz3sDq5+l9YuPsOcn7YC2kdRbzQr/5pBpsUi0giUqIymHEHB+G0bKx6PmOjhvStCzCSHJxU/qfTLj/yA== or upstream commit 55d784704cdec1ec1534b59f78f07f139539119e (upstream-tests come from the git source); byte-pinned by manifest.json per-file SHA-256 and the bundle digest; verifyVendorBundle refuses the session on any deviation (BL1 tests)."
+  },
+  {
+   "path": "src/extension/vendor/pi-lsp/upstream/dist/index.ts.map",
+   "by": [
+    "BL1"
+   ],
+   "oracles": [
+    "BL1"
+   ],
+   "sha256": "28fc14319983b7fc3b2dfa56a389e0ae1e16e46ab60284d6031c01dc592a80f4",
+   "note": "Vendored pi-lsp payload member (@narumitw/pi-lsp@0.49.9). Byte-exact with npm tarball shasum 6643cec0b716bc5dc1834bdf836285b3c7569dce / integrity sha512-YQ49sPiz3sDq5+l9YuPsOcn7YC2kdRbzQr/5pBpsUi0giUqIymHEHB+G0bKx6PmOjhvStCzCSHJxU/qfTLj/yA== or upstream commit 55d784704cdec1ec1534b59f78f07f139539119e (upstream-tests come from the git source); byte-pinned by manifest.json per-file SHA-256 and the bundle digest; verifyVendorBundle refuses the session on any deviation (BL1 tests)."
+  },
+  {
+   "path": "src/extension/vendor/pi-lsp/upstream/package.json",
+   "by": [
+    "BL1"
+   ],
+   "oracles": [
+    "BL1"
+   ],
+   "sha256": "4f83aeee77b260cfead8b672276b5c1ccfb84b9e67dda4b14b2b80d9320e022d",
+   "note": "Vendored pi-lsp payload member (@narumitw/pi-lsp@0.49.9). Byte-exact with npm tarball shasum 6643cec0b716bc5dc1834bdf836285b3c7569dce / integrity sha512-YQ49sPiz3sDq5+l9YuPsOcn7YC2kdRbzQr/5pBpsUi0giUqIymHEHB+G0bKx6PmOjhvStCzCSHJxU/qfTLj/yA== or upstream commit 55d784704cdec1ec1534b59f78f07f139539119e (upstream-tests come from the git source); byte-pinned by manifest.json per-file SHA-256 and the bundle digest; verifyVendorBundle refuses the session on any deviation (BL1 tests)."
+  },
+  {
+   "path": "src/extension/vendor/pi-lsp/upstream/src/adapters.ts",
+   "by": [
+    "BL1"
+   ],
+   "oracles": [
+    "BL1"
+   ],
+   "sha256": "6da81687c3f4b23ed41b671080e7f1aa68a4867e656dc84eedcc38bc99a77e34",
+   "note": "Vendored pi-lsp payload member (@narumitw/pi-lsp@0.49.9). Byte-exact with npm tarball shasum 6643cec0b716bc5dc1834bdf836285b3c7569dce / integrity sha512-YQ49sPiz3sDq5+l9YuPsOcn7YC2kdRbzQr/5pBpsUi0giUqIymHEHB+G0bKx6PmOjhvStCzCSHJxU/qfTLj/yA== or upstream commit 55d784704cdec1ec1534b59f78f07f139539119e (upstream-tests come from the git source); byte-pinned by manifest.json per-file SHA-256 and the bundle digest; verifyVendorBundle refuses the session on any deviation (BL1 tests)."
+  },
+  {
+   "path": "src/extension/vendor/pi-lsp/upstream/src/command.ts",
+   "by": [
+    "BL1"
+   ],
+   "oracles": [
+    "BL1"
+   ],
+   "sha256": "c8a688d714bec893c231b283a09702c08760cbf86b9b613772bb5b48767929cc",
+   "note": "Vendored pi-lsp payload member (@narumitw/pi-lsp@0.49.9). Byte-exact with npm tarball shasum 6643cec0b716bc5dc1834bdf836285b3c7569dce / integrity sha512-YQ49sPiz3sDq5+l9YuPsOcn7YC2kdRbzQr/5pBpsUi0giUqIymHEHB+G0bKx6PmOjhvStCzCSHJxU/qfTLj/yA== or upstream commit 55d784704cdec1ec1534b59f78f07f139539119e (upstream-tests come from the git source); byte-pinned by manifest.json per-file SHA-256 and the bundle digest; verifyVendorBundle refuses the session on any deviation (BL1 tests)."
+  },
+  {
+   "path": "src/extension/vendor/pi-lsp/upstream/src/files.ts",
+   "by": [
+    "BL1"
+   ],
+   "oracles": [
+    "BL1"
+   ],
+   "sha256": "166c5574ec03fa8efded8ab663ce026a280253eb111ac34e8aef1cf0b808eff8",
+   "note": "Vendored pi-lsp payload member (@narumitw/pi-lsp@0.49.9). Byte-exact with npm tarball shasum 6643cec0b716bc5dc1834bdf836285b3c7569dce / integrity sha512-YQ49sPiz3sDq5+l9YuPsOcn7YC2kdRbzQr/5pBpsUi0giUqIymHEHB+G0bKx6PmOjhvStCzCSHJxU/qfTLj/yA== or upstream commit 55d784704cdec1ec1534b59f78f07f139539119e (upstream-tests come from the git source); byte-pinned by manifest.json per-file SHA-256 and the bundle digest; verifyVendorBundle refuses the session on any deviation (BL1 tests)."
+  },
+  {
+   "path": "src/extension/vendor/pi-lsp/upstream/src/index.ts",
+   "by": [
+    "BL1"
+   ],
+   "oracles": [
+    "BL1"
+   ],
+   "sha256": "d2a56bdfb23a8da0a380371d7f607a41f3bbd6325e011978e7996275816768f5",
+   "note": "Vendored pi-lsp payload member (@narumitw/pi-lsp@0.49.9). Byte-exact with npm tarball shasum 6643cec0b716bc5dc1834bdf836285b3c7569dce / integrity sha512-YQ49sPiz3sDq5+l9YuPsOcn7YC2kdRbzQr/5pBpsUi0giUqIymHEHB+G0bKx6PmOjhvStCzCSHJxU/qfTLj/yA== or upstream commit 55d784704cdec1ec1534b59f78f07f139539119e (upstream-tests come from the git source); byte-pinned by manifest.json per-file SHA-256 and the bundle digest; verifyVendorBundle refuses the session on any deviation (BL1 tests)."
+  },
+  {
+   "path": "src/extension/vendor/pi-lsp/upstream/src/lsp-client.ts",
+   "by": [
+    "BL1"
+   ],
+   "oracles": [
+    "BL1"
+   ],
+   "sha256": "455dcc92f34dac52b4720e594179eb620905fe7571cafb7966cd47dcaa075753",
+   "note": "Vendored pi-lsp payload member (@narumitw/pi-lsp@0.49.9). Byte-exact with npm tarball shasum 6643cec0b716bc5dc1834bdf836285b3c7569dce / integrity sha512-YQ49sPiz3sDq5+l9YuPsOcn7YC2kdRbzQr/5pBpsUi0giUqIymHEHB+G0bKx6PmOjhvStCzCSHJxU/qfTLj/yA== or upstream commit 55d784704cdec1ec1534b59f78f07f139539119e (upstream-tests come from the git source); byte-pinned by manifest.json per-file SHA-256 and the bundle digest; verifyVendorBundle refuses the session on any deviation (BL1 tests)."
+  },
+  {
+   "path": "src/extension/vendor/pi-lsp/upstream/src/pi-lsp.ts",
+   "by": [
+    "BL1"
+   ],
+   "oracles": [
+    "BL1"
+   ],
+   "sha256": "f6d84d8d58a55af99f4ec1d127b709d99b0367acb97003bb04bf47a495044215",
+   "note": "Vendored pi-lsp payload member (@narumitw/pi-lsp@0.49.9). Byte-exact with npm tarball shasum 6643cec0b716bc5dc1834bdf836285b3c7569dce / integrity sha512-YQ49sPiz3sDq5+l9YuPsOcn7YC2kdRbzQr/5pBpsUi0giUqIymHEHB+G0bKx6PmOjhvStCzCSHJxU/qfTLj/yA== or upstream commit 55d784704cdec1ec1534b59f78f07f139539119e (upstream-tests come from the git source); byte-pinned by manifest.json per-file SHA-256 and the bundle digest; verifyVendorBundle refuses the session on any deviation (BL1 tests)."
+  },
+  {
+   "path": "src/extension/vendor/pi-lsp/upstream/src/routes.ts",
+   "by": [
+    "BL1"
+   ],
+   "oracles": [
+    "BL1"
+   ],
+   "sha256": "4ebd27324af0e0165d14bac2d4ddf4401a329693c753c8ce6413c2c2a795f2ca",
+   "note": "Vendored pi-lsp payload member (@narumitw/pi-lsp@0.49.9). Byte-exact with npm tarball shasum 6643cec0b716bc5dc1834bdf836285b3c7569dce / integrity sha512-YQ49sPiz3sDq5+l9YuPsOcn7YC2kdRbzQr/5pBpsUi0giUqIymHEHB+G0bKx6PmOjhvStCzCSHJxU/qfTLj/yA== or upstream commit 55d784704cdec1ec1534b59f78f07f139539119e (upstream-tests come from the git source); byte-pinned by manifest.json per-file SHA-256 and the bundle digest; verifyVendorBundle refuses the session on any deviation (BL1 tests)."
+  },
+  {
+   "path": "src/extension/vendor/pi-lsp/upstream/src/runner.ts",
+   "by": [
+    "BL1"
+   ],
+   "oracles": [
+    "BL1"
+   ],
+   "sha256": "cd37eea152a3d64c15958ee45f548ccd73e6bb871e5739210c51fc27e286a8cd",
+   "note": "Vendored pi-lsp payload member (@narumitw/pi-lsp@0.49.9). Byte-exact with npm tarball shasum 6643cec0b716bc5dc1834bdf836285b3c7569dce / integrity sha512-YQ49sPiz3sDq5+l9YuPsOcn7YC2kdRbzQr/5pBpsUi0giUqIymHEHB+G0bKx6PmOjhvStCzCSHJxU/qfTLj/yA== or upstream commit 55d784704cdec1ec1534b59f78f07f139539119e (upstream-tests come from the git source); byte-pinned by manifest.json per-file SHA-256 and the bundle digest; verifyVendorBundle refuses the session on any deviation (BL1 tests)."
+  },
+  {
+   "path": "src/extension/vendor/pi-lsp/upstream/src/session-lifecycle.ts",
+   "by": [
+    "BL1"
+   ],
+   "oracles": [
+    "BL1"
+   ],
+   "sha256": "0adb80d1feb42b6f193216bc7a451ce0f029be2ac0fa04ec35c458c6652efff6",
+   "note": "Vendored pi-lsp payload member (@narumitw/pi-lsp@0.49.9). Byte-exact with npm tarball shasum 6643cec0b716bc5dc1834bdf836285b3c7569dce / integrity sha512-YQ49sPiz3sDq5+l9YuPsOcn7YC2kdRbzQr/5pBpsUi0giUqIymHEHB+G0bKx6PmOjhvStCzCSHJxU/qfTLj/yA== or upstream commit 55d784704cdec1ec1534b59f78f07f139539119e (upstream-tests come from the git source); byte-pinned by manifest.json per-file SHA-256 and the bundle digest; verifyVendorBundle refuses the session on any deviation (BL1 tests)."
+  },
+  {
+   "path": "src/extension/vendor/pi-lsp/upstream/src/text-edits.ts",
+   "by": [
+    "BL1"
+   ],
+   "oracles": [
+    "BL1"
+   ],
+   "sha256": "8809802fba674b88cb6e1373840850122a7f5ca62eec542f18bf277d2eb18dcc",
+   "note": "Vendored pi-lsp payload member (@narumitw/pi-lsp@0.49.9). Byte-exact with npm tarball shasum 6643cec0b716bc5dc1834bdf836285b3c7569dce / integrity sha512-YQ49sPiz3sDq5+l9YuPsOcn7YC2kdRbzQr/5pBpsUi0giUqIymHEHB+G0bKx6PmOjhvStCzCSHJxU/qfTLj/yA== or upstream commit 55d784704cdec1ec1534b59f78f07f139539119e (upstream-tests come from the git source); byte-pinned by manifest.json per-file SHA-256 and the bundle digest; verifyVendorBundle refuses the session on any deviation (BL1 tests)."
+  },
+  {
+   "path": "src/extension/vendor/pi-lsp/upstream/src/types.ts",
+   "by": [
+    "BL1"
+   ],
+   "oracles": [
+    "BL1"
+   ],
+   "sha256": "c775a4bc414a6a4c5e91ae9a56b721d1c813502aa50a2705f568b1a1642a62db",
+   "note": "Vendored pi-lsp payload member (@narumitw/pi-lsp@0.49.9). Byte-exact with npm tarball shasum 6643cec0b716bc5dc1834bdf836285b3c7569dce / integrity sha512-YQ49sPiz3sDq5+l9YuPsOcn7YC2kdRbzQr/5pBpsUi0giUqIymHEHB+G0bKx6PmOjhvStCzCSHJxU/qfTLj/yA== or upstream commit 55d784704cdec1ec1534b59f78f07f139539119e (upstream-tests come from the git source); byte-pinned by manifest.json per-file SHA-256 and the bundle digest; verifyVendorBundle refuses the session on any deviation (BL1 tests)."
   }
  ],
  "readUnchanged": [
@@ -1352,16 +2069,6 @@
    ],
    "oracles": [
     "T119"
-   ],
-   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are the tests that load this module"
-  },
-  {
-   "path": "src/extension/workspace-guard.ts",
-   "by": [
-    "AV-review"
-   ],
-   "oracles": [
-    "AV3"
    ],
    "note": "read in full in the whole-codebase adversarial pass after v9; oracles are the tests that load this module"
   },
@@ -2434,23 +3141,6 @@
     "R21",
     "V04A",
     "V04B"
-   ],
-   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are tests whose loaded module closure (or text) contains this file"
-  },
-  {
-   "path": "src/domain/tool-surface.ts",
-   "by": [
-    "AV-review"
-   ],
-   "oracles": [
-    "F3",
-    "T100",
-    "T101",
-    "T102",
-    "T103",
-    "T111",
-    "T112",
-    "T99"
    ],
    "note": "read in full in the whole-codebase adversarial pass after v9; oracles are tests whose loaded module closure (or text) contains this file"
   },

@@ -636,6 +636,38 @@ name collision/intended surface/hidden 미활성/idempotent reload/provenance/
 
 ## 9. 진행 로그
 
+- 2026-10-05 (bundled #1 — pi-lsp): §7 순서(lsp→ask→hashline→web→mcp)의 첫
+  확장 구현. `@narumitw/pi-lsp@0.49.9`를 `src/extension/vendor/pi-lsp/`에
+  byte-pinned vendor — `upstream/`은 npm 타르볼(shasum
+  `6643cec0b716…`, SRI `sha512-YQ49sPiz…` — 레지스트리 메타와 직접 해시가
+  일치함을 재확인)의 무수정 스냅샷, `upstream-tests/`는 source commit
+  `55d78470`의 테스트, `runtime/`은 upstream 소스의 tsc 산출물 48파일,
+  `manifest.json`이 파일별 SHA-256+번들 다이제스트로 바인딩.
+  `vendor-bundle.ts`가 등록 전 정확-집합 검증(변경·누락·미기재·매니페스트
+  손상·다이제스트 불일치는 전부 같은 거절)하고 실패 시 세션을 거절한다.
+  어댑터(`lsp-tools.ts`)는 정확히 `lsp_diagnostics`·`lsp_fix`·`lsp_status`
+  3개만 노출하고 upstream runner의 per-call 라이프사이클(spawn→
+  initialize→작업→shutdown→종료, abort→client.close,
+  `LspSessionScope`의 session start/shutdown 계약)을 그대로 유지한다.
+  OMA가 소유하는 경계: workspace root=엔진 realpath 워크스페이스 고정
+  (root 인자 비공개, 심링크 이스케이프는 vendored realpath 벽이 재거절),
+  자식 env에서 `OMA_*`·`NODE_OPTIONS` 제거(PATH 유지), 서버 수·경로 수·
+  파일 수·바이트·timeout 클램프, 미설치 명령은 clean이 아니라
+  `unavailable`로 보고하고 적용 가능 경로가 전부 unavailable이면 호출을
+  명시 실패. `lsp_fix`는 기본 preview — `write:true`가 유일한 mutation이고
+  OMA `createContainedWriter`(직렬화+quota)만 통한다. upstream의 직접
+  writeFileSync 분기는 비활성 유지. guard는 `lsp_fix`를 조건부 write로
+  등록해 Principal의 write:true를 실행 전 차단하고 `paths[]`의 모든 항목을
+  검사한다. tool surface는 `code_intel` 그룹 하나로 Resident/Principal 플랜
+  모두에 선언 — 플랜은 도메인에서 인코딩, Resident는 유닛의
+  `OMA_TOOL_SURFACE_HEX`→runner 디코딩, Principal은 oma-society/session
+  경로로 전달, 확장 측 투영은 미등록 도구 참조·그룹↔도구 충돌·섀도잉·
+  손상 입력에서 fail-closed. 테스트: lsp-bundle 18(번들 무결성·fail-closed
+  등록·surface·guard·unavailable·preview/write·quota·심링크·per-call
+  프로세스·취소·env 스크럽) + lsp-upstream 3(vendored client/runner/route
+  직접). 문서-무결성 스캔은 vendor 트리를 authored 문서 범위에서 제외
+  (바이트 핀 페이로드이므로). NOT_RUN: 실제 언어 서버 바이너리가 설치된
+  상태의 e2e(픽스처 서버로만 검증), macOS·systemd 레인.
 - 2026-10-07 (egress 후반 3차 — 잔여 부류 기록): 3라운드 수정으로 egress 시리즈
   수렴(366d257 CLEAN). 맹검증이 남긴 **전신성 부류 — 13기준 전수 스캔에서 다룰 것**:
   post-listen `server`에 영구 `'error'` 리스너가 없음(`server.once("error",

@@ -6,6 +6,7 @@ import { fileURLToPath } from "node:url";
 import { spawnSync } from "node:child_process";
 import { loadConfig, loadConfiguration } from "../src/config.js";
 import { canonicalResourceLimits } from "../src/domain/resources.js";
+import { encodedResidentToolSurface } from "../src/domain/tool-surface.js";
 import { writePackageIndex } from "../src/runtime/pi-packages.js";
 import { createCompleteConfigurationFixture as fixture } from "./fixtures/configuration.js";
 
@@ -142,8 +143,11 @@ for (const [name, file, update] of [
   });
 }
 /** Starts the real runner entry as its unit would, stopping before Pi runs,
- * and reports what it selected. */
+ * and reports what it selected. The unit's declared surface travels as hex
+ * beside the profile and resources, so a call that does not override it gets
+ * the deployment's resident plan. */
 function runnerEntry(f: ReturnType<typeof fixture>, env: Record<string, string>) {
+  env = { OMA_TOOL_SURFACE_HEX: hex(encodedResidentToolSurface()), ...env };
   // WP31: a runner uses the engine its installation ships, and no other; the
   // fixture installation gets this repository's, as a real one has its own.
   const engine = join(f.installation, "node_modules", "@earendil-works", "pi-coding-agent");

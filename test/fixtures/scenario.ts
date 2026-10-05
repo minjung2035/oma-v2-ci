@@ -32,6 +32,7 @@ import type { UnitsModule } from "../../src/units.js";
 import { validateConfig } from "../../src/config.js";
 import { defaultHostConfig } from "../../src/config/defaults.js";
 import { canonicalResourceLimits } from "../../src/domain/resources.js";
+import { encodedResidentToolSurface } from "../../src/domain/tool-surface.js";
 import { GitModule } from "../../src/git.js";
 import { CandidateChecks } from "../../src/runtime/candidate-checks.js";
 import { QUARANTINE_RESOURCES } from "../../src/git/quarantine.js";
@@ -471,7 +472,11 @@ export async function startScenario(options: ScenarioOptions = {}): Promise<Scen
           "--config", configPath, "--state-root", root, "--run-root", runRoot], {
           env: { ...trust, ...options.engineEnv, PATH: process.env.PATH ?? "/usr/bin:/bin", HOME: home, INVOCATION_ID: units.running.invocationId,
             OMA_PROFILE_HEX: Buffer.from(residentProfile, "utf8").toString("hex"),
-            OMA_RESOURCES_HEX: Buffer.from(canonicalResourceLimits(residentResources), "utf8").toString("hex") },
+            OMA_RESOURCES_HEX: Buffer.from(canonicalResourceLimits(residentResources), "utf8").toString("hex"),
+            // The unit channel carries the resident plan; a scenario that
+            // needs a different engine surface overrides it here the way the
+            // broker would render it -- as the hex channel, not ambient env.
+            OMA_TOOL_SURFACE_HEX: Buffer.from(options.engineEnv?.OMA_TOOL_SURFACE ?? encodedResidentToolSurface(), "utf8").toString("hex") },
           stdio: ["ignore", "ignore", "pipe"] });
         let stderr = "";
         child.stderr!.on("data", chunk => { stderr += String(chunk); });

@@ -88,9 +88,36 @@ export function workspaceUsage(root: string, stopAfter: number): number {
   return total;
 }
 
-const PATH_TOOLS: readonly string[] = Object.freeze(["read", "write", "edit", "grep", "find", "ls"]);
-const WRITE_TOOLS: readonly string[] = Object.freeze(["write", "edit"]);
+/** Every exposed tool whose params name filesystem paths the guard must
+ * admit before the call runs; a tool that reads or writes paths and is
+ * missing here would pass unchecked. The file_edit and code_intel
+ * members are named explicitly so the surface rename cannot drop them. */
+const PATH_TOOLS: readonly string[] = Object.freeze([
+  "read", "write", "edit", "grep", "find", "ls",
+  "replace", "replace_within", "insert",
+  "lsp_diagnostics", "lsp_fix",
+]);
+/** Tools that write on every call. `lsp_fix` is not here: it writes only
+ * when `write: true`, so its gate is conditional below and a read-only
+ * caller still gets its preview. */
+const WRITE_TOOLS: readonly string[] = Object.freeze([
+  "write", "edit", "replace", "replace_within", "insert",
+]);
+/** Tools whose write is a parameter of the call, not the tool: only a
+ * `write: true` (or `force: true`) call is a mutation. */
+const CONDITIONAL_WRITE_TOOLS: readonly string[] = Object.freeze(["lsp_fix"]);
 const NO_ROOTS: readonly string[] = Object.freeze([]);
+
+/** Every path the call names: `path`, plus each entry of a `paths` list.
+ * A tool whose request names several paths is gated on all of them, and
+ * a malformed path value is itself refused -- `admittedRoot` admits only
+ * strings that resolve inside a root. */
+function inputPaths(input: Record<string, unknown>): unknown[] {
+  const named: unknown[] = [];
+  if (input.path !== undefined) named.push(input.path);
+  if (Array.isArray(input.paths)) named.push(...input.paths);
+  return named.length === 0 ? ["."] : named;
+}
 
 /** The first root under which the early check admits `path`, tried in the
  * order the guard itself tries them -- the workspace before every readable
@@ -122,9 +149,12 @@ export function guardWorkspaceTools(pi: ExtensionAPI, workspace: string,
   // is a Resident, and a refusal must not name another engine's role.
   const role = readOnly ? "the Principal's read, mail, review and safety role" : "this Resident's assigned role";
   pi.on("tool_call", (event) => {
+    const input = (event.input ?? {}) as Record<string, unknown>;
+    const writes = WRITE_TOOLS.includes(event.toolName) ||
+      (CONDITIONAL_WRITE_TOOLS.includes(event.toolName) && (input.write === true || input.force === true));
     if (permitted && !permitted(event.toolName))
       return { block: true, reason: `this tool is outside ${role}` };
-    if (readOnly && WRITE_TOOLS.includes(event.toolName))
+    if (readOnly && writes)
       return { block: true, reason: "the Principal reviews code but does not write or edit files; publish GOAL through explicit mail intent" };
     if (event.toolName === "bash" || event.toolName === "powershell")
       return sandboxed ? undefined : {
@@ -132,15 +162,15 @@ export function guardWorkspaceTools(pi: ExtensionAPI, workspace: string,
         reason: "shell tools are disabled outside the OMA sandbox",
       };
     if (!PATH_TOOLS.includes(event.toolName)) return undefined;
-    if (sandboxed && !WRITE_TOOLS.includes(event.toolName)) return undefined;
-    const input = event.input as Record<string, unknown>;
-    const path = input.path ?? ".";
+    if (sandboxed && !writes) return undefined;
     // C18: a read may also reach an installed-package resource root -- the
     // same store root the engine's argv names -- under the same
     // link-refusing containment the workspace gets. Writes and edits stay
-    // inside the workspace; no other host path is opened.
-    const roots = WRITE_TOOLS.includes(event.toolName) ? NO_ROOTS : readableRoots;
-    if (admittedRoot(workspace, roots, path) !== null) return undefined;
+    // inside the workspace; no other host path is opened. A call that
+    // names several paths (lsp_diagnostics's paths list) is admitted only
+    // when every named path is.
+    const roots = writes ? NO_ROOTS : readableRoots;
+    if (inputPaths(input).every(path => admittedRoot(workspace, roots, path) !== null)) return undefined;
     return { block: true, reason: "tool path is outside the agent workspace" };
   });
 }

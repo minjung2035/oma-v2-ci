@@ -53,11 +53,11 @@ export interface SessionPaths {
   /** D23/TSP-005: the surface plan's explicit hop into this engine, the same
    * channel the Resident arm declares on `RunnerProfile.toolSurface` (its
    * producer is the runner unit's deployment environment, read once by the
-   * runner entry). On the Principal's host engine no production caller sets
-   * it -- the Principal runs the default surface -- and the field exists so a
-   * spawn plan that means to carry a plan states so directly; the scenario
-   * harness uses it to exercise the engine-side gate the way OMA's plumbing
-   * would. It is never inherited and never authored configuration. */
+   * runner entry). The Principal's host session carries the deployment's
+   * principal plan -- oma-society.ts sets it -- so both roles run a declared
+   * surface and a plan that names a missing tool refuses startup rather
+   * than degrading it. It is never inherited and never authored
+   * configuration. */
   readonly toolSurface?: string | undefined;
 }
 

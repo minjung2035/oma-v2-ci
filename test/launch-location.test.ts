@@ -47,7 +47,7 @@ test("D03 launched location: every part given once, normalized, absolute and nam
 
 const residentValues = {
   node: "/n", libdir: "/l", state: "/s p/oma/demo", society: "demo", agent: "a", config: "/c $%/x.json", run: "/r/oma/demo",
-  profileHex: "70", resourcesHex: "7b7d", memoryBytes: 1024, tasks: 8, cpuQuotaPercent: 50,
+  profileHex: "70", resourcesHex: "7b7d", toolSurfaceHex: "7b7d", memoryBytes: 1024, tasks: 8, cpuQuotaPercent: 50,
 };
 
 test("D03 resident unit: the product runs the broker, so nothing is bound and the location lands as exact ExecStart words", () => {

@@ -51,6 +51,11 @@ if (!cfg.agentProfiles[profileName]) { console.error(`runner: unsupported profil
 const resourcesHex = process.env.OMA_RESOURCES_HEX ?? "";
 const resources = /^(?:[0-9a-f]{2})+$/.test(resourcesHex) ? parseCanonicalResourceLimits(Buffer.from(resourcesHex, "hex").toString("utf8")) : null;
 if (resources === null) { console.error(`runner: missing or malformed broker-rendered resources for ${agent}`); process.exit(4); }
+// The tool-surface plan travels the same hex channel; a unit this broker
+// rendered always carries it, and a malformed one is a corrupted channel.
+const toolSurfaceHex = process.env.OMA_TOOL_SURFACE_HEX ?? "";
+if (!/^(?:[0-9a-f]{2})+$/.test(toolSurfaceHex)) { console.error(`runner: missing or malformed broker-rendered tool surface for ${agent}`); process.exit(4); }
+const toolSurface = Buffer.from(toolSurfaceHex, "hex").toString("utf8");
 const agentProfile = cfg.agentProfiles[profileName]!;
 const modelName = agentProfile.modelProfile;
 // UX-08/DR34: the egress clause resolves against this role here, once, from
@@ -64,12 +69,14 @@ const profile = Object.freeze({ name: profileName, modelProfile: modelName, mode
   ...(configuration.roles[profileName] ? { settings: configuration.roles[profileName] } : {}),
   ...(egressPolicy === null ? {} : { egress: egressPolicy }),
   // D23/TSP-005: the deployment renders the run's surface plan into this
-  // unit's environment; this entry is the boundary that reads it once and
-  // makes it declared profile data. The engine's spawn plan emits it and
-  // `--clearenv` makes it the only channel -- nothing inherited carries a
-  // plan into the confined engine, and the field is never authored role
-  // configuration.
-  ...(process.env.OMA_TOOL_SURFACE === undefined ? {} : { toolSurface: process.env.OMA_TOOL_SURFACE }) });
+  // unit's environment as hex, beside the profile and resources; this entry
+  // is the boundary that reads it once and makes it declared profile data.
+  // The engine's spawn plan emits it and `--clearenv` makes it the only
+  // channel -- nothing inherited carries a plan into the confined engine,
+  // and the field is never authored role configuration. A unit this broker
+  // rendered always carries it; a malformed one names a corrupted channel,
+  // which does not start.
+  ...(toolSurface === null ? {} : { toolSurface }) });
 // OMA runs the engine it shipped with, never one found on PATH, and points it
 // at an agent directory OMA owns so a Pi the user installed stays untouched.
 const piRuntime = resolvePiRuntime({

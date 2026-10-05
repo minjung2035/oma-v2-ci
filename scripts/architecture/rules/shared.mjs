@@ -9,14 +9,23 @@ export const readJson = (root, relative) => JSON.parse(fs.readFileSync(absolute(
 export const readText = (root, relative) => fs.readFileSync(absolute(root, relative), "utf8");
 export const finding = (rule, file, reason) => ({ rule, file, reason });
 
+/** Vendored bundled-extension payloads are byte-pinned upstream snapshots
+ * (src/extension/vendor/<pkg>/: upstream sources, generated runtime and the
+ * hash-manifest), not authored OMA code. Every authored-code rule -- state
+ * tree ownership, fence propagation, product vocabulary, the extension's own
+ * closure -- judges files it can review, and a vendored file's review is the
+ * recorded digest, so the tree is data to these rules and never enumerated. */
+export const VENDORED_EXTENSION_DIR = "src/extension/vendor";
+
 export function filesUnder(root, relative, extension = ".ts") {
   const base = absolute(root, relative);
   if (!fs.existsSync(base)) return [];
+  const vendored = absolute(root, VENDORED_EXTENSION_DIR);
   const out = [];
   const walk = current => {
     for (const entry of fs.readdirSync(current, { withFileTypes: true })) {
       const next = path.join(current, entry.name);
-      if (entry.isDirectory()) walk(next);
+      if (entry.isDirectory()) { if (next !== vendored) walk(next); }
       else if (entry.isFile() && entry.name.endsWith(extension)) out.push(slash(path.relative(root, next)));
     }
   };

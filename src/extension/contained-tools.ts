@@ -25,10 +25,14 @@ import {
 import { searchWorkspace } from "./contained-search.js";
 import { admittedRoot, workspaceUsage } from "./workspace-guard.js";
 
-export function containWorkspaceTools(pi: ExtensionAPI, workspace: string, workspaceBytes: number | null, sandboxed: boolean, readOnly = false,
-  readableRoots: readonly string[] = []): void {
+/** The serialized, quota-decided workspace writer the contained `write`
+ * and `edit` tools share -- exposed so a registered tool whose mutation
+ * is computed elsewhere (lsp_fix applies language-server edits) reaches
+ * the filesystem through the same serialization, quota decision, and
+ * containment, never through a writer of its own. */
+export function createContainedWriter(workspace: string, workspaceBytes: number | null): (path: string, content: string) => Promise<void> {
   let writes: Promise<unknown> = Promise.resolve();
-  const write = (path: string, content: string): Promise<void> => {
+  return (path: string, content: string): Promise<void> => {
     const next = writes.catch(() => undefined).then(() => {
       if (!workspaceBytes) throw new WorkspaceRefusal("agent workspace quota is not configured");
       const growth = writeGrowthWithin(workspace, path, Buffer.byteLength(content, "utf8"));
@@ -40,6 +44,10 @@ export function containWorkspaceTools(pi: ExtensionAPI, workspace: string, works
     writes = next;
     return next;
   };
+}
+
+export function containWorkspaceTools(pi: ExtensionAPI, workspace: string, workspaceBytes: number | null, sandboxed: boolean, readOnly = false,
+  readableRoots: readonly string[] = [], write = createContainedWriter(workspace, workspaceBytes)): void {
   if (!readOnly) pi.registerTool(createWriteToolDefinition(workspace, { operations: {
     writeFile: (path, content) => write(path, content),
     // Parent creation is part of the same quota decision and serialized write.

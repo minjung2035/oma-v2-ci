@@ -14,6 +14,7 @@ import ts from "typescript";
 import { codeFor, exitFor } from "../dist/src/tui/exit.js";
 import { parseOmaArguments } from "../dist/src/runtime/host-arguments.js";
 import { HOST_LOSS_SIGNALS } from "../dist/src/runtime/broker-lifetime.js";
+import { encodedPrincipalToolSurface } from "../dist/src/domain/tool-surface.js";
 
 /** A production module compiled and run with its own controlled boundary.
  *
@@ -382,6 +383,9 @@ async function run({ brokerState = { kind: "started", pid: 1 }, credentials = ["
       },
     },
     "../runtime/deployment-manifest.js": { deploymentDigest: () => "a".repeat(64) },
+    // D23/TSP-005: the Principal's declared surface plan, produced by the
+    // deployment -- the real encoder, not a stand-in.
+    "../domain/tool-surface.js": { encodedPrincipalToolSurface },
     // The one list of the signals that end a process with a drain (AV31).
     "../runtime/broker-lifetime.js": { HOST_LOSS_SIGNALS },
     // `oma login` (DR18, D-9); a start never reaches it.

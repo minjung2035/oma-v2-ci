@@ -11,6 +11,7 @@ import { fileURLToPath } from "node:url";
 import { isValidSocietyName } from "../ids.js";
 import { StoreError } from "../domain/errors.js";
 import { DEPLOYMENT_LAYOUT } from "../domain/deployment.js";
+import { encodedPrincipalToolSurface } from "../domain/tool-surface.js";
 import { assertHostDirectoryLayout, hostLaunchLocation } from "../runtime/assets.js";
 import { resolvePiRuntime } from "../runtime/pi-runtime.js";
 import { ensureOwnedDirectory, removeUnusedTree } from "../storage/directory.js";
@@ -723,6 +724,10 @@ async function main(argv: readonly string[]): Promise<void> {
         coreExtension: join(settings.config.installation.libdir, DEPLOYMENT_LAYOUT.extension),
         sessionDir: principalSessionDir(stateRoot), ...(sessionFile === undefined ? {} : { sessionFile }),
         workspace, home: workspace,
+        // D23/TSP-005: the Principal's declared surface, same plan channel a
+        // Resident's unit environment feeds its runner -- produced by the
+        // deployment, never authored configuration.
+        toolSurface: encodedPrincipalToolSurface(),
         fence: owner.fence },
       profile,
       limitsOf(settings.config.limits),

@@ -19,7 +19,8 @@ import { createToolProvenance, verifiedExtensionPaths, VERIFIED_EXTENSIONS_ENV }
 import { registerPromptBoundary } from "./extension/prompt-boundary.js";
 import { registerToolSurface } from "./extension/tool-surface.js";
 import { TOOL_SCOPE_ENV, TOOL_SCOPE_SANDBOX, PACKAGE_STORE_ENV, guardWorkspaceTools } from "./extension/workspace-guard.js";
-import { containWorkspaceTools } from "./extension/contained-tools.js";
+import { containWorkspaceTools, createContainedWriter } from "./extension/contained-tools.js";
+import { registerLspTools } from "./extension/lsp-tools.js";
 
 export { decodeBatchViewText, readBatchView } from "./extension/batch-view.js";
 export { OMA_TOOL_NAMES, cliEnvironment, registerOmaTools } from "./extension/mail-tools.js";
@@ -75,7 +76,15 @@ export default async function extension(pi: ExtensionAPI) {
     try { readableRoots.push(realpathSync(packageStore)); } catch { /* an unobservable store root permits no reads */ }
   }
   guardWorkspaceTools(pi, workspace, sandboxed, channel.attached, provenance.permitted, readableRoots);
-  containWorkspaceTools(pi, workspace, integerEnv("OMA_WORKSPACE_BYTES"), sandboxed, channel.attached, readableRoots);
+  // One serialized writer serves every mutation path: the contained write
+  // and edit tools, and lsp_fix's contained application of server-computed
+  // edits. The quota is decided inside that serialization.
+  const workspaceWriter = createContainedWriter(workspace, integerEnv("OMA_WORKSPACE_BYTES"));
+  containWorkspaceTools(pi, workspace, integerEnv("OMA_WORKSPACE_BYTES"), sandboxed, channel.attached, readableRoots, workspaceWriter);
+  // The bundled pi-lsp extension: vendored bytes verified before tools are
+  // registered, code_intel's three tools behind it, lsp_fix reaching the
+  // filesystem only through the shared contained writer.
+  registerLspTools(pi, { workspace, readOnly: channel.attached, write: workspaceWriter });
   registerDelivery(pi, waitRequested);
   await startInferenceBridge(pi);
   await startEgressBridge(pi);

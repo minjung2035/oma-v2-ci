@@ -15,6 +15,9 @@ export interface RenderValues {
   profileHex?: string;
   /** D05/WP25: hex of the accepted spec's canonical resource text. */
   resourcesHex?: string;
+  /** D23/TSP-005: hex of the deployment's encoded Resident tool-surface
+   * plan -- OMA policy the runner reads once and hands the engine. */
+  toolSurfaceHex?: string;
   memoryBytes?: number;
   tasks?: number;
   cpuQuotaPercent?: number;
@@ -43,6 +46,7 @@ export function renderUnit(template: string, values: RenderValues): string {
     NODE: values.node, LIBDIR: values.libdir, STATE: values.state, STATE_ARG: values.state,
     CONFIG_ARG: values.config, RUN_ARG: values.run,
     SOCIETY: values.society, AGENT: values.agent, PROFILE_HEX: values.profileHex, RESOURCES_HEX: values.resourcesHex,
+    TOOL_SURFACE_HEX: values.toolSurfaceHex,
     MEMORY_BYTES: values.memoryBytes, TASKS: values.tasks, CPU_QUOTA: values.cpuQuotaPercent,
   };
   for (const key of ["MEMORY_BYTES", "TASKS", "CPU_QUOTA"] as const) {
@@ -54,6 +58,8 @@ export function renderUnit(template: string, values: RenderValues): string {
     throw new StoreError("UNSUPPORTED_PROFILE", "profile must have a nonempty canonical hex encoding");
   if (values.resourcesHex !== undefined && !/^(?:[0-9a-f]{2})+$/.test(values.resourcesHex))
     throw new StoreError("UNSUPPORTED_PROFILE", "resources must have a nonempty canonical hex encoding");
+  if (values.toolSurfaceHex !== undefined && !/^(?:[0-9a-f]{2})+$/.test(values.toolSurfaceHex))
+    throw new StoreError("UNSUPPORTED_PROFILE", "tool surface must have a nonempty canonical hex encoding");
   return template.replace(/@([A-Z0-9_]+)@/g, (_placeholder, key: string) => {
     if (!Object.prototype.hasOwnProperty.call(substitutions, key) || substitutions[key] === undefined)
       throw new StoreError("UNSUPPORTED_PROFILE", `unit template input is missing: ${key}`);

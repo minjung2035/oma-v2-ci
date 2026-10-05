@@ -50,11 +50,26 @@ const listed = spawnSync(process.execPath, [tsc, "-p", join(root, "tsconfig.buil
   cwd: root, encoding: "utf8", timeout: 120000, killSignal: "SIGKILL",
 });
 if (listed.error || listed.signal || listed.status !== 0) process.exit(listed.status ?? 1);
+// Vendored bundled-extension payloads are excluded from tsc's file list (the
+// tsconfigs exempt the tree) but are still build inputs: they are copied to
+// dist verbatim below, so a vendored byte change must poison the skip stamp.
+const vendoredInputs = [];
+const collectVendored = dir => {
+  for (const entry of readdirSync(dir, { withFileTypes: true })) {
+    const absolute = join(dir, entry.name);
+    if (entry.isDirectory()) collectVendored(absolute);
+    else if (entry.isFile()) vendoredInputs.push(slash(relative(root, absolute)));
+  }
+};
+const vendorSource = join(root, "src", "extension", "vendor");
+if (lstatSync(vendorSource, { throwIfNoEntry: false })?.isDirectory()) collectVendored(vendorSource);
+vendoredInputs.sort();
 const extraInputs = ["tsconfig.json", "tsconfig.build.json", "package.json", "package-lock.json",
   join("node_modules", "typescript", "package.json"),
   // The build logic itself and the checker it drives are inputs too: an edit
   // to either changes what a build produces and must not ride a stale skip.
-  join("scripts", "build.mjs"), join("scripts", "check-package.mjs")];
+  join("scripts", "build.mjs"), join("scripts", "check-package.mjs"),
+  ...vendoredInputs];
 for (const name of [...listed.stdout.trim().split(/\r?\n/).sort(), ...extraInputs]) {
   const absolute = resolve(root, name);
   hash.update(relative(root, absolute).split(sep).join("/"));
@@ -101,6 +116,24 @@ if (!fresh) {
     cwd: root, stdio: "inherit", timeout: 600000, killSignal: "SIGKILL",
   });
   if (compiled.error || compiled.signal || compiled.status !== 0) process.exit(compiled.status ?? 1);
+  // The vendored bundled-extension payloads are excluded from compilation
+  // (tsconfig exclude), but they are deployed payload: the trusted
+  // extension's adapter statically imports runtime/ and the deployment
+  // digest's dist walk must cover every vendored byte. The copy is exact --
+  // byte-identical, no rewrites -- so the source-side bundle digest
+  // (manifest.json) also covers the deployed tree.
+  if (lstatSync(vendorSource, { throwIfNoEntry: false })?.isDirectory()) {
+    const copyTree = (from, to) => {
+      mkdirSync(to, { recursive: true });
+      for (const entry of readdirSync(from, { withFileTypes: true })) {
+        const sourceEntry = join(from, entry.name), targetEntry = join(to, entry.name);
+        if (entry.isDirectory()) copyTree(sourceEntry, targetEntry);
+        else if (entry.isFile()) writeFileSync(targetEntry, readFileSync(sourceEntry));
+        else throw new Error(`nonregular vendored payload entry: ${slash(relative(root, sourceEntry))}`);
+      }
+    };
+    copyTree(vendorSource, join(output, "src", "extension", "vendor"));
+  }
 }
 // Rebuilding a linked package must preserve executable permissions for its commands.
 const manifest = JSON.parse(readFileSync(join(root, "package.json"), "utf8"));

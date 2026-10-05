@@ -203,6 +203,81 @@ export function planToolSurface(config: ToolSurfaceConfig): ToolSurfacePlan {
   });
 }
 
+/** The one bundled-extension group both roles expose: language-server
+ * intelligence hidden until the model opens the group. Mirrors
+ * `LSP_TOOL_NAMES` in src/extension/lsp-tools.ts -- PI-001 keeps the
+ * extension from importing this module, so a test binds the two lists. */
+const CODE_INTEL_GROUP_NAME = "code_intel";
+const CODE_INTEL_TOOLS: readonly string[] = ["lsp_diagnostics", "lsp_fix", "lsp_status"];
+
+function codeIntelGroup(): GroupSpec {
+  return {
+    name: CODE_INTEL_GROUP_NAME,
+    description: "Language-server intelligence: workspace diagnostics, code-action fixes (preview by default) and server status.",
+    members: CODE_INTEL_TOOLS.map(tool => ({ tool })),
+  };
+}
+
+/** The OMA tool names a Resident's engine registers -- mirrors
+ * `omaToolNames(false)` in src/extension/mail-tools.ts -- plus the Pi
+ * builtins a confined engine carries (no --exclude-tools on the confined
+ * argv). Naming them in `direct` makes their absence a startup refusal
+ * rather than a silent hole in the surface. */
+const RESIDENT_DIRECT_TOOLS: readonly string[] = [
+  "read", "write", "edit", "bash", "grep", "find", "ls",
+  "oma_mail_read", "oma_mail_send", "oma_mail_ack", "oma_status", "oma_merge", "oma_challenge",
+];
+
+/** The Principal's engine: the host argv excludes bash, powershell, write
+ * and edit, and its registrations are the mail pair plus the principal
+ * tools -- mirrors `omaToolNames(true)`. `lsp_fix` is on the surface
+ * because its default is preview; the workspace guard refuses a
+ * `write: true` call for the read-only role before execute runs. */
+const PRINCIPAL_DIRECT_TOOLS: readonly string[] = [
+  "read", "grep", "find", "ls",
+  "oma_mail_read", "oma_mail_send", "oma_society", "oma_agent_lifecycle", "oma_merge", "oma_challenge",
+];
+
+/** D23/TSP-005 role surfaces, declared host-side. Each names every tool
+ * its role is meant to have, so the extension's projection refuses
+ * startup if the deployment's registry and this declaration ever drift
+ * apart -- a plan is a statement of what exists, and a name that does not
+ * resolve ends the session instead of degrading it. defaultMode is
+ * DIRECT: nothing already exposed changes its visibility; what these
+ * plans add is the code_intel group boundary and the refusal-on-drift
+ * contract. */
+export function residentToolSurfaceConfig(): ToolSurfaceConfig {
+  return {
+    defaultMode: "DIRECT",
+    direct: RESIDENT_DIRECT_TOOLS,
+    disabled: [],
+    groups: [codeIntelGroup()],
+    roots: [CODE_INTEL_GROUP_NAME],
+  };
+}
+
+export function principalToolSurfaceConfig(): ToolSurfaceConfig {
+  return {
+    defaultMode: "DIRECT",
+    direct: PRINCIPAL_DIRECT_TOOLS,
+    disabled: [],
+    groups: [codeIntelGroup()],
+    roots: [CODE_INTEL_GROUP_NAME],
+  };
+}
+
+/** The encoded plan a Resident's unit environment carries (as hex, beside
+ * the profile and resources hex) -- produced once, validated by
+ * planToolSurface, identical bytes for every Resident of a deployment. */
+export function encodedResidentToolSurface(): string {
+  return encodeToolSurfacePlan(planToolSurface(residentToolSurfaceConfig()));
+}
+
+/** The encoded plan the Principal's host session is spawned with. */
+export function encodedPrincipalToolSurface(): string {
+  return encodeToolSurfacePlan(planToolSurface(principalToolSurfaceConfig()));
+}
+
 /** The plan travels to the sandbox as canonical JSON. Key order is fixed so the
  * same projection always produces the same bytes.
  */

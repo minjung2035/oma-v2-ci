@@ -5,6 +5,7 @@ import { fileURLToPath } from "node:url";
 import type { Actor, ResourceLimits, UnitObservation } from "../implementation/contracts.js";
 import { StoreError, unobserved } from "./domain/errors.js";
 import { canonicalResourceLimits } from "./domain/resources.js";
+import { encodedResidentToolSurface } from "./domain/tool-surface.js";
 import { unitNameFor as unitName } from "./domain/derived.js";
 import { ensureDurableDirectory, publishNoReplace, replaceDerivedFile } from "./storage/durable-fs.js";
 import { renderUnit, type RenderValues } from "./units/render.js";
@@ -237,6 +238,11 @@ export class UnitsModule {
     this.install(unitName(this.society, agent, "service"), "resident.service.in", {
       profileHex: Buffer.from(profile, "utf8").toString("hex"),
       resourcesHex: Buffer.from(canonicalResourceLimits(resources), "utf8").toString("hex"),
+      // D23/TSP-005: the deployment's encoded surface plan rides the unit's
+      // environment as hex beside the profile and resources. It is produced
+      // here -- one canonical plan for every Resident of the deployment --
+      // never authored configuration, never a caller's choice.
+      toolSurfaceHex: Buffer.from(encodedResidentToolSurface(), "utf8").toString("hex"),
       memoryBytes: resources.memoryBytes, tasks: resources.tasks, cpuQuotaPercent: resources.cpuQuotaPercent,
     });
     this.install(unitName(this.society, agent, "path"), "resident.path.in");
