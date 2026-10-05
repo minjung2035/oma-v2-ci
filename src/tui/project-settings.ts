@@ -1,7 +1,7 @@
 /** DR24/DR25: a project's OMA settings, and bringing them to the installed
  * packages. One owner for both the Human's `oma pi` and the macOS engine's
  * application of the packages the Mac installed, so the two cannot differ. */
-import { existsSync, readdirSync } from "node:fs";
+import { existsSync, lstatSync, readdirSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { StoreError } from "../domain/errors.js";
 import { defaultHostConfig } from "../config/defaults.js";
@@ -25,17 +25,29 @@ export function ensureProjectSettings(dataRoot: string, project: string, libdir:
   const path = projectSettingsPath(dataRoot, project);
   const packages = packageStoreDir(join(dataRoot, project));
   if (!existsSync(path)) {
-    // P0-8: `.projects/<project>` is oma's own under the data root.
+    // P0-8: `.projects/<project>` is oma's own under the data root. The
+    // repair restores observability, never content: the first probe's
+    // "absent" answered nothing if a degraded ancestor was in the way, so
+    // the path is observed again now -- a settings file that was only
+    // hidden is read back below, never seeded over with a new generation.
     ensureOwnedUserDirectory(dirname(path), dataRoot);
-    const earlier = [join(dataRoot, project, "config.json"), session].find(file => file !== undefined && existsSync(file));
-    const seed = earlier === undefined ? null : readSettingsForEditing(earlier);
-    const config = seed?.config ?? defaultHostConfig({ society: project, node: process.execPath, libdir: `${libdir}/`,
-      rootfs: residentRootfsPath(join(dataRoot, project)), deploymentDigest: deploymentDigest(libdir) });
-    writeSettings(path, { ...config, society: project, installation: { ...config.installation, packages } }, dataRoot);
-    // A first society that chose its roles' extensions and prompts keeps them.
-    if (seed?.snapshot && seed.layout.kind === "operations") {
-      const created = readSettingsForEditing(path);
-      commitRoleSet(created.snapshot!, created.config, roleSetOf(seed.snapshot), undefined, dataRoot);
+    if (!existsSync(path)) {
+      // The seed candidates' own ancestors are not this ensure's to repair
+      // (the society root's owner ensures it, a `--config` path is the
+      // Human's), so the probe is honest instead: ENOENT is absent, and any
+      // failure of the observation itself refuses rather than seed the
+      // defaults over settings it could not see.
+      const earlier = [join(dataRoot, project, "config.json"), session]
+        .find(file => file !== undefined && lstatSync(file, { throwIfNoEntry: false }) !== undefined);
+      const seed = earlier === undefined ? null : readSettingsForEditing(earlier);
+      const config = seed?.config ?? defaultHostConfig({ society: project, node: process.execPath, libdir: `${libdir}/`,
+        rootfs: residentRootfsPath(join(dataRoot, project)), deploymentDigest: deploymentDigest(libdir) });
+      writeSettings(path, { ...config, society: project, installation: { ...config.installation, packages } }, dataRoot);
+      // A first society that chose its roles' extensions and prompts keeps them.
+      if (seed?.snapshot && seed.layout.kind === "operations") {
+        const created = readSettingsForEditing(path);
+        commitRoleSet(created.snapshot!, created.config, roleSetOf(seed.snapshot), undefined, dataRoot);
+      }
     }
   }
   const settings = projectBundle(path, dataRoot);
@@ -73,7 +85,17 @@ export function applyPackageChange(options: { readonly dataRoot: string; readonl
   }
   for (const name of names) {
     const path = projectSettingsPath(dataRoot, name);
-    if (!existsSync(path) && name !== project) continue;
+    if (name !== project) {
+      // P0-8: `.projects/<name>` is oma's own under the data root, the same
+      // boundary this project's settings are ensured under. The probe's
+      // answer is spent the way the one above was: the owned repair comes
+      // first, so a directory that only lost its owner bits is not read as
+      // an absent settings file and skipped. A project that still cannot be
+      // observed is reported, like a failed edit below, never left out.
+      try { ensureOwnedUserDirectory(dirname(path), dataRoot); }
+      catch (error) { ok = false; said.push(`Could not update the extensions of project ${name}: ${errorWords(error)}`); continue; }
+      if (!existsSync(path)) continue;
+    }
     try {
       const settings = name === project ? ensureProjectSettings(dataRoot, name, libdir) : projectBundle(path, dataRoot);
       const principal = settings.config.principalProfile;

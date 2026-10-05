@@ -6398,8 +6398,8 @@
     "DR25",
     "P0-8"
    ],
-   "note": "Read in full at the 2026-10-05 P0-8 residual round: every project settings bundle commit names the data root the repair boundary -- the same boundary ensureOwnedUserDirectory creates `.projects/<project>` with -- so a mode-000 `.projects` or `<project>` is repaired on the commit and a stray below the data root is collected, never a user's ancestor. Package-activation reconciliation, the role-set seed and the missing-bundle path are unchanged.",
-   "sha256": "204220123ee1c39d674006bb0290444b746359e8012885612504b86219e01455"
+   "note": "Read in full at the 2026-10-05 tenth-residual round: the settings ensure's first existsSync can answer 'absent' only because a degraded oma-owned ancestor hid the file, so after ensureOwnedUserDirectory repairs `.projects/<project>` the path is observed again and the seed/write branch runs only when it is still absent -- a bundle that was only hidden is read back, never seeded over (fail-before: committed quota 4 was replaced by the seed's 5). The seed candidates' probe is lstatSync(throwIfNoEntry): ENOENT alone is absent, an unobservable candidate refuses rather than defaults (the society root's own owner repairs it, a --config path is the Human's). applyPackageChange's per-project skip got the same treatment: the owned repair runs before the probe for every non-current project, a failed repair is reported to the Human like a failed edit, and only a post-repair 'absent' skips. Package-activation reconciliation and the role-set seed are unchanged.",
+   "sha256": "c819d655c304f9f04febb29fc0e39d673e66c1cfd61b6ae6c870de3c5713e8ec"
   },
   {
    "path": "src/tui/prompt.ts",

@@ -486,6 +486,49 @@ Pi/OS 기능을 다시 구현해서 생긴 중복·workaround·pre-release 잔�
       다시 맞춘 뒤 validation.md의 검증 입력 digest를 현재 트리로
       재결박했다 — stale digest 2건(V32A)·검증 입력 digest 불일치 1건
       (R38) 해소.
+  - 열 번째 잔여 2건(같은 wedge 클래스 — 규칙 자체의 비종료·복구된 가시성
+    뒤의 시드 덮어쓰기) 수정:
+    (1) owned-state 규칙의 별칭 고정점이 종료하지 않던 것. 바인딩 맵은
+      스코프를 모르고 로컬 이름만 키로 삼는데 멤버 별칭 가지는 발견한
+      remote와 다르면 매 패스 재기록했으므로, 한 이름을 서로 다른 remote로
+      잇는 두 스코프(`const w = writeFileSync`와 `const w = readFileSync`)가
+      항목을 번갈아 뒤집어 체크가 영영 답하지 못했다. 모든 가지를
+      first-wins로 고정했다 — 일단 결속된 이름은 재결속하지 않는다.
+      거부 규칙이 별칭을 어느 remote로 해석하든 둘 다 fs 면을 이름 지으므로
+      호출은 어느 쪽으로든 표지된다(부족 검출보다 과다 검출이 안전한 방향).
+      방어적으로 `2 * sites + 1` 패스 상한을 두고 넘으면 매달리는 대신
+      던진다 — 성장 패스는 매번 바인딩을 하나 더하므로 선언이 허락하는
+      만큼만 지날 수 있다. fail-before(구 규칙): 두 함수의 그림자 별칭
+      fixture가 15초 timeout에도 미종료 → 수정 후 ~1ms에 종료·두 호출 모두
+      owned-state-raw-access로 표지 + 실 트리 `check:architecture`
+      0 findings. 회귀: architecture-rule-modules.test.mjs +1종(그림자
+      별칭 결정성 — 동기 멤버·네임스페이스 멤버·async 면 3철자).
+    (2) `ensureProjectSettings`의 존재 게이트가 복구 이전에 답을 썼던 것.
+      mode-000 `.projects` 또는 `.projects/<project>`는 existsSync를
+      거짓으로 답하게 했고, ensureOwnedUserDirectory가 조상을 복구해 이미
+      커밋된 설정이 보이게 된 뒤에도 코드는 시드·쓰기 분기로 내려가
+      커밋된 번들을 새 생성으로 교체했다(커밋된 `quota.societyAgents=4`가
+      시드의 5로). 복구는 내용이 아니라 관측 가능성만 돌려놓는다 — 이제
+      복구 뒤 경로를 다시 관측하고, 여전히 부재일 때만 시드 분기가 선다.
+      시드 후보 프로브도 existsSync에서 lstatSync(throwIfNoEntry)로:
+      후보의 조상은 이 ensure의 복구 소관이 아니므로(사회 루트는 자기
+      소유자가, `--config`는 Human의 것) ENOENT만 부재로 읽고 관측 실패는
+      기본값을 뿌리는 대신 거절한다. `applyPackageChange`의 프로젝트별
+      스킵은 같은 사각이었다 — 현재 프로젝트가 아닌 `.projects/<name>`의
+      mode-000이 설정 부재로 읽혀 패키지 제거가 커밋된 역할에 닿지 못했던
+      것을, 동일하게 복구 먼저·복구 실패는 편집 실패처럼 보고·복구 뒤에도
+      부재일 때만 스킵으로 고쳤다. `commitRoleSet` 측은 39ad677가 세운
+      ownedFrom 경계로 이미 안전(커밋이 관리 디렉토리를 읽기·쓰기 전에
+      복구). existsSync/accessSync/statSync 게이트 전수 감사: 생성·시드
+      결정 중 진짜 결함은 위 3처뿐이었고 나머지는 복구가 프로브보다 먼저
+      오거나(provision·context-snapshot·packages-apply·service·workspace),
+      ENOENT만 부재로 읽고 관측 실패는 던지거나(settings.ts·
+      pi-packages `present`·operations·personal-settings·packages-apply),
+      관측 실패를 보존 방향으로 해석하거나(pi-packages·listHostStaged),
+      fd 기반이라 조상 손상과 무관했다(fstatSync 계열). fail-before(구
+      dist): 커밋된 quota가 4→5·관측 불가 시드 후보에 예외 없이 기본값
+      생성·숨겨진 프로젝트가 제거 적용에서 스킵 — 전부 재현 후 통과.
+      회귀: pi-packages.test.ts +3종.
 
 ## 6. 선행 작업 큐 (코드베이스 전체 확장 전 — 사용자 지시)
 

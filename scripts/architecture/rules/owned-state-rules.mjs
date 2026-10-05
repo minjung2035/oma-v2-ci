@@ -240,8 +240,31 @@ const collectFsBindings = source => {
   // aliases of a namespace or a member already bound -- an alias may name an
   // alias, and `const f = writeFileSync` or `const w = fs.writeFileSync` calls
   // the same fs write under a second local name.
+  //
+  // Every branch below is first-wins: a name once bound is never rebound.
+  // That is what makes the fixed point exist at all -- the maps are keyed by
+  // the local name and know no scope, so two scopes binding one alias to
+  // different remotes (`const w = writeFileSync` here, `= readFileSync`
+  // there) would flip the entry every pass and the check would never answer.
+  // A deny rule resolving the alias to either of its remotes is safe: both
+  // name the fs surface, so the call is flagged either way. A pass that
+  // still grows adds at least one binding no earlier pass had, so the
+  // number of passes is bounded by the declarations that can bind; a pass
+  // beyond that is this rule's own defect, and it throws rather than hang.
+  let sites = 0;
+  eachNode(source, node => {
+    if (ts.isVariableDeclaration(node))
+      sites += ts.isIdentifier(node.name) ? 1 : ts.isObjectBindingPattern(node.name) ? node.name.elements.length : 0;
+  });
   let grew = true;
+  let passes = 0;
   while (grew) {
+    // A declaration binds at most a namespace and a sync and an async name,
+    // so `2 * sites` growing passes already spend every binding there is;
+    // one more pass is the settling pass, and a pass beyond it is impossible.
+    passes += 1;
+    if (passes > 2 * sites + 1)
+      throw new Error(`owned-state rule: fs alias bindings reached no fixed point after ${passes - 1} passes in ${source.fileName}`);
     grew = false;
     eachNode(source, node => {
       if (!ts.isVariableDeclaration(node) || node.initializer === undefined) return;
@@ -265,9 +288,12 @@ const collectFsBindings = source => {
           const syncRemote = ts.isIdentifier(init) ? syncNames.get(init.text) : memberRemote(fsNamespaces);
           const asyncRemote = ts.isIdentifier(init) ? asyncNames.get(init.text)
             : ts.isPropertyAccessExpression(init) && promisesMember(init.expression) ? init.name.text : memberRemote(asyncNamespaces);
-          if (syncRemote !== undefined && syncNames.get(node.name.text) !== syncRemote) {
+          // First-wins, like the namespace and binding-pattern branches: the
+          // name is the key, not the scope, so a second binding of it is a
+          // different declaration's answer -- kept for whichever wrote first.
+          if (syncRemote !== undefined && !syncNames.has(node.name.text)) {
             syncNames.set(node.name.text, syncRemote); grew = true;
-          } else if (asyncRemote !== undefined && asyncNames.get(node.name.text) !== asyncRemote) {
+          } else if (asyncRemote !== undefined && !asyncNames.has(node.name.text)) {
             asyncNames.set(node.name.text, asyncRemote); grew = true;
           }
         }

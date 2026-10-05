@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import { syncBuiltinESMExports } from "node:module";
 import { existsSync, lstatSync, mkdirSync, readdirSync, realpathSync, rmSync, statSync, symlinkSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { createCompleteConfigurationFixture } from "./fixtures/configuration.js";
 import { loadConfiguration, loadConfigurationSnapshot } from "../src/config.js";
 import { DurabilityFaultError, type DurabilityFault } from "../src/storage/durable-fs.js";
@@ -14,7 +14,7 @@ import { pruneLocalStage, stageLocalPackage } from "../src/runtime/local-package
 import { sessionArgv } from "../src/tui/session.js";
 import { planPiSpawn } from "../src/runtime/pi-spawn-plan.js";
 import { decodeRunLease } from "../src/protocol/run-lease.js";
-import { applyPackageChange } from "../src/tui/project-settings.js";
+import { applyPackageChange, ensureProjectSettings } from "../src/tui/project-settings.js";
 import { RESIDENT_PATHS, confinedPath } from "../src/sandbox.js";
 import { actorSocketPathAt, agentRootPathAt, projectGitPathAt, projectMirrorPathAt, runnerSessionDirPathAt, runnerViewPathAt, workspacePathAt } from "../src/storage/paths.js";
 import { runEngineLogin } from "../src/tui/login.js";
@@ -1253,6 +1253,100 @@ test("DR25: a project's inline settings become a managed bundle that runs as it 
     assert.equal(repair.mode, "repair", "the project's missing entry is offered for removal");
     assert.ok(repair.rows.find(row => row.id === HELLO)?.missing);
     assert.throws(() => readSettings(projectPath), "the project itself is not runnable until the entry is removed");
+  } finally { f.close(); }
+});
+
+test("P0-8/DR25: settings hidden by a degraded oma-owned ancestor are repaired and read -- never seeded over", () => {
+  // A mode-000 `.projects` component makes existsSync answer false for the
+  // settings file it hides; the create branch then seeded a new generation
+  // over the committed bundle. The repair must restore observability, never
+  // content: after it runs, the path is observed again.
+  const f = createCompleteConfigurationFixture();
+  try {
+    const dataRoot = join(f.root, "oma");
+    const project = "demo";
+    const settingsDir = join(dataRoot, ".projects", project);
+    const societyDir = join(dataRoot, project);
+    mkdirSync(settingsDir, { recursive: true });
+    mkdirSync(societyDir, { recursive: true });
+    // The committed project settings (quota 4), as the managed bundle the
+    // ensure maintains, and the first society's own configuration the
+    // create branch would have seeded from (quota 5).
+    writeSettings(join(settingsDir, "config.json"), { ...f.config, society: project }, dataRoot);
+    assert.equal(projectBundle(join(settingsDir, "config.json"), dataRoot).layout.kind, "operations");
+    const grown = f.config.quota.societyAgents + 1;
+    writeSettings(join(societyDir, "config.json"), { ...f.config, society: project,
+      quota: { ...f.config.quota, societyAgents: grown, lineageAgents: grown } }, dataRoot);
+    for (const degraded of [settingsDir, join(dataRoot, ".projects")]) {
+      chmodSync(degraded, 0o000);
+      try {
+        assert.equal(existsSync(join(settingsDir, "config.json")), false, "the ancestor really hides the settings file");
+        const ensured = ensureProjectSettings(dataRoot, project, f.installation);
+        assert.equal(ensured.config.quota.societyAgents, f.config.quota.societyAgents,
+          "the committed settings were not replaced by the seed the hidden probe could not see");
+      } finally { chmodSync(degraded, 0o700); }
+      assert.equal(loadConfiguration(join(settingsDir, "config.json")).config.quota.societyAgents, f.config.quota.societyAgents);
+    }
+  } finally { f.close(); }
+});
+
+test("P0-8/DR25: a seed candidate that cannot be observed refuses, never reads as no earlier settings", () => {
+  // The society root is oma's own under the data root but is not the
+  // settings ensure's to repair, so an unobservable seed is an unknown --
+  // refused, not silently answered with the product's defaults.
+  const f = createCompleteConfigurationFixture();
+  try {
+    const dataRoot = join(f.root, "oma");
+    const project = "demo";
+    // The defaults path computes the deployment digest, so the fixture's
+    // installation carries the inventory files it enumerates -- without
+    // them the ensure refused there first and the hidden seed was never
+    // the thing being judged.
+    for (const asset of ["dist/implementation/contracts.js", "implementation/schema-v3.sql",
+      "dist/libexec/oma", "package.json", "package-lock.json"]) {
+      mkdirSync(join(f.installation, dirname(asset)), { recursive: true });
+      writeFileSync(join(f.installation, asset), "{}\n");
+    }
+    mkdirSync(join(f.installation, "implementation/systemd"), { recursive: true });
+    const societyDir = join(dataRoot, project);
+    mkdirSync(societyDir, { recursive: true });
+    writeSettings(join(societyDir, "config.json"), { ...f.config, society: project }, dataRoot);
+    chmodSync(societyDir, 0o000);
+    try { assert.throws(() => ensureProjectSettings(dataRoot, project, f.installation)); }
+    finally { chmodSync(societyDir, 0o700); }
+    assert.equal(existsSync(join(dataRoot, ".projects", project, "config.json")), false,
+      "no settings were seeded over a society configuration that could not be observed");
+  } finally { f.close(); }
+});
+
+test("P0-8/DR25: a package change still reaches a project its degraded settings directory hid", () => {
+  // applyPackageChange's per-project probe had the same blind spot: a
+  // mode-000 `.projects/<name>` read as absent settings and the project was
+  // skipped whole -- the committed role kept an extension the removal had
+  // ended. The owned repair runs before the probe.
+  const f = createCompleteConfigurationFixture();
+  try {
+    const dataRoot = join(f.root, "oma");
+    const packages = store(f.root, { "oma-hello-ext": hello });
+    const other = "other";
+    const otherDir = join(dataRoot, ".projects", other);
+    mkdirSync(otherDir, { recursive: true });
+    const otherPath = join(otherDir, "config.json");
+    writeSettings(otherPath, { ...f.config, society: other, installation: { ...f.config.installation, packages } }, dataRoot);
+    projectBundle(otherPath, dataRoot);
+    // The Workers chose the package's extension; it is committed.
+    const context = readExtensions(readSettingsForEditing(otherPath).snapshot!, "principal", "resident",
+      [{ source: "npm:oma-hello-ext", entries: [HELLO] }]);
+    toggleExtension(context, HELLO, "workers", true);
+    const installed: InstalledPackage[] = [{ source: "npm:oma-hello-ext", entries: [HELLO] }];
+    chmodSync(otherDir, 0o000);
+    try {
+      const applied = applyPackageChange({ dataRoot, project: null, libdir: f.installation, before: installed, after: [] });
+      assert.equal(applied.ok, true, JSON.stringify(applied.said));
+    } finally { chmodSync(otherDir, 0o700); }
+    const roles = loadConfigurationSnapshot(otherPath).authoredRoles;
+    assert.ok(!(roles.resident!.value.extensions as string[]).includes(HELLO),
+      "the removal reached the hidden project's committed roles instead of skipping it");
   } finally { f.close(); }
 });
 

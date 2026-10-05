@@ -1388,7 +1388,7 @@
     },
     {
       "path": "src/tui/project-settings.ts",
-      "sha256": "204220123ee1c39d674006bb0290444b746359e8012885612504b86219e01455"
+      "sha256": "c819d655c304f9f04febb29fc0e39d673e66c1cfd61b6ae6c870de3c5713e8ec"
     },
     {
       "path": "src/tui/prompt.ts",

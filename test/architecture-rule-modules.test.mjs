@@ -416,6 +416,38 @@ test("P0-8/DR32: the owned-state rule reaches the callback spellings and the re-
   }, root => assert.deepEqual(ownedStateFindings(root), []));
 });
 
+test("P0-8/DR32: shadowed member aliases settle at the first binding instead of diverging", () => {
+  // The bindings are keyed by the local name and know no scope, so two
+  // scopes binding one alias to different remotes flipped the entry every
+  // pass of the fixed point and the check never answered. First-wins keeps
+  // the earliest binding -- resolving `w` to either of its fs remotes flags
+  // the call all the same, the safe direction for a deny rule. This fixture
+  // diverged on the rule that rebound: its returning at all is the
+  // termination proof, and both calls still flag.
+  withFixture({
+    "src/views/example.ts": `import { writeFileSync, readFileSync } from "node:fs";
+export function a(p) { const w = writeFileSync; return w(p, "x"); }
+export function b(p) { const w = readFileSync; return w(p); }`,
+  }, root => {
+    const found = ownedStateFindings(root);
+    assert.equal(found.length, 2, JSON.stringify(found));
+    assert.ok(found.every(value => value.rule === "owned-state-raw-access" && value.reason.includes("writeFileSync")),
+      JSON.stringify(found));
+  });
+  // The same shadow through a namespace member and through the async
+  // surface: the remote an alias resolves to is the one written first,
+  // however the later scopes would have spelled it.
+  for (const text of [
+    `import * as fs from "node:fs";
+export function a(p) { const w = fs.writeFileSync; return w(p, "x"); }
+export function b(p) { const w = fs.readFileSync; return w(p); }`,
+    `import { open, readdir } from "node:fs/promises";
+export async function a(p) { const o = open; return (await o(p, "w")).close(); }
+export async function b(p) { const o = readdir; return o(p); }`,
+  ]) withFixture({ "src/views/example.ts": text }, root =>
+    assert.equal(ownedStateFindings(root).length, 2, text));
+});
+
 test("P0-8/DR32: an owned tail under its alias names still flags a raw observation", () => {
   // `stateRoot`-shaped names were not the only carriers -- the store, the
   // generations directories and the names the stage and ledger code carry
