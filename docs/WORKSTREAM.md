@@ -636,6 +636,18 @@ name collision/intended surface/hidden 미활성/idempotent reload/provenance/
 
 ## 9. 진행 로그
 
+- 2026-10-06 (BL5 맹검증 정산 후속 — underlay 오라클·win32 trailing-dot):
+  BL5 잔여 2건. (1) `SDK_STDIO_ENV_UNDERLAY`가 vendored SDK의
+  `DEFAULT_INHERITED_ENV_VARS`를 수동 미러해 vendor bump가 이름을
+  추가하면 ambient-env leak이 조용히 재개될 수 있던 오라클 공백 —
+  `mcp-bundle.test.ts`에 drift oracle 추가: 검증된 ESM+CJS 번들 바이트에서
+  두 플랫폼 리스트를 정적 파싱해 live export와 결박하고, 모든 이름이
+  tombstone·child-env sanction 중 하나의 disposition을 갖는지 단언
+  (주입명 `OMA_DRIFT_PROBE` 대조군으로 oracle 자체의 실패 경로도 고정).
+  (2) command basename admission이 shim 확장자를 1회만 제거해 win32의
+  trailing dot/space 해석(`npx.`·`npx.cmd.`·`npx..` → npx(.cmd))을
+  우회할 수 있던 문제 — `[.\s]+$` 제거와 shim strip을 fixpoint까지
+  반복해 비교; ` npx `·`xnpm.cmd.`·`npm-helper.` 등 허가 집합 불변.
 - 2026-10-09 (bundled #5 — pi-mcp-adapter 맹검증 정산): BL5 vendored
   어댑터에 대한 맹검증 잔여 발견 F1–F6 전부 구현·검증. F1 — vendored
   SDK의 `StdioClientTransport`가 env를

@@ -14,6 +14,7 @@ import {
   MCP_CONFIG_FILE_NAME, MCP_STATE_DIR_NAME, MCP_TOOL_NAMES,
   mcpChildEnvironment, mcpFacadeDropped, normalizeOmaMcpConfig, registerMcpTools,
 } from "../src/extension/mcp-tools.js";
+import { admittedChildEnv, CHILD_ENV_SCRATCH_NAMES } from "../src/extension/child-env.js";
 import { omaToolNames } from "../src/extension/mail-tools.js";
 import { verifyVendorBundle, vendoredBundleDir, VendorIntegrityError } from "../src/extension/vendor-bundle.js";
 import {
@@ -240,6 +241,16 @@ test("BL5: config validation forbids the surfaces, sinks and escapes upstream de
     ["win32 npm.ps1", { mcpServers: { s: { command: "npm.ps1" } } }, /fetch packages/],
     ["win32 npx.bat", { mcpServers: { s: { command: "npx.bat" } } }, /fetch packages/],
     ["uppercase NPM", { mcpServers: { s: { command: "NPM" } } }, /fetch packages/],
+    // win32 strips a name's trailing dots and spaces before resolving it, so
+    // the same fetcher arrives under a spelling the one-shot shim strip
+    // missed -- "npx." resolves to npx, "npx.cmd." to npx.cmd, "npx.." to
+    // npx. The admission collapses those suffixes to a fixpoint first.
+    ["win32 npx.", { mcpServers: { s: { command: "npx." } } }, /fetch packages/],
+    ["win32 npx.cmd.", { mcpServers: { s: { command: "npx.cmd." } } }, /fetch packages/],
+    ["win32 npx..", { mcpServers: { s: { command: "npx.." } } }, /fetch packages/],
+    ["win32 npx.exe.", { mcpServers: { s: { command: "C:\\Tools\\npx.exe." } } }, /fetch packages/],
+    ["win32 npm.cmd ", { mcpServers: { s: { command: "npm.cmd " } } }, /fetch packages/],
+    ["padded npx", { mcpServers: { s: { command: " npx " } } }, /fetch packages/],
     ["file url", { mcpServers: { s: { url: "file:///etc/passwd" } } }, /protocol file:/],
     ["env command sink", { mcpServers: { s: { command: "srv", env: { K: "!cat /etc/passwd" } } } }, /"!command" secret sinks/],
     ["header command sink", { mcpServers: { s: { url: "https://x", headers: { H: "!x" } } } }, /"!command" secret sinks/],
@@ -277,8 +288,9 @@ test("BL5: config validation forbids the surfaces, sinks and escapes upstream de
   }, { stateDir });
   assert.equal((ok.mcpServers.srv as { command: string }).command, "server-bin");
   // Path-qualified or shim-adjacent commands that are not the package
-  // fetchers pass through untouched.
-  for (const command of ["/usr/local/bin/server-bin", "npm-helper", "npx-serve", "srv.CMD"])
+  // fetchers pass through untouched -- including names whose trailing-dot
+  // collapse lands on something other than npx/npm.
+  for (const command of ["/usr/local/bin/server-bin", "npm-helper", "npx-serve", "srv.CMD", "xnpm.cmd.", "npm-helper."])
     assert.equal((normalizeOmaMcpConfig({ mcpServers: { s: { command } } }, { stateDir })
       .mcpServers.s as { command: string }).command, command, `${command} admitted`);
   const settings = ok.settings as Record<string, unknown>;
@@ -478,6 +490,60 @@ test("BL5: through the vendored SDK transport's underlay union, denied names sta
   const control = await runProbe(stripped, join(tmp(t), "env-control.json"));
   assert.equal(control.SHELL, "/bin/oma-sentinel",
     "control: without tombstones the SDK union resurfaces the ambient SHELL");
+});
+
+test("BL5: every SDK stdio underlay name has an OMA disposition -- a vendored SDK bump cannot silently re-open the ambient leak", async t => {
+  // SDK_STDIO_ENV_UNDERLAY in mcp-tools.ts is a hand-mirrored copy of the
+  // vendored SDK's DEFAULT_INHERITED_ENV_VARS. The SDK export is a
+  // platform ternary, so one import yields only this host's list; the
+  // win32 list would go unobserved on a POSIX runner. Read BOTH branch
+  // lists out of the verified vendored bytes (ESM and CJS builds), pin
+  // the builds to each other and to the live export for this platform,
+  // then require every listed name to carry a disposition: an explicit
+  // `undefined` tombstone, a sanctioned carried value, a scratch-owned
+  // name, or a name the shared child-env predicate would admit. A bump
+  // that adds a name lands in none of those and fails here until the
+  // underlay names it -- verified below with OMA_DRIFT_PROBE.
+  verifyVendorBundle(SRC_BUNDLE);
+  const sdkDist = join(SRC_BUNDLE, "node_modules", "@modelcontextprotocol", "client", "dist");
+  const branchLists = (file: string): { win32: string[]; posix: string[] } => {
+    const source = readFileSync(join(sdkDist, file), "utf8");
+    const ternary = /DEFAULT_INHERITED_ENV_VARS\s*=\s*[^?]*\?\s*\[([^\]]*)\]\s*:\s*\[([^\]]*)\]/.exec(source);
+    assert.ok(ternary, `${file}: DEFAULT_INHERITED_ENV_VARS platform ternary not found`);
+    const names = (list: string): string[] => [...list.matchAll(/"([^"]+)"/g)].map(match => match[1]!);
+    return { win32: names(ternary[1]!), posix: names(ternary[2]!) };
+  };
+  const esm = branchLists("stdio.mjs");
+  const cjs = branchLists("stdio.cjs");
+  for (const platform of ["win32", "posix"] as const) {
+    assert.ok(esm[platform].length > 0, `the vendored SDK's ${platform} underlay list is empty`);
+    assert.deepEqual([...cjs[platform]].sort(), [...esm[platform]].sort(),
+      `the vendored SDK's ESM and CJS ${platform} underlay lists diverged`);
+  }
+  // The parse reads the same names the SDK itself would export on this
+  // host -- the static read is pinned to the live module, not to a guess.
+  const live = await import(
+    join(vendoredBundleDir("pi-mcp-adapter"), "node_modules", "@modelcontextprotocol", "client", "dist", "stdio.mjs")) as {
+      DEFAULT_INHERITED_ENV_VARS: string[];
+    };
+  assert.deepEqual([...live.DEFAULT_INHERITED_ENV_VARS].sort(),
+    [...esm[process.platform === "win32" ? "win32" : "posix"]].sort(),
+    "the live SDK export does not match the vendored bytes this host runs");
+
+  const env = mcpChildEnvironment({}, join(tmp(t), "scratch"));
+  const undisposed = (names: Iterable<string>): string[] => [...names].filter(name => {
+    const tombstoned = Object.hasOwn(env, name) && env[name] === undefined;
+    const carried = typeof env[name] === "string";
+    const sanctioned = CHILD_ENV_SCRATCH_NAMES.includes(name) ||
+      admittedChildEnv(name, "oma-env-disposition-probe");
+    return !tombstoned && !carried && !sanctioned;
+  });
+  assert.deepEqual(undisposed(new Set([...esm.win32, ...esm.posix])), [],
+    "an SDK underlay name reaches a child with no tombstone and no sanction -- add it to SDK_STDIO_ENV_UNDERLAY");
+  // The oracle fires on the drift it exists for: an underlay name the
+  // tombstone list and the scrub both miss is reported, not passed.
+  assert.deepEqual(undisposed([...esm.posix, "OMA_DRIFT_PROBE"]), ["OMA_DRIFT_PROBE"],
+    "a vendored bump adding an uncovered underlay name must fail");
 });
 
 // ---------------------------------------------------------------------------

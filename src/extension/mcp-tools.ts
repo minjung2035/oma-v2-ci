@@ -44,9 +44,9 @@
  *   projectServers) rather than clamping them, because an OMA-owned file
  *   asking for a forbidden surface is a violation, not a preference.
  * - Server entries: command is rejected when its basename -- directory
- *   prefixes and the win32 `.cmd`/`.exe`/`.bat`/`.ps1` shims stripped,
- *   case-folded -- is "npx"/"npm" (upstream's resolver would fetch
- *   packages at connect time); `url` must be http(s); `socket` must be
+ *   prefixes, the win32 `.cmd`/`.exe`/`.bat`/`.ps1` shims and trailing
+ *   dots/spaces stripped to a fixpoint, case-folded -- is "npx"/"npm"
+ *   (upstream's resolver would fetch packages at connect time); `url` must be http(s); `socket` must be
  *   absolute; `caFile`, `requestHeadersCommand`, `pluginDataDir`,
  *   `literalEnv` and per-server `directTools` are rejected outright;
  *   `!`-command secret sinks in env/headers/bearerToken/oauth.clientSecret
@@ -209,9 +209,18 @@ function normalizeServer(name: string, raw: unknown): Record<string, unknown> {
     // Package fetchers are refused by basename -- directory prefixes and
     // the win32 .cmd/.exe/.bat/.ps1 shims stripped, case-folded -- so
     // "/usr/bin/npx" or "C:\\tools\\npm.cmd" is the same admission as the
-    // bare name, not a bypass of the no-fetch rule.
-    const commandLeaf = (entry.command.split(/[\\/]/).pop() ?? "").trim().toLowerCase()
-      .replace(/\.(cmd|exe|bat|ps1)$/, "");
+    // bare name, not a bypass of the no-fetch rule. win32 also strips a
+    // name's trailing dots and spaces before resolving it, so "npx.",
+    // "npx.cmd." or "npx.." still reach npx.cmd: collapse trailing
+    // [.\s]+ and the shim extensions to a fixpoint before comparing --
+    // over-folding is the safe direction here, it can only refuse more
+    // spellings of the same fetcher.
+    let commandLeaf = (entry.command.split(/[\\/]/).pop() ?? "").trim().toLowerCase();
+    for (;;) {
+      const next = commandLeaf.replace(/[.\s]+$/, "").replace(/\.(cmd|exe|bat|ps1)$/, "");
+      if (next === commandLeaf) break;
+      commandLeaf = next;
+    }
     if (commandLeaf === "npx" || commandLeaf === "npm")
       throw configError(`server ${JSON.stringify(name)}: command ${JSON.stringify(entry.command)} would fetch packages at connect time; install the server and name the binary`);
   }
@@ -323,7 +332,11 @@ export function normalizeOmaMcpConfig(raw: unknown, options?: { interactive?: bo
  * `serverParams.env` at spawn (its `getDefaultEnvironment()`): the POSIX
  * list plus every win32 spelling, so the tombstone binds whichever list
  * applies — and a config that reaches the other platform's runtime cannot
- * leak its names either. */
+ * leak its names either. This list mirrors the vendored
+ * DEFAULT_INHERITED_ENV_VARS by hand; the boundary test parses both
+ * platform lists out of the verified bundle bytes and fails the moment a
+ * vendored SDK bump adds a name this underlay does not tombstone and the
+ * child-env posture does not sanction. */
 const SDK_STDIO_ENV_UNDERLAY: ReadonlyArray<string> = [
   "HOME", "LOGNAME", "PATH", "SHELL", "TERM", "USER",
   "APPDATA", "HOMEDRIVE", "HOMEPATH", "LOCALAPPDATA", "PROCESSOR_ARCHITECTURE",
