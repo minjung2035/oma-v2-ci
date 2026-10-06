@@ -414,7 +414,7 @@
     "BL1"
    ],
    "sha256": "e1778109feb28f141b3e96e34c31311819c184ba4f0e8dcd4766a30018fbe9da",
-   "note": "Read in full: the provision report's gitlinkNote is surfaced through the existing notice channel at society start — a loud warning that integration will refuse, while start itself stays permissive. 2026-10-05 B4: the mail port feeds readMailbox the agent names the broker's status view last observed -- before any observation the roster is undefined and the rows keep the headers' own names. BL1 review -- the Principal engine receives the encoded principal surface plan through its session environment."
+   "note": "Read in full: the provision report's gitlinkNote is surfaced through the existing notice channel at society start \u2014 a loud warning that integration will refuse, while start itself stays permissive. 2026-10-05 B4: the mail port feeds readMailbox the agent names the broker's status view last observed -- before any observation the roster is undefined and the rows keep the headers' own names. BL1 review -- the Principal engine receives the encoded principal surface plan through its session environment."
   },
   {
    "path": "src/git.ts",
@@ -480,7 +480,7 @@
     "UX-09"
    ],
    "sha256": "836359fc39bd9ecb9100d951f126dffc83f31c4e0d3d1c29f665f858c5da06ef",
-   "note": "Read in full: CHECK_CHECKOUT emits OMA_ERROR=UNSUPPORTED_PROFILE plus OMA_GITLINK=<path> and exits 125; run() classifies a nonzero exit as the named refusal only when the marker owns a whole stderr line — the same bytes inside a longer line or on stdout stay CHECK_FAILED — and re-observes the immutable candidate host-side rather than trusting sandbox output. The marker is only a claim: refuseGitlinks routes the re-observation through observed() so unknown stays REF_STATE_UNKNOWN (reconcilable, never terminal failed), corrupt stays STORE_CORRUPT, refused stays the candidate-scope INVALID_REQUEST, and a present answer with no gitlinks — the marker disproved itself — falls through to the unclassified CHECK_FAILED. Only present-with-paths earns UNSUPPORTED_PROFILE with details.paths."
+   "note": "Read in full: CHECK_CHECKOUT emits OMA_ERROR=UNSUPPORTED_PROFILE plus OMA_GITLINK=<path> and exits 125; run() classifies a nonzero exit as the named refusal only when the marker owns a whole stderr line \u2014 the same bytes inside a longer line or on stdout stay CHECK_FAILED \u2014 and re-observes the immutable candidate host-side rather than trusting sandbox output. The marker is only a claim: refuseGitlinks routes the re-observation through observed() so unknown stays REF_STATE_UNKNOWN (reconcilable, never terminal failed), corrupt stays STORE_CORRUPT, refused stays the candidate-scope INVALID_REQUEST, and a present answer with no gitlinks \u2014 the marker disproved itself \u2014 falls through to the unclassified CHECK_FAILED. Only present-with-paths earns UNSUPPORTED_PROFILE with details.paths."
   },
   {
    "path": "src/runtime/provision.ts",
@@ -491,7 +491,7 @@
     "UX-09"
    ],
    "sha256": "9ed63d7853605e7483a6a437d6bc8a0df6bd24a110e1b4a21454485e4fbfe371",
-   "note": "Read in full: after seeding/mirroring, canonical main is observed and a gitlinkNote naming every path is returned — provisioning stays permissive while telling the user integration will refuse until the links are removed."
+   "note": "Read in full: after seeding/mirroring, canonical main is observed and a gitlinkNote naming every path is returned \u2014 provisioning stays permissive while telling the user integration will refuse until the links are removed."
   },
   {
    "path": "src/views.ts",
@@ -516,7 +516,7 @@
     "UX-09"
    ],
    "sha256": "6910618c06fb58c2247296178ee3fca9c796a12ab6a7be1e12e03ddca787d6c7",
-   "note": "Read in full: the canonical adapter owns every observation byte budget; GITLINKS_OBSERVATION_BYTES (256 MiB) is the named bound the gitlinks() whole-tree ls-tree enumeration gets instead of the shared 4 MiB that wedged ~70k-entry trees into REF_STATE_UNKNOWN. Over the bound the answer stays output-limited → unknown, never a truncated 'no gitlinks'; the spawn model is one pinned executable plus argv, so no server-side filtering exists and the record grammar stays whole for the parser."
+   "note": "Read in full: the canonical adapter owns every observation byte budget; GITLINKS_OBSERVATION_BYTES (256 MiB) is the named bound the gitlinks() whole-tree ls-tree enumeration gets instead of the shared 4 MiB that wedged ~70k-entry trees into REF_STATE_UNKNOWN. Over the bound the answer stays output-limited \u2192 unknown, never a truncated 'no gitlinks'; the spawn model is one pinned executable plus argv, so no server-side filtering exists and the record grammar stays whole for the parser."
   },
   {
    "path": "src/git/quarantine.ts",
@@ -529,7 +529,7 @@
     "S-05"
    ],
    "sha256": "4a1186e6995efb7ef028f71c3bb12320ea96b6733d7136a60a3a7debbd0c60cd",
-   "note": "Read in full: a nonzero namespace exit classifies through OMA_ERROR=<code> only when the failure word owns a whole stderr line exactly as the script's echo emits it — the same bytes inside a longer line are command output, not the class, and an unclassified exit stays the honest UNSUPPORTED_PROFILE namespace refusal. A non-exited observation is REF_STATE_UNKNOWN, non-UTF-8 output is REF_STATE_UNKNOWN, and success is believed only when stdout echoes the candidate exactly and canonicalHas confirms it landed. Staging is leased before the namespace runs and collected only once the command settled."
+   "note": "Read in full: a nonzero namespace exit classifies through OMA_ERROR=<code> only when the failure word owns a whole stderr line exactly as the script's echo emits it \u2014 the same bytes inside a longer line are command output, not the class, and an unclassified exit stays the honest UNSUPPORTED_PROFILE namespace refusal. A non-exited observation is REF_STATE_UNKNOWN, non-UTF-8 output is REF_STATE_UNKNOWN, and success is believed only when stdout echoes the candidate exactly and canonicalHas confirms it landed. Staging is leased before the namespace runs and collected only once the command settled."
   },
   {
    "path": "src/entry/pi-interactive-host.ts",
@@ -1139,8 +1139,8 @@
    "oracles": [
     "BL1"
    ],
-   "sha256": "85693383bb9256a34f1ebb32cf2a2c2401cdd6f4874e4b82848c8fc2eaba4e52",
-   "note": "Re-read in full for the deny-by-default rework: the rule-table denylist could not converge (the blind probe left 84/161 hostile vars surviving) and is replaced by OMA_LSP_CHILD_ENV_ALLOW -- path, locale/terminal identity (lang/language/tz/term/no_color + the one lc_ prefix), login identity, Windows process plumbing. hardenedAdapter now builds the child's WHOLE environment: allowlisted inherited names, then the adapter's declared env through the same admittedChildEnv predicate (pi-lsp.json cannot re-arm a channel), then the per-call scratch HOME/XDG/TMP redirects last. Denied names are absent, not emptied -- an empty path-list element is the current directory to a loader. Token-typed names refuse /, \\, NUL and '..' in values (lc_*/term/lang are file-resolved channels); tz keeps Area/City but refuses absolute/colon-prefixed. The four sandbox proxy names survive only when the value equals the pin recomputed from OMA_EGRESS_PROXY_SOCKET+PORT (pi-spawn-plan.ts); every other *_proxy and every unwired env derives no pin. lspChildEnvironment verifies the bundle then applies the vendored mergeEnvironment -- whose OMA divergence makes the map the complete env (see command.js entry)."
+   "sha256": "d7042059d635590f17587a5dc9c87f8a589467b7bf8bea71c92fb1d5f24ee7eb",
+   "note": "Re-read in full for the name-charset residual repair: the prior review guarded VALUES only, so a key could carry what the guard never saw -- adapter env {\"LC_ALL=/etc/evil-locale\": \"C\"} lowercased into the lc_ prefix and serialized as LC_ALL=/etc/evil-locale=C, a path-shaped value smuggled through the NAME half of NAME=value (NUL keys were the same class, reaching spawn as an unhandled ERR_INVALID_ARG_VALUE). admittedChildEnv now gates the raw key on CHILD_ENV_KEY_CHARSET [A-Za-z0-9_]+ BEFORE toLowerCase -- folding first would launder a hostile name (U+212A KELVIN SIGN folds to plain k) into the lc_ prefix. The one predicate serves both hardenedAdapter tiers (inherited process.env and adapter-declared env); the scratch tier bypasses it as compile-time constants. '=' and NUL names are inexpressible in POSIX environ, so they are adapter-channel only; '..' and non-ASCII names ride either. Proxy names were always exact-match, so the pin was never reachable through a forged key -- the charset gate makes that structural. Allowlist, token-value guard, proxy pin, scratch precedence and deny-by-default posture are otherwise unchanged. Corpus record corrected: 279 names plantable through both channels plus 7 adapter-only key-charset cases, 0 survivors post-fix."
   },
   {
    "path": "src/extension/vendor-bundle.ts",

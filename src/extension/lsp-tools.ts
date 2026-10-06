@@ -42,7 +42,12 @@
  *   byte-for-byte. Adapter-declared env goes through the same
  *   predicate: a pi-lsp.json `env` block cannot name a channel the
  *   allowlist does not, so `GOPRIVATE` or `NODE_OPTIONS` declared there
- *   is stripped exactly as if inherited. Everything else --
+ *   is stripped exactly as if inherited -- and the NAME itself must be
+ *   `[A-Za-z0-9_]+` on the raw key: a key is the `NAME` half of the
+ *   `NAME=value` string the child receives, so `LC_ALL=/etc/evil-locale`
+ *   would otherwise serialize a path-shaped value straight past the
+ *   token guard, and a NUL name is an unhandled ERR_INVALID_ARG_VALUE
+ *   at spawn. Everything else --
  *   credentials, loader preloads, toolchain config, session/IPC
  *   authority, OMA/PI wiring, every other `*_proxy` -- is denied by
  *   absence, not emptied: loaders treat empty path-list elements as the
@@ -221,11 +226,30 @@ function egressProxyValue(lower: string): string | undefined {
   return lower === "no_proxy" ? "127.0.0.1,localhost,::1" : `http://127.0.0.1:${Number(port)}`;
 }
 
+/** The one charset a child env name may be written in. A name is not
+ * inert labeling: it is the `NAME` half of the `NAME=value` byte string
+ * the child receives, so a key can carry what the value guard never
+ * sees -- `LC_ALL=/etc/evil-locale` lowercases into the `lc_` prefix
+ * and serializes as `LC_ALL=/etc/evil-locale=C`, a path smuggled
+ * through the key side, and a NUL name is the same class (reaching
+ * spawn as an unhandled ERR_INVALID_ARG_VALUE). Checked on the RAW key
+ * before any folding: U+212A (KELVIN SIGN) lowercases to plain `k`, so
+ * folding first would launder a hostile name into the `lc_` prefix.
+ * `=` and NUL cannot be planted in process.env -- an environ entry is a
+ * `name=value` C string -- so they arrive only through an adapter's
+ * declared env; `..` and non-ASCII names ride either channel. */
+const CHILD_ENV_KEY_CHARSET = /^[A-Za-z0-9_]+$/;
+
 /** A name reaches the child only through the allowlist -- or, for the
  * four proxy names, only when its value is the sandbox's own injected
- * loopback byte-for-byte. Case-insensitive, so a case-variant of an
- * unlisted name inherits the same verdict. */
+ * loopback byte-for-byte -- and only in the sanctioned name charset.
+ * Case-insensitive, so a case-variant of an unlisted name inherits the
+ * same verdict. Both `hardenedAdapter` tiers -- the inherited
+ * process.env loop and the adapter's declared env -- funnel through
+ * this one predicate; the per-call scratch names bypass it as compiler
+ * constants. */
 function admittedChildEnv(key: string, value: string): boolean {
+  if (!CHILD_ENV_KEY_CHARSET.test(key)) return false;
   const lower = key.toLowerCase();
   if (CHILD_PROXY_NAMES.has(lower)) return value === egressProxyValue(lower);
   const named = OMA_LSP_CHILD_ENV_ALLOW.has(lower) ||

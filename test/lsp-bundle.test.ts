@@ -388,16 +388,26 @@ test("BL1: a hung server's call is cancelled by the caller's abort signal", asyn
   await assert.rejects(pending, /abort|aborted/i);
 });
 
-/** The test-side restatement of the child env boundary: the exact
- * allowlist names, the one `lc_` prefix, the four proxy names (whose
- * values the source pins to the sandbox's injected loopback), and the
- * scratch-redirected homes. A child env whose keys all satisfy this
- * predicate holds only the sanctioned set -- the deny-by-default
- * oracle. */
+/** The test-side restatement of the child env boundary: a charset-clean
+ * name (`[A-Za-z0-9_]+` on the raw key -- a name is the `NAME` half of
+ * the `NAME=value` the child receives, so the key side can smuggle too),
+ * then the exact allowlist names, the one `lc_` prefix, the four proxy
+ * names (whose values the source pins to the sandbox's injected
+ * loopback), and the scratch-redirected homes. A child env whose keys
+ * all satisfy this predicate holds only the sanctioned set -- the
+ * deny-by-default oracle. */
 const CHILD_SCRATCH_NAMES = new Set(["home", "xdg_cache_home", "xdg_config_home", "xdg_data_home",
   "tmpdir", "temp", "tmp", "userprofile", "appdata", "localappdata"]);
 const CHILD_PROXY_NAMES = new Set(["http_proxy", "https_proxy", "all_proxy", "no_proxy"]);
+/** The source predicate's name-side gate, restated: a name is the `NAME`
+ * half of the `NAME=value` byte string the child receives, so it must be
+ * `[A-Za-z0-9_]+` on the RAW key -- folding first would launder a hostile
+ * name into the `lc_` prefix (U+212A, the KELVIN SIGN, lowercases to
+ * plain `k`). Without it the oracle itself shares the smuggle: it would
+ * call `LC_ALL=/etc/evil-locale` sanctioned. */
+const CHILD_ENV_KEY_CHARSET = /^[A-Za-z0-9_]+$/;
 const sanctionedChildName = (key: string): boolean => {
+  if (!CHILD_ENV_KEY_CHARSET.test(key)) return false;
   const lower = key.toLowerCase();
   return OMA_LSP_CHILD_ENV_ALLOW.has(lower) || lower.startsWith("lc_") ||
     CHILD_PROXY_NAMES.has(lower) || CHILD_SCRATCH_NAMES.has(lower);
@@ -428,8 +438,9 @@ test("BL1: the language-server child env is deny-by-default -- OMA wiring and lo
 test("BL1/F4: deny-by-default -- the whole hostile corpus is stripped from the inherited env AND the adapter env", async t => {
   // The corpus is the union of every survivor class the blind
   // verification found in the denylist (the 84-of-161 probe), the channels
-  // each round itself denied, and names OMA has never enumerated at all.
-  // Under deny-by-default the verdict is presence: a denied name must be
+  // each round itself denied, names OMA has never enumerated at all, and
+  // hostile-charset names a real process.env can carry. Under
+  // deny-by-default the verdict is presence: a denied name must be
   // absent, not emptied -- an empty path-list element still resolves as
   // the current directory to a loader.
   const corpus = [
@@ -503,6 +514,15 @@ test("BL1/F4: deny-by-default -- the whole hostile corpus is stripped from the i
     // Names OMA has never enumerated -- deny-by-default is what makes
     // "unlisted" mean "denied".
     "NEVER_ENUMERATED_CHANNEL", "SOME_RANDOM_THING_9", "INJECTION_SURFACE_X", "ZERO_KNOWLEDGE_VAR",
+    // Hostile-charset names a real process.env CAN carry: `..` and
+    // non-ASCII bytes enumerate fine in environ, and a lowercased prefix
+    // match must not launder them -- `LC_ÄLL` folds to `lc_äll`, and
+    // U+212A (KELVIN SIGN) folds to plain `k`, so `LC_KETCHUP` becomes
+    // `lc_ketchup` under toLowerCase. `=` and NUL are NOT here: an
+    // environ entry IS `name=value` C string, so those names cannot be
+    // planted -- they arrive only through an adapter's declared env and
+    // live in hostileKeys below.
+    "LC_..EVIL", "..", "LC_ÄLL", "LC_KETCHUP",
   ];
   plantEnv(t, corpus);
   // No egress wiring in this test: every proxy var is denied even when
@@ -524,6 +544,31 @@ test("BL1/F4: deny-by-default -- the whole hostile corpus is stripped from the i
   // Nothing beyond the sanctioned set exists for the child at all --
   // the inherited env contributes only allowlisted names.
   for (const key of Object.keys(env))
+    assert.ok(sanctionedChildName(key), `${key} is not a sanctioned child name`);
+  // The key side is a channel too: a name is the `NAME` half of the
+  // `NAME=value` the child receives, so a key can carry what the value
+  // guard never sees. `LC_ALL=/etc/evil-locale` lowercases into the
+  // `lc_` prefix and spawn serializes it as `LC_ALL=/etc/evil-locale=C`
+  // -- a path-shaped value smuggled through the key, admitted before the
+  // charset gate existed. `=` and NUL names cannot be planted: an
+  // environ entry IS `name=value` C string, so these arrive only
+  // through an adapter's declared env (pi-lsp.json keys may carry
+  // either). A forged proxy or scratch name is the same class.
+  const hostileKeys = [
+    "LC_ALL=/etc/evil-locale",          // the smuggle: path value rides the key
+    "LC_MESSAGES=../../etc/evil",       // `=` plus traversal in the key
+    "LC_ALL\0EVIL",                     // admitted, a NUL name reaches spawn unhandled
+    "LC_ÄLL=/x",                        // unicode and `=` together
+    "HOME=/attacker/scratch",           // a scratch-supplied name forged in the key
+    "http_proxy=http://corp.example:8080", // the proxy class forged in the key
+    "no_proxy=,evil.example",
+  ];
+  const keyed = await lspChildEnvironment({ env: Object.fromEntries(hostileKeys.map(key => [key, "C"])) } as never);
+  for (const key of hostileKeys) {
+    assert.equal(keyed[key], undefined, `${JSON.stringify(key)} reached the child through its key`);
+    assert.equal(sanctionedChildName(key), false, `${JSON.stringify(key)} satisfies the name oracle`);
+  }
+  for (const key of Object.keys(keyed))
     assert.ok(sanctionedChildName(key), `${key} is not a sanctioned child name`);
 });
 
@@ -596,6 +641,20 @@ test("BL1/F4: only the Resident sandbox's own loopback proxies reach the child -
   process.env.HTTPS_PROXY = "http://user:pass@proxy.corp:3128";
   const hostile = await lspChildEnvironment({ env: {} } as never);
   assert.equal(hostile.HTTPS_PROXY, undefined, "a credential-carrying proxy value is denied");
+  // The key side cannot forge a proxy var either: a name carrying a
+  // proxy spelling plus `=value` is not the name -- the charset gate
+  // rejects it before the pin comparison is consulted, so a proxy var
+  // survives only under a verbatim-sanctioned name AND the pinned value.
+  const forged = await lspChildEnvironment({ env: {
+    "http_proxy=http://127.0.0.1:8318": "x",  // the pinned value itself inside the key
+    "no_proxy=,evil.example": "x",
+  } } as never);
+  assert.equal(forged["http_proxy=http://127.0.0.1:8318"], undefined,
+    "a proxy spelling inside the key is not the name");
+  assert.equal(forged["no_proxy=,evil.example"], undefined);
+  // What survives under the real name is the inherited pin, not "x" --
+  // the forged key smuggled nothing.
+  assert.equal(forged.http_proxy, "http://127.0.0.1:8318");
   // Without the egress wiring every proxy var is denied -- a host engine
   // (or an env carrying only part of the wiring) hands no proxy down.
   delete process.env.OMA_EGRESS_PROXY_SOCKET;

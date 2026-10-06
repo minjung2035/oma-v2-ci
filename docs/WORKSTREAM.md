@@ -636,6 +636,31 @@ name collision/intended surface/hidden 미활성/idempotent reload/provenance/
 
 ## 9. 진행 로그
 
+- 2026-10-06 (bundled #1 — LSP 자식 env 이름-charset 잔여 정산): 맹검증
+  잔여 — `admittedChildEnv`가 VALUE만 guard하고 KEY charset은
+  미검증이었다. adapter env `{"LC_ALL=/etc/evil-locale": "C"}`는
+  lowercase 후 `lc_` prefix에 걸려 통과하고 spawn 직렬화 결과
+  `LC_ALL=/etc/evil-locale=C`가 됨 — path-shaped 값이 KEY를 타고
+  `tokenValueAllowed`를 우회. NUL 이름도 같은 class(spawn의
+  ERR_INVALID_ARG_VALUE — fail-closed지만 unhandled). `lc_` prefix
+  class + admin이 제어하는 adapter env에서만 도달 가능했으나 선언된
+  predicate 불변식은 깨진 상태였다. 수정: `CHILD_ENV_KEY_CHARSET
+  = /^[A-Za-z0-9_]+$/`를 RAW key에 fold 전 적용 — U+212A(KELVIN
+  SIGN)가 `k`로 fold되는 unicode 세탁도 차단. `admittedChildEnv`는
+  단일 predicate라 inherited(process.env)·adapter(pi-lsp.json env)
+  양 채널이 동시에 닫히고, scratch tier는 컴파일 상수라 우회가
+  정합적. `=`·NUL 이름은 POSIX environ이 표현 불가(엔트리 자체가
+  `name=value` C 문자열)라 adapter 채널 전용, `..`·non-ASCII 이름은
+  양 채널을 탄다. proxy-pin은 proxy 이름이 exact-match라 key 속임으로는
+  애초 도달 불가 — charset gate로 구조 봉인 + forge 케이스 추가.
+  오라클 `sanctionedChildName`이 같은 gap을 공유하고 있어 동일
+  charset으로 정합. 기록 정정: 이전 항목의 "155명"은 실측 오기 —
+  해당 커밋의 corpus는 275명이었다(아래 항목 수정). 이번 추가로
+  corpus 279(양 채널 plantable) + adapter-only hostileKeys 7 = 286명.
+  fail→pass: baseline은 `LC_..EVIL`·`LC_ÄLL`·`LC_KETCHUP`(양 채널),
+  `LC_ALL=/etc/evil-locale`·`LC_ALL\0EVIL`(adapter)을 admit —
+  post-fix 0/286 생존. NOT_RUN: 실제 언어 서버 바이너리
+  e2e(픽스처만), macOS·systemd 레인.
 - 2026-10-06 (bundled #1 — LSP 자식 env deny-by-default): 규칙-테이블
   denylist의 근본적 불수렴 정산 — 맹검증 코퍼스(161명)에서 84명이
   살아남았고 전부 toolchain/로더 주입 채널이었다. 언어 서버는
@@ -656,7 +681,8 @@ name collision/intended surface/hidden 미활성/idempotent reload/provenance/
   모든 proxy 부재. vendored `mergeEnvironment`가
   `{...process.env}`로 seed하던 것을 OMA divergence(command.js
   1 edit)로 `{}` 교체 — vendor 스크립트 경유, --check PASS.
-  테스트: 코퍼스 전체(155명)를 inherited+adapter 양 채널에서
+  테스트: 코퍼스 전체(275명 — 이전 기록의 155는 실측 오기, 위 잔여
+  정산 항목에서 정정)를 inherited+adapter 양 채널에서
   부재 단언, allowlist 생존자·path-shaped 값 거부·proxy pin·
   scratch 우위 단언, 실제 spawn된 자식 안 env-probe(pid-echo로
   per-call 프로세스 증명 — PI_LSP_TEST_* 채널이 deny되어 wire
