@@ -48,8 +48,11 @@ export function collectSupportedFiles(adapter, root, requestedPaths, limit) {
     }
     return files;
 }
-function collectPath(adapter, targetPath, files, seen, visitedDirectories, realRoot, limit) {
-    if (files.length >= limit || !existsSync(targetPath))
+// OMA divergence (applied by scripts/vendor-pi-lsp.mjs; recorded under
+// generated.divergences in manifest.json): recursion depth is bounded.
+const OMA_MAX_COLLECT_DEPTH = 256;
+function collectPath(adapter, targetPath, files, seen, visitedDirectories, realRoot, limit, depth = 0) {
+    if (files.length >= limit || !existsSync(targetPath) || depth > OMA_MAX_COLLECT_DEPTH)
         return;
     if (!isInsidePath(realRoot, realpathSync(targetPath)))
         return;
@@ -73,7 +76,7 @@ function collectPath(adapter, targetPath, files, seen, visitedDirectories, realR
             break;
         if ((entry.isDirectory() || entry.isSymbolicLink()) && adapter.skipDirectories.has(entry.name))
             continue;
-        collectPath(adapter, path.join(targetPath, entry.name), files, seen, visitedDirectories, realRoot, limit);
+        collectPath(adapter, path.join(targetPath, entry.name), files, seen, visitedDirectories, realRoot, limit, depth + 1);
     }
 }
 function resolveWorkspacePath(root, inputPath, label) {

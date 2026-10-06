@@ -106,6 +106,11 @@ const WRITE_TOOLS: readonly string[] = Object.freeze([
 /** Tools whose write is a parameter of the call, not the tool: only a
  * `write: true` (or `force: true`) call is a mutation. */
 const CONDITIONAL_WRITE_TOOLS: readonly string[] = Object.freeze(["lsp_fix"]);
+/** Reads these tools make still stay inside the workspace: the vendored
+ * LSP runtime resolves every named path against the pinned workspace root
+ * and refuses anything outside it, so admitting a package-store path here
+ * would only delay the same refusal to deeper in the call. */
+const WORKSPACE_ONLY_PATH_TOOLS: readonly string[] = Object.freeze(["lsp_diagnostics", "lsp_fix"]);
 const NO_ROOTS: readonly string[] = Object.freeze([]);
 
 /** Every path the call names: `path`, plus each entry of a `paths` list.
@@ -169,7 +174,7 @@ export function guardWorkspaceTools(pi: ExtensionAPI, workspace: string,
     // inside the workspace; no other host path is opened. A call that
     // names several paths (lsp_diagnostics's paths list) is admitted only
     // when every named path is.
-    const roots = writes ? NO_ROOTS : readableRoots;
+    const roots = (writes || WORKSPACE_ONLY_PATH_TOOLS.includes(event.toolName)) ? NO_ROOTS : readableRoots;
     if (inputPaths(input).every(path => admittedRoot(workspace, roots, path) !== null)) return undefined;
     return { block: true, reason: "tool path is outside the agent workspace" };
   });

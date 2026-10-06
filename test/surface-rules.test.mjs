@@ -51,6 +51,15 @@ test("extension-dynamic-load and extension-execute: no run-time loading, no invo
     findings => assert.ok(has(findings, "extension-dynamic-load")));
   withTree({ "src/extension/a.ts": 'export const load = () => require("x");' },
     findings => assert.ok(has(findings, "extension-dynamic-load")));
+  // The one sanctioned deferred load: a literal specifier into the vendored
+  // bundle dir, evaluated only behind verifyVendorBundle. A computed or
+  // outside-vendor specifier is still forbidden.
+  withTree({ "src/extension/lsp-tools.ts": 'export const load = () => import("./vendor/pi-lsp/runtime/command.js");' },
+    findings => assert.ok(!has(findings, "extension-dynamic-load")));
+  withTree({ "src/extension/lsp-tools.ts": 'export const load = (name: string) => import(`./vendor/pi-lsp/runtime/${name}.js`);' },
+    findings => assert.ok(has(findings, "extension-dynamic-load")));
+  withTree({ "src/extension/lsp-tools.ts": 'export const load = () => import("./vendor/../a.js");' },
+    findings => assert.ok(has(findings, "extension-dynamic-load")));
   withTree({ "src/extension/a.ts": "export const run = (tool: any) => tool.execute();" },
     findings => assert.ok(has(findings, "extension-execute")));
   withTree({ "src/extension/a.ts": "export const run = (tool: any) => tool.execute.call(tool);" },

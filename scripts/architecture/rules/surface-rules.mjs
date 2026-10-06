@@ -4,7 +4,7 @@
 // passed or failed on prose. Every rule here reads the syntax tree.
 import ts from "typescript";
 import { extractEdges } from "../../dependency-graph.mjs";
-import { eachNode, exists, filesUnder, finding, normalizeRelativeImport, propertyName, sourceOf, strip } from "./shared.mjs";
+import { eachNode, exists, filesUnder, finding, normalizeRelativeImport, propertyName, sourceOf, strip, VENDORED_EXTENSION_DIR } from "./shared.mjs";
 
 const EXTENSION_ENTRY = "src/pi-extension.ts";
 const EXTENSION_EXTERNALS = new Set(["@earendil-works/pi-coding-agent", "typebox"]);
@@ -168,8 +168,20 @@ function extensionRules(root, findings) {
     }
     eachNode(source, node => {
       if (!ts.isCallExpression(node)) return;
-      if (node.expression.kind === ts.SyntaxKind.ImportKeyword || ["require", "createRequire"].includes(calleeName(node)))
-        findings.push(finding("extension-dynamic-load", file, "the trusted extension loads no code at run time"));
+      // The one deferred load the extension may make: a literal import()
+      // specifier inside the vendored bundle dir -- byte-pinned files
+      // evaluated only after verifyVendorBundle has checked them (BL1/F3),
+      // which static imports cannot express because they evaluate before
+      // the importing module runs. Any other run-time load is forbidden.
+      if (node.expression.kind === ts.SyntaxKind.ImportKeyword) {
+        const argument = node.arguments[0];
+        const specifier = argument !== undefined && ts.isStringLiteralLike(argument) ? argument.text : null;
+        const vendored = specifier !== null &&
+          normalizeRelativeImport(file, specifier)?.startsWith(`${VENDORED_EXTENSION_DIR}/`) === true;
+        if (!vendored)
+          findings.push(finding("extension-dynamic-load", file, "the trusted extension loads no code at run time outside a verified vendored bundle"));
+      } else if (["require", "createRequire"].includes(calleeName(node)))
+        findings.push(finding("extension-dynamic-load", file, "the trusted extension loads no code at run time outside a verified vendored bundle"));
       // TSP-006: opening a group activates tools; Pi's own pipeline runs them.
       const callee = strip(node.expression);
       const executes = ts.isPropertyAccessExpression(callee) && (callee.name.text === "execute" ||

@@ -36,6 +36,7 @@ export const OUTSIDE_STATE_TREE = Object.freeze({
   "src/platform/host/archive-crypto.ts": "the Mac host's archive files in its own support directory, outside any society's state tree",
   "src/entry/guest-session.ts": "a society session holder's listening socket in the oma user's runtime directory, which guesthost connects to",
   "src/cli/effects/submit.ts": "the CLI caller's own temporary directory",
+  "src/extension/lsp-tools.ts": "a fresh mkdtemp directory under the OS temp directory -- the LSP child's own per-call HOME/XDG/TMP scratch, removed when the call ends; no society's tree is written (PI-001)",
   "src/extension/mail-tools.ts": "a fresh mkdtemp directory under the model's own working directory (a Resident's sandbox home; the Principal's scratch, in the state tree but the model's own), written once and removed; the extension cannot import the storage primitives (PI-001)",
   "src/extension/principal-tools.ts": "the same fresh mkdtemp directory under the Principal's scratch for an agent brief, written once and removed (PI-001)",
   "src/extension/review-tools.ts": "the same fresh mkdtemp directory under the caller's own working directory for a vote/review/open body file, written once and removed (PI-001)",

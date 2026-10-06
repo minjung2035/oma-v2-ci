@@ -53,9 +53,12 @@ const resources = /^(?:[0-9a-f]{2})+$/.test(resourcesHex) ? parseCanonicalResour
 if (resources === null) { console.error(`runner: missing or malformed broker-rendered resources for ${agent}`); process.exit(4); }
 // The tool-surface plan travels the same hex channel; a unit this broker
 // rendered always carries it, and a malformed one is a corrupted channel.
+// Like the profile above, the bytes must round-trip as UTF-8 -- hex that
+// decodes to invalid UTF-8 is corrupted channel data, not a surface plan.
 const toolSurfaceHex = process.env.OMA_TOOL_SURFACE_HEX ?? "";
 if (!/^(?:[0-9a-f]{2})+$/.test(toolSurfaceHex)) { console.error(`runner: missing or malformed broker-rendered tool surface for ${agent}`); process.exit(4); }
 const toolSurface = Buffer.from(toolSurfaceHex, "hex").toString("utf8");
+if (Buffer.from(toolSurface, "utf8").toString("hex") !== toolSurfaceHex) { console.error(`runner: malformed broker-rendered tool surface for ${agent}`); process.exit(4); }
 const agentProfile = cfg.agentProfiles[profileName]!;
 const modelName = agentProfile.modelProfile;
 // UX-08/DR34: the egress clause resolves against this role here, once, from
@@ -75,8 +78,9 @@ const profile = Object.freeze({ name: profileName, modelProfile: modelName, mode
   // channel -- nothing inherited carries a plan into the confined engine,
   // and the field is never authored role configuration. A unit this broker
   // rendered always carries it; a malformed one names a corrupted channel,
-  // which does not start.
-  ...(toolSurface === null ? {} : { toolSurface }) });
+  // which does not start. Both hex gates above have already exited by here,
+  // so the plan is always present.
+  toolSurface });
 // OMA runs the engine it shipped with, never one found on PATH, and points it
 // at an agent directory OMA owns so a Pi the user installed stays untouched.
 const piRuntime = resolvePiRuntime({

@@ -82,9 +82,10 @@ export default async function extension(pi: ExtensionAPI) {
   const workspaceWriter = createContainedWriter(workspace, integerEnv("OMA_WORKSPACE_BYTES"));
   containWorkspaceTools(pi, workspace, integerEnv("OMA_WORKSPACE_BYTES"), sandboxed, channel.attached, readableRoots, workspaceWriter);
   // The bundled pi-lsp extension: vendored bytes verified before tools are
-  // registered, code_intel's three tools behind it, lsp_fix reaching the
-  // filesystem only through the shared contained writer.
-  registerLspTools(pi, { workspace, readOnly: channel.attached, write: workspaceWriter });
+  // registered -- and before any vendored module evaluates, so the await is
+  // load-bearing -- code_intel's three tools behind it, lsp_fix reaching
+  // the filesystem only through the shared contained writer.
+  await registerLspTools(pi, { workspace, readOnly: channel.attached, write: workspaceWriter });
   registerDelivery(pi, waitRequested);
   await startInferenceBridge(pi);
   await startEgressBridge(pi);

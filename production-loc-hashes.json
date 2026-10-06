@@ -440,7 +440,7 @@
     },
     {
       "path": "src/entry/runner.ts",
-      "sha256": "a1cf57d6535f717a846015c447978a20917637473b6b54c0d849971f346edcb5"
+      "sha256": "15393f40e20d339154fcf942b184e709a1f2afe6d8c38198b164d37164eb0b60"
     },
     {
       "path": "src/extension/batch-view.ts",
@@ -472,7 +472,7 @@
     },
     {
       "path": "src/extension/lsp-tools.ts",
-      "sha256": "d91c918b172805b34d571df39a3e7c70a4fce9b6c0d42d6ffeee44773ae15a43"
+      "sha256": "75b10cc87c2228b92043fcdcedfca0c8c79fcc85fd95522105b0fd1b8a3d3cac"
     },
     {
       "path": "src/extension/mail-tools.ts",
@@ -524,7 +524,7 @@
     },
     {
       "path": "src/extension/vendor/pi-lsp/manifest.json",
-      "sha256": "7153011e60722ca7127b6e342bcecffbd79b6f871039698f2ed36afe5514861e"
+      "sha256": "9037ea082c7ec3078724b19154a9e1ed7fb6a832638158e9632dcf52aa7c9fb1"
     },
     {
       "path": "src/extension/vendor/pi-lsp/runtime/adapters.d.ts",
@@ -548,7 +548,7 @@
     },
     {
       "path": "src/extension/vendor/pi-lsp/runtime/files.js",
-      "sha256": "19e5015c3699c91e4fe5868cb933a0a7db60ab95b410d427c75028faade807d4"
+      "sha256": "b3bfd05920e73824d2e2eb359b4c50bb36034ea7a3d3259a2f5372ced18b6d94"
     },
     {
       "path": "src/extension/vendor/pi-lsp/runtime/lsp-client.d.ts",
@@ -556,7 +556,7 @@
     },
     {
       "path": "src/extension/vendor/pi-lsp/runtime/lsp-client.js",
-      "sha256": "91ad10710238997515245976fd756b30f1ac10f23f6d23cda59cea5c2ed9d2e9"
+      "sha256": "5c1bd10c82d2b1e177a27b9983b6d76bdd2071294b90b059a4675262e38e8c44"
     },
     {
       "path": "src/extension/vendor/pi-lsp/runtime/routes.d.ts",
@@ -572,7 +572,7 @@
     },
     {
       "path": "src/extension/vendor/pi-lsp/runtime/runner.js",
-      "sha256": "2ac3700d00f642a0b63e22a2e31c7e57642e537f628714e4fe565d4ed81b93ee"
+      "sha256": "4db0851cef785f5ff8ea668182eb82f1eee3349dae445e438983c07f3a35ff13"
     },
     {
       "path": "src/extension/vendor/pi-lsp/runtime/session-lifecycle.d.ts",
@@ -704,7 +704,7 @@
     },
     {
       "path": "src/extension/workspace-guard.ts",
-      "sha256": "f44cec14d14f9d5b395a60d401ee6b021051c65baa50e905ac404e8022ae4e3f"
+      "sha256": "ca61e44dc251edc58ebcadecfce649bef61ed304793c9fb600c194d377e15923"
     },
     {
       "path": "src/frame.ts",
@@ -904,7 +904,7 @@
     },
     {
       "path": "src/pi-extension.ts",
-      "sha256": "171532b27581e5e7b30a9c458eac2289b6d3c9d23323aab5803daf6ce1e4832c"
+      "sha256": "8c2c757b56e15f06ee57ed3ddd50d891ffd6bf79fe4b904d05fe0ce2d1c5fc71"
     },
     {
       "path": "src/platform/guest/archive.ts",

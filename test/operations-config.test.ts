@@ -146,8 +146,11 @@ for (const [name, file, update] of [
  * and reports what it selected. The unit's declared surface travels as hex
  * beside the profile and resources, so a call that does not override it gets
  * the deployment's resident plan. */
-function runnerEntry(f: ReturnType<typeof fixture>, env: Record<string, string>) {
+function runnerEntry(f: ReturnType<typeof fixture>, env: Record<string, string | undefined>) {
   env = { OMA_TOOL_SURFACE_HEX: hex(encodedResidentToolSurface()), ...env };
+  // An explicit undefined removes the default: the variable is absent, the
+  // way a unit that never rendered it would leave it.
+  if (env.OMA_TOOL_SURFACE_HEX === undefined) delete env.OMA_TOOL_SURFACE_HEX;
   // WP31: a runner uses the engine its installation ships, and no other; the
   // fixture installation gets this repository's, as a real one has its own.
   const engine = join(f.installation, "node_modules", "@earendil-works", "pi-coding-agent");
@@ -185,7 +188,7 @@ function runnerEntry(f: ReturnType<typeof fixture>, env: Record<string, string>)
       "--run-root",
       join(f.root, "run", "oma", "demo"),
     ],
-    { env: { ...process.env, ...env }, encoding: "utf8", timeout: 10000 },
+    { env: { ...process.env, ...env } as Record<string, string>, encoding: "utf8", timeout: 10000 },
   );
   const selected = run.status === 0 ? JSON.parse(readFileSync(capture, "utf8")) : null;
   return { status: run.status, stderr: run.stderr, selected };
@@ -304,6 +307,38 @@ test("WP25.03 / D05: a Resident runs with its accepted resources; the current pr
       assert.equal(refused.status, 4, `resources ${resources} were accepted`);
       assert.match(refused.stderr, /broker-rendered resources/);
     }
+  } finally {
+    f.close();
+  }
+});
+
+test("F5: runner entry refuses a missing or malformed OMA_TOOL_SURFACE_HEX before Pi runs", () => {
+  const f = fixture();
+  try {
+    const resources = canonicalResourceLimits(loadConfiguration(f.path).config.agentProfiles.verifier!.resources);
+    const base = { OMA_PROFILE_HEX: hex("verifier"), OMA_RESOURCES_HEX: hex(resources) };
+    // Absent: a unit this broker rendered always carries the plan.
+    const missing = runnerEntry(f, { ...base, OMA_TOOL_SURFACE_HEX: undefined });
+    assert.equal(missing.status, 4);
+    assert.match(missing.stderr, /tool surface/);
+    for (const value of [
+      "",                       // empty is not a plan
+      "zz",                     // not hex
+      "0x7b",                   // hex-looking but off alphabet
+      "abc",                    // odd length cannot decode to bytes
+      "ff",                     // valid hex, invalid UTF-8: a corrupted channel
+      "80",                     // a lone UTF-8 continuation byte
+      "c0",                     // an overlong-form start byte
+    ]) {
+      const refused = runnerEntry(f, { ...base, OMA_TOOL_SURFACE_HEX: value });
+      assert.equal(refused.status, 4, `surface hex ${value} was accepted`);
+      assert.match(refused.stderr, /tool surface/, value);
+      assert.equal(existsSync(join(f.root, "selected.json")), false, `${value} must not reach the engine`);
+    }
+    // A well-formed plan still passes the gate.
+    const ok = runnerEntry(f, base);
+    assert.equal(ok.status, 0, ok.stderr);
+    assert.match(ok.selected.profile.toolSurface ?? "", /code_intel/);
   } finally {
     f.close();
   }

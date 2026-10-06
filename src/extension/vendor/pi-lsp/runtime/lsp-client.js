@@ -16,6 +16,16 @@ export function resolveSpawnCommand(command, platform = process.platform, comSpe
 // Quiet period (ms) after each publish before treating push diagnostics as settled.
 const PUBLISHED_DIAGNOSTICS_SETTLE_MS = 800;
 const PROCESS_EXIT_GRACE_MS = 500;
+// OMA divergences (applied by scripts/vendor-pi-lsp.mjs; recorded under
+// generated.divergences in manifest.json). Over a bound the call fails
+// cleanly -- nothing is silently truncated and a flooding server cannot
+// grow buffers without limit.
+const OMA_MAX_STDERR_CHARS = 64 * 1024;
+const OMA_MAX_INBOUND_FRAME_BYTES = 4 * 1024 * 1024;
+const OMA_MAX_DIAGNOSTICS_PER_FILE = 1024;
+const OMA_MAX_DIAGNOSTIC_MESSAGE_CHARS = 8 * 1024;
+const OMA_MAX_DIAGNOSTIC_URIS = 4096;
+const OMA_MAX_CODE_ACTIONS = 256;
 // Key diagnostics by a canonical path: a server may answer using a different but
 // equivalent encoding of the URI the client sent. marksman, like VS Code, sends
 // `file:///c%3A/dir/a.md` where pathToFileURL produces `file:///C:/dir/a.md`.
@@ -82,7 +92,12 @@ export class LspClient {
             }
         });
         child.stderr.on("data", (chunk) => {
-            this.#stderr += chunk.toString();
+            // OMA divergence: stderr is a bounded sample, not an accumulator.
+            if (this.#stderr.length < OMA_MAX_STDERR_CHARS) {
+                this.#stderr += chunk.toString();
+                if (this.#stderr.length > OMA_MAX_STDERR_CHARS)
+                    this.#stderr = `${this.#stderr.slice(0, OMA_MAX_STDERR_CHARS)}\n[stderr truncated at OMA's ${OMA_MAX_STDERR_CHARS}-char bound]`;
+            }
         });
         child.stdin.on("error", (error) => {
             this.#fail(`${this.#adapter.name} LSP stdin write failed: ${formatErrorMessage(error)}.${this.#formatStderr()}`);
@@ -95,16 +110,26 @@ export class LspClient {
             const reason = signal ? `signal ${signal}` : `code ${code ?? "unknown"}`;
             this.#rejectPending((id) => `${this.#adapter.name} LSP server exited before response ${id} (${reason}).${this.#formatStderr()}`);
         });
+        // OMA divergence: the child and its stdio keep 'error' listeners
+        // for the process's whole life. Upstream's startup once("error")
+        // only covered the first failure and the stdio streams had none at
+        // all, so a post-start error escaped as an unhandled 'error' event
+        // and crashed the engine. The permanent handler below keeps the
+        // same cleanup; the startup promise keeps its spawn-failure reject.
+        child.on("error", (error) => {
+            const message = `${this.#adapter.name} LSP server process error: ${error.message}.${this.#formatStderr()}`;
+            this.#rejectPending(message);
+            if (this.#child === child)
+                this.#child = undefined;
+            if (this.#process === child)
+                this.#process = undefined;
+        });
+        child.stdout.on("error", () => this.#fail(`${this.#adapter.name} LSP stdout failed.${this.#formatStderr()}`));
+        child.stderr.on("error", () => this.#fail(`${this.#adapter.name} LSP stderr failed.${this.#formatStderr()}`));
         await new Promise((resolve, reject) => {
             child.once("spawn", resolve);
             child.once("error", (error) => {
-                const message = `${this.#adapter.name} LSP process failed to start: ${error.message}.${this.#formatStderr()}`;
-                this.#rejectPending(message);
-                if (this.#child === child)
-                    this.#child = undefined;
-                if (this.#process === child)
-                    this.#process = undefined;
-                reject(new Error(message));
+                reject(new Error(`${this.#adapter.name} LSP process failed to start: ${error.message}.${this.#formatStderr()}`));
             });
         });
     }
@@ -191,6 +216,11 @@ export class LspClient {
         return response.result ?? [];
     }
     async resolveActions(actions) {
+        // OMA divergence: every unresolved action is a codeAction/resolve
+        // round-trip, so an unbounded action list is an unbounded sequential
+        // request loop. Refuse past the cap instead.
+        if (actions.length > OMA_MAX_CODE_ACTIONS)
+            throw new Error(`${this.#adapter.name} LSP returned ${actions.length} code actions; OMA's bound is ${OMA_MAX_CODE_ACTIONS}.`);
         // Only resolve when the server advertised resolveProvider; otherwise use the
         // action as-is. Any error from an advertised resolve is real and propagates.
         const codeActionProvider = this.#serverCapabilities.codeActionProvider;
@@ -291,6 +321,14 @@ export class LspClient {
     }
     #onData(chunk) {
         this.#buffer = Buffer.concat([this.#buffer, chunk]);
+        // OMA divergence: a frame that never completes -- or declares a
+        // Content-Length past the ceiling -- must not grow this buffer
+        // without bound. Fail the call and kill the server instead.
+        if (this.#buffer.length > OMA_MAX_INBOUND_FRAME_BYTES) {
+            this.#buffer = Buffer.alloc(0);
+            this.#fail(`${this.#adapter.name} LSP server output exceeded OMA's ${OMA_MAX_INBOUND_FRAME_BYTES}-byte inbound bound.${this.#formatStderr()}`);
+            return;
+        }
         while (true) {
             const separator = this.#buffer.indexOf("\r\n\r\n");
             if (separator < 0)
@@ -301,6 +339,10 @@ export class LspClient {
                 throw new Error(`Invalid LSP response header: ${header}`);
             const bodyStart = separator + 4;
             const bodyLength = Number(contentLength);
+            // OMA divergence: refuse a declared oversized body up front rather
+            // than buffering until the accumulation bound trips.
+            if (bodyLength > OMA_MAX_INBOUND_FRAME_BYTES)
+                throw new Error(`declared Content-Length ${bodyLength} exceeds OMA's ${OMA_MAX_INBOUND_FRAME_BYTES}-byte bound`);
             if (this.#buffer.length < bodyStart + bodyLength)
                 return;
             const rawBody = this.#buffer.subarray(bodyStart, bodyStart + bodyLength).toString("utf8");
@@ -326,7 +368,26 @@ export class LspClient {
         if (message.method === "textDocument/publishDiagnostics") {
             const params = message.params;
             if (params?.uri) {
+                // OMA divergence: pushed diagnostics are bounded -- per-file
+                // count, per-message length, and the number of distinct
+                // documents tracked. A flood fails the call rather than
+                // growing the store without limit.
+                const pushed = Array.isArray(params.diagnostics) ? params.diagnostics : [];
+                if (pushed.length > OMA_MAX_DIAGNOSTICS_PER_FILE) {
+                    this.#fail(`${this.#adapter.name} LSP pushed ${pushed.length} diagnostics for one file; OMA's bound is ${OMA_MAX_DIAGNOSTICS_PER_FILE}.`);
+                    return;
+                }
+                for (const diagnostic of pushed) {
+                    if (typeof diagnostic?.message === "string" && diagnostic.message.length > OMA_MAX_DIAGNOSTIC_MESSAGE_CHARS) {
+                        this.#fail(`${this.#adapter.name} LSP pushed a ${diagnostic.message.length}-char diagnostic message; OMA's bound is ${OMA_MAX_DIAGNOSTIC_MESSAGE_CHARS}.`);
+                        return;
+                    }
+                }
                 const key = documentKey(params.uri);
+                if (!this.#publishedDiagnostics.has(key) && this.#publishedDiagnostics.size >= OMA_MAX_DIAGNOSTIC_URIS) {
+                    this.#fail(`${this.#adapter.name} LSP pushed diagnostics for more than ${OMA_MAX_DIAGNOSTIC_URIS} documents; OMA's bound was exceeded.`);
+                    return;
+                }
                 const previousVersion = this.#publishedDiagnostics.get(key)?.version ?? 0;
                 const publication = {
                     version: previousVersion + 1,

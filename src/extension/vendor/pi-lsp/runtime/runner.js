@@ -5,6 +5,22 @@ import { collectSupportedFiles, resolveRoot, resolveSupportedFile } from "./file
 import { LspClient } from "./lsp-client.js";
 import { applyTextEdits, collectWorkspaceEdits, hasOverlappingTextEdits } from "./text-edits.js";
 export const DEFAULT_FILE_LIMIT = 50;
+// OMA divergences (applied by scripts/vendor-pi-lsp.mjs; recorded under
+// generated.divergences in manifest.json): what was read is bounded a
+// second time (the admission stat can be out of date), and a pull
+// response's diagnostics get the same count/message bounds the client
+// enforces on the push path.
+const OMA_MAX_FILE_BYTES = 1024 * 1024;
+const OMA_MAX_DIAGNOSTICS_PER_FILE = 1024;
+const OMA_MAX_DIAGNOSTIC_MESSAGE_CHARS = 8 * 1024;
+function boundedDiagnostics(adapter, file, diagnostics) {
+    if (diagnostics.length > OMA_MAX_DIAGNOSTICS_PER_FILE)
+        throw new Error(`${adapter.name} LSP returned ${diagnostics.length} diagnostics for ${file}; OMA's bound is ${OMA_MAX_DIAGNOSTICS_PER_FILE}.`);
+    for (const diagnostic of diagnostics)
+        if (typeof diagnostic?.message === "string" && diagnostic.message.length > OMA_MAX_DIAGNOSTIC_MESSAGE_CHARS)
+            throw new Error(`${adapter.name} LSP returned a ${diagnostic.message.length}-char diagnostic message for ${file}; OMA's bound is ${OMA_MAX_DIAGNOSTIC_MESSAGE_CHARS}.`);
+    return diagnostics;
+}
 export async function runDiagnostics(adapter, params, timeoutMs, signal, ctx, statusKey) {
     throwIfAborted(signal, adapter);
     const root = resolveRoot(params.root);
@@ -25,13 +41,17 @@ export async function runDiagnostics(adapter, params, timeoutMs, signal, ctx, st
                 throwIfAborted(signal, adapter);
                 const uri = pathToFileURL(file).href;
                 const text = readFileSync(file, "utf8");
+                // OMA divergence: the file can grow between the admission
+                // stat and this read; bound what was actually read.
+                if (Buffer.byteLength(text, "utf8") > OMA_MAX_FILE_BYTES)
+                    throw new Error(`${adapter.name} file exceeded OMA's ${OMA_MAX_FILE_BYTES}-byte bound when read: ${file}`);
                 client.didOpen(uri, text, adapter.languageIdFor(file));
                 openedFiles.push({ file, uri });
             }
             const entries = await Promise.all(openedFiles.map(async ({ file, uri }) => ({
                 path: path.relative(root, file) || file,
                 uri,
-                diagnostics: await client.diagnostics(uri),
+                diagnostics: boundedDiagnostics(adapter, file, await client.diagnostics(uri)),
             })));
             throwIfAborted(signal, adapter);
             return textResult(formatDiagnostics(adapter, entries), {
@@ -54,13 +74,17 @@ export async function runFix(adapter, params, timeoutMs, signal, ctx, statusKey)
     return withLspClient(adapter, root, timeoutMs, signal, ctx, statusKey, "fix", async (client) => {
         const uri = pathToFileURL(file).href;
         const text = readFileSync(file, "utf8");
+        // OMA divergence: the file can grow between the admission stat and
+        // this read; bound what was actually read.
+        if (Buffer.byteLength(text, "utf8") > OMA_MAX_FILE_BYTES)
+            throw new Error(`${adapter.name} file exceeded OMA's ${OMA_MAX_FILE_BYTES}-byte bound when read: ${file}`);
         client.didOpen(uri, text, adapter.languageIdFor(file));
         let resolvedActions;
         let selectedActions;
         let edits;
         let newText;
         try {
-            const diagnostics = await client.diagnostics(uri);
+            const diagnostics = boundedDiagnostics(adapter, file, await client.diagnostics(uri));
             throwIfAborted(signal, adapter);
             const actions = await client.codeActions(uri, text, diagnostics, actionKind);
             throwIfAborted(signal, adapter);

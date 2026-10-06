@@ -5,10 +5,17 @@
  * `upstream/` is the exact npm tarball snapshot of @narumitw/pi-lsp and is
  * never touched here. `runtime/` is tsc's emit of the upstream library
  * modules (the extension-entry files index.ts/pi-lsp.ts are vendored but
- * never compiled or loaded — OMA's adapter owns registration). `--write`
- * rebuilds runtime/ and rewrites manifest.json; the default `--check`
- * verifies both against the tree so a hand-edited or partially copied
- * bundle fails instead of silently drifting.
+ * never compiled or loaded — OMA's adapter owns registration) with OMA's
+ * declared divergence splices applied on top. `--write` rebuilds runtime/
+ * and rewrites manifest.json; the default `--check` verifies both against
+ * the tree so a hand-edited or partially copied bundle fails instead of
+ * silently drifting.
+ *
+ * OMA_DIVERGENCES is the only sanctioned difference between tsc emit and
+ * runtime/: each splice is an exact-once anchor replacement over the emitted
+ * bytes, so a drifted upstream emit fails loudly rather than skipping a
+ * bound. The manifest records every divergent file and its reason under
+ * `generated.divergences`.
  *
  * This script never reaches the network: npm integrity/shasum/commit are
  * recorded metadata, verified once at vendoring time.
@@ -41,6 +48,240 @@ const EXPECTED_PACKAGE = Object.freeze({
   commit: "55d784704cdec1ec1534b59f78f07f139539119e",
   npmIntegrity: "sha512-YQ49sPiz3sDq5+l9YuPsOcn7YC2kdRbzQr/5pBpsUi0giUqIymHEHB+G0bKx6PmOjhvStCzCSHJxU/qfTLj/yA==",
   npmShasum: "6643cec0b716bc5dc1834bdf836285b3c7569dce",
+});
+
+/** The bounds OMA's adapter needs inside the vendored client, written as
+ * exact-once text splices over tsc emit. upstream/ stays the byte-exact npm
+ * snapshot; runtime/ carries these and only these edits. Anchors quote the
+ * emitted source verbatim: each `find` must occur exactly once or the
+ * regeneration fails instead of emitting a partially patched runtime.
+ *
+ * Divergence policy: bounds and failure-posture fixes only — never a
+ * behavioral rewrite of what the server sees below the bound. */
+const OMA_DIVERGENCES = Object.freeze({
+  "lsp-client.js": {
+    reason:
+      "OMA bounds inside the wire path: stderr accumulation cap, inbound " +
+      "frame buffer cap (incomplete or oversized Content-Length), bounded " +
+      "pushed-diagnostic store (count/message/tracked files), a code-action " +
+      "count cap so resolveAction loops stay bounded, and permanent 'error' " +
+      "listeners on the child and its stdio so a post-start error can never " +
+      "escape unhandled and crash the engine.",
+    edits: [
+      {
+        find: "const PROCESS_EXIT_GRACE_MS = 500;",
+        replace: `const PROCESS_EXIT_GRACE_MS = 500;
+// OMA divergences (applied by scripts/vendor-pi-lsp.mjs; recorded under
+// generated.divergences in manifest.json). Over a bound the call fails
+// cleanly -- nothing is silently truncated and a flooding server cannot
+// grow buffers without limit.
+const OMA_MAX_STDERR_CHARS = 64 * 1024;
+const OMA_MAX_INBOUND_FRAME_BYTES = 4 * 1024 * 1024;
+const OMA_MAX_DIAGNOSTICS_PER_FILE = 1024;
+const OMA_MAX_DIAGNOSTIC_MESSAGE_CHARS = 8 * 1024;
+const OMA_MAX_DIAGNOSTIC_URIS = 4096;
+const OMA_MAX_CODE_ACTIONS = 256;`,
+      },
+      {
+        find: `        child.stderr.on("data", (chunk) => {
+            this.#stderr += chunk.toString();
+        });`,
+        replace: `        child.stderr.on("data", (chunk) => {
+            // OMA divergence: stderr is a bounded sample, not an accumulator.
+            if (this.#stderr.length < OMA_MAX_STDERR_CHARS) {
+                this.#stderr += chunk.toString();
+                if (this.#stderr.length > OMA_MAX_STDERR_CHARS)
+                    this.#stderr = \`\${this.#stderr.slice(0, OMA_MAX_STDERR_CHARS)}\\n[stderr truncated at OMA's \${OMA_MAX_STDERR_CHARS}-char bound]\`;
+            }
+        });`,
+      },
+      {
+        find: `        await new Promise((resolve, reject) => {
+            child.once("spawn", resolve);
+            child.once("error", (error) => {
+                const message = \`\${this.#adapter.name} LSP process failed to start: \${error.message}.\${this.#formatStderr()}\`;
+                this.#rejectPending(message);
+                if (this.#child === child)
+                    this.#child = undefined;
+                if (this.#process === child)
+                    this.#process = undefined;
+                reject(new Error(message));
+            });
+        });`,
+        replace: `        // OMA divergence: the child and its stdio keep 'error' listeners
+        // for the process's whole life. Upstream's startup once("error")
+        // only covered the first failure and the stdio streams had none at
+        // all, so a post-start error escaped as an unhandled 'error' event
+        // and crashed the engine. The permanent handler below keeps the
+        // same cleanup; the startup promise keeps its spawn-failure reject.
+        child.on("error", (error) => {
+            const message = \`\${this.#adapter.name} LSP server process error: \${error.message}.\${this.#formatStderr()}\`;
+            this.#rejectPending(message);
+            if (this.#child === child)
+                this.#child = undefined;
+            if (this.#process === child)
+                this.#process = undefined;
+        });
+        child.stdout.on("error", () => this.#fail(\`\${this.#adapter.name} LSP stdout failed.\${this.#formatStderr()}\`));
+        child.stderr.on("error", () => this.#fail(\`\${this.#adapter.name} LSP stderr failed.\${this.#formatStderr()}\`));
+        await new Promise((resolve, reject) => {
+            child.once("spawn", resolve);
+            child.once("error", (error) => {
+                reject(new Error(\`\${this.#adapter.name} LSP process failed to start: \${error.message}.\${this.#formatStderr()}\`));
+            });
+        });`,
+      },
+      {
+        find: `    #onData(chunk) {
+        this.#buffer = Buffer.concat([this.#buffer, chunk]);
+        while (true) {`,
+        replace: `    #onData(chunk) {
+        this.#buffer = Buffer.concat([this.#buffer, chunk]);
+        // OMA divergence: a frame that never completes -- or declares a
+        // Content-Length past the ceiling -- must not grow this buffer
+        // without bound. Fail the call and kill the server instead.
+        if (this.#buffer.length > OMA_MAX_INBOUND_FRAME_BYTES) {
+            this.#buffer = Buffer.alloc(0);
+            this.#fail(\`\${this.#adapter.name} LSP server output exceeded OMA's \${OMA_MAX_INBOUND_FRAME_BYTES}-byte inbound bound.\${this.#formatStderr()}\`);
+            return;
+        }
+        while (true) {`,
+      },
+      {
+        find: `            const bodyStart = separator + 4;
+            const bodyLength = Number(contentLength);
+            if (this.#buffer.length < bodyStart + bodyLength)
+                return;`,
+        replace: `            const bodyStart = separator + 4;
+            const bodyLength = Number(contentLength);
+            // OMA divergence: refuse a declared oversized body up front rather
+            // than buffering until the accumulation bound trips.
+            if (bodyLength > OMA_MAX_INBOUND_FRAME_BYTES)
+                throw new Error(\`declared Content-Length \${bodyLength} exceeds OMA's \${OMA_MAX_INBOUND_FRAME_BYTES}-byte bound\`);
+            if (this.#buffer.length < bodyStart + bodyLength)
+                return;`,
+      },
+      {
+        find: `            if (params?.uri) {
+                const key = documentKey(params.uri);`,
+        replace: `            if (params?.uri) {
+                // OMA divergence: pushed diagnostics are bounded -- per-file
+                // count, per-message length, and the number of distinct
+                // documents tracked. A flood fails the call rather than
+                // growing the store without limit.
+                const pushed = Array.isArray(params.diagnostics) ? params.diagnostics : [];
+                if (pushed.length > OMA_MAX_DIAGNOSTICS_PER_FILE) {
+                    this.#fail(\`\${this.#adapter.name} LSP pushed \${pushed.length} diagnostics for one file; OMA's bound is \${OMA_MAX_DIAGNOSTICS_PER_FILE}.\`);
+                    return;
+                }
+                for (const diagnostic of pushed) {
+                    if (typeof diagnostic?.message === "string" && diagnostic.message.length > OMA_MAX_DIAGNOSTIC_MESSAGE_CHARS) {
+                        this.#fail(\`\${this.#adapter.name} LSP pushed a \${diagnostic.message.length}-char diagnostic message; OMA's bound is \${OMA_MAX_DIAGNOSTIC_MESSAGE_CHARS}.\`);
+                        return;
+                    }
+                }
+                const key = documentKey(params.uri);
+                if (!this.#publishedDiagnostics.has(key) && this.#publishedDiagnostics.size >= OMA_MAX_DIAGNOSTIC_URIS) {
+                    this.#fail(\`\${this.#adapter.name} LSP pushed diagnostics for more than \${OMA_MAX_DIAGNOSTIC_URIS} documents; OMA's bound was exceeded.\`);
+                    return;
+                }`,
+      },
+      {
+        find: `    async resolveActions(actions) {
+        // Only resolve when the server advertised resolveProvider; otherwise use the`,
+        replace: `    async resolveActions(actions) {
+        // OMA divergence: every unresolved action is a codeAction/resolve
+        // round-trip, so an unbounded action list is an unbounded sequential
+        // request loop. Refuse past the cap instead.
+        if (actions.length > OMA_MAX_CODE_ACTIONS)
+            throw new Error(\`\${this.#adapter.name} LSP returned \${actions.length} code actions; OMA's bound is \${OMA_MAX_CODE_ACTIONS}.\`);
+        // Only resolve when the server advertised resolveProvider; otherwise use the`,
+      },
+    ],
+  },
+  "runner.js": {
+    reason:
+      "OMA bounds on the read and on what a pull response carries: the file " +
+      "can grow between the admission stat and the read, and a pull " +
+      "diagnostics array gets the same per-file count and per-message " +
+      "bounds the client enforces on the push path.",
+    edits: [
+      {
+        find: "export const DEFAULT_FILE_LIMIT = 50;",
+        replace: `export const DEFAULT_FILE_LIMIT = 50;
+// OMA divergences (applied by scripts/vendor-pi-lsp.mjs; recorded under
+// generated.divergences in manifest.json): what was read is bounded a
+// second time (the admission stat can be out of date), and a pull
+// response's diagnostics get the same count/message bounds the client
+// enforces on the push path.
+const OMA_MAX_FILE_BYTES = 1024 * 1024;
+const OMA_MAX_DIAGNOSTICS_PER_FILE = 1024;
+const OMA_MAX_DIAGNOSTIC_MESSAGE_CHARS = 8 * 1024;
+function boundedDiagnostics(adapter, file, diagnostics) {
+    if (diagnostics.length > OMA_MAX_DIAGNOSTICS_PER_FILE)
+        throw new Error(\`\${adapter.name} LSP returned \${diagnostics.length} diagnostics for \${file}; OMA's bound is \${OMA_MAX_DIAGNOSTICS_PER_FILE}.\`);
+    for (const diagnostic of diagnostics)
+        if (typeof diagnostic?.message === "string" && diagnostic.message.length > OMA_MAX_DIAGNOSTIC_MESSAGE_CHARS)
+            throw new Error(\`\${adapter.name} LSP returned a \${diagnostic.message.length}-char diagnostic message for \${file}; OMA's bound is \${OMA_MAX_DIAGNOSTIC_MESSAGE_CHARS}.\`);
+    return diagnostics;
+}`,
+      },
+      {
+        find: `                const uri = pathToFileURL(file).href;
+                const text = readFileSync(file, "utf8");
+                client.didOpen(uri, text, adapter.languageIdFor(file));`,
+        replace: `                const uri = pathToFileURL(file).href;
+                const text = readFileSync(file, "utf8");
+                // OMA divergence: the file can grow between the admission
+                // stat and this read; bound what was actually read.
+                if (Buffer.byteLength(text, "utf8") > OMA_MAX_FILE_BYTES)
+                    throw new Error(\`\${adapter.name} file exceeded OMA's \${OMA_MAX_FILE_BYTES}-byte bound when read: \${file}\`);
+                client.didOpen(uri, text, adapter.languageIdFor(file));`,
+      },
+      {
+        find: `        const uri = pathToFileURL(file).href;
+        const text = readFileSync(file, "utf8");
+        client.didOpen(uri, text, adapter.languageIdFor(file));`,
+        replace: `        const uri = pathToFileURL(file).href;
+        const text = readFileSync(file, "utf8");
+        // OMA divergence: the file can grow between the admission stat and
+        // this read; bound what was actually read.
+        if (Buffer.byteLength(text, "utf8") > OMA_MAX_FILE_BYTES)
+            throw new Error(\`\${adapter.name} file exceeded OMA's \${OMA_MAX_FILE_BYTES}-byte bound when read: \${file}\`);
+        client.didOpen(uri, text, adapter.languageIdFor(file));`,
+      },
+      {
+        find: `                diagnostics: await client.diagnostics(uri),`,
+        replace: `                diagnostics: boundedDiagnostics(adapter, file, await client.diagnostics(uri)),`,
+      },
+      {
+        find: `            const diagnostics = await client.diagnostics(uri);`,
+        replace: `            const diagnostics = boundedDiagnostics(adapter, file, await client.diagnostics(uri));`,
+      },
+    ],
+  },
+  "files.js": {
+    reason:
+      "OMA bound on workspace walk recursion depth: deeper trees are skipped " +
+      "rather than recursed into without limit.",
+    edits: [
+      {
+        find: `function collectPath(adapter, targetPath, files, seen, visitedDirectories, realRoot, limit) {
+    if (files.length >= limit || !existsSync(targetPath))
+        return;`,
+        replace: `// OMA divergence (applied by scripts/vendor-pi-lsp.mjs; recorded under
+// generated.divergences in manifest.json): recursion depth is bounded.
+const OMA_MAX_COLLECT_DEPTH = 256;
+function collectPath(adapter, targetPath, files, seen, visitedDirectories, realRoot, limit, depth = 0) {
+    if (files.length >= limit || !existsSync(targetPath) || depth > OMA_MAX_COLLECT_DEPTH)
+        return;`,
+      },
+      {
+        find: `        collectPath(adapter, path.join(targetPath, entry.name), files, seen, visitedDirectories, realRoot, limit);`,
+        replace: `        collectPath(adapter, path.join(targetPath, entry.name), files, seen, visitedDirectories, realRoot, limit, depth + 1);`,
+      },
+    ],
+  },
 });
 
 const slash = value => value.split(sep).join("/");
@@ -98,7 +339,27 @@ function emitRuntime(outDir) {
   const expected = RUNTIME_MODULES.flatMap(name => [`${name}.js`, `${name}.d.ts`]).sort();
   if (JSON.stringify(emitted) !== JSON.stringify(expected))
     throw new Error(`tsc emit mismatch: got [${emitted.join(", ")}]`);
+  applyDivergences(outDir);
   return emitted;
+}
+
+/** Apply OMA's declared splices to an emitted runtime tree in place. Every
+ * `find` anchor must occur exactly once in the emitted file: zero means the
+ * upstream emit drifted and the splice lost its anchor; more than one means
+ * the anchor was ambiguous. Both are regeneration failures, not silently
+ * skipped edits. */
+function applyDivergences(dir) {
+  for (const [name, divergence] of Object.entries(OMA_DIVERGENCES)) {
+    const target = join(dir, name);
+    let text = readFileSync(target, "utf8");
+    divergence.edits.forEach((edit, index) => {
+      const occurrences = text.split(edit.find).length - 1;
+      if (occurrences !== 1)
+        throw new Error(`divergence ${name}#${index + 1}: anchor occurs ${occurrences} times in tsc emit; expected exactly 1`);
+      text = text.replace(edit.find, edit.replace);
+    });
+    writeFileSync(target, text);
+  }
 }
 
 function bundleFilesUnder(base) {
@@ -155,8 +416,9 @@ function writeManifest() {
     kind: "oma-vendored-bundle-v1",
     package: packageMetadata(),
     generated: {
-      runtime: "tsc emit of upstream/src library modules; entry files (index.ts, pi-lsp.ts) are vendored but never compiled or loaded",
+      runtime: "tsc emit of upstream/src library modules with OMA divergence splices applied; entry files (index.ts, pi-lsp.ts) are vendored but never compiled or loaded",
       tool: "scripts/vendor-pi-lsp.mjs",
+      divergences: Object.fromEntries(Object.entries(OMA_DIVERGENCES).map(([file, { reason, edits }]) => [file, { reason, edits: edits.length }])),
     },
     files: records,
     bundleSha256: bundleDigest(records),
@@ -181,8 +443,9 @@ function check() {
   if (manifest.package?.name !== pkg.name || manifest.package?.version !== pkg.version)
     problems.push("manifest package identity does not match upstream/package.json");
   // The emitted runtime must be exactly what tsc produces from the vendored
-  // sources -- a hand-edited runtime/ file fails here even if someone
-  // regenerated the manifest to match it.
+  // sources plus the declared OMA divergence splices -- a hand-edited
+  // runtime/ file fails here even if someone regenerated the manifest to
+  // match it, and so does a runtime missing a declared splice.
   const scratch = mkdtempSync(join(tmpdir(), "oma-pi-lsp-check-"));
   try {
     for (const name of emitRuntime(scratch)) {

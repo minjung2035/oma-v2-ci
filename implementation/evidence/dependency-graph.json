@@ -1962,7 +1962,7 @@
   "node:https": 1,
   "node:module": 3,
   "node:net": 34,
-  "node:os": 9,
+  "node:os": 10,
   "node:path": 129,
   "node:perf_hooks": 4,
   "node:sqlite": 4,

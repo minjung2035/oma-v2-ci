@@ -636,6 +636,44 @@ name collision/intended surface/hidden 미활성/idempotent reload/provenance/
 
 ## 9. 진행 로그
 
+- 2026-10-06 (bundled #1 — pi-lsp 맹검증 정산): BL1에 대한 맹검증 발견 F1–F7
+  정산 + F8 저비용 bound 반영. F1(server→engine 무제한): vendored
+  `lsp-client.js`에 stderr 64KiB bounded sample(truncated 마커), 인바운드
+  프레임 버퍼 4MiB(미완성 프레임·초과 Content-Length 선언 모두 호출 실패+
+  서버 kill), pushed diagnostics 바운드(1024/파일·8KiB/메시지·4096 URI),
+  code-action 256 상한으로 순차 resolve 루프 bound, 자식+stdin/stdout/stderr
+  영구 `'error'` 리스너(기존 once('error')는 첫 실패만 커버 — 이후는
+  unhandled로 엔진 사망 가능). `runner.js`: admission stat과 read 사이 성장을
+  잡는 read-후 1MiB 재검사 + pull 응답에 push와 같은 진단 바운드.
+  `files.js`: collectPath 깊이 256. 어댑터 측 호출당 aggregate deadline
+  (기본 300s, `callDeadlineMs` seam) — route 수와 무관하게 호출 전체를 묶는다.
+  F2(자식 파일시스템 권한): clangd의 프로젝트-로컬 `.cache` 관측에서 보듯
+  env 리다이렉트만으로는 서버의 옆파일 쓰기를 막을 수 없음 — 계층 방어로
+  HOME/XDG/TMP를 호출당 mkdtemp scratch로 리다이렉트+종료 시 삭제하고
+  읽기전용 역할(Principal)은 spawn 가능 도구(`lsp_diagnostics`·`lsp_fix`)를
+  실행 전 거절(`lsp_status`는 spawn 없이 유지); LSP 두 도구의 read 경로는
+  workspace-only로 고정. F3(verify-before-import): `lsp-tools.ts`의 정적
+  vendored import 전부 제거 — `verifyVendorBundle` 통과 후에만
+  `await import()`로 runtime 로드(타입 import는 컴파일 소거라 무해),
+  `lspChildEnvironment`도 직접 호출 경로에서 verify+lazy import로 불변식
+  유지; `surface-rules.mjs`의 dynamic-load 규칙은 `src/extension/vendor/`
+  하위 리터럴 import만 허용하도록 좁혔다(계산된 지정자·경로 이탈·require
+  는 여전히 금지). F4(env denylist): 상속 env와 어댑터 override 양쪽에
+  대소문자 무시 denylist — `OMA_*` 프리픽스 + 프리로드/로더 채널
+  (NODE_OPTIONS·LD_PRELOAD·DYLD_INSERT_LIBRARIES·PYTHONSTARTUP·RUBYOPT
+  등) + 자격증명 형태 이름(TOKEN/SECRET/PASSWORD/CREDENTIAL/AUTH/API_KEY
+  계열) + 프록시 + agent-dir 포인터. F5: runner의 `OMA_TOOL_SURFACE_HEX`는
+  이제 canonical hex+UTF-8 round-trip으로 검증(absent·빈 문자열·비hex·0x
+  프리픽스·홀수 길이·invalid UTF-8·절단 payload 전부 exit 4), 죽은
+  `toolSurface === null` 분기 제거. F6: operations.md의 "tool-surface
+  프로듀서 없음" 기술 정정 — oma-society/unit 렌더링 프로듀서 활성.
+  F7: review-notes·review-ledger(도구 재생성)·validation digest·source
+  digests·dependency-graph evidence 재바인딩. 테스트: 적대 서버 픽스처
+  `test/fixtures/lsp-hostile-server.mjs`(stderr flood·프레임 폭탄/drip·
+  pull/push 진단 폭탄·action 폭탄·env echo)로 baseline fail→post-fix pass
+  증거 확보(baseline 16건 실패 → 수정 후 lsp-bundle+lsp-upstream 38/38);
+  runner 음성 케이스·surface-rule 케이스 보강. NOT_RUN: 실제 언어 서버
+  바이너리 e2e(픽스처로만), macOS·systemd 레인.
 - 2026-10-05 (bundled #1 — pi-lsp): §7 순서(lsp→ask→hashline→web→mcp)의 첫
   확장 구현. `@narumitw/pi-lsp@0.49.9`를 `src/extension/vendor/pi-lsp/`에
   byte-pinned vendor — `upstream/`은 npm 타르볼(shasum
