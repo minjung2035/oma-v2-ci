@@ -570,6 +570,20 @@ test("BL1/F4: deny-by-default -- the whole hostile corpus is stripped from the i
   }
   for (const key of Object.keys(keyed))
     assert.ok(sanctionedChildName(key), `${key} is not a sanctioned child name`);
+  // The value side of the same class: the path-typed names skip
+  // tokenValueAllowed, so a NUL value on PATH would ride through the
+  // predicate to spawn unhandled -- admitted before the up-front NUL
+  // refusal existed. (A NUL in process.env cannot be planted -- the OS
+  // truncates at it -- so this is an adapter-channel case only.)
+  const nulled = await lspChildEnvironment({
+    env: { PATH: "a\0b", SystemRoot: "C:\\Windows\0", LC_ALL: "C\0.UTF-8" },
+  } as never);
+  // The NUL-carrying adapter values are denied -- PATH keeps its
+  // inherited value (denying the adapter's NUL entry does not erase the
+  // legit inherited tier), and names with no inherited value are absent.
+  assert.notEqual(nulled.PATH, "a\0b", "the adapter's NUL PATH reached the child");
+  assert.equal(nulled.SystemRoot, undefined, "SystemRoot carried a NUL value to the child");
+  assert.notEqual(nulled.LC_ALL, "C\0.UTF-8", "a token-typed name already refused NUL values");
 });
 
 test("BL1/F4: the allowlisted survivors -- PATH, locale, terminal, identity -- keep their values", async t => {

@@ -472,7 +472,7 @@
     },
     {
       "path": "src/extension/lsp-tools.ts",
-      "sha256": "d7042059d635590f17587a5dc9c87f8a589467b7bf8bea71c92fb1d5f24ee7eb"
+      "sha256": "d5fd3925e1a3f7596d4f2219668c39dc743803d94f56f0b0156a3857ce01ff06"
     },
     {
       "path": "src/extension/mail-tools.ts",

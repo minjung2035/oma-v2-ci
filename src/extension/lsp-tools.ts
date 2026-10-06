@@ -247,9 +247,13 @@ const CHILD_ENV_KEY_CHARSET = /^[A-Za-z0-9_]+$/;
  * same verdict. Both `hardenedAdapter` tiers -- the inherited
  * process.env loop and the adapter's declared env -- funnel through
  * this one predicate; the per-call scratch names bypass it as compiler
- * constants. */
+ * constants. A NUL value is refused for every name up front -- the
+ * path-typed names skip `tokenValueAllowed`, so without this line a
+ * `PATH: "a\0b"` would reach spawn as an unhandled
+ * ERR_INVALID_ARG_VALUE, the same class the key charset closed on the
+ * name side. */
 function admittedChildEnv(key: string, value: string): boolean {
-  if (!CHILD_ENV_KEY_CHARSET.test(key)) return false;
+  if (!CHILD_ENV_KEY_CHARSET.test(key) || value.includes("\0")) return false;
   const lower = key.toLowerCase();
   if (CHILD_PROXY_NAMES.has(lower)) return value === egressProxyValue(lower);
   const named = OMA_LSP_CHILD_ENV_ALLOW.has(lower) ||
