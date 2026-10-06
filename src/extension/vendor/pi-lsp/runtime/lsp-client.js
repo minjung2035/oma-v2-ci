@@ -26,6 +26,21 @@ const OMA_MAX_DIAGNOSTICS_PER_FILE = 1024;
 const OMA_MAX_DIAGNOSTIC_MESSAGE_CHARS = 8 * 1024;
 const OMA_MAX_DIAGNOSTIC_URIS = 4096;
 const OMA_MAX_CODE_ACTIONS = 256;
+// OMA divergence: the stderr bound as a pure function so the rule is
+// testable and the dropped state is explicit. A sample that lands exactly
+// on the bound dropped nothing yet; the NEXT chunk is what marks it --
+// length alone could not tell those two states apart, which is how the
+// first version silently dropped bytes after an exact landing.
+export function appendStderrSample(state, text) {
+    if (state.dropped)
+        return state;
+    if (state.sample.length >= OMA_MAX_STDERR_CHARS)
+        return { sample: `${state.sample}\n[stderr truncated at OMA's ${OMA_MAX_STDERR_CHARS}-char bound]`, dropped: true };
+    const next = state.sample + text;
+    if (next.length <= OMA_MAX_STDERR_CHARS)
+        return { sample: next, dropped: false };
+    return { sample: `${next.slice(0, OMA_MAX_STDERR_CHARS)}\n[stderr truncated at OMA's ${OMA_MAX_STDERR_CHARS}-char bound]`, dropped: true };
+}
 // Key diagnostics by a canonical path: a server may answer using a different but
 // equivalent encoding of the URI the client sent. marksman, like VS Code, sends
 // `file:///c%3A/dir/a.md` where pathToFileURL produces `file:///C:/dir/a.md`.
@@ -50,6 +65,9 @@ export class LspClient {
     #publishedDiagnostics = new Map();
     #diagnosticWaiters = new Map();
     #stderr = "";
+    // OMA divergence: whether stderr bytes were ever refused, tracked
+    // separately from the sample's length (see appendStderrSample).
+    #stderrDropped = false;
     #serverCapabilities = {};
     #adapter;
     #command;
@@ -93,11 +111,9 @@ export class LspClient {
         });
         child.stderr.on("data", (chunk) => {
             // OMA divergence: stderr is a bounded sample, not an accumulator.
-            if (this.#stderr.length < OMA_MAX_STDERR_CHARS) {
-                this.#stderr += chunk.toString();
-                if (this.#stderr.length > OMA_MAX_STDERR_CHARS)
-                    this.#stderr = `${this.#stderr.slice(0, OMA_MAX_STDERR_CHARS)}\n[stderr truncated at OMA's ${OMA_MAX_STDERR_CHARS}-char bound]`;
-            }
+            const next = appendStderrSample({ sample: this.#stderr, dropped: this.#stderrDropped }, chunk.toString());
+            this.#stderr = next.sample;
+            this.#stderrDropped = next.dropped;
         });
         child.stdin.on("error", (error) => {
             this.#fail(`${this.#adapter.name} LSP stdin write failed: ${formatErrorMessage(error)}.${this.#formatStderr()}`);
@@ -116,9 +132,14 @@ export class LspClient {
         // all, so a post-start error escaped as an unhandled 'error' event
         // and crashed the engine. The permanent handler below keeps the
         // same cleanup; the startup promise keeps its spawn-failure reject.
+        // An 'error' event does not by itself stop the child -- clearing
+        // the refs alone made shutdown() return early and orphaned the
+        // process, so the handler kills before it clears.
         child.on("error", (error) => {
             const message = `${this.#adapter.name} LSP server process error: ${error.message}.${this.#formatStderr()}`;
             this.#rejectPending(message);
+            if (!child.killed)
+                child.kill("SIGKILL");
             if (this.#child === child)
                 this.#child = undefined;
             if (this.#process === child)

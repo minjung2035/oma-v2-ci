@@ -60,6 +60,15 @@ test("extension-dynamic-load and extension-execute: no run-time loading, no invo
     findings => assert.ok(has(findings, "extension-dynamic-load")));
   withTree({ "src/extension/lsp-tools.ts": 'export const load = () => import("./vendor/../a.js");' },
     findings => assert.ok(has(findings, "extension-dynamic-load")));
+  // A static edge into the vendored bundle is the same violation: its bytes
+  // would evaluate at module load, before verifyVendorBundle can run.
+  withTree({ "src/extension/lsp-tools.ts": 'import { mergeEnvironment } from "./vendor/pi-lsp/runtime/command.js";' },
+    findings => assert.ok(has(findings, "extension-dynamic-load")));
+  withTree({ "src/extension/lsp-tools.ts": 'export { mergeEnvironment } from "./vendor/pi-lsp/runtime/command.js";' },
+    findings => assert.ok(has(findings, "extension-dynamic-load")));
+  // A type-only vendored import erases at compile -- nothing evaluates early.
+  withTree({ "src/extension/lsp-tools.ts": 'import type { LspServerAdapter } from "./vendor/pi-lsp/runtime/types.js";' },
+    findings => assert.ok(!has(findings, "extension-dynamic-load")));
   withTree({ "src/extension/a.ts": "export const run = (tool: any) => tool.execute();" },
     findings => assert.ok(has(findings, "extension-execute")));
   withTree({ "src/extension/a.ts": "export const run = (tool: any) => tool.execute.call(tool);" },

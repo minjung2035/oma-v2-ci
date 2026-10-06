@@ -3,7 +3,7 @@ import path from "node:path";
 import { pathToFileURL } from "node:url";
 import { collectSupportedFiles, resolveRoot, resolveSupportedFile } from "./files.js";
 import { LspClient } from "./lsp-client.js";
-import { applyTextEdits, collectWorkspaceEdits, hasOverlappingTextEdits } from "./text-edits.js";
+import { applyTextEdits, collectWorkspaceEdits, hasOverlappingTextEdits, OMA_MAX_WORKSPACE_EDITS, OMA_MAX_WORKSPACE_EDIT_BYTES } from "./text-edits.js";
 export const DEFAULT_FILE_LIMIT = 50;
 // OMA divergences (applied by scripts/vendor-pi-lsp.mjs; recorded under
 // generated.divergences in manifest.json): what was read is bounded a
@@ -91,7 +91,23 @@ export async function runFix(adapter, params, timeoutMs, signal, ctx, statusKey)
             resolvedActions = await client.resolveActions(actions);
             throwIfAborted(signal, adapter);
             selectedActions = selectCodeActions(resolvedActions, actionKind);
-            edits = selectedActions.flatMap((action) => collectWorkspaceEdits(action.edit, uri));
+            // OMA divergence: the accumulated list is bounded across ALL
+            // selected actions, not only per action -- and it is counted as
+            // it accumulates, so an over-bound action set fails before the
+            // whole list is materialized.
+            edits = [];
+            let editBytes = 0;
+            for (const action of selectedActions) {
+                const collected = collectWorkspaceEdits(action.edit, uri);
+                if (edits.length + collected.length > OMA_MAX_WORKSPACE_EDITS)
+                    throw new Error(`${adapter.name} LSP returned ${edits.length + collected.length} accumulated workspace edits; OMA's bound is ${OMA_MAX_WORKSPACE_EDITS}.`);
+                for (const edit of collected) {
+                    editBytes += typeof edit?.newText === "string" ? edit.newText.length : 0;
+                    if (editBytes > OMA_MAX_WORKSPACE_EDIT_BYTES)
+                        throw new Error(`${adapter.name} LSP returned more than ${OMA_MAX_WORKSPACE_EDIT_BYTES} accumulated workspace edit bytes; OMA's bound was exceeded.`);
+                }
+                edits.push(...collected);
+            }
             if (hasOverlappingTextEdits(text, edits)) {
                 const relativePath = path.relative(root, file) || file;
                 throw new Error(`${adapter.name} LSP returned overlapping code-action edits for ${relativePath}; ` +

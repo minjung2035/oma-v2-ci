@@ -5,9 +5,9 @@
  * filesystem only through OMA's contained writer. */
 import test from "node:test";
 import assert from "node:assert/strict";
-import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { cpSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createContainedWriter } from "../src/extension/contained-tools.js";
 import { registerLspTools, lspChildEnvironment, LSP_TOOL_NAMES } from "../src/extension/lsp-tools.js";
@@ -429,6 +429,55 @@ test("BL1/F4: the denylist is merged-wide: credentials, preloads and proxies in 
   assert.equal(env.PI_LSP_TEST_LOG, process.env.PI_LSP_TEST_LOG ?? undefined, "the fixture flag channel survives");
 });
 
+test("BL1/F4 round 2: the rule-shaped denylist empties every channel class the name-matching one missed", async t => {
+  // The blind verifier's survivor list: every one of these inherited a
+  // credential or an injection channel under the old segment/substring
+  // matching. Each must arrive at the child emptied.
+  const survivors = [
+    // Connection strings and database credentials.
+    "DATABASE_URL", "DATABASE_URI", "PGPASSWORD", "PGPASSFILE", "MYSQL_PWD",
+    // Cloud account wiring beyond the credential words.
+    "AWS_CONFIG_FILE", "AWS_PROFILE",
+    // npm per-registry credential slots -- the real `//host/:_authtoken` shape.
+    "npm_config_//registry.npmjs.org/:_authtoken", "npm_config_userconfig",
+    // Credential words with no delimiter boundary.
+    "AUTHTOKEN", "MYAPIKEY", "SECRETKEY",
+    // Git plumbing -- config injection, exec-path shadowing, CA overrides.
+    "GIT_CONFIG_PARAMETERS", "GIT_CONFIG_COUNT", "GIT_EXEC_PATH", "GIT_SSH_COMMAND",
+    // TLS trust and keystroke logging overrides.
+    "NODE_EXTRA_CA_CERTS", "REQUESTS_CA_BUNDLE", "CURL_CA_BUNDLE", "GIT_SSL_CAINFO", "SSLKEYLOGFILE",
+    // Loader/runtime injection beyond the enumerated names.
+    "DYLD_IMAGE_SUFFIX", "DYLD_PRINT_LIBRARIES", "GEM_HOME", "GEM_PATH", "RUBYLIB",
+    "PYTHONHOME", "PYTHONINSPECT", "JAVA_TOOL_OPTIONS",
+    // Daemon endpoints and IPC buses.
+    "DOCKER_HOST", "DOCKER_CERT_PATH", "DOCKER_TLS_VERIFY", "DBUS_SESSION_BUS_ADDRESS",
+    // Inherited session locations -- the redirected XDG homes are exempt
+    // because they get a scratch value, not the inherited one.
+    "XDG_RUNTIME_DIR",
+    // Display/session authority.
+    "XAUTHORITY", "DISPLAY", "WAYLAND_DISPLAY",
+    // Proxy channels beyond http(s)/all/no.
+    "FTP_PROXY", "SOCKS_PROXY", "WS_PROXY",
+  ];
+  const saved: Record<string, string | undefined> = {};
+  for (const key of survivors) {
+    saved[key] = process.env[key];
+    process.env[key] = "probe";
+  }
+  t.after(() => {
+    for (const key of Object.keys(saved))
+      if (saved[key] === undefined) delete process.env[key]; else process.env[key] = saved[key];
+  });
+  const env = await lspChildEnvironment({ env: {} } as never);
+  for (const key of survivors)
+    assert.equal(env[key], "", `${key} survives the scrub`);
+  // The intended channels still reach the child: PATH for command lookup,
+  // the fixture flag, and the scratch-redirected XDG homes stay inherited
+  // only because this helper never applies the per-call redirect.
+  assert.ok((env.PATH ?? "").length > 0, "PATH is retained");
+  assert.equal(env.XDG_CACHE_HOME, process.env.XDG_CACHE_HOME, "the redirected set is exempt from the XDG rule, not denied");
+});
+
 // ---------------------------------------------------------------------------
 // F1: bounded server->engine data -- overflow is a clean tool error, never a
 // crash, never a truncated result passed off as clean.
@@ -518,10 +567,59 @@ test("BL1/F2: a read-only role never spawns a language server -- diagnostics and
 // ---------------------------------------------------------------------------
 // F3: nothing vendored evaluates before verifyVendorBundle has passed.
 
-test("BL1/F3: the compiled adapter holds no static vendored specifier -- every vendored load sits behind verification", () => {
-  const compiled = readFileSync(fileURLToPath(new URL("../src/extension/lsp-tools.js", import.meta.url)), "utf8");
-  assert.doesNotMatch(compiled, /^import\s[^;]*["'][^"']*vendor\//m, "a static vendored import would evaluate before verification");
-  assert.doesNotMatch(compiled, /^export\s[^;]*from\s*["'][^"']*vendor\//m, "a vendored re-export would evaluate before verification");
+test("BL1/F3: no compiled extension module statically imports vendored code -- every vendored load sits behind verification", () => {
+  // Round 1 scanned lsp-tools.js only; the invariant is the whole compiled
+  // extension: any module holding a static vendored edge would evaluate
+  // unverified bytes when loaded. Dynamic import() behind verification is
+  // the one sanctioned load (the extension-dynamic-load architecture rule
+  // enforces the same boundary on sources).
+  const extensionDir = fileURLToPath(new URL("../src/extension/", import.meta.url));
+  const compiledModules: string[] = [];
+  const walk = (directory: string): void => {
+    for (const entry of readdirSync(directory, { withFileTypes: true })) {
+      const absolute = join(directory, entry.name);
+      if (entry.isDirectory()) { if (entry.name !== "vendor") walk(absolute); }
+      else if (entry.name.endsWith(".js")) compiledModules.push(absolute);
+    }
+  };
+  walk(extensionDir);
+  assert.ok(compiledModules.length >= 15, `the scan sees the compiled extension modules, got ${compiledModules.length}`);
+  for (const file of compiledModules) {
+    const name = relative(extensionDir, file);
+    const compiled = readFileSync(file, "utf8");
+    assert.doesNotMatch(compiled, /^import\s[^;]*["'][^"']*vendor\//m,
+      `${name}: a static vendored import would evaluate before verification`);
+    assert.doesNotMatch(compiled, /^export\s[^;]*from\s*["'][^"']*vendor\//m,
+      `${name}: a vendored re-export would evaluate before verification`);
+  }
   // And the dynamic imports are still present -- the runtime loads, just late.
-  assert.match(compiled, /import\(["'][^"']*vendor\/pi-lsp\/runtime\//);
+  const adapter = readFileSync(join(extensionDir, "lsp-tools.js"), "utf8");
+  assert.match(adapter, /import\(["'][^"']*vendor\/pi-lsp\/runtime\//);
+});
+
+// ---------------------------------------------------------------------------
+// F5: --check verifies the manifest's own metadata, not just file bytes.
+
+test("BL1/F5: the bundle check refuses a manifest whose metadata drifted from the declared pins", async () => {
+  // File bytes and the bundle digest were always compared; round 2 adds the
+  // manifest's own words: generated.divergences against the script's
+  // OMA_DIVERGENCES and package.* against the pinned upstream identity.
+  const specifier = "../../scripts/vendor-pi-lsp.mjs";
+  const { manifestMetadataProblems } = await import(specifier) as {
+    manifestMetadataProblems: (manifest: { generated?: { divergences?: unknown }; package?: unknown }) => string[];
+  };
+  const manifest = JSON.parse(readFileSync(fileURLToPath(new URL("../src/extension/vendor/pi-lsp/manifest.json", import.meta.url)), "utf8"));
+  assert.deepEqual(manifestMetadataProblems(manifest), [], "the checked-in manifest matches its declared metadata");
+  const driftedReason = structuredClone(manifest);
+  driftedReason.generated.divergences["runner.js"].reason = "something other than the declared reason";
+  assert.match(manifestMetadataProblems(driftedReason).join("\n"), /divergences/, "a divergence-reason edit is caught");
+  const droppedDivergence = structuredClone(manifest);
+  delete droppedDivergence.generated.divergences["files.js"];
+  assert.match(manifestMetadataProblems(droppedDivergence).join("\n"), /divergences/, "a dropped divergence record is caught");
+  const driftedCommit = structuredClone(manifest);
+  driftedCommit.package.commit = "0".repeat(40);
+  assert.match(manifestMetadataProblems(driftedCommit).join("\n"), /package|pinned/, "a commit drift is caught");
+  const driftedNpm = structuredClone(manifest);
+  driftedNpm.package.npm.integrity = "sha512-forged";
+  assert.match(manifestMetadataProblems(driftedNpm).join("\n"), /package|pinned/, "an npm integrity drift is caught");
 });

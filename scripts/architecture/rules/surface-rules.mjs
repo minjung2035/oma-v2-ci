@@ -165,6 +165,12 @@ function extensionRules(root, findings) {
         !(edge.typeOnly && (target === "implementation/contracts.ts" || target.startsWith("implementation/contracts/")))) {
         findings.push(finding("extension-closure", file, `imports ${target}; the extension imports no OMA runtime module`));
       }
+      // BL1/F6: a static edge into the vendored bundle evaluates unverified
+      // bytes at module load -- before verifyVendorBundle can run. Only a
+      // dynamic import() behind verification may reach vendored code; a
+      // type-only edge erases at compile and stays legal.
+      if (!edge.typeOnly && members.has(file) && target !== null && target.startsWith(`${VENDORED_EXTENSION_DIR}/`))
+        findings.push(finding("extension-dynamic-load", file, `statically imports ${target}; a static vendored edge evaluates before verifyVendorBundle -- only dynamic import() behind verification may load vendored code`));
     }
     eachNode(source, node => {
       if (!ts.isCallExpression(node)) return;

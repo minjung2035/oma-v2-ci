@@ -61,12 +61,15 @@ const EXPECTED_PACKAGE = Object.freeze({
 const OMA_DIVERGENCES = Object.freeze({
   "lsp-client.js": {
     reason:
-      "OMA bounds inside the wire path: stderr accumulation cap, inbound " +
-      "frame buffer cap (incomplete or oversized Content-Length), bounded " +
-      "pushed-diagnostic store (count/message/tracked files), a code-action " +
-      "count cap so resolveAction loops stay bounded, and permanent 'error' " +
-      "listeners on the child and its stdio so a post-start error can never " +
-      "escape unhandled and crash the engine.",
+      "OMA bounds inside the wire path: stderr accumulation cap (tracked " +
+      "by an explicit dropped flag so an exact landing followed by more " +
+      "bytes still marks truncation), inbound frame buffer cap (incomplete " +
+      "or oversized Content-Length), bounded pushed-diagnostic store " +
+      "(count/message/tracked files), a code-action count cap so " +
+      "resolveAction loops stay bounded, and permanent 'error' listeners " +
+      "on the child and its stdio -- the child 'error' handler also kills " +
+      "the process, so a post-start error can neither crash the engine " +
+      "nor orphan the server.",
     edits: [
       {
         find: "const PROCESS_EXIT_GRACE_MS = 500;",
@@ -80,7 +83,29 @@ const OMA_MAX_INBOUND_FRAME_BYTES = 4 * 1024 * 1024;
 const OMA_MAX_DIAGNOSTICS_PER_FILE = 1024;
 const OMA_MAX_DIAGNOSTIC_MESSAGE_CHARS = 8 * 1024;
 const OMA_MAX_DIAGNOSTIC_URIS = 4096;
-const OMA_MAX_CODE_ACTIONS = 256;`,
+const OMA_MAX_CODE_ACTIONS = 256;
+// OMA divergence: the stderr bound as a pure function so the rule is
+// testable and the dropped state is explicit. A sample that lands exactly
+// on the bound dropped nothing yet; the NEXT chunk is what marks it --
+// length alone could not tell those two states apart, which is how the
+// first version silently dropped bytes after an exact landing.
+export function appendStderrSample(state, text) {
+    if (state.dropped)
+        return state;
+    if (state.sample.length >= OMA_MAX_STDERR_CHARS)
+        return { sample: \`\${state.sample}\\n[stderr truncated at OMA's \${OMA_MAX_STDERR_CHARS}-char bound]\`, dropped: true };
+    const next = state.sample + text;
+    if (next.length <= OMA_MAX_STDERR_CHARS)
+        return { sample: next, dropped: false };
+    return { sample: \`\${next.slice(0, OMA_MAX_STDERR_CHARS)}\\n[stderr truncated at OMA's \${OMA_MAX_STDERR_CHARS}-char bound]\`, dropped: true };
+}`,
+      },
+      {
+        find: `    #stderr = "";`,
+        replace: `    #stderr = "";
+    // OMA divergence: whether stderr bytes were ever refused, tracked
+    // separately from the sample's length (see appendStderrSample).
+    #stderrDropped = false;`,
       },
       {
         find: `        child.stderr.on("data", (chunk) => {
@@ -88,11 +113,9 @@ const OMA_MAX_CODE_ACTIONS = 256;`,
         });`,
         replace: `        child.stderr.on("data", (chunk) => {
             // OMA divergence: stderr is a bounded sample, not an accumulator.
-            if (this.#stderr.length < OMA_MAX_STDERR_CHARS) {
-                this.#stderr += chunk.toString();
-                if (this.#stderr.length > OMA_MAX_STDERR_CHARS)
-                    this.#stderr = \`\${this.#stderr.slice(0, OMA_MAX_STDERR_CHARS)}\\n[stderr truncated at OMA's \${OMA_MAX_STDERR_CHARS}-char bound]\`;
-            }
+            const next = appendStderrSample({ sample: this.#stderr, dropped: this.#stderrDropped }, chunk.toString());
+            this.#stderr = next.sample;
+            this.#stderrDropped = next.dropped;
         });`,
       },
       {
@@ -114,9 +137,14 @@ const OMA_MAX_CODE_ACTIONS = 256;`,
         // all, so a post-start error escaped as an unhandled 'error' event
         // and crashed the engine. The permanent handler below keeps the
         // same cleanup; the startup promise keeps its spawn-failure reject.
+        // An 'error' event does not by itself stop the child -- clearing
+        // the refs alone made shutdown() return early and orphaned the
+        // process, so the handler kills before it clears.
         child.on("error", (error) => {
             const message = \`\${this.#adapter.name} LSP server process error: \${error.message}.\${this.#formatStderr()}\`;
             this.#rejectPending(message);
+            if (!child.killed)
+                child.kill("SIGKILL");
             if (this.#child === child)
                 this.#child = undefined;
             if (this.#process === child)
@@ -204,8 +232,15 @@ const OMA_MAX_CODE_ACTIONS = 256;`,
       "OMA bounds on the read and on what a pull response carries: the file " +
       "can grow between the admission stat and the read, and a pull " +
       "diagnostics array gets the same per-file count and per-message " +
-      "bounds the client enforces on the push path.",
+      "bounds the client enforces on the push path. The accumulated " +
+      "workspace-edit list across all selected actions is bounded in count " +
+      "and newText bytes -- per-list bounds alone leave action-count " +
+      "times the list bound.",
     edits: [
+      {
+        find: `import { applyTextEdits, collectWorkspaceEdits, hasOverlappingTextEdits } from "./text-edits.js";`,
+        replace: `import { applyTextEdits, collectWorkspaceEdits, hasOverlappingTextEdits, OMA_MAX_WORKSPACE_EDITS, OMA_MAX_WORKSPACE_EDIT_BYTES } from "./text-edits.js";`,
+      },
       {
         find: "export const DEFAULT_FILE_LIMIT = 50;",
         replace: `export const DEFAULT_FILE_LIMIT = 50;
@@ -258,6 +293,26 @@ function boundedDiagnostics(adapter, file, diagnostics) {
         find: `            const diagnostics = await client.diagnostics(uri);`,
         replace: `            const diagnostics = boundedDiagnostics(adapter, file, await client.diagnostics(uri));`,
       },
+      {
+        find: `            edits = selectedActions.flatMap((action) => collectWorkspaceEdits(action.edit, uri));`,
+        replace: `            // OMA divergence: the accumulated list is bounded across ALL
+            // selected actions, not only per action -- and it is counted as
+            // it accumulates, so an over-bound action set fails before the
+            // whole list is materialized.
+            edits = [];
+            let editBytes = 0;
+            for (const action of selectedActions) {
+                const collected = collectWorkspaceEdits(action.edit, uri);
+                if (edits.length + collected.length > OMA_MAX_WORKSPACE_EDITS)
+                    throw new Error(\`\${adapter.name} LSP returned \${edits.length + collected.length} accumulated workspace edits; OMA's bound is \${OMA_MAX_WORKSPACE_EDITS}.\`);
+                for (const edit of collected) {
+                    editBytes += typeof edit?.newText === "string" ? edit.newText.length : 0;
+                    if (editBytes > OMA_MAX_WORKSPACE_EDIT_BYTES)
+                        throw new Error(\`\${adapter.name} LSP returned more than \${OMA_MAX_WORKSPACE_EDIT_BYTES} accumulated workspace edit bytes; OMA's bound was exceeded.\`);
+                }
+                edits.push(...collected);
+            }`,
+      },
     ],
   },
   "files.js": {
@@ -279,6 +334,150 @@ function collectPath(adapter, targetPath, files, seen, visitedDirectories, realR
       {
         find: `        collectPath(adapter, path.join(targetPath, entry.name), files, seen, visitedDirectories, realRoot, limit);`,
         replace: `        collectPath(adapter, path.join(targetPath, entry.name), files, seen, visitedDirectories, realRoot, limit, depth + 1);`,
+      },
+    ],
+  },
+  "text-edits.js": {
+    reason:
+      "OMA bounds on what a resolved code action may carry: collected " +
+      "workspace edits are refused past a count bound and a newText byte " +
+      "bound -- mid-collection, not after a flatMap materialized the whole " +
+      "list. The overlap check is a sorted sweep instead of a synchronous " +
+      "O(n^2) pair scan no AbortSignal could interrupt, and application is " +
+      "one pass over the ordered edits instead of rebuilding the string " +
+      "once per edit.",
+    edits: [
+      {
+        find: `export function positionAt(text, offset) {`,
+        replace: `// OMA divergences (applied by scripts/vendor-pi-lsp.mjs; recorded under
+// generated.divergences in manifest.json). Resolved workspace edits are
+// bounded in count and replacement bytes; overlap checking is a sorted
+// sweep, not a quadratic scan; application is a single ordered pass.
+export const OMA_MAX_WORKSPACE_EDITS = 2048;
+export const OMA_MAX_WORKSPACE_EDIT_BYTES = 4 * 1024 * 1024;
+export function positionAt(text, offset) {`,
+      },
+      {
+        find: `export function applyTextEdits(text, edits) {
+    let output = text;
+    const sortedEdits = positionTextEdits(text, edits).sort((left, right) => {
+        if (left.start !== right.start)
+            return right.start - left.start;
+        if (left.end !== right.end)
+            return right.end - left.end;
+        return right.index - left.index;
+    });
+    for (const { edit, start, end } of sortedEdits) {
+        output = \`\${output.slice(0, start)}\${edit.newText}\${output.slice(end)}\`;
+    }
+    return output;
+}`,
+        replace: `export function applyTextEdits(text, edits) {
+    // OMA divergence: one pass over the edits ordered by position instead
+    // of splicing the whole string once per edit. The output is identical
+    // for non-overlapping edits (overlap is refused upstream of this);
+    // same-position inserts keep list order -- the reverse-sorted
+    // application landed earlier-indexed text first and so does this.
+    const orderedEdits = positionTextEdits(text, edits).sort((left, right) => {
+        if (left.start !== right.start)
+            return left.start - right.start;
+        if (left.end !== right.end)
+            return left.end - right.end;
+        return left.index - right.index;
+    });
+    let output = "";
+    let cursor = 0;
+    for (const { edit, start, end } of orderedEdits) {
+        output += text.slice(cursor, start) + edit.newText;
+        cursor = end;
+    }
+    return output + text.slice(cursor);
+}`,
+      },
+      {
+        find: `export function hasOverlappingTextEdits(text, edits) {
+    const positionedEdits = positionTextEdits(text, edits);
+    for (let leftIndex = 0; leftIndex < positionedEdits.length; leftIndex += 1) {
+        for (let rightIndex = leftIndex + 1; rightIndex < positionedEdits.length; rightIndex += 1) {
+            if (textEditRangesConflict(positionedEdits[leftIndex], positionedEdits[rightIndex])) {
+                return true;
+            }
+        }
+    }
+    return false;
+}`,
+        replace: `export function hasOverlappingTextEdits(text, edits) {
+    // OMA divergence: a sorted sweep replaces the quadratic pair scan --
+    // synchronous O(n^2) CPU on a hostile edit list could not be
+    // interrupted by the request timeout or AbortSignal. Edits are
+    // grouped by start offset; a non-empty range conflicts with an
+    // earlier-starting range still open at its start or with a sibling
+    // starting at the same offset, and an insert conflicts only strictly
+    // inside an earlier range -- exactly the pair scan's verdicts.
+    const positionedEdits = positionTextEdits(text, edits).sort((left, right) => left.start - right.start);
+    let index = 0;
+    let openEnd = -1;
+    while (index < positionedEdits.length) {
+        const start = positionedEdits[index].start;
+        let siblingHasRange = false;
+        let siblingEnd = -1;
+        while (index < positionedEdits.length && positionedEdits[index].start === start) {
+            const positioned = positionedEdits[index];
+            if (positioned.start === positioned.end) {
+                if (openEnd > start)
+                    return true;
+            }
+            else {
+                if (openEnd > start || siblingHasRange)
+                    return true;
+                siblingHasRange = true;
+                if (positioned.end > siblingEnd)
+                    siblingEnd = positioned.end;
+            }
+            index += 1;
+        }
+        if (siblingEnd > openEnd)
+            openEnd = siblingEnd;
+    }
+    return false;
+}`,
+      },
+      {
+        find: `export function collectWorkspaceEdits(edit, uri) {
+    if (!edit)
+        return [];
+    if (edit.documentChanges) {
+        return edit.documentChanges.flatMap((change) => (change.textDocument?.uri === uri ? (change.edits ?? []) : []));
+    }
+    return edit.changes?.[uri] ?? [];
+}`,
+        replace: `export function collectWorkspaceEdits(edit, uri) {
+    // OMA divergence: the collected list is bounded while it builds -- an
+    // over-bound documentChanges array is refused mid-collection, not
+    // after a flatMap materialized every element.
+    if (!edit)
+        return [];
+    const collected = [];
+    let bytes = 0;
+    const take = (list) => {
+        for (const entry of list ?? []) {
+            collected.push(entry);
+            if (collected.length > OMA_MAX_WORKSPACE_EDITS)
+                throw new Error(\`workspace edits exceeded OMA's \${OMA_MAX_WORKSPACE_EDITS}-edit bound\`);
+            bytes += typeof entry?.newText === "string" ? entry.newText.length : 0;
+            if (bytes > OMA_MAX_WORKSPACE_EDIT_BYTES)
+                throw new Error(\`workspace edits exceeded OMA's \${OMA_MAX_WORKSPACE_EDIT_BYTES}-byte bound\`);
+        }
+    };
+    if (edit.documentChanges) {
+        for (const change of edit.documentChanges)
+            if (change.textDocument?.uri === uri)
+                take(change.edits);
+        return collected;
+    }
+    take(edit.changes?.[uri]);
+    return collected;
+}`,
       },
     ],
   },
@@ -395,6 +594,39 @@ function packageMetadata() {
   };
 }
 
+/** The manifest's own words, compared against what this script would
+ * declare today: the divergence table must equal OMA_DIVERGENCES
+ * (reason text and edit count, not just file names) and package.* must
+ * equal the pinned upstream identity. A regenerated or hand-edited
+ * manifest that drifted from the declared pins fails --check even when
+ * every file record and the bundle digest still match. Exported so the
+ * regression test can drive the same function the check runs. */
+export function manifestMetadataProblems(manifest) {
+  const problems = [];
+  // Canonical JSON: key order is not a difference, content is.
+  const canonical = value => JSON.stringify(value, (_key, v) =>
+    v !== null && typeof v === "object" && !Array.isArray(v)
+      ? Object.fromEntries(Object.keys(v).sort().map(k => [k, v[k]]))
+      : v);
+  const expectedDivergences = Object.fromEntries(
+    Object.entries(OMA_DIVERGENCES).map(([file, { reason, edits }]) => [file, { reason, edits: edits.length }]));
+  const declaredDivergences = manifest?.generated?.divergences;
+  const shape = value => Object.keys(value ?? {}).sort();
+  if (JSON.stringify(shape(declaredDivergences)) !== JSON.stringify(shape(expectedDivergences)))
+    problems.push("manifest generated.divergences names a different divergent-file set than OMA_DIVERGENCES");
+  else {
+    for (const [file, expected] of Object.entries(expectedDivergences)) {
+      const declared = declaredDivergences[file];
+      if (declared?.reason !== expected.reason || declared?.edits !== expected.edits)
+        problems.push(`manifest generated.divergences["${file}"] does not match OMA_DIVERGENCES`);
+    }
+  }
+  const expectedPackage = packageMetadata();
+  if (canonical(manifest?.package) !== canonical(expectedPackage))
+    problems.push("manifest package does not match the pinned upstream identity");
+  return problems;
+}
+
 function writeRuntime() {
   const scratch = mkdtempSync(join(tmpdir(), "oma-pi-lsp-emit-"));
   try {
@@ -442,6 +674,10 @@ function check() {
   const pkg = JSON.parse(readFileSync(join(UPSTREAM_DIR, "package.json"), "utf8"));
   if (manifest.package?.name !== pkg.name || manifest.package?.version !== pkg.version)
     problems.push("manifest package identity does not match upstream/package.json");
+  // The manifest's own metadata is verified too: the divergence table must
+  // equal this script's OMA_DIVERGENCES and package.* the pinned identity,
+  // so a regenerated manifest cannot launder a drifted splice set.
+  problems.push(...manifestMetadataProblems(manifest));
   // The emitted runtime must be exactly what tsc produces from the vendored
   // sources plus the declared OMA divergence splices -- a hand-edited
   // runtime/ file fails here even if someone regenerated the manifest to

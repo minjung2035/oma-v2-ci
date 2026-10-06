@@ -24,14 +24,17 @@
  *   start resets the scope and session shutdown drains it, which aborts
  *   every in-flight operation (upstream's lifecycle, kept).
  * - Environment: a language server is not an OMA client. The child gets
- *   the engine's environment minus OMA's denylist (every `OMA_*` wiring
- *   key, `NODE_OPTIONS` and the other module/loader preload channels a
- *   language server would otherwise inherit, credential-shaped names,
- *   proxy variables, and the agent-dir pointers), minus any adapter
- *   override that names one, plus a per-call scratch `HOME`/`XDG_*`/
- *   `TMPDIR` so server-internal caches do not land in the user's real
- *   home. PATH is the engine's PATH as resolved by upstream's command
- *   lookup.
+ *   the engine's environment minus OMA's denylist -- a rule table over
+ *   the lowercased name, not a list of names: `OMA_*` wiring, credential-
+ *   shaped words wherever they sit, database/cloud/registry config
+ *   channels, every `GIT_*` config/injection channel, CA and TLS
+ *   overrides, module/loader preload channels for every runtime,
+ *   session/display/IPC authority (`SSH_*`, `DOCKER_*`, `DBUS_*`,
+ *   `XDG_*` except the scratch-redirected homes, `DISPLAY`), and every
+ *   `*_PROXY` -- minus any adapter override that names one, plus a
+ *   per-call scratch `HOME`/`XDG_*`/`TMPDIR` so server-internal caches
+ *   do not land in the user's real home. PATH is the engine's PATH as
+ *   resolved by upstream's command lookup.
  * - Server filesystem rights: the child process still carries ambient
  *   filesystem authority, and env redirection cannot stop a server that
  *   writes beside the files it indexes (clangd's project-root `.cache`
@@ -119,48 +122,86 @@ interface LspRuntime {
   readonly configNotice: string | undefined;
 }
 
-/** The exact set of environment names OMA refuses a language-server child,
- * matched case-insensitively: the loader/preload channels a spawned
- * interpreter would honor, credential-shaped inherited names, proxies that
- * can carry `user:pass@`, and the agent-dir pointers that are none of a
- * language server's business. `OMA_*` is denied by prefix separately. */
-const CHILD_ENV_DENY_EXACT: ReadonlySet<string> = new Set([
-  // Interpreter/module preload channels -- the reason NODE_OPTIONS was
-  // already denied: the same injection exists for every runtime.
-  "node_options", "node_path",
-  "bash_env", "env",
-  "ld_preload", "ld_audit", "ld_library_path", "ld_debug",
-  "dyld_insert_libraries", "dyld_library_path", "dyld_fallback_library_path",
-  "pythonstartup", "pythonpath",
-  "rubyopt", "perl5opt", "perl5lib",
-  // Credential/agent plumbing.
-  "ssh_auth_sock", "ssh_agent_pid", "ssh_askpass",
-  "git_askpass", "git_ssh", "git_ssh_command",
-  "kubeconfig", "docker_config", "gnupg_home",
-  "npm_config_userconfig",
+/** The environment names OMA refuses a language-server child, matched
+ * case-insensitively by shape rather than by a list of names: each rule is a
+ * named predicate over the lowercased key, so the reason a variable is
+ * denied reads off the table and a never-enumerated variant of the same
+ * channel class is denied too. */
+const CHILD_ENV_DENY_RULES: ReadonlyArray<{ readonly reason: string; readonly test: (key: string) => boolean }> = [
+  // OMA's own wiring and the agent-dir pointers that are none of a
+  // language server's business.
+  { reason: "oma-or-agent-wiring", test: k =>
+    k.startsWith("oma_") || k === "pi_coding_agent_dir" || k === "pi_offline" },
+  // Credential-shaped names, wherever the word sits in the key.
+  { reason: "credential-shaped", test: k =>
+    k.includes("password") || k.includes("passwd") || k.includes("passphrase") ||
+    k.includes("secret") || k.includes("token") || k.includes("credential") ||
+    k.includes("apikey") || k.includes("api_key") || k.includes("private_key") ||
+    k.includes("access_key") || k.includes("session_key") || k.includes("signing_key") ||
+    k.includes("bearer") || k.includes("authorization") ||
+    k === "auth" || k.startsWith("auth_") || k.includes("_auth") || k.endsWith("auth") ||
+    k === "pwd" || k.endsWith("_pwd") || k.endsWith("_key") },
+  // Whole config namespaces that carry credentials or redirect trust:
+  // connection strings, database drivers, cloud accounts, registries,
+  // and every Git config/injection channel (`GIT_CONFIG_PARAMETERS`,
+  // `GIT_EXEC_PATH`, askpass hooks, `GIT_SSL_*` -- a git client needs none
+  // of its parent's git authority).
+  { reason: "database-or-cloud-config", test: k =>
+    k.startsWith("database") || k.startsWith("pg") || k.startsWith("mysql") ||
+    k.startsWith("mongo") || k.startsWith("redis") ||
+    k.startsWith("aws_") || k.startsWith("azure_") || k.startsWith("gcloud") ||
+    k === "kubeconfig" || k.startsWith("kube_") },
+  { reason: "package-registry-config", test: k =>
+    k.startsWith("npm_config") || k.startsWith("yarn_") || k.startsWith("pnpm_") },
+  { reason: "git-config-or-injection", test: k => k.startsWith("git_") },
+  // CA bundles and TLS overrides: a child-supplied bundle is a trusted-root
+  // redirect, and SSLKEYLOGFILE exfiltrates session keys.
+  { reason: "ca-or-tls-override", test: k =>
+    k.includes("_ca_") || k.endsWith("_ca") || k.startsWith("ca_") ||
+    k.includes("cert") || k.startsWith("ssl") || k.startsWith("tls_") ||
+    k.includes("_tls_") || k.endsWith("_tls") },
+  // Loader and runtime channels that smuggle code or search paths --
+  // the reason NODE_OPTIONS was already denied, extended to every runtime.
+  { reason: "loader-or-runtime-path", test: k =>
+    k.startsWith("ld_") || k.startsWith("dyld") || k.startsWith("node_") ||
+    k === "gem_home" || k === "gem_path" || k === "rubylib" || k === "rubyopt" ||
+    k.startsWith("python") || k === "perl5lib" || k === "perl5opt" ||
+    k === "classpath" || k.startsWith("java_") || k.startsWith("jdk_") ||
+    k.startsWith("dotnet_") || k === "gopath" || k === "goroot" ||
+    k === "cargo_home" || k === "rustup_home" },
+  // Shells and interactive hooks that would run outside the scrub.
+  { reason: "shell-hook", test: k =>
+    k === "env" || k === "bash_env" || k === "zdotdir" || k === "inputrc" ||
+    k === "prompt_command" || k === "ps1" || k === "cdpath" || k === "ifs" ||
+    k === "shell" || k === "term" || k === "browser" || k === "visual" ||
+    k === "editor" || k === "pager" },
+  // Session, agent, display, and IPC authority a language server must
+  // never see: it has no display, no bus, no docker daemon.
+  { reason: "session-or-agent-authority", test: k =>
+    k.startsWith("ssh_") || k.startsWith("gpg") || k.startsWith("gnupg") ||
+    k.startsWith("krb5") || k.includes("askpass") ||
+    k === "xauthority" || k === "display" || k === "wayland_display" ||
+    k.startsWith("dbus") || k.startsWith("docker") || k.startsWith("container") },
+  // XDG locations, except the scratch-redirected set injected below.
+  { reason: "xdg-path", test: k => k.startsWith("xdg_") },
   // Proxies can embed credentials; a language server needs no network anyway.
-  "http_proxy", "https_proxy", "all_proxy", "no_proxy",
-  // Pi agent wiring is not a language server's business.
-  "pi_coding_agent_dir", "pi_offline",
-]);
-const CHILD_ENV_DENY_SEGMENTS: ReadonlySet<string> = new Set([
-  "token", "secret", "passwd", "password", "passphrase", "credential", "credentials",
-  "apikey", "auth", "authorization", "bearer",
-]);
-const CHILD_ENV_DENY_SUBSTRINGS: readonly string[] = [
-  "api_key", "private_key", "access_key", "secret_key", "session_key", "signing_key",
+  { reason: "proxy", test: k => k.endsWith("_proxy") || k === "proxy" || k === "no_proxy" },
 ];
 
-/** A name is denied when it is OMA wiring, an exact-list preload/agent
- * channel, or shaped like a credential (`GITHUB_TOKEN`, `AWS_SECRET_ACCESS_KEY`,
- * `OPENAI_API_KEY`, `MY_SVC_AUTH`...). Matching is case-insensitive so a
- * lower- or mixed-case variant of an inherited name is denied too. */
+/** The XDG homes the caller redirects into the per-call scratch: denied
+ * names would empty the inherited value, but these get OMA's scratch value
+ * instead, so they are exempt from the `xdg-path` rule. */
+const XDG_REDIRECTED_ENV_KEYS: ReadonlySet<string> = new Set([
+  "xdg_cache_home", "xdg_config_home", "xdg_data_home",
+]);
+
+/** A name is denied when any rule's channel class matches it.
+ * Case-insensitive, so a lower- or mixed-case variant of an inherited name
+ * is denied too. */
 function deniedEnvKey(key: string): boolean {
   const lower = key.toLowerCase();
-  if (lower.startsWith("oma_")) return true;
-  if (CHILD_ENV_DENY_EXACT.has(lower)) return true;
-  if (lower.split(/[^a-z0-9]+/).some(segment => CHILD_ENV_DENY_SEGMENTS.has(segment))) return true;
-  return CHILD_ENV_DENY_SUBSTRINGS.some(part => lower.includes(part));
+  if (XDG_REDIRECTED_ENV_KEYS.has(lower)) return false;
+  return CHILD_ENV_DENY_RULES.some(rule => rule.test(lower));
 }
 
 /** The environment override map the vendored client's `mergeEnvironment`

@@ -636,6 +636,45 @@ name collision/intended surface/hidden 미활성/idempotent reload/provenance/
 
 ## 9. 진행 로그
 
+- 2026-10-06 (bundled #1 — pi-lsp 맹검증 정산 2라운드): BL1 잔여 맹검증 발견
+  F1–F6 정산. F1(누적 워크스페이스 편집 무제한 + 동기 O(n²) 중첩 검사):
+  `text-edits.js`에 `OMA_MAX_WORKSPACE_EDITS=2048`·
+  `OMA_MAX_WORKSPACE_EDIT_BYTES=4MiB` 신설 — `collectWorkspaceEdits`가
+  documentChanges/changes 양 형태를 수집 중간에 거절(flatMap 전체
+  구체화 없음), `runner.js`의 runFix는 선택된 모든 action 합산으로
+  count·newText 바이트를 bound(per-list 상한 × 256 actions 허점 제거),
+  `hasOverlappingTextEdits`는 start-정렬 스윕으로 교체(판정 동치 —
+  교체는 이전-열린 구간·동일-start 형제, 삽입은 이전 구간 내부만
+  충돌), `applyTextEdits`는 오름차순 단일 패스(동일 위치 삽입은 리스트
+  순서 보존). F2(env denylist 원칙화): 이름 나열을 규칙 테이블
+  (`CHILD_ENV_DENY_RULES`)로 교체 — 자격증명 단어 위치 무관 탐지,
+  database/pg/mysql/mongo/redis·aws_/azure_/gcloud/kube 설정 채널,
+  npm_config/yarn/pnpm 레지스트리 채널(`//host/:_authtoken` 포함),
+  git_ 전체 프리픽스(CONFIG_PARAMETERS·EXEC_PATH·SSL_CAINFO), CA/TLS
+  override(_ca_/cert/ssl·NODE_EXTRA_CA_CERTS·SSLKEYLOGFILE), 로더/
+  런타임 채널(dyld·gem·python·java 등), docker/dbus/display/xdg_
+  (scratch-redirect 3개만 `XDG_REDIRECTED_ENV_KEYS` 면제), `*_proxy`
+  전 계열. F3(stderr 정확 경계): 길이만 보던 검사를 `{sample,dropped}`
+  명시 상태의 `appendStderrSample`(exported)로 교체 — cap 정확 도달은
+  미표시, 이후 바이트 도착 시 표시+거절; 픽스처의 stderr flood는 write
+  콜백+drain으로 결정론적 flush 뒤 실패/종료(150ms sleep 레이스 제거).
+  F4(post-spawn error 고아): 영구 `child.on("error")` 핸들러가 ref를
+  지우기 전 `kill("SIGKILL")` — 기존엔 shutdown()이 early return해
+  프로세스가 고아가 됐다. F5(manifest 메타데이터): `vendor-pi-lsp.mjs
+  --check`가 `manifestMetadataProblems`(exported)로
+  `generated.divergences`를 OMA_DIVERGENCES와(reason·edit 수 포함),
+  `package.*`를 pin된 upstream 신원과 비교 — 파일 바이트·번들
+  다이제스트만 보던 허점 정산. F6(전 extension verify-before-import):
+  컴파일 스캔을 `src/extension/` 전 모듈로 확장 + `surface-rules.mjs`의
+  extension-dynamic-load가 extension 멤버의 정적 vendored import/
+  re-export를 적발(type-only은 컴파일 소거라 허용). 테스트: 적대
+  픽스처에 edits-flood·edits-documentchanges-flood·edit-bytes-flood·
+  edits-at-bound 추가 — baseline fail(9+2+rule 1) → post-fix
+  lsp-upstream/lsp-bundle/surface-rules 전부 pass. `vendor-pi-lsp.mjs
+  --write` 재생성·`--check` PASS, manifest divergences 8/7/2/4 edits로
+  정직 기록, source digests·review-notes(byte-bound 재결박)·
+  review-ledger·validation digest 재바인딩. NOT_RUN: 실제 언어 서버
+  바이너리 e2e(픽스처만), macOS·systemd 레인.
 - 2026-10-06 (bundled #1 — pi-lsp 맹검증 정산): BL1에 대한 맹검증 발견 F1–F7
   정산 + F8 저비용 bound 반영. F1(server→engine 무제한): vendored
   `lsp-client.js`에 stderr 64KiB bounded sample(truncated 마커), 인바운드
