@@ -10,7 +10,7 @@ import { tmpdir } from "node:os";
 import { join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createContainedWriter } from "../src/extension/contained-tools.js";
-import { registerLspTools, lspChildEnvironment, LSP_TOOL_NAMES } from "../src/extension/lsp-tools.js";
+import { registerLspTools, lspChildEnvironment, LSP_TOOL_NAMES, OMA_LSP_CHILD_ENV_ALLOW } from "../src/extension/lsp-tools.js";
 import { omaToolNames } from "../src/extension/mail-tools.js";
 import { guardWorkspaceTools } from "../src/extension/workspace-guard.js";
 import { verifyVendorBundle, vendoredBundleDir, VendorIntegrityError } from "../src/extension/vendor-bundle.js";
@@ -363,17 +363,20 @@ test("BL1: a symlink that escapes the pinned workspace is refused by the vendore
 });
 
 test("BL1: every lsp_* call runs a fresh server process: no daemon, no reuse", async t => {
-  const logFile = join(tmp(t), "spawns.log");
-  const previous = process.env.PI_LSP_TEST_LOG;
-  process.env.PI_LSP_TEST_LOG = logFile;
-  t.after(() => { if (previous === undefined) delete process.env.PI_LSP_TEST_LOG; else process.env.PI_LSP_TEST_LOG = previous; });
-  const { run } = await lspWorld(t, "lifecycle-go");
-  await run("lsp_diagnostics", { paths: ["note.tfix"], server: "fixture" });
-  await run("lsp_diagnostics", { paths: ["note.tfix"], server: "fixture" });
-  await run("lsp_fix", { path: "note.tfix", server: "fixture" });
-  const pids = new Set(
-    readFileSync(logFile, "utf8").trim().split("\n").map(line => JSON.parse(line).pid as number),
-  );
+  // The child pid rides the wire protocol, not an env channel: the
+  // fixture's PI_LSP_TEST_* channels are correctly deny-by-default now,
+  // so pid-echo reports process.pid inside the diagnostic and the fix
+  // action's title -- the same proof the spawns.log channel gave.
+  const { run } = await hostileWorld(t, "pid-echo");
+  const first = textOf(await run("lsp_diagnostics", { paths: ["note.tfix"], server: "fixture" }));
+  const second = textOf(await run("lsp_diagnostics", { paths: ["note.tfix"], server: "fixture" }));
+  const fix = await run("lsp_fix", { path: "note.tfix", server: "fixture" });
+  const pids = new Set([
+    ...[...first.matchAll(/pid=(\d+)/g)].map(match => match[1]),
+    ...[...second.matchAll(/pid=(\d+)/g)].map(match => match[1]),
+    ...[...(fix.details as { appliedActions?: { title?: string }[] }).appliedActions ?? []]
+      .flatMap(action => [...(action.title ?? "").matchAll(/pid=(\d+)/g)].map(match => match[1])),
+  ]);
   assert.equal(pids.size, 3, "three calls, three processes");
 });
 
@@ -385,97 +388,241 @@ test("BL1: a hung server's call is cancelled by the caller's abort signal", asyn
   await assert.rejects(pending, /abort|aborted/i);
 });
 
-test("BL1: the language-server child env drops OMA wiring and NODE_OPTIONS but keeps PATH", async t => {
-  const previous = { socket: process.env.OMA_SOCKET, surface: process.env.OMA_TOOL_SURFACE, node: process.env.NODE_OPTIONS };
-  process.env.OMA_SOCKET = "/tmp/oma.sock";
-  process.env.OMA_TOOL_SURFACE = "deadbeef";
-  process.env.NODE_OPTIONS = "--import oma-preload";
+/** The test-side restatement of the child env boundary: the exact
+ * allowlist names, the one `lc_` prefix, the four proxy names (whose
+ * values the source pins to the sandbox's injected loopback), and the
+ * scratch-redirected homes. A child env whose keys all satisfy this
+ * predicate holds only the sanctioned set -- the deny-by-default
+ * oracle. */
+const CHILD_SCRATCH_NAMES = new Set(["home", "xdg_cache_home", "xdg_config_home", "xdg_data_home",
+  "tmpdir", "temp", "tmp", "userprofile", "appdata", "localappdata"]);
+const CHILD_PROXY_NAMES = new Set(["http_proxy", "https_proxy", "all_proxy", "no_proxy"]);
+const sanctionedChildName = (key: string): boolean => {
+  const lower = key.toLowerCase();
+  return OMA_LSP_CHILD_ENV_ALLOW.has(lower) || lower.startsWith("lc_") ||
+    CHILD_PROXY_NAMES.has(lower) || CHILD_SCRATCH_NAMES.has(lower);
+};
+
+/** Plant every key in `names` (or explicit values) in process.env for
+ * the test body, restoring afterwards. */
+function plantEnv(t: import("node:test").TestContext, names: readonly string[], value = "probe"): void {
+  const saved: Record<string, string | undefined> = {};
+  for (const key of names) { saved[key] = process.env[key]; process.env[key] = value; }
   t.after(() => {
-    for (const [key, value] of [["OMA_SOCKET", previous.socket], ["OMA_TOOL_SURFACE", previous.surface], ["NODE_OPTIONS", previous.node]] as const)
+    for (const key of Object.keys(saved))
+      if (saved[key] === undefined) delete process.env[key]; else process.env[key] = saved[key];
+  });
+}
+
+test("BL1: the language-server child env is deny-by-default -- OMA wiring and loader channels are absent, PATH stays", async t => {
+  plantEnv(t, ["OMA_SOCKET", "OMA_TOOL_SURFACE", "NODE_OPTIONS"]);
+  const env = await lspChildEnvironment({ env: {} } as never);
+  assert.equal(env.OMA_SOCKET, undefined, "the broker socket is absent, not emptied");
+  assert.equal(env.OMA_TOOL_SURFACE, undefined, "the tool surface is absent, not emptied");
+  assert.equal(env.NODE_OPTIONS, undefined, "the OMA preload cannot reach the child");
+  assert.ok((env.PATH ?? "").length > 0, "PATH is retained for server lookup");
+  for (const key of Object.keys(env))
+    assert.ok(sanctionedChildName(key), `${key} is not a sanctioned child name`);
+});
+
+test("BL1/F4: deny-by-default -- the whole hostile corpus is stripped from the inherited env AND the adapter env", async t => {
+  // The corpus is the union of every survivor class the blind
+  // verification found in the denylist (the 84-of-161 probe), the channels
+  // each round itself denied, and names OMA has never enumerated at all.
+  // Under deny-by-default the verdict is presence: a denied name must be
+  // absent, not emptied -- an empty path-list element still resolves as
+  // the current directory to a loader.
+  const corpus = [
+    // OMA's own wiring and Pi's agent-dir pointers.
+    "OMA_SOCKET", "OMA_TOOL_SURFACE", "OMA_BROKER_FD", "OMA_EGRESS_PROXY_SOCKET",
+    "OMA_EGRESS_PROXY_PORT", "OMA_INFERENCE_SOCKET", "OMA_ACTOR", "OMA_CPUS",
+    "PI_CODING_AGENT_DIR", "PI_OFFLINE", "PI_LSP_CONFIG", "PI_LSP_TEST_LOG", "PI_USER_LSP_COMMAND",
+    // Credentials, connection strings, and cloud/database config.
+    "DATABASE_URL", "DATABASE_URI", "PGPASSWORD", "PGPASSFILE", "MYSQL_PWD", "MONGO_URI", "REDIS_URL",
+    "AWS_SECRET_ACCESS_KEY", "AWS_CONFIG_FILE", "AWS_PROFILE", "AWS_SESSION_TOKEN",
+    "AZURE_CLIENT_SECRET", "GCLOUD_PROJECT", "GOOGLE_APPLICATION_CREDENTIALS", "CLOUDSDK_CONFIG",
+    "GITHUB_TOKEN", "OPENAI_API_KEY", "AUTHTOKEN", "MYAPIKEY", "SECRETKEY", "lowercase_token",
+    "npm_config_//registry.npmjs.org/:_authtoken", "npm_config_userconfig", "YARN_NPM_AUTH_TOKEN", "PNPM_HOME",
+    // Git plumbing and TLS trust channels.
+    "GIT_CONFIG_PARAMETERS", "GIT_CONFIG_COUNT", "GIT_EXEC_PATH", "GIT_SSH_COMMAND", "GIT_ASKPASS",
+    "GIT_SSL_CAINFO", "GIT_SSL_NO_VERIFY", "GIT_AUTHOR_NAME", "GIT_EDITOR", "GIT_TERMINAL_PROMPT",
+    "NODE_EXTRA_CA_CERTS", "REQUESTS_CA_BUNDLE", "CURL_CA_BUNDLE", "SSLKEYLOGFILE", "SSL_CERT_FILE", "DENO_CERT",
+    // Loader and runtime injection for every toolchain -- the probe's survivors.
+    "LD_PRELOAD", "LD_LIBRARY_PATH", "LD_AUDIT", "LD_DEBUG", "DYLD_INSERT_LIBRARIES", "DYLD_IMAGE_SUFFIX",
+    "NODE_OPTIONS", "NODE_PATH", "NODE_REPL_HISTORY",
+    "PYTHONPATH", "PYTHONHOME", "PYTHONINSPECT", "PYTHONSTARTUP", "PYTHONBREAKPOINT",
+    "PERLLIB", "PERL5LIB", "PERL5OPT", "PERL5DB",
+    "GEM_HOME", "GEM_PATH", "RUBYLIB", "RUBYOPT", "BUNDLE_GEMFILE", "BUNDLE_PATH", "BUNDLE_BIN_PATH",
+    "CLASSPATH", "JAVA_HOME", "JDK_HOME", "_JAVA_OPTIONS", "JAVA_TOOL_OPTIONS", "JDK_JAVA_OPTIONS",
+    "MAVEN_OPTS", "GRADLE_OPTS", "SBT_OPTS", "ANT_OPTS", "LEIN_JVM_OPTS",
+    "DOTNET_ROOT", "NUGET_PACKAGES", "MSBuildExtensionsPath",
+    "GOPATH", "GOROOT", "GOBIN", "GOTOOLCHAIN", "GOFLAGS", "GOPROXY", "GOPRIVATE", "GONOSUMDB",
+    "GOCACHE", "GOMODCACHE", "GOWORK", "GOENV", "GO111MODULE", "GOSUMDB", "GOAUTH",
+    "RUSTC", "RUSTC_WRAPPER", "RUSTFLAGS", "RUSTUP_HOME", "RUSTUP_TOOLCHAIN",
+    "CARGO_HOME", "CARGO_NET_GIT_FETCH_WITH_CLI", "CARGO_BUILD_JOBS",
+    "VIRTUAL_ENV", "CONDA_PREFIX", "PYENV_ROOT", "NVM_DIR", "VOLTA_HOME", "FNM_DIR", "ASDF_DIR",
+    "DENO_DIR", "DENO_TLS_CA_STORE", "BUN_INSTALL", "COREPACK_ENABLE_DOWNLOAD_PROMPT",
+    // Compilers and build systems -- a language server shells out to these.
+    "CC", "CXX", "AR", "LD", "AS", "NM", "RANLIB", "STRIP",
+    "CFLAGS", "CXXFLAGS", "CPPFLAGS", "LDFLAGS", "MAKEFLAGS", "MFLAGS", "MAKE", "MAKELEVEL",
+    "CMAKE_PREFIX_PATH", "CMAKE_ARGS", "CMAKE_TOOLCHAIN_FILE",
+    "PKG_CONFIG_PATH", "PKG_CONFIG_SYSROOT_DIR", "PKG_CONFIG_LIBDIR",
+    "CPATH", "C_INCLUDE_PATH", "CPLUS_INCLUDE_PATH", "LIBRARY_PATH",
+    "CONAN_USER_HOME", "CONAN_LOGIN_USERNAME",
+    // Package-manager and provisioner config channels.
+    "PIP_INDEX_URL", "PIP_EXTRA_INDEX_URL", "PIP_CERT", "PIP_TARGET",
+    "POETRY_HTTP_BASIC_PYPI_USERNAME", "POETRY_HTTP_BASIC_PYPI_PASSWORD",
+    "NIX_PATH", "NIX_CONFIG", "NIX_SSL_CERT_FILE",
+    "ANSIBLE_CONFIG", "ANSIBLE_ROLES_PATH", "TF_CLI_CONFIG_FILE", "TF_WORKSPACE",
+    // Session, display, IPC, and agent authority.
+    "SSH_AUTH_SOCK", "SSH_AGENT_PID", "SSH_CONNECTION", "GPG_AGENT_INFO", "GNUPGHOME", "KRB5CCNAME",
+    "XAUTHORITY", "DISPLAY", "WAYLAND_DISPLAY", "SWAYSOCK", "I3SOCK", "DBUS_SESSION_BUS_ADDRESS",
+    "DOCKER_HOST", "DOCKER_CERT_PATH", "DOCKER_TLS_VERIFY", "container",
+    "KUBECONFIG", "KUBERNETES_SERVICE_HOST", "KUBERNETES_SERVICE_PORT",
+    "XDG_RUNTIME_DIR", "XDG_SESSION_ID", "XDG_CONFIG_DIRS", "XDG_DATA_DIRS",
+    // Homes and temp locations -- denied outright; the scratch redirect
+    // (asserted below) is the only way any of them gets a value.
+    "HOME", "USERPROFILE", "APPDATA", "LOCALAPPDATA", "TMPDIR", "TEMP", "TMP",
+    "XDG_CACHE_HOME", "XDG_CONFIG_HOME", "XDG_DATA_HOME", "HOMEDRIVE", "HOMEPATH",
+    // Shell, pager, and interactive hooks.
+    "SHELL", "ENV", "BASH_ENV", "ZDOTDIR", "FPATH", "INPUTRC", "PROMPT_COMMAND", "PS1", "PS2",
+    "CDPATH", "IFS", "GLOBIGNORE", "SHELLOPTS", "BASHOPTS", "BASH_VERSION",
+    "EDITOR", "VISUAL", "PAGER", "BROWSER", "MANPAGER", "SYSTEMD_PAGER",
+    "LESSOPEN", "LESSCLOSE", "LESSSECURE", "LESS", "MANPATH", "INFOPATH",
+    "MAIL", "MAILPATH", "MAILRC", "PWD", "OLDPWD", "SHLVL", "TMUX", "STY", "WINDOW", "HISTFILE",
+    // Resolver and name-service channels.
+    "HOSTALIASES", "RES_OPTIONS", "LOCALDOMAIN", "NSS_WRAPPER_PASSWD", "GSS_KRB5CCNAME",
+    // Proxies -- the egress wiring is removed below, so every proxy var
+    // is denied regardless of its value.
+    "HTTP_PROXY", "http_proxy", "HTTPS_PROXY", "https_proxy", "ALL_PROXY", "all_proxy",
+    "NO_PROXY", "no_proxy", "FTP_PROXY", "SOCKS_PROXY", "WS_PROXY", "proxy",
+    // Platform, distro, and subsystem channels.
+    "SNAP", "SNAP_NAME", "FLATPAK_ID", "WSLENV", "WSL_DISTRO_NAME", "MSYSTEM", "MSYS2_PATH_TYPE", "CYGWIN",
+    "HOMEBREW_PREFIX", "HOMEBREW_CELLAR", "__CF_USER_TEXT_ENCODING", "XPC_SERVICE_NAME", "XPC_FLAGS",
+    "GIO_LAUNCHED_DESKTOP_FILE", "GTK_THEME", "QT_QPA_PLATFORM", "GNOME_DESKTOP_SESSION_ID", "KDE_FULL_SESSION",
+    // Names OMA has never enumerated -- deny-by-default is what makes
+    // "unlisted" mean "denied".
+    "NEVER_ENUMERATED_CHANNEL", "SOME_RANDOM_THING_9", "INJECTION_SURFACE_X", "ZERO_KNOWLEDGE_VAR",
+  ];
+  plantEnv(t, corpus);
+  // No egress wiring in this test: every proxy var is denied even when
+  // its value looks like the sandbox's loopback.
+  const egressSaved = { socket: process.env.OMA_EGRESS_PROXY_SOCKET, port: process.env.OMA_EGRESS_PROXY_PORT };
+  delete process.env.OMA_EGRESS_PROXY_SOCKET;
+  delete process.env.OMA_EGRESS_PROXY_PORT;
+  t.after(() => {
+    for (const [key, value] of [["OMA_EGRESS_PROXY_SOCKET", egressSaved.socket], ["OMA_EGRESS_PROXY_PORT", egressSaved.port]] as const)
       if (value === undefined) delete process.env[key]; else process.env[key] = value;
   });
-  const env = await lspChildEnvironment({ env: { FIXTURE_FLAG: "yes" } } as never);
-  assert.equal(env.OMA_SOCKET, "", "the broker socket is emptied, not inherited");
-  assert.equal(env.OMA_TOOL_SURFACE, "", "the tool surface is emptied, not inherited");
-  assert.equal(env.NODE_OPTIONS, "", "the OMA preload is emptied, not inherited");
-  assert.equal(env.FIXTURE_FLAG, "yes", "declared adapter overrides survive");
-  assert.ok((env.PATH ?? "").length > 0, "PATH is retained for server lookup");
+  // The same corpus through the adapter channel: a pi-lsp.json env block
+  // goes through the identical predicate, so declaring a channel cannot
+  // re-arm it.
+  const declared = Object.fromEntries(corpus.map(key => [key, "declared"]));
+  const env = await lspChildEnvironment({ env: declared } as never);
+  for (const key of corpus)
+    assert.equal(env[key], undefined, `${key} reached the child`);
+  // Nothing beyond the sanctioned set exists for the child at all --
+  // the inherited env contributes only allowlisted names.
+  for (const key of Object.keys(env))
+    assert.ok(sanctionedChildName(key), `${key} is not a sanctioned child name`);
 });
 
-test("BL1/F4: the denylist is merged-wide: credentials, preloads and proxies in inherited or adapter env are emptied, in any case", async t => {
-  const planted = {
-    OMA_BROKER_FD: "7", GITHUB_TOKEN: "ghp_x", AWS_SECRET_ACCESS_KEY: "ak", OPENAI_API_KEY: "sk",
-    HTTPS_PROXY: "http://user:pass@proxy", SSH_AUTH_SOCK: "/run/agent.sock", NODE_PATH: "/inject",
-    LD_PRELOAD: "/lib/evil.so", python_path_marker: undefined,
-    lowercase_token: "still-denied", // a case-variant name must be denied too
-  } as const;
-  const saved: Record<string, string | undefined> = {};
-  for (const [key, value] of Object.entries(planted)) {
-    saved[key] = process.env[key];
-    if (value === undefined) continue;
-    process.env[key] = value;
-  }
-  t.after(() => {
-    for (const key of Object.keys(saved))
-      if (saved[key] === undefined) delete process.env[key]; else process.env[key] = saved[key];
-  });
-  // The denylist also wins over the adapter's own env block: a pi-lsp.json
-  // author cannot re-arm a scrubbed channel by declaring it.
-  const env = await lspChildEnvironment({ env: { GITHUB_TOKEN: "declared", FIXTURE_FLAG: "yes", NODE_OPTIONS: "--import x" } } as never);
-  for (const key of ["OMA_BROKER_FD", "GITHUB_TOKEN", "AWS_SECRET_ACCESS_KEY", "OPENAI_API_KEY",
-    "HTTPS_PROXY", "SSH_AUTH_SOCK", "NODE_PATH", "LD_PRELOAD", "lowercase_token", "NODE_OPTIONS"])
-    assert.equal(env[key], "", `${key} survives the merged scrub`);
-  assert.equal(env.FIXTURE_FLAG, "yes", "an ordinary declared override still survives");
-  assert.equal(env.PI_LSP_TEST_LOG, process.env.PI_LSP_TEST_LOG ?? undefined, "the fixture flag channel survives");
-});
-
-test("BL1/F4 round 2: the rule-shaped denylist empties every channel class the name-matching one missed", async t => {
-  // The blind verifier's survivor list: every one of these inherited a
-  // credential or an injection channel under the old segment/substring
-  // matching. Each must arrive at the child emptied.
-  const survivors = [
-    // Connection strings and database credentials.
-    "DATABASE_URL", "DATABASE_URI", "PGPASSWORD", "PGPASSFILE", "MYSQL_PWD",
-    // Cloud account wiring beyond the credential words.
-    "AWS_CONFIG_FILE", "AWS_PROFILE",
-    // npm per-registry credential slots -- the real `//host/:_authtoken` shape.
-    "npm_config_//registry.npmjs.org/:_authtoken", "npm_config_userconfig",
-    // Credential words with no delimiter boundary.
-    "AUTHTOKEN", "MYAPIKEY", "SECRETKEY",
-    // Git plumbing -- config injection, exec-path shadowing, CA overrides.
-    "GIT_CONFIG_PARAMETERS", "GIT_CONFIG_COUNT", "GIT_EXEC_PATH", "GIT_SSH_COMMAND",
-    // TLS trust and keystroke logging overrides.
-    "NODE_EXTRA_CA_CERTS", "REQUESTS_CA_BUNDLE", "CURL_CA_BUNDLE", "GIT_SSL_CAINFO", "SSLKEYLOGFILE",
-    // Loader/runtime injection beyond the enumerated names.
-    "DYLD_IMAGE_SUFFIX", "DYLD_PRINT_LIBRARIES", "GEM_HOME", "GEM_PATH", "RUBYLIB",
-    "PYTHONHOME", "PYTHONINSPECT", "JAVA_TOOL_OPTIONS",
-    // Daemon endpoints and IPC buses.
-    "DOCKER_HOST", "DOCKER_CERT_PATH", "DOCKER_TLS_VERIFY", "DBUS_SESSION_BUS_ADDRESS",
-    // Inherited session locations -- the redirected XDG homes are exempt
-    // because they get a scratch value, not the inherited one.
-    "XDG_RUNTIME_DIR",
-    // Display/session authority.
-    "XAUTHORITY", "DISPLAY", "WAYLAND_DISPLAY",
-    // Proxy channels beyond http(s)/all/no.
-    "FTP_PROXY", "SOCKS_PROXY", "WS_PROXY",
-  ];
-  const saved: Record<string, string | undefined> = {};
-  for (const key of survivors) {
-    saved[key] = process.env[key];
-    process.env[key] = "probe";
-  }
-  t.after(() => {
-    for (const key of Object.keys(saved))
-      if (saved[key] === undefined) delete process.env[key]; else process.env[key] = saved[key];
-  });
+test("BL1/F4: the allowlisted survivors -- PATH, locale, terminal, identity -- keep their values", async t => {
+  plantEnv(t, ["LANG", "LANGUAGE", "LC_ALL", "LC_CTYPE", "TZ", "TERM", "NO_COLOR", "USER", "LOGNAME"]);
+  process.env.LANG = "en_US.UTF-8";
+  process.env.LANGUAGE = "en_US:en";
+  process.env.LC_ALL = "C.UTF-8";
+  process.env.LC_CTYPE = "C.UTF-8";
+  process.env.TZ = "America/New_York";
+  process.env.TERM = "xterm-256color";
+  process.env.NO_COLOR = "1";
+  process.env.USER = "agent";
+  process.env.LOGNAME = "agent";
   const env = await lspChildEnvironment({ env: {} } as never);
-  for (const key of survivors)
-    assert.equal(env[key], "", `${key} survives the scrub`);
-  // The intended channels still reach the child: PATH for command lookup,
-  // the fixture flag, and the scratch-redirected XDG homes stay inherited
-  // only because this helper never applies the per-call redirect.
+  assert.equal(env.LANG, "en_US.UTF-8");
+  assert.equal(env.LANGUAGE, "en_US:en");
+  assert.equal(env.LC_ALL, "C.UTF-8", "the LC_ prefix is the one prefix the allowlist grants");
+  assert.equal(env.LC_CTYPE, "C.UTF-8");
+  assert.equal(env.TZ, "America/New_York", "a zone name's slash is not a path channel");
+  assert.equal(env.TERM, "xterm-256color");
+  assert.equal(env.NO_COLOR, "1");
+  assert.equal(env.USER, "agent");
+  assert.equal(env.LOGNAME, "agent");
   assert.ok((env.PATH ?? "").length > 0, "PATH is retained");
-  assert.equal(env.XDG_CACHE_HOME, process.env.XDG_CACHE_HOME, "the redirected set is exempt from the XDG rule, not denied");
+});
+
+test("BL1/F4: allowlisted names still refuse path-shaped values -- a token channel cannot smuggle a file path", async t => {
+  plantEnv(t, ["LC_ALL", "LC_MESSAGES", "LANG", "TERM", "TZ", "USER"]);
+  process.env.LC_ALL = "/tmp/evil-locale";           // glibc resolves LC_* values as locale files
+  process.env.LC_MESSAGES = "../../etc/evil";        // traversal under the LC_ prefix
+  process.env.LANG = "en_US.UTF-8";                  // a real locale name survives
+  process.env.TERM = "../../etc/evil-terminfo";      // ncurses resolves TERM under terminfo dirs
+  process.env.TZ = "/etc/localtime";                 // an absolute zone file, not a zone name
+  process.env.USER = "../escapee";                   // a name that lands in server-built paths
+  const env = await lspChildEnvironment({ env: {} } as never);
+  assert.equal(env.LC_ALL, undefined, "a locale name carrying a path is denied");
+  assert.equal(env.LC_MESSAGES, undefined, "traversal under the LC_ prefix is denied");
+  assert.equal(env.TERM, undefined, "terminfo traversal is denied");
+  assert.equal(env.TZ, undefined, "an absolute zone file is denied");
+  assert.equal(env.USER, undefined, "path traversal under an identity name is denied");
+  assert.equal(env.LANG, "en_US.UTF-8");
+});
+
+test("BL1/F4: only the Resident sandbox's own loopback proxies reach the child -- pinned byte-for-byte", async t => {
+  plantEnv(t, ["OMA_EGRESS_PROXY_SOCKET", "OMA_EGRESS_PROXY_PORT",
+    "HTTP_PROXY", "http_proxy", "HTTPS_PROXY", "ALL_PROXY", "all_proxy",
+    "NO_PROXY", "no_proxy", "SOCKS_PROXY", "FTP_PROXY"]);
+  // The spawn plan's own injection: socket + port + the loopback values.
+  process.env.OMA_EGRESS_PROXY_SOCKET = "/run/oma/egress.sock";
+  process.env.OMA_EGRESS_PROXY_PORT = "8318";
+  process.env.HTTP_PROXY = "http://127.0.0.1:8318";
+  process.env.http_proxy = "http://127.0.0.1:8318";
+  process.env.HTTPS_PROXY = "http://127.0.0.1:8318";
+  process.env.ALL_PROXY = "http://127.0.0.1:8318";
+  process.env.all_proxy = "http://127.0.0.1:8318";
+  process.env.NO_PROXY = "127.0.0.1,localhost,::1";
+  process.env.no_proxy = "127.0.0.1,localhost,::1";
+  process.env.SOCKS_PROXY = "http://127.0.0.1:8318"; // a proxy name OMA never injects
+  process.env.FTP_PROXY = "http://127.0.0.1:8318";   // same value, unsanctioned name
+  const env = await lspChildEnvironment({ env: {} } as never);
+  assert.equal(env.HTTP_PROXY, "http://127.0.0.1:8318", "the injected loopback survives inside the sandbox");
+  assert.equal(env.http_proxy, "http://127.0.0.1:8318");
+  assert.equal(env.HTTPS_PROXY, "http://127.0.0.1:8318");
+  assert.equal(env.ALL_PROXY, "http://127.0.0.1:8318");
+  assert.equal(env.NO_PROXY, "127.0.0.1,localhost,::1");
+  assert.equal(env.SOCKS_PROXY, undefined, "a proxy name OMA does not inject is denied");
+  assert.equal(env.FTP_PROXY, undefined, "the pinned value does not rescue an unsanctioned name");
+  // A foreign value under a sanctioned name cannot reproduce the pin.
+  process.env.HTTPS_PROXY = "http://user:pass@proxy.corp:3128";
+  const hostile = await lspChildEnvironment({ env: {} } as never);
+  assert.equal(hostile.HTTPS_PROXY, undefined, "a credential-carrying proxy value is denied");
+  // Without the egress wiring every proxy var is denied -- a host engine
+  // (or an env carrying only part of the wiring) hands no proxy down.
+  delete process.env.OMA_EGRESS_PROXY_SOCKET;
+  delete process.env.OMA_EGRESS_PROXY_PORT;
+  const bare = await lspChildEnvironment({ env: { HTTP_PROXY: "http://127.0.0.1:8318" } } as never);
+  assert.equal(bare.HTTP_PROXY, undefined, "no wiring, no proxy -- not even a loopback-looking value");
+});
+
+test("BL1/F4: the adapter's declared env goes through the same allowlist -- and cannot outrank the scratch", async t => {
+  const env = await lspChildEnvironment({ env: {
+    PATH: "/adapter/bin",            // the documented command-lookup override
+    LANG: "C.UTF-8",                 // an allowlisted declared extra
+    LC_ALL: "C",                     // declared through the LC_ prefix
+    GITHUB_TOKEN: "ghp_x",           // off the allowlist -- denied
+    NODE_OPTIONS: "--import x",      // a loader channel -- denied
+    HOME: "/attacker/home",          // a scratch name -- denied
+  } } as never);
+  assert.equal(env.PATH, "/adapter/bin", "the adapter's PATH wins command lookup");
+  assert.equal(env.LANG, "C.UTF-8");
+  assert.equal(env.LC_ALL, "C");
+  assert.equal(env.GITHUB_TOKEN, undefined, "a declared credential is denied like an inherited one");
+  assert.equal(env.NODE_OPTIONS, undefined);
+  assert.equal(env.HOME, undefined, "no scratch, no HOME -- the name is denied, not empty");
+  const scratched = await lspChildEnvironment({ env: { HOME: "/attacker/home", XDG_CACHE_HOME: "/attacker/xdg" } } as never, "/oma-scratch");
+  assert.equal(scratched.HOME, "/oma-scratch", "the scratch redirect wins over any declared home");
+  assert.equal(scratched.XDG_CACHE_HOME, "/oma-scratch");
+  assert.equal(scratched.TMPDIR, "/oma-scratch");
 });
 
 // ---------------------------------------------------------------------------
@@ -554,6 +701,34 @@ test("BL1/F2: the child's HOME/XDG/TMP land in a per-call scratch that is remove
     assert.notEqual(dir, process.env.HOME, "the user's real HOME is not handed down");
     assert.equal(existsSync(dir), false, `${dir} is removed when the call ends`);
   }
+});
+
+test("BL1/F4: the live child is deny-by-default -- planted channels are absent inside the spawned server", async t => {
+  // lspChildEnvironment proves the map; env-probe proves the spawned
+  // process: the fixture reports which env names actually arrived. The
+  // adapter's own pi-lsp.json env block goes through the same allowlist
+  // -- PROBED_ADAPTER is declared here and must still be absent.
+  const planted = ["OMA_SOCKET", "OMA_TOOL_SURFACE", "NODE_OPTIONS", "GOPRIVATE",
+    "PERLLIB", "RUSTFLAGS", "HTTP_PROXY", "PI_LSP_TEST_LOG", "SSH_AUTH_SOCK", "BASH_ENV"];
+  plantEnv(t, planted);
+  const workspace = tmp(t, "oma-lsp-ws-");
+  writeFileSync(join(workspace, "note.tfix"), "hello\n");
+  withAgentDir(t, agentDirWithConfig(t, "env-probe", {
+    command: [process.execPath, HOSTILE_SERVER, "env-probe", "1"],
+    env: { PROBED_ADAPTER: "yes", LC_ALL: "C" },
+  }));
+  const pi = fakePi();
+  await registerLspTools(pi, { workspace, readOnly: false, write: async () => {} });
+  const result = await pi.tools.get("lsp_diagnostics")!.execute("call",
+    { paths: ["note.tfix"], server: "fixture" }, undefined, undefined, ctxOf(workspace));
+  const text = textOf(result);
+  for (const key of planted)
+    assert.match(text, new RegExp(`\\b${key}=absent`), `${key} reached the live child`);
+  assert.match(text, /PROBED_ADAPTER=absent/, "a pi-lsp.json env block cannot bypass the allowlist");
+  assert.match(text, /LC_ALL=present/, "an allowlisted declared extra does reach the child");
+  assert.match(text, /PATH=present/);
+  assert.match(text, /HOME=present/, "the scratch redirect supplies HOME");
+  assert.match(text, /TMPDIR=present/);
 });
 
 test("BL1/F2: a read-only role never spawns a language server -- diagnostics and fix refuse, status still works", async t => {

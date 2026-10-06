@@ -57,8 +57,38 @@ const EXPECTED_PACKAGE = Object.freeze({
  * regeneration fails instead of emitting a partially patched runtime.
  *
  * Divergence policy: bounds and failure-posture fixes only — never a
- * behavioral rewrite of what the server sees below the bound. */
+ * behavioral rewrite of what the server sees below the bound. (The
+ * command.js splice is a failure-posture fix: the inherited-env union
+ * cannot express deny-by-default, so the boundary had to move into the
+ * seam.) */
 const OMA_DIVERGENCES = Object.freeze({
+  "command.js": {
+    reason:
+      "OMA deny-by-default child environment: mergeEnvironment no longer " +
+      "seeds the result from process.env -- the overrides map IS the " +
+      "language-server child's whole environment. The inherited union meant " +
+      "every name the adapter did not override reached the child, and the " +
+      "denylist that emptied names could never converge (emptying is also " +
+      "not stripping: loaders read an empty path-list element as the " +
+      "current directory). OMA's hardenedAdapter writes the complete " +
+      "allowlisted map; nothing else survives.",
+    edits: [
+      {
+        find: `export function mergeEnvironment(overrides, platform = process.platform) {
+    const environment = { ...process.env };`,
+        replace: `export function mergeEnvironment(overrides, platform = process.platform) {
+    // OMA divergence: deny-by-default -- the overrides ARE the child's
+    // whole environment; nothing is inherited from process.env. OMA's
+    // adapter writes the complete map (allowlisted inherited names, the
+    // adapter's declared extras through the same allowlist, the per-call
+    // scratch redirects), so an injection channel OMA never named cannot
+    // reach the child through the union this line used to seed -- and an
+    // emptied tombstone cannot fake stripping either, since loaders read
+    // an empty path-list element as the current directory.
+    const environment = {};`,
+      },
+    ],
+  },
   "lsp-client.js": {
     reason:
       "OMA bounds inside the wire path: stderr accumulation cap (tracked " +

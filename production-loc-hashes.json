@@ -472,7 +472,7 @@
     },
     {
       "path": "src/extension/lsp-tools.ts",
-      "sha256": "76cf41170d2c6e00f6cf80ac9b1a68fcada66a42a931e2d55ac3ac19bb458524"
+      "sha256": "85693383bb9256a34f1ebb32cf2a2c2401cdd6f4874e4b82848c8fc2eaba4e52"
     },
     {
       "path": "src/extension/mail-tools.ts",
@@ -524,7 +524,7 @@
     },
     {
       "path": "src/extension/vendor/pi-lsp/manifest.json",
-      "sha256": "ba83f507b115b8b7ecc32f39e1cec3cec688519e70da14ec94862968ce678940"
+      "sha256": "60808aa72d5af2d34266fbd45d73d7915af0b2af0ea470aca05ee8ae4184a6bb"
     },
     {
       "path": "src/extension/vendor/pi-lsp/runtime/adapters.d.ts",
@@ -540,7 +540,7 @@
     },
     {
       "path": "src/extension/vendor/pi-lsp/runtime/command.js",
-      "sha256": "11cbece496b5a4d3902e7650e4f51515f90c0b53cda40b26623dd665b9241da8"
+      "sha256": "9736ff080d2bd0b5f32d23be4932de82c598d94f95902749a4d62fe983bdba7c"
     },
     {
       "path": "src/extension/vendor/pi-lsp/runtime/files.d.ts",

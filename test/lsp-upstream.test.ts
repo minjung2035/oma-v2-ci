@@ -57,11 +57,11 @@ test("BL1: LspClient: one process per client -- initialize, answer, shutdown, ex
   const root = tmp(t);
   writeFileSync(join(root, "note.tfix"), "hello\n");
   const log = join(root, "spawns.log");
-  const previous = process.env.PI_LSP_TEST_LOG;
-  process.env.PI_LSP_TEST_LOG = log;
-  t.after(() => { if (previous === undefined) delete process.env.PI_LSP_TEST_LOG; else process.env.PI_LSP_TEST_LOG = previous; });
   const runClient = async () => {
-    const adapter = fixtureAdapter("pull-strict-optional-params");
+    // The vendored merge is deny-by-default now: adapter.env IS the
+    // child's whole environment, so the test channel the fixture reads is
+    // declared on the adapter instead of inherited from process.env.
+    const adapter = { ...fixtureAdapter("pull-strict-optional-params"), env: { PI_LSP_TEST_LOG: log } };
     const client = new LspClient(adapter, adapter.defaultCommand, root, 10_000);
     try {
       await client.start();

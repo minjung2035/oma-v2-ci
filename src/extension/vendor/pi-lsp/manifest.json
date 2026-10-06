@@ -17,6 +17,10 @@
     "runtime": "tsc emit of upstream/src library modules with OMA divergence splices applied; entry files (index.ts, pi-lsp.ts) are vendored but never compiled or loaded",
     "tool": "scripts/vendor-pi-lsp.mjs",
     "divergences": {
+      "command.js": {
+        "reason": "OMA deny-by-default child environment: mergeEnvironment no longer seeds the result from process.env -- the overrides map IS the language-server child's whole environment. The inherited union meant every name the adapter did not override reached the child, and the denylist that emptied names could never converge (emptying is also not stripping: loaders read an empty path-list element as the current directory). OMA's hardenedAdapter writes the complete allowlisted map; nothing else survives.",
+        "edits": 1
+      },
       "lsp-client.js": {
         "reason": "OMA bounds inside the wire path: stderr accumulation cap (tracked by an explicit dropped flag so an exact landing followed by more bytes still marks truncation), inbound frame buffer cap (incomplete or oversized Content-Length), bounded pushed-diagnostic store (count/message/tracked files), a code-action count cap so resolveAction loops stay bounded, and permanent 'error' listeners on the child and its stdio -- the child 'error' handler also kills the process, so a post-start error can neither crash the engine nor orphan the server.",
         "edits": 8
@@ -63,8 +67,8 @@
     },
     {
       "path": "runtime/command.js",
-      "bytes": 2642,
-      "sha256": "11cbece496b5a4d3902e7650e4f51515f90c0b53cda40b26623dd665b9241da8"
+      "bytes": 3198,
+      "sha256": "9736ff080d2bd0b5f32d23be4932de82c598d94f95902749a4d62fe983bdba7c"
     },
     {
       "path": "runtime/files.d.ts",
@@ -277,5 +281,5 @@
       "sha256": "c775a4bc414a6a4c5e91ae9a56b721d1c813502aa50a2705f568b1a1642a62db"
     }
   ],
-  "bundleSha256": "d5f9758dd5f143fc8022acd0211a9d76af42a612f426b4269f9aa8db66de066a"
+  "bundleSha256": "d3b4f3d41a5f637498cfc16b14bf0bc8035ddb115fb2362e7ace988864210b1d"
 }

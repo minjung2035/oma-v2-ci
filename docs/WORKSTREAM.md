@@ -636,6 +636,32 @@ name collision/intended surface/hidden 미활성/idempotent reload/provenance/
 
 ## 9. 진행 로그
 
+- 2026-10-06 (bundled #1 — LSP 자식 env deny-by-default): 규칙-테이블
+  denylist의 근본적 불수렴 정산 — 맹검증 코퍼스(161명)에서 84명이
+  살아남았고 전부 toolchain/로더 주입 채널이었다. 언어 서버는
+  하위 toolchain을 shell out하므로 생존한 채널 하나하나가 실
+  code-execution/supply-chain 표면 → denylist 확장이 아니라
+  allowlist(deny-by-default)로 전환. `lsp-tools.ts`에
+  `OMA_LSP_CHILD_ENV_ALLOW`(path·lang/language/tz/term/no_color·
+  user/logname/username·Windows plumbing + `lc_` prefix 하나)와
+  `admittedChildEnv`를 신설하고 `hardenedAdapter`가 자식의 환경 전체를
+  구성하도록 교체 — inherited → adapter 선언(동일 predicate) →
+  per-call scratch HOME/XDG/TMP 순 계층. 거절 이름은 빈 문자열
+  tombstone이 아니라 부재(loader는 빈 path-list 요소를 현재
+  디렉터리로 해석). token형 이름은 `/`·`\`·NUL·`..` 값을 거부
+  (LC_*/TERM/LANG이 file-resolve 채널), `tz`는 Area/City만 허용.
+  proxy는 4개 이름(http/https/all/no_proxy)만 + 값이
+  OMA_EGRESS_PROXY_SOCKET+PORT로 재계산한 sandbox loopback pin과
+  byte-일치할 때만 통과 — 호스트 엔진/부분 wiring은 pin이 없어
+  모든 proxy 부재. vendored `mergeEnvironment`가
+  `{...process.env}`로 seed하던 것을 OMA divergence(command.js
+  1 edit)로 `{}` 교체 — vendor 스크립트 경유, --check PASS.
+  테스트: 코퍼스 전체(155명)를 inherited+adapter 양 채널에서
+  부재 단언, allowlist 생존자·path-shaped 값 거부·proxy pin·
+  scratch 우위 단언, 실제 spawn된 자식 안 env-probe(pid-echo로
+  per-call 프로세스 증명 — PI_LSP_TEST_* 채널이 deny되어 wire
+  프로토콜로 증명하도록 재설계). NOT_RUN: 실제 언어 서버 바이너리
+  e2e(픽스처만), macOS·systemd 레인.
 - 2026-10-06 (bundled #1 — pi-lsp 맹검증 정산 2라운드): BL1 잔여 맹검증 발견
   F1–F6 정산. F1(누적 워크스페이스 편집 무제한 + 동기 O(n²) 중첩 검사):
   `text-edits.js`에 `OMA_MAX_WORKSPACE_EDITS=2048`·

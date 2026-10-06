@@ -23,18 +23,31 @@
  *   `scope.run` links the call's AbortSignal to client.close(); session
  *   start resets the scope and session shutdown drains it, which aborts
  *   every in-flight operation (upstream's lifecycle, kept).
- * - Environment: a language server is not an OMA client. The child gets
- *   the engine's environment minus OMA's denylist -- a rule table over
- *   the lowercased name, not a list of names: `OMA_*` wiring, credential-
- *   shaped words wherever they sit, database/cloud/registry config
- *   channels, every `GIT_*` config/injection channel, CA and TLS
- *   overrides, module/loader preload channels for every runtime,
- *   session/display/IPC authority (`SSH_*`, `DOCKER_*`, `DBUS_*`,
- *   `XDG_*` except the scratch-redirected homes, `DISPLAY`), and every
- *   `*_PROXY` -- minus any adapter override that names one, plus a
- *   per-call scratch `HOME`/`XDG_*`/`TMPDIR` so server-internal caches
- *   do not land in the user's real home. PATH is the engine's PATH as
- *   resolved by upstream's command lookup.
+ * - Environment: a language server is not an OMA client, and a denylist
+ *   for its env cannot converge -- the child shells out to toolchains,
+ *   so every surviving name is a live injection channel (the blind
+ *   verification of the rule-table denylist this replaces left 84
+ *   survivors in a 161-name corpus, every one a real channel). The
+ *   boundary is an allowlist,
+ *   deny-by-default: the vendored `mergeEnvironment` itself no longer
+ *   unions `process.env` (an OMA splice in command.js), so the map
+ *   `hardenedAdapter` builds IS the child's whole environment. It
+ *   admits the named allowlist -- `PATH` (the engine's or the adapter's
+ *   declared one), locale/terminal identity (`LANG`, `LANGUAGE`,
+ *   `LC_*`, `TZ`, `TERM`, `NO_COLOR`), login identity, Windows process
+ *   plumbing -- plus the per-call scratch `HOME`/`XDG_*`/`TMPDIR`
+ *   redirects so server-internal caches never land in the user's real
+ *   home, and -- only when the engine's own egress wiring is present --
+ *   the Resident sandbox's injected loopback proxy values, reproduced
+ *   byte-for-byte. Adapter-declared env goes through the same
+ *   predicate: a pi-lsp.json `env` block cannot name a channel the
+ *   allowlist does not, so `GOPRIVATE` or `NODE_OPTIONS` declared there
+ *   is stripped exactly as if inherited. Everything else --
+ *   credentials, loader preloads, toolchain config, session/IPC
+ *   authority, OMA/PI wiring, every other `*_proxy` -- is denied by
+ *   absence, not emptied: loaders treat empty path-list elements as the
+ *   current directory, so an empty-string tombstone would still be a
+ *   channel.
  * - Server filesystem rights: the child process still carries ambient
  *   filesystem authority, and env redirection cannot stop a server that
  *   writes beside the files it indexes (clangd's project-root `.cache`
@@ -69,7 +82,7 @@
  */
 import { mkdtempSync, rmSync, statSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join, relative } from "node:path";
+import { isAbsolute, join, relative } from "node:path";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
 import { WorkspaceRefusal } from "./contained-files.js";
@@ -122,102 +135,129 @@ interface LspRuntime {
   readonly configNotice: string | undefined;
 }
 
-/** The environment names OMA refuses a language-server child, matched
- * case-insensitively by shape rather than by a list of names: each rule is a
- * named predicate over the lowercased key, so the reason a variable is
- * denied reads off the table and a never-enumerated variant of the same
- * channel class is denied too. */
-const CHILD_ENV_DENY_RULES: ReadonlyArray<{ readonly reason: string; readonly test: (key: string) => boolean }> = [
-  // OMA's own wiring and the agent-dir pointers that are none of a
-  // language server's business.
-  { reason: "oma-or-agent-wiring", test: k =>
-    k.startsWith("oma_") || k === "pi_coding_agent_dir" || k === "pi_offline" },
-  // Credential-shaped names, wherever the word sits in the key.
-  { reason: "credential-shaped", test: k =>
-    k.includes("password") || k.includes("passwd") || k.includes("passphrase") ||
-    k.includes("secret") || k.includes("token") || k.includes("credential") ||
-    k.includes("apikey") || k.includes("api_key") || k.includes("private_key") ||
-    k.includes("access_key") || k.includes("session_key") || k.includes("signing_key") ||
-    k.includes("bearer") || k.includes("authorization") ||
-    k === "auth" || k.startsWith("auth_") || k.includes("_auth") || k.endsWith("auth") ||
-    k === "pwd" || k.endsWith("_pwd") || k.endsWith("_key") },
-  // Whole config namespaces that carry credentials or redirect trust:
-  // connection strings, database drivers, cloud accounts, registries,
-  // and every Git config/injection channel (`GIT_CONFIG_PARAMETERS`,
-  // `GIT_EXEC_PATH`, askpass hooks, `GIT_SSL_*` -- a git client needs none
-  // of its parent's git authority).
-  { reason: "database-or-cloud-config", test: k =>
-    k.startsWith("database") || k.startsWith("pg") || k.startsWith("mysql") ||
-    k.startsWith("mongo") || k.startsWith("redis") ||
-    k.startsWith("aws_") || k.startsWith("azure_") || k.startsWith("gcloud") ||
-    k === "kubeconfig" || k.startsWith("kube_") },
-  { reason: "package-registry-config", test: k =>
-    k.startsWith("npm_config") || k.startsWith("yarn_") || k.startsWith("pnpm_") },
-  { reason: "git-config-or-injection", test: k => k.startsWith("git_") },
-  // CA bundles and TLS overrides: a child-supplied bundle is a trusted-root
-  // redirect, and SSLKEYLOGFILE exfiltrates session keys.
-  { reason: "ca-or-tls-override", test: k =>
-    k.includes("_ca_") || k.endsWith("_ca") || k.startsWith("ca_") ||
-    k.includes("cert") || k.startsWith("ssl") || k.startsWith("tls_") ||
-    k.includes("_tls_") || k.endsWith("_tls") },
-  // Loader and runtime channels that smuggle code or search paths --
-  // the reason NODE_OPTIONS was already denied, extended to every runtime.
-  { reason: "loader-or-runtime-path", test: k =>
-    k.startsWith("ld_") || k.startsWith("dyld") || k.startsWith("node_") ||
-    k === "gem_home" || k === "gem_path" || k === "rubylib" || k === "rubyopt" ||
-    k.startsWith("python") || k === "perl5lib" || k === "perl5opt" ||
-    k === "classpath" || k.startsWith("java_") || k.startsWith("jdk_") ||
-    k.startsWith("dotnet_") || k === "gopath" || k === "goroot" ||
-    k === "cargo_home" || k === "rustup_home" },
-  // Shells and interactive hooks that would run outside the scrub.
-  { reason: "shell-hook", test: k =>
-    k === "env" || k === "bash_env" || k === "zdotdir" || k === "inputrc" ||
-    k === "prompt_command" || k === "ps1" || k === "cdpath" || k === "ifs" ||
-    k === "shell" || k === "term" || k === "browser" || k === "visual" ||
-    k === "editor" || k === "pager" },
-  // Session, agent, display, and IPC authority a language server must
-  // never see: it has no display, no bus, no docker daemon.
-  { reason: "session-or-agent-authority", test: k =>
-    k.startsWith("ssh_") || k.startsWith("gpg") || k.startsWith("gnupg") ||
-    k.startsWith("krb5") || k.includes("askpass") ||
-    k === "xauthority" || k === "display" || k === "wayland_display" ||
-    k.startsWith("dbus") || k.startsWith("docker") || k.startsWith("container") },
-  // XDG locations, except the scratch-redirected set injected below.
-  { reason: "xdg-path", test: k => k.startsWith("xdg_") },
-  // Proxies can embed credentials; a language server needs no network anyway.
-  { reason: "proxy", test: k => k.endsWith("_proxy") || k === "proxy" || k === "no_proxy" },
-];
-
-/** The XDG homes the caller redirects into the per-call scratch: denied
- * names would empty the inherited value, but these get OMA's scratch value
- * instead, so they are exempt from the `xdg-path` rule. */
-const XDG_REDIRECTED_ENV_KEYS: ReadonlySet<string> = new Set([
-  "xdg_cache_home", "xdg_config_home", "xdg_data_home",
+/** The exact environment names OMA hands a language-server child --
+ * deny-by-default. A name absent from this table does not exist for the
+ * child: the rule-table denylist this replaced enumerated known-bad
+ * channels and verification proved it cannot converge (an independent
+ * 161-name probe left 84 survivors, every one a toolchain config or
+ * injection channel the child or its spawned toolchains would honor).
+ * An allowlist is the only posture where an unenumerated channel is dead
+ * on arrival instead of waiting for its name to be learned.
+ *
+ * Names are matched on the lowercased key; nothing is implied beyond the
+ * table. The table is what a language server and the toolchains it
+ * shells out to legitimately read: `path` for command lookup (the
+ * engine's PATH or the adapter's declared one), `lang`/`language`/`tz`
+ * and the `lc_` prefix for the locale its messages arrive in, `term`/
+ * `no_color` for what its stderr may format, `user`/`logname`/`username`
+ * for the login identity some servers stamp into log lines and paths,
+ * and the Windows plumbing a spawned process cannot start without
+ * (`systemroot`, `windir`, `systemdrive`, `comspec`, `pathext`).
+ *
+ * HOME, the XDG homes and the temp names are deliberately NOT in the
+ * table: they are never inherited -- the per-call scratch supplies them
+ * below so a server's user-level caches land where OMA removes them, and
+ * neither the engine env nor a pi-lsp.json `env` block can point a
+ * server's home elsewhere. `*_proxy` is not here either; see
+ * `egressProxyValue` for the only proxy values a child may carry.
+ * Exported so the boundary test can assert the child's keys are exactly
+ * the sanctioned set. */
+export const OMA_LSP_CHILD_ENV_ALLOW: ReadonlySet<string> = new Set([
+  "path",
+  "lang", "language", "tz", "term", "no_color",
+  "user", "logname", "username",
+  "systemroot", "windir", "systemdrive", "comspec", "pathext",
 ]);
 
-/** A name is denied when any rule's channel class matches it.
- * Case-insensitive, so a lower- or mixed-case variant of an inherited name
- * is denied too. */
-function deniedEnvKey(key: string): boolean {
-  const lower = key.toLowerCase();
-  if (XDG_REDIRECTED_ENV_KEYS.has(lower)) return false;
-  return CHILD_ENV_DENY_RULES.some(rule => rule.test(lower));
+/** The one name prefix the allowlist grants: `LC_*` locale-category
+ * overrides (`LC_ALL`, `LC_CTYPE`, ...). The LC_ namespace carries
+ * locale names -- values are guarded below -- so a prefix is honest
+ * where an enumeration would silently miss a category. */
+const OMA_LSP_CHILD_ENV_PREFIXES: ReadonlyArray<string> = ["lc_"];
+
+/** Allowlist names whose values are paths or path-shaped by definition;
+ * every other admitted name gets the token guard below. */
+const CHILD_ENV_PATH_TYPED: ReadonlySet<string> = new Set([
+  "path", "systemroot", "windir", "systemdrive", "comspec",
+]);
+
+/** A `/`, `\` or NUL inside a token value is a path channel wearing a
+ * locale or identity name: glibc resolves `LC_*`/`LANG` values as locale
+ * files, ncurses resolves `TERM` under its terminfo dirs, and a server
+ * building paths from `USER` inherits whatever it was handed. `tz`
+ * legitimately carries `Area/City` zone names, so only absolute paths,
+ * the `:`-prefixed implementation form and parent traversal are refused
+ * for it. `..` and NUL are refused for every token. */
+function tokenValueAllowed(lower: string, value: string): boolean {
+  if (value.includes("\0") || value.includes("..")) return false;
+  if (lower === "tz") return !value.startsWith("/") && !value.startsWith(":");
+  return !value.includes("/") && !value.includes("\\");
 }
 
-/** The environment override map the vendored client's `mergeEnvironment`
- * applies over `process.env`: adapter overrides that name a denied key are
- * emptied rather than forwarded, every denied inherited name is emptied,
- * and -- when a call-scoped scratch exists -- HOME/XDG/TMP are redirected
- * into it so a server's user-level caches land somewhere OMA removes.
- * Because `mergeEnvironment` only unions `process.env` with this map, the
- * result is the merged environment already scrubbed on both sides of the
- * union; nothing survives to re-scrub downstream. */
+/** The proxy names OMA's Resident sandbox injects (pi-spawn-plan.ts),
+ * lowercased -- the only `*_proxy` spellings a child may carry, and then
+ * only the value `egressProxyValue` reproduces. */
+const CHILD_PROXY_NAMES: ReadonlySet<string> = new Set([
+  "http_proxy", "https_proxy", "all_proxy", "no_proxy",
+]);
+
+/** The one value a proxy var may carry: the Resident sandbox's own
+ * injected loopback, recomputed from the engine's egress wiring. The
+ * spawn plan's injection is `http://127.0.0.1:<OMA_EGRESS_PROXY_PORT>`
+ * and a fixed `no_proxy` literal, and it exists only beside
+ * `OMA_EGRESS_PROXY_SOCKET` (an absolute path): a host engine, or an env
+ * carrying only part of the wiring, derives no pin and every proxy var
+ * is denied. A credential-carrying or redirecting value cannot
+ * reproduce the pin; inside the sandbox the child keeps exactly the
+ * egress every other Resident tool has -- the CONNECT allowlist still
+ * decides what it may dial, and no other route out exists. An
+ * adapter-declared proxy goes through the same comparison, so
+ * pi-lsp.json cannot re-arm a proxy channel either. */
+function egressProxyValue(lower: string): string | undefined {
+  const socket = process.env.OMA_EGRESS_PROXY_SOCKET;
+  const port = process.env.OMA_EGRESS_PROXY_PORT;
+  if (socket === undefined || !isAbsolute(socket) ||
+    port === undefined || !/^\d+$/.test(port)) return undefined;
+  return lower === "no_proxy" ? "127.0.0.1,localhost,::1" : `http://127.0.0.1:${Number(port)}`;
+}
+
+/** A name reaches the child only through the allowlist -- or, for the
+ * four proxy names, only when its value is the sandbox's own injected
+ * loopback byte-for-byte. Case-insensitive, so a case-variant of an
+ * unlisted name inherits the same verdict. */
+function admittedChildEnv(key: string, value: string): boolean {
+  const lower = key.toLowerCase();
+  if (CHILD_PROXY_NAMES.has(lower)) return value === egressProxyValue(lower);
+  const named = OMA_LSP_CHILD_ENV_ALLOW.has(lower) ||
+    OMA_LSP_CHILD_ENV_PREFIXES.some(prefix => lower.startsWith(prefix));
+  if (!named) return false;
+  return CHILD_ENV_PATH_TYPED.has(lower) || tokenValueAllowed(lower, value);
+}
+
+/** The environment the language-server child gets, complete: the
+ * vendored client's `mergeEnvironment` no longer unions `process.env`
+ * (its OMA divergence in command.js), so this map IS the child's
+ * environment -- deny-by-default, with no empty-string tombstones. An
+ * emptied name is not a denied name: loaders treat empty path-list
+ * elements as the current directory (`LD_LIBRARY_PATH=""` searches the
+ * workspace), so a denied name must be absent, not blanked.
+ *
+ * The map is built in three tiers: the engine's allowlisted inherited
+ * names first, the adapter's declared env second (an adapter-declared
+ * PATH is the documented command-lookup override), the per-call
+ * scratch's HOME/XDG/TMP redirects last. A same-spelling collision goes
+ * to the later tier; a case-variant collision is the vendored merge's
+ * own win32 dedup below, so a declared `Path` stays inert litter on
+ * POSIX rather than shadowing PATH -- exactly upstream's platform
+ * semantics. The scratch names are not allowlisted, so nothing else can
+ * supply them: when a scratch exists they hold its value, and when none
+ * does they are absent like everything else. */
 function hardenedAdapter(adapter: LspServerAdapter, scratch?: string): LspServerAdapter {
   const env: Record<string, string> = {};
+  for (const [key, value] of Object.entries(process.env))
+    if (typeof value === "string" && admittedChildEnv(key, value)) env[key] = value;
   for (const [key, value] of Object.entries(adapter.env ?? {}))
-    env[key] = deniedEnvKey(key) ? "" : value;
-  for (const key of Object.keys(process.env))
-    if (deniedEnvKey(key)) env[key] = "";
+    if (typeof value === "string" && admittedChildEnv(key, value)) env[key] = value;
   if (scratch !== undefined)
     for (const key of ["HOME", "XDG_CACHE_HOME", "XDG_CONFIG_HOME", "XDG_DATA_HOME",
       "TMPDIR", "TEMP", "TMP", "USERPROFILE", "APPDATA", "LOCALAPPDATA"])
@@ -227,15 +267,19 @@ function hardenedAdapter(adapter: LspServerAdapter, scratch?: string): LspServer
 
 /** The exact environment the language-server child would get for this
  * adapter -- the vendored client's own `mergeEnvironment` applied to the
- * scrubbed overrides. Exported so tests can pin the boundary: no denied
- * name survives, PATH and ordinary/declared variables do. Async because
- * the vendored merge helper is loaded lazily, behind bundle verification --
- * which runs here too, keeping "no vendored byte evaluates unverified"
- * absolute rather than registration-only. */
-export async function lspChildEnvironment(adapter: LspServerAdapter): Promise<NodeJS.ProcessEnv> {
+ * map `hardenedAdapter` builds. Because the vendored merge itself no
+ * longer unions `process.env` (its OMA divergence), the returned keys
+ * are exactly the sanctioned set: allowlisted names, plus the per-call
+ * scratch redirects when a scratch is passed, plus the sandbox's pinned
+ * loopback proxies when the egress wiring is present. Exported so tests
+ * can pin the boundary; async because the vendored merge helper is
+ * loaded lazily, behind bundle verification -- which runs here too,
+ * keeping "no vendored byte evaluates unverified" absolute rather than
+ * registration-only. */
+export async function lspChildEnvironment(adapter: LspServerAdapter, scratch?: string): Promise<NodeJS.ProcessEnv> {
   verifyVendorBundle(vendoredBundleDir("pi-lsp"));
   const { mergeEnvironment } = await import("./vendor/pi-lsp/runtime/command.js");
-  return mergeEnvironment(hardenedAdapter(adapter).env);
+  return mergeEnvironment(hardenedAdapter(adapter, scratch).env);
 }
 
 function clampTimeout(timeoutMs: number): number {

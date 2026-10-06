@@ -33,6 +33,13 @@
  * - `env-echo`: a benign server whose one diagnostic reports the HOME,
  *   XDG_CACHE_HOME and TMPDIR it was spawned with -- the scratch redirect
  *   is observable only through the child's own environment.
+ * - `env-probe`: reports which of a fixed list of environment names
+ *   actually reached the spawned child -- deny-by-default is observable
+ *   inside the process, not only in the map the parent computed.
+ * - `pid-echo`: reports its own pid in a diagnostic (and inside a code
+ *   action title), so a test can prove every call spawned a fresh
+ *   process without any env channel (the PI_LSP_TEST_* channels are
+ *   correctly stripped now).
  */
 import process from "node:process";
 
@@ -60,7 +67,7 @@ function diagnostic(message, line = 0) {
   };
 }
 
-const PULL_SCENARIOS = new Set(["stderr-flood", "stderr-flood-exit", "pull-flood", "pull-big-message", "actions-flood", "edits-flood", "edits-documentchanges-flood", "edit-bytes-flood", "edits-at-bound", "oversized-frame", "frame-drip", "env-echo"]);
+const PULL_SCENARIOS = new Set(["stderr-flood", "stderr-flood-exit", "pull-flood", "pull-big-message", "actions-flood", "edits-flood", "edits-documentchanges-flood", "edit-bytes-flood", "edits-at-bound", "oversized-frame", "frame-drip", "env-echo", "env-probe", "pid-echo"]);
 
 /** Queue the whole flood, then call done only after every byte reached the
  * kernel pipe. Write callbacks fire on flush, so done() means the reader
@@ -131,6 +138,18 @@ function handle(message) {
         `env HOME=${process.env.HOME} XDG_CACHE_HOME=${process.env.XDG_CACHE_HOME} TMPDIR=${process.env.TMPDIR}`)] } });
       return;
     }
+    if (scenario === "env-probe") {
+      const names = ["OMA_SOCKET", "OMA_TOOL_SURFACE", "NODE_OPTIONS", "GOPRIVATE", "PERLLIB",
+        "RUSTFLAGS", "HTTP_PROXY", "http_proxy", "PI_LSP_TEST_LOG", "SSH_AUTH_SOCK", "BASH_ENV",
+        "HOME", "XDG_CACHE_HOME", "TMPDIR", "PATH", "LANG", "LC_ALL", "TERM", "PROBED_ADAPTER"];
+      send({ jsonrpc: "2.0", id: message.id, result: { items: [diagnostic(
+        names.map(name => `${name}=${process.env[name] === undefined ? "absent" : "present"}`).join(" "))] } });
+      return;
+    }
+    if (scenario === "pid-echo") {
+      send({ jsonrpc: "2.0", id: message.id, result: { items: [diagnostic(`pid=${process.pid}`)] } });
+      return;
+    }
     if (scenario === "pull-flood") {
       send({ jsonrpc: "2.0", id: message.id,
         result: { items: Array.from({ length: 2000 }, (_v, i) => diagnostic(`flood ${i}`, i)) } });
@@ -149,7 +168,7 @@ function handle(message) {
         ? Array.from({ length: 300 }, (_v, i) => ({ title: `action ${i}`, kind: "source.fixAll", data: {} }))
         : scenario === "edits-flood" || scenario === "edit-bytes-flood"
           ? [{ title: "flood-a", kind: "source.fixAll", data: {} }, { title: "flood-b", kind: "source.fixAll", data: {} }]
-          : [{ title: "fix", kind: "source.fixAll", data: {} }] });
+          : [{ title: scenario === "pid-echo" ? `fix pid=${process.pid}` : "fix", kind: "source.fixAll", data: {} }] });
     return;
   }
   if (message.method === "codeAction/resolve") {

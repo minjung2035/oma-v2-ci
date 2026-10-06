@@ -8,7 +8,15 @@ export function commandPathValue(env, platform = process.platform) {
     return environmentValue(env, "PATH", platform) ?? environmentValue(process.env, "PATH", platform) ?? "";
 }
 export function mergeEnvironment(overrides, platform = process.platform) {
-    const environment = { ...process.env };
+    // OMA divergence: deny-by-default -- the overrides ARE the child's
+    // whole environment; nothing is inherited from process.env. OMA's
+    // adapter writes the complete map (allowlisted inherited names, the
+    // adapter's declared extras through the same allowlist, the per-call
+    // scratch redirects), so an injection channel OMA never named cannot
+    // reach the child through the union this line used to seed -- and an
+    // emptied tombstone cannot fake stripping either, since loaders read
+    // an empty path-list element as the current directory.
+    const environment = {};
     for (const [key, value] of Object.entries(overrides ?? {})) {
         if (platform === "win32") {
             for (const existingKey of Object.keys(environment)) {
