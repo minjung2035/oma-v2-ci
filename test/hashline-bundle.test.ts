@@ -14,6 +14,7 @@ import { fileURLToPath } from "node:url";
 import { createContainedWriter } from "../src/extension/contained-tools.js";
 import { FILE_CHANGED_REFUSAL, WorkspaceRefusal, writeWithinUnchanged } from "../src/extension/contained-files.js";
 import { registerHashlineTools, HASHLINE_EDIT_TOOL_NAMES, HASHLINE_READ_TOOL_NAME } from "../src/extension/hashline-tools.js";
+import { WEB_RESEARCH_TOOL_NAMES } from "../src/extension/web-tools.js";
 import { omaToolNames } from "../src/extension/mail-tools.js";
 import { guardWorkspaceTools } from "../src/extension/workspace-guard.js";
 import { LSP_TOOL_NAMES } from "../src/extension/lsp-tools.js";
@@ -218,6 +219,8 @@ test("BL3: the declared role surfaces name only tools that exist, and file_edit 
   const residentRegistered = new Set([
     "read", "bash", "powershell", "edit", "write", "grep", "find", "ls",
     ...omaToolNames(false), ...LSP_TOOL_NAMES, ...HASHLINE_EDIT_TOOL_NAMES,
+    // BL4: the bundled pi-web-access research tools.
+    ...WEB_RESEARCH_TOOL_NAMES,
   ]);
   const resident = planToolSurface(residentToolSurfaceConfig());
   for (const name of [...resident.direct, ...resident.disabled, ...resident.grouped])
@@ -232,7 +235,9 @@ test("BL3: the declared role surfaces name only tools that exist, and file_edit 
   assert.ok(!fileEdit.children.includes("read"), "read is not a file_edit member");
   // The Principal is read-only: no file_edit group, no mutation tools.
   const principalRegistered = new Set([
-    "read", "grep", "find", "ls", ...omaToolNames(true), ...LSP_TOOL_NAMES, ASK_USER_QUESTION_TOOL_NAME,
+    "read", "grep", "find", "ls", ...omaToolNames(true), ...LSP_TOOL_NAMES,
+    // BL4: the Principal groups the same four research tools.
+    ...WEB_RESEARCH_TOOL_NAMES, ASK_USER_QUESTION_TOOL_NAME,
   ]);
   const principal = planToolSurface(principalToolSurfaceConfig());
   for (const name of [...principal.direct, ...principal.disabled, ...principal.grouped])

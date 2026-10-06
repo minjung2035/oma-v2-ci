@@ -84,14 +84,25 @@ export async function checkPackage(rootInput) {
   // dist/src/extension/vendor/<bundle>/ and carry their own pinned
   // dependency closure in <bundle>/node_modules/ plus the bundle manifest's
   // generated.dependencies table -- integrity-bound bytes, verified
-  // fail-closed by verifyVendorBundle at load. For a file inside a vendored
-  // bundle a bare specifier is therefore declared when it is a node:
-  // builtin, a root package dependency (the host Pi API), or a name in that
-  // bundle's vendored dependency closure.
+  // fail-closed by verifyVendorBundle at load. Only a bundle's runtime/
+  // tree is code OMA evaluates: a bare specifier there is declared when it
+  // is a node: builtin, a root package dependency (the host Pi API), or a
+  // name in that bundle's vendored dependency closure. The rest of the
+  // bundle -- upstream/ (the byte-exact npm snapshot, never loaded),
+  // upstream-tests/ (provenance), and node_modules/ (the pinned closure
+  // itself, whose internal specifiers are upstream's own resolution
+  // domain: an in-closure name resolves bundle-locally, a host-API peer
+  // resolves to the root install by design, and a dead optional-peer
+  // specifier fails at load exactly as it does upstream) -- is pinned
+  // input, not OMA code, so its import specifiers are not OMA's
+  // declaration boundary.
   const vendoredDependencies = file => {
     const rel = relative(root, file).split(sep).join("/");
     const match = /^dist\/src\/extension\/vendor\/([^/]+)\//.exec(rel);
     if (match === null) return null;
+    // Only runtime/ is code OMA evaluates; every other member of the
+    // bundle is integrity-pinned input.
+    if (!rel.slice(match[0].length).startsWith("runtime/")) return "skip";
     const manifestPath = join(root, "dist/src/extension/vendor", match[1], "manifest.json");
     try {
       const manifest = JSON.parse(readFileSync(manifestPath, "utf8"));
@@ -101,6 +112,7 @@ export async function checkPackage(rootInput) {
   for (const file of files) {
     requiredFile(file);
     const vendoredDeps = vendoredDependencies(file);
+    if (vendoredDeps === "skip") continue;
     const source = ts.createSourceFile(file, readFileSync(file, "utf8"), ts.ScriptTarget.Latest, true, ts.ScriptKind.JS);
     const verifyImport = specifier => {
       if (specifier.startsWith(".")) {
@@ -109,8 +121,15 @@ export async function checkPackage(rootInput) {
         if (!rel.startsWith("dist/src/") && rel !== layout.contract) throw new Error(`runtime import reaches non-runtime tree: ${rel}`);
       } else if (!specifier.startsWith("node:")) {
         const packageName = specifier.startsWith("@") ? specifier.split("/").slice(0, 2).join("/") : specifier.split("/")[0];
+        // A vendored extension's runtime may also name the Pi host API by
+        // peer-dependency semantics: @earendil-works/* packages resolve to
+        // the deployment's own root install (never a user package -- the
+        // name must exist there to pass).
+        const hostApi = vendoredDeps !== null && packageName.startsWith("@earendil-works/") &&
+          lstatSync(join(root, "node_modules", packageName, "package.json"), { throwIfNoEntry: false })?.isFile() === true;
         if (!Object.hasOwn(packageJson.dependencies ?? {}, packageName) &&
-            !(vendoredDeps !== null && Object.hasOwn(vendoredDeps, packageName)))
+            !(vendoredDeps !== null && Object.hasOwn(vendoredDeps, packageName)) &&
+            !hostApi)
           throw new Error(`runtime imports undeclared or dev dependency: ${specifier}`);
       }
     };

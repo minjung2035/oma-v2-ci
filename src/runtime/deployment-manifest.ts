@@ -8,7 +8,11 @@ import { DEPLOYMENT_LAYOUT, isDeploymentDigest } from "../domain/deployment.js";
 import { StoreError, unobserved } from "../domain/errors.js";
 import { openDirectory, openRegularBeneath } from "../storage/contained-fs.js";
 
-const MAX_ENTRIES = 4096;
+// The entry bound is sized for the compiled tree plus the vendored
+// extension payloads it ships: a vendored bundle is a full dependency
+// closure (pi-web-access alone is ~11k pinned files), each of which this
+// walk must hash -- the bound refuses absurd inventories, not honest ones.
+const MAX_ENTRIES = 32768;
 const MAX_BYTES = 256 * 1024 * 1024;
 export interface DeploymentFile {
   readonly path: string;

@@ -70,8 +70,10 @@ for (const outcome of ["continue", "wait", "unobserved"] as const)
       await s.prompt("Send work.");
       // Scale only the runner's control-idle budget; the real broker can answer
       // after it. Authentication and CLI framing still use the production path.
+      // The budget must also clear the confined engine's startup, which BL4's
+      // vendored-bundle verification and evaluation made slower than 2s.
       const config = JSON.parse(readFileSync(s.configPath, "utf8"));
-      config.limits.idleStreamSeconds = 2;
+      config.limits.idleStreamSeconds = 6;
       writeFileSync(s.configPath, JSON.stringify(config));
       const original = s.broker.dispatch.bind(s.broker);
       let observed = 0;
@@ -79,7 +81,7 @@ for (const outcome of ["continue", "wait", "unobserved"] as const)
         const request = args[1];
         if (request.method === "agent.wait" && request.params.observe === true) {
           observed++;
-          await new Promise(resolve => setTimeout(resolve, 3500));
+          await new Promise(resolve => setTimeout(resolve, 10000));
           if (outcome === "unobserved") return { v: 1, id: request.id, ok: false,
             error: { code: "BROKER_UNAVAILABLE", message: "fixture wait observation unavailable", retry: "after-repair" } };
         }
@@ -91,7 +93,7 @@ for (const outcome of ["continue", "wait", "unobserved"] as const)
       const started = performance.now();
       const result = await s.activate("worker-a");
       assert.equal(observed, 1);
-      assert.ok(performance.now() - started >= 3500, "the query actually outlived the control-idle budget");
+      assert.ok(performance.now() - started >= 10000, "the query actually outlived the control-idle budget");
       const successful = outcome === "continue";
       assert.equal(result.code, outcome === "unobserved" ? 2 : 0, result.stderr);
       if (outcome === "unobserved") assert.match(result.stderr, /SESSION_BOUNDARY_UNCONFIRMED/);

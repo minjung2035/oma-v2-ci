@@ -22,6 +22,7 @@ import { TOOL_SCOPE_ENV, TOOL_SCOPE_SANDBOX, PACKAGE_STORE_ENV, guardWorkspaceTo
 import { containWorkspaceTools, createContainedWriter } from "./extension/contained-tools.js";
 import { registerLspTools } from "./extension/lsp-tools.js";
 import { registerHashlineTools } from "./extension/hashline-tools.js";
+import { registerWebTools } from "./extension/web-tools.js";
 import { registerAskUserQuestion } from "./extension/ask-user-question.js";
 
 export { decodeBatchViewText, readBatchView } from "./extension/batch-view.js";
@@ -102,6 +103,14 @@ export default async function extension(pi: ExtensionAPI) {
     readOnly: channel.attached,
     write: workspaceWriter,
   });
+  // BL4: the bundled pi-web-access extension -- same fail-closed bundle
+  // verification before any vendored module evaluates. The adapter
+  // installs the Society web policy (egress pin, ambient-discovery refusals)
+  // and drives upstream's own extension factory through a facade that
+  // admits exactly the web_research group: web_search, source_check,
+  // fetch_content, get_search_content. No commands, shortcuts, dynamic
+  // activation, curator or browser surfaces can register through it.
+  await registerWebTools(pi);
   // BL2: ask_user_question exists only where a human sits at the terminal.
   // The Principal's engine (channel attached) registers it here; Personal
   // loads the same file as its own `-e` extension; Residents and Workers

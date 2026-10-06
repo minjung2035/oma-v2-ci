@@ -12,5 +12,9 @@ production-measurement-hashes.json
 # A vendored bundle's pinned dependency closure is integrity-listed input —
 # every byte must be committed, so node_modules (and any dist/ inside it)
 # under a vendored bundle re-includes itself after the general rules above.
+# The same holds for the byte-exact upstream snapshot: pi-web-access's npm
+# tarball ships its own dist/ bundle, which is vendored for provenance.
 !src/extension/vendor/*/node_modules/
 !src/extension/vendor/*/node_modules/**
+!src/extension/vendor/*/upstream/
+!src/extension/vendor/*/upstream/**

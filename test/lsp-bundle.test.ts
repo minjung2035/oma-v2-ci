@@ -11,6 +11,7 @@ import { join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createContainedWriter } from "../src/extension/contained-tools.js";
 import { registerLspTools, lspChildEnvironment, LSP_TOOL_NAMES, OMA_LSP_CHILD_ENV_ALLOW } from "../src/extension/lsp-tools.js";
+import { WEB_RESEARCH_TOOL_NAMES } from "../src/extension/web-tools.js";
 import { omaToolNames } from "../src/extension/mail-tools.js";
 import { guardWorkspaceTools } from "../src/extension/workspace-guard.js";
 import { verifyVendorBundle, vendoredBundleDir, VendorIntegrityError } from "../src/extension/vendor-bundle.js";
@@ -181,16 +182,21 @@ test("BL1: the declared role surfaces name only tools that exist, and code_intel
     ...omaToolNames(false), ...LSP_TOOL_NAMES,
     // BL3: the bundled hashline editor's file_edit members.
     "replace", "replace_within", "insert",
+    // BL4: the bundled pi-web-access research tools.
+    ...WEB_RESEARCH_TOOL_NAMES,
   ]);
   const resident = planToolSurface(residentToolSurfaceConfig());
   const residentNamed = [...resident.direct, ...resident.disabled, ...resident.grouped];
   for (const name of residentNamed) assert.ok(residentRegistered.has(name), `resident surface names unregistered ${name}`);
-  assert.deepEqual(resident.groups.map(group => group.name), ["code_intel", "file_edit"]);
+  assert.deepEqual(resident.groups.map(group => group.name), ["code_intel", "file_edit", "web_research"]);
   assert.deepEqual([...resident.groups[0]!.children].sort(), [...LSP_TOOL_NAMES].sort());
   assert.deepEqual([...resident.groups[1]!.children].sort(), ["insert", "replace", "replace_within"]);
+  assert.deepEqual([...resident.groups[2]!.children].sort(), [...WEB_RESEARCH_TOOL_NAMES].sort());
   const principalRegistered = new Set([
     "read", "grep", "find", "ls", // host argv excludes bash/powershell/write/edit
     ...omaToolNames(true), ...LSP_TOOL_NAMES,
+    // BL4: the Principal groups the same four research tools.
+    ...WEB_RESEARCH_TOOL_NAMES,
     // BL2: the channel-attached engine registers ask_user_question; a
     // Resident/Worker registry never holds it and its plan never names it.
     ASK_USER_QUESTION_TOOL_NAME,

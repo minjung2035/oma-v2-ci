@@ -636,6 +636,64 @@ name collision/intended surface/hidden 미활성/idempotent reload/provenance/
 
 ## 9. 진행 로그
 
+- 2026-10-08 (bundled #4 — pi-web-access): §7 순서의 네 번째 확장.
+  `pi-web-access@0.35.0`를 `src/extension/vendor/pi-web-access/`에
+  byte-pinned vendor — `upstream/`은 npm 타르볼(shasum
+  `a807f0d5c6dfa6893f24e00320774a55425f864b`, SRI
+  `sha512-D1GMJMNDG2omAkL1ztmO6ZEwEyW7LoFpTcckKh2yXjLyAgDFuhpTQrs2jQPAlVtGb3rjAeIXRZrkhFcwSWdGSg==`)
+  의 무수정 스냅샷, `upstream-tests/`는 source commit
+  `72c6e67787d67d8a7d01bf0abf30c072a6112de6`의 테스트 트리(104 entries —
+  102 `.test.mjs` + fixture 2개, npm tarball에는 테스트가 없어 git에서
+  가져옴), `runtime/`은 upstream `.ts` 전 모듈의 tsc 산출물(.ts 상대
+  지정자는 `.js`로 재작성 후 컴파일)에 `vendor-pi-web-access.mjs`의
+  OMA_DIVERGENCES만 입힌 생성물, `node_modules/`는 DEPENDENCIES 핀 테이블의
+  npm tarball 바이트 그대로인 의존 클로저. host API(`@earendil-works/*`,
+  typebox)는 vendoring하지 않고 OMA 설치본으로 해석한다(peer 의미 —
+  `check-package.mjs`가 vendored runtime의 host API import를 설치본 존재
+  확인으로 허용하도록 확장). `manifest.json`은
+  `oma-vendored-bundle-v1`(파일별 sha256 + 정렬된 path\0sha256\n
+  레코드의 번들 다이제스트 + 패키지/의존/divergence 메타) — 현재 11,020
+  파일. 어댑터(`src/extension/web-tools.ts`)는 verify→정책 설치→
+  facade→팩토리 순서를 지킨다: `verifyVendorBundle`이 먼저라 tampered
+  번들은 어떤 vendored 바이트도 평가되기 전에 세션 거절(등록 0 +
+  session_start refusal); 정책은 Society 계약 하나뿐 —
+  `{ egressPinned }`만 설치되고 credentialCommands·browserCookies·
+  ghCli·gitClone·geminiAdc·nativeMedia·localFileFetch·workflows는 전부
+  미설정(deny-by-default)이라 `!command` credential은 서브프로세스 전에
+  `[E_OMA_COMMAND_CREDENTIAL]`로, 나머지 ambient 발견 경로도 모두
+  닫힌다. egress는 `OMA_EGRESS_PROXY_SOCKET`+`PORT`가 있을 때만
+  loopback pin을 유도하고 그때만 vendored undici의
+  `EnvHttpProxyAgent`를 global dispatcher로 설치 — pin이 없으면
+  비어있지 않은 어떤 proxy 값도 `[E_OMA_PROXY_PINNED]`(도구 인자든
+  web-search.json이든), 있으면 pin 외의 값이 같은 거절을 받는다.
+  SSRF preflight는 pin 존재 시 upstream의 remote-DNS proxy 신뢰와
+  동일하게 local-DNS 우회(splice로 선언). facade는 upstream의
+  `registerTool`만 정확한 4개 이름(`web_search`, `source_check`,
+  `fetch_content`, `get_search_content` — upstream 등록 순서 그대로
+  1회씩)로 통과시키고 command·shortcut은 drop 기록, `pi.exec`
+  (browser-open 유일 호출지)는 `[E_OMA_SUBPROCESS]`로 거절; init-config
+  overlay divergence가 eager 등록·고정 도구명·커맨드 4종 비활성·
+  answer 모드 제거·workflow "none"을 upstream config 위에 강제한다.
+  경계 적응(번들 밖, 전부 기록됨): ① `deployment-manifest.ts`의
+  MAX_ENTRIES를 4096→32768로 — vendored 번들은 전체 의존 클로저라
+  dist 배포물이 ~12k 파일을 넘고, 매니페스트는 여전히 모든 멤버를
+  개별 해시하며 "absurd inventory" 거절만이 bound의 역할이다.
+  ② 아키텍처 runtime-closure 해석기는 `node_modules/`로 resolve되는
+  상대 지정자를 거절하므로(외부로 취급) vendored undici를 직접
+  import하는 대신 `utils.js`/`utils.d.ts` divergence가
+  `EnvHttpProxyAgent`·`setGlobalDispatcher`를 re-export — 어댑터의
+  모든 동적 지정자가 runtime/ 안에 머문다. ③ DR27 대기-관측
+  시나리오의 `idleStreamSeconds`를 2→6초, fixture 관측 지연을
+  3.5→10초로 — 번들 검증(~0.5s)+평가(~0.8s)가 엔진 기동을 2초 예산
+  밖으로 밀어내 DEADLINE_EXCEEDED로 deterministic하게 죽던 것을
+  관측(진단 출력으로 확인)하고 예산만 상향, 시나리오 의미(관측이
+  제어-idle 예산을 outlive)는 유지. ④ BL1/BL3 surface 테스트의
+  등록 집합·그룹 목록에 `web_research` 추가. 검증: build·typecheck·
+  `vendor-pi-web-access --check`(BUNDLE_CURRENT)·check:architecture·
+  check-package·review-ledger/closure 전부 PASS; `web-bundle.test.ts`
+  12종 + 갱신된 lsp/hashline/DR27/패키지/pty/게이트 파일 전부 PASS.
+  NOT_RUN: macOS native·systemd·kernel/powercut·provider credential·
+  release qualification 레인.
 - 2026-10-07 (bundled #3 — pi-hashline-edit-pro 맹검증 정산): BL3 맹검증
   결과 CLEAN + LOW 4건 — 1·4는 수정, 2·3은 upstream 형상 관찰로 기록.
   ① commit seam의 silent fallback 잠재 홀: `omaWriteCommit`/`omaReadFileText`

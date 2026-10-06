@@ -217,6 +217,14 @@ const CODE_INTEL_TOOLS: readonly string[] = ["lsp_diagnostics", "lsp_fix", "lsp_
  * the same name as the contained read it replaces. */
 const FILE_EDIT_GROUP_NAME = "file_edit";
 const FILE_EDIT_TOOLS: readonly string[] = ["replace", "replace_within", "insert"];
+/** BL4: the bundled pi-web-access extension's research surface — web
+ * search, source checking, remote content fetch and stored-content
+ * retrieval, grouped until the model opens it. Mirrors
+ * `WEB_RESEARCH_TOOL_NAMES` in src/extension/web-tools.ts; PI-001 keeps
+ * the extension from importing this module, so a test binds the two
+ * lists the same way the code_intel list binds LSP_TOOL_NAMES. */
+const WEB_RESEARCH_GROUP_NAME = "web_research";
+const WEB_RESEARCH_TOOLS: readonly string[] = ["web_search", "source_check", "fetch_content", "get_search_content"];
 // BL2: the bundled human-input tool — mirrors ASK_USER_QUESTION_TOOL_NAME
 // in src/client/ask-user-question/protocol.ts. PI-001 keeps the extension
 // from importing this module, so a test binds the two spellings, the same
@@ -236,6 +244,14 @@ function fileEditGroup(): GroupSpec {
     name: FILE_EDIT_GROUP_NAME,
     description: "Hashline-anchored file edits: anchor-stable replace, range-scoped replace_within and anchored insert. Stale anchors refuse before writing.",
     members: FILE_EDIT_TOOLS.map(tool => ({ tool })),
+  };
+}
+
+function webResearchGroup(): GroupSpec {
+  return {
+    name: WEB_RESEARCH_GROUP_NAME,
+    description: "Web research: search the web, check a source's reachability and metadata, fetch remote page content, and page through stored results by responseId.",
+    members: WEB_RESEARCH_TOOLS.map(tool => ({ tool })),
   };
 }
 
@@ -276,8 +292,8 @@ export function residentToolSurfaceConfig(): ToolSurfaceConfig {
     defaultMode: "DIRECT",
     direct: RESIDENT_DIRECT_TOOLS,
     disabled: [],
-    groups: [codeIntelGroup(), fileEditGroup()],
-    roots: [CODE_INTEL_GROUP_NAME, FILE_EDIT_GROUP_NAME],
+    groups: [codeIntelGroup(), fileEditGroup(), webResearchGroup()],
+    roots: [CODE_INTEL_GROUP_NAME, FILE_EDIT_GROUP_NAME, WEB_RESEARCH_GROUP_NAME],
   };
 }
 
@@ -286,8 +302,8 @@ export function principalToolSurfaceConfig(): ToolSurfaceConfig {
     defaultMode: "DIRECT",
     direct: PRINCIPAL_DIRECT_TOOLS,
     disabled: [],
-    groups: [codeIntelGroup()],
-    roots: [CODE_INTEL_GROUP_NAME],
+    groups: [codeIntelGroup(), webResearchGroup()],
+    roots: [CODE_INTEL_GROUP_NAME, WEB_RESEARCH_GROUP_NAME],
   };
 }
 

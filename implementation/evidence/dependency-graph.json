@@ -140,6 +140,7 @@
   "src/extension/tool-surface.ts",
   "src/extension/utf8.ts",
   "src/extension/vendor-bundle.ts",
+  "src/extension/web-tools.ts",
   "src/extension/workspace-guard.ts",
   "src/frame.ts",
   "src/git.ts",
@@ -1902,11 +1903,11 @@
     "src/pi-extension.ts",
     "src/extension/"
    ],
-   "files": 90
+   "files": 91
   }
  ],
- "files": 395,
- "runtimeEdges": 1684,
+ "files": 396,
+ "runtimeEdges": 1686,
  "typeOnlyEdges": 426,
  "runtimeEdgeMatrix": {
   "L1-kernel -> L1-kernel": 320,
@@ -1923,7 +1924,7 @@
   "L5-entry -> L2-facts": 2,
   "L5-entry -> L3-workflow": 7,
   "L5-entry -> L4-orchestration": 137,
-  "L5-entry -> L5-entry": 178
+  "L5-entry -> L5-entry": 180
  },
  "upwardTypeOnlyEdges": [
   {
@@ -1963,7 +1964,7 @@
   "src/broker.ts": 31,
   "src/mail.ts": 29,
   "src/entry/broker.ts": 28,
-  "src/pi-extension.ts": 22,
+  "src/pi-extension.ts": 23,
   "src/entry/oma-mac.ts": 21,
   "src/review.ts": 21,
   "src/runtime/client-runtime.ts": 19,
@@ -1976,7 +1977,7 @@
   "src/git/context.ts": 15
  },
  "external": {
-  "@earendil-works/pi-coding-agent": 33,
+  "@earendil-works/pi-coding-agent": 34,
   "@earendil-works/pi-tui": 7,
   "koffi": 6,
   "node:async_hooks": 4,
@@ -1990,7 +1991,7 @@
   "node:module": 3,
   "node:net": 34,
   "node:os": 11,
-  "node:path": 130,
+  "node:path": 131,
   "node:perf_hooks": 4,
   "node:sqlite": 4,
   "node:stream": 3,
