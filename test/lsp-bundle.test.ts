@@ -17,7 +17,7 @@ import { guardWorkspaceTools } from "../src/extension/workspace-guard.js";
 import { verifyVendorBundle, vendoredBundleDir, VendorIntegrityError } from "../src/extension/vendor-bundle.js";
 import { parseSurfacePlan, registerToolSurface } from "../src/extension/tool-surface.js";
 import {
-  ASK_USER_QUESTION_TOOL_NAME,
+  ASK_USER_QUESTION_TOOL_NAME, MCP_PROXY_TOOL_NAME,
   encodeToolSurfacePlan, encodedPrincipalToolSurface, encodedResidentToolSurface,
   planToolSurface, principalToolSurfaceConfig, residentToolSurfaceConfig,
 } from "../src/domain/tool-surface.js";
@@ -184,6 +184,8 @@ test("BL1: the declared role surfaces name only tools that exist, and code_intel
     "replace", "replace_within", "insert",
     // BL4: the bundled pi-web-access research tools.
     ...WEB_RESEARCH_TOOL_NAMES,
+    // BL5: the bundled pi-mcp-adapter's single proxy tool -- DIRECT.
+    MCP_PROXY_TOOL_NAME,
   ]);
   const resident = planToolSurface(residentToolSurfaceConfig());
   const residentNamed = [...resident.direct, ...resident.disabled, ...resident.grouped];
@@ -197,6 +199,8 @@ test("BL1: the declared role surfaces name only tools that exist, and code_intel
     ...omaToolNames(true), ...LSP_TOOL_NAMES,
     // BL4: the Principal groups the same four research tools.
     ...WEB_RESEARCH_TOOL_NAMES,
+    // BL5: the Principal holds the same DIRECT `mcp` proxy tool.
+    MCP_PROXY_TOOL_NAME,
     // BL2: the channel-attached engine registers ask_user_question; a
     // Resident/Worker registry never holds it and its plan never names it.
     ASK_USER_QUESTION_TOOL_NAME,

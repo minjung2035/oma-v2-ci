@@ -121,6 +121,7 @@ export const OWNED_STATE_EXEMPTIONS = Object.freeze({
   "src/entry/oma-society.ts": "the principal-session listing under the state root whose failure already answers `said` -- it refuses to claim silence, and the runtime probe paths above it are the caller's own",
   "src/entry/omahostd.ts": "the support directory's chmod -- the leaf's mode is set outright after the owned ensure -- and the state disk's O_EXCL create under it",
   "src/extension/lsp-tools.ts": "a fresh mkdtemp under the OS temp directory -- the LSP child's own per-call scratch (HOME/XDG/TMP redirection), removed when the call ends; never an OMA-owned tail and never a user path (PI-001 keeps the extension off the storage imports)",
+  "src/extension/mcp-tools.ts": "the MCP adapter's own state dir under the engine's agent dir -- ensure/chmod of the state root and scratch it just made, the oauth-file-key write, and the scratch/session rm -- engine-owned tails the adapter owns and rotates (PI-001 keeps the extension off the storage imports)",
   "src/extension/mail-tools.ts": "a fresh mkdtemp under the model's own working directory -- the extension's own scratch (PI-001 keeps it off the storage imports)",
   "src/git/context-repository.ts": "the context repository's own probes beside its owned ensures -- lstat answers the work tree's shape and a failure refuses loudly",
   "src/pi-extension.ts": "the store root's realpath into the sandbox's read admissions -- a failure closes the admission (the store permits nothing), never opens it",

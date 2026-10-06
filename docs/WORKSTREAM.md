@@ -636,6 +636,83 @@ name collision/intended surface/hidden 미활성/idempotent reload/provenance/
 
 ## 9. 진행 로그
 
+- 2026-10-09 (bundled #5 — pi-mcp-adapter): §7 순서의 다섯 번째(마지막)
+  확장. `pi-mcp-adapter@5.0.0`을 `src/extension/vendor/pi-mcp-adapter/`에
+  byte-pinned vendor — `upstream/`은 npm 타르볼(shasum
+  `6c20461d658ec7d7b7e303b067e2ff13a7846d00`, SRI
+  `sha512-/3vWQLSXwud+VX1vV/dFfKpp6I40guCeqiaP/XMdXIyon+frIm+sPXGArLlmvY5PIwL2ChJ3AhELIusroGA8Ng==`)
+  의 무수정 스냅샷(252 files), `upstream-tests/`는 source commit
+  `5783e5eacfe820829b18be5d4de91e5f46e79dbb`의 테스트 트리(207
+  entries — npm tarball에는 테스트가 없어 git에서 가져옴),
+  `runtime/`은 upstream 루트 `.ts` 전 모듈의 tsc 산출물(상대 `.ts`
+  지정자를 `.js`로 재작성 후 컴파일, 비-ts 페이로드는 verbatim 복사)에
+  `vendor-pi-mcp-adapter.mjs`의 OMA_DIVERGENCES만 입힌 생성물,
+  `node_modules/`는 DEPENDENCIES 핀 테이블 42개 패키지의 npm tarball
+  바이트 그대로인 의존 클로저(2,086 files). `manifest.json`은
+  `oma-vendored-bundle-v1` — 현재 2,727 파일. 어댑터
+  (`src/extension/mcp-tools.ts`)는 verify→정책 설치→수명주기 훅→
+  facade→upstream `createMcpAdapter` 순서를 지키고 정확히 `mcp` 1개
+  도구만 등록한다 — upstream 자체가 single lazy proxy라 OMA GROUPED를
+  얹지 않고 surface plan은 `mcp`를 DIRECT로 이름 붙인다(두 role 공통).
+  facade는 `registerTool`을 pinned 이름으로만 통과시키고
+  `registerCommand`/`registerFlag`/`registerShortcut`은 drop 기록,
+  `pi.exec`(browser/path open의 유일 호출지)는
+  `[E_OMA_SUBPROCESS]` 거절, `registerMcpServer`/`getMcpServers`는
+  facade에 없으므로 `piSupportsMcp(pi)`가 vendored 코드 안에서 false —
+  Pi built-in MCP는 공존 불가고 `mcp_servers_change` 미러 경로는 arm되지
+  않는다. config는 OMA 소유 하나뿐: 엔진의 agent dir 아래
+  `mcp-adapter.json`(upstream 자체 adapter-config 이름 — Pi built-in의
+  `mcp.json`과 의도적으로 구분되므로 그 파일로 오인될 수 없다; 없으면
+  빈 config, malformed이면 fail-closed) 또는 테스트의
+  `config` 옵션을 `normalizeOmaMcpConfig`가 검증해 programmatic
+  `McpConfig`로 만든다 — `configPath`는 upstream에 절대 넘기지 않아
+  host/global/project discovery·plugin loader·argv flag 경로 전부 소등.
+  `imports`·`claudePlugins`·허용 부분집합 밖 settings 키·surface를 바꾸는
+  설정(directTools·namespaceProxyTools·scriptMode·autoAuth·
+  allowInstall·hostConfigDiscovery·disableProxyTool·
+  ancestorConfigRoots·agentPluginPaths·projectServers)은 클램프가
+  아니라 거절. server 항목은 `npx`/`npm` command(connect 시 패키지
+  fetch)·비-http(s) url·상대 socket·`caFile`·`requestHeadersCommand`·
+  `pluginDataDir`·`literalEnv`·per-server `directTools`·`!`-command
+  secret sink를 경계에서 거절하고 vendored splice가 런타임에도 같은
+  sink를 막는다(defense in depth). 정책 seam(`runtime/utils.js`의
+  `omaInstallMcpPolicy`): deny-by-default permits(browser-open·
+  os-keyring 미부여), 빈 ambient-env 뷰(MCP_DIRECT_TOOLS·MCP_OAUTH_*·
+  NPM_CONFIG_CACHE·BROWSER·Jev/SystemOne·PI_MCP_ADAPTER_* selector가
+  vendored 코드에 닿지 않음), OMA 소유 agent dir·scratch root, stdio
+  child env scrub, pinned credential store. egress는 OMA 프록시 결선이
+  있을 때만 `http://127.0.0.1:<port>` pin을 vendored undici ProxyAgent로
+  설치하고 loopback은 direct 유지; 결선이 없으면 pin도 dispatcher도
+  없는 upstream direct-fetch 의미 그대로. credential은 durable 상태면
+  OMA 생성 키의 encrypted-file store, ephemeral이면 memory store로 핀 —
+  OS keyring·`@napi-rs/keyring`·keyctl 경로는 도달 불가. 수명주기는
+  upstream의 session_start/session_shutdown 소유자를 facade로 그대로
+  전달하고 OMA scratch는 session_start에 rotate·session_shutdown에
+  삭제한다. 경계 적응(번들 밖, 전부 기록됨): ① 공유 child-env
+  술어를 `src/extension/child-env.ts`로 추출해 LSP와 MCP가 같이 쓰게
+  함(deny-by-default allowlist, OMA pin과 정확히 일치하는 proxy 값만
+  통과, HOME/XDG/tmp는 미상속·per-session scratch redirect, 거절 값은
+  빈 문자열이 아니라 부재). ② `state-tree-rules.mjs`·
+  `owned-state-rules.mjs`의 raw fs-mutation 면제 표에 `mcp-tools.ts`
+  추가 — lsp-tools와 같은 사유: Pi extension 경계라 extension closure가
+  저장소 primitive import를 막고, state는 engine agent dir 아래거나
+  휘발성 OS temp다. ③ BL1/BL3/BL4 surface 테스트의 등록 집합에 `mcp`
+  추가(두 role 공통 DIRECT). ④ `tool-surface.ts`에
+  `MCP_PROXY_TOOL_NAME` 도메인 상수 추가 — PI-001이 extension의 domain
+  import를 막으므로 `mcp-tools.ts`의 `MCP_TOOL_NAMES`와 테스트가
+  결박한다. ⑤ confined Resident argv의 `--no-extensions`는 `-e` 명시
+  경로(core extension)와 양립하는 기존 방식 그대로 — vendored 등록은
+  core extension 안에서 일어나므로 정책 충돌 없음을 pi-spawn-plan으로
+  확인. 검증: build·typecheck·`vendor-pi-mcp-adapter --check`
+  (BUNDLE_CURRENT, 2,727 files)·check:architecture·check-package·
+  `mcp-bundle.test.ts` 14종 + 갱신된 lsp/hashline/web surface 테스트
+  전부 PASS — vendor 스크립트는 upstream `npx-resolver.ts`의 implicit
+  any와 cross-spawn 선언 부재에 대한 비치명 tsc 진단을 stderr에
+  남기는데, 발방출 집합이 일치하면 성공하는 BL4의 기존 관례와 동일.
+  NOT_RUN: macOS native·systemd·kernel/powercut·provider credential·
+  release qualification 레인, upstream-tests 자체 하네스(vitest·
+  네트워크 fixture — provenance용 vendored), 실제 MCP server와의 live
+  세션(경계 시험까지만).
 - 2026-10-08 (bundled #4 — pi-web-access): §7 순서의 네 번째 확장.
   `pi-web-access@0.35.0`를 `src/extension/vendor/pi-web-access/`에
   byte-pinned vendor — `upstream/`은 npm 타르볼(shasum

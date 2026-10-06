@@ -225,6 +225,14 @@ const FILE_EDIT_TOOLS: readonly string[] = ["replace", "replace_within", "insert
  * lists the same way the code_intel list binds LSP_TOOL_NAMES. */
 const WEB_RESEARCH_GROUP_NAME = "web_research";
 const WEB_RESEARCH_TOOLS: readonly string[] = ["web_search", "source_check", "fetch_content", "get_search_content"];
+/** BL5: the bundled pi-mcp-adapter's surface — upstream's own `mcp` proxy
+ * tool, DIRECT for both roles. No OMA grouping wraps it: the proxy tool
+ * is already the lazy boundary upstream designed (the model searches and
+ * calls server tools through its params). Mirrors `MCP_TOOL_NAMES` in
+ * src/extension/mcp-tools.ts; PI-001 keeps the extension from importing
+ * this module, so a test binds the two lists the same way the code_intel
+ * list binds LSP_TOOL_NAMES. */
+export const MCP_PROXY_TOOL_NAME = "mcp";
 // BL2: the bundled human-input tool — mirrors ASK_USER_QUESTION_TOOL_NAME
 // in src/client/ask-user-question/protocol.ts. PI-001 keeps the extension
 // from importing this module, so a test binds the two spellings, the same
@@ -263,6 +271,7 @@ function webResearchGroup(): GroupSpec {
 const RESIDENT_DIRECT_TOOLS: readonly string[] = [
   "read", "write", "edit", "bash", "grep", "find", "ls",
   "oma_mail_read", "oma_mail_send", "oma_mail_ack", "oma_status", "oma_merge", "oma_challenge",
+  MCP_PROXY_TOOL_NAME,
 ];
 
 /** The Principal's engine: the host argv excludes bash, powershell, write
@@ -277,6 +286,7 @@ const PRINCIPAL_DIRECT_TOOLS: readonly string[] = [
   "read", "grep", "find", "ls",
   "oma_mail_read", "oma_mail_send", "oma_society", "oma_agent_lifecycle", "oma_merge", "oma_challenge",
   ASK_USER_QUESTION_TOOL_NAME,
+  MCP_PROXY_TOOL_NAME,
 ];
 
 /** D23/TSP-005 role surfaces, declared host-side. Each names every tool

@@ -122,6 +122,7 @@
   "src/entry/runner.ts",
   "src/extension/ask-user-question.ts",
   "src/extension/batch-view.ts",
+  "src/extension/child-env.ts",
   "src/extension/contained-files.ts",
   "src/extension/contained-search.ts",
   "src/extension/contained-tools.ts",
@@ -131,6 +132,7 @@
   "src/extension/inference-bridge.ts",
   "src/extension/lsp-tools.ts",
   "src/extension/mail-tools.ts",
+  "src/extension/mcp-tools.ts",
   "src/extension/principal-channel.ts",
   "src/extension/principal-tools.ts",
   "src/extension/prompt-boundary.ts",
@@ -1903,11 +1905,11 @@
     "src/pi-extension.ts",
     "src/extension/"
    ],
-   "files": 91
+   "files": 93
   }
  ],
- "files": 396,
- "runtimeEdges": 1686,
+ "files": 398,
+ "runtimeEdges": 1690,
  "typeOnlyEdges": 426,
  "runtimeEdgeMatrix": {
   "L1-kernel -> L1-kernel": 320,
@@ -1924,7 +1926,7 @@
   "L5-entry -> L2-facts": 2,
   "L5-entry -> L3-workflow": 7,
   "L5-entry -> L4-orchestration": 137,
-  "L5-entry -> L5-entry": 180
+  "L5-entry -> L5-entry": 184
  },
  "upwardTypeOnlyEdges": [
   {
@@ -1964,7 +1966,7 @@
   "src/broker.ts": 31,
   "src/mail.ts": 29,
   "src/entry/broker.ts": 28,
-  "src/pi-extension.ts": 23,
+  "src/pi-extension.ts": 24,
   "src/entry/oma-mac.ts": 21,
   "src/review.ts": 21,
   "src/runtime/client-runtime.ts": 19,
@@ -1977,21 +1979,21 @@
   "src/git/context.ts": 15
  },
  "external": {
-  "@earendil-works/pi-coding-agent": 34,
+  "@earendil-works/pi-coding-agent": 35,
   "@earendil-works/pi-tui": 7,
   "koffi": 6,
   "node:async_hooks": 4,
   "node:child_process": 8,
-  "node:crypto": 48,
+  "node:crypto": 49,
   "node:dns": 1,
-  "node:fs": 117,
+  "node:fs": 118,
   "node:fs/promises": 3,
   "node:http": 2,
   "node:https": 1,
   "node:module": 3,
   "node:net": 34,
-  "node:os": 11,
-  "node:path": 131,
+  "node:os": 12,
+  "node:path": 133,
   "node:perf_hooks": 4,
   "node:sqlite": 4,
   "node:stream": 3,

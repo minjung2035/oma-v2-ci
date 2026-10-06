@@ -23,6 +23,7 @@ import { containWorkspaceTools, createContainedWriter } from "./extension/contai
 import { registerLspTools } from "./extension/lsp-tools.js";
 import { registerHashlineTools } from "./extension/hashline-tools.js";
 import { registerWebTools } from "./extension/web-tools.js";
+import { registerMcpTools } from "./extension/mcp-tools.js";
 import { registerAskUserQuestion } from "./extension/ask-user-question.js";
 
 export { decodeBatchViewText, readBatchView } from "./extension/batch-view.js";
@@ -111,6 +112,18 @@ export default async function extension(pi: ExtensionAPI) {
   // fetch_content, get_search_content. No commands, shortcuts, dynamic
   // activation, curator or browser surfaces can register through it.
   await registerWebTools(pi);
+  // BL5: the bundled pi-mcp-adapter extension -- same fail-closed bundle
+  // verification before any vendored module evaluates. The adapter
+  // installs the Society MCP policy (OMA-owned programmatic config, egress
+  // pin, child-env scrub, credential-store pin, scratch ownership) and
+  // drives upstream's own createMcpAdapter factory through a facade that
+  // admits exactly the `mcp` proxy tool -- no second grouping layer, no
+  // commands/flags/shortcuts, and Pi's built-in MCP can never coexist
+  // (`builtin:` paths are filtered out under --no-extensions, and the
+  // facade's absent registerMcpServer keeps piSupportsMcp false).
+  // `interactive` follows the channel: only the Principal's attached
+  // engine may honor sampling/elicitation settings.
+  await registerMcpTools(pi, { interactive: channel.attached });
   // BL2: ask_user_question exists only where a human sits at the terminal.
   // The Principal's engine (channel attached) registers it here; Personal
   // loads the same file as its own `-e` extension; Residents and Workers

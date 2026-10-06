@@ -93,6 +93,7 @@ import { Type } from "typebox";
 import { WorkspaceRefusal } from "./contained-files.js";
 import { textResult } from "./shared.js";
 import { vendoredBundleDir, verifyVendorBundle, type VendorVerification } from "./vendor-bundle.js";
+import { OMA_CHILD_ENV_ALLOW, buildChildEnv } from "./child-env.js";
 // Type-only: erased at compile, so this never evaluates the vendored
 // module before verification (PI-001 keeps runtime imports out too).
 import type { LspServerAdapter } from "./vendor/pi-lsp/runtime/types.js";
@@ -167,130 +168,25 @@ interface LspRuntime {
  * `egressProxyValue` for the only proxy values a child may carry.
  * Exported so the boundary test can assert the child's keys are exactly
  * the sanctioned set. */
-export const OMA_LSP_CHILD_ENV_ALLOW: ReadonlySet<string> = new Set([
-  "path",
-  "lang", "language", "tz", "term", "no_color",
-  "user", "logname", "username",
-  "systemroot", "windir", "systemdrive", "comspec", "pathext",
-]);
-
-/** The one name prefix the allowlist grants: `LC_*` locale-category
- * overrides (`LC_ALL`, `LC_CTYPE`, ...). The LC_ namespace carries
- * locale names -- values are guarded below -- so a prefix is honest
- * where an enumeration would silently miss a category. */
-const OMA_LSP_CHILD_ENV_PREFIXES: ReadonlyArray<string> = ["lc_"];
-
-/** Allowlist names whose values are paths or path-shaped by definition;
- * every other admitted name gets the token guard below. */
-const CHILD_ENV_PATH_TYPED: ReadonlySet<string> = new Set([
-  "path", "systemroot", "windir", "systemdrive", "comspec",
-]);
-
-/** A `/`, `\` or NUL inside a token value is a path channel wearing a
- * locale or identity name: glibc resolves `LC_*`/`LANG` values as locale
- * files, ncurses resolves `TERM` under its terminfo dirs, and a server
- * building paths from `USER` inherits whatever it was handed. `tz`
- * legitimately carries `Area/City` zone names, so only absolute paths,
- * the `:`-prefixed implementation form and parent traversal are refused
- * for it. `..` and NUL are refused for every token. */
-function tokenValueAllowed(lower: string, value: string): boolean {
-  if (value.includes("\0") || value.includes("..")) return false;
-  if (lower === "tz") return !value.startsWith("/") && !value.startsWith(":");
-  return !value.includes("/") && !value.includes("\\");
-}
-
-/** The proxy names OMA's Resident sandbox injects (pi-spawn-plan.ts),
- * lowercased -- the only `*_proxy` spellings a child may carry, and then
- * only the value `egressProxyValue` reproduces. */
-const CHILD_PROXY_NAMES: ReadonlySet<string> = new Set([
-  "http_proxy", "https_proxy", "all_proxy", "no_proxy",
-]);
-
-/** The one value a proxy var may carry: the Resident sandbox's own
- * injected loopback, recomputed from the engine's egress wiring. The
- * spawn plan's injection is `http://127.0.0.1:<OMA_EGRESS_PROXY_PORT>`
- * and a fixed `no_proxy` literal, and it exists only beside
- * `OMA_EGRESS_PROXY_SOCKET` (an absolute path): a host engine, or an env
- * carrying only part of the wiring, derives no pin and every proxy var
- * is denied. A credential-carrying or redirecting value cannot
- * reproduce the pin; inside the sandbox the child keeps exactly the
- * egress every other Resident tool has -- the CONNECT allowlist still
- * decides what it may dial, and no other route out exists. An
- * adapter-declared proxy goes through the same comparison, so
- * pi-lsp.json cannot re-arm a proxy channel either. */
-function egressProxyValue(lower: string): string | undefined {
-  const socket = process.env.OMA_EGRESS_PROXY_SOCKET;
-  const port = process.env.OMA_EGRESS_PROXY_PORT;
-  if (socket === undefined || !isAbsolute(socket) ||
-    port === undefined || !/^\d+$/.test(port)) return undefined;
-  return lower === "no_proxy" ? "127.0.0.1,localhost,::1" : `http://127.0.0.1:${Number(port)}`;
-}
-
-/** The one charset a child env name may be written in. A name is not
- * inert labeling: it is the `NAME` half of the `NAME=value` byte string
- * the child receives, so a key can carry what the value guard never
- * sees -- `LC_ALL=/etc/evil-locale` lowercases into the `lc_` prefix
- * and serializes as `LC_ALL=/etc/evil-locale=C`, a path smuggled
- * through the key side, and a NUL name is the same class (reaching
- * spawn as an unhandled ERR_INVALID_ARG_VALUE). Checked on the RAW key
- * before any folding: U+212A (KELVIN SIGN) lowercases to plain `k`, so
- * folding first would launder a hostile name into the `lc_` prefix.
- * `=` and NUL cannot be planted in process.env -- an environ entry is a
- * `name=value` C string -- so they arrive only through an adapter's
- * declared env; `..` and non-ASCII names ride either channel. */
-const CHILD_ENV_KEY_CHARSET = /^[A-Za-z0-9_]+$/;
-
-/** A name reaches the child only through the allowlist -- or, for the
- * four proxy names, only when its value is the sandbox's own injected
- * loopback byte-for-byte -- and only in the sanctioned name charset.
- * Case-insensitive, so a case-variant of an unlisted name inherits the
- * same verdict. Both `hardenedAdapter` tiers -- the inherited
- * process.env loop and the adapter's declared env -- funnel through
- * this one predicate; the per-call scratch names bypass it as compiler
- * constants. A NUL value is refused for every name up front -- the
- * path-typed names skip `tokenValueAllowed`, so without this line a
- * `PATH: "a\0b"` would reach spawn as an unhandled
- * ERR_INVALID_ARG_VALUE, the same class the key charset closed on the
- * name side. */
-function admittedChildEnv(key: string, value: string): boolean {
-  if (!CHILD_ENV_KEY_CHARSET.test(key) || value.includes("\0")) return false;
-  const lower = key.toLowerCase();
-  if (CHILD_PROXY_NAMES.has(lower)) return value === egressProxyValue(lower);
-  const named = OMA_LSP_CHILD_ENV_ALLOW.has(lower) ||
-    OMA_LSP_CHILD_ENV_PREFIXES.some(prefix => lower.startsWith(prefix));
-  if (!named) return false;
-  return CHILD_ENV_PATH_TYPED.has(lower) || tokenValueAllowed(lower, value);
-}
+/** The child-env contract lives in ./child-env.js now — shared with the
+ * pi-mcp-adapter boundary. This alias keeps the LSP name stable for the
+ * boundary tests that pin the sanctioned set. */
+export const OMA_LSP_CHILD_ENV_ALLOW: ReadonlySet<string> = OMA_CHILD_ENV_ALLOW;
 
 /** The environment the language-server child gets, complete: the
- * vendored client's `mergeEnvironment` no longer unions `process.env`
- * (its OMA divergence in command.js), so this map IS the child's
- * environment -- deny-by-default, with no empty-string tombstones. An
- * emptied name is not a denied name: loaders treat empty path-list
- * elements as the current directory (`LD_LIBRARY_PATH=""` searches the
- * workspace), so a denied name must be absent, not blanked.
- *
- * The map is built in three tiers: the engine's allowlisted inherited
- * names first, the adapter's declared env second (an adapter-declared
- * PATH is the documented command-lookup override), the per-call
- * scratch's HOME/XDG/TMP redirects last. A same-spelling collision goes
- * to the later tier; a case-variant collision is the vendored merge's
- * own win32 dedup below, so a declared `Path` stays inert litter on
- * POSIX rather than shadowing PATH -- exactly upstream's platform
- * semantics. The scratch names are not allowlisted, so nothing else can
- * supply them: when a scratch exists they hold its value, and when none
- * does they are absent like everything else. */
+ * vendored client's `mergeEnvironment` no longer seeds the result from
+ * process.env (its OMA divergence in command.js), so the map this
+ * builds IS the child's environment -- deny-by-default, with no
+ * empty-string tombstones. Built in three tiers by the shared
+ * `buildChildEnv`: the engine's allowlisted inherited names first, the
+ * adapter's declared env second (an adapter-declared PATH is the
+ * documented command-lookup override), the per-call scratch's
+ * HOME/XDG/TMP redirects last. A same-spelling collision goes to the
+ * later tier; a case-variant collision is the vendored merge's own win32
+ * dedup below, so a declared `Path` stays inert litter on POSIX rather
+ * than shadowing PATH -- exactly upstream's platform semantics. */
 function hardenedAdapter(adapter: LspServerAdapter, scratch?: string): LspServerAdapter {
-  const env: Record<string, string> = {};
-  for (const [key, value] of Object.entries(process.env))
-    if (typeof value === "string" && admittedChildEnv(key, value)) env[key] = value;
-  for (const [key, value] of Object.entries(adapter.env ?? {}))
-    if (typeof value === "string" && admittedChildEnv(key, value)) env[key] = value;
-  if (scratch !== undefined)
-    for (const key of ["HOME", "XDG_CACHE_HOME", "XDG_CONFIG_HOME", "XDG_DATA_HOME",
-      "TMPDIR", "TEMP", "TMP", "USERPROFILE", "APPDATA", "LOCALAPPDATA"])
-      env[key] = scratch;
-  return { ...adapter, env };
+  return { ...adapter, env: buildChildEnv(process.env, adapter.env, scratch) };
 }
 
 /** The exact environment the language-server child would get for this

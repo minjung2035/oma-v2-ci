@@ -285,6 +285,34 @@ web_research 도구만 등록한다. 구현 내용과 divergence 목록은 WORKS
 
 \* 전체 suite의 최종 종료 코드는 이 절을 쓰는 시점의 로그로 확정했다; systemd lane은 위처럼 별도 NOT_RUN이다.
 
+## 선행 작업: bundled extension #5 — pi-mcp-adapter 검증 (2026-10-09)
+
+§7 순서의 마지막 확장. `pi-mcp-adapter@5.0.0`을
+`src/extension/vendor/pi-mcp-adapter/`에 byte-pinned vendor하고
+`src/extension/mcp-tools.ts` 어댑터가 verify→정책 설치→수명주기 훅→
+facade→upstream `createMcpAdapter` 순서로 정확히 `mcp` 1개 도구만
+등록한다 — upstream 자체가 lazy 단일 프록시라 OMA grouping을 얹지 않고
+surface plan이 `mcp`를 DIRECT로 이름 붙인다. 구현 내용과 divergence
+목록은 WORKSTREAM §9 로그와 `src/extension/vendor/pi-mcp-adapter/NOTICE`가
+소유한다.
+
+| 검사 | 판정 | 실제 실행 범위 |
+|---|---|---|
+| upstream 정체성 | PASS | npm tarball shasum `6c20461d658ec7d7b7e303b067e2ff13a7846d00`·SRI `sha512-/3vWQLSXwud+VX1vV/dFfKpp6I40guCeqiaP/XMdXIyon+frIm+sPXGArLlmvY5PIwL2ChJ3AhELIusroGA8Ng==`·source commit `5783e5eacfe820829b18be5d4de91e5f46e79dbb` — `manifest.json` package 필드와 생성기 EXPECTED_PACKAGE가 결박 |
+| 번들 생성·재생성 | PASS | `node scripts/vendor-pi-mcp-adapter.mjs --check` → `BUNDLE_CURRENT` (2,727 files): staged 소스 재작성→tsc 재방출→27파일 divergence 재적용→발방출 집합 비교→매니페스트 메타(package·dependencies·divergences) 재검증. upstream `npx-resolver.ts`의 implicit any·cross-spawn 선언 부재에 대한 비치명 tsc 진단은 stderr에 기록되나 발방출 집합 일치 시 성공(BL4 관례) |
+| 의존 클로저 | PASS | DEPENDENCIES 핀 테이블 42개 패키지(`@modelcontextprotocol/client`·`core`·`ext-tasks`, `undici`, `zod`, `ajv` 계열, `open` 계열, `@napi-rs/keyring`, `recheck`, `quickjs-wasi` 등)가 `node_modules/` 아래 npm tarball 바이트 그대로(2,086 files); 사용자 설치 패키지는 어떤 vendored import도 충족하지 못한다 — 번들 자체 node_modules walk만 허용 |
+| 번들 무결성 경계 | PASS | `test/mcp-bundle.test.ts` 14종 — source/dist 번들 검증, 변경·누락·미기재·링크·손상 멤버 fail-closed, upstream-tests 트리 보존(207 entries), 정확한 `mcp` 1개 도구·facade 전달만(command·flag·shortcut drop 기록)·검증 실패 시 등록 0+세션 거절, `registerMcpServer`/`getMcpServers` 부재로 Pi built-in MCP 공존 경로 소등(`piSupportsMcp` false), 두 role surface plan이 `mcp`를 DIRECT로 명명·그룹 없음, config 검증이 `imports`·`claudePlugins`·surface-변경 설정·`npx`/`npm` command·비-http(s) url·`!`-command secret sink를 거절, OMA 소유 `mcp-adapter.json`(Pi built-in `mcp.json`과 구분되는 upstream adapter-config 이름)만 읽고 malformed fail-closed, OMA state의 credential key·scratch 수명주기(shutdown에 삭제), 공유 child-env scrub(allowlist·proxy pin 일치만·scratch redirect), 정책 설치가 vendored runtime 안에서 live, egress pin·loopback bypass·무결선 no-proxy fallback, 매니페스트 메타 결박 |
+| build / typecheck | PASS | `npm run build` + `tsc --noEmit` 0 오류 |
+| check:architecture | PASS | inventory·rules·lattice·transactions·boundaries·documents·spec-inventory 0 findings — `mcp-tools.ts`의 raw fs mutation은 Pi extension 경계 면제 표(`state-tree-rules.mjs`·`owned-state-rules.mjs`, lsp-tools와 같은 사유)에 명시 등록; `production-files.txt`·`production-loc-hashes.json`·`dependency-graph.json` 재생성 |
+| check:package | PASS | vendored runtime의 host API import는 BL4와 같은 host peer 의미로만 허용 |
+| `--no-extensions` 정합 | PASS | `pi-spawn-plan.ts`·`pi-interactive-host.ts`·`pi-personal.ts`의 세 엔진 경로 전부 `--no-extensions`(discovery 소등)와 명시 `-e` core extension 경로를 양립 사용 — vendored 등록은 core extension 안에서 일어나므로 정책 충돌 없음 |
+| 인접 회귀 | PASS | `lsp-bundle`(BL1)·`hashline-bundle`(BL3)·`web-bundle`(BL4)의 surface 테스트 등록 집합에 `mcp` 추가 후 전 종 PASS — 공유 `child-env.ts` 추출로 LSP의 child env 의미 변경 없음을 lsp suite가 재확인 |
+| 전체 `npm test` | PASS* | `node scripts/test-local.mjs` 로컬 lane — 재결박 전 첫 실행은 3809 tests → 3803 PASS·6 실패로, 6건 전부가 이 절 작성 시점의 미재생성 산출물(BL1/BL3/BL4 surface 집합 미갱신 3건, review-closure의 ledger 결박 2건, R38 verification-input digest 1건)이었다; 수정·재생성 후 해당 파일 단독 재실행 전부 PASS. systemd-required 9 파일은 환경 부재로 NOT_RUN 분리 |
+| upstream 테스트 이식 | NOT_RUN | `upstream-tests/`는 provenance/포팅용으로 vendored — upstream 자체 하네스(vitest·네트워크 fixture) 의존이라 npm test에 연결하지 않음 |
+| 실제 MCP server live 세션 / macOS native / systemd / kernel·powercut / provider / CI | NOT_RUN | 승인된 환경·자격 없음 — 경계 시험은 fakePi·정책 프로브·loopback 경계까지, 실제 downstream MCP 서버와의 end-to-end 세션 증거는 주장하지 않는다 |
+
+\* 전체 suite의 최종 종료 코드는 이 절을 쓰는 시점의 로그로 확정했다; systemd lane은 위처럼 별도 NOT_RUN이다.
+
 ## 현재 알려진 한계와 남은 검증
 
 - 실제 manager/cgroup candidate 검사와 reviewer shortage 예외는 기존 독립 거절의 영향을 받는다. fixture 성공을 실제 서비스 증거로 사용하지 않는다.
@@ -299,13 +327,13 @@ web_research 도구만 등록한다. 구현 내용과 divergence 목록은 WORKS
 
 아래 binding은 구조 검사의 입력 identity다. digest 생성 자체가 runtime PASS를 뜻하지 않는다.
 
-verification input digest `a58bc46766d261ba2631b583ca2235b2f1909d947c4fce8cf4448099b745d50e` (12605 files).
+verification input digest `33df2498814470559af5f6857ebbb3d0eb466b78b8d675adaa5377dfe2163581` (15337 files).
 
 당시 기록한 cloc 2.08 측정치: 354 files / 35,832 code LOC. 이 역사적 기록은 현재 source의 LOC claim이 아니며, 기존 artifact와의 불일치를 여기서 수리했다고 주장하지 않는다. 크기 제한은 없으며 값은 release proof가 아니다.
 
 K63: 현재 source list는 [production-files.txt](../../production-files.txt), per-file SHA-256은 [production-loc-hashes.json](../../production-loc-hashes.json)이 소유한다. 기존 digest 파일명은 최소 변경을 위해 유지하지만 내용은 `oma-production-source-digests-v1`이며 LOC/tool/report digest를 포함하지 않는다. `node scripts/loc.mjs --source-digests`로 명시적으로 갱신하고 `npm run check:inventory`는 cloc 없이 source bytes를 검증한다. `--inventory-only`는 계속 목록만 갱신한다.
 
-현재 LOC는 `node scripts/loc.mjs --out <evidence-directory>`가 cloc 2.08로 생성·재검증하는 CI artifact `production-loc.json`과 `production-measurement-hashes.json`에만 있다. 생성기는 committed source digest를 먼저 검증하며 이를 재작성하지 않는다. CI는 검증한 commit 아래 report·report digest·source digest·tool version을 함께 업로드한다. committed LOC claim과 측정치의 결박은 더 이상 제공하지 않으며, source digest 결박은 유지한다. 아래 구조 입력 identity는 DR34(UX-08 CONNECT egress) 2차 맹검증 변경분(paused-socket 수명주기·Teredo 거절·rest 의미)과 BL1(bundled extension #1 pi-lsp — vendor 페이로드·verifyVendorBundle·lsp-tools 어댑터·tool-surface 플랜·workspace-guard 확장), BL2(bundled extension #2 ask_user_question — OMA 네이티브 구현: client contract/model/envelope/protocol, extension 등록, TUI presenter/component, role surface·deployment·두 host 경계 결선), BL3(bundled extension #3 pi-hashline-edit-pro — vendor 페이로드+의존 closure·commit/read seam divergence·hashline-tools 어댑터·file_edit surface·contained writer identity seam), BL4(bundled extension #4 pi-web-access — vendor 페이로드+의존 closure·OMA 정책/egress divergence·web-tools 어댑터·web_research surface·deployment-manifest 엔트리 bound 상향) 변경분의 로컬 검증을 위해 다시 결박한 것이고, 이전 runtime PASS를 새 source의 PASS로 승격하지 않는다.
+현재 LOC는 `node scripts/loc.mjs --out <evidence-directory>`가 cloc 2.08로 생성·재검증하는 CI artifact `production-loc.json`과 `production-measurement-hashes.json`에만 있다. 생성기는 committed source digest를 먼저 검증하며 이를 재작성하지 않는다. CI는 검증한 commit 아래 report·report digest·source digest·tool version을 함께 업로드한다. committed LOC claim과 측정치의 결박은 더 이상 제공하지 않으며, source digest 결박은 유지한다. 아래 구조 입력 identity는 DR34(UX-08 CONNECT egress) 2차 맹검증 변경분(paused-socket 수명주기·Teredo 거절·rest 의미)과 BL1(bundled extension #1 pi-lsp — vendor 페이로드·verifyVendorBundle·lsp-tools 어댑터·tool-surface 플랜·workspace-guard 확장), BL2(bundled extension #2 ask_user_question — OMA 네이티브 구현: client contract/model/envelope/protocol, extension 등록, TUI presenter/component, role surface·deployment·두 host 경계 결선), BL3(bundled extension #3 pi-hashline-edit-pro — vendor 페이로드+의존 closure·commit/read seam divergence·hashline-tools 어댑터·file_edit surface·contained writer identity seam), BL4(bundled extension #4 pi-web-access — vendor 페이로드+의존 closure·OMA 정책/egress divergence·web-tools 어댑터·web_research surface·deployment-manifest 엔트리 bound 상향), BL5(bundled extension #5 pi-mcp-adapter — vendor 페이로드+42패키지 의존 closure·27파일 OMA 정책 divergence·mcp-tools 어댑터·공유 child-env 추출·`mcp` DIRECT surface) 변경분의 로컬 검증을 위해 다시 결박한 것이고, 이전 runtime PASS를 새 source의 PASS로 승격하지 않는다.
 
 ## 재검증
 

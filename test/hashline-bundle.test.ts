@@ -21,7 +21,7 @@ import { LSP_TOOL_NAMES } from "../src/extension/lsp-tools.js";
 import { verifyVendorBundle, vendoredBundleDir, VendorIntegrityError } from "../src/extension/vendor-bundle.js";
 import { parseSurfacePlan, registerToolSurface } from "../src/extension/tool-surface.js";
 import {
-  ASK_USER_QUESTION_TOOL_NAME,
+  ASK_USER_QUESTION_TOOL_NAME, MCP_PROXY_TOOL_NAME,
   encodeToolSurfacePlan, encodedPrincipalToolSurface, encodedResidentToolSurface,
   planToolSurface, principalToolSurfaceConfig, residentToolSurfaceConfig,
 } from "../src/domain/tool-surface.js";
@@ -221,6 +221,8 @@ test("BL3: the declared role surfaces name only tools that exist, and file_edit 
     ...omaToolNames(false), ...LSP_TOOL_NAMES, ...HASHLINE_EDIT_TOOL_NAMES,
     // BL4: the bundled pi-web-access research tools.
     ...WEB_RESEARCH_TOOL_NAMES,
+    // BL5: the bundled pi-mcp-adapter's single proxy tool -- DIRECT.
+    MCP_PROXY_TOOL_NAME,
   ]);
   const resident = planToolSurface(residentToolSurfaceConfig());
   for (const name of [...resident.direct, ...resident.disabled, ...resident.grouped])
@@ -237,7 +239,10 @@ test("BL3: the declared role surfaces name only tools that exist, and file_edit 
   const principalRegistered = new Set([
     "read", "grep", "find", "ls", ...omaToolNames(true), ...LSP_TOOL_NAMES,
     // BL4: the Principal groups the same four research tools.
-    ...WEB_RESEARCH_TOOL_NAMES, ASK_USER_QUESTION_TOOL_NAME,
+    ...WEB_RESEARCH_TOOL_NAMES,
+    // BL5: the Principal holds the same DIRECT `mcp` proxy tool.
+    MCP_PROXY_TOOL_NAME,
+    ASK_USER_QUESTION_TOOL_NAME,
   ]);
   const principal = planToolSurface(principalToolSurfaceConfig());
   for (const name of [...principal.direct, ...principal.disabled, ...principal.grouped])
