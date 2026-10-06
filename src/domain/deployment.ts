@@ -8,6 +8,10 @@ export const DEPLOYMENT_LAYOUT = Object.freeze({
   schema: "implementation/schema-v3.sql",
   systemd: "implementation/systemd",
   extension: "dist/src/pi-extension.js",
+  // BL2: the Personal host's `-e` path — the ask_user_question entry point is
+  // its own extension file so Personal gets the tool without loading the
+  // society-wide trusted extension it has no use for.
+  extensionAsk: "dist/src/extension/ask-user-question.js",
   // The model-facing command surface, as an installed path. Every agent that
   // has OMA tools runs this same file; naming it once keeps the Principal's
   // and a Resident's engine pointed at one binary.

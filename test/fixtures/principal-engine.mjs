@@ -18,6 +18,8 @@ const emit = value => process.stdout.write(`${JSON.stringify(value)}\n`);
 const tools = new Map();
 const commands = new Map();
 const handlers = new Map();
+// The shared extension event bus the real engine puts on every extension api.
+const busHandlers = new Map();
 const entries = [];
 const sessionFile = process.env.OMA_TEST_SESSION_FILE;
 const sessionId = randomBytes(8).toString("hex");
@@ -48,6 +50,14 @@ const pi = {
   getActiveTools: () => [...tools.keys()],
   getAllTools: () => [...tools.values()].map(tool => ({ name: tool.name, description: tool.description ?? "" })),
   setActiveTools: () => {},
+  events: {
+    on: (channel, handler) => {
+      const list = busHandlers.get(channel) ?? [];
+      list.push(handler); busHandlers.set(channel, list);
+      return () => { const i = (busHandlers.get(channel) ?? []).indexOf(handler); if (i >= 0) busHandlers.get(channel).splice(i, 1); };
+    },
+    emit: (channel, data) => { for (const handler of busHandlers.get(channel) ?? []) handler(data); },
+  },
 };
 const fire = async (event, payload) => {
   for (const handler of handlers.get(event) ?? []) await handler(payload, ctx);

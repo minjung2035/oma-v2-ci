@@ -2,7 +2,7 @@
  "version": 1,
  "baseline": "b25961cc46532f5e30ff60cc381fed51c59d13ab",
  "summary": {
-  "CHANGED_WITH_ORACLE": 311,
+  "CHANGED_WITH_ORACLE": 318,
   "REMOVED": 8,
   "NOT_REVIEWED": 65,
   "READ_UNCHANGED": 52
@@ -839,6 +839,58 @@
    "sha256": "1f109d31ee02869e48554230659cafb8a5e09d624d792f372bc48d0efb7e7008"
   },
   {
+   "path": "src/client/ask-user-question/envelope.ts",
+   "primary": null,
+   "status": "CHANGED_WITH_ORACLE",
+   "by": [
+    "BL2"
+   ],
+   "oracles": [
+    "BL2"
+   ],
+   "note": "Read in full for BL2: envelope wording is the upstream text (ENVELOPE_PREFIX/SUFFIX, DECLINE_MESSAGE, '(no input)' placeholder, '\"Q\"=\"A\". selected preview: P.' segments). Cancelled and zero-segment results both collapse to the canonical decline while details keep partial answers and the error code — the single 'didn't answer' signal upstream defines. The upstream notes/globalNote extras are deliberately not ported.",
+   "sha256": "b2bf40bd13e58e0af57bf41c4ff337388cbb2b9cb362bcdb8562a5c5d78590dc"
+  },
+  {
+   "path": "src/client/ask-user-question/model.ts",
+   "primary": null,
+   "status": "CHANGED_WITH_ORACLE",
+   "by": [
+    "BL2"
+   ],
+   "oracles": [
+    "BL2"
+   ],
+   "note": "Read in full for BL2: the renderer-agnostic state machine — question tabs plus a trailing Submit tab, option/custom/next/sentinel rows, multi checkboxes, grapheme-aware backspace (Intl.Segmenter). commitCustom stores answer:null for empty input (upstream parity); a custom commit on a multi tab clears the checked set rather than claiming a phantom multi. typeText strips control bytes so pasted text cannot fragment the single-line row or the transcript-quoted result. advance() lands each new tab on row 0 — clamping the old position could put Enter on 'cancel' and read a submission as a decline.",
+   "sha256": "c967aa8c82e65a5c280b163ebcfd6b7a640253423eb0ff359727bd9c0caf856e"
+  },
+  {
+   "path": "src/client/ask-user-question/protocol.ts",
+   "primary": null,
+   "status": "CHANGED_WITH_ORACLE",
+   "by": [
+    "BL2"
+   ],
+   "oracles": [
+    "BL2"
+   ],
+   "note": "Read in full for BL2: the four oma.ask.* channel names and the payload guards. isAskRequest now verifies each question's shape (question/header strings, options array with string label+description) so a malformed bus payload can never reach QuestionnaireModel; claim/cancel/response guards are id+shape checks on a same-process, same-trust-domain bus.",
+   "sha256": "9a706e02e915e5b5c7506c6d1d8b5c61ee67abe8036e08540abd391e0b5df026"
+  },
+  {
+   "path": "src/client/ask-user-question/questionnaire.ts",
+   "primary": null,
+   "status": "CHANGED_WITH_ORACLE",
+   "by": [
+    "BL2"
+   ],
+   "oracles": [
+    "BL2"
+   ],
+   "note": "Read in full for BL2: bounds (1-4 questions, 2-4 options, header<=16, label<=60), reserved labels (Other/Type something./Next), QuestionAnswer carries answer: string|null with selected for multi — the upstream details shape byte-for-byte. Validation order matches the upstream oracle (count, missing fields [OMA addition covering what upstream delegates to TypeBox], duplicate question, option count incl. too_many_options, reserved before duplicate label). normalizeQuestionParams folds CR before identity checks so a smuggled reserved label cannot hide behind a carriage return; malformed structure degrades to the validator, never throws.",
+   "sha256": "cdbc4f0895a4746b3c87afaf67db691676b11e7c3827ad6d98ac20e6dd4bff9c"
+  },
+  {
    "path": "src/client/codecs.ts",
    "primary": null,
    "status": "NOT_REVIEWED",
@@ -1199,12 +1251,22 @@
    "primary": "WP31",
    "status": "CHANGED_WITH_ORACLE",
    "by": [
-    "AV16"
+    "AV-review",
+    "BL2"
    ],
    "oracles": [
-    "AV16"
+    "AUTH-003",
+    "LOC-003",
+    "PR-002",
+    "REC-007",
+    "T100",
+    "T101",
+    "T102",
+    "T103",
+    "BL2"
    ],
-   "sha256": "65406a1b79a0784146b3dedc05284af889d3cbbfbee7110ad41b74e06cd8b98d"
+   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are tests whose loaded module closure (or text) contains this file BL2 rebind: extensionAsk names the Personal host's -e extension path (dist/src/extension/ask-user-question.js) once in the deployment layout — the same installed footing as the packaged open-tui upstream, not part of the digest-pinned user extension list.",
+   "sha256": "e3bebc22f67a91e6c8a7d810233837668f352fee5d105ab58b684c127cd3fe94"
   },
   {
    "path": "src/domain/derived.ts",
@@ -1463,7 +1525,8 @@
     "P0V-31",
     "P0V-33",
     "P0V-47",
-    "P0V-48"
+    "P0V-48",
+    "BL2"
    ],
    "oracles": [
     "BL1",
@@ -1478,10 +1541,11 @@
     "T103",
     "T111",
     "T112",
-    "T99"
+    "T99",
+    "BL2"
    ],
-   "note": "BL1 review -- residentToolSurfaceConfig()/principalToolSurfaceConfig() declare the code_intel group (lsp_diagnostics, lsp_fix, lsp_status); encodedResidentToolSurface()/encodedPrincipalToolSurface() emit the canonical hex plans.",
-   "sha256": "61f5939b718fae8d1606058e8ebdf72af01256a764203535ed4a42602b680831"
+   "note": "BL1 review -- residentToolSurfaceConfig()/principalToolSurfaceConfig() declare the code_intel group (lsp_diagnostics, lsp_fix, lsp_status); encodedResidentToolSurface()/encodedPrincipalToolSurface() emit the canonical hex plans. BL2 rebind: ASK_USER_QUESTION_TOOL_NAME is declared here (the domain side of the PI-001 boundary; a test binds it to the protocol module's spelling) and sits in PRINCIPAL_DIRECT_TOOLS — DIRECT exposure, not grouped. Resident/Worker plans never name it.",
+   "sha256": "96041cb927e1692086f470c0f1c7e474134575112e8d94a901ea6e4db15c7e54"
   },
   {
    "path": "src/domain/unseen-text.ts",
@@ -1880,7 +1944,8 @@
     "ENG2",
     "B1",
     "B2",
-    "B3"
+    "B3",
+    "BL2"
    ],
    "oracles": [
     "interactive owner",
@@ -1888,10 +1953,11 @@
     "a Human prompt",
     "oma's identity",
     "B2",
-    "B3"
+    "B3",
+    "BL2"
    ],
-   "note": "Read in full for the 1.0.1 port: the prompt command's preflightResult now carries the engine's PromptDisposition and the acceptance answer sends success with data.disposition, the same shape rpc-mode.js writes. The accepted flag still fences the catch so a rejection after acceptance cannot send a second answer; rejection stays the prompt() promise rejecting, so every disposition is an admission. OMA's admission boundary is unchanged -- the host still turns only a Human prompt into an engine prompt and engine extension commands still never reach it. 2026-10-05 B round: the boundary registers the compact-tool resolver through the public registerToolRenderer seam (B1), routes the intercepted thinking commands to a deterministic setter through the compat internals (B2), and mirrors the session's waiting[] snapshots into a bounded aboveEditor widget that is cleared when empty and reapplied on session_start (B3).",
-   "sha256": "8577d5e426b5d678185d14397c009584bc897a31a5dbafb3a4b31ac606b5eec8"
+   "note": "Read in full for the 1.0.1 port: the prompt command's preflightResult now carries the engine's PromptDisposition and the acceptance answer sends success with data.disposition, the same shape rpc-mode.js writes. The accepted flag still fences the catch so a rejection after acceptance cannot send a second answer; rejection stays the prompt() promise rejecting, so every disposition is an admission. OMA's admission boundary is unchanged -- the host still turns only a Human prompt into an engine prompt and engine extension commands still never reach it. 2026-10-05 B round: the boundary registers the compact-tool resolver through the public registerToolRenderer seam (B1), routes the intercepted thinking commands to a deterministic setter through the compat internals (B2), and mirrors the session's waiting[] snapshots into a bounded aboveEditor widget that is cleared when empty and reapplied on session_start (B3). BL2 rebind: the boundary registers the ask_user_question presenter with a lazy context read (context: () => context), so requests made while no session context is live resolve cancelled and a session boundary can never strand one; registration sits beside the other UI-boundary seams before session_start assigns context.",
+   "sha256": "7445ea6c0b20a9345be09e5b55d19b51653a0d5c8b964ae6167374b12cc98bcc"
   },
   {
    "path": "src/entry/pi-interactive.ts",
@@ -1905,14 +1971,16 @@
    "primary": null,
    "status": "CHANGED_WITH_ORACLE",
    "by": [
-    "C"
+    "C",
+    "BL2"
    ],
    "oracles": [
     "Personal engine",
-    "society slot"
+    "society slot",
+    "BL2"
    ],
-   "note": "Read in full at the 2026-10-05 C round: the boundary registers /society beside /oma; on darwin it refuses without touching the gate or the host contract (MODE-006), elsewhere a refused slot is a warning notification that leaves the Personal session alone, and a free slot goes through the existing before-switch/transition path -- switching latch, IPC {type:'switch', society}, then the InteractiveMode's own shutdown. A send failure returns the slot for retry.",
-   "sha256": "3082d34665e75009d041b57861fab75f9ca9d046427a955345d6e09930f19efb"
+   "note": "Read in full at the 2026-10-05 C round: the boundary registers /society beside /oma; on darwin it refuses without touching the gate or the host contract (MODE-006), elsewhere a refused slot is a warning notification that leaves the Personal session alone, and a free slot goes through the existing before-switch/transition path -- switching latch, IPC {type:'switch', society}, then the InteractiveMode's own shutdown. A send failure returns the slot for retry. BL2 rebind: Personal loads the bundled ask extension as its own -e path (libdir + DEPLOYMENT_LAYOUT.extensionAsk), on the same installed footing as the packaged upstream open-tui entry — appended to extensionPaths in initial load and reload both. The same lazy-context presenter registration as the interactive host.",
+   "sha256": "b46b473fcdd9ff554949b9b62f23b907072468128bbe9b346addff0ce4ce1275"
   },
   {
    "path": "src/entry/runner.ts",
@@ -1928,6 +1996,19 @@
    ],
    "note": "Read in full: the egress clause resolves once against the rendered profile name; a null policy simply omits profile.egress -- no UNSUPPORTED_PROFILE, no proxy surface. BL1 repair review -- OMA_TOOL_SURFACE_HEX is canonical-validated like the profile: strict even-length lowercase hex AND a UTF-8 round-trip re-encode (0x/odd-length/invalid-UTF-8/truncated plans all refuse startup at exit 4); the dead `toolSurface === null` branch is gone -- both hex gates have already exited, so toolSurface is always set on the spawn profile.",
    "sha256": "15393f40e20d339154fcf942b184e709a1f2afe6d8c38198b164d37164eb0b60"
+  },
+  {
+   "path": "src/extension/ask-user-question.ts",
+   "primary": null,
+   "status": "CHANGED_WITH_ORACLE",
+   "by": [
+    "BL2"
+   ],
+   "oracles": [
+    "BL2"
+   ],
+   "note": "Read in full for BL2: registers ask_user_question once per ExtensionAPI (WeakSet). execute validates before touching the bus; hasUI=false -> no_ui, invalid -> the validator's structured refusal, already-aborted signal -> decline before any request can open a dialog nobody waits on. The request id is claimed synchronously inside the request emit, so an unclaimed request is a deterministic no_presenter refusal (message tells the model to ask as plain chat, never to treat it as a decline). AbortSignal and session_shutdown/session_before_switch settle every pending call as cancelled; executionMode sequential keeps dialogs from stacking. The default export is Personal's -e entry — the same registration, not a vendored module.",
+   "sha256": "94fe3ff2adc9fc17e93b8e90789b279ca416b6cb77f741666b377ecc8aedebf1"
   },
   {
    "path": "src/extension/batch-view.ts",
@@ -3787,14 +3868,16 @@
    "status": "CHANGED_WITH_ORACLE",
    "by": [
     "DR34",
-    "BL1"
+    "BL1",
+    "BL2"
    ],
    "oracles": [
     "DR34",
-    "BL1"
+    "BL1",
+    "BL2"
    ],
-   "note": "Read in full: startEgressBridge is composed beside startInferenceBridge; the extension closure rule still holds (builtins + local modules only). BL1 repair review -- registerLspTools is awaited: the function now verifies the bundle before dynamically importing the vendored runtime, and dropping the await would let tool registration race module evaluation.",
-   "sha256": "8c2c757b56e15f06ee57ed3ddd50d891ffd6bf79fe4b904d05fe0ce2d1c5fc71"
+   "note": "Read in full: startEgressBridge is composed beside startInferenceBridge; the extension closure rule still holds (builtins + local modules only). BL1 repair review -- registerLspTools is awaited: the function now verifies the bundle before dynamically importing the vendored runtime, and dropping the await would let tool registration race module evaluation. BL2 rebind: registerAskUserQuestion runs only when channel.attached — the Principal engine gets the human-input tool; Residents/Workers never load it and no surface plan names it for them.",
+   "sha256": "cfd278c84682217762a806bc9de77310e5252ca5d051ebe764d5c3ba47ff92b8"
   },
   {
    "path": "src/platform/guest/archive.ts",
@@ -6642,6 +6725,32 @@
    "sha256": "f32bd12912a6704824e8d64e660f9064080a57883c482ec88680da071a06dec3"
   },
   {
+   "path": "src/tui/ask-user-question/component.ts",
+   "primary": null,
+   "status": "CHANGED_WITH_ORACLE",
+   "by": [
+    "BL2"
+   ],
+   "oracles": [
+    "BL2"
+   ],
+   "note": "Read in full for BL2: a pi-tui Component built from the pure model — tab bar, question/options/preview rows, side-by-side preview pane at >=ASK_QUESTION_BOUNDS.previewSplitColumns else under the rows, review+Submit/Cancel on the submit tab, footer hints. Key grammar matches upstream: Enter commits, Space only toggles multi checkboxes, Esc declines everywhere including mid-typing. Key releases/repeats are ignored; input mode accepts only printable text (CSI/control bytes never reach the buffer). render() is width-pure — a resize redraws the same state with no resize state to lose. Engine primitives are borrowed through the declared ENGINE_PRIMITIVE_OWNERS allowlist; every magic number is a named bound.",
+   "sha256": "0f24244af20f9bceba66dfcdd5954b2e2e8876307a6d7ec37c5cc548ec825999"
+  },
+  {
+   "path": "src/tui/ask-user-question/presenter.ts",
+   "primary": null,
+   "status": "CHANGED_WITH_ORACLE",
+   "by": [
+    "BL2"
+   ],
+   "oracles": [
+    "BL2"
+   ],
+   "note": "Read in full for BL2: one presenter per pi (WeakSet), synchronous claim inside the request emit, one dialog at a time with a FIFO queue. ctx.ui.custom is the public overlay seam (bottom-center, 100% width/height); the factory runs synchronously inside ui.custom so cancelDialog is armed before any cancel can arrive, and an early done() keeps the overlay from mounting at all. context() is read at request time — never cached — so a question asked with no live context resolves cancelled instead of crashing on a stale context; session_shutdown/session_before_switch drain queue+open dialogs as structured cancels. The ui.custom promise resolving or rejecting both close the slot and advance the queue.",
+   "sha256": "d7b6b6f4fee1a81d2178d0d0ef92f72099b99a93ce55bab7d96f5809cb4ee77d"
+  },
+  {
    "path": "src/tui/cells.ts",
    "primary": null,
    "status": "NOT_REVIEWED",
@@ -6751,14 +6860,16 @@
    "status": "CHANGED_WITH_ORACLE",
    "by": [
     "B1",
-    "B3"
+    "B3",
+    "BL2"
    ],
    "oracles": [
     "B1",
-    "B3"
+    "B3",
+    "BL2"
    ],
-   "note": "Read in full at the 2026-10-05 B round: declares the B-round bounds -- COMPACT_TOOL_BOUNDS for tool-row timing/summary and the queued-prompt preview counts/cells -- alongside the existing declared limits; every new bound is a named entry, no literal.",
-   "sha256": "95247d36c0c9903c613d55d9f1fd0ea6293a94fa5be70265c4f9bbb71567236a"
+   "note": "Read in full at the 2026-10-05 B round: declares the B-round bounds -- COMPACT_TOOL_BOUNDS for tool-row timing/summary and the queued-prompt preview counts/cells -- alongside the existing declared limits; every new bound is a named entry, no literal. BL2 rebind: ASK_QUESTION_BOUNDS.previewSplitColumns (72 cells) declares the side-by-side preview threshold; the batch bounds the schema declares stay with the contract in questionnaire.ts. Added to SURFACE_BOUNDS.",
+   "sha256": "9f2f9727aa396ad498dc45bf704f549568f6545bd589d3d96c7ce6795c89f616"
   },
   {
    "path": "src/tui/login.ts",

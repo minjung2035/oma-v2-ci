@@ -69,7 +69,10 @@ function world({ fail, close, dispose, run, construct, catalog, beforeSwitch, se
         const result = await factory({ cwd: birth.cwd, sessionManager: manager }); runtime.services = result.services; return runtime;
       },
       async createAgentSessionServices(options) {
-        options.resourceLoaderOptions.extensionFactories[0]({ registerCommand(name, command) { commands[name] = command; }, registerShortcut() {}, on(event, handler) { hooks[event] = handler; } });
+        options.resourceLoaderOptions.extensionFactories[0]({ registerCommand(name, command) { commands[name] = command; }, registerShortcut() {}, on(event, handler) { hooks[event] = handler; },
+          // BL2: the ask presenter subscribes the request seam on the bus; the
+          // fixture only needs it reachable.
+          events: { on() {}, emit() {} } });
         calls.push(['project-trusted', options.settingsManager.createOptions?.projectTrusted]);
         if (fail === 'services') throw new Error('injected services');
         const resourceLoader = new Loader(options.resourceLoaderOptions); resourceLoader.loaded = true;
@@ -83,6 +86,9 @@ function world({ fail, close, dispose, run, construct, catalog, beforeSwitch, se
       ThinkingSelectorComponent: class { constructor(_level, _levels, done) { done(undefined); } },
     },
     '../domain/errors.js': { StoreError: class extends Error { constructor(code, message) { super(message); this.code = code; } } },
+    // BL2: the Personal host resolves the bundled ask extension through the
+    // deployment layout — the entry point path, not a user-supplied string.
+    '../domain/deployment.js': { DEPLOYMENT_LAYOUT: { extensionAsk: 'dist/src/extension/ask-user-question.js' } },
     '../runtime/session-mode.js': { readSessionBirth: () => birth },
     '../runtime/session-catalog.js': { async sessionBirthForHistory(file) { return catalog ? catalog(file) : birth; }, sessionHistoryDirectories: () => [] },
     '../runtime/personal-settings.js': { personalExtensions: () => ({ extensions: [], missing: [] }), updatePersonalSettings: () => ({ extensions: [] }),
@@ -103,6 +109,9 @@ function world({ fail, close, dispose, run, construct, catalog, beforeSwitch, se
     '../platform/host/guest-histories.js': { async inspectMacGuestHistory() { calls.push('guest-history'); },
       async listMacGuestHistories() { return []; } },
     '../tui/open-tui-brand.js': { brandHeader(lines, brand) { calls.push(['brand', brand.version]); return lines; }, brandFooter: lines => lines },
+    // BL2: the ask presenter hooks the bus and session events; the fixture's
+    // extension api only needs the registration to be reachable.
+    '../tui/ask-user-question/presenter.js': { registerAskUserQuestionPresenter(pi, deps) { calls.push('ask-presenter'); } },
   };
   const module = { exports: {} }, process = { argv: ['node', 'entry', '--root', '/fixture/root', '--data-root', '/fixture/data', '--libdir', '/fixture/install', '--packages', '/fixture/packages'],
     platform: platform ?? 'linux',

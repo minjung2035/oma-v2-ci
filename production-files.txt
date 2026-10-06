@@ -40,6 +40,10 @@ src/cli/exit.ts
 src/cli/request-intent.ts
 src/cli/request-service.ts
 src/cli/transport.ts
+src/client/ask-user-question/envelope.ts
+src/client/ask-user-question/model.ts
+src/client/ask-user-question/protocol.ts
+src/client/ask-user-question/questionnaire.ts
 src/client/codecs.ts
 src/client/context.ts
 src/client/errors.ts
@@ -108,6 +112,7 @@ src/entry/pi-interactive-host.ts
 src/entry/pi-interactive.ts
 src/entry/pi-personal.ts
 src/entry/runner.ts
+src/extension/ask-user-question.ts
 src/extension/batch-view.ts
 src/extension/contained-files.ts
 src/extension/contained-search.ts
@@ -384,6 +389,8 @@ src/storage/transitions.ts
 src/storage/tree-lease.ts
 src/store.ts
 src/tui/app.ts
+src/tui/ask-user-question/component.ts
+src/tui/ask-user-question/presenter.ts
 src/tui/cells.ts
 src/tui/compact-tools.ts
 src/tui/dashboard.ts

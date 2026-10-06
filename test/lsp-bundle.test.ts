@@ -16,6 +16,7 @@ import { guardWorkspaceTools } from "../src/extension/workspace-guard.js";
 import { verifyVendorBundle, vendoredBundleDir, VendorIntegrityError } from "../src/extension/vendor-bundle.js";
 import { parseSurfacePlan, registerToolSurface } from "../src/extension/tool-surface.js";
 import {
+  ASK_USER_QUESTION_TOOL_NAME,
   encodeToolSurfacePlan, encodedPrincipalToolSurface, encodedResidentToolSurface,
   planToolSurface, principalToolSurfaceConfig, residentToolSurfaceConfig,
 } from "../src/domain/tool-surface.js";
@@ -187,6 +188,9 @@ test("BL1: the declared role surfaces name only tools that exist, and code_intel
   const principalRegistered = new Set([
     "read", "grep", "find", "ls", // host argv excludes bash/powershell/write/edit
     ...omaToolNames(true), ...LSP_TOOL_NAMES,
+    // BL2: the channel-attached engine registers ask_user_question; a
+    // Resident/Worker registry never holds it and its plan never names it.
+    ASK_USER_QUESTION_TOOL_NAME,
   ]);
   const principal = planToolSurface(principalToolSurfaceConfig());
   for (const name of [...principal.direct, ...principal.disabled, ...principal.grouped])

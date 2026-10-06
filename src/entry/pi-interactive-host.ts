@@ -26,6 +26,7 @@ import { PI_RESUME_HINT } from "../pi-compat/env.js";
 import { PI_BUILTIN_COMMANDS } from "../pi-compat/commands.js";
 import { interactiveInternalsOf, type InteractiveModeInternals } from "../pi-compat/interactive-mode.js";
 import { ExtensionModules } from "../runtime/extension-modules.js";
+import { registerAskUserQuestionPresenter } from "../tui/ask-user-question/presenter.js";
 import { humanPromptFitsFrame } from "../tui/limits.js";
 import { UNSEEN, UNSEEN_EXCEPT_LAYOUT } from "../domain/unseen-text.js";
 import { EFFORT_LEVELS } from "../config.js";
@@ -484,6 +485,10 @@ export async function runInteractive(): Promise<void> {
     pi.registerShortcut("ctrl+x", { description: "Open oma settings (Dashboard, Config, Mail)", handler: async () => { openPanel(); } });
     pi.on("model_select", () => { deferUi(reportEngine); });
     pi.on("thinking_level_select", () => { deferUi(reportEngine); });
+    // BL2: the ask_user_question presenter. It reads `context` at request
+    // time, so a question asked while no session context is live resolves as
+    // a structured cancel, and a session boundary can never strand one.
+    registerAskUserQuestionPresenter(pi, { context: () => context });
     pi.on("session_start", (_event, ctx) => {
       if (stopping || quitting) return;
       leaveUi();

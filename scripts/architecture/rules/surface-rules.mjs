@@ -18,6 +18,12 @@ const ENGINE_PRIMITIVE_OWNERS = Object.freeze({
   // Component contract they are drawn through; the engine's own types are
   // met structurally, so the surface never imports the coding-agent package.
   "src/tui/compact-tools.ts": Object.freeze(["Component", "truncateToWidth", "wrapTextWithAnsi"]),
+  // BL2: the questionnaire overlay borrows the key matcher, the ANSI-aware
+  // width helpers and the real-cursor marker; its state machine stays pure.
+  "src/tui/ask-user-question/component.ts": Object.freeze([
+    "CURSOR_MARKER", "isKeyRelease", "isKeyRepeat", "matchesKey",
+    "truncateToWidth", "visibleWidth", "wrapTextWithAnsi",
+  ]),
   "src/runtime/interactive-display.ts": Object.freeze(["Text"]),
 });
 const VIEW = "src/tui/view/";

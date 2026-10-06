@@ -636,6 +636,47 @@ name collision/intended surface/hidden 미활성/idempotent reload/provenance/
 
 ## 9. 진행 로그
 
+- 2026-10-07 (bundled #2 — ask_user_question, OMA 네이티브): §7 순서
+  (lsp→ask→hashline→web→mcp)의 두 번째 확장 — vendoring 아닌 직접 구현.
+  오라클은 `@juicesharp/rpiv-ask-user-question@2.12.0` 타르볼: bound
+  (question 1-4·option 2-4·header ≤16·label ≤60), 예약 라벨
+  (Other/Type something./Next), 검증 순서(개수→중복 질문→옵션 개수→
+  reserved가 duplicate보다 선행), 결과 변형(option/custom/multi,
+  `answer: string | null` — multi와 빈 custom은 null + selected, 빈
+  문자열 아님), 봉투 문구("User has answered…"/"User declined…",
+  `(no input)` placeholder)까지 대응. OMA 추가 검증(`missing_fields`,
+  `too_many_options`, `no_presenter`)은 upstream이 TypeBox 스키마에
+  위임한 부분을 fail-closed validator가 커버하는 것 — 공유 검사의
+  순서는 그대로. 의도적 차이(문서화): upstream extras(notes/global
+  note editor·config 파일·l10n·BEL/ACP·external editor·transcript
+  collapse) 미이식; 단일 질문에서도 uniform Submit/review 탭
+  (upstream은 단일 질문 자동 제출); 생명주기 경계 정책은 OMA 소유 —
+  /new·/resume(session_before_switch)·reload·shutdown
+  (session_shutdown)·abort·선 abort 모두 구조화된 cancel 결과로
+  정산하고 큐잉된 요청도 drain — pending call이 걸리거나 답변이
+  조작되지 않음. 경계: `src/extension/ask-user-question.ts`는 검증→
+  `oma.ask.request` emit→동기 claim 확인(no presenter면
+  `no_presenter` 구조 거절, 채팅으로 물으라는 지시 포함)→bus 응답
+  대기 — 답변은 prompt 큐·mail·session switch와 무관하게 tool call
+  result로만 귀착. `executionMode: "sequential"`로 다이얼로그 겹침
+  불가. UI seam은 공개 `ctx.ui.custom(factory, {overlay…})` —
+  `src/tui/ask-user-question/`(presenter + component), factory가
+  `ctx.ui.custom` 안에서 동기 호출돼 cancelDialog가 mount 전에
+  설정됨(dist의 showExtensionCustom 확인); presenter는 경계가
+  마지막으로 건넨 live context를 요청 시점에 읽고(`context: () =>
+  context` 지연 바인딩 — stale context 캡처 회피), context 소멸 시
+  open/queued 모두 구조 cancel로 정산. 역할: `pi-extension.ts`가
+  `channel.attached`일 때만 등록(Principal), Personal은 자체 `-e`
+  경로(DEPLOYMENT_LAYOUT.extensionAsk), Resident/Worker 플랜에는
+  이름 자체가 없고 DIRECT만(GROUPED 아님). 테스트 29개: schema/
+  bound/검증 순서/envelope/details parity, 단일·다중 선택·custom
+  입력·checkbox·tab·Esc, resize(폭 의존 stateless 재렌더), /new·
+  /resume·reload·quit·abort·선 abort 경계, 큐 drain·malformed bus
+  payload·idempotent 등록, no_ui/no_presenter 거절, 답변이 prompt가
+  아닌 tool result로 도착(경로 터치 시 throw하는 fake),
+  Principal DIRECT/Resident 부재. NOT_RUN: macOS native·systemd·
+  kernel/powercut·provider credential·release qualification 레인,
+  실제 터미널 수동 구동(컴포넌트는 fake context로만 구동).
 - 2026-10-06 (bundled #1 — LSP 자식 env 이름-charset 잔여 정산): 맹검증
   잔여 — `admittedChildEnv`가 VALUE만 guard하고 KEY charset은
   미검증이었다. adapter env `{"LC_ALL=/etc/evil-locale": "C"}`는

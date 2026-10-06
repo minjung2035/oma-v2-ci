@@ -42,6 +42,7 @@
 | UX-20b | HOME 미설정 시 요청 캐시가 `/tmp`로 조용히 떨어짐 — 공유 tmp에 사용자 상태 기록 | 9 | 명시적 오류로 fail-closed | fix/fh `1715ae5` — "oma: HOME is not set; the request cache has no root" (exit 4) | 수정됨 |
 | UX-18 | Principal 도구 안내문에 Principal이 할 수 없는 Worker 동작("open and review merge requests")이 들어있음 (`review-tools.ts:109`) | 11 | 역할별 안내문 분리 | fix/fm `8f0a5a1` — Principal 스니펫이 자기 surface의 동작만 이름붙임("diff and vote a HIGH merge's approval") | 수정됨 |
 | UX-19 | Worker `<oma_tools>`에 Pi 상용구("PI_* env vars…")가 남아 모델 표면을 더럽힘 | 11 | 제거 | fix/fp `8ed4b3c` — `PI_*` 언급 가이드라인 필터링, fail→pass 테스트로 실제 안내는 유지 확인 | 수정됨 |
+| UX-29 | 모델이 모호한 요구사항을 사용자에게 묻는 정식 통로가 없음 — 추측으로 진행하거나 flat 텍스트 질문에 머묾 | 1 | bundled extension #2 `ask_user_question` (OMA 네이티브, rpiv-ask-user-question 2.12.0 스키마 호환) — Principal/Personal만, 답변은 tool call result | feat/macos-hidden-vm — `src/extension/ask-user-question.ts` + `src/tui/ask-user-question/`(presenter+component), `ctx.ui.custom` overlay 공개 seam, `oma.ask.*` 버스의 동기 claim, /new·/resume·reload·shutdown·abort 경계는 구조화된 cancel로 정산, Principal DIRECT/Resident·Worker 부재, ask-user-question 테스트 29 | 수정됨 |
 
 ## 하드코딩된 제한 (출처: 사용자 실제 피해 보고 + 제한값 전수 감사 진행 중)
 

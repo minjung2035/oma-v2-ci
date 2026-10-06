@@ -59,7 +59,10 @@ async function world({ setModel, init, resourceReload, dispose, fail, moduleClos
       async createAgentSessionServices(options) {
         overrides.push(options.resourceLoaderOptions.extensionsOverride);
         options.resourceLoaderOptions.extensionFactories[0]({ registerMarkdownTransformer() {}, registerCommand(name, command) { commands[name] = command; }, registerShortcut() {},
-          registerToolRenderer() {}, on(event, handler) { hooks[event] = handler; } });
+          registerToolRenderer() {}, on(event, handler) { hooks[event] = handler; },
+          // BL2: the ask presenter subscribes the request seam on the bus; the
+          // fixture only needs it reachable.
+          events: { on() {}, emit() {} } });
         return { settingsManager: { applyOverrides() {} }, resourceLoader, diagnostics: {} };
       },
       async createAgentSessionFromServices() { if (fail === 'session') throw new Error('injected session'); return { session }; },
@@ -92,6 +95,9 @@ async function world({ setModel, init, resourceReload, dispose, fail, moduleClos
       refresh() { modules.push('modules-refresh'); }
       close() { modules.push('modules-close'); moduleClose?.(); }
     } },
+    // BL2: the ask presenter hooks the bus and session events through the
+    // extension api the fixture passes in — registration must be reachable.
+    '../tui/ask-user-question/presenter.js': { registerAskUserQuestionPresenter(pi, deps) { modules.push('ask-presenter'); } },
     '../domain/unseen-text.js': { UNSEEN: /[\x00-\x1f]/g, UNSEEN_EXCEPT_LAYOUT: /[\x00-\x08]/g },
     '../config.js': { EFFORT_LEVELS: ['off', 'high'] },
   };

@@ -124,6 +124,14 @@ export const COMPACT_TOOL_BOUNDS = Object.freeze({
   trackedCalls: bound(2000, "count", "tool-call timings kept before the oldest finished is dropped"),
 });
 
+/** BL2: the ask_user_question overlay's own bounds. The batch bounds the
+ * schema declares (questions, options, label/header lengths) live with the
+ * contract in src/client/ask-user-question/questionnaire.ts; what lives here
+ * is the layout floor only the renderer knows. */
+export const ASK_QUESTION_BOUNDS = Object.freeze({
+  previewSplitColumns: bound(72, "cells", "below this an option preview flows under the rows; at or above it earns a side pane"),
+});
+
 export const READ_BOUNDS = Object.freeze({
   mailHeaderBytes: bound(64 * 1024, "bytes", "headers are read, not whole attachments"),
   // P0V-43: one refresh reads the headers of at most this many messages, the
@@ -145,5 +153,6 @@ export const SURFACE_BOUNDS = Object.freeze({
   ...CONVERSATION_BOUNDS,
   ...CONFIG_BOUNDS,
   ...COMPACT_TOOL_BOUNDS,
+  ...ASK_QUESTION_BOUNDS,
   ...READ_BOUNDS,
 });

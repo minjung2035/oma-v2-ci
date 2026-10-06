@@ -1,6 +1,6 @@
 {
   "kind": "oma-production-source-digests-v1",
-  "manifest": "ba859451fe46e852357d20a1e217632974650acaaabf3ce9b5fb7448c8bd16c2",
+  "manifest": "463da86a73246404a474df4db54698e30577e2404ddb43ebd91dc5826e136402",
   "files": [
     {
       "path": "implementation/contracts.ts",
@@ -171,6 +171,22 @@
       "sha256": "1f109d31ee02869e48554230659cafb8a5e09d624d792f372bc48d0efb7e7008"
     },
     {
+      "path": "src/client/ask-user-question/envelope.ts",
+      "sha256": "b2bf40bd13e58e0af57bf41c4ff337388cbb2b9cb362bcdb8562a5c5d78590dc"
+    },
+    {
+      "path": "src/client/ask-user-question/model.ts",
+      "sha256": "c967aa8c82e65a5c280b163ebcfd6b7a640253423eb0ff359727bd9c0caf856e"
+    },
+    {
+      "path": "src/client/ask-user-question/protocol.ts",
+      "sha256": "9a706e02e915e5b5c7506c6d1d8b5c61ee67abe8036e08540abd391e0b5df026"
+    },
+    {
+      "path": "src/client/ask-user-question/questionnaire.ts",
+      "sha256": "cdbc4f0895a4746b3c87afaf67db691676b11e7c3827ad6d98ac20e6dd4bff9c"
+    },
+    {
       "path": "src/client/codecs.ts",
       "sha256": "4c9fb7590f89f29684698efdaf4d0a1b5aa72d7905a07989b898afd06f613eb6"
     },
@@ -284,7 +300,7 @@
     },
     {
       "path": "src/domain/deployment.ts",
-      "sha256": "65406a1b79a0784146b3dedc05284af889d3cbbfbee7110ad41b74e06cd8b98d"
+      "sha256": "e3bebc22f67a91e6c8a7d810233837668f352fee5d105ab58b684c127cd3fe94"
     },
     {
       "path": "src/domain/derived.ts",
@@ -360,7 +376,7 @@
     },
     {
       "path": "src/domain/tool-surface.ts",
-      "sha256": "61f5939b718fae8d1606058e8ebdf72af01256a764203535ed4a42602b680831"
+      "sha256": "96041cb927e1692086f470c0f1c7e474134575112e8d94a901ea6e4db15c7e54"
     },
     {
       "path": "src/domain/unseen-text.ts",
@@ -428,7 +444,7 @@
     },
     {
       "path": "src/entry/pi-interactive-host.ts",
-      "sha256": "8577d5e426b5d678185d14397c009584bc897a31a5dbafb3a4b31ac606b5eec8"
+      "sha256": "7445ea6c0b20a9345be09e5b55d19b51653a0d5c8b964ae6167374b12cc98bcc"
     },
     {
       "path": "src/entry/pi-interactive.ts",
@@ -436,11 +452,15 @@
     },
     {
       "path": "src/entry/pi-personal.ts",
-      "sha256": "3082d34665e75009d041b57861fab75f9ca9d046427a955345d6e09930f19efb"
+      "sha256": "b46b473fcdd9ff554949b9b62f23b907072468128bbe9b346addff0ce4ce1275"
     },
     {
       "path": "src/entry/runner.ts",
       "sha256": "15393f40e20d339154fcf942b184e709a1f2afe6d8c38198b164d37164eb0b60"
+    },
+    {
+      "path": "src/extension/ask-user-question.ts",
+      "sha256": "94fe3ff2adc9fc17e93b8e90789b279ca416b6cb77f741666b377ecc8aedebf1"
     },
     {
       "path": "src/extension/batch-view.ts",
@@ -904,7 +924,7 @@
     },
     {
       "path": "src/pi-extension.ts",
-      "sha256": "8c2c757b56e15f06ee57ed3ddd50d891ffd6bf79fe4b904d05fe0ce2d1c5fc71"
+      "sha256": "cfd278c84682217762a806bc9de77310e5252ca5d051ebe764d5c3ba47ff92b8"
     },
     {
       "path": "src/platform/guest/archive.ts",
@@ -1547,6 +1567,14 @@
       "sha256": "f32bd12912a6704824e8d64e660f9064080a57883c482ec88680da071a06dec3"
     },
     {
+      "path": "src/tui/ask-user-question/component.ts",
+      "sha256": "0f24244af20f9bceba66dfcdd5954b2e2e8876307a6d7ec37c5cc548ec825999"
+    },
+    {
+      "path": "src/tui/ask-user-question/presenter.ts",
+      "sha256": "d7b6b6f4fee1a81d2178d0d0ef92f72099b99a93ce55bab7d96f5809cb4ee77d"
+    },
+    {
       "path": "src/tui/cells.ts",
       "sha256": "83bf88b5f22563ee7ec3f16595273d6504b17f718eac45c3c44573a6b82da36c"
     },
@@ -1572,7 +1600,7 @@
     },
     {
       "path": "src/tui/limits.ts",
-      "sha256": "95247d36c0c9903c613d55d9f1fd0ea6293a94fa5be70265c4f9bbb71567236a"
+      "sha256": "9f2f9727aa396ad498dc45bf704f549568f6545bd589d3d96c7ce6795c89f616"
     },
     {
       "path": "src/tui/login.ts",

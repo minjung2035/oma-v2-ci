@@ -209,6 +209,11 @@ export function planToolSurface(config: ToolSurfaceConfig): ToolSurfacePlan {
  * extension from importing this module, so a test binds the two lists. */
 const CODE_INTEL_GROUP_NAME = "code_intel";
 const CODE_INTEL_TOOLS: readonly string[] = ["lsp_diagnostics", "lsp_fix", "lsp_status"];
+// BL2: the bundled human-input tool — mirrors ASK_USER_QUESTION_TOOL_NAME
+// in src/client/ask-user-question/protocol.ts. PI-001 keeps the extension
+// from importing this module, so a test binds the two spellings, the same
+// way the code_intel list binds LSP_TOOL_NAMES.
+export const ASK_USER_QUESTION_TOOL_NAME = "ask_user_question";
 
 function codeIntelGroup(): GroupSpec {
   return {
@@ -232,10 +237,14 @@ const RESIDENT_DIRECT_TOOLS: readonly string[] = [
  * and edit, and its registrations are the mail pair plus the principal
  * tools -- mirrors `omaToolNames(true)`. `lsp_fix` is on the surface
  * because its default is preview; the workspace guard refuses a
- * `write: true` call for the read-only role before execute runs. */
+ * `write: true` call for the read-only role before execute runs.
+ * `ask_user_question` is DIRECT here and only here: the tool exists where a
+ * human sits at the terminal (Principal, and Personal by its own `-e`
+ * extension), and stays absent from Resident/Worker plans entirely. */
 const PRINCIPAL_DIRECT_TOOLS: readonly string[] = [
   "read", "grep", "find", "ls",
   "oma_mail_read", "oma_mail_send", "oma_society", "oma_agent_lifecycle", "oma_merge", "oma_challenge",
+  ASK_USER_QUESTION_TOOL_NAME,
 ];
 
 /** D23/TSP-005 role surfaces, declared host-side. Each names every tool

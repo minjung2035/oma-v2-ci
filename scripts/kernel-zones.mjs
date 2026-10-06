@@ -11,6 +11,9 @@ export const KERNEL_ZONES = Object.freeze([
     files: [
       "src/client/errors.ts",
       "src/client/limits.ts",
+      // BL2: the ask_user_question contract — bounds, question/answer/result
+      // shapes, reserved labels, normalizer and the fail-closed validator.
+      "src/client/ask-user-question/questionnaire.ts",
       "src/cli/request-intent.ts",
       "src/domain/admission.ts",
       "src/domain/attestation-relations.ts",
@@ -79,6 +82,10 @@ export const KERNEL_ZONES = Object.freeze([
       "src/protocol/receipt-codec.ts",
       "src/protocol/receipt-chunks.ts",
       "src/protocol/status-page.ts",
+      // BL2: the oma.ask.* event-channel payload shapes and guards, and the
+      // model-facing envelope representation (text + details) of a result.
+      "src/client/ask-user-question/protocol.ts",
+      "src/client/ask-user-question/envelope.ts",
       "src/protocol/receipts.ts",
       "src/protocol/request-codec.ts",
       "src/protocol/response-codec.ts",
@@ -90,6 +97,9 @@ export const KERNEL_ZONES = Object.freeze([
     files: [
       "src/client/context.ts",
       "src/client/fence.ts",
+      // BL2: the questionnaire interaction state machine — tab/row focus,
+      // checkbox set, input buffer, committed answers; pure, no I/O.
+      "src/client/ask-user-question/model.ts",
       "src/client/index.ts",
       "src/client/receipts.ts",
       "src/client/request-service.ts",

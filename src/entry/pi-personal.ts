@@ -9,6 +9,7 @@ import { createAgentSessionRuntime, createAgentSessionServices, createAgentSessi
   ThinkingSelectorComponent, VERSION, type AgentSession, type ExtensionContext, type ExtensionFactory,
 } from "@earendil-works/pi-coding-agent";
 import { StoreError } from "../domain/errors.js";
+import { DEPLOYMENT_LAYOUT } from "../domain/deployment.js";
 import { readSessionBirth } from "../runtime/session-mode.js";
 import { sessionBirthForHistory, sessionHistoryDirectories } from "../runtime/session-catalog.js";
 import { personalExtensions, personalExtensionEntry, updatePersonalSettings, type PersonalSettingsLocation } from "../runtime/personal-settings.js";
@@ -23,6 +24,7 @@ import { checkSocietySlot } from "../runtime/society-slot.js";
 import { isGuestHistoryReference } from "../protocol/guest-history.js";
 import { inspectMacGuestHistory, listMacGuestHistories } from "../platform/host/guest-histories.js";
 import { brandHeader, brandFooter, type OpenTuiBrand } from "../tui/open-tui-brand.js";
+import { registerAskUserQuestionPresenter } from "../tui/ask-user-question/presenter.js";
 
 const value = (name: string): string => {
   const at = process.argv.indexOf(name), result = process.argv[at + 1];
@@ -46,6 +48,10 @@ async function main(): Promise<void> {
   preparePiRetry(agentDir); preparePiInteractive(agentDir);
   const require = createRequire(import.meta.url);
   const upstream = join(dirname(require.resolve("pi-open-tui/package.json")), "extensions/open-tui/index.ts");
+  // BL2: Personal gets ask_user_question from its own bundled extension file
+  // -- the deployment path, not a user-supplied entry, so it is not part of
+  // the digest-pinned user list but sits on the same installed footing.
+  const askExtension = join(libdir, DEPLOYMENT_LAYOUT.extensionAsk);
   const brand: OpenTuiBrand = { title: "oma", version: (JSON.parse(readFileSync(new URL("../../../package.json", import.meta.url), "utf8")) as { version: string }).version,
     engineVersion: VERSION, project: birth.cwd, society: "Personal", mode: "Personal", tip: "Ctrl+X: Config" };
   let runtime: Awaited<ReturnType<typeof createAgentSessionRuntime>> | undefined;
@@ -158,6 +164,10 @@ async function main(): Promise<void> {
     pi.registerCommand("oma", { description: "Personal Config: model, effort and extensions", handler: async (_args, ctx) => config(ctx) });
     pi.registerCommand("society", { description: "Turn Society on for this project (leaves this Personal session)", handler: async (_args, ctx) => society(ctx) });
     pi.registerShortcut("ctrl+x", { description: "Personal Config", handler: config });
+    // BL2: the ask_user_question presenter — the Personal counterpart of the
+    // interactive host's seam. It reads `context` at request time so a
+    // question asked with no live session resolves as a structured cancel.
+    registerAskUserQuestionPresenter(pi, { context: () => context });
     pi.on("session_start", (_event, ctx) => {
       uiEpoch++; context = ctx;
       ctx.ui.setStatus("oma-mode", "Personal");
@@ -197,7 +207,9 @@ async function main(): Promise<void> {
     if (options.cwd !== birth.cwd || options.sessionManager.getSessionDir() !== birth.history)
       throw new StoreError("INVALID_REQUEST", "Personal history cannot change its birth location");
     assertExtensionIntegrity(assets.extensions);
-    const extensionPaths = [...verifiedPaths(assets.extensions), upstream];
+    // BL2: the bundled ask extension is an installed deployment file, on the
+    // same trust footing as the packaged open-tui upstream beside it.
+    const extensionPaths = [...verifiedPaths(assets.extensions), upstream, askExtension];
     // C18: the installed packages' skills, prompt templates and themes, from
     // the store's index -- the same resources the Society engines get by flag.
     const packageResources = packageResourcePaths(packages);
@@ -234,7 +246,7 @@ async function main(): Promise<void> {
     loader.reload = async reloadOptions => {
       assets = personalExtensions(location, updatePersonalSettings(location));
       assertExtensionIntegrity(assets.extensions);
-      extensionPaths.splice(0, extensionPaths.length, ...verifiedPaths(assets.extensions), upstream);
+      extensionPaths.splice(0, extensionPaths.length, ...verifiedPaths(assets.extensions), upstream, askExtension);
       modules!.refresh(verifiedPaths(assets.extensions));
       // The already-loaded Pi owner clears its own module cache on reload. A new
       // loader would reuse factories from before the file's verified update.
