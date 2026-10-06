@@ -1,0 +1,545 @@
+import { describe, expect, it, vi } from "vitest";
+import { withTempDir, makePiStub } from "../support/fixtures";
+import { mkdir } from "fs/promises";
+import { join } from "path";
+import { isValidHashList } from "../../src/hash-store/validation";
+import { readConfig } from "../../src/config";
+import type { HashlineConfigOverlay } from "../../src/config-ui";
+
+async function openConfigOverlay(commands: Map<string, { handler: (...args: unknown[]) => unknown }>, cwd: string, done: () => void = () => undefined): Promise<HashlineConfigOverlay> {
+  const command = commands.get("hashline-config")!;
+  let overlay: HashlineConfigOverlay | undefined;
+  const theme = { fg: (_area: string, text: string) => text, bold: (text: string) => text };
+  type OverlayFactory = (tui: unknown, theme: unknown, keybindings: unknown, done: () => void) => Promise<HashlineConfigOverlay>;
+  await command.handler({}, { cwd, hasUI: true, ui: { notify: vi.fn(), custom: async (factory: OverlayFactory) => { overlay = await factory({ requestRender: () => undefined }, theme, {}, done); } } });
+  if (!overlay) throw new Error("hashline-config overlay was not created");
+  return overlay;
+}
+
+async function waitForConfig(done: () => Promise<boolean>): Promise<void> {
+  for (let attempt = 0; attempt < 100; attempt++) {
+    if (await done()) return;
+    await new Promise((resolve) => setTimeout(resolve, 25));
+  }
+  throw new Error("timed out waiting for config write");
+}
+describe("startup non-blocking prune", () => {
+  it("session_start returns before pruneMissing finishes", async () => {
+    await withTempDir("startup-prune-", async dir => {
+      const home = join(dir, "home");
+      await mkdir(join(home, ".config", "pi-hashline-edit-pro"), { recursive: true });
+      vi.stubEnv("HOME", home);
+      vi.stubEnv("XDG_CONFIG_HOME", "");
+      try {
+        const { loadHashStore, shutdownHashStore } = await import("../../src/hash-store");
+        const store = await loadHashStore();
+        for (let i = 0; i < 120; i++) {
+          store.stmts.upsert(`/tmp/nonexistent-${i}-${Date.now()}`, "chk", 1, JSON.stringify(["abc"]), "", Date.now());
+        }
+        shutdownHashStore();
+        const { pi, handlers } = makePiStub();
+        const { default: register } = await import("../../index");
+        register(pi);
+        const sessionStart = handlers.get("session_start") as (a: unknown, b: unknown) => Promise<void>;
+        const start = Date.now();
+        await sessionStart({}, { cwd: dir, ui: { notify: vi.fn() } });
+        const elapsed = Date.now() - start;
+        expect(elapsed).toBeLessThan(200);
+        await new Promise(r => setTimeout(r, 800));
+        const store2 = await loadHashStore();
+        const remaining = (store2.stmts.allPaths() as { path: string }[]).filter(r => r.path.includes("nonexistent-")).length;
+        expect(remaining).toBe(0);
+        shutdownHashStore();
+      } finally {
+        vi.unstubAllEnvs();
+        const { shutdownHashStore } = await import("../../src/hash-store");
+        shutdownHashStore();
+      }
+    });
+  });
+});
+
+describe("hash-store incremental vacuum", () => {
+  it("keeps freelist low after many deletes", async () => {
+    await withTempDir("startup-vacuum-", async dir => {
+      const home = join(dir, "home");
+      await mkdir(join(home, ".config", "pi-hashline-edit-pro"), { recursive: true });
+      vi.stubEnv("HOME", home);
+      vi.stubEnv("XDG_CONFIG_HOME", "");
+      try {
+        const { loadHashStore, shutdownHashStore } = await import("../../src/hash-store");
+        const store = await loadHashStore();
+        const hashes = ["ATIm", "BeSR", "DAfo", "Emno", "HDtm", "Ifms", "MEyo", "ORcy"];
+        for (let i = 0; i < 100; i++) {
+          store.stmts.upsert(`p${i}`, "chk", 1, JSON.stringify([hashes[i % hashes.length]]), "", Date.now());
+        }
+        for (let i = 0; i < 80; i++) {
+          store.stmts.deleteOne(`p${i}`);
+        }
+        shutdownHashStore();
+        const store2 = await loadHashStore();
+        expect(isValidHashList(["ATIm"])).toBe(true);
+        shutdownHashStore();
+        void store2;
+      } finally {
+        vi.unstubAllEnvs();
+        const { shutdownHashStore } = await import("../../src/hash-store");
+        shutdownHashStore();
+      }
+    });
+  });
+});
+
+describe("grep huge quantifier guard", () => {
+  it("rejects z{1000000} as unsafe", async () => {
+    await withTempDir("startup-grep-", async dir => {
+      const { setupIntegrationTest } = await import("../support/fixtures");
+      const { getTool } = setupIntegrationTest(dir);
+      const { pi } = makePiStub();
+      const { default: register } = await import("../../index");
+      register(pi);
+      const grepTool = getTool("anchor_grep");
+      await expect(grepTool.execute("g1", { pattern: "z{1000000}", path: dir }, undefined, undefined, { cwd: dir, signal: undefined } as unknown as never)).rejects.toThrow("[E_UNSAFE_REGEX]");
+    });
+  });
+});
+
+
+describe("anchor_grep default", () => {
+  it("session_start keeps anchor_grep by default and disables the built-in grep", async () => {
+    await withTempDir("startup-grep-on-", async dir => {
+      const home = join(dir, "home");
+      await mkdir(join(home, ".config", "pi-hashline-edit-pro"), { recursive: true });
+      vi.stubEnv("HOME", home);
+      vi.stubEnv("XDG_CONFIG_HOME", "");
+      try {
+        const { pi, handlers, getActive } = makePiStub(["read", "replace", "insert", "grep", "anchor_grep", "undo_last_change", "edit"]);
+        const { default: register } = await import("../../index");
+        register(pi);
+        const sessionStart = handlers.get("session_start") as (a: unknown, b: unknown) => Promise<void>;
+        await sessionStart({}, { cwd: dir, ui: { notify: vi.fn() } });
+        expect(getActive()).not.toContain("grep");
+        expect(getActive()).toContain("anchor_grep");
+        expect(getActive()).not.toContain("edit");
+        expect(getActive()).toContain("read");
+      } finally {
+        vi.unstubAllEnvs();
+        const { shutdownHashStore } = await import("../../src/hash-store");
+        shutdownHashStore();
+      }
+    });
+  });
+
+  it("session_start keeps anchor_grep and disables the built-in grep when anchorGrepEnabled is true", async () => {
+    await withTempDir("startup-grep-off-", async dir => {
+      const home = join(dir, "home");
+      await mkdir(join(home, ".config", "pi-hashline-edit-pro"), { recursive: true });
+      vi.stubEnv("HOME", home);
+      vi.stubEnv("XDG_CONFIG_HOME", "");
+      try {
+        const { writeFile } = await import("fs/promises");
+        await writeFile(
+          join(home, ".config", "pi-hashline-edit-pro", "config.json"),
+          JSON.stringify({ autoRead: true, anchorGrepEnabled: true }),
+        );
+        const { pi, handlers, getActive } = makePiStub(["read", "replace", "insert", "grep", "anchor_grep", "undo_last_change", "edit"]);
+        const { default: register } = await import("../../index");
+        register(pi);
+        const sessionStart = handlers.get("session_start") as (a: unknown, b: unknown) => Promise<void>;
+        await sessionStart({}, { cwd: dir, ui: { notify: vi.fn() } });
+        expect(getActive()).not.toContain("grep");
+        expect(getActive()).toContain("anchor_grep");
+        expect(getActive()).not.toContain("edit");
+      } finally {
+        vi.unstubAllEnvs();
+        const { shutdownHashStore } = await import("../../src/hash-store");
+        shutdownHashStore();
+      }
+    });
+  });
+
+  it("hashline-config toggles anchor_grep and the built-in grep", async () => {
+    await withTempDir("toggle-anchor-grep-", async dir => {
+      const home = join(dir, "home");
+      await mkdir(join(home, ".config", "pi-hashline-edit-pro"), { recursive: true });
+      vi.stubEnv("HOME", home);
+      vi.stubEnv("XDG_CONFIG_HOME", "");
+      try {
+        const { pi, commands, handlers, getActive } = makePiStub(["read", "replace", "insert", "grep", "anchor_grep", "undo_last_change"]);
+        const { default: register } = await import("../../index");
+        register(pi);
+        const sessionStart = handlers.get("session_start") as (a: unknown, b: unknown) => Promise<void>;
+        await sessionStart({}, { cwd: dir, ui: { notify: vi.fn() } });
+        expect(getActive()).not.toContain("grep");
+        expect(getActive()).toContain("anchor_grep");
+        const overlay = await openConfigOverlay(commands, dir);
+        overlay.handleInput("j");
+        overlay.handleInput("j");
+        overlay.handleInput("j");
+        overlay.handleInput("j");
+        overlay.handleInput(" ");
+        await waitForConfig(async () => (await readConfig()).anchorGrepEnabled === false && !getActive().includes("anchor_grep") && getActive().includes("grep"));
+        expect(getActive()).not.toContain("anchor_grep");
+        expect(getActive()).toContain("grep");
+        overlay.handleInput(" ");
+        await waitForConfig(async () => (await readConfig()).anchorGrepEnabled === true && getActive().includes("anchor_grep") && !getActive().includes("grep"));
+        expect(getActive()).toContain("anchor_grep");
+        expect(getActive()).not.toContain("grep");
+      } finally {
+        vi.unstubAllEnvs();
+        const { shutdownHashStore } = await import("../../src/hash-store");
+        shutdownHashStore();
+      }
+    });
+  });
+
+  it("hashline-config does not enable the built-in grep when it was not active", async () => {
+    await withTempDir("toggle-anchor-grep-off-", async dir => {
+      const home = join(dir, "home");
+      await mkdir(join(home, ".config", "pi-hashline-edit-pro"), { recursive: true });
+      vi.stubEnv("HOME", home);
+      vi.stubEnv("XDG_CONFIG_HOME", "");
+      try {
+        const { pi, commands, handlers, getActive } = makePiStub(["read", "replace", "insert", "anchor_grep", "undo_last_change"]);
+        const { default: register } = await import("../../index");
+        register(pi);
+        const sessionStart = handlers.get("session_start") as (a: unknown, b: unknown) => Promise<void>;
+        await sessionStart({}, { cwd: dir, ui: { notify: vi.fn() } });
+        expect(getActive()).not.toContain("grep");
+        expect(getActive()).toContain("anchor_grep");
+        const overlay = await openConfigOverlay(commands, dir);
+        overlay.handleInput("j");
+        overlay.handleInput("j");
+        overlay.handleInput("j");
+        overlay.handleInput("j");
+        overlay.handleInput(" ");
+        await waitForConfig(async () => (await readConfig()).anchorGrepEnabled === false && !getActive().includes("anchor_grep"));
+        expect(getActive()).not.toContain("anchor_grep");
+        expect(getActive()).not.toContain("grep");
+        overlay.handleInput(" ");
+        await waitForConfig(async () => (await readConfig()).anchorGrepEnabled === true && getActive().includes("anchor_grep"));
+        expect(getActive()).toContain("anchor_grep");
+        expect(getActive()).not.toContain("grep");
+      } finally {
+        vi.unstubAllEnvs();
+        const { shutdownHashStore } = await import("../../src/hash-store");
+        shutdownHashStore();
+      }
+    });
+  });
+});
+
+describe("copy/move default", () => {
+  it("session_start keeps copy and move by default", async () => {
+    await withTempDir("startup-copy-move-on-", async dir => {
+      const home = join(dir, "home");
+      await mkdir(join(home, ".config", "pi-hashline-edit-pro"), { recursive: true });
+      vi.stubEnv("HOME", home);
+      vi.stubEnv("XDG_CONFIG_HOME", "");
+      try {
+        const { pi, handlers, getActive, getTool } = makePiStub(["read", "replace", "insert", "copy", "move", "anchor_grep", "undo_last_change", "edit"]);
+        const { default: register } = await import("../../index");
+        register(pi);
+        const sessionStart = handlers.get("session_start") as (a: unknown, b: unknown) => Promise<void>;
+        await sessionStart({}, { cwd: dir, ui: { notify: vi.fn() } });
+        expect(getActive()).toContain("copy");
+        expect(getActive()).toContain("move");
+        expect(getActive()).not.toContain("edit");
+        expect(getTool("undo_last_change").description).toContain("insert, copy, or move");
+        expect(getTool("anchor_grep").description).toContain("replace, insert, copy, or move");
+      } finally {
+        vi.unstubAllEnvs();
+        const { shutdownHashStore } = await import("../../src/hash-store");
+        shutdownHashStore();
+      }
+    });
+  });
+
+  it("session_start removes copy and move when copyMoveEnabled is false", async () => {
+    await withTempDir("startup-copy-move-off-", async dir => {
+      const home = join(dir, "home");
+      await mkdir(join(home, ".config", "pi-hashline-edit-pro"), { recursive: true });
+      vi.stubEnv("HOME", home);
+      vi.stubEnv("XDG_CONFIG_HOME", "");
+      try {
+        const { writeFile } = await import("fs/promises");
+        await writeFile(
+          join(home, ".config", "pi-hashline-edit-pro", "config.json"),
+          JSON.stringify({ autoRead: true, anchorGrepEnabled: true, copyMoveEnabled: false }),
+        );
+        const { pi, handlers, getActive, getTool } = makePiStub(["read", "replace", "insert", "copy", "move", "anchor_grep", "undo_last_change", "edit"]);
+        const { default: register } = await import("../../index");
+        register(pi);
+        const sessionStart = handlers.get("session_start") as (a: unknown, b: unknown) => Promise<void>;
+        await sessionStart({}, { cwd: dir, ui: { notify: vi.fn() } });
+        expect(getActive()).not.toContain("copy");
+        expect(getActive()).not.toContain("move");
+        expect(getActive()).toContain("read");
+        expect(getTool("undo_last_change").description).not.toContain("or move");
+        expect(getTool("undo_last_change").description).not.toContain("copy");
+        expect(getTool("anchor_grep").description).not.toContain("copy");
+      } finally {
+        vi.unstubAllEnvs();
+        const { shutdownHashStore } = await import("../../src/hash-store");
+        shutdownHashStore();
+      }
+    });
+  });
+
+  it("hashline-config toggles copy and move", async () => {
+    await withTempDir("toggle-copy-move-", async dir => {
+      const home = join(dir, "home");
+      await mkdir(join(home, ".config", "pi-hashline-edit-pro"), { recursive: true });
+      vi.stubEnv("HOME", home);
+      vi.stubEnv("XDG_CONFIG_HOME", "");
+      try {
+        const { pi, commands, handlers, getActive } = makePiStub(["read", "replace", "insert", "copy", "move", "anchor_grep", "undo_last_change"]);
+        const { default: register } = await import("../../index");
+        register(pi);
+        const sessionStart = handlers.get("session_start") as (a: unknown, b: unknown) => Promise<void>;
+        await sessionStart({}, { cwd: dir, ui: { notify: vi.fn() } });
+        expect(getActive()).toContain("copy");
+        const overlay = await openConfigOverlay(commands, dir);
+        for (let step = 0; step < 5; step++) overlay.handleInput("j");
+        overlay.handleInput(" ");
+        await waitForConfig(async () => (await readConfig()).copyMoveEnabled === false && !getActive().includes("copy") && !getActive().includes("move"));
+        expect(getActive()).not.toContain("copy");
+        expect(getActive()).not.toContain("move");
+        overlay.handleInput(" ");
+        await waitForConfig(async () => (await readConfig()).copyMoveEnabled === true && getActive().includes("copy") && getActive().includes("move"));
+        expect(getActive()).toContain("copy");
+        expect(getActive()).toContain("move");
+      } finally {
+        vi.unstubAllEnvs();
+        const { shutdownHashStore } = await import("../../src/hash-store");
+        shutdownHashStore();
+      }
+    });
+  });
+});
+
+describe("replace_within default", () => {
+  it("session_start keeps replace_within by default", async () => {
+    await withTempDir("startup-replace-within-on-", async dir => {
+      const home = join(dir, "home");
+      await mkdir(join(home, ".config", "pi-hashline-edit-pro"), { recursive: true });
+      vi.stubEnv("HOME", home);
+      vi.stubEnv("XDG_CONFIG_HOME", "");
+      try {
+        const { pi, handlers, getActive, getTool } = makePiStub(["read", "replace", "replace_within", "insert", "edit"]);
+        const { default: register } = await import("../../index");
+        register(pi);
+        const sessionStart = handlers.get("session_start") as (a: unknown, b: unknown) => Promise<void>;
+        await sessionStart({}, { cwd: dir, ui: { notify: vi.fn() } });
+        expect(getActive()).toContain("replace_within");
+        expect(getActive()).not.toContain("edit");
+        expect(getTool("replace").description).toContain("use `replace_within` instead");
+      } finally {
+        vi.unstubAllEnvs();
+        const { shutdownHashStore } = await import("../../src/hash-store");
+        shutdownHashStore();
+      }
+    });
+  });
+
+  it("session_start removes replace_within when replaceWithinEnabled is false", async () => {
+    await withTempDir("startup-replace-within-off-", async dir => {
+      const home = join(dir, "home");
+      await mkdir(join(home, ".config", "pi-hashline-edit-pro"), { recursive: true });
+      vi.stubEnv("HOME", home);
+      vi.stubEnv("XDG_CONFIG_HOME", "");
+      try {
+        const { writeFile } = await import("fs/promises");
+        await writeFile(
+          join(home, ".config", "pi-hashline-edit-pro", "config.json"),
+          JSON.stringify({ autoRead: true, anchorGrepEnabled: true, replaceWithinEnabled: false }),
+        );
+        const { pi, handlers, getActive, getTool } = makePiStub(["read", "replace", "replace_within", "insert", "edit"]);
+        const { default: register } = await import("../../index");
+        register(pi);
+        const sessionStart = handlers.get("session_start") as (a: unknown, b: unknown) => Promise<void>;
+        await sessionStart({}, { cwd: dir, ui: { notify: vi.fn() } });
+        expect(getActive()).not.toContain("replace_within");
+        expect(getActive()).toContain("read");
+        expect(getTool("replace").description).not.toContain("replace_within");
+      } finally {
+        vi.unstubAllEnvs();
+        const { shutdownHashStore } = await import("../../src/hash-store");
+        shutdownHashStore();
+      }
+    });
+  });
+
+  it("hashline-config toggles replace_within", async () => {
+    await withTempDir("toggle-replace-within-", async dir => {
+      const home = join(dir, "home");
+      await mkdir(join(home, ".config", "pi-hashline-edit-pro"), { recursive: true });
+      vi.stubEnv("HOME", home);
+      vi.stubEnv("XDG_CONFIG_HOME", "");
+      try {
+        const { pi, commands, handlers, getActive } = makePiStub(["read", "replace", "replace_within", "insert", "anchor_grep", "undo_last_change"]);
+        const { default: register } = await import("../../index");
+        register(pi);
+        const sessionStart = handlers.get("session_start") as (a: unknown, b: unknown) => Promise<void>;
+        await sessionStart({}, { cwd: dir, ui: { notify: vi.fn() } });
+        expect(getActive()).toContain("replace_within");
+        const overlay = await openConfigOverlay(commands, dir);
+        for (let step = 0; step < 8; step++) overlay.handleInput("j");
+        overlay.handleInput(" ");
+        await waitForConfig(async () => (await readConfig()).replaceWithinEnabled === false && !getActive().includes("replace_within"));
+        expect(getActive()).not.toContain("replace_within");
+        overlay.handleInput(" ");
+        await waitForConfig(async () => (await readConfig()).replaceWithinEnabled === true && getActive().includes("replace_within"));
+        expect(getActive()).toContain("replace_within");
+      } finally {
+        vi.unstubAllEnvs();
+        const { shutdownHashStore } = await import("../../src/hash-store");
+        shutdownHashStore();
+      }
+    });
+  });
+});
+
+describe("hashline-config overlay rendering", () => {
+  it("renders the settings rows and closes on q", async () => {
+    await withTempDir("config-render-", async dir => {
+      const home = join(dir, "home");
+      await mkdir(join(home, ".config", "pi-hashline-edit-pro"), { recursive: true });
+      vi.stubEnv("HOME", home);
+      vi.stubEnv("XDG_CONFIG_HOME", "");
+      vi.stubEnv("PI_HASHLINE_DEBUG", "1");
+      try {
+        const { pi, commands, handlers } = makePiStub(["read", "replace", "insert", "grep", "anchor_grep", "undo_last_change", "edit"]);
+        const { default: register } = await import("../../index");
+        register(pi);
+        const notify = vi.fn();
+        const sessionStart = handlers.get("session_start") as (a: unknown, b: unknown) => Promise<void>;
+        await sessionStart({}, { cwd: dir, ui: { notify } });
+        expect(notify).toHaveBeenCalledWith("Hashline Edit mode active", "info");
+        let closed = false;
+        const overlay = await openConfigOverlay(commands, dir, () => { closed = true; });
+        const lines = overlay.render(60);
+        expect(lines[0]).toBe(`╭${"─".repeat(58)}╮`);
+        expect(lines[lines.length - 1]).toBe(`╰${"─".repeat(58)}╯`);
+        expect(lines.some((line) => line.includes("Hashline Config"))).toBe(true);
+        expect(lines.some((line) => line.includes("↑↓ navigate"))).toBe(true);
+        expect(lines.filter((line) => line.includes("[x]")).length).toBe(4);
+        expect(lines.filter((line) => line.includes("[ ]")).length).toBe(2);
+        expect(lines.filter((line) => line.includes("[on]")).length).toBe(0);
+        expect(lines.filter((line) => line.includes("[off]")).length).toBe(1);
+        overlay.handleInput("k");
+        expect(overlay.render(60).find((line) => line.includes("Replace within"))!).toContain("> ");
+        overlay.handleInput("j");
+        expect(overlay.render(60).find((line) => line.includes("Auto-read"))!).toContain("> ");
+        overlay.invalidate();
+        overlay.handleInput("q");
+        expect(closed).toBe(true);
+      } finally {
+        vi.unstubAllEnvs();
+        const { shutdownHashStore } = await import("../../src/hash-store");
+        shutdownHashStore();
+      }
+    });
+  });
+
+  it("toggles every setting from the overlay", async () => {
+    await withTempDir("toggle-all-settings-", async dir => {
+      const home = join(dir, "home");
+      await mkdir(join(home, ".config", "pi-hashline-edit-pro"), { recursive: true });
+      vi.stubEnv("HOME", home);
+      vi.stubEnv("XDG_CONFIG_HOME", "");
+      try {
+        const { pi, commands, handlers, getActive } = makePiStub(["read", "replace", "insert", "grep", "anchor_grep", "undo_last_change"]);
+        const { default: register } = await import("../../index");
+        register(pi);
+        const sessionStart = handlers.get("session_start") as (a: unknown, b: unknown) => Promise<void>;
+        await sessionStart({}, { cwd: dir, ui: { notify: vi.fn() } });
+        const overlay = await openConfigOverlay(commands, dir);
+
+        overlay.handleInput(" ");
+        await waitForConfig(async () => (await readConfig()).autoRead === false);
+
+        overlay.handleInput("j");
+        overlay.handleInput(" ");
+        await waitForConfig(async () => (await readConfig()).autoReadAll === "on");
+
+        overlay.handleInput("j");
+        overlay.handleInput("j");
+        overlay.handleInput("j");
+        overlay.handleInput(" ");
+        await waitForConfig(async () => (await readConfig()).anchorGrepEnabled === false);
+
+        overlay.handleInput("j");
+        overlay.handleInput(" ");
+        await waitForConfig(async () => (await readConfig()).copyMoveEnabled === false);
+
+        overlay.handleInput("j");
+        overlay.handleInput(" ");
+        await waitForConfig(async () => (await readConfig()).requirePath === true);
+
+        overlay.handleInput("j");
+        overlay.handleInput(" ");
+        await waitForConfig(async () => (await readConfig()).strictInput === true);
+
+        const config = await readConfig();
+        expect(config.autoRead).toBe(false);
+        expect(config.anchorGrepEnabled).toBe(false);
+        expect(config.copyMoveEnabled).toBe(false);
+        expect(config.autoReadAll).toBe("on");
+        expect(config.requirePath).toBe(true);
+        expect(config.strictInput).toBe(true);
+        expect(config.diffContextLines).toBe(1);
+        expect(getActive()).toContain("grep");
+        expect(getActive()).not.toContain("anchor_grep");
+      } finally {
+        vi.unstubAllEnvs();
+        const { shutdownHashStore } = await import("../../src/hash-store");
+        shutdownHashStore();
+      }
+    });
+  });
+
+  it("adjusts diff context from the overlay only while auto-read is on", async () => {
+    await withTempDir("diff-context-", async dir => {
+      const home = join(dir, "home");
+      await mkdir(join(home, ".config", "pi-hashline-edit-pro"), { recursive: true });
+      vi.stubEnv("HOME", home);
+      vi.stubEnv("XDG_CONFIG_HOME", "");
+      try {
+        const { pi, commands, handlers } = makePiStub(["read", "replace", "insert", "grep", "anchor_grep", "undo_last_change"]);
+        const { default: register } = await import("../../index");
+        register(pi);
+        const sessionStart = handlers.get("session_start") as (a: unknown, b: unknown) => Promise<void>;
+        await sessionStart({}, { cwd: dir, ui: { notify: vi.fn() } });
+        const overlay = await openConfigOverlay(commands, dir);
+
+        overlay.handleInput("j");
+        overlay.handleInput("j");
+        overlay.handleInput("j");
+        overlay.handleInput("+");
+        await waitForConfig(async () => (await readConfig()).diffContextLines === 2);
+        overlay.handleInput("-");
+        await waitForConfig(async () => (await readConfig()).diffContextLines === 1);
+
+        overlay.handleInput("k");
+        overlay.handleInput("k");
+        overlay.handleInput("k");
+        overlay.handleInput(" ");
+        await waitForConfig(async () => (await readConfig()).autoRead === false);
+        await new Promise((resolve) => setTimeout(resolve, 250));
+        overlay.handleInput("j");
+        overlay.handleInput("j");
+        overlay.handleInput("j");
+        overlay.handleInput("+");
+        overlay.handleInput("-");
+        overlay.handleInput(" ");
+        await new Promise((resolve) => setTimeout(resolve, 100));
+        expect((await readConfig()).diffContextLines).toBe(1);
+      } finally {
+        vi.unstubAllEnvs();
+        const { shutdownHashStore } = await import("../../src/hash-store");
+        shutdownHashStore();
+      }
+    });
+  });
+});

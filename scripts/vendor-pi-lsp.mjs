@@ -20,13 +20,16 @@
  * This script never reaches the network: npm integrity/shasum/commit are
  * recorded metadata, verified once at vendoring time.
  */
-import { createHash } from "node:crypto";
 import { execFileSync } from "node:child_process";
-import { copyFileSync, mkdirSync, mkdtempSync, lstatSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { dirname, join, relative, resolve, sep } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { createRequire } from "node:module";
+import {
+  applyDivergences, bundleDigest, bundleRecordProblems, bundleRecords, canonical,
+  divergenceMetadata, divergenceProblems, emittedRuntimeProblems, filesUnder, writeRuntimeTree,
+} from "./vendor-bundle-lib.mjs";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const BUNDLE_DIR = join(root, "src/extension/vendor/pi-lsp");
@@ -513,42 +516,6 @@ export function positionAt(text, offset) {`,
   },
 });
 
-const slash = value => value.split(sep).join("/");
-const sha256 = bytes => createHash("sha256").update(bytes).digest("hex");
-
-/** Every bundle file except the manifest itself, sorted; the manifest is
- * the index over this set, never a member of it. */
-function bundleFiles() {
-  const out = [];
-  const walk = dir => {
-    for (const entry of readdirSync(dir, { withFileTypes: true }).sort((a, b) => a.name.localeCompare(b.name))) {
-      const absolute = join(dir, entry.name);
-      if (entry.isDirectory()) walk(absolute);
-      else if (entry.isFile()) {
-        const rel = slash(relative(BUNDLE_DIR, absolute));
-        if (rel !== "manifest.json") out.push(rel);
-      }
-    }
-  };
-  walk(BUNDLE_DIR);
-  return out.sort();
-}
-
-function bundleRecords() {
-  return bundleFiles().map(path => {
-    const bytes = readFileSync(join(BUNDLE_DIR, path));
-    return { path, bytes: bytes.length, sha256: sha256(bytes) };
-  });
-}
-
-/** The multi-file digest is over the sorted (path, sha256) pairs so the
- * set is bound as a whole, not per file. */
-function bundleDigest(records) {
-  const hash = createHash("sha256");
-  for (const { path, sha256: digest } of records) hash.update(`${path}\0${digest}\n`);
-  return hash.digest("hex");
-}
-
 /** Compile the vendored library modules with the repository's own tsc.
  * Upstream's own compiler options (strict, ES2022, NodeNext) plus
  * declaration emit; OMA's extra strictness flags do not apply to vendored
@@ -564,44 +531,12 @@ function emitRuntime(outDir) {
     "--types", "node", "--noEmitOnError",
   ];
   execFileSync(process.execPath, [tsc, ...args], { cwd: root, stdio: "pipe", timeout: 120000, killSignal: "SIGKILL" });
-  const emitted = bundleFilesUnder(outDir);
+  const emitted = filesUnder(outDir);
   const expected = RUNTIME_MODULES.flatMap(name => [`${name}.js`, `${name}.d.ts`]).sort();
   if (JSON.stringify(emitted) !== JSON.stringify(expected))
     throw new Error(`tsc emit mismatch: got [${emitted.join(", ")}]`);
-  applyDivergences(outDir);
+  applyDivergences(outDir, OMA_DIVERGENCES);
   return emitted;
-}
-
-/** Apply OMA's declared splices to an emitted runtime tree in place. Every
- * `find` anchor must occur exactly once in the emitted file: zero means the
- * upstream emit drifted and the splice lost its anchor; more than one means
- * the anchor was ambiguous. Both are regeneration failures, not silently
- * skipped edits. */
-function applyDivergences(dir) {
-  for (const [name, divergence] of Object.entries(OMA_DIVERGENCES)) {
-    const target = join(dir, name);
-    let text = readFileSync(target, "utf8");
-    divergence.edits.forEach((edit, index) => {
-      const occurrences = text.split(edit.find).length - 1;
-      if (occurrences !== 1)
-        throw new Error(`divergence ${name}#${index + 1}: anchor occurs ${occurrences} times in tsc emit; expected exactly 1`);
-      text = text.replace(edit.find, edit.replace);
-    });
-    writeFileSync(target, text);
-  }
-}
-
-function bundleFilesUnder(base) {
-  const out = [];
-  const walk = dir => {
-    for (const entry of readdirSync(dir, { withFileTypes: true })) {
-      const absolute = join(dir, entry.name);
-      if (entry.isDirectory()) walk(absolute);
-      else if (entry.isFile()) out.push(slash(relative(base, absolute)));
-    }
-  };
-  walk(base);
-  return out.sort();
 }
 
 function packageMetadata() {
@@ -632,25 +567,7 @@ function packageMetadata() {
  * every file record and the bundle digest still match. Exported so the
  * regression test can drive the same function the check runs. */
 export function manifestMetadataProblems(manifest) {
-  const problems = [];
-  // Canonical JSON: key order is not a difference, content is.
-  const canonical = value => JSON.stringify(value, (_key, v) =>
-    v !== null && typeof v === "object" && !Array.isArray(v)
-      ? Object.fromEntries(Object.keys(v).sort().map(k => [k, v[k]]))
-      : v);
-  const expectedDivergences = Object.fromEntries(
-    Object.entries(OMA_DIVERGENCES).map(([file, { reason, edits }]) => [file, { reason, edits: edits.length }]));
-  const declaredDivergences = manifest?.generated?.divergences;
-  const shape = value => Object.keys(value ?? {}).sort();
-  if (JSON.stringify(shape(declaredDivergences)) !== JSON.stringify(shape(expectedDivergences)))
-    problems.push("manifest generated.divergences names a different divergent-file set than OMA_DIVERGENCES");
-  else {
-    for (const [file, expected] of Object.entries(expectedDivergences)) {
-      const declared = declaredDivergences[file];
-      if (declared?.reason !== expected.reason || declared?.edits !== expected.edits)
-        problems.push(`manifest generated.divergences["${file}"] does not match OMA_DIVERGENCES`);
-    }
-  }
+  const problems = divergenceProblems(manifest, OMA_DIVERGENCES);
   const expectedPackage = packageMetadata();
   if (canonical(manifest?.package) !== canonical(expectedPackage))
     problems.push("manifest package does not match the pinned upstream identity");
@@ -658,29 +575,18 @@ export function manifestMetadataProblems(manifest) {
 }
 
 function writeRuntime() {
-  const scratch = mkdtempSync(join(tmpdir(), "oma-pi-lsp-emit-"));
-  try {
-    emitRuntime(scratch);
-    // Deterministic write: delete the old tree only after the new emit is
-    // complete, then move the files in sorted order.
-    rmSync(RUNTIME_DIR, { recursive: true, force: true });
-    mkdirSync(RUNTIME_DIR, { recursive: true });
-    for (const name of bundleFilesUnder(scratch))
-      copyFileSync(join(scratch, name), join(RUNTIME_DIR, name));
-  } finally {
-    rmSync(scratch, { recursive: true, force: true });
-  }
+  writeRuntimeTree(RUNTIME_DIR, emitRuntime, "oma-pi-lsp-emit-");
 }
 
 function writeManifest() {
-  const records = bundleRecords();
+  const records = bundleRecords(BUNDLE_DIR);
   const manifest = {
     kind: "oma-vendored-bundle-v1",
     package: packageMetadata(),
     generated: {
       runtime: "tsc emit of upstream/src library modules with OMA divergence splices applied; entry files (index.ts, pi-lsp.ts) are vendored but never compiled or loaded",
       tool: "scripts/vendor-pi-lsp.mjs",
-      divergences: Object.fromEntries(Object.entries(OMA_DIVERGENCES).map(([file, { reason, edits }]) => [file, { reason, edits: edits.length }])),
+      divergences: divergenceMetadata(OMA_DIVERGENCES),
     },
     files: records,
     bundleSha256: bundleDigest(records),
@@ -691,16 +597,7 @@ function writeManifest() {
 
 function check() {
   const manifest = JSON.parse(readFileSync(MANIFEST_PATH, "utf8"));
-  const records = bundleRecords();
-  const problems = [];
-  const listed = new Map((manifest.files ?? []).map(entry => [entry.path, entry]));
-  for (const { path, bytes, sha256: digest } of records) {
-    const entry = listed.get(path);
-    if (!entry) problems.push(`unlisted bundle file: ${path}`);
-    else if (entry.bytes !== bytes || entry.sha256 !== digest) problems.push(`bundle file changed: ${path}`);
-  }
-  for (const path of listed.keys()) if (!records.some(record => record.path === path)) problems.push(`manifest names missing file: ${path}`);
-  if (manifest.bundleSha256 !== bundleDigest(records)) problems.push("bundle digest does not cover current files");
+  const problems = bundleRecordProblems(manifest, BUNDLE_DIR);
   const pkg = JSON.parse(readFileSync(join(UPSTREAM_DIR, "package.json"), "utf8"));
   if (manifest.package?.name !== pkg.name || manifest.package?.version !== pkg.version)
     problems.push("manifest package identity does not match upstream/package.json");
@@ -714,12 +611,7 @@ function check() {
   // match it, and so does a runtime missing a declared splice.
   const scratch = mkdtempSync(join(tmpdir(), "oma-pi-lsp-check-"));
   try {
-    for (const name of emitRuntime(scratch)) {
-      const emitted = readFileSync(join(scratch, name));
-      const vendoredPath = join(RUNTIME_DIR, name);
-      const vendored = lstatSync(vendoredPath, { throwIfNoEntry: false })?.isFile() ? readFileSync(vendoredPath) : null;
-      if (vendored === null || sha256(vendored) !== sha256(emitted)) problems.push(`runtime/${name} differs from tsc emit of vendored upstream`);
-    }
+    problems.push(...emittedRuntimeProblems(scratch, emitRuntime(scratch), RUNTIME_DIR));
   } finally {
     rmSync(scratch, { recursive: true, force: true });
   }
@@ -730,7 +622,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1]
   try {
     const write = process.argv.slice(2).includes("--write");
     if (write) { writeRuntime(); const manifest = writeManifest(); console.log(JSON.stringify({ status: "BUNDLE_WRITTEN", files: manifest.files.length, bundleSha256: manifest.bundleSha256 })); }
-    else { check(); console.log(JSON.stringify({ status: "BUNDLE_CURRENT", files: bundleRecords().length })); }
+    else { check(); console.log(JSON.stringify({ status: "BUNDLE_CURRENT", files: bundleRecords(BUNDLE_DIR).length })); }
   } catch (error) {
     console.error(error instanceof Error ? error.message : String(error));
     process.exitCode = 1;

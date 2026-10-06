@@ -80,17 +80,38 @@ export async function checkPackage(rootInput) {
     return path.endsWith(".js") ? [path] : [];
   }
   const files = [...compiledFiles(join(root, layout.compiledRoot)), join(root, layout.contract)];
+  // Vendored bundled-extension payloads live under
+  // dist/src/extension/vendor/<bundle>/ and carry their own pinned
+  // dependency closure in <bundle>/node_modules/ plus the bundle manifest's
+  // generated.dependencies table -- integrity-bound bytes, verified
+  // fail-closed by verifyVendorBundle at load. For a file inside a vendored
+  // bundle a bare specifier is therefore declared when it is a node:
+  // builtin, a root package dependency (the host Pi API), or a name in that
+  // bundle's vendored dependency closure.
+  const vendoredDependencies = file => {
+    const rel = relative(root, file).split(sep).join("/");
+    const match = /^dist\/src\/extension\/vendor\/([^/]+)\//.exec(rel);
+    if (match === null) return null;
+    const manifestPath = join(root, "dist/src/extension/vendor", match[1], "manifest.json");
+    try {
+      const manifest = JSON.parse(readFileSync(manifestPath, "utf8"));
+      return manifest?.generated?.dependencies ?? {};
+    } catch { return {}; }
+  };
   for (const file of files) {
     requiredFile(file);
+    const vendoredDeps = vendoredDependencies(file);
     const source = ts.createSourceFile(file, readFileSync(file, "utf8"), ts.ScriptTarget.Latest, true, ts.ScriptKind.JS);
     const verifyImport = specifier => {
       if (specifier.startsWith(".")) {
         const target = resolve(dirname(file), specifier); requiredFile(target);
         const rel = relative(root, target).split(sep).join("/");
         if (!rel.startsWith("dist/src/") && rel !== layout.contract) throw new Error(`runtime import reaches non-runtime tree: ${rel}`);
-      } else if (!specifier.startsWith("node:") && !Object.hasOwn(packageJson.dependencies ?? {}, specifier.split("/")[0])) {
+      } else if (!specifier.startsWith("node:")) {
         const packageName = specifier.startsWith("@") ? specifier.split("/").slice(0, 2).join("/") : specifier.split("/")[0];
-        if (!Object.hasOwn(packageJson.dependencies ?? {}, packageName)) throw new Error(`runtime imports undeclared or dev dependency: ${specifier}`);
+        if (!Object.hasOwn(packageJson.dependencies ?? {}, packageName) &&
+            !(vendoredDeps !== null && Object.hasOwn(vendoredDeps, packageName)))
+          throw new Error(`runtime imports undeclared or dev dependency: ${specifier}`);
       }
     };
     const visit = node => {

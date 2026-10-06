@@ -40,7 +40,10 @@ for (const ack of [false, true]) test(`DR27: wait persists tools, not delivery; 
     assert.equal(s.store.getAgent("worker-a")!.desired, "enabled");
     assert.deepEqual(s.operations("worker-a").map(row => row.kind), ack ? ["mail.ack"] : []);
     const sessions = runnerSessionDirPathAt(s.root, "worker-a");
-    const files = readdirSync(sessions, { recursive: true }).map(String).filter(name => name.endsWith(".jsonl"));
+    // <sessions>/hashline/ holds the bundled extension's anchor sidecars,
+    // not the engine's session journal.
+    const files = readdirSync(sessions, { recursive: true }).map(String)
+      .filter(name => name.endsWith(".jsonl") && !name.startsWith("hashline/"));
     assert.equal(files.length, 1);
     const history = readFileSync(join(sessions, files[0]!), "utf8");
     const entries = history.trim().split("\n").map(line => JSON.parse(line));
@@ -102,7 +105,8 @@ for (const outcome of ["continue", "wait", "unobserved"] as const)
       assert.equal(batches.length, successful ? 0 : 1);
       if (!successful) assert.equal(existsSync(runnerReceiptPathAt(s.root, "worker-a", batches[0]!.id)), false);
       const sessions = runnerSessionDirPathAt(s.root, "worker-a");
-      const file = readdirSync(sessions, { recursive: true }).map(String).find(name => name.endsWith(".jsonl"))!;
+      const file = readdirSync(sessions, { recursive: true }).map(String)
+        .find(name => name.endsWith(".jsonl") && !name.startsWith("hashline/"))!;
       const entries = readFileSync(join(sessions, file), "utf8").trim().split("\n").map(line => JSON.parse(line));
       assert.ok(entries.some(entry => entry.message?.role === "toolResult" && JSON.stringify(entry).includes("durable-tool-result")));
       assert.equal(entries.some(entry => entry.customType === "oma-delivery-boundary"), successful);

@@ -209,6 +209,14 @@ export function planToolSurface(config: ToolSurfaceConfig): ToolSurfacePlan {
  * extension from importing this module, so a test binds the two lists. */
 const CODE_INTEL_GROUP_NAME = "code_intel";
 const CODE_INTEL_TOOLS: readonly string[] = ["lsp_diagnostics", "lsp_fix", "lsp_status"];
+/** BL3: the bundled hashline editor's mutation surface — anchored replace
+ * and insert, grouped until the model opens it. Mirrors
+ * `HASHLINE_EDIT_TOOL_NAMES` in src/extension/hashline-tools.ts; PI-001
+ * keeps the extension from importing this module, so a test binds the two
+ * lists. The anchored `read` the bundle also registers stays DIRECT under
+ * the same name as the contained read it replaces. */
+const FILE_EDIT_GROUP_NAME = "file_edit";
+const FILE_EDIT_TOOLS: readonly string[] = ["replace", "replace_within", "insert"];
 // BL2: the bundled human-input tool — mirrors ASK_USER_QUESTION_TOOL_NAME
 // in src/client/ask-user-question/protocol.ts. PI-001 keeps the extension
 // from importing this module, so a test binds the two spellings, the same
@@ -220,6 +228,14 @@ function codeIntelGroup(): GroupSpec {
     name: CODE_INTEL_GROUP_NAME,
     description: "Language-server intelligence: workspace diagnostics, code-action fixes (preview by default) and server status.",
     members: CODE_INTEL_TOOLS.map(tool => ({ tool })),
+  };
+}
+
+function fileEditGroup(): GroupSpec {
+  return {
+    name: FILE_EDIT_GROUP_NAME,
+    description: "Hashline-anchored file edits: anchor-stable replace, range-scoped replace_within and anchored insert. Stale anchors refuse before writing.",
+    members: FILE_EDIT_TOOLS.map(tool => ({ tool })),
   };
 }
 
@@ -260,8 +276,8 @@ export function residentToolSurfaceConfig(): ToolSurfaceConfig {
     defaultMode: "DIRECT",
     direct: RESIDENT_DIRECT_TOOLS,
     disabled: [],
-    groups: [codeIntelGroup()],
-    roots: [CODE_INTEL_GROUP_NAME],
+    groups: [codeIntelGroup(), fileEditGroup()],
+    roots: [CODE_INTEL_GROUP_NAME, FILE_EDIT_GROUP_NAME],
   };
 }
 

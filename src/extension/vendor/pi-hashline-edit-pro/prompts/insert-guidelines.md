@@ -1,0 +1,1 @@
+- `insert`: compare both edges of the inserted block in the post-edit diff against the request; a missing or extra `+anchor│` blank row at either boundary is the classic insert slip.

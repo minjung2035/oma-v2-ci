@@ -9,3 +9,8 @@ staging/
 production-loc.json
 production-measurement-hashes.json
 .scratch/
+# A vendored bundle's pinned dependency closure is integrity-listed input —
+# every byte must be committed, so node_modules (and any dist/ inside it)
+# under a vendored bundle re-includes itself after the general rules above.
+!src/extension/vendor/*/node_modules/
+!src/extension/vendor/*/node_modules/**

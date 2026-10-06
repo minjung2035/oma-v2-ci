@@ -54,9 +54,18 @@ function ownerOf(node, source) {
   }
   return "(module)";
 }
+/** Vendored bundled-extension payloads are upstream source kept byte-exact
+ * under their own integrity regime: their internal calls name upstream's
+ * own primitives (an upstream `writeAtomic` is not OMA's storage
+ * `writeAtomic`), and under OMA the durable effects route through the
+ * adapter's contained seams — the boundary owner is the adapter plus the
+ * shared contained writer, which the registry and its tests cover. */
+const VENDORED_PREFIX = "src/extension/vendor/";
+
 /** Every production call of a durable primitive, grouped by the function around it. */
 export function durableBoundaries(root = process.cwd()) {
-  const files = readFileSync(join(root, "production-files.txt"), "utf8").split("\n").filter(file => file.startsWith("src/") && file.endsWith(".ts"));
+  const files = readFileSync(join(root, "production-files.txt"), "utf8").split("\n")
+    .filter(file => file.startsWith("src/") && file.endsWith(".ts") && !file.startsWith(VENDORED_PREFIX));
   const owners = new Map();
   for (const file of files) {
     if (PRIMITIVE_MODULES.includes(file)) continue;

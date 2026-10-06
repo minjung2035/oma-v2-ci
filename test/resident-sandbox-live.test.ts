@@ -231,7 +231,10 @@ test("V27A: the bundled engine, on the production plan, delivers a batch to a se
     assert.match(boundary.entryId, /^[0-9a-f]{8}$/);
     // The notification is one fact; the entry in the engine's own session file
     // is another. Both must name the same thing.
-    const sessions = readdirSync(directories.sessions, { recursive: true }).map(String).filter(name => name.endsWith(".jsonl"));
+    // The hashline sidecar lives under <sessions>/hashline/sessions/ — it is
+    // the bundled extension's claim state, not the engine's session journal.
+    const sessions = readdirSync(directories.sessions, { recursive: true }).map(String)
+      .filter(name => name.endsWith(".jsonl") && !name.startsWith("hashline/"));
     assert.equal(sessions.length, 1, `expected one session file, saw ${JSON.stringify(sessions)}`);
     assert.equal(basename(sessions[0]!), basename(boundary.sessionPath));
     const entries = readFileSync(join(directories.sessions, sessions[0]!), "utf8").split("\n").filter(Boolean)

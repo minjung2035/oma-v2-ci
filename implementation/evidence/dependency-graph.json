@@ -127,6 +127,7 @@
   "src/extension/contained-tools.ts",
   "src/extension/delivery.ts",
   "src/extension/egress-bridge.ts",
+  "src/extension/hashline-tools.ts",
   "src/extension/inference-bridge.ts",
   "src/extension/lsp-tools.ts",
   "src/extension/mail-tools.ts",
@@ -1901,11 +1902,11 @@
     "src/pi-extension.ts",
     "src/extension/"
    ],
-   "files": 89
+   "files": 90
   }
  ],
- "files": 394,
- "runtimeEdges": 1680,
+ "files": 395,
+ "runtimeEdges": 1684,
  "typeOnlyEdges": 426,
  "runtimeEdgeMatrix": {
   "L1-kernel -> L1-kernel": 320,
@@ -1922,7 +1923,7 @@
   "L5-entry -> L2-facts": 2,
   "L5-entry -> L3-workflow": 7,
   "L5-entry -> L4-orchestration": 137,
-  "L5-entry -> L5-entry": 174
+  "L5-entry -> L5-entry": 178
  },
  "upwardTypeOnlyEdges": [
   {
@@ -1962,8 +1963,8 @@
   "src/broker.ts": 31,
   "src/mail.ts": 29,
   "src/entry/broker.ts": 28,
+  "src/pi-extension.ts": 22,
   "src/entry/oma-mac.ts": 21,
-  "src/pi-extension.ts": 21,
   "src/review.ts": 21,
   "src/runtime/client-runtime.ts": 19,
   "src/entry/pi-interactive-host.ts": 18,
@@ -1975,21 +1976,21 @@
   "src/git/context.ts": 15
  },
  "external": {
-  "@earendil-works/pi-coding-agent": 32,
+  "@earendil-works/pi-coding-agent": 33,
   "@earendil-works/pi-tui": 7,
   "koffi": 6,
   "node:async_hooks": 4,
   "node:child_process": 8,
   "node:crypto": 48,
   "node:dns": 1,
-  "node:fs": 116,
-  "node:fs/promises": 1,
+  "node:fs": 117,
+  "node:fs/promises": 3,
   "node:http": 2,
   "node:https": 1,
   "node:module": 3,
   "node:net": 34,
-  "node:os": 10,
-  "node:path": 129,
+  "node:os": 11,
+  "node:path": 130,
   "node:perf_hooks": 4,
   "node:sqlite": 4,
   "node:stream": 3,

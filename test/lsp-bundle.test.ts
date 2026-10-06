@@ -179,12 +179,15 @@ test("BL1: the declared role surfaces name only tools that exist, and code_intel
   const residentRegistered = new Set([
     "read", "bash", "powershell", "edit", "write", "grep", "find", "ls",
     ...omaToolNames(false), ...LSP_TOOL_NAMES,
+    // BL3: the bundled hashline editor's file_edit members.
+    "replace", "replace_within", "insert",
   ]);
   const resident = planToolSurface(residentToolSurfaceConfig());
   const residentNamed = [...resident.direct, ...resident.disabled, ...resident.grouped];
   for (const name of residentNamed) assert.ok(residentRegistered.has(name), `resident surface names unregistered ${name}`);
-  assert.deepEqual(resident.groups.map(group => group.name), ["code_intel"]);
+  assert.deepEqual(resident.groups.map(group => group.name), ["code_intel", "file_edit"]);
   assert.deepEqual([...resident.groups[0]!.children].sort(), [...LSP_TOOL_NAMES].sort());
+  assert.deepEqual([...resident.groups[1]!.children].sort(), ["insert", "replace", "replace_within"]);
   const principalRegistered = new Set([
     "read", "grep", "find", "ls", // host argv excludes bash/powershell/write/edit
     ...omaToolNames(true), ...LSP_TOOL_NAMES,

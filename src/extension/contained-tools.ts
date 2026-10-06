@@ -20,26 +20,37 @@ import {
   detectSupportedImageMimeTypeFromFile, type ExtensionAPI,
 } from "@earendil-works/pi-coding-agent";
 import {
-  WorkspaceRefusal, accessWithin, existsWithin, isDirectoryWithin, mkdirWithin, readWithin, readdirWithin, writeGrowthWithin, withFileWithin, writeWithin,
+  WorkspaceRefusal, accessWithin, existsWithin, isDirectoryWithin, mkdirWithin, readWithin, readdirWithin, writeGrowthWithin, withFileWithin, writeWithin, writeWithinUnchanged,
 } from "./contained-files.js";
 import { searchWorkspace } from "./contained-search.js";
 import { admittedRoot, workspaceUsage } from "./workspace-guard.js";
 
 /** The serialized, quota-decided workspace writer the contained `write`
  * and `edit` tools share -- exposed so a registered tool whose mutation
- * is computed elsewhere (lsp_fix applies language-server edits) reaches
- * the filesystem through the same serialization, quota decision, and
- * containment, never through a writer of its own. */
-export function createContainedWriter(workspace: string, workspaceBytes: number | null): (path: string, content: string) => Promise<void> {
+ * is computed elsewhere (lsp_fix applies language-server edits; the
+ * bundled hashline tools commit anchored edits) reaches the filesystem
+ * through the same serialization, quota decision, and containment, never
+ * through a writer of its own.
+ *
+ * `expectedIdentity` is the read-modify-write contract the bundled
+ * hashline runtime's writeAtomic carries: when the caller passes the
+ * dev+ino it observed at read time, the write opens the named file (no
+ * O_CREAT -- a name that is gone is a changed file, not a new one) and
+ * refuses before any byte is written unless the opened inode is that same
+ * one. The check is made inside the serialization, on the opened file
+ * itself. */
+export function createContainedWriter(workspace: string, workspaceBytes: number | null):
+  (path: string, content: string, expectedIdentity?: { dev: number; ino: number }) => Promise<void> {
   let writes: Promise<unknown> = Promise.resolve();
-  return (path: string, content: string): Promise<void> => {
+  return (path: string, content: string, expectedIdentity?: { dev: number; ino: number }): Promise<void> => {
     const next = writes.catch(() => undefined).then(() => {
       if (!workspaceBytes) throw new WorkspaceRefusal("agent workspace quota is not configured");
       const growth = writeGrowthWithin(workspace, path, Buffer.byteLength(content, "utf8"));
       if (growth > 0 && (growth > workspaceBytes || workspaceUsage(workspace, workspaceBytes - growth) > workspaceBytes - growth))
         throw new WorkspaceRefusal("agent workspace quota would be exceeded");
       mkdirWithin(workspace, dirname(path));
-      writeWithin(workspace, path, content);
+      if (expectedIdentity === undefined) writeWithin(workspace, path, content);
+      else writeWithinUnchanged(workspace, path, content, expectedIdentity);
     });
     writes = next;
     return next;

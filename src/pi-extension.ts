@@ -21,6 +21,7 @@ import { registerToolSurface } from "./extension/tool-surface.js";
 import { TOOL_SCOPE_ENV, TOOL_SCOPE_SANDBOX, PACKAGE_STORE_ENV, guardWorkspaceTools } from "./extension/workspace-guard.js";
 import { containWorkspaceTools, createContainedWriter } from "./extension/contained-tools.js";
 import { registerLspTools } from "./extension/lsp-tools.js";
+import { registerHashlineTools } from "./extension/hashline-tools.js";
 import { registerAskUserQuestion } from "./extension/ask-user-question.js";
 
 export { decodeBatchViewText, readBatchView } from "./extension/batch-view.js";
@@ -87,6 +88,20 @@ export default async function extension(pi: ExtensionAPI) {
   // load-bearing -- code_intel's three tools behind it, lsp_fix reaching
   // the filesystem only through the shared contained writer.
   await registerLspTools(pi, { workspace, readOnly: channel.attached, write: workspaceWriter });
+  // BL3: the bundled pi-hashline-edit-pro extension -- same fail-closed
+  // verification before any vendored module evaluates. It registers the
+  // anchored `read` (replacing the contained read under the same name) and,
+  // for a role that may write, the file_edit group (replace,
+  // replace_within, insert) whose commits reach the filesystem only
+  // through the shared contained writer. Registered after the contained
+  // tools so its `read` is the effective registration.
+  await registerHashlineTools(pi, {
+    workspace,
+    readableRoots,
+    sandboxed,
+    readOnly: channel.attached,
+    write: workspaceWriter,
+  });
   // BL2: ask_user_question exists only where a human sits at the terminal.
   // The Principal's engine (channel attached) registers it here; Personal
   // loads the same file as its own `-e` extension; Residents and Workers
