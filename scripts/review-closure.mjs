@@ -17,6 +17,15 @@ export const REVIEWED = Object.freeze(["CHANGED_WITH_ORACLE", "READ_UNCHANGED"])
 export const STATUSES = Object.freeze([...REVIEWED, "CHANGED_WITHOUT_ORACLE", "NOT_REVIEWED", "REMOVED"]);
 /** Environment lanes release needs, and what this tree has recorded for them. */
 export const RELEASE_LANES = Object.freeze(["fast", "durable", "property", "stress", "kernel", "crash", "powercut", "provider", "ci"]);
+/** The one process bound every synchronous git plumbing call in this
+ * verification tooling runs under: CANONICAL_PROCESS_LIMITS
+ * (src/git/canonical-command.ts), restated. These scripts also run copied
+ * into fixture trees where no dist/ exists, so the constant cannot be
+ * imported -- a test pins the two equal. Whole-tree plumbing (`ls-tree -r`,
+ * `diff --name-only -z`, `log`) emits output that scales with the repository;
+ * Node's 1 MiB execFileSync default was an ENOBUFS wedge, not a bound, once
+ * the vendored bundles pushed this tree's own listing past it. */
+export const GIT_PLUMBING_LIMITS = Object.freeze({ timeout: 120000, maxBuffer: 4 * 1024 * 1024 });
 
 /** Every test name declared in the tree's test sources. */
 export function testNames(root) {

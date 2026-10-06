@@ -281,6 +281,8 @@ web_research 도구만 등록한다. 구현 내용과 divergence 목록은 WORKS
 | upstream 테스트 이식 | NOT_RUN | `upstream-tests/`는 provenance/포팅용으로 vendored — upstream 자체 하네스 의존(vitest·네트워크 fixture)이라 npm test에 연결하지 않음 |
 | macOS native / systemd / kernel·powercut / provider / CI | NOT_RUN | 승인된 환경 없음 — 이전과 같은 제외. vendored egress dispatcher의 실제 CONNECT forwarder 통과는 Linux 루프백 경계 시험까지만 확인 |
 
+**정정 (후속 맹검증)**: 위 `npm test` 기록("3794 tests → 3790 PASS, 실패 4건")은 deterministic 실패 1건을 누락했다. 이 트리에서 `test/review-closure.test.mjs`의 "DR27/V32A: historical review cannot certify unbound working-tree changes"가 `git ls-tree -r --name-only -z HEAD`의 출력(1,064,186 bytes — vendored 번들이 HEAD tree listing을 Node `execFileSync` 기본 maxBuffer 1 MiB 위로 밀어 올림)이 default bound를 초과해 ENOBUFS로 실패하고, `node scripts/review-ledger.mjs`(`npm run review:ledger`)도 같은 call에서 ENOBUFS로 exit 1이었다. 기록된 4건의 열거에는 이 실패가 없으므로 당시 실행의 실제 실패 수는 최소 5건이었거나, 이 실패가 같은 실행에서 발생했다면 기록이 누락된 것이다. 수정: verification tooling의 모든 동기 git plumbing 호출(`review-ledger.mjs`의 `ls-tree`/`diff --name-only`/`log`, `review-closure.test.mjs`의 동일 두 call)에 canonical bound를 적용했다 — `scripts/review-closure.mjs`의 `GIT_PLUMBING_LIMITS`가 `CANONICAL_PROCESS_LIMITS`(src/git/canonical-command.ts)와 동일 값으로 test에서 결박되고, 회귀 test "V32A: verification git plumbing runs under the canonical process bound"가 generator의 모든 `execFileSync` call site가 bound를 통과함을 pin한다. 수정 후 `node scripts/review-ledger.mjs` exit 0, 해당 suite 파일 8/8 PASS.
+
 \* 전체 suite의 최종 종료 코드는 이 절을 쓰는 시점의 로그로 확정했다; systemd lane은 위처럼 별도 NOT_RUN이다.
 
 ## 현재 알려진 한계와 남은 검증
@@ -297,7 +299,7 @@ web_research 도구만 등록한다. 구현 내용과 divergence 목록은 WORKS
 
 아래 binding은 구조 검사의 입력 identity다. digest 생성 자체가 runtime PASS를 뜻하지 않는다.
 
-verification input digest `5b1f9534b2f29d056e035c72d2d09ea9f24c2b32418f90c771c73f7cdb9a09a2` (12605 files).
+verification input digest `a58bc46766d261ba2631b583ca2235b2f1909d947c4fce8cf4448099b745d50e` (12605 files).
 
 당시 기록한 cloc 2.08 측정치: 354 files / 35,832 code LOC. 이 역사적 기록은 현재 source의 LOC claim이 아니며, 기존 artifact와의 불일치를 여기서 수리했다고 주장하지 않는다. 크기 제한은 없으며 값은 release proof가 아니다.
 

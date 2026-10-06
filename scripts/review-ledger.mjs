@@ -5,7 +5,7 @@
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { readFileSync, writeFileSync } from "node:fs";
-import { LEDGER, PLAN, oraclePresent, testNames } from "./review-closure.mjs";
+import { GIT_PLUMBING_LIMITS, LEDGER, PLAN, oraclePresent, testNames } from "./review-closure.mjs";
 
 const root = process.cwd();
 const plan = JSON.parse(readFileSync(PLAN, "utf8"));
@@ -31,7 +31,7 @@ const reviewedChanges = new Map((notes.reviewedChanges ?? []).map(entry => {
 const base = plan.baseline_commit;
 // A commit reviewed different bytes. Neither that history nor a clause table
 // certifies edits still in the working tree; only a byte-bound review above can.
-const gitPaths = args => execFileSync("git", args, { encoding: "utf8" }).split("\0").filter(Boolean);
+const gitPaths = args => execFileSync("git", args, { encoding: "utf8", ...GIT_PLUMBING_LIMITS }).split("\0").filter(Boolean);
 const changed = new Set(gitPaths(["diff", "--name-only", "-z", "HEAD", "--"]));
 const committedPaths = new Set(gitPaths(["ls-tree", "-r", "--name-only", "-z", "HEAD"]));
 
@@ -74,7 +74,7 @@ function declaredClauses() {
 const declared = declaredClauses();
 
 function changedBy(path) {
-  const subjects = execFileSync("git", ["log", "--format=%s", `${base}..HEAD`, "--", path], { encoding: "utf8" });
+  const subjects = execFileSync("git", ["log", "--format=%s", `${base}..HEAD`, "--", path], { encoding: "utf8", ...GIT_PLUMBING_LIMITS });
   // WP cards of the plan, AV cards of the whole-codebase adversarial pass
   // (docs/implementation/consistency-decisions.md), DR design revisions
   // (docs/design-revisions.md) and Priority 0 findings

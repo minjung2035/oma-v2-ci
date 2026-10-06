@@ -8,7 +8,8 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { execFileSync } from "node:child_process";
-import { LEDGER, ORACLE_MAP, approval, oracleFindings, reviewFindings } from "../scripts/review-closure.mjs";
+import { GIT_PLUMBING_LIMITS, LEDGER, ORACLE_MAP, approval, oracleFindings, reviewFindings } from "../scripts/review-closure.mjs";
+import { CANONICAL_PROCESS_LIMITS } from "../dist/src/git/canonical-command.js";
 
 const ledger = () => JSON.parse(readFileSync(LEDGER, "utf8"));
 const problems = value => reviewFindings(".", value).map(finding => finding.problem);
@@ -32,7 +33,7 @@ test("V32A: the committed ledger accounts for every current and baseline file, w
 });
 
 test("DR27/V32A: historical review cannot certify unbound working-tree changes", () => {
-  const paths = command => execFileSync("git", command, { encoding: "utf8" }).split("\0").filter(Boolean);
+  const paths = command => execFileSync("git", command, { encoding: "utf8", ...CANONICAL_PROCESS_LIMITS }).split("\0").filter(Boolean);
   const changed = new Set(paths(["diff", "--name-only", "-z", "HEAD", "--"]));
   const committed = new Set(paths(["ls-tree", "-r", "--name-only", "-z", "HEAD"]));
   for (const entry of ledger().files) {
@@ -40,6 +41,20 @@ test("DR27/V32A: historical review cannot certify unbound working-tree changes",
     if (changed.has(entry.path) || !committed.has(entry.path))
       assert.ok(!["CHANGED_WITH_ORACLE", "READ_UNCHANGED"].includes(entry.status), entry.path);
   }
+});
+
+/** The vendored bundles pushed this tree's `ls-tree -r` listing past Node's
+ * 1 MiB execFileSync default, so both the ledger generator and this suite
+ * wedged on ENOBUFS. The scripts' restated bound is pinned equal to the
+ * canonical adapter's, and the generator must apply it at every synchronous
+ * git call -- an unbounded execFileSync is how the wedge got in. */
+test("V32A: verification git plumbing runs under the canonical process bound", () => {
+  assert.deepEqual({ ...GIT_PLUMBING_LIMITS }, { ...CANONICAL_PROCESS_LIMITS });
+  const source = readFileSync(new URL("../scripts/review-ledger.mjs", import.meta.url), "utf8");
+  const calls = source.match(/\bexecFileSync\(/g) ?? [];
+  const bounded = source.match(/\.\.\.GIT_PLUMBING_LIMITS\b/g) ?? [];
+  assert.ok(calls.length >= 2, "the generator's git call sites were not found");
+  assert.equal(bounded.length, calls.length, "a git exec in review-ledger.mjs lost the canonical bound");
 });
 
 test("V32A: a working-tree review is bound to the reviewed file bytes", () => {
