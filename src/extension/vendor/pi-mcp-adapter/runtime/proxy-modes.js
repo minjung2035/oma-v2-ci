@@ -11,7 +11,7 @@ import { reconstructPromptMetadata } from "./metadata-cache.js";
 import { resolveMcpResultContent, transformMcpResourceContents } from "./tool-registrar.js";
 import { guardMcpOutput, guardedMcpDetails, resolveMcpOutputGuardOptions, scriptPipeHint } from "./mcp-output-guard.js";
 import { maybeStartUiSession, summarizeUiSessionResult } from "./ui-session.js";
-import { formatAuthRequiredMessage, formatMcpStatus, normalizeToolArguments, resolveServerUrl, truncateAtWord, withToolCallIdMeta } from "./utils.js";
+import { formatAuthRequiredMessage, formatMcpStatus, normalizeToolArguments, omaUiSessionsRefused, resolveServerUrl, truncateAtWord, withToolCallIdMeta } from "./utils.js";
 import { authenticate, completeAuthFromInput, getAuthStatus, startAuth, supportsOAuth } from "./mcp-auth-flow.js";
 import { SessionRecoveryAuthRequiredError, withSessionRecovery } from "./session-recovery.js";
 import { callToolViaTaskSession } from "./mcp-tasks.js";
@@ -1498,6 +1498,15 @@ internalDelivery, toolCallId) {
             return {
                 content: guarded.content,
                 details: { mode: "call", ...callIdentity, ...guardedMcpDetails(guarded) },
+            };
+        }
+        // OMA divergence: an interactive-UI tool call refuses at the
+        // boundary, before the UI machinery and before the downstream call.
+        if (toolMeta.uiResourceUri && omaUiSessionsRefused()) {
+            const message = `MCP tool "${toolMeta.originalName}" on server "${serverName}" advertises an interactive UI resource (${toolMeta.uiResourceUri}); interactive UI sessions are refused at the OMA boundary.`;
+            return {
+                content: [{ type: "text", text: message }],
+                details: { mode: "call", error: "ui_session_refused", ...callIdentity, message },
             };
         }
         uiSession = toolMeta.uiResourceUri

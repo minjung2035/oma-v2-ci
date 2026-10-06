@@ -313,6 +313,29 @@ surface plan이 `mcp`를 DIRECT로 이름 붙인다. 구현 내용과 divergence
 
 \* 전체 suite의 최종 종료 코드는 이 절을 쓰는 시점의 로그로 확정했다; systemd lane은 위처럼 별도 NOT_RUN이다.
 
+## 선행 작업: bundled extension #5 — pi-mcp-adapter 맹검증 정산 검증 (2026-10-09)
+
+BL5 vendored 어댑터에 대한 맹검증 잔여 발견 F1–F6의 정산. 구현 내용은
+WORKSTREAM §9의 해당 로그가 소유한다; 이 절은 검증 범위만 기록한다.
+
+| 검사 | 판정 | 실제 실행 범위 |
+|---|---|---|
+| F1 SDK child-env union | PASS | `mcp-tools.ts`의 `childEnvFinish`가 scrub 결과 위에 vendored SDK `getDefaultEnvironment` underlay 이름의 `undefined` tombstone을 씌운다 — vendored `node_modules/.../stdio.mjs`의 실제 `StdioClientTransport`로 child를 spawn해 `process.env`를 직렬화, scrub이 거절한 `SHELL`과 win32 underlay 이름(APPDATA·HOMEDRIVE·HOMEPATH·LOCALAPPDATA·SYSTEMROOT·TEMP·USERNAME·USERPROFILE·PROGRAMFILES·LOGNAME·TERM·USER)이 child에서 부재·`HOME`/`LANG`/`PATH`는 OMA 값으로 존재를 확인; tombstone을 뺀 대조군에서는 `SHELL`이 SDK underlay에서 재유입됨을 같이 관측해 결함 재현. dependency 바이트 변경 없이 OMA 소유 코드에서 해결 |
+| F2 UI-session escape | PASS | `OmaMcpPolicy`에 deny-by-default `ui-session` permit 추가; `direct-tools.js`·`proxy-modes.js`는 UI-resource 호출을 구조화된 `ui_session_refused`로 조기 거절하고 `ui-session.js`·`glimpse-ui.js`는 방어심층 게이트로 `who`/`orca` subprocess·`npm root -g`·host-global `glimpseui` 동적 import·browser open에 도달하기 전에 거절 — fakePi로 실 vendored stdio server를 띄운 E2E 포함, 정책 미설치 시 upstream 동작 보존 |
+| F3 부재 판정 | PASS | `existsSync` 대신 `statSync` ENOENT-only catch — chmod 000 config는 `EACCES`로 propagate(빈 config로 오인 금지)·비-정규 경로는 `[E_OMA_MCP_CONFIG]` 경계 에러·malformed JSON과 구분; `oauth-file-key` 읽기 실패도 ENOENT만 "없음"이고 나머지는 재throw해 침묵 키 재발급 차단 |
+| F4 command admission | PASS | `npx`/`npm` 거절이 basename 정규화(`/`, `\`, `.cmd/.exe/.bat/.ps1` shim, 대소문자) 후 비교 — `/usr/bin/npx`·`./node_modules/.bin/npx`·`C:\Tools\npm.cmd`·`C:\Program Files\nodejs\npx.EXE`·`npm.ps1`·`npx.bat`·`NPM` 전부 거절, `npm-helper`·`npx-serve`·`srv.CMD`·`/usr/local/bin/server-bin` 허가 유지 |
+| F5 dead code | PASS | 미사용 `omaStateDir()` 헬퍼와 `{stateDir:"",durable:false}` 폴백 제거 — typecheck이 참조 부재를 입증 |
+| F6 tautological assert | PASS | `mcp-bundle.test.ts`의 upstream-tests 검증에서 직전에 assert된 조건을 반복하던 `A || B` 분기를 vitest config·test-runner 존재와 suite 규모(>=150 test files)의 실체 검증으로 교체 — vendored 트리가 테스트를 침묵 상실하면 실패 |
+| 번들 재생성 | PASS | `node scripts/vendor-pi-mcp-adapter.mjs --write`로 runtime·manifest 재생성 후 `--check` → `BUNDLE_CURRENT` (2,727 files); 의미 변경은 전부 `OMA_DIVERGENCES` 표 기술분, dependency 바이트 무수정 |
+| `pi.events` posture | PASS(기록) | facade가 `pi.events`를 그대로 전달하고 `pi-mcp-adapter:runtime-register`는 `normalizeOmaMcpConfig`를 우회해 runtime 서버를 등록할 수 있다 — in-process 전용이고 다른 OMA 확장이 발행할 수 없으며 런타임 거절은 등록 서버에도 적용됨을 모듈 주석·review-notes에 기록; 완전히 닫힌 경계가 아니라 문서화된 posture |
+| build / typecheck | PASS | `npm run build` + `tsc --noEmit` 0 오류 |
+| check:architecture / check:package | PASS | inventory(SOURCE_DIGESTS_CURRENT)·rules·lattice·transactions·boundaries·documents·spec-inventory 0 findings; host API peer import 정책 변경 없음 |
+| `test/mcp-bundle.test.ts` | PASS | 18종 전 종 PASS (기존 14종 + tombstone 실spawn·UI 거절 E2E·ENOENT-only 부재·basename 거절 확장) |
+| 전체 `npm test` | PASS* | `node scripts/test-local.mjs` 로컬 lane 3813 tests → 3812 PASS; 유일 실패 1건은 이 절 추가·정산 변경분을 아직 반영하지 않은 validation.md 자체의 stale verification-input digest(R38)로, digest를 이 트리의 것으로 재결박 후 `production-inventory` 재실행 10/10 PASS. systemd-required 9 파일은 환경 부재로 NOT_RUN 분리 |
+| upstream 테스트 이식 / live MCP 세션 / macOS native / systemd / kernel·powercut / provider / CI | NOT_RUN | 이전 절과 동일 — 승인된 환경·자격 없음, 경계 시험까지만 |
+
+\* 전체 suite의 최종 종료 코드는 이 절을 쓰는 시점의 로그로 확정했다; systemd lane은 위처럼 별도 NOT_RUN이다.
+
 ## 현재 알려진 한계와 남은 검증
 
 - 실제 manager/cgroup candidate 검사와 reviewer shortage 예외는 기존 독립 거절의 영향을 받는다. fixture 성공을 실제 서비스 증거로 사용하지 않는다.
@@ -327,13 +350,13 @@ surface plan이 `mcp`를 DIRECT로 이름 붙인다. 구현 내용과 divergence
 
 아래 binding은 구조 검사의 입력 identity다. digest 생성 자체가 runtime PASS를 뜻하지 않는다.
 
-verification input digest `33df2498814470559af5f6857ebbb3d0eb466b78b8d675adaa5377dfe2163581` (15337 files).
+verification input digest `c4dda61a8fbc13232e4c3b7bc12d52c66fdfb7cd78999c3c614f1c202b108ad2` (15337 files).
 
 당시 기록한 cloc 2.08 측정치: 354 files / 35,832 code LOC. 이 역사적 기록은 현재 source의 LOC claim이 아니며, 기존 artifact와의 불일치를 여기서 수리했다고 주장하지 않는다. 크기 제한은 없으며 값은 release proof가 아니다.
 
 K63: 현재 source list는 [production-files.txt](../../production-files.txt), per-file SHA-256은 [production-loc-hashes.json](../../production-loc-hashes.json)이 소유한다. 기존 digest 파일명은 최소 변경을 위해 유지하지만 내용은 `oma-production-source-digests-v1`이며 LOC/tool/report digest를 포함하지 않는다. `node scripts/loc.mjs --source-digests`로 명시적으로 갱신하고 `npm run check:inventory`는 cloc 없이 source bytes를 검증한다. `--inventory-only`는 계속 목록만 갱신한다.
 
-현재 LOC는 `node scripts/loc.mjs --out <evidence-directory>`가 cloc 2.08로 생성·재검증하는 CI artifact `production-loc.json`과 `production-measurement-hashes.json`에만 있다. 생성기는 committed source digest를 먼저 검증하며 이를 재작성하지 않는다. CI는 검증한 commit 아래 report·report digest·source digest·tool version을 함께 업로드한다. committed LOC claim과 측정치의 결박은 더 이상 제공하지 않으며, source digest 결박은 유지한다. 아래 구조 입력 identity는 DR34(UX-08 CONNECT egress) 2차 맹검증 변경분(paused-socket 수명주기·Teredo 거절·rest 의미)과 BL1(bundled extension #1 pi-lsp — vendor 페이로드·verifyVendorBundle·lsp-tools 어댑터·tool-surface 플랜·workspace-guard 확장), BL2(bundled extension #2 ask_user_question — OMA 네이티브 구현: client contract/model/envelope/protocol, extension 등록, TUI presenter/component, role surface·deployment·두 host 경계 결선), BL3(bundled extension #3 pi-hashline-edit-pro — vendor 페이로드+의존 closure·commit/read seam divergence·hashline-tools 어댑터·file_edit surface·contained writer identity seam), BL4(bundled extension #4 pi-web-access — vendor 페이로드+의존 closure·OMA 정책/egress divergence·web-tools 어댑터·web_research surface·deployment-manifest 엔트리 bound 상향), BL5(bundled extension #5 pi-mcp-adapter — vendor 페이로드+42패키지 의존 closure·27파일 OMA 정책 divergence·mcp-tools 어댑터·공유 child-env 추출·`mcp` DIRECT surface) 변경분의 로컬 검증을 위해 다시 결박한 것이고, 이전 runtime PASS를 새 source의 PASS로 승격하지 않는다.
+현재 LOC는 `node scripts/loc.mjs --out <evidence-directory>`가 cloc 2.08로 생성·재검증하는 CI artifact `production-loc.json`과 `production-measurement-hashes.json`에만 있다. 생성기는 committed source digest를 먼저 검증하며 이를 재작성하지 않는다. CI는 검증한 commit 아래 report·report digest·source digest·tool version을 함께 업로드한다. committed LOC claim과 측정치의 결박은 더 이상 제공하지 않으며, source digest 결박은 유지한다. 아래 구조 입력 identity는 DR34(UX-08 CONNECT egress) 2차 맹검증 변경분(paused-socket 수명주기·Teredo 거절·rest 의미)과 BL1(bundled extension #1 pi-lsp — vendor 페이로드·verifyVendorBundle·lsp-tools 어댑터·tool-surface 플랜·workspace-guard 확장), BL2(bundled extension #2 ask_user_question — OMA 네이티브 구현: client contract/model/envelope/protocol, extension 등록, TUI presenter/component, role surface·deployment·두 host 경계 결선), BL3(bundled extension #3 pi-hashline-edit-pro — vendor 페이로드+의존 closure·commit/read seam divergence·hashline-tools 어댑터·file_edit surface·contained writer identity seam), BL4(bundled extension #4 pi-web-access — vendor 페이로드+의존 closure·OMA 정책/egress divergence·web-tools 어댑터·web_research surface·deployment-manifest 엔트리 bound 상향), BL5(bundled extension #5 pi-mcp-adapter — vendor 페이로드+42패키지 의존 closure·27파일 OMA 정책 divergence·mcp-tools 어댑터·공유 child-env 추출·`mcp` DIRECT surface), BL5 맹검증 정산(F1 SDK child-env underlay tombstone·F2 UI-session deny-by-default permit과 direct/proxy/ui-session/glimpse-ui 거절 게이트·F3 ENOENT-only 부재 판정·F4 command basename 정규화 거절·F5 dead `omaStateDir` 제거·F6 tautological assert 교체·`pi.events` runtime-register posture 기록·runtime/manifest 재생성·`mcp-bundle.test.ts` 18종) 변경분의 로컬 검증을 위해 다시 결박한 것이고, 이전 runtime PASS를 새 source의 PASS로 승격하지 않는다.
 
 ## 재검증
 

@@ -23,7 +23,13 @@
  *   `piSupportsMcp(pi)` is false inside vendored code -- Pi's built-in
  *   MCP can never run beside the adapter, and the mcp_servers_change
  *   mirroring path is never armed. There is no OMA grouping layer: the
- *   surface plan names `mcp` directly.
+ *   surface plan names `mcp` directly. Posture: `pi.events` is forwarded
+ *   unchanged and upstream's `pi-mcp-adapter:runtime-register` channel
+ *   registers a runtime server without normalizeOmaMcpConfig -- the
+ *   boundary validator (command basename rules included) does not see
+ *   it. It is in-process only and no other OMA extension can emit it, so
+ *   it is recorded as a posture note rather than closed; the runtime
+ *   refusals (ui-session, credential-command) still bind what registers.
  * - Config: the only config source is OMA-owned -- a programmatic
  *   `McpConfig` object supplied to `createMcpAdapter`, built by
  *   `normalizeOmaMcpConfig` from the OMA-owned mcp-adapter.json in the engine's
@@ -37,21 +43,38 @@
  *   disableProxyTool, ancestorConfigRoots, agentPluginPaths,
  *   projectServers) rather than clamping them, because an OMA-owned file
  *   asking for a forbidden surface is a violation, not a preference.
- * - Server entries: command is rejected for "npx"/"npm" (upstream's
- *   resolver would fetch packages at connect time); `url` must be
- *   http(s); `socket` must be absolute; `caFile`, `requestHeadersCommand`,
- *   `pluginDataDir`, `literalEnv` and per-server `directTools` are
- *   rejected outright; `!`-command secret sinks in env/headers/
- *   bearerToken/oauth.clientSecret are rejected at the boundary AND
- *   refused at runtime by the vendored splice (defense in depth).
+ * - Server entries: command is rejected when its basename -- directory
+ *   prefixes and the win32 `.cmd`/`.exe`/`.bat`/`.ps1` shims stripped,
+ *   case-folded -- is "npx"/"npm" (upstream's resolver would fetch
+ *   packages at connect time); `url` must be http(s); `socket` must be
+ *   absolute; `caFile`, `requestHeadersCommand`, `pluginDataDir`,
+ *   `literalEnv` and per-server `directTools` are rejected outright;
+ *   `!`-command secret sinks in env/headers/bearerToken/oauth.clientSecret
+ *   are rejected at the boundary AND refused at runtime by the vendored
+ *   splice (defense in depth). A `uiResourceUri` tool call fails closed
+ *   with a structured refusal inside the vendored runtime -- no `who`
+ *   probe, `npm root -g` resolution, host-package import or browser open
+ *   may run for it (the deny-by-default `ui-session`/`browser-open`
+ *   permits; upstream's UI session machinery stays unreachable).
  * - Policy seam: before the factory runs, `omaInstallMcpPolicy` installs
  *   the OMA contract inside the vendored runtime: deny-by-default permits
- *   (browser-open and os-keyring never granted), an empty ambient-env
+ *   (browser-open, os-keyring and ui-session never granted), an empty
+ *   ambient-env
  *   view (MCP_DIRECT_TOOLS, MCP_OAUTH_*, NPM_CONFIG_CACHE, BROWSER, the
  *   Jev/SystemOne vars and the PI_MCP_ADAPTER_* selectors cannot reach
  *   vendored code), the OMA-owned agent dir every getAgentPath-derived
  *   write lands under, the scratch root for output-guard spills, the
- *   stdio child env scrub, and the pinned credential store.
+ *   stdio child env scrub, and the pinned credential store. The vendored
+ *   MCP SDK's StdioClientTransport unions its own
+ *   `getDefaultEnvironment()` beneath `serverParams.env` (POSIX: HOME,
+ *   LOGNAME, PATH, SHELL, TERM, USER; win32: APPDATA, HOMEDRIVE,
+ *   HOMEPATH, LOCALAPPDATA, PATH, PROCESSOR_ARCHITECTURE, SYSTEMDRIVE,
+ *   SYSTEMROOT, TEMP, USERNAME, USERPROFILE, PROGRAMFILES), so the
+ *   child-env finish also writes an explicit `undefined` tombstone for
+ *   every underlay name it did not sanction -- the key overrides the
+ *   ambient default inside the union and Node's spawn drops
+ *   `undefined`-valued entries entirely, preserving denied-by-absence
+ *   through the union. The vendored dependency bytes stay exact.
  * - Egress: when the Resident sandbox's egress wiring is present, the pin
  *   `http://127.0.0.1:<OMA_EGRESS_PROXY_PORT>` is installed and every
  *   upstream HTTP leaf (MCP stream fetches, OAuth/auth service requests,
@@ -73,7 +96,7 @@
  *   dependency import; nothing reaches a user-installed package.
  */
 import { randomBytes } from "node:crypto";
-import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync, chmodSync, statSync } from "node:fs";
+import { mkdirSync, readFileSync, rmSync, writeFileSync, chmodSync, statSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { isAbsolute, join } from "node:path";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
@@ -183,7 +206,13 @@ function normalizeServer(name: string, raw: unknown): Record<string, unknown> {
   if (entry.command !== undefined) {
     if (typeof entry.command !== "string" || entry.command.trim() === "")
       throw configError(`server ${JSON.stringify(name)}: command must be a non-empty string`);
-    if (entry.command === "npx" || entry.command === "npm")
+    // Package fetchers are refused by basename -- directory prefixes and
+    // the win32 .cmd/.exe/.bat/.ps1 shims stripped, case-folded -- so
+    // "/usr/bin/npx" or "C:\\tools\\npm.cmd" is the same admission as the
+    // bare name, not a bypass of the no-fetch rule.
+    const commandLeaf = (entry.command.split(/[\\/]/).pop() ?? "").trim().toLowerCase()
+      .replace(/\.(cmd|exe|bat|ps1)$/, "");
+    if (commandLeaf === "npx" || commandLeaf === "npm")
       throw configError(`server ${JSON.stringify(name)}: command ${JSON.stringify(entry.command)} would fetch packages at connect time; install the server and name the binary`);
   }
   if (entry.url !== undefined) {
@@ -290,15 +319,29 @@ export function normalizeOmaMcpConfig(raw: unknown, options?: { interactive?: bo
 /* OMA-owned state dir + credential key.                                */
 /* ------------------------------------------------------------------ */
 
-/** The engine's OMA-owned agent dir, or an ephemeral scratch when the
- * deployment did not provision one. Never a host path: the fallback is a
- * fresh tmpdir the process owns, so upstream's ~/.pi/agent discovery is
- * unreachable either way. */
-function omaStateDir(agentDir: string | undefined): { stateDir: string; durable: boolean } {
-  const root = agentDir ?? process.env.PI_CODING_AGENT_DIR;
-  if (root !== undefined && isAbsolute(root))
-    return { stateDir: join(root, "mcp-adapter"), durable: true };
-  return { stateDir: "", durable: false };
+/** The names the vendored MCP SDK's StdioClientTransport unions beneath
+ * `serverParams.env` at spawn (its `getDefaultEnvironment()`): the POSIX
+ * list plus every win32 spelling, so the tombstone binds whichever list
+ * applies — and a config that reaches the other platform's runtime cannot
+ * leak its names either. */
+const SDK_STDIO_ENV_UNDERLAY: ReadonlyArray<string> = [
+  "HOME", "LOGNAME", "PATH", "SHELL", "TERM", "USER",
+  "APPDATA", "HOMEDRIVE", "HOMEPATH", "LOCALAPPDATA", "PROCESSOR_ARCHITECTURE",
+  "SYSTEMDRIVE", "SYSTEMROOT", "TEMP", "USERNAME", "USERPROFILE", "PROGRAMFILES",
+];
+
+/** The env map handed to the vendored transport: the scrubbed entries plus
+ * an explicit `undefined` tombstone on every underlay name the scrub did
+ * not sanction. Inside the SDK's `{ ...getDefaultEnvironment(), ...env }`
+ * union (the same expression in its ESM and CJS builds) the tombstone key
+ * overrides the ambient default, and Node's spawn drops `undefined`-valued
+ * entries entirely — denial by absence survives the union without touching
+ * the vendored dependency bytes. */
+function withSdkEnvTombstones(env: Record<string, string>): Record<string, string | undefined> {
+  const out: Record<string, string | undefined> = { ...env };
+  for (const name of SDK_STDIO_ENV_UNDERLAY)
+    if (!Object.hasOwn(out, name)) out[name] = undefined;
+  return out;
 }
 
 function ensurePrivateDir(path: string): void {
@@ -311,8 +354,16 @@ function ensurePrivateDir(path: string): void {
  * ephemeral policy falls back to). Never an env read. */
 function oauthFileKey(stateDir: string): string {
   const keyPath = join(stateDir, "oauth-file-key");
-  if (existsSync(keyPath)) {
-    const raw = readFileSync(keyPath, "utf8").trim();
+  let raw: string | undefined;
+  try {
+    raw = readFileSync(keyPath, "utf8").trim();
+  } catch (error) {
+    // Absent means ENOENT only: an unreadable key file must refuse, never
+    // rotate a fresh key that silently orphans the sealed store.
+    if ((error as NodeJS.ErrnoException | undefined)?.code === "ENOENT") raw = undefined;
+    else throw error;
+  }
+  if (raw !== undefined) {
     // Canonical base64 of exactly 32 bytes -- the same contract upstream's
     // own encrypted-file store enforces.
     if (/^[A-Za-z0-9+/]{43}=$/.test(raw)) return raw;
@@ -424,11 +475,21 @@ export async function registerMcpTools(pi: ExtensionAPI, options?: McpToolsOptio
   let rawConfig: unknown = options?.config;
   if (rawConfig === undefined && durable) {
     const configPath = join(agentRoot as string, MCP_CONFIG_FILE_NAME);
-    if (existsSync(configPath)) {
-      const stat = statSync(configPath);
+    // Absent means ENOENT only: an unreadable or non-file path must refuse,
+    // never masquerade as an empty config (P0-5: catch the code, not the
+    // probe -- existsSync conflates EACCES with absence).
+    const stat = (() => {
+      try { return statSync(configPath); }
+      catch (error) {
+        if ((error as NodeJS.ErrnoException | undefined)?.code === "ENOENT") return undefined;
+        throw error;
+      }
+    })();
+    if (stat !== undefined) {
       if (!stat.isFile()) throw new Error(`[E_OMA_MCP_CONFIG] ${configPath} is not a regular file`);
+      const bytes = readFileSync(configPath, "utf8");
       try {
-        rawConfig = JSON.parse(readFileSync(configPath, "utf8"));
+        rawConfig = JSON.parse(bytes);
       } catch (error) {
         throw new Error(`[E_OMA_MCP_CONFIG] ${configPath} is not valid JSON: ${error instanceof Error ? error.message : String(error)}`);
       }
@@ -457,7 +518,7 @@ export async function registerMcpTools(pi: ExtensionAPI, options?: McpToolsOptio
     egressPinned: egressPinnedProxy(),
     env: {},
     childEnv: (base) => buildChildEnv(base),
-    childEnvFinish: (merged) => buildChildEnv({}, merged, scratchDir),
+    childEnvFinish: (merged) => withSdkEnvTombstones(buildChildEnv({}, merged, scratchDir)),
     authStore,
     ...(oauthKey !== undefined ? { oauthFileKey: oauthKey } : {}),
     permits: {},
@@ -486,13 +547,15 @@ export async function registerMcpTools(pi: ExtensionAPI, options?: McpToolsOptio
     throw new Error(`[E_OMA_MCP_SURFACE] vendored pi-mcp-adapter registered [${names.join(", ")}]; expected exactly [${MCP_TOOL_NAMES.join(", ")}]`);
 }
 
-/** The exact child env a stdio MCP server would get for a declared env
- * block -- the same composition the vendored resolveEnv applies through
- * the policy seam (inherited base scrub, declared scrub, scratch
- * redirects). Exported so the boundary test can pin it without spawning
- * a server. `scratch` is the per-session scratch the caller owns. */
-export function mcpChildEnvironment(declared: Record<string, string> | undefined, scratch: string): Record<string, string> {
-  return buildChildEnv(process.env, declared, scratch);
+/** The exact env map a stdio MCP server's spawn would see for a declared
+ * env block -- the same composition the vendored resolveEnv applies
+ * through the policy seam (inherited base scrub, declared scrub, scratch
+ * redirects), plus the `undefined` tombstones that keep the SDK's
+ * getDefaultEnvironment union from re-adding denied ambient names.
+ * Exported so the boundary test can pin it without a full MCP handshake.
+ * `scratch` is the per-session scratch the caller owns. */
+export function mcpChildEnvironment(declared: Record<string, string> | undefined, scratch: string): Record<string, string | undefined> {
+  return withSdkEnvTombstones(buildChildEnv(process.env, declared, scratch));
 }
 
 /** The adapter's OMA-owned state dir under PI_CODING_AGENT_DIR and the

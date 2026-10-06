@@ -636,6 +636,47 @@ name collision/intended surface/hidden 미활성/idempotent reload/provenance/
 
 ## 9. 진행 로그
 
+- 2026-10-09 (bundled #5 — pi-mcp-adapter 맹검증 정산): BL5 vendored
+  어댑터에 대한 맹검증 잔여 발견 F1–F6 전부 구현·검증. F1 — vendored
+  SDK의 `StdioClientTransport`가 env를
+  `{...getDefaultEnvironment(), ...serverParams.env}` 순으로 합치므로
+  OMA scrub이 빼낸 이름(SHELL·APPDATA·HOMEDRIVE·… )이 SDK 자체
+  underlay에서 되살아날 수 있던 문제. `mcp-tools.ts`에 SDK underlay
+  이름 목록을 두고 `childEnvFinish`가 scrub 결과 위에 `undefined`
+  tombstone을 씌우게 해 Node spawn이 그 pair를 버리게 만든다(dependency
+  바이트는 그대로, OMA 쪽에서 제거). 실제 vendored `stdio.mjs` transport로
+  child를 띄워 `process.env`를 직렬화해 검증 — tombstone 없는 대조군은
+  SHELL이 재유입됨을 확인. F2 — UI-session 리소스 경로가 host `who`
+  probe·`orca` subprocess·`npm root -g`·host-global `glimpseui` 동적
+  import에 도달할 수 있던 문제. `OmaMcpPolicy`에 `ui-session` permit을
+  deny-by-default로 추가하고 `direct-tools.js`·`proxy-modes.js`에
+  경로 진입 전 구조화된 `ui_session_refused` 거절을, `ui-session.js`·
+  `glimpse-ui.js`에 방어심층 게이트를 splice — OMA 정책 미설치 시
+  upstream 의미 그대로. F3 — config/state의 `existsSync` 기반 부재 판정이
+  EACCES를 "없음"과 구분 못 해 접근 불가 파일을 빈 config로 취급·oauth
+  key를 침묵 재발급할 수 있던 문제. `statSync`의 ENOENT만 부재로 보고
+  나머지 에러는 전파, 비-정규 파일은 별도 `[E_OMA_MCP_CONFIG]` 경계
+  에러, malformed JSON과는 구분. F4 — `npx`/`npm` 거절이 정확일치라
+  `/usr/bin/npx`·`C:\Tools\npm.cmd` 등 path-qualified 우회가 가능했던
+  문제. command basename을 `/`·`\` 양쪽 separator로 자르고
+  `.cmd/.exe/.bat/.ps1` shim suffix와 대소문자를 정규화해 비교 —
+  `npm-helper`·`npx-serve`·`srv.CMD`는 계속 허가. F5 — 죽은
+  `omaStateDir()` 헬퍼와 잘못된 `{stateDir:"",durable:false}` 폴백 제거.
+  F6 — `mcp-bundle.test.ts`의 upstream-tests 검증에서 두 번째
+  disjunct가 직전에 이미 assert된 조건이라 `A || B`가 아무것도 묶지
+  않던 tautological assert를 vitest config·test-runner 존재와
+  suite 규모(>=150 test files)의 실체 검증으로 교체.
+  `pi.events`는 facade로 그대로 전달되고
+  `pi-mcp-adapter:runtime-register` 이벤트는 `normalizeOmaMcpConfig`
+  비경유 runtime 등록을 허용하지만 in-process 전용이며 다른 OMA 확장
+  표면이 없으므로 posture로 기록(런타임 거절은 등록된 서버에도 적용).
+  manifest·runtime은 `vendor-pi-mcp-adapter --write` 산출물로 재생성·
+  `--check` BUNDLE_CURRENT, review-notes BL5 오라클·ledger·
+  source-digests 재바인딩. `mcp-bundle.test.ts`는 14→18종으로 확장
+  (tombstone 실spawn·UI 거절 E2E·ENOENT-only·basename 거절).
+  NOT_RUN: 이전 라운드와 동일(macOS native·systemd·kernel/powercut·
+  provider credential·release qualification·upstream-tests 자체
+  하네스·live MCP 세션).
 - 2026-10-09 (bundled #5 — pi-mcp-adapter): §7 순서의 다섯 번째(마지막)
   확장. `pi-mcp-adapter@5.0.0`을 `src/extension/vendor/pi-mcp-adapter/`에
   byte-pinned vendor — `upstream/`은 npm 타르볼(shasum

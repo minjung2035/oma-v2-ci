@@ -171,6 +171,13 @@ const RUNTIME_ASSETS = Object.freeze([
  *    leaf — when the egress pin exists, MCP traffic, OAuth/auth HTTP and
  *    endpoint probes are carried by the vendored ProxyAgent dispatcher;
  *    without a pin upstream's own globalThis.fetch stands.
+ *  - proxy-modes.js / direct-tools.js: a tool call whose metadata carries
+ *    uiResourceUri returns a structured ui_session_refused result under an
+ *    installed OMA policy — before maybeStartUiSession can read the UI
+ *    resource, probe remote logins (`who`), or resolve/launch a viewer
+ *    (`orca`, `npm root -g`, a host-global glimpseui import, a browser
+ *    open). ui-session.js and glimpse-ui.js carry the same permit as a
+ *    backstop for any caller that reaches them directly.
  */
 const OMA_DIVERGENCES = Object.freeze({
   "utils.js": {
@@ -203,7 +210,9 @@ const OMA_DIVERGENCES = Object.freeze({
       "same 'OS secure credential storage is unavailable' shape upstream " +
       "produces on a host without keyring, so no vendored path can reach " +
       "the OS keyring, the @napi-rs/keyring native binding or the keyctl " +
-      "recovery spawn; omaPolicyActive lets a spliced site distinguish " +
+      "recovery spawn; omaUiSessionsRefused is the same closed-by-default " +
+      "predicate for the interactive-UI permit the ui-session/glimpse " +
+      "gates consult; omaPolicyActive lets a spliced site distinguish " +
       "'no OMA policy' from 'policy installed'.",
     edits: [
       {
@@ -252,6 +261,13 @@ export function omaOAuthFileKey() { return omaMcpPolicy?.oauthFileKey; }
 /** Under OMA the OS keyring is unreachable unless explicitly permitted —
  * the callers keep upstream's "store unavailable" semantics. */
 export function omaSecureKeyringClosed() { return omaMcpPolicy !== undefined && !omaPermits("os-keyring"); }
+/** Under OMA an interactive MCP UI session is refused unless the
+ * "ui-session" permit is granted — deny-by-default. The refusal fires
+ * before the UI machinery (the ui-resource read, the \`who\` remote-login
+ * probe, orca/npm/glimpse viewer resolution, a host-global package
+ * import, a browser open) can run. With no policy upstream's flow
+ * stands. */
+export function omaUiSessionsRefused() { return omaMcpPolicy !== undefined && !omaPermits("ui-session"); }
 let omaPinnedDispatcher;
 /** The egress leaf every spliced HTTP path funnels into. With no policy —
  * or no pin inside it — this is upstream's own globalThis.fetch. With a
@@ -372,8 +388,13 @@ export interface OmaMcpPolicy {
     readonly childEnv?: (base: NodeJS.ProcessEnv) => NodeJS.ProcessEnv;
     /** The child-env finish: applied to the merged inherited+declared map —
      * filters declared values through the same predicate and layers the
-     * scratch redirects (HOME/XDG/TMP) no other channel may supply. */
-    readonly childEnvFinish?: (merged: Record<string, string>) => Record<string, string>;
+     * scratch redirects (HOME/XDG/TMP) no other channel may supply.
+     * Entries may carry an explicit \`undefined\` tombstone: the vendored
+     * SDK's StdioClientTransport unions its own getDefaultEnvironment()
+     * beneath this map, and the tombstone overrides the ambient default
+     * inside that union (Node's spawn drops \`undefined\` values), keeping
+     * denied names absent. */
+    readonly childEnvFinish?: (merged: Record<string, string>) => Record<string, string | undefined>;
     /** The credential store OMA pins; absent means upstream's selector. */
     readonly authStore?: "memory" | "encrypted-file";
     /** The encrypted-file store key (canonical base64 of 32 bytes), held
@@ -384,6 +405,7 @@ export interface OmaMcpPolicy {
         readonly "credential-command"?: boolean;
         readonly "browser-open"?: boolean;
         readonly "os-keyring"?: boolean;
+        readonly "ui-session"?: boolean;
     };
 }
 export declare function omaInstallMcpPolicy(policy: OmaMcpPolicy | undefined): void;
@@ -394,10 +416,11 @@ export declare function omaAmbientEnv(): Record<string, string> | NodeJS.Process
 export declare function omaAgentDir(): string | undefined;
 export declare function omaTmpdir(): string;
 export declare function omaChildEnv(base: NodeJS.ProcessEnv): NodeJS.ProcessEnv;
-export declare function omaChildEnvFinish(merged: Record<string, string>): Record<string, string>;
+export declare function omaChildEnvFinish(merged: Record<string, string>): Record<string, string | undefined>;
 export declare function omaAuthStoreKind(): "memory" | "encrypted-file" | undefined;
 export declare function omaOAuthFileKey(): string | undefined;
 export declare function omaSecureKeyringClosed(): boolean;
+export declare function omaUiSessionsRefused(): boolean;
 export declare function omaPinnedFetch(input: unknown, init?: unknown): Promise<unknown>;
 export declare function omaCaFetch(caFetch: { fetch: unknown; close: () => unknown } | undefined): { fetch: unknown; close: () => unknown } | undefined;
 export declare function stripUtf8Bom(raw: string): string;`,
@@ -846,14 +869,30 @@ import { omaAmbientEnv } from "./utils.js";`,
   "glimpse-ui.js": {
     reason:
       "GLIMPSE_BINARY reads omaAmbientEnv: an operator-exported path to a " +
-      "binary must not select what a UI surface would exec under OMA.",
+      "binary must not select what a UI surface would exec under OMA. And " +
+      "the glimpse viewer itself is gated on the ui-session permit: " +
+      "getGlimpseBinaryPath (the `npm root -g` host probe) and " +
+      "openGlimpseWindow (the host-global/bundled-path glimpseui dynamic " +
+      "import) refuse under an installed OMA policy before either runs — " +
+      "backstops beneath the call-site refusal in proxy-modes.js and " +
+      "direct-tools.js; with no policy upstream's flow stands.",
     edits: [
       {
         find: `import { existsSync } from "node:fs";
 import { execFileSync } from "node:child_process";`,
         replace: `import { existsSync } from "node:fs";
 import { execFileSync } from "node:child_process";
-import { omaAmbientEnv } from "./utils.js";`,
+import { omaAmbientEnv, omaRequirePermit } from "./utils.js";`,
+      },
+      {
+        find: `function getGlimpseBinaryPath() {`,
+        replace: `function getGlimpseBinaryPath() {
+    omaRequirePermit("ui-session", "Glimpse viewer resolution");`,
+      },
+      {
+        find: `export async function openGlimpseWindow(html, options) {`,
+        replace: `export async function openGlimpseWindow(html, options) {
+    omaRequirePermit("ui-session", "Glimpse window");`,
       },
       {
         find: `    if (process.env.GLIMPSE_BINARY && existsSync(process.env.GLIMPSE_BINARY)) {
@@ -904,12 +943,28 @@ import { omaAmbientEnv } from "./utils.js";`,
     reason:
       "SSH_CONNECTION/SSH_TTY and MCP_UI_VIEWER read omaAmbientEnv: remote " +
       "session detection and viewer preference are upstream's UI heuristics " +
-      "— under OMA no ambient env may steer them.",
+      "— under OMA no ambient env may steer them. And maybeStartUiSession " +
+      "itself opens with the ui-session permit: under an installed OMA " +
+      "policy it throws before the UI-resource read, the `who` remote " +
+      "probe, orca or any viewer work can run — a backstop beneath the " +
+      "call-site refusals in proxy-modes.js and direct-tools.js.",
     edits: [
       {
         find: `import { logger } from "./logger.js";`,
         replace: `import { logger } from "./logger.js";
-import { omaAmbientEnv } from "./utils.js";`,
+import { omaAmbientEnv, omaRequirePermit } from "./utils.js";`,
+      },
+      {
+        find: `export async function maybeStartUiSession(state, request) {
+    const log = logger.child({`,
+        replace: `export async function maybeStartUiSession(state, request) {
+    // OMA divergence: every path underneath this call spawns or resolves
+    // host-side software (the \`who\` login probe, \`orca\`, \`npm root -g\`,
+    // a host-global glimpseui import, a browser open). The ui-session
+    // permit is deny-by-default, so under an installed OMA policy this
+    // throws before any of it runs; with no policy upstream's flow stands.
+    omaRequirePermit("ui-session", \`MCP UI session \${request.serverName}/\${request.toolName}\`);
+    const log = logger.child({`,
       },
       {
         find: `    return Boolean(process.env.SSH_CONNECTION || process.env.SSH_TTY);`,
@@ -918,6 +973,69 @@ import { omaAmbientEnv } from "./utils.js";`,
       {
         find: `        const viewerPref = process.env.MCP_UI_VIEWER?.toLowerCase();`,
         replace: `        const viewerPref = omaAmbientEnv().MCP_UI_VIEWER?.toLowerCase();`,
+      },
+    ],
+  },
+  "proxy-modes.js": {
+    reason:
+      "A uiResourceUri tool call is refused under an installed OMA policy " +
+      "with a structured ui_session_refused result — before the UI " +
+      "machinery (the ui-resource read, the `who` remote-login probe, " +
+      "orca, `npm root -g`, a host-global glimpseui import, a browser " +
+      "open) and before the downstream tool call itself: a tool built to " +
+      "interact through its UI cannot run coherently with the UI refused. " +
+      "With no policy upstream's flow stands.",
+    edits: [
+      {
+        find: `import { formatAuthRequiredMessage, formatMcpStatus, normalizeToolArguments, resolveServerUrl, truncateAtWord, withToolCallIdMeta } from "./utils.js";`,
+        replace: `import { formatAuthRequiredMessage, formatMcpStatus, normalizeToolArguments, omaUiSessionsRefused, resolveServerUrl, truncateAtWord, withToolCallIdMeta } from "./utils.js";`,
+      },
+      {
+        find: `        uiSession = toolMeta.uiResourceUri
+            ? await maybeStartUiSession(state, {`,
+        replace: `        // OMA divergence: an interactive-UI tool call refuses at the
+        // boundary, before the UI machinery and before the downstream call.
+        if (toolMeta.uiResourceUri && omaUiSessionsRefused()) {
+            const message = \`MCP tool "\${toolMeta.originalName}" on server "\${serverName}" advertises an interactive UI resource (\${toolMeta.uiResourceUri}); interactive UI sessions are refused at the OMA boundary.\`;
+            return {
+                content: [{ type: "text", text: message }],
+                details: { mode: "call", error: "ui_session_refused", ...callIdentity, message },
+            };
+        }
+        uiSession = toolMeta.uiResourceUri
+            ? await maybeStartUiSession(state, {`,
+      },
+    ],
+  },
+  "direct-tools.js": {
+    reason:
+      "The same ui-session refusal as proxy-modes.js on the direct-tool " +
+      "surface: a uiResourceUri tool call returns a structured " +
+      "ui_session_refused result before the UI machinery and before the " +
+      "downstream call, under an installed OMA policy. (OMA config " +
+      "validation also pins settings.directTools off, so this is a " +
+      "backstop for any path that reaches it.)",
+    edits: [
+      {
+        find: `import { formatAuthRequiredMessage, normalizeToolArguments, resolveServerUrl, withToolCallIdMeta } from "./utils.js";`,
+        replace: `import { formatAuthRequiredMessage, normalizeToolArguments, omaUiSessionsRefused, resolveServerUrl, withToolCallIdMeta } from "./utils.js";`,
+      },
+      {
+        find: `            const hasUi = !!spec.uiResourceUri;
+            uiSession = hasUi
+                ? await maybeStartUiSession(state, {`,
+        replace: `            // OMA divergence: an interactive-UI tool call refuses at
+            // the boundary, before the UI machinery and the downstream call.
+            if (spec.uiResourceUri && omaUiSessionsRefused()) {
+                const message = \`MCP tool "\${spec.originalName}" on server "\${spec.serverName}" advertises an interactive UI resource (\${spec.uiResourceUri}); interactive UI sessions are refused at the OMA boundary.\`;
+                return {
+                    content: [{ type: "text", text: message }],
+                    details: { error: "ui_session_refused", server: spec.serverName, tool: spec.originalName, message },
+                };
+            }
+            const hasUi = !!spec.uiResourceUri;
+            uiSession = hasUi
+                ? await maybeStartUiSession(state, {`,
       },
     ],
   },

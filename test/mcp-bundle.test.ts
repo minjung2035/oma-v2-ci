@@ -6,7 +6,7 @@
  * OMA's; and Pi's built-in MCP can never coexist. */
 import test from "node:test";
 import assert from "node:assert/strict";
-import { cpSync, existsSync, mkdtempSync, readFileSync, realpathSync, rmSync, statSync, symlinkSync, writeFileSync } from "node:fs";
+import { chmodSync, cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, rmSync, statSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -138,8 +138,17 @@ test("BL5: bundle verification fails closed on a changed, missing, extra, linked
 test("BL5: upstream-tests is the vendored commit's own test tree", () => {
   const stat = statSync(join(SRC_BUNDLE, "upstream-tests"));
   assert.ok(stat.isDirectory(), "the vendored commit's test tree is preserved");
-  assert.ok(existsSync(join(SRC_BUNDLE, "upstream-tests", "vitest.config.ts")) ||
-    statSync(join(SRC_BUNDLE, "upstream-tests")).isDirectory());
+  // The suite surface the manifest documents: the vitest config and the
+  // test-runner driver plus a substantial suite — a vendored tree that
+  // silently lost its tests would fail here even though it still verifies.
+  assert.ok(existsSync(join(SRC_BUNDLE, "upstream-tests", "vitest.config.ts")),
+    "upstream's vitest config is vendored");
+  assert.ok(existsSync(join(SRC_BUNDLE, "upstream-tests", "test-runner.mjs")),
+    "upstream's test runner is vendored");
+  const testFiles = readdirSync(join(SRC_BUNDLE, "upstream-tests"), { recursive: true })
+    .filter(name => /\.test\.(ts|mts|mjs)$/.test(String(name)));
+  assert.ok(testFiles.length >= 150,
+    `expected the commit's own suite (got ${testFiles.length} test files)`);
 });
 
 // ---------------------------------------------------------------------------
@@ -221,6 +230,16 @@ test("BL5: config validation forbids the surfaces, sinks and escapes upstream de
   const rejects: [string, unknown, RegExp][] = [
     ["npx command", { mcpServers: { s: { command: "npx", args: ["-y", "srv"] } } }, /fetch packages/],
     ["npm command", { mcpServers: { s: { command: "npm" } } }, /fetch packages/],
+    // The no-fetch rule matches the command's basename -- a path-qualified
+    // or win32-shimmed spelling is the same admission, not a bypass.
+    ["posix-path npx", { mcpServers: { s: { command: "/usr/bin/npx" } } }, /fetch packages/],
+    ["posix-path npm", { mcpServers: { s: { command: "/usr/local/bin/npm" } } }, /fetch packages/],
+    ["relative-path npx", { mcpServers: { s: { command: "./node_modules/.bin/npx" } } }, /fetch packages/],
+    ["win32-path npm.cmd", { mcpServers: { s: { command: "C:\\Tools\\npm.cmd" } } }, /fetch packages/],
+    ["win32-path npx.exe", { mcpServers: { s: { command: "C:\\Program Files\\nodejs\\npx.EXE" } } }, /fetch packages/],
+    ["win32 npm.ps1", { mcpServers: { s: { command: "npm.ps1" } } }, /fetch packages/],
+    ["win32 npx.bat", { mcpServers: { s: { command: "npx.bat" } } }, /fetch packages/],
+    ["uppercase NPM", { mcpServers: { s: { command: "NPM" } } }, /fetch packages/],
     ["file url", { mcpServers: { s: { url: "file:///etc/passwd" } } }, /protocol file:/],
     ["env command sink", { mcpServers: { s: { command: "srv", env: { K: "!cat /etc/passwd" } } } }, /"!command" secret sinks/],
     ["header command sink", { mcpServers: { s: { url: "https://x", headers: { H: "!x" } } } }, /"!command" secret sinks/],
@@ -257,6 +276,11 @@ test("BL5: config validation forbids the surfaces, sinks and escapes upstream de
     settings: { outputGuard: { maxBytes: 1024 }, notifyOnStartupConnect: false },
   }, { stateDir });
   assert.equal((ok.mcpServers.srv as { command: string }).command, "server-bin");
+  // Path-qualified or shim-adjacent commands that are not the package
+  // fetchers pass through untouched.
+  for (const command of ["/usr/local/bin/server-bin", "npm-helper", "npx-serve", "srv.CMD"])
+    assert.equal((normalizeOmaMcpConfig({ mcpServers: { s: { command } } }, { stateDir })
+      .mcpServers.s as { command: string }).command, command, `${command} admitted`);
   const settings = ok.settings as Record<string, unknown>;
   for (const pin of ["directTools", "namespaceProxyTools", "scriptMode", "autoAuth", "allowInstall", "exposeResources"])
     assert.equal(settings[pin], false, `${pin} pinned off`);
@@ -291,6 +315,42 @@ test("BL5: the OMA-owned config file is read from the engine's own agent dir, an
   // A malformed file is a boundary error, not a degraded startup.
   writeFileSync(join(agentDir, MCP_CONFIG_FILE_NAME), "{ not json");
   await assert.rejects(registerMcpTools(fakePi(), { agentDir }), /E_OMA_MCP_CONFIG.*not valid JSON/);
+});
+
+test("BL5: inaccessible state is an observable error -- only ENOENT means absent", async t => {
+  const agentDir = tmp(t, "oma-mcp-agent-");
+  const configPath = join(agentDir, MCP_CONFIG_FILE_NAME);
+  const eacces = (error: unknown) => (error as NodeJS.ErrnoException | undefined)?.code === "EACCES";
+
+  // An unreadable config file refuses; existsSync would have conflated the
+  // EACCES with absence and booted on an empty config.
+  writeFileSync(configPath, JSON.stringify({ mcpServers: {} }));
+  chmodSync(configPath, 0o000);
+  await assert.rejects(registerMcpTools(fakePi(), { agentDir }), eacces);
+  chmodSync(configPath, 0o600);
+
+  // A non-file config path refuses with the boundary error, not absence.
+  rmSync(configPath);
+  mkdirSync(configPath);
+  await assert.rejects(registerMcpTools(fakePi(), { agentDir }), /E_OMA_MCP_CONFIG.*not a regular file/);
+  rmSync(configPath, { recursive: true });
+
+  // An unreadable state root refuses too (stat EACCES), still not absence.
+  chmodSync(agentDir, 0o000);
+  await assert.rejects(registerMcpTools(fakePi(), { agentDir }), eacces);
+  chmodSync(agentDir, 0o755);
+
+  // An unreadable OAuth key refuses instead of rotating a fresh key that
+  // would silently orphan the sealed credential store.
+  const stateDir = join(agentDir, MCP_STATE_DIR_NAME);
+  mkdirSync(stateDir, { recursive: true });
+  const keyPath = join(stateDir, "oauth-file-key");
+  const sealed = "a2VlcHRoZWtleWZyb21ydW5uaW5nc3RvcmU=\n";
+  writeFileSync(keyPath, sealed, { mode: 0o600 });
+  chmodSync(keyPath, 0o000);
+  await assert.rejects(registerMcpTools(fakePi(), { agentDir, config: { mcpServers: {} } }), eacces);
+  chmodSync(keyPath, 0o600);
+  assert.equal(readFileSync(keyPath, "utf8"), sealed, "the denied read never rewrote the key");
 });
 
 test("BL5: OMA-owned state holds the credential key and scratch; shutdown removes scratch", async t => {
@@ -354,6 +414,70 @@ test("BL5: the stdio child env is the shared scrub -- allowlist, declared filter
   assert.equal(env.OMA_TEST_MCP_SECRET, undefined, "ambient secrets are denied by absence");
   assert.equal(env.PATH, priorPath, "PATH survives the allowlist");
   assert.ok(!Object.values(env).includes(""), "no empty-string tombstones");
+  // Names the vendored SDK's getDefaultEnvironment() would union beneath
+  // this map carry an explicit `undefined` tombstone instead -- the key
+  // overrides the underlay inside the union, and spawn drops the pair.
+  for (const name of ["SHELL", "HOMEDRIVE", "HOMEPATH", "PROCESSOR_ARCHITECTURE", "PROGRAMFILES"]) {
+    assert.ok(Object.hasOwn(env, name), `${name} is tombstoned, not merely absent`);
+    assert.equal(env[name], undefined, `${name} tombstone`);
+  }
+  assert.ok(!Object.hasOwn(env, "API_KEY"), "a non-underlay denied name is absent outright");
+});
+
+test("BL5: through the vendored SDK transport's underlay union, denied names stay absent in a real child", async t => {
+  // StdioClientTransport spawns with `{ ...getDefaultEnvironment(), ...env }`:
+  // ambient HOME/LOGNAME/PATH/SHELL/TERM/USER (win32: the other list) would
+  // resurface beneath the adapter's env unless each unsanctioned underlay
+  // name carries an `undefined` tombstone -- Node's spawn drops those
+  // pairs. This drives the vendored transport itself, so the assertion is
+  // what the spawned process actually saw.
+  const { StdioClientTransport } = await import(
+    join(vendoredBundleDir("pi-mcp-adapter"), "node_modules", "@modelcontextprotocol", "client", "dist", "stdio.mjs")) as {
+      StdioClientTransport: new (params: { command: string; args?: string[]; env?: Record<string, string>; stderr?: "pipe" | "inherit" }) => {
+        start(): Promise<void>;
+        close(): Promise<void>;
+        onclose?: (() => void) | undefined;
+        onerror?: ((error: Error) => void) | undefined;
+      };
+    };
+  const runProbe = async (envMap: Record<string, string | undefined>, out: string): Promise<Record<string, string>> => {
+    const transport = new StdioClientTransport({
+      command: process.execPath,
+      args: ["-e", `require("node:fs").writeFileSync(${JSON.stringify(out)}, JSON.stringify(process.env))`],
+      env: envMap as Record<string, string>,
+      stderr: "pipe",
+    });
+    transport.onerror = () => {};
+    await transport.start();
+    const deadline = Date.now() + 10_000;
+    while (!existsSync(out) && Date.now() < deadline)
+      await new Promise(resolve => setTimeout(resolve, 25));
+    await transport.close().catch(() => {});
+    assert.ok(existsSync(out), "the probe child ran and wrote its env");
+    return JSON.parse(readFileSync(out, "utf8")) as Record<string, string>;
+  };
+
+  const priorShell = process.env.SHELL;
+  process.env.SHELL = "/bin/oma-sentinel";
+  t.after(() => { if (priorShell === undefined) delete process.env.SHELL; else process.env.SHELL = priorShell; });
+  const scratch = join(tmp(t), "scratch");
+  const env = mcpChildEnvironment({ LANG: "C" }, scratch);
+
+  const seen = await runProbe(env, join(tmp(t), "env-after.json"));
+  assert.equal(seen.SHELL, undefined, "denied SHELL stays absent through the SDK underlay union");
+  for (const name of ["HOMEDRIVE", "HOMEPATH", "PROCESSOR_ARCHITECTURE", "PROGRAMFILES"])
+    assert.equal(seen[name], undefined, `${name} absent`);
+  assert.equal(seen.HOME, scratch, "HOME is the OMA scratch, not the underlay's ambient value");
+  assert.equal(seen.LANG, "C", "a declared allowlisted name is carried");
+  assert.equal(seen.PATH, process.env.PATH, "sanctioned PATH survives the union");
+
+  // Control: the same map without tombstones proves the leak was real --
+  // the underlay resurfaces the ambient SHELL into the spawned child.
+  const stripped = Object.fromEntries(
+    Object.entries(env).filter((entry): entry is [string, string] => entry[1] !== undefined));
+  const control = await runProbe(stripped, join(tmp(t), "env-control.json"));
+  assert.equal(control.SHELL, "/bin/oma-sentinel",
+    "control: without tombstones the SDK union resurfaces the ambient SHELL");
 });
 
 // ---------------------------------------------------------------------------
@@ -370,8 +494,10 @@ test("BL5: the installed policy is live inside the vendored runtime", async t =>
   assert.deepEqual(utils.omaAmbientEnv(), {});
   assert.equal(utils.omaPolicyActive(), true);
   // Every permit is denied by default.
-  for (const name of ["credential-command", "browser-open", "os-keyring"])
+  for (const name of ["credential-command", "browser-open", "os-keyring", "ui-session"])
     assert.equal(utils.omaPermits(name), false, `${name} denied`);
+  // The interactive-UI refusal predicate is closed under the policy.
+  assert.equal(utils.omaUiSessionsRefused(), true);
   // The `!command` credential sink refuses before any shell runs -- the
   // runtime splice behind the config-side rejection.
   assert.throws(() => utils.resolveCommandSecret("!cat /etc/passwd", "test"), /E_OMA_MCP_AUTHORITY/);
@@ -384,11 +510,14 @@ test("BL5: the installed policy is live inside the vendored runtime", async t =>
   // getAgentDir resolves the OMA-owned state dir, never the host's.
   const agentDirMod = await import(SRC_RUNTIME("agent-dir.js"));
   assert.equal(agentDirMod.getAgentDir(), join(agentDir, MCP_STATE_DIR_NAME));
-  // The child-env finish filters a merged map and layers the scratch.
+  // The child-env finish filters a merged map, layers the scratch and
+  // tombstones every SDK-underlay name the scrub did not sanction.
   const finished = utils.omaChildEnvFinish({ API_KEY: "declared-secret", LANG: "C" });
   assert.equal(finished.API_KEY, undefined);
   assert.equal(finished.LANG, "C");
   assert.equal(typeof finished.HOME, "string", "scratch HOME was layered");
+  assert.ok(Object.hasOwn(finished, "SHELL") && finished.SHELL === undefined,
+    "an unsanctioned underlay name is an explicit tombstone");
 });
 
 test("BL5: with egress wiring the vendored fetch leaf rides the pin; loopback stays direct", async t => {
@@ -424,4 +553,117 @@ test("BL5: without egress wiring the leaf is upstream's own fetch", async t => {
   // No pin: omaCaFetch stands upstream's own "no CA leaf" (undefined) --
   // no proxy dispatcher is synthesized.
   assert.equal(utils.omaCaFetch(undefined), undefined);
+});
+
+// ---------------------------------------------------------------------------
+// Interactive-UI refusal (the "ui-session" permit, deny-by-default)
+
+test("BL5: maybeStartUiSession and the glimpse viewer refuse before any host work runs", async t => {
+  withEgress(t, false);
+  const agentDir = tmp(t, "oma-mcp-agent-");
+  const pi = fakePi();
+  await registerMcpTools(pi, { agentDir, config: { mcpServers: {} } });
+  const uiSession = await import(SRC_RUNTIME("ui-session.js")) as {
+    maybeStartUiSession(state: unknown, request: { serverName: string; toolName: string; toolArgs: unknown; uiResourceUri: string }): Promise<unknown>;
+  };
+  // The permit gate is the function's first statement: a state object that
+  // throws on ANY property access proves nothing underneath it -- the
+  // ui-resource read, the `who` remote-login probe, orca, viewer
+  // resolution or a browser open -- was reached.
+  const untouchableState = new Proxy({}, { get: () => { throw new Error("ui-session state was touched before the refusal"); } });
+  await assert.rejects(
+    uiSession.maybeStartUiSession(untouchableState, { serverName: "srv", toolName: "tool", toolArgs: {}, uiResourceUri: "ui://x/app" }),
+    /E_OMA_MCP_AUTHORITY.*ui-session/);
+  const glimpse = await import(SRC_RUNTIME("glimpse-ui.js")) as {
+    openGlimpseWindow(html: string, options: Record<string, unknown>): Promise<unknown>;
+  };
+  // The permit gate precedes the `glimpseui` dynamic import, so a rejected
+  // call is also proof no host-global package was resolved or imported.
+  await assert.rejects(glimpse.openGlimpseWindow("<html/>", {}), /E_OMA_MCP_AUTHORITY/);
+});
+
+test("BL5: a uiResourceUri tool call returns the structured refusal; the server sees no UI machinery", async t => {
+  // A real stdio MCP server (spawned through the vendored transport, so the
+  // child env is also the F1 oracle) that logs every request method it
+  // receives. A `ui://` tool call must come back as a structured
+  // ui_session_refused result with the refusal firing before the adapter
+  // ever asks the server for the UI resource or calls the tool -- the
+  // point at which upstream would next spawn `who`, resolve a viewer or
+  // open a browser.
+  const dir = tmp(t, "oma-mcp-probe-");
+  const envOut = join(dir, "probe-env.json");
+  const logOut = join(dir, "probe-requests.log");
+  const probePath = join(dir, "probe-server.cjs");
+  writeFileSync(probePath, `'use strict';
+const fs = require("node:fs");
+const readline = require("node:readline");
+const envOut = process.argv[2];
+const logOut = process.argv[3];
+fs.writeFileSync(envOut, JSON.stringify(process.env));
+readline.createInterface({ input: process.stdin, terminal: false }).on("line", line => {
+  let msg;
+  try { msg = JSON.parse(line); } catch { return; }
+  if (msg.id === undefined) return; // notifications need no answer
+  fs.appendFileSync(logOut, String(msg.method) + "\\n");
+  const respond = result => process.stdout.write(JSON.stringify({ jsonrpc: "2.0", id: msg.id, result }) + "\\n");
+  if (msg.method === "initialize")
+    return respond({ protocolVersion: msg.params && msg.params.protocolVersion, capabilities: { tools: {} }, serverInfo: { name: "probe", version: "0.0.0" } });
+  if (msg.method === "tools/list")
+    return respond({ tools: [
+      { name: "ui_tool", description: "interactive", inputSchema: { type: "object", properties: {} }, _meta: { ui: { resourceUri: "ui://probe/app" } } },
+      { name: "plain_tool", description: "no ui", inputSchema: { type: "object", properties: {} } },
+    ] });
+  if (msg.method === "tools/call")
+    return respond({ content: [{ type: "text", text: "plain result" }] });
+  if (msg.method === "resources/read")
+    return respond({ contents: [{ uri: msg.params && msg.params.uri, text: "the UI resource was fetched" }] });
+  respond({});
+});
+`);
+  const agentDir = tmp(t, "oma-mcp-agent-");
+  const priorShell = process.env.SHELL;
+  process.env.SHELL = "/bin/oma-sentinel";
+  t.after(() => { if (priorShell === undefined) delete process.env.SHELL; else process.env.SHELL = priorShell; });
+  const pi = fakePi();
+  await registerMcpTools(pi, {
+    agentDir,
+    config: { mcpServers: { probe: { command: process.execPath, args: [probePath, envOut, logOut] } } },
+  });
+  // The spawned probe server outlives the call until the session's own
+  // shutdown owner kills it -- fire every registered session_shutdown
+  // handler so the stdio child cannot keep the test process alive.
+  const shutdown = async () => {
+    for (const handler of pi.handlers.get("session_shutdown") ?? [])
+      await (handler as () => Promise<unknown> | void)();
+  };
+  t.after(shutdown);
+  const mcp = pi.tools.get("mcp")!;
+
+  const refused = await mcp.execute("c", { tool: "ui_tool", server: "probe", args: {} }, undefined, undefined, { hasUI: false });
+  const details = refused.details as { error?: string; mode?: string } | undefined;
+  assert.equal(details?.error, "ui_session_refused", "the structured refusal came back");
+  assert.match(textOf(refused), /refused at the OMA boundary/);
+
+  // The refusal fired before the UI machinery: the probe server never saw
+  // a resources/read for the ui:// URI (the step upstream runs before
+  // `who`, orca/npm resolution or any browser open) and never saw the
+  // tools/call itself.
+  const log = readFileSync(logOut, "utf8");
+  assert.ok(log.includes("initialize"), "the probe server completed the handshake");
+  assert.ok(log.includes("tools/list"), "tool metadata was fetched");
+  assert.ok(!log.includes("resources/read"), "the UI resource was never fetched");
+  assert.ok(!log.includes("tools/call"), "the UI tool was never invoked");
+
+  // A non-UI tool on the same server still runs -- the refusal is specific
+  // to the ui:// surface, not a broken adapter.
+  const plain = await mcp.execute("c2", { tool: "plain_tool", server: "probe", args: {} }, undefined, undefined, { hasUI: false });
+  assert.equal((plain.details as { error?: string } | undefined)?.error, undefined);
+  assert.match(textOf(plain), /plain result/);
+
+  // The spawned probe's environment is the OMA map through the real SDK
+  // union: denied ambient names absent, scratch redirects applied.
+  const childEnv = JSON.parse(readFileSync(envOut, "utf8")) as Record<string, string>;
+  assert.equal(childEnv.SHELL, undefined, "ambient SHELL never reached the spawned server");
+  assert.equal(childEnv.HOMEDRIVE, undefined, "no underlay win32 names either");
+  assert.equal(childEnv.HOME, join(agentDir, MCP_STATE_DIR_NAME, "scratch"), "HOME is the OMA scratch");
 });

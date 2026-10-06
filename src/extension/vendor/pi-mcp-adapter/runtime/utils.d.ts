@@ -20,8 +20,13 @@ export interface OmaMcpPolicy {
     readonly childEnv?: (base: NodeJS.ProcessEnv) => NodeJS.ProcessEnv;
     /** The child-env finish: applied to the merged inherited+declared map —
      * filters declared values through the same predicate and layers the
-     * scratch redirects (HOME/XDG/TMP) no other channel may supply. */
-    readonly childEnvFinish?: (merged: Record<string, string>) => Record<string, string>;
+     * scratch redirects (HOME/XDG/TMP) no other channel may supply.
+     * Entries may carry an explicit `undefined` tombstone: the vendored
+     * SDK's StdioClientTransport unions its own getDefaultEnvironment()
+     * beneath this map, and the tombstone overrides the ambient default
+     * inside that union (Node's spawn drops `undefined` values), keeping
+     * denied names absent. */
+    readonly childEnvFinish?: (merged: Record<string, string>) => Record<string, string | undefined>;
     /** The credential store OMA pins; absent means upstream's selector. */
     readonly authStore?: "memory" | "encrypted-file";
     /** The encrypted-file store key (canonical base64 of 32 bytes), held
@@ -32,6 +37,7 @@ export interface OmaMcpPolicy {
         readonly "credential-command"?: boolean;
         readonly "browser-open"?: boolean;
         readonly "os-keyring"?: boolean;
+        readonly "ui-session"?: boolean;
     };
 }
 export declare function omaInstallMcpPolicy(policy: OmaMcpPolicy | undefined): void;
@@ -42,10 +48,11 @@ export declare function omaAmbientEnv(): Record<string, string> | NodeJS.Process
 export declare function omaAgentDir(): string | undefined;
 export declare function omaTmpdir(): string;
 export declare function omaChildEnv(base: NodeJS.ProcessEnv): NodeJS.ProcessEnv;
-export declare function omaChildEnvFinish(merged: Record<string, string>): Record<string, string>;
+export declare function omaChildEnvFinish(merged: Record<string, string>): Record<string, string | undefined>;
 export declare function omaAuthStoreKind(): "memory" | "encrypted-file" | undefined;
 export declare function omaOAuthFileKey(): string | undefined;
 export declare function omaSecureKeyringClosed(): boolean;
+export declare function omaUiSessionsRefused(): boolean;
 export declare function omaPinnedFetch(input: unknown, init?: unknown): Promise<unknown>;
 export declare function omaCaFetch(caFetch: { fetch: unknown; close: () => unknown } | undefined): { fetch: unknown; close: () => unknown } | undefined;
 export declare function stripUtf8Bom(raw: string): string;

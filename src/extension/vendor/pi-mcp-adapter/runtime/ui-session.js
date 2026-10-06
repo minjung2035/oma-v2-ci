@@ -4,7 +4,7 @@ import net from "node:net";
 import { UrlElicitationRequiredError } from "@modelcontextprotocol/client";
 import { createUiModelContextUpdate, extractUiPromptText, UI_STREAM_HOST_CONTEXT_KEY, UI_STREAM_REQUEST_META_KEY, UI_STREAM_STRUCTURED_CONTENT_KEY, } from "./types.js";
 import { logger } from "./logger.js";
-import { omaAmbientEnv } from "./utils.js";
+import { omaAmbientEnv, omaRequirePermit } from "./utils.js";
 import { startUiServer } from "./ui-server.js";
 import { isGlimpseAvailable, openGlimpseWindow } from "./glimpse-ui.js";
 import { combineAbortSignals, isAbortError } from "./runtime-owner.js";
@@ -140,6 +140,12 @@ function remoteAccessHint(opts) {
     return lines.join("\n");
 }
 export async function maybeStartUiSession(state, request) {
+    // OMA divergence: every path underneath this call spawns or resolves
+    // host-side software (the `who` login probe, `orca`, `npm root -g`,
+    // a host-global glimpseui import, a browser open). The ui-session
+    // permit is deny-by-default, so under an installed OMA policy this
+    // throws before any of it runs; with no policy upstream's flow stands.
+    omaRequirePermit("ui-session", `MCP UI session ${request.serverName}/${request.toolName}`);
     const log = logger.child({
         component: "UiSession",
         server: request.serverName,

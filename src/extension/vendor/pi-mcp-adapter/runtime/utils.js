@@ -38,6 +38,13 @@ export function omaOAuthFileKey() { return omaMcpPolicy?.oauthFileKey; }
 /** Under OMA the OS keyring is unreachable unless explicitly permitted —
  * the callers keep upstream's "store unavailable" semantics. */
 export function omaSecureKeyringClosed() { return omaMcpPolicy !== undefined && !omaPermits("os-keyring"); }
+/** Under OMA an interactive MCP UI session is refused unless the
+ * "ui-session" permit is granted — deny-by-default. The refusal fires
+ * before the UI machinery (the ui-resource read, the `who` remote-login
+ * probe, orca/npm/glimpse viewer resolution, a host-global package
+ * import, a browser open) can run. With no policy upstream's flow
+ * stands. */
+export function omaUiSessionsRefused() { return omaMcpPolicy !== undefined && !omaPermits("ui-session"); }
 let omaPinnedDispatcher;
 /** The egress leaf every spliced HTTP path funnels into. With no policy —
  * or no pin inside it — this is upstream's own globalThis.fetch. With a

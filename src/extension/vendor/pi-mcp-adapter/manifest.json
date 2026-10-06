@@ -17,7 +17,7 @@
     "tool": "scripts/vendor-pi-mcp-adapter.mjs",
     "divergences": {
       "utils.js": {
-        "reason": "The OMA boundary seam itself. omaInstallMcpPolicy is called by src/extension/mcp-tools.ts before upstream's factory runs; without an installed policy every helper degrades to upstream's own behavior (globalThis.fetch, process.env, tmpdir, the keyring store selector), so the seam is inert payload under a bare upstream load. Under the policy: omaPermits is deny-by-default (a permit absent from the table is refused); omaRequirePermit refuses `!command` credential sinks in resolveCommandSecret before any shell runs, covering env, header, bearer and clientSecret interpolation; omaAmbientEnv is the only ambient-env view vendored code consults on spliced sites (OMA supplies an empty map, so user-land env knobs like MCP_DIRECT_TOOLS, MCP_OAUTH_DIR, NPM_CONFIG_CACHE, BROWSER, MCP_OAUTH_CALLBACK_PORT, SYSTEMONE_ENDPOINT/*_API_KEY and the PI_MCP_ADAPTER_* test/recovery selectors cannot reach in); omaAgentDir/omaTmpdir re-root every getAgentPath-derived write and the output-guard spill root into OMA-owned directories; omaChildEnv runs the shared child-env allowlist over inherited process.env for stdio children; omaPinnedFetch is the egress leaf every HTTP path funnels into — loopback stays direct, everything else rides the vendored undici through a ProxyAgent built on the OMA pin, with upstream's own Request-translation (mirroring http-ca.js) so dispatcher and fetch share the vendored undici implementation; omaCaFetch substitutes that leaf for the whole fetch chain when upstream's CA-only leaf is absent; omaAuthStoreKind/omaOAuthFileKey pin the credential store to what the OMA policy declares; omaSecureKeyringClosed returns the same 'OS secure credential storage is unavailable' shape upstream produces on a host without keyring, so no vendored path can reach the OS keyring, the @napi-rs/keyring native binding or the keyctl recovery spawn; omaPolicyActive lets a spliced site distinguish 'no OMA policy' from 'policy installed'.",
+        "reason": "The OMA boundary seam itself. omaInstallMcpPolicy is called by src/extension/mcp-tools.ts before upstream's factory runs; without an installed policy every helper degrades to upstream's own behavior (globalThis.fetch, process.env, tmpdir, the keyring store selector), so the seam is inert payload under a bare upstream load. Under the policy: omaPermits is deny-by-default (a permit absent from the table is refused); omaRequirePermit refuses `!command` credential sinks in resolveCommandSecret before any shell runs, covering env, header, bearer and clientSecret interpolation; omaAmbientEnv is the only ambient-env view vendored code consults on spliced sites (OMA supplies an empty map, so user-land env knobs like MCP_DIRECT_TOOLS, MCP_OAUTH_DIR, NPM_CONFIG_CACHE, BROWSER, MCP_OAUTH_CALLBACK_PORT, SYSTEMONE_ENDPOINT/*_API_KEY and the PI_MCP_ADAPTER_* test/recovery selectors cannot reach in); omaAgentDir/omaTmpdir re-root every getAgentPath-derived write and the output-guard spill root into OMA-owned directories; omaChildEnv runs the shared child-env allowlist over inherited process.env for stdio children; omaPinnedFetch is the egress leaf every HTTP path funnels into — loopback stays direct, everything else rides the vendored undici through a ProxyAgent built on the OMA pin, with upstream's own Request-translation (mirroring http-ca.js) so dispatcher and fetch share the vendored undici implementation; omaCaFetch substitutes that leaf for the whole fetch chain when upstream's CA-only leaf is absent; omaAuthStoreKind/omaOAuthFileKey pin the credential store to what the OMA policy declares; omaSecureKeyringClosed returns the same 'OS secure credential storage is unavailable' shape upstream produces on a host without keyring, so no vendored path can reach the OS keyring, the @napi-rs/keyring native binding or the keyctl recovery spawn; omaUiSessionsRefused is the same closed-by-default predicate for the interactive-UI permit the ui-session/glimpse gates consult; omaPolicyActive lets a spliced site distinguish 'no OMA policy' from 'policy installed'.",
         "edits": 8
       },
       "utils.d.ts": {
@@ -73,8 +73,8 @@
         "edits": 2
       },
       "glimpse-ui.js": {
-        "reason": "GLIMPSE_BINARY reads omaAmbientEnv: an operator-exported path to a binary must not select what a UI surface would exec under OMA.",
-        "edits": 2
+        "reason": "GLIMPSE_BINARY reads omaAmbientEnv: an operator-exported path to a binary must not select what a UI surface would exec under OMA. And the glimpse viewer itself is gated on the ui-session permit: getGlimpseBinaryPath (the `npm root -g` host probe) and openGlimpseWindow (the host-global/bundled-path glimpseui dynamic import) refuse under an installed OMA policy before either runs — backstops beneath the call-site refusal in proxy-modes.js and direct-tools.js; with no policy upstream's flow stands.",
+        "edits": 4
       },
       "logger.js": {
         "reason": "MCP_UI_DEBUG reads omaAmbientEnv: an operator-exported debug flag must not raise vendored log verbosity under OMA.",
@@ -85,8 +85,16 @@
         "edits": 3
       },
       "ui-session.js": {
-        "reason": "SSH_CONNECTION/SSH_TTY and MCP_UI_VIEWER read omaAmbientEnv: remote session detection and viewer preference are upstream's UI heuristics — under OMA no ambient env may steer them.",
-        "edits": 3
+        "reason": "SSH_CONNECTION/SSH_TTY and MCP_UI_VIEWER read omaAmbientEnv: remote session detection and viewer preference are upstream's UI heuristics — under OMA no ambient env may steer them. And maybeStartUiSession itself opens with the ui-session permit: under an installed OMA policy it throws before the UI-resource read, the `who` remote probe, orca or any viewer work can run — a backstop beneath the call-site refusals in proxy-modes.js and direct-tools.js.",
+        "edits": 4
+      },
+      "proxy-modes.js": {
+        "reason": "A uiResourceUri tool call is refused under an installed OMA policy with a structured ui_session_refused result — before the UI machinery (the ui-resource read, the `who` remote-login probe, orca, `npm root -g`, a host-global glimpseui import, a browser open) and before the downstream tool call itself: a tool built to interact through its UI cannot run coherently with the UI refused. With no policy upstream's flow stands.",
+        "edits": 2
+      },
+      "direct-tools.js": {
+        "reason": "The same ui-session refusal as proxy-modes.js on the direct-tool surface: a uiResourceUri tool call returns a structured ui_session_refused result before the UI machinery and before the downstream call, under an installed OMA policy. (OMA config validation also pins settings.directTools off, so this is a backstop for any path that reaches it.)",
+        "edits": 2
       },
       "mcp-callback-server.js": {
         "reason": "Bare-builtin specifier normalization: 'http' becomes 'node:http' (identical module, the spelling OMA's package audit recognizes). The OAuth loopback listener itself is untouched.",
@@ -10850,8 +10858,8 @@
     },
     {
       "path": "runtime/direct-tools.js",
-      "bytes": 20856,
-      "sha256": "74ae57af032c7ac5e557d0cc95c3800f38897e5f98b9c88da8b925d61d571ee5"
+      "bytes": 21551,
+      "sha256": "055438177b2b4cb990c8464f2ca0ef7dc46cf11126fe77d748b9ef0b5067c793"
     },
     {
       "path": "runtime/elicitation-handler.d.ts",
@@ -10900,8 +10908,8 @@
     },
     {
       "path": "runtime/glimpse-ui.js",
-      "bytes": 2136,
-      "sha256": "a0dee6777f1da139361b45aa3185737bc546176e7ad07d39997f82cb1901d5bf"
+      "bytes": 2273,
+      "sha256": "448bf92a103c112a26c9660a4c47747b12b92847d47c9632fc3cfbb807dbdd36"
     },
     {
       "path": "runtime/host-html-template.d.ts",
@@ -11355,8 +11363,8 @@
     },
     {
       "path": "runtime/proxy-modes.js",
-      "bytes": 83279,
-      "sha256": "0d2ac11fc195f7ba5d2321e997c3d79df4381ce43ebd2606cd7568dba3404a33"
+      "bytes": 83933,
+      "sha256": "747eb60055823396700862c0e790e1d4f5b5a2acfcae6122cb642876f8ce89fb"
     },
     {
       "path": "runtime/request-headers-command.d.ts",
@@ -11595,8 +11603,8 @@
     },
     {
       "path": "runtime/ui-session.js",
-      "bytes": 23544,
-      "sha256": "7d6ebf297051c071310284545b2657bf19863c7a69c58a9fe451a12bf719c4a9"
+      "bytes": 24024,
+      "sha256": "f9b3d63b86cec1c2d2f1eb9ab491da69805a3ce25710a7d2c2e4b058e6e600a5"
     },
     {
       "path": "runtime/ui-stream-types.d.ts",
@@ -11630,13 +11638,13 @@
     },
     {
       "path": "runtime/utils.d.ts",
-      "bytes": 7860,
-      "sha256": "373a74e1a1f462b54337166ef9d68587281ca147a3735bf9de52ff2084575667"
+      "bytes": 8303,
+      "sha256": "b969ef53ce2dd2ba7f492e5a6deb9f221ab19a4810fc9370e731bd2b893bf6e0"
     },
     {
       "path": "runtime/utils.js",
-      "bytes": 23547,
-      "sha256": "bf4dad2c7daf05f70fab5dd109d42ec54a8b941f906d16f9c4691f3c5369300b"
+      "bytes": 24015,
+      "sha256": "b57a3a3867ab1caf3bd47428c0a8ae107caa99b05fb67cf678b4d02d1cfd198e"
     },
     {
       "path": "upstream-tests/__tests__/abort-signal.test.ts",
@@ -13934,5 +13942,5 @@
       "sha256": "e12a3786ea18a5e9106bc5320c0eacec3991ee00476a72d97438a0135f18a82d"
     }
   ],
-  "bundleSha256": "67eddf4cc8151376c97a62d37d06b9be5eb47fe75dc89d07d972aeb925e9a533"
+  "bundleSha256": "46d2607a1b3038a792e925b957ee637d3177433b0242e46b4339ead271211833"
 }

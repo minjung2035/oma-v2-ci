@@ -1,6 +1,6 @@
 import { existsSync } from "node:fs";
 import { execFileSync } from "node:child_process";
-import { omaAmbientEnv } from "./utils.js";
+import { omaAmbientEnv, omaRequirePermit } from "./utils.js";
 import { join, dirname } from "node:path";
 import { platform } from "node:os";
 import { createRequire } from "node:module";
@@ -18,6 +18,7 @@ export function isGlimpseAvailable() {
     return glimpseAvailable;
 }
 function getGlimpseBinaryPath() {
+    omaRequirePermit("ui-session", "Glimpse viewer resolution");
     if (omaAmbientEnv().GLIMPSE_BINARY && existsSync(omaAmbientEnv().GLIMPSE_BINARY)) {
         return omaAmbientEnv().GLIMPSE_BINARY;
     }
@@ -41,6 +42,7 @@ function getGlimpseBinaryPath() {
     return null;
 }
 export async function openGlimpseWindow(html, options) {
+    omaRequirePermit("ui-session", "Glimpse window");
     const modulePath = resolvedBinaryPath
         ? join(dirname(resolvedBinaryPath), "glimpse.mjs")
         : "glimpseui";
