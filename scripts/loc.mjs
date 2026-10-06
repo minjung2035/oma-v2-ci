@@ -3,7 +3,7 @@ import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join, dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createHash } from "node:crypto";
-import { assertMeasurementCurrent, assertProductionInventory, assertSourceDigests, CLOC_VERSION, collectProductionFiles,
+import { assertMeasurementCurrent, assertProductionInventory, assertSourceDigests, CLOC_VERSION, clocCoverage, collectProductionFiles,
   measureWithCloc, writeProductionInventory, writeSourceDigests } from "./production-inventory.mjs";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
@@ -41,10 +41,15 @@ if (args.includes("--inventory-only")) {
     delete report.header.lines_per_second;
   }
   writeFileSync(join(output, "production-loc.json"), JSON.stringify(report, null, 2) + "\n");
+  // LOC-001..007: every inventory file is accounted for -- a code row, or
+  // cloc's own non-code verdict recorded under nonCode. clocCoverage throws
+  // on anything else, so the loop below never sees an unaccounted file.
+  const { rows, nonCode } = clocCoverage(report, files);
   let sum = 0;
   for (const file of files) {
-    const row = report[file] ?? report[`./${file}`];
-    if (!row || !Number.isSafeInteger(row.code) || row.code < 0) throw new Error(`cloc omitted or misclassified ${file}`);
+    const row = rows.get(file);
+    if (row === undefined) { console.log("    -", file, `(${nonCode.get(file)})`); continue; }
+    if (!Number.isSafeInteger(row.code) || row.code < 0) throw new Error(`cloc omitted or misclassified ${file}`);
     sum += row.code;
     if (!Number.isSafeInteger(sum)) throw new Error("LOC sum exceeds safe integer range");
     console.log(String(row.code).padStart(5), file);

@@ -79,6 +79,53 @@ test('K63: CI measures into an artifact directory without rewriting committed so
   assert.equal(readFileSync(join(f.root, 'production-loc-hashes.json'), 'utf8'), snapshot[1]);
 });
 
+test('K63: non-code inventory files are classified by cloc verdict, never silently omitted', async t => {
+  const f = fixture(t);
+  // Vendored-payload style members cloc cannot count -- no recognized
+  // language, no bytes. The report must carry them under nonCode with
+  // cloc's own verdict, not drop them (LOC-001..007 accounting).
+  f.put('src/vendored/LICENSE', 'MIT License\n\nPermission is hereby granted, free of charge.\n');
+  f.put('src/empty.ts', '');
+  // A .txt counts as cloc's Text language -- the classification is cloc's
+  // decline set, not a file-kind guess, so this one stays a code row.
+  f.put('src/vendored/NOTICE.txt', 'This product includes third-party software.\n');
+  const files = writeProductionInventory(f.root);
+  writeSourceDigests(f.root, files);
+  const output = join(f.root, 'evidence');
+  const run = f.cli('loc.mjs', ['--out', output]);
+  assert.equal(run.status, 0, run.stderr);
+  const report = JSON.parse(readFileSync(join(output, 'production-loc.json'), 'utf8'));
+  assert.equal(report['src/vendored/LICENSE'], undefined, 'no fabricated code row for an uncountable file');
+  assert.equal(report['src/empty.ts'], undefined);
+  assert.equal(report.nonCode['src/vendored/LICENSE'], 'language unknown (#3)');
+  assert.equal(report.nonCode['src/empty.ts'], 'zero sized file');
+  assert.equal(report['src/vendored/NOTICE.txt'].language, 'Text', 'a text file stays counted');
+  assert.equal(report.nonCode['src/vendored/NOTICE.txt'], undefined);
+  assert.equal(assertMeasurementCurrent(f.root, files, { evidenceRoot: output }).status, 'SOURCE_BOUND');
+  const hashes = JSON.parse(readFileSync(join(output, 'production-measurement-hashes.json'), 'utf8'));
+  assert.equal(hashes.files.length, files.length, 'the byte binding still covers the classified files');
+
+  // A file neither counted nor classified still fails -- the accounting
+  // rule is shared by generation and verification, so a report that drops
+  // a file is refused wherever it appears.
+  const { clocCoverage } = await import('../scripts/production-inventory.mjs');
+  const dropped = JSON.parse(JSON.stringify(report));
+  delete dropped.nonCode['src/vendored/LICENSE'];
+  assert.throws(() => clocCoverage(dropped, files), /cloc omitted or misclassified src\/vendored\/LICENSE/);
+  const bogus = JSON.parse(JSON.stringify(report));
+  bogus.nonCode['src/vendored/LICENSE'] = 'not a non-code verdict';
+  assert.throws(() => clocCoverage(bogus, files), /not a recognized non-code reason/);
+  const bothCounted = JSON.parse(JSON.stringify(report));
+  bothCounted['src/vendored/LICENSE'] = { code: 1, blank: 0, comment: 0 };
+  assert.throws(() => clocCoverage(bothCounted, files), /both counts and classifies/);
+  // And the gate wraps the same rule: recorded evidence that dropped a
+  // file from both halves does not pass as covering the inventory.
+  f.put('evidence-stale/production-loc.json', JSON.stringify(dropped));
+  f.put('evidence-stale/production-measurement-hashes.json', readFileSync(join(output, 'production-measurement-hashes.json')));
+  assert.throws(() => assertMeasurementCurrent(f.root, files, { evidenceRoot: join(f.root, 'evidence-stale') }),
+    /does not account for every production file/);
+});
+
 test('K63: unavailable measurement stays NOT_RUN and cannot overwrite source digests', t => {
   const f = fixture(t), before = readFileSync(join(f.root, 'production-loc-hashes.json'), 'utf8');
   const run = f.cli('loc.mjs', ['--out', join(f.root, 'evidence')], true);

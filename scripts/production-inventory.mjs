@@ -81,9 +81,59 @@ export function assertSourceDigests(root = process.cwd(), files = assertProducti
  * other version is treated as no tool at all rather than as a second opinion. */
 export const CLOC_VERSION = "2.08";
 
+/** The ignored-file verdicts cloc can emit under the pinned invocation that
+ * mean "this inventory entry is not countable source": empty, binary, no
+ * known language, or a name cloc's own non-code tables list. Verdicts outside
+ * this set are tool-filter answers that cannot occur here (there is no
+ * --exclude/--include filter and --skip-uniqueness suppresses the duplicate
+ * verdict) or a cloc anomaly ("undefined: Filters_by_Language{...}" -- a
+ * script whose language was recognized but has no counter). An unrecognized
+ * verdict is still an accounting failure, not a classification. */
+export const CLOC_NON_CODE_REASON =
+  /^(?:zero sized file|binary file|language unknown \(#\d+\)|listed in \$Not_Code_(?:Extension|Filename)\{[^}]*\})$/;
+
+/** The two halves of a measurement's accounting, checked together: every
+ * inventory file either has a cloc code row in the report or is named in the
+ * report's `nonCode` block with a verdict CLOC_NON_CODE_REASON accepts.
+ * LOC-001..007: a file that is neither counted nor classified is still an
+ * accounting failure -- vendored payloads carry licenses, dotfiles,
+ * sourcemaps and binaries cloc declines to count, so a missing row alone is
+ * not misclassification; it has to be explicitly classified or it throws.
+ * An incoherent report throws too: a non-code name outside the inventory or
+ * one that also has a row, an unrecognized verdict, a malformed block. */
+export function clocCoverage(report, files) {
+  if (report === null || typeof report !== "object" || Array.isArray(report))
+    throw new Error("cloc report is not an object");
+  const classified = report.nonCode ?? {};
+  if (typeof classified !== "object" || classified === null || Array.isArray(classified))
+    throw new Error("cloc non-code classification is malformed");
+  const listed = new Set(files);
+  for (const [file, reason] of Object.entries(classified)) {
+    if (!listed.has(file))
+      throw new Error(`cloc non-code classification names a file outside the inventory: ${file}`);
+    if (report[file] !== undefined || report[`./${file}`] !== undefined)
+      throw new Error(`cloc report both counts and classifies ${file} as non-code`);
+    if (typeof reason !== "string" || !CLOC_NON_CODE_REASON.test(reason))
+      throw new Error(`cloc non-code verdict for ${file} is not a recognized non-code reason: ${String(reason)}`);
+  }
+  const rows = new Map(), nonCode = new Map();
+  for (const file of files) {
+    const row = report[file] ?? report[`./${file}`];
+    if (row !== undefined) { rows.set(file, row); continue; }
+    if (classified[file] !== undefined) { nonCode.set(file, classified[file]); continue; }
+    throw new Error(`cloc omitted or misclassified ${file}`);
+  }
+  return { rows, nonCode };
+}
+
 /** Measures the given files with the pinned cloc, or returns null when that
  * tool is not on this host. Null is an answer the caller must report as such:
- * a report that was not re-measured is not a measured report. */
+ * a report that was not re-measured is not a measured report.
+ *
+ * The returned report is cloc's JSON plus a `nonCode` member: the --ignored
+ * record folded in under one key so the written evidence and its digest
+ * cover both halves of the accounting -- the rows cloc produced and the
+ * per-file verdicts for everything it declined to count. */
 export function measureWithCloc(root, files, cloc = "cloc") {
   let version;
   try { version = execFileSync(cloc, ["--version"], { encoding: "utf8", timeout: 10000, killSignal: "SIGKILL" }).trim(); }
@@ -93,10 +143,19 @@ export function measureWithCloc(root, files, cloc = "cloc") {
   try {
     const list = join(scratch, "files.txt");
     const out = join(scratch, "loc.json");
+    const ignored = join(scratch, "ignored.json");
     writeFileSync(list, `${files.join("\n")}\n`);
     execFileSync(cloc, [`--list-file=${list}`, "--by-file", "--skip-uniqueness",
-      "--read-lang-def=implementation/cloc-systemd.lang", "--json", `--out=${out}`], { cwd: root, stdio: "ignore", timeout: 600000, killSignal: "SIGKILL" });
-    return JSON.parse(readFileSync(out, "utf8"));
+      "--read-lang-def=implementation/cloc-systemd.lang", `--ignored=${ignored}`, "--json", `--out=${out}`], { cwd: root, stdio: "ignore", timeout: 600000, killSignal: "SIGKILL" });
+    const report = JSON.parse(readFileSync(out, "utf8"));
+    report.nonCode = {};
+    for (const entry of JSON.parse(readFileSync(ignored, "utf8"))) {
+      // With nothing ignored cloc emits `[{}]`, not `[]` -- non-entries are
+      // skipped, real entries name the list-file path verbatim.
+      if (entry === null || typeof entry !== "object" || typeof entry.file !== "string") continue;
+      report.nonCode[entry.file.replace(/^\.\//, "")] = String(entry.reason ?? "").trim();
+    }
+    return report;
   } finally { rmSync(scratch, { recursive: true, force: true }); }
 }
 
@@ -124,15 +183,26 @@ export function assertMeasurementCurrent(root = process.cwd(), files = collectPr
     throw new Error(`stale production-measurement-hashes.json; changed=[${changed.join(", ")}]; removed=[${dropped.join(", ")}]; ` +
       "regenerate with node scripts/loc.mjs");
   const counted = JSON.parse(readFileSync(join(evidenceRoot, "production-loc.json"), "utf8"));
-  const missing = files.filter(file => counted[file] === undefined);
-  if (missing.length || counted.header?.n_files !== files.length)
+  // The recorded report must account for every inventory file the same way
+  // the generator did: a code row, or a recognized non-code verdict in the
+  // report's nonCode block. Anything else is stale or forged, not coverage.
+  const coverage = (() => {
+    try { return clocCoverage(counted, files); }
+    catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      throw new Error(`production-loc.json does not account for every production file: ${message}; regenerate with node scripts/loc.mjs`);
+    }
+  })();
+  // cloc's header counts the files it measured -- the code rows. Files it
+  // declined to count are the nonCode half, not part of n_files.
+  if (counted.header?.n_files !== coverage.rows.size)
     throw new Error(`stale production-loc.json; counted ${counted.header?.n_files} of ${files.length} files; ` +
-      `missing=[${missing.join(", ")}]; regenerate with node scripts/loc.mjs`);
+      "regenerate with node scripts/loc.mjs");
   // The informational total must still agree with what was measured:
   // every row present and a header that counts them is not the same as a total
   // that is the sum of those rows. A report whose SUM disagrees with its own
   // rows, or that has no SUM, is not a measurement this gate will pass on.
-  const rows = Object.entries(counted).filter(([key]) => key !== "header" && key !== "SUM");
+  const rows = Object.entries(counted).filter(([key]) => key !== "header" && key !== "SUM" && key !== "nonCode");
   const extra = rows.map(([key]) => key).filter(file => !files.includes(file));
   if (extra.length) throw new Error(`production-loc.json counts files outside the manifest: [${extra.join(", ")}]`);
   const sum = counted.SUM;
@@ -146,10 +216,10 @@ export function assertMeasurementCurrent(root = process.cwd(), files = collectPr
       totals[field] += row[field];
     }
   }
-  if (sum.nFiles !== files.length || sum.code !== totals.code ||
+  if (sum.nFiles !== rows.length || sum.code !== totals.code ||
       sum.comment !== totals.comment || sum.blank !== totals.blank)
     throw new Error(`production-loc.json SUM disagrees with its own rows ` +
-      `(SUM.code ${sum.code} vs ${totals.code}, SUM.nFiles ${sum.nFiles} vs ${files.length}); ` +
+      `(SUM.code ${sum.code} vs ${totals.code}, SUM.nFiles ${sum.nFiles} vs ${rows.length}); ` +
       "regenerate with node scripts/loc.mjs");
   // Both artifacts must come from the same measuring run; a count taken by one
   // cloc and hashes taken beside another is two observations, not one.
@@ -166,10 +236,25 @@ export function assertMeasurementCurrent(root = process.cwd(), files = collectPr
   // the source's. That needs the pinned tool; without it the result says so.
   const fresh = options.measure === undefined ? measureWithCloc(root, files) : options.measure(root, files);
   if (fresh === null) return { files: files.length, code: sum.code, status: "CONSISTENT_NOT_REMEASURED" };
-  const drifted = files.filter(file => ["code", "comment", "blank"].some(field => fresh[file]?.[field] !== counted[file][field]));
-  if (drifted.length || fresh.SUM?.code !== sum.code)
+  // The fresh report owes the same accounting, or this is not comparing
+  // against a measurement at all.
+  const freshCoverage = (() => {
+    try { return clocCoverage(fresh, files); }
+    catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      throw new Error(`a fresh measurement did not account for every production file: ${message}`);
+    }
+  })();
+  const drifted = [...coverage.rows.keys()].filter(file =>
+    ["code", "comment", "blank"].some(field => freshCoverage.rows.get(file)?.[field] !== coverage.rows.get(file)[field]));
+  // The classification is part of the measurement: a file recorded as
+  // non-code must still be declined, with the same verdict.
+  const classificationDrift =
+    JSON.stringify([...coverage.nonCode].sort()) !== JSON.stringify([...freshCoverage.nonCode].sort());
+  if (drifted.length || classificationDrift || fresh.SUM?.code !== sum.code)
     throw new Error(`production-loc.json does not match a fresh measurement of the source; ` +
-      `differs for [${drifted.join(", ")}]; regenerate with node scripts/loc.mjs`);
+      `differs for [${drifted.join(", ")}]${classificationDrift ? "; non-code classification differs" : ""}; ` +
+      "regenerate with node scripts/loc.mjs");
   return { files: files.length, code: sum.code, status: "SOURCE_BOUND" };
 }
 

@@ -636,6 +636,21 @@ name collision/intended surface/hidden 미활성/idempotent reload/provenance/
 
 ## 9. 진행 로그
 
+- 2026-10-06 (LOC 재생성 고정 — vendored 비코드 파일의 cloc 분류):
+  vendored 번들 유입 후 `node scripts/loc.mjs`가 `cloc omitted or
+  misclassified src/extension/vendor/pi-hashline-edit-pro/LICENSE`로
+  결정적 실패하던 문제 — cloc은 LICENSE·NOTICE·`.map`·dotfile·빈 파일·
+  바이너리(전체 1,620개)를 세지 않는다. `measureWithCloc`이 `--ignored`의
+  per-file 판정을 report의 `nonCode` 블록에 접어 기록하고, 공유 규칙
+  `clocCoverage`가 인벤토리 전 파일을 "code row 또는 인정된 non-code
+  verdict"로 계정 — LOC-001..007의 무침묵누락 불변식 유지: 미계정·
+  인벤토리 밖 분류·row/분류 중복·미인정 verdict는 여전히 실패.
+  `assertMeasurementCurrent`는 n_files/SUM.nFiles를 code-row 집합과
+  대조하고 재측정 시 분류 자체도 비교한다. `.txt`는 cloc의 Text 언어로
+  계속 카운트됨을 테스트가 결박. 루트의 gitignored
+  `production-loc.json`/`production-measurement-hashes.json`은 stale
+  잔재(이전 commit의 부분 산출물)로 확인 — `loc: CI_ARTIFACT_ONLY`
+  posture 유지, 커밋하지 않는다.
 - 2026-10-06 (BL5 맹검증 정산 후속 — underlay 오라클·win32 trailing-dot):
   BL5 잔여 2건. (1) `SDK_STDIO_ENV_UNDERLAY`가 vendored SDK의
   `DEFAULT_INHERITED_ENV_VARS`를 수동 미러해 vendor bump가 이름을
