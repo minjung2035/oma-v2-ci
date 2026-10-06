@@ -147,7 +147,12 @@ export function registerAskUserQuestion(pi: ExtensionAPI): void {
   const cancelPending = (id: string): void => {
     // Tell the presenter to close the dialog, then settle locally — the tool
     // call resolves even if nothing was ever listening on the cancel side.
-    pi.events.emit(ASK_CANCEL_EVENT, { id });
+    try {
+      pi.events.emit(ASK_CANCEL_EVENT, { id });
+    } catch {
+      // an already-invalidated event bus cannot deliver the close signal;
+      // the local settle still has to resolve the pending tool call
+    }
     settle(id, { answers: [], cancelled: true });
   };
   const cancelAll = (): void => {

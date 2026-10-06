@@ -73,7 +73,8 @@ export type QuestionnaireError =
   | "too_many_questions"
   | "duplicate_question"
   | "duplicate_option_label"
-  | "reserved_label";
+  | "reserved_label"
+  | "too_long";
 
 /** What the presenter hands back. `cancelled` is a first-class outcome, not
  * an exception: a declined questionnaire still carries the partial answers. */
@@ -134,6 +135,7 @@ export const ERROR_NO_PRESENTER =
 export const ERROR_NO_QUESTIONS = "Error: At least one question is required";
 export const ERROR_TOO_MANY_QUESTIONS = `Error: At most ${MAX_QUESTIONS} questions are allowed per invocation`;
 export const ERROR_MISSING_FIELDS = "Error: Every question requires question, header, and options with label and description";
+export const ERROR_TOO_LONG = `Error: Header must be at most ${MAX_HEADER_LENGTH} characters; option label at most ${MAX_LABEL_LENGTH}`;
 export const ERROR_DUPLICATE_QUESTION = "Error: Question text must be unique within an invocation";
 export const ERROR_TOO_FEW_OPTIONS = `Error: Each question requires at least ${MIN_OPTIONS} options`;
 export const ERROR_TOO_MANY_OPTIONS = `Error: Each question allows at most ${MAX_OPTIONS} options`;
@@ -164,6 +166,12 @@ export function validateQuestionnaire(typed: QuestionParams): ValidationResult {
       )
     ) {
       return { ok: false, error: "missing_fields", message: ERROR_MISSING_FIELDS };
+    }
+    if (
+      question.header.length > MAX_HEADER_LENGTH ||
+      (options as readonly AskOption[]).some((option) => option.label.length > MAX_LABEL_LENGTH)
+    ) {
+      return { ok: false, error: "too_long", message: ERROR_TOO_LONG };
     }
   }
   const seenQuestions = new Set<string>();

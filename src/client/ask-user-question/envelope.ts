@@ -29,7 +29,7 @@ export function formatAnswerScalar(answer: QuestionAnswer): string {
     case "multi":
       return answer.selected !== undefined && answer.selected.length > 0 ? answer.selected.join(", ") : NO_INPUT_PLACEHOLDER;
     case "custom":
-      return answer.answer !== null && answer.answer.length > 0 ? answer.answer : NO_INPUT_PLACEHOLDER;
+      return answer.answer ? answer.answer : NO_INPUT_PLACEHOLDER;
     case "option":
       return answer.answer ?? NO_INPUT_PLACEHOLDER;
   }

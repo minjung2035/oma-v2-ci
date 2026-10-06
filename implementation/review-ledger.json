@@ -848,8 +848,8 @@
    "oracles": [
     "BL2"
    ],
-   "note": "Read in full for BL2: envelope wording is the upstream text (ENVELOPE_PREFIX/SUFFIX, DECLINE_MESSAGE, '(no input)' placeholder, '\"Q\"=\"A\". selected preview: P.' segments). Cancelled and zero-segment results both collapse to the canonical decline while details keep partial answers and the error code — the single 'didn't answer' signal upstream defines. The upstream notes/globalNote extras are deliberately not ported.",
-   "sha256": "b2bf40bd13e58e0af57bf41c4ff337388cbb2b9cb362bcdb8562a5c5d78590dc"
+   "note": "Re-reviewed for the residual round: formatAnswerScalar custom branch used `answer.answer !== null && length > 0` -- a forged/malformed result with the answer KEY absent (undefined) threw TypeError where upstream absorbs undefined/null/\"\" into the placeholder. Changed to the upstream-shaped truthy check (`answer.answer ? answer.answer : NO_INPUT_PLACEHOLDER`), so a missing key spells the canonical \"(no input)\" instead of crashing the envelope build. Option and multi branches unchanged.",
+   "sha256": "2447f3f91876dad75e5509f84f5ce319b287d28c17078b81b72155ce032c7989"
   },
   {
    "path": "src/client/ask-user-question/model.ts",
@@ -887,8 +887,8 @@
    "oracles": [
     "BL2"
    ],
-   "note": "Read in full for BL2: bounds (1-4 questions, 2-4 options, header<=16, label<=60), reserved labels (Other/Type something./Next), QuestionAnswer carries answer: string|null with selected for multi — the upstream details shape byte-for-byte. Validation order matches the upstream oracle (count, missing fields [OMA addition covering what upstream delegates to TypeBox], duplicate question, option count incl. too_many_options, reserved before duplicate label). normalizeQuestionParams folds CR before identity checks so a smuggled reserved label cannot hide behind a carriage return; malformed structure degrades to the validator, never throws.",
-   "sha256": "cdbc4f0895a4746b3c87afaf67db691676b11e7c3827ad6d98ac20e6dd4bff9c"
+   "note": "Re-reviewed for the residual round: the validator comment claimed every schema guard was re-stated but header/label maxLength were missing -- a schema-bypassing caller got a rendering bug instead of a structured refusal. Added the \"too_long\" error (header >MAX_HEADER_LENGTH or any option label >MAX_LABEL_LENGTH) inside the per-question loop right after missing_fields, so field-shape precedes length exactly as the schema orders it. At-bound values still pass; union gained the \"too_long\" member. All other guards and check ordering unchanged.",
+   "sha256": "80b5323f303e82c2ac7f96cf065d7212511a658aaaf8f5802596bffc5c55531b"
   },
   {
    "path": "src/client/codecs.ts",
@@ -2007,8 +2007,8 @@
    "oracles": [
     "BL2"
    ],
-   "note": "Read in full for BL2: registers ask_user_question once per ExtensionAPI (WeakSet). execute validates before touching the bus; hasUI=false -> no_ui, invalid -> the validator's structured refusal, already-aborted signal -> decline before any request can open a dialog nobody waits on. The request id is claimed synchronously inside the request emit, so an unclaimed request is a deterministic no_presenter refusal (message tells the model to ask as plain chat, never to treat it as a decline). AbortSignal and session_shutdown/session_before_switch settle every pending call as cancelled; executionMode sequential keeps dialogs from stacking. The default export is Personal's -e entry — the same registration, not a vendored module.",
-   "sha256": "94fe3ff2adc9fc17e93b8e90789b279ca416b6cb77f741666b377ecc8aedebf1"
+   "note": "Re-reviewed for the residual round: cancelPending emitted the close signal before settling the pending promise -- on an invalidated event bus emit throws (loader assertActive), which would have left the tool call pending forever. The emit is now best-effort inside try/catch and settle always runs: an undeliverable cancel resolves the call as the structured decline instead of hanging the caller. Every other seam (claim/response/pending map/session hooks) is unchanged.",
+   "sha256": "4daecfdafffe987b003ff34c46914e54e6242f8c64cbf0a9106c18e596d1cc91"
   },
   {
    "path": "src/extension/batch-view.ts",

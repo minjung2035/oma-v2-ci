@@ -162,6 +162,19 @@ test("BL2/upstream: missing required fields refuse before identity checks", () =
   assert.equal((validateQuestionnaire(params([question({ options: [{ description: "d" }, option("ok")] })])) as { error: string }).error, "missing_fields");
 });
 
+test("BL2/upstream: the validator restates the schema's length bounds too", () => {
+  // The comment over validateQuestionnaire claims every schema guard is
+  // re-stated -- the header/label maxLength guards were missing, so a
+  // schema-bypassing caller got a rendering bug instead of a refusal.
+  const longHeader = question({ header: "x".repeat(17) });
+  assert.equal((validateQuestionnaire(params([longHeader])) as { error: string }).error, "too_long");
+  const longLabel = question({ options: [option("y".repeat(61)), option("ok")] });
+  assert.equal((validateQuestionnaire(params([longLabel])) as { error: string }).error, "too_long");
+  // Exactly at the bound is still admitted -- the guard bounds, it does not shrink.
+  assert.equal(validateQuestionnaire(params([question({ header: "x".repeat(16) })])).ok, true);
+  assert.equal(validateQuestionnaire(params([question({ options: [option("y".repeat(60)), option("ok")] })])).ok, true);
+});
+
 test("BL2/upstream: duplicate questions, duplicate labels and reserved labels refuse", () => {
   assert.equal((validateQuestionnaire(params([question(), question()])) as { error: string }).error, "duplicate_question");
   assert.equal(
@@ -216,6 +229,13 @@ test("BL2/upstream: decline is one canonical message; cancelled carries partial 
   assert.deepEqual(lifecycle.details.answers.length, 1);
   assert.equal(formatAnswerScalar({ questionIndex: 0, question: "Q", kind: "multi", answer: null, selected: [] }), NO_INPUT_PLACEHOLDER);
   assert.equal(formatAnswerScalar({ questionIndex: 0, question: "Q", kind: "custom", answer: null }), NO_INPUT_PLACEHOLDER);
+  // Upstream absorbs a MISSING answer key too (undefined/null/"" all spell
+  // the placeholder); a !== null guard throws TypeError on undefined.
+  assert.equal(
+    formatAnswerScalar({ questionIndex: 0, question: "Q", kind: "custom" } as never),
+    NO_INPUT_PLACEHOLDER,
+  );
+  assert.equal(formatAnswerScalar({ questionIndex: 0, question: "Q", kind: "custom", answer: "" }), NO_INPUT_PLACEHOLDER);
 });
 
 // ---------- model (headless) ----------
@@ -515,6 +535,31 @@ test("BL2: dialog open + every engine boundary resolves the pending call as a st
       `${name} closes the presenter side too`,
     );
   }
+});
+
+test("BL2: a cancel emit that cannot be delivered still settles the pending call", async () => {
+  // cancelPending emitted the close signal BEFORE settling — on an
+  // already-invalidated event bus emit throws (the real loader's
+  // assertActive), which used to leave the tool promise pending forever.
+  // The settle is the obligation; the emit is best-effort.
+  const host = fakePi();
+  registerAskUserQuestion(host.pi);
+  const ui = fakeUiContext();
+  registerAskUserQuestionPresenter(host.pi, { context: () => ui.ctx as never });
+  const outcomePromise = toolExecute(host, params([question()]));
+  await Promise.resolve();
+  assert.equal(ui.calls.length, 1, "the dialog is open");
+  const events = (host.pi as unknown as { events: { emit: (channel: string, data: unknown) => void } }).events;
+  const originalEmit = events.emit;
+  events.emit = () => { throw new Error("event bus already invalidated"); };
+  try {
+    host.fire("session_shutdown", { reason: "quit" });
+  } finally {
+    events.emit = originalEmit;
+  }
+  const result = await outcomePromise;
+  assert.equal(result.details.cancelled, true);
+  assert.equal(result.content[0]!.text, DECLINE_MESSAGE);
 });
 
 test("BL2: an already-aborted call declines before ever touching the bus", async () => {

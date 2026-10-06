@@ -172,7 +172,7 @@
     },
     {
       "path": "src/client/ask-user-question/envelope.ts",
-      "sha256": "b2bf40bd13e58e0af57bf41c4ff337388cbb2b9cb362bcdb8562a5c5d78590dc"
+      "sha256": "2447f3f91876dad75e5509f84f5ce319b287d28c17078b81b72155ce032c7989"
     },
     {
       "path": "src/client/ask-user-question/model.ts",
@@ -184,7 +184,7 @@
     },
     {
       "path": "src/client/ask-user-question/questionnaire.ts",
-      "sha256": "cdbc4f0895a4746b3c87afaf67db691676b11e7c3827ad6d98ac20e6dd4bff9c"
+      "sha256": "80b5323f303e82c2ac7f96cf065d7212511a658aaaf8f5802596bffc5c55531b"
     },
     {
       "path": "src/client/codecs.ts",
@@ -460,7 +460,7 @@
     },
     {
       "path": "src/extension/ask-user-question.ts",
-      "sha256": "94fe3ff2adc9fc17e93b8e90789b279ca416b6cb77f741666b377ecc8aedebf1"
+      "sha256": "4daecfdafffe987b003ff34c46914e54e6242f8c64cbf0a9106c18e596d1cc91"
     },
     {
       "path": "src/extension/batch-view.ts",
