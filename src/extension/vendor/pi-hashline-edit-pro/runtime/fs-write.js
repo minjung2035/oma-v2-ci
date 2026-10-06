@@ -1,8 +1,8 @@
 import { randomUUID } from "node:crypto";
 import { constants } from "node:fs";
-import { lstat, mkdir, open, readFile, readdir, readlink, rename, rm, stat, writeFile, } from "node:fs/promises";
+import { lstat, mkdir, open, readdir, readlink, rename, rm, stat, writeFile, } from "node:fs/promises";
 import { dirname, join, parse, resolve, sep } from "node:path";
-import { toCwd } from "./paths.js";
+import { configDir, toCwd } from "./paths.js";
 import { errCode, isModeUnsupported } from "./utils.js";
 function sameIdentity(actual, expected) {
     return actual.dev === expected.dev && actual.ino === expected.ino;
@@ -117,25 +117,42 @@ export async function resolveInCwd(path, cwd) {
 }
 // OMA divergence (applied by scripts/vendor-pi-hashline.mjs; recorded
 // under generated.divergences in manifest.json): the commit write and the
-// verification re-read are injectable. The seam is one object -- reads and
-// writes of the mutation target route together so a caller cannot split
-// them across boundaries. Installed by the adapter at registration, after
-// bundle verification; otherwise upstream's writeAtomic/readFile run.
+// verification re-read are injectable and fail-closed. The seam is one
+// object -- reads and writes of the mutation target route together so a
+// caller cannot split them across boundaries. Installed by the adapter at
+// registration, after bundle verification. With no channel installed the
+// seam refuses rather than falling back to upstream's readFile/writeAtomic:
+// a missing channel means the contained boundary was never wired, and a
+// silent fallback would read or write the mutation target outside it.
 let omaCommitChannel;
 /** Install OMA's commit channel: { read(path) -> utf8 text,
- * write(path, content, expectedIdentity) -> contained write }. */
+ * write(path, content, expectedIdentity) -> contained write }. Passing
+ * undefined restores the fail-closed default. */
 export function omaInstallCommitChannel(channel) {
     omaCommitChannel = channel;
 }
+function omaRequiredChannel() {
+    if (omaCommitChannel === undefined)
+        throw new Error("[E_OMA_NO_COMMIT_CHANNEL] no OMA commit channel is installed; refusing to read or write a mutation target outside the contained boundary");
+    return omaCommitChannel;
+}
 export async function omaReadFileText(path) {
-    return omaCommitChannel !== undefined ? omaCommitChannel.read(path) : readFile(path, "utf-8");
+    return omaRequiredChannel().read(path);
 }
 export async function omaWriteCommit(path, content, expectedIdentity) {
-    if (omaCommitChannel !== undefined)
-        return omaCommitChannel.write(path, content, expectedIdentity);
-    return writeAtomic(path, content, expectedIdentity);
+    return omaRequiredChannel().write(path, content, expectedIdentity);
 }
 export async function writeAtomic(path, content, expectedIdentity, restoreMode) {
+    // OMA divergence: direct writeAtomic use is confined to the bundle's
+    // own state directory -- config.js writes configPath() under
+    // configDir(), which the adapter redirects into OMA-owned space via
+    // PI_HASHLINE_DIR. Mutation targets are the commit channel's domain,
+    // so a direct writeAtomic call on anything else -- replace-undo.js's
+    // undo write, were that tool ever registered -- refuses closed here
+    // instead of writing uncontained.
+    const omaStateDir = resolve(configDir());
+    if (!resolve(path).startsWith(omaStateDir + sep))
+        throw new Error(`[E_OMA_STATE_DOMAIN] writeAtomic serves the bundle's own state directory only; a mutation target goes through the OMA commit channel: ${path}`);
     const targetPath = await resolveTarget(path);
     let existingStats = null;
     try {

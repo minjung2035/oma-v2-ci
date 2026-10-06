@@ -34,8 +34,15 @@
  *   quota decision `write`/`edit` use), still carrying the read snapshot's
  *   inode identity — a deleted or replaced file refuses before a byte is
  *   written, reported with upstream's own `[E_PATH_CHANGED]` wording.
- *   `writeAtomic` itself remains in the bundle, unreachable after the
- *   splice — faithful, not deleted.
+ *   The seam is fail-closed: with no channel installed it throws
+ *   `[E_OMA_NO_COMMIT_CHANNEL]` rather than falling back to upstream's
+ *   readFile/writeAtomic, and `writeAtomic` itself is confined to the
+ *   bundle's own state directory (config.js's writes under
+ *   PI_HASHLINE_DIR — a different ownership domain), so a direct
+ *   mutation-target caller — replace-undo.js's undo write, were that tool
+ *   ever registered — refuses `[E_OMA_STATE_DOMAIN]` instead of writing
+ *   uncontained. `writeAtomic` remains in the bundle, alive for the state
+ *   domain — faithful, not deleted.
  * - Authority: the workspace guard names replace/replace_within/insert in
  *   its write gate, so a read-only role (the Principal) is refused before
  *   execute runs; those tools are not even registered for it. The guard
@@ -271,6 +278,9 @@ export async function registerHashlineTools(pi: ExtensionAPI, options: HashlineT
   // reported with upstream's own [E_PATH_CHANGED] wording so the vendored
   // machinery (and the model) see the same contract. A refusal that is not
   // "changed" — quota, containment — propagates as OMA's own refusal.
+  // The install is unconditional (sandboxed or not): the vendored seam is
+  // fail-closed, so a registration path that skipped this would throw on
+  // first use rather than write uncontained.
   const commitRead = async (path: string): Promise<string> =>
     options.sandboxed ? await readFile(path, "utf-8") : readWithin(options.workspace, path).toString("utf-8");
   vendored.omaInstallCommitChannel({

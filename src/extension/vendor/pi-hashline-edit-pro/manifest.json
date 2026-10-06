@@ -25,7 +25,7 @@
         "edits": 1
       },
       "fs-write.js": {
-        "reason": "OMA write seam: the two commit paths (commit.js and batch.js's multi-edit close) are rerouted from upstream's writeAtomic to an installed writer, and the read-back verification read is rerouted to the same seam's read. OMA's adapter installs the contained serialized writer — quota decided inside the serialization, no-follow descriptor walks, inode-identity check against the read snapshot. Uninstalled, upstream's writeAtomic/readFile run unchanged. The identity contract is upstream's: a missing or replaced inode refuses before a byte is written.",
+        "reason": "OMA write seam, fail-closed: the two commit paths (commit.js and batch.js's multi-edit close) are rerouted from upstream's writeAtomic to an installed writer, and the read-back verification read is rerouted to the same seam's read. OMA's adapter installs the contained serialized writer — quota decided inside the serialization, no-follow descriptor walks, inode-identity check against the read snapshot. With no channel installed the seam throws instead of falling back to readFile/writeAtomic — a missing channel means the contained boundary was never wired, and a silent fallback would read or write the mutation target outside it. writeAtomic itself is kept but confined to the bundle's own state directory (config.js's configPath() under configDir(), redirected by the adapter into OMA-owned space via PI_HASHLINE_DIR — a different ownership domain); any other direct writeAtomic target — e.g. replace-undo.js's undo write, were that tool ever registered — refuses closed instead of writing uncontained. The identity contract is upstream's: a missing or replaced inode refuses before a byte is written.",
         "edits": 2
       },
       "fs-write.d.ts": {
@@ -1553,13 +1553,13 @@
     },
     {
       "path": "runtime/fs-write.d.ts",
-      "bytes": 985,
-      "sha256": "c9073a299511a5c3a861ef763d94f86f899462e27dfc87398aee0f43f6f8b926"
+      "bytes": 1262,
+      "sha256": "01be8d7035d4d4e7e189b6ff55d3f4a5a9d905530d61ac16d1ee781e0f6a13bc"
     },
     {
       "path": "runtime/fs-write.js",
-      "bytes": 8330,
-      "sha256": "d605e7f0017c3262101e64c092121c40dc356aaf054e940e849fa9118638baae"
+      "bytes": 9465,
+      "sha256": "13da1762ac26d53c903e7c91acc89ec8f190896d40d15dfc427eda19f249ec39"
     },
     {
       "path": "runtime/hash-store.d.ts",
@@ -2817,5 +2817,5 @@
       "sha256": "16e1adab2395005d09e878bd6a485fc84aba20d13b51bdb64d5f32b624caae9c"
     }
   ],
-  "bundleSha256": "453c949e64f30ad8efbea1d911ae39f992896bafcc0a06ea85f9164174358d2b"
+  "bundleSha256": "ade4a5df44e7e62587b8f2ce6e996e78d8acc829c96297e26e25d307b5b6629f"
 }

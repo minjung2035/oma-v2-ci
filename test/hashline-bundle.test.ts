@@ -318,8 +318,59 @@ test("BL3: the commit channel's identity refusal surfaces as upstream's [E_PATH_
     refusing.tools.get("replace")!.execute("call",
       { remove_from: anchors[1], remove_to: anchors[1], replacement_lines: "CHANGED" },
       undefined, undefined, world.ctx),
-    /E_PATH_CHANGED|changed|different file/i);
+    (error: unknown) => {
+      // Require upstream's marker itself: FILE_CHANGED_REFUSAL contains
+      // "different file", so a loose /changed|different file/ match would
+      // also pass on the raw, untranslated refusal.
+      const message = error instanceof Error ? error.message : String(error);
+      assert.match(message, /E_PATH_CHANGED/, "OMA's identity refusal must be translated to upstream's wording");
+      assert.ok(!message.includes(FILE_CHANGED_REFUSAL), "the raw refusal must not surface untranslated");
+      return true;
+    });
   assert.equal(readFileSync(file, "utf8"), "one\ntwo\nthree\n", "the refused commit wrote nothing");
+});
+
+test("BL3: the commit seam is fail-closed — no silent fallback, and writeAtomic serves only the state dir", async t => {
+  // The seam is module state the adapter shares; uninstalling exercises
+  // the same code path a missing install would hit, and the state-dir
+  // confinement is what a never-installed channel leaves for direct
+  // writeAtomic callers (replace-undo.js's undo write, if ever registered).
+  const fsWrite = await import("../src/extension/vendor/pi-hashline-edit-pro/runtime/fs-write.js");
+  const dir = tmp(t);
+  const target = join(dir, "a.ts");
+  writeFileSync(target, "original\n");
+  const stateDir = join(dir, "state");
+  const savedEnv = process.env.PI_HASHLINE_DIR;
+  process.env.PI_HASHLINE_DIR = stateDir;
+  try {
+    fsWrite.omaInstallCommitChannel(undefined);
+    await assert.rejects(fsWrite.omaReadFileText(target), /E_OMA_NO_COMMIT_CHANNEL/);
+    await assert.rejects(fsWrite.omaWriteCommit(target, "uncontained\n"), /E_OMA_NO_COMMIT_CHANNEL/);
+    assert.equal(readFileSync(target, "utf8"), "original\n", "the refused seam wrote nothing");
+    // writeAtomic stays alive for the bundle's own state directory —
+    // config.js's configPath() domain — and refuses every other target.
+    await fsWrite.writeAtomic(join(stateDir, "config.json"), "{}\n");
+    assert.equal(readFileSync(join(stateDir, "config.json"), "utf8"), "{}\n", "state-dir writeAtomic still lands");
+    await assert.rejects(
+      fsWrite.writeAtomic(target, "undo\n", { dev: 1, ino: 2 }, 0o644),
+      /E_OMA_STATE_DOMAIN/);
+    assert.equal(readFileSync(target, "utf8"), "original\n", "the refused direct write wrote nothing");
+    // With a channel installed the seam routes through it, identity included.
+    const calls: string[] = [];
+    fsWrite.omaInstallCommitChannel({
+      read: async (path: string) => { calls.push(`read:${path}`); return "body"; },
+      write: async (path: string, _content: string, expectedIdentity?: { dev: number; ino: number }) => { calls.push(`write:${path}:${expectedIdentity?.ino}`); },
+    });
+    assert.equal(await fsWrite.omaReadFileText("/p"), "body");
+    await fsWrite.omaWriteCommit("/p", "c", { dev: 1, ino: 2 });
+    assert.deepEqual(calls, ["read:/p", "write:/p:2"]);
+  } finally {
+    // Leave the seam uninstalled: every registerHashlineTools call
+    // reinstalls it, and any caller that skips installation must hit the
+    // fail-closed path, not a fallback.
+    fsWrite.omaInstallCommitChannel(undefined);
+    if (savedEnv === undefined) delete process.env.PI_HASHLINE_DIR; else process.env.PI_HASHLINE_DIR = savedEnv;
+  }
 });
 
 test("BL3: writeWithinUnchanged opens without O_CREAT and refuses a different inode", async t => {

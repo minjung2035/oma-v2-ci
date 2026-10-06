@@ -488,7 +488,7 @@
     },
     {
       "path": "src/extension/hashline-tools.ts",
-      "sha256": "6f840847a430668d4b30262ead7adcd93e6b1e24a536697f3c560413603328cf"
+      "sha256": "df7d99643f0ba92d64c1ff9721139c4c868fa4d87378185daf819adee51cde65"
     },
     {
       "path": "src/extension/inference-bridge.ts",
@@ -548,7 +548,7 @@
     },
     {
       "path": "src/extension/vendor/pi-hashline-edit-pro/manifest.json",
-      "sha256": "b96b64b676cf5d114498cd726e79504380107eb6c571be14e37f51b6c3668f7a"
+      "sha256": "c65345b870802cf86892f876eea2b0c6d8791b143b99d1bdf14604d5263828a6"
     },
     {
       "path": "src/extension/vendor/pi-hashline-edit-pro/node_modules/@borewit/text-codec/LICENSE.txt",
@@ -1544,11 +1544,11 @@
     },
     {
       "path": "src/extension/vendor/pi-hashline-edit-pro/runtime/fs-write.d.ts",
-      "sha256": "c9073a299511a5c3a861ef763d94f86f899462e27dfc87398aee0f43f6f8b926"
+      "sha256": "01be8d7035d4d4e7e189b6ff55d3f4a5a9d905530d61ac16d1ee781e0f6a13bc"
     },
     {
       "path": "src/extension/vendor/pi-hashline-edit-pro/runtime/fs-write.js",
-      "sha256": "d605e7f0017c3262101e64c092121c40dc356aaf054e940e849fa9118638baae"
+      "sha256": "13da1762ac26d53c903e7c91acc89ec8f190896d40d15dfc427eda19f249ec39"
     },
     {
       "path": "src/extension/vendor/pi-hashline-edit-pro/runtime/hash-store.d.ts",

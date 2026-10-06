@@ -112,9 +112,13 @@ const DEPENDENCIES = Object.freeze({
  * Divergence policy: OMA boundary seams only — the read path's file open
  * and the write path's commit+re-read become injectable so the adapter can
  * route them through OMA's contained admission and the serialized
- * quota-deciding writer. Upstream behavior is the default when no seam is
- * installed. Nothing about anchors, hashing, parsing, diffing or payload
- * validation is touched. */
+ * quota-deciding writer. The read seam keeps upstream's plain open as its
+ * uninstalled default (a Resident's sandbox installs no opener — the mount
+ * plan is the boundary); the commit seam is fail-closed instead: with no
+ * channel installed it throws, and direct writeAtomic use is confined to
+ * the bundle's own state directory, so a mutation-target write outside
+ * the channel cannot happen silently. Nothing about anchors, hashing,
+ * parsing, diffing or payload validation is touched. */
 const OMA_DIVERGENCES = Object.freeze({
   "file-kind.js": {
     reason:
@@ -168,43 +172,71 @@ export declare function loadFileKindAndText(`,
   },
   "fs-write.js": {
     reason:
-      "OMA write seam: the two commit paths (commit.js and batch.js's " +
-      "multi-edit close) are rerouted from upstream's writeAtomic to an " +
-      "installed writer, and the read-back verification read is rerouted " +
-      "to the same seam's read. OMA's adapter installs the contained " +
-      "serialized writer — quota decided inside the serialization, " +
-      "no-follow descriptor walks, inode-identity check against the read " +
-      "snapshot. Uninstalled, upstream's writeAtomic/readFile run " +
-      "unchanged. The identity contract is upstream's: a missing or " +
-      "replaced inode refuses before a byte is written.",
+      "OMA write seam, fail-closed: the two commit paths (commit.js and " +
+      "batch.js's multi-edit close) are rerouted from upstream's " +
+      "writeAtomic to an installed writer, and the read-back verification " +
+      "read is rerouted to the same seam's read. OMA's adapter installs " +
+      "the contained serialized writer — quota decided inside the " +
+      "serialization, no-follow descriptor walks, inode-identity check " +
+      "against the read snapshot. With no channel installed the seam " +
+      "throws instead of falling back to readFile/writeAtomic — a missing " +
+      "channel means the contained boundary was never wired, and a silent " +
+      "fallback would read or write the mutation target outside it. " +
+      "writeAtomic itself is kept but confined to the bundle's own state " +
+      "directory (config.js's configPath() under configDir(), redirected " +
+      "by the adapter into OMA-owned space via PI_HASHLINE_DIR — a " +
+      "different ownership domain); any other direct writeAtomic target — " +
+      "e.g. replace-undo.js's undo write, were that tool ever registered — " +
+      "refuses closed instead of writing uncontained. The identity " +
+      "contract is upstream's: a missing or replaced inode refuses before " +
+      "a byte is written.",
     edits: [
       {
-        find: `import { lstat, mkdir, open, readdir, readlink, rename, rm, stat, writeFile, } from "node:fs/promises";`,
-        replace: `import { lstat, mkdir, open, readFile, readdir, readlink, rename, rm, stat, writeFile, } from "node:fs/promises";`,
+        find: `import { toCwd } from "./paths.js";`,
+        replace: `import { configDir, toCwd } from "./paths.js";`,
       },
       {
-        find: `export async function writeAtomic(`,
+        find: `export async function writeAtomic(path, content, expectedIdentity, restoreMode) {
+    const targetPath = await resolveTarget(path);`,
         replace: `// OMA divergence (applied by scripts/vendor-pi-hashline.mjs; recorded
 // under generated.divergences in manifest.json): the commit write and the
-// verification re-read are injectable. The seam is one object -- reads and
-// writes of the mutation target route together so a caller cannot split
-// them across boundaries. Installed by the adapter at registration, after
-// bundle verification; otherwise upstream's writeAtomic/readFile run.
+// verification re-read are injectable and fail-closed. The seam is one
+// object -- reads and writes of the mutation target route together so a
+// caller cannot split them across boundaries. Installed by the adapter at
+// registration, after bundle verification. With no channel installed the
+// seam refuses rather than falling back to upstream's readFile/writeAtomic:
+// a missing channel means the contained boundary was never wired, and a
+// silent fallback would read or write the mutation target outside it.
 let omaCommitChannel;
 /** Install OMA's commit channel: { read(path) -> utf8 text,
- * write(path, content, expectedIdentity) -> contained write }. */
+ * write(path, content, expectedIdentity) -> contained write }. Passing
+ * undefined restores the fail-closed default. */
 export function omaInstallCommitChannel(channel) {
     omaCommitChannel = channel;
 }
+function omaRequiredChannel() {
+    if (omaCommitChannel === undefined)
+        throw new Error("[E_OMA_NO_COMMIT_CHANNEL] no OMA commit channel is installed; refusing to read or write a mutation target outside the contained boundary");
+    return omaCommitChannel;
+}
 export async function omaReadFileText(path) {
-    return omaCommitChannel !== undefined ? omaCommitChannel.read(path) : readFile(path, "utf-8");
+    return omaRequiredChannel().read(path);
 }
 export async function omaWriteCommit(path, content, expectedIdentity) {
-    if (omaCommitChannel !== undefined)
-        return omaCommitChannel.write(path, content, expectedIdentity);
-    return writeAtomic(path, content, expectedIdentity);
+    return omaRequiredChannel().write(path, content, expectedIdentity);
 }
-export async function writeAtomic(`,
+export async function writeAtomic(path, content, expectedIdentity, restoreMode) {
+    // OMA divergence: direct writeAtomic use is confined to the bundle's
+    // own state directory -- config.js writes configPath() under
+    // configDir(), which the adapter redirects into OMA-owned space via
+    // PI_HASHLINE_DIR. Mutation targets are the commit channel's domain,
+    // so a direct writeAtomic call on anything else -- replace-undo.js's
+    // undo write, were that tool ever registered -- refuses closed here
+    // instead of writing uncontained.
+    const omaStateDir = resolve(configDir());
+    if (!resolve(path).startsWith(omaStateDir + sep))
+        throw new Error(\`[E_OMA_STATE_DOMAIN] writeAtomic serves the bundle's own state directory only; a mutation target goes through the OMA commit channel: \${path}\`);
+    const targetPath = await resolveTarget(path);`,
       },
     ],
   },
@@ -217,7 +249,11 @@ export async function writeAtomic(`,
       {
         find: `export declare function writeAtomic(`,
         replace: `/** OMA divergence: the commit channel the adapter installs -- the
- * contained re-read and the serialized quota-deciding write. */
+ * contained re-read and the serialized quota-deciding write. The seam is
+ * fail-closed: with no channel installed omaReadFileText/omaWriteCommit
+ * throw, and writeAtomic itself is confined to the bundle's own state
+ * directory (the config.js domain) -- a direct mutation-target caller
+ * refuses closed instead of writing uncontained. */
 export interface OmaCommitChannel {
     read(path: string): Promise<string>;
     write(path: string, content: string, expectedIdentity?: FileIdentity): Promise<void>;

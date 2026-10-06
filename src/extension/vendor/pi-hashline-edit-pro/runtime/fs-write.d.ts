@@ -8,7 +8,11 @@ export declare function resolveInCwd(path: string, cwd: string): Promise<{
     resolved: string;
 }>;
 /** OMA divergence: the commit channel the adapter installs -- the
- * contained re-read and the serialized quota-deciding write. */
+ * contained re-read and the serialized quota-deciding write. The seam is
+ * fail-closed: with no channel installed omaReadFileText/omaWriteCommit
+ * throw, and writeAtomic itself is confined to the bundle's own state
+ * directory (the config.js domain) -- a direct mutation-target caller
+ * refuses closed instead of writing uncontained. */
 export interface OmaCommitChannel {
     read(path: string): Promise<string>;
     write(path: string, content: string, expectedIdentity?: FileIdentity): Promise<void>;

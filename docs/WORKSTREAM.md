@@ -636,6 +636,47 @@ name collision/intended surface/hidden 미활성/idempotent reload/provenance/
 
 ## 9. 진행 로그
 
+- 2026-10-07 (bundled #3 — pi-hashline-edit-pro 맹검증 정산): BL3 맹검증
+  결과 CLEAN + LOW 4건 — 1·4는 수정, 2·3은 upstream 형상 관찰로 기록.
+  ① commit seam의 silent fallback 잠재 홀: `omaWriteCommit`/`omaReadFileText`
+  가 채널 미설치 시 upstream `writeAtomic`/`readFile`로 조용히 떨어졌다
+  (오늘은 도달 불가 — 설치는 검증 후·등록 전에 무조건이지만, 미래의 등록
+  변경이 containment를 묵시 우회할 수 있었다). fail-closed로 전환: 채널
+  부재 시 `[E_OMA_NO_COMMIT_CHANNEL]` throw. `writeAtomic` 자체는 살려
+  두되 번들 자체 state 디렉터리로 국한 — `config.js:195`의 `configPath()`
+  쓰기(`configDir()`=`PI_HASHLINE_DIR` 아래, OMA가 소유하는 별도
+  ownership domain)만 계속 통하고, 그 외 직접 호출은
+  `[E_OMA_STATE_DOMAIN]`로 거절한다. 열거 결과: `replace-undo.js:181`의
+  직접 `writeAtomic` 호출은 seam을 타지 않으므로 seam-throw만으로는
+  잡히지 않고, domain gate 덕분에 `regUndo`가 등록돼도 그 undo write는
+  throw — 의도된 fail-closed 신호. 단, 같은 함수의 pre-write read는
+  raw `open()`(`replace-undo.js:154`)으로 여전히 양 seam 밖이라, 등록이
+  필요해지면 그 모듈 전용 splice가 별도로 필요함을 기록한다. splice는
+  `vendor-pi-hashline.mjs`의 OMA_DIVERGENCES로만 — vendored 파일 손수정
+  없음, `readFile` import splice는 fallback 소멸로 제거(emit이 upstream
+  원문으로 복원), manifest `generated.divergences` 재기록 + `--check`
+  BUNDLE_CURRENT. ④ inode 번역 단언 강화: 기존
+  `/E_PATH_CHANGED|changed|different file/i`는 미번역 FILE_CHANGED_REFUSAL
+  ("…a different file than…")에도 통과했다 — 번역이 사라져도 지나가는
+  비결합 단언. `E_PATH_CHANGED` 필수 + raw refusal 부재 단언으로 교체.
+  fail→pass 증거: baseline은 채널 없이 `omaWriteCommit`이 대상 파일을
+  실제로 기록하고 직접 `writeAtomic`도 임의 경로에 기록 성공 → 수정 후
+  seam throw·state-dir 쓰기만 성공·mutation 경로 거절·설치 시 채널 라우팅;
+  번역 분기를 제거한 dist 패치에서 새 단언이 정확히 실패(구 loose regex는
+  통과했을 것)함을 확인. 기록된 upstream 형상 관찰(수정 없음): ② read의
+  image 분기 — seam-admitted sniff(`openForRead`)이 kind=image를 반환하면
+  vendored read는 `createReadTool(ctx.cwd)`로 새로 만든 builtin read에
+  위임해 payload를 다시 연다 — admission된 sniff와 builtin의 자체 open
+  사이에 inode 교체 창(TOCTOU)이 있고 payload read는 seam을 타지 않는다.
+  upstream의 위임 설계 그대로; seam이 sniff 단계의 admission gate로 남아
+  있어 비승인 경로에서는 분기 자체에 도달하지 못한다. ③ 비승인 경로의
+  metadata oracle — `valAccess`(raw fsAccess)와 `loadFileKindAndText`의
+  선행 `fsStat`이 seam의 `openForRead`보다 먼저라, 거절되는 경로에 대해서도
+  존재/유형(directory·too_large의 크기 임계 통과 여부)이 답으로 관측된다.
+  content 자체는 여전히 seam이 한 바이트도 열기 전에 거절한다 — 노출은
+  existence/type/size의 메타데이터에 한정, upstream shape 유지로 기록.
+  NOT_RUN: macOS native·systemd·kernel/powercut·provider credential·release
+  qualification 레인.
 - 2026-10-07 (bundled #2 — ask_user_question, OMA 네이티브): §7 순서
   (lsp→ask→hashline→web→mcp)의 두 번째 확장 — vendoring 아닌 직접 구현.
   오라클은 `@juicesharp/rpiv-ask-user-question@2.12.0` 타르볼: bound
