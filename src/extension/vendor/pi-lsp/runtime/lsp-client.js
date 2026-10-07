@@ -39,15 +39,18 @@ export function omaOnInboundFrame(sink) {
 }
 // OMA divergence: a truncation marker is itself a diagnostic, so it
 // renders in the same output the kept entries do -- a cut list can
-// never pass as complete. The code is what a second flagging pass (and
-// the codeAction context below) recognizes: markers are not counted as
-// diagnostics again and are never sent to the server.
-export function omaMarkerDiagnostic(text) {
+// never pass as complete. The oma/ code prefix is what a second
+// flagging pass (and the codeAction context below) recognizes: markers
+// are not counted as diagnostics again and are never sent to the
+// server. The code and severity specialize the marker -- "oma/error"
+// marks one file's own failed request (the per-file degrade in
+// runner.js).
+export function omaMarkerDiagnostic(text, code = "oma/truncation", severity = 3) {
     return { range: { start: { line: 0, character: 0 }, end: { line: 0, character: 0 } },
-        severity: 3, source: "oma", code: "oma/truncation", message: `[oma: ${text}]` };
+        severity, source: "oma", code, message: `[oma: ${text}]` };
 }
-function omaIsTruncationMarker(diagnostic) {
-    return diagnostic?.source === "oma" && diagnostic?.code === "oma/truncation";
+export function omaIsMarker(diagnostic) {
+    return diagnostic?.source === "oma" && typeof diagnostic?.code === "string" && diagnostic.code.startsWith("oma/");
 }
 // A message an earlier pass already cut ends with this tail -- cutting it
 // again would slice the marker off and re-report the truncated length as
@@ -60,13 +63,21 @@ const OMA_MESSAGE_TRUNCATION_TAIL = / \[truncated at OMA's \d+-char bound; \d+ c
 // already flagged (real diagnostics plus a tail marker, messages already
 // cut), so re-flagging must not count the marker again nor re-cut a
 // message -- the drop counts the markers report are the point and
-// re-truncating would lie.
+// re-truncating would lie. A resolved list can already end in MORE than
+// one marker (the stored truncation marker plus the URI-drop marker
+// appended at settle time), so every trailing marker is stripped before
+// counting: counting only the last one re-counted the earlier marker as
+// a real diagnostic, invented a false "1 more" drop and sliced the real
+// markers off the kept prefix. Prior markers also ride after a fresh
+// truncation so their own counts are never erased.
 export function omaFlaggedDiagnostics(list, bound = OMA_MAX_DIAGNOSTICS_PER_FILE) {
     let flagged = Array.isArray(list) ? list : [];
-    const realCount = flagged.length - (flagged.length > 0 && omaIsTruncationMarker(flagged[flagged.length - 1]) ? 1 : 0);
+    let realCount = flagged.length;
+    while (realCount > 0 && omaIsMarker(flagged[realCount - 1])) realCount -= 1;
     if (realCount > bound)
         flagged = [...flagged.slice(0, bound),
-            omaMarkerDiagnostic(`${realCount - bound} more diagnostic(s) for this file were dropped at OMA's ${bound}-diagnostic bound`)];
+            omaMarkerDiagnostic(`${realCount - bound} more diagnostic(s) for this file were dropped at OMA's ${bound}-diagnostic bound`),
+            ...flagged.slice(realCount)];
     return flagged.map(diagnostic => typeof diagnostic?.message === "string" && diagnostic.message.length > OMA_MAX_DIAGNOSTIC_MESSAGE_CHARS
         && !OMA_MESSAGE_TRUNCATION_TAIL.test(diagnostic.message)
         ? { ...diagnostic, message: `${diagnostic.message.slice(0, OMA_MAX_DIAGNOSTIC_MESSAGE_CHARS)} [truncated at OMA's ${OMA_MAX_DIAGNOSTIC_MESSAGE_CHARS}-char bound; ${diagnostic.message.length} chars total]` }
@@ -247,8 +258,49 @@ export class LspClient {
         }
     }
     didOpen(uri, text, languageId) {
-        this.notify("textDocument/didOpen", {
+        // OMA divergence: return stdin's backpressure signal -- false
+        // means the stream buffered the frame, and the open loop must
+        // await didDrain() before writing the next file instead of
+        // piling the whole corpus into this process's memory.
+        return this.notify("textDocument/didOpen", {
             textDocument: { uri, languageId, version: 1, text },
+        });
+    }
+    // OMA divergence: settle a backpressured write -- resolves on the
+    // stream's 'drain', rejects on stdin 'error'/'close' (close() kills
+    // the child and ends the stream, so a caller abort still settles the
+    // wait), and rejects on the same request budget so a server that
+    // never drains is a detected timeout, not a hang.
+    didDrain() {
+        const stdin = this.#child?.stdin;
+        if (stdin === undefined)
+            return Promise.reject(new Error(`${this.#adapter.name} LSP server is not running.`));
+        if (stdin.destroyed || stdin.closed)
+            return Promise.reject(new Error(`${this.#adapter.name} LSP stdin is closed -- the server process is gone.${this.#formatStderr()}`));
+        if (stdin.writableLength === 0 && !stdin.writableNeedDrain)
+            return Promise.resolve();
+        return new Promise((resolve, reject) => {
+            const finish = (error) => {
+                clearTimeout(timer);
+                stdin.off("drain", onDrain);
+                stdin.off("error", onError);
+                stdin.off("close", onClose);
+                if (error === undefined)
+                    resolve();
+                else
+                    reject(error);
+            };
+            const onDrain = () => finish();
+            const onError = (error) => finish(new Error(`${this.#adapter.name} LSP stdin failed while awaiting drain: ${formatErrorMessage(error)}.${this.#formatStderr()}`));
+            const onClose = () => finish(new Error(`${this.#adapter.name} LSP stdin closed before buffered writes drained.${this.#formatStderr()}`));
+            const timer = setTimeout(() => finish(new Error(`${this.#adapter.name} LSP stdin did not drain within ${this.#timeoutMs}ms -- the server is not reading.${this.#formatStderr()}`)), this.#timeoutMs);
+            stdin.once("drain", onDrain);
+            stdin.once("error", onError);
+            stdin.once("close", onClose);
+            if (stdin.destroyed || stdin.closed)
+                onClose();
+            else if (stdin.writableLength === 0 && !stdin.writableNeedDrain)
+                onDrain();
         });
     }
     didClose(uri) {
@@ -279,7 +331,10 @@ export class LspClient {
         const result = response.result;
         const diagnostics = result?.items ?? [];
         if (diagnostics.length > 0 || !this.#adapter.pullDiagnosticsGraceMs)
-            return diagnostics;
+            // OMA divergence: the pull path's early return carries the
+            // same URI-bound drop marker the settle path appends -- a
+            // non-empty answer never hides dropped pushed publications.
+            return this.#withDroppedUriFlag(diagnostics);
         return this.#waitForPublishedDiagnostics(uri, {
             afterVersion,
             diagnostics,
@@ -382,14 +437,19 @@ export class LspClient {
         });
     }
     notify(method, params) {
-        this.#send(params === undefined ? { jsonrpc: "2.0", method } : { jsonrpc: "2.0", method, params });
+        // OMA divergence: expose the write's backpressure signal -- the
+        // didOpen loop is the caller that needs it.
+        return this.#send(params === undefined ? { jsonrpc: "2.0", method } : { jsonrpc: "2.0", method, params });
     }
     #send(message) {
         if (!this.#child)
             throw new Error(`${this.#adapter.name} LSP server is not running.`);
         const body = JSON.stringify(message);
         try {
-            this.#child.stdin.write(`Content-Length: ${Buffer.byteLength(body)}\r\n\r\n${body}`);
+            // OMA divergence: the write's backpressure signal is
+            // returned so the didOpen loop waits for 'drain' instead of
+            // buffering the corpus.
+            return this.#child.stdin.write(`Content-Length: ${Buffer.byteLength(body)}\r\n\r\n${body}`);
         }
         catch (error) {
             const errorMessage = `${this.#adapter.name} LSP stdin write failed: ${formatErrorMessage(error)}.` + this.#formatStderr();
@@ -568,7 +628,10 @@ export class LspClient {
                     settleWith(fallback.diagnostics);
                 }
                 else {
-                    fail(new Error(`${this.#adapter.name} LSP did not return diagnostics for ${uri} before timeout.`));
+                    // OMA divergence: the waiter timeout reports what
+                    // the wire dropped while it waited -- the drop counts
+                    // ride the failure instead of vanishing.
+                    fail(new Error(`${this.#adapter.name} LSP did not return diagnostics for ${uri} before timeout.${this.#formatDropped()}`));
                 }
             }, this.#timeoutMs);
             const existing = this.#publishedDiagnostics.get(key);
@@ -611,15 +674,15 @@ export class LspClient {
         return this.#adapter.initialization?.[section] ?? {};
     }
     // OMA divergence: refuse the request an oversized frame answers --
-    // never the server. A sniffed body id or the sole pending request is
-    // rejected surgically; an unidentified frame (a notification, or an
-    // id past the sniffed prefix) is counted so the drop rides later
-    // error tails instead of vanishing.
+    // never the server, and never a guess: only a sniffed body id that
+    // actually names a pending request refuses it. An unidentified frame
+    // (a notification, or an id past the sniffed prefix) is dropped and
+    // counted so the drop rides later error tails -- blaming the sole
+    // pending request for a frame that was not answering it was a
+    // misattributed kill.
     #refuseOversizedFrame(bodyLength, bodyPrefix) {
         const sniffed = /"id"\s*:\s*(\d+)/.exec(bodyPrefix)?.[1];
-        const pendingId = sniffed === undefined
-            ? (this.#pending.size === 1 ? [...this.#pending.keys()][0] : undefined)
-            : Number(sniffed);
+        const pendingId = sniffed === undefined ? undefined : Number(sniffed);
         const pending = pendingId === undefined ? undefined : this.#pending.get(pendingId);
         if (pending === undefined) {
             this.#droppedInboundFrames += 1;

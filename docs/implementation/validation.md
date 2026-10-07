@@ -440,7 +440,7 @@ DR34 후반에서 미뤄 둔 "listen 성공 후 `.off`로 유일한 'error' 리�
 | 어댑터 bound 제거 | PASS | `lsp-tools.ts`: `LSP_FILE_BYTES`(1MiB)·`LSP_MAX_FILES`(100)·`LSP_MAX_PATHS`(64)·`LSP_MAX_SERVERS`(64) 거절 상수 삭제 — `liveFiles`는 비regular/소실 파일만 걸러 크기는 didOpen이 그대로 운반, caller `limit`는 그대로 존중하고 미지정이면 수집 전체가 답(`details.summary.files`에 수 명시), status는 configured catalog 전수 보고 |
 | timeout 상한 제거 | PASS | `clampTimeout`이 1s floor만 적용 — 120s 상한 제거. caller 선택 <120s의 정확한 효력과 floor는 회귀로 묶음; >120s 관측은 시간상 NOT_RUN(코드에서 입증) |
 | aggregate deadline → 진행-리셋 stall | PASS | 호출당 `LSP_CALL_STALL_MS` 창이 vendored client의 `omaOnInboundFrame` 싱크가 이 호출 소유 hardened adapter를 보고할 때만 리셋 — `slow-stages` fixture(요청당 ~600ms × initialize+didOpen+diagnostics ≈1.9s)가 1200ms 창을 넘어 완료; 침묵 서버는 ~1s 안에 회수. 창은 호출의 per-request timeout보다 좁아지지 않음 — stall은 비-요청 침묵의 backstop이라는 설계 사실을 테스트 명칭·주석에 명시 |
-| oversized inbound frame | PASS | 헤더 파싱 시점에 그 프레임이 답하는 요청만 거절(sniffed id, 없으면 유일 pending), 본문은 `#discardRemaining` bounded discard로 버린 뒤 wire가 프레임 끝에서 재정렬 — `oversized-then-serve`에서 같은 client의 후속 요청이 정상 응답, 서버 생존. 미완성 본문도 빠른 종료. 프레임 경계 없는 garbage 누적은 버퍼 비움+pending 거절, 미식별 프레임은 drop 카운터가 에러 꼬리 `oma bounds:`로 명시. discard 중 shutdown은 handshake 생략하고 close |
+| oversized inbound frame | PASS | 헤더 파싱 시점에 그 프레임이 답하는 요청만 거절(sniffed id가 실제 pending과 매치될 때만 — F-3에서 유일-pending fallback 제거, 미식별 프레임은 drop+카운트만), 본문은 `#discardRemaining` bounded discard로 버린 뒤 wire가 프레임 끝에서 재정렬 — `oversized-then-serve`에서 같은 client의 후속 요청이 정상 응답, 서버 생존. 미완성 본문도 빠른 종료. 프레임 경계 없는 garbage 누적은 버퍼 비움+pending 거절, 미식별 프레임은 drop 카운터가 에러 꼬리 `oma bounds:`로 명시. discard 중 shutdown은 handshake 생략하고 close |
 | 진단 절단 정직성 | PASS | `omaFlaggedDiagnostics`가 push store·pull 경로 공용 — 첫 bound까지 유지+`[oma: N more diagnostic(s)…]` marker(`code:"oma/truncation"`), 메시지는 원본 길이 명시 절단. 재flag 멱등(꼬리 marker 재카운트 안 함·`OMA_MESSAGE_TRUNCATION_TAIL`이 재절단 방지) — push 홍수가 pull 소비에서 drop 수를 거짓 보고하지 않고, OMA marker는 codeAction context에서 서버로 가지 않음. tracked-URI 초과는 publication drop+count가 해소 리스트 marker로 명시 |
 | code-action·workspace-edit | PASS | action 목록의 256 상한 제거 — 300개 fixture 전수 resolve(각 요청은 per-request timeout과 stall 창이 묶음). workspace-edit 누적 count/bytes 거절은 유지 — 절단 edit은 오염 fix·무제한 materialization은 엔진 OOM이라 둘 다 거절보다 나쁘며, 거절은 그 요청만 |
 | 파일 수집 | PASS | `collectPath` 재귀+깊이 bound → 명시 스택(역순 push로 재귀의 depth-first 순서 보존) — 깊은 트리 통째 수집·overflow 없음 |
@@ -454,6 +454,24 @@ DR34 후반에서 미뤄 둔 "listen 성공 후 `.off`로 유일한 'error' 리�
 | macOS native / systemd / kernel·powercut / provider credential / release qualification | NOT_RUN | 로컬 환경 부재 |
 
 정직 기록: 이 절의 wire-선언-선행 행은 직전 절의 표기를 수정했다 — 오라클의 실제 계약은 "관측된 디렉터리가 최대 한 번의 drain 안에 선언됨"이며 "매 관측 시점에 이미 선언"은 그 유예를 넘어선 주장이었다.
+
+## 정산: UX-38 잔여 2차 — pi-lsp 런타임의 비차단·정직성 정산 F-4·F-5·F-1·F-2·F-3·F-6 (2026-10-07)
+
+직전 pi-lsp 정산의 맹검증 잔여 — bound가 남아 있되 그 행위가 무성하거나 잘못 귀속된 6건을 정산했다. 전부 `scripts/vendor-pi-lsp.mjs`의 `OMA_DIVERGENCES` 스플라이스로만 `runtime/`을 재생성했고 upstream/ byte-pin은 유지된다.
+
+| 절차 | 결과 | 근거 |
+|---|---|---|
+| F-4 didOpen backpressure | PASS | `didOpen`→`notify`→`#send`가 `stdin.write()` 반환을 전파하고 runner open 루프가 `false`면 `didDrain()` await — 코퍼스가 서버 읽기보다 빠를 때 자식쪽 메모리에 통째로 쌓이지 않음. `didDrain()`은 drain resolve·stdin error/close reject·`#timeoutMs` 타임아웃·리스너/타이머 settle-정리. `lsp-upstream` 443·469·484·499행 4종: backpressured write 보고+drain settle·slow reader(`slow-drain`) 완주·`stdin-stall` bounded 실패·mid-drain abort가 abort로 보고 |
+| F-5 per-file settled | PASS | `runDiagnostics` 팬아웃 `Promise.all`→`Promise.allSettled` — 개별 실패는 그 파일의 `oma/error` marker("diagnostics failed for this file: …")로 강등, 답한 파일은 보존, 전체 거절은 caller abort뿐. 어댑터도 route별 실패를 그 route 절의 명명된 오류로 강등+`details.summary.failedRoutes` 명시, 전 route 실패 시에만 거절 유지. `partial-answers` fixture+lsp-upstream 511·lsp-bundle 834·853·882행 4종 |
+| F-1 marker 회계 | PASS | `omaFlaggedDiagnostics`가 꼬리의 모든 `oma/` marker를 벗겨 실진단 수를 셈 — [truncation, URI-drop] 이중 marker 리스트 재flag 시 첫 marker를 실진단으로 새고 진짜 marker를 자르던 버그 제거, 갱신 절단은 기존 marker를 꼬리에 보존. `push-flood-uri-flood` fixture+lsp-upstream 566행 |
+| F-2 URI-drop 가시성 | PASS | `#withDroppedUriFlag`를 pull diagnostics early return에도 적용, publish waiter timeout 에러가 `#formatDropped` 꼬리로 drop 수 명시. `pull-uri-flood`·`uri-flood-timeout` fixture+lsp-upstream 587·602행 |
+| F-3 oversized 귀속 | PASS | id 스니핑 실패 시 유일 pending에 귀속하던 fallback 제거 — sniffed id가 실제 pending과 매치될 때만 그 요청 거절, 불일치는 drop+카운트(타임아웃 에러 꼬리에 보고). `oversized-notification` fixture+lsp-upstream 537행 |
+| F-6 문서 정직성 | PASS | 직전 절이 주장하던 "OMA marker는 codeAction context에서 서버로 가지 않음" 회귀를 실제 테스트로 추가 — `marker-context` fixture가 context 진단 수를 codeAction resolve 편집으로 되돌려 marker 필터링을 증명(lsp-upstream 616행). 이중 marker 재flag도 위 F-1 오라클로 커버 |
+| vendor bundle | PASS | `node scripts/vendor-pi-lsp.mjs --check` → `BUNDLE_CURRENT` (48 files), manifest `generated.divergences` 동기, 번들 sha256 `59a572cb4c0226c3e073bb9d9ee3254977cf3ec78c1adf809103c2263fe4227a` |
+| 집중 회귀 | PASS | `node --test dist/test/lsp-upstream.test.js` 30/30·`dist/test/lsp-bundle.test.js` 전종 PASS — 신규 오라클 17종(upstream 10 + bundle 7)은 구 런타임/구 어댑터에서 실패 확인 후 통과 |
+| 전체 `npm test` | PASS | `OMA_TEST_CONCURRENCY=1 npm test` 로컬 lane — build + 397 files serial 실행: serial 2/2·parallel 3,881/3,881 PASS·0 fail·0 cancelled·0 skipped(duration 1,599,229ms); R38 digest 결박 테스트 포함 전종. systemd-required 9 파일은 환경 부재로 NOT_RUN 분리 |
+| review ledger | PASS | 변경 5개 production 파일(lsp-tools.ts·runtime/lsp-client.js·lsp-client.d.ts·runner.js·manifest.json)의 byte-bound 리뷰를 fresh read 후 새 SHA-256에 재결박, `npm run review:ledger` — CHANGED_WITH_ORACLE 14062·NOT_REVIEWED 61·READ_UNCHANGED 51·REMOVED 8 |
+| macOS native / systemd / kernel·powercut / provider credential / release qualification | NOT_RUN | 로컬 환경 부재 |
 
 ## 현재 알려진 한계와 남은 검증
 
@@ -469,7 +487,7 @@ DR34 후반에서 미뤄 둔 "listen 성공 후 `.off`로 유일한 'error' 리�
 
 아래 binding은 구조 검사의 입력 identity다. digest 생성 자체가 runtime PASS를 뜻하지 않는다.
 
-verification input digest `ba521cd1eb402e1cd1985c5d7550ca8b3cd1596909ed5af127780e314cf044d4` (15340 files).
+verification input digest `9a9172ff28b6f2c4c37c36f900e1dab15208b7a744971b1355ce0df0f74cc190` (15340 files).
 
 당시 기록한 cloc 2.08 측정치: 354 files / 35,832 code LOC. 이 역사적 기록은 현재 source의 LOC claim이 아니며, 기존 artifact와의 불일치를 여기서 수리했다고 주장하지 않는다. 크기 제한은 없으며 값은 release proof가 아니다.
 

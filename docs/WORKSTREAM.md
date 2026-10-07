@@ -1599,6 +1599,53 @@ name collision/intended surface/hidden 미활성/idempotent reload/provenance/
     manifest `generated.divergences`와 번들 다이제스트는 재생성 산출물.
   - NOT_RUN: macOS native·systemd·kernel/powercut·provider credential·
     release qualification — 로컬 환경 부재.
+- 2026-10-07 (UX-38 잔여 2차 — pi-lsp 런타임의 비차단·정직성 정산 F-4·F-5·
+  F-1·F-2·F-3·F-6): 맹검증 잔여로 남은 bounded-but-dishonest 경로 6건을
+  정산했다. 전부 `OMA_DIVERGENCES` 스플라이스로만 `runtime/`을 재생성
+  (scripts/vendor-pi-lsp.mjs), `--check` BUNDLE_CURRENT 유지.
+  - F-4 didOpen backpressure — `didOpen`/`notify`/`#send`가
+    `stdin.write()`의 반환을 돌려주고, runner의 open 루프가 `false`일 때
+    `didDrain()`을 await — 큰 코퍼스가 서버가 읽는 속도보다 빠를 때
+    프로세스 메모리에 통째로 쌓이지 않는다. `didDrain()`은
+    'drain'에 resolve, stdin 'error'/'close'에 reject(`close()`가 자식을
+    죽이므로 caller abort도 settle), 그리고 요청 예산(`#timeoutMs`)으로
+    타임아웃 — drain 안 되는 서버는 정직한 bounded 실패지 행이 아니다.
+    drain/write 실패는 runner가 `throwIfAborted`로 caller abort로
+    재보고한다.
+  - F-5 per-file settled — diagnostics 팬아웃이 `Promise.all` 대신
+    `Promise.allSettled`: 한 파일의 timeout/실패는 그 파일의 `oma/error`
+    marker(`diagnostics failed for this file: …`)로 강등되고 답한 파일은
+    결과를 지킨다. 전체 호출 거절은 오직 caller abort뿐. 어댑터 측
+    route 루프도 같은 규칙 — 한 route의 실패는 그 route 절의 명명된
+    오류로 강등, 모든 route가 실패하면 여전히 거절.
+  - F-1 marker 회계 — `omaFlaggedDiagnostics`가 꼬리의 **모든** oma/
+    marker를 벗겨 세기 — [truncation, URI-drop] 두 marker가 붙은 리스트를
+    다시 flag할 때 첫 marker를 실진단으로 새어 "1 more" 허위 drop을
+    만들고 진짜 marker 둘을 잘라내는 버그 제거; 갱신 절단은 기존 marker를
+    꼬리에 보존해 카운트가 사라지지 않는다.
+  - F-2 URI-drop 가시성 — `#withDroppedUriFlag`가 settle 경로뿐 아니라
+    pull early return에도 적용되고, publish waiter timeout 에러가
+    `#formatDropped`로 drop 수를 꼬리에 단다 — drop이 더 이상 빈 응답/
+    타임아웃 경로에서 사라지지 않는다.
+  - F-3 oversized 프레임 귀속 — id 스니핑이 실패한 프레임을 유일 pending
+    요청 탓으로 돌리는 fallback 제거: sniffed id가 실제 pending과 매치될
+    때만 그 요청을 거절하고, 불일치 프레임은 drop+카운트만 — 대형
+    notification이 진행 중인 요청을 죽이지 않는다. 요청 자체의
+    timeout/error 꼬리에 drop 수가 여전히 보고된다.
+  - F-6 문서 정직성 — validation.md가 주장하던 marker 비전달·이중 flag
+    회귀를 실제 테스트로 추가(`marker-context` fixture가 codeAction
+    context의 진단 수를 resolve 편집으로 되돌려 증명 — marker 제외
+    확인), pull-uri-flood·push-flood-uri-flood·uri-flood-timeout·
+    oversized-notification·partial-answers·slow-drain·stdin-stall
+    시나리오 신설.
+  - 회귀·fail→pass: `lsp-upstream.test.ts` 30/30·`lsp-bundle.test.ts`
+    전종 PASS — 신규 오라클 17종(upstream 10 + bundle 7) 전부 구
+    런타임/구 어댑터에서 실패 확인 후 통과(backpressure reject→abort
+    보고·never-drain bounded·drain 완주·per-file degrade·route
+    degrade·all-fail 거절 유지·이중 marker·pull/timeout drop
+    카운트·notification 귀속).
+  - NOT_RUN: macOS native·systemd·kernel/powercut·provider credential·
+    release qualification — 로컬 환경 부재.
 
 ## 10. 지금부터의 실행 순서
 0. ~~P0-8 강제 수단 미구현~~ — 구현됨: `owned-state` 아키텍처 규칙

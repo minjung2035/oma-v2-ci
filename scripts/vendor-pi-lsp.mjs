@@ -97,18 +97,23 @@ const OMA_DIVERGENCES = Object.freeze({
       "OMA bounds inside the wire path, all honest degradation now: stderr " +
       "accumulation cap (truncation-only, with the marker tracked by an " +
       "explicit dropped flag); the inbound frame bound -- a declared " +
-      "oversized body refuses only the request it answers and is discarded " +
-      "in bounded memory so the wire realigns and the server survives; " +
-      "accumulation with no frame boundary at all is stream garbage that " +
-      "refuses the pending requests and clears the buffer, again without " +
-      "killing the server. Pushed diagnostics are truncated with visible " +
-      "markers and counts (per-file count, per-message length, a " +
-      "tracked-document bound whose drops are flagged into resolved " +
-      "lists) -- never a #fail. Every inbound frame chunk is reported to " +
-      "registered sinks so the caller's stall window resets on progress " +
-      "instead of a fixed deadline, and permanent 'error' listeners on " +
-      "the child and its stdio keep a post-start error from crashing the " +
-      "engine or orphaning the server.",
+      "oversized body refuses only the request its sniffed id actually " +
+      "names (an unidentifiable frame is dropped and counted, never " +
+      "blamed on the sole pending request) and is discarded in bounded " +
+      "memory so the wire realigns and the server survives; accumulation " +
+      "with no frame boundary at all is stream garbage that refuses the " +
+      "pending requests and clears the buffer, again without killing the " +
+      "server. Pushed diagnostics are truncated with visible markers and " +
+      "counts (per-file count, per-message length, a tracked-document " +
+      "bound whose drops are flagged into resolved lists on every " +
+      "return path, waiter timeouts included) -- never a #fail. Every " +
+      "inbound frame chunk is reported to registered sinks so the " +
+      "caller's stall window resets on progress instead of a fixed " +
+      "deadline, permanent 'error' listeners on the child and its stdio " +
+      "keep a post-start error from crashing the engine or orphaning the " +
+      "server, and didOpen reports stdin backpressure through the " +
+      "write's own return value so the open loop awaits a bounded " +
+      "didDrain() instead of materializing the corpus in memory.",
     edits: [
       {
         find: "const PROCESS_EXIT_GRACE_MS = 500;",
@@ -136,15 +141,18 @@ export function omaOnInboundFrame(sink) {
 }
 // OMA divergence: a truncation marker is itself a diagnostic, so it
 // renders in the same output the kept entries do -- a cut list can
-// never pass as complete. The code is what a second flagging pass (and
-// the codeAction context below) recognizes: markers are not counted as
-// diagnostics again and are never sent to the server.
-export function omaMarkerDiagnostic(text) {
+// never pass as complete. The oma/ code prefix is what a second
+// flagging pass (and the codeAction context below) recognizes: markers
+// are not counted as diagnostics again and are never sent to the
+// server. The code and severity specialize the marker -- "oma/error"
+// marks one file's own failed request (the per-file degrade in
+// runner.js).
+export function omaMarkerDiagnostic(text, code = "oma/truncation", severity = 3) {
     return { range: { start: { line: 0, character: 0 }, end: { line: 0, character: 0 } },
-        severity: 3, source: "oma", code: "oma/truncation", message: \`[oma: \${text}]\` };
+        severity, source: "oma", code, message: \`[oma: \${text}]\` };
 }
-function omaIsTruncationMarker(diagnostic) {
-    return diagnostic?.source === "oma" && diagnostic?.code === "oma/truncation";
+export function omaIsMarker(diagnostic) {
+    return diagnostic?.source === "oma" && typeof diagnostic?.code === "string" && diagnostic.code.startsWith("oma/");
 }
 // A message an earlier pass already cut ends with this tail -- cutting it
 // again would slice the marker off and re-report the truncated length as
@@ -157,13 +165,21 @@ const OMA_MESSAGE_TRUNCATION_TAIL = / \\[truncated at OMA's \\d+-char bound; \\d
 // already flagged (real diagnostics plus a tail marker, messages already
 // cut), so re-flagging must not count the marker again nor re-cut a
 // message -- the drop counts the markers report are the point and
-// re-truncating would lie.
+// re-truncating would lie. A resolved list can already end in MORE than
+// one marker (the stored truncation marker plus the URI-drop marker
+// appended at settle time), so every trailing marker is stripped before
+// counting: counting only the last one re-counted the earlier marker as
+// a real diagnostic, invented a false "1 more" drop and sliced the real
+// markers off the kept prefix. Prior markers also ride after a fresh
+// truncation so their own counts are never erased.
 export function omaFlaggedDiagnostics(list, bound = OMA_MAX_DIAGNOSTICS_PER_FILE) {
     let flagged = Array.isArray(list) ? list : [];
-    const realCount = flagged.length - (flagged.length > 0 && omaIsTruncationMarker(flagged[flagged.length - 1]) ? 1 : 0);
+    let realCount = flagged.length;
+    while (realCount > 0 && omaIsMarker(flagged[realCount - 1])) realCount -= 1;
     if (realCount > bound)
         flagged = [...flagged.slice(0, bound),
-            omaMarkerDiagnostic(\`\${realCount - bound} more diagnostic(s) for this file were dropped at OMA's \${bound}-diagnostic bound\`)];
+            omaMarkerDiagnostic(\`\${realCount - bound} more diagnostic(s) for this file were dropped at OMA's \${bound}-diagnostic bound\`),
+            ...flagged.slice(realCount)];
     return flagged.map(diagnostic => typeof diagnostic?.message === "string" && diagnostic.message.length > OMA_MAX_DIAGNOSTIC_MESSAGE_CHARS
         && !OMA_MESSAGE_TRUNCATION_TAIL.test(diagnostic.message)
         ? { ...diagnostic, message: \`\${diagnostic.message.slice(0, OMA_MAX_DIAGNOSTIC_MESSAGE_CHARS)} [truncated at OMA's \${OMA_MAX_DIAGNOSTIC_MESSAGE_CHARS}-char bound; \${diagnostic.message.length} chars total]\` }
@@ -337,6 +353,92 @@ export function appendStderrSample(state, text) {
         replace: `                    diagnostics: omaFlaggedDiagnostics(params.diagnostics ?? []),`,
       },
       {
+        find: `    didOpen(uri, text, languageId) {
+        this.notify("textDocument/didOpen", {
+            textDocument: { uri, languageId, version: 1, text },
+        });
+    }`,
+        replace: `    didOpen(uri, text, languageId) {
+        // OMA divergence: return stdin's backpressure signal -- false
+        // means the stream buffered the frame, and the open loop must
+        // await didDrain() before writing the next file instead of
+        // piling the whole corpus into this process's memory.
+        return this.notify("textDocument/didOpen", {
+            textDocument: { uri, languageId, version: 1, text },
+        });
+    }
+    // OMA divergence: settle a backpressured write -- resolves on the
+    // stream's 'drain', rejects on stdin 'error'/'close' (close() kills
+    // the child and ends the stream, so a caller abort still settles the
+    // wait), and rejects on the same request budget so a server that
+    // never drains is a detected timeout, not a hang.
+    didDrain() {
+        const stdin = this.#child?.stdin;
+        if (stdin === undefined)
+            return Promise.reject(new Error(\`\${this.#adapter.name} LSP server is not running.\`));
+        if (stdin.destroyed || stdin.closed)
+            return Promise.reject(new Error(\`\${this.#adapter.name} LSP stdin is closed -- the server process is gone.\${this.#formatStderr()}\`));
+        if (stdin.writableLength === 0 && !stdin.writableNeedDrain)
+            return Promise.resolve();
+        return new Promise((resolve, reject) => {
+            const finish = (error) => {
+                clearTimeout(timer);
+                stdin.off("drain", onDrain);
+                stdin.off("error", onError);
+                stdin.off("close", onClose);
+                if (error === undefined)
+                    resolve();
+                else
+                    reject(error);
+            };
+            const onDrain = () => finish();
+            const onError = (error) => finish(new Error(\`\${this.#adapter.name} LSP stdin failed while awaiting drain: \${formatErrorMessage(error)}.\${this.#formatStderr()}\`));
+            const onClose = () => finish(new Error(\`\${this.#adapter.name} LSP stdin closed before buffered writes drained.\${this.#formatStderr()}\`));
+            const timer = setTimeout(() => finish(new Error(\`\${this.#adapter.name} LSP stdin did not drain within \${this.#timeoutMs}ms -- the server is not reading.\${this.#formatStderr()}\`)), this.#timeoutMs);
+            stdin.once("drain", onDrain);
+            stdin.once("error", onError);
+            stdin.once("close", onClose);
+            if (stdin.destroyed || stdin.closed)
+                onClose();
+            else if (stdin.writableLength === 0 && !stdin.writableNeedDrain)
+                onDrain();
+        });
+    }`,
+      },
+      {
+        find: `    notify(method, params) {
+        this.#send(params === undefined ? { jsonrpc: "2.0", method } : { jsonrpc: "2.0", method, params });
+    }`,
+        replace: `    notify(method, params) {
+        // OMA divergence: expose the write's backpressure signal -- the
+        // didOpen loop is the caller that needs it.
+        return this.#send(params === undefined ? { jsonrpc: "2.0", method } : { jsonrpc: "2.0", method, params });
+    }`,
+      },
+      {
+        find: `            this.#child.stdin.write(\`Content-Length: \${Buffer.byteLength(body)}\\r\\n\\r\\n\${body}\`);`,
+        replace: `            // OMA divergence: the write's backpressure signal is
+            // returned so the didOpen loop waits for 'drain' instead of
+            // buffering the corpus.
+            return this.#child.stdin.write(\`Content-Length: \${Buffer.byteLength(body)}\\r\\n\\r\\n\${body}\`);`,
+      },
+      {
+        find: `        if (diagnostics.length > 0 || !this.#adapter.pullDiagnosticsGraceMs)
+            return diagnostics;`,
+        replace: `        if (diagnostics.length > 0 || !this.#adapter.pullDiagnosticsGraceMs)
+            // OMA divergence: the pull path's early return carries the
+            // same URI-bound drop marker the settle path appends -- a
+            // non-empty answer never hides dropped pushed publications.
+            return this.#withDroppedUriFlag(diagnostics);`,
+      },
+      {
+        find: `                    fail(new Error(\`\${this.#adapter.name} LSP did not return diagnostics for \${uri} before timeout.\`));`,
+        replace: `                    // OMA divergence: the waiter timeout reports what
+                    // the wire dropped while it waited -- the drop counts
+                    // ride the failure instead of vanishing.
+                    fail(new Error(\`\${this.#adapter.name} LSP did not return diagnostics for \${uri} before timeout.\${this.#formatDropped()}\`));`,
+      },
+      {
         find: `            const settleWith = (diagnostics) => {
                 dispose();
                 resolve(diagnostics);
@@ -367,15 +469,15 @@ export function appendStderrSample(state, text) {
         return stderr ? \`\\nServer stderr:\\n\${stderr}\` : "";
     }`,
         replace: `    // OMA divergence: refuse the request an oversized frame answers --
-    // never the server. A sniffed body id or the sole pending request is
-    // rejected surgically; an unidentified frame (a notification, or an
-    // id past the sniffed prefix) is counted so the drop rides later
-    // error tails instead of vanishing.
+    // never the server, and never a guess: only a sniffed body id that
+    // actually names a pending request refuses it. An unidentified frame
+    // (a notification, or an id past the sniffed prefix) is dropped and
+    // counted so the drop rides later error tails -- blaming the sole
+    // pending request for a frame that was not answering it was a
+    // misattributed kill.
     #refuseOversizedFrame(bodyLength, bodyPrefix) {
         const sniffed = /"id"\\s*:\\s*(\\d+)/.exec(bodyPrefix)?.[1];
-        const pendingId = sniffed === undefined
-            ? (this.#pending.size === 1 ? [...this.#pending.keys()][0] : undefined)
-            : Number(sniffed);
+        const pendingId = sniffed === undefined ? undefined : Number(sniffed);
         const pending = pendingId === undefined ? undefined : this.#pending.get(pendingId);
         if (pending === undefined) {
             this.#droppedInboundFrames += 1;
@@ -410,14 +512,46 @@ export function appendStderrSample(state, text) {
       },
     ],
   },
+  "lsp-client.d.ts": {
+    reason:
+      "OMA divergence: the emitted declaration mirrors the spliced " +
+      "runtime surface -- didOpen returns stdin's backpressure signal, " +
+      "didDrain settles a backpressured write, and the marker helpers " +
+      "are declared.",
+    edits: [
+      {
+        find: `    didOpen(uri: string, text: string, languageId: string): void;`,
+        replace: `    /** OMA divergence: false means the write buffered -- await didDrain(). */
+    didOpen(uri: string, text: string, languageId: string): boolean;
+    /** OMA divergence: settles a backpressured write -- resolves on
+     * 'drain', rejects on stdin error/close or the request budget. */
+    didDrain(): Promise<void>;`,
+      },
+      {
+        find: `export declare class LspClient {`,
+        replace: `/** OMA divergence: the marker constructors and predicates the spliced
+ * runtime exports -- a flagged diagnostic is a real LSP diagnostic. */
+export declare function omaMarkerDiagnostic(text: string, code?: string, severity?: number): LspDiagnostic;
+export declare function omaIsMarker(diagnostic: LspDiagnostic): boolean;
+export declare class LspClient {`,
+      },
+    ],
+  },
   "runner.js": {
     reason:
       "OMA policy on what a pull response carries: a pull diagnostics " +
       "array is truncated with the same visible markers and counts the " +
       "client applies on the push path -- never a thrown call for size " +
       "alone, and no read-time byte bound (didOpen carries the whole text " +
-      "either way, so a file size cap only blocks a real fix). The " +
-      "accumulated workspace-edit list across all selected actions stays " +
+      "either way, so a file size cap only blocks a real fix). The open " +
+      "loop honors stdin backpressure -- a buffered write awaits the " +
+      "client's bounded didDrain() so a large corpus never materializes " +
+      "in this process's memory while the server reads slowly. The " +
+      "diagnostics fan-out settles per file: one file's timeout or " +
+      "failure degrades its own entry to a named error marker and the " +
+      "completed files keep their results, while the caller's abort " +
+      "still refuses the call. The accumulated workspace-edit list " +
+      "across all selected actions stays " +
       "bounded in count and newText bytes -- it refuses that one request " +
       "mid-collection because a truncated edit list would fabricate a " +
       "corrupt fix, which is worse than a clean refusal, and an unbounded " +
@@ -432,12 +566,60 @@ export function appendStderrSample(state, text) {
         replace: `import { applyTextEdits, collectWorkspaceEdits, hasOverlappingTextEdits, OMA_MAX_WORKSPACE_EDITS, OMA_MAX_WORKSPACE_EDIT_BYTES } from "./text-edits.js";
 // OMA divergence: pull-path diagnostics are flagged-truncated by the same
 // helper the pushed store uses (lsp-client.js) -- a flood answers with a
-// visibly cut list, not a thrown call.
-import { omaFlaggedDiagnostics } from "./lsp-client.js";`,
+// visibly cut list, not a thrown call. omaIsMarker keeps OMA's own
+// annotations out of the codeAction context the server sees; the error
+// marker names a file whose own request failed.
+import { omaFlaggedDiagnostics, omaIsMarker, omaMarkerDiagnostic } from "./lsp-client.js";`,
       },
       {
-        find: `                diagnostics: await client.diagnostics(uri),`,
-        replace: `                diagnostics: omaFlaggedDiagnostics(await client.diagnostics(uri)),`,
+        find: `            for (const file of files) {
+                throwIfAborted(signal, adapter);
+                const uri = pathToFileURL(file).href;
+                const text = readFileSync(file, "utf8");
+                client.didOpen(uri, text, adapter.languageIdFor(file));
+                openedFiles.push({ file, uri });
+            }`,
+        replace: `            for (const file of files) {
+                throwIfAborted(signal, adapter);
+                const uri = pathToFileURL(file).href;
+                const text = readFileSync(file, "utf8");
+                // OMA divergence: the write's own backpressure signal is
+                // honored -- when stdin buffered the frame the loop waits
+                // for 'drain' (bounded by the request budget and settled
+                // by an abort through close()) instead of materializing
+                // the whole corpus in this process's memory. A drain or
+                // write failure still reports as the abort when the
+                // caller aborted the call.
+                try {
+                    if (client.didOpen(uri, text, adapter.languageIdFor(file)) === false)
+                        await client.didDrain();
+                }
+                catch (error) {
+                    throwIfAborted(signal, adapter);
+                    throw error;
+                }
+                openedFiles.push({ file, uri });
+            }`,
+      },
+      {
+        find: `            const entries = await Promise.all(openedFiles.map(async ({ file, uri }) => ({
+                path: path.relative(root, file) || file,
+                uri,
+                diagnostics: await client.diagnostics(uri),
+            })));`,
+        replace: `            // OMA divergence: every file's request settles independently
+            // -- one slow or failed file degrades to a per-file error
+            // marker and the completed files keep their real diagnostics.
+            // The call is refused only by the caller's abort
+            // (throwIfAborted below), never by one file's timeout alone.
+            const settled = await Promise.allSettled(openedFiles.map(({ uri }) => client.diagnostics(uri)));
+            const entries = settled.map((outcome, index) => {
+                const { file, uri } = openedFiles[index];
+                const diagnostics = outcome.status === "fulfilled"
+                    ? omaFlaggedDiagnostics(outcome.value)
+                    : [omaMarkerDiagnostic(\`diagnostics failed for this file: \${outcome.reason instanceof Error ? outcome.reason.message : String(outcome.reason)}\`, "oma/error", 1)];
+                return { path: path.relative(root, file) || file, uri, diagnostics };
+            });`,
       },
       {
         find: `            const diagnostics = await client.diagnostics(uri);`,
@@ -445,9 +627,11 @@ import { omaFlaggedDiagnostics } from "./lsp-client.js";`,
       },
       {
         find: `            const actions = await client.codeActions(uri, text, diagnostics, actionKind);`,
-        replace: `            // OMA divergence: truncation markers are OMA's own annotations --
-            // they are never sent to the server inside the codeAction context.
-            const actions = await client.codeActions(uri, text, diagnostics.filter((entry) => !(entry?.source === "oma" && entry?.code === "oma/truncation")), actionKind);`,
+        replace: `            // OMA divergence: every oma/ prefixed marker is OMA's own
+            // annotation -- truncation flags AND per-file error markers --
+            // and none are ever sent to the server inside the codeAction
+            // context.
+            const actions = await client.codeActions(uri, text, diagnostics.filter((entry) => !omaIsMarker(entry)), actionKind);`,
       },
       {
         find: `            edits = selectedActions.flatMap((action) => collectWorkspaceEdits(action.edit, uri));`,

@@ -86,12 +86,16 @@
  *   choice and an absent one means the whole workspace, with the file
  *   count always visible in the result. Diagnostics over a per-file or
  *   message bound are truncated with a visible marker and count, never
- *   thrown. An oversized inbound frame refuses the request it answers
- *   and is discarded bounded -- it never kills the server, and the drop
- *   is named. What remains a refusal is a memory bound whose failure
- *   mode (engine OOM) is worse than the refusal -- the workspace-edit
- *   materialization -- and stderr accumulation, which is truncation
- *   with a marker already.
+ *   thrown. An oversized inbound frame refuses only the request its
+ *   sniffed id names -- an unidentifiable frame (a notification, say) is
+ *   dropped and counted, never blamed on the sole pending request. The
+ *   didOpen loop honors stdin backpressure so a large corpus never
+ *   materializes in this process's memory while a server reads slowly,
+ *   and a per-file or per-route failure degrades to a named marker
+ *   instead of discarding the results that did complete. What remains a
+ *   refusal is a memory bound whose failure mode (engine OOM) is worse
+ *   than the refusal -- the workspace-edit materialization -- and stderr
+ *   accumulation, which is truncation with a marker already.
  */
 import { mkdtempSync, rmSync, statSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -498,21 +502,38 @@ export async function registerLspTools(pi: ExtensionAPI, options: LspToolOptions
         const callAdapters = new Set<LspServerAdapter>();
         const stall = callStall("lsp_diagnostics", ownedSignal, runtime.timeoutMs, callAdapters);
         const results: { route: (typeof bounded)[number]; result: ToolResult }[] = [];
+        const failures: string[] = [];
         try {
           for (const route of bounded) {
             stall.signal.throwIfAborted();
             const hardened = hardenedAdapter(route.adapter, scratch);
             callAdapters.add(hardened);
-            const result = await runDiagnostics(
-              hardened,
-              { root, files: route.files },
-              runtime.timeoutMs, stall.signal, statusCtx(scope.context(ctx)), STATUS_KEY,
-            ).catch(error => stallAware(stall, error)) as ToolResult;
-            results.push({ route, result });
+            // A route's failure degrades that route's section to a named
+            // error -- the routes that did complete keep their results.
+            // The stall and the caller's abort still end the call, and a
+            // call where every route failed stays a refusal below.
+            try {
+              const result = await runDiagnostics(
+                hardened,
+                { root, files: route.files },
+                runtime.timeoutMs, stall.signal, statusCtx(scope.context(ctx)), STATUS_KEY,
+              ) as ToolResult;
+              results.push({ route, result });
+            } catch (error) {
+              if (stall.fired()) throw new Error(stall.message);
+              stall.signal.throwIfAborted();
+              const message = error instanceof Error ? error.message : String(error);
+              failures.push(`${route.adapter.name}: ${message}`);
+              results.push({ route, result: textResult(
+                `${route.adapter.name} LSP diagnostics failed: ${message}`,
+                { failed: true, error: message, summary: { files: 0, diagnostics: 0 } }) });
+            }
           }
         } finally {
           stall.stop();
         }
+        if (results.length > 0 && failures.length === results.length)
+          throw new Error(`LSP diagnostics failed on every route: ${failures.join("; ")}`);
         const sections = results.map(({ route, result }) => `${route.reason}\n\n${textFromResult(result)}`);
         if (skipped.length > 0)
           sections.push(`Unavailable LSP server(s), not run: ${skipped.map(entry => `${entry.adapter.name} (${entry.reason})`).join("; ")}.`);
@@ -531,6 +552,7 @@ export async function registerLspTools(pi: ExtensionAPI, options: LspToolOptions
             files: results.reduce((total, { result }) => total + (((result.details as { summary?: { files?: number } })?.summary?.files) ?? 0), 0),
             diagnostics: results.reduce((total, { result }) => total + (((result.details as { summary?: { diagnostics?: number } })?.summary?.diagnostics) ?? 0), 0),
             unavailableServers: skipped.length,
+            failedRoutes: failures.length,
           },
         });
       }));

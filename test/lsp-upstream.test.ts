@@ -181,32 +181,38 @@ test("BL1/F1: a declared oversized Content-Length refuses only its request -- th
   }
 });
 
-test("BL1/F1: an oversized frame whose body never arrives still ends the call fast", async t => {
+test("BL1/F1: an oversized frame whose body never arrives degrades the one file -- the call still reports it", async t => {
   const root = tmp(t);
   writeFileSync(join(root, "note.tfix"), "hello\n");
   const ctx = { ui: { setStatus() {} } };
-  // oversized-frame declares 6MiB it never sends: the request is refused
-  // at the header and teardown skips a handshake the discarder cannot
-  // trust -- fast, bounded, and the drop is named.
-  await assert.rejects(
-    runDiagnostics(hostileAdapter("oversized-frame"), { root, files: [join(root, "note.tfix")] }, 10_000,
-      new AbortController().signal, ctx, "lsp"),
-    /declared \d+ bytes|request was refused|frame dropped|stays up/i);
+  // oversized-frame declares 6MiB it never sends. The prefix carries no id
+  // to sniff, so the frame is dropped and counted -- the pending request is
+  // NOT blamed on it (a notification looks exactly the same); the request's
+  // own timeout ends the file's entry with a marker that names both the
+  // timeout and the dropped frame. The call resolves with that marker --
+  // the teardown still skips a handshake the discarder cannot trust.
+  const result = await runDiagnostics(hostileAdapter("oversized-frame"),
+    { root, files: [join(root, "note.tfix")] }, 1_200, new AbortController().signal, ctx, "lsp");
+  const text = result.content.map((part: { text?: string }) => part.text ?? "").join("");
+  assert.match(text, /diagnostics failed for this file/);
+  assert.match(text, /timed out|did not return diagnostics/);
+  assert.match(text, /1 oversized inbound frame\(s\) dropped/, "the drop count rides the failure tail");
 });
 
 test("BL1/F1: a stderr flood is a bounded sample, not an accumulator", async t => {
   const root = tmp(t);
   writeFileSync(join(root, "note.tfix"), "hello\n");
   const ctx = { ui: { setStatus() {} } };
-  // The server floods past the 64KiB bound, then dies mid-request: the exit
-  // path attaches the stderr tail, so both the cap and the truncation
-  // marker are observable in the error.
-  const error = await runDiagnostics(hostileAdapter("stderr-flood-exit"),
-    { root, files: [join(root, "note.tfix")] }, 10_000, new AbortController().signal, ctx, "lsp")
-    .then(() => { throw new Error("the flooded call must fail"); }, (caught: unknown) => caught as Error);
-  assert.match(error.message, /exited/);
-  assert.match(error.message, /stderr truncated/, "the sample is marked truncated, not silently cut");
-  assert.ok(error.message.length < 80_000, `bounded at 64KiB plus framing, not 200KiB: ${error.message.length}`);
+  // The server floods past the 64KiB bound, then dies mid-request: the
+  // file's entry degrades to an error marker whose message still attaches
+  // the bounded stderr tail -- the cap and the truncation marker are both
+  // observable in the rendered result.
+  const result = await runDiagnostics(hostileAdapter("stderr-flood-exit"),
+    { root, files: [join(root, "note.tfix")] }, 10_000, new AbortController().signal, ctx, "lsp");
+  const text = result.content.map((part: { text?: string }) => part.text ?? "").join("");
+  assert.match(text, /diagnostics failed for this file.*exited/s);
+  assert.match(text, /stderr truncated/, "the sample is marked truncated, not silently cut");
+  assert.ok(text.length < 90_000, `bounded at 64KiB plus framing, not 200KiB: ${text.length}`);
 });
 
 test("BL1/F1: a code-action list resolves completely -- the count is not a bound", async t => {
@@ -426,4 +432,197 @@ test("BL1: selectDiagnosticRoutes marks an uninstalled default server skipped, n
   const explicit = selectDiagnosticRoutes([ghost], { root, paths: ["sub/a.ghost"], server: "ghost" }, 50);
   assert.equal(explicit.routes.length, 1);
   assert.equal(commandExists("oma-no-such-binary", root, undefined), false);
+});
+
+// ---------------------------------------------------------------------------
+// OMA divergences round 3 (UX-38 residuals): stdin backpressure in the
+// didOpen loop, per-file settled results, correct tail-marker accounting,
+// URI-drop counts on every return path, and surgical oversized-frame
+// attribution.
+
+test("BL1/F-4: a backpressured didOpen reports it and didDrain settles the write", async t => {
+  const root = tmp(t);
+  writeFileSync(join(root, "note.tfix"), "hello\n");
+  // slow-drain pauses stdin ~350ms after the first didOpen frame, so a
+  // 1MiB second write buffers instead of reaching the wire: the write
+  // returns false, didDrain() waits, and the resume completes the call.
+  const adapter = hostileAdapter("slow-drain");
+  const client = new LspClient(adapter, adapter.defaultCommand, root, 30_000);
+  try {
+    await client.start();
+    await client.initialize(root);
+    const first = pathToFileURL(join(root, "note.tfix")).href;
+    const second = pathToFileURL(join(root, "big.tfix")).href;
+    client.didOpen(first, "hello\n", "tfix");
+    const buffered = client.didOpen(second, "x".repeat(1024 * 1024), "tfix");
+    assert.equal(buffered, false, "a 1MiB frame past the stream's buffer reports backpressure");
+    // The cast keeps this file compiling against a bundle that predates
+    // the export -- the missing method is itself the regression.
+    await (client as unknown as { didDrain(): Promise<void> }).didDrain();
+    const diagnostics = await client.diagnostics(second);
+    assert.deepEqual(diagnostics.map((entry: { message: string }) => entry.message), ["pull answer"]);
+  } finally {
+    client.close();
+  }
+});
+
+test("BL1/F-4: the open loop waits for drain -- a corpus past the pipe completes against a slow reader", async t => {
+  const root = tmp(t);
+  const files = ["a.tfix", "b.tfix", "c.tfix"].map(name => join(root, name));
+  for (const file of files) writeFileSync(file, "y".repeat(768 * 1024));
+  const ctx = { ui: { setStatus() {} } };
+  // Three ~768KiB didOpens into a server that stops reading for 350ms:
+  // without the drain wait the corpus piles into this process's memory;
+  // with it the call still completes once the server resumes.
+  const result = await runDiagnostics(hostileAdapter("slow-drain"),
+    { root, files }, 30_000, new AbortController().signal, ctx, "lsp");
+  const details = result.details as { summary?: { files?: number; diagnostics?: number } };
+  assert.equal(details.summary?.files, 3);
+  assert.equal(details.summary?.diagnostics, 3, "every file answered once the drain resumed");
+});
+
+test("BL1/F-4: a server that never drains is a bounded failure, not a hang", async t => {
+  const root = tmp(t);
+  // stdin-stall stops reading after the first didOpen: the second file's
+  // 1MiB write backpressures and the drain wait hits the request budget.
+  writeFileSync(join(root, "note.tfix"), "hello\n");
+  writeFileSync(join(root, "big.tfix"), "x".repeat(1024 * 1024));
+  const ctx = { ui: { setStatus() {} } };
+  const started = Date.now();
+  await assert.rejects(
+    runDiagnostics(hostileAdapter("stdin-stall"),
+      { root, files: [join(root, "note.tfix"), join(root, "big.tfix")] }, 900, new AbortController().signal, ctx, "lsp"),
+    /did not drain|stdin closed|stdin failed|not reading/i);
+  assert.ok(Date.now() - started < 20_000, "the drain budget bounded the wait");
+});
+
+test("BL1/F-4: an abort mid-drain settles the wait and reports as the abort", async t => {
+  const root = tmp(t);
+  writeFileSync(join(root, "note.tfix"), "hello\n");
+  writeFileSync(join(root, "big.tfix"), "x".repeat(1024 * 1024));
+  const ctx = { ui: { setStatus() {} } };
+  const controller = new AbortController();
+  const call = runDiagnostics(hostileAdapter("stdin-stall"),
+    { root, files: [join(root, "note.tfix"), join(root, "big.tfix")] }, 30_000, controller.signal, ctx, "lsp");
+  setTimeout(() => controller.abort(), 150);
+  await assert.rejects(call, /aborted/i);
+});
+
+test("BL1/F-5: one file's timeout degrades to a per-file marker -- the answered files keep their results", async t => {
+  const root = tmp(t);
+  const files = ["a.tfix", "b.tfix", "c.tfix", "d.tfix"].map(name => join(root, name));
+  for (const file of files) writeFileSync(file, "x\n");
+  const ctx = { ui: { setStatus() {} } };
+  // partial-answers replies to the first two diagnostics requests and lets
+  // the rest hang: the whole call resolves -- timed-out files carry their
+  // own error markers, the answered files keep their real diagnostics.
+  const result = await runDiagnostics(hostileAdapter("partial-answers"),
+    { root, files }, 900, new AbortController().signal, ctx, "lsp");
+  const details = result.details as {
+    files: { path: string; diagnostics: { code?: string; message: string }[] }[];
+    summary?: { files?: number; diagnostics?: number };
+  };
+  assert.equal(details.files.length, 4, "every file's entry is present -- none lost to the timeout");
+  assert.deepEqual(details.files.slice(0, 2).map(entry => entry.diagnostics.map((d: { message: string }) => d.message)),
+    [["answered 1"], ["answered 2"]]);
+  for (const entry of details.files.slice(2)) {
+    assert.equal(entry.diagnostics[0]!.code, "oma/error");
+    assert.match(entry.diagnostics[0]!.message, /diagnostics failed for this file.*timed out/s);
+  }
+  const text = result.content.map((part: { text?: string }) => part.text ?? "").join("");
+  assert.match(text, /answered 1/);
+  assert.match(text, /diagnostics failed for this file/);
+});
+
+test("BL1/F-3: an oversized NOTIFICATION is dropped and counted -- the pending request is not blamed", async t => {
+  const root = tmp(t);
+  writeFileSync(join(root, "note.tfix"), "hello\n");
+  writeFileSync(join(root, "other.tfix"), "hi\n");
+  // oversized-notification sends a complete 5MiB window/logMessage frame
+  // (no id to sniff) while the diagnostics request pends: the old code
+  // refused the sole pending request for a frame that was not answering
+  // it; now the frame is dropped, counted, and the request is answered.
+  const adapter = hostileAdapter("oversized-notification");
+  const client = new LspClient(adapter, adapter.defaultCommand, root, 1_200);
+  try {
+    await client.start();
+    await client.initialize(root);
+    const first = pathToFileURL(join(root, "note.tfix")).href;
+    const second = pathToFileURL(join(root, "other.tfix")).href;
+    client.didOpen(first, "hello\n", "tfix");
+    client.didOpen(second, "hi\n", "tfix");
+    const diagnostics = await client.diagnostics(first);
+    assert.deepEqual(diagnostics.map((entry: { message: string }) => entry.message),
+      ["answer after the dropped notification"],
+      "the pending request survived the unidentifiable oversized frame");
+    // The drop is counted, not silent: the next request's own failure tail
+    // (this one hangs unanswered past the request budget) reports it.
+    await assert.rejects(client.diagnostics(second), /timed out.*1 oversized inbound frame\(s\) dropped/s);
+  } finally {
+    client.close();
+  }
+});
+
+test("BL1/F-1: a truncated list plus a URI-drop marker re-flag correctly -- both markers survive", async t => {
+  const root = tmp(t);
+  writeFileSync(join(root, "note.tfix"), "hello\n");
+  const ctx = { ui: { setStatus() {} } };
+  // push-flood-uri-flood stores the opened file's own 2000-diagnostic
+  // publication (truncated to 1024+marker at store), overflows the
+  // tracked-document bound (5 drops), then republishes so the settle timer
+  // runs after every drop is counted. The resolved list is [1024 real,
+  // truncation marker, URI-drop marker]; the runner's flag pass must strip
+  // BOTH trailing markers before counting -- counting only the last one
+  // misread the earlier marker as a real diagnostic and sliced them both
+  // off, reporting a phantom "1 more" drop and losing the real counts.
+  const result = await runDiagnostics(hostileAdapter("push-flood-uri-flood"),
+    { root, files: [join(root, "note.tfix")] }, 30_000, new AbortController().signal, ctx, "lsp");
+  const details = result.details as { files: { diagnostics: { code?: string; message: string }[] }[] };
+  const diagnostics = details.files[0]!.diagnostics;
+  assert.equal(diagnostics.length, 1026, "1024 real + truncation marker + URI-drop marker");
+  assert.match(diagnostics.at(-2)!.message, /976 more diagnostic\(s\) for this file were dropped at OMA's \d+-diagnostic bound/);
+  assert.match(diagnostics.at(-1)!.message, /5 pushed publication\(s\) were dropped at OMA's \d+-document bound/);
+});
+
+test("BL1/F-2: a pull diagnostics answer still reports the URI-bound drops", async t => {
+  const root = tmp(t);
+  writeFileSync(join(root, "note.tfix"), "hello\n");
+  const ctx = { ui: { setStatus() {} } };
+  // pull-uri-flood overflows the tracked-document bound while the pull
+  // request is in flight; the answered list takes the early return, which
+  // used to skip the marker entirely -- the drops were silently invisible.
+  const result = await runDiagnostics(hostileAdapter("pull-uri-flood"),
+    { root, files: [join(root, "note.tfix")] }, 30_000, new AbortController().signal, ctx, "lsp");
+  const details = result.details as { files: { diagnostics: { message: string }[] }[] };
+  const diagnostics = details.files[0]!.diagnostics;
+  assert.equal(diagnostics.at(0)!.message, "pull answer", "the pull answer itself is kept");
+  assert.match(diagnostics.at(-1)!.message, /5 pushed publication\(s\) were dropped at OMA's \d+-document bound/);
+});
+
+test("BL1/F-2: a waiter timeout reports the drops the wire already took", async t => {
+  const root = tmp(t);
+  writeFileSync(join(root, "note.tfix"), "hello\n");
+  const ctx = { ui: { setStatus() {} } };
+  // uri-flood-timeout fills the tracked map (4 drops) but never publishes
+  // for the opened file: the waiter times out and the failure -- carried
+  // on the file's degrade marker -- names the drops it already took.
+  const result = await runDiagnostics(hostileAdapter("uri-flood-timeout"),
+    { root, files: [join(root, "note.tfix")] }, 1_200, new AbortController().signal, ctx, "lsp");
+  const text = result.content.map((part: { text?: string }) => part.text ?? "").join("");
+  assert.match(text, /did not return diagnostics for .*before timeout/s);
+  assert.match(text, /4 pushed-diagnostic publication\(s\) dropped/, "the timeout tail reports the counted drops");
+});
+
+test("BL1/F-6: OMA's markers are never sent to the server inside the codeAction context", async t => {
+  const root = tmp(t);
+  writeFileSync(join(root, "note.tfix"), "hello\n");
+  const ctx = { ui: { setStatus() {} } };
+  // marker-context answers diagnostics with a 2000-entry flood (the list
+  // OMA hands codeActions is 1024 real + 1 truncation marker), then echoes
+  // the context's diagnostics count inside the resolved edit. If a marker
+  // ever leaked into the context the count would be 1025.
+  const result = await runFix(hostileAdapter("marker-context"), { root, path: "note.tfix" }, 30_000,
+    new AbortController().signal, ctx, "lsp");
+  const details = result.details as { text?: string };
+  assert.match(details.text ?? "", /context-diagnostics=1024\b/);
 });

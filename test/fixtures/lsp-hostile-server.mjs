@@ -27,6 +27,32 @@
  * - `push-uri-flood`: pushes publications for more distinct documents
  *   than the tracked-URI bound, then the opened file's own -- the opened
  *   file's publication is the drop the resolved list must name.
+ * - `push-flood-uri-flood`: pushes the opened file's own over-bound
+ *   publication, then the URI flood, then the file's publication again --
+ *   the resolved list carries the stored truncation marker AND the
+ *   URI-drop marker, and the re-flagging pass must count both right.
+ * - `pull-uri-flood`: the pull path's URI flood -- publications pushed on
+ *   didOpen overflow the tracked-document bound while the pull request is
+ *   in flight, so the answered list must still name the drops.
+ * - `uri-flood-timeout`: pushes the URI flood but never the opened file's
+ *   publication -- the diagnostics waiter times out and its error must
+ *   report the drops the wire already took.
+ * - `partial-answers`: answers only the first two pull diagnostics
+ *   requests; the rest hang until the request timeout -- the call's other
+ *   files must keep their results.
+ * - `oversized-notification`: sends one COMPLETE oversized NOTIFICATION
+ *   (no id to sniff) while a request is pending, then answers normally --
+ *   the pending request must survive; the drop is counted and rides the
+ *   next error's tail.
+ * - `slow-drain`: pauses its stdin briefly after the first didOpen so the
+ *   client's big writes backpressure, then resumes -- the drain path must
+ *   complete the call.
+ * - `stdin-stall`: pauses stdin forever after the first didOpen -- a
+ *   backpressured write must fail bounded (the drain budget), never hang.
+ * - `marker-context`: answers diagnostics with a flood (so OMA's marker
+ *   is in the list), then reports in its resolved edit how many
+ *   diagnostics the codeAction context carried -- proving markers are
+ *   never forwarded to the server.
  * - `pull-flood` / `pull-big-message`: same floods through the pull path.
  * - `slow-stages`: every request is answered ~600ms late -- diagnostics,
  *   codeAction, resolve -- so the call's total run exceeds a modest
@@ -82,16 +108,34 @@ function diagnostic(message, line = 0) {
   };
 }
 
-const PULL_SCENARIOS = new Set(["stderr-flood", "stderr-flood-exit", "pull-flood", "pull-big-message", "actions-flood", "edits-flood", "edits-documentchanges-flood", "edit-bytes-flood", "edits-at-bound", "oversized-frame", "oversized-then-serve", "frame-drip", "env-echo", "env-probe", "pid-echo", "slow-stages"]);
+const PULL_SCENARIOS = new Set(["stderr-flood", "stderr-flood-exit", "pull-flood", "pull-big-message", "actions-flood", "edits-flood", "edits-documentchanges-flood", "edit-bytes-flood", "edits-at-bound", "oversized-frame", "oversized-then-serve", "oversized-notification", "frame-drip", "env-echo", "env-probe", "pid-echo", "slow-stages", "pull-uri-flood", "partial-answers", "slow-drain", "stdin-stall", "marker-context"]);
 /** Each slow-stages stage delay. Below the client's 1000ms request floor,
  * so no single request times out; three of them put the whole call well
  * past a ~1s observation window, which is what proves the window resets
  * on progress instead of acting as a fixed aggregate deadline. */
 const SLOW_STAGE_MS = 600;
+/** How long slow-drain stops reading stdin -- long enough to prove the
+ * client waited on 'drain', far under any request timeout. */
+const SLOW_DRAIN_MS = 350;
 /** Documents pushed by push-uri-flood before the opened file's own
  * publication -- the client's tracked-document bound is 4096, so these
  * fill the map and leave later publications as counted drops. */
 const URI_FLOOD_DOCS = 4100;
+/** Diagnostics partial-answers answers; the rest of the fan-out hangs. */
+const PARTIAL_ANSWERS = 2;
+let diagnosticsAsked = 0;
+/** Diagnostics the server saw inside marker-context's codeAction params. */
+let markerContextCount = -1;
+/** oversized-notification fires its one frame on the first didOpen only. */
+let oversizedNotified = false;
+
+/** Push publications for URI_FLOOD_DOCS distinct documents -- fills the
+ * client's 4096-document bound so the last 4 become counted drops. */
+function pushUriFlood() {
+  for (let i = 0; i < URI_FLOOD_DOCS; i++)
+    send({ jsonrpc: "2.0", method: "textDocument/publishDiagnostics",
+      params: { uri: `file:///flood-${i}.tfix`, diagnostics: [diagnostic(`flood ${i}`)] } });
+}
 
 /** Queue the whole flood, then call done only after every byte reached the
  * kernel pipe. Write callbacks fire on flush, so done() means the reader
@@ -140,17 +184,92 @@ function handle(message) {
       // Fill the tracked-document bound, then push the opened file's own
       // publication: the client's URI bound drops it and must name the
       // drop in the resolved list.
-      for (let i = 0; i < URI_FLOOD_DOCS; i++)
-        send({ jsonrpc: "2.0", method: "textDocument/publishDiagnostics",
-          params: { uri: `file:///flood-${i}.tfix`, diagnostics: [diagnostic(`flood ${i}`)] } });
+      pushUriFlood();
       send({ jsonrpc: "2.0", method: "textDocument/publishDiagnostics",
         params: { uri, diagnostics: [diagnostic("the opened file's own publication -- dropped past the bound")] } });
+    }
+    else if (scenario === "push-flood-uri-flood") {
+      // The opened file's own publication is stored AND truncated first;
+      // the URI flood overflows the tracked bound; the second copy of the
+      // file's publication re-arms the client's settle timer, so the
+      // resolved list is built only after every drop is already counted.
+      // The list it resolves carries BOTH markers -- the stored truncation
+      // marker and the URI-drop marker appended at settle.
+      const flood = Array.from({ length: 2000 }, (_v, i) => diagnostic(`flood ${i}`, i));
+      send({ jsonrpc: "2.0", method: "textDocument/publishDiagnostics", params: { uri, diagnostics: flood } });
+      pushUriFlood();
+      send({ jsonrpc: "2.0", method: "textDocument/publishDiagnostics", params: { uri, diagnostics: flood } });
+    }
+    else if (scenario === "pull-uri-flood") {
+      // The same flood while the pull request is in flight: the drops are
+      // already counted when the pull answer lands, so the early return
+      // must still name them.
+      pushUriFlood();
+      send({ jsonrpc: "2.0", method: "textDocument/publishDiagnostics",
+        params: { uri, diagnostics: [diagnostic("the opened file's own publication -- dropped past the bound")] } });
+    }
+    else if (scenario === "uri-flood-timeout") {
+      // Fill the tracked map but never publish for the opened file -- the
+      // diagnostics waiter times out with the drop count already taken.
+      pushUriFlood();
+    }
+    else if (scenario === "oversized-notification") {
+      // A COMPLETE oversized NOTIFICATION -- no body id to sniff -- while
+      // a request pends: the pending request must survive the drop. Sent
+      // once, on the first didOpen, so the counted drop stays exactly one.
+      if (!oversizedNotified) {
+        oversizedNotified = true;
+        const body = JSON.stringify({ jsonrpc: "2.0", method: "window/logMessage",
+          params: { type: 1, message: `notice ${"n".repeat(5 * 1024 * 1024)}` } });
+        process.stdout.write(`Content-Length: ${Buffer.byteLength(body)}\r\n\r\n${body}`);
+      }
+    }
+    else if (scenario === "slow-drain") {
+      // Stop reading stdin briefly: the client's next big didOpen writes
+      // backpressure into the pipe, then resume so 'drain' completes the
+      // call. Deterministic -- the pause lands exactly after the first
+      // parsed didOpen frame.
+      process.stdin.pause();
+      setTimeout(() => process.stdin.resume(), SLOW_DRAIN_MS);
+    }
+    else if (scenario === "stdin-stall") {
+      // Never read again: a backpressured write must fail bounded, not
+      // hang. The interval keeps the process alive -- without a ref'd
+      // handle pause() would empty the loop and exit, closing the pipe
+      // (an early EPIPE, not the stall the scenario exists to prove).
+      process.stdin.pause();
+      setInterval(() => {}, 60_000);
     }
     else
       send({ jsonrpc: "2.0", method: "textDocument/publishDiagnostics", params: { uri, diagnostics: [] } });
     return;
   }
   if (message.method === "textDocument/diagnostic") {
+    diagnosticsAsked += 1;
+    if (scenario === "partial-answers") {
+      // Only the first files answered; the rest hang into the request
+      // timeout so the call's per-file degrade is exercised.
+      if (diagnosticsAsked > PARTIAL_ANSWERS) return;
+      send({ jsonrpc: "2.0", id: message.id, result: { items: [diagnostic(`answered ${diagnosticsAsked}`)] } });
+      return;
+    }
+    if (scenario === "pull-uri-flood" || scenario === "slow-drain" || scenario === "stdin-stall") {
+      send({ jsonrpc: "2.0", id: message.id, result: { items: [diagnostic("pull answer")] } });
+      return;
+    }
+    if (scenario === "marker-context") {
+      send({ jsonrpc: "2.0", id: message.id,
+        result: { items: Array.from({ length: 2000 }, (_v, i) => diagnostic(`flood ${i}`, i)) } });
+      return;
+    }
+    if (scenario === "oversized-notification") {
+      // The first request is answered normally -- the pending request
+      // survived the unidentifiable oversized frame. Later requests hang
+      // so the client's error tail reports the counted drop.
+      if (diagnosticsAsked === 1)
+        send({ jsonrpc: "2.0", id: message.id, result: { items: [diagnostic("answer after the dropped notification")] } });
+      return;
+    }
     if (scenario === "oversized-frame") {
       process.stdout.write(`Content-Length: ${6 * 1024 * 1024}\r\n\r\n{"jsonrpc":"2.0"`);
       return;
@@ -217,6 +336,16 @@ function handle(message) {
     return;
   }
   if (message.method === "textDocument/codeAction") {
+    if (scenario === "marker-context") {
+      // Report through the resolved edit how many diagnostics the
+      // codeAction context carried -- OMA's markers must be filtered out
+      // before they ever reach the server.
+      markerContextCount = Array.isArray(message.params?.context?.diagnostics)
+        ? message.params.context.diagnostics.length : -1;
+      send({ jsonrpc: "2.0", id: message.id,
+        result: [{ title: "ctx fix", kind: "source.fixAll", data: {} }] });
+      return;
+    }
     if (scenario === "slow-stages") {
       setTimeout(() => send({ jsonrpc: "2.0", id: message.id,
         result: [{ title: "slow fix", kind: "source.fixAll", data: {} }] }), SLOW_STAGE_MS);
@@ -231,6 +360,14 @@ function handle(message) {
     return;
   }
   if (message.method === "codeAction/resolve") {
+    if (scenario === "marker-context") {
+      send({ jsonrpc: "2.0", id: message.id, result: { ...message.params,
+        edit: { changes: { [openedUri]: [{
+          range: { start: { line: 0, character: 0 }, end: { line: 0, character: 0 } },
+          newText: `// context-diagnostics=${markerContextCount}\n`,
+        }] } } } });
+      return;
+    }
     if (scenario === "slow-stages") {
       const edit = { changes: { [openedUri]: [{
         range: { start: { line: 0, character: 0 }, end: { line: 0, character: 0 } },

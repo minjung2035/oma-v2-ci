@@ -500,7 +500,7 @@
     },
     {
       "path": "src/extension/lsp-tools.ts",
-      "sha256": "8d1b473e7c3a8f2a500a74e560a90f202976652d46cf1ea0780d202399f7bf84"
+      "sha256": "22f11196fef6cac4910729eb6f30c481f5feb7fb60a3ed2743acf53c486ab50b"
     },
     {
       "path": "src/extension/mail-tools.ts",
@@ -2476,7 +2476,7 @@
     },
     {
       "path": "src/extension/vendor/pi-lsp/manifest.json",
-      "sha256": "a3192f360b3af8528deb2836a3cc191bd234f586608eb87a2795a24373be0b1f"
+      "sha256": "be1b709fb1da60f64717d86be9b59f170a9456f366fbd6f684b9e0dd2f8a218e"
     },
     {
       "path": "src/extension/vendor/pi-lsp/runtime/adapters.d.ts",
@@ -2504,11 +2504,11 @@
     },
     {
       "path": "src/extension/vendor/pi-lsp/runtime/lsp-client.d.ts",
-      "sha256": "93736f06ffb2e3cc54cf9819f5facb93bc00478aa7714d48225bb48119d65540"
+      "sha256": "a53a183afb5fdbb1df6e04cf0e68aa3d73d138ed2b2b6922a47e3703a29065b8"
     },
     {
       "path": "src/extension/vendor/pi-lsp/runtime/lsp-client.js",
-      "sha256": "5eb7f8fad7864a4531a3f546d52354297d0dd34a2f69b0914b3b221632d272d1"
+      "sha256": "6268597985185691f76a3d1b3f320692e9dba27b6eb703aae4df9a3c66889499"
     },
     {
       "path": "src/extension/vendor/pi-lsp/runtime/routes.d.ts",
@@ -2524,7 +2524,7 @@
     },
     {
       "path": "src/extension/vendor/pi-lsp/runtime/runner.js",
-      "sha256": "1fc0fad102ad02d95432d2bb09bdbcd9c4b288e658703128707b3928824ddaf6"
+      "sha256": "f7d527ebbb7464a735f2ecc3690a43e51ebe493f3774a4e08993a066d1591887"
     },
     {
       "path": "src/extension/vendor/pi-lsp/runtime/session-lifecycle.d.ts",

@@ -1180,8 +1180,8 @@
     "BL1",
     "BL5"
    ],
-   "sha256": "8d1b473e7c3a8f2a500a74e560a90f202976652d46cf1ea0780d202399f7bf84",
-   "note": "Re-read in full for the UX-38 residual settlement (LSP surface): every user-facing numeric bound is gone or non-blocking -- no 1MiB file refusal (liveFiles drops only non-regular/vanished, didOpen carries whole text), no file/path/server catalog caps (the whole configured catalog routes and reports; caller limit honored exactly, absent limit means the collected set with the count in details.summary), timeout floors at 1s with no ceiling (clampTimeout), and the 300s aggregate deadline is now LSP_CALL_STALL_MS -- a per-call silence window reset by omaOnInboundFrame sinks filtered to this call's own hardened adapters, never tighter than the per-request timeout so a longer caller budget is not undercut. Verified the vendored runtime still loads only behind verifyVendorBundle, the per-call scratch, role refusal, deny-by-default child env and contained-writer path are unchanged. Oracles: BL1/F1 progress-reset, silent-reclaim, oversized-then-serve, limit-honored, 1MiB-file, 80-paths, 71-server, truncation-marker tests in lsp-bundle/lsp-upstream."
+   "sha256": "22f11196fef6cac4910729eb6f30c481f5feb7fb60a3ed2743acf53c486ab50b",
+   "note": "Re-read in full for the UX-38 residual settlement round 2 (LSP surface): the diagnostics route loop now degrades per route -- a route whose call fails keeps a named 'X LSP diagnostics failed' section while completed routes keep their results, the caller's abort and the stall still end the call (stall.fired / stall.signal.throwIfAborted checked before degrade), and a call where every route failed still refuses ('failed on every route'). Vendored runDiagnostics itself settles per file (allSettled + oma/error markers), so route-level degrade covers failures the file level cannot reach (spawn/collect). Header comment now describes sniffed-id-only oversized refusal, stdin backpressure and per-file/per-route degrade; summary.failedRoutes counts degraded routes. Verified the vendored runtime still loads only behind verifyVendorBundle; per-call scratch, role refusal, deny-by-default child env and contained-writer path unchanged. Oracles: lsp-bundle BL1/F-5 partial-answers per-file degrade, route-degrade and all-fail-refusal tests; BL1/F1 stall/abort/limit suites unchanged."
   },
   {
    "path": "src/extension/vendor-bundle.ts",
@@ -1225,8 +1225,8 @@
    "oracles": [
     "BL1"
    ],
-   "sha256": "a3192f360b3af8528deb2836a3cc191bd234f586608eb87a2795a24373be0b1f",
-   "note": "Re-read after regeneration by scripts/vendor-pi-lsp.mjs --write for the UX-38 residual settlement. generated.divergences honestly records every OMA splice (inbound-frame request refusal + bounded discard, omaOnInboundFrame sink, flagged diagnostic truncation + idempotence, URI-drop marker, iterative collectPath, code-action unbounded resolve, workspace-edit accumulation bounds, stderr sample, permanent error listeners); upstream/ bytes remain the pinned snapshot. Bundle digest 82a5999a...42fa recomputed over the regenerated runtime."
+   "sha256": "be1b709fb1da60f64717d86be9b59f170a9456f366fbd6f684b9e0dd2f8a218e",
+   "note": "Re-read after regeneration by scripts/vendor-pi-lsp.mjs --write for the UX-38 residual settlement round 2. generated.divergences honestly records every OMA splice, now including lsp-client.d.ts (didOpen backpressure return + didDrain declaration + marker helpers) and the new lsp-client.js/runner.js splices (drain-aware open loop, per-file allSettled degrade, idempotent multi-marker strip, pull-path and waiter-timeout drop flags, sniffed-id-only oversized refusal); upstream/ bytes remain the pinned snapshot. Bundle digest 59a572cb...4227a recomputed over the regenerated runtime."
   },
   {
    "path": "src/extension/vendor/pi-lsp/runtime/adapters.d.ts",
@@ -1298,13 +1298,14 @@
   {
    "path": "src/extension/vendor/pi-lsp/runtime/lsp-client.d.ts",
    "by": [
-    "BL1"
+    "BL1",
+    "UX-38"
    ],
    "oracles": [
     "BL1"
    ],
-   "sha256": "93736f06ffb2e3cc54cf9819f5facb93bc00478aa7714d48225bb48119d65540",
-   "note": "Vendored pi-lsp payload member (@narumitw/pi-lsp@0.49.9). Byte-exact with npm tarball shasum 6643cec0b716bc5dc1834bdf836285b3c7569dce / integrity sha512-YQ49sPiz3sDq5+l9YuPsOcn7YC2kdRbzQr/5pBpsUi0giUqIymHEHB+G0bKx6PmOjhvStCzCSHJxU/qfTLj/yA== or upstream commit 55d784704cdec1ec1534b59f78f07f139539119e (upstream-tests come from the git source); byte-pinned by manifest.json per-file SHA-256 and the bundle digest; verifyVendorBundle refuses the session on any deviation (BL1 tests)."
+   "sha256": "a53a183afb5fdbb1df6e04cf0e68aa3d73d138ed2b2b6922a47e3703a29065b8",
+   "note": "Upstream tsc declaration emit PLUS a declared OMA splice (manifest generated.divergences now lists lsp-client.d.ts): didOpen returns boolean (stdin backpressure signal), didDrain(): Promise<void> settles a backpressured write, and omaMarkerDiagnostic/omaIsMarker are declared so the spliced .js surface typechecks. Byte-pinned by manifest.json per-file SHA-256 and the bundle digest; verifyVendorBundle refuses the session on any deviation (BL1 tests)."
   },
   {
    "path": "src/extension/vendor/pi-lsp/runtime/lsp-client.js",
@@ -1315,8 +1316,8 @@
    "oracles": [
     "BL1"
    ],
-   "sha256": "5eb7f8fad7864a4531a3f546d52354297d0dd34a2f69b0914b3b221632d272d1",
-   "note": "Read in full for the UX-38 residual settlement: upstream tsc emit plus declared OMA splices. An oversized declared Content-Length refuses only the request it answers (sniffed body id or sole pending request via #refuseOversizedFrame), the body feeds #discardRemaining in bounded memory and the parser realigns at the frame's end; frames with no boundary past the bound clear the buffer and refuse pendings -- #fail/server-kill is never the size path. shutdown skips the handshake only mid-discard. omaOnInboundFrame reports every inbound chunk to sinks (adapter-owned, per-call filtered in lsp-tools). Pushed diagnostics store flagged-truncated via omaFlaggedDiagnostics; tracked-URI overflow drops the publication and counts into #droppedDiagnosticUris surfaced by #withDroppedUriFlag; drop counts ride #formatDropped error tails. omaFlaggedDiagnostics is idempotent (trailing oma/truncation marker not recounted, OMA_MESSAGE_TRUNCATION_TAIL prevents re-cut lying about original length). resolveActions iterates the whole list -- per-request timeout and the stall window bound it, no count cap. stderr stays a 64KiB marked sample; child/stdout/stderr permanent error listeners retained."
+   "sha256": "6268597985185691f76a3d1b3f320692e9dba27b6eb703aae4df9a3c66889499",
+   "note": "Re-read in full for the UX-38 residual settlement round 2: upstream tsc emit plus declared OMA splices. didOpen/notify/#send now return stdin.write's boolean so backpressure is observable; didDrain() settles a buffered write on 'drain', rejects on stdin error/close (close() kills the child, so a caller abort still settles it) and on #timeoutMs so a never-draining server is a detected timeout not a hang. #refuseOversizedFrame refuses only a sniffed id that actually names a pending request -- an unidentifiable frame (notification or id past the sniffed prefix) increments #droppedInboundFrames and never touches pendings; the sole-pending fallback that misattributed notifications is gone. omaFlaggedDiagnostics strips ALL trailing oma/-prefixed markers before counting, so a stored truncation marker plus a settle-time URI-drop marker recount correctly; prior markers ride after a fresh truncation. omaMarkerDiagnostic takes code/severity (oma/error marks a file's failed request); omaIsMarker exported. #withDroppedUriFlag now also guards the pull path's early return, and the published-diagnostics waiter timeout appends #formatDropped so drops count on failure tails. omaOnInboundFrame sinks, discarder, bounded stderr sample and permanent error listeners unchanged."
   },
   {
    "path": "src/extension/vendor/pi-lsp/runtime/routes.d.ts",
@@ -1360,8 +1361,8 @@
    "oracles": [
     "BL1"
    ],
-   "sha256": "1fc0fad102ad02d95432d2bb09bdbcd9c4b288e658703128707b3928824ddaf6",
-   "note": "Read in full for the UX-38 residual settlement: upstream tsc emit plus declared OMA splices. Pull diagnostics and the fix path's diagnostic list run through omaFlaggedDiagnostics (visible marker + count, idempotent over pushed-store lists); OMA truncation markers are filtered out of the codeAction context so annotations are never sent to the server. The action resolve loop is unbounded in count (request timeout + stall window own liveness); the accumulated workspace-edit count/bytes bounds remain refusal -- a truncated edit list would fabricate a corrupt fix and unbounded materialization is the engine OOM the bound exists for, and the refusal still ends only that request. withLspClient lifecycle, abort wiring and cleanup-failure precedence unchanged."
+   "sha256": "f7d527ebbb7464a735f2ecc3690a43e51ebe493f3774a4e08993a066d1591887",
+   "note": "Re-read in full for the UX-38 residual settlement round 2: upstream tsc emit plus declared OMA splices. The didOpen loop now awaits client.didDrain() whenever a write returns false -- a corpus past the pipe capacity waits on the bounded drain instead of materializing in process memory, and a drain/write failure re-reports as the caller's abort via throwIfAborted. The diagnostics fan-out is Promise.allSettled: each file's timeout or failure becomes that file's own oma/error marker ('diagnostics failed for this file: ...') while answered files keep their real results; only the caller's abort still refuses the call. codeAction context filtering now excludes every oma/-prefixed marker (omaIsMarker), not just oma/truncation. Pull-path flagging, workspace-edit accumulation bounds, withLspClient lifecycle and abort wiring unchanged."
   },
   {
    "path": "src/extension/vendor/pi-lsp/runtime/session-lifecycle.d.ts",
