@@ -1,6 +1,7 @@
 // Mechanism only: callers decide whether a known nonzero exit is a domain fact.
 // A timeout/signal/spawn failure is never represented as an empty successful read.
 import { spawnSync, type SpawnSyncOptionsWithBufferEncoding } from "node:child_process";
+import { closeSync, constants, openSync } from "node:fs";
 import { performance } from "node:perf_hooks";
 import { validateCommand, processErrorCode as errorCode, type CommandSpec, type ProcessObservation, type Capture } from "./command.js";
 import { decodeUtf8 } from "../domain/utf8.js";
@@ -34,8 +35,22 @@ function classify(result: NativeSyncResult, limited: boolean): ProcessObservatio
 export function runProcessSync(spec: CommandSpec, invoke: SyncInvoker = spawnSync, inheritedFds: readonly number[] = []): ProcessObservation {
   validateCommand(spec);
   if (inheritedFds.some(fd => !Number.isInteger(fd) || fd < 0)) throw new TypeError("invalid inherited descriptor");
+  // Honesty, not capability: a synchronous spawn sees no bytes mid-flight, so
+  // a silence window would be a fixed deadline in disguise. Spilling is the
+  // opposite case -- a descriptor the child writes to directly keeps the
+  // whole stream with no buffer bound at all.
+  if (spec.silenceMs !== undefined)
+    throw new TypeError("the synchronous runner cannot observe progress; use runProcess");
   const started = performance.now();
   const fence = inheritedFds.length === 0 ? inheritedFence() : undefined;
+  // A spooled stream is handed to the child as its own descriptor: the
+  // complete bytes land in the caller's file and the observation's buffer is
+  // empty (the path is in `stdoutSpooledTo`/`stderrSpooledTo`). The fds are
+  // this call's -- opened here, closed here -- never the child's to keep.
+  const spoolFd = (path: string | undefined): number | null =>
+    path === undefined ? null : openSync(path, constants.O_WRONLY | constants.O_CREAT | constants.O_TRUNC | constants.O_NOFOLLOW, 0o600);
+  const outFd = spoolFd(spec.stdoutSpool);
+  const errFd = spoolFd(spec.stderrSpool);
   let result: NativeSyncResult;
   try {
     result = invoke(spec.executable, [...spec.argv], { env: { ...spec.env,
@@ -46,20 +61,26 @@ export function runProcessSync(spec: CommandSpec, invoke: SyncInvoker = spawnSyn
       encoding: "buffer", shell: false, timeout: spec.timeoutMs, killSignal: "SIGKILL",
       // Preserve the existing native cap, not the sum of two legacy caps.
       maxBuffer: Math.max(1, spec.stdoutBytes, spec.stderrBytes), stdio: inheritedFds.length > 0
-        ? ["pipe", "pipe", "pipe", ...inheritedFds] : fencedStdio(["pipe", "pipe", "pipe"] as const, "ignore", fence),
+        ? ["pipe", outFd ?? "pipe", errFd ?? "pipe", ...inheritedFds]
+        : fencedStdio(["pipe", outFd ?? "pipe", errFd ?? "pipe"] as const, "ignore", fence),
     });
   } catch (error) {
     return { kind: "spawn-failed", exitCode: null, signal: null, errorCode: errorCode(error), elapsedMs: performance.now() - started,
       stdout: Buffer.alloc(0), stderr: Buffer.alloc(0), stdoutTruncated: false, stderrTruncated: false };
+  } finally {
+    if (outFd !== null) try { closeSync(outFd); } catch { /* the file is the caller's; the descriptor was ours */ }
+    if (errFd !== null) try { closeSync(errFd); } catch { /* same */ }
   }
   const stdout = bytes(result.stdout); const stderr = bytes(result.stderr);
-  const stdoutTruncated = stdout !== null && stdout.length > spec.stdoutBytes;
-  const stderrTruncated = stderr !== null && stderr.length > spec.stderrBytes;
+  const stdoutTruncated = outFd === null && stdout !== null && stdout.length > spec.stdoutBytes;
+  const stderrTruncated = errFd === null && stderr !== null && stderr.length > spec.stderrBytes;
   const limited = stdoutTruncated || (stderrTruncated && spec.stderrOverflow !== "discard");
   const kind = stdout === null || stderr === null ? "unobserved" : classify(result, limited);
   const capture: Capture = {
-    stdout: Buffer.from((stdout ?? Buffer.alloc(0)).subarray(0, spec.stdoutBytes)),
-    stderr: Buffer.from((stderr ?? Buffer.alloc(0)).subarray(0, spec.stderrBytes)),
+    stdout: Buffer.from((stdout ?? Buffer.alloc(0)).subarray(0, outFd === null ? spec.stdoutBytes : 0)),
+    stderr: Buffer.from((stderr ?? Buffer.alloc(0)).subarray(0, errFd === null ? spec.stderrBytes : 0)),
+    ...(outFd === null ? {} : { stdoutSpooledTo: spec.stdoutSpool }),
+    ...(errFd === null ? {} : { stderrSpooledTo: spec.stderrSpool }),
     stdoutTruncated, stderrTruncated, signal: result.signal, errorCode: errorCode(result.error), elapsedMs: performance.now() - started,
   };
   if (kind === "exited" && typeof result.status === "number") return { ...capture, kind, exitCode: result.status };

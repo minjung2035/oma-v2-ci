@@ -1,11 +1,11 @@
 /** DR27: the first clone starts at a working-tree snapshot. Only the owned
  * repository is written: no add, index lock, filter or ref write in the source.
  * This prepares objects, not authority to move canonical main. */
-import { closeSync, fstatSync, writeSync } from "node:fs";
+import { closeSync, constants, fstatSync, openSync, readFileSync, readSync, writeSync } from "node:fs";
 import { join } from "node:path";
 import { randomBytes } from "node:crypto";
 import { StoreError } from "../domain/errors.js";
-import { runProcessSync } from "../process/run.js";
+import { runProcessSync, decodeProcessText } from "../process/run.js";
 import { GIT_ENV, requireTextExit } from "../process/policies.js";
 import { SnapshotReader, copySnapshotFile, sameSnapshotFile } from "../storage/snapshot-reader.js";
 import { prepareProjectDirectory, type ProjectPreparation } from "../storage/project-preparation.js";
@@ -74,16 +74,41 @@ export function withProjectSnapshot<T>(options: {
   let pending = false;
   try {
     const repository = join(temporary, "repository.git");
+    // A repository's listing is exactly as large as the repository is -- it
+    // must never die for crossing a buffer bound, so both streams are
+    // descriptor-spooled into this invocation's own staging: the file holds
+    // the stream whole, and its head is read back only where a failure's
+    // message or the answer needs it.
+    const spoolOut = join(temporary, "git.stdout");
+    const spoolErr = join(temporary, "git.stderr");
+    const readHead = (path: string, bytes: number): Buffer => {
+      const fd = openSync(path, constants.O_RDONLY);
+      try {
+        const buffer = Buffer.alloc(bytes);
+        const count = readSync(fd, buffer, 0, bytes, 0);
+        return buffer.subarray(0, count);
+      } finally { closeSync(fd); }
+    };
     const run = (argv: readonly string[], input?: string | Uint8Array): string => {
       if (!active) throw new StoreError("INTERNAL_ERROR", "project snapshot ownership has ended");
-      const result = requireTextExit(runProcessSync({ executable: options.executable,
+      const result = runProcessSync({ executable: options.executable,
         argv: [...SNAPSHOT_GIT_OPTIONS, ...argv],
         env: { ...GIT_ENV, GIT_OPTIONAL_LOCKS: "0", GIT_AUTHOR_NAME: "OMA", GIT_AUTHOR_EMAIL: "oma@localhost",
           GIT_COMMITTER_NAME: "OMA", GIT_COMMITTER_EMAIL: "oma@localhost" },
         ...(input === undefined ? {} : { input }), timeoutMs: 10 * 60_000,
-        stdoutBytes: 32 * 1024 * 1024, stderrBytes: 1024 * 1024 }, undefined, [descriptor]), "project snapshot git");
-      if (result.status !== 0) throw new StoreError("STORE_CORRUPT", `project snapshot git failed: ${result.stderr.trim().slice(0, 200)}`);
-      return result.stdout;
+        stdoutBytes: 32 * 1024 * 1024, stderrBytes: 1024 * 1024,
+        stdoutSpool: spoolOut, stderrSpool: spoolErr }, undefined, [descriptor]);
+      // requireTextExit already maps the non-exited kinds; spooled streams
+      // report empty buffers there, so the streams are read from the files
+      // the invocation named.
+      const exited = requireTextExit(result, "project snapshot git");
+      if (exited.status !== 0) {
+        const stderr = result.stderrSpooledTo === undefined ? exited.stderr
+          : decodeProcessText(readHead(result.stderrSpooledTo, 8192));
+        throw new StoreError("STORE_CORRUPT", `project snapshot git failed: ${stderr.trim().slice(0, 200)}`);
+      }
+      return result.stdoutSpooledTo === undefined ? exited.stdout
+        : decodeProcessText(readFileSync(result.stdoutSpooledTo));
     };
     const git: Git = (argv, input) => run(["--git-dir", repository, ...argv], input).trimEnd();
     run(["init", "--quiet", "--bare", "--template=", `--object-format=${options.format}`, repository]);

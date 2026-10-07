@@ -130,7 +130,7 @@ export const OWNED_STATE_EXEMPTIONS = Object.freeze({
   "src/platform/guest/egress.ts": "guesthost's own egress socket in the oma runtime directory -- chmod of the name oma just made is the point",
   "src/platform/guest/host.ts": "the guest's societies listing whose failure propagates as the request's refusal -- never read as empty",
   "src/platform/guest/linux-system.ts": "the guest's own /proc and /sys names and its societies listing -- kernel paths are never repaired; a listing failure refuses",
-  "src/platform/guest/packages.ts": "the staged archive and project mirror probes inside the guest's oma-owned ledger -- existsSync's false refuses the replace, and a statSync failure refuses; never read as absent and applied anyway",
+  "src/platform/guest/packages.ts": "the staged archive and project mirror probes inside the guest's oma-owned ledger -- existsSync's false refuses the replace, and a statSync failure refuses; never read as absent and applied anyway. The output spool is a fresh mkdtemp under the OS temp directory -- the call's own scratch, removed in the same call",
   "src/platform/guest/project.ts": "the staged bundle and project mirror probes inside the guest's oma-owned ledger -- existsSync's false refuses the import, and a statSync failure refuses; never accepts a bundle that did not verify",
   "src/platform/guest/pty.ts": "the pseudo-terminal slave under /dev/pts this process just made -- a kernel path, never repaired",
   "src/platform/guest/server.ts": "the guest service's own listening socket in its systemd RuntimeDirectory -- chmod/chown of the name oma just made is the point",
@@ -150,6 +150,9 @@ export const OWNED_STATE_EXEMPTIONS = Object.freeze({
   "src/tui/project-settings.ts": "the `.projects` listing under the data root whose non-ENOENT failure already refuses to the Human",
   "src/tui/sources/mail.ts": "the mailbox's journal and message reads under the state root -- an open or listing failure is rendered as the row's `unreadable` marker, never read as absent (arch §23.5)",
   "src/units.ts": "the caller's own systemd user directory -- ~/.config/systemd/user is the user's, never repaired",
+  "src/process/async.ts": "the caller-declared spool paths -- absolute paths each caller names under its own scratch or ledger directory; the runner opens what it was told to write",
+  "src/process/run.ts": "the same caller-declared spool paths opened for the child's descriptors -- the runner opens what it was told to write",
+  "src/platform/guest/provision.ts": "a fresh mkdtemp under the OS temp directory -- the provisioning call's own spool scratch, removed when mkfs ends",
 });
 
 

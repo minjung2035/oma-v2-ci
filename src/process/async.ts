@@ -1,5 +1,6 @@
 import { spawn, type ChildProcess, type ChildProcessWithoutNullStreams } from "node:child_process";
 export type { ChildProcess, ChildProcessWithoutNullStreams };
+import { closeSync, constants, openSync, writeSync } from "node:fs";
 import { performance } from "node:perf_hooks";
 import { snapshotCommand, processErrorCode, type CommandSpec, type ProcessObservation, type Capture } from "./command.js";
 import { StoreError } from "../domain/errors.js";
@@ -52,12 +53,41 @@ export function startProcess(source: CommandSpec, options: AsyncProcessOptions =
   let returned = false, observedClose = false, exited = false, terminationRequested = false;
   let observedExit: number | null = null, observedSignal: NodeJS.Signals | null = null;
   let drainTimer: ReturnType<typeof setTimeout> | undefined;
+  let silenceTimer: ReturnType<typeof setTimeout> | undefined;
+  // An overflowed stream that names a spill file keeps its in-memory head and
+  // writes the head plus every later byte to the file, so size alone never
+  // kills a command whose output the caller asked to keep whole. The file is
+  // this invocation's while it is open; the caller owns it afterwards.
+  interface Spool { readonly fd: number; readonly path: string }
+  let outSpool: Spool | null = null, errSpool: Spool | null = null;
+  const writeAll = (fd: number, value: Buffer): void => {
+    for (let at = 0; at < value.length;) {
+      const count = writeSync(fd, value, at, value.length - at);
+      if (count <= 0) throw new StoreError("INTERNAL_ERROR", "a spill write made no progress");
+      at += count;
+    }
+  };
+  const spill = (output: boolean, head: readonly Buffer[]): Spool | null => {
+    const path = output ? spec.stdoutSpool! : spec.stderrSpool!;
+    try {
+      const fd = openSync(path, constants.O_WRONLY | constants.O_CREAT | constants.O_TRUNC | constants.O_NOFOLLOW, 0o600);
+      try { for (const chunk of head) writeAll(fd, chunk); }
+      catch (error) { try { closeSync(fd); } catch { /* the open file is the failure's to keep */ } throw error; }
+      return { fd, path };
+    } catch (error) { nativeError ??= error; return null; }
+  };
   const finish = (kind: ProcessObservation["kind"], exitCode: number | null, exitSignal: NodeJS.Signals | null): void => {
     if (returned) return;
-    returned = true; clearTimeout(timer); if (drainTimer) clearTimeout(drainTimer);
+    returned = true; clearTimeout(timer); if (drainTimer) clearTimeout(drainTimer); if (silenceTimer) clearTimeout(silenceTimer);
     signal?.removeEventListener("abort", onAbort);
+    for (const spool of [outSpool, errSpool]) if (spool !== null) {
+      try { closeSync(spool.fd); } catch (error) { nativeError ??= error; }
+    }
     const capture: Capture = { stdout: Buffer.concat(out, outBytes), stderr: Buffer.concat(err, errBytes),
-      stdoutTruncated: outLimited, stderrTruncated: errLimited, signal: exitSignal, errorCode: processErrorCode(nativeError), elapsedMs: performance.now() - started };
+      stdoutTruncated: outLimited, stderrTruncated: errLimited,
+      ...(outSpool === null ? {} : { stdoutSpooledTo: outSpool.path }),
+      ...(errSpool === null ? {} : { stderrSpooledTo: errSpool.path }),
+      signal: exitSignal, errorCode: processErrorCode(nativeError), elapsedMs: performance.now() - started };
     out.length = 0; err.length = 0;
     if (kind === "exited" && typeof exitCode === "number") resolveResult({ ...capture, kind, exitCode });
     else resolveResult({ ...capture, kind: kind === "exited" ? "unobserved" : kind, exitCode });
@@ -91,19 +121,45 @@ export function startProcess(source: CommandSpec, options: AsyncProcessOptions =
   };
   const onAbort = (): void => terminate("aborted");
   const timer = setTimeout(() => terminate("timed-out"), spec.timeoutMs);
+  // Output is the progress this runner can observe: every byte the command
+  // writes re-arms the silence window, so a working command is never cut by
+  // the clock and one that says nothing for the whole window ends "stalled".
+  const armSilence = (): void => {
+    if (spec.silenceMs === undefined || returned || observedClose) return;
+    if (silenceTimer) clearTimeout(silenceTimer);
+    silenceTimer = setTimeout(() => terminate("stalled"), spec.silenceMs);
+  };
+  armSilence();
   const collect = (value: Buffer, output: boolean): void => {
     if (returned) return;
     if (!Buffer.isBuffer(value)) { terminate("unobserved"); return; }
-    const remaining = Math.max(0, output ? spec.stdoutBytes - outBytes : spec.stderrBytes - errBytes);
+    armSilence();
+    const budget = output ? spec.stdoutBytes : spec.stderrBytes;
+    const kept = output ? outBytes : errBytes;
+    const remaining = Math.max(0, budget - kept);
     if (remaining > 0) {
       const keep = Buffer.from(value.subarray(0, remaining));
       (output ? out : err).push(keep);
       if (output) outBytes += keep.length; else errBytes += keep.length;
     }
-    if (value.length > remaining) {
-      if (output) outLimited = true; else errLimited = true;
-      if (output || spec.stderrOverflow !== "discard") terminate("output-limited");
+    if (value.length <= remaining) return;
+    // The stream outgrew its in-memory budget. With a spill path the retained
+    // head and every later byte go to the file the caller owns -- complete,
+    // and the command keeps running; without one the command is ended as
+    // before (stdout always, stderr unless the spec said to discard it).
+    if (output) outLimited = true; else errLimited = true;
+    if ((output ? spec.stdoutSpool : spec.stderrSpool) !== undefined) {
+      let spool = output ? outSpool : errSpool;
+      if (spool === null) {
+        spool = spill(output, output ? out : err);
+        if (output) outSpool = spool; else errSpool = spool;
+        if (spool === null) { terminate("unobserved"); return; }
+      }
+      try { writeAll(spool.fd, Buffer.from(value.subarray(remaining))); }
+      catch (error) { nativeError ??= error; terminate("unobserved"); }
+      return;
     }
+    if (output || spec.stderrOverflow !== "discard") terminate("output-limited");
   };
   const streamError = (error: Error): void => { nativeError ??= error; terminate("unobserved"); };
   child.stdout?.on("data", (chunk: Buffer) => collect(chunk, true));

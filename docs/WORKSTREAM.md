@@ -1647,6 +1647,63 @@ name collision/intended surface/hidden 미활성/idempotent reload/provenance/
   - NOT_RUN: macOS native·systemd·kernel/powercut·provider credential·
     release qualification — 로컬 환경 부재.
 
+- 2026-10-08 (UX-38 잔여 3차 — 네트워크/프로세스 표면의 용량 거절·고정 마감
+  변환): 같은 결함류(§2 1·9·13)를 런타임 네트워크 경계와 프로세스
+  실행층에 적용했다. 원칙은 같다 — 용량만으로 유효 요청을 거절하는
+  bound는 FIFO 대기(backpressure)로 바꾸고, 총 경과 마감은 진행이
+  관측되는 곳에서는 진행-리셋 침묵 창으로, 관측이 불가능한 곳(비동기
+  runner 외부·VM handshake/drain·프레임 소스 바이트 부재)에는 관대한
+  상한+정직한 실패로 둔다.
+  - 용량→FIFO 작업 집합 5곳: ①`connect-proxy.ts` — `CONNECT_TUNNELS`(4)
+    초과 CONNECT는 503 대신 대기열에 들어가고 활성 터널이 닫히면 순서대로
+    grant; 대기 중 클라이언트 close(이미 닫힌 소켓 포함)는 클레임 철회,
+    shutdown은 대기·활성 전부 소멸. ②`inference-relay.ts` — placeholder당
+    `concurrent` 초과 요청은 `observe().queued`로 노출되는 큐에 서고
+    `accepted`/`inFlight`는 grant 시점에만 계수; 대기 중 close는 철회.
+    ③`host/egress.ts` — run당 터널 작업 집합이 차면 `egress.connect`
+    요청을 프레임까지 읽어 큐에 두고, 터널 close·run release·service stop이
+    대기·활성을 정직히 회수(BROKER_UNAVAILABLE). ④`guest/egress.ts` —
+    빈 pool은 더는 연결 실패가 아니라 `EgressPool.wait(client)`로 기다리고
+    다음 주차 연결이 그 클레임을 채움; 클라이언트 close·pool close는
+    대기자를 정직히 끝낸다. ⑤`egress-forwarder.ts` — engine 연결도 같은
+    규칙(작업 집합 초과 시 FIFO, 떠난 engine의 클레임 철회).
+  - 진행-리셋 침묵: `platform/rpc.ts`의 `readLeadingFrame`은 수신 바이트마다
+    관측 창을 재장전(총 경과 아님 — 느린 발신은 완주하고 침묵만 회수),
+    `process/command.ts`에 `silenceMs`·stdout/stderrSpool 추가·
+    `async.ts`는 stdout/stderr 데이터마다 침묵 타이머 리셋 + 무출력 창
+    만료는 `"stalled"` 관측(`policies.ts`가 DEADLINE_EXCEEDED로 매핑 —
+    timeout·spawn failure와 구분). sync runner는 진행을 관측할 수 없어
+    `silenceMs`를 TypeError로 명시 거절(정직성), spool은
+    `O_WRONLY|O_CREAT|O_TRUNC|O_NOFOLLOW` 직결 fd로 스트림을 우회하지
+    않고 통째 보존. relay의 provider 창도 업로드/다운로드/응답 진행으로
+    리셋한다.
+  - 대출력 spill: `project-snapshot.ts`·`host/project.ts`의 git 실행은
+    stdout/stderr를 per-call 임시 스풀 파일에 통째 쓰고 메모리에는 bounded
+    head만 유지 — 저장소 크기 출력이 in-memory 상한을 넘어도 거절되지
+    않음. `canonical-command.ts`의 GITLINKS_OBSERVATION_BYTES는
+    256MiB로 상향+문서화. `guest/archive.ts`의 tar는 `--checkpoint=1024`
+    진행 로그를 stderr로 내고 침묵 창(10분)·native-timer 상한(0x7fffffff)
+    조합 — 진행하는 archive는 완주하고 침묵만 회수.
+  - 의도적 유지: handshake/drain/health/hung/restart 상한(host
+    lifecycle·service의 MAC-320/330/331 자원 안전 bound — 진행을 관측할
+    수 없는 VM 상태의 경계), CONNECT authority-form/443·allowlist·
+    공인주소 screen·pin·audit·frame byte bound·tripwire·INF-004/007 전부.
+  - 회귀·fail→pass: `r37-async-process.test.ts`에 침묵 리셋·stalled
+    분류·async spill 통째 보존·spill+침묵·sync silence 거절·sync
+    descriptor-direct spill 6종 추가. `egress-connect.test.ts` —
+    tunnels=1에서 두 번째·세 번째 요청 큐잉·닫힌 클라이언트 철회·slot
+    해제 시 grant. `inference-relay.test.ts` — observe().queued 노출,
+    한도 초과 요청이 앞 요청 완료 뒤 성공, 대기 클라이언트 close 시
+    provider 호출 0. `platform-egress.test.ts` — run 터널 4 활성+5번째
+    큐잉→close grant→burst 5개 전부 성공, run release가 대기 요청을
+    BROKER_UNAVAILABLE로 회수, 빈 pool 대기→fill 충족·waiter close 철회,
+    forwarder 작업 집합 큐잉+떠난 engine 철회+grant. `egress-observation-
+    deadlines.test.mjs` — readLeadingFrame이 청크 단위 진행으로 리셋됨을
+    대조. 구 오라클은 용량 503/BROKER_UNAVAILABLE 거절을 기대하던 부분이
+    있어 큐잉 의미로 갱신했다.
+  - NOT_RUN: macOS native·systemd·kernel/powercut·provider credential·
+    release qualification — 로컬 환경 부재.
+
 ## 10. 지금부터의 실행 순서
 0. ~~P0-8 강제 수단 미구현~~ — 구현됨: `owned-state` 아키텍처 규칙
    (scripts/architecture/rules/owned-state-rules.mjs)이 경로 기반 raw fs

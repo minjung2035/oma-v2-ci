@@ -380,8 +380,8 @@ test("DR34: a refused request dies with its answer -- no socket lingers in keep-
   const { socketPath } = await proxyWorld(t, async host => { dials.push(host); return new Socket(); }, e => audits.push(e));
 
   // A plain request gets its 405 and the socket is gone -- it cannot idle on
-  // keep-alive holding a maxConnections slot (the refusal says close, and the
-  // proxy enforces it rather than trusting the peer to leave).
+  // keep-alive occupying a listener or tunnel slot (the refusal says close,
+  // and the proxy enforces it rather than trusting the peer to leave).
   const get = connect(socketPath);
   await once(get, "connect");
   get.write("GET http://registry.npmjs.org/?api_key=SECRET HTTP/1.1\r\nHost: registry.npmjs.org\r\n\r\n");
@@ -503,6 +503,9 @@ test("DR34: an upstream-initiated close ends the tunnel and frees its slot at on
   assert.equal(status, 200);
   assert.equal(proxy.activeTunnels, 1);
   t.after(() => socket.destroy());
+  // The dial resolves with a socket that is still connecting; the upstream
+  // server sees it a turn later. Wait for the peer before ending it.
+  await until(() => upstreamPeers.length === 1, "the dialed upstream connected");
   upstreamPeers[0]!.resetAndDestroy();
   const [closed] = await Promise.race([
     once(socket, "close").then(() => [true]),
@@ -510,6 +513,47 @@ test("DR34: an upstream-initiated close ends the tunnel and frees its slot at on
   ]);
   assert.equal(closed, true, "the client half followed the upstream's end");
   await until(() => proxy.activeTunnels === 0, "the tunnel slot was freed without waiting for idleMs");
+});
+
+test("DR34: the tunnel working set queues -- it never refuses; a close grants, a queued close withdraws", async t => {
+  const port = await echo(t);
+  const dir = mkdtempSync(join(tmpdir(), "oma-connect-"));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  const socketPath = join(dir, "egress.sock");
+  let dialed = 0;
+  const proxy = await ConnectProxy.open({ socketPath, policy: POLICY, actor: "alice", tunnels: 1,
+    dial: async () => { dialed++; return connect({ host: "127.0.0.1", port }); } });
+  t.after(() => proxy.close());
+  const first = await connectRaw(socketPath, "CONNECT registry.npmjs.org:443 HTTP/1.1\r\n\r\n");
+  assert.equal(first.status, 200);
+  assert.equal(proxy.activeTunnels, 1);
+  t.after(() => first.socket.destroy());
+
+  // The second CONNECT waits: no refusal, no answer, no dial while the slot stands.
+  let secondSettled = false;
+  const second = connectRaw(socketPath, "CONNECT registry.npmjs.org:443 HTTP/1.1\r\n\r\n")
+    .then(result => { secondSettled = true; return result; });
+  await until(() => proxy.queuedTunnels === 1, "the second CONNECT queues");
+  await new Promise(r => setTimeout(r, 200));
+  assert.equal(secondSettled, false, "the queued request is neither answered nor refused");
+  assert.equal(dialed, 1, "a queued claim holds no upstream");
+
+  // A third claim queues behind it; its own close withdraws it -- nothing is
+  // dialed for a client that is no longer there.
+  const gone = connect(socketPath);
+  await once(gone, "connect");
+  gone.write("CONNECT registry.npmjs.org:443 HTTP/1.1\r\n\r\n");
+  await until(() => proxy.queuedTunnels === 2, "a third claim queues behind the second");
+  gone.destroy();
+  await until(() => proxy.queuedTunnels === 1, "the departed client's claim withdrew");
+
+  // The standing tunnel's close grants the queue's head, in order.
+  first.socket.destroy();
+  const granted = await second;
+  assert.equal(granted.status, 200, "the queued request runs once the slot frees");
+  assert.equal(dialed, 2, "only the granted claim ever dialed");
+  assert.equal(proxy.queuedTunnels, 0);
+  granted.socket.destroy();
 });
 
 test("DR34: closing the proxy ends its tunnels and removes its name", async t => {

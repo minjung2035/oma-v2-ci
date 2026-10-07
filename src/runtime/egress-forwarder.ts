@@ -60,11 +60,14 @@ function oneFrame(socket: Socket, frameBytes: number, deadlineMs: number): Promi
       // Only the frame's own bytes are parsed; the declared length is checked
       // before the body is awaited, so a lie cannot grow the buffer, and a
       // socket read cannot grow it past one frame plus what arrived with it.
+      // Each byte that lands is progress and re-arms the window: the deadline
+      // is silence, not a total -- the frame cap bounds how long bytes alone
+      // can keep it alive.
       buffered = Buffer.concat([buffered, chunk]);
-      if (buffered.length < 4) return;
+      if (buffered.length < 4) { arm(); return; }
       const length = buffered.readUInt32BE(0);
       if (length > frameBytes) { done(new FrameError("FRAME_TOO_LARGE", `frame length ${length} exceeds max ${frameBytes}`)); return; }
-      if (buffered.length < 4 + length) return;
+      if (buffered.length < 4 + length) { arm(); return; }
       let frame: Record<string, unknown>;
       try { frame = new FrameParser(frameBytes).feed(buffered.subarray(0, 4 + length))[0]!.raw; }
       catch (error) { done(error as Error); return; }
@@ -72,7 +75,11 @@ function oneFrame(socket: Socket, frameBytes: number, deadlineMs: number): Promi
     });
     socket.once("error", () => { done(new StoreError("BROKER_UNAVAILABLE", "the egress service is unavailable")); });
     socket.once("close", () => { done(new StoreError("BROKER_UNAVAILABLE", "the egress service closed without an answer")); });
-    timer = alarm(deadlineMs / 1000, () => done(new StoreError("BROKER_UNAVAILABLE", "the egress service did not answer in time")), true);
+    const arm = (): void => {
+      timer?.cancel();
+      timer = alarm(deadlineMs / 1000, () => done(new StoreError("BROKER_UNAVAILABLE", "the egress service did not answer in time")), true);
+    };
+    arm();
   });
 }
 
@@ -151,13 +158,41 @@ export async function requestEgressConnect(ask: EgressAsk, lease: { readonly pla
 }
 
 /** The engine's provider socket, forwarding each connection to one egress
- * connection for this run. At most `concurrent` at a time; one more is
- * refused, as the relay refuses at its limit and the engine retries. */
+ * connection for this run. At most `concurrent` are wired at a time; one
+ * more waits rather than being refused -- its claim is the engine socket's
+ * own, withdrawn if the socket ends before a slot frees. */
 export class EgressForwarder {
   private readonly open = new Set<Socket>();
+  /** Connections waiting for a forwarding slot, in order. */
+  private readonly waiting: { socket: Socket; cancel(): void; run(): void }[] = [];
   private closing: Promise<void> | null = null;
   private constructor(private readonly server: Server, readonly socketPath: string,
-    private readonly lease: { release(): void; ended?(listener: () => void): void } | null) {}
+    private readonly lease: { release(): void; ended?(listener: () => void): void } | null,
+    private readonly slots: number) {}
+
+  /** The connection's place: wired now if a slot is open, else queued. A
+   * queued connection has opened nothing upstream; its own close is the
+   * cancellation. */
+  private enqueue(engine: Socket, run: () => void): void {
+    const entry = { socket: engine, run, cancel: (): void => {
+      const at = this.waiting.indexOf(entry);
+      if (at >= 0) this.waiting.splice(at, 1);
+    } };
+    // The claim is withdrawn by its engine going away: 'close' on a reset or
+    // full close, 'end' on a half-close, 'error' on what the socket reported.
+    engine.once("close", entry.cancel); engine.once("end", entry.cancel); engine.once("error", entry.cancel);
+    this.waiting.push(entry);
+    this.offer();
+  }
+
+  private offer(): void {
+    while (this.waiting.length > 0 && this.open.size < this.slots) {
+      const entry = this.waiting.shift()!;
+      entry.socket.off("close", entry.cancel); entry.socket.off("end", entry.cancel); entry.socket.off("error", entry.cancel);
+      if (entry.socket.destroyed || entry.socket.closed || entry.socket.readableEnded) continue;
+      entry.run();
+    }
+  }
 
   /** The run's lease is the forwarder's from here: an answer it could not
    * give ends the run the same as its close does (P0-4, AV-15). And the
@@ -177,12 +212,11 @@ export class EgressForwarder {
     try { clearSocketName(socketPath); }
     catch (error) { lease?.release(); throw error; }
     let forwarder: EgressForwarder;
-    const server = createServer(engine => {
-      if (forwarder.closing !== null || forwarder.open.size >= concurrent) { engine.destroy(); return; }
+    const wire = (engine: Socket): void => {
       forwarder.open.add(engine);
       const upstream = connect(egressSocket);
       const drop = (): void => { engine.destroy(); upstream.destroy(); };
-      engine.once("close", () => { forwarder.open.delete(engine); upstream.destroy(); });
+      engine.once("close", () => { forwarder.open.delete(engine); upstream.destroy(); forwarder.offer(); });
       engine.on("error", drop);
       upstream.on("error", drop);
       upstream.once("close", () => { engine.destroy(); });
@@ -191,8 +225,14 @@ export class EgressForwarder {
         engine.pipe(upstream);
         upstream.pipe(engine);
       });
+    };
+    const server = createServer(engine => {
+      if (forwarder.closing !== null) { engine.destroy(); return; }
+      // A slot short of `concurrent` is a wait, not a destroy: the engine
+      // connection holds its own claim, cancelled by its own close.
+      forwarder.enqueue(engine, () => wire(engine));
     });
-    forwarder = new EgressForwarder(server, socketPath, lease);
+    forwarder = new EgressForwarder(server, socketPath, lease, concurrent);
     // The 'error' event needs a listener for the server's whole life, not
     // only the listen attempt: once the startup once-listener below is
     // removed, an accept-class error (EMFILE/ENFILE) meets zero 'error'
@@ -232,6 +272,12 @@ export class EgressForwarder {
   close(): Promise<void> {
     this.closing ??= new Promise(resolve => {
       this.lease?.release();
+      // Queued claims die with the forwarder, each socket's own close
+      // listener withdrawing its place.
+      for (const entry of this.waiting.splice(0)) {
+        entry.socket.off("close", entry.cancel); entry.socket.off("end", entry.cancel); entry.socket.off("error", entry.cancel);
+        entry.socket.destroy();
+      }
       for (const socket of this.open) socket.destroy();
       // The server's own close removes its name (P0V-114).
       this.server.close(() => { resolve(); });

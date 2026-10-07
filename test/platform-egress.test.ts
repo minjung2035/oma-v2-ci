@@ -150,12 +150,27 @@ test("MV-13: the guest names a model; one the host does not know is refused, in 
   assert.equal(host.activeRuns, 0);
 });
 
-test("MAC-225: with no connection waiting, an engine's connection is refused at once rather than held", async t => {
+test("MAC-225: with no connection waiting, an engine's connection waits -- and the next to park is granted to it", async t => {
+  // The pool being empty is a capacity condition, not a fault: the request
+  // waits for the host to park a connection, then is answered on its merits
+  // (here the placeholder is unknown, so the tunnel still honestly ends).
+  const { host, pool, serviceSocket } = await world(t);
+  assert.equal(pool.size, 0);
+  const pending = post(serviceSocket, { placeholderId: randomUUID(), ...RUN, modelProfile: "default" },
+    "sk-ant-api03-PLACEHOLDERxxxxxxxxxxxxxxxx");
+  await until(() => pool.pending === 1, "the request waits rather than being refused");
+  await host.fill();
+  assert.equal(await pending, "closed", "once a connection parks, the request is answered on its merits");
+});
+
+test("MAC-225: a waiter's own close withdraws its claim on the pool -- capacity it never took", async t => {
   const { pool, serviceSocket } = await world(t);
   assert.equal(pool.size, 0);
-  const started = performance.now();
-  assert.equal(await post(serviceSocket, { placeholderId: randomUUID(), ...RUN, modelProfile: "default" }, "sk-ant-api03-PLACEHOLDERxxxxxxxxxxxxxxxx"), "closed");
-  assert.ok(performance.now() - started < 1000, "refused, not waited out");
+  const socket = await ask(serviceSocket, "egress.open", { placeholderId: randomUUID(), ...RUN, modelProfile: "default" });
+  t.after(() => socket.destroy());
+  await until(() => pool.pending === 1, "the request stands in the queue");
+  socket.destroy();
+  await until(() => pool.pending === 0, "the departed client's claim was withdrawn");
 });
 
 test("DR18 / D-10: a run in the guest asks for its placeholder and forwards the engine's connections through egress; the key is put in on the host", async t => {
@@ -200,6 +215,54 @@ test("DR18 / D-10: a run in the guest asks for its placeholder and forwards the 
   assert.equal(principal.env.OMA_INFERENCE_PROVIDER, "anthropic");
   assert.notEqual(principal.env.OMA_INFERENCE_KEY, SECRET);
   await principal.close();
+});
+
+test("DR18/DR34: the forwarder's bound is a working set -- engine connections queue, are never refused, and a departed engine withdraws", async t => {
+  const { EgressForwarder, requestEgressPlaceholder } = await import("../src/runtime/egress-forwarder.js");
+  const { host, pool, provider, serviceSocket } = await world(t);
+  await host.fill();
+  await until(() => pool.size === 2, "the pool");
+  const ask = { socket: serviceSocket, frameBytes: PLATFORM_FRAME_BYTES, deadlineMs: 5000 };
+  const issued = await requestEgressPlaceholder(ask, RUN, "anthropic", "current", 5);
+  t.after(() => issued.release());
+  await until(() => pool.size >= 6, "the pool grows for the run");
+  const dir = mkdtempSync(join(tmpdir(), "oma-forwarder-q-"));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  const socketPath = join(dir, "inference.sock");
+  const forwarder = await EgressForwarder.listen(socketPath, serviceSocket,
+    { placeholderId: issued.placeholderId, ...RUN, modelProfile: "worker" }, 1, issued);
+  t.after(async () => { await forwarder.close(); });
+  provider.reply = { status: 200, chunks: ["a"], delayMs: 600 };
+  const engine = () => new Promise<{ status: number; body: string } | "closed">(resolve => {
+    const request = httpRequest({ socketPath, method: "POST", path: "/messages",
+      headers: { "x-api-key": issued.placeholder, "content-type": "application/json" } }, response => {
+      let body = "";
+      response.on("data", chunk => { body += chunk; });
+      response.on("end", () => resolve({ status: response.statusCode ?? 0, body }));
+    });
+    request.on("error", () => resolve("closed"));
+    request.end('{"hello":true}');
+  });
+  const first = engine();
+  await new Promise(r => setTimeout(r, 150));
+
+  // The one slot is held: a second connection waits, and a third withdraws
+  // when its engine goes away -- its claim was never the forwarder's to keep.
+  const second = engine();
+  let secondSettled = false;
+  void second.then(() => { secondSettled = true; }, () => { secondSettled = true; });
+  const gone = connect(socketPath);
+  await once(gone, "connect");
+  await new Promise(r => setTimeout(r, 100));
+  gone.destroy();
+  await new Promise(r => setTimeout(r, 200));
+  assert.equal(secondSettled, false, "the second engine connection queued rather than being refused");
+  assert.equal(provider.seen.length, 1, "a queued connection held no provider call");
+
+  const [a, b] = await Promise.all([first, second]);
+  assert.deepEqual([a, b], [{ status: 200, body: "a" }, { status: 200, body: "a" }],
+    "the queued connection ran when the slot freed");
+  assert.equal(provider.seen.length, 2, "the withdrawn connection never dialed the provider");
 });
 
 test("AV-15: a listen refused before its socket name is cleared releases the run's lease", async t => {
@@ -448,7 +511,7 @@ test("DR34: egress.connect tunnels a declared allowlisted target through the poo
     (error: unknown) => error instanceof StoreError && (error as StoreError).code === "STALE_RUN");
 });
 
-test("DR34: the run's tunnel bound counts tunnels -- four stand, the fifth is refused, a close frees its slot", async t => {
+test("DR34: the run's tunnel bound is a working set -- the fifth queues, and a close grants it", async t => {
   const { requestEgressConnect, requestEgressPlaceholder } = await import("../src/runtime/egress-forwarder.js");
   const port = await echoServer(t);
   const { host, pool, serviceSocket } = await world(t, 5000, undefined,
@@ -466,37 +529,54 @@ test("DR34: the run's tunnel bound counts tunnels -- four stand, the fifth is re
   assert.equal(held.length, 4, "four tunnels at the declared concurrent bound");
   held[0]!.write("live");
   await once(held[0]!, "data");
-  await assert.rejects(requestEgressConnect(ask, issued, RUN, "registry.npmjs.org", 443, CONNECT_POLICY),
-    (error: unknown) => error instanceof StoreError && (error as StoreError).code === "BROKER_UNAVAILABLE",
-    "the fifth tunnel is refused at the bound");
 
-  // A closed tunnel returns its slot: destroy one, then the same connect
-  // succeeds once the host has observed the close.
+  // The fifth is queued rather than refused: it settles neither way until a
+  // standing tunnel closes and grants it the slot.
+  const waiting = requestEgressConnect(ask, issued, RUN, "registry.npmjs.org", 443, CONNECT_POLICY);
+  let waitingSettled = false;
+  void waiting.then(() => { waitingSettled = true; }, () => { waitingSettled = true; });
+  await new Promise(r => setTimeout(r, 300));
+  assert.equal(waitingSettled, false, "the fifth tunnel waits rather than being refused");
   held[0]!.destroy();
-  let reopened: Socket | undefined;
-  for (let i = 0; i < 100 && reopened === undefined; i++) {
-    try { reopened = await requestEgressConnect(ask, issued, RUN, "registry.npmjs.org", 443, CONNECT_POLICY); }
-    catch (error) { assert.ok(error instanceof StoreError && (error as StoreError).code === "BROKER_UNAVAILABLE"); await new Promise(r => setTimeout(r, 10)); }
-  }
-  assert.ok(reopened, "a closed tunnel frees its slot");
+  const reopened = await waiting;
+  t.after(() => reopened.destroy());
+  assert.ok(reopened, "a closed tunnel grants its slot to the queued request");
 
-  // The bound check and the slot reservation are one synchronous step: a
-  // burst cannot pass the check together and only then dial. On a fresh run
-  // (the first run's closed sockets take no deterministic time to release),
-  // one more than the bound at once yields exactly the bound standing.
+  // A burst of five lands the same way: four are carried, one queues, and a
+  // close admits it -- no overshoot past the bound, and nobody is refused.
   for (const socket of held) socket.destroy();
   issued.release();
   await until(() => host.activeRuns === 0, "the first run is over on the host");
   const issued2 = await requestEgressPlaceholder(ask, RUN, "anthropic", "current", 5);
   await until(() => pool.size >= 6, "the pool refilled for the burst");
-  const burst = await Promise.allSettled(Array.from({ length: 5 },
-    () => requestEgressConnect(ask, issued2, RUN, "registry.npmjs.org", 443, CONNECT_POLICY)));
-  const admitted = burst.filter((r): r is PromiseFulfilledResult<Socket> => r.status === "fulfilled");
-  const refused = burst.filter(r => r.status === "rejected" && r.reason instanceof StoreError && r.reason.code === "BROKER_UNAVAILABLE");
-  assert.equal(admitted.length, 4, "four free slots admit four tunnels");
-  assert.equal(refused.length, 1, "the fifth is refused -- no overshoot past the bound");
-  for (const socket of admitted.map(r => r.value)) socket.destroy();
-  issued2.release();
+  let admitted = 0;
+  const settled: Socket[] = [];
+  const burst = Array.from({ length: 5 }, () =>
+    requestEgressConnect(ask, issued2, RUN, "registry.npmjs.org", 443, CONNECT_POLICY)
+      .then(socket => { admitted++; settled.push(socket); return socket; }));
+  t.after(() => settled.forEach(socket => socket.destroy()));
+  await until(() => admitted === 4, "four free slots admit four tunnels while the fifth queues");
+  let fifthSettled = false;
+  void burst[4]!.then(() => { fifthSettled = true; }, () => { fifthSettled = true; });
+  await new Promise(r => setTimeout(r, 300));
+  assert.equal(fifthSettled, false, "the fifth of the burst queues behind the four standing");
+  settled[0]!.destroy();
+  const granted = await burst[4]!;
+  assert.equal(admitted, 5, "the queued burst request was granted, not refused");
+
+  // Four stand again (the burst's survivors and the granted fifth): a new
+  // connect queues -- if it were granted at once it would settle within the
+  // pause below -- and a queued claim whose run ends is honestly ended, not
+  // left believing.
+  const orphan = requestEgressConnect(ask, issued2, RUN, "registry.npmjs.org", 443, CONNECT_POLICY);
+  let orphanSettled = false;
+  void orphan.then(() => { orphanSettled = true; }, () => { orphanSettled = true; });
+  await new Promise(r => setTimeout(r, 300));
+  assert.equal(orphanSettled, false, "the connect queued behind the full run");
+  await issued2.release();
+  await assert.rejects(orphan,
+    (error: unknown) => error instanceof StoreError && error.code === "BROKER_UNAVAILABLE",
+    "a released run ends its queued claims unanswered");
 });
 
 test("DR34: every connect decision audits once -- the refused, the failed, and the run that ended mid-dial", async t => {

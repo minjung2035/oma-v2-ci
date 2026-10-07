@@ -50,9 +50,18 @@ export class GuestArchives {
       try {
         writeFileSync(join(scratch, "manifest.json"), JSON.stringify({ kind: "oma-archive-manifest-v1", society, files: manifest }));
         const staged = this.ledger.staging(key as string, "archive.tar");
+        // An archive is exactly as large as the society is: a fixed total
+        // deadline would refuse a legitimately large state tree. tar instead
+        // reports progress -- a "Write checkpoint" line per 1024 records
+        // (~10 MiB) -- which re-arms the silence window, so a working archive
+        // runs to completion however long that takes while one that stopped
+        // ends as "stalled". The checkpoint lines themselves are progress,
+        // not content: stderr is bounded to a head and discarded past it.
         const made = await runProcess({ executable: "/usr/bin/tar", argv: ["--create", "--file", staged, "--format=pax", "--sort=name",
-          "--numeric-owner", "--directory", this.societiesDir, `--exclude=${society}/run`, society, "--directory", scratch, "manifest.json"],
-          env: { PATH: "/usr/bin:/bin", LC_ALL: "C" }, timeoutMs: 60 * 60_000, stdoutBytes: 64 * 1024, stderrBytes: 64 * 1024 });
+          "--numeric-owner", "--checkpoint=1024", "--directory", this.societiesDir, `--exclude=${society}/run`, society,
+          "--directory", scratch, "manifest.json"],
+          env: { PATH: "/usr/bin:/bin", LC_ALL: "C" }, timeoutMs: 0x7fffffff, silenceMs: 10 * 60_000,
+          stdoutBytes: 64 * 1024, stderrBytes: 64 * 1024, stderrOverflow: "discard" });
         if (made.kind !== "exited" || made.exitCode !== 0) throw new StoreError("INTERNAL_ERROR", "the archive could not be made");
         return { files: Object.keys(manifest).length, bytes: statSync(staged).size, sha256: await sha256(staged) };
       } finally { removeOwnedTree(scratch); }

@@ -9,7 +9,8 @@
  * looks just like that at its start) is refused and left as it is for the
  * repair path. A disk that mounts must say it belongs to this instance.
  */
-import { closeSync, openSync, readFileSync, readSync, constants } from "node:fs";
+import { closeSync, mkdtempSync, openSync, readFileSync, readSync, rmSync, constants } from "node:fs";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { StoreError } from "../../domain/errors.js";
 import { runProcess, type CommandSpec } from "../../process/run.js";
@@ -85,8 +86,20 @@ export async function hasFilesystem(device: string): Promise<boolean> {
 }
 
 export async function makeFilesystem(device: string): Promise<void> {
-  const made = await runProcess(command("/usr/sbin/mkfs.ext4", ["-q", "-L", "oma-state", "-E", "lazy_itable_init=0,lazy_journal_init=0", device], 10 * 60_000));
-  if (made.kind !== "exited" || made.exitCode !== 0) throw new StoreError("INTERNAL_ERROR", "the data disk could not be made");
+  // mkfs is not quiet here: its progress lines are the observed progress a
+  // ten-minute silence window measures -- a big disk that keeps writing is
+  // never cut at a fixed total, and one that stops saying anything is
+  // collected honestly. The progress stream itself is spooled so its size
+  // is not a refusal either.
+  const spool = mkdtempSync(join(tmpdir(), "oma-mkfs-"));
+  try {
+    const made = await runProcess({ executable: "/usr/sbin/mkfs.ext4",
+      argv: ["-L", "oma-state", "-E", "lazy_itable_init=0,lazy_journal_init=0", device],
+      env: { PATH: "/usr/sbin:/usr/bin" }, timeoutMs: 0x7fffffff, silenceMs: 10 * 60_000,
+      stdoutBytes: 64 * 1024, stderrBytes: 64 * 1024, stderrOverflow: "discard",
+      stdoutSpool: join(spool, "stdout"), stderrSpool: join(spool, "stderr") });
+    if (made.kind !== "exited" || made.exitCode !== 0) throw new StoreError("INTERNAL_ERROR", "the data disk could not be made");
+  } finally { rmSync(spool, { recursive: true, force: true }); }
 }
 
 export function readInstance(mount: string): string | null {

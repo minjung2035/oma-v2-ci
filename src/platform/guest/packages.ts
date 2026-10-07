@@ -6,7 +6,9 @@
  * request again is answered from its outcome, and one cut off runs again --
  * publishing a generation that already exists and switching the link to it
  * are the same effect twice. */
-import { existsSync, statSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, rmSync, statSync } from "node:fs";
+import { join } from "node:path";
+import { tmpdir } from "node:os";
 import { StoreError } from "../../domain/errors.js";
 import { runProcess } from "../../process/run.js";
 import { decodeProcessText } from "../../process/run.js";
@@ -48,15 +50,24 @@ export class GuestPackages {
       const mirror = projectId === undefined ? undefined : this.options.projects.mirrorOf(projectId as string);
       if (mirror !== undefined && !existsSync(mirror))
         throw new StoreError("INVALID_REQUEST", "that project has not been brought to the engine yet");
-      const ran = await runProcess({ executable: this.options.node,
-        argv: [this.options.entry, "--data", this.options.dataDir, "--archive", staged, "--libdir", this.options.libdir,
-          ...(mirror === undefined ? [] : ["--project", mirror]), ...(activate === undefined ? [] : ["--activate", activate])],
-        env: { ...this.options.env }, timeoutMs: this.options.timeoutMs, stdoutBytes: 1024 * 1024, stderrBytes: 64 * 1024 });
-      // Cut off or failed: no outcome is kept, so the same key runs it again.
-      if (ran.kind !== "exited" || ran.exitCode !== 0)
-        throw new StoreError("INTERNAL_ERROR", "the engine could not take the packages on");
+      // The answer scales with what the archive carried; it is spooled whole
+      // to this call's own temporary directory rather than cut at a fixed
+      // in-memory budget, and the directory leaves with the call either way.
+      const spool = mkdtempSync(join(tmpdir(), "oma-packages-"));
+      let text: string;
+      try {
+        const ran = await runProcess({ executable: this.options.node,
+          argv: [this.options.entry, "--data", this.options.dataDir, "--archive", staged, "--libdir", this.options.libdir,
+            ...(mirror === undefined ? [] : ["--project", mirror]), ...(activate === undefined ? [] : ["--activate", activate])],
+          env: { ...this.options.env }, timeoutMs: this.options.timeoutMs, stdoutBytes: 64 * 1024, stderrBytes: 64 * 1024,
+          stdoutSpool: join(spool, "stdout"), stderrSpool: join(spool, "stderr") });
+        // Cut off or failed: no outcome is kept, so the same key runs it again.
+        if (ran.kind !== "exited" || ran.exitCode !== 0)
+          throw new StoreError("INTERNAL_ERROR", "the engine could not take the packages on");
+        text = ran.stdoutSpooledTo === undefined ? decodeProcessText(ran.stdout) : readFileSync(ran.stdoutSpooledTo, "utf8");
+      } finally { rmSync(spool, { recursive: true, force: true }); }
       let answer: unknown;
-      try { answer = JSON.parse(decodeProcessText(ran.stdout)); } catch { throw new StoreError("INTERNAL_ERROR", "the engine's answer about the packages was malformed"); }
+      try { answer = JSON.parse(text); } catch { throw new StoreError("INTERNAL_ERROR", "the engine's answer about the packages was malformed"); }
       if (answer === null || typeof answer !== "object") throw new StoreError("INTERNAL_ERROR", "the engine's answer about the packages was malformed");
       const { added, said, ok } = answer as { added?: unknown; said?: unknown; ok?: unknown };
       const strings = (value: unknown): value is string[] => Array.isArray(value) && value.every(item => typeof item === "string" && item.length <= 4096);

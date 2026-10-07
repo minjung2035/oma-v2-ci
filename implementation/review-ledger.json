@@ -2,10 +2,10 @@
  "version": 1,
  "baseline": "b25961cc46532f5e30ff60cc381fed51c59d13ab",
  "summary": {
-  "CHANGED_WITH_ORACLE": 14062,
+  "CHANGED_WITH_ORACLE": 14064,
   "REMOVED": 8,
-  "NOT_REVIEWED": 61,
-  "READ_UNCHANGED": 51
+  "NOT_REVIEWED": 60,
+  "READ_UNCHANGED": 50
  },
  "lanes": {
   "fast": "PASS",
@@ -181532,12 +181532,12 @@
    "primary": "WP24",
    "status": "CHANGED_WITH_ORACLE",
    "by": [
-    "DR33"
+    "UX-38"
    ],
    "oracles": [
     "UX-09"
    ],
-   "note": "Read in full: the canonical adapter owns every observation byte budget; GITLINKS_OBSERVATION_BYTES (256 MiB) is the named bound the gitlinks() whole-tree ls-tree enumeration gets instead of the shared 4 MiB that wedged ~70k-entry trees into REF_STATE_UNKNOWN. Over the bound the answer stays output-limited → unknown, never a truncated 'no gitlinks'; the spawn model is one pinned executable plus argv, so no server-side filtering exists and the record grammar stays whole for the parser.",
+   "note": "Re-read in full for the UX-38 batch-4 working-tree review (2026-10-08): GITLINKS_OBSERVATION_BYTES is 256 MiB -- the named bound a whole-tree ls-tree enumeration gets; over the bound the answer stays output-limited -> unknown, never a truncated claim of no gitlinks.",
    "sha256": "6910618c06fb58c2247296178ee3fca9c796a12ab6a7be1e12e03ddca787d6c7"
   },
   {
@@ -181714,9 +181714,15 @@
   {
    "path": "src/git/project-snapshot.ts",
    "primary": null,
-   "status": "NOT_REVIEWED",
-   "by": [],
-   "oracles": []
+   "status": "CHANGED_WITH_ORACLE",
+   "by": [
+    "UX-38"
+   ],
+   "oracles": [
+    "DR27"
+   ],
+   "note": "Re-read in full for the UX-38 batch-4 working-tree review (2026-10-08): the snapshot's git commands spool stdout and stderr to the invocation's own staging directory so repository-scale output is never rejected at an in-memory bound; only a bounded stderr head is read back for error text while the complete stdout is read from its spool.",
+   "sha256": "817bc27ef5b0d0b321449b82336f1ef179689ba1b394cdf8b51cfdf661d25cbf"
   },
   {
    "path": "src/git/publication.ts",
@@ -182403,20 +182409,13 @@
    "primary": null,
    "status": "CHANGED_WITH_ORACLE",
    "by": [
-    "MAC-619",
-    "MAC-620",
-    "MAC-621",
-    "MAC-622",
-    "MAC-623",
-    "MAC-661"
+    "UX-38"
    ],
    "oracles": [
-    "MAC-620",
-    "MAC-621",
-    "MAC-622"
+    "MAC-621"
    ],
-   "note": "clauses declared by macos-platform.md's implementation table",
-   "sha256": "bd847b7da9ab51b5037e74b51c033b8657256912cb4c6f0de594da16e23d622a"
+   "note": "Re-read in full for the UX-38 batch-4 working-tree review (2026-10-08): tar runs with --checkpoint=1024 so its progress lines are observed progress: the read is bounded by a ten-minute silence window under the native timer ceiling rather than a fixed total, so a large archive that keeps writing completes and a mute tar is collected as stalled. stderr stays bounded with discard overflow.",
+   "sha256": "0cb3e574cb15b9680ace42e6ec4bc6f85ca895bed68e5578a329d1f2df4b9f54"
   },
   {
    "path": "src/platform/guest/control.ts",
@@ -182442,14 +182441,14 @@
    "primary": null,
    "status": "CHANGED_WITH_ORACLE",
    "by": [
-    "DR34"
+    "UX-38"
    ],
    "oracles": [
     "DR34",
-    "post-listen"
+    "MAC-225"
    ],
-   "note": "Re-read in full after the second blind-verification round: egress.connect no longer requires a bare answer -- answer.rest is written to the client as the tunnel's first payload (banner-first upstreams are legal), asked.rest still goes to the host first, and riding bytes on a refused answer die with the pair. A placeholder request carrying trailing bytes dies unanswered before a pooled connection is spent on it. The held-lease pair now listens for data on both ends and resumes both, so speech or a clean FIN queued behind unread bytes ends the lease rather than going unheard. 2026-10-07 DR34 post-listen sweep: a permanent 'error' listener journals to the unit's stderr best-effort and keeps the socket bound -- guesthost has no uncaughtException handler, so an accept-class error after startup previously escaped its emit as the unit's death.",
-   "sha256": "427104cbb5c99b85b9503dbc07a081b1ff8c9f4a522fdc10f7252d2e71789695"
+   "note": "Re-read in full for the UX-38 batch-4 working-tree review (2026-10-08): an empty pool waits rather than failing the connection: EgressPool.wait(client) parks a FIFO claim that the next parked host connection satisfies, a waiting client's close withdraws it, and pool close drains every waiter to an honest end. Parked connections keep their data/end/error watches; no claim counts as capacity held.",
+   "sha256": "91efea60fa515c8f2415450d721fafe52c4b71b529874e1b2c7084c58255ead5"
   },
   {
    "path": "src/platform/guest/histories.ts",
@@ -182536,12 +182535,13 @@
    "primary": null,
    "status": "CHANGED_WITH_ORACLE",
    "by": [
-    "DR25"
+    "UX-38"
    ],
    "oracles": [
     "DR25"
    ],
-   "sha256": "0bbf92929b90915dbbdab55e92eb5f993f7a571b53a138754b0f57017816802c"
+   "note": "Re-read in full for the UX-38 batch-4 working-tree review (2026-10-08): the engine's packages answer -- sized by what the archive carried -- is spooled whole to a per-call temporary directory instead of failing at a 1 MiB capture bound; the caller timeout stays the declared ceiling and non-exited observations still fail honestly with no kept outcome.",
+   "sha256": "035ac210de21eac1f0becdf252992a0bcdf5a274b9daff336ec405beaa463b45"
   },
   {
    "path": "src/platform/guest/project.ts",
@@ -182561,20 +182561,13 @@
    "primary": null,
    "status": "CHANGED_WITH_ORACLE",
    "by": [
-    "MAC-303",
-    "P0V-103",
-    "P0V-104",
-    "P0V-105",
-    "P0V-106"
+    "UX-38"
    ],
    "oracles": [
-    "MAC-303",
-    "P0V-103",
-    "P0V-104",
-    "P0V-105",
-    "P0V-106"
+    "MAC-303"
    ],
-   "sha256": "7b64e7bdc37b1d523adfd3fba0cb7ee09b948eb3ca8d26100c7ae7b0ee63d827"
+   "note": "Re-read in full for the UX-38 batch-4 working-tree review (2026-10-08): mkfs.ext4 is no longer run quiet: its progress lines feed a ten-minute silence window under the native ceiling and its stdout/stderr spool to a per-call temporary directory, so a large state disk is never cut at a fixed total and its progress volume is not a refusal. blkid keeps its fixed probe bound -- no mid-probe progress exists to observe.",
+   "sha256": "89a62ced5a19a9ee6626b4e877bc97188311be414f2b00e238337b0062aa8eef"
   },
   {
    "path": "src/platform/guest/pty.ts",
@@ -182785,13 +182778,13 @@
    "primary": null,
    "status": "CHANGED_WITH_ORACLE",
    "by": [
-    "DR34"
+    "UX-38"
    ],
    "oracles": [
     "DR34"
    ],
-   "note": "Re-read in full after the second blind-verification round: the egress.open dispatch arm now guards the synchronous connect() with try/catch -- a throw (e.g. the run's relay refusing in a connection listener) destroys the socket instead of rejecting the void-dispatched reader into an unhandled rejection. The held-placeholder lease passes readLeadingFrame's rest through: bytes that rode the request destroy the connection unanswered before a run can stand, and the lease's data listener is followed by resume() so speech in a later segment is heard. connectTunnel's reservation, audit-once and close-propagation shape unchanged.",
-   "sha256": "3f7414b3b505138b5b6238f0b06191d4d199f190f8d7250666433817a479efe2"
+   "note": "Re-read in full for the UX-38 batch-4 working-tree review (2026-10-08): the per-run tunnel bound queues instead of refusing: an egress.connect request whose working set is full is read to its frame and parked, granted in FIFO when an active tunnel closes; queued claims die with client close, run release, boot forget and service stop -- each ends as an honest BROKER_UNAVAILABLE, never a silent drop. The granted reservation still precedes the dial synchronously, policy screening, audit-once, rest payload handling and lease semantics unchanged.",
+   "sha256": "a940ac878cba09d86342c0addb18f17a5a721698b5ee7a42682b5a9a09c288fc"
   },
   {
    "path": "src/platform/host/files.ts",
@@ -182968,39 +182961,13 @@
    "primary": null,
    "status": "CHANGED_WITH_ORACLE",
    "by": [
-    "MAC-240",
-    "MAC-241",
-    "MAC-401",
-    "MAC-403",
-    "MAC-404",
-    "MAC-411",
-    "MAC-412",
-    "MAC-420",
-    "MAC-619",
-    "MAC-620",
-    "MAC-621",
-    "MAC-622",
-    "MAC-623",
-    "P0V-103",
-    "P0V-104",
-    "P0V-105",
-    "P0V-106"
+    "UX-38"
    ],
    "oracles": [
-    "MAC-240",
-    "MAC-241",
-    "MAC-404",
-    "MAC-412",
-    "MAC-620",
-    "MAC-621",
-    "MAC-622",
-    "P0V-103",
-    "P0V-104",
-    "P0V-105",
-    "P0V-106"
+    "DR27"
    ],
-   "note": "clauses declared by macos-platform.md's implementation table",
-   "sha256": "1b6ea9fd6c4b79d8d9b37922d1a6a3bcd92a4c3a62dec9e34570f04f1da26ac5"
+   "note": "Re-read in full for the UX-38 batch-4 working-tree review (2026-10-08): the host git runner hands runProcess per-call temporary spool paths, reads the complete stdout/stderr from them before removing the directory, and keeps non-exited observations as honest failure.",
+   "sha256": "a035d3beaf8be33d3b1f1e1cd945470196bd90c6395ca093f82c27c322f57e5b"
   },
   {
    "path": "src/platform/host/record.ts",
@@ -183147,13 +183114,14 @@
    "primary": null,
    "status": "CHANGED_WITH_ORACLE",
    "by": [
-    "DR34"
+    "UX-38"
    ],
    "oracles": [
-    "DR27"
+    "DR34",
+    "DR29"
    ],
-   "note": "2026-10-07 DR34 residual sweep: `new FrameParser(frameBytes)` moved inside the try in the 'data' listener -- a NaN/fractional/infinite limit compares false through every length check and reaches the constructor, and its throw now becomes this read's rejection instead of escaping the emit as the host's death.",
-   "sha256": "5e1cdc23ad01136bb2e84aeba33da9b86ff3d4529d4d5ecd99ab5f37b5ed35bc"
+   "note": "Re-read in full for the UX-38 batch-4 working-tree review (2026-10-08): readLeadingFrame's observation deadline is silence, not elapsed time: it validates the declared length before awaiting the body and re-arms the timer on every received byte, so a large or slowly-written frame completes and only a mute sender is refused. Frame byte bound, rest passthrough and BROKER_UNAVAILABLE-on-loss unchanged.",
+   "sha256": "4ea0798a07dfb9bda6db933fe732d57f7a8affb0a5038bb35dc0cc7bc07136d8"
   },
   {
    "path": "src/platform/stream-receive.ts",
@@ -183254,24 +183222,13 @@
    "primary": "WP10",
    "status": "CHANGED_WITH_ORACLE",
    "by": [
-    "DR1",
-    "DR18",
-    "DR3",
-    "DR4",
-    "DR6",
-    "DR7",
-    "MAC-022",
-    "P0V-102"
+    "UX-38"
    ],
    "oracles": [
-    "DR1",
-    "DR18",
-    "DR3",
-    "DR4",
-    "DR6",
-    "DR7"
+    "R37"
    ],
-   "sha256": "d147534d3899ba0ad0a79fddc6502a0030399dcd993e23eb47e0c38af1085b62"
+   "note": "Re-read in full for the UX-38 batch-4 working-tree review (2026-10-08): the async runner keeps the in-memory head and appends every byte to the configured spool files, so output past the capture budget is preserved whole rather than refused; silence expiry classifies as stalled -- distinct from timed-out, output-limited, spawn-failed, unobserved and known exit -- and each stdout/stderr chunk re-arms the window. Child ownership, kill escalation and cleanup are unchanged.",
+   "sha256": "d2b4d7d0c1832f4f3d16e3b68689dae1f3bd3448d4fbe88be2c3f590793b7fac"
   },
   {
    "path": "src/process/cleanup.ts",
@@ -183290,17 +183247,15 @@
   {
    "path": "src/process/command.ts",
    "primary": "WP10",
-   "status": "READ_UNCHANGED",
+   "status": "CHANGED_WITH_ORACLE",
    "by": [
-    "AV-review"
+    "UX-38"
    ],
    "oracles": [
-    "R37",
-    "V17A",
-    "V17B"
+    "R37"
    ],
-   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are the tests that load this module",
-   "sha256": "fdead1b51733f9ef18fcab7fc580ec5be1cf45d1b9b9fab868dd2b414ca6d697"
+   "note": "Re-read in full for the UX-38 batch-4 working-tree review (2026-10-08): the spec gains silenceMs -- a progress-reset observation window, validated as a safe integer within the native timer range and never wider than timeoutMs -- and stdoutSpool/stderrSpool absolute paths (POSIX \"/\" spelling; the pure contract holds no path-module capability), plus a stalled observation kind and the spooledTo markers the runners fill. Snapshotting, budget and NUL validation unchanged.",
+   "sha256": "3e0e213843c8e089ba5ece27bbd0ef129d631f049e9b300f7e295fcb0f76ac0b"
   },
   {
    "path": "src/process/host-loss.ts",
@@ -183314,18 +183269,13 @@
    "primary": "WP24",
    "status": "CHANGED_WITH_ORACLE",
    "by": [
-    "P0V-120",
-    "P0V-121",
-    "P0V-122",
-    "P0V-77"
+    "UX-38"
    ],
    "oracles": [
-    "P0V-120",
-    "P0V-121",
-    "P0V-122",
-    "P0V-77"
+    "R37"
    ],
-   "sha256": "b0870a7a87a465d86ddc577b98aedc3be14039540a8a11cd5cc370808010ddd3"
+   "note": "Re-read in full for the UX-38 batch-4 working-tree review (2026-10-08): stalled maps to DEADLINE_EXCEEDED alongside timed-out -- a dead process is a deadline failure, never success, absence or a new refusal.",
+   "sha256": "3c52157e8c78a9346d3a81f0086cbe7a1c64b58a287ad6c5f5a7e2f21c3301e9"
   },
   {
    "path": "src/process/preparation.ts",
@@ -183345,14 +183295,13 @@
    "primary": "WP10",
    "status": "CHANGED_WITH_ORACLE",
    "by": [
-    "P0V-77",
-    "P0V-86"
+    "UX-38"
    ],
    "oracles": [
-    "P0V-77",
-    "P0V-86"
+    "R37"
    ],
-   "sha256": "5f28cba7a5712d2876cf09238a8874efe0c0a1988efc82ac0a7d1c78fc885b63"
+   "note": "Re-read in full for the UX-38 batch-4 working-tree review (2026-10-08): the synchronous runner refuses silenceMs outright -- it cannot observe stream progress, so claiming a silence window would be a lie (TypeError before spawn). Spooled streams are opened O_WRONLY|O_CREAT|O_TRUNC|O_NOFOLLOW and handed to the child as its descriptors, stdout/stderr stay empty in memory and the observation names the spool paths; timeout, signal, spawn-failure, unobserved and exit distinctions unchanged.",
+   "sha256": "e7fb22b069881e4d2c96267c793529d8f1fe0a37f6b109fbf1686a0100d6e5da"
   },
   {
    "path": "src/protocol/alarm.ts",
@@ -184002,14 +183951,13 @@
    "primary": null,
    "status": "CHANGED_WITH_ORACLE",
    "by": [
-    "DR34"
+    "UX-38"
    ],
    "oracles": [
-    "DR34",
-    "post-listen"
+    "DR34"
    ],
-   "note": "Re-read in full after the third blind-verification round: the synchronous \"request\" and \"upgrade\" listeners now treat the journal as best-effort -- a sink throw inside `server.emit` escaped whole and took the runner (every tunnel/relay of the delivery) with it, so the audit call is caught at the boundary, the refusal proceeds whatever the journal's health, and any other failure inside the listener ends the connection rather than the process. The connect handler's own audits stay under its async `.catch(drop)` boundary unchanged. Teredo refusal, upstream-close propagation, audit hygiene, 0600 listener discipline and post-dial orphan-safety unchanged. 2026-10-07 DR34 post-listen sweep: a permanent 'error' listener now records `(listener)`/`fail` through the same best-effort audit boundary and keeps the socket bound -- an accept-class error after startup journals instead of escaping the emit as the runner's death.",
-   "sha256": "343919cf032e4558a901b776816a461092930652d23cb1a8a004bd98b431b80e"
+   "note": "Re-read in full for the UX-38 batch-4 working-tree review (2026-10-08): the tunnel bound is a working set, not a refusal: CONNECT requests beyond CONNECT_TUNNELS wait in a FIFO claim queue holding no tunnel and no dial, a queued client's close (including one already closed at claim time) withdraws the claim, a closing tunnel grants the oldest claim, and shutdown destroys waiting and active sockets alike. Malformed requests, wrong ports, non-public or unlisted targets still answer their named refusal; dial failures still destroy honestly; idle budgets on established tunnels are unchanged.",
+   "sha256": "a55d2b12474e6b6ba67bddcbb7b3d77ad8ad76080e8bf49476a4d4c9e568e748"
   },
   {
    "path": "src/runtime/deployment-manifest.ts",
@@ -184039,15 +183987,14 @@
    "primary": null,
    "status": "CHANGED_WITH_ORACLE",
    "by": [
-    "DR34"
+    "UX-38"
    ],
    "oracles": [
-    "DR34",
-    "post-listen",
-    "egress degradation"
+    "DR18",
+    "DR34"
    ],
-   "note": "Re-read in full after the second blind-verification round: oneFrame still hands the answered socket back paused with {frame, rest}, and requestEgressPlaceholder now resumes it after installing the post-answer speech listener -- a 'data' listener alone never resumes a paused socket, so late bytes (and a clean FIN behind unread bytes) previously went unheard and the lease outlived the run. requestEgressConnect's rest unshift into the tunnel is unchanged. 2026-10-07 DR34 post-listen sweep: `listen` takes an `onError` journal seam (runner default stderr, oma-society wired to its screen notice through openPrincipalEgress/adoptPrincipalEgress), installs a permanent 'error' listener that reports through it inside a try and keeps the socket bound -- a transient accept failure is not the lease's to end, and a reporter that throws cannot escape the emit.",
-   "sha256": "3ab90db33ade52705bf006c309c5e976650cb11b1289531853025b5e0105c7c0"
+   "note": "Re-read in full for the UX-38 batch-4 working-tree review (2026-10-08): the forwarder's engine bound is a working set: connections beyond it queue FIFO, wire no upstream until granted, and a departed engine's claim withdraws. oneFrame's deadline is silence -- every received byte re-arms it, so a slow answer completes and only a mute one times out; frame cap and rest semantics unchanged.",
+   "sha256": "b5cc1719993bfad10d90e55ee8253a4ca3675817eff54f50e8501ccc78a40f07"
   },
   {
    "path": "src/runtime/engine-auth.ts",
@@ -184146,13 +184093,13 @@
    "primary": "WP27",
    "status": "CHANGED_WITH_ORACLE",
    "by": [
-    "DR34"
+    "UX-38"
    ],
    "oracles": [
-    "post-listen"
+    "T114"
    ],
-   "note": "Read in full for the post-listen 'error' sweep and its emit residuals: a permanent 'error' listener sits beside the startup once-listener with a best-effort journal, and the 'request' and 'upgrade' handlers now catch non-Refusal escapes at the emit boundary -- admit() rethrows what is not a policy refusal, and unguarded that rethrow escaped server.emit whole as the runner's death. A boundary failure counts as a relay failure and destroys only that connection; the connect-proxy treatment applied to the same class.",
-   "sha256": "75a0794c7a488503467919f289fec32d526a2a4efe778cab756af29709078b18"
+   "note": "Re-read in full for the UX-38 batch-4 working-tree review (2026-10-08): the per-placeholder concurrency bound is a working set: requests beyond it queue in FIFO, count in observe().queued only, and take no provider call or inFlight slot until granted; a queued client close withdraws the claim and a settling request grants the next. Provider silence windows re-arm on upload, response and body progress so a working call is never cut at a total. Path/policy/placeholder refusals, tripwire, failed accounting and refused listener setup unchanged.",
+   "sha256": "9c6370ef15c5987024a1f8918fefa1f6dc43c270d0a7930119c21a042e9cf71d"
   },
   {
    "path": "src/runtime/interactive-channel.ts",

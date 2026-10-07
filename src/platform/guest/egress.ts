@@ -5,8 +5,10 @@
  * `oma` for the Principal -- ask this service for one of two things over a
  * unix socket of the oma user: a placeholder for a run (answered by the host
  * and relayed back), or a connection for one engine connection (after which
- * the bytes are the engine's HTTP, relayed unread). An empty pool refuses at
- * once, as the relay refuses at its limit: the engine retries (INF-001).
+ * the bytes are the engine's HTTP, relayed unread). An empty pool waits
+ * rather than refusing: the request is parked until a connection is parked
+ * for it, its own socket's close the cancellation (INF-001's retry stays an
+ * option, never the only answer).
  */
 import { createServer, type Server, type Socket } from "node:net";
 import { chmodSync } from "node:fs";
@@ -18,14 +20,26 @@ import { egressConnectProblem, egressOpenProblem, egressPlaceholderProblem, requ
 export class EgressPool {
   private readonly idle: Socket[] = [];
   private readonly watchers = new Map<Socket, () => void>();
+  /** Requests waiting for a pooled connection, in order. A claim is its own
+   * client socket's: the socket's close withdraws it, and `close()` ends
+   * every wait with null -- the requester learns the pool is gone. */
+  private readonly waiters: { grant(socket: Socket): boolean; cancel(): void }[] = [];
   private closed = false;
 
   /** A connection the host opened, after its hello. It is read while it
    * waits, so a host that closes it is noticed; the host sends nothing on it
    * before the guest's first message, so anything that arrives is a broken
-   * connection and it is dropped. */
+   * connection and it is dropped. A queued request is handed the socket the
+   * moment it parks, ahead of any later one. */
   park(socket: Socket): void {
     if (this.closed) { socket.destroy(); return; }
+    for (;;) {
+      const waiter = this.waiters.shift();
+      if (waiter === undefined) break;
+      // A waiter whose client is already gone hands the socket back rather
+      // than stranding a pooled connection on nobody.
+      if (waiter.grant(socket)) return;
+    }
     const broken = (): void => { socket.destroy(); };
     this.watchers.set(socket, broken);
     socket.on("data", broken);
@@ -40,7 +54,8 @@ export class EgressPool {
     socket.resume();
   }
 
-  /** A waiting connection, handed over paused and no longer watched. */
+  /** A waiting connection, handed over paused and no longer watched. Null
+   * on an empty pool: callers that want the queue use `wait` instead. */
   take(): Socket | null {
     for (;;) {
       const socket = this.idle.shift();
@@ -52,13 +67,48 @@ export class EgressPool {
     }
   }
 
+  /** A pooled connection for `client`, or null once the client or the pool
+   * is gone. An empty pool is a wait, not a refusal: the claim is FIFO and
+   * the socket's own close is the cancellation, so a request can never be
+   * left waiting for nobody. */
+  wait(client: Socket): Promise<Socket | null> {
+    const socket = this.take();
+    if (socket !== null) return Promise.resolve(socket);
+    if (this.closed || client.destroyed || client.closed) return Promise.resolve(null);
+    return new Promise<Socket | null>(resolve => {
+      const entry = { grant: (granted: Socket): boolean => {
+          client.off("close", gone); client.off("end", gone); client.off("error", gone);
+          // The client may have gone while the claim stood; false hands the
+          // socket back to `park`, which offers it to the next in line.
+          if (client.destroyed || client.closed || client.readableEnded) { resolve(null); return false; }
+          granted.pause();
+          resolve(granted);
+          return true;
+        }, cancel: (): void => {
+          const at = this.waiters.indexOf(entry);
+          if (at >= 0) this.waiters.splice(at, 1);
+          resolve(null);
+        } };
+      const gone = (): void => { entry.cancel(); };
+      // The service socket is half-open (allowHalfOpen): a client that went
+      // away arrives as 'end' or 'error', and 'close' may never come. The
+      // claim it held is withdrawn by whichever arrives first.
+      client.once("close", gone); client.once("end", gone); client.once("error", gone);
+      this.waiters.push(entry);
+    });
+  }
+
   get size(): number { return this.idle.length; }
+  /** Requests still waiting for a connection; the count callers may report. */
+  get pending(): number { return this.waiters.length; }
 
   /** Closes every waiting connection and any that arrives later: guesthost
-   * is stopping. */
+   * is stopping. Queued waits end with null -- their clients' own closes
+   * then run the request paths down. */
   close(): void {
     this.closed = true;
     for (const socket of this.idle.splice(0)) socket.destroy();
+    for (const waiter of this.waiters.splice(0)) waiter.cancel();
   }
 }
 
@@ -113,7 +163,10 @@ async function serve(client: Socket, options: EgressServiceOptions): Promise<voi
   // connection is spent on it. (The open and connect arms instead relay
   // `rest`: it is payload there.)
   if (frame.method === "egress.placeholder" && asked.rest.length > 0) { client.destroy(); return; }
-  const host = options.pool.take();
+  // An empty pool is a wait, not a refusal: the request holds its place
+  // until a connection parks for it; the client's own close is the
+  // cancellation, and null is how a wait that ended reports.
+  const host = await options.pool.wait(client);
   if (host === null) { client.destroy(); return; }
   host.on("error", () => { host.destroy(); client.destroy(); });
   host.write(encodeFrame(frame));

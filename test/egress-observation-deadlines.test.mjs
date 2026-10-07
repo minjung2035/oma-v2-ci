@@ -26,6 +26,7 @@ function world(milliseconds) {
   });
   const pending = exports.read(socket, 4096, milliseconds);
   return { pending, socket, timers, destroys: () => destroys,
+    advance(ms) { now += ms; },
     fire() { const timer = [...timers][0]; timers.delete(timer); now = timer.at; timer.run(); return timer; } };
 }
 test('DR29: a long egress observation cannot clamp to one millisecond or synthesize an empty successful response', async () => {
@@ -39,6 +40,31 @@ test('DR29: a long egress observation cannot clamp to one millisecond or synthes
   assert.deepEqual(answer.frame, { ok: true, result: { placeholder: 'controlled' } });
   assert.equal(String(answer.rest), 'tail');
   assert.equal(w.timers.size, 0); assert.equal(w.destroys(), 0);
+});
+test('DR29/UX-38: the observation window is silence, not elapsed -- every received byte re-arms it', async () => {
+  const w = world(5000);
+  const frame = encodeFrame({ ok: true, result: { bytes: 42 } });
+  // One byte lands at t=1000, t=2000, t=3000 -- each is progress and re-arms
+  // the 5s window. A fixed elapsed deadline would already have fired at
+  // t=5000; the live timer must instead sit at t=8000.
+  for (const byte of [frame.subarray(0, 1), frame.subarray(1, 2), frame.subarray(2, 3)]) {
+    w.advance(1000);
+    w.socket.emit('data', byte);
+  }
+  assert.equal([...w.timers][0].at, 8000);
+  // Still inside the re-armed window at t=7900: nothing has fired, and the
+  // frame's remainder completes the read.
+  w.advance(4900);
+  w.socket.emit('data', frame.subarray(3));
+  const answer = await w.pending;
+  assert.deepEqual(answer.frame, { ok: true, result: { bytes: 42 } });
+  assert.equal(w.timers.size, 0); assert.equal(w.destroys(), 0);
+  // And the converse: once bytes stop, the window still ends honestly.
+  const s = world(5000);
+  s.advance(1000); s.socket.emit('data', frame.subarray(0, 1));
+  s.fire(); // t=6000 -- 5s of silence after the last byte
+  await assert.rejects(s.pending, { code: 'BROKER_UNAVAILABLE' });
+  assert.equal(s.timers.size, 0); assert.equal(s.destroys(), 1);
 });
 test('DR29: egress deadline and socket loss remain unknown and return their timer exactly once', async () => {
   for (const event of ['timeout', 'error', 'close']) {

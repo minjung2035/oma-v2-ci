@@ -427,10 +427,11 @@ prompt·설정·확장은 terminal 안의 TUI가 한다. 그래서 prompt에는 
 - guest의 egress bridge는 엔진이 연 연결 하나를 pool의 egress 연결 하나에 잇는다. 둘은 엔진의 연결이 끝날 때까지 짝이다. keep-alive로
   같은 연결에 오는 요청 여럿과 WebSocket upgrade가 모두 그 짝 위로 간다. host는 그 연결을 기존 `InferenceRelay`의 HTTP server에 그대로
   넘긴다. keep-alive, 요청마다의 교체, upgrade tunnel, tripwire는 모두 기존 relay가 한다.
-- 동시 요청의 한도는 기존 relay의 규칙 그대로다. 자리표시자(= run)마다 `concurrent: 4`이고, 넘으면 relay가 곧바로 503으로 답한다.
-  기다리게 하지 않는다.
-- pool이 비어 있으면 egress bridge는 엔진의 연결을 곧바로 닫는다. 연결 실패다. 재시도는 엔진이 자기 정책대로 한다(INF-001). 기다리지
-  않는 것은 기존 relay가 한도에서 곧바로 거절하는 것과 같은 선택이다.
+- 동시 요청의 한도는 기존 relay의 규칙 그대로다. 자리표시자(= run)마다 `concurrent: 4`의 작업 집합이고, 넘는 요청은
+  거절이 아니라 FIFO로 기다린다 — 앞 요청이 끝나 자리가 나면 다음 것이 진행된다. 기다리는 요청은 provider 호출도
+  자리도 갖지 않고, 클라이언트가 끊어지면 그 차례는 철회된다. 침묵 창·provider 실패·프로토콜 거절은 기존 그대로다.
+- pool이 비어 있으면 egress bridge는 엔진의 연결을 기다리게 한다 — 다음에 주차되는 host 연결이 그 클라이언트의
+  몫이다. 기다리는 동안 엔진이 끊어지면 클레임은 철회되고, pool 자체가 닫히면 기다리던 연결은 연결 실패로 끝난다.
 - `quota`에 inference slot 필드는 없다 — 제거되었다. 동시성의 기준은 relay의 `concurrent: 4`이며, 이 판단은 guest의
   broker가 한다(MAC-713). host는 따르지 않는다.
 
@@ -863,8 +864,8 @@ Principal 엔진은 자기 agent 디렉터리의 credential을 직접 쓰지만,
 
 **MUST [MAC-712]** Relay는 `egress.open`의 `placeholderId`가 host가 이번 `bootId`에서 발급한 자리표시자이고, 그 자리표시자의
 `credentialRef`가 host에 바인딩된 credential일 때만 연결한다. 목적지는 Resolver가 해석한 origin 하나다. guest가 목적지를 정할 수 없다.
-동시 요청 수는 자리표시자(run)마다 기존 relay의 한도(`concurrent: 4`)이고, 넘으면 곧바로 503이다(§4.7). `quota`에
-inference slot 필드는 없다(제거되었다).
+동시 요청 수는 자리표시자(run)마다 기존 relay의 작업 집합(`concurrent: 4`)이고, 넘는 요청은 503이 아니라 FIFO로
+기다린다(§4.7) — 클라이언트가 끊어진 대기 요청은 철회된다. `quota`에 inference slot 필드는 없다(제거되었다).
 
 **MUST [MAC-713]** 누가 어떤 profile을 쓸 수 있는지(`actor`, `incarnation`, `modelProfile`)는 guest의 broker가 판단한다. 판단 근거는
 run lease와 spec의 model profile이다. host는 이 판단을 다시 하지 않는다. `egress.open`의 attribution은 로그와 비용 표시에만 쓴다.

@@ -44,6 +44,10 @@ export const OUTSIDE_STATE_TREE = Object.freeze({
   "src/extension/principal-tools.ts": "the same fresh mkdtemp directory under the Principal's scratch for an agent brief, written once and removed (PI-001)",
   "src/extension/review-tools.ts": "the same fresh mkdtemp directory under the caller's own working directory for a vote/review/open body file, written once and removed (PI-001)",
   "src/runtime/process-lock.ts": "the broker's lock file, which both callers keep in the run root",
+  "src/process/async.ts": "the caller-declared output spool paths -- absolute paths each caller names under its own scratch or ledger directory, never paths this runner chooses",
+  "src/process/run.ts": "the same caller-declared spool paths, opened descriptor-direct for the child -- never paths this runner chooses",
+  "src/platform/guest/packages.ts": "a fresh mkdtemp under the OS temp directory -- this replace call's own spool scratch, removed when the call ends",
+  "src/platform/guest/provision.ts": "a fresh mkdtemp under the OS temp directory -- this provisioning call's own spool scratch, removed when mkfs ends",
 });
 /** A descriptor, not a path: `fd`, `this.fd`, `active.fd`, `temporaryFd`. */
 const descriptorLike = node => {

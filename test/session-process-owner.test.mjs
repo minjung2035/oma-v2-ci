@@ -36,6 +36,11 @@ function world() {
   const deps = {
     'node:child_process': { spawn(...args) { calls.push(args); return child; } },
     'node:perf_hooks': { performance: { now: () => 0 } }, './command.js': {}, '../domain/errors.js': { StoreError },
+    // The output-spool import is real; no spec in this harness names a spool
+    // path, so opening or writing one is a harness bug, not a code path.
+    'node:fs': { constants: { O_WRONLY: 1, O_CREAT: 64, O_TRUNC: 512, O_NOFOLLOW: 256, O_RDONLY: 0 },
+      openSync() { throw new Error('no spool path was declared in this harness'); },
+      closeSync() {}, writeSync() { throw new Error('no spool path was declared in this harness'); } },
     '../client/fence.js': { SOCIETY_FENCE_ENV, SOCIETY_FENCE_FD, inheritedFence, fencedStdio },
   };
   const module = { exports: {} };

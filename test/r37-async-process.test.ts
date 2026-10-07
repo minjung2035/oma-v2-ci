@@ -3,7 +3,11 @@ import assert from "node:assert/strict";
 import childProcess from "node:child_process";
 import { syncBuiltinESMExports } from "node:module";
 import { once } from "node:events";
+import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { startProcess, runProcess, spawnSandboxed, stopOwnedChild } from "../src/process/async.js";
+import { runProcessSync } from "../src/process/run.js";
 import { PreparationExecutor } from "../src/process/preparation.js";
 import type { CommandSpec } from "../src/process/command.js";
 
@@ -43,6 +47,61 @@ test("R37: explicit diagnostic stderr discard still drains without unbounded ret
   const result = await task.result; await task.closed;
   assert.equal(result.kind, "exited"); assert.equal(result.exitCode, 0);
   assert.equal(result.stderr.length, 8); assert.equal(result.stderrTruncated, true); assert.equal(result.stdout.toString(), "ok");
+});
+
+test("R37: a command making progress is never cut by the silence window; one that says nothing stalls honestly", { timeout: 10000 }, async () => {
+  // Progress resets the window: 4 chunks 120ms apart under a 300ms window
+  // live; the same gap ending after the last byte ends the command stalled.
+  const progress = await runProcess(command(
+    "let n=0; const t=setInterval(()=>{process.stdout.write('tick'); if(++n===4){clearInterval(t);process.exit(0);}},120)",
+    { silenceMs: 300, timeoutMs: 5000 }));
+  assert.equal(progress.kind, "exited");
+  assert.equal(progress.stdout.toString(), "tick".repeat(4));
+
+  const stalled = await runProcess(command(
+    "process.stdout.write('one'); setInterval(()=>{},1000)",
+    { silenceMs: 250, timeoutMs: 5000 }));
+  assert.equal(stalled.kind, "stalled", "silence past the window is a stall, distinct from the timeout and from refusal");
+  assert.equal(stalled.stdout.toString(), "one");
+});
+
+test("R37: output past the in-memory budget spills whole -- the file holds every byte, the head stays in the result", { timeout: 10000 }, async t => {
+  const dir = mkdtempSync(join(tmpdir(), "oma-r37-spill-"));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  const spool = join(dir, "stdout.bin");
+  const result = await runProcess(command("process.stdout.write(Buffer.alloc(4096,66))", { stdoutBytes: 8, stdoutSpool: spool }));
+  assert.equal(result.kind, "exited", "overflow to a spill file is not an output-limit refusal");
+  assert.equal(result.stdoutSpooledTo, spool);
+  assert.equal(result.stdout.length, 8, "the retained head is the bounded prefix");
+  assert.equal(result.stdoutTruncated, true);
+  const whole = readFileSync(spool);
+  assert.equal(whole.length, 4096);
+  assert.ok(whole.subarray(0, 8).equals(result.stdout), "the file's head is the retained head");
+  assert.ok(whole.every(byte => byte === 66), "the file holds the stream complete");
+});
+
+test("R37: a spilled stream also keeps the silence window honest -- progress to the file is progress", { timeout: 10000 }, async t => {
+  const dir = mkdtempSync(join(tmpdir(), "oma-r37-spill-"));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  const spool = join(dir, "stdout.bin");
+  const result = await runProcess(command(
+    "let n=0; const t=setInterval(()=>{process.stdout.write(Buffer.alloc(4096,65)); if(++n===4){clearInterval(t);process.exit(0);}},120)",
+    { stdoutBytes: 8, stdoutSpool: spool, silenceMs: 400, timeoutMs: 5000 }));
+  assert.equal(result.kind, "exited");
+  assert.equal(readFileSync(spool).length, 4 * 4096);
+});
+
+test("R37: the synchronous runner refuses a silence window it cannot observe, and spills descriptor-direct", () => {
+  assert.throws(() => runProcessSync(command("", { silenceMs: 1000 })), TypeError);
+  const dir = mkdtempSync(join(tmpdir(), "oma-r37-spool-"));
+  try {
+    const spool = join(dir, "out.bin");
+    const result = runProcessSync(command("process.stdout.write(Buffer.alloc(4096,67))", { stdoutBytes: 8, stdoutSpool: spool }));
+    assert.equal(result.kind, "exited");
+    assert.equal(result.stdoutSpooledTo, spool);
+    assert.equal(result.stdout.length, 0, "the descriptor-direct file keeps nothing in memory");
+    assert.equal(readFileSync(spool).length, 4096);
+  } finally { rmSync(dir, { recursive: true, force: true }); }
 });
 
 test("R37: timeout and abort never synthesize exit-zero success", { timeout: 10000 }, async () => {

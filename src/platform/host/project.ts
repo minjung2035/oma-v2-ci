@@ -9,8 +9,9 @@
  */
 import { pipeline } from "node:stream/promises";
 import { createHash } from "node:crypto";
-import { closeSync, constants, createReadStream, fstatSync, fsyncSync, openSync, realpathSync, statSync, writeSync } from "node:fs";
-import { dirname } from "node:path";
+import { closeSync, constants, createReadStream, fstatSync, fsyncSync, mkdtempSync, openSync, readFileSync, realpathSync, rmSync, statSync, writeSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { tmpdir } from "node:os";
 import { withProjectSnapshot } from "../../git/project-snapshot.js";
 import { prepareHostProjectDirectory, removeHostStaged } from "./files.js";
 import type { Socket } from "node:net";
@@ -61,10 +62,19 @@ export class MacGit {
   }
 
   async run(repo: string, argv: readonly string[], timeoutMs = 10 * 60_000): Promise<{ status: number; stdout: string; stderr: string }> {
-    const result = await runProcess({ executable: this.executable, argv: ["-C", repo, ...DISTRUST, ...argv],
-      env: { ...GIT_ENV }, timeoutMs, stdoutBytes: 4 * 1024 * 1024, stderrBytes: 1024 * 1024 });
-    if (result.kind !== "exited") throw new StoreError("BROKER_UNAVAILABLE", "git did not finish");
-    return { status: result.exitCode, stdout: decodeProcessText(result.stdout), stderr: decodeProcessText(result.stderr) };
+    // A repository's listing is exactly as large as the repository is: it is
+    // never an output-limit refusal. Output past the in-memory budget spills
+    // to this call's own temporary directory, which the call also cleans.
+    const spoolDir = mkdtempSync(join(tmpdir(), "oma-git-output-"));
+    try {
+      const result = await runProcess({ executable: this.executable, argv: ["-C", repo, ...DISTRUST, ...argv],
+        env: { ...GIT_ENV }, timeoutMs, stdoutBytes: 4 * 1024 * 1024, stderrBytes: 1024 * 1024,
+        stdoutSpool: join(spoolDir, "stdout"), stderrSpool: join(spoolDir, "stderr") });
+      if (result.kind !== "exited") throw new StoreError("BROKER_UNAVAILABLE", "git did not finish");
+      const read = (head: Buffer, spooledTo: string | undefined): string =>
+        decodeProcessText(spooledTo === undefined ? head : readFileSync(spooledTo));
+      return { status: result.exitCode, stdout: read(result.stdout, result.stdoutSpooledTo), stderr: read(result.stderr, result.stderrSpooledTo) };
+    } finally { rmSync(spoolDir, { recursive: true, force: true }); }
   }
 
   /** §6.3: the branch, from the last import on, as a bundle file. */

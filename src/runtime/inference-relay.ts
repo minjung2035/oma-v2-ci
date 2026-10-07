@@ -72,8 +72,10 @@ export interface RelayTarget {
 }
 
 export interface RelayLimits {
-  /** Requests allowed to be in flight at once. Beyond it the relay refuses
-   * rather than queueing, so a stuck provider cannot accumulate sockets. */
+  /** Requests carried at once. Beyond it the relay queues rather than
+   * refusing: each waiting request is its own socket's claim, withdrawn if
+   * the socket ends before a slot frees, so a stuck provider cannot
+   * accumulate provider calls -- queued requests have not made one. */
   readonly concurrent: number;
   /** Milliseconds without provider progress, including connection setup and
    * upgraded streams. This is not a whole-request or whole-delivery limit. */
@@ -85,6 +87,8 @@ export interface RelayObservation {
   readonly refused: number;
   readonly failed: number;
   readonly inFlight: number;
+  /** Requests waiting for a slot; the count callers may report. */
+  readonly queued: number;
 }
 
 function parsedOrigin(origin: string): URL {
@@ -190,8 +194,12 @@ export class InferenceRelay {
       try { console.error(`inference relay listener error: ${error.message}`); } catch { /* nowhere left to say it */ }
     });
     // WP27: connections are bounded as well as requests; idle ones would
-    // otherwise pile up in this process for as long as the sandbox keeps them.
-    this.server.maxConnections = RELAY_CONNECTIONS_PER_REQUEST * limits.concurrent;
+    // otherwise pile up in this process for as long as the sandbox keeps
+    // them. It is a resource bound on open sockets, not work admission --
+    // work waits in the request queue, which needs room far above what the
+    // socket table is asked for: the bound stays generous so a refusal at
+    // it is a descriptor-table problem, never the engine's concurrency.
+    this.server.maxConnections = Math.max(1024, RELAY_CONNECTIONS_PER_REQUEST * limits.concurrent);
   }
 
   /** Sockets handed in through `accept` and still open. net.Server enforces
@@ -199,6 +207,35 @@ export class InferenceRelay {
    * the HTTP server directly passes no admission check, so a detached relay
    * counts its own (AV-20261003-16: the same bound on both paths). */
   private detachedConnections = 0;
+
+  /** Requests whose admission passed and that are waiting for an in-flight
+   * slot. An entry is its socket's claim: the socket's own close withdraws
+   * it, and a grant runs the request exactly as one that never queued. */
+  private readonly queue: { socket: Socket | Duplex; cancel: () => void; run: () => void }[] = [];
+
+  /** The request's place: granted now if a slot is open, else queued. A
+   * queued request has opened nothing upstream and is not counted accepted. */
+  private enqueue(socket: Socket | Duplex, run: () => void): void {
+    const entry = { socket, run, cancel: (): void => {
+      const at = this.queue.indexOf(entry);
+      if (at >= 0) this.queue.splice(at, 1);
+    } };
+    // 'close' alone is not enough: an HTTP server's socket is half-open, so
+    // a client that went away can arrive as 'end' or 'error' while 'close'
+    // still waits on this side. Whichever comes first withdraws the claim.
+    socket.once("close", entry.cancel); socket.once("end", entry.cancel); socket.once("error", entry.cancel);
+    this.queue.push(entry);
+    this.offer();
+  }
+
+  private offer(): void {
+    while (this.queue.length > 0 && this.inFlight < this.limits.concurrent) {
+      const entry = this.queue.shift()!;
+      entry.socket.off("close", entry.cancel); entry.socket.off("end", entry.cancel); entry.socket.off("error", entry.cancel);
+      if (entry.socket.destroyed || entry.socket.closed) continue;
+      entry.run();
+    }
+  }
 
   static async open(
     socketPath: string, target: RelayTarget, limits: RelayLimits,
@@ -266,6 +303,7 @@ export class InferenceRelay {
     return Object.freeze({
       accepted: this.accepted, refused: this.refused,
       failed: this.failed, inFlight: this.inFlight,
+      queued: this.queue.length,
     });
   }
 
@@ -366,12 +404,13 @@ export class InferenceRelay {
     socket.end(`HTTP/1.1 ${status} ${reason}\r\ncontent-type: text/plain\r\nconnection: close\r\n\r\n`);
   }
 
-  /** The request's outbound path and headers, or why it is refused. Everything
-   * that can refuse runs here, before a request is counted or sent. */
+  /** The request's outbound path and headers, or why it is refused. Every
+   * refusal that is the request's own -- a closed relay, a path outside the
+   * endpoint, the placeholder out of its slot -- runs here, before a request
+   * is counted or sent. Capacity is not among them: it is the queue's. */
   private admit(incoming: IncomingMessage, upgrade: boolean):
     { path: string; headers: Record<string, string | string[]> } | { status: number; reason: string } {
     if (this.closed) return { status: 503, reason: "relay is closed" };
-    if (this.inFlight >= this.limits.concurrent) return { status: 503, reason: "relay concurrency limit reached" };
     try {
       const requestPath = incoming.url;
       const path = targetPath(this.origin.pathname, requestPath === undefined ? undefined : this.slottedTarget(requestPath));
@@ -394,7 +433,14 @@ export class InferenceRelay {
   private forward(incoming: IncomingMessage, outgoing: ServerResponse): void {
     const admitted = this.admit(incoming, false);
     if ("status" in admitted) { this.refuse(outgoing, admitted.status, admitted.reason); return; }
+    // Past its own checks the request waits for a slot rather than being
+    // refused: the claim is the client socket's own -- its close withdraws
+    // it, and a queued request holds no provider call and no inFlight count.
+    this.enqueue(incoming.socket, () => this.serve(incoming, outgoing, admitted.path, admitted.headers));
+  }
 
+  private serve(incoming: IncomingMessage, outgoing: ServerResponse,
+    path: string, headers: Record<string, string | string[]>): void {
     this.accepted += 1;
     this.inFlight += 1;
     let settled = false;
@@ -404,11 +450,14 @@ export class InferenceRelay {
       settled = true;
       silence?.cancel();
       this.inFlight -= 1;
+      // A freed slot is offered before this settlement returns, so a queued
+      // request never waits on bookkeeping.
+      this.offer();
       return true;
     };
 
-    const upstream = httpsRequest(this.upstreamOptions(incoming.method ?? "POST", admitted.path,
-      admitted.headers), response => {
+    const upstream = httpsRequest(this.upstreamOptions(incoming.method ?? "POST", path,
+      headers), response => {
       progress();
       response.on("data", progress);
       // INF-007: a response that carries the key back is cut off, never delivered.
@@ -469,7 +518,12 @@ export class InferenceRelay {
   private tunnel(incoming: IncomingMessage, socket: Duplex, head: Buffer): void {
     const admitted = this.admit(incoming, true);
     if ("status" in admitted) { this.refuseTunnel(socket, admitted.status, admitted.reason); return; }
+    // The same queue as a plain request: the upgrade's claim is its socket.
+    this.enqueue(socket, () => this.serveTunnel(incoming, socket, head, admitted.path, admitted.headers));
+  }
 
+  private serveTunnel(incoming: IncomingMessage, socket: Duplex, head: Buffer,
+    path: string, headers: Record<string, string | string[]>): void {
     this.accepted += 1;
     this.inFlight += 1;
     let settled = false;
@@ -479,6 +533,7 @@ export class InferenceRelay {
       settled = true;
       silence?.cancel();
       this.inFlight -= 1;
+      this.offer();
       return true;
     };
     this.tunnels.add(socket);
@@ -486,7 +541,7 @@ export class InferenceRelay {
     // given back -- a provider connection with no engine left is closed, not
     // left for the provider to end.
     let provider: Duplex | null = null;
-    const upstream = httpsRequest(this.upstreamOptions(incoming.method ?? "GET", admitted.path, admitted.headers));
+    const upstream = httpsRequest(this.upstreamOptions(incoming.method ?? "GET", path, headers));
     socket.once("close", () => { this.tunnels.delete(socket); upstream.destroy(); provider?.destroy(); settle(); });
     socket.on("error", () => { socket.destroy(); });
 
@@ -553,6 +608,12 @@ export class InferenceRelay {
   async close(): Promise<void> {
     if (this.closed) return;
     this.closed = true;
+    // Queued claims die with the relay: their sockets are destroyed, and
+    // each one's own close listener is what withdraws the claim.
+    for (const entry of this.queue.splice(0)) {
+      entry.socket.off("close", entry.cancel);
+      entry.socket.destroy();
+    }
     for (const tunnel of this.tunnels) tunnel.destroy();
     this.tunnels.clear();
     // The server's own close removes its name (P0V-114).

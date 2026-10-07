@@ -13,6 +13,7 @@ export const GIT_ENV: Readonly<NodeJS.ProcessEnv> = Object.freeze({
 export interface TextExit { readonly status: number; readonly stdout: string; readonly stderr: string }
 export function requireTextExit(result: ProcessObservation, command: string): TextExit {
   if (result.kind === "timed-out") throw new StoreError("DEADLINE_EXCEEDED", `${command} timed out`);
+  if (result.kind === "stalled") throw new StoreError("DEADLINE_EXCEEDED", `${command} produced no output within its silence window`);
   if (result.kind === "output-limited") throw new StoreError("LIMIT_EXCEEDED", `${command} output exceeded its bound`);
   if (result.kind !== "exited") throw new StoreError("INTERNAL_ERROR", `${command} outcome is ${result.kind}${result.errorCode ? ` (${result.errorCode})` : ""}`);
   try { return { status: result.exitCode, stdout: decodeProcessText(result.stdout), stderr: decodeProcessText(result.stderr) }; }

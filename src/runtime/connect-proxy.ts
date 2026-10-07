@@ -31,8 +31,10 @@ import { StoreError } from "../domain/errors.js";
 
 /** The only destination port a tunnel may open: HTTPS, end to end. */
 export const EGRESS_CONNECT_PORT = 443;
-/** Tunnels one delivery's proxy holds at once -- the same per-run bound the
- * egress pool provisions for (host/egress's four spare connections per run). */
+/** Tunnels one delivery's proxy works at once -- the same per-run working
+ * set the egress pool provisions for (host/egress's four spare connections
+ * per run). It is a working-set bound, never a refusal: requests beyond it
+ * queue in order and are granted as established tunnels close. */
 export const CONNECT_TUNNELS = 4;
 /** A CONNECT request must be complete and its target answered within this
  * budget; the request itself is a few hundred bytes, so this is generous. */
@@ -282,7 +284,10 @@ function refuse(socket: Socket, status: number): void {
 
 export class ConnectProxy {
   private constructor(readonly socketPath: string, private readonly server: Server,
-    private readonly tunnels: Set<Socket>) {}
+    private readonly tunnels: Set<Socket>, private readonly queued: Set<Socket>) {}
+
+  /** CONNECTs still waiting for a tunnel slot; the count callers may report. */
+  get queuedTunnels(): number { return this.queued.size; }
 
   /** The count callers may report; never a liveness claim about the peers. */
   get activeTunnels(): number { return this.tunnels.size; }
@@ -292,7 +297,6 @@ export class ConnectProxy {
     const audit = (target: string, decision: EgressAudit["decision"], reason: string): void =>
       options.audit?.({ actor: options.actor, role: policy.role, target, decision, reason });
     clearSocketName(options.socketPath);
-    const tunnels = new Set<Socket>();
     const server = createServer({
       // The request must arrive whole promptly, then the socket is raw. These
       // bounds keep a stalled or drip-fed head from holding a slot.
@@ -304,9 +308,45 @@ export class ConnectProxy {
       keepAliveTimeout: CONNECT_KEEPALIVE_MS,
       insecureHTTPParser: false,
     });
-    // The same per-delivery bound the pool provisions for: sockets beyond it
-    // are refused by the kernel listener rather than queued into memory.
-    server.maxConnections = options.tunnels ?? CONNECT_TUNNELS;
+    // Capacity is never the refusal: requests past the working set wait in
+    // `waiting`, each claim owned by its own client socket, and a socket
+    // that leaves while queued withdraws the claim it held.
+    const limit = options.tunnels ?? CONNECT_TUNNELS;
+    const tunnels = new Set<Socket>();
+    const waiting: { client: Socket; grant: () => void }[] = [];
+    const queued = new Set<Socket>();
+    /** Grants every queued claim the working set has room for, in order. A
+     * claim whose socket went away is already withdrawn by its close. */
+    const offer = (): void => {
+      while (waiting.length > 0 && tunnels.size < limit) waiting.shift()!.grant();
+    };
+    /** Resolves once the claim holds a tunnel slot; false when the client
+     * went away while waiting -- its request was abandoned, not refused. A
+     * socket that already closed (its 'close' preceded claim's listener)
+     * takes neither kind of slot: it can never be granted, so it must never
+     * stand in the queue. */
+    const claim = (client: Socket): Promise<boolean> => {
+      if (client.destroyed || client.closed || client.writableEnded) return Promise.resolve(false);
+      if (waiting.length === 0 && tunnels.size < limit) { tunnels.add(client); return Promise.resolve(true); }
+      return new Promise<boolean>(resolve => {
+        const entry = { client, grant: () => {
+          client.off("close", gone); client.off("end", gone); client.off("error", gone);
+          queued.delete(client);
+          tunnels.add(client); resolve(true);
+        } };
+        const gone = (): void => {
+          const at = waiting.indexOf(entry);
+          if (at >= 0) waiting.splice(at, 1);
+          queued.delete(client);
+          resolve(false);
+        };
+        // 'close' alone is not enough: under the HTTP server's half-open
+        // policy a departed client is an 'end' (its FIN) or an 'error' long
+        // before the socket's own 'close' ever comes.
+        client.once("close", gone); client.once("end", gone); client.once("error", gone);
+        waiting.push(entry); queued.add(client);
+      });
+    };
     // The "request" and "upgrade" listeners run synchronously inside
     // `server.emit`: a throw escapes it whole and takes the runner -- the
     // same class the host's dispatch boundary already owns for egress
@@ -357,7 +397,7 @@ export class ConnectProxy {
       let upstream: Socket | undefined;
       const drop = (): void => { client.destroy(); upstream?.destroy(); };
       client.on("error", drop);
-      client.once("close", () => { tunnels.delete(client); upstream?.destroy(); });
+      client.once("close", () => { tunnels.delete(client); upstream?.destroy(); offer(); });
       void (async () => {
         const { target, problem } = parseConnectTarget(req.url);
         if (problem !== null) {
@@ -376,6 +416,10 @@ export class ConnectProxy {
           client.destroy();
           return;
         }
+        // The working set full is a wait, never a refusal: the claim is the
+        // socket's own and its close withdraws it. Granted, the request is
+        // dialed exactly as one that never queued.
+        if (!await claim(client)) { client.destroy(); return; }
         let dialed: Socket;
         try { dialed = await options.dial(target.host, target.port); }
         catch (error) {
@@ -402,6 +446,8 @@ export class ConnectProxy {
         // left the client half holding its `tunnels` slot until the idle
         // budget ran out -- a slot the run could never reuse sooner.
         dialed.once("close", () => client.destroy());
+        // The claim already reserved the slot; adding again is a no-op kept
+        // for the path that never queued.
         tunnels.add(client);
         dialed.pipe(client); client.pipe(dialed);
       })().catch(drop);
@@ -417,20 +463,24 @@ export class ConnectProxy {
     try { chmodSync(options.socketPath, 0o600); }
     catch (error) {
       for (const socket of tunnels) socket.destroy();
+      for (const socket of queued) socket.destroy();
       server.closeAllConnections();
       await new Promise<void>(resolve => { server.close(() => resolve()); });
       throw error;
     }
-    return new ConnectProxy(options.socketPath, server, tunnels);
+    return new ConnectProxy(options.socketPath, server, tunnels, queued);
   }
 
   async close(): Promise<void> {
     const server = this.server;
     // The tunnels are this proxy's: an upgraded socket is not always among a
     // server's tracked connections, so end each explicitly (its own close
-    // takes the upstream half with it). close() then removes the unix name
-    // it owns (P0V-114), not a stale file a next proxy would trip on.
+    // takes the upstream half with it) -- and a queued claim's socket the
+    // same way, since its request never reached the dial. close() then
+    // removes the unix name it owns (P0V-114), not a stale file a next
+    // proxy would trip on.
     for (const socket of this.tunnels) socket.destroy();
+    for (const socket of this.queued) socket.destroy();
     server.closeAllConnections();
     await new Promise<void>(resolve => { server.close(() => resolve()); });
   }

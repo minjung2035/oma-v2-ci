@@ -274,10 +274,7 @@ export function readLeadingFrame(socket: Socket, frameBytes: number, deadlineMs:
     if (deadlineMs !== Number.POSITIVE_INFINITY) phaseBudget(deadlineMs);
     let buffered = Buffer.alloc(0);
     let settled = false;
-    const timer = Number.isFinite(deadlineMs)
-      ? setTimeout(() => finish(new StoreError("BROKER_UNAVAILABLE", "no leading frame before the deadline")), deadlineMs)
-      : null;
-    timer?.unref();
+    let timer: NodeJS.Timeout | null = null;
     const finish = (error: Error | null, value?: { frame: Record<string, unknown>; rest: Buffer }): void => {
       if (settled) return;
       settled = true;
@@ -286,15 +283,26 @@ export function readLeadingFrame(socket: Socket, frameBytes: number, deadlineMs:
       socket.pause();
       if (error !== null) reject(error); else resolve(value!);
     };
+    // The deadline is an observation window, re-armed by every byte that
+    // arrives: a peer whose frame is landing slowly is progressing and is
+    // not cut, while one that sends nothing still fails honestly (the total
+    // cannot grow without bound -- the frame cap bounds the bytes that can
+    // keep re-arming).
+    const arm = (): void => {
+      if (!Number.isFinite(deadlineMs)) return;
+      if (timer !== null) clearTimeout(timer);
+      timer = setTimeout(() => finish(new StoreError("BROKER_UNAVAILABLE", "no leading frame before the deadline")), deadlineMs);
+      timer.unref();
+    };
     const onClose = (): void => finish(new StoreError("BROKER_UNAVAILABLE", "the connection closed before its leading frame"));
     const onEnd = (): void => finish(new StoreError("BROKER_UNAVAILABLE", "the connection ended before its leading frame"));
     const onError = (cause: Error): void => finish(new StoreError("BROKER_UNAVAILABLE", "the connection failed before its leading frame", { cause }));
     const onData = (chunk: Buffer): void => {
       buffered = Buffer.concat([buffered, chunk]);
-      if (buffered.length < 4) return;
+      if (buffered.length < 4) { arm(); return; }
       const length = buffered.readUInt32BE(0);
       if (length > frameBytes) { finish(new StoreError("FRAME_TOO_LARGE", "leading frame exceeds the frame limit")); return; }
-      if (buffered.length < 4 + length) return;
+      if (buffered.length < 4 + length) { arm(); return; }
       // The parser's own construction is inside the try: a limit this
       // caller cannot have validated earlier (NaN, fractional, infinite --
       // the length checks above compare false against them and let a frame
@@ -313,5 +321,6 @@ export function readLeadingFrame(socket: Socket, frameBytes: number, deadlineMs:
     socket.once("error", onError);
     socket.once("close", onClose);
     socket.resume();
+    arm();
   });
 }

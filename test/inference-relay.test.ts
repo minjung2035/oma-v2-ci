@@ -6,6 +6,7 @@
  */
 import test from "node:test";
 import assert from "node:assert/strict";
+import { once } from "node:events";
 import { request as httpRequest } from "node:http";
 import { connect as netConnect, createServer as createNetServer, type Server } from "node:net";
 import type { Duplex } from "node:stream";
@@ -85,7 +86,7 @@ test("T114 the relay carries a request to the provider and attaches the host cre
     assert.equal(request.headers.authorization, "Bearer real-secret", "the host credential replaces the caller's");
     assert.equal(request.headers["x-api-key"], undefined, "a caller-chosen key must be dropped");
     assert.equal(request.body, '{"hello":true}', "the body is forwarded verbatim");
-    assert.deepEqual(relay.observe(), { accepted: 1, refused: 0, failed: 0, inFlight: 0 });
+    assert.deepEqual(relay.observe(), { accepted: 1, refused: 0, failed: 0, inFlight: 0, queued: 0 });
   } finally { await relay.close(); await provider.close(); socket.clean(); }
 });
 
@@ -194,7 +195,7 @@ test("T114 a provider that never answers is reported, not retried", async () => 
   } finally { await relay.close(); await provider.close(); socket.clean(); }
 });
 
-test("T114 the relay refuses beyond its concurrency limit instead of queueing", async () => {
+test("T114 the relay queues beyond its concurrency limit instead of refusing", async () => {
   const provider = await tlsProvider();
   provider.reply = { status: 200, chunks: ["x"], delayMs: 400 };
   const socket = scratchSocket();
@@ -202,15 +203,45 @@ test("T114 the relay refuses beyond its concurrency limit instead of queueing", 
     { origin: provider.origin, headers: { authorization: "Bearer real-secret" } },
     { concurrent: 1, timeoutMs: 5000 });
   try {
-    const [first, second] = await Promise.all([
-      throughBridge(socket.path, "/v1/messages", "{}"),
-      new Promise<{ status: number; body: string }>(resolve => {
-        setTimeout(() => { void throughBridge(socket.path, "/v1/messages", "{}").then(resolve); }, 80).unref();
-      }),
-    ]);
-    const statuses = [first.status, second.status].sort();
-    assert.deepEqual(statuses, [200, 503], `expected one carried and one refused, got ${statuses.join(",")}`);
-    assert.equal(relay.observe().refused, 1);
+    const first = throughBridge(socket.path, "/v1/messages", "{}");
+    assert.ok(await eventually(() => relay.observe().inFlight === 1, 2000), "the first request is in flight");
+    const second = throughBridge(socket.path, "/v1/messages", "{}");
+    assert.ok(await eventually(() => relay.observe().queued === 1, 2000),
+      "the second request waits rather than being refused");
+    assert.equal(provider.seen.length, 1, "a queued request holds no provider call");
+    assert.equal(relay.observe().accepted, 1, "a queued request is not yet accepted");
+    const [firstAnswer, secondAnswer] = await Promise.all([first, second]);
+    assert.deepEqual([firstAnswer.status, secondAnswer.status], [200, 200],
+      "the queued request runs when the slot frees");
+    assert.equal(relay.observe().refused, 0, "capacity was never the refusal");
+    assert.equal(relay.observe().queued, 0);
+    assert.equal(provider.seen.length, 2);
+  } finally { await relay.close(); await provider.close(); socket.clean(); }
+});
+
+test("T114 a queued request's own close withdraws it -- no provider call is spent on nobody", async () => {
+  const provider = await tlsProvider();
+  provider.reply = { status: 200, chunks: ["x"], delayMs: 600 };
+  const socket = scratchSocket();
+  const relay = await InferenceRelay.open(socket.path,
+    { origin: provider.origin, headers: { authorization: "Bearer real-secret" } },
+    { concurrent: 1, timeoutMs: 5000 });
+  try {
+    const first = throughBridge(socket.path, "/v1/messages", "{}");
+    assert.ok(await eventually(() => relay.observe().inFlight === 1, 2000));
+    // The queued request is raw: connect, write, then go away before a slot
+    // frees. Its claim must be withdrawn, and the freed slot grants nothing.
+    const gone = netConnect(socket.path);
+    await once(gone, "connect");
+    gone.write("POST /v1/messages HTTP/1.1\r\nhost: x\r\ncontent-length: 2\r\n\r\n{}");
+    assert.ok(await eventually(() => relay.observe().queued === 1, 2000));
+    gone.destroy();
+    assert.ok(await eventually(() => relay.observe().queued === 0 && relay.observe().inFlight === 0, 4000),
+      "the abandoned claim was withdrawn and the slot settled");
+    assert.equal(provider.seen.length, 1, "the abandoned request was never sent upstream");
+    assert.equal(relay.observe().accepted, 1);
+    const answer = await first;
+    assert.equal(answer.status, 200);
   } finally { await relay.close(); await provider.close(); socket.clean(); }
 });
 
@@ -257,7 +288,7 @@ test("V27B: the relay hands a provider's answer on as it arrives; it never holds
     assert.equal(timing.body, "first second");
     assert.ok(timing.endMs >= 1400, `the provider's gap was not observed (${timing.endMs} ms)`);
     assert.ok(timing.firstMs < timing.endMs - 1000, `the first bytes waited for the whole answer (${timing.firstMs} of ${timing.endMs} ms)`);
-    assert.deepEqual(relay.observe(), { accepted: 1, refused: 0, failed: 0, inFlight: 0 });
+    assert.deepEqual(relay.observe(), { accepted: 1, refused: 0, failed: 0, inFlight: 0, queued: 0 });
   } finally { bridged.close(); await relay.close(); await provider.close(); socket.clean(); }
 });
 
@@ -311,21 +342,26 @@ test("P0V-34 / N11, P0-4: a tunnel whose engine leaves before the upgrade comple
   } finally { await relay.close(); await provider.close(); socket.clean(); }
 });
 
-test("V27B: idle connections to the relay are bounded, and a request is carried once they end", async () => {
+test("V27B: idle connections to the relay are bounded, and a request is carried once they end", { timeout: 30_000 }, async () => {
   const { RELAY_CONNECTIONS_PER_REQUEST } = await import("../src/runtime/inference-relay.js");
   const provider = await tlsProvider();
   const socket = scratchSocket();
   const relay = await InferenceRelay.open(socket.path,
     { origin: provider.origin, headers: { authorization: "Bearer real-secret" } },
     { concurrent: 2, timeoutMs: 5000 });
-  const idle = Array.from({ length: 100 }, () => { const client = netConnect(socket.path); client.on("error", () => {}); return client; });
+  // The socket-table bound is descriptor safety, not work admission: the
+  // request queue inside it is unbounded, so the bound itself stands well
+  // above anything a delivery asks -- the 1024 floor over the per-request
+  // factor, whichever is larger.
+  const bound = Math.max(1024, RELAY_CONNECTIONS_PER_REQUEST * 2);
+  const idle = Array.from({ length: bound + 25 }, () => { const client = netConnect(socket.path); client.on("error", () => {}); return client; });
   try {
-    await new Promise(resolve => setTimeout(resolve, 800));
+    await new Promise(resolve => setTimeout(resolve, 3000));
     const open = await new Promise<number>((resolve, reject) =>
       (Reflect.get(relay, "server") as Server).getConnections((error, count) => { if (error) reject(error); else resolve(count); }));
-    assert.ok(open <= RELAY_CONNECTIONS_PER_REQUEST * 2, `the relay held ${open} idle connections`);
+    assert.ok(open <= bound, `the relay held ${open} idle connections`);
     for (const client of idle) client.destroy();
-    await new Promise(resolve => setTimeout(resolve, 200));
+    await new Promise(resolve => setTimeout(resolve, 500));
     const answer = await throughBridge(socket.path, "/v1/messages", "{}");
     assert.equal(answer.status, 200);
   } finally { for (const client of idle) client.destroy(); await relay.close(); await provider.close(); socket.clean(); }

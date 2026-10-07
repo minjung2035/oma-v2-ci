@@ -1223,3 +1223,23 @@ idle budget), and the host's `egress.open` dispatch wraps the synchronous
 `connect()` in the same fail-closed shape the async arms' `.catch` had — a
 throw inside it ends the connection, never escapes a void-dispatched reader
 as an unhandled rejection.
+
+**Addendum (UX-38 batch 4 — capacity bounds are working sets, not
+refusals).** Every bound that once refused a legitimate request on size
+alone — four CONNECT tunnels per proxy or per run, four concurrent
+provider calls per placeholder, a pooled host connection when the guest
+pool is empty, the forwarder's engine slots — is now a *working set*:
+requests beyond it wait in FIFO, hold no tunnel, provider call or pool
+connection while they wait, and are granted in order as slots free. A
+waiting client that closes withdraws its claim — the slot was never
+theirs — and run release, service shutdown and proxy shutdown drain the
+queues honestly (`BROKER_UNAVAILABLE`, not silence and not a dangling
+socket). The reservation ordering the first addendum required is
+unchanged: a *granted* claim still takes its slot synchronously before
+the dial. What changed is only that "no slot" is a wait, never a
+verdict — capacity is not a policy and is never audited as a refusal.
+The decisions that stay: protocol violations, malformed targets, wrong
+ports, denied allowlist entries and unsafe resolutions are still refused;
+idle windows on *established* tunnels are still progress-reset silence
+budgets, not total elapsed deadlines; and the byte/frame bounds of the
+wire itself are untouched.
