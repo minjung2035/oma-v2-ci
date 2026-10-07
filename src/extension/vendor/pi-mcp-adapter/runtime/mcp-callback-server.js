@@ -288,10 +288,31 @@ async function ensureCallbackServerLocked(options = {}) {
     const listenPort = strictPort ? requiredPort : 0;
     try {
         await new Promise((resolve, reject) => {
-            candidateServer.once("error", (err) => {
-                reject(err);
+            // OMA divergence (applied by scripts/vendor-pi-mcp-adapter.mjs;
+            // recorded under generated.divergences in manifest.json): a
+            // permanent 'error' listener beside the startup once-listener.
+            // Upstream never removed the once-listener after a successful
+            // listen, so a post-listen error was swallowed by the settled
+            // reject and the NEXT error met zero 'error' listeners and
+            // escaped its emit as the hosting engine's death. The journal
+            // is best-effort -- a dead stderr must not throw out of the
+            // emit either -- and the socket stays bound for the kernel to
+            // retry. The once-listener still carries startup rejection and
+            // is removed exactly when the listen succeeds, so no post-
+            // listen error is ever silently consumed.
+            candidateServer.on("error", (listenerError) => {
+                try {
+                    console.error(`OAuth callback listener error: ${listenerError instanceof Error ? listenerError.message : String(listenerError)}`);
+                }
+                catch {
+                }
             });
+            const onStartupError = (err) => {
+                reject(err);
+            };
+            candidateServer.once("error", onStartupError);
             candidateServer.listen(listenPort, requestedHost, () => {
+                candidateServer.off("error", onStartupError);
                 resolve();
             });
         });

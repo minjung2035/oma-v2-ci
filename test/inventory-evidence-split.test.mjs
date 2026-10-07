@@ -144,6 +144,32 @@ test('K63: an inventory member named like an Object.prototype member is accounte
   assert.equal(covered.nonCode.get('constructor'), 'temporary editor file');
 });
 
+test('K63: an inventory member named like a report structure key is not its own row', async t => {
+  const { clocCoverage } = await import('../scripts/production-inventory.mjs');
+  // A root-level file literally named `header`, `SUM` or `nonCode` collides
+  // with the report's own members: reading `report[file]` answers the
+  // structure -- cloc's header, the SUM totals, or the non-code block --
+  // and the file looks counted while cloc never measured it. The slot is
+  // ambiguous, so the honest accounting refuses it and the file's own row
+  // lives only under the `./`-spelled key or the non-code verdict.
+  const report = {
+    header: { cloc_url: 'github.com/AlDanial/cloc', cloc_version: '2.08', n_files: 1 },
+    SUM: { blank: 0, comment: 0, code: 1, nFiles: 1 },
+    nonCode: {},
+  };
+  for (const file of ['header', 'SUM', 'nonCode']) {
+    assert.throws(() => clocCoverage(report, [file]), new RegExp(`cloc omitted or misclassified ${file}`),
+      `${file}: the structure member must not pass as the file's code row`);
+    // A real row under the `./`-spelled key still counts it.
+    const covered = clocCoverage({ ...report, [`./${file}`]: { blank: 0, comment: 0, code: 1, language: 'Text', nFiles: 1 } }, [file]);
+    assert.equal(covered.rows.get(file)?.code, 1, `${file}: its own row answers`);
+    // And a non-code verdict accounts for it without touching the structure.
+    const declined = clocCoverage({ ...report, nonCode: { [file]: 'temporary editor file' } }, [file]);
+    assert.equal(declined.nonCode.get(file), 'temporary editor file');
+    assert.equal(declined.rows.size, 0, `${file}: no phantom row from the structure`);
+  }
+});
+
 test('K63: unavailable measurement stays NOT_RUN and cannot overwrite source digests', t => {
   const f = fixture(t), before = readFileSync(join(f.root, 'production-loc-hashes.json'), 'utf8');
   const run = f.cli('loc.mjs', ['--out', join(f.root, 'evidence')], true);

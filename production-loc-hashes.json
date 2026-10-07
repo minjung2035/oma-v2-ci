@@ -36,7 +36,7 @@
     },
     {
       "path": "src/broker.ts",
-      "sha256": "7c84bd0b232e3356dd5ff0640fe8c4ae7a66d0d33d11823dd50c15e9dfe2975d"
+      "sha256": "0f3d4bf8eaa13b31c8cc8db780eee2204412961c25a73973e4826ae524841570"
     },
     {
       "path": "src/broker/composition.ts",
@@ -496,7 +496,7 @@
     },
     {
       "path": "src/extension/inference-bridge.ts",
-      "sha256": "e6e6d9a0855d70aba90c5b3e158e9a9547280c775049b9494d55d28e379005f2"
+      "sha256": "44dd06c375e2579fc3a5a13069c65277b7da48335335554f2a083ea34ee17e24"
     },
     {
       "path": "src/extension/lsp-tools.ts",
@@ -2664,7 +2664,7 @@
     },
     {
       "path": "src/extension/vendor/pi-mcp-adapter/manifest.json",
-      "sha256": "0a9a3169a87c9cbaf0d1b053bcb2a597b658e42a8e285f447a53b0d4bb1c5241"
+      "sha256": "88e746add47ac49fd21891a881ae978bc69542e0eb01dc5a6e926016d9a26909"
     },
     {
       "path": "src/extension/vendor/pi-mcp-adapter/node_modules/@modelcontextprotocol/client/LICENSE",
@@ -10968,7 +10968,7 @@
     },
     {
       "path": "src/extension/vendor/pi-mcp-adapter/runtime/mcp-callback-server.js",
-      "sha256": "23883df412085a61a2eda9e92195a05b854b8888debbf0de6885769628d45c17"
+      "sha256": "2a32a34664656a10855e257aec9d93ae9eb99aa5613d87675ef3823af24104bc"
     },
     {
       "path": "src/extension/vendor/pi-mcp-adapter/runtime/mcp-code.d.ts",
@@ -11372,7 +11372,7 @@
     },
     {
       "path": "src/extension/vendor/pi-mcp-adapter/runtime/ui-server.js",
-      "sha256": "ef763c6a4f0f066438720fc7c0b8996c17d4436a603bf16fddd39c0ec79981ed"
+      "sha256": "b1eda425d2bf030f7015c6a89a698436425f63def659f8681e053c6aead4c70e"
     },
     {
       "path": "src/extension/vendor/pi-mcp-adapter/runtime/ui-session.d.ts",
@@ -56276,7 +56276,7 @@
     },
     {
       "path": "src/runtime/inference-relay.ts",
-      "sha256": "90bb9b6fb863ca396a81b9e775d192da8274127a00f4d8efcb8446d063f9efdf"
+      "sha256": "75a0794c7a488503467919f289fec32d526a2a4efe778cab756af29709078b18"
     },
     {
       "path": "src/runtime/interactive-channel.ts",

@@ -598,6 +598,22 @@ export async function startUiServer(options) {
             sendJson(res, status, { ok: false, error: wrapped.message });
         }
     });
+    // OMA divergence (applied by scripts/vendor-pi-mcp-adapter.mjs;
+    // recorded under generated.divergences in manifest.json): a permanent
+    // 'error' listener for the host server's whole life. The retry loop
+    // below arms a fresh once-listener per candidate and onListening drops
+    // it after a successful listen, so an accept-class error (EMFILE/
+    // ENFILE) after that meets zero 'error' listeners and escapes its emit
+    // as the hosting engine's death. The journal is best-effort -- a
+    // logger that throws must not throw out of the emit either -- and the
+    // socket stays bound for the kernel to retry.
+    hostServer.on("error", (listenerError) => {
+        try {
+            log.error("UI server listener error", listenerError instanceof Error ? listenerError : undefined);
+        }
+        catch {
+        }
+    });
     server = hostServer;
     if (options.initialResultPromise) {
         options.initialResultPromise.then((result) => pushEvent("tool-result", result), (error) => {
@@ -677,6 +693,17 @@ export async function startUiServer(options) {
                     }
                     resolveProxy(address.port);
                 };
+                // OMA divergence: the same permanent 'error' listener on
+                // the sandbox proxy -- onListening removes the startup
+                // once-listener below, so a post-listen accept-class error
+                // would otherwise escape its emit the same way.
+                proxy.on("error", (listenerError) => {
+                    try {
+                        log.error("Sandbox proxy listener error", listenerError instanceof Error ? listenerError : undefined);
+                    }
+                    catch {
+                    }
+                });
                 proxy.once("error", onError);
                 proxy.listen(0, "127.0.0.1", onListening);
             });

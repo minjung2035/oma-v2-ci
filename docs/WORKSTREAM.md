@@ -1298,6 +1298,44 @@ name collision/intended surface/hidden 미활성/idempotent reload/provenance/
     in-situ 동작은 프로덕션 경계 리스너 + 단위 테스트 오라클로, 실제 fd
     소진 실험은 환경 의존이라 비결정론적이라 의도적으로 제외.
 
+- 2026-10-07 (전신성 부류 — post-listen 스캔 맹검증 잔여 정산): 직전 전수
+  스캔의 맹검증이 지목한 네 잔여를 정산. ①누락된 vendored listen 경계 —
+  `ui-server.js`(host server의 후보별 once-listener 재무장+성공 시 해제,
+  sandbox proxy의 동일 once+off)와 `mcp-callback-server.js`(once-listener가
+  성공 후에도 제거되지 않아 첫 post-listen 에러는 settled reject가 삼키고
+  두 번째는 emit을 탈출)를 `OMA_DIVERGENCES` splice로 영구 리스너 +
+  보호된 journal로 정산 — callback은 named `onStartupError`로 startup
+  reject 계약을 유지하며 성공 시점에 정확히 그 리스너만 해제. runtime·
+  manifest는 script 재생성물, `--check` → BUNDLE_CURRENT. ②`broker.ts`
+  `cleanupError`의 `console.error`가 `listen`의 영구 리스너와
+  `listenActor`의 run-revoke 경로 양쪽에서 동기 'error' emit 안에 도달
+  — 죽은 stderr가 다시 emit을 탈출하던 것을 보호된 best-effort write로.
+  ③cloc 계정(`production-inventory.mjs`): 루트 파일명 `header`/`SUM`/
+  `nonCode`가 report 구조 멤버와 충돌해 구조체를 파일 row로 오독하던
+  슬롯을 `CLOC_REPORT_STRUCTURE_KEYS`로 배제 — 모호 슬롯은 행이 아니고,
+  실제 행은 `./`-철자 또는 nonCode verdict만으로 정직하게 계정된다.
+  ④동기 emit 경계 잔여 — `inference-bridge.ts`의 'listening' emit 안
+  재등록 가드(거절은 pre-listen이 설치한 unreachable provider 유지 +
+  best-effort journal, unref·resolve는 도달), `inference-relay.ts`의
+  `request`/`upgrade` 핸들러에 connect-proxy와 같은 emit 경계(non-Refusal
+  재던짐이 `server.emit`을 통째로 탈출하지 않고 그 연결만 파괴·실패로
+  계수 — 정책 거절과 구분).
+  - 회귀: `mcp-bundle.test.ts`에 vendored emit 주입 오라클 2종(콜백 서버
+    두 연속 에러 전부 journal 도달·listening 유지·uncaughtException 0,
+    host+proxy 각각 흡수 — `Server.prototype.listen` 캡처로 클로저 내부
+    server에 도달), `post-listen-error.test.ts`에 broker 죽은-저널 오라클
+    (emit이 저널 자체 실패를 흡수 + 공유 싱크 직접 호출),
+    `inventory-evidence-split.test.mjs`에 구조키 충돌 fail-closed 오라클
+    (구조 멤버가 파일 row로 통과하지 않음 — 미수정 시 phantom 계정으로
+    조용히 통과되던 방향이 실패로 바뀜), `extension-bridges.test.ts`에
+    'listening' emit 안 거절된 재등록이 unreachable provider 유지 +
+    resolve 도달 + journal 기록, `inference-relay.test.ts`에 non-Refusal
+    재던짐이 연결만 파괴·failed 계수·escaped=[] — 전부 fail→pass 확인
+    (수정 전 되돌림에서 각각 실패/탈출/phantom 계정).
+  - NOT_RUN: 직전 항목과 동일 레인 — macOS native·systemd·
+    kernel/powercut·provider credential·release qualification·실제 fd
+    소진 주입(환경 의존 비결정론 — 동기 emit 주입이 결정론 오라클).
+
 ## 10. 지금부터의 실행 순서
 0. ~~P0-8 강제 수단 미구현~~ — 구현됨: `owned-state` 아키텍처 규칙
    (scripts/architecture/rules/owned-state-rules.mjs)이 경로 기반 raw fs

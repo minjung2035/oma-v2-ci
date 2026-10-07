@@ -162,9 +162,18 @@ export class InferenceRelay {
     private readonly target: RelayTarget,
     private readonly limits: RelayLimits,
   ) {
-    this.server = createServer((incoming, outgoing) => { this.forward(incoming, outgoing); });
+    // 'request' and 'upgrade' run synchronously inside `server.emit`: a
+    // throw escapes it whole and takes the runner -- the same boundary
+    // connect-proxy holds on its own emits, and the same reason `admit`'s
+    // non-Refusal rethrow must never reach the process. Whatever fails
+    // inside one ends the connection, never the runner.
+    this.server = createServer((incoming, outgoing) => {
+      try { this.forward(incoming, outgoing); }
+      catch { this.failed += 1; outgoing.destroy(); }
+    });
     this.server.on("upgrade", (incoming: IncomingMessage, socket: Duplex, head: Buffer) => {
-      this.tunnel(incoming, socket, head);
+      try { this.tunnel(incoming, socket, head); }
+      catch { this.failed += 1; socket.destroy(); }
     });
     // A relay that silently drops a client error would look like a provider
     // failure from inside, so the socket is destroyed instead.

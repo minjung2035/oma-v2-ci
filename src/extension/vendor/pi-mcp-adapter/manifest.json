@@ -88,6 +88,10 @@
         "reason": "SSH_CONNECTION/SSH_TTY and MCP_UI_VIEWER read omaAmbientEnv: remote session detection and viewer preference are upstream's UI heuristics — under OMA no ambient env may steer them. And maybeStartUiSession itself opens with the ui-session permit: under an installed OMA policy it throws before the UI-resource read, the `who` remote probe, orca or any viewer work can run — a backstop beneath the call-site refusals in proxy-modes.js and direct-tools.js.",
         "edits": 4
       },
+      "ui-server.js": {
+        "reason": "Post-listen 'error' absorption on both UI listeners: the host server's startup once-listener is removed after a successful listen (the EADDRINUSE candidate retry re-arms it per attempt) and the sandbox proxy's once-listener is removed the same way, so an accept-class error (EMFILE/ENFILE) later meets zero 'error' listeners and escapes its emit as the hosting engine's death. Permanent listeners journal best-effort through the child logger and keep both sockets bound for the kernel to retry — the startup rejection and the candidate-retry contract are unchanged. The ui-session permit already refuses this module under an installed OMA policy; this is defense in depth for a bare upstream load.",
+        "edits": 2
+      },
       "proxy-modes.js": {
         "reason": "A uiResourceUri tool call is refused under an installed OMA policy with a structured ui_session_refused result — before the UI machinery (the ui-resource read, the `who` remote-login probe, orca, `npm root -g`, a host-global glimpseui import, a browser open) and before the downstream tool call itself: a tool built to interact through its UI cannot run coherently with the UI refused. With no policy upstream's flow stands.",
         "edits": 2
@@ -97,8 +101,8 @@
         "edits": 2
       },
       "mcp-callback-server.js": {
-        "reason": "Bare-builtin specifier normalization: 'http' becomes 'node:http' (identical module, the spelling OMA's package audit recognizes). The OAuth loopback listener itself is untouched.",
-        "edits": 1
+        "reason": "Bare-builtin specifier normalization: 'http' becomes 'node:http' (identical module, the spelling OMA's package audit recognizes). Post-listen 'error' absorption: upstream's startup once-listener is never removed after a successful listen, so the first post-listen error is swallowed by the already-settled reject and a second meets zero listeners and escapes its emit as the hosting engine's death — reachable through the allowed auth:\"oauth\" path (mcp-auth-flow.js → ensureCallbackServer). A permanent listener journals best-effort and keeps the OAuth loopback socket bound for the kernel to retry, and the startup once-listener is removed the moment the listen succeeds so there is no swallowed-then-uncovered transition — the startup rejection contract is unchanged.",
+        "edits": 2
       },
       "agent-plugin-loader.js": {
         "reason": "Plugin-path `~` expansion reads omaAmbientEnv().HOME: the plugin loader is unreachable under OMA's config validation, and if a path ever reached it the ambient HOME could not steer it.",
@@ -11078,8 +11082,8 @@
     },
     {
       "path": "runtime/mcp-callback-server.js",
-      "bytes": 17026,
-      "sha256": "23883df412085a61a2eda9e92195a05b854b8888debbf0de6885769628d45c17"
+      "bytes": 18323,
+      "sha256": "2a32a34664656a10855e257aec9d93ae9eb99aa5613d87675ef3823af24104bc"
     },
     {
       "path": "runtime/mcp-code.d.ts",
@@ -11593,8 +11597,8 @@
     },
     {
       "path": "runtime/ui-server.js",
-      "bytes": 39217,
-      "sha256": "ef763c6a4f0f066438720fc7c0b8996c17d4436a603bf16fddd39c0ec79981ed"
+      "bytes": 40657,
+      "sha256": "b1eda425d2bf030f7015c6a89a698436425f63def659f8681e053c6aead4c70e"
     },
     {
       "path": "runtime/ui-session.d.ts",
@@ -13942,5 +13946,5 @@
       "sha256": "e12a3786ea18a5e9106bc5320c0eacec3991ee00476a72d97438a0135f18a82d"
     }
   ],
-  "bundleSha256": "46d2607a1b3038a792e925b957ee637d3177433b0242e46b4339ead271211833"
+  "bundleSha256": "66b62749fc322e024565ffa2f562b1ab8d2f460cd00a372c9468df3617a2f62c"
 }

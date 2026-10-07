@@ -8,6 +8,8 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { request as httpRequest } from "node:http";
 import { connect as netConnect, createServer as createNetServer, type Server } from "node:net";
+import type { Duplex } from "node:stream";
+import type { IncomingMessage, ServerResponse } from "node:http";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -494,4 +496,40 @@ test("DR27 / WP10: a relay's silence budget beyond the native timer range does n
     assert.deepEqual(await throughBridge(socket.path, "/messages", "{}"), { status: 200, body: "ok" });
     assert.equal(relay.observe().failed, 0);
   } finally { await relay.close(); await provider.close(); socket.clean(); }
+});
+
+test("post-listen: a non-Refusal throw inside 'request' or 'upgrade' ends the connection, never the emit", async t => {
+  // `admit` refuses by value, but a non-Refusal failure -- here an incoming
+  // message whose headers member cannot be read -- rethrows, and 'request'
+  // and 'upgrade' are synchronous emits: unguarded, the rethrow escapes
+  // `server.emit` whole and takes the runner. The boundary absorbs it and
+  // destroys only that connection, counted as a failure like the relay's
+  // other failures -- it is not a policy refusal.
+  const socket = scratchSocket();
+  const relay = await InferenceRelay.open(socket.path,
+    { origin: "https://example.com", headers: {} }, { concurrent: 2, timeoutMs: 5000 });
+  t.after(() => relay.close());
+  const server = Reflect.get(relay, "server") as Server;
+  const escaped: unknown[] = [];
+  const onUncaught = (error: Error) => { escaped.push(error); };
+  process.once("uncaughtException", onUncaught);
+  t.after(() => { process.off("uncaughtException", onUncaught); });
+
+  let outgoingDestroyed = false;
+  const request = { url: "/messages", method: "POST", headers: undefined } as unknown as IncomingMessage;
+  const outgoing = { destroy: () => { outgoingDestroyed = true; } } as unknown as ServerResponse;
+  server.emit("request", request, outgoing);
+  assert.equal(outgoingDestroyed, true, "the failed request's connection was ended");
+
+  let socketDestroyed = false;
+  const upgrade = { url: "/realtime", method: "GET", headers: undefined } as unknown as IncomingMessage;
+  const tunnel = { destroy: () => { socketDestroyed = true; } } as unknown as Duplex;
+  server.emit("upgrade", upgrade, tunnel, Buffer.alloc(0));
+  assert.equal(socketDestroyed, true, "the failed upgrade's socket was ended");
+
+  const seen = relay.observe();
+  assert.equal(seen.failed, 2, "both emit failures counted as relay failures");
+  assert.equal(seen.refused, 0, "a boundary failure is not a policy refusal");
+  assert.deepEqual(escaped, [], "nothing escaped the synchronous emit");
+  assert.equal(server.listening, true);
 });

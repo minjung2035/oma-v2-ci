@@ -976,6 +976,57 @@ import { omaAmbientEnv, omaRequirePermit } from "./utils.js";`,
       },
     ],
   },
+  "ui-server.js": {
+    reason:
+      "Post-listen 'error' absorption on both UI listeners: the host " +
+      "server's startup once-listener is removed after a successful listen " +
+      "(the EADDRINUSE candidate retry re-arms it per attempt) and the " +
+      "sandbox proxy's once-listener is removed the same way, so an " +
+      "accept-class error (EMFILE/ENFILE) later meets zero 'error' " +
+      "listeners and escapes its emit as the hosting engine's death. " +
+      "Permanent listeners journal best-effort through the child logger " +
+      "and keep both sockets bound for the kernel to retry — the startup " +
+      "rejection and the candidate-retry contract are unchanged. The " +
+      "ui-session permit already refuses this module under an installed " +
+      "OMA policy; this is defense in depth for a bare upstream load.",
+    edits: [
+      {
+        find: `    server = hostServer;`,
+        replace: `    // OMA divergence (applied by scripts/vendor-pi-mcp-adapter.mjs;
+    // recorded under generated.divergences in manifest.json): a permanent
+    // 'error' listener for the host server's whole life. The retry loop
+    // below arms a fresh once-listener per candidate and onListening drops
+    // it after a successful listen, so an accept-class error (EMFILE/
+    // ENFILE) after that meets zero 'error' listeners and escapes its emit
+    // as the hosting engine's death. The journal is best-effort -- a
+    // logger that throws must not throw out of the emit either -- and the
+    // socket stays bound for the kernel to retry.
+    hostServer.on("error", (listenerError) => {
+        try {
+            log.error("UI server listener error", listenerError instanceof Error ? listenerError : undefined);
+        }
+        catch {
+        }
+    });
+    server = hostServer;`,
+      },
+      {
+        find: `                proxy.once("error", onError);`,
+        replace: `                // OMA divergence: the same permanent 'error' listener on
+                // the sandbox proxy -- onListening removes the startup
+                // once-listener below, so a post-listen accept-class error
+                // would otherwise escape its emit the same way.
+                proxy.on("error", (listenerError) => {
+                    try {
+                        log.error("Sandbox proxy listener error", listenerError instanceof Error ? listenerError : undefined);
+                    }
+                    catch {
+                    }
+                });
+                proxy.once("error", onError);`,
+      },
+    ],
+  },
   "proxy-modes.js": {
     reason:
       "A uiResourceUri tool call is refused under an installed OMA policy " +
@@ -1043,11 +1094,55 @@ import { omaAmbientEnv, omaRequirePermit } from "./utils.js";`,
     reason:
       "Bare-builtin specifier normalization: 'http' becomes 'node:http' " +
       "(identical module, the spelling OMA's package audit recognizes). " +
-      "The OAuth loopback listener itself is untouched.",
+      "Post-listen 'error' absorption: upstream's startup once-listener is " +
+      "never removed after a successful listen, so the first post-listen " +
+      "error is swallowed by the already-settled reject and a second meets " +
+      "zero listeners and escapes its emit as the hosting engine's death — " +
+      "reachable through the allowed auth:\"oauth\" path (mcp-auth-flow.js " +
+      "→ ensureCallbackServer). A permanent listener journals best-effort " +
+      "and keeps the OAuth loopback socket bound for the kernel to retry, " +
+      "and the startup once-listener is removed the moment the listen " +
+      "succeeds so there is no swallowed-then-uncovered transition — the " +
+      "startup rejection contract is unchanged.",
     edits: [
       {
         find: `import { createServer } from "http";`,
         replace: `import { createServer } from "node:http";`,
+      },
+      {
+        find: `            candidateServer.once("error", (err) => {
+                reject(err);
+            });
+            candidateServer.listen(listenPort, requestedHost, () => {
+                resolve();
+            });`,
+        replace: `            // OMA divergence (applied by scripts/vendor-pi-mcp-adapter.mjs;
+            // recorded under generated.divergences in manifest.json): a
+            // permanent 'error' listener beside the startup once-listener.
+            // Upstream never removed the once-listener after a successful
+            // listen, so a post-listen error was swallowed by the settled
+            // reject and the NEXT error met zero 'error' listeners and
+            // escaped its emit as the hosting engine's death. The journal
+            // is best-effort -- a dead stderr must not throw out of the
+            // emit either -- and the socket stays bound for the kernel to
+            // retry. The once-listener still carries startup rejection and
+            // is removed exactly when the listen succeeds, so no post-
+            // listen error is ever silently consumed.
+            candidateServer.on("error", (listenerError) => {
+                try {
+                    console.error(\`OAuth callback listener error: \${listenerError instanceof Error ? listenerError.message : String(listenerError)}\`);
+                }
+                catch {
+                }
+            });
+            const onStartupError = (err) => {
+                reject(err);
+            };
+            candidateServer.once("error", onStartupError);
+            candidateServer.listen(listenPort, requestedHost, () => {
+                candidateServer.off("error", onStartupError);
+                resolve();
+            });`,
       },
     ],
   },

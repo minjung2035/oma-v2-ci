@@ -27,6 +27,13 @@ import { startGuestServer, type GuestIdentity } from "../src/platform/guest/serv
 import { EgressPool, startEgressService } from "../src/platform/guest/egress.js";
 import { startHostApi, type HostApiBackend } from "../src/platform/host/host-api.js";
 import { PLATFORM_FRAME_BYTES } from "../src/protocol/host-guest.js";
+import { Broker } from "../src/broker.js";
+import { ViewsModule } from "../src/views.js";
+import { LifecycleModule } from "../src/lifecycle.js";
+import type { UnitsModule } from "../src/units.js";
+import type { ResolvedAgentSpec } from "../implementation/contracts.js";
+import { preparedFixture } from "./fixtures/delivery-receipt.js";
+import { TEST_VIEW_LIMITS } from "./fixtures/limits.js";
 
 function scratch(t: TestContext): { path(name: string): string } {
   const dir = mkdtempSync(join(tmpdir(), "oma-listen-"));
@@ -195,4 +202,44 @@ test("post-listen: the Host API absorbs an accept-class error", async t => {
   assert.ok(lines.some(line => line.includes("accept failed")));
   assert.equal(server.listening, true);
   await stillServing(socketPath);
+});
+
+test("post-listen: the broker's listener survives a dead journal sink -- the cleanup write cannot escape the emit", async t => {
+  // `listen`'s permanent 'error' listener ends in `cleanupError`, whose
+  // console.error ran unguarded: a dead stderr inside the emit was the same
+  // escape the listener exists to absorb. The run-revoke path in
+  // `listenActor` reaches the identical write.
+  const f = await preparedFixture();
+  const units = { onRevokeRun: undefined, bindIncarnationReader: () => undefined, unitCgroup: () => "",
+    observe: () => ({ activeState: "active", subState: "running", result: "success", execMainStatus: 0, cgroup: "", invocationId: "a".repeat(32) }),
+    observeStatus: async () => new Map() } as unknown as UnitsModule;
+  const lifecycle = new LifecycleModule(f.store, units, { stateRoot: f.root, projectGit: join(f.root, "repos", "project.git"),
+    society: "demo", hasGoal: () => true, activationAllowed: () => true },
+    (_parent: unknown, input: { name: string; from: string; brief: string }) => ({ ...input }) as unknown as ResolvedAgentSpec, f.mail);
+  const broker = new Broker(f.store, f.mail, units, new ViewsModule(f.store, f.root, "demo", "p", TEST_VIEW_LIMITS), lifecycle, null, null,
+    { stateRoot: f.root, runRoot: join(f.root, "run"), society: "demo", hasGoal: () => true });
+  // The drain is also the teardown: an emit that escaped would otherwise
+  // leave both listeners bound and the process could never exit.
+  t.after(() => void broker.drainAndClose().catch(() => undefined));
+  const escaped: unknown[] = [];
+  const onUncaught = (error: Error) => { escaped.push(error); };
+  process.once("uncaughtException", onUncaught);
+  // The journal's own sink is dead for the rest of the test.
+  const original = console.error;
+  console.error = () => { throw new Error("stderr is dead"); };
+  try {
+    await broker.start();
+    const server = Reflect.get(broker, "hostServer") as Server;
+    server.emit("error", acceptError());
+    assert.equal(server.listening, true, "the emit absorbed the journal's own failure");
+    // The shared sink the run-revoke path reaches: the same guarded write.
+    assert.doesNotThrow(() => Reflect.get(broker, "cleanupError").call(broker, new Error("revoke failed")));
+    await broker.drainAndClose();
+  } finally {
+    console.error = original;
+    process.off("uncaughtException", onUncaught);
+    (f.store as unknown as { close(): void }).close = () => undefined;
+    f.close();
+  }
+  assert.deepEqual(escaped, [], "nothing escaped a synchronous emit");
 });

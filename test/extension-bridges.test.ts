@@ -73,3 +73,48 @@ test("post-listen: a dead stderr cannot make the inference bridge's error emit e
   assert.match(last, /^http:\/\/127\.0\.0\.1:\d+$/, "the fallback listener supplies its real address");
   assert.notEqual(new URL(last).port, "0");
 });
+
+test("post-listen: a refused re-register inside the 'listening' emit keeps the unreachable provider and still resolves", async t => {
+  // 'listening' is the same synchronous emit boundary as 'error': a
+  // registerProvider refusal escaping it kills the engine. The refused
+  // registration leaves the unreachable provider the pre-listen register
+  // installed -- the relay listens unused rather than the engine
+  // bypassing it -- and the emit still reaches resolve.
+  const dir = mkdtempSync(join(tmpdir(), "oma-bridge-"));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  env(t, "OMA_INFERENCE_SOCKET", join(dir, "inference.sock"));
+  env(t, "OMA_INFERENCE_PROVIDER", "test-provider");
+  env(t, "OMA_INFERENCE_KEY", "placeholder");
+  // The planned bind is refused so the fallback lands 'listening' -- the
+  // same emit either way, and the retry path stays deterministic.
+  env(t, "OMA_INFERENCE_PORT", String(await takenPort(t)));
+  const registered: string[] = [];
+  const shutdownHandlers: Array<() => void> = [];
+  const pi = {
+    // The bridge's only handle back to its server is the shutdown hook it
+    // registers: captured here so an emit that escaped (and so never
+    // reached unref/resolve) can still be torn down and the process exit.
+    on: (event: string, handler: () => void) => { if (event === "session_shutdown") shutdownHandlers.push(handler); },
+    registerProvider: (_name: string, options: { baseUrl: string }) => {
+      if (options.baseUrl !== "http://127.0.0.1:0") throw new Error("registerProvider refused the relay address");
+      registered.push(options.baseUrl);
+    },
+  };
+  t.after(() => { for (const handler of shutdownHandlers) handler(); });
+  const escaped: unknown[] = [];
+  const onUncaught = (error: Error) => { escaped.push(error); };
+  process.once("uncaughtException", onUncaught);
+  t.after(() => { process.off("uncaughtException", onUncaught); });
+  const lines: string[] = [];
+  const write = process.stderr.write;
+  process.stderr.write = ((chunk: unknown) => { lines.push(String(chunk)); return true; }) as typeof process.stderr.write;
+  t.after(() => { process.stderr.write = write; });
+  await Promise.race([
+    startInferenceBridge(pi as never),
+    new Promise<never>((_, reject) => setTimeout(() => reject(new Error("the emit wedged behind its own refusal")), 2000)),
+  ]);
+  assert.deepEqual(escaped, [], "the refused re-register escaped the 'listening' emit");
+  assert.deepEqual(registered, ["http://127.0.0.1:0", "http://127.0.0.1:0"],
+    "only the unreachable provider ever registered -- the refused re-register left it standing");
+  assert.ok(lines.some(line => line.includes("provider registration refused")), "the refusal reached the journal");
+});

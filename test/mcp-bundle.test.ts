@@ -10,6 +10,8 @@ import { chmodSync, cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, re
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { connect, Server } from "node:net";
+import { once } from "node:events";
 import {
   MCP_CONFIG_FILE_NAME, MCP_STATE_DIR_NAME, MCP_TOOL_NAMES,
   mcpChildEnvironment, mcpFacadeDropped, normalizeOmaMcpConfig, registerMcpTools,
@@ -732,4 +734,126 @@ readline.createInterface({ input: process.stdin, terminal: false }).on("line", l
   assert.equal(childEnv.SHELL, undefined, "ambient SHELL never reached the spawned server");
   assert.equal(childEnv.HOMEDRIVE, undefined, "no underlay win32 names either");
   assert.equal(childEnv.HOME, join(agentDir, MCP_STATE_DIR_NAME, "scratch"), "HOME is the OMA scratch");
+});
+
+// ---------------------------------------------------------------------------
+// Post-listen 'error' absorption (the vendored listen boundaries)
+
+/** Every server that binds while the patch is installed, captured through
+ * the prototype the vendored `http.createServer` results inherit: the
+ * vendored listeners are module-/closure-internal, so the emit oracle
+ * reaches them only via the shared listen path. */
+function captureListens(t: import("node:test").TestContext): Server[] {
+  const original = Server.prototype.listen;
+  const bound: Server[] = [];
+  Server.prototype.listen = function (this: Server, ...args: never[]) {
+    bound.push(this);
+    return Reflect.apply(original, this, args) as Server;
+  } as typeof Server.prototype.listen;
+  t.after(() => { Server.prototype.listen = original; });
+  return bound;
+}
+
+/** The journal each vendored listener writes through console.error. */
+function errorJournal(t: import("node:test").TestContext): string[] {
+  const lines: string[] = [];
+  const original = console.error;
+  console.error = (...args: unknown[]) => { lines.push(args.map(String).join(" ")); };
+  t.after(() => { console.error = original; });
+  return lines;
+}
+
+/** What an unhandled emit would escalate to -- recorded, never fatal here. */
+function uncaught(t: import("node:test").TestContext): unknown[] {
+  const escaped: unknown[] = [];
+  const onUncaught = (error: Error) => { escaped.push(error); };
+  process.once("uncaughtException", onUncaught);
+  t.after(() => { process.off("uncaughtException", onUncaught); });
+  return escaped;
+}
+
+/** The shape a kernel accept failure takes. */
+const vendoredAcceptError = (): Error => Object.assign(new Error("accept failed"), { code: "EMFILE" });
+
+/** The socket still answers a dial after the emit: the name stayed bound. */
+async function stillDialing(port: number): Promise<void> {
+  const probe = connect({ host: "127.0.0.1", port });
+  probe.on("error", () => {});
+  await once(probe, "connect");
+  probe.destroy();
+}
+
+test("BL5: the OAuth callback listener absorbs post-listen errors -- the first is journaled, the second cannot escape", async t => {
+  // Upstream armed a `once("error", reject)` for the server's whole life:
+  // the first post-listen error was silently consumed by the settled
+  // reject and a second met zero listeners and escaped its emit as the
+  // hosting engine's death. The divergence removes the startup
+  // once-listener exactly when the listen resolves and keeps a permanent
+  // guarded journal beside it -- reachable via the allowed auth:"oauth"
+  // path (mcp-auth-flow → ensureCallbackServer).
+  const bound = captureListens(t);
+  const lines = errorJournal(t);
+  const escaped = uncaught(t);
+  const mod = await import(SRC_RUNTIME("mcp-callback-server.js")) as {
+    ensureCallbackServer(options?: { strictPort?: boolean }): Promise<void>;
+    stopCallbackServer(): Promise<void>;
+    isCallbackServerRunning(): boolean;
+  };
+  const provider = await import(SRC_RUNTIME("mcp-oauth-provider.js")) as { getOAuthCallbackPort(): number };
+  t.after(() => mod.stopCallbackServer());
+  await mod.ensureCallbackServer({ strictPort: false });
+  const server = bound.find(candidate => candidate.listening);
+  assert.ok(server, "the callback listener bound");
+  assert.equal((server.address() as { port: number }).port, provider.getOAuthCallbackPort(),
+    "the captured listener is the OAuth callback server");
+  assert.equal(server.listenerCount("error"), 1,
+    "the permanent listener alone -- the startup once-listener is gone");
+  // The first post-listen error reaches the journal instead of being
+  // swallowed by the settled reject, and the second -- upstream's
+  // uncovered emit -- is absorbed the same way.
+  server.emit("error", vendoredAcceptError());
+  server.emit("error", vendoredAcceptError());
+  assert.equal(server.listening, true, "the socket stays bound for the kernel to retry");
+  assert.equal(mod.isCallbackServerRunning(), true);
+  assert.equal(lines.filter(line => line.includes("accept failed")).length, 2, "each error reached the journal");
+  await stillDialing(provider.getOAuthCallbackPort());
+  assert.deepEqual(escaped, []);
+});
+
+test("BL5: both vendored UI-session listeners absorb post-listen errors", async t => {
+  // The host server's retry loop re-arms a once-listener per port
+  // candidate and drops it on success; the sandbox proxy's once-listener
+  // is dropped the same way -- two instances of the class the sweep fixed
+  // everywhere else. Under OMA the ui-session permit refuses this module;
+  // the permanent listeners are the bare-load defense, exercised here
+  // through the module's own start.
+  const bound = captureListens(t);
+  const lines = errorJournal(t);
+  const escaped = uncaught(t);
+  const uiServer = await import(SRC_RUNTIME("ui-server.js")) as {
+    startUiServer(options: Record<string, unknown>): Promise<{ port: number; proxyPort: number; close(reason?: string): void }>;
+  };
+  const handle = await uiServer.startUiServer({
+    serverName: "srv", toolName: "tool", port: 0,
+    resource: { meta: {} },
+    manager: { getConnection: () => undefined, touch: () => {} },
+    consentManager: { requiresPrompt: () => false, shouldCacheConsent: () => false, ensureApproved: () => {} },
+  });
+  t.after(() => handle.close("test done"));
+  const byPort = (port: number) => bound.find(candidate =>
+    candidate.listening && (candidate.address() as { port?: number } | null)?.port === port);
+  const host = byPort(handle.port);
+  const proxy = byPort(handle.proxyPort);
+  assert.ok(host, "the host server bound");
+  assert.ok(proxy, "the sandbox proxy bound");
+  assert.notEqual(host, proxy);
+  for (const [name, server] of [["host", host], ["proxy", proxy]] as const) {
+    assert.equal(server.listenerCount("error"), 1, `${name}: one permanent listener, the startup once-listener gone`);
+    server.emit("error", vendoredAcceptError());
+    assert.equal(server.listening, true, `${name}: the socket stays bound`);
+  }
+  assert.equal(lines.filter(line => line.includes("accept failed")).length, 2, "each listener journaled its error");
+  await stillDialing(handle.port);
+  await stillDialing(handle.proxyPort);
+  assert.deepEqual(escaped, []);
 });

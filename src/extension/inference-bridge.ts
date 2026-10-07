@@ -44,7 +44,19 @@ export async function startInferenceBridge(pi: ExtensionAPI): Promise<void> {
     let planned = true;
     server.on("listening", () => {
       const address = server.address();
-      if (typeof address === "object" && address !== null) register(`http://127.0.0.1:${address.port}`);
+      // 'listening' is the same synchronous emit boundary as 'error' below:
+      // a registerProvider refusal escaping it kills the engine. The
+      // unreachable provider the pre-listen register already installed is
+      // the safe state, so a refused re-register keeps it -- the relay
+      // listens unused rather than the engine bypassing it -- and the
+      // journal is best-effort for the same reason the error listener's is.
+      if (typeof address === "object" && address !== null) {
+        try { register(`http://127.0.0.1:${address.port}`); }
+        catch (registerError) {
+          try { process.stderr.write(`oma inference bridge provider registration refused: ${registerError instanceof Error ? registerError.message : String(registerError)}\n`); }
+          catch { /* nowhere left to say it */ }
+        }
+      }
       server.unref();
       resolve();
     });

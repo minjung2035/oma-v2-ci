@@ -108,6 +108,11 @@ export const CLOC_NON_CODE_REASON =
  * not misclassification; it has to be explicitly classified or it throws.
  * An incoherent report throws too: a non-code name outside the inventory or
  * one that also has a row, an unrecognized verdict, a malformed block. */
+/** The cloc report's own members, never file rows: a root-level inventory
+ * file sharing one of these names falls through to its `./`-spelled row
+ * (or to the non-code accounting) rather than reading the structure. */
+const CLOC_REPORT_STRUCTURE_KEYS = new Set(["header", "SUM", "nonCode"]);
+
 export function clocCoverage(report, files) {
   if (report === null || typeof report !== "object" || Array.isArray(report))
     throw new Error("cloc report is not an object");
@@ -119,9 +124,13 @@ export function clocCoverage(report, files) {
   // plain parsed objects, so an inventory file literally named
   // `constructor` or `hasOwnProperty` would otherwise read back an
   // Object.prototype member -- the file would look counted or declined
-  // while cloc never measured it. The `./` spelling a report gives
-  // relative paths can never be a prototype member, so it reads directly.
-  const rowAt = file => (Object.hasOwn(report, file) ? report[file] : report[`./${file}`]);
+  // while cloc never measured it. A root-level file literally named
+  // `header`, `SUM` or `nonCode` would read a structure row the same way,
+  // so structure keys answer for no file -- the `./` spelling a report
+  // gives relative paths can never be a structure key or a prototype
+  // member, and reads directly.
+  const rowAt = file =>
+    (Object.hasOwn(report, file) && !CLOC_REPORT_STRUCTURE_KEYS.has(file) ? report[file] : report[`./${file}`]);
   for (const [file, reason] of Object.entries(classified)) {
     if (!listed.has(file))
       throw new Error(`cloc non-code classification names a file outside the inventory: ${file}`);

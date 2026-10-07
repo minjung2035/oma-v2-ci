@@ -370,7 +370,12 @@ export class Broker {
   }
   private cleanupError(error: unknown): void {
     this.health.observe(error);
-    console.error("RPC cleanup failed:", error instanceof Error ? error.message : String(error));
+    // Best-effort journal: several callers reach this inside an 'error'
+    // emit -- the permanent listener in `listen`, the run-revoke path in
+    // `listenActor` -- and a dead stderr throwing here escapes that emit as
+    // the broker's death, the same death the listener exists to absorb.
+    try { console.error("RPC cleanup failed:", error instanceof Error ? error.message : String(error)); }
+    catch { /* nowhere left to say it */ }
   }
   private serveFrames(socket: Socket, peer: BoundPeer,
     handle: (raw: Record<string, unknown>, stream: AsyncIterable<Uint8Array> | null) => Promise<object>,
