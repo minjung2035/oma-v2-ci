@@ -201,12 +201,12 @@ test("D23/TSP-005: a stray ambient OMA_TOOL_SURFACE never reaches the Principal'
 test("C18: the Principal's environment names the package store root its guard may read, and the mirror spellings agree", () => {
   const env = principalEnvironment({ stateRoot: "/state", runRoot: "/run", libdir: "/lib" },
     { society: "demo", provider: "p", model: "m", extensions: [], workspaceBytes: 1024, packageStore: "/data/.packages" },
-    { frameBytes: 1024, mailBodyBytes: 1024, batchMaxMessages: 4, contextBytes: 4096, bundleBytes: 8192 });
+    { frameBytes: 1024, mailBodyBytes: 1024, batchMaxMessages: 4, addresses: 64, contextBytes: 4096, bundleBytes: 8192 });
   assert.equal(env[PACKAGE_STORE_ENV], "/data/.packages", "the store root the guard permits reads under");
   assert.equal(GUARD_PACKAGE_STORE_ENV, PACKAGE_STORE_ENV, "the extension's mirror is not the writer's spelling");
   const without = principalEnvironment({ stateRoot: "/state", runRoot: "/run", libdir: "/lib" },
     { society: "demo", provider: "p", model: "m", extensions: [], workspaceBytes: 1024 },
-    { frameBytes: 1024, mailBodyBytes: 1024, batchMaxMessages: 4, contextBytes: 4096, bundleBytes: 8192 });
+    { frameBytes: 1024, mailBodyBytes: 1024, batchMaxMessages: 4, addresses: 64, contextBytes: 4096, bundleBytes: 8192 });
   assert.ok(!(PACKAGE_STORE_ENV in without), "no store means no read permission");
 });
 

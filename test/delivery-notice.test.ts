@@ -64,6 +64,61 @@ test("AV10 / BATCH-002: the index a notice points to, /inbox.md, is read through
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
 
+test("P0 / BATCH-002: the index is not a stored message -- an index past the mail bound still reads whole", async () => {
+  const root = mkdtempSync(join(tmpdir(), "oma-index-bound-"));
+  try {
+    const view = join(root, "view");
+    mkdirSync(view);
+    // A batch that lists three thousand messages: the index is derived from
+    // the batch parameters, not from the bound on a stored mail file. A stored
+    // bound sized for a small body must not refuse it.
+    const rows = Array.from({ length: 3000 }, (_, n) =>
+      `${n + 1}. m-00000000-0000-4000-8000-000000000001-${n}\t/mail/archive/cur/m-00000000-0000-4000-8000-000000000001-${n}:2,`);
+    const body = `# inbox — a\n\n${rows.join("\n")}\n`;
+    writeFileSync(join(view, "inbox.md"), body);
+    const storedBound = 256 * 1024 + 3 * 4096 + 3 * Math.ceil((3 * 4096) / 73) + 2; // ~268 KiB for a 4 KiB body
+    assert.ok(Buffer.byteLength(body) > storedBound, "the fixture index must exceed a stored-message bound");
+    const tools = new Map<string, { execute: (id: string, params: Record<string, unknown>) => Promise<{ content: { text: string }[] }> }>();
+    const previous = { ...process.env };
+    Object.assign(process.env, { OMA_CLI_PATH: "/nonexistent/cli.js", OMA_AGENT_HOME: root, OMA_MAIL_ARCHIVE: join(root, "archive"),
+      OMA_SOCKET: join(root, "control.sock"), OMA_BATCH_VIEW: view,
+      OMA_MAIL_BYTES: String(storedBound), OMA_BATCH_MAX_MESSAGES: "3000" });
+    try {
+      registerOmaTools({ registerTool: (tool: never) => { const t = tool as { name: string }; tools.set(t.name, tool); } } as never, root, PrincipalChannel.detached());
+    } finally {
+      for (const key of Object.keys(process.env)) if (!(key in previous)) delete process.env[key];
+      Object.assign(process.env, previous);
+    }
+    const index = await tools.get("oma_mail_read")!.execute("t", { messageId: "/inbox.md" });
+    assert.equal(index.content[0]!.text, body, "the index was refused or cut by the stored-message bound");
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
+test("P0 / INV09: the send schema names the wire's own recipient bound, not a lower one", () => {
+  const root = mkdtempSync(join(tmpdir(), "oma-send-schema-"));
+  try {
+    const toolsFor = (): Map<string, { parameters: { properties: { to: { maxItems: number } } } }> => {
+      const tools = new Map<string, never>();
+      registerOmaTools({ registerTool: (tool: never) => { const t = tool as { name: string }; tools.set(t.name, tool); } } as never,
+        root, PrincipalChannel.detached());
+      return tools as never;
+    };
+    const previous = { ...process.env };
+    try {
+      Object.assign(process.env, { OMA_AGENT_HOME: root, OMA_MAIL_ARCHIVE: join(root, "archive"), OMA_SOCKET: join(root, "control.sock") });
+      delete process.env.OMA_MAIL_ADDRESSES;
+      assert.equal(toolsFor().get("oma_mail_send")!.parameters.properties.to.maxItems, 64,
+        "the schema defaulted below the wire's 64-recipient bound");
+      process.env.OMA_MAIL_ADDRESSES = "7";
+      assert.equal(toolsFor().get("oma_mail_send")!.parameters.properties.to.maxItems, 7,
+        "the schema did not follow the configured bound");
+    } finally {
+      for (const key of Object.keys(process.env)) if (!(key in previous)) delete process.env[key];
+      Object.assign(process.env, previous);
+    }
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
 /** AV23 -- arch §5.1, BATCH-002: the sixth functional run. A Resident's report
  * in Korean reached the Principal as a Base64 body, and a Principal has no
  * shell to decode it with; a Resident did so with `base64 -d`. The read tool is

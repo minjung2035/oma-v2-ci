@@ -111,6 +111,7 @@ export interface PiAdapterOptions {
     | "receiptWaitSeconds"
     | "batchMaxMessages"
     | "mailBodyBytes"
+    | "addresses"
     | "contextBytes"
     | "bundleBytes"
   >;
@@ -167,6 +168,8 @@ function omaEnvironment(options: PiAdapterOptions, inside: PathView): Record<str
     OMA_BATCH_MAX_MESSAGES: String(options.limits.batchMaxMessages),
     // The mail tool reads stored messages, whose bound is not the body's (P0V-36).
     OMA_MAIL_BYTES: String(storedMailBytes(options.limits.mailBodyBytes)),
+    // Its send schema names the wire's own recipient bound.
+    OMA_MAIL_ADDRESSES: String(options.limits.addresses),
     // P0V-78: the streams the CLI prepares are read only up to these.
     OMA_CONTEXT_BYTES: String(options.limits.contextBytes),
     OMA_BUNDLE_BYTES: String(options.limits.bundleBytes),

@@ -27,6 +27,9 @@ export interface PreparedContext {
 export interface RuntimePort {
   readonly observationSeconds: number;
   readonly maximumReceiptBytes: number;
+  /** Keep a complete oversized answer where the caller can read it whole;
+   * returns the path. The inline answer carries its head and this path. */
+  spoolOutput(home: string, bytes: Uint8Array): string;
   cache(home: string, budget: number): CachePort;
   cacheFailure(error: unknown): { code: string; message: string } | null;
   channel(limits: Pick<ProtocolLimits, "frameBytes" | "idleStreamSeconds" | "receiptWaitSeconds">): ChannelPort;

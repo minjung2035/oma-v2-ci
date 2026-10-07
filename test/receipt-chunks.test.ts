@@ -5,7 +5,6 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createServer, type Socket } from "node:net";
 import { FrameParser, encodeFrame } from "../src/frame.js";
-import { CLI_OBSERVATION_SECONDS } from "../src/domain/limits.js";
 import { callActor } from "../src/cli/transport.js";
 import type { AuthContext, Receipt, Request } from "../implementation/contracts.js";
 import { Store } from "../src/store.js";
@@ -101,10 +100,16 @@ test("G03-broker-01: CLI recovers a handled oversized answer across connections 
   assert.equal(effects, 1); assert.ok(reads > 1);
 });
 
-test("G03-broker-01: receipt recovery shares the original deadline and closes a stalled chunk connection", async t => {
+test("G03-broker-01 / IPC-006: a stalled chunk connection is closed after one observation window of silence", async t => {
   const root = mkdtempSync(join(tmpdir(), "oma-chunk-deadline-"));
   const sockets = new Set<Socket>(); let calls = 0; let clock = 0;
   t.mock.method(performance, "now", () => clock);
+  const { installRuntime } = await import("../src/client/runtime.js");
+  const { CLIENT_RUNTIME, installClientRuntime } = await import("../src/runtime/client-runtime.js");
+  // A 1 s observation window (the smallest legal policy): the chunk read's own
+  // budget, small enough to see stall detection on a deliberately silent peer.
+  installRuntime({ ...CLIENT_RUNTIME, observationSeconds: 1 });
+  t.after(() => installClientRuntime());
   const server = createServer(socket => {
     sockets.add(socket); socket.on("error", () => {}); socket.once("close", () => sockets.delete(socket));
     const parser = new FrameParser(262144);
@@ -113,7 +118,11 @@ test("G03-broker-01: receipt recovery shares the original deadline and closes a 
       for (const { raw } of parser.feed(bytes)) {
         calls++;
         if (raw.method === "agent.stop") {
-          clock = CLI_OBSERVATION_SECONDS * 1000 - 20;
+          // The original call's own window is already spent when its answer
+          // lands -- if the chunk read shared that deadline it could never
+          // even be sent. Under progress-reset observation it gets its own
+          // whole window.
+          clock = 100_000;
           socket.end(encodeFrame({ v: 1, id: raw.id, ok: false,
             error: { code: "FRAME_TOO_LARGE", message: "handled answer too large", retry: "same-key" } }));
         } else assert.equal(raw.method, "operation.read"); // Deliberately no answer.
@@ -128,8 +137,11 @@ test("G03-broker-01: receipt recovery shares the original deadline and closes a 
   await new Promise<void>(resolve => server.listen(join(root, "socket"), resolve));
   const started = Date.now();
   await assert.rejects(callActor(join(root, "socket"), "agent.stop", { agent: "alice" }, "stop-1"), { code: "BROKER_UNAVAILABLE" });
-  assert.ok(Date.now() - started < 2000, "a chunk reset the original CLI observation deadline");
-  assert.equal(calls, 2);
+  const elapsed = Date.now() - started;
+  // The chunk read ran and, past the shared deadline, still got its own
+  // window (~1 s) before the silent broker was refused.
+  assert.equal(calls, 2, "the chunk read was issued even after the first call's window had passed");
+  assert.ok(elapsed >= 800 && elapsed < 10000, `stall window was ${elapsed} ms, not the chunk's own observation window`);
 });
 
 test("G03-broker-01: durable stop receipt survives a lost chunk and broker restart without repeating the effect or crossing actors", { timeout: 15000 }, async t => {

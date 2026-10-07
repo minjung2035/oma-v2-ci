@@ -17,10 +17,12 @@ import { prepareSubmitEffects } from "../cli/effects/submit.js";
 import { readCode } from "../cli/effects/code.js";
 import { installRuntime, type RuntimePort } from "../client/runtime.js";
 import { inCallerView } from "../client/receipts.js";
+import { spoolOutput } from "../storage/output-spool.js";
 
 export const CLIENT_RUNTIME: RuntimePort = {
   observationSeconds: CLI_OBSERVATION_SECONDS,
   maximumReceiptBytes: MAX_RECEIPT_BYTES,
+  spoolOutput,
   cache: (home, budget) => new RequestCache(home, readCacheFile, budget),
   cacheFailure: error => error instanceof CacheError ? error : null,
   channel: limits => new BrokerChannel(limits),

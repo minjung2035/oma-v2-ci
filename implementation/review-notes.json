@@ -155,14 +155,15 @@
   {
    "path": "src/extension/contained-search.ts",
    "by": [
-    "P0V-122"
+    "P0V-122",
+    "UX-38"
    ],
    "oracles": [
     "G10-02",
     "P0V-122"
    ],
-   "sha256": "3add80febbdf8f39960cfc51d932618a15659cd65d446b354a9fabe8fdc09592",
-   "note": "Read in full: child owns snapshot creation, engine walker group, EOF cancellation and cleanup; parent bounds output and duration. Caller-death and uncooperative walker tests; EOF and group-cleanup mutants assertion-killed. Does not claim cleanup after the owner itself is SIGKILLed or an OS crash."
+   "sha256": "a66ef756a07a9ea0a15a41b1c4acfc1893ed4fb7fa6f0bd55e8afc872e29a56e",
+   "note": "Read in full for UX-38: the 1 MiB result refusal and the fixed 60 s deadline are gone. The child emits one JSON frame per line -- {p:'d'} names the private copy the moment it exists, {p:'c'} copy progress, {p:'s'} heartbeats from a worker thread so a synchronous require or a long read on the main thread cannot silence them -- and one final {result}/{error}; every byte the parent receives resets its stall window, and only silence (stopped/dead process) escalates to group kill after a grace, with the announced copy swept. Hidden upstream renderer caps (50 KiB output, 500-char lines, default match/result counts the caller did not ask for) are converted to a complete second-pass rendering over the same frozen snapshot; a complete answer beyond the inline boundary is written whole to a named file and previewed with its path -- never refused, never silently truncated. Caller-requested limits still apply."
   },
   {
    "path": "src/protocol/receipt-chunks.ts",
@@ -700,14 +701,16 @@
    "path": "src/tui/session.ts",
    "by": [
     "B3",
-    "BL1"
+    "BL1",
+    "UX-38"
    ],
    "oracles": [
     "B3",
-    "BL1"
+    "BL1",
+    "P0"
    ],
-   "note": "Read in full at the 2026-10-05 B round: waiting[] stays the only queue; emitQueue sends a bounded, folded, sanitized queued_prompts snapshot on enqueue/free/handBack and clears the widget when empty -- the submitted prompt text itself is never rewritten. BL1 review -- principal sessions carry the encoded principal tool-surface plan (paths.toolSurface -> OMA_TOOL_SURFACE).",
-   "sha256": "c661f33595663170ec26322da5afea0e352b63a64951c29e93b172617cae6019"
+   "note": "Read in full for UX-38: principalEnvironment emits OMA_MAIL_ADDRESSES from limits.addresses beside OMA_MAIL_BYTES; the limits pick gained 'addresses' and principalSessionProfile still fails closed on a missing/non-positive workspaceBytes.",
+   "sha256": "01835825808d1994a14c0dd10fcc86cde297605ba8a545afa0946ae58826cd9c"
   },
   {
    "path": "src/tui/mail-names.ts",
@@ -885,13 +888,15 @@
   {
    "path": "src/runtime/pi-spawn-plan.ts",
    "by": [
-    "DR34"
+    "DR34",
+    "UX-38"
    ],
    "oracles": [
-    "DR34"
+    "DR34",
+    "P0"
    ],
-   "sha256": "144a85714ed782f4aefa94014b4f93f56936e335bf245a3b18981b8966cfef83",
-   "note": "Read in full: confinement.egress gates both the mount argument and the whole proxy environment block; without it no proxy variables exist. NO_PROXY keeps the engine's own loopback bridge direct. DR34 test pins env values and the mount triple, and the absent-policy case."
+   "sha256": "21d6d0b7421849ffaa76db957b119a203dc18f2d7bbf26f63e31409fac1c010b",
+   "note": "Read in full for UX-38: the Resident engine environment now also emits OMA_MAIL_ADDRESSES from limits.addresses and OMA_WORKSPACE_BYTES stays wired; the limits pick gained 'addresses' so the producer cannot drift from the schema."
   },
   {
    "path": "src/pi-extension.ts",
@@ -1044,7 +1049,8 @@
     "P0V-121",
     "P0V-122",
     "P0V-74",
-    "BL3"
+    "BL3",
+    "UX-38"
    ],
    "oracles": [
     "BL1",
@@ -1052,10 +1058,11 @@
     "P0V-121",
     "P0V-122",
     "P0V-74",
-    "BL3"
+    "BL3",
+    "G10-02"
    ],
-   "sha256": "e52138e8c53f865a132d0e295fad507f5937279986beacbb48bdc70b499101a9",
-   "note": "BL1 review -- createContainedWriter extracted: write/edit and lsp_fix share one serialized quota-decided workspace writer. BL3 rebind: createContainedWriter gained the optional expectedIdentity parameter -- when the caller passes the read snapshot's dev+ino the write goes through writeWithinUnchanged (no O_CREAT, inode identity checked on the opened file); the same serialization and quota decision govern both call shapes."
+   "sha256": "1873047ed0336a05db28a6c2aa8bbfae50a987ecdfc4b813243e135d7ac8eb46",
+   "note": "Read in full for UX-38: only the quota comment changed -- an absent OMA_WORKSPACE_BYTES is documented as intentional fail-closed (a miswired engine must not write without an honest quota); production wiring makes it unreachable."
   },
   {
    "path": "src/extension/workspace-guard.ts",
@@ -7094,13 +7101,15 @@
   {
    "path": "src/extension/contained-files.ts",
    "by": [
-    "BL3"
+    "BL3",
+    "UX-38"
    ],
    "oracles": [
-    "BL3"
+    "BL3",
+    "G10-02"
    ],
-   "note": "BL3 addition reviewed in full: FILE_CHANGED_REFUSAL (exported refusal text so the adapter's translation is exact) and writeWithinUnchanged -- the read-modify-write commit primitive opening O_WRONLY without O_CREAT and refusing unless the opened inode is the dev+ino the caller read. Same descriptor-relative no-follow walk as writeWithin; the decision is made on the opened file inside the serialization.",
-   "sha256": "5fd05c9980684fc906f6c8bb3968cf52dcea1303d7d583575ad4763ce8d1b31f"
+   "note": "Read in full for UX-38: the 128-level depth refusal is gone. The copy now holds one descriptor per open SOURCE level (the untrusted side, so a swapped component cannot redirect a read) while the destination is the fresh private mkdtemp tree written by path -- depth is bounded by neither a number nor held fds. Quota, nlink==1, .git exclusion, abort checks and cleanup are unchanged; progress callbacks fire per entry and per read chunk.",
+   "sha256": "6a0ee897e442a1f6401f4c80a03d9d7bef8ccfdb2e8592ab89398e85b9bf7331"
   },
   {
    "path": "src/runtime/deployment-manifest.ts",
@@ -153061,6 +153070,72 @@
    ],
    "sha256": "1e503642532f092aaca19cb9f81cdc56782142432048f493dee532ffe307d1c5",
    "note": "Read in full for UX-37: the dispatcher port now binds pendingDeliveryCount directly to store.pendingDeliveryCount, so runner.pending and the principal relay answer a COUNT(*) instead of materializing every pending delivery. The count cannot hide a row: anything that iterates still decodes and validates each delivery."
+  },
+  {
+   "path": "src/client/index.ts",
+   "by": [
+    "UX-38"
+   ],
+   "oracles": [
+    "P0"
+   ],
+   "sha256": "fef14bfd7246ecfc90c9535de4fb7557f4950732fa4b4f484c8b009ad2cc84db",
+   "note": "Read in full for UX-38: the client-wide OUTPUT_BYTES rejection is gone -- a complete encoded answer that fits rides inline, and one past PREVIEW_BYTES is written whole by spoolOutput into the caller's OMA state directory, the result carrying a marked [preview], the byte count, the path and the request key; a spool that cannot be written still returns the preview and names its own failure. No answer is refused or silently cut for size alone."
+  },
+  {
+   "path": "src/client/runtime.ts",
+   "by": [
+    "UX-38"
+   ],
+   "oracles": [
+    "P0"
+   ],
+   "sha256": "47e1153baf0ff43edd671547fbae5222b22c4e9cc701f7a21851c05a25380b6e",
+   "note": "Read in full for UX-38: the client runtime port gained spoolOutput(home, bytes), a mechanism port the wiring binds to the storage primitive -- no cap policy lives here."
+  },
+  {
+   "path": "src/client/transport.ts",
+   "by": [
+    "UX-38"
+   ],
+   "oracles": [
+    "IPC-006"
+   ],
+   "sha256": "bf9c26c915cedd516edfaf6ce6ff58d728ab3c81afb2cf22b0a12e229ffe9fdc",
+   "note": "Read in full for UX-38: each receipt chunk's operation.read now starts a fresh observation window (performance.now()+observationSeconds per call), so a many-chunk receipt over a slow link completes while only a stalled broker is terminated. The per-chunk window is a stall detector reset by progress, not an elapsed deadline."
+  },
+  {
+   "path": "src/runtime/client-runtime.ts",
+   "by": [
+    "UX-38"
+   ],
+   "oracles": [
+    "P0"
+   ],
+   "sha256": "0823765cd39ece2216e23bbf01d41f5e259762729513d43715891798251a0749",
+   "note": "Read in full for UX-38: spoolOutput is wired to src/storage/output-spool.js's spoolOutput; the binding is one line and carries no policy of its own."
+  },
+  {
+   "path": "src/storage/output-spool.ts",
+   "by": [
+    "UX-38"
+   ],
+   "oracles": [
+    "P0"
+   ],
+   "sha256": "cad61b511b2ab7dcdcc712ca80af3c8efc9886ab70941f3525817f62af6e2a6e",
+   "note": "New for UX-38: digest-named durable publication of a complete oversized answer under ~/.local/state/oma/output, via ensureOwnedDurableDirectory + publishNoReplace; an existing file is trusted only when its own digest matches, otherwise a unique fallback name is written -- never an overwrite. Delivery mechanism only: writes no receipt and no ledger fact. Kill-boundary registry entry added (sigkill publish matrix + logical replay)."
+  },
+  {
+   "path": "src/extension/mail-tools.ts",
+   "by": [
+    "UX-38"
+   ],
+   "oracles": [
+    "P0"
+   ],
+   "sha256": "7d510e48a4f440e304f410ef8d0574abb2cdeb123da15b3324e41708bad567dd",
+   "note": "Read in full for UX-38: the archived-message bound (storedMailBound -- header + 3x body + line-wrap expansion) is kept for stored reads, and /inbox.md now has its own derived bound (header/footer + per-row + per-revision path growth, linear in batch size) instead of the message bound -- an index of many messages is no longer refused for its aggregate size. mail send's recipient schema names OMA_MAIL_ADDRESSES (the wire's own bound, 64 default) instead of a hard-coded 32."
   }
  ],
  "readUnchanged": [

@@ -139,7 +139,7 @@ export const PACKAGE_STORE_ENV = "OMA_PACKAGE_STORE";
 export function principalEnvironment(
   paths: PrincipalPaths,
   profile: SessionProfile,
-  limits: Pick<ProtocolLimits, "frameBytes" | "mailBodyBytes" | "batchMaxMessages" | "contextBytes" | "bundleBytes">,
+  limits: Pick<ProtocolLimits, "frameBytes" | "mailBodyBytes" | "batchMaxMessages" | "addresses" | "contextBytes" | "bundleBytes">,
 ): Record<string, string> {
   // FS-003: the CLI's cache is in the Principal's private scratch.
   const home = principalWorkspace(paths.stateRoot);
@@ -162,6 +162,8 @@ export function principalEnvironment(
     OMA_FRAME_BYTES: String(limits.frameBytes),
     // The mail tool reads stored messages, whose bound is not the body's (P0V-36).
     OMA_MAIL_BYTES: String(storedMailBytes(limits.mailBodyBytes)),
+    // Its send schema names the wire's own recipient bound.
+    OMA_MAIL_ADDRESSES: String(limits.addresses),
     // P0V-78: the streams the CLI prepares are read only up to these.
     OMA_CONTEXT_BYTES: String(limits.contextBytes),
     OMA_BUNDLE_BYTES: String(limits.bundleBytes),

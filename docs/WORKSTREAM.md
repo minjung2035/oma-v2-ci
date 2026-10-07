@@ -1369,6 +1369,65 @@ name collision/intended surface/hidden 미활성/idempotent reload/provenance/
   - NOT_RUN: macOS native·systemd·kernel/powercut·provider credential·
     release qualification — 로컬 환경 부재.
 
+- 2026-10-07 (UX-38 — 툴 표면의 숫자 상한·고정 마감이 유효 처리를 크기/시간만으로
+  차단하던 부류 정산): client/extension 경계의 남은 용량·시간 상한을 전수 정산
+  (§2 1·9·13). 원칙: 크기 거절은 완전 보존+명시된 프리뷰(spool-to-disk)나
+  파생 bound로, 고정 경과 마감은 진행-리셋 정체 감지로 — protocol wire bound와
+  무결성·정체성 검사는 유지.
+  - 변환 6종: ①`src/client/index.ts`의 OUTPUT_BYTES=1MiB 응답 거절 제거 —
+    완전 인코딩 후 inline 경계 이하는 그대로, 초과는 `src/storage/output-spool.ts`
+    (신규: caller의 OMA state 하 `output-<sha256>.txt` digest명 publishNoReplace,
+    동명 타 bytes는 덮지 않고 unique fallback)에 통째 보존하고 `[preview]`+
+    바이트 수+경로+request key 회답; 스풀 실패 시에도 프리뷰+실패 사유 명시.
+    `client/runtime.ts` 포트 + `runtime/client-runtime.ts` 결선.
+    ②`src/client/transport.ts` 영수증 청크 — 매 `operation.read`가 새
+    관측 창을 열어(청크마다 `performance.now()+observationSeconds`) 성공 수신이
+    진행으로 리셋; 느린 링크의 다청크 영수증은 완료, 멈춘 broker만 종료.
+    ③`src/extension/mail-tools.ts` — 저장 메시지 bound(`storedMailBound`)와
+    `/inbox.md` 파생 인덱스 bound(헤더+행+리비전 경로 항으로 선형 산출) 분리;
+    send 스키마 수신자는 `OMA_MAIL_ADDRESSES`(설정값=wire 실제 64)로 — 32
+    고정 제거. 생산자 `pi-spawn-plan.ts`·`tui/session.ts`에 env 결선+limits
+    pick에 `addresses` 추가, golden 32→64.
+    ④`src/extension/contained-search.ts` — 결과 1MiB 거절과 60s 마감 제거.
+    자식이 라인 프레임(`{p:"d"}` 스냅샷명 선언·`{p:"c"}` 복사 진행·
+    `{p:"s"}` heartbeat — worker 스레드 발신이라 engine 번들의 동기
+    require나 긴 readSync가 main을 막는 동안에도 생존 증명; SIGSTOP 등
+    프로세스 정지는 heartbeat도 정지하므로 침묵은 여전히 stall)을 내고,
+    부모는 수신 바이트마다 관측 창을 리셋 — 침묵만이 grace 후 process-group
+    kill+선언된 스냅샷 부모 sweep로 귀결. upstream 렌더러 숨은 상한(50KiB
+    출력·500자 줄·caller 미요청 기본 match/result 수)은 감지 시 같은 frozen
+    snapshot에 완전 재렌더(`completeSearchText` — caller의 `limit` 의미는
+    유지). 완전 답이 inline 경계를 넘으면 `oma-search-result-<uuid>.txt`에
+    통째 기록+경로·바이트 명시.
+    ⑤`src/extension/contained-files.ts` — 128단계 깊이 거절 제거.
+    소스는 레벨당 descriptor 보유(fstat 기준 inode 추적, 경로 재지정 불가),
+    목적지는 사설 mkdtemp 경로 쓰기 — 깊이가 fd 수도 소모하지 않음.
+    quota·nlink==1·`.git` 제외·abort 검사·cleanup 유지, 항목/청크마다
+    progress 콜백.
+    ⑥`OMA_WORKSPACE_BYTES` — Resident(`pi-spawn-plan`)·Principal
+    (`tui/session`) 생산 경로 둘 다 결선 확인; 미설정 시 fail-closed는
+    유지(quota 없이 쓰면 quota가 부정직 — `contained-tools.ts` 주석).
+  - 구조 정산: surface 규칙상 engine `import()`/`tool.execute`는 child `-e`
+    스크립트 경계에 유지(모듈 AST에 두지 않음 — `searchChildBody`는 스냅샷
+    수명주기+프레임, `finishSearchResult`는 숨은-상한 감지·완전 재렌더·
+    스풀 — 둘 다 단위 시험 가능), `fenceExemptSpawnOwners`에
+    `completeSearchText` 등록, `OUTSIDE_STATE_TREE`·`OWNED_STATE_EXEMPTIONS`에
+    사설 tmp 트리 사유 등록, `kernel-zones`에 `src/storage/output-spool.ts`
+    (K2), `durable-boundaries.json`에 `#spoolOutput` 경계 등록(sigkill publish
+    행렬+logical 재생 참조).
+  - 회귀: `client.test.ts` — 스풀 프리뷰+스풀 실패 보고+digest명 중복/변조
+    파일 오라클+영수증 청크 진행 리셋(50ms 창·40ms 청크 4개+ 완료).
+    `delivery-notice.test.ts` — 저장 bound 초과 본문·파생 bound 넘는 인덱스·
+    `OMA_MAIL_ADDRESSES` 기본 64/설정 7. `contained-tools.test.ts` — 숨은
+    walker 기본(150 match)·숨은 result 상한(1,100 path)·긴 줄+대출력 완전
+    렌더·1.3MiB 결과 스풀 명명·SIGSTOP 자식 그룹+스냅샷 sweep·1.5s heartbeat
+    자식 완료·180단계 복사. `tool-schema-golden` 64 재결박. fixture 한도
+    객체에 `addresses:64` 추가(model-scope·p0-review4/6·resident-confinement·
+    resident-sandbox-live·session-resume·tui-integration-defects·
+    fixtures/resident).
+  - NOT_RUN: macOS native·systemd·kernel/powercut·provider credential·
+    release qualification — 로컬 환경 부재.
+
 ## 10. 지금부터의 실행 순서
 0. ~~P0-8 강제 수단 미구현~~ — 구현됨: `owned-state` 아키텍처 규칙
    (scripts/architecture/rules/owned-state-rules.mjs)이 경로 기반 raw fs

@@ -30,7 +30,7 @@ test("AV3 / PR-003, PR-004, FS-003: the Principal's model scope holds neither th
     const sessions = sessionDirPathAt(state, "principal");
     const environment = principalEnvironment({ stateRoot: state, runRoot: join(state, "run"), libdir: "/opt/oma" },
       { society: "demo", provider: "p", model: "m", extensions: [], workspaceBytes: 1024 },
-      { frameBytes: 1024, mailBodyBytes: 1024, batchMaxMessages: 4, contextBytes: 4096, bundleBytes: 8192 });
+      { frameBytes: 1024, mailBodyBytes: 1024, batchMaxMessages: 4, addresses: 64, contextBytes: 4096, bundleBytes: 8192 });
     // FS-003: the CLI's home, and so its request cache, is the private scratch.
     assert.equal(environment.HOME, workspace);
     assert.equal(environment.OMA_AGENT_HOME, workspace);

@@ -26,7 +26,7 @@ const RESOURCES = Object.freeze({
 });
 const LIMITS = Object.freeze({
   frameBytes: 65536, idleStreamSeconds: 30, receiptWaitSeconds: 30,
-  batchMaxMessages: 24, mailBodyBytes: 4096, contextBytes: 1 << 20, bundleBytes: 1 << 20,
+  batchMaxMessages: 24, mailBodyBytes: 4096, addresses: 64, contextBytes: 1 << 20, bundleBytes: 1 << 20,
 });
 const NUL = String.fromCharCode(0);
 

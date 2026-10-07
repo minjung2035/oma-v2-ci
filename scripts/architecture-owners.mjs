@@ -19,6 +19,8 @@ export const subprocessResponsibilities = Object.freeze({
 export const fenceExemptSpawnOwners = Object.freeze({
   "src/extension/contained-search.ts#searchWorkspace":
     "read-only source traversal and engine search over a private temporary copy; no society writes or credentials; parent pipe EOF aborts its owned copy and walker group",
+  "src/extension/contained-search.ts#completeSearchText":
+    "the complete-rendering walker runs inside the owned search child, over the same private copy it made; the child's own pipe-EOF abort and group kill bound it, and it writes no society state",
 
   // The bounded command mechanism. Its descriptors are the caller's to choose
   // (`inheritedFds`). Its callers run systemctl, systemd-run, resize2fs and

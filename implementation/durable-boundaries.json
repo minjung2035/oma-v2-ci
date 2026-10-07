@@ -1206,6 +1206,22 @@
       ]
     },
     {
+      "owner": "src/storage/output-spool.ts#spoolOutput",
+      "fact": "a caller's complete oversized answer as a digest-named file under its own state directory -- delivery only, no receipt or ledger fact",
+      "tests": [
+        {
+          "file": "test/p0-review6.test.ts",
+          "title": "a no-replace publication killed at any step leaves its name absent or whole",
+          "injection": "sigkill"
+        },
+        {
+          "file": "test/client.test.ts",
+          "title": "the output spool is content-named: the same answer is one file, and a same-named file of other bytes is not overwritten",
+          "injection": "logical"
+        }
+      ]
+    },
+    {
       "owner": "src/tui/packages-apply.ts#applyPackageArchive",
       "fact": "DR25 on macOS: the Mac's packages published as one immutable generation under the digest of what arrived, the store's link switched to it, what it replaced recorded once for the request, and the generations no engine can read collected; a run after a stop at any step ends where an uninterrupted one does",
       "tests": [

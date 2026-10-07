@@ -23,7 +23,7 @@ export function residentOptions(stateRoot: string, libdir = "/opt/oma", entry = 
   };
   const socket = actorSocketPathAt(runRoot, actor, 1);
   const limits = { frameBytes: 65536, idleStreamSeconds: 5, receiptWaitSeconds: 5, batchMaxMessages: 24,
-    mailBodyBytes: 1 << 20, contextBytes: 1 << 20, bundleBytes: 1 << 20 };
+    mailBodyBytes: 1 << 20, addresses: 64, contextBytes: 1 << 20, bundleBytes: 1 << 20 };
   return {
     actor, society: "demo", limits,
     profile: { provider: "pi", model: "current", inferenceSeconds: 600, prompt: "", extensions: [], workspaceBytes: 1 << 20 },

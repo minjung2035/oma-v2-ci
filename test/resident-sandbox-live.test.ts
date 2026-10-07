@@ -93,7 +93,7 @@ test("T117 a confined Resident reaches its provider only through the relay, with
     const runtime = resolvePiRuntime({ stateRoot, libdir: root });
     const adapter = new PiAdapter({
       actor, society: "live",
-      limits: { frameBytes: 1 << 20, idleStreamSeconds: 60, receiptWaitSeconds: 30, batchMaxMessages: 24, mailBodyBytes: 4096, contextBytes: 1 << 20, bundleBytes: 1 << 20 },
+      limits: { frameBytes: 1 << 20, idleStreamSeconds: 60, receiptWaitSeconds: 30, batchMaxMessages: 24, mailBodyBytes: 4096, addresses: 64, contextBytes: 1 << 20, bundleBytes: 1 << 20 },
       profile: { provider: "pi", model: "current", inferenceSeconds: 600, prompt: "", workspaceBytes: 1 << 24, extensions: [] },
       paths: {
         piCommand: runtime.executable, piArgs: runtime.args, piAgentDir: join(stateRoot, "pi"),
@@ -205,7 +205,7 @@ test("V27A: the bundled engine, on the production plan, delivers a batch to a se
     const runtime = resolvePiRuntime({ stateRoot, libdir: root });
     const adapter = new PiAdapter({
       actor, society: "live",
-      limits: { frameBytes: 1 << 20, idleStreamSeconds: 60, receiptWaitSeconds: 30, batchMaxMessages: 24, mailBodyBytes: 4096, contextBytes: 1 << 20, bundleBytes: 1 << 20 },
+      limits: { frameBytes: 1 << 20, idleStreamSeconds: 60, receiptWaitSeconds: 30, batchMaxMessages: 24, mailBodyBytes: 4096, addresses: 64, contextBytes: 1 << 20, bundleBytes: 1 << 20 },
       profile: { provider: "anthropic", model: "claude-fable-5", inferenceSeconds: 90, prompt: "", workspaceBytes: 1 << 24, extensions: [] },
       paths: {
         piCommand: runtime.executable, piArgs: runtime.args, piAgentDir: join(stateRoot, "pi"),
@@ -357,7 +357,7 @@ test("T117 a confined Resident loads the trusted extension and receives mail as 
     const runtime = resolvePiRuntime({ stateRoot, libdir: root });
     const adapter = new PiAdapter({
       actor, society: "live",
-      limits: { frameBytes: 262144, idleStreamSeconds: 60, receiptWaitSeconds: 30, batchMaxMessages: 24, mailBodyBytes: 4096, contextBytes: 1 << 20, bundleBytes: 1 << 20 },
+      limits: { frameBytes: 262144, idleStreamSeconds: 60, receiptWaitSeconds: 30, batchMaxMessages: 24, mailBodyBytes: 4096, addresses: 64, contextBytes: 1 << 20, bundleBytes: 1 << 20 },
       profile: { provider: "pi", model: "current", inferenceSeconds: 600, prompt: "", workspaceBytes: 1 << 24, extensions: [] },
       paths: {
         piCommand: runtime.executable, piArgs: runtime.args, piAgentDir: join(stateRoot, "pi"),
@@ -442,7 +442,7 @@ test("T117 the host product's code cannot be read inside a Resident (TUI-003)", 
     assert.ok(masks.some(mask => mask.path === "dist/src/tui"), "the built product surface should exist to hide");
     const adapter = new PiAdapter({
       actor, society: "live",
-      limits: { frameBytes: 262144, idleStreamSeconds: 60, receiptWaitSeconds: 30, batchMaxMessages: 24, mailBodyBytes: 4096, contextBytes: 1 << 20, bundleBytes: 1 << 20 },
+      limits: { frameBytes: 262144, idleStreamSeconds: 60, receiptWaitSeconds: 30, batchMaxMessages: 24, mailBodyBytes: 4096, addresses: 64, contextBytes: 1 << 20, bundleBytes: 1 << 20 },
       profile: { provider: "pi", model: "current", inferenceSeconds: 600, prompt: "", workspaceBytes: 1 << 24, extensions: [] },
       paths: {
         piCommand: runtime.executable, piArgs: runtime.args, piAgentDir: join(stateRoot, "pi"),
@@ -516,7 +516,7 @@ test("AV16 / CLI-001, arch §11.1: inside the production sandbox `oma` is the in
     const runtime = resolvePiRuntime({ stateRoot, libdir: root });
     const adapter = new PiAdapter({
       actor, society: "live",
-      limits: { frameBytes: 262144, idleStreamSeconds: 60, receiptWaitSeconds: 30, batchMaxMessages: 24, mailBodyBytes: 4096, contextBytes: 1 << 20, bundleBytes: 1 << 20 },
+      limits: { frameBytes: 262144, idleStreamSeconds: 60, receiptWaitSeconds: 30, batchMaxMessages: 24, mailBodyBytes: 4096, addresses: 64, contextBytes: 1 << 20, bundleBytes: 1 << 20 },
       profile: { provider: "pi", model: "current", inferenceSeconds: 600, prompt: "", workspaceBytes: 1 << 24, extensions: [] },
       paths: {
         piCommand: runtime.executable, piArgs: runtime.args, piAgentDir: join(stateRoot, "pi"),

@@ -238,7 +238,7 @@ test("P0V-78 / R6-05, CFG-003: every environment the CLI runs in carries the soc
   const { cliEnvironment } = await import("../src/extension/mail-tools.js");
   const { cliBundleBytes, cliContextBytes } = await import("../src/cli/transport.js");
   const { defaultHostConfig } = await import("../src/config/defaults.js");
-  const limits = { frameBytes: 256 * 1024, mailBodyBytes: 1024, batchMaxMessages: 4, contextBytes: 12345, bundleBytes: 67890 };
+  const limits = { frameBytes: 256 * 1024, mailBodyBytes: 1024, batchMaxMessages: 4, addresses: 64, contextBytes: 12345, bundleBytes: 67890 };
   const principal = principalEnvironment({ stateRoot: "/srv/oma", runRoot: "/run/oma", libdir: "/opt/oma" },
     { society: "demo", provider: "pi", model: "current", workspaceBytes: 1024, extensions: [] }, limits);
   assert.equal(principal.OMA_CONTEXT_BYTES, "12345");

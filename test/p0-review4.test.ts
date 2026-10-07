@@ -390,7 +390,7 @@ test("P0V-36 / N13, P0-2: a message whose body is within the body limit is read 
   const bodyBytes = 16 * 1024;
   // Both engines are told the bound of a stored message, not the body's.
   const principal = principalEnvironment({ stateRoot: "/srv/oma-n13", runRoot: "/run/oma-n13", libdir: "/opt/oma" },
-    { society: "demo", provider: "pi", model: "current", workspaceBytes: 1024, extensions: [] }, { frameBytes: 256 * 1024, mailBodyBytes: bodyBytes, batchMaxMessages: 4, contextBytes: 1 << 20, bundleBytes: 1 << 20 });
+    { society: "demo", provider: "pi", model: "current", workspaceBytes: 1024, extensions: [] }, { frameBytes: 256 * 1024, mailBodyBytes: bodyBytes, batchMaxMessages: 4, addresses: 64, contextBytes: 1 << 20, bundleBytes: 1 << 20 });
   assert.equal(Number(principal.OMA_MAIL_BYTES), storedMailBytes(bodyBytes));
   const state = "/srv/oma-n13";
   const options = residentOptions(state);

@@ -11,7 +11,7 @@
  * already held. The extension may use only Node built-ins (PI-001), so this
  * is openat2's RESOLVE_BENEATH|RESOLVE_NO_SYMLINKS spelled with them.
  */
-import { closeSync, constants, fstatSync, ftruncateSync, mkdirSync, mkdtempSync, openSync, opendirSync, readSync, readdirSync, rmSync, writeSync } from "node:fs";
+import { closeSync, constants, fstatSync, ftruncateSync, mkdirSync, mkdtempSync, openSync, readSync, readdirSync, rmSync, writeSync } from "node:fs";
 import { basename, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { tmpdir } from "node:os";
 import { setImmediate } from "node:timers/promises";
@@ -196,10 +196,14 @@ export function existsWithin(root: string, path: string): boolean {
 
 /** G10-02: pathname walkers see only a private copy of approved inodes, never
  * the mutable workspace. The root and every descendant stay held while read.
- * Entry metadata costs one byte of the same finite workspace budget; directory
- * depth is bounded before acquiring another descriptor. No links are copied. */
+ * Entry metadata costs one byte of the same finite workspace budget. No links
+ * are copied. Depth is not refused: the source side holds one descriptor per
+ * open level -- the workspace is the untrusted tree, so a component swapped
+ * mid-copy cannot redirect a read -- while the destination side is the fresh
+ * private mkdtemp tree, written by path with no descriptor held. */
 export async function withSearchSnapshot<T>(root: string, path: string, maximum: number | null,
-  signal: AbortSignal | undefined, use: (snapshot: string, target: string) => Promise<T>): Promise<T> {
+  signal: AbortSignal | undefined, use: (snapshot: string, target: string) => Promise<T>,
+  progress?: () => void, named?: (snapshotName: string) => void): Promise<T> {
   const parts = componentsWithin(root, path);
   if (!maximum || !Number.isSafeInteger(maximum) || maximum < 1)
     throw new WorkspaceRefusal("agent workspace quota is not configured");
@@ -208,6 +212,9 @@ export async function withSearchSnapshot<T>(root: string, path: string, maximum:
   try { base = mkdtempSync(entryAt(temp, "oma-search-")); }
   catch (error) { closeSync(temp); throw error; }
   const baseName = basename(base);
+  // Tell the caller the copy's name before a single entry lands, so a parent
+  // that outlives a wedged child can sweep what this process no longer can.
+  try { named?.(baseName); } catch { /* the announcement is best-effort */ }
   const snapshot = join(tmpdir(), baseName, "workspace");
   let destination: number | undefined;
   let remaining = maximum;
@@ -216,44 +223,42 @@ export async function withSearchSnapshot<T>(root: string, path: string, maximum:
     remaining -= bytes;
     if (remaining < 0) throw new WorkspaceRefusal("search snapshot exceeds workspace budget");
   };
-  const copy = async (fd: number, parent: number, name: string, depth: number): Promise<void> => {
-    check(); charge(1);
+  // `fd` is the descriptor held on the source entry; `parent` is its name's
+  // directory inside the private copy, so `join(parent, name)` cannot escape
+  // it. Only the source side needs the held descriptor.
+  const copy = async (fd: number, parent: string, name: string): Promise<void> => {
+    check(); charge(1); progress?.();
     const stat = fstatSync(fd);
+    const target = join(parent, name);
     if (stat.isDirectory()) {
-      if (depth > 128) throw new WorkspaceRefusal("search directory nesting exceeds bound");
-      mkdirSync(entryAt(parent, name), { mode: 0o700 });
-      const target = openSync(entryAt(parent, name), constants.O_RDONLY | constants.O_DIRECTORY | constants.O_NOFOLLOW);
-      let directory: ReturnType<typeof opendirSync> | undefined;
-      try { directory = opendirSync(`/proc/self/fd/${fd}`); }
-      catch (error) { closeSync(target); throw error; }
-      try {
-        for (let entry = directory.readSync(); entry !== null; entry = directory.readSync()) {
-          check(); charge(1);
-          // Repository internals are not a search input. An empty .git at the
-          // copy's root stops parent ignore discovery without importing config.
-          if (entry.name === ".git") continue;
-          let child: number;
-          try { child = openSync(entryAt(fd, entry.name), constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK); }
-          catch (error) {
-            if (["ENOENT", "ELOOP"].includes((error as NodeJS.ErrnoException).code ?? "")) continue;
-            throw error;
-          }
-          try {
-            const current = fstatSync(child);
-            if (current.isDirectory() || (current.isFile() && current.nlink === 1))
-              await copy(child, target, entry.name, depth + 1);
-          } finally { closeSync(child); }
+      mkdirSync(target, { mode: 0o700 });
+      for (const entry of readdirSync(`/proc/self/fd/${fd}`)) {
+        check(); charge(1); progress?.();
+        // Repository internals are not a search input. An empty .git at the
+        // copy's root stops parent ignore discovery without importing config.
+        // A listed name is one directory entry -- anything else is not one.
+        if (entry === ".git" || entry === "." || entry === ".." || entry.includes("/") || entry.includes("\0")) continue;
+        let child: number;
+        try { child = openSync(entryAt(fd, entry), constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK); }
+        catch (error) {
+          if (["ENOENT", "ELOOP"].includes((error as NodeJS.ErrnoException).code ?? "")) continue;
+          throw error;
         }
-      } finally { try { directory.closeSync(); } finally { closeSync(target); } }
+        try {
+          const current = fstatSync(child);
+          if (current.isDirectory() || (current.isFile() && current.nlink === 1))
+            await copy(child, target, entry);
+        } finally { closeSync(child); }
+      }
     } else {
       ownedFile(fd);
       charge(stat.size);
-      const out = openSync(entryAt(parent, name), constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | constants.O_NOFOLLOW, 0o600);
+      const out = openSync(target, constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | constants.O_NOFOLLOW, 0o600);
       try {
         const buffer = Buffer.alloc(Math.min(stat.size + 1, 64 * 1024));
         let used = 0;
         for (;;) {
-          check();
+          check(); progress?.();
           const count = readSync(fd, buffer, 0, buffer.length, null);
           if (count === 0) break;
           used += count;
@@ -284,7 +289,7 @@ export async function withSearchSnapshot<T>(root: string, path: string, maximum:
         }
         if (!fstatSync(selected).isDirectory()) ownedFile(selected);
       } finally { closeSync(selected); }
-      await copy(fd, destination, "workspace", 0);
+      await copy(fd, join(tmpdir(), baseName), "workspace");
     } finally { closeSync(fd); }
     const copied = openSync(entryAt(destination, "workspace"), constants.O_RDONLY | constants.O_DIRECTORY | constants.O_NOFOLLOW);
     try { mkdirSync(entryAt(copied, ".git"), { mode: 0o700 }); } finally { closeSync(copied); }

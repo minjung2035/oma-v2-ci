@@ -258,6 +258,125 @@ for (const outcome of ["abort", "parent-death"] as const) test(`G10-02 / P0-4: $
   assert.equal(live(), false, "the walker ignored termination and survived its owner");
 });
 
+test("G10-02 / P0: a hidden walker default is not the answer -- the same snapshot yields every match", async t => {
+  const { workspace, run } = world(t);
+  // 150 hits is past the engine's own default of 100; a caller that asked for
+  // nothing gets them all, not a notice that the rest were dropped.
+  for (let n = 0; n < 150; n++) writeFileSync(join(workspace, `m${String(n).padStart(3, "0")}.txt`), "needle\n");
+  const found = await run("grep", { pattern: "needle" });
+  const hits = found.split("\n").filter(line => /^m\d+\.txt:1: needle$/.test(line));
+  assert.equal(hits.length, 150, `${hits.length} of 150 matches were returned`);
+  assert.match(found, /m149\.txt:1: needle/);
+  assert.doesNotMatch(found, /limit reached/);
+});
+
+test("G10-02 / P0: a hidden walker result bound is not the answer -- find returns every path", { timeout: 60000 }, async t => {
+  const { workspace, run } = world(t);
+  // Past the engine's own 1000-result default.
+  for (let n = 0; n < 1100; n++) writeFileSync(join(workspace, `f${String(n).padStart(4, "0")}.txt`), "");
+  const found = await run("find", { pattern: "f*.txt" });
+  const rows = found.split("\n").filter(line => /^f\d+\.txt$/.test(line));
+  assert.equal(rows.length, 1100, `${rows.length} of 1100 results were returned`);
+});
+
+test("G10-02 / P0: a hidden byte/line bound is not the answer -- long lines and large output arrive whole", { timeout: 60000 }, async t => {
+  const { workspace, run } = world(t);
+  // 150 lines of 600 chars: past the 500-char line cut and the 50 KiB output cut.
+  for (let n = 0; n < 150; n++)
+    writeFileSync(join(workspace, `w${String(n).padStart(3, "0")}.txt`), `needle${"x".repeat(594)}\n`);
+  const found = await run("grep", { pattern: "needle" });
+  const hits = found.split("\n").filter(line => /^w\d+\.txt:1: needle/.test(line));
+  assert.equal(hits.length, 150);
+  assert.ok(hits.every(line => line.length === 600 + "w000.txt:1: ".length), "a line arrived cut");
+});
+
+test("G10-02 / P0: an answer beyond one result is spooled, not refused -- the result names the file that holds it", { timeout: 60000 }, async t => {
+  const { workspace, tools } = world(t, 4 << 20);
+  // One 1.3 MiB matching line: the complete answer cannot ride inline.
+  writeFileSync(join(workspace, "huge.txt"), `needle${"y".repeat(1_300_000)}\n`);
+  const result = await tools["grep"]!.execute("call", { pattern: "needle" }, undefined, undefined, { cwd: workspace });
+  const text = result.content.map((part: { text?: string }) => part.text ?? "").join("");
+  assert.match(text, /oma: \[preview\] the complete \d+-byte result is at /);
+  const file = / is at (\S+)/.exec(text)?.[1];
+  assert.ok(file && file.includes("oma-search-result-"), `no spool path in the answer: ${file}`);
+  const saved = readFileSync(file!, "utf8");
+  assert.ok(saved.startsWith("huge.txt:1: needle"), "the saved answer is not the complete rendering");
+  assert.equal(Buffer.byteLength(saved) > 1_300_000, true);
+  rmSync(file!, { force: true });
+});
+
+test("G10-02 / P0: a stalled child is refused and its group and copy are swept", { timeout: 20000 }, async t => {
+  const { base, workspace } = world(t);
+  const temporary = join(base, "temporary"); mkdirSync(temporary);
+  writeFileSync(join(workspace, "a.txt"), "needle\n");
+  const script = `const {searchWorkspace}=await import(process.argv[1]);
+    try{await searchWorkspace('grep',process.argv[2],{pattern:'needle'},1000000,undefined,300);process.exitCode=3;}
+    catch(error){process.exitCode=/produced no output/.test(String(error&&error.message))?0:2;}`;
+  const parent = spawn(process.execPath, ["--input-type=module", "-e", script,
+    new URL("../src/extension/contained-search.js", import.meta.url).href, workspace],
+    { env: { ...process.env, TMPDIR: temporary }, stdio: "ignore" });
+  const exited = new Promise<number | null>(resolve => parent.once("close", code => resolve(code)));
+  t.after(async () => { try { parent.kill("SIGKILL"); } catch {} await exited; });
+  for (let n = 0; n < 1000 && !readdirSync(temporary).some(name => name.startsWith("oma-search-")); n++) await delay(5);
+  const child = Number(readFileSync(`/proc/${parent.pid}/task/${parent.pid}/children`, "utf8").trim());
+  assert.ok(Number.isSafeInteger(child) && child > 0, "no owned search child to stop");
+  // A child that cannot emit is a stall, not a process that needs more time.
+  process.kill(child, "SIGSTOP");
+  assert.equal(await exited, 0, "the silent child was not refused inside its stall window");
+  for (let n = 0; n < 500 && readdirSync(temporary).length > 0; n++) await delay(5);
+  assert.deepEqual(readdirSync(temporary), [], "the wedged child's copy survived it");
+  const live = (): boolean => {
+    try { return !/\) Z /.test(readFileSync(`/proc/${child}/stat`, "utf8")); }
+    catch (error) { if ((error as NodeJS.ErrnoException).code === "ENOENT") return false; throw error; }
+  };
+  assert.equal(live(), false, "the wedged child's group was not put down");
+});
+
+test("G10-02 / P0: a slow child that keeps reporting is waited for -- progress resets the observation", { timeout: 20000 }, async t => {
+  const { base, workspace } = world(t);
+  const temporary = join(base, "temporary"); mkdirSync(temporary);
+  const agent = join(base, "agent"); const bin = join(agent, "bin"); mkdirSync(bin, { recursive: true });
+  writeFileSync(join(workspace, "a.txt"), "needle\n");
+  // The walker says nothing for 1.5 s -- longer than four stall windows -- and
+  // then answers. The child's heartbeats prove life; the answer arrives.
+  writeFileSync(join(bin, "rg"), `#!${process.execPath}
+const {setTimeout:delay}=require('node:timers/promises');
+(async()=>{
+if(process.argv.includes('--version')) process.exit(0);
+const target=process.argv.at(-1);
+await delay(1500);
+console.log(JSON.stringify({type:'match',data:{path:{text:target+'/a.txt'},line_number:1,lines:{text:'needle\\n'}}}));
+})();
+`, { mode: 0o755 });
+  const script = `const {searchWorkspace}=await import(process.argv[1]);
+    try{
+      const result=await searchWorkspace('grep',process.argv[2],{pattern:'needle'},1000000,undefined,300);
+      const text=result&&result.content&&result.content[0]&&result.content[0].text||'';
+      process.exitCode=/a\\.txt:1: needle/.test(text)?0:3;
+    }catch(error){console.error(String(error&&error.message||error));process.exitCode=2;}`;
+  const parent = spawn(process.execPath, ["--input-type=module", "-e", script,
+    new URL("../src/extension/contained-search.js", import.meta.url).href, workspace],
+    { env: { ...process.env, TMPDIR: temporary, PI_CODING_AGENT_DIR: agent }, stdio: ["ignore", "ignore", "inherit"] });
+  const code = await new Promise<number | null>(resolve => parent.once("close", resolve));
+  assert.equal(code, 0, "a heartbeating child was cut as a stall");
+});
+
+test("G10-02 / P0: depth is never refused -- a tree past every historical level bound copies whole", { timeout: 30000 }, async t => {
+  const { workspace } = world(t);
+  const { withSearchSnapshot } = await import("../src/extension/contained-files.js");
+  // 180 levels: past the former 128 refusal and past what recursion by path
+  // could hold open, but nowhere near an operating-system limit.
+  let deep = workspace;
+  for (let n = 0; n < 180; n++) { deep = join(deep, "d"); mkdirSync(deep); }
+  writeFileSync(join(deep, "leaf.txt"), "needle at depth\n");
+  const seen = await withSearchSnapshot(workspace, ".", 1 << 20, undefined, async snapshot => {
+    const leaf = join(snapshot, ...Array.from({ length: 180 }, () => "d"), "leaf.txt");
+    assert.equal(readFileSync(leaf, "utf8"), "needle at depth\n");
+    return existsSync(leaf);
+  });
+  assert.equal(seen, true);
+});
+
 test("PI-001: the extension's entryAt mirrors the storage primitive -- it accepts and refuses the same entries and names the same path", async () => {
   const { entryAt: mirror } = await import("../src/extension/contained-files.js");
   const { entryAt: original } = await import("../src/storage/contained-fs.js");

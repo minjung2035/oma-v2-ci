@@ -226,6 +226,33 @@ const FRAME_BYTES = "OMA_FRAME_BYTES";
 const CONTEXT_BYTES = "OMA_CONTEXT_BYTES";
 const BUNDLE_BYTES = "OMA_BUNDLE_BYTES";
 
+/** P0V-36 mirror of `storedMailBytes` in src/domain/mail-values.ts: the bound
+ * on a stored message is not the body bound -- it is the header block plus the
+ * widest retained transfer encoding. OMA_MAIL_BYTES carries the configured
+ * value; an engine that does not set it gets the same rule at the reference
+ * body bound (256 KiB, the shipped default). PI-001 keeps this extension
+ * import-free, so a test binds the mirror to the owner (INV04). */
+const MAIL_HEADER_BYTES = 256 * 1024;
+const REFERENCE_BODY_BYTES = 256 * 1024;
+const storedMailBound = (bodyBytes: number): number =>
+  MAIL_HEADER_BYTES + 3 * bodyBytes + 3 * Math.ceil((3 * bodyBytes) / 73) + 2;
+
+/** The largest index `publishBatchView` (src/storage/batch-view.ts) can write:
+ * a fixed head and footer, and per listed message one `N. <id>\t<path>` row.
+ * Each earlier revision is named on exactly one row, so the whole index is
+ * linear in the batch: m rows plus at most m path mentions in tails. The
+ * bound is derived from the configured batch size so a large deployment's
+ * index is never refused for its size; when the environment does not carry
+ * it, the most message ids a one-frame manifest could name is the floor. */
+const INDEX_HEAD_BYTES = 1024;
+const INDEX_ROW_BYTES = 256;
+const INDEX_PATH_BYTES = 128;
+function indexBound(): number {
+  const messages = integerEnv("OMA_BATCH_MAX_MESSAGES")
+    ?? Math.max(1, Math.floor((integerEnv(FRAME_BYTES) ?? 256 * 1024) / 40));
+  return INDEX_HEAD_BYTES + messages * (INDEX_ROW_BYTES + INDEX_PATH_BYTES);
+}
+
 /** The environment the tools' client is configured with.
  *
  * It is built, never inherited, so anything else in the engine's environment
@@ -261,7 +288,13 @@ export function registerOmaTools(pi: ExtensionAPI, cwd: string, channel: Princip
   const home = process.env.OMA_AGENT_HOME;
   const archive = process.env.OMA_MAIL_ARCHIVE;
   const socket = process.env.OMA_SOCKET;
-  const maximum = integerEnv("OMA_MAIL_BYTES") ?? 1024 * 1024;
+  const maximum = integerEnv("OMA_MAIL_BYTES") ?? storedMailBound(REFERENCE_BODY_BYTES);
+  // The delivery index is not a stored message; its bound is derived from the
+  // batch size the host publishes (publishBatchView), not the body limit.
+  const indexMaximum = indexBound();
+  // The wire's own address bound (config `addresses`; 64 by default) -- the
+  // schema tells the model the same bound the broker will enforce.
+  const addresses = integerEnv("OMA_MAIL_ADDRESSES") ?? 64;
   const batchView = process.env.OMA_BATCH_VIEW;
   const society = process.env.OMA_SOCIETY;
   if (
@@ -292,7 +325,7 @@ export function registerOmaTools(pi: ExtensionAPI, cwd: string, channel: Princip
     async execute(_id, params) {
       if (params.messageId === BATCH_INDEX) {
         if (batchView === undefined || !isAbsolute(batchView)) throw new Error("no delivery index is available here");
-        return textResult(readBoundedText(join(batchView, "inbox.md"), maximum), { index: BATCH_INDEX });
+        return textResult(readBoundedText(join(batchView, "inbox.md"), indexMaximum), { index: BATCH_INDEX });
       }
       const mail = readBoundedMail(archive, params.messageId, maximum);
       return textResult(readableMail(mail.text), { messageId: mail.id });
@@ -304,7 +337,7 @@ export function registerOmaTools(pi: ExtensionAPI, cwd: string, channel: Princip
     description: "Send durable mail to agents or shared addresses. `to` names agents or addresses (`commons`/`residents` reach every Worker, `principal` reaches the Principal); `replyTo` threads the message; `kind` marks message/question/result/alert/critical.",
     promptSnippet: "Send durable society mail.",
     parameters: Type.Object({
-      to: Type.Array(Type.String(), { minItems: 1, maxItems: 32,
+      to: Type.Array(Type.String(), { minItems: 1, maxItems: addresses,
         description: "agent names, or shared addresses: commons / residents (all Workers), principal" }),
       subject: Type.String({ maxLength: 998 }),
       body: Type.String(),

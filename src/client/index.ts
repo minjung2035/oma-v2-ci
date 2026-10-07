@@ -8,7 +8,10 @@ import { frameBytes } from "./settings.js";
 import { Transport } from "./transport.js";
 export { ClientError } from "./errors.js";
 
-const OUTPUT_BYTES = 1024 * 1024;
+/** P0: a complete answer is never refused for its size. Longer than this, the
+ * tool result carries a marked head and the path the whole text was saved to;
+ * what the caller asked for stays one read away instead of one error away. */
+const PREVIEW_BYTES = 1024 * 1024;
 const PAGE = 64 * 1024;
 const fullOid = (value: unknown): value is string => runtime().fullOid(value);
 const sha256 = (bytes: Uint8Array) => createHash("sha256").update(bytes).digest("hex");
@@ -75,9 +78,30 @@ export class Client {
     }, key);
   }
   private bounded(text: string, key?: string): string {
-    if (Buffer.byteLength(text) > OUTPUT_BYTES)
-      throw new ClientError(`Outcome unknown: tool answer exceeds its output bound${key === undefined ? "" : `; --request ${key}; do not rerun with a new key`}`, 3, key);
-    return text;
+    return Buffer.byteLength(text) <= PREVIEW_BYTES ? text : this.preview(Buffer.from(text, "utf8"), key);
+  }
+  /** A marked head of an answer that does not fit one tool result: the
+   * `[preview]` notice names the complete answer's size and the path it was
+   * saved to, so the head can never be mistaken for the answer. A caller
+   * with no usable home still gets the exact size and why it is not saved;
+   * a receipt's durable record is untouched either way (`--request` answers
+   * the same text again). */
+  private preview(bytes: Buffer, key?: string): string {
+    let cut = Math.min(bytes.length, PREVIEW_BYTES);
+    while (cut > 0 && (bytes[cut]! & 0xc0) === 0x80) cut--;
+    const head = bytes.subarray(0, cut).toString("utf8");
+    const home = this.context.env.HOME;
+    let where: string;
+    if (home !== undefined && home.length > 0) {
+      try {
+        where = `is at ${runtime().spoolOutput(home, bytes)}`;
+      } catch (error) {
+        where = `could not be saved (${error instanceof Error ? error.message : String(error)}); its head follows`;
+      }
+    } else {
+      where = "could not be saved (no HOME); its head follows";
+    }
+    return `${head}\noma: [preview] the complete ${bytes.length}-byte answer ${where}${key === undefined ? "" : `; --request ${key}`}`;
   }
   private present(receipt: Receipt, key: string): string {
     const text = this.bounded(runtime().receiptText(receipt, key), key);

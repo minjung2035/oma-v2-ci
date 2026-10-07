@@ -138,6 +138,9 @@ export const KERNEL_ZONES = Object.freeze([
       "src/storage/snapshot-reader.ts",
       "src/storage/staged-tree.ts",
       "src/storage/submit-spool.ts",
+      // P0: the oversized-answer spool -- a durable publish of complete bytes
+      // under the caller's state directory; delivery mechanism, no ledger facts.
+      "src/storage/output-spool.ts",
     ],
   },
   {

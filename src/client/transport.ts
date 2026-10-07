@@ -46,7 +46,12 @@ export class Transport {
     const key = method === "operation.get" ? params.key : policy.mutation(method) ? request : undefined;
     if (first?.ok !== false || first.error.code !== "FRAME_TOO_LARGE" || typeof key !== "string") return replies;
     const receipt = await policy.collectReceipt(key, policy.maximumReceiptBytes, async part => {
-      const reply = (await this.frame(path, "operation.read", part, undefined, undefined, deadline))[0];
+      // IPC-006: a chunk that lands is progress, so each operation.read gets
+      // its own whole observation window -- a receipt that legitimately takes
+      // many chunks over a slow link completes, and only a broker that stops
+      // answering is timed out.
+      const reply = (await this.frame(path, "operation.read", part, undefined, undefined,
+        performance.now() + policy.observationSeconds * 1000))[0];
       if (!reply?.ok) throw new ClientError(reply?.error.message ?? "receipt chunk missing", 3, key, undefined, false,
         reply?.ok === false ? reply.error.code : "BROKER_UNAVAILABLE");
       return reply.result as PublicMethods["operation.read"]["result"];

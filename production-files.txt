@@ -14112,6 +14112,7 @@ src/storage/ledger-reader.ts
 src/storage/operation-codec.ts
 src/storage/operation-journal.ts
 src/storage/operation-transitions.ts
+src/storage/output-spool.ts
 src/storage/paths.ts
 src/storage/preaccept-artifact.ts
 src/storage/project-preparation.ts

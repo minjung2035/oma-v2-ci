@@ -407,7 +407,7 @@ DR34 후반에서 미뤄 둔 "listen 성공 후 `.off`로 유일한 'error' 리�
 
 아래 binding은 구조 검사의 입력 identity다. digest 생성 자체가 runtime PASS를 뜻하지 않는다.
 
-verification input digest `dfdb5024570c0849ba38f02d9682390a89079e34a9c5c09a81a2693c2fc3560d` (15339 files).
+verification input digest `d73874141f300d94c190889c06c443c83003ebae58b25c9373cb0facf593139b` (15340 files).
 
 당시 기록한 cloc 2.08 측정치: 354 files / 35,832 code LOC. 이 역사적 기록은 현재 source의 LOC claim이 아니며, 기존 artifact와의 불일치를 여기서 수리했다고 주장하지 않는다. 크기 제한은 없으며 값은 release proof가 아니다.
 

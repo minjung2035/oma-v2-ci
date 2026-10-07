@@ -16,6 +16,7 @@ import { registerOmaTools } from "../src/extension/mail-tools.js";
 import { PrincipalChannel } from "../src/extension/principal-channel.js";
 import { encodeCredential } from "../src/client/codecs.js";
 import { FrameParser, encodeFrame } from "../src/frame.js";
+import { receiptChunk } from "../src/protocol/receipt-chunks.js";
 import { receiptNotFound } from "../src/protocol/receipts.js";
 
 const operation = "op-00000000-0000-4000-8000-000000000001";
@@ -203,9 +204,97 @@ test("body and answer bounds count UTF-8 bytes; pre-abort keeps the request key 
     assert.equal(CLIENT_RUNTIME.cache(root, 2048).read("aborted").kind, "absent");
     await assert.rejects(() => client.query("mail.send" as never, {}), /mutation requires a frozen request/);
     assert.equal(calls, 0);
-    await assert.rejects(() => client.queryText("agent.wait", { observe: true }), /answer exceeds.*output bound/);
+    // P0: a 1.2 MiB answer is not an error -- the tool result is a marked
+    // preview, and the complete text is one read away in the caller's state.
+    const complete = JSON.stringify({ text: "한".repeat(400_000) });
+    const text = await client.queryText("agent.wait", { observe: true });
     assert.equal(calls, 1);
+    assert.match(text, /oma: \[preview\] the complete \d+-byte answer is at /);
+    const file = / is at (\S+)/.exec(text)?.[1];
+    assert.ok(file?.startsWith(join(root, ".local", "state", "oma", "output")), `the answer was not kept under the caller's HOME: ${file}`);
+    assert.equal(readFileSync(file!, "utf8"), complete, "the saved file is not the complete answer");
+    // The head is the answer's own beginning, cut at a UTF-8 boundary.
+    assert.ok(complete.startsWith(text.slice(0, 1024)));
+    assert.doesNotThrow(() => Buffer.from(text.slice(0, text.indexOf("\noma: [preview]")), "utf8"));
   } finally { installClientRuntime(); rmSync(root, { recursive: true, force: true }); }
+});
+
+test("IPC-006 / P0: every receipt chunk buys a fresh observation window -- a many-chunk receipt over a slow link completes", async () => {
+  const root = scratch();
+  const big = { operation, state: "succeeded", result: { kind: "mail.send", message, recipientCount: 1,
+    archivePath: `/state/${"r".repeat(12_000)}` } };
+  let reads = 0;
+  // One 50 ms observation window, forty-millisecond reads: on a shared
+  // deadline the third read is dead before it is asked.
+  installRuntime({ ...CLIENT_RUNTIME, observationSeconds: 0.05, channel: () => {
+    let stopped: ((error: unknown) => void) | undefined;
+    return {
+      connect: async () => {},
+      close(error?: unknown) { stopped?.(error); },
+      call: async (method: string, params: Record<string, unknown>) => {
+        if (method === "mail.send")
+          return { ok: false as const, error: { code: "FRAME_TOO_LARGE", message: "the receipt is chunked", retry: "same-key" } };
+        assert.equal(method, "operation.read");
+        reads++;
+        const { result } = receiptChunk("f", big as never, params as never, 1500);
+        return await new Promise<Reply>((resolve, reject) => {
+          stopped = reject;
+          setTimeout(() => resolve({ ok: true, result }), 40);
+        });
+      },
+    };
+  } });
+  try {
+    const client = new Client({ cwd: root, env: { HOME: root, OMA_SOCKET: join(root, "socket") } });
+    const text = await client.sendMail({ to: ["b"], subject: "s", body: "b", kind: "message" }, "key");
+    assert.match(text, /succeeded/);
+    assert.ok(reads > 3, `only ${reads} chunk reads ran`);
+  } finally { installClientRuntime(); rmSync(root, { recursive: true, force: true }); }
+});
+
+test("P0 an oversized answer still previews when it cannot be saved, and says why", async () => {
+  const root = scratch();
+  installRuntime({ ...CLIENT_RUNTIME, channel: () => ({ connect: async () => {}, close() {},
+    call: async () => ({ ok: true, result: { text: "x".repeat(1_100_000) } }) }) });
+  try {
+    // No HOME: the head and the exact byte count still reach the caller.
+    const homeless = new Client({ cwd: root, env: { OMA_SOCKET: join(root, "socket") } });
+    const text = await homeless.queryText("agent.wait", { observe: true });
+    assert.match(text, /oma: \[preview\] the complete \d+-byte answer could not be saved \(no HOME\)/);
+    assert.equal(Buffer.byteLength(text.slice(0, text.indexOf("\noma: [preview]"))), 1_048_576, "the head is not one full preview");
+    // A HOME whose state directory cannot be made reports the failure.
+    const file = join(root, "occupied");
+    writeFileSync(file, "not a directory");
+    const blocked = new Client({ cwd: root, env: { HOME: file, OMA_SOCKET: join(root, "socket") } });
+    const failed = await blocked.queryText("agent.wait", { observe: true });
+    assert.match(failed, /oma: \[preview\] the complete \d+-byte answer could not be saved \(/);
+    // A large RECEIPT text converts the same way inside `effect`'s presentation.
+    const effectText = { operation, state: "succeeded", result: { kind: "mail.send", message, recipientCount: 1, archivePath: `/state/${"p".repeat(1_100_000)}` } };
+    installRuntime({ ...CLIENT_RUNTIME, channel: () => ({ connect: async () => {}, close() {},
+      call: async () => ({ ok: true, result: effectText }) }) });
+    const client = new Client({ cwd: root, env: { HOME: root, OMA_SOCKET: join(root, "socket") } });
+    const receiptText = await client.sendMail({ to: ["b"], subject: "s", body: "b", kind: "message" }, "key");
+    assert.match(receiptText, /oma: \[preview\] the complete \d+-byte answer is at .*; --request key/);
+  } finally { installClientRuntime(); rmSync(root, { recursive: true, force: true }); }
+});
+
+test("P0 the output spool is content-named: the same answer is one file, and a same-named file of other bytes is not overwritten", async () => {
+  const root = scratch();
+  try {
+    const { spoolOutput } = await import("../src/storage/output-spool.js");
+    const { sha256Hex } = await import("../src/domain/canonical-json.js");
+    const bytes = Buffer.from("the complete answer");
+    const first = spoolOutput(root, bytes);
+    assert.equal(first, join(root, ".local", "state", "oma", "output", `output-${sha256Hex(bytes)}.txt`));
+    assert.equal(readFileSync(first, "utf8"), "the complete answer");
+    assert.equal(spoolOutput(root, bytes), first, "the same answer spooled twice");
+    // A digest-named file holding other bytes is not this answer's home.
+    const foreign = Buffer.from("tampered");
+    writeFileSync(join(root, ".local", "state", "oma", "output", `output-${sha256Hex(bytes)}.txt`), foreign);
+    const rescued = spoolOutput(root, bytes);
+    assert.notEqual(rescued, first, "a name already holding other bytes was overwritten or trusted");
+    assert.equal(readFileSync(rescued, "utf8"), "the complete answer");
+  } finally { rmSync(root, { recursive: true, force: true }); }
 });
 
 for (const state of ["pending", "unknown"] as const) test(`candidate publication ${state} stops review naming the open key, while the frozen request stays <key>.submit`, async () => {

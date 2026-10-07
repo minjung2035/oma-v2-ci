@@ -44,6 +44,10 @@ export function createContainedWriter(workspace: string, workspaceBytes: number 
   let writes: Promise<unknown> = Promise.resolve();
   return (path: string, content: string, expectedIdentity?: { dev: number; ino: number }): Promise<void> => {
     const next = writes.catch(() => undefined).then(() => {
+      // Fail closed, never unlimited: production always wires a positive
+      // OMA_WORKSPACE_BYTES (the runner refuses to spawn without one, and the
+      // Principal's session does the same), so an absent quota means a
+      // miswired engine -- writing anyway would make the quota dishonest.
       if (!workspaceBytes) throw new WorkspaceRefusal("agent workspace quota is not configured");
       const growth = writeGrowthWithin(workspace, path, Buffer.byteLength(content, "utf8"));
       if (growth > 0 && (growth > workspaceBytes || workspaceUsage(workspace, workspaceBytes - growth) > workspaceBytes - growth))

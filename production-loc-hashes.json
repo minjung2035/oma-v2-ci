@@ -1,6 +1,6 @@
 {
   "kind": "oma-production-source-digests-v1",
-  "manifest": "aa1d56e65d830cfe6168a0e4c1c5f368c3a0dcb5e1a8688857bbe499b17bcc60",
+  "manifest": "39080d011a0503798e362fcb2aa7f434f3d9147ee0f82edba4f7be9c1da1446e",
   "files": [
     {
       "path": "implementation/contracts.ts",
@@ -204,7 +204,7 @@
     },
     {
       "path": "src/client/index.ts",
-      "sha256": "4e304fd9254505cb5def702fd70c70b3645ed1f9f90c99bbac1f8d87b5e041e9"
+      "sha256": "fef14bfd7246ecfc90c9535de4fb7557f4950732fa4b4f484c8b009ad2cc84db"
     },
     {
       "path": "src/client/limits.ts",
@@ -220,7 +220,7 @@
     },
     {
       "path": "src/client/runtime.ts",
-      "sha256": "2bf29cf0c52547876cbf723943c92d58383506aa883c1492df2f307e5258e2c8"
+      "sha256": "47e1153baf0ff43edd671547fbae5222b22c4e9cc701f7a21851c05a25380b6e"
     },
     {
       "path": "src/client/settings.ts",
@@ -228,7 +228,7 @@
     },
     {
       "path": "src/client/transport.ts",
-      "sha256": "7376bd9afcefd80c634591ee665d1c76b584969653550e764b06c70c938ff4a6"
+      "sha256": "bf9c26c915cedd516edfaf6ce6ff58d728ab3c81afb2cf22b0a12e229ffe9fdc"
     },
     {
       "path": "src/config.ts",
@@ -472,15 +472,15 @@
     },
     {
       "path": "src/extension/contained-files.ts",
-      "sha256": "5fd05c9980684fc906f6c8bb3968cf52dcea1303d7d583575ad4763ce8d1b31f"
+      "sha256": "6a0ee897e442a1f6401f4c80a03d9d7bef8ccfdb2e8592ab89398e85b9bf7331"
     },
     {
       "path": "src/extension/contained-search.ts",
-      "sha256": "3add80febbdf8f39960cfc51d932618a15659cd65d446b354a9fabe8fdc09592"
+      "sha256": "a66ef756a07a9ea0a15a41b1c4acfc1893ed4fb7fa6f0bd55e8afc872e29a56e"
     },
     {
       "path": "src/extension/contained-tools.ts",
-      "sha256": "e52138e8c53f865a132d0e295fad507f5937279986beacbb48bdc70b499101a9"
+      "sha256": "1873047ed0336a05db28a6c2aa8bbfae50a987ecdfc4b813243e135d7ac8eb46"
     },
     {
       "path": "src/extension/delivery.ts",
@@ -504,7 +504,7 @@
     },
     {
       "path": "src/extension/mail-tools.ts",
-      "sha256": "b2dac66e37a1177d01a9f310deffa988756642bdfb4138c15cc0a190de736491"
+      "sha256": "7d510e48a4f440e304f410ef8d0574abb2cdeb123da15b3324e41708bad567dd"
     },
     {
       "path": "src/extension/mcp-tools.ts",
@@ -56236,7 +56236,7 @@
     },
     {
       "path": "src/runtime/client-runtime.ts",
-      "sha256": "75830f91d451fe6d96ad870736617deecd05d0e805ef9aebca63300d36c13df6"
+      "sha256": "0823765cd39ece2216e23bbf01d41f5e259762729513d43715891798251a0749"
     },
     {
       "path": "src/runtime/connect-proxy.ts",
@@ -56328,7 +56328,7 @@
     },
     {
       "path": "src/runtime/pi-spawn-plan.ts",
-      "sha256": "144a85714ed782f4aefa94014b4f93f56936e335bf245a3b18981b8966cfef83"
+      "sha256": "21d6d0b7421849ffaa76db957b119a203dc18f2d7bbf26f63e31409fac1c010b"
     },
     {
       "path": "src/runtime/principal-delivery.ts",
@@ -56457,6 +56457,10 @@
     {
       "path": "src/storage/operation-transitions.ts",
       "sha256": "248bc23467135e393bf43f35c6bee25a6ccd3de44cb652b5304ac130f0bf0468"
+    },
+    {
+      "path": "src/storage/output-spool.ts",
+      "sha256": "cad61b511b2ab7dcdcc712ca80af3c8efc9886ab70941f3525817f62af6e2a6e"
     },
     {
       "path": "src/storage/paths.ts",
@@ -56604,7 +56608,7 @@
     },
     {
       "path": "src/tui/session.ts",
-      "sha256": "c661f33595663170ec26322da5afea0e352b63a64951c29e93b172617cae6019"
+      "sha256": "01835825808d1994a14c0dd10fcc86cde297605ba8a545afa0946ae58826cd9c"
     },
     {
       "path": "src/tui/sources/extensions.ts",

@@ -43,7 +43,7 @@ const reviewWorker = (extra: object = {}) => ({ type: "object", required: ["acti
 const mailRead = { type: "object", required: ["messageId"], properties: {
   messageId: str({ description: "Message id or archive path from a notice, or /inbox.md" }) } };
 const mailSend = (extra: object = {}) => ({ type: "object", required: ["to", "subject", "body"], properties: {
-  to: { type: "array", items: { type: "string" }, minItems: 1, maxItems: 32,
+  to: { type: "array", items: { type: "string" }, minItems: 1, maxItems: 64,
     description: "agent names, or shared addresses: commons / residents (all Workers), principal" },
   subject: str({ maxLength: 998 }), body: str(),
   kind: named(["message", "question", "result", "alert", "critical"]),
