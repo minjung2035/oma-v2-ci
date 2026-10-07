@@ -1226,6 +1226,77 @@ name collision/intended surface/hidden 미활성/idempotent reload/provenance/
   원문 유지). fixture 보수 6c91bef(B1/B3 seam 선언 누락). 표시만 변경 —
   wire 이름·durable mail facts·reply 라우팅 불변. 상세는
   plan-prereq-and-bundled.md §B 실행 결과.
+- 2026-10-07 (전신성 부류 — post-listen 'error' 전수 스캔 정산): DR34 후반에서
+  미뤄 둔 "listen 성공 후 `.off`로 유일한 'error' 리스너를 해제"하는 패턴을
+  프로덕션 경계 전체로 스캔해 6곳 전수 정산. `server.once("error", reject)`
+  + `listen` 콜백 안 `server.off` 패턴은 성공 직후 리스너 0개를 남기고, 그
+  뒤 accept 계열 에러(EMFILE/ENFILE)는 emit을 탈출해 호스트 프로세스를
+  죽인다 — runner는 delivery의 tunnel·relay·forwarder 전부, oma-society는
+  세션, guest unit은 그 boot의 채널 전부와 함께. 정산 모델은 6곳 공통으로
+  **영구 리스너 → 보호된 best-effort journal + socket bound 유지**:
+  커널이 accept를 재시도하는데 close는 client가 계속 다이얼하는 이름을
+  끊고, crash는 이미 살아있는 채널 전부를 떨군다. journal 싱크는 프로세스별
+  기존 관례 — runner·guest·host unit은 stderr(console.error),
+  connect-proxy는 기존 audit 채널(`(listener)` 타겟), EgressForwarder는
+  새 `onError` 심(runner 기본값 stderr / oma-society는 화면 notice로
+  연결, tenancy 명시). startup bind 에러는 여전히 once-listener가 reject
+  한다 — 영구 리스너는 대체가 아니라 병존이며, 오히려 startup 실패도
+  정직하게 기록한다.
+  - 노드: `runtime/inference-relay.ts`(생성자), `runtime/connect-proxy.ts`
+    (server 생성 직후), `runtime/egress-forwarder.ts`(listen, `onError`
+    파라미터 + `openPrincipalEgress`→`adoptPrincipalEgress`→oma-society
+    `notice` 연결), `platform/guest/server.ts`(guesthost·guestctl 공유
+    경계), `platform/guest/egress.ts`, `platform/host/host-api.ts`
+    (omahostd 경유).
+  - 전수 스캔 방법: `\.once\(\s*"error"`·`\.on\(\s*"error"`·`\.off\(\s*"error"`
+    를 src 전체에 치고, `createServer|\.listen\(`를 든 모든 server 객체를
+    열거 — 나머지 후보는 `test/p0-review7` 가짜 server(fixture, 해당 없음),
+    `extension/egress-bridge.ts`·`extension/inference-bridge.ts`(이미 영구
+    리스너 — journal·register·retry가 무가드, 잔여로 정산), vendored
+    `pi-web-access/runtime/curator-server.js`(같은 once+off 패턴 —
+    byte-pinned 페이로드라 OMA_DIVERGENCES splice로 영구 리스너 + 보호된
+    journal, 설치된 표면은 workflow pin이 "none"이라 도달 불가 — 미설치
+    평가 대비 defense in depth), runner/broker의 자식 프로세스·소켓
+    'error'는 이미 리스너가 있거나 개별 소켓 계약(죽을 수 있는 연결 —
+    리스너 유지가 수명)이라 대상 아님. `upstream/`·`node_modules` 안의
+    동일 패턴은 byte-exact npm 스냅샷이라 OMA가 수정하지 않는다.
+  - 동일 emit-탈출 잔여 3건: `platform/rpc.ts` `new FrameParser(frameBytes)`
+    가 'data' emit 안 try 밖(NaN·비정수·무한 limit는 길이 비교를 전부
+    false로 만들어 생성자까지 도달 — emit 탈출로 호스트 사망이 되던 것을
+    try 안으로 옮겨 이 읽기의 거절로), `extension/egress-bridge.ts` 영구
+    'error' 리스너 안 `process.stderr.write`를 보호된 기록으로(stderr
+    사망 + bind 실패 동시 시 write throw가 다시 emit을 탈출),
+    `extension/inference-bridge.ts` 영구 'error' 리스너의 본문 전체를
+    비던짐으로(write·재등록·retry listen이 emit 안에서 던질 수 있었음 —
+    재등록 거절은 첫 bind가 남긴 안전 상태 그대로, retry 실패는
+    unreachable override 유지).
+  - LOC 계정 무결성 잔여(production-inventory.mjs, 두 파일의 같은 라인):
+    `report[file]`/`classified[file]` 무가드 접근이 `constructor`·
+    `hasOwnProperty` 같은 이름의 실제 인벤토리 파일을 Object.prototype
+    상속 멤버로 오독해 "계정됨"으로 잘못 판정하던 것을 `Object.hasOwn`
+    기반 `rowAt` 조회로 수정(위치는 그대로 — `production-inventory.mjs:114·121·123`
+    계보). CLOC_NON_CODE_REASON 화이트리스트에 `temporary editor file`
+    (`~` 백업 — `implementation/vendor/*~`가 실제로 도달 가능한 판정)
+    만 추가 — `file size ... exceeds max file size`·`not file, not
+    directory`·`cannot read`·`unable to associate with a language` 같은
+    관측 이상 verdict는 여전히 분류가 아니라 게이트 실패로 남긴다.
+    `verification-spec.md` LOC-004 문구를 구현 계약(명시 계정·인정
+    verdict 목록·관측 이상은 실패)으로 동기화 + traceability 재지문.
+  - 회귀: `test/post-listen-error.test.ts` 신설 — 9오라클 전부
+    `server.emit("error", EMFILE)` 직접 주입(emit은 동기라 결정론적,
+    리스너 0개면 그 자리에서 throw). 각 사이트에서 ①리스너가 정확히 영구
+    1개만, ②journal에 도달, ③listening 유지, ④이름이 여전히 연결을
+    받음을 검증; journal이 던지는 케이스(죽은 audit sink·죽은 onError)도
+    emit을 탈출하지 않음. `platform-rpc.test.ts`에 NaN frameBytes 주입
+    (생성자 throw가 emit 탈출·uncaughtException 대신 읽기 거절 + escaped=0),
+    `egress-degradation.test.ts`에 onError가 adoption을 통과해 tenancy에
+    도달하는 스모크, `extension-bridges.test.ts` 신설(실제 EADDRINUSE +
+    죽은 stderr — 두 bridge 모두 wedge 없이 degraded resolve, inference
+    bridge는 fallback retry가 실제 포트에 도달).
+  - NOT_RUN: macOS native·systemd·kernel/powercut·provider credential·
+    release qualification 레인(로컬 환경 없음). guest·omahostd 단위의
+    in-situ 동작은 프로덕션 경계 리스너 + 단위 테스트 오라클로, 실제 fd
+    소진 실험은 환경 의존이라 비결정론적이라 의도적으로 제외.
 
 ## 10. 지금부터의 실행 순서
 0. ~~P0-8 강제 수단 미구현~~ — 구현됨: `owned-state` 아키텍처 규칙

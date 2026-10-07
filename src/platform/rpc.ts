@@ -295,9 +295,13 @@ export function readLeadingFrame(socket: Socket, frameBytes: number, deadlineMs:
       const length = buffered.readUInt32BE(0);
       if (length > frameBytes) { finish(new StoreError("FRAME_TOO_LARGE", "leading frame exceeds the frame limit")); return; }
       if (buffered.length < 4 + length) return;
-      const parser = new FrameParser(frameBytes);
+      // The parser's own construction is inside the try: a limit this
+      // caller cannot have validated earlier (NaN, fractional, infinite --
+      // the length checks above compare false against them and let a frame
+      // through) throws inside this 'data' emit, and a throw here escapes
+      // the emit as the host's death rather than this read's rejection.
       let frame: Record<string, unknown>;
-      try { frame = parser.feed(buffered.subarray(0, 4 + length))[0]!.raw; }
+      try { frame = new FrameParser(frameBytes).feed(buffered.subarray(0, 4 + length))[0]!.raw; }
       catch (error) { finish(error as Error); return; }
       finish(null, { frame, rest: buffered.subarray(4 + length) });
     };

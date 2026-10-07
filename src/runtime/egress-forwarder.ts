@@ -163,9 +163,14 @@ export class EgressForwarder {
    * give ends the run the same as its close does (P0-4, AV-15). And the
    * lease's end -- the run's own close, or the host's end of the run, a
    * reboot or a stop included -- is the forwarder's end too: the run it
-   * served is over, so its provider path stops accepting. */
+   * served is over, so its provider path stops accepting.
+   *
+   * `onError` is the hosting process's journal for listener errors that
+   * outlive the listen attempt: the runner's stderr by default, a screen
+   * notice where the host is oma-society. */
   static listen(socketPath: string, egressSocket: string, run: EgressOpenParams, concurrent: number,
-    lease: { release(): void; ended?(listener: () => void): void } | null = null): Promise<EgressForwarder> {
+    lease: { release(): void; ended?(listener: () => void): void } | null = null,
+    onError?: (error: Error) => void): Promise<EgressForwarder> {
     if (!Number.isSafeInteger(concurrent) || concurrent < 1) { lease?.release(); throw new StoreError("UNSUPPORTED_PROFILE", "the forwarder's connection bound is invalid"); }
     // A refused listen ends the run the same as an answer it could not give:
     // the lease is this forwarder's only once the socket name is cleared.
@@ -188,6 +193,20 @@ export class EgressForwarder {
       });
     });
     forwarder = new EgressForwarder(server, socketPath, lease);
+    // The 'error' event needs a listener for the server's whole life, not
+    // only the listen attempt: once the startup once-listener below is
+    // removed, an accept-class error (EMFILE/ENFILE) meets zero 'error'
+    // listeners and escapes its emit as the death of whichever process
+    // hosts the run's provider path -- the runner mid-delivery or
+    // oma-society mid-session. The permanent listener reports to the
+    // host's own journal and keeps the socket bound: the kernel retries
+    // the accept, and a transient resource failure is not the lease's to
+    // end. The journal is best-effort -- a reporter that throws does not
+    // escape this emit either.
+    const report = onError ?? ((error: Error) => { console.error(`egress forwarder listener error: ${error.message}`); });
+    server.on("error", error => {
+      try { report(error); } catch { /* the journal never stops the listener */ }
+    });
     return new Promise((resolve, reject) => {
       // From listener creation through permission setting, a failure is this
       // construction's own to clean up: the bound socket and the run's lease.
@@ -255,7 +274,7 @@ function freeLoopbackPort(): Promise<number> {
 
 export async function openPrincipalEgress(options: { readonly society: string; readonly runRoot: string; readonly provider: string;
   readonly model: string; readonly modelProfile: string; readonly frameBytes: number; readonly deadlineMs: number; readonly inferenceSeconds: number;
-  readonly env: Readonly<Record<string, string | undefined>> }): Promise<PrincipalEgress | null> {
+  readonly env: Readonly<Record<string, string | undefined>>; readonly onError?: (error: Error) => void }): Promise<PrincipalEgress | null> {
   const egress = options.env[EGRESS_SOCKET_ENV];
   if (egress === undefined || egress.length === 0) return null;
   const run = { society: options.society, actor: "principal", incarnation: 0 };
@@ -264,7 +283,7 @@ export async function openPrincipalEgress(options: { readonly society: string; r
   const socketPath = join(options.runRoot, "principal-inference.sock");
   // The lease is the forwarder's now: its close is the run's end on the host.
   const forwarder = await EgressForwarder.listen(socketPath, egress,
-    { placeholderId: issued.placeholderId, ...run, modelProfile: options.modelProfile }, 4, issued);
+    { placeholderId: issued.placeholderId, ...run, modelProfile: options.modelProfile }, 4, issued, options.onError);
   // P0-4: the forwarder is this call's until it is handed back inside the result.
   let port: number;
   try { port = await freeLoopbackPort(); }

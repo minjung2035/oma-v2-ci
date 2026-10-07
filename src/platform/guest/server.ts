@@ -55,6 +55,17 @@ export interface GuestServerOptions {
 export function startGuestServer(options: GuestServerOptions): Promise<Server> {
   clearSocketName(options.socketPath);
   const server = createServer({ allowHalfOpen: true }, socket => { void accept(socket, options); });
+  // Both callers (guesthost, guestctl) run no uncaughtException handler:
+  // once the startup once-listener below is removed, an accept-class error
+  // (EMFILE/ENFILE) meets zero 'error' listeners and escapes its emit as
+  // the unit's death -- every channel this boot holds with it. The
+  // permanent listener journals and keeps the socket bound: the kernel
+  // retries the accept, while closing would unlink the name the vsock
+  // bridge dials for every host connection. The journal is best-effort --
+  // a dead stderr must not throw out of this emit either.
+  server.on("error", error => {
+    try { console.error(`guest listener error: ${error.message}`); } catch { /* nowhere left to say it */ }
+  });
   return new Promise((resolve, reject) => {
     server.once("error", reject);
     server.listen(options.socketPath, () => {

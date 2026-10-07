@@ -628,6 +628,21 @@ export function startCuratorServer(options, callbacks) {
             reject(new Error(`Curator server failed to start: ${err.message}`));
         };
         const networkConfig = resolveCuratorNetworkConfig();
+        // OMA divergence (applied by scripts/vendor-pi-web-access.mjs; recorded
+        // under generated.divergences in manifest.json): a permanent 'error'
+        // listener beside the startup once-listener below. Once that
+        // once-listener is removed after a successful listen, an accept-
+        // class error (EMFILE/ENFILE) meets zero 'error' listeners and
+        // escapes its emit as the hosting engine's death. The journal is
+        // best-effort -- a dead stderr must not throw out of the emit
+        // either -- and the socket stays bound for the kernel to retry.
+        server.on("error", (listenerError) => {
+            try {
+                console.error(`Curator server listener error: ${listenerError instanceof Error ? listenerError.message : String(listenerError)}`);
+            }
+            catch {
+            }
+        });
         server.once("error", onError);
         server.listen(0, networkConfig.bind, () => {
             server.off("error", onError);

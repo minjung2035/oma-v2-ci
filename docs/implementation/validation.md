@@ -336,6 +336,26 @@ WORKSTREAM §9의 해당 로그가 소유한다; 이 절은 검증 범위만 기
 
 \* 전체 suite의 최종 종료 코드는 이 절을 쓰는 시점의 로그로 확정했다; systemd lane은 위처럼 별도 NOT_RUN이다.
 
+## 정산: post-listen 'error' 전수 스캔 검증 (2026-10-07)
+
+DR34 후반에서 미뤄 둔 "listen 성공 후 `.off`로 유일한 'error' 리스너를 해제" 부류의 6곳 전수 정산과 동일 emit-탈출 잔여(rpc FrameParser·egress-bridge stderr·cloc 계정 own-key)의 로컬 검증. 결정론 오라클은 `server.emit("error", EMFILE)`의 동기 주입 — 리스너가 없으면 그 자리에서 throw이고, 있으면 영구 리스너가 journal만 하고 흡수한다.
+
+| 절차 | 결과 | 근거 |
+|---|---|---|
+| post-listen 'error' 흡수 — 6곳 | PASS | `test/post-listen-error.test.ts` 9 오라클: `server.emit("error", EMFILE)` 직접 주입 뒤 ①영구 리스너 정확히 1개, ②journal 도달(console.error 캡처·audit `(listener)`/`fail`·`onError` 콜백), ③`server.listening` 유지, ④같은 소켓 이름이 여전히 연결을 받음. 죽은 journal 싱크(throwing audit·throwing onError)도 emit을 탈출하지 않음 |
+| oma-society 저널 심 | PASS | `EgressForwarder.listen`의 새 `onError`가 `openPrincipalEgress`→`adoptPrincipalEgress`→`notice`로 연결; `egress degradation` 스모크가 adoption 경유 옵션 통과 확인. HostTenure 소유·hold/abandon 계약 불변 — 영구 리스너는 bound 유지라 close/lease 수명에 손대지 않음 |
+| rpc FrameParser emit 경계 | PASS | NaN frameBytes 주입 시 생성자 throw이 'data' emit 탈출·uncaughtException 대신 읽기의 RangeError 거절이 되고 `escaped=[]` (platform-rpc.test.ts DR27 신설) |
+| egress-bridge·inference-bridge 리스너 가드 | PASS | 실제 EADDRINUSE + `stderr.write`가 던지는 상태에서 두 bridge 모두 wedge 없이 degraded resolve, uncaughtException 0건; inference bridge는 guard 아래 fallback retry가 실제 바인드 포트의 provider URL을 등록 (extension-bridges.test.ts 신설) |
+| vendored curator-server | PASS | `runtime/curator-server.js`에 OMA_DIVERGENCES splice로 영구 리스너 + 보호된 journal 적용 — `node scripts/vendor-pi-web-access.mjs --check` → BUNDLE_CURRENT(11,020 files); 설치된 표면은 workflow pin이 "none"이라 도달 불가, 미설치 평가 대비 defense in depth |
+| cloc 계정 own-key | PASS | `Object.hasOwn` 기반 `rowAt`으로 `constructor`/`hasOwnProperty` 이름의 인벤토리 멤버가 prototype 상속 멤버로 오계정되지 않음을 inventory-evidence-split 신규 오라클로 고정; `temporary editor file` verdict 인정 추가, 관측 이상 verdict(file size·not-file·cannot read·unable to associate)는 여전히 게이트 실패 |
+| startup reject 계약 유지 | PASS | bind 실패는 여전히 `once("error", reject/failed)`가 거절 — 영구 리스너는 대체가 아니라 병존(기존 startup-failure 테스트 전부 PASS로 간접 입증) |
+| build / typecheck | PASS | `npm run build` + `tsc --noEmit` 0 오류 |
+| check:architecture | PASS | inventory(SOURCE_DIGESTS_CURRENT, 14,173 files)·rules·lattice·transactions·boundaries·documents·spec-inventory 0 findings; LOC-004 재지문 drift 없음 |
+| 전체 `npm test` | PASS* | `node scripts/test-local.mjs` 로컬 lane 397 files → 3829 tests, 3828 PASS; 유일 실패 1건은 이 절과 결박 산출물 변경분을 아직 반영하지 않은 validation.md 자체의 stale verification-input digest(R38)로, digest를 이 트리의 것으로 재결박 후 `production-inventory` 재실행 PASS 확인. systemd-required 9 파일은 환경 부재로 NOT_RUN 분리 |
+| macOS native / systemd / kernel·powercut / provider credential / release qualification / 실제 fd 소진 주입 | NOT_RUN | 로컬 환경 부재 — 게스트·omahostd 단위의 in-situ 관측과 실제 EMFILE 유도(프로세스 fd 한도 소진)는 환경 의존이라 비결정론적이라 의도적으로 제외, 동기 emit 주입으로 같은 경계를 결정론적으로 커버 |
+
+\* 전체 suite의 최종 종료 코드는 이 절을 쓰는 시점의 로그로 확정했다; systemd lane은 위처럼 별도 NOT_RUN이다.
+
 ## 현재 알려진 한계와 남은 검증
 
 - 실제 manager/cgroup candidate 검사와 reviewer shortage 예외는 기존 독립 거절의 영향을 받는다. fixture 성공을 실제 서비스 증거로 사용하지 않는다.
@@ -350,13 +370,13 @@ WORKSTREAM §9의 해당 로그가 소유한다; 이 절은 검증 범위만 기
 
 아래 binding은 구조 검사의 입력 identity다. digest 생성 자체가 runtime PASS를 뜻하지 않는다.
 
-verification input digest `e16ac6ce746d73bcb66ca7013b58173bea0c34dbb5c5277ce14d871302c79523` (15337 files).
+verification input digest `c5312dce04999fcfd84f437e0703a875cc033580a9654021e9774aa1276d4da0` (15339 files).
 
 당시 기록한 cloc 2.08 측정치: 354 files / 35,832 code LOC. 이 역사적 기록은 현재 source의 LOC claim이 아니며, 기존 artifact와의 불일치를 여기서 수리했다고 주장하지 않는다. 크기 제한은 없으며 값은 release proof가 아니다.
 
 K63: 현재 source list는 [production-files.txt](../../production-files.txt), per-file SHA-256은 [production-loc-hashes.json](../../production-loc-hashes.json)이 소유한다. 기존 digest 파일명은 최소 변경을 위해 유지하지만 내용은 `oma-production-source-digests-v1`이며 LOC/tool/report digest를 포함하지 않는다. `node scripts/loc.mjs --source-digests`로 명시적으로 갱신하고 `npm run check:inventory`는 cloc 없이 source bytes를 검증한다. `--inventory-only`는 계속 목록만 갱신한다.
 
-현재 LOC는 `node scripts/loc.mjs --out <evidence-directory>`가 cloc 2.08로 생성·재검증하는 CI artifact `production-loc.json`과 `production-measurement-hashes.json`에만 있다. 생성기는 committed source digest를 먼저 검증하며 이를 재작성하지 않는다. CI는 검증한 commit 아래 report·report digest·source digest·tool version을 함께 업로드한다. committed LOC claim과 측정치의 결박은 더 이상 제공하지 않으며, source digest 결박은 유지한다. 아래 구조 입력 identity는 DR34(UX-08 CONNECT egress) 2차 맹검증 변경분(paused-socket 수명주기·Teredo 거절·rest 의미)과 BL1(bundled extension #1 pi-lsp — vendor 페이로드·verifyVendorBundle·lsp-tools 어댑터·tool-surface 플랜·workspace-guard 확장), BL2(bundled extension #2 ask_user_question — OMA 네이티브 구현: client contract/model/envelope/protocol, extension 등록, TUI presenter/component, role surface·deployment·두 host 경계 결선), BL3(bundled extension #3 pi-hashline-edit-pro — vendor 페이로드+의존 closure·commit/read seam divergence·hashline-tools 어댑터·file_edit surface·contained writer identity seam), BL4(bundled extension #4 pi-web-access — vendor 페이로드+의존 closure·OMA 정책/egress divergence·web-tools 어댑터·web_research surface·deployment-manifest 엔트리 bound 상향), BL5(bundled extension #5 pi-mcp-adapter — vendor 페이로드+42패키지 의존 closure·27파일 OMA 정책 divergence·mcp-tools 어댑터·공유 child-env 추출·`mcp` DIRECT surface), BL5 맹검증 정산(F1 SDK child-env underlay tombstone·F2 UI-session deny-by-default permit과 direct/proxy/ui-session/glimpse-ui 거절 게이트·F3 ENOENT-only 부재 판정·F4 command basename 정규화 거절·F5 dead `omaStateDir` 제거·F6 tautological assert 교체·`pi.events` runtime-register posture 기록·runtime/manifest 재생성·`mcp-bundle.test.ts` 18종), BL5 정산 후속(SDK underlay 이름의 disposition을 검증된 번들 바이트에서 파싱해 결박하는 drift oracle·win32 trailing-dot/shim fixpoint command admission), LOC 재생성 고정(cloc --ignored 판정을 report의 nonCode 블록에 접는 비코드 분류·clocCoverage 공유 계정 규칙 — vendored LICENSE/NOTICE/.map/dotfile/빈 파일/바이너리 1,620개를 명시 분류, 미계정·미인정 verdict는 여전히 실패) 변경분의 로컬 검증을 위해 다시 결박한 것이고, 이전 runtime PASS를 새 source의 PASS로 승격하지 않는다.
+현재 LOC는 `node scripts/loc.mjs --out <evidence-directory>`가 cloc 2.08로 생성·재검증하는 CI artifact `production-loc.json`과 `production-measurement-hashes.json`에만 있다. 생성기는 committed source digest를 먼저 검증하며 이를 재작성하지 않는다. CI는 검증한 commit 아래 report·report digest·source digest·tool version을 함께 업로드한다. committed LOC claim과 측정치의 결박은 더 이상 제공하지 않으며, source digest 결박은 유지한다. 아래 구조 입력 identity는 DR34(UX-08 CONNECT egress) 2차 맹검증 변경분(paused-socket 수명주기·Teredo 거절·rest 의미)과 BL1(bundled extension #1 pi-lsp — vendor 페이로드·verifyVendorBundle·lsp-tools 어댑터·tool-surface 플랜·workspace-guard 확장), BL2(bundled extension #2 ask_user_question — OMA 네이티브 구현: client contract/model/envelope/protocol, extension 등록, TUI presenter/component, role surface·deployment·두 host 경계 결선), BL3(bundled extension #3 pi-hashline-edit-pro — vendor 페이로드+의존 closure·commit/read seam divergence·hashline-tools 어댑터·file_edit surface·contained writer identity seam), BL4(bundled extension #4 pi-web-access — vendor 페이로드+의존 closure·OMA 정책/egress divergence·web-tools 어댑터·web_research surface·deployment-manifest 엔트리 bound 상향), BL5(bundled extension #5 pi-mcp-adapter — vendor 페이로드+42패키지 의존 closure·27파일 OMA 정책 divergence·mcp-tools 어댑터·공유 child-env 추출·`mcp` DIRECT surface), BL5 맹검증 정산(F1 SDK child-env underlay tombstone·F2 UI-session deny-by-default permit과 direct/proxy/ui-session/glimpse-ui 거절 게이트·F3 ENOENT-only 부재 판정·F4 command basename 정규화 거절·F5 dead `omaStateDir` 제거·F6 tautological assert 교체·`pi.events` runtime-register posture 기록·runtime/manifest 재생성·`mcp-bundle.test.ts` 18종), BL5 정산 후속(SDK underlay 이름의 disposition을 검증된 번들 바이트에서 파싱해 결박하는 drift oracle·win32 trailing-dot/shim fixpoint command admission), LOC 재생성 고정(cloc --ignored 판정을 report의 nonCode 블록에 접는 비코드 분류·clocCoverage 공유 계정 규칙 — vendored LICENSE/NOTICE/.map/dotfile/빈 파일/바이너리 1,620개를 명시 분류, 미계정·미인정 verdict는 여전히 실패), post-listen 'error' 전수 스캔 정산(6곳 listen 경계의 영구 'error' 리스너 + 보호된 best-effort journal, `egress-forwarder`의 `onError` 심과 oma-society `notice` 연결, `rpc.ts` FrameParser 생성자의 'data' emit 내부화, `egress-bridge` stderr.write 가드, cloc 계정의 `Object.hasOwn` own-key 조회와 `temporary editor file` verdict 인정·LOC-004 문구 동기화) 변경분의 로컬 검증을 위해 다시 결박한 것이고, 이전 runtime PASS를 새 source의 PASS로 승격하지 않는다.
 
 ## 재검증
 

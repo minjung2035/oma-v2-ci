@@ -241,7 +241,7 @@ LOC-001은 2026-09-28 철회했다. 이 ID를 다른 요구로 재사용하지 �
 
 **MUST [LOC-003]** production manifest는 repository-relative 원본 파일을 한 줄 하나로 열거한다. source closure에 TS, SQL/migration, systemd template, shell/native glue, 직접 작성한 runtime config/template를 포함한다. emitted JS/동일 source에서 생성한 산출물은 중복 제외하고 code generator 자체와 직접 작성한 생성 입력은 포함한다. 수정하지 않은 upstream dependency·lockfile·문서·tests는 제외한다. test helper가 production에서 import되면 production으로 포함한다. 직접 수정한 vendor/fork code를 dependency로 숨기지 않는다.
 
-**MUST [LOC-004]** manifest의 동일 path 중복은 거절하지만 내용이 같은 서로 다른 production source 파일은 각각 센다. cloc --skip-uniqueness로 content-dedup을 끈다. symlink로 다른 source를 중복 계산하거나 제외하지 않게 canonical source identity를 검사한다. unrecognized/ignored language 또는 존재하지 않는 파일이 있으면 0으로 누락하지 말고 gate 실패다. production package/entrypoint dependency inventory와 manifest를 대조한다.
+**MUST [LOC-004]** manifest의 동일 path 중복은 거절하지만 내용이 같은 서로 다른 production source 파일은 각각 센다. cloc --skip-uniqueness로 content-dedup을 끈다. symlink로 다른 source를 중복 계산하거나 제외하지 않게 canonical source identity를 검사한다. inventory의 모든 파일은 cloc code row이거나 도구가 내린 인정된 non-code verdict로 명시 계정되어야 한다 — 어느 쪽으로도 계정되지 않은 파일, 인벤토리 밖 이름의 분류, row와 분류의 이중 계정, 인정되지 않은 verdict는 0으로 누락하지 말고 gate 실패다. 인정되는 verdict는 cloc이 내리는 non-code 판정(빈 파일·바이너리·미인식 언어·도구 자체의 non-code table·temporary editor file)뿐이고, 크기 초과·not-file·unreadable 같은 관측 이상 verdict는 분류가 아니라 실패로 남는다. production package/entrypoint dependency inventory와 manifest를 대조한다.
 
 **MUST [LOC-005]** 아래 명령을 실제 source root에서 실행하고 `SUM.code`를 최종 LOC로 사용한다. file별 language/code/comment/blank와 manifest/content hash도 기록한다. 아래 path는 build 검증 산출물이며 runtime S/R allowlist를 확장하지 않는다.
 

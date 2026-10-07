@@ -169,6 +169,17 @@ export class InferenceRelay {
     // A relay that silently drops a client error would look like a provider
     // failure from inside, so the socket is destroyed instead.
     this.server.on("clientError", (_error, socket) => { socket.destroy(); });
+    // The 'error' event needs a listener for the server's whole life, not
+    // only the listen attempt: `open` removes its startup once-listener on
+    // success, and an accept-class error (EMFILE/ENFILE) after that would
+    // escape its emit and kill the runner -- this delivery's tunnels and
+    // relay with it. The permanent listener journals and keeps the socket
+    // bound: the kernel retries the accept, while closing would unlink the
+    // name the sandbox still dials. The journal is best-effort -- a dead
+    // stderr must not throw out of this emit either.
+    this.server.on("error", error => {
+      try { console.error(`inference relay listener error: ${error.message}`); } catch { /* nowhere left to say it */ }
+    });
     // WP27: connections are bounded as well as requests; idle ones would
     // otherwise pile up in this process for as long as the sandbox keeps them.
     this.server.maxConnections = RELAY_CONNECTIONS_PER_REQUEST * limits.concurrent;

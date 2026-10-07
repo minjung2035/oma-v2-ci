@@ -697,7 +697,11 @@ async function main(argv: readonly string[]): Promise<void> {
     principalEgress = await adoptPrincipalEgress(egressOwner,
       { society, runRoot, provider: egressProfile.provider, model: egressProfile.model, inferenceSeconds: egressProfile.inferenceSeconds,
         modelProfile: settings.config.agentProfiles[settings.config.principalProfile]?.modelProfile ?? settings.config.principalProfile,
-        frameBytes: settings.config.limits.frameBytes, deadlineMs: settings.config.limits.receiptWaitSeconds * 1000, env: process.env });
+        frameBytes: settings.config.limits.frameBytes, deadlineMs: settings.config.limits.receiptWaitSeconds * 1000, env: process.env,
+        // A listener error past the forwarder's start is reported on this
+        // screen and absorbed there -- this process is the forwarder's host,
+        // and the path it paid for stays bound for the engine to retry.
+        onError: error => { notice(`The engine's provider path survived a listener error: ${errorWords(error)}`); app.draw(); } });
   }
   // The session environment is principalEnvironment's own value, with the
   // provider path added only where there is one.

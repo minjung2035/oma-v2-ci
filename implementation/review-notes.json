@@ -406,15 +406,17 @@
    "by": [
     "DR33",
     "B4",
-    "BL1"
+    "BL1",
+    "DR34"
    ],
    "oracles": [
     "UX-09",
     "B4",
-    "BL1"
+    "BL1",
+    "egress degradation"
    ],
-   "sha256": "e1778109feb28f141b3e96e34c31311819c184ba4f0e8dcd4766a30018fbe9da",
-   "note": "Read in full: the provision report's gitlinkNote is surfaced through the existing notice channel at society start — a loud warning that integration will refuse, while start itself stays permissive. 2026-10-05 B4: the mail port feeds readMailbox the agent names the broker's status view last observed -- before any observation the roster is undefined and the rows keep the headers' own names. BL1 review -- the Principal engine receives the encoded principal surface plan through its session environment."
+   "sha256": "485924a22f8af3421281abe5b24c317ac327e5565c08d106dfd4b3ae540da978",
+   "note": "Read in full: the provision report's gitlinkNote is surfaced through the existing notice channel at society start — a loud warning that integration will refuse, while start itself stays permissive. 2026-10-05 B4: the mail port feeds readMailbox the agent names the broker's status view last observed -- before any observation the roster is undefined and the rows keep the headers' own names. BL1 review -- the Principal engine receives the encoded principal surface plan through its session environment. 2026-10-07 DR34 post-listen sweep: adoptPrincipalEgress now wires `onError` to this screen's notice channel -- this process is the forwarder's host, a listener error past the forwarder's start is reported as a notice and absorbed there, and the path it paid for stays bound."
   },
   {
    "path": "src/git.ts",
@@ -804,10 +806,11 @@
     "DR34"
    ],
    "oracles": [
-    "DR34"
+    "DR34",
+    "post-listen"
    ],
-   "sha256": "ac3124c4eb8637c900faad29fcee21f8a875dff1db2bd907e8a0454c12851535",
-   "note": "Re-read in full after the third blind-verification round: the synchronous \"request\" and \"upgrade\" listeners now treat the journal as best-effort -- a sink throw inside `server.emit` escaped whole and took the runner (every tunnel/relay of the delivery) with it, so the audit call is caught at the boundary, the refusal proceeds whatever the journal's health, and any other failure inside the listener ends the connection rather than the process. The connect handler's own audits stay under its async `.catch(drop)` boundary unchanged. Teredo refusal, upstream-close propagation, audit hygiene, 0600 listener discipline and post-dial orphan-safety unchanged."
+   "sha256": "343919cf032e4558a901b776816a461092930652d23cb1a8a004bd98b431b80e",
+   "note": "Re-read in full after the third blind-verification round: the synchronous \"request\" and \"upgrade\" listeners now treat the journal as best-effort -- a sink throw inside `server.emit` escaped whole and took the runner (every tunnel/relay of the delivery) with it, so the audit call is caught at the boundary, the refusal proceeds whatever the journal's health, and any other failure inside the listener ends the connection rather than the process. The connect handler's own audits stay under its async `.catch(drop)` boundary unchanged. Teredo refusal, upstream-close propagation, audit hygiene, 0600 listener discipline and post-dial orphan-safety unchanged. 2026-10-07 DR34 post-listen sweep: a permanent 'error' listener now records `(listener)`/`fail` through the same best-effort audit boundary and keeps the socket bound -- an accept-class error after startup journals instead of escaping the emit as the runner's death."
   },
   {
    "path": "src/extension/egress-bridge.ts",
@@ -815,10 +818,11 @@
     "DR34"
    ],
    "oracles": [
-    "DR34"
+    "DR34",
+    "post-listen"
    ],
-   "sha256": "84e81dee3b3de623e158fd1d58ff9d58e92f333ab3d93cc4bf4bf924e9a80408",
-   "note": "Read in full: a loopback port forwards bytes to the bound proxy socket, unread; without the env pair it starts nothing. No policy knowledge or credentials inside -- the socket end decides."
+   "sha256": "7fcf5ce7c30686ee4f178a793fa14b7c190924285e0e3aa39da15c169627fb5b",
+   "note": "Read in full: a loopback port forwards bytes to the bound proxy socket, unread; without the env pair it starts nothing. No policy knowledge or credentials inside -- the socket end decides. 2026-10-07 DR34 residual sweep: the permanent 'error' listener's `process.stderr.write` is now guarded -- a dead stderr at a refused bind previously threw out of the emit, the same process death the listener exists to absorb."
   },
   {
    "path": "src/protocol/host-guest.ts",
@@ -837,10 +841,12 @@
     "DR34"
    ],
    "oracles": [
-    "DR34"
+    "DR34",
+    "post-listen",
+    "egress degradation"
    ],
-   "sha256": "913fbb630594e2b1efb3a1b251ae45fa19501a7770d01d6d5d21b16cf4fd32ba",
-   "note": "Re-read in full after the second blind-verification round: oneFrame still hands the answered socket back paused with {frame, rest}, and requestEgressPlaceholder now resumes it after installing the post-answer speech listener -- a 'data' listener alone never resumes a paused socket, so late bytes (and a clean FIN behind unread bytes) previously went unheard and the lease outlived the run. requestEgressConnect's rest unshift into the tunnel is unchanged."
+   "sha256": "3ab90db33ade52705bf006c309c5e976650cb11b1289531853025b5e0105c7c0",
+   "note": "Re-read in full after the second blind-verification round: oneFrame still hands the answered socket back paused with {frame, rest}, and requestEgressPlaceholder now resumes it after installing the post-answer speech listener -- a 'data' listener alone never resumes a paused socket, so late bytes (and a clean FIN behind unread bytes) previously went unheard and the lease outlived the run. requestEgressConnect's rest unshift into the tunnel is unchanged. 2026-10-07 DR34 post-listen sweep: `listen` takes an `onError` journal seam (runner default stderr, oma-society wired to its screen notice through openPrincipalEgress/adoptPrincipalEgress), installs a permanent 'error' listener that reports through it inside a try and keeps the socket bound -- a transient accept failure is not the lease's to end, and a reporter that throws cannot escape the emit."
   },
   {
    "path": "src/platform/host/egress.ts",
@@ -859,10 +865,11 @@
     "DR34"
    ],
    "oracles": [
-    "DR34"
+    "DR34",
+    "post-listen"
    ],
-   "sha256": "c69d57846b158a9bfdb156541b87f5ba88a02aac1d69bce662bba6d4244cc0d6",
-   "note": "Re-read in full after the second blind-verification round: egress.connect no longer requires a bare answer -- answer.rest is written to the client as the tunnel's first payload (banner-first upstreams are legal), asked.rest still goes to the host first, and riding bytes on a refused answer die with the pair. A placeholder request carrying trailing bytes dies unanswered before a pooled connection is spent on it. The held-lease pair now listens for data on both ends and resumes both, so speech or a clean FIN queued behind unread bytes ends the lease rather than going unheard."
+   "sha256": "427104cbb5c99b85b9503dbc07a081b1ff8c9f4a522fdc10f7252d2e71789695",
+   "note": "Re-read in full after the second blind-verification round: egress.connect no longer requires a bare answer -- answer.rest is written to the client as the tunnel's first payload (banner-first upstreams are legal), asked.rest still goes to the host first, and riding bytes on a refused answer die with the pair. A placeholder request carrying trailing bytes dies unanswered before a pooled connection is spent on it. The held-lease pair now listens for data on both ends and resumes both, so speech or a clean FIN queued behind unread bytes ends the lease rather than going unheard. 2026-10-07 DR34 post-listen sweep: a permanent 'error' listener journals to the unit's stderr best-effort and keeps the socket bound -- guesthost has no uncaughtException handler, so an accept-class error after startup previously escaped its emit as the unit's death."
   },
   {
    "path": "src/resident-paths.ts",
@@ -7157,8 +7164,8 @@
    "oracles": [
     "BL4"
    ],
-   "note": "Generated by scripts/vendor-pi-web-access.mjs --write. kind oma-vendored-bundle-v1; package pins name/version/commit/npm integrity+shasum; generated.divergences equals the script's OMA_DIVERGENCES (utils.js/ssrf-protection.js egress-pin and deny-by-default policy seams, credential-command/browser-cookie/gh/clone/ADC/native-media/local-file/workflow refusals, index.js init-config overlay, utils.d.ts declarations) and generated.dependencies equals the pinned closure; files+bundleSha256 bind every byte; upstream-tests/ recorded as the vendored commit's own test tree, not wired into npm test.",
-   "sha256": "fcf72d5488bf7a6dc5d3cf37727bfea8d6b5627c1665f2a81a4de3cc49be9ad7"
+   "note": "Generated by scripts/vendor-pi-web-access.mjs --write. kind oma-vendored-bundle-v1; package pins name/version/commit/npm integrity+shasum; generated.divergences equals the script's OMA_DIVERGENCES (utils.js/ssrf-protection.js egress-pin and deny-by-default policy seams, credential-command/browser-cookie/gh/clone/ADC/native-media/local-file/workflow refusals, index.js init-config overlay, utils.d.ts declarations) and generated.dependencies equals the pinned closure; files+bundleSha256 bind every byte; upstream-tests/ recorded as the vendored commit's own test tree, not wired into npm test. 2026-10-07 DR34: regenerated for the curator-server.js post-listen 'error' divergence (new generated.divergences entry + fresh per-file hashes and bundleSha256; the divergence is recorded in scripts/vendor-pi-web-access.mjs and the emitted runtime carries exactly that edit).",
+   "sha256": "3ab67d0e7f5aca7213c51b3adc5f693fc278e3a7f4b84830e1f1da2b674f65c4"
   },
   {
    "path": "src/extension/vendor/pi-web-access/node_modules/.package-lock.json",
@@ -120441,13 +120448,15 @@
   {
    "path": "src/extension/vendor/pi-web-access/runtime/curator-server.js",
    "by": [
-    "BL4"
+    "BL4",
+    "DR34"
    ],
    "oracles": [
-    "BL4"
+    "BL4",
+    "post-listen"
    ],
-   "note": "Vendored runtime emit member: tsc output of a vendored upstream .ts module with relative .ts specifiers rewritten to Node-loadable .js by scripts/vendor-pi-web-access.mjs. OMA divergence splices declared in manifest.generated.divergences are applied by the same script; regeneration is deterministic and --check re-emits and compares byte-for-byte.",
-   "sha256": "5937c24de7fd2dfb21a5a4804b3dc6538b3fce0752bcb4a39df0a07e219ddb41"
+   "note": "Vendored runtime emit member: tsc output of a vendored upstream .ts module with relative .ts specifiers rewritten to Node-loadable .js by scripts/vendor-pi-web-access.mjs. OMA divergence splices declared in manifest.generated.divergences are applied by the same script; regeneration is deterministic and --check re-emits and compares byte-for-byte. Read in full for the post-listen 'error' sweep: the vendored curator server used the same once(\"error\") + post-listen off pattern -- an accept-class error after startup escaped the emit as the hosting engine's death. The fix rides the bundle's divergence mechanism (scripts/vendor-pi-web-access.mjs OMA_DIVERGENCES, recorded in manifest.json and byte-pinned by verifyVendorBundle): a permanent listener that journals best-effort and keeps the socket bound. The curator surface is pinned to workflow \"none\" under the installed policy, so this is defense in depth for evaluation the pin does not reach.",
+   "sha256": "88e38eddbbc5312c9dfe82df870d4573b18ae0333aa148e169046066c1fb0c21"
   },
   {
    "path": "src/extension/vendor/pi-web-access/runtime/data-uri-sanitize.d.ts",
@@ -152942,6 +152951,61 @@
    ],
    "note": "BL5 adapter for the bundled pi-mcp-adapter extension. verifyVendorBundle precedes every dynamic import -- a tampered bundle registers nothing and session_start refuses; the facade forwards only registerTool for the pinned name `mcp`, drops upstream commands/flag/shortcuts, refuses pi.exec (the browser-open path) and omits registerMcpServer/getMcpServers so piSupportsMcp stays false (no Pi built-in MCP coexistence). Config is OMA-owned only -- <agentDir>/mcp-adapter.json normalized by normalizeOmaMcpConfig; absence is ENOENT-only (statSync catch), so an unreadable config or oauth-file-key refuses instead of masquerading as empty state or silently rotating a key (malformed JSON stays a distinct boundary error). The npx/npm no-fetch rule compares the command basename across / and \\ separators, case-folded with win32 .cmd/.exe/.bat/.ps1 shims AND trailing dots/spaces stripped to a fixpoint (win32 resolves npx. / npx.cmd. / npx.. to the same fetcher), so path-qualified or suffix-padded spellings are the same refusal. The policy seam now also hands the vendored SDK-union problem a finish that writes explicit undefined tombstones on every getDefaultEnvironment underlay name the scrub denied -- Node spawn drops those pairs, so denied ambient names stay absent in the spawned child (proven against the real vendored StdioClientTransport with a sentinel SHELL). SDK_STDIO_ENV_UNDERLAY mirrors the vendored DEFAULT_INHERITED_ENV_VARS by hand; the boundary test parses both platform lists from the verified ESM+CJS bytes, pins them to the live export and fails when a vendored SDK bump adds a name with no tombstone and no child-env sanction. permits:{} keeps ui-session deny-by-default; the dead omaStateDir helper is removed; pi.events is forwarded unchanged and the pi-mcp-adapter:runtime-register channel is recorded as an in-process-only posture note (it bypasses normalizeOmaMcpConfig but no other OMA extension can emit it). Scratch rotates on session_start and is removed on session_shutdown.",
    "sha256": "238dcf7e95709d791bc3f39ffffffd4c2750d76ee70f66ebd2ddc8fb074b563d"
+  },
+  {
+   "path": "src/runtime/inference-relay.ts",
+   "by": [
+    "DR34"
+   ],
+   "oracles": [
+    "post-listen"
+   ],
+   "sha256": "90bb9b6fb863ca396a81b9e775d192da8274127a00f4d8efcb8446d063f9efdf",
+   "note": "Read in full for the post-listen 'error' sweep: a permanent 'error' listener now sits beside the startup once-listener -- after `listen` succeeds and the startup listener is removed, an accept-class error (EMFILE/ENFILE) is journaled best-effort (a sink that throws cannot escape the emit) and the socket stays bound so the kernel can retry; closing would unlink the name its clients still dial."
+  },
+  {
+   "path": "src/platform/guest/server.ts",
+   "by": [
+    "DR34"
+   ],
+   "oracles": [
+    "post-listen"
+   ],
+   "sha256": "a7705930e31cea28b5cb7b0e626bcb49374bcf9dd7efbbda59ebcd3c0abdafab",
+   "note": "Read in full for the post-listen 'error' sweep: a permanent 'error' listener now sits beside the startup once-listener -- after `listen` succeeds and the startup listener is removed, an accept-class error (EMFILE/ENFILE) is journaled best-effort (a sink that throws cannot escape the emit) and the socket stays bound so the kernel can retry; closing would unlink the name its clients still dial. Both callers (guesthost, guestctl) share this boundary and run no uncaughtException handler."
+  },
+  {
+   "path": "src/platform/host/host-api.ts",
+   "by": [
+    "DR34"
+   ],
+   "oracles": [
+    "post-listen"
+   ],
+   "sha256": "57ae09ea0e8a5198bf517261a87c35635e1090c911268e749e5e43a7572667d9",
+   "note": "Read in full for the post-listen 'error' sweep: a permanent 'error' listener now sits beside the startup once-listener -- after `listen` succeeds and the startup listener is removed, an accept-class error (EMFILE/ENFILE) is journaled best-effort (a sink that throws cannot escape the emit) and the socket stays bound so the kernel can retry; closing would unlink the name its clients still dial. omahostd reaches this boundary through platform/host/service.ts and runs no uncaughtException handler."
+  },
+  {
+   "path": "src/platform/rpc.ts",
+   "by": [
+    "DR34"
+   ],
+   "oracles": [
+    "DR27"
+   ],
+   "sha256": "5e1cdc23ad01136bb2e84aeba33da9b86ff3d4529d4d5ecd99ab5f37b5ed35bc",
+   "note": "2026-10-07 DR34 residual sweep: `new FrameParser(frameBytes)` moved inside the try in the 'data' listener -- a NaN/fractional/infinite limit compares false through every length check and reaches the constructor, and its throw now becomes this read's rejection instead of escaping the emit as the host's death."
+  },
+  {
+   "path": "src/extension/inference-bridge.ts",
+   "by": [
+    "DR34"
+   ],
+   "oracles": [
+    "post-listen"
+   ],
+   "sha256": "e6e6d9a0855d70aba90c5b3e158e9a9547280c775049b9494d55d28e379005f2",
+   "note": "Read in full for the post-listen 'error' sweep: the permanent 'error' listener already existed but its body could throw out of the emit -- a dead stderr on the write, a refused duplicate register, a retry listen that throws. All three are now guarded at the boundary; the unreachable-override retry semantics are unchanged."
   }
  ],
  "readUnchanged": [
@@ -152987,17 +153051,6 @@
     "V23A"
    ],
    "note": "closed view codec; staleness is the reader's decision"
-  },
-  {
-   "path": "src/runtime/inference-relay.ts",
-   "by": [
-    "WP27"
-   ],
-   "oracles": [
-    "T114",
-    "V27B"
-   ],
-   "note": "fixed origin, caller authority dropped, placeholder swapped in headers and path, bounded concurrency, no resend, streamed"
   },
   {
    "path": "src/protocol/channel.ts",

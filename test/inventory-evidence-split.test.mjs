@@ -126,6 +126,24 @@ test('K63: non-code inventory files are classified by cloc verdict, never silent
     /does not account for every production file/);
 });
 
+test('K63: an inventory member named like an Object.prototype member is accounted own-keyed', async t => {
+  const { clocCoverage } = await import('../scripts/production-inventory.mjs');
+  // `report` and `nonCode` are plain parsed objects, so a literal filename
+  // `constructor` or `hasOwnProperty` reads back an inherited member on a
+  // naive `report[file]` -- the file looks counted or declined while cloc
+  // never measured it. Only own properties may answer for it.
+  const files = ['constructor', 'hasOwnProperty'];
+  assert.throws(() => clocCoverage({ nonCode: {} }, files), /cloc omitted or misclassified constructor/,
+    'an inherited member is not a code row');
+  assert.throws(() => clocCoverage({ nonCode: { constructor: 'temporary editor file' } }, files),
+    /cloc omitted or misclassified hasOwnProperty/, 'the second member is still honestly missing');
+  const covered = clocCoverage({
+    nonCode: { constructor: 'temporary editor file', hasOwnProperty: 'temporary editor file' },
+  }, files);
+  assert.equal(covered.rows.size, 0, 'no phantom rows from the prototype');
+  assert.equal(covered.nonCode.get('constructor'), 'temporary editor file');
+});
+
 test('K63: unavailable measurement stays NOT_RUN and cannot overwrite source digests', t => {
   const f = fixture(t), before = readFileSync(join(f.root, 'production-loc-hashes.json'), 'utf8');
   const run = f.cli('loc.mjs', ['--out', join(f.root, 'evidence')], true);

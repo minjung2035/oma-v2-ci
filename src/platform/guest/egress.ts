@@ -73,6 +73,17 @@ export interface EgressServiceOptions {
 export function startEgressService(options: EgressServiceOptions): Promise<Server> {
   clearSocketName(options.socketPath);
   const server = createServer({ allowHalfOpen: true }, client => { void serve(client, options); });
+  // guesthost runs no uncaughtException handler: once the startup
+  // once-listener below is removed, an accept-class error (EMFILE/ENFILE)
+  // meets zero 'error' listeners and escapes its emit as the unit's death
+  // -- the pool and every held lease with it. The permanent listener
+  // journals and keeps the socket bound: the kernel retries the accept,
+  // while closing would unlink the name the guest's own processes dial.
+  // The journal is best-effort -- a dead stderr must not throw out of this
+  // emit either.
+  server.on("error", error => {
+    try { console.error(`guest egress listener error: ${error.message}`); } catch { /* nowhere left to say it */ }
+  });
   return new Promise((resolve, reject) => {
     server.once("error", reject);
     server.listen(options.socketPath, () => {

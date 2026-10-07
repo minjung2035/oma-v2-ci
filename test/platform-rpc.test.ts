@@ -129,6 +129,23 @@ test("DR27: silence expires without leaving leading-frame listeners", async t =>
   assert.deepEqual(client.eventNames().map(name => [name, client.listenerCount(name)]), before);
 });
 
+test("DR27: an unconstructible parser rejects inside the data emit, not the process", async t => {
+  const { client, remote } = await pair(t);
+  const escaped: unknown[] = [];
+  const onUncaught = (error: Error) => { escaped.push(error); };
+  process.once("uncaughtException", onUncaught);
+  t.after(() => { process.off("uncaughtException", onUncaught); });
+  // A NaN limit is refused by neither the declared-size checks (NaN
+  // compares false against the length) nor any earlier validation: the
+  // parser's constructor is reached with it inside the 'data' listener,
+  // and its throw must become this read's rejection rather than escaping
+  // the emit as the host's death.
+  const pending = readLeadingFrame(client, NaN, 1000);
+  remote.write(encodeFrame({ hello: true }));
+  await assert.rejects(observed(pending), RangeError);
+  assert.deepEqual(escaped, [], "a constructor throw inside the emit reached the process");
+});
+
 for (const channel of ["control", "stream"] as const) {
   test(`DR27: ${channel} hello uses the handshake budget, not the later request budget`, async t => {
     const { client, remote } = await pair(t);

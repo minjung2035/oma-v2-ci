@@ -83,14 +83,21 @@ export const CLOC_VERSION = "2.08";
 
 /** The ignored-file verdicts cloc can emit under the pinned invocation that
  * mean "this inventory entry is not countable source": empty, binary, no
- * known language, or a name cloc's own non-code tables list. Verdicts outside
- * this set are tool-filter answers that cannot occur here (there is no
+ * known language, a name cloc's own non-code tables list, or a `~`-suffixed
+ * editor backup a vendored payload may carry. Verdicts outside this set are
+ * tool-filter answers that cannot occur here (there is no
  * --exclude/--include filter and --skip-uniqueness suppresses the duplicate
- * verdict) or a cloc anomaly ("undefined: Filters_by_Language{...}" -- a
- * script whose language was recognized but has no counter). An unrecognized
- * verdict is still an accounting failure, not a classification. */
+ * verdict), a cloc anomaly ("undefined: Filters_by_Language{...}" -- a
+ * script whose language was recognized but has no counter), or an
+ * observation anomaly that must stay an accounting failure rather than a
+ * classification: `file size of ... exceeds max file size` (a >100 MB
+ * member), `not file, not directory` (a member that changed kind between
+ * listing and stat), `no longer readable` (it vanished mid-measurement),
+ * `unable to associate with a language` (classify raced), `cannot read`
+ * (the tool could not open it). An unrecognized verdict is still an
+ * accounting failure, not a classification. */
 export const CLOC_NON_CODE_REASON =
-  /^(?:zero sized file|binary file|language unknown \(#\d+\)|listed in \$Not_Code_(?:Extension|Filename)\{[^}]*\})$/;
+  /^(?:zero sized file|binary file|language unknown \(#\d+\)|listed in \$Not_Code_(?:Extension|Filename)\{[^}]*\}|temporary editor file)$/;
 
 /** The two halves of a measurement's accounting, checked together: every
  * inventory file either has a cloc code row in the report or is named in the
@@ -108,19 +115,27 @@ export function clocCoverage(report, files) {
   if (typeof classified !== "object" || classified === null || Array.isArray(classified))
     throw new Error("cloc non-code classification is malformed");
   const listed = new Set(files);
+  // A row or verdict is an own property only: `report` and `classified` are
+  // plain parsed objects, so an inventory file literally named
+  // `constructor` or `hasOwnProperty` would otherwise read back an
+  // Object.prototype member -- the file would look counted or declined
+  // while cloc never measured it. The `./` spelling a report gives
+  // relative paths can never be a prototype member, so it reads directly.
+  const rowAt = file => (Object.hasOwn(report, file) ? report[file] : report[`./${file}`]);
   for (const [file, reason] of Object.entries(classified)) {
     if (!listed.has(file))
       throw new Error(`cloc non-code classification names a file outside the inventory: ${file}`);
-    if (report[file] !== undefined || report[`./${file}`] !== undefined)
+    if (rowAt(file) !== undefined)
       throw new Error(`cloc report both counts and classifies ${file} as non-code`);
     if (typeof reason !== "string" || !CLOC_NON_CODE_REASON.test(reason))
       throw new Error(`cloc non-code verdict for ${file} is not a recognized non-code reason: ${String(reason)}`);
   }
   const rows = new Map(), nonCode = new Map();
   for (const file of files) {
-    const row = report[file] ?? report[`./${file}`];
+    const row = rowAt(file);
     if (row !== undefined) { rows.set(file, row); continue; }
-    if (classified[file] !== undefined) { nonCode.set(file, classified[file]); continue; }
+    const verdict = Object.hasOwn(classified, file) ? classified[file] : undefined;
+    if (verdict !== undefined) { nonCode.set(file, verdict); continue; }
     throw new Error(`cloc omitted or misclassified ${file}`);
   }
   return { rows, nonCode };

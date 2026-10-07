@@ -52,6 +52,10 @@
         "reason": "Local file refusal: upstream lets fetch_content take a local path or file:// URL into the ffprobe/ffmpeg video pipeline — a model naming a host file for a subprocess read. Under the deny-by-default permit the input is never a file path, so file:// and local paths fall through to the remote-URL validation, which refuses non-http(s) inputs.",
         "edits": 2
       },
+      "curator-server.js": {
+        "reason": "Post-listen 'error' absorption: upstream removes its only 'error' listener after a successful listen, so an accept-class error (EMFILE/ENFILE) later meets zero listeners and escapes the emit as the hosting engine's death. A permanent listener beside the startup once-listener journals best-effort and keeps the curator socket bound for the kernel to retry — the startup rejection contract is unchanged, and the class is closed even if the server ever runs under an evaluation the workflow pin did not reach.",
+        "edits": 1
+      },
       "curator-run.js": {
         "reason": "Workflow pin: the summary-review/auto-summary workflows drive model-completion calls and the browser curator — surfaces OMA does not expose. Under the deny-by-default permit every workflow resolves to none.",
         "edits": 1
@@ -54399,8 +54403,8 @@
     },
     {
       "path": "runtime/curator-server.js",
-      "bytes": 29769,
-      "sha256": "5937c24de7fd2dfb21a5a4804b3dc6538b3fce0752bcb4a39df0a07e219ddb41"
+      "bytes": 30635,
+      "sha256": "88e38eddbbc5312c9dfe82df870d4573b18ae0333aa148e169046066c1fb0c21"
     },
     {
       "path": "runtime/data-uri-sanitize.d.ts",
@@ -56003,5 +56007,5 @@
       "sha256": "025434bf88dc12430dba25f0bc68e320eabfdda4c2df7b6bbfa0868e865d4908"
     }
   ],
-  "bundleSha256": "5e0dd8912b840cb4a8ae5e677c03f254dc4c1fc0c4793366d2a6d3b3d42799a6"
+  "bundleSha256": "8721ac33a43d63d92ef4501ef8fc362196c8dff107f6347d8960aa0ed7fb4fba"
 }

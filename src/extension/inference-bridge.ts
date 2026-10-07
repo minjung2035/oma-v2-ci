@@ -51,10 +51,19 @@ export async function startInferenceBridge(pi: ExtensionAPI): Promise<void> {
     // Keep the override even if neither bind succeeds; unregistering or throwing
     // from the factory would restore the provider that bypasses the relay.
     server.on("error", error => {
-      process.stderr.write(`oma inference bridge unavailable: ${error instanceof Error ? error.message : String(error)}\n`);
-      register(UNREACHABLE);
-      if (planned) { planned = false; server.listen(0, "127.0.0.1"); }
-      else resolve();
+      // Nothing in this listener may throw: 'error' is emitted
+      // synchronously, and a throw here escapes the emit as the engine's
+      // death -- the same death the listener exists to absorb. The journal
+      // is best-effort (a dead or failing stderr, EPIPE included), the
+      // re-register is idempotent (the unreachable name was already
+      // registered before the first bind, so a refusal means the safe
+      // state already holds), and a retry listen that throws leaves the
+      // unreachable override standing.
+      try { process.stderr.write(`oma inference bridge unavailable: ${error instanceof Error ? error.message : String(error)}\n`); }
+      catch { /* nowhere left to say it */ }
+      try { register(UNREACHABLE); } catch { /* already the provider the first bind left behind */ }
+      try { if (planned) { planned = false; server.listen(0, "127.0.0.1"); } else resolve(); }
+      catch { resolve(); }
     });
     server.listen(port, "127.0.0.1");
   });

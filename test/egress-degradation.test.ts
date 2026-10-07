@@ -110,3 +110,14 @@ test("egress degradation: a tenure that ended while the egress opened adopts not
   const adopted = await adoptPrincipalEgress(f.owner(false), f.options({ [EGRESS_SOCKET_ENV]: socket }));
   assert.equal(adopted, null, "hold() closes what a dead tenure cannot keep");
 });
+
+test("egress degradation: the forwarder's post-listen error journal rides through adoption to the host's seam", async t => {
+  const f = fixture(t);
+  const socket = await fakeEgress(t, f.root, request => ({ v: 1, id: request.id, ok: true, result: PLACEHOLDER }));
+  const reported: string[] = [];
+  const adopted = await adoptPrincipalEgress(f.owner(),
+    { ...f.options({ [EGRESS_SOCKET_ENV]: socket }), onError: error => { reported.push(error.message); } });
+  assert.notEqual(adopted, null, "the journal seam is accepted through adoption");
+  await adopted!.close();
+  assert.equal(reported.length, 0, "a quiet forwarder does not invent reports");
+});

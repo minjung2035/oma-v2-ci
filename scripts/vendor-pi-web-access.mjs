@@ -669,6 +669,38 @@ import { omaPermits } from "./utils.js";`,
       },
     ],
   },
+  "curator-server.js": {
+    reason:
+      "Post-listen 'error' absorption: upstream removes its only 'error' " +
+      "listener after a successful listen, so an accept-class error " +
+      "(EMFILE/ENFILE) later meets zero listeners and escapes the emit " +
+      "as the hosting engine's death. A permanent listener beside the " +
+      "startup once-listener journals best-effort and keeps the curator " +
+      "socket bound for the kernel to retry — the startup rejection " +
+      "contract is unchanged, and the class is closed even if the server " +
+      "ever runs under an evaluation the workflow pin did not reach.",
+    edits: [
+      {
+        find: `        server.once("error", onError);`,
+        replace: `        // OMA divergence (applied by scripts/vendor-pi-web-access.mjs; recorded
+        // under generated.divergences in manifest.json): a permanent 'error'
+        // listener beside the startup once-listener below. Once that
+        // once-listener is removed after a successful listen, an accept-
+        // class error (EMFILE/ENFILE) meets zero 'error' listeners and
+        // escapes its emit as the hosting engine's death. The journal is
+        // best-effort -- a dead stderr must not throw out of the emit
+        // either -- and the socket stays bound for the kernel to retry.
+        server.on("error", (listenerError) => {
+            try {
+                console.error(\`Curator server listener error: \${listenerError instanceof Error ? listenerError.message : String(listenerError)}\`);
+            }
+            catch {
+            }
+        });
+        server.once("error", onError);`,
+      },
+    ],
+  },
   "curator-run.js": {
     reason:
       "Workflow pin: the summary-review/auto-summary workflows drive " +

@@ -38,7 +38,12 @@ export async function startEgressBridge(pi: ExtensionAPI): Promise<void> {
     // the port is another owner's and they will refuse, which is honest --
     // starting nothing would only look like "no egress configured".
     server.on("error", error => {
-      process.stderr.write(`oma egress bridge unavailable: ${error instanceof Error ? error.message : String(error)}\n`);
+      // The bridge's own journal is best-effort inside this emit: a dead
+      // or failing stderr (a closed descriptor, EPIPE) would let the
+      // write's throw escape the error event -- the same process death
+      // this listener exists to absorb.
+      try { process.stderr.write(`oma egress bridge unavailable: ${error instanceof Error ? error.message : String(error)}\n`); }
+      catch { /* nowhere left to say it */ }
       resolve();
     });
     server.listen(port, "127.0.0.1");

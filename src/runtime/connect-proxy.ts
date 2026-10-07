@@ -336,6 +336,18 @@ export class ConnectProxy {
       socket.destroy();
     });
     server.on("clientError", (_error, socket) => socket.destroy());
+    // The same boundary for the listener itself: once the startup
+    // once-listener below is removed, an accept-class error (EMFILE/ENFILE)
+    // meets zero 'error' listeners and escapes its emit as the runner's
+    // death -- this delivery's tunnels and relay with it. The record goes
+    // to the audit channel and the socket stays bound: the kernel retries
+    // the accept, while a close would unlink the name the sandbox's bridge
+    // still dials. The journal is best-effort -- a sink that throws neither
+    // vetoes nor escapes.
+    server.on("error", error => {
+      try { audit("(listener)", "fail", error.message.slice(0, 120)); }
+      catch { /* a journal that refused its record does not stop the listener */ }
+    });
     server.on("connect", (req: IncomingMessage, client: Socket, head: Buffer) => {
       const idleMs = options.idleMs ?? CONNECT_IDLE_MS;
       // The socket is the proxy's from this event, not the server's: a late
