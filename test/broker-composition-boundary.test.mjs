@@ -70,9 +70,9 @@ function fixture() {
       calls.push(`getOperation:${actor}:${key}`);
       return state.operation;
     },
-    pendingDeliveries() {
-      calls.push("pendingDeliveries");
-      return [1, 2];
+    pendingDeliveryCount() {
+      calls.push("pendingDeliveryCount");
+      return 2;
     },
     getBatch() {
       calls.push("getBatch");
@@ -295,5 +295,5 @@ test("P18 internal composition exposes narrow live capabilities without concrete
   assert.equal(ports.store.pendingDeliveryCount("alice"), 2);
   assert.equal(ports.store.getBatchAgent("batch-1"), "alice");
   assert.equal(ports.store.preparedBatchIds("alice")[0], "batch-1");
-  assert.equal(calls.includes("pendingDeliveries"), true);
+  assert.equal(calls.includes("pendingDeliveryCount"), true);
 });

@@ -52,6 +52,7 @@
 | UX-21 | 압축 작업 실행 중인데 세션이 idle로 전환됨 | 1, 9 | 실행 중인 도구는 세션을 비-idle로 유지 | 기존 커밋 `ab17f7a`가 이미 구현(pi-adapter.ts:239-267, tool_execution_start/end 추적 + idleDeadline.hold, AV24 테스트) — fo가 확인 | 수정됨(기존) |
 | UX-23 | `oma pi install <tarball>`이 디렉토리 엔트리(`package/`)를 가진 실제 tar를 전부 거절 + 루트 파일이 `ensure`의 `slice(0,-1)` 버그로 `packag` 같은 잘린 디렉토리를 만듦 | 1 | 디렉토리 엔트리는 후행 `/` 하나만 벗기고 같은 정규화 규칙 적용; 부모 디렉토리 계산은 `lastIndexOf`의 -1을 명시 처리; 경계 검사의 `startsWith("..")`를 컴포넌트 단위로 교정; 크기 상한은 읽기 전 stat으로 선검사 | 직접 수정 — pi-packages 테스트 17/17 + 실제 npm pack/GNU tar 타르볼 설치 확인 | 수정됨 |
 | UX-22+ | 하드코딩된 크기·시간 제한 전수 감사 (기준 13 — Pi에도 동일한 값은 제외, 전수 조사는 코드베이스 전체 스캔 때 마무리) | 1, 9, 13 | 사용자가 정상 사용으로 도달 가능한 제한 → 조정/명명/명시적 거절. 결과는 여기에 추가 | 감사는 리밋으로 중단 — 전수는 6단계 스캔에 편입 | 결정 |
+| UX-37 | society의 행이 10,000개를 넘으면 status 표시·runner 대기열·principal relay·recovery가 결과 크기만으로 `LIMIT_EXCEEDED` 거절 — 관리자 진단 스냅샷용 상한(10,000행/32MiB)이 운영 읽기 경로를 공유 차지 | 1, 9, 13 | 운영 읽기를 진단 예산에서 분리: 카운트는 SQL 집계, 열거는 rowid keyset 페이징·완전 수집, 조회 실패는 빈 답이 아니라 그대로 전파. 진단 스냅샷의 유한 상한은 유지 | feat/macos-hidden-vm — `LedgerReader.all`의 per-row 진단 과금 제거, `pendingDeliveryRows`를 닫힌 페이지 keyset 스트림(동결 상한 rowid·yield 전 페이지 해제), `pendingDeliveryCount`를 `COUNT(*)`로, runner.pending은 카운트 경로로; `G02-ledger-r2` 회귀 3종(10k+ 완전성·실패 전파·keyset 의미론) | 수정됨 |
 
 ## 추가 발견 (감사·검증 진행에 따라 추가)
 

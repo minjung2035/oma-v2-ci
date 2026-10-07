@@ -873,7 +873,7 @@ P0-7 gate(`check:boundaries`)의 negative control은 test/durable-boundaries.tes
 | P0V-122 | G10-02/03 | quota 판정 owner를 serialized write 하나로 통합. fd로 승인한 single-link 파일만 private snapshot에 복사하여 grep/find가 검색(context=0 포함). 자식 owner가 부모 종료·취소 때 snapshot과 walker group을 정리 | P0-2/6; `cc7d437` |
 | P0V-123 | G03-broker-01/r2-02 | dispatch 후 frame 초과는 possible effect·same-key. git.known의 prerequisites는 complete 목록이 아닌 bounded subset임을 명시(G03-broker-02) | P0-5; `649ea6e` |
 | P0V-124 | G03-broker-r2-04 | 다섯 인증 경로가 cgroup 경계 판정 하나를 공유 | P0-2; `649ea6e` |
-| P0V-125 | G02-ledger-r2-01 | 불필요한 매 요청 전체 조회 제거. full-set/조상 체인은 유한 row/byte collector로 거절 경계 보유. batch 후보는 upper-rowid keyset page와 class별 bounded 선택. status 응답에 명시적 continuation | P0-2/6; `649ea6e` |
+| P0V-125 | G02-ledger-r2-01 | 불필요한 매 요청 전체 조회 제거. full-set/조상 체인은 유한 row/byte collector로 거절 경계 보유. batch 후보는 upper-rowid keyset page와 class별 bounded 선택. status 응답에 명시적 continuation — **full-set 유한 collector 부분은 2026-10-07 UX-37로 폐기됨(아래 비해당 표 G02-ledger-r2-01 행의 폐기 주석 참조)** | P0-2/6; `649ea6e` |
 | P0V-126 | G02-ledger-r2-03 | agent·ledger·operation writer에 Store의 같은 clock 주입, 기존 clamp 유지 | P0-2; `649ea6e` |
 | P0V-127 | G05-04 | foreign unit은 observe/observeAsync에서 unknown. confirmDead·cgroupProcs가 죽음·빈 목록으로 승격하지 않음. stop은 자기 권한만 revoke하고 foreign unit에는 효과 없이 RUN_TERMINATION_UNKNOWN | P0-1/5; 후속 수정 |
 
@@ -890,7 +890,7 @@ P0-7 gate(`check:boundaries`)의 negative control은 test/durable-boundaries.tes
 | G08-03 | 원 보고의 전제 정정. Number::toString은 ECMA-262 명세 알고리즘이다. 숫자 wire 의미를 바꾸지 않고 golden vector로 결박했다 |
 | G12-07 | 변경 불필요. control 700, 나머지 701 뒤 hello.channel dispatch는 의도된 protocol이다. 포트만으로 권한을 부여하지 않는다 |
 | G10-02 | 검색 입력을 fd-승인 복사본으로 제한하여 수정. pinned grep/find의 regex/glob/ignore, 기본/context=0, link 및 root 교체 반례, 취소·부모 사망·비협조 walker 정리를 검증했다. snapshot owner 자체의 SIGKILL과 OS crash까지 정리를 보장하지 않는다 |
-| G02-ledger-r2-01 | 무제한 물질화를 bounded iterator/collector로 수정. batch는 128행 keyset page이며 class별 선택 상한을 유지한다. full-set 경로는 10,000행/32 MiB 초과를 LIMIT_EXCEEDED로 거절한다. status는 응답 pagination이지 DB 전체 snapshot paging이 아니며 무한 backlog 지원을 주장하지 않는다 |
+| G02-ledger-r2-01 | 무제한 물질화를 bounded iterator/collector로 수정. batch는 128행 keyset page이며 class별 선택 상한을 유지한다. full-set 경로는 10,000행/32 MiB 초과를 LIMIT_EXCEEDED로 거절한다. status는 응답 pagination이지 DB 전체 snapshot paging이 아니며 무한 backlog 지원을 주장하지 않는다. **[2026-10-07 폐기·대체 — UX-37]** 당시 "full-set 경로는 유한 collector로 거절" 판정은 운영 읽기에 관리자 진단 예산을 공유시켜 정상 사용이 크기만으로 거절되는 결함이었다(사용자 기준 1·9·13). 현재 계약: 운영 읽기는 크기로 거절하지 않고 완전 결과를 카운트 집계·keyset 스트림·완전 수집으로 답하며, LIMIT_EXCEEDED는 관리자의 `readDiagnosticSnapshot`에만 남는다. `docs/user-expectation-ledger.md` UX-37과 WORKSTREAM §9 2026-10-07 항목이 현재 판정을 소유한다 |
 | G03-broker-r2-01 | listening 준비 완료 후 재검증·commit으로 수정. 실제 비동기 listen error와 drain 중 거절을 시험했다. commit 이후 이미 성립한 incarnation은 되돌리지 않고 동일 invocation fence를 유지한다 |
 | G03-broker-01/r2-02 | operation.read의 actor/key·digest·offset 조각과 CLI 재조립으로 수정. 실제 stop 효과 1회, chunk 단절, broker/ledger 재시작, 같은 key 회수, 다른 actor 거절을 시험했다. 64 MiB/전체 deadline 초과와 모델 도구의 별도 1 MiB 출력 상한은 결과 불명으로 남기며 재실행하지 않는다 |
 

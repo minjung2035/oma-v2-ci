@@ -2,10 +2,10 @@
  "version": 1,
  "baseline": "b25961cc46532f5e30ff60cc381fed51c59d13ab",
  "summary": {
-  "CHANGED_WITH_ORACLE": 14056,
+  "CHANGED_WITH_ORACLE": 14057,
   "REMOVED": 8,
   "NOT_REVIEWED": 65,
-  "READ_UNCHANGED": 52
+  "READ_UNCHANGED": 51
  },
  "lanes": {
   "fast": "PASS",
@@ -194,13 +194,13 @@
    "primary": "WP21",
    "status": "CHANGED_WITH_ORACLE",
    "by": [
-    "WP23"
+    "UX-37"
    ],
    "oracles": [
-    "V23A",
-    "V23B"
+    "G02-ledger-r2"
    ],
-   "sha256": "1631ee070f65e0c303bee44b97b3a1e3fa419f7a6ce127e41949d9728a480bd1"
+   "note": "Read in full for UX-37: the dispatcher port now binds pendingDeliveryCount directly to store.pendingDeliveryCount, so runner.pending and the principal relay answer a COUNT(*) instead of materializing every pending delivery. The count cannot hide a row: anything that iterates still decodes and validates each delivery.",
+   "sha256": "1e503642532f092aaca19cb9f81cdc56782142432048f493dee532ffe307d1c5"
   },
   {
    "path": "src/broker/connection.ts",
@@ -184657,22 +184657,15 @@
   {
    "path": "src/storage/diagnostic-snapshot.ts",
    "primary": "WP23",
-   "status": "READ_UNCHANGED",
+   "status": "CHANGED_WITH_ORACLE",
    "by": [
-    "AV-review"
+    "UX-37"
    ],
    "oracles": [
-    "GIT-006",
-    "ID-003",
-    "P6",
-    "P9",
-    "R10",
-    "R21",
-    "V04A",
-    "V04B"
+    "G02-ledger-r2"
    ],
-   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are tests whose loaded module closure (or text) contains this file",
-   "sha256": "4ef0ca426eaed8fd44fae6130e7aeb8e468026de8a79c3de9f40e47f6ef530f0"
+   "note": "Read in full for UX-37: DIAGNOSTIC_READ_LIMITS is unchanged (10k rows/32 MiB/64 MiB db) and still enforced by readDiagnosticSnapshot; only the comment marking it administrator-only moved. The operational-read call sites that used to import the constant no longer do; the snapshot remains the sole bounded collector. The integrity-ledger and operational-read-budget suites assert it still throws LIMIT_EXCEEDED.",
+   "sha256": "6de3eec656690cf9563c089d6266178fd6352c33295582880293d7616ab102f9"
   },
   {
    "path": "src/storage/directory.ts",
@@ -184822,29 +184815,13 @@
    "primary": "WP04",
    "status": "CHANGED_WITH_ORACLE",
    "by": [
-    "P0V-87",
-    "P0V-88",
-    "P0V-89",
-    "P0V-90",
-    "P0V-91",
-    "P0V-92",
-    "P0V-93",
-    "P0V-94",
-    "P0V-95",
-    "WP23"
+    "UX-37"
    ],
    "oracles": [
-    "P0V-87",
-    "P0V-88",
-    "P0V-90",
-    "P0V-92",
-    "P0V-93",
-    "P0V-94",
-    "P0V-95",
-    "V23A",
-    "V23B"
+    "G02-ledger-r2"
    ],
-   "sha256": "3955877e3ba6cc892219f52d3800d8ef80dd863e76f995ce8ff85d30b33a2582"
+   "note": "Read in full for UX-37: the shared diagnostics budget is gone from operational reads -- `all` is a plain full SELECT, `pendingDeliveryRows` streams 128-row keyset pages under a frozen MAX(rowid) so a live cursor never pins and later accepts belong to the next traversal, `pendingDeliveryCount` is a SQL COUNT(*). ReadScope memoizes per-collection decodes inside one synchronous window; lineage, batch-membership, manifest and recipient-snapshot checks still run per row. A failed query still throws -- nothing converts a broken read into an empty list.",
+   "sha256": "5cad25df5cd4a7daf363912242e285dd3735538aab70709899b29921f960cabc"
   },
   {
    "path": "src/storage/operation-codec.ts",
@@ -185103,61 +185080,13 @@
    "primary": "WP04",
    "status": "CHANGED_WITH_ORACLE",
    "by": [
-    "DR13",
-    "DR9",
-    "P0V-01",
-    "P0V-02",
-    "P0V-03",
-    "P0V-04",
-    "P0V-06",
-    "P0V-123",
-    "P0V-124",
-    "P0V-125",
-    "P0V-126",
-    "P0V-19",
-    "P0V-20",
-    "P0V-21",
-    "P0V-22",
-    "P0V-23",
-    "P0V-30",
-    "P0V-56",
-    "P0V-69",
-    "P0V-70",
-    "P0V-87",
-    "P0V-88",
-    "P0V-89",
-    "P0V-90",
-    "P0V-91",
-    "P0V-92",
-    "P0V-93",
-    "P0V-94",
-    "P0V-95",
-    "WP04",
-    "WP23"
+    "UX-37"
    ],
    "oracles": [
-    "DR13",
-    "DR9",
-    "P0V-123",
-    "P0V-124",
-    "P0V-126",
-    "P0V-30",
-    "P0V-56",
-    "P0V-69",
-    "P0V-70",
-    "P0V-87",
-    "P0V-88",
-    "P0V-90",
-    "P0V-92",
-    "P0V-93",
-    "P0V-94",
-    "P0V-95",
-    "V04A",
-    "V04B",
-    "V23A",
-    "V23B"
+    "G02-ledger-r2"
    ],
-   "sha256": "172c77952d3bd5cd91341e6f2f5a5eacacc1228094df162f9b7a6fe721dd7a90"
+   "note": "Read in full for UX-37: Store delegates pendingDeliveryCount/pendingDeliveryRows to the reader's aggregate and streaming paths and keeps recoverableOperations -> journal.recoverableIds unbounded. No wrapper reintroduces a row cap; readDiagnosticSnapshot is untouched and still fails closed at its own limits.",
+   "sha256": "1cc87db78ca35bee7b42d86a79ce5887fe9d70344cee29a16357bba84282127b"
   },
   {
    "path": "src/tui/app.ts",

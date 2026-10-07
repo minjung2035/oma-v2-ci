@@ -385,6 +385,8 @@ export class Store {
   markMaterialized(message: MessageId, recipient: Actor): void { this.transitions.markMaterialized(message, recipient); }
   markAcknowledged(message: MessageId, recipient: Actor): void { this.transitions.markAcknowledged(message, recipient); }
   pendingDeliveries(agent: Actor): DeliveryRow[] { return this.reader.pendingDeliveries(agent); }
+  /** runner.pending's count: the same eligible rows, counted in SQL. */
+  pendingDeliveryCount(agent: Actor): number { return this.reader.pendingDeliveryCount(agent); }
   pendingDeliveryRows(agent: Actor): IterableIterator<DeliveryRow> { return this.reader.pendingDeliveryRows(agent); }
   getDelivery(message: MessageId, recipient: Actor): DeliveryRow | null { return this.reader.delivery(message, recipient); }
   deliveriesForOperation(id: OperationId): DeliveryRow[] { return this.reader.operationDeliveries(id); }

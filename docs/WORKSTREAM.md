@@ -1336,6 +1336,39 @@ name collision/intended surface/hidden 미활성/idempotent reload/provenance/
     kernel/powercut·provider credential·release qualification·실제 fd
     소진 주입(환경 의존 비결정론 — 동기 emit 주입이 결정론 오라클).
 
+- 2026-10-07 (UX-37 — 운영 읽기가 진단 예산을 공유 차지하던 결함 정산):
+  `LedgerReader.all`이 행마다 `DIAGNOSTIC_READ_LIMITS`(10,000행/32MiB)를
+  과금해 운영 흐름(상태 표시·runner 대기열·principal relay·recovery)이
+  society의 행 수만으로 `LIMIT_EXCEEDED`로 거절되던 결함(§2 1·9·13)을
+  정산. 진단 스냅샷 상한은 유지 — `readDiagnosticSnapshot`이 같은 상한으로
+  계속 거절함을 대조군으로 고정.
+  - 변환: 카운트는 집계(`pendingDeliveryCount` → `COUNT(*)`), 대량 열거는
+    rowid keyset 스트림(`pendingDeliveryRows` — `MAX(rowid)` 동결 상한·
+    128행 닫힌 페이지·yield 후 진행 — 다음 수용은 다음 순회로 귀속),
+    나머지 운영 열거(`agents`·`subscriptions`·`submissions`·`attestations`·
+    `recoverableIds`·`operationDeliveries`·`pendingWorkRows`·`preparedBatches`·
+    batch 링크드 목록)는 예산 없이 완전 수집 — 디코딩·관계 검증
+    (소유자·리니지·매니페스트↔배치 멤버·수신자 스냅샷)은 행마다 유지.
+    `runner.pending`·status·relay는 카운트 경로로 전환해 목록을 만들지 않음.
+    조회 실패는 빈 답이 아니라 STORE_CORRUPT로 전파 — 어떤 경로도 `[]`로
+    승격하지 않음. 같은 컬렉션 안 재읽기는 `ReadScope` 메모이즈로 동기
+    창 일관 유지.
+  - 회귀: `operational-read-budget.test.ts` 신규 G02-ledger-r2 3종 —
+    ①10,001 구독·10,300 운영(10,000 unbatched + 300 준비 배치 링크)·
+    10,500 배달 fixture를 shipped DDL+shipped INSERT로 시딩해 운영 읽기
+    전수(count·수령인·rowid 순서·복구 id·pendingWork·principal relay
+    목록·runner.pending 집계·배치 상세/링크드)가 완전·일관함을 단언하고
+    같은 상태의 diagnostic snapshot은 `LIMIT_EXCEEDED`로 거절(음성 대조).
+    ②준비 실패 DB에서 5개 읽기 진입점이 전부 throw(빈 답 없음).
+    ③keyset 의미론 — 순회 중 새 수용은 이번 순회에 나타나지 않고
+    삭제분은 재방문하지 않으며 다음 순회가 새 행을 봄.
+    fail→pass 증거: 직전 커밋(HEAD)을 별도 worktree에서 tsc로 빌드해 같은
+    시드(10,001 구독·10,001 배달)를 넣으면 `allSubscriptions`·
+    `pendingDeliveries`·`recoverableOperations`·`pendingWorkRows` 전부가
+    `LIMIT_EXCEEDED`로 throw — 수정 후 같은 fixture의 ①이 완전 결과로 통과.
+  - NOT_RUN: macOS native·systemd·kernel/powercut·provider credential·
+    release qualification — 로컬 환경 부재.
+
 ## 10. 지금부터의 실행 순서
 0. ~~P0-8 강제 수단 미구현~~ — 구현됨: `owned-state` 아키텍처 규칙
    (scripts/architecture/rules/owned-state-rules.mjs)이 경로 기반 raw fs

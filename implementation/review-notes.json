@@ -153017,6 +153017,50 @@
    ],
    "sha256": "0f3d4bf8eaa13b31c8cc8db780eee2204412961c25a73973e4826ae524841570",
    "note": "Read in full for the post-listen 'error' residual sweep: cleanupError's console.error is now a guarded best-effort write. `listen`'s permanent 'error' listener and `listenActor`'s run-revoke path both reach the shared sink inside a synchronous 'error' emit, where a dead stderr throwing would otherwise escape the emit as the broker's death -- the same death the listener exists to absorb. Startup rejection and listener-count semantics are unchanged."
+  },
+  {
+   "path": "src/storage/ledger-reader.ts",
+   "by": [
+    "UX-37"
+   ],
+   "oracles": [
+    "G02-ledger-r2"
+   ],
+   "sha256": "5cad25df5cd4a7daf363912242e285dd3735538aab70709899b29921f960cabc",
+   "note": "Read in full for UX-37: the shared diagnostics budget is gone from operational reads -- `all` is a plain full SELECT, `pendingDeliveryRows` streams 128-row keyset pages under a frozen MAX(rowid) so a live cursor never pins and later accepts belong to the next traversal, `pendingDeliveryCount` is a SQL COUNT(*). ReadScope memoizes per-collection decodes inside one synchronous window; lineage, batch-membership, manifest and recipient-snapshot checks still run per row. A failed query still throws -- nothing converts a broken read into an empty list."
+  },
+  {
+   "path": "src/storage/diagnostic-snapshot.ts",
+   "by": [
+    "UX-37"
+   ],
+   "oracles": [
+    "G02-ledger-r2"
+   ],
+   "sha256": "6de3eec656690cf9563c089d6266178fd6352c33295582880293d7616ab102f9",
+   "note": "Read in full for UX-37: DIAGNOSTIC_READ_LIMITS is unchanged (10k rows/32 MiB/64 MiB db) and still enforced by readDiagnosticSnapshot; only the comment marking it administrator-only moved. The operational-read call sites that used to import the constant no longer do; the snapshot remains the sole bounded collector. The integrity-ledger and operational-read-budget suites assert it still throws LIMIT_EXCEEDED."
+  },
+  {
+   "path": "src/store.ts",
+   "by": [
+    "UX-37"
+   ],
+   "oracles": [
+    "G02-ledger-r2"
+   ],
+   "sha256": "1cc87db78ca35bee7b42d86a79ce5887fe9d70344cee29a16357bba84282127b",
+   "note": "Read in full for UX-37: Store delegates pendingDeliveryCount/pendingDeliveryRows to the reader's aggregate and streaming paths and keeps recoverableOperations -> journal.recoverableIds unbounded. No wrapper reintroduces a row cap; readDiagnosticSnapshot is untouched and still fails closed at its own limits."
+  },
+  {
+   "path": "src/broker/composition.ts",
+   "by": [
+    "UX-37"
+   ],
+   "oracles": [
+    "G02-ledger-r2"
+   ],
+   "sha256": "1e503642532f092aaca19cb9f81cdc56782142432048f493dee532ffe307d1c5",
+   "note": "Read in full for UX-37: the dispatcher port now binds pendingDeliveryCount directly to store.pendingDeliveryCount, so runner.pending and the principal relay answer a COUNT(*) instead of materializing every pending delivery. The count cannot hide a row: anything that iterates still decodes and validates each delivery."
   }
  ],
  "readUnchanged": [
@@ -154505,23 +154549,6 @@
    ],
    "oracles": [
     "R28"
-   ],
-   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are tests whose loaded module closure (or text) contains this file"
-  },
-  {
-   "path": "src/storage/diagnostic-snapshot.ts",
-   "by": [
-    "AV-review"
-   ],
-   "oracles": [
-    "GIT-006",
-    "ID-003",
-    "P6",
-    "P9",
-    "R10",
-    "R21",
-    "V04A",
-    "V04B"
    ],
    "note": "read in full in the whole-codebase adversarial pass after v9; oracles are tests whose loaded module closure (or text) contains this file"
   },

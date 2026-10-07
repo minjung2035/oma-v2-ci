@@ -40,7 +40,7 @@
     },
     {
       "path": "src/broker/composition.ts",
-      "sha256": "1631ee070f65e0c303bee44b97b3a1e3fa419f7a6ce127e41949d9728a480bd1"
+      "sha256": "1e503642532f092aaca19cb9f81cdc56782142432048f493dee532ffe307d1c5"
     },
     {
       "path": "src/broker/connection.ts",
@@ -56420,7 +56420,7 @@
     },
     {
       "path": "src/storage/diagnostic-snapshot.ts",
-      "sha256": "4ef0ca426eaed8fd44fae6130e7aeb8e468026de8a79c3de9f40e47f6ef530f0"
+      "sha256": "6de3eec656690cf9563c089d6266178fd6352c33295582880293d7616ab102f9"
     },
     {
       "path": "src/storage/directory.ts",
@@ -56444,7 +56444,7 @@
     },
     {
       "path": "src/storage/ledger-reader.ts",
-      "sha256": "3955877e3ba6cc892219f52d3800d8ef80dd863e76f995ce8ff85d30b33a2582"
+      "sha256": "5cad25df5cd4a7daf363912242e285dd3735538aab70709899b29921f960cabc"
     },
     {
       "path": "src/storage/operation-codec.ts",
@@ -56512,7 +56512,7 @@
     },
     {
       "path": "src/store.ts",
-      "sha256": "172c77952d3bd5cd91341e6f2f5a5eacacc1228094df162f9b7a6fe721dd7a90"
+      "sha256": "1cc87db78ca35bee7b42d86a79ce5887fe9d70344cee29a16357bba84282127b"
     },
     {
       "path": "src/tui/app.ts",

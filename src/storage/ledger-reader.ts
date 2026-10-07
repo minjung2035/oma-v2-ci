@@ -1,8 +1,12 @@
 /** DB-009: SELECT-only facade. Full-row, local-reference and whole-list
  * validation are distinct; every lineage rule belongs to LineageSnapshot.
+ *
+ * P0: an operational read never refuses for the size of a complete result.
+ * `all` returns every matching row and `pendingDeliveryRows` pages a live
+ * traversal so caller work cannot pin a cursor; the bounded collector lives
+ * in the administrator's diagnostic snapshot and nothing here shares it.
+ * A failed read still fails -- unknown is never answered as an empty set.
  */
-import { DIAGNOSTIC_READ_LIMITS } from "./diagnostic-snapshot.js";
-import { StoreError } from "../domain/errors.js";
 import type { DatabaseSync, SQLInputValue, SQLOutputValue } from "node:sqlite";
 import { isValidOperationId, isValidActor, type OperationId } from "../domain/identifiers.js";
 import { ownedMessages, type RepositoryIdentity } from "../durable.js";
@@ -10,9 +14,23 @@ import { LineageSnapshot } from "../domain/lineage.js";
 import { decodeOperation, type DecodedOperation, type OperationDecodeContext, type OperationOf } from "./operation-codec.js";
 import {
   decodeAgentRow, decodeSubscriptionRow, decodeDeliveryRow, decodeBatchRow,
-  decodeBatchManifest, decodeOperationIdProjection, rowCorrupt, safeInteger,
+  decodeBatchManifest, decodeOperationIdProjection, fullRow, rowCorrupt, safeInteger,
   type AgentRow, type SubscriptionRow, type DeliveryRow, type BatchRow,
 } from "./rows.js";
+
+/** Reads shared inside one synchronous collection: an operation's plan, an
+ * agent's lineage, a batch's manifest are decoded and validated once per
+ * collection instead of once per row, and inside the synchronous window the
+ * memoized answer is what a fresh read of the same bytes would return. */
+interface ReadScope {
+  readonly operations: Map<string, DecodedOperation | null>;
+  readonly agents: Map<string, AgentRow>;
+  readonly batches: Map<string, { readonly row: BatchRow; readonly manifest: ReadonlySet<string> }>;
+  readonly batchRows: Map<string, BatchRow | null>;
+}
+function readScope(): ReadScope {
+  return { operations: new Map(), agents: new Map(), batches: new Map(), batchRows: new Map() };
+}
 
 export interface PendingWorkRows {
   readonly agents: readonly AgentRow[];
@@ -30,28 +48,14 @@ export interface PendingWorkRows {
  * put later mail in front of earlier. */
 export class LedgerReader {
   constructor(private readonly db: Pick<DatabaseSync, "prepare">, private readonly stateRoot: string, private readonly identity: () => RepositoryIdentity | null) {}
-  /** Full-set semantics are retained, but an operational read is never an
-   * unbounded allocation. Reuse diagnostic budgets; exhaustion is not corruption. */
-  private budget(): (row: unknown) => void {
-    let rows = 0; let bytes = 0;
-    return row => {
-      if (++rows > DIAGNOSTIC_READ_LIMITS.maxRows)
-        throw new StoreError("LIMIT_EXCEEDED", "operational ledger row budget exceeded");
-      bytes += Buffer.byteLength(JSON.stringify(row));
-      if (bytes > DIAGNOSTIC_READ_LIMITS.maxBytes)
-        throw new StoreError("LIMIT_EXCEEDED", "operational ledger byte budget exceeded");
-    };
-  }
   private all(sql: string, ...params: SQLInputValue[]): Record<string, SQLOutputValue>[] {
-    const rows: Record<string, SQLOutputValue>[] = []; const charge = this.budget();
-    for (const row of this.db.prepare(sql).iterate(...params)) { charge(row); rows.push(row); }
-    return rows;
+    return this.db.prepare(sql).all(...params);
   }
   private rawAgent(name: string) { return this.db.prepare("SELECT * FROM agents WHERE name=?").get(name); }
   private lineage(agent: AgentRow): void {
     // Collect only this ancestor chain. Stop fetching repeats, but pass the
     // original cyclic/missing edge to the domain validator; never truncate it.
-    const rows = [agent]; const charge = this.budget(); charge(agent);
+    const rows = [agent];
     const fetched = new Set([agent.name]);
     let parent = agent.createdBy;
     while (parent !== null && !fetched.has(parent)) {
@@ -59,7 +63,7 @@ export class LedgerReader {
       if (raw === undefined) break;
       const row = decodeAgentRow(raw);
       if (row.name !== parent) rowCorrupt("agent query identity mismatch");
-      charge(row); rows.push(row); fetched.add(row.name); parent = row.createdBy;
+      rows.push(row); fetched.add(row.name); parent = row.createdBy;
     }
     new LineageSnapshot(rows);
   }
@@ -70,6 +74,24 @@ export class LedgerReader {
     if (agent.name !== name) return rowCorrupt("agent query identity mismatch");
     this.lineage(agent);
     return agent;
+  }
+  private agentAt(scope: ReadScope | undefined, name: string): AgentRow {
+    if (scope === undefined) return this.requiredAgent(name);
+    const known = scope.agents.get(name);
+    if (known !== undefined) return known;
+    const agent = this.requiredAgent(name);
+    scope.agents.set(name, agent);
+    return agent;
+  }
+  private operationAt(scope: ReadScope | undefined, id: string): DecodedOperation | null {
+    if (scope === undefined) return this.operationById(id);
+    if (!scope.operations.has(id)) scope.operations.set(id, this.operationById(id));
+    return scope.operations.get(id) ?? null;
+  }
+  private batchAt(scope: ReadScope | undefined, id: string): BatchRow | null {
+    if (scope === undefined) return this.batch(id);
+    if (!scope.batchRows.has(id)) scope.batchRows.set(id, this.batchScoped(id, scope));
+    return scope.batchRows.get(id) ?? null;
   }
   agent(name: string): AgentRow | null {
     const raw = this.rawAgent(name);
@@ -90,14 +112,15 @@ export class LedgerReader {
     new LineageSnapshot(rows); // validate the complete list once, not once per row
     return rows;
   }
-  private subscription(value: unknown): SubscriptionRow {
-    const row = decodeSubscriptionRow(value); this.requiredAgent(row.agent); return row;
+  private subscription(value: unknown, scope: ReadScope): SubscriptionRow {
+    const row = decodeSubscriptionRow(value); this.agentAt(scope, row.agent); return row;
   }
   subscriptions(topic?: string): SubscriptionRow[] {
+    const scope = readScope();
     const raw = topic === undefined
       ? this.all("SELECT * FROM subscriptions ORDER BY topic, agent")
       : this.all("SELECT * FROM subscriptions WHERE topic=? ORDER BY agent", topic);
-    const rows = raw.map(value => this.subscription(value));
+    const rows = raw.map(value => this.subscription(value, scope));
     const seen = new Set<string>();
     for (const row of rows) {
       const key = `${row.topic}/${row.agent}`;
@@ -106,17 +129,24 @@ export class LedgerReader {
     }
     return rows;
   }
-  private batchMembership(delivery: DeliveryRow): void {
+  private batchMembership(delivery: DeliveryRow, scope?: ReadScope): void {
     if (delivery.batchId === null) return;
-    const raw = this.db.prepare("SELECT * FROM batches WHERE id=?").get(delivery.batchId);
-    if (raw === undefined) rowCorrupt("delivery references a missing batch");
-    const batch = decodeBatchRow(raw);
-    const owner = this.requiredAgent(batch.agent);
-    if (batch.agent !== delivery.recipient || batch.incarnation > owner.incarnation || !decodeBatchManifest(batch.messageIdsJson).includes(delivery.messageId))
+    const id = delivery.batchId;
+    let known = scope?.batches.get(id);
+    if (known === undefined) {
+      const raw = this.db.prepare("SELECT * FROM batches WHERE id=?").get(id);
+      if (raw === undefined) rowCorrupt("delivery references a missing batch");
+      const row = decodeBatchRow(raw);
+      known = { row, manifest: new Set(decodeBatchManifest(row.messageIdsJson)) };
+      scope?.batches.set(id, known);
+    }
+    const owner = this.agentAt(scope, known.row.agent);
+    if (known.row.agent !== delivery.recipient || known.row.incarnation > owner.incarnation || !known.manifest.has(delivery.messageId))
       rowCorrupt("delivery batch owner/incarnation/manifest mismatch");
-    if ((batch.state === "completed") !== (delivery.presented === 1)) rowCorrupt("delivery presentation differs from batch state");
+    if ((known.row.state === "completed") !== (delivery.presented === 1)) rowCorrupt("delivery presentation differs from batch state");
   }
   private context(): OperationDecodeContext {
+    const scope = readScope();
     return { stateRoot: this.stateRoot, repositoryIdentity: this.identity(), relations: {
       attestation: id => this.db.prepare("SELECT * FROM attestations WHERE operation_id=?").get(id) ?? null,
       operation: id => this.db.prepare("SELECT * FROM operations WHERE id=?").get(id) ?? null,
@@ -128,7 +158,7 @@ export class LedgerReader {
       deliveries: id => {
         const rows = this.all("SELECT * FROM deliveries WHERE operation_id=? ORDER BY message_id, recipient", id);
         for (const raw of rows) {
-          const row = decodeDeliveryRow(raw); this.requiredAgent(row.recipient); this.batchMembership(row);
+          const row = decodeDeliveryRow(raw); this.agentAt(scope, row.recipient); this.batchMembership(row, scope);
         }
         return rows;
       },
@@ -200,18 +230,18 @@ export class LedgerReader {
   recoverableIds(): OperationId[] {
     return this.all("SELECT id FROM operations WHERE state IN ('pending','unknown') ORDER BY rowid").map(decodeOperationIdProjection);
   }
-  private deliveryCore(raw: unknown): DeliveryRow {
-    const row = decodeDeliveryRow(raw); this.requiredAgent(row.recipient);
-    const operation = this.operationById(row.operationId);
+  private deliveryCore(raw: unknown, scope?: ReadScope): DeliveryRow {
+    const row = decodeDeliveryRow(raw); this.agentAt(scope, row.recipient);
+    const operation = this.operationAt(scope, row.operationId);
     const message = operation === null ? undefined
       : ownedMessages(operation.plan).find(candidate => candidate.id === row.messageId);
     if (message === undefined || !message.recipients.includes(row.recipient)) rowCorrupt("delivery differs from immutable operation recipient snapshot");
-    this.batchMembership(row);
+    this.batchMembership(row, scope);
     return row;
   }
-  private deliveryRow(raw: unknown): DeliveryRow {
-    const row = this.deliveryCore(raw);
-    if (row.batchId !== null) this.batch(row.batchId);
+  private deliveryRow(raw: unknown, scope?: ReadScope): DeliveryRow {
+    const row = this.deliveryCore(raw, scope);
+    if (row.batchId !== null) this.batchAt(scope, row.batchId);
     return row;
   }
   delivery(messageId: string, recipient: string): DeliveryRow | null {
@@ -221,6 +251,7 @@ export class LedgerReader {
   *pendingDeliveryRows(agent: string): IterableIterator<DeliveryRow> {
     // A cursor never stays open across a caller's work. Freeze the upper rowid
     // so newly accepted mail belongs to the next traversal, not an endless tail.
+    const scope = readScope();
     const upper = this.db.prepare("SELECT MAX(rowid) AS value FROM deliveries").get()?.value;
     if (upper === null || upper === undefined) return;
     const last = safeInteger(upper, "delivery traversal upper rowid", 1);
@@ -233,26 +264,39 @@ export class LedgerReader {
         const { sequence, ...row } = raw;
         const next = safeInteger(sequence, "delivery traversal rowid", after + 1);
         if (next > last) rowCorrupt("delivery traversal exceeded its upper rowid");
-        after = next; yield this.deliveryRow(row);
+        after = next; yield this.deliveryRow(row, scope);
       }
     }
   }
   pendingDeliveries(agent: string): DeliveryRow[] {
-    return this.all(`SELECT * FROM deliveries WHERE recipient=? AND materialized=1
-      AND presented=0 AND batch_id IS NULL ORDER BY rowid`, agent).map(raw => this.deliveryRow(raw));
+    return [...this.pendingDeliveryRows(agent)];
+  }
+  /** The pending count is a count: SQL counts the same eligible rows
+   * `pendingDeliveries` decodes, without materializing the list a caller
+   * never asked for. The answer can only shrink a read, never hide one:
+   * anything that actually iterates still validates every row. */
+  pendingDeliveryCount(agent: string): number {
+    const row = fullRow(this.db.prepare(`SELECT COUNT(*) AS value FROM deliveries WHERE recipient=? AND materialized=1
+      AND presented=0 AND batch_id IS NULL`).get(agent), ["value"], "pending delivery count");
+    return safeInteger(row.value, "pending delivery count", 0);
   }
   operationDeliveries(id: string): DeliveryRow[] {
     const operation = this.operationById(id);
+    const scope = readScope();
+    scope.operations.set(id, operation);
     const rows = this.all("SELECT * FROM deliveries WHERE operation_id=? ORDER BY rowid", id);
     if (operation === null && rows.length > 0) rowCorrupt("deliveries reference a missing operation");
-    return rows.map(raw => this.deliveryRow(raw));
+    return rows.map(raw => this.deliveryRow(raw, scope));
   }
-  private batchRow(raw: unknown): BatchRow {
+  private batchRow(raw: unknown, scope: ReadScope): BatchRow {
     const batch = decodeBatchRow(raw);
-    const owner = this.requiredAgent(batch.agent);
+    const owner = this.agentAt(scope, batch.agent);
     if (batch.incarnation > owner.incarnation) rowCorrupt("batch belongs to a future incarnation");
     const manifest = decodeBatchManifest(batch.messageIdsJson);
-    const deliveries = this.all("SELECT * FROM deliveries WHERE batch_id=? ORDER BY message_id, recipient", batch.id).map(row => this.deliveryCore(row));
+    // The batch being validated is also the membership fact its own linked
+    // deliveries read: identical rows inside the same synchronous window.
+    scope.batches.set(batch.id, { row: batch, manifest: new Set(manifest) });
+    const deliveries = this.all("SELECT * FROM deliveries WHERE batch_id=? ORDER BY message_id, recipient", batch.id).map(row => this.deliveryCore(row, scope));
     const linked = new Set<string>();
     for (const delivery of deliveries) {
       if (delivery.recipient !== batch.agent || delivery.batchId !== batch.id || linked.has(delivery.messageId)) rowCorrupt("batch linked delivery identity mismatch");
@@ -261,16 +305,21 @@ export class LedgerReader {
     if (manifest.length !== linked.size || manifest.some(id => !linked.has(id))) rowCorrupt("batch manifest differs from its exact linked delivery set");
     return batch;
   }
-  batch(id: string): BatchRow | null {
+  private batchScoped(id: string, scope: ReadScope): BatchRow | null {
     const raw = this.db.prepare("SELECT * FROM batches WHERE id=?").get(id);
-    return raw === undefined ? null : this.batchRow(raw);
+    return raw === undefined ? null : this.batchRow(raw, scope);
+  }
+  batch(id: string): BatchRow | null {
+    return this.batchScoped(id, readScope());
   }
   /** WP23.03: every row that display counts of pending work rest on, read
    * together with no await between the SELECTs (the broker is the only
    * writer). Each row is decoded; relation checks are pendingWorkByAgent's.
    * Unlike the full-row reads above it does not re-check each delivery against
    * its operation's recipient snapshot -- a cost that grew with the square of
-   * an operation's recipients -- so no mutation or recovery path reads it. */
+   * an operation's recipients -- so no mutation or recovery path reads it.
+   * The complete result is the contract: status must still answer past any
+   * count of rows, not refuse a society for being large. */
   pendingWorkRows(): PendingWorkRows {
     return {
       agents: this.agents(),
@@ -282,6 +331,7 @@ export class LedgerReader {
     };
   }
   preparedBatches(agent: string): BatchRow[] {
-    return this.all("SELECT * FROM batches WHERE agent=? AND state='prepared' ORDER BY rowid", agent).map(raw => this.batchRow(raw));
+    const scope = readScope();
+    return this.all("SELECT * FROM batches WHERE agent=? AND state='prepared' ORDER BY rowid", agent).map(raw => this.batchRow(raw, scope));
   }
 }

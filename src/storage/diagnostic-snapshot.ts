@@ -15,8 +15,9 @@ export interface DiagnosticReadLimits {
   readonly maxBytes: number;
   readonly maxDatabaseBytes: number;
 }
-/** Shared finite ledger-read budgets: admin snapshots and operational full-set
- * collectors. Only admin snapshots use maxDatabaseBytes; no host setting is added. */
+/** The administrator's finite ledger-read budget. Operational reads do not
+ * share it: a society past these numbers must still answer its own runner,
+ * status and recovery reads -- LIMIT_EXCEEDED is a diagnostic answer only. */
 export const DIAGNOSTIC_READ_LIMITS: DiagnosticReadLimits = Object.freeze({
   maxRows: 10000, maxBytes: 32 * 1024 * 1024, maxDatabaseBytes: 64 * 1024 * 1024,
 });

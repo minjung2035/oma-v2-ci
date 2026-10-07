@@ -120,7 +120,7 @@ export function createInternalDispatchPorts(
       const agent = store.getAgent(actor);
       return agent === null ? null : { incarnation: agent.incarnation };
     },
-    pendingDeliveryCount: (agent) => store.pendingDeliveries(agent).length,
+    pendingDeliveryCount: (agent) => store.pendingDeliveryCount(agent),
     getBatchAgent: (id) => store.getBatch(id)?.agent ?? null,
     preparedBatchIds: (agent) =>
       store.preparedBatches(agent).map((batch) => batch.id),
