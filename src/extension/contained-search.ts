@@ -2,8 +2,8 @@
  * EOF on its parent pipe aborts the work and removes the copy before exit.
  *
  * P0: a search is never refused for size or elapsed time. The child emits one
- * JSON frame per line -- `{p:"d",s}` naming the private copy the moment it
- * exists, `{p:"c",n}` progress while it copies, `{p:"r",n}` progress while a
+ * JSON frame per line -- `{p:"d",s}` declaring the private copy's name before
+ * it exists, `{p:"c",n}` progress while it copies, `{p:"r",n}` progress while a
  * completion pass reads its walker, `{p:"s"}` heartbeats from a second thread
  * while the engine's own pass runs -- and one final `{result}`/`{error}`
  * line. The parent watches two windows, not one deadline:
@@ -38,7 +38,7 @@
  * file. When no spool can take it the answer is still not truncated: it
  * rides inline with the notice that says why it is not at a path. */
 import { spawn } from "node:child_process";
-import { readFileSync, rmSync } from "node:fs";
+import { readFileSync, rmSync, writeSync } from "node:fs";
 import { createInterface } from "node:readline";
 import { randomUUID } from "node:crypto";
 import { basename, delimiter, isAbsolute, join, relative, sep } from "node:path";
@@ -100,7 +100,22 @@ export async function searchChildBody(input: ContainedSearchInput,
       const now = Date.now();
       if (now - lastBeat >= 100) { lastBeat = now; emit({ p: "c", n: copied }); }
     };
-    const named = (name: string): void => emit({ p: "d", s: name });
+    // The copy's name must already be in the parent's hand before the
+    // directory can exist, so the {p:"d"} frame cannot ride emit's buffered
+    // write -- that only reaches the pipe at a later yield, and a child
+    // killed or stopped in between would leave a snapshot nobody can name.
+    // writeSync puts the bytes in the pipe first: a snapshot that exists was
+    // always declared, which is the ordering the parent's close sweep needs.
+    // A write that cannot complete fails the snapshot before anything is
+    // created, never silently undeclared.
+    const named = (name: string): void => {
+      const frame = Buffer.from(`${JSON.stringify({ p: "d", s: name })}\n`, "utf8");
+      for (let at = 0; at < frame.length;) {
+        const wrote = writeSync(1, frame, at, frame.length - at);
+        if (wrote <= 0) throw new Error("could not declare the snapshot name");
+        at += wrote;
+      }
+    };
     return await withSearchSnapshot(input.root,
       (input.params.path ?? ".") as string, input.maximum, signal,
       walk, progress, named);

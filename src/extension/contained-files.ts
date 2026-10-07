@@ -11,8 +11,9 @@
  * already held. The extension may use only Node built-ins (PI-001), so this
  * is openat2's RESOLVE_BENEATH|RESOLVE_NO_SYMLINKS spelled with them.
  */
-import { closeSync, constants, fstatSync, ftruncateSync, mkdirSync, mkdtempSync, openSync, readSync, readdirSync, rmSync, writeSync } from "node:fs";
-import { basename, isAbsolute, join, relative, resolve, sep } from "node:path";
+import { closeSync, constants, fstatSync, ftruncateSync, mkdirSync, openSync, readSync, readdirSync, rmSync, writeSync } from "node:fs";
+import { randomUUID } from "node:crypto";
+import { isAbsolute, join, relative, resolve, sep } from "node:path";
 import { tmpdir } from "node:os";
 import { setImmediate } from "node:timers/promises";
 
@@ -42,6 +43,17 @@ export function componentsWithin(root: string, path: string): string[] {
 function refusedLink(error: unknown): never {
   const code = (error as NodeJS.ErrnoException).code;
   if (code === "ELOOP" || code === "ENOTDIR") throw new WorkspaceRefusal("tool path passes through a link or a non-directory; links are not followed");
+  throw error;
+}
+
+/** A descriptor-table overrun is the snapshot's only depth bound, and it
+ * refuses in words rather than escaping as a bare errno: any EMFILE or
+ * ENFILE the snapshot machinery raises -- the held-directory walk, a source
+ * readdir or open, a destination open, the cleanup itself -- becomes this
+ * refusal, which a caller can surface with its reason intact. */
+function descriptorRefusal(error: unknown): never {
+  const code = (error as NodeJS.ErrnoException).code;
+  if (code === "EMFILE" || code === "ENFILE") throw new WorkspaceRefusal("search snapshot ran out of file descriptors");
   throw error;
 }
 
@@ -200,28 +212,52 @@ export function existsWithin(root: string, path: string): boolean {
  * are copied. Depth is not refused: the source side holds one descriptor per
  * open level -- the workspace is the untrusted tree, so a component swapped
  * mid-copy cannot redirect a read -- and the destination side holds one per
- * open level too. The private mkdtemp tree is only mode-700: a same-uid
+ * open level too. The private `oma-search-*` tree is only mode-700: a same-uid
  * racer can still rename its directories or plant names inside it, so the
  * copy's own writes are made through the same `entryAt` containment -- a
  * held parent cannot be swapped for a link, and a planted leaf name only
  * ever fails the copy closed (EEXIST/ELOOP), never carries a write through.
  * Both sides cost one descriptor per open level, so an OS descriptor bound
  * is the only depth limit and it refuses honestly, in words, rather than
- * quietly dropping back to path writes. */
+ * quietly dropping back to path writes.
+ *
+ * `named` is a declaration, not a notification: it is called with each
+ * candidate name BEFORE that directory is created, so a caller that names
+ * the copy to a supervising parent can order the announcement ahead of the
+ * fs effect -- a copy that exists was always declared first. A `named` that
+ * cannot carry the declaration must throw: the snapshot then fails before
+ * anything is made rather than exist undeclared. */
 export async function withSearchSnapshot<T>(root: string, path: string, maximum: number | null,
+  signal: AbortSignal | undefined, use: (snapshot: string, target: string) => Promise<T>,
+  progress?: () => void, named?: (snapshotName: string) => void): Promise<T> {
+  try {
+    return await searchSnapshot(root, path, maximum, signal, use, progress, named);
+  } catch (error) {
+    // One boundary wording for the descriptor bound, wherever it fired.
+    return descriptorRefusal(error);
+  }
+}
+
+async function searchSnapshot<T>(root: string, path: string, maximum: number | null,
   signal: AbortSignal | undefined, use: (snapshot: string, target: string) => Promise<T>,
   progress?: () => void, named?: (snapshotName: string) => void): Promise<T> {
   const parts = componentsWithin(root, path);
   if (!maximum || !Number.isSafeInteger(maximum) || maximum < 1)
     throw new WorkspaceRefusal("agent workspace quota is not configured");
   const temp = openDirectoryWithin(tmpdir(), [], false);
-  let base: string;
-  try { base = mkdtempSync(entryAt(temp, "oma-search-")); }
-  catch (error) { closeSync(temp); throw error; }
-  const baseName = basename(base);
-  // Tell the caller the copy's name before a single entry lands, so a parent
-  // that outlives a wedged child can sweep what this process no longer can.
-  try { named?.(baseName); } catch { /* the announcement is best-effort */ }
+  let baseName = "";
+  try {
+    // Declare-then-create, the ordering the parent sweep needs: the name is
+    // announced before the directory exists, so a child killed or stopped in
+    // the gap still had its copy's name delivered -- an undeclared snapshot
+    // can never exist. A name already taken announces again fresh.
+    for (;;) {
+      baseName = `oma-search-${randomUUID()}`;
+      named?.(baseName);
+      try { mkdirSync(entryAt(temp, baseName), { mode: 0o700 }); break; }
+      catch (error) { if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error; }
+    }
+  } catch (error) { closeSync(temp); throw error; }
   const snapshot = join(tmpdir(), baseName, "workspace");
   let destination: number | undefined;
   let remaining = maximum;
@@ -233,12 +269,8 @@ export async function withSearchSnapshot<T>(root: string, path: string, maximum:
   /** A fresh name inside a held destination directory. The private tree is
    * mode-700 -- permission bits do not stop a same-uid racer -- so every
    * entry is named through the held parent, and a descriptor-table overrun
-   * refuses in words instead of degrading to path writes. */
-  const descriptorRefusal = (error: unknown): never => {
-    const code = (error as NodeJS.ErrnoException).code;
-    if (code === "EMFILE" || code === "ENFILE") throw new WorkspaceRefusal("search snapshot ran out of file descriptors");
-    throw error;
-  };
+   * refuses in words instead of degrading to path writes. The same refusal
+   * reaches every other site at the `withSearchSnapshot` boundary. */
   const openDestination = (parent: number, name: string, flags: number, mode?: number): number => {
     try { return openSync(entryAt(parent, name), flags, mode); }
     catch (error) { return descriptorRefusal(error); }

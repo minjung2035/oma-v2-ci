@@ -472,11 +472,11 @@
     },
     {
       "path": "src/extension/contained-files.ts",
-      "sha256": "cefd7021c3aadc583e33cc00be4cf79888ed144fcea5f7a0c128d7a3a6a26a68"
+      "sha256": "5e712fd6e3a091c9ac2c46176dd831b30f472a2733686cbf5ed1a43878b8c6fd"
     },
     {
       "path": "src/extension/contained-search.ts",
-      "sha256": "fa2659757cafb36fd711b81c246bb791ceae4341fa5a051d9f86006e89dd1ab4"
+      "sha256": "21c1a66195fb82525c940aee31c6123e0a1ec6dc09d0c76f21edd53c83aada04"
     },
     {
       "path": "src/extension/contained-tools.ts",

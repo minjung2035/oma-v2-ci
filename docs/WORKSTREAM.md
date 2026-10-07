@@ -1487,6 +1487,48 @@ name collision/intended surface/hidden 미활성/idempotent reload/provenance/
   - NOT_RUN: macOS native·systemd·kernel/powercut·provider credential·
     release qualification — 로컬 환경 부재.
 
+- 2026-10-07 (UX-38 맹검증 2라운드 잔여 — contained-search 스풀/스톨 정산의
+  잔여 결함 2건): 직전 UX-38 정산을 맹검증한 결과 남은 결함 2건(F-1·F-2)을
+  정산(§2 1·9·13, P0-4·정직성).
+  - F-1 선언-전-생성 — `withSearchSnapshot`가 `mkdtempSync`로 만들고 나서
+    `named?.()`가 `{p:"d"}`를 `process.stdout.write`(비동기 버퍼)로 보냈기
+    때문에, mkdir과 첫 yield 사이에 SIGKILL/SIGSTOP된 자식은 아무도 이름을
+    모르는 `oma-search-*`를 남겼다(실제 suite flake 관측 — CPU 포화
+    상태에서 `oma-search-FFrmEK` 잔여). 이제 헬퍼가 각 후보 이름을
+    `oma-search-<uuid>`로 생성해 `named?.(baseName)`를 mkdirSync **전에**
+    호출하고, EEXIST는 새 이름을 다시 선언한다 — 자식 쪽 `named`는 동기
+    `writeSync(1, …)`라 선언 바이트가 mkdir 전에 이미 파이프에 들어가므로
+    "존재 ⇒ 선언됨"이 성립한다(pipe 바이트는 'close' 전에 'data'로 보장
+    전달). 선언이 실패하면 생성 전에 스냅샷이 실패한다 — 선언 안 된
+    사본은 존재할 수 없다. 부모 쪽 `close` sweep은 선언된 이름을 그대로
+    소비한다. `named`는 "통지"가 아니라 "선언"으로 계약이 바뀌었다 —
+    throw는 실패 폐쇄, swallow 없음.
+  - F-2 EMFILE/ENFILE 정직성 — `descriptorRefusal`이 목적지 open만 감싸고
+    `readdirSync`·소스 `openSync`·`openDirectoryWithin`의 EMFILE/ENFILE은
+    raw로 새어나가 "contained search failed; no workspace result was
+    returned"로 평탄화됐다(실측: `ulimit -n 200`+300단계에서 raw
+    `EMFILE: … scandir '/proc/self/fd/198'`이 사유 없이 통과). 이제
+    `withSearchSnapshot` 본문을 `searchSnapshot`으로 옮기고 공개 경계에서
+    module-scope `descriptorRefusal`로 EMFILE/ENFILE →
+    `WorkspaceRefusal("search snapshot ran out of file descriptors")`로
+    변환한다 — 거절 자체는 이미 fail-closed였고, 사유가 정직해졌다.
+  - 구조 정산: `state-tree-rules`의 contained-files 면제 문구를
+    "mkdtemp 트리"에서 "생성 전에 이름이 선언되는 `oma-search-*`
+    디렉터리"로 갱신(면제는 계속 유효 — 모든 변경이 `entryAt`/held
+    descriptor 경유). `randomUUID`/`writeSync` 추가는 owned-state·
+    surface 규칙의 raw-path 금지에 걸리지 않음(entryAt 인자·fd 쓰기).
+  - 회귀·fail→pass: `contained-tools.test.ts`에 5종 — 선언-전-생성 계약
+    (구 코드에서는 생성 뒤 통지 + announce 실패 swallow로 실패),
+    EEXIST 재선언(첫 선언명을 선점시켜 두 번째 새 이름으로 착지 확인),
+    최초 관측 시점 SIGKILL sweep(동기 폴링으로 첫 관측 즉시 kill — 구
+    산출물 되돌림 시 `oma-search-*` 잔여로 3/3 실패 대조), wire 선언이
+    fs 효과보다 먼저 도달(실제 `searchChildBody`를 파이프 위에서 구동해
+    관측된 디렉터리는 항상 이미 선언됨), fd 고갈 깊이 트리가
+    "file descriptors" 거절 문구로 거절(ulimit -n 96 + 400단계; 구
+    산출물에서는 평탄화된 generic 실패로 실패 대조).
+  - NOT_RUN: macOS native·systemd·kernel/powercut·provider credential·
+    release qualification — 로컬 환경 부재.
+
 ## 10. 지금부터의 실행 순서
 0. ~~P0-8 강제 수단 미구현~~ — 구현됨: `owned-state` 아키텍처 규칙
    (scripts/architecture/rules/owned-state-rules.mjs)이 경로 기반 raw fs

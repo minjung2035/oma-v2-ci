@@ -162,8 +162,8 @@
     "G10-02",
     "P0V-122"
    ],
-   "sha256": "fa2659757cafb36fd711b81c246bb791ceae4341fa5a051d9f86006e89dd1ab4",
-   "note": "Re-read in full for the UX-38 blind-verification fix round (F1/F2/F3/F6): observation is now two windows, not one -- any byte resets the silence window while only non-heartbeat frames ({p:d/c/r/w}) and non-frame bytes reset the progress window, so a child whose only output for HEARTBEAT_ONLY_WINDOWS stall windows is the worker heartbeat has a wedged main thread and is reclaimed in bounded time; sparse real progress outlives the ceiling. The declared snapshot is swept unconditionally on close, so an externally SIGKILLed child leaves nothing. An oversized complete answer crosses the pipe in the result envelope and the parent writes it whole into the workspace .oma/search-results/ through the serialized contained writer (quota, admission, ownership like any authored file), naming it in details.complete and the [preview] marker; when no spool can take it the complete text rides inline in full with the reason. The heartbeat worker carries an explicit error listener. Read verified against the heartbeat-only-reclaim, sparse-progress, external-SIGKILL-sweep, workspace-spool-reachability and quota-refusal oracles."
+   "sha256": "21c1a66195fb82525c940aee31c6123e0a1ec6dc09d0c76f21edd53c83aada04",
+   "note": "Re-read in full for the UX-38 blind-verification round-2 settlement (declare-before-create): the {p:\"d\"} snapshot declaration no longer rides emit's buffered process.stdout.write -- searchChildBody's named() now writes the frame with a synchronous writeSync(1, ...) loop that completes before withSearchSnapshot creates the directory, so a child killed or stopped between the mkdir and its first yield can no longer leave an undeclared oma-search-* copy; a short or failed declaration write throws and fails the snapshot before anything is created. The parent's declared-name sweep on close is unchanged. Read verified against the declare-before-create contract, kill-at-first-sighting sweep and wire-ordering oracles."
   },
   {
    "path": "src/protocol/receipt-chunks.ts",
@@ -7108,8 +7108,8 @@
     "BL3",
     "G10-02"
    ],
-   "note": "Re-read in full for the UX-38 blind-verification fix round (F5): the destination side of the snapshot copy now holds one descriptor per open level exactly like the source side -- every destination mkdir/open is resolved through entryAt(parent_fd, name) so a same-uid racer that renames a copied directory or plants a symlink inside the private tree cannot carry a write through it, and EMFILE/ENFILE is converted to an honest workspace refusal rather than a fallback to path writes. Copied files are opened O_WRONLY|O_CREAT|O_EXCL|O_NOFOLLOW mode 0600. The only depth bound is the OS descriptor table. Read verified against the destination-swap race oracle (a mid-copy swap leaves the planted link untouched and the held descriptor keeps writing the real directory).",
-   "sha256": "cefd7021c3aadc583e33cc00be4cf79888ed144fcea5f7a0c128d7a3a6a26a68"
+   "note": "Re-read in full for the UX-38 blind-verification round-2 settlement: (1) withSearchSnapshot no longer mkdtemp-creates before announcing -- it generates each oma-search-<uuid> candidate itself, calls named() BEFORE mkdirSync, retries on EEXIST with a fresh announced name, and propagates a named() failure instead of swallowing it, so exists implies declared. (2) the body moved behind a thin public wrapper so an EMFILE/ENFILE raised anywhere in the snapshot -- the held-directory walk, a source readdir or open, a destination open, the cleanup -- is converted by module-scope descriptorRefusal into WorkspaceRefusal (\"search snapshot ran out of file descriptors\") instead of escaping raw and flattening to \"contained search failed\". Read verified against the declare-before-create, EEXIST-retry, kill-at-first-sighting and fd-starved refusal oracles.",
+   "sha256": "5e712fd6e3a091c9ac2c46176dd831b30f472a2733686cbf5ed1a43878b8c6fd"
   },
   {
    "path": "src/runtime/deployment-manifest.ts",

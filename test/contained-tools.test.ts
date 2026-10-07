@@ -163,6 +163,52 @@ test("G10-02: search snapshots hold the source root through replacement and remo
   controller.abort(); await assert.rejects(cancelled, /aborted/);
 });
 
+test("G10-02 / P0-4: a snapshot's name is declared before the directory can exist -- exists implies announced", async t => {
+  const { withSearchSnapshot } = await import("../src/extension/contained-files.js");
+  const { workspace } = world(t);
+  writeFileSync(join(workspace, "a.txt"), "needle\n");
+  const announced: string[] = [];
+  const result = await withSearchSnapshot(workspace, ".", 1 << 20, undefined, async snapshot => {
+    // The announced name is the directory the snapshot actually lives under.
+    assert.equal(snapshot, join(tmpdir(), announced.at(-1)!, "workspace"));
+    return "done";
+  }, undefined, name => {
+    // The ordering a supervising parent's sweep needs: the name is announced
+    // before the directory exists, so a copier killed or stopped between the
+    // mkdir and its first yield can never leave a private tree nobody can
+    // name. An announce that sees the directory already there is the defect.
+    assert.equal(existsSync(join(tmpdir(), name)), false,
+      `snapshot ${name} was announced only after it already existed`);
+    announced.push(name);
+  });
+  assert.equal(result, "done");
+  assert.equal(announced.length, 1);
+  assert.equal(existsSync(join(tmpdir(), announced[0]!)), false, "the declared snapshot was not removed");
+});
+
+test("G10-02 / P0-4: an already-taken snapshot name is announced again fresh before the retry", async t => {
+  const { withSearchSnapshot } = await import("../src/extension/contained-files.js");
+  const { workspace } = world(t);
+  writeFileSync(join(workspace, "a.txt"), "needle\n");
+  const announced: string[] = [];
+  let stolen = "";
+  const result = await withSearchSnapshot(workspace, ".", 1 << 20, undefined, async snapshot => {
+    assert.equal(snapshot, join(tmpdir(), announced.at(-1)!, "workspace"));
+    return "done";
+  }, undefined, name => {
+    assert.equal(existsSync(join(tmpdir(), name)), false,
+      `snapshot ${name} was announced only after it already existed`);
+    announced.push(name);
+    // Steal the first announced name between declare and create -- the
+    // EEXIST retry must announce a fresh name, not reuse the collided one.
+    if (announced.length === 1) { stolen = name; mkdirSync(join(tmpdir(), name)); }
+  });
+  t.after(() => { if (stolen !== "") rmSync(join(tmpdir(), stolen), { recursive: true, force: true }); });
+  assert.equal(result, "done");
+  assert.equal(announced.length, 2, "the collided name was not re-announced fresh");
+  assert.notEqual(announced[0], announced[1]);
+});
+
 test("G10-02: contained grep and find preserve regex, glob and workspace ignore rules", async t => {
   const { workspace, outside, run } = world(t);
   const previousConfig = process.env.RIPGREP_CONFIG_PATH;
@@ -291,6 +337,90 @@ test("G10-02 / P0-4: a search child killed externally mid-copy still has its ann
   assert.equal(await exited, 0, "the parent did not settle after its child died externally");
   for (let n = 0; n < 500 && readdirSync(temporary).length > 0; n++) await delay(5);
   assert.deepEqual(readdirSync(temporary), [], "an externally killed child left its private copy behind");
+});
+
+test("G10-02 / P0-4: a child killed the moment its snapshot exists still leaves nothing undeclared", { timeout: 20000 }, async t => {
+  const { base, workspace } = world(t);
+  const temporary = join(base, "temporary"); mkdirSync(temporary);
+  // A copy long enough that the directory is observable before it finishes.
+  for (let n = 0; n < 300; n++) writeFileSync(join(workspace, `${n}.txt`), "needle\n".repeat(300));
+  const script = `const {searchWorkspace}=await import(process.argv[1]);
+    try{await searchWorkspace('grep',process.argv[2],{pattern:'needle'},10000000);process.exitCode=3;}
+    catch{process.exitCode=0;}`;
+  const parent = spawn(process.execPath, ["--input-type=module", "-e", script,
+    new URL("../src/extension/contained-search.js", import.meta.url).href, workspace],
+    { env: { ...process.env, TMPDIR: temporary }, stdio: "ignore" });
+  const exited = new Promise<number | null>(resolve => parent.once("close", code => resolve(code)));
+  t.after(async () => { try { parent.kill("SIGKILL"); } catch {} await exited; });
+  // The defect window was between the mkdir and the child's first event-loop
+  // yield: a buffered {p:"d"} could die with the process and leave a copy
+  // nobody could name. Kill at the first moment the directory is observable
+  // -- a synchronous poll is the closest a sibling process can get to that
+  // window. The declaration is a synchronous pipe write that precedes the
+  // mkdir, so by the time the directory exists the parent already holds the
+  // name to sweep.
+  let observed = "";
+  const deadline = Date.now() + 10000;
+  while (observed === "" && parent.exitCode === null && Date.now() < deadline)
+    observed = readdirSync(temporary).find(name => name.startsWith("oma-search-")) ?? "";
+  assert.notEqual(observed, "", "the child's snapshot never appeared");
+  let child = 0;
+  try { child = Number(readFileSync(`/proc/${parent.pid}/task/${parent.pid}/children`, "utf8").trim()); }
+  catch { /* the child is still spawning */ }
+  if (Number.isSafeInteger(child) && child > 0) process.kill(child, "SIGKILL");
+  assert.equal(await exited, 0, "the parent did not settle after its child died at the earliest sighting");
+  for (let n = 0; n < 500 && readdirSync(temporary).length > 0; n++) await delay(5);
+  assert.deepEqual(readdirSync(temporary), [], "a killed child's snapshot was left behind -- it was never declared");
+});
+
+test("G10-02 / P0-4: the child's declaration bytes reach the pipe before the snapshot can be observed", { timeout: 20000 }, async t => {
+  const { base, workspace } = world(t);
+  const temporary = join(base, "temporary"); mkdirSync(temporary);
+  for (let n = 0; n < 100; n++) writeFileSync(join(workspace, `${n}.txt`), "needle\n".repeat(50));
+  // Drive the real child body over a real pipe: searchChildBody runs the
+  // same declare it runs inside the spawned search child, and this process
+  // watches the wire and the filesystem side by side.
+  const script = `const {searchChildBody}=await import(process.argv[1]);
+    const emit=o=>{try{process.stdout.write(JSON.stringify(o)+'\\n')}catch{}};
+    const input={name:'grep',root:process.argv[2],params:{path:'.'},maximum:1<<22,heartbeat:50};
+    const out=await searchChildBody(input,new AbortController().signal,emit,
+      async()=>{await new Promise(r=>setTimeout(r,400));return '{"done":1}';});
+    process.stdout.write(out+'\\n');`;
+  const child = spawn(process.execPath, ["--input-type=module", "-e", script,
+    new URL("../src/extension/contained-search.js", import.meta.url).href, workspace],
+    { env: { ...process.env, TMPDIR: temporary }, stdio: ["ignore", "pipe", "ignore"] });
+  // close fires once after stdio drains -- every byte the child wrote is
+  // in hand by then. Attach before polling so the event is never missed.
+  const childClosed = new Promise(resolve => child.once("close", resolve));
+  t.after(() => { try { child.kill("SIGKILL"); } catch {} });
+  const declared = new Set<string>();
+  let rest = "";
+  child.stdout.on("data", chunk => {
+    rest += chunk.toString("utf8");
+    for (let at = rest.indexOf("\n"); at >= 0; at = rest.indexOf("\n")) {
+      const line = rest.slice(0, at); rest = rest.slice(at + 1);
+      try {
+        const frame = JSON.parse(line) as { p?: string; s?: string };
+        if (frame?.p === "d" && typeof frame.s === "string") declared.add(frame.s);
+      } catch { /* the last line is the body result, not a frame */ }
+    }
+  });
+  // A directory that exists was already declared: the declaration's bytes
+  // entered the pipe before the mkdir ran, so at most one drain separates
+  // seeing the directory from holding its name.
+  const deadline = Date.now() + 15000;
+  for (;;) {
+    for (const name of readdirSync(temporary).filter(n => n.startsWith("oma-search-"))) {
+      if (!declared.has(name)) {
+        await delay(10);
+        assert.ok(declared.has(name), `snapshot ${name} exists but no {p:"d"} for it reached the pipe first`);
+      }
+    }
+    if (child.exitCode !== null || Date.now() > deadline) break;
+    await delay(2);
+  }
+  await childClosed;
+  assert.equal(declared.size > 0, true, "no snapshot name was ever declared");
 });
 
 test("G10-02 / P0: a hidden walker default is not the answer -- the same snapshot yields every match", async t => {
@@ -519,6 +649,33 @@ test("G10-02 / P0: depth is never refused -- a tree past every historical level 
     return existsSync(leaf);
   });
   assert.equal(seen, true);
+});
+
+test("G10-02 / P0-4: a descriptor-starved copy refuses in words -- EMFILE/ENFILE is not an unexplained failure", { timeout: 30000 }, async t => {
+  const { base, workspace } = world(t);
+  const temporary = join(base, "temporary"); mkdirSync(temporary);
+  // Deeper than any small descriptor budget: the copy holds one descriptor
+  // per open level on both sides, so a tight limit fires mid-copy -- at a
+  // source readdir or open, not only at the wrapped destination opens.
+  let deep = workspace;
+  for (let n = 0; n < 400; n++) { deep = join(deep, "d"); mkdirSync(deep); }
+  writeFileSync(join(deep, "leaf.txt"), "needle\n");
+  const script = `const {searchWorkspace}=await import(process.argv[1]);
+    try{await searchWorkspace('grep',process.argv[2],{pattern:'needle'},10000000);process.exitCode=3;}
+    catch(error){const m=String(error&&error.message||error);process.stdout.write(m);
+      process.exitCode=/file descriptors/.test(m)?0:2;}`;
+  // The fd ceiling is set with prlimit's direct argv -- the local lane
+  // forbids a shell, and `ulimit` exists only inside one -- and the search
+  // child the script spawns inherits it.
+  const parent = spawn("prlimit", ["--nofile=96:96",
+    process.execPath, "--input-type=module", "-e", script,
+    new URL("../src/extension/contained-search.js", import.meta.url).href, workspace],
+    { env: { ...process.env, TMPDIR: temporary }, stdio: ["ignore", "pipe", "inherit"] });
+  const exited = new Promise<number | null>(resolve => parent.once("close", code => resolve(code)));
+  t.after(async () => { try { parent.kill("SIGKILL"); } catch {} await exited; });
+  let out = "";
+  parent.stdout!.on("data", (chunk: Buffer) => { out += chunk.toString("utf8"); });
+  assert.equal(await exited, 0, `the starved child was not refused in words: ${out}`);
 });
 
 test("G10-02 / R6-01: a destination directory swapped mid-copy cannot carry a write through a link", { timeout: 30000 }, async t => {

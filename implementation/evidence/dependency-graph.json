@@ -1986,7 +1986,7 @@
   "koffi": 6,
   "node:async_hooks": 4,
   "node:child_process": 8,
-  "node:crypto": 51,
+  "node:crypto": 52,
   "node:dns": 1,
   "node:fs": 119,
   "node:fs/promises": 3,
