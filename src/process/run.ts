@@ -50,7 +50,17 @@ export function runProcessSync(spec: CommandSpec, invoke: SyncInvoker = spawnSyn
   const spoolFd = (path: string | undefined): number | null =>
     path === undefined ? null : openSync(path, constants.O_WRONLY | constants.O_CREAT | constants.O_TRUNC | constants.O_NOFOLLOW, 0o600);
   const outFd = spoolFd(spec.stdoutSpool);
-  const errFd = spoolFd(spec.stderrSpool);
+  // The second open sits ahead of the invoke try/finally that returns these
+  // descriptors, so its failure must close the first one itself: the error is
+  // the open's own and still reaches the caller, but nothing else ever sees
+  // the fd it would strand.
+  let errFd: number | null;
+  try {
+    errFd = spoolFd(spec.stderrSpool);
+  } catch (error) {
+    if (outFd !== null) try { closeSync(outFd); } catch { /* the file is the caller's; the descriptor was ours */ }
+    throw error;
+  }
   let result: NativeSyncResult;
   try {
     result = invoke(spec.executable, [...spec.argv], { env: { ...spec.env,

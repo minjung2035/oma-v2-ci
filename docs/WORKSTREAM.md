@@ -1703,6 +1703,63 @@ name collision/intended surface/hidden 미활성/idempotent reload/provenance/
     있어 큐잉 의미로 갱신했다.
   - NOT_RUN: macOS native·systemd·kernel/powercut·provider credential·
     release qualification — 로컬 환경 부재.
+- 2026-10-09 (UX-38 맹검증 정산 — 프로세스 스풀 fd 누수·동일 스풀 경로 거절·
+  LSP 오라클 결정화):
+  - F-1 `runProcessSync` 부분 실패 fd 누수: 두 spool open이 invoke의
+    try/finally 밖에 있어 두 번째 open(ENOENT/EACCES/ELOOP/EMFILE) 실패 시
+    첫 fd가 영구 누수됐다(재현: 실패 호출당 fd +1). 두 번째 open을 전용
+    try로 감싸 실패 시 첫 fd를 닫고 open 자신의 오류를 재던지는 방식으로
+    수정 — open 실패를 spawn-failed 관측으로 접지 않아 호출자 조건 오류의
+    신원(path·syscall)을 보존한다. 회귀: 유효 stdoutSpool+ENOENT
+    stderrSpool을 반복 호출해 /proc/self/fd 증가 없음을 단언(수정 전 16회
+    호출에 fd 23→39).
+  - F-2 `stdoutSpool === stderrSpool` 미거절: 같은 경로를 두 스트림이
+    열면 나중 O_TRUNC이 먼저 쓴 스트림을 지우고 두 관측이 같은 파일을
+    가리켜 무소음 손실+허위 durable fact가 됐다(재현: sync stdout 64B가
+    stderr 64B로 덮여 소실). `validateCommand`가 동일 문자열을 TypeError로
+    거절 — 두 runner 모두를 관통한다. 다른 철자의 동일 파일(alias:
+    `..`·경로 중간 링크)은 순수 계약이 path-module 능력을 갖지 않으므로
+    호출자 책임으로 문서화했다 — realpath 비교는 순수성 위배+TOCTOU라
+    채택하지 않음.
+  - O5 `lsp-upstream.test.ts` "both markers survive" 불안정 오라클:
+    부모 `3f735a0b`에서도 5/8 실패하던 선재 flake. 근본 원인 —
+    `push-flood-uri-flood`가 didOpen에 ~930KB/4,102 프레임을 한 번에
+    쏟는데 클라이언트의 settle 타이머(diagnosticsSettleMs 30ms)는 같은
+    키 발행에서만 재장전되므로, flood 도착·파싱이 30ms를 넘으면 두 번째
+    발행 전에 settle이 발화해 drop 계수 완료 전 리스트를 resolve한다
+    (관측: 1025 vs 1026 — URI-drop 마커 누락 또는 부분 카운트). 변동
+    자체는 "도착한 만큼만 정직히 보고"하는 올바른 동작이지만 검증 대상은
+    완료 상태의 마커 회계이므로 fixture를 결정화: 시나리오를 pull 가능하게
+    전환(PULL_SCENARIOS 진입 + 진단 요청에 `items: []` 응답)해 pull
+    응답을 FIFO 장벽으로 사용 — 응답이 처리될 때 모든 push 프레임이 이미
+    저장·계수됨이 wire 순서로 보장되고, `pullDiagnosticsGraceMs`로 빈 응답이
+    published-diagnostics 대기로 이어져 settle이 완료 상태를 합성한다.
+    `push-uri-flood`도 같은 부류의 경합(100ms grace 창)을 갖고 있어 같은
+    장벽으로 전환했다. 증거: 대상 테스트 8/8 + 병렬 경쟁 12/12 + 파일
+    전체 30/30 × 6회 전부 PASS.
+  - O5 후속 — 같은 flake의 두 번째 표면(`lsp-bundle.test.ts`): 전체 suite
+    최초 실행에서 BL1/F-1이 URI-drop 마커만 보고해 실패(파일 절단 마커
+    부재). bundle 표면의 `hostileWorld` 호출이 grace를 넘기지 않아 pull
+    응답이 flood 처리 전에 돌아오는 같은 경합이었다 — 두 hostile 시나리오
+    호출(`push-uri-flood`·`push-flood-uri-flood`)에
+    `pullDiagnosticsGraceMs: 250`을 결박해 upstream 표면과 같은 장벽을
+    공유하게 했다.
+  - O5 연장 — `lsp-bundle.test.ts` "truly silent server"의 resolve-or-reject
+    경합: `lifecycle-hang-textDocument/diagnostic`은 pull 요청을 hang하는데,
+    요청 타임아웃(바닥 1000ms)이 stall 창(`max(callStallMs, timeoutMs)` =
+    같은 1000ms)보다 먼저 발화하면 `Promise.allSettled`가 그 거절을
+    파일별 oma/error 마커로 강등해 호출이 **resolve**된다 — stall이 이기면
+    reject, 지면 resolve인 타이머 경합(12회 중 3회 resolve 관측). 두
+    타이머는 설계상 같은 폭이라 어느 쪽이 이길지는 spawn 지연 대 이벤트 루프
+    지연의 우연이었다. `lifecycle-hang-initialize`로 옮겨 hang된 대상을
+    initialize로 바꿈 — initialize 타임아웃은 파일별 강등 없이 route 전체를
+    reject하고 stall 선행도 reject라 **두 순서 모두 거절**로 수렴,
+    오라클이 결정적이 됐다(이후 파일 전체 48/48 × 10회 PASS).
+  - 메타데이터: source digests 재생성, run.ts·command.ts의 byte-bound
+    review 항목을 fresh re-read 후 새 sha256으로 재결박, review-ledger
+    재생성, validation.md input digest 재결박.
+  - NOT_RUN: macOS native·systemd·kernel/powercut·provider credential·
+    release qualification — 로컬 환경 부재.
 
 ## 10. 지금부터의 실행 순서
 0. ~~P0-8 강제 수단 미구현~~ — 구현됨: `owned-state` 아키텍처 규칙

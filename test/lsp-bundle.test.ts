@@ -782,18 +782,25 @@ test("BL1/F1: pull diagnostics over the count or message bound are truncated wit
 test("BL1/F1: pushed publications past the tracked-document bound are dropped with a visible count", async t => {
   // push-uri-flood fills the 4096-document map then pushes the opened
   // file's own publication: it is the drop the resolved list must name.
-  const { run } = await hostileWorld(t, "push-uri-flood", false, { pushDiagnosticsGraceMs: 100 });
+  // The scenario's empty pull answer is the ordering barrier -- the drops
+  // are all counted before the response resolves, so the grace wait below
+  // cannot settle against a still-arriving flood.
+  const { run } = await hostileWorld(t, "push-uri-flood", false, { pullDiagnosticsGraceMs: 250 });
   const text = textOf(await run("lsp_diagnostics", { paths: ["note.tfix"], server: "fixture" }));
   assert.match(text, /pushed publication\(s\) were dropped at OMA's \d+-document bound/);
 });
 
 test("BL1/F-1: a truncated list plus the URI-drop marker keep BOTH markers and counts", async t => {
   // push-flood-uri-flood stores the file's own over-bound publication,
-  // overflows the tracked-URI bound, then republishes so the settle runs
-  // after every drop: the resolved list ends in TWO markers and the
-  // re-flagging pass must not recount them -- the old single-strip
-  // accounting sliced both off and reported a phantom "1 more" drop.
-  const { run } = await hostileWorld(t, "push-flood-uri-flood");
+  // overflows the tracked-URI bound, then republishes. Its empty pull
+  // answer is the ordering barrier -- every pushed frame is stored and
+  // every drop counted before the response resolves (FIFO reads), so the
+  // settle composes the complete state rather than racing the flood's
+  // arrival against the settle window: the resolved list ends in TWO
+  // markers and the re-flagging pass must not recount them -- the old
+  // single-strip accounting sliced both off and reported a phantom
+  // "1 more" drop.
+  const { run } = await hostileWorld(t, "push-flood-uri-flood", false, { pullDiagnosticsGraceMs: 250 });
   const text = textOf(await run("lsp_diagnostics", { paths: ["note.tfix"], server: "fixture" }));
   assert.match(text, /976 more diagnostic\(s\) for this file were dropped at OMA's \d+-diagnostic bound/);
   assert.match(text, /5 pushed publication\(s\) were dropped at OMA's \d+-document bound/);
@@ -933,10 +940,14 @@ test("BL1/F1: progress resets the observation window -- a call longer than it st
 test("BL1/F1: a truly silent server is still reclaimed -- the request timeout or the stall reports it", async t => {
   // lifecycle-hang-* emits nothing after the request: with the 1000ms
   // request floor the call dies at ~1s, named as the timeout or the
-  // stall, never as an unbounded hang.
+  // stall, never as an unbounded hang. The hung method is initialize on
+  // purpose -- a hung pull request's timeout only degrades to a per-file
+  // marker (allSettled in runDiagnostics), so timeout-vs-stall there is a
+  // resolve-or-reject race; a hung initialize's timeout rejects the whole
+  // route either way, making the rejection deterministic under load.
   const workspace = tmp(t, "oma-lsp-ws-");
   writeFileSync(join(workspace, "note.tfix"), "hello\n");
-  withAgentDir(t, agentDirWithConfig(t, "lifecycle-hang-textDocument/diagnostic", {}, { timeout: 50 }));
+  withAgentDir(t, agentDirWithConfig(t, "lifecycle-hang-initialize", {}, { timeout: 50 }));
   const pi = fakePi();
   await registerLspTools(pi, { workspace, readOnly: false, write: async () => {}, callStallMs: 400 });
   await assert.rejects(

@@ -26,11 +26,19 @@
  * - `push-big-message`: pushes one diagnostic whose message is over bound.
  * - `push-uri-flood`: pushes publications for more distinct documents
  *   than the tracked-URI bound, then the opened file's own -- the opened
- *   file's publication is the drop the resolved list must name.
+ *   file's publication is the drop the resolved list must name. The
+ *   scenario advertises a pull provider and answers the pull with an
+ *   empty list: the response is the client's ordering barrier (its reads
+ *   are FIFO), so every pushed frame is stored and every drop counted
+ *   before the grace wait resolves -- a push-only variant raced the whole
+ *   flood against the settle window and could resolve mid-delivery.
  * - `push-flood-uri-flood`: pushes the opened file's own over-bound
  *   publication, then the URI flood, then the file's publication again --
  *   the resolved list carries the stored truncation marker AND the
- *   URI-drop marker, and the re-flagging pass must count both right.
+ *   URI-drop marker, and the re-flagging pass must count both right. Same
+ *   pull barrier: without it the settle timer could fire while the flood
+ *   was still arriving, cutting the resolved list before all five drops
+ *   were counted.
  * - `pull-uri-flood`: the pull path's URI flood -- publications pushed on
  *   didOpen overflow the tracked-document bound while the pull request is
  *   in flight, so the answered list must still name the drops.
@@ -108,7 +116,7 @@ function diagnostic(message, line = 0) {
   };
 }
 
-const PULL_SCENARIOS = new Set(["stderr-flood", "stderr-flood-exit", "pull-flood", "pull-big-message", "actions-flood", "edits-flood", "edits-documentchanges-flood", "edit-bytes-flood", "edits-at-bound", "oversized-frame", "oversized-then-serve", "oversized-notification", "frame-drip", "env-echo", "env-probe", "pid-echo", "slow-stages", "pull-uri-flood", "partial-answers", "slow-drain", "stdin-stall", "marker-context"]);
+const PULL_SCENARIOS = new Set(["stderr-flood", "stderr-flood-exit", "pull-flood", "pull-big-message", "actions-flood", "edits-flood", "edits-documentchanges-flood", "edit-bytes-flood", "edits-at-bound", "oversized-frame", "oversized-then-serve", "oversized-notification", "frame-drip", "env-echo", "env-probe", "pid-echo", "slow-stages", "pull-uri-flood", "push-uri-flood", "push-flood-uri-flood", "partial-answers", "slow-drain", "stdin-stall", "marker-context"]);
 /** Each slow-stages stage delay. Below the client's 1000ms request floor,
  * so no single request times out; three of them put the whole call well
  * past a ~1s observation window, which is what proves the window resets
@@ -255,6 +263,17 @@ function handle(message) {
     }
     if (scenario === "pull-uri-flood" || scenario === "slow-drain" || scenario === "stdin-stall") {
       send({ jsonrpc: "2.0", id: message.id, result: { items: [diagnostic("pull answer")] } });
+      return;
+    }
+    if (scenario === "push-uri-flood" || scenario === "push-flood-uri-flood") {
+      // The empty pull answer is the ordering barrier: it is written only
+      // after the client asked, and everything the server pushed on
+      // didOpen is already ahead of it on the wire. When the client
+      // processes this response, each publication is stored and every
+      // dropped URI counted -- the settled diagnostics deterministically
+      // carry the complete state instead of racing the flood's arrival
+      // against the settle window.
+      send({ jsonrpc: "2.0", id: message.id, result: { items: [] } });
       return;
     }
     if (scenario === "marker-context") {

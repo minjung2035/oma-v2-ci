@@ -146,8 +146,13 @@ test("BL1/F1: pushed publications past the tracked-document bound are dropped wi
   writeFileSync(join(root, "note.tfix"), "hello\n");
   const ctx = { ui: { setStatus() {} } };
   // push-uri-flood pushes 4100 documents plus the opened file's own:
-  // 4096 tracked, 5 dropped -- the resolved list names them.
-  const adapter = { ...hostileAdapter("push-uri-flood"), pushDiagnosticsGraceMs: 100 };
+  // 4096 tracked, 5 dropped -- the resolved list names them. The scenario
+  // advertises a pull provider whose empty answer is the ordering barrier:
+  // the response is processed only after every pushed frame (client reads
+  // are FIFO), so all five drops are counted before the grace wait settles
+  // the dropped-and-never-stored file's list. A push-only settle raced the
+  // flood's arrival and could name a partial drop count.
+  const adapter = { ...hostileAdapter("push-uri-flood"), pullDiagnosticsGraceMs: 250 };
   const result = await runDiagnostics(adapter as never, { root, files: [join(root, "note.tfix")] }, 10_000,
     new AbortController().signal, ctx, "lsp");
   const details = result.details as { files: { diagnostics: { message: string }[] }[] };
@@ -569,13 +574,19 @@ test("BL1/F-1: a truncated list plus a URI-drop marker re-flag correctly -- both
   const ctx = { ui: { setStatus() {} } };
   // push-flood-uri-flood stores the opened file's own 2000-diagnostic
   // publication (truncated to 1024+marker at store), overflows the
-  // tracked-document bound (5 drops), then republishes so the settle timer
-  // runs after every drop is counted. The resolved list is [1024 real,
-  // truncation marker, URI-drop marker]; the runner's flag pass must strip
-  // BOTH trailing markers before counting -- counting only the last one
-  // misread the earlier marker as a real diagnostic and sliced them both
-  // off, reporting a phantom "1 more" drop and losing the real counts.
-  const result = await runDiagnostics(hostileAdapter("push-flood-uri-flood"),
+  // tracked-document bound (5 drops), then republishes. The scenario's
+  // empty pull answer is the ordering barrier: the response resolves only
+  // after every pushed frame is already stored and counted (the client's
+  // reads are FIFO), so the settle composes the complete state instead of
+  // racing ~930KB of flood against the settle window -- the push-only form
+  // of this fixture resolved mid-delivery with drops still uncounted.
+  // The resolved list is [1024 real, truncation marker, URI-drop marker];
+  // the runner's flag pass must strip BOTH trailing markers before
+  // counting -- counting only the last one misread the earlier marker as
+  // a real diagnostic and sliced them both off, reporting a phantom
+  // "1 more" drop and losing the real counts.
+  const adapter = { ...hostileAdapter("push-flood-uri-flood"), pullDiagnosticsGraceMs: 250 };
+  const result = await runDiagnostics(adapter as never,
     { root, files: [join(root, "note.tfix")] }, 30_000, new AbortController().signal, ctx, "lsp");
   const details = result.details as { files: { diagnostics: { code?: string; message: string }[] }[] };
   const diagnostics = details.files[0]!.diagnostics;

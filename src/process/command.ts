@@ -65,6 +65,15 @@ export function validateCommand(spec: CommandSpec): void {
   }
   positive(spec.stdoutBytes + spec.stderrBytes, "combined output budget", true);
   spoolPath(spec.stdoutSpool, "stdout spill path"); spoolPath(spec.stderrSpool, "stderr spill path");
+  // One file cannot spill both streams: whichever open truncates last erases
+  // the other's bytes while both observations still name the path -- a silent
+  // stream loss reported as a durable fact. Refusing the identical string
+  // covers every runner through this contract; a different spelling of the
+  // same file (a ".." segment or a mid-path link) is the caller's to avoid,
+  // since this pure contract keeps no path-module capability to prove two
+  // names resolve apart.
+  if (spec.stdoutSpool !== undefined && spec.stdoutSpool === spec.stderrSpool)
+    throw new TypeError("invalid subprocess spill paths: stdout and stderr are the same file");
   if (spec.stderrOverflow !== undefined && spec.stderrOverflow !== "limit" && spec.stderrOverflow !== "discard") throw new TypeError("invalid subprocess stderr policy");
   if (spec.input !== undefined && typeof spec.input !== "string" && !(spec.input instanceof Uint8Array)) throw new TypeError("invalid subprocess input");
 }

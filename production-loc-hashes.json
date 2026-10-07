@@ -56076,7 +56076,7 @@
     },
     {
       "path": "src/process/command.ts",
-      "sha256": "3e0e213843c8e089ba5ece27bbd0ef129d631f049e9b300f7e295fcb0f76ac0b"
+      "sha256": "be6fd977847e3f6b8566fda387c80992bc3712f841c5a5f29890aa0fdab9e0b2"
     },
     {
       "path": "src/process/host-loss.ts",
@@ -56092,7 +56092,7 @@
     },
     {
       "path": "src/process/run.ts",
-      "sha256": "e7fb22b069881e4d2c96267c793529d8f1fe0a37f6b109fbf1686a0100d6e5da"
+      "sha256": "e49e2131e89bfb0edcfbbb9fd914c4e770542fdffc310751f07927097fa4d076"
     },
     {
       "path": "src/protocol/alarm.ts",

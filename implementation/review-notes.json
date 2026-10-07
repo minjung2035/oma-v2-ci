@@ -1,6 +1,6 @@
 {
  "version": 1,
- "about": "WP32 inputs to implementation/review-ledger.json that git history cannot supply: files read in full and left unchanged, explicitly reviewed working-tree changes bound to their SHA-256 bytes and oracles, and the environment lanes as recorded in docs/implementation/validation.md. Regenerate the ledger with `npm run review:ledger`; `review-closure` checks it. Historical lane entries do not certify later working-tree changes. DR29: withdrawn stale byte-bound review claims for src/runtime/personal-settings.ts, src/entry/personal-host.ts, src/entry/oma-mac.ts. Hashes were not silently refreshed; these edited owners require fresh review. Historical readUnchanged entries apply only to unchanged committed files; changed files are NOT_REVIEWED. UX-38 residual settlement (bundled pi-lsp surface): the seven edited files above were re-read in full and re-bound to their new bytes -- digests refreshed only alongside a fresh read, never silently. No withdrawal was needed: each change is this batch's own reviewed work.",
+ "about": "WP32 inputs to implementation/review-ledger.json that git history cannot supply: files read in full and left unchanged, explicitly reviewed working-tree changes bound to their SHA-256 bytes and oracles, and the environment lanes as recorded in docs/implementation/validation.md. Regenerate the ledger with `npm run review:ledger`; `review-closure` checks it. Historical lane entries do not certify later working-tree changes. DR29: withdrawn stale byte-bound review claims for src/runtime/personal-settings.ts, src/entry/personal-host.ts, src/entry/oma-mac.ts. Hashes were not silently refreshed; these edited owners require fresh review. Historical readUnchanged entries apply only to unchanged committed files; changed files are NOT_REVIEWED. UX-38 residual settlement (bundled pi-lsp surface): the seven edited files above were re-read in full and re-bound to their new bytes -- digests refreshed only alongside a fresh read, never silently. No withdrawal was needed: each change is this batch's own reviewed work. UX-38 blind-verification settlement (process layer): src/process/run.ts and src/process/command.ts were re-read in full and re-bound to their new bytes (spool-open fd pairing, identical-spool refusal) -- digest refresh accompanied the fresh read.",
  "reviewedChanges": [
   {
    "path": "src/process/cleanup.ts",
@@ -153150,8 +153150,8 @@
    "oracles": [
     "R37"
    ],
-   "sha256": "3e0e213843c8e089ba5ece27bbd0ef129d631f049e9b300f7e295fcb0f76ac0b",
-   "note": "Re-read in full for the UX-38 batch-4 working-tree review (2026-10-08): the spec gains silenceMs -- a progress-reset observation window, validated as a safe integer within the native timer range and never wider than timeoutMs -- and stdoutSpool/stderrSpool absolute paths (POSIX \"/\" spelling; the pure contract holds no path-module capability), plus a stalled observation kind and the spooledTo markers the runners fill. Snapshotting, budget and NUL validation unchanged."
+   "sha256": "be6fd977847e3f6b8566fda387c80992bc3712f841c5a5f29890aa0fdab9e0b2",
+   "note": "Re-read in full for the UX-38 settlement review (2026-10-09): validateCommand now refuses an identical string for stdoutSpool and stderrSpool -- one file cannot be both streams' spill, since the second O_TRUNC open erases the first stream while both observations name the path (silent loss reported as durable fact). Both runners share this contract via validateCommand/snapshotCommand. Alias spellings (.. segments, mid-path links) are documented as the caller's to avoid: the pure contract keeps no path-module capability to prove two names resolve apart. silenceMs, budgets, NUL and absolute-path validation unchanged."
   },
   {
    "path": "src/process/async.ts",
@@ -153172,8 +153172,8 @@
    "oracles": [
     "R37"
    ],
-   "sha256": "e7fb22b069881e4d2c96267c793529d8f1fe0a37f6b109fbf1686a0100d6e5da",
-   "note": "Re-read in full for the UX-38 batch-4 working-tree review (2026-10-08): the synchronous runner refuses silenceMs outright -- it cannot observe stream progress, so claiming a silence window would be a lie (TypeError before spawn). Spooled streams are opened O_WRONLY|O_CREAT|O_TRUNC|O_NOFOLLOW and handed to the child as its descriptors, stdout/stderr stay empty in memory and the observation names the spool paths; timeout, signal, spawn-failure, unobserved and exit distinctions unchanged."
+   "sha256": "e49e2131e89bfb0edcfbbb9fd914c4e770542fdffc310751f07927097fa4d076",
+   "note": "Re-read in full for the UX-38 settlement review (2026-10-09): the two spool opens are now paired so a failed second openSync (ENOENT/EACCES/ELOOP/EMFILE) closes the first descriptor before the open's own error propagates -- the fds sit ahead of the invoke try/finally, so the cleanup that returns them could never see a half-opened pair. The throw itself is preserved rather than folded into a spawn-failed observation: a bad spill path is a caller precondition like the validation errors, not a child result. silenceMs refusal, descriptor-direct spooling, timeout/signal/spawn-failure/unobserved/exit classification unchanged."
   },
   {
    "path": "src/process/policies.ts",

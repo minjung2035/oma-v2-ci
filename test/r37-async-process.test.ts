@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import childProcess from "node:child_process";
 import { syncBuiltinESMExports } from "node:module";
 import { once } from "node:events";
-import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { mkdtempSync, readdirSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { startProcess, runProcess, spawnSandboxed, stopOwnedChild } from "../src/process/async.js";
@@ -102,6 +102,37 @@ test("R37: the synchronous runner refuses a silence window it cannot observe, an
     assert.equal(result.stdout.length, 0, "the descriptor-direct file keeps nothing in memory");
     assert.equal(readFileSync(spool).length, 4096);
   } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+test("R37: a failed second spill open leaks no descriptor and keeps the open's own error", { skip: process.platform !== "linux", timeout: 10000 }, () => {
+  const dir = mkdtempSync(join(tmpdir(), "oma-r37-spool-"));
+  try {
+    const spec = command("process.stdout.write('x')", {
+      stdoutSpool: join(dir, "out.bin"),
+      // The parent directory does not exist: the second open fails ENOENT.
+      stderrSpool: join(dir, "missing", "err.bin"),
+    });
+    const fdCount = () => readdirSync("/proc/self/fd").length;
+    assert.throws(() => runProcessSync(spec),
+      (error: unknown) => (error as NodeJS.ErrnoException).code === "ENOENT",
+      "the failed open's own error still reaches the caller");
+    const baseline = fdCount();
+    for (let i = 0; i < 16; i++) assert.throws(() => runProcessSync(spec));
+    assert.equal(fdCount(), baseline,
+      "every failed call returns the descriptor the first open made -- the pre-fix leak grew one fd per call");
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+test("R37: identical stdout and stderr spill paths are refused -- the second O_TRUNC would erase the first stream", t => {
+  const dir = mkdtempSync(join(tmpdir(), "oma-r37-spool-"));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  const shared = join(dir, "shared.bin");
+  const spec = command("process.stdout.write('out'); process.stderr.write('err')",
+    { stdoutSpool: shared, stderrSpool: shared });
+  assert.throws(() => runProcessSync(spec), TypeError,
+    "one file cannot be both streams' spill -- both records would claim a file only one stream survived into");
+  assert.throws(() => startProcess(spec), TypeError,
+    "the asynchronous runner shares the same spec validation");
 });
 
 test("R37: timeout and abort never synthesize exit-zero success", { timeout: 10000 }, async () => {
