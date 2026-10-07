@@ -36,7 +36,17 @@
  * quota-charged, owned by the workspace owner like any authored file, and
  * never swept by OMA -- the result names it and it can be deleted like any
  * file. When no spool can take it the answer is still not truncated: it
- * rides inline with the notice that says why it is not at a path. */
+ * rides inline with the notice that says why it is not at a path.
+ *
+ * One naming edge is documented rather than closed: the parent's close
+ * sweep removes the LAST declared `oma-search-*` name under tmpdir. A
+ * declaration followed by an EEXIST retry and then a child death could
+ * point that sweep at a directory the child never owned -- a name stolen
+ * between declaration and creation, if the retry's declared name is the
+ * one that got preempted. Reaching it needs a fresh-UUID name stolen
+ * before the child's mkdir, and the name rides only the pipe until that
+ * mkdir, so a thief cannot learn it in time -- the gap is recorded here
+ * instead of coded around. */
 import { spawn } from "node:child_process";
 import { readFileSync, rmSync, writeSync } from "node:fs";
 import { createInterface } from "node:readline";
@@ -44,9 +54,9 @@ import { randomUUID } from "node:crypto";
 import { basename, delimiter, isAbsolute, join, relative, sep } from "node:path";
 import { tmpdir } from "node:os";
 import { getAgentDir } from "@earendil-works/pi-coding-agent";
-import { WorkspaceRefusal, withSearchSnapshot } from "./contained-files.js";
+import { WorkspaceRefusal, isDescriptorOverrun, withSearchSnapshot } from "./contained-files.js";
 import type { createGrepToolDefinition, createFindToolDefinition } from "@earendil-works/pi-coding-agent";
-export { WorkspaceRefusal } from "./contained-files.js";
+export { WorkspaceRefusal, isDescriptorOverrun } from "./contained-files.js";
 type SearchResult<N extends "grep" | "find"> = Awaited<ReturnType<ReturnType<N extends "grep" ? typeof createGrepToolDefinition : typeof createFindToolDefinition>["execute"]>>;
 
 /** The observation window one chunk of child output buys. A child that can
@@ -120,7 +130,11 @@ export async function searchChildBody(input: ContainedSearchInput,
       (input.params.path ?? ".") as string, input.maximum, signal,
       walk, progress, named);
   } catch (error) {
+    // An EMFILE/ENFILE raised inside the snapshot or the pass it owns is
+    // the same explicit refusal the snapshot boundary uses, never a
+    // shapeless "search failed".
     return JSON.stringify({ error: error instanceof WorkspaceRefusal ? error.message
+      : isDescriptorOverrun(error) ? "search snapshot ran out of file descriptors"
       : "contained search failed; no workspace result was returned" });
   }
 }
@@ -325,7 +339,10 @@ try {
       const result=await tool.execute('search',{...input.params,path:target},controller.signal,()=>emit({p:'w'}),{cwd});
       return await run.finishSearchResult(input,result,target,controller.signal,rprogress);
     } catch(error) {
-      return JSON.stringify({error:error instanceof run.WorkspaceRefusal?error.message:'contained search failed; no workspace result was returned'});
+      // A descriptor overrun inside the engine's own walk reports the same
+      // explicit refusal the snapshot boundary uses -- the walk runs inside
+      // the snapshot's lifetime, so the same wording classifies it.
+      return JSON.stringify({error:error instanceof run.WorkspaceRefusal?error.message:run.isDescriptorOverrun(error)?'search snapshot ran out of file descriptors':'contained search failed; no workspace result was returned'});
     }
   });
 } catch(error) {

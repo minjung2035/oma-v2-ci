@@ -94,49 +94,104 @@ test("BL1: runDiagnostics reports the fixture's pull diagnostics with file detai
 
 // ---------------------------------------------------------------------------
 // OMA divergences (F1): the vendored runtime carries the declared bounds --
-// the tests drive them through the runtime itself, not through the adapter.
+// as honest degradation now, not refusals. The tests drive them through the
+// runtime itself, not through the adapter.
 
-test("BL1/F1: runDiagnostics refuses a pull diagnostic message over the bound", async t => {
+test("BL1/F1: runDiagnostics truncates an over-bound pull diagnostic message with a visible marker", async t => {
   const root = tmp(t);
   writeFileSync(join(root, "note.tfix"), "hello\n");
   const ctx = { ui: { setStatus() {} } };
   // The vendored fixture's lifecycle-large path answers with a 60,000-char
-  // diagnostic -- over OMA's 8,192-char bound, so the call fails rather than
-  // formatting it.
-  await assert.rejects(
-    runDiagnostics(fixtureAdapter("lifecycle-large"), { root, files: [join(root, "note.tfix")] }, 10_000,
-      new AbortController().signal, ctx, "lsp"),
-    /60_000|60000|bound/);
+  // diagnostic -- over OMA's 8,192-char bound, so the kept prefix renders
+  // with the cut and the original length named.
+  const result = await runDiagnostics(fixtureAdapter("lifecycle-large"),
+    { root, files: [join(root, "note.tfix")] }, 10_000, new AbortController().signal, ctx, "lsp");
+  const text = result.content.map((part: { text?: string }) => part.text ?? "").join("");
+  assert.match(text, /truncated at OMA's \d+-char bound; 60000 chars total/);
+  const details = result.details as { files: { diagnostics: { message: string }[] }[] };
+  const message = details.files[0]!.diagnostics[0]!.message;
+  assert.ok(message.length <= 8_300, `the message is the bound plus the marker, not 60k: ${message.length}`);
 });
 
-test("BL1/F1: runDiagnostics refuses a pull diagnostics array over the count bound", async t => {
+test("BL1/F1: runDiagnostics truncates a pull diagnostics flood with a visible count", async t => {
   const root = tmp(t);
   writeFileSync(join(root, "note.tfix"), "hello\n");
   const ctx = { ui: { setStatus() {} } };
-  await assert.rejects(
-    runDiagnostics(hostileAdapter("pull-flood"), { root, files: [join(root, "note.tfix")] }, 10_000,
-      new AbortController().signal, ctx, "lsp"),
-    /2000 diagnostics|bound/);
+  const result = await runDiagnostics(hostileAdapter("pull-flood"),
+    { root, files: [join(root, "note.tfix")] }, 10_000, new AbortController().signal, ctx, "lsp");
+  const details = result.details as { files: { diagnostics: { source?: string; code?: string; message: string }[] }[] };
+  const diagnostics = details.files[0]!.diagnostics;
+  assert.equal(diagnostics.length, 1025, "1024 kept plus the marker element");
+  const marker = diagnostics.at(-1)!;
+  assert.equal(marker.source, "oma");
+  assert.match(marker.message, /976 more diagnostic\(s\) for this file were dropped at OMA's \d+-diagnostic bound/);
 });
 
-test("BL1/F1: a pushed-diagnostics flood fails the call inside the client", async t => {
+test("BL1/F1: a pushed-diagnostics flood resolves as a marked truncation, and the count is not re-flagged", async t => {
   const root = tmp(t);
   writeFileSync(join(root, "note.tfix"), "hello\n");
   const ctx = { ui: { setStatus() {} } };
-  await assert.rejects(
-    runDiagnostics(hostileAdapter("push-flood"), { root, files: [join(root, "note.tfix")] }, 10_000,
-      new AbortController().signal, ctx, "lsp"),
-    /pushed 2000 diagnostics|bound/);
+  // The pushed store flags at 1024+marker; the pull-path flag pass must
+  // not count the marker again or it would report "1 more dropped".
+  const result = await runDiagnostics(hostileAdapter("push-flood"),
+    { root, files: [join(root, "note.tfix")] }, 10_000, new AbortController().signal, ctx, "lsp");
+  const details = result.details as { files: { diagnostics: { message: string }[] }[] };
+  const diagnostics = details.files[0]!.diagnostics;
+  assert.equal(diagnostics.length, 1025);
+  assert.match(diagnostics.at(-1)!.message, /976 more diagnostic\(s\) for this file were dropped/);
 });
 
-test("BL1/F1: a declared oversized Content-Length fails without buffering it", async t => {
+test("BL1/F1: pushed publications past the tracked-document bound are dropped with a visible count", async t => {
   const root = tmp(t);
   writeFileSync(join(root, "note.tfix"), "hello\n");
   const ctx = { ui: { setStatus() {} } };
+  // push-uri-flood pushes 4100 documents plus the opened file's own:
+  // 4096 tracked, 5 dropped -- the resolved list names them.
+  const adapter = { ...hostileAdapter("push-uri-flood"), pushDiagnosticsGraceMs: 100 };
+  const result = await runDiagnostics(adapter as never, { root, files: [join(root, "note.tfix")] }, 10_000,
+    new AbortController().signal, ctx, "lsp");
+  const details = result.details as { files: { diagnostics: { message: string }[] }[] };
+  const marker = details.files[0]!.diagnostics.at(-1)!;
+  assert.match(marker.message, /5 pushed publication\(s\) were dropped at OMA's \d+-document bound/);
+});
+
+test("BL1/F1: a declared oversized Content-Length refuses only its request -- the same client still answers", async t => {
+  const root = tmp(t);
+  writeFileSync(join(root, "note.tfix"), "hello\n");
+  writeFileSync(join(root, "other.tfix"), "hi\n");
+  // oversized-then-serve delivers a COMPLETE oversized frame for the
+  // first diagnostics request, then answers the next normally: the drop
+  // is bounded and surgical, the wire realigns, and the server lives.
+  const adapter = hostileAdapter("oversized-then-serve");
+  const client = new LspClient(adapter, adapter.defaultCommand, root, 10_000);
+  try {
+    await client.start();
+    await client.initialize(root);
+    const uri = pathToFileURL(join(root, "note.tfix")).href;
+    client.didOpen(uri, "hello\n", "tfix");
+    await assert.rejects(client.diagnostics(uri),
+      /declared \d+ bytes.*(refused|dropped)|request was refused|stays up/i);
+    const second = pathToFileURL(join(root, "other.tfix")).href;
+    client.didOpen(second, "hi\n", "tfix");
+    const recovered = await client.diagnostics(second);
+    assert.deepEqual(recovered.map((entry: { message: string }) => entry.message), ["recovered"],
+      "a follow-up request on the same client answers -- the frame's drop realigned the wire");
+  } finally {
+    client.close();
+  }
+});
+
+test("BL1/F1: an oversized frame whose body never arrives still ends the call fast", async t => {
+  const root = tmp(t);
+  writeFileSync(join(root, "note.tfix"), "hello\n");
+  const ctx = { ui: { setStatus() {} } };
+  // oversized-frame declares 6MiB it never sends: the request is refused
+  // at the header and teardown skips a handshake the discarder cannot
+  // trust -- fast, bounded, and the drop is named.
   await assert.rejects(
     runDiagnostics(hostileAdapter("oversized-frame"), { root, files: [join(root, "note.tfix")] }, 10_000,
       new AbortController().signal, ctx, "lsp"),
-    /Content-Length|bound|invalid JSON-RPC/i);
+    /declared \d+ bytes|request was refused|frame dropped|stays up/i);
 });
 
 test("BL1/F1: a stderr flood is a bounded sample, not an accumulator", async t => {
@@ -154,16 +209,20 @@ test("BL1/F1: a stderr flood is a bounded sample, not an accumulator", async t =
   assert.ok(error.message.length < 80_000, `bounded at 64KiB plus framing, not 200KiB: ${error.message.length}`);
 });
 
-test("BL1/F1: a code-action list over the bound is refused before any resolve request", async t => {
+test("BL1/F1: a code-action list resolves completely -- the count is not a bound", async t => {
   const root = tmp(t);
   writeFileSync(join(root, "note.tfix"), "hello\n");
+  // 300 actions over the old 256 bound now resolve one by one -- each
+  // round-trip is already bounded by the request timeout and the call's
+  // progress-reset window, so a large legitimate set completes.
   const adapter = hostileAdapter("actions-flood");
-  const client = new LspClient(adapter, adapter.defaultCommand, root, 10_000);
+  const client = new LspClient(adapter, adapter.defaultCommand, root, 30_000);
   try {
     await client.start();
     await client.initialize(root);
     const actions = Array.from({ length: 300 }, (_v, i) => ({ title: `a${i}`, kind: "source.fixAll" }));
-    await assert.rejects(client.resolveActions(actions as never), /300 code actions|256/);
+    const resolved = await client.resolveActions(actions as never);
+    assert.equal(resolved.length, 300, "every action answered its resolve round-trip");
   } finally {
     client.close();
   }

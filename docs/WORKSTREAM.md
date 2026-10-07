@@ -1528,6 +1528,77 @@ name collision/intended surface/hidden 미활성/idempotent reload/provenance/
     산출물에서는 평탄화된 generic 실패로 실패 대조).
   - NOT_RUN: macOS native·systemd·kernel/powercut·provider credential·
     release qualification — 로컬 환경 부재.
+- 2026-10-07 (UX-38 잔여 — bundled pi-lsp 표면의 숫자 상한·고정 마감 변환):
+  같은 결함류(§2 1·9·13)가 code_intel LSP 표면에 남아 있어 정산했다.
+  원칙은 같다 — 유효한 처리를 크기/시간만으로 거절·묵살하는 숫자 bound는
+  제거하거나 비차단 메커니즘으로 바꾸고, 엔진 보호상 bound가 필요하면
+  정직하게 보이고 한 서버의 초과가 다른 요청·프로세스를 죽이지 않는다.
+  - 어댑터(`src/extension/lsp-tools.ts`): `LSP_FILE_BYTES`(1MiB)·
+    `LSP_MAX_FILES`(100)·`LSP_MAX_PATHS`(64)·`LSP_MAX_SERVERS`(64)·
+    `LSP_MAX_DIAGNOSTICS_*` 거절과 호출당 300s aggregate deadline 전부
+    제거. caller `limit`는 그대로 caller 선택으로 존중하고, 미지정이면
+    수집된 전체 파일 집합이 답이다(파일 수는 항상 결과 details에 명시).
+    `timeout`은 1s floor만 남기고 120s 상한을 제거 — caller가 고른
+    예산은 caller의 것. aggregate deadline은 진행-리셋 stall 창으로
+    교체: vendored client가 inbound 프레임 청크마다 `omaOnInboundFrame`
+    싱크를 호출하고, 이 호출이 소유한 hardened adapter의 프레임만이 창을
+    리셋한다 — 아직 말하는 서버는 호출 길이와 무관하게 생존하고, 침묵만이
+    회수된다. 창은 호출의 per-request timeout보다 절대 좁지 않다
+    (caller가 고른 더 긴 요청 예산을 깎지 않음).
+  - vendored divergence(`scripts/vendor-pi-lsp.mjs` → `runtime/`):
+    oversized inbound frame은 헤더 파싱 시점에 그 프레임이 답하는 요청만
+    거절(sniffed id, 없으면 유일 pending 요청)하고 본문은 bounded
+    discarder로 버린 뒤 wire를 프레임 끝에서 재정렬 — `#fail`·서버 kill
+    없음. 구분되지 않는 프레임(notification·id 미상)은 drop 카운터만
+    올려 나중 에러 꼬리에 `oma bounds:`로 명시. 프레임 경계 자체가 없는
+    garbage 누적도 버퍼를 비우고 pending 거절로 끝낸다 — 서버는 산다.
+    shutdown은 discard 진행 중엔 handshake를 건너뛰고 close(믿을 수
+    없는 wire의 handshake 금지), discard 완료 뒤엔 upstream handshake
+    그대로. push 진단은 per-file 개수·메시지 길이 bound가 throw 대신
+    `omaFlaggedDiagnostics` 절단+marker(`[oma: N more diagnostic(s)…]`,
+    `code:"oma/truncation"`) — tail marker 재인식으로 pull 경로의 이중
+    flag가 drop 수를 거짓 보고하지 않고, 메시지 절단 tail 패턴으로
+    재절단이 원본 길이를 훼손하지 않는다. tracked-URI bound 초과는 새
+    문서 publication만 drop+count하고 해소 리스트에 marker로 명시.
+    code-action 개수 상한(256)은 제거 — resolve 루프는 요청당 timeout과
+    진행-리셋 창이 이미 묶는다. workspace-edit 수집(count·newText 바이트)
+    거절은 유지: 절단된 edit 목록은 오염된 fix를 날조하고 무제한
+    materialization은 엔진 OOM — 둘 다 거절보다 나쁘다. 그 거절도 그
+    요청 하나만, 서버·다른 요청은 생존. `collectPath` 재귀+깊이 bound는
+    명시 스택 반복으로 — 깊은 트리도 통째 수집, overflow 없음. stderr는
+    64KiB bounded sample+truncation marker 유지.
+  - B2 잔여 동승: `contained-files.ts`에 `errnoCode` 가드+공개
+    `isDescriptorOverrun` — 비객체 throw(null·string·number)에서 `.code`
+    읽기 자체가 TypeError가 되던 경로를 닫고 EMFILE/ENFILE 분류 일관화.
+    `contained-search.ts`가 스냅샷 경계와 엔진 walker 양쪽의 디스크립터
+    고갈을 같은 `search snapshot ran out of file descriptors` 명시
+    거절로 매핑(재수출)하고, 선언명 선점-EEXIST-자식 사망 조합의 남은
+    sweep 대상 모서리를 헤더 주석으로 기록(코드로 닫지 않고 사유 명시).
+    `contained-tools.test.ts`의 EEXIST 교체 경주 테스트는 cleanup 등록을
+    await보다 앞으로 옮겨 planted `oma-search-*`가 실패 후에도 잔여하지
+    않게 한다.
+  - 회귀·fail→pass: `lsp-bundle.test.ts` + `lsp-upstream.test.ts` 총
+    61종 — hostile fixture `lsp-hostile-server.mjs`에 `push-uri-flood`·
+    `slow-stages`·`oversized-then-serve` 시나리오 추가. 증거: push/pull
+    진단 홍수·초대형 메시지는 marker+count로 절단된 채 해소(976 dropped
+    명시), 4097 문서 publication은 5 drop을 marker로 명시, oversized
+    frame은 요청만 거절하고 같은 client의 후속 요청이 정상 응답(wire
+    재정렬·서버 생존), 미완성 본문도 빠른 종료, 300 code-action 전부
+    resolve, `slow-stages`(요청당 ~600ms×3 → ~1.9s)가 1200ms stall 창을
+    넘어 완료(진행 리셋 증명), 침묵 서버는 ~1s 안에 timeout/stall로 회수,
+    121파일 무제한 수집·80개 paths·71개 configured server 전수 보고,
+    1.2MiB 파일 `lsp_fix` 통과.
+  - 정직 기록: `timeout`의 120s 상한 제거는 시간상 직접 관측 불가(130s
+    대기 금지) — caller 선택 timeout <120s의 정확한 효력과 floor(1s)만
+    회귀로 묶고 상한 제거 자체는 코드에서 입증. stall 창은 설계상
+    per-request timeout보다 좁아지지 않으므로 요청 pending 중 침묵은
+    항상 request timeout이 먼저 잡는다 — stall은 비-요청 침묵의
+    backstop이며 그 사실을 테스트 명칭과 코드 주석에 그대로 남겼다.
+  - vendor `--check` BUNDLE_CURRENT (48 files, sha256 `82a5999a…42fa`), build·
+    typecheck·architecture gates·focused contained/lsp suite PASS.
+    manifest `generated.divergences`와 번들 다이제스트는 재생성 산출물.
+  - NOT_RUN: macOS native·systemd·kernel/powercut·provider credential·
+    release qualification — 로컬 환경 부재.
 
 ## 10. 지금부터의 실행 순서
 0. ~~P0-8 강제 수단 미구현~~ — 구현됨: `owned-state` 아키텍처 규칙

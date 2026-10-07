@@ -472,11 +472,11 @@
     },
     {
       "path": "src/extension/contained-files.ts",
-      "sha256": "5e712fd6e3a091c9ac2c46176dd831b30f472a2733686cbf5ed1a43878b8c6fd"
+      "sha256": "b059d1b9166d2f16ac5cd6d50bf41f48a1b6bfc36f745176f9c715efb38783d2"
     },
     {
       "path": "src/extension/contained-search.ts",
-      "sha256": "21c1a66195fb82525c940aee31c6123e0a1ec6dc09d0c76f21edd53c83aada04"
+      "sha256": "0c829354cd742d3cf7177862c2ed8ed36389b5b84d5611d06fc1a8fa8c64f691"
     },
     {
       "path": "src/extension/contained-tools.ts",
@@ -500,7 +500,7 @@
     },
     {
       "path": "src/extension/lsp-tools.ts",
-      "sha256": "be8cd0a3d1cd90780e9570db42bc0c61bbe85f653d31fb0af1640330c3943ba7"
+      "sha256": "8d1b473e7c3a8f2a500a74e560a90f202976652d46cf1ea0780d202399f7bf84"
     },
     {
       "path": "src/extension/mail-tools.ts",
@@ -2476,7 +2476,7 @@
     },
     {
       "path": "src/extension/vendor/pi-lsp/manifest.json",
-      "sha256": "60808aa72d5af2d34266fbd45d73d7915af0b2af0ea470aca05ee8ae4184a6bb"
+      "sha256": "a3192f360b3af8528deb2836a3cc191bd234f586608eb87a2795a24373be0b1f"
     },
     {
       "path": "src/extension/vendor/pi-lsp/runtime/adapters.d.ts",
@@ -2500,7 +2500,7 @@
     },
     {
       "path": "src/extension/vendor/pi-lsp/runtime/files.js",
-      "sha256": "b3bfd05920e73824d2e2eb359b4c50bb36034ea7a3d3259a2f5372ced18b6d94"
+      "sha256": "29eb1ee275e04323804e989cdb949a708d6e1890f21bb9a825be448c96d3d6d7"
     },
     {
       "path": "src/extension/vendor/pi-lsp/runtime/lsp-client.d.ts",
@@ -2508,7 +2508,7 @@
     },
     {
       "path": "src/extension/vendor/pi-lsp/runtime/lsp-client.js",
-      "sha256": "d5d540b91304476fd04686e6e5a5b95bfe5984c718bb4d6a52a8402920fb5ca1"
+      "sha256": "5eb7f8fad7864a4531a3f546d52354297d0dd34a2f69b0914b3b221632d272d1"
     },
     {
       "path": "src/extension/vendor/pi-lsp/runtime/routes.d.ts",
@@ -2524,7 +2524,7 @@
     },
     {
       "path": "src/extension/vendor/pi-lsp/runtime/runner.js",
-      "sha256": "8b2565caf0523fd3beacbd9a486d1c12f106f8aa0a844dbc10613b44869bc7a7"
+      "sha256": "1fc0fad102ad02d95432d2bb09bdbcd9c4b288e658703128707b3928824ddaf6"
     },
     {
       "path": "src/extension/vendor/pi-lsp/runtime/session-lifecycle.d.ts",

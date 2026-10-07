@@ -192,6 +192,9 @@ test("G10-02 / P0-4: an already-taken snapshot name is announced again fresh bef
   writeFileSync(join(workspace, "a.txt"), "needle\n");
   const announced: string[] = [];
   let stolen = "";
+  // Registered before the await: a withSearchSnapshot that rejects after
+  // the steal must not leave the planted oma-search-* directory behind.
+  t.after(() => { if (stolen !== "") rmSync(join(tmpdir(), stolen), { recursive: true, force: true }); });
   const result = await withSearchSnapshot(workspace, ".", 1 << 20, undefined, async snapshot => {
     assert.equal(snapshot, join(tmpdir(), announced.at(-1)!, "workspace"));
     return "done";
@@ -203,7 +206,6 @@ test("G10-02 / P0-4: an already-taken snapshot name is announced again fresh bef
     // EEXIST retry must announce a fresh name, not reuse the collided one.
     if (announced.length === 1) { stolen = name; mkdirSync(join(tmpdir(), name)); }
   });
-  t.after(() => { if (stolen !== "") rmSync(join(tmpdir(), stolen), { recursive: true, force: true }); });
   assert.equal(result, "done");
   assert.equal(announced.length, 2, "the collided name was not re-announced fresh");
   assert.notEqual(announced[0], announced[1]);

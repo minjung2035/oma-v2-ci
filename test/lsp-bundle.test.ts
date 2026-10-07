@@ -58,11 +58,15 @@ const ctxOf = (workspace: string) => ({
 });
 
 /** A pi-lsp.json under a scratch agent dir: one fixture-backed server over
- * the made-up `.tfix` extension, plus one whose command does not exist. */
-function agentDirWithConfig(t: import("node:test").TestContext, fixtureScenario: string, extra: Record<string, unknown> = {}): string {
+ * the made-up `.tfix` extension, plus one whose command does not exist.
+ * `extra` lands inside the fixture server's own block, `top` next to
+ * `servers` (the file's `timeout` field lives there). */
+function agentDirWithConfig(t: import("node:test").TestContext, fixtureScenario: string,
+    extra: Record<string, unknown> = {}, top: Record<string, unknown> = {}): string {
   const dir = join(tmp(t), "agent");
   mkdirSync(dir, { recursive: true });
   writeFileSync(join(dir, "pi-lsp.json"), JSON.stringify({
+    ...top,
     servers: {
       fixture: { command: [process.execPath, FIXTURE_SERVER, fixtureScenario, "1"], extensions: [".tfix"], ...extra },
       ghost: { command: ["oma-no-such-lsp-server-binary"], extensions: [".ghost"] },
@@ -73,8 +77,9 @@ function agentDirWithConfig(t: import("node:test").TestContext, fixtureScenario:
 
 /** The same world, but the "fixture" server is OMA's hostile fixture --
  * the command override rides the adapter's own env/config channel. */
-function agentDirWithHostile(t: import("node:test").TestContext, scenario: string): string {
-  return agentDirWithConfig(t, scenario, { command: [process.execPath, HOSTILE_SERVER, scenario, "1"] });
+function agentDirWithHostile(t: import("node:test").TestContext, scenario: string,
+    extra: Record<string, unknown> = {}, top: Record<string, unknown> = {}): string {
+  return agentDirWithConfig(t, scenario, { command: [process.execPath, HOSTILE_SERVER, scenario, "1"], ...extra }, top);
 }
 
 function withAgentDir(t: import("node:test").TestContext, dir: string): void {
@@ -295,10 +300,11 @@ async function lspWorld(t: import("node:test").TestContext, scenario: string, re
     pi.tools.get(name)!.execute("call", params, signal, undefined, ctxOf(workspace)) };
 }
 
-async function hostileWorld(t: import("node:test").TestContext, scenario: string, readOnly = false) {
+async function hostileWorld(t: import("node:test").TestContext, scenario: string, readOnly = false,
+    extra: Record<string, unknown> = {}, top: Record<string, unknown> = {}) {
   const workspace = tmp(t, "oma-lsp-ws-");
   writeFileSync(join(workspace, "note.tfix"), "hello\n");
-  withAgentDir(t, agentDirWithHostile(t, scenario));
+  withAgentDir(t, agentDirWithHostile(t, scenario, extra, top));
   const pi = fakePi();
   const write = createContainedWriter(workspace, 1024 * 1024);
   await registerLspTools(pi, { workspace, readOnly, write });
@@ -716,8 +722,11 @@ test("BL1/F4: the adapter's declared env goes through the same allowlist -- and 
 });
 
 // ---------------------------------------------------------------------------
-// F1: bounded server->engine data -- overflow is a clean tool error, never a
-// crash, never a truncated result passed off as clean.
+// F1: bounded server->engine data degrades honestly now -- a cut list
+// carries a visible marker and its count, an oversized frame refuses only
+// the request it answers and is dropped in bounded memory, and a server is
+// never killed for a bound alone. What still refuses is a materialization
+// bound whose failure mode (a corrupt fix, an engine OOM) is worse.
 
 test("BL1/F1: a stderr flood is bounded -- the failure message stays small", async t => {
   const { run } = await hostileWorld(t, "stderr-flood");
@@ -727,53 +736,147 @@ test("BL1/F1: a stderr flood is bounded -- the failure message stays small", asy
   assert.ok(error.message.length < 80_000, `stderr accumulation is capped: ${error.message.length}`);
 });
 
-test("BL1/F1: a declared oversized Content-Length is refused before it buffers", async t => {
+test("BL1/F1: a declared oversized Content-Length refuses only the request it answers", async t => {
+  // oversized-frame declares a 6MiB body it never finishes sending: the
+  // pending request is refused with the bound named and the teardown
+  // skips an untrustworthy handshake -- the failure names the drop, and
+  // it arrives fast because no 6MiB is ever buffered or awaited.
   const { run } = await hostileWorld(t, "oversized-frame");
   await assert.rejects(run("lsp_diagnostics", { paths: ["note.tfix"], server: "fixture" }),
-    /Content-Length|inbound bound|invalid JSON-RPC/i);
+    /declared \d+ bytes|request was refused|frame dropped|stays up/i);
 });
 
-test("BL1/F1: bytes that never complete a frame are bounded by accumulation", async t => {
+test("BL1/F1: bytes that never complete a frame are dropped in bounded memory -- the request fails, not the server", async t => {
   const { run } = await hostileWorld(t, "frame-drip");
   await assert.rejects(run("lsp_diagnostics", { paths: ["note.tfix"], server: "fixture" }),
-    /inbound bound|invalid JSON-RPC|aborted|exceeded/i);
+    /inbound bound|dropped|stays up|invalid JSON-RPC|aborted|exceeded/i);
 });
 
-test("BL1/F1: pushed diagnostics over the count or message bound fail the call", async t => {
-  for (const [scenario, pattern] of [
-    ["push-flood", /pushed|diagnostics.*bound/i],
-    ["push-big-message", /bound|char/i],
-  ] as const) {
-    const { run } = await hostileWorld(t, scenario);
-    await assert.rejects(run("lsp_diagnostics", { paths: ["note.tfix"], server: "fixture" }), pattern, scenario);
-  }
+test("BL1/F1: pushed diagnostics over the count or message bound are truncated with a visible marker", async t => {
+  const flood = await hostileWorld(t, "push-flood");
+  const floodText = textOf(await flood.run("lsp_diagnostics", { paths: ["note.tfix"], server: "fixture" }));
+  // 2000 pushed, 1024 kept: the 101st diagnostic line is OMA's own marker,
+  // and the count it names is the real drop.
+  assert.match(floodText, /976 more diagnostic\(s\) for this file were dropped at OMA's \d+-diagnostic bound/);
+  assert.match(floodText, /flood 0\b/, "the kept diagnostics still render");
+  const big = await hostileWorld(t, "push-big-message");
+  const bigText = textOf(await big.run("lsp_diagnostics", { paths: ["note.tfix"], server: "fixture" }));
+  assert.match(bigText, /truncated at OMA's \d+-char bound; 20000 chars total/);
 });
 
-test("BL1/F1: pull diagnostics over the count or message bound fail the call", async t => {
-  for (const [scenario, pattern] of [
-    ["pull-flood", /diagnostics.*bound|1024/i],
-    ["pull-big-message", /bound|char/i],
-  ] as const) {
-    const { run } = await hostileWorld(t, scenario);
-    await assert.rejects(run("lsp_diagnostics", { paths: ["note.tfix"], server: "fixture" }), pattern, scenario);
-  }
+test("BL1/F1: pull diagnostics over the count or message bound are truncated with a visible marker", async t => {
+  const flood = await hostileWorld(t, "pull-flood");
+  const floodText = textOf(await flood.run("lsp_diagnostics", { paths: ["note.tfix"], server: "fixture" }));
+  assert.match(floodText, /976 more diagnostic\(s\) for this file were dropped at OMA's \d+-diagnostic bound/);
+  const big = await hostileWorld(t, "pull-big-message");
+  const bigText = textOf(await big.run("lsp_diagnostics", { paths: ["note.tfix"], server: "fixture" }));
+  assert.match(bigText, /truncated at OMA's \d+-char bound; 20000 chars total/);
 });
 
-test("BL1/F1: a code-action flood is refused before the resolve loop starts", async t => {
+test("BL1/F1: pushed publications past the tracked-document bound are dropped with a visible count", async t => {
+  // push-uri-flood fills the 4096-document map then pushes the opened
+  // file's own publication: it is the drop the resolved list must name.
+  const { run } = await hostileWorld(t, "push-uri-flood", false, { pushDiagnosticsGraceMs: 100 });
+  const text = textOf(await run("lsp_diagnostics", { paths: ["note.tfix"], server: "fixture" }));
+  assert.match(text, /pushed publication\(s\) were dropped at OMA's \d+-document bound/);
+});
+
+test("BL1/F1: a code-action list resolves completely -- the count is not a bound", async t => {
   const { run } = await hostileWorld(t, "actions-flood");
-  await assert.rejects(run("lsp_fix", { path: "note.tfix", server: "fixture" }), /code actions.*256|bound/i);
+  const result = await run("lsp_fix", { path: "note.tfix", server: "fixture" });
+  const details = result.details as { actions?: unknown[]; appliedActions?: unknown[]; changed?: boolean };
+  assert.equal(details.actions?.length, 300, "every action's resolve round-trip answered");
+  assert.equal(details.appliedActions?.length, 300);
 });
 
-test("BL1/F1: an aggregate per-call deadline bounds a hanging route regardless of its own timeout", async t => {
+test("BL1/F1: progress resets the observation window -- a call longer than it still completes", async t => {
+  // slow-stages answers each request ~600ms late. Three sequential
+  // requests (diagnostics, codeAction, resolve) make a ~1.9s call inside
+  // a 1200ms stall window: a fixed aggregate deadline would kill the call
+  // mid-flight; only the progress reset lets it finish. The 1000ms
+  // per-request floor still bounds each stage (config timeout 50 clamps
+  // up to the floor, never down).
   const workspace = tmp(t, "oma-lsp-ws-");
   writeFileSync(join(workspace, "note.tfix"), "hello\n");
-  withAgentDir(t, agentDirWithConfig(t, "lifecycle-hang-textDocument/diagnostic"));
+  withAgentDir(t, agentDirWithHostile(t, "slow-stages", {}, { timeout: 50 }));
   const pi = fakePi();
-  // The deadline is what must end this -- the per-request timeout stays huge.
-  await registerLspTools(pi, { workspace, readOnly: false, write: async () => {}, callDeadlineMs: 300 });
+  await registerLspTools(pi, { workspace, readOnly: false, write: async () => {}, callStallMs: 1200 });
+  const started = Date.now();
+  const result = await pi.tools.get("lsp_fix")!.execute("call",
+    { path: "note.tfix", server: "fixture" }, undefined, undefined, ctxOf(workspace));
+  const elapsed = Date.now() - started;
+  assert.match(textOf(result), /slow-fixed/);
+  assert.ok(elapsed >= 1400,
+    `the call ran ${elapsed}ms -- past the 1200ms window, so inbound frames must have reset it`);
+});
+
+test("BL1/F1: a truly silent server is still reclaimed -- the request timeout or the stall reports it", async t => {
+  // lifecycle-hang-* emits nothing after the request: with the 1000ms
+  // request floor the call dies at ~1s, named as the timeout or the
+  // stall, never as an unbounded hang.
+  const workspace = tmp(t, "oma-lsp-ws-");
+  writeFileSync(join(workspace, "note.tfix"), "hello\n");
+  withAgentDir(t, agentDirWithConfig(t, "lifecycle-hang-textDocument/diagnostic", {}, { timeout: 50 }));
+  const pi = fakePi();
+  await registerLspTools(pi, { workspace, readOnly: false, write: async () => {}, callStallMs: 400 });
   await assert.rejects(
     pi.tools.get("lsp_diagnostics")!.execute("call", { paths: ["note.tfix"], server: "fixture" }, undefined, undefined, ctxOf(workspace)),
-    /aggregate call deadline/);
+    /timed out|stalled|no LSP server activity|aborted/i);
+});
+
+// ---------------------------------------------------------------------------
+// F1 fail->pass: the adapter-side numeric refusals are gone. Caller-chosen
+// limits stay caller intent; absent ones mean the complete set.
+
+test("BL1/F1: an absent limit collects the whole workspace -- 121 files all checked, and a caller's limit is honored", async t => {
+  const { workspace, run } = await lspWorld(t, "pull-strict-optional-params");
+  for (let i = 0; i < 120; i++)
+    writeFileSync(join(workspace, `f${String(i).padStart(4, "0")}.tfix`), "x\n");
+  const all = await run("lsp_diagnostics", { server: "fixture" });
+  const details = all.details as { routes: { files: string[] }[]; summary: { files: number; diagnostics: number } };
+  assert.equal(details.routes[0]!.files.length, 121, "every collected file reached the route");
+  assert.equal(details.summary.files, 121);
+  assert.equal(details.summary.diagnostics, 121, "every file's diagnostic reported");
+  const limited = await run("lsp_diagnostics", { server: "fixture", limit: 3 });
+  const limitedDetails = limited.details as { routes: { files: string[] }[] };
+  assert.equal(limitedDetails.routes[0]!.files.length, 3, "the caller's own limit is honored exactly");
+});
+
+test("BL1/F1: a paths list past the old 64-entry bound is the caller's own selection -- it is not refused", async t => {
+  const { workspace, run } = await lspWorld(t, "pull-strict-optional-params");
+  const directory = join(workspace, "dir");
+  mkdirSync(directory);
+  const paths = Array.from({ length: 80 }, (_v, i) => `dir/p${String(i).padStart(3, "0")}.tfix`);
+  for (const entry of paths) writeFileSync(join(workspace, entry), "x\n");
+  const result = await run("lsp_diagnostics", { paths, server: "fixture" });
+  const details = result.details as { summary: { files: number } };
+  assert.equal(details.summary.files, 80, "all 80 caller-listed paths were checked");
+});
+
+test("BL1/F1: lsp_status reports every configured server -- no catalog truncation", async t => {
+  const workspace = tmp(t, "oma-lsp-ws-");
+  const servers: Record<string, unknown> = Object.fromEntries(
+    Array.from({ length: 70 }, (_v, i) => [`srv${i}`, { command: ["oma-missing-lsp-server"], extensions: [`.s${i}`] }]));
+  servers.fixture = { command: [process.execPath, FIXTURE_SERVER, "pull-strict-optional-params", "1"], extensions: [".tfix"] };
+  const dir = join(tmp(t), "agent");
+  mkdirSync(dir, { recursive: true });
+  writeFileSync(join(dir, "pi-lsp.json"), JSON.stringify({ servers }));
+  withAgentDir(t, dir);
+  const pi = fakePi();
+  await registerLspTools(pi, { workspace, readOnly: false, write: async () => {} });
+  const result = await pi.tools.get("lsp_status")!.execute("call", {}, undefined, undefined, ctxOf(workspace));
+  const details = result.details as { servers: { name: string }[]; summary: { configured: number; unavailable: number } };
+  assert.equal(details.summary.configured, 71, "all 71 configured servers are reported, not a 64-entry slice");
+  assert.equal(details.servers.length, 71);
+});
+
+test("BL1/F1: a file past the old 1MiB bound is fixed, not refused -- didOpen carries the text either way", async t => {
+  const { workspace, run } = await lspWorld(t, "lifecycle-go");
+  writeFileSync(join(workspace, "big.tfix"), `// big\n${"x".repeat(1_200_000)}\n`);
+  const result = await run("lsp_fix", { path: "big.tfix", server: "fixture" });
+  const details = result.details as { changed?: boolean; text?: string };
+  assert.equal(details.changed, true);
+  assert.match(details.text ?? "", /^\/\/ fixed\n\/\/ big/);
 });
 
 // ---------------------------------------------------------------------------

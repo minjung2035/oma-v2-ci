@@ -423,13 +423,37 @@ DR34 후반에서 미뤄 둔 "listen 성공 후 `.off`로 유일한 'error' 리�
 | F-1 fail→pass 대조 | PASS | 컴파일 산출물의 `named` 호출을 mkdirSync 뒤로 되돌린 구 동작에서 최초-관측-시점 kill 테스트가 `oma-search-*` 잔여로 3/3 실패; 수정 산출물은 잔여 없음 |
 | F-2 EMFILE/ENFILE 명시 거절 | PASS | `withSearchSnapshot` 본문을 `searchSnapshot`으로 내리고 공개 경계에서 module-scope `descriptorRefusal`이 EMFILE/ENFILE → `WorkspaceRefusal("search snapshot ran out of file descriptors")`로 변환 — `readdirSync`·소스 `openSync`·`openDirectoryWithin`·목적지 open 전수 포괄, 다른 에러 의미 불변 |
 | F-2 fd 고갈 거절 문구 | PASS | `ulimit -n 96` + 400단계 트리에서 자식이 완료하고 출력이 "file descriptors"를 명시 — 구 산출물에서는 raw EMFILE이 "contained search failed"로 평탄화되어 실패 대조 |
-| wire 선언이 fs 효과에 선행 | PASS | 실제 `searchChildBody`를 파이프 위에서 구동해 매 관측 시점에 존재하는 스냅샷 디렉터리는 항상 이미 `{p:"d"}`로 선언된 이름임을 스캔 — 역순 관측 없음 |
+| wire 선언이 fs 효과에 선행 | PASS | 실제 `searchChildBody`를 파이프 위에서 구동해 관측된 스냅샷 디렉터리가 최대 한 번의 drain 안에 `{p:"d"}`로 선언됐음을 검증 — 선언 바이트는 mkdir 전에 파이프에 들어가므로 "존재하는 디렉터리가 영원히 미선언"은 없다(기술 수정: 관측과 선언 사이에 한 번의 폴링-drain 유예를 두는 것이 오라클의 실제 계약이며, 이전 표기 "매 관측 시점에 이미 선언"은 그 유예를 넘어선 주장이었다) |
 | EEXIST 재선언 | PASS | 첫 선언명을 호스트가 선점시켜 헬퍼가 두 번째 새 이름으로 착지 — 두 이름 모두 선언됐고 실제 생성된 것은 둘째 |
 | build / typecheck | PASS | `npm run build` + `tsc --noEmit` 0 오류 |
 | architecture gates | PASS | check:inventory(SOURCE_DIGESTS_CURRENT)·rules(0 findings — `state-tree-rules`의 contained-files 면제 문구를 "생성 전에 이름이 선언되는 `oma-search-*` 디렉터리"로 갱신)·lattice·transactions·boundaries·documents·spec-inventory 0 findings; `node:crypto` import로 stale된 `implementation/evidence/dependency-graph.json`은 `npm run evidence:graph`로 재생성 |
 | 집중 회귀 | PASS | `node --test dist/test/contained-tools.test.js` 36/36 PASS — 신규 5종(선언-전-생성 계약·EEXIST 재선언·최초관측 SIGKILL sweep·wire 선언-선행·fd 고갈 거절 문구) + 기존 외부 SIGKILL close-sweep 유지 |
 | 전체 `npm test` | PASS* | `node scripts/test-local.mjs` 로컬 lane 397 files → 3,856 tests 전부 PASS; 이 절의 최초 실행에서 보인 2건은 정산됨 — fd-고갈 테스트의 `bash -c ulimit` 래퍼가 local lane의 shell 금지(local-test-guard)에 걸려 `prlimit --nofile=96:96` direct argv로 교체(liveness-observation의 기존 패턴과 동일, 단독 재실행 PASS), 다른 1건은 이 절과 결박 산출물 변경분을 아직 반영하지 않은 validation.md 자체의 stale verification-input digest(R38)로 이 트리의 digest로 재결박. systemd-required 파일은 환경 부재로 NOT_RUN 분리 |
 | macOS native / systemd / kernel·powercut / provider credential / release qualification | NOT_RUN | 로컬 환경 부재 |
+
+## 정산: UX-38 잔여 — bundled pi-lsp 표면의 숫자 상한·고정 마감 변환 (2026-10-07)
+
+같은 결함류(유효한 처리를 크기/시간만으로 거절·묵살하는 숫자 bound)가 code_intel LSP 표면에 남아 있어 정산했다. 원칙은 UX-38 본편과 같다 — bound를 제거하거나 비차단으로 바꾸고, 엔진 보호상 남는 bound는 정직하게 보이며 한 서버의 초과가 프로세스나 다른 요청을 죽이지 않는다.
+
+| 절차 | 결과 | 근거 |
+|---|---|---|
+| 어댑터 bound 제거 | PASS | `lsp-tools.ts`: `LSP_FILE_BYTES`(1MiB)·`LSP_MAX_FILES`(100)·`LSP_MAX_PATHS`(64)·`LSP_MAX_SERVERS`(64) 거절 상수 삭제 — `liveFiles`는 비regular/소실 파일만 걸러 크기는 didOpen이 그대로 운반, caller `limit`는 그대로 존중하고 미지정이면 수집 전체가 답(`details.summary.files`에 수 명시), status는 configured catalog 전수 보고 |
+| timeout 상한 제거 | PASS | `clampTimeout`이 1s floor만 적용 — 120s 상한 제거. caller 선택 <120s의 정확한 효력과 floor는 회귀로 묶음; >120s 관측은 시간상 NOT_RUN(코드에서 입증) |
+| aggregate deadline → 진행-리셋 stall | PASS | 호출당 `LSP_CALL_STALL_MS` 창이 vendored client의 `omaOnInboundFrame` 싱크가 이 호출 소유 hardened adapter를 보고할 때만 리셋 — `slow-stages` fixture(요청당 ~600ms × initialize+didOpen+diagnostics ≈1.9s)가 1200ms 창을 넘어 완료; 침묵 서버는 ~1s 안에 회수. 창은 호출의 per-request timeout보다 좁아지지 않음 — stall은 비-요청 침묵의 backstop이라는 설계 사실을 테스트 명칭·주석에 명시 |
+| oversized inbound frame | PASS | 헤더 파싱 시점에 그 프레임이 답하는 요청만 거절(sniffed id, 없으면 유일 pending), 본문은 `#discardRemaining` bounded discard로 버린 뒤 wire가 프레임 끝에서 재정렬 — `oversized-then-serve`에서 같은 client의 후속 요청이 정상 응답, 서버 생존. 미완성 본문도 빠른 종료. 프레임 경계 없는 garbage 누적은 버퍼 비움+pending 거절, 미식별 프레임은 drop 카운터가 에러 꼬리 `oma bounds:`로 명시. discard 중 shutdown은 handshake 생략하고 close |
+| 진단 절단 정직성 | PASS | `omaFlaggedDiagnostics`가 push store·pull 경로 공용 — 첫 bound까지 유지+`[oma: N more diagnostic(s)…]` marker(`code:"oma/truncation"`), 메시지는 원본 길이 명시 절단. 재flag 멱등(꼬리 marker 재카운트 안 함·`OMA_MESSAGE_TRUNCATION_TAIL`이 재절단 방지) — push 홍수가 pull 소비에서 drop 수를 거짓 보고하지 않고, OMA marker는 codeAction context에서 서버로 가지 않음. tracked-URI 초과는 publication drop+count가 해소 리스트 marker로 명시 |
+| code-action·workspace-edit | PASS | action 목록의 256 상한 제거 — 300개 fixture 전수 resolve(각 요청은 per-request timeout과 stall 창이 묶음). workspace-edit 누적 count/bytes 거절은 유지 — 절단 edit은 오염 fix·무제한 materialization은 엔진 OOM이라 둘 다 거절보다 나쁘며, 거절은 그 요청만 |
+| 파일 수집 | PASS | `collectPath` 재귀+깊이 bound → 명시 스택(역순 push로 재귀의 depth-first 순서 보존) — 깊은 트리 통째 수집·overflow 없음 |
+| B2 rider | PASS | `contained-files.ts` `errnoCode` 가드(비객체 throw의 `.code` 읽기 TypeError 경로 차단)+공개 `isDescriptorOverrun`; `contained-search.ts`가 스냅샷 경계·엔진 walker 양쪽의 EMFILE/ENFILE을 같은 "search snapshot ran out of file descriptors"로 매핑; EEXIST 테스트의 cleanup 등록을 await보다 전으로; 선언명 선점-EEXIST-자식 사망 모서리는 헤더 주석으로 기록 |
+| vendor bundle | PASS | `node scripts/vendor-pi-lsp.mjs` → `BUNDLE_CURRENT`; upstream/ byte-exact 유지, divergence anchor 전부 exact-once, manifest `generated.divergences` 동기, 번들 sha256 `82a5999ac583aca062cbaca28af04e7b2340d83a83cf8aac6940e1c715d942fa` |
+| build / typecheck | PASS | `npm run build` + `tsc --noEmit` 0 오류 |
+| architecture gates | PASS | check:inventory(SOURCE_DIGESTS_CURRENT)·rules(0 findings)·lattice·transactions·boundaries·documents·spec-inventory 0 findings |
+| review ledger | PASS | 변경된 7개 production 파일의 byte-bound 리뷰 클레임을 재판독 후 새 바이트에 재결박(묵은 갱신 아닌 fresh read 동반, notes `about`에 명시), `npm run review:ledger` 재생성 — CHANGED_WITH_ORACLE 14062·NOT_REVIEWED 61·READ_UNCHANGED 51·REMOVED 8, `review-closure` findings 없음 |
+| 집중 회귀 | PASS | `node --test dist/test/lsp-bundle.test.js dist/test/lsp-upstream.test.js` 61/61 PASS — fail→pass 신규: oversized-then-serve·미완성 oversized·push/pull 진단 홍수+초대형 메시지 marker 절단·URI drop marker·300 code-action·slow-stages 진행 리셋·침묵 회수·1.2MiB 파일·80 paths·121 파일 무제한 수집·71 server status·marker 비재전송·이중flag 방지; `dist/test/contained-tools.test.js` 36/36 PASS |
+| 전체 `npm test` | PASS | `OMA_TEST_CONCURRENCY=1 npm test` 로컬 lane — build + 397 files serial 실행: serial phase 9/9 PASS, parallel phase 3,864/3,864 PASS·0 fail·0 cancelled·0 skipped(duration 1,639,995ms), runner unrun-check 통과. 직전 실행은 이 절·산출물 변경분이 반영되지 않은 stale digest로 R38 1건만 실패했고, 이 트리의 digest로 재결박 뒤의 이 실행은 R38 포함 전부 PASS. systemd-required 9 파일은 환경 부재로 NOT_RUN 분리 |
+| macOS native / systemd / kernel·powercut / provider credential / release qualification | NOT_RUN | 로컬 환경 부재 |
+
+정직 기록: 이 절의 wire-선언-선행 행은 직전 절의 표기를 수정했다 — 오라클의 실제 계약은 "관측된 디렉터리가 최대 한 번의 drain 안에 선언됨"이며 "매 관측 시점에 이미 선언"은 그 유예를 넘어선 주장이었다.
 
 ## 현재 알려진 한계와 남은 검증
 
@@ -445,7 +469,7 @@ DR34 후반에서 미뤄 둔 "listen 성공 후 `.off`로 유일한 'error' 리�
 
 아래 binding은 구조 검사의 입력 identity다. digest 생성 자체가 runtime PASS를 뜻하지 않는다.
 
-verification input digest `1e8b48fe97326c958a2e8cb92fff6cbb2da13e6485c8045308c0b8d681c2e629` (15340 files).
+verification input digest `ba521cd1eb402e1cd1985c5d7550ca8b3cd1596909ed5af127780e314cf044d4` (15340 files).
 
 당시 기록한 cloc 2.08 측정치: 354 files / 35,832 code LOC. 이 역사적 기록은 현재 source의 LOC claim이 아니며, 기존 artifact와의 불일치를 여기서 수리했다고 주장하지 않는다. 크기 제한은 없으며 값은 release proof가 아니다.
 

@@ -17,15 +17,61 @@ export function resolveSpawnCommand(command, platform = process.platform, comSpe
 const PUBLISHED_DIAGNOSTICS_SETTLE_MS = 800;
 const PROCESS_EXIT_GRACE_MS = 500;
 // OMA divergences (applied by scripts/vendor-pi-lsp.mjs; recorded under
-// generated.divergences in manifest.json). Over a bound the call fails
-// cleanly -- nothing is silently truncated and a flooding server cannot
-// grow buffers without limit.
+// generated.divergences in manifest.json). A bound is honest
+// degradation: a request is refused with the bound named, a list is
+// truncated with a marker and count -- the server is never killed for a
+// single oversized result and a drop is never silent.
 const OMA_MAX_STDERR_CHARS = 64 * 1024;
 const OMA_MAX_INBOUND_FRAME_BYTES = 4 * 1024 * 1024;
 const OMA_MAX_DIAGNOSTICS_PER_FILE = 1024;
 const OMA_MAX_DIAGNOSTIC_MESSAGE_CHARS = 8 * 1024;
 const OMA_MAX_DIAGNOSTIC_URIS = 4096;
-const OMA_MAX_CODE_ACTIONS = 256;
+// OMA divergence: every inbound frame chunk is reported to registered
+// sinks with the serving client's adapter -- the per-call progress
+// signal the adapter's stall window resets on, replacing the fixed
+// aggregate deadline that could abort a still-working call.
+const omaInboundSinks = new Set();
+export function omaOnInboundFrame(sink) {
+    omaInboundSinks.add(sink);
+    return () => {
+        omaInboundSinks.delete(sink);
+    };
+}
+// OMA divergence: a truncation marker is itself a diagnostic, so it
+// renders in the same output the kept entries do -- a cut list can
+// never pass as complete. The code is what a second flagging pass (and
+// the codeAction context below) recognizes: markers are not counted as
+// diagnostics again and are never sent to the server.
+export function omaMarkerDiagnostic(text) {
+    return { range: { start: { line: 0, character: 0 }, end: { line: 0, character: 0 } },
+        severity: 3, source: "oma", code: "oma/truncation", message: `[oma: ${text}]` };
+}
+function omaIsTruncationMarker(diagnostic) {
+    return diagnostic?.source === "oma" && diagnostic?.code === "oma/truncation";
+}
+// A message an earlier pass already cut ends with this tail -- cutting it
+// again would slice the marker off and re-report the truncated length as
+// the original, lying about both the text kept and the total dropped.
+const OMA_MESSAGE_TRUNCATION_TAIL = / \[truncated at OMA's \d+-char bound; \d+ chars total\]$/;
+// OMA divergence: bound a diagnostics list by truncating WITH markers --
+// the first entries stay, an element names how many were dropped, and
+// each over-long message is cut with its original length. Never a
+// refusal and never a silent drop. Idempotent: a pushed-store list is
+// already flagged (real diagnostics plus a tail marker, messages already
+// cut), so re-flagging must not count the marker again nor re-cut a
+// message -- the drop counts the markers report are the point and
+// re-truncating would lie.
+export function omaFlaggedDiagnostics(list, bound = OMA_MAX_DIAGNOSTICS_PER_FILE) {
+    let flagged = Array.isArray(list) ? list : [];
+    const realCount = flagged.length - (flagged.length > 0 && omaIsTruncationMarker(flagged[flagged.length - 1]) ? 1 : 0);
+    if (realCount > bound)
+        flagged = [...flagged.slice(0, bound),
+            omaMarkerDiagnostic(`${realCount - bound} more diagnostic(s) for this file were dropped at OMA's ${bound}-diagnostic bound`)];
+    return flagged.map(diagnostic => typeof diagnostic?.message === "string" && diagnostic.message.length > OMA_MAX_DIAGNOSTIC_MESSAGE_CHARS
+        && !OMA_MESSAGE_TRUNCATION_TAIL.test(diagnostic.message)
+        ? { ...diagnostic, message: `${diagnostic.message.slice(0, OMA_MAX_DIAGNOSTIC_MESSAGE_CHARS)} [truncated at OMA's ${OMA_MAX_DIAGNOSTIC_MESSAGE_CHARS}-char bound; ${diagnostic.message.length} chars total]` }
+        : diagnostic);
+}
 // OMA divergence: the stderr bound as a pure function so the rule is
 // testable and the dropped state is explicit. A sample that lands exactly
 // on the bound dropped nothing yet; the NEXT chunk is what marks it --
@@ -68,6 +114,18 @@ export class LspClient {
     // OMA divergence: whether stderr bytes were ever refused, tracked
     // separately from the sample's length (see appendStderrSample).
     #stderrDropped = false;
+    // OMA divergence: bytes of an oversized frame's body still owed to
+    // the discarder. While >0 inbound bytes feed the dropped frame in
+    // bounded memory and the parser resumes at the frame's end; a
+    // shutdown handshake mid-discard could not be trusted.
+    #discardRemaining = 0;
+    // OMA divergence: inbound frames dropped without a pending request to
+    // refuse (a notification, or an id past the sniffed prefix). The
+    // count rides every error tail so the drop is never silent.
+    #droppedInboundFrames = 0;
+    // OMA divergence: pushed publications refused by the tracked-document
+    // bound; the count is flagged into resolved diagnostics lists.
+    #droppedDiagnosticUris = 0;
     #serverCapabilities = {};
     #adapter;
     #command;
@@ -237,11 +295,6 @@ export class LspClient {
         return response.result ?? [];
     }
     async resolveActions(actions) {
-        // OMA divergence: every unresolved action is a codeAction/resolve
-        // round-trip, so an unbounded action list is an unbounded sequential
-        // request loop. Refuse past the cap instead.
-        if (actions.length > OMA_MAX_CODE_ACTIONS)
-            throw new Error(`${this.#adapter.name} LSP returned ${actions.length} code actions; OMA's bound is ${OMA_MAX_CODE_ACTIONS}.`);
         // Only resolve when the server advertised resolveProvider; otherwise use the
         // action as-is. Any error from an advertised resolve is real and propagates.
         const codeActionProvider = this.#serverCapabilities.codeActionProvider;
@@ -264,7 +317,11 @@ export class LspClient {
         const processExit = this.#processExit;
         if (!child || !processExit)
             return;
-        if (this.#child === child) {
+        // OMA divergence: while an oversized frame's body is still owed
+        // to the discarder the wire cannot carry a trustworthy handshake --
+        // skip it and close. A completed discard leaves framing intact and
+        // the handshake proceeds as upstream's does.
+        if (this.#child === child && this.#discardRemaining === 0) {
             try {
                 await this.request("shutdown", null);
                 this.notify("exit", undefined);
@@ -342,12 +399,32 @@ export class LspClient {
     }
     #onData(chunk) {
         this.#buffer = Buffer.concat([this.#buffer, chunk]);
-        // OMA divergence: a frame that never completes -- or declares a
-        // Content-Length past the ceiling -- must not grow this buffer
-        // without bound. Fail the call and kill the server instead.
-        if (this.#buffer.length > OMA_MAX_INBOUND_FRAME_BYTES) {
+        // OMA divergence: every inbound byte is liveness -- a caller's
+        // stall window resets on frames, so a server still talking
+        // survives a call of any length and only silence is reclaimed.
+        for (const sink of omaInboundSinks)
+            try {
+                sink(this.#adapter);
+            }
+            catch { /* a sink's failure is not the wire's */ }
+        // OMA divergence: while a dropped oversized frame's body is still
+        // arriving, inbound bytes feed the discarder in bounded memory
+        // and the parser resumes exactly at the frame's end.
+        if (this.#discardRemaining > 0) {
+            const skip = Math.min(this.#buffer.length, this.#discardRemaining);
+            this.#buffer = this.#buffer.subarray(skip);
+            this.#discardRemaining -= skip;
+            if (this.#discardRemaining > 0)
+                return;
+        }
+        // OMA divergence: accumulation with no frame boundary at all is
+        // stream garbage, not a legit huge response. Clear the buffer,
+        // refuse the pending request(s) with the bound named, and keep
+        // the server alive -- the next real frame still parses.
+        if (this.#discardRemaining === 0 && this.#buffer.indexOf("\r\n\r\n") < 0 && this.#buffer.length > OMA_MAX_INBOUND_FRAME_BYTES) {
             this.#buffer = Buffer.alloc(0);
-            this.#fail(`${this.#adapter.name} LSP server output exceeded OMA's ${OMA_MAX_INBOUND_FRAME_BYTES}-byte inbound bound.${this.#formatStderr()}`);
+            this.#droppedInboundFrames += 1;
+            this.#rejectPending(`${this.#adapter.name} LSP server output exceeded OMA's ${OMA_MAX_INBOUND_FRAME_BYTES}-byte inbound bound without completing a frame; the data was dropped, the server stays up.${this.#formatStderr()}`);
             return;
         }
         while (true) {
@@ -360,10 +437,20 @@ export class LspClient {
                 throw new Error(`Invalid LSP response header: ${header}`);
             const bodyStart = separator + 4;
             const bodyLength = Number(contentLength);
-            // OMA divergence: refuse a declared oversized body up front rather
-            // than buffering until the accumulation bound trips.
-            if (bodyLength > OMA_MAX_INBOUND_FRAME_BYTES)
-                throw new Error(`declared Content-Length ${bodyLength} exceeds OMA's ${OMA_MAX_INBOUND_FRAME_BYTES}-byte bound`);
+            // OMA divergence: a declared oversized body is refused as one
+            // request, not buffered and never a server kill -- the request
+            // it answers is rejected with the bound named, the body's
+            // bytes are discarded in bounded memory, and the wire realigns
+            // at the frame's end so the shutdown handshake can still
+            // complete.
+            if (bodyLength > OMA_MAX_INBOUND_FRAME_BYTES) {
+                this.#refuseOversizedFrame(bodyLength, this.#buffer.subarray(bodyStart, Math.min(bodyStart + 4096, this.#buffer.length)).toString("utf8"));
+                this.#buffer = this.#buffer.subarray(bodyStart);
+                const skip = Math.min(this.#buffer.length, bodyLength);
+                this.#buffer = this.#buffer.subarray(skip);
+                this.#discardRemaining = bodyLength - skip;
+                continue;
+            }
             if (this.#buffer.length < bodyStart + bodyLength)
                 return;
             const rawBody = this.#buffer.subarray(bodyStart, bodyStart + bodyLength).toString("utf8");
@@ -389,30 +476,21 @@ export class LspClient {
         if (message.method === "textDocument/publishDiagnostics") {
             const params = message.params;
             if (params?.uri) {
-                // OMA divergence: pushed diagnostics are bounded -- per-file
-                // count, per-message length, and the number of distinct
-                // documents tracked. A flood fails the call rather than
-                // growing the store without limit.
-                const pushed = Array.isArray(params.diagnostics) ? params.diagnostics : [];
-                if (pushed.length > OMA_MAX_DIAGNOSTICS_PER_FILE) {
-                    this.#fail(`${this.#adapter.name} LSP pushed ${pushed.length} diagnostics for one file; OMA's bound is ${OMA_MAX_DIAGNOSTICS_PER_FILE}.`);
-                    return;
-                }
-                for (const diagnostic of pushed) {
-                    if (typeof diagnostic?.message === "string" && diagnostic.message.length > OMA_MAX_DIAGNOSTIC_MESSAGE_CHARS) {
-                        this.#fail(`${this.#adapter.name} LSP pushed a ${diagnostic.message.length}-char diagnostic message; OMA's bound is ${OMA_MAX_DIAGNOSTIC_MESSAGE_CHARS}.`);
-                        return;
-                    }
-                }
+                // OMA divergence: pushed diagnostics are flagged-bounded,
+                // never a server kill and never a silent drop. A
+                // publication for a document past the tracked-URI bound
+                // loses only its own data, counted and flagged into every
+                // resolved list; the stored list itself is truncated with
+                // markers where it is built below.
                 const key = documentKey(params.uri);
                 if (!this.#publishedDiagnostics.has(key) && this.#publishedDiagnostics.size >= OMA_MAX_DIAGNOSTIC_URIS) {
-                    this.#fail(`${this.#adapter.name} LSP pushed diagnostics for more than ${OMA_MAX_DIAGNOSTIC_URIS} documents; OMA's bound was exceeded.`);
+                    this.#droppedDiagnosticUris += 1;
                     return;
                 }
                 const previousVersion = this.#publishedDiagnostics.get(key)?.version ?? 0;
                 const publication = {
                     version: previousVersion + 1,
-                    diagnostics: params.diagnostics ?? [],
+                    diagnostics: omaFlaggedDiagnostics(params.diagnostics ?? []),
                 };
                 this.#publishedDiagnostics.set(key, publication);
                 const waiters = this.#diagnosticWaiters.get(key);
@@ -450,7 +528,10 @@ export class LspClient {
             };
             const settleWith = (diagnostics) => {
                 dispose();
-                resolve(diagnostics);
+                // OMA divergence: the URI-bound drop count is appended as
+                // a visible marker rather than swallowed -- a resolved
+                // list reports that pushed publications were lost.
+                resolve(this.#withDroppedUriFlag(diagnostics));
             };
             const fail = (reason) => {
                 dispose();
@@ -529,9 +610,46 @@ export class LspClient {
             return this.#adapter.initialization ?? {};
         return this.#adapter.initialization?.[section] ?? {};
     }
+    // OMA divergence: refuse the request an oversized frame answers --
+    // never the server. A sniffed body id or the sole pending request is
+    // rejected surgically; an unidentified frame (a notification, or an
+    // id past the sniffed prefix) is counted so the drop rides later
+    // error tails instead of vanishing.
+    #refuseOversizedFrame(bodyLength, bodyPrefix) {
+        const sniffed = /"id"\s*:\s*(\d+)/.exec(bodyPrefix)?.[1];
+        const pendingId = sniffed === undefined
+            ? (this.#pending.size === 1 ? [...this.#pending.keys()][0] : undefined)
+            : Number(sniffed);
+        const pending = pendingId === undefined ? undefined : this.#pending.get(pendingId);
+        if (pending === undefined) {
+            this.#droppedInboundFrames += 1;
+            return;
+        }
+        clearTimeout(pending.timeout);
+        this.#pending.delete(pendingId);
+        pending.reject(new Error(`${this.#adapter.name} LSP response frame declared ${bodyLength} bytes; OMA's bound is ${OMA_MAX_INBOUND_FRAME_BYTES} -- the request was refused and the frame dropped, the server stays up.`));
+    }
+    // OMA divergence: the URI-bound drop count resolves as a visible
+    // marker diagnostic appended to every list -- the drop is named, not
+    // silent.
+    #withDroppedUriFlag(diagnostics) {
+        return this.#droppedDiagnosticUris > 0
+            ? [...diagnostics, omaMarkerDiagnostic(`${this.#droppedDiagnosticUris} pushed publication(s) were dropped at OMA's ${OMA_MAX_DIAGNOSTIC_URIS}-document bound`)]
+            : diagnostics;
+    }
+    // OMA divergence: bounded-drop counts ride every error tail, so a
+    // refused or timed-out request also reports what the wire dropped.
+    #formatDropped() {
+        const parts = [];
+        if (this.#droppedInboundFrames > 0)
+            parts.push(`${this.#droppedInboundFrames} oversized inbound frame(s) dropped`);
+        if (this.#droppedDiagnosticUris > 0)
+            parts.push(`${this.#droppedDiagnosticUris} pushed-diagnostic publication(s) dropped`);
+        return parts.length > 0 ? `\noma bounds: ${parts.join(", ")}` : "";
+    }
     #formatStderr() {
         const stderr = this.#stderr.trim();
-        return stderr ? `\nServer stderr:\n${stderr}` : "";
+        return (stderr ? `\nServer stderr:\n${stderr}` : "") + this.#formatDropped();
     }
 }
 function formatErrorMessage(error) {

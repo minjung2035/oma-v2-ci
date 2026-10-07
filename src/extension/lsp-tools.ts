@@ -76,18 +76,26 @@
  *   `unavailable`. The diagnostics aggregate is refused loud when every
  *   applicable server is unavailable -- "no diagnostics" is a state a
  *   server reports, not a state OMA invents for a server it never ran.
- * - Bounds: file count, file bytes (at admission and again after the
- *   read, so a file grown between stat and read is still refused), path
- *   list, timeout, configured server count, stderr accumulation, the
- *   inbound JSON-RPC frame buffer, per-file diagnostic count and message
- *   length, code-action count, workspace-walk depth, and an aggregate
- *   per-call deadline across routes are all clamped to OMA limits
- *   regardless of what `pi-lsp.json` or a server asks for. Over a bound
- *   the call fails as a tool error; nothing is silently truncated.
+ * - Bounds: numeric caps that could refuse legitimate work are converted,
+ *   never silently. A caller's own timeout is floored at one second but
+ *   never capped; the aggregate per-call deadline is gone -- replaced by
+ *   a progress-reset stall window any inbound LSP frame restarts, so a
+ *   server still streaming survives a call of any length and only a
+ *   silent one is reclaimed. File lists, path lists and configured
+ *   server counts are complete: a caller's `limit` is honored as its own
+ *   choice and an absent one means the whole workspace, with the file
+ *   count always visible in the result. Diagnostics over a per-file or
+ *   message bound are truncated with a visible marker and count, never
+ *   thrown. An oversized inbound frame refuses the request it answers
+ *   and is discarded bounded -- it never kills the server, and the drop
+ *   is named. What remains a refusal is a memory bound whose failure
+ *   mode (engine OOM) is worse than the refusal -- the workspace-edit
+ *   materialization -- and stderr accumulation, which is truncation
+ *   with a marker already.
  */
 import { mkdtempSync, rmSync, statSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { isAbsolute, join, relative } from "node:path";
+import { join, relative } from "node:path";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
 import { WorkspaceRefusal } from "./contained-files.js";
@@ -100,21 +108,17 @@ import type { LspServerAdapter } from "./vendor/pi-lsp/runtime/types.js";
 
 export const LSP_TOOL_NAMES = Object.freeze(["lsp_diagnostics", "lsp_fix", "lsp_status"] as const);
 
-/** OMA bounds over the upstream defaults: the model may narrow them,
- * never widen them. */
-const LSP_MAX_FILES = 100;
-const LSP_MAX_PATHS = 64;
-const LSP_FILE_BYTES = 1_048_576;
+/** The timeout used when pi-lsp.json's `timeout` is absent or invalid.
+ * A caller's positive value is floored at one second and never capped --
+ * the configured budget is the caller's own choice. */
 const LSP_TIMEOUT_MS = 120_000;
-const LSP_MAX_SERVERS = 64;
-/** One tool call may fan out to several server routes; each route's own
- * request timeout still applies, but the whole call dies at this deadline
- * regardless of route count. */
-const LSP_CALL_DEADLINE_MS = 300_000;
-/** Pull-path mirror of the pushed-diagnostic bounds the vendored client
- * enforces (see generated.divergences in the bundle manifest). */
-const LSP_MAX_DIAGNOSTICS_PER_FILE = 1_024;
-const LSP_MAX_DIAGNOSTIC_MESSAGE_CHARS = 8_192;
+/** The silence window for one call across however many routes it fans
+ * out to. Not a deadline: every inbound LSP frame restarts it, so a
+ * server still streaming survives a call of any length and only a dead,
+ * stopped or wedged server is reclaimed. It is never tighter than the
+ * call's own per-request timeout, so a caller who asked for a longer
+ * request budget is not undercut. */
+const LSP_CALL_STALL_MS = 300_000;
 
 const STATUS_KEY = "lsp";
 
@@ -130,9 +134,11 @@ export interface LspToolOptions {
   /** The bundle root to verify -- defaults to the deployed vendored copy
    * beside this module. Tests point it at a copy they may corrupt. */
   readonly bundleDir?: string | undefined;
-  /** Aggregate per-call deadline across every route a call fans out to;
-   * defaults to LSP_CALL_DEADLINE_MS. Tests shrink it to prove the bound. */
-  readonly callDeadlineMs?: number | undefined;
+  /** Silence window for the whole call across every route it fans out
+   * to; defaults to LSP_CALL_STALL_MS and is never tighter than the
+   * call's per-request timeout. Any inbound LSP frame restarts it --
+   * tests shrink it to prove the progress reset. */
+  readonly callStallMs?: number | undefined;
 }
 
 interface LspRuntime {
@@ -208,45 +214,29 @@ export async function lspChildEnvironment(adapter: LspServerAdapter, scratch?: s
 
 function clampTimeout(timeoutMs: number): number {
   if (!Number.isFinite(timeoutMs) || timeoutMs <= 0) return LSP_TIMEOUT_MS;
-  return Math.min(Math.max(1000, Math.floor(timeoutMs)), LSP_TIMEOUT_MS);
+  return Math.max(1000, Math.floor(timeoutMs));
 }
 
-/** Files upstream collected for a route, minus the ones OMA will not send
- * over stdio: oversized reads are counted and skipped, never silently. */
-function boundedFiles(root: string, files: string[]): { files: string[]; oversized: string[] } {
+/** Files upstream collected for a route, minus the ones that are not
+ * regular files or vanished between collect and open. Size is not a
+ * refusal: the LSP didOpen carries the whole text either way, so the
+ * cost is the file itself -- there is no amplification a byte bound
+ * would guard. */
+function liveFiles(files: string[]): string[] {
   const kept: string[] = [];
-  const oversized: string[] = [];
   for (const file of files) {
-    try {
-      const stat = statSync(file);
-      if (!stat.isFile()) continue;
-      if (stat.size > LSP_FILE_BYTES) { oversized.push(relative(root, file) || file); continue; }
-      kept.push(file);
-    } catch { /* a file that vanished between collect and open is skipped */ }
+    try { if (statSync(file).isFile()) kept.push(file); }
+    catch { /* a file that vanished between collect and open is skipped */ }
   }
-  return { files: kept.slice(0, LSP_MAX_FILES), oversized };
-}
-
-/** The pull path's copy of the pushed-diagnostic bounds the vendored client
- * enforces: a server that answered `textDocument/diagnostic` with a flood
- * sees the same refusal a flooding `publishDiagnostics` would get. */
-function boundDiagnostics(server: string, file: string, diagnostics: unknown): void {
-  if (!Array.isArray(diagnostics)) return;
-  if (diagnostics.length > LSP_MAX_DIAGNOSTICS_PER_FILE)
-    throw new Error(`${server} LSP returned ${diagnostics.length} diagnostics for ${file}; OMA's bound is ${LSP_MAX_DIAGNOSTICS_PER_FILE}.`);
-  for (const diagnostic of diagnostics) {
-    const message = (diagnostic as { message?: unknown }).message;
-    if (typeof message === "string" && message.length > LSP_MAX_DIAGNOSTIC_MESSAGE_CHARS)
-      throw new Error(`${server} LSP returned a ${message.length}-char diagnostic message for ${file}; OMA's bound is ${LSP_MAX_DIAGNOSTIC_MESSAGE_CHARS}.`);
-  }
+  return kept;
 }
 
 const DiagnosticsParameters = Type.Object({
   paths: Type.Optional(Type.Array(Type.String(), {
-    description: `Files or directories to check, relative to the workspace root (default: whole workspace). At most ${LSP_MAX_PATHS} entries.`,
+    description: "Files or directories to check, relative to the workspace root (default: whole workspace).",
   })),
   limit: Type.Optional(Type.Number({
-    description: `Maximum files to check per selected server (default 50, at most ${LSP_MAX_FILES}).`,
+    description: "Maximum files to check per selected server (default: all collected files).",
   })),
   server: Type.Optional(Type.Union([Type.String(), Type.Array(Type.String())], {
     description: "Optional configured LSP server name, or names. Defaults to all servers matching the file extension.",
@@ -297,16 +287,26 @@ interface VendoredRuntime {
     run<T>(caller: AbortSignal | undefined, operation: (signal: AbortSignal) => Promise<T>): Promise<T>;
     close(): Promise<unknown>;
   };
+  /** Registers a sink the vendored client calls with its adapter on every
+   * inbound LSP frame chunk -- the per-call progress signal the stall
+   * window resets on. Returns the unsubscribe. Exported by an OMA
+   * divergence in lsp-client.js. */
+  omaOnInboundFrame(sink: (adapter: LspServerAdapter) => void): () => void;
 }
 
 async function loadVendoredRuntime(): Promise<VendoredRuntime> {
-  const [adapters, command, files, runner, routes, sessionLifecycle] = await Promise.all([
+  const [adapters, command, files, runner, routes, sessionLifecycle, lspClient] = await Promise.all([
     import("./vendor/pi-lsp/runtime/adapters.js"),
     import("./vendor/pi-lsp/runtime/command.js"),
     import("./vendor/pi-lsp/runtime/files.js"),
     import("./vendor/pi-lsp/runtime/runner.js"),
     import("./vendor/pi-lsp/runtime/routes.js"),
     import("./vendor/pi-lsp/runtime/session-lifecycle.js"),
+    // The splice export lives in the verified .js; the upstream-emitted
+    // .d.ts does not declare it, so the import is cast -- the bundle
+    // check above already proved the export exists.
+    import("./vendor/pi-lsp/runtime/lsp-client.js").then(
+      module => module as unknown as Pick<VendoredRuntime, "omaOnInboundFrame">),
   ]);
   return {
     consumeLspConfigNotice: adapters.consumeLspConfigNotice,
@@ -320,6 +320,7 @@ async function loadVendoredRuntime(): Promise<VendoredRuntime> {
     selectDiagnosticRoutes: routes.selectDiagnosticRoutes,
     selectFixRoute: routes.selectFixRoute,
     LspSessionScope: sessionLifecycle.LspSessionScope,
+    omaOnInboundFrame: lspClient.omaOnInboundFrame,
   } as VendoredRuntime;
 }
 
@@ -344,7 +345,8 @@ export async function registerLspTools(pi: ExtensionAPI, options: LspToolOptions
   }
   const vendored = await loadVendoredRuntime();
   const { consumeLspConfigNotice, loadRuntime, commandExists, commandPathValue, resolveCommandPath,
-    resolveSupportedFile, runDiagnostics, runFix, selectDiagnosticRoutes, selectFixRoute, LspSessionScope } = vendored;
+    resolveSupportedFile, runDiagnostics, runFix, selectDiagnosticRoutes, selectFixRoute, LspSessionScope,
+    omaOnInboundFrame } = vendored;
 
   /** Load and bound the configured server catalog, exactly like upstream
    * (config is re-read per call so a pi-lsp.json change takes effect on the
@@ -353,7 +355,9 @@ export async function registerLspTools(pi: ExtensionAPI, options: LspToolOptions
   const configuredRuntime = (workspace: string): LspRuntime => {
     const { adapters, timeoutMs } = loadRuntime(workspace, { projectTrusted: false });
     return {
-      adapters: adapters.slice(0, LSP_MAX_SERVERS),
+      // Every configured server routes and reports -- the catalog is the
+      // user's own config, so none of it is dropped.
+      adapters,
       timeoutMs: clampTimeout(timeoutMs),
       configNotice: consumeLspConfigNotice(),
     };
@@ -406,27 +410,43 @@ export async function registerLspTools(pi: ExtensionAPI, options: LspToolOptions
     return fn(scratch).finally(() => rmSync(scratch, { recursive: true, force: true }));
   };
 
-  /** The aggregate deadline for one call across however many routes it fans
-   * out to: each route still gets its own request timeout, but a hung or
-   * slow route cannot multiply that timeout by the route count. The signal
-   * merges the caller's abort with the deadline; an error surfaced while
-   * the deadline -- not the caller -- fired is reported as the deadline. */
-  const callDeadline = (tool: string, ownedSignal: AbortSignal) => {
-    const ms = options.callDeadlineMs ?? LSP_CALL_DEADLINE_MS;
+  /** The observation window for one call across however many routes it
+   * fans out to -- progress-reset, not a deadline. Every inbound LSP
+   * frame on any of the call's own servers restarts it (the vendored
+   * client reports frames through `omaOnInboundFrame`), so a server
+   * still streaming diagnostics survives a call of any length and only
+   * a dead, stopped or wedged server is reclaimed. The window is never
+   * tighter than the call's own per-request timeout, so a caller who
+   * asked for a longer request budget is not undercut, and each route's
+   * request timeout still applies inside it. `adapters` holds the
+   * hardened adapter objects this call may spawn, so an unrelated call's
+   * traffic does not count as this call's progress. The signal merges
+   * the caller's abort with the stall; an error surfaced while the
+   * stall -- not the caller -- fired is reported as the stall. */
+  const callStall = (tool: string, ownedSignal: AbortSignal, timeoutMs: number,
+      adapters: ReadonlySet<LspServerAdapter>) => {
+    const ms = Math.max(options.callStallMs ?? LSP_CALL_STALL_MS, timeoutMs);
     const controller = new AbortController();
-    const message = `${tool} exceeded OMA's ${ms}ms aggregate call deadline`;
-    const timer = setTimeout(() => controller.abort(new Error(message)), ms);
+    const message = `${tool} saw no LSP server activity for ${ms}ms -- the server is stalled or dead`;
+    const fire = () => controller.abort(new Error(message));
+    let timer = setTimeout(fire, ms);
+    const unsubscribe = omaOnInboundFrame(adapter => {
+      if (adapters.has(adapter)) {
+        clearTimeout(timer);
+        timer = setTimeout(fire, ms);
+      }
+    });
     return {
       signal: AbortSignal.any([ownedSignal, controller.signal]),
-      stop: () => clearTimeout(timer),
+      stop: () => { clearTimeout(timer); unsubscribe(); },
       fired: () => controller.signal.aborted && !ownedSignal.aborted,
       message,
     };
   };
-  /** Re-report an in-flight failure as the deadline when the deadline is
-   * what ended it -- the vendored abort text would only say "aborted". */
-  const deadlineAware = (deadline: ReturnType<typeof callDeadline>, error: unknown): never => {
-    if (deadline.fired()) throw new Error(deadline.message);
+  /** Re-report an in-flight failure as the stall when the stall is what
+   * ended it -- the vendored abort text would only say "aborted". */
+  const stallAware = (stall: ReturnType<typeof callStall>, error: unknown): never => {
+    if (stall.fired()) throw new Error(stall.message);
     throw error;
   };
 
@@ -447,9 +467,12 @@ export async function registerLspTools(pi: ExtensionAPI, options: LspToolOptions
     parameters: DiagnosticsParameters,
     async execute(_toolCallId, params, signal, _onUpdate, ctx) {
       requireSpawnRole("lsp_diagnostics");
-      if (params.paths !== undefined && params.paths.length > LSP_MAX_PATHS)
-        throw new WorkspaceRefusal(`lsp_diagnostics accepts at most ${LSP_MAX_PATHS} paths`);
-      const limit = Math.min(Math.max(1, Math.floor(params.limit ?? 50)), LSP_MAX_FILES);
+      // A limit the model passes is its own choice and is honored exactly;
+      // an absent one means the whole collected workspace -- the complete
+      // file set and count are what the result reports.
+      const limit = params.limit === undefined || !Number.isFinite(params.limit)
+        ? Number.MAX_SAFE_INTEGER
+        : Math.max(1, Math.floor(params.limit));
       const scope = sessionFor(ctx.sessionManager).scope;
       return await scope.run(signal, async (ownedSignal) => await withScratch(async (scratch) => {
         const runtime = configuredRuntime(options.workspace);
@@ -459,43 +482,40 @@ export async function registerLspTools(pi: ExtensionAPI, options: LspToolOptions
           ...(params.server === undefined ? {} : { server: params.server }),
           limit,
         }, limit);
-        // Re-filter each route's collected files through OMA's byte bound;
-        // a route whose files are all oversized is dropped, not run.
+        // Drop only what is not a regular file (or vanished since collect);
+        // size is never a refusal -- didOpen carries the text either way.
         const bounded = routes
-          .map(route => ({ ...route, bounded: boundedFiles(root, route.files) }))
-          .filter(route => route.bounded.files.length > 0);
-        const oversized = bounded.flatMap(route => route.bounded.oversized);
+          .map(route => ({ ...route, files: liveFiles(route.files) }))
+          .filter(route => route.files.length > 0);
         if (bounded.length === 0) {
           if (skipped.length > 0)
             throw new Error(`LSP diagnostics unavailable: ${skipped.map(entry => `${entry.adapter.name} (${entry.reason})`).join("; ")}. ` +
               "Every applicable server's command is missing from PATH -- unavailable is not clean.");
-          throw new Error("No supported files within OMA bounds to check.");
+          throw new Error("No supported files to check.");
         }
-        // The aggregate deadline bounds the whole call across routes.
-        const deadline = callDeadline("lsp_diagnostics", ownedSignal);
+        // The stall window observes the whole call across routes; any
+        // inbound frame on a route's own server restarts it.
+        const callAdapters = new Set<LspServerAdapter>();
+        const stall = callStall("lsp_diagnostics", ownedSignal, runtime.timeoutMs, callAdapters);
         const results: { route: (typeof bounded)[number]; result: ToolResult }[] = [];
         try {
           for (const route of bounded) {
-            deadline.signal.throwIfAborted();
+            stall.signal.throwIfAborted();
+            const hardened = hardenedAdapter(route.adapter, scratch);
+            callAdapters.add(hardened);
             const result = await runDiagnostics(
-              hardenedAdapter(route.adapter, scratch),
-              { root, files: route.bounded.files },
-              runtime.timeoutMs, deadline.signal, statusCtx(scope.context(ctx)), STATUS_KEY,
-            ).catch(error => deadlineAware(deadline, error)) as ToolResult;
-            // The pull path's diagnostics array is bounded here; the
-            // pushed-diagnostics path is bounded inside the vendored client.
-            for (const entry of (result.details as { files?: { path?: string; diagnostics?: unknown }[] } | undefined)?.files ?? [])
-              boundDiagnostics(route.adapter.name, entry.path ?? "?", entry.diagnostics);
+              hardened,
+              { root, files: route.files },
+              runtime.timeoutMs, stall.signal, statusCtx(scope.context(ctx)), STATUS_KEY,
+            ).catch(error => stallAware(stall, error)) as ToolResult;
             results.push({ route, result });
           }
         } finally {
-          deadline.stop();
+          stall.stop();
         }
         const sections = results.map(({ route, result }) => `${route.reason}\n\n${textFromResult(result)}`);
         if (skipped.length > 0)
           sections.push(`Unavailable LSP server(s), not run: ${skipped.map(entry => `${entry.adapter.name} (${entry.reason})`).join("; ")}.`);
-        if (oversized.length > 0)
-          sections.push(`Skipped oversized file(s): ${oversized.join(", ")}.`);
         if (runtime.configNotice !== undefined)
           sections.push(`config: ${runtime.configNotice}`);
         return textResult(sections.join("\n\n---\n\n"), {
@@ -503,16 +523,14 @@ export async function registerLspTools(pi: ExtensionAPI, options: LspToolOptions
           routes: results.map(({ route, result }) => ({
             server: route.adapter.name,
             reason: route.reason,
-            files: route.bounded.files.map(file => relative(root, file) || file),
+            files: route.files.map(file => relative(root, file) || file),
             details: result.details,
           })),
           unavailable: skipped.map(entry => ({ server: entry.adapter.name, reason: entry.reason })),
-          oversized,
           summary: {
             files: results.reduce((total, { result }) => total + (((result.details as { summary?: { files?: number } })?.summary?.files) ?? 0), 0),
             diagnostics: results.reduce((total, { result }) => total + (((result.details as { summary?: { diagnostics?: number } })?.summary?.diagnostics) ?? 0), 0),
             unavailableServers: skipped.length,
-            oversizedFiles: oversized.length,
           },
         });
       }));
@@ -545,15 +563,16 @@ export async function registerLspTools(pi: ExtensionAPI, options: LspToolOptions
           ...(params.server === undefined ? {} : { server: params.server }),
         });
         const adapter = hardenedAdapter(route.adapter, scratch);
-        // OMA bound: the file is read whole into the JSON-RPC request.
-        const file = resolveSupportedFile(adapter, root, params.path);
-        const stat = statSync(file);
-        if (stat.size > LSP_FILE_BYTES)
-          throw new WorkspaceRefusal(`${params.path} is ${stat.size} bytes; lsp_fix is bounded to ${LSP_FILE_BYTES}`);
-        // The per-call deadline also bounds the sequential codeAction/resolve
-        // loop (each unresolved action is a request): a pathological action
-        // list cannot stretch the call past it.
-        const deadline = callDeadline("lsp_fix", ownedSignal);
+        // Resolves the path and refuses it when missing, non-regular or
+        // outside root. No byte bound: didOpen carries the whole text
+        // regardless, so the cost is the file itself -- refusing only
+        // blocks a real fix.
+        resolveSupportedFile(adapter, root, params.path);
+        const callAdapters = new Set<LspServerAdapter>([adapter]);
+        // The stall window also observes the sequential codeAction/resolve
+        // loop (each unresolved action is a request): a pathological list
+        // that stops answering is reclaimed, one still answering is not.
+        const stall = callStall("lsp_fix", ownedSignal, runtime.timeoutMs, callAdapters);
         // Always compute in preview mode -- upstream's write branch never
         // runs. Mutation is OMA's contained writer below, after the signal
         // is still live and the role gate has passed.
@@ -562,10 +581,10 @@ export async function registerLspTools(pi: ExtensionAPI, options: LspToolOptions
           preview = await runFix(adapter, {
             root, path: params.path, write: false,
             ...(params.kind === undefined ? {} : { kind: params.kind }),
-          }, runtime.timeoutMs, deadline.signal, statusCtx(scope.context(ctx)), STATUS_KEY)
-            .catch(error => deadlineAware(deadline, error)) as ToolResult;
+          }, runtime.timeoutMs, stall.signal, statusCtx(scope.context(ctx)), STATUS_KEY)
+            .catch(error => stallAware(stall, error)) as ToolResult;
         } finally {
-          deadline.stop();
+          stall.stop();
         }
         const details = (preview.details ?? {}) as Record<string, unknown>;
         if (params.write !== true || details.changed !== true)

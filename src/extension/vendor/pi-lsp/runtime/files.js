@@ -49,34 +49,40 @@ export function collectSupportedFiles(adapter, root, requestedPaths, limit) {
     return files;
 }
 // OMA divergence (applied by scripts/vendor-pi-lsp.mjs; recorded under
-// generated.divergences in manifest.json): recursion depth is bounded.
-const OMA_MAX_COLLECT_DEPTH = 256;
-function collectPath(adapter, targetPath, files, seen, visitedDirectories, realRoot, limit, depth = 0) {
-    if (files.length >= limit || !existsSync(targetPath) || depth > OMA_MAX_COLLECT_DEPTH)
-        return;
-    if (!isInsidePath(realRoot, realpathSync(targetPath)))
-        return;
-    const stats = statSync(targetPath);
-    if (stats.isFile()) {
-        if (adapter.isSupportedFile(targetPath) && !seen.has(targetPath)) {
-            seen.add(targetPath);
-            files.push(targetPath);
-        }
-        return;
-    }
-    if (!stats.isDirectory())
-        return;
-    const directoryKey = realpathSync(targetPath);
-    if (visitedDirectories.has(directoryKey))
-        return;
-    visitedDirectories.add(directoryKey);
-    const entries = readdirSync(targetPath, { withFileTypes: true }).sort((left, right) => left.name.localeCompare(right.name));
-    for (const entry of entries) {
-        if (files.length >= limit)
-            break;
-        if ((entry.isDirectory() || entry.isSymbolicLink()) && adapter.skipDirectories.has(entry.name))
+// generated.divergences in manifest.json): the recursion became an
+// explicit stack -- a deep tree is collected whole, never dropped for
+// depth and never recursed into a stack overflow. Children are pushed
+// in reverse sorted order so pops visit them in the recursion's own
+// depth-first order; the collected list is identical.
+function collectPath(adapter, targetPath, files, seen, visitedDirectories, realRoot, limit) {
+    const pending = [targetPath];
+    while (pending.length > 0 && files.length < limit) {
+        const current = pending.pop();
+        if (!existsSync(current))
             continue;
-        collectPath(adapter, path.join(targetPath, entry.name), files, seen, visitedDirectories, realRoot, limit, depth + 1);
+        if (!isInsidePath(realRoot, realpathSync(current)))
+            continue;
+        const stats = statSync(current);
+        if (stats.isFile()) {
+            if (adapter.isSupportedFile(current) && !seen.has(current)) {
+                seen.add(current);
+                files.push(current);
+            }
+            continue;
+        }
+        if (!stats.isDirectory())
+            continue;
+        const directoryKey = realpathSync(current);
+        if (visitedDirectories.has(directoryKey))
+            continue;
+        visitedDirectories.add(directoryKey);
+        const entries = readdirSync(current, { withFileTypes: true }).sort((left, right) => left.name.localeCompare(right.name));
+        for (let index = entries.length - 1; index >= 0; index -= 1) {
+            const entry = entries[index];
+            if ((entry.isDirectory() || entry.isSymbolicLink()) && adapter.skipDirectories.has(entry.name))
+                continue;
+            pending.push(path.join(current, entry.name));
+        }
     }
 }
 function resolveWorkspacePath(root, inputPath, label) {

@@ -40,10 +40,31 @@ export function componentsWithin(root: string, path: string): string[] {
   return offset.split(sep);
 }
 
+/** The errno a thrown value carries, if any. A throw site is not obliged
+ * to produce an object -- a null, string or number throw carries no
+ * `.code` at all, and reading it blind would make the error handler
+ * itself throw TypeError in place of the real error. */
+function errnoCode(error: unknown): string | undefined {
+  return typeof error === "object" && error !== null
+    ? (error as NodeJS.ErrnoException).code
+    : undefined;
+}
+
 function refusedLink(error: unknown): never {
-  const code = (error as NodeJS.ErrnoException).code;
+  const code = errnoCode(error);
   if (code === "ELOOP" || code === "ENOTDIR") throw new WorkspaceRefusal("tool path passes through a link or a non-directory; links are not followed");
   throw error;
+}
+
+/** True when `error` is the descriptor-table overrun the snapshot's depth
+ * is bounded by -- EMFILE or ENFILE -- checked without assuming the
+ * thrown value's shape, so a non-object throw cannot turn the check
+ * itself into a TypeError. Exported for the search child's own error
+ * mapping, which classifies the same overrun raised inside the engine
+ * walker the snapshot hands to it. */
+export function isDescriptorOverrun(error: unknown): boolean {
+  const code = errnoCode(error);
+  return code === "EMFILE" || code === "ENFILE";
 }
 
 /** A descriptor-table overrun is the snapshot's only depth bound, and it
@@ -52,8 +73,7 @@ function refusedLink(error: unknown): never {
  * readdir or open, a destination open, the cleanup itself -- becomes this
  * refusal, which a caller can surface with its reason intact. */
 function descriptorRefusal(error: unknown): never {
-  const code = (error as NodeJS.ErrnoException).code;
-  if (code === "EMFILE" || code === "ENFILE") throw new WorkspaceRefusal("search snapshot ran out of file descriptors");
+  if (isDescriptorOverrun(error)) throw new WorkspaceRefusal("search snapshot ran out of file descriptors");
   throw error;
 }
 

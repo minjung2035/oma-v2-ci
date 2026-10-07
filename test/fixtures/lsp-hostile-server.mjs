@@ -14,14 +14,26 @@
  *   before the error lands (a fixed sleep raced the reader under load).
  * - `oversized-frame`: on the diagnostics request, announces a
  *   Content-Length far past the inbound bound -- the client must refuse
- *   without buffering it.
+ *   without buffering it. The declared body is never sent in full, so the
+ *   discarder is still owed bytes when the call tears down.
+ * - `oversized-then-serve`: the first diagnostics request gets a COMPLETE
+ *   oversized frame (declared and delivered); every later diagnostics
+ *   request answers normally -- proves the refuse-a-request path drops
+ *   the frame, realigns the wire, and keeps the server alive.
  * - `frame-drip`: streams more bytes than the inbound bound without ever
  *   completing a frame -- the accumulation bound must trip.
  * - `push-flood`: pushes more diagnostics for one file than the bound.
  * - `push-big-message`: pushes one diagnostic whose message is over bound.
+ * - `push-uri-flood`: pushes publications for more distinct documents
+ *   than the tracked-URI bound, then the opened file's own -- the opened
+ *   file's publication is the drop the resolved list must name.
  * - `pull-flood` / `pull-big-message`: same floods through the pull path.
- * - `actions-flood`: returns more code actions than the resolve bound, so
- *   the sequential codeAction/resolve loop never starts.
+ * - `slow-stages`: every request is answered ~600ms late -- diagnostics,
+ *   codeAction, resolve -- so the call's total run exceeds a modest
+ *   stall window while no single silence gap does. Only a progress-reset
+ *   window lets the call finish; a fixed aggregate deadline kills it.
+ * - `actions-flood`: returns more code actions than the old resolve bound;
+ *   the sequential codeAction/resolve loop resolves every one.
  * - `edits-flood`: two actions whose edits total more than the accumulated
  *   edit bound -- the count cap is per list, the total is OMA's bound.
  * - `edits-documentchanges-flood`: one action whose documentChanges carry
@@ -52,6 +64,9 @@ const OMA_TEST_MAX_EDITS = 2048;
 
 /** The URI the client opened -- edits are attached to it at resolve time. */
 let openedUri;
+/** oversized-then-serve fires its one complete oversized frame on the
+ * first diagnostics request, then answers normally. */
+let oversizedServed = false;
 
 function send(message) {
   const body = JSON.stringify(message);
@@ -67,7 +82,16 @@ function diagnostic(message, line = 0) {
   };
 }
 
-const PULL_SCENARIOS = new Set(["stderr-flood", "stderr-flood-exit", "pull-flood", "pull-big-message", "actions-flood", "edits-flood", "edits-documentchanges-flood", "edit-bytes-flood", "edits-at-bound", "oversized-frame", "frame-drip", "env-echo", "env-probe", "pid-echo"]);
+const PULL_SCENARIOS = new Set(["stderr-flood", "stderr-flood-exit", "pull-flood", "pull-big-message", "actions-flood", "edits-flood", "edits-documentchanges-flood", "edit-bytes-flood", "edits-at-bound", "oversized-frame", "oversized-then-serve", "frame-drip", "env-echo", "env-probe", "pid-echo", "slow-stages"]);
+/** Each slow-stages stage delay. Below the client's 1000ms request floor,
+ * so no single request times out; three of them put the whole call well
+ * past a ~1s observation window, which is what proves the window resets
+ * on progress instead of acting as a fixed aggregate deadline. */
+const SLOW_STAGE_MS = 600;
+/** Documents pushed by push-uri-flood before the opened file's own
+ * publication -- the client's tracked-document bound is 4096, so these
+ * fill the map and leave later publications as counted drops. */
+const URI_FLOOD_DOCS = 4100;
 
 /** Queue the whole flood, then call done only after every byte reached the
  * kernel pipe. Write callbacks fire on flush, so done() means the reader
@@ -112,6 +136,16 @@ function handle(message) {
     else if (scenario === "push-big-message")
       send({ jsonrpc: "2.0", method: "textDocument/publishDiagnostics",
         params: { uri, diagnostics: [diagnostic("x".repeat(20_000))] } });
+    else if (scenario === "push-uri-flood") {
+      // Fill the tracked-document bound, then push the opened file's own
+      // publication: the client's URI bound drops it and must name the
+      // drop in the resolved list.
+      for (let i = 0; i < URI_FLOOD_DOCS; i++)
+        send({ jsonrpc: "2.0", method: "textDocument/publishDiagnostics",
+          params: { uri: `file:///flood-${i}.tfix`, diagnostics: [diagnostic(`flood ${i}`)] } });
+      send({ jsonrpc: "2.0", method: "textDocument/publishDiagnostics",
+        params: { uri, diagnostics: [diagnostic("the opened file's own publication -- dropped past the bound")] } });
+    }
     else
       send({ jsonrpc: "2.0", method: "textDocument/publishDiagnostics", params: { uri, diagnostics: [] } });
     return;
@@ -119,6 +153,26 @@ function handle(message) {
   if (message.method === "textDocument/diagnostic") {
     if (scenario === "oversized-frame") {
       process.stdout.write(`Content-Length: ${6 * 1024 * 1024}\r\n\r\n{"jsonrpc":"2.0"`);
+      return;
+    }
+    if (scenario === "oversized-then-serve") {
+      // First diagnostics request gets a COMPLETE oversized frame -- the
+      // body is fully sent so the client's discarder reaches the frame's
+      // end and the next frame parses cleanly.
+      if (!oversizedServed) {
+        oversizedServed = true;
+        const body = JSON.stringify({
+          jsonrpc: "2.0", id: message.id,
+          result: { items: [diagnostic(`pad ${"p".repeat(5 * 1024 * 1024)}`)] },
+        });
+        process.stdout.write(`Content-Length: ${Buffer.byteLength(body)}\r\n\r\n${body}`);
+        return;
+      }
+      send({ jsonrpc: "2.0", id: message.id, result: { items: [diagnostic("recovered")] } });
+      return;
+    }
+    if (scenario === "slow-stages") {
+      setTimeout(() => send({ jsonrpc: "2.0", id: message.id, result: { items: [diagnostic("slow diagnostic")] } }), SLOW_STAGE_MS);
       return;
     }
     if (scenario === "frame-drip") { dripBytes(); return; }
@@ -163,6 +217,11 @@ function handle(message) {
     return;
   }
   if (message.method === "textDocument/codeAction") {
+    if (scenario === "slow-stages") {
+      setTimeout(() => send({ jsonrpc: "2.0", id: message.id,
+        result: [{ title: "slow fix", kind: "source.fixAll", data: {} }] }), SLOW_STAGE_MS);
+      return;
+    }
     send({ jsonrpc: "2.0", id: message.id,
       result: scenario === "actions-flood"
         ? Array.from({ length: 300 }, (_v, i) => ({ title: `action ${i}`, kind: "source.fixAll", data: {} }))
@@ -172,6 +231,14 @@ function handle(message) {
     return;
   }
   if (message.method === "codeAction/resolve") {
+    if (scenario === "slow-stages") {
+      const edit = { changes: { [openedUri]: [{
+        range: { start: { line: 0, character: 0 }, end: { line: 0, character: 0 } },
+        newText: "// slow-fixed\n",
+      }] } };
+      setTimeout(() => send({ jsonrpc: "2.0", id: message.id, result: { ...message.params, edit } }), SLOW_STAGE_MS);
+      return;
+    }
     // The edit floods hide inside each resolved action's edit -- the action
     // count itself stays under the cap.
     const insert = (newText) => ({

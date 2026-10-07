@@ -1,6 +1,6 @@
 {
  "version": 1,
- "about": "WP32 inputs to implementation/review-ledger.json that git history cannot supply: files read in full and left unchanged, explicitly reviewed working-tree changes bound to their SHA-256 bytes and oracles, and the environment lanes as recorded in docs/implementation/validation.md. Regenerate the ledger with `npm run review:ledger`; `review-closure` checks it. Historical lane entries do not certify later working-tree changes. DR29: withdrawn stale byte-bound review claims for src/runtime/personal-settings.ts, src/entry/personal-host.ts, src/entry/oma-mac.ts. Hashes were not silently refreshed; these edited owners require fresh review. Historical readUnchanged entries apply only to unchanged committed files; changed files are NOT_REVIEWED.",
+ "about": "WP32 inputs to implementation/review-ledger.json that git history cannot supply: files read in full and left unchanged, explicitly reviewed working-tree changes bound to their SHA-256 bytes and oracles, and the environment lanes as recorded in docs/implementation/validation.md. Regenerate the ledger with `npm run review:ledger`; `review-closure` checks it. Historical lane entries do not certify later working-tree changes. DR29: withdrawn stale byte-bound review claims for src/runtime/personal-settings.ts, src/entry/personal-host.ts, src/entry/oma-mac.ts. Hashes were not silently refreshed; these edited owners require fresh review. Historical readUnchanged entries apply only to unchanged committed files; changed files are NOT_REVIEWED. UX-38 residual settlement (bundled pi-lsp surface): the seven edited files above were re-read in full and re-bound to their new bytes -- digests refreshed only alongside a fresh read, never silently. No withdrawal was needed: each change is this batch's own reviewed work.",
  "reviewedChanges": [
   {
    "path": "src/process/cleanup.ts",
@@ -162,8 +162,8 @@
     "G10-02",
     "P0V-122"
    ],
-   "sha256": "21c1a66195fb82525c940aee31c6123e0a1ec6dc09d0c76f21edd53c83aada04",
-   "note": "Re-read in full for the UX-38 blind-verification round-2 settlement (declare-before-create): the {p:\"d\"} snapshot declaration no longer rides emit's buffered process.stdout.write -- searchChildBody's named() now writes the frame with a synchronous writeSync(1, ...) loop that completes before withSearchSnapshot creates the directory, so a child killed or stopped between the mkdir and its first yield can no longer leave an undeclared oma-search-* copy; a short or failed declaration write throws and fails the snapshot before anything is created. The parent's declared-name sweep on close is unchanged. Read verified against the declare-before-create contract, kill-at-first-sighting sweep and wire-ordering oracles."
+   "sha256": "0c829354cd742d3cf7177862c2ed8ed36389b5b84d5611d06fc1a8fa8c64f691",
+   "note": "Re-read for the B2 rider: searchChildBody's catch maps a WorkspaceRefusal verbatim, then any descriptor overrun raised inside the engine walker the snapshot hands to (not only the snapshot's own opens) to the same 'search snapshot ran out of file descriptors' wording via the re-exported isDescriptorOverrun; the generated child script's own catch maps identically (contained-search.ts:345). Header comment now records the declared-name-preempted-EEXIST-plus-child-death sweep edge as a documented residual. Declare-writeSync-first, heartbeat/progress windows, spool contract unchanged. Oracles: G10-02 fd-exhaustion wording in both parent and child paths."
   },
   {
    "path": "src/protocol/receipt-chunks.ts",
@@ -1173,14 +1173,15 @@
    "path": "src/extension/lsp-tools.ts",
    "by": [
     "BL1",
-    "BL5"
+    "BL5",
+    "UX-38"
    ],
    "oracles": [
     "BL1",
     "BL5"
    ],
-   "sha256": "be8cd0a3d1cd90780e9570db42bc0c61bbe85f653d31fb0af1640330c3943ba7",
-   "note": "Re-read the env-boundary region in full for the NUL-value residual: the key-charset review guarded NAMES and token VALUES, but the five path-typed names (path/systemroot/windir/systemdrive/comspec) skip tokenValueAllowed -- its NUL refusal included -- so adapter env {\"PATH\": \"a\\0b\"} was admitted to spawn as an unhandled ERR_INVALID_ARG_VALUE, the same class the charset closed on the name side. admittedChildEnv now refuses value.includes(\"\\0\") up front for every name. Both hardenedAdapter tiers (inherited process.env, adapter-declared env) still funnel through the one predicate; scratch names remain compile-time constants. Verified by test: adapter NUL PATH denied while the inherited PATH keeps its value, SystemRoot absent, LC_ALL token-side refusal pinned. Reviewed the predicate, proxy pin, tier ordering and allowlist tables again -- no other value-side asymmetry stands. BL5 rebind: the child-env predicate moved verbatim into src/extension/child-env.ts (shared with the MCP boundary); this module now imports buildChildEnv and keeps its own server env composition -- the lsp suite's env tests rebind the unchanged semantics."
+   "sha256": "8d1b473e7c3a8f2a500a74e560a90f202976652d46cf1ea0780d202399f7bf84",
+   "note": "Re-read in full for the UX-38 residual settlement (LSP surface): every user-facing numeric bound is gone or non-blocking -- no 1MiB file refusal (liveFiles drops only non-regular/vanished, didOpen carries whole text), no file/path/server catalog caps (the whole configured catalog routes and reports; caller limit honored exactly, absent limit means the collected set with the count in details.summary), timeout floors at 1s with no ceiling (clampTimeout), and the 300s aggregate deadline is now LSP_CALL_STALL_MS -- a per-call silence window reset by omaOnInboundFrame sinks filtered to this call's own hardened adapters, never tighter than the per-request timeout so a longer caller budget is not undercut. Verified the vendored runtime still loads only behind verifyVendorBundle, the per-call scratch, role refusal, deny-by-default child env and contained-writer path are unchanged. Oracles: BL1/F1 progress-reset, silent-reclaim, oversized-then-serve, limit-honored, 1MiB-file, 80-paths, 71-server, truncation-marker tests in lsp-bundle/lsp-upstream."
   },
   {
    "path": "src/extension/vendor-bundle.ts",
@@ -1218,13 +1219,14 @@
   {
    "path": "src/extension/vendor/pi-lsp/manifest.json",
    "by": [
-    "BL1"
+    "BL1",
+    "UX-38"
    ],
    "oracles": [
     "BL1"
    ],
-   "sha256": "60808aa72d5af2d34266fbd45d73d7915af0b2af0ea470aca05ee8ae4184a6bb",
-   "note": "Re-read after regeneration by scripts/vendor-pi-lsp.mjs --write for the command.js env splice. generated.divergences honestly records command.js (1 edit: mergeEnvironment no longer seeds from process.env) beside the prior lsp-client.js(8)/runner.js(7)/files.js(2)/text-edits.js(4) entries; --check PASSes; bundle digest d3b4f3d41a5f637498cfc16b14bf0bc8035ddb115fb2362e7ace988864210b1d binds every byte."
+   "sha256": "a3192f360b3af8528deb2836a3cc191bd234f586608eb87a2795a24373be0b1f",
+   "note": "Re-read after regeneration by scripts/vendor-pi-lsp.mjs --write for the UX-38 residual settlement. generated.divergences honestly records every OMA splice (inbound-frame request refusal + bounded discard, omaOnInboundFrame sink, flagged diagnostic truncation + idempotence, URI-drop marker, iterative collectPath, code-action unbounded resolve, workspace-edit accumulation bounds, stderr sample, permanent error listeners); upstream/ bytes remain the pinned snapshot. Bundle digest 82a5999a...42fa recomputed over the regenerated runtime."
   },
   {
    "path": "src/extension/vendor/pi-lsp/runtime/adapters.d.ts",
@@ -1284,13 +1286,14 @@
   {
    "path": "src/extension/vendor/pi-lsp/runtime/files.js",
    "by": [
-    "BL1"
+    "BL1",
+    "UX-38"
    ],
    "oracles": [
     "BL1"
    ],
-   "sha256": "b3bfd05920e73824d2e2eb359b4c50bb36034ea7a3d3259a2f5372ced18b6d94",
-   "note": "Vendored pi-lsp payload member (@narumitw/pi-lsp@0.49.9). Runtime bytes are upstream tsc emit plus the deliberate OMA divergence splices scripts/vendor-pi-lsp.mjs applies -- recorded with reasons and edit counts under generated.divergences in manifest.json and re-derived (not just listed) by `node scripts/vendor-pi-lsp.mjs --check`, so a hand edit diverges loudly. Divergence: collectPath recursion depth is bounded at 256 so a deeper tree is skipped, never recursed without limit."
+   "sha256": "29eb1ee275e04323804e989cdb949a708d6e1890f21bb9a825be448c96d3d6d7",
+   "note": "Vendored pi-lsp payload member (@narumitw/pi-lsp@0.49.9), upstream tsc emit plus declared OMA splices (verified identical to emitRuntime output). New this round: collectPath's recursion and 256-depth bound became an explicit pending-path stack with reverse-sorted push so pops preserve the recursion's own depth-first order -- a deep tree is collected whole, never dropped for depth and never a stack overflow; read-time file-byte refusal removed (didOpen carries the text either way). realpath containment and skipDirectories policy unchanged."
   },
   {
    "path": "src/extension/vendor/pi-lsp/runtime/lsp-client.d.ts",
@@ -1306,13 +1309,14 @@
   {
    "path": "src/extension/vendor/pi-lsp/runtime/lsp-client.js",
    "by": [
-    "BL1"
+    "BL1",
+    "UX-38"
    ],
    "oracles": [
     "BL1"
    ],
-   "sha256": "d5d540b91304476fd04686e6e5a5b95bfe5984c718bb4d6a52a8402920fb5ca1",
-   "note": "Read in full at the BL1 round-2 residual review: upstream tsc emit plus the declared OMA splices (verified identical to emitRuntime output). New this round: exported appendStderrSample carries an explicit {sample,dropped} state -- an exact landing stays unmarked and the next chunk marks and is refused, fixing the length-only check that silently dropped bytes; #stderrDropped field wires it; the permanent child 'error' handler now child.kill(\"SIGKILL\")s before clearing #child/#process so a post-spawn error cannot orphan the server through shutdown()'s early return. Prior bounds (stderr 64KiB, 4MiB inbound frame, diagnostic count/message/URI caps, 256 code actions, permanent stdio error listeners) unchanged."
+   "sha256": "5eb7f8fad7864a4531a3f546d52354297d0dd34a2f69b0914b3b221632d272d1",
+   "note": "Read in full for the UX-38 residual settlement: upstream tsc emit plus declared OMA splices. An oversized declared Content-Length refuses only the request it answers (sniffed body id or sole pending request via #refuseOversizedFrame), the body feeds #discardRemaining in bounded memory and the parser realigns at the frame's end; frames with no boundary past the bound clear the buffer and refuse pendings -- #fail/server-kill is never the size path. shutdown skips the handshake only mid-discard. omaOnInboundFrame reports every inbound chunk to sinks (adapter-owned, per-call filtered in lsp-tools). Pushed diagnostics store flagged-truncated via omaFlaggedDiagnostics; tracked-URI overflow drops the publication and counts into #droppedDiagnosticUris surfaced by #withDroppedUriFlag; drop counts ride #formatDropped error tails. omaFlaggedDiagnostics is idempotent (trailing oma/truncation marker not recounted, OMA_MESSAGE_TRUNCATION_TAIL prevents re-cut lying about original length). resolveActions iterates the whole list -- per-request timeout and the stall window bound it, no count cap. stderr stays a 64KiB marked sample; child/stdout/stderr permanent error listeners retained."
   },
   {
    "path": "src/extension/vendor/pi-lsp/runtime/routes.d.ts",
@@ -1350,13 +1354,14 @@
   {
    "path": "src/extension/vendor/pi-lsp/runtime/runner.js",
    "by": [
-    "BL1"
+    "BL1",
+    "UX-38"
    ],
    "oracles": [
     "BL1"
    ],
-   "sha256": "8b2565caf0523fd3beacbd9a486d1c12f106f8aa0a844dbc10613b44869bc7a7",
-   "note": "Read in full at the BL1 round-2 residual review: upstream tsc emit plus the declared OMA splices. New this round: runFix replaces the unbounded flatMap accumulation with an iterative collect that refuses past OMA_MAX_WORKSPACE_EDITS (2048) total edits and OMA_MAX_WORKSPACE_EDIT_BYTES (4MiB) total newText across ALL selected actions -- counted as it accumulates, so an over-bound set fails before materializing; per-list bounds in collectWorkspaceEdits remain. Prior read-after-admission byte bound and pull-diagnostic boundedDiagnostics unchanged."
+   "sha256": "1fc0fad102ad02d95432d2bb09bdbcd9c4b288e658703128707b3928824ddaf6",
+   "note": "Read in full for the UX-38 residual settlement: upstream tsc emit plus declared OMA splices. Pull diagnostics and the fix path's diagnostic list run through omaFlaggedDiagnostics (visible marker + count, idempotent over pushed-store lists); OMA truncation markers are filtered out of the codeAction context so annotations are never sent to the server. The action resolve loop is unbounded in count (request timeout + stall window own liveness); the accumulated workspace-edit count/bytes bounds remain refusal -- a truncated edit list would fabricate a corrupt fix and unbounded materialization is the engine OOM the bound exists for, and the refusal still ends only that request. withLspClient lifecycle, abort wiring and cleanup-failure precedence unchanged."
   },
   {
    "path": "src/extension/vendor/pi-lsp/runtime/session-lifecycle.d.ts",
@@ -7108,8 +7113,8 @@
     "BL3",
     "G10-02"
    ],
-   "note": "Re-read in full for the UX-38 blind-verification round-2 settlement: (1) withSearchSnapshot no longer mkdtemp-creates before announcing -- it generates each oma-search-<uuid> candidate itself, calls named() BEFORE mkdirSync, retries on EEXIST with a fresh announced name, and propagates a named() failure instead of swallowing it, so exists implies declared. (2) the body moved behind a thin public wrapper so an EMFILE/ENFILE raised anywhere in the snapshot -- the held-directory walk, a source readdir or open, a destination open, the cleanup -- is converted by module-scope descriptorRefusal into WorkspaceRefusal (\"search snapshot ran out of file descriptors\") instead of escaping raw and flattening to \"contained search failed\". Read verified against the declare-before-create, EEXIST-retry, kill-at-first-sighting and fd-starved refusal oracles.",
-   "sha256": "5e712fd6e3a091c9ac2c46176dd831b30f472a2733686cbf5ed1a43878b8c6fd"
+   "note": "Re-read for the B2 rider: errnoCode guards the .code read behind typeof-object-non-null so a thrown null/string/number cannot turn the classifier itself into a TypeError; isDescriptorOverrun is the exported EMFILE/ENFILE test both the snapshot boundary (descriptorRefusal) and the search child's engine-walker mapping share -- the same overrun says 'search snapshot ran out of file descriptors' wherever it is raised. Declare-before-create, held-descriptor walk, EEXIST rename semantics unchanged. Oracles: G10-02 fd-exhaustion refusal wording, declare-before-create, EEXIST re-declare, wire declaration ordering.",
+   "sha256": "b059d1b9166d2f16ac5cd6d50bf41f48a1b6bfc36f745176f9c715efb38783d2"
   },
   {
    "path": "src/runtime/deployment-manifest.ts",
