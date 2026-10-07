@@ -1428,6 +1428,65 @@ name collision/intended surface/hidden 미활성/idempotent reload/provenance/
   - NOT_RUN: macOS native·systemd·kernel/powercut·provider credential·
     release qualification — 로컬 환경 부재.
 
+- 2026-10-07 (UX-38 맹검증 정산 — 직전 커밋의 변환이 정직성·소유권·도달성을
+  어기던 잔여 6건): 위 정산을 맹검증한 결과, 크기·시간 상한의 변환 자체가
+  새로운 거절·묵살·무소유를 만들어 낸 결함 6건(F1–F6)을 정산(§2 1·9·13,
+  P0-4). 원칙 재확인: 유효한 사용자 작업을 막을 수 있는 상한은
+  거절·절단하지 않되, 변환은 정확성·정직성·소유권을 보존한다.
+  - F1 완전 결과 도달성 — `oma-search-result-*.txt`가 `os.tmpdir()`에 쓰여
+    host/밀봉 engine의 contained read/grep/find/ls가 도달할 수 없고
+    `details.complete`에 소비자가 없어 완전 답이 사실상 프리뷰로 잘렸다.
+    이제 완전 답은 result envelope로 pipe를 건너 부모가 직렬화된
+    contained writer(quota 판정·직렬화·guard 승인 동일)로
+    `<workspace>/.oma/search-results/oma-search-result-<uuid>.txt`에
+    통째 기록하고 `details.complete={path,bytes}`와 `[preview]` 마커가
+    승인된 경로를 명시한다. 스풀이 못 받으면(quota·read-only 표면)
+    절단 없이 완전 답이 사유와 함께 inline으로 회귀한다.
+  - F2 heartbeat≠진행 — 임의 수신 바이트가 유일한 정체 창을 리셋해
+    worker 스레드의 `{p:"s"}`가 멈춘 main 스레드를 무한히 살려 두었다.
+    이제 관측은 두 창: 임의 바이트가 리셋하는 침묵 창(정지·사망·출력
+    차단은 한 창 안에 회수)과 비-heartbeat 프레임·비프레임 바이트만이
+    리셋하는 진행 창(`HEARTBEAT_ONLY_WINDOWS=10` × stall 창 — 왕성하지만
+    유한). 자식은 `{p:"r"}` 완전-렌더 진행과 engine `onUpdate`의
+    `{p:"w"}`를 새로 보낸다. heartbeat만의 자식은 경계 안에 회수되고,
+    성긴 실진행은 경계를 넘어 생존한다. 헤더의 "heartbeat만으로
+    D-state 감지" 주장도 제거.
+  - F3 외부 kill 스냅샷 잔여 — 선언된 스냅샷 sweep이 `stop()`의 지연
+    killer에만 달려 외부 SIGKILL/OOM `close`가 `oma-search-*` 사본을
+    남겼다. 이제 `close` 핸들러가 무조건 sweep한다(정상 종료·killer
+    경로와 멱등).
+  - F4 스풀 소유·보존 정책 — workspace 검색 스풀은 workspace 소유자의
+    보통 파일(quota 과금·guard 승인, OMA가 자동 sweep하지 않음 — 결과가
+    이름을 명시하고 모델·사용자가 지울 수 있음), client 출력 스풀은
+    caller 소유(OMA는 caller가 아직 필요로 하는지 알 인덱스를 갖지
+    않으므로 GC 없음 — caller가 비울 수 있고 durable request·ledger
+    사실에 무영향). `output-spool.ts` 헤더가 둘의 정책을 명시한다.
+  - F5 목적지 fd 좁히기 — 목적지 복사가 `join(parent,name)` 경로 문자열을
+    써서 `O_NOFOLLOW`가 leaf만 지켰고 같은-uid 경주가 중간 목적지
+    디렉터리를 symlink로 교체할 수 있었다. 이제 목적지도 레벨마다 보유한
+    디스크립터에 `entryAt(parent_fd,name)`으로 생성·개방하고
+    EMFILE/ENFILE은 명시된 workspace 거절로 변환한다 — OS 디스크립터
+    테이블이 유일한 깊이 bound.
+  - F6 잔여 — heartbeat worker에 명시적 `error` 리스너 장착;
+    `spoolOutput`의 동기 write/fsync가 의도(표시 경로의 내구성 약속,
+    비동기는 같은 I/O를 옮길 뿐)임을 헤더에 명시.
+  - 구조 정산: `state-tree-rules`·`owned-state-rules`·`architecture-owners`
+    면제·소유자 문구를 새 동작으로 갱신 — F5로 목적지마저 보유
+    디스크립터로 쓰면서 `contained-files.ts`의 owned-state 면제 자체가
+    stale이 되어 제거(규칙이 다시 파일을 지킴).
+  - 회귀·fail→pass: `contained-tools.test.ts`에 6종 추가·2종 갱신 —
+    스풀 경로가 guard 판정(read/grep/find/ls 전부 승인)·실제 tool
+    호출(ls·find·read·grep)·quota 과금으로 증명되고, quota 거절 시
+    완전 답이 사유와 함께 inline; heartbeat-only 자식이 경계 안에
+    회수(컴파일 산출물을 heartbeat=진행 구 동작으로 되돌리면 30s
+    타임아웃 실패로 대조); 400ms 간격 성긴 진행이 경계를 넘어 생존;
+    외부 SIGKILL 자식의 선언 스냅샷이 sweep(구 동작 되돌림 시
+    `oma-search-*` 잔여로 실패 대조); 목적지 디렉터리 중간 교체 경주에서
+    보유 fd가 실 디렉터리를 계속 쓰고 심은 link를 넘지 않음(구 경로
+    기반 되돌림 시 1,991 파일이 link를 넘어 실패 대조).
+  - NOT_RUN: macOS native·systemd·kernel/powercut·provider credential·
+    release qualification — 로컬 환경 부재.
+
 ## 10. 지금부터의 실행 순서
 0. ~~P0-8 강제 수단 미구현~~ — 구현됨: `owned-state` 아키텍처 규칙
    (scripts/architecture/rules/owned-state-rules.mjs)이 경로 기반 raw fs

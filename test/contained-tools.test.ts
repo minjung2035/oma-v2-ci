@@ -10,7 +10,7 @@ import { existsSync, linkSync, mkdirSync, mkdtempSync, readFileSync, readdirSync
 import { spawn } from "node:child_process";
 import { setTimeout as delay } from "node:timers/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { basename, join, sep } from "node:path";
 import { containWorkspaceTools } from "../src/extension/contained-tools.js";
 import { guardWorkspaceTools, workspaceUsage } from "../src/extension/workspace-guard.js";
 
@@ -258,6 +258,41 @@ for (const outcome of ["abort", "parent-death"] as const) test(`G10-02 / P0-4: $
   assert.equal(live(), false, "the walker ignored termination and survived its owner");
 });
 
+test("G10-02 / P0-4: a search child killed externally mid-copy still has its announced snapshot swept", { timeout: 20000 }, async t => {
+  const { base, workspace } = world(t);
+  const temporary = join(base, "temporary"); mkdirSync(temporary);
+  // Enough entries that the copy is still running when the kill lands.
+  for (let n = 0; n < 500; n++) writeFileSync(join(workspace, `${n}.txt`), "needle\n".repeat(1000));
+  // The parent stays alive and well -- only the child is SIGKILLed, the way
+  // an OOM killer or an operator would. The child cannot run its own cleanup
+  // then, so the announced-name sweep on `close` is the only owner left.
+  const script = `const {searchWorkspace}=await import(process.argv[1]);
+    try{await searchWorkspace('grep',process.argv[2],{pattern:'needle'},10000000);process.exitCode=3;}
+    catch{process.exitCode=0;}`;
+  const parent = spawn(process.execPath, ["--input-type=module", "-e", script,
+    new URL("../src/extension/contained-search.js", import.meta.url).href, workspace],
+    { env: { ...process.env, TMPDIR: temporary }, stdio: "ignore" });
+  const exited = new Promise<number | null>(resolve => parent.once("close", code => resolve(code)));
+  t.after(async () => { try { parent.kill("SIGKILL"); } catch {} await exited; });
+  // The child declares the snapshot before the first entry lands; entries in
+  // the copy prove the declaration reached the parent before the kill.
+  let snap = "";
+  for (let n = 0; n < 2000; n++) {
+    await delay(5);
+    const names = readdirSync(temporary).filter(name => name.startsWith("oma-search-"));
+    if (names.length > 0 && existsSync(join(temporary, names[0]!, "workspace")) &&
+        readdirSync(join(temporary, names[0]!, "workspace")).length >= 3) { snap = names[0]!; break; }
+  }
+  assert.ok(snap !== "", "the child's copy never started");
+  await delay(100);
+  const child = Number(readFileSync(`/proc/${parent.pid}/task/${parent.pid}/children`, "utf8").trim());
+  assert.ok(Number.isSafeInteger(child) && child > 0, "no owned search child to kill");
+  process.kill(child, "SIGKILL");
+  assert.equal(await exited, 0, "the parent did not settle after its child died externally");
+  for (let n = 0; n < 500 && readdirSync(temporary).length > 0; n++) await delay(5);
+  assert.deepEqual(readdirSync(temporary), [], "an externally killed child left its private copy behind");
+});
+
 test("G10-02 / P0: a hidden walker default is not the answer -- the same snapshot yields every match", async t => {
   const { workspace, run } = world(t);
   // 150 hits is past the engine's own default of 100; a caller that asked for
@@ -290,19 +325,55 @@ test("G10-02 / P0: a hidden byte/line bound is not the answer -- long lines and 
   assert.ok(hits.every(line => line.length === 600 + "w000.txt:1: ".length), "a line arrived cut");
 });
 
-test("G10-02 / P0: an answer beyond one result is spooled, not refused -- the result names the file that holds it", { timeout: 60000 }, async t => {
-  const { workspace, tools } = world(t, 4 << 20);
+test("G10-02 / P0: an answer beyond one result is spooled into the workspace, and the named path is one the model's own tools can read", { timeout: 90000 }, async t => {
+  const { workspace, tools, run } = world(t, 4 << 20);
   // One 1.3 MiB matching line: the complete answer cannot ride inline.
   writeFileSync(join(workspace, "huge.txt"), `needle${"y".repeat(1_300_000)}\n`);
   const result = await tools["grep"]!.execute("call", { pattern: "needle" }, undefined, undefined, { cwd: workspace });
   const text = result.content.map((part: { text?: string }) => part.text ?? "").join("");
   assert.match(text, /oma: \[preview\] the complete \d+-byte result is at /);
   const file = / is at (\S+)/.exec(text)?.[1];
-  assert.ok(file && file.includes("oma-search-result-"), `no spool path in the answer: ${file}`);
+  const spoolDir = join(workspace, ".oma", "search-results");
+  assert.ok(file !== undefined && file.startsWith(`${spoolDir}${sep}`),
+    `the named path is not inside the workspace spool: ${file}`);
+  assert.equal((result as { details?: { complete?: { path?: string; bytes?: number } } }).details?.complete?.path, file,
+    "details.complete does not name the admitted path");
+  // Reachability is the guard's verdict, not file existence: the same
+  // admission the tool_call gate gives, then the same contained operations
+  // the registered tools make.
+  let hook: ((event: { toolName: string; input: unknown }) => { block: boolean; reason: string } | undefined) | undefined;
+  guardWorkspaceTools({ on: (_: string, handler: typeof hook) => { hook = handler; } } as never, workspace, false);
+  for (const tool of ["read", "grep", "find", "ls"])
+    assert.equal(hook!({ toolName: tool, input: { path: file!, pattern: "needle" } }), undefined,
+      `${tool} is refused at the spool path the result named`);
+  // The tools themselves reach it: ls and find list it, read opens it (the
+  // single line is past the read renderer's own cap -- proof it read THIS
+  // file), and grep over it completes the whole pipeline on the path.
+  const name = basename(file!);
+  assert.match(await run("ls", { path: spoolDir }), new RegExp(name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
+  assert.match(await run("find", { pattern: "oma-search-result-*.txt", path: spoolDir }), /oma-search-result-.*\.txt/);
+  assert.match(await run("read", { path: file! }), /exceeds|Line 1/, "read did not reach the spooled file");
+  const searched = await run("grep", { pattern: "needle", path: file!, limit: 1 });
+  assert.match(searched, /needle/, "grep could not read the file the result named");
+  // The complete bytes really are there, and the quota counts them like any
+  // authored file.
   const saved = readFileSync(file!, "utf8");
   assert.ok(saved.startsWith("huge.txt:1: needle"), "the saved answer is not the complete rendering");
   assert.equal(Buffer.byteLength(saved) > 1_300_000, true);
-  rmSync(file!, { force: true });
+  assert.ok(workspaceUsage(workspace, 4 << 20) > 1_300_000, "the spool is not charged to the workspace quota");
+});
+
+test("G10-02 / P0: a spool the quota cannot hold is not a silent truncation -- the complete result rides inline with the reason", { timeout: 60000 }, async t => {
+  const { workspace, tools } = world(t, 2 << 20);
+  writeFileSync(join(workspace, "huge.txt"), `needle${"y".repeat(1_300_000)}\n`);
+  const result = await tools["grep"]!.execute("call", { pattern: "needle" }, undefined, undefined, { cwd: workspace });
+  const text = result.content.map((part: { text?: string }) => part.text ?? "").join("");
+  // The whole 1.3 MiB answer arrives anyway; the notice names why no path
+  // was written. Nothing is cut.
+  assert.match(text, /huge\.txt:1: needle/);
+  assert.match(text, /oma: the complete \d+-byte result could not be written to the workspace spool \(/);
+  assert.ok(text.length > 1_300_000, "the complete answer was truncated instead of delivered inline");
+  assert.equal(existsSync(join(workspace, ".oma")), false, "a refused spool still made files");
 });
 
 test("G10-02 / P0: a stalled child is refused and its group and copy are swept", { timeout: 20000 }, async t => {
@@ -332,13 +403,14 @@ test("G10-02 / P0: a stalled child is refused and its group and copy are swept",
   assert.equal(live(), false, "the wedged child's group was not put down");
 });
 
-test("G10-02 / P0: a slow child that keeps reporting is waited for -- progress resets the observation", { timeout: 20000 }, async t => {
+test("G10-02 / P0: a slow child that keeps reporting is waited for -- real progress resets the observation", { timeout: 20000 }, async t => {
   const { base, workspace } = world(t);
   const temporary = join(base, "temporary"); mkdirSync(temporary);
   const agent = join(base, "agent"); const bin = join(agent, "bin"); mkdirSync(bin, { recursive: true });
   writeFileSync(join(workspace, "a.txt"), "needle\n");
-  // The walker says nothing for 1.5 s -- longer than four stall windows -- and
-  // then answers. The child's heartbeats prove life; the answer arrives.
+  // The walker says nothing for 1.5 s -- longer than a silence window -- and
+  // then answers. The child's heartbeats prove life inside the heartbeat-only
+  // ceiling (10 windows); the answer arrives.
   writeFileSync(join(bin, "rg"), `#!${process.execPath}
 const {setTimeout:delay}=require('node:timers/promises');
 (async()=>{
@@ -350,7 +422,7 @@ console.log(JSON.stringify({type:'match',data:{path:{text:target+'/a.txt'},line_
 `, { mode: 0o755 });
   const script = `const {searchWorkspace}=await import(process.argv[1]);
     try{
-      const result=await searchWorkspace('grep',process.argv[2],{pattern:'needle'},1000000,undefined,300);
+      const result=await searchWorkspace('grep',process.argv[2],{pattern:'needle'},1000000,undefined,1000);
       const text=result&&result.content&&result.content[0]&&result.content[0].text||'';
       process.exitCode=/a\\.txt:1: needle/.test(text)?0:3;
     }catch(error){console.error(String(error&&error.message||error));process.exitCode=2;}`;
@@ -358,7 +430,79 @@ console.log(JSON.stringify({type:'match',data:{path:{text:target+'/a.txt'},line_
     new URL("../src/extension/contained-search.js", import.meta.url).href, workspace],
     { env: { ...process.env, TMPDIR: temporary, PI_CODING_AGENT_DIR: agent }, stdio: ["ignore", "ignore", "inherit"] });
   const code = await new Promise<number | null>(resolve => parent.once("close", resolve));
-  assert.equal(code, 0, "a heartbeating child was cut as a stall");
+  assert.equal(code, 0, "a heartbeating child inside its progress window was cut as a stall");
+});
+
+test("G10-02 / P0: a child that only ever heartbeats is reclaimed inside a bounded multiple of the stall window", { timeout: 30000 }, async t => {
+  const { base, workspace } = world(t);
+  const temporary = join(base, "temporary"); mkdirSync(temporary);
+  const agent = join(base, "agent"); const bin = join(agent, "bin"); mkdirSync(bin, { recursive: true });
+  const marker = join(base, "walker-pid");
+  writeFileSync(join(workspace, "a.txt"), "needle\n");
+  // The walker never exits and never prints: after it starts, the child's
+  // only output is the worker's heartbeat. Liveness is not progress -- the
+  // heartbeat-only ceiling must still end the search.
+  writeFileSync(join(bin, "rg"), `#!${process.execPath}
+if(process.argv.includes('--version')) process.exit(0);
+require('node:fs').writeFileSync(${JSON.stringify(marker)},String(process.pid));
+process.on('SIGTERM',()=>{});
+setInterval(()=>{},1000);
+`, { mode: 0o755 });
+  const script = `const {searchWorkspace}=await import(process.argv[1]);
+    try{await searchWorkspace('grep',process.argv[2],{pattern:'needle'},1000000,undefined,600);process.exitCode=3;}
+    catch(error){process.exitCode=/only heartbeats/.test(String(error&&error.message))?0:2;}`;
+  const parent = spawn(process.execPath, ["--input-type=module", "-e", script,
+    new URL("../src/extension/contained-search.js", import.meta.url).href, workspace],
+    { env: { ...process.env, TMPDIR: temporary, PI_CODING_AGENT_DIR: agent }, stdio: ["ignore", "ignore", "ignore"] });
+  const exited = new Promise<number | null>(resolve => parent.once("close", code => resolve(code)));
+  t.after(async () => { try { parent.kill("SIGKILL"); } catch {} await exited; });
+  let walker = 0; let child = 0;
+  for (let n = 0; n < 1000 && (!existsSync(marker) || child === 0); n++) {
+    await delay(5);
+    try { child = Number(readFileSync(`/proc/${parent.pid}/task/${parent.pid}/children`, "utf8").trim()); } catch { /* spawning */ }
+  }
+  assert.ok(existsSync(marker), "the pinned walker never started -- there was nothing wedged to reclaim");
+  walker = Number(readFileSync(marker, "utf8"));
+  assert.equal(await exited, 0, "a heartbeat-only child was not reclaimed inside its ceiling");
+  const live = (pid: number): boolean => {
+    try { return !/\) Z /.test(readFileSync(`/proc/${pid}/stat`, "utf8")); }
+    catch (error) { if ((error as NodeJS.ErrnoException).code === "ENOENT") return false; throw error; }
+  };
+  for (let n = 0; n < 500 && (readdirSync(temporary).length || live(walker) || live(child)); n++) await delay(5);
+  assert.deepEqual(readdirSync(temporary), [], "the heartbeat-only child's copy survived it");
+  assert.equal(live(walker), false, "the wedged walker survived its owner");
+  assert.equal(live(child), false, "the heartbeat-only child's group was not put down");
+});
+
+test("G10-02 / P0: sparse real progress outlives the heartbeat-only ceiling -- a completion pass that drips is never cut", { timeout: 30000 }, async t => {
+  const { base, workspace } = world(t);
+  const temporary = join(base, "temporary"); mkdirSync(temporary);
+  const agent = join(base, "agent"); const bin = join(agent, "bin"); mkdirSync(bin, { recursive: true });
+  writeFileSync(join(workspace, "a.txt"), "needle\n");
+  // Pass one floods past the engine's 100-match default so the hidden bound
+  // triggers the completion pass; the pinned walker's second run then emits
+  // one match every 400 ms. 10 drips is 4 s -- past a 3 s heartbeat-only
+  // ceiling -- and each line is a real {p:"r"} frame, so nothing cuts it.
+  writeFileSync(join(bin, "rg"), `#!${process.execPath}
+if(process.argv.includes('--version')) process.exit(0);
+const fs=require('node:fs');
+const target=process.argv.at(-1);
+const line=i=>JSON.stringify({type:'match',data:{path:{text:target+'/m'+i+'.txt'},line_number:1,lines:{text:'needle\\n'}}});
+const mark=process.env.PI_CODING_AGENT_DIR+'/rg-drip-mark';
+if(!fs.existsSync(mark)){fs.writeFileSync(mark,'1');for(let i=0;i<150;i++)console.log(line(i));}
+else{(async()=>{const{setTimeout:d}=require('node:timers/promises');for(let i=0;i<10;i++){await d(400);console.log(line(i));}})();}
+`, { mode: 0o755 });
+  const script = `const {searchWorkspace}=await import(process.argv[1]);
+    try{
+      const result=await searchWorkspace('grep',process.argv[2],{pattern:'needle'},1000000,undefined,300);
+      const text=result&&result.content&&result.content[0]&&result.content[0].text||'';
+      process.exitCode=/m9\\.txt:1: needle/.test(text)?0:3;
+    }catch(error){console.error(String(error&&error.message||error));process.exitCode=2;}`;
+  const parent = spawn(process.execPath, ["--input-type=module", "-e", script,
+    new URL("../src/extension/contained-search.js", import.meta.url).href, workspace],
+    { env: { ...process.env, TMPDIR: temporary, PI_CODING_AGENT_DIR: agent }, stdio: ["ignore", "ignore", "inherit"] });
+  const code = await new Promise<number | null>(resolve => parent.once("close", resolve));
+  assert.equal(code, 0, "a child whose real progress was sparse was cut by the heartbeat-only ceiling");
 });
 
 test("G10-02 / P0: depth is never refused -- a tree past every historical level bound copies whole", { timeout: 30000 }, async t => {
@@ -375,6 +519,41 @@ test("G10-02 / P0: depth is never refused -- a tree past every historical level 
     return existsSync(leaf);
   });
   assert.equal(seen, true);
+});
+
+test("G10-02 / R6-01: a destination directory swapped mid-copy cannot carry a write through a link", { timeout: 30000 }, async t => {
+  const { base, workspace, outside } = world(t);
+  const { withSearchSnapshot } = await import("../src/extension/contained-files.js");
+  mkdirSync(join(workspace, "d"));
+  // Enough entries that the copy is still inside `d` when the swap lands.
+  for (let n = 0; n < 2000; n++) writeFileSync(join(workspace, "d", `${n}.txt`), "x".repeat(2048));
+  const probe = join(outside, "probe-target"); mkdirSync(probe);
+  // The private tree is mode-700, not a boundary: a same-uid racer can rename
+  // its directories and plant names in it. The attack F5 closed is exactly
+  // that -- the destination's own name is swapped for a link after the real
+  // directory exists and is open.
+  let baseName = "";
+  const done = withSearchSnapshot(workspace, ".", 1 << 23, undefined, async () => "used",
+    undefined, name => { baseName = name; });
+  const destinationDir = (): string => join(tmpdir(), baseName, "workspace", "d");
+  for (let n = 0; n < 15000; n++) {
+    await delay(1);
+    if (baseName !== "" && existsSync(destinationDir())) {
+      try { if (readdirSync(destinationDir()).length >= 5) break; } catch { /* racing */ }
+    }
+  }
+  assert.ok(existsSync(destinationDir()), "the destination dir was never observed mid-copy");
+  const moved = join(base, "d-held");
+  renameSync(destinationDir(), moved);
+  symlinkSync(probe, destinationDir());
+  // Writes must keep reaching the directory the copy actually opened: the
+  // entry count grows past the swap point inside the renamed real dir, and
+  // nothing lands through the planted link.
+  const atSwap = readdirSync(moved).length;
+  assert.ok(atSwap < 2000, `the copy had already finished before the swap (${atSwap})`);
+  await done;
+  assert.equal(readdirSync(probe).length, 0, "a write crossed the swapped link");
+  assert.equal(readdirSync(moved).length, 2000, "the held descriptor lost its real directory");
 });
 
 test("PI-001: the extension's entryAt mirrors the storage primitive -- it accepts and refuses the same entries and names the same path", async () => {

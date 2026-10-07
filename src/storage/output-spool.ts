@@ -5,9 +5,24 @@
  * file already holding different bytes is evidence of tampering, not a place
  * to overwrite.
  *
+ * Ownership and retention (P0-4): the spool is the caller's own state --
+ * `.local/state/oma/output` under the caller's HOME, the same boundary the
+ * request cache keeps, not OMA's society state. Every file in it is a
+ * complete answer some preview already named to the caller, and nothing in
+ * OMA keeps an index back to it, so OMA is never in a position to call one
+ * garbage: the retention policy is that the caller owns the directory and
+ * may empty it at any time without confusing anything but disk usage --
+ * files persist until their owner removes them, exactly like the frozen
+ * requests beside them. A sweep that deleted bytes the caller may still
+ * need would be the defect this spool exists to prevent.
+ *
  * This is delivery, not accounting: the spool writes no receipt and changes
  * no durable fact, so a crash may leave an extra file under `output/` but
- * never a wrong one. */
+ * never a wrong one. The write and its fsync are synchronous on the
+ * caller's event loop by design: the one caller (`Client.preview`) is a
+ * synchronous presentation path, the flush is the durability the file
+ * exists for, and making it asynchronous would only move the same bytes,
+ * not avoid them. */
 import { randomUUID } from "node:crypto";
 import { join } from "node:path";
 import { sha256Hex } from "../domain/canonical-json.js";

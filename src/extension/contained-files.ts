@@ -199,8 +199,15 @@ export function existsWithin(root: string, path: string): boolean {
  * Entry metadata costs one byte of the same finite workspace budget. No links
  * are copied. Depth is not refused: the source side holds one descriptor per
  * open level -- the workspace is the untrusted tree, so a component swapped
- * mid-copy cannot redirect a read -- while the destination side is the fresh
- * private mkdtemp tree, written by path with no descriptor held. */
+ * mid-copy cannot redirect a read -- and the destination side holds one per
+ * open level too. The private mkdtemp tree is only mode-700: a same-uid
+ * racer can still rename its directories or plant names inside it, so the
+ * copy's own writes are made through the same `entryAt` containment -- a
+ * held parent cannot be swapped for a link, and a planted leaf name only
+ * ever fails the copy closed (EEXIST/ELOOP), never carries a write through.
+ * Both sides cost one descriptor per open level, so an OS descriptor bound
+ * is the only depth limit and it refuses honestly, in words, rather than
+ * quietly dropping back to path writes. */
 export async function withSearchSnapshot<T>(root: string, path: string, maximum: number | null,
   signal: AbortSignal | undefined, use: (snapshot: string, target: string) => Promise<T>,
   progress?: () => void, named?: (snapshotName: string) => void): Promise<T> {
@@ -223,37 +230,53 @@ export async function withSearchSnapshot<T>(root: string, path: string, maximum:
     remaining -= bytes;
     if (remaining < 0) throw new WorkspaceRefusal("search snapshot exceeds workspace budget");
   };
-  // `fd` is the descriptor held on the source entry; `parent` is its name's
-  // directory inside the private copy, so `join(parent, name)` cannot escape
-  // it. Only the source side needs the held descriptor.
-  const copy = async (fd: number, parent: string, name: string): Promise<void> => {
+  /** A fresh name inside a held destination directory. The private tree is
+   * mode-700 -- permission bits do not stop a same-uid racer -- so every
+   * entry is named through the held parent, and a descriptor-table overrun
+   * refuses in words instead of degrading to path writes. */
+  const descriptorRefusal = (error: unknown): never => {
+    const code = (error as NodeJS.ErrnoException).code;
+    if (code === "EMFILE" || code === "ENFILE") throw new WorkspaceRefusal("search snapshot ran out of file descriptors");
+    throw error;
+  };
+  const openDestination = (parent: number, name: string, flags: number, mode?: number): number => {
+    try { return openSync(entryAt(parent, name), flags, mode); }
+    catch (error) { return descriptorRefusal(error); }
+  };
+  // `fd` is the descriptor held on the source entry and `parent` the one
+  // held on its name's directory inside the private copy, so neither side
+  // can be swapped out from under the entry this call resolves.
+  const copy = async (fd: number, parent: number, name: string): Promise<void> => {
     check(); charge(1); progress?.();
     const stat = fstatSync(fd);
-    const target = join(parent, name);
     if (stat.isDirectory()) {
-      mkdirSync(target, { mode: 0o700 });
-      for (const entry of readdirSync(`/proc/self/fd/${fd}`)) {
-        check(); charge(1); progress?.();
-        // Repository internals are not a search input. An empty .git at the
-        // copy's root stops parent ignore discovery without importing config.
-        // A listed name is one directory entry -- anything else is not one.
-        if (entry === ".git" || entry === "." || entry === ".." || entry.includes("/") || entry.includes("\0")) continue;
-        let child: number;
-        try { child = openSync(entryAt(fd, entry), constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK); }
-        catch (error) {
-          if (["ENOENT", "ELOOP"].includes((error as NodeJS.ErrnoException).code ?? "")) continue;
-          throw error;
+      mkdirSync(entryAt(parent, name), { mode: 0o700 });
+      const into = openDestination(parent, name, constants.O_RDONLY | constants.O_DIRECTORY | constants.O_NOFOLLOW);
+      try {
+        for (const entry of readdirSync(`/proc/self/fd/${fd}`)) {
+          check(); charge(1); progress?.();
+          // Repository internals are not a search input. An empty .git at the
+          // copy's root stops parent ignore discovery without importing config.
+          // A listed name is one directory entry -- anything else is not one.
+          if (entry === ".git" || entry === "." || entry === ".." || entry.includes("/") || entry.includes("\0")) continue;
+          let child: number;
+          try { child = openSync(entryAt(fd, entry), constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK); }
+          catch (error) {
+            if (["ENOENT", "ELOOP"].includes((error as NodeJS.ErrnoException).code ?? "")) continue;
+            throw error;
+          }
+          try {
+            const current = fstatSync(child);
+            if (current.isDirectory() || (current.isFile() && current.nlink === 1))
+              await copy(child, into, entry);
+          } finally { closeSync(child); }
         }
-        try {
-          const current = fstatSync(child);
-          if (current.isDirectory() || (current.isFile() && current.nlink === 1))
-            await copy(child, target, entry);
-        } finally { closeSync(child); }
-      }
+      } finally { closeSync(into); }
     } else {
       ownedFile(fd);
       charge(stat.size);
-      const out = openSync(target, constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | constants.O_NOFOLLOW, 0o600);
+      const out = openDestination(parent, name,
+        constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | constants.O_NOFOLLOW, 0o600);
       try {
         const buffer = Buffer.alloc(Math.min(stat.size + 1, 64 * 1024));
         let used = 0;
@@ -289,7 +312,7 @@ export async function withSearchSnapshot<T>(root: string, path: string, maximum:
         }
         if (!fstatSync(selected).isDirectory()) ownedFile(selected);
       } finally { closeSync(selected); }
-      await copy(fd, join(tmpdir(), baseName), "workspace");
+      await copy(fd, destination, "workspace");
     } finally { closeSync(fd); }
     const copied = openSync(entryAt(destination, "workspace"), constants.O_RDONLY | constants.O_DIRECTORY | constants.O_NOFOLLOW);
     try { mkdirSync(entryAt(copied, ".git"), { mode: 0o700 }); } finally { closeSync(copied); }

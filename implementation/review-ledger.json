@@ -2015,8 +2015,8 @@
     "BL3",
     "G10-02"
    ],
-   "note": "Read in full for UX-38: the 128-level depth refusal is gone. The copy now holds one descriptor per open SOURCE level (the untrusted side, so a swapped component cannot redirect a read) while the destination is the fresh private mkdtemp tree written by path -- depth is bounded by neither a number nor held fds. Quota, nlink==1, .git exclusion, abort checks and cleanup are unchanged; progress callbacks fire per entry and per read chunk.",
-   "sha256": "6a0ee897e442a1f6401f4c80a03d9d7bef8ccfdb2e8592ab89398e85b9bf7331"
+   "note": "Re-read in full for the UX-38 blind-verification fix round (F5): the destination side of the snapshot copy now holds one descriptor per open level exactly like the source side -- every destination mkdir/open is resolved through entryAt(parent_fd, name) so a same-uid racer that renames a copied directory or plants a symlink inside the private tree cannot carry a write through it, and EMFILE/ENFILE is converted to an honest workspace refusal rather than a fallback to path writes. Copied files are opened O_WRONLY|O_CREAT|O_EXCL|O_NOFOLLOW mode 0600. The only depth bound is the OS descriptor table. Read verified against the destination-swap race oracle (a mid-copy swap leaves the planted link untouched and the held descriptor keeps writing the real directory).",
+   "sha256": "cefd7021c3aadc583e33cc00be4cf79888ed144fcea5f7a0c128d7a3a6a26a68"
   },
   {
    "path": "src/extension/contained-search.ts",
@@ -2030,8 +2030,8 @@
     "G10-02",
     "P0V-122"
    ],
-   "note": "Read in full for UX-38: the 1 MiB result refusal and the fixed 60 s deadline are gone. The child emits one JSON frame per line -- {p:'d'} names the private copy the moment it exists, {p:'c'} copy progress, {p:'s'} heartbeats from a worker thread so a synchronous require or a long read on the main thread cannot silence them -- and one final {result}/{error}; every byte the parent receives resets its stall window, and only silence (stopped/dead process) escalates to group kill after a grace, with the announced copy swept. Hidden upstream renderer caps (50 KiB output, 500-char lines, default match/result counts the caller did not ask for) are converted to a complete second-pass rendering over the same frozen snapshot; a complete answer beyond the inline boundary is written whole to a named file and previewed with its path -- never refused, never silently truncated. Caller-requested limits still apply.",
-   "sha256": "a66ef756a07a9ea0a15a41b1c4acfc1893ed4fb7fa6f0bd55e8afc872e29a56e"
+   "note": "Re-read in full for the UX-38 blind-verification fix round (F1/F2/F3/F6): observation is now two windows, not one -- any byte resets the silence window while only non-heartbeat frames ({p:d/c/r/w}) and non-frame bytes reset the progress window, so a child whose only output for HEARTBEAT_ONLY_WINDOWS stall windows is the worker heartbeat has a wedged main thread and is reclaimed in bounded time; sparse real progress outlives the ceiling. The declared snapshot is swept unconditionally on close, so an externally SIGKILLed child leaves nothing. An oversized complete answer crosses the pipe in the result envelope and the parent writes it whole into the workspace .oma/search-results/ through the serialized contained writer (quota, admission, ownership like any authored file), naming it in details.complete and the [preview] marker; when no spool can take it the complete text rides inline in full with the reason. The heartbeat worker carries an explicit error listener. Read verified against the heartbeat-only-reclaim, sparse-progress, external-SIGKILL-sweep, workspace-spool-reachability and quota-refusal oracles.",
+   "sha256": "fa2659757cafb36fd711b81c246bb791ceae4341fa5a051d9f86006e89dd1ab4"
   },
   {
    "path": "src/extension/contained-tools.ts",
@@ -2055,8 +2055,8 @@
     "BL3",
     "G10-02"
    ],
-   "note": "Read in full for UX-38: only the quota comment changed -- an absent OMA_WORKSPACE_BYTES is documented as intentional fail-closed (a miswired engine must not write without an honest quota); production wiring makes it unreachable.",
-   "sha256": "1873047ed0336a05db28a6c2aa8bbfae50a987ecdfc4b813243e135d7ac8eb46"
+   "note": "Re-read in full for the UX-38 blind-verification fix round (F1): grep/find now pass a ContainedSearchSpool {workspace, write} built on the shared serialized contained writer, so a spilled complete answer is quota-decided, serialized and guard-admitted exactly like a file the model wrote itself, and lands under .oma/search-results/ inside the caller workspace. A read-only surface wires no spool and the complete answer rides inline in full instead. The fail-closed quota comment is unchanged. Read verified against the workspace-spool reachability and quota-refusal oracles.",
+   "sha256": "358ecf5293c50b25eb4e4d26703a9bad28fff5d7f1fca8cd24f09f10ede2db10"
   },
   {
    "path": "src/extension/delivery.ts",
@@ -184875,8 +184875,8 @@
    "oracles": [
     "P0"
    ],
-   "note": "New for UX-38: digest-named durable publication of a complete oversized answer under ~/.local/state/oma/output, via ensureOwnedDurableDirectory + publishNoReplace; an existing file is trusted only when its own digest matches, otherwise a unique fallback name is written -- never an overwrite. Delivery mechanism only: writes no receipt and no ledger fact. Kill-boundary registry entry added (sigkill publish matrix + logical replay).",
-   "sha256": "cad61b511b2ab7dcdcc712ca80af3c8efc9886ab70941f3525817f62af6e2a6e"
+   "note": "Re-read in full for the UX-38 blind-verification fix round (F4/F6): the header now states the ownership and retention policy -- the spool is the caller-owned .local/state/oma/output boundary, files persist until the caller removes them and OMA runs no GC because nothing in OMA keeps an index of whether a caller still needs a file (deleting needed bytes would be the defect the spool prevents). It also states why the write and fsync are synchronous on the caller event loop: Client.preview is a synchronous presentation path and the flush is the durability promise. Mechanism unchanged: digest-named publishNoReplace, existing file trusted only when its own digest matches, unique fallback otherwise, no receipt or ledger fact.",
+   "sha256": "d3a6d0bdedfea7869c01133413f43fee1d9bc5848764f2b812faae0b7c75cf36"
   },
   {
    "path": "src/storage/paths.ts",

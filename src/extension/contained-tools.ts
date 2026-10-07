@@ -92,12 +92,19 @@ export function containWorkspaceTools(pi: ExtensionAPI, workspace: string, works
   // G10-02: the engine's walkers only see approved copies, including the
   // context=0 fast path which never invokes a custom readFile operation. The
   // snapshot's root is the one the search's own path was admitted under.
+  // A complete answer too large for one result is spilled into the
+  // workspace's own `.oma/search-results/` through the same contained
+  // writer -- quota-decided and serialized like any authored file, so the
+  // named path is one the model's read/grep/find can open. A read-only
+  // surface gets no spool (it must not write where its role cannot) and
+  // the answer rides inline in full instead.
+  const spool = readOnly ? undefined : { workspace, write };
   const grep = createGrepToolDefinition(workspace);
   pi.registerTool({ ...grep, execute: async (id, params, signal, update, ctx) =>
-    searchWorkspace("grep", rootFor(params.path ?? "."), params, workspaceBytes, signal) });
+    searchWorkspace("grep", rootFor(params.path ?? "."), params, workspaceBytes, signal, undefined, spool) });
   const find = createFindToolDefinition(workspace);
   pi.registerTool({ ...find, execute: async (id, params, signal, update, ctx) =>
-    searchWorkspace("find", rootFor(params.path ?? "."), params, workspaceBytes, signal) });
+    searchWorkspace("find", rootFor(params.path ?? "."), params, workspaceBytes, signal, undefined, spool) });
   pi.registerTool(createLsToolDefinition(workspace, { operations: {
     exists: path => existsWithin(rootFor(path), path),
     stat: path => { const directory = isDirectoryWithin(rootFor(path), path); return { isDirectory: () => directory }; },

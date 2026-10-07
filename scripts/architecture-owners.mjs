@@ -8,7 +8,7 @@ export const subprocessResponsibilities = Object.freeze({
   // exec cannot pass a private descriptor, so the extension owns this one child.
   // PI-001: engine grep/fd inherit global config and expose no spawn options.
   // This read-only process searches a descriptor-created copy with clean env.
-  "src/extension/contained-search.ts": "bounded search-only process group over private copied inputs, with abort/timeout/output cleanup",
+  "src/extension/contained-search.ts": "bounded search-only process group over private copied inputs, with abort/stall-observation/output cleanup",
 });
 /** REC-007: the places that start a child without handing it the society
  * lease, and why each one may. An entry is a claim that this child cannot be a
@@ -18,7 +18,7 @@ export const subprocessResponsibilities = Object.freeze({
  */
 export const fenceExemptSpawnOwners = Object.freeze({
   "src/extension/contained-search.ts#searchWorkspace":
-    "read-only source traversal and engine search over a private temporary copy; no society writes or credentials; parent pipe EOF aborts its owned copy and walker group",
+    "read-only source traversal and engine search over a private temporary copy; the oversized answer may also be written into the caller's own workspace through the serialized contained writer -- never a society write or credential; parent pipe EOF aborts its owned copy and walker group",
   "src/extension/contained-search.ts#completeSearchText":
     "the complete-rendering walker runs inside the owned search child, over the same private copy it made; the child's own pipe-EOF abort and group kill bound it, and it writes no society state",
 

@@ -472,15 +472,15 @@
     },
     {
       "path": "src/extension/contained-files.ts",
-      "sha256": "6a0ee897e442a1f6401f4c80a03d9d7bef8ccfdb2e8592ab89398e85b9bf7331"
+      "sha256": "cefd7021c3aadc583e33cc00be4cf79888ed144fcea5f7a0c128d7a3a6a26a68"
     },
     {
       "path": "src/extension/contained-search.ts",
-      "sha256": "a66ef756a07a9ea0a15a41b1c4acfc1893ed4fb7fa6f0bd55e8afc872e29a56e"
+      "sha256": "fa2659757cafb36fd711b81c246bb791ceae4341fa5a051d9f86006e89dd1ab4"
     },
     {
       "path": "src/extension/contained-tools.ts",
-      "sha256": "1873047ed0336a05db28a6c2aa8bbfae50a987ecdfc4b813243e135d7ac8eb46"
+      "sha256": "358ecf5293c50b25eb4e4d26703a9bad28fff5d7f1fca8cd24f09f10ede2db10"
     },
     {
       "path": "src/extension/delivery.ts",
@@ -56460,7 +56460,7 @@
     },
     {
       "path": "src/storage/output-spool.ts",
-      "sha256": "cad61b511b2ab7dcdcc712ca80af3c8efc9886ab70941f3525817f62af6e2a6e"
+      "sha256": "d3a6d0bdedfea7869c01133413f43fee1d9bc5848764f2b812faae0b7c75cf36"
     },
     {
       "path": "src/storage/paths.ts",

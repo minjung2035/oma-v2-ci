@@ -3,22 +3,42 @@
  *
  * P0: a search is never refused for size or elapsed time. The child emits one
  * JSON frame per line -- `{p:"d",s}` naming the private copy the moment it
- * exists, `{p:"c"}` pings while it copies, `{p:"s"}` heartbeats while the
- * engine's walker runs -- and one final `{result}`/`{error}` line. Every byte
- * the child emits resets the parent's stall window, so a slow-but-progressing
- * search finishes; only a child that can no longer produce output is put
- * down (by group kill after a grace), and the copy it announced is swept
- * here too.
+ * exists, `{p:"c",n}` progress while it copies, `{p:"r",n}` progress while a
+ * completion pass reads its walker, `{p:"s"}` heartbeats from a second thread
+ * while the engine's own pass runs -- and one final `{result}`/`{error}`
+ * line. The parent watches two windows, not one deadline:
+ *
+ * - Silence: any byte at all restarts the stall window. A child that is dead,
+ *   stopped or output-blocked emits nothing -- the heartbeat thread stops
+ *   with it -- and is reclaimed inside one window.
+ * - Progress: only main-thread output restarts the progress window -- every
+ *   frame but `{p:"s"}` (the worker cannot write those) and every non-frame
+ *   byte (the answer writing itself out). Heartbeats prove the process lives,
+ *   not that it advances: a child whose only output for HEARTBEAT_ONLY_
+ *   WINDOWS stall windows is `{p:"s"}` has a wedged or unobservable main
+ *   thread and is reclaimed too, so a hung `tool.execute` still ends in
+ *   bounded time. The honest cost: the engine's own first-pass walk forwards
+ *   nothing the child can report, so it is observed by liveness and bounded
+ *   by the progress window; the unbounded phases the child owns -- the copy
+ *   and the complete rendering -- report real progress and are never cut.
  *
  * The upstream tools' own rendering is still truncated at 50 KiB and 500-char
  * lines, and at 100/1000 results when the caller did not ask for a bound --
  * those are renderer caps, not a refusal, so they are converted: when the
  * tool reports a bound the caller did not choose, the same pinned walker
  * runs again over the same frozen snapshot for the complete rendering. A
- * complete answer that fits is returned inline; a larger one is written to a
- * named file and the result names the path -- a preview, never a truncation. */
+ * complete answer that fits is returned inline; a larger one crosses the
+ * pipe in the result envelope and the parent writes it whole into the
+ * caller's workspace under `.oma/search-results/` through the same
+ * serialized, quota-decided contained writer every workspace write takes --
+ * so the path the result names is one the model's own read/grep/find/ls can
+ * open. A spool file is ordinary workspace content (P0-4): guard-admitted,
+ * quota-charged, owned by the workspace owner like any authored file, and
+ * never swept by OMA -- the result names it and it can be deleted like any
+ * file. When no spool can take it the answer is still not truncated: it
+ * rides inline with the notice that says why it is not at a path. */
 import { spawn } from "node:child_process";
-import { readFileSync, writeFileSync, rmSync } from "node:fs";
+import { readFileSync, rmSync } from "node:fs";
 import { createInterface } from "node:readline";
 import { randomUUID } from "node:crypto";
 import { basename, delimiter, isAbsolute, join, relative, sep } from "node:path";
@@ -29,19 +49,32 @@ import type { createGrepToolDefinition, createFindToolDefinition } from "@earend
 export { WorkspaceRefusal } from "./contained-files.js";
 type SearchResult<N extends "grep" | "find"> = Awaited<ReturnType<ReturnType<N extends "grep" ? typeof createGrepToolDefinition : typeof createFindToolDefinition>["execute"]>>;
 
-/** The observation window one chunk of child output buys. A child that is
- * alive and working emits progress or heartbeats well inside it; a child that
- * is dead, stopped or wedged in an uninterruptible call emits nothing and is
- * reclaimed. This is a stall detector, not a deadline. */
+/** The observation window one chunk of child output buys. A child that can
+ * still produce output emits well inside it; a child that is dead, stopped
+ * or output-blocked emits nothing and is reclaimed. This is a silence
+ * detector: heartbeat bytes buy it just as answer bytes do. */
 const SEARCH_STALL_MS = 60_000;
+/** How many silence windows a child may report heartbeats and nothing else.
+ * Heartbeats are liveness, not progress -- a main thread wedged in a call it
+ * cannot leave keeps beating from the worker thread forever. The window is
+ * generous on purpose: inside it sits the engine's own first-pass walk,
+ * which forwards nothing to report, plus the synchronous bundle load. The
+ * phases that can produce unbounded work report real progress ({p:"c"},
+ * {p:"r"}, answer bytes) and outlive any number of windows. */
+const HEARTBEAT_ONLY_WINDOWS = 10;
 /** Grace between the parent's pipe close (which lets a live child clean up
  * after itself) and the group kill that a dead child cannot run. */
 const KILL_GRACE_MS = 2_000;
 /** The most answer text one tool result carries inline. A longer answer is
- * written whole to a named file and the result names it -- the same complete
- * data, one `cat` away instead of an error away. The value matches the former
- * inline boundary so what fit before still fits. */
+ * written whole into the workspace spool and the result names the admitted
+ * path -- the same complete data, one `read` away instead of an error away.
+ * The value matches the former inline boundary so what fit before still
+ * fits. */
 const SEARCH_PREVIEW_BYTES = 1024 * 1024;
+/** Where inside the workspace a spilled answer lands: an ordinary workspace
+ * path, so the guard's admission, the quota and the model's own tools all
+ * reach it unchanged. */
+const SEARCH_SPOOL_DIR = join(".oma", "search-results");
 const SELF = import.meta.url;
 
 export interface ContainedSearchInput {
@@ -83,10 +116,13 @@ export async function searchChildBody(input: ContainedSearchInput,
  * match/result count -- is converted, not reported: the same pinned walker
  * runs again over the same frozen snapshot for the complete rendering, and
  * only the caller's own `limit` may bound it. A complete answer that fits
- * returns inline; a larger one is written whole to a named file and the
- * result names it -- a preview, never a truncation. */
+ * returns inline; a larger one crosses the pipe in the result envelope as
+ * `complete` -- the parent owns the preview cut and the workspace spool the
+ * result will name, because the workspace is its side of the pipe, not the
+ * child's. */
 export async function finishSearchResult(input: ContainedSearchInput,
-    result: SearchResult<"grep" | "find">, target: string, signal?: AbortSignal): Promise<string> {
+    result: SearchResult<"grep" | "find">, target: string, signal?: AbortSignal,
+    progress?: () => void): Promise<string> {
   const resultRecord = result as { content?: { type: string; text?: string }[]; details?: Record<string, unknown> };
   const details = (resultRecord.details ?? {}) as Record<string, unknown>;
   const callerLimit = typeof input.params.limit === "number" && Number.isFinite(input.params.limit);
@@ -96,27 +132,19 @@ export async function finishSearchResult(input: ContainedSearchInput,
   if (hidden) {
     let complete: string;
     try {
-      complete = await completeSearchText(input.name, input.params, target, signal);
+      complete = await completeSearchText(input.name, input.params, target, signal, progress);
     } catch (error) {
       // The tool's own answer stays, its truncation notices included,
       // and the marker says the completion pass failed -- never a
       // silently cut answer.
       complete = `${resultRecord.content?.[0]?.text ?? ""}\n\noma: the complete result could not be produced (${error instanceof Error ? error.message : String(error)})`;
     }
-    const bytes = Buffer.byteLength(complete, "utf8");
-    if (bytes <= SEARCH_PREVIEW_BYTES) {
+    if (Buffer.byteLength(complete, "utf8") <= SEARCH_PREVIEW_BYTES) {
       resultRecord.content = [{ type: "text", text: complete }];
+      resultRecord.details = details;
     } else {
-      const file = join(tmpdir(), `oma-search-result-${randomUUID()}.txt`);
-      writeFileSync(file, complete, { mode: 0o600 });
-      const whole = Buffer.from(complete, "utf8");
-      let cut = Math.min(whole.length, SEARCH_PREVIEW_BYTES);
-      while (cut > 0 && (whole[cut]! & 0xc0) === 0x80) cut--;
-      resultRecord.content = [{ type: "text",
-        text: `${whole.subarray(0, cut).toString("utf8")}\n\noma: [preview] the complete ${bytes}-byte result is at ${file}` }];
-      details.complete = { path: file, bytes };
+      return JSON.stringify({ result, complete });
     }
-    resultRecord.details = details;
   }
   return JSON.stringify({ result });
 }
@@ -136,7 +164,7 @@ function shownPath(path: string, target: string): string {
  * asked) its result-count caps removed. The caller's own `limit` still
  * applies -- it is part of the request, not a hidden bound. */
 export async function completeSearchText(name: "grep" | "find", params: Record<string, unknown>,
-    target: string, signal?: AbortSignal): Promise<string> {
+    target: string, signal?: AbortSignal, progress?: () => void): Promise<string> {
   // The same `Math.max(1, limit)` reading the upstream tool gives it; absent
   // means none, and only absent lets the hidden default be lifted.
   const limit = typeof params.limit === "number" && Number.isFinite(params.limit)
@@ -188,6 +216,7 @@ export async function completeSearchText(name: "grep" | "find", params: Record<s
     });
   });
   reader.on("line", line => {
+    progress?.();
     if (!line) return;
     if (name === "find") {
       const text = line.replace(/\r$/, "").trim();
@@ -226,6 +255,7 @@ export async function completeSearchText(name: "grep" | "find", params: Record<s
     return cached;
   };
   for (const match of matches) {
+    progress?.();
     const name = shown(match.filePath);
     if (context === 0) { lines.push(`${name}:${match.lineNumber}: ${match.text}`); continue; }
     const around = fileLines(match.filePath);
@@ -249,6 +279,10 @@ const emit=o=>{try{process.stdout.write(JSON.stringify(o)+'\\n');}catch{}};
 // neither must silence the proof that the process is alive. A process that
 // is stopped or dead stops the thread too -- silence still means stall.
 const beater=new (await import('node:worker_threads')).Worker(\`import{writeSync}from'node:fs';import{workerData}from'node:worker_threads';setInterval(()=>{try{writeSync(1,'{"p":"s"}'+String.fromCharCode(10))}catch{}},workerData.iv);\`,{eval:true,workerData:{iv:Math.max(50,Number(input.heartbeat)||50)}});
+// A dead beater means heartbeats stop -- the parent's silence and progress
+// windows still own the verdict. An unhandled 'error' event would instead
+// make one worker failure the child's own.
+beater.on('error',()=>{});
 let output='';
 try {
   const run=await import(process.argv[1]);
@@ -256,6 +290,8 @@ try {
   // child chdirs into the private copy, reparents the scratch HOME there,
   // arms the abort path that removes the copy and puts the group down, and
   // only then runs the pinned engine's walker over the frozen snapshot.
+  let lastR=0;
+  const rprogress=()=>{const now=Date.now();if(now-lastR>=100){lastR=now;emit({p:'r'});}};
   output=await run.searchChildBody(input,controller.signal,emit,async(cwd,target)=>{
     process.chdir(cwd);
     const fs=await import('node:fs');
@@ -269,8 +305,10 @@ try {
     if(controller.signal.aborted)return JSON.stringify({error:'search aborted'});
     const tool=input.name==='grep'?engine.createGrepToolDefinition(cwd):engine.createFindToolDefinition(cwd);
     try {
-      const result=await tool.execute('search',{...input.params,path:target},controller.signal,undefined,{cwd});
-      return await run.finishSearchResult(input,result,target,controller.signal);
+      // The engine's own pass reports nothing yet; the onUpdate channel is
+      // passed so a tool that gains one reports real progress ({p:"w"}).
+      const result=await tool.execute('search',{...input.params,path:target},controller.signal,()=>emit({p:'w'}),{cwd});
+      return await run.finishSearchResult(input,result,target,controller.signal,rprogress);
     } catch(error) {
       return JSON.stringify({error:error instanceof run.WorkspaceRefusal?error.message:'contained search failed; no workspace result was returned'});
     }
@@ -286,8 +324,18 @@ finally {
   process.stdout.end(output,()=>process.kill(-process.pid,'SIGKILL'));
 }
 `;
+/** Where a spilled answer is written, when the caller's surface may write:
+ * the workspace root plus the same serialized, quota-decided contained
+ * writer every workspace write takes -- so a spilled result is charged,
+ * admitted and owned exactly like a file the model wrote itself. */
+export interface ContainedSearchSpool {
+  readonly workspace: string;
+  readonly write: (path: string, content: string) => Promise<void>;
+}
+
 export function searchWorkspace<N extends "grep" | "find">(name: N, root: string, params: object,
-  maximum: number | null, signal?: AbortSignal, stallMs: number = SEARCH_STALL_MS): Promise<SearchResult<N>> {
+  maximum: number | null, signal?: AbortSignal, stallMs: number = SEARCH_STALL_MS,
+  spool?: ContainedSearchSpool): Promise<SearchResult<N>> {
   if (signal?.aborted) return Promise.reject(new WorkspaceRefusal("search aborted"));
   return new Promise((resolve, reject) => {
     const child = spawn(process.execPath, ["--input-type=module", "-e", SCRIPT,
@@ -303,8 +351,10 @@ export function searchWorkspace<N extends "grep" | "find">(name: N, root: string
     let failure: Error | null = null;
     let snapshot: string | null = null;
     let killer: NodeJS.Timeout | undefined;
+    const heartbeatOnly = stallMs * HEARTBEAT_ONLY_WINDOWS;
     const stop = (message: string): void => {
       failure ??= new WorkspaceRefusal(message);
+      clearTimeout(timer); clearTimeout(progressTimer);
       // Closing the pipe also happens when this process is SIGKILLed. The
       // child, not a parent finally block, owns snapshot and group cleanup --
       // except a child that cannot run its own cleanup: after a grace window
@@ -319,38 +369,94 @@ export function searchWorkspace<N extends "grep" | "find">(name: N, root: string
       }, KILL_GRACE_MS);
     };
     const quiet = (): void => stop(`contained search produced no output for ${stallMs} ms`);
+    const still = (): void => stop(`contained search produced only heartbeats for ${heartbeatOnly} ms`);
     let timer = setTimeout(quiet, stallMs);
+    let progressTimer = setTimeout(still, heartbeatOnly);
     child.stdin.on("error", () => { /* exit can close the lifetime pipe first */ });
     const abort = (): void => stop("search aborted");
     signal?.addEventListener("abort", abort, { once: true });
     if (signal?.aborted) abort();
     child.stdout.on("data", (chunk: Buffer) => {
       chunks.push(chunk);
-      // Every emitted byte is progress: the window starts over, and a
-      // multi-second answer writing itself out is never mistaken for a stall.
+      // Any byte is life: the silence window starts over, and a dead or
+      // stopped child is always reclaimed inside it.
       clearTimeout(timer); timer = setTimeout(quiet, stallMs);
       rest = Buffer.concat([rest, chunk]);
+      // Progress is what the worker heartbeat cannot write: a frame other
+      // than {p:"s"}, a line past the frame bound or one that fails frame
+      // parsing (the answer writing itself out), and a tail already past
+      // that bound still accumulating.
+      let real = rest.length > 1024;
       for (let at = rest.indexOf(0x0a); at >= 0; at = rest.indexOf(0x0a)) {
         const line = rest.subarray(0, at); rest = rest.subarray(at + 1);
-        if (line.length > 1024) continue;
-        try {
-          const frame = JSON.parse(line.toString("utf8")) as { p?: unknown; s?: unknown };
-          if (frame?.p === "d" && typeof frame.s === "string" && /^oma-search-[^/\\\0]+$/.test(frame.s)) snapshot = frame.s;
-        } catch { /* the last line is the answer, not a control frame */ }
+        if (line.length > 1024) { real = true; continue; }
+        let frame: { p?: unknown; s?: unknown };
+        try { frame = JSON.parse(line.toString("utf8")) as { p?: unknown; s?: unknown }; }
+        catch { real = true; continue; /* the last line is the answer, not a control frame */ }
+        if (frame?.p === "s") continue;
+        real = true;
+        if (frame?.p === "d" && typeof frame.s === "string" && /^oma-search-[^/\\\0]+$/.test(frame.s)) snapshot = frame.s;
       }
+      if (real) { clearTimeout(progressTimer); progressTimer = setTimeout(still, heartbeatOnly); }
     });
     child.on("error", () => { failure ??= new WorkspaceRefusal("search process could not start"); });
     child.on("close", () => {
-      clearTimeout(timer); signal?.removeEventListener("abort", abort);
+      clearTimeout(timer); clearTimeout(progressTimer);
+      signal?.removeEventListener("abort", abort);
       if (killer !== undefined) clearTimeout(killer);
+      // A child that could not run its own cleanup (SIGKILL, OOM) left the
+      // copy it announced; the name was declared up front so this sweep is
+      // idempotent on every close -- a normal exit already removed it, and
+      // a stop() that armed the killer is covered here too if it lands
+      // first.
+      if (snapshot !== null)
+        try { rmSync(join(tmpdir(), snapshot), { recursive: true, force: true }); } catch { /* best effort */ }
       if (failure) { reject(failure); return; }
-      try {
-        const text = Buffer.concat(chunks).toString("utf8");
-        const answer = JSON.parse(text.trimEnd().split("\n").at(-1) ?? "") as { result?: SearchResult<N>; error?: string };
-        if (typeof answer.error === "string") { reject(new WorkspaceRefusal(answer.error)); return; }
-        if (!answer.result) throw new Error("missing search result");
-        resolve(answer.result);
-      } catch { reject(new WorkspaceRefusal("contained search failed; no workspace result was returned")); }
+      (async () => {
+        try {
+          const text = Buffer.concat(chunks).toString("utf8");
+          const answer = JSON.parse(text.trimEnd().split("\n").at(-1) ?? "") as
+            { result?: SearchResult<N>; complete?: unknown; error?: string };
+          if (typeof answer.error === "string") { reject(new WorkspaceRefusal(answer.error)); return; }
+          if (!answer.result) throw new Error("missing search result");
+          if (typeof answer.complete === "string") await spillComplete(answer.result, answer.complete);
+          resolve(answer.result);
+        } catch { reject(new WorkspaceRefusal("contained search failed; no workspace result was returned")); }
+      })();
     });
+    /** A complete answer too large for one result is written whole into the
+     * workspace spool through the contained writer -- the same quota
+     * decision and serialization as any authored write -- and the result
+     * names the admitted path (`details.complete`). When the spool cannot
+     * take it -- a read-only surface wires none, or the quota cannot hold
+     * it -- the answer is not truncated instead: it rides inline in full
+     * with the notice that says why it is not at a path. */
+    const spillComplete = async (result: SearchResult<N>, complete: string): Promise<void> => {
+      const resultRecord = result as { content?: { type: string; text?: string }[]; details?: Record<string, unknown> };
+      const details = (resultRecord.details ?? {}) as Record<string, unknown>;
+      const bytes = Buffer.byteLength(complete, "utf8");
+      if (spool !== undefined) {
+        const file = join(spool.workspace, SEARCH_SPOOL_DIR, `oma-search-result-${randomUUID()}.txt`);
+        try {
+          await spool.write(file, complete);
+          const whole = Buffer.from(complete, "utf8");
+          let cut = Math.min(whole.length, SEARCH_PREVIEW_BYTES);
+          while (cut > 0 && (whole[cut]! & 0xc0) === 0x80) cut--;
+          resultRecord.content = [{ type: "text",
+            text: `${whole.subarray(0, cut).toString("utf8")}\n\noma: [preview] the complete ${bytes}-byte result is at ${file}` }];
+          details.complete = { path: file, bytes };
+          resultRecord.details = details;
+          return;
+        } catch (error) {
+          resultRecord.content = [{ type: "text",
+            text: `${complete}\n\noma: the complete ${bytes}-byte result could not be written to the workspace spool (${error instanceof Error ? error.message : String(error)}); it is returned above in full` }];
+          resultRecord.details = details;
+          return;
+        }
+      }
+      resultRecord.content = [{ type: "text",
+        text: `${complete}\n\noma: the complete ${bytes}-byte result has no workspace spool on this surface; it is returned above in full` }];
+      resultRecord.details = details;
+    };
   });
 }
