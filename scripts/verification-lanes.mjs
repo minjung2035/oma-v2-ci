@@ -398,7 +398,7 @@ export const lanes = Object.freeze({
       "V05A: the receipt file itself is flushed",
       "V06A: a receipt directory that cannot be opened",
       "V06A: live completion binds the current run",
-      "V12B: one configuration file over 1 MiB",
+      "V12B: one configuration file over the document bound",
       "V12A: a file changed after the snapshot read it",
       "V18A: a staging root replaced after preparation",
       "V24A: a recovery CAS that loses to a third writer",

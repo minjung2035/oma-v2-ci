@@ -12,9 +12,11 @@
  *
  * A pid alone can be reused, so the engine is pinned by its start time as well,
  * and every step of the walk reads the observation substrate fresh. Anything
- * unreadable, malformed or too deep is "not a descendant": the walk fails
- * closed. Failing closed is refusing, not concluding that a process ended:
- * only `processEnded` says that, and only from what the substrate answered.
+ * unreadable or malformed is "not a descendant": the walk fails closed. A walk
+ * that revisits a pid -- the only way a parent chain can fail to end at init --
+ * is no chain the engine started either, and ends the walk the same way.
+ * Failing closed is refusing, not concluding that a process ended: only
+ * `processEnded` says that, and only from what the substrate answered.
  */
 import { readFileSync } from "node:fs";
 
@@ -23,10 +25,6 @@ export interface ProcessIdentity {
   /** Clock ticks since boot at which the process started (proc(5), field 22). */
   readonly startTime: string;
 }
-
-/** Deeper than any chain the engine starts (engine, then the CLI it runs). A
- * longer walk is not a descendant OMA started. */
-const MAXIMUM_DEPTH = 16;
 
 /** What the substrate says about a pid: running (with its parent and start
  * time), exited (the kernel has no such process), or unavailable -- unreadable
@@ -104,15 +102,19 @@ function buildProbe(substrate: "proc" | "none", read: ProcessObservationReader):
       return observed.kind === "running" && observed.startTime === identity.startTime ? "running" : "ended";
     },
     descendsFrom(pid, ancestor) {
+      // No fixed depth: a real chain ends at init (ppid <= 1), and a walk that
+      // revisits a pid -- the only other way it could not terminate -- is no
+      // chain the engine started. Depth alone is not a refusal.
       let current = pid;
-      for (let depth = 0; depth <= MAXIMUM_DEPTH; depth += 1) {
+      const seen = new Set<number>();
+      for (;;) {
         const observed = read(current);
         if (observed.kind !== "running") return false;
         if (current === ancestor.pid) return observed.startTime === ancestor.startTime;
-        if (observed.ppid <= 1) return false;
+        if (observed.ppid <= 1 || seen.has(current)) return false;
+        seen.add(current);
         current = observed.ppid;
       }
-      return false;
     },
   };
 }

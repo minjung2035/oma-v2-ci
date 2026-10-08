@@ -16,6 +16,8 @@ import { quiesceResidents } from "./lifecycle/society.js";
 import { LifecycleModule } from "./lifecycle.js";
 import { pendingWork } from "./views/pending-work.js";
 import { collectUnacceptedArtifacts, preacceptEvent, type PreacceptCollection } from "./reconcile/preaccept.js";
+import { TreeLease, treeQuiescence } from "./storage/tree-lease.js";
+import { removeOwnedFile } from "./storage/directory.js";
 import { dirname } from "node:path";
 
 export interface ReconcilePaths {
@@ -236,11 +238,28 @@ export class ReconcileModule {
    * that reports damage is corruption. */
   assertCanonicalHealthyAsync(): Promise<void> {
     if (this.healthTask) return this.healthTask;
-    const task = this.healthExecutor.run({ executable: "/usr/bin/git",
-      argv: ["--git-dir", this.paths.projectGit, "fsck", "--strict", "--no-reflogs"], env: GIT_ENV,
-      timeoutMs: 30000, stdoutBytes: 1024 * 1024, stderrBytes: 1024 * 1024 }).then(result => {
-      if (result.kind !== "exited") throw new StoreError("REF_STATE_UNKNOWN", "canonical health observation is uncertain");
-      if (result.exitCode !== 0) throw new StoreError("STORE_CORRUPT", "canonical repository health observation failed");
+    const task = Promise.resolve().then(async () => {
+      if (this.healthExecutor.blocked) {
+        // The killed fsck's lease on the repository answers whether its
+        // children are gone -- the stale unknown clears on that observation.
+        const observed = this.healthExecutor.reverifyStale(
+          () => { try { return treeQuiescence(this.paths.projectGit).kind; } catch { return "unknown"; } });
+        if (observed !== "quiescent") throw new StoreError("REF_STATE_UNKNOWN", `canonical health observation is ${observed}`);
+      }
+      const lease = TreeLease.take(this.paths.projectGit);
+      // fsck on a big canonical repository cannot fit a fixed deadline: its
+      // own --progress stream re-arms the silence window, and the stream is
+      // spooled rather than bounded in memory.
+      const diagnostics = `${this.paths.projectGit}.fsck.stderr`;
+      try {
+        try { removeOwnedFile(diagnostics); } catch { /* residue cannot block health */ }
+        const result = await this.healthExecutor.run({ executable: "/usr/bin/git",
+          argv: ["--git-dir", this.paths.projectGit, "fsck", "--strict", "--no-reflogs", "--progress"], env: GIT_ENV,
+          timeoutMs: 24 * 3600 * 1000, silenceMs: 120000, stdoutBytes: 1024 * 1024, stderrBytes: 1024 * 1024,
+          stderrSpool: diagnostics }, undefined, [lease.descriptor]);
+        if (result.kind !== "exited") throw new StoreError("REF_STATE_UNKNOWN", "canonical health observation is uncertain");
+        if (result.exitCode !== 0) throw new StoreError("STORE_CORRUPT", "canonical repository health observation failed");
+      } finally { lease.release(); try { removeOwnedFile(diagnostics); } catch { /* diagnostic residue */ } }
     }).finally(() => { if (this.healthTask === task) this.healthTask = null; });
     this.healthTask = task; return task;
   }

@@ -48,6 +48,8 @@ export const OUTSIDE_STATE_TREE = Object.freeze({
   "src/process/run.ts": "the same caller-declared spool paths, opened descriptor-direct for the child -- never paths this runner chooses",
   "src/platform/guest/packages.ts": "a fresh mkdtemp under the OS temp directory -- this replace call's own spool scratch, removed when the call ends",
   "src/platform/guest/provision.ts": "a fresh mkdtemp under the OS temp directory -- this provisioning call's own spool scratch, removed when mkfs ends",
+  "src/git/canonical-command.ts": "fresh mkdtemp directories under the OS temp directory -- the ls-tree and merge-tree spool scratch each call names and removes itself; no society's tree is written",
+  "src/runtime/local-package.ts": "the Mac host staging writes -- the store lives in the app's support directory outside any state tree on the hostStaging path; the Linux staging and archive spool name every entry through held store/staging parents",
 });
 /** A descriptor, not a path: `fd`, `this.fd`, `active.fd`, `temporaryFd`. */
 const descriptorLike = node => {

@@ -16,7 +16,7 @@ const pathsOf = (root: string, tmpBytes: number): GitPaths => ({
   worldDir: join(root, "world"),
   society: "demo",
   quarantineTmpBytes: tmpBytes,
-  quarantineResources: { cpuSeconds: 30, memoryBytes: 512 * 1024 * 1024, tasks: 128, timeoutSeconds: 30 },
+  quarantineResources: { cpuSeconds: 30, memoryBytes: 512 * 1024 * 1024, tasks: 128, timeoutSeconds: 30, silenceSeconds: 30 },
 });
 
 const CANDIDATE = "a".repeat(40);

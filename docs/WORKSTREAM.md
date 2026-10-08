@@ -1760,6 +1760,71 @@ name collision/intended surface/hidden 미활성/idempotent reload/provenance/
     재생성, validation.md input digest 재결박.
   - NOT_RUN: macOS native·systemd·kernel/powercut·provider credential·
     release qualification — 로컬 환경 부재.
+- 2026-10-12 (UX-38 batch 5 — durable-capacity 변환: 격리/관측/워크스페이스/
+  패키지/브로커/계보의 크기·시간 거절을 비차단 기구로):
+  - quarantine: namespaced import 스크립트가 OMA_PHASE 마커·dd/fsck/fetch
+    자체 진행 출력·15s heartbeat로 진행을 내보내고 `timeoutSeconds`는
+    작업 마감이 아니라 generous ceiling(24h) — `silenceSeconds`가 멈춘
+    import만 끝낸다. heartbeat 자식의 계승 stdout을 `>&-`로 닫지 않으면
+    스크립트의 command substitution 파이프가 heartbeat 수명만큼 열려
+    테스트가 정확히 30s 멈추는 결함이 있어 닫았다. `PreparationExecutor`의
+    영구 전역 중독은 executor별 `unprovenPreparations` 추적으로 —
+    `reverifyStale`은 임차 트리의 fresh `quiescent` 관측에서만 풀리고
+    `active`/`unknown`은 계속 막으며, 수용된 번들 증거는 cleanup 불확실성으로
+    버려지지 않는다. `GitPaths.quarantineResources`에 `silenceSeconds` 추가.
+  - canonical Git: `ls-tree -r -z --full-tree`(gitlink)와 `merge-tree` 출력은
+    `os.tmpdir()` 아래 fresh mkdtemp 스풀로 통째 흘려보내고 레코드 단위
+    점증 파싱 — `GITLINKS_OBSERVATION_BYTES` 제거, merge-tree는 merged-tree
+    행+conflict 경로 접두만 읽는다. grammar 거절·unterminated=unknown은
+    불변.
+  - workspace Git: `WorkspaceCoordinator.prepareGit`이 clone/fetch/checkout을
+    PreparationExecutor로 — 24h ceiling + 120s 진행-리셋 침묵 창(git에
+    `--progress`), 두 스트림은 staged 트리 옆 스풀 파일. 소 plumbing은
+    bounded sync 유지. `runWorkspaceGit`(dead code·구 120s/4MiB 정책) 제거.
+    canonical fsck도 같은 형태(health executor + `--progress` + 진단 스풀의
+    owned 수거 — `T68d` 신규).
+  - 설정 소스: `CONFIGURATION_SOURCE_LIMITS`는 작업-집합 한도로 재명명
+    (4096 파일/64 MiB 집계 — 소스 파일당 identity 행 1개, asset 바이트는
+    `fileDigest`로 스트리밍돼 메모리에 없음). 통째 읽는 문서/프롬프트만
+    `CONFIGURATION_DOCUMENT_BYTES` 16 MiB — 구 256/8 MiB/1 MiB 폐기.
+  - 패키지 아카이브: 읽기·쓰기 전부 64 KiB/1 MiB 청크 스트리밍, 구
+    200k-entry/2 GiB-total/256 MiB-file 페이로드 상한 폐기 — entries는
+    8M working-set 한도로, `pathBytes`(16-bit wire)·`componentBytes`
+    (NAME_MAX)는 포맷 한도로 유지. local `stageArchive`는 .tgz를 스토어
+    아래 `.staging-local-*` 스풀에 chunk로 inflate해 ustar 헤더 단위로
+    파싱 — 멤버 바이트는 staged 파일로 스트리밍.
+  - 브로커 쿼터: `StorageAdmission.startupState()` 신설 — 같은 fresh scan이
+    QUOTA_EXCEEDED면 "degraded"로 기동(신규 admission은 요청당 거절)하고
+    비-쿼터 관측 실패는 여전히 throw. `D04` 테스트가 세 분기 모두 결박.
+  - 프로세스 계보: 고정 깊이 16 폐기 — 조상 발견(start-time 일치)·init/root
+    도달·PID 반복(Set 사이클)·관측 불가/exit까지 임의 깊이로 걷는다.
+    depth-64 체인·사이클·PID 재사용 불일치 회귀.
+  - 워크스페이스 쿼터 결선: `OMA_WORKSPACE_BYTES`가 Resident spawn plan→
+    adapter(양의 safe-integer 검증·fail-closed)→runner→broker-rendered
+    resources→Principal env→interactive `sessionEnv`(ambient 제거하면서
+    보존)→trusted extension 공유 직렬화 writer까지 일관 — 미설정 시 쓰기
+    거절(`PR-004` E2E 신규).
+  - architecture-gate 정산: `state-tree`/`owned-state` 규칙 위반 정리 —
+    canonical-command의 tmpdir 스풀과 local-package의 Mac host-staging 경로는
+    문서화 면제로, store 아래 tar 스풀은 held-parent(`entryAt`/`openBeneath`
+    O_EXCL|O_NOFOLLOW)+async-generator 싱크+`removeOwnedTree`로 전환,
+    workspace/reconcile 진단 스풀은 `removeOwnedFile`로. 신규 collection
+    경계 2개(`ReconcileModule.assertCanonicalHealthyAsync`·
+    `local-package#stageArchive`)를 `durable-boundaries.json`에 T68d·
+    pi-packages 오라클로 등록.
+  - 테스트 정산: `broker-composition-policy` StorageAdmission mock에
+    `startupState` 추가, `verification-lanes`의 durable 레인 필수명을
+    새 V12B 제목으로 갱신, `preaccept-ownership` V18A를 신계약(잔여
+    unknown은 fresh quiescence로만 풀림)으로 재작성 — mock의 sleep 치환이
+    silenceMs≤timeoutMs 검증을 어기지 않게 silenceMs:50.
+  - 메타데이터: source digests·dependency-graph evidence 재생성,
+    review-notes byte-bound 항목 11개 fresh re-read 후 새 sha256·신규 항목
+    등록(`process-ancestry`·`paths`는 readUnchanged→reviewedChanges 이동),
+    review-ledger 재생성, `design-revisions.md` gitlink 스풀 단락 반영.
+  - NOT_RUN: macOS native·kernel/powercut·provider credential·release
+    qualification·guest lanes — 로컬 환경 부재. systemd 게이트는
+    `OMA_TEST_SYSTEMD=1` 하에 phase8 수동 실행으로 부분 커버
+    (test-local.mjs 목록에서는 여전히 NOT_RUN).
 
 ## 10. 지금부터의 실행 순서
 0. ~~P0-8 강제 수단 미구현~~ — 구현됨: `owned-state` 아키텍처 규칙

@@ -1,4 +1,3 @@
-import type { SpawnSyncOptionsWithStringEncoding } from "node:child_process";
 import { StoreError } from "../domain/errors.js";
 import { runProcess, runProcessSync, decodeProcessText, type ProcessObservation } from "./run.js";
 
@@ -34,18 +33,6 @@ export function runGitText(argv: readonly string[], options: GitTextOptions = {}
     env: { ...GIT_ENV, ...options.env },
     timeoutMs: options.timeout ?? 30000, stdoutBytes: budget, stderrBytes: budget,
   }, undefined, options.inheritedFds ?? []), "git");
-}
-/** Existing lifecycle call shape, constrained to its named executable policy. */
-export function runWorkspaceGit(command: string, argv: readonly string[], options: SpawnSyncOptionsWithStringEncoding): TextExit {
-  if (command !== "/usr/bin/git" || options.shell) throw new StoreError("INTERNAL_ERROR", "workspace policy requires direct pinned Git");
-  if (options.cwd !== undefined && typeof options.cwd !== "string") throw new StoreError("INTERNAL_ERROR", "workspace Git requires a string cwd");
-  if (options.input !== undefined && typeof options.input !== "string" && !Buffer.isBuffer(options.input)) throw new StoreError("INTERNAL_ERROR", "unsupported workspace Git input");
-  return requireTextExit(runProcessSync({ executable: command, argv,
-    ...(typeof options.cwd === "string" ? { cwd: options.cwd } : {}),
-    ...(options.input === undefined ? {} : { input: typeof options.input === "string" ? options.input : Buffer.from(options.input) }),
-    env: options.env ?? GIT_ENV,
-    timeoutMs: options.timeout ?? 120000, stdoutBytes: options.maxBuffer ?? 4 * 1024 * 1024, stderrBytes: options.maxBuffer ?? 4 * 1024 * 1024,
-  }), "workspace git");
 }
 export function runQuarantineCommand(executable: "/usr/bin/git" | "systemd-run", argv: readonly string[], timeoutMs: number, maxBuffer: number): TextExit {
   return requireTextExit(runProcessSync({ executable, argv, env: GIT_ENV, timeoutMs, stdoutBytes: maxBuffer, stderrBytes: maxBuffer }), executable);

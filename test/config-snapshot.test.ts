@@ -74,28 +74,41 @@ test("V12B: aggregate source bytes are bounded even when each referenced file is
     if (layout.kind !== "operations") return;
     const manifest = readJson(fixture.path);
     const role = readJson(layout.roles.resident!);
-    for (let index = 0; index < 9; index++) {
-      const name = `extra-${index}`;
+    const add = (name: string, size: number): void => {
       const prompt = `prompts/${name}.md`;
-      writeFileSync(join(fixture.output, prompt), Buffer.alloc(1024 * 1024, 0x61));
+      writeFileSync(join(fixture.output, prompt), Buffer.alloc(size, 0x61));
       writeFileSync(join(fixture.output, `roles/${name}.json`), JSON.stringify({ ...role, promptFile: prompt }));
       manifest.roles[name] = `roles/${name}.json`;
-    }
+    };
+    // The old aggregate bound was 8 MiB of documents; nine MiB-sized prompts
+    // used to refuse. The closure's working bound is generous now -- the
+    // same source loads.
+    for (let index = 0; index < 9; index++) add(`extra-${index}`, 1024 * 1024);
+    writeFileSync(fixture.path, JSON.stringify(manifest));
+    assert.equal(loadConfigurationSnapshot(fixture.path).config.society, "demo",
+      "fail-before: the 8 MiB aggregate refused this source outright");
+    // And the bound that remains still binds: over 64 MiB of whole-read
+    // documents is refused, whatever each file's own validity.
+    for (let index = 0; index < 5; index++) add(`large-${index}`, 13 * 1024 * 1024);
     writeFileSync(fixture.path, JSON.stringify(manifest));
     assert.throws(() => loadConfigurationSnapshot(fixture.path), { code: "LIMIT_EXCEEDED" });
   } finally { fixture.close(); }
 });
 
-test("V12B: one configuration file over 1 MiB is refused even though the whole source would fit", () => {
+test("V12B: one configuration file over the document bound is refused even though the whole source would fit", () => {
   const fixture = createCompleteConfigurationFixture();
   try {
     const layout = configurationLayout(fixture.path);
     assert.equal(layout.kind, "operations");
     if (layout.kind !== "operations") return;
-    // Valid JSON, 1.5 MiB of it, well inside the 8 MiB closure budget.
+    // Valid JSON, 1.5 MiB of it: the old 1 MiB per-file bound refused this;
+    // a whole-read document is bounded generously instead.
     const host = readJson(layout.host);
     writeFileSync(layout.host, `${JSON.stringify(host)}${" ".repeat(1536 * 1024)}`);
-    assert.throws(() => loadConfigurationSnapshot(fixture.path), { code: "INVALID_REQUEST", message: /at most 1 MiB/ });
+    assert.equal(loadConfigurationSnapshot(fixture.path).config.society, "demo",
+      "fail-before: the 1 MiB per-file bound refused this document");
+    writeFileSync(layout.host, `${JSON.stringify(host)}${" ".repeat(17 * 1024 * 1024)}`);
+    assert.throws(() => loadConfigurationSnapshot(fixture.path), { code: "INVALID_REQUEST", message: /at most 16 MiB/ });
   } finally { fixture.close(); }
 });
 

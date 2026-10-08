@@ -352,7 +352,13 @@ test("OPS config: rejects symlinked and oversized prompt assets", () => {
     symlinkSync(f.input, prompt);
     assert.throws(() => loadConfiguration(f.path), { code: "INVALID_REQUEST" });
     rmSync(prompt);
+    // The old 1 MiB per-file bound refused this prompt; a whole-read document
+    // is bounded generously instead -- the old fixture loads.
     writeFileSync(prompt, "x".repeat(1024 * 1024 + 1));
+    assert.equal(loadConfiguration(f.path).config.society, "demo",
+      "fail-before: the 1 MiB per-file bound refused this prompt");
+    // Past the document bound a whole-read file is still refused.
+    writeFileSync(prompt, "x".repeat(17 * 1024 * 1024));
     assert.throws(() => loadConfiguration(f.path), { code: "INVALID_REQUEST" });
   } finally {
     f.close();

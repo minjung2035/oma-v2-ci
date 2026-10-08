@@ -111,12 +111,23 @@ test("DR25/mac: an archive that names anything out of place, or more than it may
       const into = join(dir, name); mkdirSync(into);
       assert.throws(() => readPackageArchive(archive, into), reason, name);
     }
+    // A member whose u64 size declares bytes the archive does not carry ends
+    // honestly on the stream, whatever the number -- size alone is no longer a
+    // refusal, but declared bytes that are absent still are.
     const huge = Buffer.alloc(9); huge.writeUInt32BE(1, 1); huge.writeUInt32BE(0, 5);
     const archive = join(dir, "huge.archive");
     writeFileSync(archive, Buffer.concat([magic, entry(1, "npm"), Buffer.from([2, 0, 5]), Buffer.from("npm/x"), huge]));
     mkdirSync(join(dir, "huge"));
-    assert.throws(() => readPackageArchive(archive, join(dir, "huge")), /larger than oma takes/);
-    assert.ok(PACKAGE_ARCHIVE_BOUNDS.fileBytes < 2 ** 32);
+    assert.throws(() => readPackageArchive(archive, join(dir, "huge")), /ends early/);
+    // A size the wire's u64 cannot name exactly is the one refusal left:
+    // it cannot be observed exactly at all.
+    const unsafe = Buffer.alloc(9); unsafe.writeUInt8(0, 0); unsafe.writeUInt32BE(0x200000, 1); unsafe.writeUInt32BE(0, 5);
+    const unobservable = join(dir, "unsafe.archive");
+    writeFileSync(unobservable, Buffer.concat([magic, entry(1, "npm"), Buffer.from([2, 0, 5]), Buffer.from("npm/x"), unsafe]));
+    mkdirSync(join(dir, "unsafe"));
+    assert.throws(() => readPackageArchive(unobservable, join(dir, "unsafe")), /observed exactly/);
+    assert.ok(PACKAGE_ARCHIVE_BOUNDS.fileBytes === Number.MAX_SAFE_INTEGER,
+      "the file bound is the exact-observation bound, not a capacity cap");
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
 

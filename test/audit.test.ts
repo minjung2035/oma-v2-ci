@@ -282,6 +282,7 @@ function brokerEnv(): BrokerEnv {
         memoryBytes: 512 * 1024 * 1024,
         tasks: 4096,
         timeoutSeconds: 30,
+        silenceSeconds: 30,
       },
     },
     store,

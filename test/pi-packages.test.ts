@@ -168,7 +168,7 @@ test("DR25/C20: `oma pi install` of a local path copies it into the store as `lo
     writeFileSync(join(rich, "themes", "dark.json"), "{}\n");
     symlinkSync(target, join(rich, "linked.ts"));
 
-    assert.equal(stageLocalPackage(store, rich), `${PACKAGE_LOCAL_DIR}/oma-local-rich`);
+    assert.equal(await stageLocalPackage(store, rich), `${PACKAGE_LOCAL_DIR}/oma-local-rich`);
     const staged = join(store, "local", "oma-local-rich");
     assert.ok(existsSync(join(staged, "extensions", "e.ts")));
     // A copy, never a link: the link's target's bytes are inside the store.
@@ -178,14 +178,14 @@ test("DR25/C20: `oma pi install` of a local path copies it into the store as `lo
     // Re-installing the source replaces the copy wholesale.
     writeFileSync(join(rich, "extensions", "e.ts"), "export default function () { /* v2 */ }\n");
     rmSync(join(rich, "prompts", "review.md"));
-    assert.equal(stageLocalPackage(store, rich), `${PACKAGE_LOCAL_DIR}/oma-local-rich`);
+    assert.equal(await stageLocalPackage(store, rich), `${PACKAGE_LOCAL_DIR}/oma-local-rich`);
     assert.equal(existsSync(join(staged, "prompts", "review.md")), false, "a file removed upstream stays removed");
     assert.match(readFileSync(join(staged, "extensions", "e.ts"), "utf8"), /v2/);
 
     // A lone extension file stages under its own name.
     const lone = join(f.root, "src", "single.ts");
     writeFileSync(lone, "export default function () {}\n");
-    assert.equal(stageLocalPackage(store, lone), `${PACKAGE_LOCAL_DIR}/single.ts`);
+    assert.equal(await stageLocalPackage(store, lone), `${PACKAGE_LOCAL_DIR}/single.ts`);
 
     // A tarball of a package (real npm pack shape: directory members with a
     // trailing `/` precede the files under `package/`).
@@ -196,15 +196,19 @@ test("DR25/C20: `oma pi install` of a local path copies it into the store as `lo
       "package/e.ts": "export default function () {}\n",
       "package/skills/roll/SKILL.md": "# roll\n",
     }, ["package/", "package/skills/", "package/skills/roll/"])));
-    assert.equal(stageLocalPackage(store, packed), `${PACKAGE_LOCAL_DIR}/oma-packed`);
+    assert.equal(await stageLocalPackage(store, packed), `${PACKAGE_LOCAL_DIR}/oma-packed`);
     assert.ok(existsSync(join(store, "local", "oma-packed", "skills", "roll", "SKILL.md")));
+    // The inflated archive's spool went with the call: nothing staging-named
+    // is live content, and a refused archive's spool goes the same way.
+    assert.equal(readdirSync(store).some(name => name.startsWith(".staging-local-")), false,
+      "the archive spool went with the call");
     // Still refused: a file member named with a trailing slash, a directory
     // name that is only slashes, and `..` anywhere.
-    assert.throws(() => stageLocalPackage(store, (() => { const p = join(f.root, "bad1.tar"); writeFileSync(p, tarball({ "a/": "x" })); return p; })()),
+    await assert.rejects(stageLocalPackage(store, (() => { const p = join(f.root, "bad1.tar"); writeFileSync(p, tarball({ "a/": "x" })); return p; })()),
       /not a normalized relative path/);
-    assert.throws(() => stageLocalPackage(store, (() => { const p = join(f.root, "bad2.tar"); writeFileSync(p, tarball({}, ["//"])); return p; })()),
+    await assert.rejects(stageLocalPackage(store, (() => { const p = join(f.root, "bad2.tar"); writeFileSync(p, tarball({}, ["//"])); return p; })()),
       /not a normalized relative path/);
-    assert.throws(() => stageLocalPackage(store, (() => { const p = join(f.root, "bad3.tar"); writeFileSync(p, tarball({}, ["../evil/"])); return p; })()),
+    await assert.rejects(stageLocalPackage(store, (() => { const p = join(f.root, "bad3.tar"); writeFileSync(p, tarball({}, ["../evil/"])); return p; })()),
       /not a normalized relative path/);
 
     // A tar without the single top directory unpacks to the name the archive had.
@@ -213,25 +217,25 @@ test("DR25/C20: `oma pi install` of a local path copies it into the store as `lo
       "package.json": JSON.stringify({ name: "@scope/plain" }),
       "extensions/e.ts": "export default function () {}\n",
     }));
-    assert.equal(stageLocalPackage(store, plain), `${PACKAGE_LOCAL_DIR}/@scope/plain`);
+    assert.equal(await stageLocalPackage(store, plain), `${PACKAGE_LOCAL_DIR}/@scope/plain`);
     assert.ok(existsSync(join(store, "local", "@scope", "plain", "package.json")));
 
     // Refusals are loud and named: nothing there, no manifest, not a package,
     // a source that is or contains the store, an archive that is not a tar.
     const missing = join(f.root, "src", "missing");
-    assert.throws(() => stageLocalPackage(store, missing), /does not exist/);
+    await assert.rejects(stageLocalPackage(store, missing), /does not exist/);
     const bare = join(f.root, "src", "bare");
     mkdirSync(bare, { recursive: true });
-    assert.throws(() => stageLocalPackage(store, bare), /INVALID_REQUEST|no package\.json/);
+    await assert.rejects(stageLocalPackage(store, bare), /INVALID_REQUEST|no package\.json/);
     writeFileSync(join(bare, "package.json"), "{broken");
-    assert.throws(() => stageLocalPackage(store, bare), /not readable JSON/);
+    await assert.rejects(stageLocalPackage(store, bare), /not readable JSON/);
     writeFileSync(join(bare, "package.json"), JSON.stringify({ name: "bare" }));
-    assert.throws(() => stageLocalPackage(store, bare), /no pi manifest/);
-    assert.throws(() => stageLocalPackage(store, store), /inside the package store|contains the package store/);
-    assert.throws(() => stageLocalPackage(store, staged), /inside the package store/);
+    await assert.rejects(stageLocalPackage(store, bare), /no pi manifest/);
+    await assert.rejects(stageLocalPackage(store, store), /inside the package store|contains the package store/);
+    await assert.rejects(stageLocalPackage(store, staged), /inside the package store/);
     const notTar = join(f.root, "src", "not-a-tar.tgz");
     writeFileSync(notTar, "this is not a tar archive at all, not even close\n");
-    assert.throws(() => stageLocalPackage(store, notTar), /not a tar|ustar/);
+    await assert.rejects(stageLocalPackage(store, notTar), /not a tar|ustar/);
 
     // The staged copies resolve through the engine's own pipeline: the same
     // settings.json entry `local/<name>` the engine's `install` records, the
@@ -268,7 +272,7 @@ test("DR25/C20: `oma pi install` of a local path copies it into the store as `lo
   } finally { f.close(); }
 });
 
-test("DR25/C20: a staging interrupted mid-copy leaves only dead content; a retry installs whole and the next change collects it", () => {
+test("DR25/C20: a staging interrupted mid-copy leaves only dead content; a retry installs whole and the next change collects it", async () => {
   const f = createCompleteConfigurationFixture();
   try {
     const store = join(f.root, "packages");
@@ -295,13 +299,13 @@ test("DR25/C20: a staging interrupted mid-copy leaves only dead content; a retry
     writeFileSync(join(broken, "package.json"), JSON.stringify({ name: "broken", pi: { extensions: ["./extensions/e.ts"] } }));
     writeFileSync(join(broken, "extensions", "e.ts"), "export default function () {}\n");
     symlinkSync(join(f.root, "missing-target"), join(broken, "gone.ts"));
-    assert.throws(() => stageLocalPackage(store, broken), /link to nothing/);
+    await assert.rejects(stageLocalPackage(store, broken), /link to nothing/);
     assert.equal(existsSync(join(store, "local", "broken")), false, "a failed install publishes no name");
     assert.equal(readdirSync(store).some(name => name.startsWith(".staging-local-")), false, "the staging area went with it");
 
     // The same name retried installs the whole copy.
     rmSync(join(broken, "gone.ts"));
-    assert.equal(stageLocalPackage(store, broken), "local/broken");
+    assert.equal(await stageLocalPackage(store, broken), "local/broken");
     assert.equal(readFileSync(join(store, "local", "broken", "extensions", "e.ts"), "utf8"), "export default function () {}\n");
   } finally { f.close(); }
 });
@@ -332,7 +336,7 @@ test("DR25/C20: a configured `local/..foo` source survives the prune -- `..` dec
   } finally { f.close(); }
 });
 
-test("DR25/C20: a configured `local/@bare` source survives the prune -- the scope directory itself may be the package", () => {
+test("DR25/C20: a configured `local/@bare` source survives the prune -- the scope directory itself may be the package", async () => {
   const f = createCompleteConfigurationFixture();
   try {
     const store = join(f.root, "packages");
@@ -346,7 +350,7 @@ test("DR25/C20: a configured `local/@bare` source survives the prune -- the scop
     mkdirSync(join(source, "extensions"), { recursive: true });
     writeFileSync(join(source, "package.json"), JSON.stringify({ name: "@bare", pi: { extensions: ["./extensions/e.ts"] } }));
     writeFileSync(join(source, "extensions", "e.ts"), "export default function () {}\n");
-    assert.equal(stageLocalPackage(store, source), `${PACKAGE_LOCAL_DIR}/@bare`);
+    assert.equal(await stageLocalPackage(store, source), `${PACKAGE_LOCAL_DIR}/@bare`);
 
     // Beside it: a scoped package a source names beneath its scope, a dead
     // sibling under that same scope, and a scope no source names at all.
@@ -497,7 +501,7 @@ test("DR25/C20: dead content that lost its owner bits is collected -- the remova
   }
 });
 
-test("DR25/C20: publish replaces a staged copy that lost its mode -- a mode-000 copy cannot wedge re-install", () => {
+test("DR25/C20: publish replaces a staged copy that lost its mode -- a mode-000 copy cannot wedge re-install", async () => {
   const f = createCompleteConfigurationFixture();
   const staged = join(f.root, "packages", "local", "wedge");
   try {
@@ -507,13 +511,13 @@ test("DR25/C20: publish replaces a staged copy that lost its mode -- a mode-000 
     mkdirSync(join(source, "extensions"), { recursive: true });
     writeFileSync(join(source, "package.json"), JSON.stringify({ name: "wedge", pi: { extensions: ["./extensions/e.ts"] } }));
     writeFileSync(join(source, "extensions", "e.ts"), "export default function () { /* v1 */ }\n");
-    assert.equal(stageLocalPackage(store, source), "local/wedge");
+    assert.equal(await stageLocalPackage(store, source), "local/wedge");
     // A same-UID stray or an interrupted writer leaves the existing copy at
     // mode-000: publish's removeOwnedTree threw EACCES at the open, so every
     // `oma pi install` of the name failed until the copy was removed by hand.
     chmodSync(staged, 0o000);
     writeFileSync(join(source, "extensions", "e.ts"), "export default function () { /* v2 */ }\n");
-    assert.equal(stageLocalPackage(store, source), "local/wedge", "re-install over the mode-000 copy");
+    assert.equal(await stageLocalPackage(store, source), "local/wedge", "re-install over the mode-000 copy");
     assert.match(readFileSync(join(staged, "extensions", "e.ts"), "utf8"), /v2/, "the new copy landed whole");
     assert.equal(statSync(staged).mode & 0o777, 0o700, "the published copy has the staging root's mode");
   } finally {
@@ -522,7 +526,7 @@ test("DR25/C20: publish replaces a staged copy that lost its mode -- a mode-000 
   }
 });
 
-test("DR25/C20: mode-000 ancestors on the open path are repaired before they are opened -- `local/`, its scopes, the store root", () => {
+test("DR25/C20: mode-000 ancestors on the open path are repaired before they are opened -- `local/`, its scopes, the store root", async () => {
   const f = createCompleteConfigurationFixture();
   const locked = [join(f.root, "packages"), join(f.root, "packages", "local"), join(f.root, "packages", "local", "@scope")];
   try {
@@ -532,7 +536,7 @@ test("DR25/C20: mode-000 ancestors on the open path are repaired before they are
     mkdirSync(join(source, "extensions"), { recursive: true });
     writeFileSync(join(source, "package.json"), JSON.stringify({ name: "wedge", pi: { extensions: ["./extensions/e.ts"] } }));
     writeFileSync(join(source, "extensions", "e.ts"), "export default function () { /* v1 */ }\n");
-    assert.equal(stageLocalPackage(store, source), "local/wedge");
+    assert.equal(await stageLocalPackage(store, source), "local/wedge");
 
     // The publish path used to reach `local` through a by-path
     // ensureUserDirectory whose open threw EACCES before any repair could
@@ -542,7 +546,7 @@ test("DR25/C20: mode-000 ancestors on the open path are repaired before they are
     // repair the sweeps make.
     chmodSync(join(store, "local"), 0o000);
     writeFileSync(join(source, "extensions", "e.ts"), "export default function () { /* v2 */ }\n");
-    assert.equal(stageLocalPackage(store, source), "local/wedge", "re-install over a mode-000 `local/`");
+    assert.equal(await stageLocalPackage(store, source), "local/wedge", "re-install over a mode-000 `local/`");
     assert.match(readFileSync(join(store, "local", "wedge", "extensions", "e.ts"), "utf8"), /v2/);
     assert.equal(statSync(join(store, "local")).mode & 0o777, 0o700, "the opened directory kept its repaired bits");
 
@@ -554,14 +558,14 @@ test("DR25/C20: mode-000 ancestors on the open path are repaired before they are
     mkdirSync(join(scoped, "extensions"), { recursive: true });
     writeFileSync(join(scoped, "package.json"), JSON.stringify({ name: "@scope/pkg", pi: { extensions: ["./extensions/e.ts"] } }));
     writeFileSync(join(scoped, "extensions", "e.ts"), "export default function () {}\n");
-    assert.equal(stageLocalPackage(store, scoped), "local/@scope/pkg");
+    assert.equal(await stageLocalPackage(store, scoped), "local/@scope/pkg");
     assert.equal(statSync(join(store, "local", "@scope")).mode & 0o777, 0o700);
 
     // The store root itself in the same shape: the staging area's open pins
     // and repairs it rather than dying on EACCES the way the plain
     // openDirectory did.
     chmodSync(store, 0o000);
-    assert.equal(stageLocalPackage(store, source), "local/wedge", "a mode-000 store root cannot wedge staging's open");
+    assert.equal(await stageLocalPackage(store, source), "local/wedge", "a mode-000 store root cannot wedge staging's open");
     assert.equal(statSync(store).mode & 0o777, 0o700, "the open repaired the store root");
     assert.match(readFileSync(join(store, "local", "wedge", "extensions", "e.ts"), "utf8"), /v2/);
   } finally {
@@ -807,7 +811,7 @@ test("DR25/C20: a resource the index cannot observe is refused, never indexed as
   } finally { f.close(); }
 });
 
-test("DR25/C20: a staged name of three or more components flushes every directory that names it", t => {
+test("DR25/C20: a staged name of three or more components flushes every directory that names it", async t => {
   const f = createCompleteConfigurationFixture();
   try {
     const store = join(f.root, "packages");
@@ -828,7 +832,7 @@ test("DR25/C20: a staged name of three or more components flushes every director
       try { flushed.add(fs.readlinkSync(`/proc/self/fd/${fd}`)); } catch { /* a descriptor that names nothing on disk */ }
     });
     syncBuiltinESMExports();
-    try { assert.equal(stageLocalPackage(store, source), "local/deep/inside/pkg"); }
+    try { assert.equal(await stageLocalPackage(store, source), "local/deep/inside/pkg"); }
     finally { t.mock.restoreAll(); syncBuiltinESMExports(); }
     const root = realpathSync(store);
     for (const dir of ["local", "local/deep", "local/deep/inside"])
@@ -837,7 +841,7 @@ test("DR25/C20: a staged name of three or more components flushes every director
   } finally { f.close(); }
 });
 
-test("DR25/C20: a file or link in a strict-prefix slot is collected by the install itself -- the wedge never reaches the user", () => {
+test("DR25/C20: a file or link in a strict-prefix slot is collected by the install itself -- the wedge never reaches the user", async () => {
   const f = createCompleteConfigurationFixture();
   try {
     const store = join(f.root, "packages");
@@ -856,7 +860,7 @@ test("DR25/C20: a file or link in a strict-prefix slot is collected by the insta
     // once, and the install proceeds.
     writeFileSync(join(store, "local", "foo"), "stray\n");
     writeFileSync(join(store, "local", "other"), "dead sibling\n");
-    assert.equal(stageLocalPackage(store, source), "local/foo/bar", "the stray prefix is collected by the install itself");
+    assert.equal(await stageLocalPackage(store, source), "local/foo/bar", "the stray prefix is collected by the install itself");
     assert.equal(lstatSync(join(store, "local", "foo"), { throwIfNoEntry: false })?.isDirectory(), true,
       "the stray file's slot is the scope directory the install needed");
     assert.ok(existsSync(join(store, "local", "foo", "bar", "package.json")), "the staged copy landed");
@@ -869,7 +873,7 @@ test("DR25/C20: a file or link in a strict-prefix slot is collected by the insta
     mkdirSync(target); writeFileSync(join(target, "keep"), "kept\n");
     rmSync(join(store, "local", "foo"), { recursive: true });
     symlinkSync(target, join(store, "local", "foo"));
-    assert.equal(stageLocalPackage(store, source), "local/foo/bar", "the stray link is collected by the install itself");
+    assert.equal(await stageLocalPackage(store, source), "local/foo/bar", "the stray link is collected by the install itself");
     assert.equal(existsSync(join(store, "local", "foo", "bar", "extensions", "e.ts")), true);
     assert.equal(readFileSync(join(target, "keep"), "utf8"), "kept\n", "the link's target is not the entry's");
 
@@ -877,7 +881,7 @@ test("DR25/C20: a file or link in a strict-prefix slot is collected by the insta
     // same way -- collected, remade, staged into.
     rmSync(join(store, "local"), { recursive: true });
     writeFileSync(join(store, "local"), "the whole stage as a file\n");
-    assert.equal(stageLocalPackage(store, source), "local/foo/bar", "a stray `local` file is collected and remade");
+    assert.equal(await stageLocalPackage(store, source), "local/foo/bar", "a stray `local` file is collected and remade");
     assert.equal(statSync(join(store, "local")).isDirectory(), true);
     assert.ok(existsSync(join(store, "local", "foo", "bar", "package.json")));
 
@@ -1049,7 +1053,7 @@ test("DR25/C20: a configured source is descended to the depth it needs -- dead c
   } finally { f.close(); }
 });
 
-test("DR25/C20: a stray at the package-store slot itself is collected -- never swept into or staged into", () => {
+test("DR25/C20: a stray at the package-store slot itself is collected -- never swept into or staged into", async () => {
   const f = createCompleteConfigurationFixture();
   try {
     const store = join(f.root, "packages");
@@ -1081,7 +1085,7 @@ test("DR25/C20: a stray at the package-store slot itself is collected -- never s
     mkdirSync(source, { recursive: true });
     writeFileSync(join(source, "package.json"), JSON.stringify({ name: "pkg", pi: { extensions: ["./e.ts"] } }));
     writeFileSync(join(source, "e.ts"), "export default function () {}\n");
-    assert.throws(() => stageLocalPackage(store, source), /does not exist/);
+    await assert.rejects(stageLocalPackage(store, source), /does not exist/);
     assert.equal(lstatSync(store, { throwIfNoEntry: false }), undefined, "the stray link is collected");
     assert.deepEqual(readdirSync(victim), ["keep.txt"], "nothing was staged into the link's target");
   } finally { f.close(); }

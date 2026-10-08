@@ -2,6 +2,7 @@
  * The caller supplies the fixed host runner. Every observation retains process
  * evidence; nonzero, timeout, signal and malformed output are not absence.
  */
+import { closeSync, constants, openSync, readSync } from "node:fs";
 import { StoreError } from "../domain/errors.js";
 import { isValidFullOid, isValidWirePath } from "../domain/identifiers.js";
 import { decodeUtf8 } from "../domain/utf8.js";
@@ -26,6 +27,12 @@ export interface GitProcessEvidence {
   readonly error?: Error;
   readonly stdout: Uint8Array | null;
   readonly stderr: Uint8Array | null;
+  /** The file a streamed stdout was spooled into, when the runner carries one;
+   * the observation reads it back a record at a time and `dispose`s it. */
+  readonly stdoutSpooledTo?: string;
+  /** Releases whatever the runner staged for this evidence (the spool's
+   * holding directory). Called by the observation that consumed it. */
+  readonly dispose?: () => void;
 }
 export type GitObservation<T> =
   | { readonly kind: "present"; readonly value: T; readonly evidence: GitProcessEvidence }
@@ -89,6 +96,25 @@ export function parseNameStatusZ(bytes: Uint8Array): Parsed<readonly ChangedPath
 const LS_TREE_TYPES: Readonly<Record<string, string>> = {
   "100644": "blob", "100755": "blob", "120000": "blob", "160000": "commit",
 };
+/** A complete `<mode> <type> <oid>\t` record header, or null when the text is
+ * not one — the grammar context-repository.ts and project-snapshot.ts share. */
+function lsTreeHeader(text: string): { readonly mode: string; readonly prefix: number } | null {
+  const header = /^(\d{6}) ([^ ]+) ([0-9a-f]+)\t/.exec(text);
+  if (header === null || LS_TREE_TYPES[header[1]!] !== header[2] || !isValidFullOid(header[3] ?? "")) return null;
+  return { mode: header[1]!, prefix: header[0].length };
+}
+type RecordOutcome = { readonly ok: true } | { readonly ok: false; readonly reason: string; readonly scope: "output" | "candidate" };
+/** One ls-tree record's grammar check, shared by the buffer and stream parses. */
+function gitlinkRecord(record: Uint8Array, paths: string[]): RecordOutcome {
+  let text: string;
+  try { text = decodeUtf8(record); } catch { return { ok: false, reason: "an ls-tree path is not UTF-8", scope: "candidate" }; }
+  const header = lsTreeHeader(text);
+  if (header === null) return { ok: false, reason: "malformed ls-tree record", scope: "output" };
+  const path = text.slice(header.prefix);
+  if (!isValidWirePath(path)) return { ok: false, reason: "invalid repository-relative tree path", scope: "candidate" };
+  if (header.mode === "160000") paths.push(path);
+  return { ok: true };
+}
 /** `ls-tree -r -z` emits one leaf record per NUL, `<mode> <type> <oid>\t<path>`
  * — the grammar context-repository.ts and project-snapshot.ts already parse.
  * A record outside it is corrupt output; a leaf whose name the grammar cannot
@@ -96,22 +122,57 @@ const LS_TREE_TYPES: Readonly<Record<string, string>> = {
 export function parseGitlinksZ(bytes: Uint8Array): Parsed<readonly string[]> {
   if (bytes.byteLength === 0) return { ok: true, value: [] };
   if (bytes[bytes.byteLength - 1] !== 0) return { ok: false, reason: "unterminated ls-tree record", scope: "output" };
-  let text: string;
-  try { text = decodeUtf8(bytes); } catch { return { ok: false, reason: "an ls-tree path is not UTF-8", scope: "candidate" }; }
-  const fields = text.split("\0");
-  fields.pop();
   const paths: string[] = [];
-  for (const record of fields) {
-    const header = /^(\d{6}) ([^ ]+) ([0-9a-f]+)\t/.exec(record);
-    const mode = header?.[1] ?? "";
-    const expected = LS_TREE_TYPES[mode];
-    if (header === null || expected === undefined || expected !== header[2] || !isValidFullOid(header[3] ?? ""))
-      return { ok: false, reason: "malformed ls-tree record", scope: "output" };
-    const path = record.slice(header[0].length);
-    if (!isValidWirePath(path)) return { ok: false, reason: "invalid repository-relative tree path", scope: "candidate" };
-    if (mode === "160000") paths.push(path);
+  let start = 0;
+  for (let index = 0; index < bytes.length; index++) {
+    if (bytes[index] !== 0) continue;
+    const outcome = gitlinkRecord(bytes.subarray(start, index), paths);
+    if (!outcome.ok) return outcome;
+    start = index + 1;
   }
   return { ok: true, value: paths };
+}
+
+/** One record's working-set bound: a wire path (4096) plus the ~110-byte
+ * record header. A record that outgrows it can only carry a path the grammar
+ * cannot represent — refused at candidate scope when its header is valid
+ * ls-tree output, corrupt output when it is not. */
+const LS_TREE_RECORD_BYTES = 4096 + 256;
+
+/** The same parse over a descriptor, a record at a time — the enumeration's
+ * whole output never lands in memory, so output size alone can never be the
+ * refusal. The in-memory working set is one record plus one read chunk. */
+export function parseGitlinksFd(fd: number): Parsed<readonly string[]> {
+  const paths: string[] = [];
+  const chunk = Buffer.alloc(1024 * 1024);
+  let carry = Buffer.alloc(0);
+  for (let position = 0;;) {
+    const count = readSync(fd, chunk, 0, chunk.length, position);
+    if (count === 0) break;
+    position += count;
+    carry = carry.byteLength === 0 ? Buffer.from(chunk.subarray(0, count))
+      : Buffer.concat([carry, chunk.subarray(0, count)]);
+    for (;;) {
+      const end = carry.indexOf(0);
+      if (end < 0) break;
+      const record = carry.subarray(0, end);
+      carry = carry.subarray(end + 1);
+      const outcome = gitlinkRecord(record, paths);
+      if (!outcome.ok) return outcome;
+    }
+    if (carry.byteLength > LS_TREE_RECORD_BYTES)
+      return lsTreeHeader(carry.subarray(0, 128).toString("utf8")) === null
+        ? { ok: false, reason: "malformed ls-tree record", scope: "output" }
+        : { ok: false, reason: "invalid repository-relative tree path", scope: "candidate" };
+  }
+  if (carry.byteLength !== 0) return { ok: false, reason: "unterminated ls-tree record", scope: "output" };
+  return { ok: true, value: paths };
+}
+/** `parseGitlinksFd` on a path the runner spooled; an unopenable or unreadable
+ * spool is a thrown I/O failure for the caller to answer as unknown. */
+export function parseGitlinksPath(path: string): Parsed<readonly string[]> {
+  const fd = openSync(path, constants.O_RDONLY | constants.O_NOFOLLOW);
+  try { return parseGitlinksFd(fd); } finally { closeSync(fd); }
 }
 
 /** '/' stays gated by the production profile admission check. */
@@ -213,11 +274,21 @@ export class GitObserver {
    * grammar knows no "tree" records; an uncertain answer is never "none". */
   gitlinks(repository: string, oid: string): GitObservation<readonly string[]> {
     const evidence = this.run(["--git-dir", repository, "ls-tree", "-r", "-z", "--full-tree", gitOidArgument(oid)]);
-    if (uncertain(evidence) || evidence.status !== 0 || diagnostic(evidence)) return unknown(evidence, "gitlink process unavailable");
-    if (evidence.stdout === null) return corrupt(evidence, "missing gitlink output");
-    const parsed = parseGitlinksZ(evidence.stdout);
-    return parsed.ok ? { kind: "present", value: parsed.value, evidence }
-      : parsed.scope === "candidate" ? refused(evidence, parsed.reason) : corrupt(evidence, parsed.reason);
+    try {
+      if (uncertain(evidence) || evidence.status !== 0 || diagnostic(evidence)) return unknown(evidence, "gitlink process unavailable");
+      if (evidence.stdout === null && evidence.stdoutSpooledTo === undefined) return corrupt(evidence, "missing gitlink output");
+      let parsed: Parsed<readonly string[]>;
+      if (evidence.stdoutSpooledTo === undefined) parsed = parseGitlinksZ(evidence.stdout!);
+      else {
+        // The spool is read a record at a time: the enumeration's size can
+        // never be the refusal, and an unreadable spool is unknown, never a
+        // truncated "no gitlinks".
+        try { parsed = parseGitlinksPath(evidence.stdoutSpooledTo); }
+        catch { return unknown(evidence, "gitlink output could not be read"); }
+      }
+      return parsed.ok ? { kind: "present", value: parsed.value, evidence }
+        : parsed.scope === "candidate" ? refused(evidence, parsed.reason) : corrupt(evidence, parsed.reason);
+    } finally { evidence.dispose?.(); }
   }
 }
 

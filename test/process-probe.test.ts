@@ -68,6 +68,39 @@ test("the seam takes a substrate: an injected reader drives the same four answer
   assert.equal(probe.ended(engine), "unknown", "unreadable is unknown -- refuses, retires nothing");
 });
 
+test("descent walks the whole chain -- depth alone is not a refusal, and a cycle ends it closed", () => {
+  // A chain of 64 live processes, deeper than any bound the walk once carried:
+  // pid N's parent is N-1 down to init.
+  const deep = new Map<number, ProcessObservation>([[1, { kind: "running", ppid: 0, startTime: "1" }]]);
+  for (let pid = 2; pid <= 64; pid += 1) deep.set(pid, { kind: "running", ppid: pid - 1, startTime: String(pid) });
+  const probe = processProbeFor("darwin", pid => deep.get(pid) ?? { kind: "unavailable" });
+  const root = probe.identity(2)!;
+  assert.equal(probe.descendsFrom(64, root), true, "a chain sixty-two links deep is still descent");
+  deep.set(1, { kind: "running", ppid: 0, startTime: "1" });
+  assert.equal(probe.descendsFrom(64, { pid: 2, startTime: "other" }), false,
+    "the ancestor's pinned start time is part of the identity -- reuse is not descent");
+  // A loop -- 700 <-> 701 -- can never reach init or the ancestor; the walk
+  // must end it, not follow it forever and never call it descent.
+  const looped = new Map<number, ProcessObservation>([
+    [700, { kind: "running", ppid: 701, startTime: "7" }],
+    [701, { kind: "running", ppid: 700, startTime: "8" }],
+    [702, { kind: "running", ppid: 702, startTime: "9" }],
+  ]);
+  const cyclic = processProbeFor("darwin", pid => looped.get(pid) ?? { kind: "unavailable" });
+  assert.equal(cyclic.descendsFrom(701, { pid: 1, startTime: "1" }), false, "a pid pair parenting each other is no descent");
+  assert.equal(cyclic.descendsFrom(702, { pid: 1, startTime: "1" }), false, "a pid that is its own parent is no descent");
+  // An unreadable middle of the chain fails the walk closed -- it is never
+  // treated as reaching the ancestor or as the process having ended.
+  const blind = new Map<number, ProcessObservation>([
+    [1, { kind: "running", ppid: 0, startTime: "1" }],
+    [900, { kind: "running", ppid: 901, startTime: "9" }],
+    [901, { kind: "unavailable" }],
+    [902, { kind: "running", ppid: 1, startTime: "1" }],
+  ]);
+  const dim = processProbeFor("darwin", pid => blind.get(pid) ?? { kind: "unavailable" });
+  assert.equal(dim.descendsFrom(900, { pid: 1, startTime: "1" }), false, "an unavailable link is not a proven chain");
+});
+
 test("the exported entry points are the platform probe's, unchanged for callers", () => {
   assert.equal(processIdentity(process.pid)?.pid, process.pid);
   assert.equal(parentOf(process.pid), process.ppid);

@@ -6,7 +6,7 @@
  */
 import test from "node:test";
 import assert from "node:assert/strict";
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { PiAdapter } from "../src/runtime/pi-adapter.js";
@@ -14,7 +14,8 @@ import { RunnerModule } from "../src/runner.js";
 import { RESIDENT_SYSTEM_PROMPT } from "../src/config/role-prompts.js";
 import { TOOL_SCOPE_ENV, TOOL_SCOPE_SANDBOX, type PiConfinement } from "../src/runtime/pi-spawn-plan.js";
 import { TOOL_SCOPE_ENV as MIRRORED_ENV, TOOL_SCOPE_SANDBOX as MIRRORED_SANDBOX, guardWorkspaceTools } from "../src/extension/workspace-guard.js";
-import { containWorkspaceTools } from "../src/extension/contained-tools.js";
+import { containWorkspaceTools, createContainedWriter } from "../src/extension/contained-tools.js";
+import { principalEnvironment, sessionEnv } from "../src/tui/session.js";
 import { RESIDENT_INFERENCE_PORT, RESIDENT_PATHS, confinedPath, hostSessionPath, residentArgv, residentProjectGit, requireResidentRootfs, type ResidentDirectories } from "../src/sandbox.js";
 import { decodeRunLease } from "../src/protocol/run-lease.js";
 import { actorSocketPathAt, agentRootPathAt, runnerSessionDirPathAt, runnerViewPathAt, workspacePathAt } from "../src/storage/paths.js";
@@ -561,4 +562,47 @@ test("TSP-005/D23: the surface plan is the declared profile's -- nothing ambient
     else process.env.OMA_TOOL_SURFACE = saved;
     rmSync(f.root, { recursive: true, force: true });
   }
+});
+
+/** PR-004 deny-by-default, end to end: the workspace quota is not a fallback
+ * that a missed wire silently loses. The Resident's spawn plan carries the
+ * accepted profile's value, the adapter refuses to exist without a positive
+ * one, the Principal's own environment carries it through sessionEnv's
+ * ambient strip, and the one serialized writer refuses every write when it
+ * does not know a quota -- an absent OMA_WORKSPACE_BYTES is a miswired
+ * engine, never an unbounded one. */
+test("PR-004: the workspace quota reaches every engine, and a missing one refuses writes", async () => {
+  const f = fixture();
+  try {
+    const plan = f.adapter.spawnPlan();
+    const at = plan.args.lastIndexOf("OMA_WORKSPACE_BYTES");
+    assert.ok(at > 0 && plan.args[at - 1] === "--setenv", "the Resident's plan names the quota");
+    assert.equal(plan.args[at + 1], String(RESOURCES.workspaceBytes), "the engine is told the accepted quota");
+    for (const workspaceBytes of [0, -1, Number.NaN, 1.5])
+      assert.throws(() => new PiAdapter({ actor: "alice", society: "s", limits: LIMITS,
+        profile: { provider: "pi", model: "current", inferenceSeconds: 600, prompt: "", workspaceBytes, extensions: [] },
+        paths: { piCommand: f.paths.piCommand!, piArgs: [f.paths.piEntry!], piAgentDir: f.paths.piAgentDir!,
+          coreExtension: f.paths.coreExtension!, cli: f.paths.cli!, workspace: f.dirs.workspace, sessionDir: f.dirs.sessions,
+          agentHome: f.dirs.home, mailArchive: f.paths.mailArchive!, workerArchive: f.paths.workerArchive!, projectGit: f.paths.projectGit!,
+          batchView: f.dirs.view, socket: f.paths.socket! },
+        confinement: f.confinement }), { code: "UNSUPPORTED_PROFILE" }, `workspaceBytes ${workspaceBytes}`);
+    const principal = principalEnvironment({ stateRoot: "/srv/oma", runRoot: "/run/oma", libdir: "/opt/oma" },
+      { society: "s", provider: "pi", model: "current", workspaceBytes: 2048, extensions: [] },
+      { frameBytes: 1024, mailBodyBytes: 1024, batchMaxMessages: 4, addresses: 64, contextBytes: 1 << 20, bundleBytes: 1 << 20 });
+    assert.equal(principal.OMA_WORKSPACE_BYTES, "2048", "the Principal's own environment names its quota");
+    // The interactive spawn's ambient strip drops only OMA_TOOL_SURFACE --
+    // a dropped OMA_WORKSPACE_BYTES would refuse the Principal's every write.
+    const engine = sessionEnv({ OMA_WORKSPACE_BYTES: "2048", OMA_TOOL_SURFACE: "ambient" },
+      { society: "s", provider: "pi", model: "current", workspaceBytes: 2048, extensions: [] });
+    assert.equal(engine.OMA_WORKSPACE_BYTES, "2048", "the quota survives the ambient strip");
+    assert.equal(engine.OMA_TOOL_SURFACE, undefined);
+    // And at the effect itself: the serialized writer, reached by write, edit,
+    // lsp_fix and the hashline tools, refuses when it was given no quota.
+    const workspace = mkdtempSync(join(tmpdir(), "oma-quota-"));
+    try {
+      const write = createContainedWriter(workspace, null);
+      await assert.rejects(write("file.txt", "content"), /quota is not configured/);
+      assert.equal(existsSync(join(workspace, "file.txt")), false, "a refused write left no file");
+    } finally { rmSync(workspace, { recursive: true, force: true }); }
+  } finally { rmSync(f.root, { recursive: true, force: true }); }
 });

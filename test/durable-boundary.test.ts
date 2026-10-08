@@ -105,7 +105,7 @@ test("ERR-001/REC-006: accepted submit bundle corruption cannot become terminal 
   seedGit(root);
   const mail = new MailModule({ stateRoot: root, society: "demo" }, store, 8);
   const git = new GitModule({ stateRoot: root, projectGit: join(root, "repos/project.git"), contextGit: join(root, "repos/context.git"), worldDir: join(root, "world"), society: "demo",
-    quarantineTmpBytes: 1024 * 1024, quarantineResources: { cpuSeconds: 1, memoryBytes: 64 * 1024 * 1024, tasks: 32, timeoutSeconds: 1 } }, store, mail);
+    quarantineTmpBytes: 1024 * 1024, quarantineResources: { cpuSeconds: 1, memoryBytes: 64 * 1024 * 1024, tasks: 32, timeoutSeconds: 1, silenceSeconds: 1 } }, store, mail);
   try {
     const bytes = readFileSync(join(root, "candidate.bundle"));
     const initial = submitFixture(root, SUBMIT_RECOVERY_OP, bytes);

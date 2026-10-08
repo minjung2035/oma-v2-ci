@@ -47,7 +47,17 @@ export interface ConfigurationSource {
    * source is an editing input, never a runnable configuration. */
   readonly extensionAssets: "read" | "unread";
 }
-export const CONFIGURATION_SOURCE_LIMITS = Object.freeze({ files: 256, bytes: 8 * 1024 * 1024 });
+/** The closure's working-set bound, not a size policy: one identity row is
+ * held per source file while the snapshot is taken, and `bytes` sums only
+ * the documents read whole (asset bytes stream through `fileDigest` and are
+ * never in memory). A configuration that genuinely needs more than this is
+ * not one this loader can hold. */
+export const CONFIGURATION_SOURCE_LIMITS = Object.freeze({ files: 4096, bytes: 64 * 1024 * 1024 });
+/** One file read whole — a parsed JSON document or a prompt string held in
+ * memory. Generous, not a capacity policy: prompts are kilobytes in
+ * practice; extension assets are digested streaming and never pass through
+ * this bound at all. */
+export const CONFIGURATION_DOCUMENT_BYTES = 16 * 1024 * 1024;
 /** Test seam: where a snapshot read is. `source-read` follows each file the
  * snapshot closes over, after its bytes are recorded. */
 export type ConfigurationReadObserver = (event: Readonly<
@@ -179,8 +189,8 @@ function bytes(path: string, closure?: SourceClosure): Buffer {
   const fd = openSync(path, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);
   try {
     const before = fstatSync(fd);
-    if (!before.isFile() || before.size > 1024 * 1024)
-      return invalid("expected a regular file of at most 1 MiB");
+    if (!before.isFile() || before.size > CONFIGURATION_DOCUMENT_BYTES)
+      return invalid(`expected a regular file of at most ${Math.floor(CONFIGURATION_DOCUMENT_BYTES / (1024 * 1024))} MiB`);
     const buffer = Buffer.alloc(before.size + 1);
     let count = 0;
     while (count < buffer.length) {

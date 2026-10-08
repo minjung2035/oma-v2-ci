@@ -12,7 +12,7 @@ import { isValidFullOid } from "../ids.js";
 import { sha256Hex } from "../hash.js";
 import { readContextEntry, assertContextDirectory } from "../storage/context-files.js";
 import { contextStagingPathAt, contextRevisionPathAt } from "../storage/paths.js";
-import { TreeLease } from "../storage/tree-lease.js";
+import { TreeLease, treeQuiescence } from "../storage/tree-lease.js";
 import { ensureOwnedDurableDirectory, fsyncDir, fsyncTree, writeExclusiveFsyncedFile } from "../storage/durable-fs.js";
 import { entryAt, openBeneath, openDirectory, closeEvery } from "../storage/contained-fs.js";
 import { publishContextRevision, verifyContextRevision } from "../storage/context-snapshot.js";
@@ -62,7 +62,9 @@ export class ContextRepository {
     return result.stdout;
   }
   private prepareCommand(argv: readonly string[], env: Readonly<NodeJS.ProcessEnv> = CONTEXT_ENV): Promise<ProcessObservation> {
-    return this.preparation.run({ executable: "/usr/bin/git", argv, env, timeoutMs: 120000,
+    // A working plumbing child is never silent for two minutes; the ceiling
+    // only ends a command that never stops producing output.
+    return this.preparation.run({ executable: "/usr/bin/git", argv, env, timeoutMs: 24 * 3600 * 1000, silenceMs: 120000,
       stdoutBytes: 4 * 1024 * 1024, stderrBytes: 4 * 1024 * 1024 });
   }
   private async prepareSuccess(argv: readonly string[], env: Readonly<NodeJS.ProcessEnv> = CONTEXT_ENV): Promise<Buffer> {
@@ -120,7 +122,15 @@ export class ContextRepository {
     // Copy every entry before the first await. Caller mutation cannot replace
     // the manifest while Git is running; file bytes are verified again on use.
     const entries = Object.freeze(source.map(entry => Object.freeze({ ...entry })));
-    if (this.preparing || this.preparation.blocked) throw new StoreError("REF_STATE_UNKNOWN", "context preparation is active or uncertain");
+    if (this.preparing) throw new StoreError("REF_STATE_UNKNOWN", "context preparation is active");
+    if (this.preparation.blocked) {
+      // The stale unknown clears on the lease's fresh answer for the tree the
+      // killed run staged, never on the attempt itself.
+      const staging = this.preparedTree === null ? null : dirname(this.preparedTree);
+      const observed = staging === null ? "unknown" as const
+        : this.preparation.reverifyStale(() => { try { return treeQuiescence(staging).kind; } catch { return "unknown"; } });
+      if (observed !== "quiescent") throw new StoreError("REF_STATE_UNKNOWN", `context preparation is ${observed}`);
+    }
     this.preparing = true; this.preparedTree = tree;
     let treeFd: number | undefined; let workFd: number | undefined;
     let lease: TreeLease | undefined;
@@ -142,7 +152,8 @@ export class ContextRepository {
       const directory = workFd;
       const run = (argv: readonly string[], input?: Uint8Array) => this.preparation.run({
         executable: "/usr/bin/git", argv: ["-C", "/proc/self/fd/3", ...argv], env: CONTEXT_ENV,
-        ...(input === undefined ? {} : { input }), timeoutMs: 120000, stdoutBytes: 4 * 1024 * 1024, stderrBytes: 4 * 1024 * 1024,
+        ...(input === undefined ? {} : { input }), timeoutMs: 24 * 3600 * 1000, silenceMs: 120000,
+        stdoutBytes: 4 * 1024 * 1024, stderrBytes: 4 * 1024 * 1024,
       }, undefined, [directory, held.descriptor]);
       const success = async (argv: readonly string[], input?: Uint8Array) => requirePreparedSuccess(await run(argv, input), "context preparation");
       await success(["init", "-q", `--object-format=${format}`]);

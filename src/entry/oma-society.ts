@@ -115,7 +115,7 @@ async function piPackages(dataRoot: string, project: string, decision: Extract<P
     // the staged `local/<name>`, never the path the Human gave.
     let run = decision;
     if (decision.local !== undefined)
-      run = Object.freeze({ ...decision, args: Object.freeze(["install", stageLocalPackage(store, decision.local)]) });
+      run = Object.freeze({ ...decision, args: Object.freeze(["install", await stageLocalPackage(store, decision.local)]) });
     code = await runEngineLogin({ stateRoot, libdir: `${libdir}/`, override: process.env.OMA_PI_COMMAND, fence: lease.fence,
       env: process.env, packages: { store, args: run.args } });
     if (code === 0 && decision.command !== "list" && !args.includes("--help") && !args.includes("-h")) {

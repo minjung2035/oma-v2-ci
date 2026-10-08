@@ -1056,20 +1056,21 @@ the refusal's class (a bare 125, shared with the resource gate, stays a plain
 CHECK_FAILED) and re-observes the paths on the immutable candidate rather
 than trusting sandbox output.
 
-The whole-tree enumeration carries its own named bound:
-`GITLINKS_OBSERVATION_BYTES` (256 MiB) in the canonical command adapter. A
-sha256 `ls-tree -z` record costs ~80 bytes plus its path, so the bound admits
-roughly a million leaf entries even at ~180 bytes of average path. Under the
-shared 4 MiB process bound a ~70k-entry tree overran the capture, which the
-observation honestly reports as unknown — but unknown at every gate is a
-permanent integration wedge even when the tree holds zero gitlinks, a scaling
-limit this gate itself introduced. Over the bound the answer is still
-output-limited → unknown, never a truncated "no gitlinks". Filtering inside
-the spawned pipeline was rejected: the canonical runner is a single pinned
-executable plus argv — there is no shell to pipe `ls-tree` through — and
-`ls-tree` has no mode filter of its own. Shrinking each record via `--format`
-was rejected because it would strip the mode/type/oid grammar the parser
-validates. The marker protocol also tightened: `OMA_ERROR=UNSUPPORTED_PROFILE`
+The whole-tree enumeration carries no byte bound at all. `ls-tree -z` output
+is spooled whole to a caller-owned file and parsed one record at a time
+(`parseGitlinksFd`/`parseGitlinksPath`), so a tree of any size still answers
+present/refused/corrupt — output size alone can never become unknown, and an
+unterminated record can never read as "no gitlinks". The only working bound
+is per-record: a wire path (4096) plus the ~110-byte record grammar
+(`LS_TREE_RECORD_BYTES`), and it is a grammar bound, not a capacity one. An
+earlier revision of this gate tried named capture bounds — the shared 4 MiB
+wedge, then 256 MiB — and each only moved where output size alone turned
+into REF_STATE_UNKNOWN at every gate. Filtering inside the spawned pipeline
+was rejected: the canonical runner is a single pinned executable plus argv —
+there is no shell to pipe `ls-tree` through — and `ls-tree` has no mode
+filter of its own. Shrinking each record via `--format` was rejected because
+it would strip the mode/type/oid grammar the parser validates. The marker
+protocol also tightened: `OMA_ERROR=UNSUPPORTED_PROFILE`
 classifies the refusal only as a whole stderr line, so a check argv that
 prints the same bytes inside a longer line stays a plain CHECK_FAILED. And
 the marker is still only a claim — it asks the host to look, and the

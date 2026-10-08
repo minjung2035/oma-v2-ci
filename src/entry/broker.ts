@@ -142,10 +142,13 @@ async function main(): Promise<void> {
     // No schema search, path flattening or cross-installation fallback.
     assertRuntimeAssets(runtimeAssets(cfg.installation.libdir), { schema: SCHEMA_PATH, systemd: UNIT_TPL_DIR });
     assertDeploymentDigest(cfg.installation.libdir, cfg.installation.deploymentDigest);
-    // D04: over the admission cap startup still enters bounded recovery (new work
-    // is refused per request); only past the settlement headroom does it stop here.
+    // D04: over the admission cap the broker still starts and enters bounded
+    // recovery -- the fresh scan refuses each new admission per request until
+    // usage settles, and settlement keeps its headroom. An over-quota store is
+    // reported as degraded, never hidden; it no longer stops the process here.
     const storage = new StorageAdmission(stateRoot, cfg.quota.storageBytes, cfg.limits.frameBytes);
-    storage.admit("settle")();
+    if (storage.startupState() === "degraded")
+      console.error(JSON.stringify({ event: "broker.storage", state: "degraded", reason: "QUOTA_EXCEEDED" }));
     graceSeconds = cfg.limits.receiptWaitSeconds;
     const integrationPolicy = integrationPolicyFromConfig(cfg.integration);
     assertSupportedIntegration(snapshotIntegrationPolicy(integrationPolicy));

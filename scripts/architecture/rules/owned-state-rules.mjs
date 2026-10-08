@@ -125,6 +125,7 @@ export const OWNED_STATE_EXEMPTIONS = Object.freeze({
   "src/extension/mail-tools.ts": "a fresh mkdtemp under the model's own working directory -- the extension's own scratch (PI-001 keeps it off the storage imports)",
   "src/extension/contained-search.ts": "the private snapshot's announced-name sweep under the OS temp directory; the complete-result spool is written by the serialized contained writer in contained-tools.ts, not here (PI-001 keeps the extension off the storage imports)",
   "src/git/context-repository.ts": "the context repository's own probes beside its owned ensures -- lstat answers the work tree's shape and a failure refuses loudly",
+  "src/git/canonical-command.ts": "fresh mkdtemp directories under the OS temp directory -- the ls-tree and merge-tree output spool scratch, removed in the same call; never an OMA-owned tail",
   "src/pi-extension.ts": "the store root's realpath into the sandbox's read admissions -- a failure closes the admission (the store permits nothing), never opens it",
   "src/platform/guest/archive.ts": "the archive scratch mkdtemp inside the request ledger the guest owns -- ensured owned by the ledger's constructor",
   "src/platform/guest/egress.ts": "guesthost's own egress socket in the oma runtime directory -- chmod of the name oma just made is the point",

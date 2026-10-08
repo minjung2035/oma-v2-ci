@@ -6,8 +6,7 @@ import { join } from "node:path";
 import { spawnSync } from "node:child_process";
 import { GitObserver, parseNameStatusZ, parseGitlinksZ, protectedPathMatches, classifyRefAfterCas,
   type GitProcessEvidence, type GitObservation } from "../src/git/observe.js";
-import { canonicalMergeDiff, mergeDiffText, createCanonicalObserver, CANONICAL_PROCESS_LIMITS,
-  GITLINKS_OBSERVATION_BYTES } from "../src/git/canonical-command.js";
+import { canonicalMergeDiff, mergeDiffText, createCanonicalObserver, CANONICAL_PROCESS_LIMITS } from "../src/git/canonical-command.js";
 
 const bytes = (text: string): Buffer => Buffer.from(text, "utf8");
 function evidence(patch: Partial<GitProcessEvidence> = {}): GitProcessEvidence {
@@ -204,11 +203,12 @@ test("UX-09: gitlink records parse only the strict ls-tree grammar; hostile byte
 });
 
 // UX-09: the whole-tree enumeration is the only observation that scales with
-// leaf count; it carries its own named bound instead of the shared 4 MiB that
-// would wedge a ~70k-entry tree into unknown at every gate. The bound stays a
-// bound — the 4 MiB run still answers unknown rather than a truncated list.
+// leaf count; it is spooled to a file and parsed a record at a time, so the
+// output has no byte bound at all -- a tree that wedged the shared 4 MiB
+// buffer into unknown at every gate now answers whole. The fail-before
+// stands as the control: the 4 MiB run still answers unknown rather than a
+// truncated list.
 test("UX-09: a tree larger than the shared bound still observes gitlinks whole", () => {
-  assert.ok(GITLINKS_OBSERVATION_BYTES > CANONICAL_PROCESS_LIMITS.maxBuffer);
   const root = mkdtempSync(join(tmpdir(), "oma-gitlinks-bound-"));
   const env = { HOME: "/nonexistent", PATH: "/usr/bin:/bin", LANG: "C", LC_ALL: "C",
     GIT_CONFIG_NOSYSTEM: "1", GIT_CONFIG_GLOBAL: "/dev/null", GIT_CONFIG_SYSTEM: "/dev/null",
@@ -233,7 +233,7 @@ test("UX-09: a tree larger than the shared bound still observes gitlinks whole",
     const commit = run(["commit-tree", tree, "-p", base, "-m", "wide tree"]);
     const repository = join(root, ".git");
     const raw = spawnSync("/usr/bin/git", ["--git-dir", repository, "ls-tree", "-r", "-z", "--full-tree", commit],
-      { env, timeout: 30000, maxBuffer: GITLINKS_OBSERVATION_BYTES });
+      { env, timeout: 30000, maxBuffer: 64 * 1024 * 1024 });
     assert.ok(raw.stdout.byteLength > CANONICAL_PROCESS_LIMITS.maxBuffer,
       `fixture must exceed the shared bound: ${raw.stdout.byteLength}`);
     // Fail-before: under the shared bound this same answer is output-limited

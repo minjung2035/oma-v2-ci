@@ -10,9 +10,11 @@ export interface GitPaths {
    * (NB-01). */
   quarantineTmpBytes: number;
   /** The quarantine's own profile (`QUARANTINE_RESOURCES` in production).
-   * `timeoutSeconds` bounds one bundle import start to end; it is not an
-   * integration check's deadline (P0V-29). */
-  quarantineResources?: { cpuSeconds: number; memoryBytes: number; tasks: number; timeoutSeconds: number };
+   * `timeoutSeconds` is a generous ceiling on one bundle import, never its
+   * deadline: the namespaced script streams progress, so a working import is
+   * bounded by `silenceSeconds` of silence. Neither is an integration check's
+   * deadline (P0V-29). */
+  quarantineResources?: { cpuSeconds: number; memoryBytes: number; tasks: number; timeoutSeconds: number; silenceSeconds: number };
   checkRootfs?: string;
   checkNode?: string;
   checkAssetsDir?: string;

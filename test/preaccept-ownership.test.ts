@@ -502,7 +502,10 @@ test("V18A: native preparation uncertainty retains only the tree that preparatio
     const run = PreparationExecutor.prototype.run;
     t.mock.method(executor, "run", function (this: PreparationExecutor, ...[spec, signal, fds]: Parameters<PreparationExecutor["run"]>) {
       // The commit child is one whose exit the executor never observes.
-      const unobserved = spec.argv.includes("commit") ? { ...spec, executable: "/usr/bin/sleep", argv: ["30"], timeoutMs: 100 } : spec;
+      // The substitute keeps a silence window under its own ceiling: the
+      // caller's 120 s window against a 100 ms timeout is a contradiction
+      // the command validator refuses, not the uncertainty this proves.
+      const unobserved = spec.argv.includes("commit") ? { ...spec, executable: "/usr/bin/sleep" as const, argv: ["30"], timeoutMs: 100, silenceMs: 50 } : spec;
       return run.call(this, unobserved, signal, fds);
     });
     await assert.rejects(f.publish("context-uncertain"), { code: "REF_STATE_UNKNOWN" });
@@ -510,11 +513,17 @@ test("V18A: native preparation uncertainty retains only the tree that preparatio
     const retained = contextStaging(f.root);
     assert.equal(retained.length, 1, "a tree a non-quiescent preparation may use is retained");
     assert.deepEqual(contextLeases(f.root), retained.map(name => `${name}.lease`), "with its lease, by which the next start decides (R6-04)");
-    // A later request is refused before any native work touches its own tree.
-    await assert.rejects(f.publish("context-after-uncertain"), { code: "REF_STATE_UNKNOWN" });
-    assert.deepEqual(contextStaging(f.root), retained);
-    assert.deepEqual(contextOperations(f.root), []);
-    assert.deepEqual(objectsOf(f.root), []);
+    // The stale unknown is not a permanent poison: the blocked executor
+    // verifies the leased tree is quiescent, and only that fresh observation
+    // lets the next request reach its own tree -- never the attempt itself.
+    t.mock.restoreAll();
+    await f.publish("context-after-uncertain");
+    const operations = contextOperations(f.root);
+    assert.equal(operations.length, 1, "the retried request is the operation that landed");
+    // Its own tree is the one the accepted plan names; the uncertain run's
+    // tree stays retained beside it.
+    assert.deepEqual(contextStaging(f.root), [...retained, `context-${operations[0]}`].sort());
+    assert.deepEqual(contextLeases(f.root), [...retained, `context-${operations[0]}`].map(name => `${name}.lease`).sort());
   } finally { f.close(); }
 });
 

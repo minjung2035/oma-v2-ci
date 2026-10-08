@@ -675,7 +675,7 @@
       "tests": [
         {
           "file": "test/crash-boundaries.test.ts",
-          "title": "T18–T22/T27 primitive SIGKILL at",
+          "title": "T18\u2013T22/T27 primitive SIGKILL at",
           "injection": "sigkill",
           "points": [
             "stage",
@@ -700,7 +700,7 @@
       "tests": [
         {
           "file": "test/crash-boundaries.test.ts",
-          "title": "T18–T22/T27 primitive SIGKILL at",
+          "title": "T18\u2013T22/T27 primitive SIGKILL at",
           "injection": "sigkill",
           "points": [
             "accepted"
@@ -740,7 +740,7 @@
       "tests": [
         {
           "file": "test/crash-boundaries.test.ts",
-          "title": "T18–T22/T27 primitive SIGKILL at",
+          "title": "T18\u2013T22/T27 primitive SIGKILL at",
           "injection": "sigkill",
           "points": [
             "cur"
@@ -759,7 +759,7 @@
       "tests": [
         {
           "file": "test/crash-boundaries.test.ts",
-          "title": "T18–T22/T27 primitive SIGKILL at",
+          "title": "T18\u2013T22/T27 primitive SIGKILL at",
           "injection": "sigkill",
           "points": [
             "prepared"
@@ -789,7 +789,7 @@
       "tests": [
         {
           "file": "test/crash-boundaries.test.ts",
-          "title": "T18–T22/T27 primitive SIGKILL at",
+          "title": "T18\u2013T22/T27 primitive SIGKILL at",
           "injection": "sigkill",
           "points": [
             "archive"
@@ -808,7 +808,7 @@
       "tests": [
         {
           "file": "test/crash-boundaries.test.ts",
-          "title": "T18–T22/T27 primitive SIGKILL at",
+          "title": "T18\u2013T22/T27 primitive SIGKILL at",
           "injection": "sigkill",
           "points": [
             "inbox-a",
@@ -868,6 +868,17 @@
           "file": "test/platform-request-ledger.test.ts",
           "title": "P0-7/MAC-240: killed right after its outcome, a request's retry is answered from the record",
           "injection": "sigkill"
+        }
+      ]
+    },
+    {
+      "owner": "src/reconcile.ts#ReconcileModule.assertCanonicalHealthyAsync",
+      "fact": "the canonical fsck diagnostic spool is collected when the health observation ends -- residue never blocks or survives the next observation",
+      "tests": [
+        {
+          "file": "test/phase8.test.ts",
+          "title": "T68d: a dead run's fsck diagnostic spool is collected",
+          "injection": "logical"
         }
       ]
     },
@@ -988,27 +999,6 @@
       ]
     },
     {
-      "owner": "src/runtime/personal-settings.ts#commitPersonalSettings",
-      "fact": "DR28/29: the sync and async locked Personal settings wrappers publish through one shared commit; failed first observations consume no choice, saved choices skip observation, and retry preserves package edits.",
-      "tests": [
-        {
-          "file": "test/personal-settings.test.ts",
-          "title": "update preserves disabled entries and removal cannot resurrect them on restart",
-          "injection": "logical"
-        },
-        {
-          "file": "test/personal-settings.test.ts",
-          "title": "a contended writer changes nothing and releases after an exception",
-          "injection": "logical"
-        },
-        {
-          "file": "test/personal-settings.test.ts",
-          "title": "DR29/P0-5: a failed async project observation consumes no first choice and returns its writer",
-          "injection": "logical"
-        }
-      ]
-    },
-    {
       "owner": "src/runtime/local-package.ts#linuxStaging",
       "fact": "DR25/C20: a staged local package's copy under local/<name> is whole or absent -- published by one rename after a durable fill; a dead copy or an interrupted staging area is collected, never half-seen",
       "tests": [
@@ -1031,18 +1021,13 @@
       ]
     },
     {
-      "owner": "src/runtime/pi-packages.ts#writePackageIndex",
-      "fact": "DR25: the package store's extension index, replaced atomically with the engine's answer after every oma pi change; a change whose index was not written is picked up by the next",
+      "owner": "src/runtime/local-package.ts#stageArchive",
+      "fact": "a staged archive's inflated spool scratch is removed with the call -- residue under the staging prefix is collected, never live content",
       "tests": [
         {
           "file": "test/pi-packages.test.ts",
-          "title": "DR25: the engine names a package's extensions; the index keeps them by package, and roles follow a package through updates",
+          "title": "DR25/C20: `oma pi install` of a local path copies it into the store as `local/<name>`",
           "injection": "logical"
-        },
-        {
-          "file": "test/crash-kill-boundaries.test.ts",
-          "title": "P0V-96 / P0-7: a derived-file replacement SIGKILLed at any point",
-          "injection": "sigkill"
         }
       ]
     },
@@ -1068,6 +1053,43 @@
         {
           "file": "test/pi-runtime.test.ts",
           "title": "INF-001: engine retry settings preserve unrelated fields and allow exactly five outer retries",
+          "injection": "logical"
+        },
+        {
+          "file": "test/crash-kill-boundaries.test.ts",
+          "title": "P0V-96 / P0-7: a derived-file replacement SIGKILLed at any point",
+          "injection": "sigkill"
+        }
+      ]
+    },
+    {
+      "owner": "src/runtime/personal-settings.ts#commitPersonalSettings",
+      "fact": "DR28/29: the sync and async locked Personal settings wrappers publish through one shared commit; failed first observations consume no choice, saved choices skip observation, and retry preserves package edits.",
+      "tests": [
+        {
+          "file": "test/personal-settings.test.ts",
+          "title": "update preserves disabled entries and removal cannot resurrect them on restart",
+          "injection": "logical"
+        },
+        {
+          "file": "test/personal-settings.test.ts",
+          "title": "a contended writer changes nothing and releases after an exception",
+          "injection": "logical"
+        },
+        {
+          "file": "test/personal-settings.test.ts",
+          "title": "DR29/P0-5: a failed async project observation consumes no first choice and returns its writer",
+          "injection": "logical"
+        }
+      ]
+    },
+    {
+      "owner": "src/runtime/pi-packages.ts#writePackageIndex",
+      "fact": "DR25: the package store's extension index, replaced atomically with the engine's answer after every oma pi change; a change whose index was not written is picked up by the next",
+      "tests": [
+        {
+          "file": "test/pi-packages.test.ts",
+          "title": "DR25: the engine names a package's extensions; the index keeps them by package, and roles follow a package through updates",
           "injection": "logical"
         },
         {
@@ -1185,6 +1207,22 @@
       ]
     },
     {
+      "owner": "src/storage/output-spool.ts#spoolOutput",
+      "fact": "a caller's complete oversized answer as a digest-named file under its own state directory -- delivery only, no receipt or ledger fact",
+      "tests": [
+        {
+          "file": "test/p0-review6.test.ts",
+          "title": "a no-replace publication killed at any step leaves its name absent or whole",
+          "injection": "sigkill"
+        },
+        {
+          "file": "test/client.test.ts",
+          "title": "the output spool is content-named: the same answer is one file, and a same-named file of other bytes is not overwritten",
+          "injection": "logical"
+        }
+      ]
+    },
+    {
       "owner": "src/storage/project-preparation.ts#prepareProjectDirectory",
       "fact": "a snapshot preparation retains its lease until its owner and descendants release it; partial cleanup is recoverable and never adopts an existing tree",
       "tests": [
@@ -1202,22 +1240,6 @@
           "file": "test/project-preparation-boundaries.test.ts",
           "title": "failed preparation handoff releases its lease and collects only its own tree",
           "injection": "in-process-fault"
-        }
-      ]
-    },
-    {
-      "owner": "src/storage/output-spool.ts#spoolOutput",
-      "fact": "a caller's complete oversized answer as a digest-named file under its own state directory -- delivery only, no receipt or ledger fact",
-      "tests": [
-        {
-          "file": "test/p0-review6.test.ts",
-          "title": "a no-replace publication killed at any step leaves its name absent or whole",
-          "injection": "sigkill"
-        },
-        {
-          "file": "test/client.test.ts",
-          "title": "the output spool is content-named: the same answer is one file, and a same-named file of other bytes is not overwritten",
-          "injection": "logical"
         }
       ]
     },

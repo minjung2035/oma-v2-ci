@@ -7,8 +7,8 @@ import { isValidFullOid } from "../ids.js";
 import { agentRootPathAt, isWorkspacePathFor } from "../storage/paths.js";
 import { ensureOwnedDurableDirectory, fsyncDir } from "../storage/durable-fs.js";
 import { publishStagedDirectory } from "../storage/staged-tree.js";
-import { assertDirectory } from "../storage/directory.js";
-import { TreeLease, collectLeasedTree } from "../storage/tree-lease.js";
+import { assertDirectory, removeOwnedFile } from "../storage/directory.js";
+import { TreeLease, collectLeasedTree, treeQuiescence } from "../storage/tree-lease.js";
 import { openBeneath, withinDirectory } from "../storage/contained-fs.js";
 import { runGitText, GIT_ENV } from "../process/policies.js";
 import { PreparationExecutor } from "../process/preparation.js";
@@ -25,9 +25,17 @@ export class WorkspaceCoordinator {
   private git(argv: readonly string[], cwd?: string) {
     return runGitText(argv, { ...(cwd === undefined ? {} : { cwd }), timeout: 120000, maxBuffer: 4 * 1024 * 1024 });
   }
-  private async prepareGit(lease: TreeLease, argv: readonly string[], cwd?: string): Promise<{ status: number; stdout: string }> {
+  private async prepareGit(lease: TreeLease, argv: readonly string[], cwd?: string, spool?: { stdout: string; stderr: string }): Promise<{ status: number; stdout: string }> {
+    // A clone/fetch/checkout of a big workspace cannot fit a fixed deadline:
+    // every byte the child emits re-arms the 120-second silence window (git
+    // carries --progress, so a working child is never silent), and only a
+    // generous ceiling ends one that never stops. Both streams of such a
+    // command are spooled whole -- progress noise and ref chatter must not
+    // become in-memory refusals. Small plumbing keeps its bounded buffers.
     const result = await this.executor.run({ executable: "/usr/bin/git", argv, env: GIT_ENV,
-      ...(cwd === undefined ? {} : { cwd }), timeoutMs: 120000, stdoutBytes: 4 * 1024 * 1024, stderrBytes: 4 * 1024 * 1024 },
+      ...(cwd === undefined ? {} : { cwd }), timeoutMs: 24 * 3600 * 1000, silenceMs: 120000, stdoutBytes: 4 * 1024 * 1024,
+      stderrBytes: 4 * 1024 * 1024,
+      ...(spool === undefined ? {} : { stdoutSpool: spool.stdout, stderrSpool: spool.stderr }) },
       undefined, [lease.descriptor]);
     if (result.kind !== "exited") throw new StoreError("REF_STATE_UNKNOWN", `workspace preparation is ${result.kind}`);
     try { return { status: result.exitCode, stdout: decodeProcessText(result.stdout) }; }
@@ -55,7 +63,15 @@ export class WorkspaceCoordinator {
     const identity = Object.freeze({ name: plan.spec.name, from: plan.spec.from, workspacePath: plan.workspacePath, specHash: plan.specHash });
     const key = `${identity.workspacePath}\0${identity.specHash}`;
     if (this.working) return this.working.key === key ? this.working.task : Promise.reject(new StoreError("REF_STATE_UNKNOWN", "another workspace preparation is active"));
-    if (this.executor.blocked) return Promise.reject(new StoreError("REF_STATE_UNKNOWN", "workspace executor outcome is uncertain"));
+    if (this.executor.blocked) {
+      // A run that never reached a complete observation left its staged tree
+      // behind; its lease is the fresh observation of whether those children
+      // are gone. Only that proof lets the next preparation proceed -- the
+      // stale unknown clears on the observation, never on the attempt.
+      const stale = join(agentRootPathAt(this.paths.stateRoot, plan.spec.name), "workspace.tmp");
+      const observed = this.executor.reverifyStale(() => { try { return treeQuiescence(stale).kind; } catch { return "unknown"; } });
+      if (observed !== "quiescent") return Promise.reject(new StoreError("REF_STATE_UNKNOWN", `workspace executor outcome is ${observed}`));
+    }
     const task = Promise.resolve().then(() => this.prepare(identity, readinessProven)).finally(() => { if (this.working?.task === task) this.working = null; });
     this.working = { key, task }; return task;
   }
@@ -91,12 +107,20 @@ export class WorkspaceCoordinator {
     finally { lease.release(); }
     // Published: only the lease is left, and nothing holds it.
     collectLeasedTree(temporary);
+    try { removeOwnedFile(`${temporary}.stderr`); } catch { /* diagnostic residue */ }
+    try { removeOwnedFile(`${temporary}.stdout`); } catch { /* diagnostic residue */ }
   }
   private async prepareLeased(lease: TreeLease, identity: Readonly<{ name: string; from: string }>, temporary: string, workspace: string,
     verify: (path: string) => void): Promise<void> {
     ensureOwnedDurableDirectory(temporary, this.paths.stateRoot, 0o755);
+    // The git progress/error streams are spooled beside the staged tree;
+    // under the lease they are this run's alone, so what a dead run left is
+    // replaced.
+    const diagnostics = { stderr: `${temporary}.stderr`, stdout: `${temporary}.stdout` };
+    try { removeOwnedFile(diagnostics.stderr); } catch { /* a stray cannot block preparation */ }
+    try { removeOwnedFile(diagnostics.stdout); } catch { /* a stray cannot block preparation */ }
     if (!existsSync(join(temporary, ".git"))) {
-      const cloned = await this.prepareGit(lease, ["clone", "--no-local", "--single-branch", "--branch", "main", this.paths.projectGit, temporary]);
+      const cloned = await this.prepareGit(lease, ["clone", "--progress", "--no-local", "--single-branch", "--branch", "main", this.paths.projectGit, temporary], undefined, diagnostics);
       if (cloned.status !== 0) throw new StoreError("INTERNAL_ERROR", "private workspace clone failed");
     }
     assertDirectory(join(temporary, ".git"));
@@ -109,11 +133,11 @@ export class WorkspaceCoordinator {
     if (remote.status !== 0) throw new StoreError("INTERNAL_ERROR", "private workspace origin could not be set");
     let haveBase = await this.prepareGit(lease, ["cat-file", "-e", `${identity.from}^{commit}`], temporary);
     if (haveBase.status !== 0) {
-      const fetched = await this.prepareGit(lease, ["fetch", "--no-tags", this.paths.projectGit, identity.from], temporary);
+      const fetched = await this.prepareGit(lease, ["fetch", "--progress", "--no-tags", this.paths.projectGit, identity.from], temporary, diagnostics);
       haveBase = await this.prepareGit(lease, ["cat-file", "-e", `${identity.from}^{commit}`], temporary);
       if (fetched.status !== 0 || haveBase.status !== 0) throw new StoreError("PREREQUISITE_MISSING", `cloned workspace does not contain frozen base ${identity.from}`);
     }
-    const checkout = await this.prepareGit(lease, ["checkout", "--detach", identity.from], temporary);
+    const checkout = await this.prepareGit(lease, ["checkout", "--progress", "--detach", identity.from], temporary, diagnostics);
     if (checkout.status !== 0) throw new StoreError("INTERNAL_ERROR", "frozen workspace base checkout failed");
     // Final observation, filesystem durability and rename remain one synchronous
     // publication section. Unknown/aborted commands never reach this point.

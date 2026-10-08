@@ -1,4 +1,7 @@
 // GIT-004/008: bounded canonical command adapter. Effect exit status is never CAS proof.
+import { closeSync, constants, mkdtempSync, openSync, readSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { GIT_ENV } from "../process/policies.js";
 import { StoreError } from "../domain/errors.js";
 import { runProcessSync } from "../process/run.js";
@@ -12,33 +15,36 @@ export const CANONICAL_PROCESS_LIMITS = { timeout: 120000, maxBuffer: 4 * 1024 *
 /** UX-09/DR33: `GitObserver.gitlinks` is the one observation that enumerates a
  * candidate's *whole* tree (`ls-tree -r -z --full-tree`), so its output scales
  * with leaf count, not with a diff or a ref set — a sha256 record is ~80 bytes
- * plus the path. Under the shared 4 MiB bound a ~70k-entry tree overflows into
- * output-limited → unknown → REF_STATE_UNKNOWN at every gate, a permanent
- * integration wedge even with zero gitlinks. 256 MiB admits ~1M leaf records
- * with ~180 bytes of average path (or ~2.6M at typical depths) — and it stays
- * a bound: beyond it the observation is still output-limited → unknown, never
- * a truncated "no gitlinks". Server-side filtering was rejected: the canonical
- * spawn model is one pinned executable plus argv (no shell pipeline) and
- * `ls-tree` has no mode filter; shrinking records via `--format` was rejected
- * because it would strip the mode/type/oid grammar the parser validates. */
-export const GITLINKS_OBSERVATION_BYTES = 256 * 1024 * 1024;
+ * plus the path. There is no honest in-memory bound for it: the runner spools
+ * the stream whole and the observer parses it one record at a time, so a tree
+ * of any size answers present/refused/corrupt — output size alone can never
+ * become unknown, and a truncated record can never read as "no gitlinks". */
 /** Native execution is owned by process/run.ts. Both byte budgets are the same
  * single bound, so the native combined stdout+stderr cap is unchanged. */
-function evidence(argv: readonly string[], timeoutMs: number, maxBuffer: number, input?: string): GitProcessEvidence {
+function evidence(argv: readonly string[], timeoutMs: number, maxBuffer: number, input?: string, stdoutSpool?: string): GitProcessEvidence {
   const result = runProcessSync({ executable: GIT_BIN, argv, env: GIT_ENV,
     timeoutMs, stdoutBytes: maxBuffer, stderrBytes: maxBuffer,
-    ...(input === undefined ? {} : { input }) });
+    ...(input === undefined ? {} : { input }), ...(stdoutSpool === undefined ? {} : { stdoutSpool }) });
   return { status: result.kind === "exited" ? result.exitCode : null, signal: result.signal,
-    stdout: result.stdout, stderr: result.stderr };
+    stdout: result.stdout, stderr: result.stderr,
+    ...(result.stdoutSpooledTo === undefined ? {} : { stdoutSpooledTo: result.stdoutSpooledTo }) };
 }
 export function createCanonicalObserver(): GitObserver {
   return new GitObserver((args, input) => {
     const format = args.includes("--show-object-format");
     const commit = args.includes("--batch-check=%(objecttype)");
-    const wholeTree = args.includes("ls-tree");
+    if (args.includes("ls-tree")) {
+      let dir: string;
+      try { dir = mkdtempSync(join(tmpdir(), "oma-ls-tree-")); }
+      catch (error) {
+        return { status: null, signal: null, stdout: null, stderr: null,
+          error: error instanceof Error ? error : new Error(String(error)) };
+      }
+      const observed = evidence([...args], CANONICAL_PROCESS_LIMITS.timeout, CANONICAL_PROCESS_LIMITS.maxBuffer, input, join(dir, "stdout"));
+      return { ...observed, dispose: () => { try { rmSync(dir, { recursive: true, force: true }); } catch { /* diagnostic residue */ } } };
+    }
     return evidence([...args], format ? 30000 : commit ? 10000 : CANONICAL_PROCESS_LIMITS.timeout,
-      format ? 1024 : commit ? 64 * 1024 : wholeTree ? GITLINKS_OBSERVATION_BYTES
-        : CANONICAL_PROCESS_LIMITS.maxBuffer, input);
+      format ? 1024 : commit ? 64 * 1024 : CANONICAL_PROCESS_LIMITS.maxBuffer, input);
   });
 }
 export function compareAndSwapCanonicalRef(observations: GitObserver, repository: string, ref: string,
@@ -121,38 +127,79 @@ export function canonicalRevertCommit(repository: string, input: {
   readonly mergeBase: string; readonly main: string; readonly base: string;
   readonly message: string; readonly society: string;
 }): string {
-  const merge = runProcessSync({ executable: GIT_BIN,
-    argv: [...CANONICAL_SAFE_ARGS, "--git-dir", repository, "merge-tree", "--write-tree", "--name-only",
-      "--no-messages",
-      `--merge-base=${gitOidArgument(input.mergeBase)}`, gitOidArgument(input.main), gitOidArgument(input.base)],
-    env: GIT_ENV, timeoutMs: CANONICAL_PROCESS_LIMITS.timeout,
-    stdoutBytes: CANONICAL_PROCESS_LIMITS.maxBuffer, stderrBytes: 8192 });
-  if (merge.kind === "timed-out") throw new StoreError("DEADLINE_EXCEEDED", "merge-tree timed out");
-  if (merge.kind !== "exited" || (merge.exitCode !== 0 && merge.exitCode !== 1))
-    throw new StoreError("REF_STATE_UNKNOWN", `canonical merge-tree is ${merge.kind}${merge.exitCode !== null ? ` ${merge.exitCode}` : ""}`);
-  const lines = merge.stdout.toString("utf8").split("\n").filter(line => line.length > 0);
-  if (merge.exitCode === 1)
-    throw new StoreError("REVERT_CONFLICT", "the revert conflicts with later work on main",
-      { details: { paths: lines.slice(1, 65), artifact: "none" } });
-  const tree = lines[0] ?? "";
-  if (!isValidFullOid(tree)) throw new StoreError("REF_STATE_UNKNOWN", "merge-tree wrote no tree");
-  const mainTree = runProcessSync({ executable: GIT_BIN,
-    argv: [...CANONICAL_SAFE_ARGS, "--git-dir", repository, "rev-parse", `${gitOidArgument(input.main)}^{tree}`],
-    env: GIT_ENV, timeoutMs: CANONICAL_PROCESS_LIMITS.timeout, stdoutBytes: 256, stderrBytes: 256 });
-  if (mainTree.kind !== "exited" || mainTree.exitCode !== 0)
-    throw new StoreError("REF_STATE_UNKNOWN", "canonical main tree is not observable");
-  if (mainTree.stdout.toString("utf8").trim() === tree)
-    throw new StoreError("INVALID_REQUEST", "the merged change is no longer present on main");
-  const commit = runProcessSync({ executable: GIT_BIN,
-    argv: [...CANONICAL_SAFE_ARGS, "--git-dir", repository, "commit-tree", gitOidArgument(tree),
-      "-p", gitOidArgument(input.main), "-m", input.message],
-    env: { ...GIT_ENV, GIT_AUTHOR_NAME: "OMA", GIT_AUTHOR_EMAIL: `oma@${input.society}.oma.invalid`,
-      GIT_COMMITTER_NAME: "OMA", GIT_COMMITTER_EMAIL: `oma@${input.society}.oma.invalid` },
-    timeoutMs: CANONICAL_PROCESS_LIMITS.timeout, stdoutBytes: 256, stderrBytes: 8192 });
-  if (commit.kind !== "exited" || commit.exitCode !== 0)
-    throw new StoreError("REF_STATE_UNKNOWN", `canonical commit-tree is ${commit.kind}`);
-  const oid = commit.stdout.toString("utf8").trim();
-  if (!isValidFullOid(oid)) throw new StoreError("REF_STATE_UNKNOWN", "commit-tree wrote no commit");
-  return oid;
+  // The conflict listing scales with the tree, not with a document bound:
+  // merge-tree's stdout is spooled whole and only the head the classification
+  // needs -- the tree line and up to 64 conflict paths -- is read back.
+  const dir = mkdtempSync(join(tmpdir(), "oma-merge-tree-"));
+  try {
+    const merge = runProcessSync({ executable: GIT_BIN,
+      argv: [...CANONICAL_SAFE_ARGS, "--git-dir", repository, "merge-tree", "--write-tree", "--name-only",
+        "--no-messages",
+        `--merge-base=${gitOidArgument(input.mergeBase)}`, gitOidArgument(input.main), gitOidArgument(input.base)],
+      env: GIT_ENV, timeoutMs: CANONICAL_PROCESS_LIMITS.timeout,
+      stdoutBytes: CANONICAL_PROCESS_LIMITS.maxBuffer, stderrBytes: 8192, stdoutSpool: join(dir, "stdout") });
+    if (merge.kind === "timed-out") throw new StoreError("DEADLINE_EXCEEDED", "merge-tree timed out");
+    if (merge.kind !== "exited" || (merge.exitCode !== 0 && merge.exitCode !== 1))
+      throw new StoreError("REF_STATE_UNKNOWN", `canonical merge-tree is ${merge.kind}${merge.exitCode !== null ? ` ${merge.exitCode}` : ""}`);
+    let lines: string[];
+    try { lines = headLines(join(dir, "stdout"), 65); }
+    catch { throw new StoreError("REF_STATE_UNKNOWN", "canonical merge-tree output could not be read"); }
+    if (merge.exitCode === 1)
+      throw new StoreError("REVERT_CONFLICT", "the revert conflicts with later work on main",
+        { details: { paths: lines.slice(1, 65), artifact: "none" } });
+    const tree = lines[0] ?? "";
+    if (!isValidFullOid(tree)) throw new StoreError("REF_STATE_UNKNOWN", "merge-tree wrote no tree");
+    const mainTree = runProcessSync({ executable: GIT_BIN,
+      argv: [...CANONICAL_SAFE_ARGS, "--git-dir", repository, "rev-parse", `${gitOidArgument(input.main)}^{tree}`],
+      env: GIT_ENV, timeoutMs: CANONICAL_PROCESS_LIMITS.timeout, stdoutBytes: 256, stderrBytes: 256 });
+    if (mainTree.kind !== "exited" || mainTree.exitCode !== 0)
+      throw new StoreError("REF_STATE_UNKNOWN", "canonical main tree is not observable");
+    if (mainTree.stdout.toString("utf8").trim() === tree)
+      throw new StoreError("INVALID_REQUEST", "the merged change is no longer present on main");
+    const commit = runProcessSync({ executable: GIT_BIN,
+      argv: [...CANONICAL_SAFE_ARGS, "--git-dir", repository, "commit-tree", gitOidArgument(tree),
+        "-p", gitOidArgument(input.main), "-m", input.message],
+      env: { ...GIT_ENV, GIT_AUTHOR_NAME: "OMA", GIT_AUTHOR_EMAIL: `oma@${input.society}.oma.invalid`,
+        GIT_COMMITTER_NAME: "OMA", GIT_COMMITTER_EMAIL: `oma@${input.society}.oma.invalid` },
+      timeoutMs: CANONICAL_PROCESS_LIMITS.timeout, stdoutBytes: 256, stderrBytes: 8192 });
+    if (commit.kind !== "exited" || commit.exitCode !== 0)
+      throw new StoreError("REF_STATE_UNKNOWN", `canonical commit-tree is ${commit.kind}`);
+    const oid = commit.stdout.toString("utf8").trim();
+    if (!isValidFullOid(oid)) throw new StoreError("REF_STATE_UNKNOWN", "commit-tree wrote no commit");
+    return oid;
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+}
+
+/** The first `maxLines` non-empty lines of a spooled stream, read a chunk at a
+ * time — merge-tree's tree line and conflict paths without the whole listing
+ * in memory. A line beyond the chunk-plus-carry working set still counts as
+ * one; an unreadable spool is a thrown I/O failure for the caller. */
+function headLines(path: string, maxLines: number): string[] {
+  const fd = openSync(path, constants.O_RDONLY | constants.O_NOFOLLOW);
+  try {
+    const lines: string[] = [];
+    const chunk = Buffer.alloc(1024 * 1024);
+    let carry = Buffer.alloc(0);
+    while (lines.length < maxLines) {
+      const count = readSync(fd, chunk, 0, chunk.length, null);
+      if (count === 0) break;
+      carry = Buffer.concat([carry, chunk.subarray(0, count)]);
+      for (;;) {
+        const at = carry.indexOf(0x0a);
+        if (at < 0) break;
+        const line = carry.subarray(0, at).toString("utf8");
+        carry = carry.subarray(at + 1);
+        if (line.length > 0) lines.push(line);
+        if (lines.length >= maxLines) break;
+      }
+      // A single line beyond this cannot be a tree oid or a wire path.
+      if (carry.byteLength > 16 * 1024 * 1024) break;
+    }
+    if (lines.length < maxLines && carry.byteLength > 0 && carry.byteLength <= 16 * 1024 * 1024) {
+      const line = carry.toString("utf8");
+      if (line.length > 0) lines.push(line);
+    }
+    return lines;
+  } finally { closeSync(fd); }
 }
 

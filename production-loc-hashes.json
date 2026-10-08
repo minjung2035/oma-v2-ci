@@ -68,7 +68,7 @@
     },
     {
       "path": "src/broker/process-ancestry.ts",
-      "sha256": "3d72cf704a21ed07dd78ed8a4e3e53f465c71fb0f38bc57829d6b2da3c281c5c"
+      "sha256": "577c66c5cdc9cb2c5cc264665a31aebd8aaa983b4245ff2fdf6fb954d1f2fd20"
     },
     {
       "path": "src/broker/public-dispatcher.ts",
@@ -244,7 +244,7 @@
     },
     {
       "path": "src/config/operations.ts",
-      "sha256": "cc95aa8faa9be3cb284fc01498d60ca523008748af6074e2f74e66aac283bb2a"
+      "sha256": "66f5f5b79ebec15f0a356b7d26c675d8db2005a974b8b72c1622a8d9d823c1f3"
     },
     {
       "path": "src/config/policy.ts",
@@ -392,7 +392,7 @@
     },
     {
       "path": "src/entry/broker.ts",
-      "sha256": "5ba07d141436bccfd2d692bc0080f1bfd4a085db669f1571a1751e082495ba0c"
+      "sha256": "5b243f3b10d56ce117659b6b3881627a7b8635970adcdc5a67abb752eca483b2"
     },
     {
       "path": "src/entry/guest-packages.ts",
@@ -424,11 +424,11 @@
     },
     {
       "path": "src/entry/oma-mac.ts",
-      "sha256": "1eac4397ede4da3f18a8b81e0f8d14524792c2c1b3dcc09df22f231c540eadbb"
+      "sha256": "12332ed918e91851928673513b4a002c0fc5d251fd4576c70cc9933c5f23f5ef"
     },
     {
       "path": "src/entry/oma-society.ts",
-      "sha256": "485924a22f8af3421281abe5b24c317ac327e5565c08d106dfd4b3ae540da978"
+      "sha256": "d073b87fe85e762beec0558e4875673e118abdbf6650e57f967435677d95bcff"
     },
     {
       "path": "src/entry/oma.ts",
@@ -55696,7 +55696,7 @@
     },
     {
       "path": "src/git/canonical-command.ts",
-      "sha256": "6910618c06fb58c2247296178ee3fca9c796a12ab6a7be1e12e03ddca787d6c7"
+      "sha256": "e95973a47af633aaf611c2445f630788e6a651bbdaa268a57e04d970f0fe7b6c"
     },
     {
       "path": "src/git/context-publication.ts",
@@ -55704,7 +55704,7 @@
     },
     {
       "path": "src/git/context-repository.ts",
-      "sha256": "98a12ea195c126160c6e2d7ff66b35e84ffd83a98790e1cd77bb618c4dc34943"
+      "sha256": "7d316504d4f618715acd56504b8b31cb3ec8c3679eb83838c6f565335da5e000"
     },
     {
       "path": "src/git/context.ts",
@@ -55724,11 +55724,11 @@
     },
     {
       "path": "src/git/observe.ts",
-      "sha256": "3ff49f6803838d0bac40e730dd5e6630d2a2d13e267d0a56c59fe1b7091133f7"
+      "sha256": "77195062f9e243c16491d5aa1a04466229f2003599789b026d62bc2b8ca4b02a"
     },
     {
       "path": "src/git/paths.ts",
-      "sha256": "1041fa0e8b29e7f0a4c34615ecf1a73e2e9d9b2cbd25f75de52d465b51cbdfc3"
+      "sha256": "d0fb12132346312cdb8f490d41519f2f3dc2170bf6f82e604af76c140a78d8db"
     },
     {
       "path": "src/git/project-snapshot.ts",
@@ -55740,7 +55740,7 @@
     },
     {
       "path": "src/git/quarantine.ts",
-      "sha256": "4a1186e6995efb7ef028f71c3bb12320ea96b6733d7136a60a3a7debbd0c60cd"
+      "sha256": "89908c6de9915b4e7553e140a2374fffb89c8b298e2152f5a51cad433caf9269"
     },
     {
       "path": "src/git/submit.ts",
@@ -55796,7 +55796,7 @@
     },
     {
       "path": "src/lifecycle/workspace.ts",
-      "sha256": "28ae5d607e371b3ac948d33b92aee7ba9f473acb5480e9c04de6ff26bdf98ee5"
+      "sha256": "18f28cd5bad0601b50c6b39445a7e31e93ef34418f48b5402dd6b57619876519"
     },
     {
       "path": "src/mail.ts",
@@ -56036,7 +56036,7 @@
     },
     {
       "path": "src/platform/package-archive.ts",
-      "sha256": "13c4cd69564a2924772c6f9dc05a418cb89330a12883cabd892eafd7e1148531"
+      "sha256": "d82d6879176f275e3cfa720b2519d7b03e532c6b1238c78dea4cdb6883dd3ba6"
     },
     {
       "path": "src/platform/product-text.ts",
@@ -56084,11 +56084,11 @@
     },
     {
       "path": "src/process/policies.ts",
-      "sha256": "3c52157e8c78a9346d3a81f0086cbe7a1c64b58a287ad6c5f5a7e2f21c3301e9"
+      "sha256": "5ee2f5ce698b2bb4f6484c44d5986e399cc47e6f708196ca5caf980ceb210800"
     },
     {
       "path": "src/process/preparation.ts",
-      "sha256": "b1953d37664b614543dce5ebbd21098cb1922926d74112f8440c008690d05b5c"
+      "sha256": "81ab6622cf30a11f6896332c64fe681c0a131efdecb121de591a033da1d59653"
     },
     {
       "path": "src/process/run.ts",
@@ -56188,7 +56188,7 @@
     },
     {
       "path": "src/reconcile.ts",
-      "sha256": "99902729d8855fcb9d6e8a908b32c67fa8761dd4b6fe6893a0445dceefa6b7a8"
+      "sha256": "cf16eebef2dd011d313f8a3f490e1921c9b73ccd70142c3957485d81264507b1"
     },
     {
       "path": "src/reconcile/operations.ts",
@@ -56288,7 +56288,7 @@
     },
     {
       "path": "src/runtime/local-package.ts",
-      "sha256": "a7d5a8b01f0dfc9697844cccf7589034e4aa041cd3938981e07e0f6db03b12b3"
+      "sha256": "0954e92f08685ba3458c759c72bbea0331776a462cd45e113b47261dc2cdd8fb"
     },
     {
       "path": "src/runtime/locked-files.ts",
@@ -56476,7 +56476,7 @@
     },
     {
       "path": "src/storage/quota.ts",
-      "sha256": "fa179bf5bfc9a1eba31acf4fc584bec05ec710a2176a4628c6f835cbafe2065f"
+      "sha256": "f455fc2aebe421570c9aaf8183777e8bcbb6335f7da8226201d1b09c2b4a7a88"
     },
     {
       "path": "src/storage/receipt-projector.ts",

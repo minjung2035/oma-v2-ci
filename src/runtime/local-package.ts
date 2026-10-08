@@ -33,9 +33,10 @@
  */
 import { randomUUID } from "node:crypto";
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
-import { closeSync, constants, fsyncSync, lstatSync, mkdirSync, readdirSync, readFileSync,
-  realpathSync, renameSync, statSync, unlinkSync, writeFileSync } from "node:fs";
-import { gunzipSync } from "node:zlib";
+import { closeSync, constants, createReadStream, fstatSync, fsyncSync, lstatSync, mkdirSync, openSync, readdirSync,
+  readFileSync, readSync, realpathSync, renameSync, statSync, unlinkSync, writeFileSync, writeSync } from "node:fs";
+import { pipeline } from "node:stream/promises";
+import { createGunzip } from "node:zlib";
 import { userInfo } from "node:os";
 import { fileURLToPath } from "node:url";
 import { StoreError, unobserved } from "../domain/errors.js";
@@ -68,6 +69,10 @@ interface StageArea {
   make(rel: string): void;
   /** `bytes` is the file `rel` beneath the staging root, its parents made. */
   write(rel: string, bytes: Buffer, executable: boolean): void;
+  /** `size` bytes of `source` from `position` on are the file `rel` beneath the
+   * staging root, its parents made -- the copy is chunked, so a staged file
+   * is never a whole buffer in memory. */
+  writeFrom(rel: string, source: number, position: number, size: number, executable: boolean): void;
   /** `made` -- a leaf name under the staging root, "" for the root itself --
    * becomes `local/<name>` whole, replacing a dead copy. */
   publish(made: string, name: string): void;
@@ -76,6 +81,22 @@ interface StageArea {
 }
 
 const DIRECTORY = constants.O_RDONLY | constants.O_DIRECTORY;
+
+/** `size` bytes of `source` from `position` on copied to the held `out`, a
+ * chunk at a time -- the one copy loop both StageArea spellings share. A
+ * source that ends early throws: what was staged is not the file the size
+ * named. Positional reads keep the caller's own cursor untouched. */
+function copyFdRange(source: number, position: number, size: number, out: number): void {
+  const chunk = Buffer.alloc(Math.min(size, 1024 * 1024));
+  let at = position, left = size;
+  while (left > 0) {
+    const want = Math.min(chunk.length, left);
+    const got = readSync(source, chunk, 0, want, at);
+    if (got === 0) throw new StoreError("INVALID_REQUEST", "a staged file ends inside the bytes its size named");
+    for (let written = 0; written < got;) written += writeSync(out, chunk, written, got - written);
+    at += got; left -= got;
+  }
+}
 
 /** `rel`'s components beneath the held `dir`, each named through its held
  * parent; the deepest is answered held for the caller (which is `dir` itself
@@ -167,6 +188,15 @@ function linuxStaging(root: string): StageArea {
       const parent = descendBeneath(held, dirname(rel) === "." ? "" : dirname(rel), true);
       try { writeFileSync(entryAt(parent, basename(rel)), bytes, { mode: executable ? 0o755 : 0o644 }); }
       finally { release(parent); }
+    },
+    writeFrom(rel, source, position, size, executable) {
+      const parent = descendBeneath(held, dirname(rel) === "." ? "" : dirname(rel), true);
+      try {
+        const out = openBeneath(parent, basename(rel),
+          constants.O_WRONLY | constants.O_CREAT | constants.O_TRUNC, executable ? 0o755 : 0o644);
+        try { copyFdRange(source, position, size, out); }
+        finally { closeSync(out); }
+      } finally { release(parent); }
     },
     publish(made, name) {
       const source = made === "" ? store : held;
@@ -260,6 +290,13 @@ function hostStaging(root: string): StageArea {
     path,
     make: rel => makeHostStagedDirectories(path, rel),
     write: (rel, bytes, executable) => writeHostStagedFile(path, rel, bytes, executable ? 0o755 : 0o644),
+    writeFrom(rel, source, position, size, executable) {
+      const dest = join(path, rel);
+      mkdirSync(dirname(dest), { recursive: true });
+      const out = openSync(dest, constants.O_WRONLY | constants.O_CREAT | constants.O_TRUNC, executable ? 0o755 : 0o644);
+      try { copyFdRange(source, position, size, out); }
+      finally { closeSync(out); }
+    },
     publish: (made, name) => publishHostStaged(made === "" ? path : join(path, made), join(root, PACKAGE_LOCAL_DIR), name, ownedFrom),
     close() { if (closed) return; closed = true; removeHostStaged(path); },
   };
@@ -301,8 +338,11 @@ function packageManifest(root: string): { readonly name: string | undefined } {
   if (observed === undefined)
     return refuse(`not a package (no package.json, the manifest a package must have): ${root}`);
   if (!observed.isFile()) return refuse(`the local package's package.json is not a file: ${root}`);
-  if (observed.size > PACKAGE_ARCHIVE_BOUNDS.fileBytes)
-    return refuse(`the local package's package.json exceeds its ${PACKAGE_ARCHIVE_BOUNDS.fileBytes}-byte bound`);
+  // The manifest is the one member held whole: a JSON document the resolver
+  // parses. Generous, not a capacity policy -- everything else in a package
+  // is staged a chunk at a time.
+  if (observed.size > PACKAGE_MANIFEST_BYTES)
+    return refuse(`the local package's package.json exceeds its ${PACKAGE_MANIFEST_BYTES}-byte bound`);
   let parsed: unknown;
   try { parsed = JSON.parse(readFileSync(file, "utf8")); }
   catch { return refuse(`the local package's package.json is not readable JSON: ${root}`); }
@@ -332,15 +372,17 @@ function stagedComponent(name: string): void {
     refuse(`the local package holds a name oma cannot store: ${JSON.stringify(name)}`);
 }
 
-/** A staged tree's size keeps the bounds the carried store's archive keeps. */
-interface StageBudget { entries: number; bytes: number }
-function budgetFile(budget: StageBudget, rel: string, size: number): void {
+/** A manifest read whole is a JSON document, so its bound is the generous
+ * document one -- not the carry's old per-file cap, which size alone made
+ * refuse packages that only streamed. */
+const PACKAGE_MANIFEST_BYTES = 16 * 1024 * 1024;
+
+/** A staged tree's count keeps the carry index's working bound; its bytes are
+ * streamed, so size alone is not a refusal. */
+interface StageBudget { entries: number }
+function budgetFile(budget: StageBudget): void {
   if (++budget.entries > PACKAGE_ARCHIVE_BOUNDS.entries)
     refuse(`the local package holds more than ${PACKAGE_ARCHIVE_BOUNDS.entries} entries`);
-  if (size > PACKAGE_ARCHIVE_BOUNDS.fileBytes)
-    refuse(`the local package's ${rel} exceeds its ${PACKAGE_ARCHIVE_BOUNDS.fileBytes}-byte file bound`);
-  if ((budget.bytes += size) > PACKAGE_ARCHIVE_BOUNDS.bytes)
-    refuse(`the local package exceeds its ${PACKAGE_ARCHIVE_BOUNDS.bytes}-byte bound`);
 }
 
 /** The source tree copied beneath the staging root: links are resolved to
@@ -359,17 +401,25 @@ function copyIntoStage(source: string, area: StageArea, rel: string, budget: Sta
     try { observed = statSync(origin); }
     catch (error) { throw unobserved(error, "the local package") ?? refuse(`the local package holds a link to nothing: ${dest}`); }
     if (observed.isDirectory()) {
-      budgetFile(budget, dest, 0);
+      budgetFile(budget);
       area.make(dest);
       copyIntoStage(origin, area, dest, budget);
       continue;
     }
     if (!observed.isFile()) refuse(`the local package holds something that is not a file or a directory: ${dest}`);
-    if (observed.size > PACKAGE_ARCHIVE_BOUNDS.fileBytes)
-      refuse(`the local package's ${dest} exceeds its ${PACKAGE_ARCHIVE_BOUNDS.fileBytes}-byte file bound`);
-    const bytes = readFileSync(origin);
-    budgetFile(budget, dest, bytes.length);
-    area.write(dest, bytes, (observed.mode & 0o111) !== 0);
+    budgetFile(budget);
+    // The copy is chunked and the file is checked before and after it is read:
+    // a file that grows or is swapped mid-copy stages what the size named, and
+    // the mismatch is the honest failure, not a partial copy.
+    const fd = openSync(origin, constants.O_RDONLY);
+    try {
+      const before = fstatSync(fd);
+      area.writeFrom(dest, fd, 0, before.size, (observed.mode & 0o111) !== 0);
+      const after = statSync(origin);
+      if (before.dev !== after.dev || before.ino !== after.ino || before.size !== after.size ||
+          before.mtimeMs !== after.mtimeMs || before.ctimeMs !== after.ctimeMs)
+        throw new StoreError("POLICY_CHANGED", `the local package's ${dest} changed while it was read`);
+    } finally { closeSync(fd); }
   }
 }
 
@@ -388,20 +438,23 @@ function stageDirectory(store: string, source: string): string {
   const { name: manifest } = packageManifest(source);
   const name = stagedName(manifest, basename(source));
   return staging(store, area => {
-    copyIntoStage(source, area, "", { entries: 0, bytes: 0 });
+    copyIntoStage(source, area, "", { entries: 0 });
     return { made: "", name };
   });
 }
 
 function stageFile(store: string, source: string): string {
   const name = basename(source);
-  if (statSync(source).size > PACKAGE_ARCHIVE_BOUNDS.fileBytes)
-    refuse(`the local file exceeds its ${PACKAGE_ARCHIVE_BOUNDS.fileBytes}-byte bound`);
-  const bytes = readFileSync(source);
-  if (bytes.length > PACKAGE_ARCHIVE_BOUNDS.fileBytes)
-    refuse(`the local file exceeds its ${PACKAGE_ARCHIVE_BOUNDS.fileBytes}-byte bound`);
   return staging(store, area => {
-    area.write(name, bytes, false);
+    const fd = openSync(source, constants.O_RDONLY);
+    try {
+      const before = fstatSync(fd);
+      area.writeFrom(name, fd, 0, before.size, false);
+      const after = statSync(source);
+      if (before.dev !== after.dev || before.ino !== after.ino || before.size !== after.size ||
+          before.mtimeMs !== after.mtimeMs || before.ctimeMs !== after.ctimeMs)
+        throw new StoreError("POLICY_CHANGED", `the local file changed while it was read: ${name}`);
+    } finally { closeSync(fd); }
     return { made: name, name };
   });
 }
@@ -409,7 +462,7 @@ function stageFile(store: string, source: string): string {
 /** `oma pi install <path>`: copy the local package into the store and answer
  * the store-relative source (`local/<name>`) the engine is then asked to
  * install -- never the path the Human gave. */
-export function stageLocalPackage(store: string, given: string): string {
+export async function stageLocalPackage(store: string, given: string): Promise<string> {
   const source = localSourcePath(given);
   // The store's own slot is oma's: a file or a link where the store root
   // must be a directory can hold no staged copies -- the same stray the
@@ -438,7 +491,7 @@ export function stageLocalPackage(store: string, given: string): string {
   if (observed.isDirectory()) return stageDirectory(root, source);
   if (observed.isFile()) {
     if (extensionEntryProblem(basename(source)) === null) return stageFile(root, source);
-    return stageArchive(root, source);
+    return await stageArchive(root, source);
   }
   return refuse(`not a package source (not a directory, an archive or a JS/TS file): ${given}`);
 }
@@ -448,33 +501,72 @@ export function stageLocalPackage(store: string, given: string): string {
  * to `tar`, because both ends of the format are then this product's own and
  * closed -- regular files and directories only, within the archive bounds the
  * carried store already keeps. A link, a device, an absolute or escaping
- * name is refused, as is anything that is not ustar. */
-function stageArchive(store: string, source: string): string {
-  if (statSync(source).size > PACKAGE_ARCHIVE_BOUNDS.fileBytes)
-    refuse(`the package archive exceeds its ${PACKAGE_ARCHIVE_BOUNDS.fileBytes}-byte bound`);
-  let data: Buffer;
-  try { data = readFileSync(source); }
-  catch (error) { throw unobserved(error, "the local package") ?? refuse(`the package archive could not be read (${errorWordsOf(error)})`); }
-  if (data.length > PACKAGE_ARCHIVE_BOUNDS.fileBytes)
-    refuse(`the package archive exceeds its ${PACKAGE_ARCHIVE_BOUNDS.fileBytes}-byte bound`);
-  const bytes = isGzip(data) ? inflate(data) : data;
-  return staging(store, area => {
-    extractTar(bytes, area);
-    const tops = readdirSync(area.path);
-    const made = tops.length === 1 && lstatSync(join(area.path, tops[0]!)).isDirectory() ? tops[0]! : "";
-    const { name: manifest } = packageManifest(made === "" ? area.path : join(area.path, made));
-    const name = stagedName(manifest, archiveName(source));
-    return { made, name };
-  });
-}
-
-function isGzip(bytes: Buffer): boolean {
-  return bytes.length > 2 && bytes[0] === 0x1f && bytes[1] === 0x8b;
-}
-
-function inflate(data: Buffer): Buffer {
-  try { return gunzipSync(data, { maxOutputLength: PACKAGE_ARCHIVE_BOUNDS.bytes }); }
-  catch { return refuse("the package archive is not a gzip stream oma can read"); }
+ * name is refused, as is anything that is not ustar.
+ *
+ * Nothing about the archive is held whole: a `.tgz` is inflated to a spool
+ * file a chunk at a time (a sibling of the staging areas, which the stage
+ * sweep collects if it is left), a `.tar` is read in place, and entries are
+ * parsed and copied header by header, member bytes streaming to the staged
+ * file. An archive the old whole-buffer path refused on size alone stages. */
+async function stageArchive(store: string, source: string): Promise<string> {
+  const before = (() => {
+    try { return lstatSync(source); }
+    catch (error) { throw unobserved(error, "the local package") ?? refuse(`the package archive could not be read (${errorWordsOf(error)})`); }
+  })();
+  if (!before.isFile()) return refuse(`the package archive is not a file: ${source}`);
+  const gzip = (() => {
+    const fd = openSync(source, constants.O_RDONLY);
+    try { const head = Buffer.alloc(2); return readSync(fd, head, 0, 2, 0) === 2 && head[0] === 0x1f && head[1] === 0x8b; }
+    finally { closeSync(fd); }
+  })();
+  // A scratch directory for the inflated stream: its name starts with the
+  // staging prefix, so the stage sweep collects it if a crash leaves it.
+  // Made through the store's held parent like the staging areas themselves.
+  const storeFd = openOwnedDirectoryPath(store);
+  const spoolName = `${STAGING_PREFIX}${randomUUID()}`;
+  const spool = join(store, spoolName);
+  try {
+    try { mkdirSync(entryAt(storeFd, spoolName), { mode: 0o700 }); }
+    finally { closeSync(storeFd); }
+  } catch (error) { throw unobserved(error, "the local package") ?? refuse(`the package archive's staging directory could not be made (${errorWordsOf(error)})`); }
+  const tar = gzip ? join(spool, "archive.tar") : source;
+  try {
+    if (gzip) {
+      try {
+        // The destination is a held descriptor beneath the spool's own parent;
+        // an async-generator sink writes what the stream yields a chunk at a
+        // time, so the inflated archive is never a buffer in memory either.
+        const out = withinDirectory(tar, (parent, name) =>
+          openBeneath(parent, name, constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | constants.O_NOFOLLOW, 0o600));
+        try {
+          await pipeline(createReadStream(source), createGunzip(), async chunks => {
+            for await (const chunk of chunks) writeSync(out, chunk as Buffer);
+          });
+        } finally { closeSync(out); }
+      } catch (error) {
+        throw unobserved(error, "the local package") ?? refuse(`the package archive is not a gzip stream oma can read (${errorWordsOf(error)})`);
+      }
+    }
+    const fd = openSync(tar, constants.O_RDONLY);
+    let staged: string;
+    try {
+      staged = staging(store, area => {
+        extractTar(fd, area);
+        const tops = readdirSync(area.path);
+        const made = tops.length === 1 && lstatSync(join(area.path, tops[0]!)).isDirectory() ? tops[0]! : "";
+        const { name: manifest } = packageManifest(made === "" ? area.path : join(area.path, made));
+        const name = stagedName(manifest, archiveName(source));
+        return { made, name };
+      });
+    } finally { closeSync(fd); }
+    // The file that staged the package is checked after the read too: an
+    // archive swapped mid-read did not stage what its stat named.
+    const after = lstatSync(source, { throwIfNoEntry: false });
+    if (after === undefined || before.dev !== after.dev || before.ino !== after.ino ||
+        before.size !== after.size || before.mtimeMs !== after.mtimeMs || before.ctimeMs !== after.ctimeMs)
+      throw new StoreError("POLICY_CHANGED", "the package archive changed while it was read");
+    return staged;
+  } finally { removeOwnedTree(spool); }
 }
 
 function archiveName(source: string): string {
@@ -523,12 +615,40 @@ function* paxRecords(content: Buffer, fail: (words: string) => never): Generator
   }
 }
 
+/** Bytes of one member's in-band metadata (a pax record block or a GNU long
+ * name) buffered whole to be parsed: a record whose payload names paths and
+ * sizes is path-sized, so this is generous, and a file member never pays it
+ * -- member bytes stream to the staged file. */
+const TAR_METADATA_BYTES = 1024 * 1024;
+
 /** Writes every entry of a ustar stream into the staging area; nothing that
  * is not a regular file or a directory, and no name that is not a normalized
- * relative path -- the same rule a `packages:` entry keeps. */
-function extractTar(bytes: Buffer, area: StageArea): void {
+ * relative path -- the same rule a `packages:` entry keeps. `source` is read
+ * positionally a chunk at a time: the archive is never a buffer in memory. */
+function extractTar(source: number, area: StageArea): void {
   const fail = (words: string): never => { throw new StoreError("INVALID_REQUEST", `the package archive is not a tar oma can install: ${words}`); };
   const made = new Set<string>();
+  let position = 0, entries = 0;
+  /** Exactly `length` bytes at the cursor, or the end of the archive short of
+   * them -- null. */
+  const take = (length: number): Buffer | null => {
+    const out = Buffer.alloc(length);
+    let used = 0;
+    while (used < length) {
+      const got = readSync(source, out, used, length - used, position + used);
+      if (got === 0) return null;
+      used += got;
+    }
+    position += length;
+    return out;
+  };
+  /** Bytes past the cursor to the end of the archive (a tail is at most a
+   * block's worth of zero padding by the header loop's own shape). */
+  const rest = (): Buffer => {
+    const out = Buffer.alloc(BLOCK);
+    const got = readSync(source, out, 0, BLOCK, position);
+    return out.subarray(0, got);
+  };
   /** `rel` (a directory) and its parents exist beneath the staging root. */
   const ensure = (rel: string): void => {
     let at = "";
@@ -544,7 +664,6 @@ function extractTar(bytes: Buffer, area: StageArea): void {
     const cut = rel.lastIndexOf("/");
     ensure(cut < 0 ? "" : rel.slice(0, cut));
   };
-  let position = 0, entries = 0, written = 0;
   let longName: string | undefined;
   let paxPath: string | undefined, paxSize: number | undefined;
   /** A directory member's name ends in one `/` (as `npm pack` writes it);
@@ -560,23 +679,16 @@ function extractTar(bytes: Buffer, area: StageArea): void {
     return name;
   };
   for (;;) {
-    if (position + BLOCK > bytes.length) {
-      if (bytes.subarray(position).every(byte => byte === 0)) break;
-      fail("it ends inside a header");
-    }
-    const header = bytes.subarray(position, position + BLOCK);
+    const header = take(BLOCK) ?? (rest().every(byte => byte === 0) ? null : fail("it ends inside a header"));
+    if (header === null) break;
     if (header.every(byte => byte === 0)) break;
     if (tarString(header.subarray(257, 262)) !== USTAR) fail("a header is not ustar");
     if (!tarChecksum(header)) fail("a header checksum does not hold");
     if (++entries > PACKAGE_ARCHIVE_BOUNDS.entries) fail(`it holds more than ${PACKAGE_ARCHIVE_BOUNDS.entries} entries`);
     const type = header[156]!;
     const size = tarNumber(header.subarray(124, 136));
-    if (!Number.isSafeInteger(size) || size < 0 || size > PACKAGE_ARCHIVE_BOUNDS.fileBytes)
-      fail(`an entry exceeds the ${PACKAGE_ARCHIVE_BOUNDS.fileBytes}-byte file bound`);
-    if ((written += size) > PACKAGE_ARCHIVE_BOUNDS.bytes) fail(`it holds more than ${PACKAGE_ARCHIVE_BOUNDS.bytes} bytes`);
-    position += BLOCK;
-    const content = bytes.subarray(position, position + size);
-    if (content.length !== size) fail("it ends inside a file");
+    if (!Number.isSafeInteger(size) || size < 0) fail("an entry names a size that cannot be observed exactly");
+    const content = position;
     position += Math.ceil(size / BLOCK) * BLOCK;
     const name = paxPath ?? longName ?? (() => {
       const leaf = tarString(header.subarray(0, 100));
@@ -587,14 +699,22 @@ function extractTar(bytes: Buffer, area: StageArea): void {
     paxPath = undefined; paxSize = undefined; longName = undefined;
     if (sizeOverride !== undefined && sizeOverride !== size) fail("a pax size does not match its header");
     switch (type) {
-      case 0x78: // 'x' — pax per-entry metadata
-        for (const record of paxRecords(content, fail)) {
+      case 0x78: { // 'x' — pax per-entry metadata
+        if (size > TAR_METADATA_BYTES) fail("a pax record is larger than a path's metadata can be");
+        const block = readMetadata(source, content, size) ?? fail("it ends inside a file");
+        for (const record of paxRecords(block, fail)) {
           if (record.key === "path") paxPath = record.value;
           else if (record.key === "size") paxSize = Number.parseInt(record.value, 10);
         }
         continue;
+      }
       case 0x67: continue; // 'g' — pax globals; none apply per entry
-      case 0x4c: longName = tarString(content); continue; // 'L' — GNU long name
+      case 0x4c: { // 'L' — GNU long name
+        if (size > TAR_METADATA_BYTES) fail("a long name is larger than a path's metadata can be");
+        const block = readMetadata(source, content, size) ?? fail("it ends inside a file");
+        longName = tarString(block);
+        continue;
+      }
       case 0x4b: continue; // 'K' — a long link name; the link itself is refused below
       case 0x35: { // '5' — directory
         const rel = entryName(name, true);
@@ -608,7 +728,12 @@ function extractTar(bytes: Buffer, area: StageArea): void {
         const rel = entryName(name, false);
         ensureParents(rel);
         if (made.has(rel)) fail(`a duplicate entry: ${rel}`);
-        area.write(rel, content, (tarNumber(header.subarray(100, 108)) & 0o111) !== 0);
+        try {
+          area.writeFrom(rel, source, content, size, (tarNumber(header.subarray(100, 108)) & 0o111) !== 0);
+        } catch (error) {
+          if (error instanceof StoreError && error.code === "INVALID_REQUEST") fail("it ends inside a file");
+          throw error;
+        }
         made.add(rel);
         continue;
       }
@@ -616,6 +741,20 @@ function extractTar(bytes: Buffer, area: StageArea): void {
         fail(`an entry that is not a file or a directory (type ${JSON.stringify(String.fromCharCode(type))}): ${name}`);
     }
   }
+}
+
+/** `size` bytes of `source` at `position`, or null when the archive ends
+ * inside them -- for the small metadata members a pax record or long name
+ * is. File members stream instead. */
+function readMetadata(source: number, position: number, size: number): Buffer | null {
+  const out = Buffer.alloc(size);
+  let used = 0;
+  while (used < size) {
+    const got = readSync(source, out, used, size - used, position + used);
+    if (got === 0) return null;
+    used += got;
+  }
+  return out;
 }
 
 /** Staged copies under `local/` -- and staging areas an interrupted install

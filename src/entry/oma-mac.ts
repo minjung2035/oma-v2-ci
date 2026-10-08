@@ -77,7 +77,7 @@ async function packages(decision: Extract<PackageCommand, { kind: "run" }>): Pro
     // the staged `local/<name>`, never the path the Human gave.
     let run = decision;
     if (decision.local !== undefined)
-      run = Object.freeze({ ...decision, args: Object.freeze(["install", stageLocalPackage(store, decision.local)]) });
+      run = Object.freeze({ ...decision, args: Object.freeze(["install", await stageLocalPackage(store, decision.local)]) });
     let code = await runEngineLogin({ stateRoot: join(store, "oma"), libdir: `${libdir}/`,
       override: process.env.OMA_PI_COMMAND, fence: lock.descriptor, env: process.env, packages: { store, args: run.args } });
     if (code === 0 && decision.command !== "list" && !args.includes("--help") && !args.includes("-h")) {

@@ -127,6 +127,19 @@ export class StorageAdmission {
     this.reserved += bytes;
     return releaseOnce(() => { this.reserved -= bytes; });
   }
+  /** The startup probe: does the store currently admit new work. "degraded"
+   * answers the over-quota state honestly -- the broker still starts and
+   * serves, refusing each new admission per request until usage settles,
+   * rather than not starting at all (a whole-society outage that used to
+   * need manual cleanup). The probe holds nothing; a failure that is not a
+   * quota refusal still throws. */
+  startupState(): "admitted" | "degraded" {
+    try { this.admit("admit")(); return "admitted"; }
+    catch (error) {
+      if (error instanceof StoreError && error.code === "QUOTA_EXCEEDED") return "degraded";
+      throw error;
+    }
+  }
   admit(category: ResourceCategory): Release {
     switch (category) {
       case "read": case "safety-control": return NO_HOLD;

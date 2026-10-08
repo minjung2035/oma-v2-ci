@@ -14,7 +14,7 @@ import ts from "typescript";
  * and a stand-in that does would run the rest of a function the product ended. */
 class Exited extends Error {}
 
-const QUARANTINE_PROFILE = Object.freeze({ cpuSeconds: 30, memoryBytes: 1, tasks: 1, timeoutSeconds: 120 });
+const QUARANTINE_PROFILE = Object.freeze({ cpuSeconds: 30, memoryBytes: 1, tasks: 1, timeoutSeconds: 120, silenceSeconds: 120 });
 
 async function compose(environment, { lockHeld = true, claim = "taken", cgroup = "0::/user.slice/app.slice/oma.scope",
   argv = ["--society", "fixture"], supervisionEstablished = true, repairFails = false,
@@ -123,7 +123,9 @@ async function compose(environment, { lockHeld = true, claim = "taken", cgroup =
     "../storage/paths.js": { projectGitPathAt: stateRoot => `${stateRoot}/repos/project.git` },
     // AV27: where a Resident's Git reaches that repository has one owner.
     "../sandbox.js": { residentProjectGit: () => '/git/project.git' },
-    "../storage/quota.js": { StorageAdmission: class { admit() { calls.push("storage-quota"); return () => undefined; } reserve() { return () => undefined; } } },
+    "../storage/quota.js": { StorageAdmission: class {
+      startupState() { calls.push("storage-quota"); return "admitted"; }
+      admit() { return () => undefined; } reserve() { return () => undefined; } } },
     "../authority.js": { resolvedSpecOf: value => value },
     "../domain/errors.js": { StoreError: class extends Error {} },
     "../ids.js": { isValidSocietyName: value => value === "fixture" },

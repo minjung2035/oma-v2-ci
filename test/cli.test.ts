@@ -130,7 +130,7 @@ function envOf(): Env {
       worldDir: join(state, "world"),
       society,
       quarantineTmpBytes: 64 * 1024 * 1024,
-      quarantineResources: { cpuSeconds: 30, memoryBytes: 512 * 1024 * 1024, tasks: 4096, timeoutSeconds: 30 },
+      quarantineResources: { cpuSeconds: 30, memoryBytes: 512 * 1024 * 1024, tasks: 4096, timeoutSeconds: 30, silenceSeconds: 30 },
     },
     store,
     mail,

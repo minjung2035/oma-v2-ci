@@ -3,27 +3,51 @@ import { startProcess } from "./async.js";
 import { snapshotCommand, type CommandSpec, type ProcessObservation } from "./command.js";
 
 // Process-lifetime accounting only: no new queue, sidecar, worker DB or daemon.
-// Completed tasks are removed. Uncertain descendant quiescence is deliberately
-// sticky until process/cgroup termination and authoritative startup recovery.
+// Completed tasks are removed. An executor whose last run did not reach a
+// complete observation stays in `unprovenPreparations` -- the shutdown
+// barrier's evidence that descendant quiescence was never proven -- until its
+// owner re-observes the prepared state quiescent (reverifyStale), which is
+// the authoritative startup recovery in this process's lifetime.
 const nativeClosures = new Set<Promise<void>>();
-let uncertainNativePreparation = false;
+const unprovenPreparations = new Set<PreparationExecutor>();
 export async function preparationShutdownBarrier(): Promise<void> {
-  if (uncertainNativePreparation) throw new StoreError("RUN_TERMINATION_UNKNOWN", "native preparation quiescence is unproven; retain writer resources for process termination");
+  if (unprovenPreparations.size > 0) throw new StoreError("RUN_TERMINATION_UNKNOWN", "native preparation quiescence is unproven; retain writer resources for process termination");
   while (nativeClosures.size > 0) {
     await Promise.all([...nativeClosures]);
-    if (uncertainNativePreparation) throw new StoreError("RUN_TERMINATION_UNKNOWN", "native preparation became uncertain during shutdown");
+    if (unprovenPreparations.size > 0) throw new StoreError("RUN_TERMINATION_UNKNOWN", "native preparation became uncertain during shutdown");
   }
 }
 
+/** The answer an owner asks a preparation executor to give for the state its
+ * last run left behind -- the tree the run was preparing, observed fresh. */
+export type PreparationQuiescence = "quiescent" | "active" | "unknown";
+
 /** One owner per existing workflow/repository; no waiting array. A non-exit
- * observation blocks this owner until recovery/restart. Direct-child close is
- * not proof of arbitrary-descendant death and cannot authorize artifact cleanup.
+ * observation blocks this owner while the outcome it left is unproven -- but
+ * the block is a stale unknown, not a permanent one: the owner's next attempt
+ * first re-observes the prepared state through its lease
+ * (`reverifyStale`), and a fresh authoritative "quiescent" read lets the new
+ * run proceed. What it must never do is treat the unproven run as complete;
+ * the flag clears on the observation, never on the attempt.
  */
 export class PreparationExecutor {
   private active = false;
   private uncertain = false;
   get blocked(): boolean { return this.active || this.uncertain; }
   get quiescence(): "quiescent" | "unknown" { return this.blocked ? "unknown" : "quiescent"; }
+  /** A fresh observation of the state this executor's last run prepared.
+   * "quiescent" clears the stale unknown and answers it; "active" and
+   * "unknown" answer without clearing -- a run whose descendants still live
+   * (or cannot be proven gone) keeps its owner blocked. Called only when a
+   * new operation finds the executor blocked; it never runs the probe for a
+   * currently-active run, whose answer would be obsolete on arrival. */
+  reverifyStale(observe: () => PreparationQuiescence): PreparationQuiescence {
+    if (this.active) return "active";
+    if (!this.uncertain) return "quiescent";
+    const observed = observe();
+    if (observed === "quiescent") { this.uncertain = false; unprovenPreparations.delete(this); }
+    return observed;
+  }
   async run(source: CommandSpec, signal?: AbortSignal, inheritedFds: readonly number[] = []): Promise<ProcessObservation> {
     const command = snapshotCommand(source);
     if (this.blocked) throw new StoreError("REF_STATE_UNKNOWN", "a prior preparation is active or has an uncertain outcome");
@@ -33,12 +57,12 @@ export class PreparationExecutor {
     try {
       const task = startProcess(command, { processGroup: true, inheritedFds, ...(signal === undefined ? {} : { signal }) });
       const closure = task.result.then(observation => {
-        if (observation.kind !== "exited") uncertainNativePreparation = true;
+        if (observation.kind !== "exited") unprovenPreparations.add(this);
         return task.closed;
       });
       nativeClosures.add(closure);
       void closure.then(() => nativeClosures.delete(closure), () => {
-        uncertainNativePreparation = true; nativeClosures.delete(closure);
+        unprovenPreparations.add(this); nativeClosures.delete(closure);
       });
       const observation = await task.result;
       if (observation.kind !== "exited") this.uncertain = true;

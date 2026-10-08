@@ -23,7 +23,7 @@ function world(t: import("node:test").TestContext, tmpBytes = 256 * 1024 * 1024)
   t.after(() => store.close());
   store.transaction(tx => { for (const name of ["a", "b"]) tx.insertAgent(makeValidAgent(name)); });
   const paths = { stateRoot: root, projectGit: join(root, "repos/project.git"), contextGit: join(root, "repos/context.git"), worldDir: join(root, "world"),
-    society: "crash", quarantineTmpBytes: tmpBytes, quarantineResources: { cpuSeconds: 30, memoryBytes: 512 * 1024 * 1024, tasks: 4096, timeoutSeconds: 30 } };
+    society: "crash", quarantineTmpBytes: tmpBytes, quarantineResources: { cpuSeconds: 30, memoryBytes: 512 * 1024 * 1024, tasks: 4096, timeoutSeconds: 30, silenceSeconds: 30 } };
   const mail = new MailModule({ stateRoot: root, society: "crash" }, store, 64);
   const git = new GitModule(paths, store, mail, { policyRevision: "s05", protectedPaths: [], checks: [] });
   const info = JSON.parse(readFileSync(join(root, "git-fixture.json"), "utf8")) as { base: string; candidate: string; exportRef: string };
