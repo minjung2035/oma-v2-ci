@@ -29,7 +29,11 @@
  * Staging writes are FS-005's shape: on Linux the store is inside a society's
  * state tree, so every name under it is made through a directory held open
  * once; on the Mac the store lives in the app's own support directory, which
- * the host's file owner writes by path under the host lock.
+ * the host's file owner writes by path under the host lock. Archive
+ * inflation's scratch spool follows the same split: the Mac's open(2) keeps
+ * the O_NOFOLLOW leaf guarantee but its walk is path-based, not the kernel's
+ * descriptor containment -- oma's own tree under the host lock is the
+ * boundary there, the same one every host file effect keeps.
  */
 import { randomUUID } from "node:crypto";
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
@@ -521,23 +525,39 @@ async function stageArchive(store: string, source: string): Promise<string> {
   })();
   // A scratch directory for the inflated stream: its name starts with the
   // staging prefix, so the stage sweep collects it if a crash leaves it.
-  // Made through the store's held parent like the staging areas themselves.
-  const storeFd = openOwnedDirectoryPath(store);
-  const spoolName = `${STAGING_PREFIX}${randomUUID()}`;
-  const spool = join(store, spoolName);
+  // The split is `staging`'s own: on Linux the spool is made through the
+  // store's held parent; the Mac has no openat2, so there the host's file
+  // owner makes it by path under the owned-boundary repair
+  // `createHostStagingDirectory` gives every host staging area.
+  const darwin = process.platform === "darwin";
+  let spool: string;
   try {
-    try { mkdirSync(entryAt(storeFd, spoolName), { mode: 0o700 }); }
-    finally { closeSync(storeFd); }
+    if (darwin) spool = createHostStagingDirectory(store, STAGING_PREFIX, dirname(store));
+    else {
+      const storeFd = openOwnedDirectoryPath(store);
+      const spoolName = `${STAGING_PREFIX}${randomUUID()}`;
+      spool = join(store, spoolName);
+      try { mkdirSync(entryAt(storeFd, spoolName), { mode: 0o700 }); }
+      finally { closeSync(storeFd); }
+    }
   } catch (error) { throw unobserved(error, "the local package") ?? refuse(`the package archive's staging directory could not be made (${errorWordsOf(error)})`); }
   const tar = gzip ? join(spool, "archive.tar") : source;
   try {
     if (gzip) {
       try {
-        // The destination is a held descriptor beneath the spool's own parent;
-        // an async-generator sink writes what the stream yields a chunk at a
-        // time, so the inflated archive is never a buffer in memory either.
-        const out = withinDirectory(tar, (parent, name) =>
-          openBeneath(parent, name, constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | constants.O_NOFOLLOW, 0o600));
+        // The destination is a fresh exclusive name that refuses a link at
+        // the leaf on both platforms. On Linux it is a held descriptor
+        // beneath the spool's own parent -- RESOLVE_BENEATH |
+        // RESOLVE_NO_SYMLINKS makes the whole walk kernel-pinned. The Mac's
+        // open(2) keeps the same O_NOFOLLOW leaf guarantee but the walk to
+        // it is path-based: the boundary there is oma's own store tree,
+        // written only by the host lock holder, the same one every host
+        // file effect keeps. An async-generator sink writes what the
+        // stream yields a chunk at a time, so the inflated archive is
+        // never a buffer in memory either.
+        const flags = constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | constants.O_NOFOLLOW;
+        const out = darwin ? openSync(tar, flags, 0o600)
+          : withinDirectory(tar, (parent, name) => openBeneath(parent, name, flags, 0o600));
         try {
           await pipeline(createReadStream(source), createGunzip(), async chunks => {
             for await (const chunk of chunks) writeSync(out, chunk as Buffer);
@@ -566,7 +586,7 @@ async function stageArchive(store: string, source: string): Promise<string> {
         before.size !== after.size || before.mtimeMs !== after.mtimeMs || before.ctimeMs !== after.ctimeMs)
       throw new StoreError("POLICY_CHANGED", "the package archive changed while it was read");
     return staged;
-  } finally { removeOwnedTree(spool); }
+  } finally { if (darwin) removeHostStaged(spool); else removeOwnedTree(spool); }
 }
 
 function archiveName(source: string): string {

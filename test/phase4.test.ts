@@ -9,7 +9,7 @@ import {
   mkdirSync, readFileSync, symlinkSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { spawn, spawnSync } from "node:child_process";
 import { Store, StoreError } from "../src/store.js";
 import { UnitsModule, renderUnit, unitName, UNIT_TPL_DIR } from "../src/units.js";
@@ -21,6 +21,8 @@ import { ViewsModule } from "../src/views.js";
 import { generateOperationId } from "../src/ids.js";
 import { requestHash } from "../src/hash.js";
 import { canonicalResourceLimits } from "../src/domain/resources.js";
+import { encodedResidentToolSurface } from "../src/domain/tool-surface.js";
+import { runnerReceiptPathAt } from "../src/storage/paths.js";
 import { StatusRefresh } from "../src/views/status-refresh.js";
 import { makeValidAgent } from "./fixtures/spec.js";
 import { TEST_VIEW_LIMITS } from "./fixtures/limits.js";
@@ -182,6 +184,9 @@ test("phase4: rendered templates pass systemd-analyze --user verify", () => {
         node: NODE, libdir: process.cwd(), state: join(env.dir, "state"), society: env.society, agent: "a",
         config: join(env.dir, "config.json"), run: join(env.dir, "run", "oma", env.society),
         profileHex: Buffer.from("p").toString("hex"), resourcesHex: Buffer.from(canonicalResourceLimits(TEST_RESOURCES)).toString("hex"),
+        // The same canonical plan UnitsModule installs (D23/TSP-005) -- the
+        // renderer requires the input the template names.
+        toolSurfaceHex: Buffer.from(encodedResidentToolSurface(), "utf8").toString("hex"),
         memoryBytes: TEST_RESOURCES.memoryBytes,
         tasks: TEST_RESOURCES.tasks, cpuQuotaPercent: TEST_RESOURCES.cpuQuotaPercent,
       }));
@@ -359,7 +364,19 @@ test("SEQ-002: unknown old-run death stops startup before mail reconciliation", 
     Reflect.set(env.units, "stop", () => { throw new StoreError("RUN_TERMINATION_UNKNOWN", "injected unknown death"); });
     Reflect.set(env.mail, "reconcilePending", () => assert.fail("mail reconciled before death proof"));
     const reconcile = new ReconcileModule(env.store, env.mail, null, env.units, env.lifecycle, { projectGit: join(env.dir, "state", "repos", "project.git"), hasGoal: () => true, activationAllowed: () => true });
-    await assert.rejects(reconcile.startup(false), /injected unknown death/);
+    // Every Resident gets its stop attempt, so the seeded pair's failures
+    // arrive aggregated under the typed outer error -- not collapsed into
+    // the first attempt's message. The cause carries each injected death.
+    await assert.rejects(reconcile.startup(false), (error: unknown) => {
+      assert.ok(error instanceof StoreError && error.code === "RUN_TERMINATION_UNKNOWN", String(error));
+      assert.match(error.message, /cannot confirm every Resident stopped/);
+      assert.ok(error.cause instanceof AggregateError, "multiple stop failures arrive aggregated");
+      assert.equal(error.cause.errors.length, 2);
+      for (const entry of error.cause.errors)
+        assert.ok(entry instanceof StoreError && entry.code === "RUN_TERMINATION_UNKNOWN" &&
+          /injected unknown death/.test(entry.message), String(entry));
+      return true;
+    });
   } finally { cleanup(); }
 });
 
@@ -612,8 +629,14 @@ setInterval(() => {}, 1000);
     assert.equal(env.store.getAgent("dynamic")!.incarnation, 4);
     assert.equal(env.store.preparedBatches("dynamic")[0]!.id, prepared.id);
     for (let i = 0; i < 500 && !env.units.confirmDead("dynamic", 4); i++) await new Promise(resolve => setTimeout(resolve, 20));
-    const failedDir = join(env.dir, "R", "actors", "dynamic", "5");
-    writeFileSync(failedDir, "not a directory");
+    // The stray file this once planted where the incarnation's socket
+    // directory must be is no longer a failure: owned-directory repair (P0-8)
+    // collects oma-owned strays, which is itself required behavior. The open's
+    // failure moves to settlement instead -- a receipt that conflicts with the
+    // still-prepared batch holds it (P0-2), so the endpoint is never set up.
+    const failedReceipt = runnerReceiptPathAt(join(env.dir, "state"), "dynamic", prepared.id);
+    mkdirSync(dirname(failedReceipt), { recursive: true });
+    writeFileSync(failedReceipt, "not a receipt\n");
     const failureFile = join(env.dir, "failed-listener");
     writeFileSync(wrapper, `
 import { BrokerChannel } from ${JSON.stringify(join(process.cwd(), "dist", "src", "runner.js"))};
@@ -630,7 +653,7 @@ setInterval(() => {}, 1000);
     for (let i = 0; i < 500 && !existsSync(failureFile); i++) await new Promise(resolve => setTimeout(resolve, 20));
     assert.equal(existsSync(failureFile), true);
     const failedReplies = JSON.parse(readFileSync(failureFile, "utf8"));
-    assert.equal(failedReplies.first.error.code, "INTERNAL_ERROR");
+    assert.equal(failedReplies.first.error.code, "BATCH_CONFLICT");
     assert.equal(failedReplies.retry.error.code, "STALE_RUN");
     // P0V-113: a failed endpoint takes no incarnation, but its invocation
     // remains fenced until the pinned cgroup is proven dead.
@@ -642,7 +665,7 @@ setInterval(() => {}, 1000);
     assert.match(readFileSync(`/proc/self/fd/${failedFd}/cgroup.events`, "utf8"), /^populated 1$/m);
     env.units.stop("dynamic", 4);
     assert.equal(env.units.confirmDead("dynamic", 4), true);
-    rmSync(failedDir);
+    rmSync(failedReceipt);
     writeFileSync(wrapper, originalWrapper);
     env.units.start("dynamic", false);
     for (let i = 0; i < 500 && env.store.getAgent("dynamic")!.incarnation === 4; i++) await new Promise(resolve => setTimeout(resolve, 20));

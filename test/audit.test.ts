@@ -812,7 +812,7 @@ test("C1: two concurrent git.submit uploads over the real actor channel — conn
 // Part D — entry/broker.js ordered bootstrap (READY only after recovery)
 // ---------------------------------------------------------------------------
 
-function minimalConfig(society: string): Record<string, unknown> {
+function minimalConfig(society: string, rootfs = "/rootfs"): Record<string, unknown> {
   return {
     schemaVersion: 1,
     society,
@@ -822,7 +822,10 @@ function minimalConfig(society: string): Record<string, unknown> {
       // resolve from, or the entry refuses to start. Tests run from the package
       // root, where dist/ and implementation/ live side by side.
       libdir: process.cwd(),
-      rootfs: "/rootfs",
+      // SB-002-E: the trusted Resident rootfs must be a real non-root path.
+      // Callers that spawn a broker pass a directory they created; the decode
+      // callers keep the shape-only default.
+      rootfs,
       deploymentDigest: deploymentDigest(process.cwd()),
     },
     modelProfiles: {
@@ -1053,7 +1056,9 @@ test("LIFE-009 entry: fresh broker seeds once and restart ignores population edi
     ]);
     const base = git(["rev-parse", "HEAD"]);
     git(["clone", "-q", "--bare", root, join(state, "repos", "project.git")]);
-    const cfg = minimalConfig(society);
+    const rootfs = join(dir, "rootfs");
+    mkdirSync(rootfs);
+    const cfg = minimalConfig(society, rootfs);
     cfg.initialResidents = [
       { name: "child", profile: "child", brief: "initial" },
     ];
@@ -1145,9 +1150,11 @@ test("D1: READY=1 arrives after startup recovery (recovered mail op observable),
     mkdirSync(runRoot, { recursive: true });
     mkdirSync(join(stateRoot, "repos"), { recursive: true });
     seedProject({ dir, state: stateRoot });
+    const rootfs = join(dir, "rootfs");
+    mkdirSync(rootfs);
     writeFileSync(
       join(stateRoot, "config.json"),
-      JSON.stringify(minimalConfig(society)),
+      JSON.stringify(minimalConfig(society, rootfs)),
       "utf8",
     );
     // seed a pending mail operation (accepted-before-materialize fixture)
@@ -1286,9 +1293,11 @@ test("D2: startup recovery failure -> no READY, exit 1, nothing served", async (
     mkdirSync(runRoot, { recursive: true });
     mkdirSync(join(stateRoot, "repos"), { recursive: true });
     seedProject({ dir, state: stateRoot });
+    const rootfs = join(dir, "rootfs");
+    mkdirSync(rootfs);
     writeFileSync(
       join(stateRoot, "config.json"),
-      JSON.stringify(minimalConfig(society)),
+      JSON.stringify(minimalConfig(society, rootfs)),
       "utf8",
     );
     const store = new Store(join(stateRoot, "runtime.sqlite"));

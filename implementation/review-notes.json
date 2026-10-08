@@ -1,6 +1,6 @@
 {
  "version": 1,
- "about": "WP32 inputs to implementation/review-ledger.json that git history cannot supply: files read in full and left unchanged, explicitly reviewed working-tree changes bound to their SHA-256 bytes and oracles, and the environment lanes as recorded in docs/implementation/validation.md. Regenerate the ledger with `npm run review:ledger`; `review-closure` checks it. Historical lane entries do not certify later working-tree changes. DR29: withdrawn stale byte-bound review claims for src/runtime/personal-settings.ts, src/entry/personal-host.ts, src/entry/oma-mac.ts. Hashes were not silently refreshed; these edited owners require fresh review. Historical readUnchanged entries apply only to unchanged committed files; changed files are NOT_REVIEWED. UX-38 residual settlement (bundled pi-lsp surface): the seven edited files above were re-read in full and re-bound to their new bytes -- digests refreshed only alongside a fresh read, never silently. No withdrawal was needed: each change is this batch's own reviewed work. UX-38 blind-verification settlement (process layer): src/process/run.ts and src/process/command.ts were re-read in full and re-bound to their new bytes (spool-open fd pairing, identical-spool refusal) -- digest refresh accompanied the fresh read.",
+ "about": "WP32 inputs to implementation/review-ledger.json that git history cannot supply: files read in full and left unchanged, explicitly reviewed working-tree changes bound to their SHA-256 bytes and oracles, and the environment lanes as recorded in docs/implementation/validation.md. Regenerate the ledger with `npm run review:ledger`; `review-closure` checks it. Historical lane entries do not certify later working-tree changes. DR29: withdrawn stale byte-bound review claims for src/runtime/personal-settings.ts, src/entry/personal-host.ts, src/entry/oma-mac.ts. Hashes were not silently refreshed; these edited owners require fresh review. Historical readUnchanged entries apply only to unchanged committed files; changed files are NOT_REVIEWED. UX-38 residual settlement (bundled pi-lsp surface): the seven edited files above were re-read in full and re-bound to their new bytes -- digests refreshed only alongside a fresh read, never silently. No withdrawal was needed: each change is this batch's own reviewed work. UX-38 blind-verification settlement (process layer): src/process/run.ts and src/process/command.ts were re-read in full and re-bound to their new bytes (spool-open fd pairing, identical-spool refusal) -- digest refresh accompanied the fresh read. F1/F2-MAC settlement (macOS archive staging regression): src/runtime/local-package.ts and src/git/canonical-command.ts were re-read in full and re-bound to their new bytes (Darwin archive spool through the host file owner; ls-tree scratch cleanup on spool-open failure) -- digest refresh accompanied the fresh read.",
  "reviewedChanges": [
   {
    "path": "implementation/contracts.ts",
@@ -152193,14 +152193,16 @@
   {
    "path": "src/git/canonical-command.ts",
    "by": [
+    "F2-MAC",
     "UX-38"
    ],
    "oracles": [
-    "UX-09",
-    "R37"
+    "GIT-004",
+    "R37",
+    "UX-09"
    ],
-   "sha256": "e95973a47af633aaf611c2445f630788e6a651bbdaa268a57e04d970f0fe7b6c",
-   "note": "Re-read in full for the UX-38 batch-5 working-tree review (2026-10-12): GITLINKS_OBSERVATION_BYTES is gone -- ls-tree -r -z --full-tree output is spooled whole to a fresh mkdtemp under the OS temp directory and parsed one record at a time by observe.ts; a large tree answers gitlinks-or-none on evidence, never output-limited -> unknown for size alone. merge-tree output spools the same way and only the merged-tree line plus a bounded conflict-path prefix is read back. The spool directory is removed in the same call; small plumbing keeps CANONICAL_PROCESS_LIMITS."
+   "sha256": "cb2f950db606b9d83670d0e5a04ddce82747826a653e237de0bb87e100fc71d6",
+   "note": "Re-read in full for the macOS regression-settlement round (F2): the ls-tree scratch window between mkdtempSync and the runner's synchronous stdout-spool open is now closed -- a spool-open failure (EMFILE/starvation) removes the made oma-ls-tree-* directory and answers the same typed evidence shape the unmade-scratch branch gives, never propagating the raw throw. The earlier spool/dispose review stands; test/canonical-command.test.mjs binds both halves (typed evidence on starvation, dispose removes the scratch of a completed run)."
   },
   {
    "path": "src/git/context-repository.ts",
@@ -152872,16 +152874,18 @@
   {
    "path": "src/runtime/local-package.ts",
    "by": [
-    "UX-38",
     "DR25",
-    "P0-8"
+    "F1-MAC",
+    "P0-8",
+    "UX-38"
    ],
    "oracles": [
     "DR25",
+    "DR25/C20",
     "P0-8"
    ],
-   "note": "Re-read in full for the UX-38 batch-5 working-tree review (2026-10-12): the prior fsync/scope-flush review stands. stageArchive no longer reads the archive whole: a .tgz is inflated to a `.staging-local-*` spool made through the store's held parent (entryAt + openBeneath O_EXCL|O_NOFOLLOW, an async-generator sink writes the stream a chunk at a time -- no createWriteStream path call inside the tree), a .tar is read in place, and ustar entries are parsed header by header with member bytes streaming to the staged file (copyFdRange). The spool goes with the call via removeOwnedTree; a crash's residue carries the staging prefix so the sweep collects it. Manifest alone is held whole under the generous 16 MiB document bound; entry count keeps the carry's working-set bound while size alone never refuses.",
-   "sha256": "0954e92f08685ba3458c759c72bbea0331776a462cd45e113b47261dc2cdd8fb"
+   "note": "Re-read in full for the macOS regression-settlement round (F1): stageArchive's inflate spool no longer reaches for the Linux-only held-parent primitives on Darwin -- the scratch directory is createHostStagingDirectory (the host file owner's path-based spelling under the owned-boundary repair), the inflated member lands through a fresh O_EXCL|O_NOFOLLOW path open, and removal is removeHostStaged, matching the hostStaging StageArea split and prune's own platform branch. The walk to the spool is path-based -- not the kernel's RESOLVE_BENEATH descriptor containment -- with oma's own store tree under the host lock as the boundary; the header says so honestly. test/local-package-platform.test.mjs exercises the Darwin branch with contained-fs/directory replaced by the host's real UNSUPPORTED_PROFILE refusal: a real .tgz and .tar stage end-to-end and the spool leaves no residue.",
+   "sha256": "369de6993fcd80cbd0fe8d512ea30a825ad55efa59c65c6a38f4c932126d30e9"
   },
   {
    "path": "src/runtime/personal-session.ts",

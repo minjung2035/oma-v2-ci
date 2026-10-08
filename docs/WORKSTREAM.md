@@ -1825,6 +1825,64 @@ name collision/intended surface/hidden 미활성/idempotent reload/provenance/
     qualification·guest lanes — 로컬 환경 부재. systemd 게이트는
     `OMA_TEST_SYSTEMD=1` 하에 phase8 수동 실행으로 부분 커버
     (test-local.mjs 목록에서는 여전히 NOT_RUN).
+- 2026-10-12 (macOS 스트리밍 아카이브 회귀 정산 — F1/F2 수정 + phase4 드리프트
+  정직 평가, feat/macos-hidden-vm @ e85bc587 이후):
+  - F1 (macOS 사용자-facing 회귀 — `oma pi install <path>.tgz/.tar`이 Darwin에서
+    영구 실패): UX-38 batch 5가 `stageArchive`를 스트리밍 스풀로 전환하면서
+    `openOwnedDirectoryPath`/`entryAt`/`withinDirectory`/`removeOwnedTree` —
+    전부 Linux openat2·/proc/self/fd 프리미티브 — 를 무조건 호출하게 됐고,
+    Mac은 `contained-fs`의 UNSUPPORTED_PROFILE로 매 설치가 죽었다. 스풀 생성·
+    inflate 대상 오픈·제거를 `staging()`/`pruneLocalStage`가 이미 지키는 같은
+    플랫폼 분기로 옮겼다: Darwin은 `createHostStagingDirectory`(호스트 파일
+    소유자의 path 방식 + owned-boundary 복구)·`openSync(O_EXCL|O_NOFOLLOW)`·
+    `removeHostStaged`; Linux는 그대로 held-descriptor. 정직성 문구를 헤더에
+    명기 — Mac의 open(2)은 같은 leaf O_NOFOLLOW 보장을 유지하지만 그 경로까지의
+    워크는 path 기반이며 커널의 RESOLVE_BENEATH 디스크립터 격리가 아니다;
+    경계는 호스트 lock 아래 oma 소유 스토어 트리다.
+    `test/local-package-platform.test.mjs` 신설 — `process.platform` 스텁으로
+    Darwin 분기를 Linux에서 수행하고 contained-fs/directory를 호스트의 실제
+    UNSUPPORTED_PROFILE 거절로 교체해, 실제 .tgz·.tar이 끝까지 스테이지되고
+    `.staging-local-*` 잔재가 없음을 결박(user-files.test.mjs의 seam 패턴).
+    사전 소스(`git show HEAD:`) 대조군은 두 플랫폼 거절 모두 재현.
+  - F2 (canonical ls-tree 스크래치 누수): `createCanonicalObserver`의
+    mkdtemp 성공과 `runProcessSync`의 동기 stdout-spool 오픈 사이 창에서
+    실패가 그대로 throw되며 `oma-ls-tree-*` 디렉터리를 남겼다. 실패는 이제
+    scratch를 `rmSync`로 회수한 뒤 unmade-scratch 분기와 같은 typed evidence
+    (`status/signal/stdout/stderr=null`+`error`)로 응답한다.
+    `test/canonical-command.test.mjs` 신설 — runner를 EMFILE로 스텁해
+    starvation을 재현하고 완료 런의 dispose도 결박.
+  - F3 + phase4 드리프트 정직 평가 (systemd 레인, OMA_TEST_SYSTEMD=1,
+    21/21 PASS): (1) `rendered templates pass systemd-analyze --user verify`의
+    `renderUnit` 호출이 `@TOOL_SURFACE_HEX@`를 빠뜨려 UNSUPPORTED_PROFILE —
+    `encodedResidentToolSurface()` hex를 units.ts:245와 같은 생산 결선으로
+    추가. (2) SEQ-002 — `quiesceResidents`는 Resident마다 stop을 시도하고
+    복수 실패를 AggregateError cause로 묶는 것이 현재 의도된 의미이므로
+    프로덕션 불변, assert를 외측 StoreError(RUN_TERMINATION_UNKNOWN)의
+    cause 체인 검증으로 갱신. (3) T-create-ready — `R/actors/dynamic/5`의
+    stray 파일 주입은 P0-8 owned-directory 복구가 합법적으로 수집하는
+    결함이므로 더 이상 실패를 유발하지 않음; open의 실패 주입을 settlement로
+    옮겨 still-prepared 배치와 충돌하는 영수증(BATCH_CONFLICT hold — P0-2의
+    실제 생산 경로)으로 교체, incarnation 미소비·revoked-awaiting-death·
+    재시도 STALE_RUN·사망 증명 후 같은 prepared 배치로 재기동 성공
+    계약은 불변.
+  - audit.test.ts `rootfs` 정산 (실제 결함 확인): `minimalConfig`의
+    `rootfs: "/rootfs"`는 `requireResidentRootfs`의 순수 형태 규칙은 통과하지만
+    `broker.ts`의 `assertHostDirectoryLayout(rootfs)`(allowMissing=false)는
+    이 호스트에 존재하지 않는 `/rootfs`를 거절 — 실제 broker를 spawn하는
+    LIFE-009 entry·D1·D2가 `UNSUPPORTED_PROFILE`로 기동 불가였다
+    (HEAD 동일 — systemd 레인 비실행으로 잠복). `minimalConfig(society, rootfs)`
+    시그니처를 추가하고 spawn 쪽 세 테스트는 `join(dir, "rootfs")`를 만들어
+    전달(SB-007의 "OMA가 state root 아래에 만드는 rootfs" 모양과 같은,
+    테스트가 소유한 실제 디렉터리); 디코드 전용 호출부는 형태만 보는
+    기본값 유지. 수정 후 audit.test.js 13/13 PASS.
+  - 메타데이터: production-loc-hashes 재생성, review-notes의 두 파일 항목을
+    fresh re-read 후 새 sha256·oracles로 재결박, review-ledger 재생성,
+    validation.md의 verification input digest 재결박.
+  - NOT_RUN: macOS native(실기)·kernel/powercut·provider credential·release·
+    guest lanes — 로컬 환경 부재. systemd는 이 환경에서 실행 가능:
+    `OMA_TEST_SYSTEMD=1`로 systemd-required 9파일 전부 실행 —
+    phase4 21/21·audit 13/13·나머지 7파일(audit2·cli·phase5·phase8·
+    crash-boundaries·launch-topology·cgroup-pin) 68/68 PASS.
 
 ## 10. 지금부터의 실행 순서
 0. ~~P0-8 강제 수단 미구현~~ — 구현됨: `owned-state` 아키텍처 규칙

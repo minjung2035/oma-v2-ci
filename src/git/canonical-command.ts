@@ -40,8 +40,19 @@ export function createCanonicalObserver(): GitObserver {
         return { status: null, signal: null, stdout: null, stderr: null,
           error: error instanceof Error ? error : new Error(String(error)) };
       }
-      const observed = evidence([...args], CANONICAL_PROCESS_LIMITS.timeout, CANONICAL_PROCESS_LIMITS.maxBuffer, input, join(dir, "stdout"));
-      return { ...observed, dispose: () => { try { rmSync(dir, { recursive: true, force: true }); } catch { /* diagnostic residue */ } } };
+      // The spool is opened synchronously inside the run (stdoutSpool), so a
+      // starved descriptor table reports here, not in the child. A made
+      // scratch whose spool could not be opened answers the same typed
+      // evidence an unmade scratch does -- and the directory is given back
+      // first, since nothing downstream will own it.
+      try {
+        const observed = evidence([...args], CANONICAL_PROCESS_LIMITS.timeout, CANONICAL_PROCESS_LIMITS.maxBuffer, input, join(dir, "stdout"));
+        return { ...observed, dispose: () => { try { rmSync(dir, { recursive: true, force: true }); } catch { /* diagnostic residue */ } } };
+      } catch (error) {
+        try { rmSync(dir, { recursive: true, force: true }); } catch { /* diagnostic residue */ }
+        return { status: null, signal: null, stdout: null, stderr: null,
+          error: error instanceof Error ? error : new Error(String(error)) };
+      }
     }
     return evidence([...args], format ? 30000 : commit ? 10000 : CANONICAL_PROCESS_LIMITS.timeout,
       format ? 1024 : commit ? 64 * 1024 : CANONICAL_PROCESS_LIMITS.maxBuffer, input);
