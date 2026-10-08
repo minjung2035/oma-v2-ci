@@ -14,9 +14,11 @@
 - 스위트 상태: **`npm test` 3559/3559 통과, 실패 0** — 과거 "의도적 stale 실패 5건"
   (V01A·V32A×2·DR27·R38)은 20c3e5b에서 fresh review 후 **재바인딩 완료**. 더 이상
   빨간 상태가 정상이 아니다 — 실패가 나오면 진짜다.
-- NOT_RUN 유지: systemd 필수 테스트 파일 9개(audit, audit2, cli, phase4, phase5,
-  phase8, crash-boundaries, launch-topology, cgroup-pin), macOS/native, powercut,
-  provider, release qualification — **거짓 보고 금지**.
+- NOT_RUN 유지: macOS/native, powercut, provider, release qualification —
+  **거짓 보고 금지**. systemd 필수 테스트 파일 9개는 이 호스트에서 실행 가능해졌다
+  (user systemd 257.13·bwrap·cgroup v2·user bus 있음): `OMA_TEST_SYSTEMD=1 node
+  scripts/verify-lane.mjs kernel|crash`로 2026-10-12에 EXECUTED+PASS(65/65·63/63)
+  기록 — test-local은 여전히 `OMA_TEST_SYSTEMD=0`으로 설계상 분리한다.
 - 벽시계: `npm test` ≈ **4~5분** (최적화 후), `npm run build` cold ~19s / stamp hit ~3s.
 - 게이트: `npm run build`, `typecheck`, `check:architecture` 전부 통과 확인됨.
 - 오래된 stash `stash@{0}` (6월 작업 백업) — 건드리지 않기로 결정됨, 그대로 둠.
@@ -126,7 +128,8 @@ OMA v2(`oma-core-v1`) 적대적 감사 + 경화 + v0.1 선행 작업. 목표 순
   `repairHostOwnedPath`, `collectHostStageStray` 등은 코드 동형이지만 Mac 미실행.
 - `oma-mac`의 `reconcilePersonalSettings` 등 일부 경로는 plain ensure 잔여
   (에이전트 보고 — 정적 규칙 통과 범위 내 잔존으로 추정, 재확인 필요).
-- 스위트는 3559/3559 통과하지만 systemd 9개 파일은 NOT_RUN 유지.
+- 스위트는 3559/3559 통과(당시); systemd 9개 파일은 test-local에서 분리되며
+  verify-lane kernel·crash로 실측 초록 — §1의 NOT_RUN 항목 참조.
 
 ## 7. 테스트·빌드·검증 레퍼런스
 
@@ -169,7 +172,9 @@ npm run evidence:graph                   # dependency-graph.json 재생성
 - 사용자가 직접 고친 파일을 되돌리지 않는다.
 - 실제 사용자 OMA/VM·인증·유료 provider 사용 금지 — fixture/loopback만.
 - 생성물은 재생성으로만 갱신.
-- macOS/native·systemd·powercut·provider·release는 실행하지 않고 NOT_RUN으로 표기.
+- macOS/native·powercut·provider·release는 실행하지 않고 NOT_RUN으로 표기.
+  systemd lane은 이 호스트에서 실행 가능 — 명시적 `OMA_TEST_SYSTEMD=1`
+  verify-lane kernel·crash 경유(2026-10-12 EXECUTED+PASS 기록).
 - 불확실하면 실험·추론으로 닫고 기록 — 미결로 두지 않는다.
 - 최종 보고는 장부 기준 "무엇을 더 찾았고 어떻게 고쳤는지" 한국어.
 

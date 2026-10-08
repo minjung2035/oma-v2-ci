@@ -173,6 +173,41 @@ test("mail-v1 CLI: dirty workspace warns; known candidate skips the submit; pend
   void candidate;
 });
 
+test("mail-v1 CLI: a refused `git status` is not reported as a clean workspace", async t => {
+  const home = mkdtempSync(join(tmpdir(), "oma-merge-refused-")); t.after(() => rmSync(home, { recursive: true, force: true }));
+  const { cwd } = workspace(home);
+  writeFileSync(join(cwd, "r.md"), "r\n");
+  // A corrupt index makes `git status` exit 128 with an empty listing while
+  // rev-parse still resolves refs: the observation is refused, not clean.
+  writeFileSync(join(cwd, ".git", "index"), "GARBAGE");
+  const run = await runCliWithPeer(home, cwd,
+    ["merge", "open", "--tier", "LOW", "--title", "t", "--file", join(cwd, "r.md"), "--request", "KR"],
+    async (request) => frame(request, {}));
+  assert.equal(run.status, 3, run.stderr);
+  assert.match(run.stderr, /git status: fatal:/);
+  assert.deepEqual(run.requests, [], "the open did not proceed on an unobserved workspace");
+});
+
+test("mail-v1 CLI: `merge open` outside a repository has no workspace to observe", async t => {
+  const home = mkdtempSync(join(tmpdir(), "oma-merge-norepo-")); t.after(() => rmSync(home, { recursive: true, force: true }));
+  const dir = join(home, "nowhere");
+  mkdirSync(dir);
+  writeFileSync(join(dir, "r.md"), "r\n");
+  // Both revisions are explicit full OIDs, so nothing about the request needs
+  // the caller's cwd to be a repository; "not a git repository" is a factual
+  // negative, not a refusal.
+  const run = await runCliWithPeer(home, dir,
+    ["merge", "open", "--tier", "LOW", "--title", "t", "--file", join(dir, "r.md"),
+      "--candidate", "0".repeat(40), "--base", "1".repeat(40), "--request", "KN"],
+    async (request) => {
+      if (asRequest(request).method === "git.known") return frame(request, { hasCandidate: true, prerequisites: [] });
+      return frame(request, openReceipt("merge-55555555"));
+    });
+  assert.equal(run.status, 0, run.stderr);
+  assert.doesNotMatch(run.stderr, /uncommitted changes/);
+  assert.deepEqual(run.requests.map(r => r.method), ["git.known", "attest.record"]);
+});
+
 test("mail-v1 CLI: review/vote/cancel send exact params; approval only via --approval", async t => {
   const home = mkdtempSync(join(tmpdir(), "oma-merge-facts-")); t.after(() => rmSync(home, { recursive: true, force: true }));
   const { cwd } = workspace(home);

@@ -488,8 +488,25 @@ DR34 후반에서 미뤄 둔 "listen 성공 후 `.off`로 유일한 'error' 리�
 | architecture gates | PASS | check:inventory(SOURCE_DIGESTS_CURRENT)·rules 0·lattice(dependency-graph evidence 재생성)·transactions·boundaries·documents·spec-inventory 전부 0 findings |
 | review ledger | PASS | `src/cli/effects.ts`·`src/cli/effects/code.ts` 신규 byte-bound 리뷰 + `src/storage/ledger-reader.ts` 재결박(모두 fresh re-read 후 새 sha256), `npm run review:ledger` 재생성 — CHANGED_WITH_ORACLE 14065·NOT_REVIEWED 59·READ_UNCHANGED 50·REMOVED 8 |
 | 집중 회귀 | PASS | `node --test dist/test/principal-code-view.test.js dist/test/merge-cli.test.js dist/test/operational-read-budget.test.js` 16/16 · `dist/test/effect-observation.test.js dist/test/git-effect-evidence.test.js dist/test/merge-review.test.js` 38/38 · `dist/test/scenario-merge-review.test.js` 9/9 |
-| 전체 `npm test` | PASS* | `node scripts/test-local.mjs` 로컬 lane 399 files → 3,900 tests, 3,898 PASS; 실패 2건의 정직한 내역: (a) SCN-L02는 8-way 병렬 aggregate에서만 재현되는 기존 타이밍 flake로 해당 파일 단독 재실행 40/40 PASS(이전 절들에도 같은 양상이 기록됨); (b) R38은 이 절과 신규 문서(limit-bounds.md)가 반영되기 전의 stale verification-input digest로, 이 트리의 digest로 재결박 후 `production-inventory` 재실행 확인. 한 차례 이전 실행은 정산 중 dist 재생성이 suite와 경주한 환경 간섭으로 wedge됐고(SCN-C09/C10·R04–R07·S01·society-bringup), 관련 파일 4종 단독 재실행 96/96 PASS 후의 실행이 위 결과다. systemd-required 9 파일은 환경 부재로 NOT_RUN 분리 |
-| macOS native / systemd / kernel·powercut / provider credential / release qualification | NOT_RUN | 로컬 환경 부재 |
+| 전체 `npm test` | PASS* | `node scripts/test-local.mjs` 로컬 lane 399 files → 3,900 tests, 3,898 PASS; 실패 2건의 정직한 내역: (a) SCN-L02는 8-way 병렬 aggregate에서만 재현되는 기존 타이밍 flake로 해당 파일 단독 재실행 40/40 PASS(이전 절들에도 같은 양상이 기록됨); (b) R38은 이 절과 신규 문서(limit-bounds.md)가 반영되기 전의 stale verification-input digest로, 이 트리의 digest로 재결박 후 `production-inventory` 재실행 확인. 한 차례 이전 실행은 정산 중 dist 재생성이 suite와 경주한 환경 간섭으로 wedge됐고(SCN-C09/C10·R04–R07·S01·society-bringup), 관련 파일 4종 단독 재실행 96/96 PASS 후의 실행이 위 결과다. systemd-required 9 파일은 test-local이 `OMA_TEST_SYSTEMD=0` 고정으로 설계상 분리 — "환경 부재"는 stale한 오기였고, 실제 lane 실행 결과는 다음 절에 기록한다 |
+| systemd-required 9 파일 (verify-lane kernel·crash) | EXECUTED+PASS | 다음 절의 실기록 — `verify-lane.mjs kernel` 12파일 65/65·`crash` 2파일 63/63, 이 호스트의 실제 user systemd에서 전종 초록 |
+| macOS native / powercut / provider credential / release qualification | NOT_RUN | 로컬 환경 부재 |
+
+## 정산: UX-38 bound survey 맹검증 잔여 — workspaceDirty 거절 관측 정직성 + systemd lane 실기록 (2026-10-12)
+
+위 절의 맹검증 잔여 2건을 정산했다. F-1: 위 절은 systemd-required lane을 "환경 부재"로 NOT_RUN 표기했으나 이 호스트에는 user systemd 257.13·bwrap 0.12.0·cgroup v2·user bus가 있고 lane은 실제로 실행된다 — stale한 표기를 실측으로 교체했다. F-2: `workspaceDirty()`가 `git status`의 exited-nonzero + 빈 stdout을 clean으로 읽던 잔여를 고쳤다 — 거절된 관측이 absent로 축소되는 결함류 그 자체이며, 구 코드도 같은 의미였으므로 회귀가 아니라 잔존 결함의 정산이다.
+
+| 절차 | 결과 | 근거 |
+|---|---|---|
+| F-2 workspaceDirty 거절 관측 | PASS | `src/cli/effects.ts` — 비영 종료는 git이 답을 거절한 것이지 빈 목록이 아니다. stderr의 `not a git repository`/`this operation must be run in a work tree`만 유일한 사실상 부정(관측할 워크스페이스 자체가 없음)으로 남기고, 그 외 거절 — 깨진 index, git이 거절하는 ownership 등 — 은 `StoreError(INTERNAL_ERROR)`로 전파한다. `effects/submit.ts`·`effects/code.ts`·`journalView` 등 주변 관측 경계의 refuse-on-nonzero 관례와 일치하고, 명시 full-OID `merge open`/`challenge open`의 비저장소 cwd 호출(`resolveOid`의 full-OID 단축이 만들어 둔 정상 경로)은 보존된다. timed-out·stalled·output-limited·spawn-failed는 종전대로 `requireTextExit`가 던진다 |
+| F-2 fail→pass | PASS | `test/merge-cli.test.ts` 신규 2종 — 손상된 `.git/index`로 거절을 재현한 `merge open`이 exit 3 + `oma: INTERNAL_ERROR: git status: fatal:`로 명시 실패하며 요청을 보내지 않는다(구 dist로 재실행하면 무경고 진행·실패를 확인); 비저장소 cwd의 명시-OID open은 경고 없이 완료되는 회귀 가드. 파일 12/12 PASS |
+| F-1 systemd lane 실기록 | PASS | `OMA_TEST_SYSTEMD=1 node scripts/verify-lane.mjs kernel` → EXECUTED+PASS 65/65(12 파일 — systemd-required 8종 + peer-pid·native-leaf·runner-channel·compliance), `crash` → EXECUTED+PASS 63/63(crash-boundaries·global-invariants) — systemd-required 9파일 전종이 실제 user systemd에서 초록. artifacts=/tmp/oma-lane-kernel·/tmp/oma-lane-crash |
+| build / typecheck | PASS | `npm run build` + `tsc --noEmit` 0 오류 |
+| architecture gates | PASS | check:inventory(SOURCE_DIGESTS_CURRENT)·rules·lattice(dependency-graph evidence 재생성)·transactions·boundaries·documents·spec-inventory 전부 0 findings |
+| review ledger | PASS | `src/cli/effects.ts` 항목을 fresh re-read 후 새 sha256으로 재결박, `npm run review:ledger` 재생성 — CHANGED_WITH_ORACLE 14065·NOT_REVIEWED 59·READ_UNCHANGED 50·REMOVED 8 |
+| 집중 회귀 | PASS | `node --test dist/test/merge-cli.test.js dist/test/effect-observation.test.js dist/test/git-effect-evidence.test.js dist/test/merge-review.test.js dist/test/scenario-merge-review.test.js dist/test/principal-code-view.test.js dist/test/operational-read-budget.test.js dist/test/client.test.js` 88/88 |
+| 전체 `npm test` | PASS | `node scripts/test-local.mjs` 로컬 lane 399 files → 3,902 tests, 3,902 PASS·0 fail·0 cancelled·0 skipped(duration 284,386ms). 이 절 작성 중의 첫 실행은 변경분이 반영되기 전의 stale digest로 R38 1건만 실패했고, 재결박 뒤의 위 실행은 R38 포함 전종 PASS — 단독 재실행 `production-inventory`·`document-integrity`·`traceability-policy` 23/23 확인. systemd-required 9 파일은 test-local이 설계상 분리하며 실제 실행은 위 kernel·crash lane 기록 |
+| macOS native / powercut / provider credential / release qualification | NOT_RUN | 로컬 환경 부재 |
 
 ## 현재 알려진 한계와 남은 검증
 
@@ -498,14 +515,14 @@ DR34 후반에서 미뤄 둔 "listen 성공 후 `.off`로 유일한 'error' 리�
 - 이전 systemd/VM ownership/isolated-HOME probe 거절과 aggregate suite 금지는 [HANDOFF](../HANDOFF.md)에 유지한다. 문서 이동은 실행 허가가 아니다.
 - F1의 bound project 첫 관측에는 이미 실행 중인 app/guest를 요구했던 한계가 남아 있다.
 - F2의 Linux file/socket/PTY 및 controlled ownership 회귀는 remote/native 실행 증거의 대체가 아니다.
-- kernel/powercut lane과 native 환경 lane은 이 작업에서 실행하지 않는다. release 판정은 필요한 환경과 전체 검증이 갖춰진 뒤 별도로 갱신한다.
+- kernel·crash systemd lane은 이 호스트의 user systemd에서 EXECUTED+PASS로 기록됐다(위 정산 절). powercut lane과 native 환경 lane은 이 작업에서 실행하지 않으며, release 판정은 필요한 환경과 전체 검증이 갖춰진 뒤 별도로 갱신한다.
 - optional verifier·notmuch·reflink·비용 상한·성능 우위는 구현과 실험 증거 없이 활성 기능으로 표시하지 않는다. 현재 unsupported 정책과 후속 구현의 구분은 해당 contract/DR을 따른다.
 
 ## 검증 입력과 측정 artifact
 
 아래 binding은 구조 검사의 입력 identity다. digest 생성 자체가 runtime PASS를 뜻하지 않는다.
 
-verification input digest `992ecd134d4133cea0c85bd9470b55b9fc705b74525fb66621a4fb5f7bf6855a` (15343 files).
+verification input digest `8cc7a12e9105b43a3041f4698cef64a094c095b602421d9afddbcfb381dbdc1a` (15343 files).
 
 당시 기록한 cloc 2.08 측정치: 354 files / 35,832 code LOC. 이 역사적 기록은 현재 source의 LOC claim이 아니며, 기존 artifact와의 불일치를 여기서 수리했다고 주장하지 않는다. 크기 제한은 없으며 값은 release proof가 아니다.
 

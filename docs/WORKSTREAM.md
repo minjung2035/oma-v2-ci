@@ -1937,6 +1937,39 @@ name collision/intended surface/hidden 미활성/idempotent reload/provenance/
     96/96 PASS로 확인됐다.
   - NOT_RUN: macOS native(실기)·kernel/powercut·provider credential·
     release·systemd-required lanes — 로컬 환경 부재.
+- 2026-10-12 (UX-38 bound survey 맹검증 잔여 정산 — workspaceDirty 거절
+  관측 정직성·stale NOT_RUN 표기 교정, feat/macos-hidden-vm @ 182a6031
+  이후):
+  - F-2 `src/cli/effects.ts` — `workspaceDirty()`가 `git status`의
+    exited-nonzero + 빈 stdout을 clean으로 읽었다: 깨진 index·git이
+    거절하는 ownership 등 워크스페이스가 있으나 관측이 거절된 경우까지
+    clean으로 축소(구 코드도 같은 의미 — 회귀가 아니라 잔존 결함의 정산).
+    이제 비영 종료 중 `not a git repository`/`must be run in a work
+    tree`만 유일한 사실상 부정(관측할 워크스페이스 부재)이고, 나머지
+    거절은 `StoreError(INTERNAL_ERROR)`로 전파 — 주변 관측 경계
+    (effects/submit·effects/code·journalView)의 refuse-on-nonzero
+    관례와 일치. 명시 full-OID `merge open`/`challenge open`의 비저장소
+    cwd 호출(`resolveOid`의 full-OID 단축 경로)은 보존된다.
+  - fail→pass: `test/merge-cli.test.ts`에 손상 `.git/index` 거절 재현 —
+    open이 exit 3·`git status: fatal:`로 명시 실패하고 요청을 보내지
+    않는다(구 dist에서는 무경고 진행으로 실패 확인). 비저장소 명시-OID
+    open은 경고 없이 완료되는 회귀 가드도 추가.
+  - F-1 stale 표기 교정: validation.md의 systemd-required "환경 부재"
+    NOT_RUN은 stale — 이 호스트는 user systemd 257.13·bwrap 0.12.0·
+    cgroup v2·user bus를 갖춘다. `OMA_TEST_SYSTEMD=1` 실측:
+    `verify-lane.mjs kernel` 12파일 65/65·`crash` 2파일 63/63
+    EXECUTED+PASS — systemd-required 9파일 전종이 실제 user
+    manager에서 초록.
+  - 메타데이터: production-loc-hashes·dependency-graph evidence 재생성,
+    review-notes의 effects.ts 항목 fresh re-read 후 새 sha256 재결박,
+    review-ledger 재생성(14065/59/50/8), validation.md의 verification
+    input digest 재결박.
+  - 게이트: build·typecheck·check:architecture 전부 PASS; 집중 회귀
+    merge-cli 12/12 포함 88/88; test-local 399 files → 3,902 tests
+    3,902 PASS·0 실패(첫 실행은 정산 산출물 반영 전 stale digest의 R38
+    1건 — 재결박 뒤 재실행이 전종 초록).
+  - NOT_RUN: macOS native(실기)·powercut·provider credential·release —
+    로컬 환경 부재.
 
 ## 10. 지금부터의 실행 순서
 0. ~~P0-8 강제 수단 미구현~~ — 구현됨: `owned-state` 아키텍처 규칙

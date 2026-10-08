@@ -153394,8 +153394,8 @@
    "oracles": [
     "mail-v1 CLI"
    ],
-   "sha256": "372db4c802871cc2d857ccdbf58af73b53fd4bb63a1b90d78e39ae1ef1332958",
-   "note": "Read in full for the UX-38 bound survey: workspaceDirty is a boolean probe, so a bounded porcelain listing can never refuse -- any captured stdout byte proves dirt (a truncated listing is still a dirty one) and only a successful empty listing answers clean; a timed-out, stalled, spawn-failed or otherwise unobserved listing still throws through requireTextExit rather than being mistaken for clean. This removes the old LIMIT_EXCEEDED a >256KiB porcelain stream could raise on a legitimately dirty workspace. resolveOid, recordedBase, readBody and the request-frame file bound are unchanged: a whole local file still must fit one request frame, which is the wire contract, not a UI preference."
+   "sha256": "07f9e230473e76507d43cca4c1439102bca8c72ec5ac42690fc19d4196321c5c",
+   "note": "Read in full again for the UX-38 bound-survey blind-verification rider: workspaceDirty keeps the boolean-probe contract -- any captured stdout byte proves dirt (a truncated listing is still a dirty one) and only a successful empty listing answers clean -- and the residual hole the earlier note left is now closed: a nonzero exit is git declining the question, so 'not a git repository'/'no work tree' is the one factual negative while any other refusal on a present workspace (a corrupt index, an ownership git declines) propagates as StoreError instead of being read as clean. timed-out, stalled, spawn-failed or otherwise unobserved listings still throw through requireTextExit. resolveOid, recordedBase, readBody and the request-frame file bound are unchanged: a whole local file still must fit one request frame, which is the wire contract, not a UI preference."
   },
   {
    "path": "src/cli/effects/code.ts",

@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import { closeSync, constants, fstatSync, openSync, readSync } from "node:fs";
 import { FULL_OID_RE } from "../ids.js";
 import { isValidFullOid } from "../domain/identifiers.js";
+import { StoreError } from "../domain/errors.js";
 import { GIT_ENV, requireTextExit, runGitText } from "../process/policies.js";
 import { runProcessSync } from "../process/run.js";
 import { fail } from "../client/errors.js";
@@ -104,13 +105,20 @@ export function recordedBase(): string | null {
 /** Uncommitted work is never part of a resolved candidate; `merge open` warns.
  * The answer is boolean, so the bounded listing never refuses: a truncated
  * porcelain stream still proves dirty, and only a listing that captured no
- * entry needs the command's own outcome. */
+ * entry needs the command's own outcome. A nonzero exit is git declining the
+ * question, not an empty listing -- a workspace that is not there at all is
+ * the one factual negative, while a refusal on a present one (a corrupt
+ * index, an ownership git declines) leaves the state unobserved, which
+ * propagates rather than answer clean. */
 export function workspaceDirty(): boolean {
   const result = runProcessSync({ executable: "/usr/bin/git", argv: ["status", "--porcelain"],
     env: GIT_ENV, cwd: currentContext().cwd, timeoutMs: 30000, stdoutBytes: 256 * 1024, stderrBytes: 256 * 1024 });
   if (result.stdout.length > 0) return true;
   const status = requireTextExit(result, "git");
-  return status.status === 0 && status.stdout.trim().length > 0;
+  if (status.status !== 0 && !/^fatal: (?:not a git repository|this operation must be run in a work tree)/m.test(status.stderr))
+    throw new StoreError("INTERNAL_ERROR",
+      `git status: ${status.stderr.trim().split("\n", 1)[0]!.slice(0, 200) || `exit ${status.status}`}`);
+  return false;
 }
 
 export function resolveOid(revision: string): string {

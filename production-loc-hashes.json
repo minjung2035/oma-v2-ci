@@ -132,7 +132,7 @@
     },
     {
       "path": "src/cli/effects.ts",
-      "sha256": "372db4c802871cc2d857ccdbf58af73b53fd4bb63a1b90d78e39ae1ef1332958"
+      "sha256": "07f9e230473e76507d43cca4c1439102bca8c72ec5ac42690fc19d4196321c5c"
     },
     {
       "path": "src/cli/effects/code.ts",
