@@ -21,6 +21,7 @@
 | macOS host와 hidden Linux VM | [macos-platform](macos-platform.md) | RPC·VM·project·credential·image·복구 계약과 helper 안내 |
 | 시험·release evidence·LOC·qualification·fixture | [verification-spec](verification-spec.md) | 기존 TEST/COMP/LOC/SP/VAL 조항과 수용 번호의 단일 owner |
 | 현재 실행 결과·한계·재검증 | [validation](implementation/validation.md) | 현재 판정과 수치의 단일 owner. 과거 실행 이력은 archive |
+| 잔여 숫자 bound의 분류 | [limit-bounds](limit-bounds.md) | UX-38 이후 남은 bound의 인벤토리와 분류. 각 bound의 동작 계약은 소유 코드·spec 문서가 유지하며 이 파일은 인벤토리다 |
 
 같은 동작의 규범은 한 owner에서 정의하고 다른 문서는 연결한다. 문장 존재 자체가 구현 완료나 시험 통과를 뜻하지 않는다.
 

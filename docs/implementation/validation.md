@@ -468,9 +468,27 @@ DR34 후반에서 미뤄 둔 "listen 성공 후 `.off`로 유일한 'error' 리�
 | F-3 oversized 귀속 | PASS | id 스니핑 실패 시 유일 pending에 귀속하던 fallback 제거 — sniffed id가 실제 pending과 매치될 때만 그 요청 거절, 불일치는 drop+카운트(타임아웃 에러 꼬리에 보고). `oversized-notification` fixture+lsp-upstream 537행 |
 | F-6 문서 정직성 | PASS | 직전 절이 주장하던 "OMA marker는 codeAction context에서 서버로 가지 않음" 회귀를 실제 테스트로 추가 — `marker-context` fixture가 context 진단 수를 codeAction resolve 편집으로 되돌려 marker 필터링을 증명(lsp-upstream 616행). 이중 marker 재flag도 위 F-1 오라클로 커버 |
 | vendor bundle | PASS | `node scripts/vendor-pi-lsp.mjs --check` → `BUNDLE_CURRENT` (48 files), manifest `generated.divergences` 동기, 번들 sha256 `59a572cb4c0226c3e073bb9d9ee3254977cf3ec78c1adf809103c2263fe4227a` |
-| 집중 회귀 | PASS | `node --test dist/test/lsp-upstream.test.js` 30/30·`dist/test/lsp-bundle.test.js` 전종 PASS — 신규 오라클 17종(upstream 10 + bundle 7)은 구 런타임/구 어댑터에서 실패 확인 후 통과 |
+| 집중 회귀 | PASS | `node --test dist/test/lsp-upstream.test.js` 30/30·`dist/test/lsp-bundle.test.js` 전종 PASS — 신규 오라클 17종 중 14종은 구 런타임/구 어댑터에서 실패 확인 후 통과; 나머지 3종(marker-context 등)은 구 동작이 없어 대조 불가한 회귀 가드 |
 | 전체 `npm test` | PASS | `OMA_TEST_CONCURRENCY=1 npm test` 로컬 lane — build + 397 files serial 실행: serial 2/2·parallel 3,881/3,881 PASS·0 fail·0 cancelled·0 skipped(duration 1,599,229ms); R38 digest 결박 테스트 포함 전종. systemd-required 9 파일은 환경 부재로 NOT_RUN 분리 |
 | review ledger | PASS | 변경 5개 production 파일(lsp-tools.ts·runtime/lsp-client.js·lsp-client.d.ts·runner.js·manifest.json)의 byte-bound 리뷰를 fresh read 후 새 SHA-256에 재결박, `npm run review:ledger` — CHANGED_WITH_ORACLE 14062·NOT_REVIEWED 61·READ_UNCHANGED 51·REMOVED 8 |
+| macOS native / systemd / kernel·powercut / provider credential / release qualification | NOT_RUN | 로컬 환경 부재 |
+
+## 정산: UX-38 잔여 bound 전수 조사 + 남은 자의적 거절 제거 (2026-10-12)
+
+배치 1–5가 변환한 뒤 남은 숫자 bound를 전수 조사·분류하고, 스윕에서 발견한 잔여 사용자-facing 자의적 거절을 제거했다. 결과 장부는 [limit-bounds.md](../limit-bounds.md) — §1 PROTOCOL/WIRE-MANDATED 29·§2 FORMAT-MANDATED 13·§3 SECURITY/INTEGRITY 11·§4 RESOURCE-PROTECTION(의도적 유지) 26·§5 QUIESCENT/JITTER 25·§6 TEST-ONLY 1, 총 105행. §4는 방어적이지만 자의적인 값을 정직하게 그렇게 분류하고, §7은 수치 기반 사용자-facing 거절 26종을 하나씩 판정한다 — wire 계약·포맷·무결성·의도적 자원 보호가 필요한 것만 남았고, 그 외의 용량/시간 거절은 남지 않았다.
+
+| 절차 | 결과 | 근거 |
+|---|---|---|
+| merge-diff 뷰 bound 정렬 | PASS | `src/cli/effects/code.ts` — production merge-diff의 캡처 bound를 고정 768 KiB에서 `bundleBytes()+1`로 교체. 이전 값은 wire가 선언한 완료-notice 문서 bound(기본 256 MiB)보다 좁은 자의적 거절이었고 `commands/merge.ts`의 오류 문구(`cliBundleBytes()` 명명)와 불일치했다. `+1`은 "정확히 수용"과 "1바이트 초과"를 구별한다. revision 해석(ref/published/ancestry 관측)의 출력 bound도 고유 768 KiB에서 `CANONICAL_PROCESS_LIMITS.maxBuffer`(4 MiB)로 정렬 — broker의 canonical observer와 같은 명령 같은 bound. 고정 MAXIMUM(768 KiB)은 production이 도달하지 않는 show/diff/log/ls-tree/grep 뷰만 묶는 TEST-ONLY bound로 주석과 함께 남았다 |
+| workspaceDirty 불리언 관측 | PASS | `src/cli/effects.ts` — `git status --porcelain`을 더는 텍스트 maxBuffer로 읽지 않고 직접 관측한다: 캡처된 stdout이 1바이트라도 있으면 dirty(절단된 목록도 증거), 성공적으로 빈 목록만 clean. 이전에는 256 KiB를 넘는 정직한 dirty 워크스페이스가 `merge open`에서 LIMIT_EXCEEDED로 죽을 수 있었다. timed-out/stalled/spawn-failed는 `requireTextExit`가 계속 던진다 — 실패를 clean으로 읽지 않는다 |
+| ReadScope 주석 교정 | PASS | `src/storage/ledger-reader.ts` — "fresh read/snapshot" 인상을 주던 주석을 정확한 기술로 교체: memoized 항목은 그 컬렉션 안에서 키로 처음 읽은 row bytes의 디코딩이며 DB 스냅샷이 아니고, 컬렉션 도중 다른 writer가 바꾼 row는 재관측되지 않는다(새 바이트가 필요하면 새 scope). 동작 변경 없음 |
+| 문서 정밀 수정 | PASS | LSP 오라클 서술을 "17 fail-before"에서 "14 fail-before + 3 회귀 가드(구 동작 부재로 대조 불가)"로 이 파일과 WORKSTREAM 양쪽 정정; WORKSTREAM의 B1 fixture 문구를 102 `.test.mjs` + 보조 2종(`isolate-env.mjs` 프리로드·`pdf-fixture.mjs` 헬퍼, fixture는 후자 하나)으로 정밀화 |
+| 잔여 거절 판정 | PASS | limit-bounds §7의 26종 전부가 wire/format/integrity/의도적 자원 보호/jitter 중 하나로 귀결 — 스윕에서 변환 가능한데 남은 거절은 셋이었고 전부 제거(merge-diff 뷰 bound·workspaceDirty porcelain 캡·code view published-ref 캡 비대칭). 대표 잔여: merge-diff>bundleBytes(PROTOCOL), 로컬 파일>1요청 프레임(PROTOCOL, 대체 채널 없음), LSP workspace-edit 2048/4 MiB(INTEGRITY — 절단 fix=오염), human prompt 16 KiB+frame(PROTOCOL+RESOURCE), 설정/패키지 문서 bound(RESOURCE, 방어적·자의적으로 명시), 진단 스냅샷(RESOURCE, 운영 읽기와 무관) |
+| build / typecheck | PASS | `npm run build` + `tsc --noEmit` 0 오류 |
+| architecture gates | PASS | check:inventory(SOURCE_DIGESTS_CURRENT)·rules 0·lattice(dependency-graph evidence 재생성)·transactions·boundaries·documents·spec-inventory 전부 0 findings |
+| review ledger | PASS | `src/cli/effects.ts`·`src/cli/effects/code.ts` 신규 byte-bound 리뷰 + `src/storage/ledger-reader.ts` 재결박(모두 fresh re-read 후 새 sha256), `npm run review:ledger` 재생성 — CHANGED_WITH_ORACLE 14065·NOT_REVIEWED 59·READ_UNCHANGED 50·REMOVED 8 |
+| 집중 회귀 | PASS | `node --test dist/test/principal-code-view.test.js dist/test/merge-cli.test.js dist/test/operational-read-budget.test.js` 16/16 · `dist/test/effect-observation.test.js dist/test/git-effect-evidence.test.js dist/test/merge-review.test.js` 38/38 · `dist/test/scenario-merge-review.test.js` 9/9 |
+| 전체 `npm test` | PASS* | `node scripts/test-local.mjs` 로컬 lane 399 files → 3,900 tests, 3,898 PASS; 실패 2건의 정직한 내역: (a) SCN-L02는 8-way 병렬 aggregate에서만 재현되는 기존 타이밍 flake로 해당 파일 단독 재실행 40/40 PASS(이전 절들에도 같은 양상이 기록됨); (b) R38은 이 절과 신규 문서(limit-bounds.md)가 반영되기 전의 stale verification-input digest로, 이 트리의 digest로 재결박 후 `production-inventory` 재실행 확인. 한 차례 이전 실행은 정산 중 dist 재생성이 suite와 경주한 환경 간섭으로 wedge됐고(SCN-C09/C10·R04–R07·S01·society-bringup), 관련 파일 4종 단독 재실행 96/96 PASS 후의 실행이 위 결과다. systemd-required 9 파일은 환경 부재로 NOT_RUN 분리 |
 | macOS native / systemd / kernel·powercut / provider credential / release qualification | NOT_RUN | 로컬 환경 부재 |
 
 ## 현재 알려진 한계와 남은 검증
@@ -487,7 +505,7 @@ DR34 후반에서 미뤄 둔 "listen 성공 후 `.off`로 유일한 'error' 리�
 
 아래 binding은 구조 검사의 입력 identity다. digest 생성 자체가 runtime PASS를 뜻하지 않는다.
 
-verification input digest `cbd0566ce84d58ae3803ff11910b152bbeec959f6252bd727c51c069199a9b0f` (15342 files).
+verification input digest `992ecd134d4133cea0c85bd9470b55b9fc705b74525fb66621a4fb5f7bf6855a` (15343 files).
 
 당시 기록한 cloc 2.08 측정치: 354 files / 35,832 code LOC. 이 역사적 기록은 현재 source의 LOC claim이 아니며, 기존 artifact와의 불일치를 여기서 수리했다고 주장하지 않는다. 크기 제한은 없으며 값은 release proof가 아니다.
 

@@ -5,11 +5,17 @@ import { isAbsolute } from "node:path";
 import { isValidFullOid, isValidWirePath } from "../../domain/identifiers.js";
 import { StoreError } from "../../domain/errors.js";
 import { GitObserver, observed } from "../../git/observe.js";
-import { CANONICAL_SAFE_ARGS, mergeDiffText } from "../../git/canonical-command.js";
+import { CANONICAL_PROCESS_LIMITS, CANONICAL_SAFE_ARGS, mergeDiffText } from "../../git/canonical-command.js";
 import { GIT_ENV, runGitText } from "../../process/policies.js";
 import { runProcessSync } from "../../process/run.js";
+import { bundleBytes } from "../../client/settings.js";
 
 const SAFE = CANONICAL_SAFE_ARGS;
+/** Test-only view bound for the actions no production path reaches (only
+ * merge-diff is wired): a bounded read so a pathological fixture cannot grow
+ * the process without limit. merge-diff is bound by the wire's own document
+ * bound (bundleBytes), and revision resolution by CANONICAL_PROCESS_LIMITS --
+ * the same bound the broker's canonical observer puts on the same commands. */
 const MAXIMUM = 768 * 1024;
 export interface CodeView {
   readonly action: "show" | "diff" | "log" | "ls-tree" | "grep" | "merge-diff";
@@ -33,7 +39,7 @@ export function readCode(repository: string, input: CodeView): { revision: strin
     throw new StoreError("INVALID_REQUEST", "a show view requires a file path");
   const observer = new GitObserver(args => {
     const result = runProcessSync({ executable: "/usr/bin/git", argv: [...SAFE, ...args], env: GIT_ENV,
-      timeoutMs: 30_000, stdoutBytes: MAXIMUM, stderrBytes: 8192 });
+      timeoutMs: 30_000, stdoutBytes: CANONICAL_PROCESS_LIMITS.maxBuffer, stderrBytes: 8192 });
     return { status: result.kind === "exited" ? result.exitCode : null, signal: null, stdout: result.stdout, stderr: result.stderr };
   });
   // Freeze main once: output names the actual commit, not a moving alias.
@@ -68,9 +74,14 @@ export function readCode(repository: string, input: CodeView): { revision: strin
   // merge-diff carries raw bytes (a binary patch is valid); its text view is
   // the same owner-rendered representation the completion notice uses.
   if (input.action === "merge-diff") {
+    // The diff's only destination bound is the completion-notice document
+    // bound the wire already declares (bundleBytes) -- a tighter in-memory
+    // cap would refuse a diff that could still integrate, and a looser one
+    // would pretend a diff that can never ride a notice can. The refusal is
+    // therefore exactly the protocol's, and --path narrows below it.
     const result = runProcessSync({ executable: "/usr/bin/git",
       argv: [...SAFE, "--git-dir", repository, ...args], env: { ...GIT_ENV, GIT_LITERAL_PATHSPECS: "1" },
-      timeoutMs: 30_000, stdoutBytes: MAXIMUM, stderrBytes: 8192 });
+      timeoutMs: 30_000, stdoutBytes: bundleBytes() + 1, stderrBytes: 8192 });
     if (result.kind === "output-limited") throw new StoreError("LIMIT_EXCEEDED", "merge diff exceeds its view bound");
     if (result.kind === "timed-out") throw new StoreError("DEADLINE_EXCEEDED", "merge diff timed out");
     if (result.kind !== "exited" || result.exitCode !== 0)

@@ -1911,7 +1911,7 @@
   }
  ],
  "files": 399,
- "runtimeEdges": 1695,
+ "runtimeEdges": 1697,
  "typeOnlyEdges": 426,
  "runtimeEdgeMatrix": {
   "L1-kernel -> L1-kernel": 321,
@@ -1920,7 +1920,7 @@
   "L3-workflow -> L1-kernel": 223,
   "L3-workflow -> L2-facts": 14,
   "L3-workflow -> L3-workflow": 68,
-  "L4-orchestration -> L1-kernel": 355,
+  "L4-orchestration -> L1-kernel": 357,
   "L4-orchestration -> L2-facts": 8,
   "L4-orchestration -> L3-workflow": 21,
   "L4-orchestration -> L4-orchestration": 181,
@@ -1959,7 +1959,7 @@
   "src/hash.ts": 21,
   "src/domain/derived.ts": 20,
   "src/frame.ts": 20,
-  "src/process/run.ts": 18,
+  "src/process/run.ts": 19,
   "src/store.ts": 18,
   "src/domain/deployment.ts": 17
  },

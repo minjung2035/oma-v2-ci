@@ -788,8 +788,9 @@ name collision/intended surface/hidden 미활성/idempotent reload/provenance/
   `sha512-D1GMJMNDG2omAkL1ztmO6ZEwEyW7LoFpTcckKh2yXjLyAgDFuhpTQrs2jQPAlVtGb3rjAeIXRZrkhFcwSWdGSg==`)
   의 무수정 스냅샷, `upstream-tests/`는 source commit
   `72c6e67787d67d8a7d01bf0abf30c072a6112de6`의 테스트 트리(104 entries —
-  102 `.test.mjs` + fixture 2개, npm tarball에는 테스트가 없어 git에서
-  가져옴), `runtime/`은 upstream `.ts` 전 모듈의 tsc 산출물(.ts 상대
+  102 `.test.mjs` + 보조 파일 2개(`isolate-env.mjs` 테스트-환경
+  프리로드·`pdf-fixture.mjs` PDF 생성 헬퍼; fixture는 후자 하나),
+  npm tarball에는 테스트가 없어 git에서 가져옴), `runtime/`은 upstream `.ts` 전 모듈의 tsc 산출물(.ts 상대
   지정자는 `.js`로 재작성 후 컴파일)에 `vendor-pi-web-access.mjs`의
   OMA_DIVERGENCES만 입힌 생성물, `node_modules/`는 DEPENDENCIES 핀 테이블의
   npm tarball 바이트 그대로인 의존 클로저. host API(`@earendil-works/*`,
@@ -1639,11 +1640,12 @@ name collision/intended surface/hidden 미활성/idempotent reload/provenance/
     oversized-notification·partial-answers·slow-drain·stdin-stall
     시나리오 신설.
   - 회귀·fail→pass: `lsp-upstream.test.ts` 30/30·`lsp-bundle.test.ts`
-    전종 PASS — 신규 오라클 17종(upstream 10 + bundle 7) 전부 구
-    런타임/구 어댑터에서 실패 확인 후 통과(backpressure reject→abort
-    보고·never-drain bounded·drain 완주·per-file degrade·route
-    degrade·all-fail 거절 유지·이중 marker·pull/timeout drop
-    카운트·notification 귀속).
+    전종 PASS — 신규 오라클 17종 중 14종은 구 런타임/구 어댑터에서 실패
+    확인 후 통과(backpressure reject→abort 보고·never-drain
+    bounded·drain 완주·per-file degrade·route degrade·all-fail 거절
+    유지·이중 marker·pull/timeout drop 카운트·notification 귀속);
+    나머지 3종은 구 동작 자체가 없어 대조할 fail-before가 없는 회귀
+    가드(marker-context 등 신규 시나리오)다.
   - NOT_RUN: macOS native·systemd·kernel/powercut·provider credential·
     release qualification — 로컬 환경 부재.
 
@@ -1883,6 +1885,58 @@ name collision/intended surface/hidden 미활성/idempotent reload/provenance/
     `OMA_TEST_SYSTEMD=1`로 systemd-required 9파일 전부 실행 —
     phase4 21/21·audit 13/13·나머지 7파일(audit2·cli·phase5·phase8·
     crash-boundaries·launch-topology·cgroup-pin) 68/68 PASS.
+- 2026-10-12 (UX-38 잔여 bound 전수 조사 + 정산 — bound 장부·세 잔여
+  자의적 거절 제거·문서 정밀 수정, feat/macos-hidden-vm @ f19232d9 이후):
+  - 배치 1–5 뒤 남은 숫자 bound를 전수 조사해 `docs/limit-bounds.md`로
+    정리했다(§1 PROTOCOL/WIRE-MANDATED 29·§2 FORMAT-MANDATED 13·
+    §3 SECURITY/INTEGRITY 11·§4 RESOURCE-PROTECTION 26·
+    §5 QUIESCENT/JITTER 25·§6 TEST-ONLY 1 — 105행 인벤토리). 각 bound는
+    위치·값·분류·근거를 가지고, wire bound는 피어 계약과 oversized-payload
+    대체 채널의 유무를 명시한다. 방어적이지만 자의적인 값은 §4가
+    "defensive-but-arbitrary"로 정직하게 분류한다 — 프로토콜 요구인 척하지
+    않는다.
+  - 추가 스윕에서 남은 사용자-facing 거절 셋을 고쳤다:
+    (a) `src/cli/effects/code.ts` — production `merge-diff` 캡처 bound가
+    고정 768 KiB라 wire의 문서 bound(`bundleBytes`, 기본 256 MiB)보다 좁은
+    자의적 거절이었고 오류 문구는 `cliBundleBytes()`를 명명해 불일치했다.
+    이제 `bundleBytes()+1`로 정렬 — 통과할 수 있는 diff를 거절하지 않고
+    +1이 "정확히 수용"과 "초과"를 구별한다. 같은 파일의 revision 해석
+    관측(ref/published/ancestry)도 고유 768 KiB에서
+    `CANONICAL_PROCESS_LIMITS.maxBuffer`(4 MiB)로 정렬 — broker의
+    canonical observer가 같은 명령에 두는 bound와 같아져 큰 발행 이력의
+    저장소가 code view에서만 거절되는 비대칭을 없앴다. 고정 MAXIMUM은
+    production이 도달하지 않는 show/diff/log/ls-tree/grep 뷰의 TEST-ONLY
+    bound로만 남겼다(주석 명기). (b) `src/cli/effects.ts` —
+    `workspaceDirty()`가 `runGitText`(256 KiB maxBuffer)로 porcelain을
+    읽어 정직하게 dirty한 큰 워크스페이스가 LIMIT_EXCEEDED로 죽을 수
+    있었다. 불리언 관측이므로 어떤 stdout이라도 잡히면 dirty — 절단된
+    목록도 증거이고, 성공적으로 빈 목록만 clean이다. timeout/stalled/spawn
+    실패는 requireTextExit로 계속 전파돼 clean으로 오독되지 않는다.
+  - 문서 정밀 수정: LSP 신규 오라클 서술을 "17 fail-before"에서
+    "14 fail-before + 3 회귀 가드"(구 동작이 없어 대조 불가)로
+    WORKSTREAM·validation.md 양쪽에 정정; B1 fixture 문구를
+    "102 .test.mjs + helper 2종(isolate-env preload·pdf-fixture)"로
+    정밀화; `src/storage/ledger-reader.ts`의 ReadScope 주석이
+    스냅샷 보장을 과대 주장한 것을 컬렉션-로컬 memoization 기술로 교정.
+  - 메타데이터: production-loc-hashes 재생성, review-notes의
+    effects.ts·effects/code.ts 신규 byte-bound 리뷰 + ledger-reader.ts
+    재결박(전부 fresh re-read 후 새 sha256), review-ledger 재생성,
+    dependency-graph evidence·validation.md의 verification input digest
+    재결박.
+  - 게이트: build·typecheck·check:architecture(인벤토리·rules·lattice·
+    transactions·boundaries·documents·spec-inventory) 전부 PASS;
+    집중 회귀 principal-code-view·merge-cli·operational-read-budget
+    16/16, effect-observation·git-effect-evidence·merge-review 38/38,
+    scenario-merge-review 9/9 PASS.
+  - 전체 `node scripts/test-local.mjs`: 399 files → 3,900 tests, 3,898
+    PASS. 실패 2건 — SCN-L02는 8-way 병렬에서만 재현되는 기존 타이밍
+    flake(파일 단독 재실행 40/40 PASS), R38은 정산 산출물 반영 전의
+    stale digest로 재결박으로 소거. 이전 한 실행은 정산 중 dist 재생성이
+    suite와 경주해 wedge됐고 관련 파일 4종(scenario-confined·
+    scenario-society·scenario-principal·society-bringup) 단독 재실행
+    96/96 PASS로 확인됐다.
+  - NOT_RUN: macOS native(실기)·kernel/powercut·provider credential·
+    release·systemd-required lanes — 로컬 환경 부재.
 
 ## 10. 지금부터의 실행 순서
 0. ~~P0-8 강제 수단 미구현~~ — 구현됨: `owned-state` 아키텍처 규칙

@@ -153069,13 +153069,14 @@
   {
    "path": "src/storage/ledger-reader.ts",
    "by": [
-    "UX-37"
+    "UX-37",
+    "UX-38"
    ],
    "oracles": [
     "G02-ledger-r2"
    ],
-   "sha256": "5cad25df5cd4a7daf363912242e285dd3735538aab70709899b29921f960cabc",
-   "note": "Read in full for UX-37: the shared diagnostics budget is gone from operational reads -- `all` is a plain full SELECT, `pendingDeliveryRows` streams 128-row keyset pages under a frozen MAX(rowid) so a live cursor never pins and later accepts belong to the next traversal, `pendingDeliveryCount` is a SQL COUNT(*). ReadScope memoizes per-collection decodes inside one synchronous window; lineage, batch-membership, manifest and recipient-snapshot checks still run per row. A failed query still throws -- nothing converts a broken read into an empty list."
+   "sha256": "e3d4edb6a921781311e0d5bcf3b4e5bbda52805ebbbeaee92f937a4f1798e7c7",
+   "note": "Read in full for UX-37: the shared diagnostics budget is gone from operational reads -- `all` is a plain full SELECT, `pendingDeliveryRows` streams 128-row keyset pages under a frozen MAX(rowid) so a live cursor never pins and later accepts belong to the next traversal, `pendingDeliveryCount` is a SQL COUNT(*). A failed query still throws -- nothing converts a broken read into an empty list. Re-read for the UX-38 bound survey: the ReadScope comment now says exactly what the code does -- a memoized entry is the decoding of the row bytes first read under its key inside one synchronous collection, not a database snapshot, and a row another writer changes mid-collection is not re-observed (a caller needing newer bytes opens a new scope). Lineage, batch-membership, manifest and recipient-snapshot checks still run per row."
   },
   {
    "path": "src/storage/output-spool.ts",
@@ -153384,6 +153385,29 @@
    ],
    "sha256": "1113d5ba0e63ab363546160df2c88599006848a601905c6fc4c032016e63d1b9",
    "note": "Read in full: START.md documents that merge/integration refuses any candidate whose tree carries a gitlink with UNSUPPORTED_PROFILE and named paths, and that a main carrying a gitlink refuses every merge until a candidate removes it. DR34 rider: START.md now says network reaches the sandbox only through the egress proxy's allowlist when the Human configured one (HTTPS_PROXY set then, allowlisted HTTPS only), keeping 'no git push' and the other sandbox facts."
+  },
+  {
+   "path": "src/cli/effects.ts",
+   "by": [
+    "UX-38"
+   ],
+   "oracles": [
+    "mail-v1 CLI"
+   ],
+   "sha256": "372db4c802871cc2d857ccdbf58af73b53fd4bb63a1b90d78e39ae1ef1332958",
+   "note": "Read in full for the UX-38 bound survey: workspaceDirty is a boolean probe, so a bounded porcelain listing can never refuse -- any captured stdout byte proves dirt (a truncated listing is still a dirty one) and only a successful empty listing answers clean; a timed-out, stalled, spawn-failed or otherwise unobserved listing still throws through requireTextExit rather than being mistaken for clean. This removes the old LIMIT_EXCEEDED a >256KiB porcelain stream could raise on a legitimately dirty workspace. resolveOid, recordedBase, readBody and the request-frame file bound are unchanged: a whole local file still must fit one request frame, which is the wire contract, not a UI preference."
+  },
+  {
+   "path": "src/cli/effects/code.ts",
+   "by": [
+    "UX-38"
+   ],
+   "oracles": [
+    "mail-v1 CLI",
+    "DR27"
+   ],
+   "sha256": "6cc33ad2b3f328868b4c53c828c89906a7103e874384b92392bff188ffcf3d20",
+   "note": "Read in full for the UX-38 bound survey: only merge-diff is wired to production callers, and its stdout bound is now the wire's own document bound -- bundleBytes()+1, so a diff that could still ride a completion notice is never refused and the +1 lets LIMIT_EXCEEDED distinguish 'fits exactly' from 'one byte over'. Revision resolution (main/published/ancestry) now binds at CANONICAL_PROCESS_LIMITS.maxBuffer -- the same bound the broker's canonical observer puts on the same commands, so a repository whose published-ref listing outgrows the old 768 KiB no longer fails only in the code view. The fixed 768 KiB MAXIMUM bounds only the show/diff/log/ls-tree/grep view actions no production path reaches (commented as test-only), a bounded read so a pathological fixture cannot grow the process without limit. Revision grammar (main or a full published oid), the published-history ancestry check, CANONICAL_SAFE_ARGS, --no-ext-diff/--no-textconv and the refusal mapping are unchanged; merge diff keeps returning raw bytes through mergeDiffText with its base64 fallback for non-UTF-8 patches."
   }
  ],
  "readUnchanged": [

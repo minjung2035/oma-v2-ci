@@ -2,7 +2,8 @@ import { createHash } from "node:crypto";
 import { closeSync, constants, fstatSync, openSync, readSync } from "node:fs";
 import { FULL_OID_RE } from "../ids.js";
 import { isValidFullOid } from "../domain/identifiers.js";
-import { runGitText } from "../process/policies.js";
+import { GIT_ENV, requireTextExit, runGitText } from "../process/policies.js";
+import { runProcessSync } from "../process/run.js";
 import { fail } from "../client/errors.js";
 import { currentContext } from "../client/context.js";
 import { frameBytes as cliFrameBytes } from "../client/settings.js";
@@ -100,9 +101,15 @@ export function recordedBase(): string | null {
   return isValidFullOid(oid) ? oid : null;
 }
 
-/** Uncommitted work is never part of a resolved candidate; `merge open` warns. */
+/** Uncommitted work is never part of a resolved candidate; `merge open` warns.
+ * The answer is boolean, so the bounded listing never refuses: a truncated
+ * porcelain stream still proves dirty, and only a listing that captured no
+ * entry needs the command's own outcome. */
 export function workspaceDirty(): boolean {
-  const status = runGitText(["status", "--porcelain"], { cwd: currentContext().cwd, maxBuffer: 256 * 1024 });
+  const result = runProcessSync({ executable: "/usr/bin/git", argv: ["status", "--porcelain"],
+    env: GIT_ENV, cwd: currentContext().cwd, timeoutMs: 30000, stdoutBytes: 256 * 1024, stderrBytes: 256 * 1024 });
+  if (result.stdout.length > 0) return true;
+  const status = requireTextExit(result, "git");
   return status.status === 0 && status.stdout.trim().length > 0;
 }
 

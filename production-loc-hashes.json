@@ -132,11 +132,11 @@
     },
     {
       "path": "src/cli/effects.ts",
-      "sha256": "d76061225bb6151ab5a6615eca5a7b138ba2b9fcf42ec95fa63b993ae76bbd83"
+      "sha256": "372db4c802871cc2d857ccdbf58af73b53fd4bb63a1b90d78e39ae1ef1332958"
     },
     {
       "path": "src/cli/effects/code.ts",
-      "sha256": "823552527cb79237e0b919c3643a6f4c8705e2f92dfc4b3cfd75189389aa3db1"
+      "sha256": "6cc33ad2b3f328868b4c53c828c89906a7103e874384b92392bff188ffcf3d20"
     },
     {
       "path": "src/cli/effects/context.ts",
@@ -56444,7 +56444,7 @@
     },
     {
       "path": "src/storage/ledger-reader.ts",
-      "sha256": "5cad25df5cd4a7daf363912242e285dd3735538aab70709899b29921f960cabc"
+      "sha256": "e3d4edb6a921781311e0d5bcf3b4e5bbda52805ebbbeaee92f937a4f1798e7c7"
     },
     {
       "path": "src/storage/operation-codec.ts",

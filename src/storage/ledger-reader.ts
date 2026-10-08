@@ -20,8 +20,10 @@ import {
 
 /** Reads shared inside one synchronous collection: an operation's plan, an
  * agent's lineage, a batch's manifest are decoded and validated once per
- * collection instead of once per row, and inside the synchronous window the
- * memoized answer is what a fresh read of the same bytes would return. */
+ * collection instead of once per row. A memoized entry is the decoding of the
+ * row bytes first read under its key inside this collection -- it is not a
+ * snapshot of the database, and a row another writer changes mid-collection
+ * is not re-observed. Callers needing newer bytes open a new scope. */
 interface ReadScope {
   readonly operations: Map<string, DecodedOperation | null>;
   readonly agents: Map<string, AgentRow>;
