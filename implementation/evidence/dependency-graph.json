@@ -1995,7 +1995,7 @@
   "node:module": 3,
   "node:net": 34,
   "node:os": 16,
-  "node:path": 136,
+  "node:path": 137,
   "node:perf_hooks": 4,
   "node:readline": 1,
   "node:sqlite": 4,

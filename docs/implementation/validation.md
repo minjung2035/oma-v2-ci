@@ -508,6 +508,23 @@ DR34 후반에서 미뤄 둔 "listen 성공 후 `.off`로 유일한 'error' 리�
 | 전체 `npm test` | PASS | `node scripts/test-local.mjs` 로컬 lane 399 files → 3,902 tests, 3,902 PASS·0 fail·0 cancelled·0 skipped(duration 284,386ms). 이 절 작성 중의 첫 실행은 변경분이 반영되기 전의 stale digest로 R38 1건만 실패했고, 재결박 뒤의 위 실행은 R38 포함 전종 PASS — 단독 재실행 `production-inventory`·`document-integrity`·`traceability-policy` 23/23 확인. systemd-required 9 파일은 test-local이 설계상 분리하며 실제 실행은 위 kernel·crash lane 기록 |
 | macOS native / powercut / provider credential / release qualification | NOT_RUN | 로컬 환경 부재 |
 
+## 정산: UX-38 잔여 정산 후속 — workspaceDirty not-a-repo 사실상 부정의 상호확인 (2026-10-12)
+
+직전 정산의 맹검증 LOW 잔여 1건을 정산했다. `workspaceDirty()`는 `git status`의 `not a git repository`/`must be run in a work tree` 거절 문자열을 그대로 사실상 부정으로 믿었다 — 그런데 git은 진짜 부재뿐 아니라 존재하나 손상된 `.git`(깨진 HEAD, chmod 000, 삭제된 objects, 끊어진 심링크, 허공을 가리키는 gitdir 포인터, 마운트 경계 너머의 `.git`)에도 같은 문자열로 128을 낸다. 문자열이 아니라 관측 부재를 상호확인하도록 고쳤다.
+
+| 절차 | 결과 | 근거 |
+|---|---|---|
+| not-a-repo 상호확인 | PASS | `src/cli/effects.ts` — `workspaceClaimPresent`가 관측 디렉터리와 그 조상을 `.git` 엔트리로 걷는다: 디렉터리·gitdir 포인터 파일·끊어진 심링크 전부 워크스페이스 주장이고, lstat이 못 읽는 단계(EACCES 등)도 주장을 배제할 수 없어 실패-폐쇄한다. ENOENT/ENOTDIR만으로 끝까지 걸었을 때만 부재가 확정돼 false. `.git`이 있으면 거절은 존재하는 워크스페이스에 대한 것이므로 `StoreError(INTERNAL_ERROR)` + git stderr로 전파 — corrupt index 등 기존 전파 경로와 같은 판정 |
+| 대면 검증 (컴파일된 모듈 직접 호출) | PASS | 9종 — 깨진 `.git/HEAD`·댕글링 `.git` 심링크·`.git` 파일 gitdir 포인터·실제 repo의 `.git` 내부 cwd·`core.bare=true` 오설정 → 전부 INTERNAL_ERROR 전파; bare repo cwd·진짜 비저장소 → false; clean repo false·dirty repo true 유지 |
+| bare repo 판정 | PASS | `.git` 부재 + work-tree 거절은 git이 저장소를 읽고 bare임을 확인한 완전한 관측 — bare repo에는 uncommitted work가 있을 곳이 없어 vacuous 부정(false). `.git` 존재 시 같은 거절은 미관측 작업을 숨길 수 있어 전파한다. "거절이면 무조건 전파" 대안보다, 거절이 관측 디렉터리의 미커밋 작업을 숨기는지를 기준으로 선택 |
+| fail→pass | PASS | `test/merge-cli.test.ts` 신규 2종 — 손상 `.git/HEAD`로 not-a-repo를 재현한 명시-OID `merge open`: HEAD dist에서는 거절이 clean으로 읽혀 transport까지 진행해 exit 3 불일치로 실패, 수정 dist에서는 exit 3 + `git status: fatal: not a git repository` + 요청 0건으로 명시 실패. bare repo cwd 명시-OID open은 경고 없이 완료 — vacuous 부정 결정 고정. 기존 비저장소 명시-OID 가드(KN)도 유지 |
+| build / typecheck | PASS | `npm run build` + `tsc --noEmit` 0 오류 |
+| architecture gates | PASS | check:inventory(SOURCE_DIGESTS_CURRENT)·rules·lattice(dependency-graph evidence 재생성)·transactions·boundaries·documents·spec-inventory 전부 0 findings |
+| review ledger | PASS | `src/cli/effects.ts` 항목을 fresh re-read 후 새 sha256으로 재결박, `npm run review:ledger` 재생성 — CHANGED_WITH_ORACLE 14065·NOT_REVIEWED 59·READ_UNCHANGED 50·REMOVED 8 |
+| 집중 회귀 | PASS | `node --test dist/test/merge-cli.test.js` 14/14 |
+| 전체 `npm test` | PASS* | `node scripts/test-local.mjs` 로컬 lane 399 files → 3,904 tests, 3,903 PASS·0 cancelled·0 skipped(duration 284,892ms). 유일 실패 1건은 이 절과 결박 산출물 변경분을 아직 반영하지 않은 validation.md 자체의 stale verification-input digest(R38)로, digest를 이 트리의 것으로 재결박 후 `production-inventory` 단독 재실행 PASS 확인. systemd-required 9 파일은 test-local이 `OMA_TEST_SYSTEMD=0`으로 설계상 분리 |
+| macOS native / powercut / provider credential / release qualification | NOT_RUN | 로컬 환경 부재 |
+
 ## 현재 알려진 한계와 남은 검증
 
 - 실제 manager/cgroup candidate 검사와 reviewer shortage 예외는 기존 독립 거절의 영향을 받는다. fixture 성공을 실제 서비스 증거로 사용하지 않는다.
@@ -522,7 +539,7 @@ DR34 후반에서 미뤄 둔 "listen 성공 후 `.off`로 유일한 'error' 리�
 
 아래 binding은 구조 검사의 입력 identity다. digest 생성 자체가 runtime PASS를 뜻하지 않는다.
 
-verification input digest `8cc7a12e9105b43a3041f4698cef64a094c095b602421d9afddbcfb381dbdc1a` (15343 files).
+verification input digest `6d059b6b229b67e8330e6620ef577af7ad71c9df5a8023fa1d22d265cae9cfb8` (15343 files).
 
 당시 기록한 cloc 2.08 측정치: 354 files / 35,832 code LOC. 이 역사적 기록은 현재 source의 LOC claim이 아니며, 기존 artifact와의 불일치를 여기서 수리했다고 주장하지 않는다. 크기 제한은 없으며 값은 release proof가 아니다.
 

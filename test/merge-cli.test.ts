@@ -188,6 +188,46 @@ test("mail-v1 CLI: a refused `git status` is not reported as a clean workspace",
   assert.deepEqual(run.requests, [], "the open did not proceed on an unobserved workspace");
 });
 
+test("mail-v1 CLI: a `.git` that is present but damaged is not an absent workspace", async t => {
+  const home = mkdtempSync(join(tmpdir(), "oma-merge-damaged-")); t.after(() => rmSync(home, { recursive: true, force: true }));
+  const { cwd } = workspace(home);
+  writeFileSync(join(cwd, "r.md"), "r\n");
+  // A corrupt .git/HEAD makes `git status` answer "not a git repository" —
+  // the same words as a dir that never had one — but the `.git` entry is
+  // right there: the observation was refused, not a factual negative, so it
+  // propagates instead of reading as clean. Explicit OIDs keep resolveOid
+  // out of the way so only the dirty observation decides.
+  writeFileSync(join(cwd, ".git", "HEAD"), "GARBAGE");
+  const run = await runCliWithPeer(home, cwd,
+    ["merge", "open", "--tier", "LOW", "--title", "t", "--file", join(cwd, "r.md"),
+      "--candidate", "0".repeat(40), "--base", "1".repeat(40), "--request", "KD"],
+    async (request) => frame(request, {}));
+  assert.equal(run.status, 3, run.stderr);
+  assert.match(run.stderr, /git status: fatal: not a git repository/);
+  assert.deepEqual(run.requests, [], "the open did not proceed on a workspace it could not observe");
+});
+
+test("mail-v1 CLI: a bare repository has no work tree that could be dirty", async t => {
+  const home = mkdtempSync(join(tmpdir(), "oma-merge-bare-")); t.after(() => rmSync(home, { recursive: true, force: true }));
+  const bare = join(home, "bare.git");
+  git(home, ["init", "-q", "--bare", bare]);
+  writeFileSync(join(bare, "r.md"), "r\n");
+  // "this operation must be run in a work tree" is git's own positive
+  // observation that the repository has no work tree — no place for
+  // uncommitted work — and no `.git` entry claims otherwise: a vacuous
+  // factual negative, so the explicit-OID open completes without warning.
+  const run = await runCliWithPeer(home, bare,
+    ["merge", "open", "--tier", "LOW", "--title", "t", "--file", join(bare, "r.md"),
+      "--candidate", "0".repeat(40), "--base", "1".repeat(40), "--request", "KB"],
+    async (request) => {
+      if (asRequest(request).method === "git.known") return frame(request, { hasCandidate: true, prerequisites: [] });
+      return frame(request, openReceipt("merge-44444444"));
+    });
+  assert.equal(run.status, 0, run.stderr);
+  assert.doesNotMatch(run.stderr, /uncommitted changes/);
+  assert.deepEqual(run.requests.map(r => r.method), ["git.known", "attest.record"]);
+});
+
 test("mail-v1 CLI: `merge open` outside a repository has no workspace to observe", async t => {
   const home = mkdtempSync(join(tmpdir(), "oma-merge-norepo-")); t.after(() => rmSync(home, { recursive: true, force: true }));
   const dir = join(home, "nowhere");

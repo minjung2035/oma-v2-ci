@@ -1970,6 +1970,45 @@ name collision/intended surface/hidden 미활성/idempotent reload/provenance/
     1건 — 재결박 뒤 재실행이 전종 초록).
   - NOT_RUN: macOS native(실기)·powercut·provider credential·release —
     로컬 환경 부재.
+- 2026-10-12 (UX-38 잔여 정산 후속 — workspaceDirty not-a-repo 사실상
+  부정의 상호확인, feat/macos-hidden-vm @ e3fd0ee9 이후):
+  - `src/cli/effects.ts` — 직전 정산이 남긴 LOW 잔여: `git status`의
+    `not a git repository` 거절 문자열을 그대로 믿으면, 손상된 `.git`
+    (깨진 HEAD·읽을 수 없거나 끊어진 `.git` 엔트리·허공을 가리키는
+    gitdir 포인터·마운트 경계 너머의 주장)도 부재로 축소돼 `merge
+    open`/`challenge open`이 미커밋 경고 없이 진행됐다. 이제 그
+    carve-out은 관측 디렉터리와 그 조상을 `.git` 엔트리로 걷는
+    `workspaceClaimPresent`의 상호확인을 거친다 — 디렉터리든 gitdir
+    포인터 파일이든 엔트리가 있으면 워크스페이스 주장이므로 거절을
+    `StoreError(INTERNAL_ERROR)` + git stderr로 전파하고, 어느 단계도
+    엔트리를 못 찾을 때만(ENOENT/ENOTDIR; 관측 불가한 stat은
+    실패-폐쇄) false가 정직한 사실상 부정이다.
+  - bare repo 판정: `.git`이 어디에도 없는 `must be run in a work
+    tree`는 git이 저장소를 열어 work tree 부재를 직접 확인한 완전한
+    관측이고, bare repo에는 uncommitted work가 있을 곳 자체가 없다 —
+    vacuous한 사실상 부정으로 false를 유지한다. 같은 문구라도 `.git`이
+    있으면(잘못 설정된 core.bare, gitdir 내부의 cwd) 미관측 작업이 숨을
+    수 있어 전파한다. 전부 거절이면 전파라는 더 보수적 대안을 두고,
+    거절이 관측 디렉터리의 미커밋 작업을 숨길 수 있는지를 기준으로
+    결정했다.
+  - fail→pass: `test/merge-cli.test.ts` 신규 2종 — 손상 `.git/HEAD`로
+    not-a-repo 거절을 재현한 명시-OID `merge open`이 이제 exit 3 +
+    `git status: fatal: not a git repository`로 명시 실패하고 요청을
+    보내지 않는다(HEAD dist 재실행에서는 거절이 clean으로 읽혀
+    transport까지 진행·실패 확인). bare repo cwd의 명시-OID open은
+    경고 없이 완료해 vacuous 부정 결정을 고정하고, 기존 비저장소
+    명시-OID 회귀 가드는 그대로 유지된다. 대면 검증 9종(깨진 HEAD·
+    댕글링 링크·`.git` 파일 포인터·gitdir 내부 cwd·core.bare 오설정
+    전부 전파; bare·진짜 부재는 false; clean/dirty 유지) 확인.
+  - 메타데이터: production-loc-hashes 재생성, review-notes의
+    effects.ts 항목 fresh re-read 후 새 sha256 재결박,
+    dependency-graph evidence·review-ledger 재생성(14065/59/50/8),
+    validation.md의 verification input digest 재결박.
+  - 게이트: build·typecheck·check:architecture 전부 PASS; 집중 회귀
+    merge-cli 14/14; `node scripts/test-local.mjs` 전체 lane 결과는
+    아래 validation.md 정산 절에 기록한다.
+  - NOT_RUN: macOS native(실기)·powercut·provider credential·release —
+    로컬 환경 부재.
 
 ## 10. 지금부터의 실행 순서
 0. ~~P0-8 강제 수단 미구현~~ — 구현됨: `owned-state` 아키텍처 규칙

@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
-import { closeSync, constants, fstatSync, openSync, readSync } from "node:fs";
+import { closeSync, constants, fstatSync, lstatSync, openSync, readSync } from "node:fs";
+import { dirname, join } from "node:path";
 import { FULL_OID_RE } from "../ids.js";
 import { isValidFullOid } from "../domain/identifiers.js";
 import { StoreError } from "../domain/errors.js";
@@ -102,20 +103,53 @@ export function recordedBase(): string | null {
   return isValidFullOid(oid) ? oid : null;
 }
 
+/** The not-a-repo words are absence only once nothing claims the workspace.
+ * Git says "not a git repository" for a dir that never had one and for a
+ * `.git` it found but cannot use -- a corrupt HEAD, an unreadable or
+ * dangling `.git`, a `.git` file whose gitdir pointer leads nowhere, or a
+ * claim across a mount boundary discovery will not cross -- so the message
+ * alone cannot tell a missing workspace from a present-but-refusing one.
+ * The corroboration walks the queried dir and its ancestors for a `.git`
+ * entry: a directory or a gitdir-pointer file both claim the workspace, and
+ * lstat sees the claim even when it is a link whose target is gone. An
+ * entry that exists but cannot be observed (an ancestor the caller cannot
+ * traverse) fails the corroboration too -- absence is asserted only when
+ * every level answers ENOENT/ENOTDIR, never on an uncertain stat. */
+function workspaceClaimPresent(dir: string): boolean {
+  for (let current = dir;; current = dirname(current)) {
+    try { lstatSync(join(current, ".git")); return true; }
+    catch (error) {
+      const code = (error as NodeJS.ErrnoException).code;
+      if (code !== "ENOENT" && code !== "ENOTDIR") return true;
+    }
+    if (dirname(current) === current) return false;
+  }
+}
+
 /** Uncommitted work is never part of a resolved candidate; `merge open` warns.
  * The answer is boolean, so the bounded listing never refuses: a truncated
  * porcelain stream still proves dirty, and only a listing that captured no
  * entry needs the command's own outcome. A nonzero exit is git declining the
- * question, not an empty listing -- a workspace that is not there at all is
- * the one factual negative, while a refusal on a present one (a corrupt
- * index, an ownership git declines) leaves the state unobserved, which
- * propagates rather than answer clean. */
+ * question, not an empty listing -- and even the two known declines answer
+ * false only when `workspaceClaimPresent` corroborates that nothing claims
+ * the workspace. A `.git` that is there but damaged or unreachable (a
+ * corrupt HEAD, an unreadable entry, a gitdir pointer to nowhere, a claim
+ * across a mount boundary) is a refusal on a present workspace, like a
+ * corrupt index or an ownership git declines: it propagates rather than
+ * answer clean. The one decline that stays a factual negative without a
+ * `.git` is "must be run in a work tree" -- git read the repository enough
+ * to know it has no work tree, and a bare repository has no place for
+ * uncommitted work to be, while the same words with a `.git` present (a
+ * mis-set core.bare, a cwd inside the gitdir) may hide unobserved work and
+ * propagate. */
 export function workspaceDirty(): boolean {
   const result = runProcessSync({ executable: "/usr/bin/git", argv: ["status", "--porcelain"],
     env: GIT_ENV, cwd: currentContext().cwd, timeoutMs: 30000, stdoutBytes: 256 * 1024, stderrBytes: 256 * 1024 });
   if (result.stdout.length > 0) return true;
   const status = requireTextExit(result, "git");
-  if (status.status !== 0 && !/^fatal: (?:not a git repository|this operation must be run in a work tree)/m.test(status.stderr))
+  if (status.status !== 0 &&
+      (!/^fatal: (?:not a git repository|this operation must be run in a work tree)/m.test(status.stderr)
+        || workspaceClaimPresent(currentContext().cwd)))
     throw new StoreError("INTERNAL_ERROR",
       `git status: ${status.stderr.trim().split("\n", 1)[0]!.slice(0, 200) || `exit ${status.status}`}`);
   return false;
