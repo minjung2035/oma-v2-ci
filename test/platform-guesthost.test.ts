@@ -36,13 +36,15 @@ const hello = (overrides: Partial<HelloParams> = {}): HelloParams => ({ channel:
 const code = (expected: string) => (error: unknown) => error instanceof PlatformError && error.failure.code === expected;
 
 /** Starts the holder as a child of the test; records what it was asked. */
-function localLauncher(dir: string, env: Record<string, string>): SessionLauncher & { started: { society: string; projectDir: string }[]; children: ChildProcess[] } {
+function localLauncher(dir: string, env: Record<string, string>, societiesDir: string): SessionLauncher & { started: { society: string; projectDir: string }[]; children: ChildProcess[] } {
   const started: { society: string; projectDir: string }[] = [];
   const children: ChildProcess[] = [];
   const socketPath = (society: string): string => join(dir, `${society}.sock`);
   return {
     started, children, socketPath,
     async start(society, projectDir) {
+      // The stand-in TUI does not provision; the real oma commits this binding.
+      publishProjectBinding(join(societiesDir, society), { society, canonicalProjectPath: projectDir });
       started.push({ society, projectDir });
       const child = spawn(process.execPath, ["--import", join(here, "fixtures", "socket-names.js"), holderEntry, "--socket", socketPath(society), "--cwd", projectDir, "--", process.execPath, fakeTui],
         { stdio: ["ignore", "ignore", "inherit"], env: { ...process.env, ...env } });
@@ -62,7 +64,7 @@ function localLauncher(dir: string, env: Record<string, string>): SessionLaunche
 async function setup(t: import("node:test").TestContext, archives?: GuestArchives) {
   const dir = mkdtempSync(join(tmpdir(), "oma-guesthost-"));
   const socketNames = holdSocketNames(dir);
-  const launcher = localLauncher(dir, socketNames.env);
+  const launcher = localLauncher(dir, socketNames.env, join(dir, "data", "oma"));
   let server: Server | undefined;
   const peers: FramedPeer[] = [];
   const sockets = new Set<import("node:net").Socket>();
@@ -303,4 +305,82 @@ test("AV-23/P0-4: a maintenance latch ends with the connection that took it, how
     }
   }
   assert.deepEqual(unlatched, { files: 1 }, "the dead connection's latch was returned");
+});
+
+test("DR38: duplicate maintenance keys cannot replace a live owner", async t => {
+  const archives = { async create() { return { files: 1 }; } } as unknown as GuestArchives;
+  const { open } = await setup(t, archives);
+  const owner = await open(hello()), other = await open(hello()), observer = await open(hello());
+  await owner.request("maintenance.begin", {}, "same-snapshot");
+  await assert.rejects(other.request("maintenance.begin", {}, "same-snapshot"), code("REQUEST_KEY_REUSED"));
+  other.close();
+  await assert.rejects(observer.request("archive.create", { society: "demo" }, "still-held"), code("BROKER_UNAVAILABLE"));
+  assert.deepEqual(await owner.request("maintenance.end", {}, "same-snapshot"), { maintenance: false });
+  assert.deepEqual(await observer.request("archive.create", { society: "demo" }, "released"), { files: 1 });
+});
+
+test("DR38: a foreign maintenance.end cannot return another connection's lease", async t => {
+  const archives = { async create() { return { files: 1 }; } } as unknown as GuestArchives;
+  const { open } = await setup(t, archives);
+  const owner = await open(hello()), other = await open(hello());
+  await owner.request("maintenance.begin", {}, "held");
+  await assert.rejects(other.request("maintenance.end", {}, "held"), code("AUTH_FAILED"));
+  await assert.rejects(other.request("archive.create", { society: "demo" }, "blocked"), code("BROKER_UNAVAILABLE"));
+  assert.deepEqual(await owner.request("maintenance.end", {}, "held"), { maintenance: false });
+});
+
+test("DR38: a running society validates its imported project and binding before returning success", async t => {
+  const { host, launcher, importedMirror, societiesDir, socketPath } = await setup(t);
+  const bound = randomUUID(), other = randomUUID();
+  const mirror = importedMirror(bound); importedMirror(other);
+  publishProjectBinding(join(societiesDir, "demo"), { society: "demo", canonicalProjectPath: mirror });
+  t.mock.method(launcher, "socketPath", () => socketPath);
+  assert.deepEqual(await host.open("demo", bound), { state: "running" });
+  await assert.rejects(host.open("demo", other), { code: "INVALID_REQUEST" });
+  writeFileSync(join(societiesDir, "demo", "project-binding.json"), "{broken");
+  await assert.rejects(host.open("demo", bound), { code: "BROKER_UNAVAILABLE" });
+  assert.deepEqual(launcher.started, []);
+});
+
+test("DR38: society.close on another connection waits for its in-flight open", async t => {
+  const { open, launcher, importedMirror } = await setup(t);
+  const projectId = randomUUID(); importedMirror(projectId);
+  let release!: () => void, entered!: () => void;
+  const gate = new Promise<void>(resolve => { release = resolve; });
+  const started = new Promise<void>(resolve => { entered = resolve; });
+  let stops = 0;
+  t.mock.method(launcher, "start", async () => { entered(); await gate; });
+  t.mock.method(launcher, "stop", async () => { stops++; return "stopped"; });
+  const first = await open(hello()), second = await open(hello());
+  const opening = first.request("society.open", { society: "demo", projectId });
+  await started;
+  const closing = second.request("society.close", { society: "demo", mode: "stop" });
+  try {
+    await new Promise(resolve => setTimeout(resolve, 30));
+    assert.equal(stops, 0, "stop raced with start");
+  } finally { release(); await Promise.allSettled([opening, closing]); }
+  assert.equal(stops, 1);
+  assert.deepEqual(await closing, { state: "stopped" });
+});
+
+test("DR38: a rejected close settles before the next open and does not poison its queue", async t => {
+  const { host, launcher, importedMirror } = await setup(t);
+  const projectId = randomUUID(); importedMirror(projectId);
+  let release!: () => void, entered!: () => void;
+  const gate = new Promise<void>(resolve => { release = resolve; });
+  const started = new Promise<void>(resolve => { entered = resolve; });
+  let opens = 0;
+  t.mock.method(launcher, "stop", async () => { entered(); await gate; throw new Error("stop unknown"); });
+  t.mock.method(launcher, "start", async () => { opens++; });
+  const closing = host.close("demo", "stop");
+  const closed = closing.catch(error => error);
+  await started;
+  const opening = host.open("demo", projectId);
+  try {
+    await new Promise(resolve => setTimeout(resolve, 20));
+    assert.equal(opens, 0);
+    assert.throws(() => host.maintenanceBegin("busy"), { code: "BROKER_UNAVAILABLE" });
+  } finally { release(); await closed; }
+  assert.deepEqual(await opening, { state: "running" });
+  assert.equal(opens, 1);
 });

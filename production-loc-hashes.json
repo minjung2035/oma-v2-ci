@@ -1,6 +1,6 @@
 {
   "kind": "oma-production-source-digests-v1",
-  "manifest": "3e5b0f9c847d1dca380549b3a8c76e60e2f6935aa399a521f06ea70220b2a969",
+  "manifest": "5139fc1ec6456cb0257c6875d7c0294f75213274f9c978d81bb6d02270606453",
   "files": [
     {
       "path": "implementation/contracts.ts",
@@ -308,7 +308,7 @@
     },
     {
       "path": "src/domain/egress.ts",
-      "sha256": "67fc67811d1db54e1287b7fd93bca557f4923b67e23d85ba596eb5da31df0fed"
+      "sha256": "0dc2df28ce22f1ac391713e43dab5d3174d75c2ea610ec1335a021c94156af48"
     },
     {
       "path": "src/domain/errors.ts",
@@ -436,7 +436,7 @@
     },
     {
       "path": "src/entry/omahostd.ts",
-      "sha256": "bc67891c8abf2d08d29d974bf74c8a059887aff6b8bae77a866ca63477005eaa"
+      "sha256": "dbcaaa466578d6abde14cf718fe6c1039f3f7569b2d5cfb794cd9b68ed19f565"
     },
     {
       "path": "src/entry/personal-host.ts",
@@ -55924,7 +55924,7 @@
     },
     {
       "path": "src/platform/guest/host.ts",
-      "sha256": "366e8c29c02a95f16eecfc30c75a9d6412c3f677c95851574781e412f4187933"
+      "sha256": "236b5c6ce9bce2ef144ec952d429329b4ebf043e515a131c01829c4d2601dd79"
     },
     {
       "path": "src/platform/guest/identity.ts",
@@ -55992,7 +55992,7 @@
     },
     {
       "path": "src/platform/host/egress.ts",
-      "sha256": "7ca7a21fa6347d372477c9760b9d8b93e4c83bc92bb9a9e1a375c4adc4c27fe4"
+      "sha256": "0c3c4325928947d54a1fc0b3886dca86dfd39c877f0e69fb595eba0721566180"
     },
     {
       "path": "src/platform/host/files.ts",
@@ -56024,7 +56024,7 @@
     },
     {
       "path": "src/platform/host/lifecycle.ts",
-      "sha256": "d701c3e68a0b2b3585a2c91de4ff86cc852d40c9e6791c86b2e8e7eefc3267b0"
+      "sha256": "bafdca444fd92919ea2b5de1c273a53dc8ad56fa8a4650d6ced3b6a5f69ca11a"
     },
     {
       "path": "src/platform/host/peer.ts",
@@ -56037,6 +56037,10 @@
     {
       "path": "src/platform/host/personal-seed.ts",
       "sha256": "53c2c40d8a2860415fbc8f494b210ba0fed0f09e38b0392f099128d71be07a92"
+    },
+    {
+      "path": "src/platform/host/project-sync.ts",
+      "sha256": "3206c4c2faf34e1b26e02a954f4ddc072eb2e2a9ad6a169afdf3b0a924c5e3d5"
     },
     {
       "path": "src/platform/host/project.ts",
@@ -56052,11 +56056,23 @@
     },
     {
       "path": "src/platform/host/service.ts",
-      "sha256": "14db37a7b7e2ee7ebab15e11481866235c7cb698d29671ea3a841aaf9b749142"
+      "sha256": "1e9058c6fa6aabd8e286b023f63359784dfdd6d61d82168740155ef6a6ba4f0f"
+    },
+    {
+      "path": "src/platform/host/session-gateway.ts",
+      "sha256": "560bec8629f856ff077216a18c82ac1ef92311869e62143ee9792212a11f10aa"
+    },
+    {
+      "path": "src/platform/host/snapshot-coordinator.ts",
+      "sha256": "58c0b53fc648f9f099ca6cc9a33b5d436ff13ec26f228f5424e5d15f14fa5537"
     },
     {
       "path": "src/platform/host/snapshot.ts",
-      "sha256": "02356a9b963a719a83989c139fefc7813dd6da6cbfba249d5b446edb5ab4d303"
+      "sha256": "ba841a1370979b6bd9167a5d520d2ba11c2a2387b260064cc95c15a987c632fd"
+    },
+    {
+      "path": "src/platform/host/transfers.ts",
+      "sha256": "89571a169273f52edcfcd389e36b2d6b41beddccaba41af5787f4b1741aab4ef"
     },
     {
       "path": "src/platform/host/vz-driver.ts",
@@ -56160,7 +56176,7 @@
     },
     {
       "path": "src/protocol/host-guest.ts",
-      "sha256": "29bf451fbf911f5b1d7072f8da8f01e8646b7bb2c399aefed950c1528f5ee4b3"
+      "sha256": "eb41236df986ba5fff4ae3966286391d72b781ba66b95b5b7d01d694ce04675b"
     },
     {
       "path": "src/protocol/host-history.ts",

@@ -165,10 +165,9 @@ export class EgressHost {
     run.relay.accept(socket, rest);
   }
 
-  /** DR34/UX-08: `egress.connect` -- the guest's CONNECT proxy asked the host
-   * to dial `host:port` for one of its runs. The run is checked the way
-   * `egress.open` checks it, then the wire's one port (443) is enforced and
-   * the dial resolves, screens and pins here. An answered `ok` makes the
+  /** DR37: the host permits network destinations for a live, host-issued run.
+   * Guest role/allow fields are compatibility metadata, not host policy.
+   * The host resolves and dials the requested host and port. An answered `ok` makes the
    * connection the tunnel; a refusal is a framed error, and either way the
    * pooled connection ends -- like `egress.open`, a second request on it is
    * not possible. Every tunnel a run still holds dies with the run. */
@@ -190,10 +189,6 @@ export class EgressHost {
     await this.dialTunnel(run, socket, id, asked, target, rest);
   }
 
-  /** The claim's place in the run's queue. The socket waits for the host's
-   * answer; its close is the withdrawal, before any dial is spent on it. A
-   * socket already gone when its claim would be queued takes no place --
-   * its close event already fired, so the withdrawal listener never would. */
   /** The run owns every project tunnel until both halves close. */
   private async dialTunnel(run: Run, socket: Socket, id: string, asked: EgressConnectParams, target: string,
     rest: Buffer): Promise<void> {
@@ -202,20 +197,15 @@ export class EgressHost {
     const answer = (value: Record<string, unknown>): void => { socket.end(encodeFrame({ v: 1, id, ...value })); };
     run.tunnels.add(socket);
     const owner = new AbortController();
-    // The slot is the connection's until it closes, whichever way that
-    // happens -- a refused dial's ended socket, a finished tunnel, or a
-    // peer that left mid-dial -- and releasing it is what grants the next
-    // queued claim its wait. (A socket closed before this listener stood
-    // reports `closed`, not a close event.)
+    // Closing a client cancels its pending dial and releases run ownership.
+    // A socket already closed reports `closed` without another close event.
     socket.once("close", () => { owner.abort(); run.tunnels.delete(socket); });
     if (socket.closed) { owner.abort(); run.tunnels.delete(socket); return; }
     const dial = this.options.dial ?? makePublicDial();
     let upstream: Socket;
     try { upstream = await dial(asked.host, asked.port, owner.signal); }
     catch (error) {
-      // The dial's own INVALID_REQUEST is the host's screen speaking -- a
-      // policy refusal, the same word the guest-side proxy uses. Everything
-      // else is an operational failure.
+      // Invalid endpoint requests are refusals; transport errors are failures.
       const refused = error instanceof StoreError && error.code === "INVALID_REQUEST";
       audit(asked.run.actor, asked.role, refused ? "refuse" : "fail",
         (error instanceof Error ? error.message : String(error)).slice(0, 120));

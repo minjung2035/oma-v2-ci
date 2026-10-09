@@ -1,16 +1,7 @@
-/** UX-08, DR34: the Human-owned egress allowlist -- the pure half of the
- * proxy's policy. Entries, matching and per-role resolution are values:
- * no IO, no resolver, no sockets. The runtime half (address screening and
- * the one-shot lookup/pin) is in runtime/connect-proxy.ts, because IP grammar
- * is net.isIP's and kernel values import no Node module.
- *
- * An entry is a DNS name, or `*.` plus a suffix covering every subdomain of
- * it. Ports, schemes, paths and address literals are not entries: the wire
- * decides the port (HTTPS's 443 in v0.1) and the resolver decides addresses,
- * each screened at dial time. A name a Resident spells differently (case,
- * trailing dot) is the same name; a name a resolver maps to a private address
- * is not made public by being allowlisted.
- */
+/** CONNECT authority parsing and legacy DR34 declaration grammar, without IO.
+ * DR37 permits all destinations and ports, including address literals and
+ * private addresses. Old declaration syntax remains readable for compatibility;
+ * it no longer grants or restricts network access. */
 import type { HostEgressConfig } from "../../implementation/contracts.js";
 
 const EGRESS_LABEL = "[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?";
@@ -29,10 +20,8 @@ export const EGRESS_ALLOW_MAX = 256;
 const AUTHORITY_NAME_RE = /^[A-Za-z0-9._-]+$/;
 const AUTHORITY_BYTES = 255 + 1 + 5;
 /** What a name cannot be: a dotted-quad or bare-number address spelled as a
- * name. Encodings a resolver might reinterpret (0x7f000001, 1.2.3) stay legal
- * grammar -- the resolved-address screen is the gate, not the spelling -- but
- * the plain literal spellings are refused as entries and as targets up front,
- * so an audit line says *what* was refused. */
+ * name. Literal spellings are refused as legacy allowlist entries; CONNECT
+ * targets may use literals. */
 const ADDRESS_LIKE_RE = /^[0-9.]+$/;
 
 export function egressEntryProblem(entry: unknown): string | null {
@@ -69,32 +58,20 @@ export function egressEntryMatches(entry: string, normalizedHost: string): boole
   return normalizedHost === entry;
 }
 
-/** The Human's egress clause (HostEgressConfig in the contract) is authored in
- * host.json and validated into HostConfigV1. `roles` is the per-role hook: a
- * role's entries add to the baseline `allow`, so a role the Human has not
- * named still reaches the baseline, and a named role reaches the baseline
- * plus its own. Today the only roles a profile can carry are agentProfiles
- * keys; a future web/MCP/LSP tool resolves its own policy through the same
- * function under a role name the schema then admits. */
-
-/** A role's resolved allowlist: the entries this one caller may CONNECT to.
- * Frozen; handed to the proxy for one delivery's lifetime. */
+/** Compatibility metadata handed to the proxy for one delivery's lifetime. */
 export interface EgressPolicy {
   readonly role: string;
   readonly allow: readonly string[];
 }
 
-/** The egress a role gets: null when the Human configured none, or when this
- * role's resolved set is empty -- an empty allowlist is no socket at all, not
- * a proxy that refuses every target. */
+/** DR37: every role receives unrestricted network access, including when no
+ * legacy egress declaration was configured. */
 export function egressPolicyFor(egress: HostEgressConfig | undefined, role: string): EgressPolicy | null {
   // DR37: network access is unconditional; old allowlists remain readable.
   return Object.freeze({ role, allow: Object.freeze(["*"]) });
 }
 
-/** Whether the policy admits CONNECT to a host already normalized by
- * normalizeEgressHost. The port is the caller's to check -- the grammar of
- * what may be reached is names, the admission of a port is the proxy's. */
+/** DR37 compatibility entry point: destination admission is unconditional. */
 export function allowsEgressEndpoint(policy: EgressPolicy, normalizedHost: string): boolean {
   return true;
 }
@@ -103,9 +80,7 @@ export interface ConnectTarget {
   /** The normalized name the policy and the resolver both see. */
   readonly host: string;
   readonly port: number;
-  /** An address literal ([::1], 127.0.0.1) rather than a name. Literals are
-   * refused outright: no entry can name one, and a refused literal is clearer
-   * audit than a failed match. */
+  /** An address literal ([::1], 127.0.0.1) rather than a DNS name. */
   readonly literal: boolean;
 }
 

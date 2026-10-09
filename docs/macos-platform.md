@@ -24,14 +24,14 @@ Linux에서 시험한 것(`test/platform-*.test.ts`, `test/sandbox-seccomp.test.
 | terminal session과 guesthost | `src/platform/guest/{pty,session,host,systemd-launcher}.ts`, `src/entry/{guest-session,guesthost}.ts`, TUI의 Ctrl-L | §4.5, §4.6, MAC-220..222, MAC-412 |
 | egress | `src/platform/guest/egress.ts`, `src/platform/host/egress.ts`, `InferenceRelay.detached` | MAC-225, MAC-710..712 |
 | request 원장과 stream | `src/platform/guest/{requests,stream}.ts`, `src/platform/stream-source.ts`, `src/platform/stream-receive.ts` | MAC-240/241, §4.8, P0-7 등록 |
-| project identity와 sync | `src/platform/guest/project.ts`, `src/platform/host/{record,bookmark,bundle,project}.ts`, `src/platform/host/personal-seed.ts` | §6, MAC-401/403/404, MAC-411/412, MAC-420 |
-| saved history 관측·모드 재개 | `src/protocol/{guest-history,host-history}.ts`, `src/platform/guest/histories.ts`, `src/platform/host/{guest-histories,personal-histories}.ts`, `src/runtime/host-history-channel.ts` | MODE-005/006, MAC-220..222/230/250 |
+| project identity와 sync | `src/platform/guest/project.ts`, `src/platform/host/{record,bookmark,bundle,project,project-sync}.ts`, `src/platform/host/personal-seed.ts` | §6, MAC-401/403/404, MAC-411/412, MAC-420 |
+| saved history 관측·모드 재개 | `src/protocol/{guest-history,host-history}.ts`, `src/platform/guest/histories.ts`, `src/platform/host/{guest-histories,personal-histories,session-gateway}.ts`, `src/runtime/host-history-channel.ts` | MODE-005/006, MAC-220..222/230/250 |
 | host 수명과 조립 | `src/platform/host/{guest-link,lifecycle,service,record}.ts` | MAC-301, MAC-320, MAC-330, MAC-331, MAC-601 |
 | Host API와 Mac 명령 | `src/protocol/host-api.ts`, `src/platform/host/{host-api,peer,attach-client}.ts`, `src/entry/oma-mac.ts` | MAC-020/021/222/251 |
 | credential | `src/platform/host/{keychain,resolver}.ts`, `resolveEngineAuth`의 선택 저장소 | MAC-701/702/704 |
 | image | `src/platform/host/image.ts`, `scripts/platform/sign-image.mjs` | MAC-601, MAC-611 |
 | VM helper 규약(Node 쪽) | `src/platform/host/vz-driver.ts` | §2.1, §9.1, §9.3, MAC-701/702(Keychain을 helper에게 묻는 channel) |
-| 백업 | `src/platform/host/{snapshot,archive-crypto}.ts`, `src/platform/guest/archive.ts` | REC-005, MAC-619..623, MAC-661 |
+| 백업·package/archive 전송 | `src/platform/host/{snapshot,snapshot-coordinator,archive-crypto,transfers}.ts`, `src/platform/guest/archive.ts` | REC-005, MAC-619..623, MAC-661 |
 | 시계 | `principal-delivery`, `broker-supervisor`, CLI transport | MAC-650(D-7) |
 | sandbox filter | `src/runtime/sandbox-seccomp.ts`, `src/sandbox.ts`의 `--seccomp 3`, `src/runtime/pi-adapter.ts`의 filter channel | MAC-205(D-5) |
 | guest의 provider 길 | `src/runtime/egress-forwarder.ts`, `platform/guest/environment.d/60-oma-egress.conf`, runner의 `openRelay` | MAC-710(D-10, D-4) |
@@ -459,12 +459,13 @@ forwarder가 닫히면 lease도 닫히고, host는 그 끝을 run의 끝으로 �
 `egress.open` 뒤에는 엔진이 쓴 HTTP/1.1 byte가 그대로 흐르고, 응답 byte가 반대로 흐른다(INF-005). host의 Relay는 `placeholderId`로
 그 run의 자리표시자와 credential을 찾는다. 자리표시자는 run의 lease가 끊어지거나 `bootId`가 바뀌면 버린다. host 쪽 규칙은 §7.4에 있다.
 
-`egress.connect`(protocol 6, DR34/UX-08)는 run의 CONNECT tunnel 하나를 연다. guest의 runner가 세운 per-delivery CONNECT proxy가
-Resident의 `HTTPS_PROXY` 요청을 받으면 이 message로 host에 다이얼을 청한다. `role`/`allow`는 그 role로 해석된 allowlist를
-그대로 싣는다 — society의 config는 guest의 디스크에 있어 host가 읽을 수 없으므로, host는 문법을 다시 검사하고 선언된 목록을
-그대로 집행한 뒤 이름을 스스로 resolve해 모든 answer를 private/special-use 대역으로 screen하고 literal을 pin한다. `port`는
-443뿐이다. run 검사는 `egress.open`과 같고, run이 낸 tunnel은 run과 함께 끝난다(`release`/`forgetBoot`). ok 응답 뒤의 byte는
-터널의 byte다. 거절은 framed error다.
+`egress.connect`(protocol 6, DR37)는 run의 CONNECT tunnel 하나를 연다. guest의 runner가 세운 per-delivery CONNECT proxy가
+Resident의 `HTTPS_PROXY` 요청을 받으면 이 message로 host에 다이얼을 청한다. host의 현재 네트워크 정책은 목적지·포트 제한 없이
+연결하는 것이다. 사설 주소와 literal도 연결한다. `role`/`allow`는 protocol 6 호환용 guest 선언이며 문법만 검사한다.
+사용자가 승인한 host 정책이나 검증된 role의 증거로 사용하지 않는다. host가 발급한 자리표시자와 run의
+society·actor·incarnation 일치는 계속 검사한다. run이 낸 tunnel은 run과 함께 끝난다(`release`/`forgetBoot`).
+provider credential은 기존 relay에서 관리한다. CONNECT 대상이나 guest의 role 선언으로 credential 목적지를 변경하지 않는다.
+ok 응답 뒤의 byte는 터널의 byte다. 거절은 framed error다.
 
 ### 4.8 stream channel
 

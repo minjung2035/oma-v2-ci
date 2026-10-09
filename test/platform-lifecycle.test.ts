@@ -18,7 +18,7 @@ import { HOST_GUEST_PROTOCOL, PLATFORM_FRAME_BYTES } from "../src/protocol/host-
 const INSTANCE = randomUUID();
 
 async function world(t: import("node:test").TestContext,
-  overrides: { restarts?: { max: number; windowMs: number; backoffMs: number }; record?: (event: string) => void } = {}) {
+  overrides: { restarts?: { max: number; windowMs: number; backoffMs: number }; record?: (event: string) => void; ready?: () => void } = {}) {
   const dir = mkdtempSync(join(tmpdir(), "oma-lifecycle-"));
   const societiesDir = join(dir, "data", "oma");
   mkdirSync(join(societiesDir, "demo", "state"), { recursive: true });
@@ -43,6 +43,7 @@ async function world(t: import("node:test").TestContext,
     after: (ms, run) => { const timer = setTimeout(run, ms); timer.unref(); return { cancel: () => clearTimeout(timer) }; },
     handshakeDeadlineMs: 2000, handshakeRetryMs: 20, drainDeadlineMs: 800, healthEveryMs: 40, hungAfterMs: 250,
     restarts: overrides.restarts ?? { max: 3, windowMs: 60_000, backoffMs: 20 },
+    ...(overrides.ready === undefined ? {} : { ready: overrides.ready }),
     record: event => { overrides.record?.(event); records.push(event); },
   });
   lifecycle.onState(state => states.push(state));
@@ -169,4 +170,24 @@ test("NB-29: a stop is not kept waiting on a stopped event the helper never send
   assert.equal(driver.forced, 1, "the power was still asked of the helper");
   assert.equal(lifecycle.state, "failed", "an end that cannot be observed is repair, not a wait forever");
   assert.deepEqual(records, ["failed"]);
+});
+
+test("DR38: failed mandatory ready persistence rejects startup and ends that VM", async t => {
+  const { lifecycle, driver, states, records } = await world(t, { ready: () => { throw new Error("ready record unwritable"); } });
+  await assert.rejects(lifecycle.start(), /ready record unwritable/);
+  assert.equal(lifecycle.state, "failed");
+  assert.equal(states.includes("ready"), false);
+  assert.equal(driver.running, null);
+  assert.equal(driver.forced, 1);
+  assert.deepEqual(records, ["failed"]);
+});
+
+test("DR38: an optional state observer failure does not change the VM state", async t => {
+  const { lifecycle, driver } = await world(t);
+  lifecycle.onState(() => { throw new Error("UI observer unavailable"); });
+  await lifecycle.start();
+  assert.equal(lifecycle.state, "ready");
+  assert.notEqual(driver.running, null);
+  assert.equal(await lifecycle.stop(), "stopped");
+  assert.equal(lifecycle.state, "stopped");
 });

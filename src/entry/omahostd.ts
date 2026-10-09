@@ -76,19 +76,17 @@ async function main(): Promise<void> {
       expectImage: image.version, protocol: { min: Math.max(1, HOST_GUEST_PROTOCOL - 1), max: HOST_GUEST_PROTOCOL } },
     resolve: hostResolver(dirs.engine, driver, join(bundle!, "Contents", "Resources")),
     power: listener => { driver.onPower(listener); },
-    statePath, packagesDir: dirs.packages, snapshotsDir: dirs.snapshots,
-  });
-  service.lifecycle.onState(state => {
-    if (state !== "ready") return;
-    const current = readHostRecord(recordPath);
-    if (current === null) return;
-    writeHostRecord(recordPath, { ...current, image: { current: image.version, previous: current.image.current === image.version ? current.image.previous : current.image.current },
-      highestSchemaWritten: Math.max(current.highestSchemaWritten ?? 0, image.stateSchema.written) });
+    statePath, stateSchemaWritten: image.stateSchema.written, packagesDir: dirs.packages, snapshotsDir: dirs.snapshots,
   });
   // MAC-321: launchd's SIGTERM at logout, restart or update -- and, AV31 and
   // P0V-81, every other way this process is asked to end.
   let ending = false;
-  const end = (code: number): void => { driver.close(); process.exit(code); };
+  const report = (error: unknown): void => { try { process.stderr.write(`omahostd shutdown failed: ${String(error)}\n`); } catch { /* exiting anyway */ } };
+  const end = (code: number): void => {
+    try { driver.close(); }
+    catch (error) { report(error); code = 1; }
+    process.exit(code);
+  };
   for (const signal of HOST_LOSS_SIGNALS) process.on(signal, () => {
     if (ending) return;
     ending = true;
@@ -97,7 +95,11 @@ async function main(): Promise<void> {
     // shutdown: the watchdog reaches driver.close() however the drain ends.
     const watchdog = setTimeout(() => end(1), 5 * DEFAULT_TIMINGS.drainDeadlineMs);
     watchdog.unref();
-    void service.shutdown().finally(() => { clearTimeout(watchdog); end(0); });
+    void service.shutdown().then(() => {
+      clearTimeout(watchdog); end(0);
+    }, error => {
+      report(error); clearTimeout(watchdog); end(1);
+    });
   });
 }
 main().catch(error => { fail(error instanceof Error ? error.message : String(error)); });

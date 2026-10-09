@@ -2,19 +2,20 @@
  * machine, the guest link, egress, the Host API, and the host record. The
  * entry adds only the Mac-specific pieces (the VM helper, the paths). */
 import type { Server, Socket } from "node:net";
-import { createHash, randomBytes, randomUUID } from "node:crypto";
-import { chmodSync, existsSync, readdirSync, realpathSync, statSync, statfsSync, writeFileSync } from "node:fs";
-import { basename, dirname, join } from "node:path";
+import { randomBytes } from "node:crypto";
+import { chmodSync, readdirSync, statSync, statfsSync, writeFileSync } from "node:fs";
+import { dirname, join } from "node:path";
 import { GuestLink, type HostIdentity } from "./guest-link.js";
 import { VmLifecycle, type LifecycleOptions, type VmDriver } from "./lifecycle.js";
 import { EgressHost, type EgressHostOptions } from "./egress.js";
 import { startHostApi } from "./host-api.js";
-import { readHostRecord, writeHostRecord, type HostRecord, type ProjectRecord } from "./record.js";
+import { readHostRecord, writeHostRecord, type HostRecord } from "./record.js";
 import type { ProjectBookmarks } from "./bookmark.js";
-import { MacGit, fileSink, getStream, putStream, sha256File } from "./project.js";
-import { writePackageArchive } from "../package-archive.js";
-import { sealedArchiveSink } from "./archive-crypto.js";
-import { openSnapshotStore, pruneSnapshots, snapshotIdOf, snapshotRunning, snapshotStopped, type SnapshotStore } from "./snapshot.js";
+import type { SnapshotStore } from "./snapshot.js";
+import { SnapshotCoordinator } from "./snapshot-coordinator.js";
+import { ProjectSyncCoordinator } from "./project-sync.js";
+import { SessionGateway } from "./session-gateway.js";
+import { HostTransfers } from "./transfers.js";
 import { collectTemporaries, ensureHostOwnedDirectory, removeHostStaged } from "./files.js";
 import { ProcessLock } from "../../runtime/process-lock.js";
 import { withAsyncCleanup } from "../../process/cleanup.js";
@@ -39,6 +40,8 @@ export interface HostServiceOptions {
   readonly recordPath: string;
   readonly driver: VmDriver;
   readonly identity: HostIdentity;
+  /** The verified image's schema, committed with readiness and image identity. */
+  readonly stateSchemaWritten?: number;
   readonly resolve: EgressHostOptions["resolve"];
   readonly uid: number;
   /** §6: the git the app ships, for the Human's repositories (MAC-404). */
@@ -66,8 +69,6 @@ export interface HostServiceOptions {
 }
 
 const GIB = 1024 ** 3;
-/** §8.4/MAC-661: how many of the newest snapshots a prune keeps. */
-const SNAPSHOTS_KEPT = 3;
 /** MAC-660: what the Mac keeps free -- max(5 GiB, 10% of the state disk). */
 function storageFloor(options: HostServiceOptions): number {
   if (options.storageFloorBytes !== undefined) return options.storageFloorBytes;
@@ -144,6 +145,7 @@ export async function archiveKey(keychain: KeychainStore, lockPath: string,
 }
 
 export class HostService {
+  private ending: Promise<"stopped" | "forced"> | null = null;
   private constructor(readonly lifecycle: VmLifecycle, readonly egress: EgressHost, readonly link: GuestLink,
     private readonly api: Server, readonly token: string, private readonly stopRecorded: () => Promise<"stopped" | "forced">,
     private readonly apiConnections: Set<Socket>,
@@ -162,7 +164,8 @@ export class HostService {
     const record = (update: (current: HostRecord) => HostRecord): void => {
       lock.assertHeld(join(options.runDir, "omahostd.lock"));
       const current = readHostRecord(options.recordPath);
-      if (current !== null) writeHostRecord(options.recordPath, update(current));
+      if (current === null) throw new StoreError("STORE_CORRUPT", "the host record is missing");
+      writeHostRecord(options.recordPath, update(current));
     };
     const link = new GuestLink(options.driver, options.identity,
       { frameBytes: PLATFORM_FRAME_BYTES, helloDeadlineMs: 10_000, requestTimeoutMs: 60_000 });
@@ -171,17 +174,19 @@ export class HostService {
       after: (ms, run) => { const timer = setTimeout(run, ms); return { cancel: () => clearTimeout(timer) }; },
       ...(options.timings ?? DEFAULT_TIMINGS),
       record: event => { record(current => ({ ...current, lastStop: event })); },
+      ready: () => { record(current => ({ ...current, provisioning: "done",
+        image: { current: options.identity.expectImage,
+          previous: current.image.current === options.identity.expectImage ? current.image.previous : current.image.current },
+        ...(options.stateSchemaWritten === undefined ? {} : {
+          highestSchemaWritten: Math.max(current.highestSchemaWritten ?? 0, options.stateSchemaWritten) }) })); },
     });
     const egress = new EgressHost({
       open: () => link.bytes("egress"), resolve: options.resolve,
       // v1 guests supplied no model budget. v2 carries it per run, not as a
       // host-wide RPC timeout. The compatibility value is the old model default.
       limits: { concurrent: 4, timeoutMs: 600_000 }, frameBytes: PLATFORM_FRAME_BYTES, maxPool: 32,
-      // DR34: `egress.connect` dials through here. The host resolves the name
-      // itself, screens every answer against private and special-use space,
-      // and pins the literal it connects to; the per-role allowlist travels
-      // with the guest's request (the society's config is not the host's to
-      // read), and the host enforces the list it was given.
+      // DR37: host-owned unrestricted network policy. Legacy guest role/allow
+      // metadata is not authority. Run/boot ownership still gates every tunnel.
       dial: makePublicDial(),
       // A connect decision lands in the host's journal -- the stderr of the
       // service process -- once per tunnel the guest asks for.
@@ -189,9 +194,7 @@ export class HostService {
     });
     lifecycle.onState(state => {
       if (state === "ready") {
-        // MAC-303: a disk that answered a handshake has been made.
-        record(current => current.provisioning === "done" ? current : { ...current, provisioning: "done" });
-        void egress.fill();
+        void egress.fill().catch(error => { try { console.error("egress pool fill failed", error); } catch { /* best-effort observation */ } });
       }
     });
     link.onReboot(() => { void egress.forgetBoot().catch(() => undefined); });
@@ -199,24 +202,6 @@ export class HostService {
     // the lifecycle itself (NB-26), never swallowed here.
     options.power?.(event => { if (event === "wake") void lifecycle.woke().catch(() => undefined); });
 
-    const stopRecorded = (): Promise<"stopped" | "forced"> => lifecycle.stop();
-    const git = new MacGit(options.git);
-    const projects = (): readonly ProjectRecord[] => {
-      const current = readHostRecord(options.recordPath);
-      if (current === null) throw new StoreError("STORE_CORRUPT", "The app's project record is missing");
-      return current.projects;
-    };
-    const bookmarks = (): ProjectBookmarks => {
-      if (options.bookmarks === undefined) throw new StoreError("UNSUPPORTED_PROFILE", "Project bookmarks are unavailable");
-      return options.bookmarks;
-    };
-    const projectRepo = async (project: ProjectRecord, requested?: string): Promise<string> => {
-      const repo = realpathSync(await bookmarks().resolve(project.bookmark));
-      if (requested !== undefined && realpathSync(requested) !== repo)
-        throw new StoreError("INVALID_REQUEST", "The project folder does not match its saved bookmark; bind its new location first");
-      await git.verifyIdentity(repo, project);
-      return repo;
-    };
     const transfer = join(options.runDir, "transfer");
     // P0-8/DR32: the transfer, archives and snapshots directories are oma's
     // own; a damaged leaf is repaired rather than trusted as-is.
@@ -228,60 +213,19 @@ export class HostService {
     collectTemporaries(options.archivesDir);
     collectTemporaries(dirname(options.recordPath));
     for (const name of readdirSync(transfer)) removeHostStaged(join(transfer, name));
-    // §8.4: the snapshot store, when this OMA keeps one -- the update's own
-    // snapshots and the ones the Human asks for. A dead service's unfinished
-    // clone is a temporary its start removes (P0V-103, F-08).
-    let snapshots: SnapshotStore | null = null;
-    if (options.snapshotsDir !== undefined && options.statePath !== undefined) {
-      ensureHostOwnedDirectory(options.snapshotsDir, dirname(options.snapshotsDir));
-      openSnapshotStore(options.snapshotsDir);
-      snapshots = { dir: options.snapshotsDir, statePath: options.statePath,
-        ...(options.snapshotClone === undefined ? {} : { clone: options.snapshotClone }) };
-    }
-    // A backup's own condition -- the disk had no room for the clone, a copy
-    // whose consistency is not proven -- is the honest unavailable, not an
-    // internal error (MAC-622, P0-5).
-    const backup = async <T>(make: () => Promise<T>): Promise<T> => {
-      try { return await make(); }
-      catch (error) {
-        if (error instanceof StoreError) throw error;
-        throw new StoreError("BROKER_UNAVAILABLE",
-          `the backup could not be made: ${error instanceof Error ? error.message : String(error)}`);
-      }
-    };
-    /** §8.4, MAC-661: space before count -- the newest SNAPSHOTS_KEPT stay,
-     * plus the running image's own pre-update snapshot, whose protection is
-     * never lifted while this image runs (the spec's three-boots-or-seven-days
-     * window is its minimum, not its bound). An older update's snapshot
-     * decays by age like any other. The marker is the snapshot's parsed id:
-     * a name's tail is no match -- a user id ending in the marker's bytes
-     * squats on nothing. */
-    const updateId = `update-${options.identity.expectImage}`;
-    const updateProtection = (): ReadonlySet<string> => {
-      if (snapshots === null) return new Set();
-      return new Set(readdirSync(snapshots.dir).filter(name => snapshotIdOf(name) === updateId));
-    };
-    const prune = (): void => { if (snapshots !== null) pruneSnapshots(snapshots.dir, SNAPSHOTS_KEPT, updateProtection()); };
-    // §8.4: the update's own snapshot -- the state disk as the image that
-    // last booted left it -- is kept before this image's first boot can write
-    // it. The record names what last booted, `expectImage` what is about to:
-    // equal, or no image ever booted, is no update. The marker name means the
-    // snapshot was already made -- re-making it now would preserve a disk
-    // this image may already have touched. A snapshot that cannot be made
-    // refuses the boot: the update does not run its rollback point down.
-    let updateBackup: Promise<void> | null = null;
-    const updateSnapshot = (): Promise<void> => {
-      if (snapshots === null || lifecycle.state !== "stopped") return Promise.resolve();
-      const current = readHostRecord(options.recordPath);
-      if (current === null || current.image.current === null || current.image.current === options.identity.expectImage)
-        return Promise.resolve();
-      if (readdirSync(snapshots.dir).some(name => snapshotIdOf(name) === updateId))
-        return Promise.resolve();
-      updateBackup ??= backup(() => snapshotStopped(snapshots, updateId))
-        .then(() => { prune(); }).finally(() => { updateBackup = null; });
-      return updateBackup;
-    };
     const floor = storageFloor(options);
+    const room = (dir: string, incoming: number): void => assertRoom(dir, incoming, floor);
+    const snapshots = new SnapshotCoordinator({ lifecycle, link, recordPath: options.recordPath,
+      imageVersion: options.identity.expectImage,
+      ...(options.statePath === undefined ? {} : { statePath: options.statePath }),
+      ...(options.snapshotsDir === undefined ? {} : { dir: options.snapshotsDir }),
+      ...(options.snapshotClone === undefined ? {} : { clone: options.snapshotClone }) });
+    const projects = new ProjectSyncCoordinator({ link, git: options.git, recordPath: options.recordPath, record,
+      transfer, room, ...(options.bookmarks === undefined ? {} : { bookmarks: options.bookmarks }) });
+    const sessions = new SessionGateway(link, lifecycle, projects, () => snapshots.start());
+    const transfers = new HostTransfers({ link, transfer, room, archivesDir: options.archivesDir,
+      ...(options.packagesDir === undefined ? {} : { packagesDir: options.packagesDir }),
+      archiveKey: () => archiveKey(options.keychain, join(options.runDir, "archive-key.lock")) });
     const token = randomBytes(32).toString("hex");
     const tokenPath = join(options.runDir, "token");
     writeFileSync(tokenPath, `${token}\n`, { mode: 0o600 });
@@ -291,157 +235,18 @@ export class HostService {
       frameBytes: PLATFORM_FRAME_BYTES, helloDeadlineMs: 10_000, requestTimeoutMs: 120_000,
       backend: {
         state: () => lifecycle.state,
-        start: async () => { await updateSnapshot(); await lifecycle.start(); },
-        stop: stopRecorded,
+        start: () => snapshots.start(),
+        stop: () => snapshots.stop(),
         society: () => link.json("society"),
         terminal: (society, takeover) => link.bytes("terminal", { society, ...(takeover ? { takeover: true as const } : {}) }),
-        bindProject: async params => {
-          const repo = realpathSync(params.macRepo);
-          const identity = await git.identity(repo);
-          const bookmark = await bookmarks().create(repo);
-          if (realpathSync(await bookmarks().resolve(bookmark)) !== repo)
-            throw new StoreError("BROKER_UNAVAILABLE", "The project bookmark does not identify the selected folder");
-          // The existing writer re-reads after the asynchronous inspection.
-          // Repeating a bind for this Society keeps its original project ID.
-          let selected: ProjectRecord | undefined;
-          record(current => {
-            const prior = current.projects.find(p => p.society === params.society);
-            if (prior !== undefined && (prior.objectFormat !== identity.objectFormat ||
-                !identity.rootCommits.some(root => prior.rootCommits.includes(root))))
-              throw new StoreError("INVALID_REQUEST", "This Society is bound to another repository");
-            selected = prior === undefined ? { ...identity, projectId: randomUUID(), society: params.society,
-              displayName: basename(repo).slice(0, 200), bookmark } : { ...prior, bookmark };
-            return { ...current, projects: [...current.projects.filter(p => p.society !== params.society), selected] };
-          });
-          if (selected === undefined) throw new StoreError("STORE_CORRUPT", "The app's project record is missing");
-          return { projectId: selected.projectId, displayName: selected.displayName, society: selected.society };
-        },
-        projectExtensions: async projectId => {
-          const project = projects().find(p => p.projectId === projectId);
-          if (project === undefined) throw new StoreError("INVALID_REQUEST", "The project is not bound on this Mac");
-          if (lifecycle.state !== "ready") throw new StoreError("BROKER_UNAVAILABLE", "Project settings require an already running engine");
-          const peer = await link.json("society");
-          try { return await peer.request("project.extensions", { projectId }); }
-          finally { peer.close(); }
-        },
-        sessions: async (method, params) => {
-          const project = projects().find(p => p.projectId === params.projectId);
-          if (project === undefined || params.society !== undefined && params.society !== project.society)
-            throw new StoreError("INVALID_REQUEST", "That history is not bound to a project on this Mac");
-          // A resume may be the first interaction after an update: the boot
-          // must take the same pre-update snapshot `start` takes, or the
-          // rollback point is gone before this image writes the disk.
-          if (method === "session.resume") { await updateSnapshot(); await lifecycle.start(); }
-          else if (lifecycle.state !== "ready") throw new StoreError("BROKER_UNAVAILABLE", "Guest histories require an already running engine");
-          await projectRepo(project);
-          const peer = await link.json("society");
-          try { return await peer.request(method, { ...params, society: project.society }); }
-          finally { peer.close(); }
-        },
-        importProject: async (key, params) => {
-          const project = projects().find(p => p.projectId === params.projectId);
-          if (project === undefined) throw new StoreError("INVALID_REQUEST", "Bind the project on this Mac before importing it");
-          const repo = await projectRepo(project, params.macRepo);
-          const file = join(transfer, `${createHash("sha256").update(key).digest("hex")}.import.bundle`);
-          assertRoom(transfer, 0, floor);
-          try {
-            const bundled = await git.bundle(repo, params.branch, params.since, file);
-            await putStream(await link.bytes("stream"), key, file, PLATFORM_FRAME_BYTES);
-            const society = await link.json("society");
-            try {
-              const result = await society.request("project.import",
-                { projectId: params.projectId, branch: params.branch, bundle: { bytes: bundled.bytes, sha256: bundled.sha256 } }, key);
-              if (typeof result.head !== "string" || !new RegExp(`^[0-9a-f]{${project.objectFormat === "sha256" ? 64 : 40}}$`).test(result.head))
-                throw new StoreError("BROKER_UNAVAILABLE", "The import result could not be observed");
-              const head = result.head;
-              record(current => ({ ...current, projects: current.projects.map(p => p.projectId === project.projectId
-                ? { ...p, lastImport: { head, at: Date.now() } } : p) }));
-              return result;
-            } finally { society.close(); }
-          } finally { removeHostStaged(file); }
-        },
-        syncPackages: async (key, params) => {
-          if (options.packagesDir === undefined) throw new StoreError("UNSUPPORTED_PROFILE", "this OMA keeps no packages");
-          const file = join(transfer, `${createHash("sha256").update(key).digest("hex")}.packages`);
-          assertRoom(transfer, 0, floor);
-          try {
-            // The whole store, as it is now: what `oma pi` installed and the list it keeps.
-            removeHostStaged(file);
-            await writePackageArchive(options.packagesDir, file);
-            const declared = { bytes: statSync(file).size, sha256: await sha256File(file) };
-            await putStream(await link.bytes("stream"), key, file, PLATFORM_FRAME_BYTES);
-            const society = await link.json("society");
-            try {
-              return await society.request("packages.replace",
-                { archive: declared, ...(params.activate === undefined ? {} : { activate: params.activate }), ...(params.projectId === null ? {} : { projectId: params.projectId }) }, key);
-            } finally { society.close(); }
-          } finally { removeHostStaged(file); }
-        },
-        exportProject: async (key, params) => {
-          const project = projects().find(p => p.society === params.society);
-          if (project === undefined) throw new StoreError("INVALID_REQUEST", "The Society is not bound to a project on this Mac");
-          const repo = await projectRepo(project, params.macRepo);
-          const society = await link.json("society");
-          let exported: Record<string, unknown>;
-          try { exported = await society.request("project.export", { society: params.society, ...(params.since === null ? {} : { since: params.since }) }, key); }
-          finally { society.close(); }
-          const file = join(transfer, `${createHash("sha256").update(key).digest("hex")}.export.bundle`);
-          try {
-            await getStream(await link.bytes("stream"), key, declared => { assertRoom(transfer, declared.bytes, floor); return fileSink(file); },
-              PLATFORM_FRAME_BYTES);
-            // Recheck immediately before writing the Human's repository.
-            await git.verifyIdentity(repo, project);
-            const fetched = await git.fetchExport(repo, file);
-            // NB-22: nothing malformed reaches the durable record -- a head
-            // that is not this repository's object id is not a head.
-            const oid = new RegExp(`^[0-9a-f]{${project.objectFormat === "sha256" ? 64 : 40}}$`);
-            if (typeof fetched.head !== "string" || !oid.test(fetched.head))
-              throw new StoreError("BROKER_UNAVAILABLE", "The export result could not be observed");
-            record(current => ({ ...current, projects: current.projects.map(p => p.projectId === project.projectId
-              ? { ...p, lastExport: { head: fetched.head, at: Date.now() } } : p) }));
-            return { ...exported, ...fetched, ref: "refs/remotes/oma/main" };
-          } finally { removeHostStaged(file); }
-        },
-        archive: async (key, society) => {
-          const peer = await link.json("society");
-          let made: Record<string, unknown>;
-          try { made = await peer.request("archive.create", { society }, key); } finally { peer.close(); }
-          const name = `${society}-${createHash("sha256").update(key).digest("hex").slice(0, 16)}.omaarchive`;
-          const target = join(options.archivesDir, name);
-          // P0V-103: a name in the archives directory is a finished
-          // publication (files.ts); an interrupted one is only a temporary.
-          if (!existsSync(target)) {
-            const sealKey = await archiveKey(options.keychain, join(options.runDir, "archive-key.lock"));
-            // MAC-621, P0V-104: sealed as it arrives -- the plain bytes are
-            // never written -- into a temporary published whole.
-            await getStream(await link.bytes("stream"), key, declared => {
-              assertRoom(options.archivesDir, declared.bytes, floor);
-              return sealedArchiveSink(options.archivesDir, name, sealKey);
-            }, PLATFORM_FRAME_BYTES, "archive");
-          }
-          return { ...made, path: target };
-        },
-        snapshot: async ({ id }) => {
-          if (snapshots === null) throw new StoreError("UNSUPPORTED_PROFILE", "this OMA keeps no snapshots");
-          // The update- marker namespace is the service's own (host-api.ts
-          // refuses it at the wire; the same reservation holds for any other
-          // caller that reaches this backend).
-          const named = id ?? "manual";
-          if (named.startsWith("update-"))
-            throw new StoreError("INVALID_REQUEST", "snapshot ids beginning update- are reserved for the service's own pre-update snapshots");
-          // REC-005: only a quiescent point -- a stopped engine's disk as it
-          // is, or a running one's with every society stopped and the file
-          // system frozen for the clone. An engine between the two is not a
-          // point a backup can be made at.
-          const state = lifecycle.state;
-          if (state !== "stopped" && state !== "ready")
-            throw new StoreError("BROKER_UNAVAILABLE", "the engine is not at a point a backup can be made");
-          const made = state === "stopped"
-            ? { path: await backup(() => snapshotStopped(snapshots, named)), stopped: [] as string[] }
-            : await backup(() => snapshotRunning(snapshots, link, named));
-          prune();
-          return { path: made.path, stopped: made.stopped };
-        },
+        bindProject: params => projects.bindProject(params),
+        projectExtensions: projectId => sessions.projectExtensions(projectId),
+        sessions: (method, params) => sessions.sessions(method, params),
+        importProject: (key, params) => projects.importProject(key, params),
+        syncPackages: (key, params) => transfers.syncPackages(key, params),
+        exportProject: (key, params) => projects.exportProject(key, params),
+        archive: (key, society) => transfers.archive(key, society),
+        snapshot: params => snapshots.snapshot(params),
       },
     });
     const apiConnections = new Set<Socket>();
@@ -449,17 +254,29 @@ export class HostService {
       apiConnections.add(socket);
       socket.once("close", () => apiConnections.delete(socket));
     });
-    return new HostService(lifecycle, egress, link, api, token, stopRecorded, apiConnections, lock);
+    return new HostService(lifecycle, egress, link, api, token, () => snapshots.shutdown(), apiConnections, lock);
   }
 
   /** MAC-320/321: the service is ending (logout, restart, update). */
-  async shutdown(): Promise<"stopped" | "forced"> {
-    await this.egress.stop();
-    const result = await this.stopRecorded();
-    // A UI connection held open must not hold the end open (NB-29).
-    for (const socket of this.apiConnections) socket.destroy();
-    await new Promise<void>(resolve => { this.api.close(() => resolve()); });
-    this.lock.close();
-    return result;
+  shutdown(): Promise<"stopped" | "forced"> {
+    if (this.ending !== null) return this.ending;
+    this.ending = withAsyncCleanup(async () => {
+      // Closing admission is synchronous; cleanup failure never skips VM stop.
+      const stopping = this.stopRecorded();
+      const results = await Promise.allSettled([stopping, Promise.resolve().then(() => this.egress.stop())]);
+      const failures = results.filter(result => result.status === "rejected").map(result => result.reason);
+      if (failures.length === 1) throw failures[0];
+      if (failures.length > 1) throw new AggregateError(failures, "Host shutdown failed");
+      const result = results[0]!;
+      if (result.status !== "fulfilled") throw new Error("VM stop result is unavailable");
+      return result.value;
+    }, async () => {
+      // A UI connection held open must not hold the end open (NB-29).
+      await withAsyncCleanup(async () => {
+        for (const socket of this.apiConnections) socket.destroy();
+        await new Promise<void>((resolve, reject) => { this.api.close(error => error ? reject(error) : resolve()); });
+      }, () => this.lock.close());
+    });
+    return this.ending;
   }
 }

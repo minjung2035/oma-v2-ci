@@ -1,6 +1,49 @@
 # OMA v2 — 현재 검증 상태
 
-## 지정한 제한 제거·기능 복구 결과 (2026-10-09, DR37)
+## host·guest 소유권·종료·ready 수정 (2026-10-09, DR38)
+
+Human이 제시한 6건을 수정했다. 중복 maintenance lease와 외부 해제 거절,
+host state-disk 작업 직렬화, 같은 society의 open/resume/close 직렬화, running project binding,
+필수 ready record publication, 실패를 보존하는 종료와 API/lock 정리를 구현했다.
+HostService의 project/session/snapshot/transfer 조정을 4개 concrete owner로 분리했다.
+네트워크는 DR37의 unrestricted host 정책을 유지하며 guest role/allow를 권한 증거로 쓰지 않는다.
+변경 생산 파일 12개의 수정과 영향 owner를 직접 검토하고 SHA-256·named DR38 oracle에 결박했다.
+서브에이전트는 사용하지 않았다. 추가 아키텍처 개선은 수정 완료 뒤 계획만 작성한다.
+
+수정 전 회귀에서 8개의 동작 실패를 재현했다. 기존 shutdown 실패가 API listener를 남겨
+검사 worker가 종료되지 않아 해당 검사 소유 worker 하나를 TERM으로 정리했다. 이 실행을
+정상 종료한 suite로 표시하지 않는다. 수정 후 platform 5개 파일 집중 검사 80/80,
+실제 daemon entry의 controlled native boundary 검사 4/4가 통과했다.
+entry 첫 실행의 1건 실패는 assert.match에 문자열을 전달한 테스트 오류였으며 수정 후 4 PASS다.
+
+| 검사 | 이번 실행 결과 | 범위 |
+|---|---|---|
+| 전체 local suite | PASS: 3,962/3,962 | serial 9 + parallel 3,953; fail/cancel/skip/todo 0. 405개 파일, parallel 403개 concurrency 8 |
+| build / typecheck | PASS | 이번 최종 생산 코드와 테스트 입력 |
+| architecture aggregate | PASS: 0 findings | inventory·rules·architecture·transactions·boundaries·documents·spec inventory; runtime cycle 0 |
+
+첫 구조 검사는 새 coordinator의 raw directory listing 2곳과 archive existence probe 1곳을
+거절했다. 기존 host-owned listing/permission repair를 사용하고 관측 불가·archive 비정상 entry를
+refuse하도록 수정해 통과했다. 이 실패 로그도 보존했다. review ledger 첫 시도는 inventory
+생성 완료 전에 실행해 새 파일을 거절했으며 inventory 완료 뒤 재실행했다.
+
+전체 local suite의 입력은 15,382 files, sha256
+`0ee898bf2cbcd92d73b89c35a00719df16db9796a471d0d96149b9de92b1fe05`다.
+suite 전후 전체 입력의 바이트를 대조해 변경 0건을 확인했다. 아래 현재 구조 입력 field와
+이 결과 문서·[DR38 evidence](../../test/audit/host-ownership-2026-10-09.evidence.json)는 실행 후
+기록이다. 그 미래 바이트까지 runtime suite가 실행한 것으로 다루지 않는다. 기록 뒤 구조 검사를
+별도로 실행한다. 명령·로그 SHA·변경 생산 파일 SHA와 미실행 범위는 evidence에 있다.
+
+이 Linux 실행은 LocalDriver·guest services·Host API Unix socket·copyFileSync clone 및
+controlled macOS entry 경계를 검증한다. Virtualization.framework/APFS/Keychain/AF_VSOCK
+native·macOS VM boot·power loss는 미실행이다. 이전 kernel/crash PASS는 DR37 당시 결과다.
+이번 수정은 앞선 시작 시간의 새 측정이 아니며 최초 Society의 전체 준비 5초 예산은 여전히
+충족했다고 주장할 수 없다. raw log는 `/tmp/oma-host-ownership-2026-10-09`에 보존한다.
+
+현재 구조 검사의 입력 identity(생성 자체는 runtime PASS가 아니다):
+verification input digest `cfcc3d1c787304b87f4c7f46796855ee7898e23c5d68889e25538ca09cb1dfd6` (15383 files).
+
+## 이전 실행 결과: 지정한 제한 제거·기능 복구 (2026-10-09, DR37)
 
 사용자가 지정한 SC-01/02/03/04/05/20/23/26/30/31/32, 총 11개 항목을 구현하고 검증했다.
 SC-01~05/20/31의 OMA 네트워크·실행 자원·인원·저장 quota를 제거하고,
@@ -82,9 +125,6 @@ local/kernel/crash와 최종 시작 측정 뒤 15,376개 파일의 바이트를 
 한다. 이 저장소에는 image builder가 없어 image packaging/부팅을 수행하지 않았다.
 legacy reader marker 없는 package 세대는 기존 독자 종료를 증명할 수 없어 보존한다.
 프로토콜 payload 문법/바이트 검증과 P0 권한·파일·종료 소유는 유지한다.
-
-현재 구조 검사의 입력 identity(생성 자체는 runtime PASS가 아니다):
-verification input digest `0ec557e68ea99e3101e662c6be9b978db4b60a896dcb65eedbc5996d6b9669ac` (15377 files).
 
 ## 이전 실행 결과: 적대적 감사 발견 수정·재검증 (2026-10-09, DR36)
 

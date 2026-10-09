@@ -9,7 +9,7 @@
  * discarded, never kept as a snapshot (MAC-622, P0-5).
  */
 import { constants, copyFileSync, readdirSync } from "node:fs";
-import { createHash } from "node:crypto";
+import { randomUUID } from "node:crypto";
 import { join } from "node:path";
 import { StoreError } from "../../domain/errors.js";
 import { withAsyncCleanup } from "../../process/cleanup.js";
@@ -78,9 +78,9 @@ export function snapshotStopped(store: SnapshotStore, id: string): Promise<strin
  * freeze for the clone. Answers the societies that were stopped, for the UI
  * to reopen. */
 export async function snapshotRunning(store: SnapshotStore, link: GuestLink, id: string): Promise<{ path: string; stopped: string[] }> {
-  // The maintenance latch's key is a request key, whose alphabet is narrower
-  // than the id's ("+" is a legal id): the digest carries the id injectively.
-  const key = `snapshot-${createHash("sha256").update(id).digest("hex").slice(0, 16)}`;
+  // A maintenance lease belongs to this attempt, not the user-visible name.
+  // Two snapshots with the same id must never share a release key.
+  const key = `snapshot-${randomUUID()}`;
   const society = await link.json("society");
   const stopped: string[] = [];
   try {

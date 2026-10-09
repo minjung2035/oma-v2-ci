@@ -448,9 +448,8 @@ test("AV-15/§4.7 v5: a run the host ends ends the guest's forwarder; the lease 
   await until(() => host.activeRuns === 0, "the ended lease's run is over on the host too");
 });
 
-/* ---- DR34 / UX-08: egress.connect -- the run's CONNECT tunnels through the
- * same pool, declared policy and all. The host re-checks run identity,
- * enforces the declared allowlist, owns resolution and the address screen. */
+/* CONNECT tunnels retain host-issued run ownership under DR37. Guest policy
+ * metadata is syntactically validated, without destination restrictions. */
 
 const CONNECT_POLICY = Object.freeze({ role: "worker", allow: Object.freeze(["registry.npmjs.org", "*.github.com"]) });
 
@@ -463,7 +462,7 @@ async function echoServer(t: import("node:test").TestContext): Promise<number> {
   return (server.address() as { port: number }).port;
 }
 
-test("DR34: egress.connect tunnels a declared allowlisted target through the pool; the rest are refused", async t => {
+test("DR34: egress.connect tunnels through the pool and refuses stale runs and malformed metadata", async t => {
   const { requestEgressConnect, requestEgressPlaceholder } = await import("../src/runtime/egress-forwarder.js");
   const port = await echoServer(t);
   const audits: import("../src/runtime/connect-proxy.js").EgressAudit[] = [];
@@ -482,8 +481,7 @@ test("DR34: egress.connect tunnels a declared allowlisted target through the poo
   tunnel.destroy();
   assert.ok(audits.some(e => e.decision === "allow" && e.target === "registry.npmjs.org:443" && e.actor === "alice" && e.role === "worker"));
 
-  // Everything off the declared list, off the one port, or for a run that is
-  // not this boot's is refused -- and never dials.
+  // A run that is not this boot's is refused before dialing.
   for (const [host_, port_, code] of [
     ["registry.npmjs.org", 443, "STALE_RUN"],        // a run the placeholder does not stand for
   ] as const) {
@@ -507,6 +505,29 @@ test("DR34: egress.connect tunnels a declared allowlisted target through the poo
   await until(() => host.activeRuns === 0, "the released run is over on the host");
   await assert.rejects(requestEgressConnect(ask, issued, RUN, "registry.npmjs.org", 443, CONNECT_POLICY),
     (error: unknown) => error instanceof StoreError && (error as StoreError).code === "STALE_RUN");
+});
+
+test("DR38: guest role/allow metadata cannot grant run authority or restrict host network policy", async t => {
+  const { requestEgressConnect, requestEgressPlaceholder } = await import("../src/runtime/egress-forwarder.js");
+  const port = await echoServer(t);
+  const dialed: string[] = [];
+  const { host, serviceSocket } = await world(t, 5000, undefined, {
+    dial: async (name, requestedPort) => { dialed.push(`${name}:${requestedPort}`); return connect({ host: "127.0.0.1", port }); },
+  });
+  await host.fill();
+  const ask = { socket: serviceSocket, frameBytes: PLATFORM_FRAME_BYTES, deadlineMs: 5000 };
+  const issued = await requestEgressPlaceholder(ask, RUN, "anthropic", "current", 5);
+  // A guest-declared narrow list does not change the host's unrestricted policy.
+  const metadata = { role: "principal", allow: ["unrelated.example"] };
+  const tunnel = await requestEgressConnect(ask, issued, RUN, "127.0.0.1", 22, metadata);
+  t.after(() => tunnel.destroy());
+  tunnel.write("unrestricted");
+  assert.equal(String((await once(tunnel, "data"))[0]), "unrestricted");
+  assert.deepEqual(dialed, ["127.0.0.1:22"]);
+  // Naming an elevated role and '*' still cannot use another actor's run.
+  await assert.rejects(requestEgressConnect(ask, issued, { ...RUN, actor: "mallory" }, "example.org", 443,
+    { role: "principal", allow: ["*"] }), (error: unknown) => error instanceof StoreError && error.code === "STALE_RUN");
+  assert.deepEqual(dialed, ["127.0.0.1:22"], "a forged run must never reach the dialer");
 });
 
 test("DR34: project tunnels exceed the old concurrency limit and all close with their run", async t => {

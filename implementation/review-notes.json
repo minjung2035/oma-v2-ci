@@ -1,6 +1,6 @@
 {
  "version": 1,
- "about": "WP32 inputs to implementation/review-ledger.json that git history cannot supply: files read in full and left unchanged, explicitly reviewed working-tree changes bound to their SHA-256 bytes and oracles, and the environment lanes as recorded in docs/implementation/validation.md. Regenerate the ledger with `npm run review:ledger`; `review-closure` checks it. Historical lane entries do not certify later working-tree changes. DR29: withdrawn stale byte-bound review claims for src/runtime/personal-settings.ts, src/entry/personal-host.ts, src/entry/oma-mac.ts. Hashes were not silently refreshed; these edited owners require fresh review. Historical readUnchanged entries apply only to unchanged committed files; changed files are NOT_REVIEWED. UX-38 residual settlement (bundled pi-lsp surface): the seven edited files above were re-read in full and re-bound to their new bytes -- digests refreshed only alongside a fresh read, never silently. No withdrawal was needed: each change is this batch's own reviewed work. UX-38 blind-verification settlement (process layer): src/process/run.ts and src/process/command.ts were re-read in full and re-bound to their new bytes (spool-open fd pairing, identical-spool refusal) -- digest refresh accompanied the fresh read. F1/F2-MAC settlement (macOS archive staging regression): src/runtime/local-package.ts and src/git/canonical-command.ts were re-read in full and re-bound to their new bytes (Darwin archive spool through the host file owner; ls-tree scratch cleanup on spool-open failure) -- digest refresh accompanied the fresh read. UX-38 LOW residual settlement (workspaceDirty not-a-repo corroboration): src/cli/effects.ts was re-read in full and re-bound to its new bytes (the not-a-repo decline is now a factual negative only after a .git-claim walk corroborates absence) -- digest refresh accompanied the fresh read. DR35: current startup deltas directly reviewed with the user prohibition on subagents; each changed owner is bound to its current bytes and DR35 regressions. Historical lane results do not certify this batch. DR36 (2026-10-09): direct review of the repair deltas and affected owner flows, without subagents, is recorded separately from historical full-file reviews. Hash updates here accompany that review and named current regression oracles; earlier environment lanes are not renewed by digest regeneration. DR37 (2026-10-09): selected restriction removal deltas and affected lifetimes directly reviewed without subagents; current bytes and named behavioral oracles recorded, not a renewed full-codebase review.",
+ "about": "WP32 inputs to implementation/review-ledger.json that git history cannot supply: files read in full and left unchanged, explicitly reviewed working-tree changes bound to their SHA-256 bytes and oracles, and the environment lanes as recorded in docs/implementation/validation.md. Regenerate the ledger with `npm run review:ledger`; `review-closure` checks it. Historical lane entries do not certify later working-tree changes. DR29: withdrawn stale byte-bound review claims for src/runtime/personal-settings.ts, src/entry/personal-host.ts, src/entry/oma-mac.ts. Hashes were not silently refreshed; these edited owners require fresh review. Historical readUnchanged entries apply only to unchanged committed files; changed files are NOT_REVIEWED. UX-38 residual settlement (bundled pi-lsp surface): the seven edited files above were re-read in full and re-bound to their new bytes -- digests refreshed only alongside a fresh read, never silently. No withdrawal was needed: each change is this batch's own reviewed work. UX-38 blind-verification settlement (process layer): src/process/run.ts and src/process/command.ts were re-read in full and re-bound to their new bytes (spool-open fd pairing, identical-spool refusal) -- digest refresh accompanied the fresh read. F1/F2-MAC settlement (macOS archive staging regression): src/runtime/local-package.ts and src/git/canonical-command.ts were re-read in full and re-bound to their new bytes (Darwin archive spool through the host file owner; ls-tree scratch cleanup on spool-open failure) -- digest refresh accompanied the fresh read. UX-38 LOW residual settlement (workspaceDirty not-a-repo corroboration): src/cli/effects.ts was re-read in full and re-bound to its new bytes (the not-a-repo decline is now a factual negative only after a .git-claim walk corroborates absence) -- digest refresh accompanied the fresh read. DR35: current startup deltas directly reviewed with the user prohibition on subagents; each changed owner is bound to its current bytes and DR35 regressions. Historical lane results do not certify this batch. DR36 (2026-10-09): direct review of the repair deltas and affected owner flows, without subagents, is recorded separately from historical full-file reviews. Hash updates here accompany that review and named current regression oracles; earlier environment lanes are not renewed by digest regeneration. DR37 (2026-10-09): selected restriction removal deltas and affected lifetimes directly reviewed without subagents; current bytes and named behavioral oracles recorded, not a renewed full-codebase review. DR38 (2026-10-09): six host/guest repair deltas and concrete extracted owners directly reviewed without subagents, with current byte-bound behavioral regressions. Historical reviews and native environment PASS are not renewed.",
  "reviewedChanges": [
   {
    "path": "implementation/contracts.ts",
@@ -292,13 +292,13 @@
   {
    "path": "src/domain/egress.ts",
    "by": [
-    "DR37"
+    "DR38"
    ],
    "oracles": [
-    "DR37"
+    "DR38"
    ],
-   "sha256": "67fc67811d1db54e1287b7fd93bca557f4923b67e23d85ba596eb5da31df0fed",
-   "note": "DR37 direct review of network and socket owner deltas: share-net retains filesystem/user/PID/seccomp boundaries, arbitrary destination/port forwarding preserves destination auth and strips proxy auth; unique ports precede adapter capture; close/abort owns upstream and downstream. Actual TCP/UDP, HTTP and twelve-tunnel tests cover behavior."
+   "sha256": "0dc2df28ce22f1ac391713e43dab5d3174d75c2ea610ec1335a021c94156af48",
+   "note": "Reviewed current pure authority/declaration grammar and compatibility functions; comment-only correction documents existing DR37 unrestricted destinations including literals and private addresses, while legacy declaration parsing stays wire-compatible."
   },
   {
    "path": "src/domain/errors.ts",
@@ -427,6 +427,17 @@
    ],
    "sha256": "4a5253b0ce3b3cc710ddc9c4f2016ba6441b2da9d18b41954966fd20eaec404b",
    "note": "Reviewed preparation ownership and host/broker ordering: no independent short total timeout, child inherits the society fence and remains owned until actual close, strict bounded child report, private UI before broker readiness without authority, and inherited descendant fences survive cancellation until the kernel admits a successor."
+  },
+  {
+   "path": "src/entry/omahostd.ts",
+   "by": [
+    "DR38"
+   ],
+   "oracles": [
+    "DR38"
+   ],
+   "sha256": "dbcaaa466578d6abde14cf718fe6c1039f3f7569b2d5cfb794cd9b68ed19f565",
+   "note": "Actual daemon entry shutdown uses explicit success/failure branches, closes native helper even on failure, returns non-zero on unknown VM end/helper failure/watchdog; verified image schema now enters required ready record publication. Controlled-boundary entry regressions are Linux evidence only."
   },
   {
    "path": "src/entry/personal-host.ts",
@@ -152621,6 +152632,17 @@
    "note": "Read in full: existing project binding and Society birth/header/private cwd admission, lexical bounded pagination, SDK-skipped files remain unknown. Real saved files and scripted launcher/current listening holder conflict oracles pass. Actual manager launch NOT_RUN."
   },
   {
+   "path": "src/platform/guest/host.ts",
+   "by": [
+    "DR38"
+   ],
+   "oracles": [
+    "DR38"
+   ],
+   "sha256": "236b5c6ce9bce2ef144ec952d429329b4ebf043e515a131c01829c4d2601dd79",
+   "note": "Reviewed full operation-owner flow: same-society open/resume/close share a queue and archive/maintenance see that fence; live endpoints must still prove imported mirror and matching persisted project binding; duplicate lease keys refuse without overwriting owners, end/reap releases only matching connection. Failure cannot poison later operations."
+  },
+  {
    "path": "src/platform/guest/packages.ts",
    "by": [
     "UX-38"
@@ -152690,13 +152712,13 @@
   {
    "path": "src/platform/host/egress.ts",
    "by": [
-    "DR37"
+    "DR38"
    ],
    "oracles": [
-    "DR37"
+    "DR38"
    ],
-   "sha256": "7ca7a21fa6347d372477c9760b9d8b93e4c83bc92bb9a9e1a375c4adc4c27fe4",
-   "note": "DR37 direct review of network and socket owner deltas: share-net retains filesystem/user/PID/seccomp boundaries, arbitrary destination/port forwarding preserves destination auth and strips proxy auth; unique ports precede adapter capture; close/abort owns upstream and downstream. Actual TCP/UDP, HTTP and twelve-tunnel tests cover behavior."
+   "sha256": "0c3c4325928947d54a1fc0b3886dca86dfd39c877f0e69fb595eba0721566180",
+   "note": "Reviewed CONNECT run/boot/actor/incarnation ownership, dial cancellation and both socket lifetimes; DR37 already applies unrestricted host policy. Updated obsolete allowlist/443/private-address/FIFO-slot comments. Regression proves guest role/allow cannot authorize another actor and cannot narrow host policy."
   },
   {
    "path": "src/platform/host/files.ts",
@@ -152734,6 +152756,17 @@
    "note": "Read in full: serialized per-item writer uses a cross-process lock and awaits the fenced writer before returning it; abort and identity are rechecked before write. Controlled in-memory store failure beside lock close and cleanup-only failure retain exact outcomes. Native Swift helper, real Keychain and credential execution were not exercised. P0-8: the per-item lock's directory is ensured through ensureOwnedUserDirectory inside its own boundary, not trusted as-is."
   },
   {
+   "path": "src/platform/host/lifecycle.ts",
+   "by": [
+    "DR38"
+   ],
+   "oracles": [
+    "DR38"
+   ],
+   "sha256": "bafdca444fd92919ea2b5de1c273a53dc8ad56fa8a4650d6ced3b6a5f69ca11a",
+   "note": "Reviewed boot/phase cancellation/force/stop and observer paths. Required ready persistence precedes ready/watch and failure rejects startup, records failed and observes owned VM force; optional UI observers log without corrupting committed state. Existing death-observation and cleanup aggregation remain."
+  },
+  {
    "path": "src/platform/host/personal-histories.ts",
    "by": [
     "DR29"
@@ -152756,6 +152789,17 @@
    "note": "Read in full: host-record binding/bookmark/Git identity precedes already-running project settings observation; absent binding is empty, ambiguity/unknown is refusal. Real Git relocation/replacement and controlled settings tests pass. Bound first seed requires an already running app/guest, and native Mac NOT_RUN."
   },
   {
+   "path": "src/platform/host/project-sync.ts",
+   "by": [
+    "DR38"
+   ],
+   "oracles": [
+    "DR38"
+   ],
+   "sha256": "3206c4c2faf34e1b26e02a954f4ddc072eb2e2a9ad6a169afdf3b0a924c5e3d5",
+   "note": "Read full extracted project bind/import/export owner and compared to original callbacks: bookmark folder and Git identity checks, reread-under-record-writer, request keys, stream digests, pre-export identity recheck, actual result observation, and finally staging removal remain. No generic framework or alternate record authority."
+  },
+  {
    "path": "src/platform/host/project.ts",
    "by": [
     "UX-38"
@@ -152769,25 +152813,57 @@
   {
    "path": "src/platform/host/service.ts",
    "by": [
-    "DR34"
+    "DR38"
    ],
    "oracles": [
-    "DR34"
+    "DR38"
    ],
-   "sha256": "14db37a7b7e2ee7ebab15e11481866235c7cb698d29671ea3a841aaf9b749142",
-   "note": "Read in full: EgressHost gains dial=makePublicDial() so egress.connect resolves/screens/pins on the host, and the audit callback logs one journal line per decision; the placeholder/open lifecycle is untouched."
+   "sha256": "1e9058c6fa6aabd8e286b023f63359784dfdd6d61d82168740155ef6a6ba4f0f",
+   "note": "Reviewed composition and extracted behavior against original callbacks: ready publishes provisioning/image/schema under the process-lock writer in one record; explicit concrete coordinators retain Git/stream/archive owners. Shutdown closes admission, observes VM stop and egress outcomes separately, retains failures, always closes API sockets/listener and lock, and shares one result across callers."
+  },
+  {
+   "path": "src/platform/host/session-gateway.ts",
+   "by": [
+    "DR38"
+   ],
+   "oracles": [
+    "DR38"
+   ],
+   "sha256": "560bec8629f856ff077216a18c82ac1ef92311869e62143ee9792212a11f10aa",
+   "note": "Read full extracted history/settings gateway: project record and society identity checks precede guest requests; resume uses the same pre-update-safe queued start; repository identity verification and peer-finally cleanup remain."
+  },
+  {
+   "path": "src/platform/host/snapshot-coordinator.ts",
+   "by": [
+    "DR38"
+   ],
+   "oracles": [
+    "DR38"
+   ],
+   "sha256": "58c0b53fc648f9f099ca6cc9a33b5d436ff13ec26f228f5424e5d15f14fa5537",
+   "note": "Read full state-disk coordinator: stopped/ready snapshot checks and clone/thaw/lease return share one queue with start/stop/pre-update snapshot; shutdown closes admission synchronously and queues observed stop; rejected work does not poison the tail. Existing retention and reserved update-id policy preserved. Architecture check exposed inherited raw directory listing after extraction: now uses existing host-owned listing/permission repair and refuses unobservable state rather than claiming an absent update snapshot."
   },
   {
    "path": "src/platform/host/snapshot.ts",
    "by": [
-    "DR25",
-    "DR28"
+    "DR38"
    ],
    "oracles": [
-    "Owned cleanup stopped snapshot"
+    "DR38"
    ],
-   "sha256": "02356a9b963a719a83989c139fefc7813dd6da6cbfba249d5b446edb5ab4d303",
-   "note": "Read in full: partial snapshot ownership spans clone/publication and discard; primary plus discard and cleanup-only outcomes are not success. Discard-removal control assertion-killed. Actual local-fixture snapshot regressions pass. Running-snapshot maintenance/control/society cleanup and clone/thaw failure composition remain open; no native VM, APFS or power-cut proof. P0-8: the snapshot prune removes each staged name through removeHostStaged's owner-bits repair, not a blind rmSync."
+   "sha256": "ba841a1370979b6bd9167a5d520d2ba11c2a2387b260064cc95c15a987c632fd",
+   "note": "Reviewed snapshot freeze/thaw/cleanup/publication flow. Each attempt now gets a random unique maintenance lease independent of visible snapshot id; cleanup remains on the acquiring peer. Required observed thaw and no-replace publication are preserved."
+  },
+  {
+   "path": "src/platform/host/transfers.ts",
+   "by": [
+    "DR38"
+   ],
+   "oracles": [
+    "DR38"
+   ],
+   "sha256": "89571a169273f52edcfcd389e36b2d6b41beddccaba41af5787f4b1741aab4ef",
+   "note": "Read full package/archive transfer extraction and compared to original effects: stable request-key staging, whole package store archive, validated streams, finally removal, host room observation, encrypted archive sink and idempotent finished publication retained. Architecture check exposed inherited raw publication probe after extraction: now observes through existing host-owned listing and refuses unobservable archive directory or non-file publication, never adopts a false absence."
   },
   {
    "path": "src/platform/package-archive.ts",
@@ -152910,13 +152986,13 @@
   {
    "path": "src/protocol/host-guest.ts",
    "by": [
-    "DR34"
+    "DR38"
    ],
    "oracles": [
-    "DR34"
+    "DR38"
    ],
-   "sha256": "29bf451fbf911f5b1d7072f8da8f01e8646b7bb2c399aefed950c1528f5ee4b3",
-   "note": "Read in full: v6 egress.connect validator unchanged in shape -- placeholderId/run/host/port plus declared role and a bounded grammar-checked allow list; the >256 check now reads EGRESS_ALLOW_MAX so the wire bound and the commit bound share one constant."
+   "sha256": "eb41236df986ba5fff4ae3966286391d72b781ba66b95b5b7d01d694ce04675b",
+   "note": "Reviewed protocol-6 CONNECT params validation and comments: role/allow remain self-declared compatibility metadata, never independent host policy or role authority. Wire fields, grammar and protocol version unchanged."
   },
   {
    "path": "src/protocol/host-history.ts",

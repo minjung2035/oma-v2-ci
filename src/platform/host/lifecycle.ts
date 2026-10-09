@@ -42,6 +42,9 @@ export interface LifecycleOptions {
   readonly restarts: { readonly max: number; readonly windowMs: number; readonly backoffMs: number };
   /** What the host keeps in its record (`host-record`), for the next start's one line. */
   readonly record: (event: "clean" | "forced" | "crashed" | "failed") => void;
+  /** Mandatory persistence after the handshake, before ready is published.
+   * A failure rejects startup and ends the VM; observers cannot replace it. */
+  readonly ready?: () => void;
 }
 
 /** P0-4: continuations, peers and timers belong to one phase, never its successor. */
@@ -127,14 +130,11 @@ export class VmLifecycle {
   private enter(state: VmState): void {
     if (this.current === state) return;
     this.current = state;
-    // NB-23: a listener's own bookkeeping (the record write it performs) may
-    // fail; that failure cannot be let escape into the transition that
-    // called it -- it would skip cleanup or kill the daemon from a bare
-    // timer callback. The record being unwritable is a repair matter, and
-    // "failed" is how the engine says so.
+    // Optional observers describe a committed transition. Mandatory ready
+    // persistence lives in options.ready and can reject boot before this.
     for (const listener of this.listeners) {
       try { listener(state); }
-      catch { this.current = "failed"; }
+      catch (error) { try { console.error("VM state observer failed", error); } catch { /* best-effort observation */ } }
     }
   }
 
@@ -171,6 +171,7 @@ export class VmLifecycle {
   private async boot(run: VmRun, phase: VmPhase): Promise<void> {
     phase.assertActive();
     this.enter("booting");
+    let readinessFailed = false;
     try {
       const launching = Promise.resolve().then(() => { phase.assertActive(); return this.options.driver.start(); })
         .finally(() => { if (this.launching === launching) this.launching = null; });
@@ -191,17 +192,21 @@ export class VmLifecycle {
       // §9.2: the guest has no clock source of its own.
       await phase.request(phase.control, "time.set", { wallMs: this.options.wallClock() });
       phase.assertActive(); deadline.cancel();
+      try { this.options.ready?.(); }
+      catch (error) { readinessFailed = true; throw error; }
+      phase.assertActive();
       this.enter("ready"); this.watch(run, phase);
     } catch (error) {
       if (this.run === run && run.phase === phase && this.closing === null) {
         phase.cancel();
         const incompatible = error instanceof PlatformError && error.failure.code === "ENGINE_VERSION_SKEW";
-        this.enter(incompatible ? "failed" : "crashed");
+        const event = incompatible || readinessFailed ? "failed" : "crashed";
+        this.enter(event);
         // NB-23: the record write can fail where only the caller sees it, but
         // it must never skip the force -- the VM's power comes first, then
         // both failures are told together.
         let recorded: unknown = null;
-        try { this.options.record(incompatible ? "failed" : "crashed"); }
+        try { this.options.record(event); }
         catch (recordError) { recorded = recordError; }
         try { await this.force(run); }
         catch (cleanup) {

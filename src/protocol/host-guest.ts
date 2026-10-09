@@ -331,12 +331,10 @@ export function egressOpenProblem(params: unknown): string | null {
   if (typeof params.modelProfile !== "string" || !TOKEN.test(params.modelProfile)) return "invalid modelProfile";
   return runProblem({ society: params.society, actor: params.actor, incarnation: params.incarnation });
 }
-/** DR34: the first (and only) framed request of `egress.connect` on a pooled
- * connection -- the run the placeholder stands for, the CONNECT target, and
- * the role's resolved allowlist. The allowlist is the guest's own statement
- * of its configured policy: the host cannot read the society's config (it
- * lives on the guest's disk), so it re-checks the entry grammar, enforces
- * the declared list verbatim, and screens every resolved address itself.
+/** The first (and only) framed request of `egress.connect` on a pooled
+ * connection: the host-issued run, CONNECT target and legacy guest metadata.
+ * DR37 permits destinations independently of guest role/allow declarations.
+ * These fields retain protocol-6 grammar and are never host authorization.
  * An `ok` answer is followed by the raw tunnel; a refused one by the framed
  * error and close. */
 export interface EgressConnectParams {
@@ -344,9 +342,9 @@ export interface EgressConnectParams {
   readonly run: EgressRun;
   readonly host: string;
   readonly port: number;
-  /** The profile name the guest resolved the policy for (audit). */
+  /** Guest-declared profile name for diagnostics; not verified authority. */
   readonly role: string;
-  /** The role's allowlist entries, exactly as configured (DR34 grammar). */
+  /** Legacy declaration retained for wire compatibility (DR34 grammar). */
   readonly allow: readonly string[];
 }
 export function egressConnectProblem(params: unknown): string | null {

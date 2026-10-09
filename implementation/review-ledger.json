@@ -2,7 +2,7 @@
  "version": 1,
  "baseline": "b25961cc46532f5e30ff60cc381fed51c59d13ab",
  "summary": {
-  "CHANGED_WITH_ORACLE": 14086,
+  "CHANGED_WITH_ORACLE": 14090,
   "REMOVED": 8,
   "NOT_REVIEWED": 51,
   "READ_UNCHANGED": 47
@@ -1135,13 +1135,13 @@
    "primary": null,
    "status": "CHANGED_WITH_ORACLE",
    "by": [
-    "DR37"
+    "DR38"
    ],
    "oracles": [
-    "DR37"
+    "DR38"
    ],
-   "note": "DR37 direct review of network and socket owner deltas: share-net retains filesystem/user/PID/seccomp boundaries, arbitrary destination/port forwarding preserves destination auth and strips proxy auth; unique ports precede adapter capture; close/abort owns upstream and downstream. Actual TCP/UDP, HTTP and twelve-tunnel tests cover behavior.",
-   "sha256": "67fc67811d1db54e1287b7fd93bca557f4923b67e23d85ba596eb5da31df0fed"
+   "note": "Reviewed current pure authority/declaration grammar and compatibility functions; comment-only correction documents existing DR37 unrestricted destinations including literals and private addresses, while legacy declaration parsing stays wire-compatible.",
+   "sha256": "0dc2df28ce22f1ac391713e43dab5d3174d75c2ea610ec1335a021c94156af48"
   },
   {
    "path": "src/domain/errors.ts",
@@ -1702,33 +1702,13 @@
    "primary": null,
    "status": "CHANGED_WITH_ORACLE",
    "by": [
-    "DR17",
-    "MAC-240",
-    "MAC-241",
-    "MAC-619",
-    "MAC-620",
-    "MAC-621",
-    "MAC-622",
-    "MAC-623",
-    "P0V-103",
-    "P0V-104",
-    "P0V-105",
-    "P0V-106",
-    "P0V-81"
+    "DR38"
    ],
    "oracles": [
-    "MAC-240",
-    "MAC-241",
-    "MAC-620",
-    "MAC-621",
-    "MAC-622",
-    "P0V-103",
-    "P0V-104",
-    "P0V-105",
-    "P0V-106",
-    "P0V-81"
+    "DR38"
    ],
-   "sha256": "bc67891c8abf2d08d29d974bf74c8a059887aff6b8bae77a866ca63477005eaa"
+   "note": "Actual daemon entry shutdown uses explicit success/failure branches, closes native helper even on failure, returns non-zero on unknown VM end/helper failure/watchdog; verified image schema now enters required ready record publication. Controlled-boundary entry regressions are Linux evidence only.",
+   "sha256": "dbcaaa466578d6abde14cf718fe6c1039f3f7569b2d5cfb794cd9b68ed19f565"
   },
   {
    "path": "src/entry/personal-host.ts",
@@ -182366,39 +182346,13 @@
    "primary": null,
    "status": "CHANGED_WITH_ORACLE",
    "by": [
-    "MAC-220",
-    "MAC-221",
-    "MAC-222",
-    "MAC-240",
-    "MAC-241",
-    "MAC-412",
-    "MAC-619",
-    "MAC-620",
-    "MAC-621",
-    "MAC-622",
-    "MAC-623",
-    "P0V-103",
-    "P0V-104",
-    "P0V-105",
-    "P0V-106"
+    "DR38"
    ],
    "oracles": [
-    "MAC-220",
-    "MAC-221",
-    "MAC-222",
-    "MAC-240",
-    "MAC-241",
-    "MAC-412",
-    "MAC-620",
-    "MAC-621",
-    "MAC-622",
-    "P0V-103",
-    "P0V-104",
-    "P0V-105",
-    "P0V-106"
+    "DR38"
    ],
-   "note": "clauses declared by macos-platform.md's implementation table",
-   "sha256": "366e8c29c02a95f16eecfc30c75a9d6412c3f677c95851574781e412f4187933"
+   "note": "Reviewed full operation-owner flow: same-society open/resume/close share a queue and archive/maintenance see that fence; live endpoints must still prove imported mirror and matching persisted project binding; duplicate lease keys refuse without overwriting owners, end/reap releases only matching connection. Failure cannot poison later operations.",
+   "sha256": "236b5c6ce9bce2ef144ec952d429329b4ebf043e515a131c01829c4d2601dd79"
   },
   {
    "path": "src/platform/guest/identity.ts",
@@ -182676,13 +182630,13 @@
    "primary": null,
    "status": "CHANGED_WITH_ORACLE",
    "by": [
-    "DR37"
+    "DR38"
    ],
    "oracles": [
-    "DR37"
+    "DR38"
    ],
-   "note": "DR37 direct review of network and socket owner deltas: share-net retains filesystem/user/PID/seccomp boundaries, arbitrary destination/port forwarding preserves destination auth and strips proxy auth; unique ports precede adapter capture; close/abort owns upstream and downstream. Actual TCP/UDP, HTTP and twelve-tunnel tests cover behavior.",
-   "sha256": "7ca7a21fa6347d372477c9760b9d8b93e4c83bc92bb9a9e1a375c4adc4c27fe4"
+   "note": "Reviewed CONNECT run/boot/actor/incarnation ownership, dial cancellation and both socket lifetimes; DR37 already applies unrestricted host policy. Updated obsolete allowlist/443/private-address/FIFO-slot comments. Regression proves guest role/allow cannot authorize another actor and cannot narrow host policy.",
+   "sha256": "0c3c4325928947d54a1fc0b3886dca86dfd39c877f0e69fb595eba0721566180"
   },
   {
    "path": "src/platform/host/files.ts",
@@ -182793,21 +182747,13 @@
    "primary": null,
    "status": "CHANGED_WITH_ORACLE",
    "by": [
-    "MAC-301",
-    "MAC-320",
-    "MAC-330",
-    "MAC-331",
-    "MAC-601"
+    "DR38"
    ],
    "oracles": [
-    "MAC-301",
-    "MAC-320",
-    "MAC-330",
-    "MAC-331",
-    "MAC-601"
+    "DR38"
    ],
-   "note": "clauses declared by macos-platform.md's implementation table",
-   "sha256": "d701c3e68a0b2b3585a2c91de4ff86cc852d40c9e6791c86b2e8e7eefc3267b0"
+   "note": "Reviewed boot/phase cancellation/force/stop and observer paths. Required ready persistence precedes ready/watch and failure rejects startup, records failed and observes owned VM force; optional UI observers log without corrupting committed state. Existing death-observation and cleanup aggregation remain.",
+   "sha256": "bafdca444fd92919ea2b5de1c273a53dc8ad56fa8a4650d6ced3b6a5f69ca11a"
   },
   {
    "path": "src/platform/host/peer.ts",
@@ -182852,6 +182798,19 @@
    ],
    "note": "Read in full: host-record binding/bookmark/Git identity precedes already-running project settings observation; absent binding is empty, ambiguity/unknown is refusal. Real Git relocation/replacement and controlled settings tests pass. Bound first seed requires an already running app/guest, and native Mac NOT_RUN.",
    "sha256": "53c2c40d8a2860415fbc8f494b210ba0fed0f09e38b0392f099128d71be07a92"
+  },
+  {
+   "path": "src/platform/host/project-sync.ts",
+   "primary": null,
+   "status": "CHANGED_WITH_ORACLE",
+   "by": [
+    "DR38"
+   ],
+   "oracles": [
+    "DR38"
+   ],
+   "note": "Read full extracted project bind/import/export owner and compared to original callbacks: bookmark folder and Git identity checks, reread-under-record-writer, request keys, stream digests, pre-export identity recheck, actual result observation, and finally staging removal remain. No generic framework or alternate record authority.",
+   "sha256": "3206c4c2faf34e1b26e02a954f4ddc072eb2e2a9ad6a169afdf3b0a924c5e3d5"
   },
   {
    "path": "src/platform/host/project.ts",
@@ -182935,27 +182894,65 @@
    "primary": null,
    "status": "CHANGED_WITH_ORACLE",
    "by": [
-    "DR34"
+    "DR38"
    ],
    "oracles": [
-    "DR34"
+    "DR38"
    ],
-   "note": "Read in full: EgressHost gains dial=makePublicDial() so egress.connect resolves/screens/pins on the host, and the audit callback logs one journal line per decision; the placeholder/open lifecycle is untouched.",
-   "sha256": "14db37a7b7e2ee7ebab15e11481866235c7cb698d29671ea3a841aaf9b749142"
+   "note": "Reviewed composition and extracted behavior against original callbacks: ready publishes provisioning/image/schema under the process-lock writer in one record; explicit concrete coordinators retain Git/stream/archive owners. Shutdown closes admission, observes VM stop and egress outcomes separately, retains failures, always closes API sockets/listener and lock, and shares one result across callers.",
+   "sha256": "1e9058c6fa6aabd8e286b023f63359784dfdd6d61d82168740155ef6a6ba4f0f"
+  },
+  {
+   "path": "src/platform/host/session-gateway.ts",
+   "primary": null,
+   "status": "CHANGED_WITH_ORACLE",
+   "by": [
+    "DR38"
+   ],
+   "oracles": [
+    "DR38"
+   ],
+   "note": "Read full extracted history/settings gateway: project record and society identity checks precede guest requests; resume uses the same pre-update-safe queued start; repository identity verification and peer-finally cleanup remain.",
+   "sha256": "560bec8629f856ff077216a18c82ac1ef92311869e62143ee9792212a11f10aa"
+  },
+  {
+   "path": "src/platform/host/snapshot-coordinator.ts",
+   "primary": null,
+   "status": "CHANGED_WITH_ORACLE",
+   "by": [
+    "DR38"
+   ],
+   "oracles": [
+    "DR38"
+   ],
+   "note": "Read full state-disk coordinator: stopped/ready snapshot checks and clone/thaw/lease return share one queue with start/stop/pre-update snapshot; shutdown closes admission synchronously and queues observed stop; rejected work does not poison the tail. Existing retention and reserved update-id policy preserved. Architecture check exposed inherited raw directory listing after extraction: now uses existing host-owned listing/permission repair and refuses unobservable state rather than claiming an absent update snapshot.",
+   "sha256": "58c0b53fc648f9f099ca6cc9a33b5d436ff13ec26f228f5424e5d15f14fa5537"
   },
   {
    "path": "src/platform/host/snapshot.ts",
    "primary": null,
    "status": "CHANGED_WITH_ORACLE",
    "by": [
-    "DR25",
-    "DR28"
+    "DR38"
    ],
    "oracles": [
-    "Owned cleanup stopped snapshot"
+    "DR38"
    ],
-   "note": "Read in full: partial snapshot ownership spans clone/publication and discard; primary plus discard and cleanup-only outcomes are not success. Discard-removal control assertion-killed. Actual local-fixture snapshot regressions pass. Running-snapshot maintenance/control/society cleanup and clone/thaw failure composition remain open; no native VM, APFS or power-cut proof. P0-8: the snapshot prune removes each staged name through removeHostStaged's owner-bits repair, not a blind rmSync.",
-   "sha256": "02356a9b963a719a83989c139fefc7813dd6da6cbfba249d5b446edb5ab4d303"
+   "note": "Reviewed snapshot freeze/thaw/cleanup/publication flow. Each attempt now gets a random unique maintenance lease independent of visible snapshot id; cleanup remains on the acquiring peer. Required observed thaw and no-replace publication are preserved.",
+   "sha256": "ba841a1370979b6bd9167a5d520d2ba11c2a2387b260064cc95c15a987c632fd"
+  },
+  {
+   "path": "src/platform/host/transfers.ts",
+   "primary": null,
+   "status": "CHANGED_WITH_ORACLE",
+   "by": [
+    "DR38"
+   ],
+   "oracles": [
+    "DR38"
+   ],
+   "note": "Read full package/archive transfer extraction and compared to original effects: stable request-key staging, whole package store archive, validated streams, finally removal, host room observation, encrypted archive sink and idempotent finished publication retained. Architecture check exposed inherited raw publication probe after extraction: now observes through existing host-owned listing and refuses unobservable archive directory or non-file publication, never adopts a false absence.",
+   "sha256": "89571a169273f52edcfcd389e36b2d6b41beddccaba41af5787f4b1741aab4ef"
   },
   {
    "path": "src/platform/host/vz-driver.ts",
@@ -183370,13 +183367,13 @@
    "primary": null,
    "status": "CHANGED_WITH_ORACLE",
    "by": [
-    "DR34"
+    "DR38"
    ],
    "oracles": [
-    "DR34"
+    "DR38"
    ],
-   "note": "Read in full: v6 egress.connect validator unchanged in shape -- placeholderId/run/host/port plus declared role and a bounded grammar-checked allow list; the >256 check now reads EGRESS_ALLOW_MAX so the wire bound and the commit bound share one constant.",
-   "sha256": "29bf451fbf911f5b1d7072f8da8f01e8646b7bb2c399aefed950c1528f5ee4b3"
+   "note": "Reviewed protocol-6 CONNECT params validation and comments: role/allow remain self-declared compatibility metadata, never independent host policy or role authority. Wire fields, grammar and protocol version unchanged.",
+   "sha256": "eb41236df986ba5fff4ae3966286391d72b781ba66b95b5b7d01d694ce04675b"
   },
   {
    "path": "src/protocol/host-history.ts",

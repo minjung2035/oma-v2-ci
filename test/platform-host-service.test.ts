@@ -106,6 +106,70 @@ test("MAC-320: the service's end drains and powers off, and how it ended is reco
   assert.equal(readHostRecord(forced.recordPath)!.lastStop, "forced");
 });
 
+for (const failed of ["egress", "stop"] as const) test(`DR38: shutdown ${failed} failure still closes the API and releases its lock`, async t => {
+  const { service, call, driver, runDir, markShut } = await world(t);
+  await call("engine.start");
+  const socket = connect(join(runDir, "hostapi.sock"));
+  await new Promise<void>((resolve, reject) => { socket.once("connect", resolve); socket.once("error", reject); });
+  const closed = new Promise<void>(resolve => socket.once("close", () => resolve()));
+  t.after(() => socket.destroy());
+  // The test owns leaked resources even when running the failing old code.
+  t.after(() => {
+    const api = Reflect.get(service, "api") as Server;
+    if (api.listening) api.close();
+    (Reflect.get(service, "lock") as ProcessLock).close();
+  });
+  if (failed === "egress") t.mock.method(service.egress, "stop", async () => { throw new Error("egress stop failed"); });
+  else t.mock.method(service.lifecycle, "stop", async () => { throw new Error("VM stop unknown"); });
+  markShut();
+  await assert.rejects(service.shutdown(), failed === "egress" ? /egress stop failed/ : /VM stop unknown/);
+  await Promise.race([closed, new Promise((_, reject) => { const timer = setTimeout(() => reject(new Error("API client leaked")), 300); timer.unref(); })]);
+  const lock = ProcessLock.tryAcquire(join(runDir, "omahostd.lock"));
+  assert.notEqual(lock, null, "shutdown leaked its process lock");
+  lock!.close();
+  if (failed === "egress") assert.equal(driver.running, null, "egress failure skipped VM stop");
+});
+
+test("DR38: missing mandatory host record rejects ready and stops the running VM", async t => {
+  const { service, recordPath, driver } = await world(t);
+  rmSync(recordPath);
+  await assert.rejects(service.lifecycle.start());
+  assert.equal(service.lifecycle.state, "failed");
+  assert.equal(driver.running, null);
+  assert.equal(driver.forced, 1);
+});
+
+test("DR38: same-name snapshots on different Host API connections are serialized through thaw and lease return", async t => {
+  let release!: () => void, entered!: () => void;
+  const started = new Promise<void>(resolve => { entered = resolve; });
+  let held = false;
+  const mutate = (peer: FramedPeer): void => {
+    const methods = new Map<string, string>();
+    peer.onFrame(frame => { if (typeof frame.id === "string" && typeof frame.method === "string") methods.set(frame.id, frame.method); });
+    const answer = peer.answer.bind(peer);
+    peer.answer = (id, result) => {
+      if (methods.get(id) === "society.list" && !held) {
+        held = true; release = () => answer(id, result); entered();
+      } else answer(id, result);
+    };
+  };
+  const { call, dir, driver } = await world(t, d => writeFileSync(join(d, "state.img"), "disk"), mutate, undefined,
+    d => ({ snapshotsDir: join(d, "snapshots"), statePath: join(d, "state.img"), snapshotClone: copyFileSync }));
+  await call("engine.start");
+  const first = call("snapshot.create", { id: "same" });
+  await started;
+  const second = call("snapshot.create", { id: "same" });
+  try {
+    await new Promise(resolve => setTimeout(resolve, 30));
+    assert.equal(driver.calls.filter(method => method === "maintenance.begin").length, 1);
+  } finally { release(); }
+  const answers = await Promise.all([first, second]);
+  assert.ok(answers.every(answer => answer.ok === true), JSON.stringify(answers));
+  assert.deepEqual(readdirSync(join(dir, "snapshots")).sort(), ["00000000-same.img", "00000001-same.img"]);
+  assert.deepEqual(driver.calls.filter(method => method === "maintenance.begin" || method === "maintenance.end"),
+    ["maintenance.begin", "maintenance.end", "maintenance.begin", "maintenance.end"]);
+});
+
 test("MAC-211/MAC-712: after the guest reboots, no placeholder of the last boot is kept", async t => {
   const { service, driver, call, until } = await world(t);
   await call("engine.start");

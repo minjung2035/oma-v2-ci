@@ -1388,3 +1388,42 @@ marker 없는 legacy 세대는 이전 버전 독자가 없다는 증거가 없�
 fd가 없으면 Pi의 installer를 background로 시작한다. 기존 Pi autocomplete provider가 다음
 요청에서 설치된 경로를 받아 recursive/fuzzy completion을 복구한다. UI init은 다운로드를
 기다리지 않는다. 별도 파일 검색 구현이나 Pi tool installer의 전역 교체를 만들지 않는다.
+
+## DR38 — host·guest 수명 소유와 필수 ready 기록
+
+2026-10-09 Human이 제시한 여섯 가지 문제를 수정한다. maintenance key는 connection 소유의
+lease다. 같은 key의 재획득은 `REQUEST_KEY_REUSED`, 다른 connection의 해제는 `AUTH_FAILED`다.
+연결 종료는 그 연결의 lease만 해제한다. snapshot의 표시 ID와 lease ID를 분리하여 매 작업에
+고유 key를 만들고, HostService의 snapshot·pre-update snapshot·engine start/stop을 한 queue에서
+직렬화한다. thaw와 lease 해제가 끝난 뒤 다음 작업으로 넘어간다. shutdown은 새 작업 admission을
+동기적으로 닫는다. 실패한 작업은 다음 작업의 queue를 망가뜨리지 않는다.
+
+guest의 같은 society에 대한 open/resume/close는 동일한 operation owner를 사용한다.
+maintenance와 archive도 이 owner를 확인한다. 이미 실행 중인 society를 열 때에도 imported
+project mirror와 기존 project binding을 검증한다. binding이 다른 프로젝트를 가리키거나
+관측되지 않으면 running 성공을 반환하지 않는다.
+
+VM ready에 필요한 host record 게시를 optional state observer에서 분리한다. provisioning,
+image identity, 검증된 image의 highest schema를 ready 전 하나의 record publication으로
+기록한다. 실패하면 startup을 reject하고 VM의 강제 종료를 관측한다. state는 failed로 남는다.
+UI·egress pool 등의 optional observer 실패는 기록하며 이미 확정된 VM state를 바꾸지 않는다.
+
+HostService shutdown은 VM stop과 egress stop의 실패를 모두 보존한다. 어느 쪽 실패에도 Host API
+연결·listener와 process lock을 정리한다. 데몬은 shutdown/helper 종료 실패를 stderr에 기록하고
+non-zero로 종료한다. watchdog 종료도 non-zero다. 관측하지 못한 VM 종료를 성공으로 바꾸지 않는다.
+
+네트워크는 Human이 승인한 DR37의 host-owned unrestricted 정책을 유지한다. protocol 6의
+guest role/allow는 호환용 선언이며 host 권한 정책의 증거가 아니다. 선언으로 host-issued run,
+boot, actor, incarnation 검사를 우회하거나 provider credential의 목적지를 바꿀 수 없다.
+과거 allowlist·443·사설 주소 제한을 현재 동작으로 설명하던 주석과 문서를 정정한다.
+
+HostService는 조립·record publication·수명 관리를 소유한다. 프로젝트 bind/import/export는
+ProjectSyncCoordinator, guest history/settings는 SessionGateway, state-disk operation은
+SnapshotCoordinator, package/archive transfer는 HostTransfers로 옮긴다. 기존 Git identity
+재검사·stream 검증·staging cleanup·archive 암호화·pre-update rollback point는 보존한다.
+oma-society·ReviewModule·계약 metadata의 추가 정리는 이 수정 뒤 작성할 계획 범위다.
+
+named `DR38` 회귀는 중복 lease, 외부 connection의 해제, running binding, open/close 순서,
+실패 후 queue 재사용, API/lock 정리, 필수 ready 실패와 optional observer 실패, 같은 이름의
+Host API snapshot 직렬화, role/allow의 권한 부재, 데몬 종료 코드를 검증한다. Linux의 LocalDriver와
+controlled native boundary를 사용한다. macOS Virtualization.framework/APFS native 실행 증거는 아니다.

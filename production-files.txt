@@ -14007,11 +14007,15 @@ src/platform/host/lifecycle.ts
 src/platform/host/peer.ts
 src/platform/host/personal-histories.ts
 src/platform/host/personal-seed.ts
+src/platform/host/project-sync.ts
 src/platform/host/project.ts
 src/platform/host/record.ts
 src/platform/host/resolver.ts
 src/platform/host/service.ts
+src/platform/host/session-gateway.ts
+src/platform/host/snapshot-coordinator.ts
 src/platform/host/snapshot.ts
+src/platform/host/transfers.ts
 src/platform/host/vz-driver.ts
 src/platform/package-archive.ts
 src/platform/product-text.ts
