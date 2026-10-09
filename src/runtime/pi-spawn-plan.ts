@@ -173,7 +173,6 @@ function omaEnvironment(options: PiAdapterOptions, inside: PathView): Record<str
     // P0V-78: the streams the CLI prepares are read only up to these.
     OMA_CONTEXT_BYTES: String(options.limits.contextBytes),
     OMA_BUNDLE_BYTES: String(options.limits.bundleBytes),
-    OMA_WORKSPACE_BYTES: String(options.profile.workspaceBytes),
     OMA_MAIL_ARCHIVE: inside(options.paths.mailArchive),
     // mail-v1: only Resident engines reach this builder; the Principal's host
     // engine is composed in tui/session.ts and gets neither of these.
@@ -207,21 +206,12 @@ function omaEnvironment(options: PiAdapterOptions, inside: PathView): Record<str
  * FI-1: Git commits as the actor, at the address its mail carries, so a
  * commit needs no `-c user.*` (the editor and prompt are RESIDENT_ENVIRONMENT's).
  *
- * FI-5: the unit's bounds, because nothing inside shows them honestly: there
- * is no cpuset, so `nproc` counts the host's cores under a CPUQuota. A build
- * tool reads `-j$OMA_CPUS`; OMA sets no tool's parallelism for it. */
+ * DR37: there is no OMA CPU/memory/task hint or execution quota. */
 function residentHints(options: PiAdapterOptions, actor: Actor): Record<string, string> {
   const address = actorAddress(actor, options.society);
-  const resources = options.profile.resources;
   return {
-    GIT_AUTHOR_NAME: actor, GIT_AUTHOR_EMAIL: address, GIT_COMMITTER_NAME: actor, GIT_COMMITTER_EMAIL: address,
-    ...(resources === undefined ? {} : {
-      // A partial CPU rounds up: the quota is a share of time, not of cores,
-      // and -j1 under 150% would leave half of it idle.
-      OMA_CPUS: String(Math.max(1, Math.ceil(resources.cpuQuotaPercent / 100))),
-      OMA_MEMORY_BYTES: String(resources.memoryBytes),
-      OMA_TASKS: String(resources.tasks),
-    }),
+    GIT_AUTHOR_NAME: actor, GIT_AUTHOR_EMAIL: address,
+    GIT_COMMITTER_NAME: actor, GIT_COMMITTER_EMAIL: address,
   };
 }
 

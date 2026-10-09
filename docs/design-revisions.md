@@ -1342,3 +1342,49 @@ owned-state 정적 규칙은 symbol alias와 resolved local callee의 문자열 
 10.0.16으로 정확히 고정했다. OMA는 SMTP가 아닌 stream transport를 사용하며, 외부 메일을
 mailparser로 받아들이는 경로는 없다. 공개 advisory의 일반적인 원격 공격 가능성을 OMA의
 확인된 도달 경로로 주장하지 않는다. 기존 MIME/frozen-fact 회귀와 새 npm audit 결과로 검증한다.
+
+
+## DR37 — 사용자가 지정한 네트워크·자원 제한 제거와 기능 복구
+
+2026-10-09 Human은 SC-01/02/03/04/05/20의 자원 제한, SC-31의 quota를 제거하고
+SC-23/26/30/32를 해결하도록 명시했다. 이 결정은 SB-004/DR34의 인터넷 차단·443·allowlist·
+사설 주소 차단·터널/시간 제한, MAC-203의 NIC 없음, S-01의 Worker/검사 자원 cap과
+저장량/agent-count admission을 대체한다. P0의 현재 권한 확인, 수명 소유, 효과 전 검증,
+영속 사실 보존, 파일 containment와 불확실성의 보존은 계속 적용한다.
+
+Worker와 integration checker는 filesystem/pid/user 격리를 유지하고 `--share-net`으로
+TCP·UDP를 이용한다. HTTP proxy는 absolute HTTP와 임의 포트 CONNECT를 전달하며 DNS의
+사설/loopback/literal IP도 접속한다. 프록시의 기본 tunnel/handshake/dial/idle cap은 없다.
+Worker의 loopback bridge는 커널이 선택한 포트를 adapter 등록 전에 게시한다.
+macOS VM은 Virtio NAT NIC를 갖는다. guest image에는 `platform/guest/network/80-oma.network`를
+`/etc/systemd/network/80-oma.network`에 설치하고 virtio_net, systemd-networkd/resolved 및
+`/etc/resolv.conf -> /run/systemd/resolve/resolv.conf`를 포함한다. guesthost는 networkd/resolved를
+시작하되 화면 readiness가 DHCP 완료를 기다리지는 않는다.
+
+memory/tasks/CPU/tmp/workspace/staging/check-timeout과 storage/agent count를 OMA admission이나
+systemd property로 부과하지 않는다. systemd의 finite DefaultTasksMax도 Worker와 checker의
+`TasksMax=infinity`로 해제한다. 새 기본 선언은 0이고 과거 양수 선언·accepted spec은
+재작성하지 않고 읽는다. quota용 generated-name 배제는 없다. kernel/디스크의 실제 용량과
+명령 자체의 오류는 실행 결과로 관측한다. Git quarantine의 prlimit/size/timeout/silence cap도
+제거하며 broker lifetime signal·namespace lease로 종료를 소유한다. 중단 시 process-tree 종료 소유는 유지한다.
+
+MCP는 npx/npm server, credential command, requestHeadersCommand, custom CA, OAuth와 autoAuth를
+사용하고 proxy의 install이 engine의 OMA config 파일에 실제 저장한다. config destination을
+programmatic config와 함께 명시하여 upstream의 무조건 install 거절을 해제한다. 웹은 기존
+4개 tool surface를 유지하고 commands/shortcuts/browser exec, git/gh clone, native media,
+curator/summary 및 answer fetch를 복구한다. Human의 workflow/fetch/domain 설정을 보존한다.
+호스트 keyring/cookies/ADC와 다른 에이전트의 전역 설정 자동 discovery는 이 결정 범위 밖이다.
+
+새 package generation은 reader-lease marker를 게시한다. engine이 처음 읽기 전에 directory
+inode의 shared flock을 잡으며 reload로 남은 callback/late import 때문에 exit까지 유지한다.
+metadata index의 단기 읽기는 별도 shared lease를 읽기 직후 닫아서 상주 publisher가 모든 세대를
+영구 보유하지 않는다. publication owner는 current를 제외하고 exclusive flock을 획득한 세대를 잠금 유지 중 수거한다.
+SIGKILL도 kernel이 마지막 reader descriptor를 닫은 뒤에만 수거를 허용한다.
+수거 시작은 `.collecting-p-<digest>` rename과 parent fsync로 먼저 기록하고, 수거 도중 죽으면
+marker가 지워진 부분 트리도 다음 수거가 이어서 정리한다. 이 계약 전의
+marker 없는 legacy 세대는 이전 버전 독자가 없다는 증거가 없어 자동 삭제하지 않는다.
+고정 횟수·세대 나이·PID 관측은 회수의 근거로 사용하지 않는다.
+
+fd가 없으면 Pi의 installer를 background로 시작한다. 기존 Pi autocomplete provider가 다음
+요청에서 설치된 경로를 받아 recursive/fuzzy completion을 복구한다. UI init은 다운로드를
+기다리지 않는다. 별도 파일 검색 구현이나 Pi tool installer의 전역 교체를 만들지 않는다.

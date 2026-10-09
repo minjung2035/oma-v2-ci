@@ -10,6 +10,8 @@ X-OMA-Owner=@STATE@
 StartLimitIntervalSec=60s
 StartLimitBurst=5
 [Service]
+# DR37: disable the manager's finite DefaultTasksMax as well as OMA caps.
+TasksMax=infinity
 Type=exec
 Environment=OMA_PROFILE_HEX=@PROFILE_HEX@
 Environment=OMA_RESOURCES_HEX=@RESOURCES_HEX@
@@ -25,9 +27,6 @@ RestartSteps=4
 RestartMaxDelaySec=12s
 KillMode=control-group
 TimeoutStopSec=10s
-MemoryMax=@MEMORY_BYTES@
-TasksMax=@TASKS@
-CPUQuota=@CPU_QUOTA@%
 OOMPolicy=kill
 UMask=0077
 StandardOutput=journal

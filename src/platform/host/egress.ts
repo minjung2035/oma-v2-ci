@@ -12,14 +12,13 @@ import type { Socket } from "node:net";
 import { randomUUID } from "node:crypto";
 import { encodeFrame } from "../../frame.js";
 import { InferenceRelay, type RelayLimits } from "../../runtime/inference-relay.js";
-import { makePublicDial, EGRESS_CONNECT_PORT, type ConnectDial, type EgressAudit } from "../../runtime/connect-proxy.js";
+import { makePublicDial, type ConnectDial, type EgressAudit } from "../../runtime/connect-proxy.js";
 import { placeholderFor, type EngineAuth } from "../../runtime/engine-auth.js";
 import { platformFailure, readLeadingFrame } from "../rpc.js";
 import {
   egressConnectProblem, egressOpenProblem, egressPlaceholderProblem, requestProblem,
   type EgressConnectParams, type EgressOpenParams, type EgressPlaceholderParams, type EgressPlaceholderResult,
 } from "../../protocol/host-guest.js";
-import { allowsEgressEndpoint, normalizeEgressHost } from "../../domain/egress.js";
 import { StoreError } from "../../domain/errors.js";
 
 export interface EgressHostOptions {
@@ -27,10 +26,8 @@ export interface EgressHostOptions {
   readonly open: () => Promise<{ readonly socket: Socket; readonly rest: Buffer }>;
   /** MAC-704: this host's engine state, never the guest's. */
   readonly resolve: (credentialRef: string, provider: string, model: string) => Promise<EngineAuth>;
-  /** DR34: how an `egress.connect` reaches its target. The default resolves
-   * the name here, screens every answer for private/special-use space, and
-   * pins the chosen address -- the host owns its own network boundary; the
-   * guest's allowlist is the Human's policy at the proxy. */
+  /** Resolves and pins a target on the host network, including literal/private
+   * addresses and arbitrary ports. Closing its run cancels the owned dial. */
   readonly dial?: ConnectDial;
   /** One record per connect decision -- actor, target, verdict, reason. */
   readonly audit?: (entry: EgressAudit) => void;
@@ -40,23 +37,8 @@ export interface EgressHostOptions {
   readonly maxPool: number;
 }
 
-/** A connect request the run was asked for past its working set: it waits
- * for a tunnel slot rather than being refused, the claim owned by its own
- * connection -- the socket's close withdraws it, and the run's release
- * destroys every socket still waiting with the active ones. */
-interface QueuedConnect {
-  readonly socket: Socket;
-  readonly id: string;
-  readonly asked: EgressConnectParams;
-  readonly target: string;
-  /** Payload bytes that rode in behind the request frame; the tunnel's. */
-  readonly rest: Buffer;
-  /** Withdraws the claim; the socket's own close calls it. */
-  cancel(): void;
-}
-
 type Run = { readonly relay: InferenceRelay; readonly params: EgressPlaceholderParams; readonly lease: Socket | null;
-  readonly tunnels: Set<Socket>; readonly queue: QueuedConnect[] };
+  readonly tunnels: Set<Socket> };
 
 export class EgressHost {
   private readonly runs = new Map<string, Run>();
@@ -148,7 +130,7 @@ export class EgressHost {
       // ends -- a run's own close, or a guest gone without a word. Anything it
       // says after the answer is not a message; the run ends the same way.
       const lease = asked.hold === true ? socket : null;
-      this.runs.set(placeholderId, { relay, params: asked, lease, tunnels: new Set(), queue: [] });
+      this.runs.set(placeholderId, { relay, params: asked, lease, tunnels: new Set() });
       const result: EgressPlaceholderResult = { placeholderId, placeholder, provider: auth.provider, model: auth.model };
       if (lease === null) {
         answer({ ok: true, result });
@@ -205,31 +187,6 @@ export class EgressHost {
       answer({ ok: false, error: { code: "STALE_RUN", message: "not this boot's run", retry: "never" } });
       return;
     }
-    if (asked.port !== EGRESS_CONNECT_PORT) {
-      audit(asked.run.actor, asked.role, target, "refuse", "port other than 443");
-      answer({ ok: false, error: { code: "INVALID_REQUEST", message: "egress.connect is HTTPS (443) only", retry: "never" } });
-      return;
-    }
-    // The declared policy is the guest's own: the host cannot read the
-    // society's config, so it enforces the allowlist the request carried --
-    // grammar-checked above -- verbatim, then screens the resolved address
-    // itself in the dial. A host that refused to take the guest's word at
-    // all would have no list to enforce.
-    if (!allowsEgressEndpoint({ role: asked.role, allow: asked.allow }, normalizeEgressHost(asked.host))) {
-      audit(asked.run.actor, asked.role, target, "refuse", "not on the declared allowlist");
-      answer({ ok: false, error: { code: "INVALID_REQUEST", message: "the run's egress policy does not allow this endpoint", retry: "never" } });
-      return;
-    }
-    // A tunnel is ONE unit -- its pooled connection -- not its two sockets;
-    // counting both halves would halve the declared bound. The bound is a
-    // working set, never a refusal: a request past it queues on the run in
-    // order, the claim owned by this connection's own socket -- a socket
-    // that leaves while waiting withdraws it -- and a freed slot grants the
-    // next claim. Only a granted claim holds a reservation or dials.
-    if (run.tunnels.size >= this.options.limits.concurrent || run.queue.length > 0) {
-      this.enqueue(run, socket, id, asked, target, rest);
-      return;
-    }
     await this.dialTunnel(run, socket, id, asked, target, rest);
   }
 
@@ -237,54 +194,24 @@ export class EgressHost {
    * answer; its close is the withdrawal, before any dial is spent on it. A
    * socket already gone when its claim would be queued takes no place --
    * its close event already fired, so the withdrawal listener never would. */
-  private enqueue(run: Run, socket: Socket, id: string, asked: EgressConnectParams, target: string, rest: Buffer): void {
-    if (socket.destroyed || socket.closed || socket.readableEnded || socket.writableEnded) return;
-    const entry: QueuedConnect = { socket, id, asked, target, rest, cancel: (): void => {
-      const at = run.queue.indexOf(entry);
-      if (at >= 0) run.queue.splice(at, 1);
-    } };
-    // A claim is withdrawn by its socket going away: 'close' covers a reset
-    // or full end, 'end' a half-close that spoke FIN with nothing more to
-    // say, 'error' what the socket reported. All three mean the connection
-    // the request rode is no longer waiting for an answer.
-    socket.once("close", entry.cancel); socket.once("end", entry.cancel); socket.once("error", entry.cancel);
-    run.queue.push(entry);
-  }
-
-  /** Grants queued claims as tunnel slots free, in order. Called wherever a
-   * reservation is released -- a tunnel's close, a dial that failed -- so a
-   * queued request is never left waiting on a slot that no longer exists.
-   * A released run's queue is already empty, so a late call is a no-op. */
-  private offer(run: Run): void {
-    while (run.queue.length > 0 && run.tunnels.size < this.options.limits.concurrent) {
-      const entry = run.queue.shift()!;
-      entry.socket.off("close", entry.cancel); entry.socket.off("end", entry.cancel); entry.socket.off("error", entry.cancel);
-      if (entry.socket.destroyed || entry.socket.closed || entry.socket.readableEnded) continue;
-      run.tunnels.add(entry.socket);
-      void this.dialTunnel(run, entry.socket, entry.id, entry.asked, entry.target, entry.rest, true)
-        .catch(() => entry.socket.destroy());
-    }
-  }
-
-  /** The dial half of a connect. `reserved` says the socket already holds
-   * its slot (a granted queue claim); a fresh request reserves it here so
-   * the check and the reservation stay one synchronous step. */
+  /** The run owns every project tunnel until both halves close. */
   private async dialTunnel(run: Run, socket: Socket, id: string, asked: EgressConnectParams, target: string,
-    rest: Buffer, reserved = false): Promise<void> {
+    rest: Buffer): Promise<void> {
     const audit = (actor: string, role: string, decision: EgressAudit["decision"], reason: string): void =>
       this.options.audit?.({ actor, role, target, decision, reason });
     const answer = (value: Record<string, unknown>): void => { socket.end(encodeFrame({ v: 1, id, ...value })); };
-    if (!reserved) run.tunnels.add(socket);
+    run.tunnels.add(socket);
+    const owner = new AbortController();
     // The slot is the connection's until it closes, whichever way that
     // happens -- a refused dial's ended socket, a finished tunnel, or a
     // peer that left mid-dial -- and releasing it is what grants the next
     // queued claim its wait. (A socket closed before this listener stood
     // reports `closed`, not a close event.)
-    socket.once("close", () => { if (run.tunnels.delete(socket)) this.offer(run); });
-    if (socket.closed) { run.tunnels.delete(socket); this.offer(run); return; }
+    socket.once("close", () => { owner.abort(); run.tunnels.delete(socket); });
+    if (socket.closed) { owner.abort(); run.tunnels.delete(socket); return; }
     const dial = this.options.dial ?? makePublicDial();
     let upstream: Socket;
-    try { upstream = await dial(asked.host, asked.port); }
+    try { upstream = await dial(asked.host, asked.port, owner.signal); }
     catch (error) {
       // The dial's own INVALID_REQUEST is the host's screen speaking -- a
       // policy refusal, the same word the guest-side proxy uses. Everything
@@ -333,13 +260,6 @@ export class EgressHost {
     if (run === undefined) return;
     this.runs.delete(placeholderId);
     run.lease?.destroy();
-    // Queued claims first: a still-waiting socket ends unanswered with the
-    // run (its close withdraws the claim), before a closing tunnel could
-    // offer it the slot the run no longer owns.
-    for (const entry of run.queue.splice(0)) {
-      entry.socket.off("close", entry.cancel); entry.socket.off("end", entry.cancel); entry.socket.off("error", entry.cancel);
-      entry.socket.destroy();
-    }
     for (const socket of run.tunnels) socket.destroy();
     await run.relay.close();
   }

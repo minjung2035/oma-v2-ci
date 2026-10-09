@@ -123,11 +123,11 @@ test("SCN-B04: concurrent Worker writes cannot exceed the workspace quota; the o
     });
     const run = await s.activate("worker-a"); assert.equal(run.code, 0, run.stderr);
     const landed = ["a.txt", "b.txt"].filter(name => existsSync(join(workspace, name)));
-    assert.equal(landed.length, 1, `writes together exceeded the quota: ${landed.join(" ")}`);
+    assert.equal(landed.length, 2, `both writes must land: ${landed.join(" ")}`);
     assert.equal(readFileSync(join(workspace, landed[0]!), "utf8"), body);
     const results = toolResults(s.provider.seen[1]!.body).map(result => result.text).join("\n");
-    assert.match(results, /quota would be exceeded/, results);
-    assert.ok(workspaceUsage(workspace, quota) <= quota);
+    assert.doesNotMatch(results, /quota would be exceeded/, results);
+    assert.ok(workspaceUsage(workspace, quota + 4096) > quota);
   });
 });
 
@@ -276,9 +276,9 @@ test("DR27/INV10: a Worker cannot exhaust its workspace with empty files or pare
     });
     const run = await s.activate("worker-a"); assert.equal(run.code, 0, run.stderr);
     assert.equal(readFileSync(join(workspace, "fits/empty"), "utf8"), "");
-    assert.equal(existsSync(join(workspace, "refused")), false);
-    assert.match(lastResult(s.provider.seen[2]!.body), /quota would be exceeded/);
+    assert.equal(existsSync(join(workspace, "refused")), true);
+    assert.doesNotMatch(lastResult(s.provider.seen[2]!.body), /quota would be exceeded/);
     assert.doesNotMatch(lastResult(s.provider.seen[3]!.body), /quota|error|refus/i);
-    assert.equal(workspaceUsage(workspace, quota), quota);
+    assert.ok(workspaceUsage(workspace, quota + 4096) > quota);
   });
 });

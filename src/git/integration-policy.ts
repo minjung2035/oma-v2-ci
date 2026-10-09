@@ -102,8 +102,8 @@ export function assertCheckResources(check: FrozenCheck): void {
   if (checkShape(check) !== null || check.argv[0] === "")
     throw new StoreError("UNSUPPORTED_PROFILE", "integration check profile is invalid");
   const resources = check.resources;
-  if (!resources || check.timeoutSeconds !== resources.checkTimeoutSeconds ||
-      (check.tmpBytes !== undefined && check.tmpBytes !== resources.tmpBytes))
+  if (resources && (check.timeoutSeconds !== resources.checkTimeoutSeconds ||
+      (check.tmpBytes !== undefined && check.tmpBytes !== resources.tmpBytes)))
     throw new StoreError("UNSUPPORTED_PROFILE", "integration checks require their complete resource profile");
   if (!Number.isSafeInteger(check.timeoutSeconds * 1000 + 60_000))
     throw new StoreError("UNSUPPORTED_PROFILE", "integration check deadline cannot be enforced");

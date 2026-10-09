@@ -1,27 +1,10 @@
-/** UX-08, DR34 (the SB-004 exception): a small HTTP CONNECT proxy on one unix
- * socket, owned by the runner for the length of one delivery. It is the only
- * thing a confined Resident's HTTP_PROXY/HTTPS_PROXY/ALL_PROXY point at, via
- * the extension's loopback forwarder; on macOS its `dial` is the host's
- * `egress.connect`, on Linux a direct pinned dial.
- *
- * The proxy is the policy point:
- *  - the request must be CONNECT authority-form (parseConnectTarget); every
- *    other request, malformed framing and oversized heads are refused or
- *    destroyed, and after the 200 the socket is raw -- nothing re-parses it,
- *    so a second request cannot hide behind the first.
- *  - the port is the wire's, not the caller's: only 443 tunnels (HTTPS;
- *    SSH/22, SOCKS and raw TCP stay out of v0.1).
- *  - the name must be on the role's resolved allowlist; literals cannot match
- *    because no entry can name one.
- *  - the dial resolves the name here, screens every answer, and pins the
- *    chosen address -- a rebinding answer after the check connects nowhere.
- *  - headers end at the proxy: nothing of the CONNECT request reaches the
- *    target, so no credential a Resident was given (or invented) crosses.
- *
- * Audit: one record per CONNECT, allow or refuse, carrying actor, role,
- * target and reason -- never request bytes, headers or credentials.
- */
-import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
+/** Delivery-owned HTTP/CONNECT forwarding. Full destination/port access;
+ * host resolution pins one address per dial without excluding local networks.
+ * Plain HTTP forwards payload and destination authentication, while stripping
+ * proxy authentication. CONNECT carries raw bytes after its response. Neither
+ * path imposes concurrency or elapsed-time limits. Close owns both halves.
+ * Audit records contain destination authority only, never query/credentials. */
+import { Agent, createServer, request, type IncomingHttpHeaders, type IncomingMessage, type Server, type ServerResponse } from "node:http";
 import { connect as netConnect, isIP, type Socket } from "node:net";
 import { lookup as dnsLookup } from "node:dns";
 import { chmodSync } from "node:fs";
@@ -35,14 +18,14 @@ export const EGRESS_CONNECT_PORT = 443;
  * set the egress pool provisions for (host/egress's four spare connections
  * per run). It is a working-set bound, never a refusal: requests beyond it
  * queue in order and are granted as established tunnels close. */
-export const CONNECT_TUNNELS = 4;
+export const CONNECT_TUNNELS = Number.POSITIVE_INFINITY;
 /** A CONNECT request must be complete and its target answered within this
  * budget; the request itself is a few hundred bytes, so this is generous. */
-export const CONNECT_HANDSHAKE_MS = 15_000;
+export const CONNECT_HANDSHAKE_MS = 0;
 /** Silence budget of an established tunnel. */
-export const CONNECT_IDLE_MS = 120_000;
+export const CONNECT_IDLE_MS = 0;
 /** Per-address dial deadline once a name has resolved. */
-export const CONNECT_DIAL_MS = 15_000;
+export const CONNECT_DIAL_MS = 0;
 /** CONNECT needs no headers beyond Host; this still admits a verbose client. */
 const CONNECT_HEADER_BYTES = 8192;
 /** Backstop for an idle keep-alive socket: every response path already sends
@@ -65,7 +48,7 @@ export interface EgressAudit {
 /** One upstream connection: a name + port in, a connected socket out. The
  * production dialer resolves and screens; on macOS the runner substitutes the
  * host's `egress.connect` request, and tests inject an oracle. */
-export type ConnectDial = (host: string, port: number) => Promise<Socket>;
+export type ConnectDial = (host: string, port: number, signal?: AbortSignal) => Promise<Socket>;
 
 /* ---- the SSRF screen ---------------------------------------------------- */
 
@@ -200,7 +183,7 @@ export interface PublicDialSeams {
    * production is dns.lookup({all, verbatim}) so resolver order is kept. */
   readonly lookup?: (host: string) => Promise<readonly { address: string; family: number }[]>;
   /** TCP connect to one literal address; production is net.connect. */
-  readonly connect?: (address: string, port: number) => Promise<Socket>;
+  readonly connect?: ConnectDial;
   readonly timeoutMs?: number;
 }
 
@@ -210,9 +193,9 @@ function defaultLookup(host: string): Promise<readonly { address: string; family
       error === null ? resolve(addresses) : reject(error)));
 }
 
-function defaultConnect(timeoutMs: number): (address: string, port: number) => Promise<Socket> {
-  return (address, port) => new Promise((resolve, reject) => {
-    const socket = netConnect({ host: address, port });
+function defaultConnect(timeoutMs: number): ConnectDial {
+  return (address, port, signal) => new Promise((resolve, reject) => {
+    const socket = netConnect({ host: address, port, ...(signal ? { signal } : {}) });
     socket.setTimeout(timeoutMs);
     socket.once("timeout", () => { socket.destroy(); reject(new StoreError("DEADLINE_EXCEEDED", `egress connect to ${address}:${port} timed out`)); });
     socket.once("connect", () => { socket.setTimeout(0); resolve(socket); });
@@ -228,17 +211,17 @@ function defaultConnect(timeoutMs: number): (address: string, port: number) => P
 export function makePublicDial(seams: PublicDialSeams = {}): ConnectDial {
   const lookup = seams.lookup ?? defaultLookup;
   const connect = seams.connect ?? defaultConnect(seams.timeoutMs ?? CONNECT_DIAL_MS);
-  return async (host, port) => {
+  return async (host, port, signal) => {
+    signal?.throwIfAborted();
     const answers = await lookup(host);
-    const usable = answers.filter(answer => isPublicConnectAddress(answer.address));
-    if (usable.length === 0) {
-      if (answers.length === 0)
-        throw new StoreError("BROKER_UNAVAILABLE", `egress destination ${host} resolves to no address`);
-      throw new StoreError("INVALID_REQUEST", `egress destination ${host} resolves only to private or special-use addresses`);
-    }
+    signal?.throwIfAborted();
+    const usable = answers;
+    if (usable.length === 0)
+      throw new StoreError("BROKER_UNAVAILABLE", `egress destination ${host} resolves to no address`);
     let last: unknown;
     for (const { address } of usable) {
-      try { return await connect(address, port); }
+      signal?.throwIfAborted();
+      try { return await connect(address, port, signal); }
       catch (error) { last = error; }
     }
     throw last instanceof Error ? last : new StoreError("BROKER_UNAVAILABLE", `egress connect to ${host}:${port} failed`);
@@ -355,18 +338,40 @@ export class ConnectProxy {
     // and whatever else fails inside one ends the connection, never the
     // process.
     server.on("request", (req: IncomingMessage, res: ServerResponse) => {
-      // Only CONNECT exists here: a plain request gets a refusal with words,
-      // and the socket goes with it -- an unanswered connection idling in
-      // keep-alive would wedge a listener slot for as long as the peer wants.
-      try { audit(auditTarget(req.url, req.method ?? AUDIT_NO_TARGET), "refuse", "not a CONNECT request"); }
-      catch { /* a journal that refused its record does not stop the refusal */ }
-      try {
-        res.writeHead(405, { "Connection": "close", "Content-Length": 0 });
-        res.end();
-        // The response is flushed, then the socket is destroyed -- pipelined
-        // bytes behind a refused request die unread with it.
-        req.socket.destroySoon();
-      } catch { req.socket.destroy(); }
+      const owner = new AbortController();
+      tunnels.add(req.socket);
+      const gone = (): void => { owner.abort(); tunnels.delete(req.socket); };
+      req.socket.once("close", gone);
+      res.once("close", gone);
+      void (async () => {
+        let upstream: Socket | undefined;
+        try {
+          const url = new URL(req.url ?? "");
+          if (url.protocol !== "http:" || url.username || url.password) throw new Error("HTTP proxy requests need an absolute http URL without userinfo");
+          const port = Number(url.port || 80), host = url.hostname.replace(/^\[|\]$/g, "");
+          upstream = await options.dial(host, port, owner.signal);
+          if (req.destroyed || res.destroyed) { upstream.destroy(); return; }
+          const agent = new Agent();
+          agent.createConnection = () => upstream!;
+          const headers: IncomingHttpHeaders = { ...req.headers, host: url.host };
+          delete headers["proxy-authorization"]; delete headers["proxy-connection"];
+          const outgoing = request({ hostname: host, port, path: `${url.pathname}${url.search}`,
+            method: req.method, headers, agent }, response => {
+            res.writeHead(response.statusCode ?? 502, response.headers);
+            response.pipe(res);
+          });
+          tunnels.add(req.socket);
+          res.once("close", () => { tunnels.delete(req.socket); outgoing.destroy(); agent.destroy(); });
+          outgoing.on("error", () => { if (!res.headersSent) res.writeHead(502, { Connection: "close" }); res.end(); agent.destroy(); });
+          req.once("aborted", () => { outgoing.destroy(); agent.destroy(); });
+          req.pipe(outgoing);
+          try { audit(`${host}:${port}`, "allow", "HTTP connected"); } catch { /* diagnostics */ }
+        } catch {
+          upstream?.destroy();
+          if (!res.headersSent) res.writeHead(502, { Connection: "close" });
+          res.end();
+        }
+      })();
     });
     // An `Upgrade:` request is not a CONNECT and there is no protocol to
     // switch to -- destroy the socket rather than let it linger.
@@ -395,9 +400,10 @@ export class ConnectProxy {
       // dial's own scope so the catch can end a connection that was already
       // opened when a later step (audit, the 200 write) threw.
       let upstream: Socket | undefined;
-      const drop = (): void => { client.destroy(); upstream?.destroy(); };
+      const owner = new AbortController();
+      const drop = (): void => { owner.abort(); client.destroy(); upstream?.destroy(); };
       client.on("error", drop);
-      client.once("close", () => { tunnels.delete(client); upstream?.destroy(); offer(); });
+      client.once("close", () => { owner.abort(); tunnels.delete(client); upstream?.destroy(); offer(); });
       void (async () => {
         const { target, problem } = parseConnectTarget(req.url);
         if (problem !== null) {
@@ -405,9 +411,6 @@ export class ConnectProxy {
           return refuse(client, 403);
         }
         const name = `${target.host}:${target.port}`;
-        if (target.literal) { audit(name, "refuse", "address literal"); return refuse(client, 403); }
-        if (target.port !== EGRESS_CONNECT_PORT) { audit(name, "refuse", "port other than 443"); return refuse(client, 403); }
-        if (!allowsEgressEndpoint(policy, target.host)) { audit(name, "refuse", "not on the egress allowlist"); return refuse(client, 403); }
         // Node emits a pipelined request even on a socket the refusal before
         // it already closed: the CONNECT is still judged, but a dead socket
         // dials nothing.
@@ -421,7 +424,7 @@ export class ConnectProxy {
         // dialed exactly as one that never queued.
         if (!await claim(client)) { client.destroy(); return; }
         let dialed: Socket;
-        try { dialed = await options.dial(target.host, target.port); }
+        try { dialed = await options.dial(target.host, target.port, owner.signal); }
         catch (error) {
           const reason = error instanceof StoreError && error.code === "INVALID_REQUEST" ? error.message : "dial failed";
           audit(name, error instanceof StoreError && error.code === "INVALID_REQUEST" ? "refuse" : "fail", reason.slice(0, 120));

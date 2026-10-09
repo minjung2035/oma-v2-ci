@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { spawnSync } from "node:child_process";
@@ -23,6 +23,43 @@ console.log('PASS');
 `], { encoding: "utf8", timeout: 10_000, env: { HOME: root, PATH: "/usr/bin:/bin" } });
     assert.equal(result.status, 0, result.stderr);
     assert.equal(result.stdout.trim(), "PASS");
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
+test("DR37: a delayed fd installation restores recursive autocomplete in the existing provider", () => {
+  const root = mkdtempSync(join(tmpdir(), "oma-late-autocomplete-"));
+  try {
+    mkdirSync(join(root, "deep", "nested"), { recursive: true });
+    writeFileSync(join(root, "deep", "nested", "needle.ts"), "export {};");
+    const binary = join(root, "fd");
+    writeFileSync(binary, `#!${process.execPath}\nconst args=process.argv;const base=args[args.indexOf('--base-directory')+1];for(const p of require('node:fs').readdirSync(base,{recursive:true}))if(p.endsWith('.ts'))console.log(p);\n`, { mode: 0o755 });
+    const result = spawnSync(process.execPath, ["--import",
+      new URL("../src/pi-compat/interactive-tool-setup.js", import.meta.url).href, "--input-type=module", "-e", `
+import assert from 'node:assert/strict';
+import {registerHooks} from 'node:module';
+const engine=new URL('./modes/interactive/interactive-mode.js',import.meta.resolve('@earendil-works/pi-coding-agent')).href;
+const manager=new URL('./utils/tools-manager.js',import.meta.resolve('@earendil-works/pi-coding-agent')).href;
+let started;const installing=new Promise(r=>{started=r});globalThis.__started=started;
+registerHooks({load(url,context,next){
+ if(url===manager)return{format:'module',shortCircuit:true,source:'export function getToolPath(){return null} export async function ensureTool(){globalThis.__started();return new Promise(r=>{globalThis.__release=r})}'};
+ if(url===engine)return{format:'module',shortCircuit:true,source:'import {ensureTool} from "../../utils/tools-manager.js";export const ready=await ensureTool("fd");'};
+ return next(url,context);
+}});
+const ui=await import(engine);assert.equal(ui.ready,undefined);
+const {CombinedAutocompleteProvider}=await import('@earendil-works/pi-tui');
+const provider=new CombinedAutocompleteProvider([{name:'test'}],${JSON.stringify(root)},null);
+const args=[['@needle'],0,7,{signal:new AbortController().signal}];
+assert.equal(await provider.getSuggestions(...args),null);
+const beforeCommands=await provider.getSuggestions(['/te'],0,3,{signal:new AbortController().signal});
+await installing;globalThis.__release(${JSON.stringify(binary)});
+await new Promise(r=>setImmediate(r));
+const found=await provider.getSuggestions(...args);
+assert.ok(found.items.some(i=>i.value.includes('deep/nested/needle.ts')),JSON.stringify(found));
+const command=await provider.getSuggestions(['/te'],0,3,{signal:new AbortController().signal});
+assert.deepEqual(command,beforeCommands);
+console.log('PASS');
+`], { encoding: "utf8", timeout: 10000, env: { HOME: root, PATH: "/usr/bin:/bin", PI_CODING_AGENT_DIR: root } });
+    assert.equal(result.status, 0, result.stderr); assert.equal(result.stdout.trim(), "PASS");
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
 

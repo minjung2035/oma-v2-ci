@@ -46,18 +46,18 @@ test("DR27: a Worker creates a peer without Principal orchestration, resumes its
   });
 });
 
-test("DR27: a Worker's quota refusal leaves no child, accepted create or initial mail", RESIDENT_TEST_OPTIONS, async () => {
+test("DR27: legacy quotas do not block a Worker creating a peer", RESIDENT_TEST_OPTIONS, async () => {
   await withScenario({ residents: ["worker-a"], confined: true }, async s => {
     const config = readSettings(s.configPath).config;
     writeSettings(s.configPath, { ...config, quota: { ...config.quota, societyAgents: 1, lineageAgents: 1 } });
     await s.restartBroker();
     s.script([tools(call("oma_mail_send", { to: ["worker-a"], subject: "Work", body: "Try collaborating." })), text("Assigned.")]);
     await s.prompt("Ask for work.");
-    s.script([tools(call("bash", { command: create })), text("Quota refusal retained.")]);
+    s.script([tools(call("bash", { command: create })), text("Peer created.")]);
     const run = await s.activate("worker-a"); assert.equal(run.code, 0, run.stderr);
-    assert.match(toolResults(s.provider.seen.at(-1)!.body).at(-1)!.text, /QUOTA_EXCEEDED/);
-    assert.equal(s.store.getOperation("worker-a", "delegate-peer"), null);
-    assert.equal(s.store.getAgent("peer"), null);
-    assert.equal(s.store.pendingDeliveries("peer").length, 0);
+    assert.doesNotMatch(toolResults(s.provider.seen.at(-1)!.body).at(-1)!.text, /QUOTA_EXCEEDED/);
+    assert.equal(s.store.getOperation("worker-a", "delegate-peer")?.state, "succeeded");
+    assert.ok(s.store.getAgent("peer"));
+    assert.equal(s.store.pendingDeliveries("peer").length, 1);
   });
 });

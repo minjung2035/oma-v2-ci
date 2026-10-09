@@ -1244,7 +1244,7 @@
       ]
     },
     {
-      "owner": "src/tui/packages-apply.ts#applyPackageArchive",
+      "owner": "src/tui/packages-apply.ts#applyOwnedPackageArchive",
       "fact": "DR25 on macOS: the Mac's packages published as one immutable generation under the digest of what arrived, the store's link switched to it, what it replaced recorded once for the request, and the generations no engine can read collected; a run after a stop at any step ends where an uninterrupted one does",
       "tests": [
         {
@@ -1411,6 +1411,22 @@
           "file": "test/adversarial-repairs.test.ts",
           "title": "AV-02: stale Pi managers merge through OMA's lock and preserve trusted project settings",
           "injection": "logical"
+        }
+      ]
+    },
+    {
+      "owner": "src/runtime/pi-packages.ts#collectPackageGenerations",
+      "fact": "DR37: collect only marked, noncurrent generations after exclusive directory lease; live engines and unleased legacy generations retain their files; retry after collection is idempotent",
+      "tests": [
+        {
+          "file": "test/unrestricted-runtime.test.ts",
+          "title": "DR37: shared generation leases retain live readers and collect after actual SIGKILL",
+          "injection": "sigkill"
+        },
+        {
+          "file": "test/unrestricted-runtime.test.ts",
+          "title": "DR37: collector SIGKILL after tombstone rename resumes after partial removal",
+          "injection": "sigkill"
         }
       ]
     }

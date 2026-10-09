@@ -788,8 +788,8 @@ test("WP25.03 / D05: a Resident's unit carries its accepted resources, not the c
     const carried = /OMA_RESOURCES_HEX=([0-9a-f]+)/.exec(shown)?.[1];
     assert.ok(carried, `the unit's environment carries no accepted resources: ${shown}`);
     assert.deepEqual(JSON.parse(Buffer.from(carried!, "hex").toString("utf8")), accepted);
-    assert.match(shown, new RegExp(`^MemoryMax=${accepted.memoryBytes}$`, "m"));
-    assert.match(shown, new RegExp(`^TasksMax=${accepted.tasks}$`, "m"));
+    assert.match(shown, /^MemoryMax=infinity$/m);
+    assert.match(shown, /^TasksMax=infinity$/m);
   } finally { cleanup(); }
 });
 

@@ -4,13 +4,13 @@ import type { ResourceLimits } from "../../implementation/contracts/host.js";
 import { StoreError } from "./errors.js";
 
 export const RESOURCE_FIELDS = Object.freeze({
-  memoryBytes: Object.freeze({ minInclusive: 1, unit: "bytes" }),
-  tasks: Object.freeze({ minInclusive: 1, unit: "count" }),
-  cpuQuotaPercent: Object.freeze({ minInclusive: 1, unit: "percent" }),
-  tmpBytes: Object.freeze({ minInclusive: 1, unit: "bytes" }),
-  workspaceBytes: Object.freeze({ minInclusive: 1, unit: "bytes" }),
-  stagingBytes: Object.freeze({ minInclusive: 1, unit: "bytes" }),
-  checkTimeoutSeconds: Object.freeze({ minInclusive: 1, maxInclusive: Math.floor((Number.MAX_SAFE_INTEGER - 60_000) / 1000), unit: "seconds" }),
+  memoryBytes: Object.freeze({ minInclusive: 0, unit: "bytes" }),
+  tasks: Object.freeze({ minInclusive: 0, unit: "count" }),
+  cpuQuotaPercent: Object.freeze({ minInclusive: 0, unit: "percent" }),
+  tmpBytes: Object.freeze({ minInclusive: 0, unit: "bytes" }),
+  workspaceBytes: Object.freeze({ minInclusive: 0, unit: "bytes" }),
+  stagingBytes: Object.freeze({ minInclusive: 0, unit: "bytes" }),
+  checkTimeoutSeconds: Object.freeze({ minInclusive: 0, maxInclusive: Math.floor((Number.MAX_SAFE_INTEGER - 60_000) / 1000), unit: "seconds" }),
 } satisfies Record<string, IntegerField>);
 
 export type { ResourceLimits };
@@ -46,8 +46,8 @@ export function parseCanonicalResourceLimits(text: string): ResourceLimits | nul
   try { value = JSON.parse(text); } catch { return null; }
   return isResourceLimits(value) && canonicalResourceLimits(value) === text ? value : null;
 }
-/** S-01: positive caps enable the owned state-tree admission implementation. */
+/** DR37: legacy numeric declarations are readable; zero means unrestricted. */
 export function assertStorageQuotaSupported(storageBytes: number): void {
-  if (!Number.isSafeInteger(storageBytes) || storageBytes <= 0)
-    throw new StoreError("UNSUPPORTED_PROFILE", "storage quota must be a positive safe integer");
+  if (!Number.isSafeInteger(storageBytes) || storageBytes < 0)
+    throw new StoreError("UNSUPPORTED_PROFILE", "legacy storage declaration must be a nonnegative safe integer");
 }

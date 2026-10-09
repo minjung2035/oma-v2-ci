@@ -5175,8 +5175,8 @@
   {
     "requirement": "MAC-203",
     "source": "docs/macos-platform.md",
-    "digest": "74f82341ee86126fa90c306bd1183b9b78a3757f1c14a9ff81b1a126e9837d09",
-    "normativeText": "**MUST [MAC-203]** guest VM 구성에는 network device를 두지 않는다. `VZNetworkDeviceConfiguration`을 붙이지 않는다.",
+    "digest": "84ad7e514f560833d52faf351d29e1b6fc3932b2f214baf00eba865b4fcff46f",
+    "normativeText": "**MUST [MAC-203]** DR37에 따라 guest VM에는 Virtio NAT network device를 둔다.\n`platform/guest/network/80-oma.network`를 image의 `/etc/systemd/network/`에 설치하고,\nvirtio_net 및 systemd-networkd/resolved와 DHCP DNS용 resolv.conf를 제공한다.\nWorker와 checker는 공유 network에서 TCP·UDP·사설망에 접근한다.",
     "applicability": "unclassified",
     "rationale": "Requires production-path review; no inference from test names.",
     "owner": null,
@@ -5299,8 +5299,8 @@
   {
     "requirement": "MAC-225",
     "source": "docs/macos-platform.md",
-    "digest": "2d1e54e31f5c416aa23ce3d03c7055b89271a7c453c2f4c993c3653e1b001faa",
-    "normativeText": "**MUST [MAC-225]** guest의 엔진은 provider에 직접 닿지 않는다(guest에는 NIC가 없다). egress 연결은 host가 연다(MAC-201).",
+    "digest": "9734f61a3e402db5949054191c7e7e18ac0f33ec05c91eb8393baa8097570c80",
+    "normativeText": "**MUST [MAC-225]** guest 엔진의 provider 인증 경로는 host Relay를 사용한다(MAC-201). 일반 도구와 패키지는 MAC-203의 NAT network에 직접 접근한다.",
     "applicability": "unclassified",
     "rationale": "Requires production-path review; no inference from test names.",
     "owner": null,

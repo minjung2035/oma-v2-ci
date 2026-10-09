@@ -164,8 +164,6 @@ export class PiAdapter {
       throw failure("UNSUPPORTED_PROFILE", "Resident execution requires confinement");
     if (!Number.isSafeInteger(options.profile.inferenceSeconds) || options.profile.inferenceSeconds <= 0)
       throw failure("UNSUPPORTED_PROFILE", "Pi inference silence budget is unavailable");
-    if (!Number.isSafeInteger(options.profile.workspaceBytes) || options.profile.workspaceBytes <= 0)
-      throw failure("UNSUPPORTED_PROFILE", "Pi workspace quota is unavailable");
     for (const path of [
       options.paths.piCommand,
       // The vendored engine entry is an asset too, not just an argument.

@@ -79,7 +79,7 @@ export function residentArgv(h: SandboxHost, lease: ValidatedRunLease,
   if (egressSocketHost !== undefined && !trustedAbsolutePath(egressSocketHost))
     throw new StoreError("UNSUPPORTED_PROFILE", "egress proxy socket path is not a trusted absolute path");
   const limits = h.limits!;
-  return ["bwrap", "--unshare-all", "--new-session", "--die-with-parent", "--cap-drop", "ALL",
+  return ["bwrap", "--unshare-all", "--share-net", "--new-session", "--die-with-parent", "--cap-drop", "ALL",
     // SB-001, MAC-205: the kernel objects no namespace confines are refused by
     // system call; the program is read from this descriptor (sandboxSeccompFilter).
     "--seccomp", String(SANDBOX_FILTER_FD),
@@ -90,7 +90,7 @@ export function residentArgv(h: SandboxHost, lease: ValidatedRunLease,
     // ships them there; the rootfs links them beside the Node.
     ...nodeToolchainMounts(h.node).flatMap(([source, target]) => ["--ro-bind-try", source, target]),
     "--proc", "/proc", "--dev", "/dev",
-    "--size", String(h.tmpBytes), "--tmpfs", "/tmp",
+    "--tmpfs", "/tmp",
     "--ro-bind", h.libdir, RESIDENT_PATHS.libdir,
     ...(h.hidden ?? []).flatMap(({ path, kind }) => {
       const target = `${RESIDENT_PATHS.libdir}/${path}`;
@@ -138,7 +138,7 @@ export function validateSandboxHost(h: SandboxHost): void {
   if (h.systemBinds !== undefined && (!Array.isArray(h.systemBinds) ||
     h.systemBinds.some(path => !SYSTEM_BIND_CANDIDATES.includes(path))))
     throw new StoreError("UNSUPPORTED_PROFILE", "sandbox system mounts must be operating-system paths only");
-  if (!Number.isSafeInteger(h.tmpBytes) || h.tmpBytes <= 0 || !Array.isArray(h.piModeArgs) ||
+  if (!Array.isArray(h.piModeArgs) ||
     h.piModeArgs.some(value => typeof value !== "string" || value.includes("\0")))
     throw new StoreError("UNSUPPORTED_PROFILE", "sandbox temporary bound or Pi argv is invalid");
 }

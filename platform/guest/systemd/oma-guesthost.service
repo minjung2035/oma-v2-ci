@@ -4,7 +4,7 @@
 Description=OMA guest host
 Requires=oma-provision.service
 After=local-fs.target oma-provision.service user@1000.service
-Wants=user@1000.service
+Wants=user@1000.service systemd-networkd.service systemd-resolved.service
 
 [Service]
 Type=simple

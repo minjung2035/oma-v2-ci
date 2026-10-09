@@ -47,9 +47,9 @@ for (const [title, fields, expectedUnits, check] of [
     const units = Object.fromEntries(Object.entries(fields).map(([key, field]) => [key, field.unit]));
     assert.deepEqual(units, expectedUnits);
     for (const [key, field] of Object.entries(fields)) {
-      assert.equal(field.minInclusive, 1);
+      assert.equal(field.minInclusive, title === "resources" ? 0 : 1);
       assert.equal(Object.isFrozen(field), true);
-      for (const value of [-1, 0, 0.5, NaN, Infinity, Number.MAX_SAFE_INTEGER + 1, "1", null, undefined])
+      for (const value of [-1, ...(title === "resources" ? [] : [0]), 0.5, NaN, Infinity, Number.MAX_SAFE_INTEGER + 1, "1", null, undefined])
         assert.notEqual(check({ ...one, [key]: value }), null, `${key} must reject ${String(value)}`);
       const missing = { ...one };
       delete missing[key];
@@ -73,7 +73,7 @@ test("R02: policy deduplication preserves resolved-spec bytes and does not grant
   assert.deepEqual([...capabilitiesOf(agent)], EXPECTED_CAPABILITIES);
   assert.equal(capabilitiesOf({ specJson: resolvedSpec([], "p", "principal") }).size, 0);
   const value = JSON.parse(SPEC_BYTES);
-  value.resources.tasks = 0;
+  value.resources.tasks = -1;
   const invalid = { ...agent, specJson: JSON.stringify(value) };
   // MAINTENANCE §10: corruption is not an empty permission set. Both readers
   // fail closed instead of degrading a corrupt durable spec to "no rights".

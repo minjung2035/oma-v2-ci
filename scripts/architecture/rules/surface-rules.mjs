@@ -10,6 +10,9 @@ const EXTENSION_ENTRY = "src/pi-extension.ts";
 const EXTENSION_EXTERNALS = new Set(["@earendil-works/pi-coding-agent", "typebox"]);
 // TUI-020: each engine primitive has one owner, and only these names are borrowed.
 const ENGINE_PRIMITIVE_OWNERS = Object.freeze({
+  // DR37: this pinned compatibility seam updates Pi's existing autocomplete
+  // provider after its own installer completes; it owns no terminal layout.
+  "src/pi-compat/interactive-tools.ts": Object.freeze(["CombinedAutocompleteProvider"]),
   "src/tui/cells.ts": Object.freeze(["visibleWidth"]),
   "src/tui/keys.ts": Object.freeze(["parseKey"]),
   // DR22: upstream owns the conversation; these adapters own input and lifetime, not layout.

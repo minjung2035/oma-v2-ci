@@ -14,7 +14,11 @@
  * that lists extensions reads a file instead of running the engine's resolver.
  */
 import { dirname, isAbsolute, join, relative, sep } from "node:path";
-import { lstatSync, realpathSync } from "node:fs";
+import { closeSync, constants, fstatSync, lstatSync, openSync, realpathSync, renameSync } from "node:fs";
+import { lockFileDescriptor } from "../leaf.js";
+import { removeOwnedTree } from "../storage/directory.js";
+import { entryAt, withinDirectory } from "../storage/contained-fs.js";
+import { fsyncHeldDir } from "../storage/durable-fs.js";
 import { StoreError, unobserved } from "../domain/errors.js";
 import { PACKAGE_ENTRY_PREFIX, extensionEntryProblem } from "../config/operations.js";
 import { readUserFile, replaceUserFile } from "./user-files.js";
@@ -27,6 +31,59 @@ export const PACKAGE_STORE = ".packages";
 /** On macOS the engine's store is a link to one of these: the packages the
  * Mac installed, each published whole under the digest of what arrived. */
 export const PACKAGE_GENERATIONS = ".packages-generations";
+/** A generation published with reader leases. Earlier unleased engines may
+ * still read legacy generations, so absence of this marker never proves idle. */
+export const PACKAGE_READER_MARKER = ".oma-reader-leases-v1";
+const readers = new Map<string, number>();
+
+/** Lock the directory inode and verify its name still refers to that inode. */
+function acquirePackageReader(root: string): number {
+  const fd = openSync(root, constants.O_RDONLY | constants.O_DIRECTORY | constants.O_NOFOLLOW);
+  try {
+    const result = lockFileDescriptor(fd, true);
+    if (result.kind !== "held") throw new StoreError("BROKER_UNAVAILABLE", "package generation could not acquire its reader lease; retry loading packages");
+    const pinned = fstatSync(fd), named = lstatSync(root);
+    if (pinned.dev !== named.dev || pinned.ino !== named.ino) throw new StoreError("BROKER_UNAVAILABLE", "package generation changed while acquiring its reader lease");
+    return fd;
+  } catch (error) { closeSync(fd); throw error; }
+}
+/** Held until engine exit: reload can leave callbacks and late imports alive. */
+export function pinPackageGeneration(root: string): void {
+  if (!readers.has(root)) readers.set(root, acquirePackageReader(root));
+}
+
+/** Called under the publication lock. An exclusive lock remains held through
+ * deletion, so a new reader cannot enter between the idle check and removal. */
+export function collectPackageGenerations(data: string, current: string, afterRename?: (tombstone: string) => void): void {
+  const parent = join(data, PACKAGE_GENERATIONS);
+  for (const entry of listOwnedDirectory(parent) ?? []) {
+    const collecting = /^\.collecting-p-[0-9a-f]{64}$/.test(entry.name);
+    if (!entry.isDirectory() || entry.name === current || (!collecting && !/^p-[0-9a-f]{64}$/.test(entry.name))) continue;
+    const root = join(parent, entry.name);
+    if (!collecting && readUserFile(join(root, PACKAGE_READER_MARKER), 32, { singleName: true }) !== "oma-reader-leases-v1\n") continue;
+    const fd = openSync(root, constants.O_RDONLY | constants.O_DIRECTORY | constants.O_NOFOLLOW);
+    try {
+      const result = lockFileDescriptor(fd);
+      if (result.kind === "contended") continue;
+      if (result.kind === "failed") throw new StoreError("BROKER_UNAVAILABLE", `package reader leases could not be evaluated (errno ${result.errno})`);
+      const pinned = fstatSync(fd), named = lstatSync(root);
+      if (pinned.dev !== named.dev || pinned.ino !== named.ino) throw new StoreError("STORE_CORRUPT", "package generation inode changed during collection");
+      const tombstone = collecting ? entry.name : `.collecting-${entry.name}`;
+      if (!collecting) withinDirectory(root, (directory, name) => {
+        const now = lstatSync(entryAt(directory, name));
+        if (now.dev !== pinned.dev || now.ino !== pinned.ino ||
+            lstatSync(entryAt(directory, tombstone), { throwIfNoEntry: false }) !== undefined)
+          throw new StoreError("STORE_CORRUPT", "package collection names changed");
+        // Record collection before deleting any member, including its lease
+        // marker. A killed collector resumes this name even after partial removal.
+        renameSync(entryAt(directory, name), entryAt(directory, tombstone));
+        fsyncHeldDir(directory, parent);
+      });
+      afterRename?.(join(parent, tombstone));
+      removeOwnedTree(join(parent, tombstone));
+    } finally { closeSync(fd); }
+  }
+}
 /** The store's index of extension entries, by package. */
 export const PACKAGE_INDEX = "oma-extensions.json";
 /** UX-20: how large the index may be, written and read alike -- a DoS ceiling
@@ -199,8 +256,12 @@ export function configuredPackageSources(store: string): readonly string[] {
 
 /** The store's directory itself: on macOS the engine's store is a link to its
  * current generation (DR25), which the store's own files are read beneath. */
-export function packageStoreRoot(store: string): string | null {
-  try { return realpathSync(store); } catch (error) {
+export function packageStoreRoot(store: string, readerLease = true): string | null {
+  try {
+    const root = realpathSync(store);
+    if (readerLease && dirname(root).endsWith(`${sep}${PACKAGE_GENERATIONS}`)) pinPackageGeneration(root);
+    return root;
+  } catch (error) {
     if ((error as NodeJS.ErrnoException).code === "ENOENT") return null;
     throw unobserved(error, "the package store") ?? error;
   }
@@ -253,16 +314,20 @@ function indexBytes(path: string): string | null {
   }
 }
 
-/** The store's index as last written, or none. */
+/** Metadata holds its own short reader lease. A publisher that only copies
+ * an index must not pin every old generation until its long-lived host exits. */
 export function readPackageIndex(store: string): readonly InstalledPackage[] {
-  const root = packageStoreRoot(store);
+  const root = packageStoreRoot(store, false);
   if (root === null) return Object.freeze([]);
-  const file = indexBytes(join(root, PACKAGE_INDEX));
-  if (file === null) return Object.freeze([]);
-  let value: unknown;
-  const invalid = (): never => { throw new StoreError("STORE_CORRUPT", "the installed-package index is malformed"); };
-  try { value = JSON.parse(file); } catch { return invalid(); }
-  return decodePackageIndex(value);
+  const lease = dirname(root).endsWith(`${sep}${PACKAGE_GENERATIONS}`) ? acquirePackageReader(root) : undefined;
+  try {
+    const file = indexBytes(join(root, PACKAGE_INDEX));
+    if (file === null) return Object.freeze([]);
+    let value: unknown;
+    const invalid = (): never => { throw new StoreError("STORE_CORRUPT", "the installed-package index is malformed"); };
+    try { value = JSON.parse(file); } catch { return invalid(); }
+    return decodePackageIndex(value);
+  } finally { if (lease !== undefined) closeSync(lease); }
 }
 
 /** The same schema validates the live index and a request's saved before-image. */

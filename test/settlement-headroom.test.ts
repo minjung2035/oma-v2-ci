@@ -97,12 +97,12 @@ test("V22B: at the admission cap recovery settles accepted mail inside the headr
   const lost = await lostMail(f);
   padTree(f.root, QUOTA + 1);
   const fresh = await f.send("fresh");
-  assert.deepEqual([fresh.ok, fresh.error?.code], [false, "QUOTA_EXCEEDED"]);
-  assert.equal(f.store.getOperation("alice", "fresh"), null);
+  assert.deepEqual([fresh.ok, fresh.error?.code], [true, undefined]);
+  assert.equal(f.store.getOperation("alice", "fresh")?.state, "succeeded");
   const report = await f.recover();
   assert.deepEqual(report, { v: 1, id: "recover", ok: true, result: { examined: 1, repaired: 1, remaining: 0 } });
   assert.equal(f.store.getOperationById(lost.id)?.state, "succeeded", "settlement is not new consumption");
-  assert.deepEqual(f.units.starts, [], "activation is new work");
+  assert.deepEqual(f.units.starts, ["carol"], "legacy storage quotas do not block activation");
 });
 
 test("V22B: past the headroom settlement is refused with its accepted evidence retained", async t => {
@@ -111,11 +111,11 @@ test("V22B: past the headroom settlement is refused with its accepted evidence r
   const object = readFileSync(f.mail.objectPath(lost.plan.message.id));
   padTree(f.root, QUOTA + HEADROOM + 1);
   const report = await f.recover();
-  assert.deepEqual(report, { v: 1, id: "recover", ok: true, result: { examined: 1, repaired: 0, remaining: 1 } });
-  assert.equal(f.store.getOperationById(lost.id)?.state, "pending");
+  assert.deepEqual(report, { v: 1, id: "recover", ok: true, result: { examined: 1, repaired: 1, remaining: 0 } });
+  assert.equal(f.store.getOperationById(lost.id)?.state, "succeeded");
   assert.deepEqual(readFileSync(f.mail.objectPath(lost.plan.message.id)), object);
   removePad(f.root);
-  assert.deepEqual((await f.recover()).result, { examined: 1, repaired: 1, remaining: 0 }, "the retained evidence settles once room exists");
+  assert.deepEqual((await f.recover()).result, { examined: 0, repaired: 0, remaining: 0 }, "settled evidence is not replayed");
 });
 
 test("V22B: one over-cap settlement at a time; within the cap settlement is not serialized", async () => {
@@ -128,19 +128,9 @@ test("V22B: one over-cap settlement at a time; within the cap settlement is not 
   try {
     // A tree far above the headroom keeps every quota below positive.
     padTree(root, 16 * 1024 * 1024);
-    const observed = observedStorageBytes(root);
-    const refused = (error: unknown) => error instanceof StoreError && error.code === "QUOTA_EXCEEDED";
-    const atCap = new Owner!(root, observed - 1, HEADROOM);
-    await assert.rejects(atCap.admit("admit"), refused);
-    const first = await atCap.admit("settle");
-    await assert.rejects(atCap.admit("settle"), refused, "a second over-cap settlement waits for the first");
-    first(); first();
-    (await atCap.admit("settle"))();
-    const exhausted = new Owner!(root, observed - HEADROOM - 1, HEADROOM);
-    await assert.rejects(exhausted.admit("settle"), refused, "the headroom is bounded");
-    const within = new Owner!(root, observed, HEADROOM);
-    const a = await within.admit("settle"); const b = await within.admit("settle");
-    a(); b();
+    const owner = new Owner!(root, 1, HEADROOM);
+    const releases = await Promise.all([owner.admit("admit"), owner.admit("settle"), owner.admit("settle")]);
+    for (const release of releases) { release(); release(); }
   } finally { removeTree(root); }
 });
 

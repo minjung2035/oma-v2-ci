@@ -1,0 +1,9 @@
+# DR37: Virtualization.framework NAT; native TCP/UDP and DHCP DNS.
+[Match]
+Driver=virtio_net
+
+[Network]
+DHCP=yes
+
+[DHCPv4]
+UseDNS=yes

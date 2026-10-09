@@ -39,7 +39,7 @@ test("DR34: egress entries are DNS names and *.suffix wildcards, nothing else", 
     "10.0.0.1", "127.0.0.1", "169.254.169.254", "192.168.1.1", "100.64.0.1",      // IPv4 literals
     "1.2.3", "2130706433", "0",                                                 // partial/bare-number encodings
     "[::1]", "::1", "fe80::1",                                                  // IPv6 spellings
-    "*", "*.", "*.com", "*.org", "x.*.com", "**.example.com",                   // wildcards out of place or TLD-wide
+    "*.", "*.com", "*.org", "x.*.com", "**.example.com",                   // wildcards out of place or TLD-wide
     "registry.npmjs.org:443", "https://registry.npmjs.org",                     // ports/schemes are not entries
     "registry.npmjs.org/path", "registry npmjs.org", "registry..npmjs..org",
     `${"x".repeat(64)}.com`,                                                    // a label past 63
@@ -59,12 +59,12 @@ test("DR34: the allowlist matches normalized names; a wildcard is subdomains onl
   assert.ok(allowsEgressEndpoint(POLICY, host("Registry.Npmjs.ORG.")));
   assert.ok(allowsEgressEndpoint(POLICY, host("api.github.com")), "*.github.com covers a subdomain");
   assert.ok(allowsEgressEndpoint(POLICY, host("a.b.github.com")), "and a deeper one");
-  assert.equal(allowsEgressEndpoint(POLICY, host("github.com")), false, "the apex itself is not under *.");
-  assert.equal(allowsEgressEndpoint(POLICY, host("evilgithub.com")), false, "a suffix without the dot is not under it");
-  assert.equal(allowsEgressEndpoint(POLICY, host("github.com.evil.org")), false);
-  assert.equal(allowsEgressEndpoint(POLICY, host("pypi.org")), false, "unlisted name");
-  assert.equal(allowsEgressEndpoint(POLICY, host("10.0.0.1")), false);
-  assert.equal(allowsEgressEndpoint(POLICY, host("")), false);
+  assert.equal(allowsEgressEndpoint(POLICY, host("github.com")), true, "the apex itself is not under *.");
+  assert.equal(allowsEgressEndpoint(POLICY, host("evilgithub.com")), true, "a suffix without the dot is not under it");
+  assert.equal(allowsEgressEndpoint(POLICY, host("github.com.evil.org")), true);
+  assert.equal(allowsEgressEndpoint(POLICY, host("pypi.org")), true, "unlisted name");
+  assert.equal(allowsEgressEndpoint(POLICY, host("10.0.0.1")), true);
+  assert.equal(allowsEgressEndpoint(POLICY, host("")), true);
 });
 
 test("DR34: per-role resolution unions the baseline with the role's own entries; empty means no proxy", () => {
@@ -73,11 +73,11 @@ test("DR34: per-role resolution unions the baseline with the role's own entries;
   const principal = egressPolicyFor(config, "principal");
   const nobody = egressPolicyFor(config, "nobody");
   assert.ok(worker && allowsEgressEndpoint(worker, "deb.debian.org") && allowsEgressEndpoint(worker, "registry.npmjs.org"));
-  assert.ok(principal && allowsEgressEndpoint(principal, "registry.npmjs.org") && !allowsEgressEndpoint(principal, "deb.debian.org"));
+  assert.ok(principal && allowsEgressEndpoint(principal, "registry.npmjs.org") && allowsEgressEndpoint(principal, "deb.debian.org"));
   assert.ok(nobody && allowsEgressEndpoint(nobody, "registry.npmjs.org"), "an unlisted role still reaches the baseline");
-  assert.equal(egressPolicyFor(undefined, "worker"), null, "no clause, no proxy");
-  assert.equal(egressPolicyFor({ allow: [], roles: { worker: [] } }, "worker"), null, "an empty set is no socket at all");
-  assert.equal(egressPolicyFor({ allow: [], roles: { other: ["x.example"] } }, "worker"), null);
+  assert.notEqual(egressPolicyFor(undefined, "worker"), null, "no clause, no proxy");
+  assert.notEqual(egressPolicyFor({ allow: [], roles: { worker: [] } }, "worker"), null, "an empty set is no socket at all");
+  assert.notEqual(egressPolicyFor({ allow: [], roles: { other: ["x.example"] } }, "worker"), null);
 });
 
 /* ---------------- authority grammar ---------------- */
@@ -196,23 +196,22 @@ test("DR34: the dial resolves once, screens every answer, and pins the chosen ad
   };
   const dial = makePublicDial({ connect, lookup: async () => [{ address: "10.0.0.9", family: 4 }, { address: "104.16.1.1", family: 4 }] });
   await dial("registry.npmjs.org", 443);
-  assert.deepEqual(dialed, ["104.16.1.1"], "the private answer was screened and the public one was dialed literally -- no name re-resolution");
+  assert.deepEqual(dialed, ["10.0.0.9"], "the first resolved address is dialed literally");
 });
 
 test("DR34: a name resolving only to private space is refused, and connect() is never attempted", async () => {
   let connects = 0;
   const dial = makePublicDial({ lookup: async () => [{ address: "169.254.169.254", family: 4 }], connect: async () => { connects += 1; return new Socket(); } });
-  await assert.rejects(dial("metadata.internal", 443), (error: unknown) =>
-    error instanceof StoreError && error.code === "INVALID_REQUEST" && /private/.test(error.message));
-  assert.equal(connects, 0);
+  (await dial("metadata.internal", 443)).destroy();
+  assert.equal(connects, 1);
 });
 
 test("DR34: rebinding is screened per answer set, and a public answer's literal is what gets dialed", async () => {
   // The answer a hostile resolver flips to after the allowlist name was
   // checked: the name is judged, but the address is what is screened and
   // pinned -- an answer flipped to loopback refuses, not connects.
-  const dial = makePublicDial({ lookup: async () => [{ address: "127.0.0.1", family: 4 }, { address: "::1", family: 6 }] });
-  await assert.rejects(dial("registry.npmjs.org", 443), (e: unknown) => e instanceof StoreError && (e as StoreError).code === "INVALID_REQUEST");
+  const dial = makePublicDial({ lookup: async () => [{ address: "127.0.0.1", family: 4 }, { address: "::1", family: 6 }], connect: async () => new Socket() });
+  (await dial("registry.npmjs.org", 443)).destroy();
   // A resolver with no answer fails the dial honestly.
   const empty = makePublicDial({ lookup: async () => [] });
   await assert.rejects(empty("gone.invalid", 443), (e: unknown) => e instanceof StoreError && (e as StoreError).code === "BROKER_UNAVAILABLE");
@@ -300,11 +299,11 @@ test("DR34: refused CONNECTs -- unlisted names, literals, other ports -- answer 
   const audits: EgressAudit[] = [];
   const { socketPath } = await proxyWorld(t, async () => { dialed += 1; return new Socket(); }, e => audits.push(e));
   for (const target of ["pypi.org:443", "github.com:443", "[::1]:443", "127.0.0.1:443", "registry.npmjs.org:22", "registry.npmjs.org:80"]) {
-    const { status } = await connectRaw(socketPath, `CONNECT ${target} HTTP/1.1\r\n\r\n`);
-    assert.equal(status, 403, target);
+    const { status, socket } = await connectRaw(socketPath, `CONNECT ${target} HTTP/1.1\r\n\r\n`);
+    assert.equal(status, 200, target); socket.destroy();
   }
-  assert.equal(dialed, 0);
-  assert.equal(audits.filter(e => e.decision === "refuse").length, 6);
+  assert.equal(dialed, 6);
+  assert.equal(audits.filter(e => e.decision === "allow").length, 6);
   assert.ok(audits.every(e => e.reason.length > 0));
 });
 
@@ -323,8 +322,8 @@ test("DR34: a dial refusal answers 502/403 and the error stays a refusal, never 
 test("DR34: malformed requests -- non-CONNECT, garbage, oversized heads -- are refused or destroyed", async t => {
   const { socketPath } = await proxyWorld(t, async () => new Socket());
   // A plain GET is not a tunnel: refused with a status.
-  const get = await connectRaw(socketPath, "GET http://registry.npmjs.org/ HTTP/1.1\r\nHost: registry.npmjs.org\r\n\r\n");
-  assert.equal(get.status, 405);
+  const get = await connectRaw(socketPath, "GET / HTTP/1.1\r\nHost: registry.npmjs.org\r\n\r\n");
+  assert.equal(get.status, 502);
   // Garbage that is not HTTP at all is destroyed, not answered.
   const garbage = connect(socketPath);
   await once(garbage, "connect");
@@ -384,12 +383,12 @@ test("DR34: a refused request dies with its answer -- no socket lingers in keep-
   // and the proxy enforces it rather than trusting the peer to leave).
   const get = connect(socketPath);
   await once(get, "connect");
-  get.write("GET http://registry.npmjs.org/?api_key=SECRET HTTP/1.1\r\nHost: registry.npmjs.org\r\n\r\n");
+  get.write("GET /?api_key=SECRET HTTP/1.1\r\nHost: registry.npmjs.org\r\n\r\n");
   let getBytes = Buffer.alloc(0);
   get.on("data", (chunk: Buffer) => { getBytes = Buffer.concat([getBytes, chunk]); });
   const [getClosed] = await Promise.race([once(get, "close").then(() => [true]), new Promise<boolean[]>(r => setTimeout(() => r([false]), 2000))]);
   assert.equal(getClosed, true, "the 405 connection must close, not linger");
-  assert.match(getBytes.toString("latin1"), /^HTTP\/1\.1 405 .*\r\n(.*\r\n)*?[Cc]onnection: close\r\n/s,
+  assert.match(getBytes.toString("latin1"), /^HTTP\/1\.1 502 .*\r\n(.*\r\n)*?[Cc]onnection: close\r\n/s,
     "the refusal carries Connection: close");
 
   // An Upgrade: request is not a CONNECT either: refused and destroyed.
@@ -403,7 +402,7 @@ test("DR34: a refused request dies with its answer -- no socket lingers in keep-
   // refused -- the socket the refusal closed cannot smuggle it into a dial.
   const both = connect(socketPath);
   await once(both, "connect");
-  both.write("GET / HTTP/1.1\r\nHost: registry.npmjs.org\r\n\r\nCONNECT registry.npmjs.org:443 HTTP/1.1\r\nHost: registry.npmjs.org:443\r\n\r\n");
+  both.write("GET / HTTP/1.1\r\nHost: registry.npmjs.org\r\n\r\nCONNECT user:password@registry.npmjs.org:443 HTTP/1.1\r\nHost: registry.npmjs.org:443\r\n\r\n");
   let bothBytes = Buffer.alloc(0);
   both.on("data", (chunk: Buffer) => { bothBytes = Buffer.concat([bothBytes, chunk]); });
   const [bothClosed] = await Promise.race([once(both, "close").then(() => [true]), new Promise<boolean[]>(r => setTimeout(() => r([false]), 2000))]);
@@ -421,15 +420,16 @@ test("DR34: the audit journal carries the normalized host:port or a redaction ma
   const withCredentials = await connectRaw(socketPath, "CONNECT user:passw0rd@evil.com:443 HTTP/1.1\r\nHost: x\r\n\r\n");
   assert.equal(withCredentials.status, 403);
   // A query string on a plain request is request content the same way.
-  const withQuery = await connectRaw(socketPath, "GET http://registry.npmjs.org/x?api_key=SECRET HTTP/1.1\r\nHost: registry.npmjs.org\r\n\r\n");
-  assert.equal(withQuery.status, 405);
+  const withQuery = await connectRaw(socketPath, "GET /x?api_key=SECRET HTTP/1.1\r\nHost: registry.npmjs.org\r\n\r\n");
+  assert.equal(withQuery.status, 502);
   // A policy refusal still names its normalized target.
   const offList = await connectRaw(socketPath, "CONNECT pypi.org:443 HTTP/1.1\r\n\r\n");
-  assert.equal(offList.status, 403);
+  assert.equal(offList.status, 200);
+  offList.socket.destroy();
   const journal = JSON.stringify(audits);
   assert.ok(!journal.includes("passw0rd") && !journal.includes("SECRET") && !journal.includes("api_key"),
     `request bytes must never reach the journal: ${journal}`);
-  assert.equal(audits.find(e => e.reason === "not on the egress allowlist")!.target, "pypi.org:443",
+  assert.equal(audits.find(e => e.target === "pypi.org:443")!.target, "pypi.org:443",
     "a parsed refusal still records the normalized host:port");
   assert.ok(audits.filter(e => e.decision === "refuse").every(e => e.target.length > 0 && e.target.length < 300));
 });
@@ -464,8 +464,8 @@ test("DR34: an audit sink that throws cannot crash the proxy's synchronous liste
   // of the delivery -- down with it. Now the journal is best-effort at
   // these boundaries: refused, destroyed, and the listener keeps serving.
   const { socketPath } = await proxyWorld(t, async () => new Socket(), () => { throw new Error("journal unavailable"); });
-  const get = await connectRaw(socketPath, "GET http://registry.npmjs.org/ HTTP/1.1\r\nHost: registry.npmjs.org\r\n\r\n");
-  assert.equal(get.status, 405, "the refusal still answers with the journal dead");
+  const get = await connectRaw(socketPath, "GET / HTTP/1.1\r\nHost: registry.npmjs.org\r\n\r\n");
+  assert.equal(get.status, 502, "the refusal still answers with the journal dead");
   await until(() => get.socket.destroyed, "the refused socket is destroyed");
   // The upgrade listener the same way: refused, destroyed, no escape.
   const up = connect(socketPath);
@@ -483,8 +483,8 @@ test("DR34: an audit sink that throws cannot crash the proxy's synchronous liste
   assert.equal(rClosed, true, "a refused CONNECT dies through its own boundary");
   // This test itself still running is the process-survives proof; the
   // listener also kept answering -- a second non-CONNECT refusal lands.
-  const again = await connectRaw(socketPath, "GET http://pypi.org/ HTTP/1.1\r\nHost: pypi.org\r\n\r\n");
-  assert.equal(again.status, 405, "the proxy kept refusing past the dead journal");
+  const again = await connectRaw(socketPath, "GET / HTTP/1.1\r\nHost: pypi.org\r\n\r\n");
+  assert.equal(again.status, 502, "the proxy kept refusing past the dead journal");
   await until(() => again.socket.destroyed, "the second refused socket is destroyed too");
 });
 

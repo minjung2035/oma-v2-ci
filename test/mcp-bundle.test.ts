@@ -12,6 +12,7 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { connect, Server } from "node:net";
 import { once } from "node:events";
+import { createServer } from "node:http";
 import {
   MCP_CONFIG_FILE_NAME, MCP_STATE_DIR_NAME, MCP_TOOL_NAMES,
   mcpChildEnvironment, mcpFacadeDropped, normalizeOmaMcpConfig, registerMcpTools,
@@ -231,41 +232,17 @@ test("BL5: both role surface plans name `mcp` DIRECT and no group wraps it", () 
 test("BL5: config validation forbids the surfaces, sinks and escapes upstream defaults allow", t => {
   const stateDir = tmp(t, "oma-mcp-cfg-");
   const rejects: [string, unknown, RegExp][] = [
-    ["npx command", { mcpServers: { s: { command: "npx", args: ["-y", "srv"] } } }, /fetch packages/],
-    ["npm command", { mcpServers: { s: { command: "npm" } } }, /fetch packages/],
     // The no-fetch rule matches the command's basename -- a path-qualified
     // or win32-shimmed spelling is the same admission, not a bypass.
-    ["posix-path npx", { mcpServers: { s: { command: "/usr/bin/npx" } } }, /fetch packages/],
-    ["posix-path npm", { mcpServers: { s: { command: "/usr/local/bin/npm" } } }, /fetch packages/],
-    ["relative-path npx", { mcpServers: { s: { command: "./node_modules/.bin/npx" } } }, /fetch packages/],
-    ["win32-path npm.cmd", { mcpServers: { s: { command: "C:\\Tools\\npm.cmd" } } }, /fetch packages/],
-    ["win32-path npx.exe", { mcpServers: { s: { command: "C:\\Program Files\\nodejs\\npx.EXE" } } }, /fetch packages/],
-    ["win32 npm.ps1", { mcpServers: { s: { command: "npm.ps1" } } }, /fetch packages/],
-    ["win32 npx.bat", { mcpServers: { s: { command: "npx.bat" } } }, /fetch packages/],
-    ["uppercase NPM", { mcpServers: { s: { command: "NPM" } } }, /fetch packages/],
     // win32 strips a name's trailing dots and spaces before resolving it, so
     // the same fetcher arrives under a spelling the one-shot shim strip
     // missed -- "npx." resolves to npx, "npx.cmd." to npx.cmd, "npx.." to
     // npx. The admission collapses those suffixes to a fixpoint first.
-    ["win32 npx.", { mcpServers: { s: { command: "npx." } } }, /fetch packages/],
-    ["win32 npx.cmd.", { mcpServers: { s: { command: "npx.cmd." } } }, /fetch packages/],
-    ["win32 npx..", { mcpServers: { s: { command: "npx.." } } }, /fetch packages/],
-    ["win32 npx.exe.", { mcpServers: { s: { command: "C:\\Tools\\npx.exe." } } }, /fetch packages/],
-    ["win32 npm.cmd ", { mcpServers: { s: { command: "npm.cmd " } } }, /fetch packages/],
-    ["padded npx", { mcpServers: { s: { command: " npx " } } }, /fetch packages/],
     ["file url", { mcpServers: { s: { url: "file:///etc/passwd" } } }, /protocol file:/],
-    ["env command sink", { mcpServers: { s: { command: "srv", env: { K: "!cat /etc/passwd" } } } }, /"!command" secret sinks/],
-    ["header command sink", { mcpServers: { s: { url: "https://x", headers: { H: "!x" } } } }, /"!command" secret sinks/],
-    ["bearer command sink", { mcpServers: { s: { url: "https://x", bearerToken: "!x" } } }, /"!command" bearerToken/],
-    ["oauth clientSecret sink", { mcpServers: { s: { url: "https://x", oauth: { clientSecret: "!x" } } } }, /oauth\.clientSecret/],
     ["provider auth", { mcpServers: { s: { url: "https://x", auth: { provider: "github" } } } }, /provider credentials/],
     ["server directTools", { mcpServers: { s: { command: "srv", directTools: true } } }, /key "directTools"/],
-    ["server caFile", { mcpServers: { s: { url: "https://x", caFile: "/etc/ssl/x.pem" } } }, /key "caFile"/],
-    ["server requestHeadersCommand", { mcpServers: { s: { url: "https://x", requestHeadersCommand: { command: "x" } } } }, /requestHeadersCommand/],
     ["settings directTools", { settings: { directTools: true } }, /settings\.directTools/],
     ["settings scriptMode", { settings: { scriptMode: true } }, /settings\.scriptMode/],
-    ["settings autoAuth", { settings: { autoAuth: true } }, /settings\.autoAuth/],
-    ["settings allowInstall", { settings: { allowInstall: true } }, /settings\.allowInstall/],
     ["settings hostConfigDiscovery", { settings: { hostConfigDiscovery: "auto" } }, /settings\.hostConfigDiscovery/],
     ["settings ancestorConfigRoots", { settings: { ancestorConfigRoots: ["/"] } }, /settings\.ancestorConfigRoots/],
     ["imports", { imports: ["cursor"] }, /key "imports"/],
@@ -296,7 +273,7 @@ test("BL5: config validation forbids the surfaces, sinks and escapes upstream de
     assert.equal((normalizeOmaMcpConfig({ mcpServers: { s: { command } } }, { stateDir })
       .mcpServers.s as { command: string }).command, command, `${command} admitted`);
   const settings = ok.settings as Record<string, unknown>;
-  for (const pin of ["directTools", "namespaceProxyTools", "scriptMode", "autoAuth", "allowInstall", "exposeResources"])
+  for (const pin of ["directTools", "namespaceProxyTools", "scriptMode", "exposeResources"])
     assert.equal(settings[pin], false, `${pin} pinned off`);
   assert.equal(settings.hostConfigDiscovery, "off");
   assert.equal(settings.oauthCredentialStore, "encrypted-file");
@@ -329,6 +306,45 @@ test("BL5: the OMA-owned config file is read from the engine's own agent dir, an
   // A malformed file is a boundary error, not a degraded startup.
   writeFileSync(join(agentDir, MCP_CONFIG_FILE_NAME), "{ not json");
   await assert.rejects(registerMcpTools(fakePi(), { agentDir }), /E_OMA_MCP_CONFIG.*not valid JSON/);
+});
+
+test("DR37: MCP credential helpers, custom CA, npm servers and auth/install settings are accepted", t => {
+  const config = normalizeOmaMcpConfig({ settings: { autoAuth: true, allowInstall: true }, mcpServers: {
+    npm: { command: "npx", args: ["-y", "server"], env: { KEY: "!printf token" } },
+    http: { url: "https://internal.example/", caFile: "/workspace/ca.pem", bearerToken: "!printf token",
+      requestHeadersCommand: { command: "printf", args: ["{}"] } },
+  } }, { stateDir: tmp(t) });
+  assert.equal(config.mcpServers.npm!.command, "npx");
+  assert.equal(config.mcpServers.http!.caFile, "/workspace/ca.pem");
+  assert.equal(config.settings?.autoAuth, true); assert.equal(config.settings?.allowInstall, true);
+});
+
+test("DR37: installing through the actual MCP proxy connects and persists to the OMA configuration", { timeout: 15000 }, async t => {
+  withEgress(t, false);
+  const agentDir = tmp(t), methods: string[] = [];
+  const server = createServer((req, res) => {
+    if (req.method !== "POST") { res.writeHead(405); res.end(); return; }
+    let bytes = ""; req.setEncoding("utf8"); req.on("data", part => { bytes += part; });
+    req.on("end", () => {
+      const call = JSON.parse(bytes) as { id?: number; method: string };
+      methods.push(call.method);
+      if (call.id === undefined) { res.writeHead(202); res.end(); return; }
+      const result = call.method === "initialize" ? { protocolVersion: "2025-03-26", capabilities: { tools: {} }, serverInfo: { name: "local", version: "1" } }
+        : { tools: [] };
+      res.writeHead(200, { "Content-Type": "application/json" }); res.end(JSON.stringify({ jsonrpc: "2.0", id: call.id, result }));
+    });
+  });
+  server.listen(0, "127.0.0.1"); await once(server, "listening");
+  t.after(() => { server.closeAllConnections(); server.close(); });
+  const pi = fakePi(); await registerMcpTools(pi, { agentDir, config: { mcpServers: {} } });
+  const ctx = { hasUI: false, cwd: agentDir, isProjectTrusted: () => true, sessionManager: { getBranch: () => [] } };
+  t.after(async () => { for (const hook of pi.handlers.get("session_shutdown") ?? []) await (hook as Function)({}, ctx); });
+  const url = `http://127.0.0.1:${(server.address() as { port: number }).port}/mcp`;
+  const result = await pi.tools.get("mcp")!.execute("install", { action: "install", server: "local", url }, undefined, undefined, ctx);
+  assert.notEqual((result.details as { error?: string })?.error, "programmatic_config");
+  assert.ok(methods.includes("initialize"), JSON.stringify(result));
+  const saved = JSON.parse(readFileSync(join(agentDir, MCP_CONFIG_FILE_NAME), "utf8"));
+  assert.equal(saved.mcpServers.local.url, url);
 });
 
 test("BL5: inaccessible state is an observable error -- only ENOENT means absent", async t => {
@@ -562,13 +578,15 @@ test("BL5: the installed policy is live inside the vendored runtime", async t =>
   assert.deepEqual(utils.omaAmbientEnv(), {});
   assert.equal(utils.omaPolicyActive(), true);
   // Every permit is denied by default.
-  for (const name of ["credential-command", "browser-open", "os-keyring", "ui-session"])
+  for (const name of ["os-keyring", "ui-session"])
     assert.equal(utils.omaPermits(name), false, `${name} denied`);
   // The interactive-UI refusal predicate is closed under the policy.
   assert.equal(utils.omaUiSessionsRefused(), true);
   // The `!command` credential sink refuses before any shell runs -- the
   // runtime splice behind the config-side rejection.
-  assert.throws(() => utils.resolveCommandSecret("!cat /etc/passwd", "test"), /E_OMA_MCP_AUTHORITY/);
+  assert.equal(utils.omaPermits("credential-command"), true);
+  assert.equal(utils.omaPermits("browser-open"), true);
+
   // Env interpolation resolves against the empty ambient view.
   assert.equal(utils.interpolateEnvVars("${OMA_TEST_MCP_SECRET}"), "");
   // The OS keyring store is the closed shape.

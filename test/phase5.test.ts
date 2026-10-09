@@ -618,7 +618,7 @@ test("prepared batch manifest shape stays compatible with the trusted extension"
 });
 
 
-test("SB-005-negative: candidate argv rejects empty commands and keeps tmp cap", () => {
+test("SB-005-negative: candidate argv rejects empty commands and removes execution caps", () => {
   const paths = { stateRoot: "/state", projectGit: "/state/project.git", contextGit: "/state/context.git", worldDir: "/state/world",
     society: "demo", quarantineTmpBytes: 1024, checkRootfs: "/trusted/rootfs", checkNode: process.execPath, checkAssetsDir: "/checks" };
   const check = { id: "bounds", argv: ["/bin/true"], env: {}, timeoutSeconds: 1,
@@ -633,13 +633,11 @@ test("SB-005-negative: candidate argv rejects empty commands and keeps tmp cap",
     },
   };
   const argv = candidateCheckCommand(paths, "a".repeat(40), check, []).argv;
-  const size = argv.lastIndexOf("--size");
-  assert.notEqual(size, -1);
-  assert.equal(argv[size + 1], "4096");
-  assert.throws(
-    () => candidateCheckCommand(paths, "a".repeat(40), { ...check, resources: { ...check.resources, tmpBytes: 0 } }, []),
-    (e: unknown) => e instanceof Error && (e as { code?: string }).code === "UNSUPPORTED_PROFILE",
-  );
+  assert.equal(argv.includes("--size"), false);
+  assert.ok(argv.includes("--share-net"));
+  assert.ok(argv.includes("--property=TasksMax=infinity"));
+  assert.equal(argv.some(arg => /MemoryMax|CPUQuota|RuntimeMaxSec/.test(arg)), false);
+  assert.doesNotThrow(() => candidateCheckCommand(paths, "a".repeat(40), { ...check, resources: { ...check.resources, tmpBytes: 0 } }, []));
   assert.throws(
     () => candidateCheckCommand(paths, "a".repeat(40), { ...check, argv: [] }, []),
     (e: unknown) => e instanceof Error && (e as { code?: string }).code === "UNSUPPORTED_PROFILE",
@@ -674,4 +672,96 @@ test("SB-005: systemd timeout kills candidate descendants", { timeout: 10000 }, 
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
+});
+
+test("DR37: real candidate checks use network, outlive legacy caps and stop their whole cgroup on owner loss", { timeout: 20000 }, async t => {
+  const { residentOptions, prepareResident } = await import('./fixtures/resident.js');
+  const { runGitText } = await import('../src/process/policies.js');
+  const { CandidateChecks } = await import('../src/runtime/candidate-checks.js');
+  const { runProcess } = await import('../src/process/run.js');
+  const { RESIDENT_PATHS } = await import('../src/sandbox.js');
+  const { createServer } = await import('node:http');
+  const { once } = await import('node:events');
+  const dir = mkdtempSync(join(tmpdir(), 'oma-unlimited-check-'));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  const opts = residentOptions(dir, process.cwd()); prepareResident(opts);
+  const project = opts.paths.projectGit;
+  const git = (argv: string[], input?: string) => {
+    const result = runGitText(argv, { gitDir: project, ...(input === undefined ? {} : {input}), env: {
+      GIT_AUTHOR_NAME: 'fixture', GIT_AUTHOR_EMAIL: 'fixture@example.invalid',
+      GIT_COMMITTER_NAME: 'fixture', GIT_COMMITTER_EMAIL: 'fixture@example.invalid' } });
+    assert.equal(result.status, 0, result.stderr); return result.stdout.trim();
+  };
+  git(['init', '--bare', project]);
+  const candidate = git(['commit-tree', git(['mktree'], ''), '-m', 'fixture']);
+  const paths = { stateRoot: dir, projectGit: project, contextGit: join(dir,'context.git'), worldDir: join(dir,'world'),
+    society: 'demo', quarantineTmpBytes: 1, checkRootfs: opts.confinement.host.rootfs,
+    checkNode: opts.confinement.host.node, checkAssetsDir: process.cwd() };
+  const owner = new AbortController(); let hits = 0; let cgroup: string | undefined;
+  const server = createServer((req,res) => {
+    hits++; res.end('network-ok');
+    if(req.url === '/spawned') void (async () => {
+      const command = candidateCheckCommand(paths,candidate,make('setInterval(()=>{},1000)'));
+      const unit = command.argv.find(arg=>arg.startsWith('--unit='))!.slice(7);
+      const observed = await runProcess({ executable:'/usr/bin/systemctl',argv:['--user','show',unit,'--property=ControlGroup','--value'],
+        env:{...process.env},timeoutMs:5000,stdoutBytes:4096,stderrBytes:4096 });
+      assert.equal(observed.kind,'exited'); cgroup=observed.stdout.toString().trim();
+      const tasks=await runProcess({executable:'/usr/bin/systemctl',argv:['--user','show',unit,'--property=TasksMax','--value'],
+        env:{...process.env},timeoutMs:5000,stdoutBytes:4096,stderrBytes:4096});
+      assert.equal(tasks.kind,'exited');assert.equal(tasks.stdout.toString().trim(),'infinity');owner.abort();
+    })();
+  });
+  server.listen(0,'127.0.0.1'); await once(server,'listening');
+  t.after(()=>{server.closeAllConnections();server.close()});
+  const url = `http://127.0.0.1:${(server.address() as {port:number}).port}`;
+  const resources = { memoryBytes:1,tasks:1,cpuQuotaPercent:1,tmpBytes:1,workspaceBytes:1,stagingBytes:1,checkTimeoutSeconds:1 };
+  function make(code:string) { return { id:'unrestricted',argv:[RESIDENT_PATHS.node,'--input-type=module','-e',code],env:{},timeoutSeconds:1,resources }; }
+  await new CandidateChecks(paths).run(candidate,make(`await fetch('${url}/ordinary');await new Promise(r=>setTimeout(r,1500));`));
+  assert.equal(hits,1,'the actual checker reached the host service and passed beyond its old deadline');
+  await assert.rejects(new CandidateChecks(paths,undefined,undefined,owner.signal).run(candidate,make(`
+const {spawn}=await import('node:child_process');spawn(process.execPath,['-e','setInterval(()=>{},1000)'],{stdio:'ignore'});
+await fetch('${url}/spawned');setInterval(()=>{},1000);`)), {code:'REF_STATE_UNKNOWN'});
+  assert.ok(cgroup?.startsWith('/'),'the checker cgroup was actually observed before cancellation');
+  const events = `/sys/fs/cgroup${cgroup}/cgroup.events`;
+  assert.ok(!existsSync(events) || /^populated 0$/m.test(readFileSync(events,'utf8')),'descendants survived owner shutdown');
+});
+
+test("DR37: MCP command credentials execute through the installed adapter policy", async t => {
+  const dir = mkdtempSync(join(tmpdir(), 'oma-mcp-credential-'));
+  t.after(() => rmSync(dir,{recursive:true,force:true}));
+  const prior=process.env.PI_CODING_AGENT_DIR;process.env.PI_CODING_AGENT_DIR=dir;
+  t.after(()=>{if(prior===undefined)delete process.env.PI_CODING_AGENT_DIR;else process.env.PI_CODING_AGENT_DIR=prior});
+  const hooks=new Map<string,Array<()=>unknown>>();
+  const pi={registerTool(){},registerCommand(){},registerFlag(){},registerShortcut(){},appendEntry(){},sendMessage(){},
+    exec:async()=>({code:0,stdout:'',stderr:''}),events:{on(){},off(){},emit(){return false}},
+    on(name:string,hook:()=>unknown){hooks.set(name,[...(hooks.get(name)??[]),hook])}};
+  const {registerMcpTools}=await import('../src/extension/mcp-tools.js');await registerMcpTools(pi as never);
+  const specifier='../src/extension/vendor/pi-mcp-adapter/runtime/utils.js';
+  const utils=await import(specifier) as {resolveCommandSecret:(value:string)=>Promise<string>};
+  assert.equal(await utils.resolveCommandSecret('!printf helper-token'),'helper-token');
+  for(const close of hooks.get('session_shutdown')??[]) await close();
+});
+
+
+test("DR37: web configured and per-call proxies perform real requests under the restored policy", async t => {
+  const dir = mkdtempSync(join(tmpdir(), 'oma-web-proxy-'));
+  t.after(() => rmSync(dir,{recursive:true,force:true}));
+  const prior = process.env.PI_CODING_AGENT_DIR; process.env.PI_CODING_AGENT_DIR=dir;
+  t.after(()=>{if(prior===undefined)delete process.env.PI_CODING_AGENT_DIR;else process.env.PI_CODING_AGENT_DIR=prior});
+  const {createServer}=await import('node:http');const {once}=await import('node:events');
+  const requests:string[]=[];
+  const proxy=createServer((req,res)=>{requests.push(req.url!);res.setHeader('Connection','close');res.end('proxy-ok')});
+  proxy.listen(0,'127.0.0.1');await once(proxy,'listening');
+  t.after(()=>{proxy.closeAllConnections();proxy.close()});
+  const proxyUrl=`http://127.0.0.1:${(proxy.address() as {port:number}).port}`;
+  const pi={registerTool(){},registerCommand(){},registerShortcut(){},appendEntry(){},sendMessage(){},on(){},exec:async()=>({code:0,stdout:'',stderr:''})};
+  const {registerWebTools}=await import('../src/extension/web-tools.js');await registerWebTools(pi as never);
+  const specifier='../src/extension/vendor/pi-web-access/runtime/utils.js';
+  const utils=await import(specifier) as {runWithProxy:<T>(proxy:string|undefined,fn:()=>T)=>T};
+  const destination='http://private.fixture.invalid:12345/path?q=1';
+  const request=async()=>{const response=await fetch(destination,{signal:AbortSignal.timeout(5000)});assert.equal(await response.text(),'proxy-ok')};
+  await utils.runWithProxy(proxyUrl,request);
+  writeFileSync(join(dir,'web-search.json'),JSON.stringify({proxy:proxyUrl}));
+  await utils.runWithProxy(undefined,request);
+  assert.deepEqual(requests,[destination,destination]);
 });

@@ -51,9 +51,8 @@ for (const point of ["before-write", "after-write"] as const) {
       // never a partial render and never a temporary file left in place.
       const path = join(workerRoot, "config.json");
       const loaded = loadConfig(path);
-      assert.ok([8, 12].includes(loaded.quota.societyAgents),
-        `societyAgents was ${loaded.quota.societyAgents}, which is neither the old nor the new value`);
-      if (point === "after-write") assert.equal(loaded.quota.societyAgents, 12);
+      assert.equal(loaded.initialResidents.length, point === "before-write" ? 1 : 12,
+        "the named boundary must retain the complete old or new seed list");
 
       const strays = readdirSync(workerRoot).filter(name => name !== "config.json" && name !== "dist");
       assert.deepEqual(strays, [], `a temporary artefact survived the kill: ${strays.join(", ")}`);

@@ -239,7 +239,7 @@ test("V01B: the actual unsupported integration gate is not generic success or re
           id: "unqualified",
           argv: ["/usr/bin/true"],
           env: {},
-          timeoutSeconds: 1,
+          timeoutSeconds: -1,
         },
       ],
     },

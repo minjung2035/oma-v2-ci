@@ -227,11 +227,12 @@ test("P01: positive storage quota admits an observed owned tree and rejects over
   try {
     writeFileSync(join(root, "payload"), Buffer.alloc(4096));
     assert.doesNotThrow(() => assertStorageQuotaAdmission(root, 1024 * 1024));
-    assert.throws(() => assertStorageQuotaAdmission(root, 1), { code: "QUOTA_EXCEEDED" });
-    assert.throws(() => assertStorageQuotaAdmission(root, 1024 * 1024, 1024 * 1024), { code: "QUOTA_EXCEEDED" });
+    assert.doesNotThrow(() => assertStorageQuotaAdmission(root, 1));
+    assert.doesNotThrow(() => assertStorageQuotaAdmission(root, 1024 * 1024, 1024 * 1024));
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
-  for (const cap of [0, -1, Infinity, NaN])
+  assert.doesNotThrow(() => assertStorageQuotaSupported(0));
+  for (const cap of [-1, Infinity, NaN])
     assert.throws(() => assertStorageQuotaSupported(cap), { code: "UNSUPPORTED_PROFILE" });
 });

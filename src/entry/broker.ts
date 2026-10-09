@@ -24,7 +24,6 @@ import { claimSocietyFence } from "../runtime/society-lease.js";
 import { BrokerLifetime, stopOnHostLoss } from "../runtime/broker-lifetime.js";
 import { assertRuntimeAssets, runtimeAssets, assertHostDirectoryLayout, assertStateRoot, hostLaunchLocation, launchedLocation, type LaunchLocation } from "../runtime/assets.js";
 import { assertDeploymentDigest } from "../runtime/deployment-manifest.js";
-import { StorageAdmission } from "../storage/quota.js";
 import { resolvedSpecOf } from "../authority.js";
 import { StoreError } from "../domain/errors.js";
 import { isValidSocietyName } from "../ids.js";
@@ -167,13 +166,6 @@ async function main(): Promise<void> {
     if (stopping !== null) { await stopping; return; }
     assertHostDirectoryLayout(cfg.installation.rootfs);
     assertStateRoot(stateRoot);
-    // D04: over the admission cap the broker still starts and enters bounded
-    // recovery -- the fresh scan refuses each new admission per request until
-    // usage settles, and settlement keeps its headroom. An over-quota store is
-    // reported as degraded, never hidden; it no longer stops the process here.
-    const storage = new StorageAdmission(stateRoot, cfg.quota.storageBytes, cfg.limits.frameBytes);
-    if (await storage.startupState() === "degraded")
-      console.error(JSON.stringify({ event: "broker.storage", state: "degraded", reason: "QUOTA_EXCEEDED" }));
     graceSeconds = cfg.limits.receiptWaitSeconds;
     const integrationPolicy = integrationPolicyFromConfig(cfg.integration);
     assertSupportedIntegration(snapshotIntegrationPolicy(integrationPolicy));
@@ -189,10 +181,10 @@ async function main(): Promise<void> {
     const resolveSpec = createChildSpecResolver(() => readCurrentHostPolicy(configPath, society), () => store.inTransaction);
     const gitPaths = { stateRoot, projectGit: projectGitPathAt(stateRoot), contextGit: join(stateRoot, "repos", "context.git"),
       worldDir: join(stateRoot, "world"), society, quarantineTmpBytes: cfg.limits.bundleBytes,
-      quarantineResources: QUARANTINE_RESOURCES,
+      quarantineResources: QUARANTINE_RESOURCES, ownerSignal: preparationAbort.signal,
       checkRootfs: cfg.installation.rootfs, checkNode: cfg.installation.node, checkAssetsDir: cfg.installation.libdir,
     };
-    const checks = new CandidateChecks(gitPaths);
+    const checks = new CandidateChecks(gitPaths, undefined, undefined, preparationAbort.signal);
     const git = new GitModule(gitPaths, store, mail, integrationPolicy,
       () => integrationPolicyFromConfig(readCurrentHostPolicy(configPath, society).integration),
       (candidate, check) => checks.run(candidate, check),
@@ -205,13 +197,13 @@ async function main(): Promise<void> {
     const reconcile = new ReconcileModule(store, mail, git, units, lifecycle, {
       projectGit: projectGitPathAt(stateRoot), hasGoal, activationAllowed: () => lifetime.permitsActivation,
       ...(freshVerifiedMain === undefined ? {} : { freshVerifiedMain }),
-      sweepBudgetSeconds: cfg.limits.receiptWaitSeconds, resourceGate: category => storage.admit(category),
+      sweepBudgetSeconds: cfg.limits.receiptWaitSeconds,
     });
     // PR-001: only the host that started this process gets a Principal
     // endpoint, and credentials leave only on the channel that host holds --
     // never through a file, an environment or this process's own output.
     const broker = new Broker(store, mail, units, views, lifecycle, git, reconcile,
-      { stateRoot, runRoot, society, hasGoal, storageBytes: cfg.quota.storageBytes, storage,
+      { stateRoot, runRoot, society, hasGoal,
         quiesceOnDrain: () => reconcile.quiesceForShutdown() }, cfg.limits, lock,
       principalHost);
     lifetime.attach(broker);

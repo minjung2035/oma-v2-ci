@@ -20,7 +20,7 @@ import { readCurrentHostPolicy } from "../src/config.js";
 import { defaultHostConfig } from "../src/config/defaults.js";
 import { loadConfiguration, validateConfig } from "../src/config.js";
 import { collectManagedGenerations, commitInlineConfiguration, createInlineConfiguration } from "../src/config/generations.js";
-import { applyField, commitField, readSettings, WORKER_LIMIT } from "../src/tui/sources/settings.js";
+import { applyField, commitField, readSettings, INITIAL_WORKERS } from "../src/tui/sources/settings.js";
 import { DurabilityFaultError, type DurabilityObserver } from "../src/storage/durable-fs.js";
 import { createCompleteConfigurationFixture } from "./fixtures/configuration.js";
 import { Client, ClientError } from "../src/client/index.js";
@@ -281,10 +281,10 @@ test("DR12 / P0-3, CONFIG-CONTRACT: an inline edit from a snapshot that is no lo
     const settings = readSettings(f.input);
     assert.equal(settings.layout.kind, "inline");
     // The Human edits the file by hand after the screen read it.
-    const manual = { ...f.config, quota: { ...f.config.quota, societyAgents: f.config.quota.societyAgents + 5 } };
+    const manual = { ...f.config, quota: { ...f.config.quota, societyAgents: f.config.initialResidents.length + 5 } };
     writeFileSync(f.input, JSON.stringify(manual));
-    assert.throws(() => commitField(settings, WORKER_LIMIT, f.config.quota.societyAgents + 1), { code: "POLICY_CHANGED" });
-    assert.equal(JSON.parse(readFileSync(f.input, "utf8")).quota.societyAgents, manual.quota.societyAgents, "the newer edit is not lost");
+    assert.throws(() => commitField(settings, INITIAL_WORKERS, f.config.initialResidents.length + 1), { code: "POLICY_CHANGED" });
+    assert.equal(JSON.parse(readFileSync(f.input, "utf8")).initialResidents.length, manual.initialResidents.length, "the newer edit is not lost");
   } finally { f.close(); }
 });
 
@@ -293,7 +293,7 @@ test("DR12 / P0-3: a crash before an inline commit point changes nothing, one af
   try {
     const original = readFileSync(f.input);
     const settings = readSettings(f.input);
-    const candidate = validateConfig(applyField(settings, WORKER_LIMIT, f.config.quota.societyAgents + 1));
+    const candidate = validateConfig(applyField(settings, INITIAL_WORKERS, f.config.initialResidents.length + 1));
     const crashAt = (phase: "before" | "after-visible"): DurabilityObserver => event => {
       if (event.point === "derived-rename" && event.phase === phase) throw new DurabilityFaultError(event);
     };
@@ -301,7 +301,7 @@ test("DR12 / P0-3: a crash before an inline commit point changes nothing, one af
     assert.deepEqual(readFileSync(f.input), original, "nothing is committed before the rename");
     assert.equal(collectManagedGenerations({ layout: settings.snapshot!.layout }).length, 1, "the crashed temporary is collected");
     assert.throws(() => commitInlineConfiguration(settings.snapshot!, candidate, crashAt("after-visible")), DurabilityFaultError);
-    assert.equal(loadConfiguration(f.input).config.quota.societyAgents, f.config.quota.societyAgents + 1,
+    assert.equal(loadConfiguration(f.input).config.initialResidents.length, f.config.initialResidents.length + 1,
       "a committed configuration is one the loader loads");
   } finally { f.close(); }
 });
@@ -310,14 +310,14 @@ test("DR12: a flush that fails after the inline commit point is reported as unco
   const f = createCompleteConfigurationFixture();
   try {
     const settings = readSettings(f.input);
-    const candidate = validateConfig(applyField(settings, WORKER_LIMIT, f.config.quota.societyAgents + 1));
+    const candidate = validateConfig(applyField(settings, INITIAL_WORKERS, f.config.initialResidents.length + 1));
     let failed = false;
     const failFlush: DurabilityObserver = event => {
       if (!failed && event.point === "directory-fsync" && event.phase === "ambiguous" && event.path === f.root) { failed = true; throw new Error("EIO: injected flush failure"); }
     };
     assert.throws(() => commitInlineConfiguration(settings.snapshot!, candidate, failFlush), /published but its durability is unconfirmed/);
-    assert.equal(loadConfiguration(f.input).config.quota.societyAgents, f.config.quota.societyAgents + 1, "the rename happened");
-    assert.equal(commitField(readSettings(f.input), WORKER_LIMIT, f.config.quota.societyAgents + 2).kind, "saved");
+    assert.equal(loadConfiguration(f.input).config.initialResidents.length, f.config.initialResidents.length + 1, "the rename happened");
+    assert.equal(commitField(readSettings(f.input), INITIAL_WORKERS, f.config.initialResidents.length + 2).kind, "saved");
   } finally { f.close(); }
 });
 
@@ -328,7 +328,7 @@ test("DR12: a first-run configuration is created where none exists and never ove
     const first = validateConfig(f.config);
     assert.equal(createInlineConfiguration(path, first), "created");
     const bytes = readFileSync(path); const inode = statSync(path).ino;
-    const other = validateConfig({ ...f.config, quota: { ...f.config.quota, societyAgents: f.config.quota.societyAgents + 1 } });
+    const other = validateConfig({ ...f.config, quota: { ...f.config.quota, societyAgents: f.config.initialResidents.length + 1 } });
     assert.equal(createInlineConfiguration(path, other), "existing");
     assert.deepEqual(readFileSync(path), bytes); assert.equal(statSync(path).ino, inode);
     assert.deepEqual(readdirSync(f.root).filter(name => name.endsWith(".tmp")), [], "no temporary is left behind");
@@ -363,7 +363,9 @@ test("P0V-15 / P0-5: a workspace entry that cannot be observed is not zero bytes
     const write = (path: string): Promise<unknown> => tools.write!.execute("call", { path, content: "hello" }, undefined, undefined, { cwd: workspace });
     await write("note.txt");
     chmodSync(locked, 0o600); // listable, but its entries cannot be looked at
-    await assert.rejects(write("other.txt"), /quota would be exceeded/, "what could not be observed was counted as nothing");
+    await write("other.txt");
+    await assert.rejects(write("locked/other.txt"), /workspace|access|directory|EACCES/i,
+      "the actual inaccessible destination must still refuse");
   } finally { chmodSync(locked, 0o700); rmSync(workspace, { recursive: true, force: true }); }
 });
 
@@ -432,11 +434,11 @@ test("DR13 / DR12: a configuration file that cannot be read now is not a changed
     const original = readFileSync(f.input);
     chmodSync(f.input, 0o000);
     try {
-      assert.throws(() => commitField(settings, WORKER_LIMIT, f.config.quota.societyAgents + 1), { code: "BROKER_UNAVAILABLE" });
+      assert.throws(() => commitField(settings, INITIAL_WORKERS, f.config.initialResidents.length + 1), { code: "BROKER_UNAVAILABLE" });
     } finally { chmodSync(f.input, 0o600); }
     assert.deepEqual(readFileSync(f.input), original, "nothing is committed");
     rmSync(f.input);
-    assert.throws(() => commitField(settings, WORKER_LIMIT, f.config.quota.societyAgents + 1), { code: "POLICY_CHANGED" }, "a file that is gone has changed");
+    assert.throws(() => commitField(settings, INITIAL_WORKERS, f.config.initialResidents.length + 1), { code: "POLICY_CHANGED" }, "a file that is gone has changed");
   } finally { f.close(); }
 });
 

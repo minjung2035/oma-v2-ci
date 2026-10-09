@@ -65,16 +65,11 @@ export function societyFromDirectory(directory: string): string {
   return trimmed.length > 0 ? trimmed : "workspace";
 }
 
+// DR37: zero denotes unrestricted execution. The fields remain readable for
+// historical v1 configuration and accepted specs; they impose no new limits.
 const RESOURCES = Object.freeze({
-  // FI-6: a dev workload is the engine, a shell, npm and a runner's workers —
-  // one Node alone is a dozen threads, and every thread is a task.
-  memoryBytes: 4 * 1024 * 1024 * 1024,
-  tasks: 256,
-  cpuQuotaPercent: 200,
-  tmpBytes: 512 * 1024 * 1024,
-  workspaceBytes: 2 * 1024 * 1024 * 1024,
-  stagingBytes: 1024 * 1024 * 1024,
-  checkTimeoutSeconds: 600,
+  memoryBytes: 0, tasks: 0, cpuQuotaPercent: 0, tmpBytes: 0,
+  workspaceBytes: 0, stagingBytes: 0, checkTimeoutSeconds: 0,
 });
 
 /** CFG-003's reference values. Stated here rather than inferred so the written
@@ -141,9 +136,9 @@ export function defaultHostConfig(input: DefaultConfigInput): HostConfigV1 {
     initialResidents: [{ name: "worker-1", profile: DEFAULT_RESIDENT_PROFILE,
       brief: "You have woken in an OMA society. Read /world/START.md for the map, then /inbox.md and the mail it lists. The shared objective is /world/context/current/GOAL.md -- find an unheld piece of it, say so on the board, and start." }],
     quota: {
-      societyAgents: 8,
-      lineageAgents: 4,
-      storageBytes: 8 * 1024 * 1024 * 1024,
+      societyAgents: 0,
+      lineageAgents: 0,
+      storageBytes: 0,
     },
     integration: {
       policyRevision: "default-1",

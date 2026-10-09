@@ -19,7 +19,7 @@ import { newHostRecord, writeHostRecord } from "../src/platform/host/record.js";
 import { HOST_GUEST_PROTOCOL, PLATFORM_FRAME_BYTES } from "../src/protocol/host-guest.js";
 import { HOST_API_VERSION } from "../src/protocol/host-api.js";
 import { PACKAGE_ARCHIVE_BOUNDS, readPackageArchive, writePackageArchive } from "../src/platform/package-archive.js";
-import { PACKAGE_GENERATIONS, PACKAGE_STORE, readPackageIndex } from "../src/runtime/pi-packages.js";
+import { PACKAGE_GENERATIONS, PACKAGE_STORE, readPackageIndex, pinPackageGeneration } from "../src/runtime/pi-packages.js";
 import { loadConfiguration } from "../src/config.js";
 import { defaultSocietyFor } from "../src/config/defaults.js";
 import { sha256Hex } from "../src/hash.js";
@@ -200,6 +200,7 @@ test("DR25/mac: packages.sync makes the Mac's packages the engine's store, turns
   const store = join(w.societiesDir, PACKAGE_STORE);
   assert.ok(lstatSync(store).isSymbolicLink(), "the engine's store is not a link to a generation");
   const firstGeneration = readlinkSync(store);
+  pinPackageGeneration(realpathSync(store)); // An engine that can retain old callbacks stays a reader.
   assert.match(firstGeneration, new RegExp(`^${PACKAGE_GENERATIONS}/p-[0-9a-f]{64}$`));
   assert.deepEqual(readPackageIndex(store), [{ source: "npm:oma-hello-ext", entries: [HELLO], skills: [], prompts: [], themes: [] }]);
   const settings = loadConfiguration(w.projectSettings);
@@ -384,5 +385,24 @@ test("DR25/mac: an application stopped after any of its steps, run again for the
     const settings = loadConfiguration(join(data, ".projects", defaultSocietyFor(real, sha256Hex(real)), "config.json"));
     for (const role of [settings.config.principalProfile, "resident"])
       assert.ok(settings.roles[role]!.extensions.some(item => item.path.endsWith("oma-hello-ext/extensions/hello.ts")), `${stop}: ${role}`);
+  }
+});
+
+
+test("DR37: repeated real packages.sync collects old generations without restarting its publisher", TIMEOUT, async t => {
+  const w=await world(t); const store=join(w.societiesDir,PACKAGE_STORE);
+  let previous:string|undefined;
+  for (const number of [1,2,3]) {
+    rmSync(w.macPackages,{recursive:true,force:true});
+    const name=`oma-metadata-${number}`;
+    macStore(w.macPackages,{[name]:{'package.json':JSON.stringify({name,version:'1.0.0',pi:{extensions:[]}})}});
+    const answer=await w.call('packages.sync',{},`collect-${number}`);
+    assert.equal(answer.ok,true,JSON.stringify(answer));
+    assert.equal((answer.result as {ok:boolean}).ok,true,JSON.stringify(answer));
+    assert.equal(readPackageIndex(store)[0]?.source,`npm:${name}`);
+    const current=realpathSync(store);
+    if(previous)assert.equal(existsSync(previous),false,'the live publisher retained an idle old generation');
+    assert.equal(existsSync(join(current,'npm/node_modules',name,'package.json')),true);
+    previous=current;
   }
 });

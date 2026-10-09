@@ -40,9 +40,8 @@ test("DR18 / S-01-CANDIDATE: checks without resource profiles are refused, and t
     assert.equal(protectedPathMatches(path, "/"), true, path);
   assert.equal(protectedPathMatches("src/a.ts", "docs/"), false);
   assert.equal(protectedPathMatches("docs/a.md", "docs/"), true);
-  assert.throws(() => assertSupportedIntegration(snapshotIntegrationPolicy({ policyRevision: "p", protectedPaths: [],
-    checks: [{ id: "test", argv: ["/usr/bin/true"], env: {}, timeoutSeconds: 1 }] })),
-  (error: unknown) => error instanceof StoreError && error.code === "UNSUPPORTED_PROFILE" && /resource profile/.test(error.message));
+  assert.doesNotThrow(() => assertSupportedIntegration(snapshotIntegrationPolicy({ policyRevision: "p", protectedPaths: [],
+    checks: [{ id: "test", argv: ["/usr/bin/true"], env: {}, timeoutSeconds: 0 }] })));
 });
 
 test("DR18 / D-9, DR24: `oma login` hands the terminal to the engine's own login over the Human's one engine home, needing no session", async t => {

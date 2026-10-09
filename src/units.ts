@@ -260,7 +260,6 @@ export class UnitsModule {
       // here -- one canonical plan for every Resident of the deployment --
       // never authored configuration, never a caller's choice.
       toolSurfaceHex: Buffer.from(encodedResidentToolSurface(), "utf8").toString("hex"),
-      memoryBytes: resources.memoryBytes, tasks: resources.tasks, cpuQuotaPercent: resources.cpuQuotaPercent,
     });
     this.install([service, this.prepareUnit(unitName(this.society, agent, "path"), "resident.path.in")]);
   }

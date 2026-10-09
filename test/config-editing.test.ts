@@ -34,9 +34,9 @@ test("V11A: the inline compatibility writer validates before replacement", () =>
     const before = observeFile(fixture.input);
     const invalid = {
       ...fixture.config,
-      quota: { ...fixture.config.quota, societyAgents: 3 },
+      quota: { ...fixture.config.quota, societyAgents: -1 },
     };
-    assert.throws(() => writeSettings(fixture.input, invalid), /quota\.lineageAgents exceeds quota\.societyAgents/);
+    assert.throws(() => writeSettings(fixture.input, invalid), /quota\.societyAgents/);
     assert.deepEqual(observeFile(fixture.input), before);
     assert.doesNotThrow(() => loadConfiguration(fixture.input));
   } finally {
@@ -46,8 +46,8 @@ test("V11A: the inline compatibility writer validates before replacement", () =>
 
 for (const mode of ["inline", "split"] as const) {
   for (const [field, value, message] of [
-    [WORKER_LIMIT, 3, /quota\.lineageAgents exceeds quota\.societyAgents/],
-    [INITIAL_WORKERS, 5, /initialResidents exceed quota\.societyAgents/],
+    [WORKER_LIMIT, 3, /not editable|Unknown|unknown|unsupported/i],
+    [INITIAL_WORKERS, -1, /non-negative|Invalid|invalid|integer/i],
   ] as const) {
     test(`V11A: invalid ${mode} ${field} edit is rejected before every authored file`, () => {
       const fixture = createCompleteConfigurationFixture();

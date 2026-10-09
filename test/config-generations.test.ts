@@ -174,12 +174,12 @@ test("V13B: a manual bundle migrates without touching its files, and a stale or 
     assert.deepEqual(readFileSync(join(f.output, "host.json")), host);
     // A snapshot read before that commit is refused, and changes nothing.
     const manifest = readFileSync(f.path);
-    assert.throws(() => commitField(stale, WORKER_LIMIT, 5), (error: unknown) => error instanceof StoreError && error.code === "POLICY_CHANGED");
+    assert.throws(() => commitField(stale, "initial-workers", 5), (error: unknown) => error instanceof StoreError && error.code === "POLICY_CHANGED");
     assert.deepEqual(readFileSync(f.path), manifest);
     // An external edit of the manifest after a read is refused as well.
     const current = readSettings(f.path);
     writeFileSync(f.path, `${readFileSync(f.path, "utf8")} `);
-    assert.throws(() => commitField(current, WORKER_LIMIT, 5), (error: unknown) => error instanceof StoreError && error.code === "POLICY_CHANGED");
+    assert.throws(() => commitField(current, "initial-workers", 5), (error: unknown) => error instanceof StoreError && error.code === "POLICY_CHANGED");
     // An old writer that patches a generation file in place is refused by the
     // filesystem: published generations are read-only.
     const role = migrated.layout.kind === "operations" ? migrated.layout.roles.principal! : "";

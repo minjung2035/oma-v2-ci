@@ -39,7 +39,7 @@ test("V15A: seed fields are editable only while they can still take effect, and 
     assert.match(blocked(done, INITIAL_WORKERS) ?? "", /already bootstrapped/);
     assert.match(blocked(done, WORKER_PROFILE) ?? "", /already bootstrapped/);
     // Fields read at later starts stay editable after bootstrap.
-    for (const id of [PRINCIPAL_MODEL, WORKER_MODEL, WORKER_LIMIT]) assert.equal(blocked(done, id), null, id);
+    for (const id of [PRINCIPAL_MODEL, WORKER_MODEL]) assert.equal(blocked(done, id), null, id);
     // The writer refuses what the screen does not offer, and writes nothing.
     const manifest = readFileSync(f.path);
     assert.throws(() => commitField(settings, INITIAL_WORKERS, 2, "done"), (error: unknown) => error instanceof StoreError && error.code === "INVALID_REQUEST");
@@ -77,11 +77,11 @@ test("V15A / WP15.03: confirming the value already configured writes nothing and
   const f = createCompleteConfigurationFixture();
   try {
     const settings = readSettings(f.path);
-    const limit = settings.config.quota.societyAgents;
+    const limit = settings.config.initialResidents.length;
     const manifest = readFileSync(f.path);
-    assert.equal(commitField(settings, WORKER_LIMIT, limit, "done").kind, "unchanged");
+    assert.equal(commitField(settings, INITIAL_WORKERS, limit, "pending").kind, "unchanged");
     assert.deepEqual(readFileSync(f.path), manifest);
-    assert.equal(commitField(readSettings(f.path), WORKER_LIMIT, limit + 1, "done").kind, "saved");
+    assert.equal(commitField(readSettings(f.path), INITIAL_WORKERS, limit + 1, "pending").kind, "saved");
   } finally { f.close(); }
 });
 
@@ -103,10 +103,10 @@ test("V15A / WP15.03: an inline configuration confirmed at its current value is 
     const inode = statSync(f.input).ino;
     const settings = readSettings(f.input);
     assert.equal(settings.layout.kind, "inline");
-    assert.equal(commitField(settings, WORKER_LIMIT, settings.config.quota.societyAgents, "done").kind, "unchanged");
+    assert.equal(commitField(settings, INITIAL_WORKERS, settings.config.initialResidents.length, "pending").kind, "unchanged");
     assert.deepEqual(readFileSync(f.input), before);
     assert.equal(statSync(f.input).ino, inode, "the unchanged inline file was replaced");
-    assert.equal(commitField(readSettings(f.input), WORKER_LIMIT, settings.config.quota.societyAgents + 1, "done").kind, "saved");
+    assert.equal(commitField(readSettings(f.input), INITIAL_WORKERS, settings.config.initialResidents.length + 1, "pending").kind, "saved");
     assert.notEqual(statSync(f.input).ino, inode);
   } finally { f.close(); }
 });

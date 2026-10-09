@@ -1,4 +1,4 @@
-/** Built-in file tools stay inside the agent's workspace and its quota.
+/** Built-in file tools stay inside the agent's workspace.
  *
  * On the host -- the Principal, or a Resident of an unsealed deployment --
  * shell tools are refused outright and read/write/edit/grep/find/ls are
@@ -8,11 +8,7 @@
  * what the sandbox shows. Everywhere, a write or edit stays inside the
  * workspace.
  *
- * P0V-122 (G10-03), P0-2: the byte quota is not decided here. Its one owner
- * is the contained write (contained-tools.ts), which decides it at the moment
- * of the write, from the exact growth, inside the serialization every write
- * of this engine takes. A second decision here, by path and by the upper
- * bound an edit's replacement texts give, refused edits that fit.
+ * DR37: admission checks containment, not workspace bytes or quota.
  */
 import { lstatSync, readdirSync } from "node:fs";
 import { basename, isAbsolute, join, relative, resolve, sep } from "node:path";
@@ -45,19 +41,8 @@ function allowedWorkspacePath(root: string, input: unknown): boolean {
   }
   return true;
 }
-/** FI-4: directory names whose contents the quota does not count. What the
- * clone came with (`.git`) and the trees a package manager or build tool
- * regenerates are not what the quota bounds -- it bounds what the agent
- * authors through the write/edit tools, and those trees are shell work a
- * real project needs (a `node_modules` alone can exceed the whole quota).
- * The check is a name on a directory: a file of the same name is authored
- * content and counts, and the root is never excluded even when its own name
- * is on this list. An agent could hide growth inside one -- but the shell is
- * the quota's already-standing blind side, not this exclusion's.
- * Mirrors `EXCLUDED_USAGE_TREES` in src/storage/quota.ts (UX-10b), the
- * observed-storage owner's spelling of this same set -- PI-001 keeps the
- * extension from importing it, and a test binds the two (INV04). */
-export const EXCLUDED_USAGE_TREES: ReadonlySet<string> = new Set([".git", "node_modules", ".venv", "target", "dist", "build"]);
+/** Legacy usage diagnostics count every tree. Writes impose no quota. */
+export const EXCLUDED_USAGE_TREES: ReadonlySet<string> = new Set<string>();
 
 export function workspaceUsage(root: string, stopAfter: number): number {
   const pending: [path: string, top: boolean][] = [[root, true]];

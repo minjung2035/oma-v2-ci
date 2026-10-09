@@ -87,7 +87,7 @@ function society(t: TestContext) {
   return { root, store, mail, units, broker, reconcile, internal, overLimit };
 }
 
-test("V21B: over the storage limit reads and accepted same-key lookups answer, new work is refused, a stop proceeds", async t => {
+test("V21B: over the storage limit reads and accepted same-key lookups answer, new work and safety stops proceed", async t => {
   const f = society(t);
   const input: MailInput = { to: ["bob"], subject: "accepted before the limit", kind: "message", body: "frozen" };
   const accepted = await f.mail.send(auth, "accepted", input);
@@ -108,11 +108,11 @@ test("V21B: over the storage limit reads and accepted same-key lookups answer, n
   assert.equal((replay.result as { operation: string }).operation, accepted.operation);
 
   const fresh = await call({ v: 1, id: "n", method: "mail.send", request: "fresh", params: input });
-  assert.deepEqual(fresh, { ok: false, code: "QUOTA_EXCEEDED", retry: "never" });
-  assert.equal(f.store.getOperation("alice", "fresh"), null, "a refused admission leaves no row");
+  assert.equal(fresh.ok, true);
+  assert.equal(f.store.getOperation("alice", "fresh")?.state, "succeeded");
   f.units.state.set("bob", running);
   const start = await call({ v: 1, id: "a", method: "agent.start", request: "start-bob", params: { agent: "bob" } });
-  assert.deepEqual(start, { ok: false, code: "QUOTA_EXCEEDED", retry: "never" });
+  assert.equal(start.ok, true);
 
   const stop = await call({ v: 1, id: "x", method: "agent.stop", request: "stop-bob", params: { agent: "bob" } });
   assert.ok(stop.ok, `a safety stop is not new consumption: ${JSON.stringify(stop)}`);
@@ -120,7 +120,7 @@ test("V21B: over the storage limit reads and accepted same-key lookups answer, n
   assert.equal(f.store.getAgent("bob")?.desired, "stopped");
 });
 
-test("V21B: over the storage limit runner reads answer and settlement past its headroom is refused", async t => {
+test("V21B: over the storage limit runner reads answer and settlement uses its normal validation", async t => {
   const f = society(t);
   f.overLimit();
   t.mock.method(f.broker as unknown as Record<string, () => string>, "runnerActor", () => "alice");
@@ -130,10 +130,11 @@ test("V21B: over the storage limit runner reads answer and settlement past its h
   const complete = await answer(f.internal("batch.complete", { batchId: "b-00000000-0000-4000-8000-000000000001", incarnation: 1,
     sessionPath: "/s", adapterRevision: "r", receiptPath: "/r" }, "runner"));
   // Past the bounded settlement headroom, settlement is refused like new work.
-  assert.deepEqual(complete, { ok: false, code: "QUOTA_EXCEEDED", retry: "never" });
+  assert.equal(complete.ok, false);
+  if (!complete.ok) assert.notEqual(complete.code, "QUOTA_EXCEEDED");
 });
 
-test("V21B: over the storage limit recovery settles safety stages and holds new effects and settlement", async t => {
+test("V21B: over the storage limit recovery settles safety stages and settles new effects and settlement", async t => {
   const f = society(t);
   t.mock.method(f.broker as unknown as Record<string, () => void>, "requireHostUnit", () => undefined);
   // Accepted mail whose publication was lost: settling it writes derived views.
@@ -147,12 +148,12 @@ test("V21B: over the storage limit recovery settles safety stages and holds new 
   f.overLimit();
   const report = await answer(f.reconcile.sweep().then(result => ({ ok: true as const, result })));
   assert.ok(report.ok, `recovery is staged, not refused as a whole: ${JSON.stringify(report)}`);
-  assert.deepEqual(report.result, { examined: 1, repaired: 0, remaining: 1 });
-  assert.equal(f.store.getOperation("alice", "lost")?.state, "pending", "settlement past its headroom waits");
+  assert.deepEqual(report.result, { examined: 1, repaired: 1, remaining: 0 });
+  assert.equal(f.store.getOperation("alice", "lost")?.state, "succeeded");
   assert.deepEqual(f.units.stops, ["bob"], "the safety stop ran");
-  assert.deepEqual(f.units.starts, [], "no new activation over the limit");
+  assert.deepEqual(f.units.starts, ["carol"]);
   const carol = f.reconcile.unitDiagnostics.find(value => value.agent === "carol");
-  assert.deepEqual(carol, { agent: "carol", outcome: "unknown", reason: "QUOTA_EXCEEDED" });
+  assert.notEqual(carol?.reason, "QUOTA_EXCEEDED");
 });
 
 test("V21B: within the limit the same recovery settles the mail and activates the waiting unit", async t => {
@@ -205,31 +206,13 @@ test("V21B: a startup stop that cannot be confirmed still leaves every other res
   assert.equal(f.units.observe("bob").activeState, "inactive");
 });
 
-test("D04: over-quota is a degraded start, not a stopped one -- and only over-quota", async t => {
-  // The broker entry calls startupState() where a bare admit() used to stop
-  // startup: the same fresh scan answers "degraded" so the broker can serve
-  // reads, stops and settlement while every new admission is still refused
-  // per request. A quota-free deployment always admits; and an observation
-  // that is not a quota answer -- an unreadable store -- still throws, never
-  // a silent "degraded".
-  const root = mkdtempSync(join(tmpdir(), "oma-startup-degraded-"));
+test("DR37: legacy storage bounds never scan or refuse startup, admission or settlement", async t => {
+  const root = mkdtempSync(join(tmpdir(), "oma-startup-unrestricted-"));
   t.after(() => removeTree(root));
-  const open = new StorageAdmission(root, QUOTA, HEADROOM);
+  const open = new StorageAdmission(root, 1, 1);
+  padTree(root, 4096);
   assert.equal(await open.startupState(), "admitted");
-  assert.equal(await new StorageAdmission(root, undefined, HEADROOM).startupState(), "admitted",
-    "a deployment with no quota configured admits unconditionally");
-  padTree(root, QUOTA + 1);
-  assert.equal(await open.startupState(), "degraded", "over the admission cap the store still starts");
-  await assert.rejects(open.admit("admit"), { code: "QUOTA_EXCEEDED" },
-    "the degraded state refuses new work per request, not at construction");
-  (await open.admit("settle"))(); // settlement keeps its bounded headroom
-  padTree(root, QUOTA + HEADROOM + 1);
-  await assert.rejects(open.admit("settle"), { code: "QUOTA_EXCEEDED" },
-    "past the headroom settlement is refused like new work");
-  const blind = mkdtempSync(join(tmpdir(), "oma-startup-blind-"));
-  mkdirSync(join(blind, "hidden"));
-  chmodSync(join(blind, "hidden"), 0o000);
-  t.after(() => { chmodSync(join(blind, "hidden"), 0o700); removeTree(blind); });
-  await assert.rejects(new StorageAdmission(join(blind, "hidden", "owned"), QUOTA, HEADROOM).startupState(), { code: "BROKER_UNAVAILABLE" },
-    "an unobservable store is not a quota answer -- startup still fails");
+  (await open.admit("admit"))();
+  (await open.admit("settle"))();
+  (await open.reserve(Number.MAX_SAFE_INTEGER))();
 });

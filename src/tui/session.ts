@@ -167,7 +167,6 @@ export function principalEnvironment(
     // P0V-78: the streams the CLI prepares are read only up to these.
     OMA_CONTEXT_BYTES: String(limits.contextBytes),
     OMA_BUNDLE_BYTES: String(limits.bundleBytes),
-    OMA_WORKSPACE_BYTES: String(profile.workspaceBytes),
     // PR-002: where the broker publishes the Principal's prepared batches, and
     // how large one may be. The host delivers them; the extension reads them.
     OMA_BATCH_VIEW: runnerViewPathAt(paths.stateRoot, "principal"),
@@ -219,8 +218,6 @@ export function principalSessionProfile(configPath: string, society: string): Se
   const role = configuration.roles[config.principalProfile];
   const prompt = role?.prompt ?? "";
   const workspaceBytes = config.agentProfiles[config.principalProfile]?.resources.workspaceBytes;
-  if (!Number.isSafeInteger(workspaceBytes) || (workspaceBytes ?? 0) <= 0)
-    throw new StoreError("UNSUPPORTED_PROFILE", "the principal role declares no workspace quota");
   // The store's real root is the root the engine's reads are allowed under,
   // and the one packageResourcePaths resolves the advertised resources from.
   const packageStore = config.installation.packages === undefined ? undefined

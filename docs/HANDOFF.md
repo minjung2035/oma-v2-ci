@@ -1,6 +1,36 @@
 # OMA v2 — 인계 (handoff)
 
-## 현재 결과: 감사 발견 수정·검증 (2026-10-09)
+## 지정한 제한 제거·복구 완료 (2026-10-09, DR37)
+
+SC-01/02/03/04/05/20/31의 OMA 네트워크·실행 자원·인원·저장 quota를 제거했다.
+SC-23/26의 MCP 설치·인증 명령·CA·웹 clone/미디어/workflow/명령/프록시를 복구하고,
+SC-30은 실제 reader flock과 collector tombstone으로 회수·강제 종료 복구를 구현했다.
+SC-32는 Pi fd 설치를 백그라운드로 실행해 기존 autocomplete provider를 갱신한다.
+사용자가 지정한 11개 항목의 변경이며 아래 원래 32개 장부 전체를 수정한 주장은 아니다.
+문서 먼저, 실제 측정 먼저, **서브에이전트 금지**를 지켰다.
+파일 접근·authority·durable 기록·실행 중 reader 소유는 유지한다.
+구버전 reader marker가 없는 세대는 독자 종료를 증명할 수 없어 보존한다.
+
+최종 local **3,946 PASS**(serial 9 + parallel 3,937), 실제 kernel **68 PASS**,
+실제 SIGKILL·재시작 복구 **63 PASS**, build/typecheck/architecture PASS, 취약점 0건이다.
+systemd `DefaultTasksMax=38426`가 남아 있던 문제를 실행으로 발견해 Resident/checker에
+`TasksMax=infinity`를 명시했고 실제 manager 값을 검증했다. 실행·시작 측정 종료 뒤 고정된
+15,376개 입력 바이트 대조는 변경 0건이다. 결과 기록은 그 이후 변경이며 구조 검사를 다시 한다.
+
+부하가 겹치지 않은 최종 3회씩 PTY 측정: Personal 화면 **1.23~1.25초** / 응답 1.54~1.56초,
+Society 화면 **2.95~3.08초** / 일반 대화 응답 3.22~3.35초다.
+최초 Society broker 준비는 **14.76~14.97초**, 즉시 요청한 첫 도구는 **15.49~15.72초**에
+정확히 한 번 성공했다. **1초 목표와 최초 Society 전체 준비·도구의 5초 목표는 미달이다.**
+macOS native/VM 부팅은 이 Linux 호스트에서 NOT_RUN이다. NAT NIC와 guest network unit을
+추가했지만 외부 signed guest image에 해당 unit과 virtio_net/networkd/resolved/DNS 구성을
+포함해야 한다. 이 저장소에는 guest image builder가 없다.
+
+현재 결과·명령·한계는 [validation](implementation/validation.md), 원시 로그와 입력 SHA는
+[DR37 evidence](../test/audit/unrestricted-2026-10-09.evidence.json)를 따른다.
+현재 브랜치 `feat/macos-hidden-vm`에 최종 기록·검사를 포함해 커밋하고 origin에 일반 푸시한다.
+아래 DR36와 과거 감사 수치는 해당 시점의 기록이며 이번 PASS를 대신하지 않는다.
+
+## 이전 결과: 감사 발견 수정·검증 (2026-10-09)
 
 사용자가 감사 이후 발견 전체 수정과 푸시를 명시적으로 지시했다. 아래 기록만 요청은
 과거 단계다. 기존 시작 시간 변경을 보존하고 13개 발견의 결함을 수정·재검증했다. 추가로

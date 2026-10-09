@@ -34,6 +34,7 @@ function world(platform, { selected = 'personal', birth, birthError, societies =
   }, host);
   const packageGrammar = compile(process.env.OMA_PACKAGE_GRAMMAR_SOURCE ?? 'src/runtime/pi-packages.ts', {
     'node:fs': {}, 'node:path': path, '../domain/errors.js': { StoreError },
+    '../leaf.js': {}, '../storage/contained-fs.js': {}, '../storage/durable-fs.js': {},
     '../config/operations.js': { PACKAGE_ENTRY_PREFIX: 'packages:', extensionEntryProblem() {} },
     './user-files.js': {}, '../protocol/host-guest.js': { isUuid: value => typeof value === 'string' && /^[a-f0-9-]{36}$/.test(value) },
     '../storage/directory.js': { listOwnedDirectory() { return null; } },

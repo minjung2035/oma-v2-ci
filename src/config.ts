@@ -243,9 +243,7 @@ export function validateConfig(raw: unknown): ValidatedConfigCandidate {
   for (const key of Object.keys(quota)) needInt(quota[key], `quota.${key}`, 0);
   const societyAgents = needInt(quota.societyAgents, "quota.societyAgents", 0);
   const lineageAgents = needInt(quota.lineageAgents, "quota.lineageAgents", 0);
-  needInt(quota.storageBytes, "quota.storageBytes", 1);
-  if (lineageAgents > societyAgents) err("quota.lineageAgents exceeds quota.societyAgents");
-  if (initialResidents.length > societyAgents) err("initialResidents exceed quota.societyAgents");
+  needInt(quota.storageBytes, "quota.storageBytes", 0);
 
   const integration = closedRecord(cfg.integration, ["policyRevision", "protectedPaths", "checks"], "integration", ["tiered"]);
   if (integration.tiered !== undefined && tieredPolicyCheck(integration.tiered) !== null) err("integration.tiered has invalid rules or authority");

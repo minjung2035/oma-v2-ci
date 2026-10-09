@@ -93,16 +93,16 @@ test("T94/TUI-007: writing settings replaces config.json atomically with a fresh
     const before = readSettings(path);
     assert.equal(before.config.integration.policyRevision, "rev-initial");
 
-    const written = writeSettings(path, applyField(before, WORKER_LIMIT, 12));
+    const written = writeSettings(path, applyField(before, INITIAL_WORKERS, 12));
     const reloaded = readSettings(path);
-    assert.equal(reloaded.config.quota.societyAgents, 12);
+    assert.equal(reloaded.config.initialResidents.length, 12);
     assert.notEqual(reloaded.config.integration.policyRevision, "rev-initial");
     assert.equal(reloaded.config.integration.policyRevision, written.integration.policyRevision);
     // Deterministic: the same content yields the same revision, so a no-op
     // rewrite does not churn the policy identity.
-    assert.equal(revisionFor(applyField(before, WORKER_LIMIT, 12)), revisionFor(applyField(before, WORKER_LIMIT, 12)));
-    assert.notEqual(revisionFor(applyField(before, WORKER_LIMIT, 12)), revisionFor(applyField(before, WORKER_LIMIT, 13)));
-    assert.equal(JSON.parse(readFileSync(path, "utf8")).quota.societyAgents, 12);
+    assert.equal(revisionFor(applyField(before, INITIAL_WORKERS, 12)), revisionFor(applyField(before, INITIAL_WORKERS, 12)));
+    assert.notEqual(revisionFor(applyField(before, INITIAL_WORKERS, 12)), revisionFor(applyField(before, INITIAL_WORKERS, 13)));
+    assert.equal(JSON.parse(readFileSync(path, "utf8")).initialResidents.length, 12);
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
 
@@ -132,7 +132,7 @@ test("T96/TUI-007: every exposed field declares an apply scope that matches its 
     const scopes = new Map(fields.flatMap(field => (field.kind === "link" ? [] : [[field.id, field.apply] as const])));
     assert.equal(scopes.get(PRINCIPAL_MODEL), "next-session");
     assert.equal(scopes.get(WORKER_MODEL), "next-activation");
-    assert.equal(scopes.get(WORKER_LIMIT), "restart");
+    assert.equal(scopes.get(WORKER_LIMIT), undefined);
     assert.equal(scopes.get(INITIAL_WORKERS), "bootstrap-only");
     // The Config screen never offers to run Residents as the Principal.
     const profileField = fields.find(field => field.id === WORKER_PROFILE)!;
@@ -391,7 +391,7 @@ test("T98/TUI-012: the Dashboard keeps an unobserved value unknown instead of gu
     });
     const observedByLabel = new Map(observed.map(line => [line.label, line.value]));
     assert.equal(observedByLabel.get("Active"), "1");
-    assert.equal(observedByLabel.get("Workers"), "2 created / 8 max");
+    assert.equal(observedByLabel.get("Workers"), "2 created");
     assert.match(observedByLabel.get("Pending")!, /^3 \(/);
     assert.match(observedByLabel.get("Status")!, /^observed \(/);
     assert.match(observedByLabel.get("Mail")!, /^0 pending delivery to the Principal session \([0-9:]+ observed\) · 0 new arrivals$/);
@@ -517,20 +517,11 @@ test("T92/TUI-004,014: the Principal session runs Pi in RPC mode; OMA suppresses
   assert.equal(pinned[pinned.indexOf("--model") + 1], "openai-codex/gpt");
 });
 
-test("DR27/CREATE-003: the persistent Worker limit is a creation limit, not an activation limit", () => {
+test("DR27/CREATE-003: obsolete Worker quota is absent from settings", () => {
   const root = scratch("oma-total-workers-");
   try {
-    const path = join(root, "config.json");
-    writeFileSync(path, JSON.stringify(config(root)));
-    const before = readSettings(path);
-    const field = before.fields.find(field => field.id === WORKER_LIMIT)!;
-    assert.equal(field.label, "Max created workers");
-    assert.equal(field.kind === "number" && field.apply, "restart");
-    writeSettings(path, applyField(before, WORKER_LIMIT, 12));
-    const after = readSettings(path);
-    assert.deepEqual(after.config.quota, { ...before.config.quota, societyAgents: 12 });
-    assert.deepEqual(after.config.initialResidents, before.config.initialResidents);
-    assert.equal(after.fields.some(field => /active.*limit|limit.*active/i.test(field.label)), false);
+    assert.equal(fieldsOf(config(root), "resident").some(field => field.id === WORKER_LIMIT), false);
+    assert.throws(() => applyField(settingsOf(join(root, "config.json"), config(root)), WORKER_LIMIT, 12), { code: "INVALID_REQUEST" });
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
 
@@ -543,7 +534,7 @@ for (const desired of ["provisioning", "enabled", "stopped", "retired"] as const
       const rows = new Map(dashboardLines({ config: cfg, principalModel: { configured: "strong", session: null }, unread: 0,
         observation: { kind: "observed", observedAtMs: 0, statuses: [status, { ...status, agent: "principal" }] },
       }).map(row => [row.label, row.value]));
-      assert.equal(rows.get("Workers"), "1 created / 8 max");
+      assert.equal(rows.get("Workers"), "1 created");
       assert.equal(rows.get("Active"), activeState === "active" ? "1" : "0");
     });
 
@@ -553,6 +544,6 @@ test("DR27/P0-5: an unknown unit does not erase its created slot or invent activ
   const rows = new Map(dashboardLines({ config: config("/fixture"), principalModel: { configured: "strong", session: null }, unread: 0,
     observation: { kind: "observed", observedAtMs: 0, statuses: [status] },
   }).map(row => [row.label, row.value]));
-  assert.equal(rows.get("Workers"), "1 created / 8 max");
+  assert.equal(rows.get("Workers"), "1 created");
   assert.match(rows.get("Active")!, /^unknown /);
 });

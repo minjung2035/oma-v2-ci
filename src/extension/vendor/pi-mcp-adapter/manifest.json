@@ -66,7 +66,7 @@
       },
       "index.js": {
         "reason": "Ambient-env neutralization: the factory-level MCP_DIRECT_TOOLS read drives direct/namespace tool overrides at registration time — under OMA it reads omaAmbientEnv, so no exported env var can resurrect a tool surface the OMA config forbade.",
-        "edits": 4
+        "edits": 7
       },
       "config.js": {
         "reason": "PI_MCP_CONFIG_MODE reads omaAmbientEnv: upstream's 'exclusive' env mode decides whether config sources merge or override — under OMA no env may reach that authority decision.",
@@ -10952,8 +10952,8 @@
     },
     {
       "path": "runtime/index.js",
-      "bytes": 117908,
-      "sha256": "3ad86c84a31847f8f5967336276e60d05bc5af2a7a77242dc947ccdb308a1bd9"
+      "bytes": 118159,
+      "sha256": "ec1fff5a002e1bfce9e6183825c5780c72ad8affaffd4e63679734f835281706"
     },
     {
       "path": "runtime/init.d.ts",
@@ -13946,5 +13946,5 @@
       "sha256": "e12a3786ea18a5e9106bc5320c0eacec3991ee00476a72d97438a0135f18a82d"
     }
   ],
-  "bundleSha256": "66b62749fc322e024565ffa2f562b1ab8d2f460cd00a372c9468df3617a2f62c"
+  "bundleSha256": "ed4f14a6e93ab066fd1102b26f6ddc374b381a7f9c676a19e3fed0be4f0be553"
 }

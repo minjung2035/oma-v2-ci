@@ -36,7 +36,7 @@ const environment: Check = value => {
 };
 export const integrationCheckCheck = checkObject({
   id: checkString({ min: 1 }), argv: checkArray(commandString, { min: 1 }), env: environment,
-  timeoutSeconds: checkInt({ min: 1 }), tmpBytes: checkOptional(checkInt({ min: 1 })),
+  timeoutSeconds: checkInt({ min: 0 }), tmpBytes: checkOptional(checkInt({ min: 0 })),
   resources: checkOptional(resourceLimitsCheck),
 });
 

@@ -16,7 +16,7 @@ import { join } from "node:path";
 import type { PreparedBatch } from "../implementation/contracts.js";
 import { loadConfiguration, loadConfigurationSnapshot, validateConfig, type ConfigurationSnapshot } from "../src/config.js";
 import { collectManagedGenerations, commitInlineConfiguration } from "../src/config/generations.js";
-import { applyField, commitManagedEdit, readSettings, WORKER_LIMIT } from "../src/tui/sources/settings.js";
+import { applyField, commitManagedEdit, readSettings, INITIAL_WORKERS } from "../src/tui/sources/settings.js";
 import { replaceDerivedFile, type DurabilityFault } from "../src/storage/durable-fs.js";
 import { publishImmutableFile } from "../src/storage/immutable-file.js";
 import { PI_ADAPTER_REVISION, deliveryDecision, observeDeliveryReceipt, publishDeliveryReceipt, readDeliveryReceipt, type DeliveryBoundary } from "../src/storage/delivery-receipt.js";
@@ -99,8 +99,8 @@ test("DR12 / P0-7: an inline commit SIGKILLed at any durability point leaves the
   let limit = 0;
   try {
     const settings = readSettings(probe.input);
-    limit = probe.config.quota.societyAgents + 1;
-    commitInlineConfiguration(settings.snapshot!, validateConfig(applyField(settings, WORKER_LIMIT, limit)), fault => { points.push(fault); });
+    limit = probe.config.initialResidents.length + 1;
+    commitInlineConfiguration(settings.snapshot!, validateConfig(applyField(settings, INITIAL_WORKERS, limit)), fault => { points.push(fault); });
   } finally { probe.close(); }
   const renamed = points.findIndex(point => point.point === "derived-rename" && point.phase === "after-visible");
   assert.ok(renamed > 0, "the inline commit has a rename point");
@@ -110,18 +110,18 @@ test("DR12 / P0-7: an inline commit SIGKILLed at any durability point leaves the
       const run = killedAt(crash, `
         const { validateConfig } = await import(${JSON.stringify(moduleUrl("../src/config.js"))});
         const { commitInlineConfiguration } = await import(${JSON.stringify(moduleUrl("../src/config/generations.js"))});
-        const { applyField, readSettings, WORKER_LIMIT } = await import(${JSON.stringify(moduleUrl("../src/tui/sources/settings.js"))});
+        const { applyField, readSettings, INITIAL_WORKERS } = await import(${JSON.stringify(moduleUrl("../src/tui/sources/settings.js"))});
         const settings = readSettings(${JSON.stringify(f.input)});
-        commitInlineConfiguration(settings.snapshot, validateConfig(applyField(settings, WORKER_LIMIT, ${limit})), faults);`);
+        commitInlineConfiguration(settings.snapshot, validateConfig(applyField(settings, INITIAL_WORKERS, ${limit})), faults);`);
       const at = `${crash} (${points[crash]!.point}/${points[crash]!.phase})`;
       assert.equal(run.signal, "SIGKILL", `not killed at ${at}: ${String(run.stdout)}${String(run.stderr)}`);
-      assert.equal(loadConfiguration(f.input).config.quota.societyAgents, crash >= renamed ? limit : f.config.quota.societyAgents, `killed at ${at}`);
+      assert.equal(loadConfiguration(f.input).config.initialResidents.length, crash >= renamed ? limit : f.config.initialResidents.length, `killed at ${at}`);
       // Its temporary is collected, and the next edit commits.
       collectManagedGenerations({ layout: loadConfigurationSnapshot(f.input).layout });
       assert.deepEqual(temporariesUnder(join(f.input, "..")), [], `a dead commit's temporary outlived the collection, at ${at}`);
       const settings = readSettings(f.input);
-      commitInlineConfiguration(settings.snapshot!, validateConfig(applyField(settings, WORKER_LIMIT, limit + 1)));
-      assert.equal(loadConfiguration(f.input).config.quota.societyAgents, limit + 1, `after ${at}`);
+      commitInlineConfiguration(settings.snapshot!, validateConfig(applyField(settings, INITIAL_WORKERS, limit + 1)));
+      assert.equal(loadConfiguration(f.input).config.initialResidents.length, limit + 1, `after ${at}`);
     } finally { f.close(); }
   }
 });

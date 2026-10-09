@@ -7,7 +7,7 @@ import { writeFileSync } from "node:fs";
 import { join } from "node:path";
 import type { HostConfigV1 } from "../../implementation/contracts.js";
 import { defaultHostConfig } from "../../src/config/defaults.js";
-import { WORKER_LIMIT, commitField, readSettings } from "../../src/tui/sources/settings.js";
+import { INITIAL_WORKERS, commitField, readSettings } from "../../src/tui/sources/settings.js";
 
 const [root, point] = process.argv.slice(2);
 if (!root || !point) throw new Error("surface crash worker requires its owned root and boundary");
@@ -29,6 +29,6 @@ const seed: HostConfigV1 = defaultHostConfig({
 writeFileSync(path, `${JSON.stringify(seed, null, 2)}\n`);
 
 checkpoint("before-write");
-commitField(readSettings(path), WORKER_LIMIT, 12);
+commitField(readSettings(path), INITIAL_WORKERS, 12);
 checkpoint("after-write");
 process.exit(0);

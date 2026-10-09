@@ -78,7 +78,7 @@ test("R19 / INT-004: complete check profiles are retained; missing limits are re
   const before = JSON.stringify(source);
   assert.doesNotThrow(() => assertSupportedIntegration(snapshotIntegrationPolicy(source)));
   const incomplete = structuredClone(source); delete incomplete.checks[0]!.resources;
-  assert.throws(() => assertSupportedIntegration(snapshotIntegrationPolicy(incomplete)), code("UNSUPPORTED_PROFILE"));
+  assert.doesNotThrow(() => assertSupportedIntegration(snapshotIntegrationPolicy(incomplete)));
   assert.equal(JSON.stringify(source), before, "checks are not replaced with an empty list");
   assert.doesNotThrow(() => assertSupportedIntegration(snapshotIntegrationPolicy({
     policyRevision: "p1", protectedPaths: ["/"], checks: [],

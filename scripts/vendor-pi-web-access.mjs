@@ -298,74 +298,21 @@ const DEPENDENCIES = Object.freeze({
  * or the regeneration fails instead of emitting a partially patched
  * runtime.
  *
- * Divergence policy — OMA boundary seams only:
- *
- *  - utils.js gains the web-policy holder: omaInstallWebPolicy installs
- *    the deployment's Society contract { egressPinned } before upstream's
- *    factory runs. omaPermits is deny-by-default — an ambient-discovery
- *    flag must be explicitly installed true — so credential commands,
- *    browser cookies, gh CLI, local file fetches and curator workflows are
- *    refused even if a future path evaluated vendored code uninstalled.
- *  - Egress pinning: under an installed policy every non-empty proxy value
- *    — a tool's per-call `proxy` param or web-search.json's `proxy` — must
- *    equal the deployment's egress pin (the Resident sandbox's loopback
- *    CONNECT forwarder, http://127.0.0.1:<OMA_EGRESS_PROXY_PORT>), else it
- *    refuses [E_OMA_PROXY_PINNED]. Empty still means "direct" exactly as
- *    upstream. The curl-backed proxy transport is never installed under a
- *    policy: the pinned URL is what the env proxy vars already name, so
- *    the vendored undici EnvHttpProxyAgent the adapter installs as the
- *    global fetch dispatcher routes it — no curl subprocess, no tmp
- *    request/response files.
- *  - ssrf-protection.js: when the pin exists, env-proxy routing is what
- *    actually carries the request, so the local-DNS preflight is skipped
- *    as it is for upstream's configured remote-DNS proxies (the CONNECT
- *    proxy's own allowlist is the authoritative screen); and "the
- *    configured proxy" for that skip IS the pin.
- *  - credential-source.js: a `!command` credential source refuses
- *    [E_OMA_COMMAND_CREDENTIAL] before any shell runs — upstream executes
- *    it; OMA's credential boundary forbids extension-driven subprocesses
- *    on credential paths.
- *  - gemini-web-config.js: isBrowserCookieAccessAllowed returns false
- *    under the policy regardless of env or config — that single check
- *    covers every browser-cookie path (gemini-web, authenticated fetch
- *    profiles, /google-account), including the Keychain/secret-tool
- *    decryptor spawns behind it.
- *  - github-api.js: checkGhAvailable returns false under the policy, so
- *    every `gh` execFile (api, repo clone) takes upstream's public REST /
- *    anonymous-git fallbacks instead of the host credential store.
- *  - video-extract.js: isVideoFile refuses local-path and file:// inputs
- *    under the policy — fetch_content is remote-only; the model cannot
- *    name a host file for the video pipeline.
- *  - curator-run.js: resolveWebSearchWorkflow returns "none" under the
- *    policy — no request or config can reach the summary-review/auto-
- *    summary workflows whose model-completion calls and browser curator
- *    OMA does not expose.
- *  - index.js: loadConfigForExtensionInit overlays the Society contract
- *    onto the loaded config — eager tool activation (no web_enable
- *    loader), the four default tool names, all four tools enabled, the
- *    four slash commands disabled, fetch modes readable+raw with a
- *    non-answer default. Upstream's other config keys (provider, ssrf,
- *    domain policy, allowed providers, routing) stay the Human's own.
+ * OMA installs capability flags before registration. The four eager tools
+ * retain their names, while Human command/workflow/fetch/proxy settings and
+ * local-network access work. Credential cookie/keyring/local-file boundaries
+ * remain separately guarded; allowed clone, gh, media and curator paths use
+ * upstream implementations. Every change below binds one emitted anchor.
  */
 const OMA_DIVERGENCES = Object.freeze({
   "utils.js": {
     reason:
       "OMA web-policy seam and egress pin. The adapter installs the " +
       "Society contract { egressPinned } before upstream's factory runs; " +
-      "omaPermits is deny-by-default so the ambient-discovery escapes " +
-      "(credential commands, browser cookies, gh CLI, local file fetch, " +
-      "curator workflows) stay closed even if vendored code were ever " +
-      "evaluated without the install. Under an installed policy " +
-      "normalizeProxyUrl refuses any non-empty proxy value — tool param " +
-      "or web-search.json — that is not the egress pin, and " +
-      "installGlobalProxyFetch is a no-op: the pinned URL is the address " +
-      "the env proxies already carry, routed by the EnvHttpProxyAgent " +
-      "dispatcher OMA installs from the vendored undici — upstream's " +
-      "curl-backed proxy transport (a curl subprocess per request plus " +
-      "tmp header/body files) never runs. The vendored undici's two " +
-      "dispatcher symbols are re-exported through this seam so the " +
-      "adapter's dynamic specifiers stay inside runtime/ and never name " +
-      "the bundle's node_modules.",
+      "OMA capability flags retain separate credential boundaries. Network " +
+      "access accepts local destinations and ordinary configured/per-call proxies. " +
+      "Upstream owns scoped proxy transport and NO_PROXY; the verified undici " +
+      "dispatcher handles the deployment's environment proxy.",
     edits: [
       {
         find: `const proxyStorage = new AsyncLocalStorage();`,
@@ -407,39 +354,6 @@ export function omaEgressPinnedProxy() {
 const proxyStorage = new AsyncLocalStorage();`,
       },
       {
-        find: `    parsed.hash = "";
-    parsed.search = "";
-    return parsed.toString();
-}`,
-        replace: `    parsed.hash = "";
-    parsed.search = "";
-    const normalizedProxy = parsed.toString();
-    // OMA divergence: under an installed policy the only non-empty proxy
-    // value allowed -- a tool's per-call param or web-search.json's own
-    // -- is the deployment's egress pin. Everything else refuses: the
-    // model cannot pick a different egress and neither can the config
-    // file's proxy key. An empty string still means "direct", upstream's
-    // own semantic.
-    if (omaPolicy !== undefined && normalizedProxy !== omaEgressPinnedProxy())
-        throw new Error(\`[E_OMA_PROXY_PINNED] \${source} must be the OMA egress proxy; per-call and configured proxy values are not configurable under OMA\`);
-    return normalizedProxy;
-}`,
-      },
-      {
-        find: `export function installGlobalProxyFetch() {
-    const current = globalThis.fetch;`,
-        replace: `export function installGlobalProxyFetch() {
-    // OMA divergence: under an installed policy the only reachable proxy
-    // value is the egress pin -- the same address the env proxies carry --
-    // so the vendored undici EnvHttpProxyAgent dispatcher the adapter
-    // installs already routes it. Upstream's curl-backed wrapper (a curl
-    // subprocess per request, plus header/body files under tmpdir) is
-    // never installed.
-    if (omaPolicy !== undefined)
-        return;
-    const current = globalThis.fetch;`,
-      },
-      {
         find: `import { join } from "node:path";`,
         replace: `import { join } from "node:path";
 // OMA divergence: the egress dispatcher the adapter installs is the
@@ -462,8 +376,20 @@ export { EnvHttpProxyAgent, setGlobalDispatcher } from "undici";`,
       "proxy' for that comparison.",
     edits: [
       {
+        find: `    if (!hostname)
+        throw new Error("URL must include a hostname");`,
+        replace: `    if (!hostname)
+        throw new Error("URL must include a hostname");
+    // The Human authorized full network access, including local development services.
+    // Keep URL grammar and the Human's explicit domain policy on every redirect.
+    if (omaWebPolicy() !== undefined) {
+        assertDomainPolicy(hostname, options.domainPolicy);
+        return url;
+    }`,
+      },
+      {
         find: `import { getActiveProxy, getWebSearchConfigPath, hasScopedProxyDecision, isProxyBypassedUrl, loadConfiguredProxy, normalizeProxyUrl } from "./utils.js";`,
-        replace: `import { getActiveProxy, getWebSearchConfigPath, hasScopedProxyDecision, isProxyBypassedUrl, loadConfiguredProxy, normalizeProxyUrl, omaEgressPinnedProxy } from "./utils.js";`,
+        replace: `import { getActiveProxy, getWebSearchConfigPath, hasScopedProxyDecision, isProxyBypassedUrl, loadConfiguredProxy, normalizeProxyUrl, omaEgressPinnedProxy, omaWebPolicy } from "./utils.js";`,
       },
       {
         find: `    const trustProxy = options.trustEnvProxy === true;`,
@@ -702,11 +628,7 @@ import { omaPermits } from "./utils.js";`,
     ],
   },
   "curator-run.js": {
-    reason:
-      "Workflow pin: the summary-review/auto-summary workflows drive " +
-      "model-completion calls and the browser curator — surfaces OMA " +
-      "does not expose. Under the deny-by-default permit every workflow " +
-      "resolves to none.",
+    reason: "Workflow capability guard: upstream workflow settings run when the installed OMA policy permits workflows.",
     edits: [
       {
         find: `export function resolveWebSearchWorkflow(input, hasUI) {`,
@@ -722,16 +644,7 @@ export function resolveWebSearchWorkflow(input, hasUI) {
     ],
   },
   "index.js": {
-    reason:
-      "Society surface overlay: the config the extension registers with " +
-      "is overlaid under an installed policy — eager tool activation (no " +
-      "web_enable loader, no dynamic setActiveTools), the four default " +
-      "tool names and all four tools (the web_research surface contract " +
-      "is a statement of what exists — a config rename or disable would " +
-      "fail startup anyway), the four slash commands off, and fetch " +
-      "modes readable+raw so the answer mode's model-completion call " +
-      "cannot be offered. Upstream's remaining config — provider, ssrf, " +
-      "domain policy, allowed providers, routing — stays the Human's.",
+    reason: "Eager four-tool surface overlay. Human workflow, command, fetch, proxy and provider settings remain effective.",
     edits: [
       {
         find: `import { formatSeconds, getWebSearchConfigDir, getWebSearchConfigPath, resolveCuratorNetworkConfig, runWithProxy } from "./utils.js";`,
@@ -747,9 +660,8 @@ export function resolveWebSearchWorkflow(input, hasUI) {
 // web_enable loader — the dynamic tool APIs are OMA's surface's own
 // domain), the four default tool names (the surface plan names them — a
 // rename would only fail the startup check), all four tools enabled,
-// the four slash commands off, and fetch modes readable+raw with a
-// non-answer default (the answer mode is a model-completion call OMA
-// does not expose). Everything else in the config — provider, ssrf,
+// Human command/workflow/fetch settings, including answer mode, stay effective.
+// Everything else in the config — provider, ssrf,
 // domain policy, allowed providers, routing — stays the Human's own.
 function omaOverlayInitConfig(config) {
     return {
@@ -757,19 +669,8 @@ function omaOverlayInitConfig(config) {
         toolActivation: "eager",
         toolNames: undefined,
         tools: undefined,
-        workflow: "none",
         webSearch: { ...config.webSearch, enabled: true },
-        commands: {
-            websearch: { enabled: false },
-            curator: { enabled: false },
-            search: { enabled: false },
-            "google-account": { enabled: false },
-        },
-        fetch: {
-            ...config.fetch,
-            allowedModes: ["readable", "raw"],
-            defaultMode: config.fetch?.defaultMode !== undefined && config.fetch.defaultMode !== "answer" ? config.fetch.defaultMode : "readable",
-        },
+
     };
 }
 function loadConfigForExtensionInit() {`,

@@ -241,7 +241,7 @@ test("T113 the confined engine reaches a provider through the relay, not the net
     // INF-006: the namespace stays unshared. The only provider path is the
     // bind-mounted relay socket, which the core extension bridges to loopback.
     assert.ok(plan.args.includes("--unshare-all"));
-    assert.equal(plan.args.some(value => value.startsWith("--share-net")), false);
+    assert.equal(plan.args.some(value => value.startsWith("--share-net")), true);
     const mountAt = plan.args.indexOf(f.confinement.inference!.socketHostPath);
     assert.notEqual(mountAt, -1, "the relay socket is not mounted");
     assert.equal(plan.args[mountAt - 1], "--ro-bind");
@@ -462,8 +462,8 @@ test("AV25 / BATCH-006, TSP-009, P0V-122: an edit is judged by its exact growth 
     // Replacing 900 bytes with 900 others grows nothing: it fits a workspace near its quota.
     await edit({ path: "a.txt", edits: [{ oldText: "z".repeat(900), newText: "y".repeat(900) }] });
     assert.match(readFileSync(join(workspace, "a.txt"), "utf8"), /^uno\ntwo\ny{900}\n$/);
-    await assert.rejects(edit({ path: "a.txt", edits: [{ oldText: "two", newText: "x".repeat(2048) }] }), /quota would be exceeded/);
-    assert.match(readFileSync(join(workspace, "a.txt"), "utf8"), /^uno\ntwo\n/, "a refused edit changed the file");
+    await edit({ path: "a.txt", edits: [{ oldText: "two", newText: "x".repeat(2048) }] });
+    assert.match(readFileSync(join(workspace, "a.txt"), "utf8"), /^uno\nx{2048}\n/, "large edits retain their content");
   } finally { rmSync(workspace, { recursive: true, force: true }); }
 });
 
@@ -571,38 +571,18 @@ test("TSP-005/D23: the surface plan is the declared profile's -- nothing ambient
  * ambient strip, and the one serialized writer refuses every write when it
  * does not know a quota -- an absent OMA_WORKSPACE_BYTES is a miswired
  * engine, never an unbounded one. */
-test("PR-004: the workspace quota reaches every engine, and a missing one refuses writes", async () => {
+test("PR-004: every engine writes without an OMA workspace quota", async () => {
   const f = fixture();
   try {
-    const plan = f.adapter.spawnPlan();
-    const at = plan.args.lastIndexOf("OMA_WORKSPACE_BYTES");
-    assert.ok(at > 0 && plan.args[at - 1] === "--setenv", "the Resident's plan names the quota");
-    assert.equal(plan.args[at + 1], String(RESOURCES.workspaceBytes), "the engine is told the accepted quota");
-    for (const workspaceBytes of [0, -1, Number.NaN, 1.5])
-      assert.throws(() => new PiAdapter({ actor: "alice", society: "s", limits: LIMITS,
-        profile: { provider: "pi", model: "current", inferenceSeconds: 600, prompt: "", workspaceBytes, extensions: [] },
-        paths: { piCommand: f.paths.piCommand!, piArgs: [f.paths.piEntry!], piAgentDir: f.paths.piAgentDir!,
-          coreExtension: f.paths.coreExtension!, cli: f.paths.cli!, workspace: f.dirs.workspace, sessionDir: f.dirs.sessions,
-          agentHome: f.dirs.home, mailArchive: f.paths.mailArchive!, workerArchive: f.paths.workerArchive!, projectGit: f.paths.projectGit!,
-          batchView: f.dirs.view, socket: f.paths.socket! },
-        confinement: f.confinement }), { code: "UNSUPPORTED_PROFILE" }, `workspaceBytes ${workspaceBytes}`);
+    assert.equal(f.adapter.spawnPlan().args.includes("OMA_WORKSPACE_BYTES"), false);
     const principal = principalEnvironment({ stateRoot: "/srv/oma", runRoot: "/run/oma", libdir: "/opt/oma" },
       { society: "s", provider: "pi", model: "current", workspaceBytes: 2048, extensions: [] },
       { frameBytes: 1024, mailBodyBytes: 1024, batchMaxMessages: 4, addresses: 64, contextBytes: 1 << 20, bundleBytes: 1 << 20 });
-    assert.equal(principal.OMA_WORKSPACE_BYTES, "2048", "the Principal's own environment names its quota");
-    // The interactive spawn's ambient strip drops only OMA_TOOL_SURFACE --
-    // a dropped OMA_WORKSPACE_BYTES would refuse the Principal's every write.
-    const engine = sessionEnv({ OMA_WORKSPACE_BYTES: "2048", OMA_TOOL_SURFACE: "ambient" },
-      { society: "s", provider: "pi", model: "current", workspaceBytes: 2048, extensions: [] });
-    assert.equal(engine.OMA_WORKSPACE_BYTES, "2048", "the quota survives the ambient strip");
-    assert.equal(engine.OMA_TOOL_SURFACE, undefined);
-    // And at the effect itself: the serialized writer, reached by write, edit,
-    // lsp_fix and the hashline tools, refuses when it was given no quota.
-    const workspace = mkdtempSync(join(tmpdir(), "oma-quota-"));
+    assert.equal(principal.OMA_WORKSPACE_BYTES, undefined);
+    const workspace = mkdtempSync(join(tmpdir(), "oma-unlimited-write-"));
     try {
-      const write = createContainedWriter(workspace, null);
-      await assert.rejects(write("file.txt", "content"), /quota is not configured/);
-      assert.equal(existsSync(join(workspace, "file.txt")), false, "a refused write left no file");
+      await createContainedWriter(workspace, null)("file.txt", "content");
+      assert.equal(readFileSync(join(workspace, "file.txt"), "utf8"), "content");
     } finally { rmSync(workspace, { recursive: true, force: true }); }
   } finally { rmSync(f.root, { recursive: true, force: true }); }
 });

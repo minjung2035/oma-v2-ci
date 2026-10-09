@@ -5,8 +5,9 @@
  * The store is a link to one generation, published whole under the digest of
  * what arrived and never changed after, so an engine that loaded an extension
  * from an earlier generation keeps reading the files it pinned. Published
- * generations remain until the installation's owner removes them: a newer
- * generation is not evidence that readers of an older one have exited.
+ * generations with reader leases are collected only after an exclusive
+ * inode lock proves no live engine holds them. Unmarked legacy generations
+ * stay because their reader lifetime cannot be proven.
  *
  * guesthost runs a request cut off before its outcome again, so every step is
  * one that may have been done already: the generation is published once under
@@ -20,7 +21,9 @@ import { StoreError } from "../domain/errors.js";
 import { defaultSocietyFor } from "../config/defaults.js";
 import { sha256Hex } from "../hash.js";
 import { readPackageArchive } from "../platform/package-archive.js";
-import { PACKAGE_GENERATIONS, PACKAGE_STORE, PACKAGE_INDEX_BYTES, decodePackageIndex, readPackageIndex, writePackageIndex, type InstalledPackage } from "../runtime/pi-packages.js";
+import { PACKAGE_GENERATIONS, PACKAGE_READER_MARKER, PACKAGE_STORE, PACKAGE_INDEX_BYTES, collectPackageGenerations, decodePackageIndex, readPackageIndex, writePackageIndex, type InstalledPackage } from "../runtime/pi-packages.js";
+import { ProcessLock } from "../runtime/process-lock.js";
+import { withAsyncCleanup } from "../process/cleanup.js";
 import { readUserFile } from "../runtime/user-files.js";
 import { ensureOwnedDurableDirectory, publishNoReplace } from "../storage/durable-fs.js";
 import { removeOwnedTree } from "../storage/directory.js";
@@ -51,6 +54,11 @@ function beforeImage(path: string): { before: readonly InstalledPackage[]; previ
 
 export async function applyPackageArchive(options: { readonly data: string; readonly archive: string; readonly libdir: string;
   readonly mirror?: string | undefined; readonly activate?: string | undefined }, after?: (step: ApplyStep) => void): Promise<{ readonly added: string[]; readonly said: string[]; readonly ok: boolean }> {
+  const owner = ProcessLock.acquire(join(options.data, ".packages-publication.lock"));
+  return withAsyncCleanup(() => applyOwnedPackageArchive(options, after), () => owner.close());
+}
+async function applyOwnedPackageArchive(options: { readonly data: string; readonly archive: string; readonly libdir: string;
+  readonly mirror?: string | undefined; readonly activate?: string | undefined }, after?: (step: ApplyStep) => void): Promise<{ readonly added: string[]; readonly said: string[]; readonly ok: boolean }> {
   const { data, archive, libdir, mirror } = options;
   const store = join(data, PACKAGE_STORE);
   const generations = join(data, PACKAGE_GENERATIONS);
@@ -80,14 +88,14 @@ export async function applyPackageArchive(options: { readonly data: string; read
       readPackageArchive(archive, staging);
       // Which files are extensions is the engine's answer, asked where they now are.
       await writePackageIndex(staging);
+      publishNoReplace(join(staging, PACKAGE_READER_MARKER), "oma-reader-leases-v1\n");
       publishStagedDirectory(staging, target, () => {});
     } finally { removeOwnedTree(staging); }
   }
   after?.("published");
   replaceDerivedSymlink(store, `${PACKAGE_GENERATIONS}/${id}`);
   after?.("switched");
-  // Publishing another generation never proves old readers quiescent.
-  // Staging is cleaned by its invocation; published code remains pinned.
+  collectPackageGenerations(data, id);
   after?.("collected");
   const now = readPackageIndex(store);
   const project = mirror === undefined ? null : (() => { const real = realpathSync(mirror); return defaultSocietyFor(real, sha256Hex(real)); })();

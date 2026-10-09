@@ -17,12 +17,12 @@
     "tool": "scripts/vendor-pi-web-access.mjs",
     "divergences": {
       "utils.js": {
-        "reason": "OMA web-policy seam and egress pin. The adapter installs the Society contract { egressPinned } before upstream's factory runs; omaPermits is deny-by-default so the ambient-discovery escapes (credential commands, browser cookies, gh CLI, local file fetch, curator workflows) stay closed even if vendored code were ever evaluated without the install. Under an installed policy normalizeProxyUrl refuses any non-empty proxy value — tool param or web-search.json — that is not the egress pin, and installGlobalProxyFetch is a no-op: the pinned URL is the address the env proxies already carry, routed by the EnvHttpProxyAgent dispatcher OMA installs from the vendored undici — upstream's curl-backed proxy transport (a curl subprocess per request plus tmp header/body files) never runs. The vendored undici's two dispatcher symbols are re-exported through this seam so the adapter's dynamic specifiers stay inside runtime/ and never name the bundle's node_modules.",
-        "edits": 4
+        "reason": "OMA web-policy seam and egress pin. The adapter installs the Society contract { egressPinned } before upstream's factory runs; OMA capability flags retain separate credential boundaries. Network access accepts local destinations and ordinary configured/per-call proxies. Upstream owns scoped proxy transport and NO_PROXY; the verified undici dispatcher handles the deployment's environment proxy.",
+        "edits": 2
       },
       "ssrf-protection.js": {
         "reason": "Egress-aware SSRF preflight: when the OMA egress pin exists the request is carried by the env proxy the pin names, so the local-DNS preflight is skipped exactly as upstream skips it for a configured remote-DNS proxy — the CONNECT allowlist is the authoritative screen, and a sandboxed engine could not resolve names locally anyway. The pin takes the place of 'the configured proxy' for that comparison.",
-        "edits": 3
+        "edits": 4
       },
       "credential-source.js": {
         "reason": "Credential command refusal: upstream executes a `!command` source to resolve a credential; OMA's credential boundary forbids extension-driven subprocesses on credential paths, so under the deny-by-default permit the source refuses before any shell runs. Literal, $ENV and file config sources keep upstream's semantics — what they can see is the engine's own allowlisted environment and the OMA-owned config file, not the host's credential stores.",
@@ -57,11 +57,11 @@
         "edits": 1
       },
       "curator-run.js": {
-        "reason": "Workflow pin: the summary-review/auto-summary workflows drive model-completion calls and the browser curator — surfaces OMA does not expose. Under the deny-by-default permit every workflow resolves to none.",
+        "reason": "Workflow capability guard: upstream workflow settings run when the installed OMA policy permits workflows.",
         "edits": 1
       },
       "index.js": {
-        "reason": "Society surface overlay: the config the extension registers with is overlaid under an installed policy — eager tool activation (no web_enable loader, no dynamic setActiveTools), the four default tool names and all four tools (the web_research surface contract is a statement of what exists — a config rename or disable would fail startup anyway), the four slash commands off, and fetch modes readable+raw so the answer mode's model-completion call cannot be offered. Upstream's remaining config — provider, ssrf, domain policy, allowed providers, routing — stays the Human's.",
+        "reason": "Eager four-tool surface overlay. Human workflow, command, fetch, proxy and provider settings remain effective.",
         "edits": 3
       },
       "utils.d.ts": {
@@ -54613,8 +54613,8 @@
     },
     {
       "path": "runtime/index.js",
-      "bytes": 187865,
-      "sha256": "48310bdef641c67d0d61ba1ea7424cf8a005067399b64ea52b6b905e17cbf7d1"
+      "bytes": 187309,
+      "sha256": "90558f5c056e0d28acff28e462feb7130f56721509646c12849cee3ebc391449"
     },
     {
       "path": "runtime/jina-search.d.ts",
@@ -54898,8 +54898,8 @@
     },
     {
       "path": "runtime/ssrf-protection.js",
-      "bytes": 21210,
-      "sha256": "3fb4b6d835d9753113cfd1d836e5aee3da53ee5717d0c4483c9f27aca8eb017d"
+      "bytes": 21519,
+      "sha256": "47ff598d123793dd2ee7549eb9bdcb8dec8a23923738a7825f465d477798e63d"
     },
     {
       "path": "runtime/storage.d.ts",
@@ -54968,8 +54968,8 @@
     },
     {
       "path": "runtime/utils.js",
-      "bytes": 23986,
-      "sha256": "d672599237f59f890275504376c7f3f85430e9dc759a762defd20a05bcc840ae"
+      "bytes": 22882,
+      "sha256": "580cffdb1bdd4b89d397965063f35c6b47bfb466a21a46fcaf1e034adf764f87"
     },
     {
       "path": "runtime/valyu.d.ts",
@@ -56007,5 +56007,5 @@
       "sha256": "025434bf88dc12430dba25f0bc68e320eabfdda4c2df7b6bbfa0868e865d4908"
     }
   ],
-  "bundleSha256": "8721ac33a43d63d92ef4501ef8fc362196c8dff107f6347d8960aa0ed7fb4fba"
+  "bundleSha256": "0c6ad206f15b728d6dd102e84d239ceb737abe2e15e85f7156bed6491e55d631"
 }

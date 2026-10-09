@@ -301,7 +301,7 @@ test("WP25.03 / D05: a Resident runs with its accepted resources; the current pr
     // replaced by the current profile.
     const { ["workspaceBytes"]: _dropped, ...partial } = accepted;
     for (const resources of [undefined, "", "zz", hex("{}"), hex(JSON.stringify(partial)),
-      hex(JSON.stringify({ ...accepted, workspaceBytes: 0 })), hex(JSON.stringify({ ...accepted, extra: 1 })),
+      hex(JSON.stringify({ ...accepted, workspaceBytes: -1 })), hex(JSON.stringify({ ...accepted, extra: 1 })),
       hex(JSON.stringify(Object.fromEntries(Object.entries(accepted).reverse())))]) {
       const refused = runnerEntry(f, { OMA_PROFILE_HEX: hex("verifier"), ...(resources === undefined ? {} : { OMA_RESOURCES_HEX: resources }) });
       assert.equal(refused.status, 4, `resources ${resources} were accepted`);

@@ -116,7 +116,7 @@ test("F34/F35/F36 live: locale, identity, temp, user-local PATH and support file
     assert.equal(report.user.username, "agent"); assert.equal(report.user.shell, "/bin/sh");
     assert.equal(report.locale, "UTF-8"); assert.equal(report.local, "local-ok"); assert.equal(report.tmp, "temp");
     assert.deepEqual(report.modes, [0o700, 0o700]);
-    assert.equal(report.routes, 1);
+    assert.ok(report.routes > 1, "the sandbox shares the host network");
     assert.ok(report.files.every(([, writable]: [string, boolean]) => !writable));
     for (const [path, bytes] of before) assert.equal(readFileSync(path).toString("base64"), bytes);
     const first = prepareResidentRootfs(options.confinement.host.rootfs, layout, process.getuid!(), process.getgid!());
@@ -187,13 +187,13 @@ test("FI-2: the toolchain contract -- this host's pinned Node ships the commands
       `${command}: neither ${prefixOf(node)}/lib/node_modules/${module}/${entry} nor /usr/bin/${command}`);
 });
 
-test("FI-5: a Resident is told its CPU, memory and task bounds; nproc reports the host", () => {
+test("FI-5: legacy resource declarations do not become Worker environment limits; nproc reports the host", () => {
   const options = residentOptions("/state");
   const env = (cpuQuotaPercent: number) => planEnvironment(planPiSpawn({ ...options,
     profile: { ...options.profile, resources: { cpuQuotaPercent, memoryBytes: FOUR_GIB, tasks: 256 } } } as PiAdapterOptions).args);
-  assert.deepEqual([env(200).OMA_CPUS, env(200).OMA_MEMORY_BYTES, env(200).OMA_TASKS], ["2", String(FOUR_GIB), "256"]);
-  assert.equal(env(150).OMA_CPUS, "2", "a partial CPU rounds up: -j1 would idle half the quota");
-  assert.equal(env(50).OMA_CPUS, "1");
+  assert.deepEqual([env(200).OMA_CPUS, env(200).OMA_MEMORY_BYTES, env(200).OMA_TASKS], [undefined, undefined, undefined]);
+  assert.equal(env(150).OMA_CPUS, undefined);
+  assert.equal(env(50).OMA_CPUS, undefined);
 });
 
 test("FI-5: the runner hands the accepted resources to the engine it starts", t => {
@@ -216,7 +216,7 @@ test("FI-5: the runner hands the accepted resources to the engine it starts", t 
   (runner as unknown as { lease: unknown }).lease = options.confinement.lease;
   const adapter = (runner as unknown as { adapter(batch: unknown): PiAdapter }).adapter({ id: "b", agent: "alice", incarnation: 1 });
   const env = planEnvironment(adapter.spawnPlan().args);
-  assert.deepEqual([env.OMA_CPUS, env.OMA_MEMORY_BYTES, env.OMA_TASKS], ["3", String(FOUR_GIB), "256"]);
+  assert.deepEqual([env.OMA_CPUS, env.OMA_MEMORY_BYTES, env.OMA_TASKS], [undefined, undefined, undefined]);
 });
 
 test("FI-1/2/5 live: a Worker commits, amends, rebases and merges without -c flags or an editor, and runs npm/npx", RESIDENT_TEST_OPTIONS, async () => {
@@ -263,6 +263,6 @@ test("FI-1/2/5 live: a Worker commits, amends, rebases and merges without -c fla
     assert.match(report.npmVersion ?? "", /^\d+\.\d+\.\d+$/);
     assert.match(report.npxVersion ?? "", /^\d+\.\d+\.\d+$/);
     assert.match(report.corepackVersion ?? "", /^\d+\.\d+\.\d+$/);
-    assert.equal(report.cpus, "2");
+    assert.equal(report.cpus, "unset");
   } finally { child?.kill("SIGKILL"); rmSync(root, { recursive: true, force: true }); }
 });

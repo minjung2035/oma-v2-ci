@@ -255,16 +255,7 @@ export function normalizeProxyUrl(value, source) {
         throw new Error(`${source} must include a proxy host: ${trimmed}`);
     parsed.hash = "";
     parsed.search = "";
-    const normalizedProxy = parsed.toString();
-    // OMA divergence: under an installed policy the only non-empty proxy
-    // value allowed -- a tool's per-call param or web-search.json's own
-    // -- is the deployment's egress pin. Everything else refuses: the
-    // model cannot pick a different egress and neither can the config
-    // file's proxy key. An empty string still means "direct", upstream's
-    // own semantic.
-    if (omaPolicy !== undefined && normalizedProxy !== omaEgressPinnedProxy())
-        throw new Error(`[E_OMA_PROXY_PINNED] ${source} must be the OMA egress proxy; per-call and configured proxy values are not configurable under OMA`);
-    return normalizedProxy;
+    return parsed.toString();
 }
 function redactProxyUrl(value) {
     const parsed = new URL(value);
@@ -345,14 +336,6 @@ export function isProxyBypassedUrl(url) {
 }
 /** Wraps globalThis.fetch so every http(s) call routes through curl while a proxy is active. Idempotent. */
 export function installGlobalProxyFetch() {
-    // OMA divergence: under an installed policy the only reachable proxy
-    // value is the egress pin -- the same address the env proxies carry --
-    // so the vendored undici EnvHttpProxyAgent dispatcher the adapter
-    // installs already routes it. Upstream's curl-backed wrapper (a curl
-    // subprocess per request, plus header/body files under tmpdir) is
-    // never installed.
-    if (omaPolicy !== undefined)
-        return;
     const current = globalThis.fetch;
     if (typeof current !== "function" || current.__piWebAccessProxyFetch === true)
         return;

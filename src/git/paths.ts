@@ -5,16 +5,12 @@ export interface GitPaths {
   contextGit: string;
   worldDir: string;
   society: string;
-  /** The quarantine bundle bound (`limits.bundleBytes`); the importer doubles
-   * it for the private tmpfs, which must also hold the imported object store
-   * (NB-01). */
+  /** Legacy declaration; DR37 imports use ordinary OS tmpfs capacity. */
   quarantineTmpBytes: number;
-  /** The quarantine's own profile (`QUARANTINE_RESOURCES` in production).
-   * `timeoutSeconds` is a generous ceiling on one bundle import, never its
-   * deadline: the namespaced script streams progress, so a working import is
-   * bounded by `silenceSeconds` of silence. Neither is an integration check's
-   * deadline (P0V-29). */
+  /** Legacy declaration; DR37 does not apply these execution caps. */
   quarantineResources?: { cpuSeconds: number; memoryBytes: number; tasks: number; timeoutSeconds: number; silenceSeconds: number };
+  /** Broker lifetime cancellation, never client disconnect cancellation. */
+  ownerSignal?: AbortSignal;
   checkRootfs?: string;
   checkNode?: string;
   checkAssetsDir?: string;

@@ -1,7 +1,7 @@
 import { lookup as dnsLookup } from "node:dns/promises";
 import { existsSync, readFileSync, statSync } from "node:fs";
 import net from "node:net";
-import { getActiveProxy, getWebSearchConfigPath, hasScopedProxyDecision, isProxyBypassedUrl, loadConfiguredProxy, normalizeProxyUrl, omaEgressPinnedProxy } from "./utils.js";
+import { getActiveProxy, getWebSearchConfigPath, hasScopedProxyDecision, isProxyBypassedUrl, loadConfiguredProxy, normalizeProxyUrl, omaEgressPinnedProxy, omaWebPolicy } from "./utils.js";
 const DEFAULT_MAX_REDIRECTS = 5;
 const REDIRECT_STATUSES = new Set([301, 302, 303, 307, 308]);
 const LOOPBACK_ALLOW_RANGES = ["127.0.0.0/8", "::1", "::ffff:127.0.0.0/104"];
@@ -133,6 +133,12 @@ export async function validateRemoteUrl(rawUrl, options = {}) {
     const hostname = normalizeHostname(url.hostname);
     if (!hostname)
         throw new Error("URL must include a hostname");
+    // The Human authorized full network access, including local development services.
+    // Keep URL grammar and the Human's explicit domain policy on every redirect.
+    if (omaWebPolicy() !== undefined) {
+        assertDomainPolicy(hostname, options.domainPolicy);
+        return url;
+    }
     if (hostname === "localhost") {
         if (options.allowLoopback === true)
             return url;

@@ -137,7 +137,10 @@ func configuration(_ config: VmConfig) throws -> VZVirtualMachineConfiguration {
   c.entropyDevices = [VZVirtioEntropyDeviceConfiguration()]
   c.memoryBalloonDevices = [VZVirtioTraditionalMemoryBalloonDeviceConfiguration()]
   c.socketDevices = [VZVirtioSocketDeviceConfiguration()]
-  // MAC-203, MAC-005: no network device and no shared directory.
+  // DR37: ordinary TCP/UDP networking; filesystem sharing remains explicit.
+  let network = VZVirtioNetworkDeviceConfiguration()
+  network.attachment = VZNATNetworkDeviceAttachment()
+  c.networkDevices = [network]
   try c.validate()
   return c
 }

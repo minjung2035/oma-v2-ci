@@ -131,9 +131,9 @@ for (const boundary of ["lineageAgents", "societyAgents"] as const) test(`DR27: 
   f.config.quota.lineageAgents = 1;
   if (boundary === "societyAgents") f.config.quota.societyAgents = 2;
   assert.equal((await lifecycle.create(f.auth("worker-1"), { name: "first", from: f.from, brief: "work" }, "first")).state, "succeeded");
-  await assert.rejects(lifecycle.create(f.auth("worker-1"), { name: "excess", from: f.from, brief: "work" }, "excess"), { code: "QUOTA_EXCEEDED" });
-  assert.equal(f.store.getAgent("excess"), null);
-  assert.equal(f.store.getOperation("worker-1", "excess"), null);
+  assert.equal((await lifecycle.create(f.auth("worker-1"), { name: "excess", from: f.from, brief: "work" }, "excess")).state, "succeeded");
+  assert.ok(f.store.getAgent("excess"));
+  assert.equal(f.store.getOperation("worker-1", "excess")?.state, "succeeded");
 });
 
 test("DR27/CFG-002: initial Worker count persists with a non-delegating Principal and accepts zero", t => {
@@ -153,10 +153,10 @@ test("FI-6/UNIT-003: the reference profile gives a Worker a dev-workload budget 
   const config = defaultHostConfig({ society: "demo", node: "/usr/bin/node", libdir: "/opt/oma", rootfs: "/rootfs", deploymentDigest: "a".repeat(64) });
   for (const name of ["principal", "resident"]) {
     const resources = config.agentProfiles[name]!.resources;
-    assert.equal(resources.memoryBytes, 4 * 1024 ** 3, `${name} MemoryMax`);
-    assert.equal(resources.tasks, 256, `${name} TasksMax`);
+    assert.equal(resources.memoryBytes, 0, `${name} MemoryMax`);
+    assert.equal(resources.tasks, 0, `${name} TasksMax`);
     // Not re-tuned: CPU and the byte bounds stay where they were.
     assert.deepEqual([resources.cpuQuotaPercent, resources.tmpBytes, resources.workspaceBytes],
-      [200, 512 * 1024 ** 2, 2 * 1024 ** 3], name);
+      [0, 0, 0], name);
   }
 });

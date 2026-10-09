@@ -51,8 +51,8 @@ function fakePi() {
     on(event: string, handler: (...args: never[]) => unknown) { handlers.set(event, [...(handlers.get(event) ?? []), handler]); },
     appendEntry(type: string, data: unknown) { appended.push({ type, data }); },
     sendMessage() {},
-    registerCommand() { throw new Error("facade must have dropped this command"); },
-    registerShortcut() { throw new Error("facade must have dropped this shortcut"); },
+    registerCommand() {},
+    registerShortcut() {},
     exec() { throw new Error("facade must have refused exec"); },
   };
   return pi as never as import("@earendil-works/pi-coding-agent").ExtensionAPI & typeof pi;
@@ -163,8 +163,7 @@ test("BL4: registerWebTools registers exactly the four web_research tools and fo
   for (const event of ["session_start", "session_tree", "session_shutdown"])
     assert.ok(pi.handlers.has(event), `expected a forwarded ${event} hook`);
   assert.deepEqual(webFacadeDropped.filter(entry => entry.kind === "command"), [], "no slash command was registered");
-  assert.deepEqual(webFacadeDropped.map(entry => entry.name), ["ctrl+shift+s", "ctrl+shift+w"],
-    "the two curator/activity shortcuts were dropped, not registered");
+  assert.deepEqual(webFacadeDropped, [], "commands and shortcuts are forwarded");
   // A second registration (extension reload) is idempotent: same names.
   const again = fakePi();
   await registerWebTools(again);
@@ -257,8 +256,8 @@ test("BL4: ambient discovery is deny-by-default even with hostile env opt-ins", 
 
   // The native-media paths are off: no URL classifies as YouTube and the
   // enabled check stays false even if the config enabled it.
-  assert.deepEqual(youtube.isYouTubeURL("https://www.youtube.com/watch?v=abc123xyz00"), { isYouTube: false, videoId: null });
-  assert.equal(youtube.isYouTubeEnabled(), false);
+  assert.deepEqual(youtube.isYouTubeURL("https://www.youtube.com/watch?v=abc123xyz00"), { isYouTube: true, videoId: "abc123xyz00" });
+  assert.equal(youtube.isYouTubeEnabled(), true);
 
   // The host's ADC file is never probed.
   assert.equal(geminiAdc.isGeminiAdcAvailable(), false, "no Google ADC discovery");
@@ -285,38 +284,23 @@ test("BL4: command credential sources fail before a subprocess runs", async t =>
 // ---------------------------------------------------------------------------
 // Egress pin
 
-test("BL4: without egress wiring no proxy value is permitted at all", async t => {
-  withAgentDir(t, tmp(t, "oma-web-agent-"));
-  withEgress(t, false);
-  const pi = fakePi();
-  await registerWebTools(pi);
+test("BL4: configured and per-call proxies work without egress wiring", async t => {
+  withAgentDir(t, tmp(t, "oma-web-agent-")); withEgress(t, false);
+  await registerWebTools(fakePi());
   const utils = await import(SRC_RUNTIME("utils.js"));
   assert.equal(utils.omaEgressPinnedProxy(), null);
-  // A model-supplied proxy param refuses (fetch_content reports param
-  // errors as result text, upstream's own shape).
-  const fetchContent = pi.tools.get("fetch_content")!;
-  const refused = await fetchContent.execute("c", { url: "https://example.com", proxy: "http://proxy.example:8080" }, undefined, undefined, ctxOf());
-  assert.match(textOf(refused), /E_OMA_PROXY_PINNED/);
-  // The loopback form is not acceptable either -- there is no pin.
-  const alsoRefused = await fetchContent.execute("c", { url: "https://example.com", proxy: "http://127.0.0.1:47801" }, undefined, undefined, ctxOf());
-  assert.match(textOf(alsoRefused), /E_OMA_PROXY_PINNED/);
+  assert.equal(utils.normalizeProxyUrl("http://proxy.example:8080", "proxy"), "http://proxy.example:8080/");
+  assert.equal(utils.normalizeProxyUrl("http://127.0.0.1:47801", "proxy"), "http://127.0.0.1:47801/");
+  assert.equal(utils.normalizeProxyUrl("", "proxy"), null);
 });
 
-test("BL4: with egress wiring the pin is the only proxy value a tool may carry", async t => {
-  withAgentDir(t, tmp(t, "oma-web-agent-"));
-  withEgress(t, true, 47813);
-  const pi = fakePi();
-  await registerWebTools(pi);
+test("BL4: explicit proxies remain configurable beside an environment proxy", async t => {
+  withAgentDir(t, tmp(t, "oma-web-agent-")); withEgress(t, true, 47813);
+  await registerWebTools(fakePi());
   const utils = await import(SRC_RUNTIME("utils.js"));
   assert.equal(utils.omaEgressPinnedProxy(), "http://127.0.0.1:47813/");
-  // A different proxy refuses (as result text, upstream's own shape)...
-  const fetchContent = pi.tools.get("fetch_content")!;
-  const refused = await fetchContent.execute("c", { url: "https://example.com", proxy: "http://proxy.example:8080" }, undefined, undefined, ctxOf());
-  assert.match(textOf(refused), /E_OMA_PROXY_PINNED/);
-  // ...the pin itself normalizes (and the refusal moves past the proxy
-  // check -- the request may still fail downstream, but never on the pin).
-  const result = await fetchContent.execute("c", { url: "http://localhost/", proxy: "http://127.0.0.1:47813" }, undefined, undefined, ctxOf());
-  assert.match(textOf(result), /Blocked internal hostname/, "the pin passed normalization; the SSRF blocklist still stands");
+  assert.equal(utils.normalizeProxyUrl("http://proxy.example:8080", "proxy"), "http://proxy.example:8080/");
+  assert.equal(utils.normalizeProxyUrl("http://127.0.0.1:47813", "proxy"), "http://127.0.0.1:47813/");
 });
 
 // ---------------------------------------------------------------------------

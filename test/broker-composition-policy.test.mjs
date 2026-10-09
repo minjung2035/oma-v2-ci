@@ -194,8 +194,8 @@ test("P1 composition root: startup still wires recovery before listen, notify an
   const { calls } = await compose();
   assert.deepEqual(calls.slice(calls.indexOf("recover")), ["recover", "repair:/data/oma/fixture", "bootstrap", "listen", "notify", "activate", "refresh"]);
   assert.equal(calls.filter(value => value === "Store").length, 1);
-  assert.ok(calls.indexOf("digest") < calls.indexOf("storage-quota"));
-  assert.ok(calls.indexOf("storage-quota") < calls.indexOf("Store"));
+  assert.ok(calls.indexOf("digest") < calls.indexOf("Store"));
+  assert.equal(calls.includes("storage-quota"), false);
 });
 
 test("P1 composition root: only a broker the product started has a Principal endpoint", async () => {

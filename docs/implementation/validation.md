@@ -1,13 +1,99 @@
 # OMA v2 — 현재 검증 상태
 
-## 현재 결과: 적대적 감사 발견 수정·재검증 (2026-10-09, DR36)
+## 지정한 제한 제거·기능 복구 결과 (2026-10-09, DR37)
+
+사용자가 지정한 SC-01/02/03/04/05/20/23/26/30/31/32, 총 11개 항목을 구현하고 검증했다.
+SC-01~05/20/31의 OMA 네트워크·실행 자원·인원·저장 quota를 제거하고,
+SC-23/26의 MCP·웹 기능, SC-30의 reader 소유 패키지 GC, SC-32의 비동기 fd 자동완성을 복구했다.
+문서와 실제 실행 측정부터 진행했고 서브에이전트는 사용하지 않았다.
+45개 변경 생산 파일과 영향 owner를 직접 검토하고 현재 SHA-256와 named oracle에 결박했다.
+상속된 미검토 파일이나 과거 환경 PASS를 metadata 생성으로 재승인하지 않는다.
+
+| 검사 | 이번 최종 실행 결과 | 범위 |
+|---|---|---|
+| `node scripts/test-local.mjs` (별도 build 후) | PASS: 3,946/3,946 | serial 9 + parallel 3,937. fail/cancel/skip/todo 0. 404개 파일: serial 2 + parallel 402, concurrency 8 |
+| `verify-lane.mjs kernel` | EXECUTED+PASS: 68/68 | 실제 user systemd/cgroup/bwrap/socket, checker와 MCP/web native 추가 3건 포함 |
+| `verify-lane.mjs crash` | EXECUTED+PASS: 63/63 | 실제 primitive SIGSTOP/부모 SIGKILL·반복 복구; VM power loss는 미실행 |
+| build / typecheck / architecture aggregate | PASS | inventory·rules·architecture·transactions·durable registry·documents·spec inventory |
+| `npm audit --json` | PASS: 알려진 취약점 0건 | 이번 변경에서 의존성 버전을 바꾸지 않음 |
+
+실제 두 confined Worker의 TCP·UDP, private HTTP의 목적지 인증 보존·proxy 인증 제거,
+12개 CONNECT 동시 연결을 관측했다. checker는 인터넷을 사용하며 과거 1초 제한을 넘어
+정상 완료하고, owner 취소 시 남은 자식까지 전체 cgroup을 종료한다. MCP credential helper의
+실제 명령 실행과 웹 configured/per-call proxy의 실제 요청도 통과했다.
+
+패키지 reader 회귀는 production client-preload를 실행한다. reader SIGKILL 전에는 세대를
+보존하고 종료 뒤 회수한다. collector가 rename 후 marker를 지운 다음 SIGKILL되어도
+`.collecting-*` tombstone을 재시작에서 회수한다. metadata index의 단기 lease는 즉시 닫으며,
+상주 publisher에서 실제 `packages.sync` 3회 후 옛 세대가 회수된다. fd는 Pi installer로
+백그라운드 설치하며 기존 autocomplete provider가 설치 뒤 재귀 결과를 내는 회귀가 통과했다.
+
+첫 kernel 실행은 67 PASS·1 FAIL이었다. `TasksMax`를 생략해도 systemd 기본값 38,426이
+실제 적용되는 결함을 발견했다. Resident/checker에 `TasksMax=infinity`를 명시하고 manager에서
+무한 값을 관측하는 회귀를 추가해 최종 68 PASS를 얻었다. 전체 세 번째 실행의 serial 9 PASS /
+parallel 3,879 PASS·56 FAIL과 네 번째의 serial 9 PASS / parallel 3,936 PASS·1 FAIL 로그는
+보존했다. 제거한 heartbeat의 남은 호출을 수정하고 stale 환경·surface oracle 및 reader lease가
+없는 역사적 extension fixture를 정산했다. 이 중간 실행들을 최종 PASS로 바꾸지 않는다.
+
+시작 측정은 전체 검사 종료 뒤 Personal·Society 즉시 도구·Society 일반 대화를 각각 3회씩
+순서대로 실행했다. 새로운 HOME/data와 현재 checkout, 실제 OMA entry·bundled Pi·PTY를
+사용하며 모델만 로컬 대본이다. OS page cache는 비우지 않았고 모든 child exit는 0이다.
+
+| 실제 관측 | 최종 3회 범위 | 요청한 예산 판정 |
+|---|---|---|
+| Personal 화면 / 첫 응답 | 1.23~1.25초 / 1.54~1.56초 | 5초 이내; 1초 목표 미달 |
+| Society 화면 / 일반 대화 첫 응답 | 2.95~3.08초 / 3.22~3.35초 | 대화는 5초 이내; 1초 목표 미달 |
+| 최초 Society broker 준비 | 14.76~14.97초 | 전체 준비 5초 목표 **FAIL** |
+| 시작 직후 첫 Society tool 완료 | 15.49~15.72초 | 3회 모두 SQLite의 `society.set` succeeded 정확히 한 행; 5초 목표 **FAIL** |
+
+변경 전 실제 1회는 화면 2.931초·broker 14.561초·첫 도구 15.262초였다.
+`--wait-broker --early-tool` 명령의 exit 1은 예산 미달이다. 도구 실행 실패와 혼동하거나
+PASS로 바꾸지 않는다. 처음부터 요청한 도구가 준비를 기다리는 시간은 화면 표시와 별개다.
+
+```sh
+npm run build
+node scripts/test-local.mjs
+npm run typecheck
+npm run check:architecture
+OMA_TEST_SYSTEMD=1 node scripts/verify-lane.mjs kernel --out <new-directory>
+OMA_TEST_SYSTEMD=1 node scripts/verify-lane.mjs crash --out <another-new-directory>
+python3 scripts/benchmark-startup.py --node <node24> --mode personal --runs 3
+python3 scripts/benchmark-startup.py --node <node24> --runs 3 --wait-broker --early-tool
+python3 scripts/benchmark-startup.py --node <node24> --runs 3
+npm audit --json
+```
+
+Node v24.21.0, Linux UID 1001, user systemd 257.13, bwrap 0.12.0, cgroup v2에서 실행했다.
+local suite는 `OMA_TEST_SYSTEMD=0`과 local-test-guard, 존재하지 않는 user bus를 쓰며,
+native lane은 실제 `/run/user/1001/bus`에서 guard 없이 실행한다. PATH에는 cloc 2.08과
+현재 dist를 가리키는 임시 `oma` 링크를 포함한다. 명령·raw log SHA·실측·변경 실행 파일 SHA는
+[DR37 evidence](../../test/audit/unrestricted-2026-10-09.evidence.json)에 있다.
+원시 로그는 `/tmp/oma-unrestricted-2026-10-09`에 보존했다.
+
+runtime 입력은 15,376 files, sha256 `8cb5c9c1b0bf0f760205ab88dfd4401cbc3cb1f1bf5cde631ac9c314fd667cca`였다.
+local/kernel/crash와 최종 시작 측정 뒤 15,376개 파일의 바이트를 고정 map과 대조해 변경 0건을
+확인했다. 이 결과 문서와 evidence는 실행 이후 기록이다. 그 미래 바이트까지 runtime suite가
+실행했다는 뜻이 아니며, 기록 후 구조 검사를 별도로 재실행한다.
+
+미실행: macOS Virtualization.framework/APFS/Keychain/AF_VSOCK native·VM 부팅,
+실제 유료 provider, VM power loss, host reboot, 전체 release qualification.
+새 NAT NIC의 guest DHCP/DNS 계약은 [macOS 플랫폼](../macos-platform.md)과 DR37을 따른다.
+외부 signed guest image가 network unit·virtio_net·networkd/resolved·resolv.conf 연결을 포함해야
+한다. 이 저장소에는 image builder가 없어 image packaging/부팅을 수행하지 않았다.
+legacy reader marker 없는 package 세대는 기존 독자 종료를 증명할 수 없어 보존한다.
+프로토콜 payload 문법/바이트 검증과 P0 권한·파일·종료 소유는 유지한다.
+
+현재 구조 검사의 입력 identity(생성 자체는 runtime PASS가 아니다):
+verification input digest `0ec557e68ea99e3101e662c6be9b978db4b60a896dcb65eedbc5996d6b9669ac` (15377 files).
+
+## 이전 실행 결과: 적대적 감사 발견 수정·재검증 (2026-10-09, DR36)
 
 사용자의 전체 수정·푸시 지시에 따라 수정과 현재 입력의 검사를 실행했다. 아래 기록 전용 감사와 이전 suite 수는
 해당 시점의 기록이다. 최초 13건의 수정 상태는 [audit](../priority-0-audit.md), 추가로 조사한
 인터넷·skills·MCP 등의 32개 제한은 [장부](../user-expectation-ledger.md)에 있다.
 서브에이전트 없이 직접 수정·검증했다. 역사적 결함 oracle의 exit 0은 수정 성공으로 바꾸지 않는다.
 
-| 검사 | 현재 실행 결과 | 범위 |
+| 검사 | 당시 실행 결과 | 범위 |
 |---|---|---|
 | `npm test` | PASS: 3,938/3,938 | serial 9 + parallel 3,929. fail/cancel/skip/todo 0. 403개 파일; systemd 필수 9개 파일은 별도 lane |
 | `verify-lane.mjs kernel` | EXECUTED+PASS: 65/65 | 실제 user systemd/cgroup/bwrap/Unix socket. broker 재시작 포함 |
@@ -63,22 +149,19 @@ npm audit --json
 `XDG_RUNTIME_DIR=/run/user/1001`이다. local suite의 PATH에는 cloc 2.08과 설치된 `oma` 명령이
 필요하다. 이번에는 `/tmp/oma-repair-2026-10-09/bin/oma`가 현재 빌드 entry를 가리키게 했다.
 raw 로그는 그 `/tmp` 아래 남겼다. portable 판정·명령·source/log 해시는
-[현재 수정 evidence](../../test/audit/repairs-2026-10-09.evidence.json)에 있다.
+[DR36 수정 evidence](../../test/audit/repairs-2026-10-09.evidence.json)에 있다.
 
 전체 suite 실행 시 입력 closure는 sha256 `924ba992c8f836bffc9a8f550ce4acc82a3151bc444b488262f212b5de9ae822`
 (15,374 files)였다. 이후 바뀐 것은 결과 문서·evidence이며 실행 코드·테스트·설정 바이트는
 실행 시작 시 고정한 해시와 대조한다. kernel 실행 중 생성된 review/LOC metadata와 기록 문서도
 당시 capture 이후 변경으로 별도 표시했다; 그 lane의 실행 코드·테스트는 일치한다.
-아래 현재 구조 identity는 이 최종 기록까지 포함하며, 과거 전체 suite가 미래의 자기 결과 문서까지
-검증했다는 뜻이 아니다. 기록 후 R38·document·architecture 구조 검사를 새로 실행한다.
+위 DR37 구조 identity는 이후 기록까지 포함한다. 과거 suite가 미래의 자기 결과 문서까지
+검증했다는 뜻이 아니다. 각 작업의 기록 후 구조 검사는 별도로 실행한다.
 
 미실행: macOS Virtualization.framework/APFS/Keychain/AF_VSOCK native, 실제 유료 provider,
 VM power loss, host reboot, 전체 release qualification. 이전 패키지 세대 보유에 따른 디스크 증가와
 정적 provenance의 dynamic-call 한계도 남는다. 58개 변경 생산 파일과 영향 owner를 직접 검토한 것이며,
 상속된 미검토 파일을 metadata 재생성만으로 승인하지 않는다.
-
-현재 구조 검사의 입력 identity(생성 자체는 runtime PASS가 아니다):
-verification input digest `7581c05641e7668530049101fc53a46d314e215115a35730823ce9ea45db383d` (15375 files).
 
 ## 과거 작업: 추가 적대적 감사·기록만 (2026-10-08–09)
 

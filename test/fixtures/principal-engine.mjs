@@ -39,6 +39,8 @@ const message = message => { entries.push({ type: "message", id: randomBytes(4).
 const pi = {
   registerTool: tool => { tools.set(tool.name, tool); },
   registerCommand: (name, command) => { commands.set(name, command); },
+  registerShortcut: () => {},
+  exec: async () => ({ code: 0, stdout: "", stderr: "", killed: false }),
   registerProvider: () => {},
   on: (event, handler) => { const list = handlers.get(event) ?? []; list.push(handler); handlers.set(event, list); },
   sendMessage: async (message, options) => { emit({ type: "custom_message", message, options }); },

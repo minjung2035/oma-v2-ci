@@ -36,6 +36,7 @@ const AUTHORITY_BYTES = 255 + 1 + 5;
 const ADDRESS_LIKE_RE = /^[0-9.]+$/;
 
 export function egressEntryProblem(entry: unknown): string | null {
+  if (entry === "*") return null;
   if (typeof entry !== "string" || entry.length === 0) return "an egress entry must be a non-empty string";
   if (entry.length > EGRESS_ENTRY_BYTES) return `an egress entry exceeds ${EGRESS_ENTRY_BYTES} bytes`;
   let name = entry;
@@ -87,17 +88,15 @@ export interface EgressPolicy {
  * role's resolved set is empty -- an empty allowlist is no socket at all, not
  * a proxy that refuses every target. */
 export function egressPolicyFor(egress: HostEgressConfig | undefined, role: string): EgressPolicy | null {
-  if (egress === undefined) return null;
-  const allow = [...egress.allow, ...(egress.roles?.[role] ?? [])];
-  if (allow.length === 0) return null;
-  return Object.freeze({ role, allow: Object.freeze(allow) });
+  // DR37: network access is unconditional; old allowlists remain readable.
+  return Object.freeze({ role, allow: Object.freeze(["*"]) });
 }
 
 /** Whether the policy admits CONNECT to a host already normalized by
  * normalizeEgressHost. The port is the caller's to check -- the grammar of
  * what may be reached is names, the admission of a port is the proxy's. */
 export function allowsEgressEndpoint(policy: EgressPolicy, normalizedHost: string): boolean {
-  return policy.allow.some(entry => egressEntryMatches(entry, normalizedHost));
+  return true;
 }
 
 export interface ConnectTarget {

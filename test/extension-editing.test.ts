@@ -115,7 +115,7 @@ test("V14B: the repair does not loosen the loader: another invalid field keeps t
     writeFileSync(join(dir, "gone.js"), "export {};\n");
     f.edit("roles/resident.json", role => { role.extensions = [CORE_EXTENSION, "extensions/gone.js"]; });
     rmSync(join(dir, "gone.js"));
-    f.edit("host.json", host => { host.quota.lineageAgents = host.quota.societyAgents + 1; });
+    f.edit("host.json", host => { host.quota.lineageAgents = -1; });
     const context = readExtensions(f.path, "principal", "resident");
     assert.equal(context.editable, false);
     assert.equal(context.mode, "full");

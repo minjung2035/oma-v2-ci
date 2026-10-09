@@ -139,12 +139,13 @@ test("a Config edit publishes the split bundle as a generation instead of flatte
   } finally { removeTree(root); }
 });
 
-test("a quota edit on a split bundle lands in the host configuration only", () => {
+test("a removed quota edit is refused without modifying the split bundle", () => {
   const root = scratch("oma-defect-quota-");
   try {
     const index = bundle(root);
-    commitField(readSettings(index), WORKER_LIMIT, 12);
-    assert.equal((hostOf(index).quota as Record<string, unknown>).societyAgents, 12);
+    const before = hostOf(index);
+    assert.throws(() => commitField(readSettings(index), WORKER_LIMIT, 12), { code: "INVALID_REQUEST" });
+    assert.deepEqual(hostOf(index), before);
     assert.equal(readJson(index).kind, "oma-operations-v1");
     assert.ok(authored(index, "resident").promptFile, "the role file is intact");
     assert.equal((authored(index, "resident").agentProfile as Record<string, unknown>).modelProfile, "cheap");

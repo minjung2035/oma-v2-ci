@@ -211,10 +211,10 @@ export type FileLock =
  * on: 11 on Linux, 35 on macOS (the host service's lock, P0V-105). */
 const EWOULDBLOCK = process.platform === "darwin" ? 35 : 11;
 
-export function lockFileDescriptor(fd: number): FileLock {
-  const LOCK_EX = 2; const LOCK_NB = 4;
+export function lockFileDescriptor(fd: number, shared = false): FileLock {
+  const LOCK_SH = 1; const LOCK_EX = 2; const LOCK_NB = 4;
   try {
-    if (lib().flock(fd, LOCK_EX | LOCK_NB) === 0) return { kind: "held" };
+    if (lib().flock(fd, (shared ? LOCK_SH : LOCK_EX) | LOCK_NB) === 0) return { kind: "held" };
     const code = errno();
     return code === EWOULDBLOCK ? { kind: "contended" } : { kind: "failed", errno: code };
   } catch { return { kind: "failed", errno: 0 }; }

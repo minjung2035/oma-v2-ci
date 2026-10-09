@@ -82,9 +82,9 @@ export default async function extension(pi: ExtensionAPI) {
   guardWorkspaceTools(pi, workspace, sandboxed, channel.attached, provenance.permitted, readableRoots);
   // One serialized writer serves every mutation path: the contained write
   // and edit tools, and lsp_fix's contained application of server-computed
-  // edits. The quota is decided inside that serialization.
-  const workspaceWriter = createContainedWriter(workspace, integerEnv("OMA_WORKSPACE_BYTES"));
-  containWorkspaceTools(pi, workspace, integerEnv("OMA_WORKSPACE_BYTES"), sandboxed, channel.attached, readableRoots, workspaceWriter);
+  // edits. Containment is decided inside that serialization.
+  const workspaceWriter = createContainedWriter(workspace, null);
+  containWorkspaceTools(pi, workspace, null, sandboxed, channel.attached, readableRoots, workspaceWriter);
   // The bundled pi-lsp extension: vendored bytes verified before tools are
   // registered -- and before any vendored module evaluates, so the await is
   // load-bearing -- code_intel's three tools behind it, lsp_fix reaching
@@ -109,8 +109,12 @@ export default async function extension(pi: ExtensionAPI) {
   // installs the Society web policy (egress pin, ambient-discovery refusals)
   // and drives upstream's own extension factory through a facade that
   // admits exactly the web_research group: web_search, source_check,
-  // fetch_content, get_search_content. No commands, shortcuts, dynamic
-  // activation, curator or browser surfaces can register through it.
+  // fetch_content, get_search_content. Commands and curator/browser workflows
+  // use Pi's extension API without changing the four model tool names.
+  // Shared network access makes fixed loopback ports unsafe across Workers.
+  // Publish the bridges' actual ports before adapters capture their proxy pin.
+  await startInferenceBridge(pi);
+  await startEgressBridge(pi);
   await registerWebTools(pi);
   // BL5: the bundled pi-mcp-adapter extension -- same fail-closed bundle
   // verification before any vendored module evaluates. The adapter
@@ -130,6 +134,4 @@ export default async function extension(pi: ExtensionAPI) {
   // never load it, and no surface plan names it for them.
   if (channel.attached) registerAskUserQuestion(pi);
   registerDelivery(pi, waitRequested);
-  await startInferenceBridge(pi);
-  await startEgressBridge(pi);
 }

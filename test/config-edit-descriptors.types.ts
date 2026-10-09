@@ -8,7 +8,6 @@ const descriptor = null as unknown as EditableFieldDescriptor;
 const complete = {
   "principal-model": descriptor,
   "worker-model": descriptor,
-  "worker-limit": descriptor,
   "initial-workers": descriptor,
   "worker-profile": descriptor,
   "worker-integrate": descriptor,
@@ -25,7 +24,6 @@ void productionRegistry;
 const missing: Readonly<Record<EditableField, EditableFieldDescriptor>> = {
   "principal-model": descriptor,
   "worker-model": descriptor,
-  "worker-limit": descriptor,
   "initial-workers": descriptor,
 };
 void missing;

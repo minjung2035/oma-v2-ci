@@ -18,14 +18,14 @@ export function dashboardRows(data: DashboardData): readonly DashboardRow[] {
   const rows: DashboardRow[] = [];
   const seen = data.status;
   if (seen.kind === "observed") {
-    rows.push({ label: "Workers", value: `${seen.created} created / ${data.workerLimit} max` });
+    rows.push({ label: "Workers", value: `${seen.created} created` });
     rows.push({ label: "Active", value: seen.active === null ? `unknown (Unit not observed; ${clock(seen.observedAtMs)} observed)` : String(seen.active) });
     rows.push({ label: "Pending", value: `${seen.pending} (${clock(seen.observedAtMs)} observed)` });
     rows.push({ label: "Status", value: `observed (${clock(seen.observedAtMs)})` });
   } else {
     const unknown = `unknown (${seen.reason}; ${clock(seen.observedAtMs)} observed)`;
     // A configured seed count is not a running count; it is labelled as config.
-    rows.push({ label: "Workers", value: `${data.configuredWorkers} configured / ${data.workerLimit} max created` });
+    rows.push({ label: "Workers", value: `${data.configuredWorkers} configured` });
     rows.push({ label: "Active", value: unknown });
     rows.push({ label: "Pending", value: unknown });
     rows.push({ label: "Status", value: unknown });

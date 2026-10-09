@@ -299,9 +299,9 @@ test("T106/TUI-019: running in a bare project needs no setup command and no hand
     assert.equal(model.provider, "pi");
     assert.equal(model.model, "current");
 
-    // CFG-002: nothing unlimited, and integration stays an explicit empty set.
-    assert.ok(loaded.quota.societyAgents > 0 && Number.isFinite(loaded.quota.societyAgents));
-    assert.ok(loaded.quota.storageBytes > 0 && Number.isFinite(loaded.quota.storageBytes));
+    // DR37: resource/count limits are disabled; integration remains explicit.
+    assert.ok(loaded.quota.societyAgents === 0);
+    assert.ok(loaded.quota.storageBytes === 0);
     assert.deepEqual(loaded.integration.checks, []);
     assert.deepEqual(loaded.integration.protectedPaths, []);
 
@@ -314,7 +314,7 @@ test("T106/TUI-019: running in a bare project needs no setup command and no hand
 
     // Every generated value is reachable from the Control Panel.
     const fields = readSettings(path).fields.map(field => field.id);
-    for (const id of ["principal-model", "worker-model", "worker-limit"])
+    for (const id of ["principal-model", "worker-model", "initial-workers"])
       assert.ok(fields.includes(id), `${id} must be editable`);
   } finally { rmSync(root, { recursive: true, force: true }); }
 });

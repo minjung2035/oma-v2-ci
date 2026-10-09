@@ -259,9 +259,7 @@ function installMcpAdapter(pi, options) {
         }
         restoreSessionApprovalState(targetState, branch);
     }
-    const earlyConfigPath = programmaticConfig
-        ? undefined
-        : options.configPath ?? getConfigPathFromArgv();
+    const earlyConfigPath = options.configPath ?? (programmaticConfig ? undefined : getConfigPathFromArgv());
     const earlyConfig = programmaticConfig
         ? resolveConfiguredClaudePluginMcp(cloneMcpConfig(sessionConfig), process.cwd())
         : excludeProjectServersAtLoadTime(loadMcpConfig(earlyConfigPath));
@@ -1756,9 +1754,9 @@ function installMcpAdapter(pi, options) {
         const installOwner = currentOwner;
         signal?.throwIfAborted();
         installOwner?.throwIfInactive();
-        if (programmaticConfig) {
+        if (programmaticConfig && earlyConfigPath === undefined) {
             return {
-                content: [{ type: "text", text: "MCP install is unavailable when the adapter uses programmatic configuration." }],
+                content: [{ type: "text", text: "MCP install needs an explicit configuration destination." }],
                 details: { mode: "install", error: "programmatic_config" },
             };
         }
@@ -1774,7 +1772,10 @@ function installMcpAdapter(pi, options) {
                 details: { mode: "install", error: "invalid_target" },
             };
         }
-        const destination = target === "project" ? getProjectConfigPath(cwd) : getPiGlobalConfigPath(earlyConfigPath);
+        // OMA supplies one explicit installation destination for this engine.
+        // Project installs use it too, so a sandbox never writes an unrelated .pi file.
+        const destination = programmaticConfig && earlyConfigPath !== undefined ? earlyConfigPath
+            : target === "project" ? getProjectConfigPath(cwd) : getPiGlobalConfigPath(earlyConfigPath);
         if (target === "project" && omaAmbientEnv().PI_MCP_CONFIG_MODE?.trim().toLowerCase() === "exclusive"
             && resolve(destination) !== resolve(getPiGlobalConfigPath(earlyConfigPath))) {
             return {

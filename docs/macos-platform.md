@@ -101,7 +101,7 @@ guest memory 어디에도 없다. guest에 있는 것은 자리표시자뿐이�
 ### 1.2 비목표(v1)
 
 - Intel Mac. §11에 조건을 적었다.
-- guest의 network. guest에는 NIC가 없다(MAC-203). 의존성 설치 같은 egress는 SB-004의 OPTIONAL proxy profile로 따로 다룬다(v1 밖).
+- guest의 network. guest는 MAC-203의 Virtio NAT를 통해 인터넷과 사설망에 접근한다.
 - 여러 macOS 사용자가 하나의 VM을 나누는 것. VM과 state disk는 macOS 사용자마다 따로 있다.
 - Mac 사이의 state 동기화, iCloud.
 - 엔진(Pi)을 macOS에서 native로 돌리는 것. 엔진은 guest에서 돈다. 예외는 host의 credential 해석뿐이다(§7.3).
@@ -240,7 +240,7 @@ guest는 **host의 자원과 credential에 대해서는 신뢰하지 않는다.*
 
 | 공격자 | 대응 |
 |---|---|
-| A1 Resident나 Principal tool 안의 모델이 만든 코드 | 기존 bwrap 경계. 여기에 seccomp로 `socket(AF_VSOCK, …)`을 막는다(MAC-205). guest에는 NIC가 없다. vsock loopback transport를 빼고 build한다(MAC-204) |
+| A1 Resident나 Principal tool 안의 모델이 만든 코드 | 기존 bwrap 경계. 여기에 seccomp로 `socket(AF_VSOCK, …)`을 막는다(MAC-205). guest는 NAT NIC를 공유한다. vsock loopback transport를 빼고 build한다(MAC-204) |
 | A2 guest 안의 `oma` 사용자 프로세스(sandbox 밖의 엔진 포함) | reserved port는 systemd만 bind한다. bridge는 peer CID가 host(2)인 연결만 잇는다. guestctl·guesthost는 bridge의 uid(`oma-bridge`)에서 온 연결만 받는다(`SO_PEERCRED`). 그래서 `oma`의 프로세스는 서비스의 unix socket을 열어도 host 행세를 할 수 없다(MAC-202) |
 | A3 탈취된 guest root | §3.3의 잔여 위험. host는 guest 입력을 schema·한도로 검사한다(MAC-230) |
 | A4 같은 macOS 사용자의 다른 프로세스 | Host API를 부를 수 있다. 사용자가 `oma`를 실행하는 것과 같은 권한이다. Keychain item은 access group을 가진 서명된 `oma-vmhelper`만 읽는다. bundle 안의 JS를 바꿔 Resolver를 가로채는 것은 bundle 봉인과 App Management 보호가 막는다(MAC-701의 조건과 잔여 위험) |
@@ -274,7 +274,10 @@ bind는 systemd(pid 1)만 한다. guestctl과 guesthost는 bind capability를 �
 안에서는 파일의 mode가 경계가 아니다(FS-005). 그래서 누가 연결했는지는 커널에게 묻는다(AUTH-003과 같은 원칙). `oma-bridge`로 도는
 것은 bridge instance뿐이다.
 
-**MUST [MAC-203]** guest VM 구성에는 network device를 두지 않는다. `VZNetworkDeviceConfiguration`을 붙이지 않는다.
+**MUST [MAC-203]** DR37에 따라 guest VM에는 Virtio NAT network device를 둔다.
+`platform/guest/network/80-oma.network`를 image의 `/etc/systemd/network/`에 설치하고,
+virtio_net 및 systemd-networkd/resolved와 DHCP DNS용 resolv.conf를 제공한다.
+Worker와 checker는 공유 network에서 TCP·UDP·사설망에 접근한다.
 
 **MUST [MAC-204]** guest kernel은 `CONFIG_VSOCKETS_LOOPBACK=n`으로 build한다. 이렇게 하면 guest 안의 프로세스가 guest의 listener에
 vsock으로 닿을 수 없다. MAC-202의 CID 검사가 이에 대한 두 번째 방어다.
@@ -366,7 +369,7 @@ guestctl이 control channel로 내보내는 거절 문구는 MAC-231을 거친�
 
 DR29 saved history methods: `session.list {projectId, society, after?}`는 해당 bound Society의 paginated identity·생성/수정 시각·message count·160자 이하 이름/첫 메시지만 읽는다. `session.inspect {projectId, society, file, sessionId}`는 실제 saved birth와 private engine cwd/header를 검증하고 `{mode: "society", sessionId}`만 반환한다. `session.resume`는 같은 identity를 다시 검증한 뒤 guest 내부에서만 file 경로를 만들고 이미 열린 writer를 `ATTACH_CONFLICT`로 거절한다. Host API의 list는 host projectId에서 Society를 결정하며 inspect/resume은 opaque guest identity를 받는다. 읽기·seed/list/inspect는 이미 실행 중인 guest만 관측한다. Human의 명시적 resume만 engine 시작을 요청할 수 있다. 이 method들은 replay key나 새 durable request queue를 갖지 않는다.
 
-mail·설정·확장은 society channel에 없다. 그것은 guest의 TUI가 terminal 안에서 한다(기존 Control Panel 그대로). 예외는 engine이 스스로 받을 수 없는 확장 패키지의 파일뿐이다: guest에는 network가 없으므로(MAC-203) Mac이 설치하고 `packages.replace`로 옮긴다. 켜고 끄는 것은 여전히 guest의 Ctrl+X Extensions에서 한다.
+mail·설정·확장은 society channel에 없다. 그것은 guest의 TUI가 terminal 안에서 한다(기존 Control Panel 그대로). 예외는 engine이 스스로 받을 수 없는 확장 패키지의 파일뿐이다: Mac이 설치한 공통 패키지는 `packages.replace`로 옮긴다. 켜고 끄는 것은 여전히 guest의 Ctrl+X Extensions에서 한다.
 
 ### 4.6 terminal channel
 
@@ -419,7 +422,7 @@ prompt·설정·확장은 terminal 안의 TUI가 한다. 그래서 prompt에는 
 
 ### 4.7 egress channel과 pool
 
-**MUST [MAC-225]** guest의 엔진은 provider에 직접 닿지 않는다(guest에는 NIC가 없다). egress 연결은 host가 연다(MAC-201).
+**MUST [MAC-225]** guest 엔진의 provider 인증 경로는 host Relay를 사용한다(MAC-201). 일반 도구와 패키지는 MAC-203의 NAT network에 직접 접근한다.
 
 - `omahostd`는 guest가 떠 있는 동안 egress 연결을 pool로 열어 둔다. 개수는 `min(2 + 4 × 진행 중인 run 수, 32)`다. 4는 기존
   relay가 run 하나에 허락하는 동시 요청 수(`concurrent: 4`)다. run은 `egress.placeholder`로 시작하고 run의 끝이나 `bootId`의 변화로
@@ -548,7 +551,7 @@ Node이므로 양쪽은 같은 codec을 쓴다. Swift helper가 말하는 것은
 | vsock | `VZVirtioSocketDeviceConfiguration` 하나 | §4 |
 | entropy | `VZVirtioEntropyDeviceConfiguration` | |
 | console | `VZVirtioConsoleDeviceSerialPortConfiguration` → `logs/guest-console.log`(크기 한도) | 부팅 실패 진단 |
-| network | 없음 | MAC-203 |
+| network | Virtio NAT, DHCP, TCP·UDP | MAC-203 |
 | shared directory | 없음 | MAC-005 |
 
 **MUST [MAC-302]** state disk는 `synchronizationMode: .full`로만 붙인다. `.fsync`나 `.none`으로 붙이지 않는다. `.fsync`는 APFS에서
@@ -827,7 +830,7 @@ item의 값은 엔진이 쓰는 credential blob이고, OMA는 그 형식을 읽�
 
 ### 7.3 로그인과 해석
 
-- **로그인과 model 선택**: guest의 엔진에는 network도 browser도 없으므로 로그인은 host에서 한다. 흐름은 엔진이 이미 가진 것을
+- **로그인과 model 선택**: provider 로그인은 host browser에서 하고 guest는 placeholder를 통해 host Relay에 요청한다. 흐름은 엔진이 이미 가진 것을
   쓴다(README·PRODUCT: OMA는 인증·model 관리 화면을 따로 만들지 않는다). 다만 PRODUCT는 엔진을 RPC 모드로만 돌려 엔진의 대화형
   화면이 없게 하라고도 한다. 엔진의 로그인 흐름을 어느 표면으로 보일지는 Linux에서도 아직 열려 있는 문제다(PRODUCT의 첫 줄, "아직
   아닌 것"). 그래서 macOS가 따로 정하지 않고 D-9로 한 번에 정했다: `oma login`이 엔진 자신의 대화형 모드를 엔진 디렉터리 위에서 연다.
@@ -1032,7 +1035,7 @@ archive를 만든다. 공간이 첫 한도 아래면 만들지 않고 알린다(
 
 ### 9.2 시계
 
-guest에는 NTP가 없다(network 없음). guestctl은 부팅 때와 깨어날 때 `time.set`으로 `CLOCK_REALTIME`을 host 시각에 맞춘다. 앞으로 뛰는 것과
+부팅·복귀의 시각 동기화는 guestctl이 소유한다. guestctl은 부팅 때와 깨어날 때 `time.set`으로 `CLOCK_REALTIME`을 host 시각에 맞춘다. 앞으로 뛰는 것과
 뒤로 가는 것 모두 step한다. 저장하는 시각은 P0V-56의 하한 규칙이 인과를 지킨다. guest의 timezone은 UTC다. host UI가 local time으로 보인다.
 
 ### 9.3 장애 표
@@ -1206,8 +1209,7 @@ admission(D04)만으로는 Mac이 가득 차는 것을 막지 못한다. Mac의 
 
 ### 11.3 배포
 
-- Developer ID 서명과 hardened runtime을 쓴다. entitlement는 `com.apple.security.virtualization`이다. VM에 network를 주지 않으므로
-  네트워크 entitlement는 host의 Relay에만 필요하다.
+- Developer ID 서명과 hardened runtime을 쓴다. entitlement는 `com.apple.security.virtualization`이다. VM의 NAT device와 host Relay의 네트워크 요구를 배포 entitlement에 반영한다.
 - 동봉하는 Node, git, `oma-vmhelper`는 app bundle 안에서 서명한다. `omahostd`·Resolver·Relay의 JS는 bundle 봉인에 들어간다. `omahostd`는
   bundle 안의 이 파일들만 실행한다(경로를 bundle 기준으로 고정한다). Keychain의 조건은 MAC-701·MAC-703이다.
 - update는 Sparkle(EdDSA 서명)로 한다. guest image는 app update에 함께 들어간다(lockstep). image만 따로 update하지 않는다.

@@ -330,7 +330,7 @@ export function spawnSessionInteractive(executable: string, argv: readonly strin
  * value may itself be "--", "--args" or "--seccomp"; only option positions
  * carry meaning. The command and its arguments are never parsed here. */
 const SANDBOX_OPTION_ARITY: Readonly<Record<string, number>> = Object.freeze({
-  "--unshare-all": 0, "--unshare-net": 0, "--unshare-pid": 0,
+  "--unshare-all": 0, "--share-net": 0, "--unshare-net": 0, "--unshare-pid": 0,
   "--new-session": 0, "--die-with-parent": 0, "--clearenv": 0,
   "--cap-drop": 1, "--seccomp": 1, "--proc": 1, "--dev": 1,
   "--size": 1, "--tmpfs": 1, "--remount-ro": 1, "--chdir": 1,

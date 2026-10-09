@@ -423,15 +423,14 @@ test("BL3: insert and replace_within commit through the same contained writer", 
   assert.equal(readFileSync(file, "utf8"), "alpha\nbeta\nG\nomega\n");
 });
 
-test("BL3: the contained writer's quota gates a hashline commit, and the refusal writes nothing", async t => {
+test("BL3: hashline commits grow beyond a legacy workspace quota", async t => {
   const world = await hashlineWorld(t, { quota: 8 });
   const file = join(world.workspace, "a.ts");
   writeFileSync(file, "one\ntwo\nthree\n");
   const anchors = await serveAnchors(world, "a.ts");
-  await assert.rejects(
-    world.run("replace", { remove_from: anchors[2], remove_to: anchors[2], replacement_lines: "a much longer line that exceeds the quota" }),
-    /quota/);
-  assert.equal(readFileSync(file, "utf8"), "one\ntwo\nthree\n", "the quota refusal wrote nothing");
+  await world.run("replace", { remove_from: anchors[2], remove_to: anchors[2], replacement_lines: "a much longer line that exceeds the old quota" });
+  assert.match(readFileSync(file, "utf8"), /a much longer line/);
+
 });
 
 test("BL3: a symlink is never followed — read and edit refuse through the contained opener", async t => {

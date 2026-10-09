@@ -262,8 +262,6 @@ async function searchSnapshot<T>(root: string, path: string, maximum: number | n
   signal: AbortSignal | undefined, use: (snapshot: string, target: string) => Promise<T>,
   progress?: () => void, named?: (snapshotName: string) => void): Promise<T> {
   const parts = componentsWithin(root, path);
-  if (!maximum || !Number.isSafeInteger(maximum) || maximum < 1)
-    throw new WorkspaceRefusal("agent workspace quota is not configured");
   const temp = openDirectoryWithin(tmpdir(), [], false);
   let baseName = "";
   try {
@@ -280,12 +278,7 @@ async function searchSnapshot<T>(root: string, path: string, maximum: number | n
   } catch (error) { closeSync(temp); throw error; }
   const snapshot = join(tmpdir(), baseName, "workspace");
   let destination: number | undefined;
-  let remaining = maximum;
   const check = (): void => { if (signal?.aborted) throw new WorkspaceRefusal("search aborted"); };
-  const charge = (bytes: number): void => {
-    remaining -= bytes;
-    if (remaining < 0) throw new WorkspaceRefusal("search snapshot exceeds workspace budget");
-  };
   /** A fresh name inside a held destination directory. The private tree is
    * mode-700 -- permission bits do not stop a same-uid racer -- so every
    * entry is named through the held parent, and a descriptor-table overrun
@@ -299,14 +292,14 @@ async function searchSnapshot<T>(root: string, path: string, maximum: number | n
   // held on its name's directory inside the private copy, so neither side
   // can be swapped out from under the entry this call resolves.
   const copy = async (fd: number, parent: number, name: string): Promise<void> => {
-    check(); charge(1); progress?.();
+    check(); progress?.();
     const stat = fstatSync(fd);
     if (stat.isDirectory()) {
       mkdirSync(entryAt(parent, name), { mode: 0o700 });
       const into = openDestination(parent, name, constants.O_RDONLY | constants.O_DIRECTORY | constants.O_NOFOLLOW);
       try {
         for (const entry of readdirSync(`/proc/self/fd/${fd}`)) {
-          check(); charge(1); progress?.();
+          check(); progress?.();
           // Repository internals are not a search input. An empty .git at the
           // copy's root stops parent ignore discovery without importing config.
           // A listed name is one directory entry -- anything else is not one.
@@ -326,7 +319,6 @@ async function searchSnapshot<T>(root: string, path: string, maximum: number | n
       } finally { closeSync(into); }
     } else {
       ownedFile(fd);
-      charge(stat.size);
       const out = openDestination(parent, name,
         constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | constants.O_NOFOLLOW, 0o600);
       try {

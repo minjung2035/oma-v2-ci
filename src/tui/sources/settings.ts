@@ -32,7 +32,6 @@ export const WORKER_INTEGRATE = "worker-integrate";
 export const EDITABLE_FIELDS = Object.freeze([
   PRINCIPAL_MODEL,
   WORKER_MODEL,
-  WORKER_LIMIT,
   INITIAL_WORKERS,
   WORKER_PROFILE,
   WORKER_INTEGRATE,
@@ -440,17 +439,6 @@ const DESCRIPTOR_SOURCE = {
       assertKnown(typeof value === "string" && Object.hasOwn(config.modelProfiles, value), "unknown model profile");
       return { ...config, agentProfiles: { ...config.agentProfiles,
         [name]: { ...profile!, modelProfile: value as string } } };
-    },
-  }),
-  [WORKER_LIMIT]: Object.freeze({
-    label: "Max created workers",
-    apply: "restart",
-    view: (config: HostConfigV1) => ({
-      kind: "number" as const, value: config.quota.societyAgents, min: 0, max: Number.MAX_SAFE_INTEGER,
-    }),
-    transform: (settings: Settings, value: FieldValue) => {
-      assertKnown(typeof value === "number" && Number.isSafeInteger(value) && value >= 0, "worker limit must be a non-negative integer");
-      return { ...settings.config, quota: { ...settings.config.quota, societyAgents: value as number } };
     },
   }),
   [INITIAL_WORKERS]: Object.freeze({

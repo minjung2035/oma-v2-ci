@@ -1,36 +1,37 @@
 import { isAbsolute } from "node:path";
-import { connect, createServer } from "node:net";
+import { connect, createServer, type Socket } from "node:net";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { integerEnv } from "./shared.js";
 
-/** UX-08/DR34: the sandbox end of the CONNECT egress proxy.
- *
- * The confined Resident's tools are told HTTP_PROXY/HTTPS_PROXY/ALL_PROXY
- * pointing at a loopback port. They cannot reach the runner's proxy socket
- * (a bind-mounted unix socket) on their own, so this listener forwards their
- * connections to it, bytes unread. Nothing here knows an allowlist or sees a
- * credential: the proxy end on the socket decides what may be dialed, and
- * the TLS that follows is the tool's own end to end with the target.
- *
- * Without `OMA_EGRESS_PROXY_SOCKET`/`OMA_EGRESS_PROXY_PORT` -- the Human
- * configured no egress for this role -- this starts nothing, and the
- * environment carries no proxy variables for tools to find.
- */
+/** The delivery's loopback HTTP/CONNECT bridge. The kernel chooses a unique
+ * port on the shared network, published before adapters capture proxy settings.
+ * The bridge forwards bytes without reading credentials and owns both socket
+ * halves until close/shutdown. */
 export async function startEgressBridge(pi: ExtensionAPI): Promise<void> {
   const socket = process.env.OMA_EGRESS_PROXY_SOCKET;
   const port = integerEnv("OMA_EGRESS_PROXY_PORT");
   if (!socket || port === null || !isAbsolute(socket)) return;
+  const clients = new Set<Socket>();
   const server = createServer(client => {
+    clients.add(client);
     const upstream = connect(socket);
     const drop = (): void => { client.destroy(); upstream.destroy(); };
+    client.once("close", () => { clients.delete(client); upstream.destroy(); });
+    upstream.once("close", () => client.destroy());
     client.on("error", drop);
     upstream.on("error", drop);
     client.pipe(upstream);
     upstream.pipe(client);
   });
-  pi.on("session_shutdown", () => { server.close(); });
-  await new Promise<void>(resolve => {
+  pi.on("session_shutdown", () => { for (const client of clients) client.destroy(); server.close(); });
+  await new Promise<void>((resolve, reject) => {
     server.on("listening", () => {
+      const address = server.address();
+      if (address === null || typeof address === "string") { reject(new Error("egress bridge has no TCP port")); return; }
+      process.env.OMA_EGRESS_PROXY_PORT = String(address.port);
+      const proxy = `http://127.0.0.1:${address.port}`;
+      for (const key of ["HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY", "http_proxy", "https_proxy", "all_proxy"])
+        process.env[key] = proxy;
       server.unref();
       resolve();
     });
@@ -44,8 +45,8 @@ export async function startEgressBridge(pi: ExtensionAPI): Promise<void> {
       // this listener exists to absorb.
       try { process.stderr.write(`oma egress bridge unavailable: ${error instanceof Error ? error.message : String(error)}\n`); }
       catch { /* nowhere left to say it */ }
-      resolve();
+      reject(error);
     });
-    server.listen(port, "127.0.0.1");
+    server.listen(0, "127.0.0.1");
   });
 }

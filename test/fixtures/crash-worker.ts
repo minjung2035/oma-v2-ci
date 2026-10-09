@@ -89,7 +89,7 @@ fs.copyFileSync = (source, destination, mode) => {
 const spawnAsync = cp.spawn as (...args: unknown[]) => unknown;
 cp.spawn = ((command: unknown, args?: unknown, options?: unknown) => {
   const argv = Array.isArray(args) ? args as string[] : [];
-  if (point === "submit-import" && command === "/usr/bin/prlimit" && argv.includes("oma-quarantine")) checkpoint();
+  if (point === "submit-import" && command === "/usr/bin/unshare" && argv.includes("oma-quarantine")) checkpoint();
   return spawnAsync(command, args, options);
 }) as unknown as typeof cp.spawn;
 const spawn = cp.spawnSync;
@@ -112,7 +112,7 @@ cp.spawnSync = new Proxy(spawn, {
       if (point === "int-cas" && main && project) checkpoint();
       if (point === "ctx-cas" && main && context) checkpoint();
       if (point === "submit-ref" && argv.includes("update-ref") && argv.some(arg => arg.startsWith("refs/oma/published/"))) checkpoint();
-      if (point === "submit-import" && args[0] === "/usr/bin/prlimit" && argv.includes("oma-quarantine")) checkpoint();
+      if (point === "submit-import" && args[0] === "/usr/bin/unshare" && argv.includes("oma-quarantine")) checkpoint();
     }
     return result;
   },

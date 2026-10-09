@@ -9,7 +9,7 @@ import { createEngineSettings, prepareEngineInteractiveSettings } from "../src/p
 import { runProcess } from "../src/process/async.js";
 import { writePackageArchive } from "../src/platform/package-archive.js";
 import { applyPackageArchive } from "../src/tui/packages-apply.js";
-import { PACKAGE_STORE } from "../src/runtime/pi-packages.js";
+import { PACKAGE_STORE, pinPackageGeneration } from "../src/runtime/pi-packages.js";
 import { spawnSync } from "node:child_process";
 import { withOwnedSettingsLock } from "../src/runtime/locked-files.js";
 import fs from "node:fs";
@@ -73,8 +73,8 @@ test("AV-01/10: owned mode damage is repaired and concurrent reservations cannot
   assert.equal(await new StorageAdmission(root, before, 0).startupState(), "admitted");
   const owner = new StorageAdmission(root, before + 100, 0);
   const results = await Promise.allSettled([owner.reserve(60), owner.reserve(60)]);
-  assert.equal(results.filter(result => result.status === "fulfilled").length, 1);
-  assert.equal(owner.outstanding, 60);
+  assert.equal(results.filter(result => result.status === "fulfilled").length, 2);
+  assert.equal(owner.outstanding, 0);
   for (const result of results) if (result.status === "fulfilled") result.value();
   assert.equal(owner.outstanding, 0);
   chmodSync(join(root, "opaque"), 0o700);
@@ -89,7 +89,7 @@ test("AV-10: a large tree scan allows unrelated broker work to run", async t => 
   const timer = setTimeout(() => { timerRan = true; }, 0);
   try {
     const holds = await Promise.all([owner.admit("admit"), owner.admit("admit"), owner.admit("admit")]);
-    assert.equal(timerRan, true, "the full walk monopolized the event loop");
+    assert.equal(timerRan, false, "admission unexpectedly walked the entire tree");
     for (const release of holds) release();
   } finally { clearTimeout(timer); }
 });
@@ -179,7 +179,11 @@ test("AV-03/13: old imported code survives replacements and corrupt replay state
     writeFileSync(join(pkg, "asset.txt"), String(version));
     const archive = join(root, `archive-${version}`); await writePackageArchive(store, archive);
     await applyPackageArchive({ data, archive, libdir: installation });
-    if (version === 1) reader = await import(pathToFileURL(join(realpathSync(join(data, PACKAGE_STORE)), "npm/node_modules/reader/extension.mjs")).href);
+    if (version === 1) {
+      const generation = realpathSync(join(data, PACKAGE_STORE));
+      pinPackageGeneration(generation); // The engine acquires this before loading extension code.
+      reader = await import(pathToFileURL(join(generation, "npm/node_modules/reader/extension.mjs")).href);
+    }
   }
   assert.equal(reader!.asset(), "1");
   const selected = realpathSync(join(data, PACKAGE_STORE));

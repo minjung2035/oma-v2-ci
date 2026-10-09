@@ -16,7 +16,7 @@ test("authority accepts only a closed resolved spec", () => {
     { ...base, modelProfile: undefined },
     { ...base, resources: undefined },
     { ...base, modelProfile: "" },
-    { ...base, resources: { ...base.resources, memoryBytes: 0 } },
+    { ...base, resources: { ...base.resources, memoryBytes: -1 } },
     { ...base, resources: { ...base.resources, unexpected: 1 } },
   ]) rejects(JSON.stringify(bad));
   assert.deepEqual(

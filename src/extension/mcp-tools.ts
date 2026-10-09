@@ -1,100 +1,10 @@
-/** mcp: the bundled pi-mcp-adapter extension (vendored byte-pinned under
- * `src/extension/vendor/pi-mcp-adapter/`) exposed as exactly one OMA tool
- * -- `mcp`, upstream's own proxy surface -- inside OMA's authority model
- * rather than upstream's "host pi extension" model.
- *
- * What OMA owns, and where it lives:
- *
- * - Integrity: `verifyVendorBundle` runs at registration, and only after
- *   it passes is any vendored module evaluated -- every runtime import
- *   here is a dynamic `await import()` behind that check (this module
- *   itself only type-imports vendored declarations, which erase at
- *   compile). A tampered or incomplete payload refuses the session, it
- *   does not degrade.
- * - Surface: OMA drives upstream's own `createMcpAdapter` factory through
- *   a facade ExtensionAPI. The facade forwards `registerTool` only for
- *   the pinned name `mcp` -- a renamed, extra or missing registration
- *   fails startup. `registerCommand`, `registerFlag` and
- *   `registerShortcut` are recorded, not registered: upstream's /mcp,
- *   /mcp-adapter and /mcp-auth surfaces stay closed because every auth
- *   action the proxy tool offers is reached through `mcp` params instead.
- *   `exec` is refused (its only call sites are browser/path opening);
- *   `registerMcpServer`/`getMcpServers` are absent from the facade, so
- *   `piSupportsMcp(pi)` is false inside vendored code -- Pi's built-in
- *   MCP can never run beside the adapter, and the mcp_servers_change
- *   mirroring path is never armed. There is no OMA grouping layer: the
- *   surface plan names `mcp` directly. Posture: `pi.events` is forwarded
- *   unchanged and upstream's `pi-mcp-adapter:runtime-register` channel
- *   registers a runtime server without normalizeOmaMcpConfig -- the
- *   boundary validator (command basename rules included) does not see
- *   it. It is in-process only and no other OMA extension can emit it, so
- *   it is recorded as a posture note rather than closed; the runtime
- *   refusals (ui-session, credential-command) still bind what registers.
- * - Config: the only config source is OMA-owned -- a programmatic
- *   `McpConfig` object supplied to `createMcpAdapter`, built by
- *   `normalizeOmaMcpConfig` from the OMA-owned mcp-adapter.json in the engine's
- *   own PI_CODING_AGENT_DIR (or the `config` option in tests). `configPath`
- *   is never offered to upstream, so no discovery path (Pi global config,
- *   project config, host config, package/claude-plugin loaders, argv
- *   flags) can run. The validator rejects `imports`, `claudePlugins` and
- *   every settings key outside the allowed subset; it forbids the
- *   surface-altering settings (directTools, namespaceProxyTools,
- *   scriptMode, autoAuth, allowInstall, hostConfigDiscovery,
- *   disableProxyTool, ancestorConfigRoots, agentPluginPaths,
- *   projectServers) rather than clamping them, because an OMA-owned file
- *   asking for a forbidden surface is a violation, not a preference.
- * - Server entries: command is rejected when its basename -- directory
- *   prefixes, the win32 `.cmd`/`.exe`/`.bat`/`.ps1` shims and trailing
- *   dots/spaces stripped to a fixpoint, case-folded -- is "npx"/"npm"
- *   (upstream's resolver would fetch packages at connect time); `url` must be http(s); `socket` must be
- *   absolute; `caFile`, `requestHeadersCommand`, `pluginDataDir`,
- *   `literalEnv` and per-server `directTools` are rejected outright;
- *   `!`-command secret sinks in env/headers/bearerToken/oauth.clientSecret
- *   are rejected at the boundary AND refused at runtime by the vendored
- *   splice (defense in depth). A `uiResourceUri` tool call fails closed
- *   with a structured refusal inside the vendored runtime -- no `who`
- *   probe, `npm root -g` resolution, host-package import or browser open
- *   may run for it (the deny-by-default `ui-session`/`browser-open`
- *   permits; upstream's UI session machinery stays unreachable).
- * - Policy seam: before the factory runs, `omaInstallMcpPolicy` installs
- *   the OMA contract inside the vendored runtime: deny-by-default permits
- *   (browser-open, os-keyring and ui-session never granted), an empty
- *   ambient-env
- *   view (MCP_DIRECT_TOOLS, MCP_OAUTH_*, NPM_CONFIG_CACHE, BROWSER, the
- *   Jev/SystemOne vars and the PI_MCP_ADAPTER_* selectors cannot reach
- *   vendored code), the OMA-owned agent dir every getAgentPath-derived
- *   write lands under, the scratch root for output-guard spills, the
- *   stdio child env scrub, and the pinned credential store. The vendored
- *   MCP SDK's StdioClientTransport unions its own
- *   `getDefaultEnvironment()` beneath `serverParams.env` (POSIX: HOME,
- *   LOGNAME, PATH, SHELL, TERM, USER; win32: APPDATA, HOMEDRIVE,
- *   HOMEPATH, LOCALAPPDATA, PATH, PROCESSOR_ARCHITECTURE, SYSTEMDRIVE,
- *   SYSTEMROOT, TEMP, USERNAME, USERPROFILE, PROGRAMFILES), so the
- *   child-env finish also writes an explicit `undefined` tombstone for
- *   every underlay name it did not sanction -- the key overrides the
- *   ambient default inside the union and Node's spawn drops
- *   `undefined`-valued entries entirely, preserving denied-by-absence
- *   through the union. The vendored dependency bytes stay exact.
- * - Egress: when the Resident sandbox's egress wiring is present, the pin
- *   `http://127.0.0.1:<OMA_EGRESS_PROXY_PORT>` is installed and every
- *   upstream HTTP leaf (MCP stream fetches, OAuth/auth service requests,
- *   endpoint probes, semantic-search calls) rides the vendored undici's
- *   ProxyAgent -- loopback stays direct. Stdio children receive only the
- *   reproduced pin values through the shared child-env allowlist, never
- *   an inherited or config-declared proxy. Without the wiring there is
- *   no pin and no dispatcher -- upstream's own direct-fetch semantics.
- * - Credentials: the OAuth secret store is pinned to the encrypted-file
- *   backend keyed by an OMA-generated file under the OMA-owned state dir
- *   (or a memory store when no state dir exists); the OS keyring is
- *   unreachable, so no host credential is read, imported or recovered.
- * - Lifecycle: upstream's own session_start/session_shutdown owners are
- *   forwarded through the facade -- connections abort, OAuth runtimes
- *   shut down and the runtime owner's AbortController chains exactly as
- *   upstream intends; OMA's own scratch dir is rotated on session_start
- *   and removed on session_shutdown.
- * - Dependencies: the bundle's own node_modules resolves every vendored
- *   dependency import; nothing reaches a user-installed package.
- */
+/** Bundled MCP adapter on OMA's single proxy tool surface. Explicit npm/npx
+ * servers, credential/header commands, custom CAs, OAuth, auto-auth and install
+ * use upstream capabilities. Installs persist in this engine's OMA config.
+ * OMA supplies owned credentials/scratch and the scrubbed child environment;
+ * automatic host provider/keyring discovery and separate UI-session tools keep
+ * their own boundaries. Verified bytes load before registration, and session
+ * hooks retain upstream connection and cleanup ownership. */
 import { randomBytes } from "node:crypto";
 import { mkdirSync, readFileSync, rmSync, writeFileSync, chmodSync, statSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -122,9 +32,9 @@ const dropped = mcpFacadeDropped as { kind: "command" | "flag" | "shortcut"; nam
 export interface McpToolsOptions {
   /** The OMA-owned programmatic config. When absent, the OMA-owned file
    * `<PI_CODING_AGENT_DIR>/mcp-adapter.json` is read; when that is absent too, an
-   * empty config is used (the `mcp` tool still registers -- status and
-   * runtime-registered servers keep working). A path may never reach
-   * upstream: this is OMA's own read, upstream's discovery never runs. */
+   * empty config is used (status and runtime-registered servers still work).
+   * Upstream receives the owned destination for installs; ambient config
+   * discovery does not replace the OMA config. */
   readonly config?: unknown;
   /** OMA-owned engine agent dir -- defaults to PI_CODING_AGENT_DIR. When
    * neither exists the adapter runs on an ephemeral scratch state dir and
@@ -150,16 +60,14 @@ const ALLOWED_SETTINGS: ReadonlySet<string> = new Set([
   "mcpFooterStatus", "showStatusIcon", "notifyOnStartupConnect",
   "deferWithMissingMetadata", "approveTools", "authRequiredMessage",
   "idleTimeout", "requestTimeoutMs", "trace", "jev",
-  "sampling", "elicitation",
+  "sampling", "elicitation", "autoAuth", "allowInstall",
 ]);
 
-/** Server-entry keys OMA accepts. `directTools`, `caFile`,
- * `requestHeadersCommand`, `pluginDataDir` and `literalEnv` are absent --
- * the surface clamp, the host-CA read, the per-request header command and
- * the plugin-data path have no OMA counterpart, and literalEnv exists only
- * for plugin env rules. */
+/** Explicit server command/env/headers/auth/CA settings pass through. Direct
+ * tool registration and plugin-specific data/env discovery keep their separate
+ * surfaces; the MCP proxy owns OMA's declared model tool surface. */
 const ALLOWED_SERVER_KEYS: ReadonlySet<string> = new Set([
-  "description", "command", "args", "cwd", "env", "inheritEnv",
+  "description", "command", "args", "cwd", "env", "inheritEnv", "caFile", "requestHeadersCommand",
   "url", "socket", "headers", "auth", "bearerToken", "bearerTokenEnv",
   "bearerTokenStore", "oauth", "lifecycle", "idleTimeout",
   "requestTimeoutMs", "includeTools", "excludeTools", "searchKeywords",
@@ -181,16 +89,6 @@ function configError(detail: string): Error {
 
 /** A `!value` string marks an upstream command-secret sink (a spawned
  * shell); `!!` is the upstream literal escape and stays harmless. */
-function isCommandSink(value: unknown): boolean {
-  return typeof value === "string" && value.startsWith("!") && !value.startsWith("!!");
-}
-
-function rejectCommandSinks(record: unknown, where: string): void {
-  if (record === null || typeof record !== "object") return;
-  for (const [key, value] of Object.entries(record as Record<string, unknown>))
-    if (isCommandSink(value)) throw configError(`${where}.${key}: "!command" secret sinks are not permitted`);
-}
-
 function normalizeServer(name: string, raw: unknown): Record<string, unknown> {
   if (!MCP_SERVER_NAME.test(name))
     throw configError(`invalid server name ${JSON.stringify(name)}`);
@@ -206,23 +104,7 @@ function normalizeServer(name: string, raw: unknown): Record<string, unknown> {
   if (entry.command !== undefined) {
     if (typeof entry.command !== "string" || entry.command.trim() === "")
       throw configError(`server ${JSON.stringify(name)}: command must be a non-empty string`);
-    // Package fetchers are refused by basename -- directory prefixes and
-    // the win32 .cmd/.exe/.bat/.ps1 shims stripped, case-folded -- so
-    // "/usr/bin/npx" or "C:\\tools\\npm.cmd" is the same admission as the
-    // bare name, not a bypass of the no-fetch rule. win32 also strips a
-    // name's trailing dots and spaces before resolving it, so "npx.",
-    // "npx.cmd." or "npx.." still reach npx.cmd: collapse trailing
-    // [.\s]+ and the shim extensions to a fixpoint before comparing --
-    // over-folding is the safe direction here, it can only refuse more
-    // spellings of the same fetcher.
-    let commandLeaf = (entry.command.split(/[\\/]/).pop() ?? "").trim().toLowerCase();
-    for (;;) {
-      const next = commandLeaf.replace(/[.\s]+$/, "").replace(/\.(cmd|exe|bat|ps1)$/, "");
-      if (next === commandLeaf) break;
-      commandLeaf = next;
-    }
-    if (commandLeaf === "npx" || commandLeaf === "npm")
-      throw configError(`server ${JSON.stringify(name)}: command ${JSON.stringify(entry.command)} would fetch packages at connect time; install the server and name the binary`);
+
   }
   if (entry.url !== undefined) {
     let parsed: URL;
@@ -238,13 +120,7 @@ function normalizeServer(name: string, raw: unknown): Record<string, unknown> {
     (!Array.isArray(entry.args) || entry.args.some(a => typeof a !== "string")))
     throw configError(`server ${JSON.stringify(name)}: args must be a string array`);
 
-  // `!command` secret sinks, and the provider-auth channel that would read
-  // the host Pi's own provider credentials, are refused here; the vendored
-  // splices refuse them again at runtime.
-  rejectCommandSinks(entry.env, `server ${JSON.stringify(name)} env`);
-  rejectCommandSinks(entry.headers, `server ${JSON.stringify(name)} headers`);
-  if (isCommandSink(entry.bearerToken))
-    throw configError(`server ${JSON.stringify(name)}: "!command" bearerToken sinks are not permitted`);
+  // Provider-auth discovery stays separate from explicit MCP credentials.
   if (typeof entry.auth === "object" && entry.auth !== null)
     throw configError(`server ${JSON.stringify(name)}: auth { provider } would read the host Pi's provider credentials; use bearer/oauth`);
   if (entry.auth !== undefined && !["oauth", "bearer", false].includes(entry.auth as never))
@@ -255,8 +131,7 @@ function normalizeServer(name: string, raw: unknown): Record<string, unknown> {
       throw configError(`server ${JSON.stringify(name)}: oauth must be an object or false`);
     for (const key of Object.keys(oauth))
       if (!ALLOWED_OAUTH_KEYS.has(key)) throw configError(`server ${JSON.stringify(name)}: oauth.${key} is not permitted`);
-    if (isCommandSink(oauth.clientSecret))
-      throw configError(`server ${JSON.stringify(name)}: "!command" oauth.clientSecret sinks are not permitted`);
+
   }
   return { ...entry };
 }
@@ -281,8 +156,8 @@ function normalizeSettings(raw: unknown, interactive: boolean, stateDir: string)
     directTools: false,
     namespaceProxyTools: false,
     scriptMode: false,
-    autoAuth: false,
-    allowInstall: false,
+    autoAuth: true,
+    allowInstall: true,
     hostConfigDiscovery: "off",
     exposeResources: false,
     // The credential and state roots OMA owns.
@@ -415,8 +290,8 @@ function mcpFacade(pi: ExtensionAPI, registered: Set<string>): ExtensionAPI {
     registerTool(definition: { name: string }) {
       if (!(MCP_TOOL_NAMES as readonly string[]).includes(definition.name))
         throw new Error(`[E_OMA_MCP_SURFACE] vendored pi-mcp-adapter tried to register unlisted tool ${JSON.stringify(definition.name)}`);
-      if (registered.has(definition.name))
-        throw new Error(`[E_OMA_MCP_SURFACE] vendored pi-mcp-adapter registered ${definition.name} twice`);
+      // The proxy refreshes its metadata after connect/install. Pi replaces
+      // that same tool definition; the one-name surface stays unchanged.
       registered.add(definition.name);
       return pi.registerTool(definition as Parameters<ExtensionAPI["registerTool"]>[0]);
     },
@@ -433,9 +308,7 @@ function mcpFacade(pi: ExtensionAPI, registered: Set<string>): ExtensionAPI {
     getActiveTools: optional("getActiveTools"),
     setActiveTools: optional("setActiveTools"),
     getAllTools: optional("getAllTools"),
-    exec() {
-      throw new Error("[E_OMA_SUBPROCESS] vendored pi-mcp-adapter asked for pi.exec -- the only call sites are browser/path opening, which OMA does not expose");
-    },
+    exec: pi.exec.bind(pi),
   };
   return facade as unknown as ExtensionAPI;
 }
@@ -534,7 +407,7 @@ export async function registerMcpTools(pi: ExtensionAPI, options?: McpToolsOptio
     childEnvFinish: (merged) => withSdkEnvTombstones(buildChildEnv({}, merged, scratchDir)),
     authStore,
     ...(oauthKey !== undefined ? { oauthFileKey: oauthKey } : {}),
-    permits: {},
+    permits: { "credential-command": true, "browser-open": true },
   };
   utils.omaInstallMcpPolicy(policy);
 
@@ -547,7 +420,7 @@ export async function registerMcpTools(pi: ExtensionAPI, options?: McpToolsOptio
   const vendored = await import("./vendor/pi-mcp-adapter/runtime/index.js") as VendoredIndex;
   dropped.length = 0;
   const registered = new Set<string>();
-  const factory = vendored.createMcpAdapter({ config });
+  const factory = vendored.createMcpAdapter({ config, ...(durable ? { configPath: join(agentRoot as string, MCP_CONFIG_FILE_NAME) } : {}) });
   factory(mcpFacade(pi, registered));
 
   // The surface contract, asserted after the factory ran: exactly `mcp`,

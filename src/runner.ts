@@ -248,8 +248,6 @@ export class RunnerModule {
       !this.lease ||
       !this.limits ||
       !this.profile ||
-      !Number.isSafeInteger(this.profile?.workspaceBytes) ||
-      (this.profile?.workspaceBytes ?? 0) <= 0 ||
       !stateRoot ||
       !society ||
       !piCommand ||

@@ -364,11 +364,11 @@ test("BL1: lsp_fix write is refused for a read-only role before any work runs", 
   assert.equal(readFileSync(join(workspace, "note.tfix"), "utf8"), "hello\n", "nothing was written");
 });
 
-test("BL1: the contained writer's quota still gates an lsp_fix write", async t => {
+test("BL1: lsp_fix grows beyond a legacy workspace quota", async t => {
   // note.tfix is 6 bytes; the fix grows it to 14 -> growth 8 > quota 5.
   const { workspace, run } = await lspWorld(t, "lifecycle-go", false, 5);
-  await assert.rejects(run("lsp_fix", { path: "note.tfix", write: true }), /quota/);
-  assert.equal(readFileSync(join(workspace, "note.tfix"), "utf8"), "hello\n");
+  await run("lsp_fix", { path: "note.tfix", write: true });
+  assert.notEqual(readFileSync(join(workspace, "note.tfix"), "utf8"), "hello\n");
 });
 
 test("BL1: a symlink that escapes the pinned workspace is refused by the vendored realpath wall", async t => {

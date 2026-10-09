@@ -1,6 +1,6 @@
 {
  "version": 1,
- "about": "WP32 inputs to implementation/review-ledger.json that git history cannot supply: files read in full and left unchanged, explicitly reviewed working-tree changes bound to their SHA-256 bytes and oracles, and the environment lanes as recorded in docs/implementation/validation.md. Regenerate the ledger with `npm run review:ledger`; `review-closure` checks it. Historical lane entries do not certify later working-tree changes. DR29: withdrawn stale byte-bound review claims for src/runtime/personal-settings.ts, src/entry/personal-host.ts, src/entry/oma-mac.ts. Hashes were not silently refreshed; these edited owners require fresh review. Historical readUnchanged entries apply only to unchanged committed files; changed files are NOT_REVIEWED. UX-38 residual settlement (bundled pi-lsp surface): the seven edited files above were re-read in full and re-bound to their new bytes -- digests refreshed only alongside a fresh read, never silently. No withdrawal was needed: each change is this batch's own reviewed work. UX-38 blind-verification settlement (process layer): src/process/run.ts and src/process/command.ts were re-read in full and re-bound to their new bytes (spool-open fd pairing, identical-spool refusal) -- digest refresh accompanied the fresh read. F1/F2-MAC settlement (macOS archive staging regression): src/runtime/local-package.ts and src/git/canonical-command.ts were re-read in full and re-bound to their new bytes (Darwin archive spool through the host file owner; ls-tree scratch cleanup on spool-open failure) -- digest refresh accompanied the fresh read. UX-38 LOW residual settlement (workspaceDirty not-a-repo corroboration): src/cli/effects.ts was re-read in full and re-bound to its new bytes (the not-a-repo decline is now a factual negative only after a .git-claim walk corroborates absence) -- digest refresh accompanied the fresh read. DR35: current startup deltas directly reviewed with the user prohibition on subagents; each changed owner is bound to its current bytes and DR35 regressions. Historical lane results do not certify this batch. DR36 (2026-10-09): direct review of the repair deltas and affected owner flows, without subagents, is recorded separately from historical full-file reviews. Hash updates here accompany that review and named current regression oracles; earlier environment lanes are not renewed by digest regeneration.",
+ "about": "WP32 inputs to implementation/review-ledger.json that git history cannot supply: files read in full and left unchanged, explicitly reviewed working-tree changes bound to their SHA-256 bytes and oracles, and the environment lanes as recorded in docs/implementation/validation.md. Regenerate the ledger with `npm run review:ledger`; `review-closure` checks it. Historical lane entries do not certify later working-tree changes. DR29: withdrawn stale byte-bound review claims for src/runtime/personal-settings.ts, src/entry/personal-host.ts, src/entry/oma-mac.ts. Hashes were not silently refreshed; these edited owners require fresh review. Historical readUnchanged entries apply only to unchanged committed files; changed files are NOT_REVIEWED. UX-38 residual settlement (bundled pi-lsp surface): the seven edited files above were re-read in full and re-bound to their new bytes -- digests refreshed only alongside a fresh read, never silently. No withdrawal was needed: each change is this batch's own reviewed work. UX-38 blind-verification settlement (process layer): src/process/run.ts and src/process/command.ts were re-read in full and re-bound to their new bytes (spool-open fd pairing, identical-spool refusal) -- digest refresh accompanied the fresh read. F1/F2-MAC settlement (macOS archive staging regression): src/runtime/local-package.ts and src/git/canonical-command.ts were re-read in full and re-bound to their new bytes (Darwin archive spool through the host file owner; ls-tree scratch cleanup on spool-open failure) -- digest refresh accompanied the fresh read. UX-38 LOW residual settlement (workspaceDirty not-a-repo corroboration): src/cli/effects.ts was re-read in full and re-bound to its new bytes (the not-a-repo decline is now a factual negative only after a .git-claim walk corroborates absence) -- digest refresh accompanied the fresh read. DR35: current startup deltas directly reviewed with the user prohibition on subagents; each changed owner is bound to its current bytes and DR35 regressions. Historical lane results do not certify this batch. DR36 (2026-10-09): direct review of the repair deltas and affected owner flows, without subagents, is recorded separately from historical full-file reviews. Hash updates here accompany that review and named current regression oracles; earlier environment lanes are not renewed by digest regeneration. DR37 (2026-10-09): selected restriction removal deltas and affected lifetimes directly reviewed without subagents; current bytes and named behavioral oracles recorded, not a renewed full-codebase review.",
  "reviewedChanges": [
   {
    "path": "implementation/contracts.ts",
@@ -16,33 +16,24 @@
   {
    "path": "implementation/systemd/resident.service.in",
    "by": [
-    "BL1",
-    "P0V-59",
-    "WP03",
-    "WP25"
+    "DR37"
    ],
    "oracles": [
-    "BL1",
-    "P0V-59",
-    "V03A",
-    "V03B",
-    "V25A"
+    "DR37"
    ],
-   "sha256": "50d2f29590a8f00611e6fc0b48aaf72ce87c60328fd15d85df830c4df5f9e324",
-   "note": "BL1 review -- the unit now carries OMA_TOOL_SURFACE_HEX=<hex> so the broker-rendered code_intel plan reaches the confined Resident beside profile/resources."
+   "sha256": "2de20d1dd7fe9a48023026d60ea935f724ae4fd295029e7b01188877afa84892",
+   "note": "DR37 direct review of changed code and affected composition: remove OMA resource/count/storage admission enforcement while keeping current authority, serialized contained effects, canonical historical declarations and explicit OS errors. Updated existing regressions plus DR37 positive execution tests cover the delta; no historical full-file review or environment PASS is renewed by this hash. Native systemd exposed finite DefaultTasksMax after omission; explicit TasksMax=infinity now disables that inherited per-service default without adding a resource cap."
   },
   {
    "path": "src/broker.ts",
    "by": [
-    "DR35",
-    "DR36"
+    "DR37"
    ],
    "oracles": [
-    "R14",
-    "AV-10"
+    "DR37"
    ],
-   "sha256": "aeccac82b639c9966e5fa5595a8f965c8b17a38ebe9d2e93c5c806a5081f7b3d",
-   "note": "Reviewed asynchronous admission through transport, public/internal dispatch, shutdown and review: raw input pauses before reserve/spool, close/revoke/EOF rechecks precede effects, release remains once-only, and safety-control is independent of quota scans. Native peer and delayed-admission regressions exercise affected owner flow."
+   "sha256": "5a2d070f475d317a7132764e4dd0468ed1fe6be07b7be6062b0edaac7e3455bc",
+   "note": "DR37 direct review of changed code and affected composition: remove OMA resource/count/storage admission enforcement while keeping current authority, serialized contained effects, canonical historical declarations and explicit OS errors. Updated existing regressions plus DR37 positive execution tests cover the delta; no historical full-file review or environment PASS is renewed by this hash."
   },
   {
    "path": "src/broker/composition.ts",
@@ -216,15 +207,24 @@
   {
    "path": "src/config.ts",
    "by": [
-    "DR35",
-    "DR36"
+    "DR37"
    ],
    "oracles": [
-    "AV-04",
-    "AV-06"
+    "DR37"
    ],
-   "sha256": "cc0ed766e0d55e8ffe0c0a470f1a72cfa9ad6809a05e72b1cdac3e45a0f3b387",
-   "note": "Reviewed numeric and process policies: retained stream heads are independent of command execution, both streams continue draining, native timers are segmented monotonically and cancellable, sync-only limitations are explicit, derived configuration milliseconds remain safe integers, and cgroup memory comparison follows observed kernel page alignment. Long-timeout and overflowing-output regressions accompany native cgroup checks."
+   "sha256": "96ea2bdab03224bf54c615e01551e1864744e6eca1a7ade2a26a50e20091bf56",
+   "note": "DR37 direct review of changed code and affected composition: remove OMA resource/count/storage admission enforcement while keeping current authority, serialized contained effects, canonical historical declarations and explicit OS errors. Updated existing regressions plus DR37 positive execution tests cover the delta; no historical full-file review or environment PASS is renewed by this hash."
+  },
+  {
+   "path": "src/config/defaults.ts",
+   "by": [
+    "DR37"
+   ],
+   "oracles": [
+    "DR37"
+   ],
+   "sha256": "95ae1af98463d135c99f1531672507700a7216ea2fecdd5732f63f61fb7384e0",
+   "note": "DR37 direct review of changed code and affected composition: remove OMA resource/count/storage admission enforcement while keeping current authority, serialized contained effects, canonical historical declarations and explicit OS errors. Updated existing regressions plus DR37 positive execution tests cover the delta; no historical full-file review or environment PASS is renewed by this hash."
   },
   {
    "path": "src/config/generations.ts",
@@ -292,13 +292,13 @@
   {
    "path": "src/domain/egress.ts",
    "by": [
-    "DR34"
+    "DR37"
    ],
    "oracles": [
-    "DR34"
+    "DR37"
    ],
-   "sha256": "3ed3e87d6964412a527123511912e4392549fcf22f3667217ce0e72a5d58b3fb",
-   "note": "Read in full: pure policy unchanged -- entries are normalized DNS names or *.suffix (two-label minimum); literals, ports, schemes, paths and malformed spellings refuse at grammar. New: EGRESS_ALLOW_MAX = 256 is the shared wire/commit bound, named here so host-guest.ts and config.ts cannot drift. No IO anywhere."
+   "sha256": "67fc67811d1db54e1287b7fd93bca557f4923b67e23d85ba596eb5da31df0fed",
+   "note": "DR37 direct review of network and socket owner deltas: share-net retains filesystem/user/PID/seccomp boundaries, arbitrary destination/port forwarding preserves destination auth and strips proxy auth; unique ports precede adapter capture; close/abort owns upstream and downstream. Actual TCP/UDP, HTTP and twelve-tunnel tests cover behavior."
   },
   {
    "path": "src/domain/errors.ts",
@@ -325,17 +325,37 @@
    "note": "Reviewed numeric and process policies: retained stream heads are independent of command execution, both streams continue draining, native timers are segmented monotonically and cancellable, sync-only limitations are explicit, derived configuration milliseconds remain safe integers, and cgroup memory comparison follows observed kernel page alignment. Long-timeout and overflowing-output regressions accompany native cgroup checks."
   },
   {
-   "path": "src/domain/resources.ts",
+   "path": "src/domain/integration-policy.ts",
    "by": [
-    "DR35",
-    "DR36"
+    "DR37"
    ],
    "oracles": [
-    "AV-04",
-    "AV-06"
+    "DR37"
    ],
-   "sha256": "2e40245a6ceb07b415a03419aca29431c7f386b7e19deb98432794157d57d687",
-   "note": "Reviewed numeric and process policies: retained stream heads are independent of command execution, both streams continue draining, native timers are segmented monotonically and cancellable, sync-only limitations are explicit, derived configuration milliseconds remain safe integers, and cgroup memory comparison follows observed kernel page alignment. Long-timeout and overflowing-output regressions accompany native cgroup checks."
+   "sha256": "a3f036b4ce7bc0224b47c9c54bad8500e0029981e974f4eb7c47acdebb8b5cce",
+   "note": "DR37 direct review of changed code and affected composition: remove OMA resource/count/storage admission enforcement while keeping current authority, serialized contained effects, canonical historical declarations and explicit OS errors. Updated existing regressions plus DR37 positive execution tests cover the delta; no historical full-file review or environment PASS is renewed by this hash."
+  },
+  {
+   "path": "src/domain/lineage.ts",
+   "by": [
+    "DR37"
+   ],
+   "oracles": [
+    "DR37"
+   ],
+   "sha256": "6e084373a1af8d039936563863348b9a55c161d258c02c58da43e5ec4cfb9c74",
+   "note": "DR37 direct review of changed code and affected composition: remove OMA resource/count/storage admission enforcement while keeping current authority, serialized contained effects, canonical historical declarations and explicit OS errors. Updated existing regressions plus DR37 positive execution tests cover the delta; no historical full-file review or environment PASS is renewed by this hash."
+  },
+  {
+   "path": "src/domain/resources.ts",
+   "by": [
+    "DR37"
+   ],
+   "oracles": [
+    "DR37"
+   ],
+   "sha256": "34a53522d0f19ce445ddd196eaa813d1d1aabac831ff2a55140d1a3b672d9876",
+   "note": "DR37 direct review of changed code and affected composition: remove OMA resource/count/storage admission enforcement while keeping current authority, serialized contained effects, canonical historical declarations and explicit OS errors. Updated existing regressions plus DR37 positive execution tests cover the delta; no historical full-file review or environment PASS is renewed by this hash."
   },
   {
    "path": "src/domain/tool-surface.ts",
@@ -376,15 +396,13 @@
   {
    "path": "src/entry/broker.ts",
    "by": [
-    "DR35",
-    "DR36"
+    "DR37"
    ],
    "oracles": [
-    "DR35",
-    "AV-07"
+    "DR37"
    ],
-   "sha256": "8c11b66e29a770324d985bc9dae06b85657d03fdf6fe559bcb24a38cb4c64860",
-   "note": "Reviewed preparation ownership and host/broker ordering: no independent short total timeout, child inherits the society fence and remains owned until actual close, strict bounded child report, private UI before broker readiness without authority, and inherited descendant fences survive cancellation until the kernel admits a successor."
+   "sha256": "1e8a168aa61df6df6c28e6d4801c659f43934ba091ec8fe32ca13ff41c34d5cf",
+   "note": "DR37 direct review of accepted execution and shutdown flows: no execution cap or quota scan, broker lifetime cancellation rather than client disconnect cancellation, manager wait owns checker cgroup; quarantine namespace lease/native barrier retain unknown outcomes. Actual long check/network/cgroup cancellation plus Git import crash/retry oracles apply."
   },
   {
    "path": "src/entry/oma-mac.ts",
@@ -498,15 +516,13 @@
   {
    "path": "src/extension/contained-files.ts",
    "by": [
-    "BL3",
-    "UX-38"
+    "DR37"
    ],
    "oracles": [
-    "BL3",
-    "G10-02"
+    "DR37"
    ],
-   "note": "Re-read for the B2 rider: errnoCode guards the .code read behind typeof-object-non-null so a thrown null/string/number cannot turn the classifier itself into a TypeError; isDescriptorOverrun is the exported EMFILE/ENFILE test both the snapshot boundary (descriptorRefusal) and the search child's engine-walker mapping share -- the same overrun says 'search snapshot ran out of file descriptors' wherever it is raised. Declare-before-create, held-descriptor walk, EEXIST rename semantics unchanged. Oracles: G10-02 fd-exhaustion refusal wording, declare-before-create, EEXIST re-declare, wire declaration ordering.",
-   "sha256": "b059d1b9166d2f16ac5cd6d50bf41f48a1b6bfc36f745176f9c715efb38783d2"
+   "sha256": "f1ba8bb2f5f0d629ef99bdfa4bb9bc57a501768d480ffe0f27621f1b86a32061",
+   "note": "DR37 direct review of changed code and affected composition: remove OMA resource/count/storage admission enforcement while keeping current authority, serialized contained effects, canonical historical declarations and explicit OS errors. Updated existing regressions plus DR37 positive execution tests cover the delta; no historical full-file review or environment PASS is renewed by this hash."
   },
   {
    "path": "src/extension/contained-search.ts",
@@ -524,25 +540,13 @@
   {
    "path": "src/extension/contained-tools.ts",
    "by": [
-    "BL1",
-    "P0V-120",
-    "P0V-121",
-    "P0V-122",
-    "P0V-74",
-    "BL3",
-    "UX-38"
+    "DR37"
    ],
    "oracles": [
-    "BL1",
-    "P0V-120",
-    "P0V-121",
-    "P0V-122",
-    "P0V-74",
-    "BL3",
-    "G10-02"
+    "DR37"
    ],
-   "sha256": "358ecf5293c50b25eb4e4d26703a9bad28fff5d7f1fca8cd24f09f10ede2db10",
-   "note": "Re-read in full for the UX-38 blind-verification fix round (F1): grep/find now pass a ContainedSearchSpool {workspace, write} built on the shared serialized contained writer, so a spilled complete answer is quota-decided, serialized and guard-admitted exactly like a file the model wrote itself, and lands under .oma/search-results/ inside the caller workspace. A read-only surface wires no spool and the complete answer rides inline in full instead. The fail-closed quota comment is unchanged. Read verified against the workspace-spool reachability and quota-refusal oracles."
+   "sha256": "5d9d3203713ae38062f2c67f18837d21e709fb34ec46a8c4e4f0daa0b215fad6",
+   "note": "DR37 direct review of changed code and affected composition: remove OMA resource/count/storage admission enforcement while keeping current authority, serialized contained effects, canonical historical declarations and explicit OS errors. Updated existing regressions plus DR37 positive execution tests cover the delta; no historical full-file review or environment PASS is renewed by this hash."
   },
   {
    "path": "src/extension/delivery.ts",
@@ -561,14 +565,13 @@
   {
    "path": "src/extension/egress-bridge.ts",
    "by": [
-    "DR34"
+    "DR37"
    ],
    "oracles": [
-    "DR34",
-    "post-listen"
+    "DR37"
    ],
-   "sha256": "7fcf5ce7c30686ee4f178a793fa14b7c190924285e0e3aa39da15c169627fb5b",
-   "note": "Read in full: a loopback port forwards bytes to the bound proxy socket, unread; without the env pair it starts nothing. No policy knowledge or credentials inside -- the socket end decides. 2026-10-07 DR34 residual sweep: the permanent 'error' listener's `process.stderr.write` is now guarded -- a dead stderr at a refused bind previously threw out of the emit, the same process death the listener exists to absorb."
+   "sha256": "4689c8a6fce01517f14407271b533780265c2decb52c91887cdddb0200651654",
+   "note": "DR37 direct review of network and socket owner deltas: share-net retains filesystem/user/PID/seccomp boundaries, arbitrary destination/port forwarding preserves destination auth and strips proxy auth; unique ports precede adapter capture; close/abort owns upstream and downstream. Actual TCP/UDP, HTTP and twelve-tunnel tests cover behavior."
   },
   {
    "path": "src/extension/hashline-tools.ts",
@@ -622,13 +625,13 @@
   {
    "path": "src/extension/mcp-tools.ts",
    "by": [
-    "BL5"
+    "DR37"
    ],
    "oracles": [
-    "BL5"
+    "DR37"
    ],
-   "note": "BL5 adapter for the bundled pi-mcp-adapter extension. verifyVendorBundle precedes every dynamic import -- a tampered bundle registers nothing and session_start refuses; the facade forwards only registerTool for the pinned name `mcp`, drops upstream commands/flag/shortcuts, refuses pi.exec (the browser-open path) and omits registerMcpServer/getMcpServers so piSupportsMcp stays false (no Pi built-in MCP coexistence). Config is OMA-owned only -- <agentDir>/mcp-adapter.json normalized by normalizeOmaMcpConfig; absence is ENOENT-only (statSync catch), so an unreadable config or oauth-file-key refuses instead of masquerading as empty state or silently rotating a key (malformed JSON stays a distinct boundary error). The npx/npm no-fetch rule compares the command basename across / and \\ separators, case-folded with win32 .cmd/.exe/.bat/.ps1 shims AND trailing dots/spaces stripped to a fixpoint (win32 resolves npx. / npx.cmd. / npx.. to the same fetcher), so path-qualified or suffix-padded spellings are the same refusal. The policy seam now also hands the vendored SDK-union problem a finish that writes explicit undefined tombstones on every getDefaultEnvironment underlay name the scrub denied -- Node spawn drops those pairs, so denied ambient names stay absent in the spawned child (proven against the real vendored StdioClientTransport with a sentinel SHELL). SDK_STDIO_ENV_UNDERLAY mirrors the vendored DEFAULT_INHERITED_ENV_VARS by hand; the boundary test parses both platform lists from the verified ESM+CJS bytes, pins them to the live export and fails when a vendored SDK bump adds a name with no tombstone and no child-env sanction. permits:{} keeps ui-session deny-by-default; the dead omaStateDir helper is removed; pi.events is forwarded unchanged and the pi-mcp-adapter:runtime-register channel is recorded as an in-process-only posture note (it bypasses normalizeOmaMcpConfig but no other OMA extension can emit it). Scratch rotates on session_start and is removed on session_shutdown.",
-   "sha256": "238dcf7e95709d791bc3f39ffffffd4c2750d76ee70f66ebd2ddc8fb074b563d"
+   "sha256": "2bd18b29e2522d06349467a8a8a39275bfc3eafd5ba059045337474c6997414d",
+   "note": "DR37 direct review of changed code and affected composition: remove OMA resource/count/storage admission enforcement while keeping current authority, serialized contained effects, canonical historical declarations and explicit OS errors. Updated existing regressions plus DR37 positive execution tests cover the delta; no historical full-file review or environment PASS is renewed by this hash."
   },
   {
    "path": "src/extension/principal-channel.ts",
@@ -6482,13 +6485,13 @@
   {
    "path": "src/extension/vendor/pi-mcp-adapter/manifest.json",
    "by": [
-    "BL5"
+    "DR37"
    ],
    "oracles": [
-    "BL5"
+    "DR37"
    ],
-   "note": "Generated by scripts/vendor-pi-mcp-adapter.mjs --write. kind oma-vendored-bundle-v1; package pins name/version/commit/npm integrity+shasum; generated.divergences equals the script's OMA_DIVERGENCES (utils.js policy seam -- omaInstallMcpPolicy/omaPermits/omaAmbientEnv/omaAgentDir/omaChildEnv/omaChildEnvFinish/omaPinnedFetch/omaAuthStoreKind/omaSecureKeyringClosed/omaUiSessionsRefused plus the spliced call sites in agent-dir, server-manager, mcp-auth*, secure-keyring, config, index, init, logger, metadata-cache, ui-session, ui-server, proxy-modes, direct-tools, mcp-callback-server, plugin loaders, npx-resolver, command resolvers, auth flow, elicitation-handler, mcp-output-guard) and generated.dependencies equals the pinned 42-package closure; files+bundleSha256 bind every byte; upstream-tests/ recorded as the vendored commit's own test tree, not wired into npm test.",
-   "sha256": "88e746add47ac49fd21891a881ae978bc69542e0eb01dc5a6e926016d9a26909"
+   "sha256": "21a9513fdfe3cafadbaeb58d939e23c8e7556cae939373d305299a4a74050f62",
+   "note": "DR37 direct review of generator divergence anchors and emitted semantic deltas; manifest regenerated from the pinned dependency closure. MCP owns explicit install persistence; web preserves configured workflows and proxy transport. Integrity and actual install regressions are separate from historical validation."
   },
   {
    "path": "src/extension/vendor/pi-mcp-adapter/node_modules/@modelcontextprotocol/client/LICENSE",
@@ -29032,13 +29035,13 @@
   {
    "path": "src/extension/vendor/pi-mcp-adapter/runtime/index.js",
    "by": [
-    "BL5"
+    "DR37"
    ],
    "oracles": [
-    "BL5"
+    "DR37"
    ],
-   "note": "Vendored runtime emit member: tsc output of a vendored upstream .ts module with relative .ts specifiers rewritten to Node-loadable .js by scripts/vendor-pi-mcp-adapter.mjs (non-.ts payload members copied verbatim). OMA divergence splices declared in manifest.generated.divergences are applied by the same script; regeneration is deterministic and --check re-emits and compares byte-for-byte.",
-   "sha256": "3ad86c84a31847f8f5967336276e60d05bc5af2a7a77242dc947ccdb308a1bd9"
+   "sha256": "ec1fff5a002e1bfce9e6183825c5780c72ad8affaffd4e63679734f835281706",
+   "note": "DR37 direct review of generator divergence anchors and emitted semantic deltas; manifest regenerated from the pinned dependency closure. MCP owns explicit install persistence; web preserves configured workflows and proxy transport. Integrity and actual install regressions are separate from historical validation."
   },
   {
    "path": "src/extension/vendor/pi-mcp-adapter/runtime/init.d.ts",
@@ -35467,13 +35470,13 @@
   {
    "path": "src/extension/vendor/pi-web-access/manifest.json",
    "by": [
-    "BL4"
+    "DR37"
    ],
    "oracles": [
-    "BL4"
+    "DR37"
    ],
-   "note": "Generated by scripts/vendor-pi-web-access.mjs --write. kind oma-vendored-bundle-v1; package pins name/version/commit/npm integrity+shasum; generated.divergences equals the script's OMA_DIVERGENCES (utils.js/ssrf-protection.js egress-pin and deny-by-default policy seams, credential-command/browser-cookie/gh/clone/ADC/native-media/local-file/workflow refusals, index.js init-config overlay, utils.d.ts declarations) and generated.dependencies equals the pinned closure; files+bundleSha256 bind every byte; upstream-tests/ recorded as the vendored commit's own test tree, not wired into npm test. 2026-10-07 DR34: regenerated for the curator-server.js post-listen 'error' divergence (new generated.divergences entry + fresh per-file hashes and bundleSha256; the divergence is recorded in scripts/vendor-pi-web-access.mjs and the emitted runtime carries exactly that edit).",
-   "sha256": "3ab67d0e7f5aca7213c51b3adc5f693fc278e3a7f4b84830e1f1da2b674f65c4"
+   "sha256": "60095d2b39ff931e34385a895f286e47e8cbd9a20664a231b828e9f0d00a366b",
+   "note": "DR37 direct review of generator divergence anchors and emitted semantic deltas; manifest regenerated from the pinned dependency closure. MCP owns explicit install persistence; web preserves configured workflows and proxy transport. Integrity and actual install regressions are separate from historical validation."
   },
   {
    "path": "src/extension/vendor/pi-web-access/node_modules/.package-lock.json",
@@ -149220,13 +149223,13 @@
   {
    "path": "src/extension/vendor/pi-web-access/runtime/index.js",
    "by": [
-    "BL4"
+    "DR37"
    ],
    "oracles": [
-    "BL4"
+    "DR37"
    ],
-   "note": "Vendored runtime emit member: tsc output of a vendored upstream .ts module with relative .ts specifiers rewritten to Node-loadable .js by scripts/vendor-pi-web-access.mjs. OMA divergence splices declared in manifest.generated.divergences are applied by the same script; regeneration is deterministic and --check re-emits and compares byte-for-byte.",
-   "sha256": "48310bdef641c67d0d61ba1ea7424cf8a005067399b64ea52b6b905e17cbf7d1"
+   "sha256": "90558f5c056e0d28acff28e462feb7130f56721509646c12849cee3ebc391449",
+   "note": "DR37 direct review of generator divergence anchors and emitted semantic deltas; manifest regenerated from the pinned dependency closure. MCP owns explicit install persistence; web preserves configured workflows and proxy transport. Integrity and actual install regressions are separate from historical validation."
   },
   {
    "path": "src/extension/vendor/pi-web-access/runtime/jina-search.d.ts",
@@ -149847,13 +149850,13 @@
   {
    "path": "src/extension/vendor/pi-web-access/runtime/ssrf-protection.js",
    "by": [
-    "BL4"
+    "DR37"
    ],
    "oracles": [
-    "BL4"
+    "DR37"
    ],
-   "note": "Vendored runtime emit member: tsc output of a vendored upstream .ts module with relative .ts specifiers rewritten to Node-loadable .js by scripts/vendor-pi-web-access.mjs. OMA divergence splices declared in manifest.generated.divergences are applied by the same script; regeneration is deterministic and --check re-emits and compares byte-for-byte.",
-   "sha256": "3fb4b6d835d9753113cfd1d836e5aee3da53ee5717d0c4483c9f27aca8eb017d"
+   "sha256": "47ff598d123793dd2ee7549eb9bdcb8dec8a23923738a7825f465d477798e63d",
+   "note": "DR37 direct review of generator divergence anchors and emitted semantic deltas; manifest regenerated from the pinned dependency closure. MCP owns explicit install persistence; web preserves configured workflows and proxy transport. Integrity and actual install regressions are separate from historical validation."
   },
   {
    "path": "src/extension/vendor/pi-web-access/runtime/storage.d.ts",
@@ -150001,13 +150004,13 @@
   {
    "path": "src/extension/vendor/pi-web-access/runtime/utils.js",
    "by": [
-    "BL4"
+    "DR37"
    ],
    "oracles": [
-    "BL4"
+    "DR37"
    ],
-   "note": "Vendored runtime emit member: tsc output of a vendored upstream .ts module with relative .ts specifiers rewritten to Node-loadable .js by scripts/vendor-pi-web-access.mjs. OMA divergence splices declared in manifest.generated.divergences are applied by the same script; regeneration is deterministic and --check re-emits and compares byte-for-byte.",
-   "sha256": "d672599237f59f890275504376c7f3f85430e9dc759a762defd20a05bcc840ae"
+   "sha256": "580cffdb1bdd4b89d397965063f35c6b47bfb466a21a46fcaf1e034adf764f87",
+   "note": "DR37 direct review of generator divergence anchors and emitted semantic deltas; manifest regenerated from the pinned dependency closure. MCP owns explicit install persistence; web preserves configured workflows and proxy transport. Integrity and actual install regressions are separate from historical validation."
   },
   {
    "path": "src/extension/vendor/pi-web-access/runtime/valyu.d.ts",
@@ -152256,43 +152259,24 @@
   {
    "path": "src/extension/web-tools.ts",
    "by": [
-    "BL4"
+    "DR37"
    ],
    "oracles": [
-    "BL4"
+    "DR37"
    ],
-   "note": "BL4 adapter for the bundled pi-web-access extension. verifyVendorBundle precedes every dynamic import (a tampered bundle registers no tools and the session refuses at session_start); the facade forwards only session plumbing (on/appendEntry/sendMessage), drops upstream commands and shortcuts, and refuses pi.exec (the browser-open path); the Society web policy is installed before the vendored factory runs -- egressPinned only, every ambient-discovery permit deny-by-default; the vendored undici EnvHttpProxyAgent becomes the global dispatcher only when OMA_EGRESS_PROXY_SOCKET+PORT wiring exists; exactly the four web_research tools register in upstream's own order, once each.",
-   "sha256": "b156619712debec326707113ca9162ffd99c05b92ec614ba8d5a82a785bd627c"
+   "sha256": "fa720567b4c8308148547bba451e238e118859795b8f1f83573a9e6649302383",
+   "note": "DR37 direct review of changed code and affected composition: remove OMA resource/count/storage admission enforcement while keeping current authority, serialized contained effects, canonical historical declarations and explicit OS errors. Updated existing regressions plus DR37 positive execution tests cover the delta; no historical full-file review or environment PASS is renewed by this hash."
   },
   {
    "path": "src/extension/workspace-guard.ts",
    "by": [
-    "AV-review",
-    "AV13",
-    "AV25",
-    "BL1",
-    "DR13",
-    "P0V-120",
-    "P0V-121",
-    "P0V-122",
-    "P0V-14",
-    "P0V-15",
-    "P0V-74"
+    "DR37"
    ],
    "oracles": [
-    "AV13",
-    "AV25",
-    "AV3",
-    "BL1",
-    "DR13",
-    "P0V-120",
-    "P0V-121",
-    "P0V-122",
-    "P0V-15",
-    "P0V-74"
+    "DR37"
    ],
-   "sha256": "ca61e44dc251edc58ebcadecfce649bef61ed304793c9fb600c194d377e15923",
-   "note": "BL1 repair review -- lsp_diagnostics/lsp_fix join the path gate, replace/replace_within/insert join the write gate, every paths[] entry is gated, malformed path values refuse instead of defaulting to \".\", lsp_fix is conditional-write (blocked for read-only roles only when write/force is true), and WORKSPACE_ONLY_PATH_TOOLS keeps the two LSP tools' reads inside the workspace -- the vendored runtime resolves every path against the pinned root anyway, so a package-store admission would only delay the same refusal."
+   "sha256": "023cdd389843c4531b7254497c57c2a8e536bd0c7f9e8d577b8471be73b03a0f",
+   "note": "DR37 direct review of changed code and affected composition: remove OMA resource/count/storage admission enforcement while keeping current authority, serialized contained effects, canonical historical declarations and explicit OS errors. Updated existing regressions plus DR37 positive execution tests cover the delta; no historical full-file review or environment PASS is renewed by this hash."
   },
   {
    "path": "src/git.ts",
@@ -152334,15 +152318,13 @@
   {
    "path": "src/git/integration-policy.ts",
    "by": [
-    "DR35",
-    "DR36"
+    "DR37"
    ],
    "oracles": [
-    "AV-04",
-    "AV-06"
+    "DR37"
    ],
-   "sha256": "30d9e0b798caf952c8af34e7ad4e0a020be0e34219644f0aeaf27e72eb0e0759",
-   "note": "Reviewed numeric and process policies: retained stream heads are independent of command execution, both streams continue draining, native timers are segmented monotonically and cancellable, sync-only limitations are explicit, derived configuration milliseconds remain safe integers, and cgroup memory comparison follows observed kernel page alignment. Long-timeout and overflowing-output regressions accompany native cgroup checks."
+   "sha256": "08604958b19c26b2ff56b4feb4051d125416aae3731ca8ba8e0a6000c5bd6453",
+   "note": "DR37 direct review of changed code and affected composition: remove OMA resource/count/storage admission enforcement while keeping current authority, serialized contained effects, canonical historical declarations and explicit OS errors. Updated existing regressions plus DR37 positive execution tests cover the delta; no historical full-file review or environment PASS is renewed by this hash."
   },
   {
    "path": "src/git/integration.ts",
@@ -152370,16 +152352,13 @@
   {
    "path": "src/git/paths.ts",
    "by": [
-    "UX-38",
-    "AV-review"
+    "DR37"
    ],
    "oracles": [
-    "NB-01",
-    "NB-02",
-    "R37"
+    "DR37"
    ],
-   "note": "Re-read in full for the UX-38 batch-5 working-tree review (2026-10-12): quarantineResources gains silenceSeconds and its timeoutSeconds comment now names what it is -- a generous ceiling on one bundle import, never its deadline; the namespaced script's progress stream re-arms the silence window, so a working import is bounded by silence, not the clock.",
-   "sha256": "d0fb12132346312cdb8f490d41519f2f3dc2170bf6f82e604af76c140a78d8db"
+   "sha256": "4974cfd551ebdbe6dafb5748bc4771e8fb05a51f6196349373c4b92bac7feb0a",
+   "note": "DR37 direct review of accepted execution and shutdown flows: no execution cap or quota scan, broker lifetime cancellation rather than client disconnect cancellation, manager wait owns checker cgroup; quarantine namespace lease/native barrier retain unknown outcomes. Actual long check/network/cgroup cancellation plus Git import crash/retry oracles apply."
   },
   {
    "path": "src/git/project-snapshot.ts",
@@ -152398,17 +152377,13 @@
   {
    "path": "src/git/quarantine.ts",
    "by": [
-    "UX-38",
-    "DR33",
-    "P0-5"
+    "DR37"
    ],
    "oracles": [
-    "NB-02",
-    "S-05",
-    "R37"
+    "DR37"
    ],
-   "sha256": "89908c6de9915b4e7553e140a2374fffb89c8b298e2152f5a51cad433caf9269",
-   "note": "Re-read in full for the UX-38 batch-5 working-tree review (2026-10-12): the namespaced import streams heartbeat progress and the whole-import timeoutSeconds is a generous ceiling, not the working deadline -- silenceSeconds of quiet ends a stalled import while a progressing one runs. The heartbeat child closes its inherited stdout so command substitutions in the script cannot wedge on the pipe it keeps open (the 30s test hang). Sticky executor poisoning is per-run: a stale unknown clears only on the leased tree's fresh quiescence observation, never on the attempt, and accepted bundle evidence is kept."
+   "sha256": "55fcd0aa4d1112f493a0a9705f91d6d9a8bd432968c99c71c6cb4aa0dd368866",
+   "note": "DR37 direct review of accepted execution and shutdown flows: no execution cap or quota scan, broker lifetime cancellation rather than client disconnect cancellation, manager wait owns checker cgroup; quarantine namespace lease/native barrier retain unknown outcomes. Actual long check/network/cgroup cancellation plus Git import crash/retry oracles apply."
   },
   {
    "path": "src/git/repository-health.ts",
@@ -152422,6 +152397,28 @@
    ],
    "sha256": "ff373a248744d87001058072ab871d61074bba42ca5766fe993c366a8b9e96b0",
    "note": "Reviewed shared strict Git health policy and ephemeral provisioning proof: only successful history observation under the same inherited tenure may avoid the duplicate startup scan, only once and only while current main equals the reported OID. Existing/mismatching/restarted state still takes full observation; failure does not publish canonical state."
+  },
+  {
+   "path": "src/leaf.ts",
+   "by": [
+    "DR37"
+   ],
+   "oracles": [
+    "DR37"
+   ],
+   "sha256": "9fcec657737cb6b672ed26fb163ca18691561efc4ad7d5867ff96852f3506684",
+   "note": "DR37 direct review of affected reader/publication owner flow: shared inode leases precede loading; serialized publication and exclusive collection retain live readers; tombstone rename+parent fsync precedes deletion; actual reader and collector SIGKILL/retry regressions exercise these boundaries. Legacy unmarked generations remain unknown."
+  },
+  {
+   "path": "src/lifecycle/policy.ts",
+   "by": [
+    "DR37"
+   ],
+   "oracles": [
+    "DR37"
+   ],
+   "sha256": "f821cfc17de02d16bdc545d65b411fb281019e1a96c5dccaedbd732200fc7874",
+   "note": "DR37 direct review of changed code and affected composition: remove OMA resource/count/storage admission enforcement while keeping current authority, serialized contained effects, canonical historical declarations and explicit OS errors. Updated existing regressions plus DR37 positive execution tests cover the delta; no historical full-file review or environment PASS is renewed by this hash."
   },
   {
    "path": "src/lifecycle/society.ts",
@@ -152507,27 +152504,24 @@
   {
    "path": "src/pi-compat/interactive-tools.ts",
    "by": [
-    "DR35",
-    "DR36"
+    "DR37"
    ],
    "oracles": [
-    "DR35"
+    "DR37"
    ],
-   "sha256": "a542cd453f3b716a98f8d1ea6a9c2aad21207aab9528bd10140d1e76475ec3f8",
-   "note": "Reviewed the earlier startup deltas and affected ownership/import path: one installation digest per derivation with complete byte hashing, linear bundle membership, explicit Pi presentation instead of eager SDK import, private history ownership, and precisely scoped optional interactive tool setup. Actual PTY and import/ownership regressions remain the startup oracles; no authority is granted by a private screen."
+   "sha256": "27bd2f43c340c9a2ff473fdaefeaee97265afb73d31ce2c00ea5cfec08ae4fa7",
+   "note": "DR37 direct review of scoped Pi compatibility seam: initialization returns existing paths without awaiting optional download, deduplicated upstream installer refreshes the same pinned provider field; real recursive fixture and delayed installer regression preserve command behavior."
   },
   {
    "path": "src/pi-compat/pi-private.d.ts",
    "by": [
-    "DR35",
-    "DR36"
+    "DR37"
    ],
    "oracles": [
-    "AV-02",
-    "DR35"
+    "DR37"
    ],
-   "sha256": "510aada3d5269ff2704716ad64c532572e6786094f9f0beed20bb615910ae0b6",
-   "note": "Reviewed Pi public storage/factory wiring and startup presentation separation: one owned settings lock, Pi field merging, trusted user project atomic replacement under the public Pi file lock with conflict detection, preservation of explicit skill choices, bundled CLI preload only for the pinned runtime, and typed private compatibility declarations. Interprocess CLI and trusted/untrusted project oracles cover the settings changes."
+   "sha256": "6c812c3e1934d4e64d870f558ddf9161c48da65a17f964c2658c32e3b4edecda",
+   "note": "DR37 direct review of scoped Pi compatibility seam: initialization returns existing paths without awaiting optional download, deduplicated upstream installer refreshes the same pinned provider field; real recursive fixture and delayed installer regression preserve command behavior."
   },
   {
    "path": "src/pi-compat/settings-object.ts",
@@ -152584,23 +152578,13 @@
   {
    "path": "src/pi-extension.ts",
    "by": [
-    "DR34",
-    "BL1",
-    "BL2",
-    "BL3",
-    "BL4",
-    "BL5"
+    "DR37"
    ],
    "oracles": [
-    "DR34",
-    "BL1",
-    "BL2",
-    "BL3",
-    "BL4",
-    "BL5"
+    "DR37"
    ],
-   "sha256": "272e8bc33661b7869c9178207c8fcd9a02cff1563192e0b44718678aae586f21",
-   "note": "Read in full: startEgressBridge is composed beside startInferenceBridge; the extension closure rule still holds (builtins + local modules only). BL1 repair review -- registerLspTools is awaited: the function now verifies the bundle before dynamically importing the vendored runtime, and dropping the await would let tool registration race module evaluation. BL2 rebind: registerAskUserQuestion runs only when channel.attached — the Principal engine gets the human-input tool; Residents/Workers never load it and no surface plan names it for them. BL3 rebind: registerHashlineTools is awaited after the contained tools and LSP registration -- the anchored read replaces the contained read's registration under the same name; file_edit members are skipped for the read-only (channel-attached) role; writes carry the shared workspaceWriter seam. BL4 rebind: registerWebTools is awaited after the hashline registration and before the ask_user_question wiring -- the vendored bundle is verified before its runtime evaluates, and the same four research tools register for the confined (Resident/Worker) engine and the Principal. BL5 rebind: registerMcpTools is awaited after registerWebTools -- the vendored pi-mcp-adapter bundle is verified before its runtime evaluates, the Society MCP policy installs before upstream's factory, and exactly the `mcp` proxy tool registers for both the confined engine and the Principal (interactive=channel.attached governs sampling/elicitation settings)."
+   "sha256": "868aa2af324a2ddc14c76c51a62978ab94d99f59571ba13f72a7662b5093ee37",
+   "note": "DR37 direct review of changed code and affected composition: remove OMA resource/count/storage admission enforcement while keeping current authority, serialized contained effects, canonical historical declarations and explicit OS errors. Updated existing regressions plus DR37 positive execution tests cover the delta; no historical full-file review or environment PASS is renewed by this hash."
   },
   {
    "path": "src/platform/guest/archive.ts",
@@ -152706,13 +152690,13 @@
   {
    "path": "src/platform/host/egress.ts",
    "by": [
-    "UX-38"
+    "DR37"
    ],
    "oracles": [
-    "DR34"
+    "DR37"
    ],
-   "sha256": "a940ac878cba09d86342c0addb18f17a5a721698b5ee7a42682b5a9a09c288fc",
-   "note": "Re-read in full for the UX-38 batch-4 working-tree review (2026-10-08): the per-run tunnel bound queues instead of refusing: an egress.connect request whose working set is full is read to its frame and parked, granted in FIFO when an active tunnel closes; queued claims die with client close, run release, boot forget and service stop -- each ends as an honest BROKER_UNAVAILABLE, never a silent drop. The granted reservation still precedes the dial synchronously, policy screening, audit-once, rest payload handling and lease semantics unchanged."
+   "sha256": "7ca7a21fa6347d372477c9760b9d8b93e4c83bc92bb9a9e1a375c4adc4c27fe4",
+   "note": "DR37 direct review of network and socket owner deltas: share-net retains filesystem/user/PID/seccomp boundaries, arbitrary destination/port forwarding preserves destination auth and strips proxy auth; unique ports precede adapter capture; close/abort owns upstream and downstream. Actual TCP/UDP, HTTP and twelve-tunnel tests cover behavior."
   },
   {
    "path": "src/platform/host/files.ts",
@@ -152831,15 +152815,13 @@
   {
    "path": "src/process/async.ts",
    "by": [
-    "DR35",
-    "DR36"
+    "DR37"
    ],
    "oracles": [
-    "AV-04",
-    "AV-06"
+    "DR37"
    ],
-   "sha256": "c5e28e3effe2bb3b3e0cf362bc2f621962c46c5dfa426a18d6f73d87d4b3c14c",
-   "note": "Reviewed numeric and process policies: retained stream heads are independent of command execution, both streams continue draining, native timers are segmented monotonically and cancellable, sync-only limitations are explicit, derived configuration milliseconds remain safe integers, and cgroup memory comparison follows observed kernel page alignment. Long-timeout and overflowing-output regressions accompany native cgroup checks."
+   "sha256": "693e13be0520590517ddbc745912395222c9d40e48f50fe06b939e09de3576cf",
+   "note": "DR37 direct review of changed code and affected composition: remove OMA resource/count/storage admission enforcement while keeping current authority, serialized contained effects, canonical historical declarations and explicit OS errors. Updated existing regressions plus DR37 positive execution tests cover the delta; no historical full-file review or environment PASS is renewed by this hash."
   },
   {
    "path": "src/process/cleanup.ts",
@@ -153009,13 +152991,13 @@
   {
    "path": "src/runner.ts",
    "by": [
-    "DR34"
+    "DR37"
    ],
    "oracles": [
-    "DR34"
+    "DR37"
    ],
-   "sha256": "14933b6a327aab9d51d74e09cb624d4abfd416bcbb79100a544c7c127e3c8ca0",
-   "note": "Read in full: openRelay still opens inference first; openConnectProxy runs only when profile.egress resolved, beside the lease socket, closed in the delivery's finally before the relay's. The guest-path connectDial carries the run's placeholder lease and this role's resolved policy into requestEgressConnect; a proxy failure still closes the relay."
+   "sha256": "a4aa0244cdcddafe62cf66a776173cced56d38a68c48b03b736eeeb96dcb690b",
+   "note": "DR37 direct review of changed code and affected composition: remove OMA resource/count/storage admission enforcement while keeping current authority, serialized contained effects, canonical historical declarations and explicit OS errors. Updated existing regressions plus DR37 positive execution tests cover the delta; no historical full-file review or environment PASS is renewed by this hash."
   },
   {
    "path": "src/runtime/broker-supervisor.ts",
@@ -153033,15 +153015,24 @@
   {
    "path": "src/runtime/candidate-checks.ts",
    "by": [
-    "DR35",
-    "DR36"
+    "DR37"
    ],
    "oracles": [
-    "AV-04",
-    "AV-06"
+    "DR37"
    ],
-   "sha256": "a7f6c83599f0447ec4cf5199ffb74bb552371c63dc5455ab729efe179b8ff637",
-   "note": "Reviewed numeric and process policies: retained stream heads are independent of command execution, both streams continue draining, native timers are segmented monotonically and cancellable, sync-only limitations are explicit, derived configuration milliseconds remain safe integers, and cgroup memory comparison follows observed kernel page alignment. Long-timeout and overflowing-output regressions accompany native cgroup checks."
+   "sha256": "f4d02e7e754c2d4012c117864c36a30078352a5f144e15bee97d4985575a5052",
+   "note": "DR37 direct review of accepted execution and shutdown flows: no execution cap or quota scan, broker lifetime cancellation rather than client disconnect cancellation, manager wait owns checker cgroup; quarantine namespace lease/native barrier retain unknown outcomes. Actual long check/network/cgroup cancellation plus Git import crash/retry oracles apply. Native systemd exposed finite DefaultTasksMax after omission; explicit TasksMax=infinity now disables that inherited per-service default without adding a resource cap."
+  },
+  {
+   "path": "src/runtime/client-preload.ts",
+   "by": [
+    "DR37"
+   ],
+   "oracles": [
+    "DR37"
+   ],
+   "sha256": "1085d9f626e2ab3e2430dce5d3dad540a142f0b5ad14b2f6ee95399666185bed",
+   "note": "DR37 direct review of affected reader/publication owner flow: shared inode leases precede loading; serialized publication and exclusive collection retain live readers; tombstone rename+parent fsync precedes deletion; actual reader and collector SIGKILL/retry regressions exercise these boundaries. Legacy unmarked generations remain unknown."
   },
   {
    "path": "src/runtime/client-runtime.ts",
@@ -153057,13 +153048,13 @@
   {
    "path": "src/runtime/connect-proxy.ts",
    "by": [
-    "UX-38"
+    "DR37"
    ],
    "oracles": [
-    "DR34"
+    "DR37"
    ],
-   "sha256": "a55d2b12474e6b6ba67bddcbb7b3d77ad8ad76080e8bf49476a4d4c9e568e748",
-   "note": "Re-read in full for the UX-38 batch-4 working-tree review (2026-10-08): the tunnel bound is a working set, not a refusal: CONNECT requests beyond CONNECT_TUNNELS wait in a FIFO claim queue holding no tunnel and no dial, a queued client's close (including one already closed at claim time) withdraws the claim, a closing tunnel grants the oldest claim, and shutdown destroys waiting and active sockets alike. Malformed requests, wrong ports, non-public or unlisted targets still answer their named refusal; dial failures still destroy honestly; idle budgets on established tunnels are unchanged."
+   "sha256": "ec15345a3168f2b91634b3c2b4b8f20abe427f3f9f7af738da1bef76e0afd39b",
+   "note": "DR37 direct review of network and socket owner deltas: share-net retains filesystem/user/PID/seccomp boundaries, arbitrary destination/port forwarding preserves destination auth and strips proxy auth; unique ports precede adapter capture; close/abort owns upstream and downstream. Actual TCP/UDP, HTTP and twelve-tunnel tests cover behavior."
   },
   {
    "path": "src/runtime/deployment-manifest.ts",
@@ -153177,16 +153168,26 @@
    "note": "Reviewed the earlier startup deltas and affected ownership/import path: one installation digest per derivation with complete byte hashing, linear bundle membership, explicit Pi presentation instead of eager SDK import, private history ownership, and precisely scoped optional interactive tool setup. Actual PTY and import/ownership regressions remain the startup oracles; no authority is granted by a private screen."
   },
   {
-   "path": "src/runtime/pi-packages.ts",
+   "path": "src/runtime/pi-adapter.ts",
    "by": [
-    "DR35",
-    "DR36"
+    "DR37"
    ],
    "oracles": [
-    "AV-03"
+    "DR37"
    ],
-   "sha256": "593274e7928fcea4da4bfba7bcbeca7ef96576be760b41fd03069abea0db997b",
-   "note": "Reviewed replay validation before effects and reader lifetime: the shared index codec rejects damaged before-images and invalid generation names; publishing/selecting cannot precede validation, and replacement count no longer deletes a still-readable immutable generation. Archive/import-reader and zero-effect damage oracles cover these changes."
+   "sha256": "80f69e14e8169a0856172ad10f97413f75b29f3baa453141088ff0413d964863",
+   "note": "DR37 direct review of changed code and affected composition: remove OMA resource/count/storage admission enforcement while keeping current authority, serialized contained effects, canonical historical declarations and explicit OS errors. Updated existing regressions plus DR37 positive execution tests cover the delta; no historical full-file review or environment PASS is renewed by this hash."
+  },
+  {
+   "path": "src/runtime/pi-packages.ts",
+   "by": [
+    "DR37"
+   ],
+   "oracles": [
+    "DR37"
+   ],
+   "sha256": "582a6402b747f2656de9dcf6601cba2114d169bc3a13b702e0544e1a9f669149",
+   "note": "DR37 direct review of affected reader/publication owner flow: shared inode leases precede loading; serialized publication and exclusive collection retain live readers; tombstone rename+parent fsync precedes deletion; actual reader and collector SIGKILL/retry regressions exercise these boundaries. Legacy unmarked generations remain unknown. Follow-up owner review: metadata index readers take short leases released on completion, while engine code readers retain process leases; publisher stays alive across replacement/collection regressions."
   },
   {
    "path": "src/runtime/pi-presentation.ts",
@@ -153216,15 +153217,13 @@
   {
    "path": "src/runtime/pi-spawn-plan.ts",
    "by": [
-    "DR34",
-    "UX-38"
+    "DR37"
    ],
    "oracles": [
-    "DR34",
-    "P0"
+    "DR37"
    ],
-   "sha256": "21d6d0b7421849ffaa76db957b119a203dc18f2d7bbf26f63e31409fac1c010b",
-   "note": "Read in full for UX-38: the Resident engine environment now also emits OMA_MAIL_ADDRESSES from limits.addresses and OMA_WORKSPACE_BYTES stays wired; the limits pick gained 'addresses' so the producer cannot drift from the schema."
+   "sha256": "fd764e68d69fa8e39450af9318f82d37d06f72018e8e68502e37be19cd6c2d03",
+   "note": "DR37 direct review of changed code and affected composition: remove OMA resource/count/storage admission enforcement while keeping current authority, serialized contained effects, canonical historical declarations and explicit OS errors. Updated existing regressions plus DR37 positive execution tests cover the delta; no historical full-file review or environment PASS is renewed by this hash."
   },
   {
    "path": "src/runtime/process-lock.ts",
@@ -153333,18 +153332,13 @@
   {
    "path": "src/sandbox.ts",
    "by": [
-    "DR18",
-    "DR27",
-    "DR34"
+    "DR37"
    ],
    "oracles": [
-    "DR27",
-    "DR34",
-    "R28",
-    "SCN-C08"
+    "DR37"
    ],
-   "sha256": "b757f4f5f8b8eed58bab6cb476d35b1ec489e8fc2d245a5783a5e1b480b1f410",
-   "note": "Read in full: resolvedBindSource names each socket bind source by the real directory it reaches instead of a /proc/<pid>/fd anchor bubblewrap cannot traverse inside its user namespace; only the parent resolves, the leaf need not exist, and a missing parent keeps the lexical spelling (ENOENT/ENOTDIR only -- other resolution failures propagate). R28 asserts the pure recipe with fabricated dirs; SCN-C08 runs a real confined shell under the filter; DR27 private-argument tests hold the recipe's value preservation. DR34 rider: the egress proxy socket binds the same way as the relay socket -- ro-bound at RESIDENT_PATHS.egress only when a trusted absolute host path is given; an untrusted or absent path mounts nothing (UNSUPPORTED_PROFILE for the former). The CONNECT environment lives in pi-spawn-plan's env composition, gated on the same presence."
+   "sha256": "7cd9feb1243d34fcfa5926e4213fc2b021bdb83c383977ece224095881a5d8f4",
+   "note": "DR37 direct review of network and socket owner deltas: share-net retains filesystem/user/PID/seccomp boundaries, arbitrary destination/port forwarding preserves destination auth and strips proxy auth; unique ports precede adapter capture; close/abort owns upstream and downstream. Actual TCP/UDP, HTTP and twelve-tunnel tests cover behavior."
   },
   {
    "path": "src/storage/contained-fs.ts",
@@ -153448,16 +153442,13 @@
   {
    "path": "src/storage/quota.ts",
    "by": [
-    "DR35",
-    "DR36"
+    "DR37"
    ],
    "oracles": [
-    "AV-01",
-    "AV-10",
-    "V03A"
+    "DR37"
    ],
-   "sha256": "ae283cda732df8b6b818063b2569f59c440deb1280c76a77c6df7c46423de9bb",
-   "note": "Reviewed owned traversal and quota admission: pinned nofollow descriptors, observation repairs only owner read/search and preserves sealed 0555 revisions across native broker restart, writer repair retains its separate write requirement, complete FD cleanup, hardlink deduplication, per-entry yielding including duplicate links, in-flight-only sharing, and atomic post-await reservation accounting. Actual fault, 30k-entry, concurrent-reservation and damaged-mode oracles exercise these deltas."
+   "sha256": "1da57efbe017c7c8c83fcc30efc201e07afd158f3fab0ab63767b3d6be8938e7",
+   "note": "DR37 direct review of changed code and affected composition: remove OMA resource/count/storage admission enforcement while keeping current authority, serialized contained effects, canonical historical declarations and explicit OS errors. Updated existing regressions plus DR37 positive execution tests cover the delta; no historical full-file review or environment PASS is renewed by this hash."
   },
   {
    "path": "src/storage/snapshot-reader.ts",
@@ -153592,14 +153583,13 @@
   {
    "path": "src/tui/packages-apply.ts",
    "by": [
-    "DR35",
-    "DR36"
+    "DR37"
    ],
    "oracles": [
-    "AV-03"
+    "DR37"
    ],
-   "sha256": "894460b4bbffc560656ae9cb5095ecd26aaf4c5cda7bcbe32635b601d630b7ec",
-   "note": "Reviewed replay validation before effects and reader lifetime: the shared index codec rejects damaged before-images and invalid generation names; publishing/selecting cannot precede validation, and replacement count no longer deletes a still-readable immutable generation. Archive/import-reader and zero-effect damage oracles cover these changes."
+   "sha256": "39c8266b98c6e9098317da75e62228cf2ba08fff0277b6d12cd74c523f67392a",
+   "note": "DR37 direct review of affected reader/publication owner flow: shared inode leases precede loading; serialized publication and exclusive collection retain live readers; tombstone rename+parent fsync precedes deletion; actual reader and collector SIGKILL/retry regressions exercise these boundaries. Legacy unmarked generations remain unknown."
   },
   {
    "path": "src/tui/project-settings.ts",
@@ -153616,14 +153606,13 @@
   {
    "path": "src/tui/session.ts",
    "by": [
-    "DR35",
-    "DR36"
+    "DR37"
    ],
    "oracles": [
-    "DR35"
+    "DR37"
    ],
-   "sha256": "43f1a088b22a5014874fb39d03f800995c7c1f50a457e461b8a94dafbac80a87",
-   "note": "Reviewed the earlier startup deltas and affected ownership/import path: one installation digest per derivation with complete byte hashing, linear bundle membership, explicit Pi presentation instead of eager SDK import, private history ownership, and precisely scoped optional interactive tool setup. Actual PTY and import/ownership regressions remain the startup oracles; no authority is granted by a private screen."
+   "sha256": "3b7c02764f40f54c4cb21ef9b9850f9f404b9e9e57e948c7031c5b173f0d7d1e",
+   "note": "DR37 direct review of changed code and affected composition: remove OMA resource/count/storage admission enforcement while keeping current authority, serialized contained effects, canonical historical declarations and explicit OS errors. Updated existing regressions plus DR37 positive execution tests cover the delta; no historical full-file review or environment PASS is renewed by this hash."
   },
   {
    "path": "src/tui/sources/extensions.ts",
@@ -153654,19 +153643,24 @@
   {
    "path": "src/tui/sources/settings.ts",
    "by": [
-    "DR25",
-    "P0-8"
+    "DR37"
    ],
    "oracles": [
-    "DR25",
-    "V13A",
-    "V13B",
-    "V13C",
-    "CFG-005",
-    "P0-8"
+    "DR37"
    ],
-   "note": "Read in full at the 2026-10-05 P0-8 residual round: the managed-commit wrappers thread a caller-named `ownedFrom` through commitRoleSet/projectBundle/deriveSessionSettings/writeSettings/commitManagedEdit/commitField into commitManagedGeneration; a caller that cannot vouch for an oma-owned ancestor omits it and `.oma-config` remains the boundary, so the user's `--config` ancestors are never repaired. Role-revision input, the unchanged short-circuit, inline-edit and field-descriptor paths are unchanged.",
-   "sha256": "e6d6465f0cd269fbda7cd2646732e51de480f39e92dbacf66a56617d59a4c908"
+   "sha256": "ed44c2ff7c7af3630cf87a89e1e29b786bdd1998087c31330cb9d407701faaaa",
+   "note": "DR37 direct review of changed code and affected composition: remove OMA resource/count/storage admission enforcement while keeping current authority, serialized contained effects, canonical historical declarations and explicit OS errors. Updated existing regressions plus DR37 positive execution tests cover the delta; no historical full-file review or environment PASS is renewed by this hash."
+  },
+  {
+   "path": "src/tui/view/dashboard.ts",
+   "by": [
+    "DR37"
+   ],
+   "oracles": [
+    "DR37"
+   ],
+   "sha256": "8f3fb8841d78cf413fbe8397cc45818dcf78f695b4e24a4b5198e47beaa7e919",
+   "note": "DR37 direct review of changed code and affected composition: remove OMA resource/count/storage admission enforcement while keeping current authority, serialized contained effects, canonical historical declarations and explicit OS errors. Updated existing regressions plus DR37 positive execution tests cover the delta; no historical full-file review or environment PASS is renewed by this hash."
   },
   {
    "path": "src/tui/view/screens.ts",
@@ -153682,15 +153676,13 @@
   {
    "path": "src/units.ts",
    "by": [
-    "DR35",
-    "DR36"
+    "DR37"
    ],
    "oracles": [
-    "V03A",
-    "DR35"
+    "DR37"
    ],
-   "sha256": "22123a85e001e7059223117943fdab109c32cb015486df82d6502bb03866045d",
-   "note": "Reviewed unit installation batching: each rendered file still passes ownership and durable publication; service/path pairs link and reload together, then each complete effective-property observation validates source, drop-ins, argv and raw configured limits. Native systemd startup and unit oracles exercise this flow."
+   "sha256": "8e856eec19c18c9eaa8a0048737c732df9cb84eba204852266273b37e0727ba8",
+   "note": "DR37 direct review of changed code and affected composition: remove OMA resource/count/storage admission enforcement while keeping current authority, serialized contained effects, canonical historical declarations and explicit OS errors. Updated existing regressions plus DR37 positive execution tests cover the delta; no historical full-file review or environment PASS is renewed by this hash."
   },
   {
    "path": "src/units/render.ts",

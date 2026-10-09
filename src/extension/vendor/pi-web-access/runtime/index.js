@@ -243,9 +243,8 @@ function resolveToolNames(config) {
 // web_enable loader — the dynamic tool APIs are OMA's surface's own
 // domain), the four default tool names (the surface plan names them — a
 // rename would only fail the startup check), all four tools enabled,
-// the four slash commands off, and fetch modes readable+raw with a
-// non-answer default (the answer mode is a model-completion call OMA
-// does not expose). Everything else in the config — provider, ssrf,
+// Human command/workflow/fetch settings, including answer mode, stay effective.
+// Everything else in the config — provider, ssrf,
 // domain policy, allowed providers, routing — stays the Human's own.
 function omaOverlayInitConfig(config) {
     return {
@@ -253,19 +252,8 @@ function omaOverlayInitConfig(config) {
         toolActivation: "eager",
         toolNames: undefined,
         tools: undefined,
-        workflow: "none",
         webSearch: { ...config.webSearch, enabled: true },
-        commands: {
-            websearch: { enabled: false },
-            curator: { enabled: false },
-            search: { enabled: false },
-            "google-account": { enabled: false },
-        },
-        fetch: {
-            ...config.fetch,
-            allowedModes: ["readable", "raw"],
-            defaultMode: config.fetch?.defaultMode !== undefined && config.fetch.defaultMode !== "answer" ? config.fetch.defaultMode : "readable",
-        },
+
     };
 }
 function loadConfigForExtensionInit() {

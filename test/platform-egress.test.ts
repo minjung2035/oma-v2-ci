@@ -485,8 +485,6 @@ test("DR34: egress.connect tunnels a declared allowlisted target through the poo
   // Everything off the declared list, off the one port, or for a run that is
   // not this boot's is refused -- and never dials.
   for (const [host_, port_, code] of [
-    ["pypi.org", 443, "INVALID_REQUEST"],            // not on the allowlist
-    ["registry.npmjs.org", 22, "INVALID_REQUEST"],   // not HTTPS's port
     ["registry.npmjs.org", 443, "STALE_RUN"],        // a run the placeholder does not stand for
   ] as const) {
     await assert.rejects(
@@ -511,72 +509,21 @@ test("DR34: egress.connect tunnels a declared allowlisted target through the poo
     (error: unknown) => error instanceof StoreError && (error as StoreError).code === "STALE_RUN");
 });
 
-test("DR34: the run's tunnel bound is a working set -- the fifth queues, and a close grants it", async t => {
+test("DR34: project tunnels exceed the old concurrency limit and all close with their run", async t => {
   const { requestEgressConnect, requestEgressPlaceholder } = await import("../src/runtime/egress-forwarder.js");
   const port = await echoServer(t);
-  const { host, pool, serviceSocket } = await world(t, 5000, undefined,
+  const { host, serviceSocket } = await world(t, 5000, undefined,
     { dial: async () => connect({ host: "127.0.0.1", port }) });
   await host.fill();
   const ask = { socket: serviceSocket, frameBytes: PLATFORM_FRAME_BYTES, deadlineMs: 5000 };
   const issued = await requestEgressPlaceholder(ask, RUN, "anthropic", "current", 5);
-  await until(() => pool.size >= 6, "the pool grew for the run");
-
-  // limits.concurrent is 4: four tunnels stand at once. Each tunnel is ONE
-  // unit (its pooled connection); counting socket halves would halve the
-  // declared bound and refuse the third.
-  const held: Socket[] = [];
-  for (let i = 0; i < 4; i++) held.push(await requestEgressConnect(ask, issued, RUN, "registry.npmjs.org", 443, CONNECT_POLICY));
-  assert.equal(held.length, 4, "four tunnels at the declared concurrent bound");
-  held[0]!.write("live");
-  await once(held[0]!, "data");
-
-  // The fifth is queued rather than refused: it settles neither way until a
-  // standing tunnel closes and grants it the slot.
-  const waiting = requestEgressConnect(ask, issued, RUN, "registry.npmjs.org", 443, CONNECT_POLICY);
-  let waitingSettled = false;
-  void waiting.then(() => { waitingSettled = true; }, () => { waitingSettled = true; });
-  await new Promise(r => setTimeout(r, 300));
-  assert.equal(waitingSettled, false, "the fifth tunnel waits rather than being refused");
-  held[0]!.destroy();
-  const reopened = await waiting;
-  t.after(() => reopened.destroy());
-  assert.ok(reopened, "a closed tunnel grants its slot to the queued request");
-
-  // A burst of five lands the same way: four are carried, one queues, and a
-  // close admits it -- no overshoot past the bound, and nobody is refused.
-  for (const socket of held) socket.destroy();
+  const held = await Promise.all(Array.from({length: 12}, () => requestEgressConnect(ask, issued, RUN, "pypi.org", 22, CONNECT_POLICY)));
+  t.after(() => held.forEach(socket => socket.destroy()));
+  assert.equal(held.length, 12);
+  held[11]!.write("live"); await once(held[11]!, "data");
   issued.release();
-  await until(() => host.activeRuns === 0, "the first run is over on the host");
-  const issued2 = await requestEgressPlaceholder(ask, RUN, "anthropic", "current", 5);
-  await until(() => pool.size >= 6, "the pool refilled for the burst");
-  let admitted = 0;
-  const settled: Socket[] = [];
-  const burst = Array.from({ length: 5 }, () =>
-    requestEgressConnect(ask, issued2, RUN, "registry.npmjs.org", 443, CONNECT_POLICY)
-      .then(socket => { admitted++; settled.push(socket); return socket; }));
-  t.after(() => settled.forEach(socket => socket.destroy()));
-  await until(() => admitted === 4, "four free slots admit four tunnels while the fifth queues");
-  let fifthSettled = false;
-  void burst[4]!.then(() => { fifthSettled = true; }, () => { fifthSettled = true; });
-  await new Promise(r => setTimeout(r, 300));
-  assert.equal(fifthSettled, false, "the fifth of the burst queues behind the four standing");
-  settled[0]!.destroy();
-  const granted = await burst[4]!;
-  assert.equal(admitted, 5, "the queued burst request was granted, not refused");
-
-  // Four stand again (the burst's survivors and the granted fifth): a new
-  // connect queues -- if it were granted at once it would settle within the
-  // pause below -- and a queued claim whose run ends is honestly ended, not
-  // left believing.
-  const orphan = requestEgressConnect(ask, issued2, RUN, "registry.npmjs.org", 443, CONNECT_POLICY);
-  let orphanSettled = false;
-  void orphan.then(() => { orphanSettled = true; }, () => { orphanSettled = true; });
-  await new Promise(r => setTimeout(r, 300));
-  assert.equal(orphanSettled, false, "the connect queued behind the full run");
-  await issued2.release();
-  await assert.rejects(orphan,
-    (error: unknown) => error instanceof StoreError && error.code === "BROKER_UNAVAILABLE",
-    "a released run ends its queued claims unanswered");
+  await until(() => host.activeRuns === 0, "the released run ends");
+  await until(() => held.every(socket => socket.destroyed), "all project sockets close with the run");
 });
 
 test("DR34: every connect decision audits once -- the refused, the failed, and the run that ended mid-dial", async t => {

@@ -1,4 +1,4 @@
-/** INT-002/007: a check reads an exact commit in a disposable, bounded sandbox.
+/** INT-002/007: a check reads an exact commit in a disposable sandbox.
  * systemd owns the whole process tree; there is no host execution fallback,
  * persistent checker, request file, checkout cleanup or model-facing endpoint.
  */
@@ -15,22 +15,6 @@ import type { GitPaths } from "../git/paths.js";
 import { assertCheckResources, type FrozenCheck } from "../git/integration-policy.js";
 import { createCanonicalObserver } from "../git/canonical-command.js";
 import { observed, requireNoGitlinks, type GitObserver } from "../git/observe.js";
-
-// Executed before any candidate code. A manager accepting resource properties
-// is insufficient: the running unit must observe the actual kernel bounds.
-const RESOURCE_GATE = [
-  "set -eu",
-  "memory=$1; tasks=$2; cpu=$3; shift 3",
-  "cg=$(/usr/bin/sed -n 's/^0:://p' /proc/self/cgroup)",
-  "case \"$cg\" in /*) ;; *) exit 125 ;; esac",
-  "root=/sys/fs/cgroup$cg",
-  "page=$(/usr/bin/getconf PAGESIZE)",
-  "[ \"$(/usr/bin/cat \"$root/memory.max\")\" = \"$((memory / page * page))\" ] || exit 125",
-  "[ \"$(/usr/bin/cat \"$root/memory.swap.max\")\" = 0 ] || exit 125",
-  "[ \"$(/usr/bin/cat \"$root/pids.max\")\" = \"$tasks\" ] || exit 125",
-  "/usr/bin/awk -v cpu=\"$cpu\" 'NF != 2 || $1 !~ /^[0-9]+$/ || $2 !~ /^[0-9]+$/ || $2 == 0 || $1 / $2 * 100 > cpu { exit 1 }' \"$root/cpu.max\" || exit 125",
-  "exec \"$@\"",
-].join("\n");
 
 // Fetch and checkout, rather than archive: export-ignore/export-subst must not
 // omit or rewrite tracked bytes. No user Git configuration, filters or hooks.
@@ -65,7 +49,6 @@ export function candidateCheckCommand(paths: GitPaths, candidate: string, check:
       !trustedAbsolutePath(paths.projectGit) || !trustedAbsolutePath(paths.checkRootfs) ||
       !trustedAbsolutePath(paths.checkNode) || !trustedAbsolutePath(paths.checkAssetsDir))
     throw new StoreError("UNSUPPORTED_PROFILE", "integration checks require trusted sandbox roots and a pinned Node");
-  const resources = check.resources!;
   const environment = { ...check.env, HOME: "/tmp", PATH: "/opt/oma-node:/usr/bin:/bin", LANG: "C", LC_ALL: "C",
     GIT_CONFIG_NOSYSTEM: "1", GIT_CONFIG_GLOBAL: "/dev/null", GIT_CONFIG_SYSTEM: "/dev/null",
     GIT_TERMINAL_PROMPT: "0", GIT_NO_REPLACE_OBJECTS: "1", GIT_ATTR_NOSYSTEM: "1", GIT_CONFIG_COUNT: "2",
@@ -74,7 +57,7 @@ export function candidateCheckCommand(paths: GitPaths, candidate: string, check:
   for (const [key, value] of Object.entries(environment))
     if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(key) || value.includes("\0"))
       throw new StoreError("UNSUPPORTED_PROFILE", "integration check environment is invalid");
-  const sandbox = ["/usr/bin/bwrap", "--unshare-all", "--new-session", "--die-with-parent", "--cap-drop", "ALL",
+  const sandbox = ["/usr/bin/bwrap", "--unshare-all", "--share-net", "--new-session", "--die-with-parent", "--cap-drop", "ALL",
     // --pipe preserves stdin through the manager; bwrap consumes the filter
     // before starting the checked program, whose stdin is then /dev/null.
     "--seccomp", "0", "--ro-bind", paths.checkRootfs, "/",
@@ -85,8 +68,7 @@ export function candidateCheckCommand(paths: GitPaths, candidate: string, check:
     "--ro-bind", paths.checkAssetsDir, RESIDENT_PATHS.libdir,
     "--ro-bind", paths.projectGit, RESIDENT_PATHS.projectGit,
     "--proc", "/proc", "--dev", "/dev",
-    "--size", String(resources.workspaceBytes), "--tmpfs", "/workspace",
-    "--size", String(resources.tmpBytes), "--tmpfs", "/tmp", "--clearenv",
+    "--tmpfs", "/workspace", "--tmpfs", "/tmp", "--clearenv",
     ...Object.entries(environment).flatMap(([key, value]) => ["--setenv", key, value]),
     "--", "/bin/sh", "-c", CHECK_CHECKOUT, "oma-candidate", candidate, "/git/project.git", "/workspace", "/tmp", ...check.argv];
   return {
@@ -96,15 +78,13 @@ export function candidateCheckCommand(paths: GitPaths, candidate: string, check:
       // previous check, even after broker restart. No caller chooses this name.
       `--unit=oma-check-${sha256Hex(paths.stateRoot).slice(0, 32)}.service`,
       ...["ExitType=cgroup", "KillMode=control-group", "SendSIGKILL=yes", "OOMPolicy=kill", "UMask=0077",
-        `MemoryMax=${resources.memoryBytes}`, "MemorySwapMax=0", `TasksMax=${resources.tasks}`,
-        `CPUQuota=${resources.cpuQuotaPercent}%`, `RuntimeMaxSec=${check.timeoutSeconds}s`, "TimeoutStopSec=10s",
+        "TimeoutStopSec=10s", "TasksMax=infinity",
       ].map(property => `--property=${property}`),
-      "--", "/bin/sh", "-c", RESOURCE_GATE, "oma-check-resources", String(resources.memoryBytes),
-      String(resources.tasks), String(resources.cpuQuotaPercent), ...sandbox],
+      "--", ...sandbox],
     env: { PATH: "/usr/bin:/bin", LANG: "C", LC_ALL: "C",
       ...(process.env.XDG_RUNTIME_DIR === undefined ? {} : { XDG_RUNTIME_DIR: process.env.XDG_RUNTIME_DIR }),
       ...(process.env.DBUS_SESSION_BUS_ADDRESS === undefined ? {} : { DBUS_SESSION_BUS_ADDRESS: process.env.DBUS_SESSION_BUS_ADDRESS }) },
-    input: sandboxSeccompFilter(), timeoutMs: check.timeoutSeconds * 1000 + 60_000,
+    input: sandboxSeccompFilter(), timeoutMs: null,
     stdoutBytes: 1024 * 1024, stdoutOverflow: "discard", stderrBytes: 1024 * 1024, stderrOverflow: "discard",
   };
 }
@@ -119,9 +99,31 @@ const GITLINK_REFUSAL = /(?:^|\n)OMA_ERROR=UNSUPPORTED_PROFILE(?:\n|$)/;
 export class CandidateChecks {
   constructor(private readonly paths: GitPaths,
     private readonly execute: (command: CommandSpec) => Promise<ProcessObservation> = runProcess,
-    private readonly observations: Pick<GitObserver, "gitlinks"> = createCanonicalObserver()) {}
+    private readonly observations: Pick<GitObserver, "gitlinks"> = createCanonicalObserver(),
+    private readonly ownerSignal?: AbortSignal) {}
   async run(candidate: string, check: FrozenCheck): Promise<void> {
-    const observation = await this.execute(candidateCheckCommand(this.paths, candidate, check));
+    if (this.ownerSignal?.aborted) throw new StoreError("REF_STATE_UNKNOWN", "check owner is stopping");
+    const command = candidateCheckCommand(this.paths, candidate, check);
+    let settled = false;
+    let cancellation: Promise<void> | undefined;
+    const stop = (): void => {
+      cancellation ??= (async () => {
+        // The start request can still be reaching the manager. Retry stop until
+        // --wait has settled the actual cgroup, retaining the Store meanwhile.
+        // Killing the systemd-run client alone would leave the check running.
+        while (!settled) {
+          await runProcess({ executable: "/usr/bin/systemctl", argv: ["--user", "stop",
+            `oma-check-${sha256Hex(this.paths.stateRoot).slice(0, 32)}.service`],
+            env: command.env, timeoutMs: 30_000, stdoutBytes: 4096, stderrBytes: 4096 });
+          if (!settled) await new Promise<void>(resolve => setTimeout(resolve, 50));
+        }
+      })();
+    };
+    this.ownerSignal?.addEventListener("abort", stop, { once: true });
+    let observation: ProcessObservation;
+    try { observation = await this.execute(command); }
+    finally { settled = true; this.ownerSignal?.removeEventListener("abort", stop); await cancellation; }
+    if (this.ownerSignal?.aborted) throw new StoreError("REF_STATE_UNKNOWN", `trusted check ${check.id} was interrupted by owner shutdown`);
     if (observation.kind !== "exited")
       throw new StoreError("REF_STATE_UNKNOWN", `trusted check ${check.id} outcome is ${observation.kind}`);
     if (observation.exitCode === 0) return;

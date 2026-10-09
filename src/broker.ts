@@ -105,7 +105,7 @@ export class Broker {
   ) {
     this.mail = mail;
     bindAdmissionGate(store, this.health);
-    this.storage = paths.storage ?? new StorageAdmission(paths.stateRoot, paths.storageBytes, limits.frameBytes);
+    this.storage = new StorageAdmission(paths.stateRoot, undefined, limits.frameBytes);
     this.admitResource = category => this.storage.admit(category);
     this.peers = new PeerAuthenticator(store, units, this.runLeases, paths.society, error => this.cleanupError(error));
     this.statusRefresh = new StatusRefresh(() => this.store.agentNames(), agents => this.units.observeStatus(agents));

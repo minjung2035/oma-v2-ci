@@ -20,12 +20,12 @@ import {
   detectSupportedImageMimeTypeFromFile, type ExtensionAPI,
 } from "@earendil-works/pi-coding-agent";
 import {
-  WorkspaceRefusal, accessWithin, existsWithin, isDirectoryWithin, mkdirWithin, readWithin, readdirWithin, writeGrowthWithin, withFileWithin, writeWithin, writeWithinUnchanged,
+  WorkspaceRefusal, accessWithin, existsWithin, isDirectoryWithin, mkdirWithin, readWithin, readdirWithin, withFileWithin, writeWithin, writeWithinUnchanged,
 } from "./contained-files.js";
 import { searchWorkspace } from "./contained-search.js";
-import { admittedRoot, workspaceUsage } from "./workspace-guard.js";
+import { admittedRoot } from "./workspace-guard.js";
 
-/** The serialized, quota-decided workspace writer the contained `write`
+/** The serialized, contained workspace writer the contained `write`
  * and `edit` tools share -- exposed so a registered tool whose mutation
  * is computed elsewhere (lsp_fix applies language-server edits; the
  * bundled hashline tools commit anchored edits) reaches the filesystem
@@ -44,14 +44,8 @@ export function createContainedWriter(workspace: string, workspaceBytes: number 
   let writes: Promise<unknown> = Promise.resolve();
   return (path: string, content: string, expectedIdentity?: { dev: number; ino: number }): Promise<void> => {
     const next = writes.catch(() => undefined).then(() => {
-      // Fail closed, never unlimited: production always wires a positive
-      // OMA_WORKSPACE_BYTES (the runner refuses to spawn without one, and the
-      // Principal's session does the same), so an absent quota means a
-      // miswired engine -- writing anyway would make the quota dishonest.
-      if (!workspaceBytes) throw new WorkspaceRefusal("agent workspace quota is not configured");
-      const growth = writeGrowthWithin(workspace, path, Buffer.byteLength(content, "utf8"));
-      if (growth > 0 && (growth > workspaceBytes || workspaceUsage(workspace, workspaceBytes - growth) > workspaceBytes - growth))
-        throw new WorkspaceRefusal("agent workspace quota would be exceeded");
+      // DR37: writes keep their serialization and descriptor containment;
+      // their size is governed by the filesystem, not an OMA quota.
       mkdirWithin(workspace, dirname(path));
       if (expectedIdentity === undefined) writeWithin(workspace, path, content);
       else writeWithinUnchanged(workspace, path, content, expectedIdentity);

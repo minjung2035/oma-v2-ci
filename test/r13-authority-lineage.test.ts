@@ -46,7 +46,7 @@ test("R13: deep and wide trees have no invented depth or argument-count policy",
   assert.equal(wide.isDescendant("root", "root", true), true);
 });
 
-test("R13: two candidates cannot consume the same final society slot", async () => {
+test("R13: concurrent candidates are not refused by legacy society quotas", async () => {
   const root = mkdtempSync(join(tmpdir(), "oma-lineage-quota-"));
   const store = new Store(join(root, "runtime.sqlite"));
   try {
@@ -58,8 +58,8 @@ test("R13: two candidates cannot consume the same final society slot", async () 
         tx.insertAgent(makeValidAgent(name, { createdBy: "alice" }));
       });
     }));
-    assert.equal(results.filter(result => result.status === "fulfilled").length, 1);
-    assert.equal(store.listAgents().length, 2);
+    assert.equal(results.filter(result => result.status === "fulfilled").length, 2);
+    assert.equal(store.listAgents().length, 3);
   } finally { store.close(); rmSync(root, { recursive: true, force: true }); }
 });
 

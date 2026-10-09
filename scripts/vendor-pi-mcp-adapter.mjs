@@ -825,6 +825,27 @@ import { omaAmbientEnv } from "./utils.js";`,
       "tool surface the OMA config forbade.",
     edits: [
       {
+        find: `    const earlyConfigPath = programmaticConfig
+        ? undefined
+        : options.configPath ?? getConfigPathFromArgv();`,
+        replace: `    const earlyConfigPath = options.configPath ?? (programmaticConfig ? undefined : getConfigPathFromArgv());`,
+      },
+      {
+        find: `        if (programmaticConfig) {
+            return {
+                content: [{ type: "text", text: "MCP install is unavailable when the adapter uses programmatic configuration." }],`,
+        replace: `        if (programmaticConfig && earlyConfigPath === undefined) {
+            return {
+                content: [{ type: "text", text: "MCP install needs an explicit configuration destination." }],`,
+      },
+      {
+        find: `        const destination = target === "project" ? getProjectConfigPath(cwd) : getPiGlobalConfigPath(earlyConfigPath);`,
+        replace: `        // OMA supplies one explicit installation destination for this engine.
+        // Project installs use it too, so a sandbox never writes an unrelated .pi file.
+        const destination = programmaticConfig && earlyConfigPath !== undefined ? earlyConfigPath
+            : target === "project" ? getProjectConfigPath(cwd) : getPiGlobalConfigPath(earlyConfigPath);`,
+      },
+      {
         find: `import { formatMcpFooterStatus, formatTerminalError, getConfigPathFromArgv, normalizeDirectToolInputSchema, truncateAtWord } from "./utils.js";`,
         replace: `import { formatMcpFooterStatus, formatTerminalError, getConfigPathFromArgv, normalizeDirectToolInputSchema, truncateAtWord } from "./utils.js";
 import { omaAmbientEnv } from "./utils.js";`,
