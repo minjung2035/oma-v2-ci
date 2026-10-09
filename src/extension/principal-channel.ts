@@ -31,6 +31,8 @@ export class PrincipalChannel {
   private pending = "";
   private broken = false;
   private opened = false;
+  private ended = false;
+  private readonly waiting = new Set<() => void>();
 
   /** For code that holds a grant another way, and for tests. */
   static detached(): PrincipalChannel { return new PrincipalChannel(); }
@@ -70,8 +72,25 @@ export class PrincipalChannel {
    * the Principal's always is, a Resident's never is. */
   get attached(): boolean { return this.opened; }
 
+  /** The private conversation may start before repository preparation. Its
+   * first request waits for registration before freezing or sending work.
+   * Cancellation and channel death release every listener; no polling timer. */
+  waitForGrant(signal?: AbortSignal): Promise<void> {
+    if (!this.attached || this.grant !== null) return Promise.resolve();
+    return new Promise((resolve, reject) => {
+      const changed = (): void => {
+        if (!signal?.aborted && !this.ended && this.grant === null) return;
+        this.waiting.delete(changed); signal?.removeEventListener("abort", changed);
+        if (signal?.aborted) reject(new Error("Society request cancelled before registration"));
+        else if (this.ended) reject(new Error("Society preparation ended before Principal registration"));
+        else resolve();
+      };
+      this.waiting.add(changed); signal?.addEventListener("abort", changed, { once: true }); changed();
+    });
+  }
+
   push(chunk: Buffer | string): void {
-    if (this.broken) return;
+    if (this.broken || this.ended) return;
     this.pending += typeof chunk === "string" ? chunk : chunk.toString("latin1");
     for (;;) {
       const end = this.pending.indexOf("\n");
@@ -83,9 +102,13 @@ export class PrincipalChannel {
       // be; no credential from it is trusted afterwards.
       if (match === null) { this.broken = true; this.clear(); return; }
       this.grant = Object.freeze(match);
+      for (const changed of this.waiting) changed();
     }
     if (this.pending.length > LINE_BYTES) { this.broken = true; this.clear(); }
   }
 
-  private clear(): void { this.grant = null; this.pending = ""; }
+  private clear(): void {
+    this.grant = null; this.pending = ""; this.ended = true;
+    for (const changed of this.waiting) changed();
+  }
 }

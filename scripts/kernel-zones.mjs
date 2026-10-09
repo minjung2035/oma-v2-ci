@@ -114,6 +114,8 @@ export const KERNEL_ZONES = Object.freeze([
       "src/leaf.ts",
       "src/process/async.ts",
       "src/process/cleanup.ts",
+      // DR36: cancellable native timer scheduling is an execution mechanism.
+      "src/process/deadline.ts",
       "src/process/policies.ts",
       "src/process/preparation.ts",
       "src/process/run.ts",

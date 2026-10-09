@@ -1,6 +1,7 @@
 /** Pure descriptor mechanics. No host defaults, I/O, authority, or error-code policy. */
 export interface IntegerField {
   readonly minInclusive: number;
+  readonly maxInclusive?: number;
   readonly unit: "bytes" | "count" | "percent" | "seconds";
 }
 
@@ -26,6 +27,8 @@ export function integerFieldsCheck(
       const scalar = record[key];
       if (typeof scalar !== "number" || !Number.isSafeInteger(scalar) || scalar < field.minInclusive)
         return `${key} must be a safe integer >= ${field.minInclusive}`;
+      if (field.maxInclusive !== undefined && scalar > field.maxInclusive)
+        return `${key} must be <= ${field.maxInclusive}`;
     }
     return null;
   };

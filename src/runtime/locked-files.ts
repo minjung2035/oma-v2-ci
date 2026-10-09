@@ -10,14 +10,23 @@ import { ensureOwnedUserDirectory, ensureUserDirectory, readUserFile, replaceUse
 
 function lockedReplace(ensure: (directory: string) => void, directory: string, name: string, bound: number,
   update: (current: string | undefined) => string | undefined): void {
-  ensure(directory);
-  const lock = ProcessLock.acquire(join(directory, "oma-settings.lock"));
-  withCleanup(() => {
+  withSettingsLock(ensure, directory, () => {
     const path = join(directory, name);
     const current = readUserFile(path, bound, { singleName: true });
     const next = update(current ?? undefined);
     if (next !== undefined && next !== current) replaceUserFile(path, next);
-  }, () => lock.close());
+  });
+}
+
+function withSettingsLock<T>(ensure: (directory: string) => void, directory: string, body: () => T): T {
+  ensure(directory);
+  const lock = ProcessLock.acquire(join(directory, "oma-settings.lock"));
+  return withCleanup(body, () => lock.close());
+}
+
+/** All settings scopes of one engine home use this writer lock. */
+export function withOwnedSettingsLock<T>(directory: string, body: () => T): T {
+  return withSettingsLock(other => ensureOwnedUserDirectory(other, directory), directory, body);
 }
 
 export function lockedUserReplace(directory: string, name: string, bound: number,

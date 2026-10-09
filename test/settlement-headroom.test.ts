@@ -121,7 +121,7 @@ test("V22B: past the headroom settlement is refused with its accepted evidence r
 test("V22B: one over-cap settlement at a time; within the cap settlement is not serialized", async () => {
   const quota = await import("../src/storage/quota.js") as unknown as Record<string, unknown>;
   const Owner = quota.StorageAdmission as (new (root: string, storageBytes: number | undefined, headroom: number) => {
-    admit(category: string): () => void;
+    admit(category: string): Promise<() => void>;
   }) | undefined;
   assert.equal(typeof Owner, "function", "one owner holds the process's storage policy");
   const root = mkdtempSync(join(tmpdir(), "oma-headroom-unit-"));
@@ -131,15 +131,15 @@ test("V22B: one over-cap settlement at a time; within the cap settlement is not 
     const observed = observedStorageBytes(root);
     const refused = (error: unknown) => error instanceof StoreError && error.code === "QUOTA_EXCEEDED";
     const atCap = new Owner!(root, observed - 1, HEADROOM);
-    assert.throws(() => atCap.admit("admit"), refused);
-    const first = atCap.admit("settle");
-    assert.throws(() => atCap.admit("settle"), refused, "a second over-cap settlement waits for the first");
+    await assert.rejects(atCap.admit("admit"), refused);
+    const first = await atCap.admit("settle");
+    await assert.rejects(atCap.admit("settle"), refused, "a second over-cap settlement waits for the first");
     first(); first();
-    atCap.admit("settle")();
+    (await atCap.admit("settle"))();
     const exhausted = new Owner!(root, observed - HEADROOM - 1, HEADROOM);
-    assert.throws(() => exhausted.admit("settle"), refused, "the headroom is bounded");
+    await assert.rejects(exhausted.admit("settle"), refused, "the headroom is bounded");
     const within = new Owner!(root, observed, HEADROOM);
-    const a = within.admit("settle"); const b = within.admit("settle");
+    const a = await within.admit("settle"); const b = await within.admit("settle");
     a(); b();
   } finally { removeTree(root); }
 });

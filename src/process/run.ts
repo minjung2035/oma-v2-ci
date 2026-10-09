@@ -34,6 +34,10 @@ function classify(result: NativeSyncResult, limited: boolean): ProcessObservatio
  */
 export function runProcessSync(spec: CommandSpec, invoke: SyncInvoker = spawnSync, inheritedFds: readonly number[] = []): ProcessObservation {
   validateCommand(spec);
+  if (spec.timeoutMs === null || spec.stdoutOverflow === "discard")
+    throw new TypeError("the synchronous runner requires a native bounded deadline and stdout capture; use runProcess");
+  if (spec.timeoutMs > 0x7fffffff)
+    throw new RangeError("the synchronous runner cannot represent this native timeout; use runProcess");
   if (inheritedFds.some(fd => !Number.isInteger(fd) || fd < 0)) throw new TypeError("invalid inherited descriptor");
   // Honesty, not capability: a synchronous spawn sees no bytes mid-flight, so
   // a silence window would be a fixed deadline in disguise. Spilling is the

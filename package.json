@@ -47,11 +47,13 @@
     "typescript": "5.9.3"
   },
   "dependencies": {
+    "@earendil-works/pi-ai": "1.0.3",
     "@earendil-works/pi-coding-agent": "1.0.1",
     "@earendil-works/pi-tui": "1.0.1",
     "koffi": "^3.2.1",
-    "nodemailer": "10.0.1",
+    "nodemailer": "10.0.16",
     "pi-open-tui": "0.3.11",
+    "proper-lockfile": "4.1.2",
     "typebox": "1.3.27"
   },
   "allowScripts": {

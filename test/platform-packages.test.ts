@@ -234,14 +234,14 @@ test("DR25/mac: packages.sync makes the Mac's packages the engine's store, turns
   const after = loadConfiguration(w.projectSettings);
   for (const role of Object.keys(after.roles))
     assert.ok(!after.roles[role]!.extensions.some(item => item.path.includes("oma-hello-ext")), role);
-  // The last generation stays for an engine still reading it; the one before it goes.
+  // More publications never establish that readers of older code exited.
   const generations = readdirSync(join(w.societiesDir, PACKAGE_GENERATIONS)).sort();
   assert.ok(generations.includes(firstGeneration.split("/").at(-1)!), "the previous generation was removed");
   macStore(w.macPackages, { "oma-two": { "package.json": JSON.stringify({ name: "oma-two", version: "1.0.0", pi: { extensions: ["./two.ts"] } }),
     "two.ts": "export default function () {}\n" } });
   await w.call("packages.sync", {}, "pi-3");
-  assert.ok(!readdirSync(join(w.societiesDir, PACKAGE_GENERATIONS)).includes(firstGeneration.split("/").at(-1)!),
-    "a generation no engine can still read was kept");
+  assert.ok(readdirSync(join(w.societiesDir, PACKAGE_GENERATIONS)).includes(firstGeneration.split("/").at(-1)!),
+    "an old generation was removed without proof that its readers exited");
   // Not named: listed, turned on nowhere.
   assert.ok(!loadConfiguration(w.projectSettings).roles.resident!.extensions.some(item => item.path.includes("oma-two")));
   // A project that was never brought to the engine is refused, not made up.

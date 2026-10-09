@@ -7,7 +7,7 @@
  */
 import test, { type TestContext } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, readFileSync, readdirSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, readdirSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { ProtocolLimits } from "../implementation/contracts.js";
@@ -157,6 +157,7 @@ test("V22A: a reservation is released once however the connection ends, and a st
   // Closed mid-stream: the partial transport copy and its reservation go.
   const cut = f.serve();
   cut.emit("data", Buffer.concat([f.submitFrame("cut"), f.bundle.subarray(0, 8)]));
+  await until(() => existsSync(join(f.root, "staging")) && f.wires().length === 1, "stream admission and spooling");
   assert.equal(f.wires().length, 1);
   cut.emit("close", true);
   assert.equal(f.wires().length, 0);
@@ -188,24 +189,24 @@ test("V22A: a reservation is released once however the connection ends, and a st
 test("V22A: reservations refuse overflow and exhaustion explicitly and release idempotently", async () => {
   const quota = await import("../src/storage/quota.js") as unknown as Record<string, unknown>;
   const Owner = quota.StorageAdmission as (new (root: string, storageBytes: number | undefined, headroom: number) => {
-    readonly outstanding: number; reserve(bytes: number): () => void; admit(category: string): () => void;
+    readonly outstanding: number; reserve(bytes: number): Promise<() => void>; admit(category: string): Promise<() => void>;
   }) | undefined;
   assert.equal(typeof Owner, "function", "one owner holds the process's storage reservations");
   const root = mkdtempSync(join(tmpdir(), "oma-reservation-unit-"));
   try {
     const owner = new Owner!(root, 1024 * 1024, 4096);
-    const first = owner.reserve(600 * 1024);
-    assert.throws(() => owner.reserve(600 * 1024), (error: unknown) => error instanceof StoreError && error.code === "QUOTA_EXCEEDED");
-    assert.throws(() => owner.reserve(Number.MAX_SAFE_INTEGER), (error: unknown) => error instanceof StoreError && error.code === "QUOTA_EXCEEDED");
-    assert.throws(() => owner.reserve(-1), (error: unknown) => error instanceof StoreError);
+    const first = await owner.reserve(600 * 1024);
+    await assert.rejects(owner.reserve(600 * 1024), (error: unknown) => error instanceof StoreError && error.code === "QUOTA_EXCEEDED");
+    await assert.rejects(owner.reserve(Number.MAX_SAFE_INTEGER), (error: unknown) => error instanceof StoreError && error.code === "QUOTA_EXCEEDED");
+    await assert.rejects(owner.reserve(-1), (error: unknown) => error instanceof StoreError);
     assert.equal(owner.outstanding, 600 * 1024);
     first(); first();
     assert.equal(owner.outstanding, 0, "a second release subtracts nothing");
-    const second = owner.reserve(600 * 1024);
+    const second = await owner.reserve(600 * 1024);
     assert.equal(owner.outstanding, 600 * 1024);
     second();
     const full = new Owner!(root, 1, 4096);
-    assert.throws(() => full.admit("admit"), (error: unknown) => error instanceof StoreError && error.code === "QUOTA_EXCEEDED");
-    full.admit("read")(); full.admit("safety-control")();
+    await assert.rejects(full.admit("admit"), (error: unknown) => error instanceof StoreError && error.code === "QUOTA_EXCEEDED");
+    (await full.admit("read"))(); (await full.admit("safety-control"))();
   } finally { removeTree(root); }
 });

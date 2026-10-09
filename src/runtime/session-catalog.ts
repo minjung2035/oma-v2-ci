@@ -1,6 +1,6 @@
 /** A history's layout locates its birth record; a legacy Society needs binding
  * evidence too. No index, implicit import, or corruption-to-default fallback. */
-import { readdirSync } from "node:fs";
+import { listOwnedDirectory } from "../storage/directory.js";
 import { basename, dirname, join } from "node:path";
 import { StoreError } from "../domain/errors.js";
 import { isValidSocietyName, UUID_V4_RE } from "../domain/identifiers.js";
@@ -27,8 +27,7 @@ export async function sessionBirthForHistory(dataRoot: string, file: string, cwd
   return saved;
 }
 const names = (root: string): string[] => {
-  try { return readdirSync(root); }
-  catch (error) { if ((error as NodeJS.ErrnoException).code === "ENOENT") return []; throw error; }
+  return listOwnedDirectory(root)?.map(entry => entry.name) ?? [];
 };
 export interface SessionHistoryDirectory { readonly root: string; readonly dir: string; readonly mode: "society" | "personal" }
 export function sessionHistoryDirectories(dataRoot: string, cwd: string): readonly SessionHistoryDirectory[] {

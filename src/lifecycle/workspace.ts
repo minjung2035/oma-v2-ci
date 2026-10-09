@@ -120,7 +120,8 @@ export class WorkspaceCoordinator {
     try { removeOwnedFile(diagnostics.stderr); } catch { /* a stray cannot block preparation */ }
     try { removeOwnedFile(diagnostics.stdout); } catch { /* a stray cannot block preparation */ }
     if (!existsSync(join(temporary, ".git"))) {
-      const cloned = await this.prepareGit(lease, ["clone", "--progress", "--no-local", "--single-branch", "--branch", "main", this.paths.projectGit, temporary], undefined, diagnostics);
+      const cloned = await this.prepareGit(lease, ["clone", "--progress", "--local", "--no-hardlinks", "--dissociate", "--no-checkout",
+        "--single-branch", "--branch", "main", this.paths.projectGit, temporary], undefined, diagnostics);
       if (cloned.status !== 0) throw new StoreError("INTERNAL_ERROR", "private workspace clone failed");
     }
     assertDirectory(join(temporary, ".git"));

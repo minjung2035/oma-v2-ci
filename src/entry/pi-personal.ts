@@ -5,10 +5,11 @@ import { createRequire } from "node:module";
 import { dirname, join } from "node:path";
 import { createAgentSessionRuntime, createAgentSessionServices, createAgentSessionFromServices,
   DefaultResourceLoader, hasTrustRequiringProjectResources, InteractiveMode, ModelSelectorComponent, ProjectTrustStore,
-  SessionManager, SessionSelectorComponent, SettingsManager,
+  SessionManager, SessionSelectorComponent,
   ThinkingSelectorComponent, VERSION, type AgentSession, type ExtensionContext, type ExtensionFactory,
 } from "@earendil-works/pi-coding-agent";
 import { StoreError } from "../domain/errors.js";
+import { createEngineSettings } from "../pi-compat/settings.js";
 import { DEPLOYMENT_LAYOUT } from "../domain/deployment.js";
 import { readSessionBirth } from "../runtime/session-mode.js";
 import { sessionBirthForHistory, sessionHistoryDirectories } from "../runtime/session-catalog.js";
@@ -16,7 +17,8 @@ import { personalExtensions, personalExtensionEntry, updatePersonalSettings, typ
 import { packageResourcePaths, readPackageIndex } from "../runtime/pi-packages.js";
 import { assertExtensionIntegrity, verifiedPaths } from "../runtime/extension-integrity.js";
 import { ExtensionModules } from "../runtime/extension-modules.js";
-import { PI_AGENT_DIR_ENV, preparePiInteractive, preparePiRetry } from "../runtime/pi-runtime.js";
+import { PI_AGENT_DIR_ENV, preparePiRetry } from "../runtime/pi-runtime.js";
+import { preparePiInteractive } from "../runtime/pi-presentation.js";
 import { PI_RESUME_HINT } from "../pi-compat/env.js";
 import { interactiveInternalsOf } from "../pi-compat/interactive-mode.js";
 import { personalModels } from "../runtime/personal-models.js";
@@ -240,7 +242,7 @@ async function main(): Promise<void> {
       // The recorded decision is the only source: absent means untrusted when
       // the folder holds gated resources, and trivially trusted when it does
       // not (upstream's own rule -- there is nothing the gate could hold back).
-      settingsManager: SettingsManager.create(options.cwd, agentDir,
+      settingsManager: createEngineSettings(options.cwd, agentDir,
         { projectTrusted: !projectNeedsTrust || trustStore.get(options.cwd) === true }), resourceLoaderOptions: resources() });
     const loader = services.resourceLoader, reload = loader.reload.bind(loader);
     loader.reload = async reloadOptions => {

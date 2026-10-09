@@ -24,7 +24,7 @@ export class AdmissionGate {
 export type ResourceCategory = "read" | "admit" | "settle" | "safety-control";
 /** Ends one admitted action's hold on shared resources; a second call does nothing. */
 export type Release = () => void;
-export type ResourceGate = (category: ResourceCategory) => Release;
+export type ResourceGate = (category: ResourceCategory) => Release | Promise<Release>;
 export const NO_HOLD: Release = () => undefined;
 /** Wraps a release so that repeating it cannot subtract twice. */
 export function releaseOnce(release: () => void): Release {

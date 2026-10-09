@@ -154,16 +154,7 @@ export class PublicDispatcher {
           isValidRequestKey(envelope.request) && this.terminalReceiptHeld(auth.actor, envelope.request))) throw error;
       }
     }
-    // Resources are judged once the action is known. Stream bytes are reserved by transport.
-    let release: Release = NO_HOLD;
-    if (phase === "dispatch") {
-      try { release = this.deps.admitResource(descriptor.resource); }
-      catch (error) {
-        // An accepted same-key lookup is not new consumption; the ledger is read only when refused.
-        if (!(descriptor.key === "required" && isValidRequestKey(envelope.request) &&
-          this.deps.store.hasOperation(auth.actor, envelope.request))) throw error;
-      }
-    }
+    const release: Release = NO_HOLD;
     // SAFETY: this method's decoder validated params; TS cannot express that dynamic key/union correlation.
     return { ok: true, id, method, descriptor, params, release } as ValidatedPublicCall;
   }
@@ -180,8 +171,17 @@ export class PublicDispatcher {
     // SAFETY: expose only raw envelope fields to validation; this cast grants no schema or authority fact.
     const validation = this.validatePublicRequest(auth, request as unknown as Record<string, unknown>, "dispatch", Boolean(stream));
     if (!validation.ok) return errorAnswer(validation.id, validation.failure);
-    const { id, method, descriptor, params, release } = validation;
+    const { id, method, descriptor, params } = validation;
+    let release: Release = NO_HOLD;
+    try { release = await this.deps.admitResource(descriptor.resource); }
+    catch (error) {
+      if (!(descriptor.key === "required" && isValidRequestKey(request.request) &&
+        this.deps.store.hasOperation(auth.actor, request.request))) throw error;
+    }
     try {
+      // A scan yields; authority and the acceptance fence are read again.
+      const current = this.validatePublicRequest(auth, request as unknown as Record<string, unknown>, "dispatch", Boolean(stream));
+      if (!current.ok) return errorAnswer(current.id, current.failure);
       switch (method) {
         case "status.get": {
           // A named agent is an address like the one logs.read checks: absent

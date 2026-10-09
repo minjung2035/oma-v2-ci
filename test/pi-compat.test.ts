@@ -120,8 +120,7 @@ test("A4: absent settings get OMA's interactive defaults through the engine's ow
   assert.equal(settings.quietStartup, true);
   assert.equal(settings.enableInstallTelemetry, false);
   assert.equal(settings.enableAnalytics, false);
-  // C16: skill commands are Pi's ordinary surface -- a persisted suppression
-  // is scrubbed, not pinned over again.
+  // Pi supplies skill-command defaults; OMA does not persist suppression.
   assert.equal("enableSkillCommands" in settings, false);
   assert.equal(settings.fullscreenExitOutput, "resume-hint");
 });

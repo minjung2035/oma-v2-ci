@@ -1,0 +1,231 @@
+{
+  "schema": "oma-adversarial-coverage-v1",
+  "startedAt": "2026-10-08T17:31:26.985550+00:00",
+  "continuedDate": "2026-10-09",
+  "head": "0364e99cbbb07726097da2b923a03d185c8fcd73",
+  "subagentsUsed": false,
+  "scope": "Whole-codebase horizontal AST/import/function/numeric survey plus selected semantic owner/call-path review across all execution areas; emphasis is not exclusion. No exhaustive line-by-line or all-number safety claim.",
+  "authoredTypeScript": {
+    "files": 394,
+    "physicalLinesIncludingCommentsAndBlanks": 59757,
+    "filesByDirectory": {
+      "(root)": 25,
+      "broker": 11,
+      "cli": 21,
+      "client": 15,
+      "config": 5,
+      "diagnostics": 4,
+      "domain": 29,
+      "entry": 18,
+      "extension": 24,
+      "git": 16,
+      "lifecycle": 8,
+      "mail": 11,
+      "pi-compat": 10,
+      "platform": 45,
+      "ports": 2,
+      "process": 7,
+      "protocol": 23,
+      "reconcile": 2,
+      "runtime": 46,
+      "storage": 30,
+      "tui": 37,
+      "units": 3,
+      "views": 2
+    }
+  },
+  "numericInventory": {
+    "literalOccurrences": 4628,
+    "heuristicLimitRelatedOccurrences": 860,
+    "allOccurrences": "test/audit/adversarial-2026-10-08.numbers.json",
+    "candidateOccurrences": "test/audit/adversarial-2026-10-08.numeric-candidates.json",
+    "limitations": "Includes literal factors/indexes/sentinels. Regex context selection is not a proof of all numeric policies. Vendored dependencies/native/scripts are outside the 394-file TS count."
+  },
+  "areas": [
+    {
+      "area": "documents",
+      "focus": "PRIORITY-0, MAINTENANCE, README/owner map, current HANDOFF, relevant implementation/verification contracts and historical audits",
+      "selectedOwnerPaths": [
+        "docs/PRIORITY-0.md",
+        "docs/MAINTENANCE.md",
+        "docs/README.md",
+        "docs/HANDOFF.md",
+        "docs/implementation-spec.md",
+        "docs/verification-spec.md",
+        "docs/limit-bounds.md",
+        "docs/simplification-audit.md",
+        "docs/priority-0-audit.md"
+      ],
+      "reviewScope": "selected owners and failure/call paths; not a whole-read claim for every listed file",
+      "executionAndLimits": "Doc authority; old closure/PASS claims checked against current owners. No new normative contract."
+    },
+    {
+      "area": "entry/startup/engine",
+      "focus": "startup execution, host/child/lease boundary, Pi settings and readiness",
+      "selectedOwnerPaths": [
+        "src/entry/oma-society.ts",
+        "src/entry/broker.ts",
+        "src/entry/pi-interactive-host.ts",
+        "src/entry/pi-personal.ts",
+        "src/runtime/host-tenure.ts",
+        "src/runtime/broker-supervisor.ts",
+        "src/runtime/society-preparation.ts",
+        "src/runtime/deployment-manifest.ts",
+        "src/runtime/society-lease.ts",
+        "src/runtime/personal-session.ts",
+        "src/tui/session.ts"
+      ],
+      "reviewScope": "selected owners and failure/call paths; not a whole-read claim for every listed file",
+      "executionAndLimits": "Real PTY with scripted provider. No paid provider. Slow >120s legitimate project not run."
+    },
+    {
+      "area": "durable storage/config",
+      "focus": "transaction authority, persisted decoding/relations, atomic publication, repair and quota",
+      "selectedOwnerPaths": [
+        "src/store.ts",
+        "src/storage/transaction.ts",
+        "src/storage/ledger-reader.ts",
+        "src/storage/transitions.ts",
+        "src/storage/operation-transitions.ts",
+        "src/storage/receipt-projector.ts",
+        "src/storage/durable-fs.ts",
+        "src/storage/directory.ts",
+        "src/storage/contained-fs.ts",
+        "src/storage/quota.ts",
+        "src/config.ts",
+        "src/config/generations.ts",
+        "src/config/operations.ts",
+        "src/domain/resources.ts"
+      ],
+      "reviewScope": "selected owners and failure/call paths; not a whole-read claim for every listed file",
+      "executionAndLimits": "Real metadata corruption and validator/executor controls. No power-loss or exhaustive durable fault matrix."
+    },
+    {
+      "area": "mail/git/lifecycle/recovery",
+      "focus": "accepted plan vs live authority, batch evidence, frozen inputs, integration resource gate, safe stop",
+      "selectedOwnerPaths": [
+        "src/mail.ts",
+        "src/mail/batches.ts",
+        "src/mail/batch-policy.ts",
+        "src/git.ts",
+        "src/git/integration-policy.ts",
+        "src/git/integration.ts",
+        "src/git/project-snapshot.ts",
+        "src/git/quarantine.ts",
+        "src/lifecycle/actions.ts",
+        "src/lifecycle/create.ts",
+        "src/lifecycle/workspace.ts",
+        "src/reconcile.ts",
+        "src/units/observe.ts",
+        "src/runtime/candidate-checks.ts",
+        "src/runtime/principal-delivery.ts"
+      ],
+      "reviewScope": "selected owners and failure/call paths; not a whole-read claim for every listed file",
+      "executionAndLimits": "Real native cgroup/bwrap candidate boundary. Whole integrate/CAS, full kernel/crash suite and paid resident not run."
+    },
+    {
+      "area": "authority/IPC/client/CLI",
+      "focus": "current capability checks, peer identity, framing, replay and unknown reporting",
+      "selectedOwnerPaths": [
+        "src/broker/public-dispatcher.ts",
+        "src/broker/internal-dispatcher.ts",
+        "src/broker/peer-authenticator.ts",
+        "src/broker/principal-endpoint.ts",
+        "src/client/transport.ts",
+        "src/client/index.ts",
+        "src/client/limits.ts",
+        "src/cli/cache-codec.ts",
+        "src/protocol/receipt-codec.ts",
+        "src/protocol/log-response.ts",
+        "src/runtime/inference-relay.ts",
+        "src/runtime/connect-proxy.ts"
+      ],
+      "reviewScope": "selected owners and failure/call paths; not a whole-read claim for every listed file",
+      "executionAndLimits": "Selected owner/call-path reads and real first-tool test. No claim of exhaustive auth attack, network/proxy or provider qualification."
+    },
+    {
+      "area": "packages/Pi compatibility",
+      "focus": "one settings owner, archive staging/publication, generation reader lifetime, pinned upstream API",
+      "selectedOwnerPaths": [
+        "src/runtime/locked-files.ts",
+        "src/runtime/pi-packages.ts",
+        "src/pi-compat/settings.ts",
+        "src/pi-compat/interactive-mode.ts",
+        "src/pi-compat/interactive-tools.ts",
+        "src/pi-compat/interactive-tool-setup.ts",
+        "src/tui/packages-apply.ts",
+        "src/tui/project-settings.ts",
+        "src/platform/package-archive.ts",
+        "src/platform/guest/packages.ts",
+        "src/platform/host/service.ts",
+        "test/platform-packages.test.ts"
+      ],
+      "reviewScope": "selected owners and failure/call paths; not a whole-read claim for every listed file",
+      "executionAndLimits": "Actual OMA/Pi separate writers and real package apply/index/module reader. Not a live native Mac UI session."
+    },
+    {
+      "area": "platform/backup/native",
+      "focus": "request ledger, maintenance/archive interlocks, helper deadlines and relay shutdown",
+      "selectedOwnerPaths": [
+        "src/platform/guest/host.ts",
+        "src/platform/guest/requests.ts",
+        "src/platform/guest/archive.ts",
+        "src/platform/host/host-api.ts",
+        "src/platform/host/lifecycle.ts",
+        "src/platform/host/snapshot.ts",
+        "src/platform/host/record.ts",
+        "src/platform/host/keychain-client.ts",
+        "src/platform/host/vz-driver.ts",
+        "platform/guest/bridge/oma-vsock-bridge.c",
+        "platform/host/vmhelper/Sources/oma-vmhelper/main.swift"
+      ],
+      "reviewScope": "selected owners and failure/call paths; not a whole-read claim for every listed file",
+      "executionAndLimits": "Production C relay run over Unix socketpairs. Swift/native VM, AF_VSOCK authentication, APFS, Keychain not run."
+    },
+    {
+      "area": "TUI/views/diagnostics",
+      "focus": "input sanitation, response truncation, derived view refresh, observation scope",
+      "selectedOwnerPaths": [
+        "src/tui/keys.ts",
+        "src/tui/app.ts",
+        "src/tui/model.ts",
+        "src/tui/view/text.ts",
+        "src/tui/screen.ts",
+        "src/views.ts",
+        "src/broker.ts",
+        "src/diagnostics/files.ts",
+        "src/diagnostics/integrity.ts",
+        "src/diagnostics/ledger.ts"
+      ],
+      "reviewScope": "selected owners and failure/call paths; not a whole-read claim for every listed file",
+      "executionAndLimits": "Selected current paths re-read; historical typed-control and truthful-truncation fixes remain in source. No exhaustive interactive golden/fuzz pass."
+    },
+    {
+      "area": "build/verification/tooling",
+      "focus": "inventory/digest binding, static rule exemptions, test lane scope and native blind spots",
+      "selectedOwnerPaths": [
+        "package.json",
+        "scripts/architecture/rule-check.mjs",
+        "scripts/architecture/rules/owned-state-rules.mjs",
+        "scripts/document-integrity.mjs",
+        "scripts/test-local.mjs",
+        "scripts/verify-lane.mjs",
+        "scripts/production-inventory.mjs",
+        ".github/workflows/architecture-verification.yml"
+      ],
+      "reviewScope": "selected owners and failure/call paths; not a whole-read claim for every listed file",
+      "executionAndLimits": "Fresh architecture-rule execution. Previous 3919 local suite not reclassified as this audit/full/native evidence."
+    }
+  ],
+  "notRun": [
+    "all 394 files manually line by line",
+    "all 860 numeric candidates individually proved safe",
+    "native macOS VZ/Keychain/APFS/Swift build",
+    "AF_VSOCK transport and native VM",
+    "real paid provider and complete resident lifecycle",
+    "power-loss qualification",
+    "full kernel/crash/release lanes",
+    "fresh full 3919 local suite",
+    "legitimate full project preparation exceeding 120 seconds"
+  ]
+}

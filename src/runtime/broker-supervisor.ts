@@ -51,11 +51,9 @@ export interface BrokerHandle {
    * listening: at first start and after every restart. Never called for a
    * broker this handle did not start.
    *
-   * This is the only proof of ownership the product has. The broker takes the
-   * society lock before it can say this, so a ready broker is this process's
-   * broker and no other process holds one. Anything that must not happen twice
-   * in a society -- starting the Principal engine above all -- belongs here and
-   * nowhere else. */
+   * It grants broker authority, not the private conversation's lifetime: the
+   * host's inherited lease owns that lifetime even while startup is pending.
+   * Registration and Society delivery wait for this signal. */
   onReady(listener: () => void): void;
   /** Called whenever a broker this handle started ends, before anything is
    * decided about restarting it.
@@ -95,6 +93,8 @@ export interface SuperviseOptions {
   readonly stateRoot: string;
   readonly runRoot: string;
   readonly configPath: string;
+  /** The bound project whose initial snapshot this broker prepares. */
+  readonly projectDir?: string;
   /** The society lease descriptor, inherited by the broker so that the society
    * cannot pass to another host while a process that can still write to it is
    * alive (REC-007). */
@@ -186,7 +186,8 @@ export async function superviseBroker(options: SuperviseOptions): Promise<Broker
       // than infer it from how it happened to be started.
       if (options.fence !== undefined) env[SOCIETY_FENCE_ENV] = String(SOCIETY_FENCE_FD);
       child = spawnSupervisedService(options.node, [join(options.libdir, "dist/src/entry/broker.js"),
-        "--society", options.society, ...launchLocationArgv(options)], env, true, options.fence);
+        "--society", options.society, ...launchLocationArgv(options),
+        ...(options.projectDir === undefined ? [] : ["--project-dir", options.projectDir])], env, true, options.fence);
     } catch (error) {
       return error instanceof Error ? error.message : String(error);
     }

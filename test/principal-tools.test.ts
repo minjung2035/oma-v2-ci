@@ -32,7 +32,8 @@ async function peer(root: string, answer?: (frame: Record<string, unknown>) => R
         catch { pending = Buffer.alloc(0); break; }
         pending = pending.subarray(4 + length);
         frames.push(frame);
-        const custom = answer?.(frame);
+        const custom = frame.method === "principal.attach"
+          ? { v: 1, id: frame.id, ok: true, result: { actor: "principal", incarnation: 0 } } : answer?.(frame);
         const reply = Buffer.from(JSON.stringify(custom ?? { v: 1, id: frame.id, ok: false,
           error: { code: "BROKER_UNAVAILABLE", message: "fixture", retry: "same-key" } }));
         const head = Buffer.alloc(4); head.writeUInt32BE(reply.length, 0);
@@ -55,7 +56,11 @@ function register(root: string, socket: string, principal: boolean, projectGit?:
     ...(projectGit === undefined ? {} : { OMA_PROJECT_GIT: projectGit }), OMA_CONTEXT_GIT: contextGit ?? "" });
   const channel = PrincipalChannel.detached();
   // The Principal's engine is the one the product starts with its channel attached.
-  if (principal) Object.defineProperty(channel, "attached", { value: true });
+  if (principal) {
+    Object.defineProperty(channel, "attached", { value: true });
+    // The peer is scripted, but a registered Principal still needs a grant.
+    channel.push(`credential ${"c".repeat(64)} ${"d".repeat(32)}\n`);
+  }
   try {
     registerOmaTools({ registerTool: (tool: never) => { const t = tool as { name: string }; tools.set(t.name, tool); } } as never, root, channel);
   } finally {

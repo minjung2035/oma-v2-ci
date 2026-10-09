@@ -21,7 +21,7 @@ import { commitManagedEdit, commitRoleSet, projectBundle, projectSettingsPath, r
  * `.projects/<project>` is oma's own under the data root, which is the
  * repair boundary every commit of the bundle names -- the same boundary the
  * bundle's creation ensures with. */
-export function ensureProjectSettings(dataRoot: string, project: string, libdir: string, session?: string): Settings {
+export function ensureProjectSettings(dataRoot: string, project: string, libdir: string, session?: string, verifiedDigest?: string): Settings {
   const path = projectSettingsPath(dataRoot, project);
   const packages = packageStoreDir(join(dataRoot, project));
   if (!existsSync(path)) {
@@ -41,7 +41,7 @@ export function ensureProjectSettings(dataRoot: string, project: string, libdir:
         .find(file => file !== undefined && lstatSync(file, { throwIfNoEntry: false }) !== undefined);
       const seed = earlier === undefined ? null : readSettingsForEditing(earlier);
       const config = seed?.config ?? defaultHostConfig({ society: project, node: process.execPath, libdir: `${libdir}/`,
-        rootfs: residentRootfsPath(join(dataRoot, project)), deploymentDigest: deploymentDigest(libdir) });
+        rootfs: residentRootfsPath(join(dataRoot, project)), deploymentDigest: verifiedDigest ?? deploymentDigest(libdir) });
       writeSettings(path, { ...config, society: project, installation: { ...config.installation, packages } }, dataRoot);
       // A first society that chose its roles' extensions and prompts keeps them.
       if (seed?.snapshot && seed.layout.kind === "operations") {

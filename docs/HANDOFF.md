@@ -1,5 +1,65 @@
 # OMA v2 — 인계 (handoff)
 
+## 현재 결과: 감사 발견 수정·검증 (2026-10-09)
+
+사용자가 감사 이후 발견 전체 수정과 푸시를 명시적으로 지시했다. 아래 기록만 요청은
+과거 단계다. 기존 시작 시간 변경을 보존하고 13개 발견의 결함을 수정·재검증했다. 추가로
+인터넷·skills 등 사용자가 예상하기 어려운 제한 32건을 조사·기록했다. 문서 먼저,
+실제 실행 측정 먼저, 서브에이전트 금지는 계속 적용한다. 현재 브랜치
+`feat/macos-hidden-vm`에 검증된 변경을 커밋하고 origin에 일반 푸시한다.
+
+현재 입력의 local suite 3,938 PASS(fail/cancel/skip/todo 0), 실제 Linux kernel 65 PASS,
+SIGKILL·재시작 복구 63 PASS, native candidate 대조 4건 성공이다. 빌드·타입·아키텍처와
+의존성 감사도 통과했고 알려진 의존성 취약점은 0건이다. native 재시작에서 quota 관측이
+0555 context 봉인을 0755로 바꾸는 수정 중 결함을 잡아 read/search-only 수리로 정산했다.
+Human Git private index/stash가 local clone으로 들어가는 문제도 packed-object 회귀로 막았다.
+
+부하를 겹치지 않은 3회씩의 실제 PTY 측정: Personal 화면 1.22~1.24초/응답 1.51~1.53초,
+Society 화면 2.93~2.99초/일반 대화 응답 3.22~3.27초다. 최초 Society broker 준비는
+14.47~14.67초, 시작 직후 요청한 첫 도구는 15.19~15.38초에 정확히 한 번 성공했다.
+**1초 목표와 최초 Society 전체 준비의 5초 목표는 미달이다.** 개선된 화면을 그 목표 달성으로
+보고하지 않는다. 잘못된 Human local clone 때의 약 9초 측정은 현재 성능 증거에서 제외한다.
+현재 결과·재현 명령·입력 바이트·미실행 한계는 [validation](implementation/validation.md)과
+[수정 evidence](../test/audit/repairs-2026-10-09.evidence.json)를 따른다.
+
+## 과거 작업: 전체 적대적 감사·기록만 (2026-10-08–09)
+
+이 절은 수정 지시 이전의 요청과 당시 결과다. 사용자는 P0·내부 중복/과잉 설계/비효율·숫자의 타당성·불합리한 로직에
+중점을 두되 **그 네 가지로 범위를 제한하지 말라**고 했다. 문서 먼저, 실제 실행 측정 먼저,
+서브에이전트 금지를 유지했다. 이번 pass에서 생산 코드와 기존 테스트는 수정하지 않았다.
+아래 시작 시간 수정은 이번 감사 이전 worktree의 상태이며 그대로 보존했다.
+
+발견 13건 모두 OPEN: 10건 실행 재현, 2건 정적 근거, 1건 내부 중복. 결함·원인·영향·수정 방향은
+[audit](priority-0-audit.md), 실행 명령·판정·한계는 [validation](implementation/validation.md),
+관측값과 source 바이트는 [evidence](../test/audit/adversarial-2026-10-08.evidence.json),
+전체 수평 조사와 선택 owner 검토의 범위는 [coverage](../test/audit/adversarial-2026-10-08.coverage.json)가 소유한다.
+기존 지침의 수정/위임 루프는 현재 요청을 덮어쓰지 않는다. 이후 사용자의 전체 수정·푸시 지시가 이 단계의 기록 전용 범위를 대체했다.
+
+## 과거 작업: 시작 시간 측정·수정 (2026-10-08, DR35)
+
+이 절은 최초 시작 시간 수정의 인계다. 아래 과거 인계의 HEAD·테스트 수·위임 지침은 당시 기록이다.
+현재 사용자는 **문서 먼저, 실행 측정 먼저, 서브에이전트 금지**를 명시했고 직접 수행했다.
+기준 HEAD는 `0364e99c`, 같은 worktree의 미커밋 변경이며 기존 사용자 변경은 없었다.
+
+- 실제 PTY 재현: 최초 출력/실패까지 146.7초, 그중 동기 프로세스 호출에서 136.5초.
+  15,519개 선택 파일을 파일마다 Git child로 해시하던 구현을 한 번의 batch로 변경했다.
+- 설정 파생의 중복 설치 digest, 파일마다 ancestor 재개방/버퍼 할당,
+  vendor missing-file 목록의 제곱 시간 검사, 입력 전 fd/rg 다운로드도 수정했다.
+  공통 runtime이 SDK를 중복 로드하던 0.718초 비용도 presentation 모듈 분리로 제거했다.
+- lease를 가진 private 대화는 broker 준비와 함께 시작한다. Principal credential·delivery는
+  실제 broker ready + registration 뒤에만 열린다. preparation 취소는 process group 종료와
+  실제 close를 기다리고, rootfs repair는 recovery/quiescence 뒤에 남는다.
+- 깨끗한 HOME/data와 로컬 시험 모델로 3회씩 측정: 첫 모델 요청 Society 3.13~3.15초,
+  Personal 1.43~1.49초. **1초 목표는 미달**. 이 저장소의 Society 전체 준비는 별도 30.1초였다.
+  대화의 5초 한도와 Worker 준비 완료를 혼동하지 않는다.
+- 재현: `python3 scripts/benchmark-startup.py --node /opt/oma-test-node/bin/node --runs 3`.
+  `--mode personal`로 Personal, `--runs 1 --wait-broker`로 실제 admin socket 준비를 따로 관측한다.
+- 최종 전체 local suite **3,919/3,919 PASS**, fail/cancel/skip 0. 빌드·타입·패키지·아키텍처 검사 PASS.
+  별도 actual PTY에서 broker ready 후 Principal 도구가 정확히 한 번 succeeded인 것을 read-only SQLite로 확인했다.
+- 최종 검사 결과·로그·한계는 [validation](implementation/validation.md)의 DR35 절을 따른다.
+  native macOS·실제 유료 provider·powercut·release qualification은 이번 작업에서 NOT_RUN이다.
+
+
 작성: 2026-10-04 (세 번째 개정). 이 문서는 대화 압축·새 세션에서도 작업을 이어갈 수
 있게 **권위 문서 위치, 실행 지침, 현재 상태, 다음 순서**를 한 곳에 모은다.
 *(추측)* 표시가 붙은 것은 미확인 추정 — 인계받는 쪽이 먼저 확인한다.
@@ -83,7 +143,7 @@ OMA v2(`oma-core-v1`) 적대적 감사 + 경화 + v0.1 선행 작업. 목표 순
 
 ## 5. 실행 지침 (사용자가 정한 프로토콜 — WORKSTREAM §4 판)
 
-- **서브에이전트 동시 1개** (rate-limit 학습 — 5개 병렬이 주간 한도를 태움).
+- **현재 사용자 지시: 서브에이전트 금지.** 아래 위임 루프는 과거 지침이며 이번 작업에 적용하지 않는다.
 - 오케스트레이터는 읽기·조정·diff 리뷰·디스패치가 본분. 사소하거나 정확성이
   중요한 수정의 직접 수정은 실제로 해왔다 *(추측: 묵시 허용)*.
 - 루프: 구현 에이전트 1개 → **맹검증** 에이전트 1개 → 발견 있으면 다시 구현.
@@ -167,7 +227,7 @@ npm run evidence:graph                   # dependency-graph.json 재생성
 
 ## 9. 실행 제약
 
-- push, PR, 배포 없음. 커밋만 로컬에.
+- 현재 사용자는 검증 후 이 브랜치의 일반 push를 명시적으로 승인했다. PR·배포는 요청 범위에 없다.
 - 보안 게이트·설정을 CI 통과 목적으로 바꾸지 않는다.
 - 사용자가 직접 고친 파일을 되돌리지 않는다.
 - 실제 사용자 OMA/VM·인증·유료 provider 사용 금지 — fixture/loopback만.

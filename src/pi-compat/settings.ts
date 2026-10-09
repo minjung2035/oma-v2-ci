@@ -17,9 +17,14 @@
  * open-tui, themes, auth) keeps its direct writer.
  */
 import { SettingsManager } from "@earendil-works/pi-coding-agent";
+import { lockSync } from "proper-lockfile";
+import { join } from "node:path";
 import { StoreError } from "../domain/errors.js";
-import { lockedOwnedReplace } from "../runtime/locked-files.js";
+import { lockedOwnedReplace, withOwnedSettingsLock } from "../runtime/locked-files.js";
+import { ensureUserDirectory, readUserFile, replaceUserFile } from "../runtime/user-files.js";
 import { OMA_THEME_NAME } from "../runtime/oma-theme.js";
+import { settingsObject } from "./settings-object.js";
+import { withCleanup } from "../process/cleanup.js";
 
 /** `SettingsStorage`/`SettingsScope` are not root-exported in 1.0.1; the
  * interface is named through the public factory's parameter, as A4 states. */
@@ -29,35 +34,50 @@ type SettingsLockBody = Parameters<SettingsStorage["withLock"]>[1];
 
 const SETTINGS_BYTES = 1024 * 1024;
 
-/** The settings object check every writer shares: absent is an empty object,
- * anything else that is not a plain object is a profile the engine was never
- * given and the bytes stay untouched. */
-export function settingsObject(value: unknown): Record<string, unknown> {
-  if (value === undefined) return {};
-  if (value === null || typeof value !== "object" || Array.isArray(value))
-    throw new StoreError("UNSUPPORTED_PROFILE", "engine settings must be an object");
-  return value as Record<string, unknown>;
-}
-
-/** A `SettingsStorage` that is OMA's settings slot, not a file layout. There
- * is one scope: the society engine home's `settings.json`, replaced under the
- * writer's lock with the user-file guarantees -- bounded read, single name,
- * atomic replace, and no write when nothing changed. */
+/** The global file uses OMA's owned writer lock. Trusted project settings
+ * also take Pi's public file lock and retain user-file atomic replacement. */
 export class OmaSettingsStorage implements SettingsStorage {
-  constructor(private readonly agentDir: string) {}
+  constructor(private readonly agentDir: string, private readonly cwd?: string) {}
   withLock(scope: SettingsScope, fn: SettingsLockBody): void {
-    // Project settings have no OMA file: the engine home is the only settings
-    // fact this storage owns. A read answers absent; a write would be one this
-    // bridge was never asked to carry, so it is refused rather than dropped.
+    // Standalone OMA transforms address only the owned global scope. An
+    // interactive engine supplies its cwd; Pi's project trust gate controls
+    // whether that user scope is read or written.
     if (scope === "project") {
-      if (fn(undefined) !== undefined)
-        throw new StoreError("UNSUPPORTED_PROFILE", "engine project settings have no OMA storage");
+      if (this.cwd === undefined) {
+        if (fn(undefined) !== undefined)
+          throw new StoreError("UNSUPPORTED_PROFILE", "engine project settings require a working directory");
+        return;
+      }
+      withOwnedSettingsLock(this.agentDir, () => {
+        const directory = join(this.cwd!, ".pi");
+        const path = join(directory, "settings.json");
+        const current = readUserFile(path, SETTINGS_BYTES, { singleName: true });
+        const next = fn(current ?? undefined);
+        if (next !== undefined && next !== current) {
+          ensureUserDirectory(directory);
+          // Share Pi's public lock primitive for the Human project file too.
+          // A foreign Pi can have changed it since the initial observation;
+          // reject that conflict instead of overwriting its committed fields.
+          const release = lockSync(path, { realpath: false });
+          withCleanup(() => {
+            if (readUserFile(path, SETTINGS_BYTES, { singleName: true }) !== current)
+              throw new StoreError("BROKER_UNAVAILABLE", "project settings changed before the writer lock was acquired");
+            replaceUserFile(path, next);
+          }, release);
+        }
+      });
       return;
     }
     // P0-8/DR32: the engine home is oma's own; a damaged leaf mode is
     // repaired before the locked replace rather than wedging on it.
     lockedOwnedReplace(this.agentDir, this.agentDir, "settings.json", SETTINGS_BYTES, fn);
   }
+}
+
+/** Pi merges modified fields; all OMA interactive writers share this storage. */
+export function createEngineSettings(cwd: string, agentDir: string,
+  options: Parameters<typeof SettingsManager.create>[2] = {}): SettingsManager {
+  return SettingsManager.fromStorage(new OmaSettingsStorage(agentDir, cwd), options);
 }
 
 /** The bytes a locked slot currently holds, answered as `SettingsStorage`
@@ -106,10 +126,8 @@ export function prepareEngineInteractiveSettings(agentDir: string): void {
     manager.setEnableAnalytics(false);
     manager.setFullscreenExitOutput("resume-hint");
     const nextSettings = manager.getGlobalSettings() as Record<string, unknown>;
-    // C16: skill commands are Pi's ordinary surface and stay enabled; an
-    // earlier suppression persisted in this file is scrubbed once here rather
-    // than pinned over again.
-    delete nextSettings.enableSkillCommands;
+    // Pi owns skill-command defaults. Preserve an explicit Human choice;
+    // historical automatic suppression cannot be distinguished from it.
     const next = `${JSON.stringify(nextSettings, null, 2)}\n`;
     return next === current ? undefined : next;
   });

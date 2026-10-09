@@ -36,9 +36,13 @@ function load(changes = {}) {
   return module.exports;
 }
 
-test('GIT-004: a canonical ls-tree spool that cannot be opened answers typed evidence and gives its scratch back', () => {
+test('GIT-004: a canonical ls-tree spool that cannot be opened answers typed evidence and gives its scratch back', t => {
+  const scratchOwner = fs.mkdtempSync(path.join(os.tmpdir(), 'oma-spool-fault-'));
+  t.after(() => fs.rmSync(scratchOwner, { recursive: true, force: true }));
   const made = [];
-  const fsWrap = { ...fs, mkdtempSync(prefix) { const dir = fs.mkdtempSync(prefix); made.push(dir); return dir; } };
+  const fsWrap = { ...fs, mkdtempSync(prefix) {
+    const dir = fs.mkdtempSync(path.join(scratchOwner, path.basename(prefix))); made.push(dir); return dir;
+  } };
   // The runner opens the spool before the child exists, so the starvation is
   // a synchronous open failure -- exactly what a descriptor-exhausted
   // `openSync` reports from inside `runProcessSync`.
@@ -48,7 +52,6 @@ test('GIT-004: a canonical ls-tree spool that cannot be opened answers typed evi
     return realRun.runProcessSync(spec);
   } };
   const api = load({ 'node:fs': fsWrap, '../process/run.js': run });
-  const heldNames = fs.readdirSync(os.tmpdir()).filter(name => name.startsWith('oma-ls-tree-'));
   const observation = api.createCanonicalObserver().gitlinks('/repo', 'a'.repeat(40));
   assert.equal(observation.kind, 'unknown', 'a failed observation is evidence, not a throw');
   // The injected error is this realm's; the module under test re-wraps it in
@@ -61,8 +64,7 @@ test('GIT-004: a canonical ls-tree spool that cannot be opened answers typed evi
   assert.equal(observation.evidence.stderr, null);
   assert.equal(made.length, 1, 'the scratch directory was made before the spool failed');
   assert.equal(fs.existsSync(made[0]), false, 'the failed observation gave its scratch back');
-  assert.deepEqual(fs.readdirSync(os.tmpdir()).filter(name => name.startsWith('oma-ls-tree-')), heldNames,
-    'no oma-ls-tree-* residue in tmp');
+  assert.deepEqual(fs.readdirSync(scratchOwner), [], 'no scratch residue owned by this invocation');
 });
 
 test('GIT-004: a canonical ls-tree scratch whose run completes disposes on the observation boundary', () => {

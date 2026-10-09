@@ -3,6 +3,265 @@
 이 문서는 **점검 기록**이다([문서 지도](README.md)). [PRIORITY-0.md](PRIORITY-0.md)의 적용 절차가 요구하는 기록이며, 다음 점검도 새 파일을 만들지 않고 이 문서를 갱신한다.
 여기의 판정은 각 기준점의 코드에 대한 것이다. 지금의 검증 상태와 수치는 [validation.md](implementation/validation.md)가 소유한다.
 
+## 수정 재검증 — 2026-10-09 (DR36)
+
+사용자가 전체 수정·검증·푸시를 지시했다. 아래 2026-10-08의 13개 OPEN과 결함 재현 evidence는
+당시 바이트의 역사적 기록으로 보존한다. 현재 수정은 [DR36](design-revisions.md), 예상 밖 제한은
+[user expectation ledger](user-expectation-ledger.md), fresh 실행 결과는
+[validation](implementation/validation.md)이 소유한다. 이번 수정도 서브에이전트 없이 직접 수행했다.
+현재 local suite 3,938 PASS, native kernel 65 PASS, SIGKILL·재시작 복구 63 PASS다.
+입력 바이트·명령·실행 범위는 [수정 evidence](../test/audit/repairs-2026-10-09.evidence.json)에 있다.
+Society 화면은 2.93~2.99초지만 최초 실제 권한 준비는 14.47~14.67초여서 전체 5초 목표는
+여전히 미달이다. 이 목표를 아래 결함 수정 상태와 별개로 남긴다.
+
+| 발견 | 수정과 재검증 | 현재 판정 |
+|---|---|---|
+| AV-20261008-01 | FD에 고정한 owned 순회에서 read/search만 수리하며 0555 봉인 보존, hardlink 중복 과금 방지; close 실패·재시작 회귀 | FIXED |
+| AV-20261008-02 | 공개 Pi storage/factory로 OMA-owned lock 통일; trusted 프로젝트에는 Pi의 공개 file lock; 실제 CLI 경쟁 회귀 | FIXED |
+| AV-20261008-03 | 교체 횟수만으로 살아 있는 reader의 세대를 삭제하는 GC 제거; 실제 import reader의 자원 보존 | FIXED; 디스크 보유 증가 명시 |
+| AV-20261008-04 | 출력 보관량과 실행 중단 분리, 초과 stdout/stderr도 배출하며 정상 완료 확인 | FIXED |
+| AV-20261008-05 | 실제 kernel page size에 따라 내려간 memory.max 비교; native cgroup 검사 | FIXED |
+| AV-20261008-06 | 단일 monotonic timer로 native interval 분할; 설정 파생까지 안전 정수 검사 | FIXED |
+| AV-20261008-07 | 등록을 기다린 뒤 freeze/send, 종료·취소 시 회수; 실제 첫 tool이 정확히 한 번 성공 | acceptance unknown 결함 FIXED; 전체 5초 목표 미달 |
+| AV-20261008-08 | 종료된 read fd를 poll에서 제외; production C의 실제 socketpair idle·정상 종료 검사 | FIXED; native VZ 미실행 |
+| AV-20261008-09 | preparation의 독립 120초 총량 제거; 상위 취소와 실제 close·상속 lease로 수명 관리 | FIXED |
+| AV-20261008-10 | 진행 중 scan만 공유하고 entry마다 event loop 양보; 실제 30,000개 파일과 동시 예약 회귀 | FIXED |
+| AV-20261008-11 | 문자열 경로 provenance를 symbol alias와 local callee까지 추적; 이름만 다른 positive/negative 회귀 | FIXED within static scope; dynamic call 증명 한계 명시 |
+| AV-20261008-12 | 공개 Pi getSupportedThinkingLevels 사용 | FIXED |
+| AV-20261008-13 | 효과 전에 shared index codec·세대 이름·before-image 검증; 손상 입력의 zero-effect 회귀 | FIXED |
+
+추가 발견: **AV-20261009-01** — 직접 의존한 nodemailer 10.0.1에 addressparser의 알려진
+quadratic DoS가 포함되어 있었다. [upstream advisory](https://github.com/nodemailer/nodemailer/security/advisories/GHSA-prgh-xp8r-p3m5),
+[별도 fallback advisory](https://github.com/nodemailer/nodemailer/security/advisories/GHSA-v53p-9fqp-m79j)를 확인해
+10.0.16으로 고정했다. OMA의 stream transport와 주소 생성 경로를 검토했으며, 일반 SMTP/외부
+mailparser 공격을 OMA에서 실제 재현한 것으로 확대하지 않는다. 기존 MIME/frozen-fact 회귀
+24개(수정 회귀 포함) PASS, 패치 후 npm audit 알려진 취약점 0건이다.
+
+수정 중에도 두 결함을 실제 검사에서 발견했다. Human Git의 local clone이 private index/stash
+객체까지 복사하는 문제는 protocol clone과 packed private object 부재 회귀로 수정했다.
+새 quota 관측이 0555 context revision을 0755로 바꿔 다음 broker 시작을 STORE_CORRUPT로
+막는 문제는 native kernel lane의 첫 실행에서 확인했다. 관측은 read/search만 수리하도록
+수정했으며, 첫 실패 기록을 보존하고 봉인 보존·native 재시작을 새 입력에서 재검증했다.
+
+## 추가 적대적 감사 — 2026-10-08 시작, 2026-10-09 재현·기록
+
+**당시 요청은 전체 감사와 기록만이었다.** P0, 내부 구현의 중복·과잉 설계·비효율, 숫자의 타당성,
+이해되지 않는 로직에 중점을 두되 데이터 유실, 동시성, 권한·격리, 복구, 성능, 사용자 흐름,
+플랫폼 통신, 검증 사각지대도 함께 살폈다. 문서를 먼저 읽고 실행을 측정했으며 서브에이전트는 사용하지 않았다.
+이 pass에서는 production 코드와 기존 테스트를 수정하지 않았다. 아래 13건은 모두 **OPEN**이다.
+10건은 실행으로 재현했고 2건은 정적 근거, 1건은 현재 동작 결함과 구별한 내부 중복이다.
+여기서 P0-번호는 원칙이며, 심각도 P1/P2/P3와 다른 축이다.
+
+기준은 HEAD `0364e99cbbb07726097da2b923a03d185c8fcd73`과 시작 시간 수정이 들어 있는 미커밋 worktree다.
+HEAD만으로 이번 판정을 재현할 수 없다. 실제 source·compiled owner·Pi 의존 바이트, 관측 결과와 범위는
+[evidence](../test/audit/adversarial-2026-10-08.evidence.json), 수평 조사 범위는
+[coverage](../test/audit/adversarial-2026-10-08.coverage.json)에 고정했다.
+과거의 "수정됨", suite PASS, bound 문서의 분류는 현재의 안전성을 대신하지 않는다.
+
+| ID | 심각도 | 근거 종류 | 문제 / 주요 축 |
+|---|---|---|---|
+| AV-20261008-01 | P1 | 실제 UID·filesystem | 손상된 owned 하위 디렉터리 하나가 quota 관측·broker 기동·새 admission을 막음 / P0-8 |
+| AV-20261008-02 | P1 | 실제 OMA·Pi writer 교차 실행 | 서로 다른 설정 잠금으로 저장된 모델 선택 유실 / P0-2·동시성·중복 owner |
+| AV-20261008-03 | P1 | 실제 archive/apply·로드된 확장 | 두 번의 패키지 교체가 살아 있는 reader의 세대를 삭제 / P0-4·자료 수명 |
+| AV-20261008-04 | P1 | 실제 systemd/cgroup/bwrap check | 성공하도록 작성한 검사도 stdout 1 MiB를 넘으면 중단·unknown / 숫자·통합 가용성 |
+| AV-20261008-05 | P2 | 실제 systemd/cgroup/bwrap check | 메모리 값에 1 byte를 더하면 커널 정렬 때문에 검사 실행 전 exit 125 / 숫자·오류 분류 |
+| AV-20261008-06 | P2 | 실제 config validator·지원 검사 | 검증된 check deadline을 broker 지원 검사가 거부 / 검증 경계·숫자 |
+| AV-20261008-07 | P1 | 실제 PTY·bundled Pi·scripted model | 5초 안의 대화에서 첫 Society tool은 acceptance unknown / 시작 수용 기준·사용자 흐름 |
+| AV-20261008-08 | P2 | production C relay·socketpair | 한 peer 종료 후 반대편이 열려 있으면 유휴 CPU spin / 통신·종료 로직 |
+| AV-20261008-09 | P2 | 정적 호출 관계 | 준비 child의 고정 120초가 내부 Git의 600초 허용을 자름 / 숫자·가용성 |
+| AV-20261008-10 | P2 | 실제 quota owner·30,000파일 | 매 admission의 전체 동기 walk가 broker event loop를 막음 / 내부 효율·성능 |
+| AV-20261008-11 | P2 | 정적 규칙·실제 gate 실행 | owned-state 이름 휴리스틱이 위반을 놓쳐도 architecture rule PASS / P0-7·검증 사각지대 |
+| AV-20261008-12 | P3 | 현재 pinned Pi source 비교 | 공개된 thinking-level 계산을 내부에서 다시 구현 / 내부 중복; 현재 오동작 주장은 아님 |
+| AV-20261008-13 | P1 | 손상 기록·실제 archive/apply | 복구 snapshot 검증 전에 세대 게시·선택·삭제 후 TypeError / P0-3·저장 경계 |
+
+### AV-20261008-01 — quota walk가 owned 손상을 복구하지 않는다
+
+[quota.ts](../src/storage/quota.ts)의 `observedStorageBytes`는 pathname `lstatSync`/`readdirSync`를
+직접 사용한다. root 아래 `opaque/fact`를 만든 뒤 `opaque`를 mode 000으로 바꾸면 UID 1001에서
+관측·`startupState`·`admit` 모두 `BROKER_UNAVAILABLE`, 원인 `EACCES`이고 mode는 000 그대로다.
+양성 대조에서는 같은 tree를 관측하고 startup이 admitted였다. [broker.ts](../src/entry/broker.ts):173의
+startup probe 때문에 한 하위 entry의 권한 손상이 전체 broker 기동을 막을 수 있다.
+unknown으로 거절하는 P0-5는 지키지만 owned 접근 primitive에 복구가 내장되어야 한다는 P0-8은 지키지 않는다.
+
+재현: [quota-probe.mjs](../test/audit/adversarial-2026-10-08/quota-probe.mjs).
+수정 방향은 최초 경로에서 몇 개 directory를 ensure하는 예외가 아니라, walk의 매 owned 접근에
+contained repair를 적용하는 것이다. 권한 손상과 실제 quota 초과를 구별해야 한다.
+
+### AV-20261008-02 — OMA와 Pi가 같은 설정을 다른 잠금으로 저장한다
+
+[locked-files.ts](../src/runtime/locked-files.ts):14는 `oma-settings.lock`을 사용한다.
+[settings.ts](../src/pi-compat/settings.ts):85는 잠금 안에서 읽은 전체 JSON을 변환해 교체하며,
+"동시 writer는 이 잠금을 지나야 한다"고 전제한다. 그러나 실제 두 interactive entry는
+`SettingsManager.create`를 사용한다([Society](../src/entry/pi-interactive-host.ts):576,
+[Personal](../src/entry/pi-personal.ts):244). pinned Pi `FileSettingsStorage`의 잠금은 `settings.json.lock`이다.
+[piAgentDir](../src/runtime/pi-runtime.ts):161은 Society와 Personal에 공통 Human engine home을 준다.
+따라서 기존 창이 모델 선택을 저장하는 동안 새 창의 준비가 같은 파일을 교체할 수 있다.
+
+실제 OMA 잠금 hold의 read/replace 사이에 별도 프로세스의 실제 Pi setter+flush를 실행했다.
+Pi의 `new-provider/new-model` 저장 완료와 파일 내용까지 확인했지만 OMA commit 뒤에는
+`old-provider/old-model`로 되돌아갔다. 제어한 interleaving이며 두 실제 UI 세션의 확률적 race 측정은 아니다.
+원인은 저장 owner를 둘로 만든 내부 중복이다. Pi의 수정 필드 merge도 OMA의 전체 snapshot 교체를 막지 못한다.
+
+재현: [settings-race.mjs](../test/audit/adversarial-2026-10-08/settings-race.mjs).
+수정 방향: 모든 engine writer가 같은 storage/lock owner를 사용하게 하고, 이전 내용의 전체 교체로
+다른 writer가 완료한 변경을 덮어쓰지 않게 한다.
+
+### AV-20261008-03 — "직전 세대까지 보존"은 reader 사망 증거가 아니다
+
+[packages-apply.ts](../src/tui/packages-apply.ts):71–73은 현재와 직전 generation만 남기며 나머지를 삭제한다.
+그동안 [guest packages](../src/platform/guest/packages.ts) → [guest host](../src/platform/guest/host.ts) →
+[host sync](../src/platform/host/service.ts)의 경로에는 기존 세대의 모든 reader가 끝났다는 검사가 없다.
+archive의 open race를 막는 `archiving` latch는 packages.replace의 reader 수명 보호가 아니다.
+
+첫 세대의 실제 확장 module을 import하고 상대 경로 asset을 읽었다. 첫 교체 뒤에는 여전히 읽히지만
+두 번째 교체 뒤에는 살아 있는 동일 module의 `readAsset()`이 `ENOENT`를 받고 pinned directory도 없다.
+실제 archive 생성·검증·Pi package indexing·apply 경로를 사용했다. native VM/Pi UI 세션 전체는 이 oracle의 범위 밖이다.
+기존 platform-packages 시험은 세 번째 sync에서 첫 세대 삭제를 기대하지만 reader 종료를 세우지 않는다.
+
+재현: [package-generation.mjs](../test/audit/adversarial-2026-10-08/package-generation.mjs).
+수정 방향: generation 수가 아니라 reader lease/death 또는 확인된 quiescence를 수집 조건으로 사용한다.
+
+### AV-20261008-04 — check의 로그 1 MiB가 실행 수명 상한이다
+
+[candidate-checks.ts](../src/runtime/candidate-checks.ts):107은 stdout/stderr 각각 1 MiB이고 spool이 없다.
+이 값은 preview 크기가 아니라 overflow 시 프로세스를 중단시키는 값이다.
+실제 user systemd·cgroup·bubblewrap 검사에서 `/bin/true`는 성공했고,
+`head -c 1048577 /dev/zero; exit 0`은 `output-limited`, exitCode null,
+보존 stdout 1048576 bytes, `REF_STATE_UNKNOWN`이 됐다. 즉 정상적으로 더 많은 로그를 내는 검사에
+성공 결과 관측을 끝낼 경로가 없다. 같은 조건으로 반복해도 이 한도에서 다시 중단된다.
+unknown을 PASS로 바꾸지는 않으므로 그 안전 경계는 유지된다.
+
+재현: [native-checks.mjs](../test/audit/adversarial-2026-10-08/native-checks.mjs).
+수정 방향: 실제 종료 관측과 진단 preview를 분리하고 전체 출력은 owner가 있는 spool로 보존한다.
+이 oracle는 실제 confined check 경계이며 전체 `git.integrate` receipt/CAS qualification은 아니다.
+
+### AV-20261008-05 — 커널 page 정렬을 설정의 byte 동등성으로 검사한다
+
+[candidate-checks.ts](../src/runtime/candidate-checks.ts):27의 resource gate는 `memory.max`와 요청 bytes의
+문자열 동등성을 요구한다. config/resource validator는 page 정렬을 요구하지 않는다.
+실제 같은 check의 268435456 bytes는 성공하고 268435457 bytes는 `/bin/true`에 도달하기 전에
+exit 125, `CHECK_FAILED`가 된다. 별도 kernel 관측에서 67108865 bytes 요청의 `memory.max`는 67108864였다.
+이는 코드 검사 실패가 아니라 커널의 page 단위 표현과 비교 규칙의 불일치다.
+
+재현: 위 native-checks oracle의 `unaligned-memory`.
+수정 방향: 지원할 정렬 범위를 설정 검증과 실행 gate가 공유하게 하고, 실제 적용된 kernel bound를
+그 범위의 의미로 비교한다. 의도한 자원 보호를 느슨하게 하는 임의 오차 허용은 대안이 아니다.
+
+### AV-20261008-06 — 설정과 executor의 deadline 유효 범위가 다르다
+
+`validateConfig`는 complete check resource의 `checkTimeoutSeconds=2147484`를 받지만,
+[integration-policy.ts](../src/git/integration-policy.ts):108은 ms 변환+60,000이 `0x7fffffff`를 넘으면
+`UNSUPPORTED_PROFILE: integration check deadline cannot be enforced`를 던진다.
+[broker entry](../src/entry/broker.ts):177은 이 지원 검사를 기동 시 실행한다.
+유효성 검증과 실행 지원 판단이 서로 다른 owner의 숫자 범위를 사용한다.
+
+재현: native-checks의 `config-executor-deadline`. 실제 validator와 startup에 쓰이는 지원 함수를 호출했다.
+이 설정을 managed commit한 뒤 전체 broker를 부팅한 실험은 아니다. 설정 loader가 unreadable해졌다는 주장도 아니다.
+수정 방향: 저장할 runnable config를 검증하는 단계에서 executor의 표현 가능 범위도 동일하게 검증한다.
+
+### AV-20261008-07 — 첫 대화 시간과 Society 기능 준비 시간은 다르다
+
+기존 DR35 측정은 broker 준비 전 plaintext 대화를 5초 안에 가능하게 했으며 전체 준비 약 30.1초도 공개했다.
+추가 실제 PTY oracle에서는 첫 모델 응답이 곧바로 `oma_society`를 호출하게 했다.
+2026-10-08 관측: 모델 요청 3.198초, 도구 결과 3.238초에 `Acceptance status unknown`과 same-key 복구 안내.
+2026-10-09 재현도 요청 3.129초, 도구 결과 3.176초에 같은 결과였다. [oma-society](../src/entry/oma-society.ts)의
+engine 선기동과 [transport](../src/client/transport.ts)의 즉시 연결 사이에 Society readiness 대기가 없다.
+
+재현: [early-tool-benchmark.py](../test/audit/adversarial-2026-10-08/early-tool-benchmark.py)와 함께 있는 PTY fixture.
+실제 제품·bundled Pi·tool이며 모델만 로컬 대본이다. 준비 전 권한을 발급하거나 성공을 꾸민 것은 아니다.
+하지만 첫 화면/모델 요청만으로 "OMA가 최대 5초 안에 켜져 Society 일을 한다"는 요구는 충족되지 않는다.
+수정 방향: 기동 수용 기준에 첫 유용한 Society 작업을 포함하고, 준비 중 tool 실행을 명시적으로 다룬다.
+
+### AV-20261008-08 — 끝난 relay 방향의 fd가 poll에서 계속 깨어난다
+
+[oma-vsock-bridge.c](../platform/guest/bridge/oma-vsock-bridge.c):86은 끝난 방향도 `events=0`인 fd로 poll에 남긴다.
+peer의 완전 종료 후 `POLLHUP`는 계속 반환되지만 `!open` 조건 때문에 처리하지 않는다.
+반대편이 아직 열려 있으면 loop가 기다리지 않고 돈다.
+정확한 production `relay()`를 C harness에 include해 Unix socketpair로 실행했다.
+400ms 동안 정상 유휴 CPU ticks는 0, 한 peer 종료 뒤에는 39/100Hz(약 한 코어 97.5%)였다.
+
+재현: [relay-probe.c](../test/audit/adversarial-2026-10-08/relay-probe.c).
+native Linux C relay의 EOF/poll 경계 증거다. AF_VSOCK peer 인증, Swift host bridge, 실제 VM qualification은 아니다.
+수정 방향: 종료된 방향의 fd를 poll 대상에서 빼고 종료·half-close·양방향 backpressure를 함께 검증한다.
+
+### AV-20261008-09 — 준비 전체의 120초가 내부 작업의 허용 시간을 무효화한다
+
+[society-preparation.ts](../src/runtime/society-preparation.ts):14의 `timeoutMs:120_000`은 진행과 무관한 전체 마감이다.
+child의 [project-snapshot.ts](../src/git/project-snapshot.ts):106은 Git 명령 하나에 `10*60_000`을 허용하고
+여러 snapshot/seed/mirror 작업이 순차 실행된다. 큰 source tree나 느린 디스크에서 정상 진행 중인
+준비도 바깥 120초에 잘릴 수 있다. 새 마감은 기존 [limit-bounds](limit-bounds.md) 목록에도 없다.
+
+**정적 근거로 OPEN**이다. 정상 프로젝트가 실제로 120초를 넘는 end-to-end 실험은 NOT_RUN이다.
+수정 방향: 진행 관측·취소·실제 child 종료를 포함한 하나의 준비 시간 정책을 사용한다.
+5초 안의 사용성 요구를 전체 준비를 120초에 죽이는 것으로 충족시킬 수는 없다.
+
+### AV-20261008-10 — quota의 동기 전체 walk가 모든 새 admission의 비용이다
+
+[quota.ts](../src/storage/quota.ts)의 `reserve`/`admit`/`check`는 매번 전체 tree를 동기로 관측하며 캐시하지 않는다.
+실제 owner의 별도 microbenchmark에서 5,000파일 admission은 19–28ms,
+30,000파일은 131–155ms였다. 30,000파일에서 세 번 연속 호출한 동안 zero-delay timer도 431.8ms 지연됐다.
+측정값은 machine/workload별 값이며 실제 모든 요청의 latency나 시작 2분의 원인으로 확대하지 않는다.
+
+재현: quota-probe의 `performance`; evidence에는 별도 측정과 재현 값을 모두 남겼다.
+고빈도 preflight·정산과 파일 수가 함께 증가하면 stop/authority loss 같은 event-loop 작업도 지연될 수 있다.
+수정 방향: 정확한 quota 의미와 외부 writer를 유지하면서 kernel/비동기 관측 owner 또는 admission 방식의
+비용을 줄이는 설계를 검토한다. 확인되지 않은 cache를 현재 사용량의 사실로 바꾸는 단순 교체는 금물이다.
+
+### AV-20261008-11 — 정적 gate의 PASS는 owned 접근 전수 준수 증거가 아니다
+
+[owned-state-rules.mjs](../scripts/architecture/rules/owned-state-rules.mjs):165의 `OWNED_ROOT_NAME`은
+generic `root`/`path`/`dir`을 제외한다. quota walker는 바로 이 이름을 사용해 실제 owned 관측이 규칙에서 빠진다.
+수정 owner allowlist와 사전 ensure를 근거로 한 예외도 접근 때의 손상 복구를 모두 증명하지 않는다.
+현 소스에서 `node scripts/architecture/rule-check.mjs`는 **PASS, 0 findings**였지만 AV-01은 실제로 재현됐다.
+
+이 항목은 gate의 coverage 한계다. 이미 고친 과거 alias 규칙을 여전히 미수정이라고 주장하지 않는다.
+수정 방향: 소유 경계와 fs 접근의 dataflow를 검사하고, 기존 source의 실제 반례와
+damage/kill/retry oracle를 gate 의미에 포함한다. PASS를 runtime/P0 전체 증거로 승격하지 않는다.
+
+### AV-20261008-12 — Pi의 공개 계산을 다시 유지하는 내부 helper
+
+[pi-interactive-host.ts](../src/entry/pi-interactive-host.ts):40의 `effortLevelsOf`는 pinned Pi AI의
+공개 `getSupportedThinkingLevels`와 같은 filtering을 별도로 구현한다. `pi-ai/dist/index.js`는
+`models.js`를 공개 export한다. 기존 parity 시험은 drift를 찾지만 같은 의미의 owner를 둘 유지할 필요까지 증명하지 않는다.
+
+**내부 중복/P3**로 기록한다. 현재의 valid model에서 다른 결과를 냈다는 재현은 없으며,
+model surface의 풍부함이나 필수 sandbox/fencing 구조를 과잉 설계로 분류한 것이 아니다.
+수정 방향: 공개 계산에 위임하고 OMA의 UI mapping만 유지한다. 13개 private InteractiveMode override는
+별도의 Pi 호환 비용으로 관찰했으나 각 제품 요구가 있어 개수만으로 제거를 권고하지 않는다.
+
+### AV-20261008-13 — 손상된 package snapshot을 적용 뒤에야 소비한다
+
+[packages-apply.ts](../src/tui/packages-apply.ts):50은 `${archive}.before.json`을 `JSON.parse` 뒤 type assertion만 한다.
+`publishNoReplace`가 existing을 돌려줘도 기존 내용의 shape/relation을 검증하지 않는다.
+`{before:null,previous:null}`을 주입한 실제 archive 적용은 `recorded → published → switched → collected`까지
+진행하고 나서 [project-settings.ts](../src/tui/project-settings.ts):72의 `before.some`에서 TypeError가 났다.
+실패 뒤 선택된 store의 asset은 이미 `generation 4`였으며 이전 세대 수집도 실행됐다.
+
+재현: package-generation oracle의 `damagedRecord`. 실제 owned 기록의 통제된 byte 손상이다.
+P0의 persisted boundary에서 shape·관계를 effect 전에 검증하지 않는 결함이며, rollback으로 이미 삭제한
+reader 자원을 되돌릴 수 없다. 수정 방향: 기존 snapshot의 완전한 decoder와 request/generation 관계를 먼저
+검증하고 손상이면 STORE_CORRUPT로 effect 없이 멈춘다.
+
+### 범위와 남은 불확실성
+
+수평 조사에는 authored `src` TS 394파일의 import/function 구조와 numeric literal 4,628개가 포함된다.
+그중 이름·식 문맥으로 추린 limit 관련 후보는 860개다. 숫자 occurrence 수이지 독립 상한 860개라는 뜻은 아니다.
+명명된 bound도 정당성 증거로 취급하지 않았으며 실제 거절, kernel 정렬, 시간 표현, reader 수명을 따로 검증했다.
+전체 394파일을 모두 줄 단위로 읽었다거나 860후보의 안전성을 모두 증명했다는 주장은 하지 않는다.
+영역별 검토 owner와 부족한 실행 증거는 coverage artifact에 명시한다.
+
+검토 중 현재 source에서 유지되는 안전 경계도 확인했다: transaction capability의 scope/owner 확인,
+원본 acceptance 밖의 plan 변경 금지, relationally decoded receipt projection, 현재 peer/cgroup 권한 재검사,
+check 관측 실패의 unknown 유지, snapshot stop·freeze/thaw·archive/open latch. 확인한 경계의 정적 판단이며
+P0 전체의 PASS나 실제 power-loss/manager-death 증거는 아니다.
+
+Swift bridge close 뒤 지연 connect callback/relay thread 수명은 native 실행으로 확인하지 못했다.
+실제 macOS VZ/Keychain/APFS, AF_VSOCK transport, 유료 provider, powercut, release qualification은 NOT_RUN이다.
+기존 full suite 3,919 PASS는 이전 시작 수정의 기록이며 이번 감사의 fresh whole-suite 결과로 재사용하지 않았다.
+실행 판정·재현 명령과 마지막 byte 대조는 validation의 이번 감사 절을 따른다.
+
+## 과거 점검 기록
+
 **상태(2026-09-26).** 코드의 발견 24개(P0V-01–P0V-24)와 문서·식별자의 발견 14개(P0D-01–P0D-14)를 모두 고쳤다. 4차 점검(외부 전수 검토)의 발견
 P0V-25–P0V-53 가운데 P0V-44는 의도된 예외(DR14)이고 나머지는 고쳤다. 코드 발견은 상태 열이 수정 commit이다.
 

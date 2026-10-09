@@ -109,6 +109,7 @@ test("P02: canonical deployment manifest pins every selected byte independent of
         })),
     };
     assert.deepEqual(deploymentManifest(root), expected);
+    assert.deepEqual(deploymentManifest(`${root}/`), expected);
     const digest = createHash("sha256")
       .update(JSON.stringify(expected))
       .digest("hex");

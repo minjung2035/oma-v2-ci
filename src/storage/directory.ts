@@ -6,7 +6,7 @@ import { constants, chmodSync, closeSync, fstatSync, fsyncSync, lstatSync, mkdir
 import { basename, dirname, isAbsolute, join, parse } from "node:path";
 import { StoreError, unobserved } from "../domain/errors.js";
 import { withCleanup } from "../process/cleanup.js";
-import { entryAt, openBeneath, openDirectory, withinDirectory } from "./contained-fs.js";
+import { closeEvery, entryAt, openBeneath, openDirectory, withinDirectory } from "./contained-fs.js";
 
 function componentsOf(path: string): { root: string; components: string[] } {
   if (!isAbsolute(path) || path.includes("\0"))
@@ -60,15 +60,15 @@ export function ensureDirectory(path: string, mode = 0o755): readonly string[] {
 }
 
 /** Gives a directory pinned beneath a held parent back its owner
- * read/write/search bits where a same-UID stray or an interrupted writer
+ * required owner bits where a same-UID stray or an interrupted writer
  * dropped them. The repair runs through the O_PATH pin's own proc name --
  * the one inode the pin names, never a replaced path -- and bits are only
  * added, never stripped: the mode's other permission bits and its setuid,
  * setgid and sticky bits are kept. */
-function repairOwnerBits(pin: number): void {
+function repairOwnerBits(pin: number, required = 0o700): void {
   const observed = fstatSync(pin);
-  if ((observed.mode & 0o700) !== 0o700)
-    chmodSync(`/proc/self/fd/${pin}`, (observed.mode & 0o7777) | 0o700);
+  if ((observed.mode & required) !== required)
+    chmodSync(`/proc/self/fd/${pin}`, (observed.mode & 0o7777) | required);
 }
 
 /** Opens the `name` directory beneath a held parent for an open, removal or
@@ -101,6 +101,57 @@ export function openOwnedDirectory(parent: number, name: string): number {
  * inode for as long as it is open. */
 export function openOwnedDirectoryPath(path: string): number {
   return withinDirectory(path, (parent, name) => openOwnedDirectory(parent, name));
+}
+
+/** Stream an owned tree through pinned parents. A mode-000 child receives
+ * only owner read/search bits on its own inode; sealed modes stay sealed.
+ * Links are observed, never followed. All held directories
+ * close even when the consumer stops early or throws. */
+export function* walkOwnedTree(path: string, skip: ReadonlySet<string> = new Set()): Generator<Stats> {
+  const stack: { fd: number; names: string[]; index: number }[] = [];
+  let primary: { error: unknown } | null = null;
+  const enter = (parent: number, name: string, top: boolean): { stat: Stats; directory: number | null } | null => {
+    let pin: number;
+    try { pin = openBeneath(parent, name, 0o10000000 /* O_PATH */ | constants.O_NOFOLLOW); }
+    catch (error) { if ((error as NodeJS.ErrnoException).code === "ENOENT") return null; throw error; }
+    let directory: number | null = null;
+    try { return withCleanup(() => {
+      const stat = fstatSync(pin);
+      if (!top && stat.isDirectory() && skip.has(name)) return null;
+      if (stat.isDirectory()) {
+        // Observation needs read/search, never write. Adding owner-write to
+        // an immutable revision directory would invalidate its sealed mode.
+        repairOwnerBits(pin, 0o500);
+        directory = openSync(`/proc/self/fd/${pin}`, constants.O_RDONLY | constants.O_DIRECTORY);
+        return { stat, directory };
+      }
+      return { stat, directory: null };
+    }, () => closeSync(pin)); }
+    catch (error) { return withCleanup(() => { throw error; }, () => closeEvery(directory)); }
+  };
+  const push = (entry: { stat: Stats; directory: number | null }): void => {
+    if (entry.directory === null) return;
+    try { stack.push({ fd: entry.directory, names: readdirSync(`/proc/self/fd/${entry.directory}`), index: 0 }); }
+    catch (error) { withCleanup(() => { throw error; }, () => closeSync(entry.directory!)); }
+  };
+  try {
+    let first: ReturnType<typeof enter>;
+    try { first = withinDirectory(path, (parent, name) => enter(parent, name, true)); }
+    catch (error) { if ((error as NodeJS.ErrnoException).code === "ENOENT") return; throw error; }
+    if (first === null) return;
+    push(first); yield first.stat;
+    while (stack.length > 0) {
+      const current = stack.at(-1)!;
+      if (current.index === current.names.length) { stack.pop(); closeSync(current.fd); continue; }
+      const entry = enter(current.fd, current.names[current.index++]!, false);
+      if (entry === null) continue;
+      push(entry); yield entry.stat;
+    }
+  } catch (error) { primary = { error }; throw error; }
+  finally {
+    withCleanup(() => { if (primary !== null) throw primary.error; },
+      () => closeEvery(...stack.reverse().map(item => item.fd)));
+  }
 }
 
 /** `ensureDirectory` for a path whose tail oma owns. `ownedFrom` names the

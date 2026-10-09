@@ -5,7 +5,8 @@ import { Store } from "./store.js";
 import { StoreError, classifyError, errorCodeOf } from "./domain/errors.js";
 import { assertNever } from "./domain/exhaustive.js";
 import { NO_HOLD, observeStoreFailure, type Release, type ResourceCategory, type ResourceGate } from "./domain/admission.js";
-import { GIT_ENV } from "./process/policies.js";
+import { repositoryHealthCommand, requireHealthyRepository } from "./git/repository-health.js";
+import { createCanonicalObserver } from "./git/canonical-command.js";
 import { PreparationExecutor } from "./process/preparation.js";
 import { MailModule } from "./mail.js";
 import { reconcileMailOperation, type RecoveryCounts } from "./mail/reconcile.js";
@@ -22,6 +23,8 @@ import { dirname } from "node:path";
 
 export interface ReconcilePaths {
   projectGit: string; hasGoal: () => boolean; activationAllowed(): boolean;
+  /** Ephemeral fresh provisioning observation, under this same society lease. */
+  freshVerifiedMain?: string;
   /** Existing host receiptWaitSeconds; not a new configuration/wire field. */
   sweepBudgetSeconds?: number;
   /** D04: admits each recovery stage by what it would consume. Absent only in a
@@ -50,11 +53,13 @@ export class ReconcileModule {
   private readonly operations: OperationRecovery;
   private readonly healthExecutor = new PreparationExecutor();
   private healthTask: Promise<void> | null = null;
+  private freshVerifiedMain: string | undefined;
   private diagnostics: readonly UnitRecoveryDiagnostic[] = [];
   constructor(private readonly store: Store, private readonly mail: MailModule, private readonly git: GitModule | null,
     private readonly units: UnitsModule, private readonly lifecycle: LifecycleModule, private readonly paths: ReconcilePaths) {
     if (typeof paths.activationAllowed !== "function")
       throw new StoreError("UNSUPPORTED_PROFILE", "recovery requires an explicit activation gate");
+    this.freshVerifiedMain = paths.freshVerifiedMain;
     this.operations = new OperationRecovery({ snapshot: () => store.recoverableOperations(), read: id => store.getOperationById(id),
       recover: operation => this.recover(operation, true), failure: error => this.retainRecoveryFailure(error),
       ...(paths.sweepBudgetSeconds === undefined ? {} : { budgetSeconds: paths.sweepBudgetSeconds }) });
@@ -66,10 +71,10 @@ export class ReconcileModule {
   private collected: PreacceptCollection | null = null;
   get unitDiagnostics(): readonly UnitRecoveryDiagnostic[] { return this.diagnostics; }
   private activation(allowed = true): boolean { return allowed && this.paths.activationAllowed() === true && this.store.societyOpen(); }
-  private admit(category: ResourceCategory): Release { return this.paths.resourceGate?.(category) ?? NO_HOLD; }
+  private async admit(category: ResourceCategory): Promise<Release> { return await this.paths.resourceGate?.(category) ?? NO_HOLD; }
   /** Every resident gets its stop attempt; one unconfirmed death does not skip the rest. */
   private quiesceResidents(): void {
-    quiesceResidents(this.store, this.units, this.paths.resourceGate);
+    quiesceResidents(this.store, this.units);
   }
   /** D03: the drain of a broker whose Residents are bound to no unit. The
    * same per-resident stop and death proof as startup, so a later startup finds
@@ -86,7 +91,11 @@ export class ReconcileModule {
       const preaccept = preacceptEvent(this.collected, dirname(this.store.path));
       if (preaccept !== null) console.error(JSON.stringify(preaccept));
       if (this.git) {
-        await this.assertCanonicalHealthyAsync();
+        const fresh = this.freshVerifiedMain;
+        this.freshVerifiedMain = undefined;
+        const main = fresh === undefined ? null : createCanonicalObserver().ref(this.paths.projectGit, "refs/heads/main");
+        if (main === null || main.kind !== "present" || main.value !== fresh)
+          await this.assertCanonicalHealthyAsync();
         // An earlier death observation is not a token valid across fsck's await.
         this.quiesceResidents();
       }
@@ -98,7 +107,7 @@ export class ReconcileModule {
         switch (operation.kind) {
           case "attest.record": case "mail.send": case "agent.continue":
             try {
-              const release = this.admit(recoveryCategory(operation.kind));
+              const release = await this.admit(recoveryCategory(operation.kind));
               try { await reconcileMailOperation(this.store, this.mail, id); } finally { release(); }
             }
             catch (error) { this.retainRecoveryFailure(error); }
@@ -128,7 +137,7 @@ export class ReconcileModule {
     finally { this.starting = false; }
   }
   private async recover(operation: RecoveryRow, allowed: boolean): Promise<void> {
-    const release = this.admit(recoveryCategory(operation.kind));
+    const release = await this.admit(recoveryCategory(operation.kind));
     try {
       switch (operation.kind) {
         case "society.set": this.lifecycle.reconcileSociety(operation.id); return;
@@ -193,7 +202,10 @@ export class ReconcileModule {
           if (current.desired === "stopped" || !this.store.societyOpen()) {
             // Do not trust an old async inactive observation as death proof.
             if (!this.units.confirmDead(current.name, current.incarnation)) {
-              this.admit("safety-control")();
+              (await this.admit("safety-control"))();
+              const latest = this.store.getAgent(current.name);
+              if (!latest || latest.incarnation !== current.incarnation ||
+                (latest.desired !== "stopped" && this.store.societyOpen())) continue;
               this.units.stop(current.name, current.incarnation);
               diagnostics.push({ agent: current.name, outcome: "stopped", reason: null });
             } else diagnostics.push({ agent: current.name, outcome: "observed", reason: null });
@@ -208,7 +220,12 @@ export class ReconcileModule {
               const fresh = this.units.observe(current.name);
               if (["inactive", "dead"].includes(fresh.activeState)) {
                 // Current desired/incarnation/activation check -> start has no await.
-                this.admit("admit")();
+                (await this.admit("admit"))();
+                const latest = this.store.getAgent(current.name);
+                if (!latest || latest.incarnation !== current.incarnation || latest.specHash !== current.specHash ||
+                  latest.desired !== "enabled" || !this.activation() || !this.paths.hasGoal()) continue;
+                const final = this.units.observe(current.name);
+                if (!["inactive", "dead"].includes(final.activeState)) continue;
                 this.units.start(current.name, false);
                 diagnostics.push({ agent: current.name, outcome: "started", reason: null }); continue;
               }
@@ -253,12 +270,8 @@ export class ReconcileModule {
       const diagnostics = `${this.paths.projectGit}.fsck.stderr`;
       try {
         try { removeOwnedFile(diagnostics); } catch { /* residue cannot block health */ }
-        const result = await this.healthExecutor.run({ executable: "/usr/bin/git",
-          argv: ["--git-dir", this.paths.projectGit, "fsck", "--strict", "--no-reflogs", "--progress"], env: GIT_ENV,
-          timeoutMs: 24 * 3600 * 1000, silenceMs: 120000, stdoutBytes: 1024 * 1024, stderrBytes: 1024 * 1024,
-          stderrSpool: diagnostics }, undefined, [lease.descriptor]);
-        if (result.kind !== "exited") throw new StoreError("REF_STATE_UNKNOWN", "canonical health observation is uncertain");
-        if (result.exitCode !== 0) throw new StoreError("STORE_CORRUPT", "canonical repository health observation failed");
+        const result = await this.healthExecutor.run(repositoryHealthCommand(this.paths.projectGit, diagnostics), undefined, [lease.descriptor]);
+        requireHealthyRepository(result);
       } finally { lease.release(); try { removeOwnedFile(diagnostics); } catch { /* diagnostic residue */ } }
     }).finally(() => { if (this.healthTask === task) this.healthTask = null; });
     this.healthTask = task; return task;

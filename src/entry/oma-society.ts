@@ -286,8 +286,8 @@ async function main(argv: readonly string[]): Promise<void> {
   const libdir = resolve(fileURLToPath(new URL("../../../", import.meta.url)));
   const projectPath = projectSettingsPath(dataRoot, project);
   const packageStore = packageStoreDir(stateRoot);
-  const own = (): SessionOwn => ({ society, node: process.execPath, libdir: `${libdir}/`, rootfs: residentRootfsPath(stateRoot),
-    deploymentDigest: deploymentDigest(libdir), packages: packageStore });
+  const own = (digest = deploymentDigest(libdir)): SessionOwn => ({ society, node: process.execPath, libdir: `${libdir}/`, rootfs: residentRootfsPath(stateRoot),
+    deploymentDigest: digest, packages: packageStore });
   /** DR25: the extensions a project names whose files are gone, left out of this session. */
   let leftOut: readonly string[] = [];
   let projectSeen = "";
@@ -295,14 +295,15 @@ async function main(argv: readonly string[]): Promise<void> {
    * from: what the screen shows, and what an edit is committed against. */
   let projectSettings: Settings | null = null;
   const deriveSettings = (): Settings => {
+    const digest = deploymentDigest(libdir);
     // The project's settings begin as its first society's, or this one's, or the product's defaults.
-    projectSettings = ensureProjectSettings(dataRoot, project, libdir, configPath);
+    projectSettings = ensureProjectSettings(dataRoot, project, libdir, configPath, digest);
     // P0-8: the bundle's repair boundary is the oma-owned ancestor this
     // entry resolved -- the data root when the session's own configuration
     // is being derived under it. A `--config` bundle lives where the Human
     // put it: no ancestor there is oma's, and the managed tail's own name
     // stays the boundary instead of a user's parent.
-    const derived = deriveSessionSettings(projectSettings, configPath, own(), configArgument === undefined ? dataRoot : undefined);
+    const derived = deriveSessionSettings(projectSettings, configPath, own(digest), configArgument === undefined ? dataRoot : undefined);
     leftOut = derived.missing;
     projectSeen = projectVersion();
     return derived.settings;
@@ -330,7 +331,7 @@ async function main(argv: readonly string[]): Promise<void> {
   // restarting and building its sandbox, on the entries being rewritten.
   let provisioned: ProvisionReport | null = null;
   if (tenure !== null) {
-    try { provisioned = provisionSociety(stateRoot, { projectDir: process.cwd() }); }
+    try { provisioned = provisionSociety(stateRoot, { conversationOnly: true }); }
     catch (error) { fail(`Could not prepare the society: ${errorWords(error)}`, codeFor(error)); }
     // D02/WP13: configuration generations no reader can still use are
     // collected only here -- this process owns the society, no broker is
@@ -672,6 +673,7 @@ async function main(argv: readonly string[]): Promise<void> {
   broker = tenure === null ? null : await superviseBroker({
     node: process.execPath, libdir: settings.config.installation.libdir,
     society, stateRoot, runRoot, configPath, fence: tenure.fence,
+    projectDir: canonicalProjectPath,
     // A broker that started as expected, and the repairs its start makes, are
     // not news on the screen; what went wrong is.
     onEvent: line => { if (!/^(broker (ready|listening)\b|Restored rootfs entry\b)/.test(line)) notice(`broker: ${line}`); app.draw(); },
@@ -873,14 +875,24 @@ async function main(argv: readonly string[]): Promise<void> {
     }
     live.grant(credential, handle);
     owner.principalRegistered();
+    if (delivery === null) delivery = new PrincipalDelivery({
+      get running() { return live.running; },
+      get busy() { return live.busy; },
+      onEvent: (listener: (event: PiEvent) => void) => live.onEvent(listener),
+      deliver: (batchId: string) => live.deliver(batchId),
+    }, principalHostBroker(runRoot, settings.config.limits), {
+      stateRoot, frameBytes: settings.config.limits.frameBytes,
+      acceptMs: settings.config.limits.receiptWaitSeconds * 1000, retryAfterMs: 60_000,
+    });
   };
 
   // PR-002: pending mail reaches the Principal while this product runs, one
-  // bounded batch at a time, whenever the session is idle. Built with the
-  // engine, because there is nothing to deliver into before one exists.
+  // bounded batch at a time, whenever the session is idle. Its owner is made
+  // only after a ready broker has granted this engine its credential.
   let delivery: PrincipalDelivery | null = null;
   /** Said once and never taken back, exactly as the supervisor says it. */
   let disowned = false;
+  let preparationStartFailed = false;
   const deliver = (): void => {
     if (delivery === null || tenure === null || !tenure.deliverable) return;
     const current = delivery;
@@ -899,21 +911,20 @@ async function main(argv: readonly string[]): Promise<void> {
 
   // One engine per society, and this is the only place one is started.
   //
-  // A spawned broker is not an owned society. The supervisor probes, spawns and
-  // hands back a pid, and between that probe and the lock the child takes,
-  // another `oma` can take the society; the loser's broker exits and the
-  // product that started it would have had a second engine on one society, a
-  // second writer of the same private workspace and session history. So the
-  // engine waits for the one fact that settles ownership: a broker of this
-  // process's saying it is ready, which it says only after it holds the society
-  // lock. Nothing branches on `broker.state` to decide this -- a state that is
-  // merely "not already-running" has never been proof of anything.
-  const startSessionOnce = (): void => {
-    if (session !== null || finished || disowned || tenure === null || !tenure.canStartEngine) return;
+  // DR35: the lease already owns the private conversation. A started broker
+  // can prepare repositories alongside it, but its pid grants no authority:
+  // registration and delivery still require that broker's readiness. A failed
+  // or disowned supervisor cannot start a conversation and closes any one it
+  // already owns before returning the tenure.
+  const startSessionOnce = (preparing = false): void => {
+    if (session !== null || finished || disowned || tenure === null ||
+        !(preparing ? tenure.canPrepareEngine : tenure.canStartEngine)) return;
     const owner = tenure;
+    preparationStartFailed = false;
     let live: PrincipalSession;
     try { live = startEngine(owner); }
     catch (error) {
+      preparationStartFailed = preparing;
       // A setup failure may still own a live child. Neither a kill request nor
       // the thrown constructor gives its terminal or engine slot back.
       void owner.engineExited.then(() => {
@@ -927,15 +938,6 @@ async function main(argv: readonly string[]): Promise<void> {
     }
     session = live;
     sessionHandle = newSessionHandle();
-    delivery = new PrincipalDelivery({
-      get running() { return live.running; },
-      get busy() { return live.busy; },
-      onEvent: (listener: (event: PiEvent) => void) => live.onEvent(listener),
-      deliver: (batchId: string) => live.deliver(batchId),
-    }, principalHostBroker(runRoot, settings.config.limits), {
-      stateRoot, frameBytes: settings.config.limits.frameBytes,
-      acceptMs: settings.config.limits.receiptWaitSeconds * 1000, retryAfterMs: 60_000,
-    });
     live.onEvent(event => { if (session === live && event.type === "agent_settled") deliver(); });
   };
 
@@ -975,11 +977,15 @@ async function main(argv: readonly string[]): Promise<void> {
     broker.onReady(() => {
       if (disowned || tenure === null) return;
       tenure.brokerReady();
-      startSessionOnce();
+      if (!preparationStartFailed) startSessionOnce();
       void register().then(deliver);
     });
     broker.onLost(() => { tenure?.brokerLost(); });
     broker.onDisowned(reason => { void disown(reason); });
+    if (broker.state.kind === "started") {
+      notice("Preparing society repositories and Workers; conversation is available while they prepare.");
+      startSessionOnce(true);
+    }
   }
 
   if (finished) return;

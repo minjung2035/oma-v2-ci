@@ -59,7 +59,7 @@ test('Personal child: common process owner receives saved cwd, history descripto
   const w = world(), run = w.runPersonalSession({ ...options, resume: '/fixture/history/saved.jsonl' });
   const [executable, argv, cwd, env, descriptor] = w.launches[0];
   assert.equal(executable, '/fixture/node'); assert.equal(cwd, '/fixture/cwd'); assert.equal(descriptor, 73);
-  assert.deepEqual(Array.from(argv), ['/fixture/install/dist/src/entry/pi-personal.js', '--root', options.root,
+  assert.deepEqual(Array.from(argv), ['--import', '/fixture/install/dist/src/pi-compat/interactive-tool-setup.js', '/fixture/install/dist/src/entry/pi-personal.js', '--root', options.root,
     '--data-root', options.dataRoot, '--libdir', options.libdir, '--packages', options.packages, '--resume', '/fixture/history/saved.jsonl']);
   assert.equal(env.HOME, '/fixture/home'); assert.equal(env.PATH, '/usr/bin:/bin'); assert.equal(env.PI_OFFLINE, '1');
   assert.equal(env.PI_CODING_AGENT_DIR, '/fixture/engine'); assert.equal(env.OMA_ACTOR, undefined); assert.equal(env.PI_SESSION, undefined);

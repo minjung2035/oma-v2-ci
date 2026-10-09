@@ -2,13 +2,15 @@
  * and settings as they ship; OMA owns only where a plain Human prompt goes and
  * how mail reaches the session. */
 import "../runtime/client-preload.js";
+import { getSupportedThinkingLevels } from "@earendil-works/pi-ai";
+import { createEngineSettings } from "../pi-compat/settings.js";
 import { Socket } from "node:net";
 import { readFileSync } from "node:fs";
 import { userInfo } from "node:os";
 import { basename, join, dirname, relative, isAbsolute, resolve, sep } from "node:path";
 import { createRequire } from "node:module";
 import { createAgentSessionRuntime, createAgentSessionServices, createAgentSessionFromServices,
-  DynamicBorder, InteractiveMode, ModelSelectorComponent, SessionManager, SessionSelectorComponent, SettingsManager,
+  DynamicBorder, InteractiveMode, ModelSelectorComponent, SessionManager, SessionSelectorComponent,
   ThinkingSelectorComponent, VERSION, type AgentSession,
   type ExtensionContext, type SessionInfo,
   type ExtensionFactory } from "@earendil-works/pi-coding-agent";
@@ -21,7 +23,7 @@ import { stylePanel } from "../tui/panel-style.js";
 import { ProjectSessionDirectories } from "../tui/project-session-directories.js";
 import { parseHostHistoryReference } from "../protocol/host-history.js";
 import { brandFooter, brandHeader, type OpenTuiBrand } from "../tui/open-tui-brand.js";
-import { preparePiInteractive } from "../runtime/pi-runtime.js";
+import { preparePiInteractive } from "../runtime/pi-presentation.js";
 import { PI_RESUME_HINT } from "../pi-compat/env.js";
 import { PI_BUILTIN_COMMANDS } from "../pi-compat/commands.js";
 import { interactiveInternalsOf, type InteractiveModeInternals } from "../pi-compat/interactive-mode.js";
@@ -29,22 +31,13 @@ import { ExtensionModules } from "../runtime/extension-modules.js";
 import { registerAskUserQuestionPresenter } from "../tui/ask-user-question/presenter.js";
 import { humanPromptFitsFrame } from "../tui/limits.js";
 import { UNSEEN, UNSEEN_EXCEPT_LAYOUT } from "../domain/unseen-text.js";
-import { EFFORT_LEVELS } from "../config.js";
-import type { EffortLevel } from "../../implementation/contracts.js";
 
 type EngineModel = NonNullable<AgentSession["model"]>;
 type EngineEffort = ConstructorParameters<typeof ThinkingSelectorComponent>[0];
 
 /** The effort levels the engine offers for a model, as its own effort list
  * does (the engine's getSupportedThinkingLevels); a test holds this to it. */
-export function effortLevelsOf(model: { readonly reasoning?: boolean; readonly thinkingLevelMap?: Readonly<Record<string, unknown>> }): EffortLevel[] {
-  if (model.reasoning !== true) return ["off"];
-  return EFFORT_LEVELS.filter(level => {
-    const mapped = model.thinkingLevelMap?.[level];
-    if (mapped === null) return false;
-    return level === "xhigh" || level === "max" ? mapped !== undefined : true;
-  });
-}
+export const effortLevelsOf = getSupportedThinkingLevels;
 
 const numberEnv = (name: string): number => {
   const value = Number(process.env[name]);
@@ -573,7 +566,7 @@ export async function runInteractive(): Promise<void> {
   runtime = await createAgentSessionRuntime(async options => {
     modules!.refresh(extensions);
     const services = await createAgentSessionServices({ ...options,
-      settingsManager: SettingsManager.create(cwd, agentDir, { projectTrusted: false }), resourceLoaderOptions: {
+      settingsManager: createEngineSettings(cwd, agentDir, { projectTrusted: false }), resourceLoaderOptions: {
       // Discovery stays explicit: only the role's pinned extensions load
       // (`-e`, never a scanned directory), while skills, prompt templates and
       // context files are discovered as Pi ships them -- the trusted core

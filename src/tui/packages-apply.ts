@@ -4,8 +4,9 @@
  *
  * The store is a link to one generation, published whole under the digest of
  * what arrived and never changed after, so an engine that loaded an extension
- * from the last generation keeps reading the files it pinned; the current and
- * the previous generation are kept.
+ * from an earlier generation keeps reading the files it pinned. Published
+ * generations remain until the installation's owner removes them: a newer
+ * generation is not evidence that readers of an older one have exited.
  *
  * guesthost runs a request cut off before its outcome again, so every step is
  * one that may have been done already: the generation is published once under
@@ -13,13 +14,14 @@
  * recorded once for the request, before anything changes, so a run after a
  * crash finds the same packages added as the first would have. */
 import { createHash, randomUUID } from "node:crypto";
-import { createReadStream, lstatSync, readdirSync, readFileSync, readlinkSync, realpathSync } from "node:fs";
+import { createReadStream, lstatSync, readlinkSync, realpathSync } from "node:fs";
 import { join } from "node:path";
 import { StoreError } from "../domain/errors.js";
 import { defaultSocietyFor } from "../config/defaults.js";
 import { sha256Hex } from "../hash.js";
 import { readPackageArchive } from "../platform/package-archive.js";
-import { PACKAGE_GENERATIONS, PACKAGE_STORE, readPackageIndex, writePackageIndex, type InstalledPackage } from "../runtime/pi-packages.js";
+import { PACKAGE_GENERATIONS, PACKAGE_STORE, PACKAGE_INDEX_BYTES, decodePackageIndex, readPackageIndex, writePackageIndex, type InstalledPackage } from "../runtime/pi-packages.js";
+import { readUserFile } from "../runtime/user-files.js";
 import { ensureOwnedDurableDirectory, publishNoReplace } from "../storage/durable-fs.js";
 import { removeOwnedTree } from "../storage/directory.js";
 import { publishStagedDirectory, replaceDerivedSymlink } from "../storage/staged-tree.js";
@@ -34,6 +36,19 @@ async function digestOf(path: string): Promise<string> {
   return hash.digest("hex");
 }
 
+function beforeImage(path: string): { before: readonly InstalledPackage[]; previous: string | null } {
+  const invalid = (): never => { throw new StoreError("STORE_CORRUPT", "the saved package before-image is malformed"); };
+  // The live index's bound plus the JSON envelope and one generation name.
+  const bytes = readUserFile(path, PACKAGE_INDEX_BYTES + Buffer.byteLength(JSON.stringify({ before: [], previous: `p-${sha256Hex("")}` })), { singleName: true });
+  let value: unknown;
+  try { value = JSON.parse(bytes ?? ""); } catch { return invalid(); }
+  if (value === null || typeof value !== "object" || Array.isArray(value)) return invalid();
+  const saved = value as Record<string, unknown>;
+  if (Object.keys(saved).length !== 2 || !Object.hasOwn(saved, "before") || !Object.hasOwn(saved, "previous") ||
+      (saved.previous !== null && (typeof saved.previous !== "string" || !/^p-[0-9a-f]{64}$/.test(saved.previous)))) return invalid();
+  return { before: decodePackageIndex(saved.before), previous: saved.previous as string | null };
+}
+
 export async function applyPackageArchive(options: { readonly data: string; readonly archive: string; readonly libdir: string;
   readonly mirror?: string | undefined; readonly activate?: string | undefined }, after?: (step: ApplyStep) => void): Promise<{ readonly added: string[]; readonly said: string[]; readonly ok: boolean }> {
   const { data, archive, libdir, mirror } = options;
@@ -45,9 +60,12 @@ export async function applyPackageArchive(options: { readonly data: string; read
   // What the store held before this request, and the generation it was, once
   // for the request: a run after a crash reads them instead of the store it changed.
   const recorded = `${archive}.before.json`;
+  const link = current === undefined ? null : readlinkSync(store);
+  if (link !== null && !/^\.packages-generations\/p-[0-9a-f]{64}$/.test(link))
+    throw new StoreError("STORE_CORRUPT", "the package store link does not name a published generation");
   publishNoReplace(recorded, JSON.stringify({ before: readPackageIndex(store),
-    previous: current === undefined ? null : readlinkSync(store).split("/").at(-1) ?? null }));
-  const { before, previous } = JSON.parse(readFileSync(recorded, "utf8")) as { before: InstalledPackage[]; previous: string | null };
+    previous: link === null ? null : link.split("/").at(-1)! }));
+  const { before } = beforeImage(recorded);
   after?.("recorded");
   // `data` and everything beneath it is oma's own tree in the guest: the
   // owner-bits repair runs on the walk so a mode-000 generations directory
@@ -68,9 +86,8 @@ export async function applyPackageArchive(options: { readonly data: string; read
   after?.("published");
   replaceDerivedSymlink(store, `${PACKAGE_GENERATIONS}/${id}`);
   after?.("switched");
-  // What no engine can still be reading: every generation but this one and the one before it.
-  for (const name of readdirSync(generations))
-    if (name !== id && name !== previous) removeOwnedTree(join(generations, name));
+  // Publishing another generation never proves old readers quiescent.
+  // Staging is cleaned by its invocation; published code remains pinned.
   after?.("collected");
   const now = readPackageIndex(store);
   const project = mirror === undefined ? null : (() => { const real = realpathSync(mirror); return defaultSocietyFor(real, sha256Hex(real)); })();

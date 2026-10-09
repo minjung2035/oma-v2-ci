@@ -2,6 +2,7 @@ import { spawn, type ChildProcess, type ChildProcessWithoutNullStreams } from "n
 export type { ChildProcess, ChildProcessWithoutNullStreams };
 import { closeSync, constants, openSync, writeSync } from "node:fs";
 import { performance } from "node:perf_hooks";
+import { deadline } from "./deadline.js";
 import { snapshotCommand, processErrorCode, type CommandSpec, type ProcessObservation, type Capture } from "./command.js";
 import { StoreError } from "../domain/errors.js";
 import { fencedStdio, SOCIETY_FENCE_FD, SOCIETY_FENCE_ENV } from "../client/fence.js";
@@ -21,6 +22,7 @@ export interface ProcessTask {
   readonly closed: Promise<void>;
   cancel(): void;
 }
+
 /** This is not an arbitrary-descendant/cgroup death oracle. Group termination
  * is requested only while the original direct child is still alive; an exited
  * PID is never reused as a signal target. Escaped descendants require the native
@@ -52,8 +54,8 @@ export function startProcess(source: CommandSpec, options: AsyncProcessOptions =
   let failure: ProcessObservation["kind"] | null = null, nativeError: unknown = null;
   let returned = false, observedClose = false, exited = false, terminationRequested = false;
   let observedExit: number | null = null, observedSignal: NodeJS.Signals | null = null;
-  let drainTimer: ReturnType<typeof setTimeout> | undefined;
-  let silenceTimer: ReturnType<typeof setTimeout> | undefined;
+  let drainTimer: (() => void) | undefined;
+  let silenceTimer: (() => void) | undefined;
   // An overflowed stream that names a spill file keeps its in-memory head and
   // writes the head plus every later byte to the file, so size alone never
   // kills a command whose output the caller asked to keep whole. The file is
@@ -78,7 +80,7 @@ export function startProcess(source: CommandSpec, options: AsyncProcessOptions =
   };
   const finish = (kind: ProcessObservation["kind"], exitCode: number | null, exitSignal: NodeJS.Signals | null): void => {
     if (returned) return;
-    returned = true; clearTimeout(timer); if (drainTimer) clearTimeout(drainTimer); if (silenceTimer) clearTimeout(silenceTimer);
+    returned = true; timer(); drainTimer?.(); silenceTimer?.();
     signal?.removeEventListener("abort", onAbort);
     for (const spool of [outSpool, errSpool]) if (spool !== null) {
       try { closeSync(spool.fd); } catch (error) { nativeError ??= error; }
@@ -103,7 +105,7 @@ export function startProcess(source: CommandSpec, options: AsyncProcessOptions =
   const startDrainDeadline = (): void => {
     // Reuse the existing per-command timeout for a separate bounded drain phase;
     // no new host resource field or magic grace interval is introduced.
-    drainTimer ??= setTimeout(drainExpired, spec.timeoutMs);
+    drainTimer ??= deadline(spec.timeoutMs, drainExpired);
   };
   const terminate = (reason: ProcessObservation["kind"]): void => {
     if (observedClose || returned) return;
@@ -120,14 +122,14 @@ export function startProcess(source: CommandSpec, options: AsyncProcessOptions =
     }
   };
   const onAbort = (): void => terminate("aborted");
-  const timer = setTimeout(() => terminate("timed-out"), spec.timeoutMs);
+  const timer = deadline(spec.timeoutMs, () => terminate("timed-out"));
   // Output is the progress this runner can observe: every byte the command
   // writes re-arms the silence window, so a working command is never cut by
   // the clock and one that says nothing for the whole window ends "stalled".
   const armSilence = (): void => {
     if (spec.silenceMs === undefined || returned || observedClose) return;
-    if (silenceTimer) clearTimeout(silenceTimer);
-    silenceTimer = setTimeout(() => terminate("stalled"), spec.silenceMs);
+    silenceTimer?.();
+    silenceTimer = deadline(spec.silenceMs, () => terminate("stalled"));
   };
   armSilence();
   const collect = (value: Buffer, output: boolean): void => {
@@ -159,7 +161,7 @@ export function startProcess(source: CommandSpec, options: AsyncProcessOptions =
       catch (error) { nativeError ??= error; terminate("unobserved"); }
       return;
     }
-    if (output || spec.stderrOverflow !== "discard") terminate("output-limited");
+    if ((output ? spec.stdoutOverflow : spec.stderrOverflow) !== "discard") terminate("output-limited");
   };
   const streamError = (error: Error): void => { nativeError ??= error; terminate("unobserved"); };
   child.stdout?.on("data", (chunk: Buffer) => collect(chunk, true));
@@ -168,7 +170,7 @@ export function startProcess(source: CommandSpec, options: AsyncProcessOptions =
   child.once("error", error => { nativeError ??= error; failure ??= "spawn-failed"; startDrainDeadline(); });
   child.once("exit", (code, exitSignal) => { exited = true; observedExit = code; observedSignal = exitSignal; startDrainDeadline(); });
   child.once("close", (code, exitSignal) => {
-    observedClose = true; clearTimeout(timer); if (drainTimer) clearTimeout(drainTimer);
+    observedClose = true; timer(); drainTimer?.();
     signal?.removeEventListener("abort", onAbort);
     const kind = failure ?? (exitSignal ? "signalled" : typeof code === "number" && Number.isSafeInteger(code) && code >= 0 ? "exited" : "unobserved");
     finish(kind, code, exitSignal); resolveClosed();

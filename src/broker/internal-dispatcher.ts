@@ -68,11 +68,15 @@ export type InternalAdmission = Pick<InternalDispatchDependencies, "isDraining" 
  * serves it -- the runner channel here, or the Principal host's endpoint for
  * the same `batch.prepare` and `batch.complete`. Only a runner's own pending
  * and observation reads pass a store fenced after corruption. */
-export function admitInternal(method: keyof InternalMethods, admission: InternalAdmission): Release {
+export async function admitInternal(method: keyof InternalMethods, admission: InternalAdmission): Promise<Release> {
   if (admission.isDraining() || (method !== "runner.pending" && method !== "runner.observe"))
     admission.assertAdmission();
   const resource = INTERNAL_METHODS[method].resource;
-  return admission.admitResource(resource);
+  const release = await admission.admitResource(resource);
+  try {
+    if (admission.isDraining() || (method !== "runner.pending" && method !== "runner.observe")) admission.assertAdmission();
+    return release;
+  } catch (error) { release(); throw error; }
 }
 type ValidatedInternalCall = {
   [M in keyof InternalMethods]: {
@@ -146,7 +150,7 @@ export class InternalDispatcher {
       const invalid = descriptor.paramsCheck(params);
       if (invalid)
         throw new StoreError("INVALID_REQUEST", `${method}: ${invalid}`);
-      release = admitInternal(method, this.deps);
+      release = await admitInternal(method, this.deps);
       // SAFETY: params passed this method's descriptor check; retain the correlation erased by dynamic indexing.
       const call = { id, method, params } as ValidatedInternalCall;
       const { method: dispatchMethod, params: dispatchParams } = call;

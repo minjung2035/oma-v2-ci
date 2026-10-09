@@ -10,7 +10,7 @@ export const RESOURCE_FIELDS = Object.freeze({
   tmpBytes: Object.freeze({ minInclusive: 1, unit: "bytes" }),
   workspaceBytes: Object.freeze({ minInclusive: 1, unit: "bytes" }),
   stagingBytes: Object.freeze({ minInclusive: 1, unit: "bytes" }),
-  checkTimeoutSeconds: Object.freeze({ minInclusive: 1, unit: "seconds" }),
+  checkTimeoutSeconds: Object.freeze({ minInclusive: 1, maxInclusive: Math.floor((Number.MAX_SAFE_INTEGER - 60_000) / 1000), unit: "seconds" }),
 } satisfies Record<string, IntegerField>);
 
 export type { ResourceLimits };

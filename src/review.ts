@@ -897,11 +897,11 @@ Challenge ${name}` });
       if (main.kind === "corrupt")
         throw new StoreError("STORE_CORRUPT", "canonical main observation is malformed");
       if (main.kind === "present" && main.value !== state.identity.expectedBase) {
-        const release = gate("admit");
+        const release = await gate("admit");
         try { await this.acceptRefresh(open, state, main.value); } finally { release(); }
         state = reviewState(this.inputFor(open));
       } else if (state.approval !== null && !state.approvalValid) {
-        const release = gate("admit");
+        const release = await gate("admit");
         try { await this.acceptRefresh(open, state, null); } finally { release(); }
         state = reviewState(this.inputFor(open));
       }
@@ -922,7 +922,7 @@ Challenge ${name}` });
       throw error;
     }
     if (policy.policyRevision !== state.identity.policyRevision) return;
-    const release = gate("admit");
+    const release = await gate("admit");
     try { await this.createIntegration(open, policy); } finally { release(); }
   }
 

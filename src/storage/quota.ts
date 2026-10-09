@@ -1,5 +1,6 @@
-import { lstatSync, readdirSync, type Stats } from "node:fs";
-import { basename, join } from "node:path";
+import type { Stats } from "node:fs";
+import { scheduler } from "node:timers/promises";
+import { walkOwnedTree } from "./directory.js";
 import { assertStorageQuotaSupported } from "../domain/resources.js";
 import { StoreError } from "../domain/errors.js";
 import { NO_HOLD, releaseOnce, type Release, type ResourceCategory } from "../domain/admission.js";
@@ -26,50 +27,37 @@ export function observedStorageBytes(
   root: string,
   stopAfter = Number.MAX_SAFE_INTEGER,
 ): number {
-  // The root is walked like any entry: absent is 0 bytes, and a root that
-  // cannot be observed is unavailable, not empty (INV02).
-  const pending: [path: string, top: boolean][] = [[root, true]];
+  const usage = countedStorage(root);
+  let total = 0;
+  for (total of usage) if (!Number.isSafeInteger(total) || total > stopAfter) break;
+  return total;
+}
+
+function* countedStorage(root: string): Generator<number> {
   const files = new Set<string>();
   let total = 0;
-  while (pending.length > 0) {
-    const [path, top] = pending.pop()!;
-    let stat: Stats;
-    try {
-      stat = lstatSync(path);
-    } catch (error) {
-      if (
-        error &&
-        typeof error === "object" &&
-        "code" in error &&
-        error.code === "ENOENT"
-      )
-        continue;
-      throw new StoreError(
-        "BROKER_UNAVAILABLE",
-        "storage usage cannot be observed",
-        { cause: error },
-      );
-    }
-    if (!top && stat.isDirectory() && EXCLUDED_USAGE_TREES.has(basename(path))) continue;
+  try { for (const stat of walkOwnedTree(root, EXCLUDED_USAGE_TREES)) {
     if (stat.isFile()) {
       const identity = `${stat.dev}:${stat.ino}`;
-      if (files.has(identity)) continue;
+      // Repeated hardlinks still cost an observation. Let the asynchronous
+      // consumer yield for these entries as well, without charging twice.
+      if (files.has(identity)) { yield total; continue; }
       files.add(identity);
     }
     total += allocatedBytes(stat);
-    if (!Number.isSafeInteger(total) || total > stopAfter) return total;
-    if (!stat.isDirectory()) continue;
-    let names: string[];
-    try {
-      names = readdirSync(path);
-    } catch (error) {
-      throw new StoreError(
-        "BROKER_UNAVAILABLE",
-        "storage directory cannot be observed",
-        { cause: error },
-      );
-    }
-    for (const name of names) pending.push([join(path, name), false]);
+    yield total;
+  } } catch (error) {
+    throw new StoreError("BROKER_UNAVAILABLE", "storage usage cannot be observed", { cause: error });
+  }
+}
+
+/** Each observed entry yields to the broker; concurrent admissions share only
+ * a scan still in progress, never a retained completed usage observation. */
+export async function observedStorageBytesAsync(root: string, stopAfter = Number.MAX_SAFE_INTEGER): Promise<number> {
+  let total = 0;
+  for (total of countedStorage(root)) {
+    if (!Number.isSafeInteger(total) || total > stopAfter) break;
+    await scheduler.yield();
   }
   return total;
 }
@@ -111,6 +99,7 @@ export function assertStorageQuotaAdmission(
 export class StorageAdmission {
   private reserved = 0;
   private overCapSettlements = 0;
+  private observation: Promise<number> | null = null;
   constructor(private readonly stateRoot: string, private readonly storageBytes: number | undefined,
     private readonly settlementHeadroom: number) {
     if (!Number.isSafeInteger(settlementHeadroom) || settlementHeadroom < 0)
@@ -120,10 +109,11 @@ export class StorageAdmission {
   get outstanding(): number { return this.reserved; }
   /** A streamed request reserves its declared bytes from preflight until its
    * execution settles or its connection closes; the release runs once. */
-  reserve(bytes: number): Release {
+  async reserve(bytes: number): Promise<Release> {
     if (!Number.isSafeInteger(bytes) || bytes < 0)
       throw new StoreError("UNSUPPORTED_PROFILE", "storage reservation must be a non-negative safe integer");
-    this.check(bytes, 0);
+    const observed = await this.observe();
+    this.check(observed, bytes, 0);
     this.reserved += bytes;
     return releaseOnce(() => { this.reserved -= bytes; });
   }
@@ -133,33 +123,46 @@ export class StorageAdmission {
    * rather than not starting at all (a whole-society outage that used to
    * need manual cleanup). The probe holds nothing; a failure that is not a
    * quota refusal still throws. */
-  startupState(): "admitted" | "degraded" {
-    try { this.admit("admit")(); return "admitted"; }
+  async startupState(): Promise<"admitted" | "degraded"> {
+    try { (await this.admit("admit"))(); return "admitted"; }
     catch (error) {
       if (error instanceof StoreError && error.code === "QUOTA_EXCEEDED") return "degraded";
       throw error;
     }
   }
-  admit(category: ResourceCategory): Release {
+  async admit(category: ResourceCategory): Promise<Release> {
+    if (category === "read" || category === "safety-control") return NO_HOLD;
+    const observed = await this.observe();
     switch (category) {
-      case "read": case "safety-control": return NO_HOLD;
-      case "admit": this.check(0, 0); return NO_HOLD;
+      case "admit": this.check(observed, 0, 0); return NO_HOLD;
       case "settle": {
-        try { this.check(0, 0); return NO_HOLD; }
+        try { this.check(observed, 0, 0); return NO_HOLD; }
         catch (error) { if (!(error instanceof StoreError) || error.code !== "QUOTA_EXCEEDED") throw error; }
         if (this.overCapSettlements > 0)
           throw new StoreError("QUOTA_EXCEEDED", "the settlement headroom is in use; the settlement waits for it");
-        this.check(0, this.settlementHeadroom);
+        this.check(observed, 0, this.settlementHeadroom);
         this.overCapSettlements++;
         return releaseOnce(() => { this.overCapSettlements--; });
       }
     }
   }
-  private check(extra: number, headroom: number): void {
+  private observe(): Promise<number> {
+    if (this.storageBytes === undefined) return Promise.resolve(0);
+    assertStorageQuotaSupported(this.storageBytes);
+    if (this.observation === null) {
+      const scan = observedStorageBytesAsync(this.stateRoot);
+      this.observation = scan;
+      void scan.then(() => { if (this.observation === scan) this.observation = null; },
+        () => { if (this.observation === scan) this.observation = null; });
+    }
+    return this.observation;
+  }
+  private check(observed: number, extra: number, headroom: number): void {
     if (this.storageBytes === undefined) return;
     const reserved = this.reserved + extra; const ceiling = this.storageBytes + headroom;
     if (!Number.isSafeInteger(reserved) || !Number.isSafeInteger(ceiling))
       throw new StoreError("QUOTA_EXCEEDED", "storage reservations exceed the supported range");
-    assertStorageQuotaAdmission(this.stateRoot, ceiling, reserved);
+    if (reserved > ceiling || observed > ceiling - reserved)
+      throw new StoreError("QUOTA_EXCEEDED", "society storage quota would be exceeded");
   }
 }

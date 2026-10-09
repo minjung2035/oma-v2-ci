@@ -24,7 +24,8 @@ const RESOURCE_GATE = [
   "cg=$(/usr/bin/sed -n 's/^0:://p' /proc/self/cgroup)",
   "case \"$cg\" in /*) ;; *) exit 125 ;; esac",
   "root=/sys/fs/cgroup$cg",
-  "[ \"$(/usr/bin/cat \"$root/memory.max\")\" = \"$memory\" ] || exit 125",
+  "page=$(/usr/bin/getconf PAGESIZE)",
+  "[ \"$(/usr/bin/cat \"$root/memory.max\")\" = \"$((memory / page * page))\" ] || exit 125",
   "[ \"$(/usr/bin/cat \"$root/memory.swap.max\")\" = 0 ] || exit 125",
   "[ \"$(/usr/bin/cat \"$root/pids.max\")\" = \"$tasks\" ] || exit 125",
   "/usr/bin/awk -v cpu=\"$cpu\" 'NF != 2 || $1 !~ /^[0-9]+$/ || $2 !~ /^[0-9]+$/ || $2 == 0 || $1 / $2 * 100 > cpu { exit 1 }' \"$root/cpu.max\" || exit 125",
@@ -104,7 +105,7 @@ export function candidateCheckCommand(paths: GitPaths, candidate: string, check:
       ...(process.env.XDG_RUNTIME_DIR === undefined ? {} : { XDG_RUNTIME_DIR: process.env.XDG_RUNTIME_DIR }),
       ...(process.env.DBUS_SESSION_BUS_ADDRESS === undefined ? {} : { DBUS_SESSION_BUS_ADDRESS: process.env.DBUS_SESSION_BUS_ADDRESS }) },
     input: sandboxSeccompFilter(), timeoutMs: check.timeoutSeconds * 1000 + 60_000,
-    stdoutBytes: 1024 * 1024, stderrBytes: 1024 * 1024,
+    stdoutBytes: 1024 * 1024, stdoutOverflow: "discard", stderrBytes: 1024 * 1024, stderrOverflow: "discard",
   };
 }
 

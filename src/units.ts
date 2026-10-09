@@ -114,7 +114,7 @@ export class UnitsModule {
     return outcome.stdout.trim();
   }
 
-  private install(name: string, templateName: string, overrides: Partial<RenderValues> = {}): void {
+  private prepareUnit(name: string, templateName: string, overrides: Partial<RenderValues> = {}) {
     const rendered = renderUnit(readFileSync(join(UNIT_TPL_DIR, templateName), "utf8"), {
       ...this.values, ...overrides, agent: this.agentFrom(name),
     });
@@ -131,31 +131,48 @@ export class UnitsModule {
       this.assertOwnUnit(name, rendered);
       replaceDerivedFile(target, rendered, 0o600);
     }
-    const linked = this.command(["link", target]);
-    if (linked.kind === "unknown") throw unitCommandError(linked, `link ${name}`)!;
+    return { name, target, rendered, overrides };
+  }
+
+  private install(prepared: readonly ReturnType<UnitsModule["prepareUnit"]>[]): void {
+    // Link the complete pair, reload once, then observe every effective unit.
+    // File publication and ownership checks remain per unit.
+    const linked = this.command(["link", ...prepared.map(unit => unit.target)]);
+    if (linked.kind === "unknown") throw unitCommandError(linked, "link units")!;
     if (linked.kind === "failed" && !/already|exists/i.test(linked.stdout + linked.stderr))
-      throw new StoreError("INTERNAL_ERROR", `systemctl link not confirmed for ${name}`);
+      throw new StoreError("INTERNAL_ERROR", "systemctl link not confirmed for units");
     this.run(["daemon-reload"]);
-    if (this.run(["show", name, "--property=LoadState", "--value"]) !== "loaded")
+    for (const unit of prepared) this.verifyInstalled(unit);
+  }
+
+  private verifyInstalled({ name, target, rendered, overrides }: ReturnType<UnitsModule["prepareUnit"]>): void {
+    const exec = renderedExecArgv(rendered);
+    const required = ["LoadState", "FragmentPath", "DropInPaths",
+      ...(exec === null ? [] : ["ExecStart"]),
+      ...(overrides.memoryBytes === undefined ? [] : ["MemoryMax"]),
+      ...(overrides.tasks === undefined ? [] : ["TasksMax"]),
+      ...(overrides.cpuQuotaPercent === undefined ? [] : ["CPUQuotaPerSecUSec"])];
+    const observed = parseProperties(this.run(["show", name, ...required.map(property => `--property=${property}`)]), required);
+    if (observed === null) throw new StoreError("UNSUPPORTED_PROFILE", `effective unit properties are incomplete: ${name}`);
+    if (observed.get("LoadState") !== "loaded")
       throw new StoreError("UNSUPPORTED_PROFILE", `unit did not load: ${name}`);
-    const fragment = this.run(["show", name, "--property=FragmentPath", "--value"]);
-    if (!fragment || realpathSync(fragment) !== realpathSync(target) || this.run(["show", name, "--property=DropInPaths", "--value"]) !== "")
+    const fragment = observed.get("FragmentPath");
+    if (!fragment || realpathSync(fragment) !== realpathSync(target) || observed.get("DropInPaths") !== "")
       throw new StoreError("UNSUPPORTED_PROFILE", `unit source differs from rendered contract: ${name}`);
     // D03/WP03.04: the argv the manager will execute is the rendered one. A
     // quoting or specifier the manager reads differently would hand a runner a
     // location the broker never resolved.
-    const exec = renderedExecArgv(rendered);
     if (exec !== null) {
-      const effective = effectiveExecArgv(this.run(["show", name, "--property=ExecStart", "--value"]));
+      const effective = effectiveExecArgv(observed.get("ExecStart")!);
       if (effective !== exec.join(" "))
         throw new StoreError("UNSUPPORTED_PROFILE", `${name} effective ExecStart differs from its rendered argv`);
     }
     for (const [property, expected] of [["MemoryMax", overrides.memoryBytes], ["TasksMax", overrides.tasks]] as const) {
-      if (expected !== undefined && this.run(["show", name, `--property=${property}`, "--value"]) !== String(expected))
+      if (expected !== undefined && observed.get(property) !== String(expected))
         throw new StoreError("UNSUPPORTED_PROFILE", `${name} effective ${property} mismatch`);
     }
     if (overrides.cpuQuotaPercent !== undefined) {
-      const cpu = this.run(["show", name, "--property=CPUQuotaPerSecUSec", "--value"]);
+      const cpu = observed.get("CPUQuotaPerSecUSec")!;
       const parsed = executeUnitCommand("systemd-analyze", ["timespan", cpu]);
       const micros = /^\s*(?:μs|Microseconds):\s*(\d+)$/m.exec(parsed.stdout);
       if (parsed.kind !== "succeeded" || !micros || Number(micros[1]) !== overrides.cpuQuotaPercent * 10000)
@@ -235,7 +252,7 @@ export class UnitsModule {
     const resources = frozen ?? (profile ? this.profiles[profile] : undefined);
     if (!profile || !resources)
       throw new StoreError("UNSUPPORTED_PROFILE", `resident profile missing or unsupported for ${agent}`);
-    this.install(unitName(this.society, agent, "service"), "resident.service.in", {
+    const service = this.prepareUnit(unitName(this.society, agent, "service"), "resident.service.in", {
       profileHex: Buffer.from(profile, "utf8").toString("hex"),
       resourcesHex: Buffer.from(canonicalResourceLimits(resources), "utf8").toString("hex"),
       // D23/TSP-005: the deployment's encoded surface plan rides the unit's
@@ -245,11 +262,11 @@ export class UnitsModule {
       toolSurfaceHex: Buffer.from(encodedResidentToolSurface(), "utf8").toString("hex"),
       memoryBytes: resources.memoryBytes, tasks: resources.tasks, cpuQuotaPercent: resources.cpuQuotaPercent,
     });
-    this.install(unitName(this.society, agent, "path"), "resident.path.in");
+    this.install([service, this.prepareUnit(unitName(this.society, agent, "path"), "resident.path.in")]);
   }
   ensurePrincipal(): void {
-    this.install(unitName(this.society, "principal", "path"), "principal.path.in");
-    this.install(unitName(this.society, "principal-relay", "service"), "principal-relay.service.in");
+    this.install([this.prepareUnit(unitName(this.society, "principal", "path"), "principal.path.in"),
+      this.prepareUnit(unitName(this.society, "principal-relay", "service"), "principal-relay.service.in")]);
   }
 
   private verifyPath(agent: Actor, active: boolean): void {

@@ -55,7 +55,12 @@ function closedRecord(value: unknown, keys: readonly string[], what: string, opt
 }
 function needIntegerFields(record: Record<string, unknown>, fields: Readonly<Record<string, IntegerField>>, what: string): void {
   closedKeys(record, Object.keys(fields), what);
-  for (const key of Object.keys(fields)) needInt(record[key], `${what}.${key}`, fields[key]!.minInclusive);
+  for (const key of Object.keys(fields)) {
+    const field = fields[key]!;
+    needInt(record[key], `${what}.${key}`, field.minInclusive);
+    if (field.maxInclusive !== undefined && (record[key] as number) > field.maxInclusive)
+      err(`${what}.${key} must be <= ${field.maxInclusive}`);
+  }
 }
 declare const VALIDATED_CONFIG: unique symbol;
 /** A complete deep snapshot produced only by the canonical runtime validator. */

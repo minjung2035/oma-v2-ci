@@ -205,7 +205,7 @@ test("V21B: a startup stop that cannot be confirmed still leaves every other res
   assert.equal(f.units.observe("bob").activeState, "inactive");
 });
 
-test("D04: over-quota is a degraded start, not a stopped one -- and only over-quota", t => {
+test("D04: over-quota is a degraded start, not a stopped one -- and only over-quota", async t => {
   // The broker entry calls startupState() where a bare admit() used to stop
   // startup: the same fresh scan answers "degraded" so the broker can serve
   // reads, stops and settlement while every new admission is still refused
@@ -215,21 +215,21 @@ test("D04: over-quota is a degraded start, not a stopped one -- and only over-qu
   const root = mkdtempSync(join(tmpdir(), "oma-startup-degraded-"));
   t.after(() => removeTree(root));
   const open = new StorageAdmission(root, QUOTA, HEADROOM);
-  assert.equal(open.startupState(), "admitted");
-  assert.equal(new StorageAdmission(root, undefined, HEADROOM).startupState(), "admitted",
+  assert.equal(await open.startupState(), "admitted");
+  assert.equal(await new StorageAdmission(root, undefined, HEADROOM).startupState(), "admitted",
     "a deployment with no quota configured admits unconditionally");
   padTree(root, QUOTA + 1);
-  assert.equal(open.startupState(), "degraded", "over the admission cap the store still starts");
-  assert.throws(() => open.admit("admit"), { code: "QUOTA_EXCEEDED" },
+  assert.equal(await open.startupState(), "degraded", "over the admission cap the store still starts");
+  await assert.rejects(open.admit("admit"), { code: "QUOTA_EXCEEDED" },
     "the degraded state refuses new work per request, not at construction");
-  open.admit("settle")(); // settlement keeps its bounded headroom
+  (await open.admit("settle"))(); // settlement keeps its bounded headroom
   padTree(root, QUOTA + HEADROOM + 1);
-  assert.throws(() => open.admit("settle"), { code: "QUOTA_EXCEEDED" },
+  await assert.rejects(open.admit("settle"), { code: "QUOTA_EXCEEDED" },
     "past the headroom settlement is refused like new work");
   const blind = mkdtempSync(join(tmpdir(), "oma-startup-blind-"));
   mkdirSync(join(blind, "hidden"));
   chmodSync(join(blind, "hidden"), 0o000);
   t.after(() => { chmodSync(join(blind, "hidden"), 0o700); removeTree(blind); });
-  assert.throws(() => new StorageAdmission(blind, QUOTA, HEADROOM).startupState(), { code: "BROKER_UNAVAILABLE" },
+  await assert.rejects(new StorageAdmission(join(blind, "hidden", "owned"), QUOTA, HEADROOM).startupState(), { code: "BROKER_UNAVAILABLE" },
     "an unobservable store is not a quota answer -- startup still fails");
 });

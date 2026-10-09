@@ -1329,7 +1329,7 @@
       ]
     },
     {
-      "owner": "src/units.ts#UnitsModule.install",
+      "owner": "src/units.ts#UnitsModule.prepareUnit",
       "fact": "an installed unit file",
       "tests": [
         {
@@ -1400,6 +1400,17 @@
           "file": "test/crash-kill-boundaries.test.ts",
           "title": "P0V-96 / P0-7: a derived-file replacement SIGKILLed at any point",
           "injection": "sigkill"
+        }
+      ]
+    },
+    {
+      "owner": "src/pi-compat/settings.ts#OmaSettingsStorage.withLock",
+      "fact": "trusted Human project settings, atomically replaced under OMA and Pi file locks; explicit choices survive restart and retry",
+      "tests": [
+        {
+          "file": "test/adversarial-repairs.test.ts",
+          "title": "AV-02: stale Pi managers merge through OMA's lock and preserve trusted project settings",
+          "injection": "logical"
         }
       ]
     }

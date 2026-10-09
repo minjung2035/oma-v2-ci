@@ -8,7 +8,7 @@ import { StoreError } from "../domain/errors.js";
 import { runProcessSync, decodeProcessText } from "../process/run.js";
 import { GIT_ENV, requireTextExit } from "../process/policies.js";
 import { SnapshotReader, copySnapshotFile, sameSnapshotFile } from "../storage/snapshot-reader.js";
-import { prepareProjectDirectory, type ProjectPreparation } from "../storage/project-preparation.js";
+import { prepareProjectDirectory, projectContentName, type ProjectPreparation } from "../storage/project-preparation.js";
 
 /** Commands that inspect the Human's repository must not run its programs.
  * In particular, ls-files would otherwise invoke core.fsmonitor. */
@@ -44,9 +44,16 @@ function record(root: Tree, path: string, item: Item): void {
 }
 function writeTree(root: Tree, git: Git): string {
   const lines: string[] = [];
-  for (const [name, item] of root.files) lines.push(`${item.mode} ${item.mode === "160000" ? "commit" : "blob"} ${item.oid}\t${name}\0`);
-  for (const [name, child] of root.trees) lines.push(`040000 tree ${writeTree(child, git)}\t${name}\0`);
-  return git(["mktree", "-z", "--missing"], lines.join(""));
+  const pending = [{ tree: root, prefix: "" }];
+  while (pending.length > 0) {
+    const { tree: next, prefix } = pending.pop()!;
+    for (const [name, item] of next.files) lines.push(`${item.mode} ${item.oid}\t${prefix}${name}\0`);
+    for (const [name, child] of next.trees) pending.push({ tree: child, prefix: `${prefix}${name}/` });
+  }
+  // This index belongs to the temporary repository, never the source. Git
+  // builds all subtrees in one invocation rather than one child per directory.
+  git(["update-index", "-z", "--index-info"], lines.join(""));
+  return git(["write-tree"]);
 }
 
 /** The preparation stays owned through synchronous or asynchronous bundle/fetch.
@@ -55,6 +62,8 @@ function writeTree(root: Tree, git: Git): string {
 export function withProjectSnapshot<T>(options: {
   readonly source: string; readonly parent: string | null; readonly format: "sha1" | "sha256";
   readonly sourceIsGit: boolean; readonly temporaryParent: string; readonly executable: string;
+  /** Already owned local history, when provisioning prepared its mirror. */
+  readonly historySource?: string;
   readonly prepare?: (path: string) => ProjectPreparation;
 }, use: (snapshot: { readonly repository: string; readonly head: string; readonly empty: boolean;
   readonly git: Git }) => T): T {
@@ -95,6 +104,7 @@ export function withProjectSnapshot<T>(options: {
         argv: [...SNAPSHOT_GIT_OPTIONS, ...argv],
         env: { ...GIT_ENV, GIT_OPTIONAL_LOCKS: "0", GIT_AUTHOR_NAME: "OMA", GIT_AUTHOR_EMAIL: "oma@localhost",
           GIT_COMMITTER_NAME: "OMA", GIT_COMMITTER_EMAIL: "oma@localhost" },
+        cwd: temporary,
         ...(input === undefined ? {} : { input }), timeoutMs: 10 * 60_000,
         stdoutBytes: 32 * 1024 * 1024, stderrBytes: 1024 * 1024,
         stdoutSpool: spoolOut, stderrSpool: spoolErr }, undefined, [descriptor]);
@@ -111,13 +121,20 @@ export function withProjectSnapshot<T>(options: {
         : decodeProcessText(readFileSync(result.stdoutSpooledTo));
     };
     const git: Git = (argv, input) => run(["--git-dir", repository, ...argv], input).trimEnd();
-    run(["init", "--quiet", "--bare", "--template=", `--object-format=${options.format}`, repository]);
     // A parent commit describes the whole repository, not the invocation
     // subdirectory. Mixing that tree with subdirectory-relative paths would
     // silently delete siblings and move files to the root.
     const sourceRoot = options.sourceIsGit
       ? run(["-C", options.source, "rev-parse", "--show-toplevel"]).replace(/\n$/, "") : options.source;
-    if (options.parent !== null) git(["fetch", "--quiet", "--no-tags", "--no-write-fetch-head", sourceRoot, options.parent]);
+    if (options.parent === null) run(["init", "--quiet", "--bare", "--template=", `--object-format=${options.format}`, repository]);
+    else {
+      // Local cloning copies existing objects without repeatedly packing the
+      // same history. Never hardlink the Human's objects into owned state.
+      run(["clone", "--quiet", "--bare", "--local", ...(options.historySource === undefined ? ["--no-hardlinks"] : []), "--dissociate", "--no-tags",
+        options.historySource ?? sourceRoot, repository]);
+      if (options.historySource === undefined) git(["fsck", "--full", "--no-dangling", "--no-progress"]);
+      git(["rev-parse", "--verify", `${options.parent}^{commit}`]);
+    }
     const source = (argv: readonly string[]) => run(options.sourceIsGit
       ? ["-C", sourceRoot, ...argv]
       : ["--git-dir", repository, "--work-tree", sourceRoot, ...argv]);
@@ -136,8 +153,9 @@ export function withProjectSnapshot<T>(options: {
     reader = new SnapshotReader(sourceRoot);
     const root = tree();
     const observed = new Map<string, ReturnType<SnapshotReader["entry"]>>();
-    const spool = join(temporary, "content");
+    const blobs: { readonly path: string; readonly mode: string }[] = [];
     const leaves = new Set<string>();
+    const scratch = Buffer.alloc(64 * 1024);
     for (const path of selected) {
       if (path.endsWith("/")) throw new StoreError("UNSUPPORTED_PROFILE", `snapshot contains a nested repository: ${path}`);
       // A tracked directory replaced by a file or symlink deletes its old
@@ -154,7 +172,7 @@ export function withProjectSnapshot<T>(options: {
           observed.set(path, entry); continue;
         }
         leaves.add(path);
-        const out = prepared.openContent();
+        const out = prepared.openContent(blobs.length);
         try {
           const write = (bytes: Buffer): void => {
             for (let at = 0; at < bytes.length;) {
@@ -163,10 +181,9 @@ export function withProjectSnapshot<T>(options: {
               at += count;
             }
           };
-          if (entry.link !== null) write(entry.link); else copySnapshotFile(entry, path, write);
+          if (entry.link !== null) write(entry.link); else copySnapshotFile(entry, path, write, scratch);
         } finally { closeSync(out); }
-        const oid = git(["hash-object", "-w", "--no-filters", "--", spool]);
-        record(root, path, { mode: entry.link !== null ? "120000" : (entry.stat.mode & 0o111) !== 0 ? "100755" : "100644", oid });
+        blobs.push({ path, mode: entry.link !== null ? "120000" : (entry.stat.mode & 0o111) !== 0 ? "100755" : "100644" });
         observed.set(path, entry);
       } finally { closeSync(entry.descriptor); }
     }
@@ -184,6 +201,18 @@ export function withProjectSnapshot<T>(options: {
     }
     if (!sameSnapshotFile(reader.identity, fstatSync(reader.descriptor)))
       throw new StoreError("REF_STATE_UNKNOWN", "project directory changed during the snapshot");
+    // Only private, numeric spool names reach --stdin-paths. Source names may
+    // contain newlines, tabs, quotes or symlinks; they never become Git input
+    // paths here. The held reader and raw-byte/filter checks remain unchanged.
+    if (blobs.length > 0) {
+      const ids = git(["hash-object", "-w", "--no-filters", "--stdin-paths"],
+        blobs.map((_, index) => `${projectContentName(index)}\n`).join("")).split("\n");
+      const oidPattern = options.format === "sha256" ? /^[0-9a-f]{64}$/ : /^[0-9a-f]{40}$/;
+      if (ids.length !== blobs.length || ids.some(oid => !oidPattern.test(oid)))
+        throw new StoreError("REF_STATE_UNKNOWN", "snapshot blob import returned an incomplete object list");
+      for (let index = 0; index < blobs.length; index++)
+        record(root, blobs[index]!.path, { mode: blobs[index]!.mode, oid: ids[index]! });
+    }
     const treeId = writeTree(root, git);
     const unchanged = options.parent !== null && treeId === git(["rev-parse", `${options.parent}^{tree}`]);
     const head = unchanged ? options.parent! : git(["commit-tree", treeId,

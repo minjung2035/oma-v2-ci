@@ -1244,3 +1244,101 @@ ports, denied allowlist entries and unsafe resolutions are still refused;
 idle windows on *established* tunnels are still progress-reset silence
 budgets, not total elapsed deadlines; and the byte/frame bounds of the
 wire itself are untouched.
+
+## DR35 — The private conversation starts alongside Society preparation
+
+사용자 결정(2026-10-08): OMA 대화 시작은 1초를 목표로 하며 최대 5초 안에 입력 가능한 화면을 제공한다.
+실제 PTY와 CPU 프로파일에서 기존 시작은 첫 출력까지 146.7초를 쓰고, 136.5초를 `spawnSync`에서 보냈다.
+프로젝트 15,519개 파일에 각각 `git hash-object`를 실행하고 디렉터리마다 `mktree`를 실행한 것이 직접 원인이다.
+blob은 원본 파일명을 받지 않는 private spool에서 일괄 가져오고, 임시 저장소의 index로 트리를 한 번에 만든다.
+원본 checkout·index·filters·hooks를 실행하거나 변경하지 않으며 변경 관측과 lease 수명은 유지한다.
+
+대화 화면은 host가 society lease·프로젝트 binding·설정·private 경로를 확보한 뒤 시작한다.
+저장소 snapshot·mirror·복구·Worker 준비는 같은 fence를 상속한 broker에서 진행한다.
+이 private engine의 존재는 Principal 권한이 아니다. broker가 복구·rootfs 수리를 끝내 준비를 알리고,
+같은 engine의 등록에 credential을 발급한 뒤에만 Society 도구와 mail delivery에 권한이 생긴다.
+준비 중에도 Human과 모델의 대화·설정 화면은 사용할 수 있고, Society 요청은 credential 없이 실행되지 않는다.
+소유하지 못한 host는 대화를 시작하지 않는다. broker 소유 실패는 기존 teardown으로 engine을 닫고
+실제 종료 뒤 lease를 놓는다. 이전 "engine 생성 자체도 broker ready 뒤" 순서(TUI-004/T119)를
+"private 대화 준비와 Principal 권한 부여 분리"로 바꾼다. 빠른 로딩 화면을 준비 완료로 보고하지 않는다.
+
+동기 Git 준비는 broker가 상속한 lease를 다시 상속하는 별도 preparation child가 맡는다.
+그 child와 Git 후손은 하나의 process group 안에 있고, host loss는 broker의 event loop에서
+즉시 취소된다. broker는 child의 실제 close 뒤에만 lock·supervision channel을 반환한다.
+Store를 열기 전 실패해도 supervision channel이 남아 종료를 막지 않는다.
+
+한 번의 설정 파생에서는 설치 digest를 한 번만 계산해 프로젝트와 session에 같이 쓴다.
+설치 manifest는 모든 바이트를 계속 해시하지만 순회 중 directory descriptor와 읽기 버퍼를
+재사용한다. extension bundle의 missing-file 검사는 Set으로 선형화한다.
+Pi InteractiveMode의 optional fd/rg 다운로드는 입력 시작의 선행 조건에서 뺀다:
+정확히 그 UI module의 tools-manager import만 기존 binary를 관측하는 adapter로 연결한다.
+Pi 파일은 수정하지 않으며 grep/find 실행은 원래 installer를 사용한다. 설치된 fd는 그대로
+자동완성에 쓰고, fd가 없는 환경의 재귀 파일 자동완성은 Pi가 해당 도구를 설치한 다음 세션부터
+쓸 수 있다. 모델 연결·catalog·package manager의 online 설정은 바꾸지 않는다.
+
+새로 추가한 `scripts/benchmark-startup.py`는 독립 HOME/data와 로컬 시험 모델을 써 실제
+PTY 입력에서 모델 요청·응답·종료를 측정한다. 수치와 실행 한계의 owner는 validation이며
+Worker 준비를 대화 입력 가능 시간에 합쳐 준비 완료로 주장하지 않는다.
+
+호스트의 경로·retry 해석이 interactive settings setter를 통해 Pi SDK 전체를 미리 로드하던
+추가 비용도 실행 관측했다(공통 runtime import 0.718초). byte validation과 engine presentation
+설정을 분리해 setter는 원래 엔진 안에서만 로드한다. Pi manager의 parse/migrate/setter와
+locked writer 의미는 그대로이고, 호스트 runtime이 SDK를 import하면 실패하는 회귀를 둔다.
+
+
+## DR36 — Adversarial repair: ownership, admission and native preparation
+
+사용자의 전체 수정·푸시 지시(2026-10-09)에 따른 변경이다. 감사 당시 source와 결함 재현은
+AV-20261008 기록에 그대로 둔다. 새로운 성공 oracle와 실제 native 검증은 validation이 소유한다.
+
+Pi SettingsManager의 공개 fromStorage로 모든 interactive writer를 같은 OMA settings lock에
+연결한다. bundled CLI도 installation-owned preload를 통해 공개 create factory를 같은 storage로
+연결한다. Pi의 수정 필드 merge, 프로젝트 trust, user-file atomic replace를 보존한다.
+Human 프로젝트 파일은 Pi가 쓰는 공개 proper-lockfile도 함께 획득하고, 잠금 전후 관측이
+달라졌으면 덮어쓰지 않는다. OMA-owned 전역 파일과 user-owned 프로젝트 파일의 경계는 유지한다.
+명시적인 skill-command 선택은 startup에서 삭제하지 않는다. 충돌한 writer는 조용히 값을 잃지 않고
+Pi의 오류 채널로 거절된다.
+
+패키지 before-image는 공유 index decoder로 효과 전에 전부 검증한다. 선택 세대의 이름과 이전
+세대 ID도 같은 경계에서 검증한다. 교체 횟수는 독자의 종료 증거가 아니므로 게시된 세대는
+자동 count-based GC에서 제거한다. 이전 세대 디스크 회수는 owner가 실제 독자의 종료를 증명하거나
+전체 installation 수명을 끝낼 때의 일이다. 무제한 디스크가 생겼다는 뜻은 아니다.
+
+StorageAdmission은 owned traversal로 손상된 directory owner bits를 contained repair한다.
+관측에 필요한 owner read/search만 추가하며 write 권한은 추가하지 않는다. context revision의
+0555 봉인은 유지한다. native 재시작 검사에서 관측이 0755로 바꾸는 수정 중 결함을 발견했고,
+봉인 보존 회귀와 실제 broker 재시작으로 검증한다. 일반 owned 쓰기·수거의 권한 수리와 구별한다.
+진행 중 관측만 공유하고 매 entry마다 event loop에 양보한다. 완료된 사용량은 캐시하지 않는다.
+예약 합계 검사는 await 뒤 한 continuation에서 갱신한다. RPC raw spool과 새 acceptance는 관측 뒤
+현재 authority·fence·연결을 다시 확인한다. 종료·안전 제어는 quota scan을 기다리지 않는다.
+
+검사의 메모리 캡은 실제 kernel page size로 내림 정렬된 memory.max를 확인한다. 캡을 높이지 않는다.
+출력의 보관 head와 실행 중단 한도를 분리해 verbose 성공을 unknown으로 만들지 않는다.
+async subprocess와 RPC는 하나의 monotonic deadline primitive로 긴 native timer를 나누어 재설정한다.
+설정에 저장되는 check timeout은 파생 observer milliseconds까지 안전한 정수여야 한다.
+preparation child는 별도 120초 총량으로 자르지 않으며 상위 owner의 취소·실제 close가 수명을 정한다.
+
+Human Git history는 protocol clone으로 committed branch 도달 객체만 가져온다. Human의 local
+object store를 통째 복사하면 index/stash/unreachable 비공개 바이트까지 가져올 수 있어 사용하지
+않는다. Human에서 들어오는 object와 Worker의 쓰기 가능한 object는 hardlink하지 않는다.
+OMA만 관리하는 immutable object 사이에는 Git의 local hardlink를
+사용한다. refs/config는 독립이며 canonical main은 clone된 HEAD가 아니라 원래의 CAS로 게시한다.
+strict history 검증을 snapshot capture와 겹쳐 실행하되 성공 전 canonical 게시를 하지 않는다.
+Git이 만든 새 snapshot과 검증한 owned history의 OID를 같은 society lease 안에서만 broker에 전달한다.
+recovery는 현재 main과 일치할 때 한 번만 이 관측을 사용한다. restart·기존 canonical·불일치는
+기존 full health observation을 실행한다. 영속 health cache나 무검증 ready 표시는 만들지 않는다.
+
+private Principal의 첫 요청은 등록될 때까지 기다린 다음 request를 freeze/send한다. 채널 종료와
+AbortSignal은 대기 listener를 회수한다. 전송하지 않은 새 요청에 recovery/acceptance unknown을
+생성하지 않는다. 준비 완료 시간을 대화 화면의 시작 시간으로 대체하지 않는다.
+
+unit 설치는 각 파일의 소유 확인·영속 게시를 유지하면서 service/path 쌍을 함께 link/reload한다.
+각 unit의 실제 source·drop-in·실행 argv·설정 자원 관측은 하나의 show에서 같은 필드를 검증한다.
+C relay는 읽기가 끝난 방향의 fd를 poll에서 제거하고 반대 방향의 종료까지 기다린다.
+owned-state 정적 규칙은 symbol alias와 resolved local callee의 문자열 경로 provenance를 추적한다.
+동적 호출 등 정적으로 보장하지 못하는 경계와 개별 raw-call 예외의 이유는 규칙에 명시한다.
+
+추가 의존성 감사에서 nodemailer 10.0.1의 addressparser에 알려진 quadratic DoS가 확인되어
+10.0.16으로 정확히 고정했다. OMA는 SMTP가 아닌 stream transport를 사용하며, 외부 메일을
+mailparser로 받아들이는 경로는 없다. 공개 advisory의 일반적인 원격 공격 가능성을 OMA의
+확인된 도달 경로로 주장하지 않는다. 기존 MIME/frozen-fact 회귀와 새 npm audit 결과로 검증한다.

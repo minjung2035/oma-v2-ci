@@ -57,6 +57,8 @@ function world({ fail, close, dispose, run, construct, catalog, beforeSwitch, se
     calls.push('resources-bound'); hooks.session_start({ reason: 'reload' }, context);
   };
   const dependencies = {
+    '../pi-compat/settings.js': { createEngineSettings: (_cwd, _dir, opts) => Object.assign(settingsManager,
+      { createOptions: opts, setProjectTrusted(value) { calls.push(['set-trusted', value]); } }) },
     'node:fs': { lstatSync: () => ({ isFile: () => true }), readFileSync: () => '{"version":"fixture-version"}' },
     'node:path': path, 'node:module': { createRequire: () => ({ resolve: () => '/fixture/open-tui/package.json' }) },
     '@earendil-works/pi-coding-agent': {
@@ -79,7 +81,6 @@ function world({ fail, close, dispose, run, construct, catalog, beforeSwitch, se
         return { settingsManager, resourceLoader, diagnostics: [] };
       },
       async createAgentSessionFromServices() { if (fail === 'session') throw new Error('injected session'); return { session }; },
-      SettingsManager: { create: (_cwd, _dir, opts) => Object.assign(settingsManager, { createOptions: opts, setProjectTrusted(value) { calls.push(['set-trusted', value]); } }) },
       SessionManager: { create: () => manager, open: () => manager, async listAll() { return []; } },
       SessionSelectorComponent: class { constructor(load, _all, choose, cancel, quit) { Object.assign(this, { load, choose, cancel, quit }); } },
       ModelSelectorComponent: class { constructor(_tui, _model, _runtime, _scoped, done) { calls.push('model-selector'); done(undefined); } },
@@ -100,7 +101,8 @@ function world({ fail, close, dispose, run, construct, catalog, beforeSwitch, se
       refresh() { calls.push('modules-refresh'); }
       close() { calls.push('modules-close'); moduleClose?.(); }
     } },
-    '../runtime/pi-runtime.js': { PI_AGENT_DIR_ENV: 'PI_CODING_AGENT_DIR', preparePiInteractive() {}, preparePiRetry() {} },
+    '../runtime/pi-runtime.js': { PI_AGENT_DIR_ENV: 'PI_CODING_AGENT_DIR', preparePiRetry() {} },
+    '../runtime/pi-presentation.js': { preparePiInteractive() {} },
     '../pi-compat/env.js': { PI_RESUME_HINT: 'To resume this session:' },
     '../pi-compat/interactive-mode.js': { interactiveInternalsOf: mode => mode },
     '../runtime/personal-models.js': { personalModels: async () => credentials },

@@ -4,6 +4,7 @@ import assert from 'node:assert/strict';
 import { readFileSync, fstatSync } from 'node:fs';
 import { Script } from 'node:vm';
 import ts from 'typescript';
+import { deadline } from '../dist/src/process/deadline.js';
 
 const code = ts.transpileModule(readFileSync(process.env.OMA_ASYNC_PROCESS_SOURCE ?? 'src/process/async.ts', 'utf8'), {
   compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
@@ -36,6 +37,7 @@ function world() {
   const deps = {
     'node:child_process': { spawn(...args) { calls.push(args); return child; } },
     'node:perf_hooks': { performance: { now: () => 0 } }, './command.js': {}, '../domain/errors.js': { StoreError },
+    './deadline.js': { deadline },
     // The output-spool import is real; no spec in this harness names a spool
     // path, so opening or writing one is a harness bug, not a code path.
     'node:fs': { constants: { O_WRONLY: 1, O_CREAT: 64, O_TRUNC: 512, O_NOFOLLOW: 256, O_RDONLY: 0 },

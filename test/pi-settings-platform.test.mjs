@@ -38,8 +38,10 @@ function fixture(t, platform, transform = value => value) {
   // darwin assertion is not silently satisfied by the host's linux branch.
   const bridge = load('src/pi-compat/settings.ts', platform,
     { '../runtime/locked-files.js': locked, '@earendil-works/pi-coding-agent': piPackage });
-  const api = load('src/runtime/pi-runtime.ts', platform,
-    { './locked-files.js': locked, '../pi-compat/settings.js': bridge });
+  const runtime = load('src/runtime/pi-runtime.ts', platform, { './locked-files.js': locked });
+  const presentation = load('src/runtime/pi-presentation.ts', platform,
+    { './pi-runtime.js': runtime, '../pi-compat/settings.js': bridge });
+  const api = { ...runtime, ...presentation };
   return { root, api, path: join(root, 'settings.json'), metadata };
 }
 const json = file => JSON.parse(fs.readFileSync(file, 'utf8'));

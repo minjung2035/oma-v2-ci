@@ -1,7 +1,7 @@
 /** DR18 (D-9) / DR25: the Human uses the bundled engine's own login or package
  * command, not an OMA authentication screen. OMA's engine directory (or package
  * store) is explicit; the caller holds its fence until the child actually closes. */
-import { dirname } from "node:path";
+import { dirname, join } from "node:path";
 import { PI_AGENT_DIR_ENV, piIsolationEnv, resolvePiRuntime } from "../runtime/pi-runtime.js";
 import { spawnInteractive } from "../process/async.js";
 import { ensureOwnedUserDirectory } from "../runtime/user-files.js";
@@ -37,7 +37,8 @@ export async function runEngineLogin(login: EngineLogin): Promise<number> {
   for (const [name, value] of Object.entries(login.env))
     if (typeof value === "string" && !name.startsWith("PI_CODING_AGENT_")) env[name] = value;
   Object.assign(env, piIsolationEnv(runtime), { [PI_AGENT_DIR_ENV]: agentDir });
-  const child = spawnInteractive(runtime.executable, [...runtime.args, ...(login.packages?.args ?? [])], agentDir, env, login.fence);
+  const storageArgs = runtime.source === "bundled" ? ["--import", join(login.libdir, "dist/src/pi-compat/settings-preload.js")] : [];
+  const child = spawnInteractive(runtime.executable, [...storageArgs, ...runtime.args, ...(login.packages?.args ?? [])], agentDir, env, login.fence);
   return new Promise(resolve => {
     let failed = false;
     // An error/exit notification cannot return the caller's lock while the

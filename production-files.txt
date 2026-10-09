@@ -111,6 +111,7 @@ src/entry/personal-host.ts
 src/entry/pi-interactive-host.ts
 src/entry/pi-interactive.ts
 src/entry/pi-personal.ts
+src/entry/prepare-society.ts
 src/entry/runner.ts
 src/extension/ask-user-question.ts
 src/extension/batch-view.ts
@@ -13933,6 +13934,7 @@ src/git/paths.ts
 src/git/project-snapshot.ts
 src/git/publication.ts
 src/git/quarantine.ts
+src/git/repository-health.ts
 src/git/submit.ts
 src/git/tiered-authority.ts
 src/hash.ts
@@ -13963,7 +13965,12 @@ src/module-ports.ts
 src/pi-compat/commands.ts
 src/pi-compat/env.ts
 src/pi-compat/interactive-mode.ts
+src/pi-compat/interactive-tool-setup.ts
+src/pi-compat/interactive-tools.ts
+src/pi-compat/pi-private.d.ts
 src/pi-compat/session.ts
+src/pi-compat/settings-object.ts
+src/pi-compat/settings-preload.ts
 src/pi-compat/settings.ts
 src/pi-compat/wire.ts
 src/pi-extension.ts
@@ -14017,6 +14024,7 @@ src/ports/runtime.ts
 src/process/async.ts
 src/process/cleanup.ts
 src/process/command.ts
+src/process/deadline.ts
 src/process/host-loss.ts
 src/process/policies.ts
 src/process/preparation.ts
@@ -14077,6 +14085,7 @@ src/runtime/personal-session.ts
 src/runtime/personal-settings.ts
 src/runtime/pi-adapter.ts
 src/runtime/pi-packages.ts
+src/runtime/pi-presentation.ts
 src/runtime/pi-rpc.ts
 src/runtime/pi-runtime.ts
 src/runtime/pi-spawn-plan.ts
@@ -14092,6 +14101,7 @@ src/runtime/session-handoff.ts
 src/runtime/session-history.ts
 src/runtime/session-mode.ts
 src/runtime/society-lease.ts
+src/runtime/society-preparation.ts
 src/runtime/society-slot.ts
 src/runtime/supervision-channel.ts
 src/runtime/user-files.ts

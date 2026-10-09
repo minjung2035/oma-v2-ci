@@ -197,8 +197,8 @@ export function inheritedFence(descriptor: number, stateRoot: string): Inherited
  * "this could not be established" are different answers and only the first is
  * a reason to exit quietly. */
 export type SocietyFence =
-  | { readonly kind: "inherited" }
-  | { readonly kind: "taken"; readonly lease: SocietyLease }
+  | { readonly kind: "inherited"; readonly fence: number }
+  | { readonly kind: "taken"; readonly lease: SocietyLease; readonly fence: number }
   | { readonly kind: "elsewhere" };
 
 /** The one question a process asks before it serves a society.
@@ -211,13 +211,13 @@ export function claimSocietyFence(stateRoot: string): SocietyFence {
   const declared = process.env[SOCIETY_FENCE_ENV];
   if (declared === undefined) {
     const lease = tryHoldSociety(stateRoot);
-    return lease === null ? { kind: "elsewhere" } : { kind: "taken", lease };
+    return lease === null ? { kind: "elsewhere" } : { kind: "taken", lease, fence: lease.fence };
   }
   if (declared !== String(SOCIETY_FENCE_FD))
     throw new StoreError("INTERNAL_ERROR", `${SOCIETY_FENCE_ENV} names descriptor ${declared}, which is not where this product places the society lease`);
   const fence = inheritedFence(SOCIETY_FENCE_FD, stateRoot);
   switch (fence.kind) {
-    case "society": return { kind: "inherited" };
+    case "society": return { kind: "inherited", fence: SOCIETY_FENCE_FD };
     case "other-society":
       throw new StoreError("INTERNAL_ERROR", `descriptor ${SOCIETY_FENCE_FD} holds the lease of another society, not this one`);
     case "not-a-lease":

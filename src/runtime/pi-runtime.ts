@@ -10,12 +10,11 @@
  * Pi is vendored unmodified. This module resolves and isolates it; it does not
  * patch it, and OMA's own behaviour lives in the trusted core extension.
  */
-import { OMA_THEME, OMA_THEME_NAME } from "./oma-theme.js";
 import { closeSync, fstatSync, readFileSync, readSync, statSync } from "node:fs";
 import { openDirectory, openRegularBeneath } from "../storage/contained-fs.js";
 import { lockedOwnedReplace } from "./locked-files.js";
 import { ensureOwnedUserDirectory } from "./user-files.js";
-import { prepareEngineInteractiveSettings, settingsObject } from "../pi-compat/settings.js";
+import { settingsObject } from "../pi-compat/settings-object.js";
 import { fileURLToPath } from "node:url";
 import { dirname, isAbsolute, join, resolve } from "node:path";
 import { StoreError, unobserved } from "../domain/errors.js";
@@ -31,7 +30,7 @@ export const PI_PROVIDER_RETRIES = 5;
  * relay or restart a tool-bearing turn. Provider-internal retries are disabled
  * so five retries mean six calls, not two nested retry budgets. Called before
  * spawn, under the settings writer's lock; unrelated engine settings survive. */
-function prepareEngineFile(agentDir: string, name: string,
+export function prepareEngineFile(agentDir: string, name: string,
   update: (settings: Record<string, unknown>) => Record<string, unknown>): void {
   // P0-8/DR32: the directory is oma's own (the agent directory or its
   // `themes` tail); its leaf is repaired before the locked replace -- the
@@ -58,29 +57,6 @@ export function preparePiRetry(agentDir: string): void {
       baseDelayMs: delay(retry.baseDelayMs, 1000), maxAgentDelayMs: delay(retry.maxAgentDelayMs, 8000),
       provider: { ...provider, maxRetries: 0 } } };
   });
-}
-
-/** Presentation policy persists across Pi's own settings reloads. Only the
- * society's isolated engine files are touched; unrelated choices survive. */
-export function preparePiInteractive(agentDir: string): void {
-  // P0-8: the themes directory is oma's own under the agent directory; a
-  // mode-000 `.engine/themes` left by a stray is repaired here rather than
-  // wedging the locked replace that follows. The agent directory itself is
-  // the boundary: above it is the caller's layout, already owned-ensured by
-  // the entry that resolved it.
-  ensureOwnedUserDirectory(join(agentDir, "themes"), agentDir);
-  // The look of Open TUI's own preview is the default; what the Human then
-  // chooses in /settings or /open-tui is kept. Telemetry to Pi stays off.
-  prepareEngineFile(join(agentDir, "themes"), `${OMA_THEME_NAME}.json`, () => ({ ...OMA_THEME }));
-  // A4: the settings fields Pi has setters for go through its SettingsManager;
-  // the locked read-modify-replace is OMA's storage (pi-compat/settings.ts).
-  prepareEngineInteractiveSettings(agentDir);
-  // Ctrl+X is oma's settings; the engine's copy stays on /copy, and its
-  // "clear all models" in the scoped-model list is left without a key.
-  prepareEngineFile(agentDir, "keybindings.json", keys => ({ ...keys, "app.message.copy": keys["app.message.copy"] ?? [],
-    "app.models.clearAll": keys["app.models.clearAll"] ?? [] }));
-  prepareEngineFile(agentDir, "open-tui.json", settings => ({ ...settings, enabled: true,
-    telemetry: settings.telemetry ?? { enabled: false }, thinkingPeek: settings.thinkingPeek ?? { lines: 0 } }));
 }
 
 /** A bounded regular file of `directory`, or null when there is none. Never

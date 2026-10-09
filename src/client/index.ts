@@ -34,7 +34,8 @@ export class Client {
   private readonly transport: Transport;
   private service: RequestService | undefined;
   private readonly context: ClientContext;
-  constructor(context: ClientContext, grant: GrantProvider = () => null) {
+  constructor(context: ClientContext, grant: GrantProvider = () => null,
+    private readonly prepare?: (signal?: AbortSignal) => Promise<void>) {
     this.context = { ...context, env: Object.freeze({ ...context.env }) };
     this.transport = new Transport(grant);
   }
@@ -50,6 +51,7 @@ export class Client {
   }
   private scope<T>(signal: AbortSignal | undefined, action: () => Promise<T>, request?: string): Promise<T> {
     return inContext({ ...this.context, signal }, async () => {
+      await this.prepare?.(signal);
       if (signal?.aborted) throw new ClientError(`Outcome unknown: observation stopped before replying${request === undefined ? "" : `; --request ${request}`}`, 3, request, undefined, false, "BROKER_UNAVAILABLE");
       return action();
     });

@@ -23,7 +23,7 @@ import { assertHostDirectoryLayout } from "../../runtime/assets.js";
 import { StoreError } from "../../domain/errors.js";
 import { withCleanup } from "../../process/cleanup.js";
 import { lockFileDescriptor } from "../../leaf.js";
-import { disposeProjectPreparation, type ProjectPreparation } from "../../storage/project-preparation.js";
+import { disposeProjectPreparation, projectContentName, type ProjectPreparation } from "../../storage/project-preparation.js";
 
 const TEMPORARY = /^\..+\.[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.partial$/;
 
@@ -366,7 +366,7 @@ export function prepareHostProjectDirectory(path: string): ProjectPreparation {
       throw new StoreError("BROKER_UNAVAILABLE", "snapshot preparation could not hold its lease");
     mkdirSync(path, { mode: 0o700 }); made = true;
     return { path, descriptor,
-      openContent: () => openSync(join(path, "content"), constants.O_WRONLY | constants.O_CREAT | constants.O_TRUNC | constants.O_NOFOLLOW, 0o600),
+      openContent: (index = 0) => openSync(join(path, projectContentName(index)), constants.O_WRONLY | constants.O_CREAT | constants.O_TRUNC | constants.O_NOFOLLOW, 0o600),
       dispose() { disposeProjectPreparation(release, collect); },
     };
   } catch (error) {

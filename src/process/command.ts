@@ -4,7 +4,9 @@ export interface CommandSpec {
   readonly executable: string; readonly argv: readonly string[];
   readonly env: Readonly<NodeJS.ProcessEnv>; readonly cwd?: string;
   readonly input?: string | Uint8Array;
-  readonly timeoutMs: number; readonly stdoutBytes: number; readonly stderrBytes: number;
+  /** null: the owner cancels this process; no independent total deadline. */
+  readonly timeoutMs: number | null; readonly stdoutBytes: number; readonly stderrBytes: number;
+  readonly stdoutOverflow?: "limit" | "discard";
   readonly stderrOverflow?: "limit" | "discard";
   /** Async runner only: a silence budget, re-armed by every byte the command
    * writes. `timeoutMs` stays the never-exceeded ceiling; `silenceMs` is the
@@ -54,14 +56,13 @@ export function validateCommand(spec: CommandSpec): void {
   if (spec.cwd !== undefined && (typeof spec.cwd !== "string" || !spec.cwd || spec.cwd.includes("\0"))) throw new TypeError("invalid subprocess cwd");
   for (const [key, value] of Object.entries(spec.env))
     if (!key || /[=\0]/.test(key) || (value !== undefined && (typeof value !== "string" || value.includes("\0")))) throw new TypeError("invalid subprocess environment");
-  positive(spec.timeoutMs, "timeout"); positive(spec.stdoutBytes, "stdout budget", true); positive(spec.stderrBytes, "stderr budget", true);
-  if (spec.timeoutMs > 0x7fffffff) throw new RangeError("subprocess timeout exceeds the supported native timer interval");
+  if (spec.timeoutMs !== null) positive(spec.timeoutMs, "timeout");
+  positive(spec.stdoutBytes, "stdout budget", true); positive(spec.stderrBytes, "stderr budget", true);
   if (spec.silenceMs !== undefined) {
     positive(spec.silenceMs, "silence window");
-    if (spec.silenceMs > 0x7fffffff) throw new RangeError("subprocess silence window exceeds the supported native timer interval");
     // A silence window wider than the ceiling is a contradiction in the
     // description, not a meaningful one: the ceiling would always fire first.
-    if (spec.silenceMs > spec.timeoutMs) throw new RangeError("subprocess silence window exceeds its timeout");
+    if (spec.timeoutMs !== null && spec.silenceMs > spec.timeoutMs) throw new RangeError("subprocess silence window exceeds its timeout");
   }
   positive(spec.stdoutBytes + spec.stderrBytes, "combined output budget", true);
   spoolPath(spec.stdoutSpool, "stdout spill path"); spoolPath(spec.stderrSpool, "stderr spill path");
@@ -75,6 +76,7 @@ export function validateCommand(spec: CommandSpec): void {
   if (spec.stdoutSpool !== undefined && spec.stdoutSpool === spec.stderrSpool)
     throw new TypeError("invalid subprocess spill paths: stdout and stderr are the same file");
   if (spec.stderrOverflow !== undefined && spec.stderrOverflow !== "limit" && spec.stderrOverflow !== "discard") throw new TypeError("invalid subprocess stderr policy");
+  if (spec.stdoutOverflow !== undefined && spec.stdoutOverflow !== "limit" && spec.stdoutOverflow !== "discard") throw new TypeError("invalid subprocess stdout policy");
   if (spec.input !== undefined && typeof spec.input !== "string" && !(spec.input instanceof Uint8Array)) throw new TypeError("invalid subprocess input");
 }
 /** Called before any await; mutable byte input is privately copied as well.
@@ -89,6 +91,7 @@ export function snapshotCommand(source: CommandSpec): CommandSpec {
     ...(source.silenceMs === undefined ? {} : { silenceMs: source.silenceMs }),
     ...(source.stdoutSpool === undefined ? {} : { stdoutSpool: source.stdoutSpool }),
     ...(source.stderrSpool === undefined ? {} : { stderrSpool: source.stderrSpool }),
+    ...(source.stdoutOverflow === undefined ? {} : { stdoutOverflow: source.stdoutOverflow }),
     ...(source.stderrOverflow === undefined ? {} : { stderrOverflow: source.stderrOverflow }) });
 }
 export function processErrorCode(error: unknown): string | null {

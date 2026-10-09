@@ -1,5 +1,54 @@
 # 사용자 기대 미충족 장부
 
+## 추가 조사: 사용자가 예상하기 어려운 현재 제약 (2026-10-09)
+
+사용자가 인터넷 차단·skills 적용 불가 등을 포함해 제약을 전반적으로 찾으라고 요청했다.
+아래는 현재 구현에서 확인한 동작이다. 과거 “수정됨”은 무제한 사용 가능이라는 뜻이 아니다.
+특히 UX-08의 프록시 구현과 **기본 인터넷 허용**은 다르다. 의도된 격리도 조사에서 제외하지
+않았다. 근거는 로컬 생산 코드이며, Linux 실행 재현과 native macOS/외부 서비스별 검증의
+범위는 별도 validation 기록을 따른다. 이 추가 요청은 발견·기록이며, 기존 13건의 수정 결과는
+감사 기록과 validation이 소유한다. 아래 32건이 외부 서비스별 실행 증명이나 모든 제약의 부재를 뜻하지 않는다.
+
+| ID | 범위 | 현재 제약·사용자 영향 | 근거·설정 가능 여부 |
+|---|---|---|---|
+| SC-01 | Worker 인터넷 기본값 | 기본 HostConfig에는 egress가 없어 외부 인터넷이 차단된다. | [defaults](../src/config/defaults.ts), [policy](../src/domain/egress.ts): Human이 `egress.allow`/역할 목록을 설정해야 소켓이 생긴다. |
+| SC-02 | 프로토콜·포트 | 설정 후에도 CONNECT의 HTTPS 443만 허용한다. HTTP 80, SSH 22, 임의 포트·UDP, 프록시를 무시하는 프로그램은 이 경로를 사용할 수 없다. | [proxy](../src/runtime/connect-proxy.ts), [namespace](../src/sandbox.ts): 해당 프로토콜 예외 설정은 없다. |
+| SC-03 | 사설망·로컬 서비스 | allowlist에 넣어도 사설·loopback·link-local 주소만 반환하면 거절한다. 사내 registry, LAN DB, 호스트 개발 서버에 접근할 수 없다. | [DNS resolve/pin](../src/runtime/connect-proxy.ts): allowlist만으로 해제할 수 없다. |
+| SC-04 | 네트워크 숫자 | delivery당 활성 터널 4개, handshake/dial 15초, 열린 터널 무응답 120초다. 동시 요청은 대기하며 느린 정상 연결도 종료될 수 있다. | [constants](../src/runtime/connect-proxy.ts): 이 숫자를 바꾸는 HostConfig 표면은 없다. 추가 지연 검증 대상이다. |
+| SC-05 | integration 검사 인터넷 | 검사는 Worker와 다른 `--unshare-all` sandbox이고 egress 소켓을 mount하지 않는다. 네트워크가 필요한 검사도 차단된다. | [checker](../src/runtime/candidate-checks.ts): 검사별 egress 설정은 없다. |
+| SC-06 | 기존 Pi 설치 | 별도 engine home을 사용하므로 Human의 전역 `~/.pi` 로그인·모델·skills·확장이 자동으로 연결되지 않는다. | [runtime](../src/runtime/pi-runtime.ts), [env](../src/pi-compat/env.ts): OMA Login/Settings/Packages를 사용한다. |
+| SC-07 | 프로젝트 skills·프롬프트 | Society cwd는 실제 프로젝트가 아닌 private/workspace다. 실제 프로젝트 `.pi` 자원이 그 위치에 없으면 ordinary Pi 발견 경로에 없다. | [spawn](../src/runtime/pi-spawn-plan.ts), [host](../src/entry/pi-interactive-host.ts): package resources는 flags로 전달한다. 프로젝트 자원 전달은 별도 개선 대상이다. |
+| SC-08 | skills 명령 선택 | **수정됨:** preparation이 Human의 `enableSkillCommands` 선택을 보존한다. 값이 없으면 Pi 기본값을 쓴다. 과거 자동 suppression과 Human의 false를 구분할 근거 없이 삭제하던 문제가 있었다. | [settings](../src/pi-compat/settings.ts), [regression](../test/adversarial-repairs.test.ts): 기존 false를 true로 추측해 바꾸지 않는다. |
+| SC-09 | 확장 자동 발견 | Society·Personal 모두 `noExtensions`를 쓰고 선택·검증된 확장만 넣는다. 프로젝트에 확장을 놓는 것만으로 자동 실행되지 않는다. | [Personal](../src/entry/pi-personal.ts), [Society](../src/entry/pi-interactive-host.ts): OMA Config의 확장 선택이 필요하다. |
+| SC-10 | Personal project trust | Pi의 신뢰 결정을 적용하며 신뢰되지 않은 프로젝트 설정/자원은 로드하지 않는다. | [trust](../src/entry/pi-personal.ts): Human의 기록된 결정이 필요하다. skills 전체를 끄는 플래그와는 다르다. |
+| SC-11 | Principal 직접 작업 | 기본 bash/powershell/write/edit는 제외되고 역할·workspace 경계가 적용된다. 실제 Human 프로젝트를 일반 에이전트처럼 직접 편집하는 경로가 아니다. | [spawn](../src/runtime/pi-spawn-plan.ts), [guard](../src/extension/workspace-guard.ts): ordinary OS 권한 작업은 Personal을 선택한다. |
+| SC-12 | Worker 파일·도구 | Human 홈, 임의 `/opt` 도구, 호스트 서비스가 모두 보이는 환경이 아니다. 정해진 mount와 자신의 workspace/private/tmp만 보인다. | [mounts](../src/sandbox.ts), [rootfs](../src/runtime/resident-rootfs.ts): 호스트에 설치된 도구와 Worker의 도구는 다를 수 있다. |
+| SC-13 | 환경·비밀값 | HOME/PATH를 OMA가 만들고 provider credentials는 relay가 갖는다. shell rc, SSH keys, git credentials, venv 환경을 그대로 상속하지 않는다. | [environment](../src/runtime/pi-spawn-plan.ts), [relay](../src/runtime/inference-relay.ts): host 환경 전체 전달 설정은 없다. |
+| SC-14 | Worker 모델 선택 | 해석된 role/profile의 provider/model을 실행한다. 모델·effort 변경이 실행 중인 과거 spec을 바꾸지 않는다. | [spawn](../src/runtime/pi-spawn-plan.ts), [policy](../src/domain/child-policy.ts): Config/Principal 모델 선택과 새 실행 경계가 필요하다. |
+| SC-15 | 패키지 명령 | `oma pi`는 install/remove/update/list adapter다. `--local`, `--approve`, `--force`, `--self`, 일반 Pi config/session 명령 등은 거절된다. | [adapter](../src/runtime/pi-packages.ts): 프로젝트 Pi가 아닌 OMA 공용 store를 관리한다. |
+| SC-16 | Worker 활성화·수 | 기본 Worker는 GOAL 전에는 활성화되지 않는다. 기본 society 8명·lineage 4명 한도가 있다. | [defaults](../src/config/defaults.ts), [lifecycle](../src/lifecycle.ts): GOAL 게시와 quota/profile 편집이 필요하다. |
+| SC-17 | 통합 권한·검토 | 기본 Resident에 `code.integrate`가 없다. HIGH는 최소 두 peer와 Principal 판단을 요구한다. | [defaults](../src/config/defaults.ts), [policy](../src/git/integration-policy.ts): 명시적 Human grant·정책 설정이 필요하다. |
+| SC-18 | Git 프로젝트 형태 | 첫 working-tree snapshot은 sparse checkout, submodule/nested repository, 특수 파일을 거절한다. gitlink candidate의 integration도 거절한다. | [snapshot](../src/git/project-snapshot.ts), [gate](../src/git/observe.ts): 지원 구현 없이 설정만으로 해제할 수 없다. |
+| SC-19 | Git push·실제 프로젝트 | Worker origin은 읽기 전용 canonical mount다. `git push origin`으로 Human 저장소를 수정하지 않는다. 초기 import도 Human index/refs/worktree를 쓰지 않는다. | [workspace](../src/lifecycle/workspace.ts), [provision](../src/runtime/provision.ts): OMA 제출·통합 경로를 사용한다. |
+| SC-20 | 저장량·실행 자원 | 저장량 초과는 새 작업을 막는다. memory/tasks/CPU/tmp/workspace/staging/check timeout도 제한된다. 재생성 tree 배제가 물리 공간을 늘리지는 않는다. | [quota](../src/storage/quota.ts), [resources](../src/domain/resources.ts): HostConfig 한도와 실제 디스크를 확인해야 한다. |
+| SC-21 | 세션·기록 경계 | Society/Personal history·birth·authority를 임의로 합치지 않는다. 같은 society authority의 동시 소유도 거절한다. | [catalog](../src/runtime/session-catalog.ts), [lease](../src/runtime/society-lease.ts), [birth](../src/runtime/session-mode.ts): 올바른 모드의 resume 또는 새 세션이 필요하다. |
+| SC-22 | MCP 설정 가져오기 | `imports`, `claudePlugins`, host config 자동 발견을 거절한다. 기존 Claude/Pi MCP 설정이 자동 이식되지 않는다. | [normalizer](../src/extension/mcp-tools.ts): OMA `mcp-adapter.json`에 지원 필드를 직접 넣어야 한다. |
+| SC-23 | MCP 인증·설치 | `autoAuth`, `allowInstall`은 false다. `!command` 비밀값, per-request header command, 사용자 CA 경로를 지원하지 않는다. | [server/settings clamp](../src/extension/mcp-tools.ts): 외부 login helper·사내 CA 구성과 호환되지 않을 수 있다. |
+| SC-24 | MCP 도구·서버 상호작용 | directTools/scriptMode는 꺼지고 검색·호출 표면을 쓴다. Worker sampling/elicitation은 false며 이를 요청한 설정은 거절한다. | [MCP surface](../src/extension/mcp-tools.ts), [projection](../src/domain/tool-surface.ts): 모델에서 보이는 목록과 실제 서버 지원은 다르다. |
+| SC-25 | 웹 도구의 로컬 자원 | browser cookies, Keychain/secret-tool, Google ADC, `!command` credentials, local file/file:// 접근을 막는다. | [web adapter](../src/extension/web-tools.ts): 로그인된 브라우저의 사내 페이지를 그대로 읽는 도구가 아니다. |
+| SC-26 | 웹 도구의 기능 | git/gh clone, yt-dlp/ffmpeg/ffprobe, curator/browser opening, upstream slash commands/shortcuts를 제공하지 않는다. | [web adapter](../src/extension/web-tools.ts): 네 개 OMA 웹 도구만 등록한다. 일반 터미널 도구의 지원과 구분한다. |
+| SC-27 | 일반 Pi 명령 | Society `/trust`, `/bug`, `/import`는 자체 이유와 함께 거절한다. `/export`의 상대 경로는 실제 프로젝트로 재해석한다. | [interactive commands](../src/entry/pi-interactive-host.ts): 원래 Pi와 명령 의미가 완전히 같지 않다. |
+| SC-28 | 동적 도구 표면 | extension이 등록한 모든 도구가 바로 model surface에 나타나지 않는다. DIRECT/DISABLED/GROUPED 투영이 적용된다. | [surface plan](../src/domain/tool-surface.ts), [extension](../src/extension/tool-surface.ts): 그룹을 열어야 보이는 도구와 호출 자체가 금지된 도구를 구분해야 한다. |
+| SC-29 | 시작 직후 Society 요청 | private 대화가 먼저 열려도 실제 도구는 저장소 준비·복구·Principal 등록 뒤에 실행된다. **수정됨:** 처음부터 요청하면 등록을 기다리고, 전송 전 실패를 수락 불명으로 만들지 않는다. | [channel](../src/extension/principal-channel.ts), [client](../src/client/index.ts): 대화 화면과 Worker 준비의 시간은 별도로 측정한다. |
+| SC-30 | 패키지 디스크 회수 | **수정된 정책:** 패키지 교체 횟수로 이전 세대를 삭제하지 않는다. 살아 있는 확장이 이전 파일을 읽을 수 있어 자동 회수가 보수적이며 디스크 사용이 늘어난다. | [apply](../src/tui/packages-apply.ts): 독자가 모두 끝났다는 증거 없이 삭제할 수 없다. |
+| SC-31 | quota의 디렉터리 이름 제외 | `.git`, `node_modules`, `.venv`, `target`, `dist`, `build` 디렉터리는 내용의 생성 주체가 아니라 이름으로 사용량에서 제외된다. 같은 이름의 실제 작성 소스도 제외될 수 있고 물리 디스크 한도가 되지 않는다. | [quota](../src/storage/quota.ts): 설정으로 제외 목록을 바꾸는 표면은 없다. 파일 자체가 이 이름이면 과금한다. |
+| SC-32 | 도구 없는 환경의 자동완성 | 시작 시 optional fd/rg 다운로드를 기다리지 않는다. fd가 없으면 그 세션의 재귀 파일 자동완성이 제한된다. 설치된 fd는 바로 사용하고 모델의 grep/find는 기존 Pi installer를 사용한다. | [UI adapter](../src/pi-compat/interactive-tools.ts), [scoped import](../src/pi-compat/interactive-tool-setup.ts): 입력 시작 시간을 위해 바꾼 동작이며 도구 설치·다음 세션의 발견이 필요하다. |
+
+
+기본 차단, 설정 가능한 제한, 설정으로 해제할 수 없는 제한을 혼동하지 않는다. 이 표의
+사실을 숨기거나 “인터넷/skills 완전 지원”으로 과장하지 않으며, authority·격리 경계도
+근거 없이 제거하지 않는다.
+
 > 사용자가 당연히 될 거라 기대하는데 안 되는 것(WORKSTREAM §2 기준 1·2·9·10·11 중심)을
 > 발견 → 결정 → 수정 순으로 기록한다. 내부 원인이어도 사용자가 겪으면 여기 올리고 구현한다.
 > 사용자에게 영향 없는 순수 기술개선은 여기 올리지 않는다(WORKSTREAM에 기록만).
@@ -94,3 +143,9 @@ prune 비대칭(스코프 규칙의 일반화 누락) — 설치된 동안 죽�
 잔류했다. 사용자-facing wedge는 아니고 제거 시점엔 전체가 수집됐으므로 UX 행 대신 여기에
 기록; top-level 엔트리 하위에 설정된 strict descendant가 있으면 동일하게 한 단계 descend로
 일반화하고 회귀 테스트 추가.
+
+## 시작 시간 (실행 측정, 2026-10-08)
+
+| ID | 사용자가 겪는 것 | 기준 | 결정 | 수정 | 상태 |
+|---|---|---|---|---|---|
+| UX-39 | `oma`가 켜지는 데 약 2분; 1초 목표·5초 한도 요청 | 1, 9 | 문서→실제 PTY/CPU/child 실행 측정→수정→재측정. private 대화 시작과 broker authority 준비를 별도 관측 | DR35 — raw snapshot batch + 단일 임시 index tree, 설치 바이트 검증 순회/중복 개선, vendor membership 선형화, UI optional-tool 다운로드 분리, lease를 상속하는 취소 가능한 broker preparation. 첫 모델 요청 3회 Society 3.13~3.15초·Personal 1.43~1.49초; 상세 evidence와 최종 검사는 validation | 대화 5초 한도 충족; 1초 미달, Society 전체 준비 30.1초는 별도 백그라운드 작업 |

@@ -82,7 +82,7 @@ static int relay(int a, int b) {
   static char buffer[BUFFER_BYTES];
   int open_ab = 1, open_ba = 1;
   while (open_ab || open_ba) {
-    struct pollfd fds[2] = { { a, open_ab ? POLLIN : 0, 0 }, { b, open_ba ? POLLIN : 0, 0 } };
+    struct pollfd fds[2] = { { open_ab ? a : -1, POLLIN, 0 }, { open_ba ? b : -1, POLLIN, 0 } };
     if (poll(fds, 2, -1) < 0) { if (errno == EINTR) continue; return -1; }
     for (int side = 0; side < 2; side++) {
       int from = side == 0 ? a : b, to = side == 0 ? b : a;

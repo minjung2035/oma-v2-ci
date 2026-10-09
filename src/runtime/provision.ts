@@ -39,6 +39,7 @@ import { modelWorkspaceFor } from "../domain/derived.js";
 import { runGitText } from "../process/policies.js";
 import { withProjectSnapshot, SNAPSHOT_GIT_OPTIONS } from "../git/project-snapshot.js";
 import { createCanonicalObserver, createCanonicalRef } from "../git/canonical-command.js";
+import { repositoryHealthCommand } from "../git/repository-health.js";
 import { ensureOwnedDurableDirectory, fsyncHeldDir, fsyncTree, writeExclusiveFsyncedFile } from "../storage/durable-fs.js";
 import { ensureOwnedDirectory, removeOwnedFile } from "../storage/directory.js";
 import { TreeLease, collectLeasedTree } from "../storage/tree-lease.js";
@@ -77,6 +78,8 @@ const OWNED_DIRECTORIES: readonly string[] = Object.freeze([
 ]);
 
 export interface ProvisionReport {
+  /** Fresh strict history validation plus Git-created snapshot, never persisted. */
+  readonly verifiedMain?: string;
   /** Directories this call created. Empty on an already-provisioned society. */
   readonly created: readonly string[];
   /** True when this call seeded the canonical repository's first commit. */
@@ -101,6 +104,11 @@ export interface ProvisionReport {
 export interface ProvisionOptions {
   /** The directory `oma` was started in; its committed `HEAD` seeds `main`. */
   readonly projectDir?: string;
+  /** The host prepares private UI paths; the fenced broker owns repository work. */
+  readonly conversationOnly?: boolean;
+  /** Internal preparation: overlap a strict check of the owned history with
+   * file capture. The consumer waits before publishing canonical main. */
+  readonly verifyHistory?: (repository: string) => Promise<void>;
 }
 
 /** The project's committed `HEAD` and object format, or why there is none.
@@ -152,7 +160,9 @@ function git(argv: readonly string[], gitDir?: string, inheritedFds: readonly nu
  * for a society repository. `rename` onto a directory that already has the
  * winner's repository in it is refused by the kernel, which is exactly the
  * signal that this start lost. */
-function ensureBareRepository(path: string, format = "sha1"): boolean {
+function ensureBareRepository(path: string, format = "sha1", clone?: {
+  source: string; keepHeads: boolean; verify?: boolean; immutableOwnedObjects?: true;
+}): boolean {
   if (existsSync(path)) return false;
   if (format !== "sha1" && format !== "sha256")
     throw new StoreError("UNSUPPORTED_PROFILE", `the project uses an unsupported object format ${format}`);
@@ -166,7 +176,26 @@ function ensureBareRepository(path: string, format = "sha1"): boolean {
   // after a crash can tell a finished staging from one still being written.
   const lease = TreeLease.take(staging);
   try {
-    git(["init", "--quiet", "--bare", "--initial-branch=main", `--object-format=${format}`, staging], undefined, [lease.descriptor]);
+    if (clone === undefined)
+      git(["init", "--quiet", "--bare", "--initial-branch=main", `--object-format=${format}`, staging], undefined, [lease.descriptor]);
+    else {
+      // Human object stores can contain private index/stash/unreachable data.
+      // Only the Git protocol selects reachable advertised branch history;
+      // local copying is reserved for OMA's immutable owned repositories.
+      git([...SNAPSHOT_GIT_OPTIONS, "clone", "--quiet", "--bare",
+        ...(clone.immutableOwnedObjects === true ? ["--local"] : ["--no-local", "--no-hardlinks"]),
+        "--dissociate", "--no-tags", clone.source, staging], undefined, [lease.descriptor]);
+      if (clone.verify) git(["fsck", "--full", "--no-dangling", "--no-progress"], staging, [lease.descriptor]);
+      // A cloned branch is never canonical main. Only the CAS below makes it.
+      if (!clone.keepHeads) {
+        const deletions = git(["for-each-ref", "--format=delete %(refname)"], staging);
+        if (deletions) {
+          const result = runGitText(["update-ref", "--stdin"], { gitDir: staging, input: `${deletions}\n`, inheritedFds: [lease.descriptor] });
+          if (result.status !== 0) throw new StoreError("STORE_CORRUPT", "cloned refs could not be cleared before publication");
+        }
+        git(["symbolic-ref", "HEAD", "refs/heads/main"], staging);
+      }
+    }
     // WP16.04: everything the final name will expose is durable before it is
     // exposed, and the name itself is durable before this reports success.
     fsyncTree(staging);
@@ -220,6 +249,8 @@ function createCanonicalMain(projectGit: string, oid: string, what: string): boo
  * `upload-pack` ignores command-running settings in repository configuration.
  * It brings the objects only; `main` itself is made by the CAS above. */
 function seedFromProject(projectGit: string, projectDir: string, oid: string): boolean {
+  const present = runGitText(["cat-file", "-e", `${oid}^{commit}`], { gitDir: projectGit });
+  if (present.status === 0) return createCanonicalMain(projectGit, oid, "the copied project's HEAD");
   const fetched = runGitText([...SNAPSHOT_GIT_OPTIONS, "fetch", "--no-tags", "--quiet", projectDir, oid],
     { gitDir: projectGit, timeout: 10 * 60 * 1000 });
   if (fetched.status !== 0)
@@ -250,7 +281,9 @@ function seedEmptyRoot(projectGit: string): boolean {
  * creating what is absent and nothing else. Safe to call on every run and safe
  * to lose a race with another start; it reports what it had to create, and
  * what it found wrong and deliberately did not touch. */
-export function provisionSociety(stateRoot: string, options: ProvisionOptions = {}): ProvisionReport {
+export function provisionSociety(stateRoot: string, options: ProvisionOptions & { verifyHistory: (repository: string) => Promise<void> }): Promise<ProvisionReport>;
+export function provisionSociety(stateRoot: string, options?: ProvisionOptions): ProvisionReport;
+export function provisionSociety(stateRoot: string, options: ProvisionOptions = {}): ProvisionReport | Promise<ProvisionReport> {
   // P0-4: a binding publication that died before or after its link left its
   // private temporary; only the tenure holder writes one, and it runs this.
   collectBindingTemporaries(stateRoot);
@@ -265,6 +298,11 @@ export function provisionSociety(stateRoot: string, options: ProvisionOptions = 
     const made = ensureOwnedDurableDirectory(path, dirname(stateRoot), 0o700);
     if (made.includes(path)) created.push(relative);
   }
+  if (options.conversationOnly === true) {
+    const report = Object.freeze({ created: Object.freeze(created), seeded: false, seedSource: null, seedNote: null,
+      mirrorNote: null, gitlinkNote: null, pendingRepairs: Object.freeze([]) });
+    return options.verifyHistory === undefined ? report : Promise.resolve(report);
+  }
   const projectGit = projectGitPathAt(stateRoot);
   // The project is consulted only while the canonical repository has no main;
   // after that its history belongs to the society, not to this directory.
@@ -275,36 +313,63 @@ export function provisionSociety(stateRoot: string, options: ProvisionOptions = 
   const sourceIsGit = project !== null && ("oid" in project || project.note === "the project directory has no committed HEAD");
   const format = project !== null && "oid" in project ? project.format : sourceIsGit
     ? git(["-C", options.projectDir!, "rev-parse", "--show-object-format"]) : "sha1";
-  if (ensureBareRepository(projectGit, format)) created.push(join("repos", "project.git"));
   if (ensureBareRepository(join(stateRoot, "repos", "context.git"))) created.push(join("repos", "context.git"));
+  const freshHistory = fresh && !bare && project !== null && "oid" in project;
+  const concurrent = freshHistory && options.verifyHistory !== undefined;
+  const mirrorNote = options.projectDir === undefined ? null : refreshProjectMirror(stateRoot, options.projectDir, !freshHistory);
+  // This read-only verifier inherits the tree lease. It must finish even when
+  // capture fails, so no native child loses its owner during cleanup.
+  const verification = concurrent && mirrorNote === null ? options.verifyHistory!(projectMirrorPathAt(stateRoot)) : null;
+  if (freshHistory && mirrorNote === null && verification === null)
+    git([...repositoryHealthCommand(projectMirrorPathAt(stateRoot)).argv.slice(2).filter(arg => arg !== "--progress"),
+      "--no-progress", "--no-dangling"], projectMirrorPathAt(stateRoot));
   let seedSource: ProvisionReport["seedSource"] = null;
-  if (!hasCanonicalMain(projectGit)) {
-    // Reported only by the start that actually seeded. A start that lost the
-    // race created nothing and says so, so the product does not tell the user
-    // it started a society that was already there.
-    if (bare && project !== null && "oid" in project) {
-      if (seedFromProject(projectGit, options.projectDir!, project.oid)) seedSource = "project";
-    } else if (options.projectDir !== undefined) {
-      if (format !== "sha1" && format !== "sha256") throw new StoreError("UNSUPPORTED_PROFILE", "unsupported project object format");
-      withProjectSnapshot({ source: options.projectDir, parent: project !== null && "oid" in project ? project.oid : null,
-        sourceIsGit, format, temporaryParent: dirname(projectGit), executable: "/usr/bin/git" }, snapshot => {
-        if (seedFromProject(projectGit, snapshot.repository, snapshot.head)) seedSource = snapshot.empty &&
-          (project === null || !("oid" in project)) ? "empty" : "project";
-      });
-    } else if (seedEmptyRoot(projectGit)) seedSource = "empty";
+  let verifiedMain: string | undefined;
+  const finish = (): ProvisionReport => {
+    const seeded = seedSource !== null;
+    const seedNote = project !== null && "note" in project && seeded ? project.note : null;
+    const gitlinkNote = gitlinksOnMain(projectGit);
+    const rootfs = prepareResidentRootfs(residentRootfsPath(stateRoot), hostSystemLayout(),
+      process.getuid?.() ?? 0, process.getgid?.() ?? 0, "create");
+    return Object.freeze({ created: Object.freeze(created), seeded, seedSource, seedNote, mirrorNote, gitlinkNote,
+      pendingRepairs: rootfs.deferred, ...(verifiedMain === undefined ? {} : { verifiedMain }) });
+  };
+  try {
+    if (!existsSync(projectGit) || !hasCanonicalMain(projectGit)) {
+      // Reported only by the start that actually seeded. A start that lost the
+      // race created nothing and says so, so the product does not tell the user
+      // it started a society that was already there.
+      if (bare && project !== null && "oid" in project) {
+        if (ensureBareRepository(projectGit, format)) created.push(join("repos", "project.git"));
+        if (seedFromProject(projectGit, options.projectDir!, project.oid)) seedSource = "project";
+      } else if (options.projectDir !== undefined) {
+        if (format !== "sha1" && format !== "sha256") throw new StoreError("UNSUPPORTED_PROFILE", "unsupported project object format");
+        const result = withProjectSnapshot({ source: options.projectDir, parent: project !== null && "oid" in project ? project.oid : null,
+          sourceIsGit, format, temporaryParent: dirname(projectGit), executable: "/usr/bin/git",
+          ...(project !== null && "oid" in project && mirrorNote === null ? { historySource: projectMirrorPathAt(stateRoot) } : {}) }, snapshot => {
+          const publish = (): void => {
+            if (ensureBareRepository(projectGit, format, { source: snapshot.repository, keepHeads: false, immutableOwnedObjects: true })) created.push(join("repos", "project.git"));
+            if (seedFromProject(projectGit, snapshot.repository, snapshot.head)) {
+              seedSource = snapshot.empty && (project === null || !("oid" in project)) ? "empty" : "project";
+              if (verification !== null) verifiedMain = snapshot.head;
+            }
+          };
+          return verification === null ? publish() : verification.then(publish);
+        });
+        if (result !== undefined) return result.then(finish);
+      } else {
+        if (ensureBareRepository(projectGit, format)) created.push(join("repos", "project.git"));
+        if (seedEmptyRoot(projectGit)) seedSource = "empty";
+      }
+    }
+  } catch (error) {
+    if (verification !== null) return verification.then(() => { throw error; }, failure => {
+      throw new AggregateError([error, failure], "capture and history verification failed");
+    });
+    throw error;
   }
-  const seeded = seedSource !== null;
-  const seedNote = project !== null && "note" in project && seeded ? project.note : null;
-  const mirrorNote = options.projectDir === undefined ? null : refreshProjectMirror(stateRoot, options.projectDir);
-  const gitlinkNote = gitlinksOnMain(projectGit);
-  // Confinement on by default: the rootfs is built here rather than being a
-  // thing the user must assemble before Residents can be sandboxed.
-  const rootfs = prepareResidentRootfs(residentRootfsPath(stateRoot), hostSystemLayout(),
-    process.getuid?.() ?? 0, process.getgid?.() ?? 0, "create");
-  return Object.freeze({
-    created: Object.freeze(created), seeded, seedSource, seedNote, mirrorNote, gitlinkNote,
-    pendingRepairs: rootfs.deferred,
-  });
+  const report = finish();
+  return options.verifyHistory === undefined ? report : Promise.resolve(report);
 }
 
 /** UX-09: provisioning stays permissive — a seeded or mirrored `main` may
@@ -332,13 +397,13 @@ function gitlinksOnMain(projectGit: string): string | null {
  * The canonical repository does not depend on the mirror, so a project that
  * cannot be read now is a note, not a failed start; its answer is null when
  * the mirror is current. */
-export function refreshProjectMirror(stateRoot: string, projectDir: string): string | null {
+export function refreshProjectMirror(stateRoot: string, projectDir: string, verify = true): string | null {
   const project = projectHead(projectDir);
   const mirror = projectMirrorPathAt(stateRoot);
   // A project that never had history has nothing to mirror, which is not news
   // at every start; one whose history the mirror holds and cannot now be read is.
   if ("note" in project) return existsSync(mirror) ? project.note : null;
-  ensureBareRepository(mirror, project.format);
+  if (ensureBareRepository(mirror, project.format, { source: projectDir, keepHeads: true, verify })) return null;
   const format = runGitText(["rev-parse", "--show-object-format"], { gitDir: mirror });
   if (format.status !== 0 || format.stdout.trim() !== project.format)
     return "the project's object format differs from its mirror's; the mirror was not refreshed";

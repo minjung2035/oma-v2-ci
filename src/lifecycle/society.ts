@@ -11,21 +11,17 @@ import { decodeMutationPayload } from "../protocol/request-codec.js";
 import { receiptOfOperation } from "../storage/receipt-projector.js";
 import type { OperationOf } from "../storage/operation-codec.js";
 import type { UnitsModule } from "../units.js";
-import type { ResourceGate } from "../domain/admission.js";
 
 /** Every Resident's path is disabled, even if its service is already dead.
  * Otherwise a queued mail/path activation can outlive an observed empty cgroup. */
-export function quiesceResidents(store: Store, units: UnitsModule, admit?: ResourceGate): void {
+export function quiesceResidents(store: Store, units: UnitsModule): void {
   const failures: unknown[] = [];
   for (const agent of store.listAgents()) {
     if (agent.role !== "resident") continue;
     try {
-      const release = admit?.("safety-control");
-      try {
-        units.stop(agent.name, agent.incarnation);
-        if (!units.confirmDead(agent.name, agent.incarnation))
-          throw new StoreError("RUN_TERMINATION_UNKNOWN", `cannot prove ${agent.name} terminated`);
-      } finally { release?.(); }
+      units.stop(agent.name, agent.incarnation);
+      if (!units.confirmDead(agent.name, agent.incarnation))
+        throw new StoreError("RUN_TERMINATION_UNKNOWN", `cannot prove ${agent.name} terminated`);
     } catch (error) { failures.push(error); }
   }
   if (failures.length === 0) return;

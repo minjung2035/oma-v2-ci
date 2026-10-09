@@ -38,16 +38,18 @@
 // `const w = fs.writeFileSync`). A same-named local function is never an fs
 // call here.
 //
-// The observation arm's bound, said once: it audits a call whose argument
-// *mentions* an owned-tail identifier (OWNED_ROOT_NAME). An owned path that
-// reaches a raw probe under a generic name -- `path`, `dir`, `root` -- is
-// beyond what a name rule can see; the mutation arm audits the file's whole
-// surface regardless of names. An owned tail in new code should travel under
+// Observation provenance starts at OWNED_ROOT_NAME bindings and follows
+// string aliases, assignments and resolved local callee parameters across
+// files. Generic names retain that provenance; distinct symbols do not share
+// it. Dynamically computed call targets remain outside this static proof.
+// The mutation arm audits the file's whole surface regardless of names.
+// An owned tail in new code should travel under
 // an owned name, and a rename of one into a generic identifier hides it from
 // this arm -- the written answer for that is the exemption table, not the
 // rename.
 import ts from "typescript";
-import { eachNode, filesUnder, finding, sourceOf } from "./shared.mjs";
+import path from "node:path";
+import { eachNode, filesUnder, finding } from "./shared.mjs";
 
 /** Path-taking fs mutations: a name oma owns is created, changed or removed.
  * The `node:fs` module carries the same effects twice -- the `*Sync` spelling
@@ -114,6 +116,21 @@ export const OWNED_STATE_OWNERS = Object.freeze([
  * entry says the path the call touches is not an OMA-owned tail, or why the
  * plain call on it is already refused-and-reported. */
 export const OWNED_STATE_EXEMPTIONS = Object.freeze({
+  "src/config/operations.ts": "the Human-authored configuration closure and explicitly selected extension assets: canonical-path and content checks refuse unreadable inputs, never repair or rewrite the Human's source",
+  "src/entry/personal-host.ts": "read-only birth/config metadata and the Human's actual cwd; the host owns no project permission repair and a failed probe refuses the launch",
+  "src/lifecycle/workspace.ts": "a metadata-only .git existence probe after owned staging preparation; the workspace's Git validation supplies the authoritative result, never a false absence on a failed open",
+  "src/mail/materializer.ts": "metadata-only new/cur membership probes after owned maildir repair; lstat does not need leaf read bits and an observation failure propagates instead of authorizing replacement",
+  "src/pi-compat/settings.ts": "only Personal's trusted project scope ensures the Human's .pi directory; OMA's global scope uses lockedOwnedReplace and never rewrites project ancestor permissions",
+  "src/platform/guest/identity.ts": "image/boot attestation reads and the mounted instance record; a failed read refuses hello, never invents an identity or repairs a read-only image",
+  "src/platform/host/record.ts": "read-only host-record decoding before a controller's ownership decision; a read failure refuses startup and never creates a replacement identity",
+  "src/reconcile/preaccept.ts": "metadata probes after owned directory repair during lease-authorized collection; lstat needs no leaf read bits, and failures retain artifacts rather than authorizing collection",
+  "src/runtime/assets.ts": "installation pin validation and a filesystem-type probe that may ascend into the Human's existing ancestors; unreadable assets refuse, never alter the pinned installation or user directories",
+  "src/runtime/personal-settings.ts": "metadata distinguishes an oversized regular settings file after the bounded user-file reader refused it; external configured extension metadata is validated without repairing the Human's files",
+  "src/storage/context-snapshot.ts": "immutable revision verification deliberately checks fixed modes rather than repairing them; publication's existence probe names the already prepared owned destination",
+  "src/storage/staged-tree.ts": "the held-parent publication primitive's metadata probes; staged/final shape and durability are validated before adoption and unknown observations never authorize replacement",
+  "src/store.ts": "read-only SQLite diagnostics and sidecar identity probes deliberately perform no permission repair, writes or owner takeover; unreadable state refuses the diagnostic",
+  "src/tui/sources/settings.ts": "metadata-only configuration existence probes after source layout validation; an inaccessible existing source propagates an error instead of being treated as absent",
+  "src/tui/transport.ts": "best-effort read-only status view observation: a failed open is displayed as unavailable and never grants broker authority or permits mutation",
   "src/broker/internal-dispatcher.ts": "the maildir `new` listing under the state root -- a failure refuses the request, never reads as empty; the directories are repaired by the broker's owned ensures",
   "src/cli/effects/submit.ts": "a fresh mkdtemp under the OS temp directory -- the CLI caller's own scratch, not oma state",
   "src/entry/guest-provision.ts": "the guest's own /proc/cmdline read and the chown of its data parts to the oma user -- deliberate ownership assignment, kernel paths are never repaired",
@@ -363,15 +380,62 @@ const writingOpen = node => {
 };
 
 /** Does the expression mention an OMA-owned root identifier? */
-const namesOwnedRoot = node => {
+const namesOwnedRoot = (node, tainted = new Set(), checker) => {
   let owned = false;
   eachNode(node, child => {
     if (owned) return;
     if (ts.isIdentifier(child) && OWNED_ROOT_NAME.test(child.text)) owned = true;
     if (ts.isPropertyAccessExpression(child) && OWNED_ROOT_NAME.test(child.name.text)) owned = true;
+    if (checker && ts.isIdentifier(child) && tainted.has(checker.getSymbolAtLocation(child))) owned = true;
   });
   return owned;
 };
+
+/** Follow owned arguments into local callees and aliases by symbol, including
+ * cross-file imports. Generic root/path/dir names do not erase provenance. */
+function ownedProvenance(sources, checker) {
+  const tainted = new Set();
+  const edges = [];
+  const pathSymbol = symbol => {
+    if (!symbol) return false;
+    const declaration = symbol.valueDeclaration ?? symbol.declarations?.[0];
+    if (!declaration) return false;
+    const type = checker.getTypeOfSymbolAtLocation(symbol, declaration);
+    const scalar = item => (item.flags & (ts.TypeFlags.StringLike | ts.TypeFlags.Any | ts.TypeFlags.Unknown)) !== 0;
+    return type.isUnion() ? type.types.some(scalar) : scalar(type);
+  };
+  const bind = (name, expression) => {
+    eachNode(name, child => {
+      if (ts.isIdentifier(child)) {
+        const symbol = checker.getSymbolAtLocation(child);
+        if (pathSymbol(symbol)) edges.push({ symbol, expression });
+      }
+    });
+  };
+  const sourceSet = new Set(sources);
+  for (const source of sources) eachNode(source, node => {
+    if (ts.isIdentifier(node) && OWNED_ROOT_NAME.test(node.text)) {
+      const symbol = checker.getSymbolAtLocation(node);
+      if (pathSymbol(symbol)) tainted.add(symbol);
+    }
+    if (ts.isVariableDeclaration(node) && node.initializer) bind(node.name, node.initializer);
+    if (ts.isBinaryExpression(node) && node.operatorToken.kind === ts.SyntaxKind.EqualsToken) bind(node.left, node.right);
+    if (ts.isCallExpression(node)) {
+      const declaration = checker.getResolvedSignature(node)?.declaration;
+      if (!declaration || !sourceSet.has(declaration.getSourceFile())) return;
+      for (const [index, parameter] of (declaration.parameters ?? []).entries())
+        if (node.arguments[index]) bind(parameter.name, node.arguments[index]);
+    }
+  });
+  let changed = true;
+  while (changed) {
+    changed = false;
+    for (const { symbol, expression } of edges) if (!tainted.has(symbol) && namesOwnedRoot(expression, tainted, checker)) {
+      tainted.add(symbol); changed = true;
+    }
+  }
+  return tainted;
+}
 
 /** Calls that touch two paths at once (rename/link/copy name both ends);
  * `symlink`'s first argument is link content, never a path it touches. */
@@ -388,10 +452,18 @@ const touchedArguments = (node, name) =>
 
 export function ownedStateFindings(root) {
   const findings = [];
-  for (const file of filesUnder(root, "src")) {
+  const files = filesUnder(root, "src");
+  const program = ts.createProgram(files.map(file => path.resolve(root, file)), {
+    target: ts.ScriptTarget.ESNext, module: ts.ModuleKind.NodeNext, moduleResolution: ts.ModuleResolutionKind.NodeNext,
+    skipLibCheck: true, noEmit: true,
+  });
+  const sources = files.map(file => program.getSourceFile(path.resolve(root, file)));
+  const checker = program.getTypeChecker();
+  const tainted = ownedProvenance(sources, checker);
+  for (const [index, file] of files.entries()) {
     if (OWNED_STATE_OWNERS.includes(file)) continue;
     const exempted = Object.hasOwn(OWNED_STATE_EXEMPTIONS, file);
-    const source = sourceOf(root, file);
+    const source = sources[index];
     const bindings = collectFsBindings(source);
     let flagged = 0;
     eachNode(source, node => {
@@ -424,7 +496,7 @@ export function ownedStateFindings(root) {
           return;
         }
       }
-      if (observations.has(resolved.name) && touched.some(namesOwnedRoot)) {
+      if (observations.has(resolved.name) && touched.some(argument => namesOwnedRoot(argument, tainted, checker))) {
         flagged += 1;
         if (!exempted)
           findings.push(finding("owned-state-raw-observation", file,

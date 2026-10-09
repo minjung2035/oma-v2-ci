@@ -112,8 +112,9 @@ export class SnapshotReader {
 }
 /** Read only the observed length, then require EOF and unchanged metadata.
  * A growing file cannot prolong the snapshot indefinitely. */
-export function copySnapshotFile(entry: SnapshotEntry, path: string, write: (bytes: Buffer) => void): void {
-  const buffer = Buffer.alloc(64 * 1024);
+export function copySnapshotFile(entry: SnapshotEntry, path: string, write: (bytes: Buffer) => void,
+  buffer = Buffer.alloc(64 * 1024)): void {
+  if (buffer.length === 0) throw new TypeError("snapshot copy needs a nonempty buffer");
   let position = 0;
   while (position < entry.stat.size) {
     const count = readSync(entry.descriptor, buffer, 0, Math.min(buffer.length, entry.stat.size - position), position);

@@ -12,7 +12,9 @@ import { openSupervisionChannel } from "../runtime/supervision-channel.js";
 import { GitModule } from "../git.js";
 import { CandidateChecks } from "../runtime/candidate-checks.js";
 import { QUARANTINE_RESOURCES } from "../git/quarantine.js";
-import { repairSociety } from "../runtime/provision.js";
+import { observeProjectBinding, repairSociety } from "../runtime/provision.js";
+import { prepareSociety } from "../runtime/society-preparation.js";
+import { realpathSync } from "node:fs";
 import { integrationPolicyFromConfig, snapshotIntegrationPolicy, assertSupportedIntegration } from "../git/integration-policy.js";
 import { ReconcileModule } from "../reconcile.js";
 import { loadConfig, readCurrentHostPolicy } from "../config.js";
@@ -98,10 +100,19 @@ async function main(): Promise<void> {
     return graceSeconds;
   });
   let exitStatus = 0; let stopping: Promise<void> | null = null;
+  const preparationAbort = new AbortController();
+  let preparation: ReturnType<typeof prepareSociety> | null = null;
+  let freshVerifiedMain: string | undefined;
+  let principalHost: ReturnType<typeof openSupervisionChannel>;
   const stop = (code: number): Promise<void> => {
     exitStatus = Math.max(exitStatus, code);
     if (stopping) return stopping;
-    stopping = lifetime.shutdown().then(() => { process.exitCode = exitStatus; }, error => {
+    preparationAbort.abort();
+    stopping = (async () => {
+      if (preparation !== null) await preparation.catch(() => {});
+      await lifetime.shutdown();
+      principalHost?.close();
+    })().then(() => { process.exitCode = exitStatus; }, error => {
       // P0V-58: e.g. a Resident whose end the drain could not prove. The
       // Store and lock are given back; the drain did not finish, and says so.
       console.error("broker drain did not finish:", error instanceof StoreError ? `${error.code}: ${error.message}` : error instanceof Error ? error.message : String(error));
@@ -115,7 +126,7 @@ async function main(): Promise<void> {
   // recovery still takes this broker with it; a broker started any other way
   // has no channel, opens no Principal endpoint, and runs as before.
   const supervised = process.env[HOST_CHANNEL_ENV] === String(HOST_CHANNEL_FD);
-  const principalHost = supervised
+  principalHost = supervised
     ? openSupervisionChannel({
       fd: HOST_CHANNEL_FD,
       onHostGone: reason => { console.error(`${reason}; the broker stops with it`); void stop(0); },
@@ -136,18 +147,32 @@ async function main(): Promise<void> {
   try {
     const cfg = loadConfig(configPath);
     if (cfg.society !== society) throw new StoreError("INVALID_REQUEST", "config society does not match the requested society");
-    assertStateRoot(stateRoot);
     assertHostDirectoryLayout(cfg.installation.libdir);
-    assertHostDirectoryLayout(cfg.installation.rootfs);
     // No schema search, path flattening or cross-installation fallback.
     assertRuntimeAssets(runtimeAssets(cfg.installation.libdir), { schema: SCHEMA_PATH, systemd: UNIT_TPL_DIR });
     assertDeploymentDigest(cfg.installation.libdir, cfg.installation.deploymentDigest);
+    const projectIdx = args.indexOf("--project-dir");
+    if (projectIdx >= 0) {
+      const projectDir = args[projectIdx + 1];
+      const binding = observeProjectBinding(stateRoot);
+      if (projectDir === undefined || realpathSync(projectDir) !== projectDir || binding.kind !== "bound" ||
+          binding.binding.society !== society || binding.binding.canonicalProjectPath !== projectDir)
+        throw new StoreError("INVALID_REQUEST", "startup project does not match the society's committed binding");
+      preparation = prepareSociety({ node: cfg.installation.node, libdir: cfg.installation.libdir,
+        stateRoot, society, projectDir, fence: claim.fence,
+        signal: preparationAbort.signal, log: line => console.error(line) });
+      const prepared = await preparation;
+      freshVerifiedMain = prepared.verifiedMain ?? undefined;
+    }
+    if (stopping !== null) { await stopping; return; }
+    assertHostDirectoryLayout(cfg.installation.rootfs);
+    assertStateRoot(stateRoot);
     // D04: over the admission cap the broker still starts and enters bounded
     // recovery -- the fresh scan refuses each new admission per request until
     // usage settles, and settlement keeps its headroom. An over-quota store is
     // reported as degraded, never hidden; it no longer stops the process here.
     const storage = new StorageAdmission(stateRoot, cfg.quota.storageBytes, cfg.limits.frameBytes);
-    if (storage.startupState() === "degraded")
+    if (await storage.startupState() === "degraded")
       console.error(JSON.stringify({ event: "broker.storage", state: "degraded", reason: "QUOTA_EXCEEDED" }));
     graceSeconds = cfg.limits.receiptWaitSeconds;
     const integrationPolicy = integrationPolicyFromConfig(cfg.integration);
@@ -179,6 +204,7 @@ async function main(): Promise<void> {
       residentProjectGit: residentProjectGit() }, resolveSpec, mail, cfg.quota);
     const reconcile = new ReconcileModule(store, mail, git, units, lifecycle, {
       projectGit: projectGitPathAt(stateRoot), hasGoal, activationAllowed: () => lifetime.permitsActivation,
+      ...(freshVerifiedMain === undefined ? {} : { freshVerifiedMain }),
       sweepBudgetSeconds: cfg.limits.receiptWaitSeconds, resourceGate: category => storage.admit(category),
     });
     // PR-001: only the host that started this process gets a Principal
@@ -204,8 +230,8 @@ async function main(): Promise<void> {
           // after the startup quiescence proved every earlier Resident ended,
           // so nothing still runs on it, and before recovery, listening or
           // activation can wake one on it. A repair that fails ends startup:
-          // no broker listens and no engine starts over a rootfs the product
-          // cannot vouch for.
+          // no broker listens or grants authority over an unverified rootfs.
+          // DR35's private host conversation uses no Resident rootfs.
           for (const path of repairSociety(stateRoot)) console.error(`Restored rootfs entry to its expected value: ${path}`);
           await lifecycle.bootstrap(cfg); validateStoredProfiles();
         });
@@ -224,6 +250,7 @@ async function main(): Promise<void> {
       activate: async () => { await reconcile.sweep(); views.refreshWorld(); },
     });
   } catch (error) {
+    if (preparationAbort.signal.aborted) { await stop(0); return; }
     console.error("broker startup failed:", error instanceof StoreError ? `${error.code}: ${error.message}` : error instanceof Error ? error.message : String(error)); await stop(1);
   }
 }

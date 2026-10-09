@@ -3,7 +3,8 @@ import assert from "node:assert/strict";
 import { chmodSync, closeSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, symlinkSync, unlinkSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { spawnSync } from "node:child_process";
+import childProcess, { spawnSync } from "node:child_process";
+import { syncBuiltinESMExports } from "node:module";
 import { withProjectSnapshot } from "../src/git/project-snapshot.js";
 import { StoreError } from "../src/domain/errors.js";
 import { SnapshotReader, copySnapshotFile } from "../src/storage/snapshot-reader.js";
@@ -29,6 +30,29 @@ function fixture(t: import("node:test").TestContext, format: "sha1" | "sha256" =
   const options = { source: project, parent, format, sourceIsGit: true, temporaryParent: root, executable: "/usr/bin/git" } as const;
   return { root, project, run, parent, options };
 }
+
+test("startup: snapshot Git processes do not grow with file or directory count", t => {
+  const f = fixture(t);
+  for (let i = 0; i < 80; i++) {
+    const dir = join(f.project, `dir-${i}`); mkdirSync(dir);
+    writeFileSync(join(dir, "file"), `bytes-${i}\r\n`);
+  }
+  const native = childProcess.spawnSync;
+  const calls: string[][] = [];
+  t.after(() => { t.mock.restoreAll(); syncBuiltinESMExports(); });
+  t.mock.method(childProcess, "spawnSync", ((executable: string, argv: string[], options: Parameters<typeof native>[2]) => {
+    calls.push([...argv]);
+    return native(executable, argv, options);
+  }) as typeof native);
+  syncBuiltinESMExports();
+  withProjectSnapshot(f.options, snapshot => {
+    assert.equal(snapshot.git(["show", `${snapshot.head}:dir-79/file`]), "bytes-79");
+    assert.equal(snapshot.git(["ls-tree", "-rz", "--name-only", snapshot.head]).split("\0").length - 1, 83);
+  });
+  assert.equal(calls.filter(argv => argv.includes("hash-object")).length, 1, "one batch imports all raw blobs");
+  assert.ok(calls.filter(argv => argv.includes("mktree") || argv.includes("write-tree")).length <= 1,
+    "Git builds the whole tree in one process");
+});
 for (const format of ["sha1", "sha256"] as const) test(`DR27: ${format} snapshot captures raw worktree bytes without touching the source`, t => {
   const f = fixture(t, format);
   const marker = join(f.root, "ran");

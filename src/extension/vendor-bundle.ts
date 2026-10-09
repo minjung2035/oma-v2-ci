@@ -14,7 +14,7 @@
  * OMA runtime import, no network, no package manager. The same check runs
  * identically on the host and inside a Resident's sandbox. A second,
  * coarser pin is the deployment digest over all of dist/, asserted by the
- * broker before any engine starts; this one is the per-bundle check the
+ * broker before it grants Society authority; this one is the per-bundle check the
  * extension itself can make where no broker armed a digest.
  */
 import { createHash } from "node:crypto";
@@ -100,6 +100,7 @@ export function verifyVendorBundle(bundleDir: string): VendorVerification {
   const manifest = readManifest(root);
   const listed = new Map(manifest.files.map(entry => [entry.path, entry]));
   const actual = bundleFiles(root);
+  const present = new Set(actual);
   const records = actual.map(path => {
     const bytes = readFileSync(join(root, path));
     return { path, bytes: bytes.length, sha256: sha256(bytes) };
@@ -111,7 +112,7 @@ export function verifyVendorBundle(bundleDir: string): VendorVerification {
       throw new VendorIntegrityError(`vendored bundle file changed: ${record.path}`);
   }
   for (const path of listed.keys())
-    if (!records.some(record => record.path === path))
+    if (!present.has(path))
       throw new VendorIntegrityError(`vendored bundle file is missing: ${path}`);
   const digest = createHash("sha256");
   for (const { path, sha256: file } of records) digest.update(`${path}\0${file}\n`);

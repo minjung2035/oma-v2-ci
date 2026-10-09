@@ -1,36 +1,51 @@
 /** P0-4/FS-005: a snapshot's owned preparation, held until its consumer ends.
  * Every Git child inherits the lease; an unobserved child keeps the tree. */
 import { constants, mkdirSync } from "node:fs";
-import { join } from "node:path";
-import { entryAt, openBeneath, withinDirectory } from "./contained-fs.js";
-import { removeOwnedFile } from "./directory.js";
+import { closeEvery, entryAt, openBeneath, withinDirectory } from "./contained-fs.js";
+import { openOwnedDirectoryPath, removeOwnedFile } from "./directory.js";
 import { TreeLease, collectLeasedTree } from "./tree-lease.js";
 
 export interface ProjectPreparation {
   readonly path: string;
   readonly descriptor: number;
-  openContent(): number;
+  openContent(index?: number): number;
   dispose(): void;
+}
+
+/** Private spool names, independent of untrusted project filenames. */
+export function projectContentName(index = 0): string {
+  if (!Number.isSafeInteger(index) || index < 0) throw new TypeError("invalid snapshot content index");
+  return index === 0 ? "content" : `content-${index}`;
 }
 
 /** Linux society state: no mutation resolves an unchecked parent pathname. */
 export function prepareProjectDirectory(path: string): ProjectPreparation {
   const lease = TreeLease.take(path, true);
   let made = false;
+  let directory: number | undefined;
   try {
     withinDirectory(path, (parent, name) => { mkdirSync(entryAt(parent, name), { mode: 0o700 }); made = true; });
+    directory = openOwnedDirectoryPath(path);
     return {
       path, get descriptor() { return lease.descriptor; },
-      openContent: () => withinDirectory(join(path, "content"), (parent, name) =>
-        openBeneath(parent, name, constants.O_WRONLY | constants.O_CREAT | constants.O_TRUNC | constants.O_NOFOLLOW, 0o600)),
+      openContent: (index = 0) => {
+        if (directory === undefined) throw new Error("snapshot preparation is disposed");
+        return openBeneath(directory, projectContentName(index), constants.O_WRONLY | constants.O_CREAT | constants.O_TRUNC | constants.O_NOFOLLOW, 0o600);
+      },
       dispose() {
         // Even a failed close is not proof of a child having exited. The
         // collector's fresh lock observation alone permits removal.
-        disposeProjectPreparation(() => lease.release(), () => { collectLeasedTree(path); });
+        disposeProjectPreparation(() => {
+          const held = directory; directory = undefined;
+          disposeProjectPreparation(() => closeEvery(held), () => lease.release());
+        }, () => { collectLeasedTree(path); });
       },
     };
   } catch (error) {
-    try { disposeProjectPreparation(() => lease.release(), () => {
+    try { disposeProjectPreparation(() => {
+      const held = directory; directory = undefined;
+      disposeProjectPreparation(() => closeEvery(held), () => lease.release());
+    }, () => {
       if (made) collectLeasedTree(path); else removeOwnedFile(`${path}.lease`);
     }); }
     catch (cleanup) { throw new AggregateError([error, cleanup], "snapshot preparation and cleanup failed"); }

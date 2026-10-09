@@ -146,7 +146,8 @@ test("P1 public validation: successful requests re-read and re-decode rather tha
     dispatcher.preflight(auth, raw);
     const result = await dispatcher.dispatch(auth, raw, body());
     assert.equal(result.ok, true); assert.equal(result.id, raw.id);
-    assert.equal(calls.actors, 2); assert.equal(calls.params, 2); assert.equal(calls.admission, 2);
+    // Preflight, before storage admission, and after its asynchronous scan.
+    assert.equal(calls.actors, 3); assert.equal(calls.params, 3); assert.equal(calls.admission, 3);
     assert.equal(calls.effects.length, 1); assert.equal(calls.refresh, 1);
   }
 });
@@ -176,7 +177,7 @@ test("P1 public validation: bundle-omitted submission without a stream remains v
   const { dispatcher, auth, calls } = fixture();
   const result = await dispatcher.dispatch(auth, request({ params: {} }), null);
   assert.equal(result.ok, true); assert.equal(calls.effects.length, 1);
-  assert.equal(calls.actors, 1); assert.equal(calls.admission, 1);
+  assert.equal(calls.actors, 2); assert.equal(calls.admission, 2);
 });
 
 test("P11 public mail.send without approval does not inspect the operation ledger", async () => {

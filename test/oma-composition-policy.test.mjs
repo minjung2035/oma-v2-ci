@@ -443,19 +443,17 @@ async function run({ brokerState = { kind: "started", pid: 1 }, credentials = ["
     fireEvent: event => sessionListener?.(event) };
 }
 
-test("T119: the engine starts when this process is proved to own the society, not when a broker is spawned", async () => {
+test("T119 / DR35: the lease permits private conversation while broker authority remains closed", async () => {
   const society = await run();
-  // A spawned broker is a pid, not an owned society: between the supervisor's
-  // probe and the lock the child takes, another `oma` can take it. Starting the
-  // engine here is starting a second Principal on one society.
-  assert.equal(society.calls.includes("PrincipalSession.start"), false,
-    "an engine was started on a spawn, before any broker said it holds the society");
-  assert.equal(society.started, null);
+  assert.ok(society.calls.includes("PrincipalSession.start"));
+  assert.ok(society.calls.indexOf("tryHoldSociety") < society.calls.indexOf("PrincipalSession.start"));
+  assert.ok(society.started);
+  assert.equal(society.broker.registrations.length, 0);
+  assert.deepEqual(society.grants, []);
   assert.equal(society.calls.includes("PrincipalDelivery"), false,
-    "a delivery owner was built with no session to deliver into");
+    "a delivery owner was built before any broker granted authority");
 
-  // Readiness is the broker saying it holds the society lock, and it is the
-  // only thing the engine waits for.
+  // Broker readiness and registration grant authority to the existing engine.
   society.broker.fireReady();
   await society.settle();
   const { calls, started, grants } = society;
@@ -782,22 +780,22 @@ test("VAL-002 negative control: a run root the product can vouch for is judged a
     "the control did not reproduce the ordinary path, so the refusal above proves nothing");
 });
 
-test("P0V-58 / R03, DR16: the host provisions the tree and leaves its repair to the broker's startup", async () => {
+test("P0V-58 / DR16 / DR35: the host prepares private paths and broker startup owns rootfs repair", async () => {
   // The rootfs used to be repaired here, before the broker existed -- and so
   // before anything had proven that the Residents an earlier broker failed to
   // stop had ended: one could still be running, or restarting and building its
   // sandbox, on the entries being rewritten. The repair now runs in the
   // broker, right after its startup quiescence and before it can wake a
   // Resident (broker-composition-policy); a repair that fails ends the
-  // broker's startup, so no broker becomes ready and no engine starts.
+  // broker's startup, so no broker becomes ready or grants Society authority.
   const society = await run();
   const order = name => society.calls.indexOf(name);
   assert.equal(society.calls.includes("repairSociety"), false, "the host repaired the rootfs before any quiescence");
   assert.ok(order("tryHoldSociety") < order("provisionSociety"));
   assert.ok(order("provisionSociety") < order("superviseBroker"));
-  // No engine starts until the broker says it is ready -- which a broker whose
-  // repair failed never does.
-  assert.equal(society.calls.includes("PrincipalSession.start"), false);
+  assert.ok(society.calls.includes("PrincipalSession.start"));
+  assert.equal(society.grants.length, 0);
+  assert.equal(society.deliveries.length, 0);
   society.broker.fireReady();
   await society.settle();
   assert.ok(society.calls.includes("PrincipalSession.start"));
@@ -877,8 +875,7 @@ test("T119: a crash stops the broker and the engine this process started", async
 
 test("T119 / PR-002: delivery runs only once a broker is ready, and again as each turn settles", async () => {
   const { calls, deliveries, broker, settle, fireEvent } = await run();
-  // Before the broker is ready there is no session, so there is nothing to
-  // deliver into and nothing to prepare from.
+  // A private conversation exists, but there is no Society delivery authority.
   assert.equal(calls.includes("PrincipalDelivery"), false);
   fireEvent({ type: "agent_settled" });
   await settle();

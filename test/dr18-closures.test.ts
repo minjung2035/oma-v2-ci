@@ -104,8 +104,12 @@ test("DR18 / D-8: every start brings the project's committed branch history into
   git(project, "checkout", "-q", "main");
   // Uncommitted work of every kind: a stash, and a staged file.
   writeFileSync(join(project, "a.txt"), "stashed\n"); git(project, "stash", "-q");
+  const stashed = git(project, "rev-parse", "refs/stash:a.txt");
   writeFileSync(join(project, "staged.txt"), "private staged bytes\n"); git(project, "add", "staged.txt");
   const staged = git(project, "hash-object", "staged.txt");
+  // Private objects inside a pack must not leak either. Removing only loose
+  // unreachable objects after a local copy would not satisfy this contract.
+  git(project, "gc", "--quiet");
   const stateRoot = join(root, "state");
   const report = provisionSociety(stateRoot, { projectDir: project });
   assert.equal(report.mirrorNote, null);
@@ -113,6 +117,7 @@ test("DR18 / D-8: every start brings the project's committed branch history into
   const refs = git(mirror, "for-each-ref", "--format=%(refname) %(objectname)").split("\n").sort();
   assert.deepEqual(refs, [`refs/heads/feature ${git(project, "rev-parse", "feature")}`, `refs/heads/main ${git(project, "rev-parse", "main")}`]);
   assert.notEqual(spawnSync("git", ["--git-dir", mirror, "cat-file", "-e", staged], { env }).status, 0, "a staged, uncommitted file reached the mirror");
+  assert.notEqual(spawnSync("git", ["--git-dir", mirror, "cat-file", "-e", stashed], { env }).status, 0, "private packed stash bytes reached the mirror");
   // A later commit reaches it at the next start; the canonical main does not move.
   const canonical = git(join(stateRoot, "repos", "project.git"), "rev-parse", "refs/heads/main");
   git(project, "commit", "-q", "-m", "later");

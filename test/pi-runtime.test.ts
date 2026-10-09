@@ -7,8 +7,9 @@ import { tmpdir } from "node:os";
 import { StoreError } from "../src/domain/errors.js";
 import {
   ENGINE_HOME, PI_AGENT_DIR_ENV, PI_PACKAGE,
-  piAgentDir, piIsolationEnv, preparePiRetry, preparePiInteractive, resolvePiRuntime,
+  piAgentDir, piIsolationEnv, preparePiRetry, resolvePiRuntime,
 } from "../src/runtime/pi-runtime.js";
+import { preparePiInteractive } from "../src/runtime/pi-presentation.js";
 import { sessionArgv, sessionEnv } from "../src/tui/session.js";
 import { SOCIETY_FENCE_ENV, SOCIETY_FENCE_FD } from "../src/process/async.js";
 import {
@@ -54,9 +55,8 @@ test("Open TUI: the preview's look is the default, the Human's own choices are k
   const ui = JSON.parse(readFileSync(join(root, "open-tui.json"), "utf8"));
   assert.equal(settings.theme, "dark"); assert.equal(settings.hideThinkingBlock, false);
   assert.equal(settings.enableAnalytics, false);
-  // C16: skill commands are Pi's ordinary surface. The old suppression pin is
-  // scrubbed from a persisted file, and a fresh file never gets one.
-  assert.ok(!("enableSkillCommands" in settings), "the skill-command suppression survived");
+  // Pi supplies its default; an explicit Human choice survives preparation.
+  assert.equal(settings.enableSkillCommands, false);
   assert.ok(!("enableSkillCommands" in defaults), "a fresh settings file carries the suppression");
   assert.equal(ui.enabled, true); assert.equal(ui.thinkingPeek.lines, 2);
   assert.deepEqual(ui.footerSegments, { model: true });
@@ -318,4 +318,3 @@ test("T106/TUI-019: running in a bare project needs no setup command and no hand
       assert.ok(fields.includes(id), `${id} must be editable`);
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
-

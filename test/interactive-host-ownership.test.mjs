@@ -51,6 +51,8 @@ async function world({ setModel, init, resourceReload, dispose, fail, moduleClos
     // w10's in-process Client preload is a side-effect import; the mocked
     // boundaries below never reach it, so the install itself is a no-op here.
     '../runtime/client-preload.js': {},
+    '@earendil-works/pi-ai': { getSupportedThinkingLevels: () => ['off', 'high'] },
+    '../pi-compat/settings.js': { createEngineSettings() {} },
     'node:os': { userInfo: () => ({ homedir: '/home/fake' }) }, 'node:path': path,
     'node:module': { createRequire: () => ({ resolve: () => '/fake/pi-open-tui/package.json' }) },
     '@earendil-works/pi-coding-agent': {
@@ -66,7 +68,7 @@ async function world({ setModel, init, resourceReload, dispose, fail, moduleClos
         return { settingsManager: { applyOverrides() {} }, resourceLoader, diagnostics: {} };
       },
       async createAgentSessionFromServices() { if (fail === 'session') throw new Error('injected session'); return { session }; },
-      SettingsManager: { create() {} }, SessionManager: { continueRecent() {}, async listAll() { return []; } },
+      SessionManager: { continueRecent() {}, async listAll() { return []; } },
       SessionSelectorComponent: class { constructor(load, _all, choose, cancel, quit) { Object.assign(this, { kind: 'resume', load, choose, cancel, quit }); } },
       ModelSelectorComponent: class { constructor(_tui, _current, _runtime, _models, choose) { this.kind = 'model'; this.choose = choose; } },
       ThinkingSelectorComponent: class { constructor(_current, _levels, choose) { this.kind = 'effort'; this.choose = choose; } },
@@ -87,7 +89,7 @@ async function world({ setModel, init, resourceReload, dispose, fail, moduleClos
     '../tui/panel-style.js': { stylePanel: () => [] }, '../tui/open-tui-brand.js': {},
     '../tui/project-session-directories.js': { ProjectSessionDirectories: class { close() {} async snapshot() { return { dirs: ['/sessions'], histories: [] }; } } },
     '../protocol/host-history.js': { parseHostHistoryReference() { throw new Error('No remote history in this fixture'); } },
-    '../runtime/pi-runtime.js': { preparePiInteractive() {} }, '../tui/limits.js': {},
+    '../runtime/pi-presentation.js': { preparePiInteractive() {} }, '../tui/limits.js': {},
     '../pi-compat/env.js': { PI_RESUME_HINT: 'To resume this session:' },
     '../pi-compat/commands.js': { PI_BUILTIN_COMMANDS: new Set() },
     '../pi-compat/interactive-mode.js': { interactiveInternalsOf: mode => mode },

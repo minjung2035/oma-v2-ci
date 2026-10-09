@@ -1,8 +1,126 @@
 # OMA v2 — 현재 검증 상태
 
+## 현재 결과: 적대적 감사 발견 수정·재검증 (2026-10-09, DR36)
+
+사용자의 전체 수정·푸시 지시에 따라 수정과 현재 입력의 검사를 실행했다. 아래 기록 전용 감사와 이전 suite 수는
+해당 시점의 기록이다. 최초 13건의 수정 상태는 [audit](../priority-0-audit.md), 추가로 조사한
+인터넷·skills·MCP 등의 32개 제한은 [장부](../user-expectation-ledger.md)에 있다.
+서브에이전트 없이 직접 수정·검증했다. 역사적 결함 oracle의 exit 0은 수정 성공으로 바꾸지 않는다.
+
+| 검사 | 현재 실행 결과 | 범위 |
+|---|---|---|
+| `npm test` | PASS: 3,938/3,938 | serial 9 + parallel 3,929. fail/cancel/skip/todo 0. 403개 파일; systemd 필수 9개 파일은 별도 lane |
+| `verify-lane.mjs kernel` | EXECUTED+PASS: 65/65 | 실제 user systemd/cgroup/bwrap/Unix socket. broker 재시작 포함 |
+| `verify-lane.mjs crash` | EXECUTED+PASS: 63/63 | 실제 primitive SIGSTOP/부모 SIGKILL·반복 복구. VM power loss 증거는 아님 |
+| native candidate 대조 | PASS: 4건 | baseline, memory cap +1 byte, stdout/stderr 각각 1 MiB 초과 정상 완료, 검증된 2,147,484초 timeout 실제 실행 |
+| build / typecheck / architecture aggregate | PASS | inventory, rules, architecture, transactions, durable registry, documents, spec inventory 포함. registry strongest-injection 숫자는 이번 실제 kill 수가 아님 |
+| `npm audit --json` | PASS: 알려진 취약점 0건 | nodemailer 10.0.16 고정; 일반 SMTP 원격 공격의 OMA 재현 주장은 없음 |
+
+집중 검사에는 read-only 봉인·owned traversal·quota 26 PASS, 수리·MIME·production C 24 PASS,
+준비/수리 13 PASS, 이력 격리/숫자/Principal fixture 정산 24 PASS, 공개 Pi API와 process owner 대역
+110 PASS가 있다. 이전 전체 시도의 95개 실패는 보존했으며 원인은
+stale API 대역·비동기 권한 재검사 횟수·sync timeout 거절 타입·PATH의 cloc 부재·입력 digest였다.
+첫 진단 실행은 Git 비공개 객체 유입과 오래된 숫자 oracle를 발견했고, 등록되지 않은 가짜
+Principal 대기 때문에 중단했다. 당시 Personal PTY의 `spawn oma ENOENT`는 임시 설치 링크를
+빠뜨린 검사 환경 문제였다. 새 fixture는 실제 grant/attach와 설치 명령을 제공한다.
+
+kernel 첫 실행은 64 PASS/1 FAIL이었다. 새 quota 관측이 immutable context directory를
+0555에서 0755로 바꾸어 다음 broker가 STORE_CORRUPT로 거절하는 실제 제품 결함이었다.
+관측에 read/search만 수리하도록 고치고 기존 strict validator를 유지했다. 봉인 보존 회귀와
+새 kernel lane 65 PASS가 이를 검증한다. 첫 실패 로그는 보존했다.
+
+최종 시작 측정은 빌드·테스트와 겹치지 않게 3회씩 순서대로 실행했다. 각 회는 새로운
+HOME/data와 같은 현재 checkout, 실제 OMA entry·bundled Pi·PTY를 쓴다. 모델만 로컬 대본이며
+OS page cache는 비우지 않았다. 모든 child exit 0이다.
+
+| 실제 관측 | 3회 범위 | 요청한 예산 판정 |
+|---|---|---|
+| Personal 화면 / 첫 응답 | 1.22~1.24초 / 1.51~1.53초 | 5초 이내; 1초 목표 미달 |
+| Society 화면 / 일반 대화 첫 응답 | 2.93~2.99초 / 3.22~3.27초 | 대화는 5초 이내; 1초 목표 미달 |
+| 최초 Society broker 준비 | 14.47~14.67초 | 전체 준비 5초 목표 **FAIL** |
+| 시작 직후 첫 Society tool 완료 | 15.19~15.38초 | 모두 SQLite에서 `society.set` succeeded 정확히 한 행; 5초 목표 **FAIL** |
+
+`--wait-broker --early-tool` 측정 명령은 예산 미달로 exit 1을 반환했다. 이를 도구 실패나 PASS로
+바꾸지 않는다. 부하가 겹친 이전 측정과 Human private 객체를 잘못 복사했던 약 9초 측정은
+현재 성능 판정에서 제외한다. Human protocol clone의 별도 단독 대조는 약 6.4초였고
+`pack.window=0`도 유의미하게 개선하지 않아 적용하지 않았다. 개인정보 경계·strict history 검증을
+건너뛴 시간을 목표 달성으로 다루지 않는다.
+
+```sh
+npm test
+npm run typecheck
+npm run check:architecture
+OMA_TEST_SYSTEMD=1 node scripts/verify-lane.mjs kernel --out <new-directory>
+OMA_TEST_SYSTEMD=1 node scripts/verify-lane.mjs crash --out <another-new-directory>
+node test/audit/repairs-2026-10-09/native-checks.mjs
+python3 scripts/benchmark-startup.py --node <node24> --runs 3 --wait-broker --early-tool
+python3 scripts/benchmark-startup.py --node <node24> --mode personal --runs 3
+python3 scripts/benchmark-startup.py --node <node24> --runs 3
+npm audit --json
+```
+
+이 호스트는 Node `/opt/oma-test-node/bin/node` v24.21.0, UID 1001,
+`XDG_RUNTIME_DIR=/run/user/1001`이다. local suite의 PATH에는 cloc 2.08과 설치된 `oma` 명령이
+필요하다. 이번에는 `/tmp/oma-repair-2026-10-09/bin/oma`가 현재 빌드 entry를 가리키게 했다.
+raw 로그는 그 `/tmp` 아래 남겼다. portable 판정·명령·source/log 해시는
+[현재 수정 evidence](../../test/audit/repairs-2026-10-09.evidence.json)에 있다.
+
+전체 suite 실행 시 입력 closure는 sha256 `924ba992c8f836bffc9a8f550ce4acc82a3151bc444b488262f212b5de9ae822`
+(15,374 files)였다. 이후 바뀐 것은 결과 문서·evidence이며 실행 코드·테스트·설정 바이트는
+실행 시작 시 고정한 해시와 대조한다. kernel 실행 중 생성된 review/LOC metadata와 기록 문서도
+당시 capture 이후 변경으로 별도 표시했다; 그 lane의 실행 코드·테스트는 일치한다.
+아래 현재 구조 identity는 이 최종 기록까지 포함하며, 과거 전체 suite가 미래의 자기 결과 문서까지
+검증했다는 뜻이 아니다. 기록 후 R38·document·architecture 구조 검사를 새로 실행한다.
+
+미실행: macOS Virtualization.framework/APFS/Keychain/AF_VSOCK native, 실제 유료 provider,
+VM power loss, host reboot, 전체 release qualification. 이전 패키지 세대 보유에 따른 디스크 증가와
+정적 provenance의 dynamic-call 한계도 남는다. 58개 변경 생산 파일과 영향 owner를 직접 검토한 것이며,
+상속된 미검토 파일을 metadata 재생성만으로 승인하지 않는다.
+
+현재 구조 검사의 입력 identity(생성 자체는 runtime PASS가 아니다):
+verification input digest `7581c05641e7668530049101fc53a46d314e215115a35730823ce9ea45db383d` (15375 files).
+
+## 과거 작업: 추가 적대적 감사·기록만 (2026-10-08–09)
+
+이 절의 판정은 수정 지시 이전 기록이다. 아래 checkpoint·전수 원장·suite 수는 해당 시점의 기록이다.
+기준 HEAD `0364e99c`와 DR35의 미커밋 시작 수정이 있는 worktree를 함께 고정하고 감사했다.
+서브에이전트 없이 문서·실행 먼저 진행했다. production 수정과 기존 테스트 수정은 없다.
+
+발견 13건 중 10건은 실행 재현, 2건은 정적 근거, 1건은 내부 중복으로 분류했고 모두 OPEN이다.
+의미·심각도·수정 방향은 [audit](../priority-0-audit.md)의 AV-20261008-01–13이 소유한다.
+원시 관측값·양성 대조·source/compiled/Pi 바이트·검사 결과·마지막 대조는
+[evidence](../../test/audit/adversarial-2026-10-08.evidence.json), 영역별 검토와 미실행 범위는
+[coverage](../../test/audit/adversarial-2026-10-08.coverage.json)에 있다.
+
+이번 oracle는 결함을 재현하면 exit 0이다. 이를 제품 수정 PASS로 읽지 않는다.
+confined check는 실제 user manager/cgroup/bwrap에서 대조 검사까지 실행했다.
+설정은 실제 두 writer, 패키지는 실제 archive/apply/index와 import된 확장 reader,
+C는 production relay의 Unix socketpair 경계, 시작은 실제 PTY와 bundled Pi(모델만 대본)이다.
+이 범위를 실제 Mac VM·AF_VSOCK·유료 provider·powercut·전체 release 증거로 확대하지 않는다.
+앞선 3,919-suite PASS를 이번 입력의 fresh whole-suite PASS로 재결박하지 않았다.
+
+빌드된 owner가 필요한 재현 명령(빌드는 현재 source에서 준비되어 있어야 함):
+
+```sh
+node test/audit/adversarial-2026-10-08/settings-race.mjs
+node test/audit/adversarial-2026-10-08/quota-probe.mjs
+node test/audit/adversarial-2026-10-08/package-generation.mjs
+XDG_RUNTIME_DIR=/run/user/1001 node test/audit/adversarial-2026-10-08/native-checks.mjs
+cc -O2 -Wall -Wextra -o /tmp/oma-audit-relay test/audit/adversarial-2026-10-08/relay-probe.c
+/tmp/oma-audit-relay
+python3 test/audit/adversarial-2026-10-08/early-tool-benchmark.py --node /opt/oma-test-node/bin/node --runs 1
+```
+
+실행 환경은 Node v24.21.0, Linux UID 1001, 현재 checkout의 pinned Pi 1.0.1이다.
+다른 UID의 `XDG_RUNTIME_DIR`와 Node 경로는 해당 환경에 맞춘다. script의 임시 상태는 자체 소유한 경로에만
+만들며 PTY 원시 artifact는 `/tmp`에 남긴다. metadata 손상 시험은 root 권한의 통과를 허용하지 않는다.
+architecture rule의 fresh 실행은 PASS/0 findings였지만 실제 AV-01을 놓쳤다. 구조 검사의 한계를 audit에 기록했다.
+문서/기록 검사와 최종 생산 바이트 대조의 정확한 판정은 evidence의 `checks`/`finalByteComparison`에 기록한다.
+감사 기록 추가로 검증 입력이 바뀌는 것을 기존 release/whole-source PASS의 자동 재승인으로 다루지 않는다.
+
 기준: 2026-10-03 적대적 검증, 생산 source checkpoint `a75c29911c077a2d2b207a48773268e2e2355ca0`. 이 문서는 현재 판정·실행 결과·수치·로그·한계의 단일 owner다. 검증 요구는 [verification-spec](../verification-spec.md), 과거 실행은 [archive](../archive.md)가 소유한다.
 
-## 현재 source 판정
+## 과거 source 판정 (2026-10-03)
 
 전수 감사는 **진행 중**이다. 현재 production 356개와 추가 실행·계약·native·build/verification source 74개를
 [파일별 원장](../../test/audit/full-2026-10-03.review.json)에 고정했다. 원장의 개별 상태·P0 근거가 진행 판정이며,
@@ -525,6 +643,42 @@ DR34 후반에서 미뤄 둔 "listen 성공 후 `.off`로 유일한 'error' 리�
 | 전체 `npm test` | PASS* | `node scripts/test-local.mjs` 로컬 lane 399 files → 3,904 tests, 3,903 PASS·0 cancelled·0 skipped(duration 284,892ms). 유일 실패 1건은 이 절과 결박 산출물 변경분을 아직 반영하지 않은 validation.md 자체의 stale verification-input digest(R38)로, digest를 이 트리의 것으로 재결박 후 `production-inventory` 단독 재실행 PASS 확인. systemd-required 9 파일은 test-local이 `OMA_TEST_SYSTEMD=0`으로 설계상 분리 |
 | macOS native / powercut / provider credential / release qualification | NOT_RUN | 로컬 환경 부재 |
 
+
+## DR35: 시작 시간 실행 측정과 수정 (2026-10-08)
+
+사용자가 문서와 실제 실행 측정을 먼저 요구했다. 서브에이전트 없이 기준 HEAD
+`0364e99c`의 clean worktree에서 시작했고, 현재 변경은 미커밋이다. 이 절은 시작 경로와
+같은 부류의 코드 병목을 수정한 범위의 증거이며 기존 전수 감사나 release의 완료를 뜻하지 않는다.
+
+| 관측 | 실제 결과 | 범위 |
+|---|---|---|
+| 수정 전 실제 Society 시작 | 최초 출력/실패 146.673초; CPU profiler의 spawnSync 구간 누적 136.459초(호출 벽시계; child CPU 사용량 아님) | raw PTY `/tmp/oma-startup-nhj_86s8`; source snapshot 중 directory 변경을 감지해 exit 3. 정상 시작 성공으로 세지 않음 |
+| 동기 Git 원인 확인 | 15,519 선택 파일; trace 중 8,688개의 `hash-object` child | `/tmp/oma-startup-xtxy7bj1`, strace 자체가 시간을 늘리므로 200초 trace 값을 일반 시작 수치로 쓰지 않음 |
+| batch Git 적용 뒤 정상 시작 | 대화창 36.49초 | `/tmp/oma-startup-2tmyjkt3`, 원본 보존·authority gate 유지 |
+| 대화 실제 입력→모델 요청 | Society 3.131/3.146/3.130초; Personal 1.490/1.481/1.434초 | 독립 HOME/data 3회씩, 실제 OMA+Pi+OpenTUI+PTY, 모델만 로컬 scripted provider. setup 시간은 launch 전에 끝내며 child spawn부터 Node monotonic clock으로 측정 |
+| 화면 입력 준비 | Society 2.879~2.893초; Personal 1.213~1.235초 | 같은 3회 측정, 렌더링만으로 모델 입력 준비를 추정하지 않고 이어서 실제 모델 요청을 확인 |
+| 첫 모델 응답 | Society 3.153~3.171초; Personal 1.495~1.532초 | 모델 서버 응답은 시험용이므로 실제 유료 provider 속도를 증명하지 않음 |
+| 준비 중 종료 | 0.11~0.15초, 모든 회차 exit 0 | Ctrl-D → 실제 host exit, preparation 취소와 자식 회수 포함 |
+| Society 전체 준비 | admin socket 연결 30.121초, 이후 종료 0.727초 | `/tmp/oma-startup-benchmark-rq0iokw1`; 단순 UI marker가 아닌 실제 broker endpoint 관측. 첫 모델 요청 3.139초와 구별 |
+| 실제 준비 완료 뒤 권한 연결 | PASS, 첫 모델 요청 3.171초 → admin socket 30.010초 → Principal 도구 30.835초 | `/tmp/oma-startup-benchmark-wq3mkkpe`. 실제 모델→`oma_society`→client→broker 흐름으로 시험 Society를 닫음. 종료 뒤 read-only SQLite에서 같은 actor/request key의 `society.set`이 정확히 1행·succeeded인 것을 확인. 준비 중 private engine이 준비 완료 뒤 실제 grant를 받아 쓰는 경로를 UI 문구로 추정하지 않음 |
+| 추가 Git 압축 실험 | 기존 fetch 6.455초, pack window/depth/compression 0은 6.406초, bytes 동일 | 복제된 측정용 bare repository만 사용. 유의한 개선이 없어 생산 코드에 적용하지 않음 |
+| 공통 runtime import | 0.718초 → 0.029초 | interactive setter의 SDK 의존을 엔진 presentation owner로 옮김. 호스트 import 금지 회귀와 기존 설정 의미론 유지 |
+| build / typecheck / package / architecture | PASS | 최종 빌드·타입 검사, package closure, inventory/rules/lattice/transactions/boundaries/documents/spec inventory |
+| SDK 분리·설정·엔진 소유권 집중 회귀 | PASS 130/130 | 원래 Pi manager·locked writer, 경계 손상/권한/byte 보존, Linux/Darwin platform-injected 설정, host SDK import 금지. Native Darwin PASS로 확대하지 않음 |
+| 시작·취소·history·scratch 집중 회귀 | PASS 7/7 | 실제 inherited lease + native descendant cancellation, raw project 준비, 원래 Pi installer 보존, Personal history inode lifetime, 병렬 scratch 격리 |
+| 전체 local suite | PASS 3,919/3,919 (serial 9 + parallel 3,910), fail/cancel/skip 0 | 첫 실행은 9+3,909 tests, 병렬 23 실패. 16건은 이 shell의 `oma` PATH 부재, 2건은 새 preload를 빼먹은 fake install, 1건은 다른 test의 `/tmp` scratch를 비교한 race, 나머지는 architecture/ledger/validation 산출물 미결박. 원인별 수정 후 전체 PASS, SDK 분리 뒤 전체 재실행도 PASS. 최종 parallel 240,892ms + serial 78,574ms; 로그 `/tmp/oma-final-full-suite.log`. systemd-required 9 파일은 test-local 설계상 NOT_RUN 분리 |
+| native macOS / real provider / powercut / release qualification | NOT_RUN | Linux 시작·로컬 시험 모델 증거를 해당 레인의 PASS로 확대하지 않음 |
+
+**대화 시작의 5초 한도는 충족했고 1초 목표는 미달이다. Society authority·Worker 준비 전체가
+5초 안에 완료됐다고 주장하지 않는다.** 준비 중에는 그 사실을 화면에 표시하며, credential과
+mail delivery는 broker 준비·registration 뒤에만 허용한다. 원본 index/refs/filters·상속 lease·
+child 실제 종료·rootfs quiescence와 모든 설치 바이트 검증은 유지했다.
+
+대화 6회·broker 준비 1회 측정, 별도 실제 권한 연결 1회와 생산 변경의 SHA-256은 [startup evidence](../../test/audit/startup-2026-10-08.evidence.json)에 고정했다.
+재현은 [benchmark](../../scripts/benchmark-startup.py), 결정은 [DR35](../design-revisions.md),
+사용자 상태는 UX-39가 소유한다. raw logs는 `/tmp/oma-startup-final-{society,personal,broker}.log`,
+최종 검사 로그는 `/tmp/oma-final-{build,typecheck,architecture,startup-tests}.log`이다.
+
 ## 현재 알려진 한계와 남은 검증
 
 - 실제 manager/cgroup candidate 검사와 reviewer shortage 예외는 기존 독립 거절의 영향을 받는다. fixture 성공을 실제 서비스 증거로 사용하지 않는다.
@@ -539,7 +693,7 @@ DR34 후반에서 미뤄 둔 "listen 성공 후 `.off`로 유일한 'error' 리�
 
 아래 binding은 구조 검사의 입력 identity다. digest 생성 자체가 runtime PASS를 뜻하지 않는다.
 
-verification input digest `6d059b6b229b67e8330e6620ef577af7ad71c9df5a8023fa1d22d265cae9cfb8` (15343 files).
+과거 구조 입력 sha256 `273e7a8b329b1178f3068066e59c0e6d96e03cfa9878578a9091e8f022c471bf` (15355 files)..
 
 당시 기록한 cloc 2.08 측정치: 354 files / 35,832 code LOC. 이 역사적 기록은 현재 source의 LOC claim이 아니며, 기존 artifact와의 불일치를 여기서 수리했다고 주장하지 않는다. 크기 제한은 없으며 값은 release proof가 아니다.
 

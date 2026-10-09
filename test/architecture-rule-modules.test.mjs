@@ -467,6 +467,15 @@ export function probe(path) { return lstatSync(path); }`,
   }, root => assert.deepEqual(ownedStateFindings(root), []));
 });
 
+test("P0-8: owned provenance survives a generic callee parameter and cross-file alias", () => withFixture({
+  "src/entry/example.ts": `import { observe } from "../storage/probe.js"; export function run(stateRoot: string) { const alias = stateRoot; return observe(alias); }`,
+  "src/storage/probe.ts": `import { readdirSync } from "node:fs"; export function observe(root: string) { const path = root; return readdirSync(path); }`,
+}, root => assert.ok(ownedStateFindings(root).some(value => value.file === "src/storage/probe.ts" && value.rule === "owned-state-raw-observation"))));
+
+test("P0-8: a generic user path is not tainted by another function's parameter", () => withFixture({
+  "src/example.ts": `import { readdirSync } from "node:fs"; function one(stateRoot: string) { return stateRoot; } function two(root: string) { return readdirSync(root); } export { one, two };`,
+}, root => assert.deepEqual(ownedStateFindings(root), [])));
+
 test("P0-8/DR32: the owned-state rule reports a stale exemption", () => {
   const repository = fileURLToPath(new URL("..", import.meta.url));
   assert.deepEqual(ownedStateFindings(repository), []);

@@ -310,7 +310,7 @@ export function registerOmaTools(pi: ExtensionAPI, cwd: string, channel: Princip
   // command assembled later from whatever the environment happens to hold then
   // would not be the environment the engine was started with.
   const environment = cliEnvironment(home, socket, archive);
-  const client = new Client({ cwd, env: environment }, () => channel.current());
+  const client = new Client({ cwd, env: environment }, () => channel.current(), signal => channel.waitForGrant(signal));
   pi.registerTool({
     name: "oma_mail_read",
     label: "Read OMA mail",

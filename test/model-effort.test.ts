@@ -82,7 +82,9 @@ test("DR24: the effort levels offered for a Worker's model are the engine's own 
   const { getSupportedThinkingLevels } = models;
   for (const model of [{ reasoning: false }, { reasoning: true }, { reasoning: true, thinkingLevelMap: { xhigh: "x" } },
     { reasoning: true, thinkingLevelMap: { minimal: null, max: "m" } }, { reasoning: true, thinkingLevelMap: { xhigh: null, low: "l" } }])
-    assert.deepEqual(effortLevelsOf(model), getSupportedThinkingLevels(model), JSON.stringify(model));
+    assert.deepEqual(effortLevelsOf({ id: "fixture", name: "fixture", api: "openai-completions", provider: "fixture",
+      baseUrl: "http://localhost", input: ["text"], cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+      contextWindow: 4096, maxTokens: 512, ...model }), getSupportedThinkingLevels(model), JSON.stringify(model));
 });
 
 test("DR24: the Dashboard names the engine's model once, and what a Worker runs", () => {

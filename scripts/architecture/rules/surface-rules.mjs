@@ -339,7 +339,10 @@ function userPiRules(root, findings) {
         findings.push(finding("user-pi-state", file, "reads the user's home directory"));
     });
     for (const { text } of literalTexts(source))
-      if (/(^|\/)\.pi(\/|$)/.test(text)) findings.push(finding("user-pi-state", file, `names the user's Pi state (${text})`));
+      if (/(^|\/)\.pi(\/|$)/.test(text) && !(file === "src/pi-compat/settings.ts" && text === ".pi"))
+        // Personal's trusted project settings use Pi's ordinary .pi scope;
+        // this storage never names the Human's global ~/.pi engine home.
+        findings.push(finding("user-pi-state", file, `names the user's Pi state (${text})`));
   }
 }
 

@@ -34,6 +34,8 @@ async function compose(environment, { lockHeld = true, claim = "taken", cgroup =
   const config = { society: "fixture", installation: { node: "node", libdir: "/lib", rootfs: "/rootfs", deploymentDigest: "a".repeat(64) },
     quota: { storageBytes: 1024 }, integration: { checks: [] }, limits: { receiptWaitSeconds: 1 }, agentProfiles: {}, modelProfiles: {} };
   const modules = {
+    "node:fs": { realpathSync: value => value },
+    "../runtime/society-preparation.js": { prepareSociety: async () => { calls.push("prepare"); } },
     "node:path": path,
     "../store.js": { SCHEMA_PATH: "schema", Store: class {
       constructor() { calls.push("Store"); } close() {} listAgents() { return []; } getAgent() { return null; }
@@ -96,10 +98,10 @@ async function compose(environment, { lockHeld = true, claim = "taken", cgroup =
     "../runtime/society-lease.js": { claimSocietyFence: () => {
       calls.push("claim");
       switch (claim) {
-        case "inherited": return { kind: "inherited" };
+        case "inherited": return { kind: "inherited", fence: 4 };
         case "elsewhere": return { kind: "elsewhere" };
         case "unhonourable": throw new Error("descriptor 4 is not this society's lease");
-        default: return { kind: "taken", lease: { name: "\0oma.society.fixture", fence: 4, release() { calls.push("release"); } } };
+        default: return { kind: "taken", fence: 4, lease: { name: "\0oma.society.fixture", fence: 4, release() { calls.push("release"); } } };
       }
     } },
     // AV31: every way the host goes away ends the broker through its drain.
@@ -133,14 +135,14 @@ async function compose(environment, { lockHeld = true, claim = "taken", cgroup =
     "../runtime/supervision-channel.js": { openSupervisionChannel: options => {
       calls.push(`supervision:${options.fd}`);
       supervision = options;
-      return supervisionEstablished ? { hostPid: 4242, ready() {}, grant() {}, refuse() {}, onSession() {} } : undefined;
+      return supervisionEstablished ? { hostPid: 4242, ready() {}, grant() {}, refuse() {}, onSession() {}, close() {} } : undefined;
     } },
   };
   const process = { argv: ["node", "broker", ...argv], env: { ...(environment ?? {}) }, exitCode: 0, once() {},
     exit(code) { exits.push(code); throw new Exited(`exit(${code})`); } };
   const lines = [];
   await new Script(executable, { filename: "broker-composition.cjs" }).runInNewContext({
-    exports: {}, process, console: { error(...parts) { lines.push(parts.join(" ")); } }, require(name) {
+    exports: {}, process, AbortController, console: { error(...parts) { lines.push(parts.join(" ")); } }, require(name) {
       assert.ok(Object.hasOwn(modules, name), `uncontrolled dependency: ${name}`);
       return modules[name];
     },

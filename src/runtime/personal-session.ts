@@ -39,7 +39,8 @@ export async function runPersonalSession(options: { readonly root: string; reado
   let child: ChildProcess;
   try {
     const runtime = resolvePiRuntime({ stateRoot: join(options.dataRoot, "personal"), libdir: options.libdir });
-    const argv = [join(options.libdir, DEPLOYMENT_LAYOUT.entries.personal), "--root", options.root,
+    const argv = ["--import", join(options.libdir, "dist/src/pi-compat/interactive-tool-setup.js"),
+      join(options.libdir, DEPLOYMENT_LAYOUT.entries.personal), "--root", options.root,
       "--data-root", options.dataRoot, "--libdir", options.libdir, "--packages", options.packages,
       ...(options.resume === undefined ? [] : ["--resume", options.resume])];
     const env = personalEnvironment(options.env ?? process.env, runtime.agentDir);

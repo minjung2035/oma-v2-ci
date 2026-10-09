@@ -28,6 +28,27 @@ import { runCliProcess } from "./fixtures/cli-child.js";
 const CREDENTIAL = "c".repeat(64);
 const HANDLE = "d".repeat(32);
 
+test("AV-07: an attached Principal waits for its first grant and releases waits on cancellation or channel damage", async t => {
+  const attached = () => {
+    const channel = PrincipalChannel.detached();
+    // Exercise the channel's waiting state independently of process fd 3.
+    t.mock.getter(channel, "attached", () => true);
+    return channel;
+  };
+  const channel = attached(); let settled = false;
+  const ready = channel.waitForGrant().then(() => { settled = true; });
+  await Promise.resolve(); assert.equal(settled, false);
+  channel.push(`credential ${CREDENTIAL} ${HANDLE}\n`);
+  await ready; assert.equal(settled, true);
+  const cancelled = attached(), abort = new AbortController();
+  const cancelledWait = assert.rejects(cancelled.waitForGrant(abort.signal), /cancelled before registration/);
+  abort.abort(); await cancelledWait;
+  const damaged = attached();
+  const damagedWait = assert.rejects(damaged.waitForGrant(), /ended before Principal registration/);
+  damaged.push("invalid\n"); await damagedWait;
+  await assert.rejects(damaged.waitForGrant(), /ended before Principal registration/);
+});
+
 /** Every shape a line on the channel could take: valid ones of each kind, and
  * the near misses a hand-written parser gets wrong. */
 const CORPUS: readonly string[] = [

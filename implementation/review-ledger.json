@@ -2,10 +2,10 @@
  "version": 1,
  "baseline": "b25961cc46532f5e30ff60cc381fed51c59d13ab",
  "summary": {
-  "CHANGED_WITH_ORACLE": 14065,
+  "CHANGED_WITH_ORACLE": 14082,
   "REMOVED": 8,
-  "NOT_REVIEWED": 59,
-  "READ_UNCHANGED": 50
+  "NOT_REVIEWED": 53,
+  "READ_UNCHANGED": 49
  },
  "lanes": {
   "fast": "PASS",
@@ -181,13 +181,15 @@
    "primary": "WP21",
    "status": "CHANGED_WITH_ORACLE",
    "by": [
-    "DR34"
+    "DR35",
+    "DR36"
    ],
    "oracles": [
-    "post-listen"
+    "R14",
+    "AV-10"
    ],
-   "note": "Read in full for the post-listen 'error' residual sweep: cleanupError's console.error is now a guarded best-effort write. `listen`'s permanent 'error' listener and `listenActor`'s run-revoke path both reach the shared sink inside a synchronous 'error' emit, where a dead stderr throwing would otherwise escape the emit as the broker's death -- the same death the listener exists to absorb. Startup rejection and listener-count semantics are unchanged.",
-   "sha256": "0f3d4bf8eaa13b31c8cc8db780eee2204412961c25a73973e4826ae524841570"
+   "note": "Reviewed asynchronous admission through transport, public/internal dispatch, shutdown and review: raw input pauses before reserve/spool, close/revoke/EOF rechecks precede effects, release remains once-only, and safety-control is independent of quota scans. Native peer and delayed-admission regressions exercise affected owner flow.",
+   "sha256": "aeccac82b639c9966e5fa5595a8f965c8b17a38ebe9d2e93c5c806a5081f7b3d"
   },
   {
    "path": "src/broker/composition.ts",
@@ -207,57 +209,30 @@
    "primary": "WP26",
    "status": "CHANGED_WITH_ORACLE",
    "by": [
-    "P0V-123",
-    "P0V-124",
-    "P0V-125",
-    "P0V-126"
+    "DR35",
+    "DR36"
    ],
    "oracles": [
-    "P0V-123",
-    "P0V-124",
-    "P0V-126"
+    "R14",
+    "AV-10"
    ],
-   "sha256": "add69b5d6a3ce9fb17feb352732d91c7c2676571b3d7a975a6d40c8044425110"
+   "note": "Reviewed asynchronous admission through transport, public/internal dispatch, shutdown and review: raw input pauses before reserve/spool, close/revoke/EOF rechecks precede effects, release remains once-only, and safety-control is independent of quota scans. Native peer and delayed-admission regressions exercise affected owner flow.",
+   "sha256": "ee31ba055b782d0b5cd9ff48c1047994a6f4b42126574b545cf624db5366f2d3"
   },
   {
    "path": "src/broker/internal-dispatcher.ts",
    "primary": "WP21",
    "status": "CHANGED_WITH_ORACLE",
    "by": [
-    "P0V-32",
-    "P0V-37",
-    "P0V-45",
-    "P0V-57",
-    "P0V-87",
-    "P0V-88",
-    "P0V-89",
-    "P0V-90",
-    "P0V-91",
-    "P0V-92",
-    "P0V-93",
-    "P0V-94",
-    "P0V-95",
-    "WP21",
-    "WP22"
+    "DR35",
+    "DR36"
    ],
    "oracles": [
-    "P0V-32",
-    "P0V-37",
-    "P0V-45",
-    "P0V-57",
-    "P0V-87",
-    "P0V-88",
-    "P0V-90",
-    "P0V-92",
-    "P0V-93",
-    "P0V-94",
-    "P0V-95",
-    "V21A",
-    "V21B",
-    "V22A",
-    "V22B"
+    "R14",
+    "AV-10"
    ],
-   "sha256": "e32ed899af59cc9f763c0713856429907294fa23acede35422a6df55373f9ac2"
+   "note": "Reviewed asynchronous admission through transport, public/internal dispatch, shutdown and review: raw input pauses before reserve/spool, close/revoke/EOF rechecks precede effects, release remains once-only, and safety-control is independent of quota scans. Native peer and delayed-admission regressions exercise affected owner flow.",
+   "sha256": "67ec5556f339a33db87944f5b6f0b84cdc706767908e4fdf046a543e67da7494"
   },
   {
    "path": "src/broker/logs.ts",
@@ -358,38 +333,15 @@
    "primary": "WP21",
    "status": "CHANGED_WITH_ORACLE",
    "by": [
-    "DR1",
-    "DR18",
-    "DR3",
-    "DR4",
-    "DR6",
-    "DR7",
-    "P0V-123",
-    "P0V-124",
-    "P0V-125",
-    "P0V-126",
-    "WP21",
-    "WP22",
-    "WP23"
+    "DR35",
+    "DR36"
    ],
    "oracles": [
-    "DR1",
-    "DR18",
-    "DR3",
-    "DR4",
-    "DR6",
-    "DR7",
-    "P0V-123",
-    "P0V-124",
-    "P0V-126",
-    "V21A",
-    "V21B",
-    "V22A",
-    "V22B",
-    "V23A",
-    "V23B"
+    "R14",
+    "AV-10"
    ],
-   "sha256": "45d7f2d5b26b1ed5c31877b61b40341b8f3e3dfccbb895b7f5535f0cb9737279"
+   "note": "Reviewed asynchronous admission through transport, public/internal dispatch, shutdown and review: raw input pauses before reserve/spool, close/revoke/EOF rechecks precede effects, release remains once-only, and safety-control is independent of quota scans. Native peer and delayed-admission regressions exercise affected owner flow.",
+   "sha256": "6bf82f4f80f847d25b62786d4b5ab886a894e2a99de6f8470da24bc1fec88dfe"
   },
   {
    "path": "src/broker/replies.ts",
@@ -846,13 +798,15 @@
    "primary": null,
    "status": "CHANGED_WITH_ORACLE",
    "by": [
-    "UX-38"
+    "DR35",
+    "DR36"
    ],
    "oracles": [
-    "P0"
+    "AV-07",
+    "T114"
    ],
-   "note": "Read in full for UX-38: the client-wide OUTPUT_BYTES rejection is gone -- a complete encoded answer that fits rides inline, and one past PREVIEW_BYTES is written whole by spoolOutput into the caller's OMA state directory, the result carrying a marked [preview], the byte count, the path and the request key; a spool that cannot be written still returns the preview and names its own failure. No answer is refused or silently cut for size alone.",
-   "sha256": "fef14bfd7246ecfc90c9535de4fb7557f4950732fa4b4f484c8b009ad2cc84db"
+   "note": "Reviewed the first Principal tool path: wait for the actual channel grant before freezing/sending a new request; abort, damage and channel EOF reject waits and remove listeners. Detached behavior retains its existing transport semantics. Grant/cancel/damage regressions and the actual PTY once-only operation probe cover the change.",
+   "sha256": "e3dd696d638d0c490f9e3c0c568714832c44f2edd036ebb9ed7b47148f59c476"
   },
   {
    "path": "src/client/limits.ts",
@@ -913,13 +867,15 @@
    "primary": "WP11",
    "status": "CHANGED_WITH_ORACLE",
    "by": [
-    "DR34"
+    "DR35",
+    "DR36"
    ],
    "oracles": [
-    "DR34"
+    "AV-04",
+    "AV-06"
    ],
-   "note": "Read in full: egress stays a closed optional clause -- allow required, each entry checked by egressEntryProblem, role names checked against configured profiles, an empty effective clause refused. New: the wire's 256-entry bound is enforced at commit on the resolved list -- baseline alone over the bound is refused, and each named role's baseline-plus-own over the bound is refused, so a config macOS could only reject cannot be written.",
-   "sha256": "52e77d08fa8549787f594191fb6bd6845b29d027455081c5cb868672fc20deb4"
+   "note": "Reviewed numeric and process policies: retained stream heads are independent of command execution, both streams continue draining, native timers are segmented monotonically and cancellable, sync-only limitations are explicit, derived configuration milliseconds remain safe integers, and cgroup memory comparison follows observed kernel page alignment. Long-timeout and overflowing-output regressions accompany native cgroup checks.",
+   "sha256": "cc0ed766e0d55e8ffe0c0a470f1a72cfa9ad6809a05e72b1cdac3e45a0f3b387"
   },
   {
    "path": "src/config/defaults.ts",
@@ -1077,30 +1033,15 @@
    "primary": "WP21",
    "status": "CHANGED_WITH_ORACLE",
    "by": [
-    "DR1",
-    "DR3",
-    "DR4",
-    "DR6",
-    "DR7",
-    "P0V-69",
-    "P0V-70",
-    "WP21",
-    "WP22"
+    "DR35",
+    "DR36"
    ],
    "oracles": [
-    "DR1",
-    "DR3",
-    "DR4",
-    "DR6",
-    "DR7",
-    "P0V-69",
-    "P0V-70",
-    "V21A",
-    "V21B",
-    "V22A",
-    "V22B"
+    "R14",
+    "AV-10"
    ],
-   "sha256": "47c11ed4f1468fb327fd40f0522923f5264d16621c333c7e4a4cdc2d25693b09"
+   "note": "Reviewed asynchronous admission through transport, public/internal dispatch, shutdown and review: raw input pauses before reserve/spool, close/revoke/EOF rechecks precede effects, release remains once-only, and safety-control is independent of quota scans. Native peer and delayed-admission regressions exercise affected owner flow.",
+   "sha256": "88bd5677efc21316fd6e69f508ca9ed85756286243d2da39513956639552f21e"
   },
   {
    "path": "src/domain/attestation-relations.ts",
@@ -1180,22 +1121,14 @@
    "primary": "WP31",
    "status": "CHANGED_WITH_ORACLE",
    "by": [
-    "AV-review",
-    "BL2"
+    "DR35",
+    "DR36"
    ],
    "oracles": [
-    "AUTH-003",
-    "LOC-003",
-    "PR-002",
-    "REC-007",
-    "T100",
-    "T101",
-    "T102",
-    "T103",
-    "BL2"
+    "DR35"
    ],
-   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are tests whose loaded module closure (or text) contains this file BL2 rebind: extensionAsk names the Personal host's -e extension path (dist/src/extension/ask-user-question.js) once in the deployment layout — the same installed footing as the packaged open-tui upstream, not part of the digest-pinned user extension list.",
-   "sha256": "e3bebc22f67a91e6c8a7d810233837668f352fee5d105ab58b684c127cd3fe94"
+   "note": "Reviewed the earlier startup deltas and affected ownership/import path: one installation digest per derivation with complete byte hashing, linear bundle membership, explicit Pi presentation instead of eager SDK import, private history ownership, and precisely scoped optional interactive tool setup. Actual PTY and import/ownership regressions remain the startup oracles; no authority is granted by a private screen.",
+   "sha256": "629cb247111d35889960b4ee7c6c53c99ab6f4180941ecf265af65d65fd85d68"
   },
   {
    "path": "src/domain/derived.ts",
@@ -1276,22 +1209,17 @@
   {
    "path": "src/domain/integer-fields.ts",
    "primary": "WP29",
-   "status": "READ_UNCHANGED",
+   "status": "CHANGED_WITH_ORACLE",
    "by": [
-    "AV-review"
+    "DR35",
+    "DR36"
    ],
    "oracles": [
-    "P1",
-    "R19",
-    "R26",
-    "T111",
-    "T112",
-    "V01A",
-    "V01B",
-    "V04"
+    "AV-04",
+    "AV-06"
    ],
-   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are tests whose loaded module closure contains this module",
-   "sha256": "458f4520d615d433e314f8cefc8a2490c8afc67e334329ba951240d874d051bd"
+   "note": "Reviewed numeric and process policies: retained stream heads are independent of command execution, both streams continue draining, native timers are segmented monotonically and cancellable, sync-only limitations are explicit, derived configuration milliseconds remain safe integers, and cgroup memory comparison follows observed kernel page alignment. Long-timeout and overflowing-output regressions accompany native cgroup checks.",
+   "sha256": "5785874ffad3f580afdd815de57fdf26ad4702167b2f0aec5a60c0586587d11f"
   },
   {
    "path": "src/domain/integration-policy.ts",
@@ -1389,12 +1317,15 @@
    "primary": "WP22",
    "status": "CHANGED_WITH_ORACLE",
    "by": [
-    "WP25"
+    "DR35",
+    "DR36"
    ],
    "oracles": [
-    "V25A"
+    "AV-04",
+    "AV-06"
    ],
-   "sha256": "e51c2da2e124816954c2c5b71daef7d5556d50f5f0e20ad37bad47b03b98e94f"
+   "note": "Reviewed numeric and process policies: retained stream heads are independent of command execution, both streams continue draining, native timers are segmented monotonically and cancellable, sync-only limitations are explicit, derived configuration milliseconds remain safe integers, and cgroup memory comparison follows observed kernel page alignment. Long-timeout and overflowing-output regressions accompany native cgroup checks.",
+   "sha256": "2e40245a6ceb07b415a03419aca29431c7f386b7e19deb98432794157d57d687"
   },
   {
    "path": "src/domain/review-evaluation.ts",
@@ -1533,13 +1464,15 @@
    "primary": "WP03",
    "status": "CHANGED_WITH_ORACLE",
    "by": [
-    "UX-38"
+    "DR35",
+    "DR36"
    ],
    "oracles": [
-    "D04"
+    "DR35",
+    "AV-07"
    ],
-   "note": "Re-read in full for the UX-38 batch-5 working-tree review (2026-10-12): startup now calls StorageAdmission.startupState() where a bare admit() stopped the process -- over-quota reports {event:broker.storage,state:degraded,reason:QUOTA_EXCEEDED} on stderr and the broker still starts to serve reads, stops and settlement while every new admission refuses per request. A probe failure that is not QUOTA_EXCEEDED still throws and still stops startup.",
-   "sha256": "5b243f3b10d56ce117659b6b3881627a7b8635970adcdc5a67abb752eca483b2"
+   "note": "Reviewed preparation ownership and host/broker ordering: no independent short total timeout, child inherits the society fence and remains owned until actual close, strict bounded child report, private UI before broker readiness without authority, and inherited descendant fences survive cancellation until the kernel admits a successor.",
+   "sha256": "8c11b66e29a770324d985bc9dae06b85657d03fdf6fe559bcb24a38cb4c64860"
   },
   {
    "path": "src/entry/guest-packages.ts",
@@ -1687,21 +1620,15 @@
    "primary": null,
    "status": "CHANGED_WITH_ORACLE",
    "by": [
-    "UX-38",
-    "DR33",
-    "B4",
-    "BL1",
-    "DR34"
+    "DR35",
+    "DR36"
    ],
    "oracles": [
-    "PR-004",
-    "UX-09",
-    "B4",
-    "BL1",
-    "egress degradation"
+    "DR35",
+    "AV-07"
    ],
-   "note": "Re-read in full for the UX-38 batch-5 working-tree review (2026-10-12): the interactive PrincipalSession start passes the workspace quota through sessionEnv -- OMA_WORKSPACE_BYTES survives while ambient tool-surface variables are dropped, and the prior DR33/DR34 note stands (gitlink notice channel at start; adoptPrincipalEgress's onError wired to the screen's notice channel). Missing or invalid quota fails the engine's writes closed through the shared serialized writer.",
-   "sha256": "d073b87fe85e762beec0558e4875673e118abdbf6650e57f967435677d95bcff"
+   "note": "Reviewed preparation ownership and host/broker ordering: no independent short total timeout, child inherits the society fence and remains owned until actual close, strict bounded child report, private UI before broker readiness without authority, and inherited descendant fences survive cancellation until the kernel admits a successor.",
+   "sha256": "4a5253b0ce3b3cc710ddc9c4f2016ba6441b2da9d18b41954966fd20eaec404b"
   },
   {
    "path": "src/entry/oma.ts",
@@ -1831,23 +1758,15 @@
    "primary": null,
    "status": "CHANGED_WITH_ORACLE",
    "by": [
-    "ENG2",
-    "B1",
-    "B2",
-    "B3",
-    "BL2"
+    "DR35",
+    "DR36"
    ],
    "oracles": [
-    "interactive owner",
-    "Open TUI",
-    "a Human prompt",
-    "oma's identity",
-    "B2",
-    "B3",
-    "BL2"
+    "AV-02",
+    "DR35"
    ],
-   "note": "Read in full for the 1.0.1 port: the prompt command's preflightResult now carries the engine's PromptDisposition and the acceptance answer sends success with data.disposition, the same shape rpc-mode.js writes. The accepted flag still fences the catch so a rejection after acceptance cannot send a second answer; rejection stays the prompt() promise rejecting, so every disposition is an admission. OMA's admission boundary is unchanged -- the host still turns only a Human prompt into an engine prompt and engine extension commands still never reach it. 2026-10-05 B round: the boundary registers the compact-tool resolver through the public registerToolRenderer seam (B1), routes the intercepted thinking commands to a deterministic setter through the compat internals (B2), and mirrors the session's waiting[] snapshots into a bounded aboveEditor widget that is cleared when empty and reapplied on session_start (B3). BL2 rebind: the boundary registers the ask_user_question presenter with a lazy context read (context: () => context), so requests made while no session context is live resolve cancelled and a session boundary can never strand one; registration sits beside the other UI-boundary seams before session_start assigns context.",
-   "sha256": "7445ea6c0b20a9345be09e5b55d19b51653a0d5c8b964ae6167374b12cc98bcc"
+   "note": "Reviewed Pi public storage/factory wiring and startup presentation separation: one owned settings lock, Pi field merging, trusted user project atomic replacement under the public Pi file lock with conflict detection, preservation of explicit skill choices, bundled CLI preload only for the pinned runtime, and typed private compatibility declarations. Interprocess CLI and trusted/untrusted project oracles cover the settings changes.",
+   "sha256": "a22a4821822e5517dd2baebb9763d2d9216d3fb58cf14f4175749459f30f733a"
   },
   {
    "path": "src/entry/pi-interactive.ts",
@@ -1861,16 +1780,30 @@
    "primary": null,
    "status": "CHANGED_WITH_ORACLE",
    "by": [
-    "C",
-    "BL2"
+    "DR35",
+    "DR36"
    ],
    "oracles": [
-    "Personal engine",
-    "society slot",
-    "BL2"
+    "AV-02",
+    "DR35"
    ],
-   "note": "Read in full at the 2026-10-05 C round: the boundary registers /society beside /oma; on darwin it refuses without touching the gate or the host contract (MODE-006), elsewhere a refused slot is a warning notification that leaves the Personal session alone, and a free slot goes through the existing before-switch/transition path -- switching latch, IPC {type:'switch', society}, then the InteractiveMode's own shutdown. A send failure returns the slot for retry. BL2 rebind: Personal loads the bundled ask extension as its own -e path (libdir + DEPLOYMENT_LAYOUT.extensionAsk), on the same installed footing as the packaged upstream open-tui entry — appended to extensionPaths in initial load and reload both. The same lazy-context presenter registration as the interactive host.",
-   "sha256": "b46b473fcdd9ff554949b9b62f23b907072468128bbe9b346addff0ce4ce1275"
+   "note": "Reviewed Pi public storage/factory wiring and startup presentation separation: one owned settings lock, Pi field merging, trusted user project atomic replacement under the public Pi file lock with conflict detection, preservation of explicit skill choices, bundled CLI preload only for the pinned runtime, and typed private compatibility declarations. Interprocess CLI and trusted/untrusted project oracles cover the settings changes.",
+   "sha256": "a3fdfc7a097017cda8168dfd21e523f108278a10dcf365bd837d948aa87a8b42"
+  },
+  {
+   "path": "src/entry/prepare-society.ts",
+   "primary": null,
+   "status": "CHANGED_WITH_ORACLE",
+   "by": [
+    "DR35",
+    "DR36"
+   ],
+   "oracles": [
+    "DR35",
+    "AV-07"
+   ],
+   "note": "Reviewed preparation ownership and host/broker ordering: no independent short total timeout, child inherits the society fence and remains owned until actual close, strict bounded child report, private UI before broker readiness without authority, and inherited descendant fences survive cancellation until the kernel admits a successor.",
+   "sha256": "57d84ccf4ff270112486c744ea9abe2299efeea672374a5a247c8003658e58b8"
   },
   {
    "path": "src/entry/runner.ts",
@@ -2079,13 +2012,15 @@
    "primary": "WP27",
    "status": "CHANGED_WITH_ORACLE",
    "by": [
-    "UX-38"
+    "DR35",
+    "DR36"
    ],
    "oracles": [
-    "P0"
+    "AV-07",
+    "T114"
    ],
-   "note": "Read in full for UX-38: the archived-message bound (storedMailBound -- header + 3x body + line-wrap expansion) is kept for stored reads, and /inbox.md now has its own derived bound (header/footer + per-row + per-revision path growth, linear in batch size) instead of the message bound -- an index of many messages is no longer refused for its aggregate size. mail send's recipient schema names OMA_MAIL_ADDRESSES (the wire's own bound, 64 default) instead of a hard-coded 32.",
-   "sha256": "7d510e48a4f440e304f410ef8d0574abb2cdeb123da15b3324e41708bad567dd"
+   "note": "Reviewed the first Principal tool path: wait for the actual channel grant before freezing/sending a new request; abort, damage and channel EOF reject waits and remove listeners. Detached behavior retains its existing transport semantics. Grant/cancel/damage regressions and the actual PTY once-only operation probe cover the change.",
+   "sha256": "b7e8510e8da56e1d7cd284edbb4283401c5a3989162e2066efb23d52de0845ed"
   },
   {
    "path": "src/extension/mcp-tools.ts",
@@ -2105,14 +2040,15 @@
    "primary": "WP27",
    "status": "CHANGED_WITH_ORACLE",
    "by": [
-    "AV10",
-    "AV11"
+    "DR35",
+    "DR36"
    ],
    "oracles": [
-    "AV10",
-    "AV11"
+    "AV-07",
+    "T114"
    ],
-   "sha256": "3fbece2b1f8b4c5c0b9f162f4964036821b6f92db60e54ba6152148853266ad2"
+   "note": "Reviewed the first Principal tool path: wait for the actual channel grant before freezing/sending a new request; abort, damage and channel EOF reject waits and remove listeners. Detached behavior retains its existing transport semantics. Grant/cancel/damage regressions and the actual PTY once-only operation probe cover the change.",
+   "sha256": "62680fcf1a6877ba0b8339491378775d1b81a2e28f444b9450df9b33fd548863"
   },
   {
    "path": "src/extension/principal-tools.ts",
@@ -2217,13 +2153,14 @@
    "primary": null,
    "status": "CHANGED_WITH_ORACLE",
    "by": [
-    "BL1"
+    "DR35",
+    "DR36"
    ],
    "oracles": [
-    "BL1"
+    "DR35"
    ],
-   "note": "Fail-closed bundle verifier: manifest shape, exact file set (missing/changed/unlisted/symlink all refuse), per-file SHA-256, whole-bundle digest; trailing-slash roots normalized. Node built-ins only; identical on host and inside a Resident sandbox.",
-   "sha256": "5851a613fcd41e1dc3688a908bd173c34d7cccd2fb7d3adec51fe0f2fca62bec"
+   "note": "Reviewed the earlier startup deltas and affected ownership/import path: one installation digest per derivation with complete byte hashing, linear bundle membership, explicit Pi presentation instead of eager SDK import, private history ownership, and precisely scoped optional interactive tool setup. Actual PTY and import/ownership regressions remain the startup oracles; no authority is granted by a private screen.",
+   "sha256": "7e831836219a87696809b9a18d371bbbcdaaccd979dbd2fbf2a4126d2b8d002a"
   },
   {
    "path": "src/extension/vendor/pi-hashline-edit-pro/LICENSE",
@@ -181589,16 +181526,15 @@
    "primary": "WP24",
    "status": "CHANGED_WITH_ORACLE",
    "by": [
-    "DR18",
-    "DR3",
-    "DR8"
+    "DR35",
+    "DR36"
    ],
    "oracles": [
-    "DR18",
-    "DR3",
-    "DR8"
+    "AV-04",
+    "AV-06"
    ],
-   "sha256": "73cc379668880d1fb521510e2e6c7300549f3020839e228611dc2972bde82f74"
+   "note": "Reviewed numeric and process policies: retained stream heads are independent of command execution, both streams continue draining, native timers are segmented monotonically and cancellable, sync-only limitations are explicit, derived configuration milliseconds remain safe integers, and cgroup memory comparison follows observed kernel page alignment. Long-timeout and overflowing-output regressions accompany native cgroup checks.",
+   "sha256": "30d9e0b798caf952c8af34e7ad4e0a020be0e34219644f0aeaf27e72eb0e0759"
   },
   {
    "path": "src/git/integration-publication.ts",
@@ -181655,13 +181591,16 @@
    "primary": null,
    "status": "CHANGED_WITH_ORACLE",
    "by": [
-    "UX-38"
+    "DR35",
+    "DR36"
    ],
    "oracles": [
-    "DR27"
+    "DR35",
+    "AV-07",
+    "DR18 / D-8"
    ],
-   "note": "Re-read in full for the UX-38 batch-4 working-tree review (2026-10-08): the snapshot's git commands spool stdout and stderr to the invocation's own staging directory so repository-scale output is never rejected at an in-memory bound; only a bounded stderr head is read back for error text while the complete stdout is read from its spool.",
-   "sha256": "817bc27ef5b0d0b321449b82336f1ef179689ba1b394cdf8b51cfdf661d25cbf"
+   "note": "Reviewed snapshot/provision flow and local-clone isolation: Human protocol clone imports only committed branch history and excludes private index/stash/unreachable objects; Human and writable Worker objects never hardlink to owned state; immutable owned objects may share only their bytes, refs remain independent, inherited leases fence actual child lifetimes, batch hashing and reusable scratch retain complete metadata/EOF checks, and canonical publication waits for healthy history before CAS.",
+   "sha256": "10b939adb76fecac83573f970f2a9d2c1f0367721bf9caac47d0cfa0549bc6bb"
   },
   {
    "path": "src/git/publication.ts",
@@ -181692,6 +181631,21 @@
    ],
    "note": "Re-read in full for the UX-38 batch-5 working-tree review (2026-10-12): the namespaced import streams heartbeat progress and the whole-import timeoutSeconds is a generous ceiling, not the working deadline -- silenceSeconds of quiet ends a stalled import while a progressing one runs. The heartbeat child closes its inherited stdout so command substitutions in the script cannot wedge on the pipe it keeps open (the 30s test hang). Sticky executor poisoning is per-run: a stale unknown clears only on the leased tree's fresh quiescence observation, never on the attempt, and accepted bundle evidence is kept.",
    "sha256": "89908c6de9915b4e7553e140a2374fffb89c8b298e2152f5a51cad433caf9269"
+  },
+  {
+   "path": "src/git/repository-health.ts",
+   "primary": null,
+   "status": "CHANGED_WITH_ORACLE",
+   "by": [
+    "DR35",
+    "DR36"
+   ],
+   "oracles": [
+    "AV-07",
+    "DR35"
+   ],
+   "note": "Reviewed shared strict Git health policy and ephemeral provisioning proof: only successful history observation under the same inherited tenure may avoid the duplicate startup scan, only once and only while current main equals the reported OID. Existing/mismatching/restarted state still takes full observation; failure does not publish canonical state.",
+   "sha256": "ff373a248744d87001058072ab871d61074bba42ca5766fe993c366a8b9e96b0"
   },
   {
    "path": "src/git/submit.ts",
@@ -181962,23 +181916,33 @@
   {
    "path": "src/lifecycle/society.ts",
    "primary": null,
-   "status": "NOT_REVIEWED",
-   "by": [],
-   "oracles": []
+   "status": "CHANGED_WITH_ORACLE",
+   "by": [
+    "DR35",
+    "DR36"
+   ],
+   "oracles": [
+    "R14",
+    "AV-10"
+   ],
+   "note": "Reviewed asynchronous admission through transport, public/internal dispatch, shutdown and review: raw input pauses before reserve/spool, close/revoke/EOF rechecks precede effects, release remains once-only, and safety-control is independent of quota scans. Native peer and delayed-admission regressions exercise affected owner flow.",
+   "sha256": "ba1b774132f8297c524ac6613071dbfc63b74c74f9c13aff16dbea30fe7e180b"
   },
   {
    "path": "src/lifecycle/workspace.ts",
    "primary": "WP19",
    "status": "CHANGED_WITH_ORACLE",
    "by": [
-    "UX-38"
+    "DR35",
+    "DR36"
    ],
    "oracles": [
-    "R37",
-    "PR-004"
+    "DR35",
+    "AV-07",
+    "DR18 / D-8"
    ],
-   "note": "Re-read in full for the UX-38 batch-5 working-tree review (2026-10-12): prepareGit runs clone/fetch/checkout through PreparationExecutor under the staged tree's lease -- 24h ceiling, 120s silence window re-armed by every emitted byte (git carries --progress), both streams spooled whole beside the staged tree so progress noise and ref chatter are never in-memory refusals. Small plumbing (rev-parse, cat-file -e) keeps its bounded sync path. A stale executor block clears only on the leased tree's quiescence observation, and the diagnostic spools are collected as owned files when the observation ends.",
-   "sha256": "18f28cd5bad0601b50c6b39445a7e31e93ef34418f48b5402dd6b57619876519"
+   "note": "Reviewed snapshot/provision flow and local-clone isolation: Human protocol clone imports only committed branch history and excludes private index/stash/unreachable objects; Human and writable Worker objects never hardlink to owned state; immutable owned objects may share only their bytes, refs remain independent, inherited leases fence actual child lifetimes, batch hashing and reusable scratch retain complete metadata/EOF checks, and canonical publication waits for healthy history before CAS.",
+   "sha256": "38946fb0091823a1e8bc09bb74d152cd4a9758977aef514229788c6239b48a02"
   },
   {
    "path": "src/mail.ts",
@@ -182284,6 +182248,49 @@
    "sha256": "8bc91b61cd9b1301f411169fa7a29248d2bd0363457b1928edc56301a383aace"
   },
   {
+   "path": "src/pi-compat/interactive-tool-setup.ts",
+   "primary": null,
+   "status": "CHANGED_WITH_ORACLE",
+   "by": [
+    "DR35",
+    "DR36"
+   ],
+   "oracles": [
+    "DR35"
+   ],
+   "note": "Reviewed the earlier startup deltas and affected ownership/import path: one installation digest per derivation with complete byte hashing, linear bundle membership, explicit Pi presentation instead of eager SDK import, private history ownership, and precisely scoped optional interactive tool setup. Actual PTY and import/ownership regressions remain the startup oracles; no authority is granted by a private screen.",
+   "sha256": "c1d8510d823b928b75e7ebd5717ce2b3a64fba4f28498322f519762b75614b91"
+  },
+  {
+   "path": "src/pi-compat/interactive-tools.ts",
+   "primary": null,
+   "status": "CHANGED_WITH_ORACLE",
+   "by": [
+    "DR35",
+    "DR36"
+   ],
+   "oracles": [
+    "DR35"
+   ],
+   "note": "Reviewed the earlier startup deltas and affected ownership/import path: one installation digest per derivation with complete byte hashing, linear bundle membership, explicit Pi presentation instead of eager SDK import, private history ownership, and precisely scoped optional interactive tool setup. Actual PTY and import/ownership regressions remain the startup oracles; no authority is granted by a private screen.",
+   "sha256": "a542cd453f3b716a98f8d1ea6a9c2aad21207aab9528bd10140d1e76475ec3f8"
+  },
+  {
+   "path": "src/pi-compat/pi-private.d.ts",
+   "primary": null,
+   "status": "CHANGED_WITH_ORACLE",
+   "by": [
+    "DR35",
+    "DR36"
+   ],
+   "oracles": [
+    "AV-02",
+    "DR35"
+   ],
+   "note": "Reviewed Pi public storage/factory wiring and startup presentation separation: one owned settings lock, Pi field merging, trusted user project atomic replacement under the public Pi file lock with conflict detection, preservation of explicit skill choices, bundled CLI preload only for the pinned runtime, and typed private compatibility declarations. Interprocess CLI and trusted/untrusted project oracles cover the settings changes.",
+   "sha256": "510aada3d5269ff2704716ad64c532572e6786094f9f0beed20bb615910ae0b6"
+  },
+  {
    "path": "src/pi-compat/session.ts",
    "primary": null,
    "status": "NOT_REVIEWED",
@@ -182291,17 +182298,49 @@
    "oracles": []
   },
   {
+   "path": "src/pi-compat/settings-object.ts",
+   "primary": null,
+   "status": "CHANGED_WITH_ORACLE",
+   "by": [
+    "DR35",
+    "DR36"
+   ],
+   "oracles": [
+    "AV-02",
+    "DR35"
+   ],
+   "note": "Reviewed Pi public storage/factory wiring and startup presentation separation: one owned settings lock, Pi field merging, trusted user project atomic replacement under the public Pi file lock with conflict detection, preservation of explicit skill choices, bundled CLI preload only for the pinned runtime, and typed private compatibility declarations. Interprocess CLI and trusted/untrusted project oracles cover the settings changes.",
+   "sha256": "126753973027352fd7cdbe4cf9fe3140872e75e4099eb23c85bec562c9ef407f"
+  },
+  {
+   "path": "src/pi-compat/settings-preload.ts",
+   "primary": null,
+   "status": "CHANGED_WITH_ORACLE",
+   "by": [
+    "DR35",
+    "DR36"
+   ],
+   "oracles": [
+    "AV-02",
+    "DR35"
+   ],
+   "note": "Reviewed Pi public storage/factory wiring and startup presentation separation: one owned settings lock, Pi field merging, trusted user project atomic replacement under the public Pi file lock with conflict detection, preservation of explicit skill choices, bundled CLI preload only for the pinned runtime, and typed private compatibility declarations. Interprocess CLI and trusted/untrusted project oracles cover the settings changes.",
+   "sha256": "65f3f56b18262748edd58ac04f0234d6c3377f81355e4faab6b09437e3f0adce"
+  },
+  {
    "path": "src/pi-compat/settings.ts",
    "primary": null,
    "status": "CHANGED_WITH_ORACLE",
    "by": [
-    "ENG2"
+    "DR35",
+    "DR36"
    ],
    "oracles": [
-    "A4"
+    "AV-02",
+    "DR35"
    ],
-   "note": "Read in full: setQuietStartup now passes a stored \"header\" literal through instead of flattening it to true -- 1.0.1 widened QuietStartup to boolean | \"header\" and the literal is the Human's choice, not truthiness. The new A4 regression asserts the literal survives the bridge. Other comments re-pinned to 1.0.1.",
-   "sha256": "359c70ef2fd79ca403febeb29c340086cb190f54cdf774634c88c338f2241113"
+   "note": "Reviewed Pi public storage/factory wiring and startup presentation separation: one owned settings lock, Pi field merging, trusted user project atomic replacement under the public Pi file lock with conflict detection, preservation of explicit skill choices, bundled CLI preload only for the pinned runtime, and typed private compatibility declarations. Interprocess CLI and trusted/untrusted project oracles cover the settings changes.",
+   "sha256": "03032f56701862679f5e4b908bb93fb0cbb0f3d79ad4d85a009841a7abaafe50"
   },
   {
    "path": "src/pi-compat/wire.ts",
@@ -182728,15 +182767,14 @@
    "primary": null,
    "status": "CHANGED_WITH_ORACLE",
    "by": [
-    "DR25",
-    "DR28",
-    "P0-8"
+    "DR35",
+    "DR36"
    ],
    "oracles": [
-    "Owned cleanup host"
+    "DR35"
    ],
-   "note": "Read in full at the 2026-10-05 P0-8 residual round, re-binding the earlier host-owner review: publishHostStaged now flushes the renamed staged tree's regular files and every directory that names them, then the destination's parent and the staging root the name came from -- the same structural durability the Linux publish's fsyncTree keeps, so the index never names file contents a crash could lose. HostTemporary ownership, the owned-boundary repair, the one-shot stray collection at the publish slot, listHostStaged and removeHostStaged are unchanged; native Mac execution of the flush is NOT_RUN on this Linux host.",
-   "sha256": "1278562e94f3f34c2e2a9e293a95c68b27aa42afa31a132ac7e05a4b43f04620"
+   "note": "Reviewed the earlier startup deltas and affected ownership/import path: one installation digest per derivation with complete byte hashing, linear bundle membership, explicit Pi presentation instead of eager SDK import, private history ownership, and precisely scoped optional interactive tool setup. Actual PTY and import/ownership regressions remain the startup oracles; no authority is granted by a private screen.",
+   "sha256": "1f7bc01e96d7aa7d8003a15f1d3ad035846a9fde0889be1ccf8cdda436462022"
   },
   {
    "path": "src/platform/host/guest-histories.ts",
@@ -183160,13 +183198,15 @@
    "primary": "WP10",
    "status": "CHANGED_WITH_ORACLE",
    "by": [
-    "UX-38"
+    "DR35",
+    "DR36"
    ],
    "oracles": [
-    "R37"
+    "AV-04",
+    "AV-06"
    ],
-   "note": "Re-read in full for the UX-38 batch-4 working-tree review (2026-10-08): the async runner keeps the in-memory head and appends every byte to the configured spool files, so output past the capture budget is preserved whole rather than refused; silence expiry classifies as stalled -- distinct from timed-out, output-limited, spawn-failed, unobserved and known exit -- and each stdout/stderr chunk re-arms the window. Child ownership, kill escalation and cleanup are unchanged.",
-   "sha256": "d2b4d7d0c1832f4f3d16e3b68689dae1f3bd3448d4fbe88be2c3f590793b7fac"
+   "note": "Reviewed numeric and process policies: retained stream heads are independent of command execution, both streams continue draining, native timers are segmented monotonically and cancellable, sync-only limitations are explicit, derived configuration milliseconds remain safe integers, and cgroup memory comparison follows observed kernel page alignment. Long-timeout and overflowing-output regressions accompany native cgroup checks.",
+   "sha256": "c5e28e3effe2bb3b3e0cf362bc2f621962c46c5dfa426a18d6f73d87d4b3c14c"
   },
   {
    "path": "src/process/cleanup.ts",
@@ -183187,13 +183227,30 @@
    "primary": "WP10",
    "status": "CHANGED_WITH_ORACLE",
    "by": [
-    "UX-38"
+    "DR35",
+    "DR36"
    ],
    "oracles": [
-    "R37"
+    "AV-04",
+    "AV-06"
    ],
-   "note": "Re-read in full for the UX-38 settlement review (2026-10-09): validateCommand now refuses an identical string for stdoutSpool and stderrSpool -- one file cannot be both streams' spill, since the second O_TRUNC open erases the first stream while both observations name the path (silent loss reported as durable fact). Both runners share this contract via validateCommand/snapshotCommand. Alias spellings (.. segments, mid-path links) are documented as the caller's to avoid: the pure contract keeps no path-module capability to prove two names resolve apart. silenceMs, budgets, NUL and absolute-path validation unchanged.",
-   "sha256": "be6fd977847e3f6b8566fda387c80992bc3712f841c5a5f29890aa0fdab9e0b2"
+   "note": "Reviewed numeric and process policies: retained stream heads are independent of command execution, both streams continue draining, native timers are segmented monotonically and cancellable, sync-only limitations are explicit, derived configuration milliseconds remain safe integers, and cgroup memory comparison follows observed kernel page alignment. Long-timeout and overflowing-output regressions accompany native cgroup checks.",
+   "sha256": "28e15d6ba5e9bd5d8d56bd837d2931ae744972c8c76679c17349182b975e2cf1"
+  },
+  {
+   "path": "src/process/deadline.ts",
+   "primary": null,
+   "status": "CHANGED_WITH_ORACLE",
+   "by": [
+    "DR35",
+    "DR36"
+   ],
+   "oracles": [
+    "AV-04",
+    "AV-06"
+   ],
+   "note": "Reviewed numeric and process policies: retained stream heads are independent of command execution, both streams continue draining, native timers are segmented monotonically and cancellable, sync-only limitations are explicit, derived configuration milliseconds remain safe integers, and cgroup memory comparison follows observed kernel page alignment. Long-timeout and overflowing-output regressions accompany native cgroup checks.",
+   "sha256": "8fd7efad16f3518ada16c7fe3860da55c58c191f992cf1b3790e58564097fa23"
   },
   {
    "path": "src/process/host-loss.ts",
@@ -183233,13 +183290,15 @@
    "primary": "WP10",
    "status": "CHANGED_WITH_ORACLE",
    "by": [
-    "UX-38"
+    "DR35",
+    "DR36"
    ],
    "oracles": [
-    "R37"
+    "AV-04",
+    "AV-06"
    ],
-   "note": "Re-read in full for the UX-38 settlement review (2026-10-09): the two spool opens are now paired so a failed second openSync (ENOENT/EACCES/ELOOP/EMFILE) closes the first descriptor before the open's own error propagates -- the fds sit ahead of the invoke try/finally, so the cleanup that returns them could never see a half-opened pair. The throw itself is preserved rather than folded into a spawn-failed observation: a bad spill path is a caller precondition like the validation errors, not a child result. silenceMs refusal, descriptor-direct spooling, timeout/signal/spawn-failure/unobserved/exit classification unchanged.",
-   "sha256": "e49e2131e89bfb0edcfbbb9fd914c4e770542fdffc310751f07927097fa4d076"
+   "note": "Reviewed numeric and process policies: retained stream heads are independent of command execution, both streams continue draining, native timers are segmented monotonically and cancellable, sync-only limitations are explicit, derived configuration milliseconds remain safe integers, and cgroup memory comparison follows observed kernel page alignment. Long-timeout and overflowing-output regressions accompany native cgroup checks.",
+   "sha256": "099f7ff9a8774d9f499649f10b2ece7df1dc952cd4e2264bfb6a21ae6a6b210f"
   },
   {
    "path": "src/protocol/alarm.ts",
@@ -183640,14 +183699,15 @@
    "primary": "WP21",
    "status": "CHANGED_WITH_ORACLE",
    "by": [
-    "UX-38"
+    "DR35",
+    "DR36"
    ],
    "oracles": [
-    "T68d",
-    "R37"
+    "AV-07",
+    "DR35"
    ],
-   "note": "Re-read in full for the UX-38 batch-5 working-tree review (2026-10-12): assertCanonicalHealthyAsync runs fsck --strict --progress under the project lease through the health executor -- 24h ceiling with a 120s silence window re-armed by fsck's own --progress stream, stderr spooled to a diagnostics file collected as an owned file when the observation ends (residue cannot block the next health observation). A non-exited observation is still REF_STATE_UNKNOWN, a nonzero fsck still STORE_CORRUPT.",
-   "sha256": "cf16eebef2dd011d313f8a3f490e1921c9b73ccd70142c3957485d81264507b1"
+   "note": "Reviewed shared strict Git health policy and ephemeral provisioning proof: only successful history observation under the same inherited tenure may avoid the duplicate startup scan, only once and only while current main equals the reported OID. Existing/mismatching/restarted state still takes full observation; failure does not publish canonical state.",
+   "sha256": "0b080d52c94b69839dde19d2fc8847b71dd38d25b55c69d96196278a6d252fde"
   },
   {
    "path": "src/reconcile/operations.ts",
@@ -183734,13 +183794,15 @@
    "primary": null,
    "status": "CHANGED_WITH_ORACLE",
    "by": [
-    "DR33"
+    "DR35",
+    "DR36"
    ],
    "oracles": [
-    "UX-09"
+    "R14",
+    "AV-10"
    ],
-   "note": "Read in full: merge.open, caller-built challenge candidates and prepared revert candidates each pass through the gitlink gate and refuse synchronously with named paths before a review operation is created.",
-   "sha256": "91f71ebd0d564b4f1b5aebcbf7156a78d168073965b880a1598afe0a4127aac2"
+   "note": "Reviewed asynchronous admission through transport, public/internal dispatch, shutdown and review: raw input pauses before reserve/spool, close/revoke/EOF rechecks precede effects, release remains once-only, and safety-control is independent of quota scans. Native peer and delayed-admission regressions exercise affected owner flow.",
+   "sha256": "8529f964a79d29272a8e60b6bfc772821198a3b005acfdead99d26b611fff256"
   },
   {
    "path": "src/rpc-client.ts",
@@ -183804,34 +183866,30 @@
    "primary": "WP03",
    "status": "CHANGED_WITH_ORACLE",
    "by": [
-    "MAC-650",
-    "P0V-25",
-    "P0V-27",
-    "P0V-35",
-    "WP03"
+    "DR35",
+    "DR36"
    ],
    "oracles": [
-    "MAC-650",
-    "P0V-25",
-    "P0V-27",
-    "P0V-35",
-    "V03A",
-    "V03B"
+    "DR35",
+    "AV-07"
    ],
-   "sha256": "0c244704ef6995c9c80bfb0721a2a910b1115cd8833ece36f485b22b4221a596"
+   "note": "Reviewed preparation ownership and host/broker ordering: no independent short total timeout, child inherits the society fence and remains owned until actual close, strict bounded child report, private UI before broker readiness without authority, and inherited descendant fences survive cancellation until the kernel admits a successor.",
+   "sha256": "4583a66e461274873d76f92fb51b98d38958e9169a2a3cd8964f2ae08777d122"
   },
   {
    "path": "src/runtime/candidate-checks.ts",
    "primary": null,
    "status": "CHANGED_WITH_ORACLE",
    "by": [
-    "DR33"
+    "DR35",
+    "DR36"
    ],
    "oracles": [
-    "UX-09"
+    "AV-04",
+    "AV-06"
    ],
-   "note": "Read in full: CHECK_CHECKOUT emits OMA_ERROR=UNSUPPORTED_PROFILE plus OMA_GITLINK=<path> and exits 125; run() classifies a nonzero exit as the named refusal only when the marker owns a whole stderr line — the same bytes inside a longer line or on stdout stay CHECK_FAILED — and re-observes the immutable candidate host-side rather than trusting sandbox output. The marker is only a claim: refuseGitlinks routes the re-observation through observed() so unknown stays REF_STATE_UNKNOWN (reconcilable, never terminal failed), corrupt stays STORE_CORRUPT, refused stays the candidate-scope INVALID_REQUEST, and a present answer with no gitlinks — the marker disproved itself — falls through to the unclassified CHECK_FAILED. Only present-with-paths earns UNSUPPORTED_PROFILE with details.paths.",
-   "sha256": "836359fc39bd9ecb9100d951f126dffc83f31c4e0d3d1c29f665f858c5da06ef"
+   "note": "Reviewed numeric and process policies: retained stream heads are independent of command execution, both streams continue draining, native timers are segmented monotonically and cancellable, sync-only limitations are explicit, derived configuration milliseconds remain safe integers, and cgroup memory comparison follows observed kernel page alignment. Long-timeout and overflowing-output regressions accompany native cgroup checks.",
+   "sha256": "a7f6c83599f0447ec4cf5199ffb74bb552371c63dc5455ab729efe179b8ff637"
   },
   {
    "path": "src/runtime/client-preload.ts",
@@ -183871,23 +183929,14 @@
    "primary": "WP31",
    "status": "CHANGED_WITH_ORACLE",
    "by": [
-    "AV-review",
-    "BL4"
+    "DR35",
+    "DR36"
    ],
    "oracles": [
-    "A1",
-    "A2",
-    "A3",
-    "A4",
-    "A5",
-    "A6",
-    "B1",
-    "C1",
-    "BL4",
-    "P02"
+    "DR35"
    ],
-   "note": "BL4 rebind over the AV-review read: MAX_ENTRIES raised 4096 -> 32768 because a vendored bundle is a full pinned dependency closure (pi-web-access ships ~11k files under dist/src/extension/vendor/) and the deployment walk must hash every member; the bound still refuses absurd inventories, and every per-file sha256, openRegularBeneath containment and change-during-read check is unchanged.",
-   "sha256": "f6a409b15a52d47c89385c0b0d4c7b66280e7f6cf2b53cc4610b88420db7665f"
+   "note": "Reviewed the earlier startup deltas and affected ownership/import path: one installation digest per derivation with complete byte hashing, linear bundle membership, explicit Pi presentation instead of eager SDK import, private history ownership, and precisely scoped optional interactive tool setup. Actual PTY and import/ownership regressions remain the startup oracles; no authority is granted by a private screen.",
+   "sha256": "e304f0107cd464aae5bec19521d4250cbc364d44c495f08c09d87496be5100a9"
   },
   {
    "path": "src/runtime/egress-forwarder.ts",
@@ -183979,21 +184028,15 @@
    "primary": "WP09",
    "status": "CHANGED_WITH_ORACLE",
    "by": [
-    "P0V-113",
-    "P0V-114",
-    "P0V-115",
-    "P0V-116",
-    "WP10"
+    "DR35",
+    "DR36"
    ],
    "oracles": [
-    "P0V-113",
-    "P0V-114",
-    "P0V-115",
-    "P0V-116",
-    "V10A",
-    "V10C"
+    "DR35",
+    "AV-07"
    ],
-   "sha256": "6ca36292d4204be5f163a76c4cf5c6de4fe71848d4feec7e9e96d65c83016714"
+   "note": "Reviewed preparation ownership and host/broker ordering: no independent short total timeout, child inherits the society fence and remains owned until actual close, strict bounded child report, private UI before broker readiness without authority, and inherited descendant fences survive cancellation until the kernel admits a successor.",
+   "sha256": "fe453d5ca33868a3ba1c27ee3d741009cca8ee422189b4a44d7161aa28929838"
   },
   {
    "path": "src/runtime/inference-relay.ts",
@@ -184043,9 +184086,17 @@
   {
    "path": "src/runtime/locked-files.ts",
    "primary": null,
-   "status": "NOT_REVIEWED",
-   "by": [],
-   "oracles": []
+   "status": "CHANGED_WITH_ORACLE",
+   "by": [
+    "DR35",
+    "DR36"
+   ],
+   "oracles": [
+    "AV-02",
+    "DR35"
+   ],
+   "note": "Reviewed Pi public storage/factory wiring and startup presentation separation: one owned settings lock, Pi field merging, trusted user project atomic replacement under the public Pi file lock with conflict detection, preservation of explicit skill choices, bundled CLI preload only for the pinned runtime, and typed private compatibility declarations. Interprocess CLI and trusted/untrusted project oracles cover the settings changes.",
+   "sha256": "efcc6de42dfb7d77a18f3d6f85046776846ca727e4140d803016db2db8d921be"
   },
   {
    "path": "src/runtime/oma-theme.ts",
@@ -184066,13 +184117,14 @@
    "primary": null,
    "status": "CHANGED_WITH_ORACLE",
    "by": [
-    "C"
+    "DR35",
+    "DR36"
    ],
    "oracles": [
-    "Personal child"
+    "DR35"
    ],
-   "note": "Read in full at the 2026-10-05 C round: the switch wire now admits society as a second target -- one target only, first valid message wins, still attached to the exit only when the child closed with status 0. Extra keys, a session+society mix and a mistyped society are ignored.",
-   "sha256": "f2833b3289e4dfebd17bfd35094373a3a9b21f5d020a1795017840c2bb69ee22"
+   "note": "Reviewed the earlier startup deltas and affected ownership/import path: one installation digest per derivation with complete byte hashing, linear bundle membership, explicit Pi presentation instead of eager SDK import, private history ownership, and precisely scoped optional interactive tool setup. Actual PTY and import/ownership regressions remain the startup oracles; no authority is granted by a private screen.",
+   "sha256": "e6bbaa4de5de5694bc9757a0ac0f1cfc23fa200ff3531535c2154569e33bc90a"
   },
   {
    "path": "src/runtime/personal-settings.ts",
@@ -184115,18 +184167,28 @@
    "primary": null,
    "status": "CHANGED_WITH_ORACLE",
    "by": [
-    "DR25",
-    "DR28",
-    "P0-8"
+    "DR35",
+    "DR36"
    ],
    "oracles": [
-    "Package grammar",
-    "DR28",
-    "DR25",
-    "P0-8"
+    "AV-03"
    ],
-   "note": "Read in full at the 2026-10-05 P0-8 residual round, re-binding the 2026-10-01 host-only package review: writePackageIndex's resource listing treats the filesystem's own ENOENT as the only absent answer -- EACCES, EIO and every other unfinished observation refuse the write for realpath and for the lstat of the name realpath just answered, so an index is never committed without what the package still holds. One value-aware grammar produces the immutable explicit Mac-only local decision, refuses duplicate/value-like/project combinations and Linux use; index byte bound, inside-containment, symlink real-path pinning, role reconciliation and per-source entries are unchanged.",
-   "sha256": "c825bf9cca23314915708b54ae03cdcf7c748945e6cd1a21957a22ee34420dd6"
+   "note": "Reviewed replay validation before effects and reader lifetime: the shared index codec rejects damaged before-images and invalid generation names; publishing/selecting cannot precede validation, and replacement count no longer deletes a still-readable immutable generation. Archive/import-reader and zero-effect damage oracles cover these changes.",
+   "sha256": "593274e7928fcea4da4bfba7bcbeca7ef96576be760b41fd03069abea0db997b"
+  },
+  {
+   "path": "src/runtime/pi-presentation.ts",
+   "primary": null,
+   "status": "CHANGED_WITH_ORACLE",
+   "by": [
+    "DR35",
+    "DR36"
+   ],
+   "oracles": [
+    "DR35"
+   ],
+   "note": "Reviewed the earlier startup deltas and affected ownership/import path: one installation digest per derivation with complete byte hashing, linear bundle membership, explicit Pi presentation instead of eager SDK import, private history ownership, and precisely scoped optional interactive tool setup. Actual PTY and import/ownership regressions remain the startup oracles; no authority is granted by a private screen.",
+   "sha256": "05f73869725ecc99e5f4145195bc688a755e1c98abfce7e4275fd5930e543217"
   },
   {
    "path": "src/runtime/pi-rpc.ts",
@@ -184163,16 +184225,15 @@
    "primary": "WP31",
    "status": "CHANGED_WITH_ORACLE",
    "by": [
-    "DR25",
-    "DR28"
+    "DR35",
+    "DR36"
    ],
    "oracles": [
-    "Owned cleanup engine",
-    "Owned cleanup settings",
-    "engine settings"
+    "AV-02",
+    "DR35"
    ],
-   "note": "Read in full: settings/adoption writer returns and nested engine-file/parent returns preserve primary failure. Parent-leak control assertion-killed; controlled adoption fails on directory observation before opening any credential file. Bundled-only engine resolution, separate engine home and one retry owner retained. No actual auth.json was read; all pre-transfer absence and native credential adoption boundaries are not certified. P0-8/DR32: preparePiInteractive repairs a mode-000 .engine/themes tail through ensureOwnedUserDirectory before the locked replace, which is lockedOwnedReplace -- engine files are oma's, not a generic user path.",
-   "sha256": "2531d71f38c1fd85cfdaf76884c3951aa4c7b84ddcb4d3db03bc499c0f1434f8"
+   "note": "Reviewed Pi public storage/factory wiring and startup presentation separation: one owned settings lock, Pi field merging, trusted user project atomic replacement under the public Pi file lock with conflict detection, preservation of explicit skill choices, bundled CLI preload only for the pinned runtime, and typed private compatibility declarations. Interprocess CLI and trusted/untrusted project oracles cover the settings changes.",
+   "sha256": "8bd4eb7f16b9347e7375366740e68e11279c147394c17e506e8d0a3388dcbe8a"
   },
   {
    "path": "src/runtime/pi-spawn-plan.ts",
@@ -184244,13 +184305,16 @@
    "primary": "WP16",
    "status": "CHANGED_WITH_ORACLE",
    "by": [
-    "DR33"
+    "DR35",
+    "DR36"
    ],
    "oracles": [
-    "UX-09"
+    "DR35",
+    "AV-07",
+    "DR18 / D-8"
    ],
-   "note": "Read in full: after seeding/mirroring, canonical main is observed and a gitlinkNote naming every path is returned — provisioning stays permissive while telling the user integration will refuse until the links are removed.",
-   "sha256": "9ed63d7853605e7483a6a437d6bc8a0df6bd24a110e1b4a21454485e4fbfe371"
+   "note": "Reviewed snapshot/provision flow and local-clone isolation: Human protocol clone imports only committed branch history and excludes private index/stash/unreachable objects; Human and writable Worker objects never hardlink to owned state; immutable owned objects may share only their bytes, refs remain independent, inherited leases fence actual child lifetimes, batch hashing and reusable scratch retain complete metadata/EOF checks, and canonical publication waits for healthy history before CAS.",
+   "sha256": "1b9f7b18443078393484470651ee785e4f2b859fb5aab23b72729930079ab8c5"
   },
   {
    "path": "src/runtime/resident-rootfs.ts",
@@ -184302,9 +184366,18 @@
   {
    "path": "src/runtime/session-catalog.ts",
    "primary": null,
-   "status": "NOT_REVIEWED",
-   "by": [],
-   "oracles": []
+   "status": "CHANGED_WITH_ORACLE",
+   "by": [
+    "DR35",
+    "DR36"
+   ],
+   "oracles": [
+    "AV-01",
+    "AV-10",
+    "V03A"
+   ],
+   "note": "Reviewed owned traversal and quota admission: pinned nofollow descriptors, observation repairs only owner read/search and preserves sealed 0555 revisions across native broker restart, writer repair retains its separate write requirement, complete FD cleanup, hardlink deduplication, per-entry yielding including duplicate links, in-flight-only sharing, and atomic post-await reservation accounting. Actual fault, 30k-entry, concurrent-reservation and damaged-mode oracles exercise these deltas.",
+   "sha256": "f2d686f770318b18ecf9d7a942d11774292068a1407c24d1f229838cafb9fe86"
   },
   {
    "path": "src/runtime/session-handoff.ts",
@@ -184332,12 +184405,30 @@
    "primary": "WP25",
    "status": "CHANGED_WITH_ORACLE",
    "by": [
-    "DR18"
+    "DR35",
+    "DR36"
    ],
    "oracles": [
-    "DR18"
+    "DR35",
+    "AV-07"
    ],
-   "sha256": "8d27d6759361abbfbd86885d6ae17668f9b76cf13026fa92ee48faca0a9a09c8"
+   "note": "Reviewed preparation ownership and host/broker ordering: no independent short total timeout, child inherits the society fence and remains owned until actual close, strict bounded child report, private UI before broker readiness without authority, and inherited descendant fences survive cancellation until the kernel admits a successor.",
+   "sha256": "f979f74a7189ff98e870026788422c3da8b055e00943045a53e343916b27aa25"
+  },
+  {
+   "path": "src/runtime/society-preparation.ts",
+   "primary": null,
+   "status": "CHANGED_WITH_ORACLE",
+   "by": [
+    "DR35",
+    "DR36"
+   ],
+   "oracles": [
+    "DR35",
+    "AV-07"
+   ],
+   "note": "Reviewed preparation ownership and host/broker ordering: no independent short total timeout, child inherits the society fence and remains owned until actual close, strict bounded child report, private UI before broker readiness without authority, and inherited descendant fences survive cancellation until the kernel admits a successor.",
+   "sha256": "84cb34b22c4e175cb0025a646d7f6000b24ea656175ebf53990b178d5b0b0cec"
   },
   {
    "path": "src/runtime/society-slot.ts",
@@ -184523,25 +184614,16 @@
    "primary": "WP17",
    "status": "CHANGED_WITH_ORACLE",
    "by": [
-    "DR13",
-    "P0V-19",
-    "P0V-20",
-    "P0V-21",
-    "P0V-22",
-    "P0V-23",
-    "P0V-49",
-    "P0V-50",
-    "P0V-52",
-    "P0V-53"
+    "DR35",
+    "DR36"
    ],
    "oracles": [
-    "DR13",
-    "P0V-49",
-    "P0V-50",
-    "P0V-52",
-    "P0V-53"
+    "AV-01",
+    "AV-10",
+    "V03A"
    ],
-   "sha256": "c3f8a4e8a8691796e3506a3280b75833e20ecf2033aac07f8386b1dd973ef48c"
+   "note": "Reviewed owned traversal and quota admission: pinned nofollow descriptors, observation repairs only owner read/search and preserves sealed 0555 revisions across native broker restart, writer repair retains its separate write requirement, complete FD cleanup, hardlink deduplication, per-entry yielding including duplicate links, in-flight-only sharing, and atomic post-await reservation accounting. Actual fault, 30k-entry, concurrent-reservation and damaged-mode oracles exercise these deltas.",
+   "sha256": "477543e8326e91ae61cc4b152467844cfac07a42e6be9c69ed13958c684072df"
   },
   {
    "path": "src/storage/durable-fs.ts",
@@ -184779,22 +184861,34 @@
   {
    "path": "src/storage/project-preparation.ts",
    "primary": null,
-   "status": "NOT_REVIEWED",
-   "by": [],
-   "oracles": []
+   "status": "CHANGED_WITH_ORACLE",
+   "by": [
+    "DR35",
+    "DR36"
+   ],
+   "oracles": [
+    "DR35",
+    "AV-07",
+    "DR18 / D-8"
+   ],
+   "note": "Reviewed snapshot/provision flow and local-clone isolation: Human protocol clone imports only committed branch history and excludes private index/stash/unreachable objects; Human and writable Worker objects never hardlink to owned state; immutable owned objects may share only their bytes, refs remain independent, inherited leases fence actual child lifetimes, batch hashing and reusable scratch retain complete metadata/EOF checks, and canonical publication waits for healthy history before CAS.",
+   "sha256": "52c98eaf7f2f93e5d60d012bca4d03a0b4cd93f38fe2b268f58c2d54ce383de5"
   },
   {
    "path": "src/storage/quota.ts",
    "primary": "WP22",
    "status": "CHANGED_WITH_ORACLE",
    "by": [
-    "UX-38"
+    "DR35",
+    "DR36"
    ],
    "oracles": [
-    "D04"
+    "AV-01",
+    "AV-10",
+    "V03A"
    ],
-   "note": "Re-read in full for the UX-38 batch-5 working-tree review (2026-10-12): startupState() answers 'admitted' or 'degraded' from the same fresh scan admit() runs -- QUOTA_EXCEEDED becomes the degraded state, anything else (an unobservable store) still throws, so a non-quota observation failure can never masquerade as degradation. Settlement keeps its bounded headroom; a deployment with no quota configured admits unconditionally.",
-   "sha256": "f455fc2aebe421570c9aaf8183777e8bcbb6335f7da8226201d1b09c2b4a7a88"
+   "note": "Reviewed owned traversal and quota admission: pinned nofollow descriptors, observation repairs only owner read/search and preserves sealed 0555 revisions across native broker restart, writer repair retains its separate write requirement, complete FD cleanup, hardlink deduplication, per-entry yielding including duplicate links, in-flight-only sharing, and atomic post-await reservation accounting. Actual fault, 30k-entry, concurrent-reservation and damaged-mode oracles exercise these deltas.",
+   "sha256": "ae283cda732df8b6b818063b2569f59c440deb1280c76a77c6df7c46423de9bb"
   },
   {
    "path": "src/storage/receipt-projector.ts",
@@ -184833,9 +184927,18 @@
   {
    "path": "src/storage/snapshot-reader.ts",
    "primary": null,
-   "status": "NOT_REVIEWED",
-   "by": [],
-   "oracles": []
+   "status": "CHANGED_WITH_ORACLE",
+   "by": [
+    "DR35",
+    "DR36"
+   ],
+   "oracles": [
+    "DR35",
+    "AV-07",
+    "DR18 / D-8"
+   ],
+   "note": "Reviewed snapshot/provision flow and local-clone isolation: Human protocol clone imports only committed branch history and excludes private index/stash/unreachable objects; Human and writable Worker objects never hardlink to owned state; immutable owned objects may share only their bytes, refs remain independent, inherited leases fence actual child lifetimes, batch hashing and reusable scratch retain complete metadata/EOF checks, and canonical publication waits for healthy history before CAS.",
+   "sha256": "849e4bdc2dc9ea241950fd2dba151c33c69f3010b819595de485c12c477ff7c9"
   },
   {
    "path": "src/storage/socket-name.ts",
@@ -185137,14 +185240,15 @@
    "primary": null,
    "status": "CHANGED_WITH_ORACLE",
    "by": [
-    "DR25",
-    "DR28"
+    "DR35",
+    "DR36"
    ],
    "oracles": [
-    "engine"
+    "AV-02",
+    "DR35"
    ],
-   "note": "Read in full at the 2026-10-01 host-only package checkpoint: platform-aware runtime metadata preparation completes before spawn; explicit engine/store/arguments/environment/fence, error retained until actual direct-child close, and signal/null/nonzero close not success. Fourteen controlled tests pass; eleven source-copy controls assertion-killed under complete TAP with no cancellations/skips or harness errors, including the direct exit-only oracle. Actual Mac entry/bundled package manager and installed Personal PTY pass on Linux. Actual close does not establish arbitrary descendant/cgroup death; fallible listener acquisition and native Mac execution remain open. No credential files or real provider used. P0-8: the engine directory and package store are ensured through ensureOwnedUserDirectory inside dirname(stateRoot).",
-   "sha256": "deb19402bdca4fc9d5c215c815f14a4bf4f8612321d1da3ab02cecef25d19b5d"
+   "note": "Reviewed Pi public storage/factory wiring and startup presentation separation: one owned settings lock, Pi field merging, trusted user project atomic replacement under the public Pi file lock with conflict detection, preservation of explicit skill choices, bundled CLI preload only for the pinned runtime, and typed private compatibility declarations. Interprocess CLI and trusted/untrusted project oracles cover the settings changes.",
+   "sha256": "2a035d592f5035d25861528cecb7a49c193d472282541132517182752f1b3ce3"
   },
   {
    "path": "src/tui/mail-names.ts",
@@ -185188,9 +185292,16 @@
   {
    "path": "src/tui/packages-apply.ts",
    "primary": null,
-   "status": "NOT_REVIEWED",
-   "by": [],
-   "oracles": []
+   "status": "CHANGED_WITH_ORACLE",
+   "by": [
+    "DR35",
+    "DR36"
+   ],
+   "oracles": [
+    "AV-03"
+   ],
+   "note": "Reviewed replay validation before effects and reader lifetime: the shared index codec rejects damaged before-images and invalid generation names; publishing/selecting cannot precede validation, and replacement count no longer deletes a still-readable immutable generation. Archive/import-reader and zero-effect damage oracles cover these changes.",
+   "sha256": "894460b4bbffc560656ae9cb5095ecd26aaf4c5cda7bcbe32635b601d630b7ec"
   },
   {
    "path": "src/tui/panel-style.ts",
@@ -185218,15 +185329,14 @@
    "primary": null,
    "status": "CHANGED_WITH_ORACLE",
    "by": [
-    "DR25",
-    "P0-8"
+    "DR35",
+    "DR36"
    ],
    "oracles": [
-    "DR25",
-    "P0-8"
+    "DR35"
    ],
-   "note": "Read in full at the 2026-10-05 tenth-residual round: the settings ensure's first existsSync can answer 'absent' only because a degraded oma-owned ancestor hid the file, so after ensureOwnedUserDirectory repairs `.projects/<project>` the path is observed again and the seed/write branch runs only when it is still absent -- a bundle that was only hidden is read back, never seeded over (fail-before: committed quota 4 was replaced by the seed's 5). The seed candidates' probe is lstatSync(throwIfNoEntry): ENOENT alone is absent, an unobservable candidate refuses rather than defaults (the society root's own owner repairs it, a --config path is the Human's). applyPackageChange's per-project skip got the same treatment: the owned repair runs before the probe for every non-current project, a failed repair is reported to the Human like a failed edit, and only a post-repair 'absent' skips. Package-activation reconciliation and the role-set seed are unchanged.",
-   "sha256": "c819d655c304f9f04febb29fc0e39d673e66c1cfd61b6ae6c870de3c5713e8ec"
+   "note": "Reviewed the earlier startup deltas and affected ownership/import path: one installation digest per derivation with complete byte hashing, linear bundle membership, explicit Pi presentation instead of eager SDK import, private history ownership, and precisely scoped optional interactive tool setup. Actual PTY and import/ownership regressions remain the startup oracles; no authority is granted by a private screen.",
+   "sha256": "b4837465923927326874ae7a0cd73a0a4286dc0f519d3492f6a3050fce64a155"
   },
   {
    "path": "src/tui/prompt.ts",
@@ -185278,17 +185388,14 @@
    "primary": "WP09",
    "status": "CHANGED_WITH_ORACLE",
    "by": [
-    "B3",
-    "BL1",
-    "UX-38"
+    "DR35",
+    "DR36"
    ],
    "oracles": [
-    "B3",
-    "BL1",
-    "P0"
+    "DR35"
    ],
-   "note": "Read in full for UX-38: principalEnvironment emits OMA_MAIL_ADDRESSES from limits.addresses beside OMA_MAIL_BYTES; the limits pick gained 'addresses' and principalSessionProfile still fails closed on a missing/non-positive workspaceBytes.",
-   "sha256": "01835825808d1994a14c0dd10fcc86cde297605ba8a545afa0946ae58826cd9c"
+   "note": "Reviewed the earlier startup deltas and affected ownership/import path: one installation digest per derivation with complete byte hashing, linear bundle membership, explicit Pi presentation instead of eager SDK import, private history ownership, and precisely scoped optional interactive tool setup. Actual PTY and import/ownership regressions remain the startup oracles; no authority is granted by a private screen.",
+   "sha256": "43f1a088b22a5014874fb39d03f800995c7c1f50a457e461b8a94dafbac80a87"
   },
   {
    "path": "src/tui/sources/extensions.ts",
@@ -185510,53 +185617,15 @@
    "primary": "WP25",
    "status": "CHANGED_WITH_ORACLE",
    "by": [
-    "AV12",
-    "AV9",
-    "BL1",
-    "DR13",
-    "P0V-100",
-    "P0V-101",
-    "P0V-11",
-    "P0V-26",
-    "P0V-59",
-    "P0V-87",
-    "P0V-88",
-    "P0V-89",
-    "P0V-90",
-    "P0V-91",
-    "P0V-92",
-    "P0V-93",
-    "P0V-94",
-    "P0V-95",
-    "P0V-98",
-    "P0V-99",
-    "WP03",
-    "WP23",
-    "WP25"
+    "DR35",
+    "DR36"
    ],
    "oracles": [
-    "AV12",
-    "AV9",
-    "BL1",
-    "DR13",
-    "P0V-26",
-    "P0V-59",
-    "P0V-87",
-    "P0V-88",
-    "P0V-90",
-    "P0V-92",
-    "P0V-93",
-    "P0V-94",
-    "P0V-95",
-    "P0V-98",
     "V03A",
-    "V03B",
-    "V23A",
-    "V23B",
-    "V25A"
+    "DR35"
    ],
-   "note": "BL1 review -- generated Resident units render toolSurfaceHex = encodedResidentToolSurface() into the template.",
-   "sha256": "b9dad2ab2f8194b5ad549d59bd74c503809f2171553ad8f8605089261ac693e6"
+   "note": "Reviewed unit installation batching: each rendered file still passes ownership and durable publication; service/path pairs link and reload together, then each complete effective-property observation validates source, drop-ins, argv and raw configured limits. Native systemd startup and unit oracles exercise this flow.",
+   "sha256": "22123a85e001e7059223117943fdab109c32cb015486df82d6502bb03866045d"
   },
   {
    "path": "src/units/execute.ts",

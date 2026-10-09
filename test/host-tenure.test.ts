@@ -44,6 +44,30 @@ const engineThat = (dies: boolean): FencedEngine & { closed: number; die: () => 
   };
 };
 
+test("DR35 private engine preparation holds one lease without opening broker authority", async () => {
+  const root = scratch();
+  try {
+    const held = HostTenure.take(root)!;
+    assert.equal(held.canPrepareEngine, true);
+    assert.equal(held.canStartEngine, false);
+    assert.equal(held.deliverable, false);
+    const engine = engineThat(true);
+    held.adopt(engine);
+    assert.equal(held.canPrepareEngine, false);
+    assert.equal(held.deliverable, false);
+    assert.equal(takeable(root), false);
+    held.brokerReady();
+    assert.equal(held.deliverable, false);
+    held.principalRegistered();
+    assert.equal(held.deliverable, true);
+    held.brokerLost();
+    assert.equal(held.deliverable, false);
+    await held.end();
+    assert.equal(held.canPrepareEngine, false);
+    assert.equal(takeable(root), true);
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
 test("T119 a society has one tenure at a time, and it is takeable again only when that one ends", async () => {
   const root = scratch();
   try {

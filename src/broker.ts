@@ -222,11 +222,11 @@ export class Broker {
     const hostEndpoint = new PrincipalHostEndpoint(channel, { ...connection,
       // P0V-57: the same admission the runner channel gives these methods.
       prepare: async auth => {
-        const release = admitInternal("batch.prepare", this.internalAdmission);
+        const release = await admitInternal("batch.prepare", this.internalAdmission);
         try { return await this.mail.prepare(auth); } finally { release(); }
       },
       complete: async (auth, evidence) => {
-        const release = admitInternal("batch.complete", this.internalAdmission);
+        const release = await admitInternal("batch.complete", this.internalAdmission);
         try { await this.mail.complete(auth, evidence); } finally { release(); }
         this.refreshViews();
       },
@@ -398,9 +398,15 @@ export class Broker {
       preflight: raw => {
         try {
           preflight(raw);
-          releaseReservation();
-          releaseReservation = this.storage.reserve(this.streamReservationBytes(raw));
         } catch (error) { this.health.observe(error); throw error; }
+      },
+      reserve: async raw => {
+        const release = await this.storage.reserve(this.streamReservationBytes(raw));
+        try {
+          if (socket.destroyed || this.draining) throw new StoreError("BROKER_UNAVAILABLE", "stream admission owner closed");
+          preflight(raw);
+          releaseReservation(); releaseReservation = release;
+        } catch (error) { release(); this.health.observe(error); throw error; }
       },
       onClosed: () => { if (!executing) releaseReservation(); this.connections.delete(socket); }, onCleanupError: error => this.cleanupError(error),
       onTask: task => {

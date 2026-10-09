@@ -41,7 +41,9 @@ for (const [title, fields, expectedUnits, check] of [
     assert.deepEqual(Object.keys(fields), Object.keys(expectedUnits));
     const one = Object.fromEntries(Object.keys(expectedUnits).map((key) => [key, 1]));
     assert.equal(check(one), null, "minimum valid control");
-    assert.equal(check(Object.fromEntries(Object.keys(expectedUnits).map((key) => [key, Number.MAX_SAFE_INTEGER]))), null);
+    const maxima = Object.fromEntries(Object.entries(fields).map(([key, field]) =>
+      [key, "maxInclusive" in field ? field.maxInclusive : Number.MAX_SAFE_INTEGER]));
+    assert.equal(check(maxima), null, "declared maximum valid control");
     const units = Object.fromEntries(Object.entries(fields).map(([key, field]) => [key, field.unit]));
     assert.deepEqual(units, expectedUnits);
     for (const [key, field] of Object.entries(fields)) {

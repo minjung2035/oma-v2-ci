@@ -110,6 +110,10 @@ export class HostTenure {
    * not an RPC error, a timeout, or a stop request. */
   get canStartEngine(): boolean { return !this.over && this.brokerLive && this.engine === null; }
 
+  /** The owned, private conversation can load while the broker prepares. Its
+   * credential and delivery remain closed until brokerReady + registration. */
+  get canPrepareEngine(): boolean { return !this.over && this.engine === null; }
+
   /** A failed setup still owns the terminal until the acquired child is gone. */
   get engineExited(): Promise<void> { return this.engine?.exited ?? Promise.resolve(); }
 

@@ -21,7 +21,7 @@ export const DEPLOYMENT_LAYOUT = Object.freeze({
   modelCommand: "dist/libexec/oma",
   // TUI-002: `tui` is the host product entrypoint a Human runs. It has no
   // systemd unit, so it is absent from templateEntries by design.
-  entries: Object.freeze({ broker: "dist/src/entry/broker.js", runner: "dist/src/entry/runner.js", host: "dist/src/entry/host.js", tui: "dist/src/entry/oma.js", interactive: "dist/src/entry/pi-interactive.js",
+  entries: Object.freeze({ broker: "dist/src/entry/broker.js", preparation: "dist/src/entry/prepare-society.js", runner: "dist/src/entry/runner.js", host: "dist/src/entry/host.js", tui: "dist/src/entry/oma.js", interactive: "dist/src/entry/pi-interactive.js",
     society: "dist/src/entry/oma-society.js", personalHost: "dist/src/entry/personal-host.js", personal: "dist/src/entry/pi-personal.js",
     mac: "dist/src/entry/oma-mac.js",
     // DR25: the macOS engine's side of `oma pi`, run by its guest host service.
@@ -31,8 +31,11 @@ export const DEPLOYMENT_LAYOUT = Object.freeze({
   // TUI-003: the host product's files, relative to the installation. The
   // installation is mounted into every Resident, so these are hidden there;
   // nothing a model runs may read the product surface's code.
-  productSurface: Object.freeze(["dist/src/tui", "dist/src/entry/oma.js", "src/tui", "src/entry/oma.ts", "dist/src/entry/pi-interactive.js", "src/entry/pi-interactive.ts",
+  productSurface: Object.freeze(["dist/src/tui", "dist/src/entry/oma.js", "src/tui", "src/entry/oma.ts", "dist/src/entry/prepare-society.js", "src/entry/prepare-society.ts", "dist/src/runtime/society-preparation.js", "src/runtime/society-preparation.ts", "dist/src/entry/pi-interactive.js", "src/entry/pi-interactive.ts",
     "dist/src/runtime/pi-interactive.js", "src/runtime/pi-interactive.ts",
+    "dist/src/pi-compat/interactive-tool-setup.js", "src/pi-compat/interactive-tool-setup.ts",
+    "dist/src/pi-compat/interactive-tools.js", "src/pi-compat/interactive-tools.ts", "src/pi-compat/pi-private.d.ts",
+    "dist/src/runtime/pi-presentation.js", "src/runtime/pi-presentation.ts",
     "dist/src/entry/oma-society.js", "src/entry/oma-society.ts", "dist/src/entry/personal-host.js", "src/entry/personal-host.ts",
     "dist/src/entry/pi-personal.js", "src/entry/pi-personal.ts", "dist/src/entry/pi-interactive-host.js", "src/entry/pi-interactive-host.ts",
     "dist/src/entry/oma-mac.js", "src/entry/oma-mac.ts"] as const),

@@ -527,7 +527,8 @@ export class PrincipalSession {
     if (paths.piAgentDir !== undefined) preparePiRetry(paths.piAgentDir);
     if (paths.interactiveEntry !== undefined) {
       if (paths.fence === undefined) throw new StoreError("UNSUPPORTED_PROFILE", "interactive session requires its lease descriptor");
-      const child = spawnOwnedInteractive(paths.piCommand, [paths.interactiveEntry, ...sessionArgv(paths, profile)], paths.workspace,
+      const child = spawnOwnedInteractive(paths.piCommand, ["--import", new URL("../pi-compat/interactive-tool-setup.js", import.meta.url).href,
+        paths.interactiveEntry, ...sessionArgv(paths, profile)], paths.workspace,
         { ...sessionEnv(env, profile, paths), OMA_UI_IDLE_SECONDS: String(limits.idleStreamSeconds),
           OMA_UI_RECEIPT_SECONDS: String(limits.receiptWaitSeconds), OMA_PROJECT_DISPLAY: paths.project ?? paths.workspace,
           ...(paths.sessionFile === undefined ? {} : { OMA_SESSION_FILE: paths.sessionFile }),

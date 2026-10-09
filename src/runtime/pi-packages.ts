@@ -262,6 +262,12 @@ export function readPackageIndex(store: string): readonly InstalledPackage[] {
   let value: unknown;
   const invalid = (): never => { throw new StoreError("STORE_CORRUPT", "the installed-package index is malformed"); };
   try { value = JSON.parse(file); } catch { return invalid(); }
+  return decodePackageIndex(value);
+}
+
+/** The same schema validates the live index and a request's saved before-image. */
+export function decodePackageIndex(value: unknown): readonly InstalledPackage[] {
+  const invalid = (): never => { throw new StoreError("STORE_CORRUPT", "the installed-package index is malformed"); };
   if (!Array.isArray(value)) return invalid();
   const packages: InstalledPackage[] = [];
   for (const entry of value) {

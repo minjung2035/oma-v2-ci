@@ -28,6 +28,8 @@ function fixture(): { directory: string; lockPath: string; options: Parameters<t
   mkdirSync(packages); mkdirSync(dataRoot);
   const entry = join(libdir, DEPLOYMENT_LAYOUT.entries.personal), engine = join(libdir, "node_modules", PI_PACKAGE);
   mkdirSync(join(libdir, "dist", "src", "entry"), { recursive: true }); mkdirSync(engine, { recursive: true });
+  mkdirSync(join(libdir, "dist", "src", "pi-compat"), { recursive: true });
+  writeFileSync(join(libdir, "dist", "src", "pi-compat", "interactive-tool-setup.js"), "// fixture engine has no interactive tool imports\n");
   writeFileSync(entry, fixtureChild); writeFileSync(join(engine, "package.json"), JSON.stringify({ name: PI_PACKAGE, bin: { pi: "fixture.js" } }));
   writeFileSync(join(engine, "fixture.js"), "// resolver fixture; never executed\n");
   const { root } = personalBirth(dataRoot, directory);
