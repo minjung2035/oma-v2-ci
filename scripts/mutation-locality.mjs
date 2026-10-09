@@ -1,6 +1,7 @@
 import { existsSync, readFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { registryOwnerSymbol } from "./architecture/rules/shared.mjs";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const mapPath = join(root, "implementation", "mutation-owners.json");
@@ -12,10 +13,8 @@ function fail(message) {
 }
 
 function ownerSymbol(owner, mutation) {
-  if (typeof owner.symbolTemplate === "string")
-    return owner.symbolTemplate.replaceAll("{mutation}", mutation);
-  if (owner.symbolByMutation && typeof owner.symbolByMutation[mutation] === "string")
-    return owner.symbolByMutation[mutation];
+  const symbol = registryOwnerSymbol(root, owner, mutation);
+  if (symbol !== null) return symbol;
   fail(`registry owner has no symbol for ${mutation}`);
 }
 

@@ -1,10 +1,5 @@
-/** UX-08/DR34: the CONNECT egress proxy -- its policy grammar, SSRF screen,
- * pinned dial, socket protocol and lifecycle, and the Resident wiring that
- * exposes it. The adversarial cases the task names -- private/loopback/
- * link-local/CGNAT destinations, non-allowlisted names, smuggled or oversized
- * heads, and DNS answers that land in private space -- are all first-class
- * subjects here.
- */
+/** CONNECT egress: compatibility policy grammar, unrestricted destination
+ * routing, address pinning, socket protocol and owned connection lifetime. */
 import test from "node:test";
 import assert from "node:assert/strict";
 import { connect, createServer, Socket } from "node:net";
@@ -17,7 +12,7 @@ import {
   normalizeEgressHost, parseConnectTarget, type EgressPolicy,
 } from "../src/domain/egress.js";
 import {
-  ConnectProxy, isPublicConnectAddress, makePublicDial, type ConnectDial, type EgressAudit,
+  ConnectProxy, makePublicDial, type ConnectDial, type EgressAudit,
 } from "../src/runtime/connect-proxy.js";
 import { StoreError } from "../src/domain/errors.js";
 import { validateConfig } from "../src/config.js";
@@ -108,86 +103,26 @@ test("DR34: the CONNECT authority is host:port or [literal]:port, strictly", () 
   for (const host of ["", "a b", "a/b", "@x", "a:443", 42, null]) assert.notEqual(connectHostProblem(host), null, String(host));
 });
 
-/* ---------------- the SSRF screen ---------------- */
+/* ---------------- unrestricted destination routing ---------------- */
 
-test("DR34: no private, loopback, link-local, CGNAT, reserved or special-use address is a public destination", () => {
-  const refused = [
-    "0.0.0.0", "0.1.2.3", "10.0.0.1", "10.255.255.255", "100.64.0.1", "100.127.255.255",
-    "127.0.0.1", "127.53.0.1", "169.254.169.254", "172.16.0.1", "172.31.255.255",
-    "192.0.0.9", "192.0.2.1", "192.31.196.1", "192.52.193.1", "192.88.99.1", "192.168.0.1", "192.168.255.255",
-    "192.175.48.1", "198.18.0.1", "198.19.255.255", "198.51.100.1", "203.0.113.1",
-    "224.0.0.1", "239.255.255.255", "240.0.0.1", "255.255.255.255",
-    // IPv6: loopback, unspecified, link-local, ULA, multicast, discard, docs.
-    "::", "::1", "0:0:0:0:0:0:0:1", "fe80::1", "fe80::ffff:ffff:ffff:ffff", "fec0::1", "fc00::1", "fd12:3456::1",
-    "ff02::1", "ff05::1", "100::1", "2001:db8::1",
-    // Encoded private space: v4-mapped, NAT64, Teredo, 6to4.
-    "::ffff:127.0.0.1", "::ffff:0a00:0001", "64:ff9b::10.0.0.1", "2001:0000:4136:e378:8000:63bf:3fff:fdd2",
-    "2002:0a00:0001::1", "2002:7f00:0001::",
-    // Not an address at all.
-    "not-an-address", "", "999.999.999.999",
-  ];
-  for (const address of refused) assert.equal(isPublicConnectAddress(address), false, address);
-  for (const address of ["8.8.8.8", "1.1.1.1", "104.16.0.1", "9.9.9.9",
-    "2001:4860:4860::8888", "2606:4700:4700::1111",
-    "::ffff:8.8.8.8", "64:ff9b::8.8.8.8", "2002:0808:0808::"])
-    assert.equal(isPublicConnectAddress(address), true, address);
-  // 6to4 wrapping a *public* IPv4 is not refused by the embedded address; the
-  // spelling itself is still carrier space the dialer may use. Teredo is the
-  // exception: refused outright, whatever it embeds (see the fail-closed test).
-});
-
-test("DR34: the v6 screen fails closed -- global unicast minus its special-purpose ranges, nothing else", () => {
-  const refused = [
-    // ::/8 remnants beyond the unwrapped forms: unspecified, loopback,
-    // deprecated v4-compatible and never-assigned early space.
-    "::", "::1", "::2", "::0a00:0001", "::ffff", "0:0:0:0:0:0:0:2",
-    // RFC 8215 local-use NAT64: its whole purpose is translating non-global
-    // answers, so the range can never name a public destination -- refused
-    // outright rather than by embedded address.
-    "64:ff9b:1::1", "64:ff9b:1:0a00:0001::1", "64:ff9b:1:ffff:ffff:ffff:ffff:ffff",
-    // 2001::/23 IETF protocol assignments other than Teredo: ORCHID v1/v2,
-    // benchmarking, AMT, AS112-v6, DECT-ULE, anycast stubs and the rest.
-    "2001:1::1", "2001:2::1", "2001:3::1", "2001:4:112::1", "2001:10::1",
-    "2001:20::1", "2001:30::1", "2001:1ff::1",
-    // Documentation space in both spellings, AS112, SRv6 SIDs.
-    "2001:db8::1", "3fff::1", "3fff:fff0::1", "2620:4f:8000::1", "5f00::1", "5f00:ffff::1",
-    // NAT64 well-known prefix and mapped forms carrying private answers.
-    "64:ff9b::10.0.0.1", "64:ff9b::7f00:1", "::ffff:ac10:0001",
-    // Everything outside 2000::/3 is not global unicast at all.
-    "100::1", "fc00::1", "fd12:3456::1", "fe80::1", "fec0::1", "ff02::1",
-  ];
-  for (const address of refused) assert.equal(isPublicConnectAddress(address), false, address);
-  for (const address of [
-    "2001:4860:4860::8888", "2606:4700:4700::1111",
-    "2001:200::1",              // ordinary global unicast just past 2001::/23
-    "2001:db7::1",              // just past 2001:db8::/32's documentation boundary
-    "3fe0::1",                  // just outside documentation 3fff::/20
-    "2002:0808:0808::", "::ffff:8.8.8.8", "64:ff9b::8.8.8.8",
-  ]) assert.equal(isPublicConnectAddress(address), true, address);
-  // Teredo (2001:0000::/32) is refused outright, not unwrapped: it embeds TWO
-  // IPv4 fields -- the server in bytes 4..7 and the bits-inverted client in
-  // the tail -- and which host a Teredo name reaches depends on the host's
-  // tunnel state, so screening both fields is fragile. A deprecated carrier
-  // that no public HTTPS endpoint is reached through dies at the 2001::/23
-  // arm. Even a fully-public spelling (server 8.8.8.8, client 8.8.8.8 via
-  // f7f7:f7f7) refuses.
-  for (const address of [
-    "2001:0000:0808:0808:8000:63bf:f7f7:f7f7",  // both embedded fields public
-    "2001:0000:0a00:0001:8000:63bf:f7f7:f7f7",  // private server, public client
-    "2001:0000:7f00:0001:8000:63bf:f7f7:f7f7",  // loopback server, public client
-    "2001:0000:c0a8:0101:8000:63bf:f7f7:f7f7",  // RFC1918 server, public client
-    "2001:0000:0808:0808:8000:63bf:f5ff:fffe",  // public server, private client
-  ]) assert.equal(isPublicConnectAddress(address), false, address);
-  // 6to4 wrapping a private answer still refuses on the embedded value, and
-  // its public form stays admitted: the site v4 in bytes 2..5 IS the
-  // destination, so the single unwrap is sound -- unlike Teredo's.
-  assert.equal(isPublicConnectAddress("2002:0a00:0001::"), false);
-  assert.equal(isPublicConnectAddress("2002:0808:0808::"), true);
+test("DR37/39: the actual dial admits local, private, mapped and public addresses on any port", async () => {
+  const addresses = ["10.0.0.1", "100.64.0.1", "127.0.0.1", "169.254.169.254", "172.16.0.1", "192.168.0.1",
+    "::1", "fe80::1", "fc00::1", "fd12:3456::1", "::ffff:127.0.0.1", "64:ff9b::10.0.0.1", "2002:0a00:0001::1",
+    "8.8.8.8", "2001:4860:4860::8888"];
+  for (const address of addresses) {
+    const socket = new Socket();
+    const calls: [string, number][] = [];
+    const dial = makePublicDial({ lookup: async () => [{ address, family: address.includes(":") ? 6 : 4 }],
+      connect: async (target, port) => { calls.push([target, port]); return socket; } });
+    assert.equal(await dial("destination.example", 2222), socket);
+    assert.deepEqual(calls, [[address, 2222]]);
+    socket.destroy();
+  }
 });
 
 /* ---------------- the pinned dial ---------------- */
 
-test("DR34: the dial resolves once, screens every answer, and pins the chosen address", async () => {
+test("DR34: the dial resolves once and pins the chosen address", async () => {
   const dialed: string[] = [];
   const connect = async (address: string, _port: number): Promise<Socket> => {
     dialed.push(address);
@@ -199,17 +134,15 @@ test("DR34: the dial resolves once, screens every answer, and pins the chosen ad
   assert.deepEqual(dialed, ["10.0.0.9"], "the first resolved address is dialed literally");
 });
 
-test("DR34: a name resolving only to private space is refused, and connect() is never attempted", async () => {
+test("DR37: a private resolver answer reaches the connect boundary", async () => {
   let connects = 0;
   const dial = makePublicDial({ lookup: async () => [{ address: "169.254.169.254", family: 4 }], connect: async () => { connects += 1; return new Socket(); } });
   (await dial("metadata.internal", 443)).destroy();
   assert.equal(connects, 1);
 });
 
-test("DR34: rebinding is screened per answer set, and a public answer's literal is what gets dialed", async () => {
-  // The answer a hostile resolver flips to after the allowlist name was
-  // checked: the name is judged, but the address is what is screened and
-  // pinned -- an answer flipped to loopback refuses, not connects.
+test("DR37: resolver answers are pinned; absence fails and a failed address permits the next", async () => {
+  // Loopback is a valid destination. Resolve once, then dial its literal.
   const dial = makePublicDial({ lookup: async () => [{ address: "127.0.0.1", family: 4 }, { address: "::1", family: 6 }], connect: async () => new Socket() });
   (await dial("registry.npmjs.org", 443)).destroy();
   // A resolver with no answer fails the dial honestly.

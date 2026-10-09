@@ -8,21 +8,7 @@
     },
     "validation": {
       "path": "src/validate.ts",
-      "symbolByMutation": {
-        "attest.record": "attestationParamsCheck",
-        "society.set": "societySetParamsCheck",
-        "mail.send": "mailParamsCheck",
-        "agent.continue": "agentContinueParamsCheck",
-        "mail.ack": "mailAckParamsCheck",
-        "route.follow": "routeParamsCheck",
-        "route.unfollow": "routeParamsCheck",
-        "agent.create": "agentCreateParamsCheck",
-        "agent.start": "agentActionParamsCheck",
-        "agent.stop": "agentActionParamsCheck",
-        "git.submit": "gitSubmitParamsCheck",
-        "git.integrate": "gitIntegrateParamsCheck",
-        "context.publish": "contextPublishParamsCheck"
-      }
+      "symbolFromMethod": "paramsCheck"
     },
     "method": {
       "path": "src/protocol/methods.ts",

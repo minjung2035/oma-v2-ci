@@ -8,7 +8,7 @@ import { randomUUID } from "node:crypto";
 import { basename, dirname, join } from "node:path";
 import { StoreError } from "../domain/errors.js";
 import { assertDirectory, ensureDirectory, ensureOwnedDirectory } from "./directory.js";
-import { entryAt, openBeneath, openDirectory, openRegularBeneath, withinDirectory } from "./contained-fs.js";
+import { entryAt, linkDescriptor, openBeneath, openDirectory, openRegularBeneath, withinDirectory } from "./contained-fs.js";
 import { lockFileDescriptor } from "../leaf.js";
 
 /** P7 durability fault seam. It is confined to these leaf primitives and their
@@ -223,12 +223,26 @@ export function temporaryNameFor(name: string): string {
  * the temporary is gone -- linked away, renamed away or removed -- so a lock
  * found free is the proof its writer died in between. */
 export function createLockedTemporary(parent: number, temporaryName: string, flags: number, mode: number): number {
-  const fd = openBeneath(parent, temporaryName, flags | constants.O_CREAT | constants.O_EXCL | constants.O_NOFOLLOW, mode);
-  const lock = lockFileDescriptor(fd);
-  if (lock.kind === "held") return fd;
-  closeSync(fd);
-  try { unlinkSync(entryAt(parent, temporaryName)); } catch { /* cleanup only */ }
-  throw new StoreError("BROKER_UNAVAILABLE", `a publication's temporary could not be locked (${lock.kind})`);
+  // A collector may acquire a fresh inode between O_EXCL and flock. Publish
+  // the collectible name only after locking; the plain temporary has no
+  // claim of writer death and is retained if this tiny preparation crashes.
+  const preparing = temporaryName.replace(/\.held\.tmp$/, ".tmp");
+  if (preparing === temporaryName) throw new StoreError("INTERNAL_ERROR", "locked temporary requires its held suffix");
+  const fd = openBeneath(parent, preparing, flags | constants.O_CREAT | constants.O_EXCL | constants.O_NOFOLLOW, mode);
+  try {
+    const lock = lockFileDescriptor(fd);
+    if (lock.kind !== "held")
+      throw new StoreError("BROKER_UNAVAILABLE", `a publication's temporary could not be locked (${lock.kind})`);
+    // The provisional name is unique and cannot be collected or reused while
+    // its descriptor is held. Never replace an existing held name.
+    linkDescriptor(fd, parent, temporaryName);
+    unlinkSync(entryAt(parent, preparing));
+    return fd;
+  } catch (error) {
+    try { unlinkSync(entryAt(parent, preparing)); } catch { /* retain the original failure */ }
+    closeSync(fd);
+    throw error;
+  }
 }
 /** The locked temporaries in the held directory whose writers are dead,
  * removed under their lock. Every publication calls it first, so what a

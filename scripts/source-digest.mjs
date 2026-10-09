@@ -20,11 +20,13 @@ import { digest, sourceFiles } from "./traceability.mjs";
 
 export const VERIFICATION_INPUT_ROOTS = Object.freeze([
   "src",
+  "platform",
   "test",
   "scripts",
   "implementation",
   "docs",
   ".github/workflows",
+  ".gitignore",
   "package.json",
   "package-lock.json",
   "tsconfig.json",

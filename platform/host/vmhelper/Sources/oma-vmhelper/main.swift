@@ -183,7 +183,11 @@ func start(_ id: Int, _ config: VmConfig) {
 func forceStop(_ id: Int) {
   vmQueue.async {
     guard let vm = machine else { answer(id); return }
-    vm.stop { _ in
+    vm.stop { error in
+      // A completion callback can report failure while the VM still runs.
+      // Retain the machine/bridges and refuse this request until death is
+      // observed; neither the callback nor its arrival proves a stop.
+      guard error == nil else { refuse(id, "the engine did not stop"); return }
       machine = nil
       stopBridges()
       answer(id)

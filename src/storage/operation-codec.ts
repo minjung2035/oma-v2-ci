@@ -23,6 +23,7 @@ import { resolvedSpecDigest } from "../domain/spec-identity.js";
 import { requestHash } from "../hash.js";
 import { StoreError, isErrorCode, isPreacceptOnlyFailure } from "../domain/errors.js";
 import { isMutationMethod } from "../protocol/receipt-codec.js";
+import { PUBLIC_METHODS } from "../protocol/methods.js";
 import { decodeMutationPayload } from "../protocol/request-codec.js";
 import { operationResultCheck } from "../validate.js";
 
@@ -45,10 +46,10 @@ const PLAN = Symbol("ValidatedOperationPlan");
 const OPERATION = Symbol("DecodedOperation");
 export type ValidatedPlan<K extends MutationMethod> = PlanFor<K> & { readonly [PLAN]: true };
 
-/** P1/P3-1: pure kind -> validator metadata. Every entry binds the same existing
- * checks this module already called; no new validation, effect, recovery
- * decision or state is introduced. The `satisfies` below is the compile-time
- * exhaustiveness gate: a new OperationPlan kind without its codec does not build.
+/** P1/P3-1: codec keys are derived from the public method registry. The mapped
+ * type retains its actual mutation keys, so `satisfies` independently rejects
+ * an OperationPlan kind with no registered mutation. Semantic plan, result and
+ * relation validators still have their own exhaustiveness checks.
  */
 export interface OperationCodec {
   readonly planCheck: (plan: unknown, context: OperationPlanContext) => string | null;
@@ -61,21 +62,12 @@ const codecFor = (kind: MutationMethod): OperationCodec => Object.freeze({
   relationsCheck: (plan: unknown, result: unknown, context: OperationPlanContext) =>
     operationResultRelationCheck(kind, plan, result, context),
 });
-export const OPERATION_CODECS = Object.freeze({
-  "society.set": codecFor("society.set"),
-  "attest.record": codecFor("attest.record"),
-  "mail.send": codecFor("mail.send"),
-  "agent.continue": codecFor("agent.continue"),
-  "mail.ack": codecFor("mail.ack"),
-  "route.follow": codecFor("route.follow"),
-  "route.unfollow": codecFor("route.unfollow"),
-  "agent.create": codecFor("agent.create"),
-  "agent.start": codecFor("agent.start"),
-  "agent.stop": codecFor("agent.stop"),
-  "git.submit": codecFor("git.submit"),
-  "git.integrate": codecFor("git.integrate"),
-  "context.publish": codecFor("context.publish"),
-}) satisfies Record<MutationMethod, OperationCodec>;
+type RegisteredCodecs = {
+  readonly [K in keyof typeof PUBLIC_METHODS as typeof PUBLIC_METHODS[K]["mode"] extends "mutation" ? K : never]: OperationCodec;
+};
+export const OPERATION_CODECS = Object.freeze(Object.fromEntries(
+  Object.keys(PUBLIC_METHODS).filter(isMutationMethod).map(kind => [kind, codecFor(kind)]),
+) as RegisteredCodecs) satisfies Record<MutationMethod, OperationCodec>;
 interface IdentityFields {
   readonly id: OperationId;
   readonly actor: Actor;

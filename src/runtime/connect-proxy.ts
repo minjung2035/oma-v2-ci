@@ -5,26 +5,21 @@
  * path imposes concurrency or elapsed-time limits. Close owns both halves.
  * Audit records contain destination authority only, never query/credentials. */
 import { Agent, createServer, request, type IncomingHttpHeaders, type IncomingMessage, type Server, type ServerResponse } from "node:http";
-import { connect as netConnect, isIP, type Socket } from "node:net";
+import { connect as netConnect, type Socket } from "node:net";
 import { lookup as dnsLookup } from "node:dns";
 import { chmodSync } from "node:fs";
 import { allowsEgressEndpoint, parseConnectTarget, type EgressPolicy } from "../domain/egress.js";
 import { clearSocketName } from "../storage/socket-name.js";
 import { StoreError } from "../domain/errors.js";
 
-/** The only destination port a tunnel may open: HTTPS, end to end. */
-export const EGRESS_CONNECT_PORT = 443;
-/** Tunnels one delivery's proxy works at once -- the same per-run working
- * set the egress pool provisions for (host/egress's four spare connections
- * per run). It is a working-set bound, never a refusal: requests beyond it
- * queue in order and are granted as established tunnels close. */
+/** Production has no tunnel concurrency cap. An explicitly supplied finite
+ * test/embedding limit queues excess connections instead of rejecting them. */
 export const CONNECT_TUNNELS = Number.POSITIVE_INFINITY;
-/** A CONNECT request must be complete and its target answered within this
- * budget; the request itself is a few hundred bytes, so this is generous. */
+/** Zero disables the production handshake deadline. */
 export const CONNECT_HANDSHAKE_MS = 0;
-/** Silence budget of an established tunnel. */
+/** Zero disables the production idle deadline. */
 export const CONNECT_IDLE_MS = 0;
-/** Per-address dial deadline once a name has resolved. */
+/** Zero disables the production dial deadline. */
 export const CONNECT_DIAL_MS = 0;
 /** CONNECT needs no headers beyond Host; this still admits a verbose client. */
 const CONNECT_HEADER_BYTES = 8192;
@@ -46,137 +41,11 @@ export interface EgressAudit {
 }
 
 /** One upstream connection: a name + port in, a connected socket out. The
- * production dialer resolves and screens; on macOS the runner substitutes the
+ * production dialer resolves once and pins; on macOS the runner substitutes the
  * host's `egress.connect` request, and tests inject an oracle. */
 export type ConnectDial = (host: string, port: number, signal?: AbortSignal) => Promise<Socket>;
 
-/* ---- the SSRF screen ---------------------------------------------------- */
-
-/** IPv4 ranges a tunnel may never open, as [prefix, bits]. This-node, RFC1918,
- * CGNAT, link-local, loopback, IETF protocol assignments, AS112, benchmark,
- * documentation, multicast, reserved and broadcast space. */
-const V4_REFUSED: readonly (readonly [number, number])[] = Object.freeze([
-  [0x00000000, 8],  // 0.0.0.0/8 "this host"
-  [0x0a000000, 8],  // 10.0.0.0/8 private
-  [0x64400000, 10], // 100.64.0.0/10 CGNAT
-  [0x7f000000, 8],  // 127.0.0.0/8 loopback
-  [0xa9fe0000, 16], // 169.254.0.0/16 link-local
-  [0xac100000, 12], // 172.16.0.0/12 private
-  [0xc0000000, 24], // 192.0.0.0/24 IETF protocol assignments
-  [0xc0000200, 24], // 192.0.2.0/24 documentation
-  [0xc01fc400, 24], // 192.31.196.0/24 AS112-v4
-  [0xc034c100, 24], // 192.52.193.0/24 AMT
-  [0xc0586300, 24], // 192.88.99.0/24 6to4 relay anycast (deprecated)
-  [0xc0a80000, 16], // 192.168.0.0/16 private
-  [0xc0af3000, 24], // 192.175.48.0/24 AS112
-  [0xc6120000, 15], // 198.18.0.0/15 benchmarking
-  [0xc6336400, 24], // 198.51.100.0/24 documentation
-  [0xcb007100, 24], // 203.0.113.0/24 documentation
-  [0xe0000000, 4],  // 224.0.0.0/4 multicast
-  [0xf0000000, 4],  // 240.0.0.0/4 reserved, includes the broadcast address
-]);
-
-function v4Private(a: number, b: number, c: number, d: number): boolean {
-  const value = ((a << 24) | (b << 16) | (c << 8) | d) >>> 0;
-  return V4_REFUSED.some(([base, bits]) => (value >>> (32 - bits)) === (base >>> (32 - bits)));
-}
-
-function v4AddressPrivate(address: string): boolean {
-  const parts = address.split(".");
-  if (parts.length !== 4 || !parts.every(part => /^[0-9]{1,3}$/.test(part))) return true;
-  return v4Private(...parts.map(Number) as [number, number, number, number]);
-}
-
-/** A validated IPv6 spelling (isIP already accepted it) as 16 bytes, with an
- * embedded dotted-quad in the tail position expanded to its two hextets. */
-function v6Bytes(ip: string): number[] | null {
-  const halves = ip.split("::");
-  if (halves.length > 2) return null;
-  const groups = (half: string): string[] => (half === "" ? [] : half.split(":"));
-  const head = groups(halves[0] ?? "");
-  const tail = groups(halves[1] ?? "");
-  const out: number[] = [];
-  const push = (group: string): boolean => {
-    if (group.includes(".")) {
-      const parts = group.split(".");
-      if (parts.length !== 4 || !parts.every(part => /^[0-9]{1,3}$/.test(part) && Number(part) <= 255)) return false;
-      out.push((Number(parts[0]) << 8) | Number(parts[1]), (Number(parts[2]) << 8) | Number(parts[3]));
-      return true;
-    }
-    if (!/^[0-9a-fA-F]{1,4}$/.test(group)) return false;
-    out.push(parseInt(group, 16));
-    return true;
-  };
-  for (const group of head) if (!push(group)) return null;
-  const headCount = out.length;
-  for (const group of tail) if (!push(group)) return null;
-  if (halves.length === 1 ? out.length !== 8 : out.length > 7) return null;
-  const zeros = 8 - out.length;
-  const expanded = [...out.slice(0, headCount), ...Array<number>(zeros).fill(0), ...out.slice(headCount)];
-  if (expanded.length !== 8) return null;
-  return expanded.flatMap(hextet => [(hextet >> 8) & 0xff, hextet & 0xff]);
-}
-
-/** Whether an address a resolver returned may be dialed for a Resident. This
- * is the rebinding and encoding backstop: whatever name was asked, the
- * address actually connected is screened here. An unparseable or
- * unrecognizable answer is not public.
- *
- * The v6 model is fail-closed allowlist, not denylist (DR34): embedded-IPv4
- * carrier formats are unwrapped and judged by their embedded address first
- * (Teredo excepted -- its two embedded fields and tunnel-state-dependent
- * reachability make it unscreenable, so it is refused outright), then only
- * `2000::/3` -- global unicast -- is admitted, minus the
- * special-purpose ranges the IANA registry assigns inside it. Everything
- * outside `2000::/3` dies at the gate: `::/8` (unspecified, loopback and the
- * deprecated v4-compatible space), `64:ff9b:1::/48` (RFC 8215 local-use
- * NAT64 -- it exists to translate non-global answers, so it can never name a
- * public destination), `100::/64` discard, `5f00::/16` SRv6 SIDs, `fc00::/7`
- * ULA, `fe80::/10` link-local, `fec0::/10` site-local and `ff00::/8`
- * multicast. Anything the rules below do not recognize is refused. */
-export function isPublicConnectAddress(address: string): boolean {
-  const family = isIP(address);
-  if (family === 4) return !v4AddressPrivate(address);
-  if (family !== 6) return false;
-  const b = v6Bytes(address);
-  if (b === null) return false;
-  // v6Bytes proves sixteen bytes; the index is exact, not unchecked input.
-  const at = (index: number): number => b[index]!;
-  const last4 = `${at(12)}.${at(13)}.${at(14)}.${at(15)}`;
-  // Embedded-IPv4 carriers are the IPv4 answer in another spelling; the
-  // embedded address decides, never the carrier.
-  // ::ffff:0:0/96 v4-mapped.
-  if (b.slice(0, 10).every(byte => byte === 0) && at(10) === 0xff && at(11) === 0xff)
-    return !v4AddressPrivate(last4);
-  // 64:ff9b::/96 NAT64 well-known prefix: the embedded IPv4 decides.
-  if (at(0) === 0x00 && at(1) === 0x64 && at(2) === 0xff && at(3) === 0x9b && b.slice(4, 12).every(byte => byte === 0))
-    return !v4AddressPrivate(last4);
-  // The admission gate: only global unicast is ever a public destination.
-  if ((at(0) & 0xe0) !== 0x20) return false;
-  // Inside 2000::/3, special-purpose space is refused or unwrapped:
-  // 2001:0000::/32 Teredo is refused outright, not unwrapped -- it embeds
-  // TWO IPv4 fields (the server in bytes 4..7 and the bits-inverted client
-  // in the tail), and which host a Teredo name actually reaches depends on
-  // the host's tunnel state, so screening both fields is fragile. A
-  // deprecated carrier no public HTTPS endpoint is reached through simply
-  // dies here, ahead of the 2001::/23 arm that would catch it anyway.
-  if (at(0) === 0x20 && at(1) === 0x01 && at(2) === 0x00 && at(3) === 0x00) return false;
-  // 2001::/23 IETF protocol assignments: benchmark 2001:2::/48, AMT
-  // 2001:3::/32, AS112 2001:4:112::/48, ORCHID 2001:10::/28 and ORCHIDv2
-  // 2001:20::/28, the anycast stubs and every sibling -- none names a host a
-  // Resident may reach.
-  if (at(0) === 0x20 && at(1) === 0x01 && at(2) <= 0x01) return false;
-  if (at(0) === 0x20 && at(1) === 0x01 && at(2) === 0x0d && at(3) === 0xb8) return false; // 2001:db8::/32 documentation
-  // 2002::/16 6to4: the site's IPv4 sits in bytes 2..5.
-  if (at(0) === 0x20 && at(1) === 0x02)
-    return !v4AddressPrivate(`${at(2)}.${at(3)}.${at(4)}.${at(5)}`);
-  // 2620:4f:8000::/48 direct-delegation AS112 and 3fff::/20 documentation.
-  if (at(0) === 0x26 && at(1) === 0x20 && at(2) === 0x00 && at(3) === 0x4f && at(4) === 0x80 && at(5) === 0x00) return false;
-  if (at(0) === 0x3f && (at(1) & 0xf0) === 0xf0) return false;
-  return true;
-}
-
-/* ---- the pinned public dial -------------------------------------------- */
+/* ---- the pinned dial -------------------------------------------- */
 
 export interface PublicDialSeams {
   /** One resolver answer set: [{address, family}]. Tests inject oracles;
@@ -203,11 +72,9 @@ function defaultConnect(timeoutMs: number): ConnectDial {
   });
 }
 
-/** The production CONNECT dialer: resolve once here (never inside the target
- * socket), screen every answer, then pin -- connect(2) gets the literal
- * address, so an answer that changed after the check connects nowhere.
- * All-private answers refuse as INVALID_REQUEST; a name with no answers fails
- * as BROKER_UNAVAILABLE the way the resolver reports it. */
+/** Resolve once, then dial the returned addresses in resolver order. Public,
+ * private and loopback destinations use the same path; empty resolution and
+ * actual connection failures are reported as observed. */
 export function makePublicDial(seams: PublicDialSeams = {}): ConnectDial {
   const lookup = seams.lookup ?? defaultLookup;
   const connect = seams.connect ?? defaultConnect(seams.timeoutMs ?? CONNECT_DIAL_MS);
@@ -215,11 +82,10 @@ export function makePublicDial(seams: PublicDialSeams = {}): ConnectDial {
     signal?.throwIfAborted();
     const answers = await lookup(host);
     signal?.throwIfAborted();
-    const usable = answers;
-    if (usable.length === 0)
+    if (answers.length === 0)
       throw new StoreError("BROKER_UNAVAILABLE", `egress destination ${host} resolves to no address`);
     let last: unknown;
-    for (const { address } of usable) {
+    for (const { address } of answers) {
       signal?.throwIfAborted();
       try { return await connect(address, port, signal); }
       catch (error) { last = error; }

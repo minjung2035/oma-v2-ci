@@ -44,11 +44,22 @@ test("§2.1: a started VM's guest port is one connection through the helper's po
 
 test("MAC-701/702: the Keychain is the helper's; an unreadable one is an error, not an empty item", async t => {
   const { driver } = await world(t);
-  assert.equal(await driver.get("engine-managed"), undefined);
-  await driver.put("engine-managed", '{"anthropic":{"type":"api_key","key":"k"}}');
-  assert.equal(await driver.get("engine-managed"), '{"anthropic":{"type":"api_key","key":"k"}}');
+  assert.equal(await driver.keychain.get("engine-managed"), undefined);
+  await driver.keychain.put("engine-managed", '{"anthropic":{"type":"api_key","key":"k"}}');
+  assert.equal(await driver.keychain.get("engine-managed"), '{"anthropic":{"type":"api_key","key":"k"}}');
   const locked = await world(t, { FAKE_KEYCHAIN_LOCKED: "1" });
-  await assert.rejects(locked.driver.get("engine-managed"), (error: unknown) => error instanceof StoreError && /locked/.test(error.message));
+  await assert.rejects(locked.driver.keychain.get("engine-managed"), (error: unknown) => error instanceof StoreError && /locked/.test(error.message));
+});
+
+test("DR39 native helper: the credential API exposes no VM control and remains usable after VM stop", async t => {
+  const { driver } = await world(t);
+  assert.equal("get" in driver, false);
+  assert.equal("start" in driver.keychain, false);
+  await driver.keychain.put("separate-api", "before");
+  await driver.start(); await driver.forceStop();
+  assert.equal(await driver.keychain.get("separate-api"), "before");
+  await driver.keychain.put("separate-api", "after");
+  assert.equal(await driver.keychain.get("separate-api"), "after");
 });
 
 test("§9.3: a forced stop, a guest power-off and the helper's own end are all the VM stopping", async t => {
@@ -61,7 +72,7 @@ test("§9.3: a forced stop, a guest power-off and the helper's own end are all t
   await helperDies.driver.start();
   (helperDies.driver as unknown as { child: { kill(signal: string): void } }).child.kill("SIGKILL");
   await until(() => helperDies.stops.length === 1, "the VM ran inside the helper, so it stopped with it");
-  await assert.rejects(helperDies.driver.get("x"), (error: unknown) => error instanceof StoreError && /helper ended/.test(error.message),
+  await assert.rejects(helperDies.driver.keychain.get("x"), (error: unknown) => error instanceof StoreError && /helper ended/.test(error.message),
     "nothing more is asked of a helper that is gone");
 
   const powersOff = await world(t);
@@ -83,15 +94,15 @@ test("§9.1: the helper's sleep and wake reach the host", async t => {
 test("AV-21: a credential answer whose value is not a string is an error, never an absence", async t => {
   const { driver, dir } = await world(t);
   writeFileSync(join(dir, "keychain.json"), JSON.stringify({ malformed: 42 }));
-  await assert.rejects(driver.get("malformed"), (error: unknown) => error instanceof StoreError && error.code === "BROKER_UNAVAILABLE");
-  assert.equal(await driver.get("absent"), undefined, "only the omitted value is absent");
+  await assert.rejects(driver.keychain.get("malformed"), (error: unknown) => error instanceof StoreError && error.code === "BROKER_UNAVAILABLE");
+  assert.equal(await driver.keychain.get("absent"), undefined, "only the omitted value is absent");
 });
 
 test("NB-29: a helper that answers nothing does not hold the request forever", async t => {
   const { driver } = await world(t, { FAKE_KEYCHAIN_WEDGED: "1" }, { keychainMs: 80 });
-  await assert.rejects(driver.get("engine-managed"),
+  await assert.rejects(driver.keychain.get("engine-managed"),
     (error: unknown) => error instanceof StoreError && error.code === "BROKER_UNAVAILABLE" && /did not answer .* in time/.test(error.message));
-  await assert.rejects(driver.get("engine-managed"),
+  await assert.rejects(driver.keychain.get("engine-managed"),
     (error: unknown) => error instanceof StoreError && error.code === "BROKER_UNAVAILABLE" && /did not answer .* in time/.test(error.message),
     "the next request is bounded the same way");
 });

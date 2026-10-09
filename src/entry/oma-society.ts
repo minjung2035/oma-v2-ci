@@ -19,21 +19,20 @@ import { TuiApp, type AppPorts } from "../tui/app.js";
 import { codeFor, exitFor, fail as exitFailure } from "../tui/exit.js";
 import { errorWords, humanStream, surfaceWords } from "../tui/words.js";
 import { PanelTerminal } from "../tui/panel-terminal.js";
-import { dashboardData } from "../tui/dashboard.js";
+import { societyPanelPorts } from "../tui/society-panel.js";
 import { PrincipalSession, newSessionHandle, principalEnvironment, principalSessionDir, principalSessionProfile, principalWorkspace } from "../tui/session.js";
 import { PrincipalDelivery, principalHostBroker } from "../runtime/principal-delivery.js";
 import type { PiEvent } from "../runtime/pi-rpc.js";
 import { TuiTransport, limitsOf, type Observation } from "../tui/transport.js";
-import { principalMailbox, readBody, readMailbox, unreadCount } from "../tui/sources/mail.js";
-import { storedMailBytes } from "../domain/mail-values.js";
-import { readExtensions, toggleExtension } from "../tui/sources/extensions.js";
-import { PRINCIPAL_MODEL, WORKER_MODEL, bootstrapStateOf, commitField, commitManagedEdit, commitRoleSet, deriveSessionSettings,
-  engineModelChoiceOf, engineName, fieldsOf, followsEngine, projectBundle, projectSettingsPath, readSettings, readSettingsForEditing,
-  roleSetOf, workerModelText, writeSettings, type FieldValue, type SessionOwn, type Settings } from "../tui/sources/settings.js";
+import { principalMailbox } from "../tui/sources/mail.js";
+import { WORKER_MODEL, bootstrapStateOf, commitManagedEdit, commitRoleSet,
+  engineModelChoiceOf, engineName, projectBundle, readSettings, readSettingsForEditing,
+  roleSetOf, workerModelText, writeSettings, type FieldValue, type SessionOwn } from "../tui/sources/settings.js";
 import { PACKAGE_USAGE, packageActivation, packageCommand, packageListLines, packageStoreDir, readPackageIndex, writePackageIndex,
   type PackageCommand } from "../runtime/pi-packages.js";
 import { pruneLocalStage, stageLocalPackage } from "../runtime/local-package.js";
-import { applyPackageChange, ensureProjectSettings } from "../tui/project-settings.js";
+import { applyPackageChange } from "../tui/project-settings.js";
+import { ProjectSessionSettings } from "../tui/project-session-settings.js";
 import { reconcilePersonalSettings } from "../runtime/personal-settings.js";
 import { collectManagedGenerations } from "../config/generations.js";
 import { defaultHostConfig, defaultSocietyFor, sessionSocietyName, societyFromDirectory } from "../config/defaults.js";
@@ -54,7 +53,6 @@ import { inspectSessionHistory } from "../runtime/session-history.js";
 import { HostTenure } from "../runtime/host-tenure.js";
 import { tryHoldSociety } from "../runtime/society-lease.js";
 import { deploymentDigest } from "../runtime/deployment-manifest.js";
-import type { ConfigField, ExtensionRow } from "../tui/model.js";
 import type { PromptOutcome } from "../tui/prompt.js";
 import { HOST_LOSS_SIGNALS } from "../runtime/broker-lifetime.js";
 import { runEngineLogin } from "../tui/login.js";
@@ -284,43 +282,35 @@ async function main(argv: readonly string[]): Promise<void> {
   // society's own -- its name, rootfs and the installation it runs from
   // (CFG-001's pin, re-pinned when this installation was rebuilt) -- is its own.
   const libdir = resolve(fileURLToPath(new URL("../../../", import.meta.url)));
-  const projectPath = projectSettingsPath(dataRoot, project);
   const packageStore = packageStoreDir(stateRoot);
   const own = (digest = deploymentDigest(libdir)): SessionOwn => ({ society, node: process.execPath, libdir: `${libdir}/`, rootfs: residentRootfsPath(stateRoot),
     deploymentDigest: digest, packages: packageStore });
-  /** DR25: the extensions a project names whose files are gone, left out of this session. */
-  let leftOut: readonly string[] = [];
-  let projectSeen = "";
-  /** The project's settings as this society's configuration was last made
-   * from: what the screen shows, and what an edit is committed against. */
-  let projectSettings: Settings | null = null;
-  const deriveSettings = (): Settings => {
-    const digest = deploymentDigest(libdir);
-    // The project's settings begin as its first society's, or this one's, or the product's defaults.
-    projectSettings = ensureProjectSettings(dataRoot, project, libdir, configPath, digest);
-    // P0-8: the bundle's repair boundary is the oma-owned ancestor this
-    // entry resolved -- the data root when the session's own configuration
-    // is being derived under it. A `--config` bundle lives where the Human
-    // put it: no ancestor there is oma's, and the managed tail's own name
-    // stays the boundary instead of a user's parent.
-    const derived = deriveSessionSettings(projectSettings, configPath, own(digest), configArgument === undefined ? dataRoot : undefined);
-    leftOut = derived.missing;
-    projectSeen = projectVersion();
-    return derived.settings;
+  /** Every write this product performs on behalf of the Human passes here.
+   *
+   * A process without the tenure is a Control Panel over a society another
+   * `oma` owns: it may read that society's configuration and mail, and it may
+   * not change them. That was stated in the architecture and enforced only at
+   * startup, so the panels themselves still called the real write paths -- two
+   * `oma` processes could edit one running society's policy files at the same
+   * time. The check belongs at the write, which is the only place that knows a
+   * write is about to happen. */
+  const owning = (what: string): HostTenure => {
+    if (tenure === null) throw new StoreError("BROKER_UNAVAILABLE", `Cannot change ${what}: another oma process owns this society`);
+    tenure.assertOwned(what);
+    return tenure;
   };
-  const projectVersion = (): string => {
-    try { const stat = statSync(projectPath); return `${stat.mtimeMs}/${stat.size}`; } catch { return ""; }
-  };
-  let settings: Settings;
-  try { settings = tenure === null ? readSettings(configPath) : deriveSettings(); }
-  catch (error) {
-    // A process that does not own the society writes nothing into it, so it
-    // does not create the configuration it is missing either.
+
+  let configuration: ProjectSessionSettings;
+  try {
+    configuration = new ProjectSessionSettings({ dataRoot, project, libdir, configPath, packageStore,
+      externalConfig: configArgument !== undefined, own, owns: () => tenure !== null,
+      assertWritable: what => owning(what), notice: text => notice(text) });
+  } catch (error) {
     if (tenure === null && !existsSync(configPath))
       fail("Another oma process owns this society and its configuration is not ready. Try again shortly.", exitFor("BROKER_UNAVAILABLE"));
     fail(`Cannot read settings: ${errorWords(error)}`, codeFor(error));
   }
-  if (settings.config.society !== society)
+  if (configuration.settings.config.society !== society)
     fail("Configured society differs from the requested society", exitFor("INVALID_REQUEST"));
 
   // REC-007: the society's tree is made to exist before anything can act on
@@ -338,164 +328,33 @@ async function main(argv: readonly string[]): Promise<void> {
     // listening and nothing it will start has read the configuration yet. The
     // current and the previously committed generation are kept. A failed
     // collection only leaves history behind, which a later edit reports.
-    if (settings.snapshot !== null) {
-      try { collectManagedGenerations(settings.snapshot); } catch { /* history kept; the edit budget says so */ }
+    if (configuration.settings.snapshot !== null) {
+      try { collectManagedGenerations(configuration.settings.snapshot); } catch { /* history kept; the edit budget says so */ }
     }
     // DR25: the project's settings keep their history the same way; a session
     // reading one reads the current or the previous generation, which stay.
-    const projectSnapshot = (projectSettings as Settings | null)?.snapshot;
+    const projectSnapshot = configuration.projectSettings?.snapshot;
     if (projectSnapshot) {
       try { collectManagedGenerations(projectSnapshot); } catch { /* history kept; the edit budget says so */ }
     }
   }
 
   const mailbox = principalMailbox(stateRoot);
-  const transport = new TuiTransport(stateRoot, society, settings.config.limits.frameBytes);
+  const transport = new TuiTransport(stateRoot, society, configuration.settings.config.limits.frameBytes);
   let observation: Observation = { kind: "unknown", reason: "Not yet observed", observedAtMs: Date.now() };
-  /** DR24/DR25: extensions are chosen in the project's settings, which every
-   * session of the project is made from, among the installation's files and
-   * the installed packages; a process that does not own this society shows
-   * the society's own. */
-  const extensionsOf = (): ReturnType<typeof readExtensions> =>
-    readExtensions(projectSettings?.snapshot ?? settings.snapshot ?? configPath, settings.config.principalProfile, settings.workerProfile,
-      readPackageIndex(packageStore));
-  let extensionContext = extensionsOf();
-
-  const reload = (): void => {
-    settings = readSettings(configPath);
-    if (tenure !== null) projectSettings = readSettingsForEditing(projectPath);
-    extensionContext = extensionsOf();
-  };
-
   const terminal: PanelTerminal = new PanelTerminal({ input: process.stdin, output: process.stdout }, () => app.snapshot.open);
   // Until the broker exists, this is all a failure has to undo.
   abandon = () => { tenure?.abandon(); terminal.restore(); };
   let session: PrincipalSession | null = null;
   /** WP15.05: the model profile the running session was started with. */
   let sessionModel: string | null = null;
-  /** WP15.03: why the configuration could not be read back after a save. */
-  let settingsUnread: string | null = null;
-  /** WP15.03, P0: the screen shows the configuration as last read. After any
-   * attempt to write it -- committed, refused or unconfirmed -- it is read
-   * again, so a refusal because the file changed since it was read shows what
-   * the file now holds instead of the snapshot the edit was made from, and the
-   * next edit is made from it. A read-back that fails is an unknown. */
-  const readBack = (): boolean => {
-    try { reload(); settingsUnread = null; return true; }
-    catch (error) { settingsUnread = errorWords(error); return false; }
-  };
-
-  /** Every write this product performs on behalf of the Human passes here.
-   *
-   * A process without the tenure is a Control Panel over a society another
-   * `oma` owns: it may read that society's configuration and mail, and it may
-   * not change them. That was stated in the architecture and enforced only at
-   * startup, so the panels themselves still called the real write paths -- two
-   * `oma` processes could edit one running society's policy files at the same
-   * time. The check belongs at the write, which is the only place that knows a
-   * write is about to happen. */
-  const owning = (what: string): HostTenure => {
-    if (tenure === null) throw new StoreError("BROKER_UNAVAILABLE", `Cannot change ${what}: another oma process owns this society`);
-    tenure.assertOwned(what);
-    return tenure;
-  };
-
   /** What the engine says it runs: its model and effort, reported by its screen. */
   let engineState: { model: string | null; thinking: string | null } = { model: null, thinking: null };
-  const engineText = (): string | null => engineState.model === null ? null
-    : `${engineState.model}${engineState.thinking === null ? "" : ` · ${engineState.thinking}`}`;
-  const principalFollowsEngine = (): boolean =>
-    followsEngine(settings.config.modelProfiles[settings.config.agentProfiles[settings.config.principalProfile]?.modelProfile ?? ""]);
-  /** DR24: the Principal's and a Worker's model are one row each -- the model
-   * and its effort -- and Enter chooses both in one go from the engine's own
-   * lists, which need the conversation's screen. The Principal's row is the
-   * engine's own choice when its profile leaves the model to the engine;
-   * otherwise it stays the profile's. */
-  const modelRows = (fields: readonly ConfigField[]): readonly ConfigField[] => {
-    if (tenure === null) return fields;
-    const unavailable = session === null || !screenReady ? "Available while the conversation is open" : null;
-    return fields.map(field => {
-      if (field.id === PRINCIPAL_MODEL && principalFollowsEngine())
-        return Object.freeze({ kind: "link" as const, id: field.id, label: field.label, value: engineText() ?? "unknown", blocked: unavailable });
-      if (field.id === WORKER_MODEL)
-        return Object.freeze({ kind: "link" as const, id: field.id, label: field.label, blocked: field.blocked ?? unavailable,
-          value: workerModelText(settings.config, settings.workerProfile) });
-      return field;
-    });
-  };
-  /** DR24/DR25: this session made again from the project's settings. A
-   * session that cannot take them on now -- its configuration history is
-   * full, say -- keeps what it runs with and says so once; the project keeps
-   * the change, and the next start takes it on. */
-  let cannotFollow = "";
-  const rederive = (): boolean => {
-    try { settings = deriveSettings(); cannotFollow = ""; return true; }
-    catch (error) {
-      const words = `Saved for the project; this session takes it on from its next start (${errorWords(error)}).`;
-      if (words !== cannotFollow) notice(words);
-      cannotFollow = words;
-      return false;
-    }
-  };
-  /** DR24: saved to the project's settings, then made this society's, so it
-   * holds in every session of the project, this one's next one included.
-   * WP15.03: committed against the settings the screen was made from; a file
-   * changed since is refused, and the screen then shows what it holds. */
-  const saveField = (field: string, value: FieldValue): ReturnType<AppPorts["setField"]> => {
-    owning("settings");
-    let committed: ReturnType<typeof commitField>;
-    // The edit lands in the project's settings under `.projects` -- oma's
-    // own tree, so its degraded ancestors are this commit's to repair, and
-    // the data root is the boundary they stand beneath.
-    try { committed = commitField(projectSettings ?? readSettings(projectPath), field, value, bootstrapStateOf(observation), dataRoot); }
-    catch (error) { rederive(); readBack(); throw error; }
-    rederive();
-    // WP15.03: a failed read-back does not undo the commit, and the old
-    // values are not shown as current meanwhile.
-    if (!readBack()) return { kind: "saved-unread" as const, reason: settingsUnread! };
-    return committed;
-  };
+  const saveField = (field: string, value: FieldValue): ReturnType<AppPorts["setField"]> =>
+    configuration.saveField(field, value, bootstrapStateOf(observation));
   const ports: AppPorts = {
-    // WP15: fields are judged against the latest observation of the society,
-    // and against nothing while the configuration could not be read back.
-    configFields: () => {
-      const fields = settingsUnread === null ? fieldsOf(settings.config, settings.workerProfile, bootstrapStateOf(observation))
-        : fieldsOf(settings.config, settings.workerProfile).map(field => field.kind === "link" ? field
-          : Object.freeze({ kind: "choice" as const, id: field.id, label: field.label, value: "?", options: Object.freeze([]),
-            apply: field.apply, blocked: `Could not read settings back: ${settingsUnread}` }));
-      return settingsUnread === null ? modelRows(fields) : fields;
-    },
-    dashboard: () => dashboardData({
-      config: settings.config,
-      principalModel: {
-        configured: settingsUnread === null ? settings.config.agentProfiles[settings.config.principalProfile]?.modelProfile ?? "unknown" : "unknown",
-        session: session === null ? null : sessionModel,
-        ...(engineText() === null ? {} : { engine: engineText()! }),
-        engineManaged: settingsUnread === null && principalFollowsEngine(),
-      },
-      ...(settingsUnread === null ? { workerModel: workerModelText(settings.config, settings.workerProfile) } : {}),
-      unread: unreadCount(mailbox),
-      observation,
-    }),
-    // B4: the mail rows name parties by the roster the broker's status view
-    // last observed -- while none has been observed, names stay what the
-    // headers say rather than inventing roles.
-    mail: () => readMailbox(mailbox,
-      observation.kind === "observed" ? observation.statuses.map(status => status.agent) : undefined),
-    extensions: (): readonly ExtensionRow[] => extensionContext.rows,
-    // P0V-42: a stored message is read within the most one of this society's
-    // messages can take, and a longer one is shown as partial.
-    body: (path: string) => (path.length === 0 ? null : readBody(path, storedMailBytes(settings.config.limits.mailBodyBytes))),
-    setField: (field, value) => saveField(field, value),
-    setExtension: (id, role, enabled) => {
-      owning("extensions");
-      // DR24/DR25: saved to the project's settings, then made this society's,
-      // so it holds in every session of the project and in the next. A toggle
-      // that was committed is not reported as unsaved because the read-back
-      // failed (P0-5); the fields then say the read-back failed.
-      try { toggleExtension(extensionContext, id, role, enabled, dataRoot); }
-      finally { rederive(); readBack(); }
-    },
+    ...societyPanelPorts(configuration, mailbox, () => ({ observation, owned: tenure !== null,
+      conversationOpen: session !== null, screenReady, sessionModel, engine: engineState })),
     submitPrompt: (text: string): PromptOutcome => {
       if (session === null) {
         if (text.trim() !== "/restart") return { kind: "refused", reason: "No Pi session is available. Enter /restart to reopen the conversation." };
@@ -510,7 +369,7 @@ async function main(argv: readonly string[]): Promise<void> {
     quit: () => { void shutdown(0); },
   };
 
-  const app = new TuiApp(ports, terminal, settings.config.limits.frameBytes);
+  const app = new TuiApp(ports, terminal, configuration.settings.config.limits.frameBytes);
   let poll: ReturnType<typeof setInterval> | undefined;
   const closeApp = (): void => {
     if (poll !== undefined) clearInterval(poll);
@@ -530,7 +389,7 @@ async function main(argv: readonly string[]): Promise<void> {
   /** DR25: said once per derivation that left an extension out. */
   let saidLeftOut = "";
   const sayLeftOut = (): void => {
-    const words = leftOut.length === 0 ? "" : `Not loaded, its file is gone: ${leftOut.join(", ")}. ` +
+    const words = configuration.leftOut.length === 0 ? "" : `Not loaded, its file is gone: ${configuration.leftOut.join(", ")}. ` +
       "Turn it off in Ctrl+X > Config > Extensions, or install its package again with oma pi install.";
     if (words !== saidLeftOut && words.length > 0) notice(words);
     saidLeftOut = words;
@@ -542,7 +401,7 @@ async function main(argv: readonly string[]): Promise<void> {
   // DR18: the Principal's provider path in the macOS guest, opened below.
   let principalEgress: PrincipalEgress | null = null;
   let finished = false;
-  const hostHistories = HostHistoryChannel.open(settings.config.limits.receiptWaitSeconds);
+  const hostHistories = HostHistoryChannel.open(configuration.settings.config.limits.receiptWaitSeconds);
   const shutdown = async (code: number): Promise<void> => {
     if (finished) return;
     finished = true;
@@ -565,7 +424,7 @@ async function main(argv: readonly string[]): Promise<void> {
    * was seeded, is not kept: every start is a new session, and an unused one
    * would otherwise leave a society behind each time. */
   const removeIfUnused = (): void => {
-    if (!createdHere || settings.config.initialResidents.length > 0) return;
+    if (!createdHere || configuration.settings.config.initialResidents.length > 0) return;
     let said: boolean;
     try { said = readdirSync(principalSessionDir(stateRoot)).some(name => name.endsWith(".jsonl")); } catch { said = true; }
     if (said) return;
@@ -671,7 +530,7 @@ async function main(argv: readonly string[]): Promise<void> {
   // supervision channel closes. It inherits the lease so that a broker still
   // able to write to the society keeps the society from changing hands.
   broker = tenure === null ? null : await superviseBroker({
-    node: process.execPath, libdir: settings.config.installation.libdir,
+    node: process.execPath, libdir: configuration.settings.config.installation.libdir,
     society, stateRoot, runRoot, configPath, fence: tenure.fence,
     projectDir: canonicalProjectPath,
     // A broker that started as expected, and the repairs its start makes, are
@@ -698,8 +557,8 @@ async function main(argv: readonly string[]): Promise<void> {
     const egressProfile = principalSessionProfile(configPath, society);
     principalEgress = await adoptPrincipalEgress(egressOwner,
       { society, runRoot, provider: egressProfile.provider, model: egressProfile.model, inferenceSeconds: egressProfile.inferenceSeconds,
-        modelProfile: settings.config.agentProfiles[settings.config.principalProfile]?.modelProfile ?? settings.config.principalProfile,
-        frameBytes: settings.config.limits.frameBytes, deadlineMs: settings.config.limits.receiptWaitSeconds * 1000, env: process.env,
+        modelProfile: configuration.settings.config.agentProfiles[configuration.settings.config.principalProfile]?.modelProfile ?? configuration.settings.config.principalProfile,
+        frameBytes: configuration.settings.config.limits.frameBytes, deadlineMs: configuration.settings.config.limits.receiptWaitSeconds * 1000, env: process.env,
         // A listener error past the forwarder's start is reported on this
         // screen and absorbed there -- this process is the forwarder's host,
         // and the path it paid for stays bound for the engine to retry.
@@ -711,7 +570,7 @@ async function main(argv: readonly string[]): Promise<void> {
     principalEgress === null ? environment : { ...environment, ...principalEgress.env };
   const startEngine = (owner: HostTenure): PrincipalSession => {
     const piRuntime = resolvePiRuntime({
-      stateRoot, libdir: settings.config.installation.libdir, override: process.env.OMA_PI_COMMAND,
+      stateRoot, libdir: configuration.settings.config.installation.libdir, override: process.env.OMA_PI_COMMAND,
     });
     if (piRuntime.source !== "bundled")
       throw new StoreError("UNSUPPORTED_PROFILE", "The interactive UI requires the bundled engine. OMA_PI_COMMAND overrides are not supported here.");
@@ -722,12 +581,12 @@ async function main(argv: readonly string[]): Promise<void> {
     // private space that holds the Human's session history.
     const workspace = principalWorkspace(stateRoot);
     const profile = principalSessionProfile(configPath, society);
-    sessionModel = settings.config.agentProfiles[settings.config.principalProfile]?.modelProfile ?? null;
+    sessionModel = configuration.settings.config.agentProfiles[configuration.settings.config.principalProfile]?.modelProfile ?? null;
     terminal.handoff(event => session?.sendUi(event));
     const started = PrincipalSession.start(
       { piCommand: piRuntime.executable, piArgs: piRuntime.args, piAgentDir: piRuntime.agentDir,
-        interactiveEntry: join(settings.config.installation.libdir, DEPLOYMENT_LAYOUT.entries.interactive), project: process.cwd(),
-        coreExtension: join(settings.config.installation.libdir, DEPLOYMENT_LAYOUT.extension),
+        interactiveEntry: join(configuration.settings.config.installation.libdir, DEPLOYMENT_LAYOUT.entries.interactive), project: process.cwd(),
+        coreExtension: join(configuration.settings.config.installation.libdir, DEPLOYMENT_LAYOUT.extension),
         sessionDir: principalSessionDir(stateRoot), ...(sessionFile === undefined ? {} : { sessionFile }),
         workspace, home: workspace,
         // D23/TSP-005: the Principal's declared surface, same plan channel a
@@ -736,8 +595,8 @@ async function main(argv: readonly string[]): Promise<void> {
         toolSurface: encodedPrincipalToolSurface(),
         fence: owner.fence },
       profile,
-      limitsOf(settings.config.limits),
-      withEgress(principalEnvironment({ stateRoot, runRoot, libdir: settings.config.installation.libdir }, profile, settings.config.limits)),
+      limitsOf(configuration.settings.config.limits),
+      withEgress(principalEnvironment({ stateRoot, runRoot, libdir: configuration.settings.config.installation.libdir }, profile, configuration.settings.config.limits)),
       {
         onAcquire: engine => owner.adopt(engine),
         // WP09.03: every callback is this engine's; a late one from an engine
@@ -763,9 +622,9 @@ async function main(argv: readonly string[]): Promise<void> {
                   const publish = (): void => { if (sessions.length > 0) started.sendUi({ type: "host_history_page", id, page: { sessions, after: null } }); };
                   for (const info of page.sessions) {
                     const event = { type: "host_history_page", id, page: { sessions: [...sessions, info], after: null } };
-                    if (Buffer.byteLength(JSON.stringify(event)) > settings.config.limits.frameBytes) { publish(); sessions = []; }
+                    if (Buffer.byteLength(JSON.stringify(event)) > configuration.settings.config.limits.frameBytes) { publish(); sessions = []; }
                     const single = { type: "host_history_page", id, page: { sessions: [info], after: null } };
-                    if (Buffer.byteLength(JSON.stringify(single)) > settings.config.limits.frameBytes)
+                    if (Buffer.byteLength(JSON.stringify(single)) > configuration.settings.config.limits.frameBytes)
                       throw new StoreError("FRAME_TOO_LARGE", "Host history metadata exceeds the UI frame limit");
                     sessions.push(info);
                   }
@@ -787,7 +646,7 @@ async function main(argv: readonly string[]): Promise<void> {
           else if (event.type === "worker_model") {
             // DR24: a Worker's model and effort, chosen from the engine's
             // lists, is the Worker model field's value, saved as any is.
-            const project = (projectSettings ?? settings).config;
+            const project = (configuration.projectSettings ?? configuration.settings).config;
             const value: FieldValue | null = event.same === true
               ? project.agentProfiles[project.principalProfile]?.modelProfile ?? null
               : engineModelChoiceOf(event);
@@ -795,7 +654,7 @@ async function main(argv: readonly string[]): Promise<void> {
               try {
                 const saved = saveField(WORKER_MODEL, value);
                 notice(saved.kind === "saved-unread" ? `Worker model saved; could not read settings back: ${saved.reason}`
-                  : `Worker model: ${workerModelText(settings.config, settings.workerProfile)}${saved.kind === "unchanged" ? " (unchanged)" : " · saved; applies from the next activation"}`);
+                  : `Worker model: ${workerModelText(configuration.settings.config, configuration.settings.workerProfile)}${saved.kind === "unchanged" ? " (unchanged)" : " · saved; applies from the next activation"}`);
               } catch (error) { notice(`Could not save the worker model: ${errorWords(error)}`); }
               app.refresh(); app.draw();
             }
@@ -880,9 +739,9 @@ async function main(argv: readonly string[]): Promise<void> {
       get busy() { return live.busy; },
       onEvent: (listener: (event: PiEvent) => void) => live.onEvent(listener),
       deliver: (batchId: string) => live.deliver(batchId),
-    }, principalHostBroker(runRoot, settings.config.limits), {
-      stateRoot, frameBytes: settings.config.limits.frameBytes,
-      acceptMs: settings.config.limits.receiptWaitSeconds * 1000, retryAfterMs: 60_000,
+    }, principalHostBroker(runRoot, configuration.settings.config.limits), {
+      stateRoot, frameBytes: configuration.settings.config.limits.frameBytes,
+      acceptMs: configuration.settings.config.limits.receiptWaitSeconds * 1000, retryAfterMs: 60_000,
     });
   };
 
@@ -998,8 +857,8 @@ async function main(argv: readonly string[]): Promise<void> {
     deliver();
     // DR24: a setting saved in another session of this project is made this
     // society's too; this process writes only its own society's configuration.
-    if (tenure !== null && !finished && projectVersion() !== projectSeen) {
-      if (rederive()) { readBack(); sayLeftOut(); app.refresh(); app.draw(); }
+    if (tenure !== null && !finished && configuration.changed()) {
+      if (configuration.rederive()) { configuration.readBack(); sayLeftOut(); app.refresh(); app.draw(); }
     }
   }, 5000);
   poll.unref();

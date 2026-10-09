@@ -20,6 +20,26 @@ export interface KeychainDeadlines {
   readonly closeMs?: number;
 }
 
+/** The credential API shared by VM-backed and Keychain-only clients. The
+ * caller owns the channel's lifetime; this adapter owns only credential
+ * response meaning and cannot send a VM operation. */
+export function nativeKeychainStore(
+  request: (op: "keychain.get" | "keychain.put", fields: Record<string, string>) => Promise<Record<string, unknown>>,
+  invalidResponse: () => void = () => {},
+): KeychainStore {
+  return {
+    async get(account) {
+      const answer = await request("keychain.get", { account });
+      if (answer.value !== undefined && typeof answer.value !== "string") {
+        invalidResponse();
+        throw new StoreError("BROKER_UNAVAILABLE", "the Keychain helper returned an invalid credential response");
+      }
+      return answer.value as string | undefined;
+    },
+    async put(account, value) { await request("keychain.put", { account, value }); },
+  };
+}
+
 /** Resources may contain the installation; never search PATH or another bundle. */
 export function bundledKeychainHelper(libdir: string): string {
   const resources = macBundleResources(libdir);
@@ -32,9 +52,11 @@ export class KeychainClient implements KeychainStore {
   private buffered = "";
   private ending = false;
   private readonly deadlines: Required<KeychainDeadlines>;
+  private readonly store: KeychainStore;
   private constructor(private readonly channel: Socket, private readonly libdir: string, private readonly ended: Promise<void>,
     private readonly child: ChildProcess, deadlines?: KeychainDeadlines) {
     this.deadlines = { requestMs: deadlines?.requestMs ?? REQUEST_DEADLINE_MS, closeMs: deadlines?.closeMs ?? CLOSE_DEADLINE_MS };
+    this.store = nativeKeychainStore((op, fields) => this.ask(op, fields), () => this.fail());
     child.once("close", () => { this.fail(); });
     child.on("error", () => { this.fail(); });
     child.stderr?.resume();
@@ -120,13 +142,9 @@ export class KeychainClient implements KeychainStore {
   }
 
   async get(account: string): Promise<string | undefined> {
-    const answer = await this.ask("keychain.get", { account });
-    if (answer.value !== undefined && typeof answer.value !== "string") {
-      this.fail(); throw new StoreError("BROKER_UNAVAILABLE", "the Keychain helper returned an invalid credential response");
-    }
-    return answer.value as string | undefined;
+    return this.store.get(account);
   }
-  async put(account: string, value: string): Promise<void> { await this.ask("keychain.put", { account, value }); }
+  async put(account: string, value: string): Promise<void> { await this.store.put(account, value); }
   async close(): Promise<void> {
     this.fail();
     // The helper exits on supervision EOF. Wait for that exit, not for EOF

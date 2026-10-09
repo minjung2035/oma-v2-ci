@@ -3,6 +3,8 @@ reference/
 dist/
 *.log
 mail/
+# Runtime mail is ignored; authored mail modules must remain visible to Git.
+!src/mail/
 runtime.sqlite
 .pi/
 staging/

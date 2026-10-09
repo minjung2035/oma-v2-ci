@@ -70,11 +70,11 @@ async function main(): Promise<void> {
     });
   const service = await HostService.start({
     runDir: dirs.run, recordPath, driver, uid: process.getuid!(), git: join(bundle!, "Contents", "Resources", "git", "bin", "git"),
-    archivesDir: dirs.archives, keychain: driver,
+    archivesDir: dirs.archives, keychain: driver.keychain,
     bookmarks: nativeProjectBookmarks(join(bundle!, "Contents", "MacOS", "oma-vmhelper")),
     identity: { hostVersion: process.env.OMA_APP_VERSION ?? "0.0.0", installationId: record.installationId, instanceId: record.instanceId,
       expectImage: image.version, protocol: { min: Math.max(1, HOST_GUEST_PROTOCOL - 1), max: HOST_GUEST_PROTOCOL } },
-    resolve: hostResolver(dirs.engine, driver, join(bundle!, "Contents", "Resources")),
+    resolve: hostResolver(dirs.engine, driver.keychain, join(bundle!, "Contents", "Resources")),
     power: listener => { driver.onPower(listener); },
     statePath, stateSchemaWritten: image.stateSchema.written, packagesDir: dirs.packages, snapshotsDir: dirs.snapshots,
   });

@@ -7,7 +7,7 @@
  */
 import test, { type TestContext } from "node:test";
 import assert from "node:assert/strict";
-import { chmodSync, mkdirSync, mkdtempSync } from "node:fs";
+import { chmodSync, mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { AuthContext, MailInput, UnitObservation } from "../implementation/contracts.js";
@@ -210,7 +210,7 @@ test("DR37: legacy storage bounds never scan or refuse startup, admission or set
   const root = mkdtempSync(join(tmpdir(), "oma-startup-unrestricted-"));
   t.after(() => removeTree(root));
   const open = new StorageAdmission(root, 1, 1);
-  padTree(root, 4096);
+  writeFileSync(join(root, "padding"), Buffer.alloc(4096));
   assert.equal(await open.startupState(), "admitted");
   (await open.admit("admit"))();
   (await open.admit("settle"))();

@@ -5,12 +5,14 @@ import { readFileSync } from 'node:fs';
 import { EventEmitter } from 'node:events';
 import { Script } from 'node:vm';
 import ts from 'typescript';
+import { nativeKeychainStore } from '../dist/src/platform/host/keychain-client.js';
 const code = ts.transpileModule(readFileSync('src/platform/host/vz-driver.ts', 'utf8'), {compilerOptions: {module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText;
 class StoreError extends Error { constructor(code, message) { super(message); this.code = code; } }
 const module_ = {exports: {}};
 new Script(code).runInNewContext({exports:module_.exports,module:module_,setTimeout,clearTimeout,require(name) {
   if(name==='node:path') return {join:(...p)=>p.join('/')};
   if(name==='../../domain/errors.js') return {StoreError};
+  if(name==='./keychain-client.js') return {nativeKeychainStore};
   if(name==='../rpc.js'||name==='../../process/async.js') return {};
   throw new Error(name);
 }});

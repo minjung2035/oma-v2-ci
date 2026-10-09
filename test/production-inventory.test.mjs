@@ -213,7 +213,7 @@ test("R38: the pinned tool re-measures real source and catches a forged count", 
 
 test("R38: the verification closure includes every class of local gate input", () => {
   assert.deepEqual(VERIFICATION_INPUT_ROOTS, [
-    "src", "test", "scripts", "implementation", "docs", ".github/workflows",
+    "src", "platform", "test", "scripts", "implementation", "docs", ".github/workflows", ".gitignore",
     "package.json", "package-lock.json",
     "tsconfig.json", "tsconfig.build.json", "production-manifest.json", "production-files.txt",
     "production-loc-hashes.json",
@@ -232,6 +232,7 @@ test("R38: the verification closure includes every class of local gate input", (
     "package.json", "package-lock.json", "tsconfig.json", "tsconfig.build.json",
     "production-manifest.json", "production-files.txt",
     "production-loc-hashes.json", ".github/workflows/architecture-verification.yml",
+    "platform/host/vmhelper/Sources/oma-vmhelper/main.swift", "platform/guest/network/80-oma.network", ".gitignore",
   ]) assert.ok(files.includes(required), required);
   assert.equal(files.includes("production-loc.json"), false);
   assert.equal(files.includes("production-measurement-hashes.json"), false);
@@ -243,7 +244,7 @@ test("R38: package, compiler, owner, spec and workflow changes all change the ve
   const f = fixture();
   try {
     for (const root of VERIFICATION_INPUT_ROOTS) {
-      if (["src", "test", "scripts", "implementation", "docs", ".github/workflows"].includes(root))
+      if (["src", "platform", "test", "scripts", "implementation", "docs", ".github/workflows"].includes(root))
         f.put(`${root}/fixture.ts`);
       else f.put(root, `${root}\n`);
     }
@@ -254,7 +255,7 @@ test("R38: package, compiler, owner, spec and workflow changes all change the ve
       ".github/workflows/architecture-verification.yml",
     ]) f.put(file, `${file}\n`);
     const before = verificationInputDigest(f.root);
-    for (const file of ["package.json", "tsconfig.json", "implementation/source-owners.json", "docs/implementation-spec.md", ".github/workflows/architecture-verification.yml"]) {
+    for (const file of ["package.json", "tsconfig.json", "implementation/source-owners.json", "docs/implementation-spec.md", ".github/workflows/architecture-verification.yml", "platform/fixture.ts", ".gitignore"]) {
       const original = readFileSync(join(f.root, file));
       f.put(file, Buffer.concat([original, Buffer.from("changed\n")]));
       assert.notDeepEqual(verificationInputDigest(f.root), before, file);
@@ -301,7 +302,7 @@ test("R38: the lane's bound source is the canonical closure -- committed digests
   const f = fixture();
   try {
     for (const root of VERIFICATION_INPUT_ROOTS) {
-      if (["src", "test", "scripts", "implementation", "docs", ".github/workflows"].includes(root))
+      if (["src", "platform", "test", "scripts", "implementation", "docs", ".github/workflows"].includes(root))
         f.put(`${root}/fixture.ts`);
       else f.put(root, `${root}\n`);
     }

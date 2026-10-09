@@ -186,6 +186,7 @@
   "src/mail/materializer.ts",
   "src/mail/reconcile.ts",
   "src/mail/review-bounds.ts",
+  "src/mail/review-documents.ts",
   "src/mail/routing.ts",
   "src/mail/serialize.ts",
   "src/module-ports.ts",
@@ -385,11 +386,13 @@
   "src/tui/panel-style.ts",
   "src/tui/panel-terminal.ts",
   "src/tui/project-session-directories.ts",
+  "src/tui/project-session-settings.ts",
   "src/tui/project-settings.ts",
   "src/tui/prompt.ts",
   "src/tui/screen.ts",
   "src/tui/session-mode.ts",
   "src/tui/session.ts",
+  "src/tui/society-panel.ts",
   "src/tui/sources/extensions.ts",
   "src/tui/sources/mail.ts",
   "src/tui/sources/settings.ts",
@@ -411,6 +414,7 @@
   "src/validate.ts",
   "src/views.ts",
   "src/views/pending-work.ts",
+  "src/views/review-status.ts",
   "src/views/status-refresh.ts"
  ],
  "kernel": {
@@ -569,7 +573,7 @@
    "K2-mechanisms -> K1-codecs": 9,
    "K2-mechanisms -> K2-mechanisms": 69,
    "K3-ledger -> K0-values": 21,
-   "K3-ledger -> K1-codecs": 10,
+   "K3-ledger -> K1-codecs": 11,
    "K3-ledger -> K2-mechanisms": 1,
    "K3-ledger -> K3-ledger": 14
   },
@@ -1332,6 +1336,11 @@
    },
    {
     "from": "src/storage/operation-codec.ts",
+    "to": "src/protocol/methods.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "src/storage/operation-codec.ts",
     "to": "src/protocol/receipt-codec.ts",
     "kind": "runtime"
    },
@@ -1886,7 +1895,7 @@
     "src/reconcile/",
     "src/review.ts"
    ],
-   "files": 42
+   "files": 44
   },
   {
    "index": 4,
@@ -1916,28 +1925,28 @@
     "src/pi-extension.ts",
     "src/extension/"
    ],
-   "files": 94
+   "files": 96
   }
  ],
- "files": 412,
- "runtimeEdges": 1748,
- "typeOnlyEdges": 436,
+ "files": 416,
+ "runtimeEdges": 1765,
+ "typeOnlyEdges": 445,
  "runtimeEdgeMatrix": {
-  "L1-kernel -> L1-kernel": 322,
+  "L1-kernel -> L1-kernel": 323,
   "L2-facts -> L1-kernel": 36,
   "L2-facts -> L2-facts": 5,
-  "L3-workflow -> L1-kernel": 225,
+  "L3-workflow -> L1-kernel": 227,
   "L3-workflow -> L2-facts": 14,
-  "L3-workflow -> L3-workflow": 68,
+  "L3-workflow -> L3-workflow": 70,
   "L4-orchestration -> L1-kernel": 373,
   "L4-orchestration -> L2-facts": 8,
   "L4-orchestration -> L3-workflow": 24,
-  "L4-orchestration -> L4-orchestration": 198,
-  "L5-entry -> L1-kernel": 135,
+  "L4-orchestration -> L4-orchestration": 199,
+  "L5-entry -> L1-kernel": 136,
   "L5-entry -> L2-facts": 2,
   "L5-entry -> L3-workflow": 8,
-  "L5-entry -> L4-orchestration": 145,
-  "L5-entry -> L5-entry": 185
+  "L5-entry -> L4-orchestration": 148,
+  "L5-entry -> L5-entry": 192
  },
  "upwardTypeOnlyEdges": [
   {
@@ -1956,7 +1965,7 @@
   ]
  ],
  "fanIn": {
-  "src/domain/errors.ts": 213,
+  "src/domain/errors.ts": 215,
   "src/domain/identifiers.ts": 63,
   "src/protocol/host-guest.ts": 31,
   "src/storage/contained-fs.ts": 31,
@@ -1973,13 +1982,13 @@
   "src/store.ts": 18
  },
  "fanOut": {
-  "src/entry/oma-society.ts": 42,
+  "src/entry/oma-society.ts": 41,
   "src/broker.ts": 31,
   "src/mail.ts": 29,
   "src/entry/broker.ts": 28,
   "src/pi-extension.ts": 24,
+  "src/review.ts": 22,
   "src/entry/oma-mac.ts": 21,
-  "src/review.ts": 21,
   "src/runtime/client-runtime.ts": 20,
   "src/entry/pi-personal.ts": 19,
   "src/entry/pi-interactive-host.ts": 18,

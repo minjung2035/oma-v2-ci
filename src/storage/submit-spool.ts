@@ -24,8 +24,8 @@ function code(error: unknown): string | null {
 }
 export class PreparedSubmitSpool implements PreacceptOwner {
   private readonly artifact: PreacceptArtifact | null;
-  constructor(readonly bundle: FrozenBundle | null, identity: PublishedIdentity | null = null) {
-    this.artifact = bundle === null ? null : new PreacceptArtifact(bundle.path, identity);
+  constructor(readonly bundle: FrozenBundle | null, artifact: PreacceptArtifact | null = null) {
+    this.artifact = bundle === null ? null : artifact ?? new PreacceptArtifact(bundle.path, null);
   }
   /** Called on durable acceptance or uncertainty about whether T committed. */
   retainForOperation(): void { this.artifact?.retainForOperation(); }
@@ -55,12 +55,14 @@ export async function prepareSubmitSpool(
   const parent = openDirectory(staging);
   let fd: number;
   let identity: PublishedIdentity | null = null;
+  let artifact: PreacceptArtifact;
   try { fd = openBeneath(parent, basename(path), constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | constants.O_NOFOLLOW, 0o600); }
   catch (error) { closeSync(parent); throw error; }
   try {
     const acquired = fstatSync(fd);
     if (!acquired.isFile()) throw new StoreError("STORE_CORRUPT", "prepared bundle is not a regular file");
     identity = { dev: acquired.dev, ino: acquired.ino };
+    artifact = new PreacceptArtifact(path, identity);
   } catch (error) {
     closeSync(fd);
     closeSync(parent);
@@ -88,12 +90,12 @@ export async function prepareSubmitSpool(
   } catch (error) {
     try {
       if (identity === null) throw new StoreError("REF_STATE_UNKNOWN", "bundle cleanup identity is unavailable");
-      new PreacceptArtifact(path, identity).discardUnaccepted();
+      artifact!.discardUnaccepted();
     } catch (cleanup) { throw new AggregateError([error, cleanup], "bundle preparation and owned cleanup failed"); }
     throw error;
   } finally { closeSync(parent); }
   if (identity === null) throw new StoreError("INTERNAL_ERROR", "prepared bundle identity was not registered");
-  return new PreparedSubmitSpool(Object.freeze({ path, ...frozenDescriptor }), identity);
+  return new PreparedSubmitSpool(Object.freeze({ path, ...frozenDescriptor }), artifact!);
 }
 
 /** Read-time trust boundary: hash one contained single-link descriptor and keep

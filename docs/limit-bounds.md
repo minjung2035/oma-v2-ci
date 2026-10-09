@@ -1,7 +1,9 @@
-# 잔여 숫자 bound 분류 장부 (UX-38 정산)
+# 숫자 bound 분류 장부 (UX-38 기록과 DR37/DR39 현재 상태)
 
 > UX-38 배치 1–5가 사용자-facing 용량·시간 거절을 durable spool / 진행-리셋 창 /
 > FIFO 작업 집합 / 정직한 절하로 변환한 뒤 남은 bound를 전수 조사해 분류한다.
+> 2026-10-09 DR39에서 DR37의 제한 제거와 어긋나던 항목을 바로잡았다.
+> 아래의 나머지 UX-38 수치는 당시 조사 기록이며, 전체 숫자의 새 전수 검증을 뜻하지 않는다.
 > 이 문서는 인벤토리다 — bound의 동작 계약은 각 소유 코드와 spec 문서가 유지하고,
 > 여기의 분류 변경은 그 계약을 덮어쓰지 않는다.
 
@@ -19,7 +21,7 @@
 또한 표에 없는 항목 두 부류를 먼저 선언한다 — 조사에서 발견했지만 bound가 아닌 것:
 
 - **청크/버퍼 크기**(전부 구현 상세, payload 상한이 아님): `src/storage/context-files.ts`·`context-stream.ts`·`submit-spool.ts`·`immutable-file.ts`·`file-digest.ts`·`snapshot-reader.ts`의 64 KiB/1 MiB 읽기 버퍼, `src/protocol/channel.ts`의 64 KiB 스트림 청크, `src/platform/host/archive-crypto.ts`의 `CHUNK`(64 KiB), `src/git/observe.ts`의 1 MiB 읽기 청크. 스트림 전체가 아니라 한 번의 read/write만 묶는다.
-- **이미 비차단으로 변환된 bound**(거절 아님): `src/client/index.ts`의 `PREVIEW_BYTES`(1 MiB)와 `PAGE`(64 KiB) — 완전 결과는 `src/storage/output-spool.ts`에 보존되고 inline은 프리뷰 경계일 뿐. `src/extension/contained-search.ts`의 `SEARCH_PREVIEW_BYTES`(1 MiB)도 같다 — 완전 결과는 `<workspace>/.oma-search-*`/`.oma/search-results`에 기록된다. `src/runtime/connect-proxy.ts`의 `CONNECT_TUNNELS`(4)와 `src/runtime/inference-relay.ts`의 `RELAY_CONNECTIONS_PER_REQUEST`(4)는 FIFO 작업 집합 — 초과 요청은 거절이 아니라 대기열이다. `src/platform/guest/histories.ts`의 `PREVIEW_CHARS`(160)와 `RESPONSE_MARGIN`(4096)은 `after` 커서 페이징으로 프레임에 맞춘다. vendored pi-lsp의 진단 bound(`OMA_MAX_DIAGNOSTICS_PER_FILE` 1024·`OMA_MAX_DIAGNOSTIC_MESSAGE_CHARS` 8 KiB·`OMA_MAX_DIAGNOSTIC_URIS` 4096)는 marker+count 절하다 — 초과분은 숨기지 않고 `[oma: …]` marker로 보인다.
+- **이미 비차단으로 변환된 bound**(거절 아님): `src/client/index.ts`의 `PREVIEW_BYTES`(1 MiB)와 `PAGE`(64 KiB) — 완전 결과는 `src/storage/output-spool.ts`에 보존되고 inline은 프리뷰 경계일 뿐. `src/extension/contained-search.ts`의 `SEARCH_PREVIEW_BYTES`(1 MiB)도 같다 — 완전 결과는 `<workspace>/.oma-search-*`/`.oma/search-results`에 기록된다. `src/runtime/connect-proxy.ts`의 `CONNECT_TUNNELS`는 `Infinity`로 기본 동시 연결 제한이 없다. 명시적으로 지정한 유한 테스트/embedding 값만 FIFO로 동작한다. `src/runtime/inference-relay.ts`의 `RELAY_CONNECTIONS_PER_REQUEST`(4)는 별도의 provider relay 연결 산출 값이며 인터넷 접근 권한이나 CONNECT 상한을 정하지 않는다. `src/platform/guest/histories.ts`의 `PREVIEW_CHARS`(160)와 `RESPONSE_MARGIN`(4096)은 `after` 커서 페이징으로 프레임에 맞춘다. vendored pi-lsp의 진단 bound(`OMA_MAX_DIAGNOSTICS_PER_FILE` 1024·`OMA_MAX_DIAGNOSTIC_MESSAGE_CHARS` 8 KiB·`OMA_MAX_DIAGNOSTIC_URIS` 4096)는 marker+count 절하다 — 초과분은 숨기지 않고 `[oma: …]` marker로 보인다.
 
 ## 1. PROTOCOL/WIRE-MANDATED
 
@@ -78,7 +80,7 @@
 | 위치 | 값 | 사용자-facing | 근거 |
 |---|---|---|---|
 | `src/domain/canonical-json.ts` `JSON_NESTING_LIMIT` | 64 | 예(깊은 JSON 거절) | 재귀 파서의 스택/재귀 고갈 보호 — canonical JSON은 내용이 아니라 형태를 검증한다. |
-| `src/git/quarantine.ts` `QUARANTINE_RESOURCES` | cpu 30 s·mem 512 MiB·tasks 1024·ceiling 24 h·silence 120 s | 예(격리 실패) | 신뢰할 수 없는 번들 import를 위한 cgroup 자원 한도 — 신뢰 경계의 보안 장치이며, 시간 부분(24 h ceiling + 120 s 진행-리셋 침묵)은 §5의 jitter/quiescent 성격을 겸한다. |
+| `src/git/quarantine.ts` `QUARANTINE_RESOURCES` | 전 필드 0 | 아니오 | DR37에서 CPU/메모리/tasks/timeout/silence cap 제거. 호환 선언만 남고, namespace·tree lease·broker cancellation·전체 객체 무결성 검증이 작업을 소유한다. |
 | `src/extension/vendor/pi-lsp/runtime/text-edits.js` | `OMA_MAX_WORKSPACE_EDITS` 2048·`OMA_MAX_WORKSPACE_EDIT_BYTES` 4 MiB | 예(해당 fix 요청만 거절) | 의도적 유지 — 절단된 edit 목록은 오염된 fix를 날조하고, 무제한 materialization은 엔진 OOM 위험이라 둘 다 거절보다 나쁘다. 거절은 그 요청 하나에만 적용되고 서버·다른 요청은 생존한다. 대체 채널 없음. |
 | `src/extension/vendor/pi-lsp/runtime/lsp-client.js` `OMA_MAX_INBOUND_FRAME_BYTES` | 4 MiB | 예(귀속 가능한 요청만 거절) | 오작동/적대 서버가 엔진 프로세스 메모리를 무제한으로 키우는 것을 막는 방어 bound — oversized 프레임은 그 요청만 거절하고 본문은 bounded discard 뒤 wire 재정렬, 미식별 프레임은 drop+count만 한다. |
 | `src/domain/tool-surface.ts` `SURFACE_LIMITS` | groups 32·members/group 16·depth 4·names 512·desc 512 B | 예(플랜 거절) | 툴 표면 플랜의 구조 문법 — 방어적이며 자의적인 값이지만, 플랜은 네비게이션 메타데이터일 뿐이며 bound는 구조적 정직성을 위해 유지한다. |
@@ -122,17 +124,17 @@
 | `src/reconcile/preaccept.ts` `PREACCEPT_EVENT_KEPT_LIMIT` | 8 | 아니오 | pre-accept 이벤트의 감사 상세 보존 수 — 초과는 유실이 아니라 요약된 보존 한계. |
 | `src/protocol/byte-queue.ts` `maxRetainedBytes` | 호출자 설정 | 아니오 | 프레임 파서의 내부 보유 버퍼 — wire bound 그 자체가 아닌 구현 상세. |
 
-운영자 설정 정책 bound(쿼터): `src/config.ts`의 `quota.societyAgents`·`quota.lineageAgents`·`storageBytes`·`workspaceBytes` 등은 제품의 admission-control 기능이며 상한이 아니라 정책이다 — 코드 상수가 아니라 설정값이므로 이 장부의 숫자 bound 분류에는 넣지 않되, over-quota 기동은 `StorageAdmission.startupState`의 "degraded"로 정직하게 보고된다.
+DR37의 resource/quota 필드는 과거 설정·accepted spec을 읽기 위한 호환 선언이다. memory/tasks/CPU/tmp/workspace/staging/check-timeout·저장량·society/lineage agent count는 OMA admission이나 systemd cap으로 집행하지 않는다. 기본값은 0이며, 이전 양수 값도 재작성하지 않는다. `StorageAdmission.startupState()`는 `admitted`를 반환한다. 권한·corruption/draining fence·파일 containment와 실제 OS/I/O 오류는 계속 적용한다.
 
 ## 5. QUIESCENT/JITTER budgets
 
-> 진행이 관측될 때마다 리셋되는 창이거나, 진행을 관측할 수 없는 곳의 관대한 고정 상한이다. 어느 쪽도 "총 경과 마감"으로 유효 작업을 거절하지 않는다 — 침묵·정지·교착만 회수한다.
+> 진행으로 리셋되는 침묵 창과 고정 경과 마감을 구분한다. 고정 마감은 실제 진행 중인 작업에도 도달할 수 있으며, 결과를 성공·부재로 바꾸는 근거가 될 수 없다. 아래 값은 소유 코드의 관측 정책이다. DR37이 제거한 실행·quarantine·CONNECT cap은 복구하지 않는다.
 
 | 위치 | 값 | 근거 |
 |---|---|---|
 | `src/extension/lsp-tools.ts` | `LSP_TIMEOUT_MS` 120 s(기본)·`LSP_CALL_STALL_MS` 300 s | timeout은 caller 선택 예산의 기본값(1 s floor, 상한 없음), stall은 inbound 프레임마다 리셋되는 침묵 창(요청 timeout보다 좁아지지 않음 — 비-요청 침묵의 backstop). |
 | `src/extension/contained-search.ts` | `SEARCH_STALL_MS` 60 s·`HEARTBEAT_ONLY_WINDOWS` 10·`KILL_GRACE_MS` 2 s | 수신 바이트마다 리셋되는 침묵 창; heartbeat만 나오는 wedged main은 10창 안에 회수(heartbeat는 liveness이지 진행이 아니므로 진행 창을 리셋하지 못한다 — 의도적 liveness 경계); kill 후 grace. |
-| `src/runtime/connect-proxy.ts` | `CONNECT_HANDSHAKE_MS` 15 s·`CONNECT_IDLE_MS` 120 s·`CONNECT_DIAL_MS` 15 s·`CONNECT_KEEPALIVE_MS` 5 s | 핸드셰이크·다이얼·유휴·keepalive 예산 — 터널 수 자체는 FIFO(§1 표기 규칙 참조)로 이미 비차단이다. |
+| `src/runtime/connect-proxy.ts` | handshake/idle/dial 0·keepalive 5 s | DR37: 기본 handshake/idle/dial 마감 없음. 5초는 HTTP keep-alive 연결의 보유 시간이며 raw CONNECT 터널의 시간 제한이 아니다. |
 | `src/views/status-refresh.ts` | `STATUS_OBSERVATION_BUDGET_MS` 2 s | 상태 관측의 예산 — 관측이 예산을 넘으면 stale로 표시하지 요청을 거절하지 않는다. |
 | `src/protocol/status-view.ts` | `STATUS_REFRESH_MS` 5 s·`STATUS_STALE_MS` 4×refresh | status 파일의 갱신 주기와 stale 판정 창. |
 | `src/store.ts` `DEFAULT_BUSY_RETRIES` | 5 | SQLite busy 재시도 — 동시성 jitter 완충. |
@@ -150,7 +152,7 @@
 | `src/process/command.ts` | `timeoutMs`(호출자)·`silenceMs`(진행-리셋) | 비동기 runner의 이중 창 — 데이터 수신이 침묵 타이머를 리셋하고 동기 runner는 진행을 못 봐서 `silenceMs`를 TypeError로 명시 거절한다. |
 | `src/git/canonical-command.ts` `CANONICAL_PROCESS_LIMITS` | timeout 120 s·maxBuffer 4 MiB | canonical plumbing의 데드라인/출력 bound — 대형 출력은 스풀+점증 파싱으로 이미 우회됐다. |
 | `src/lifecycle/workspace.ts`·`src/git/context-repository.ts` | ceiling 24 h·silence 120 s | clone/fetch/checkout 등 장기 Git 작업 — 진행 출력이 창을 리셋한다. |
-| `src/git/quarantine.ts` | `timeoutSeconds` 24 h·`silenceSeconds` 120 s | 격리 import의 ceiling+침묘 — §3의 cgroup bound와 쌍을 이룬다. |
+| `src/git/quarantine.ts` | timeout/silence 0 | DR37에서 제거. cancellation과 실제 namespace/process 종료로 수명을 관측한다. |
 | `src/platform/guest/archive.ts` | silence 10 min·timer 상한 0x7fffffff | tar checkpoint 진행이 침묘 창을 리셋. |
 | `src/protocol/alarm.ts`·`src/broker/connection.ts` | setTimeout ≤ 0x7fffffff | Node 타이머의 플랫폼 상한을 넘는 지연을 클램프하는 구현 상세. |
 | `src/tui/limits.ts` `TERMINAL_BOUNDS` | escape 64 B/50 ms·paste 16 KiB/1000 ms/50 ms·exit 2 s·startup 10 s | 터미널 디코더의 jitter 예산 — 불완전한 escape/paste 시퀀스가 무제한 자라지 않게 한다. |
@@ -189,10 +191,10 @@ UX-38 배치 1–5 이후 스윕에서 확인된, 여전히 존재하는 **수�
 21. **배치 뷰·status 행·host-history 엔트리·로그 응답** — 한 프레임에 들어가지 않는 최소 단위는 거절(로그는 `truncated` 마커로 절하). **PROTOCOL/WIRE-MANDATED**.
 22. **채널 동시 요청** — 채널당 진행 중 요청 1건 초과 시 LIMIT_EXCEEDED. **PROTOCOL/WIRE-MANDATED**(직렬 시맨틱; 병렬은 새 채널).
 23. **플랫폼 프레임·터미널 프레임·라인 채널** — host-guest `PLATFORM_FRAME_BYTES`/`TERMINAL_FRAME_BYTES`, host channel `LINE_BYTES` 128. **PROTOCOL/WIRE-MANDATED**.
-24. **격리 리소스** — quarantine의 CPU 30 s/메모리 512 MiB/tasks 1024 초과 시 커널이 종료. **SECURITY/INTEGRITY**(cgroup 한도).
+24. **격리 리소스** — DR37에서 제거. 호환 필드는 모두 0이며 OMA의 CPU/메모리/tasks/시간 cap을 부과하지 않는다.
 25. **tool surface 플랜·ask_user_question·MCP 이름 문법** — **PROTOCOL/WIRE-MANDATED**(upstream 계약) 또는 **SECURITY/INTEGRITY**(surface 플랜의 방어적 구조 bound)로 문서화 — §1·§3 표 참조.
 26. **VM/헬퍼 데드라인·재시도** — vz-driver·keychain·service timings·society-lease·engine-auth 등. **QUIESCENT/JITTER** — 진행 미관측 경계의 관대한 상한 또는 재시도 예산.
 
 ## 8. 확인 방법
 
-이 장부의 숫자는 2026-10-12 브랜치(`feat/macos-hidden-vm`)의 소스를 직접 읽어 기록했다. 항목이 소스와 어긋나면 소스가 정본이며, 그때는 이 문서를 수정하라. `npm run check:documents`가 이 문서의 링크와 ID 무결성을 검증한다.
+UX-38의 원래 표와 2026-10-09 DR37/DR39 후속 확인을 구분한다. DR39에서 직접 재확인한 범위는 quota/admission, quarantine, CONNECT의 동시성·시간·목적지 정책, Review 문서의 byte 계산이다. 나머지 표를 이번 배치에서 전수 재검증했다는 주장은 하지 않는다. 항목이 소스와 어긋나면 소스가 정본이며, 그때는 이 문서를 수정하라. `npm run check:documents`가 이 문서의 링크와 ID 무결성을 검증한다.

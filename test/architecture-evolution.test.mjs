@@ -243,10 +243,12 @@ test("P22 B: a new operation kind cannot omit result, codec or result-validator 
     () => assertOperationClosure(programWith(changes)),
     /codec closure/,
   );
-  changes[codec] = replaceOnce(
-    read(codec),
-    "export const OPERATION_CODECS = Object.freeze({",
-    'export const OPERATION_CODECS = Object.freeze({\n  "probe.mutate": codecFor("probe.mutate"),',
+  // The codec registry now follows the method declaration automatically.
+  // A new method still cannot manufacture the independent result validator.
+  changes[methods] = replaceOnce(
+    read(methods),
+    "export const PUBLIC_METHODS = {",
+    'export const PUBLIC_METHODS = {\n  "probe.mutate": { mode: "mutation", key: "required", stream: "none", channel: "actor", result: "receipt", capability: null, resource: "admit", authority: ["current-actor"], paramsCheck: fixed(societySetParamsCheck) },',
   );
   assert.throws(
     () => assertOperationClosure(programWith(changes)),

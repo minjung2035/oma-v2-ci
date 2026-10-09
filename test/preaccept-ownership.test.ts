@@ -225,6 +225,37 @@ test("PRE-6: discard removes only the inode it published, and never a replacemen
   } finally { removeTree(root); }
 });
 
+test("DR39: preaccept pins end on acceptance, discard and a replacement refusal", () => {
+  const root = fs.mkdtempSync(join(tmpdir(), "oma-preaccept-pin-"));
+  const path = join(root, "artifact.eml");
+  const pins = (): number => fs.readdirSync("/proc/self/fd").filter(name => {
+    try { const target = fs.readlinkSync(`/proc/self/fd/${name}`); return target === path || target === `${path} (deleted)`; }
+    catch { return false; }
+  }).length;
+  try {
+    fs.writeFileSync(path, "accepted");
+    const accepted = publishedArtifact(path);
+    assert.equal(pins(), 1);
+    accepted.retainForOperation();
+    assert.equal(pins(), 0);
+    accepted.discardUnaccepted();
+    assert.equal(fs.readFileSync(path, "utf8"), "accepted");
+    const discarded = publishedArtifact(path);
+    discarded.discardUnaccepted();
+    assert.equal(pins(), 0);
+    assert.equal(fs.existsSync(path), false);
+    fs.writeFileSync(path, "original");
+    const replaced = publishedArtifact(path);
+    fs.unlinkSync(path);
+    fs.writeFileSync(path, "replacement");
+    assert.equal(pins(), 1, "the old inode is still held and cannot be reused");
+    assert.throws(() => replaced.discardUnaccepted(), { code: "REF_STATE_UNKNOWN" });
+    assert.equal(pins(), 0, "a refused cleanup releases its kernel resource");
+    assert.throws(() => replaced.discardUnaccepted(), { code: "REF_STATE_UNKNOWN" });
+    assert.equal(fs.readFileSync(path, "utf8"), "replacement");
+  } finally { removeTree(root); }
+});
+
 test("PRE-7: retained evidence cannot be discarded and unconfirmed cleanup is retryable", () => {
   const retained = new PreacceptArtifact("/nonexistent/retained.eml", null);
   retained.retainForOperation();
@@ -668,4 +699,3 @@ test("V19B: a same-name, same-spec race has one physical winner and the linked l
     assert.equal(readDiagnosticSnapshot(f.root).tables.deliveries.filter((row) => (row as { recipient: string }).recipient === "shared").length, 1);
   } finally { f.close(); }
 });
-

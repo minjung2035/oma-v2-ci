@@ -87,7 +87,8 @@ function brokerStandIn(state, credentials, disownedReason = null) {
 async function run({ brokerState = { kind: "started", pid: 1 }, credentials = ["1".repeat(64), "2".repeat(64)],
   disowned = null, leased = true, engineExits = true, startFailures = 0, acquiredFailures = 0,
   brokerAlreadyListening = false, untrustedRunRoot = false, binding = "fresh", rereadFails = false, commitRefused = false, startupFailure = null, statusReply = null, onEgress = null,
-  resumeBirth = null, resumeError = null, resumeReply = null, hostNew = false, hostHistory = null, tenureGraceMs, env = {}, argv = ["node", "oma", "--society", "fixture"] } = {}) {
+  resumeBirth = null, resumeError = null, resumeReply = null, hostNew = false, hostHistory = null, tenureGraceMs,
+  projectPointerRead = () => "controlled-settings-version", env = {}, argv = ["node", "oma", "--society", "fixture"] } = {}) {
   // DR24: a start without a society is a new session of the project; the
   // ownership rules below are asked of the society a start names.
   const expected = argv.includes("--society") ? argv[argv.indexOf("--society") + 1] : "fixture-new";
@@ -397,6 +398,24 @@ async function run({ brokerState = { kind: "started", pid: 1 }, credentials = ["
       humanStream: () => process.stderr },
     "../config/generations.js": { collectManagedGenerations: () => { calls.push("collectManagedGenerations"); return []; } },
   };
+  // Exercise the actual extracted settings owner with the same effect
+  // boundaries as the entry, so write ownership and read-back still run.
+  modules["../tui/project-session-settings.js"] = loadSource("src/tui/project-session-settings.ts", {
+    "../runtime/user-files.js": { readUserFile: projectPointerRead },
+    "../config/operations.js": { CONFIGURATION_DOCUMENT_BYTES: 16777216 },
+    "../runtime/deployment-manifest.js": modules["../runtime/deployment-manifest.js"],
+    "../runtime/pi-packages.js": modules["../runtime/pi-packages.js"],
+    "./words.js": modules["../tui/words.js"],
+    "./sources/extensions.js": modules["../tui/sources/extensions.js"],
+    "./sources/settings.js": modules["../tui/sources/settings.js"],
+    "./project-settings.js": modules["../tui/project-settings.js"],
+  });
+  modules["../tui/society-panel.js"] = loadSource("src/tui/society-panel.ts", {
+    "./dashboard.js": modules["../tui/dashboard.js"],
+    "./sources/mail.js": modules["../tui/sources/mail.js"],
+    "./sources/settings.js": modules["../tui/sources/settings.js"],
+    "../domain/mail-values.js": modules["../domain/mail-values.js"],
+  });
   const process_ = {
     argv, env: { HOME: "/home/user", XDG_DATA_HOME: "/state", XDG_RUNTIME_DIR: "/run", ...env },
     execPath: "node", execArgv: [], execve(...args) { calls.push("execve"); restarts.push(args); },
@@ -442,6 +461,30 @@ async function run({ brokerState = { kind: "started", pid: 1 }, credentials = ["
     get ports() { return capturedPorts; },
     fireEvent: event => sessionListener?.(event) };
 }
+
+test("DR39 Society settings: pointer content change is followed even with unchanged stat metadata", async () => {
+  let pointer = "generation-A";
+  const society = await run({ projectPointerRead: () => pointer });
+  const before = society.calls.filter(call => call.startsWith("deriveSessionSettings:")).length;
+  pointer = "generation-B";
+  for (const timer of society.intervals) timer.run();
+  await society.settle();
+  assert.equal(society.calls.filter(call => call.startsWith("deriveSessionSettings:")).length, before + 1);
+  society.handlers.SIGTERM(); await society.settle();
+});
+
+test("DR39 Society settings: an unobservable project pointer is retried instead of cached as unchanged", async () => {
+  let unavailable = false;
+  const society = await run({ projectPointerRead: () => { if (unavailable) throw new Error("pointer unreadable"); return "generation-A"; } });
+  const before = society.calls.filter(call => call.startsWith("deriveSessionSettings:")).length;
+  unavailable = true;
+  for (let count = 0; count < 2; count++) {
+    for (const timer of society.intervals) timer.run();
+    await society.settle();
+  }
+  assert.equal(society.calls.filter(call => call.startsWith("deriveSessionSettings:")).length, before + 2);
+  society.handlers.SIGTERM(); await society.settle();
+});
 
 test("T119 / DR35: the lease permits private conversation while broker authority remains closed", async () => {
   const society = await run();

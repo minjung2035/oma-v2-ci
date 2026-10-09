@@ -1,9 +1,4 @@
-import { exists, finding, mutationMethods, readJson } from "./shared.mjs";
-
-function symbolFor(owner, mutation) {
-  if (typeof owner.symbolTemplate === "string") return owner.symbolTemplate.replaceAll("{mutation}", mutation);
-  return owner.symbolByMutation?.[mutation] ?? null;
-}
+import { exists, finding, mutationMethods, readJson, registryOwnerSymbol } from "./shared.mjs";
 
 export function ownershipRuleFindings(root) {
   const file = "implementation/mutation-owners.json";
@@ -18,7 +13,7 @@ export function ownershipRuleFindings(root) {
     if (!owner || typeof owner.path !== "string" || !exists(root, owner.path))
       findings.push(finding("mutation-registry-owner", file, `${dimension} registry owner path is missing`));
     for (const mutation of expected)
-      if (!symbolFor(owner, mutation))
+      if (!registryOwnerSymbol(root, owner, mutation))
         findings.push(finding("mutation-registry-symbol", file, `${dimension} has no symbol locator for ${mutation}`));
   }
   for (const [mutation, spec] of Object.entries(map.mutations ?? {})) {

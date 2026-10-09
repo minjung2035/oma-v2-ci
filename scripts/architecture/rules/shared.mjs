@@ -82,6 +82,37 @@ function publicMethodsObject(source) {
   return null;
 }
 
+/** A registry locator either records independent ownership or follows the
+ * actual method's validator. Do not keep a second method -> validator table. */
+export function registryOwnerSymbol(root, owner, mutation) {
+  if (typeof owner?.symbolTemplate === "string") return owner.symbolTemplate.replaceAll("{mutation}", mutation);
+  if (owner?.symbolFromMethod === "paramsCheck" && typeof owner.path === "string") {
+    const file = "src/protocol/methods.ts";
+    const source = sourceOf(root, file);
+    const table = publicMethodsObject(source);
+    const method = table?.properties.find(node => ts.isPropertyAssignment(node) && propertyName(node.name) === mutation);
+    const descriptor = method && strip(method.initializer);
+    if (!descriptor || !ts.isObjectLiteralExpression(descriptor)) return null;
+    const check = descriptor.properties.find(node => ts.isPropertyAssignment(node) && propertyName(node.name) === "paramsCheck");
+    if (!check || !ts.isPropertyAssignment(check)) return null;
+    const imports = new Map();
+    for (const statement of source.statements) {
+      if (!ts.isImportDeclaration(statement) || !ts.isStringLiteralLike(statement.moduleSpecifier) ||
+          normalizeRelativeImport(file, statement.moduleSpecifier.text) !== owner.path) continue;
+      const named = statement.importClause?.namedBindings;
+      if (named && ts.isNamedImports(named))
+        for (const specifier of named.elements) if (!specifier.isTypeOnly)
+          imports.set(specifier.name.text, (specifier.propertyName ?? specifier.name).text);
+    }
+    const referenced = new Set();
+    eachNode(check.initializer, node => {
+      if (ts.isIdentifier(node) && imports.has(node.text)) referenced.add(imports.get(node.text));
+    });
+    return referenced.size === 1 ? [...referenced][0] : null;
+  }
+  return owner?.symbolByMutation?.[mutation] ?? null;
+}
+
 export function mutationMethods(root) {
   const source = sourceOf(root, "src/protocol/methods.ts");
   const table = publicMethodsObject(source);

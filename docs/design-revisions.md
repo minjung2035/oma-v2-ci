@@ -1427,3 +1427,57 @@ named `DR38` 회귀는 중복 lease, 외부 connection의 해제, running bindin
 실패 후 queue 재사용, API/lock 정리, 필수 ready 실패와 optional observer 실패, 같은 이름의
 Host API snapshot 직렬화, role/allow의 권한 부재, 데몬 종료 코드를 검증한다. Linux의 LocalDriver와
 controlled native boundary를 사용한다. macOS Virtualization.framework/APFS native 실행 증거는 아니다.
+
+
+## DR39 — 변경 책임 분리와 중복 선언 제거
+
+2026-10-09 Human은 DR38 완료 뒤 아키텍처 개선을 진행하도록 승인하고, 변경 증폭·응집도·
+인지 비용 평가를 추가했다. 계층이나 모든 구현체의 port를 늘리는 방식은 도입하지 않는다.
+Broker·authoritative Store·프로세스 경계·durable operation의 소유권을 유지한다.
+
+Society의 프로젝트 설정은 ProjectSessionSettings가 파생·저장·read-back·extension view를
+함께 조정한다. 실제 쓰기는 기존 managed bundle primitive와 effect 전 tenure 검사를 거친다.
+관리 포인터 변경은 실제 읽힌 바이트로 확인한다. 읽기 실패는 변경 없음으로 확정하지 않는다.
+societyPanelPorts는 설정·dashboard·mail view와 action을 구성하고 runtime은 현재 관측을 공급한다.
+entry의 engine/broker/tenure·resume·실제 OS exit 순서는 기존 owner에 남긴다.
+1020줄의 entry가 879줄로 줄었지만 이 수치만으로 진입점 경량화가 끝났다고 판단하지 않는다.
+
+ReviewModule은 acceptance·freeze·Git preparation·effect ordering·recovery를 유지한다.
+review-documents와 review-status는 공급된 사실을 문서·상태로 계산한다. thread history의
+prefix/suffix byte accounting은 반복 문서 재생성의 제곱 비용을 제거하며 newest suffix와
+omission anchor를 유지한다. notice의 newline도 part budget 안에 포함한다.
+ReviewModule은 1281줄에서 1126줄로 줄었고 순수 계산의 수정과 effect owner의 변경을 구분한다.
+
+OPERATION_CODECS의 key는 PUBLIC_METHODS의 실제 mutation key에서 생성한다. 등록 key의
+mapped type와 별도의 durable plan/result/relation exhaustive 검사는 유지한다.
+mutation owner inventory의 paramsCheck symbol은 메서드 AST의 실제 import에서 도출한다.
+모호하거나 관측되지 않은 symbol은 거절한다. 독립적인 workflow/recovery 소유 선언은 유지한다.
+이 변경은 중복 목록 두 개를 제거하며 실제 feature 변경 파일 수를 측정한 결과는 아니다.
+
+VzDriver는 VmDriver만 구현한다. 별도 KeychainStore adapter는 keychain operation만 내며
+VM-backed/Keychain-only client의 응답 의미를 공유한다. helper binary와 IPC는 하나로 유지한다.
+Swift forceStop callback의 오류는 request 실패로 보존하고 VM 종료를 알리지 않는다.
+Linux controlled adapter 증거와 native Swift 실행 증거는 분리한다.
+
+DR37 정책 이후 사용되지 않는 SSRF classifier·443 상수·그 전용 테스트를 제거한다.
+실제 dial regression은 private/loopback/literal IP와 임의 포트를 검사한다.
+limit-bounds의 해당 resource/quota/tunnel 문구를 정정하며 전체 숫자의 새 전수 검증으로
+표시하지 않는다. 시작 시간은 측정상 여전히 5초 목표 미달이다. pack 옵션 실험을 성공으로
+바꾸거나 Human private Git objects를 복제하는 빠른 경로를 채택하지 않는다.
+
+기존 verification input digest에 빠졌던 platform 원본과 .gitignore도 같은 closure에 포함한다.
+source identity 증거이며 Linux suite가 Swift를 실행했다는 뜻은 아니다. 별도 gate를 추가하지 않는다.
+
+
+전체 local suite를 disk filesystem에서 실행해 기존 결함 두 가지와 fixture 오류 하나를 추가로
+발견했다. preaccept artifact는 최초 publisher descriptor가 살아 있을 때 별도 kernel pin을
+획득하고 acceptance/discard/refusal에서 닫는다. dev/ino 숫자만 보존해서 unlink 뒤 재사용된
+inode를 삭제하는 경로를 막는다. pin을 잃은 cleanup은 새 삭제 권한을 재구성하지 않는다.
+Mail과 submit spool은 original descriptor가 held인 구간에서 pin을 인계한다.
+
+locked temporary는 plain `.tmp`로 만들고 flock을 획득한 뒤 `.held.tmp`를 no-replace link한다.
+생성과 flock 사이의 수거자가 살아 있는 writer를 죽었다고 판단하는 창을 닫는다.
+이 짧은 준비 구간에서 죽으면 lock 소유가 입증되지 않은 plain temporary를 보존한다.
+기존 startup broker fence 아래 mail temporary recovery와 진단 원칙을 따른다.
+quota 제거 시험은 filesystem directory allocation보다 작은 고정 총량을 요구하지 않고
+실제 4096-byte 파일을 legacy 1-byte 선언과 함께 실행한다.

@@ -13,7 +13,7 @@ import { mailObjectPathAt, mailArchivePathAt, mailWorkersPathAt, mailInboxPathAt
 import { sha256Hex, requestHash, canonicalRequestParams } from "./hash.js";
 import { fsyncDir, writeExclusiveFsyncedFile as writeFsynced } from "./storage/durable-fs.js";
 import { publishImmutableFile, readImmutableBytes } from "./storage/immutable-file.js";
-import { PreacceptArtifact, PreacceptScope, type PublishedIdentity } from "./storage/preaccept-artifact.js";
+import { PreacceptArtifact, PreacceptScope } from "./storage/preaccept-artifact.js";
 import { buildFrozenMessage } from "./mail/serialize.js";
 import { defaultLogicalReplyTo, messagePlanFrom } from "./mail/facts.js";
 import { expandAddresses, logicalReplyAddress } from "./mail/routing.js";
@@ -192,13 +192,14 @@ export class MailModule {
     const staged = join(stagingDir, `${messageId}.${generateOperationId()}.tmp`);
     writeFsynced(staged, eml.text);
     const destination = this.objectPath(messageId);
-    let linked: PublishedIdentity | null = null;
+    let owned: PreacceptArtifact | null = null;
     const failures: unknown[] = [];
-    try { publishImmutableFile(staged, destination, eml.sha256 ?? sha256Hex(eml.text), undefined, identity => { linked = identity; }); }
+    try { publishImmutableFile(staged, destination, eml.sha256 ?? sha256Hex(eml.text), undefined,
+      identity => { owned = new PreacceptArtifact(destination, identity); }); }
     catch (error) { failures.push(error); }
     try { removeOwnedFile(staged); } catch (error) { failures.push(error); }
     // An existing destination this call did not link is not its object.
-    const artifact = new PreacceptArtifact(destination, linked, linked === null);
+    const artifact: PreacceptArtifact = owned ?? new PreacceptArtifact(destination, null, true);
     if (failures.length === 0) return artifact;
     try { artifact.discardUnaccepted(); } catch (error) { failures.push(error); }
     throw failures.length > 1 ? new AggregateError(failures, "mail object freeze and owned cleanup failed") : failures[0];

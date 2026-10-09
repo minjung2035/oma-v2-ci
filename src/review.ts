@@ -21,7 +21,7 @@ import { StoreError, acceptedFailure, errorCodeOf } from "./domain/errors.js";
 import { NO_HOLD, observeStoreFailure, type ResourceGate } from "./domain/admission.js";
 import { applyRequestKeyFor, refreshRequestKeyFor, reviewRequestNameFor } from "./domain/identifiers.js";
 import { mergeDiffText } from "./git/canonical-command.js";
-import { NOTICE_PART_OVERHEAD, OMISSION_MARKER, OMISSION_MARKER_COMPACT, approvalBodyText, boundVoteText, describeEntryText, threadHeadText } from "./mail/review-bounds.js";
+import { reviewSubject, reviewThreadBody, reviewApprovalBody, reviewNoticeDocument, splitReviewNotice } from "./mail/review-documents.js";
 import { publishedRefFor } from "./domain/derived.js";
 import { expandAddresses } from "./mail/routing.js";
 import { rfcMessageIdFor } from "./mail/addresses.js";
@@ -29,7 +29,8 @@ import { PreacceptScope, type PreacceptArtifact } from "./storage/preaccept-arti
 import { frozenMessageDisposition } from "./mail/materializer.js";
 import { receiptOfOperation } from "./storage/receipt-projector.js";
 import { requestHash, sha256Hex } from "./hash.js";
-import type { ReviewRequestStatus, ReviewRequestSummary, ReviewStatusEntry, ReviewStatusResult } from "../implementation/contracts/public-wire.js";
+import type { ReviewRequestSummary, ReviewStatusResult } from "../implementation/contracts/public-wire.js";
+import { workerReviewStatus } from "./views/review-status.js";
 import { generateMessageId, generateOperationId } from "./ids.js";
 import { deterministicTier, type IntegrationSnapshot } from "./git/integration-policy.js";
 import { maximumTier } from "./domain/tier-evaluation.js";
@@ -516,8 +517,8 @@ Challenge ${name}` });
     // Challenges always have a review thread — LOW challenges too (§7).
     const emissions: Emission[] = [{
       to: ["residents"], kind: "message",
-      subject: this.cutSubject(`[${name}] ${input.title} (rev 0)`),
-      body: this.threadBody(after0, fact, [], null),
+      subject: reviewSubject(`[${name}] ${input.title} (rev 0)`, this.bounds.subjectBytes),
+      body: reviewThreadBody(after0, fact, [], null, this.bounds.mailBodyBytes),
       replyHeaders: { replyTo: ["residents"], inReplyTo: null, references: [] },
       audience: "workers", review: { role: "thread", request: id, name, revision: 0 } }];
     const frozen = await this.freeze(scope, id, auth.actor, emissions);
@@ -583,8 +584,8 @@ Challenge ${name}` });
       eligible, highPeerFloor: tiered.highPeerFloor });
     const emissions: Emission[] = input.tier === "LOW" ? [] : [{
       to: ["residents"], kind: "message",
-      subject: this.cutSubject(`[${name}] ${input.title} (rev 0)`),
-      body: this.threadBody(after0, fact, [], null),
+      subject: reviewSubject(`[${name}] ${input.title} (rev 0)`, this.bounds.subjectBytes),
+      body: reviewThreadBody(after0, fact, [], null, this.bounds.mailBodyBytes),
       replyHeaders: { replyTo: ["residents"], inReplyTo: null, references: [] },
       audience: "workers", review: { role: "thread", request: id, name, revision: 0 } }];
     const frozen = await this.freeze(scope, id, auth.actor, emissions);
@@ -702,15 +703,15 @@ Challenge ${name}` });
     const emissions: Emission[] = [];
     if (hasThread) emissions.push({
       to: ["residents"], kind: "message",
-      subject: this.cutSubject(`[${before.name}] ${openFact.title} (rev ${revision})`),
-      body: this.threadBody(after0, openFact, [...inputFor.entries, newEntry], priorThread?.id ?? null),
+      subject: reviewSubject(`[${before.name}] ${openFact.title} (rev ${revision})`, this.bounds.subjectBytes),
+      body: reviewThreadBody(after0, openFact, [...inputFor.entries, newEntry], priorThread?.id ?? null, this.bounds.mailBodyBytes),
       replyHeaders: { replyTo: ["residents"],
         inReplyTo: priorThread === null ? null : rfcMessageIdFor(priorThread.id, this.society),
         references: priorThread === null ? []
           : [...priorThread.replyHeaders.references, rfcMessageIdFor(priorThread.id, this.society)] },
       audience: "workers", review: { role: "thread", request: open.operation.id, name: before.name, revision } });
     if (effects.withdraw !== null) emissions.push({
-      to: [PRINCIPAL], kind: "message", subject: this.cutSubject(`[${before.name}] approval withdrawn`),
+      to: [PRINCIPAL], kind: "message", subject: reviewSubject(`[${before.name}] approval withdrawn`, this.bounds.subjectBytes),
       body: `Approval ${effects.withdraw.id} for ${before.name} is withdrawn: ${effects.withdraw.reason}.\n` +
         `The request remains open; Workers may vote again.`,
       replyHeaders: { replyTo: [PRINCIPAL], inReplyTo: rfcMessageIdFor(effects.withdraw.id, this.society),
@@ -718,7 +719,7 @@ Challenge ${name}` });
       review: { role: "withdrawn", request: open.operation.id, name: before.name, approval: effects.withdraw.id } });
     if (effects.approve !== null) {
       const approvalId = generateMessageId(id, emissions.length);
-      const body = this.approvalBody(approvalId, openFact, [...inputFor.entries, newEntry], inputFor.open.actor, effects.approve);
+      const body = reviewApprovalBody(approvalId, openFact, [...inputFor.entries, newEntry], inputFor.open.actor, effects.approve);
       // The floor model (mail/review-bounds.ts) covers this body for the
       // votes the configured floor binds; over it is a bounds bug, not a mail
       // the Principal cannot read (the notice-part assert has the same shape).
@@ -726,7 +727,7 @@ Challenge ${name}` });
         throw new StoreError("INTERNAL_ERROR", "an approval request exceeds the mail body bound");
       emissions.push({
         to: [PRINCIPAL], kind: "approval_required",
-        subject: this.cutSubject(`[${before.name}] HIGH approval requested: ${openFact.title}`),
+        subject: reviewSubject(`[${before.name}] HIGH approval requested: ${openFact.title}`, this.bounds.subjectBytes),
         body,
         approvalFor: openFact.identity,
         replyHeaders: { replyTo: [PRINCIPAL], inReplyTo: null, references: [] },
@@ -734,7 +735,7 @@ Challenge ${name}` });
     }
     if (decision !== null)
       emissions.push({
-        to: [PRINCIPAL], kind: "result", subject: this.cutSubject(`[${before.name}] decision recorded`),
+        to: [PRINCIPAL], kind: "result", subject: reviewSubject(`[${before.name}] decision recorded`, this.bounds.subjectBytes),
         body: `Principal ${decision.verdict} on approval ${decision.approval} for ${before.name}:\n${decision.body}`,
         replyHeaders: { replyTo: [PRINCIPAL], inReplyTo: rfcMessageIdFor(decision.approval, this.society),
           references: this.referencesTo(inputFor, decision.approval) },
@@ -761,65 +762,6 @@ Challenge ${name}` });
     return this.allMessages(input)
       .filter(message => message.review?.role === "thread" && message.review.request === input.open.operation)
       .length;
-  }
-
-  private cutSubject(text: string): string {
-    if (Buffer.byteLength(text, "utf8") <= this.bounds.subjectBytes) return text;
-    let out = "";
-    for (const point of text) {
-      if (Buffer.byteLength(out + point, "utf8") > this.bounds.subjectBytes - 3) break;
-      out += point;
-    }
-    return `${out}...`;
-  }
-
-  /** The complete thread text (design §3); over the mail bound it keeps the
-   * newest entries and names the revision that still carried the rest. */
-  private threadBody(state: ReviewState, openFact: Extract<ReviewFact, { kind: "merge.open" | "challenge.open" }>,
-      entries: readonly ReviewEntry[], previousThreadId: MessageId | null): string {
-    const head = threadHeadText(openFact, state.requester, state.display);
-    const lines = entries.map((entry, index) => describeEntryText(index + 1, entry));
-    const full = head + lines.join("\n");
-    if (Buffer.byteLength(full, "utf8") <= this.bounds.mailBodyBytes) return full;
-    // Every omitted entry names the revision that first carried it: the thread
-    // revision its own operation owns, which always held it in full. That
-    // per-entry anchor list is itself O(history); when it outgrows the bound
-    // the compact form keeps one pointer to the ledger that carries every
-    // omitted entry in full, so a long thread still leaves room to record a
-    // vote or cancel (AV-12).
-    const anchor = (index: number): string => {
-      const message = entries[index]!.messages.find(candidate =>
-        candidate.review?.role === "thread" && candidate.review.request === state.request);
-      return `[${index + 1}] ${message?.id ?? previousThreadId ?? "(unknown)"}`;
-    };
-    const build = (omitted: number, anchored: boolean): string =>
-      `${head}${OMISSION_MARKER}` +
-      (anchored ? `:\n${entries.slice(0, omitted).map((_, index) => anchor(index)).join("\n")}\n`
-        : OMISSION_MARKER_COMPACT) +
-      lines.slice(omitted).join("\n");
-    let omitted = 0;
-    while (omitted < lines.length && Buffer.byteLength(build(omitted, true), "utf8") > this.bounds.mailBodyBytes)
-      omitted++;
-    if (omitted === lines.length) {
-      // The anchor list alone outgrew the bound: fall back to the compact
-      // pointer and keep as many newest entries as fit.
-      omitted = 0;
-      while (omitted < lines.length && Buffer.byteLength(build(omitted, false), "utf8") > this.bounds.mailBodyBytes)
-        omitted++;
-      // Head plus the newest entry must always fit the bound; a body/reason
-      // bound is a quarter of it and the newest entry is never dropped.
-      // Anything else is a bounds configuration bug, not a message we may send.
-      if (omitted === lines.length)
-        throw new StoreError("INTERNAL_ERROR", "mail bounds cannot hold a thread revision");
-      return build(omitted, false);
-    }
-    return build(omitted, true);
-  }
-
-  private approvalBody(approvalId: MessageId, openFact: Extract<ReviewFact, { kind: "merge.open" | "challenge.open" }>,
-      entries: readonly ReviewEntry[], requester: Actor, votes: readonly OperationId[]): string {
-    return approvalBodyText(approvalId, openFact, requester,
-      votes.map(voteId => boundVoteText(voteId, entries.find(candidate => candidate.operation === voteId))));
   }
 
   /** Freeze every emission's EML in plan order; ordinals name the messages.
@@ -996,14 +938,14 @@ Challenge ${name}` });
         if (error instanceof StoreError && error.code === "LIMIT_EXCEEDED") { this.markOversize(current, null); return; }
         throw error;
       }
-      const document = this.noticeDocument(id, current, openFact, diff);
+      const document = reviewNoticeDocument(id, current, openFact, diff);
       const bytes = Buffer.byteLength(document, "utf8");
       if (bytes > this.bounds.bundleBytes) { this.markOversize(current, bytes); return; }
       const digest = sha256Hex(document);
-      const chunks = this.splitNotice(document);
+      const chunks = splitReviewNotice(document, this.bounds.mailBodyBytes);
       const emissions: Emission[] = chunks.map((chunk, index) => ({
         to: ["commons", PRINCIPAL], kind: "result",
-        subject: this.cutSubject(`[${current.name}] applied: ${openFact.title} (part ${index + 1}/${chunks.length})`),
+        subject: reviewSubject(`[${current.name}] applied: ${openFact.title} (part ${index + 1}/${chunks.length})`, this.bounds.subjectBytes),
         body: `Part ${index + 1}/${chunks.length} of the ${current.name} completion notice ` +
           `(document ${bytes} bytes, sha256 ${digest}); concatenate the parts after this line in order.
 ` +
@@ -1072,26 +1014,6 @@ Challenge ${name}` });
     this.oversize.add(state.request);
     console.error(JSON.stringify({ event: "review.notice.oversize", request: state.request,
       name: state.name, bytes }));
-  }
-
-  /** §6: the completion notice document, then the bounded part bodies. */
-  private noticeDocument(integrationId: OperationId, state: ReviewState,
-      openFact: Extract<ReviewFact, { kind: "merge.open" | "challenge.open" }>, diff: string): string {
-    const entries = state.entries.map((entry, index) => describeEntryText(index + 1, entry));
-    const lowMerge = openFact.kind === "merge.open" && openFact.tier === "LOW";
-    const principal = state.principal !== null && state.principal.fact.kind === "vote"
-      ? `${state.principal.fact.body} (approval ${state.principal.fact.approval})` : "none";
-    return `OMA ${openFact.kind === "merge.open" ? "merge" : "revert"} applied: ${state.name} — ${openFact.title}` +
-      `\nIntegration operation: ${integrationId}   Tier: ${state.tier}   Requester: ${state.requester}` +
-      `\nPrevious main: ${state.identity.expectedBase}\nNew main: ${state.identity.candidate}` +
-      (openFact.kind === "challenge.open"
-        ? `\nReverts merge ${openFact.target.name} (integration ${openFact.target.integration})` : "") +
-      `\n\nReason:\n${openFact.reason}\n\nReviews and votes:\n` +
-      `${lowMerge ? "none — LOW is applied without prior review" : entries.join("\n")}` +
-      `\n\nPrincipal: ${principal}\n\n` +
-      `Diff (git diff --binary --full-index --no-ext-diff --no-textconv --no-color ` +
-      `${state.identity.expectedBase} ${state.identity.candidate}):\n` +
-      diff;
   }
 
   /* ---- §8 status read model ---- */
@@ -1164,58 +1086,7 @@ Challenge ${name}` });
     }
     if (this.oversize.has(state.request))
       missing.push("the completion notice exceeds the document bound; split the change");
-    const sent = state.entries.some(entry =>
-      entry.messages.some(message => message.review?.role === "approval"));
-    const latestPrincipal = [...state.entries].reverse()
-      .find(entry => entry.fact.kind === "vote" && entry.actor === PRINCIPAL);
-    const fixed = {
-      name: state.name, kind: state.kind, tier: state.tier, title: openFact.title,
-      reason: openFact.reason, requester: state.requester, identity: { ...state.identity },
-      display: state.display, required: state.required,
-      approvers: [...state.approvers], rejectors: [...state.rejectors],
-      principal: { approval: state.approval?.id ?? null, sent,
-        // The latest Principal vote on this request — still shown after its
-        // approval lapsed (a reject's own op withdraws it).
-        decision: latestPrincipal !== undefined && latestPrincipal.fact.kind === "vote"
-          ? latestPrincipal.fact.verdict : null,
-        decisionApproval: latestPrincipal !== undefined && latestPrincipal.fact.kind === "vote"
-          ? latestPrincipal.fact.approval : null },
-      integration: state.integration === null ? null
-        : { operation: state.integration.operation, state: state.integration.state,
-            error: state.integration.errorCode },
-      main,
-      ...(openFact.kind === "challenge.open" ? { target: { name: openFact.target.name,
-        integration: openFact.target.integration, identity: { ...openFact.target.identity } } } : {}),
-    };
-    const projected: ReviewStatusEntry[] = state.entries.map((entry, index) => ({
-      index: index + 1, sequence: entry.sequence, actor: entry.actor,
-      kind: entry.fact.kind as ReviewStatusEntry["kind"],
-      ...(entry.fact.kind === "vote" ? { verdict: entry.fact.verdict } : {}) }));
-    const detail = (entries: ReviewStatusEntry[], omitted: number): ReviewRequestStatus => ({ ...fixed,
-      entries,
-      missing: omitted === 0 ? missing : [...missing, `${omitted} earlier ${omitted === 1 ? "entry" : "entries"} omitted for size`] });
-    const bytesOf = (result: ReviewRequestStatus): number =>
-      Buffer.byteLength(JSON.stringify({ v: 1, id: responseId, ok: true, result }));
-    let answer = detail(projected, 0);
-    if (bytesOf(answer) <= frameBytes) return answer;
-    // Marginal accounting keeps the newest entries: the floor carries the
-    // longest possible omission note, so per-entry costs are exact.
-    const floor = detail([], projected.length);
-    if (bytesOf(floor) > frameBytes)
-      throw new StoreError("FRAME_TOO_LARGE", "one review status answer exceeds the response frame budget");
-    let remaining = frameBytes - bytesOf(floor), kept = 0;
-    for (let index = projected.length - 1; index >= 0; index--) {
-      const cost = Buffer.byteLength(JSON.stringify(projected[index]!)) + (kept > 0 ? 1 : 0);
-      if (cost > remaining) break;
-      remaining -= cost; kept++;
-    }
-    answer = detail(projected.slice(projected.length - kept), projected.length - kept);
-    // Verify the exact answer the wire carries, never the estimate.
-    while (kept > 0 && bytesOf(answer) > frameBytes) {
-      kept--;
-      answer = detail(projected.slice(projected.length - kept), projected.length - kept);
-    }
-    return answer;
+    return workerReviewStatus(state, openFact, missing, main, frameBytes, responseId);
   }
 
   /** The Principal sees a request only when an approval mail reached it or the
@@ -1251,31 +1122,5 @@ Challenge ${name}` });
     };
   }
 
-  /** Split the document into part chunks of at most mailBodyBytes −
-   * NOTICE_PART_OVERHEAD, cutting at a line end inside the window when one
-   * exists, else on a UTF-8 code point boundary; concatenating the chunks
-   * restores the document. The per-part envelope reserve lives with the other
-   * mail-bound constants (mail/review-bounds.ts): the configuration floor and
-   * this split budget are measured from the same constant (AV-07). */
-  private splitNotice(document: string): string[] {
-    const bytes = Buffer.from(document, "utf8");
-    const budget = this.bounds.mailBodyBytes - NOTICE_PART_OVERHEAD;
-    if (budget <= 0) throw new StoreError("INTERNAL_ERROR", "mail body bound cannot hold a notice part");
-    const chunks: Buffer[] = [];
-    let at = 0;
-    while (at < bytes.length) {
-      if (bytes.length - at <= budget) { chunks.push(bytes.subarray(at)); break; }
-      const lastBreak = bytes.lastIndexOf(0x0a, at + budget);
-      let cut: number;
-      if (lastBreak >= at) cut = lastBreak + 1 - at;
-      else {
-        cut = budget;
-        while (cut > 0 && (bytes[at + cut]! & 0b1100_0000) === 0b1000_0000) cut--;
-        if (cut === 0) throw new StoreError("INTERNAL_ERROR", "mail bound splits a UTF-8 sequence");
-      }
-      chunks.push(bytes.subarray(at, at + cut));
-      at += cut;
-    }
-    return chunks.map(chunk => chunk.toString("utf8"));
-  }
+
 }

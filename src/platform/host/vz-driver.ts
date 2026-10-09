@@ -24,6 +24,7 @@ import { StoreError } from "../../domain/errors.js";
 import { spawnSupervisedService } from "../../process/async.js";
 import type { VmDriver, VmStopCause } from "./lifecycle.js";
 import type { KeychainStore } from "./keychain.js";
+import { nativeKeychainStore } from "./keychain-client.js";
 
 export interface VmConfig {
   readonly kernel: string;
@@ -56,18 +57,20 @@ export interface VzDeadlines {
   readonly keychainMs?: number;
 }
 
-export class VzDriver implements VmDriver, KeychainStore {
+export class VzDriver implements VmDriver {
   private readonly pending = new Map<number, Pending>();
   private readonly stopListeners: ((cause: VmStopCause) => void)[] = [];
   private readonly powerListeners: ((event: "sleep" | "wake") => void)[] = [];
   private sequence = 0;
   private buffered = "";
   private readonly deadlines: Required<VzDeadlines>;
+  readonly keychain: KeychainStore;
 
   private constructor(private readonly child: ChildProcess, private readonly channel: Socket,
     private readonly socketDir: string, private readonly config: VmConfig, deadlines?: VzDeadlines) {
     this.deadlines = { startMs: deadlines?.startMs ?? START_DEADLINE_MS,
       stopMs: deadlines?.stopMs ?? STOP_DEADLINE_MS, keychainMs: deadlines?.keychainMs ?? KEYCHAIN_DEADLINE_MS };
+    this.keychain = nativeKeychainStore((op, fields) => this.ask(op, fields, this.deadlines.keychainMs));
     channel.setEncoding("utf8");
     channel.on("data", (chunk: string) => { this.received(chunk); });
     channel.on("error", () => { channel.destroy(); });
@@ -146,17 +149,6 @@ export class VzDriver implements VmDriver, KeychainStore {
   connect(port: number, deadlineMs = 10_000): Promise<Socket> {
     return connectSocket(join(this.socketDir, `port-${port}.sock`), deadlineMs);
   }
-
-  async get(account: string): Promise<string | undefined> {
-    const answer = await this.ask("keychain.get", { account }, this.deadlines.keychainMs);
-    // P0-5: absent is only the omitted value. A malformed one is not "no
-    // credential" -- treating it so would let a corrupted read overwrite the
-    // stored archive key (AV-21, as in KeychainClient.get).
-    if (answer.value !== undefined && typeof answer.value !== "string")
-      throw new StoreError("BROKER_UNAVAILABLE", "the VM helper returned an invalid credential response");
-    return answer.value as string | undefined;
-  }
-  async put(account: string, value: string): Promise<void> { await this.ask("keychain.put", { account, value }, this.deadlines.keychainMs); }
 
   /** Ends the helper; the VM, if any, ends with it. */
   close(): void { this.channel.destroy(); this.child.kill("SIGTERM"); }

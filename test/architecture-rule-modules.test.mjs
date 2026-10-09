@@ -90,6 +90,24 @@ test("architecture ownership rule rejects mutation vocabulary drift", () => {
   }, root => assert.ok(ownershipRuleFindings(root).some(value => value.rule === "mutation-ownership-exhaustiveness")));
 });
 
+for (const ambiguous of [false, true]) test(`DR39 architecture ownership: validator locator is ${ambiguous ? "refused when ambiguous" : "derived from the method, including aliases"}`, () => {
+  const map = ownerMap();
+  map.registryOwners.validation = { path: "src/validate.ts", symbolFromMethod: "paramsCheck" };
+  return withFixture({
+    "src/protocol/methods.ts": `import { mailParamsCheck as checkMail, checkString } from "../validate.js";
+      export const PUBLIC_METHODS = { "mail.send": { mode: "mutation",
+        paramsCheck: context => ${ambiguous ? "value => checkMail(context)(value) ?? checkString()(value)" : "checkMail(context)"} } };`,
+    "src/validate.ts": "export const mailParamsCheck = 1; export const checkString = 2;",
+    "src/owner.ts": "export const run = 1;",
+    "test/owner.test.ts": "export const oracle = 1;",
+    "implementation/mutation-owners.json": map,
+  }, root => {
+    const findings = ownershipRuleFindings(root);
+    if (ambiguous) assert.ok(findings.some(value => value.rule === "mutation-registry-symbol"));
+    else assert.deepEqual(findings, []);
+  });
+});
+
 test("architecture schema duplication rule accepts centralized registry dimensions", () => withFixture({
   "implementation/mutation-owners.json": ownerMap(),
 }, root => assert.deepEqual(schemaDuplicationFindings(root), [])));

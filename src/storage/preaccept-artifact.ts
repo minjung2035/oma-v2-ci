@@ -28,7 +28,7 @@ export interface PublishedIdentity {
  * yields no identity, and an artifact with no identity is never removed.
  */
 type PublishedIdentityObservation =
-  | { readonly kind: "present"; readonly identity: PublishedIdentity }
+  | { readonly kind: "present"; readonly identity: PublishedIdentity; readonly descriptor: number }
   | { readonly kind: "absent" }
   | { readonly kind: "unavailable" };
 
@@ -37,10 +37,15 @@ function observePublished(path: string): PublishedIdentityObservation {
   try {
     parent = openDirectory(dirname(path));
     const fd = openRegularBeneath(parent, basename(path));
+    let transferred = false;
     try {
       const stat = fstatSync(fd);
-      return stat.isFile() ? { kind: "present", identity: { dev: stat.dev, ino: stat.ino } } : { kind: "unavailable" };
-    } finally { closeSync(fd); }
+      if (stat.isFile()) {
+        transferred = true;
+        return { kind: "present", identity: { dev: stat.dev, ino: stat.ino }, descriptor: fd };
+      }
+      return { kind: "unavailable" };
+    } finally { if (!transferred) closeSync(fd); }
   } catch (error) {
     return (error as NodeJS.ErrnoException).code === "ENOENT" ? { kind: "absent" } : { kind: "unavailable" };
   } finally { if (parent !== undefined) closeSync(parent); }
@@ -48,7 +53,8 @@ function observePublished(path: string): PublishedIdentityObservation {
 
 export function observePublishedIdentity(path: string): PublishedIdentity | null {
   const observed = observePublished(path);
-  return observed.kind === "present" ? observed.identity : null;
+  if (observed.kind !== "present") return null;
+  try { return observed.identity; } finally { closeSync(observed.descriptor); }
 }
 
 /** Unlink a name only while it still resolves to the inode we published.
@@ -80,11 +86,35 @@ function removeOwnedInode(path: string, identity: PublishedIdentity): "removed" 
 
 export class PreacceptArtifact implements PreacceptOwner {
   private owner: "preaccept" | "accepted" | "released" = "preaccept";
-  constructor(readonly path: string, private readonly identity: PublishedIdentity | null, private readonly knownAbsent = false) {}
+  private pin: number | undefined;
+  constructor(readonly path: string, private readonly identity: PublishedIdentity | null,
+      private readonly knownAbsent = false, descriptor?: number) {
+    if (identity === null) return;
+    let observed: PublishedIdentityObservation;
+    if (descriptor === undefined) observed = observePublished(path);
+    else {
+      try { observed = { kind: "present", identity: fstatSync(descriptor), descriptor }; }
+      catch (error) { closeSync(descriptor); throw error; }
+    }
+    if (observed.kind !== "present")
+      throw new StoreError("REF_STATE_UNKNOWN", "preaccept artifact identity cannot be pinned");
+    if (observed.identity.dev !== identity.dev || observed.identity.ino !== identity.ino) {
+      closeSync(observed.descriptor);
+      throw new StoreError("REF_STATE_UNKNOWN", "preaccept artifact identity changed before pinning");
+    }
+    // A live descriptor prevents inode-number reuse after unlink. The
+    // publisher must acquire this pin while its original descriptor is held.
+    this.pin = observed.descriptor;
+  }
+  private closePin(): void {
+    const pin = this.pin; this.pin = undefined;
+    if (pin !== undefined) closeSync(pin);
+  }
   retainForOperation(): void {
     if (this.owner === "released")
       throw new StoreError("INTERNAL_ERROR", "released artifact cannot become accepted evidence");
     this.owner = "accepted";
+    this.closePin();
   }
   discardUnaccepted(): void {
     if (this.owner !== "preaccept") return;
@@ -92,17 +122,22 @@ export class PreacceptArtifact implements PreacceptOwner {
       if (this.knownAbsent) { this.owner = "released"; return; }
       throw new StoreError("REF_STATE_UNKNOWN", "preaccept artifact identity is unavailable; cleanup is unconfirmed");
     }
-    const removed = removeOwnedInode(this.path, this.identity);
-    if (removed === "identity-mismatch")
-      throw new StoreError("REF_STATE_UNKNOWN", "preaccept artifact identity changed; replacement retained");
-    this.owner = "released";
+    if (this.pin === undefined)
+      throw new StoreError("REF_STATE_UNKNOWN", "preaccept cleanup lost its inode pin; evidence retained");
+    try {
+      const removed = removeOwnedInode(this.path, this.identity);
+      if (removed === "identity-mismatch")
+        throw new StoreError("REF_STATE_UNKNOWN", "preaccept artifact identity changed; replacement retained");
+      this.owner = "released";
+    } finally { this.closePin(); }
   }
 }
 
 /** The artifact a publication just put at this name, owned by nobody yet. */
 export function publishedArtifact(path: string): PreacceptArtifact {
   const observed = observePublished(path);
-  return new PreacceptArtifact(path, observed.kind === "present" ? observed.identity : null, observed.kind === "absent");
+  return new PreacceptArtifact(path, observed.kind === "present" ? observed.identity : null,
+    observed.kind === "absent", observed.kind === "present" ? observed.descriptor : undefined);
 }
 
 export type PreacceptDisposition =

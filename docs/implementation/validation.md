@@ -1,6 +1,64 @@
 # OMA v2 — 현재 검증 상태
 
-## host·guest 소유권·종료·ready 수정 (2026-10-09, DR38)
+## 아키텍처 변경 책임 분리 (2026-10-09, DR39)
+
+DR38 여섯 결함 수정·푸시 완료 뒤 승인받은 구조 개선을 구현했다.
+Society settings/panel, Review documents/status, VM/Keychain API의 변경 책임을 분리하고
+codec key와 paramsCheck owner symbol의 중복 선언 두 개를 실제 메서드에서 도출한다.
+현재 진입점 1020→879줄, Review 1281→1126줄이다. 파일 크기는 구조적 완료의 증명이 아니다.
+Broker·Store·acceptance·recovery 소유권은 유지한다. 서브에이전트는 사용하지 않았다.
+
+추출 단계에서 build/typecheck와 structure gate 0 findings, 집중 회귀 216/216, settings composition
+62/62가 통과했다. 첫 전체 local suite는 serial 9 PASS, parallel 3,959 PASS / 3 FAIL이었다. 새로운 파일이 inventory에 게시되기 전에
+시작한 structure 검사 2건은 manifest 누락으로 실패했고, 생성 완료 후 재실행은 통과했다.
+최초 settings 추출은 raw stat owned-state 규칙에 거절되어 기존 inode-checked pointer reader로
+수정했다. 이 실패들을 최종 PASS로 바꾸지 않는다.
+
+실제 PTY 기준은 화면 3.028초 / broker 15.054초 / 첫 도구 15.779초이며 SQLite mutation이
+정확히 한 번 succeeded다. 5초 예산 실패로 harness exit 1이다. BPF-filtered process trace의
+clone 8.568초 / pack-objects 7.202초 / strict fsck 2.983초는 trace 실행 값이다.
+Git transport 옵션의 별도 실험은 개선이 부족해 적용하지 않았다. 전체 ptrace 실행은
+화면 지연·응답 timeout 후 종료되어 성능 기준으로 쓰지 않는다. 시작 목표는 미달이다.
+
+설정 pointer의 같은 크기/mtime 교체와 unobservable read 재확인, review history 20,000건의
+newest suffix, UTF-8 notice 분할과 경계 newline을 집중 검사했다. VM credential API는 별도
+surface로 검사했다. Swift stop 오류 무시를 수정했지만 native Swift 컴파일·실행은 NOT_RUN이다.
+[Apple stop API](https://developer.apple.com/documentation/virtualization/vzvirtualmachine/stop%28completionhandler%3A%29)의 오류가 nil일 때만 stop 성공이라는 계약에 따라 구현했으며 이 문서 확인은
+실행 증거가 아니다. macOS native, paid provider, VM power loss와 release qualification도 미실행이다.
+
+기존 입력 digest에서 빠졌던 `platform/`과 `.gitignore`도 현재 source closure에 포함했다.
+Swift·guest unit·source publication 규칙의 변경을 바이트로 추적하며 native 실행 PASS를 뜻하지 않는다.
+첫 전체 suite의 15,403 입력은 `92bae4d455f2cb420b43feade3ee843821e3d7cfcbd86ba7b093b8c387a540d6`이고
+전후 byte 변경은 0건이다. TMPDIR=/var/tmp의 disk filesystem에서 directory allocation이
+4096-byte fixture target을 넘는 오류와 preaccept inode 재사용·publication create/flock 수거
+경쟁의 실제 결함을 발견했다. 이 첫 실행은 실패이며 최종 PASS로 바꾸지 않는다.
+수정 후 affected owners 113/113가 통과했다. 새 collector-before-flock 회귀는 baseline에서
+실패, 현재 코드에서 통과했다. inode pin은 acceptance/discard/refusal에서 실제 닫힘을 검사했다.
+수정한 15,404 입력을 다시 고정해 전체 local suite, actual crash와 PTY를 실행했다.
+최종 runtime 입력 sha256는 `fc4796d0cc73aa62d3627bf32909d9837b03801b160ac5f2dacaeec9ef20332f`다.
+실행 전후 15,404개 source bytes의 변경은 0건이다. 이 결과 기록과 evidence는 실행 후 입력이다.
+그 미래 바이트까지 runtime suite가 실행한 것으로 주장하지 않는다. 기록 후 구조 검사를 재실행한다.
+
+| 최종 실행 | 결과 | 범위 |
+|---|---|---|
+| 전체 local suite | PASS: 3,973/3,973 | serial 9 + parallel 3,964; fail/cancel/skip/todo 0; 407 files, parallel 405, concurrency 8, TMPDIR=/var/tmp |
+| actual crash lane | EXECUTED+PASS: 63/63 | 실제 primitive SIGSTOP·부모 SIGKILL·반복 복구; VM power loss/entrypoint crash 증거는 아님 |
+| build / typecheck / architecture | PASS | source inventory·rules·dependencies·transactions·boundaries·documents·spec inventory; runtime cycles 0 |
+| 최종 Society PTY 3회 | 화면 2.96~3.07초, broker 15.06~15.37초, 첫 도구 15.83~16.21초 | 새 HOME/data, installed OMA와 bundled Pi, 실제 systemd broker, provider만 로컬 시험 응답; 3회 모두 mutation succeeded 정확히 한 행과 child exit 0 |
+
+시작 예산 5초는 **FAIL**이며 PTY harness exit 1을 성공으로 바꾸지 않는다. 1초 목표도 미달이다.
+이 배치에서 Git pack 실험을 제품에 넣지 않았고 시작 시간 개선을 달성한 주장은 하지 않는다.
+preaccept pin은 정산까지 파일당 descriptor 하나를 사용한다. 실제 OS descriptor/I/O 한계는
+명시적 오류로 보존하며 새 OMA quota를 만들지 않는다. pre-lock 준비 중 죽은 plain temporary는
+살아 있는 writer의 죽음을 입증하지 못하므로 보존한다.
+이번 review ledger는 수정과 새 owner 15개를 현재 bytes와 oracle에 결박했다. 상속된 미검토
+50개나 과거 native 환경 PASS를 재승인하지 않는다. 상세 명령·로그 SHA·source SHA·중간 실패는
+[DR39 evidence](../../test/audit/architecture-2026-10-09.evidence.json)에 기록했다.
+원시 로그는 `/tmp/oma-architecture-2026-10-09`, 별도 Git trace2 실험은
+`/home/dev/oma-audit-artifacts/architecture/git-transport-2026-10-09`에 보존했다.
+결과 기록의 미래 바이트는 그 runtime 실행의 입력으로 주장하지 않는다.
+
+## 이전 실행 결과: host·guest 소유권·종료·ready 수정 (2026-10-09, DR38)
 
 Human이 제시한 6건을 수정했다. 중복 maintenance lease와 외부 해제 거절,
 host state-disk 작업 직렬화, 같은 society의 open/resume/close 직렬화, running project binding,
@@ -8,7 +66,8 @@ host state-disk 작업 직렬화, 같은 society의 open/resume/close 직렬화,
 HostService의 project/session/snapshot/transfer 조정을 4개 concrete owner로 분리했다.
 네트워크는 DR37의 unrestricted host 정책을 유지하며 guest role/allow를 권한 증거로 쓰지 않는다.
 변경 생산 파일 12개의 수정과 영향 owner를 직접 검토하고 SHA-256·named DR38 oracle에 결박했다.
-서브에이전트는 사용하지 않았다. 추가 아키텍처 개선은 수정 완료 뒤 계획만 작성한다.
+서브에이전트는 사용하지 않았다. 당시 추가 아키텍처 개선은 수정 완료 뒤 계획만 작성하는 범위였다.
+이후 진행 승인이 DR39의 구현 범위를 추가했다.
 
 수정 전 회귀에서 8개의 동작 실패를 재현했다. 기존 shutdown 실패가 API listener를 남겨
 검사 worker가 종료되지 않아 해당 검사 소유 worker 하나를 TERM으로 정리했다. 이 실행을
@@ -41,7 +100,7 @@ native·macOS VM boot·power loss는 미실행이다. 이전 kernel/crash PASS�
 충족했다고 주장할 수 없다. raw log는 `/tmp/oma-host-ownership-2026-10-09`에 보존한다.
 
 현재 구조 검사의 입력 identity(생성 자체는 runtime PASS가 아니다):
-verification input digest `cfcc3d1c787304b87f4c7f46796855ee7898e23c5d68889e25538ca09cb1dfd6` (15383 files).
+verification input digest `604899c38dddfe64f517e5fa7d9824672ae29923aea3b2bf648350b2f5d8af97` (15405 files).
 
 ## 이전 실행 결과: 지정한 제한 제거·기능 복구 (2026-10-09, DR37)
 

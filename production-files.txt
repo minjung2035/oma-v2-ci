@@ -13959,6 +13959,7 @@ src/mail/headers.ts
 src/mail/materializer.ts
 src/mail/reconcile.ts
 src/mail/review-bounds.ts
+src/mail/review-documents.ts
 src/mail/routing.ts
 src/mail/serialize.ts
 src/module-ports.ts
@@ -14159,11 +14160,13 @@ src/tui/packages-apply.ts
 src/tui/panel-style.ts
 src/tui/panel-terminal.ts
 src/tui/project-session-directories.ts
+src/tui/project-session-settings.ts
 src/tui/project-settings.ts
 src/tui/prompt.ts
 src/tui/screen.ts
 src/tui/session-mode.ts
 src/tui/session.ts
+src/tui/society-panel.ts
 src/tui/sources/extensions.ts
 src/tui/sources/mail.ts
 src/tui/sources/settings.ts
@@ -14185,4 +14188,5 @@ src/units/render.ts
 src/validate.ts
 src/views.ts
 src/views/pending-work.ts
+src/views/review-status.ts
 src/views/status-refresh.ts
