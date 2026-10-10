@@ -12,7 +12,11 @@ src/application/packages-apply.ts
 src/application/project-session-settings.ts
 src/application/project-settings.ts
 src/application/settings.ts
+src/application/society-bootstrap.ts
+src/application/society-interaction.ts
 src/application/society-panel.ts
+src/application/society-runtime.ts
+src/application/society-transition.ts
 src/application/status-observation.ts
 src/attestation.ts
 src/authority.ts

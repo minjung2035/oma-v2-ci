@@ -1,3 +1,5 @@
+/** Host application use case: admits a project-bound session and relays guest commands/observations.
+ * GuestHost remains the session-holder owner; this gateway does not infer engine or Worker state. */
 import type { ProjectExtensionsResult, SessionMethod, SessionRequests, SocietyMethods } from "../../protocol/host-api.js";
 import { requestSociety } from "../society-client.js";
 /** The Mac's gateway to guest histories and project settings.

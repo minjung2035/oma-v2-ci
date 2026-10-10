@@ -34,7 +34,7 @@
       ]
     },
     {
-      "owner": "src/entry/oma-society.ts#main",
+      "owner": "src/application/society-bootstrap.ts#bootstrapSociety",
       "fact": "the state root's project binding (D05)",
       "tests": [
         {

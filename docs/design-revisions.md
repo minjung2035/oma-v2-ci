@@ -1600,3 +1600,22 @@ Git changeset 도구로 기록한다. 검증·실패 기록과 native 한계는
 검증한다. 최신 실행 수치·실패 기록은 [validation](implementation/validation.md), bytes·로그는
 [DR42 evidence](../test/audit/host-repairs-2026-10-10.evidence.json)가 소유한다. 이전 startup 목표,
 native macOS VM·Keychain·VM power loss·paid provider·release 검증의 미완료 상태는 유지한다.
+
+## DR43 — Society 조립 수명 단위와 플랫폼 책임 경계
+
+Human은 단일 lifetime owner와 Core ownership을 유지하면서 Society composition root,
+platform의 application coordination/native adapter 구분과 계약 체계의 이해 비용을 줄이도록 요청했다.
+
+Society 진입점은 command·project identity와 조립·process signal 배선을 맡는다. identity/binding/
+settings 준비는 bootstrap, broker/Principal registration·delivery는 runtime, TUI/history/settings
+interaction은 interaction, 종료·재진입은 transition의 Application 단위로 분리한다. HostTenure만
+lease/fence와 권한을 판단하며 engine 교체는 actual exit를 기다린다. 화면은 좁은 view command,
+interaction은 현재 conversation 관측과 실행 command를 통해 연결한다. runtime의 가변 상태는
+외부에서 직접 쓸 수 없다. Broker·Store·Git·Maildir·durable operation·Reconcile은 기존 owner를 유지한다.
+
+HostService/GuestHost 및 project/session use case는 process application coordinator로 명시한다.
+VM/native/Keychain/systemd/files/bridge/RPC는 effect 또는 transport adapter 역할을 갖는다.
+디렉터리를 대대적으로 옮기거나 별도 Supervisor를 추가하지 않는다. 세 lifetime은 command와
+observation으로 연결하며 상위 계층은 아래 계층의 state machine을 재현하지 않는다.
+계약 위치·의존 방향과 실행을 읽는 순서는 [Application 경계 안내](application-boundaries.md)가 설명한다.
+기존 규범과 검사 강도를 유지하며 파생 메타데이터를 위한 새 수동 registry를 만들지 않는다.

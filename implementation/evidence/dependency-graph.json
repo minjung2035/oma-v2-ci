@@ -20,7 +20,11 @@
   "src/application/project-session-settings.ts",
   "src/application/project-settings.ts",
   "src/application/settings.ts",
+  "src/application/society-bootstrap.ts",
+  "src/application/society-interaction.ts",
   "src/application/society-panel.ts",
+  "src/application/society-runtime.ts",
+  "src/application/society-transition.ts",
   "src/application/status-observation.ts",
   "src/attestation.ts",
   "src/authority.ts",
@@ -2000,12 +2004,12 @@
     "src/pi-extension.ts",
     "src/extension/"
    ],
-   "files": 96
+   "files": 100
   }
  ],
- "files": 434,
- "runtimeEdges": 1810,
- "typeOnlyEdges": 471,
+ "files": 438,
+ "runtimeEdges": 1835,
+ "typeOnlyEdges": 483,
  "runtimeEdgeMatrix": {
   "L1-kernel -> L1-kernel": 330,
   "L2-facts -> L1-kernel": 36,
@@ -2017,11 +2021,11 @@
   "L4-orchestration -> L2-facts": 8,
   "L4-orchestration -> L3-workflow": 24,
   "L4-orchestration -> L4-orchestration": 214,
-  "L5-entry -> L1-kernel": 147,
+  "L5-entry -> L1-kernel": 153,
   "L5-entry -> L2-facts": 2,
   "L5-entry -> L3-workflow": 8,
-  "L5-entry -> L4-orchestration": 151,
-  "L5-entry -> L5-entry": 175
+  "L5-entry -> L4-orchestration": 159,
+  "L5-entry -> L5-entry": 186
  },
  "upwardTypeOnlyEdges": [
   {
@@ -2040,11 +2044,11 @@
   ]
  ],
  "fanIn": {
-  "src/domain/errors.ts": 222,
+  "src/domain/errors.ts": 225,
   "src/domain/identifiers.ts": 64,
+  "src/storage/directory.ts": 34,
   "src/protocol/host-guest.ts": 32,
   "src/storage/contained-fs.ts": 32,
-  "src/storage/directory.ts": 32,
   "src/storage/paths.ts": 31,
   "src/storage/durable-fs.ts": 28,
   "src/ids.ts": 27,
@@ -2053,11 +2057,10 @@
   "src/domain/derived.ts": 20,
   "src/frame.ts": 20,
   "src/process/run.ts": 19,
-  "src/process/cleanup.ts": 18,
-  "src/store.ts": 18
+  "src/domain/deployment.ts": 18,
+  "src/process/cleanup.ts": 18
  },
  "fanOut": {
-  "src/entry/oma-society.ts": 42,
   "src/broker.ts": 31,
   "src/mail.ts": 29,
   "src/entry/broker.ts": 28,
@@ -2065,6 +2068,7 @@
   "src/entry/oma-mac.ts": 22,
   "src/review.ts": 22,
   "src/runtime/client-runtime.ts": 20,
+  "src/entry/oma-society.ts": 19,
   "src/entry/pi-interactive-host.ts": 19,
   "src/entry/pi-personal.ts": 19,
   "src/git.ts": 18,
@@ -2080,17 +2084,18 @@
   "@earendil-works/pi-tui": 9,
   "koffi": 6,
   "node:async_hooks": 4,
+  "node:buffer": 1,
   "node:child_process": 7,
   "node:crypto": 55,
   "node:dns": 1,
-  "node:fs": 129,
+  "node:fs": 130,
   "node:fs/promises": 3,
   "node:http": 2,
   "node:https": 1,
   "node:module": 4,
   "node:net": 35,
   "node:os": 16,
-  "node:path": 145,
+  "node:path": 148,
   "node:perf_hooks": 5,
   "node:readline": 1,
   "node:sqlite": 4,

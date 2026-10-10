@@ -1,6 +1,6 @@
 {
   "kind": "oma-production-source-digests-v1",
-  "manifest": "e4e04ed4aecc79245c40d9d08037418a5618852b7114e9c58602d39a7cdb6bf1",
+  "manifest": "92549a588cab6b11fd27af137fb32d624c01fe5626041c4e9501c053b01e03dc",
   "files": [
     {
       "path": "implementation/contracts.ts",
@@ -59,8 +59,24 @@
       "sha256": "8b1bb16b6cc73df62c4af6dfbadfdefbe313e550e4d50aa6221393acaee9ad55"
     },
     {
+      "path": "src/application/society-bootstrap.ts",
+      "sha256": "17c8281888aea37dac578bdb552f3b706468a768eab6d7e611efe82ee9175e30"
+    },
+    {
+      "path": "src/application/society-interaction.ts",
+      "sha256": "09b710d1615f57897fac8106bbddd6b26217becbb0934e0db6ccab5bcc5f0dcc"
+    },
+    {
       "path": "src/application/society-panel.ts",
       "sha256": "732a4ba8fb60b54b7a4e3bddfd3173f50d18d93ba298c466097d13093f216a35"
+    },
+    {
+      "path": "src/application/society-runtime.ts",
+      "sha256": "88042745ea66801dfa9dac32cdad81f22629cdf14a5a9ee1826966280f4e2549"
+    },
+    {
+      "path": "src/application/society-transition.ts",
+      "sha256": "12ba162d371e9dff4745c6dcdd19ad5972f6ceb1eb7bc64abf03c40fa784b6ba"
     },
     {
       "path": "src/application/status-observation.ts",
@@ -480,7 +496,7 @@
     },
     {
       "path": "src/entry/oma-society.ts",
-      "sha256": "84a7bbb96627b71578d6ac2bc88948c1620e0e02176b998811f05940dad90b73"
+      "sha256": "3bcd3abab1e88ba333fdb59b1e6d6c648ef7aedaae048bfc074c9ada8d8f187b"
     },
     {
       "path": "src/entry/oma.ts",
@@ -55996,7 +56012,7 @@
     },
     {
       "path": "src/platform/guest/host.ts",
-      "sha256": "735d97594daf8750e2e4c3ce48efbb9fd9de942b939430671285a16caafed465"
+      "sha256": "8b4bf94d9d6787f8564a343d7321b4494be434a4b1414152b283bbb25f96c0a0"
     },
     {
       "path": "src/platform/guest/identity.ts",
@@ -56120,7 +56136,7 @@
     },
     {
       "path": "src/platform/host/project-sync.ts",
-      "sha256": "cdbc9dc23062df772bbaae6ef5ea4773e996b71af305886d986e2c30d6c830f5"
+      "sha256": "7583c65c9a8d1c31afe71acb330a70f141eeaad633afd332e75b5db70fc9c1eb"
     },
     {
       "path": "src/platform/host/project.ts",
@@ -56136,11 +56152,11 @@
     },
     {
       "path": "src/platform/host/service.ts",
-      "sha256": "f91bfa6dd54e04ab687e6bc9eaa149c41e55138dda5e125e58e8dcf4c95f8a2c"
+      "sha256": "fdbca5e03cc5ecd8f0a8af07d862730ffecbaffe69a5f71358daa0d8a1c8d9d8"
     },
     {
       "path": "src/platform/host/session-gateway.ts",
-      "sha256": "682a5978456302024cf510cdb3ea695beba0bbf0a1785b4555acf5317d38dd74"
+      "sha256": "21c3b0e728a4eda8400c741d698f8984d87bf8ff43a2547f49032287924fa5a5"
     },
     {
       "path": "src/platform/host/snapshot-coordinator.ts",

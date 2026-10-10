@@ -136,7 +136,7 @@ export const OWNED_STATE_EXEMPTIONS = Object.freeze({
   "src/cli/effects/submit.ts": "a fresh mkdtemp under the OS temp directory -- the CLI caller's own scratch, not oma state",
   "src/entry/guest-provision.ts": "the guest's own /proc/cmdline read and the chown of its data parts to the oma user -- deliberate ownership assignment, kernel paths are never repaired",
   "src/entry/guest-session.ts": "the session holder's own listening socket in the oma user's runtime directory -- chmod of the name oma just made is the point",
-  "src/entry/oma-society.ts": "the principal-session listing under the state root whose failure already answers `said` -- it refuses to claim silence, and the runtime probe paths above it are the caller's own",
+  "src/application/society-transition.ts": "the principal-session listing under the state root whose failure already answers `said` -- it refuses to claim silence, and the runtime probe paths above it are the caller's own",
   "src/entry/omahostd.ts": "the support directory's chmod -- the leaf's mode is set outright after the owned ensure -- and the state disk's O_EXCL create under it",
   "src/extension/lsp-call-scope.ts": "a fresh mkdtemp under the OS temp directory -- the LSP child's own per-call scratch (HOME/XDG/TMP redirection), removed when the call ends; never an OMA-owned tail and never a user path (PI-001 keeps the extension off the storage imports)",
   "src/extension/mcp-tools.ts": "the MCP adapter's own state dir under the engine's agent dir -- ensure/chmod of the state root and scratch it just made, the oauth-file-key write, and the scratch/session rm -- engine-owned tails the adapter owns and rotates (PI-001 keeps the extension off the storage imports)",

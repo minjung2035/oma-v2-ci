@@ -1,11 +1,15 @@
+/** Guest process application coordinator: serializes society commands and delegates unit facts
+ * to SessionLauncher. ProjectMutations/RequestLedger own mirror writes; the Society process owns
+ * Broker and Principal lifetimes. No lower process state machine is reproduced here. */
 /** guesthost (macos-platform §4.5, §4.6): the society channel and the
  * terminal channel, as the oma user.
  *
  * A society here is what it is on Linux: a state root under
  * `<data>/oma/<society>` that the product's own `oma` made and owns. guesthost
- * never acts on a society's state; it starts, stops and lists the sessions
- * that run `oma` (each a holder in its own user unit, so a guesthost restart
- * leaves them running), and it relays a screen to one of them.
+ * admits project-bound commands and delegates mirror/package/archive effects
+ * to their owners. It starts, stops and lists the holders that run `oma` (each
+ * in its own user unit, so a guesthost restart leaves them running), and relays
+ * a screen. Broker, Principal and Resident lifetimes stay inside that Society.
  */
 import type { Socket } from "node:net";
 import { connectEndpoint, endpointListening } from "../../protocol/connection.js";

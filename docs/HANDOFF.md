@@ -1,30 +1,25 @@
-# OMA v2 — 현재 인계 (2026-10-10, DR42)
+# OMA v2 — 현재 인계 (2026-10-10, DR43)
 
-Human이 기준 `ae15804000ce6`의 여섯 Host/Guest 결함 수정을 지시했다.
-문서부터 확인했고 **서브에이전트 사용 금지**, 승인된 수정·검증·커밋·푸시를 유지한다.
+Human의 Host/Guest 여섯 항목은 DR42 `06df8990`으로 수정·검증·푸시했다.
+전체 suite 4,010/4,010 및 actual primitive crash 63/63 PASS다.
+현재는 추가 요청한 Society composition과 platform coordination/adapter·계약 경계를 개선한다.
+문서부터 확인했고 서브에이전트 사용 금지와 승인된 수정·검증·커밋·푸시를 유지한다.
 
-현재 VzDriver에는 이미 처리한 줄을 제거하는 코드가 있으며 baseline 37/37이 통과했다.
-두 Native helper client의 JSONL·correlation·deadline을 공통 owner로 묶었다.
-project별 import/start/archive queue와 maintenance barrier, 세대별 egress 재시도·취소,
-archive의 실제 launcher stop/manager proof, Keychain과 archive key의 유한 writer 대기,
-Host/Guest 공통 RPC dispatcher를 구현했다. same-key 과거 결과와 unknown 의미는 유지한다.
+Society entry는 command 선택과 조립·signal 배선을 맡는다. project identity/binding/settings 준비,
+Broker/Principal 등록·mail delivery, UI/history/settings interaction, shutdown/relaunch를
+Application의 bootstrap/runtime/interaction/transition에 나눴다. HostTenure만 lease/fence와 권한을
+판단하며 replacement는 실제 outgoing engine exit를 기다린다. Runtime state는 외부에서 직접
+갱신할 수 없다. Host/Guest coordinator 역할과 세 process lifetime의 command/observation,
+계약 위치와 의존 방향은 [Application 경계 안내](application-boundaries.md)에 기록했다.
 
-집중 재실행 274/274, build/typecheck, architecture rules가 통과했다.
-실제 Linux user systemd에서 endpoint가 없는 live holder/child의 짧은 stop은 unknown,
-완전한 stop과 collected-unit 관측은 stopped임을 확인했다.
-첫 전체 suite 4,008/4,008이 통과했다. 추가 P0 검토로 ledger의 historical replay/key binding을
-현재 project fence보다 먼저 판정하며 pending 효과·outcome 게시만 owner에 맡기도록 보완했다.
-Keychain/Archive key는 중복 promise queue를 제거해 같은 프로세스의 대기도 유한 budget에 포함한다.
-보완 후 ledger 집중 59/59, lock/credential/cleanup 집중 87/87이 통과했다.
-전역 package 게시도 같은 maintenance/archive barrier에 참여한다. package/project/archive 통합 집중 65/65이 통과했다.
-최종 전체 suite 4,010/4,010과 actual primitive crash 63/63이 통과했다.
-두 실행의 입력 15,439개는 동일하며 전후 변경은 0건이다. 코드 delta 21개를 검토했고 상속된 미검토 50개는 유지한다.
-Human이 추가 요청한 Society composition 및 플랫폼 책임·계약 구조 개선을 다음 DR43에서 진행한다.
-
-설계는 [DR42](design-revisions.md#dr42--native-transportproject-writeregress-복구archive-종료-증명),
-현재 실행은 [validation](implementation/validation.md), bytes·실패 로그는
-[DR42 evidence](../test/audit/host-repairs-2026-10-10.evidence.json)를 따른다.
-이전 인계는 [DR41 보관본](archive/handoff-before-dr42.md)에 있다.
+집중 기존 실행 114/114, history frame/correlation·늦은 engine observation 회귀 추가 뒤 116/116이
+통과했다. 새 bootstrap 입력은 CLI parser 타입을 참조하지 않으며 entry에서 use case 입력으로 변환한다.
+표시 초기화 실패 cleanup 회귀까지 합친 집중 실행은 121/121 PASS다.
+최종 전체 suite 4,013/4,013과 actual primitive crash 63/63 PASS이며 공통 입력 15,445개의
+실행 전후 변경은 0건이다. build/typecheck/architecture도 통과했다. 생산 delta 9개를 직접 검토하고
+상속된 미검토 50개와 기존 native qualification 한계는 유지한다. 결과는 [validation](implementation/validation.md),
+[DR43 evidence](../test/audit/composition-2026-10-10.evidence.json)를 따른다.
+이전 완료 상태는 [DR42 인계](archive/handoff-before-dr43.md)에 보존했다.
 
 native Mac·VM power loss·paid provider·release는 NOT_RUN이다.
 기존 전체 startup 5초 목표 미달과 Pi private hooks·Store type-only SCC는 남는다.

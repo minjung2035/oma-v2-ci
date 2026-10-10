@@ -15,6 +15,7 @@ import ts from "typescript";
 import { codeFor, exitFor } from "../dist/src/application/exit.js";
 import { parseOmaArguments } from "../dist/src/runtime/host-arguments.js";
 import { HOST_LOSS_SIGNALS } from "../dist/src/runtime/broker-lifetime.js";
+import { hostHistoryReference } from "../dist/src/protocol/host-history.js";
 import { encodedPrincipalToolSurface } from "../dist/src/domain/tool-surface.js";
 
 /** A production module compiled and run with its own controlled boundary.
@@ -88,7 +89,7 @@ function brokerStandIn(state, credentials, disownedReason = null) {
 async function run({ brokerState = { kind: "started", pid: 1 }, credentials = ["1".repeat(64), "2".repeat(64)],
   disowned = null, leased = true, engineExits = true, startFailures = 0, acquiredFailures = 0,
   brokerAlreadyListening = false, untrustedRunRoot = false, binding = "fresh", rereadFails = false, commitRefused = false, startupFailure = null, statusReply = null, onEgress = null,
-  resumeBirth = null, resumeError = null, resumeReply = null, hostNew = false, hostHistory = null, tenureGraceMs,
+  resumeBirth = null, resumeError = null, resumeReply = null, hostNew = false, hostHistory = null, tenureGraceMs, frameBytes = 262144,
   projectPointerRead = () => "controlled-settings-version", env = {}, argv = ["node", "oma", "--society", "fixture"] } = {}) {
   // DR24: a start without a society is a new session of the project; the
   // ownership rules below are asked of the society a start names.
@@ -117,7 +118,7 @@ async function run({ brokerState = { kind: "started", pid: 1 }, credentials = ["
     config: {
       society: expected,
       installation: { node: "node", libdir: "/lib", rootfs: "/rootfs", deploymentDigest: "a".repeat(64) },
-      limits: { frameBytes: 262144, mailBodyBytes: 262144, batchMaxMessages: 24, idleStreamSeconds: 30, receiptWaitSeconds: 30 },
+      limits: { frameBytes, mailBodyBytes: 262144, batchMaxMessages: 24, idleStreamSeconds: 30, receiptWaitSeconds: 30 },
       principalProfile: "principal",
       initialResidents: [],
       agentProfiles: { principal: { modelProfile: "m", resources: { workspaceBytes: 4096 } } },
@@ -260,7 +261,10 @@ async function run({ brokerState = { kind: "started", pid: 1 }, credentials = ["
     },
     "../application/status-observation.js": {
       limitsOf: value => value,
-      TuiTransport: class { async status() { calls.push("status"); return statusReply ? await statusReply(handlers) : { kind: "unknown", reason: "probe", observedAtMs: 1 }; } },
+      TuiTransport: class {
+        constructor() { if (startupFailure === "display-transport") throw new StoreError("BROKER_UNAVAILABLE", "display transport could not start"); }
+        async status() { calls.push("status"); return statusReply ? await statusReply(handlers) : { kind: "unknown", reason: "probe", observedAtMs: 1 }; }
+      },
     },
     "../application/mail.js": { principalMailbox: () => ({}), readBody: () => null, readMailbox: () => [], unreadCount: () => 0 },
     "../application/extensions.js": { readExtensions: () => {
@@ -435,14 +439,31 @@ async function run({ brokerState = { kind: "started", pid: 1 }, credentials = ["
     const actual = modules["../runtime/host-tenure.js"].HostTenure;
     modules["../runtime/host-tenure.js"] = { HostTenure: { take: root => actual.take(root, tenureGraceMs) } };
   }
-  const completion = new Script(compiled, { filename: "oma-composition.cjs" }).runInNewContext({
+  modules["node:buffer"] = { Buffer };
+  const context = {
     exports: {}, module: { exports: {} }, process: process_, console: { error() {} },
     setInterval: run => { const timer = { run, unref() {} }; intervals.add(timer); return timer; },
     clearInterval: timer => { intervals.delete(timer); }, setTimeout, clearTimeout, Promise, Date, JSON, URL, Buffer,
-    require(name) {
-      assert.ok(Object.hasOwn(modules, name), `uncontrolled dependency: ${name}`);
-      return modules[name];
-    },
+  };
+  // Run the real Application owners, retaining all prior controlled effect boundaries.
+  const byFile = new Map(Object.entries(modules).map(([name, value]) =>
+    [name.startsWith(".") ? path.posix.normalize(path.posix.join("src/entry", name)) : name, value]));
+  const owners = new Set(["society-bootstrap", "society-runtime", "society-interaction", "society-transition"]
+    .map(name => `src/application/${name}.js`));
+  function dependency(from, name) {
+    const file = name.startsWith(".") ? path.posix.normalize(path.posix.join(path.posix.dirname(from), name)) : name;
+    if (byFile.has(file)) return byFile.get(file);
+    assert.ok(owners.has(file), `uncontrolled dependency in ${from}: ${name}`);
+    const source = readFileSync(file.replace(/\.js$/, ".ts"), "utf8");
+    const code = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS,
+      target: ts.ScriptTarget.ES2022 } }).outputText;
+    const module_ = { exports: {} };
+    new Script(code, { filename: file }).runInNewContext({ ...context,
+      exports: module_.exports, module: module_, require: name => dependency(file, name) });
+    byFile.set(file, module_.exports); return module_.exports;
+  }
+  const completion = new Script(compiled, { filename: "oma-composition.cjs" }).runInNewContext({
+    ...context, require: name => dependency("src/entry/oma-society.js", name),
   });
   await completion;
   // Two turns, because a teardown now waits for the engine's exit before it
@@ -1298,4 +1319,55 @@ test("MODE-005/P0-4: one pending resume owns admission; duplicate switch cannot 
   resolve(PERSONAL_BIRTH); await society.until(() => society.restarts.length === 1);
   assert.equal(live.closes, 1); assert.equal(society.broker.stops, 1);
   assert.equal(society.restarts[0][2].OMA_RESUME_SESSION, PERSONAL_HISTORY);
+});
+
+
+test("DR43: Application history pages preserve metadata, correlation and the UI byte limit", async () => {
+  const sessions = Array.from({ length: 8 }, (_, index) => ({
+    reference: hostHistoryReference({ birthId: "11111111-1111-4111-8111-111111111111",
+      file: `history${index}.jsonl`, sessionId: `session-${index}` }),
+    created: "2026-10-10T00:00:00Z", modified: "2026-10-10T00:00:00Z",
+    messageCount: index, firstMessage: `History ${index}`,
+  }));
+  const hostHistory = { async pages(publish) { publish({ sessions, after: null }); }, close() {} };
+  const society = await run({ hostHistory, frameBytes: 1280 });
+  const live = society.started;
+  live.sink.onUi({ type: "sessions_request", id: "dr43-pages" }); await society.settle();
+  const pages = live.uiEvents.filter(event => event.type === "host_history_page");
+  assert.ok(pages.length > 1, "the page must be split, not dropped or exceed the frame limit");
+  assert.deepEqual(pages.flatMap(event => event.page.sessions), sessions);
+  for (const event of pages) {
+    assert.equal(event.id, "dr43-pages"); assert.ok(Buffer.byteLength(JSON.stringify(event)) <= 1280);
+  }
+  assert.equal(live.uiEvents.at(-1).type, "session_dirs");
+  assert.equal(live.uiEvents.at(-1).id, "dr43-pages");
+  society.handlers.SIGTERM(); await society.settle();
+});
+
+test("DR43: a history observation from an exited engine cannot publish into its successor", async () => {
+  let release;
+  const hostHistory = { async pages(publish) {
+    await new Promise(resolve => { release = resolve; }); publish({ sessions: [], after: null });
+  }, close() {} };
+  const society = await run({ hostHistory }); society.broker.fireReady(); await society.settle();
+  const outgoing = society.started;
+  outgoing.sink.onUi({ type: "sessions_request", id: "dr43-stale" });
+  outgoing.running = false; outgoing.sink.onEnd("engine ended"); outgoing.confirmDeath(); await society.settle();
+  assert.equal(society.ports.submitPrompt("/restart").kind, "accepted"); await society.settle();
+  const successor = society.started; assert.notEqual(successor, outgoing);
+  release(); await society.settle();
+  for (const engine of [outgoing, successor])
+    assert.equal(engine.uiEvents.some(event => event.id === "dr43-stale"), false);
+  society.handlers.SIGTERM(); await society.settle();
+});
+
+test("DR43: display construction failure returns the already acquired host channel and tenure", async () => {
+  let closed = 0;
+  const society = await run({ startupFailure: "display-transport", hostHistory: { close() { closed++; } } });
+  assert.equal(closed, 1);
+  assert.equal(society.lease.releases, 1);
+  assert.equal(society.lease.holds, false);
+  assert.equal(society.calls.includes("TuiApp"), false);
+  assert.equal(society.calls.includes("superviseBroker"), false);
+  assert.equal(society.started, null);
 });

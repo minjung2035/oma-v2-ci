@@ -1,3 +1,5 @@
+/** Host process application coordinator: composes VM, project/session commands and cleanup.
+ * VmLifecycle owns VM transitions; native drivers implement effects without product workflows. */
 /** `omahostd`'s parts put together (macos-platform §2.1): the VM's state
  * machine, the guest link, egress, the Host API, and the host record. The
  * entry adds only the Mac-specific pieces (the VM helper, the paths). */

@@ -1,3 +1,5 @@
+/** Host application use case: orders bundle transfer, typed guest import and host checkpoint.
+ * The guest owns mirror mutation; bundle/bookmark/file adapters implement host effects. */
 import type { ProjectBindRequest, ProjectBindResult, ProjectExportRequest, ProjectExportResult, ProjectImportRequest, ProjectImportResult } from "../../protocol/host-api.js";
 import { requestSociety } from "../society-client.js";
 /** Host-owned project identity and explicit import/export (MAC-404/411/412).

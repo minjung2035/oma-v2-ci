@@ -1,5 +1,41 @@
 # OMA v2 — 현재 검증 상태
 
+## Society 조립·플랫폼 책임 경계 (2026-10-10, DR43)
+
+DR42 완료·푸시 `06df8990` 뒤 Human이 추가 요청한 설계 개선이다. entry의 project/session 준비,
+실행 등록·mail delivery, TUI interaction, outgoing transition을 기존 Application 계층의 네 단위로
+분리한다. HostTenure와 Core owner의 권한·actual exit·unknown 의미를 유지한다. platform의
+process coordinator와 adapter 및 계약 위치·의존 규칙을 코드와 짧은 안내로 명시한다.
+새 supervisor/registry/layer는 추가하지 않고 서브에이전트는 사용하지 않았다.
+
+첫 typecheck는 destructured never-returning fail callback의 flow narrowing, nullable conversation
+관측, 이동한 transport 참조로 실패했다. 명시적 Fail 타입과 단일 관측 및 실제 owner 참조를
+적용한 재검사는 통과했다. 기존 composition/package 회귀 114/114, host history 분할·correlation·
+stale engine observation 검증을 추가한 실행 116/116 PASS다. controlled 모듈 경계에서 실제 entry와
+네 Application 구현을 실행하며 HostTenure의 실제 구현과 기존 assertion을 유지한다.
+독립 모듈 build/경계까지 합친 집중 실행은 120/120 PASS다. CLI 인자를 내부 bootstrap 입력으로
+바꾼 뒤 첫 전체 structure/build는 exactOptionalPropertyTypes에서 undefined 전달을 거절했다.
+요청 필드를 명시적 string | undefined로 표현해 타입 계약을 맞춘다. 첫 review metadata 생성은
+테스트 경로를 oracle ID로 사용해 거절됐고 기존 DR43/T119 oracle 이름으로 정정했다.
+첫 durable boundary 검사는 project binding publication의 등록 위치가 이전 main을 가리켜
+두 건을 거절했다. 같은 kill/retry/restart oracle을 실제 bootstrap publication 위치로 옮겨 등록한다.
+등록 수·시험 강도와 checker는 유지한다. entry는 881→171줄, main은 728→54줄이며
+이 수치는 소스 분해 결과이고 평점·feature 변경 비용·startup 성능 향상의 증거는 아니다.
+이전 DR42 suite/native evidence는 DR43 bytes의 실행으로 재사용하지 않는다.
+host history channel을 표시 구성보다 먼저 열므로 취득 직후 cleanup을 등록한다. 표시 transport
+초기화 실패에서도 channel/tenure가 반환되는 실제 composition 회귀를 추가했다.
+최종 집중 검증 121/121과 build·typecheck·전체 architecture gate가 통과했다. 전체 local suite는
+4,013/4,013 PASS(415 files, serial 9 + parallel 4,004; fail/cancel/skip/todo 0)이며 실제 primitive
+crash lane은 EXECUTED+PASS 63/63이다. 두 실행의 공통 runtime 입력은
+`33259b0cae1da21d7653edc0b2f46fc1580dc000bfadc647b581f2e8e8137c30` (15445 files)이며 실행 전후 변경은 0건이다.
+실제 SIGSTOP·부모 SIGKILL·재시작·반복 복구 범위이고 VM power loss 또는 entrypoint crash를
+검증했다고 확장하지 않는다. 결과 기록의 bytes에는 후속 structure/metadata/input 검사를 적용하며
+이미 runtime suite가 실행했다고 주장하지 않는다. 직접 검토한 생산 delta는 9개이고 상속된
+미검토 50개는 유지한다. graph는 438 files / 1,835 runtime edges / 483 type-only edges /
+runtime cycles 0이며 Store type-only SCC는 남는다. 원시 로그·명령·input map·SHA는
+[DR43 evidence](../../test/audit/composition-2026-10-10.evidence.json)와 외부 artifact에 보존했다.
+native Mac·VM power loss·paid provider·release는 NOT_RUN이고 기존 startup 목표 미달은 남는다.
+
 ## Host/Guest owner 결함 수정 (2026-10-10, DR42)
 
 기준 HEAD `ae15804000ce6`에서 지정된 여섯 항목을 확인했다. VzDriver의 줄 소비는 이미
@@ -237,7 +273,7 @@ native·macOS VM boot·power loss는 미실행이다. 이전 kernel/crash PASS�
 충족했다고 주장할 수 없다. raw log는 `/tmp/oma-host-ownership-2026-10-09`에 보존한다.
 
 현재 구조 검사의 입력 identity(생성 자체는 runtime PASS가 아니다):
-verification input digest `2a1e59a89c5f224873e0685f8dfccb4d4118a2552458be046db9eec3c236e4cc` (15439 files).
+verification input digest `707d0a8293532cae0653e4712def7d91d45761f36648ad87d67f19a562967486` (15445 files).
 
 ## 이전 실행 결과: 지정한 제한 제거·기능 복구 (2026-10-09, DR37)
 
