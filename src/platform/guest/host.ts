@@ -9,14 +9,14 @@
  */
 import type { Socket } from "node:net";
 import { connectEndpoint, endpointListening } from "../../protocol/connection.js";
-import { join } from "node:path";
+import { basename, dirname, join } from "node:path";
 import { lstatSync, readdirSync } from "node:fs";
 import { StoreError } from "../../domain/errors.js";
 import { isValidSocietyName } from "../../domain/identifiers.js";
 import { runGitText } from "../../process/policies.js";
 import { observeProjectBinding, stateRootHasSociety } from "../../runtime/provision.js";
 import type { FramedPeer } from "../rpc.js";
-import { serveRequests } from "./server.js";
+import { serveRequests } from "../rpc-server.js";
 import { encodeTerminalJson, isRequestKey, isUuid, type HelloParams } from "../../protocol/host-guest.js";
 import type { GuestProjects } from "./project.js";
 import type { RequestLedger } from "./requests.js";
@@ -106,23 +106,29 @@ export class GuestHost {
    * for the project it is bound to (D05, as on Linux). */
   async open(society: unknown, projectId: unknown): Promise<{ state: "running" }> {
     if (!isValidSocietyName(society)) throw new StoreError("INVALID_REQUEST", "invalid society name");
-    return this.operation(society, () => this.openAlone(society, projectId));
+    if (!isUuid(projectId)) throw new StoreError("INVALID_REQUEST", "projectId must be a UUID");
+    return this.operation(society, () => this.withProject(projectId, () => this.openAlone(society, projectId)));
   }
 
   async resume(value: unknown): Promise<{ state: "running" }> {
     const identity = checkedGuestHistory(value);
-    return this.operation(identity.society, async () => {
+    return this.operation(identity.society, () => this.withProject(identity.projectId, async () => {
       const saved = await new GuestHistories(this.options.societiesDir, this.options.projectsDir).inspect(identity);
       return await this.openAlone(identity.society, identity.projectId, saved.file);
-    });
+    }));
   }
 
   private async operation<T>(society: string, run: () => Promise<T>): Promise<T> {
+    if (this.archiving.has(society)) throw new StoreError("BROKER_UNAVAILABLE", "this society is being archived; retry shortly");
     const before = this.operating.get(society) ?? Promise.resolve();
     const next = before.catch(() => undefined).then(run);
     this.operating.set(society, next);
     try { return await next; }
     finally { if (this.operating.get(society) === next) this.operating.delete(society); }
+  }
+
+  private withProject<T>(projectId: string, run: () => Promise<T>): Promise<T> {
+    return this.options.projects === undefined ? run() : this.options.projects.mutations.run(projectId, run);
   }
 
   private async openAlone(society: string, projectId: unknown, resume?: string): Promise<{ state: "running" }> {
@@ -172,9 +178,10 @@ export class GuestHost {
     if (!isRequestKey(key)) throw new StoreError("INVALID_REQUEST", "invalid request key");
     if (owner?.isClosed) throw new StoreError("BROKER_UNAVAILABLE", "the maintenance owner has disconnected");
     if (this.maintenance.has(key)) throw new StoreError("REQUEST_KEY_REUSED", "this maintenance key already has an owner");
-    if (this.operating.size > 0 || this.archiving.size > 0)
+    if (this.operating.size > 0 || this.archiving.size > 0 || this.options.projects?.mutations.active === true)
       throw new StoreError("BROKER_UNAVAILABLE", "a society operation or archive is active; retry maintenance shortly");
     this.maintenance.set(key, owner);
+    this.options.projects?.mutations.setMaintenance(true);
     return { maintenance: true };
   }
   maintenanceEnd(key: unknown, owner: FramedPeer | null = null): { maintenance: boolean } {
@@ -182,11 +189,13 @@ export class GuestHost {
     if (this.maintenance.has(key) && this.maintenance.get(key) !== owner)
       throw new StoreError("AUTH_FAILED", "this maintenance lease belongs to another connection");
     this.maintenance.delete(key);
+    this.options.projects?.mutations.setMaintenance(this.maintenance.size > 0);
     return { maintenance: this.maintenance.size > 0 };
   }
   /** A dead owner cannot hold the engine: its latches end with it. */
   private reapOwner(owner: FramedPeer): void {
     for (const [key, held] of this.maintenance) if (held === owner) this.maintenance.delete(key);
+    this.options.projects?.mutations.setMaintenance(this.maintenance.size > 0);
   }
 
   serve(peer: FramedPeer): void {
@@ -229,7 +238,17 @@ export class GuestHost {
           if (this.maintenance.size > 0 || this.operating.has(society) || this.archiving.has(society))
             throw new StoreError("BROKER_UNAVAILABLE", "the society has an active operation; retry the same key shortly");
           this.archiving.add(society);
-          try { return await this.need(this.options.archives, method).create(key, { society }); }
+          try {
+            const binding = observeProjectBinding(this.stateRoot(society));
+            if (binding.kind === "unreadable" || binding.kind === "unavailable")
+              throw new StoreError("BROKER_UNAVAILABLE", "the archive's project could not be checked");
+            const create = () => this.need(this.options.archives, method).create(key, { society });
+            if (binding.kind !== "bound") return await this.withProject(`archive/${society}`, create);
+            const mirror = binding.binding.canonicalProjectPath, projectId = basename(mirror);
+            if (dirname(mirror) !== this.options.projectsDir || !isUuid(projectId))
+              throw new StoreError("INVALID_REQUEST", "the society is not bound to a guest project mirror");
+            return await this.withProject(projectId, create);
+          }
           finally { this.archiving.delete(society); }
         }
         default: throw new StoreError("UNKNOWN_METHOD", `the society channel has no ${method}`);

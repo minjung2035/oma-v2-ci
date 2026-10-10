@@ -75,12 +75,18 @@ export class GuestLink {
 
   /** A terminal, egress or stream connection, after its hello, with whatever
    * the guest sent right behind its answer. */
-  async bytes(channel: "terminal" | "egress" | "stream", extra: { society?: string; takeover?: true } = {}):
+  async bytes(channel: "terminal" | "egress" | "stream", extra: { society?: string; takeover?: true } = {}, signal?: AbortSignal):
     Promise<{ readonly socket: Socket; readonly rest: Buffer }> {
+    signal?.throwIfAborted();
     const socket = await this.ports.connect(portOf(channel), this.options.helloDeadlineMs);
+    if (signal?.aborted) { socket.destroy(); signal.throwIfAborted(); }
+    const abort = (): void => { socket.destroy(); };
+    signal?.addEventListener("abort", abort, { once: true });
     let answered: { result: HelloResult; rest: Buffer };
     try { answered = await sendHelloForBytes(socket, this.hello(channel, extra), this.options.frameBytes, this.options.helloDeadlineMs); }
     catch (error) { socket.destroy(); throw error; }
+    finally { signal?.removeEventListener("abort", abort); }
+    if (signal?.aborted) { socket.destroy(); signal.throwIfAborted(); }
     try { this.observe(answered.result); }
     catch (error) { socket.destroy(); throw error; }
     return { socket, rest: answered.rest };

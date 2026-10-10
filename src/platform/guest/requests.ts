@@ -83,7 +83,8 @@ export class RequestLedger {
   /** Where a request may keep its bytes (a staged stream), by its key. */
   staging(key: string, suffix: string): string { return join(this.dir, `${this.name(key)}.${suffix}`); }
 
-  async run(key: unknown, method: string, params: Record<string, unknown>, effect: () => Promise<Record<string, unknown>>): Promise<Record<string, unknown>> {
+  async run(key: unknown, method: string, params: Record<string, unknown>, effect: () => Promise<Record<string, unknown>>,
+    own: (run: () => Promise<Record<string, unknown>>) => Promise<Record<string, unknown>> = run => run()): Promise<Record<string, unknown>> {
     if (!isRequestKey(key)) throw new StoreError("INVALID_REQUEST", "this request needs a request key");
     const base = join(this.dir, this.name(key));
     const digest = sha256Hex(`${method}\n${canonicalJson(params)}`);
@@ -98,19 +99,23 @@ export class RequestLedger {
     if (this.active.has(key)) throw new StoreError("BROKER_UNAVAILABLE", "this request is still running; observe or retry the same key");
     this.active.add(key);
     try {
-      let outcome: Outcome;
-      try { outcome = { ok: true, result: await effect() }; }
-      catch (error) {
-        if (primaryFailure(error) instanceof PlatformError) throw error;
-        const failure = platformFailure(error);
-        // The wire and the ledger share one judgment. Observation and repairable
-        // failures leave intent pending; existing terminal outcomes are read above
-        // unchanged, never reclassified under today's policy (P0-1/P0-5).
-        if (failure.retry !== "never") throw error;
-        outcome = { ok: false, error: failure };
-      }
-      publishNoReplace(`${base}.outcome.json`, JSON.stringify(outcome));
-      return this.answer(this.readRecord(`${base}.outcome.json`, isOutcome) ?? outcome);
+      // Historical outcome/intent binding above is independent of today's
+      // admission fence. Only a pending effect and its publication need it.
+      return await own(async () => {
+        let outcome: Outcome;
+        try { outcome = { ok: true, result: await effect() }; }
+        catch (error) {
+          if (primaryFailure(error) instanceof PlatformError) throw error;
+          const failure = platformFailure(error);
+          // The wire and the ledger share one judgment. Observation and repairable
+          // failures leave intent pending; existing terminal outcomes are read above
+          // unchanged, never reclassified under today's policy (P0-1/P0-5).
+          if (failure.retry !== "never") throw error;
+          outcome = { ok: false, error: failure };
+        }
+        publishNoReplace(`${base}.outcome.json`, JSON.stringify(outcome));
+        return this.answer(this.readRecord(`${base}.outcome.json`, isOutcome) ?? outcome);
+      });
     } finally { this.active.delete(key); }
   }
 

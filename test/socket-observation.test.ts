@@ -62,7 +62,7 @@ test("DR27: an unobserved endpoint leaves archive intent pending, not durably re
   t.after(() => rmSync(dir, { recursive: true, force: true }));
   const ledger = new RequestLedger(dir);
   refused(t, "EACCES");
-  const archives = new GuestArchives(dir, ledger, () => listening("/unused/socket"));
+  const archives = new GuestArchives(dir, ledger, async () => await listening("/unused/socket") ? "running" : "unknown");
   await assert.rejects(archives.create("archive-key", { society: "demo" }), unavailable);
   assert.deepEqual(ledger.status("archive-key"), { state: "pending", method: "archive.create" });
 });

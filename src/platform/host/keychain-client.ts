@@ -7,9 +7,7 @@ import { StoreError } from "../../domain/errors.js";
 import { spawnSupervisedService, stopOwnedChild } from "../../process/async.js";
 import type { KeychainStore } from "./keychain.js";
 import { macBundleResources } from "./bundle.js";
-
-const LINE_BYTES = 1024 * 1024;
-type Pending = { resolve(value: Record<string, unknown>): void; reject(error: Error): void; timer: NodeJS.Timeout };
+import { NativeChannel } from "./native-channel.js";
 
 /** P0-6: the helper channel is waited on only so long (NB-30). A wedged
  * helper that still holds the channel answers no request; close ends it. */
@@ -47,24 +45,20 @@ export function bundledKeychainHelper(libdir: string): string {
 }
 
 export class KeychainClient implements KeychainStore {
-  private readonly pending = new Map<number, Pending>();
-  private sequence = 0;
-  private buffered = "";
-  private ending = false;
+  private readonly requests: NativeChannel;
   private readonly deadlines: Required<KeychainDeadlines>;
   private readonly store: KeychainStore;
   private constructor(private readonly channel: Socket, private readonly libdir: string, private readonly ended: Promise<void>,
     private readonly child: ChildProcess, deadlines?: KeychainDeadlines) {
     this.deadlines = { requestMs: deadlines?.requestMs ?? REQUEST_DEADLINE_MS, closeMs: deadlines?.closeMs ?? CLOSE_DEADLINE_MS };
+    this.requests = new NativeChannel(channel, {
+      helper: "Keychain", endedMessage: "the Keychain helper channel ended", strictResponses: true, timeoutEndsChannel: true,
+      refusal: () => new StoreError("BROKER_UNAVAILABLE", "the Keychain could not be accessed"),
+    });
     this.store = nativeKeychainStore((op, fields) => this.ask(op, fields), () => this.fail());
     child.once("close", () => { this.fail(); });
     child.on("error", () => { this.fail(); });
     child.stderr?.resume();
-    channel.setEncoding("utf8");
-    channel.on("data", (chunk: string) => { this.received(chunk); });
-    channel.on("error", () => { this.fail(); });
-    channel.once("end", () => { this.fail(); });
-    channel.once("close", () => { this.fail(); });
   }
 
   static async launch(libdir: string, fence?: number, deadlines?: KeychainDeadlines): Promise<KeychainClient> {
@@ -92,53 +86,10 @@ export class KeychainClient implements KeychainStore {
     finally { await writer.close(); }
   }
 
-  private fail(): void {
-    this.ending = true;
-    this.channel.destroy();
-    for (const item of this.pending.values()) { clearTimeout(item.timer); item.reject(new StoreError("BROKER_UNAVAILABLE", "the Keychain helper channel ended")); }
-    this.pending.clear();
-  }
-
-  private received(chunk: string): void {
-    this.buffered += chunk;
-    for (let at = this.buffered.indexOf("\n"); at >= 0; at = this.buffered.indexOf("\n")) {
-      const line = this.buffered.slice(0, at); this.buffered = this.buffered.slice(at + 1);
-      if (Buffer.byteLength(line) > LINE_BYTES) { this.fail(); return; }
-      let answer: Record<string, unknown>;
-      try { answer = JSON.parse(line) as Record<string, unknown>; }
-      catch { this.fail(); return; }
-      if (!answer || typeof answer !== "object" || Array.isArray(answer) || !Number.isSafeInteger(answer.id) || typeof answer.ok !== "boolean") {
-        this.fail(); return;
-      }
-      const item = this.pending.get(answer.id as number);
-      if (item === undefined) { this.fail(); return; }
-      this.pending.delete(answer.id as number);
-      clearTimeout(item.timer);
-      if (answer.ok) item.resolve(answer);
-      else item.reject(new StoreError("BROKER_UNAVAILABLE", "the Keychain could not be accessed"));
-    }
-    if (Buffer.byteLength(this.buffered) > LINE_BYTES) this.fail();
-  }
+  private fail(): void { this.requests.close(); }
 
   private ask(op: string, fields: Record<string, string>): Promise<Record<string, unknown>> {
-    if (this.ending || this.channel.destroyed) return Promise.reject(new StoreError("BROKER_UNAVAILABLE", "the Keychain helper channel ended"));
-    const id = ++this.sequence;
-    const line = `${JSON.stringify({ op, id, ...fields })}\n`;
-    if (Buffer.byteLength(line) > LINE_BYTES)
-      return Promise.reject(new StoreError("INVALID_REQUEST", "the credential exceeds the Keychain channel limit"));
-    return new Promise((resolve, reject) => {
-      const timer = setTimeout(() => {
-        // A wedged helper is unanswerable: the request ends, and a channel
-        // that can no longer order answers ends with it (NB-30).
-        this.pending.delete(id);
-        this.fail();
-        reject(new StoreError("BROKER_UNAVAILABLE", `the Keychain helper did not answer ${op} in time`));
-      }, this.deadlines.requestMs);
-      timer.unref();
-      this.pending.set(id, { resolve, reject, timer });
-      try { this.channel.write(line, error => { if (error) this.fail(); }); }
-      catch { this.fail(); }
-    });
+    return this.requests.request(op, fields, this.deadlines.requestMs);
   }
 
   async get(account: string): Promise<string | undefined> {

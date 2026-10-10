@@ -14000,6 +14000,7 @@ src/platform/guest/host.ts
 src/platform/guest/identity.ts
 src/platform/guest/linux-system.ts
 src/platform/guest/packages.ts
+src/platform/guest/project-mutations.ts
 src/platform/guest/project.ts
 src/platform/guest/provision.ts
 src/platform/guest/pty.ts
@@ -14022,6 +14023,7 @@ src/platform/host/image.ts
 src/platform/host/keychain-client.ts
 src/platform/host/keychain.ts
 src/platform/host/lifecycle.ts
+src/platform/host/native-channel.ts
 src/platform/host/peer.ts
 src/platform/host/personal-histories.ts
 src/platform/host/personal-seed.ts
@@ -14039,6 +14041,7 @@ src/platform/package-archive.ts
 src/platform/package-files.ts
 src/platform/package-staging.ts
 src/platform/product-text.ts
+src/platform/rpc-server.ts
 src/platform/rpc.ts
 src/platform/society-client.ts
 src/platform/stream-receive.ts
@@ -14122,6 +14125,7 @@ src/runtime/pi-runtime.ts
 src/runtime/pi-spawn-plan.ts
 src/runtime/principal-delivery.ts
 src/runtime/process-lock.ts
+src/runtime/process-writer.ts
 src/runtime/project-binding.ts
 src/runtime/provision.ts
 src/runtime/resident-rootfs.ts

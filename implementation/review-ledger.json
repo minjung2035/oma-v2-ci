@@ -2,7 +2,7 @@
  "version": 1,
  "baseline": "b25961cc46532f5e30ff60cc381fed51c59d13ab",
  "summary": {
-  "CHANGED_WITH_ORACLE": 14112,
+  "CHANGED_WITH_ORACLE": 14116,
   "REMOVED": 15,
   "NOT_REVIEWED": 50,
   "READ_UNCHANGED": 44
@@ -1637,8 +1637,7 @@
    "primary": null,
    "status": "NOT_REVIEWED",
    "by": [],
-   "oracles": [],
-   "note": "Current working-tree bytes have no explicit byte-bound review; historical reviews do not certify these changes."
+   "oracles": []
   },
   {
    "path": "src/entry/guest-provision.ts",
@@ -1709,31 +1708,13 @@
    "primary": null,
    "status": "CHANGED_WITH_ORACLE",
    "by": [
-    "MAC-220",
-    "MAC-221",
-    "MAC-222",
-    "MAC-240",
-    "MAC-241",
-    "MAC-412",
-    "MAC-619",
-    "MAC-620",
-    "MAC-621",
-    "MAC-622",
-    "MAC-623"
+    "DR42"
    ],
    "oracles": [
-    "MAC-220",
-    "MAC-221",
-    "MAC-222",
-    "MAC-240",
-    "MAC-241",
-    "MAC-412",
-    "MAC-620",
-    "MAC-621",
-    "MAC-622"
+    "DR42"
    ],
-   "note": "clauses declared by macos-platform.md's implementation table",
-   "sha256": "06e14a62aa44c401a067563db11834dc7416e87a8882b54428e17dc022d49224"
+   "note": "DR42 direct delta/affected-owner review without subagents; native lane and historical full-file review not renewed. Checked shared JSONL correlation and EOF vs child death, per-project outcome/start/archive serialization and maintenance ownership, boot-owned egress retry/cancellation, manager stop evidence, contention-only process writer deadline and inode/child fence, common RPC dispatch with unchanged authentication/failure meaning. Existing oracle set retained; DR42 tests exercise actual owners and local Git/ledger/socket/archive effects.",
+   "sha256": "2a5c6d2b05dbf55851a4fc0adc6f9b88de894bc2f4121c54ed0cf05a5315fbf5"
   },
   {
    "path": "src/entry/host.ts",
@@ -182429,32 +182410,28 @@
    "primary": null,
    "status": "CHANGED_WITH_ORACLE",
    "by": [
-    "UX-38"
+    "UX-38",
+    "DR42"
    ],
    "oracles": [
-    "MAC-621"
+    "MAC-621",
+    "DR42"
    ],
-   "note": "Re-read in full for the UX-38 batch-4 working-tree review (2026-10-08): tar runs with --checkpoint=1024 so its progress lines are observed progress: the read is bounded by a ten-minute silence window under the native timer ceiling rather than a fixed total, so a large archive that keeps writing completes and a mute tar is collected as stalled. stderr stays bounded with discard overflow.",
-   "sha256": "0cb3e574cb15b9680ace42e6ec4bc6f85ca895bed68e5578a329d1f2df4b9f54"
+   "note": "DR42 direct delta/affected-owner review without subagents; native lane and historical full-file review not renewed. Checked shared JSONL correlation and EOF vs child death, per-project outcome/start/archive serialization and maintenance ownership, boot-owned egress retry/cancellation, manager stop evidence, contention-only process writer deadline and inode/child fence, common RPC dispatch with unchanged authentication/failure meaning. Existing oracle set retained; DR42 tests exercise actual owners and local Git/ledger/socket/archive effects.",
+   "sha256": "c4ac369308b0a388e79d7f86cea023feca2d9b4adab0a7aa9e18ac8d6b3c855f"
   },
   {
    "path": "src/platform/guest/control.ts",
    "primary": null,
    "status": "CHANGED_WITH_ORACLE",
    "by": [
-    "MAC-202",
-    "MAC-320",
-    "MAC-620",
-    "P0V-82"
+    "DR42"
    ],
    "oracles": [
-    "MAC-202",
-    "MAC-320",
-    "MAC-620",
-    "P0V-82"
+    "DR42"
    ],
-   "note": "clauses declared by macos-platform.md's implementation table",
-   "sha256": "bfd30ea3326c83f4fb4323c6bb5cfe11088977f0edbbc50be705b646bf81375a"
+   "note": "DR42 direct delta/affected-owner review without subagents; native lane and historical full-file review not renewed. Checked shared JSONL correlation and EOF vs child death, per-project outcome/start/archive serialization and maintenance ownership, boot-owned egress retry/cancellation, manager stop evidence, contention-only process writer deadline and inode/child fence, common RPC dispatch with unchanged authentication/failure meaning. Existing oracle set retained; DR42 tests exercise actual owners and local Git/ledger/socket/archive effects.",
+   "sha256": "d1b72f0bd3016f8ffed13a7642842b856ce2fcc58a5f51f2aaf17178a585608d"
   },
   {
    "path": "src/platform/guest/egress.ts",
@@ -182488,13 +182465,15 @@
    "primary": null,
    "status": "CHANGED_WITH_ORACLE",
    "by": [
-    "DR38"
+    "DR38",
+    "DR42"
    ],
    "oracles": [
-    "DR38"
+    "DR38",
+    "DR42"
    ],
-   "note": "Reviewed full operation-owner flow: same-society open/resume/close share a queue and archive/maintenance see that fence; live endpoints must still prove imported mirror and matching persisted project binding; duplicate lease keys refuse without overwriting owners, end/reap releases only matching connection. Failure cannot poison later operations.",
-   "sha256": "236b5c6ce9bce2ef144ec952d429329b4ebf043e515a131c01829c4d2601dd79"
+   "note": "DR42 direct delta/affected-owner review without subagents; native lane and historical full-file review not renewed. Checked shared JSONL correlation and EOF vs child death, per-project outcome/start/archive serialization and maintenance ownership, boot-owned egress retry/cancellation, manager stop evidence, contention-only process writer deadline and inode/child fence, common RPC dispatch with unchanged authentication/failure meaning. Existing oracle set retained; DR42 tests exercise actual owners and local Git/ledger/socket/archive effects.",
+   "sha256": "735d97594daf8750e2e4c3ce48efbb9fd9de942b939430671285a16caafed465"
   },
   {
    "path": "src/platform/guest/identity.ts",
@@ -182529,26 +182508,43 @@
    "primary": null,
    "status": "CHANGED_WITH_ORACLE",
    "by": [
-    "DR41"
+    "DR41",
+    "DR42"
    ],
    "oracles": [
-    "DR41"
+    "DR41",
+    "DR42"
    ],
    "note": "DR41 direct delta and affected-owner review, without subagents: remove TUI effect/Runtime implementation imports; preserve configuration publication/read-back/unknown, effect-time tenure, Principal ordering and actual OS exit, package inode leases and staging containment. Named moved declarations were compared with the baseline; the three altered runtime bodies supply product wording or platform directory ports. Concrete Society port and module boundary/build oracles plus the existing behavior regressions cover the change. This is not a renewed full-file/codebase review or native qualification. Inherited NOT_REVIEWED owners remain unapproved.",
-   "sha256": "cb3f865add0cab2035819340796a4b7a15b9110a0d5e5df0b3e6ff6365f99564"
+   "sha256": "1c0dc1e2ea58c23776cad5b35ff5cb672557db557ac7a7df4d49ac3e8a5b0c8e"
+  },
+  {
+   "path": "src/platform/guest/project-mutations.ts",
+   "primary": null,
+   "status": "CHANGED_WITH_ORACLE",
+   "by": [
+    "DR42"
+   ],
+   "oracles": [
+    "DR42"
+   ],
+   "note": "DR42 direct delta/affected-owner review without subagents; native lane and historical full-file review not renewed. Checked shared JSONL correlation and EOF vs child death, per-project outcome/start/archive serialization and maintenance ownership, boot-owned egress retry/cancellation, manager stop evidence, contention-only process writer deadline and inode/child fence, common RPC dispatch with unchanged authentication/failure meaning. Existing oracle set retained; DR42 tests exercise actual owners and local Git/ledger/socket/archive effects.",
+   "sha256": "c7fb80bbdc9855cf0a40eb9bbdfcd11081da40212ba7bd9572a33347659a6e26"
   },
   {
    "path": "src/platform/guest/project.ts",
    "primary": null,
    "status": "CHANGED_WITH_ORACLE",
    "by": [
-    "DR33"
+    "DR33",
+    "DR42"
    ],
    "oracles": [
-    "UX-09"
+    "UX-09",
+    "DR42"
    ],
-   "note": "Read in full: import scans the mirror tree for 160000 entries and names every gitlink path in notCarried; when the initial snapshot dropped a registered-but-unchecked-out submodule the .gitmodules declaration still reports \"submodule contents\", preserving the previous warning coverage.",
-   "sha256": "69180dd4afa28e2e5562a61b5dab41ef681bb35726372851c4e680c4fd6e2018"
+   "note": "DR42 direct delta/affected-owner review without subagents; native lane and historical full-file review not renewed. Checked shared JSONL correlation and EOF vs child death, per-project outcome/start/archive serialization and maintenance ownership, boot-owned egress retry/cancellation, manager stop evidence, contention-only process writer deadline and inode/child fence, common RPC dispatch with unchanged authentication/failure meaning. Existing oracle set retained; DR42 tests exercise actual owners and local Git/ledger/socket/archive effects.",
+   "sha256": "e323162c22c3890ac0156a6c0f4a5de05b3caa40f65dff3a0c1b954666155754"
   },
   {
    "path": "src/platform/guest/provision.ts",
@@ -182589,27 +182585,28 @@
    "primary": null,
    "status": "CHANGED_WITH_ORACLE",
    "by": [
-    "MAC-240",
-    "MAC-241"
+    "DR42"
    ],
    "oracles": [
-    "MAC-240",
-    "MAC-241"
+    "DR42"
    ],
-   "sha256": "12446e942ab3bab86e3e3c93f629e669d838fa5caefc9dd220c3e630560be9cd"
+   "note": "DR42 direct delta/affected-owner review without subagents, historical full-file/native claims not renewed. Ledger reads historical intent/outcome before pending-effect project admission, retains owner through outcome publication and key active membership through cleanup.",
+   "sha256": "9c8a91cff0ad63d785dd6b3ca9c43ac0abfb27efd00b97a743851dbd345a8fe7"
   },
   {
    "path": "src/platform/guest/server.ts",
    "primary": null,
    "status": "CHANGED_WITH_ORACLE",
    "by": [
-    "DR34"
+    "DR34",
+    "DR42"
    ],
    "oracles": [
-    "post-listen"
+    "post-listen",
+    "DR42"
    ],
-   "note": "Read in full for the post-listen 'error' sweep: a permanent 'error' listener now sits beside the startup once-listener -- after `listen` succeeds and the startup listener is removed, an accept-class error (EMFILE/ENFILE) is journaled best-effort (a sink that throws cannot escape the emit) and the socket stays bound so the kernel can retry; closing would unlink the name its clients still dial. Both callers (guesthost, guestctl) share this boundary and run no uncaughtException handler.",
-   "sha256": "a7705930e31cea28b5cb7b0e626bcb49374bcf9dd7efbbda59ebcd3c0abdafab"
+   "note": "DR42 direct delta/affected-owner review without subagents; native lane and historical full-file review not renewed. Checked shared JSONL correlation and EOF vs child death, per-project outcome/start/archive serialization and maintenance ownership, boot-owned egress retry/cancellation, manager stop evidence, contention-only process writer deadline and inode/child fence, common RPC dispatch with unchanged authentication/failure meaning. Existing oracle set retained; DR42 tests exercise actual owners and local Git/ledger/socket/archive effects.",
+   "sha256": "8a44dfb5e5c5fd9a9d66d9ff456c4b7af07eccac545aba308c441a3afb69886d"
   },
   {
    "path": "src/platform/guest/session.ts",
@@ -182671,27 +182668,13 @@
    "primary": null,
    "status": "CHANGED_WITH_ORACLE",
    "by": [
-    "MAC-220",
-    "MAC-221",
-    "MAC-222",
-    "MAC-412",
-    "P0V-103",
-    "P0V-104",
-    "P0V-105",
-    "P0V-106"
+    "DR42"
    ],
    "oracles": [
-    "MAC-220",
-    "MAC-221",
-    "MAC-222",
-    "MAC-412",
-    "P0V-103",
-    "P0V-104",
-    "P0V-105",
-    "P0V-106"
+    "DR42"
    ],
-   "note": "clauses declared by macos-platform.md's implementation table",
-   "sha256": "3d295873f99994f0371998d07355d4820e1e696be15c458969aad837f7dcd4f1"
+   "note": "DR42 direct delta/affected-owner review without subagents; native lane and historical full-file review not renewed. Checked shared JSONL correlation and EOF vs child death, per-project outcome/start/archive serialization and maintenance ownership, boot-owned egress retry/cancellation, manager stop evidence, contention-only process writer deadline and inode/child fence, common RPC dispatch with unchanged authentication/failure meaning. Existing oracle set retained; DR42 tests exercise actual owners and local Git/ledger/socket/archive effects.",
+   "sha256": "1e535ec6d026bdcf3f9ba1340d20d6222f38006360b921b61f4bf2f0f95a1244"
   },
   {
    "path": "src/platform/host/api-client.ts",
@@ -182772,13 +182755,15 @@
    "primary": null,
    "status": "CHANGED_WITH_ORACLE",
    "by": [
-    "DR38"
+    "DR38",
+    "DR42"
    ],
    "oracles": [
-    "DR38"
+    "DR38",
+    "DR42"
    ],
-   "note": "Reviewed CONNECT run/boot/actor/incarnation ownership, dial cancellation and both socket lifetimes; DR37 already applies unrestricted host policy. Updated obsolete allowlist/443/private-address/FIFO-slot comments. Regression proves guest role/allow cannot authorize another actor and cannot narrow host policy.",
-   "sha256": "0c3c4325928947d54a1fc0b3886dca86dfd39c877f0e69fb595eba0721566180"
+   "note": "DR42 direct delta/affected-owner review without subagents; native lane and historical full-file review not renewed. Checked shared JSONL correlation and EOF vs child death, per-project outcome/start/archive serialization and maintenance ownership, boot-owned egress retry/cancellation, manager stop evidence, contention-only process writer deadline and inode/child fence, common RPC dispatch with unchanged authentication/failure meaning. Existing oracle set retained; DR42 tests exercise actual owners and local Git/ledger/socket/archive effects.",
+   "sha256": "6a5a607dd6917129aef6f09acdd18758321baec469244c2a29d7a675cbb7ea78"
   },
   {
    "path": "src/platform/host/files.ts",
@@ -182820,34 +182805,28 @@
    "primary": null,
    "status": "CHANGED_WITH_ORACLE",
    "by": [
-    "MAC-301",
-    "MAC-320",
-    "MAC-330",
-    "MAC-331",
-    "MAC-601"
+    "DR42"
    ],
    "oracles": [
-    "MAC-301",
-    "MAC-320",
-    "MAC-330",
-    "MAC-331",
-    "MAC-601"
+    "DR42"
    ],
-   "note": "clauses declared by macos-platform.md's implementation table",
-   "sha256": "7a6cf9c20529ebb47222864d550f5814cf39389dc4ee70314fd02e7f99504398"
+   "note": "DR42 direct delta/affected-owner review without subagents; native lane and historical full-file review not renewed. Checked shared JSONL correlation and EOF vs child death, per-project outcome/start/archive serialization and maintenance ownership, boot-owned egress retry/cancellation, manager stop evidence, contention-only process writer deadline and inode/child fence, common RPC dispatch with unchanged authentication/failure meaning. Existing oracle set retained; DR42 tests exercise actual owners and local Git/ledger/socket/archive effects.",
+   "sha256": "fed39a6346e7cc879eec6c2190e813b5e807d190e2a17c8126b22944092c7c3c"
   },
   {
    "path": "src/platform/host/host-api.ts",
    "primary": null,
    "status": "CHANGED_WITH_ORACLE",
    "by": [
-    "DR41"
+    "DR41",
+    "DR42"
    ],
    "oracles": [
-    "DR41"
+    "DR41",
+    "DR42"
    ],
-   "note": "DR41 direct delta and affected-owner review, without subagents: remove TUI effect/Runtime implementation imports; preserve configuration publication/read-back/unknown, effect-time tenure, Principal ordering and actual OS exit, package inode leases and staging containment. Named moved declarations were compared with the baseline; the three altered runtime bodies supply product wording or platform directory ports. Concrete Society port and module boundary/build oracles plus the existing behavior regressions cover the change. This is not a renewed full-file/codebase review or native qualification. Inherited NOT_REVIEWED owners remain unapproved.",
-   "sha256": "09d203a32582e11320820e317a5e1d71808ef59f07bced3776251fda70292998"
+   "note": "DR42 direct delta/affected-owner review without subagents; native lane and historical full-file review not renewed. Checked shared JSONL correlation and EOF vs child death, per-project outcome/start/archive serialization and maintenance ownership, boot-owned egress retry/cancellation, manager stop evidence, contention-only process writer deadline and inode/child fence, common RPC dispatch with unchanged authentication/failure meaning. Existing oracle set retained; DR42 tests exercise actual owners and local Git/ledger/socket/archive effects.",
+   "sha256": "7f40aed4523e7cc156ac27682f9d4761203fde04e86324ba9bd42f95b736762b"
   },
   {
    "path": "src/platform/host/image.ts",
@@ -182868,13 +182847,15 @@
    "primary": null,
    "status": "CHANGED_WITH_ORACLE",
    "by": [
-    "DR39"
+    "DR39",
+    "DR42"
    ],
    "oracles": [
-    "DR39"
+    "DR39",
+    "DR42"
    ],
-   "note": "DR39 direct delta/affected-owner review without subagents; no historical full-file or native lane renewal. Reviewed shared credential adapter and affected request lifetime: only keychain operations are exposed, malformed value is not absence; standalone client still owns its helper and channel teardown.",
-   "sha256": "6ef631d8a316db2d28284ff86206842d78bc6dc64fe7bbd2aaec1d6516ff46c5"
+   "note": "DR42 direct delta/affected-owner review without subagents; native lane and historical full-file review not renewed. Checked shared JSONL correlation and EOF vs child death, per-project outcome/start/archive serialization and maintenance ownership, boot-owned egress retry/cancellation, manager stop evidence, contention-only process writer deadline and inode/child fence, common RPC dispatch with unchanged authentication/failure meaning. Existing oracle set retained; DR42 tests exercise actual owners and local Git/ledger/socket/archive effects.",
+   "sha256": "96a7ba71b791ec8920ebed2d6066cc09b299fddbe1c23fdd21ded3744a939ba9"
   },
   {
    "path": "src/platform/host/keychain.ts",
@@ -182882,13 +182863,15 @@
    "status": "CHANGED_WITH_ORACLE",
    "by": [
     "DR25",
-    "DR28"
+    "DR28",
+    "DR42"
    ],
    "oracles": [
-    "Owned cleanup Keychain"
+    "Owned cleanup Keychain",
+    "DR42"
    ],
-   "note": "Read in full: serialized per-item writer uses a cross-process lock and awaits the fenced writer before returning it; abort and identity are rechecked before write. Controlled in-memory store failure beside lock close and cleanup-only failure retain exact outcomes. Native Swift helper, real Keychain and credential execution were not exercised. P0-8: the per-item lock's directory is ensured through ensureOwnedUserDirectory inside its own boundary, not trusted as-is.",
-   "sha256": "ddfd2394da5d5f15a51d16e8b1053b64e3e97f331842d099859f608f817bad26"
+   "note": "DR42 direct delta/affected-owner review without subagents; native lane and historical full-file review not renewed. Checked shared JSONL correlation and EOF vs child death, per-project outcome/start/archive serialization and maintenance ownership, boot-owned egress retry/cancellation, manager stop evidence, contention-only process writer deadline and inode/child fence, common RPC dispatch with unchanged authentication/failure meaning. Existing oracle set retained; DR42 tests exercise actual owners and local Git/ledger/socket/archive effects.",
+   "sha256": "34086258d2e9010c2702d3677a4fe90632097a1270d61b4ad0b2018595b718de"
   },
   {
    "path": "src/platform/host/lifecycle.ts",
@@ -182902,6 +182885,19 @@
    ],
    "note": "Reviewed boot/phase cancellation/force/stop and observer paths. Required ready persistence precedes ready/watch and failure rejects startup, records failed and observes owned VM force; optional UI observers log without corrupting committed state. Existing death-observation and cleanup aggregation remain.",
    "sha256": "bafdca444fd92919ea2b5de1c273a53dc8ad56fa8a4650d6ced3b6a5f69ca11a"
+  },
+  {
+   "path": "src/platform/host/native-channel.ts",
+   "primary": null,
+   "status": "CHANGED_WITH_ORACLE",
+   "by": [
+    "DR42"
+   ],
+   "oracles": [
+    "DR42"
+   ],
+   "note": "DR42 direct delta/affected-owner review without subagents; native lane and historical full-file review not renewed. Checked shared JSONL correlation and EOF vs child death, per-project outcome/start/archive serialization and maintenance ownership, boot-owned egress retry/cancellation, manager stop evidence, contention-only process writer deadline and inode/child fence, common RPC dispatch with unchanged authentication/failure meaning. Existing oracle set retained; DR42 tests exercise actual owners and local Git/ledger/socket/archive effects.",
+   "sha256": "d46546126e8e4d06093e1a1fcc88607288aa9bebd148fdb3562668fb9d0a89b6"
   },
   {
    "path": "src/platform/host/peer.ts",
@@ -182953,14 +182949,16 @@
    "status": "CHANGED_WITH_ORACLE",
    "by": [
     "DR38",
-    "DR40"
+    "DR40",
+    "DR42"
    ],
    "oracles": [
     "DR38",
-    "DR40"
+    "DR40",
+    "DR42"
    ],
-   "note": "DR40 direct delta and affected-owner review without subagents; no historical full-file or native qualification renewal. Typed method result decoding and coordinator contracts; transport and durable replay ownership preserved.",
-   "sha256": "27649dcf128cd9394b5717fd493dfa9e77d3230fcf8c3cdecbe260621a17ca6d"
+   "note": "DR42 direct delta/affected-owner review without subagents; native lane and historical full-file review not renewed. Checked shared JSONL correlation and EOF vs child death, per-project outcome/start/archive serialization and maintenance ownership, boot-owned egress retry/cancellation, manager stop evidence, contention-only process writer deadline and inode/child fence, common RPC dispatch with unchanged authentication/failure meaning. Existing oracle set retained; DR42 tests exercise actual owners and local Git/ledger/socket/archive effects.",
+   "sha256": "cdbc9dc23062df772bbaae6ef5ea4773e996b71af305886d986e2c30d6c830f5"
   },
   {
    "path": "src/platform/host/project.ts",
@@ -183044,13 +183042,15 @@
    "primary": null,
    "status": "CHANGED_WITH_ORACLE",
    "by": [
-    "DR38"
+    "DR38",
+    "DR42"
    ],
    "oracles": [
-    "DR38"
+    "DR38",
+    "DR42"
    ],
-   "note": "Reviewed composition and extracted behavior against original callbacks: ready publishes provisioning/image/schema under the process-lock writer in one record; explicit concrete coordinators retain Git/stream/archive owners. Shutdown closes admission, observes VM stop and egress outcomes separately, retains failures, always closes API sockets/listener and lock, and shares one result across callers.",
-   "sha256": "1e9058c6fa6aabd8e286b023f63359784dfdd6d61d82168740155ef6a6ba4f0f"
+   "note": "DR42 direct delta/affected-owner review without subagents; native lane and historical full-file review not renewed. Checked shared JSONL correlation and EOF vs child death, per-project outcome/start/archive serialization and maintenance ownership, boot-owned egress retry/cancellation, manager stop evidence, contention-only process writer deadline and inode/child fence, common RPC dispatch with unchanged authentication/failure meaning. Existing oracle set retained; DR42 tests exercise actual owners and local Git/ledger/socket/archive effects.",
+   "sha256": "f91bfa6dd54e04ab687e6bc9eaa149c41e55138dda5e125e58e8dcf4c95f8a2c"
   },
   {
    "path": "src/platform/host/session-gateway.ts",
@@ -183115,13 +183115,15 @@
    "primary": null,
    "status": "CHANGED_WITH_ORACLE",
    "by": [
-    "DR39"
+    "DR39",
+    "DR42"
    ],
    "oracles": [
-    "DR39"
+    "DR39",
+    "DR42"
    ],
-   "note": "DR39 direct delta/affected-owner review without subagents; no historical full-file or native lane renewal. Reviewed VM API separation and affected stop/channel lifetimes: driver implements only VmDriver and exposes a separate KeychainStore using the same native transport; EOF does not prove VM death, actual helper exit remains authoritative.",
-   "sha256": "0433f715da42aa9aba6484e0ad1169a28cbdf102470962ef940dfc5e6c8a7e1c"
+   "note": "DR42 direct delta/affected-owner review without subagents; native lane and historical full-file review not renewed. Checked shared JSONL correlation and EOF vs child death, per-project outcome/start/archive serialization and maintenance ownership, boot-owned egress retry/cancellation, manager stop evidence, contention-only process writer deadline and inode/child fence, common RPC dispatch with unchanged authentication/failure meaning. Existing oracle set retained; DR42 tests exercise actual owners and local Git/ledger/socket/archive effects.",
+   "sha256": "42551cba7aa157153020888035ce600862ea3f5ff6a770b887af2538055a5e44"
   },
   {
    "path": "src/platform/package-archive.ts",
@@ -183183,6 +183185,19 @@
    ],
    "note": "clauses declared by macos-platform.md's implementation table",
    "sha256": "a5efdc22b698db94f5d07dbc8d73ea10e2d5126e915890d11f80fa4eef069082"
+  },
+  {
+   "path": "src/platform/rpc-server.ts",
+   "primary": null,
+   "status": "CHANGED_WITH_ORACLE",
+   "by": [
+    "DR42"
+   ],
+   "oracles": [
+    "DR42"
+   ],
+   "note": "DR42 direct delta/affected-owner review without subagents; native lane and historical full-file review not renewed. Checked shared JSONL correlation and EOF vs child death, per-project outcome/start/archive serialization and maintenance ownership, boot-owned egress retry/cancellation, manager stop evidence, contention-only process writer deadline and inode/child fence, common RPC dispatch with unchanged authentication/failure meaning. Existing oracle set retained; DR42 tests exercise actual owners and local Git/ledger/socket/archive effects.",
+   "sha256": "7fd14c9e6de517bdb62fb8104991bf899866be126dca61d175809aaa8f936f8f"
   },
   {
    "path": "src/platform/rpc.ts",
@@ -184118,8 +184133,7 @@
    "primary": null,
    "status": "NOT_REVIEWED",
    "by": [],
-   "oracles": [],
-   "note": "Current working-tree bytes have no explicit byte-bound review; historical reviews do not certify these changes."
+   "oracles": []
   },
   {
    "path": "src/runtime/extension-integrity.ts",
@@ -184300,8 +184314,7 @@
    "primary": null,
    "status": "NOT_REVIEWED",
    "by": [],
-   "oracles": [],
-   "note": "Current working-tree bytes have no explicit byte-bound review; historical reviews do not certify these changes."
+   "oracles": []
   },
   {
    "path": "src/runtime/pi-adapter.ts",
@@ -184430,6 +184443,19 @@
    ],
    "note": "Read in full: only observed contention returns null; failed acquisition preserves primary beside close failure, contended close is not repeated, close revokes descriptor access before the fallible return. Two source-copy controls assertion-killed. Existing inode identity/fence rules retained; native Darwin flock and inherited descendant death are not proved by controlled composition.",
    "sha256": "9f19f7da8a0bffaad163c31683b99ccc2b07fcf949c5981b5f67a002a782e8f6"
+  },
+  {
+   "path": "src/runtime/process-writer.ts",
+   "primary": null,
+   "status": "CHANGED_WITH_ORACLE",
+   "by": [
+    "DR42"
+   ],
+   "oracles": [
+    "DR42"
+   ],
+   "note": "DR42 direct delta/affected-owner review without subagents; native lane and historical full-file review not renewed. Checked shared JSONL correlation and EOF vs child death, per-project outcome/start/archive serialization and maintenance ownership, boot-owned egress retry/cancellation, manager stop evidence, contention-only process writer deadline and inode/child fence, common RPC dispatch with unchanged authentication/failure meaning. Existing oracle set retained; DR42 tests exercise actual owners and local Git/ledger/socket/archive effects.",
+   "sha256": "7127abd285cb692aff1650ce1d35a32b361a7fe2be4f1f1cff57ca36dfcf48fb"
   },
   {
    "path": "src/runtime/project-binding.ts",
@@ -185318,8 +185344,7 @@
    "primary": null,
    "status": "NOT_REVIEWED",
    "by": [],
-   "oracles": [],
-   "note": "Current working-tree bytes have no explicit byte-bound review; historical reviews do not certify these changes."
+   "oracles": []
   },
   {
    "path": "src/tui/prompt.ts",
@@ -185467,8 +185492,7 @@
    "primary": "WP28",
    "status": "NOT_REVIEWED",
    "by": [],
-   "oracles": [],
-   "note": "Current working-tree bytes have no explicit byte-bound review; historical reviews do not certify these changes."
+   "oracles": []
   },
   {
    "path": "src/tui/transport.ts",
@@ -185537,8 +185561,7 @@
    "primary": "WP28",
    "status": "NOT_REVIEWED",
    "by": [],
-   "oracles": [],
-   "note": "Current working-tree bytes have no explicit byte-bound review; historical reviews do not certify these changes."
+   "oracles": []
   },
   {
    "path": "src/tui/view/notice.ts",

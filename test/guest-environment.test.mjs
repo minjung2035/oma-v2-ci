@@ -61,3 +61,19 @@ test('F34 systemd launcher: normalized values reach --setenv, stale resume is dr
   }
   assert.equal(input.TZ, 'host'); assert.equal(input[RESUME_SESSION_ENV], 'stale');
 });
+
+const collected = 'MainPID=0\nControlPID=0\nControlGroup=\nLoadState=not-found\nActiveState=inactive\nSubState=dead\n';
+for (const observation of [collected, collected.replace('inactive', 'active'), collected.replace('MainPID=0', 'MainPID=42'),
+  collected.replace('ControlPID=0', 'ControlPID=42'), collected.replace('ControlGroup=', 'ControlGroup=/live'),
+  collected.replace('SubState=dead\n', ''), collected.replace('not-found', 'error')])
+ test(`DR42 systemd: failed stop needs complete manager proof: ${JSON.stringify(observation)}`, async () => {
+  let calls = 0;
+  const { systemdSessionLauncher } = load('src/platform/guest/systemd-launcher.ts', {
+    'node:path': path, '../../domain/errors.js': {StoreError: Error},
+    '../../process/run.js': {runProcess: async () => ++calls === 1 ? {kind:'exited', exitCode:5} :
+      {kind:'exited', exitCode:0, stdout:Buffer.from(observation)}},
+    './host.js': {listening: async () => false}, '../../runtime/session-catalog.js': {RESUME_SESSION_ENV},
+  }, {performance, setTimeout});
+  const launcher = systemdSessionLauncher({sessionsDir:'/unused', node:'/unused', libdir:'/unused', env:{}});
+  assert.equal(await launcher.stop('demo', 100), observation === collected ? 'stopped' : 'unknown'); assert.equal(calls, 2);
+ });

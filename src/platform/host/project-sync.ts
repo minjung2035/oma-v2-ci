@@ -25,6 +25,7 @@ export interface ProjectSyncOptions {
 }
 
 export class ProjectSyncCoordinator {
+  private readonly importing = new Map<string, Promise<ProjectImportResult>>();
   private readonly git: MacGit;
   constructor(private readonly options: ProjectSyncOptions) { this.git = new MacGit(options.git); }
   projects(): readonly ProjectRecord[] {
@@ -65,6 +66,13 @@ export class ProjectSyncCoordinator {
     return { projectId: selected.projectId, displayName: selected.displayName, society: selected.society };
   }
   async importProject(key: string, params: ProjectImportRequest): Promise<ProjectImportResult> {
+    const before = this.importing.get(params.projectId) ?? Promise.resolve();
+    const next = before.catch(() => undefined).then(() => this.importAlone(key, params));
+    this.importing.set(params.projectId, next);
+    try { return await next; }
+    finally { if (this.importing.get(params.projectId) === next) this.importing.delete(params.projectId); }
+  }
+  private async importAlone(key: string, params: ProjectImportRequest): Promise<ProjectImportResult> {
     const project = this.projects().find(p => p.projectId === params.projectId);
     if (project === undefined) throw new StoreError("INVALID_REQUEST", "Bind the project on this Mac before importing it");
     const repo = await this.repo(project, params.macRepo);

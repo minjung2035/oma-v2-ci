@@ -61,8 +61,25 @@ export function systemdSessionLauncher(options: SystemdLauncherOptions): Session
       throw new StoreError("BROKER_UNAVAILABLE", "the society session did not come up");
     },
     async stop(society, deadlineMs) {
+      const deadline = performance.now() + deadlineMs;
       const result = await runProcess(command("/usr/bin/systemctl", ["--user", "stop", unitOf(society)], options.env, deadlineMs));
-      if (result.kind !== "exited" || result.exitCode !== 0) return "unknown";
+      if (result.kind !== "exited") return "unknown";
+      if (result.exitCode !== 0) {
+        // --collect may already have unloaded an ended transient unit. Only
+        // the manager's full inactive/not-found observation can substitute
+        // for an acknowledged stop, never a missing holder endpoint alone.
+        const remaining = Math.ceil(deadline - performance.now());
+        if (remaining <= 0) return "unknown";
+        const observed = await runProcess(command("/usr/bin/systemctl", ["--user", "show", unitOf(society),
+          "--property=LoadState,ActiveState,SubState,MainPID,ControlPID,ControlGroup"], options.env, remaining));
+        if (observed.kind !== "exited" || observed.exitCode !== 0) return "unknown";
+        const properties = new Map(observed.stdout.toString("utf8").trim().split("\n").map(line => {
+          const at = line.indexOf("="); return [line.slice(0, at), line.slice(at + 1)];
+        }));
+        if (properties.get("LoadState") !== "not-found" || properties.get("ActiveState") !== "inactive" ||
+            properties.get("SubState") !== "dead" || properties.get("MainPID") !== "0" ||
+            properties.get("ControlPID") !== "0" || properties.get("ControlGroup") !== "") return "unknown";
+      }
       try { return (await listening(socketPath(society))) ? "unknown" : "stopped"; }
       catch { return "unknown"; }
     },

@@ -73,6 +73,6 @@ export class GuestPackages {
       const strings = (value: unknown): value is string[] => Array.isArray(value) && value.every(item => typeof item === "string" && item.length <= 4096);
       if (!strings(added) || !strings(said) || typeof ok !== "boolean") throw new StoreError("INTERNAL_ERROR", "the engine's answer about the packages was malformed");
       return { added, said, ok };
-    });
+    }, run => this.options.projects.mutations.runGlobal(run));
   }
 }

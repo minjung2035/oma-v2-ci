@@ -23,7 +23,7 @@ import { StoreError } from "../../domain/errors.js";
 
 export interface EgressHostOptions {
   /** Opens one egress connection to the guest and completes its hello. */
-  readonly open: () => Promise<{ readonly socket: Socket; readonly rest: Buffer }>;
+  readonly open: (signal: AbortSignal) => Promise<{ readonly socket: Socket; readonly rest: Buffer }>;
   /** MAC-704: this host's engine state, never the guest's. */
   readonly resolve: (credentialRef: string, provider: string, model: string) => Promise<EngineAuth>;
   /** Resolves and pins a target on the host network, including literal/private
@@ -35,6 +35,8 @@ export interface EgressHostOptions {
   readonly frameBytes: number;
   /** The most connections kept waiting, whatever the runs ask (MAC-225). */
   readonly maxPool: number;
+  /** Transport recovery cadence, independent of run/request budgets. */
+  readonly retry?: { readonly initialMs: number; readonly maxMs: number };
 }
 
 type Run = { readonly relay: InferenceRelay; readonly params: EgressPlaceholderParams; readonly lease: Socket | null;
@@ -43,45 +45,83 @@ type Run = { readonly relay: InferenceRelay; readonly params: EgressPlaceholderP
 export class EgressHost {
   private readonly runs = new Map<string, Run>();
   private readonly idle = new Set<Socket>();
-  private waiting = 0;
-  private opening = 0;
+  private filling: { readonly boot: number; readonly promise: Promise<void> } | null = null;
+  private retryTimer: NodeJS.Timeout | null = null;
+  private retryMs: number;
+  private readonly retry: { readonly initialMs: number; readonly maxMs: number };
+  private enabled = true;
   private stopped = false;
   /** MAC-211: which guest boot the runs belong to. A placeholder request that
    * outlives the boot it was asked in creates nothing (AV-14). */
   private boot = 0;
+  private bootAbort = new AbortController();
 
-  constructor(private readonly options: EgressHostOptions) {}
+  constructor(private readonly options: EgressHostOptions) {
+    // Start at the existing handshake retry cadence; cap only retry delay,
+    // not attempts or run lifetime. A healthy guest recovers without traffic.
+    this.retry = options.retry ?? { initialMs: 250, maxMs: 5000 };
+    if (!Number.isFinite(this.retry.initialMs) || this.retry.initialMs <= 0 ||
+        !Number.isFinite(this.retry.maxMs) || this.retry.maxMs < this.retry.initialMs || this.retry.maxMs > 0x7fffffff)
+      throw new StoreError("INVALID_REQUEST", "invalid egress recovery delays");
+    this.retryMs = this.retry.initialMs;
+  }
 
   /** MAC-225: two spare, and the existing relay's four per run. */
   get target(): number { return Math.min(2 + 4 * this.runs.size, this.options.maxPool); }
-  get pooled(): number { return this.waiting; }
+  get pooled(): number { return this.idle.size; }
   get activeRuns(): number { return this.runs.size; }
 
-  /** Opens connections until the pool is at its target. A failure to open
-   * leaves the pool short; the next call tries again. */
-  async fill(): Promise<void> {
-    while (!this.stopped && this.waiting + this.opening < this.target) {
-      this.opening += 1;
+  /** Exactly one fill loop per boot. A failed open owns its next attempt. */
+  fill(): Promise<void> {
+    if (this.stopped || !this.enabled || this.retryTimer !== null) return Promise.resolve();
+    if (this.filling?.boot === this.boot) return this.filling.promise;
+    const boot = this.boot;
+    const promise = this.fillBoot(boot);
+    const held = { boot, promise };
+    this.filling = held;
+    void promise.finally(() => { if (this.filling === held) this.filling = null; }).catch(() => undefined);
+    return promise;
+  }
+
+  private async fillBoot(boot: number): Promise<void> {
+    while (!this.stopped && this.enabled && boot === this.boot && this.idle.size < this.target && this.retryTimer === null) {
       let opened: { socket: Socket; rest: Buffer };
-      try { opened = await this.options.open(); }
-      catch { this.opening -= 1; return; }
-      this.opening -= 1;
-      // Stopped while this one was opening: it is not kept.
-      if (this.stopped) { opened.socket.destroy(); return; }
-      this.waiting += 1;
-      void this.await(opened.socket, opened.rest);
+      try { opened = await this.options.open(this.bootAbort.signal); }
+      catch { if (boot === this.boot) this.retryFill(); return; }
+      if (this.stopped || !this.enabled || boot !== this.boot) { opened.socket.destroy(); return; }
+      this.retryMs = this.retry.initialMs;
+      void this.await(opened.socket, opened.rest, boot);
     }
   }
 
-  private async await(socket: Socket, rest: Buffer): Promise<void> {
+  private retryFill(): void {
+    if (this.stopped || !this.enabled || this.retryTimer !== null) return;
+    const boot = this.boot;
+    const timer = setTimeout(() => {
+      if (this.retryTimer !== timer) return;
+      this.retryTimer = null;
+      if (boot === this.boot) void this.fill();
+    }, this.retryMs);
+    this.retryTimer = timer; timer.unref();
+    this.retryMs = Math.min(this.retry.maxMs, this.retryMs * 2);
+  }
+
+  resume(): void { if (!this.stopped) this.enabled = true; }
+  async pause(): Promise<void> { this.enabled = false; await this.forgetBoot(); }
+
+  private async await(socket: Socket, rest: Buffer, boot: number): Promise<void> {
     socket.on("error", () => { socket.destroy(); });
     if (rest.length > 0) socket.unshift(rest);
     this.idle.add(socket);
     let first: { frame: Record<string, unknown>; rest: Buffer };
     try { first = await readLeadingFrame(socket, this.options.frameBytes, Number.POSITIVE_INFINITY); }
-    catch { this.idle.delete(socket); this.waiting -= 1; socket.destroy(); void this.fill(); return; }
+    catch {
+      this.idle.delete(socket); socket.destroy();
+      if (boot === this.boot) this.retryFill();
+      return;
+    }
     this.idle.delete(socket);
-    this.waiting -= 1;
+    if (this.stopped || !this.enabled || boot !== this.boot) { socket.destroy(); return; }
     void this.fill();
     const frame = first.frame;
     const problem = requestProblem(frame);
@@ -259,12 +299,18 @@ export class EgressHost {
     // The boot boundary first, so a resolution completing during the release
     // is already the last boot's and creates nothing (AV-14).
     this.boot += 1;
+    this.bootAbort.abort(); this.bootAbort = new AbortController();
+    if (this.retryTimer !== null) clearTimeout(this.retryTimer);
+    this.retryTimer = null; this.retryMs = this.retry.initialMs;
+    for (const socket of this.idle) socket.destroy();
+    this.idle.clear();
     await Promise.all([...this.runs.keys()].map(id => this.release(id)));
+    if (!this.stopped && this.enabled) void this.fill();
   }
 
   async stop(): Promise<void> {
     this.stopped = true;
-    for (const socket of this.idle) socket.destroy();
+    this.enabled = false;
     await this.forgetBoot();
   }
 }

@@ -26,7 +26,7 @@ import { HOST_API_VERSION, hostApiHelloProblem, type HostApiHello } from "../../
 import { isRequestKey, isUuid, requestProblem } from "../../protocol/host-guest.js";
 import { installedPackageSource } from "../../runtime/packages/index.js";
 import { clearSocketName } from "../../storage/socket-name.js";
-import { HANDOFF, serveRequests, type Answer } from "../guest/server.js";
+import { HANDOFF, serveRequests, type Answer } from "../rpc-server.js";
 import { FramedPeer } from "../rpc.js";
 import { requestSociety } from "../society-client.js";
 import type { VmState } from "./lifecycle.js";

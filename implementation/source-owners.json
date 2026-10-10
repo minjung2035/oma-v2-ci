@@ -671,9 +671,9 @@
       "MAC-210"
     ],
     "owner": "src/platform/rpc.ts#FramedPeer",
-    "entrypoint": "src/platform/guest/server.ts#serveRequests",
+    "entrypoint": "src/platform/rpc-server.ts#serveRequests",
     "callPath": [
-      "src/platform/guest/server.ts#serveRequests",
+      "src/platform/rpc-server.ts#serveRequests",
       "src/platform/rpc.ts#FramedPeer",
       "src/frame.ts#FrameParser",
       "src/platform/guest/stream.ts#serveStream",
@@ -691,9 +691,9 @@
       "MAC-231"
     ],
     "owner": "src/platform/rpc.ts#platformFailure",
-    "entrypoint": "src/platform/guest/server.ts#serveRequests",
+    "entrypoint": "src/platform/rpc-server.ts#serveRequests",
     "callPath": [
-      "src/platform/guest/server.ts#serveRequests",
+      "src/platform/rpc-server.ts#serveRequests",
       "src/platform/guest/stream.ts#serveStream",
       "src/platform/host/egress.ts#EgressHost",
       "src/platform/rpc.ts#platformFailure",

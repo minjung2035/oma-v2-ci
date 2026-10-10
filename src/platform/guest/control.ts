@@ -6,7 +6,7 @@
  */
 import { StoreError } from "../../domain/errors.js";
 import type { FramedPeer } from "../rpc.js";
-import { serveRequests } from "./server.js";
+import { serveRequests } from "../rpc-server.js";
 
 export interface HealthFacts {
   readonly uptimeMs: number;

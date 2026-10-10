@@ -226,6 +226,7 @@
   "src/platform/guest/identity.ts",
   "src/platform/guest/linux-system.ts",
   "src/platform/guest/packages.ts",
+  "src/platform/guest/project-mutations.ts",
   "src/platform/guest/project.ts",
   "src/platform/guest/provision.ts",
   "src/platform/guest/pty.ts",
@@ -248,6 +249,7 @@
   "src/platform/host/keychain-client.ts",
   "src/platform/host/keychain.ts",
   "src/platform/host/lifecycle.ts",
+  "src/platform/host/native-channel.ts",
   "src/platform/host/peer.ts",
   "src/platform/host/personal-histories.ts",
   "src/platform/host/personal-seed.ts",
@@ -265,6 +267,7 @@
   "src/platform/package-files.ts",
   "src/platform/package-staging.ts",
   "src/platform/product-text.ts",
+  "src/platform/rpc-server.ts",
   "src/platform/rpc.ts",
   "src/platform/society-client.ts",
   "src/platform/stream-receive.ts",
@@ -348,6 +351,7 @@
   "src/runtime/pi-spawn-plan.ts",
   "src/runtime/principal-delivery.ts",
   "src/runtime/process-lock.ts",
+  "src/runtime/process-writer.ts",
   "src/runtime/project-binding.ts",
   "src/runtime/provision.ts",
   "src/runtime/resident-rootfs.ts",
@@ -1982,7 +1986,7 @@
     "src/sandbox.ts",
     "src/platform/"
    ],
-   "files": 135
+   "files": 139
   },
   {
    "index": 5,
@@ -1999,8 +2003,8 @@
    "files": 96
   }
  ],
- "files": 430,
- "runtimeEdges": 1802,
+ "files": 434,
+ "runtimeEdges": 1810,
  "typeOnlyEdges": 471,
  "runtimeEdgeMatrix": {
   "L1-kernel -> L1-kernel": 330,
@@ -2009,14 +2013,14 @@
   "L3-workflow -> L1-kernel": 227,
   "L3-workflow -> L2-facts": 14,
   "L3-workflow -> L3-workflow": 70,
-  "L4-orchestration -> L1-kernel": 395,
+  "L4-orchestration -> L1-kernel": 399,
   "L4-orchestration -> L2-facts": 8,
   "L4-orchestration -> L3-workflow": 24,
-  "L4-orchestration -> L4-orchestration": 209,
+  "L4-orchestration -> L4-orchestration": 214,
   "L5-entry -> L1-kernel": 147,
   "L5-entry -> L2-facts": 2,
   "L5-entry -> L3-workflow": 8,
-  "L5-entry -> L4-orchestration": 152,
+  "L5-entry -> L4-orchestration": 151,
   "L5-entry -> L5-entry": 175
  },
  "upwardTypeOnlyEdges": [
@@ -2036,11 +2040,11 @@
   ]
  ],
  "fanIn": {
-  "src/domain/errors.ts": 219,
+  "src/domain/errors.ts": 222,
   "src/domain/identifiers.ts": 64,
+  "src/protocol/host-guest.ts": 32,
   "src/storage/contained-fs.ts": 32,
   "src/storage/directory.ts": 32,
-  "src/protocol/host-guest.ts": 31,
   "src/storage/paths.ts": 31,
   "src/storage/durable-fs.ts": 28,
   "src/ids.ts": 27,
@@ -2084,7 +2088,7 @@
   "node:http": 2,
   "node:https": 1,
   "node:module": 4,
-  "node:net": 34,
+  "node:net": 35,
   "node:os": 16,
   "node:path": 145,
   "node:perf_hooks": 5,
@@ -2093,7 +2097,7 @@
   "node:stream": 3,
   "node:stream/promises": 3,
   "node:string_decoder": 1,
-  "node:timers/promises": 4,
+  "node:timers/promises": 3,
   "node:tty": 1,
   "node:url": 13,
   "node:util": 5,

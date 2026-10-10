@@ -6,10 +6,12 @@ import { EventEmitter } from 'node:events';
 import { Script } from 'node:vm';
 import ts from 'typescript';
 import { nativeKeychainStore } from '../dist/src/platform/host/keychain-client.js';
+import { NativeChannel } from '../dist/src/platform/host/native-channel.js';
 const code = ts.transpileModule(readFileSync('src/platform/host/vz-driver.ts', 'utf8'), {compilerOptions: {module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText;
 class StoreError extends Error { constructor(code, message) { super(message); this.code = code; } }
 const module_ = {exports: {}};
 new Script(code).runInNewContext({exports:module_.exports,module:module_,setTimeout,clearTimeout,require(name) {
+  if(name==='./native-channel.js') return {NativeChannel};
   if(name==='node:path') return {join:(...p)=>p.join('/')};
   if(name==='../../domain/errors.js') return {StoreError};
   if(name==='./keychain-client.js') return {nativeKeychainStore};
@@ -36,3 +38,10 @@ test('Vz owner: channel EOF is not helper or VM death', async () => {
  assert.equal(w.stopped,0,'EOF released the VM before actual helper exit');
  w.child.emit('exit',1,null); assert.equal(w.stopped,1);
 });
+for (const response of ['null\n', '[]\n', '{"id":1,"ok":"true"}\n', '{"event":"stopped","cause":"unknown"}\n'])
+ test(`DR42 Vz: malformed helper response ${response.trim()} ends requests without asserting VM death`, async () => {
+  const w = world(), refused = assert.rejects(w.driver.start(), {code:'BROKER_UNAVAILABLE'});
+  w.channel.emit('data', response); await refused;
+  assert.equal(w.channel.destroyed, true); assert.equal(w.stopped, 0);
+  w.child.emit('exit', 1, null); assert.equal(w.stopped, 1);
+ });

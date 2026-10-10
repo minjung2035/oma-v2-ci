@@ -1,28 +1,30 @@
-# OMA v2 — 현재 인계 (2026-10-10, DR41)
+# OMA v2 — 현재 인계 (2026-10-10, DR42)
 
-Human이 지정한 TUI/Application/Runtime/Extension 모듈 독립성을 구현하고 검증했다.
-브랜치 `feat/macos-hidden-vm`, 기준 DR40 완료 `babe732`다. 문서부터 확인하고
-**서브에이전트 사용 금지**, 승인된 수정·검증·푸시를 유지한다.
+Human이 기준 `ae15804000ce6`의 여섯 Host/Guest 결함 수정을 지시했다.
+문서부터 확인했고 **서브에이전트 사용 금지**, 승인된 수정·검증·커밋·푸시를 유지한다.
 
-TUI의 설정·메일·관측 저장 효과는 Application이, Principal 실행·입력·수명은
-Runtime의 engine owner가 맡는다. Society 패널은 데이터·행동 port만 받는다.
-Core 설정 의미·DTO·Observation, Runtime packages 공개 API와 Platform staging/directory
-port를 연결했다. Extension의 기존 contracts/client/Pi/verified vendor 경계를 유지한다.
-공개 TUI subpath와 모듈 import 경계는 기존 checker가 지연·type-only 참조까지 검사한다.
+현재 VzDriver에는 이미 처리한 줄을 제거하는 코드가 있으며 baseline 37/37이 통과했다.
+두 Native helper client의 JSONL·correlation·deadline을 공통 owner로 묶었다.
+project별 import/start/archive queue와 maintenance barrier, 세대별 egress 재시도·취소,
+archive의 실제 launcher stop/manager proof, Keychain과 archive key의 유한 writer 대기,
+Host/Guest 공통 RPC dispatcher를 구현했다. same-key 과거 결과와 unknown 의미는 유지한다.
 
-두 독립 빌드는 `node scripts/build-module.mjs <tui|extension> --out <새-경로>`다.
-각 manifest와 declarations, Extension의 vendor·Pi manifest를 포함한다. 실제 npm
-의존성으로 산출물 전체 공개 API가 로드되고 copied vendor 변조가 거절됐다.
-전체 local suite 3,990/3,990, actual primitive crash 63/63이 통과했다.
-동일한 15,433개 입력의 실행 전후 변경은 0건이다. 코드 변경 후 결과 기록을 별도 검증한다.
-변경 생산 delta 49개를 직접 검토했고 상속된 미검토 50개는 유지했다.
-첫 전체 suite의 29개 실패와 fixture·규범 기록 정정도 evidence에 보존했다.
-Broker·Store·durable·effect-time 권한·OS 종료·host/guest 경계와 상속된 미검토 상태는 유지한다.
+집중 재실행 274/274, build/typecheck, architecture rules가 통과했다.
+실제 Linux user systemd에서 endpoint가 없는 live holder/child의 짧은 stop은 unknown,
+완전한 stop과 collected-unit 관측은 stopped임을 확인했다.
+첫 전체 suite 4,008/4,008이 통과했다. 추가 P0 검토로 ledger의 historical replay/key binding을
+현재 project fence보다 먼저 판정하며 pending 효과·outcome 게시만 owner에 맡기도록 보완했다.
+Keychain/Archive key는 중복 promise queue를 제거해 같은 프로세스의 대기도 유한 budget에 포함한다.
+보완 후 ledger 집중 59/59, lock/credential/cleanup 집중 87/87이 통과했다.
+전역 package 게시도 같은 maintenance/archive barrier에 참여한다. package/project/archive 통합 집중 65/65이 통과했다.
+최종 전체 suite 4,010/4,010과 actual primitive crash 63/63이 통과했다.
+두 실행의 입력 15,439개는 동일하며 전후 변경은 0건이다. 코드 delta 21개를 검토했고 상속된 미검토 50개는 유지한다.
+Human이 추가 요청한 Society composition 및 플랫폼 책임·계약 구조 개선을 다음 DR43에서 진행한다.
 
-상세는 [DR41](design-revisions.md#dr41--tuiapplicationruntimeextension-모듈-경계)과
-[검증 상태](implementation/validation.md),
-[DR41 evidence](../test/audit/modules-2026-10-10.evidence.json)를 따른다.
-이전 인계는 [DR40 보관본](archive/handoff-before-dr41.md)에 있다.
+설계는 [DR42](design-revisions.md#dr42--native-transportproject-writeregress-복구archive-종료-증명),
+현재 실행은 [validation](implementation/validation.md), bytes·실패 로그는
+[DR42 evidence](../test/audit/host-repairs-2026-10-10.evidence.json)를 따른다.
+이전 인계는 [DR41 보관본](archive/handoff-before-dr42.md)에 있다.
 
-Pi private hook·Store type-only 순환은 남는다. native Mac·VM power loss·paid provider·
-release는 NOT_RUN이다. 기존 시작 1초/5초 목표는 미달이며 이 배치가 해결하지 않았다.
+native Mac·VM power loss·paid provider·release는 NOT_RUN이다.
+기존 전체 startup 5초 목표 미달과 Pi private hooks·Store type-only SCC는 남는다.

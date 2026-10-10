@@ -505,6 +505,13 @@ RPC가 아니라 guest의 TUI가 하므로 이 조항 밖이다(§4.6).
 있고 결과가 없으면 guesthost가 효과를 관측해 판정할 때까지 unknown이다. 기존 CLI의 V26B 규칙과 같다.
 결과를 모르는 동안 UI는 "결과를 확인하는 중"이라고 말한다. "실패"라고 말하지 않는다(P0-5).
 
+DR42에서 request key의 멱등성 owner와 별도로 project mirror의 mutation owner를 완성했다.
+Import와 session startup, bound society archive는 같은 project별 queue를 통과하며, maintenance는
+진행·대기 중인 project/society 작업이 끝난 뒤에만 시작한다. maintenance 소유권이 유지되는 동안
+새 import와 startup도 거절한다. same-key outcome의 역사적 의미와 canonical main writer는 유지한다.
+Archive의 endpoint 부재는 stopped의 증거가 아니며 launcher의 명시적 stop/manager 관측을 요구한다.
+세대별 egress recovery와 Keychain contention budget도 [DR42](design-revisions.md#dr42--native-transportproject-writeregress-복구archive-종료-증명)를 따른다.
+
 ### 4.10 protocol 버전
 
 **MUST [MAC-250]** protocol 버전은 정수 하나다. 메시지 모양이나 뜻이 바뀌면 올린다. host는 두 버전을 모두 말한다. 하나는 자기가

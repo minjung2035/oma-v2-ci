@@ -37,14 +37,17 @@ async function manifestOf(root: string, top: string): Promise<Record<string, str
 
 export class GuestArchives {
   constructor(private readonly societiesDir: string, private readonly ledger: RequestLedger,
-    private readonly running: (society: string) => Promise<boolean>) {}
+    private readonly stop: (society: string) => Promise<"stopped" | "running" | "unknown">) {}
 
   create(key: unknown, params: { society: unknown }): Promise<Record<string, unknown>> {
     return this.ledger.run(key, "archive.create", params, async () => {
       const society = params.society;
       if (!isValidSocietyName(society)) throw new StoreError("INVALID_REQUEST", "invalid society name");
       // REC-005: an archive is of a quiescent society; a running one is not archived.
-      if (await this.running(society)) throw new StoreError("BATCH_CONFLICT", "stop the society before archiving it");
+      const stopped = await this.stop(society);
+      if (stopped === "running") throw new StoreError("BATCH_CONFLICT", "stop the society before archiving it");
+      if (stopped !== "stopped")
+        throw new StoreError("BROKER_UNAVAILABLE", "the society session has not been confirmed stopped; retry the same key");
       const manifest = await manifestOf(this.societiesDir, society);
       const scratch = mkdtempSync(this.ledger.staging(key as string, "manifest-"));
       try {

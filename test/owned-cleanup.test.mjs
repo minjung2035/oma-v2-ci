@@ -18,7 +18,7 @@ function load(file, replacements = {}, platform = 'linux') {
     .replaceAll('import.meta.url', JSON.stringify(pathToFileURL(resolve(file)).href));
   const code = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText;
   const module = { exports: {} };
-  new Script(code, { filename: file }).runInNewContext({ module, exports: module.exports, Buffer, URL, AggregateError,
+  new Script(code, { filename: file }).runInNewContext({ module, exports: module.exports, Buffer, URL, AggregateError, performance,
     process: { platform, arch: process.arch }, require(name) {
       if (Object.hasOwn(replacements, name)) return replacements[name];
       return require(name.startsWith('.') ? resolve('dist', dirname(file), name) : name);
@@ -363,9 +363,12 @@ for (const file of ['src/runtime/personal-settings.ts', 'src/runtime/pi-runtime.
   });
 for (const failed of [false, true]) test(`Owned cleanup Keychain: controlled ${failed ? 'store failure plus' : 'only'} lock close failure retains exact outcome`, async () => {
   let returned = 0, writes = 0;
+  const writer = load('src/runtime/process-writer.ts', {
+    './process-lock.js': { ProcessLock: { tryAcquire: () => ({ descriptor: 17, assertHeld() {}, close() { returned++; throw secondary; } }) } },
+  });
   const api = load('src/platform/host/keychain.ts', {
     '../../runtime/user-files.js': { ensureOwnedUserDirectory() {} },
-    '../../runtime/process-lock.js': { ProcessLock: { tryAcquire: () => ({ descriptor: 17, assertHeld() {}, close() { returned++; throw secondary; } }) } },
+    '../../runtime/process-writer.js': writer,
   });
   const store = { async get() { if (failed) throw primary; return '{}'; }, async put() { writes++; } };
   const credential = api.keychainCredentials(store, 'fixture-account', '/fixture/item.lock');

@@ -8,6 +8,7 @@ import { Script } from 'node:vm';
 import ts from 'typescript';
 import { macBundleResources } from '../dist/src/platform/host/bundle.js';
 
+import { NativeChannel } from '../dist/src/platform/host/native-channel.js';
 const code = ts.transpileModule(readFileSync('src/platform/host/keychain-client.ts', 'utf8'), {
   compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
 }).outputText;
@@ -17,6 +18,7 @@ class StoreError extends Error { constructor(code, message) { super(message); th
 function world({ fault, noChannel = false, spawnError } = {}) {
   const children = [], launches = [];
   const deps = {
+    './native-channel.js': { NativeChannel },
     './bundle.js': { macBundleResources },
     'node:path': path, '../../domain/errors.js': { StoreError },
     '../../process/async.js': {

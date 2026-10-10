@@ -3,7 +3,7 @@
 import { join } from "node:path";
 import { readGuestIdentity, systemUser } from "../platform/guest/identity.js";
 import { startGuestServer } from "../platform/guest/server.js";
-import { GuestHost } from "../platform/guest/host.js";
+import { GuestHost, listening } from "../platform/guest/host.js";
 import { systemdSessionLauncher } from "../platform/guest/systemd-launcher.js";
 import { EgressPool, startEgressService } from "../platform/guest/egress.js";
 import { RequestLedger } from "../platform/guest/requests.js";
@@ -12,7 +12,6 @@ import { serveStream } from "../platform/guest/stream.js";
 import { GuestArchives } from "../platform/guest/archive.js";
 import { GuestPackages } from "../platform/guest/packages.js";
 import { DEPLOYMENT_LAYOUT } from "../domain/deployment.js";
-import { listening } from "../platform/guest/host.js";
 import { PLATFORM_FRAME_BYTES } from "../protocol/host-guest.js";
 
 function argOf(flag: string, fallback: string): string {
@@ -29,8 +28,6 @@ const dataHome = process.env.XDG_DATA_HOME ?? join(dataDir, "data");
 
 const ledger = new RequestLedger(join(dataDir, "requests"));
 const projects = new GuestProjects(join(dataDir, "projects"), join(dataHome, "oma"), ledger);
-const sessionsDir = runtimeDir;
-const archives = new GuestArchives(join(dataHome, "oma"), ledger, society => listening(join(sessionsDir, `${society}.sock`)));
 // DR25: the engine's processes run as the society sessions do.
 const engineEnv = {
   HOME: process.env.HOME ?? join(dataDir, "home"),
@@ -42,13 +39,7 @@ const engineEnv = {
 };
 const packages = new GuestPackages({ ledger, projects, dataDir: join(dataHome, "oma"), libdir, node: process.execPath,
   entry: join(libdir, DEPLOYMENT_LAYOUT.entries.guestPackages), env: engineEnv, timeoutMs: 10 * 60_000 });
-const host = new GuestHost({
-  archives, packages,
-  societiesDir: join(dataHome, "oma"),
-  projectsDir: join(dataDir, "projects"),
-  projects, ledger,
-  stopDeadlineMs: 150_000,
-  launcher: systemdSessionLauncher({
+const launcher = systemdSessionLauncher({
     sessionsDir: runtimeDir,
     node: process.execPath,
     libdir,
@@ -56,8 +47,12 @@ const host = new GuestHost({
       ...engineEnv,
       ...(process.env.DBUS_SESSION_BUS_ADDRESS === undefined ? {} : { DBUS_SESSION_BUS_ADDRESS: process.env.DBUS_SESSION_BUS_ADDRESS }),
     },
-  }),
-});
+  });
+const stopDeadlineMs = 150_000;
+const archives = new GuestArchives(join(dataHome, "oma"), ledger, async society =>
+  await listening(launcher.socketPath(society)) ? "running" : launcher.stop(society, stopDeadlineMs));
+const host = new GuestHost({ archives, packages, societiesDir: join(dataHome, "oma"), projectsDir: join(dataDir, "projects"),
+  projects, ledger, stopDeadlineMs, launcher });
 
 // §4.7: the host's pooled egress connections, and the socket the guest's own
 // processes ask for them on.

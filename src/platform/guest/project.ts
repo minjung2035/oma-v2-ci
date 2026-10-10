@@ -17,6 +17,7 @@ import { runGitText } from "../../process/policies.js";
 import { projectGitPathAt } from "../../storage/paths.js";
 import { isUuid } from "../../protocol/host-guest.js";
 import type { RequestLedger } from "./requests.js";
+import { ProjectMutations } from "./project-mutations.js";
 
 /** The product's trusted git, with object checks on everything fetched. */
 function git(argv: readonly string[], cwd?: string): { status: number; stdout: string; stderr: string } {
@@ -63,6 +64,7 @@ export function bundleObjectFormat(path: string): "sha1" | "sha256" {
 export type ImportParams = Record<string, unknown> & { projectId?: unknown; branch?: unknown; bundle?: unknown };
 
 export class GuestProjects {
+  readonly mutations = new ProjectMutations();
   constructor(private readonly projectsDir: string, private readonly societiesDir: string, private readonly ledger: RequestLedger) {}
 
   mirrorOf(projectId: string): string { return join(this.projectsDir, projectId); }
@@ -111,7 +113,7 @@ export class GuestProjects {
       const attributes = git(["-C", mirror, "cat-file", "-p", `${head}:.gitattributes`]);
       if (attributes.status === 0 && /filter=lfs/.test(attributes.stdout)) notCarried.push("large files (LFS)");
       return { head, ref, objectFormat: format, notCarried };
-    });
+    }, run => isUuid(params.projectId) ? this.mutations.run(params.projectId, run) : run());
   }
 
   /** §6.4: the society's canonical main, as a bundle staged for the host. */

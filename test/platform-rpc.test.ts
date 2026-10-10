@@ -14,7 +14,7 @@ import { FramedPeer, PlatformError, connectSocket, readLeadingFrame, readLeading
 import { syncBuiltinESMExports } from "node:module";
 import { borrowedFileRange } from "../src/platform/stream-source.js";
 import { receiveDeclared } from "../src/platform/stream-receive.js";
-import { serveRequests } from "../src/platform/guest/server.js";
+import { serveRequests } from "../src/platform/rpc-server.js";
 import { serveStream } from "../src/platform/guest/stream.js";
 import { RequestLedger } from "../src/platform/guest/requests.js";
 import { createHash } from "node:crypto";
@@ -238,7 +238,7 @@ test("DR27: host egress pool releases a half-closed slot and replaces it", async
   const host = new EgressHost({
     open: async () => { const { client, remote } = await pair(t); peers.push(remote); return { socket: client, rest: Buffer.alloc(0) }; },
     resolve: async () => { throw new Error("no provider may be called"); },
-    frameBytes: PLATFORM_FRAME_BYTES, maxPool: 1, limits: { concurrent: 1, timeoutMs: 100 },
+    frameBytes: PLATFORM_FRAME_BYTES, maxPool: 1, limits: { concurrent: 1, timeoutMs: 100 }, retry: { initialMs: 10, maxMs: 20 },
   });
   t.after(() => host.stop());
   await host.fill();

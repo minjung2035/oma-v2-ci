@@ -20,10 +20,9 @@ import { collectTemporaries, ensureHostOwnedDirectory, removeHostStaged } from "
 import { ProcessLock } from "../../runtime/process-lock.js";
 import { withAsyncCleanup } from "../../process/cleanup.js";
 import { ensureOwnedUserDirectory } from "../../runtime/user-files.js";
-import { setTimeout as pause } from "node:timers/promises";
+import { assertWriterWait, withProcessWriterLock } from "../../runtime/process-writer.js";
 import { StoreError } from "../../domain/errors.js";
 import type { KeychainStore } from "./keychain.js";
-import { serialized } from "./keychain.js";
 import { PLATFORM_FRAME_BYTES } from "../../protocol/host-guest.js";
 import { makePublicDial } from "../../runtime/connect-proxy.js";
 
@@ -89,59 +88,31 @@ export const ARCHIVE_KEY_LOCK_WAIT_MS = 30_000;
 
 /** The archive key: made once on this Mac and kept in the Keychain (§8.4).
  * Its creation is the serialized create-if-absent the credentials use
- * (AV-22): one in-process writer, then the cross-process lock, then a reread
+ * (AV-22): one OS writer across this and other processes, then a reread
  * under it -- so two callers can never write two keys, the loser's archives
  * opening with nothing (P0-2/4). The lock wait itself is bounded
  * (ARCHIVE_KEY_LOCK_WAIT_MS): contention past the deadline is
  * BROKER_UNAVAILABLE, not a hang. */
 export async function archiveKey(keychain: KeychainStore, lockPath: string,
     waitMs = ARCHIVE_KEY_LOCK_WAIT_MS): Promise<Buffer> {
-  // A wait that is not a finite positive number cannot bound the loop below:
-  // NaN or an infinity makes `now >= now + waitMs` never true and the
-  // deadline meant to bound this wait becomes the unbounded spin it replaced.
-  // Invalid arguments are refused before the first try.
-  if (!Number.isFinite(waitMs) || waitMs <= 0)
-    throw new StoreError("INVALID_REQUEST", "the archive key lock wait must be a positive finite number of milliseconds");
-  const acquire = (): ProcessLock | null => {
-    try { return ProcessLock.tryAcquire(lockPath); }
-    catch (error) {
-      // The wait exists for transient contention: out of descriptors or of
-      // lock slots is "try later", like a held lock, never a raw errno.
-      if (["EMFILE", "ENFILE", "EAGAIN"].includes((error as NodeJS.ErrnoException).code ?? ""))
-        throw new StoreError("BROKER_UNAVAILABLE",
-          `the archive key lock could not be acquired (${(error as NodeJS.ErrnoException).code}); try again`);
-      throw error;
-    }
-  };
+  assertWriterWait(waitMs);
   const stored = await keychain.get("archive");
   if (stored !== undefined) return Buffer.from(stored, "base64");
-  return serialized(lockPath, async () => {
-    const again = await keychain.get("archive");
-    if (again !== undefined) return Buffer.from(again, "base64");
-    // P0-8: the archive key lock lives in oma's own run directory; its leaf
-    // is repaired rather than trusted as-is.
-    ensureOwnedUserDirectory(dirname(lockPath), dirname(lockPath));
-    const deadline = performance.now() + waitMs;
-    let lock: ProcessLock | null;
-    while ((lock = acquire()) === null) {
-      if (performance.now() >= deadline)
-        throw new StoreError("BROKER_UNAVAILABLE", "another process still holds the archive key lock");
-      await pause(25);
-    }
-    const held = lock;
-    return withAsyncCleanup(async () => {
-      const fenced = (writer: KeychainStore): Promise<Buffer> => (async () => {
-        // Read once more under the lock: a winner may already have written.
-        const current = await writer.get("archive");
-        if (current !== undefined) return Buffer.from(current, "base64");
-        const made = randomBytes(32);
-        held.assertHeld(lockPath);
-        await writer.put("archive", made.toString("base64"));
-        return made;
-      })();
-      return await (keychain.withWriter === undefined ? fenced(keychain) : keychain.withWriter(held.descriptor, fenced));
-    }, () => held.close());
-  });
+  // P0-8: the archive key lock lives in oma's own run directory; its leaf
+  // is repaired rather than trusted as-is.
+  ensureOwnedUserDirectory(dirname(lockPath), dirname(lockPath));
+  return withProcessWriterLock(lockPath, async held => {
+    const fenced = (writer: KeychainStore): Promise<Buffer> => (async () => {
+      // Read once more under the lock: a winner may already have written.
+      const current = await writer.get("archive");
+      if (current !== undefined) return Buffer.from(current, "base64");
+      const made = randomBytes(32);
+      held.assertHeld(lockPath);
+      await writer.put("archive", made.toString("base64"));
+      return made;
+    })();
+    return await (keychain.withWriter === undefined ? fenced(keychain) : keychain.withWriter(held.descriptor, fenced));
+  }, { waitMs, busyMessage: "another process still holds the archive key lock" });
 }
 
 export class HostService {
@@ -181,7 +152,7 @@ export class HostService {
           highestSchemaWritten: Math.max(current.highestSchemaWritten ?? 0, options.stateSchemaWritten) }) })); },
     });
     const egress = new EgressHost({
-      open: () => link.bytes("egress"), resolve: options.resolve,
+      open: signal => link.bytes("egress", {}, signal), resolve: options.resolve,
       // v1 guests supplied no model budget. v2 carries it per run, not as a
       // host-wide RPC timeout. The compatibility value is the old model default.
       limits: { concurrent: 4, timeoutMs: 600_000 }, frameBytes: PLATFORM_FRAME_BYTES, maxPool: 32,
@@ -194,8 +165,9 @@ export class HostService {
     });
     lifecycle.onState(state => {
       if (state === "ready") {
+        egress.resume();
         void egress.fill().catch(error => { try { console.error("egress pool fill failed", error); } catch { /* best-effort observation */ } });
-      }
+      } else { void egress.pause().catch(() => undefined); }
     });
     link.onReboot(() => { void egress.forgetBoot().catch(() => undefined); });
     // §9.1: a wake the guest's clock could not be stepped for is reported by

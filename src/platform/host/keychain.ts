@@ -10,12 +10,10 @@
  * writer lock across processes; each mutation rereads the committed blob.
  */
 import { StoreError } from "../../domain/errors.js";
-import { withAsyncCleanup } from "../../process/cleanup.js";
 import type { EngineCredentials } from "../../runtime/engine-auth.js";
-import { ProcessLock } from "../../runtime/process-lock.js";
+import { withProcessWriterLock } from "../../runtime/process-writer.js";
 import { ensureOwnedUserDirectory } from "../../runtime/user-files.js";
 import { dirname } from "node:path";
-import { setTimeout as pause } from "node:timers/promises";
 
 export interface KeychainStore {
   /** The item's value, or undefined when there is none. A locked or
@@ -51,26 +49,28 @@ export function serialized<T>(account: string, run: () => Promise<T>): Promise<T
 
 /** P0-3: host resolver and Personal engines share one cross-process writer lock.
  * Waiting measures contention only; no timeout reclassifies an in-flight write. */
-export function keychainCredentials(store: KeychainStore, account: string, lockPath?: string): EngineCredentials {
-  const write = <T>(run: (writer: KeychainStore) => Promise<T>, signal?: AbortSignal): Promise<T> => serialized(lockPath ?? account, async () => {
+// The helper's existing 60 s credential availability budget also bounds
+// contention. This is not a limit on a write already holding the fence.
+const CREDENTIAL_LOCK_WAIT_MS = 60_000;
+export function keychainCredentials(store: KeychainStore, account: string, lockPath?: string,
+  options: { readonly waitMs?: number } = {}): EngineCredentials {
+  const write = async <T>(run: (writer: KeychainStore) => Promise<T>, signal?: AbortSignal): Promise<T> => {
     signal?.throwIfAborted();
-    if (lockPath === undefined) return run(store);
+    if (lockPath === undefined) return serialized(account, async () => { signal?.throwIfAborted(); return run(store); });
+    // The OS lock also serializes independent descriptors in this process.
+    // A second, unbounded promise queue would hide contention from its deadline.
     // P0-8: the lock's directory is oma's own (the engine or run directory);
     // its leaf is repaired rather than trusted as-is.
     ensureOwnedUserDirectory(dirname(lockPath), dirname(lockPath));
-    let lock: ProcessLock | null;
-    while ((lock = ProcessLock.tryAcquire(lockPath)) === null) await pause(25, undefined, { signal });
-    const held = lock;
-    return withAsyncCleanup(async () => {
-      signal?.throwIfAborted(); held.assertHeld(lockPath);
+    return withProcessWriterLock(lockPath, async held => {
       const fenced = (writer: KeychainStore): Promise<T> => run({ get: account => writer.get(account),
         put: (account, value) => {
           signal?.throwIfAborted(); held.assertHeld(lockPath);
           return writer.put(account, value);
         } });
       return await (store.withWriter === undefined ? fenced(store) : store.withWriter(held.descriptor, fenced));
-    }, () => held.close());
-  });
+    }, { waitMs: options.waitMs ?? CREDENTIAL_LOCK_WAIT_MS, ...(signal === undefined ? {} : { signal }), busyMessage: "another process still holds the credential writer lock" });
+  };
   return {
     async read(providerId) {
       return parse(await store.get(account))[providerId] as Credential | undefined;

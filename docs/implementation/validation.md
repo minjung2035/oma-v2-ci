@@ -1,5 +1,42 @@
 # OMA v2 — 현재 검증 상태
 
+## Host/Guest owner 결함 수정 (2026-10-10, DR42)
+
+기준 HEAD `ae15804000ce6`에서 지정된 여섯 항목을 확인했다. VzDriver의 줄 소비는 이미
+구현돼 있었고 기존 helper 실행 37/37이 통과했다. 두 Node helper client의 JSONL·ID·deadline
+owner를 공통화하며 UTF-8 줄별 제한과 malformed response 회귀를 강화했다. project별 mutation,
+maintenance barrier, archive quiescence, egress autonomous recovery, Keychain 유한 contention wait와
+공통 RPC dispatcher를 구현했다. 서브에이전트는 사용하지 않았다.
+
+집중 첫 실행은 258 PASS / 5 FAIL이었다. archive 테스트의 새 request key에 staged bundle이
+없었고 endpoint 테스트의 일반 bool 관측 fixture가 archive 전용 확인으로 바뀌어 두 건 실패했다.
+이를 실제 staging/관측 계약에 맞게 정정했다. 새 egress backoff보다 짧은 200 ms fixture는
+명시적 test retry cadence를 받는다. Vz의 malformed credential 거절 뒤 다른 유효한 응답을
+받는 기존 의미를 유지했다. build 과정은 optional signal·Buffer 해석·mock 인수 타입 진단으로
+실패했고 타입을 정정했다. 실패 실행을 최종 PASS로 바꾸지 않는다.
+집중 재실행 274/274 PASS, build/typecheck와 architecture rules 0 findings다.
+실제 user systemd에서도 socket이 없는 live holder/child를 만든 뒤 짧은 stop이 unknown을 반환하고,
+전체 stop 및 collected unit 관측이 stopped를 반환하는 것을 확인했다.
+
+첫 전체 suite는 4,008/4,008 PASS이며 15,439개 입력의 실행 전후 변경은 0건이다.
+실행 중 추가 검토에서 project fence가 ledger 이전에 놓이면 immutable outcome/key binding 판정이
+현재 maintenance/입력 검증에 가려질 수 있음을 확인했다. ledger는 과거 결과를 먼저 읽고 pending
+효과·결과 게시에만 owner를 적용하도록 보완했다. historical replay·key reuse·pending assertion을
+추가한 집중 검증 59/59도 통과했다. Keychain/Archive key의 OS writer 앞 중복 promise queue도
+제거해 같은 프로세스의 대기 역시 유한 budget을 적용받도록 했다. 취득한 첫 writer는 deadline으로
+중단하지 않는 회귀를 추가했고, lock/credential/cleanup 집중 검증은 87/87 PASS다.
+같은 검토에서 모든 project role 설정을 쓰는 packages.replace도 maintenance/archive barrier에
+참여해야 함을 확인했다. 전역 package 게시만 exclusive 구간으로 처리하고 일반 mirror 작업은
+계속 project별로 병렬 실행한다. unbound archive까지 package writer와 충돌하는 회귀를 추가했고, package/project/archive 통합 집중 실행 65/65도 통과했다.
+이 변경 뒤 입력을 다시 고정한 전체 회귀는 4,010/4,010 PASS(415 files), actual primitive crash는
+EXECUTED+PASS 63/63이다. 공통 runtime 입력은 `efbad65e03c83dbc3fb64264c17b972a186403b5be58c93ebb4c8dbfc0fc913d`
+(15,439 files)이며 각각 전후 변경은 0건이다. SIGSTOP·부모 SIGKILL·재시작·반복 복구 범위이고
+VM power loss나 entrypoint crash의 증거로 확장하지 않는다. 후속 결과 기록의 bytes에는 별도
+structure·input 검사를 적용하며 runtime suite가 이미 실행했다고 주장하지 않는다.
+기존 suite/native evidence를 이번 bytes의 실행으로 재사용하지 않는다. 결과와 로그 hash는
+[DR42 evidence](../../test/audit/host-repairs-2026-10-10.evidence.json)에 기록한다.
+native Mac·VM power loss·paid provider·release는 NOT_RUN이며, 기존 전체 startup 5초 목표 미달은 남는다.
+
 ## 모듈 독립성 (2026-10-10, DR41)
 
 기준 `babe732`에서 TUI 효과·Principal 수명·설정과 package/Platform 책임을 분리했다.
@@ -200,7 +237,7 @@ native·macOS VM boot·power loss는 미실행이다. 이전 kernel/crash PASS�
 충족했다고 주장할 수 없다. raw log는 `/tmp/oma-host-ownership-2026-10-09`에 보존한다.
 
 현재 구조 검사의 입력 identity(생성 자체는 runtime PASS가 아니다):
-verification input digest `25d9be7d9750b9188adfecd9c7a63a6ba60681bb382b3a1e1f5922e187f32ad4` (15433 files).
+verification input digest `2a1e59a89c5f224873e0685f8dfccb4d4118a2552458be046db9eec3c236e4cc` (15439 files).
 
 ## 이전 실행 결과: 지정한 제한 제거·기능 복구 (2026-10-09, DR37)
 

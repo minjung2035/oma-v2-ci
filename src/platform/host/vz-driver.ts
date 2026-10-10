@@ -25,6 +25,7 @@ import { spawnSupervisedService } from "../../process/async.js";
 import type { VmDriver, VmStopCause } from "./lifecycle.js";
 import type { KeychainStore } from "./keychain.js";
 import { nativeKeychainStore } from "./keychain-client.js";
+import { NativeChannel } from "./native-channel.js";
 
 export interface VmConfig {
   readonly kernel: string;
@@ -43,8 +44,6 @@ export interface HelperCommand {
   readonly env: Readonly<Record<string, string>>;
 }
 
-type Pending = { resolve(value: Record<string, unknown>): void; reject(error: Error): void; timer: NodeJS.Timeout };
-const LINE_BYTES = 1024 * 1024;
 /** P0-6: no request of the helper waits forever. A wedged helper that still
  * holds the channel is ended by the deadlines its requests carry, not by the
  * next request's luck (NB-29). */
@@ -58,11 +57,9 @@ export interface VzDeadlines {
 }
 
 export class VzDriver implements VmDriver {
-  private readonly pending = new Map<number, Pending>();
+  private readonly requests: NativeChannel;
   private readonly stopListeners: ((cause: VmStopCause) => void)[] = [];
   private readonly powerListeners: ((event: "sleep" | "wake") => void)[] = [];
-  private sequence = 0;
-  private buffered = "";
   private readonly deadlines: Required<VzDeadlines>;
   readonly keychain: KeychainStore;
 
@@ -70,11 +67,22 @@ export class VzDriver implements VmDriver {
     private readonly socketDir: string, private readonly config: VmConfig, deadlines?: VzDeadlines) {
     this.deadlines = { startMs: deadlines?.startMs ?? START_DEADLINE_MS,
       stopMs: deadlines?.stopMs ?? STOP_DEADLINE_MS, keychainMs: deadlines?.keychainMs ?? KEYCHAIN_DEADLINE_MS };
+    this.requests = new NativeChannel(channel, {
+      helper: "VM", endedMessage: "the VM helper ended", strictResponses: false, timeoutEndsChannel: false,
+      refusal: message => new StoreError("BROKER_UNAVAILABLE", typeof message.error === "string" ? message.error : "the VM helper refused"),
+      event: message => {
+        if (message.event === "stopped" && (message.cause === "guest" || message.cause === "error")) {
+          for (const listener of this.stopListeners) listener(message.cause);
+          return true;
+        }
+        if (message.event === "sleep" || message.event === "wake") {
+          for (const listener of this.powerListeners) listener(message.event);
+          return true;
+        }
+        return false;
+      },
+    });
     this.keychain = nativeKeychainStore((op, fields) => this.ask(op, fields, this.deadlines.keychainMs));
-    channel.setEncoding("utf8");
-    channel.on("data", (chunk: string) => { this.received(chunk); });
-    channel.on("error", () => { channel.destroy(); });
-    channel.once("close", () => { this.channelGone(); });
     child.once("exit", () => { this.helperGone(); });
     child.once("error", () => { if (child.pid === undefined) this.helperGone(); });
   }
@@ -92,55 +100,14 @@ export class VzDriver implements VmDriver {
   /** §9.1: the Mac is going to sleep, or has woken. */
   onPower(listener: (event: "sleep" | "wake") => void): void { this.powerListeners.push(listener); }
 
-  private received(chunk: string): void {
-    this.buffered += chunk;
-    if (this.buffered.length > LINE_BYTES) { this.channel.destroy(); return; }
-    for (let at = this.buffered.indexOf("\n"); at >= 0; at = this.buffered.indexOf("\n")) {
-      const line = this.buffered.slice(0, at);
-      this.buffered = this.buffered.slice(at + 1);
-      let message: Record<string, unknown>;
-      try { message = JSON.parse(line) as Record<string, unknown>; }
-      catch { this.channel.destroy(); return; }
-      if (message.event === "stopped") {
-        if (message.cause !== "guest" && message.cause !== "error") { this.channel.destroy(); return; }
-        for (const listener of this.stopListeners) listener(message.cause);
-        continue;
-      }
-      if (message.event === "sleep" || message.event === "wake") { for (const listener of this.powerListeners) listener(message.event); continue; }
-      const waiting = typeof message.id === "number" ? this.pending.get(message.id) : undefined;
-      if (waiting === undefined) continue;
-      this.pending.delete(message.id as number);
-      clearTimeout(waiting.timer);
-      if (message.ok === true) waiting.resolve(message);
-      else waiting.reject(new StoreError("BROKER_UNAVAILABLE", typeof message.error === "string" ? message.error : "the VM helper refused"));
-    }
-  }
-
-  private channelGone(): void {
-    for (const waiting of this.pending.values()) { clearTimeout(waiting.timer); waiting.reject(new StoreError("BROKER_UNAVAILABLE", "the VM helper ended")); }
-    this.pending.clear();
-  }
-
   private helperGone(): void {
-    this.channelGone();
+    this.requests.close();
     // P0-5: EOF rejects requests, but only actual helper exit proves VM death.
     for (const listener of this.stopListeners.splice(0)) listener("error");
   }
 
   private ask(op: string, fields: Record<string, unknown> = {}, deadlineMs = KEYCHAIN_DEADLINE_MS): Promise<Record<string, unknown>> {
-    const id = ++this.sequence;
-    return new Promise((resolve, reject) => {
-      if (this.channel.destroyed) { reject(new StoreError("BROKER_UNAVAILABLE", "the VM helper ended")); return; }
-      const timer = setTimeout(() => {
-        // The helper answered nothing in its budget; the request is not kept
-        // waiting on it. A late answer to this id is dropped as a stray line.
-        this.pending.delete(id);
-        reject(new StoreError("BROKER_UNAVAILABLE", `the VM helper did not answer ${op} in time`));
-      }, deadlineMs);
-      timer.unref();
-      this.pending.set(id, { resolve, reject, timer });
-      this.channel.write(`${JSON.stringify({ op, id, ...fields })}\n`);
-    });
+    return this.requests.request(op, fields, deadlineMs);
   }
 
   async start(): Promise<void> { await this.ask("start", { config: { ...this.config, socketDir: this.socketDir } }, this.deadlines.startMs); }
@@ -151,5 +118,5 @@ export class VzDriver implements VmDriver {
   }
 
   /** Ends the helper; the VM, if any, ends with it. */
-  close(): void { this.channel.destroy(); this.child.kill("SIGTERM"); }
+  close(): void { this.requests.close(); this.child.kill("SIGTERM"); }
 }

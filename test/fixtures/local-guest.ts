@@ -97,7 +97,7 @@ export class LocalDriver implements VmDriver {
     const control = new GuestControl(system);
     const ledger = new RequestLedger(join(this.dir, "requests"));
     const projects = new GuestProjects(join(this.dir, "projects"), this.societies.dir, ledger);
-    const archives = new GuestArchives(this.societies.dir, ledger, society => listening(this.societies.launcher.socketPath(society)));
+    const archives = new GuestArchives(this.societies.dir, ledger, async society => await listening(this.societies.launcher.socketPath(society)) ? "running" : this.societies.launcher.stop(society, 2000));
     // DR25: the engine's `oma pi` code, this checkout's, over the guest's data.
     const libdir = fileURLToPath(new URL("../../../", import.meta.url));
     const packages = new GuestPackages({ ledger, projects, dataDir: this.societies.dir, libdir, node: process.execPath,

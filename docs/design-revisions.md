@@ -1555,3 +1555,48 @@ host/guest 프로세스 경계, model tool surface·권한·자원 선언의 의
 Git changeset 도구로 기록한다. 검증·실패 기록과 native 한계는
 [현재 검증 상태](implementation/validation.md), bytes는
 [DR41 evidence](../test/audit/modules-2026-10-10.evidence.json)에 기록한다.
+
+## DR42 — Native transport·project writer·egress 복구·archive 종료 증명
+
+2026-10-10. Human이 기준 `ae15804000ce6`에서 제시한 여섯 항목을 직접 확인하고 수정한다.
+서브에이전트는 사용하지 않는다. 해당 HEAD의 VzDriver에는 처리한 줄을 제거하는 코드가
+이미 있다. 무한 루프 주장 자체는 현재 소스·기존 37개 실행에서 재현되지 않았다.
+다만 중복 파서·느슨한 응답 shape·read 전체의 문자 길이 제한은 실제로 개선할 대상이다.
+
+- [NativeChannel](../src/platform/host/native-channel.ts)이 두 helper client의 줄 소비·UTF-8
+  바이트 제한·응답 shape·ID·pending timer를 소유한다. 기존 1 MiB helper wire 경계를 줄별로
+  검사하고 여러 유효한 줄의 합으로 연결을 거절하지 않는다. Keychain의 strict correlation과
+  VM의 늦은 응답 처리 차이, credential refusal의 비밀 보호를 유지한다. EOF는 요청을 끝내며
+  실제 helper exit만 VM 종료의 증거다. Swift/native 실행은 별도 Mac 검증 대상이다.
+- [ProjectMutations](../src/platform/guest/project-mutations.ts)는 mirror별 import·세션
+  startup·bound society archive를 outcome 게시까지 직렬화한다. 서로 다른 mirror는 동시에
+  진행할 수 있다. 모든 project role 설정을 쓰는 packages.replace는 같은 owner의 global exclusive
+  구간을 사용한다. unbound archive도 owner에 등록해 package 설정 변경과 겹치지 않는다.
+  maintenance admission은 대기 중인 project·society 작업도 확인하고, 소유
+  연결의 end/reap까지 import와 startup을 막는다. RequestLedger는 현재 fence를 적용하기 전에 intent binding과 과거 outcome을 먼저 읽는다.
+  완료된 same-key 결과·key 재사용 판정은 maintenance와 독립적이고, pending 효과와 outcome 게시만
+  project owner를 통과한다. Host import도 transfer부터 lastImport 기록까지 project별 순서를
+  유지한다. 실행 중인 broker의 canonical repository writer는 기존 owner가 계속 소유한다.
+- EgressHost는 세대별 fill 하나와 retry timer를 소유한다. 최초 실패 뒤에도 외부 요청 없이
+  목표 spare 연결 수를 회복한다. 기존 handshake cadence인 250 ms에서 두 배씩 늘려 최대
+  5 s 간격으로 재시도하며, 재시도 횟수·run lifetime 제한을 두지 않는다. VM ready에서 재개하고
+  ready를 벗어나면 중단한다. reboot/shutdown은 timer·abort·idle sockets·run leases를 반환하며
+  이전 세대의 늦은 open/credential resolution은 새 연결이나 run을 만들지 않는다.
+- Archive는 endpoint가 실제로 열려 있으면 기존 BATCH_CONFLICT로 거절한다. endpoint 부재는
+  명시적 launcher stop 확인을 요구한다. systemd stop이 실패했을 때는 manager가 collected
+  unit의 not-found/inactive/dead, 두 PID 0, 빈 ControlGroup을 모두 관측해야 stopped다.
+  불완전 관측은 unknown이며 archive intent를 pending으로 남긴다. GuestHost의 society/project
+  fence는 stop 확인·manifest·tar·결과 게시가 끝날 때까지 새 startup/import/maintenance를 막는다.
+- [withProcessWriterLock](../src/runtime/process-writer.ts)이 Keychain credential와 archive key의
+  monotonic contention wait·AbortSignal·inode fence·cleanup을 소유한다. credential은 기존 helper
+  availability budget인 60 s, archive key는 기존 30 s를 기본으로 사용한다. lock을 취득한 write의
+  수명이나 상속한 helper의 실제 close를 대기 deadline으로 잘라 성공/실패로 바꾸지 않는다.
+  OS writer 앞의 중복 promise queue는 제거해 같은 프로세스의 대기도 이 contention budget에 포함한다.
+- 공통 [RPC dispatcher](../src/platform/rpc-server.ts)는 HANDOFF와 Answer를 함께 소유한다.
+  Host API와 Guest control/society가 이 module을 참조한다. Guest server의 peer authentication,
+  hello·service startup 책임과 wire 버전·method·오류 의미는 유지한다.
+
+실제 Git/ledger/socket/archive 회귀와 Linux user systemd의 살아 있는 parent/child 종료 관측을
+검증한다. 최신 실행 수치·실패 기록은 [validation](implementation/validation.md), bytes·로그는
+[DR42 evidence](../test/audit/host-repairs-2026-10-10.evidence.json)가 소유한다. 이전 startup 목표,
+native macOS VM·Keychain·VM power loss·paid provider·release 검증의 미완료 상태는 유지한다.
