@@ -36,7 +36,7 @@ export const OUTSIDE_STATE_TREE = Object.freeze({
   "src/platform/host/archive-crypto.ts": "the Mac host's archive files in its own support directory, outside any society's state tree",
   "src/entry/guest-session.ts": "a society session holder's listening socket in the oma user's runtime directory, which guesthost connects to",
   "src/cli/effects/submit.ts": "the CLI caller's own temporary directory",
-  "src/extension/lsp-tools.ts": "a fresh mkdtemp directory under the OS temp directory -- the LSP child's own per-call HOME/XDG/TMP scratch, removed when the call ends; no society's tree is written (PI-001)",
+  "src/extension/lsp-call-scope.ts": "a fresh mkdtemp directory under the OS temp directory -- the LSP child's own per-call HOME/XDG/TMP scratch, removed when the call ends; no society's tree is written (PI-001)",
   "src/extension/mcp-tools.ts": "the MCP adapter's own state directory under the engine's agent dir (the credential key, the OAuth root, the per-session child-env scratch), or a fresh ephemeral tmp dir when no agent dir was provisioned -- engine-owned, rotated and removed by the adapter; the extension cannot import the storage primitives (PI-001)",
   "src/extension/mail-tools.ts": "a fresh mkdtemp directory under the model's own working directory (a Resident's sandbox home; the Principal's scratch, in the state tree but the model's own), written once and removed; the extension cannot import the storage primitives (PI-001)",
   "src/extension/contained-files.ts": "the search snapshot's private copy -- a fresh `oma-search-*` directory under the OS temp directory this call names before it exists and removes itself, written and removed by the same holder; source and destination are both written through held per-level descriptors (a same-uid racer cannot swap a component out from under either), so depth stays unbounded by anything but the OS descriptor table; the extension cannot import the storage primitives (PI-001)",
@@ -49,6 +49,7 @@ export const OUTSIDE_STATE_TREE = Object.freeze({
   "src/platform/guest/packages.ts": "a fresh mkdtemp under the OS temp directory -- this replace call's own spool scratch, removed when the call ends",
   "src/platform/guest/provision.ts": "a fresh mkdtemp under the OS temp directory -- this provisioning call's own spool scratch, removed when mkfs ends",
   "src/git/canonical-command.ts": "fresh mkdtemp directories under the OS temp directory -- the ls-tree and merge-tree spool scratch each call names and removes itself; no society's tree is written",
+  "src/runtime/local-package-stage.ts": "the extracted filesystem staging owner: Mac paths are beneath the app support store; Linux mutations retain held parents through publication",
   "src/runtime/local-package.ts": "the Mac host staging writes -- the store lives in the app's support directory outside any state tree on the hostStaging path; the Linux staging and archive spool name every entry through held store/staging parents",
 });
 /** A descriptor, not a path: `fd`, `this.fd`, `active.fd`, `temporaryFd`. */

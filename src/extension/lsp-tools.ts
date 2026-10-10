@@ -97,15 +97,15 @@
  *   than the refusal -- the workspace-edit materialization -- and stderr
  *   accumulation, which is truncation with a marker already.
  */
-import { mkdtempSync, rmSync, statSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join, relative } from "node:path";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
+import { statSync } from "node:fs";
+import { relative } from "node:path";
 import { Type } from "typebox";
+import { OMA_CHILD_ENV_ALLOW, buildChildEnv } from "./child-env.js";
 import { WorkspaceRefusal } from "./contained-files.js";
+import { observeLspCall, withLspScratch } from "./lsp-call-scope.js";
 import { textResult } from "./shared.js";
 import { vendoredBundleDir, verifyVendorBundle, type VendorVerification } from "./vendor-bundle.js";
-import { OMA_CHILD_ENV_ALLOW, buildChildEnv } from "./child-env.js";
 // Type-only: erased at compile, so this never evaluates the vendored
 // module before verification (PI-001 keeps runtime imports out too).
 import type { LspServerAdapter } from "./vendor/pi-lsp/runtime/types.js";
@@ -407,52 +407,8 @@ export async function registerLspTools(pi: ExtensionAPI, options: LspToolOptions
         `${tool} spawns a language server with ambient filesystem authority -- a read-only role cannot run it. lsp_status still works; run diagnostics from a writable agent.`);
   };
 
-  /** One call, one scratch: server-internal home/cache/temp writes land in
-   * a directory OMA removes when the call ends. */
-  const withScratch = <T>(fn: (scratch: string) => Promise<T>): Promise<T> => {
-    const scratch = mkdtempSync(join(tmpdir(), "oma-lsp-"));
-    return fn(scratch).finally(() => rmSync(scratch, { recursive: true, force: true }));
-  };
-
-  /** The observation window for one call across however many routes it
-   * fans out to -- progress-reset, not a deadline. Every inbound LSP
-   * frame on any of the call's own servers restarts it (the vendored
-   * client reports frames through `omaOnInboundFrame`), so a server
-   * still streaming diagnostics survives a call of any length and only
-   * a dead, stopped or wedged server is reclaimed. The window is never
-   * tighter than the call's own per-request timeout, so a caller who
-   * asked for a longer request budget is not undercut, and each route's
-   * request timeout still applies inside it. `adapters` holds the
-   * hardened adapter objects this call may spawn, so an unrelated call's
-   * traffic does not count as this call's progress. The signal merges
-   * the caller's abort with the stall; an error surfaced while the
-   * stall -- not the caller -- fired is reported as the stall. */
-  const callStall = (tool: string, ownedSignal: AbortSignal, timeoutMs: number,
-      adapters: ReadonlySet<LspServerAdapter>) => {
-    const ms = Math.max(options.callStallMs ?? LSP_CALL_STALL_MS, timeoutMs);
-    const controller = new AbortController();
-    const message = `${tool} saw no LSP server activity for ${ms}ms -- the server is stalled or dead`;
-    const fire = () => controller.abort(new Error(message));
-    let timer = setTimeout(fire, ms);
-    const unsubscribe = omaOnInboundFrame(adapter => {
-      if (adapters.has(adapter)) {
-        clearTimeout(timer);
-        timer = setTimeout(fire, ms);
-      }
-    });
-    return {
-      signal: AbortSignal.any([ownedSignal, controller.signal]),
-      stop: () => { clearTimeout(timer); unsubscribe(); },
-      fired: () => controller.signal.aborted && !ownedSignal.aborted,
-      message,
-    };
-  };
-  /** Re-report an in-flight failure as the stall when the stall is what
-   * ended it -- the vendored abort text would only say "aborted". */
-  const stallAware = (stall: ReturnType<typeof callStall>, error: unknown): never => {
-    if (stall.fired()) throw new Error(stall.message);
-    throw error;
-  };
+  const callStall = (tool: string, signal: AbortSignal, timeoutMs: number, adapters: ReadonlySet<LspServerAdapter>) =>
+    observeLspCall(tool, signal, timeoutMs, options.callStallMs ?? LSP_CALL_STALL_MS, adapters, omaOnInboundFrame);
 
   pi.registerTool({
     name: "lsp_diagnostics",
@@ -478,7 +434,7 @@ export async function registerLspTools(pi: ExtensionAPI, options: LspToolOptions
         ? Number.MAX_SAFE_INTEGER
         : Math.max(1, Math.floor(params.limit));
       const scope = sessionFor(ctx.sessionManager).scope;
-      return await scope.run(signal, async (ownedSignal) => await withScratch(async (scratch) => {
+      return await scope.run(signal, async (ownedSignal) => await withLspScratch(async (scratch) => {
         const runtime = configuredRuntime(options.workspace);
         const { root, routes, skipped } = selectDiagnosticRoutes(runtime.adapters, {
           root: options.workspace,
@@ -578,7 +534,7 @@ export async function registerLspTools(pi: ExtensionAPI, options: LspToolOptions
       if (params.write === true && options.readOnly)
         throw new WorkspaceRefusal("lsp_fix write requested but this role is read-only: preview the computed changes instead");
       const scope = sessionFor(ctx.sessionManager).scope;
-      return await scope.run(signal, async (ownedSignal) => await withScratch(async (scratch) => {
+      return await scope.run(signal, async (ownedSignal) => await withLspScratch(async (scratch) => {
         const runtime = configuredRuntime(options.workspace);
         const { root, route } = selectFixRoute(runtime.adapters, {
           root: options.workspace, path: params.path,
@@ -604,7 +560,7 @@ export async function registerLspTools(pi: ExtensionAPI, options: LspToolOptions
             root, path: params.path, write: false,
             ...(params.kind === undefined ? {} : { kind: params.kind }),
           }, runtime.timeoutMs, stall.signal, statusCtx(scope.context(ctx)), STATUS_KEY)
-            .catch(error => stallAware(stall, error)) as ToolResult;
+            .catch(error => stall.rethrow(error)) as ToolResult;
         } finally {
           stall.stop();
         }

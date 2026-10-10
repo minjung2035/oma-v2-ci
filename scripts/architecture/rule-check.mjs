@@ -1,5 +1,6 @@
 import path from "node:path";
 import { pathToFileURL } from "node:url";
+import { withSourceSnapshot } from "./rules/shared.mjs";
 import { importRuleFindings } from "./rules/import-rules.mjs";
 import { transactionRuleFindings } from "./rules/transaction-rules.mjs";
 import { ownershipRuleFindings } from "./rules/ownership-rules.mjs";
@@ -26,10 +27,12 @@ export const ARCHITECTURE_RULES = Object.freeze([
 ]);
 
 export function runArchitectureRuleCheck(root = process.cwd()) {
-  const findings = [];
-  for (const [group, check] of ARCHITECTURE_RULES)
-    for (const value of check(path.resolve(root))) findings.push({ group, ...value });
-  return findings;
+  return withSourceSnapshot(() => {
+    const findings = [];
+    for (const [group, check] of ARCHITECTURE_RULES)
+      for (const value of check(path.resolve(root))) findings.push({ group, ...value });
+    return findings;
+  });
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(path.resolve(process.argv[1])).href) {

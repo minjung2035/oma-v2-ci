@@ -999,7 +999,7 @@
       ]
     },
     {
-      "owner": "src/runtime/local-package.ts#linuxStaging",
+      "owner": "src/runtime/local-package-stage.ts#linuxStaging",
       "fact": "DR25/C20: a staged local package's copy under local/<name> is whole or absent -- published by one rename after a durable fill; a dead copy or an interrupted staging area is collected, never half-seen",
       "tests": [
         {

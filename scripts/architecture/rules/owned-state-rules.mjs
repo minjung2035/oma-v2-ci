@@ -106,6 +106,7 @@ export const OWNED_STATE_OWNERS = Object.freeze([
   // staging owner; executed only on the Mac side).
   "src/runtime/pi-packages.ts",
   "src/runtime/local-package.ts",
+  "src/runtime/local-package-stage.ts",
   "src/config/generations.ts",
   "src/tui/packages-apply.ts",
   "src/platform/package-archive.ts",
@@ -137,7 +138,7 @@ export const OWNED_STATE_EXEMPTIONS = Object.freeze({
   "src/entry/guest-session.ts": "the session holder's own listening socket in the oma user's runtime directory -- chmod of the name oma just made is the point",
   "src/entry/oma-society.ts": "the principal-session listing under the state root whose failure already answers `said` -- it refuses to claim silence, and the runtime probe paths above it are the caller's own",
   "src/entry/omahostd.ts": "the support directory's chmod -- the leaf's mode is set outright after the owned ensure -- and the state disk's O_EXCL create under it",
-  "src/extension/lsp-tools.ts": "a fresh mkdtemp under the OS temp directory -- the LSP child's own per-call scratch (HOME/XDG/TMP redirection), removed when the call ends; never an OMA-owned tail and never a user path (PI-001 keeps the extension off the storage imports)",
+  "src/extension/lsp-call-scope.ts": "a fresh mkdtemp under the OS temp directory -- the LSP child's own per-call scratch (HOME/XDG/TMP redirection), removed when the call ends; never an OMA-owned tail and never a user path (PI-001 keeps the extension off the storage imports)",
   "src/extension/mcp-tools.ts": "the MCP adapter's own state dir under the engine's agent dir -- ensure/chmod of the state root and scratch it just made, the oauth-file-key write, and the scratch/session rm -- engine-owned tails the adapter owns and rotates (PI-001 keeps the extension off the storage imports)",
   "src/extension/mail-tools.ts": "a fresh mkdtemp under the model's own working directory -- the extension's own scratch (PI-001 keeps it off the storage imports)",
   "src/extension/contained-search.ts": "the private snapshot's announced-name sweep under the OS temp directory; the complete-result spool is written by the serialized contained writer in contained-tools.ts, not here (PI-001 keeps the extension off the storage imports)",

@@ -4,6 +4,7 @@ import path from "node:path";
 import crypto from "node:crypto";
 import { pathToFileURL } from "node:url";
 import ts from "typescript";
+import { eachNode, propertyName, strip } from "./architecture/rules/shared.mjs";
 import { resolveExportDeclaration } from "./contract-surface.mjs";
 import {
   DEFAULT_POLICY,
@@ -12,6 +13,7 @@ import {
 import {
   EVIDENCE_PATH,
   architectureSources,
+  adjacencyOf,
   createArchitectureProgram,
   cyclicComponents,
   dependencyEvidence,
@@ -117,29 +119,8 @@ export function runtimeImportClosure({
   return { reachable, external, findings, graph };
 }
 
-function eachNode(node, visit) {
-  visit(node);
-  ts.forEachChild(node, (child) => eachNode(child, visit));
-}
-function propertyName(node) {
-  return node && (ts.isIdentifier(node) || ts.isStringLiteralLike(node))
-    ? node.text
-    : null;
-}
 function declaredName(node) {
   return node.name ? propertyName(node.name) : null;
-}
-function strip(node) {
-  while (
-    node &&
-    (ts.isParenthesizedExpression(node) ||
-      ts.isAsExpression(node) ||
-      ts.isTypeAssertionExpression(node) ||
-      ts.isNonNullExpression(node) ||
-      ts.isSatisfiesExpression(node))
-  )
-    node = node.expression;
-  return node;
 }
 function underlyingSymbol(checker, node) {
   let symbol = checker.getSymbolAtLocation(node);
@@ -349,7 +330,6 @@ export function analyzeProgram(
     sources.map((source) => relative(root, source.fileName)),
   );
   const declarations = new Map(),
-    graph = new Map(),
     findings = [],
     reported = new Set();
   const sourceByFile = new Map(
@@ -460,7 +440,6 @@ export function analyzeProgram(
       );
   };
   for (const source of sources) {
-    graph.set(relative(root, source.fileName), new Set());
     checkTransactionCompatibilityLeak(source);
     if (isInternalPort(relative(root, source.fileName))) {
       // P17 contract, not a taste heuristic: this surface must erase completely.
@@ -668,7 +647,6 @@ export function analyzeProgram(
               node,
               `Pure kernel owner imports a non-value capability: ${specifier}`,
             );
-          if (target) graph.get(file).add(target);
           if ((target && isTest(target)) || isTest(specifier))
             report(
               "production-test-import",
@@ -903,7 +881,8 @@ export function analyzeProgram(
       }
     });
   }
-  for (const group of stronglyConnected(graph))
+  const productionRuntime = adjacencyOf(programGraph, "runtime");
+  for (const group of stronglyConnected(productionRuntime))
     report(
       "runtime-import-cycle",
       sourceByFile.get(group[0]),
@@ -935,30 +914,10 @@ export function analyzeProgram(
       sourceByFile.get(finding.file) ?? anchor,
       finding.reason,
     );
-  const unionAdjacency = new Map(
-    [...production].sort().map((file) => [file, new Set()]),
-  );
-  const productionRuntime = new Map(
-    [...production].sort().map((file) => [file, new Set()]),
-  );
-  const runtimeSelfLoop = new Set();
-  for (const edge of latticeEdges) {
-    unionAdjacency.get(edge.from).add(edge.to);
-    if (edge.kind === "runtime") {
-      productionRuntime.get(edge.from).add(edge.to);
-      if (edge.from === edge.to) runtimeSelfLoop.add(edge.from);
-    }
-  }
-  const runtimeGroups = new Set(
-    stronglyConnected(productionRuntime)
-      .filter((group) => group.length > 1 || runtimeSelfLoop.has(group[0]))
-      .map((group) => group.join("\0")),
-  );
-  const unionGroups = stronglyConnected(unionAdjacency)
-    .filter(
-      (group) => group.length > 1 || unionAdjacency.get(group[0]).has(group[0]),
-    )
-    .filter((group) => !runtimeGroups.has(group.join("\0")));
+  // Reuse the evidence graph's adjacency semantics, including self-imports.
+  const runtimeGroups = new Set(stronglyConnected(productionRuntime).map(group => group.join("\0")));
+  const unionAdjacency = adjacencyOf(programGraph, "all");
+  const unionGroups = stronglyConnected(unionAdjacency).filter(group => !runtimeGroups.has(group.join("\0")));
   for (const finding of cycleFindings(unionGroups))
     report(
       finding.rule,

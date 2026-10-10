@@ -1,36 +1,41 @@
 /** Principal-only interactive host. Pi and Open TUI own presentation, commands
  * and settings as they ship; OMA owns only where a plain Human prompt goes and
  * how mail reaches the session. */
-import "../runtime/client-preload.js";
 import { getSupportedThinkingLevels } from "@earendil-works/pi-ai";
-import { createEngineSettings } from "../pi-compat/settings.js";
-import { Socket } from "node:net";
+import {
+	createAgentSessionFromServices,
+	createAgentSessionRuntime, createAgentSessionServices,
+	DynamicBorder, InteractiveMode, ModelSelectorComponent, SessionManager, SessionSelectorComponent,
+	ThinkingSelectorComponent, VERSION, type AgentSession,
+	type ExtensionContext,
+	type ExtensionFactory,
+	type SessionInfo
+} from "@earendil-works/pi-coding-agent";
 import { readFileSync } from "node:fs";
-import { userInfo } from "node:os";
-import { basename, join, dirname, relative, isAbsolute, resolve, sep } from "node:path";
 import { createRequire } from "node:module";
-import { createAgentSessionRuntime, createAgentSessionServices, createAgentSessionFromServices,
-  DynamicBorder, InteractiveMode, ModelSelectorComponent, SessionManager, SessionSelectorComponent,
-  ThinkingSelectorComponent, VERSION, type AgentSession,
-  type ExtensionContext, type SessionInfo,
-  type ExtensionFactory } from "@earendil-works/pi-coding-agent";
-import { InteractiveChannel, INTERACTIVE_RPC_FD, INTERACTIVE_UI_FD } from "../runtime/interactive-channel.js";
-import type { PiEvent } from "../runtime/pi-rpc.js";
-import { ownedEditor, type Suggestion } from "../tui/interactive-editor.js";
-import { createCompactToolRuntime } from "../tui/compact-tools.js";
+import { Socket } from "node:net";
+import { userInfo } from "node:os";
+import { basename, dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
+import { UNSEEN, UNSEEN_EXCEPT_LAYOUT } from "../domain/unseen-text.js";
+import { PI_BUILTIN_COMMANDS } from "../pi-compat/commands.js";
+import { PI_RESUME_HINT } from "../pi-compat/env.js";
+import { interactiveInternalsOf, type InteractiveModeInternals } from "../pi-compat/interactive-mode.js";
+import { adaptInteractiveUi } from "../pi-compat/interactive-ui.js";
+import { createEngineSettings } from "../pi-compat/settings.js";
+import { parseHostHistoryReference } from "../protocol/host-history.js";
+import "../runtime/client-preload.js";
+import { ExtensionModules } from "../runtime/extension-modules.js";
+import { INTERACTIVE_RPC_FD, INTERACTIVE_UI_FD, InteractiveChannel } from "../runtime/interactive-channel.js";
 import { safeToolPresentation } from "../runtime/interactive-display.js";
+import { preparePiInteractive } from "../runtime/pi-presentation.js";
+import type { PiEvent } from "../runtime/pi-rpc.js";
+import { registerAskUserQuestionPresenter } from "../tui/ask-user-question/presenter.js";
+import { createCompactToolRuntime } from "../tui/compact-tools.js";
+import { ownedEditor, type Suggestion } from "../tui/interactive-editor.js";
+import { humanPromptFitsFrame } from "../tui/limits.js";
+import { brandFooter, brandHeader, type OpenTuiBrand } from "../tui/open-tui-brand.js";
 import { stylePanel } from "../tui/panel-style.js";
 import { ProjectSessionDirectories } from "../tui/project-session-directories.js";
-import { parseHostHistoryReference } from "../protocol/host-history.js";
-import { brandFooter, brandHeader, type OpenTuiBrand } from "../tui/open-tui-brand.js";
-import { preparePiInteractive } from "../runtime/pi-presentation.js";
-import { PI_RESUME_HINT } from "../pi-compat/env.js";
-import { PI_BUILTIN_COMMANDS } from "../pi-compat/commands.js";
-import { interactiveInternalsOf, type InteractiveModeInternals } from "../pi-compat/interactive-mode.js";
-import { ExtensionModules } from "../runtime/extension-modules.js";
-import { registerAskUserQuestionPresenter } from "../tui/ask-user-question/presenter.js";
-import { humanPromptFitsFrame } from "../tui/limits.js";
-import { UNSEEN, UNSEEN_EXCEPT_LAYOUT } from "../domain/unseen-text.js";
 
 type EngineModel = NonNullable<AgentSession["model"]>;
 type EngineEffort = ConstructorParameters<typeof ThinkingSelectorComponent>[0];
@@ -172,6 +177,7 @@ export async function runInteractive(): Promise<void> {
   };
   let editorInstalled = false;
   let context: ExtensionContext | undefined;
+  let releaseUi: (() => void) | undefined;
   let ready = false;
   const notices: { text: string; level: "info" | "warning" | "error" }[] = [];
   const notify = (text: string, level: "info" | "warning" | "error"): void => {
@@ -212,6 +218,7 @@ export async function runInteractive(): Promise<void> {
     uiTimers.clear();
     const done = panelDone;
     panelDone = undefined; redraw = undefined; panelOpen = false; panelLines = [];
+    releaseUi?.(); releaseUi = undefined;
     context = undefined;
     done?.();
   };
@@ -488,36 +495,30 @@ export async function runInteractive(): Promise<void> {
       context = ctx;
       applyQueueWidget();
       if (runtime) { follow(runtime.session); if (ready) reportEngine(); }
-      const original = ctx.ui.setEditorComponent.bind(ctx.ui);
-      ctx.ui.setEditorComponent = factory => {
-        if (factory) original((tui, theme, keys) => {
+      releaseUi = adaptInteractiveUi(ctx.ui, {
+        editor: factory => factory && ((tui, theme, keys) => {
           editorInstalled = true;
           return ownedEditor(factory(tui, theme, keys), { submit, isCommand, thinkingVisibility, extensionCommand, panel: openPanel, suggest,
             frameBytes: limits.frameBytes,
             refuse: () => ctx.ui.notify("Input exceeds the allowed size; edit the draft before submitting.", "warning"),
             pasteImage: () => ctx.ui.notify("Pasted images are not sent; an oma prompt is text only.", "warning") });
-        });
-        else original(factory);
-      };
-      // Open TUI's header and footer, as they ship, naming oma and the project.
-      const setHeader = ctx.ui.setHeader.bind(ctx.ui);
-      ctx.ui.setHeader = factory => setHeader(factory && ((tui, theme) => {
-        const inner = factory(tui, theme);
-        return { render: (width: number) => brandHeader(inner.render(width), brand, text => theme.fg("accent", text)),
-          invalidate: () => inner.invalidate(), dispose: () => (inner as { dispose?(): void }).dispose?.() };
-      }));
-      const setFooter = ctx.ui.setFooter.bind(ctx.ui);
-      ctx.ui.setFooter = factory => setFooter(factory && ((tui, theme, data) => {
-        const inner = factory(tui, theme, data);
-        return { render: (width: number) => brandFooter(inner.render(width), brand),
-          invalidate: () => inner.invalidate(), dispose: () => (inner as { dispose?(): void }).dispose?.() };
-      }));
-      const upstreamNotify = ctx.ui.notify.bind(ctx.ui);
-      ctx.ui.notify = (message, level) => {
-        if (message.startsWith("OMA_PI_BOUNDARY_V1 ")) {
-          rpc.send({ type: "extension_ui_request", method: "notify", message, notifyType: level ?? "info" });
-        } else upstreamNotify(message, level);
-      };
+        }),
+        header: factory => factory && ((tui, theme) => {
+          const inner = factory(tui, theme);
+          return { render: (width: number) => brandHeader(inner.render(width), brand, text => theme.fg("accent", text)),
+            invalidate: () => inner.invalidate(), dispose: () => inner.dispose?.() };
+        }),
+        footer: factory => factory && ((tui, theme, data) => {
+          const inner = factory(tui, theme, data);
+          return { render: (width: number) => brandFooter(inner.render(width), brand),
+            invalidate: () => inner.invalidate(), dispose: () => inner.dispose?.() };
+        }),
+        notify: (message, level, upstream) => {
+          if (message.startsWith("OMA_PI_BOUNDARY_V1 ")) {
+            rpc.send({ type: "extension_ui_request", method: "notify", message, notifyType: level ?? "info" });
+          } else upstream(message, level);
+        },
+      });
       // An invisible widget is the extension API's one path to the terminal's
       // frame request; bound, a running tool row repaints its dot instead of
       // being rebuilt each pulse.
@@ -618,8 +619,7 @@ export async function runInteractive(): Promise<void> {
         catch (error) {
           try { services.resourceLoader.getExtensions().runtime.invalidate(); }
           catch (cleanup) { error = new AggregateError([error, cleanup], "Interactive reload and cleanup failed"); }
-          if (mode !== undefined) await (mode as unknown as { handleFatalRuntimeError(prefix: string, error: unknown): Promise<void> })
-            .handleFatalRuntimeError("Interactive reload failed", error);
+          if (mode !== undefined) await interactiveInternalsOf(mode).handleFatalRuntimeError("Interactive reload failed", error);
           throw error;
         }
       };

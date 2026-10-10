@@ -6,21 +6,31 @@
  * `terminal.attach` turns its connection into the society's terminal: after
  * the answer, frames pass through to the guest unchanged (§4.6).
  */
-import { createServer, type Server, type Socket } from "node:net";
-import { chmodSync } from "node:fs";
-import { clearSocketName } from "../../storage/socket-name.js";
 import { timingSafeEqual } from "node:crypto";
-import { StoreError } from "../../domain/errors.js";
-import { FramedPeer } from "../rpc.js";
-import { HANDOFF, serveRequests, type Answer } from "../guest/server.js";
-import { peerUid } from "./peer.js";
-import { isRequestKey, isUuid, requestProblem } from "../../protocol/host-guest.js";
-import { installedPackageSource } from "../../runtime/pi-packages.js";
+import { chmodSync } from "node:fs";
+import { createServer, type Server, type Socket } from "node:net";
 import { isAbsolute } from "node:path";
-import { HOST_API_VERSION, hostApiHelloProblem, type HostApiHello } from "../../protocol/host-api.js";
-import type { VmState } from "./lifecycle.js";
+import { StoreError } from "../../domain/errors.js";
 import { isValidSocietyName } from "../../domain/identifiers.js";
 import { checkedGuestHistory } from "../../protocol/guest-history.js";
+import type {
+  ArchiveResult, PackageSyncRequest, PackageSyncResult, ProjectBindRequest, ProjectBindResult,
+  ProjectExportRequest, ProjectExportResult,
+  ProjectExtensionsResult,
+  ProjectImportRequest, ProjectImportResult,
+  SessionMethod, SessionRequests,
+  SnapshotResult,
+  SocietyMethods
+} from "../../protocol/host-api.js";
+import { HOST_API_VERSION, hostApiHelloProblem, type HostApiHello } from "../../protocol/host-api.js";
+import { isRequestKey, isUuid, requestProblem } from "../../protocol/host-guest.js";
+import { installedPackageSource } from "../../runtime/pi-packages.js";
+import { clearSocketName } from "../../storage/socket-name.js";
+import { HANDOFF, serveRequests, type Answer } from "../guest/server.js";
+import { FramedPeer } from "../rpc.js";
+import { requestSociety } from "../society-client.js";
+import type { VmState } from "./lifecycle.js";
+import { peerUid } from "./peer.js";
 import { SNAPSHOT_ID } from "./snapshot.js";
 
 export interface HostApiBackend {
@@ -31,19 +41,19 @@ export interface HostApiBackend {
   society(): Promise<FramedPeer>;
   terminal(society: string, takeover: boolean): Promise<{ readonly socket: Socket; readonly rest: Buffer }>;
   /** §6: the project sync, keyed by the UI's request key (MAC-240). */
-  importProject(key: string, params: { projectId: string; macRepo: string; branch: string; since: string | null }): Promise<Record<string, unknown>>;
-  exportProject(key: string, params: { society: string; macRepo: string; since: string | null }): Promise<Record<string, unknown>>;
+  importProject(key: string, params: ProjectImportRequest): Promise<ProjectImportResult>;
+  exportProject(key: string, params: ProjectExportRequest): Promise<ProjectExportResult>;
   /** §8.4: a stopped society's archive, encrypted at rest (MAC-621). */
-  archive(key: string, society: string): Promise<Record<string, unknown>>;
+  archive(key: string, society: string): Promise<ArchiveResult & { path: string }>;
   /** DR25: the Mac's package store, carried to the engine whole; what was
    * added is turned on in `projectId`'s project when one is named. */
-  syncPackages(key: string, params: { projectId: string | null; activate?: string | undefined }): Promise<Record<string, unknown>>;
-  bindProject?(params: { macRepo: string; society: string }): Promise<Record<string, unknown>>;
-  projectExtensions?(projectId: string): Promise<Record<string, unknown>>;
-  sessions?(method: "session.list" | "session.inspect" | "session.resume", params: Record<string, unknown>): Promise<Record<string, unknown>>;
+  syncPackages(key: string, params: PackageSyncRequest): Promise<PackageSyncResult>;
+  bindProject?(params: ProjectBindRequest): Promise<ProjectBindResult>;
+  projectExtensions?(projectId: string): Promise<ProjectExtensionsResult>;
+  sessions?<M extends SessionMethod>(method: M, params: SessionRequests[M]): Promise<SocietyMethods[M]["result"]>;
   /** §8.4: a snapshot of the state disk at its quiescent point. Answers the
    * published path and the societies that were stopped for it. */
-  snapshot?(params: { id?: string }): Promise<Record<string, unknown>>;
+  snapshot?(params: { id?: string }): Promise<SnapshotResult>;
 }
 
 export interface HostApiOptions {
@@ -127,7 +137,18 @@ function serve(peer: FramedPeer, backend: HostApiBackend): void {
   const forward = async (method: string, params: Record<string, unknown>): Promise<Record<string, unknown>> => {
     await backend.start();
     const society = await backend.society();
-    try { return await society.request(method, params); }
+    try {
+      if (method === "society.list") return await requestSociety(society, method, {});
+      if (method === "society.open") {
+        if (!isValidSocietyName(params.society) || !isUuid(params.projectId)) throw new StoreError("INVALID_REQUEST", "society.open names a society and project");
+        return await requestSociety(society, method, { society: params.society, projectId: params.projectId });
+      }
+      if (method === "society.close") {
+        if (!isValidSocietyName(params.society) || params.mode !== "stop" && params.mode !== "keep-running") throw new StoreError("INVALID_REQUEST", "society.close names a society and close mode");
+        return await requestSociety(society, method, { society: params.society, mode: params.mode });
+      }
+      return await society.request(method, params); // request.status carries an opaque durable operation result.
+    }
     finally { society.close(); }
   };
   let attached = false;
@@ -170,7 +191,9 @@ function serve(peer: FramedPeer, backend: HostApiBackend): void {
         if (!["projectId", "after,projectId"].includes(Object.keys(params).sort().join(",")) || !isUuid(params.projectId) || key !== undefined)
           throw new StoreError("INVALID_REQUEST", "session.list names a project");
         if (backend.sessions === undefined) throw new StoreError("UNSUPPORTED_PROFILE", "Saved guest histories are unavailable");
-        return await backend.sessions(method, params);
+        if (params.after !== undefined && typeof params.after !== "string")
+          throw new StoreError("INVALID_REQUEST", "session.list cursor must be a file name");
+        return await backend.sessions(method, { projectId: params.projectId, ...(params.after === undefined ? {} : { after: params.after }) });
       }
       case "session.inspect": case "session.resume": {
         const identity = checkedGuestHistory(params);

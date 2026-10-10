@@ -12,26 +12,26 @@
  * one the permanent listener absorbs it. Each site's journal seam is
  * checked too -- a sink that throws inside the emit is the same escape.
  */
-import test, { type TestContext } from "node:test";
 import assert from "node:assert/strict";
-import { connect, Socket, type Server } from "node:net";
+import { randomUUID } from "node:crypto";
+import { once } from "node:events";
 import { mkdtempSync, rmSync } from "node:fs";
+import { connect, Socket, type Server } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { once } from "node:events";
-import { randomUUID } from "node:crypto";
-import { InferenceRelay } from "../src/runtime/inference-relay.js";
-import { ConnectProxy, type EgressAudit } from "../src/runtime/connect-proxy.js";
-import { EgressForwarder } from "../src/runtime/egress-forwarder.js";
-import { startGuestServer, type GuestIdentity } from "../src/platform/guest/server.js";
+import test, { type TestContext } from "node:test";
+import type { ResolvedAgentSpec } from "../implementation/contracts.js";
+import { Broker } from "../src/broker.js";
+import { LifecycleModule } from "../src/lifecycle.js";
 import { EgressPool, startEgressService } from "../src/platform/guest/egress.js";
+import { startGuestServer, type GuestIdentity } from "../src/platform/guest/server.js";
 import { startHostApi, type HostApiBackend } from "../src/platform/host/host-api.js";
 import { PLATFORM_FRAME_BYTES } from "../src/protocol/host-guest.js";
-import { Broker } from "../src/broker.js";
-import { ViewsModule } from "../src/views.js";
-import { LifecycleModule } from "../src/lifecycle.js";
+import { ConnectProxy, type EgressAudit } from "../src/runtime/connect-proxy.js";
+import { EgressForwarder } from "../src/runtime/egress-forwarder.js";
+import { InferenceRelay } from "../src/runtime/inference-relay.js";
 import type { UnitsModule } from "../src/units.js";
-import type { ResolvedAgentSpec } from "../implementation/contracts.js";
+import { ViewsModule } from "../src/views.js";
 import { preparedFixture } from "./fixtures/delivery-receipt.js";
 import { TEST_VIEW_LIMITS } from "./fixtures/limits.js";
 
@@ -192,7 +192,8 @@ test("post-listen: the Host API absorbs an accept-class error", async t => {
   const backend: HostApiBackend = {
     state: () => "ready", start: async () => {}, stop: async () => "stopped",
     society: async () => { throw new Error("unused"); }, terminal: async () => { throw new Error("unused"); },
-    importProject: async () => ({}), exportProject: async () => ({}), archive: async () => ({}), syncPackages: async () => ({}),
+    importProject: async () => { throw new Error("unused"); }, exportProject: async () => { throw new Error("unused"); },
+    archive: async () => { throw new Error("unused"); }, syncPackages: async () => { throw new Error("unused"); },
   };
   const server = await startHostApi({ socketPath, token: "t", backend, frameBytes: PLATFORM_FRAME_BYTES,
     helloDeadlineMs: 1000, requestTimeoutMs: 1000, uid: process.getuid!() });

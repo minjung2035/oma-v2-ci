@@ -33,9 +33,22 @@ export function filesUnder(root, relative, extension = ".ts") {
   return out.sort();
 }
 
+// One rule-check invocation reads one syntax snapshot. Nothing survives the
+// invocation: subsequent checks, including mutation controls, read fresh bytes.
+let activeSources;
+export function withSourceSnapshot(check) {
+  const previous = activeSources;
+  activeSources = new Map();
+  try { return check(); }
+  finally { activeSources = previous; }
+}
 export function sourceOf(root, relative) {
   const file = absolute(root, relative);
-  return ts.createSourceFile(file, fs.readFileSync(file, "utf8"), ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
+  const cached = activeSources?.get(file);
+  if (cached) return cached;
+  const source = ts.createSourceFile(file, fs.readFileSync(file, "utf8"), ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
+  activeSources?.set(file, source);
+  return source;
 }
 
 export function eachNode(node, visit) {

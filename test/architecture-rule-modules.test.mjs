@@ -4,6 +4,7 @@ import { fileURLToPath } from "node:url";
 import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { tmpdir } from "node:os";
+import { sourceOf, withSourceSnapshot } from "../scripts/architecture/rules/shared.mjs";
 import { importRuleFindings } from "../scripts/architecture/rules/import-rules.mjs";
 import { transactionRuleFindings } from "../scripts/architecture/rules/transaction-rules.mjs";
 import { ownershipRuleFindings } from "../scripts/architecture/rules/ownership-rules.mjs";
@@ -497,4 +498,20 @@ test("P0-8: a generic user path is not tainted by another function's parameter",
 test("P0-8/DR32: the owned-state rule reports a stale exemption", () => {
   const repository = fileURLToPath(new URL("..", import.meta.url));
   assert.deepEqual(ownedStateFindings(repository), []);
+});
+
+
+test("DR40: Architecture syntax snapshots expire between checks and after an exception", () => {
+  withFixture({ "src/probe.ts": "export const version = 1;" }, root => {
+    const file = join(root, "src/probe.ts");
+    withSourceSnapshot(() => {
+      const before = sourceOf(root, "src/probe.ts");
+      writeFileSync(file, "export const version = 2;");
+      assert.equal(sourceOf(root, "src/probe.ts"), before);
+    });
+    assert.match(sourceOf(root, "src/probe.ts").text, /version = 2/);
+    assert.throws(() => withSourceSnapshot(() => { sourceOf(root, "src/probe.ts"); throw new Error("oracle"); }), /oracle/);
+    writeFileSync(file, "export const version = 3;");
+    assert.match(withSourceSnapshot(() => sourceOf(root, "src/probe.ts")).text, /version = 3/);
+  });
 });

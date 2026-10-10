@@ -23,6 +23,7 @@ import * as errors from '../dist/src/domain/errors.js';
 import * as operations from '../dist/src/config/operations.js';
 import * as piPackages from '../dist/src/runtime/pi-packages.js';
 import * as durable from '../dist/src/storage/durable-fs.js';
+import * as tar from '../dist/src/runtime/package-tar.js';
 import * as packageArchive from '../dist/src/platform/package-archive.js';
 import * as host from '../dist/src/platform/host/files.js';
 
@@ -49,8 +50,16 @@ function load(platform, changes = {}) {
     '../storage/directory.js': directoryStub, '../storage/durable-fs.js': durable,
     '../platform/package-archive.js': packageArchive, '../platform/host/files.js': host,
     ...changes };
-  new Script(code).runInNewContext({ module, exports: module.exports, Buffer, process: { platform },
+  const stage = { exports: {} };
+  const stageCode = ts.transpileModule(fs.readFileSync('src/runtime/local-package-stage.ts', 'utf8'), {
+    compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
+  }).outputText;
+  const context = output => ({ module: output, exports: output.exports, Buffer, process: { platform },
     require(name) { assert.ok(Object.hasOwn(dependencies, name), name); return dependencies[name]; } });
+  new Script(stageCode).runInNewContext(context(stage));
+  dependencies['./local-package-stage.js'] = stage.exports;
+  dependencies['./package-tar.js'] = tar;
+  new Script(code).runInNewContext(context(module));
   return module.exports;
 }
 function fixture(t) {

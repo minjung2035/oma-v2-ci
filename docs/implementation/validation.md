@@ -1,5 +1,59 @@
 # OMA v2 — 현재 검증 상태
 
+## 추가 아키텍처 감사 (2026-10-10, DR40)
+
+기준 `3b9bcea`에서 Human이 지정한 A-01~A-11을 구현했다. 계약·effect·capability의
+소유권을 유지하면서 내부 간접 참조와 수동 동기화를 줄였다. 서브에이전트는 사용하지 않았다.
+설정과 nested RPC 응답, transaction scope, 실제 Pi/LSP/MCP 및 아키텍처 negative control을 검증한다.
+전체 local suite와 actual primitive crash 결과를 이 구간과
+[바이트 증거](../../test/audit/architecture-2026-10-10.evidence.json)에 기록했다.
+
+집중 첫 실행 83/83, 아키텍처 oracle·실제 Git changeset·원자 설정 view 59/59가 통과했다.
+첫 Pi/LSP/MCP 집중 실행은 109 PASS / 38 FAIL이었다. 새 UI owner가 fixture의 controlled
+import 목록에 없어서 interactive owner 38건이 거절됐으며 실제 helper를 fixture에 연결한
+재실행은 38/38 PASS다. structure gate의 첫 7건 거절은 이동한 scratch/staging owner 선언을
+정정한 뒤 0 findings다. 이동한 staging의 durable boundary 등록 경로도 정정했다.
+그 검사 중 시작한 suite는 coordinator만 TERM으로 종료하고 해당 child가 종료할 때까지 기다렸으며
+이 부분 실행을 전체 suite의 성공으로 표시하지 않는다. 실패 실행을 최종 PASS로 바꾸지 않는다.
+첫 전체 실행은 3,966 PASS / 17 FAIL이다. 16건은 테스트 PATH에 설치된 oma 링크가
+빠진 ENOENT였고, 1건은 이전 verification input digest가 남은 기록 오류였다.
+입력은 15,419개이며 실행 전후 변경은 0건이다.
+환경·기록을 정정한 두 번째 전체 실행은 3,982 PASS / 1 FAIL이다. Personal PTY 16건은
+모두 통과했다. 남은 build-stamp fixture는 삭제한 inode가 재할당되지 않는다고 가정해
+실패했다. 이전 출력의 descriptor를 재빌드 assertion까지 고정해 물리적인 교체 증거를
+유지하도록 수정했고, 해당 파일 6/6이 통과했다. 두 번째 입력도 전후 변경 0건이다.
+제품 build 구현은 변경하지 않았다. 고정한 최종 입력으로 전체 suite와 crash lane을 재검증했다.
+
+| 최종 실행 | 결과 | 범위 |
+|---|---|---|
+| 전체 local suite | PASS: 3,983/3,983 | serial 9 + parallel 3,974; fail/cancel/skip/todo 0; 411 files, parallel 409, concurrency 8, TMPDIR=/var/tmp |
+| actual crash lane | EXECUTED+PASS: 63/63 | 실제 primitive SIGSTOP·부모 SIGKILL·재시작·반복 복구; VM power loss/entrypoint crash 증거는 아님 |
+| build / typecheck / architecture | PASS | inventory·rules·dependencies·transactions·durable boundaries·documents·spec inventory; runtime cycles 0 |
+| 전체 MCP vendor re-emit | PASS: BUNDLE_CURRENT 2,727 files | 기존 cross-spawn type 선언 관련 emit 진단은 남으며 baseline/current 모두 동일한 emitted set을 검증함 |
+
+최종 runtime 입력 sha256는 `3b6620ac1d073e1be23979d38613a690afa8f7c3692d16a3b01a5ac6362085c3`다.
+전체 suite와 crash lane의 15,419개 입력 bytes는 동일하며 실행 전후 변경은 0건이다.
+이 결과 문서와 evidence는 실행 후 작성한 입력이다. 마지막 diff 검사에서 staging/tar 소스
+두 파일의 끝 빈 줄도 제거했다. 재빌드한 15,150개 emitted file은 이전 실행 bytes와 모두
+동일하다(build input identity stamp 제외). 이 후속 소스·기록 bytes까지 기존 runtime suite가
+실행했다고 주장하지 않으며 architecture gate와 validation input 검사를 별도로 실행한다.
+변경 생산 파일 21개의 delta와 영향 owner를 직접 검토하고 현재 SHA·DR40 oracle에 결박했다.
+상속된 미검토 50개와 과거 native 검증은 재승인하지 않는다. 생성된 dependency graph는
+423 files / 1,786 runtime edges / 454 type-only edges / runtime cycles 0이다.
+Store 중심 type-only SCC 한 묶음은 남는다. LOC를 새로 측정한 주장은 하지 않는다.
+실제 changeset은 이 11개 항목 전체의 55개 경로(source 21, tests 15, tools 9, metadata 10)다.
+public mutation 13개의 관련 owner inventory 평균 14.46개와 구분하며, 한 feature의 변경 비용이
+줄었다고 추정하지 않는다. 상세 명령·로그 SHA·input map은 evidence에 있고 원시 로그는
+`/home/dev/oma-audit-artifacts/architecture-2026-10-10`에 보존했다.
+
+SDK metadata 검사와 전체 vendor re-emit 검사를 구분한다. 첫 전체 re-emit은 생성기에
+TypeScript import를 추가한 문자열 치환이 기존 divergence 템플릿까지 변경해 실패했다.
+baseline 재실행은 통과했으며 템플릿의 원문을 복원해 생성기 회귀를 수정했다. 목록만
+검사한 결과를 전체 vendor 재생성 성공으로 표시하지 않는다. 기존 private Pi hook·Store type-only 순환·복잡한
+보안 데이터 흐름 검사는 남는다. 평점이나 단일 feature 변경 파일 수 개선을 추정하지 않는다.
+macOS native·VM power loss·paid provider·release qualification은 이번 실행에서 NOT_RUN이다.
+시작 시간 목표는 이번 아키텍처 배치에서 개선하지 않았다.
+
 ## 아키텍처 변경 책임 분리 (2026-10-09, DR39)
 
 DR38 여섯 결함 수정·푸시 완료 뒤 승인받은 구조 개선을 구현했다.
@@ -100,7 +154,7 @@ native·macOS VM boot·power loss는 미실행이다. 이전 kernel/crash PASS�
 충족했다고 주장할 수 없다. raw log는 `/tmp/oma-host-ownership-2026-10-09`에 보존한다.
 
 현재 구조 검사의 입력 identity(생성 자체는 runtime PASS가 아니다):
-verification input digest `604899c38dddfe64f517e5fa7d9824672ae29923aea3b2bf648350b2f5d8af97` (15405 files).
+verification input digest `807a6470cfef16de672b14557972f3b257f199cb2f6a0802ca63bde81c192e1f` (15419 files).
 
 ## 이전 실행 결과: 지정한 제한 제거·기능 복구 (2026-10-09, DR37)
 

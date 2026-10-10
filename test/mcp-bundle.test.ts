@@ -4,26 +4,26 @@
  * admits exactly `mcp`; the config is OMA-owned and validated; the
  * child-env scrub, egress pin, credential store and scratch lifecycle are
  * OMA's; and Pi's built-in MCP can never coexist. */
-import test from "node:test";
 import assert from "node:assert/strict";
-import { chmodSync, cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, rmSync, statSync, symlinkSync, writeFileSync } from "node:fs";
+import { once } from "node:events";
+import { chmodSync, cpSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, statSync, symlinkSync, writeFileSync } from "node:fs";
+import { createServer } from "node:http";
+import { connect, Server } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import test from "node:test";
 import { fileURLToPath } from "node:url";
-import { connect, Server } from "node:net";
-import { once } from "node:events";
-import { createServer } from "node:http";
 import {
-  MCP_CONFIG_FILE_NAME, MCP_STATE_DIR_NAME, MCP_TOOL_NAMES,
-  mcpChildEnvironment, mcpFacadeDropped, normalizeOmaMcpConfig, registerMcpTools,
-} from "../src/extension/mcp-tools.js";
+	ASK_USER_QUESTION_TOOL_NAME, MCP_PROXY_TOOL_NAME,
+	planToolSurface, principalToolSurfaceConfig, residentToolSurfaceConfig,
+} from "../src/domain/tool-surface.js";
 import { admittedChildEnv, CHILD_ENV_SCRATCH_NAMES } from "../src/extension/child-env.js";
 import { omaToolNames } from "../src/extension/mail-tools.js";
-import { verifyVendorBundle, vendoredBundleDir, VendorIntegrityError } from "../src/extension/vendor-bundle.js";
 import {
-  ASK_USER_QUESTION_TOOL_NAME, MCP_PROXY_TOOL_NAME,
-  planToolSurface, principalToolSurfaceConfig, residentToolSurfaceConfig,
-} from "../src/domain/tool-surface.js";
+	MCP_CONFIG_FILE_NAME, MCP_STATE_DIR_NAME, MCP_TOOL_NAMES,
+	mcpChildEnvironment, mcpFacadeDropped, normalizeOmaMcpConfig, registerMcpTools,
+} from "../src/extension/mcp-tools.js";
+import { vendoredBundleDir, VendorIntegrityError, verifyVendorBundle } from "../src/extension/vendor-bundle.js";
 
 const SRC_BUNDLE = fileURLToPath(new URL("../src/extension/vendor/pi-mcp-adapter/", import.meta.url));
 /** The runtime modules the adapter itself loads: the deployed copy
@@ -511,7 +511,8 @@ test("BL5: through the vendored SDK transport's underlay union, denied names sta
 });
 
 test("BL5: every SDK stdio underlay name has an OMA disposition -- a vendored SDK bump cannot silently re-open the ambient leak", async t => {
-  // SDK_STDIO_ENV_UNDERLAY in mcp-tools.ts is a hand-mirrored copy of the
+  // SDK_STDIO_ENV_UNDERLAY is generated from the pinned bundle. This test
+  // independently checks the generated names against both builds of the
   // vendored SDK's DEFAULT_INHERITED_ENV_VARS. The SDK export is a
   // platform ternary, so one import yields only this host's list; the
   // win32 list would go unobserved on a POSIX runner. Read BOTH branch
@@ -557,7 +558,7 @@ test("BL5: every SDK stdio underlay name has an OMA disposition -- a vendored SD
     return !tombstoned && !carried && !sanctioned;
   });
   assert.deepEqual(undisposed(new Set([...esm.win32, ...esm.posix])), [],
-    "an SDK underlay name reaches a child with no tombstone and no sanction -- add it to SDK_STDIO_ENV_UNDERLAY");
+    "an SDK underlay name reaches a child with no tombstone and no sanction -- regenerate the SDK metadata");
   // The oracle fires on the drift it exists for: an underlay name the
   // tombstone list and the scrub both miss is reported, not passed.
   assert.deepEqual(undisposed([...esm.posix, "OMA_DRIFT_PROBE"]), ["OMA_DRIFT_PROBE"],

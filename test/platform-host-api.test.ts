@@ -1,24 +1,24 @@
 /** MAC-020/021/222/251: the Host API and the Mac's attach client, down to a
  * real guest session on this machine (a stand-in TUI on a real pty). */
-import test from "node:test";
 import assert from "node:assert/strict";
 import { spawn, spawnSync, type ChildProcess } from "node:child_process";
-import { connect, type Server } from "node:net";
+import { randomBytes, randomUUID } from "node:crypto";
 import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { connect, type Server } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { PassThrough, Writable } from "node:stream";
+import test from "node:test";
 import { fileURLToPath } from "node:url";
-import { randomBytes, randomUUID } from "node:crypto";
 import { encodeFrame } from "../src/frame.js";
-import { PlatformError, readLeadingFrame } from "../src/platform/rpc.js";
-import { startGuestServer, type GuestIdentity } from "../src/platform/guest/server.js";
 import { GuestHost, listening, type SessionLauncher } from "../src/platform/guest/host.js";
+import { startGuestServer, type GuestIdentity } from "../src/platform/guest/server.js";
+import { attachTerminal, type AttachTerminal } from "../src/platform/host/attach-client.js";
 import { GuestLink } from "../src/platform/host/guest-link.js";
 import { startHostApi, type HostApiBackend } from "../src/platform/host/host-api.js";
-import { attachTerminal, type AttachTerminal } from "../src/platform/host/attach-client.js";
-import { GUEST_PORTS, HOST_GUEST_PROTOCOL, PLATFORM_FRAME_BYTES } from "../src/protocol/host-guest.js";
+import { PlatformError, readLeadingFrame } from "../src/platform/rpc.js";
 import { HOST_API_VERSION } from "../src/protocol/host-api.js";
+import { GUEST_PORTS, HOST_GUEST_PROTOCOL, PLATFORM_FRAME_BYTES } from "../src/protocol/host-guest.js";
 import { holdSocketNames } from "./fixtures/socket-names.js";
 
 const here = fileURLToPath(new URL(".", import.meta.url));
@@ -78,7 +78,8 @@ async function world(t: import("node:test").TestContext, options: { uid?: number
     state: () => "ready", start: async () => {}, stop: async () => "stopped",
     society: () => link.json("society"),
     terminal: (society, takeover) => link.bytes("terminal", { society, ...(takeover ? { takeover: true as const } : {}) }),
-    importProject: async () => ({}), exportProject: async () => ({}), archive: async () => ({}), syncPackages: async () => ({}),
+    importProject: async () => { throw new Error("unused"); }, exportProject: async () => { throw new Error("unused"); },
+    archive: async () => { throw new Error("unused"); }, syncPackages: async () => { throw new Error("unused"); },
   };
   const token = randomBytes(32).toString("hex");
   const apiSocket = join(dir, "hostapi.sock");

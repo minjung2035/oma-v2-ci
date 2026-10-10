@@ -1,5 +1,6 @@
 // DR27: run the interactive host, substituting engine/stream boundaries, not its UI lifetime.
 import test from 'node:test';
+import { adaptInteractiveUi } from '../dist/src/pi-compat/interactive-ui.js';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { Script } from 'node:vm';
@@ -52,6 +53,7 @@ async function world({ setModel, init, resourceReload, dispose, fail, moduleClos
     // boundaries below never reach it, so the install itself is a no-op here.
     '../runtime/client-preload.js': {},
     '@earendil-works/pi-ai': { getSupportedThinkingLevels: () => ['off', 'high'] },
+    '../pi-compat/interactive-ui.js': { adaptInteractiveUi },
     '../pi-compat/settings.js': { createEngineSettings() {} },
     'node:os': { userInfo: () => ({ homedir: '/home/fake' }) }, 'node:path': path,
     'node:module': { createRequire: () => ({ resolve: () => '/fake/pi-open-tui/package.json' }) },

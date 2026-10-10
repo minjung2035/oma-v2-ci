@@ -1,16 +1,18 @@
+import type { ArchiveResult, PackageSyncRequest, PackageSyncResult } from "../../protocol/host-api.js";
+import { requestSociety } from "../society-client.js";
 /** Package transfer and encrypted archive retrieval (DR25, MAC-621).
  * Plain archive bytes never land in the host staging directory. */
 import { createHash } from "node:crypto";
 import { statSync } from "node:fs";
 import { join } from "node:path";
 import { StoreError } from "../../domain/errors.js";
+import { PLATFORM_FRAME_BYTES } from "../../protocol/host-guest.js";
 import { writePackageArchive } from "../package-archive.js";
 import { sealedArchiveSink } from "./archive-crypto.js";
-import { getStream, putStream, sha256File } from "./project.js";
 import { listHostStaged, removeHostStaged } from "./files.js";
-import { PLATFORM_FRAME_BYTES } from "../../protocol/host-guest.js";
 import type { GuestLink } from "./guest-link.js";
-import type { HostApiBackend } from "./host-api.js";
+import { getStream, putStream, sha256File } from "./project.js";
+
 
 export interface HostTransferOptions {
   readonly link: GuestLink;
@@ -22,7 +24,7 @@ export interface HostTransferOptions {
 }
 export class HostTransfers {
   constructor(private readonly options: HostTransferOptions) {}
-  async syncPackages(key: string, params: Parameters<HostApiBackend["syncPackages"]>[1]): Promise<Record<string, unknown>> {
+  async syncPackages(key: string, params: PackageSyncRequest): Promise<PackageSyncResult> {
     if (this.options.packagesDir === undefined) throw new StoreError("UNSUPPORTED_PROFILE", "this OMA keeps no packages");
     const file = join(this.options.transfer, `${createHash("sha256").update(key).digest("hex")}.packages`);
     this.options.room(this.options.transfer, 0);
@@ -34,15 +36,15 @@ export class HostTransfers {
       await putStream(await this.options.link.bytes("stream"), key, file, PLATFORM_FRAME_BYTES);
       const society = await this.options.link.json("society");
       try {
-        return await society.request("packages.replace",
+        return await requestSociety(society, "packages.replace",
           { archive: declared, ...(params.activate === undefined ? {} : { activate: params.activate }), ...(params.projectId === null ? {} : { projectId: params.projectId }) }, key);
       } finally { society.close(); }
     } finally { removeHostStaged(file); }
   }
-  async archive(key: string, society: string): Promise<Record<string, unknown>> {
+  async archive(key: string, society: string): Promise<ArchiveResult & { path: string }> {
     const peer = await this.options.link.json("society");
-    let made: Record<string, unknown>;
-    try { made = await peer.request("archive.create", { society }, key); } finally { peer.close(); }
+    let made: ArchiveResult;
+    try { made = await requestSociety(peer, "archive.create", { society }, key); } finally { peer.close(); }
     const name = `${society}-${createHash("sha256").update(key).digest("hex").slice(0, 16)}.omaarchive`;
     const target = join(this.options.archivesDir, name);
     // P0V-103: a name in the archives directory is a finished

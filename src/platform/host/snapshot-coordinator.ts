@@ -1,12 +1,13 @@
+import type { SnapshotResult } from "../../protocol/host-api.js";
 /** One state-disk owner for snapshots and engine start/stop. A clone's
  * quiescent interval cannot overlap another clone or a new engine boot. */
 import { dirname } from "node:path";
 import { StoreError } from "../../domain/errors.js";
 import { ensureHostOwnedDirectory, listHostStaged } from "./files.js";
-import { readHostRecord } from "./record.js";
-import { openSnapshotStore, pruneSnapshots, snapshotIdOf, snapshotRunning, snapshotStopped, type SnapshotStore } from "./snapshot.js";
 import type { GuestLink } from "./guest-link.js";
 import type { VmLifecycle } from "./lifecycle.js";
+import { readHostRecord } from "./record.js";
+import { openSnapshotStore, pruneSnapshots, snapshotIdOf, snapshotRunning, snapshotStopped, type SnapshotStore } from "./snapshot.js";
 
 export interface SnapshotCoordinatorOptions {
   readonly lifecycle: VmLifecycle;
@@ -48,7 +49,7 @@ export class SnapshotCoordinator {
     return this.operation(() => this.options.lifecycle.stop(), true);
   }
 
-  snapshot({ id }: { id?: string }): Promise<Record<string, unknown>> {
+  snapshot({ id }: { id?: string }): Promise<SnapshotResult> {
     return this.operation(async () => {
       const store = this.store;
       if (store === null) throw new StoreError("UNSUPPORTED_PROFILE", "this OMA keeps no snapshots");

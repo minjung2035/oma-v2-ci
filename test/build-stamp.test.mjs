@@ -12,7 +12,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import {
-  appendFileSync, chmodSync, existsSync, lstatSync, mkdirSync, mkdtempSync,
+  appendFileSync, chmodSync, closeSync, existsSync, fstatSync, lstatSync, mkdirSync, mkdtempSync, openSync,
   readFileSync, rmSync, statSync, symlinkSync, writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
@@ -88,6 +88,21 @@ function build(root) {
   return run;
 }
 
+function assertRebuild(root, target, change, message) {
+  // A deleted inode may be reused by the next compile. Keep the old output
+  // alive until the assertion so inode identity proves replacement on disk
+  // filesystems as well as tmpfs, including a removed or symlinked target.
+  const held = openSync(target, "r");
+  try {
+    const before = fstatSync(held).ino;
+    change();
+    build(root);
+    assert.notEqual(statSync(target).ino, before, message);
+  } finally {
+    closeSync(held);
+  }
+}
+
 test("build stamp: a no-change build skips tsc instead of rewriting outputs", t => {
   const root = fixture(t);
   build(root);
@@ -102,36 +117,26 @@ test("build stamp: appended, same-size-patched, swapped or removed outputs force
   build(root);
   const target = join(root, "dist/src/domain/deployment.js");
   const pristine = readFileSync(target);
-  const ino = () => statSync(target).ino;
-
-  let previous = ino();
-  appendFileSync(target, "// CORRUPTED\n");
-  build(root);
-  assert.notEqual(ino(), previous, "appended bytes did not force a rebuild");
+  assertRebuild(root, target, () => appendFileSync(target, "// CORRUPTED\n"),
+    "appended bytes did not force a rebuild");
   assert.deepEqual(readFileSync(target), pristine, "the corrupted output was not restored");
 
-  previous = ino();
   const patched = Buffer.from(pristine);
   patched[patched.length - 2] ^= 0x20;
-  writeFileSync(target, patched);
-  build(root);
-  assert.notEqual(ino(), previous, "same-size patched bytes did not force a rebuild");
+  assertRebuild(root, target, () => writeFileSync(target, patched),
+    "same-size patched bytes did not force a rebuild");
   assert.deepEqual(readFileSync(target), pristine, "the patched output was not restored");
 
-  previous = ino();
   const swap = join(root, "swap-copy.js");
   writeFileSync(swap, pristine);
-  rmSync(target);
-  symlinkSync(swap, target);
-  build(root);
-  assert.notEqual(ino(), previous, "a swapped-in symlink did not force a rebuild");
+  assertRebuild(root, target, () => {
+    rmSync(target);
+    symlinkSync(swap, target);
+  }, "a swapped-in symlink did not force a rebuild");
   assert.equal(lstatSync(target).isSymbolicLink(), false, "the swap left a symlink in dist");
   assert.deepEqual(readFileSync(target), pristine, "the swapped output was not restored");
 
-  previous = ino();
-  rmSync(target);
-  build(root);
-  assert.notEqual(ino(), previous, "a removed output did not force a rebuild");
+  assertRebuild(root, target, () => rmSync(target), "a removed output did not force a rebuild");
   assert.deepEqual(readFileSync(target), pristine, "the removed output was not restored");
 });
 
@@ -155,10 +160,9 @@ test("build stamp: a stamp without per-output hashes cannot skip", t => {
   const stamp = JSON.parse(readFileSync(join(root, "dist/.build-stamp.json"), "utf8"));
   // The retired format listed names only; its `existsSync` check is exactly
   // the hole, so a same-digest old-format stamp must still rebuild.
-  writeFileSync(join(root, "dist/.build-stamp.json"), JSON.stringify({ digest: stamp.digest, outputs: ["src/sandbox.js"] }));
-  const before = statSync(target).ino;
-  build(root);
-  assert.notEqual(statSync(target).ino, before, "a name-only stamp skipped the compile");
+  assertRebuild(root, target, () => {
+    writeFileSync(join(root, "dist/.build-stamp.json"), JSON.stringify({ digest: stamp.digest, outputs: ["src/sandbox.js"] }));
+  }, "a name-only stamp skipped the compile");
 });
 
 test("build stamp: an edit to the build's own scripts is an input, not a free ride on the old stamp", t => {
@@ -169,10 +173,8 @@ test("build stamp: an edit to the build's own scripts is an input, not a free ri
   // logic itself: a build.mjs or check-package.mjs edit changed what the
   // build produces while the stamp proved "inputs unchanged".
   for (const script of ["build.mjs", "check-package.mjs"]) {
-    const before = statSync(target).ino;
-    appendFileSync(join(root, "scripts", script), `\n// a ${script} edit\n`);
-    build(root);
-    assert.notEqual(statSync(target).ino, before, `an edit to scripts/${script} rode a stale skip`);
+    assertRebuild(root, target, () => appendFileSync(join(root, "scripts", script), `\n// a ${script} edit\n`),
+      `an edit to scripts/${script} rode a stale skip`);
   }
 });
 

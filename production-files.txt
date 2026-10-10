@@ -123,8 +123,10 @@ src/extension/delivery.ts
 src/extension/egress-bridge.ts
 src/extension/hashline-tools.ts
 src/extension/inference-bridge.ts
+src/extension/lsp-call-scope.ts
 src/extension/lsp-tools.ts
 src/extension/mail-tools.ts
+src/extension/mcp-sdk-env.ts
 src/extension/mcp-tools.ts
 src/extension/principal-channel.ts
 src/extension/principal-tools.ts
@@ -13965,9 +13967,11 @@ src/mail/serialize.ts
 src/module-ports.ts
 src/pi-compat/commands.ts
 src/pi-compat/env.ts
+src/pi-compat/interactive-editor.ts
 src/pi-compat/interactive-mode.ts
 src/pi-compat/interactive-tool-setup.ts
 src/pi-compat/interactive-tools.ts
+src/pi-compat/interactive-ui.ts
 src/pi-compat/pi-private.d.ts
 src/pi-compat/session.ts
 src/pi-compat/settings-object.ts
@@ -14021,6 +14025,7 @@ src/platform/host/vz-driver.ts
 src/platform/package-archive.ts
 src/platform/product-text.ts
 src/platform/rpc.ts
+src/platform/society-client.ts
 src/platform/stream-receive.ts
 src/platform/stream-source.ts
 src/platform/terminal-modes.ts
@@ -14082,9 +14087,11 @@ src/runtime/host-tenure.ts
 src/runtime/inference-relay.ts
 src/runtime/interactive-channel.ts
 src/runtime/interactive-display.ts
+src/runtime/local-package-stage.ts
 src/runtime/local-package.ts
 src/runtime/locked-files.ts
 src/runtime/oma-theme.ts
+src/runtime/package-tar.ts
 src/runtime/personal-models.ts
 src/runtime/personal-session.ts
 src/runtime/personal-settings.ts

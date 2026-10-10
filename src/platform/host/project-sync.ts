@@ -1,16 +1,18 @@
+import type { ProjectBindRequest, ProjectBindResult, ProjectExportRequest, ProjectExportResult, ProjectImportRequest, ProjectImportResult } from "../../protocol/host-api.js";
+import { requestSociety } from "../society-client.js";
 /** Host-owned project identity and explicit import/export (MAC-404/411/412).
  * Record publication and stream staging keep their existing owners. */
 import { createHash, randomUUID } from "node:crypto";
 import { realpathSync } from "node:fs";
 import { basename, join } from "node:path";
 import { StoreError } from "../../domain/errors.js";
-import { MacGit, fileSink, getStream, putStream } from "./project.js";
-import { readHostRecord, type HostRecord, type ProjectRecord } from "./record.js";
-import { removeHostStaged } from "./files.js";
 import { PLATFORM_FRAME_BYTES } from "../../protocol/host-guest.js";
 import type { ProjectBookmarks } from "./bookmark.js";
+import { removeHostStaged } from "./files.js";
 import type { GuestLink } from "./guest-link.js";
-import type { HostApiBackend } from "./host-api.js";
+import { MacGit, fileSink, getStream, putStream } from "./project.js";
+import { readHostRecord, type HostRecord, type ProjectRecord } from "./record.js";
+
 
 export interface ProjectSyncOptions {
   readonly link: GuestLink;
@@ -41,7 +43,7 @@ export class ProjectSyncCoordinator {
     await this.git.verifyIdentity(repo, project);
     return repo;
   }
-  async bindProject(params: { macRepo: string; society: string }): Promise<Record<string, unknown>> {
+  async bindProject(params: ProjectBindRequest): Promise<ProjectBindResult> {
     const repo = realpathSync(params.macRepo);
     const identity = await this.git.identity(repo);
     const bookmark = await this.bookmarks().create(repo);
@@ -62,7 +64,7 @@ export class ProjectSyncCoordinator {
     if (selected === undefined) throw new StoreError("STORE_CORRUPT", "The app's project record is missing");
     return { projectId: selected.projectId, displayName: selected.displayName, society: selected.society };
   }
-  async importProject(key: string, params: Parameters<HostApiBackend["importProject"]>[1]): Promise<Record<string, unknown>> {
+  async importProject(key: string, params: ProjectImportRequest): Promise<ProjectImportResult> {
     const project = this.projects().find(p => p.projectId === params.projectId);
     if (project === undefined) throw new StoreError("INVALID_REQUEST", "Bind the project on this Mac before importing it");
     const repo = await this.repo(project, params.macRepo);
@@ -73,9 +75,9 @@ export class ProjectSyncCoordinator {
       await putStream(await this.options.link.bytes("stream"), key, file, PLATFORM_FRAME_BYTES);
       const society = await this.options.link.json("society");
       try {
-        const result = await society.request("project.import",
+        const result = await requestSociety(society, "project.import",
           { projectId: params.projectId, branch: params.branch, bundle: { bytes: bundled.bytes, sha256: bundled.sha256 } }, key);
-        if (typeof result.head !== "string" || !new RegExp(`^[0-9a-f]{${project.objectFormat === "sha256" ? 64 : 40}}$`).test(result.head))
+        if (result.objectFormat !== project.objectFormat)
           throw new StoreError("BROKER_UNAVAILABLE", "The import result could not be observed");
         const head = result.head;
         this.options.record(current => ({ ...current, projects: current.projects.map(p => p.projectId === project.projectId
@@ -84,13 +86,13 @@ export class ProjectSyncCoordinator {
       } finally { society.close(); }
     } finally { removeHostStaged(file); }
   }
-  async exportProject(key: string, params: Parameters<HostApiBackend["exportProject"]>[1]): Promise<Record<string, unknown>> {
+  async exportProject(key: string, params: ProjectExportRequest): Promise<ProjectExportResult> {
     const project = this.projects().find(p => p.society === params.society);
     if (project === undefined) throw new StoreError("INVALID_REQUEST", "The Society is not bound to a project on this Mac");
     const repo = await this.repo(project, params.macRepo);
     const society = await this.options.link.json("society");
-    let exported: Record<string, unknown>;
-    try { exported = await society.request("project.export", { society: params.society, ...(params.since === null ? {} : { since: params.since }) }, key); }
+    let exported: Omit<ProjectExportResult, "ref">;
+    try { exported = await requestSociety(society, "project.export", { society: params.society, ...(params.since === null ? {} : { since: params.since }) }, key); }
     finally { society.close(); }
     const file = join(this.options.transfer, `${createHash("sha256").update(key).digest("hex")}.export.bundle`);
     try {

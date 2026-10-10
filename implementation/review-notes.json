@@ -1,6 +1,6 @@
 {
  "version": 1,
- "about": "WP32 inputs to implementation/review-ledger.json that git history cannot supply: files read in full and left unchanged, explicitly reviewed working-tree changes bound to their SHA-256 bytes and oracles, and the environment lanes as recorded in docs/implementation/validation.md. Regenerate the ledger with `npm run review:ledger`; `review-closure` checks it. Historical lane entries do not certify later working-tree changes. DR29: withdrawn stale byte-bound review claims for src/runtime/personal-settings.ts, src/entry/personal-host.ts, src/entry/oma-mac.ts. Hashes were not silently refreshed; these edited owners require fresh review. Historical readUnchanged entries apply only to unchanged committed files; changed files are NOT_REVIEWED. UX-38 residual settlement (bundled pi-lsp surface): the seven edited files above were re-read in full and re-bound to their new bytes -- digests refreshed only alongside a fresh read, never silently. No withdrawal was needed: each change is this batch's own reviewed work. UX-38 blind-verification settlement (process layer): src/process/run.ts and src/process/command.ts were re-read in full and re-bound to their new bytes (spool-open fd pairing, identical-spool refusal) -- digest refresh accompanied the fresh read. F1/F2-MAC settlement (macOS archive staging regression): src/runtime/local-package.ts and src/git/canonical-command.ts were re-read in full and re-bound to their new bytes (Darwin archive spool through the host file owner; ls-tree scratch cleanup on spool-open failure) -- digest refresh accompanied the fresh read. UX-38 LOW residual settlement (workspaceDirty not-a-repo corroboration): src/cli/effects.ts was re-read in full and re-bound to its new bytes (the not-a-repo decline is now a factual negative only after a .git-claim walk corroborates absence) -- digest refresh accompanied the fresh read. DR35: current startup deltas directly reviewed with the user prohibition on subagents; each changed owner is bound to its current bytes and DR35 regressions. Historical lane results do not certify this batch. DR36 (2026-10-09): direct review of the repair deltas and affected owner flows, without subagents, is recorded separately from historical full-file reviews. Hash updates here accompany that review and named current regression oracles; earlier environment lanes are not renewed by digest regeneration. DR37 (2026-10-09): selected restriction removal deltas and affected lifetimes directly reviewed without subagents; current bytes and named behavioral oracles recorded, not a renewed full-codebase review. DR38 (2026-10-09): six host/guest repair deltas and concrete extracted owners directly reviewed without subagents, with current byte-bound behavioral regressions. Historical reviews and native environment PASS are not renewed. DR39 (2026-10-09): architecture extraction and simplification deltas plus new concrete owners reviewed directly, with current behavioral oracles and exact bytes. Native Swift stop-error guard is outside this production manifest and is explicitly NOT_RUN on Linux; runtime budgets remain unmet.",
+ "about": "WP32 inputs to implementation/review-ledger.json that git history cannot supply: files read in full and left unchanged, explicitly reviewed working-tree changes bound to their SHA-256 bytes and oracles, and the environment lanes as recorded in docs/implementation/validation.md. Regenerate the ledger with `npm run review:ledger`; `review-closure` checks it. Historical lane entries do not certify later working-tree changes. DR29: withdrawn stale byte-bound review claims for src/runtime/personal-settings.ts, src/entry/personal-host.ts, src/entry/oma-mac.ts. Hashes were not silently refreshed; these edited owners require fresh review. Historical readUnchanged entries apply only to unchanged committed files; changed files are NOT_REVIEWED. UX-38 residual settlement (bundled pi-lsp surface): the seven edited files above were re-read in full and re-bound to their new bytes -- digests refreshed only alongside a fresh read, never silently. No withdrawal was needed: each change is this batch's own reviewed work. UX-38 blind-verification settlement (process layer): src/process/run.ts and src/process/command.ts were re-read in full and re-bound to their new bytes (spool-open fd pairing, identical-spool refusal) -- digest refresh accompanied the fresh read. F1/F2-MAC settlement (macOS archive staging regression): src/runtime/local-package.ts and src/git/canonical-command.ts were re-read in full and re-bound to their new bytes (Darwin archive spool through the host file owner; ls-tree scratch cleanup on spool-open failure) -- digest refresh accompanied the fresh read. UX-38 LOW residual settlement (workspaceDirty not-a-repo corroboration): src/cli/effects.ts was re-read in full and re-bound to its new bytes (the not-a-repo decline is now a factual negative only after a .git-claim walk corroborates absence) -- digest refresh accompanied the fresh read. DR35: current startup deltas directly reviewed with the user prohibition on subagents; each changed owner is bound to its current bytes and DR35 regressions. Historical lane results do not certify this batch. DR36 (2026-10-09): direct review of the repair deltas and affected owner flows, without subagents, is recorded separately from historical full-file reviews. Hash updates here accompany that review and named current regression oracles; earlier environment lanes are not renewed by digest regeneration. DR37 (2026-10-09): selected restriction removal deltas and affected lifetimes directly reviewed without subagents; current bytes and named behavioral oracles recorded, not a renewed full-codebase review. DR38 (2026-10-09): six host/guest repair deltas and concrete extracted owners directly reviewed without subagents, with current byte-bound behavioral regressions. Historical reviews and native environment PASS are not renewed. DR39 (2026-10-09): architecture extraction and simplification deltas plus new concrete owners reviewed directly, with current behavioral oracles and exact bytes. Native Swift stop-error guard is outside this production manifest and is explicitly NOT_RUN on Linux; runtime budgets remain unmet. DR40 (2026-10-10): A-01 through A-11 deltas and concrete owners reviewed directly without subagents; current bytes/oracles recorded separately from historical reviews and native qualification.",
  "reviewedChanges": [
   {
    "path": "implementation/contracts.ts",
@@ -452,14 +452,16 @@
    "path": "src/entry/pi-interactive-host.ts",
    "by": [
     "DR35",
-    "DR36"
+    "DR36",
+    "DR40"
    ],
    "oracles": [
     "AV-02",
-    "DR35"
+    "DR35",
+    "DR40"
    ],
-   "sha256": "a22a4821822e5517dd2baebb9763d2d9216d3fb58cf14f4175749459f30f733a",
-   "note": "Reviewed Pi public storage/factory wiring and startup presentation separation: one owned settings lock, Pi field merging, trusted user project atomic replacement under the public Pi file lock with conflict detection, preservation of explicit skill choices, bundled CLI preload only for the pinned runtime, and typed private compatibility declarations. Interprocess CLI and trusted/untrusted project oracles cover the settings changes."
+   "sha256": "28074817bd510f2406933feb7a9114223a258a16017c8dfcd7cfd2a694c68d37",
+   "note": "DR40 direct delta and affected-owner review without subagents; no historical full-file or native qualification renewal. Pinned external-engine adaptation and lifetime boundaries; existing authority policy preserved."
   },
   {
    "path": "src/entry/pi-personal.ts",
@@ -605,18 +607,31 @@
    "note": "Read in full for the post-listen 'error' sweep and its emit residuals: the permanent 'error' listener's body is non-throwing (journal, re-register, retry listen all guarded) and the re-register inside the 'listening' emit is now guarded too -- 'listening' is the same synchronous emit boundary, so a refused registerProvider escaping it would kill the engine. A refusal keeps the unreachable provider the pre-listen register installed (the relay listens unused rather than the engine bypassing it) and is journaled best-effort; unref and resolve still run."
   },
   {
+   "path": "src/extension/lsp-call-scope.ts",
+   "by": [
+    "DR40"
+   ],
+   "oracles": [
+    "DR40"
+   ],
+   "sha256": "baca862f67355040d7e855fad1750df0c97b83deb52106755385feeddf232fe6",
+   "note": "DR40 direct delta and affected-owner review without subagents; no historical full-file or native qualification renewal. Pinned external-engine adaptation and lifetime boundaries; existing authority policy preserved."
+  },
+  {
    "path": "src/extension/lsp-tools.ts",
    "by": [
     "BL1",
     "BL5",
-    "UX-38"
+    "UX-38",
+    "DR40"
    ],
    "oracles": [
     "BL1",
-    "BL5"
+    "BL5",
+    "DR40"
    ],
-   "sha256": "22f11196fef6cac4910729eb6f30c481f5feb7fb60a3ed2743acf53c486ab50b",
-   "note": "Re-read in full for the UX-38 residual settlement round 2 (LSP surface): the diagnostics route loop now degrades per route -- a route whose call fails keeps a named 'X LSP diagnostics failed' section while completed routes keep their results, the caller's abort and the stall still end the call (stall.fired / stall.signal.throwIfAborted checked before degrade), and a call where every route failed still refuses ('failed on every route'). Vendored runDiagnostics itself settles per file (allSettled + oma/error markers), so route-level degrade covers failures the file level cannot reach (spawn/collect). Header comment now describes sniffed-id-only oversized refusal, stdin backpressure and per-file/per-route degrade; summary.failedRoutes counts degraded routes. Verified the vendored runtime still loads only behind verifyVendorBundle; per-call scratch, role refusal, deny-by-default child env and contained-writer path unchanged. Oracles: lsp-bundle BL1/F-5 partial-answers per-file degrade, route-degrade and all-fail-refusal tests; BL1/F1 stall/abort/limit suites unchanged."
+   "sha256": "cc72c5636df0e146ef525d5f08aa41dfd2f9ae963b4500043df6adf05e627ada",
+   "note": "DR40 direct delta and affected-owner review without subagents; no historical full-file or native qualification renewal. Pinned external-engine adaptation and lifetime boundaries; existing authority policy preserved."
   },
   {
    "path": "src/extension/mail-tools.ts",
@@ -632,15 +647,28 @@
    "note": "Reviewed the first Principal tool path: wait for the actual channel grant before freezing/sending a new request; abort, damage and channel EOF reject waits and remove listeners. Detached behavior retains its existing transport semantics. Grant/cancel/damage regressions and the actual PTY once-only operation probe cover the change."
   },
   {
-   "path": "src/extension/mcp-tools.ts",
+   "path": "src/extension/mcp-sdk-env.ts",
    "by": [
-    "DR37"
+    "DR40"
    ],
    "oracles": [
-    "DR37"
+    "DR40"
    ],
-   "sha256": "2bd18b29e2522d06349467a8a8a39275bfc3eafd5ba059045337474c6997414d",
-   "note": "DR37 direct review of changed code and affected composition: remove OMA resource/count/storage admission enforcement while keeping current authority, serialized contained effects, canonical historical declarations and explicit OS errors. Updated existing regressions plus DR37 positive execution tests cover the delta; no historical full-file review or environment PASS is renewed by this hash."
+   "sha256": "11d9f8c98355ab074bfccecc5a6d420b29f5b410c315f10c336f0b529f85c073",
+   "note": "DR40 direct delta and affected-owner review without subagents; no historical full-file or native qualification renewal. Pinned external-engine adaptation and lifetime boundaries; existing authority policy preserved."
+  },
+  {
+   "path": "src/extension/mcp-tools.ts",
+   "by": [
+    "DR37",
+    "DR40"
+   ],
+   "oracles": [
+    "DR37",
+    "DR40"
+   ],
+   "sha256": "7d6d04d971bbb34836b1c33ddb083c5394fce2c09a037b0de09e36101950a696",
+   "note": "DR40 direct delta and affected-owner review without subagents; no historical full-file or native qualification renewal. Pinned external-engine adaptation and lifetime boundaries; existing authority policy preserved."
   },
   {
    "path": "src/extension/principal-channel.ts",
@@ -152505,6 +152533,17 @@
    "note": "Read in full: docstring re-pinned to 1.0.1 only. The strip list is verified against the installed engine's bash.js deletions by the A7 oracle; no list entry changed."
   },
   {
+   "path": "src/pi-compat/interactive-editor.ts",
+   "by": [
+    "DR40"
+   ],
+   "oracles": [
+    "DR40"
+   ],
+   "sha256": "330692f34ce5ff517728b24a98d1d0131dc7ff8067908f07c2f9d641295f8efa",
+   "note": "DR40 direct delta and affected-owner review without subagents; no historical full-file or native qualification renewal. Pinned external-engine adaptation and lifetime boundaries; existing authority policy preserved."
+  },
+  {
    "path": "src/pi-compat/interactive-mode.ts",
    "by": [
     "ENG2",
@@ -152543,6 +152582,17 @@
    ],
    "sha256": "27bd2f43c340c9a2ff473fdaefeaee97265afb73d31ce2c00ea5cfec08ae4fa7",
    "note": "DR37 direct review of scoped Pi compatibility seam: initialization returns existing paths without awaiting optional download, deduplicated upstream installer refreshes the same pinned provider field; real recursive fixture and delayed installer regression preserve command behavior."
+  },
+  {
+   "path": "src/pi-compat/interactive-ui.ts",
+   "by": [
+    "DR40"
+   ],
+   "oracles": [
+    "DR40"
+   ],
+   "sha256": "6c9145d0027907b9d47e3690d40d205e5a14206d04ce603bf6cfea1173ac9b81",
+   "note": "DR40 direct delta and affected-owner review without subagents; no historical full-file or native qualification renewal. Pinned external-engine adaptation and lifetime boundaries; existing authority policy preserved."
   },
   {
    "path": "src/pi-compat/pi-private.d.ts",
@@ -152756,13 +152806,15 @@
   {
    "path": "src/platform/host/host-api.ts",
    "by": [
-    "DR34"
+    "DR34",
+    "DR40"
    ],
    "oracles": [
-    "post-listen"
+    "post-listen",
+    "DR40"
    ],
-   "sha256": "57ae09ea0e8a5198bf517261a87c35635e1090c911268e749e5e43a7572667d9",
-   "note": "Read in full for the post-listen 'error' sweep: a permanent 'error' listener now sits beside the startup once-listener -- after `listen` succeeds and the startup listener is removed, an accept-class error (EMFILE/ENFILE) is journaled best-effort (a sink that throws cannot escape the emit) and the socket stays bound so the kernel can retry; closing would unlink the name its clients still dial. omahostd reaches this boundary through platform/host/service.ts and runs no uncaughtException handler."
+   "sha256": "412b374e17d346e59683306400d0a5702c20d600b1269b016bf67190f674b9a5",
+   "note": "DR40 direct delta and affected-owner review without subagents; no historical full-file or native qualification renewal. Typed method result decoding and coordinator contracts; transport and durable replay ownership preserved."
   },
   {
    "path": "src/platform/host/keychain-client.ts",
@@ -152823,13 +152875,15 @@
   {
    "path": "src/platform/host/project-sync.ts",
    "by": [
-    "DR38"
+    "DR38",
+    "DR40"
    ],
    "oracles": [
-    "DR38"
+    "DR38",
+    "DR40"
    ],
-   "sha256": "3206c4c2faf34e1b26e02a954f4ddc072eb2e2a9ad6a169afdf3b0a924c5e3d5",
-   "note": "Read full extracted project bind/import/export owner and compared to original callbacks: bookmark folder and Git identity checks, reread-under-record-writer, request keys, stream digests, pre-export identity recheck, actual result observation, and finally staging removal remain. No generic framework or alternate record authority."
+   "sha256": "27649dcf128cd9394b5717fd493dfa9e77d3230fcf8c3cdecbe260621a17ca6d",
+   "note": "DR40 direct delta and affected-owner review without subagents; no historical full-file or native qualification renewal. Typed method result decoding and coordinator contracts; transport and durable replay ownership preserved."
   },
   {
    "path": "src/platform/host/project.ts",
@@ -152856,24 +152910,28 @@
   {
    "path": "src/platform/host/session-gateway.ts",
    "by": [
-    "DR38"
+    "DR38",
+    "DR40"
    ],
    "oracles": [
-    "DR38"
+    "DR38",
+    "DR40"
    ],
-   "sha256": "560bec8629f856ff077216a18c82ac1ef92311869e62143ee9792212a11f10aa",
-   "note": "Read full extracted history/settings gateway: project record and society identity checks precede guest requests; resume uses the same pre-update-safe queued start; repository identity verification and peer-finally cleanup remain."
+   "sha256": "682a5978456302024cf510cdb3ea695beba0bbf0a1785b4555acf5317d38dd74",
+   "note": "DR40 direct delta and affected-owner review without subagents; no historical full-file or native qualification renewal. Typed method result decoding and coordinator contracts; transport and durable replay ownership preserved."
   },
   {
    "path": "src/platform/host/snapshot-coordinator.ts",
    "by": [
-    "DR38"
+    "DR38",
+    "DR40"
    ],
    "oracles": [
-    "DR38"
+    "DR38",
+    "DR40"
    ],
-   "sha256": "58c0b53fc648f9f099ca6cc9a33b5d436ff13ec26f228f5424e5d15f14fa5537",
-   "note": "Read full state-disk coordinator: stopped/ready snapshot checks and clone/thaw/lease return share one queue with start/stop/pre-update snapshot; shutdown closes admission synchronously and queues observed stop; rejected work does not poison the tail. Existing retention and reserved update-id policy preserved. Architecture check exposed inherited raw directory listing after extraction: now uses existing host-owned listing/permission repair and refuses unobservable state rather than claiming an absent update snapshot."
+   "sha256": "de2124c27d487a21f5770f9ed970080a3d627d87c56d2a410702a7d08754a956",
+   "note": "DR40 direct delta and affected-owner review without subagents; no historical full-file or native qualification renewal. Typed method result decoding and coordinator contracts; transport and durable replay ownership preserved."
   },
   {
    "path": "src/platform/host/snapshot.ts",
@@ -152889,13 +152947,15 @@
   {
    "path": "src/platform/host/transfers.ts",
    "by": [
-    "DR38"
+    "DR38",
+    "DR40"
    ],
    "oracles": [
-    "DR38"
+    "DR38",
+    "DR40"
    ],
-   "sha256": "89571a169273f52edcfcd389e36b2d6b41beddccaba41af5787f4b1741aab4ef",
-   "note": "Read full package/archive transfer extraction and compared to original effects: stable request-key staging, whole package store archive, validated streams, finally removal, host room observation, encrypted archive sink and idempotent finished publication retained. Architecture check exposed inherited raw publication probe after extraction: now observes through existing host-owned listing and refuses unobservable archive directory or non-file publication, never adopts a false absence."
+   "sha256": "0f91d78d4bd11780e24e85d4c27367a380aca8919fc0d4430c117303c9f06310",
+   "note": "DR40 direct delta and affected-owner review without subagents; no historical full-file or native qualification renewal. Typed method result decoding and coordinator contracts; transport and durable replay ownership preserved."
   },
   {
    "path": "src/platform/host/vz-driver.ts",
@@ -152930,6 +152990,17 @@
    ],
    "sha256": "4ea0798a07dfb9bda6db933fe732d57f7a8affb0a5038bb35dc0cc7bc07136d8",
    "note": "Re-read in full for the UX-38 batch-4 working-tree review (2026-10-08): readLeadingFrame's observation deadline is silence, not elapsed time: it validates the declared length before awaiting the body and re-arms the timer on every received byte, so a large or slowly-written frame completes and only a mute sender is refused. Frame byte bound, rest passthrough and BROKER_UNAVAILABLE-on-loss unchanged."
+  },
+  {
+   "path": "src/platform/society-client.ts",
+   "by": [
+    "DR40"
+   ],
+   "oracles": [
+    "DR40"
+   ],
+   "sha256": "ee3c894aec2e5ec5160953a14ab2baad34d515c2e00382860a871fe78cf0f850",
+   "note": "DR40 direct delta and affected-owner review without subagents; no historical full-file or native qualification renewal. Typed method result decoding and coordinator contracts; transport and durable replay ownership preserved."
   },
   {
    "path": "src/process/async.ts",
@@ -153025,6 +153096,17 @@
    ],
    "sha256": "c7cb54e3c276c8667a0278bfbbea953447b41fce40fc8e9c090540eaec24e7cd",
    "note": "Read in full: canonical project/Society/basename/header identity, exact shape and round trip; traversal, added cwd, malformed references and replaced identity are rejected by DR29 guest-history tests. Pure value codec; no writer or native proof."
+  },
+  {
+   "path": "src/protocol/host-api.ts",
+   "by": [
+    "DR40"
+   ],
+   "oracles": [
+    "DR40"
+   ],
+   "sha256": "7854c4ec0170b914c01badd467f9f91feb9e9f871d59f6c19dc656ce20a3c6f5",
+   "note": "DR40 direct delta and affected-owner review without subagents; no historical full-file or native qualification renewal. Typed method result decoding and coordinator contracts; transport and durable replay ownership preserved."
   },
   {
    "path": "src/protocol/host-guest.ts",
@@ -153244,20 +153326,33 @@
    "note": "Re-read in full for the UX-38 batch-4 working-tree review (2026-10-08): the per-placeholder concurrency bound is a working set: requests beyond it queue in FIFO, count in observe().queued only, and take no provider call or inFlight slot until granted; a queued client close withdraws the claim and a settling request grants the next. Provider silence windows re-arm on upload, response and body progress so a working call is never cut at a total. Path/policy/placeholder refusals, tripwire, failed accounting and refused listener setup unchanged."
   },
   {
+   "path": "src/runtime/local-package-stage.ts",
+   "by": [
+    "DR40"
+   ],
+   "oracles": [
+    "DR40"
+   ],
+   "sha256": "6558a98d1bb4f83c2641467c61a6c56c740ed2b347b17a954e18880951b73f78",
+   "note": "DR40 direct delta and affected-owner review without subagents; no historical full-file or native qualification renewal. Filesystem staging/tar byte interpretation or atomic settings view; existing effect order and diagnostics retained. Final EOF whitespace cleanup after runtime; separate emitted-byte comparison is recorded."
+  },
+  {
    "path": "src/runtime/local-package.ts",
    "by": [
     "DR25",
     "F1-MAC",
     "P0-8",
-    "UX-38"
+    "UX-38",
+    "DR40"
    ],
    "oracles": [
     "DR25",
     "DR25/C20",
-    "P0-8"
+    "P0-8",
+    "DR40"
    ],
-   "note": "Re-read in full for the macOS regression-settlement round (F1): stageArchive's inflate spool no longer reaches for the Linux-only held-parent primitives on Darwin -- the scratch directory is createHostStagingDirectory (the host file owner's path-based spelling under the owned-boundary repair), the inflated member lands through a fresh O_EXCL|O_NOFOLLOW path open, and removal is removeHostStaged, matching the hostStaging StageArea split and prune's own platform branch. The walk to the spool is path-based -- not the kernel's RESOLVE_BENEATH descriptor containment -- with oma's own store tree under the host lock as the boundary; the header says so honestly. test/local-package-platform.test.mjs exercises the Darwin branch with contained-fs/directory replaced by the host's real UNSUPPORTED_PROFILE refusal: a real .tgz and .tar stage end-to-end and the spool leaves no residue.",
-   "sha256": "369de6993fcd80cbd0fe8d512ea30a825ad55efa59c65c6a38f4c932126d30e9"
+   "sha256": "f4b975a9e4b50d75656f54ce9f2c98d41a3a74ebabd9941d28b6cae9e9eaf02f",
+   "note": "DR40 direct delta and affected-owner review without subagents; no historical full-file or native qualification renewal. Filesystem staging/tar byte interpretation or atomic settings view; existing effect order and diagnostics retained."
   },
   {
    "path": "src/runtime/locked-files.ts",
@@ -153271,6 +153366,17 @@
    ],
    "sha256": "efcc6de42dfb7d77a18f3d6f85046776846ca727e4140d803016db2db8d921be",
    "note": "Reviewed Pi public storage/factory wiring and startup presentation separation: one owned settings lock, Pi field merging, trusted user project atomic replacement under the public Pi file lock with conflict detection, preservation of explicit skill choices, bundled CLI preload only for the pinned runtime, and typed private compatibility declarations. Interprocess CLI and trusted/untrusted project oracles cover the settings changes."
+  },
+  {
+   "path": "src/runtime/package-tar.ts",
+   "by": [
+    "DR40"
+   ],
+   "oracles": [
+    "DR40"
+   ],
+   "sha256": "1d26b15b14bf11358d4f249f9623325f7ee5db340a7721393cd09603ad3dcfd3",
+   "note": "DR40 direct delta and affected-owner review without subagents; no historical full-file or native qualification renewal. Filesystem staging/tar byte interpretation or atomic settings view; existing effect order and diagnostics retained. Final EOF whitespace cleanup after runtime; separate emitted-byte comparison is recorded."
   },
   {
    "path": "src/runtime/personal-session.ts",
@@ -153520,6 +153626,17 @@
    "note": "DR39 directly reviewed delta and affected owner; no subagents or renewed historical/native PASS. Reviewed locked-temporary acquisition and all publication call sites. Create an uncollectible plain temporary, acquire its flock, then link its held name without replacement and remove the provisional name. A pre-lock crash retains the unproven plain temporary. Deterministic collector-before-flock regression fails on baseline and passes on current code; fault matrix passed."
   },
   {
+   "path": "src/storage/facets.ts",
+   "by": [
+    "DR40"
+   ],
+   "oracles": [
+    "DR40"
+   ],
+   "sha256": "1001651e3626bc710e9f30ebe783df6018abe11d86761cc96c6f67039eabe3f7",
+   "note": "DR40 direct delta and affected-owner review without subagents; no historical full-file or native qualification renewal. Explicit transaction-scoped capability calls; stale closure, rollback, admission and single Store ownership retained."
+  },
+  {
    "path": "src/storage/file-digest.ts",
    "by": [
     "DR26"
@@ -153629,6 +153746,17 @@
    "note": "DR39 directly reviewed delta and affected owner; no subagents or renewed historical/native PASS. Reviewed complete spool preparation and verification. Acquire the artifact pin while exclusive-create writer descriptor is held, preserve it through async input and transfer it to PreparedSubmitSpool. Early stream failures settle the same artifact and release both descriptor owners; R20 and preaccept regressions passed."
   },
   {
+   "path": "src/storage/transaction.ts",
+   "by": [
+    "DR40"
+   ],
+   "oracles": [
+    "DR40"
+   ],
+   "sha256": "3c44ca972212f7d643b0c312af1914027afed4c164652162c9e5c414f57daf01",
+   "note": "DR40 direct delta and affected-owner review without subagents; no historical full-file or native qualification renewal. Explicit transaction-scoped capability calls; stale closure, rollback, admission and single Store ownership retained."
+  },
+  {
    "path": "src/store.ts",
    "by": [
     "UX-37"
@@ -153675,13 +153803,15 @@
   {
    "path": "src/tui/interactive-editor.ts",
    "by": [
-    "B2"
+    "B2",
+    "DR40"
    ],
    "oracles": [
-    "B2"
+    "B2",
+    "DR40"
    ],
-   "note": "Read in full at the 2026-10-05 B round: the submit chain intercepts exactly '/thinking show' and '/thinking hide' before isCommand routing -- bare /thinking and every other argument still reach Pi; setThinkingBlockHidden reads hideThinkingBlock and calls the engine's toggle only on a difference, so the request is deterministic.",
-   "sha256": "6e55a26b1e8e8c9368dc9a0a131f0a79cba6022c24843aa1b29666848490a24b"
+   "sha256": "dc5be9a45a436d53e17f8b2635012c4420c61c2089fa2eb39e77f84ac5645871",
+   "note": "DR40 direct delta and affected-owner review without subagents; no historical full-file or native qualification renewal. Filesystem staging/tar byte interpretation or atomic settings view; existing effect order and diagnostics retained."
   },
   {
    "path": "src/tui/limits.ts",
@@ -153758,13 +153888,15 @@
   {
    "path": "src/tui/project-session-settings.ts",
    "by": [
-    "DR39"
+    "DR39",
+    "DR40"
    ],
    "oracles": [
-    "DR39"
+    "DR39",
+    "DR40"
    ],
-   "sha256": "3384ffb9c173365c5de848300d17bf77fae0b6fae54123f4fba8613230d8ce24",
-   "note": "DR39 direct delta/affected-owner review without subagents; no historical full-file or native lane renewal. Read new owner in full: existing managed-bundle commits and derivation share live write authority; read-back preserves unknown and failed commits; actual pointer bytes detect same-size replacements and unobservable reads retry."
+   "sha256": "200c66f17ffac7feefece76dba9fccc0ba1660078898c080e56ca11740b44986",
+   "note": "DR40 direct delta and affected-owner review without subagents; no historical full-file or native qualification renewal. Filesystem staging/tar byte interpretation or atomic settings view; existing effect order and diagnostics retained."
   },
   {
    "path": "src/tui/project-settings.ts",
@@ -154696,23 +154828,6 @@
    "note": "read in full in the whole-codebase adversarial pass after v9; oracles are the tests that load this module"
   },
   {
-   "path": "src/storage/transaction.ts",
-   "by": [
-    "AV-review"
-   ],
-   "oracles": [
-    "P4",
-    "T14",
-    "T15",
-    "T16",
-    "T17",
-    "T18",
-    "T19",
-    "T20"
-   ],
-   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are the tests that load this module"
-  },
-  {
    "path": "src/storage/operation-journal.ts",
    "by": [
     "AV-review"
@@ -155365,23 +155480,6 @@
    ],
    "oracles": [
     "R28"
-   ],
-   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are tests whose loaded module closure (or text) contains this file"
-  },
-  {
-   "path": "src/storage/facets.ts",
-   "by": [
-    "AV-review"
-   ],
-   "oracles": [
-    "DB-009",
-    "GIT-006",
-    "ID-003",
-    "P9",
-    "R10",
-    "R21",
-    "V04A",
-    "V04B"
    ],
    "note": "read in full in the whole-codebase adversarial pass after v9; oracles are tests whose loaded module closure (or text) contains this file"
   },

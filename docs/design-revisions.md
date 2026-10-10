@@ -1481,3 +1481,39 @@ locked temporary는 plain `.tmp`로 만들고 flock을 획득한 뒤 `.held.tmp`
 기존 startup broker fence 아래 mail temporary recovery와 진단 원칙을 따른다.
 quota 제거 시험은 filesystem directory allocation보다 작은 고정 총량을 요구하지 않고
 실제 4096-byte 파일을 legacy 1-byte 선언과 함께 실행한다.
+
+
+## DR40 — 추가 아키텍처 감사 A-01~A-11 대응
+
+2026-10-10 Human은 `3b9bcea`의 추가 감사를 구현하도록 지시했다. 시작 성능 작업으로
+잘못 이어받은 측정용 변경은 원복했다. 이 배치는 설계·계약·변경 비용 개선이며,
+새 계층·service framework·quota를 도입하지 않는다. 서브에이전트를 사용하지 않는다.
+
+| 감사 | 구현과 소유권 | 남는 경계 |
+|---|---|---|
+| A-01 | `protocol/host-api.ts`가 프로젝트·패키지·snapshot·history의 request/result를 선언한다. HostApiBackend와 coordinator는 각각 이 계약을 참조하며 `Parameters<HostApiBackend>` 역방향 참조를 제거한다. | framing의 JSON과 durable request.status의 불특정 operation 결과는 계속 opaque다. |
+| A-02 | Pi editor Proxy·action handler·autocomplete 적응은 `pi-compat/interactive-editor.ts`에, UI 재할당·반환은 `interactive-ui.ts`에 둔다. TUI는 prompt 크기·라우팅 정책을 공급한다. 세션 종료는 자신이 설치한 UI wrapper만 반환한다. | pinned Pi private hooks 자체를 모두 제거한 것은 아니다. 기존 private-member catalog와 실제 upstream oracle을 유지한다. |
+| A-03 | read facet은 명시적인 Store 호출, write facet은 현재 transaction의 실제 closure로 연결한다. transaction도 허용 method를 typed object로 구성한다. Reflect.get/apply와 문자열 dispatch를 제거한다. | capability 이름 표와 Store 기반 type-only 참조는 유지한다. 별도 repository나 복제된 Store port를 만들지 않는다. |
+| A-04 | package 정책·설치 조정은 local-package, filesystem staging은 local-package-stage, tar byte 해석은 package-tar가 소유한다. | gzip spool과 설치·cleanup의 트랜잭션 순서는 기존 coordinator가 소유한다. Linux held-parent와 Mac host-file 경계는 같다. |
+| A-05 | domain-neutral FramedPeer 위의 requestSociety가 메서드별 params/result를 연결하고 protocol validator로 전체 shape와 history binding을 확인한다. project·transfer·history·society 호출자가 이를 사용한다. | 승인·거절·unknown·durable replay와 연결 종료의 소유권은 기존 transport/caller에 남는다. |
+| A-06 | 설정·project 설정·extension·누락 항목·pointer version을 snapshot으로 묶고 종속 읽기가 모두 끝난 뒤 게시한다. 실패 시 이전 완전한 view와 unread 진단을 구분한다. | 저장이 성공했으나 재파생/읽기가 실패한 기존 saved-next-start·saved-unread 의미를 유지한다. |
+| A-07 | lsp-call-scope가 call-owned progress/stall·merged abort·scratch 반환을 소유한다. 두 실행 tool은 같은 helper를 사용한다. | upstream LspSessionScope와 child shutdown을 재구현하지 않는다. 관계없는 call의 frame은 stall을 갱신하지 않는다. |
+| A-08 | SDK의 stdio inherited-env 두 platform 목록을 벤더 ESM/CJS AST에서 생성하며 두 build가 다르면 거절한다. vendor maintenance tool에 생성·검사 경로를 둔다. | server/settings/OAuth 허용 목록은 OMA의 독립 권한 정책이므로 유지한다. bundle 검증 전 vendor 실행은 없다. |
+| A-09 | main checker의 중복 AST helpers와 순환 adjacency 구성을 기존 공유 구현으로 통일한다. rule check는 호출당 syntax snapshot 하나를 사용하고 끝나면 폐기한다. | 명시적 kernel owner·filesystem provenance·transaction effect 추적·negative control을 줄이지 않는다. 복잡한 보안 검사는 남는다. |
+| A-10 | evolution mutation은 이름이 있는 interface/member/type/registry/switch의 AST 위치를 선택한다. 정확한 문구 replaceOnce를 제거한다. | 의도적으로 바꾸는 계약 의미와 frozen v1 golden은 유지하며 서식·주석 변경으로 anchor가 사라지지 않는다. |
+| A-11 | mutation-locality의 owner inventory를 명시하고 `--since`/`--until`로 실제 Git 변경 파일을 별도 측정한다. NUL 경로와 untracked pending work를 처리한다. | owner 교집합을 feature 변경 수로 추정하지 않는다. audit 전체의 변경 파일 수를 단일 feature locality로 주장하지 않는다. |
+
+기존 런타임 의미를 보존하는 직접 검증과 최종 기록은
+[DR40 evidence](../test/audit/architecture-2026-10-10.evidence.json)와
+[현재 검증 상태](implementation/validation.md)를 따른다. 소스 기반 평점 상승을 보증하지 않는다.
+실제 macOS helper·VM·전원 손실·paid provider는 이 Linux 배치의 실행 증거에 포함되지 않는다.
+
+MCP SDK 목록을 갱신하려면 `node scripts/vendor-pi-mcp-adapter.mjs --write-sdk-metadata`,
+검사하려면 `--check-sdk-metadata`를 사용한다. 이 경로는 manifest byte identity와
+생성 목록만 검사한다. 기존 전체 vendor re-emit 검사와 같은 증거로 표시하지 않는다.
+
+한 feature를 변경한 Git 구간의 실제 비용은
+`node scripts/mutation-locality.mjs --since <base> --until <head> --json`으로 기록한다.
+`--until` 생략은 working tree와 미커밋 파일까지 포함한다. 기존 옵션 없는 JSON array는 유지한다.
+경로 수를 측정하므로 rename은 기존 경로와 새 경로 두 개로 센다. 한 feature로 지정한
+changeset끼리 비교해야 하며, 여러 감사 항목을 묶은 이번 배치의 수치를 feature 개선으로 추정하지 않는다.

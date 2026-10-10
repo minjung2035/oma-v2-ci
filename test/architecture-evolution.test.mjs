@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { resolve, relative } from "node:path";
 import ts from "typescript";
+import { addInterfaceMember, removeInterfaceMember, setMemberResult, setMemberParameter, prependType, addRegistryProperty, replaceRegistryProperty, addSwitchCase } from "./helpers/architecture-mutations.mjs";
 import {
   createArchitectureProgram,
   graphFromProgram,
@@ -52,14 +53,6 @@ function programWith(overrides) {
     ],
   });
 }
-function replaceOnce(text, before, after) {
-  assert.equal(
-    text.split(before).length,
-    2,
-    `mutation anchor must be unique: ${before}`,
-  );
-  return text.replace(before, after);
-}
 const errors = (program) =>
   ts
     .getPreEmitDiagnostics(program)
@@ -89,14 +82,13 @@ function interfaceSurface(text, file) {
   // P0V-113 changes only the existing owner's readiness result. Project that
   // exact delta out for BOTH positive and negative capability controls.
   if (file === "src/broker/internal-dispatcher.ts")
-    text = replaceOnce(text, "openRun(actor: Actor, invocationId: string): Promise<RunLease>;", "openRun(actor: Actor, invocationId: string): RunLease;");
-  // DR27 adds only the explicit society/attestation ports and wait observation.
-  // Exact anchors protect the delta itself; the original capability golden stays fixed.
+    text = setMemberResult(text, "InternalDispatchDependencies", "openRun", "RunLease");
+  // Project only explicitly reviewed additions out of the frozen v1 golden.
   if (file === publicDispatcher) {
-    text = replaceOnce(text, '  readonly setSociety?: (auth: AuthContext, state: "open" | "closed", key: RequestKey) => Receipt;\n', "");
-    text = replaceOnce(text, '  readonly attestations?: { record(auth: AuthContext, key: RequestKey, input: PublicMethods["attest.record"]["params"]): Promise<Receipt> };\n', "");
-    text = replaceOnce(text, "  waitRun(auth: AuthContext, observe: boolean): boolean;\n", "");
-    text = replaceOnce(text, 'input: PublicMethods["git.integrate"]["params"]', "input: { candidate: Oid; expected: Oid }");
+    text = removeInterfaceMember(text, "PublicLifecyclePort", "setSociety");
+    text = removeInterfaceMember(text, "PublicGitPort", "attestations");
+    text = removeInterfaceMember(text, "PublicDispatchDependencies", "waitRun");
+    text = setMemberParameter(text, "PublicGitPort", "integrate", "input", "{ candidate: Oid; expected: Oid }");
   }
   const source = ts.createSourceFile(file, text, ts.ScriptTarget.Latest, true);
   return declarationSurface(
@@ -170,49 +162,27 @@ test("P22 positive control: current production compiles and has closed operation
 });
 
 test("P22 A: adding a public read method requires DTO, descriptor, handler and response decoder", () => {
-  const changedWire = replaceOnce(
-    replaceOnce(
-      read(wire),
-      "export interface PublicMethods {",
-      'export interface PublicMethods {\n  "probe.read": { params: Record<string, never>; result: { accepted: boolean } };',
-    ),
-    "export type ReadMethod =",
-    'export type ReadMethod = "probe.read" |',
-  );
+  const changedWire = prependType(addInterfaceMember(read(wire), "PublicMethods",
+    '"probe.read": { params: Record<string, never>; result: { accepted: boolean } };'), "ReadMethod", '"probe.read"');
   const changes = { [wire]: changedWire };
   assert.ok(
     hasError(fileErrors(programWith(changes), methods), methods, 1360, "probe.read"),
     "DTO alone must not bypass descriptor closure",
   );
-  changes[methods] = replaceOnce(
-    read(methods),
-    "export const PUBLIC_METHODS = {",
-    'export const PUBLIC_METHODS = {\n  "probe.read": { mode: "read", key: "forbidden", stream: "none", channel: "actor", result: "probe.read", capability: null, resource: "read", authority: ["current-actor"], paramsCheck: fixed(agentWaitParamsCheck) },',
-  );
+  changes[methods] = addRegistryProperty(read(methods), "PUBLIC_METHODS",
+    '"probe.read": { mode: "read", key: "forbidden", stream: "none", channel: "actor", result: "probe.read", capability: null, resource: "read", authority: ["current-actor"], paramsCheck: fixed(agentWaitParamsCheck) },');
   assert.ok(
     hasError(fileErrors(programWith(changes), publicDispatcher), publicDispatcher, 2345, "never"),
     "descriptor must not bypass real handler closure",
   );
-  changes[publicDispatcher] = replaceOnce(
-    read(publicDispatcher),
-    "default: return assertNever(method);",
-    'case "probe.read": return okAnswer(id, { accepted: true });\n      default: return assertNever(method);',
-  );
+  changes[publicDispatcher] = addSwitchCase(read(publicDispatcher), "dispatchChecked",
+    'case "probe.read": return okAnswer(id, { accepted: true });');
   assert.ok(
     hasError(fileErrors(programWith(changes), response), response, 1360, "probe.read"),
     "handler must not bypass response decoder closure",
   );
-  changes[response] = replaceOnce(
-    read(response),
-    "const checks = {",
-    'const checks = {\n  "probe.read": checkObject({ accepted: checkBool() }),',
-  );
-  // DR27: the Principal's delegation boundary is a closed method switch too.
-  changes[methods] = replaceOnce(
-    changes[methods],
-    'case "mail.ack": case "route.follow": case "route.unfollow": case "agent.create":',
-    'case "probe.read":\n    case "mail.ack": case "route.follow": case "route.unfollow": case "agent.create":',
-  );
+  changes[response] = addRegistryProperty(read(response), "checks", '"probe.read": checkObject({ accepted: checkBool() }),');
+  changes[methods] = addSwitchCase(changes[methods], "principalRequestAllowed", 'case "probe.read": return true;');
   assert.deepEqual(
     errors(programWith(changes)).map(message),
     [],
@@ -221,44 +191,28 @@ test("P22 A: adding a public read method requires DTO, descriptor, handler and r
 });
 
 test("P22 B: a new operation kind cannot omit result, codec or result-validator ownership", () => {
-  const changes = {
-    [durable]: replaceOnce(
-      read(durable),
-      "export type OperationPlan =",
-      'export type OperationPlan =\n  | { kind: "probe.mutate" }',
-    ),
-  };
+  const changes = { [durable]: prependType(read(durable), "OperationPlan", '{ kind: "probe.mutate" }') };
   const planOnly = programWith(changes);
   assert.throws(() => assertOperationClosure(planOnly), /result kind closure/);
   assert.ok(
     hasError(fileErrors(planOnly, codec), codec, 1360, "probe.mutate"),
     "actual codec registry must reject a missing kind",
   );
-  changes[durable] = replaceOnce(
-    changes[durable],
-    "export type OperationResult =",
-    'export type OperationResult =\n  | { kind: "probe.mutate" }',
-  );
+  changes[durable] = prependType(changes[durable], "OperationResult", '{ kind: "probe.mutate" }');
   assert.throws(
     () => assertOperationClosure(programWith(changes)),
     /codec closure/,
   );
   // The codec registry now follows the method declaration automatically.
   // A new method still cannot manufacture the independent result validator.
-  changes[methods] = replaceOnce(
-    read(methods),
-    "export const PUBLIC_METHODS = {",
-    'export const PUBLIC_METHODS = {\n  "probe.mutate": { mode: "mutation", key: "required", stream: "none", channel: "actor", result: "receipt", capability: null, resource: "admit", authority: ["current-actor"], paramsCheck: fixed(societySetParamsCheck) },',
-  );
+  changes[methods] = addRegistryProperty(read(methods), "PUBLIC_METHODS",
+    '"probe.mutate": { mode: "mutation", key: "required", stream: "none", channel: "actor", result: "receipt", capability: null, resource: "admit", authority: ["current-actor"], paramsCheck: fixed(societySetParamsCheck) },');
   assert.throws(
     () => assertOperationClosure(programWith(changes)),
     /result validator closure/,
   );
-  changes[validate] = replaceOnce(
-    read(validate),
-    "export function operationResultCheck(kind: string): Check {\n  switch (kind) {",
-    'export function operationResultCheck(kind: string): Check {\n  switch (kind) {\n    case "probe.mutate": return checkObject({ kind: checkEnum(["probe.mutate"]) });',
-  );
+  changes[validate] = addSwitchCase(read(validate), "operationResultCheck",
+    'case "probe.mutate": return checkObject({ kind: checkEnum(["probe.mutate"]) });');
   assertOperationClosure(programWith(changes)); // Schema links only, not a fictitious implemented workflow.
 });
 
@@ -296,11 +250,7 @@ test("P22 D: optional repair/recover/transaction capabilities cannot silently wi
   ])
     widened[file] = ["repair", "recover", "transaction"].reduce(
       (text, capability) =>
-        replaceOnce(
-          text,
-          `export interface ${port} {`,
-          `export interface ${port} {\n  readonly ${capability}?: () => void;`,
-        ),
+        addInterfaceMember(text, port, `readonly ${capability}?: () => void;`),
       read(file),
     );
   assert.deepEqual(
@@ -313,11 +263,7 @@ test("P22 D: optional repair/recover/transaction capabilities cannot silently wi
     ["src/broker/internal-dispatcher.ts", "InternalStorePort"],
   ]) {
     for (const capability of ["repair", "recover", "transaction"]) {
-      const changed = replaceOnce(
-        read(file),
-        `export interface ${port} {`,
-        `export interface ${port} {\n  readonly ${capability}?: () => void;`,
-      );
+      const changed = addInterfaceMember(read(file), port, `readonly ${capability}?: () => void;`);
       assert.notDeepEqual(
         interfaceSurface(changed, file),
         snapshots.dispatch[file],
@@ -330,12 +276,22 @@ test("P22 D: optional repair/recover/transaction capabilities cannot silently wi
 test("V29A: the request-hash set-field recipe is a closed registry of mutation methods and their array params", () => {
   const identity = "src/domain/request-identity.ts";
   const base = read(identity);
-  for (const [name, before, after] of [
-    ["an unknown method", '"mail.send": ["to"],', '"mail.sned": ["to"],'],
-    ["a field the method does not have", '"mail.send": ["to"],', '"mail.send": ["recipients"],'],
-    ["a field that is not a set", '"mail.send": ["to"],', '"mail.send": ["subject"],'],
+  for (const [name, after] of [
+    ["an unknown method", '"mail.sned": ["to"]'],
+    ["a field the method does not have", '"mail.send": ["recipients"]'],
+    ["a field that is not a set", '"mail.send": ["subject"]'],
   ]) {
-    const program = programWith({ [identity]: replaceOnce(base, before, after) });
+    const program = programWith({ [identity]: replaceRegistryProperty(base, "SET_FIELD_RECIPE", "mail.send", after) });
     assert.ok(fileErrors(program, identity).length > 0, `${name} compiled`);
   }
+});
+
+
+test("DR40: Architecture mutations select syntax owners through comments and reformatting", () => {
+  const original = 'export interface /* owner */ Probe\n { readonly value : string; }';
+  const changed = addInterfaceMember(original, "Probe", "readonly repair?: () => void;");
+  assert.deepEqual(declarationSurface(removeInterfaceMember(changed, "Probe", "repair"), "fixture.ts"), declarationSurface(original, "fixture.ts"));
+  const table = 'const checks /* registry */ = ( { "probe": false } as const );';
+  assert.match(addRegistryProperty(table, "checks", '"added": true,'), /"added": true/);
+  assert.throws(() => addRegistryProperty('const a = {};', "checks", '"added": true,'), /exactly one syntax owner/);
 });

@@ -49,22 +49,40 @@ type Bound<T extends Table> = {
 export type ReadFacets = Bound<typeof READ_FACETS>;
 export type WriteFacets = Bound<typeof WRITE_FACETS>;
 
-/** The type assertion is a key-preserving adapter, not a data decoder. */
-function bind<T extends Table>(table: T, owner: object): Bound<T> {
-  const result: Record<string, object> = {};
-  for (const [group, members] of Object.entries(table)) {
-    const facet: Record<string, unknown> = {};
-    for (const [name, method] of Object.entries(members)) {
-      const fn: unknown = Reflect.get(owner, method);
-      if (typeof fn !== "function") throw new TypeError(`missing Store facet method ${method}`);
-      facet[name] = (...args: unknown[]) => Reflect.apply(fn, owner, args);
-    }
-    result[group] = Object.freeze(facet);
-  }
-  return Object.freeze(result) as Bound<T>;
+/** Explicit calls keep the projection visible to the compiler and static
+ * call graph. The descriptors above name capabilities, never dispatch them. */
+export function readFacets(store: Store): ReadFacets {
+  return Object.freeze({
+    operations: Object.freeze({
+      get: (actor, key) => store.getOperation(actor, key),
+      getById: id => store.getOperationById(id),
+      classifyKey: (actor, key, hash) => store.claimKey(actor, key, hash),
+      retried: (actor, key) => store.retriedOperation(actor, key),
+      recoverableIds: () => store.recoverableOperations(),
+      physicalCreate: (name, hash) => store.findPhysicalCreate(name, hash),
+      succeededContext: candidate => store.findSucceededContext(candidate),
+      latestAction: (agent, actor) => store.latestAgentAction(agent, actor),
+      latestSociety: () => store.latestSocietyAction(),
+      submissions: () => store.submittedOperations(),
+    }),
+    attestations: Object.freeze({ all: () => store.attestationFacts() }),
+    agents: Object.freeze({ get: name => store.getAgent(name), all: () => store.listAgents() }),
+    subscriptions: Object.freeze({ subscribers: topic => store.subscribers(topic), all: () => store.allSubscriptions() }),
+    deliveries: Object.freeze({ get: (message, recipient) => store.getDelivery(message, recipient),
+      pending: agent => store.pendingDeliveries(agent), forOperation: id => store.deliveriesForOperation(id) }),
+    batches: Object.freeze({ get: id => store.getBatch(id), prepared: agent => store.preparedBatches(agent),
+      pending: (agent, incarnation) => store.pendingBatchesFor(agent, incarnation) }),
+  } satisfies ReadFacets);
 }
-export function readFacets(store: Store): ReadFacets { return bind(READ_FACETS, store); }
-/** Pass ONLY the current transaction's already-scoped closures, never Store.
- * Escaped facet functions therefore retain exactly the original root scope.
- */
-export function writeFacets(scoped: StoreWrites): WriteFacets { return bind(WRITE_FACETS, scoped); }
+/** Projection retains the exact current transaction's scoped closures. */
+export function writeFacets(scoped: StoreWrites): WriteFacets {
+  return Object.freeze({
+    operations: Object.freeze({ insert: scoped.insertOperation, claim: scoped.claimOperation,
+      accept: scoped.acceptOperation, prepare: scoped.updateOperationPlanJson,
+      succeed: scoped.setOperationSucceeded, fail: scoped.setOperationFailed, unknown: scoped.setOperationUnknown }),
+    agents: Object.freeze({ insert: scoped.insertAgent, update: scoped.updateAgent }),
+    subscriptions: Object.freeze({ follow: scoped.follow, unfollow: scoped.unfollow }),
+    deliveries: Object.freeze({ insert: scoped.insertDeliveries, materialize: scoped.markMaterialized, acknowledge: scoped.markAcknowledged }),
+    batches: Object.freeze({ prepare: scoped.insertPreparedBatch, link: scoped.linkDeliveriesToBatch, complete: scoped.completeBatch }),
+  } satisfies WriteFacets);
+}

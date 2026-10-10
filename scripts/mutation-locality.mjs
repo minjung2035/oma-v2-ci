@@ -1,6 +1,7 @@
 import { existsSync, readFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { changeLocality } from "./change-locality.mjs";
 import { registryOwnerSymbol } from "./architecture/rules/shared.mjs";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
@@ -74,13 +75,25 @@ function metrics(mutation, spec) {
 }
 
 const json = process.argv.includes("--json");
-const requested = process.argv.slice(2).filter(arg => arg !== "--json");
+const args = process.argv.slice(2);
+const option = name => {
+  const at = args.indexOf(name);
+  if (at < 0) return undefined;
+  if (!args[at + 1] || args[at + 1].startsWith("--")) fail(`${name} requires a revision`);
+  return args[at + 1];
+};
+const since = option("--since"), until = option("--until");
+if (until !== undefined && since === undefined) fail("--until requires --since");
+const requested = args.filter((arg, index) => arg !== "--json" && arg !== "--since" && arg !== "--until" &&
+  args[index - 1] !== "--since" && args[index - 1] !== "--until");
 const names = requested.length > 0 ? requested : Object.keys(ownership.mutations);
 for (const name of names) if (!Object.hasOwn(ownership.mutations, name)) fail(`unknown mutation ${name}`);
 const rows = names.map(name => metrics(name, ownership.mutations[name]));
 
+const changes = since === undefined ? null : changeLocality(root, since, until, rows);
 if (json) {
-  console.log(JSON.stringify(rows.map(({ refs, ...row }) => row), null, 2));
+  const inventory = rows.map(({ refs, ...row }) => row);
+  console.log(JSON.stringify(changes === null ? inventory : { inventory, changes }, null, 2));
   process.exit(0);
 }
 
@@ -88,6 +101,7 @@ const header = ["mutation", "pipeline", "runtime", "tests", "total", "recovery"]
 const body = rows.map(row => [row.mutation, row.pipelineFiles, row.runtimeFiles, row.testFiles, row.totalFiles, row.recovery]);
 const widths = header.map((value, index) => Math.max(String(value).length, ...body.map(row => String(row[index]).length)));
 const render = row => row.map((value, index) => String(value).padEnd(widths[index])).join("  ");
+console.log("Owner inventory (related files, not files edited per feature):");
 console.log(render(header));
 console.log(render(widths.map(width => "-".repeat(width))));
 for (const row of body) console.log(render(row));
@@ -96,4 +110,11 @@ if (requested.length === 1) {
   console.log("\nowners:");
   for (const ref of rows[0].refs)
     console.log(`${ref.dimension.padEnd(15)} ${ref.path} :: ${ref.symbol}`);
+}
+
+if (changes !== null) {
+  console.log(`\nActual changeset: ${changes.from} -> ${changes.to}`);
+  console.log(`${changes.totalFiles} changed files; ${JSON.stringify(changes.counts)}`);
+  for (const file of changes.changedFiles) console.log(file);
+  console.log(changes.meaning);
 }

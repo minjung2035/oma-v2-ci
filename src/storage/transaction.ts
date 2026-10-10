@@ -3,11 +3,11 @@
  * transaction's authority. It cannot undo an external effect already started.
  */
 import { AsyncLocalStorage } from "node:async_hooks";
-import { StoreError } from "../domain/errors.js";
 import { assertNewAcceptance, observeStoreFailure } from "../domain/admission.js";
-import type { Store } from "../store.js";
+import { StoreError } from "../domain/errors.js";
 import type { SynchronousResult } from "../ports/ledger.js";
-import { WRITE_METHODS, writeFacets, type StoreWrites, type WriteFacets } from "./facets.js";
+import type { Store } from "../store.js";
+import { writeFacets, type StoreWrites, type WriteFacets } from "./facets.js";
 export type { StoreWrites } from "./facets.js";
 
 const BRAND: unique symbol = Symbol("StoreTransaction");
@@ -57,13 +57,34 @@ export class TransactionScope {
     if (this.active) throw new StoreError("INTERNAL_ERROR", "nested store transaction");
     const scope: Scope = { owner: this, active: true, inserted: new Set() };
     this.scope = scope;
-    const methods = Object.fromEntries(WRITE_METHODS.map(name => [name, (...args: unknown[]) => {
+    const scoped = <A extends unknown[], R>(fn: (...args: A) => R): ((...args: A) => R) => (...args) => {
       this.requireScope(scope);
-      if (name === "insertPreparedBatch") assertNewAcceptance(this.store);
-      return Reflect.apply(this.store[name], this.store, args);
-    }]));
+      return fn(...args);
+    };
+    const methods = {
+      insertOperation: scoped(this.store.insertOperation.bind(this.store)),
+      claimOperation: scoped(this.store.claimOperation.bind(this.store)),
+      acceptOperation: scoped(this.store.acceptOperation.bind(this.store)),
+      updateOperationPlanJson: scoped(this.store.updateOperationPlanJson.bind(this.store)),
+      setOperationSucceeded: scoped(this.store.setOperationSucceeded.bind(this.store)),
+      setOperationFailed: scoped(this.store.setOperationFailed.bind(this.store)),
+      setOperationUnknown: scoped(this.store.setOperationUnknown.bind(this.store)),
+      insertAgent: scoped(this.store.insertAgent.bind(this.store)),
+      updateAgent: scoped(this.store.updateAgent.bind(this.store)),
+      follow: scoped(this.store.follow.bind(this.store)),
+      unfollow: scoped(this.store.unfollow.bind(this.store)),
+      insertDeliveries: scoped(this.store.insertDeliveries.bind(this.store)),
+      markMaterialized: scoped(this.store.markMaterialized.bind(this.store)),
+      markAcknowledged: scoped(this.store.markAcknowledged.bind(this.store)),
+      linkDeliveriesToBatch: scoped(this.store.linkDeliveriesToBatch.bind(this.store)),
+      completeBatch: scoped(this.store.completeBatch.bind(this.store)),
+      insertPreparedBatch: scoped((input: Parameters<StoreWrites["insertPreparedBatch"]>[0]) => {
+        assertNewAcceptance(this.store);
+        return this.store.insertPreparedBatch(input);
+      }),
+    } satisfies StoreWrites;
     // Both compatibility methods and facets retain the same captured scope.
-    const tx = Object.freeze({ ...methods, ...writeFacets(methods as StoreWrites), [BRAND]: true }) as Transaction;
+    const tx = Object.freeze({ ...methods, ...writeFacets(methods), [BRAND]: true }) as Transaction;
     try { return current.run(scope, () => body(tx)); }
     catch (error) { observeStoreFailure(this.store, error); throw error; }
     finally { scope.active = false; scope.inserted.clear(); this.scope = null; }

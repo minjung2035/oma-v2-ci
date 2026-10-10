@@ -5,18 +5,19 @@
  * automatic host provider/keyring discovery and separate UI-session tools keep
  * their own boundaries. Verified bytes load before registration, and session
  * hooks retain upstream connection and cleanup ownership. */
+import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { randomBytes } from "node:crypto";
-import { mkdirSync, readFileSync, rmSync, writeFileSync, chmodSync, statSync } from "node:fs";
+import { chmodSync, mkdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { isAbsolute, join } from "node:path";
-import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
-import { vendoredBundleDir, verifyVendorBundle } from "./vendor-bundle.js";
 import { buildChildEnv, egressProxyValue } from "./child-env.js";
+import { SDK_STDIO_ENV_UNDERLAY } from "./mcp-sdk-env.js";
+import { vendoredBundleDir, verifyVendorBundle } from "./vendor-bundle.js";
 // Type-only: erased at compile, so this never evaluates the vendored
 // module before verification.
-import type { OmaMcpPolicy } from "./vendor/pi-mcp-adapter/runtime/utils.js";
-import type { McpConfig, McpSettings } from "./vendor/pi-mcp-adapter/runtime/types.js";
 import type { McpAdapterOptions } from "./vendor/pi-mcp-adapter/runtime/index.js";
+import type { McpConfig, McpSettings } from "./vendor/pi-mcp-adapter/runtime/types.js";
+import type { OmaMcpPolicy } from "./vendor/pi-mcp-adapter/runtime/utils.js";
 
 /** The MCP surface, verbatim: the one tool the facade admits and the
  * surface plan names. No second grouping layer is added -- upstream's
@@ -202,21 +203,6 @@ export function normalizeOmaMcpConfig(raw: unknown, options?: { interactive?: bo
 /* ------------------------------------------------------------------ */
 /* OMA-owned state dir + credential key.                                */
 /* ------------------------------------------------------------------ */
-
-/** The names the vendored MCP SDK's StdioClientTransport unions beneath
- * `serverParams.env` at spawn (its `getDefaultEnvironment()`): the POSIX
- * list plus every win32 spelling, so the tombstone binds whichever list
- * applies — and a config that reaches the other platform's runtime cannot
- * leak its names either. This list mirrors the vendored
- * DEFAULT_INHERITED_ENV_VARS by hand; the boundary test parses both
- * platform lists out of the verified bundle bytes and fails the moment a
- * vendored SDK bump adds a name this underlay does not tombstone and the
- * child-env posture does not sanction. */
-const SDK_STDIO_ENV_UNDERLAY: ReadonlyArray<string> = [
-  "HOME", "LOGNAME", "PATH", "SHELL", "TERM", "USER",
-  "APPDATA", "HOMEDRIVE", "HOMEPATH", "LOCALAPPDATA", "PROCESSOR_ARCHITECTURE",
-  "SYSTEMDRIVE", "SYSTEMROOT", "TEMP", "USERNAME", "USERPROFILE", "PROGRAMFILES",
-];
 
 /** The env map handed to the vendored transport: the scrubbed entries plus
  * an explicit `undefined` tombstone on every underlay name the scrub did

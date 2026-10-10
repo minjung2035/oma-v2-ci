@@ -5,24 +5,26 @@
  * names, the exit hint or the wire emission fails here rather than drifting
  * past the boundary silently.
  */
-import test from "node:test";
+import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
 import { once } from "node:events";
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
+import test from "node:test";
 import { fileURLToPath } from "node:url";
 import { StoreError } from "../src/domain/errors.js";
-import { ProcessLock } from "../src/runtime/process-lock.js";
 import { PI_RESUME_HINT, PI_SESSION_ENV_NAMES } from "../src/pi-compat/env.js";
-import { PI_INTERACTIVE_PRIVATE_MEMBERS, PI_INTERACTIVE_PRIVATE_FIELDS } from "../src/pi-compat/interactive-mode.js";
+import { PI_INTERACTIVE_PRIVATE_FIELDS, PI_INTERACTIVE_PRIVATE_MEMBERS } from "../src/pi-compat/interactive-mode.js";
+import { adaptInteractiveUi } from "../src/pi-compat/interactive-ui.js";
 import { sessionHeaderIdentity } from "../src/pi-compat/session.js";
 import { OmaSettingsStorage, prepareEngineInteractiveSettings } from "../src/pi-compat/settings.js";
 import type { PiInboundEvent, RpcCommand } from "../src/pi-compat/wire.js";
 import { PiRpcClient, SKIPPED_EVENT, type PiObservedEvent } from "../src/runtime/pi-rpc.js";
 import { preparePiRetry } from "../src/runtime/pi-runtime.js";
 import { planPiSpawn, type PiAdapterOptions } from "../src/runtime/pi-spawn-plan.js";
+import { ProcessLock } from "../src/runtime/process-lock.js";
 import { residentOptions } from "./fixtures/resident.js";
 
 const scratch = (prefix: string): string => mkdtempSync(join(tmpdir(), prefix));
@@ -294,3 +296,19 @@ test("A7: the compat module is the only importer of engine wire names", () => {
 
 // Guard for environments where the vendored package layout was not installed.
 assert.ok(existsSync(join(PI_ROOT, "dist", "core", "tools", "bash.js")), "the vendored engine tree is not readable");
+
+
+test("DR40: Pi UI adaptation releases only the methods owned by this session", () => {
+  const seen: string[] = [];
+  const base = { setEditorComponent() {}, setHeader() {}, setFooter() {}, notify(message: string) { seen.push(message); } };
+  const ui = { ...base } as unknown as ExtensionContext["ui"];
+  const release = adaptInteractiveUi(ui, { editor: factory => factory, header: factory => factory, footer: factory => factory,
+    notify: (message, level, upstream) => upstream(`oma:${message}`, level) });
+  ui.notify("notice", "info"); assert.deepEqual(seen, ["oma:notice"]);
+  const later = () => {};
+  ui.setHeader = later;
+  release(); release();
+  assert.equal(ui.setEditorComponent, base.setEditorComponent); assert.equal(ui.setFooter, base.setFooter);
+  assert.equal(ui.notify, base.notify); assert.equal(ui.setHeader, later);
+  ui.notify("later", "info"); assert.deepEqual(seen, ["oma:notice", "later"]);
+});
