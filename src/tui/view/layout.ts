@@ -1,6 +1,6 @@
 /** Column widths the screens are laid out with. Layout, not policy: changing
  * any of these changes how the product looks and nothing else. */
-import { bound } from "../limits.js";
+import { bound } from "../../domain/surface-bounds.js";
 
 export const LAYOUT_BOUNDS = Object.freeze({
   labelColumn: bound(28, "cells", "widest Config label the screen shows"),

@@ -34,11 +34,12 @@ const VIEW = "src/tui/view/";
 const VIEW_SEAM = "src/tui/view/index.ts";
 // The chooser owns the terminal before a session/app exists, never alongside it.
 const VIEW_CALLERS = new Set(["src/tui/app.ts", "src/tui/session-mode.ts"]);
-const VIEW_MAY_IMPORT = [VIEW, "src/tui/model.ts", "src/tui/limits.ts", "src/tui/cells.ts", "src/domain/", "implementation/contracts"];
-// TUI-006: the two declared owners of product-surface writes.
+const VIEW_MAY_IMPORT = [VIEW, "src/tui/model.ts", "src/domain/surface-bounds.ts", "src/tui/cells.ts", "src/domain/", "implementation/contracts"];
+// TUI-006: presentation writes belong to Application. Package staging keeps
+// its independent descriptor/host-file checks in owned-state-rules.
 // exit.ts's writeSync targets the process's own stdout/stderr fd before
 // process.exit (NB-06: a buffered stream write can be dropped); it owns no file.
-const TUI_WRITE_OWNERS = new Set(["src/tui/sources/settings.ts", "src/tui/sources/extensions.ts", "src/tui/exit.ts"]);
+const TUI_WRITE_OWNERS = new Set(["src/application/settings.ts", "src/application/extensions.ts", "src/application/exit.ts", "src/application/local-packages.ts"]);
 const WRITE_CALLS = new Set([
   "writeFileSync", "appendFileSync", "renameSync", "unlinkSync", "rmSync", "mkdirSync", "copyFileSync",
   "symlinkSync", "writeSync", "truncateSync", "replaceDerivedFile", "writeExclusiveFsyncedFile", "moveToCur",
@@ -53,9 +54,9 @@ const PRODUCT_ENTRIES = Object.freeze([
   "src/entry/oma.ts", "src/entry/oma-society.ts", "src/entry/oma-mac.ts", "src/entry/personal-host.ts",
   "src/entry/pi-personal.ts", "src/entry/pi-interactive.ts", "src/entry/pi-interactive-host.ts",
 ]);
-const isProductFile = file => file.startsWith("src/tui/") || PRODUCT_ENTRIES.includes(file);
+const isProductFile = file => file.startsWith("src/tui/") || file.startsWith("src/application/") || PRODUCT_ENTRIES.includes(file);
 const TUI_FORBIDDEN_CLOSURE = ["src/store.ts", "src/storage/transaction.ts", "src/storage/rows.ts", "src/durable.ts"];
-const PRODUCT_DECLARATIONS = new Set(["src/tui/limits.ts", "src/tui/view/layout.ts", "src/domain/tool-surface.ts", "src/config/defaults.ts"]);
+const PRODUCT_DECLARATIONS = new Set(["src/domain/surface-bounds.ts", "src/tui/view/layout.ts", "src/domain/tool-surface.ts", "src/config/defaults.ts"]);
 // Arch §23: closed unions whose switch must end in assertNever, so a new case
 // cannot fall through unnoticed.
 const CLOSED_SWITCHES = Object.freeze([
@@ -252,7 +253,7 @@ function viewRules(root, findings) {
 
 function surfaceEffectRules(root, findings) {
   const internal = internalMethodNames(root);
-  for (const file of filesUnder(root, "src/tui")) {
+  for (const file of [...filesUnder(root, "src/tui"), ...filesUnder(root, "src/application")]) {
     const source = sourceOf(root, file);
     eachNode(source, node => {
       if (ts.isCallExpression(node) && WRITE_CALLS.has(calleeName(node)) && !TUI_WRITE_OWNERS.has(file))
@@ -262,7 +263,7 @@ function surfaceEffectRules(root, findings) {
       const target = normalizeRelativeImport(file, edge.specifier);
       if (LEDGER_MODULES.has(edge.specifier) || target === "src/store.ts")
         findings.push(finding("tui-ledger", file, "the product surface owns no durable store"));
-      if (target === "src/protocol/channel.ts" && !(file === "src/tui/transport.ts" && edge.typeOnly))
+      if (target === "src/protocol/channel.ts" && !(file === "src/application/status-observation.ts" && edge.typeOnly))
         findings.push(finding("tui-transport-owner", file, "the product surface reaches the broker only through its transport owner"));
     }
     for (const { text } of literalTexts(source))
@@ -351,7 +352,7 @@ function userPiRules(root, findings) {
 }
 
 function ownerShapeRules(root, findings) {
-  const settings = "src/tui/sources/settings.ts";
+  const settings = "src/domain/settings-policy.ts";
   if (exists(root, settings)) {
     const source = sourceOf(root, settings);
     let switches = 0;
@@ -394,7 +395,7 @@ function ownerShapeRules(root, findings) {
 // and the tools in between rebuilt the environment from a list that never
 // mentioned it, so every OMA tool failed authentication while every test
 // passed.
-const ENV_PRODUCER = "src/tui/session.ts";
+const ENV_PRODUCER = "src/runtime/engine/principal-session.ts";
 const ENV_PRODUCER_FUNCTION = "principalEnvironment";
 // Everything the tools put in the CLI's environment: the list copied from the
 // engine's own environment, and what the process owner adds itself.
@@ -695,9 +696,10 @@ function utf8DecoderRules(root, findings) {
  * already passed that reading. The engine's own message event is the
  * transcript's content, not OMA's words. */
 const WORDS_OWNER = "src/tui/words.ts";
-const ENGINE_CONTENT = Object.freeze({ "src/tui/session.ts": "event" });
+const ENGINE_CONTENT = Object.freeze({ "src/runtime/engine/principal-session.ts": "event" });
 function errorWordsRules(root, findings) {
   const files = [...filesUnder(root, "src/tui").filter(file => file !== WORDS_OWNER && !file.startsWith(VIEW)),
+    ...filesUnder(root, "src/application").filter(file => file !== "src/application/local-packages.ts"),
     ...present(root, ["src/entry/oma.ts", "src/entry/oma-society.ts"])];
   for (const file of files) {
     const caught = new Set();
@@ -805,8 +807,42 @@ function extensionRegistryRules(root, findings) {
   }
 }
 
+// Public subpath APIs avoid an eager barrel that loads every UI adapter.
+export const TUI_PUBLIC_SUBPATHS = Object.freeze([
+  "app", "model", "screen", "words", "society-panel", "mail-names", "session-mode",
+  "compact-tools", "interactive-editor", "open-tui-brand", "panel-style", "panel-terminal",
+  "ask-user-question/presenter",
+]);
+const TUI_PUBLIC_APIS = new Set(TUI_PUBLIC_SUBPATHS.map(name => `src/tui/${name}.ts`));
+function moduleBoundaryRules(root, findings) {
+  for (const file of filesUnder(root, "src")) {
+    const extracted = extractEdges({ source: sourceOf(root, file),
+      resolve: specifier => normalizeRelativeImport(file, specifier) });
+    const references = [...extracted.edges, ...extracted.external.map(specifier => ({ specifier }))];
+    for (const edge of references) {
+      const target = normalizeRelativeImport(file, edge.specifier);
+      if (file.startsWith("src/tui/")) {
+        if (target !== null && ["src/runtime/", "src/application/", "src/storage/", "src/config/", "src/broker/"].some(prefix => target.startsWith(prefix)) ||
+            target === "src/config.ts" || target !== null && target.startsWith("src/platform/") &&
+              !(file === "src/tui/words.ts" && target === "src/platform/product-text.ts") ||
+            ["src/broker.ts", "src/store.ts", "src/runner.ts", "src/reconcile.ts", "src/lifecycle.ts"].includes(target) ||
+            ["fs", "fs/promises", "child_process", "net", "sqlite"].includes(edge.specifier.replace(/^node:/, "")))
+          findings.push(finding("tui-module-boundary", file, `imports ${edge.specifier}; file, configuration and process effects belong to Application/Runtime ports`));
+      } else if (target?.startsWith("src/tui/") && !TUI_PUBLIC_APIS.has(target))
+        findings.push(finding("tui-public-api", file, `imports private presentation module ${target}`));
+      if (file.startsWith("src/runtime/") && target !== null && ["src/tui/", "src/application/"].some(prefix => target.startsWith(prefix)))
+        findings.push(finding("runtime-module-boundary", file, `imports ${target}; Runtime receives product policy through its ports`));
+      if (!file.startsWith("src/runtime/packages/") && target === "src/runtime/packages/store.ts")
+        findings.push(finding("package-public-api", file, "imports the package store implementation instead of runtime/packages/index"));
+    }
+    if (file.startsWith("src/tui/") && extracted.unresolved.some(edge => edge.reason === "nonliteral"))
+      findings.push(finding("tui-module-boundary", file, "loads a computed module; presentation adapters use declared dependencies"));
+  }
+}
+
 export function surfaceRuleFindings(root) {
   const findings = [];
+  moduleBoundaryRules(root, findings);
   extensionRules(root, findings);
   extensionRegistryRules(root, findings);
   engineRules(root, findings);

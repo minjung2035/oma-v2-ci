@@ -1,3 +1,5 @@
+import type { StageArea } from "../ports/package-files.js";
+export type { StageArea } from "../ports/package-files.js";
 /** Filesystem staging effects; package naming and archive interpretation stay
  * with their own owners. Linux keeps directory descriptors through publication;
  * macOS uses the host's owned file boundary. */
@@ -5,36 +7,14 @@ import { randomUUID } from "node:crypto";
 import { closeSync, constants, fsyncSync, lstatSync, mkdirSync, openSync, readSync, renameSync, unlinkSync, writeFileSync, writeSync } from "node:fs";
 import { basename, dirname, join } from "node:path";
 import { StoreError } from "../domain/errors.js";
-import { createHostStagingDirectory, makeHostStagedDirectories, publishHostStaged, removeHostStaged, writeHostStagedFile } from "../platform/host/files.js";
+import { createHostStagingDirectory, makeHostStagedDirectories, publishHostStaged, removeHostStaged, writeHostStagedFile } from "./host/files.js";
 import { entryAt, openBeneath } from "../storage/contained-fs.js";
 import { openOwnedDirectory, openOwnedDirectoryPath, removeOwnedFile, removeOwnedTree } from "../storage/directory.js";
 import { flushDirectoryChain, fsyncDir, fsyncFile, fsyncTree } from "../storage/durable-fs.js";
-import { PACKAGE_LOCAL_DIR } from "./pi-packages.js";
+import { PACKAGE_LOCAL_DIR } from "../domain/package-policy.js";
 
 /** An interrupted staging area the next change removes. */
 export const STAGING_PREFIX = ".staging-local-";
-
-/** What staging a local package needs of the filesystem beneath the store: a
- * scratch directory to fill, then one rename into `local/`. The two platforms
- * implement it their own way (the file's header says why); the readers of the
- * staged tree use `path`, which is never written through. */
-export interface StageArea {
-  /** The staging root's own path -- for reading it back, not writing it. */
-  readonly path: string;
-  /** `rel` is a directory beneath the staging root, its parents made too. */
-  make(rel: string): void;
-  /** `bytes` is the file `rel` beneath the staging root, its parents made. */
-  write(rel: string, bytes: Buffer, executable: boolean): void;
-  /** `size` bytes of `source` from `position` on are the file `rel` beneath the
-   * staging root, its parents made -- the copy is chunked, so a staged file
-   * is never a whole buffer in memory. */
-  writeFrom(rel: string, source: number, position: number, size: number, executable: boolean): void;
-  /** `made` -- a leaf name under the staging root, "" for the root itself --
-   * becomes `local/<name>` whole, replacing a dead copy. */
-  publish(made: string, name: string): void;
-  /** The staging root is given back; a published name is unaffected. */
-  close(): void;
-}
 
 const DIRECTORY = constants.O_RDONLY | constants.O_DIRECTORY;
 

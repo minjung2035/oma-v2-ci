@@ -8,8 +8,8 @@ import { observedStorageBytes, StorageAdmission } from "../src/storage/quota.js"
 import { createEngineSettings, prepareEngineInteractiveSettings } from "../src/pi-compat/settings.js";
 import { runProcess } from "../src/process/async.js";
 import { writePackageArchive } from "../src/platform/package-archive.js";
-import { applyPackageArchive } from "../src/tui/packages-apply.js";
-import { PACKAGE_STORE, pinPackageGeneration } from "../src/runtime/pi-packages.js";
+import { applyPackageArchive } from "../src/application/packages-apply.js";
+import { PACKAGE_STORE, pinPackageGeneration } from "../src/runtime/packages/store.js";
 import { spawnSync } from "node:child_process";
 import { withOwnedSettingsLock } from "../src/runtime/locked-files.js";
 import fs from "node:fs";

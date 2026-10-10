@@ -8,7 +8,7 @@
  */
 import type { Actor, ProtocolLimits, ResourceLimits } from "../../implementation/contracts.js";
 import { verifiedPaths, type VerifiedExtension } from "./extension-integrity.js";
-import type { PackageResourcePaths } from "./pi-packages.js";
+import type { PackageResourcePaths } from "./packages/index.js";
 import { PI_AGENT_DIR_ENV } from "./pi-runtime.js";
 import { dirname, join } from "node:path";
 import { pathToFileURL } from "node:url";

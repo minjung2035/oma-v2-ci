@@ -1517,3 +1517,41 @@ MCP SDK 목록을 갱신하려면 `node scripts/vendor-pi-mcp-adapter.mjs --writ
 `--until` 생략은 working tree와 미커밋 파일까지 포함한다. 기존 옵션 없는 JSON array는 유지한다.
 경로 수를 측정하므로 rename은 기존 경로와 새 경로 두 개로 센다. 한 feature로 지정한
 changeset끼리 비교해야 하며, 여러 감사 항목을 묶은 이번 배치의 수치를 feature 개선으로 추정하지 않는다.
+
+## DR41 — TUI/Application/Runtime/Extension 모듈 경계
+
+2026-10-10 Human은 디렉터리·패키지 수보다 내부 구현을 몰라도 작동하는 모듈 독립성을
+구현하도록 지시했다. 기준은 DR40 완료 `babe732`다. 문서부터 확인했고 서브에이전트는 사용하지 않는다.
+
+TUI의 설정·extension·메일·status 읽기와 저장 조정을 Application으로 옮겼다. Society 패널은
+`SocietyPanelEffects`의 데이터·행동만 사용한다. 설정 파생 snapshot과 실제 저장, effect-time tenure
+확인은 Application에 남는다. Core의 settings policy/DTO/Observation을 공유하여 TUI가 설정
+loader와 package/user-file 구현을 가져오지 않게 했다. effort 값은 순수 계약에 선언해 config loader가
+화면 정책까지 로드하지 않는다. Application에서 실제 메일 경계·설정 owner·Runtime을 조립한다.
+
+Principal 세션·login/package child·resume directory 관측을 `runtime/engine`으로 옮겼다.
+Runtime의 세션은 prompt outcome 계약과 오류 표현 port를 받고 TUI를 import하지 않는다.
+제품 진입점은 기존 Mac 오류 표현 owner를 공급한다. package store의 공개 `index`, tar parser,
+StageArea port와 Platform staging/directory owner를 분리했다. Runtime package store에 host-file
+구현과 OS 선택을 넣지 않고 실제 host 조립에서 directory port를 공급한다. list 실패·repair 실패는
+빈 index 성공으로 바꾸지 않는다. generation lease·descriptor containment·unknown은 보존한다.
+
+기존 surface checker에 좁은 모듈 import 규칙을 추가했다. TUI의 효과 구현과 Runtime의 TUI/Application
+참조, TUI private subpath와 package private store 참조를 type-only·literal import()/require()·재수출에도
+적용한다. TUI computed load는 거절한다. 별도 checker·service framework·중복 정책 registry를 추가하지
+않았다. 공개 TUI 목록은 산출물 exports에도 사용하며 모든 TUI adapter를 즉시 로드하는 barrel은 없다.
+
+`tsconfig.tui.json`, `tsconfig.extension.json`, `build-module.mjs`는 Runtime/Application/Broker/Store를
+포함하지 않는 독립 소스 closure를 컴파일한다. 두 config는 verification 입력에 포함한다.
+Extension의 Pi manifest와 검증된 vendor copy를 포함한다. 독립 산출물을 실제 외부 의존성으로
+로드하고, copied vendor의 unlisted file 및 기존 output 교체 거절을 검사한다. Extension의 실행 환경·
+권한·delivery bridge 요구를 축소하지 않는다. 물리적 npm workspaces 이동과 새 OS service는 추가하지 않는다.
+
+Resident 배포 mask도 이동한 host 제품 경로로 옮긴다. 실제 bwrap probe가 Application·Principal owner·
+화면 정책 내용을 가리면서 trusted Extension을 보존하는지 검증한다. Broker·Store·durable operation과
+host/guest 프로세스 경계, model tool surface·권한·자원 선언의 의미는 유지한다.
+
+수치 기반 아키텍처 평점이나 단일 feature 변경 비용 감소는 추정하지 않는다. 직접 변경 비용은 기존
+Git changeset 도구로 기록한다. 검증·실패 기록과 native 한계는
+[현재 검증 상태](implementation/validation.md), bytes는
+[DR41 evidence](../test/audit/modules-2026-10-10.evidence.json)에 기록한다.

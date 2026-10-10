@@ -3,8 +3,8 @@
  * this process draws nothing until the engine takes the terminal or this
  * process has to show its own screen instead (reclaim). */
 import { openTerminal, restoreTerminalModes, type Terminal, type TerminalStreams } from "./screen.js";
-import type { PiEvent } from "../runtime/pi-rpc.js";
-import { TERMINAL_BOUNDS } from "./limits.js";
+import type { PiEvent } from "../protocol/jsonl.js";
+import { TERMINAL_BOUNDS } from "../domain/surface-bounds.js";
 
 export class PanelTerminal implements Terminal {
   private local: Terminal | null;

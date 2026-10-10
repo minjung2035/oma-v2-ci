@@ -7,7 +7,7 @@ import {
   EXTENSIONS,
   fieldsOf,
   readSettings,
-} from "../src/tui/sources/settings.js";
+} from "../src/application/settings.js";
 
 test("V11B: one own-key descriptor registry covers every editable field and policy", () => {
   assert.equal(Object.getPrototypeOf(EDITABLE_FIELD_DESCRIPTORS), null);

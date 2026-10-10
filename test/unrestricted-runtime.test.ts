@@ -9,7 +9,7 @@ import { createServer, request } from "node:http";
 import { connect } from "node:net";
 import { createSocket } from "node:dgram";
 import { ConnectProxy, makePublicDial } from "../src/runtime/connect-proxy.js";
-import { collectPackageGenerations, readPackageIndex, PACKAGE_INDEX, PACKAGE_GENERATIONS, PACKAGE_READER_MARKER } from "../src/runtime/pi-packages.js";
+import { collectPackageGenerations, readPackageIndex, PACKAGE_INDEX, PACKAGE_GENERATIONS, PACKAGE_READER_MARKER } from "../src/runtime/packages/store.js";
 import { createContainedWriter } from "../src/extension/contained-tools.js";
 import { StorageAdmission } from "../src/storage/quota.js";
 import { planPiSpawn } from "../src/runtime/pi-spawn-plan.js";
@@ -101,7 +101,7 @@ test("DR37: collector SIGKILL after tombstone rename resumes after partial remov
     writeFileSync(join(at, "code.js"), "export {};");
   }
   const child = spawn(process.execPath, ["--input-type=module", "-e", `
-const {collectPackageGenerations,PACKAGE_READER_MARKER}=await import(${JSON.stringify(new URL("../src/runtime/pi-packages.js", import.meta.url).href)});
+const {collectPackageGenerations,PACKAGE_READER_MARKER}=await import(${JSON.stringify(new URL("../src/runtime/packages/store.js", import.meta.url).href)});
 const {unlinkSync}=await import('node:fs');const {join}=await import('node:path');
 collectPackageGenerations(process.argv[1],process.argv[2],tomb=>{
  unlinkSync(join(tomb,PACKAGE_READER_MARKER));process.stdout.write('partial');

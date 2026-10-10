@@ -1,3 +1,5 @@
+import { PACKAGE_LOCAL_DIR } from "../../domain/package-policy.js";
+export { PACKAGE_LOCAL_DIR } from "../../domain/package-policy.js";
 /** DR25: the Pi packages the Human installs for oma.
  *
  * `oma pi install <source>` runs the bundled engine's own package manager
@@ -15,16 +17,16 @@
  */
 import { dirname, isAbsolute, join, relative, sep } from "node:path";
 import { closeSync, constants, fstatSync, lstatSync, openSync, realpathSync, renameSync } from "node:fs";
-import { lockFileDescriptor } from "../leaf.js";
-import { removeOwnedTree } from "../storage/directory.js";
-import { entryAt, withinDirectory } from "../storage/contained-fs.js";
-import { fsyncHeldDir } from "../storage/durable-fs.js";
-import { StoreError, unobserved } from "../domain/errors.js";
-import { PACKAGE_ENTRY_PREFIX, extensionEntryProblem } from "../config/operations.js";
-import { readUserFile, replaceUserFile } from "./user-files.js";
-import { isUuid } from "../protocol/host-guest.js";
-import { listOwnedDirectory, repairOwnedEntryMode } from "../storage/directory.js";
-import { listHostStaged, repairHostStagedEntryMode } from "../platform/host/files.js";
+import { lockFileDescriptor } from "../../leaf.js";
+import { removeOwnedTree } from "../../storage/directory.js";
+import { entryAt, withinDirectory } from "../../storage/contained-fs.js";
+import { fsyncHeldDir } from "../../storage/durable-fs.js";
+import { StoreError, unobserved } from "../../domain/errors.js";
+import { PACKAGE_ENTRY_PREFIX, extensionEntryProblem } from "../../config/operations.js";
+import { readUserFile, replaceUserFile } from "../user-files.js";
+import { isUuid } from "../../protocol/host-guest.js";
+import { listOwnedDirectory, repairOwnedEntryMode } from "../../storage/directory.js";
+import type { PackageDirectories } from "../../ports/package-files.js";
 
 /** The store's directory name, beside the engine home and every session. */
 export const PACKAGE_STORE = ".packages";
@@ -142,10 +144,6 @@ export const PACKAGE_USAGE = "usage: oma pi install <npm:… | git:… | https:/
   "       oma pi update <source> | --extension <source> | --extensions\n" +
   "       oma pi list\n" +
   "Packages carry extensions, skills, prompt templates and themes; a local path is copied into the store.";
-
-/** Where staged local-package copies live in the store, beside `npm/` and
- * `git/` (C20; local-package.ts does the staging). */
-export const PACKAGE_LOCAL_DIR = "local";
 
 /** A source the engine's package manager fetches into the store itself. A
  * local path is copied in by staging first (C20), so it is not one. */
@@ -374,7 +372,9 @@ export function packageResourcePaths(store: string | undefined): PackageResource
  * keeps the answer as the store's index. A path outside the store, or reached
  * through a link, is no entry: no Resident could be shown it. Extensions
  * additionally keep their file-and-suffix rule; a skill may be a directory. */
-export async function writePackageIndex(store: string): Promise<readonly InstalledPackage[]> {
+export async function writePackageIndex(store: string, directories: PackageDirectories = {
+  list: listOwnedDirectory, repair: path => repairOwnedEntryMode(path) !== null,
+}): Promise<readonly InstalledPackage[]> {
   const sdk = await import("@earendil-works/pi-coding-agent");
   const settingsManager = sdk.SettingsManager.create(store, store, { projectTrusted: false });
   const manager = new sdk.DefaultPackageManager({ cwd: store, agentDir: store, settingsManager });
@@ -399,8 +399,8 @@ export async function writePackageIndex(store: string): Promise<readonly Install
   // agree on what a configured source names.
   const base = realpathSync(store);
   const local = join(base, PACKAGE_LOCAL_DIR);
-  const list = process.platform === "darwin" ? listHostStaged : listOwnedDirectory;
-  const repairEntryMode = process.platform === "darwin" ? repairHostStagedEntryMode : repairOwnedEntryMode;
+  const list = directories.list;
+  const repairEntryMode = directories.repair;
   const unavailable = (what: string): never => {
     throw new StoreError("BROKER_UNAVAILABLE", `${what}; the package index was not written`);
   };
@@ -423,7 +423,7 @@ export async function writePackageIndex(store: string): Promise<readonly Install
     if (observed === undefined) return true;
     if (!observed.isFile()) return false;
     if ((observed.mode & 0o600) === 0o600) return true;
-    return repairEntryMode(path) !== null || !present(path);
+    return repairEntryMode(path) || !present(path);
   };
   /** `dir` and every directory beneath it, repaired then listed, and every
    * regular file's owner bits put back where a stray dropped them; false

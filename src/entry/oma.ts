@@ -7,7 +7,7 @@ import { hostLaunchLocation } from "../runtime/assets.js";
 import { sessionBirthForHistory, RESUME_SESSION_ENV } from "../runtime/session-catalog.js";
 import { requireSessionMode } from "../runtime/session-mode.js";
 import { chooseSessionMode } from "../tui/session-mode.js";
-import { codeFor, fail } from "../tui/exit.js";
+import { codeFor, fail } from "../application/exit.js";
 import { errorWords } from "../tui/words.js";
 
 async function main(argv: readonly string[]): Promise<void> {

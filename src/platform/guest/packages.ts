@@ -13,7 +13,7 @@ import { StoreError } from "../../domain/errors.js";
 import { runProcess } from "../../process/run.js";
 import { decodeProcessText } from "../../process/run.js";
 import { isUuid } from "../../protocol/host-guest.js";
-import { installedPackageSource } from "../../runtime/pi-packages.js";
+import { installedPackageSource } from "../../runtime/packages/index.js";
 import type { RequestLedger } from "./requests.js";
 import type { GuestProjects } from "./project.js";
 import { sha256File } from "./project.js";

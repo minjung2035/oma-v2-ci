@@ -7,7 +7,7 @@
  * process; then the society is held by the fence (REC-007) and the terminal
  * is left to the shell's `reset`.
  */
-import { TERMINAL_BOUNDS } from "./limits.js";
+import { TERMINAL_BOUNDS } from "../domain/surface-bounds.js";
 
 export interface Terminal {
   readonly columns: number;

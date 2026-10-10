@@ -10,8 +10,8 @@ import { spawn, spawnSync } from "node:child_process";
 import { loadConfiguration } from "../src/config.js";
 import { defaultSocietyFor } from "../src/config/defaults.js";
 import { sha256Hex } from "../src/hash.js";
-import { packageResourcePaths, readPackageIndex } from "../src/runtime/pi-packages.js";
-import { readExtensions, toggleExtension } from "../src/tui/sources/extensions.js";
+import { packageResourcePaths, readPackageIndex } from "../src/runtime/packages/store.js";
+import { readExtensions, toggleExtension } from "../src/application/extensions.js";
 import { fakeNpmRegistry } from "./fixtures/fake-npm-registry.js";
 import { readPersonalSettings, updatePersonalSettings } from "../src/runtime/personal-settings.js";
 

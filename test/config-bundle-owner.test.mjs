@@ -21,7 +21,7 @@ import { join } from "node:path";
 import { DEPLOYMENT_LAYOUT } from "../dist/src/domain/deployment.js";
 import { configurationLayout, readConfigurationSource } from "../dist/src/config/operations.js";
 import { loadConfiguration } from "../dist/src/config.js";
-import { readExtensions, toggleExtension } from "../dist/src/tui/sources/extensions.js";
+import { readExtensions, toggleExtension } from "../dist/src/application/extensions.js";
 import { StoreError } from "../dist/src/domain/errors.js";
 import { createCompleteConfigurationFixture } from "../dist/test/fixtures/configuration.js";
 
@@ -122,7 +122,7 @@ test("CFG-005: the screens do not carry a second reading of the bundle format", 
   // pass if a screen merely happened to agree with the owner today; what broke
   // was a screen that had its own rule and drifted from it. A screen that
   // cannot name the format cannot re-derive what is inside it.
-  for (const file of ["src/tui/sources/settings.ts", "src/tui/sources/extensions.ts"]) {
+  for (const file of ["src/application/settings.ts", "src/application/extensions.ts"]) {
     const source = readFileSync(new URL(`../${file}`, import.meta.url), "utf8");
     assert.equal(source.includes("oma-operations-v1"), false,
       `${file} recognises the bundle format itself: what a bundle contains is the loader's answer`);

@@ -1,3 +1,5 @@
+import { EFFORT_LEVELS } from "./protocol/settings.js";
+export { EFFORT_LEVELS } from "./protocol/settings.js";
 import { tieredPolicyCheck } from "./domain/integration-policy.js";
 // MUST [CFG-001/002/005]: closed host configuration, no unlimited defaults.
 import {
@@ -23,9 +25,6 @@ import { isDeploymentDigest } from "./domain/deployment.js";
 import { isLogResponseFrameLimit } from "./protocol/log-response.js";
 import { isAbsolute, normalize } from "node:path";
 export { resolveChildSpec } from "./domain/child-policy.js";
-
-/** DR24: the engine's effort levels, in its order. */
-export const EFFORT_LEVELS: readonly EffortLevel[] = Object.freeze(["off", "minimal", "low", "medium", "high", "xhigh", "max"]);
 
 function err(message: string): never { throw new StoreError("INVALID_REQUEST", `config: ${message}`); }
 function needString(value: unknown, what: string): string {

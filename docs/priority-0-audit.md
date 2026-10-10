@@ -108,7 +108,7 @@ Pi의 `new-provider/new-model` 저장 완료와 파일 내용까지 확인했지
 
 ### AV-20261008-03 — "직전 세대까지 보존"은 reader 사망 증거가 아니다
 
-[packages-apply.ts](../src/tui/packages-apply.ts):71–73은 현재와 직전 generation만 남기며 나머지를 삭제한다.
+[packages-apply.ts](../src/application/packages-apply.ts):71–73은 현재와 직전 generation만 남기며 나머지를 삭제한다.
 그동안 [guest packages](../src/platform/guest/packages.ts) → [guest host](../src/platform/guest/host.ts) →
 [host sync](../src/platform/host/service.ts)의 경로에는 기존 세대의 모든 reader가 끝났다는 검사가 없다.
 archive의 open race를 막는 `archiving` latch는 packages.replace의 reader 수명 보호가 아니다.
@@ -231,10 +231,10 @@ model surface의 풍부함이나 필수 sandbox/fencing 구조를 과잉 설계�
 
 ### AV-20261008-13 — 손상된 package snapshot을 적용 뒤에야 소비한다
 
-[packages-apply.ts](../src/tui/packages-apply.ts):50은 `${archive}.before.json`을 `JSON.parse` 뒤 type assertion만 한다.
+[packages-apply.ts](../src/application/packages-apply.ts):50은 `${archive}.before.json`을 `JSON.parse` 뒤 type assertion만 한다.
 `publishNoReplace`가 existing을 돌려줘도 기존 내용의 shape/relation을 검증하지 않는다.
 `{before:null,previous:null}`을 주입한 실제 archive 적용은 `recorded → published → switched → collected`까지
-진행하고 나서 [project-settings.ts](../src/tui/project-settings.ts):72의 `before.some`에서 TypeError가 났다.
+진행하고 나서 [project-settings.ts](../src/application/project-settings.ts):72의 `before.some`에서 TypeError가 났다.
 실패 뒤 선택된 store의 asset은 이미 `generation 4`였으며 이전 세대 수집도 실행됐다.
 
 재현: package-generation oracle의 `damagedRecord`. 실제 owned 기록의 통제된 byte 손상이다.
@@ -1375,7 +1375,7 @@ ID만 남긴 뒤 `mail/archive/cur/<id>:2,`로 다시 조립한다. CLI는 존�
 
 ### AV-20261003-11 — freeze timestamp를 arrival로 표시
 
-위치: [mail.ts](../src/tui/sources/mail.ts) `readBounded`의 100행, `entriesIn`, `foldThreads`, `byArrival`;
+위치: [mail.ts](../src/application/mail.ts) `readBounded`의 100행, `entriesIn`, `foldThreads`, `byArrival`;
 [materializer.ts](../src/mail/materializer.ts) `publishDelivery`의 141–148행.
 
 첫 mail.send를 실제 접수한 뒤 post-accept materialization만 일시 실패시켜 pending으로 둔다.

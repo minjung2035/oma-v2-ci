@@ -32,8 +32,8 @@ import { credentialMatches, isPrincipalCredential, sessionHandleMatches } from "
 import { StoreError } from "../src/domain/errors.js";
 import { observeStoreFailure } from "../src/domain/admission.js";
 import { encodeHostMessage } from "../src/protocol/host-channel.js";
-import { PrincipalSession, newSessionHandle, principalEnvironment, principalSessionDir, principalWorkspace } from "../src/tui/session.js";
-import { CONVERSATION_BOUNDS } from "../src/tui/limits.js";
+import { PrincipalSession, newSessionHandle, principalEnvironment, principalSessionDir, principalWorkspace } from "../src/runtime/engine/principal-session.js";
+import { CONVERSATION_BOUNDS } from "../src/domain/surface-bounds.js";
 import { provisionSociety } from "../src/runtime/provision.js";
 import { processIdentity, type ProcessIdentity } from "../src/broker/process-ancestry.js";
 import { PrincipalDelivery, principalHostBroker, type DeliverySession } from "../src/runtime/principal-delivery.js";

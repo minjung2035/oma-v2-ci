@@ -1,3 +1,4 @@
+import { packageDirectories } from "../platform/package-files.js";
 /** DR25 on macOS: the engine's side of `oma pi` -- the packages the Mac
  * installed made the engine's store, and every project's roles brought to
  * them (entry/guest-packages.ts runs this for guesthost's packages.replace).
@@ -21,7 +22,7 @@ import { StoreError } from "../domain/errors.js";
 import { defaultSocietyFor } from "../config/defaults.js";
 import { sha256Hex } from "../hash.js";
 import { readPackageArchive } from "../platform/package-archive.js";
-import { PACKAGE_GENERATIONS, PACKAGE_READER_MARKER, PACKAGE_STORE, PACKAGE_INDEX_BYTES, collectPackageGenerations, decodePackageIndex, readPackageIndex, writePackageIndex, type InstalledPackage } from "../runtime/pi-packages.js";
+import { PACKAGE_GENERATIONS, PACKAGE_READER_MARKER, PACKAGE_STORE, PACKAGE_INDEX_BYTES, collectPackageGenerations, decodePackageIndex, readPackageIndex, writePackageIndex, type InstalledPackage } from "../runtime/packages/index.js";
 import { ProcessLock } from "../runtime/process-lock.js";
 import { withAsyncCleanup } from "../process/cleanup.js";
 import { readUserFile } from "../runtime/user-files.js";
@@ -87,7 +88,7 @@ async function applyOwnedPackageArchive(options: { readonly data: string; readon
     try {
       readPackageArchive(archive, staging);
       // Which files are extensions is the engine's answer, asked where they now are.
-      await writePackageIndex(staging);
+      await writePackageIndex(staging, packageDirectories);
       publishNoReplace(join(staging, PACKAGE_READER_MARKER), "oma-reader-leases-v1\n");
       publishStagedDirectory(staging, target, () => {});
     } finally { removeOwnedTree(staging); }

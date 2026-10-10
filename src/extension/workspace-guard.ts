@@ -126,7 +126,7 @@ export function admittedRoot(workspace: string, readableRoots: readonly string[]
 export const TOOL_SCOPE_ENV = "OMA_TOOL_SCOPE";
 export const TOOL_SCOPE_SANDBOX = "sandbox";
 
-/** Mirrors `PACKAGE_STORE_ENV` in src/tui/session.ts: the host engine's
+/** Mirrors `PACKAGE_STORE_ENV` in src/runtime/engine/principal-session.ts: the host engine's
  * environment names the installed-package store's real root, so the guard can
  * permit reads of the package skills, prompt templates and themes the
  * engine's argv advertised (C18) without opening arbitrary host paths. */

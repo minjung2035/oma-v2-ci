@@ -6,7 +6,7 @@ import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { parseOmaArguments, parseMacArguments } from "../src/runtime/host-arguments.js";
-import { packageCommand } from "../src/runtime/pi-packages.js";
+import { packageCommand } from "../src/runtime/packages/store.js";
 
 const project = "00000000-0000-4000-8000-000000000001";
 test("DR27: Linux host values cannot become options; package tails retain their own grammar", () => {

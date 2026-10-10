@@ -55,7 +55,7 @@ function world({ platform = 'linux', saved = false, config = true, snapshot = {}
     } },
     '../protocol/guest-history.js': { isGuestHistoryReference: value => value.startsWith('oma-guest-history:') },
     '../platform/host/guest-histories.js': { async inspectMacGuestHistory() { effects.push(['guest-history']); } },
-    '../tui/sources/settings.js': {
+    '../application/settings.js': {
       projectSettingsPath: () => '/fixture/project-config.json',
       readSettingsForEditing() { effects.push(['config-read']); if (configError) throw configError; return { snapshot, config: { principalProfile: 'principal' } }; },
       roleSetOf() { effects.push(['roles']); return { principal: { extensions: ['society-core', 'extensions/user.js'] } }; },

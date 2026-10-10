@@ -215,7 +215,7 @@ test("R38: the verification closure includes every class of local gate input", (
   assert.deepEqual(VERIFICATION_INPUT_ROOTS, [
     "src", "platform", "test", "scripts", "implementation", "docs", ".github/workflows", ".gitignore",
     "package.json", "package-lock.json",
-    "tsconfig.json", "tsconfig.build.json", "production-manifest.json", "production-files.txt",
+    "tsconfig.json", "tsconfig.build.json", "tsconfig.tui.json", "tsconfig.extension.json", "production-manifest.json", "production-files.txt",
     "production-loc-hashes.json",
   ]);
   assert.deepEqual(VERIFICATION_OUTPUT_EXCLUSIONS, [
@@ -229,7 +229,7 @@ test("R38: the verification closure includes every class of local gate input", (
     "implementation/source-owners.json", "implementation/traceability.json",
     "docs/implementation/validation.md", "implementation/evidence/dependency-graph.json",
     "implementation/tests/contracts.type-test.ts", "docs/architecture.md", "docs/implementation-spec.md",
-    "package.json", "package-lock.json", "tsconfig.json", "tsconfig.build.json",
+    "package.json", "package-lock.json", "tsconfig.json", "tsconfig.build.json", "tsconfig.tui.json", "tsconfig.extension.json",
     "production-manifest.json", "production-files.txt",
     "production-loc-hashes.json", ".github/workflows/architecture-verification.yml",
     "platform/host/vmhelper/Sources/oma-vmhelper/main.swift", "platform/guest/network/80-oma.network", ".gitignore",
@@ -255,7 +255,7 @@ test("R38: package, compiler, owner, spec and workflow changes all change the ve
       ".github/workflows/architecture-verification.yml",
     ]) f.put(file, `${file}\n`);
     const before = verificationInputDigest(f.root);
-    for (const file of ["package.json", "tsconfig.json", "implementation/source-owners.json", "docs/implementation-spec.md", ".github/workflows/architecture-verification.yml", "platform/fixture.ts", ".gitignore"]) {
+    for (const file of ["package.json", "tsconfig.json", "tsconfig.tui.json", "tsconfig.extension.json", "implementation/source-owners.json", "docs/implementation-spec.md", ".github/workflows/architecture-verification.yml", "platform/fixture.ts", ".gitignore"]) {
       const original = readFileSync(join(f.root, file));
       f.put(file, Buffer.concat([original, Buffer.from("changed\n")]));
       assert.notDeepEqual(verificationInputDigest(f.root), before, file);

@@ -94,7 +94,7 @@ function world({ fail, close, dispose, run, construct, catalog, beforeSwitch, se
     '../runtime/session-catalog.js': { async sessionBirthForHistory(file) { return catalog ? catalog(file) : birth; }, sessionHistoryDirectories: () => [] },
     '../runtime/personal-settings.js': { personalExtensions: () => ({ extensions: [], missing: [] }), updatePersonalSettings: () => ({ extensions: [] }),
       personalExtensionEntry: input => path.isAbsolute(input) ? `local:${input}` : input },
-    '../runtime/pi-packages.js': { readPackageIndex: () => [], packageResourcePaths: () => packageResources },
+    '../runtime/packages/index.js': { readPackageIndex: () => [], packageResourcePaths: () => packageResources },
     '../runtime/extension-integrity.js': { assertExtensionIntegrity() {}, verifiedPaths: () => [] },
     '../runtime/extension-modules.js': { ExtensionModules: class {
       constructor() { calls.push('modules-create'); }

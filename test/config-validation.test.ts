@@ -13,7 +13,7 @@ import {
   commitField,
   readSettings,
   settingsOf,
-} from "../src/tui/sources/settings.js";
+} from "../src/application/settings.js";
 
 test("V11C: the pure validator returns a deep immutable snapshot with own-key maps", async () => {
   const fixture = createCompleteConfigurationFixture();

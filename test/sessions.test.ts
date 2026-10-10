@@ -7,7 +7,7 @@ import { tmpdir } from "node:os";
 import { defaultSocietyFor, sessionSocietyName } from "../src/config/defaults.js";
 import { isValidSocietyName } from "../src/domain/identifiers.js";
 import { removeUnusedTree } from "../src/storage/directory.js";
-import { projectSettingsPath, sessionConfigOf } from "../src/tui/sources/settings.js";
+import { projectSettingsPath, sessionConfigOf } from "../src/application/settings.js";
 import { defaultHostConfig } from "../src/config/defaults.js";
 
 test("DR24: every session of a project has a society name of its own, valid, and named for its project", () => {

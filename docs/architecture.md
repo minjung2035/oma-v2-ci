@@ -4,6 +4,29 @@
 
 2026-09-22 WP01의 [D01–D06 결정 기록](implementation/consistency-decisions.md)은 delivery 복구 순서, 관리형 config generation, 배포 gate, admission/settlement, 프로젝트 binding과 적용 시점, no-op/unknown의 아래 상세화를 채택한다. 이는 C0–C2 설계 범위이며 runtime 구현·운영 검증 완료가 아니다. DB/wire/receipt version과 live caller 권한은 유지한다. 미구현 차이는 해당 WP의 명시적 gate로 남긴다.
 
+## 모듈 책임과 공개 경계 (DR41, 2026-10-10)
+
+[DR41](design-revisions.md#dr41--tuiapplicationruntimeextension-모듈-경계)는 기존 프로세스·durable 계약을
+유지하면서 제품의 변경 책임을 분리한다. Application/Entry가 설정 저장·메일·관측과 세션을
+조립한다. TUI는 화면·입력·ViewModel과 Pi 화면 adapter를 소유하며 Runtime·Application·파일 저장
+구현을 가져오지 않는다. `SocietyPanelEffects`는 완전한 설정 view와 행동만 전달하며 managed
+snapshot·경로·저장소 handle을 전달하지 않는다. `saved-unread`, 예외로 남는 publication 불확실,
+bootstrap unknown과 실제 OS 종료를 기존 의미대로 유지한다.
+
+Principal 실행·입력·수명은 `runtime/engine/`, package store와 tar 해석은 `runtime/packages/`,
+플랫폼별 staging·directory 효과는 Platform이 소유한다. 설치 조정은 `application/local-packages.ts`다.
+Runtime은 TUI/Application 구현을 모르며 화면 오류 표현을 port로 받는다. Application이 host의
+package directory port를 선택한다. Broker·Store·acceptance·recovery의 소유권은 바꾸지 않는다.
+
+공개 TUI subpath와 package `index` 경계는 기존 architecture checker에서 type-only·지연 import와
+재수출까지 검사한다. 공개 subpath 목록 하나에서 TUI 산출물의 exports도 만든다. Extension은 기존
+`pi-extension` 진입점·contracts/client·Pi API·검증된 vendor closure를 유지한다. 독립 빌드는
+`node scripts/build-module.mjs tui --out <새-경로>`와 `extension --out <새-경로>`다.
+각 산출물은 ESM·declaration·의존성 manifest를 포함하고 Extension은 복사 전후 검증된 vendor와
+Pi extension manifest를 포함한다. npm 의존성 설치는 산출물의 manifest를 따른다. 이 빌드는 별도
+프로세스나 npm workspace를 추가하지 않는다. Resident에서 가렸던 host 제품 코드도 이동한
+Application·Principal owner·화면 정책 경로로 계속 가린다.
+
 ## 1. 선택한 구조와 철학의 구현 위치
 
 **고성능 Principal 한 세션 + 저비용 Resident 여러 세션 + 공개 메일링 리스트 + 개별 Maildir + 공유 Git remote + systemd 실행 관리**를 사용한다.

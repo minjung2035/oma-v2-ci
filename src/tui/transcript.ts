@@ -11,7 +11,7 @@
  * It performs no I/O and decides nothing about presentation: a stored line is
  * what was produced, and how it is drawn belongs to `view/text.ts`.
  */
-import { CONVERSATION_BOUNDS } from "./limits.js";
+import { CONVERSATION_BOUNDS } from "../domain/surface-bounds.js";
 
 const graphemes = new Intl.Segmenter(undefined, { granularity: "grapheme" });
 

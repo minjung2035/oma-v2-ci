@@ -7,7 +7,7 @@ import { loadConfigurationSnapshot } from "../src/config.js";
 import {
   bootstrapStateOf, commitField, fieldsOf, readSettings, INITIAL_WORKERS, PRINCIPAL_MODEL, WORKER_LIMIT, WORKER_MODEL, WORKER_PROFILE,
   type BootstrapState,
-} from "../src/tui/sources/settings.js";
+} from "../src/application/settings.js";
 import { dashboardRows } from "../src/tui/view/dashboard.js";
 import { StoreError } from "../src/domain/errors.js";
 import { createCompleteConfigurationFixture } from "./fixtures/configuration.js";

@@ -10,12 +10,12 @@ import { DEPLOYMENT_LAYOUT } from "../src/domain/deployment.js";
 import { TEST_RESOURCES } from "./fixtures/spec.js";
 import { configurationLayout as layoutOf, readConfigurationSource } from "../src/config/operations.js";
 import { encodeToolSurfacePlan } from "../src/domain/tool-surface.js";
-import { readExtensions, toggleExtension } from "../src/tui/sources/extensions.js";
+import { readExtensions, toggleExtension } from "../src/application/extensions.js";
 import {
   PRINCIPAL_MODEL, WORKER_LIMIT, WORKER_MODEL,
   commitField, readSettings,
-} from "../src/tui/sources/settings.js";
-import { PACKAGE_STORE_ENV, principalEnvironment, principalSessionProfile, projectEvent, sessionArgv, sessionEnv } from "../src/tui/session.js";
+} from "../src/application/settings.js";
+import { PACKAGE_STORE_ENV, principalEnvironment, principalSessionProfile, projectEvent, sessionArgv, sessionEnv } from "../src/runtime/engine/principal-session.js";
 import { PACKAGE_STORE_ENV as GUARD_PACKAGE_STORE_ENV } from "../src/extension/workspace-guard.js";
 import { PRINCIPAL_SYSTEM_PROMPT } from "../src/config/role-prompts.js";
 import { loadConfiguration } from "../src/config.js";

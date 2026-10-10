@@ -1,8 +1,9 @@
 /** DR27/P0-4: each /resume observation owns its reply, timer and cancellation.
  * A slow parent's answer belongs to that request, never to the next selector. */
-import { alarm, type PiEvent, type Timer } from "../runtime/pi-rpc.js";
-import { checkedHostHistoryPage, type HostHistoryInfo } from "../protocol/host-history.js";
-import { StoreError } from "../domain/errors.js";
+import { alarm, type Timer } from "../../protocol/alarm.js";
+import type { PiEvent } from "../../protocol/jsonl.js";
+import { checkedHostHistoryPage, type HostHistoryInfo } from "../../protocol/host-history.js";
+import { StoreError } from "../../domain/errors.js";
 
 interface HistorySnapshot { readonly dirs: string[]; readonly histories: HostHistoryInfo[]; readonly error?: string }
 

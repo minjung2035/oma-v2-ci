@@ -106,7 +106,7 @@ test("NB-05: Pending counts Residents only; the Principal's own count stays its 
 });
 
 test("NB-06: a failure message survives process.exit behind it, even past the pipe's buffer", () => {
-  const exit = fileURLToPath(new URL("../src/tui/exit.js", import.meta.url));
+  const exit = fileURLToPath(new URL("../src/application/exit.js", import.meta.url));
   // Well past any pipe buffer: a buffered write() has no chance to drain
   // before process.exit. On Linux the Human's stream is stderr.
   const script = `import { fail } from ${JSON.stringify(exit)}; fail("x".repeat(300_000) + "TAIL", 2);`;

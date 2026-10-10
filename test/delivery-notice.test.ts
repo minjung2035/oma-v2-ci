@@ -17,7 +17,7 @@ import { MailModule } from "../src/mail.js";
 import { readableMail, registerOmaTools, replyPathFor } from "../src/extension/mail-tools.js";
 import { buildEml } from "../src/mail/serialize.js";
 import { readableMail as runtimeReadableMail } from "../src/mail/display.js";
-import { parseMessage, readBody } from "../src/tui/sources/mail.js";
+import { parseMessage, readBody } from "../src/application/mail.js";
 import { PrincipalChannel } from "../src/extension/principal-channel.js";
 import { makeValidAgent } from "./fixtures/spec.js";
 import { TEST_VIEW_LIMITS } from "./fixtures/limits.js";

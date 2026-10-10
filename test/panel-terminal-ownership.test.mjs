@@ -17,7 +17,7 @@ function load(file, dependencies, globals = {}) {
   return module.exports;
 }
 function world() {
-  const bounds = load('src/tui/limits.ts', {});
+  const bounds = load('src/domain/surface-bounds.ts', {});
   const host = new EventEmitter();
   const input = new EventEmitter(), output = new EventEmitter();
   const raw = [], bytes = [], timers = new Set();
@@ -25,8 +25,8 @@ function world() {
   Object.assign(input, { isTTY: true, setRawMode(value) { raw.push(value); },
     resume() { resumes++; }, pause() { pauses++; } });
   Object.assign(output, { columns: 80, rows: 24, write(value) { bytes.push(value); return true; } });
-  const screen = load('src/tui/screen.ts', { './limits.js': bounds }, { process: host, Buffer });
-  const { PanelTerminal } = load('src/tui/panel-terminal.ts', { './limits.js': bounds, './screen.js': screen }, {
+  const screen = load('src/tui/screen.ts', { '../domain/surface-bounds.js': bounds }, { process: host, Buffer });
+  const { PanelTerminal } = load('src/tui/panel-terminal.ts', { '../domain/surface-bounds.js': bounds, './screen.js': screen }, {
     setTimeout(run) { const timer = { run, unref() {} }; timers.add(timer); return timer; },
     clearTimeout(timer) { timers.delete(timer); },
   });

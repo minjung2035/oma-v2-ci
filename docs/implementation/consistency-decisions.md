@@ -285,9 +285,9 @@ is host authoring data, not a new operation/message/batch state.
 |---|---|---|---|---|
 | surface.public | src/protocol/methods.ts, implementation/contracts/public-wire.ts, implementation/contracts/internal-wire.ts | add internal action-category metadata to existing method decisions; no new RPC | key rules, method names, strict payload/error/correlation and live authentication | WP21, WP26 |
 | surface.durable | src/storage/operation-codec.ts, src/storage/transitions.ts, implementation/contracts/durable.ts, implementation/schema-v3.sql | validated exact evidence selects existing transitions before rollover; ownership scope settles current plans | six entities, user_version=3, state enums, request/spec/receipt bytes; no golden refresh | WP04, WP06, WP07, WP17, WP20, WP24 |
-| surface.editor | src/config.ts, src/config/operations.ts, src/tui/sources/settings.ts, src/tui/sources/extensions.ts | pure full validator plus snapshot/source/version and closed edit descriptors; generation writer owns publication | HostConfigV1 keys, role metadata semantics, index-root prompt references, no implicit delegation change | WP11, WP12, WP13, WP14, WP15, WP16 |
+| surface.editor | src/config.ts, src/config/operations.ts, src/application/settings.ts, src/application/extensions.ts | pure full validator plus snapshot/source/version and closed edit descriptors; generation writer owns publication | HostConfigV1 keys, role metadata semantics, index-root prompt references, no implicit delegation change | WP11, WP12, WP13, WP14, WP15, WP16 |
 | surface.resources | src/domain/resources.ts, src/storage/quota.ts | explicit action policy, bounded reservation transfer and diagnostic snapshot; freeze derivation/budgets in WP22 | resource field vocabulary, integer/size validation, no cost accounting or stale cache authorization | WP21, WP22, WP23 |
-| surface.authority | src/broker.ts, src/runtime/principal-delivery.ts, src/tui/session.ts | separate live complete from narrow trusted recovery; single correlated run owner across await | current peer/incarnation checks, single writer, inherited fence and real descendant death | WP03, WP07, WP08, WP09, WP10, WP25 |
+| surface.authority | src/broker.ts, src/runtime/principal-delivery.ts, src/runtime/engine/principal-session.ts | separate live complete from narrow trusted recovery; single correlated run owner across await | current peer/incarnation checks, single writer, inherited fence and real descendant death | WP03, WP07, WP08, WP09, WP10, WP25 |
 | surface.evidence | implementation/source-owners.json, implementation/mutation-owners.json, production-files.txt, scripts/verification-lanes.mjs | update actual owner/caller/test trace when runtime responsibility moves; include new production sources | generated evidence must be recomputed, not hand merged; no static/runtime proof inflation | WP29, WP30, WP31, WP32 |
 
 No wire/DDL/durable codec/type declaration changes are needed by WP01. Existing
@@ -377,7 +377,7 @@ start without it; only the model comes from the current profile at activation
 by the runner; there is no automatic re-rendering of existing Resident units, so a
 society created before this change set needs its Residents recreated (open item for
 the WP31 support table). The Principal is not a unit: its session still reads its
-workspace limit from the current principal profile (`src/tui/session.ts`); whether
+workspace limit from the current principal profile (`src/runtime/engine/principal-session.ts`); whether
 the Principal's accepted spec should bind it is left to WP28's review.
 
 WP25.04 — `revoke` closes authorization and keeps the pin (`revoked-awaiting-death`);

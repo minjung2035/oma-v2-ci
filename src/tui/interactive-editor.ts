@@ -1,7 +1,7 @@
 /** OMA prompt policy over the pinned Pi editor adaptation. */
 import type { EditorComponent } from "@earendil-works/pi-tui";
 import { ownedEditor as adaptEditor, type EditorRoutingPorts } from "../pi-compat/interactive-editor.js";
-import { humanPromptFitsFrame } from "./limits.js";
+import { humanPromptFitsFrame } from "../domain/surface-bounds.js";
 export type { Suggestion } from "../pi-compat/interactive-editor.js";
 
 export interface InteractiveEditorPorts extends Omit<EditorRoutingPorts, "acceptsInput"> {

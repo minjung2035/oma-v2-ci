@@ -10,17 +10,17 @@ function fixture() {
   const notices = [];
   const deps = {
     "../runtime/deployment-manifest.js": { deploymentDigest: () => "digest" },
-    "../runtime/pi-packages.js": { readPackageIndex: () => [] },
+    "../runtime/packages/index.js": { readPackageIndex: () => [] },
     "../runtime/user-files.js": { readUserFile: () => project.snapshot },
     "../config/operations.js": { CONFIGURATION_DOCUMENT_BYTES: 1024 },
-    "./words.js": { errorWords: error => error.message },
-    "./sources/extensions.js": { readExtensions: source => { if (failed) throw new Error("extensions unreadable"); return { source }; } },
-    "./sources/settings.js": { projectSettingsPath: () => "/project/settings", readSettings: () => current,
+    "../tui/words.js": { errorWords: error => error.message },
+    "./extensions.js": { readExtensions: source => { if (failed) throw new Error("extensions unreadable"); return { source }; } },
+    "./settings.js": { projectSettingsPath: () => "/project/settings", readSettings: () => current,
       readSettingsForEditing: () => project, deriveSessionSettings: () => ({ settings: current, missing: [] }) },
     "./project-settings.js": { ensureProjectSettings: () => project },
   };
   const output = { exports: {} };
-  const code = ts.transpileModule(readFileSync("src/tui/project-session-settings.ts", "utf8"), {
+  const code = ts.transpileModule(readFileSync("src/application/project-session-settings.ts", "utf8"), {
     compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
   }).outputText;
   new Script(code).runInNewContext({ module: output, exports: output.exports, Object,

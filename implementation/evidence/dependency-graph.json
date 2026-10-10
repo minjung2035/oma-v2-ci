@@ -12,6 +12,16 @@
   "implementation/contracts/public-wire.ts",
   "implementation/contracts/runtime.ts",
   "implementation/contracts/values.ts",
+  "src/application/exit.ts",
+  "src/application/extensions.ts",
+  "src/application/local-packages.ts",
+  "src/application/mail.ts",
+  "src/application/packages-apply.ts",
+  "src/application/project-session-settings.ts",
+  "src/application/project-settings.ts",
+  "src/application/settings.ts",
+  "src/application/society-panel.ts",
+  "src/application/status-observation.ts",
   "src/attestation.ts",
   "src/authority.ts",
   "src/broker.ts",
@@ -91,12 +101,15 @@
   "src/domain/limits.ts",
   "src/domain/lineage.ts",
   "src/domain/mail-values.ts",
+  "src/domain/package-policy.ts",
   "src/domain/persisted-formats.ts",
   "src/domain/request-identity.ts",
   "src/domain/resources.ts",
   "src/domain/review-evaluation.ts",
   "src/domain/session-mode.ts",
+  "src/domain/settings-policy.ts",
   "src/domain/spec-identity.ts",
+  "src/domain/surface-bounds.ts",
   "src/domain/tier-evaluation.ts",
   "src/domain/tier-snapshot.ts",
   "src/domain/tool-surface.ts",
@@ -249,6 +262,8 @@
   "src/platform/host/transfers.ts",
   "src/platform/host/vz-driver.ts",
   "src/platform/package-archive.ts",
+  "src/platform/package-files.ts",
+  "src/platform/package-staging.ts",
   "src/platform/product-text.ts",
   "src/platform/rpc.ts",
   "src/platform/society-client.ts",
@@ -256,6 +271,7 @@
   "src/platform/stream-source.ts",
   "src/platform/terminal-modes.ts",
   "src/ports/ledger.ts",
+  "src/ports/package-files.ts",
   "src/ports/runtime.ts",
   "src/process/async.ts",
   "src/process/cleanup.ts",
@@ -286,6 +302,7 @@
   "src/protocol/request-codec.ts",
   "src/protocol/response-codec.ts",
   "src/protocol/run-lease.ts",
+  "src/protocol/settings.ts",
   "src/protocol/status-page.ts",
   "src/protocol/status-view.ts",
   "src/reconcile.ts",
@@ -305,6 +322,9 @@
   "src/runtime/deployment-manifest.ts",
   "src/runtime/egress-forwarder.ts",
   "src/runtime/engine-auth.ts",
+  "src/runtime/engine/login.ts",
+  "src/runtime/engine/principal-session.ts",
+  "src/runtime/engine/session-directories.ts",
   "src/runtime/extension-integrity.ts",
   "src/runtime/extension-modules.ts",
   "src/runtime/host-arguments.ts",
@@ -313,16 +333,15 @@
   "src/runtime/inference-relay.ts",
   "src/runtime/interactive-channel.ts",
   "src/runtime/interactive-display.ts",
-  "src/runtime/local-package-stage.ts",
-  "src/runtime/local-package.ts",
   "src/runtime/locked-files.ts",
   "src/runtime/oma-theme.ts",
-  "src/runtime/package-tar.ts",
+  "src/runtime/packages/index.ts",
+  "src/runtime/packages/store.ts",
+  "src/runtime/packages/tar.ts",
   "src/runtime/personal-models.ts",
   "src/runtime/personal-session.ts",
   "src/runtime/personal-settings.ts",
   "src/runtime/pi-adapter.ts",
-  "src/runtime/pi-packages.ts",
   "src/runtime/pi-presentation.ts",
   "src/runtime/pi-rpc.ts",
   "src/runtime/pi-runtime.ts",
@@ -381,30 +400,18 @@
   "src/tui/cells.ts",
   "src/tui/compact-tools.ts",
   "src/tui/dashboard.ts",
-  "src/tui/exit.ts",
   "src/tui/interactive-editor.ts",
   "src/tui/keys.ts",
-  "src/tui/limits.ts",
-  "src/tui/login.ts",
   "src/tui/mail-names.ts",
   "src/tui/model.ts",
   "src/tui/open-tui-brand.ts",
-  "src/tui/packages-apply.ts",
   "src/tui/panel-style.ts",
   "src/tui/panel-terminal.ts",
-  "src/tui/project-session-directories.ts",
-  "src/tui/project-session-settings.ts",
-  "src/tui/project-settings.ts",
   "src/tui/prompt.ts",
   "src/tui/screen.ts",
   "src/tui/session-mode.ts",
-  "src/tui/session.ts",
   "src/tui/society-panel.ts",
-  "src/tui/sources/extensions.ts",
-  "src/tui/sources/mail.ts",
-  "src/tui/sources/settings.ts",
   "src/tui/transcript.ts",
-  "src/tui/transport.ts",
   "src/tui/view/dashboard.ts",
   "src/tui/view/index.ts",
   "src/tui/view/labels.ts",
@@ -451,11 +458,14 @@
      "src/domain/limits.ts",
      "src/domain/lineage.ts",
      "src/domain/mail-values.ts",
+     "src/domain/package-policy.ts",
      "src/domain/request-identity.ts",
      "src/domain/resources.ts",
      "src/domain/review-evaluation.ts",
      "src/domain/session-mode.ts",
+     "src/domain/settings-policy.ts",
      "src/domain/spec-identity.ts",
+     "src/domain/surface-bounds.ts",
      "src/domain/tier-evaluation.ts",
      "src/domain/tool-surface.ts",
      "src/domain/unseen-text.ts",
@@ -463,6 +473,7 @@
      "src/hash.ts",
      "src/process/command.ts",
      "src/process/host-loss.ts",
+     "src/protocol/settings.ts",
      "src/resident-paths.ts",
      "src/storage/paths.ts"
     ]
@@ -573,10 +584,10 @@
    }
   ],
   "runtimeEdgeMatrix": {
-   "K0-values -> K0-values": 32,
+   "K0-values -> K0-values": 35,
    "K1-codecs -> K0-values": 70,
    "K1-codecs -> K1-codecs": 29,
-   "K2-mechanisms -> K0-values": 69,
+   "K2-mechanisms -> K0-values": 71,
    "K2-mechanisms -> K1-codecs": 9,
    "K2-mechanisms -> K2-mechanisms": 69,
    "K3-ledger -> K0-values": 21,
@@ -585,6 +596,7 @@
    "K3-ledger -> K3-ledger": 14
   },
   "typeOnlyEdgeMatrix": {
+   "K0-values -> K0-values": 1,
    "K1-codecs -> K0-values": 3,
    "K1-codecs -> K1-codecs": 4,
    "K1-codecs -> K3-ledger": 1,
@@ -709,6 +721,16 @@
    {
     "from": "src/config.ts",
     "to": "src/protocol/log-response.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "src/config.ts",
+    "to": "src/protocol/settings.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "src/config.ts",
+    "to": "src/protocol/settings.ts",
     "kind": "runtime"
    },
    {
@@ -1560,6 +1582,7 @@
   "internalPortContracts": [
    "src/module-ports.ts",
    "src/ports/ledger.ts",
+   "src/ports/package-files.ts",
    "src/ports/runtime.ts"
   ],
   "typeOnlyReview": {
@@ -1714,6 +1737,27 @@
      "coarseUpward": false
     },
     {
+     "from": "src/platform/package-files.ts",
+     "to": "src/ports/package-files.ts",
+     "classification": "internal-port-contract",
+     "kernelUpward": false,
+     "coarseUpward": false
+    },
+    {
+     "from": "src/platform/package-staging.ts",
+     "to": "src/ports/package-files.ts",
+     "classification": "internal-port-contract",
+     "kernelUpward": false,
+     "coarseUpward": false
+    },
+    {
+     "from": "src/platform/package-staging.ts",
+     "to": "src/ports/package-files.ts",
+     "classification": "internal-port-contract",
+     "kernelUpward": false,
+     "coarseUpward": false
+    },
+    {
      "from": "src/ports/ledger.ts",
      "to": "implementation/contracts/durable.ts",
      "classification": "internal-port-contract",
@@ -1784,6 +1828,20 @@
      "coarseUpward": false
     },
     {
+     "from": "src/runtime/packages/store.ts",
+     "to": "src/ports/package-files.ts",
+     "classification": "internal-port-contract",
+     "kernelUpward": false,
+     "coarseUpward": false
+    },
+    {
+     "from": "src/runtime/packages/tar.ts",
+     "to": "src/ports/package-files.ts",
+     "classification": "internal-port-contract",
+     "kernelUpward": false,
+     "coarseUpward": false
+    },
+    {
      "from": "src/sandbox.ts",
      "to": "src/ports/runtime.ts",
      "classification": "internal-port-contract",
@@ -1847,7 +1905,7 @@
     "src/ports/",
     "src/module-ports.ts"
    ],
-   "files": 15
+   "files": 16
   },
   {
    "index": 1,
@@ -1875,7 +1933,7 @@
     "src/resident-paths.ts",
     "src/store.ts"
    ],
-   "files": 125
+   "files": 129
   },
   {
    "index": 2,
@@ -1924,41 +1982,42 @@
     "src/sandbox.ts",
     "src/platform/"
    ],
-   "files": 131
+   "files": 135
   },
   {
    "index": 5,
    "name": "L5-entry",
    "prefixes": [
     "src/entry/",
+    "src/application/",
     "src/cli/",
     "src/cli.ts",
     "src/tui/",
     "src/pi-extension.ts",
     "src/extension/"
    ],
-   "files": 98
+   "files": 96
   }
  ],
- "files": 423,
- "runtimeEdges": 1786,
- "typeOnlyEdges": 454,
+ "files": 430,
+ "runtimeEdges": 1802,
+ "typeOnlyEdges": 471,
  "runtimeEdgeMatrix": {
-  "L1-kernel -> L1-kernel": 325,
+  "L1-kernel -> L1-kernel": 330,
   "L2-facts -> L1-kernel": 36,
   "L2-facts -> L2-facts": 5,
   "L3-workflow -> L1-kernel": 227,
   "L3-workflow -> L2-facts": 14,
   "L3-workflow -> L3-workflow": 70,
-  "L4-orchestration -> L1-kernel": 379,
+  "L4-orchestration -> L1-kernel": 395,
   "L4-orchestration -> L2-facts": 8,
   "L4-orchestration -> L3-workflow": 24,
-  "L4-orchestration -> L4-orchestration": 208,
-  "L5-entry -> L1-kernel": 136,
+  "L4-orchestration -> L4-orchestration": 209,
+  "L5-entry -> L1-kernel": 147,
   "L5-entry -> L2-facts": 2,
   "L5-entry -> L3-workflow": 8,
-  "L5-entry -> L4-orchestration": 150,
-  "L5-entry -> L5-entry": 194
+  "L5-entry -> L4-orchestration": 152,
+  "L5-entry -> L5-entry": 175
  },
  "upwardTypeOnlyEdges": [
   {
@@ -1977,11 +2036,11 @@
   ]
  ],
  "fanIn": {
-  "src/domain/errors.ts": 218,
+  "src/domain/errors.ts": 219,
   "src/domain/identifiers.ts": 64,
   "src/storage/contained-fs.ts": 32,
+  "src/storage/directory.ts": 32,
   "src/protocol/host-guest.ts": 31,
-  "src/storage/directory.ts": 31,
   "src/storage/paths.ts": 31,
   "src/storage/durable-fs.ts": 28,
   "src/ids.ts": 27,
@@ -1994,13 +2053,13 @@
   "src/store.ts": 18
  },
  "fanOut": {
-  "src/entry/oma-society.ts": 41,
+  "src/entry/oma-society.ts": 42,
   "src/broker.ts": 31,
   "src/mail.ts": 29,
   "src/entry/broker.ts": 28,
   "src/pi-extension.ts": 24,
+  "src/entry/oma-mac.ts": 22,
   "src/review.ts": 22,
-  "src/entry/oma-mac.ts": 21,
   "src/runtime/client-runtime.ts": 20,
   "src/entry/pi-interactive-host.ts": 19,
   "src/entry/pi-personal.ts": 19,

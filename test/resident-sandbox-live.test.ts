@@ -440,6 +440,8 @@ test("T117 the host product's code cannot be read inside a Resident (TUI-003)", 
     const runtime = resolvePiRuntime({ stateRoot, libdir: root });
     const masks = productSurfaceMasks(root);
     assert.ok(masks.some(mask => mask.path === "dist/src/tui"), "the built product surface should exist to hide");
+    for (const path of ["dist/src/application", "dist/src/runtime/engine", "dist/src/domain/settings-policy.js", "dist/src/domain/surface-bounds.js"])
+      assert.ok(masks.some(mask => mask.path === path), `the moved host product must stay hidden: ${path}`);
     const adapter = new PiAdapter({
       actor, society: "live",
       limits: { frameBytes: 262144, idleStreamSeconds: 60, receiptWaitSeconds: 30, batchMaxMessages: 24, mailBodyBytes: 4096, addresses: 64, contextBytes: 1 << 20, bundleBytes: 1 << 20 },
@@ -470,6 +472,8 @@ test("T117 the host product's code cannot be read inside a Resident (TUI-003)", 
       const write = p => { try { fs.writeFileSync(p, "x"); return "written"; } catch (e) { return e.code; } };
       console.log(JSON.stringify({
         tuiDir: list("/opt/oma/dist/src/tui"), tuiSource: list("/opt/oma/src/tui"),
+        application: list("/opt/oma/dist/src/application"), engine: list("/opt/oma/dist/src/runtime/engine"),
+        settingsPolicy: read("/opt/oma/dist/src/domain/settings-policy.js"), surfaceBounds: read("/opt/oma/dist/src/domain/surface-bounds.js"),
         entry: read("/opt/oma/dist/src/entry/oma.js"), entrySource: read("/opt/oma/src/entry/oma.ts"),
         writeIntoMask: write("/opt/oma/dist/src/tui/planted.js"),
         extension: read("/opt/oma/dist/src/pi-extension.js") }));`], { encoding: "utf8", timeout: 30000, stdio }));
@@ -477,6 +481,10 @@ test("T117 the host product's code cannot be read inside a Resident (TUI-003)", 
     const seen = JSON.parse(probe.stdout.trim()) as Record<string, unknown>;
     assert.deepEqual(seen.tuiDir, [], "the built product surface is readable inside");
     assert.deepEqual(seen.tuiSource, [], "the product surface's source is readable inside");
+    assert.deepEqual(seen.application, [], "the host Application is readable inside");
+    assert.deepEqual(seen.engine, [], "the Principal session owner is readable inside");
+    for (const value of [seen.settingsPolicy, seen.surfaceBounds])
+      assert.ok(typeof value === "string" || value === 0, "moved presentation policy contents are readable inside");
     assert.equal(typeof seen.entry, "string", "the product entrypoint is readable inside");
     assert.equal(typeof seen.entrySource, "string", "the product entrypoint's source is readable inside");
     assert.notEqual(seen.writeIntoMask, "written", "the mask must not become writable space");

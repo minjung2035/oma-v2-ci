@@ -8,7 +8,7 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
 import { fakeNpmRegistry } from "./fixtures/fake-npm-registry.js";
-import { readPackageIndex } from "../src/runtime/pi-packages.js";
+import { readPackageIndex } from "../src/runtime/packages/store.js";
 import { readPersonalSettings, updatePersonalSettings } from "../src/runtime/personal-settings.js";
 import { ProcessLock } from "../src/runtime/process-lock.js";
 

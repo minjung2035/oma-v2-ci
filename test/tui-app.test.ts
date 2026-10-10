@@ -7,7 +7,7 @@ import { StoreError } from "../src/domain/errors.js";
 import type { ConfigField, ExtensionRow, MailboxRead } from "../src/tui/model.js";
 import { unknownDashboard } from "./fixtures/dashboard.js";
 import type { Terminal } from "../src/tui/screen.js";
-import { CONVERSATION_BOUNDS, TERMINAL_BOUNDS, humanPromptByteLimit, humanPromptFrameBytes } from "../src/tui/limits.js";
+import { CONVERSATION_BOUNDS, TERMINAL_BOUNDS, humanPromptByteLimit, humanPromptFrameBytes } from "../src/domain/surface-bounds.js";
 
 const ESC = String.fromCharCode(27);
 const CTRL_X = Buffer.from([0x18]);

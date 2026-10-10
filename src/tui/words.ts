@@ -10,7 +10,7 @@
  */
 import { errorCodeOf } from "../domain/errors.js";
 import { productText } from "../platform/product-text.js";
-import { READ_BOUNDS } from "./limits.js";
+import { READ_BOUNDS } from "../domain/surface-bounds.js";
 
 export const PRODUCT_TEXT_ENV = "OMA_PRODUCT_TEXT";
 const logged = new Set<string>();

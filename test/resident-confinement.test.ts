@@ -15,7 +15,7 @@ import { RESIDENT_SYSTEM_PROMPT } from "../src/config/role-prompts.js";
 import { TOOL_SCOPE_ENV, TOOL_SCOPE_SANDBOX, type PiConfinement } from "../src/runtime/pi-spawn-plan.js";
 import { TOOL_SCOPE_ENV as MIRRORED_ENV, TOOL_SCOPE_SANDBOX as MIRRORED_SANDBOX, guardWorkspaceTools } from "../src/extension/workspace-guard.js";
 import { containWorkspaceTools, createContainedWriter } from "../src/extension/contained-tools.js";
-import { principalEnvironment, sessionEnv } from "../src/tui/session.js";
+import { principalEnvironment, sessionEnv } from "../src/runtime/engine/principal-session.js";
 import { RESIDENT_INFERENCE_PORT, RESIDENT_PATHS, confinedPath, hostSessionPath, residentArgv, residentProjectGit, requireResidentRootfs, type ResidentDirectories } from "../src/sandbox.js";
 import { decodeRunLease } from "../src/protocol/run-lease.js";
 import { actorSocketPathAt, agentRootPathAt, runnerSessionDirPathAt, runnerViewPathAt, workspacePathAt } from "../src/storage/paths.js";
@@ -513,7 +513,7 @@ test("mail-v1: the worker archive is a read-only Resident mount its environment 
 });
 
 test("mail-v1: the Principal's host engine is given no worker archive", async () => {
-  const { principalEnvironment } = await import("../src/tui/session.js");
+  const { principalEnvironment } = await import("../src/runtime/engine/principal-session.js");
   const env = principalEnvironment({ stateRoot: "/srv/oma", runRoot: "/run/oma", libdir: "/opt/oma" },
     { society: "s", provider: "pi", model: "current", workspaceBytes: 1024, extensions: [] } as never,
     { frameBytes: 1024, mailBodyBytes: 1024, batchMaxMessages: 4, contextBytes: 1 << 20, bundleBytes: 1 << 20 } as never);

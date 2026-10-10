@@ -10,7 +10,7 @@ import { ensureOwnedDirectory } from "../storage/directory.js";
 import { realpathSync } from "node:fs";
 import { hostSystemLayout } from "../runtime/resident-rootfs.js";
 import { requireResidentRootfs } from "../sandbox.js";
-import { packageStoreRoot } from "../runtime/pi-packages.js";
+import { packageStoreRoot } from "../runtime/packages/index.js";
 import { DEPLOYMENT_LAYOUT } from "../domain/deployment.js";
 import { parseCanonicalResourceLimits } from "../domain/resources.js";
 import { egressPolicyFor } from "../domain/egress.js";

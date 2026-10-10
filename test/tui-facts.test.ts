@@ -11,7 +11,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { TuiApp, type AppPorts } from "../src/tui/app.js";
 import type { Terminal } from "../src/tui/screen.js";
-import { principalMailbox, readBody, readMailbox, unreadCount } from "../src/tui/sources/mail.js";
+import { principalMailbox, readBody, readMailbox, unreadCount } from "../src/application/mail.js";
 import { unknownDashboard } from "./fixtures/dashboard.js";
 
 const ESC = String.fromCharCode(27);

@@ -7,12 +7,12 @@ import { StoreError } from "../domain/errors.js";
 import { defaultHostConfig } from "../config/defaults.js";
 import { isValidSocietyName } from "../domain/identifiers.js";
 import { deploymentDigest } from "../runtime/deployment-manifest.js";
-import { packageStoreDir, reconciledEntries, type InstalledPackage } from "../runtime/pi-packages.js";
+import { packageStoreDir, reconciledEntries, type InstalledPackage } from "../runtime/packages/index.js";
 import { residentRootfsPath } from "../runtime/provision.js";
 import { ensureOwnedUserDirectory } from "../runtime/user-files.js";
-import { errorWords } from "./words.js";
+import { errorWords } from "../tui/words.js";
 import { commitManagedEdit, commitRoleSet, projectBundle, projectSettingsPath, readSettingsForEditing, roleSetOf, writeSettings,
-  type Settings } from "./sources/settings.js";
+  type Settings } from "./settings.js";
 
 /** The project's settings, made once -- from its first society's
  * configuration, roles and all, or the product's defaults -- and kept a

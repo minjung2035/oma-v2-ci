@@ -16,7 +16,7 @@ import { join } from "node:path";
 import type { PreparedBatch } from "../implementation/contracts.js";
 import { loadConfiguration, loadConfigurationSnapshot, validateConfig, type ConfigurationSnapshot } from "../src/config.js";
 import { collectManagedGenerations, commitInlineConfiguration } from "../src/config/generations.js";
-import { applyField, commitManagedEdit, readSettings, INITIAL_WORKERS } from "../src/tui/sources/settings.js";
+import { applyField, commitManagedEdit, readSettings, INITIAL_WORKERS } from "../src/application/settings.js";
 import { replaceDerivedFile, type DurabilityFault } from "../src/storage/durable-fs.js";
 import { publishImmutableFile } from "../src/storage/immutable-file.js";
 import { PI_ADAPTER_REVISION, deliveryDecision, observeDeliveryReceipt, publishDeliveryReceipt, readDeliveryReceipt, type DeliveryBoundary } from "../src/storage/delivery-receipt.js";
@@ -73,7 +73,7 @@ test("V13A / P0-7: a managed commit SIGKILLed at any durability point leaves the
       const oldRevision = before.config.integration.policyRevision;
       const run = killedAt(crash, `
         const { loadConfigurationSnapshot, validateConfig } = await import(${JSON.stringify(moduleUrl("../src/config.js"))});
-        const { commitManagedEdit } = await import(${JSON.stringify(moduleUrl("../src/tui/sources/settings.js"))});
+        const { commitManagedEdit } = await import(${JSON.stringify(moduleUrl("../src/application/settings.js"))});
         const snapshot = loadConfigurationSnapshot(${JSON.stringify(f.path)});
         const principal = snapshot.config.agentProfiles.principal;
         const next = validateConfig({ ...snapshot.config, agentProfiles: { ...snapshot.config.agentProfiles, principal: { ...principal, modelProfile: "review" } } });
@@ -110,7 +110,7 @@ test("DR12 / P0-7: an inline commit SIGKILLed at any durability point leaves the
       const run = killedAt(crash, `
         const { validateConfig } = await import(${JSON.stringify(moduleUrl("../src/config.js"))});
         const { commitInlineConfiguration } = await import(${JSON.stringify(moduleUrl("../src/config/generations.js"))});
-        const { applyField, readSettings, INITIAL_WORKERS } = await import(${JSON.stringify(moduleUrl("../src/tui/sources/settings.js"))});
+        const { applyField, readSettings, INITIAL_WORKERS } = await import(${JSON.stringify(moduleUrl("../src/application/settings.js"))});
         const settings = readSettings(${JSON.stringify(f.input)});
         commitInlineConfiguration(settings.snapshot, validateConfig(applyField(settings, INITIAL_WORKERS, ${limit})), faults);`);
       const at = `${crash} (${points[crash]!.point}/${points[crash]!.phase})`;

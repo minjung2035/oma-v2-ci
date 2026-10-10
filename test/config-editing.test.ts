@@ -11,7 +11,7 @@ import {
   commitField,
   readSettings,
   writeSettings,
-} from "../src/tui/sources/settings.js";
+} from "../src/application/settings.js";
 
 function filesBelow(root: string): string[] {
   return readdirSync(root, { withFileTypes: true })

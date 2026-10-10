@@ -17,7 +17,7 @@ import { syncBuiltinESMExports } from "node:module";
 import { join } from "node:path";
 import { loadConfigurationSnapshot, validateConfig } from "../src/config.js";
 import { collectManagedGenerations, MANAGED_DIRECTORY } from "../src/config/generations.js";
-import { commitManagedEdit } from "../src/tui/sources/settings.js";
+import { commitManagedEdit } from "../src/application/settings.js";
 import { StoreError } from "../src/domain/errors.js";
 import { createCompleteConfigurationFixture } from "./fixtures/configuration.js";
 

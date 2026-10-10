@@ -10,6 +10,8 @@
   "license": "UNLICENSED",
   "scripts": {
     "build": "node scripts/build.mjs",
+    "build:tui": "node scripts/build-module.mjs tui",
+    "build:extension": "node scripts/build-module.mjs extension",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "config:split": "npm run build && node scripts/split-operations-config.mjs",
     "config:export": "npm run build && node scripts/export-operations-config.mjs",

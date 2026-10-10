@@ -9,7 +9,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { Transcript, storedLines } from "../src/tui/transcript.js";
-import { CONVERSATION_BOUNDS } from "../src/tui/limits.js";
+import { CONVERSATION_BOUNDS } from "../src/domain/surface-bounds.js";
 
 const LINES = CONVERSATION_BOUNDS.transcriptLines.value;
 const TOTAL_BYTES = CONVERSATION_BOUNDS.transcriptBytes.value;

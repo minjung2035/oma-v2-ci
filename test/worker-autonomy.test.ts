@@ -17,7 +17,7 @@ import { Store } from "../src/store.js";
 import { UnitsModule } from "../src/units.js";
 import { provisionSociety } from "../src/runtime/provision.js";
 import { projectGitPathAt, workspacePathAt } from "../src/storage/paths.js";
-import { commitField, INITIAL_WORKERS, readSettings } from "../src/tui/sources/settings.js";
+import { commitField, INITIAL_WORKERS, readSettings } from "../src/application/settings.js";
 import { makeValidAgent } from "./fixtures/spec.js";
 
 class ScriptedUnits extends UnitsModule {

@@ -8,7 +8,7 @@ import { loadConfigurationSnapshot, validateConfig, type ConfigurationSnapshot }
 import {
   collectManagedGenerations, generationIdOf, managedGenerationOf, MANAGED_DIRECTORY, MANAGED_LIMITS,
 } from "../src/config/generations.js";
-import { commitManagedEdit, commitField, readSettings, PRINCIPAL_MODEL, WORKER_LIMIT } from "../src/tui/sources/settings.js";
+import { commitManagedEdit, commitField, readSettings, PRINCIPAL_MODEL, WORKER_LIMIT } from "../src/application/settings.js";
 import { replaceDerivedFile, DurabilityFaultError, type DurabilityFault } from "../src/storage/durable-fs.js";
 import { StoreError } from "../src/domain/errors.js";
 import { createCompleteConfigurationFixture } from "./fixtures/configuration.js";

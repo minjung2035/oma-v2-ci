@@ -110,6 +110,7 @@ const LAYERS = Object.freeze([
     name: "L5-entry",
     prefixes: [
       "src/entry/",
+      "src/application/",
       "src/cli/",
       "src/cli.ts",
       // The product surface is an entry surface, like the model-facing CLI: it

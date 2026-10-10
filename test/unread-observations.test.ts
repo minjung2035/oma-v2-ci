@@ -16,7 +16,7 @@ import { join } from "node:path";
 import { observedStorageBytes, EXCLUDED_USAGE_TREES } from "../src/storage/quota.js";
 import { EXCLUDED_USAGE_TREES as MIRRORED_USAGE_TREES } from "../src/extension/workspace-guard.js";
 import { StoreError } from "../src/domain/errors.js";
-import { readMailbox, unreadCount, type MailboxPaths } from "../src/tui/sources/mail.js";
+import { readMailbox, unreadCount, type MailboxPaths } from "../src/application/mail.js";
 import { TuiApp, type AppPorts } from "../src/tui/app.js";
 import type { Terminal } from "../src/tui/screen.js";
 import { unknownDashboard } from "./fixtures/dashboard.js";

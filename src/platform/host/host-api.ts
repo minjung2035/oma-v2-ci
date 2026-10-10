@@ -24,7 +24,7 @@ import type {
 } from "../../protocol/host-api.js";
 import { HOST_API_VERSION, hostApiHelloProblem, type HostApiHello } from "../../protocol/host-api.js";
 import { isRequestKey, isUuid, requestProblem } from "../../protocol/host-guest.js";
-import { installedPackageSource } from "../../runtime/pi-packages.js";
+import { installedPackageSource } from "../../runtime/packages/index.js";
 import { clearSocketName } from "../../storage/socket-name.js";
 import { HANDOFF, serveRequests, type Answer } from "../guest/server.js";
 import { FramedPeer } from "../rpc.js";

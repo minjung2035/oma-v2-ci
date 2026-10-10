@@ -31,6 +31,8 @@ export const VERIFICATION_INPUT_ROOTS = Object.freeze([
   "package-lock.json",
   "tsconfig.json",
   "tsconfig.build.json",
+  "tsconfig.tui.json",
+  "tsconfig.extension.json",
   "production-manifest.json",
   "production-files.txt",
   "production-loc-hashes.json",

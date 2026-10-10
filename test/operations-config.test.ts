@@ -7,7 +7,7 @@ import { spawnSync } from "node:child_process";
 import { loadConfig, loadConfiguration } from "../src/config.js";
 import { canonicalResourceLimits } from "../src/domain/resources.js";
 import { encodedResidentToolSurface } from "../src/domain/tool-surface.js";
-import { writePackageIndex } from "../src/runtime/pi-packages.js";
+import { writePackageIndex } from "../src/runtime/packages/store.js";
 import { createCompleteConfigurationFixture as fixture } from "./fixtures/configuration.js";
 
 test("OPS config: migration preserves the closed host contract and does not overwrite input/output", () => {
@@ -165,7 +165,7 @@ function runnerEntry(f: ReturnType<typeof fixture>, env: Record<string, string |
     preload,
     `import { writeFileSync } from 'node:fs';
     import { RunnerModule } from ${JSON.stringify(new URL("../src/runner.js", import.meta.url).href)};
-    import { packageResourcePaths } from ${JSON.stringify(new URL("../src/runtime/pi-packages.js", import.meta.url).href)};
+    import { packageResourcePaths } from ${JSON.stringify(new URL("../src/runtime/packages/store.js", import.meta.url).href)};
     RunnerModule.prototype.run = async function () {
       writeFileSync(${JSON.stringify(capture)}, JSON.stringify({ profile: this.profile, confinement: this.paths.confinement ?? null,
         packages: this.paths.packages ?? null, packageResources: packageResourcePaths(this.paths.packages) ?? null })); return 0; };`,

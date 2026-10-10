@@ -1,3 +1,4 @@
+import * as settingsPolicy from "../dist/src/domain/settings-policy.js";
 /** T119 / TUI-002, PR-001, PR-002, LIFE-006: the product entrypoint's wiring.
  *
  * Every part of the Principal's path had a test and the path was still broken,
@@ -11,7 +12,7 @@ import { readFileSync } from "node:fs";
 import * as path from "node:path";
 import { Script } from "node:vm";
 import ts from "typescript";
-import { codeFor, exitFor } from "../dist/src/tui/exit.js";
+import { codeFor, exitFor } from "../dist/src/application/exit.js";
 import { parseOmaArguments } from "../dist/src/runtime/host-arguments.js";
 import { HOST_LOSS_SIGNALS } from "../dist/src/runtime/broker-lifetime.js";
 import { encodedPrincipalToolSurface } from "../dist/src/domain/tool-surface.js";
@@ -188,14 +189,14 @@ async function run({ brokerState = { kind: "started", pid: 1 }, credentials = ["
       refresh() { calls.push("app.refresh"); } draw() { calls.push("app.draw"); } line(text) { lines.push(text); } setBusy() {} note() {}
     } },
     // The product's own exit reading (DR13); only the exit itself is stood in for.
-    "../tui/exit.js": { codeFor, exitFor, fail: (reason, code) => { calls.push(`fail:${code}`); calls.push(`holdsAtFail:${lease.holds}`); throw new Error(`fail: ${reason}`); } },
+    "../application/exit.js": { codeFor, exitFor, fail: (reason, code) => { calls.push(`fail:${code}`); calls.push(`holdsAtFail:${lease.holds}`); throw new Error(`fail: ${reason}`); } },
     // One terminal owner: this process's panel, or the engine's screen.
     "../tui/panel-terminal.js": { PanelTerminal: class {
       restore() { calls.push("restore"); } onResize() {} onKeys() {} handoff() {} reclaim() { calls.push("reclaim"); } open() {} size() {} draw() {}
       whenUnclaimed() {}
     } },
     "../tui/dashboard.js": { dashboardData: () => ({}) },
-    "../tui/session.js": {
+    "../runtime/engine/principal-session.js": {
       newSessionHandle: () => "h".repeat(32),
       // The entry must take the session directory from its owner and pass it
       // through untouched. A path spelled out here would be a second, silent
@@ -257,16 +258,16 @@ async function run({ brokerState = { kind: "started", pid: 1 }, credentials = ["
         async tick() { deliveries.push("tick"); return { kind: "idle" }; }
       },
     },
-    "../tui/transport.js": {
+    "../application/status-observation.js": {
       limitsOf: value => value,
       TuiTransport: class { async status() { calls.push("status"); return statusReply ? await statusReply(handlers) : { kind: "unknown", reason: "probe", observedAtMs: 1 }; } },
     },
-    "../tui/sources/mail.js": { principalMailbox: () => ({}), readBody: () => null, readMailbox: () => [], unreadCount: () => 0 },
-    "../tui/sources/extensions.js": { readExtensions: () => {
+    "../application/mail.js": { principalMailbox: () => ({}), readBody: () => null, readMailbox: () => [], unreadCount: () => 0 },
+    "../application/extensions.js": { readExtensions: () => {
       if (startupFailure === "extensions") throw new StoreError("BROKER_UNAVAILABLE", "extensions could not be observed");
       return { rows: [] };
     }, toggleExtension() {} },
-    "../tui/sources/settings.js": {
+    "../application/settings.js": {
       commitField: (current, field) => {
         calls.push(`commitField:${field}:${current.config.shownLimit ?? "-"}`);
         if (commitRefused && current.config.shownLimit === 6)
@@ -292,17 +293,17 @@ async function run({ brokerState = { kind: "started", pid: 1 }, credentials = ["
       roleSetOf: () => ({}),
     },
     // DR25: the project's settings, made once and kept a bundle naming the store.
-    "../tui/project-settings.js": {
+    "../application/project-settings.js": {
       ensureProjectSettings: (root, project) => { const read = readSettings(`${root}/.projects/${project}/config.json`);
         return { ...read, config: { ...read.config, installation: { ...read.config.installation, packages: PACKAGE_STORE } } }; },
       applyPackageChange: () => { throw new Error("a start applied a package change"); },
     },
     // DR25: the package store; a start reads its index and changes nothing in it.
-    "../runtime/pi-packages.js": { PACKAGE_USAGE: "usage: oma pi ...", packageStoreDir: () => PACKAGE_STORE,
+    "../runtime/packages/index.js": { PACKAGE_USAGE: "usage: oma pi ...", packageStoreDir: () => PACKAGE_STORE,
       readPackageIndex: () => [], packageCommand: () => { throw new Error("a start ran oma pi"); },
       writePackageIndex: async () => { throw new Error("a start wrote the package index"); }, reconciledEntries: entries => entries },
     // C20: local-package staging is a package command's concern; a start never touches it.
-    "../runtime/local-package.js": { stageLocalPackage: () => { throw new Error("a start staged a local package"); },
+    "../application/local-packages.js": { stageLocalPackage: () => { throw new Error("a start staged a local package"); },
       pruneLocalStage: () => { throw new Error("a start pruned the local stage"); } },
     "../runtime/personal-settings.js": { reconcilePersonalSettings() { throw new Error("a Society start reconciled Personal choices"); } },
     "../runtime/session-handoff.js": { requestHostNewSession() { calls.push("host-new"); return hostNew; } },
@@ -390,7 +391,7 @@ async function run({ brokerState = { kind: "started", pid: 1 }, credentials = ["
     // The one list of the signals that end a process with a drain (AV31).
     "../runtime/broker-lifetime.js": { HOST_LOSS_SIGNALS },
     // `oma login` (DR18, D-9); a start never reaches it.
-    "../tui/login.js": { runEngineLogin: () => { throw new Error("a start ran the engine's login"); } },
+    "../runtime/engine/login.js": { runEngineLogin: () => { throw new Error("a start ran the engine's login"); } },
     // DR18 (D-10): the environment names no egress socket here, as on Linux.
     "../runtime/egress-forwarder.js": { adoptPrincipalEgress: async () => { onEgress?.(handlers); return null; } },
     // DR18 (D-1): an error's words as Linux shows them.
@@ -400,22 +401,28 @@ async function run({ brokerState = { kind: "started", pid: 1 }, credentials = ["
   };
   // Exercise the actual extracted settings owner with the same effect
   // boundaries as the entry, so write ownership and read-back still run.
-  modules["../tui/project-session-settings.js"] = loadSource("src/tui/project-session-settings.ts", {
+  modules["../application/project-session-settings.js"] = loadSource("src/application/project-session-settings.ts", {
     "../runtime/user-files.js": { readUserFile: projectPointerRead },
     "../config/operations.js": { CONFIGURATION_DOCUMENT_BYTES: 16777216 },
     "../runtime/deployment-manifest.js": modules["../runtime/deployment-manifest.js"],
-    "../runtime/pi-packages.js": modules["../runtime/pi-packages.js"],
-    "./words.js": modules["../tui/words.js"],
-    "./sources/extensions.js": modules["../tui/sources/extensions.js"],
-    "./sources/settings.js": modules["../tui/sources/settings.js"],
-    "./project-settings.js": modules["../tui/project-settings.js"],
+    "../runtime/packages/index.js": modules["../runtime/packages/index.js"],
+    "../tui/words.js": modules["../tui/words.js"],
+    "./extensions.js": modules["../application/extensions.js"],
+    "./settings.js": modules["../application/settings.js"],
+    "./project-settings.js": modules["../application/project-settings.js"],
   });
   modules["../tui/society-panel.js"] = loadSource("src/tui/society-panel.ts", {
     "./dashboard.js": modules["../tui/dashboard.js"],
-    "./sources/mail.js": modules["../tui/sources/mail.js"],
-    "./sources/settings.js": modules["../tui/sources/settings.js"],
+    "../domain/settings-policy.js": { ...settingsPolicy, ...modules["../application/settings.js"] },
+    "./settings.js": modules["../application/settings.js"],
     "../domain/mail-values.js": modules["../domain/mail-values.js"],
   });
+  modules["../application/society-panel.js"] = loadSource("src/application/society-panel.ts", {
+    "../tui/society-panel.js": modules["../tui/society-panel.js"],
+    "../domain/mail-values.js": modules["../domain/mail-values.js"],
+    "./mail.js": modules["../application/mail.js"],
+  });
+  modules["../platform/package-files.js"] = { packageDirectories: {} };
   const process_ = {
     argv, env: { HOME: "/home/user", XDG_DATA_HOME: "/state", XDG_RUNTIME_DIR: "/run", ...env },
     execPath: "node", execArgv: [], execve(...args) { calls.push("execve"); restarts.push(args); },

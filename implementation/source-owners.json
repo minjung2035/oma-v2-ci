@@ -264,7 +264,7 @@
     "callPath": [
       "src/entry/oma.ts#main",
       "src/entry/oma-society.ts#main",
-      "src/tui/session.ts#PrincipalSession.start",
+      "src/runtime/engine/principal-session.ts#PrincipalSession.start",
       "src/entry/pi-interactive-host.ts#runInteractive",
       "src/tui/interactive-editor.ts#ownedEditor"
     ],
@@ -281,14 +281,14 @@
       "TUI-008",
       "TUI-009"
     ],
-    "owner": "src/tui/sources/settings.ts#applyField",
+    "owner": "src/domain/settings-policy.ts#applyField",
     "entrypoint": "src/entry/oma.ts#main",
     "callPath": [
       "src/entry/oma.ts#main",
       "src/entry/oma-society.ts#main",
       "src/tui/app.ts#TuiApp",
-      "src/tui/sources/settings.ts#applyField",
-      "src/tui/sources/settings.ts#writeSettings"
+      "src/domain/settings-policy.ts#applyField",
+      "src/application/settings.ts#writeSettings"
     ],
     "negativeTests": [
       "test/tui-sources.test.ts#T93",
@@ -318,14 +318,14 @@
     "requirements": [
       "TUI-010"
     ],
-    "owner": "src/tui/sources/extensions.ts#toggleExtension",
+    "owner": "src/application/extensions.ts#toggleExtension",
     "entrypoint": "src/entry/oma.ts#main",
     "callPath": [
       "src/entry/oma.ts#main",
       "src/entry/oma-society.ts#main",
       "src/tui/app.ts#TuiApp",
-      "src/tui/sources/extensions.ts#readExtensions",
-      "src/tui/sources/extensions.ts#toggleExtension"
+      "src/application/extensions.ts#readExtensions",
+      "src/application/extensions.ts#toggleExtension"
     ],
     "negativeTests": [
       "test/tui-sources.test.ts#T97",
@@ -337,13 +337,13 @@
     "requirements": [
       "TUI-011"
     ],
-    "owner": "src/tui/sources/mail.ts#readMailbox",
+    "owner": "src/application/mail.ts#readMailbox",
     "entrypoint": "src/entry/oma.ts#main",
     "callPath": [
       "src/entry/oma.ts#main",
       "src/entry/oma-society.ts#main",
       "src/tui/app.ts#TuiApp",
-      "src/tui/sources/mail.ts#readMailbox"
+      "src/application/mail.ts#readMailbox"
     ],
     "negativeTests": [
       "test/tui-sources.test.ts#T98",
@@ -360,7 +360,7 @@
     "callPath": [
       "src/entry/oma.ts#main",
       "src/entry/oma-society.ts#main",
-      "src/tui/transport.ts#TuiTransport.status",
+      "src/application/status-observation.ts#TuiTransport.status",
       "src/tui/dashboard.ts#dashboardLines"
     ],
     "negativeTests": [
@@ -398,8 +398,8 @@
       "src/tui/model.ts#step",
       "src/tui/prompt.ts#appendPrompt",
       "src/tui/transcript.ts#Transcript",
-      "src/tui/limits.ts#humanPromptFitsFrame",
-      "src/tui/session.ts#PrincipalSession.submit"
+      "src/domain/surface-bounds.ts#humanPromptFitsFrame",
+      "src/runtime/engine/principal-session.ts#PrincipalSession.submit"
     ],
     "negativeTests": [
       "test/tui-app.test.ts#T120",
@@ -492,7 +492,7 @@
       "src/entry/oma-society.ts#main",
       "src/config/defaults.ts#defaultHostConfig",
       "src/runtime/pi-runtime.ts#resolvePiRuntime",
-      "src/tui/session.ts#PrincipalSession.start"
+      "src/runtime/engine/principal-session.ts#PrincipalSession.start"
     ],
     "negativeTests": [
       "test/pi-runtime.test.ts#T105",
@@ -526,7 +526,7 @@
     "callPath": [
       "src/entry/oma.ts#main",
       "src/entry/oma-society.ts#main",
-      "src/tui/session.ts#PrincipalSession",
+      "src/runtime/engine/principal-session.ts#PrincipalSession",
       "src/runtime/principal-delivery.ts#PrincipalDelivery",
       "src/runtime/principal-delivery.ts#principalHostBroker",
       "src/broker/principal-endpoint.ts#PrincipalHostEndpoint",
@@ -585,7 +585,7 @@
     "callPath": [
       "src/entry/oma.ts#main",
       "src/entry/oma-society.ts#main",
-      "src/tui/session.ts#PrincipalSession.start",
+      "src/runtime/engine/principal-session.ts#PrincipalSession.start",
       "src/storage/paths.ts#assertModelScope",
       "src/broker/public-dispatcher.ts#PublicDispatcher",
       "src/pi-extension.ts#extension",
@@ -605,12 +605,12 @@
     "requirements": [
       "FS-003"
     ],
-    "owner": "src/tui/session.ts#principalEnvironment",
+    "owner": "src/runtime/engine/principal-session.ts#principalEnvironment",
     "entrypoint": "src/entry/oma.ts#main",
     "callPath": [
       "src/entry/oma.ts#main",
       "src/entry/oma-society.ts#main",
-      "src/tui/session.ts#principalEnvironment"
+      "src/runtime/engine/principal-session.ts#principalEnvironment"
     ],
     "negativeTests": [
       "test/model-scope.test.ts#AV3"
@@ -797,10 +797,10 @@
       "src/entry/personal-host.ts#personalMain",
       "src/entry/oma-society.ts#piPackages",
       "src/entry/oma-mac.ts#packages",
-      "src/tui/login.ts#runEngineLogin",
+      "src/runtime/engine/login.ts#runEngineLogin",
       "src/runtime/user-files.ts#ensureUserDirectory",
-      "src/runtime/pi-packages.ts#packageCommand",
-      "src/runtime/pi-packages.ts#writePackageIndex",
+      "src/runtime/packages/store.ts#packageCommand",
+      "src/runtime/packages/store.ts#writePackageIndex",
       "src/runtime/personal-settings.ts#reconcilePersonalSettings",
       "src/runtime/personal-settings.ts#updatePersonalSettings",
       "src/runtime/user-files.ts#readUserFile",

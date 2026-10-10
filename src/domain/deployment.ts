@@ -31,7 +31,11 @@ export const DEPLOYMENT_LAYOUT = Object.freeze({
   // TUI-003: the host product's files, relative to the installation. The
   // installation is mounted into every Resident, so these are hidden there;
   // nothing a model runs may read the product surface's code.
-  productSurface: Object.freeze(["dist/src/tui", "dist/src/entry/oma.js", "src/tui", "src/entry/oma.ts", "dist/src/entry/prepare-society.js", "src/entry/prepare-society.ts", "dist/src/runtime/society-preparation.js", "src/runtime/society-preparation.ts", "dist/src/entry/pi-interactive.js", "src/entry/pi-interactive.ts",
+  productSurface: Object.freeze(["dist/src/tui", "dist/src/application", "src/application",
+    "dist/src/runtime/engine", "src/runtime/engine",
+    "dist/src/domain/settings-policy.js", "src/domain/settings-policy.ts",
+    "dist/src/domain/surface-bounds.js", "src/domain/surface-bounds.ts",
+    "dist/src/entry/oma.js", "src/tui", "src/entry/oma.ts", "dist/src/entry/prepare-society.js", "src/entry/prepare-society.ts", "dist/src/runtime/society-preparation.js", "src/runtime/society-preparation.ts", "dist/src/entry/pi-interactive.js", "src/entry/pi-interactive.ts",
     "dist/src/runtime/pi-interactive.js", "src/runtime/pi-interactive.ts",
     "dist/src/pi-compat/interactive-tool-setup.js", "src/pi-compat/interactive-tool-setup.ts",
     "dist/src/pi-compat/interactive-tools.js", "src/pi-compat/interactive-tools.ts", "src/pi-compat/pi-private.d.ts",

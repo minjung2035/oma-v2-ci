@@ -15,7 +15,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { assertModelScope, modelWorkspacePathAt, sessionDirPathAt, workspacePathAt, runnerSessionDirPathAt, runnerViewPathAt, agentRootPathAt } from "../src/storage/paths.js";
-import { principalEnvironment, principalWorkspace, PrincipalSession } from "../src/tui/session.js";
+import { principalEnvironment, principalWorkspace, PrincipalSession } from "../src/runtime/engine/principal-session.js";
 import { planPiSpawn } from "../src/runtime/pi-spawn-plan.js";
 import { piAgentDir } from "../src/runtime/pi-runtime.js";
 import { guardWorkspaceTools } from "../src/extension/workspace-guard.js";

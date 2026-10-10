@@ -5,7 +5,7 @@ import { RESIDENT_TEST_OPTIONS } from "./fixtures/resident.js";
 import assert from "node:assert/strict";
 import { withScenario } from "./fixtures/scenario.js";
 import { call, text, tools, toolResults } from "./fixtures/scripted-provider.js";
-import { readSettings, writeSettings } from "../src/tui/sources/settings.js";
+import { readSettings, writeSettings } from "../src/application/settings.js";
 import { resolvedSpecOf } from "../src/authority.js";
 
 const create = "printf 'Review the implementation independently.\\n' > brief.txt && oma agent create peer --from HEAD --file brief.txt --request delegate-peer";

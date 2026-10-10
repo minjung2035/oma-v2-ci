@@ -1,5 +1,51 @@
 # OMA v2 — 현재 검증 상태
 
+## 모듈 독립성 (2026-10-10, DR41)
+
+기준 `babe732`에서 TUI 효과·Principal 수명·설정과 package/Platform 책임을 분리했다.
+TUI는 Application/Runtime 저장·프로세스 구현을 import하지 않는다. 두 독립 빌드가 전체 Runtime·
+Application·Broker·Store 없이 컴파일·로드되고 Extension의 검증된 vendor와 Pi manifest를 포함한다.
+서브에이전트는 사용하지 않았다. 이전 배치의 suite·native 증거를 이번 변경의 실행으로 재사용하지 않는다.
+
+집중 MJS 첫 실행 123 PASS / 173 FAIL은 이동한 소스의 controlled import 경로와 owner oracle의
+경로가 이전 위치를 가리킨 실패다. 실제 새 owner에 연결하고 Application의 기존 surface 검사 범위도
+보존한 재실행은 296/296 PASS다. 독립 산출물 build/load·vendor 변조·기존 출력 교체 거절은 2/2 PASS다.
+TS 집중 첫 실행은 165 PASS / 1 FAIL이었다. Principal child의 기록을 50ms 뒤에 가정한 fixture를
+실제 첫 기록 관측 뒤 검사하도록 정정했다. receipt unknown·busy·Human 입력 순서의 assertion은 유지한다.
+첫 build/typecheck는 shebang 앞에 import가 놓여 실패했고 첫 structure 검사 5건은 private import 경로가
+남아 실패했다. shebang과 공개 import를 수정한 build/typecheck·rule check는 통과했다.
+
+정정 뒤 Principal·package·Society port·실제 Resident sandbox 집중 검증은 58/58 PASS,
+최종 모듈·독립 산출물·입력 identity·surface gate oracle은 33/33 PASS다. 첫 전체 architecture gate의
+문서 링크 6건은 이동 전 파일을 가리켜 거절됐다. 현재 owner로 링크를 갱신했다.
+첫 전체 local suite는 3,961 PASS / 29 FAIL이다(414 files; serial 9 PASS + parallel 3,952 PASS).
+15,433개 입력의 실행 전후 변경은 0건이다. 27건은 entry 함수만 추출한 package ownership fixture에
+새 directory port가 빠져 실패했다. port를 공급하고 index 호출이 그 port를 받는지 검증한다.
+2건은 consistency owner 경로와 N-001 architecture hash가 이전 값을 가리킨 실패다. Human이 지정한
+DR41 경계 변경을 대조하고 현재 규범 hash·traceability 및 owner 경로를 갱신한다.
+첫 실행의 실패를 최종 PASS로 바꾸지 않는다. 정정 뒤 고정한 최종 runtime 입력 sha256는 `5539955a6f8dd31eac0858934acb9d82d3ee87019c0046cb0afdefc56ba8097f`다.
+
+| 최종 실행 | 결과 | 범위 |
+|---|---|---|
+| 전체 local suite | PASS: 3,990/3,990 | serial 9 + parallel 3,981; fail/cancel/skip/todo 0; 414 files, parallel 412, concurrency 8 |
+| actual crash lane | EXECUTED+PASS: 63/63 | 실제 primitive SIGSTOP·부모 SIGKILL·재시작·반복 복구; VM power loss/entrypoint crash 증거는 아님 |
+| 독립 TUI·Extension | BUILD+LOAD PASS | manifest·declaration·공개 API 전체 로딩·vendor copy 검증·변조 및 기존 출력 교체 거절 |
+| build/typecheck/architecture | PASS | inventory·rules·dependencies·transactions·durable boundaries·documents·spec inventory |
+
+전체 suite와 crash의 15,433개 입력 bytes는 동일하고 전후 변경은 0건이다. 결과 기록과 evidence는
+이 실행 후 작성한 입력이다. 코드 bytes는 바꾸지 않았으며 후속 기록에는 structure/문서/input 검사를
+별도로 적용한다. 직접 검토한 변경 생산 delta는 49개, 전체 변경 생산 경로는 55개다. 상속된
+미검토 50개를 유지한다. 이동된 211개 named declaration의 emitted representation을 비교하고,
+바뀐 runtime body 세 곳의 wording/directory port 주입을 직접 검토했다. type-only 선언은 emit에서
+지워지므로 이 비교를 타입 계약 검증으로 대신하지 않는다. source graph는 430 files / 1,802 runtime
+edges / 471 type-only edges / runtime cycles 0이며 Store type-only SCC 한 묶음은 남는다.
+단일 feature의 변경 비용 감소나 평점은 추정하지 않고 전체 changeset과 기존 owner inventory를
+구분한다. 원시 로그와 최종 독립 산출물은 `/home/dev/oma-audit-artifacts/modules-2026-10-10`에 보존하고
+명령·로그 hash·공통 입력 map은 [DR41 evidence](../../test/audit/modules-2026-10-10.evidence.json)에 기록했다.
+검증의 현재 digest field는 전체 local gate 입력을 결박한다. runtime 뒤 작성한 결과 기록의 bytes까지
+이미 실행했다고 주장하지 않는다. macOS native·VM power loss·paid provider·release qualification은
+Linux 배치에서 NOT_RUN이다. 기존 시작 시간 목표는 이 배치에서 측정·개선하지 않았다.
+
 ## 추가 아키텍처 감사 (2026-10-10, DR40)
 
 기준 `3b9bcea`에서 Human이 지정한 A-01~A-11을 구현했다. 계약·effect·capability의
@@ -154,7 +200,7 @@ native·macOS VM boot·power loss는 미실행이다. 이전 kernel/crash PASS�
 충족했다고 주장할 수 없다. raw log는 `/tmp/oma-host-ownership-2026-10-09`에 보존한다.
 
 현재 구조 검사의 입력 identity(생성 자체는 runtime PASS가 아니다):
-verification input digest `807a6470cfef16de672b14557972f3b257f199cb2f6a0802ca63bde81c192e1f` (15419 files).
+verification input digest `25d9be7d9750b9188adfecd9c7a63a6ba60681bb382b3a1e1f5922e187f32ad4` (15433 files).
 
 ## 이전 실행 결과: 지정한 제한 제거·기능 복구 (2026-10-09, DR37)
 

@@ -21,7 +21,7 @@ import { residentOptions, prepareResident, RESIDENT_TEST_OPTIONS } from "./fixtu
 import { spawnSandboxed } from "../src/process/async.js";
 import { RESIDENT_PATHS } from "../src/sandbox.js";
 import { resolvePiRuntime } from "../src/runtime/pi-runtime.js";
-import { sessionArgv } from "../src/tui/session.js";
+import { sessionArgv } from "../src/runtime/engine/principal-session.js";
 
 const LIBDIR = fileURLToPath(new URL("../../", import.meta.url));
 const LIMITS = { frameBytes: 1 << 20, idleStreamSeconds: 60, receiptWaitSeconds: 30, batchMaxMessages: 4, mailBodyBytes: 1 << 16, addresses: 64, contextBytes: 1 << 20, bundleBytes: 1 << 20 };

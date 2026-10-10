@@ -1,3 +1,5 @@
+import type { PromptOutcome } from "../protocol/settings.js";
+export type { PromptOutcome } from "../protocol/settings.js";
 /** TUI-023: one bounded Human prompt draft.
  *
  * Admission, Unicode editing and submission are one state machine because an
@@ -5,7 +7,7 @@
  * mistaken for the Human's complete request. This module performs no I/O and
  * does not word notices; it reports closed transitions to the TUI model.
  */
-import { humanPromptFitsFrame } from "./limits.js";
+import { humanPromptFitsFrame } from "../domain/surface-bounds.js";
 
 /** Why the draft is refusing to grow, or null when it is not.
  *
@@ -27,18 +29,6 @@ export type PromptTransition =
   | { readonly kind: "show-limit"; readonly draft: PromptDraft; readonly cause: PromptOverflow }
   | { readonly kind: "clear-limit"; readonly draft: PromptDraft }
   | { readonly kind: "submit"; readonly draft: PromptDraft; readonly text: string };
-
-/** What the session did with a submitted prompt, answered in the same step it
- * was submitted.
- *
- * The transcript shows what was accepted, so acceptance cannot be something
- * the screen learns later: a prompt echoed first and refused afterwards reads
- * exactly like a prompt the Principal is working on, and the Human has no way
- * to tell those apart -- nor anything left to retype from.
- */
-export type PromptOutcome =
-  | { readonly kind: "accepted" }
-  | { readonly kind: "refused"; readonly reason: string };
 
 export const EMPTY_PROMPT: PromptDraft = Object.freeze({ text: "", overflow: null });
 const graphemes = new Intl.Segmenter(undefined, { granularity: "grapheme" });

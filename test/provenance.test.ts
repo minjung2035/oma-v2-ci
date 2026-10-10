@@ -125,7 +125,7 @@ test("D25: the spawn plans write the verified list the engine reads, in the same
   // pi-spawn-plan.ts mirror the constant because the extension's files may not
   // be imported there (PI-001), so a test binds the mirror.
   const { VERIFIED_EXTENSIONS_ENV } = await import("../src/pi-extension.js");
-  const { sessionEnv } = await import("../src/tui/session.js");
+  const { sessionEnv } = await import("../src/runtime/engine/principal-session.js");
   const spawnPlan = await import("../src/runtime/pi-spawn-plan.js");
   assert.equal(VERIFIED_EXTENSIONS_ENV, "OMA_VERIFIED_EXTENSIONS");
   assert.equal(spawnPlan.VERIFIED_EXTENSIONS_ENV, VERIFIED_EXTENSIONS_ENV);

@@ -14,7 +14,7 @@ import { DEPLOYMENT_LAYOUT } from "../domain/deployment.js";
 import { readSessionBirth } from "../runtime/session-mode.js";
 import { sessionBirthForHistory, sessionHistoryDirectories } from "../runtime/session-catalog.js";
 import { personalExtensions, personalExtensionEntry, updatePersonalSettings, type PersonalSettingsLocation } from "../runtime/personal-settings.js";
-import { packageResourcePaths, readPackageIndex } from "../runtime/pi-packages.js";
+import { packageResourcePaths, readPackageIndex } from "../runtime/packages/index.js";
 import { assertExtensionIntegrity, verifiedPaths } from "../runtime/extension-integrity.js";
 import { ExtensionModules } from "../runtime/extension-modules.js";
 import { PI_AGENT_DIR_ENV, preparePiRetry } from "../runtime/pi-runtime.js";

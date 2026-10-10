@@ -15,7 +15,7 @@
  */
 import { truncateToWidth, wrapTextWithAnsi, type Component } from "@earendil-works/pi-tui";
 import { UNSEEN_EXCEPT_LAYOUT } from "../domain/unseen-text.js";
-import { COMPACT_TOOL_BOUNDS, DURATION_UNITS } from "./limits.js";
+import { COMPACT_TOOL_BOUNDS, DURATION_UNITS } from "../domain/surface-bounds.js";
 
 /** The theme a row is drawn with; the engine's Theme satisfies it. */
 export interface CompactTheme {

@@ -9,13 +9,13 @@ import { SURFACE_LIMITS, planToolSurface, type ToolSurfaceConfig } from "../src/
 import { INITIAL, step, type PanelData } from "../src/tui/model.js";
 import { render } from "../src/tui/view/index.js";
 import { unknownDashboard } from "./fixtures/dashboard.js";
-import { WORKER_LIMIT, commitField, readSettings } from "../src/tui/sources/settings.js";
+import { WORKER_LIMIT, commitField, readSettings } from "../src/application/settings.js";
 // Containment is the loader's rule, so it is asked of the loader. The screen
 // consuming it is proved in `test/config-bundle-owner.test.mjs`.
 import { configurationLayout as layoutOf } from "../src/config/operations.js";
-import { readExtensions, toggleExtension } from "../src/tui/sources/extensions.js";
-import { parseMessage, principalMailbox, readBody, readMailbox, unreadCount } from "../src/tui/sources/mail.js";
-import { READ_BOUNDS } from "../src/tui/limits.js";
+import { readExtensions, toggleExtension } from "../src/application/extensions.js";
+import { parseMessage, principalMailbox, readBody, readMailbox, unreadCount } from "../src/application/mail.js";
+import { READ_BOUNDS } from "../src/domain/surface-bounds.js";
 
 const FRAME_BYTES = 262144;
 

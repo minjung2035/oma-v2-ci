@@ -2,7 +2,7 @@ import {
   EDITABLE_FIELD_DESCRIPTORS,
   type EditableField,
   type EditableFieldDescriptor,
-} from "../src/tui/sources/settings.js";
+} from "../src/application/settings.js";
 
 const descriptor = null as unknown as EditableFieldDescriptor;
 const complete = {

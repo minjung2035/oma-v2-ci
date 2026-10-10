@@ -7,7 +7,7 @@
 import type { AgentStatus, HostConfigV1 } from "../../implementation/contracts.js";
 import { NO_UNIT_REASON } from "../protocol/status-view.js";
 import type { DashboardData } from "./model.js";
-import type { Observation } from "./transport.js";
+import type { Observation } from "../protocol/status-view.js";
 import { surfaceWords } from "./words.js";
 
 export interface DashboardInput {

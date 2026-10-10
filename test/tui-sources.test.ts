@@ -11,18 +11,18 @@ import { createCompleteConfigurationFixture } from "./fixtures/configuration.js"
 import {
   INITIAL_WORKERS, PRINCIPAL_MODEL, WORKER_LIMIT, WORKER_MODEL, WORKER_PROFILE,
   applyField, fieldsOf, readSettings, revisionFor, settingsOf, writeSettings,
-} from "../src/tui/sources/settings.js";
-import { CORE_EXTENSION, nextEntries, readExtensions, toggleExtension } from "../src/tui/sources/extensions.js";
-import { parseMessage, principalMailbox, readBody, readMailbox, unreadCount } from "../src/tui/sources/mail.js";
+} from "../src/application/settings.js";
+import { CORE_EXTENSION, nextEntries, readExtensions, toggleExtension } from "../src/application/extensions.js";
+import { parseMessage, principalMailbox, readBody, readMailbox, unreadCount } from "../src/application/mail.js";
 import { dashboardData, type DashboardInput } from "../src/tui/dashboard.js";
 import { dashboardRows } from "../src/tui/view/dashboard.js";
 
 /** Observation to words: the data layer interprets, the view words it. These
  * tests hold the whole chain, so a regression in either layer shows here. */
 const dashboardLines = (input: DashboardInput) => dashboardRows(dashboardData(input));
-import { TuiTransport } from "../src/tui/transport.js";
+import { TuiTransport } from "../src/application/status-observation.js";
 import { STATUS_STALE_MS, encodeStatusView, statusViewPath } from "../src/protocol/status-view.js";
-import { sessionArgv } from "../src/tui/session.js";
+import { sessionArgv } from "../src/runtime/engine/principal-session.js";
 
 function digest(text: string): string { return createHash("sha256").update(text).digest("hex"); }
 

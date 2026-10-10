@@ -2,8 +2,8 @@
   {
     "requirement": "N-001",
     "source": "docs/implementation-spec.md",
-    "digest": "eea1f8cab3a2f43caed3f7dabeaa6160f8faa2458e1888bc02d509ba5c108d8a",
-    "normativeText": "**MUST [N-001]** 구현의 상위 규범은 [docs/architecture.md](architecture.md)이며, WP01 D01–D06 대조 후 이 계약의 기준본 SHA-256은 `74ceea98494404924de5c3005390e094226b71359c9ac1eb05f85264c5f5daf1`이다. 구현 시작 및 release 때 기준본 hash를 확인한다. hash 변경 시 이 계약을 자동 적용하지 않고 차이를 검토한다.",
+    "digest": "82b1e9688abe320fce01acccbfee0064228df713763c9421b8cea10a010cca75",
+    "normativeText": "**MUST [N-001]** 구현의 상위 규범은 [docs/architecture.md](architecture.md)이며, WP01 D01–D06 및 DR41 모듈 경계 대조 후 이 계약의 기준본 SHA-256은 `39613e469209210632007e5f8f91293ff288dc2785dcda010b62f55fe7250e88`이다. 구현 시작 및 release 때 기준본 hash를 확인한다. hash 변경 시 이 계약을 자동 적용하지 않고 차이를 검토한다.",
     "applicability": "unclassified",
     "rationale": "Requires production-path review; no inference from test names.",
     "owner": null,
@@ -461,12 +461,12 @@
     "normativeText": "**MUST [FS-003]** CLI cache는 `/home/agent/.local/state/oma/requests/<key>.json`이며 freeze된 request, body/bundle digest, 마지막 receipt만 저장한다. broker 원본이 아니고 모델이 변조할 수 있다. broker는 항상 다시 검증한다. Principal CLI의 대응 cache는 자기 private scratch 안에 둔다. 여기서 별도 queue/자동 replay engine을 만들지 않는다.",
     "applicability": "unclassified",
     "rationale": "Requires production-path review; no inference from test names.",
-    "owner": "src/tui/session.ts#principalEnvironment",
+    "owner": "src/runtime/engine/principal-session.ts#principalEnvironment",
     "entrypoint": "src/entry/oma.ts#main",
     "callPath": [
       "src/entry/oma.ts#main",
       "src/entry/oma-society.ts#main",
-      "src/tui/session.ts#principalEnvironment"
+      "src/runtime/engine/principal-session.ts#principalEnvironment"
     ],
     "negativeTests": [
       "test/model-scope.test.ts#AV3"
@@ -1196,7 +1196,7 @@
     "callPath": [
       "src/entry/oma.ts#main",
       "src/entry/oma-society.ts#main",
-      "src/tui/session.ts#PrincipalSession",
+      "src/runtime/engine/principal-session.ts#PrincipalSession",
       "src/runtime/principal-delivery.ts#PrincipalDelivery",
       "src/runtime/principal-delivery.ts#principalHostBroker",
       "src/broker/principal-endpoint.ts#PrincipalHostEndpoint",
@@ -1252,7 +1252,7 @@
     "callPath": [
       "src/entry/oma.ts#main",
       "src/entry/oma-society.ts#main",
-      "src/tui/session.ts#PrincipalSession.start",
+      "src/runtime/engine/principal-session.ts#PrincipalSession.start",
       "src/storage/paths.ts#assertModelScope",
       "src/broker/public-dispatcher.ts#PublicDispatcher",
       "src/pi-extension.ts#extension",
@@ -2662,10 +2662,10 @@
       "src/entry/personal-host.ts#personalMain",
       "src/entry/oma-society.ts#piPackages",
       "src/entry/oma-mac.ts#packages",
-      "src/tui/login.ts#runEngineLogin",
+      "src/runtime/engine/login.ts#runEngineLogin",
       "src/runtime/user-files.ts#ensureUserDirectory",
-      "src/runtime/pi-packages.ts#packageCommand",
-      "src/runtime/pi-packages.ts#writePackageIndex",
+      "src/runtime/packages/store.ts#packageCommand",
+      "src/runtime/packages/store.ts#writePackageIndex",
       "src/runtime/personal-settings.ts#reconcilePersonalSettings",
       "src/runtime/personal-settings.ts#updatePersonalSettings",
       "src/runtime/user-files.ts#readUserFile",
@@ -2905,14 +2905,14 @@
     "normativeText": "**MUST [TUI-005]** Principal의 model 선택 대상은 host가 `HostConfigV1`에 선언한 model profile 이름뿐이다. caller는 provider, URL, header, credential, 가격, token 상한을 지정하지 못한다. 선택은 host authority를 고쳐 쓰는 것이므로 CFG-005의 policy revision 갱신을 동반하고, **다음 Principal session부터** 적용한다. 진행 중인 session이나 stream의 model을 바꾸지 않는다.",
     "applicability": "unclassified",
     "rationale": "Requires production-path review; no inference from test names.",
-    "owner": "src/tui/sources/settings.ts#applyField",
+    "owner": "src/domain/settings-policy.ts#applyField",
     "entrypoint": "src/entry/oma.ts#main",
     "callPath": [
       "src/entry/oma.ts#main",
       "src/entry/oma-society.ts#main",
       "src/tui/app.ts#TuiApp",
-      "src/tui/sources/settings.ts#applyField",
-      "src/tui/sources/settings.ts#writeSettings"
+      "src/domain/settings-policy.ts#applyField",
+      "src/application/settings.ts#writeSettings"
     ],
     "negativeTests": [
       "test/tui-sources.test.ts#T93",
@@ -2954,14 +2954,14 @@
     "normativeText": "**MUST [TUI-007; arch §23.6]** 값 확정 시 저장하고 별도 Save 단계나 dirty state를 두지 않는다. 편집 중 Esc는 확정 전 값으로 되돌린다. 화면은 각 항목의 **적용 시점**을 함께 표시한다.",
     "applicability": "unclassified",
     "rationale": "Requires production-path review; no inference from test names.",
-    "owner": "src/tui/sources/settings.ts#applyField",
+    "owner": "src/domain/settings-policy.ts#applyField",
     "entrypoint": "src/entry/oma.ts#main",
     "callPath": [
       "src/entry/oma.ts#main",
       "src/entry/oma-society.ts#main",
       "src/tui/app.ts#TuiApp",
-      "src/tui/sources/settings.ts#applyField",
-      "src/tui/sources/settings.ts#writeSettings"
+      "src/domain/settings-policy.ts#applyField",
+      "src/application/settings.ts#writeSettings"
     ],
     "negativeTests": [
       "test/tui-sources.test.ts#T93",
@@ -2980,14 +2980,14 @@
     "normativeText": "**MUST [TUI-008]** `initialResidents`에 대응하는 항목은 bootstrap seed로만 표시하고 실행 중 society의 Resident 수를 바꾸는 값으로 제시하지 않는다. LIFE-009에 따라 값 변경이 다음 재시작에 agent를 자동 생성·삭제·중지하지 않는다. 현재 Resident를 늘리거나 줄이는 조작은 설정 항목이 아니라 명시적 lifecycle 행위로 분리해 표시한다.",
     "applicability": "unclassified",
     "rationale": "Requires production-path review; no inference from test names.",
-    "owner": "src/tui/sources/settings.ts#applyField",
+    "owner": "src/domain/settings-policy.ts#applyField",
     "entrypoint": "src/entry/oma.ts#main",
     "callPath": [
       "src/entry/oma.ts#main",
       "src/entry/oma-society.ts#main",
       "src/tui/app.ts#TuiApp",
-      "src/tui/sources/settings.ts#applyField",
-      "src/tui/sources/settings.ts#writeSettings"
+      "src/domain/settings-policy.ts#applyField",
+      "src/application/settings.ts#writeSettings"
     ],
     "negativeTests": [
       "test/tui-sources.test.ts#T93",
@@ -3006,14 +3006,14 @@
     "normativeText": "**MUST [TUI-009]** 이미 생성된 Resident의 `ResolvedAgentSpec.modelProfile` 참조는 LIFE-008에 따라 고정이다. 설정 화면은 참조가 가리키는 profile의 내용만 바꾸고 참조 자체를 바꾸지 않는다. 저장된 참조를 현재 배포가 해석하지 못하면 `UNSUPPORTED_PROFILE`로 차단하고 임의 profile로 대체하지 않는다. config 의미가 바뀌면 CFG-005/D02의 정책에 따라 policy revision을 갱신한다.",
     "applicability": "unclassified",
     "rationale": "Requires production-path review; no inference from test names.",
-    "owner": "src/tui/sources/settings.ts#applyField",
+    "owner": "src/domain/settings-policy.ts#applyField",
     "entrypoint": "src/entry/oma.ts#main",
     "callPath": [
       "src/entry/oma.ts#main",
       "src/entry/oma-society.ts#main",
       "src/tui/app.ts#TuiApp",
-      "src/tui/sources/settings.ts#applyField",
-      "src/tui/sources/settings.ts#writeSettings"
+      "src/domain/settings-policy.ts#applyField",
+      "src/application/settings.ts#writeSettings"
     ],
     "negativeTests": [
       "test/tui-sources.test.ts#T93",
@@ -3032,14 +3032,14 @@
     "normativeText": "**MUST [TUI-010; arch §23.7]** Extensions 화면의 목록 출처는 host가 `installation.libdir` 아래에 이미 배치한 파일과, [DR25](design-revisions.md)에 따라 Human이 `oma pi install`로 oma의 패키지 저장소(`installation.packages`)에 설치한 패키지의 extension 파일뿐이다. 설치는 `oma pi`의 명시 명령으로만 하며 화면에서의 임의 경로 입력, 자동 탐색, 네트워크 설치를 허용하지 않는다. core OMA extension은 항상 첫 항목으로 고정하고 해제할 수 없다. 선택한 항목의 SHA-256을 기록하고 실행 직전에 다시 확인한다. [DR26](design-revisions.md)에 따라 확장 실행 코드는 설정 문서의 1 MiB/합계 8 MiB 제한에 포함하지 않으며, 고정 메모리로 파일을 해시하고 읽기 전후 동일성을 확인한다. 추가 extension은 Pi host process와 동일 권한의 trusted deployment code이며 model tool로 취급하지 않는다. 이 화면은 host 전용이고 모델·workspace·mail 내용이 목록·선택·적용에 영향을 주지 못한다.",
     "applicability": "unclassified",
     "rationale": "Requires production-path review; no inference from test names.",
-    "owner": "src/tui/sources/extensions.ts#toggleExtension",
+    "owner": "src/application/extensions.ts#toggleExtension",
     "entrypoint": "src/entry/oma.ts#main",
     "callPath": [
       "src/entry/oma.ts#main",
       "src/entry/oma-society.ts#main",
       "src/tui/app.ts#TuiApp",
-      "src/tui/sources/extensions.ts#readExtensions",
-      "src/tui/sources/extensions.ts#toggleExtension"
+      "src/application/extensions.ts#readExtensions",
+      "src/application/extensions.ts#toggleExtension"
     ],
     "negativeTests": [
       "test/tui-sources.test.ts#T97",
@@ -3057,13 +3057,13 @@
     "normativeText": "**MUST [TUI-011; arch §23.8]** Mail 화면의 읽지 않음 표시는 기존 `deliveries` flag에서 파생한 값이며 새 durable 상태가 아니다. ACK 조작은 MAIL-009의 의미만 갖는다. UI 문구가 `presented=understood`, `ack=approved`, `ack=읽음 완료`를 암시해서는 안 된다(NEG-002). 기본 대상은 Principal 수신 메일이며 commons/topic을 Principal prompt에 자동 주입하지 않는 A-003은 그대로 유지한다.",
     "applicability": "unclassified",
     "rationale": "Requires production-path review; no inference from test names.",
-    "owner": "src/tui/sources/mail.ts#readMailbox",
+    "owner": "src/application/mail.ts#readMailbox",
     "entrypoint": "src/entry/oma.ts#main",
     "callPath": [
       "src/entry/oma.ts#main",
       "src/entry/oma-society.ts#main",
       "src/tui/app.ts#TuiApp",
-      "src/tui/sources/mail.ts#readMailbox"
+      "src/application/mail.ts#readMailbox"
     ],
     "negativeTests": [
       "test/tui-sources.test.ts#T98",
@@ -3086,7 +3086,7 @@
     "callPath": [
       "src/entry/oma.ts#main",
       "src/entry/oma-society.ts#main",
-      "src/tui/transport.ts#TuiTransport.status",
+      "src/application/status-observation.ts#TuiTransport.status",
       "src/tui/dashboard.ts#dashboardLines"
     ],
     "negativeTests": [
@@ -3132,7 +3132,7 @@
     "callPath": [
       "src/entry/oma.ts#main",
       "src/entry/oma-society.ts#main",
-      "src/tui/session.ts#PrincipalSession.start",
+      "src/runtime/engine/principal-session.ts#PrincipalSession.start",
       "src/entry/pi-interactive-host.ts#runInteractive",
       "src/tui/interactive-editor.ts#ownedEditor"
     ],
@@ -3159,7 +3159,7 @@
       "src/entry/oma-society.ts#main",
       "src/config/defaults.ts#defaultHostConfig",
       "src/runtime/pi-runtime.ts#resolvePiRuntime",
-      "src/tui/session.ts#PrincipalSession.start"
+      "src/runtime/engine/principal-session.ts#PrincipalSession.start"
     ],
     "negativeTests": [
       "test/pi-runtime.test.ts#T105",
@@ -3184,7 +3184,7 @@
       "src/entry/oma-society.ts#main",
       "src/config/defaults.ts#defaultHostConfig",
       "src/runtime/pi-runtime.ts#resolvePiRuntime",
-      "src/tui/session.ts#PrincipalSession.start"
+      "src/runtime/engine/principal-session.ts#PrincipalSession.start"
     ],
     "negativeTests": [
       "test/pi-runtime.test.ts#T105",
@@ -3209,7 +3209,7 @@
       "src/entry/oma-society.ts#main",
       "src/config/defaults.ts#defaultHostConfig",
       "src/runtime/pi-runtime.ts#resolvePiRuntime",
-      "src/tui/session.ts#PrincipalSession.start"
+      "src/runtime/engine/principal-session.ts#PrincipalSession.start"
     ],
     "negativeTests": [
       "test/pi-runtime.test.ts#T105",
@@ -3273,8 +3273,8 @@
       "src/tui/model.ts#step",
       "src/tui/prompt.ts#appendPrompt",
       "src/tui/transcript.ts#Transcript",
-      "src/tui/limits.ts#humanPromptFitsFrame",
-      "src/tui/session.ts#PrincipalSession.submit"
+      "src/domain/surface-bounds.ts#humanPromptFitsFrame",
+      "src/runtime/engine/principal-session.ts#PrincipalSession.submit"
     ],
     "negativeTests": [
       "test/tui-app.test.ts#T120",
@@ -3314,7 +3314,7 @@
       "src/entry/oma-society.ts#main",
       "src/config/defaults.ts#defaultHostConfig",
       "src/runtime/pi-runtime.ts#resolvePiRuntime",
-      "src/tui/session.ts#PrincipalSession.start"
+      "src/runtime/engine/principal-session.ts#PrincipalSession.start"
     ],
     "negativeTests": [
       "test/pi-runtime.test.ts#T105",

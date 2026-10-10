@@ -10,26 +10,26 @@
 import { randomBytes } from "node:crypto";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
-import type { ProtocolLimits } from "../../implementation/contracts.js";
-import { SOCIETY_FENCE_ENV, SOCIETY_FENCE_FD, stopOwnedChild, spawnOwnedRpc, spawnOwnedInteractive, type ChildProcess } from "../process/async.js";
-import { InteractiveChannel, INTERACTIVE_RPC_FD, INTERACTIVE_UI_FD } from "../runtime/interactive-channel.js";
-import type { FencedEngine } from "../runtime/host-tenure.js";
-import type { PiRpcStreams } from "../runtime/pi-rpc.js";
+import type { ProtocolLimits } from "../../../implementation/contracts.js";
+import { SOCIETY_FENCE_ENV, SOCIETY_FENCE_FD, stopOwnedChild, spawnOwnedRpc, spawnOwnedInteractive, type ChildProcess } from "../../process/async.js";
+import { InteractiveChannel, INTERACTIVE_RPC_FD, INTERACTIVE_UI_FD } from "../interactive-channel.js";
+import type { FencedEngine } from "../host-tenure.js";
+import type { PiRpcStreams } from "../pi-rpc.js";
 import type { Socket } from "node:net";
-import { HOST_CHANNEL_ENV, HOST_CHANNEL_FD, encodeHostMessage } from "../protocol/host-channel.js";
-import { assertModelScope, modelWorkspacePathAt, projectGitPathAt, runnerViewPathAt, sessionDirPathAt } from "../storage/paths.js";
-import { PiRpcClient, SKIPPED_EVENT, alarm, assertPiRpcLimits, commandWasNotWritten, type PiEvent, type PiRpcLimits } from "../runtime/pi-rpc.js";
-import { assertExtensionIntegrity, verifiedPaths, type VerifiedExtension } from "../runtime/extension-integrity.js";
-import { PI_AGENT_DIR_ENV, preparePiRetry } from "../runtime/pi-runtime.js";
-import { loadConfiguration } from "../config.js";
-import { StoreError } from "../domain/errors.js";
-import { errorWords } from "./words.js";
-import { storedMailBytes } from "../domain/mail-values.js";
-import { UNSEEN, UNSEEN_EXCEPT_LAYOUT } from "../domain/unseen-text.js";
-import { packageResourcePaths, packageStoreRoot, type PackageResourcePaths } from "../runtime/pi-packages.js";
-import { CONVERSATION_BOUNDS, TERMINAL_BOUNDS, humanPromptFitsFrame, humanPromptRequestId } from "./limits.js";
-import type { PromptOutcome } from "./prompt.js";
-import { PRINCIPAL_SYSTEM_PROMPT } from "../config/role-prompts.js";
+import { HOST_CHANNEL_ENV, HOST_CHANNEL_FD, encodeHostMessage } from "../../protocol/host-channel.js";
+import { assertModelScope, modelWorkspacePathAt, projectGitPathAt, runnerViewPathAt, sessionDirPathAt } from "../../storage/paths.js";
+import { PiRpcClient, SKIPPED_EVENT, alarm, assertPiRpcLimits, commandWasNotWritten, type PiEvent, type PiRpcLimits } from "../pi-rpc.js";
+import { assertExtensionIntegrity, verifiedPaths, type VerifiedExtension } from "../extension-integrity.js";
+import { PI_AGENT_DIR_ENV, preparePiRetry } from "../pi-runtime.js";
+import { loadConfiguration } from "../../config.js";
+import { StoreError } from "../../domain/errors.js";
+
+import { storedMailBytes } from "../../domain/mail-values.js";
+import { UNSEEN, UNSEEN_EXCEPT_LAYOUT } from "../../domain/unseen-text.js";
+import { packageResourcePaths, packageStoreRoot, type PackageResourcePaths } from "../packages/index.js";
+import { CONVERSATION_BOUNDS, TERMINAL_BOUNDS, humanPromptFitsFrame, humanPromptRequestId } from "../../domain/surface-bounds.js";
+import type { PromptOutcome } from "../../protocol/settings.js";
+import { PRINCIPAL_SYSTEM_PROMPT } from "../../config/role-prompts.js";
 
 export interface SessionPaths {
   readonly piCommand: string;
@@ -176,6 +176,8 @@ export function principalEnvironment(
 }
 
 export interface SessionSink {
+  /** Application owns product wording; headless consumers may keep raw errors. */
+  readonly errorWords?: (error: unknown) => string;
   /** P0-4: ownership begins before fallible RPC/UI setup, not at constructor return. */
   readonly onAcquire?: (engine: FencedEngine) => void;
   readonly onLine: (line: string) => void;
@@ -378,6 +380,9 @@ function queuePreviewLine(text: string): string {
 }
 
 export class PrincipalSession {
+  private errorWords(error: unknown): string {
+    return this.sink.errorWords ? this.sink.errorWords(error) : error instanceof Error ? error.message : String(error);
+  }
   private readonly rpc: PiRpcClient;
   private ui: InteractiveChannel | null = null;
   private ready = true;
@@ -490,7 +495,7 @@ export class PrincipalSession {
         this.closed = true;
         this.ui?.close();
         const reason = result.state === "failed"
-          ? `Session ended with an error: ${errorWords(result.error)}`
+          ? `Session ended with an error: ${this.errorWords(result.error)}`
           : "Session ended.";
         this.handBack(reason);
         this.owner = null;
@@ -524,7 +529,7 @@ export class PrincipalSession {
     if (paths.piAgentDir !== undefined) preparePiRetry(paths.piAgentDir);
     if (paths.interactiveEntry !== undefined) {
       if (paths.fence === undefined) throw new StoreError("UNSUPPORTED_PROFILE", "interactive session requires its lease descriptor");
-      const child = spawnOwnedInteractive(paths.piCommand, ["--import", new URL("../pi-compat/interactive-tool-setup.js", import.meta.url).href,
+      const child = spawnOwnedInteractive(paths.piCommand, ["--import", new URL("../../pi-compat/interactive-tool-setup.js", import.meta.url).href,
         paths.interactiveEntry, ...sessionArgv(paths, profile)], paths.workspace,
         { ...sessionEnv(env, profile, paths), OMA_UI_IDLE_SECONDS: String(limits.idleStreamSeconds),
           OMA_UI_RECEIPT_SECONDS: String(limits.receiptWaitSeconds), OMA_PROJECT_DISPLAY: paths.project ?? paths.workspace,
@@ -611,7 +616,7 @@ export class PrincipalSession {
   private write(text: string): void {
     void this.sendPrompt(this.nextRequestId(), text, "human").catch((error: unknown) => {
       if (!commandWasNotWritten(error)) return;
-      this.sink.onPromptFailed(text, errorWords(error));
+      this.sink.onPromptFailed(text, this.errorWords(error));
       this.release("human");
     });
   }

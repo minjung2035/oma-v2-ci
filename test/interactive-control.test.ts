@@ -4,7 +4,7 @@ import { once } from "node:events";
 import { mkdtempSync, mkdirSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { PrincipalSession } from "../src/tui/session.js";
+import { PrincipalSession } from "../src/runtime/engine/principal-session.js";
 import { tryHoldSociety } from "../src/runtime/society-lease.js";
 import { PiRpcClient, type PiEvent } from "../src/runtime/pi-rpc.js";
 

@@ -11,7 +11,7 @@ import { dashboardRows } from "../src/tui/view/dashboard.js";
 import type { DashboardData } from "../src/tui/model.js";
 import {
   WORKER_MODEL, WORKER_MODEL_PROFILE, commitField, engineModelChoiceOf, readSettings, workerModelText, writeSettings,
-} from "../src/tui/sources/settings.js";
+} from "../src/application/settings.js";
 
 const installation = { society: "demo", node: "/usr/bin/node", libdir: "/opt/oma/", rootfs: "/state/rootfs", deploymentDigest: "a".repeat(64) };
 

@@ -1,3 +1,5 @@
+import type { Observation } from "../protocol/status-view.js";
+export type { Observation } from "../protocol/status-view.js";
 /** TUI-012/021: where the Dashboard's broker-derived values come from.
  *
  * `status.get` answers only a caller inside an agent's systemd unit, and a
@@ -13,10 +15,6 @@ import { closeSync, constants, fstatSync, openSync, readSync } from "node:fs";
 import type { AgentStatus, ProtocolLimits } from "../../implementation/contracts.js";
 import type { ChannelLimits } from "../protocol/channel.js";
 import { STATUS_REFRESH_MS, STATUS_STALE_MS, decodeStatusView, statusViewPath } from "../protocol/status-view.js";
-
-export type Observation =
-  | { readonly kind: "observed"; readonly statuses: readonly AgentStatus[]; readonly observedAtMs: number }
-  | { readonly kind: "unknown"; readonly reason: string; readonly observedAtMs: number };
 
 export function limitsOf(limits: ProtocolLimits): ChannelLimits {
   return { frameBytes: limits.frameBytes, idleStreamSeconds: limits.idleStreamSeconds, receiptWaitSeconds: limits.receiptWaitSeconds };

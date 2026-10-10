@@ -7,17 +7,17 @@ import * as path from 'node:path';
 import { Script } from 'node:vm';
 import ts from 'typescript';
 
-const code = ts.transpileModule(readFileSync(process.env.OMA_LOGIN_SOURCE ?? 'src/tui/login.ts', 'utf8'), {
+const code = ts.transpileModule(readFileSync(process.env.OMA_LOGIN_SOURCE ?? 'src/runtime/engine/login.ts', 'utf8'), {
   compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
 }).outputText;
 function world({ spawnError, directoryError } = {}) {
   const child = new EventEmitter(), launches = [], directories = [];
   const deps = {
-    '../runtime/pi-runtime.js': { PI_AGENT_DIR_ENV: 'PI_CODING_AGENT_DIR',
+    '../pi-runtime.js': { PI_AGENT_DIR_ENV: 'PI_CODING_AGENT_DIR',
       resolvePiRuntime: () => ({ executable: '/fixture/node', args: ['engine.js'], agentDir: '/fixture/engine' }),
       piIsolationEnv: () => ({ PI_CODING_AGENT_DIR: '/fixture/engine', PI_CODING_AGENT_SESSION_DIR: '/fixture/history' }) },
-    '../process/async.js': { spawnInteractive(...args) { if (spawnError) throw spawnError; launches.push(args); return child; } },
-    '../runtime/user-files.js': { ensureOwnedUserDirectory(target) { directories.push(target); if (directoryError) throw directoryError; } },
+    '../../process/async.js': { spawnInteractive(...args) { if (spawnError) throw spawnError; launches.push(args); return child; } },
+    '../user-files.js': { ensureOwnedUserDirectory(target) { directories.push(target); if (directoryError) throw directoryError; } },
     'node:path': path,
   };
   const module = { exports: {} };

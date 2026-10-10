@@ -13,7 +13,7 @@ import { updatePersonalSettingsAsync } from "../runtime/personal-settings.js";
 import { macProjectExtensionSeed } from "../platform/host/personal-seed.js";
 import { isGuestHistoryReference } from "../protocol/guest-history.js";
 import { inspectMacGuestHistory } from "../platform/host/guest-histories.js";
-import { readSettingsForEditing, projectSettingsPath, roleSetOf } from "../tui/sources/settings.js";
+import { readSettingsForEditing, projectSettingsPath, roleSetOf } from "../application/settings.js";
 
 export async function personalMain(options: { readonly dataRoot: string; readonly cwd: string; readonly resume?: string;
   readonly packages?: string }): Promise<void> {

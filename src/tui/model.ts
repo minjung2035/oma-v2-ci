@@ -1,3 +1,5 @@
+import type { ApplyScope, ChoiceField, NumberField, LinkField, ConfigField } from "../protocol/settings.js";
+export type { ApplyScope, ChoiceField, NumberField, LinkField, ConfigField } from "../protocol/settings.js";
 /** TUI-007/008/010/011: the Control Panel state machine.
  *
  * This module is pure. It owns navigation, edit lifecycle and which effect a
@@ -7,42 +9,12 @@
  * and no separate save step here.
  */
 import type { Key } from "./keys.js";
-import { CONFIG_BOUNDS } from "./limits.js";
+import { CONFIG_BOUNDS } from "../domain/surface-bounds.js";
 import { EMPTY_PROMPT, appendPrompt, erasePrompt, pastePrompt, submitPrompt, type PromptDraft, type PromptOverflow, type PromptTransition } from "./prompt.js";
 import { assertNever } from "../domain/exhaustive.js";
 
 export type Category = "dashboard" | "config" | "mail";
 export const CATEGORIES: readonly Category[] = Object.freeze(["dashboard", "config", "mail"]);
-
-/** Arch §23.6: every setting carries when it actually takes effect. The UI
- * must never leave the user guessing why a value did not change yet.
- */
-export type ApplyScope =
-  | "immediate"
-  | "next-activation"
-  | "next-session"
-  | "restart"
-  | "bootstrap-only"
-  | "new-agents";
-
-/** WP15: why a field cannot be edited right now, said where the apply time
- * would be (no target, or a value that would change nothing), or null. */
-export interface ChoiceField {
-  readonly kind: "choice"; readonly id: string; readonly label: string;
-  readonly value: string; readonly options: readonly string[]; readonly apply: ApplyScope;
-  readonly blocked: string | null;
-}
-export interface NumberField {
-  readonly kind: "number"; readonly id: string; readonly label: string;
-  readonly value: number; readonly min: number; readonly max: number; readonly apply: ApplyScope;
-  readonly blocked: string | null;
-}
-export interface LinkField {
-  readonly kind: "link"; readonly id: string; readonly label: string;
-  /** What the link currently stands for, when it has a value to show. */
-  readonly value?: string;
-  readonly blocked?: string | null;
-}
 
 /** DR24: Config rows that open the engine's own lists -- every model of every
  * provider it is logged in to, then that model's effort levels -- in one go.
@@ -50,7 +22,6 @@ export interface LinkField {
  * next; a Worker's is saved in the project's settings. */
 export const ENGINE_LINKS = Object.freeze({ "principal-model": "principal-model", "worker-model": "worker-model" } as const);
 export type EngineCommand = (typeof ENGINE_LINKS)[keyof typeof ENGINE_LINKS];
-export type ConfigField = ChoiceField | NumberField | LinkField;
 
 /** TUI-010: `locked` marks the core OMA extension, which is always first and
  * cannot be cleared. It is not a styling hint.

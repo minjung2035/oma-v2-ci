@@ -2,9 +2,9 @@
  * This module interprets bytes; it does not acquire or publish package state. */
 import { readSync } from "node:fs";
 import { isAbsolute } from "node:path";
-import { StoreError } from "../domain/errors.js";
-import { PACKAGE_ARCHIVE_BOUNDS } from "../platform/package-archive.js";
-import type { StageArea } from "./local-package-stage.js";
+import { StoreError } from "../../domain/errors.js";
+import { PACKAGE_ARCHIVE_BOUNDS } from "../../domain/package-policy.js";
+import type { StageArea } from "../../ports/package-files.js";
 
 const USTAR = "ustar";
 const BLOCK = 512;

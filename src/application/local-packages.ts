@@ -59,9 +59,9 @@ import {
 import { PACKAGE_ARCHIVE_BOUNDS } from "../platform/package-archive.js";
 import { entryAt, openBeneath, withinDirectory } from "../storage/contained-fs.js";
 import { listOwnedDirectory, openOwnedDirectoryPath, removeOwnedFile, removeOwnedTree } from "../storage/directory.js";
-import { STAGING_PREFIX, collectStageStray, hostStaging, linuxStaging, type StageArea } from "./local-package-stage.js";
-import { extractTar } from "./package-tar.js";
-import { PACKAGE_LOCAL_DIR, configuredPackageSources, escapes, packageStoreRoot, resourceEntryProblem } from "./pi-packages.js";
+import { STAGING_PREFIX, collectStageStray, hostStaging, linuxStaging, type StageArea } from "../platform/package-staging.js";
+import { extractTar } from "../runtime/packages/tar.js";
+import { PACKAGE_LOCAL_DIR, configuredPackageSources, escapes, packageStoreRoot, resourceEntryProblem } from "../runtime/packages/index.js";
 /** The conventional directories the engine's resolver collects a package's
  * skills, prompt templates, themes and extensions from when its `pi`
  * manifest does not declare them. */

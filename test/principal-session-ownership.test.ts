@@ -8,7 +8,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync } from "node:f
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { HostTenure, type FencedEngine } from "../src/runtime/host-tenure.js";
-import { PrincipalSession } from "../src/tui/session.js";
+import { PrincipalSession } from "../src/runtime/engine/principal-session.js";
 import { PiRpcClient } from "../src/runtime/pi-rpc.js";
 import { PrincipalDelivery } from "../src/runtime/principal-delivery.js";
 import { TEST_VIEW_LIMITS } from "./fixtures/limits.js";
@@ -69,7 +69,8 @@ test("V09A: an unanswered delivery keeps the session, so a Human prompt waits in
     assert.equal(s.session.busy, true, "an ambiguous accept timeout freed the session");
     // The Human types meanwhile: the prompt waits, it is not written into the run.
     assert.deepEqual(s.session.submit("while unsure"), { kind: "accepted" });
-    await new Promise(resolve => setTimeout(resolve, 50));
+    await until("the delivery command to reach the engine", () => s.written().length > 0);
+    assert.equal(s.session.busy, true);
     assert.deepEqual(s.written(), [`/oma-deliver silent:${BATCH_ID}`]);
     // The engine answers late and the run settles: only now does the Human's go.
     process.kill(s.pid(), "SIGUSR1");

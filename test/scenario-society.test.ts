@@ -16,7 +16,7 @@ import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 
 import { dirname, join } from "node:path";
 import { withScenario, type Scenario } from "./fixtures/scenario.js";
 import { call, continuesTurn, delayed, lastUserText, text, textOf, toolResults, tools, type ChatRequest, type Reply } from "./fixtures/scripted-provider.js";
-import { WORKER_MODEL, commitField, commitRoleSet, readSettings, readSettingsForEditing, roleSetOf, writeSettings } from "../src/tui/sources/settings.js";
+import { WORKER_MODEL, commitField, commitRoleSet, readSettings, readSettingsForEditing, roleSetOf, writeSettings } from "../src/application/settings.js";
 import { runnerReceiptPathAt, workspacePathAt } from "../src/storage/paths.js";
 
 import { RESIDENT_TEST_OPTIONS as TIMEOUT } from "./fixtures/resident.js";

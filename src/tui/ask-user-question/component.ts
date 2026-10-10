@@ -16,7 +16,7 @@ import {
 } from "@earendil-works/pi-tui";
 import { QuestionnaireModel, rowLabel, type AskOutcome } from "../../client/ask-user-question/model.js";
 import type { QuestionnaireResult } from "../../client/ask-user-question/questionnaire.js";
-import { ASK_QUESTION_BOUNDS, TERMINAL_BOUNDS } from "../limits.js";
+import { ASK_QUESTION_BOUNDS, TERMINAL_BOUNDS } from "../../domain/surface-bounds.js";
 
 /** The slice of the engine Theme this component draws with — a structural
  * subset so the presenter can hand in the real Theme without importing it. */

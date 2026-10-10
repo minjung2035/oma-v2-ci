@@ -7,8 +7,8 @@ import { scriptedProvider, call, tools, text, failing, lastUserText, toolResults
 import { updatePersonalSettings } from '../../dist/src/runtime/personal-settings.js';
 import { defaultSocietyFor } from '../../dist/src/config/defaults.js';
 import { sha256Hex } from '../../dist/src/hash.js';
-import { ensureProjectSettings } from '../../dist/src/tui/project-settings.js';
-import { readExtensions, toggleExtension } from '../../dist/src/tui/sources/extensions.js';
+import { ensureProjectSettings } from '../../dist/src/application/project-settings.js';
+import { readExtensions, toggleExtension } from '../../dist/src/application/extensions.js';
 
 const [root, ending = 'tools'] = process.argv.slice(2);
 const cwd = join(root, 'project'), outside = join(root, 'user', 'hyprland.conf');

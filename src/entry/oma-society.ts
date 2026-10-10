@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { packageDirectories } from "../platform/package-files.js";
 /** TUI-002/003: the host product entrypoint.
  *
  * This is the `oma` a Human runs. It is a different executable from the
@@ -16,23 +17,23 @@ import { assertHostDirectoryLayout, hostLaunchLocation } from "../runtime/assets
 import { resolvePiRuntime } from "../runtime/pi-runtime.js";
 import { ensureOwnedDirectory, removeUnusedTree } from "../storage/directory.js";
 import { TuiApp, type AppPorts } from "../tui/app.js";
-import { codeFor, exitFor, fail as exitFailure } from "../tui/exit.js";
+import { codeFor, exitFor, fail as exitFailure } from "../application/exit.js";
 import { errorWords, humanStream, surfaceWords } from "../tui/words.js";
 import { PanelTerminal } from "../tui/panel-terminal.js";
-import { societyPanelPorts } from "../tui/society-panel.js";
-import { PrincipalSession, newSessionHandle, principalEnvironment, principalSessionDir, principalSessionProfile, principalWorkspace } from "../tui/session.js";
+import { societyPanelPorts } from "../application/society-panel.js";
+import { PrincipalSession, newSessionHandle, principalEnvironment, principalSessionDir, principalSessionProfile, principalWorkspace } from "../runtime/engine/principal-session.js";
 import { PrincipalDelivery, principalHostBroker } from "../runtime/principal-delivery.js";
 import type { PiEvent } from "../runtime/pi-rpc.js";
-import { TuiTransport, limitsOf, type Observation } from "../tui/transport.js";
-import { principalMailbox } from "../tui/sources/mail.js";
+import { TuiTransport, limitsOf, type Observation } from "../application/status-observation.js";
+import { principalMailbox } from "../application/mail.js";
 import { WORKER_MODEL, bootstrapStateOf, commitManagedEdit, commitRoleSet,
   engineModelChoiceOf, engineName, projectBundle, readSettings, readSettingsForEditing,
-  roleSetOf, workerModelText, writeSettings, type FieldValue, type SessionOwn } from "../tui/sources/settings.js";
+  roleSetOf, workerModelText, writeSettings, type FieldValue, type SessionOwn } from "../application/settings.js";
 import { PACKAGE_USAGE, packageActivation, packageCommand, packageListLines, packageStoreDir, readPackageIndex, writePackageIndex,
-  type PackageCommand } from "../runtime/pi-packages.js";
-import { pruneLocalStage, stageLocalPackage } from "../runtime/local-package.js";
-import { applyPackageChange } from "../tui/project-settings.js";
-import { ProjectSessionSettings } from "../tui/project-session-settings.js";
+  type PackageCommand } from "../runtime/packages/index.js";
+import { pruneLocalStage, stageLocalPackage } from "../application/local-packages.js";
+import { applyPackageChange } from "../application/project-settings.js";
+import { ProjectSessionSettings } from "../application/project-session-settings.js";
 import { reconcilePersonalSettings } from "../runtime/personal-settings.js";
 import { collectManagedGenerations } from "../config/generations.js";
 import { defaultHostConfig, defaultSocietyFor, sessionSocietyName, societyFromDirectory } from "../config/defaults.js";
@@ -53,9 +54,9 @@ import { inspectSessionHistory } from "../runtime/session-history.js";
 import { HostTenure } from "../runtime/host-tenure.js";
 import { tryHoldSociety } from "../runtime/society-lease.js";
 import { deploymentDigest } from "../runtime/deployment-manifest.js";
-import type { PromptOutcome } from "../tui/prompt.js";
+import type { PromptOutcome } from "../protocol/settings.js";
 import { HOST_LOSS_SIGNALS } from "../runtime/broker-lifetime.js";
-import { runEngineLogin } from "../tui/login.js";
+import { runEngineLogin } from "../runtime/engine/login.js";
 import { adoptPrincipalEgress, type PrincipalEgress } from "../runtime/egress-forwarder.js";
 
 function usage(): never {
@@ -117,7 +118,7 @@ async function piPackages(dataRoot: string, project: string, decision: Extract<P
     code = await runEngineLogin({ stateRoot, libdir: `${libdir}/`, override: process.env.OMA_PI_COMMAND, fence: lease.fence,
       env: process.env, packages: { store, args: run.args } });
     if (code === 0 && decision.command !== "list" && !args.includes("--help") && !args.includes("-h")) {
-      const after = await writePackageIndex(store);
+      const after = await writePackageIndex(store, packageDirectories);
       pruneLocalStage(store);
       const { ok, said } = applyPackageChange({ dataRoot, project, libdir, before, after, activate: packageActivation(run) });
       reconcilePersonalSettings({ dataRoot, libdir, packages: store });
@@ -598,6 +599,7 @@ async function main(argv: readonly string[]): Promise<void> {
       limitsOf(configuration.settings.config.limits),
       withEgress(principalEnvironment({ stateRoot, runRoot, libdir: configuration.settings.config.installation.libdir }, profile, configuration.settings.config.limits)),
       {
+        errorWords,
         onAcquire: engine => owner.adopt(engine),
         // WP09.03: every callback is this engine's; a late one from an engine
         // that is no longer the session cannot clear or re-mark its successor.

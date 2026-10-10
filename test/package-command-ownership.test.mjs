@@ -28,9 +28,10 @@ function world(platform, { command = 'update', args = [command, 'npm:fixture'], 
   };
   const lock = { descriptor: 17, fence: 17, assertHeld() { assert.equal(held, true); calls.push('assert-held'); },
     close() { calls.push('return'); returns++; held = false; if (cleanupFailure) throw cleanupFailure; }, release() { this.close(); } };
+  const packageDirectories = Object.freeze({}); // Directory effects belong to the controlled index boundary.
   const run = new Script(compiled, { filename: file }).runInNewContext({
     ...path, fileURLToPath(url) { if (failure === 'location') throw primary; return fileURLToPath(url); },
-    URL, withAsyncCleanup, home: '/fixture/home', exports: {},
+    URL, withAsyncCleanup, packageDirectories, home: '/fixture/home', exports: {},
     process: { env: {}, stdout: { write(line) { output.push(line); } }, exit(value) { throw { exit: value }; } },
     ensureDirectory() { calls.push('directory'); },
     ensureOwnedDirectory(directory, ownedFrom, mode) {
@@ -52,7 +53,7 @@ function world(platform, { command = 'update', args = [command, 'npm:fixture'], 
     packageStoreDir: () => '/fixture/packages',
     readPackageIndex() { assert.equal(held, true); calls.push('before'); if (failure === 'before') throw primary; return []; },
     async runEngineLogin(options) { assert.equal(options.fence, 17); await step('engine'); return code; },
-    async writePackageIndex() { await step('index'); return []; },
+    async writePackageIndex(_store, directories) { assert.equal(directories, packageDirectories); await step('index'); return []; },
     stageLocalPackage(_store, source) { assert.equal(held, true); calls.push('stage'); if (failure === 'stage') throw primary; return 'local/staged'; },
     pruneLocalStage() { assert.equal(held, true); calls.push('prune'); if (failure === 'prune') throw primary; },
     packageListLines() { assert.equal(held, true); return []; },

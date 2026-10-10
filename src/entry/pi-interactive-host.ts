@@ -32,10 +32,10 @@ import type { PiEvent } from "../runtime/pi-rpc.js";
 import { registerAskUserQuestionPresenter } from "../tui/ask-user-question/presenter.js";
 import { createCompactToolRuntime } from "../tui/compact-tools.js";
 import { ownedEditor, type Suggestion } from "../tui/interactive-editor.js";
-import { humanPromptFitsFrame } from "../tui/limits.js";
+import { humanPromptFitsFrame } from "../domain/surface-bounds.js";
 import { brandFooter, brandHeader, type OpenTuiBrand } from "../tui/open-tui-brand.js";
 import { stylePanel } from "../tui/panel-style.js";
-import { ProjectSessionDirectories } from "../tui/project-session-directories.js";
+import { ProjectSessionDirectories } from "../runtime/engine/session-directories.js";
 
 type EngineModel = NonNullable<AgentSession["model"]>;
 type EngineEffort = ConstructorParameters<typeof ThinkingSelectorComponent>[0];

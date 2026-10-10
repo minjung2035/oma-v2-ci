@@ -999,7 +999,7 @@
       ]
     },
     {
-      "owner": "src/runtime/local-package-stage.ts#linuxStaging",
+      "owner": "src/platform/package-staging.ts#linuxStaging",
       "fact": "DR25/C20: a staged local package's copy under local/<name> is whole or absent -- published by one rename after a durable fill; a dead copy or an interrupted staging area is collected, never half-seen",
       "tests": [
         {
@@ -1010,7 +1010,7 @@
       ]
     },
     {
-      "owner": "src/runtime/local-package.ts#pruneLocalStage",
+      "owner": "src/application/local-packages.ts#pruneLocalStage",
       "fact": "DR25/C20: dead staged copies and interrupted staging areas under local/ are removed -- a removal nothing accepted owns, run after every oma pi change",
       "tests": [
         {
@@ -1021,7 +1021,7 @@
       ]
     },
     {
-      "owner": "src/runtime/local-package.ts#stageArchive",
+      "owner": "src/application/local-packages.ts#stageArchive",
       "fact": "a staged archive's inflated spool scratch is removed with the call -- residue under the staging prefix is collected, never live content",
       "tests": [
         {
@@ -1084,7 +1084,7 @@
       ]
     },
     {
-      "owner": "src/runtime/pi-packages.ts#writePackageIndex",
+      "owner": "src/runtime/packages/store.ts#writePackageIndex",
       "fact": "DR25: the package store's extension index, replaced atomically with the engine's answer after every oma pi change; a change whose index was not written is picked up by the next",
       "tests": [
         {
@@ -1244,7 +1244,7 @@
       ]
     },
     {
-      "owner": "src/tui/packages-apply.ts#applyOwnedPackageArchive",
+      "owner": "src/application/packages-apply.ts#applyOwnedPackageArchive",
       "fact": "DR25 on macOS: the Mac's packages published as one immutable generation under the digest of what arrived, the store's link switched to it, what it replaced recorded once for the request, and the generations no engine can read collected; a run after a stop at any step ends where an uninterrupted one does",
       "tests": [
         {
@@ -1260,7 +1260,7 @@
       ]
     },
     {
-      "owner": "src/tui/sources/settings.ts#commitInlineEdit",
+      "owner": "src/application/settings.ts#commitInlineEdit",
       "fact": "an inline configuration generation (DR12)",
       "tests": [
         {
@@ -1281,7 +1281,7 @@
       ]
     },
     {
-      "owner": "src/tui/sources/settings.ts#commitManagedEdit",
+      "owner": "src/application/settings.ts#commitManagedEdit",
       "fact": "a managed configuration generation (D02)",
       "tests": [
         {
@@ -1297,7 +1297,7 @@
       ]
     },
     {
-      "owner": "src/tui/sources/settings.ts#commitRoleSet",
+      "owner": "src/application/settings.ts#commitRoleSet",
       "fact": "DR25: a whole role set committed as one managed generation -- an inline configuration becoming a bundle, a session taking on its project's roles -- against the snapshot it was read as",
       "tests": [
         {
@@ -1313,7 +1313,7 @@
       ]
     },
     {
-      "owner": "src/tui/sources/settings.ts#writeSettings",
+      "owner": "src/application/settings.ts#writeSettings",
       "fact": "a first-run or replaced configuration (DR12)",
       "tests": [
         {
@@ -1415,7 +1415,7 @@
       ]
     },
     {
-      "owner": "src/runtime/pi-packages.ts#collectPackageGenerations",
+      "owner": "src/runtime/packages/store.ts#collectPackageGenerations",
       "fact": "DR37: collect only marked, noncurrent generations after exclusive directory lease; live engines and unleased legacy generations retain their files; retry after collection is idempotent",
       "tests": [
         {

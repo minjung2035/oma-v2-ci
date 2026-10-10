@@ -2,9 +2,9 @@
  * command, not an OMA authentication screen. OMA's engine directory (or package
  * store) is explicit; the caller holds its fence until the child actually closes. */
 import { dirname, join } from "node:path";
-import { PI_AGENT_DIR_ENV, piIsolationEnv, resolvePiRuntime } from "../runtime/pi-runtime.js";
-import { spawnInteractive } from "../process/async.js";
-import { ensureOwnedUserDirectory } from "../runtime/user-files.js";
+import { PI_AGENT_DIR_ENV, piIsolationEnv, resolvePiRuntime } from "../pi-runtime.js";
+import { spawnInteractive } from "../../process/async.js";
+import { ensureOwnedUserDirectory } from "../user-files.js";
 
 export interface EngineLogin {
   readonly stateRoot: string;

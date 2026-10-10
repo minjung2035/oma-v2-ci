@@ -6,7 +6,7 @@
  *
  * Prints one JSON line: { added, said }. */
 import { StoreError } from "../domain/errors.js";
-import { applyPackageArchive } from "../tui/packages-apply.js";
+import { applyPackageArchive } from "../application/packages-apply.js";
 import { errorWords } from "../tui/words.js";
 
 function argOf(flag: string): string | undefined {

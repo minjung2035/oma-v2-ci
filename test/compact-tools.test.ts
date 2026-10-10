@@ -4,7 +4,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { createCompactToolRuntime, toolDisplayName, callSummary, formatDurationMs, resultText, paintIndicator,
   type BaseToolRenderers, type CompactContext, type CompactResult, type CompactTheme } from "../src/tui/compact-tools.js";
-import { COMPACT_TOOL_BOUNDS } from "../src/tui/limits.js";
+import { COMPACT_TOOL_BOUNDS } from "../src/domain/surface-bounds.js";
 
 /** A theme that tags color and weight in-band, so assertions read text. */
 const theme: CompactTheme = {

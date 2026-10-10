@@ -8,7 +8,7 @@ import { DEPLOYMENT_LAYOUT } from "../domain/deployment.js";
 import { extensionEntryProblem, observeExtensionAsset, PACKAGE_ENTRY_PREFIX, type ExtensionRoots } from "../config/operations.js";
 import { ensureOwnedUserDirectory, readUserFile, replaceUserFile } from "./user-files.js";
 import { ProcessLock } from "./process-lock.js";
-import { PACKAGE_INDEX_BYTES, packageStoreRoot, readPackageIndex, reconciledEntries, resourceEntryProblem, type InstalledPackage } from "./pi-packages.js";
+import { PACKAGE_INDEX_BYTES, packageStoreRoot, readPackageIndex, reconciledEntries, resourceEntryProblem, type InstalledPackage } from "./packages/index.js";
 import { PERSONAL_SESSIONS } from "./session-mode.js";
 import { fileDigest } from "../storage/file-digest.js";
 import type { VerifiedExtension } from "./extension-integrity.js";

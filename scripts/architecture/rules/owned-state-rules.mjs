@@ -104,11 +104,11 @@ export const OWNED_STATE_OWNERS = Object.freeze([
   // store it is handed, the managed tail's generation accounting, and the
   // Mac store's whole-generation publish path (structural twin of the Linux
   // staging owner; executed only on the Mac side).
-  "src/runtime/pi-packages.ts",
-  "src/runtime/local-package.ts",
-  "src/runtime/local-package-stage.ts",
+  "src/runtime/packages/store.ts",
+  "src/application/local-packages.ts",
+  "src/platform/package-staging.ts",
   "src/config/generations.ts",
-  "src/tui/packages-apply.ts",
+  "src/application/packages-apply.ts",
   "src/platform/package-archive.ts",
 ]);
 
@@ -130,8 +130,8 @@ export const OWNED_STATE_EXEMPTIONS = Object.freeze({
   "src/storage/context-snapshot.ts": "immutable revision verification deliberately checks fixed modes rather than repairing them; publication's existence probe names the already prepared owned destination",
   "src/storage/staged-tree.ts": "the held-parent publication primitive's metadata probes; staged/final shape and durability are validated before adoption and unknown observations never authorize replacement",
   "src/store.ts": "read-only SQLite diagnostics and sidecar identity probes deliberately perform no permission repair, writes or owner takeover; unreadable state refuses the diagnostic",
-  "src/tui/sources/settings.ts": "metadata-only configuration existence probes after source layout validation; an inaccessible existing source propagates an error instead of being treated as absent",
-  "src/tui/transport.ts": "best-effort read-only status view observation: a failed open is displayed as unavailable and never grants broker authority or permits mutation",
+  "src/application/settings.ts": "metadata-only configuration existence probes after source layout validation; an inaccessible existing source propagates an error instead of being treated as absent",
+  "src/application/status-observation.ts": "best-effort read-only status view observation: a failed open is displayed as unavailable and never grants broker authority or permits mutation",
   "src/broker/internal-dispatcher.ts": "the maildir `new` listing under the state root -- a failure refuses the request, never reads as empty; the directories are repaired by the broker's owned ensures",
   "src/cli/effects/submit.ts": "a fresh mkdtemp under the OS temp directory -- the CLI caller's own scratch, not oma state",
   "src/entry/guest-provision.ts": "the guest's own /proc/cmdline read and the chown of its data parts to the oma user -- deliberate ownership assignment, kernel paths are never repaired",
@@ -166,8 +166,8 @@ export const OWNED_STATE_EXEMPTIONS = Object.freeze({
   "src/runtime/inference-relay.ts": "the relay's own socket in the run's run-root directory -- chmod of the name oma just made is the point",
   "src/runtime/process-lock.ts": "a lock file beside a directory its caller ensured owned -- the O_EXCL acquire refuses loudly",
   "src/runtime/provision.ts": "probes beside the owned ensures under the state root and the society layout -- a probe failure refuses, never reads as absent",
-  "src/tui/project-settings.ts": "the `.projects` listing under the data root whose non-ENOENT failure already refuses to the Human",
-  "src/tui/sources/mail.ts": "the mailbox's journal and message reads under the state root -- an open or listing failure is rendered as the row's `unreadable` marker, never read as absent (arch §23.5)",
+  "src/application/project-settings.ts": "the `.projects` listing under the data root whose non-ENOENT failure already refuses to the Human",
+  "src/application/mail.ts": "the mailbox's journal and message reads under the state root -- an open or listing failure is rendered as the row's `unreadable` marker, never read as absent (arch §23.5)",
   "src/units.ts": "the caller's own systemd user directory -- ~/.config/systemd/user is the user's, never repaired",
   "src/process/async.ts": "the caller-declared spool paths -- absolute paths each caller names under its own scratch or ledger directory; the runner opens what it was told to write",
   "src/process/run.ts": "the same caller-declared spool paths opened for the child's descriptors -- the runner opens what it was told to write",

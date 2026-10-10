@@ -12,7 +12,7 @@ import { join } from "node:path";
 import { Store } from "../src/store.js";
 import { ViewsModule } from "../src/views.js";
 import { decodeStatusView, encodeStatusView, statusViewPath } from "../src/protocol/status-view.js";
-import { TuiTransport } from "../src/tui/transport.js";
+import { TuiTransport } from "../src/application/status-observation.js";
 
 test("T118 what the broker publishes is what the Dashboard accepts, and only its owner can read it", () => {
   const root = mkdtempSync(join(tmpdir(), "oma-status-view-"));

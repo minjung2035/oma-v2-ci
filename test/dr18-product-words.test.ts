@@ -8,7 +8,7 @@ import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
 const words = fileURLToPath(new URL("../src/tui/words.js", import.meta.url));
-const exit = fileURLToPath(new URL("../src/tui/exit.js", import.meta.url));
+const exit = fileURLToPath(new URL("../src/application/exit.js", import.meta.url));
 
 function run(script: string, productText: boolean): { stdout: string; stderr: string; status: number | null } {
   const env: Record<string, string> = { PATH: process.env.PATH ?? "/usr/bin:/bin" };

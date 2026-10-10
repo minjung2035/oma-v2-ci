@@ -1,3 +1,5 @@
+import { PACKAGE_ARCHIVE_BOUNDS } from "../domain/package-policy.js";
+export { PACKAGE_ARCHIVE_BOUNDS } from "../domain/package-policy.js";
 /** DR25 on macOS: the package store as it travels from the Mac to the engine.
  *
  * The guest has no network (MAC-203), so the packages `oma pi install`
@@ -21,25 +23,6 @@ import { lstat, open, readdir } from "node:fs/promises";
 import { join } from "node:path";
 import { decodeUtf8 } from "../domain/utf8.js";
 import { StoreError } from "../domain/errors.js";
-
-export const PACKAGE_ARCHIVE_BOUNDS = Object.freeze({
-  /** Files and directories one archive may hold: the working-set bound of the
-   * in-memory index of made paths (`made`), not a size policy. An archive
-   * beyond it would carry a package no real store holds. */
-  entries: 8_000_000,
-  /** Bytes of file content one archive may hold. Payloads stream a chunk at a
-   * time both ways, so this is not a memory bound: it is the largest size a
-   * wire u64 still names exactly -- beyond it a size could not be observed
-   * exactly at all, which is a stream-honest refusal, not a capacity one. */
-  bytes: Number.MAX_SAFE_INTEGER,
-  /** Bytes one file may have: the same exact-observation bound. */
-  fileBytes: Number.MAX_SAFE_INTEGER,
-  /** Bytes of one entry's path: a staged path must also land on a filesystem
-   * (PATH_MAX class), and the wire length field is u16 -- format-mandated. */
-  pathBytes: 4096,
-  /** Bytes of one path component: NAME_MAX -- format-mandated. */
-  componentBytes: 255,
-});
 const MAGIC = Buffer.from("oma-packages-v1\n", "utf8");
 /** What of the store travels: the package manager's list and what it installed. */
 const ROOTS = Object.freeze({ files: ["settings.json"], directories: ["npm", "git", "local"] });

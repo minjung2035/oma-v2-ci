@@ -7,21 +7,22 @@ import { dirname, join } from "node:path";
 import { createCompleteConfigurationFixture } from "./fixtures/configuration.js";
 import { loadConfiguration, loadConfigurationSnapshot } from "../src/config.js";
 import { DurabilityFaultError, type DurabilityFault } from "../src/storage/durable-fs.js";
-import { CORE_EXTENSION, readExtensions, toggleExtension } from "../src/tui/sources/extensions.js";
-import { commitRoleSet, deriveSessionSettings, projectBundle, readSettings, readSettingsForEditing, roleSetOf, writeSettings } from "../src/tui/sources/settings.js";
-import { PACKAGE_INDEX, PACKAGE_INDEX_BYTES, PACKAGE_LOCAL_DIR, packageCommand, packageListLines, packageResourcePaths, readPackageIndex, reconciledEntries, writePackageIndex, type InstalledPackage } from "../src/runtime/pi-packages.js";
-import { pruneLocalStage, stageLocalPackage } from "../src/runtime/local-package.js";
-import { sessionArgv } from "../src/tui/session.js";
+import { CORE_EXTENSION, readExtensions, toggleExtension } from "../src/application/extensions.js";
+import { commitRoleSet, deriveSessionSettings, projectBundle, readSettings, readSettingsForEditing, roleSetOf, writeSettings } from "../src/application/settings.js";
+import { PACKAGE_INDEX, PACKAGE_INDEX_BYTES, PACKAGE_LOCAL_DIR, packageCommand, packageListLines, packageResourcePaths, readPackageIndex, reconciledEntries, writePackageIndex, type InstalledPackage } from "../src/runtime/packages/store.js";
+import { pruneLocalStage, stageLocalPackage } from "../src/application/local-packages.js";
+import { sessionArgv } from "../src/runtime/engine/principal-session.js";
 import { planPiSpawn } from "../src/runtime/pi-spawn-plan.js";
 import { decodeRunLease } from "../src/protocol/run-lease.js";
-import { applyPackageChange, ensureProjectSettings } from "../src/tui/project-settings.js";
+import { applyPackageChange, ensureProjectSettings } from "../src/application/project-settings.js";
 import { RESIDENT_PATHS, confinedPath } from "../src/sandbox.js";
 import { actorSocketPathAt, agentRootPathAt, projectGitPathAt, projectMirrorPathAt, runnerSessionDirPathAt, runnerViewPathAt, workspacePathAt } from "../src/storage/paths.js";
-import { runEngineLogin } from "../src/tui/login.js";
+import { runEngineLogin } from "../src/runtime/engine/login.js";
 import { assertExtensionIntegrity } from "../src/runtime/extension-integrity.js";
 import { createHash } from "node:crypto";
 import { gzipSync } from "node:zlib";
 import { chmodSync, readFileSync } from "node:fs";
+import { listOwnedDirectory } from "../src/storage/directory.js";
 
 const HELLO = "packages:npm/node_modules/oma-hello-ext/extensions/hello.ts";
 
@@ -37,6 +38,25 @@ function store(root: string, packages: Record<string, Record<string, string>>): 
 }
 const hello = { "package.json": JSON.stringify({ name: "oma-hello-ext", version: "1.0.0", pi: { extensions: ["./extensions/hello.ts"] } }),
   "extensions/hello.ts": "export default function (pi) { pi.registerCommand('hello-ext', { handler: async () => {} }); }\n" };
+
+test("DR41: the package filesystem port cannot publish an empty index when an owned file cannot be repaired", async () => {
+  const f = createCompleteConfigurationFixture(), root = join(f.root, "packages"), local = join(root, "local", "hello");
+  try {
+    mkdirSync(local, { recursive: true });
+    writeFileSync(join(local, "package.json"), JSON.stringify({ name: "hello", pi: { extensions: ["./e.ts"] } }));
+    const entry = join(local, "e.ts");
+    writeFileSync(entry, "export default function () {}\n");
+    writeFileSync(join(root, "settings.json"), JSON.stringify({ packages: ["local/hello"] }));
+    await writePackageIndex(root);
+    const prior = readFileSync(join(root, PACKAGE_INDEX));
+    chmodSync(entry, 0);
+    let repairs = 0;
+    await assert.rejects(writePackageIndex(root, { list: listOwnedDirectory, repair: () => { repairs++; return false; } }),
+      { code: "BROKER_UNAVAILABLE" });
+    assert.equal(repairs, 1);
+    assert.deepEqual(readFileSync(join(root, PACKAGE_INDEX)), prior);
+  } finally { f.close(); }
+});
 
 test("DR25: oma pi runs the engine's package commands over oma's store, and refuses what would reach past oma", () => {
   for (const args of [["install", "npm:@foo/bar@1.0.0"], ["install", "git:github.com/foo/bar"], ["install", "https://github.com/foo/bar"],

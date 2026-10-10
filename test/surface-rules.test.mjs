@@ -84,7 +84,7 @@ test("engine-primitive-owner: one owner per borrowed primitive, and no borrowed 
     findings => assert.ok(has(findings, "engine-primitive-owner")));
   withTree({ "src/tui/screen.ts": 'import { visibleWidth } from "@earendil-works/pi-tui";' },
     findings => assert.ok(has(findings, "engine-primitive-owner")));
-  withTree({ "src/tui/session.ts": 'import type { X } from "@earendil-works/pi-coding-agent";' },
+  withTree({ "src/tui/private-adapter.ts": 'import type { X } from "@earendil-works/pi-coding-agent";' },
     findings => assert.ok(has(findings, "engine-primitive-owner")));
 });
 
@@ -98,7 +98,7 @@ test("tui-view-boundary: the view sees only data, and only terminal owners draw 
   }, findings => clean(findings, "tui-view-boundary"));
   withTree({ "src/tui/view/screens.ts": 'import { readFileSync } from "node:fs";' },
     findings => assert.ok(has(findings, "tui-view-boundary")));
-  withTree({ "src/tui/view/screens.ts": 'import { readMailbox } from "../sources/mail.js";', "src/tui/sources/mail.ts": "export const readMailbox = 1;" },
+  withTree({ "src/tui/view/screens.ts": 'import { readMailbox } from "../sources/mail.js";', "src/application/mail.ts": "export const readMailbox = 1;" },
     findings => assert.ok(has(findings, "tui-view-boundary")));
   withTree({ "src/tui/view/text.ts": "export const fit = 1;", "src/tui/app.ts": 'import { fit } from "./view/text.js";' },
     findings => assert.ok(has(findings, "tui-view-boundary")));
@@ -112,10 +112,10 @@ test("tui-view-boundary: the view sees only data, and only terminal owners draw 
 
 test("tui-write-owner, tui-ledger, tui-transport-owner, tui-internal-method", () => {
   withTree({
-    "src/tui/sources/settings.ts": 'import { replaceDerivedFile } from "../../storage/durable-fs.js"; replaceDerivedFile("a", "b");',
-    "src/tui/transport.ts": 'import type { ChannelLimits } from "../protocol/channel.js";',
+    "src/application/settings.ts": 'import { replaceDerivedFile } from "../../storage/durable-fs.js"; replaceDerivedFile("a", "b");',
+    "src/application/status-observation.ts": 'import type { ChannelLimits } from "../protocol/channel.js";',
   }, findings => clean(findings, "tui-write-owner", "tui-ledger", "tui-transport-owner", "tui-internal-method"));
-  withTree({ "src/tui/sources/mail.ts": 'import { renameSync } from "node:fs"; renameSync("a", "b");' },
+  withTree({ "src/application/mail.ts": 'import { renameSync } from "node:fs"; renameSync("a", "b");' },
     findings => assert.ok(has(findings, "tui-write-owner")));
   // Near miss: writing to a terminal stream is not a filesystem write.
   withTree({ "src/tui/screen.ts": 'export const draw = (out: { write(t: string): void }) => out.write("x");' },
@@ -126,12 +126,12 @@ test("tui-write-owner, tui-ledger, tui-transport-owner, tui-internal-method", ()
     findings => assert.ok(has(findings, "tui-transport-owner")));
   withTree({
     "src/protocol/methods.ts": 'export const INTERNAL_METHODS = { "host.principalRelay": {} } as const;',
-    "src/tui/transport.ts": 'export const call = "host.principalRelay";',
+    "src/application/status-observation.ts": 'export const call = "host.principalRelay";',
   }, findings => assert.ok(has(findings, "tui-internal-method")));
   // Near miss: the name in a comment is prose, not a call.
   withTree({
     "src/protocol/methods.ts": 'export const INTERNAL_METHODS = { "host.principalRelay": {} } as const;',
-    "src/tui/transport.ts": "// never calls host.principalRelay\nexport const x = 1;",
+    "src/application/status-observation.ts": "// never calls host.principalRelay\nexport const x = 1;",
   }, findings => clean(findings, "tui-write-owner", "tui-ledger", "tui-transport-owner", "tui-internal-method"));
 });
 
@@ -212,7 +212,7 @@ test("product-bare-error and product-undeclared-bound", () => {
     findings => assert.ok(has(findings, "product-undeclared-bound")));
   // Near misses: a declaration file, a byte identity, a file mode, a small index.
   withTree({
-    "src/tui/limits.ts": "export const W = 80;",
+    "src/domain/surface-bounds.ts": "export const W = 80;",
     "src/tui/keys.ts": "export const esc = String.fromCharCode(27); export const csi = 0x5b; export const mode = 0o600; export const i = 3;",
     "src/tui/app.ts": 'export const label = "80 columns";',
   }, findings => clean(findings, "product-bare-error", "product-undeclared-bound"));
@@ -230,10 +230,10 @@ test("user-pi-state: the user's home and Pi state are never named", () => {
 
 test("settings-placement-owner, closed-switch and module-port-import", () => {
   withTree({
-    "src/tui/sources/settings.ts": "const PLACEMENT = {}; export function f(field: string) { switch (field) { default: return PLACEMENT; } }",
+    "src/domain/settings-policy.ts": "const PLACEMENT = {}; export function f(field: string) { switch (field) { default: return PLACEMENT; } }",
     "src/tui/app.ts": 'import { assertNever } from "../domain/exhaustive.js"; export function run(effect: { kind: "a" }) { switch (effect.kind) { case "a": return; default: return assertNever(effect); } }',
   }, findings => assert.deepEqual(findings, []));
-  withTree({ "src/tui/sources/settings.ts": "export function f(field: string) { switch (field) {} switch (field) {} }" },
+  withTree({ "src/domain/settings-policy.ts": "export function f(field: string) { switch (field) {} switch (field) {} }" },
     findings => assert.ok(has(findings, "settings-placement-owner")));
   withTree({ "src/tui/app.ts": 'export function run(effect: { kind: "a" }) { switch (effect.kind) { case "a": return; } }' },
     findings => assert.ok(has(findings, "closed-switch")));
@@ -249,7 +249,7 @@ test("settings-placement-owner, closed-switch and module-port-import", () => {
 test("principal-turn-owner: the host never asks the engine to fold a prompt into a run already going", () => {
   // Accept: a prompt written with nothing else in the message.
   withTree({
-    "src/tui/session.ts": 'export const send = (text: string) => ({ type: "prompt", message: text });',
+    "src/runtime/engine/principal-session.ts": 'export const send = (text: string) => ({ type: "prompt", message: text });',
   }, findings => clean(findings, "principal-turn-owner"));
   // Near miss: the batch's own delivery mode is a different thing with the
   // same vocabulary, and it is the broker's fixed policy, not a turn joining
@@ -260,10 +260,10 @@ test("principal-turn-owner: the host never asks the engine to fold a prompt into
   }, findings => clean(findings, "principal-turn-owner"));
   // Reject, in each spelling the option can be written.
   withTree({
-    "src/tui/session.ts": 'export const send = (text: string) => ({ type: "prompt", message: text, streamingBehavior: "followUp" });',
-  }, findings => assert.ok(findings.some(value => value.rule === "principal-turn-owner" && value.file === "src/tui/session.ts")));
+    "src/runtime/engine/principal-session.ts": 'export const send = (text: string) => ({ type: "prompt", message: text, streamingBehavior: "followUp" });',
+  }, findings => assert.ok(findings.some(value => value.rule === "principal-turn-owner" && value.file === "src/runtime/engine/principal-session.ts")));
   withTree({
-    "src/tui/session.ts": 'export const send = (text: string) => ({ type: "prompt", message: text, ["streamingBehavior"]: "steer" });',
+    "src/runtime/engine/principal-session.ts": 'export const send = (text: string) => ({ type: "prompt", message: text, ["streamingBehavior"]: "steer" });',
   }, findings => assert.ok(has(findings, "principal-turn-owner")));
   withTree({
     "src/runtime/pi-adapter.ts": 'export const key = "streamingBehavior";',
@@ -302,7 +302,7 @@ export function cliEnvironment(home, socket) {
   return environment;
 }`;
   const tree = ({ copied = "FRAME_BYTES", producerExtra = "" } = {}) => ({
-    "src/tui/session.ts": producer(producerExtra),
+    "src/runtime/engine/principal-session.ts": producer(producerExtra),
     "src/client/settings.ts": consumer,
     "src/extension/mail-tools.ts": tools(copied),
   });
@@ -323,7 +323,7 @@ export function cliEnvironment(home, socket) {
   // Reject: the credential or the session handle given an environment name,
   // anywhere in the source -- as a key the host sets, or a name a reader reads.
   withTree(tree({ producerExtra: 'OMA_PRINCIPAL_CREDENTIAL: "x",' }), findings => {
-    assert.ok(findings.some(value => value.rule === "principal-secret-env" && value.file === "src/tui/session.ts"));
+    assert.ok(findings.some(value => value.rule === "principal-secret-env" && value.file === "src/runtime/engine/principal-session.ts"));
   });
   withTree({ ...tree(), "src/cli/extra.ts": 'export const read = () => process.env["OMA_PRINCIPAL_SESSION"];' }, findings => {
     assert.ok(findings.some(value => value.rule === "principal-secret-env" && value.file === "src/cli/extra.ts"));
@@ -340,7 +340,7 @@ export function cliEnvironment(home, socket) {
       assert.doesNotMatch(value.reason, /OMA_ACTOR|OMA_SOCIETY/);
   });
   // Near miss: a tree without these files is not a violation.
-  withTree({ "src/tui/session.ts": "export const a = 1;" },
+  withTree({ "src/runtime/engine/principal-session.ts": "export const a = 1;" },
     findings => clean(findings, "principal-session-env", "principal-secret-env"));
 });
 
@@ -404,14 +404,14 @@ test("utf8-decoder-owner (P0V-86): UTF-8 is read through the owner and the exten
 test("error-words-owner (DR18, D-1): an error's words on the product surface come from one reading", () => {
   const words = { "src/tui/words.ts": "export function errorWords(error) { return error instanceof Error ? error.message : String(error); }" };
   withTree({ ...words, "src/entry/oma.ts": "try { f(); } catch (error) { fail(errorWords(error)); }",
-    "src/tui/session.ts": "const message = event.message;" }, findings => clean(findings, "error-words-owner"));
+    "src/runtime/engine/principal-session.ts": "const message = event.message;" }, findings => clean(findings, "error-words-owner"));
   // Reject: each way a file reads a thrown value's words itself.
   for (const [file, text] of [
     ["src/entry/oma.ts", "try { f(); } catch (error) { fail(error instanceof Error ? 'x' : 'y'); }"],
     ["src/entry/oma-society.ts", "try { f(); } catch (error) { fail(String(error)); }"],
     ["src/tui/app.ts", "const text = failure.message;"],
-    ["src/tui/sources/mail.ts", "try { f(); } catch (error) { note(String(error)); }"],
-    ["src/tui/session.ts", "const text = result.message;"],
+    ["src/application/mail.ts", "try { f(); } catch (error) { note(String(error)); }"],
+    ["src/tui/interactive-editor.ts", "const text = result.message;"],
   ])
     withTree({ ...words, [file]: text }, findings => {
       assert.ok(findings.some(value => value.rule === "error-words-owner" && value.file === file), `${file}: ${text}`);

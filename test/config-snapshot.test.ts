@@ -4,7 +4,7 @@ import { copyFileSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join, relative } from "node:path";
 import { loadConfiguration, loadConfigurationSnapshot } from "../src/config.js";
 import { configurationLayout } from "../src/config/operations.js";
-import { readExtensions } from "../src/tui/sources/extensions.js";
+import { readExtensions } from "../src/application/extensions.js";
 import { createCompleteConfigurationFixture } from "./fixtures/configuration.js";
 
 function readJson(path: string): Record<string, any> {

@@ -16,7 +16,7 @@ import { spawnSync } from "node:child_process";
 import { join } from "node:path";
 import { withScenario, SCENARIO_LIMITS } from "./fixtures/scenario.js";
 import { call, text, textOf, toolResults, tools, type ChatRequest } from "./fixtures/scripted-provider.js";
-import { principalWorkspace } from "../src/tui/session.js";
+import { principalWorkspace } from "../src/runtime/engine/principal-session.js";
 import { workspacePathAt } from "../src/storage/paths.js";
 import { workspaceUsage } from "../src/extension/workspace-guard.js";
 import { sha256Hex } from "../src/hash.js";

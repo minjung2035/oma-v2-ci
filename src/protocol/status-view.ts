@@ -74,3 +74,7 @@ export function decodeStatusView(text: string, society: string): DecodedStatusVi
     }),
   };
 }
+
+export type Observation =
+  | { readonly kind: "observed"; readonly statuses: readonly AgentStatus[]; readonly observedAtMs: number }
+  | { readonly kind: "unknown"; readonly reason: string; readonly observedAtMs: number };

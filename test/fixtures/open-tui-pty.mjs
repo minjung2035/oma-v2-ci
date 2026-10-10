@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { writeFileSync, readdirSync, readFileSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { createHash } from 'node:crypto';
-import { principalSessionDir } from '../../dist/src/tui/session.js';
+import { principalSessionDir } from '../../dist/src/runtime/engine/principal-session.js';
 import { startScenario } from '../../dist/test/fixtures/scenario.js';
 import { call, tools, text, delayed, lastUserText } from '../../dist/test/fixtures/scripted-provider.js';
 import { PanelTerminal } from '../../dist/src/tui/panel-terminal.js';

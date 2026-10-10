@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import type { EditorComponent } from "@earendil-works/pi-tui";
 import { ownedEditor } from "../src/tui/interactive-editor.js";
-import { CONVERSATION_BOUNDS } from "../src/tui/limits.js";
+import { CONVERSATION_BOUNDS } from "../src/domain/surface-bounds.js";
 
 test("Open TUI: Pi keeps its commands, shell and shortcuts; only a plain prompt goes to OMA", () => {
   let draft = "";

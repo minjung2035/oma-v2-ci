@@ -1,15 +1,15 @@
 /** DR24/DR25: the settings and extension view of one live Society session. */
 import { CONFIGURATION_DOCUMENT_BYTES } from "../config/operations.js";
 import { deploymentDigest } from "../runtime/deployment-manifest.js";
-import { readPackageIndex } from "../runtime/pi-packages.js";
+import { readPackageIndex } from "../runtime/packages/index.js";
 import { readUserFile } from "../runtime/user-files.js";
 import { ensureProjectSettings } from "./project-settings.js";
-import { readExtensions, toggleExtension } from "./sources/extensions.js";
+import { readExtensions, toggleExtension } from "./extensions.js";
 import {
 	commitField, deriveSessionSettings, projectSettingsPath, readSettings, readSettingsForEditing,
 	type FieldValue, type SessionOwn, type Settings
-} from "./sources/settings.js";
-import { errorWords } from "./words.js";
+} from "./settings.js";
+import { errorWords } from "../tui/words.js";
 
 /** A session's view of its project's settings. Commits still belong to the
  * managed bundle primitives; this owner keeps derivation, read-back and the

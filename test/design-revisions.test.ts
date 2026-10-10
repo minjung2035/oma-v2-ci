@@ -5,7 +5,7 @@ import assert from "node:assert/strict";
 import type { HostConfigV1 } from "../implementation/contracts.js";
 import { defaultHostConfig } from "../src/config/defaults.js";
 import { HOST_GRANTED, resolveChildSpec } from "../src/domain/child-policy.js";
-import { commitField, readSettings, WORKER_INTEGRATE } from "../src/tui/sources/settings.js";
+import { commitField, readSettings, WORKER_INTEGRATE } from "../src/application/settings.js";
 import { applyLabel } from "../src/tui/view/labels.js";
 import { createCompleteConfigurationFixture } from "./fixtures/configuration.js";
 

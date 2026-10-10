@@ -18,7 +18,7 @@ import { dirname, join } from "node:path";
 import { withScenario, type Scenario } from "./fixtures/scenario.js";
 import { SCRIPTED_KEY, call, continuesTurn, text, textOf, toolResults, tools, type ChatRequest } from "./fixtures/scripted-provider.js";
 import { projectGitPathAt } from "../src/storage/paths.js";
-import { commitRoleSet, readSettings, readSettingsForEditing, roleSetOf, writeSettings } from "../src/tui/sources/settings.js";
+import { commitRoleSet, readSettings, readSettingsForEditing, roleSetOf, writeSettings } from "../src/application/settings.js";
 
 import { RESIDENT_TEST_OPTIONS as OPTIONS } from "./fixtures/resident.js";
 const isResident = (request: ChatRequest): boolean => !(request.tools ?? []).some(tool => tool.function?.name === "oma_society");

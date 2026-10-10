@@ -14,16 +14,16 @@
  */
 import { lstatSync, readdirSync } from "node:fs";
 import { join, relative } from "node:path";
-import { StoreError } from "../../domain/errors.js";
-import { errorWords } from "../words.js";
-import { DEPLOYMENT_LAYOUT } from "../../domain/deployment.js";
-import { loadConfigurationSnapshot, loadEditableConfiguration, type ConfigurationSnapshot } from "../../config.js";
-import { extensionEntryProblem, extensionListProblem, observeExtensionAsset, type ExtensionRoots } from "../../config/operations.js";
-import type { InstalledPackage } from "../../runtime/pi-packages.js";
-import type { ManagedSource } from "../../config/generations.js";
+import { StoreError } from "../domain/errors.js";
+import { errorWords } from "../tui/words.js";
+import { DEPLOYMENT_LAYOUT } from "../domain/deployment.js";
+import { loadConfigurationSnapshot, loadEditableConfiguration, type ConfigurationSnapshot } from "../config.js";
+import { extensionEntryProblem, extensionListProblem, observeExtensionAsset, type ExtensionRoots } from "../config/operations.js";
+import type { InstalledPackage } from "../runtime/packages/index.js";
+import type { ManagedSource } from "../config/generations.js";
 import { commitManagedEdit } from "./settings.js";
-import type { ExtensionRow } from "../model.js";
-import { READ_BOUNDS } from "../limits.js";
+import type { ExtensionRow } from "../tui/model.js";
+import { READ_BOUNDS } from "../domain/surface-bounds.js";
 
 export const CORE_EXTENSION = DEPLOYMENT_LAYOUT.extension;
 

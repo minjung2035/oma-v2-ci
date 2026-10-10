@@ -10,7 +10,7 @@ import { PERSONAL_SETTINGS_BYTES, updatePersonalSettings, updatePersonalSettings
 import { assertExtensionIntegrity } from "../src/runtime/extension-integrity.js";
 import { ProcessLock } from "../src/runtime/process-lock.js";
 import { DEPLOYMENT_LAYOUT } from "../src/domain/deployment.js";
-import { PACKAGE_INDEX } from "../src/runtime/pi-packages.js";
+import { PACKAGE_INDEX } from "../src/runtime/packages/store.js";
 
 function fixture(t: { after(run: () => void): void }) {
   const root = mkdtempSync(join(tmpdir(), "oma-personal-settings-"));

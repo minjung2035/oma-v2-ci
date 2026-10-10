@@ -49,7 +49,7 @@ import { LifecycleModule } from "../../src/lifecycle.js";
 import { provisionSociety, residentRootfsPath } from "../../src/runtime/provision.js";
 import { processIdentity, type ProcessIdentity } from "../../src/broker/process-ancestry.js";
 import { encodeHostMessage } from "../../src/protocol/host-channel.js";
-import { PrincipalSession, principalSessionProfile, newSessionHandle, principalEnvironment, principalSessionDir, principalWorkspace } from "../../src/tui/session.js";
+import { PrincipalSession, principalSessionProfile, newSessionHandle, principalEnvironment, principalSessionDir, principalWorkspace } from "../../src/runtime/engine/principal-session.js";
 import { PrincipalDelivery, principalHostBroker, type DeliveryOutcome } from "../../src/runtime/principal-delivery.js";
 import { resolvePiRuntime } from "../../src/runtime/pi-runtime.js";
 import type { VerifiedExtension } from "../../src/runtime/extension-integrity.js";

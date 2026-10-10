@@ -6,7 +6,7 @@
 import { writeSync } from "node:fs";
 import type { ErrorCode } from "../../implementation/contracts/errors.js";
 import { errorCodeOf, errorExit } from "../domain/errors.js";
-import { humanStream } from "./words.js";
+import { humanStream } from "../tui/words.js";
 
 export type ExitCode = 0 | 2 | 3 | 4;
 

@@ -15,7 +15,7 @@ import { MailModule } from "../src/mail.js";
 import {
   readExtensions,
   toggleExtension,
-} from "../src/tui/sources/extensions.js";
+} from "../src/application/extensions.js";
 import { loadConfiguration } from "../src/config.js";
 import { makeValidAgent } from "./fixtures/spec.js";
 import { observeFile, observeLedger } from "./fixtures/effect-observation.js";

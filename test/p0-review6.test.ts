@@ -47,7 +47,7 @@ test("P0V-75 / R6-02, P0-5: an INTEGER the driver cannot hand over is corruption
 
 test("P0V-76 / R6-03: an Enter after a paste's burst submits even when the wall clock was set back meanwhile", async () => {
   const { KeyDecoder } = await import("../src/tui/keys.js");
-  const { TERMINAL_BOUNDS } = await import("../src/tui/limits.js");
+  const { TERMINAL_BOUNDS } = await import("../src/domain/surface-bounds.js");
   const wall = Date.now;
   let offset = 0;
   // The wall clock is under the test's hand from before the decoder exists.
@@ -234,7 +234,7 @@ test("P0V-78 / R6-05, INV10: a submission's bundle is read only up to the bundle
 });
 
 test("P0V-78 / R6-05, CFG-003: every environment the CLI runs in carries the society's stream bounds, and an omitted one is the reference value", async () => {
-  const { principalEnvironment } = await import("../src/tui/session.js");
+  const { principalEnvironment } = await import("../src/runtime/engine/principal-session.js");
   const { cliEnvironment } = await import("../src/extension/mail-tools.js");
   const { cliBundleBytes, cliContextBytes } = await import("../src/cli/transport.js");
   const { defaultHostConfig } = await import("../src/config/defaults.js");
@@ -528,7 +528,7 @@ test("P0V-88 / R6-11: a sweep observes a recovery failure once, and still observ
 
 test("P0V-90 / R6-13: a generation already present is reused only if it holds these files and nothing else", async () => {
   const { loadConfigurationSnapshot, validateConfig } = await import("../src/config.js");
-  const { commitManagedEdit } = await import("../src/tui/sources/settings.js");
+  const { commitManagedEdit } = await import("../src/application/settings.js");
   const { MANAGED_DIRECTORY } = await import("../src/config/generations.js");
   const { createCompleteConfigurationFixture } = await import("./fixtures/configuration.js");
   const { chmodSync } = await import("node:fs");

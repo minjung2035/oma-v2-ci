@@ -21,11 +21,12 @@ import { Script } from 'node:vm';
 import ts from 'typescript';
 import * as errors from '../dist/src/domain/errors.js';
 import * as operations from '../dist/src/config/operations.js';
-import * as piPackages from '../dist/src/runtime/pi-packages.js';
+import * as piPackages from '../dist/src/runtime/packages/index.js';
 import * as durable from '../dist/src/storage/durable-fs.js';
-import * as tar from '../dist/src/runtime/package-tar.js';
+import * as tar from '../dist/src/runtime/packages/tar.js';
 import * as packageArchive from '../dist/src/platform/package-archive.js';
 import * as host from '../dist/src/platform/host/files.js';
+import * as policy from '../dist/src/domain/package-policy.js';
 
 const unsupported = () => {
   throw new errors.StoreError('UNSUPPORTED_PROFILE',
@@ -37,7 +38,7 @@ const containedStub = new Proxy({}, { get: () => unsupported });
 const directoryStub = new Proxy({}, { get: () => unsupported });
 
 const code = ts.transpileModule(
-  fs.readFileSync(process.env.OMA_LOCAL_PACKAGE_SOURCE ?? 'src/runtime/local-package.ts', 'utf8'), {
+  fs.readFileSync(process.env.OMA_LOCAL_PACKAGE_SOURCE ?? 'src/application/local-packages.ts', 'utf8'), {
     compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
   }).outputText;
 function load(platform, changes = {}) {
@@ -46,19 +47,20 @@ function load(platform, changes = {}) {
     'node:crypto': crypto, 'node:path': path, 'node:fs': fs, 'node:stream/promises': streams,
     'node:zlib': zlib, 'node:os': os, 'node:url': url,
     '../domain/errors.js': errors, '../config/operations.js': operations,
-    './pi-packages.js': piPackages, '../storage/contained-fs.js': containedStub,
+    '../runtime/packages/index.js': piPackages, '../storage/contained-fs.js': containedStub,
     '../storage/directory.js': directoryStub, '../storage/durable-fs.js': durable,
     '../platform/package-archive.js': packageArchive, '../platform/host/files.js': host,
+    './host/files.js': host, '../domain/package-policy.js': policy,
     ...changes };
   const stage = { exports: {} };
-  const stageCode = ts.transpileModule(fs.readFileSync('src/runtime/local-package-stage.ts', 'utf8'), {
+  const stageCode = ts.transpileModule(fs.readFileSync('src/platform/package-staging.ts', 'utf8'), {
     compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
   }).outputText;
   const context = output => ({ module: output, exports: output.exports, Buffer, process: { platform },
     require(name) { assert.ok(Object.hasOwn(dependencies, name), name); return dependencies[name]; } });
   new Script(stageCode).runInNewContext(context(stage));
-  dependencies['./local-package-stage.js'] = stage.exports;
-  dependencies['./package-tar.js'] = tar;
+  dependencies['../platform/package-staging.js'] = stage.exports;
+  dependencies['../runtime/packages/tar.js'] = tar;
   new Script(code).runInNewContext(context(module));
   return module.exports;
 }

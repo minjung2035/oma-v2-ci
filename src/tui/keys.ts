@@ -10,7 +10,7 @@
  * framing those tokens from a byte stream and its typed `Key` vocabulary.
  */
 import { parseKey } from "@earendil-works/pi-tui";
-import { TERMINAL_BOUNDS } from "./limits.js";
+import { TERMINAL_BOUNDS } from "../domain/surface-bounds.js";
 import { decodeUtf8 } from "../domain/utf8.js";
 import { UNSEEN_EXCEPT_LAYOUT } from "../domain/unseen-text.js";
 

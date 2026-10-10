@@ -1,3 +1,4 @@
+import { packageDirectories } from "../platform/package-files.js";
 /** `oma` on the Mac (macos-platform §2.4 / DR28): the Human's command.
  * Society uses the Host API and carries the guest's screen. Personal uses
  * the native host engine, selected before any Host API token is read.
@@ -17,12 +18,12 @@ import { errorCodeOf, errorExit, isErrorCode } from "../domain/errors.js";
 import { hostApiRequest } from "../platform/host/api-client.js";
 import { attachTerminal } from "../platform/host/attach-client.js";
 import { PLATFORM_FRAME_BYTES } from "../protocol/host-guest.js";
-import { PACKAGE_USAGE, packageActivation, packageCommand, packageListLines, writePackageIndex, type PackageCommand } from "../runtime/pi-packages.js";
-import { pruneLocalStage, stageLocalPackage } from "../runtime/local-package.js";
+import { PACKAGE_USAGE, packageActivation, packageCommand, packageListLines, writePackageIndex, type PackageCommand } from "../runtime/packages/index.js";
+import { pruneLocalStage, stageLocalPackage } from "../application/local-packages.js";
 import { reconcilePersonalSettings } from "../runtime/personal-settings.js";
 import { parseMacArguments } from "../runtime/host-arguments.js";
 import { ProcessLock } from "../runtime/process-lock.js";
-import { runEngineLogin } from "../tui/login.js";
+import { runEngineLogin } from "../runtime/engine/login.js";
 import { chooseSessionMode, chooseSociety } from "../tui/session-mode.js";
 import { sessionBirthForHistory, RESUME_SESSION_ENV } from "../runtime/session-catalog.js";
 import { requireSessionMode } from "../runtime/session-mode.js";
@@ -82,7 +83,7 @@ async function packages(decision: Extract<PackageCommand, { kind: "run" }>): Pro
       override: process.env.OMA_PI_COMMAND, fence: lock.descriptor, env: process.env, packages: { store, args: run.args } });
     if (code === 0 && decision.command !== "list" && !args.includes("--help") && !args.includes("-h")) {
       lock.assertHeld(join(home, "run", "packages.lock"));
-      await writePackageIndex(store);
+      await writePackageIndex(store, packageDirectories);
       pruneLocalStage(store);
       reconcilePersonalSettings({ dataRoot: home, libdir, packages: store });
       if (decision.hostOnly) process.stdout.write("Host packages updated; Society packages were not synchronized. Select Personal extensions in Config > Extensions.\n");

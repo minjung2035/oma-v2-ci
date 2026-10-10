@@ -16,7 +16,7 @@ import { EGRESS_SOCKET_ENV, EgressForwarder, requestEgressConnect, requestEgress
 import { placeholderFor, resolveEngineAuth } from "./runtime/engine-auth.js";
 import { productSurfaceMasks } from "./runtime/resident-rootfs.js";
 import { StoreError } from "./domain/errors.js";
-import { packageResourcePaths } from "./runtime/pi-packages.js";
+import { packageResourcePaths } from "./runtime/packages/index.js";
 import { BrokerChannel, type ChannelLimits } from "./protocol/channel.js";
 import {
   deliveryDecision,

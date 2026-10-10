@@ -6,7 +6,7 @@ import { chmodSync, mkdirSync, readFileSync, rmSync, symlinkSync, writeFileSync 
 import { join } from "node:path";
 import { loadConfiguration, loadConfigurationSnapshot } from "../src/config.js";
 import { observeExtensionAsset } from "../src/config/operations.js";
-import { CORE_EXTENSION, readExtensions, toggleExtension } from "../src/tui/sources/extensions.js";
+import { CORE_EXTENSION, readExtensions, toggleExtension } from "../src/application/extensions.js";
 import { StoreError } from "../src/domain/errors.js";
 import { createCompleteConfigurationFixture } from "./fixtures/configuration.js";
 

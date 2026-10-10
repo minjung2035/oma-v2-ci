@@ -12,7 +12,7 @@ import { PROTOCOL_LIMIT_FIELDS } from "../src/domain/limits.js";
 import { loadConfig } from "../src/config.js";
 import { readConfigurationSource } from "../src/config/operations.js";
 import { defaultHostConfig, societyFromDirectory } from "../src/config/defaults.js";
-import { readSettings } from "../src/tui/sources/settings.js";
+import { readSettings } from "../src/application/settings.js";
 import { PUBLIC_METHODS, INTERNAL_METHODS } from "../src/protocol/methods.js";
 
 const scratch = (prefix: string): string => mkdtempSync(join(tmpdir(), prefix));

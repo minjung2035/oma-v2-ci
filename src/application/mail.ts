@@ -7,13 +7,13 @@
  */
 import { closeSync, constants, fstatSync, lstatSync, openSync, readSync, readdirSync } from "node:fs";
 import { dirname, join } from "node:path";
-import type { MailBody, MailboxRead, MailRow } from "../model.js";
-import { mailNamerFor, type MailRoster } from "../mail-names.js";
-import { READ_BOUNDS } from "../limits.js";
-import { displaySubject } from "../../mail/headers.js";
-import { headerEnd, readableBody } from "../../mail/display.js";
-import { unobserved } from "../../domain/errors.js";
-import { errorWords } from "../words.js";
+import type { MailBody, MailboxRead, MailRow } from "../tui/model.js";
+import { mailNamerFor, type MailRoster } from "../tui/mail-names.js";
+import { READ_BOUNDS } from "../domain/surface-bounds.js";
+import { displaySubject } from "../mail/headers.js";
+import { headerEnd, readableBody } from "../mail/display.js";
+import { unobserved } from "../domain/errors.js";
+import { errorWords } from "../tui/words.js";
 
 export interface MailboxPaths {
   readonly newDir: string;

@@ -4,7 +4,7 @@
 // syntax tree now: scripts/architecture/rules/surface-rules.mjs.
 import test from "node:test";
 import assert from "node:assert/strict";
-import { SURFACE_BOUNDS } from "../src/tui/limits.js";
+import { SURFACE_BOUNDS } from "../src/domain/surface-bounds.js";
 import { LAYOUT_BOUNDS } from "../src/tui/view/layout.js";
 import { SURFACE_LIMITS } from "../src/domain/tool-surface.js";
 
@@ -17,4 +17,3 @@ test("every declared bound is positive, finite and explains itself", () => {
   for (const [name, value] of Object.entries(SURFACE_LIMITS))
     assert.ok(Number.isSafeInteger(value) && value > 0, `tool surface ${name} must be a positive safe integer`);
 });
-

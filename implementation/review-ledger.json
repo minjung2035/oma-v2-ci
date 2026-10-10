@@ -2,10 +2,10 @@
  "version": 1,
  "baseline": "b25961cc46532f5e30ff60cc381fed51c59d13ab",
  "summary": {
-  "CHANGED_WITH_ORACLE": 14104,
-  "REMOVED": 8,
+  "CHANGED_WITH_ORACLE": 14112,
+  "REMOVED": 15,
   "NOT_REVIEWED": 50,
-  "READ_UNCHANGED": 45
+  "READ_UNCHANGED": 44
  },
  "lanes": {
   "fast": "PASS",
@@ -125,6 +125,136 @@
    ],
    "note": "DR37 direct review of changed code and affected composition: remove OMA resource/count/storage admission enforcement while keeping current authority, serialized contained effects, canonical historical declarations and explicit OS errors. Updated existing regressions plus DR37 positive execution tests cover the delta; no historical full-file review or environment PASS is renewed by this hash. Native systemd exposed finite DefaultTasksMax after omission; explicit TasksMax=infinity now disables that inherited per-service default without adding a resource cap.",
    "sha256": "2de20d1dd7fe9a48023026d60ea935f724ae4fd295029e7b01188877afa84892"
+  },
+  {
+   "path": "src/application/exit.ts",
+   "primary": null,
+   "status": "CHANGED_WITH_ORACLE",
+   "by": [
+    "DR41"
+   ],
+   "oracles": [
+    "DR41"
+   ],
+   "note": "DR41 direct delta and affected-owner review, without subagents: remove TUI effect/Runtime implementation imports; preserve configuration publication/read-back/unknown, effect-time tenure, Principal ordering and actual OS exit, package inode leases and staging containment. Named moved declarations were compared with the baseline; the three altered runtime bodies supply product wording or platform directory ports. Concrete Society port and module boundary/build oracles plus the existing behavior regressions cover the change. This is not a renewed full-file/codebase review or native qualification. Inherited NOT_REVIEWED owners remain unapproved.",
+   "sha256": "e47855215c26719cae8fd834a1099a322693cda3eeace1fd8c418a60d2c527e6"
+  },
+  {
+   "path": "src/application/extensions.ts",
+   "primary": null,
+   "status": "CHANGED_WITH_ORACLE",
+   "by": [
+    "DR41"
+   ],
+   "oracles": [
+    "DR41"
+   ],
+   "note": "DR41 direct delta and affected-owner review, without subagents: remove TUI effect/Runtime implementation imports; preserve configuration publication/read-back/unknown, effect-time tenure, Principal ordering and actual OS exit, package inode leases and staging containment. Named moved declarations were compared with the baseline; the three altered runtime bodies supply product wording or platform directory ports. Concrete Society port and module boundary/build oracles plus the existing behavior regressions cover the change. This is not a renewed full-file/codebase review or native qualification. Inherited NOT_REVIEWED owners remain unapproved.",
+   "sha256": "f4036ec05754a86cabd471aa8422c0bf89d8c8f7fbf0bbc06f20b0db8426cd00"
+  },
+  {
+   "path": "src/application/local-packages.ts",
+   "primary": null,
+   "status": "CHANGED_WITH_ORACLE",
+   "by": [
+    "DR41"
+   ],
+   "oracles": [
+    "DR41"
+   ],
+   "note": "DR41 direct delta and affected-owner review, without subagents: remove TUI effect/Runtime implementation imports; preserve configuration publication/read-back/unknown, effect-time tenure, Principal ordering and actual OS exit, package inode leases and staging containment. Named moved declarations were compared with the baseline; the three altered runtime bodies supply product wording or platform directory ports. Concrete Society port and module boundary/build oracles plus the existing behavior regressions cover the change. This is not a renewed full-file/codebase review or native qualification. Inherited NOT_REVIEWED owners remain unapproved.",
+   "sha256": "b1611ff2291366f155d664eb4db87ff4cd30f2a77c58c2a3b43a8c1e16846782"
+  },
+  {
+   "path": "src/application/mail.ts",
+   "primary": null,
+   "status": "CHANGED_WITH_ORACLE",
+   "by": [
+    "DR41"
+   ],
+   "oracles": [
+    "DR41"
+   ],
+   "note": "DR41 direct delta and affected-owner review, without subagents: remove TUI effect/Runtime implementation imports; preserve configuration publication/read-back/unknown, effect-time tenure, Principal ordering and actual OS exit, package inode leases and staging containment. Named moved declarations were compared with the baseline; the three altered runtime bodies supply product wording or platform directory ports. Concrete Society port and module boundary/build oracles plus the existing behavior regressions cover the change. This is not a renewed full-file/codebase review or native qualification. Inherited NOT_REVIEWED owners remain unapproved.",
+   "sha256": "365afeac83b8d9cddf1f9c909756f21feda6d885ffa0c99e156551196d4ebc11"
+  },
+  {
+   "path": "src/application/packages-apply.ts",
+   "primary": null,
+   "status": "CHANGED_WITH_ORACLE",
+   "by": [
+    "DR41"
+   ],
+   "oracles": [
+    "DR41"
+   ],
+   "note": "DR41 direct delta and affected-owner review, without subagents: remove TUI effect/Runtime implementation imports; preserve configuration publication/read-back/unknown, effect-time tenure, Principal ordering and actual OS exit, package inode leases and staging containment. Named moved declarations were compared with the baseline; the three altered runtime bodies supply product wording or platform directory ports. Concrete Society port and module boundary/build oracles plus the existing behavior regressions cover the change. This is not a renewed full-file/codebase review or native qualification. Inherited NOT_REVIEWED owners remain unapproved.",
+   "sha256": "142dd445597a3699031fa4f868462d831dcce66f9a92054f1432c6c3390d0ab4"
+  },
+  {
+   "path": "src/application/project-session-settings.ts",
+   "primary": null,
+   "status": "CHANGED_WITH_ORACLE",
+   "by": [
+    "DR41"
+   ],
+   "oracles": [
+    "DR41"
+   ],
+   "note": "DR41 direct delta and affected-owner review, without subagents: remove TUI effect/Runtime implementation imports; preserve configuration publication/read-back/unknown, effect-time tenure, Principal ordering and actual OS exit, package inode leases and staging containment. Named moved declarations were compared with the baseline; the three altered runtime bodies supply product wording or platform directory ports. Concrete Society port and module boundary/build oracles plus the existing behavior regressions cover the change. This is not a renewed full-file/codebase review or native qualification. Inherited NOT_REVIEWED owners remain unapproved.",
+   "sha256": "71cad290ba6e0227e875f7ed217fe5c10c9c0f8224dc8d92aba5b50c2d64e634"
+  },
+  {
+   "path": "src/application/project-settings.ts",
+   "primary": null,
+   "status": "CHANGED_WITH_ORACLE",
+   "by": [
+    "DR41"
+   ],
+   "oracles": [
+    "DR41"
+   ],
+   "note": "DR41 direct delta and affected-owner review, without subagents: remove TUI effect/Runtime implementation imports; preserve configuration publication/read-back/unknown, effect-time tenure, Principal ordering and actual OS exit, package inode leases and staging containment. Named moved declarations were compared with the baseline; the three altered runtime bodies supply product wording or platform directory ports. Concrete Society port and module boundary/build oracles plus the existing behavior regressions cover the change. This is not a renewed full-file/codebase review or native qualification. Inherited NOT_REVIEWED owners remain unapproved.",
+   "sha256": "6da69e82ae91512672cea8956105143bd4759a8a598d792111ca90a5c0d9d9a6"
+  },
+  {
+   "path": "src/application/settings.ts",
+   "primary": null,
+   "status": "CHANGED_WITH_ORACLE",
+   "by": [
+    "DR41"
+   ],
+   "oracles": [
+    "DR41"
+   ],
+   "note": "DR41 direct delta and affected-owner review, without subagents: remove TUI effect/Runtime implementation imports; preserve configuration publication/read-back/unknown, effect-time tenure, Principal ordering and actual OS exit, package inode leases and staging containment. Named moved declarations were compared with the baseline; the three altered runtime bodies supply product wording or platform directory ports. Concrete Society port and module boundary/build oracles plus the existing behavior regressions cover the change. This is not a renewed full-file/codebase review or native qualification. Inherited NOT_REVIEWED owners remain unapproved.",
+   "sha256": "8b1bb16b6cc73df62c4af6dfbadfdefbe313e550e4d50aa6221393acaee9ad55"
+  },
+  {
+   "path": "src/application/society-panel.ts",
+   "primary": null,
+   "status": "CHANGED_WITH_ORACLE",
+   "by": [
+    "DR41"
+   ],
+   "oracles": [
+    "DR41"
+   ],
+   "note": "DR41 direct delta and affected-owner review, without subagents: remove TUI effect/Runtime implementation imports; preserve configuration publication/read-back/unknown, effect-time tenure, Principal ordering and actual OS exit, package inode leases and staging containment. Named moved declarations were compared with the baseline; the three altered runtime bodies supply product wording or platform directory ports. Concrete Society port and module boundary/build oracles plus the existing behavior regressions cover the change. This is not a renewed full-file/codebase review or native qualification. Inherited NOT_REVIEWED owners remain unapproved.",
+   "sha256": "732a4ba8fb60b54b7a4e3bddfd3173f50d18d93ba298c466097d13093f216a35"
+  },
+  {
+   "path": "src/application/status-observation.ts",
+   "primary": null,
+   "status": "CHANGED_WITH_ORACLE",
+   "by": [
+    "DR41"
+   ],
+   "oracles": [
+    "DR41"
+   ],
+   "note": "DR41 direct delta and affected-owner review, without subagents: remove TUI effect/Runtime implementation imports; preserve configuration publication/read-back/unknown, effect-time tenure, Principal ordering and actual OS exit, package inode leases and staging containment. Named moved declarations were compared with the baseline; the three altered runtime bodies supply product wording or platform directory ports. Concrete Society port and module boundary/build oracles plus the existing behavior regressions cover the change. This is not a renewed full-file/codebase review or native qualification. Inherited NOT_REVIEWED owners remain unapproved.",
+   "sha256": "20c00d0589db01535feda990774c2a02cda1fadeda957d8da864f20f11d254d0"
   },
   {
    "path": "src/attestation.ts",
@@ -858,13 +988,13 @@
    "primary": "WP11",
    "status": "CHANGED_WITH_ORACLE",
    "by": [
-    "DR37"
+    "DR41"
    ],
    "oracles": [
-    "DR37"
+    "DR41"
    ],
-   "note": "DR37 direct review of changed code and affected composition: remove OMA resource/count/storage admission enforcement while keeping current authority, serialized contained effects, canonical historical declarations and explicit OS errors. Updated existing regressions plus DR37 positive execution tests cover the delta; no historical full-file review or environment PASS is renewed by this hash.",
-   "sha256": "96ea2bdab03224bf54c615e01551e1864744e6eca1a7ade2a26a50e20091bf56"
+   "note": "DR41 direct delta and affected-owner review, without subagents: remove TUI effect/Runtime implementation imports; preserve configuration publication/read-back/unknown, effect-time tenure, Principal ordering and actual OS exit, package inode leases and staging containment. Named moved declarations were compared with the baseline; the three altered runtime bodies supply product wording or platform directory ports. Concrete Society port and module boundary/build oracles plus the existing behavior regressions cover the change. This is not a renewed full-file/codebase review or native qualification. Inherited NOT_REVIEWED owners remain unapproved.",
+   "sha256": "e4149b7e3c9a05b7678d41eebe9171e6eb4593c9ffc5a901d5b8466f3cdffcd7"
   },
   {
    "path": "src/config/defaults.ts",
@@ -1109,14 +1239,13 @@
    "primary": "WP31",
    "status": "CHANGED_WITH_ORACLE",
    "by": [
-    "DR35",
-    "DR36"
+    "DR41"
    ],
    "oracles": [
-    "DR35"
+    "DR41"
    ],
-   "note": "Reviewed the earlier startup deltas and affected ownership/import path: one installation digest per derivation with complete byte hashing, linear bundle membership, explicit Pi presentation instead of eager SDK import, private history ownership, and precisely scoped optional interactive tool setup. Actual PTY and import/ownership regressions remain the startup oracles; no authority is granted by a private screen.",
-   "sha256": "629cb247111d35889960b4ee7c6c53c99ab6f4180941ecf265af65d65fd85d68"
+   "note": "DR41 direct delta and affected-owner review, without subagents: remove TUI effect/Runtime implementation imports; preserve configuration publication/read-back/unknown, effect-time tenure, Principal ordering and actual OS exit, package inode leases and staging containment. Named moved declarations were compared with the baseline; the three altered runtime bodies supply product wording or platform directory ports. Concrete Society port and module boundary/build oracles plus the existing behavior regressions cover the change. This is not a renewed full-file/codebase review or native qualification. Inherited NOT_REVIEWED owners remain unapproved.",
+   "sha256": "9e3a1cb7ca818b968f6bb00b5b5772a1b65d9fda349aa29115601cf3ea8ba51e"
   },
   {
    "path": "src/domain/derived.ts",
@@ -1269,6 +1398,19 @@
    "sha256": "83cffcb1c209200ea6716134096154a01c890d6aa9497153b8e38fbf6a78370b"
   },
   {
+   "path": "src/domain/package-policy.ts",
+   "primary": null,
+   "status": "CHANGED_WITH_ORACLE",
+   "by": [
+    "DR41"
+   ],
+   "oracles": [
+    "DR41"
+   ],
+   "note": "DR41 direct delta and affected-owner review, without subagents: remove TUI effect/Runtime implementation imports; preserve configuration publication/read-back/unknown, effect-time tenure, Principal ordering and actual OS exit, package inode leases and staging containment. Named moved declarations were compared with the baseline; the three altered runtime bodies supply product wording or platform directory ports. Concrete Society port and module boundary/build oracles plus the existing behavior regressions cover the change. This is not a renewed full-file/codebase review or native qualification. Inherited NOT_REVIEWED owners remain unapproved.",
+   "sha256": "41dd90ac4d47b442b8372f2be46a4bfd927660336ba2987223076a313cc31237"
+  },
+  {
    "path": "src/domain/persisted-formats.ts",
    "primary": "WP04",
    "status": "CHANGED_WITH_ORACLE",
@@ -1334,6 +1476,19 @@
    "oracles": []
   },
   {
+   "path": "src/domain/settings-policy.ts",
+   "primary": null,
+   "status": "CHANGED_WITH_ORACLE",
+   "by": [
+    "DR41"
+   ],
+   "oracles": [
+    "DR41"
+   ],
+   "note": "DR41 direct delta and affected-owner review, without subagents: remove TUI effect/Runtime implementation imports; preserve configuration publication/read-back/unknown, effect-time tenure, Principal ordering and actual OS exit, package inode leases and staging containment. Named moved declarations were compared with the baseline; the three altered runtime bodies supply product wording or platform directory ports. Concrete Society port and module boundary/build oracles plus the existing behavior regressions cover the change. This is not a renewed full-file/codebase review or native qualification. Inherited NOT_REVIEWED owners remain unapproved.",
+   "sha256": "fd197bb9ec05ef93660148d2a4ef31b67a881bd1e298a4575a9f9cf086ea1ffd"
+  },
+  {
    "path": "src/domain/spec-identity.ts",
    "primary": "WP25",
    "status": "READ_UNCHANGED",
@@ -1352,6 +1507,19 @@
    ],
    "note": "read in full in the whole-codebase adversarial pass after v9; oracles are the tests that load this module",
    "sha256": "624d9ecbcce801f2bc1d96db6a985813391f6c755d7a27f133a25f48b90820a6"
+  },
+  {
+   "path": "src/domain/surface-bounds.ts",
+   "primary": null,
+   "status": "CHANGED_WITH_ORACLE",
+   "by": [
+    "DR41"
+   ],
+   "oracles": [
+    "DR41"
+   ],
+   "note": "DR41 direct delta and affected-owner review, without subagents: remove TUI effect/Runtime implementation imports; preserve configuration publication/read-back/unknown, effect-time tenure, Principal ordering and actual OS exit, package inode leases and staging containment. Named moved declarations were compared with the baseline; the three altered runtime bodies supply product wording or platform directory ports. Concrete Society port and module boundary/build oracles plus the existing behavior regressions cover the change. This is not a renewed full-file/codebase review or native qualification. Inherited NOT_REVIEWED owners remain unapproved.",
+   "sha256": "9f2f9727aa396ad498dc45bf704f549568f6545bd589d3d96c7ce6795c89f616"
   },
   {
    "path": "src/domain/tier-evaluation.ts",
@@ -1469,7 +1637,8 @@
    "primary": null,
    "status": "NOT_REVIEWED",
    "by": [],
-   "oracles": []
+   "oracles": [],
+   "note": "Current working-tree bytes have no explicit byte-bound review; historical reviews do not certify these changes."
   },
   {
    "path": "src/entry/guest-provision.ts",
@@ -1597,103 +1766,39 @@
    "primary": null,
    "status": "CHANGED_WITH_ORACLE",
    "by": [
-    "UX-38"
+    "DR41"
    ],
    "oracles": [
-    "DR25/mac"
+    "DR41"
    ],
-   "note": "Re-read in full for the UX-38 batch-5 working-tree review (2026-10-12): stageLocalPackage is now awaited -- the archive path it can take is async (the gunzip pipeline), so the Mac's install decision carries the staged name only after staging settles; the engine run, lock and list semantics are unchanged.",
-   "sha256": "12332ed918e91851928673513b4a002c0fc5d251fd4576c70cc9933c5f23f5ef"
+   "note": "DR41 direct delta and affected-owner review, without subagents: remove TUI effect/Runtime implementation imports; preserve configuration publication/read-back/unknown, effect-time tenure, Principal ordering and actual OS exit, package inode leases and staging containment. Named moved declarations were compared with the baseline; the three altered runtime bodies supply product wording or platform directory ports. Concrete Society port and module boundary/build oracles plus the existing behavior regressions cover the change. This is not a renewed full-file/codebase review or native qualification. Inherited NOT_REVIEWED owners remain unapproved.",
+   "sha256": "055621cdd9d240d5f521b9df550475ef71cfc10f64545381c7ba047eed205794"
   },
   {
    "path": "src/entry/oma-society.ts",
    "primary": null,
    "status": "CHANGED_WITH_ORACLE",
    "by": [
-    "DR39"
+    "DR41"
    ],
    "oracles": [
-    "MODE-005"
+    "DR41"
    ],
-   "note": "DR39 direct delta/affected-owner review without subagents; no historical full-file or native lane renewal. Extract project settings and panel views; retain tenure, OS-confirmed engine exit, resume admission, broker generation and delivery ownership in the entry. DR39 pointer-byte and unavailable-read regressions plus existing controlled lifetime tests cover the affected flows.",
-   "sha256": "ccfc965911c0398a53af9a25adb484f3a990a008e36a50ff3905087f78346b26"
+   "note": "DR41 direct delta and affected-owner review, without subagents: remove TUI effect/Runtime implementation imports; preserve configuration publication/read-back/unknown, effect-time tenure, Principal ordering and actual OS exit, package inode leases and staging containment. Named moved declarations were compared with the baseline; the three altered runtime bodies supply product wording or platform directory ports. Concrete Society port and module boundary/build oracles plus the existing behavior regressions cover the change. This is not a renewed full-file/codebase review or native qualification. Inherited NOT_REVIEWED owners remain unapproved.",
+   "sha256": "84a7bbb96627b71578d6ac2bc88948c1620e0e02176b998811f05940dad90b73"
   },
   {
    "path": "src/entry/oma.ts",
    "primary": "WP28",
    "status": "CHANGED_WITH_ORACLE",
    "by": [
-    "AV3",
-    "AV5",
-    "AV7",
-    "DR13",
-    "DR16",
-    "DR17",
-    "DR18",
-    "MAC-022",
-    "P0V-113",
-    "P0V-114",
-    "P0V-115",
-    "P0V-116",
-    "P0V-12",
-    "P0V-18",
-    "P0V-24",
-    "P0V-36",
-    "P0V-40",
-    "P0V-41",
-    "P0V-42",
-    "P0V-43",
-    "P0V-58",
-    "P0V-81",
-    "WP03",
-    "WP08",
-    "WP09",
-    "WP10",
-    "WP12",
-    "WP13",
-    "WP15",
-    "WP16",
-    "WP28"
+    "DR41"
    ],
    "oracles": [
-    "AV3",
-    "AV5",
-    "AV7",
-    "DR13",
-    "DR18",
-    "P0V-113",
-    "P0V-114",
-    "P0V-115",
-    "P0V-116",
-    "P0V-36",
-    "P0V-40",
-    "P0V-41",
-    "P0V-42",
-    "P0V-43",
-    "P0V-58",
-    "P0V-81",
-    "V03A",
-    "V03B",
-    "V08A",
-    "V08B",
-    "V09A",
-    "V09B",
-    "V09C",
-    "V10A",
-    "V10C",
-    "V12A",
-    "V12B",
-    "V13A",
-    "V13B",
-    "V13C",
-    "V15A",
-    "V15B",
-    "V16A",
-    "V16B",
-    "V28A",
-    "V28B"
+    "DR41"
    ],
-   "sha256": "e73013febf56e34821e0dafffc7f4b239e4c94e4052fae777aa32d8a37b332c7"
+   "note": "DR41 direct delta and affected-owner review, without subagents: remove TUI effect/Runtime implementation imports; preserve configuration publication/read-back/unknown, effect-time tenure, Principal ordering and actual OS exit, package inode leases and staging containment. Named moved declarations were compared with the baseline; the three altered runtime bodies supply product wording or platform directory ports. Concrete Society port and module boundary/build oracles plus the existing behavior regressions cover the change. This is not a renewed full-file/codebase review or native qualification. Inherited NOT_REVIEWED owners remain unapproved.",
+   "sha256": "fea19d3c762d30e8d9c18e11a41ed4743eae0cfe17db0cb3cab37ed59747cc52"
   },
   {
    "path": "src/entry/omahostd.ts",
@@ -1713,30 +1818,26 @@
    "primary": null,
    "status": "CHANGED_WITH_ORACLE",
    "by": [
-    "C"
+    "DR41"
    ],
    "oracles": [
-    "Personal host"
+    "DR41"
    ],
-   "note": "Read in full at the 2026-10-05 C round: a society handoff runs only after the child owner's actual exit, re-derives the project's canonical society name itself, refuses any other name with INVALID_REQUEST, chdirs to the session's birth cwd (a resumed window's cwd may differ) and execves 'oma --society <project>' with RESUME_SESSION_ENV deleted -- a fresh Society birth, not a resume.",
-   "sha256": "70f2aec4bae1312faadf8448984792fa2dd697321df5619218978d9b5f9a457e"
+   "note": "DR41 direct delta and affected-owner review, without subagents: remove TUI effect/Runtime implementation imports; preserve configuration publication/read-back/unknown, effect-time tenure, Principal ordering and actual OS exit, package inode leases and staging containment. Named moved declarations were compared with the baseline; the three altered runtime bodies supply product wording or platform directory ports. Concrete Society port and module boundary/build oracles plus the existing behavior regressions cover the change. This is not a renewed full-file/codebase review or native qualification. Inherited NOT_REVIEWED owners remain unapproved.",
+   "sha256": "95c33e53dd1f61bc81e1adb9fa6bf8a49ee28a1c1fc7d13ad3acd10e36eabd7a"
   },
   {
    "path": "src/entry/pi-interactive-host.ts",
    "primary": null,
    "status": "CHANGED_WITH_ORACLE",
    "by": [
-    "DR35",
-    "DR36",
-    "DR40"
+    "DR41"
    ],
    "oracles": [
-    "AV-02",
-    "DR35",
-    "DR40"
+    "DR41"
    ],
-   "note": "DR40 direct delta and affected-owner review without subagents; no historical full-file or native qualification renewal. Pinned external-engine adaptation and lifetime boundaries; existing authority policy preserved.",
-   "sha256": "28074817bd510f2406933feb7a9114223a258a16017c8dfcd7cfd2a694c68d37"
+   "note": "DR41 direct delta and affected-owner review, without subagents: remove TUI effect/Runtime implementation imports; preserve configuration publication/read-back/unknown, effect-time tenure, Principal ordering and actual OS exit, package inode leases and staging containment. Named moved declarations were compared with the baseline; the three altered runtime bodies supply product wording or platform directory ports. Concrete Society port and module boundary/build oracles plus the existing behavior regressions cover the change. This is not a renewed full-file/codebase review or native qualification. Inherited NOT_REVIEWED owners remain unapproved.",
+   "sha256": "48108473601daa6a5a9da225c2c299d4a15c49de80774ccad51b3a834d74ddb7"
   },
   {
    "path": "src/entry/pi-interactive.ts",
@@ -1750,15 +1851,13 @@
    "primary": null,
    "status": "CHANGED_WITH_ORACLE",
    "by": [
-    "DR35",
-    "DR36"
+    "DR41"
    ],
    "oracles": [
-    "AV-02",
-    "DR35"
+    "DR41"
    ],
-   "note": "Reviewed Pi public storage/factory wiring and startup presentation separation: one owned settings lock, Pi field merging, trusted user project atomic replacement under the public Pi file lock with conflict detection, preservation of explicit skill choices, bundled CLI preload only for the pinned runtime, and typed private compatibility declarations. Interprocess CLI and trusted/untrusted project oracles cover the settings changes.",
-   "sha256": "a3fdfc7a097017cda8168dfd21e523f108278a10dcf365bd837d948aa87a8b42"
+   "note": "DR41 direct delta and affected-owner review, without subagents: remove TUI effect/Runtime implementation imports; preserve configuration publication/read-back/unknown, effect-time tenure, Principal ordering and actual OS exit, package inode leases and staging containment. Named moved declarations were compared with the baseline; the three altered runtime bodies supply product wording or platform directory ports. Concrete Society port and module boundary/build oracles plus the existing behavior regressions cover the change. This is not a renewed full-file/codebase review or native qualification. Inherited NOT_REVIEWED owners remain unapproved.",
+   "sha256": "bf4e962cba8f047018f92091820f0c65077a59d6c5d33464f449bf5f54bdecaa"
   },
   {
    "path": "src/entry/prepare-society.ts",
@@ -1780,15 +1879,13 @@
    "primary": "WP03",
    "status": "CHANGED_WITH_ORACLE",
    "by": [
-    "DR34",
-    "BL1"
+    "DR41"
    ],
    "oracles": [
-    "DR34",
-    "BL1"
+    "DR41"
    ],
-   "note": "Read in full: the egress clause resolves once against the rendered profile name; a null policy simply omits profile.egress -- no UNSUPPORTED_PROFILE, no proxy surface. BL1 repair review -- OMA_TOOL_SURFACE_HEX is canonical-validated like the profile: strict even-length lowercase hex AND a UTF-8 round-trip re-encode (0x/odd-length/invalid-UTF-8/truncated plans all refuse startup at exit 4); the dead `toolSurface === null` branch is gone -- both hex gates have already exited, so toolSurface is always set on the spawn profile.",
-   "sha256": "15393f40e20d339154fcf942b184e709a1f2afe6d8c38198b164d37164eb0b60"
+   "note": "DR41 direct delta and affected-owner review, without subagents: remove TUI effect/Runtime implementation imports; preserve configuration publication/read-back/unknown, effect-time tenure, Principal ordering and actual OS exit, package inode leases and staging containment. Named moved declarations were compared with the baseline; the three altered runtime bodies supply product wording or platform directory ports. Concrete Society port and module boundary/build oracles plus the existing behavior regressions cover the change. This is not a renewed full-file/codebase review or native qualification. Inherited NOT_REVIEWED owners remain unapproved.",
+   "sha256": "d7593a7051b2994f4fc531c04980e4c68e0ccc272ebcf6a5326d4af3743ebf81"
   },
   {
    "path": "src/extension/ask-user-question.ts",
@@ -181325,13 +181422,13 @@
    "primary": "WP22",
    "status": "CHANGED_WITH_ORACLE",
    "by": [
-    "DR37"
+    "DR41"
    ],
    "oracles": [
-    "DR37"
+    "DR41"
    ],
-   "note": "DR37 direct review of changed code and affected composition: remove OMA resource/count/storage admission enforcement while keeping current authority, serialized contained effects, canonical historical declarations and explicit OS errors. Updated existing regressions plus DR37 positive execution tests cover the delta; no historical full-file review or environment PASS is renewed by this hash.",
-   "sha256": "023cdd389843c4531b7254497c57c2a8e536bd0c7f9e8d577b8471be73b03a0f"
+   "note": "DR41 direct delta and affected-owner review, without subagents: remove TUI effect/Runtime implementation imports; preserve configuration publication/read-back/unknown, effect-time tenure, Principal ordering and actual OS exit, package inode leases and staging containment. Named moved declarations were compared with the baseline; the three altered runtime bodies supply product wording or platform directory ports. Concrete Society port and module boundary/build oracles plus the existing behavior regressions cover the change. This is not a renewed full-file/codebase review or native qualification. Inherited NOT_REVIEWED owners remain unapproved.",
+   "sha256": "a212f4e6382c8dc800445b9a01d0ef1c986d4bbcd87d8d6fc644260986b548bf"
   },
   {
    "path": "src/frame.ts",
@@ -182432,13 +182529,13 @@
    "primary": null,
    "status": "CHANGED_WITH_ORACLE",
    "by": [
-    "UX-38"
+    "DR41"
    ],
    "oracles": [
-    "DR25"
+    "DR41"
    ],
-   "note": "Re-read in full for the UX-38 batch-4 working-tree review (2026-10-08): the engine's packages answer -- sized by what the archive carried -- is spooled whole to a per-call temporary directory instead of failing at a 1 MiB capture bound; the caller timeout stays the declared ceiling and non-exited observations still fail honestly with no kept outcome.",
-   "sha256": "035ac210de21eac1f0becdf252992a0bcdf5a274b9daff336ec405beaa463b45"
+   "note": "DR41 direct delta and affected-owner review, without subagents: remove TUI effect/Runtime implementation imports; preserve configuration publication/read-back/unknown, effect-time tenure, Principal ordering and actual OS exit, package inode leases and staging containment. Named moved declarations were compared with the baseline; the three altered runtime bodies supply product wording or platform directory ports. Concrete Society port and module boundary/build oracles plus the existing behavior regressions cover the change. This is not a renewed full-file/codebase review or native qualification. Inherited NOT_REVIEWED owners remain unapproved.",
+   "sha256": "cb3f865add0cab2035819340796a4b7a15b9110a0d5e5df0b3e6ff6365f99564"
   },
   {
    "path": "src/platform/guest/project.ts",
@@ -182744,15 +182841,13 @@
    "primary": null,
    "status": "CHANGED_WITH_ORACLE",
    "by": [
-    "DR34",
-    "DR40"
+    "DR41"
    ],
    "oracles": [
-    "post-listen",
-    "DR40"
+    "DR41"
    ],
-   "note": "DR40 direct delta and affected-owner review without subagents; no historical full-file or native qualification renewal. Typed method result decoding and coordinator contracts; transport and durable replay ownership preserved.",
-   "sha256": "412b374e17d346e59683306400d0a5702c20d600b1269b016bf67190f674b9a5"
+   "note": "DR41 direct delta and affected-owner review, without subagents: remove TUI effect/Runtime implementation imports; preserve configuration publication/read-back/unknown, effect-time tenure, Principal ordering and actual OS exit, package inode leases and staging containment. Named moved declarations were compared with the baseline; the three altered runtime bodies supply product wording or platform directory ports. Concrete Society port and module boundary/build oracles plus the existing behavior regressions cover the change. This is not a renewed full-file/codebase review or native qualification. Inherited NOT_REVIEWED owners remain unapproved.",
+   "sha256": "09d203a32582e11320820e317a5e1d71808ef59f07bced3776251fda70292998"
   },
   {
    "path": "src/platform/host/image.ts",
@@ -183033,13 +183128,39 @@
    "primary": null,
    "status": "CHANGED_WITH_ORACLE",
    "by": [
-    "UX-38"
+    "DR41"
    ],
    "oracles": [
-    "DR25/mac"
+    "DR41"
    ],
-   "note": "Re-read in full for the UX-38 batch-5 working-tree review (2026-10-12): archive reads and writes stream in chunks -- member bytes are copied 64 KiB at a time and never a whole-buffer hold. The old 200k-entry/2 GiB-total/256 MiB-file payload caps are gone; entries keeps a much larger implementation working-set bound (8M), sizes must still be safe-integer representable, and every integrity rule stands: magic and framing, UTF-8 names, normalized relative paths, traversal refusal, root ordering, duplicate/out-of-place members, executable flags, truncation and trailing data. pathBytes (16-bit wire field) and componentBytes (NAME_MAX class) remain format bounds.",
-   "sha256": "d82d6879176f275e3cfa720b2519d7b03e532c6b1238c78dea4cdb6883dd3ba6"
+   "note": "DR41 direct delta and affected-owner review, without subagents: remove TUI effect/Runtime implementation imports; preserve configuration publication/read-back/unknown, effect-time tenure, Principal ordering and actual OS exit, package inode leases and staging containment. Named moved declarations were compared with the baseline; the three altered runtime bodies supply product wording or platform directory ports. Concrete Society port and module boundary/build oracles plus the existing behavior regressions cover the change. This is not a renewed full-file/codebase review or native qualification. Inherited NOT_REVIEWED owners remain unapproved.",
+   "sha256": "470d3da1be636d42f91168356b728832ab45e48fe07a37ab32a1c15dc8e02edf"
+  },
+  {
+   "path": "src/platform/package-files.ts",
+   "primary": null,
+   "status": "CHANGED_WITH_ORACLE",
+   "by": [
+    "DR41"
+   ],
+   "oracles": [
+    "DR41"
+   ],
+   "note": "DR41 direct delta and affected-owner review, without subagents: remove TUI effect/Runtime implementation imports; preserve configuration publication/read-back/unknown, effect-time tenure, Principal ordering and actual OS exit, package inode leases and staging containment. Named moved declarations were compared with the baseline; the three altered runtime bodies supply product wording or platform directory ports. Concrete Society port and module boundary/build oracles plus the existing behavior regressions cover the change. This is not a renewed full-file/codebase review or native qualification. Inherited NOT_REVIEWED owners remain unapproved.",
+   "sha256": "583aa36f423c33bc47871fa82dd99a54861cf9ec7c95673d406198dff5c5af8f"
+  },
+  {
+   "path": "src/platform/package-staging.ts",
+   "primary": null,
+   "status": "CHANGED_WITH_ORACLE",
+   "by": [
+    "DR41"
+   ],
+   "oracles": [
+    "DR41"
+   ],
+   "note": "DR41 direct delta and affected-owner review, without subagents: remove TUI effect/Runtime implementation imports; preserve configuration publication/read-back/unknown, effect-time tenure, Principal ordering and actual OS exit, package inode leases and staging containment. Named moved declarations were compared with the baseline; the three altered runtime bodies supply product wording or platform directory ports. Concrete Society port and module boundary/build oracles plus the existing behavior regressions cover the change. This is not a renewed full-file/codebase review or native qualification. Inherited NOT_REVIEWED owners remain unapproved.",
+   "sha256": "66551456424fe39d5b49c3663bbcb21f90ec71be066882c425560395bec24f5b"
   },
   {
    "path": "src/platform/product-text.ts",
@@ -183169,6 +183290,19 @@
    ],
    "note": "read in full in the whole-codebase adversarial pass after v9; oracles are tests whose loaded module closure (or text) contains this file",
    "sha256": "1a81915fabf9162b4f64bb54504cb7abaa6817634c44dce41fc39e80cf04ab9c"
+  },
+  {
+   "path": "src/ports/package-files.ts",
+   "primary": null,
+   "status": "CHANGED_WITH_ORACLE",
+   "by": [
+    "DR41"
+   ],
+   "oracles": [
+    "DR41"
+   ],
+   "note": "DR41 direct delta and affected-owner review, without subagents: remove TUI effect/Runtime implementation imports; preserve configuration publication/read-back/unknown, effect-time tenure, Principal ordering and actual OS exit, package inode leases and staging containment. Named moved declarations were compared with the baseline; the three altered runtime bodies supply product wording or platform directory ports. Concrete Society port and module boundary/build oracles plus the existing behavior regressions cover the change. This is not a renewed full-file/codebase review or native qualification. Inherited NOT_REVIEWED owners remain unapproved.",
+   "sha256": "1615f5a557a091bf232052a9be93808b52afe448293b088f6fc3aadf13c09e0f"
   },
   {
    "path": "src/ports/runtime.ts",
@@ -183634,6 +183768,19 @@
    "sha256": "2bf0751cb6fbe7f70a4c93170a1974291048b83b938c0da493e0a595f2a5c510"
   },
   {
+   "path": "src/protocol/settings.ts",
+   "primary": null,
+   "status": "CHANGED_WITH_ORACLE",
+   "by": [
+    "DR41"
+   ],
+   "oracles": [
+    "DR41"
+   ],
+   "note": "DR41 direct delta and affected-owner review, without subagents: remove TUI effect/Runtime implementation imports; preserve configuration publication/read-back/unknown, effect-time tenure, Principal ordering and actual OS exit, package inode leases and staging containment. Named moved declarations were compared with the baseline; the three altered runtime bodies supply product wording or platform directory ports. Concrete Society port and module boundary/build oracles plus the existing behavior regressions cover the change. This is not a renewed full-file/codebase review or native qualification. Inherited NOT_REVIEWED owners remain unapproved.",
+   "sha256": "42d2cd1fa7864aa7b04773d14928efa0842f84532b711001bd9bfd0f60043f32"
+  },
+  {
    "path": "src/protocol/status-page.ts",
    "primary": null,
    "status": "CHANGED_WITH_ORACLE",
@@ -183651,20 +183798,13 @@
    "primary": "WP23",
    "status": "CHANGED_WITH_ORACLE",
    "by": [
-    "P0V-28",
-    "P0V-29",
-    "P0V-38",
-    "P0V-39",
-    "P0V-51"
+    "DR41"
    ],
    "oracles": [
-    "P0V-28",
-    "P0V-29",
-    "P0V-38",
-    "P0V-39",
-    "P0V-51"
+    "DR41"
    ],
-   "sha256": "959fa5cec8dfbd85837e539c707cbbf00ddb9b851c2e5ac48966a4ea72685758"
+   "note": "DR41 direct delta and affected-owner review, without subagents: remove TUI effect/Runtime implementation imports; preserve configuration publication/read-back/unknown, effect-time tenure, Principal ordering and actual OS exit, package inode leases and staging containment. Named moved declarations were compared with the baseline; the three altered runtime bodies supply product wording or platform directory ports. Concrete Society port and module boundary/build oracles plus the existing behavior regressions cover the change. This is not a renewed full-file/codebase review or native qualification. Inherited NOT_REVIEWED owners remain unapproved.",
+   "sha256": "d6aa9035ffe3417b7a9df3325110a7f68363e7bab227b230702fd6f92223324a"
   },
   {
    "path": "src/reconcile.ts",
@@ -183786,13 +183926,13 @@
    "primary": "WP07",
    "status": "CHANGED_WITH_ORACLE",
    "by": [
-    "DR37"
+    "DR41"
    ],
    "oracles": [
-    "DR37"
+    "DR41"
    ],
-   "note": "DR37 direct review of changed code and affected composition: remove OMA resource/count/storage admission enforcement while keeping current authority, serialized contained effects, canonical historical declarations and explicit OS errors. Updated existing regressions plus DR37 positive execution tests cover the delta; no historical full-file review or environment PASS is renewed by this hash.",
-   "sha256": "a4aa0244cdcddafe62cf66a776173cced56d38a68c48b03b736eeeb96dcb690b"
+   "note": "DR41 direct delta and affected-owner review, without subagents: remove TUI effect/Runtime implementation imports; preserve configuration publication/read-back/unknown, effect-time tenure, Principal ordering and actual OS exit, package inode leases and staging containment. Named moved declarations were compared with the baseline; the three altered runtime bodies supply product wording or platform directory ports. Concrete Society port and module boundary/build oracles plus the existing behavior regressions cover the change. This is not a renewed full-file/codebase review or native qualification. Inherited NOT_REVIEWED owners remain unapproved.",
+   "sha256": "c05074d1f7f332951c1ff32fc3f5efcdd319315bf533c20f40c6f5a56183dbf8"
   },
   {
    "path": "src/runtime/assets.ts",
@@ -183864,13 +184004,13 @@
    "primary": null,
    "status": "CHANGED_WITH_ORACLE",
    "by": [
-    "DR37"
+    "DR41"
    ],
    "oracles": [
-    "DR37"
+    "DR41"
    ],
-   "note": "DR37 direct review of affected reader/publication owner flow: shared inode leases precede loading; serialized publication and exclusive collection retain live readers; tombstone rename+parent fsync precedes deletion; actual reader and collector SIGKILL/retry regressions exercise these boundaries. Legacy unmarked generations remain unknown.",
-   "sha256": "1085d9f626e2ab3e2430dce5d3dad540a142f0b5ad14b2f6ee95399666185bed"
+   "note": "DR41 direct delta and affected-owner review, without subagents: remove TUI effect/Runtime implementation imports; preserve configuration publication/read-back/unknown, effect-time tenure, Principal ordering and actual OS exit, package inode leases and staging containment. Named moved declarations were compared with the baseline; the three altered runtime bodies supply product wording or platform directory ports. Concrete Society port and module boundary/build oracles plus the existing behavior regressions cover the change. This is not a renewed full-file/codebase review or native qualification. Inherited NOT_REVIEWED owners remain unapproved.",
+   "sha256": "14bedfd67d4d80dbfea98555f33a9b5618f6c911afb7046dc5ac96ab44d2d1c8"
   },
   {
    "path": "src/runtime/client-runtime.ts",
@@ -183946,6 +184086,40 @@
     "V27B"
    ],
    "sha256": "9a25397e3a5429b18baa66987e8620b8f5a9e9b81ea457f81ef3b87387a25aa4"
+  },
+  {
+   "path": "src/runtime/engine/login.ts",
+   "primary": null,
+   "status": "CHANGED_WITH_ORACLE",
+   "by": [
+    "DR41"
+   ],
+   "oracles": [
+    "DR41"
+   ],
+   "note": "DR41 direct delta and affected-owner review, without subagents: remove TUI effect/Runtime implementation imports; preserve configuration publication/read-back/unknown, effect-time tenure, Principal ordering and actual OS exit, package inode leases and staging containment. Named moved declarations were compared with the baseline; the three altered runtime bodies supply product wording or platform directory ports. Concrete Society port and module boundary/build oracles plus the existing behavior regressions cover the change. This is not a renewed full-file/codebase review or native qualification. Inherited NOT_REVIEWED owners remain unapproved.",
+   "sha256": "1d256938e89a8372bd65ed023d90b5397f15a4cdd1e6aa0b565d1f7888eb0624"
+  },
+  {
+   "path": "src/runtime/engine/principal-session.ts",
+   "primary": null,
+   "status": "CHANGED_WITH_ORACLE",
+   "by": [
+    "DR41"
+   ],
+   "oracles": [
+    "DR41"
+   ],
+   "note": "DR41 direct delta and affected-owner review, without subagents: remove TUI effect/Runtime implementation imports; preserve configuration publication/read-back/unknown, effect-time tenure, Principal ordering and actual OS exit, package inode leases and staging containment. Named moved declarations were compared with the baseline; the three altered runtime bodies supply product wording or platform directory ports. Concrete Society port and module boundary/build oracles plus the existing behavior regressions cover the change. This is not a renewed full-file/codebase review or native qualification. Inherited NOT_REVIEWED owners remain unapproved.",
+   "sha256": "a79c51a37a92add110066eb8f8979b91eb6d0a4c6976e3529776a93a5672e351"
+  },
+  {
+   "path": "src/runtime/engine/session-directories.ts",
+   "primary": null,
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": [],
+   "note": "Current working-tree bytes have no explicit byte-bound review; historical reviews do not certify these changes."
   },
   {
    "path": "src/runtime/extension-integrity.ts",
@@ -184040,39 +184214,6 @@
    "oracles": []
   },
   {
-   "path": "src/runtime/local-package-stage.ts",
-   "primary": null,
-   "status": "CHANGED_WITH_ORACLE",
-   "by": [
-    "DR40"
-   ],
-   "oracles": [
-    "DR40"
-   ],
-   "note": "DR40 direct delta and affected-owner review without subagents; no historical full-file or native qualification renewal. Filesystem staging/tar byte interpretation or atomic settings view; existing effect order and diagnostics retained. Final EOF whitespace cleanup after runtime; separate emitted-byte comparison is recorded.",
-   "sha256": "6558a98d1bb4f83c2641467c61a6c56c740ed2b347b17a954e18880951b73f78"
-  },
-  {
-   "path": "src/runtime/local-package.ts",
-   "primary": null,
-   "status": "CHANGED_WITH_ORACLE",
-   "by": [
-    "DR25",
-    "F1-MAC",
-    "P0-8",
-    "UX-38",
-    "DR40"
-   ],
-   "oracles": [
-    "DR25",
-    "DR25/C20",
-    "P0-8",
-    "DR40"
-   ],
-   "note": "DR40 direct delta and affected-owner review without subagents; no historical full-file or native qualification renewal. Filesystem staging/tar byte interpretation or atomic settings view; existing effect order and diagnostics retained.",
-   "sha256": "f4b975a9e4b50d75656f54ce9f2c98d41a3a74ebabd9941d28b6cae9e9eaf02f"
-  },
-  {
    "path": "src/runtime/locked-files.ts",
    "primary": null,
    "status": "CHANGED_WITH_ORACLE",
@@ -184095,17 +184236,43 @@
    "oracles": []
   },
   {
-   "path": "src/runtime/package-tar.ts",
+   "path": "src/runtime/packages/index.ts",
    "primary": null,
    "status": "CHANGED_WITH_ORACLE",
    "by": [
-    "DR40"
+    "DR41"
    ],
    "oracles": [
-    "DR40"
+    "DR41"
    ],
-   "note": "DR40 direct delta and affected-owner review without subagents; no historical full-file or native qualification renewal. Filesystem staging/tar byte interpretation or atomic settings view; existing effect order and diagnostics retained. Final EOF whitespace cleanup after runtime; separate emitted-byte comparison is recorded.",
-   "sha256": "1d26b15b14bf11358d4f249f9623325f7ee5db340a7721393cd09603ad3dcfd3"
+   "note": "DR41 direct delta and affected-owner review, without subagents: remove TUI effect/Runtime implementation imports; preserve configuration publication/read-back/unknown, effect-time tenure, Principal ordering and actual OS exit, package inode leases and staging containment. Named moved declarations were compared with the baseline; the three altered runtime bodies supply product wording or platform directory ports. Concrete Society port and module boundary/build oracles plus the existing behavior regressions cover the change. This is not a renewed full-file/codebase review or native qualification. Inherited NOT_REVIEWED owners remain unapproved.",
+   "sha256": "ab179c29a73cdfb7def44936414cf20809fd2f41914172bebf2fd92761ddaa98"
+  },
+  {
+   "path": "src/runtime/packages/store.ts",
+   "primary": null,
+   "status": "CHANGED_WITH_ORACLE",
+   "by": [
+    "DR41"
+   ],
+   "oracles": [
+    "DR41"
+   ],
+   "note": "DR41 direct delta and affected-owner review, without subagents: remove TUI effect/Runtime implementation imports; preserve configuration publication/read-back/unknown, effect-time tenure, Principal ordering and actual OS exit, package inode leases and staging containment. Named moved declarations were compared with the baseline; the three altered runtime bodies supply product wording or platform directory ports. Concrete Society port and module boundary/build oracles plus the existing behavior regressions cover the change. This is not a renewed full-file/codebase review or native qualification. Inherited NOT_REVIEWED owners remain unapproved.",
+   "sha256": "8b01b8dcc90b564ac681a5ab845b178bc9b90a932c62a4da2656c9318a397639"
+  },
+  {
+   "path": "src/runtime/packages/tar.ts",
+   "primary": null,
+   "status": "CHANGED_WITH_ORACLE",
+   "by": [
+    "DR41"
+   ],
+   "oracles": [
+    "DR41"
+   ],
+   "note": "DR41 direct delta and affected-owner review, without subagents: remove TUI effect/Runtime implementation imports; preserve configuration publication/read-back/unknown, effect-time tenure, Principal ordering and actual OS exit, package inode leases and staging containment. Named moved declarations were compared with the baseline; the three altered runtime bodies supply product wording or platform directory ports. Concrete Society port and module boundary/build oracles plus the existing behavior regressions cover the change. This is not a renewed full-file/codebase review or native qualification. Inherited NOT_REVIEWED owners remain unapproved.",
+   "sha256": "99b88ad6f1a2c8691ad991b2e0397a86e0b80d9c51538c816565883b7f416387"
   },
   {
    "path": "src/runtime/personal-models.ts",
@@ -184133,7 +184300,8 @@
    "primary": null,
    "status": "NOT_REVIEWED",
    "by": [],
-   "oracles": []
+   "oracles": [],
+   "note": "Current working-tree bytes have no explicit byte-bound review; historical reviews do not certify these changes."
   },
   {
    "path": "src/runtime/pi-adapter.ts",
@@ -184147,19 +184315,6 @@
    ],
    "note": "DR37 direct review of changed code and affected composition: remove OMA resource/count/storage admission enforcement while keeping current authority, serialized contained effects, canonical historical declarations and explicit OS errors. Updated existing regressions plus DR37 positive execution tests cover the delta; no historical full-file review or environment PASS is renewed by this hash.",
    "sha256": "80f69e14e8169a0856172ad10f97413f75b29f3baa453141088ff0413d964863"
-  },
-  {
-   "path": "src/runtime/pi-packages.ts",
-   "primary": null,
-   "status": "CHANGED_WITH_ORACLE",
-   "by": [
-    "DR37"
-   ],
-   "oracles": [
-    "DR37"
-   ],
-   "note": "DR37 direct review of affected reader/publication owner flow: shared inode leases precede loading; serialized publication and exclusive collection retain live readers; tombstone rename+parent fsync precedes deletion; actual reader and collector SIGKILL/retry regressions exercise these boundaries. Legacy unmarked generations remain unknown. Follow-up owner review: metadata index readers take short leases released on completion, while engine code readers retain process leases; publisher stays alive across replacement/collection regressions.",
-   "sha256": "582a6402b747f2656de9dcf6601cba2114d169bc3a13b702e0544e1a9f669149"
   },
   {
    "path": "src/runtime/pi-presentation.ts",
@@ -184225,13 +184380,13 @@
    "primary": "WP27",
    "status": "CHANGED_WITH_ORACLE",
    "by": [
-    "DR37"
+    "DR41"
    ],
    "oracles": [
-    "DR37"
+    "DR41"
    ],
-   "note": "DR37 direct review of changed code and affected composition: remove OMA resource/count/storage admission enforcement while keeping current authority, serialized contained effects, canonical historical declarations and explicit OS errors. Updated existing regressions plus DR37 positive execution tests cover the delta; no historical full-file review or environment PASS is renewed by this hash.",
-   "sha256": "fd764e68d69fa8e39450af9318f82d37d06f72018e8e68502e37be19cd6c2d03"
+   "note": "DR41 direct delta and affected-owner review, without subagents: remove TUI effect/Runtime implementation imports; preserve configuration publication/read-back/unknown, effect-time tenure, Principal ordering and actual OS exit, package inode leases and staging containment. Named moved declarations were compared with the baseline; the three altered runtime bodies supply product wording or platform directory ports. Concrete Society port and module boundary/build oracles plus the existing behavior regressions cover the change. This is not a renewed full-file/codebase review or native qualification. Inherited NOT_REVIEWED owners remain unapproved.",
+   "sha256": "9b4565db70f31103c7e011caec1e746b31daefb656ea9b6ebca71fd6a4a8f3de"
   },
   {
    "path": "src/runtime/principal-delivery.ts",
@@ -185003,13 +185158,13 @@
    "primary": null,
    "status": "CHANGED_WITH_ORACLE",
    "by": [
-    "BL2"
+    "DR41"
    ],
    "oracles": [
-    "BL2"
+    "DR41"
    ],
-   "note": "Read in full for BL2: a pi-tui Component built from the pure model — tab bar, question/options/preview rows, side-by-side preview pane at >=ASK_QUESTION_BOUNDS.previewSplitColumns else under the rows, review+Submit/Cancel on the submit tab, footer hints. Key grammar matches upstream: Enter commits, Space only toggles multi checkboxes, Esc declines everywhere including mid-typing. Key releases/repeats are ignored; input mode accepts only printable text (CSI/control bytes never reach the buffer). render() is width-pure — a resize redraws the same state with no resize state to lose. Engine primitives are borrowed through the declared ENGINE_PRIMITIVE_OWNERS allowlist; every magic number is a named bound.",
-   "sha256": "0f24244af20f9bceba66dfcdd5954b2e2e8876307a6d7ec37c5cc548ec825999"
+   "note": "DR41 direct delta and affected-owner review, without subagents: remove TUI effect/Runtime implementation imports; preserve configuration publication/read-back/unknown, effect-time tenure, Principal ordering and actual OS exit, package inode leases and staging containment. Named moved declarations were compared with the baseline; the three altered runtime bodies supply product wording or platform directory ports. Concrete Society port and module boundary/build oracles plus the existing behavior regressions cover the change. This is not a renewed full-file/codebase review or native qualification. Inherited NOT_REVIEWED owners remain unapproved.",
+   "sha256": "7a73d6ac60e838a596f2fd0c1867ca137844abe7863da810415cd48166391c30"
   },
   {
    "path": "src/tui/ask-user-question/presenter.ts",
@@ -185036,48 +185191,31 @@
    "primary": null,
    "status": "CHANGED_WITH_ORACLE",
    "by": [
-    "B1"
+    "DR41"
    ],
    "oracles": [
-    "B1"
+    "DR41"
    ],
-   "note": "Read in full at the 2026-10-05 B round: OMA-owned compact tool runtime registered through Pi's public registerToolRenderer with renderShell \"self\" -- live indicator, one-line argument summary, Done-in-Xs control row, author renderers preserved for expansion; oma_ is dropped from display names only, wire names and the registry untouched; timings and summaries bounded by COMPACT_TOOL_BOUNDS and the shared state is keyed through a WeakMap, never written. 2026-10-05 C rider: the unused Indicator.drawnAt bookkeeping is removed -- the field was written on every sync and never read; indicators still hold only their invalidate callback.",
-   "sha256": "443d7d9f0dae8c3d7bf3e61719e4129b4482c23c851c26100858bc388475d2f5"
+   "note": "DR41 direct delta and affected-owner review, without subagents: remove TUI effect/Runtime implementation imports; preserve configuration publication/read-back/unknown, effect-time tenure, Principal ordering and actual OS exit, package inode leases and staging containment. Named moved declarations were compared with the baseline; the three altered runtime bodies supply product wording or platform directory ports. Concrete Society port and module boundary/build oracles plus the existing behavior regressions cover the change. This is not a renewed full-file/codebase review or native qualification. Inherited NOT_REVIEWED owners remain unapproved.",
+   "sha256": "832b172fb87464721f268d8ff98556167e865422e3fe86e53c1e7b6f4e6a1444"
   },
   {
    "path": "src/tui/dashboard.ts",
    "primary": "WP28",
    "status": "CHANGED_WITH_ORACLE",
    "by": [
-    "AV7",
-    "DR18",
-    "MAC-022",
-    "P0V-28",
-    "P0V-29",
-    "P0V-38",
-    "P0V-39",
-    "P0V-51",
-    "P0V-66",
-    "WP15"
+    "DR41"
    ],
    "oracles": [
-    "AV7",
-    "DR18",
-    "P0V-28",
-    "P0V-29",
-    "P0V-38",
-    "P0V-39",
-    "P0V-51",
-    "P0V-66",
-    "V15A",
-    "V15B"
+    "DR41"
    ],
-   "sha256": "02942ec479ce321fa66f973fd0bb995e787ca8a88890223df8c54b9ea5453186"
+   "note": "DR41 direct delta and affected-owner review, without subagents: remove TUI effect/Runtime implementation imports; preserve configuration publication/read-back/unknown, effect-time tenure, Principal ordering and actual OS exit, package inode leases and staging containment. Named moved declarations were compared with the baseline; the three altered runtime bodies supply product wording or platform directory ports. Concrete Society port and module boundary/build oracles plus the existing behavior regressions cover the change. This is not a renewed full-file/codebase review or native qualification. Inherited NOT_REVIEWED owners remain unapproved.",
+   "sha256": "d42b77fcca9b02c387ee4a2749e24088aa4a6e641e4e4e9eabeba9822c6f852b"
   },
   {
    "path": "src/tui/exit.ts",
    "primary": "WP28",
-   "status": "CHANGED_WITH_ORACLE",
+   "status": "REMOVED",
    "by": [
     "DR13",
     "DR18",
@@ -185085,82 +185223,49 @@
     "P0V-12",
     "P0V-18"
    ],
-   "oracles": [
-    "DR13",
-    "DR18"
-   ],
-   "sha256": "956bf76caae7170075bdddc24e3a5861c5e337168ec6759db3dc6985a63ac314"
+   "oracles": []
   },
   {
    "path": "src/tui/interactive-editor.ts",
    "primary": null,
    "status": "CHANGED_WITH_ORACLE",
    "by": [
-    "B2",
-    "DR40"
+    "DR41"
    ],
    "oracles": [
-    "B2",
-    "DR40"
+    "DR41"
    ],
-   "note": "DR40 direct delta and affected-owner review without subagents; no historical full-file or native qualification renewal. Filesystem staging/tar byte interpretation or atomic settings view; existing effect order and diagnostics retained.",
-   "sha256": "dc5be9a45a436d53e17f8b2635012c4420c61c2089fa2eb39e77f84ac5645871"
+   "note": "DR41 direct delta and affected-owner review, without subagents: remove TUI effect/Runtime implementation imports; preserve configuration publication/read-back/unknown, effect-time tenure, Principal ordering and actual OS exit, package inode leases and staging containment. Named moved declarations were compared with the baseline; the three altered runtime bodies supply product wording or platform directory ports. Concrete Society port and module boundary/build oracles plus the existing behavior regressions cover the change. This is not a renewed full-file/codebase review or native qualification. Inherited NOT_REVIEWED owners remain unapproved.",
+   "sha256": "589a825c8be7769486d42bf2ffb0ef2ea6bf5abc5c9f14c3e84a1e7941daa70d"
   },
   {
    "path": "src/tui/keys.ts",
    "primary": "WP28",
    "status": "CHANGED_WITH_ORACLE",
    "by": [
-    "P0V-108",
-    "P0V-109",
-    "P0V-46",
-    "P0V-67",
-    "P0V-76",
-    "P0V-79",
-    "P0V-86"
+    "DR41"
    ],
    "oracles": [
-    "P0V-108",
-    "P0V-109",
-    "P0V-46",
-    "P0V-67",
-    "P0V-76",
-    "P0V-79",
-    "P0V-86"
+    "DR41"
    ],
-   "sha256": "9cb60b71b0e5d152b44a76b1cc6605e6ce4a323a8ed450f5c6ddbe3571095596"
+   "note": "DR41 direct delta and affected-owner review, without subagents: remove TUI effect/Runtime implementation imports; preserve configuration publication/read-back/unknown, effect-time tenure, Principal ordering and actual OS exit, package inode leases and staging containment. Named moved declarations were compared with the baseline; the three altered runtime bodies supply product wording or platform directory ports. Concrete Society port and module boundary/build oracles plus the existing behavior regressions cover the change. This is not a renewed full-file/codebase review or native qualification. Inherited NOT_REVIEWED owners remain unapproved.",
+   "sha256": "cb193b33ef1444cad2c23c553de19d2aac8dfa103f4f3b09f68270c51a14ada5"
   },
   {
    "path": "src/tui/limits.ts",
    "primary": "WP28",
-   "status": "CHANGED_WITH_ORACLE",
+   "status": "REMOVED",
    "by": [
-    "B1",
-    "B3",
-    "BL2"
+    "DR18",
+    "MAC-022",
+    "P0V-36",
+    "P0V-40",
+    "P0V-41",
+    "P0V-42",
+    "P0V-43",
+    "WP14"
    ],
-   "oracles": [
-    "B1",
-    "B3",
-    "BL2"
-   ],
-   "note": "Read in full at the 2026-10-05 B round: declares the B-round bounds -- COMPACT_TOOL_BOUNDS for tool-row timing/summary and the queued-prompt preview counts/cells -- alongside the existing declared limits; every new bound is a named entry, no literal. BL2 rebind: ASK_QUESTION_BOUNDS.previewSplitColumns (72 cells) declares the side-by-side preview threshold; the batch bounds the schema declares stay with the contract in questionnaire.ts. Added to SURFACE_BOUNDS.",
-   "sha256": "9f2f9727aa396ad498dc45bf704f549568f6545bd589d3d96c7ce6795c89f616"
-  },
-  {
-   "path": "src/tui/login.ts",
-   "primary": null,
-   "status": "CHANGED_WITH_ORACLE",
-   "by": [
-    "DR35",
-    "DR36"
-   ],
-   "oracles": [
-    "AV-02",
-    "DR35"
-   ],
-   "note": "Reviewed Pi public storage/factory wiring and startup presentation separation: one owned settings lock, Pi field merging, trusted user project atomic replacement under the public Pi file lock with conflict detection, preservation of explicit skill choices, bundled CLI preload only for the pinned runtime, and typed private compatibility declarations. Interprocess CLI and trusted/untrusted project oracles cover the settings changes.",
-   "sha256": "2a035d592f5035d25861528cecb7a49c193d472282541132517182752f1b3ce3"
+   "oracles": []
   },
   {
    "path": "src/tui/mail-names.ts",
@@ -185180,13 +185285,13 @@
    "primary": "WP28",
    "status": "CHANGED_WITH_ORACLE",
    "by": [
-    "B4"
+    "DR41"
    ],
    "oracles": [
-    "B4"
+    "DR41"
    ],
-   "note": "Read in full at the 2026-10-05 B round: MailRow gains an optional `to` carrying the recipients' display names; it is display-only data the source fills, absent when the message names no recipients -- durable mail facts are unchanged.",
-   "sha256": "37ccba5ba04c61cf8f46472e360c41da8132542b3d774a6eb28b8a5647f18c39"
+   "note": "DR41 direct delta and affected-owner review, without subagents: remove TUI effect/Runtime implementation imports; preserve configuration publication/read-back/unknown, effect-time tenure, Principal ordering and actual OS exit, package inode leases and staging containment. Named moved declarations were compared with the baseline; the three altered runtime bodies supply product wording or platform directory ports. Concrete Society port and module boundary/build oracles plus the existing behavior regressions cover the change. This is not a renewed full-file/codebase review or native qualification. Inherited NOT_REVIEWED owners remain unapproved.",
+   "sha256": "c93fceeeb20782dba7256eba352e135fe2c6a3356dbbac5eb7762f6e5719dcd6"
   },
   {
    "path": "src/tui/open-tui-brand.ts",
@@ -185202,19 +185307,6 @@
    "sha256": "afe6abff7ee8b077f92d11ef66d98f36855944104b2771fc87d6b50ed2072b19"
   },
   {
-   "path": "src/tui/packages-apply.ts",
-   "primary": null,
-   "status": "CHANGED_WITH_ORACLE",
-   "by": [
-    "DR37"
-   ],
-   "oracles": [
-    "DR37"
-   ],
-   "note": "DR37 direct review of affected reader/publication owner flow: shared inode leases precede loading; serialized publication and exclusive collection retain live readers; tombstone rename+parent fsync precedes deletion; actual reader and collector SIGKILL/retry regressions exercise these boundaries. Legacy unmarked generations remain unknown.",
-   "sha256": "39c8266b98c6e9098317da75e62228cf2ba08fff0277b6d12cd74c523f67392a"
-  },
-  {
    "path": "src/tui/panel-style.ts",
    "primary": null,
    "status": "NOT_REVIEWED",
@@ -185226,81 +185318,34 @@
    "primary": null,
    "status": "NOT_REVIEWED",
    "by": [],
-   "oracles": []
-  },
-  {
-   "path": "src/tui/project-session-directories.ts",
-   "primary": null,
-   "status": "NOT_REVIEWED",
-   "by": [],
-   "oracles": []
-  },
-  {
-   "path": "src/tui/project-session-settings.ts",
-   "primary": null,
-   "status": "CHANGED_WITH_ORACLE",
-   "by": [
-    "DR39",
-    "DR40"
-   ],
-   "oracles": [
-    "DR39",
-    "DR40"
-   ],
-   "note": "DR40 direct delta and affected-owner review without subagents; no historical full-file or native qualification renewal. Filesystem staging/tar byte interpretation or atomic settings view; existing effect order and diagnostics retained.",
-   "sha256": "200c66f17ffac7feefece76dba9fccc0ba1660078898c080e56ca11740b44986"
-  },
-  {
-   "path": "src/tui/project-settings.ts",
-   "primary": null,
-   "status": "CHANGED_WITH_ORACLE",
-   "by": [
-    "DR35",
-    "DR36"
-   ],
-   "oracles": [
-    "DR35"
-   ],
-   "note": "Reviewed the earlier startup deltas and affected ownership/import path: one installation digest per derivation with complete byte hashing, linear bundle membership, explicit Pi presentation instead of eager SDK import, private history ownership, and precisely scoped optional interactive tool setup. Actual PTY and import/ownership regressions remain the startup oracles; no authority is granted by a private screen.",
-   "sha256": "b4837465923927326874ae7a0cd73a0a4286dc0f519d3492f6a3050fce64a155"
+   "oracles": [],
+   "note": "Current working-tree bytes have no explicit byte-bound review; historical reviews do not certify these changes."
   },
   {
    "path": "src/tui/prompt.ts",
    "primary": "WP09",
-   "status": "READ_UNCHANGED",
+   "status": "CHANGED_WITH_ORACLE",
    "by": [
-    "AV-review"
+    "DR41"
    ],
    "oracles": [
-    "T114",
-    "T120",
-    "T92",
-    "T96",
-    "T97",
-    "TUI-002",
-    "TUI-007",
-    "TUI-010"
+    "DR41"
    ],
-   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are tests whose loaded module closure contains this module",
-   "sha256": "8cffd45edd7e4dc219246e70b632bc13d732d6fad256e2d7ab87fbeac42ef04b"
+   "note": "DR41 direct delta and affected-owner review, without subagents: remove TUI effect/Runtime implementation imports; preserve configuration publication/read-back/unknown, effect-time tenure, Principal ordering and actual OS exit, package inode leases and staging containment. Named moved declarations were compared with the baseline; the three altered runtime bodies supply product wording or platform directory ports. Concrete Society port and module boundary/build oracles plus the existing behavior regressions cover the change. This is not a renewed full-file/codebase review or native qualification. Inherited NOT_REVIEWED owners remain unapproved.",
+   "sha256": "f6508a1008bce1dc1d57ff10766b5bd4c9c369548bdb37ddb97c8a3d84649bca"
   },
   {
    "path": "src/tui/screen.ts",
    "primary": "WP28",
    "status": "CHANGED_WITH_ORACLE",
    "by": [
-    "DR17",
-    "P0V-79",
-    "P0V-81",
-    "WP28"
+    "DR41"
    ],
    "oracles": [
-    "P0V-79",
-    "P0V-81",
-    "V28A",
-    "V28B"
+    "DR41"
    ],
-   "sha256": "27c4023b773a3287d8264a84e795a16a9299bd63e25e13bb1dd0dff289988859"
+   "note": "DR41 direct delta and affected-owner review, without subagents: remove TUI effect/Runtime implementation imports; preserve configuration publication/read-back/unknown, effect-time tenure, Principal ordering and actual OS exit, package inode leases and staging containment. Named moved declarations were compared with the baseline; the three altered runtime bodies supply product wording or platform directory ports. Concrete Society port and module boundary/build oracles plus the existing behavior regressions cover the change. This is not a renewed full-file/codebase review or native qualification. Inherited NOT_REVIEWED owners remain unapproved.",
+   "sha256": "55d6dad14b89fb6d0152010e43ae6bbc5f577397239dd148bf7a087ccd78dcea"
   },
   {
    "path": "src/tui/session-mode.ts",
@@ -185312,91 +185357,127 @@
   {
    "path": "src/tui/session.ts",
    "primary": "WP09",
-   "status": "CHANGED_WITH_ORACLE",
+   "status": "REMOVED",
    "by": [
-    "DR37"
+    "AV10",
+    "AV11",
+    "AV14",
+    "AV3",
+    "DR15",
+    "DR18",
+    "MAC-022",
+    "P0V-36",
+    "P0V-40",
+    "P0V-41",
+    "P0V-42",
+    "P0V-43",
+    "P0V-73",
+    "P0V-78",
+    "WP09"
    ],
-   "oracles": [
-    "DR37"
-   ],
-   "note": "DR37 direct review of changed code and affected composition: remove OMA resource/count/storage admission enforcement while keeping current authority, serialized contained effects, canonical historical declarations and explicit OS errors. Updated existing regressions plus DR37 positive execution tests cover the delta; no historical full-file review or environment PASS is renewed by this hash.",
-   "sha256": "3b7c02764f40f54c4cb21ef9b9850f9f404b9e9e57e948c7031c5b173f0d7d1e"
+   "oracles": []
   },
   {
    "path": "src/tui/society-panel.ts",
    "primary": null,
    "status": "CHANGED_WITH_ORACLE",
    "by": [
-    "DR39"
+    "DR41"
    ],
    "oracles": [
-    "MODE-005"
+    "DR41"
    ],
-   "note": "DR39 direct delta/affected-owner review without subagents; no historical full-file or native lane renewal. Read new concrete panel owner in full: settings/mail/dashboard observations and seven AppPorts actions; no engine or broker lifetime state, writes delegate to project owner with the tenure check.",
-   "sha256": "f6af4a4b8a57254ee2e27b00e3ce7362b3e4803205a6e8a8f2d0658d69e2045e"
+   "note": "DR41 direct delta and affected-owner review, without subagents: remove TUI effect/Runtime implementation imports; preserve configuration publication/read-back/unknown, effect-time tenure, Principal ordering and actual OS exit, package inode leases and staging containment. Named moved declarations were compared with the baseline; the three altered runtime bodies supply product wording or platform directory ports. Concrete Society port and module boundary/build oracles plus the existing behavior regressions cover the change. This is not a renewed full-file/codebase review or native qualification. Inherited NOT_REVIEWED owners remain unapproved.",
+   "sha256": "86e9502b12d3619740824723951ce9de8dfd16bbfbdf5d88333066255aee26a9"
   },
   {
    "path": "src/tui/sources/extensions.ts",
    "primary": "WP14",
-   "status": "CHANGED_WITH_ORACLE",
+   "status": "REMOVED",
    "by": [
-    "DR25",
-    "P0-8"
+    "DR13",
+    "DR18",
+    "MAC-022",
+    "P0V-19",
+    "P0V-20",
+    "P0V-21",
+    "P0V-22",
+    "P0V-23",
+    "P0V-28",
+    "P0V-29",
+    "P0V-38",
+    "P0V-39",
+    "P0V-51",
+    "WP12",
+    "WP13",
+    "WP14"
    ],
-   "oracles": [
-    "DR25",
-    "V14A",
-    "V14B",
-    "CFG-005"
-   ],
-   "note": "Read in full at the 2026-10-05 P0-8 residual round: toggleExtension accepts the caller's `ownedFrom` and forwards it to the managed generation commit; the editable gate, the missing-file repair mode, the core-extension lock and the per-role entry rewrite (order preserved, exact declaration removed) are unchanged.",
-   "sha256": "0083b85332a9b7145f865829fec7870f1b13ae16569f74182eaae6224d990ea4"
+   "oracles": []
   },
   {
    "path": "src/tui/sources/mail.ts",
    "primary": "WP28",
-   "status": "CHANGED_WITH_ORACLE",
+   "status": "REMOVED",
    "by": [
-    "B4"
+    "AV26",
+    "AV7",
+    "DR13",
+    "DR18",
+    "MAC-022",
+    "P0V-19",
+    "P0V-20",
+    "P0V-21",
+    "P0V-22",
+    "P0V-23",
+    "P0V-36",
+    "P0V-40",
+    "P0V-41",
+    "P0V-42",
+    "P0V-43"
    ],
-   "oracles": [
-    "B4"
-   ],
-   "note": "Read in full at the 2026-10-05 B round: readMailbox takes the observed roster and names each row's sender, and parses the To header into comma-joined display names via the shared namer; the stored bytes and the durable logical addresses are read, never rewritten -- a missing To leaves the field absent.",
-   "sha256": "7b95f69d06c10107ae53e18acc45dcc3dde4c35e2a7649e87581fa97fd151f33"
+   "oracles": []
   },
   {
    "path": "src/tui/sources/settings.ts",
    "primary": "WP15",
-   "status": "CHANGED_WITH_ORACLE",
+   "status": "REMOVED",
    "by": [
-    "DR37"
+    "DR1",
+    "DR12",
+    "DR3",
+    "DR4",
+    "DR6",
+    "DR7",
+    "P0V-12",
+    "P0V-28",
+    "P0V-29",
+    "P0V-38",
+    "P0V-39",
+    "P0V-51",
+    "WP11",
+    "WP12",
+    "WP13",
+    "WP14",
+    "WP15"
    ],
-   "oracles": [
-    "DR37"
-   ],
-   "note": "DR37 direct review of changed code and affected composition: remove OMA resource/count/storage admission enforcement while keeping current authority, serialized contained effects, canonical historical declarations and explicit OS errors. Updated existing regressions plus DR37 positive execution tests cover the delta; no historical full-file review or environment PASS is renewed by this hash.",
-   "sha256": "ed44c2ff7c7af3630cf87a89e1e29b786bdd1998087c31330cb9d407701faaaa"
+   "oracles": []
   },
   {
    "path": "src/tui/transcript.ts",
    "primary": "WP28",
    "status": "NOT_REVIEWED",
    "by": [],
-   "oracles": []
+   "oracles": [],
+   "note": "Current working-tree bytes have no explicit byte-bound review; historical reviews do not certify these changes."
   },
   {
    "path": "src/tui/transport.ts",
    "primary": "WP23",
-   "status": "CHANGED_WITH_ORACLE",
+   "status": "REMOVED",
    "by": [
     "WP28"
    ],
-   "oracles": [
-    "V28A",
-    "V28B"
-   ],
-   "sha256": "2a4c4a253b76cbe78eac90f6e26ddf32c1a49cb53f0252c6346e23e07a552bfe"
+   "oracles": []
   },
   {
    "path": "src/tui/view/dashboard.ts",
@@ -185456,7 +185537,8 @@
    "primary": "WP28",
    "status": "NOT_REVIEWED",
    "by": [],
-   "oracles": []
+   "oracles": [],
+   "note": "Current working-tree bytes have no explicit byte-bound review; historical reviews do not certify these changes."
   },
   {
    "path": "src/tui/view/notice.ts",
@@ -185519,13 +185601,13 @@
    "primary": null,
    "status": "CHANGED_WITH_ORACLE",
    "by": [
-    "DR18",
-    "MAC-022"
+    "DR41"
    ],
    "oracles": [
-    "DR18"
+    "DR41"
    ],
-   "sha256": "95bb1e06074fb08d88f4327e4d44b3a632800cac3c48c1387fd46c46a1b811e1"
+   "note": "DR41 direct delta and affected-owner review, without subagents: remove TUI effect/Runtime implementation imports; preserve configuration publication/read-back/unknown, effect-time tenure, Principal ordering and actual OS exit, package inode leases and staging containment. Named moved declarations were compared with the baseline; the three altered runtime bodies supply product wording or platform directory ports. Concrete Society port and module boundary/build oracles plus the existing behavior regressions cover the change. This is not a renewed full-file/codebase review or native qualification. Inherited NOT_REVIEWED owners remain unapproved.",
+   "sha256": "62c05dc791718a3ac60c19b8633ed2fb068fac78403c06453895bd16c169193d"
   },
   {
    "path": "src/units.ts",

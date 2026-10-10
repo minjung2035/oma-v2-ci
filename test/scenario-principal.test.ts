@@ -18,7 +18,7 @@ import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { withScenario } from "./fixtures/scenario.js";
 import { call, continuesTurn, delayed, failing, lastUserText, text, textOf, toolResults, tools, type ChatRequest, type Reply } from "./fixtures/scripted-provider.js";
-import { principalSessionDir, principalWorkspace } from "../src/tui/session.js";
+import { principalSessionDir, principalWorkspace } from "../src/runtime/engine/principal-session.js";
 
 const TIMEOUT = { timeout: 120_000 };
 

@@ -4,7 +4,7 @@
 
 문서 상태: **규범 초안 / SPIKE 미해결 / production release 불가**. 작성일: 2026-09-07. 정책 확장 반영: 2026-09-09.
 
-**MUST [N-001]** 구현의 상위 규범은 [docs/architecture.md](architecture.md)이며, WP01 D01–D06 대조 후 이 계약의 기준본 SHA-256은 `74ceea98494404924de5c3005390e094226b71359c9ac1eb05f85264c5f5daf1`이다. 구현 시작 및 release 때 기준본 hash를 확인한다. hash 변경 시 이 계약을 자동 적용하지 않고 차이를 검토한다.
+**MUST [N-001]** 구현의 상위 규범은 [docs/architecture.md](architecture.md)이며, WP01 D01–D06 및 DR41 모듈 경계 대조 후 이 계약의 기준본 SHA-256은 `39613e469209210632007e5f8f91293ff288dc2785dcda010b62f55fe7250e88`이다. 구현 시작 및 release 때 기준본 hash를 확인한다. hash 변경 시 이 계약을 자동 적용하지 않고 차이를 검토한다.
 
 이전 기준본 `7588b31e7518ded1d439f604400ca0984cccd30936428e00eac03b6032f29fab`까지의 링크/제품 표면 변경 기록은 Git history에 보존한다. 이번 WP01은 §6 mode별 runtime gate, §7 exact old receipt 정산 순서, §12 no-op과 applied CAS 구별, §23 project binding 및 실제 적용 시점을 [D01–D06 결과](implementation/consistency-decisions.md)와 대조했다. runtime source가 이 변경을 이미 만족한다는 뜻이 아니며 지정 WP의 regression/runtime evidence 전에는 그 차이가 해소되지 않는다.
 

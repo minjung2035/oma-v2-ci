@@ -10,13 +10,13 @@ import {
   piAgentDir, piIsolationEnv, preparePiRetry, resolvePiRuntime,
 } from "../src/runtime/pi-runtime.js";
 import { preparePiInteractive } from "../src/runtime/pi-presentation.js";
-import { sessionArgv, sessionEnv } from "../src/tui/session.js";
+import { sessionArgv, sessionEnv } from "../src/runtime/engine/principal-session.js";
 import { SOCIETY_FENCE_ENV, SOCIETY_FENCE_FD } from "../src/process/async.js";
 import {
   DEFAULT_MODEL_PROFILE, DEFAULT_PRINCIPAL_PROFILE, DEFAULT_RESIDENT_PROFILE,
   defaultHostConfig, societyFromDirectory,
 } from "../src/config/defaults.js";
-import { readSettings } from "../src/tui/sources/settings.js";
+import { readSettings } from "../src/application/settings.js";
 
 const scratch = (prefix: string): string => mkdtempSync(join(tmpdir(), prefix));
 

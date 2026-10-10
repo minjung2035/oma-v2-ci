@@ -1,3 +1,4 @@
+import * as packagePolicy from "../dist/src/domain/package-policy.js";
 /** Actual birth routers at controlled effect boundaries; no real service, VM or provider. */
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -32,18 +33,19 @@ function world(platform, { selected = 'personal', birth, birthError, societies =
     '../protocol/host-guest.js': { isUuid: value => typeof value === 'string' && /^[a-f0-9-]{36}$/.test(value) },
     '../domain/session-mode.js': { isSessionMode: value => value === 'society' || value === 'personal' },
   }, host);
-  const packageGrammar = compile(process.env.OMA_PACKAGE_GRAMMAR_SOURCE ?? 'src/runtime/pi-packages.ts', {
-    'node:fs': {}, 'node:path': path, '../domain/errors.js': { StoreError },
-    '../leaf.js': {}, '../storage/contained-fs.js': {}, '../storage/durable-fs.js': {},
-    '../config/operations.js': { PACKAGE_ENTRY_PREFIX: 'packages:', extensionEntryProblem() {} },
-    './user-files.js': {}, '../protocol/host-guest.js': { isUuid: value => typeof value === 'string' && /^[a-f0-9-]{36}$/.test(value) },
-    '../storage/directory.js': { listOwnedDirectory() { return null; } },
-    '../platform/host/files.js': { listHostStaged() { return null; } },
+  const packageGrammar = compile(process.env.OMA_PACKAGE_GRAMMAR_SOURCE ?? 'src/runtime/packages/store.ts', {
+    'node:fs': {}, 'node:path': path, '../../domain/errors.js': { StoreError },
+    '../../leaf.js': {}, '../../storage/contained-fs.js': {}, '../../storage/durable-fs.js': {},
+    '../../config/operations.js': { PACKAGE_ENTRY_PREFIX: 'packages:', extensionEntryProblem() {} },
+    '../user-files.js': {}, '../../protocol/host-guest.js': { isUuid: value => typeof value === 'string' && /^[a-f0-9-]{36}$/.test(value) },
+    '../../storage/directory.js': { listOwnedDirectory() { return null; } },
+    '../../domain/package-policy.js': packagePolicy,
   }, host);
   const catalogue = { RESUME_SESSION_ENV: 'OMA_RESUME_SESSION', sessionBirthForHistory(...args) {
     effects.push(['birth', ...args]); if (birthError) throw birthError; return birth;
   } };
   const deps = {
+    '../platform/package-files.js': { packageDirectories: {} },
     'node:fs': { realpathSync: value => value, readFileSync(file) { effects.push(['token', file]); if (tokenError) throw tokenError; return 'fixture-token'; } },
     'node:path': path, 'node:url': { fileURLToPath }, 'node:os': { constants: { signals: {} } },
     'node:crypto': { randomUUID: () => 'fixture-request' },
@@ -57,7 +59,7 @@ function world(platform, { selected = 'personal', birth, birthError, societies =
       async chooseSociety(_streams, items) { choices.push({ items }); return end === 'cancel' ? null : items.at(-1); } },
     './personal-host.js': { async personalMain(options) { effects.push(['personal']); personal.push(options); } },
     './oma-society.js': { loaded: effects }, './oma-mac.js': { loaded: effects },
-    '../tui/exit.js': {}, '../tui/words.js': {},
+    '../application/exit.js': {}, '../tui/words.js': {},
     '../runtime/user-files.js': { ensureUserDirectory(directory) { effects.push(['mkdir', directory]); },
       ensureOwnedUserDirectory(directory, ownedFrom) {
         effects.push(['mkdir', directory]);
@@ -83,16 +85,16 @@ function world(platform, { selected = 'personal', birth, birthError, societies =
     '../protocol/guest-history.js': { isGuestHistoryReference: value => value.startsWith('oma-guest-history:'),
       parseGuestHistoryReference() { return { projectId: 'fixture-project', society: 'demo', file: 'saved.jsonl', sessionId: 'saved-id' }; } },
     '../protocol/host-api.js': { HOST_API_VERSION: 1 }, '../protocol/host-guest.js': { PLATFORM_FRAME_BYTES: 262144 },
-    '../runtime/pi-packages.js': { PACKAGE_USAGE: 'usage: oma pi ...', packageCommand(args) {
+    '../runtime/packages/index.js': { PACKAGE_USAGE: 'usage: oma pi ...', packageCommand(args) {
       assert.equal(packages, true, 'not a package test');
       return packageGrammar.packageCommand(args, true);
     }, async writePackageIndex() { effects.push(['index']); }, packageActivation() { return 'npm:fixture'; } },
-    '../runtime/local-package.js': { stageLocalPackage(_store, source) { effects.push(['stage-local', source]); return 'local/staged-fixture'; },
+    '../application/local-packages.js': { stageLocalPackage(_store, source) { effects.push(['stage-local', source]); return 'local/staged-fixture'; },
       pruneLocalStage() { effects.push(['prune-local']); } },
     '../runtime/personal-settings.js': { reconcilePersonalSettings() { assert.equal(packages, true); effects.push(['reconcile']); } },
     '../runtime/process-lock.js': { ProcessLock: { tryAcquire() { effects.push(['lock']); assert.equal(packages, true);
       return { descriptor: 17, assertHeld() {}, close() { effects.push(['return']); } }; } } },
-    '../tui/login.js': { runEngineLogin(options) { effects.push(['engine-login']);
+    '../runtime/engine/login.js': { runEngineLogin(options) { effects.push(['engine-login']);
       assert.equal(options.packages.args.includes('--host-only'), false, 'host selector reached Pi'); return 0; } },
     '../process/cleanup.js': cleanup,
     '../domain/errors.js': { StoreError }, '../domain/identifiers.js': { isValidSocietyName: value => typeof value === 'string' && /^[a-z][a-z0-9-]*$/.test(value) },
