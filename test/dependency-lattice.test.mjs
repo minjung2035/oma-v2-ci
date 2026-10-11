@@ -81,12 +81,12 @@ test("P5 lattice: a type-only reference may not form a cycle across two layers",
   assert.match(findings[0].reason, /L1-kernel, L4-orchestration/);
 });
 
-test("P5 lattice: one layer is one mechanism, so an intra-layer type cycle is not a crossing", () => {
+test("DR44: Store capabilities cannot form a type cycle with their composition even within one layer", () => {
   const findings = analyze({
     "src/storage/facets.ts": typeRef("../store.js"),
     "src/store.ts": typeRef("./storage/facets.js"),
   });
-  assert.deepEqual(findings, []);
+  assert.deepEqual(findings.map(finding => finding.rule), ["type-import-cycle"]);
 });
 
 test("P5 lattice: the current production graph satisfies the enforced lattice", () => {

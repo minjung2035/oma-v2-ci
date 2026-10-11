@@ -2,7 +2,7 @@
   "version": 1,
   "decision": "defer-further-split",
   "scope": "src/broker.ts lifecycle responsibilities after dispatcher extraction",
-  "reason": "The remaining listener/connection, run-endpoint and drain paths still share admission health, Store lifetime, storage reservations and task settlement. Extracting them now would replace local methods with callback/port plumbing without reducing the files required for a lifecycle change.",
+  "reason": "DR44: extract Server readiness and pending-close observations into BrokerListeners with one health/error callback. Admission, authenticated connection/task ownership, actor incarnation/revocation, final drain and Store/lease release stay in Broker. Do not infer reduced feature change cost from source decomposition alone.",
   "alreadySeparatedOwners": [
     "src/broker/connection.ts",
     "src/broker/public-dispatcher.ts",
@@ -10,22 +10,19 @@
     "src/broker/peer-authenticator.ts",
     "src/runtime/run-registry.ts",
     "src/runtime/broker-lifetime.ts",
-    "src/runtime/process-lock.ts"
+    "src/runtime/process-lock.ts",
+    "src/broker/listeners.ts"
   ],
   "remainingClusters": {
     "listener-connection-lifetime": {
       "members": [
-        "Broker.listen",
         "Broker.listenInternal",
         "Broker.listenActor",
-        "Broker.closeListener",
         "Broker.serveFrames",
         "Broker.closeAdmission",
         "Broker.drainAndClose"
       ],
       "coupledState": [
-        "listeners",
-        "listenerCloses",
         "connections",
         "executingTasks",
         "draining",
@@ -34,7 +31,7 @@
         "health",
         "storageReservations"
       ],
-      "decision": "keep-together-for-now"
+      "decision": "keep-connection-task-admission-and-final-drain-together"
     },
     "actor-run-coordination": {
       "members": [

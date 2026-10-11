@@ -7,7 +7,7 @@ import { surfaceRuleFindings } from "../scripts/architecture/rules/surface-rules
 function findings(files) {
   const root = mkdtempSync(join(tmpdir(), "oma-module-rule-"));
   try { for (const [name, text] of Object.entries(files)) { const path = join(root, name); mkdirSync(dirname(path), { recursive: true }); writeFileSync(path, text); }
-    return surfaceRuleFindings(root).filter(row => ["tui-module-boundary", "tui-public-api", "runtime-module-boundary", "package-public-api"].includes(row.rule));
+    return surfaceRuleFindings(root).filter(row => ["tui-module-boundary", "tui-public-api", "runtime-module-boundary", "package-public-api", "society-conversation-boundary", "platform-adapter-boundary"].includes(row.rule));
   } finally { rmSync(root, { recursive: true, force: true }); }
 }
 test("DR41: module boundaries reject implementation imports including erased type edges", () => {
@@ -18,6 +18,21 @@ test("DR41: module boundaries reject implementation imports including erased typ
   assert.equal(findings({ "src/runtime/example.ts": 'import { X } from "../tui/model.js";' })[0]?.rule, "runtime-module-boundary");
   assert.equal(findings({ "src/entry/example.ts": 'import { X } from "../tui/transcript.js";' })[0]?.rule, "tui-public-api");
   assert.equal(findings({ "src/application/example.ts": 'import { X } from "../runtime/packages/store.js";' })[0]?.rule, "package-public-api");
+});
+test("DR44: conversation and native lifecycle boundaries also reject erased, deferred and re-exported implementation imports", () => {
+  for (const [file, target, rule] of [
+    ["src/application/society-interaction.ts", "../runtime/engine/principal-session.js", "society-conversation-boundary"],
+    ["src/application/society-runtime.ts", "../tui/words.js", "society-conversation-boundary"],
+    ["src/platform/guest/systemd-launcher.ts", "./host.js", "platform-adapter-boundary"],
+    ["src/platform/host/vz-driver.ts", "./lifecycle.js", "platform-adapter-boundary"],
+  ]) for (const text of [
+    `import type { X } from "${target}";`, `export type { X } from "${target}";`,
+    `type X = import("${target}").X;`, `import("${target}");`, `require("${target}");`,
+  ]) assert.equal(findings({ [file]: text }).some(row => row.rule === rule), true, text);
+  assert.deepEqual(findings({
+    "src/platform/guest/systemd-launcher.ts": 'import type { SessionLauncher } from "../../ports/platform-lifecycle.js";',
+    "src/application/society-interaction.ts": 'import type { ConversationUi } from "./society-conversation.js";',
+  }), []);
 });
 test("DR41: Application composes public modules and TUI consumes contracts without loading their effects", () => {
   assert.deepEqual(findings({ "src/tui/example.ts": 'import type { ConfigField } from "../protocol/settings.js";',

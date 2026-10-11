@@ -1,7 +1,7 @@
 /** P5 coarse dependency DAG, refined inside L1 by kernel-zones.mjs (P13).
  * Runtime imports may stay in a layer or point downward; all runtime cycles fail.
- * Erased type cycles are reported separately and only fail across coarse layers.
- * Store/facet type-only relations deliberately retain their authoritative owner.
+ * Erased type cycles fail too: capability declarations do not refer back to their composition.
+ * Store capabilities point toward decoded values, never back to SQLite composition.
  * New files outside these prefixes fail rather than escaping the lattice.
  */
 const INTERNAL_PORT_PREFIXES = ["src/ports/", "src/module-ports.ts"];
@@ -85,6 +85,7 @@ const LAYERS = Object.freeze([
       "src/views.ts",
       "src/reconcile/",
       "src/review.ts",
+      "src/review/",
     ],
   },
   {
@@ -165,21 +166,18 @@ export function latticeFindings(edges, files, layers = LAYERS) {
   return findings;
 }
 
-/** A cycle is only an architecture finding when it spans two layers, i.e. when
- * two ownership units reference each other. A cycle inside one layer is one
- * mechanism referencing itself. */
+/** Both runtime and erased type cycles obscure ownership, including within a layer. */
 export function cycleFindings(groups, layers = LAYERS) {
   const findings = [];
   for (const group of groups) {
     const names = new Set(
       group.map((file) => layerOf(file, layers)?.name ?? "unclassified"),
     );
-    if (names.size > 1)
-      findings.push({
-        rule: "type-import-cycle",
-        file: group[0],
-        reason: `Runtime/type import SCC crosses ${[...names].sort().join(", ")}: ${group.join(" -> ")}`,
-      });
+    findings.push({
+      rule: "type-import-cycle",
+      file: group[0],
+      reason: `Runtime/type import SCC in ${[...names].sort().join(", ")}: ${group.join(" -> ")}`,
+    });
   }
   return findings;
 }

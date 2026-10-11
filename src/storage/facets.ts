@@ -1,9 +1,11 @@
 /** P4: logical views of the one Store, not independent repositories.
  * The tables rename existing methods only. They create neither SQL nor effects.
  */
-import type { Store } from "../store.js";
+import type { StoreQueries, StoreWrites } from "./store-access.js";
+export type { StoreWrites } from "./store-access.js";
 
-type Table = Readonly<Record<string, Readonly<Record<string, keyof Store>>>>;
+type StoreAccess = StoreQueries & StoreWrites;
+type Table = Readonly<Record<string, Readonly<Record<string, keyof StoreAccess>>>>;
 
 function freezeTable<T extends Table>(table: T): T {
   for (const group of Object.values(table)) Object.freeze(group);
@@ -39,19 +41,18 @@ export const WRITE_FACETS = freezeTable({
 
 type Values<T> = T[keyof T];
 export type WriteMethod = Values<{ [K in keyof typeof WRITE_FACETS]: Values<typeof WRITE_FACETS[K]> }>;
-export type StoreWrites = Pick<Store, WriteMethod>;
 export const WRITE_METHODS: readonly WriteMethod[] = Object.freeze(
   [...new Set(Object.values(WRITE_FACETS).flatMap(facet => Object.values(facet)))],
 );
 type Bound<T extends Table> = {
-  readonly [Group in keyof T]: { readonly [Name in keyof T[Group]]: Store[T[Group][Name]] }
+  readonly [Group in keyof T]: { readonly [Name in keyof T[Group]]: StoreAccess[T[Group][Name]] }
 };
 export type ReadFacets = Bound<typeof READ_FACETS>;
 export type WriteFacets = Bound<typeof WRITE_FACETS>;
 
 /** Explicit calls keep the projection visible to the compiler and static
  * call graph. The descriptors above name capabilities, never dispatch them. */
-export function readFacets(store: Store): ReadFacets {
+export function readFacets(store: StoreQueries): ReadFacets {
   return Object.freeze({
     operations: Object.freeze({
       get: (actor, key) => store.getOperation(actor, key),

@@ -14,6 +14,15 @@ const output = join(root, "dist");
 if (lstatSync(output, { throwIfNoEntry: false })?.isSymbolicLink()) throw new Error("refuse to clean a symlinked outDir");
 const require = createRequire(import.meta.url);
 const tsc = join(dirname(require.resolve("typescript/package.json")), "bin", "tsc");
+function requireSuccessfulChild(result, phase) {
+  // Some launch failures still carry status 0 and partial stdout. Only a
+  // completed, error-free child can certify the compile or package check.
+  if (result.error || result.signal) {
+    console.error(`${phase} failed: ${result.error?.message ?? result.signal}`);
+    process.exit(1);
+  }
+  if (result.status !== 0) process.exit(result.status ?? 1);
+}
 
 // A no-change rebuild is pure cost: `tsc --listFilesOnly` resolves the exact
 // file set the compile will read, so hashing every listed input (plus the
@@ -49,7 +58,7 @@ const hash = createHash("sha256");
 const listed = spawnSync(process.execPath, [tsc, "-p", join(root, "tsconfig.build.json"), "--listFilesOnly"], {
   cwd: root, encoding: "utf8", timeout: 120000, killSignal: "SIGKILL",
 });
-if (listed.error || listed.signal || listed.status !== 0) process.exit(listed.status ?? 1);
+requireSuccessfulChild(listed, "Compiler input discovery");
 // Vendored bundled-extension payloads are excluded from tsc's file list (the
 // tsconfigs exempt the tree) but are still build inputs: they are copied to
 // dist verbatim below, so a vendored byte change must poison the skip stamp.
@@ -115,7 +124,7 @@ if (!fresh) {
   const compiled = spawnSync(process.execPath, [tsc, "-p", join(root, "tsconfig.build.json")], {
     cwd: root, stdio: "inherit", timeout: 600000, killSignal: "SIGKILL",
   });
-  if (compiled.error || compiled.signal || compiled.status !== 0) process.exit(compiled.status ?? 1);
+  requireSuccessfulChild(compiled, "TypeScript compilation");
   // The vendored bundled-extension payloads are excluded from compilation
   // (tsconfig exclude), but they are deployed payload: the trusted
   // extension's adapter statically imports runtime/ and the deployment
@@ -162,4 +171,4 @@ if (!fresh) {
 const checked = spawnSync(process.execPath, [join(root, "scripts/check-package.mjs"), "--root", root], {
   cwd: root, stdio: "inherit", timeout: 60000, killSignal: "SIGKILL",
 });
-if (checked.error || checked.signal || checked.status !== 0) process.exit(checked.status ?? 1);
+requireSuccessfulChild(checked, "Package verification");

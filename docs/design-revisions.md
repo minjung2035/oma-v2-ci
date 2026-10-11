@@ -1619,3 +1619,61 @@ VM/native/Keychain/systemd/files/bridge/RPC는 effect 또는 transport adapter �
 observation으로 연결하며 상위 계층은 아래 계층의 state machine을 재현하지 않는다.
 계약 위치·의존 방향과 실행을 읽는 순서는 [Application 경계 안내](application-boundaries.md)가 설명한다.
 기존 규범과 검사 강도를 유지하며 파생 메타데이터를 위한 새 수동 registry를 만들지 않는다.
+
+## DR44 — Review 권한과 실행 조정의 변경 경계
+
+2026-10-11. Human은 기준 `067bb7c`의 8.4점 정적 평가와 17개 추가 후보를 제공하고,
+필수 문서·실제 코드를 먼저 읽은 뒤 핵심 소유권을 보존하면서 변경 복잡성을 줄이도록 요청했다.
+서브에이전트는 사용하지 않는다. 외부 30개 프로젝트의 전수 감사나 개선 후 평점 자체를
+실행 증거로 사용하지 않는다.
+
+ReviewModule은 caller admission과 공개 API의 facade다. authority read·candidate preparation·
+message construction·acceptance·advancement·status를 각각 다른 변경 이유로 분리한다.
+ReviewAcceptance 하나만 review fact와 merge integration intent의 T를 소유한다. 준비 객체의
+readonly recipient 배열을 cast로 쓰던 부분은 제거한다. T에서 새 recipient snapshot을 만들고
+결과도 실제 accepted plan으로 계산한다. MessagePlan을 동결하는 실제 merge 회귀가 이를 검증한다.
+검증된 attestation read를 사용하며 합성 operation을 provenance type으로 cast하지 않는다.
+
+GitModule이 read-only ReviewAuthorityReader를 먼저 구성한다. Integration은 synchronous
+ReviewAuthority port를 통해 순수 ReviewState의 현재 readiness를 확인하며 Review workflow로
+되돌아가지 않는다. 정책 floor는 broker가 묶은 값이다. ReviewAdvancement만 Integration에
+적용을 요청한다. live checks→최종 authority→writer slot→CAS와 accepted-effect recovery의
+기존 순서를 유지한다. public Review gate를 실패시키는 회귀로 workflow callback 제거를 확인한다.
+
+Principal의 launch/profile/environment와 event projection을 분리하고 Human/Delivery arbitration은
+I/O 없는 TurnAdmission에 둔다. claim과 대기 입력 handoff는 동기적으로 끝난다. unanswered
+acceptance는 unknown이며 receipt timeout만으로 claim을 반환하지 않는다. PrincipalSession은
+실제 RPC·UI·credential socket·child exit의 lifetime을 계속 소유한다. BrokerListeners는 listen
+readiness와 진행 중인 close만 소유한다. Broker의 health/admission, task drain, RunRegistry,
+Resident quiescence와 Store·lease 반환 순서는 유지한다.
+
+Pi의 global autocomplete prototype/private fdPath 교체를 제거한다. public autocomplete wrapper와
+public CombinedAutocompleteProvider 생성자로 늦은 fd 설치를 반영한다. 기존 provider 우선권,
+completion 적용과 cancellation을 유지한다. input readiness를 막는 optional download에 대한
+private import 우회는 고정된 Pi/Pi TUI 1.0.1 preload와 export 계약 검사로 제한한다. 다른 기존
+private UI hook과 native qualification이 해결됐다고 주장하지 않는다.
+실제 재로드에서 새 public factory가 stale ctx.cwd를 붙잡던 오류를 발견했다. 등록 때 cwd 문자열을
+읽고 반복 wrapper는 겹치지 않게 한다. Personal 저장 확인은 reload 뒤 현재 UI에 보낸다.
+
+StoreQueries/StoreWrites는 concrete Store를 참조하지 않고 기존 LedgerReader의 decoded/provenance
+타입과 write 입력을 재사용한다. transaction의 runtime owner identity·captured closure·동기 gate는
+그대로다. runtime뿐 아니라 같은 계층의 type union cycle도 기존 lattice 검사로 거절한다.
+diagnostics는 좁은 GitReadPort, native lifecycle adapter는 platform-lifecycle port를 사용한다.
+SystemdSessionLauncher가 listening helper 하나 때문에 GuestHost 전체를 로드하던 역참조도 제거한다.
+Society Interaction은 sendUi adapter, Runtime은 view wording port를 사용한다. concrete session은
+Runtime 안에 남고 stale callback의 identity 확인은 보존한다.
+
+파생 메타데이터 갱신은 기존 도구를 순서대로 실행하는 evidence:refresh 명령 하나로 묶는다.
+authored review·durable owner·규범·historical PASS는 자동 갱신하지 않는다. input binding 생성은
+runtimeProof:false다. stale/중복 binding 거절과 idempotence를 음성 대조군으로 검증한다.
+추가 검토에서 build child의 실행 오류에 status 0이 동반되면 이전 dist를 성공으로 오인하는
+결함을 발견했다. discovery·compile·package 단계 모두 error/signal을 우선 실패로 처리하고
+실제 build runner의 실패 주입으로 검사한다. 이전 dist의 숫자는 변경 코드의 증거로 철회한다.
+실제 changeset 비용은 기존 mutation-locality 도구로 기록한다. 이번 구조 변경의 파일 수를
+승인 규칙 추가나 engine upgrade 같은 별도 feature의 전후 비용 감소로 해석하지 않는다.
+
+두 플랫폼 ledger·세 process lifetime·identity trust boundary는 실제 서로 다른 책임이므로 합치지
+않는다. Host/Guest wire의 공통 SocietyMethods와 shape 검사는 기존 protocol owner를 재사용한다.
+Society root의 deferred UI/transition 연결과 나머지 Pi UI hook은 잔여 변경 비용으로 명시한다.
+정적 지표·fresh 실행·환경 한계는 [validation](implementation/validation.md), 읽는 순서와
+변경 책임은 [Application 경계 안내](application-boundaries.md)에 기록한다.

@@ -1,10 +1,13 @@
 /** Keep optional installation out of input readiness. Pi's existing providers
  * observe the installed path on their next request, including Personal/reload. */
-import { CombinedAutocompleteProvider } from "@earendil-works/pi-tui";
+import { CombinedAutocompleteProvider, type AutocompleteProvider } from "@earendil-works/pi-tui";
 import { getToolPath, ensureTool as installTool, type ToolStatus } from "@earendil-works/pi-coding-agent/dist/utils/tools-manager.js";
+if (typeof getToolPath !== "function" || typeof installTool !== "function")
+  throw new Error("Unsupported Pi search-tool adapter exports");
 
 const pending = new Map<string, Promise<void>>();
 let installedFd: string | undefined;
+const wrapped = new WeakMap<AutocompleteProvider, { cwd: string; upstream: AutocompleteProvider }>();
 function install(tool: "fd" | "rg", status?: (status: ToolStatus) => void): void {
   if (pending.has(tool)) return;
   const existing = getToolPath(tool);
@@ -24,12 +27,32 @@ export async function ensureTool(tool: "fd" | "rg", status?: (status: ToolStatus
   return path;
 }
 
-// The one pinned private field needed for late installation. All matching,
-// cancellation, commands and application of completions remain upstream's.
-const suggest = CombinedAutocompleteProvider.prototype.getSuggestions;
-CombinedAutocompleteProvider.prototype.getSuggestions = function (...args) {
-  const path = installedFd;
-  if (path) Reflect.set(this, "fdPath", path);
-  else setImmediate(() => install("fd"));
-  return suggest.apply(this, args);
-};
+/** Installed through ExtensionUIContext.addAutocompleteProvider. Upstream and
+ * other extensions keep first refusal; a public provider supplies late fd
+ * results without changing the engine's prototype or private fields. */
+export function withSearchTools(current: AutocompleteProvider, cwd: string): AutocompleteProvider {
+  const existing = wrapped.get(current);
+  if (existing?.cwd === cwd) return current;
+  if (existing !== undefined) current = existing.upstream;
+  let path: string | undefined;
+  let files: CombinedAutocompleteProvider | undefined;
+  const provider: AutocompleteProvider = {
+    ...(current.triggerCharacters === undefined ? {} : { triggerCharacters: current.triggerCharacters }),
+    async getSuggestions(...args) {
+      const result = await current.getSuggestions(...args);
+      if (result !== null || args[3].signal.aborted) return result;
+      if (installedFd === undefined) { setImmediate(() => install("fd")); return null; }
+      if (files === undefined || path !== installedFd) {
+        path = installedFd;
+        files = new CombinedAutocompleteProvider([], cwd, path);
+      }
+      return files.getSuggestions(...args);
+    },
+    applyCompletion: (...args) => current.applyCompletion(...args),
+    ...(current.shouldTriggerFileCompletion === undefined ? {} : {
+      shouldTriggerFileCompletion: (...args: [string[], number, number]) => current.shouldTriggerFileCompletion!(...args),
+    }),
+  };
+  wrapped.set(provider, { cwd, upstream: current });
+  return provider;
+}

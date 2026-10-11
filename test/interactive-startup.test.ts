@@ -5,6 +5,23 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { spawnSync } from "node:child_process";
 
+test("DR44: private search-tool preload refuses an unqualified Pi upgrade before installing hooks", () => {
+  const result = spawnSync(process.execPath, ["--input-type=module", "-e", `
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import { syncBuiltinESMExports } from 'node:module';
+const read = fs.readFileSync;
+fs.readFileSync = (path, ...args) => String(path).endsWith('/pi-coding-agent/package.json')
+  ? JSON.stringify({ version: '1.0.2' }) : read(path, ...args);
+syncBuiltinESMExports();
+await assert.rejects(import(${JSON.stringify(new URL("../src/pi-compat/interactive-tool-setup.js", import.meta.url).href)}),
+  /Unsupported Pi search-tool adapter version: 1.0.2/);
+console.log('PASS');
+`], { encoding: "utf8", timeout: 10_000 });
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(result.stdout.trim(), "PASS");
+});
+
 test("DR35 host runtime resolution and retry setup never load the interactive SDK", () => {
   const root = mkdtempSync(join(tmpdir(), "oma-host-startup-"));
   try {
@@ -26,7 +43,7 @@ console.log('PASS');
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
 
-test("DR37: a delayed fd installation restores recursive autocomplete in the existing provider", () => {
+test("DR37/DR44: public autocomplete wrapper restores late fd results without changing the engine prototype", () => {
   const root = mkdtempSync(join(tmpdir(), "oma-late-autocomplete-"));
   try {
     mkdirSync(join(root, "deep", "nested"), { recursive: true });
@@ -47,7 +64,11 @@ registerHooks({load(url,context,next){
 }});
 const ui=await import(engine);assert.equal(ui.ready,undefined);
 const {CombinedAutocompleteProvider}=await import('@earendil-works/pi-tui');
-const provider=new CombinedAutocompleteProvider([{name:'test'}],${JSON.stringify(root)},null);
+const prototype=CombinedAutocompleteProvider.prototype.getSuggestions;
+const {withSearchTools}=await import(${JSON.stringify(new URL("../src/pi-compat/interactive-tools.js", import.meta.url).href)});
+const upstream=new CombinedAutocompleteProvider([{name:'test'}],${JSON.stringify(root)},null);
+const provider=withSearchTools(upstream,${JSON.stringify(root)});
+assert.equal(withSearchTools(provider,${JSON.stringify(root)}),provider,'reload stacked another search wrapper');
 const args=[['@needle'],0,7,{signal:new AbortController().signal}];
 assert.equal(await provider.getSuggestions(...args),null);
 const beforeCommands=await provider.getSuggestions(['/te'],0,3,{signal:new AbortController().signal});
@@ -57,6 +78,8 @@ const found=await provider.getSuggestions(...args);
 assert.ok(found.items.some(i=>i.value.includes('deep/nested/needle.ts')),JSON.stringify(found));
 const command=await provider.getSuggestions(['/te'],0,3,{signal:new AbortController().signal});
 assert.deepEqual(command,beforeCommands);
+assert.equal(CombinedAutocompleteProvider.prototype.getSuggestions,prototype);
+assert.equal(await upstream.getSuggestions(...args),null,'upstream private fdPath was changed');
 console.log('PASS');
 `], { encoding: "utf8", timeout: 10000, env: { HOME: root, PATH: "/usr/bin:/bin", PI_CODING_AGENT_DIR: root } });
     assert.equal(result.status, 0, result.stderr); assert.equal(result.stdout.trim(), "PASS");

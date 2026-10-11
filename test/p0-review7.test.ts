@@ -122,7 +122,7 @@ test("P0V-113 / G03-broker-r2-01: a run that could not be opened leaves the inca
   await broker.start();
   const openRun = (): Promise<{ incarnation: number }> => (Reflect.get(broker, "openRun") as (actor: string, id: string) => Promise<{ incarnation: number }>).call(broker, "alice", invocation);
   const incarnation = (): number => f.store.getAgent("alice")!.incarnation;
-  const servers = (): number => (Reflect.get(broker, "actorServers") as Set<unknown>).size;
+  const servers = (): number => (Reflect.get(broker, "listeners") as import("../src/broker/listeners.js").BrokerListeners).size;
   const nextInvocation = (): void => { cgroups.at(-1)!.population = "empty"; invocation = String(cgroups.length).padStart(32, "d"); };
   const before = incarnation(); const listening = servers();
   // The endpoint could not be made (a full disk, a path too long).

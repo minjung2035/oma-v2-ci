@@ -8,19 +8,9 @@
  */
 import type { FramedPeer } from "../rpc.js";
 import { PlatformError } from "../rpc.js";
-import type { GuestLink, GuestPorts } from "./guest-link.js";
-
-export interface VmDriver extends GuestPorts {
-  /** Boots the VM; resolves once it is running (not yet answering). */
-  start(): Promise<void>;
-  /** Resolves only after the VM is stopped (including a start in progress). */
-  forceStop(): Promise<void>;
-  /** The VM stopped, whoever stopped it: the guest powered off, it crashed,
-   * or `forceStop` pulled the power. */
-  onStopped(listener: (cause: VmStopCause) => void): void;
-}
-
-export type VmStopCause = "guest" | "error";
+import type { GuestLink } from "./guest-link.js";
+import type { VmDriver, VmStopCause } from "../../ports/platform-lifecycle.js";
+export type { VmDriver, VmStopCause } from "../../ports/platform-lifecycle.js";
 export type VmState = "stopped" | "booting" | "handshaking" | "ready" | "draining" | "forced" | "crashed" | "failed";
 
 export interface LifecycleOptions {

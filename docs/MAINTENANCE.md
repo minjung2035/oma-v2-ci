@@ -430,7 +430,7 @@ Static checker도 코드다. Architecture가 이동했으면 broad exception을 
 4. 겉모양은 비슷하지만 허용되어야 하는 false-positive control.
 5. 어떤 기존 계약/semantic owner를 보호하며 naming heuristic이 아닌지 설명.
 
-Runtime DAG와 type coupling은 별도다. Type-only 상향 edge는 먼저 생성 evidence에서 관측하고 실제 의미를 검토한다. 실제 부적절한 coupling이 재현되고, legitimate representation/contract 관계가 분류되며, false-positive control이 준비된 뒤에만 방향 gate를 검토한다. 기존 cross-layer union SCC gate를 없애거나 edge별 whitelist로 우회하지 않는다.
+Runtime DAG와 type coupling은 별도다. Type-only 상향 edge는 먼저 생성 evidence에서 관측하고 실제 의미를 검토한다. 실제 부적절한 coupling이 재현되고, legitimate representation/contract 관계가 분류되며, false-positive control이 준비된 뒤에만 방향 gate를 검토한다. DR44부터 runtime/type union SCC는 같은 계층 안에서도 거절한다. capability는 concrete composition으로 돌아가지 않고 기존 decoder의 provenance 타입을 참조한다. cycle gate를 없애거나 edge별 whitelist로 우회하지 않는다.
 
 Checker 파일 분리는 책임·source universe·분석 재사용이 분명해질 때만 한다. LOC 목표를 맞추기 위한 분할, TypeScript/기존 helper와 중복되는 parser·registry·evidence 체계는 추가하지 않는다. 현재 수용 사례는 `test/architecture-rule-modules.test.mjs`와 `test/architecture-oracles.test.mjs`의 positive/negative/false-positive fixture를 기준으로 확인한다.
 
@@ -455,6 +455,12 @@ Checker 파일 분리는 책임·source universe·분석 재사용이 분명해�
 문서의 owner·권위·새 정보를 적는 곳은 [문서 지도](README.md#새-정보를-어디에-적는가) 하나가 정한다. 병렬 색인이나 같은 정책의 두 번째 설명을 만들지 않는다. 실제 wire/durable 선언과 기계 판독 map은 코드 입력으로 구분한다.
 
 현재 실행 판정은 validation, 재개점은 HANDOFF에 기록한다. 긴 과거 실행·인계·입력 원본은 [archive](archive.md)로 구분하고 작성 시점의 사실을 보존한다. Generated trace/report/inventory/evidence는 생성 도구와 입력 bytes에 결박한다. 문서 통합 때문에 과거 검증이나 승인 fact의 뜻을 바꾸지 않는다.
+
+`npm run evidence:refresh`로 import graph·production inventory/source digests·review ledger·
+structural input binding을 재생성한다. stale review claim을 자동 rehash하거나 과거 PASS를 갱신하지
+않는다. 규범 fingerprint, effect owner와 durable boundary, 실제로 검토한 delta의 review-notes는
+사람의 판단을 기록하는 입력이다. 파일 이동 시 의미 owner만 수정하고 파생 파일 목록·digest·
+graph를 각각 손으로 동기화하지 않는다. 입력 binding 갱신과 runtime execution 기록은 별개다.
 
 ## 30. 인계 작성 템플릿
 

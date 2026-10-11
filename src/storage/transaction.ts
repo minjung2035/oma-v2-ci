@@ -6,12 +6,12 @@ import { AsyncLocalStorage } from "node:async_hooks";
 import { assertNewAcceptance, observeStoreFailure } from "../domain/admission.js";
 import { StoreError } from "../domain/errors.js";
 import type { SynchronousResult } from "../ports/ledger.js";
-import type { Store } from "../store.js";
+import type { StoreQueries } from "./store-access.js";
 import { writeFacets, type StoreWrites, type WriteFacets } from "./facets.js";
 export type { StoreWrites } from "./facets.js";
 
 const BRAND: unique symbol = Symbol("StoreTransaction");
-export type StoreReads = Pick<Store,
+export type StoreReads = Pick<StoreQueries,
   "societyOpen" | "getAgent" | "listAgents" | "subscribers" | "allSubscriptions" | "claimKey" |
   "getOperation" | "getOperationById" | "findPhysicalCreate" | "recoverableOperations" |
   "getDelivery" | "pendingDeliveries" | "deliveriesForOperation" | "getBatch" |
@@ -32,7 +32,7 @@ export function assertSynchronousResult(value: unknown): void {
 
 export class TransactionScope {
   private scope: Scope | null = null;
-  constructor(private readonly store: Store) {}
+  constructor(private readonly store: StoreWrites) {}
   get active(): boolean { return this.scope?.active === true; }
   private requireScope(expected?: Scope): Scope {
     const scope = current.getStore();

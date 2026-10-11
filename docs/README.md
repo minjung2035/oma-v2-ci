@@ -79,4 +79,9 @@ PRIORITY-0가 최상위다. architecture는 고정 상위 기준본이며, 사�
 | [contract-direction-plan.json](../implementation/contract-direction-plan.json) | contract 의존 방향 결정 |
 | [broker-lifecycle-review.json](../implementation/broker-lifecycle-review.json) | broker lifecycle 경계 검토 |
 
-Production inventory·LOC·dependency graph·review ledger·trace inventory는 생성 도구로 갱신한다. 예전 값을 새 측정처럼 손으로 보정하지 않는다. 현재 결과는 validation이 소유한다.
+`npm run evidence:refresh`는 dependency graph, production inventory/source digests,
+review ledger, validation의 structural input binding을 순서대로 갱신한다. 구조 생성 결과는
+`runtimeProof: false`이며 새 시험 PASS를 만들지 않는다. authored review의 digest가 stale이면
+거절하므로 실제 delta 검토 후 review-notes를 기록해야 한다. 권한·durable 의미·규범 fingerprint·
+review 판정은 이 명령이 고치지 않는다. LOC 측정·trace inventory는 각 기존 도구를 사용한다.
+예전 값을 새 측정처럼 손으로 보정하지 않는다. 현재 결과는 validation이 소유한다.

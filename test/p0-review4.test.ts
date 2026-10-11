@@ -173,19 +173,16 @@ test("P0V-52 / F6, P0-4: a broker keeps only the listener closes still in progre
   const broker = new Broker(f.store, f.mail, units, new ViewsModule(f.store, f.root, "demo", "p", TEST_VIEW_LIMITS), lifecycle, null, null,
     { stateRoot: f.root, runRoot: join(f.root, "run"), society: "demo", hasGoal: () => true });
   try {
-    const listeners = Reflect.get(broker, "listeners") as Map<Server, Promise<void>>;
-    const closeListener = Reflect.get(broker, "closeListener") as (server: Server) => void;
+    const listeners = Reflect.get(broker, "listeners") as import("../src/broker/listeners.js").BrokerListeners;
     // A run endpoint per revoked run over a long-lived broker's life.
     for (let index = 0; index < 20; index += 1) {
       const server = createServer();
-      const ready = new Promise<void>(resolve => server.listen(join(f.root, `endpoint-${index}.sock`), resolve));
-      listeners.set(server, ready);
-      closeListener.call(broker, server);
+      listeners.listen(server, join(f.root, `endpoint-${index}.sock`));
+      listeners.close(server);
     }
-    const closes = Reflect.get(broker, "listenerCloses") as Set<Promise<void>> | Promise<void>[];
-    await Promise.all([...closes]);
+    await Promise.all(listeners.pendingCloses);
     await new Promise(resolve => setImmediate(resolve));
-    const kept = closes instanceof Set ? closes.size : closes.length;
+    const kept = listeners.pendingCloses.length;
     assert.equal(kept, 0, `the broker kept ${kept} closes that had already finished`);
   } finally {
     await broker.drainAndClose();

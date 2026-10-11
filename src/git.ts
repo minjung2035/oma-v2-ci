@@ -15,6 +15,7 @@ import type { GitObservation, RefAfterCas } from "./git/observe.js";
 import { createCanonicalObserver, compareAndSwapCanonicalRef, authorizeCanonicalNoop, canonicalMergeDiff, canonicalRevertCommit } from "./git/canonical-command.js";
 import { IntegrationCoordinator } from "./git/integration.js";
 import { ReviewModule, type ReviewBounds } from "./review.js";
+import { ReviewAuthorityReader } from "./review/authority.js";
 import { SubmitCoordinator, type SubmitInput } from "./git/submit.js";
 import { GitPublicationObserver } from "./git/publication.js";
 import { QuarantineImporter } from "./git/quarantine.js";
@@ -46,6 +47,7 @@ export class GitModule {
     reviewBounds: ReviewBounds = { mailBodyBytes: 256 * 1024, subjectBytes: 512, bundleBytes: 256 * 1024 * 1024 },
   ) {
     this.store.bindRepositoryIdentity({ society: paths.society });
+    const reviewAuthority = new ReviewAuthorityReader(store, integration?.tiered?.highPeerFloor ?? 1);
     this.integrationCoordinator = new IntegrationCoordinator(store, {
       verifyObjectFormat: oids => { this.objectFormat(paths.projectGit, oids); },
       main: () => this.observations.ref(paths.projectGit, "refs/heads/main"),
@@ -58,10 +60,7 @@ export class GitModule {
       noopWitness: ref => this.observations.ref(paths.projectGit, ref),
       authorizeNoop: (ref, candidate) => authorizeCanonicalNoop(this.observations, paths.projectGit, ref, candidate),
       submitters: (base, candidate) => this.submitters(base, candidate),
-    }, integration, policyRevisionReader, mail,
-      // The reviews field is assigned below; the gate is only invoked by
-      // applyMerge, long after construction completes.
-      request => this.reviews.assertApplicable(request));
+    }, integration, policyRevisionReader, mail, reviewAuthority);
     this.reviews = new ReviewModule(store, mail, {
       policy: () => this.integrationCoordinator.boundPolicy(),
       currentPolicy: () => this.integrationCoordinator.currentIntegrationPolicy(),
@@ -77,7 +76,7 @@ export class GitModule {
       publishCandidateRef: (ref, candidate) => this.publishRef(ref, candidate),
       applyMerge: operation => this.integrationCoordinator.applyMerge(operation),
       withWriter: work => this.withWriter(work),
-    }, reviewBounds, paths.society);
+    }, reviewBounds, paths.society, reviewAuthority);
     this.attestations = new AttestationModule(store,
       { record: (a, k, i) => this.reviews.record(a, k, i) });
     this.quarantine = new QuarantineImporter(paths, candidate => this.canonicalHas(candidate));

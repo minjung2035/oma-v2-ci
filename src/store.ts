@@ -16,6 +16,8 @@ import { LedgerTransitions, type DeliveryIdentity, type PreparedBatchInput } fro
 import { OperationTransitions, type NewOperation } from "./storage/operation-transitions.js";
 import { OperationJournal } from "./storage/operation-journal.js";
 import { readFacets } from "./storage/facets.js";
+import type { NewAgent, StoreQueries, StoreWrites } from "./storage/store-access.js";
+export type { NewAgent } from "./storage/store-access.js";
 export { reused } from "./storage/operation-journal.js";
 import { TransactionScope, assertSynchronousResult, type SyncCallback } from "./storage/transaction.js";
 import { isValidSocietyName, isValidFullOid, isValidOperationId } from "./domain/identifiers.js";
@@ -33,10 +35,6 @@ export type OperationRow = DecodedOperation;
 export function isBusyError(error: unknown): boolean {
   const primary = sqlitePrimaryCode(error);
   return primary === 5 || primary === 6;
-}
-export interface NewAgent {
-  name: Actor; specHash: string; role: "resident" | "principal"; desired: AgentRow["desired"];
-  incarnation: number; profile: string; createdBy: string | null; specJson: string;
 }
 
 /** Existing-file compatibility only. Startup must already own the broker's
@@ -159,7 +157,7 @@ export function readDiagnosticSnapshot(stateRoot: string, limits: DiagnosticRead
 }
 
 const DEFAULT_BUSY_RETRIES = 5;
-export class Store {
+export class Store implements StoreQueries, StoreWrites {
   private readonly readViews = readFacets(this);
   readonly operations = this.readViews.operations;
   readonly attestations = this.readViews.attestations;
@@ -333,7 +331,7 @@ export class Store {
     return this.journal.classifyKey(actor, key, hash);
   }
   claimOperation(operation: NewOperation): "inserted" | "retry" { return this.journal.accept(operation); }
-  acceptOperation(operation: Parameters<Store["insertOperation"]>[0]): "inserted" | "retry" { return this.claimOperation(operation); }
+  acceptOperation(operation: NewOperation): "inserted" | "retry" { return this.claimOperation(operation); }
   getOperation(actor: Actor, key: RequestKey): OperationRow | null { return this.journal.get(actor, key); }
   /** P0V-92 (R6-15): the operation behind a key the ledger has just answered
    * as a retry. No code removes an operation, so a missing one is a ledger
@@ -381,7 +379,7 @@ export class Store {
   setOperationSucceeded(id: OperationId, resultJson: string): void { this.journal.succeed(id, resultJson); }
   setOperationFailed(id: OperationId, code: ErrorCode): void { this.journal.fail(id, code); }
   setOperationUnknown(id: OperationId): void { this.journal.markUnknown(id); }
-  insertDeliveries(deliveries: DeliveryIdentity[]): void { this.transitions.insertDeliveries(deliveries); }
+  insertDeliveries(deliveries: readonly DeliveryIdentity[]): void { this.transitions.insertDeliveries(deliveries); }
   markMaterialized(message: MessageId, recipient: Actor): void { this.transitions.markMaterialized(message, recipient); }
   markAcknowledged(message: MessageId, recipient: Actor): void { this.transitions.markAcknowledged(message, recipient); }
   pendingDeliveries(agent: Actor): DeliveryRow[] { return this.reader.pendingDeliveries(agent); }

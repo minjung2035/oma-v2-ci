@@ -1,5 +1,73 @@
 # OMA v2 — 현재 검증 상태
 
+## Review 권한·실행 조정·파생 증거 (2026-10-11, DR44)
+
+기준 `067bb7c`의 구조를 직접 검토하고 Review acceptance/advancement/authority/message/status,
+Principal turn admission/launch/projection, Broker listener 관측, Pi 공개 autocomplete,
+Store capability·diagnostic·platform·conversation port를 개선했다. 필수 문서와 영향 owner를
+먼저 읽었으며 서브에이전트는 사용하지 않았다. 단일 T·writer·HostTenure·actual exit·unknown과
+historical receipt의 의미를 보존한다. 변경 이유와 잔여 경계는 [DR44](../design-revisions.md#dr44--review-권한과-실행-조정의-변경-경계)와
+[Application 경계 안내](../application-boundaries.md)를 따른다.
+
+초기 sandbox 실행에서 Git child EPERM을 관측했다. 초기 dist가 기준 HEAD의 산출물로 남아
+있었으므로 132/132와 이어진 223 PASS / 2 FAIL 실행은 변경 코드의 runtime 증거로 철회한다.
+두 실패는 stale inventory/input binding 검사였다. typecheck는 moved constant의 잘못된 import와
+회귀 fixture property 이름을 거절했고 실제 owner의 export와 fixture 이름으로 정정했다.
+첫 surface 검사도 public AutocompleteProvider 타입의 owner 등록 누락을 거절했다.
+실제 빌드 뒤 DR44 코드와 새 회귀가 dist에 존재함을 확인하고 최종 실행을 진행한다.
+
+첫 fresh 전체 local 실행은 3,916 PASS / 105 FAIL(415 files)이었고 15,462개 입력의
+실행 전후 변경은 0건이었다. 추출 전 Principal 필드를 직접 만들던 fixture, 이전 GuestHost
+listening 경로, 새 Pi adapter의 controlled import 누락과 eager private import가 주요 원인이다.
+실제 TurnAdmission과 새 observation owner를 fixture에 공급하고 optional Pi adapter는 UI를
+시작할 때 불러온다. 같은 계층 type cycle을 허용하던 옛 oracle과 새 회귀의 requestName 인자
+순서도 정정한다. Personal 확장 선택 PTY 두 실패는 별도로 재현한다. 실패 실행은 보존한다.
+
+첫 집중 재실행은 101 PASS / 84 FAIL이다. CommonJS controlled fixture에서 UI adapter의
+deferred import가 local `require` 이름과 충돌했고 constructor를 생략한 Principal fixture에
+ready 값이 빠졌다. package resolver를 명시적으로 이름 붙이고 실제 ready 상태를 공급한다.
+Personal 확장 설정은 저장·재로드됐지만 이전 UI에 보낸 확인이 새 화면에 표시되지 않았다.
+확인을 reload 완료 뒤 현재 UI에 보낸다. PTY의 saved 표시와 실제 extension 제거 검사는 유지한다.
+
+다음 집중 실행은 141 PASS / 2 FAIL이다. 원시 PTY를 보존한 재현에서 autocomplete factory가
+reload 전에 받은 ctx.cwd를 다시 읽어 stale context guard에 거절됨을 확인했다. 등록할 때 cwd를
+읽고 문자열만 capture한다. 공개 wrapper는 반복 등록에도 겹치지 않고 prototype/private field를
+수정하지 않는다. saved 확인은 현재 UI에 보낸다. 기존 PTY의 saved·실제 tool 제거 oracle을
+줄이지 않으며 재로드 성공을 최종 실행에서 다시 확인한다.
+
+수정 뒤 Pi compatibility·Personal 실제 PTY 집중 실행은 20/20 PASS이며 skip/cancel/todo는
+0이다. build·typecheck도 통과했다. build child 실행 오류와 status 0이 함께 오는 별도 결함은
+discovery·compile·package 모두 실패로 처리하며 실제 build script의 실패 주입을 검증한다.
+직접 검토한 생산 delta는 40개다. 기준 미검토 50개 중 review.ts를 직접 검토해 현재 49개가
+남으며 나머지를 자동 승인하지 않는다. authored review의 기존 순서와 변경 없는 기록을 보존한다.
+
+직접 분석한 graph는 454 TS files / 1,897 runtime edges / 543 type-only edges다.
+runtime cycle, runtime/type union SCC, type-only 상향 edge는 모두 0이다. readiness 판정은
+Integration→ReviewAuthorityReader→순수 ReviewState이며 Review workflow로 되돌아가지 않는다.
+Pi global autocomplete prototype 교체를 제거했다. Store provenance는 기존 decoder에 남는다.
+
+최종 전체 local suite는 4,021/4,021 PASS(415 files, serial 9 + parallel 4,012)이며
+fail/cancel/skip/todo는 0이다. 실제 primitive crash는 EXECUTED+PASS 63/63이다. 두 실행의
+공통 runtime 입력은 `32c17e1595580f5d1149189823ea38c8647d5722e96f30c33f405812200a6ae6`
+(15,463 files)이고 각각 실행 전후 변경과 lane 입력 차이는 0건이다. 실제 SIGSTOP·부모 SIGKILL·
+재시작·반복 복구 범위다. VM power loss 또는 모든 entrypoint crash의 증거로 확장하지 않는다.
+build·typecheck·전체 architecture gate도 통과했다. 원시 로그·입력 map·SHA·실패 실행과 검토
+범위는 [DR44 evidence](../../test/audit/architecture-quality-2026-10-11.evidence.json)와
+`/home/dev/oma-audit-artifacts/architecture-quality-2026-10-11`에 보존한다. crash 원본은 옆의
+`architecture-quality-2026-10-11-clean-crash`다. 결과 기록의 bytes는 실행 뒤 작성됐으며 별도
+metadata/structure 검사로 결박한다. 실행한 production code는 변경하지 않았다.
+동일 feature의 전후 변경 비용이나 독립 평점을 측정한 결과로 해석하지 않는다.
+
+마지막 staged 검사에서 새 Principal helper 두 파일의 EOF 빈 줄을 정리한 뒤 위 전체
+suite·crash를 다시 실행해 현재 소스 바이트를 검증했다. 앞선 성공 실행과 원시 증거도
+별도 snapshot으로 보존한다. 결과 기록 bytes의 최종 metadata·structure 검사 원본은
+같은 artifact 디렉터리의 `clean-post-record-result.json`이다.
+
+아래 DR43 이하 실행은 과거 입력의 결과다. structural binding 생성만으로 runtime PASS를
+만들지 않는다. native Mac·VM power loss·paid
+provider·release 및 별도 kernel qualification은 이번 작업에서 NOT_RUN이다. 기존 startup
+목표 미달과 나머지 Pi private UI hook은 남는다.
+
 ## Society 조립·플랫폼 책임 경계 (2026-10-10, DR43)
 
 DR42 완료·푸시 `06df8990` 뒤 Human이 추가 요청한 설계 개선이다. entry의 project/session 준비,
@@ -273,7 +341,7 @@ native·macOS VM boot·power loss는 미실행이다. 이전 kernel/crash PASS�
 충족했다고 주장할 수 없다. raw log는 `/tmp/oma-host-ownership-2026-10-09`에 보존한다.
 
 현재 구조 검사의 입력 identity(생성 자체는 runtime PASS가 아니다):
-verification input digest `707d0a8293532cae0653e4712def7d91d45761f36648ad87d67f19a562967486` (15445 files).
+verification input digest `511b59a97a7369802c3f7fb7875bfd7429766fd1e1d14fcd05dcb07cd0dc7f16` (15463 files).
 
 ## 이전 실행 결과: 지정한 제한 제거·기능 복구 (2026-10-09, DR37)
 

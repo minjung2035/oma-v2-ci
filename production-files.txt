@@ -13,6 +13,7 @@ src/application/project-session-settings.ts
 src/application/project-settings.ts
 src/application/settings.ts
 src/application/society-bootstrap.ts
+src/application/society-conversation.ts
 src/application/society-interaction.ts
 src/application/society-panel.ts
 src/application/society-runtime.ts
@@ -24,6 +25,7 @@ src/broker.ts
 src/broker/composition.ts
 src/broker/connection.ts
 src/broker/internal-dispatcher.ts
+src/broker/listeners.ts
 src/broker/logs.ts
 src/broker/peer-authenticator.ts
 src/broker/peer-pin.ts
@@ -109,6 +111,7 @@ src/domain/surface-bounds.ts
 src/domain/tier-evaluation.ts
 src/domain/tier-snapshot.ts
 src/domain/tool-surface.ts
+src/domain/turn-admission.ts
 src/domain/unseen-text.ts
 src/domain/utf8.ts
 src/durable.ts
@@ -14051,8 +14054,11 @@ src/platform/society-client.ts
 src/platform/stream-receive.ts
 src/platform/stream-source.ts
 src/platform/terminal-modes.ts
+src/ports/git-observation.ts
 src/ports/ledger.ts
 src/ports/package-files.ts
+src/ports/platform-lifecycle.ts
+src/ports/review-authority.ts
 src/ports/runtime.ts
 src/process/async.ts
 src/process/cleanup.ts
@@ -14092,6 +14098,13 @@ src/reconcile/preaccept.ts
 src/request-cache.ts
 src/resident-paths.ts
 src/review.ts
+src/review/acceptance.ts
+src/review/advancement.ts
+src/review/authority.ts
+src/review/messages.ts
+src/review/preparation.ts
+src/review/status.ts
+src/review/types.ts
 src/runner.ts
 src/runtime/assets.ts
 src/runtime/broker-lifetime.ts
@@ -14104,6 +14117,8 @@ src/runtime/deployment-manifest.ts
 src/runtime/egress-forwarder.ts
 src/runtime/engine-auth.ts
 src/runtime/engine/login.ts
+src/runtime/engine/principal-events.ts
+src/runtime/engine/principal-launch.ts
 src/runtime/engine/principal-session.ts
 src/runtime/engine/session-directories.ts
 src/runtime/extension-integrity.ts
@@ -14171,6 +14186,7 @@ src/storage/rows.ts
 src/storage/snapshot-reader.ts
 src/storage/socket-name.ts
 src/storage/staged-tree.ts
+src/storage/store-access.ts
 src/storage/submit-spool.ts
 src/storage/transaction.ts
 src/storage/transitions.ts

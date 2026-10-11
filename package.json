@@ -36,6 +36,7 @@
     "verify:platform": "node scripts/verify-lane.mjs platform",
     "verify:all": "node scripts/verify-lane.mjs all",
     "evidence:graph": "node scripts/dependency-graph.mjs --write-evidence",
+    "evidence:refresh": "node scripts/refresh-evidence.mjs",
     "verify:powercut": "node scripts/powercut-lane.mjs",
     "verify:powercut:simulation": "npm run build && node --test test/powercut-lane.test.mjs",
     "test:functional-surface": "npm run build && node scripts/functional-surface.mjs",

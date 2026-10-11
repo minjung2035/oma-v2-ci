@@ -946,7 +946,7 @@
       ]
     },
     {
-      "owner": "src/review.ts#ReviewModule.acceptPrepared",
+      "owner": "src/review/acceptance.ts#ReviewAcceptance.acceptPrepared",
       "fact": "a review fact's acceptance (caller or broker-derived refresh) with its mail",
       "tests": [
         {
@@ -962,7 +962,7 @@
       ]
     },
     {
-      "owner": "src/review.ts#ReviewModule.createIntegration",
+      "owner": "src/review/acceptance.ts#ReviewAcceptance.acceptIntegration",
       "fact": "the request's single integration intent and its frozen completion notices",
       "tests": [
         {

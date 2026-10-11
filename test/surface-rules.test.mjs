@@ -302,7 +302,7 @@ export function cliEnvironment(home, socket) {
   return environment;
 }`;
   const tree = ({ copied = "FRAME_BYTES", producerExtra = "" } = {}) => ({
-    "src/runtime/engine/principal-session.ts": producer(producerExtra),
+    "src/runtime/engine/principal-launch.ts": producer(producerExtra),
     "src/client/settings.ts": consumer,
     "src/extension/mail-tools.ts": tools(copied),
   });
@@ -323,7 +323,7 @@ export function cliEnvironment(home, socket) {
   // Reject: the credential or the session handle given an environment name,
   // anywhere in the source -- as a key the host sets, or a name a reader reads.
   withTree(tree({ producerExtra: 'OMA_PRINCIPAL_CREDENTIAL: "x",' }), findings => {
-    assert.ok(findings.some(value => value.rule === "principal-secret-env" && value.file === "src/runtime/engine/principal-session.ts"));
+    assert.ok(findings.some(value => value.rule === "principal-secret-env" && value.file === "src/runtime/engine/principal-launch.ts"));
   });
   withTree({ ...tree(), "src/cli/extra.ts": 'export const read = () => process.env["OMA_PRINCIPAL_SESSION"];' }, findings => {
     assert.ok(findings.some(value => value.rule === "principal-secret-env" && value.file === "src/cli/extra.ts"));
@@ -340,7 +340,7 @@ export function cliEnvironment(home, socket) {
       assert.doesNotMatch(value.reason, /OMA_ACTOR|OMA_SOCIETY/);
   });
   // Near miss: a tree without these files is not a violation.
-  withTree({ "src/runtime/engine/principal-session.ts": "export const a = 1;" },
+  withTree({ "src/runtime/engine/principal-launch.ts": "export const a = 1;" },
     findings => clean(findings, "principal-session-env", "principal-secret-env"));
 });
 

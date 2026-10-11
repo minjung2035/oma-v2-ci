@@ -35,13 +35,8 @@ import { GuestHistories } from "./histories.js";
 import { checkedGuestHistory } from "../../protocol/guest-history.js";
 
 /** Starts and stops the holder of one society's session. */
-export interface SessionLauncher {
-  /** Resolves once the holder accepts connections on `socketPath(society)`. */
-  start(society: string, projectDir: string, resume?: string): Promise<void>;
-  /** Asks the session to end; "unknown" when it was not seen to end in time. */
-  stop(society: string, deadlineMs: number): Promise<"stopped" | "unknown">;
-  socketPath(society: string): string;
-}
+import type { SessionLauncher } from "../../ports/platform-lifecycle.js";
+export type { SessionLauncher } from "../../ports/platform-lifecycle.js";
 
 export interface GuestHostOptions {
   /** `<XDG_DATA_HOME>/oma`: where the guest's `oma` keeps its state roots. */

@@ -141,6 +141,7 @@ async function main(argv: readonly string[]): Promise<void> {
   let transition: SocietyTransition;
   interaction = new SocietyInteraction(bootstrap, prepared.configuration, histories, {
     session: () => runtime?.session ?? null, owned: () => owner() !== null,
+    sessionDirectory: () => runtime!.sessionDirectory,
     finished: () => runtime?.finished ?? false,
     submit: text => runtime!.submit(text), deliver: () => runtime!.deliver(),
     shutdown: code => transition.shutdown(code), relaunch: resume => transition.relaunch(resume),

@@ -34,6 +34,7 @@ import { observeStoreFailure } from "../src/domain/admission.js";
 import { encodeHostMessage } from "../src/protocol/host-channel.js";
 import { PrincipalSession, newSessionHandle, principalEnvironment, principalSessionDir, principalWorkspace } from "../src/runtime/engine/principal-session.js";
 import { CONVERSATION_BOUNDS } from "../src/domain/surface-bounds.js";
+import { TurnAdmission } from "../src/domain/turn-admission.js";
 import { provisionSociety } from "../src/runtime/provision.js";
 import { processIdentity, type ProcessIdentity } from "../src/broker/process-ancestry.js";
 import { PrincipalDelivery, principalHostBroker, type DeliverySession } from "../src/runtime/principal-delivery.js";
@@ -678,8 +679,8 @@ function reservedSession(refuse?: (message: Record<string, unknown>) => Error | 
       onLine: (line: string) => void; onBusy: (busy: boolean) => void; onEnd: (reason: string) => void;
       onPromptFailed: (text: string, reason: string) => void;
     };
-    owner: "human" | "delivery" | null; waiting: string[]; unanswered: unknown;
-    closed: boolean; sequence: number; frameBytes: number;
+    turns: TurnAdmission;
+    ready: boolean; closed: boolean; sequence: number; frameBytes: number;
     observe: (event: PiEvent) => void;
   };
   state.rpc = { send: async message => {
@@ -691,8 +692,8 @@ function reservedSession(refuse?: (message: Record<string, unknown>) => Error | 
     onLine: line => lines.push(line), onBusy: value => busy.push(value), onEnd: () => {},
     onPromptFailed: (text, reason) => { failed.push({ text, reason }); },
   };
-  state.owner = null; state.waiting = []; state.unanswered = null;
-  state.closed = false; state.sequence = 0; state.frameBytes = LIMITS.frameBytes;
+  state.turns = new TurnAdmission();
+  state.ready = true; state.closed = false; state.sequence = 0; state.frameBytes = LIMITS.frameBytes;
   return { session, sent, lines, busy, failed, emit: event => { state.observe(event); } };
 }
 

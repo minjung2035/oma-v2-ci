@@ -7,6 +7,7 @@ import { createHash } from "node:crypto";
 import { collectProductionFiles, writeProductionInventory, assertProductionInventory, assertMeasurementCurrent, assertSourceDigests, measureWithCloc, writeSourceDigests } from "../scripts/production-inventory.mjs";
 import { VERIFICATION_INPUT_ROOTS, VERIFICATION_OUTPUT_EXCLUSIONS, verificationInputDigest, verificationInputFiles, verificationSourceDigests } from "../scripts/source-digest.mjs";
 import { fileURLToPath } from "node:url";
+import { bindVerificationInputs } from "../scripts/refresh-evidence.mjs";
 
 const REPO = fileURLToPath(new URL("..", import.meta.url));
 
@@ -275,6 +276,35 @@ test("R38: package, compiler, owner, spec and workflow changes all change the ve
     assert.deepEqual(verificationInputDigest(f.root), outputBefore, "verification outputs entered their own input digest");
     f.put("implementation/new-gate-input.json", "new input\n");
     assert.notDeepEqual(verificationInputDigest(f.root), outputBefore, "a new implementation input was omitted");
+  } finally { f.close(); }
+});
+
+test("DR44: structural rebinding is idempotent and preserves authored outcomes and review claims", () => {
+  const f = fixture();
+  try {
+    for (const root of VERIFICATION_INPUT_ROOTS) {
+      if (["src", "platform", "test", "scripts", "implementation", "docs", ".github/workflows"].includes(root))
+        f.put(`${root}/fixture.ts`);
+      else f.put(root, `${root}\n`);
+    }
+    const historical = "Historical runtime PASS for old bytes.\n";
+    const binding = "verification input digest `" + "0".repeat(64) + "` (1 files)";
+    const path = "docs/implementation/validation.md";
+    f.put(path, historical + binding + "\n");
+    f.put("implementation/review-notes.json", "authored byte-bound review claim\n");
+    const identity = bindVerificationInputs(f.root);
+    assert.equal(identity.runtimeProof, false);
+    assert.deepEqual({ digest: identity.digest, files: identity.files }, verificationInputDigest(f.root));
+    const once = readFileSync(join(f.root, path), "utf8");
+    assert.ok(once.startsWith(historical));
+    assert.deepEqual(bindVerificationInputs(f.root), identity);
+    assert.equal(readFileSync(join(f.root, path), "utf8"), once);
+    assert.equal(readFileSync(join(f.root, "implementation/review-notes.json"), "utf8"), "authored byte-bound review claim\n");
+    for (const invalid of [historical, once + binding]) {
+      f.put(path, invalid);
+      assert.throws(() => bindVerificationInputs(f.root), /exactly one/);
+      assert.equal(readFileSync(join(f.root, path), "utf8"), invalid, "ambiguous binding was rewritten");
+    }
   } finally { f.close(); }
 });
 

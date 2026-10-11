@@ -1,0 +1,443 @@
+{
+ "schema": 1,
+ "revision": "DR44",
+ "date": "2026-10-11",
+ "baseline": "067bb7cec9bacf00fc08956af68d7ac92676fe4c",
+ "subagentsUsed": false,
+ "scope": "Direct review of essential documents, changed production deltas and affected owners; not a new manual review of every vendored file or an independent numerical certification.",
+ "productionDeltaReview": {
+  "files": 40,
+  "unit": "current production deltas reviewed directly, not whole-file/codebase certification",
+  "remainingNotReviewed": 49,
+  "baselineNotReviewed": 50,
+  "reviewed": [
+   {
+    "path": "src/broker.ts",
+    "sha256": "13c4c0c363fb07a98e925e0c2eeedf14f364aaaa84a1c0d1e27c43f5913e50f2"
+   },
+   {
+    "path": "src/entry/oma-society.ts",
+    "sha256": "64e706a7e1ee5d4b63076e0b04e3e3b0e07fde31682626ae3095190450fdf8c5"
+   },
+   {
+    "path": "src/entry/pi-interactive-host.ts",
+    "sha256": "085545de32601cae4ce5eb50eec12f144d3eb67ba13188aa77c65a3c2d21e744"
+   },
+   {
+    "path": "src/entry/pi-personal.ts",
+    "sha256": "8b2a31111367721f550ac0ecbc4a937ca14050b0e5d18a62d8691cbe24e789e7"
+   },
+   {
+    "path": "src/git.ts",
+    "sha256": "983f473e1bf1f216fb05588747e4514e7b1141a416ccd47a8e4cbb7419b6ac21"
+   },
+   {
+    "path": "src/git/integration.ts",
+    "sha256": "01a112c438d22d86f39238f0115c92829b5f85552d68d351419b8e09ee8061cf"
+   },
+   {
+    "path": "src/git/observe.ts",
+    "sha256": "46433fcb20a66f7f154a6aebf915496a54de6ebb74bebea7badd7235486a03bc"
+   },
+   {
+    "path": "src/pi-compat/interactive-tool-setup.ts",
+    "sha256": "695dbc6f3235c29f4f8970f9e6cf1a961c71b6354a11551da569eb6142f5f840"
+   },
+   {
+    "path": "src/pi-compat/interactive-tools.ts",
+    "sha256": "bbb6fa89d76b0958d29fb2ca16a1ea91e2d62840691c4ba76dec7d7e0787db4a"
+   },
+   {
+    "path": "src/platform/guest/host.ts",
+    "sha256": "ab7a19a77c2ed4a7f08c4830e9367f36022d16792c965d3d209a311b7e182857"
+   },
+   {
+    "path": "src/platform/guest/systemd-launcher.ts",
+    "sha256": "449082c4514b7fdbcfdb2cb9aa28a155693f02e6e89589f06eef6ad75a95f08d"
+   },
+   {
+    "path": "src/platform/host/guest-link.ts",
+    "sha256": "3b1425c000ed8bc7fa838322faa2fad03d847d799f445e9d173dfa8d08f3c210"
+   },
+   {
+    "path": "src/platform/host/lifecycle.ts",
+    "sha256": "877affb25d80415e500e938218c0db0240f0c23ac1617036f70c1df6ee6982ea"
+   },
+   {
+    "path": "src/platform/host/vz-driver.ts",
+    "sha256": "5867e591fadda0b4e90892361d51d7d2ea9b5516360ddce406677dd7addb3677"
+   },
+   {
+    "path": "src/review.ts",
+    "sha256": "312353cbcc1a863d7382c8e607b007a20c644caa63792cd1601820da4ab1b1b7"
+   },
+   {
+    "path": "src/runtime/engine/principal-session.ts",
+    "sha256": "eab6f8b00bc06411669a4424bf29740f90c5851b46472e544089153ef411e86a"
+   },
+   {
+    "path": "src/storage/facets.ts",
+    "sha256": "11fcb2e8f2774c5ecd972ad1ebe0e9324b0be4e16ffaf7dfdfe6fa892270715c"
+   },
+   {
+    "path": "src/storage/transaction.ts",
+    "sha256": "3f79398e4cbf345847cf96c591e13e7adef6142d47f10e36d5166eaec179ca2c"
+   },
+   {
+    "path": "src/store.ts",
+    "sha256": "9f17aba2f680e81dafa6cc8d06715b62b8ed3d7f6e2268b464be78a00f87269c"
+   },
+   {
+    "path": "src/application/society-interaction.ts",
+    "sha256": "f0702ac1764eeb8ed4d32136ba3c53c7ede1c4a5bf36978f1232c6ec0b8edaaa"
+   },
+   {
+    "path": "src/application/society-runtime.ts",
+    "sha256": "1732b5783d3a5b76ff78bc4f7b95120d1b81dace1c4e177660058b0d1080b2c7"
+   },
+   {
+    "path": "src/application/society-conversation.ts",
+    "sha256": "d70e37701b379376745701c3e27cb9414c70f8dbd522ed2598e3af761f952a31"
+   },
+   {
+    "path": "src/broker/listeners.ts",
+    "sha256": "6b120162f4843e255ef985be66364b83b8bd2e7af4c1108d5ee15ec54d38ab2c"
+   },
+   {
+    "path": "src/diagnostics/integrity.ts",
+    "sha256": "2f59f251997b3e70722f161f64fbfbe2e0776f7fecc523752f56fe2032f36042"
+   },
+   {
+    "path": "src/domain/review-evaluation.ts",
+    "sha256": "0ed4cd8507328c851eb37665c54cbd55c8cbc53d5789bdb416c8a444d2044d48"
+   },
+   {
+    "path": "src/domain/turn-admission.ts",
+    "sha256": "5bb24f1aace703995fe6c7ed1826a8c6a1663f21957bc71941ebe43df375962a"
+   },
+   {
+    "path": "src/ports/git-observation.ts",
+    "sha256": "d5f46809e27370bd836ef1c04b9196224e63ce7860367e36e4c3b7c4462fc0d0"
+   },
+   {
+    "path": "src/ports/platform-lifecycle.ts",
+    "sha256": "d8223d54fd79c2a003f474ed02c38f6177c0ab9222b08abe710eec720ea36aa2"
+   },
+   {
+    "path": "src/ports/review-authority.ts",
+    "sha256": "35a6d94bfc7c622c9c5b73c850e0192911a678de4017d0fe7c1468867461ca30"
+   },
+   {
+    "path": "src/review/acceptance.ts",
+    "sha256": "41f74cd0023896c60d231f367f8158c0616009b60f7cb4ad8a37b4652431553f"
+   },
+   {
+    "path": "src/review/advancement.ts",
+    "sha256": "2fd2d6e9332ef320b48996121561315a939fea1379c220045f7595586a65518d"
+   },
+   {
+    "path": "src/review/authority.ts",
+    "sha256": "0232124151fd021e00e74fe72aa670bf0c83ee5c11a9bb48e64c6e87b049064d"
+   },
+   {
+    "path": "src/review/messages.ts",
+    "sha256": "29665810fb417e3304a65f80f51b108d220d4922b06f5419e8af4f7d98f8509b"
+   },
+   {
+    "path": "src/review/preparation.ts",
+    "sha256": "c18f88785c1277d8746f12e81a62a269eecbcd082fc59eca4b3b846c1f59b54e"
+   },
+   {
+    "path": "src/review/status.ts",
+    "sha256": "e7a2867af3b733618ad4c4c010ef9bc7d8ab0d540fc4997a06d4409d3bbe0591"
+   },
+   {
+    "path": "src/review/types.ts",
+    "sha256": "ec615606ca3a778b82e04b684fa0cbc2bf9abfa0b851795ae7c37095ea97516d"
+   },
+   {
+    "path": "src/runtime/engine/principal-events.ts",
+    "sha256": "67512a4a807c9b51826cb831d17d71c07aed62dd1a1abee1f1cf129d199b3674"
+   },
+   {
+    "path": "src/runtime/engine/principal-launch.ts",
+    "sha256": "cfb7a548f2c84d3a54dd9a5cf28b55fb6e8cbcfb85cf4d4d0b7d0975456bcd77"
+   },
+   {
+    "path": "src/storage/operation-transitions.ts",
+    "sha256": "cdafc98fd0a9f263f9a3631bdc30072fadb167e3447bdd9845c32ea8eb30e00d"
+   },
+   {
+    "path": "src/storage/store-access.ts",
+    "sha256": "3b870e66334c493154a2db448cdf185ca19bce82f2bb35b70367ce0419296347"
+   }
+  ]
+ },
+ "dependencyGraph": {
+  "baselineCheckedIn": {
+   "sourceFiles": 438,
+   "runtimeEdges": 1835,
+   "typeOnlyEdges": 483,
+   "runtimeCycles": 0,
+   "unionCycles": 1,
+   "upwardTypeOnlyEdges": 1,
+   "unresolved": 0
+  },
+  "currentRegenerated": {
+   "sourceFiles": 454,
+   "runtimeEdges": 1897,
+   "typeOnlyEdges": 543,
+   "runtimeCycles": 0,
+   "unionCycles": 0,
+   "upwardTypeOnlyEdges": 0,
+   "unresolved": 0
+  },
+  "path": "implementation/evidence/dependency-graph.json",
+  "sha256": "6f17233715d3769a38f3184b065603f147f44e2865ce62d720d3dd1209969d02"
+ },
+ "changes": [
+  "ReviewAcceptance alone commits review facts and integration intents; authority reads, preparation, messages, advancement and status are separate concrete owners.",
+  "Integration uses an already-constructed read-only ReviewAuthorityReader; the public Review workflow callback is absent.",
+  "TurnAdmission owns pure Human/Delivery arbitration; PrincipalSession retains actual process, RPC/UI and credential lifetimes.",
+  "BrokerListeners owns readiness and in-flight close observations; Broker retains final admission/drain/Store/lease authority.",
+  "Pi autocomplete uses public wrappers and constructors with no prototype/private fdPath writes. Remaining search-init resolution seam checks exact Pi/Pi TUI 1.0.1 and exports.",
+  "Factories capture an active cwd string, never a stale extension context; repeated wrappers are idempotent. Personal saved confirmation uses the current post-reload UI.",
+  "Store capabilities reuse decoder-issued provenance without a concrete Store type backreference. Diagnostics, native adapters and Society conversation boundaries use narrow ports.",
+  "evidence:refresh derives graph, source inventory, review ledger and structural input binding; authored reviews/norms and historical runtime PASS are not regenerated.",
+  "Additional defects: acceptance mutated readonly frozen recipient arrays; build launch error with status zero could report stale outputs as successful; SystemdSessionLauncher loaded GuestHost only for listening."
+ ],
+ "runtimeInputs": {
+  "identity": {
+   "files": 15463,
+   "digest": "32c17e1595580f5d1149189823ea38c8647d5722e96f30c33f405812200a6ae6"
+  },
+  "before": {
+   "path": "/home/dev/oma-audit-artifacts/architecture-quality-2026-10-11/oma-dr44-clean-inputs-before.json",
+   "sha256": "994a85941c24c37711c0a45be82648b56d70bf6598e2d9940b72e260caa5ec82"
+  },
+  "afterLocal": {
+   "path": "/home/dev/oma-audit-artifacts/architecture-quality-2026-10-11/oma-dr44-clean-inputs-after-local.json",
+   "sha256": "994a85941c24c37711c0a45be82648b56d70bf6598e2d9940b72e260caa5ec82"
+  },
+  "afterCrash": {
+   "path": "/home/dev/oma-audit-artifacts/architecture-quality-2026-10-11/oma-dr44-clean-inputs-after-crash.json",
+   "sha256": "994a85941c24c37711c0a45be82648b56d70bf6598e2d9940b72e260caa5ec82"
+  },
+  "localChangedFiles": 0,
+  "crashChangedFiles": 0,
+  "laneInputDifferences": 0,
+  "productionFilesChangedAfterRecording": 0
+ },
+ "verification": {
+  "build": {
+   "status": "PASS",
+   "command": "npm run build",
+   "log": {
+    "path": "/home/dev/oma-audit-artifacts/architecture-quality-2026-10-11/oma-dr44-clean-build.log",
+    "sha256": "cccfcd5d5169e7cc8604508632ef031166923f10ded462df8caca2efb931ff40"
+   }
+  },
+  "typecheck": {
+   "status": "PASS",
+   "command": "npm run typecheck",
+   "log": {
+    "path": "/home/dev/oma-audit-artifacts/architecture-quality-2026-10-11/oma-dr44-clean-typecheck.log",
+    "sha256": "cc5f8db3e8f9500e18fe0677c06fdbeadf01257cb4632bad7be2a52e2ca79f52"
+   }
+  },
+  "architecture": {
+   "status": "PASS",
+   "command": "npm run check:architecture",
+   "log": {
+    "path": "/home/dev/oma-audit-artifacts/architecture-quality-2026-10-11/oma-dr44-architecture-verified.log",
+    "sha256": "551e4ca1f13724dfe80c376039c0ba1203f85ac75490b21ac9b3656046cc99ad"
+   },
+   "durableBoundaryRegistrations": 86,
+   "strongestInjection": {
+    "sigkill": 52,
+    "inProcessFault": 11,
+    "logical": 23
+   },
+   "scope": "Production structure gate before final result recording; final recorded input checks are stored in the separate clean-post-record-result.json output."
+  },
+  "piAndPersonal": {
+   "status": "PASS",
+   "tests": 20,
+   "pass": 20,
+   "fail": 0,
+   "cancelled": 0,
+   "skipped": 0,
+   "todo": 0,
+   "log": {
+    "path": "/home/dev/oma-audit-artifacts/architecture-quality-2026-10-11/oma-dr44-pi-final-tests.log",
+    "sha256": "efa5982a6ec3a090016e5a070ee9e68b8b2210a59eca8b436cab8c3b45c71a48"
+   }
+  },
+  "localSuite": {
+   "status": "PASS",
+   "command": "node scripts/test-local.mjs",
+   "files": 415,
+   "serial": 9,
+   "parallel": 4012,
+   "tests": 4021,
+   "pass": 4021,
+   "fail": 0,
+   "cancelled": 0,
+   "skipped": 0,
+   "todo": 0,
+   "log": {
+    "path": "/home/dev/oma-audit-artifacts/architecture-quality-2026-10-11/oma-dr44-clean-local-suite.log",
+    "sha256": "668ce3fc808cc1b6b2d8a88efee097a016b95298ba530b351dec8f19289ab3ed"
+   },
+   "systemdRequiredFilesNotRun": 9
+  },
+  "actualPrimitiveCrash": {
+   "status": "PASS",
+   "execution": "EXECUTED",
+   "totals": {
+    "tests": 63,
+    "pass": 63,
+    "fail": 0,
+    "cancelled": 0,
+    "skipped": 0,
+    "todo": 0
+   },
+   "command": "OMA_TEST_SYSTEMD=1 node scripts/verify-lane.mjs crash --out /home/dev/oma-audit-artifacts/architecture-quality-2026-10-11-clean-crash",
+   "scope": "primitive SIGSTOP/parent-SIGKILL and restart; not an entrypoint-crash or VM-power-loss attestation",
+   "result": {
+    "path": "/home/dev/oma-audit-artifacts/architecture-quality-2026-10-11-clean-crash/result.json",
+    "sha256": "98dd0c059a00fe0fcaca8bf157aec27571b3f53105ff2e0d097c48a518278049"
+   },
+   "stdout": {
+    "path": "/home/dev/oma-audit-artifacts/architecture-quality-2026-10-11-clean-crash/tests.stdout.log",
+    "sha256": "f7311652d70fca639623e7a31e7c03b3fbd3f8ecca123e0fa86231ab9d5eafe7"
+   }
+  },
+  "finalRecordedChecks": {
+   "record": "/home/dev/oma-audit-artifacts/architecture-quality-2026-10-11/clean-post-record-result.json",
+   "scope": "Metadata tests and the complete architecture gate for the final recorded bytes; external output avoids rewriting its own verification inputs."
+  }
+ },
+ "failedRunsPreserved": [
+  {
+   "scope": "initial stale-dist runs",
+   "result": "WITHDRAWN as changed-code runtime proof",
+   "counts": [
+    "132 PASS",
+    "223 PASS / 2 FAIL"
+   ],
+   "reason": "Earlier build could exit zero on launch error; changed emitted code was absent."
+  },
+  {
+   "scope": "first fresh local suite",
+   "pass": 3916,
+   "fail": 105,
+   "changedInputs": 0,
+   "log": {
+    "path": "/home/dev/oma-audit-artifacts/architecture-quality-2026-10-11/oma-dr44-local-suite.log",
+    "sha256": "2e4f2ba8779ea958b0bc0af41fe9c5ddf82df6420e03f92b6af96d0cce16dfe8"
+   }
+  },
+  {
+   "scope": "first repair focus",
+   "pass": 101,
+   "fail": 84,
+   "log": {
+    "path": "/home/dev/oma-audit-artifacts/architecture-quality-2026-10-11/oma-dr44-repair-tests.log",
+    "sha256": "8cf6e65f1fb7f741e5bfec7cd0098db29250c3b67e4461e8026362319063fa55"
+   }
+  },
+  {
+   "scope": "second repair focus",
+   "pass": 141,
+   "fail": 2,
+   "log": {
+    "path": "/home/dev/oma-audit-artifacts/architecture-quality-2026-10-11/oma-dr44-repair2-tests.log",
+    "sha256": "e8854888f8559ba44544e44eca330e448ced6f85e9cae2cc98f810ab3209d0f0"
+   }
+  }
+ ],
+ "interpretation": {
+  "sourceCountsAndFileSizes": "Structural facts, not proof of equal-feature change cost or an absolute score.",
+  "recordBytes": "This report and final result prose were written after runtime execution; subsequent metadata/structure checks bind those bytes separately. Production code remains the executed code.",
+  "finalWhitespaceCleanup": "Removed only two EOF blank lines from the new Principal helpers. The fresh final local suite (4021/4021) and actual crash suite (63/63) used the same final production bytes, with zero before/after or lane input differences; the earlier successful snapshot is preserved separately."
+ },
+ "residuals": [
+  "Society composition still connects some UI/transition callbacks after construction; bootstrap still reads host inputs.",
+  "Other existing Pi private UI hooks remain. The remaining search-init seam is narrowly pinned, not a public upstream API.",
+  "Host/Guest protocol method shape maintenance still uses existing typed contracts and owner validation; no broad generator was introduced.",
+  "Three process lifetimes, two durable request stores and identity trust boundaries retain their separate owners.",
+  "Fixed feature-change scenarios were not benchmarked before/after; current changeset measurements cannot certify that comparison.",
+  "Native Mac, VM power loss, paid provider, release and the separate full systemd/kernel qualification suite NOT_RUN; existing startup target miss remains."
+ ],
+ "changeLocality": {
+  "command": "node scripts/mutation-locality.mjs --since 067bb7cec9bacf00fc08956af68d7ac92676fe4c --json",
+  "scope": "Actual current changeset and existing owner inventory, not equal-feature before/after change cost.",
+  "path": "/home/dev/oma-audit-artifacts/architecture-quality-2026-10-11/oma-dr44-locality-final.json",
+  "sha256": "bc1823ff70edcb084495e1329701e552af56f21914a4fa1c85e33b9e18a4d078"
+ },
+ "previousSuccessfulSnapshot": {
+  "reasonSuperseded": "After this successful execution, staging found two EOF blank lines in the new Principal helpers. Only trailing newlines were removed, then the complete local and actual crash suites were rerun against the final production bytes.",
+  "runtimeInputs": {
+   "identity": {
+    "files": 15462,
+    "digest": "701153acf475bfd01a360f3f73871446d7717b6fb34779275770ecf06e0370ca"
+   },
+   "before": {
+    "path": "/home/dev/oma-audit-artifacts/architecture-quality-2026-10-11/oma-dr44-final-runtime-inputs-before.json",
+    "sha256": "1751c1d3659066b98a1c375a36556c22f006924218a3f73a8cc88f2bbaf38cfd"
+   },
+   "afterLocal": {
+    "path": "/home/dev/oma-audit-artifacts/architecture-quality-2026-10-11/oma-dr44-final-runtime-inputs-after.json",
+    "sha256": "1751c1d3659066b98a1c375a36556c22f006924218a3f73a8cc88f2bbaf38cfd"
+   },
+   "afterCrash": {
+    "path": "/home/dev/oma-audit-artifacts/architecture-quality-2026-10-11/oma-dr44-final-crash-inputs-after.json",
+    "sha256": "1751c1d3659066b98a1c375a36556c22f006924218a3f73a8cc88f2bbaf38cfd"
+   },
+   "localChangedFiles": 0,
+   "crashChangedFiles": 0,
+   "laneInputDifferences": 0
+  },
+  "localSuite": {
+   "status": "PASS",
+   "command": "node scripts/test-local.mjs",
+   "files": 415,
+   "serial": 9,
+   "parallel": 4012,
+   "tests": 4021,
+   "pass": 4021,
+   "fail": 0,
+   "cancelled": 0,
+   "skipped": 0,
+   "todo": 0,
+   "log": {
+    "path": "/home/dev/oma-audit-artifacts/architecture-quality-2026-10-11/oma-dr44-final-local-suite.log",
+    "sha256": "9f12e66ec6010749a2560394eaff34dcb886d7402cac57bc5aebe51d3f8c8679"
+   },
+   "systemdRequiredFilesNotRun": 9
+  },
+  "actualPrimitiveCrash": {
+   "status": "PASS",
+   "execution": "EXECUTED",
+   "totals": {
+    "tests": 63,
+    "pass": 63,
+    "fail": 0,
+    "cancelled": 0,
+    "skipped": 0,
+    "todo": 0
+   },
+   "command": "OMA_TEST_SYSTEMD=1 node scripts/verify-lane.mjs crash --out /home/dev/oma-audit-artifacts/architecture-quality-2026-10-11-crash",
+   "scope": "primitive SIGSTOP/parent-SIGKILL and restart; not an entrypoint-crash or VM-power-loss attestation",
+   "result": {
+    "path": "/home/dev/oma-audit-artifacts/architecture-quality-2026-10-11-crash/result.json",
+    "sha256": "704abb93d4b26c5cec576915ef81c2ba990d32237067864ca60b0a45d921a9ac"
+   },
+   "stdout": {
+    "path": "/home/dev/oma-audit-artifacts/architecture-quality-2026-10-11-crash/tests.stdout.log",
+    "sha256": "c917991be7af1c7a8680172182a2f6b39e043f823ff2f71c693b9dcaf7d3a656"
+   }
+  }
+ }
+}

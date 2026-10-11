@@ -2,10 +2,10 @@
  "version": 1,
  "baseline": "b25961cc46532f5e30ff60cc381fed51c59d13ab",
  "summary": {
-  "CHANGED_WITH_ORACLE": 14120,
+  "CHANGED_WITH_ORACLE": 14138,
   "REMOVED": 15,
-  "NOT_REVIEWED": 50,
-  "READ_UNCHANGED": 44
+  "NOT_REVIEWED": 49,
+  "READ_UNCHANGED": 43
  },
  "lanes": {
   "fast": "PASS",
@@ -245,18 +245,30 @@
    "sha256": "17c8281888aea37dac578bdb552f3b706468a768eab6d7e611efe82ee9175e30"
   },
   {
+   "path": "src/application/society-conversation.ts",
+   "primary": null,
+   "status": "CHANGED_WITH_ORACLE",
+   "by": [
+    "DR44"
+   ],
+   "oracles": [
+    "DR44"
+   ],
+   "note": "DR44 direct delta and affected-owner review, without subagents. Affected boundary delta reviewed: concrete native/application imports replaced by narrow lifecycle, Git observation or conversation capabilities; upstream observation grammar, stale callback identity, actual termination and unknown semantics unchanged. Existing platform/composition behavior plus DR44 import-boundary controls cover the delta. Historical full-file/codebase review and environment PASS are not renewed.",
+   "sha256": "d70e37701b379376745701c3e27cb9414c70f8dbd522ed2598e3af761f952a31"
+  },
+  {
    "path": "src/application/society-interaction.ts",
    "primary": null,
    "status": "CHANGED_WITH_ORACLE",
    "by": [
-    "DR43"
+    "DR44"
    ],
    "oracles": [
-    "DR43",
-    "T119"
+    "DR44"
    ],
-   "note": "DR43 direct delta and affected-owner review: bootstrap admission precedes society writes; runtime delegates fence/registration authority to HostTenure, engine callbacks remain bound to the live instance and broker generation, UI consumes commands/observations, replacement waits actual outgoing exit, and cleanup is registered at acquisition. Existing composition assertions run real extracted owners; history frame/correlation and successor isolation regressions cover moved UI work. Platform edits clarify coordinator/adapter roles without changing their state machines. No whole-codebase/native review claim or inherited NOT_REVIEWED renewal.",
-   "sha256": "09b710d1615f57897fac8106bbddd6b26217becbb0934e0db6ccab5bcc5f0dcc"
+   "note": "DR44 direct delta and affected-owner review, without subagents. Affected boundary delta reviewed: concrete native/application imports replaced by narrow lifecycle, Git observation or conversation capabilities; upstream observation grammar, stale callback identity, actual termination and unknown semantics unchanged. Existing platform/composition behavior plus DR44 import-boundary controls cover the delta. Historical full-file/codebase review and environment PASS are not renewed.",
+   "sha256": "f0702ac1764eeb8ed4d32136ba3c53c7ede1c4a5bf36978f1232c6ec0b8edaaa"
   },
   {
    "path": "src/application/society-panel.ts",
@@ -276,14 +288,13 @@
    "primary": null,
    "status": "CHANGED_WITH_ORACLE",
    "by": [
-    "DR43"
+    "DR44"
    ],
    "oracles": [
-    "DR43",
-    "T119"
+    "DR44"
    ],
-   "note": "DR43 direct delta and affected-owner review: bootstrap admission precedes society writes; runtime delegates fence/registration authority to HostTenure, engine callbacks remain bound to the live instance and broker generation, UI consumes commands/observations, replacement waits actual outgoing exit, and cleanup is registered at acquisition. Existing composition assertions run real extracted owners; history frame/correlation and successor isolation regressions cover moved UI work. Platform edits clarify coordinator/adapter roles without changing their state machines. No whole-codebase/native review claim or inherited NOT_REVIEWED renewal.",
-   "sha256": "88042745ea66801dfa9dac32cdad81f22629cdf14a5a9ee1826966280f4e2549"
+   "note": "DR44 direct delta and affected-owner review, without subagents. Affected boundary delta reviewed: concrete native/application imports replaced by narrow lifecycle, Git observation or conversation capabilities; upstream observation grammar, stale callback identity, actual termination and unknown semantics unchanged. Existing platform/composition behavior plus DR44 import-boundary controls cover the delta. Historical full-file/codebase review and environment PASS are not renewed.",
+   "sha256": "1732b5783d3a5b76ff78bc4f7b95120d1b81dace1c4e177660058b0d1080b2c7"
   },
   {
    "path": "src/application/society-transition.ts",
@@ -360,13 +371,13 @@
    "primary": "WP21",
    "status": "CHANGED_WITH_ORACLE",
    "by": [
-    "DR37"
+    "DR44"
    ],
    "oracles": [
-    "DR37"
+    "DR44"
    ],
-   "note": "DR37 direct review of changed code and affected composition: remove OMA resource/count/storage admission enforcement while keeping current authority, serialized contained effects, canonical historical declarations and explicit OS errors. Updated existing regressions plus DR37 positive execution tests cover the delta; no historical full-file review or environment PASS is renewed by this hash.",
-   "sha256": "5a2d070f475d317a7132764e4dd0468ed1fe6be07b7be6062b0edaac7e3455bc"
+   "note": "DR44 direct delta and affected-owner review, without subagents. Broker listener acquisition/close extraction reviewed against baseline: ready-before-close, pending closes released after observation, bind failure and persistent error listener. Admission, authenticated socket/task ownership, run revocation, bounded drain and Store/lease release remain in Broker. Existing P0V-52/P0V-113 oracles retain their assertions against the concrete extracted owner. Historical full-file/codebase review and environment PASS are not renewed.",
+   "sha256": "13c4c0c363fb07a98e925e0c2eeedf14f364aaaa84a1c0d1e27c43f5913e50f2"
   },
   {
    "path": "src/broker/composition.ts",
@@ -410,6 +421,19 @@
    ],
    "note": "Reviewed asynchronous admission through transport, public/internal dispatch, shutdown and review: raw input pauses before reserve/spool, close/revoke/EOF rechecks precede effects, release remains once-only, and safety-control is independent of quota scans. Native peer and delayed-admission regressions exercise affected owner flow.",
    "sha256": "67ec5556f339a33db87944f5b6f0b84cdc706767908e4fdf046a543e67da7494"
+  },
+  {
+   "path": "src/broker/listeners.ts",
+   "primary": null,
+   "status": "CHANGED_WITH_ORACLE",
+   "by": [
+    "DR44"
+   ],
+   "oracles": [
+    "DR44"
+   ],
+   "note": "DR44 direct delta and affected-owner review, without subagents. Broker listener acquisition/close extraction reviewed against baseline: ready-before-close, pending closes released after observation, bind failure and persistent error listener. Admission, authenticated socket/task ownership, run revocation, bounded drain and Store/lease release remain in Broker. Existing P0V-52/P0V-113 oracles retain their assertions against the concrete extracted owner. Historical full-file/codebase review and environment PASS are not renewed.",
+   "sha256": "6b120162f4843e255ef985be66364b83b8bd2e7af4c1108d5ee15ec54d38ab2c"
   },
   {
    "path": "src/broker/logs.ts",
@@ -1145,22 +1169,15 @@
   {
    "path": "src/diagnostics/integrity.ts",
    "primary": "WP23",
-   "status": "READ_UNCHANGED",
+   "status": "CHANGED_WITH_ORACLE",
    "by": [
-    "AV-review"
+    "DR44"
    ],
    "oracles": [
-    "P6",
-    "P7",
-    "PRE-1",
-    "PRE-2",
-    "PRE-3",
-    "PRE-4",
-    "PRE-5",
-    "PRE-6"
+    "DR44"
    ],
-   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are tests whose loaded module closure (or text) contains this file",
-   "sha256": "f53e42f36d9b50c4779c3d669f86d6ba92b44dd5d9e8efe38bd731533c7044ee"
+   "note": "DR44 direct delta and affected-owner review, without subagents. Affected boundary delta reviewed: concrete native/application imports replaced by narrow lifecycle, Git observation or conversation capabilities; upstream observation grammar, stale callback identity, actual termination and unknown semantics unchanged. Existing platform/composition behavior plus DR44 import-boundary controls cover the delta. Historical full-file/codebase review and environment PASS are not renewed.",
+   "sha256": "2f59f251997b3e70722f161f64fbfbe2e0776f7fecc523752f56fe2032f36042"
   },
   {
    "path": "src/diagnostics/ledger.ts",
@@ -1520,9 +1537,15 @@
   {
    "path": "src/domain/review-evaluation.ts",
    "primary": null,
-   "status": "NOT_REVIEWED",
-   "by": [],
-   "oracles": []
+   "status": "CHANGED_WITH_ORACLE",
+   "by": [
+    "DR44"
+   ],
+   "oracles": [
+    "DR44"
+   ],
+   "note": "DR44 direct delta and affected-owner review, without subagents. Review stage extraction and changed composition reviewed against baseline: read-only authority before construction, single acceptance T, immutable recipient snapshot, preaccept ownership, exact drift/refusal and post-CAS recovery ordering. Fresh DR44 workflow-poison and frozen-plan oracles plus existing merge/challenge/fault/concurrency regressions cover this delta. Historical full-file/codebase review and environment PASS are not renewed.",
+   "sha256": "0ed4cd8507328c851eb37665c54cbd55c8cbc53d5789bdb416c8a444d2044d48"
   },
   {
    "path": "src/domain/session-mode.ts",
@@ -1628,6 +1651,19 @@
    ],
    "note": "BL1 review -- residentToolSurfaceConfig()/principalToolSurfaceConfig() declare the code_intel group (lsp_diagnostics, lsp_fix, lsp_status); encodedResidentToolSurface()/encodedPrincipalToolSurface() emit the canonical hex plans. BL2 rebind: ASK_USER_QUESTION_TOOL_NAME is declared here (the domain side of the PI-001 boundary; a test binds it to the protocol module's spelling) and sits in PRINCIPAL_DIRECT_TOOLS — DIRECT exposure, not grouped. Resident/Worker plans never name it. BL3 rebind: residentToolSurfaceConfig() gains the file_edit group (replace, replace_within, insert -- mirrors HASHLINE_EDIT_TOOL_NAMES); the principal surface deliberately has no file_edit. The anchored read stays DIRECT under the contained read's name. BL4 rebind: WEB_RESEARCH_GROUP_NAME/WEB_RESEARCH_TOOLS mirror WEB_RESEARCH_TOOL_NAMES in src/extension/web-tools.ts (PI-001 keeps the domain module from importing the extension, so a test binds the two lists); the web_research group is a root on both residentToolSurfaceConfig() and principalToolSurfaceConfig(). BL5 rebind: MCP_PROXY_TOOL_NAME (\"mcp\") is declared here and sits DIRECT in both RESIDENT_DIRECT_TOOLS and PRINCIPAL_DIRECT_TOOLS -- no group wraps upstream's own lazy proxy surface. PI-001 keeps the extension from importing this module, so a test binds it to mcp-tools.ts's MCP_TOOL_NAMES, the same seam as ASK_USER_QUESTION_TOOL_NAME.",
    "sha256": "dc9c6c8da0fcea6ad78a55e88db1f2518dc048cc4e3021067c293394bbcdd724"
+  },
+  {
+   "path": "src/domain/turn-admission.ts",
+   "primary": null,
+   "status": "CHANGED_WITH_ORACLE",
+   "by": [
+    "DR44"
+   ],
+   "oracles": [
+    "DR44"
+   ],
+   "note": "DR44 direct delta and affected-owner review, without subagents. Principal extraction and affected admission/lifetime reviewed: pure Human/Delivery claims, synchronous queue handoff, matching prompt response, provably unwritten versus unconfirmed input, once-only handback. Spawn/environment/event bodies compared with baseline; actual child/credential/UI ownership stays in PrincipalSession. DR44 pure transitions and existing real scripted-engine ownership oracles cover this delta. Historical full-file/codebase review and environment PASS are not renewed.",
+   "sha256": "5bb24f1aace703995fe6c7ed1826a8c6a1663f21957bc71941ebe43df375962a"
   },
   {
    "path": "src/domain/unseen-text.ts",
@@ -1816,14 +1852,13 @@
    "primary": null,
    "status": "CHANGED_WITH_ORACLE",
    "by": [
-    "DR43"
+    "DR44"
    ],
    "oracles": [
-    "DR43",
-    "T119"
+    "DR44"
    ],
-   "note": "DR43 direct delta and affected-owner review: bootstrap admission precedes society writes; runtime delegates fence/registration authority to HostTenure, engine callbacks remain bound to the live instance and broker generation, UI consumes commands/observations, replacement waits actual outgoing exit, and cleanup is registered at acquisition. Existing composition assertions run real extracted owners; history frame/correlation and successor isolation regressions cover moved UI work. Platform edits clarify coordinator/adapter roles without changing their state machines. No whole-codebase/native review claim or inherited NOT_REVIEWED renewal.",
-   "sha256": "3bcd3abab1e88ba333fdb59b1e6d6c648ef7aedaae048bfc074c9ada8d8f187b"
+   "note": "DR44 direct delta and affected-owner review, without subagents. Affected boundary delta reviewed: concrete native/application imports replaced by narrow lifecycle, Git observation or conversation capabilities; upstream observation grammar, stale callback identity, actual termination and unknown semantics unchanged. Existing platform/composition behavior plus DR44 import-boundary controls cover the delta. Historical full-file/codebase review and environment PASS are not renewed.",
+   "sha256": "64e706a7e1ee5d4b63076e0b04e3e3b0e07fde31682626ae3095190450fdf8c5"
   },
   {
    "path": "src/entry/oma.ts",
@@ -1869,13 +1904,13 @@
    "primary": null,
    "status": "CHANGED_WITH_ORACLE",
    "by": [
-    "DR41"
+    "DR44"
    ],
    "oracles": [
-    "DR41"
+    "DR44"
    ],
-   "note": "DR41 direct delta and affected-owner review, without subagents: remove TUI effect/Runtime implementation imports; preserve configuration publication/read-back/unknown, effect-time tenure, Principal ordering and actual OS exit, package inode leases and staging containment. Named moved declarations were compared with the baseline; the three altered runtime bodies supply product wording or platform directory ports. Concrete Society port and module boundary/build oracles plus the existing behavior regressions cover the change. This is not a renewed full-file/codebase review or native qualification. Inherited NOT_REVIEWED owners remain unapproved.",
-   "sha256": "48108473601daa6a5a9da225c2c299d4a15c49de80774ccad51b3a834d74ddb7"
+   "note": "DR44 direct delta and affected-owner review, without subagents. Pi adapter delta reviewed: public autocomplete wrapper/constructor preserve upstream priority, command completion and cancellation; no prototype or private-field mutation. Tool-init private import remains scoped and explicitly pinned to engine/TUI 1.0.1; export checks reject incompatible seams. DR44 delayed installer and upgrade-refusal controls cover the change. Historical full-file/codebase review and environment PASS are not renewed. The optional adapter is loaded at actual UI startup; importing command/projection helpers does not load the private seam. Controlled ownership fixtures retain explicit dependency lists. Package resolver has an explicit name. Personal saved confirmation is sent only after reload to the current UI; persistence and historical session birth are unchanged, existing PTY checks remain strict. Actual reload exposed stale ctx.cwd capture: factory now closes over a string read while active. WeakMap keeps repeated public search wrappers idempotent and replaces its own cwd adapter without retaining a context. Real saved/tool-removal PTY oracles and late-fd/prototype isolation checks are retained.",
+   "sha256": "085545de32601cae4ce5eb50eec12f144d3eb67ba13188aa77c65a3c2d21e744"
   },
   {
    "path": "src/entry/pi-interactive.ts",
@@ -1889,13 +1924,13 @@
    "primary": null,
    "status": "CHANGED_WITH_ORACLE",
    "by": [
-    "DR41"
+    "DR44"
    ],
    "oracles": [
-    "DR41"
+    "DR44"
    ],
-   "note": "DR41 direct delta and affected-owner review, without subagents: remove TUI effect/Runtime implementation imports; preserve configuration publication/read-back/unknown, effect-time tenure, Principal ordering and actual OS exit, package inode leases and staging containment. Named moved declarations were compared with the baseline; the three altered runtime bodies supply product wording or platform directory ports. Concrete Society port and module boundary/build oracles plus the existing behavior regressions cover the change. This is not a renewed full-file/codebase review or native qualification. Inherited NOT_REVIEWED owners remain unapproved.",
-   "sha256": "bf4e962cba8f047018f92091820f0c65077a59d6c5d33464f449bf5f54bdecaa"
+   "note": "DR44 direct delta and affected-owner review, without subagents. Pi adapter delta reviewed: public autocomplete wrapper/constructor preserve upstream priority, command completion and cancellation; no prototype or private-field mutation. Tool-init private import remains scoped and explicitly pinned to engine/TUI 1.0.1; export checks reject incompatible seams. DR44 delayed installer and upgrade-refusal controls cover the change. Historical full-file/codebase review and environment PASS are not renewed. The optional adapter is loaded at actual UI startup; importing command/projection helpers does not load the private seam. Controlled ownership fixtures retain explicit dependency lists. Package resolver has an explicit name. Personal saved confirmation is sent only after reload to the current UI; persistence and historical session birth are unchanged, existing PTY checks remain strict. Actual reload exposed stale ctx.cwd capture: factory now closes over a string read while active. WeakMap keeps repeated public search wrappers idempotent and replaces its own cwd adapter without retaining a context. Real saved/tool-removal PTY oracles and late-fd/prototype isolation checks are retained.",
+   "sha256": "8b2a31111367721f550ac0ecbc4a937ca14050b0e5d18a62d8691cbe24e789e7"
   },
   {
    "path": "src/entry/prepare-society.ts",
@@ -181487,13 +181522,13 @@
    "primary": "WP24",
    "status": "CHANGED_WITH_ORACLE",
    "by": [
-    "DR33"
+    "DR44"
    ],
    "oracles": [
-    "UX-09"
+    "DR44"
    ],
-   "note": "Read in full: integration and review effect objects both wire this.observations.gitlinks(projectGit, candidate) so every admission path shares the same whole-tree observer.",
-   "sha256": "b2c0535f9177aa11fbac73fe4f7dc264990093139aa4c6517856a1eb2035cf65"
+   "note": "DR44 direct delta and affected-owner review, without subagents. Review stage extraction and changed composition reviewed against baseline: read-only authority before construction, single acceptance T, immutable recipient snapshot, preaccept ownership, exact drift/refusal and post-CAS recovery ordering. Fresh DR44 workflow-poison and frozen-plan oracles plus existing merge/challenge/fault/concurrency regressions cover this delta. Historical full-file/codebase review and environment PASS are not renewed.",
+   "sha256": "983f473e1bf1f216fb05588747e4514e7b1141a416ccd47a8e4cbb7419b6ac21"
   },
   {
    "path": "src/git/approval.ts",
@@ -181647,27 +181682,26 @@
    "primary": "WP24",
    "status": "CHANGED_WITH_ORACLE",
    "by": [
-    "DR33"
+    "DR44"
    ],
    "oracles": [
-    "UX-09"
+    "DR44"
    ],
-   "note": "Read in full: requireEligible observes gitlinks(candidate) and calls requireNoGitlinks before protected-path checks and before CAS; the initial admission path repeats the gate before an operation row exists, and recovery/reconciliation reuse the same gate so no CAS boundary skips it.",
-   "sha256": "8b8f9d39891a2ae82b68dad46d3fe835a26a286abedab2430358ee4755023aa6"
+   "note": "DR44 direct delta and affected-owner review, without subagents. Review stage extraction and changed composition reviewed against baseline: read-only authority before construction, single acceptance T, immutable recipient snapshot, preaccept ownership, exact drift/refusal and post-CAS recovery ordering. Fresh DR44 workflow-poison and frozen-plan oracles plus existing merge/challenge/fault/concurrency regressions cover this delta. Historical full-file/codebase review and environment PASS are not renewed.",
+   "sha256": "01a112c438d22d86f39238f0115c92829b5f85552d68d351419b8e09ee8061cf"
   },
   {
    "path": "src/git/observe.ts",
    "primary": "WP24",
    "status": "CHANGED_WITH_ORACLE",
    "by": [
-    "UX-38",
-    "DR33"
+    "DR44"
    ],
    "oracles": [
-    "UX-09"
+    "DR44"
    ],
-   "note": "Re-read in full for the UX-38 batch-5 working-tree review (2026-10-12): the gitlink parser now reads the ls-tree spool incrementally -- one NUL record at a time, never the whole tree in memory. The same strict grammar holds (mode/type pairing, full oids, UTF-8, wire paths); an unterminated or malformed record stays corrupt/unknown and is never reported as no gitlinks.",
-   "sha256": "77195062f9e243c16491d5aa1a04466229f2003599789b026d62bc2b8ca4b02a"
+   "note": "DR44 direct delta and affected-owner review, without subagents. Affected boundary delta reviewed: concrete native/application imports replaced by narrow lifecycle, Git observation or conversation capabilities; upstream observation grammar, stale callback identity, actual termination and unknown semantics unchanged. Existing platform/composition behavior plus DR44 import-boundary controls cover the delta. Historical full-file/codebase review and environment PASS are not renewed.",
+   "sha256": "46433fcb20a66f7f154a6aebf915496a54de6ebb74bebea7badd7235486a03bc"
   },
   {
    "path": "src/git/paths.ts",
@@ -182334,27 +182368,26 @@
    "primary": null,
    "status": "CHANGED_WITH_ORACLE",
    "by": [
-    "DR35",
-    "DR36"
+    "DR44"
    ],
    "oracles": [
-    "DR35"
+    "DR44"
    ],
-   "note": "Reviewed the earlier startup deltas and affected ownership/import path: one installation digest per derivation with complete byte hashing, linear bundle membership, explicit Pi presentation instead of eager SDK import, private history ownership, and precisely scoped optional interactive tool setup. Actual PTY and import/ownership regressions remain the startup oracles; no authority is granted by a private screen.",
-   "sha256": "c1d8510d823b928b75e7ebd5717ce2b3a64fba4f28498322f519762b75614b91"
+   "note": "DR44 direct delta and affected-owner review, without subagents. Pi adapter delta reviewed: public autocomplete wrapper/constructor preserve upstream priority, command completion and cancellation; no prototype or private-field mutation. Tool-init private import remains scoped and explicitly pinned to engine/TUI 1.0.1; export checks reject incompatible seams. DR44 delayed installer and upgrade-refusal controls cover the change. Historical full-file/codebase review and environment PASS are not renewed.",
+   "sha256": "695dbc6f3235c29f4f8970f9e6cf1a961c71b6354a11551da569eb6142f5f840"
   },
   {
    "path": "src/pi-compat/interactive-tools.ts",
    "primary": null,
    "status": "CHANGED_WITH_ORACLE",
    "by": [
-    "DR37"
+    "DR44"
    ],
    "oracles": [
-    "DR37"
+    "DR44"
    ],
-   "note": "DR37 direct review of scoped Pi compatibility seam: initialization returns existing paths without awaiting optional download, deduplicated upstream installer refreshes the same pinned provider field; real recursive fixture and delayed installer regression preserve command behavior.",
-   "sha256": "27bd2f43c340c9a2ff473fdaefeaee97265afb73d31ce2c00ea5cfec08ae4fa7"
+   "note": "DR44 direct delta and affected-owner review, without subagents. Pi adapter delta reviewed: public autocomplete wrapper/constructor preserve upstream priority, command completion and cancellation; no prototype or private-field mutation. Tool-init private import remains scoped and explicitly pinned to engine/TUI 1.0.1; export checks reject incompatible seams. DR44 delayed installer and upgrade-refusal controls cover the change. Historical full-file/codebase review and environment PASS are not renewed. Actual reload exposed stale ctx.cwd capture: factory now closes over a string read while active. WeakMap keeps repeated public search wrappers idempotent and replaces its own cwd adapter without retaining a context. Real saved/tool-removal PTY oracles and late-fd/prototype isolation checks are retained.",
+   "sha256": "bbb6fa89d76b0958d29fb2ca16a1ea91e2d62840691c4ba76dec7d7e0787db4a"
   },
   {
    "path": "src/pi-compat/interactive-ui.ts",
@@ -182522,14 +182555,13 @@
    "primary": null,
    "status": "CHANGED_WITH_ORACLE",
    "by": [
-    "DR43"
+    "DR44"
    ],
    "oracles": [
-    "DR43",
-    "T119"
+    "DR44"
    ],
-   "note": "DR43 direct delta and affected-owner review: bootstrap admission precedes society writes; runtime delegates fence/registration authority to HostTenure, engine callbacks remain bound to the live instance and broker generation, UI consumes commands/observations, replacement waits actual outgoing exit, and cleanup is registered at acquisition. Existing composition assertions run real extracted owners; history frame/correlation and successor isolation regressions cover moved UI work. Platform edits clarify coordinator/adapter roles without changing their state machines. No whole-codebase/native review claim or inherited NOT_REVIEWED renewal.",
-   "sha256": "8b4bf94d9d6787f8564a343d7321b4494be434a4b1414152b283bbb25f96c0a0"
+   "note": "DR44 direct delta and affected-owner review, without subagents. Affected boundary delta reviewed: concrete native/application imports replaced by narrow lifecycle, Git observation or conversation capabilities; upstream observation grammar, stale callback identity, actual termination and unknown semantics unchanged. Existing platform/composition behavior plus DR44 import-boundary controls cover the delta. Historical full-file/codebase review and environment PASS are not renewed.",
+   "sha256": "ab7a19a77c2ed4a7f08c4830e9367f36022d16792c965d3d209a311b7e182857"
   },
   {
    "path": "src/platform/guest/identity.ts",
@@ -182724,13 +182756,13 @@
    "primary": null,
    "status": "CHANGED_WITH_ORACLE",
    "by": [
-    "DR42"
+    "DR44"
    ],
    "oracles": [
-    "DR42"
+    "DR44"
    ],
-   "note": "DR42 direct delta/affected-owner review without subagents; native lane and historical full-file review not renewed. Checked shared JSONL correlation and EOF vs child death, per-project outcome/start/archive serialization and maintenance ownership, boot-owned egress retry/cancellation, manager stop evidence, contention-only process writer deadline and inode/child fence, common RPC dispatch with unchanged authentication/failure meaning. Existing oracle set retained; DR42 tests exercise actual owners and local Git/ledger/socket/archive effects.",
-   "sha256": "1e535ec6d026bdcf3f9ba1340d20d6222f38006360b921b61f4bf2f0f95a1244"
+   "note": "DR44 direct delta and affected-owner review, without subagents. Affected boundary delta reviewed: concrete native/application imports replaced by narrow lifecycle, Git observation or conversation capabilities; upstream observation grammar, stale callback identity, actual termination and unknown semantics unchanged. Existing platform/composition behavior plus DR44 import-boundary controls cover the delta. Historical full-file/codebase review and environment PASS are not renewed.",
+   "sha256": "449082c4514b7fdbcfdb2cb9aa28a155693f02e6e89589f06eef6ad75a95f08d"
   },
   {
    "path": "src/platform/host/api-client.ts",
@@ -182861,13 +182893,13 @@
    "primary": null,
    "status": "CHANGED_WITH_ORACLE",
    "by": [
-    "DR42"
+    "DR44"
    ],
    "oracles": [
-    "DR42"
+    "DR44"
    ],
-   "note": "DR42 direct delta/affected-owner review without subagents; native lane and historical full-file review not renewed. Checked shared JSONL correlation and EOF vs child death, per-project outcome/start/archive serialization and maintenance ownership, boot-owned egress retry/cancellation, manager stop evidence, contention-only process writer deadline and inode/child fence, common RPC dispatch with unchanged authentication/failure meaning. Existing oracle set retained; DR42 tests exercise actual owners and local Git/ledger/socket/archive effects.",
-   "sha256": "fed39a6346e7cc879eec6c2190e813b5e807d190e2a17c8126b22944092c7c3c"
+   "note": "DR44 direct delta and affected-owner review, without subagents. Affected boundary delta reviewed: concrete native/application imports replaced by narrow lifecycle, Git observation or conversation capabilities; upstream observation grammar, stale callback identity, actual termination and unknown semantics unchanged. Existing platform/composition behavior plus DR44 import-boundary controls cover the delta. Historical full-file/codebase review and environment PASS are not renewed.",
+   "sha256": "3b1425c000ed8bc7fa838322faa2fad03d847d799f445e9d173dfa8d08f3c210"
   },
   {
    "path": "src/platform/host/host-api.ts",
@@ -182934,13 +182966,13 @@
    "primary": null,
    "status": "CHANGED_WITH_ORACLE",
    "by": [
-    "DR38"
+    "DR44"
    ],
    "oracles": [
-    "DR38"
+    "DR44"
    ],
-   "note": "Reviewed boot/phase cancellation/force/stop and observer paths. Required ready persistence precedes ready/watch and failure rejects startup, records failed and observes owned VM force; optional UI observers log without corrupting committed state. Existing death-observation and cleanup aggregation remain.",
-   "sha256": "bafdca444fd92919ea2b5de1c273a53dc8ad56fa8a4650d6ced3b6a5f69ca11a"
+   "note": "DR44 direct delta and affected-owner review, without subagents. Affected boundary delta reviewed: concrete native/application imports replaced by narrow lifecycle, Git observation or conversation capabilities; upstream observation grammar, stale callback identity, actual termination and unknown semantics unchanged. Existing platform/composition behavior plus DR44 import-boundary controls cover the delta. Historical full-file/codebase review and environment PASS are not renewed.",
+   "sha256": "877affb25d80415e500e938218c0db0240f0c23ac1617036f70c1df6ee6982ea"
   },
   {
    "path": "src/platform/host/native-channel.ts",
@@ -183166,15 +183198,13 @@
    "primary": null,
    "status": "CHANGED_WITH_ORACLE",
    "by": [
-    "DR39",
-    "DR42"
+    "DR44"
    ],
    "oracles": [
-    "DR39",
-    "DR42"
+    "DR44"
    ],
-   "note": "DR42 direct delta/affected-owner review without subagents; native lane and historical full-file review not renewed. Checked shared JSONL correlation and EOF vs child death, per-project outcome/start/archive serialization and maintenance ownership, boot-owned egress retry/cancellation, manager stop evidence, contention-only process writer deadline and inode/child fence, common RPC dispatch with unchanged authentication/failure meaning. Existing oracle set retained; DR42 tests exercise actual owners and local Git/ledger/socket/archive effects.",
-   "sha256": "42551cba7aa157153020888035ce600862ea3f5ff6a770b887af2538055a5e44"
+   "note": "DR44 direct delta and affected-owner review, without subagents. Affected boundary delta reviewed: concrete native/application imports replaced by narrow lifecycle, Git observation or conversation capabilities; upstream observation grammar, stale callback identity, actual termination and unknown semantics unchanged. Existing platform/composition behavior plus DR44 import-boundary controls cover the delta. Historical full-file/codebase review and environment PASS are not renewed.",
+   "sha256": "5867e591fadda0b4e90892361d51d7d2ea9b5516360ddce406677dd7addb3677"
   },
   {
    "path": "src/platform/package-archive.ts",
@@ -183338,6 +183368,19 @@
    "sha256": "102e1af15b0492730df0563be0c29ad065cf08662e6f5ec0cc962ae30889c400"
   },
   {
+   "path": "src/ports/git-observation.ts",
+   "primary": null,
+   "status": "CHANGED_WITH_ORACLE",
+   "by": [
+    "DR44"
+   ],
+   "oracles": [
+    "DR44"
+   ],
+   "note": "DR44 direct delta and affected-owner review, without subagents. Affected boundary delta reviewed: concrete native/application imports replaced by narrow lifecycle, Git observation or conversation capabilities; upstream observation grammar, stale callback identity, actual termination and unknown semantics unchanged. Existing platform/composition behavior plus DR44 import-boundary controls cover the delta. Historical full-file/codebase review and environment PASS are not renewed.",
+   "sha256": "d5f46809e27370bd836ef1c04b9196224e63ce7860367e36e4c3b7c4462fc0d0"
+  },
+  {
    "path": "src/ports/ledger.ts",
    "primary": "WP29",
    "status": "READ_UNCHANGED",
@@ -183369,6 +183412,32 @@
    ],
    "note": "DR41 direct delta and affected-owner review, without subagents: remove TUI effect/Runtime implementation imports; preserve configuration publication/read-back/unknown, effect-time tenure, Principal ordering and actual OS exit, package inode leases and staging containment. Named moved declarations were compared with the baseline; the three altered runtime bodies supply product wording or platform directory ports. Concrete Society port and module boundary/build oracles plus the existing behavior regressions cover the change. This is not a renewed full-file/codebase review or native qualification. Inherited NOT_REVIEWED owners remain unapproved.",
    "sha256": "1615f5a557a091bf232052a9be93808b52afe448293b088f6fc3aadf13c09e0f"
+  },
+  {
+   "path": "src/ports/platform-lifecycle.ts",
+   "primary": null,
+   "status": "CHANGED_WITH_ORACLE",
+   "by": [
+    "DR44"
+   ],
+   "oracles": [
+    "DR44"
+   ],
+   "note": "DR44 direct delta and affected-owner review, without subagents. Affected boundary delta reviewed: concrete native/application imports replaced by narrow lifecycle, Git observation or conversation capabilities; upstream observation grammar, stale callback identity, actual termination and unknown semantics unchanged. Existing platform/composition behavior plus DR44 import-boundary controls cover the delta. Historical full-file/codebase review and environment PASS are not renewed.",
+   "sha256": "d8223d54fd79c2a003f474ed02c38f6177c0ab9222b08abe710eec720ea36aa2"
+  },
+  {
+   "path": "src/ports/review-authority.ts",
+   "primary": null,
+   "status": "CHANGED_WITH_ORACLE",
+   "by": [
+    "DR44"
+   ],
+   "oracles": [
+    "DR44"
+   ],
+   "note": "DR44 direct delta and affected-owner review, without subagents. Affected boundary delta reviewed: concrete native/application imports replaced by narrow lifecycle, Git observation or conversation capabilities; upstream observation grammar, stale callback identity, actual termination and unknown semantics unchanged. Existing platform/composition behavior plus DR44 import-boundary controls cover the delta. Historical full-file/codebase review and environment PASS are not renewed.",
+   "sha256": "35a6d94bfc7c622c9c5b73c850e0192911a678de4017d0fe7c1468867461ca30"
   },
   {
    "path": "src/ports/runtime.ts",
@@ -183972,13 +184041,104 @@
    "primary": null,
    "status": "CHANGED_WITH_ORACLE",
    "by": [
-    "DR39"
+    "DR44"
    ],
    "oracles": [
-    "DR39"
+    "DR44"
    ],
-   "note": "DR39 direct delta/affected-owner review without subagents; no historical full-file or native lane renewal. Reviewed extraction delta and affected review paths: pure documents/status moved; acceptance transaction, frozen EML, recipients, Git preparation, physical-effect ordering and recovery retain the existing owner. Integration/fault/concurrency regressions also passed.",
-   "sha256": "6b92813461ae7beef5e193ca5525b56dcab5c3ac90700d6c5fed8f7a82498b0b"
+   "note": "DR44 direct delta and affected-owner review, without subagents. Review stage extraction and changed composition reviewed against baseline: read-only authority before construction, single acceptance T, immutable recipient snapshot, preaccept ownership, exact drift/refusal and post-CAS recovery ordering. Fresh DR44 workflow-poison and frozen-plan oracles plus existing merge/challenge/fault/concurrency regressions cover this delta. Historical full-file/codebase review and environment PASS are not renewed.",
+   "sha256": "312353cbcc1a863d7382c8e607b007a20c644caa63792cd1601820da4ab1b1b7"
+  },
+  {
+   "path": "src/review/acceptance.ts",
+   "primary": null,
+   "status": "CHANGED_WITH_ORACLE",
+   "by": [
+    "DR44"
+   ],
+   "oracles": [
+    "DR44"
+   ],
+   "note": "DR44 direct delta and affected-owner review, without subagents. Review stage extraction and changed composition reviewed against baseline: read-only authority before construction, single acceptance T, immutable recipient snapshot, preaccept ownership, exact drift/refusal and post-CAS recovery ordering. Fresh DR44 workflow-poison and frozen-plan oracles plus existing merge/challenge/fault/concurrency regressions cover this delta. Historical full-file/codebase review and environment PASS are not renewed.",
+   "sha256": "41f74cd0023896c60d231f367f8158c0616009b60f7cb4ad8a37b4652431553f"
+  },
+  {
+   "path": "src/review/advancement.ts",
+   "primary": null,
+   "status": "CHANGED_WITH_ORACLE",
+   "by": [
+    "DR44"
+   ],
+   "oracles": [
+    "DR44"
+   ],
+   "note": "DR44 direct delta and affected-owner review, without subagents. Review stage extraction and changed composition reviewed against baseline: read-only authority before construction, single acceptance T, immutable recipient snapshot, preaccept ownership, exact drift/refusal and post-CAS recovery ordering. Fresh DR44 workflow-poison and frozen-plan oracles plus existing merge/challenge/fault/concurrency regressions cover this delta. Historical full-file/codebase review and environment PASS are not renewed.",
+   "sha256": "2fd2d6e9332ef320b48996121561315a939fea1379c220045f7595586a65518d"
+  },
+  {
+   "path": "src/review/authority.ts",
+   "primary": null,
+   "status": "CHANGED_WITH_ORACLE",
+   "by": [
+    "DR44"
+   ],
+   "oracles": [
+    "DR44"
+   ],
+   "note": "DR44 direct delta and affected-owner review, without subagents. Review stage extraction and changed composition reviewed against baseline: read-only authority before construction, single acceptance T, immutable recipient snapshot, preaccept ownership, exact drift/refusal and post-CAS recovery ordering. Fresh DR44 workflow-poison and frozen-plan oracles plus existing merge/challenge/fault/concurrency regressions cover this delta. Historical full-file/codebase review and environment PASS are not renewed.",
+   "sha256": "0232124151fd021e00e74fe72aa670bf0c83ee5c11a9bb48e64c6e87b049064d"
+  },
+  {
+   "path": "src/review/messages.ts",
+   "primary": null,
+   "status": "CHANGED_WITH_ORACLE",
+   "by": [
+    "DR44"
+   ],
+   "oracles": [
+    "DR44"
+   ],
+   "note": "DR44 direct delta and affected-owner review, without subagents. Review stage extraction and changed composition reviewed against baseline: read-only authority before construction, single acceptance T, immutable recipient snapshot, preaccept ownership, exact drift/refusal and post-CAS recovery ordering. Fresh DR44 workflow-poison and frozen-plan oracles plus existing merge/challenge/fault/concurrency regressions cover this delta. Historical full-file/codebase review and environment PASS are not renewed.",
+   "sha256": "29665810fb417e3304a65f80f51b108d220d4922b06f5419e8af4f7d98f8509b"
+  },
+  {
+   "path": "src/review/preparation.ts",
+   "primary": null,
+   "status": "CHANGED_WITH_ORACLE",
+   "by": [
+    "DR44"
+   ],
+   "oracles": [
+    "DR44"
+   ],
+   "note": "DR44 direct delta and affected-owner review, without subagents. Review stage extraction and changed composition reviewed against baseline: read-only authority before construction, single acceptance T, immutable recipient snapshot, preaccept ownership, exact drift/refusal and post-CAS recovery ordering. Fresh DR44 workflow-poison and frozen-plan oracles plus existing merge/challenge/fault/concurrency regressions cover this delta. Historical full-file/codebase review and environment PASS are not renewed.",
+   "sha256": "c18f88785c1277d8746f12e81a62a269eecbcd082fc59eca4b3b846c1f59b54e"
+  },
+  {
+   "path": "src/review/status.ts",
+   "primary": null,
+   "status": "CHANGED_WITH_ORACLE",
+   "by": [
+    "DR44"
+   ],
+   "oracles": [
+    "DR44"
+   ],
+   "note": "DR44 direct delta and affected-owner review, without subagents. Review stage extraction and changed composition reviewed against baseline: read-only authority before construction, single acceptance T, immutable recipient snapshot, preaccept ownership, exact drift/refusal and post-CAS recovery ordering. Fresh DR44 workflow-poison and frozen-plan oracles plus existing merge/challenge/fault/concurrency regressions cover this delta. Historical full-file/codebase review and environment PASS are not renewed.",
+   "sha256": "e7a2867af3b733618ad4c4c010ef9bc7d8ab0d540fc4997a06d4409d3bbe0591"
+  },
+  {
+   "path": "src/review/types.ts",
+   "primary": null,
+   "status": "CHANGED_WITH_ORACLE",
+   "by": [
+    "DR44"
+   ],
+   "oracles": [
+    "DR44"
+   ],
+   "note": "DR44 direct delta and affected-owner review, without subagents. Review stage extraction and changed composition reviewed against baseline: read-only authority before construction, single acceptance T, immutable recipient snapshot, preaccept ownership, exact drift/refusal and post-CAS recovery ordering. Fresh DR44 workflow-poison and frozen-plan oracles plus existing merge/challenge/fault/concurrency regressions cover this delta. Historical full-file/codebase review and environment PASS are not renewed.",
+   "sha256": "ec615606ca3a778b82e04b684fa0cbc2bf9abfa0b851795ae7c37095ea97516d"
   },
   {
    "path": "src/rpc-client.ts",
@@ -184167,17 +184327,43 @@
    "sha256": "1d256938e89a8372bd65ed023d90b5397f15a4cdd1e6aa0b565d1f7888eb0624"
   },
   {
+   "path": "src/runtime/engine/principal-events.ts",
+   "primary": null,
+   "status": "CHANGED_WITH_ORACLE",
+   "by": [
+    "DR44"
+   ],
+   "oracles": [
+    "DR44"
+   ],
+   "note": "DR44 direct delta and affected-owner review, without subagents. Principal extraction and affected admission/lifetime reviewed: pure Human/Delivery claims, synchronous queue handoff, matching prompt response, provably unwritten versus unconfirmed input, once-only handback. Spawn/environment/event bodies compared with baseline; actual child/credential/UI ownership stays in PrincipalSession. DR44 pure transitions and existing real scripted-engine ownership oracles cover this delta. Historical full-file/codebase review and environment PASS are not renewed.",
+   "sha256": "67512a4a807c9b51826cb831d17d71c07aed62dd1a1abee1f1cf129d199b3674"
+  },
+  {
+   "path": "src/runtime/engine/principal-launch.ts",
+   "primary": null,
+   "status": "CHANGED_WITH_ORACLE",
+   "by": [
+    "DR44"
+   ],
+   "oracles": [
+    "DR44"
+   ],
+   "note": "DR44 direct delta and affected-owner review, without subagents. Principal extraction and affected admission/lifetime reviewed: pure Human/Delivery claims, synchronous queue handoff, matching prompt response, provably unwritten versus unconfirmed input, once-only handback. Spawn/environment/event bodies compared with baseline; actual child/credential/UI ownership stays in PrincipalSession. DR44 pure transitions and existing real scripted-engine ownership oracles cover this delta. Historical full-file/codebase review and environment PASS are not renewed.",
+   "sha256": "cfb7a548f2c84d3a54dd9a5cf28b55fb6e8cbcfb85cf4d4d0b7d0975456bcd77"
+  },
+  {
    "path": "src/runtime/engine/principal-session.ts",
    "primary": null,
    "status": "CHANGED_WITH_ORACLE",
    "by": [
-    "DR41"
+    "DR44"
    ],
    "oracles": [
-    "DR41"
+    "DR44"
    ],
-   "note": "DR41 direct delta and affected-owner review, without subagents: remove TUI effect/Runtime implementation imports; preserve configuration publication/read-back/unknown, effect-time tenure, Principal ordering and actual OS exit, package inode leases and staging containment. Named moved declarations were compared with the baseline; the three altered runtime bodies supply product wording or platform directory ports. Concrete Society port and module boundary/build oracles plus the existing behavior regressions cover the change. This is not a renewed full-file/codebase review or native qualification. Inherited NOT_REVIEWED owners remain unapproved.",
-   "sha256": "a79c51a37a92add110066eb8f8979b91eb6d0a4c6976e3529776a93a5672e351"
+   "note": "DR44 direct delta and affected-owner review, without subagents. Principal extraction and affected admission/lifetime reviewed: pure Human/Delivery claims, synchronous queue handoff, matching prompt response, provably unwritten versus unconfirmed input, once-only handback. Spawn/environment/event bodies compared with baseline; actual child/credential/UI ownership stays in PrincipalSession. DR44 pure transitions and existing real scripted-engine ownership oracles cover this delta. Historical full-file/codebase review and environment PASS are not renewed.",
+   "sha256": "eab6f8b00bc06411669a4424bf29740f90c5851b46472e544089153ef411e86a"
   },
   {
    "path": "src/runtime/engine/session-directories.ts",
@@ -184853,13 +185039,13 @@
    "primary": "WP29",
    "status": "CHANGED_WITH_ORACLE",
    "by": [
-    "DR40"
+    "DR44"
    ],
    "oracles": [
-    "DR40"
+    "DR44"
    ],
-   "note": "DR40 direct delta and affected-owner review without subagents; no historical full-file or native qualification renewal. Explicit transaction-scoped capability calls; stale closure, rollback, admission and single Store ownership retained.",
-   "sha256": "1001651e3626bc710e9f30ebe783df6018abe11d86761cc96c6f67039eabe3f7"
+   "note": "DR44 direct delta and affected-owner review, without subagents. Store capability/type delta reviewed: signatures reuse authoritative LedgerReader decoded values and existing transition inputs; no concrete Store backreference. TransactionScope still compares the same runtime owner, captures write closures and enforces synchronous/liveness/admission fences. DR44 cycle negative control and existing transaction/facet oracles cover the change; decoder provenance is not exported into a weaker public contract. Historical full-file/codebase review and environment PASS are not renewed.",
+   "sha256": "11fcb2e8f2774c5ecd972ad1ebe0e9324b0be4e16ffaf7dfdfe6fa892270715c"
   },
   {
    "path": "src/storage/file-digest.ts",
@@ -184948,21 +185134,13 @@
    "primary": "WP29",
    "status": "CHANGED_WITH_ORACLE",
    "by": [
-    "P0V-123",
-    "P0V-124",
-    "P0V-125",
-    "P0V-126",
-    "P0V-30",
-    "P0V-56"
+    "DR44"
    ],
    "oracles": [
-    "P0V-123",
-    "P0V-124",
-    "P0V-126",
-    "P0V-30",
-    "P0V-56"
+    "DR44"
    ],
-   "sha256": "248bc23467135e393bf43f35c6bee25a6ccd3de44cb652b5304ac130f0bf0468"
+   "note": "DR44 direct delta and affected-owner review, without subagents. Store capability/type delta reviewed: signatures reuse authoritative LedgerReader decoded values and existing transition inputs; no concrete Store backreference. TransactionScope still compares the same runtime owner, captures write closures and enforces synchronous/liveness/admission fences. DR44 cycle negative control and existing transaction/facet oracles cover the change; decoder provenance is not exported into a weaker public contract. Historical full-file/codebase review and environment PASS are not renewed.",
+   "sha256": "cdafc98fd0a9f263f9a3631bdc30072fadb167e3447bdd9845c32ea8eb30e00d"
   },
   {
    "path": "src/storage/output-spool.ts",
@@ -185121,6 +185299,19 @@
    "sha256": "3175ed609818d825a307d4790336114d92146ee006e718cdc4c11d1742fe365c"
   },
   {
+   "path": "src/storage/store-access.ts",
+   "primary": null,
+   "status": "CHANGED_WITH_ORACLE",
+   "by": [
+    "DR44"
+   ],
+   "oracles": [
+    "DR44"
+   ],
+   "note": "DR44 direct delta and affected-owner review, without subagents. Store capability/type delta reviewed: signatures reuse authoritative LedgerReader decoded values and existing transition inputs; no concrete Store backreference. TransactionScope still compares the same runtime owner, captures write closures and enforces synchronous/liveness/admission fences. DR44 cycle negative control and existing transaction/facet oracles cover the change; decoder provenance is not exported into a weaker public contract. Historical full-file/codebase review and environment PASS are not renewed.",
+   "sha256": "3b870e66334c493154a2db448cdf185ca19bce82f2bb35b70367ce0419296347"
+  },
+  {
    "path": "src/storage/submit-spool.ts",
    "primary": "WP20",
    "status": "CHANGED_WITH_ORACLE",
@@ -185139,13 +185330,13 @@
    "primary": "WP04",
    "status": "CHANGED_WITH_ORACLE",
    "by": [
-    "DR40"
+    "DR44"
    ],
    "oracles": [
-    "DR40"
+    "DR44"
    ],
-   "note": "DR40 direct delta and affected-owner review without subagents; no historical full-file or native qualification renewal. Explicit transaction-scoped capability calls; stale closure, rollback, admission and single Store ownership retained.",
-   "sha256": "3c44ca972212f7d643b0c312af1914027afed4c164652162c9e5c414f57daf01"
+   "note": "DR44 direct delta and affected-owner review, without subagents. Store capability/type delta reviewed: signatures reuse authoritative LedgerReader decoded values and existing transition inputs; no concrete Store backreference. TransactionScope still compares the same runtime owner, captures write closures and enforces synchronous/liveness/admission fences. DR44 cycle negative control and existing transaction/facet oracles cover the change; decoder provenance is not exported into a weaker public contract. Historical full-file/codebase review and environment PASS are not renewed.",
+   "sha256": "3f79398e4cbf345847cf96c591e13e7adef6142d47f10e36d5166eaec179ca2c"
   },
   {
    "path": "src/storage/transitions.ts",
@@ -185185,13 +185376,13 @@
    "primary": "WP04",
    "status": "CHANGED_WITH_ORACLE",
    "by": [
-    "UX-37"
+    "DR44"
    ],
    "oracles": [
-    "G02-ledger-r2"
+    "DR44"
    ],
-   "note": "Read in full for UX-37: Store delegates pendingDeliveryCount/pendingDeliveryRows to the reader's aggregate and streaming paths and keeps recoverableOperations -> journal.recoverableIds unbounded. No wrapper reintroduces a row cap; readDiagnosticSnapshot is untouched and still fails closed at its own limits.",
-   "sha256": "1cc87db78ca35bee7b42d86a79ce5887fe9d70344cee29a16357bba84282127b"
+   "note": "DR44 direct delta and affected-owner review, without subagents. Store capability/type delta reviewed: signatures reuse authoritative LedgerReader decoded values and existing transition inputs; no concrete Store backreference. TransactionScope still compares the same runtime owner, captures write closures and enforces synchronous/liveness/admission fences. DR44 cycle negative control and existing transaction/facet oracles cover the change; decoder provenance is not exported into a weaker public contract. Historical full-file/codebase review and environment PASS are not renewed.",
+   "sha256": "9f17aba2f680e81dafa6cc8d06715b62b8ed3d7f6e2268b464be78a00f87269c"
   },
   {
    "path": "src/tui/app.ts",

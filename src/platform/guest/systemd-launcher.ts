@@ -6,7 +6,8 @@
 import { join } from "node:path";
 import { StoreError } from "../../domain/errors.js";
 import { runProcess, type CommandSpec } from "../../process/run.js";
-import { listening, type SessionLauncher } from "./host.js";
+import { endpointListening as listening } from "../../protocol/connection.js";
+import type { SessionLauncher } from "../../ports/platform-lifecycle.js";
 import { RESUME_SESSION_ENV } from "../../runtime/session-catalog.js";
 
 export interface SystemdLauncherOptions {

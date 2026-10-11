@@ -88,6 +88,26 @@ function build(root) {
   return run;
 }
 
+test("DR44: discovery, compile and package launch failures cannot certify a build with status zero", t => {
+  for (const [phase, signal] of [[1, false], [2, false], [3, false], [1, true]]) {
+    const root = fixture(t);
+    writeFileSync(join(root, "inject-child.mjs"), `
+import cp from "node:child_process";
+import { syncBuiltinESMExports } from "node:module";
+const spawn = cp.spawnSync;
+let calls = 0;
+cp.spawnSync = (...args) => ++calls === ${phase}
+  ? { status: 0, signal: ${signal ? '"SIGTERM"' : 'null'}, error: ${signal ? 'undefined' : 'Object.assign(new Error("injected EPERM"), { code: "EPERM" })'} }
+  : spawn(...args);
+syncBuiltinESMExports();
+`);
+    const result = spawnSync(process.execPath, ["--import", "./inject-child.mjs", "scripts/build.mjs"],
+      { cwd: root, encoding: "utf8", timeout: 120_000 });
+    assert.equal(result.status, 1, `phase ${phase} was reported successful: ${result.stderr}`);
+    assert.match(result.stderr, signal ? /SIGTERM/ : /injected EPERM/);
+  }
+});
+
 function assertRebuild(root, target, change, message) {
   // A deleted inode may be reused by the next compile. Keep the old output
   // alive until the assertion so inode identity proves replacement on disk

@@ -46,7 +46,7 @@ test('F34 systemd launcher: normalized values reach --setenv, stale resume is dr
     'node:path': path,
     '../../domain/errors.js': { StoreError: Error },
     '../../process/run.js': { runProcess: async spec => { calls.push(spec); return { kind: 'exited', exitCode: 0 }; } },
-    './host.js': { listening: async () => true },
+    '../../protocol/connection.js': { endpointListening: async () => true },
     '../../runtime/session-catalog.js': { RESUME_SESSION_ENV },
   }, { performance, setTimeout });
   const input = { HOME: '/guest/home', PATH: '/usr/bin:/bin', LANG: 'C.UTF-8', [RESUME_SESSION_ENV]: 'stale', TZ: 'host', USER: 'host' };
@@ -72,7 +72,7 @@ for (const observation of [collected, collected.replace('inactive', 'active'), c
     'node:path': path, '../../domain/errors.js': {StoreError: Error},
     '../../process/run.js': {runProcess: async () => ++calls === 1 ? {kind:'exited', exitCode:5} :
       {kind:'exited', exitCode:0, stdout:Buffer.from(observation)}},
-    './host.js': {listening: async () => false}, '../../runtime/session-catalog.js': {RESUME_SESSION_ENV},
+    '../../protocol/connection.js': {endpointListening: async () => false}, '../../runtime/session-catalog.js': {RESUME_SESSION_ENV},
   }, {performance, setTimeout});
   const launcher = systemdSessionLauncher({sessionsDir:'/unused', node:'/unused', libdir:'/unused', env:{}});
   assert.equal(await launcher.stop('demo', 100), observation === collected ? 'stopped' : 'unknown'); assert.equal(calls, 2);

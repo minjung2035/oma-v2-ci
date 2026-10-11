@@ -22,7 +22,8 @@ async function world({ setModel, init, resourceReload, dispose, fail, moduleClos
     getAvailableThinkingLevels() { return ['off', 'high']; },
     setThinkingLevel(level) { changes.push(['effort', level]); this.thinkingLevel = level; },
   };
-  const context = { ui: {
+  const context = { cwd: '/work', ui: {
+    addAutocompleteProvider(factory) { assert.equal(factory({}).cwd, '/work'); },
     setEditorComponent(factory) { factory({}, {}, {}); }, setHeader() {}, setFooter() {}, notify(message, level) { notices.push([message, level]); },
     // B3: the host mirrors OMA's waiting queue above the editor; the fixture
     // keeps the seam, not the widget.
@@ -48,6 +49,7 @@ async function world({ setModel, init, resourceReload, dispose, fail, moduleClos
   const runtime = { session, async switchSession(path) { changes.push(['switch', path]); }, services: { resourceLoader },
     async dispose() { modules.push('dispose'); hooks.session_shutdown({ reason: 'quit' }); await dispose?.(); } };
   const dependencies = {
+    '../pi-compat/interactive-tools.js': { withSearchTools: (current, cwd) => ({ current, cwd }) },
     'node:net': { Socket: class {} }, 'node:fs': { readFileSync: () => '{"version":"test"}' },
     // w10's in-process Client preload is a side-effect import; the mocked
     // boundaries below never reach it, so the install itself is a no-op here.

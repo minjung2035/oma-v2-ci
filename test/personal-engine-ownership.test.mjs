@@ -18,7 +18,7 @@ function world({ fail, close, dispose, run, construct, catalog, beforeSwitch, se
   const session = { sessionFile: '/fixture/history/current.jsonl', extensionRunner: {
     async emit(event) { calls.push(event.type); if (event.type === 'session_before_switch' && beforeSwitch) return beforeSwitch(event); return hooks[event.type]?.(event, context); },
   }, async abort() { calls.push('abort'); if (fail === 'abort') throw new Error('injected abort'); }, dispose() {} };
-  const context = { ui: { setStatus() {}, setHeader(factory) { factory?.({}, { fg: (_color, text) => text }).render(80); }, setFooter() {}, notify(...args) { calls.push(['notice', ...args]); },
+  const context = { cwd: birth.cwd, ui: { addAutocompleteProvider(factory) { calls.push(['autocomplete', factory({})]); }, setStatus() {}, setHeader(factory) { factory?.({}, { fg: (_color, text) => text }).render(80); }, setFooter() {}, notify(...args) { calls.push(['notice', ...args]); },
     select(title, rows) { return new Promise(resolve => picks.push({ title, rows, choose: resolve })); },
     custom(factory) { return new Promise(resolve => picks.push(factory({ requestRender() {} }, {}, {}, resolve))); },
   } };
@@ -57,6 +57,7 @@ function world({ fail, close, dispose, run, construct, catalog, beforeSwitch, se
     calls.push('resources-bound'); hooks.session_start({ reason: 'reload' }, context);
   };
   const dependencies = {
+    '../pi-compat/interactive-tools.js': { withSearchTools: (current, cwd) => ({ current, cwd }) },
     '../pi-compat/settings.js': { createEngineSettings: (_cwd, _dir, opts) => Object.assign(settingsManager,
       { createOptions: opts, setProjectTrusted(value) { calls.push(['set-trusted', value]); } }) },
     'node:fs': { lstatSync: () => ({ isFile: () => true }), readFileSync: () => '{"version":"fixture-version"}' },

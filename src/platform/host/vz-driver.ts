@@ -22,7 +22,7 @@ import type { ChildProcess } from "node:child_process";
 import { connectSocket } from "../rpc.js";
 import { StoreError } from "../../domain/errors.js";
 import { spawnSupervisedService } from "../../process/async.js";
-import type { VmDriver, VmStopCause } from "./lifecycle.js";
+import type { VmDriver, VmStopCause } from "../../ports/platform-lifecycle.js";
 import type { KeychainStore } from "./keychain.js";
 import { nativeKeychainStore } from "./keychain-client.js";
 import { NativeChannel } from "./native-channel.js";

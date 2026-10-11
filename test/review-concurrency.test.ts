@@ -7,9 +7,54 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { readDiagnosticSnapshot } from "../src/store.js";
 import { inspectLedger } from "../src/diagnostics/ledger.js";
-import type { Receipt } from "../implementation/contracts.js";
+import type { Receipt, MessagePlan } from "../implementation/contracts.js";
 import { fixture, messages, inboxCount } from "./fixtures/review-fixture.js";
 import { makeValidAgent } from "./fixtures/spec.js";
+
+test("DR44: Integration's pre-CAS authority never calls the public Review workflow", async () => {
+  const f = fixture();
+  try {
+    f.module.reviews.assertApplicable = () => { throw new Error("workflow callback reached CAS"); };
+    const candidate = f.candidateWith({ "a.txt": "independent authority\n" });
+    await f.submit("alice", candidate);
+    await f.open("alice", { tier: "LOW", candidate }, "no-workflow-callback");
+    assert.equal(f.applyOp("alice", "no-workflow-callback")?.state, "succeeded");
+    assert.equal(f.git(["rev-parse", "refs/heads/main"]), candidate);
+  } finally { f.close(); }
+});
+
+test("DR44: review acceptance snapshots recipients without mutating frozen thread or completion plans", async () => {
+  const f = fixture();
+  try {
+    const prepared: MessagePlan[] = [];
+    const freeze = f.mail.freezeReviewMessage.bind(f.mail);
+    f.mail.freezeReviewMessage = async (...args) => {
+      const frozen = await freeze(...args);
+      Object.freeze(frozen.message.recipients);
+      Object.freeze(frozen.message);
+      prepared.push(frozen.message);
+      return frozen;
+    };
+    const candidate = f.candidateWith({ "a.txt": "land this\n" });
+    await f.submit("alice", candidate);
+    const opened = await f.open("alice", { tier: "MEDIUM", candidate }, "immutable-open");
+    assert.equal(opened.state, "succeeded");
+    const name = f.requestName("immutable-open");
+    const voted = await f.vote("bob", name, "approve", "checked the change", "immutable-vote");
+    assert.equal(voted.state, "succeeded");
+    const applied = f.applyOp("alice", "immutable-open");
+    assert.equal(applied?.state, "succeeded");
+    assert.equal(f.git(["rev-parse", "refs/heads/main"]), candidate);
+    assert.ok(prepared.some(message => message.review?.role === "notice"));
+    assert.ok(prepared.every(message => message.recipients.length === 0), "acceptance changed a preparation artifact");
+    for (const [actor, key] of [["alice", "immutable-open"], ["bob", "immutable-vote"]] as const) {
+      const operation = f.store.getOperation(actor, key);
+      assert.ok(operation?.state === "succeeded" && operation.result.kind === "attest.record");
+      assert.ok(operation.result.recipientCount > 0, "receipt did not use the accepted recipient snapshot");
+      assert.ok(messages(f, actor, key).every(message => message.recipients.length > 0));
+    }
+  } finally { f.close(); }
+});
 
 type Outcome = { ok: true; receipt: Receipt } | { ok: false; error: unknown };
 const settle = (p: Promise<Receipt>): Promise<Outcome> =>

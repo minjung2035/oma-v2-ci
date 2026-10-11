@@ -4,28 +4,17 @@ import { Buffer } from "node:buffer";
 import { StoreError } from "../domain/errors.js";
 import { TuiApp, type AppPorts } from "../tui/app.js";
 import { PanelTerminal } from "../tui/panel-terminal.js";
-import { errorWords } from "../tui/words.js";
+import { errorWords, surfaceWords } from "../tui/words.js";
 import { engineName, engineModelChoiceOf, WORKER_MODEL, workerModelText, bootstrapStateOf, type FieldValue } from "./settings.js";
 import { principalMailbox } from "./mail.js";
 import { societyPanelPorts } from "./society-panel.js";
 import { TuiTransport, type Observation } from "./status-observation.js";
-import { principalSessionDir, type PrincipalSession } from "../runtime/engine/principal-session.js";
 import { sessionHistoryDirectories } from "../runtime/session-catalog.js";
 import type { PiEvent } from "../runtime/pi-rpc.js";
 import type { HostHistoryChannel } from "../runtime/host-history-channel.js";
-import type { PromptOutcome } from "../protocol/settings.js";
 import type { ProjectSessionSettings } from "./project-session-settings.js";
 import type { SocietyBootstrap } from "./society-bootstrap.js";
-import type { SocietyConversationView } from "./society-runtime.js";
-interface ConversationCommands {
-  session(): PrincipalSession | null;
-  owned(): boolean;
-  finished(): boolean;
-  submit(text: string): PromptOutcome;
-  deliver(): void;
-  shutdown(code: number): Promise<void>;
-  relaunch(resume: string | null): Promise<void>;
-}
+import type { ConversationCommands, ConversationUi, SocietyConversationView } from "./society-conversation.js";
 export class SocietyInteraction implements SocietyConversationView {
   private readonly app: TuiApp;
   private readonly terminal: PanelTerminal;
@@ -80,7 +69,9 @@ export class SocietyInteraction implements SocietyConversationView {
       this.notice(words);
     this.saidLeftOut = words;
   }
-  onUi(live: PrincipalSession, event: PiEvent): void {
+  errorWords(error: unknown): string { return errorWords(error); }
+  surfaceWords(text: string, instead: string): string { return surfaceWords(text, instead); }
+  onUi(live: ConversationUi, event: PiEvent): void {
     if (this.commands.session() !== live)
       return;
     if (event.type === "quit") {
@@ -132,7 +123,7 @@ export class SocietyInteraction implements SocietyConversationView {
         if (!this.commands.finished() && this.commands.session() === live)
           live.sendUi({ type: "session_dirs", id,
             dirs: sessionHistoryDirectories(this.bootstrap.dataRoot, this.bootstrap.canonicalProjectPath).map(entry => entry.dir),
-            current: principalSessionDir(this.bootstrap.stateRoot),
+            current: this.commands.sessionDirectory(),
             ...(error === undefined ? {} : { error }) });
       })().catch(error => { if (!this.commands.finished() && this.commands.session() === live)
         live.sendUi({ type: "session_dirs", id, dirs: [], error: errorWords(error) }); });

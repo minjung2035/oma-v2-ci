@@ -1,6 +1,7 @@
 # Application 조립과 책임 경계
 
-[DR43](design-revisions.md#dr43--society-조립-수명-단위와-플랫폼-책임-경계)의 구현 안내다.
+[DR43](design-revisions.md#dr43--society-조립-수명-단위와-플랫폼-책임-경계)와
+[DR44](design-revisions.md#dr44--review-권한과-실행-조정의-변경-경계)의 구현 안내다.
 기존 [architecture](architecture.md), [implementation-spec](implementation-spec.md),
 [macOS 규격](macos-platform.md)의 ownership·권한·복구 계약을 변경하지 않는다.
 
@@ -15,8 +16,11 @@
 | `application/society-interaction.ts` | TUI 조립, 입력·engine UI event·history page·설정/메일 관측 표시 | runtime command, settings commit/read-back, mail/transport 관측 |
 | `application/society-transition.ts` | 종료·재진입 순서, history admission, unused session 정리 | runtime 종료 command와 실제 engine exit observation |
 
-Runtime이 보는 화면 API는 `SocietyConversationView`다. Interaction은 현재 conversation 관측과
-submit/deliver/shutdown/relaunch command만 받는다. 연결은 entry에서 이루어지며 TUI 자체에는
+Runtime이 보는 화면 API는 `application/society-conversation.ts`의 `SocietyConversationView`다.
+Interaction은 `ConversationCommands`와 `sendUi`만 있는 `ConversationUi`를 받는다. 이 adapter는
+engine 하나의 수명 동안 동일하고 교체 시 새 객체가 되므로 늦은 UI callback의 identity 검사도 유지한다.
+실제 PrincipalSession과 `exited`는 Runtime 안에 남으며 문구 표현은 view가 공급한다.
+연결은 entry에서 이루어지며 TUI 자체에는
 process 실행이나 설정 저장 구현이 들어가지 않는다. Runtime의 current session/finish/owner는
 외부에서 읽을 수 있지만 직접 갱신할 수 없다.
 
@@ -40,6 +44,9 @@ broker/VM state machine을 만들지 않는다. `/new`와 `/resume`은 outgoing 
 Coordinator는 adapter의 반환 관측을 사용한다. adapter는 Society 선택, project policy,
 UI 또는 상위 use case의 실행 순서를 소유하지 않는다. 새 native 기능은 adapter에,
 새 project/session 시나리오는 해당 coordinator에 추가한다.
+`ports/platform-lifecycle.ts`의 `VmDriver`, `GuestPorts`, `SessionLauncher`가 이 경계다.
+VzDriver와 SystemdSessionLauncher는 coordinator를 import하지 않는다. endpoint 연결 가능 여부는
+`protocol/connection.ts`의 공통 관측을 사용하며 GuestHost 전체를 로드하지 않는다.
 
 ## 세 process lifetime의 연결
 
@@ -54,6 +61,49 @@ GuestHost의 project/society fence → launcher start → holder 관측이다. h
 bootstrap이 binding/tenure를 확인하고 runtime이 broker와 Principal을 조립한다. Host의 running
 응답은 guest가 관측한 session 상태이며 VM ready나 endpoint 하나가 Principal의 등록·Worker의
 종료·backup quiescence까지 증명하지 않는다. 종료와 backup도 각 owner의 관측 결과를 넘긴다.
+
+| 추적할 행동 | 실제 연결 | 성공 관측의 한계 |
+|---|---|---|
+| VM 시작 | `VmLifecycle` → `VmDriver.start` → guest handshake | VM running은 guest ready와 별도 |
+| Society 열기 | `SessionGateway` → `requestSociety` → `GuestHost.open` → `SessionLauncher.start` | holder endpoint 준비까지만 증명 |
+| Society 실행 | bootstrap → `SocietyRuntime.start` → HostTenure·Broker·PrincipalSession | registration과 actual exit는 각 owner의 관측 |
+| archive 준비 | Guest mutation fence → `SessionLauncher.stop` → manifest·tar·outcome | stopped 확인이 없으면 unknown으로 유지 |
+
+## Review의 변경 경계
+
+`review.ts`는 공개 API와 caller admission을 연결하는 facade다. 수락 T는 `ReviewAcceptance`
+하나가 소유한다. 다음 owner는 같은 durable operation·Maildir·Git writer를 사용한다.
+
+| owner | 변경 이유 | 사용할 수 없는 효과 |
+|---|---|---|
+| `review/authority.ts` / ReviewAuthorityReader | validated fact를 현재 순수 정책 입력으로 구성, 중복·drift·pre-CAS readiness | Store write, Git I/O, workflow 실행 |
+| `review/preparation.ts` | 새 caller intent의 권한·candidate 관측과 준비 순서 | 수락 transaction, 적용 CAS |
+| `review/messages.ts` | thread·approval 문서, preaccept artifact 등록 | operation 수락 |
+| `review/acceptance.ts` | T 안의 recheck·recipient snapshot·intent+deliveries, 수락 후 settlement | T 안의 Git·Maildir I/O |
+| `review/advancement.ts` | accepted challenge repair·refresh·completion notice·통합 요청 | 직접 Store write |
+| `review/status.ts` | Worker/Principal visibility와 bounded read projection | fresh authority 부여 |
+
+`GitModule`은 AuthorityReader를 먼저 구성하고, IntegrationCoordinator에는
+`ports/review-authority.ts`의 synchronous `assertApplicable` port만 준다. ReviewAdvancement는
+Integration에 적용을 요청하고, Integration은 AuthorityReader의 현재 판정 직후 CAS한다.
+Integration에서 ReviewModule/Advancement로 되돌아가는 callback은 없다. readiness의 의미는
+`domain/review-evaluation.ts` 한곳에 남는다. 이미 CAS된 사실의 settlement는 새 권한 판정과 구분한다.
+
+## Principal과 Pi의 변경 경계
+
+`domain/turn-admission.ts`는 Human/Delivery claim, 대기 순서, prompt response correlation,
+unsent/unconfirmed 구분의 I/O 없는 상태 전이다. PrincipalSession은 그 결정을 실제 RPC와 UI에
+연결하고 child·credential socket·actual exit를 소유한다. launch/profile/env는 `principal-launch.ts`,
+표시 projection은 `principal-events.ts`를 읽으면 된다. 별도 process supervisor를 만들지 않는다.
+
+Pi autocomplete는 공개 `ExtensionUIContext.addAutocompleteProvider`와
+`CombinedAutocompleteProvider` 생성자를 사용한다. prototype과 private fdPath를 바꾸지 않는다.
+선행 provider의 결과·cancellation·command completion을 유지하고 늦게 설치된 fd의 파일 결과만
+보완한다. 등록 시 cwd 문자열을 읽고 factory는 이전 extension context를 붙잡지 않는다.
+재로드의 반복 wrapper는 겹치지 않으며 저장 확인은 현재 UI에 보낸다.
+UI init의 optional tool download를 피하는 private import 우회는 `pi-compat/`에 남으며
+Pi와 Pi TUI 1.0.1만 허용한다. 이 버전을 올릴 때는 preload·실제 설치 지연·upstream installer
+유지 검사를 실행해야 한다. 다른 기존 Pi private UI hook까지 공개 API로 바뀌었다고 해석하지 않는다.
 
 ## 계약을 둘 위치와 의존 방향
 

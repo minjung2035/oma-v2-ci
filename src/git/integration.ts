@@ -4,6 +4,7 @@
 import type { TieredAcceptance } from "../../implementation/contracts/integration.js";
 import type { RiskTier, ExactCandidateIdentity } from "../../implementation/contracts/values.js";
 import type { MailModule } from "../mail.js";
+import type { ReviewAuthority } from "../ports/review-authority.js";
 import { PreacceptScope } from "../storage/preaccept-artifact.js";
 
 import { IntegrationPublicationObserver } from "./integration-publication.js";
@@ -57,9 +58,8 @@ export class IntegrationCoordinator {
     policy: IntegrationPolicy | null,
     private readonly policyReader: IntegrationPolicyReader | null = null,
     private readonly mail: MailModule | null = null,
-    /** mail-v1: the synchronous pre-CAS review-state gate owned by
-     * ReviewModule.assertApplicable. Required for any plan.merge. */
-    private readonly reviewGate: ((request: OperationId) => void) | null = null,
+    /** Read-only pre-CAS authority. Never calls the review workflow. */
+    private readonly reviewGate: ReviewAuthority | null = null,
   ) {
     this.bound = policy === null ? null : snapshotIntegrationPolicy(policy);
   }
@@ -340,7 +340,7 @@ export class IntegrationCoordinator {
       // The last synchronous check before CAS: the request must still be ready
       // (a cancel fact cancels; any other unreadiness is a conditions refusal).
       if (this.reviewGate === null) throw new StoreError("STORE_CORRUPT", "review gate owner is unavailable");
-      this.reviewGate(plan.merge.request);
+      this.reviewGate.assertApplicable(plan.merge.request);
       this.requireWriterSlot(operation.id);
       knowledge = "possible";
       const after = this.effects.compareAndSwap(plan.base, plan.candidate);

@@ -3,7 +3,7 @@ import { join } from "node:path";
 import type { UnitObservation } from "../../implementation/contracts/runtime.js";
 import type { ContextEntry } from "../../implementation/contracts/values.js";
 import type { MessagePlan } from "../../implementation/contracts/durable.js";
-import type { GitObserver, GitObservation } from "../git/observe.js";
+import type { GitReadPort, GitObservation } from "../ports/git-observation.js";
 import type { AgentRow } from "../storage/rows.js";
 import { mailObjectPathAt, mailArchivePathAt, mailAudiencePathAt, mailInboxPathAt, contextRevisionPathAt } from "../storage/paths.js";
 import { contextRevisionLinkFor, maildirCurName } from "../domain/derived.js";
@@ -13,7 +13,7 @@ import type { FileObservation, IntegrityFiles } from "./files.js";
 
 export interface IntegrityOptions {
   readonly files: IntegrityFiles;
-  readonly git?: Pick<GitObserver, "ref" | "commit" | "ancestry"> & {
+  readonly git?: GitReadPort & {
     contextTree?(repository: string, candidate: string, entries: readonly ContextEntry[]): FileObservation;
   };
   readonly units?: (agent: AgentRow) => FileObservation<UnitObservation>;

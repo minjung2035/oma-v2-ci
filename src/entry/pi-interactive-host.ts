@@ -151,6 +151,8 @@ function projectDisplay(path: string): string {
 }
 
 export async function runInteractive(): Promise<void> {
+  // Optional search-tool compatibility belongs to the launched UI lifetime.
+  const { withSearchTools } = await import("../pi-compat/interactive-tools.js");
   const limits = { frameBytes: numberEnv("OMA_FRAME_BYTES"), idleStreamSeconds: numberEnv("OMA_UI_IDLE_SECONDS"),
     receiptWaitSeconds: numberEnv("OMA_UI_RECEIPT_SECONDS") };
   const argv = process.argv.slice(2);
@@ -493,6 +495,8 @@ export async function runInteractive(): Promise<void> {
       if (stopping || quitting) return;
       leaveUi();
       context = ctx;
+      const searchCwd = ctx.cwd;
+      ctx.ui.addAutocompleteProvider(current => withSearchTools(current, searchCwd));
       applyQueueWidget();
       if (runtime) { follow(runtime.session); if (ready) reportEngine(); }
       releaseUi = adaptInteractiveUi(ctx.ui, {
@@ -559,8 +563,8 @@ export async function runInteractive(): Promise<void> {
       else context?.ui.notify(String(error), "error");
     });
   }, die);
-  const require = createRequire(import.meta.url);
-  const upstream = join(dirname(require.resolve("pi-open-tui/package.json")), "extensions/open-tui/index.ts");
+  const packageResolver = createRequire(import.meta.url);
+  const upstream = join(dirname(packageResolver.resolve("pi-open-tui/package.json")), "extensions/open-tui/index.ts");
   const extensions = [...argv.flatMap((value, index) => value === "-e" ? [argv[index + 1]!] : []), upstream];
   modules = new ExtensionModules(extensions);
   try {

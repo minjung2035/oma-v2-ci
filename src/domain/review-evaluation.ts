@@ -9,6 +9,7 @@
  *   the entry's messages are then built from effects;
  *   final   = reviewState(input + the entry carrying those messages).
  */
+import { canonicalJson } from "./canonical-json.js";
 import { StoreError } from "./errors.js";
 import type { ErrorCode } from "../../implementation/contracts/errors.js";
 import type { Actor, MessageId, OperationId } from "../../implementation/contracts/identity.js";
@@ -243,4 +244,19 @@ export function planEffects(before: ReviewState, after: ReviewState): PrincipalE
     (after.approval === null || withdraw !== null || !after.approvalValid)
     ? [...after.bundle] : null;
   return freeze({ withdraw, approve });
+}
+
+/** The decision-determining projection of a state; `missing` text and the
+ * latest-votes map derive from the same fields, so they carry no signal. */
+export function sameReviewDecision(left: ReviewState, right: ReviewState): boolean {
+  const project = (s: ReviewState) => ({
+    name: s.name, kind: s.kind, tier: s.tier, identity: s.identity, requester: s.requester,
+    authors: s.authors, required: s.required, approvers: s.approvers, rejectors: s.rejectors,
+    bundle: s.bundle, approval: s.approval, approvalValid: s.approvalValid,
+    principal: s.principal?.operation ?? null, terminal: s.terminal, integration: s.integration,
+    ready: s.ready, display: s.display,
+    entries: s.entries.map(entry => ({ sequence: entry.sequence, operation: entry.operation,
+      actor: entry.actor, fact: entry.fact,
+      messages: entry.messages.map(message => ({ id: message.id, review: message.review })) })) });
+  return canonicalJson(project(left)) === canonicalJson(project(right));
 }

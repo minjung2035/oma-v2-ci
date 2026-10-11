@@ -15,7 +15,8 @@ import {
 
 /** How a connection to a guest port is made: vsock through the VM helper in
  * production, a local socket in tests. */
-export interface GuestPorts { connect(port: number, deadlineMs?: number): Promise<Socket> }
+import type { GuestPorts } from "../../ports/platform-lifecycle.js";
+export type { GuestPorts } from "../../ports/platform-lifecycle.js";
 
 export interface HostIdentity {
   readonly hostVersion: string;

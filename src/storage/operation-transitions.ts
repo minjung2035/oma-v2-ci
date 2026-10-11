@@ -1,8 +1,9 @@
 // DB-005/009: synchronous operation writes only. The backend never escapes to workflow callers.
 import type { DatabaseSync } from "node:sqlite";
-import type { Actor, OperationId, RequestKey } from "../../implementation/contracts/identity.js";
+import type { OperationId } from "../../implementation/contracts/identity.js";
 import type { ErrorCode } from "../../implementation/contracts/errors.js";
-import type { OperationPlan } from "../../implementation/contracts/durable.js";
+import type { NewOperation } from "./store-access.js";
+export type { NewOperation } from "./store-access.js";
 import { operationResultCheck } from "../validate.js";
 import { operationResultRelationCheck, type OperationPlanContext } from "../durable.js";
 import type { DecodedOperation } from "./operation-codec.js";
@@ -11,10 +12,6 @@ import type { TransactionScope } from "./transaction.js";
 import { fullRow } from "./rows.js";
 import { StoreError, isErrorCode, isPreacceptOnlyFailure } from "../domain/errors.js";
 
-export interface NewOperation {
-  id: OperationId; actor: Actor; requestKey: RequestKey; requestHash: string;
-  kind: OperationPlan["kind"]; payloadJson: string; planJson: string;
-}
 export class OperationTransitions {
   constructor(private readonly db: Pick<DatabaseSync, "prepare">,
     private readonly read: Pick<LedgerReader, "operationById">, private readonly scope: TransactionScope,

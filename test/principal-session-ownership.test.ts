@@ -12,6 +12,37 @@ import { PrincipalSession } from "../src/runtime/engine/principal-session.js";
 import { PiRpcClient } from "../src/runtime/pi-rpc.js";
 import { PrincipalDelivery } from "../src/runtime/principal-delivery.js";
 import { TEST_VIEW_LIMITS } from "./fixtures/limits.js";
+import { TurnAdmission } from "../src/domain/turn-admission.js";
+
+test("DR44: turn admission isolates unknown delivery, transfers queued Humans atomically, and reports unsent input once", () => {
+  const turns = new TurnAdmission();
+  assert.equal(turns.claimDelivery(), true);
+  turns.writing("batch", "/oma-deliver batch", "delivery");
+  assert.equal(turns.claimHuman("first"), "queued");
+  assert.equal(turns.claimHuman("second"), "queued");
+  assert.equal(turns.claimDelivery(), false, "ambiguous acceptance lost its claim");
+  assert.equal(turns.response("stale"), null);
+  assert.equal(turns.busy, true);
+  assert.deepEqual(turns.release("human"), { released: false, next: null });
+  assert.equal(turns.settle(), "first");
+  assert.equal(turns.busy, true, "handoff exposed an idle window to Mail");
+  assert.equal(turns.claimDelivery(), false);
+  turns.writing("human", "first", "human");
+  assert.deepEqual(turns.end(), { unconfirmed: "first", unsent: ["second"] });
+  assert.deepEqual(turns.end(), { unconfirmed: null, unsent: [] });
+});
+
+test("DR44: a provably unwritten prompt returns the run and keeps the bounded Human queue in order", () => {
+  const turns = new TurnAdmission();
+  assert.equal(turns.claimHuman("unwritten"), "started");
+  turns.writing("human-1", "unwritten", "human");
+  for (let i = 0; i < TurnAdmission.WAITING; i++) assert.equal(turns.claimHuman(`waiting-${i}`), "queued");
+  assert.equal(turns.claimHuman("overflow"), "full");
+  turns.notWritten("human-1");
+  assert.deepEqual(turns.release("human"), { released: true, next: "waiting-0" });
+  assert.equal(turns.busy, true);
+  assert.equal(turns.end().unconfirmed, null, "unwritten input was reported as possibly accepted");
+});
 
 const LIMITS = { frameBytes: TEST_VIEW_LIMITS.frameBytes, idleStreamSeconds: 30, receiptWaitSeconds: 5 };
 const BATCH_ID = "b-00000000-0000-4000-8000-0000000000a9";

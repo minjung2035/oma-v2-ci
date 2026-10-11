@@ -34,6 +34,7 @@ const value = (name: string): string => {
   return result;
 };
 async function main(): Promise<void> {
+  const { withSearchTools } = await import("../pi-compat/interactive-tools.js");
   const root = value("--root"), dataRoot = value("--data-root"), libdir = value("--libdir"), packages = value("--packages");
   const birth = readSessionBirth(root), agentDir = process.env[PI_AGENT_DIR_ENV];
   if (birth === null || birth.mode !== "personal" || agentDir === undefined || birth.cwd !== process.cwd())
@@ -48,8 +49,8 @@ async function main(): Promise<void> {
   let assets = personalExtensions(location, updatePersonalSettings(location));
   assertExtensionIntegrity(assets.extensions);
   preparePiRetry(agentDir); preparePiInteractive(agentDir);
-  const require = createRequire(import.meta.url);
-  const upstream = join(dirname(require.resolve("pi-open-tui/package.json")), "extensions/open-tui/index.ts");
+  const packageResolver = createRequire(import.meta.url);
+  const upstream = join(dirname(packageResolver.resolve("pi-open-tui/package.json")), "extensions/open-tui/index.ts");
   // BL2: Personal gets ask_user_question from its own bundled extension file
   // -- the deployment path, not a user-supplied entry, so it is not part of
   // the digest-pinned user list but sits on the same installed footing.
@@ -156,10 +157,11 @@ async function main(): Promise<void> {
     const entry = raw === undefined ? undefined : personalExtensionEntry(raw);
     if (!entry || !current(epoch)) return;
     updatePersonalSettings(location, [], { entry, enabled: !saved.extensions.includes(entry) });
-    ctx.ui.notify("Personal extension choice saved. Reloading this session to apply it.", "info");
     // Pi has not written an empty session yet. Reload preserves that manager,
     // its pending entries and its birth instead of reopening a nonexistent file.
     await runtime!.session.reload();
+    // Reload replaces the UI context; confirm on the screen that now owns it.
+    if (!switching) context?.ui.notify("Personal extension choice saved. Reloaded this session to apply it.", "info");
   };
   const branded = new WeakSet<object>();
   const boundary: ExtensionFactory = pi => {
@@ -171,6 +173,8 @@ async function main(): Promise<void> {
     // question asked with no live session resolves as a structured cancel.
     registerAskUserQuestionPresenter(pi, { context: () => context });
     pi.on("session_start", (_event, ctx) => {
+      const searchCwd = ctx.cwd;
+      ctx.ui.addAutocompleteProvider(current => withSearchTools(current, searchCwd));
       uiEpoch++; context = ctx;
       ctx.ui.setStatus("oma-mode", "Personal");
       if (!branded.has(ctx.ui)) {

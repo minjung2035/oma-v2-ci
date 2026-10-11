@@ -9,6 +9,7 @@ import { StoreError, publicFailure, errorCodeOf } from "./domain/errors.js";
 import { AdmissionGate, bindAdmissionGate, type ResourceGate } from "./domain/admission.js";
 import { actorSocketDirectoryAt, actorSocketPathAt } from "./storage/paths.js";
 import { encodeFrame } from "./frame.js";
+import { BrokerListeners } from "./broker/listeners.js";
 import { RpcConnection, NODE_ALARMS } from "./broker/connection.js";
 import { PeerAuthenticator, type BoundPeer } from "./broker/peer-authenticator.js";
 import { PublicDispatcher } from "./broker/public-dispatcher.js";
@@ -67,14 +68,11 @@ export class Broker {
   private principalHostEndpoint: PrincipalHostEndpoint | null = null;
   private readonly mail: MailModule;
 
-  private readonly actorServers = new Set<Server>();
   private readonly connections = new Map<Socket, RpcConnection>();
   private readonly executingTasks = new Set<Promise<void>>();
-  private readonly listeners = new Map<Server, Promise<void>>();
-  /** Listener closes still in progress. P0V-52, P0-4: one that has finished
-   * leaves the set, so a long-lived broker does not keep every close it ever
-   * made (one per run endpoint it revoked). */
-  private readonly listenerCloses = new Set<Promise<void>>();
+  private readonly listeners = new BrokerListeners(error => {
+    this.health.observe(error); this.cleanupError(error);
+  });
   private standaloneLock: ProcessLock | null = null;
   private running = false;
   private draining = false;
@@ -152,8 +150,8 @@ export class Broker {
     this.hostServer = this.listenInternal(join(this.paths.runRoot, "host.sock"), "host");
     if (this.principalHost !== undefined) this.listenPrincipal(this.principalHost);
     const principalListeners = [this.principalServer, this.principalHostServer]
-      .filter((server): server is Server => server !== null).map(server => this.listeners.get(server)!);
-    this.starting = Promise.all([this.listeners.get(this.adminServer)!, this.listeners.get(this.hostServer)!,
+      .filter((server): server is Server => server !== null).map(server => this.listeners.ready(server));
+    this.starting = Promise.all([this.listeners.ready(this.adminServer), this.listeners.ready(this.hostServer),
       ...principalListeners]).then(() => {
       this.health.assertAdmission(); this.running = true;
       // Only now: a host told "ready" can register its session and expect both
@@ -179,22 +177,13 @@ export class Broker {
     this.health.assertAdmission();
     return sdNotifyReady(process.env.NOTIFY_SOCKET ?? "");
   }
-  private listen(server: Server, path: string): void {
-    const ready = new Promise<void>((resolve, reject) => {
-      server.once("listening", resolve);
-      server.on("error", error => { this.health.observe(error); reject(error); this.cleanupError(error); });
-      try { server.listen(path); } catch (error) { reject(error); }
-    });
-    this.listeners.set(server, ready);
-    void ready.catch(() => undefined);
-  }
   private listenInternal(path: string, channel: "runner" | "host"): Server {
     clearSocketName(path);
     const server = createServer({ allowHalfOpen: true }, socket => {
       if (this.draining) { socket.destroy(); return; }
       this.handleInternal(socket, channel);
     });
-    this.listen(server, path); return server;
+    this.listeners.listen(server, path); return server;
   }
   /** TUI-004: the endpoint the product's own Pi session reaches the society
    * through. It is a public actor endpoint like a Resident's, with one
@@ -243,7 +232,7 @@ export class Broker {
       if (this.draining) { socket.destroy(); return; }
       serve(socket);
     });
-    this.listen(server, path);
+    this.listeners.listen(server, path);
     return server;
   }
   private refreshViews(): void {
@@ -315,26 +304,16 @@ export class Broker {
       const run = this.runLeases.get(actor);
       if (run?.identity.incarnation === incarnation) { try { run.revoke(); } catch (error) { this.cleanupError(error); } }
     });
-    this.listen(server, path); this.actorServers.add(server);
-    return { socketHostPath: path, ready: this.listeners.get(server)!, done: () => {
+    this.listeners.listen(server, path);
+    return { socketHostPath: path, ready: this.listeners.ready(server), done: () => {
       if (revoked) return;
       revoked = true;
       for (const socket of sockets) this.fail(socket, { code: "STALE_RUN", message: "run endpoint revoked", retry: "never" });
-      this.actorServers.delete(server); this.closeListener(server);
+      this.listeners.close(server);
     } };
   }
   private actorSocketDirectoryAfterAdmission(actor: Actor, incarnation: number): string {
     this.health.assertAdmission(); return this.actorSocketDirectory(actor, incarnation);
-  }
-  private closeListener(server: Server): void {
-    const ready = this.listeners.get(server);
-    if (!ready) return;
-    this.listeners.delete(server);
-    const closing: Promise<void> = ready.then(() => new Promise<void>(resolve => {
-      try { server.close(() => resolve()); } catch { resolve(); }
-    }), () => { try { server.close(); } catch { /* failed bind has no listening handle */ } });
-    this.listenerCloses.add(closing);
-    void closing.then(() => { this.listenerCloses.delete(closing); });
   }
   private bindPeer(socket: Socket): BoundPeer | null { return this.peers.bind(socket); }
   private trustedContext(actor: Actor, peer: BoundPeer, channel: "actor" | "trusted-runner" = "actor"): AuthContext | null {
@@ -560,13 +539,13 @@ export class Broker {
     this.principalHostServer = null;
     for (const connection of this.connections.values()) connection.close();
     for (const record of this.runLeases.values()) { try { record.revoke(); } catch (error) { this.cleanupError(error); } }
-    for (const server of [...this.listeners.keys()]) this.closeListener(server);
+    this.listeners.closeAll();
   }
   drainAndClose(): Promise<void> {
     if (this.closing) return this.closing;
     this.closeAdmission();
     this.closing = (async () => {
-      await settleWithin([...(this.starting ? [this.starting] : []), ...this.executingTasks, ...this.listenerCloses], this.limits.receiptWaitSeconds);
+      await settleWithin([...(this.starting ? [this.starting] : []), ...this.executingTasks, ...this.listeners.pendingCloses], this.limits.receiptWaitSeconds);
       // Stop what nothing else will stop while the incarnations that prove
       // each death are still readable. A failure is no reason to leave the
       // Store and lock held -- P0V-58, P0-5: nor is it a drain that finished.
@@ -576,7 +555,7 @@ export class Broker {
       try { this.paths.quiesceOnDrain?.(); } catch (error) { this.cleanupError(error); unproven = { error }; }
       // No Store or pinned lease closes before all dispatched task owners settle.
       try { this.runLeases.close(); } catch (error) { this.cleanupError(error); }
-      this.actorServers.clear(); this.store.close();
+      this.store.close();
       this.standaloneLock?.close(); this.standaloneLock = null;
       if (unproven !== null) throw unproven.error;
     })();

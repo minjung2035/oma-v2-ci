@@ -12,7 +12,7 @@ const EXTENSION_EXTERNALS = new Set(["@earendil-works/pi-coding-agent", "typebox
 const ENGINE_PRIMITIVE_OWNERS = Object.freeze({
   // DR37: this pinned compatibility seam updates Pi's existing autocomplete
   // provider after its own installer completes; it owns no terminal layout.
-  "src/pi-compat/interactive-tools.ts": Object.freeze(["CombinedAutocompleteProvider"]),
+  "src/pi-compat/interactive-tools.ts": Object.freeze(["CombinedAutocompleteProvider", "AutocompleteProvider"]),
   "src/tui/cells.ts": Object.freeze(["visibleWidth"]),
   "src/tui/keys.ts": Object.freeze(["parseKey"]),
   // DR22: upstream owns the conversation; these adapters own input and lifetime, not layout.
@@ -395,7 +395,7 @@ function ownerShapeRules(root, findings) {
 // and the tools in between rebuilt the environment from a list that never
 // mentioned it, so every OMA tool failed authentication while every test
 // passed.
-const ENV_PRODUCER = "src/runtime/engine/principal-session.ts";
+const ENV_PRODUCER = "src/runtime/engine/principal-launch.ts";
 const ENV_PRODUCER_FUNCTION = "principalEnvironment";
 // Everything the tools put in the CLI's environment: the list copied from the
 // engine's own environment, and what the process owner adds itself.
@@ -832,6 +832,12 @@ function moduleBoundaryRules(root, findings) {
         findings.push(finding("tui-public-api", file, `imports private presentation module ${target}`));
       if (file.startsWith("src/runtime/") && target !== null && ["src/tui/", "src/application/"].some(prefix => target.startsWith(prefix)))
         findings.push(finding("runtime-module-boundary", file, `imports ${target}; Runtime receives product policy through its ports`));
+      if ((file === "src/application/society-runtime.ts" && target?.startsWith("src/tui/")) ||
+          (file === "src/application/society-interaction.ts" && target?.startsWith("src/runtime/engine/")))
+        findings.push(finding("society-conversation-boundary", file, `imports ${target}; conversation commands and presentation observations use society-conversation`));
+      if (["src/platform/host/vz-driver.ts", "src/platform/guest/systemd-launcher.ts"].includes(file) &&
+          ["src/platform/host/lifecycle.ts", "src/platform/host/service.ts", "src/platform/guest/host.ts"].includes(target))
+        findings.push(finding("platform-adapter-boundary", file, `imports ${target}; lifecycle adapters receive platform-lifecycle capabilities`));
       if (!file.startsWith("src/runtime/packages/") && target === "src/runtime/packages/store.ts")
         findings.push(finding("package-public-api", file, "imports the package store implementation instead of runtime/packages/index"));
     }

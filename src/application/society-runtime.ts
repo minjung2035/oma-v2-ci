@@ -13,28 +13,17 @@ import { superviseBroker, type BrokerHandle } from "../runtime/broker-supervisor
 import type { HostTenure } from "../runtime/host-tenure.js";
 import { adoptPrincipalEgress, type PrincipalEgress } from "../runtime/egress-forwarder.js";
 import { limitsOf } from "./status-observation.js";
-import { errorWords, surfaceWords } from "../tui/words.js";
 import type { PromptOutcome } from "../protocol/settings.js";
 import type { SocietyBootstrap, PreparedSociety } from "./society-bootstrap.js";
-export interface SocietyConversationView {
-  notice(text: string): void;
-  draw(): void;
-  refresh(): void;
-  reclaim(): void;
-  starting(model: string | null): void;
-  onUi(session: PrincipalSession, event: PiEvent): void;
-  line(text: string): void;
-  busy(value: boolean): void;
-  ending(): void;
-  ended(reason: string, finished: boolean, disowned: boolean): void;
-  returnPrompt(text: string, reason: string): void;
-  disowned(reason: string, had: boolean): void;
-}
+import type { ConversationUi, SocietyConversationView } from "./society-conversation.js";
+export type { SocietyConversationView } from "./society-conversation.js";
 export class SocietyRuntime {
   private tenure: HostTenure | null;
   get owner(): HostTenure | null { return this.tenure; }
   private currentSession: PrincipalSession | null = null;
-  get session(): PrincipalSession | null { return this.currentSession; }
+  private currentConversation: ConversationUi | null = null;
+  get session(): ConversationUi | null { return this.currentConversation; }
+  get sessionDirectory(): string { return principalSessionDir(this.bootstrap.stateRoot); }
   private finishing = false;
   get finished(): boolean { return this.finishing; }
   private disowned = false;
@@ -79,7 +68,7 @@ export class SocietyRuntime {
         // A listener error past the forwarder's start is reported on this
         // screen and absorbed there -- this process is the forwarder's host,
         // and the path it paid for stays bound for the engine to retry.
-        onError: error => { this.view.notice(`The engine's provider path survived a listener error: ${errorWords(error)}`); this.view.draw(); } });
+        onError: error => { this.view.notice(`The engine's provider path survived a listener error: ${this.view.errorWords(error)}`); this.view.draw(); } });
     }
     if (this.broker === null) {
       // No tenure, so no broker was ever started and nothing was written. The
@@ -130,12 +119,12 @@ export class SocietyRuntime {
       // deployment, never authored configuration.
       toolSurface: encodedPrincipalToolSurface(),
       fence: owner.fence }, profile, limitsOf(this.config.limits), this.withEgress(principalEnvironment({ stateRoot: this.bootstrap.stateRoot, runRoot: this.bootstrap.runRoot, libdir: this.config.installation.libdir }, profile, this.config.limits)), {
-      errorWords,
+      errorWords: error => this.view.errorWords(error),
       onAcquire: engine => owner.adopt(engine),
       // WP09.03: every callback is this engine's; a late one from an engine
       // that is no longer the session cannot clear or re-mark its successor.
-      onUi: event => { if (this.currentSession === started)
-        this.view.onUi(started, event); },
+      onUi: event => { if (this.currentSession === started && this.currentConversation !== null)
+        this.view.onUi(this.currentConversation, event); },
       // The engine's screen shows the run's errors itself; the lines are for
       // this process's own screen, should it have to show it.
       onLine: line => { if (this.currentSession === started)
@@ -154,6 +143,7 @@ export class SocietyRuntime {
           if (this.currentSession !== started)
             return;
           this.currentSession = null;
+          this.currentConversation = null;
           this.view.ended(reason, this.finishing, this.disowned);
         });
       },
@@ -228,13 +218,13 @@ export class SocietyRuntime {
         this.view.draw();
       }
       else if (outcome.kind === "failed") {
-        this.view.notice(`[Mail] Could not complete delivery (${outcome.phase}):${surfaceWords(outcome.reason, "See the log for details")}`);
+        this.view.notice(`[Mail] Could not complete delivery (${outcome.phase}):${this.view.surfaceWords(outcome.reason, "See the log for details")}`);
         this.view.draw();
       }
     }, (error: unknown) => {
       if (this.delivery !== current)
         return;
-      this.view.notice(`[Mail] Delivery error: ${errorWords(error)}`);
+      this.view.notice(`[Mail] Delivery error: ${this.view.errorWords(error)}`);
       this.view.draw();
     });
   }
@@ -256,13 +246,14 @@ export class SocietyRuntime {
         if (this.finishing || this.disowned || this.tenure !== owner || this.currentSession !== null)
           return;
         this.view.reclaim();
-        this.view.notice(`Could not start the Pi session: ${errorWords(error)}`);
+        this.view.notice(`Could not start the Pi session: ${this.view.errorWords(error)}`);
         this.view.notice("Enter /restart to try again. Dashboard, Config, and Mail remain available through Ctrl+X.");
         this.view.draw();
       });
       return;
     }
     this.currentSession = live;
+    this.currentConversation = Object.freeze({ sendUi: (event: PiEvent) => live.sendUi(event) });
     this.currentHandle = newSessionHandle();
     live.onEvent(event => { if (this.currentSession === live && event.type === "agent_settled")
       this.deliver(); });
@@ -277,6 +268,7 @@ export class SocietyRuntime {
       await this.tenure.end();
     this.tenure = null;
     this.currentSession = null;
+    this.currentConversation = null;
     this.view.disowned(reason, had);
   }
   submit(text: string): PromptOutcome {
@@ -305,6 +297,7 @@ export class SocietyRuntime {
     if (replacing)
       await outgoing?.exited;
     this.currentSession = null;
+    this.currentConversation = null;
     await this.broker?.stop();
   }
   abandon(): void {

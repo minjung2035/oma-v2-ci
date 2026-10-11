@@ -177,17 +177,19 @@ test("transaction analysis follows local call aliases and rejects filesystem and
   assert.equal(positive.status, 0, JSON.stringify(positive.findings));
 });
 
-test("runtime SCCs are rejected while type-only cycles do not form runtime edges", () => {
+test("runtime and type-only SCCs are rejected by their own dependency rules", () => {
   rejects("runtime-import-cycle", {
     "src/a.ts": `import {b} from "./b.js"; export const a = () => b;`,
     "src/b.ts": `import {a} from "./a.js"; export const b = () => a;`,
   });
-  const positive = fixture({
-    // A type-only cycle inside one measured layer is not a runtime coupling.
+  const types = fixture({
     "src/domain/canonical-json.ts": `import type {B} from "./spec-identity.js"; export interface A {b: B}`,
     "src/domain/spec-identity.ts": `import type {A} from "./canonical-json.js"; export interface B {a: A}`,
   });
-  assert.equal(positive.status, 0, JSON.stringify(positive.findings));
+  assert.notEqual(types.status, 0);
+  assert.ok(types.findings.some(finding => finding.rule === "type-import-cycle"), JSON.stringify(types.findings));
+  assert.equal(types.findings.some(finding => finding.rule === "runtime-import-cycle"), false,
+    "type-only imports were incorrectly counted as runtime effects");
 });
 
 function registryFixture(missingResult: boolean): Record<string, string> {
