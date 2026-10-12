@@ -163,9 +163,12 @@ export function parseEmlHeaders(input: string | Uint8Array, limits: HeaderReadLi
   };
   const revision = unfolded("x-oma-context");
   if (revision !== null && !isValidFullOid(revision)) return invalid("invalid context OID");
+  // Remove wire folding whitespace before decoding; whitespace encoded in
+  // the revision itself remains part of the exact approval identity.
+  const approvalPolicy = unfolded("x-oma-approval-policy");
   const approval = { repo: unfolded("x-oma-approval-repo"), targetRef: unfolded("x-oma-approval-target"),
     expectedBase: unfolded("x-oma-approval-base"), candidate: unfolded("x-oma-approval-candidate"),
-    policyRevision: headers["x-oma-approval-policy"] === undefined ? null : headerWords(headers["x-oma-approval-policy"]) };
+    policyRevision: approvalPolicy === null ? null : headerWords(approvalPolicy) };
   const hasApproval = Object.values(approval).some(value => value !== null);
   if (hasApproval && (kind !== "approval_required" || exactCandidateCheck(approval) !== null)) return invalid("inconsistent approval identity");
   if (kind === "approval_required" && !hasApproval) return invalid("missing approval identity");

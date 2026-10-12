@@ -1,5 +1,28 @@
 # OMA v2 — 현재 인계 (2026-10-12)
 
+## 실제 모델의 구현·리뷰·merge 실행 (2026-10-12)
+
+Human의 요청은 자동 테스트 실행이 아니라 실제 코딩 task 수행이다. 격리한 expense-report
+프로젝트를 실제 설치 진입점으로 열고 Principal·seed Worker·Worker가 만든 리뷰어 2명 모두
+`openai-codex/gpt-6.1-sol`, `medium`으로 실행했다. 실제 OAuth inference, systemd unit와
+bwrap를 사용했다. 한 Worker가 정확한 금액 집계·JSONL CLI·CSV·필터·검증·문서·회귀를
+구현하고 HIGH 요청의 `peer-needed`에서 부족한 두 리뷰어를 직접 생성했다. 모델 세션과
+durable operation에서 각 역할의 선택 모델·effort·독립 표를 확인했다.
+
+실행 도중 두 번째 표에서 `INTERNAL_ERROR`가 재현됐다. 접힌 approval-policy 헤더의 wire
+공백이 정책 ID에 들어가 frozen claim과 달랐다. `mail/headers.ts`에서 decoding 전에
+wire 공백만 정리하고 encoded revision 자체의 공백은 보존한다. 새 회귀는 수정 전 FAIL,
+수정 후 PASS다. 제품을 정상 종료·재빌드·재개한 뒤 같은 키의 실패 표가 기록됐다. 배포
+변경으로 정책 revision이 바뀌어 Worker가 옛 요청을 취소하고 같은 패치의 새 HIGH 요청을
+열었다. 옛 사실을 수정하지 않고 두 동료와 Principal이 새 실제 표를 남겼다.
+
+최종 요청 `merge-95baec00-1f41-421f-992c-35e85ade1a76`의 integration은 succeeded이고
+canonical main은 `b18f625384c019a81b290932f6347f6696867bd8`다. Worker의 main 재검사
+12/12와 별도 요구사항 44/44가 통과했다. 제품 정상 종료와 세 Worker unit inactive를
+확인했다. 상세 증거는 [실행 기록](../test/audit/real-task-2026-10-12.evidence.json)과
+`/home/dev/oma-audit-artifacts/real-task-6.1-sol-medium-2026-10-12/result.json`에 있다.
+전체 local suite·native macOS 실행 결과는 이 실행으로 갱신하지 않는다.
+
 ## Worker 리뷰어 보충 안내
 
 Human이 merge/challenge 리뷰어를 Worker 소환으로 보충하는 방법을 시스템 프롬프트에

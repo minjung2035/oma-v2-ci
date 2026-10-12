@@ -1,0 +1,210 @@
+{
+  "status": "PASS_AFTER_RUNTIME_FIX",
+  "date": "2026-10-12",
+  "sourceBaseline": "d543c84c298ce1407130f025f8951ec239797752",
+  "execution": "real installed OMA Society + bundled Pi + real authenticated OpenAI Codex inference + systemd/bwrap Workers",
+  "provider": "openai-codex",
+  "model": "gpt-6.1-sol",
+  "thinking": "medium",
+  "task": "Implement exact validated expense-report library and JSONL/JSON/CSV CLI, tests and docs",
+  "taskSpecification": "task.txt",
+  "initialWorkers": 1,
+  "workerCreatedReviewers": [
+    {
+      "actor": "reviewer-1",
+      "createdBy": "worker-1"
+    },
+    {
+      "actor": "reviewer-2",
+      "createdBy": "worker-1"
+    }
+  ],
+  "base": "51b24c9752ef3d5ad3dc513f943fed80e7bbe009",
+  "candidate": "b18f625384c019a81b290932f6347f6696867bd8",
+  "canonicalMain": "b18f625384c019a81b290932f6347f6696867bd8",
+  "request": "merge-95baec00-1f41-421f-992c-35e85ade1a76",
+  "integration": {
+    "id": "op-8b19b713-c30c-414f-81de-e1e63119e7fa",
+    "state": "succeeded",
+    "result": {
+      "kind": "git.integrate",
+      "base": "51b24c9752ef3d5ad3dc513f943fed80e7bbe009",
+      "candidate": "b18f625384c019a81b290932f6347f6696867bd8",
+      "target": "refs/heads/main",
+      "policyRevision": "rev-832ac82772f8b3fc99a1062269450594",
+      "changed": true,
+      "merge": {
+        "name": "merge-95baec00-1f41-421f-992c-35e85ade1a76",
+        "notices": [
+          "m-8b19b713-c30c-414f-81de-e1e63119e7fa-0"
+        ],
+        "recipientCount": 4
+      }
+    }
+  },
+  "votes": [
+    {
+      "actor": "reviewer-1",
+      "operation": "op-06bf3527-d925-41bf-b6ce-149470436302",
+      "state": "succeeded",
+      "payload": {
+        "kind": "vote",
+        "name": "merge-95baec00-1f41-421f-992c-35e85ade1a76",
+        "verdict": "approve",
+        "body": "Verified fresh HIGH request binding: base 51b24c9752ef3d5ad3dc513f943fed80e7bbe009, candidate b18f625384c019a81b290932f6347f6696867bd8, current policy rev-832ac82772f8b3fc99a1062269450594. Retrieved and inspected exact broker diff: SHA256 70c58d189e9cb492a8c4e1e8f421341248c132d19a3f9fdfcab110eb6f524de1 is byte-identical to independently reviewed patch. Confirmed checked-out production/test/docs files unchanged; reran npm test now, 12/12 pass. Prior independent malformed-field/excluded-filter matrix, 10,000 decimal integer-oracle sums, safe-limit boundaries/overflow, Unicode prefix/BMP/astral ordering, frozen inputs/prototype-like categories, CLI CRLF/multiline CSV/invalid argument and no-error-stdout checks all passed on this exact unchanged candidate. No blocking findings; independently approve this fresh request."
+      }
+    },
+    {
+      "actor": "reviewer-2",
+      "operation": "op-1c7930b2-aebd-4168-9844-80b5e51c5da8",
+      "state": "succeeded",
+      "payload": {
+        "kind": "vote",
+        "name": "merge-95baec00-1f41-421f-992c-35e85ade1a76",
+        "verdict": "approve",
+        "body": "Independent fresh approval under policy rev-832ac82772f8b3fc99a1062269450594. Verified new broker diff binds exact base 51b24c9752ef3d5ad3dc513f943fed80e7bbe009 -> candidate b18f625384c019a81b290932f6347f6696867bd8; diff SHA256 70c58d189e9cb492a8c4e1e8f421341248c132d19a3f9fdfcab110eb6f524de1 matches my fully inspected original patch. Candidate checkout unchanged and clean. Re-ran npm test: 12/12 pass; git diff --check clean. My independent checks on this identical candidate previously passed 4,752 date oracle cases, separate BigInt oracle sums over 1,000 frozen records with multiple currency/category groups, strict whitespace/newline validation before filtering, safe-integer boundaries, CLI argument rejection, CRLF/blank JSONL, exact comma/quote/LF/CR CSV escaping and zero stdout on malformed JSON/data in both formats. No blocking findings. This is an actual vote on the new exact request, not a transfer of the old vote."
+      }
+    },
+    {
+      "actor": "principal",
+      "operation": "op-b0065614-f3f1-4781-b0db-08017842e803",
+      "state": "succeeded",
+      "payload": {
+        "kind": "vote",
+        "name": "merge-95baec00-1f41-421f-992c-35e85ade1a76",
+        "verdict": "approve",
+        "approval": "m-1c7930b2-aebd-4168-9844-80b5e51c5da8-1",
+        "body": "Reviewed exact fresh-request diff under rev-832ac82772f8b3fc99a1062269450594. Base 51b24c9752ef3d5ad3dc513f943fed80e7bbe009 -> candidate b18f625384c019a81b290932f6347f6696867bd8, SHA256 70c58d189e9cb492a8c4e1e8f421341248c132d19a3f9fdfcab110eb6f524de1, is identical to my previously inspected patch. Strict validation before filtering, exact BigInt cents/safe bounds, currency-separated groups, code-point sorting, immutable inputs, buffered JSONL CLI with correct CSV/error behavior, documentation and substantive regressions satisfy GOAL. Both existing independent reviewers recorded actual new votes on this policy binding and reran 12/12 tests; independent oracle and edge checks on unchanged candidate passed. Approve; no blocking findings."
+      }
+    }
+  ],
+  "actors": [
+    {
+      "actor": "principal",
+      "session": "data/oma/task-sol-medium-1012/principal/private/sessions/2026-10-12T02-24-11-887Z_01a12dec-bc6e-73af-865a-a8a45fec4e76.jsonl",
+      "models": [
+        {
+          "timestamp": "2026-10-12T02:24:12.829Z",
+          "provider": "openai-codex",
+          "modelId": "gpt-6.1-sol"
+        }
+      ],
+      "thinking": [
+        "medium"
+      ],
+      "assistantTurns": 37,
+      "observedResponseModels": [
+        "openai-codex/gpt-6.1-sol"
+      ],
+      "reportedProviderCost": 0.2718328
+    },
+    {
+      "actor": "worker-1",
+      "session": "data/oma/task-sol-medium-1012/agents/worker-1/runner/sessions/2026-10-12T02-24-34-940Z_01a12ded-167b-7743-b9d8-e56489bf1b40.jsonl",
+      "models": [
+        {
+          "timestamp": "2026-10-12T02:24:36.467Z",
+          "provider": "openai-codex",
+          "modelId": "gpt-6.1-sol"
+        }
+      ],
+      "thinking": [
+        "medium"
+      ],
+      "assistantTurns": 73,
+      "observedResponseModels": [
+        "openai-codex/gpt-6.1-sol"
+      ],
+      "reportedProviderCost": 0.5606392
+    },
+    {
+      "actor": "reviewer-2",
+      "session": "data/oma/task-sol-medium-1012/agents/reviewer-2/runner/sessions/2026-10-12T02-27-43-454Z_01a12def-f6de-73f9-b3aa-abf9995cb59f.jsonl",
+      "models": [
+        {
+          "timestamp": "2026-10-12T02:27:44.966Z",
+          "provider": "openai-codex",
+          "modelId": "gpt-6.1-sol"
+        }
+      ],
+      "thinking": [
+        "medium"
+      ],
+      "assistantTurns": 40,
+      "observedResponseModels": [
+        "openai-codex/gpt-6.1-sol"
+      ],
+      "reportedProviderCost": 0.3818916
+    },
+    {
+      "actor": "reviewer-1",
+      "session": "data/oma/task-sol-medium-1012/agents/reviewer-1/runner/sessions/2026-10-12T02-27-42-128Z_01a12def-f1af-75d3-a8f4-d9e162426e51.jsonl",
+      "models": [
+        {
+          "timestamp": "2026-10-12T02:27:43.662Z",
+          "provider": "openai-codex",
+          "modelId": "gpt-6.1-sol"
+        }
+      ],
+      "thinking": [
+        "medium"
+      ],
+      "assistantTurns": 61,
+      "observedResponseModels": [
+        "openai-codex/gpt-6.1-sol"
+      ],
+      "reportedProviderCost": 0.432668
+    }
+  ],
+  "canonicalRequirements": {
+    "passed": 44,
+    "total": 44,
+    "failed": []
+  },
+  "workerPostMergeTests": {
+    "passed": 12,
+    "failed": 0,
+    "evidence": "principal-final.txt and worker session bash result"
+  },
+  "runtimeDefect": {
+    "error": "INTERNAL_ERROR on the quorum-completing vote",
+    "cause": "MIME-folding whitespace became part of decoded approval policy revision",
+    "source": "src/mail/headers.ts",
+    "redRegression": "regression-before.log",
+    "fixedRegression": "fix-regressions.log",
+    "focusedTests": 20,
+    "focusedFailed": 0,
+    "readOnlyReproducerBefore": "vote-diagnosis.log",
+    "readOnlyReproducerAfter": "vote-diagnosis-after.log"
+  },
+  "interventions": [
+    "Configured both roles and HIGH integration grant for isolated actual project; supplied implementation task through Human editor",
+    "Gracefully stopped, repaired header parser, rebuilt, resumed durable Society and informed Principal of repair/policy binding change; all votes performed by actual models"
+  ],
+  "oldRequest": "merge-9df71008-f41d-4581-9cf5-2340bb8a8461",
+  "oldRequestDisposition": "requester cancelled after deployment policy changed; immutable facts retained; fresh real votes collected",
+  "shutdown": {
+    "firstExit": 0,
+    "finalExit": 0,
+    "unitEvidence": "shutdown-units.txt",
+    "copiedHostCredentialRemoved": true
+  },
+  "artifacts": "/home/dev/oma-audit-artifacts/real-task-6.1-sol-medium-2026-10-12",
+  "limitations": [
+    "One real Linux task; does not prove all merge/challenge scenarios or native macOS VM execution",
+    "Provider cost values are model SDK usage metadata, not verified account billing"
+  ],
+  "sourceFixSha256": "9450f2fa831ddde95c6e7ca4ae2b289291671f7ebc5944ca0d5218c206c1f0e1",
+  "runtimeDeploymentDigest": "8449feea6f934c62cf59f16f04a6c865067676e488d5f365332870ccd8d0cd0e",
+  "compiledHeaderSha256": "f0f0690e90601f0c520e9de90de6d2428ddd632b48a2f9488152d56271c7b9f2",
+  "repositoryChecks": {
+    "build": "PASS",
+    "typecheck": "PASS",
+    "architecture": "PASS",
+    "focusedRegressions": {
+      "passed": 20,
+      "failed": 0
+    },
+    "diffWhitespace": "PASS"
+  }
+}

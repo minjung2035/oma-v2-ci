@@ -182190,30 +182190,13 @@
    "primary": "WP20",
    "status": "CHANGED_WITH_ORACLE",
    "by": [
-    "AV10",
-    "AV11",
-    "P0V-117",
-    "P0V-118",
-    "P0V-36",
-    "P0V-40",
-    "P0V-41",
-    "P0V-42",
-    "P0V-43",
-    "P0V-86"
+    "real-task-2026-10-12"
    ],
    "oracles": [
-    "AV10",
-    "AV11",
-    "P0V-117",
-    "P0V-118",
-    "P0V-36",
-    "P0V-40",
-    "P0V-41",
-    "P0V-42",
-    "P0V-43",
-    "P0V-86"
+    "folded approval policy preserves the exact revision and encoded whitespace"
    ],
-   "sha256": "c3b2ab022a56d766b380691b9bd56624a131889ca6de6226e8354cf748add0fe"
+   "note": "Direct parser delta and affected MIME/approval-owner review, without subagents. The actual gpt-6.1-sol medium Society task reproduced INTERNAL_ERROR at the quorum-completing vote: a policy header folded before its first encoded word decoded with an extra leading space. Unfold and trim wire whitespace before decoding, retaining whitespace inside encoded revision values. Independent folded EML fixture and pinned serializer roundtrips cover generated-length, 128-byte and meaningful-whitespace policy revisions. No accepted facts, approval authority, MIME bytes or retry keys are rewritten. Focused regressions and the resumed real HIGH task passed; historical full-suite review is not renewed.",
+   "sha256": "9450f2fa831ddde95c6e7ca4ae2b289291671f7ebc5944ca0d5218c206c1f0e1"
   },
   {
    "path": "src/mail/materializer.ts",

@@ -154563,6 +154563,17 @@
    ],
    "sha256": "3b870e66334c493154a2db448cdf185ca19bce82f2bb35b70367ce0419296347",
    "note": "DR44 direct delta and affected-owner review, without subagents. Store capability/type delta reviewed: signatures reuse authoritative LedgerReader decoded values and existing transition inputs; no concrete Store backreference. TransactionScope still compares the same runtime owner, captures write closures and enforces synchronous/liveness/admission fences. DR44 cycle negative control and existing transaction/facet oracles cover the change; decoder provenance is not exported into a weaker public contract. Historical full-file/codebase review and environment PASS are not renewed."
+  },
+  {
+   "path": "src/mail/headers.ts",
+   "by": [
+    "real-task-2026-10-12"
+   ],
+   "oracles": [
+    "folded approval policy preserves the exact revision and encoded whitespace"
+   ],
+   "sha256": "9450f2fa831ddde95c6e7ca4ae2b289291671f7ebc5944ca0d5218c206c1f0e1",
+   "note": "Direct parser delta and affected MIME/approval-owner review, without subagents. The actual gpt-6.1-sol medium Society task reproduced INTERNAL_ERROR at the quorum-completing vote: a policy header folded before its first encoded word decoded with an extra leading space. Unfold and trim wire whitespace before decoding, retaining whitespace inside encoded revision values. Independent folded EML fixture and pinned serializer roundtrips cover generated-length, 128-byte and meaningful-whitespace policy revisions. No accepted facts, approval authority, MIME bytes or retry keys are rewritten. Focused regressions and the resumed real HIGH task passed; historical full-suite review is not renewed."
   }
  ],
  "readUnchanged": [
@@ -155091,16 +155102,6 @@
     "P01",
     "P02",
     "P05"
-   ],
-   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are the tests that load this module"
-  },
-  {
-   "path": "src/mail/headers.ts",
-   "by": [
-    "AV-review"
-   ],
-   "oracles": [
-    "R36"
    ],
    "note": "read in full in the whole-codebase adversarial pass after v9; oracles are the tests that load this module"
   },

@@ -1,5 +1,38 @@
 # OMA v2 — 현재 검증 상태
 
+## 실제 task: gpt-6.1-sol medium (2026-10-12)
+
+기준 `d543c84c`에서 Human이 Principal·Worker를 6.1 sol medium으로 지정하고 실제 코딩
+과제를 수행하도록 요청했다. 자동 suite나 scripted provider를 task 실행 증거로 대신하지
+않았다. 실제 `oma` Society·bundled Pi·인증된 `openai-codex/gpt-6.1-sol` inference,
+systemd/bwrap 환경에서 expense-report의 정확한 cents 집계, validation/filter, JSONL
+CLI/CSV, 문서와 회귀를 맡겼다. 세션 model-change, thinking-level-change와 실제 assistant
+response metadata에서 Principal·구현 Worker·소환된 두 리뷰어 모두 medium을 확인했다.
+
+처음 결과는 **BLOCKED**였다. HIGH 요청의 첫 동료 표 뒤 두 번째 표가 INTERNAL_ERROR로
+거부됐다. read-only emission 재현은 `MIME emission differs from frozen approval claim`을
+가리켰고, folded 정책 헤더의 decoded revision에 앞 공백 하나가 추가됨을 확인했다.
+`src/mail/headers.ts`에서 raw unfolded header의 경계 공백을 decoding 전에 정리했다.
+encoded revision의 실제 공백은 지우지 않는다. 독립 folded wire fixture와 writer 왕복
+회귀가 수정 전 FAIL, 수정 후 PASS다. build와 MIME/헤더/merge/Worker autonomy 집중 회귀
+20/20 PASS, fail/cancel/skip/todo 0이다. 최종 typecheck와 architecture 전체 검사도 PASS다.
+
+최종 결과는 **PASS_AFTER_RUNTIME_FIX**다. 정상 종료 후 실제 Society를 다시 열어 같은
+키의 실패 표 기록을 확인했다. 새 deployment가 정책 revision을 바꿨으므로 Worker는
+옛 요청을 취소하고 동일 후보의 새 HIGH 요청을 열었다. 옛 사실과 표를 바꾸지 않았고,
+기존 두 리뷰어가 새 binding/diff를 확인하고 실제 표를 남겼다. Principal도 exact diff를
+읽어 새 승인 ID에 투표했다. `git.integrate` 한 건이 succeeded, canonical main은
+`b18f625384c019a81b290932f6347f6696867bd8`, 요청은
+`merge-95baec00-1f41-421f-992c-35e85ade1a76`다. Worker의 post-merge test 12/12와
+별도 canonical 요구사항 검사 44/44 PASS다. 제품 exit 0와 세 Worker unit inactive/dead를
+확인하고 복사한 host credential을 제거했다.
+
+[실행 증거](../../test/audit/real-task-2026-10-12.evidence.json)는 실제 모델 선택, parent별
+소환, 승인 표, integration, 검사와 operator 개입을 기록한다. raw 로그·세션·SQLite
+operation·결과 코드는 `/home/dev/oma-audit-artifacts/real-task-6.1-sol-medium-2026-10-12`에
+있다. 이 실행은 Linux의 한 실제 task이며 전체 suite·모든 challenge·native macOS의
+PASS를 뜻하지 않는다. 아래 수치는 각 과거 입력의 기록으로 유지한다.
+
 ## Worker 리뷰어 보충 안내 (2026-10-12)
 
 Human 요청으로 기준 `0d84ff34`의 내장 Worker 시스템 프롬프트에 리뷰어 부족 시 보충 안내를
@@ -360,7 +393,7 @@ native·macOS VM boot·power loss는 미실행이다. 이전 kernel/crash PASS�
 충족했다고 주장할 수 없다. raw log는 `/tmp/oma-host-ownership-2026-10-09`에 보존한다.
 
 현재 구조 검사의 입력 identity(생성 자체는 runtime PASS가 아니다):
-verification input digest `7ba3fcf14fc53de97a7b572a96479fb5b9a16578de8c725cc6c085811e74f49b` (15463 files).
+verification input digest `60702b741c34d7e7a2bb3b3c2b5f0fd381f528e50f1aa7d0700d3a2999415e1c` (15464 files).
 
 ## 이전 실행 결과: 지정한 제한 제거·기능 복구 (2026-10-09, DR37)
 

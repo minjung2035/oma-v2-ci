@@ -74,6 +74,26 @@ test("frozen logical facts produce byte-identical pinned MIME and one timestamp"
   assert.deepEqual(plan.replyHeaders.references, [first, second]);
 });
 
+test("folded approval policy preserves the exact revision and encoded whitespace", async () => {
+  const revision = "rev-52224b22672dc0d77f224ccb93c05042";
+  // Independent wire fixture: the first word is on a continuation line.
+  const wire = ["X-OMA-Kind: approval_required", "X-OMA-Approval-Repo: project",
+    "X-OMA-Approval-Target: refs/heads/main", `X-OMA-Approval-Base: ${"a".repeat(40)}`,
+    `X-OMA-Approval-Candidate: ${"b".repeat(40)}`, "X-OMA-Approval-Policy:",
+    " =?UTF-8?B?cmV2LTUyMjI0YjIyNjcyZGMwZDc3ZjIyNGNjYjkzYzA1MDQy?="].join("\r\n");
+  assert.equal(parseEmlHeaders(wire).approvalFor?.policyRevision, revision);
+  for (const policyRevision of [revision, "p".repeat(128), "  검토정책 " + "p".repeat(40) + "  "]) {
+    const facts = freezeMessageFacts({ id, sender: "alice", society: "demo", to: ["principal"],
+      kind: "approval_required", contextRevision: null, dateMs,
+      approvalFor: { ...approvalFor, policyRevision },
+      replyHeaders: { replyTo: ["alice"], inReplyTo: null, references: [] } });
+    const emitted = await renderFrozenMessage(facts, { subject: "HIGH approval", body: "Review the exact candidate." });
+    assert.match(emitted.text, /X-Oma-Approval-Policy:\r\n[ \t]=\?UTF-8\?B\?/);
+    assert.equal(emitted.headerFacts.approvalFor?.policyRevision, policyRevision);
+    assert.equal(messagePlanFrom(emitted, ["principal"]).approvalFor?.policyRevision, policyRevision);
+  }
+});
+
 test("logical and RFC reply selection share policy without sharing grammars", () => {
   assert.deepEqual(defaultLogicalReplyTo("alice", ["bob", "commons", "topic/work"]), ["commons", "topic/work"]);
   assert.deepEqual(defaultLogicalReplyTo("alice", ["bob"]), ["alice"]);
