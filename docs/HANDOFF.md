@@ -1,4 +1,19 @@
-# OMA v2 — 현재 인계 (2026-10-11, DR44)
+# OMA v2 — 현재 인계 (2026-10-12)
+
+## Worker 리뷰어 보충 안내
+
+Human이 merge/challenge 리뷰어를 Worker 소환으로 보충하는 방법을 시스템 프롬프트에
+명시하도록 요청했다. 기준 `0d84ff34`에서 내장 Worker의 영문 model input과 한국어 comment를
+함께 수정했다. 기존 동료에게 먼저 리뷰를 요청하고 자격 있는 인원 자체가 부족할 때만
+필요한 Worker를 생성한다. brief는 요청 이름과 정확한 diff·관련 검사·자신의 approve/reject를
+지시한다. enabled와 요청자/인증된 제출자 제외, 자식의 별도 reviewer 자격, 생성과 승인의
+구분, 기본 challenge 정족수와 Principal/broker의 역할을 안내한다. 권한·투표 정책은 그대로다.
+
+build·typecheck와 기존 role-prompts/prompt-boundary/resident-confinement 35/35가 통과했다.
+현재 결과는 [validation](implementation/validation.md)의 최신 절이 소유한다. 아래 DR44의
+전체 suite·crash 숫자는 당시 입력의 기록이며 이 프롬프트 변경의 실행으로 재사용하지 않는다.
+
+## DR44 인계 (2026-10-11)
 
 기준은 `067bb7c`다. Human이 8.4점 정적 평가와 추가 17개 개선 후보를 제공하고 코드 품질과
 구조적 변경 비용을 개선하도록 요청했다. 필수 문서·영향 owner를 직접 읽고 서브에이전트 없이

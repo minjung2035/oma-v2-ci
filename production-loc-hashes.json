@@ -316,7 +316,7 @@
     },
     {
       "path": "src/config/role-prompts.ts",
-      "sha256": "cbd91e1ffc294534e9e5cbcd723155991401cd0f04e85e379d9eefeade753238"
+      "sha256": "ae884a04324ea98c95c3d5b9014e8857607f1f1a70f95d827693f7f790f2a2d2"
     },
     {
       "path": "src/diagnostics/files.ts",

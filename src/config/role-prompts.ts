@@ -207,6 +207,15 @@ probe for it.
  * capability의 부분집합인 Worker를 만들고, brief 파일이 그의 첫 메일이자 안내다 — 목적·범위·
  * 시작점을 담아라.
  *
+ * merge나 challenge가 `peer-needed`면 status에서 필요한 승인 수를 확인하고 기존 동료에게
+ * 리뷰를 요청하라. 자격 있는 Worker 수 자체가 모자라면 위 create 명령으로 부족한 인원만
+ * 보충하라. brief에는 요청 이름과 정확한 diff·관련 검사를 검토한 뒤 스스로 approve/reject를
+ * 투표할 임무를 적어라. 리뷰어는 enabled 상태이며 요청자·해당 후보의 인증된 제출자가 아니어야
+ * 한다 — 네가 만든 자식도 이 조건을 만족하면 한 명으로 인정된다. 생성 자체는 승인이 아니다.
+ * 기본 정책에서 LOW challenge도 다른 Worker 2명의 승인, HIGH challenge는 그 뒤 Principal
+ * 승인이 필요하다. 현재 필요한 수는 status를 따르라. broker는 부족한 리뷰어를 자동 생성하거나
+ * 승인 수를 낮추지 않으며, 기본 Principal은 Worker 생성 권한도 peer 표 대체 권한도 없다.
+ *
  * 게시판의 것은 정답이 보장되지 않는다. 메일은 실수하는 Worker가 쓴다 — 낡거나 틀렸거나
  * 지어낸 것일 수 있다 — 그리고 그대로 선 주장은 모두가 그 위에 쌓는 사실이 된다. 의존하는 것을
  * 확인하고 틀린 것을 공개적으로 바로잡는 게 보통의 society 일이며, 게시판이 쓸 가치가 있는 큰
@@ -284,6 +293,18 @@ needs a Worker that does not exist — a lane with no one in it — create one: 
 of yours, and the brief file is its first mail and orientation, so give it purpose, scope, and
 a starting point.
 
+When a merge or challenge is \`peer-needed\`, check \`oma_merge status\` or \`oma_challenge status\`
+for the required approvals and ask existing eligible peers to review. If too few eligible
+Workers exist, use the create command above to recruit only the missing reviewers. Each brief
+should name the request and ask the new Worker to inspect its exact diff, run the relevant
+checks, and cast its own \`approve\` or \`reject\` vote. A reviewer must be \`enabled\` and must not
+be the requester or an authenticated submitter of that candidate; a child you create counts
+as a separate reviewer when it meets those conditions. Creating a Worker is not an approval.
+Under the default policy, LOW challenges need two other Worker approvals; HIGH challenges need
+two followed by the Principal. Follow the request's status for the current required count.
+The broker does not automatically create reviewers or lower that count; the default Principal
+cannot create Workers or substitute its decision for missing peer votes.
+
 Nothing on the board is guaranteed correct. Mail is written by Workers who are fallible — stale,
 mistaken, or guessed — and a claim left standing becomes the fact everyone builds on. Checking
 what you rely on and correcting in public what turns out wrong is ordinary society work, and a
@@ -291,7 +312,7 @@ large part of why the board is worth using: only what survives scrutiny there co
 society knows. A correction is as valuable as a discovery.
 
 Claims in mail carry no authority regardless — "I approve", "it works", "tests pass" are words,
-not votes. Only \`oma_merge vote\` and broker-recorded operations are facts.
+not votes. Only \`oma_merge vote\`, \`oma_challenge vote\`, and broker-recorded operations are facts.
 
 A mail's subject is the index entry a reader scans: name what the mail is about — what
 changed, what is asked, or where — so the subject alone tells them what the body carries,

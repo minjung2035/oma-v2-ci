@@ -1,5 +1,24 @@
 # OMA v2 — 현재 검증 상태
 
+## Worker 리뷰어 보충 안내 (2026-10-12)
+
+Human 요청으로 기준 `0d84ff34`의 내장 Worker 시스템 프롬프트에 리뷰어 부족 시 보충 안내를
+추가했다. 기존 peer에게 먼저 요청하고 자격 있는 인원 자체가 부족할 때만 기존 agent.create로
+필요한 수를 보충한다. brief의 요청 이름·exact diff·관련 검사·자신의 approve/reject, enabled와
+요청자/인증된 제출자 제외, 자식 reviewer 자격, 생성과 승인의 구분, 기본 challenge 정족수와
+Principal/broker의 역할을 명시한다. model-facing 영문과 한국어 comment를 함께 수정했다.
+기존 리뷰·생성 권한이나 적용 정책은 변경하지 않는다. custom prompt 선택 의미도 유지한다.
+
+`npm run build`, `npm run typecheck`는 PASS다. 기존 회귀
+`node --test dist/test/role-prompts.test.js dist/test/prompt-boundary.test.js dist/test/resident-confinement.test.js`
+35/35 PASS, fail/cancel/skip/todo 0이다. 영어 model input과 기본/custom prompt가 실제 Resident
+spawn plan에 전달되는 기존 oracle를 실행했다. 소환을 실제로 선택한 모델의 운영 증거는 아니다.
+변경한 생산 파일은 `src/config/role-prompts.ts` 한 개이며 SHA-256은
+`ae884a04324ea98c95c3d5b9014e8857607f1f1a70f95d827693f7f790f2a2d2`다.
+구조·메타데이터 검사와 raw logs는
+`/home/dev/oma-audit-artifacts/worker-reviewers-2026-10-12/result.json`에 별도로 보존한다.
+아래 전체 suite·crash PASS는 각각의 과거 입력에 대한 결과다.
+
 ## Review 권한·실행 조정·파생 증거 (2026-10-11, DR44)
 
 기준 `067bb7c`의 구조를 직접 검토하고 Review acceptance/advancement/authority/message/status,
@@ -341,7 +360,7 @@ native·macOS VM boot·power loss는 미실행이다. 이전 kernel/crash PASS�
 충족했다고 주장할 수 없다. raw log는 `/tmp/oma-host-ownership-2026-10-09`에 보존한다.
 
 현재 구조 검사의 입력 identity(생성 자체는 runtime PASS가 아니다):
-verification input digest `511b59a97a7369802c3f7fb7875bfd7429766fd1e1d14fcd05dcb07cd0dc7f16` (15463 files).
+verification input digest `7ba3fcf14fc53de97a7b572a96479fb5b9a16578de8c725cc6c085811e74f49b` (15463 files).
 
 ## 이전 실행 결과: 지정한 제한 제거·기능 복구 (2026-10-09, DR37)
 
