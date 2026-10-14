@@ -117,6 +117,9 @@ export const OWNED_STATE_OWNERS = Object.freeze([
  * entry says the path the call touches is not an OMA-owned tail, or why the
  * plain call on it is already refused-and-reported. */
 export const OWNED_STATE_EXEMPTIONS = Object.freeze({
+  "src/storage/mail-notices.ts": "read-only Human observation of a bounded broker projection; no-follow descriptor reads report missing, malformed or unreadable metadata explicitly and never repair state without broker ownership",
+  "src/storage/published-mail.ts": "read-only publication-link inventory for Human mail and broker projection; metadata probes reject links, report unreadable directories and never turn observation into permission repair",
+
   "src/config/operations.ts": "the Human-authored configuration closure and explicitly selected extension assets: canonical-path and content checks refuse unreadable inputs, never repair or rewrite the Human's source",
   "src/entry/personal-host.ts": "read-only birth/config metadata and the Human's actual cwd; the host owns no project permission repair and a failed probe refuses the launch",
   "src/lifecycle/workspace.ts": "a metadata-only .git existence probe after owned staging preparation; the workspace's Git validation supplies the authoritative result, never a false absence on a failed open",

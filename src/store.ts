@@ -342,6 +342,15 @@ export class Store implements StoreQueries, StoreWrites {
     return operation;
   }
   getOperationById(id: OperationId): OperationRow | null { return this.journal.getById(id); }
+  /** Bounded presentation lookup: ordinary mail needs no full operation decode.
+   * Only an integration's validated accepted plan can identify a notice. */
+  integrationNoticeRequester(messageId: MessageId): Actor | null {
+    const id = `op-${messageId.slice(2, 38)}`;
+    if (!this.db.prepare("SELECT id FROM operations WHERE id = ? AND kind = 'git.integrate' AND state <> 'failed'").get(id)) return null;
+    const operation = this.getOperationById(id);
+    return operation?.kind === "git.integrate" && operation.plan.merge?.notice.some(message =>
+      message.id === messageId && message.review?.role === "notice") ? operation.actor : null;
+  }
   latestSocietyAction() { return this.reader.latestSocietyAction(); }
   societyOpen(): boolean {
     const action = this.latestSocietyAction();

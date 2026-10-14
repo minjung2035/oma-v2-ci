@@ -1485,7 +1485,7 @@ Group은 tool과 다른 group을 명시적으로 지목하는 DAG다. 처음에�
 ### 23.11 Mail
 
 
-Mail은 멀티에이전트 활동을 Human이 확인하는 주 surface다. 초기 버전은 Principal 앞으로 온 메일의 inbox 중심이다.
+Mail은 멀티에이전트 활동을 Human이 확인하는 주 surface다. 공개된 society 전체 메일을 개별 행으로 표시한다. Principal 발신 GOAL, Worker 간 메일, 자동 공지를 포함하며 발신자 이름은 실제 actor 이름을 보존한다. merge 완료 공지는 broker가 ledger에서 재생성하는 host 전용 `mail-notices.json` 관측 파일로 구분해 `OMA / notice`로 표시하고 요청 actor는 상세에 표시한다. 관측 파일은 새 durable 사실이 아니며 없거나 불완전하면 미확인 상태를 표시한다. Principal prompt에 전달되는 메일 범위는 바꾸지 않는다.
 
 ```text
 MAIL

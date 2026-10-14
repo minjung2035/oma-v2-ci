@@ -14,6 +14,8 @@ import { displaySubject } from "../mail/headers.js";
 import { headerEnd, readableBody } from "../mail/display.js";
 import { unobserved } from "../domain/errors.js";
 import { errorWords } from "../tui/words.js";
+import { publishedMailEntries } from "../storage/published-mail.js";
+import { readMailNotices } from "../storage/mail-notices.js";
 
 export interface MailboxPaths {
   readonly newDir: string;
@@ -232,9 +234,10 @@ function entriesIn(directory: string, arrivals: ReadonlyMap<string, number>): { 
  * read now is not known to be no message: the rows that were read are kept,
  * and the directory says it was not wholly read, as one it cannot list does. */
 function rowsIn(directory: string, unread: boolean, budget: number,
-    arrivals: ReadonlyMap<string, number>, party: (local: string) => string): DirectoryRows {
+    arrivals: ReadonlyMap<string, number>, party: (local: string) => string,
+    selected?: readonly Entry[]): DirectoryRows {
   const rows: { row: MailRow; deliveredAtMs: number; threadKey: string | null }[] = [];
-  const listed = entriesIn(directory, arrivals);
+  const listed = selected === undefined ? entriesIn(directory, arrivals) : { entries: selected, unreadable: null };
   let unreadable = listed.unreadable;
   const shown = listed.entries.slice(0, Math.max(0, budget));
   for (const { name, deliveredAtMs } of shown) {
@@ -308,11 +311,8 @@ function byArrival(rows: readonly Entry2[]): readonly MailRow[] {
     .map(entry => entry.row);
 }
 
-/** B4: `roster` is the society's agent names as last observed -- the workers
- * the screen numbers -- and a roster that was not observed names only the
- * fixed roles, keeping each actor's own name rather than inventing one. The
- * roster changes display names only; the stored headers and the durable
- * addresses they carry are untouched. */
+/** The roster disambiguates actor names that resemble topic addresses.
+ * Actor names and broadcast addresses remain stable; headers are untouched. */
 export function readMailbox(paths: MailboxPaths, roster?: MailRoster): MailboxRead {
   const party = mailNamerFor(roster);
   const budget = READ_BOUNDS.mailListRows.value;
@@ -329,6 +329,33 @@ export function readMailbox(paths: MailboxPaths, roster?: MailRoster): MailboxRe
     unreadable: journal.unreadable ?? pending.unreadable ?? settled.unreadable,
     omitted: pending.omitted + settled.omitted,
   });
+}
+
+/** Human overview of published society mail, not the engine's delivery inbox.
+ * Archive and worker-board links are publication evidence; unaccepted objects
+ * in mail/objects are never displayed. Every message has its own selectable
+ * row, including sent GOALs and separate replies to the same question. */
+export function readSocietyMail(stateRoot: string, roster?: MailRoster): MailboxRead {
+  const party = mailNamerFor(roster);
+  const published = publishedMailEntries(stateRoot);
+  const selected = published.entries;
+  let unreadable = published.unreadable;
+  const pending = listDir(principalMailbox(stateRoot).newDir);
+  if ("unreadable" in pending) unreadable ??= pending.unreadable;
+  const pendingIds = new Set("names" in pending ? pending.names.map(arrivalKeyOf) : []);
+  const metadata = selected.length === 0 ? { requesters: new Map<string, string>(), unreadable: null }
+    : readMailNotices(stateRoot, selected.map(entry => arrivalKeyOf(entry.name)));
+  unreadable ??= metadata.unreadable;
+  const rows: MailRow[] = [];
+  for (const entry of selected) {
+    const read = rowsIn(entry.directory, pendingIds.has(arrivalKeyOf(entry.name)), 1, new Map(), party, [entry]);
+    unreadable ??= read.unreadable;
+    for (const { row } of read.rows) {
+      const requester = metadata.requesters.get(arrivalKeyOf(entry.name));
+      rows.push(requester === undefined ? row : Object.freeze({ ...row, from: "OMA", kind: "notice", requester }));
+    }
+  }
+  return Object.freeze({ rows: Object.freeze(rows), unreadable, omitted: published.omitted });
 }
 
 /** Messages not yet delivered to the Principal's session, or null when the

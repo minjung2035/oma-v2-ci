@@ -55,7 +55,7 @@ test("V28A: a message the TUI shows is still waiting for the Principal's session
     // The configured model is not the running one.
     assert.match(dashboard, /review \(Configured; next session; current session started with standard\)/);
     app.feed(RIGHT); app.feed(RIGHT);
-    assert.match(last(), /● New arrivals \(not yet batched\); opening here does not deliver or acknowledge them/);
+    assert.match(last(), /All society mail · ● Awaiting Principal delivery; opening does not acknowledge mail/);
     app.feed(ENTER);
     assert.match(last(), /어느 API를 쓸까요\?/, "the message did not open");
     // Opening it wrote nothing: still new, nothing in cur, same file.

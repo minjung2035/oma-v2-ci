@@ -700,7 +700,7 @@ session 경계를 넘지 않는 per-request 전환은 하지 않는다. inferenc
 
 **MUST [TUI-010; arch §23.7]** Extensions 화면의 목록 출처는 host가 `installation.libdir` 아래에 이미 배치한 파일과, [DR25](design-revisions.md)에 따라 Human이 `oma pi install`로 oma의 패키지 저장소(`installation.packages`)에 설치한 패키지의 extension 파일뿐이다. 설치는 `oma pi`의 명시 명령으로만 하며 화면에서의 임의 경로 입력, 자동 탐색, 네트워크 설치를 허용하지 않는다. core OMA extension은 항상 첫 항목으로 고정하고 해제할 수 없다. 선택한 항목의 SHA-256을 기록하고 실행 직전에 다시 확인한다. [DR26](design-revisions.md)에 따라 확장 실행 코드는 설정 문서의 1 MiB/합계 8 MiB 제한에 포함하지 않으며, 고정 메모리로 파일을 해시하고 읽기 전후 동일성을 확인한다. 추가 extension은 Pi host process와 동일 권한의 trusted deployment code이며 model tool로 취급하지 않는다. 이 화면은 host 전용이고 모델·workspace·mail 내용이 목록·선택·적용에 영향을 주지 못한다.
 
-**MUST [TUI-011; arch §23.8]** Mail 화면의 읽지 않음 표시는 기존 `deliveries` flag에서 파생한 값이며 새 durable 상태가 아니다. ACK 조작은 MAIL-009의 의미만 갖는다. UI 문구가 `presented=understood`, `ack=approved`, `ack=읽음 완료`를 암시해서는 안 된다(NEG-002). 기본 대상은 Principal 수신 메일이며 commons/topic을 Principal prompt에 자동 주입하지 않는 A-003은 그대로 유지한다.
+**MUST [TUI-011; arch §23.8]** Mail 화면의 읽지 않음 표시는 기존 `deliveries` flag에서 파생한 값이며 새 durable 상태가 아니다. ACK 조작은 MAIL-009의 의미만 갖는다. UI 문구가 `presented=understood`, `ack=approved`, `ack=읽음 완료`를 암시해서는 안 된다(NEG-002). 기본 대상은 공개된 society 전체 메일(Principal 발신 GOAL, Worker 간 메일, 자동 공지 포함)이다. 각 메일은 독립 행으로 표시하고 실제 발신자 이름을 유지한다. 자동 merge 완료 공지는 ledger의 notice 메타데이터로 구분해 OMA / notice로 표시하며 요청 Worker는 상세에 표시한다. 읽지 않음 표시는 Principal 전달 대기만 뜻한다. commons/topic을 Principal prompt에 자동 주입하지 않는 A-003은 그대로 유지한다.
 
 **MUST [TUI-012; arch §23.5]** Dashboard의 모든 수치는 VIEW-002의 관측 규칙을 따른다. 관측 시각을 함께 보유하고, unknown이나 disconnected를 running·0·성공으로 바꾸지 않는다. INF-004의 불확정 비용은 확정분과 구분해 표시하며 하나의 합계나 백분율로 뭉개지 않는다. broker에 연결하지 못하면 cached 값임과 관측 시각을 표시한다.
 

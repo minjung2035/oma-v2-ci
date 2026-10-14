@@ -51,6 +51,16 @@ test("mail-v1: a LOW merge request applies itself and mails the completion notic
     const notice = merge.notice;
     assert.equal(notice.length, 1, "a small document is one part");
     const part = notice[0]!;
+    assert.equal(f.store.integrationNoticeRequester(part.id), "alice");
+    assert.equal(f.store.integrationNoticeRequester(`m-${op.id.slice(3)}-0`), null);
+    const { publishMailNoticeView } = await import("../src/views/mail-notices.js");
+    const { readSocietyMail } = await import("../src/application/mail.js");
+    publishMailNoticeView(f.store, f.root);
+    const displayed = readSocietyMail(f.root).rows.find(row => row.id === `${part.id}:2,`)!;
+    assert.ok(displayed);
+    assert.equal(displayed.from, "OMA");
+    assert.equal(displayed.kind, "notice");
+    assert.equal(displayed.requester, "alice");
     assert.equal(part.kind, "result"); assert.deepEqual(part.to, ["commons", "principal"]);
     assert.equal(part.review?.role, "notice"); assert.equal(part.audience, undefined);
     assert.equal(existsSync(mailArchivePathAt(f.root, part.id)), true, "notice is in the public archive");

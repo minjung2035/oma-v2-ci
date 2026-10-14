@@ -14173,6 +14173,7 @@ src/storage/facets.ts
 src/storage/file-digest.ts
 src/storage/immutable-file.ts
 src/storage/ledger-reader.ts
+src/storage/mail-notices.ts
 src/storage/operation-codec.ts
 src/storage/operation-journal.ts
 src/storage/operation-transitions.ts
@@ -14180,6 +14181,7 @@ src/storage/output-spool.ts
 src/storage/paths.ts
 src/storage/preaccept-artifact.ts
 src/storage/project-preparation.ts
+src/storage/published-mail.ts
 src/storage/quota.ts
 src/storage/receipt-projector.ts
 src/storage/rows.ts
@@ -14225,6 +14227,7 @@ src/units/observe.ts
 src/units/render.ts
 src/validate.ts
 src/views.ts
+src/views/mail-notices.ts
 src/views/pending-work.ts
 src/views/review-status.ts
 src/views/status-refresh.ts

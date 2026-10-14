@@ -135,8 +135,8 @@ function rowsFor(input: ViewInput): { readonly fixed: string[]; readonly rows: s
   const omitted = data.mailOmitted === 0 ? []
     : [fit(`  Showing ${data.mail.length} recent messages; ${data.mailOmitted} older messages were not read`, columns)];
   if (data.mail.length === 0)
-    return { fixed: unreadable.length + omitted.length > 0 ? [...unreadable, ...omitted] : ["  No incoming mail."], rows: [], selected: null };
-  return { fixed: [...unreadable, ...omitted, fit("  ● New arrivals (not yet batched); opening here does not deliver or acknowledge them", columns)],
+    return { fixed: unreadable.length + omitted.length > 0 ? [...unreadable, ...omitted] : ["  No society mail."], rows: [], selected: null };
+  return { fixed: [...unreadable, ...omitted, fit("  All society mail · ● Awaiting Principal delivery; opening does not acknowledge mail", columns)],
     selected, rows: data.mail.map((row, index) => {
       const marker = index === selected ? ">" : " ";
       const flag = row.unread ? "●" : " ";
@@ -185,6 +185,7 @@ function mailDetailParts(input: ViewInput, notice: string | null) {
   if (!message) return null;
   const head = [
     `From: ${message.from}`,
+    ...(message.requester === undefined ? [] : [`Requested by: ${message.requester}`]),
     // B4: the recipients the message names, absent when it carries none.
     ...(message.to === undefined ? [] : [`To: ${message.to}`]),
     `Kind: ${message.kind}`,

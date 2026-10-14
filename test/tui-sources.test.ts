@@ -249,10 +249,10 @@ test("B4: mail rows name parties by the roster, and keep the header's names with
 
     const rows = readMailbox(box, ["principal", "worker-a", "worker-b"]).rows;
     const byId = new Map(rows.map(row => [row.id, row]));
-    assert.equal(byId.get("m-1")!.from, "worker1");
-    assert.equal(byId.get("m-1")!.to, "worker");
-    assert.equal(byId.get("m-2")!.from, "worker2");
-    assert.equal(byId.get("m-2")!.to, "worker2, worker1");
+    assert.equal(byId.get("m-1")!.from, "worker-a");
+    assert.equal(byId.get("m-1")!.to, "residents");
+    assert.equal(byId.get("m-2")!.from, "worker-b");
+    assert.equal(byId.get("m-2")!.to, "worker-b, worker-a");
     // An actor the roster does not know keeps its name; a topic keeps its label.
     assert.equal(byId.get("m-3")!.from, "worker-c");
     assert.equal(byId.get("m-3")!.to, "topic/plan, principal");
@@ -265,7 +265,7 @@ test("B4: mail rows name parties by the roster, and keep the header's names with
     const raw = readMailbox(box).rows;
     const rawById = new Map(raw.map(row => [row.id, row]));
     assert.equal(rawById.get("m-1")!.from, "worker-a");
-    assert.equal(rawById.get("m-1")!.to, "worker");
+    assert.equal(rawById.get("m-1")!.to, "residents");
     assert.equal(rawById.get("m-2")!.to, "worker-b, worker-a");
     assert.equal(rawById.get("m-3")!.to, "topic/plan, principal");
     assert.equal(rawById.get("m-4")!.to, undefined);

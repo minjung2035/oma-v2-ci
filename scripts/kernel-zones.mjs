@@ -128,6 +128,8 @@ export const KERNEL_ZONES = Object.freeze([
       "src/protocol/channel.ts",
       "src/protocol/connection.ts",
       "src/storage/batch-view.ts",
+      "src/storage/mail-notices.ts",
+      "src/storage/published-mail.ts",
       "src/storage/contained-fs.ts",
       "src/storage/tree-lease.ts",
       "src/storage/context-files.ts",

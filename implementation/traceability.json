@@ -2574,8 +2574,8 @@
   {
     "requirement": "MODE-001",
     "source": "docs/implementation-spec.md",
-    "digest": "4600dcc4cb0090f1672836eefefd9ef2423e2bee99e2924c81039a7bcb50bc38",
-    "normativeText": "**MUST [MODE-001]** 새 세션의 모드는 `society`(기본값) 또는 `personal`이다. TTY의 최초 선택은 broker·Worker·모델 호출·VM 시작보다 먼저이며 Enter는 Society, 취소는 효과 없이 터미널·입력 decoder·timer·listener를 반환한다. `oma --mode society|personal`은 새 세션 선택을 명시하고 비TTY에서 생략하면 Society다. `--society`로 기존 Society를 지정하면 새 선택창을 띄우지 않는다. Personal과 `--society/--config/--bind-project`의 조합은 효과 전에 거절한다. 지원하지 않는 모드를 조용히 Society로 실행하지 않는다.",
+    "digest": "4f8dfb7411f6780ae43488531be818aacfe2385493be97ff878eb7dd13411597",
+    "normativeText": "**MUST [MODE-001]** 새 세션의 모드는 `society`(기본값) 또는 `personal`이다. OMA 실행 시 모드 선택창을 띄우지 않으며 TTY·비TTY 모두 생략한 모드는 Society다. `oma --mode society|personal`은 시작 모드를 명시한다. 처음 세션을 열고 아직 대화를 시작하지 않은 idle 상태에서는 `/society`로 Personal·Society를 선택한다. 선택 취소·현재 모드 선택은 세션을 유지하며, 대화·실행 중인 작업이 있으면 전환을 거절한다. Personal과 `--society/--config/--bind-project`의 조합은 효과 전에 거절한다. 지원하지 않는 모드를 조용히 Society로 실행하지 않는다.",
     "applicability": "unclassified",
     "rationale": "Requires production-path review; no inference from test names.",
     "owner": "src/tui/session-mode.ts#chooseSessionMode",
@@ -2704,8 +2704,8 @@
   {
     "requirement": "MODE-005",
     "source": "docs/implementation-spec.md",
-    "digest": "2532a8112d2706e877dbbbea8b710ef6513e511d8f68dfc33834b5fdd815f820",
-    "normativeText": "**MUST [MODE-005]** `/resume`는 저장된 모드로 열며 변환하지 않고, fork도 출처 모드를 유지한다. `/new`와 Personal 세션의 `/society`만 새 birth 선택을 허용한다. `/society`는 실행 중인 엔진을 바꾸지 않는다: 프로젝트 자신의 Society 슬롯(`<data>/<project>`)에 binding·Society 기록·다른 birth record가 없을 때만 통과하고 — bound·unreadable·unavailable 관측·binding 없는 기록·legacy Society는 그 기록을 이유로 거절하며 관측 불가를 부재로 승격하지 않는다 — 통과 시 현재 writer의 실제 종료를 관측한 뒤 `oma --society <project>`로 execve 재진입해 표준 binding·provisioning의 새 Society를 birth한다. 이 재진입은 `RESUME_SESSION_ENV`도 저장 history의 재개도 아니다. 게이트와 재진입 요청은 아무 기록도 쓰지 않으므로 그 사이의 종료·전원손실은 다음 `/society`가 같은 슬롯을 다시 관측하는 것으로 끝나며, binding이 게시된 뒤의 재시작은 그 Society를 born으로 인식한다. macOS Personal의 `/society`는 전환 없이 거절한다. 모드를 구분해 표시하고 다른 엔진 경로로 이동할 때 현재 history writer의 실제 종료를 관측한 뒤 시작한다. IPC EOF이나 timeout만으로 writer 종료를 인정하지 않는다. legacy Society는 관측된 기존 project binding으로만 식별하며 경로 형태만으로 외부 Pi history를 수입하지 않는다. Society open/close는 협업 상태이며 Personal 시작은 다른 Society나 개별 force-stop 사실을 바꾸지 않는다.",
+    "digest": "f5c577d6379e64da43938e5211dddbf4a1de1dd40519a65c837a223474e4d204",
+    "normativeText": "**MUST [MODE-005]** `/resume`는 저장된 모드로 열며 변환하지 않고, fork도 출처 모드를 유지한다. `/new`는 현재 모드의 새 세션을 선택창 없이 연다. 첫 대화 전 idle 세션의 `/society`는 모드 선택을 제공한다. 다른 모드 선택 시 현재 writer의 실제 종료를 관측한 뒤 `oma --mode personal|society`로 재진입해 같은 프로젝트의 세션을 열며, 기존 birth·history를 변환하거나 이어 쓰지 않는다. Personal→Society는 표준 project binding·ownership·provisioning 경로로 같은 프로젝트의 새 Society 세션을 연다. 선택창·before-switch hook 대기 중 세션이 바뀌거나 작업이 시작되면 전환하지 않는다. macOS의 Society→Personal은 실제 guest writer 종료 뒤 모드만 host로 전달해 native Personal을 열고, Personal→Society는 Host API로 관측된 실행 중 Society에 연결한다. IPC EOF이나 timeout만으로 writer 종료를 인정하지 않는다. legacy Society는 관측된 기존 project binding으로만 식별하며 경로 형태만으로 외부 Pi history를 수입하지 않는다. Society open/close는 협업 상태이며 Personal 시작은 다른 Society나 개별 force-stop 사실을 바꾸지 않는다.",
     "applicability": "unclassified",
     "rationale": "Requires production-path review; no inference from test names.",
     "owner": "src/runtime/personal-session.ts#runPersonalSession",
@@ -3067,8 +3067,8 @@
   {
     "requirement": "TUI-011; arch §23.8",
     "source": "docs/implementation-spec.md",
-    "digest": "595ed18e6108da1104dfc8daf37530ed2968ad4e3c9ad27f4fe7addc967ee538",
-    "normativeText": "**MUST [TUI-011; arch §23.8]** Mail 화면의 읽지 않음 표시는 기존 `deliveries` flag에서 파생한 값이며 새 durable 상태가 아니다. ACK 조작은 MAIL-009의 의미만 갖는다. UI 문구가 `presented=understood`, `ack=approved`, `ack=읽음 완료`를 암시해서는 안 된다(NEG-002). 기본 대상은 Principal 수신 메일이며 commons/topic을 Principal prompt에 자동 주입하지 않는 A-003은 그대로 유지한다.",
+    "digest": "48197c340359ef86e8e1f9e8b6363e07f3cca291e7946451f970e8587bdc2957",
+    "normativeText": "**MUST [TUI-011; arch §23.8]** Mail 화면의 읽지 않음 표시는 기존 `deliveries` flag에서 파생한 값이며 새 durable 상태가 아니다. ACK 조작은 MAIL-009의 의미만 갖는다. UI 문구가 `presented=understood`, `ack=approved`, `ack=읽음 완료`를 암시해서는 안 된다(NEG-002). 기본 대상은 공개된 society 전체 메일(Principal 발신 GOAL, Worker 간 메일, 자동 공지 포함)이다. 각 메일은 독립 행으로 표시하고 실제 발신자 이름을 유지한다. 자동 merge 완료 공지는 ledger의 notice 메타데이터로 구분해 OMA / notice로 표시하며 요청 Worker는 상세에 표시한다. 읽지 않음 표시는 Principal 전달 대기만 뜻한다. commons/topic을 Principal prompt에 자동 주입하지 않는 A-003은 그대로 유지한다.",
     "applicability": "unclassified",
     "rationale": "Requires production-path review; no inference from test names.",
     "owner": "src/application/mail.ts#readMailbox",

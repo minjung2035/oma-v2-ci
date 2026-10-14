@@ -266,7 +266,7 @@ async function run({ brokerState = { kind: "started", pid: 1 }, credentials = ["
         async status() { calls.push("status"); return statusReply ? await statusReply(handlers) : { kind: "unknown", reason: "probe", observedAtMs: 1 }; }
       },
     },
-    "../application/mail.js": { principalMailbox: () => ({}), readBody: () => null, readMailbox: () => [], unreadCount: () => 0 },
+    "../application/mail.js": { principalMailbox: () => ({}), readBody: () => null, readMailbox: () => [], readSocietyMail: () => ({ rows: [], unreadable: null, omitted: 0 }), unreadCount: () => 0 },
     "../application/extensions.js": { readExtensions: () => {
       if (startupFailure === "extensions") throw new StoreError("BROKER_UNAVAILABLE", "extensions could not be observed");
       return { rows: [] };
@@ -648,7 +648,7 @@ test("T119 / REC-007: a Control Panel over someone else's society cannot write t
   assert.equal(society.calls.includes("writeSettings"), false);
   // Reading is exactly what it is for, and still works.
   assert.deepEqual(ports.configFields(), []);
-  assert.deepEqual(ports.mail(), []);
+  assert.deepEqual(ports.mail(), { rows: [], unreadable: null, omitted: 0 });
 });
 
 test("T119 / REC-007: an owner that has given the society back stops being able to write to it", async () => {

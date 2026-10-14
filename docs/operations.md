@@ -200,3 +200,5 @@ Tool 표면 투영은 더 이상 role 설정이 아니다(D23). 모델에게 보
 현재 실행 환경의 검증 범위와 미실행 항목은 [validation](implementation/validation.md)을 확인한다. 플랫폼의 요구 조건은 [Core 계약](implementation-spec.md)과 [macOS 계약](macos-platform.md)을 따른다. 이전 WP31 지원 조합·lockfile 수정 기록은 [과거 qualification 기록](archive/qualification-before-consolidation.md#운영-문서의-wp31-지원-checkpoint)에 보존했다.
 
 호환성: WP03 이전에 렌더된 Resident unit은 launch location이 없고, WP25 이전 unit은 accepted 자원(`OMA_RESOURCES_HEX`)이 없어 runner가 시작을 거절한다. 기존 unit을 다시 렌더하는 경로는 없으므로 그런 society의 Resident는 다시 만들어야 한다. 관리형 설정 generation(WP13)은 이전 버전 writer가 알지 못하므로, 이전 바이너리로 같은 설정을 편집하지 않는다.
+
+Mail 화면은 society 전체의 공개된 메일을 개별 행으로 보여 준다. Principal이 보낸 GOAL·작업 지시, Worker 간 메일과 응답도 포함한다. 발신자는 실제 이름을 사용하고 자동 merge 완료 공지는 `OMA / notice`, 요청자는 상세의 `Requested by`에 표시한다. `●`는 Principal 전달 대기이며 화면에서 여는 동작은 ACK를 보내지 않는다.

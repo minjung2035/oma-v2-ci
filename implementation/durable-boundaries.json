@@ -1429,6 +1429,22 @@
           "injection": "sigkill"
         }
       ]
+    },
+    {
+      "owner": "src/views/mail-notices.ts#publishMailNoticeView",
+      "fact": "host-only notice presentation rebuilt from accepted integration facts; no new mail or acknowledgement",
+      "tests": [
+        {
+          "file": "test/society-mail.test.ts",
+          "title": "Society mail includes sent GOAL, peer replies and board; notices use ledger provenance and real names",
+          "injection": "logical"
+        },
+        {
+          "file": "test/crash-kill-boundaries.test.ts",
+          "title": "P0V-96 / P0-7: a derived-file replacement SIGKILLed at any point",
+          "injection": "sigkill"
+        }
+      ]
     }
   ]
 }

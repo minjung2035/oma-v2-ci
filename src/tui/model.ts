@@ -38,6 +38,8 @@ export interface ExtensionRow {
  * The model stores no read state of its own.
  */
 export interface MailRow {
+  /** Original actor associated with an automatically generated notice. */
+  readonly requester?: string;
   readonly id: string; readonly from: string; readonly kind: string;
   readonly subject: string; readonly unread: boolean; readonly path: string;
   /** B4: the message's recipients as the screen names them, comma-joined;

@@ -2,6 +2,7 @@
 import { join } from "node:path";
 import type { Actor, AgentStatus, PreparedBatch } from "../implementation/contracts.js";
 import { Store } from "./store.js";
+import { publishMailNoticeView } from "./views/mail-notices.js";
 import { replaceDerivedFile as writeAtomic } from "./storage/durable-fs.js";
 import { ensureOwnedDirectory } from "./storage/directory.js";
 import { NO_UNIT_REASON, encodeStatusView, statusViewPath } from "./protocol/status-view.js";
@@ -192,6 +193,7 @@ export class ViewsModule {
   publishStatus(snapshot: StatusSnapshot): void {
     const agents = this.statusOf(snapshot);
     writeAtomic(statusViewPath(this.stateRoot), encodeStatusView(this.society, { observedAtMs: snapshot.observedAtMs, agents }), 0o600);
+    publishMailNoticeView(this.store, this.stateRoot);
   }
   /** WP23: every agent's status for one observation, projected once -- when
    * the first answer for it is due, after every caller waiting on it asked --

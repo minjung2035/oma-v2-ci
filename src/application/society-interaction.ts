@@ -6,7 +6,6 @@ import { TuiApp, type AppPorts } from "../tui/app.js";
 import { PanelTerminal } from "../tui/panel-terminal.js";
 import { errorWords, surfaceWords } from "../tui/words.js";
 import { engineName, engineModelChoiceOf, WORKER_MODEL, workerModelText, bootstrapStateOf, type FieldValue } from "./settings.js";
-import { principalMailbox } from "./mail.js";
 import { societyPanelPorts } from "./society-panel.js";
 import { TuiTransport, type Observation } from "./status-observation.js";
 import { sessionHistoryDirectories } from "../runtime/session-catalog.js";
@@ -34,7 +33,7 @@ export class SocietyInteraction implements SocietyConversationView {
     this.terminal = new PanelTerminal({ input: process.stdin, output: process.stdout }, () => this.app.snapshot.open);
     acquired(() => this.restore());
     const ports: AppPorts = {
-      ...societyPanelPorts(configuration, principalMailbox(bootstrap.stateRoot), () => ({
+      ...societyPanelPorts(configuration, bootstrap.stateRoot, () => ({
         observation: this.observation, owned: commands.owned(), conversationOpen: commands.session() !== null,
         screenReady: this.screenReady, sessionModel: this.sessionModel, engine: this.engineState,
       })),
