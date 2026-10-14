@@ -1,6 +1,7 @@
 /** Application commands and presentation observations. No engine/tenure handle escapes. */
 import type { PiEvent } from "../protocol/jsonl.js";
 import type { PromptOutcome } from "../protocol/settings.js";
+import type { SessionMode } from "../domain/session-mode.js";
 
 /** Identity is stable for one engine; a replacement receives a new adapter. */
 export interface ConversationUi { sendUi(event: PiEvent): void }
@@ -12,7 +13,7 @@ export interface ConversationCommands {
   submit(text: string): PromptOutcome;
   deliver(): void;
   shutdown(code: number): Promise<void>;
-  relaunch(resume: string | null): Promise<void>;
+  relaunch(resume: string | null, mode?: SessionMode): Promise<void>;
 }
 export interface SocietyConversationView {
   errorWords(error: unknown): string;

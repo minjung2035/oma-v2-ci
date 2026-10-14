@@ -6,6 +6,7 @@ import { constants } from "node:os";
 import { StoreError } from "../domain/errors.js";
 import { HOST_LOSS_SIGNALS } from "../process/host-loss.js";
 import { DEPLOYMENT_LAYOUT } from "../domain/deployment.js";
+import { isSessionMode, type SessionMode } from "../domain/session-mode.js";
 import { ProcessLock } from "./process-lock.js";
 import { ensureOwnedUserDirectory } from "./user-files.js";
 import { newSessionBirth, PERSONAL_SESSIONS, publishSessionBirth, readSessionBirth, type SessionBirth } from "./session-mode.js";
@@ -26,7 +27,7 @@ export function personalBirth(dataRoot: string, cwd: string): { readonly root: s
 /** `next` is the child's declared handoff after a clean exit: `session` is a
  * history to reopen, `society` the project's own Society the host re-enters
  * with `oma --society` — a fresh birth, not this session resumed. */
-export type PersonalExit = { readonly code: number; readonly next?: { readonly session?: string; readonly society?: string } };
+export type PersonalExit = { readonly code: number; readonly next?: { readonly session?: string; readonly society?: string; readonly mode?: SessionMode } };
 export async function runPersonalSession(options: { readonly root: string; readonly dataRoot: string; readonly libdir: string;
   readonly packages: string; readonly resume?: string; readonly env?: NodeJS.ProcessEnv }): Promise<PersonalExit> {
   const birth = readSessionBirth(options.root);
@@ -81,8 +82,9 @@ export async function runPersonalSession(options: { readonly root: string; reado
       child.on("message", value => {
         if (closed || !value || typeof value !== "object" || Array.isArray(value)) return;
         const message = value as Record<string, unknown>;
-        if (next !== undefined || message.type !== "switch" || Object.keys(message).some(key => key !== "type" && key !== "session" && key !== "society")) return;
-        if (message.session !== undefined && message.society !== undefined) return;
+        if (next !== undefined || message.type !== "switch" || Object.keys(message).some(key => key !== "type" && key !== "session" && key !== "society" && key !== "mode")) return;
+        if ([message.session, message.society, message.mode].filter(value => value !== undefined).length > 1) return;
+        if (Object.hasOwn(message, "mode")) { if (isSessionMode(message.mode)) next = { mode: message.mode }; return; }
         if (message.society !== undefined) { if (typeof message.society === "string") next = { society: message.society }; return; }
         if (message.session === undefined) next = {};
         else if (typeof message.session === "string") next = { session: message.session };

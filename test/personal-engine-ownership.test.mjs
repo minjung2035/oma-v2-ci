@@ -15,10 +15,10 @@ function world({ fail, close, dispose, run, construct, catalog, beforeSwitch, se
   const calls = [], hooks = {}, writes = [], commands = {}, picks = [];
   const birth = { id: 'personal-id', mode: 'personal', cwd: '/fixture/work', history: '/fixture/history' };
   const manager = { getCwd: () => birth.cwd, getSessionDir: () => birth.history };
-  const session = { sessionFile: '/fixture/history/current.jsonl', extensionRunner: {
+  const session = { messages: [], sessionFile: '/fixture/history/current.jsonl', extensionRunner: {
     async emit(event) { calls.push(event.type); if (event.type === 'session_before_switch' && beforeSwitch) return beforeSwitch(event); return hooks[event.type]?.(event, context); },
   }, async abort() { calls.push('abort'); if (fail === 'abort') throw new Error('injected abort'); }, dispose() {} };
-  const context = { cwd: birth.cwd, ui: { addAutocompleteProvider(factory) { calls.push(['autocomplete', factory({})]); }, setStatus() {}, setHeader(factory) { factory?.({}, { fg: (_color, text) => text }).render(80); }, setFooter() {}, notify(...args) { calls.push(['notice', ...args]); },
+  const context = { cwd: birth.cwd, isIdle: () => true, ui: { addAutocompleteProvider(factory) { calls.push(['autocomplete', factory({})]); }, setStatus() {}, setHeader(factory) { factory?.({}, { fg: (_color, text) => text }).render(80); }, setFooter() {}, notify(...args) { calls.push(['notice', ...args]); },
     select(title, rows) { return new Promise(resolve => picks.push({ title, rows, choose: resolve })); },
     custom(factory) { return new Promise(resolve => picks.push(factory({ requestRender() {} }, {}, {}, resolve))); },
   } };
@@ -243,51 +243,50 @@ test('Personal engine: extension replacement failure returns owners before upstr
   assert.equal(w.calls.filter(value => value === 'dispose').length, 1);
   assert.equal(w.calls.filter(value => value === 'credentials-close').length, 1);
 });
-test('Personal engine: /society on a free slot hands the project Society to the host and ends the writer', async () => {
+test('Personal engine: /society opens the mode choice only when requested and hands Society to the host', async () => {
   let finish;
   const w = world({ run: async () => new Promise(resolve => { finish = resolve; }) });
   const main = w.main(); await flush();
-  await w.commands.society.handler('', w.context);
-  assert.deepEqual(w.calls.find(value => Array.isArray(value) && value[0] === 'slot'), ['slot', '/fixture/data', '/fixture/work']);
+  assert.equal(w.picks.length, 0, 'startup has no mode picker');
+  const choosing = w.commands.society.handler('', w.context); await flush();
+  assert.equal(w.picks[0].title, 'Session mode — Personal');
+  assert.deepEqual(Array.from(w.picks[0].rows), ['Personal', 'Society']);
+  w.picks[0].choose('Society'); await choosing;
   const sent = w.calls.find(value => Array.isArray(value) && value[0] === 'switch');
-  assert.equal(sent?.[1]?.type, 'switch'); assert.equal(sent?.[1]?.society, 'fixture-society'); assert.equal(sent?.[1]?.session, undefined);
+  assert.equal(sent?.[1]?.type, 'switch'); assert.equal(sent?.[1]?.mode, 'society');
+  assert.equal(sent?.[1]?.session, undefined); assert.equal(sent?.[1]?.society, undefined);
   assert.equal(w.calls.includes('upstream-exit'), true);
   finish(); await main;
 });
-test('Personal engine: a refused slot is reported and never reaches the host or the writer', async () => {
-  let finish;
-  const w = world({ slot: { kind: 'refused', reason: 'injected durable record' }, run: async () => new Promise(resolve => { finish = resolve; }) });
-  const main = w.main(); await flush();
-  await w.commands.society.handler('', w.context);
-  assert.deepEqual(w.calls.find(value => Array.isArray(value) && value[0] === 'notice'), ['notice', 'injected durable record', 'warning']);
-  assert.equal(w.calls.some(value => Array.isArray(value) && value[0] === 'switch'), false);
-  assert.equal(w.calls.includes('upstream-exit'), false); assert.equal(w.calls.includes('dispose'), false);
-  finish(); await main;
-});
-test('Personal engine: an observation failure refuses without treating the slot as absent', async () => {
-  let finish;
-  const w = world({ slot() { throw new Error('injected observation'); }, run: async () => new Promise(resolve => { finish = resolve; }) });
-  const main = w.main(); await flush();
-  await w.commands.society.handler('', w.context);
-  assert.equal(w.calls.some(value => Array.isArray(value) && value[0] === 'notice' && value[2] === 'error'), true);
-  assert.equal(w.calls.some(value => Array.isArray(value) && value[0] === 'switch'), false);
-  finish(); await main;
-});
-test('Personal engine: /society on macOS refuses without a transition — the host contract has no meaning for it', async () => {
+for (const condition of ['conversation', 'busy', 'cancel', 'same-mode', 'stale']) {
+  test(`Personal engine: ${condition} keeps the current mode and writer`, async () => {
+    let finish;
+    const w = world({ run: async () => new Promise(resolve => { finish = resolve; }) });
+    const main = w.main(); await flush();
+    if (condition === 'conversation') w.session.messages.push({ role: 'user' });
+    if (condition === 'busy') w.context.isIdle = () => false;
+    const choosing = w.commands.society.handler('', w.context); await flush();
+    if (condition === 'stale') w.hooks.session_shutdown({ reason: 'reload' }, w.context);
+    if (w.picks.length) w.picks[0].choose(condition === 'same-mode' ? 'Personal' : condition === 'stale' ? 'Society' : undefined);
+    await choosing;
+    assert.equal(w.calls.some(value => Array.isArray(value) && value[0] === 'switch'), false);
+    assert.equal(w.calls.includes('upstream-exit'), false);
+    finish(); await main;
+  });
+}
+test('Personal engine: Mac mode switch returns to the host Society route', async () => {
   let finish;
   const w = world({ platform: 'darwin', run: async () => new Promise(resolve => { finish = resolve; }) });
   const main = w.main(); await flush();
-  await w.commands.society.handler('', w.context);
-  assert.equal(w.calls.some(value => Array.isArray(value) && value[0] === 'notice'), true);
-  assert.equal(w.calls.some(value => Array.isArray(value) && value[0] === 'slot'), false, 'the gate is not asked on a platform that cannot take the answer');
-  assert.equal(w.calls.some(value => Array.isArray(value) && value[0] === 'switch'), false);
+  await w.commands.society.handler('society', w.context);
+  assert.equal(w.calls.find(value => Array.isArray(value) && value[0] === 'switch')?.[1]?.mode, 'society');
   finish(); await main;
 });
 test('Personal engine: a cancelled before-switch keeps the /society session Personal', async () => {
   let finish;
   const w = world({ beforeSwitch: async () => ({ cancel: true }), run: async () => new Promise(resolve => { finish = resolve; }) });
   const main = w.main(); await flush();
-  await w.commands.society.handler('', w.context);
+  await w.commands.society.handler('society', w.context);
   assert.equal(w.calls.some(value => Array.isArray(value) && value[0] === 'switch'), false);
   assert.equal(w.calls.includes('upstream-exit'), false);
   finish(); await main;
@@ -297,9 +296,9 @@ test('Personal engine: a second /society while one is transitioning cannot doubl
   const w = world({ beforeSwitch: () => new Promise(resolve => { accept = resolve; }),
     run: async () => new Promise(resolve => { finish = resolve; }) });
   const main = w.main(); await flush();
-  const first = w.commands.society.handler('', w.context); await flush();
-  await w.commands.society.handler('', w.context);
-  assert.equal(w.calls.filter(value => Array.isArray(value) && value[0] === 'slot').length, 1);
+  const first = w.commands.society.handler('society', w.context); await flush();
+  await w.commands.society.handler('society', w.context);
+  assert.equal(w.calls.filter(value => value === 'session_before_switch').length, 1);
   accept({ cancel: false }); await first;
   assert.equal(w.calls.filter(value => Array.isArray(value) && value[0] === 'switch').length, 1);
   finish(); await main;
@@ -308,8 +307,8 @@ test('Personal engine: an IPC send failure on /society returns the transition sl
   let finish;
   const problem = new Error('injected send'), w = world({ sendError: problem, run: async () => new Promise(resolve => { finish = resolve; }) });
   const main = w.main(); await flush();
-  await assert.rejects(w.commands.society.handler('', w.context), error => error === problem);
-  await assert.rejects(w.commands.society.handler('', w.context), error => error === problem);
+  await assert.rejects(w.commands.society.handler('society', w.context), error => error === problem);
+  await assert.rejects(w.commands.society.handler('society', w.context), error => error === problem);
   assert.equal(w.calls.filter(value => Array.isArray(value) && value[0] === 'switch').length, 2);
   assert.equal(w.calls.includes('upstream-exit'), false); finish(); await main;
 });

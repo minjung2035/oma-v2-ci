@@ -13,7 +13,7 @@ const flush = async () => { for (let i = 0; i < 20; i++) await Promise.resolve()
 async function world({ setModel, init, resourceReload, dispose, fail, moduleClose, observe } = {}) {
   const timers = new Set(), channels = [], hooks = {}, sent = [], picks = [], changes = [], signals = [], commands = {}, modules = [], notices = [],
     modes = [], overrides = [];
-  const session = { model: { id: 'initial', provider: 'fake' }, thinkingLevel: 'off',
+  const session = { messages: [], extensionRunner: { async emit() { return {}; } }, model: { id: 'initial', provider: 'fake' }, thinkingLevel: 'off',
     modelRuntime: {}, scopedModels: [], sessionManager: {},
     subscribe() { return () => {}; },
     async abort() { modules.push('abort'); },
@@ -22,7 +22,7 @@ async function world({ setModel, init, resourceReload, dispose, fail, moduleClos
     getAvailableThinkingLevels() { return ['off', 'high']; },
     setThinkingLevel(level) { changes.push(['effort', level]); this.thinkingLevel = level; },
   };
-  const context = { cwd: '/work', ui: {
+  const context = { cwd: '/work', isIdle: () => true, ui: {
     addAutocompleteProvider(factory) { assert.equal(factory({}).cwd, '/work'); },
     setEditorComponent(factory) { factory({}, {}, {}); }, setHeader() {}, setFooter() {}, notify(message, level) { notices.push([message, level]); },
     // B3: the host mirrors OMA's waiting queue above the editor; the fixture
@@ -124,6 +124,26 @@ async function world({ setModel, init, resourceReload, dispose, fail, moduleClos
     tick() { for (const timer of [...timers]) { timers.delete(timer); timer.run(); } },
   };
 }
+test('interactive owner: /society chooses Personal before the first conversation', async () => {
+  const w = await world();
+  assert.equal(w.picks.length, 0);
+  const choosing = w.commands.society.handler('', w.context); await flush();
+  w.picks[0].choose('Personal'); await choosing;
+  assert.deepEqual(JSON.parse(JSON.stringify(w.sent.filter(event => event.type === 'switch'))), [{ type: 'switch', mode: 'personal' }]);
+});
+for (const condition of ['conversation', 'busy', 'cancel', 'same-mode', 'stale', 'changed', 'extension-cancel'])
+  test(`interactive owner: mode choice ${condition} keeps Society`, async () => {
+    const w = await world();
+    if (condition === 'conversation') w.runtime.session.messages.push({ role: 'user' });
+    if (condition === 'busy') w.context.isIdle = () => false;
+    if (condition === 'extension-cancel') w.runtime.session.extensionRunner.emit = async () => ({ cancel: true });
+    const choosing = w.commands.society.handler('', w.context); await flush();
+    if (condition === 'stale') w.hooks.session_shutdown({ reason: 'reload' });
+    if (condition === 'changed') w.runtime.session.messages.push({ role: 'user' });
+    if (w.picks.length) w.picks[0].choose(condition === 'same-mode' ? 'Society' : condition === 'cancel' ? undefined : 'Personal');
+    await choosing;
+    assert.equal(w.sent.some(event => event.type === 'switch'), false);
+  });
 test('interactive owner: native extension identity advances before the existing loader reloads and returns on quit', async () => {
   const w = await world();
   await w.runtime.services.resourceLoader.reload();

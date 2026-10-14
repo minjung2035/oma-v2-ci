@@ -19,7 +19,7 @@ oma
 
 ## 세션 모드
 
-[DR28](design-revisions.md)의 Society는 기본 선택이며 기존 프로젝트 binding·Principal 제한·Worker 협업을 유지한다. Personal은 Principal에 쓰기 권한을 주는 옵션이 아니라 Society 없이 동봉 Pi/Open TUI·기본 도구·명시적으로 선택한 확장을 사용하는 별도 Human 세션이다. 새 세션의 선택창 또는 `oma --mode personal`로 시작하며 일반 OS 사용자 권한으로 프로젝트 밖 파일도 편집한다. 모드는 시작 때 고정되고 `/resume`·fork는 보존하며 `/new`만 다시 선택한다. Personal 세션에서 `/society`는 이 프로젝트의 Society를 켠다 — 프로젝트 자신의 Society 자리가 비어 있을 때만 진행되고, 이미 binding·Society 기록이 있거나 지금 확인할 수 없으면 그 사실을 이유로 거절한다. 진행되면 현재 세션이 정상 종료된 뒤 `oma --society`로 새로 시작하므로 이 세션의 history를 잇지 않으며, macOS에서는 Personal 안에서 시작할 수 없다. Personal Config의 확장 선택은 Principal/Worker 설정과 독립적으로 저장된다.
+[DR28](design-revisions.md)의 Society는 기본 모드이며 기존 프로젝트 binding·Principal 제한·Worker 협업을 유지한다. `oma`는 모드 선택창 없이 바로 Society 세션을 연다. 아직 대화를 시작하지 않은 idle 세션에서 `/society`를 입력하면 Personal/Society 선택이 열린다. 다른 모드를 고르면 현재 세션이 완전히 종료된 뒤 같은 프로젝트에서 해당 모드로 다시 시작하며 기존 history를 변환하지 않는다. 작업을 시작한 뒤에는 `/new`로 현재 모드의 새 세션을 열고 선택한다. Personal은 Society 없이 동봉 Pi/Open TUI·기본 도구·명시적으로 선택한 확장을 사용하는 별도 Human 세션이며, `oma --mode personal`로도 바로 시작할 수 있다. `/resume`·fork는 저장된 모드를 보존한다. macOS의 Personal→Society는 OMA 앱에서 실행 중인 Society에 연결하므로 앱에서 먼저 열어야 한다. Personal Config의 확장 선택은 Principal/Worker 설정과 독립적으로 저장된다.
 
 Mac의 `oma pi install npm:<package> --host-only`는 앱·Host API token·VM 없이 기존 host package store/index만 갱신한다. `remove`, `update`, `list`에도 같은 선택을 사용할 수 있다. 설치만으로 Personal 확장을 켜지 않으므로 Personal의 Config > Extensions에서 명시적으로 선택한다. `--host-only`는 Pi에 전달되지 않으며 `--project`와 함께 쓸 수 없고 Linux에서는 거절한다. 이 flag가 없으면 기존 Society guest 동기화가 필요하며 앱이 없거나 관측이 실패해도 host-only로 대신 실행하지 않는다.
 

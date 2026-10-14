@@ -45,6 +45,11 @@ export async function personalMain(options: { readonly dataRoot: string; readonl
   if (ended.next === undefined) { process.exitCode = ended.code; return; }
   if (process.execve === undefined) throw new StoreError("UNSUPPORTED_PROFILE", "This Node cannot restart oma in place; start oma again");
   const env = { ...process.env }; delete env[RESUME_SESSION_ENV];
+  if (ended.next.mode !== undefined) {
+    process.chdir(cwd);
+    process.execve(process.execPath, [process.execPath, ...process.execArgv, join(libdir, DEPLOYMENT_LAYOUT.entries.tui), "--mode", ended.next.mode], env);
+    return;
+  }
   if (ended.next.society !== undefined) {
     // `/society`: a fresh Society birth for this session's own project, never
     // this session resumed — no RESUME_SESSION_ENV and no saved history.
@@ -67,5 +72,6 @@ export async function personalMain(options: { readonly dataRoot: string; readonl
       if (birth.mode === "personal") process.chdir(realpathSync(birth.cwd));
     }
   }
-  process.execve(process.execPath, [process.execPath, ...process.execArgv, join(libdir, DEPLOYMENT_LAYOUT.entries.tui)], env);
+  process.execve(process.execPath, [process.execPath, ...process.execArgv, join(libdir, DEPLOYMENT_LAYOUT.entries.tui),
+    ...(ended.next.session === undefined ? ["--mode", "personal"] : [])], env);
 }

@@ -25,7 +25,7 @@ export interface AttachTerminal {
   onResize(listener: () => void): () => void;
 }
 export type AttachEnd =
-  | { readonly kind: "exit"; readonly code: number | null; readonly signal: string | null; readonly next?: "new" | "resume"; readonly history?: string }
+  | { readonly kind: "exit"; readonly code: number | null; readonly signal: string | null; readonly next?: "new" | "resume"; readonly history?: string; readonly mode?: "personal" | "society" }
   | { readonly kind: "detached" }
   | { readonly kind: "refused"; readonly code: string; readonly message: string }
   /** The connection ended without the session saying why: whether the

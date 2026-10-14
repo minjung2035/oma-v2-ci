@@ -49,8 +49,7 @@ export default pi => {
 };\n`);
 writeFileSync(join(store, 'oma-extensions.json'), JSON.stringify([{ source: 'npm:local-fixture', entries: ['packages:fixture.mjs'] }]));
 const projectSeed = ending.startsWith('project-seed');
-// /society's gate: a slot that already carries this project's binding must be
-// refused by name while the Personal session stays alive.
+// A bound project still lets an unused Personal session open the mode picker.
 if (ending === 'society-bound') {
   const project = defaultSocietyFor(realpathSync(cwd), sha256Hex(realpathSync(cwd))), slot = join(data, project);
   mkdirSync(slot, { recursive: true });

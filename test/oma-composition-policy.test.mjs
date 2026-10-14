@@ -1202,6 +1202,24 @@ test("DR27/P0-4: shutdown during startup cannot acquire a later display poll", a
   assert.equal(society.intervals.size, 0);
   assert.equal(society.calls.includes("status"), false);
 });
+test("Session mode: Society switches to a fresh Personal session only after actual engine exit", async () => {
+  const society = await run({ engineExits: false }); society.broker.fireReady(); await society.settle();
+  const live = society.started;
+  live.sink.onUi({ type: "switch", mode: "personal" }); await society.settle();
+  assert.equal(society.restarts.length, 0);
+  live.confirmDeath(); await society.until(() => society.restarts.length === 1);
+  const [, argv, env] = society.restarts[0];
+  assert.deepEqual(Array.from(argv), ["node", "/lib/dist/src/entry/oma.js", "--mode", "personal"]);
+  assert.equal(env.OMA_RESUME_SESSION, undefined);
+});
+test("Session mode: guest Society carries the Personal choice to the host after actual engine exit", async () => {
+  const calls = [], hostHistory = { async finish(reference, mode) { calls.push([reference, mode]); }, close() {} };
+  const society = await run({ engineExits: false, hostHistory }); society.broker.fireReady(); await society.settle();
+  society.started.sink.onUi({ type: "switch", mode: "personal" }); await society.settle();
+  assert.deepEqual(calls, []);
+  society.started.confirmDeath(); await society.until(() => calls.length === 1);
+  assert.deepEqual(calls, [[null, "personal"]]); assert.equal(society.restarts.length, 0);
+});
 test("DR27/P0-4: relaunch returns the display poll before waiting for the engine", async () => {
   const society = await run({ engineExits: false }); society.broker.fireReady(); await society.settle();
   const old = [...society.intervals][0]; const live = society.started; assert.ok(live);

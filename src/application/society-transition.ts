@@ -3,6 +3,7 @@ import { realpathSync, readdirSync, statSync } from "node:fs";
 import { basename, join } from "node:path";
 import { StoreError } from "../domain/errors.js";
 import { DEPLOYMENT_LAYOUT } from "../domain/deployment.js";
+import type { SessionMode } from "../domain/session-mode.js";
 import { removeUnusedTree } from "../storage/directory.js";
 import { principalSessionDir, principalWorkspace } from "../runtime/engine/principal-session.js";
 import { RESUME_SESSION_ENV, sessionBirthForHistory } from "../runtime/session-catalog.js";
@@ -50,7 +51,9 @@ export class SocietyTransition {
     }
     catch { /* left behind, not lost */ }
   }
-  async relaunch(resume: string | null): Promise<void> {
+  async relaunch(resume: string | null, mode?: SessionMode): Promise<void> {
+    if (mode !== undefined && (resume !== null || mode !== "personal"))
+      throw new StoreError("INVALID_REQUEST", "A mode switch starts a fresh Personal session");
     if (this.runtime.finished || this.relaunchPending)
       return;
     const outgoing = this.runtime.session;
@@ -124,11 +127,11 @@ export class SocietyTransition {
       // A hidden-VM session returns a new birth to the Mac, only after its
       // actual engine and owned broker ended. No guest Personal or guest path.
       if (this.hostHistories !== null) {
-        await this.hostHistories.finish(guestResume ?? resume);
+        await this.hostHistories.finish(guestResume ?? resume, mode);
         process.exit(0);
         return;
       }
-      if (resume === null && requestHostNewSession()) {
+      if (resume === null && requestHostNewSession(mode)) {
         process.exit(0);
         return;
       }
@@ -141,7 +144,8 @@ export class SocietyTransition {
       if (process.execve === undefined)
         this.fail("This Node cannot restart oma in place; start oma again.", exitFor("UNSUPPORTED_PROFILE"));
       process.chdir(resumeCwd);
-      process.execve(process.execPath, [process.execPath, ...process.execArgv, join(this.libdir, DEPLOYMENT_LAYOUT.entries.tui)], env);
+      process.execve(process.execPath, [process.execPath, ...process.execArgv, join(this.libdir, DEPLOYMENT_LAYOUT.entries.tui),
+        ...(mode === undefined ? [] : ["--mode", mode])], env);
     }
     finally {
       this.relaunchPending = false;

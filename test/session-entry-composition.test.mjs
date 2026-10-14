@@ -112,15 +112,11 @@ test('Package grammar: host-only is Mac-only and returns an explicit local decis
   assert.equal(w.packageCommand(['list', '--host-only']).kind, 'refused');
 });
 for (const platform of ['linux', 'darwin']) {
-  for (const args of [[], ['--mode', 'personal']]) test(`birth router ${platform}: ${JSON.stringify(args)} Personal loads no Society or Host API`, async () => {
+  for (const args of [['--mode', 'personal']]) test(`birth router ${platform}: ${JSON.stringify(args)} Personal loads no Society or Host API`, async () => {
     const w = world(platform); await w.main(args);
     assert.equal(w.personal.length, 1); assert.equal(w.personal[0].cwd, '/current');
-    assert.deepEqual(w.effects.map(item => item[0]), args.length === 0 ? ['chooser', 'personal'] : ['personal']);
+    assert.deepEqual(w.effects.map(item => item[0]), ['personal']);
     if (platform === 'darwin') assert.equal(w.personal[0].packages, '/fixture/home/Library/Application Support/OMA/packages');
-  });
-  test(`birth router ${platform}: birth chooser cancellation has no start or token effects`, async () => {
-    const w = world(platform, { selected: null }); await w.main([]);
-    assert.deepEqual(w.effects, [['chooser']]);
   });
   test(`birth router ${platform}: saved Personal resumes its mode without a chooser`, async () => {
     const w = world(platform, { birth: { mode: 'personal', cwd: '/saved' } });
@@ -139,9 +135,9 @@ for (const platform of ['linux', 'darwin']) {
     assert.deepEqual(w.effects.map(item => item[0]), ['birth']);
   });
 }
-test('Linux birth router: Society admission happens only after the chooser', async () => {
-  const w = world('linux', { selected: 'society' }); await w.main([]);
-  assert.deepEqual(w.effects, [['chooser'], ['society-import']]);
+for (const tty of [true, false]) test(`Linux birth router: startup defaults to Society without a chooser (TTY ${tty})`, async () => {
+  const w = world('linux', { selected: null }); w.host.stdin.isTTY = w.host.stdout.isTTY = tty; await w.main([]);
+  assert.deepEqual(w.effects, [['society-import']]);
 });
 test('Mac birth router: explicit host-only package command requires neither token nor Host API', async () => {
   const w = world('darwin', { packages: true, tokenError: new Error('app absent') });
@@ -163,7 +159,7 @@ test('Mac birth router: an ordinary package command cannot become host-only when
 test('Mac birth router: Society uses its token and attaches only an observed running Society', async () => {
   const w = world('darwin', { selected: 'society' });
   await assert.rejects(w.main([]), error => error.exit === 0);
-  assert.deepEqual(w.effects.map(item => item[0]), ['chooser', 'token', 'host-api', 'request', 'request']);
+  assert.deepEqual(w.effects.map(item => item[0]), ['token', 'host-api', 'request', 'request']);
   assert.deepEqual(w.effects.filter(item => item[0] === 'request').map(item => item[1]), ['hello', 'society.list']);
   assert.equal(w.attached[0].society, 'demo'); assert.equal(w.attached[0].takeover, false);
 });
@@ -186,7 +182,14 @@ for (const societies of [undefined, null, {}, [null], [['demo', true]], [{ socie
       await assert.rejects(w.main(args), { code: 'BROKER_UNAVAILABLE' }); assert.equal(w.attached.length, 0);
       assert.deepEqual(w.output, [], 'no partial observation is displayed');
     });
-test('Mac birth router: completed guest /new restarts only the host birth chooser without stale resume or guest cwd', async () => {
+test('Mac birth router: guest Personal choice re-enters the host with an explicit mode', async () => {
+  const w = world('darwin', { attachEnd: { kind: 'exit', code: 0, signal: null, next: 'new', mode: 'personal' } });
+  await w.main(['attach', 'demo']);
+  const call = w.effects.find(item => item[0] === 'exec');
+  assert.deepEqual(Array.from(call[2]), ['/fixture/node', '--fixture', '/fixture/dist/src/entry/oma.js', '--mode', 'personal']);
+  assert.equal(Object.hasOwn(call[3], 'OMA_RESUME_SESSION'), false);
+});
+test('Mac birth router: completed guest /new restarts the host without stale resume or guest cwd', async () => {
   const w = world('darwin', { attachEnd: { kind: 'exit', code: 0, signal: null, next: 'new' } });
   w.host.env.OMA_RESUME_SESSION = '/guest/history.jsonl';
   await w.main(['attach', 'demo']);

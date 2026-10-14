@@ -8,11 +8,22 @@ import { randomUUID } from "node:crypto";
 import { createServer, connect, type Socket } from "node:net";
 import { CURRENT_SESSION_VERSION } from "@earendil-works/pi-coding-agent";
 import { hostHistoryReference, parseHostHistoryReference, parseHostHistoryQuery, checkedHostHistoryPage } from "../src/protocol/host-history.js";
-import { parseTerminalExit, TERMINAL_FRAME_BYTES } from "../src/protocol/host-guest.js";
+import { isNewSessionHandoff, parseTerminalExit, TERMINAL_FRAME_BYTES } from "../src/protocol/host-guest.js";
 import { newSessionBirth, publishSessionBirth } from "../src/runtime/session-mode.js";
 import { hostPersonalHistoryQuery, inspectHostPersonalHistory } from "../src/platform/host/personal-histories.js";
 import { HostHistoryChannel } from "../src/runtime/host-history-channel.js";
 import { FrameParser, encodeFrame } from "../src/frame.js";
+
+test("Session mode: host handoff accepts a mode only for a successful new session", () => {
+  const valid = { code: 0, signal: null, next: "new", mode: "personal" };
+  assert.deepEqual(parseTerminalExit(Buffer.from(JSON.stringify(valid))), valid);
+  assert.equal(isNewSessionHandoff({ next: "new", mode: "personal" }), true);
+  for (const fields of [{ mode: "invalid" }, { mode: null }, { code: 7 }, { signal: "SIGTERM" },
+    { next: "resume" }, { history: "/untrusted/path" }])
+    assert.equal(parseTerminalExit(Buffer.from(JSON.stringify({ ...valid, ...fields }))), null);
+  assert.equal(isNewSessionHandoff({ next: "new", mode: "invalid" }), false);
+  assert.equal(isNewSessionHandoff({ next: "new", mode: "personal", cwd: "/untrusted" }), false);
+});
 
 function world(t: import("node:test").TestContext) {
   const root = mkdtempSync(join(tmpdir(), "oma-host-history-")), cwd = join(root, "project");
@@ -109,6 +120,14 @@ for (const kind of ["closed", "partial", "damaged", "empty-error"] as const)
     });
     await assert.rejects(bridge.pages(() => assert.fail("unknown became a history list")), { code: "BROKER_UNAVAILABLE" });
   });
+
+test("Session mode: final Personal choice is flushed to the host before EOF", async t => {
+  const w = world(t), seen: Record<string, unknown>[] = [];
+  let ended!: () => void; const eof = new Promise<void>(resolve => { ended = resolve; });
+  const bridge = await channel(t, w, (raw, socket) => { seen.push(raw); socket.once("end", ended); });
+  await bridge.finish(null, "personal"); await eof;
+  assert.deepEqual(seen, [{ next: "new", mode: "personal" }]);
+});
 
 test("DR29: final resume is exactly one flushed private request followed by EOF", async t => {
   const w = world(t), reference = save(w, 1), seen: Record<string, unknown>[] = [];

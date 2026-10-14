@@ -123,10 +123,21 @@ for (const [label, next, target] of [['new', {}, undefined], ['Personal resume',
     assert.ok(w.effects.findIndex(item => item[0] === 'engine-return') < w.effects.findIndex(item => item[0] === 'exec'));
     const [executable, argv, env] = w.replacements[0];
     assert.equal(executable, '/fixture/node');
-    assert.deepEqual(Array.from(argv), ['/fixture/node', '--fixture-node-arg', '/fixture/dist/src/entry/oma.js']);
+    assert.deepEqual(Array.from(argv), ['/fixture/node', '--fixture-node-arg', '/fixture/dist/src/entry/oma.js',
+      ...(label === 'new' ? ['--mode', 'personal'] : [])]);
     assert.equal(env.OMA_RESUME_SESSION, next.session); assert.equal(env.OMA_HOST_HOME, '/fixture/data');
     assert.deepEqual(w.effects.filter(item => item[0] === 'chdir'), target?.mode === 'personal' ? [['chdir', target.cwd]] : []);
   });
+for (const platform of ['linux', 'darwin']) test(`Personal host ${platform}: mode choice waits for actual exit and starts Society without a saved history`, async () => {
+  let finish; const w = world({ platform, run: () => new Promise(resolve => { finish = resolve; }) });
+  const pending = w.personalMain(options); await flush();
+  assert.equal(w.replacements.length, 0);
+  finish({ code: 0, next: { mode: 'society' } }); await pending;
+  const [, argv, env] = w.replacements[0];
+  assert.deepEqual(Array.from(argv), ['/fixture/node', '--fixture-node-arg', '/fixture/dist/src/entry/oma.js', '--mode', 'society']);
+  assert.equal(env.OMA_RESUME_SESSION, undefined);
+  assert.deepEqual(w.effects.filter(item => item[0] === 'chdir'), [['chdir', options.cwd]]);
+});
 test('Personal host: /society re-enters as a fresh `oma --society` birth after the actual child exit', async () => {
   let finish; const w = world({ run: () => new Promise(resolve => { finish = resolve; }) });
   const pending = w.personalMain(options); pending.catch(() => {}); await flush();

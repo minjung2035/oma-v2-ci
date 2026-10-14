@@ -38,7 +38,7 @@ export interface SessionOptions {
    * it reattaches and is drawn again rather than holding the program back. */
   readonly backlogBytes: number;
 }
-export interface SessionEnd { readonly code: number | null; readonly signal: string | null; readonly next?: "new" | "resume"; readonly history?: string }
+export interface SessionEnd { readonly code: number | null; readonly signal: string | null; readonly next?: "new" | "resume"; readonly history?: string; readonly mode?: "personal" | "society" }
 
 type Screen = { readonly socket: Socket; readonly parser: TerminalFrameParser; attached: boolean; sized: boolean };
 
@@ -65,7 +65,7 @@ export class TerminalSession {
     const handoff = child.stdio[3] as Duplex | null;
     this.historyChannel = handoff;
     const requests = new FrameParser(TERMINAL_FRAME_BYTES - 1);
-    let handoffEnded = handoff === null, requested: { next: "new" | "resume"; history?: string } | null = null, invalidHandoff = false;
+    let handoffEnded = handoff === null, requested: { next: "new" | "resume"; history?: string; mode?: "personal" | "society" } | null = null, invalidHandoff = false;
     let drainTimer: ReturnType<typeof setTimeout> | undefined;
     const settle = (): void => {
       if (exited === null || !drained || !handoffEnded) return;
@@ -78,7 +78,8 @@ export class TerminalSession {
       try {
         for (const frame of requests.feed(chunk)) {
           if (requested !== null) throw new Error("Invalid session handoff");
-          if (isNewSessionHandoff(frame.raw)) requested = { next: "new" };
+          if (isNewSessionHandoff(frame.raw)) requested = { next: "new",
+            ...(frame.raw.mode === "personal" || frame.raw.mode === "society" ? { mode: frame.raw.mode } : {}) };
           else if (isResumeSessionHandoff(frame.raw)) requested = { next: "resume", history: frame.raw.history as string };
           else this.requestHistory(parseHostHistoryQuery(frame.raw));
         }

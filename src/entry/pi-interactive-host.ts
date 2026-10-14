@@ -327,6 +327,22 @@ export async function runInteractive(): Promise<void> {
   };
   let runtime: Awaited<ReturnType<typeof createAgentSessionRuntime>> | undefined;
   let modules: ExtensionModules | undefined, mode: InteractiveMode | undefined;
+  let modeSelectionPending = false;
+  const chooseSessionMode = async (args: string, ctx: ExtensionContext): Promise<void> => {
+    const epoch = uiEpoch, session = runtime?.session;
+    if (!session || !currentUi(epoch) || modeSelectionPending) return;
+    const unused = (): boolean => session.messages.length === 0 && ctx.isIdle() && !pendingInput;
+    if (!unused()) { notify("Choose Personal or Society before starting a conversation. Use /new for a new session.", "warning"); return; }
+    modeSelectionPending = true;
+    try {
+      const picked = args.trim() || await ctx.ui.select("Session mode — Society", ["Society", "Personal"]);
+      if (!currentUi(epoch) || runtime?.session !== session || !unused() || picked === undefined || picked.toLowerCase() === "society") return;
+      if (picked.toLowerCase() !== "personal") { notify("Use /society personal or /society society.", "warning"); return; }
+      const result = await session.extensionRunner.emit({ type: "session_before_switch", reason: "new" });
+      if (result?.cancel !== true && currentUi(epoch) && runtime?.session === session && unused())
+        ui.send({ type: "switch", mode: "personal" });
+    } finally { modeSelectionPending = false; }
+  };
   /** The engine's own model list: every model of every provider it is logged in to. */
   const chooseModel = (session: AgentSession, current: EngineModel | undefined): Promise<EngineModel | undefined> =>
     context!.ui.custom<EngineModel | undefined>((tui, _theme, _keys, done) =>
@@ -483,6 +499,7 @@ export async function runInteractive(): Promise<void> {
     pi.on("tool_execution_end", event => compact.toolEnded(event.toolCallId));
     pi.registerMarkdownTransformer(markdown => markdown.replace(UNSEEN_EXCEPT_LAYOUT, ""));
     pi.registerCommand("oma", { description: "Open oma settings: Dashboard, Config, Mail (also Ctrl+X)", handler: async () => { openPanel(); } });
+    pi.registerCommand("society", { description: "Choose Personal or Society before starting a conversation", handler: chooseSessionMode });
     // Listed by the engine's /hotkeys; the editor itself answers the key first.
     pi.registerShortcut("ctrl+x", { description: "Open oma settings (Dashboard, Config, Mail)", handler: async () => { openPanel(); } });
     pi.on("model_select", () => { deferUi(reportEngine); });

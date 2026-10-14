@@ -11,6 +11,9 @@ staging/
 production-loc.json
 production-measurement-hashes.json
 .scratch/
+# Local AIF planning notes.
+/AIF_PLT_Plan.md
+/AiF_PLT_Plan.md.save
 # A vendored bundle's pinned dependency closure is integrity-listed input —
 # every byte must be committed, so node_modules (and any dist/ inside it)
 # under a vendored bundle re-includes itself after the general rules above.

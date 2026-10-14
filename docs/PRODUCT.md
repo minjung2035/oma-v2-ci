@@ -12,7 +12,7 @@ OMA는 Pi를 내부 엔진으로 사용하는 코딩 에이전트다. 사용자�
 
 원래 Pi의 대화형 화면과 엔진 기능을 사용하고 OMA의 협업·설정·메일 기능을 연결한다. 이전 RPC 전용/custom conversation 설계는 DR21에서 철회했고 원본 InteractiveMode 사용은 DR22가 수용했다. 제품 구현을 과거 화면 설계로 되돌리지 않는다([결정 기록](design-revisions.md)).
 
-Society와 Personal은 세션 모드다. Society는 Principal/Worker 협업, Personal은 일반 Human 코딩 경로다. 모드는 birth 사실이며 세션 안에서 바뀌지 않는다 — 기록 없는 Personal 세션은 `/society`로 프로젝트의 Society를 켜고(프로세스 재진입, 이어쓰기 아님), 선택·history·resume·설정은 [운영 안내](operations.md#세션-모드)와 관련 MODE 계약을 따른다. Personal을 Principal 권한 toggle로 구현하지 않는다.
+Society와 Personal은 세션 모드다. Society는 Principal/Worker 협업, Personal은 일반 Human 코딩 경로다. OMA는 시작 시 모드 선택창 없이 기본 Society로 열린다. 첫 대화 전 idle 상태에서는 `/society`로 모드를 선택하고 현재 writer 종료 후 다른 모드의 세션을 연다. 기존 birth·history는 보존하며 선택·history·resume·설정은 [운영 안내](operations.md#세션-모드)와 관련 MODE 계약을 따른다. Personal을 Principal 권한 toggle로 구현하지 않는다.
 
 ## 소유 경계
 

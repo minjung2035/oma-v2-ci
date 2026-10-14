@@ -253,21 +253,24 @@ export interface TerminalExit {
   readonly signal: string | null;
   readonly next?: "new" | "resume";
   readonly history?: string;
+  readonly mode?: "personal" | "society";
 }
 export function parseTerminalExit(payload: Buffer): TerminalExit | null {
   let value: Record<string, unknown>;
   try { value = parseJsonObject(payload).raw; } catch { return null; }
-  if (exactKeys(value, ["code", "signal"], ["next", "history"]) !== null ||
+  if (exactKeys(value, ["code", "signal"], ["next", "history", "mode"]) !== null ||
       !(value.code === null || uint(value.code)) ||
       !(value.signal === null || typeof value.signal === "string" && /^SIG[A-Z0-9]{1,16}$/.test(value.signal)) ||
       Object.hasOwn(value, "next") && (value.next !== "new" && value.next !== "resume" || value.code !== 0 || value.signal !== null)) return null;
   if (value.next === "resume") {
     try { checkedResumeHistoryReference(value.history as string); } catch { return null; }
   } else if (Object.hasOwn(value, "history")) return null;
+  if (Object.hasOwn(value, "mode") && (value.next !== "new" || value.mode !== "personal" && value.mode !== "society")) return null;
   return value as unknown as TerminalExit;
 }
 export function isNewSessionHandoff(value: Record<string, unknown>): boolean {
-  return exactKeys(value, ["next"]) === null && value.next === "new";
+  return exactKeys(value, ["next"], ["mode"]) === null && value.next === "new" &&
+    (!Object.hasOwn(value, "mode") || value.mode === "personal" || value.mode === "society");
 }
 export function isResumeSessionHandoff(value: Record<string, unknown>): boolean {
   if (exactKeys(value, ["next", "history"]) !== null || value.next !== "resume") return false;

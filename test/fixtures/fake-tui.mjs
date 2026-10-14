@@ -16,6 +16,7 @@ process.stdin.on("data", data => {
     else if (byte === 0x71) { out("\u001b[?2004l\u001b[?25h\u001b[?1049l"); process.exit(exitCode); }
     // N queues the private request but stays alive; only q ends this writer.
     else if (byte === 0x4e && !requestedNew) { requestedNew = true; requestHostNewSession(); out("host-new-requested"); }
+    else if (byte === 0x50 && !requestedNew) { requestedNew = true; requestHostNewSession("personal"); out("host-personal-requested"); }
     else if (byte === 0x46) exitCode = 7;
     // "Q": a last burst larger than the terminal's buffer, then the end.
     else if (byte === 0x51) { out(`${"x".repeat(512 * 1024)}END\u001b[?1049l`); process.exit(0); }

@@ -144,7 +144,7 @@ async function main(argv: readonly string[]): Promise<void> {
     sessionDirectory: () => runtime!.sessionDirectory,
     finished: () => runtime?.finished ?? false,
     submit: text => runtime!.submit(text), deliver: () => runtime!.deliver(),
-    shutdown: code => transition.shutdown(code), relaunch: resume => transition.relaunch(resume),
+    shutdown: code => transition.shutdown(code), relaunch: (resume, mode) => transition.relaunch(resume, mode),
   }, cleanup => {
     abandon = () => {
       histories?.close();

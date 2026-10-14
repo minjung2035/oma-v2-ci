@@ -35,9 +35,10 @@ for (const ending of ["tools", "config", "empty-extensions", "extensions", "new"
         step("\r", "Personal extension choice saved"), prompt]
       : ending === "extensions" ? [prompt, step("\x18", "Config — Personal"), step("\x1b[B\r", "PERSONAL_RESPONSE_COMPLETE"),
         step("\r", "Personal extension choice saved"), prompt]
-      : ending === "new" ? [prompt, step("/new\r", "Mode is fixed for this session", 0.5),
-        birth("\x1b[B\r", "Let's build something great", 0.5), prompt]
-      : ending === "society-bound" ? [step("/society\r", "already on for this project", 0.5), prompt]
+      : ending === "new" ? [prompt, birth("/new\r", "Let's build something great", 0.5), prompt]
+      : ending === "society-bound" ? [step("/society\r", "Session mode", 0.5),
+        step("\r", "Let's build something great", 0.5), prompt,
+        step("/society\r", "before starting a conversation", 0.5)]
       : ending === "project-seed-resume" ? [prompt, step("/fixture-break-project\r", "EXTENSION_TOOL_COMPLETE", 0.5),
         step("/resume\r", "[Personal]", 0.5), birth("\r", "PERSONAL_RESPONSE_COMPLETE", 0.5), prompt]
       : ending === "resume" ? [prompt, step("/resume\r", "[Personal]", 0.5), birth("\r", "PERSONAL_RESPONSE_COMPLETE", 0.5), prompt]
@@ -68,8 +69,8 @@ for (const ending of ["tools", "config", "empty-extensions", "extensions", "new"
     assert.doesNotMatch(output, /OMA_PI_BOUNDARY_V1|SOCIETY_PROMPT_SENTINEL|PROJECT_CONTEXT_SENTINEL/);
     if (ending === "config") { assert.match(output, /Config — Personal/); assert.match(output, /Thinking Level/); }
     if (ending.includes("extensions")) assert.match(output, /Personal extension choice saved/);
-    if (ending === "new") assert.match(output, /Mode is fixed for this session/);
-    if (ending === "society-bound") assert.match(output, /already on for this project/);
+    assert.doesNotMatch(output, /Mode is fixed for this session/);
+    if (ending === "society-bound") { assert.match(output, /Session mode/); assert.match(output, /before starting a conversation/); }
     if (ending.endsWith("resume")) assert.match(output, /\[Personal\]/);
     if (ending.startsWith("project-seed")) assert.match(output, /EXTENSION_TOOL_COMPLETE/);
     if (ending.startsWith("fork-")) assert.match(output, /Fork from Message/);

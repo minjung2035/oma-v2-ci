@@ -6,7 +6,6 @@ import { parseOmaArguments } from "../runtime/host-arguments.js";
 import { hostLaunchLocation } from "../runtime/assets.js";
 import { sessionBirthForHistory, RESUME_SESSION_ENV } from "../runtime/session-catalog.js";
 import { requireSessionMode } from "../runtime/session-mode.js";
-import { chooseSessionMode } from "../tui/session-mode.js";
 import { codeFor, fail } from "../application/exit.js";
 import { errorWords } from "../tui/words.js";
 
@@ -26,9 +25,7 @@ async function main(argv: readonly string[]): Promise<void> {
     if (birth !== null) requireSessionMode(birth, "society");
     mode = "society";
   } else if (mode === undefined) {
-    const selected = await chooseSessionMode({ input: process.stdin, output: process.stdout });
-    if (selected === null) return;
-    mode = selected;
+    mode = "society";
   }
   if (mode === "personal") {
     const { personalMain } = await import("./personal-host.js");

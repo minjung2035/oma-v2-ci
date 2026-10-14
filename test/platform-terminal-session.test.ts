@@ -189,6 +189,16 @@ for (const failure of [false, true]) test(`MODE-006: a real holder does not send
   assert.equal(await exited, failure ? 7 : 0);
 });
 
+test("Session mode: real guest holder carries Personal to the host only after writer exit", { skip: !setsid }, async t => {
+  const { socketPath, child, exited } = await holder(t);
+  const screen = await Screen.attach(socketPath); await screen.until(/frame/, "the screen");
+  screen.type("P"); await screen.until(/host-personal-requested/, "the mode request was written");
+  assert.equal(child.exitCode, null); assert.equal(screen.control("exit"), null);
+  screen.type("q"); await screen.closed;
+  assert.deepEqual(screen.control("exit"), { code: 0, signal: null, next: "new", mode: "personal" });
+  assert.equal(await exited, 0);
+});
+
 test("MAC-221: output the program wrote just before it ended reaches the screen before the end does", { skip: setsid ? false : "util-linux setsid is not available" }, async t => {
   const { socketPath } = await holder(t);
   const screen = await Screen.attach(socketPath);

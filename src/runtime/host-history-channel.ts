@@ -2,6 +2,7 @@
 import { Socket } from "node:net";
 import { FrameParser, encodeFrame } from "../frame.js";
 import { StoreError } from "../domain/errors.js";
+import type { SessionMode } from "../domain/session-mode.js";
 import { checkedHostHistoryPage, parseHostHistoryReference, type HostHistoryQuery, type HostHistoryPage } from "../protocol/host-history.js";
 import { TERMINAL_FRAME_BYTES, checkedResumeHistoryReference } from "../protocol/host-guest.js";
 import { HOST_SESSION_HANDOFF_ENV, HOST_SESSION_HANDOFF_FD } from "./session-handoff.js";
@@ -70,10 +71,12 @@ export class HostHistoryChannel {
     if (Object.keys(result).sort().join(",") !== "mode,reference" || result.reference !== reference || result.mode !== "personal")
       throw new StoreError("BROKER_UNAVAILABLE", "Selected host history could not be observed");
   }
-  async finish(reference: string | null): Promise<void> {
+  async finish(reference: string | null, mode?: SessionMode): Promise<void> {
+    if (reference !== null && mode !== undefined) throw new StoreError("INVALID_REQUEST", "A mode switch cannot resume a history");
     if (reference !== null) checkedResumeHistoryReference(reference);
     if (this.closed) throw new StoreError("BROKER_UNAVAILABLE", "Host history connection is closed");
-    await new Promise<void>((resolve, reject) => this.socket.end(encodeFrame(reference === null ? { next: "new" } : { next: "resume", history: reference }), () => {
+    await new Promise<void>((resolve, reject) => this.socket.end(encodeFrame(reference === null
+      ? { next: "new", ...(mode === undefined ? {} : { mode }) } : { next: "resume", history: reference }), () => {
       if (this.closed) reject(new StoreError("BROKER_UNAVAILABLE", "Host handoff was lost")); else resolve();
     }));
     this.close();

@@ -128,8 +128,11 @@ export class SocietyInteraction implements SocietyConversationView {
       })().catch(error => { if (!this.commands.finished() && this.commands.session() === live)
         live.sendUi({ type: "session_dirs", id, dirs: [], error: errorWords(error) }); });
     }
-    else if (event.type === "switch")
-      void this.commands.relaunch(typeof event.session === "string" ? event.session : null);
+    else if (event.type === "switch") {
+      if (event.mode !== undefined && (event.mode !== "personal" || event.session !== undefined)) return;
+      void this.commands.relaunch(typeof event.session === "string" ? event.session : null,
+        event.mode === "personal" ? "personal" : undefined);
+    }
     else if (event.type === "engine_state") {
       this.engineState = { model: engineName(event.model), thinking: engineName(event.thinking) };
       this.app.refresh();

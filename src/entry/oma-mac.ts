@@ -24,7 +24,7 @@ import { reconcilePersonalSettings } from "../runtime/personal-settings.js";
 import { parseMacArguments } from "../runtime/host-arguments.js";
 import { ProcessLock } from "../runtime/process-lock.js";
 import { runEngineLogin } from "../runtime/engine/login.js";
-import { chooseSessionMode, chooseSociety } from "../tui/session-mode.js";
+import { chooseSociety } from "../tui/session-mode.js";
 import { sessionBirthForHistory, RESUME_SESSION_ENV } from "../runtime/session-catalog.js";
 import { requireSessionMode } from "../runtime/session-mode.js";
 import { StoreError } from "../domain/errors.js";
@@ -130,9 +130,7 @@ async function main(argv: readonly string[]): Promise<void> {
       }
     } else if (society !== undefined) mode = "society";
     else if (mode === undefined) {
-      const selected = await chooseSessionMode({ input: process.stdin, output: process.stdout });
-      if (selected === null) return;
-      mode = selected;
+      mode = "society";
     }
     if (mode === "personal") {
       const { personalMain } = await import("./personal-host.js");
@@ -196,7 +194,8 @@ async function main(argv: readonly string[]): Promise<void> {
         }
       }
       const libdir = resolve(fileURLToPath(new URL("../../../", import.meta.url)));
-      process.execve(process.execPath, [process.execPath, ...process.execArgv, join(libdir, "dist", "src", "entry", "oma.js")], env);
+      process.execve(process.execPath, [process.execPath, ...process.execArgv, join(libdir, "dist", "src", "entry", "oma.js"),
+        ...(end.mode === undefined ? [] : ["--mode", end.mode])], env);
       return;
     }
     process.exit(end.code ?? 1);

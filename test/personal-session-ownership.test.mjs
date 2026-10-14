@@ -32,6 +32,7 @@ function world({ fault, spawnError, lockError, closeError, contended = false, pl
   const deps = {
     'node:path': path, 'node:crypto': { randomUUID: () => 'fixture-id' }, 'node:os': { constants },
     '../domain/errors.js': { StoreError }, '../process/host-loss.js': { HOST_LOSS_SIGNALS: signals },
+    '../domain/session-mode.js': { isSessionMode: value => value === 'personal' || value === 'society' },
     '../domain/deployment.js': { DEPLOYMENT_LAYOUT: { entries: { personal: 'dist/src/entry/pi-personal.js' } } },
     '../process/async.js': { spawnSessionInteractive: spawn, stopOwnedChild(value) { assert.equal(value, child); child.kill('SIGKILL'); } },
     './process-lock.js': { ProcessLock: { tryAcquire() { return contended ? null : lease; } } },
@@ -55,6 +56,16 @@ function released(w) {
   for (const name of signals) assert.equal(w.host.listenerCount(name), 0, name);
 }
 
+test('Personal child: a mode handoff has one valid target and waits for actual writer exit', async () => {
+  const w = world(), run = watch(w.runPersonalSession(options));
+  for (const message of [{ type: 'switch', mode: 'invalid' }, { type: 'switch', mode: null },
+    { type: 'switch', mode: 'society', session: '/fixture/history.jsonl' },
+    { type: 'switch', mode: 'society', society: 'fixture' }]) w.child.emit('message', message);
+  w.child.emit('message', { type: 'switch', mode: 'society' }); await flush();
+  assert.equal(run.returned, false); assert.equal(w.lease.closed, 0);
+  w.child.finish(); const ended = await run.done;
+  assert.equal(ended.next.mode, 'society'); released(w);
+});
 test('Personal child: common process owner receives saved cwd, history descriptor and clean environment', async () => {
   const w = world(), run = w.runPersonalSession({ ...options, resume: '/fixture/history/saved.jsonl' });
   const [executable, argv, cwd, env, descriptor] = w.launches[0];
