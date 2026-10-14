@@ -2,12 +2,13 @@
  * The caller serializes publication in a trusted root and validates artifact
  * identity. These syscalls do not establish a new kernel no-replace guarantee.
  */
-import { lstatSync, renameSync, symlinkSync, unlinkSync } from "node:fs";
+import { lstatSync, readdirSync, renameSync, symlinkSync, unlinkSync } from "node:fs";
 import { randomUUID } from "node:crypto";
-import { basename, dirname, isAbsolute, join } from "node:path";
+import { dirname, isAbsolute } from "node:path";
 import { StoreError } from "../domain/errors.js";
-import { fsyncDir, fsyncTree, type TreeFlushPolicy } from "./durable-fs.js";
+import { fsyncDir, fsyncHeldDir, fsyncTree, type TreeFlushPolicy } from "./durable-fs.js";
 import { assertDirectory } from "./directory.js";
+import { entryAt, withinDirectory } from "./contained-fs.js";
 
 function requireDirectory(path: string): void {
   assertDirectory(path);
@@ -42,7 +43,7 @@ export function publishStagedDirectory(
     return "existing";
   };
   let present = true;
-  try { lstatSync(destination); }
+  try { withinDirectory(destination, (parent, name) => lstatSync(entryAt(parent, name))); }
   catch (error) {
     if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
     present = false;
@@ -52,14 +53,25 @@ export function publishStagedDirectory(
   requireDirectory(staging);
   verify(staging);
   fsyncTree(staging, policy);
-  try { renameSync(staging, destination); }
-  catch (error) {
-    const code = (error as NodeJS.ErrnoException).code;
-    if (code !== "EEXIST" && code !== "ENOTEMPTY") throw error;
-    return existing();
-  }
-  fsyncDir(dirname(destination));
-  if (dirname(staging) !== dirname(destination)) fsyncDir(dirname(staging));
+  // Both ends of the rename are addressed through descriptors this call holds.
+  // Naming them by path again would mean the directory just verified and the
+  // directory published into need not be the same one: at this UID a component
+  // of either path can be replaced between the check and the rename, and the
+  // accepted tree would land outside the state tree under a name the product
+  // then reports as published.
+  const moved = withinDirectory(staging, (from, fromName) =>
+    withinDirectory(destination, (to, toName) => {
+      try { renameSync(entryAt(from, fromName), entryAt(to, toName)); }
+      catch (error) {
+        const code = (error as NodeJS.ErrnoException).code;
+        if (code !== "EEXIST" && code !== "ENOTEMPTY") throw error;
+        return false;
+      }
+      fsyncHeldDir(to, dirname(destination));
+      if (dirname(staging) !== dirname(destination)) fsyncHeldDir(from, dirname(staging));
+      return true;
+    }));
+  if (!moved) return existing();
   requireDirectory(destination);
   verify(destination);
   return "published";
@@ -73,17 +85,31 @@ export function replaceDerivedSymlink(path: string, target: string): void {
   assertDirectory(dirname(path));
   if (isAbsolute(target) || target.includes("\0") || target.split("/").some(part => part === "" || part === "." || part === ".."))
     throw new StoreError("STORE_CORRUPT", "derived link target must remain relative and contained");
-  const temporary = join(dirname(path), `.${basename(path)}.${randomUUID()}.tmp`);
-  symlinkSync(target, temporary);
-  let owned = true;
-  try {
-    renameSync(temporary, path); owned = false;
-    fsyncDir(dirname(path));
-  } finally {
-    if (owned) {
-      try { unlinkSync(temporary); }
+  // Same rule as the derived file: the parent is resolved once and the link is
+  // created, renamed and cleaned up through that descriptor only.
+  withinDirectory(path, (parent, name) => {
+    // P0V-111 (G01r2-02): a link cannot carry a lock, so the proof that a
+    // leftover link temporary of this name is dead is who writes it: this
+    // synchronous call is its only writer, and the caller serializes
+    // publication in its root (above). What a killed one left is removed
+    // before the next link is made; a file, or another name's, is not.
+    for (const entry of readdirSync(`/proc/self/fd/${parent}`)) {
+      if (!entry.startsWith(`.${name}.`) || !/\.[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.tmp$/.test(entry)) continue;
+      try { if (lstatSync(entryAt(parent, entry)).isSymbolicLink()) unlinkSync(entryAt(parent, entry)); }
       catch (error) { if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error; }
-      fsyncDir(dirname(temporary));
     }
-  }
+    const temporaryName = `.${name}.${randomUUID()}.tmp`;
+    symlinkSync(target, entryAt(parent, temporaryName));
+    let owned = true;
+    try {
+      renameSync(entryAt(parent, temporaryName), entryAt(parent, name)); owned = false;
+      fsyncHeldDir(parent, dirname(path));
+    } finally {
+      if (owned) {
+        try { unlinkSync(entryAt(parent, temporaryName)); }
+        catch (error) { if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error; }
+        fsyncHeldDir(parent, dirname(path));
+      }
+    }
+  });
 }

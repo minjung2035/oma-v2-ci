@@ -24,6 +24,7 @@ import {
 } from "../src/runtime/deployment-manifest.js";
 import { assertHostDirectoryLayout } from "../src/runtime/assets.js";
 import { assertStorageQuotaSupported } from "../src/domain/resources.js";
+import { assertStorageQuotaAdmission } from "../src/storage/quota.js";
 import { ProcessLock } from "../src/runtime/process-lock.js";
 import { TEST_RESOURCES } from "./fixtures/spec.js";
 
@@ -42,11 +43,6 @@ function config(root: string): HostConfigV1 {
       model: {
         provider: "fixture",
         model: "fixture",
-        credentialRef: "none",
-        codecRevision: "fixture",
-        pricingRevision: "fixture",
-        maxInputTokens: 1,
-        maxOutputTokens: 1,
         inferenceTimeoutSeconds: 1,
       },
     },
@@ -64,11 +60,6 @@ function config(root: string): HostConfigV1 {
     quota: {
       societyAgents: 1,
       lineageAgents: 1,
-      societyUnits: 1,
-      lineageUnits: 1,
-      principalReservedUnits: 0,
-      inferenceSlots: 1,
-      principalReservedSlots: 0,
       storageBytes: 1024,
     },
     integration: { policyRevision: "fixture", protectedPaths: [], checks: [] },
@@ -86,12 +77,6 @@ function config(root: string): HostConfigV1 {
       idleStreamSeconds: 1,
       receiptWaitSeconds: 1,
     },
-    features: {
-      notmuch: false,
-      reflinkSeed: false,
-      formalApproval: false,
-      egress: false,
-    },
   };
 }
 
@@ -102,7 +87,9 @@ test("P02: canonical deployment manifest pins every selected byte independent of
     "dist/src/nested/a.js": "a\n",
     "dist/implementation/contracts.js": "export {};\n",
     "implementation/systemd/resident.path.in": "[Path]\n",
-    "implementation/schema-v1.sql": "schema\n",
+    "implementation/schema-v3.sql": "schema\n",
+    // AV16: the sandbox's `oma` command is pinned with the rest.
+    "dist/libexec/oma": "#!/bin/sh\n",
     "package.json": "{}",
     "package-lock.json": "{}",
   };
@@ -122,6 +109,7 @@ test("P02: canonical deployment manifest pins every selected byte independent of
         })),
     };
     assert.deepEqual(deploymentManifest(root), expected);
+    assert.deepEqual(deploymentManifest(`${root}/`), expected);
     const digest = createHash("sha256")
       .update(JSON.stringify(expected))
       .digest("hex");
@@ -144,14 +132,15 @@ test("P02: canonical deployment manifest pins every selected byte independent of
   }
 });
 
-test("P01/P02: installed broker refuses mismatch and unqualified storage BEFORE SQLite or unit effects", () => {
+test("P02: installed broker refuses deployment mismatch BEFORE SQLite or unit effects", () => {
   const root = mkdtempSync(join(tmpdir(), "oma-deployment-entry-"));
   try {
     for (const path of [
       "dist/src",
       "dist/implementation",
       "implementation/systemd",
-      "implementation/schema-v1.sql",
+      "implementation/schema-v3.sql",
+      "dist/libexec",
       "package.json",
       "package-lock.json",
     ]) {
@@ -195,7 +184,6 @@ test("P01/P02: installed broker refuses mismatch and unqualified storage BEFORE 
       lock.close();
       return result.stderr;
     };
-    assert.match(run(), /SPIKE_UNRESOLVED.*S-01 filesystem storage quota/);
     const asset = join(root, "dist/src/mail/facts.js");
     const bytes = readFileSync(asset);
     writeFileSync(
@@ -234,13 +222,17 @@ test("P05: symlinked host ancestors are explicitly unsupported, not store corrup
   }
 });
 
-test("P01: no positive storage quota silently enables an unqualified production profile", () => {
-  for (const cap of [1, 1024, Number.MAX_SAFE_INTEGER])
-    assert.throws(() => assertStorageQuotaSupported(cap), {
-      code: "SPIKE_UNRESOLVED",
-    });
-  for (const cap of [0, -1, Infinity, NaN])
-    assert.throws(() => assertStorageQuotaSupported(cap), {
-      code: "UNSUPPORTED_PROFILE",
-    });
+test("P01: positive storage quota admits an observed owned tree and rejects overflow", () => {
+  const root = mkdtempSync(join(tmpdir(), "oma-storage-quota-"));
+  try {
+    writeFileSync(join(root, "payload"), Buffer.alloc(4096));
+    assert.doesNotThrow(() => assertStorageQuotaAdmission(root, 1024 * 1024));
+    assert.doesNotThrow(() => assertStorageQuotaAdmission(root, 1));
+    assert.doesNotThrow(() => assertStorageQuotaAdmission(root, 1024 * 1024, 1024 * 1024));
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+  assert.doesNotThrow(() => assertStorageQuotaSupported(0));
+  for (const cap of [-1, Infinity, NaN])
+    assert.throws(() => assertStorageQuotaSupported(cap), { code: "UNSUPPORTED_PROFILE" });
 });

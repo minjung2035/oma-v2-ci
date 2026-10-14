@@ -1,19 +1,18 @@
 // MUST [FS-003]/[IPC-006/008]: private model-mutable preaccept cache.
 // This is neither a durable effect ledger nor broker/session authority.
-import {
-  mkdirSync, readFileSync, writeFileSync, openSync, fsyncSync,
-  closeSync, linkSync, unlinkSync, fstatSync, lstatSync, constants,
-} from "node:fs";
-import { randomUUID } from "node:crypto";
-import { basename, dirname, join } from "node:path";
+import { readFileSync, openSync, closeSync, fstatSync, lstatSync, constants } from "node:fs";
+
+import { join } from "node:path";
 import type { Receipt, RequestKey } from "../implementation/contracts.js";
 import { isValidRequestKey } from "./domain/identifiers.js";
 import { requestParamsEqual } from "./domain/request-identity.js";
 import { sha256Hex } from "./domain/canonical-json.js";
 import { parseJsonObject } from "./frame.js";
-import { decodeReceipt } from "./protocol/receipt-codec.js";
+import { decodeReceipt, receiptSupersession } from "./protocol/receipt-codec.js";
 import { decodeCachedRequest, decodeStreamDigest, type CachedRequest, type StreamDigest } from "./cli/cache-codec.js";
-import { fsyncDir, replaceDerivedFile as replaceReceiptFile } from "./storage/durable-fs.js";
+import { ensureOwnedDurableDirectory, publishNoReplace, replaceDerivedFile as replaceReceiptFile } from "./storage/durable-fs.js";
+import { openBeneath, withinDirectory } from "./storage/contained-fs.js";
+import { lockFileDescriptor } from "./leaf.js";
 
 export type { CachedRequest, StreamDigest } from "./cli/cache-codec.js";
 export type FreezeInput = Omit<CachedRequest, "lastReceipt">;
@@ -25,7 +24,18 @@ export type FileObservation<T> =
 export type CacheRead = FileObservation<CachedRequest>;
 export type BodyRead = FileObservation<Uint8Array>;
 export type FreezeResult = { readonly kind: "created" | "existing"; readonly value: CachedRequest };
-export type CacheReader = (path: string, expectedBytes?: number) => FileObservation<Uint8Array>;
+export type CacheReader = (path: string, expectedBytes?: number, maximumBytes?: number) => FileObservation<Uint8Array>;
+
+/** P0V-112 (G02-ledger-r2-02): a request's metadata holds the request and its
+ * latest receipt, each no larger than one frame; a file larger than two
+ * frames is not one this cache wrote, and is not read whole. The reference
+ * frame is the CLI's when unset (256 KiB, CFG-003). */
+export const REFERENCE_METADATA_BYTES = 2 * 256 * 1024;
+
+/** How long a competing process may hold one request key's receipt lock
+ * before this one reports the cache unavailable rather than waiting further. */
+const RECEIPT_LOCK_ATTEMPTS = 200;
+const RECEIPT_LOCK_PAUSE_MS = 5;
 
 export class CacheError extends Error {
   constructor(readonly code: "INVALID_REQUEST" | "REQUEST_KEY_REUSED" | "CACHE_CORRUPT" | "CACHE_UNAVAILABLE", message: string) {
@@ -49,7 +59,7 @@ function requirePresent<T>(observation: FileObservation<T>, what: string): T {
 }
 
 /** No existsSync precheck, symlink following, or FIFO read can erase an I/O failure. */
-export const readCacheFile: CacheReader = (path, expectedBytes) => {
+export const readCacheFile: CacheReader = (path, expectedBytes, maximumBytes) => {
   let fd: number | undefined;
   try {
     fd = openSync(path, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);
@@ -58,6 +68,8 @@ export const readCacheFile: CacheReader = (path, expectedBytes) => {
       return { kind: "corrupt", reason: "cache entry is not a regular file with a safe size" };
     if (expectedBytes !== undefined && stat.size !== expectedBytes)
       return { kind: "corrupt", reason: "body size differs from frozen digest" };
+    if (maximumBytes !== undefined && stat.size > maximumBytes)
+      return { kind: "corrupt", reason: "cache entry is larger than a request and its receipt can be" };
     const bytes = readFileSync(fd);
     if (bytes.length !== stat.size) return { kind: "corrupt", reason: "cache file changed during read" };
     return { kind: "present", value: bytes };
@@ -75,34 +87,6 @@ export const readCacheFile: CacheReader = (path, expectedBytes) => {
  * Initial cache publication owns this descriptor and its unlink separately from
  * immutable mail and from the receipt-only derived replacement API.
  */
-function prepareTemp(target: string, data: string | Uint8Array): string {
-  const temp = join(dirname(target), `.${basename(target)}.${randomUUID()}.tmp`);
-  const fd = openSync(temp, constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | constants.O_NOFOLLOW, 0o600);
-  try { writeFileSync(fd, data); fsyncSync(fd); }
-  catch (error) {
-    try { unlinkSync(temp); fsyncDir(dirname(temp)); } catch { /* cleanup only; retain the write error */ }
-    throw error;
-  } finally { closeSync(fd); }
-  return temp;
-}
-
-/** File fsync -> no-replace hardlink -> directory fsync. Existing bytes are never overwritten. */
-function publishNoReplace(target: string, data: string | Uint8Array): "created" | "existing" {
-  const temp = prepareTemp(target, data);
-  let result: "created" | "existing" = "created";
-  try {
-    try { linkSync(temp, target); }
-    catch (error) {
-      if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error;
-      result = "existing";
-    }
-  } finally {
-    unlinkSync(temp);
-    fsyncDir(dirname(target));
-  }
-  return result;
-}
-
 function sameIdentity(left: CachedRequest, right: CachedRequest): boolean {
   return left.key === right.key && left.method === right.method &&
     requestParamsEqual(left.method, left.params, right.params) &&
@@ -118,9 +102,17 @@ function freezeInput(input: FreezeInput): CachedRequest {
 
 export class RequestCache {
   /** The injected reader is for deterministic I/O-failure tests, never wire input. */
-  constructor(readonly homeDir: string, private readonly reader: CacheReader = readCacheFile) {}
+  constructor(readonly homeDir: string, private readonly reader: CacheReader = readCacheFile,
+    private readonly metadataBytes: number = REFERENCE_METADATA_BYTES) {}
 
   private dir(): string { return join(this.homeDir, ".local", "state", "oma", "requests"); }
+  /** P0-8: `.local/state/oma` is the first component oma itself made inside
+   * the caller's home -- `.local` and `.local/state` are the user's shared
+   * XDG names, never repaired -- and a mode-000 cache directory beneath the
+   * boundary is repaired rather than wedged on. */
+  private ensureDir(): void {
+    ensureOwnedDurableDirectory(this.dir(), join(this.homeDir, ".local", "state", "oma"), 0o700);
+  }
   private path(key: RequestKey): string {
     if (!isValidRequestKey(key)) throw new CacheError("INVALID_REQUEST", "invalid request key");
     return join(this.dir(), `${key}.json`);
@@ -129,7 +121,7 @@ export class RequestCache {
 
   private readMetadata(key: RequestKey): CacheRead {
     if (!isValidRequestKey(key)) return { kind: "corrupt", reason: "invalid request key" };
-    const bytes = this.reader(this.path(key));
+    const bytes = this.reader(this.path(key), undefined, this.metadataBytes);
     if (bytes.kind !== "present") return bytes;
     try {
       const decoded = decodeCachedRequest(parseJsonObject(bytes.value).raw, key);
@@ -165,8 +157,9 @@ export class RequestCache {
     const frozen = requirePresent(actual, "frozen metadata");
     if (!sameIdentity(request, frozen)) throw new CacheError("REQUEST_KEY_REUSED", `key ${request.key} is already frozen for another request`);
     if (frozen.digest) requirePresent(this.readBody(frozen.key, frozen.digest), "frozen body");
-    // Fence a competing link even when its original publisher has not fsynced yet.
-    try { fsyncDir(this.dir()); }
+    // Fence a competing link even when its original publisher has not fsynced
+    // yet -- and, P0V-71, the path to it, which that publisher may not have.
+    try { this.ensureDir(); }
     catch (error) { throw new CacheError("CACHE_UNAVAILABLE", `replay durability barrier failed: ${messageOf(error)}`); }
     return { kind: "existing", value: frozen };
   }
@@ -191,7 +184,9 @@ export class RequestCache {
         throw new CacheError("INVALID_REQUEST", "fresh body does not match frozen digest");
     } else if (body !== undefined) throw new CacheError("INVALID_REQUEST", "request without a descriptor cannot freeze a body");
     try {
-      mkdirSync(this.dir(), { recursive: true, mode: 0o700 });
+      // P0V-71, P0-3: the first freeze in a home creates `.local/state/oma/requests`;
+      // a frozen request is durable only if every name on that path is.
+      this.ensureDir();
       if (request.digest && body !== undefined) {
         const published = publishNoReplace(this.bodyPath(request.key), body);
         if (published === "existing") {
@@ -214,16 +209,61 @@ export class RequestCache {
     }
   }
 
-  /** Only this API changes lastReceipt; callers cannot supply replacement identity fields. */
+  /** Serialises one request key's read-modify-write against other processes.
+   *
+   * The metadata file is replaced by rename, so a lock taken on it would be a
+   * lock on an inode the next writer replaces; the lock is its own name, and
+   * it is held for one read and one rename. A holder still there after the
+   * bounded wait is not making progress, and a cache that hangs the Human's
+   * terminal is worse than one that says it is unavailable. */
+  private withReceiptLock<T>(key: RequestKey, body: () => T): T {
+    const path = `${this.path(key).replace(/\.json$/, "")}.lock`;
+    let fd: number;
+    try {
+      this.ensureDir();
+      fd = withinDirectory(path, (parent, name) =>
+        openBeneath(parent, name, constants.O_CREAT | constants.O_RDWR | constants.O_NOFOLLOW, 0o600));
+    } catch (error) { throw new CacheError("CACHE_UNAVAILABLE", `receipt lock could not be opened: ${messageOf(error)}`); }
+    const pause = new Int32Array(new SharedArrayBuffer(4));
+    try {
+      for (let attempt = 0; attempt < RECEIPT_LOCK_ATTEMPTS; attempt += 1) {
+        const lock = lockFileDescriptor(fd);
+        if (lock.kind === "held") return body();
+        if (lock.kind === "failed")
+          throw new CacheError("CACHE_UNAVAILABLE", `receipt lock could not be evaluated (errno ${lock.errno})`);
+        Atomics.wait(pause, 0, 0, RECEIPT_LOCK_PAUSE_MS);
+      }
+      throw new CacheError("CACHE_UNAVAILABLE", "another process still holds this request's receipt lock");
+    } finally { closeSync(fd); }
+  }
+
+  /** Only this API changes lastReceipt; callers cannot supply replacement identity fields.
+   *
+   * The read and the write are one critical section. Reading outside it would
+   * make the ordering below an opinion about a value that may already have
+   * been replaced, which is the lost update it exists to prevent. */
   updateReceipt(key: RequestKey, receipt: unknown): CachedRequest {
-    const frozen = requirePresent(this.read(key), "receipt update metadata");
-    const decoded = decodeReceipt(receipt, { expectedKind: frozen.method });
-    if (!decoded.ok) throw new CacheError("CACHE_CORRUPT", `invalid receipt observation: ${decoded.reason}`);
-    if (frozen.lastReceipt !== null && frozen.lastReceipt.operation !== decoded.value.operation)
-      throw new CacheError("CACHE_CORRUPT", "receipt operation differs from the previous observation");
-    const updated: CachedRequest = { ...frozen, lastReceipt: decoded.value };
-    try { replaceReceiptFile(this.path(key), JSON.stringify(updated)); }
-    catch (error) { throw new CacheError("CACHE_UNAVAILABLE", `receipt update failed: ${messageOf(error)}`); }
-    return updated;
+    return this.withReceiptLock(key, () => {
+      const frozen = requirePresent(this.read(key), "receipt update metadata");
+      const decoded = decodeReceipt(receipt, { expectedKind: frozen.method });
+      if (!decoded.ok) throw new CacheError("CACHE_CORRUPT", `invalid receipt observation: ${decoded.reason}`);
+      if (frozen.lastReceipt !== null && frozen.lastReceipt.operation !== decoded.value.operation)
+        throw new CacheError("CACHE_CORRUPT", "receipt operation differs from the previous observation");
+      const order = receiptSupersession(frozen.lastReceipt, decoded.value);
+      if (order === "contradiction")
+        throw new CacheError("CACHE_CORRUPT", "one operation cannot both succeed and fail");
+      // A settled observation is kept: this one is older news, and rewriting
+      // it would be the regression the ordering exists to refuse.
+      if (order === "stale") return frozen;
+      const updated: CachedRequest = { ...frozen, lastReceipt: decoded.value };
+      const encoded = JSON.stringify(updated);
+      // Recovery can receive a multi-frame receipt. Keep the original freeze
+      // readable when that observation cannot fit the bounded local cache.
+      if (Buffer.byteLength(encoded) > this.metadataBytes)
+        throw new CacheError("CACHE_UNAVAILABLE", "receipt exceeds local cache budget; original request freeze preserved");
+      try { replaceReceiptFile(this.path(key), encoded); }
+      catch (error) { throw new CacheError("CACHE_UNAVAILABLE", `receipt update failed: ${messageOf(error)}`); }
+      return updated;
+    });
   }
 }

@@ -1,0 +1,911 @@
+{
+  "schema": 1,
+  "recordedAt": "2026-10-09T11:09:10.947209+00:00",
+  "baseHead": "64d6923b6fd55ad77b5e4e14bfa055fe8cf15350",
+  "branch": "feat/macos-hidden-vm",
+  "subagentsUsed": false,
+  "scope": {
+    "selectedItems": [
+      "SC-01",
+      "SC-02",
+      "SC-03",
+      "SC-04",
+      "SC-05",
+      "SC-20",
+      "SC-23",
+      "SC-26",
+      "SC-30",
+      "SC-31",
+      "SC-32"
+    ],
+    "revision": "DR37",
+    "implementation": "Remove OMA network/resource/count/storage quotas; restore MCP/web selected features; reader-owned crash-recoverable package GC; background Pi fd installer updates the existing autocomplete provider."
+  },
+  "environment": {
+    "node": "v24.21.0",
+    "platform": "Linux",
+    "uid": 1001,
+    "actualUserSystemd": true,
+    "cgroupV2": true,
+    "bubblewrap": true,
+    "paidProviderCalls": false
+  },
+  "fullSuite": {
+    "status": "PASS",
+    "execution": "EXECUTED",
+    "command": "node scripts/test-local.mjs (after npm run build)",
+    "exitCode": 0,
+    "environment": {
+      "OMA_TEST_SYSTEMD": "0",
+      "NODE_OPTIONS": "--import=/home/dev/oma-v2/scripts/local-test-guard.mjs",
+      "DBUS_SESSION_BUS_ADDRESS": "unix:path=/nonexistent/oma-local-tests-no-user-bus"
+    },
+    "files": 404,
+    "serialFiles": 2,
+    "parallelFiles": 402,
+    "parallelConcurrency": 8,
+    "phases": [
+      {
+        "tests": 9,
+        "suites": 0,
+        "pass": 9,
+        "fail": 0,
+        "cancelled": 0,
+        "skipped": 0,
+        "todo": 0,
+        "durationMs": 79421.754091
+      },
+      {
+        "tests": 3937,
+        "suites": 0,
+        "pass": 3937,
+        "fail": 0,
+        "cancelled": 0,
+        "skipped": 0,
+        "todo": 0,
+        "durationMs": 250921.753471
+      }
+    ],
+    "totalTests": 3946,
+    "log": {
+      "path": "/tmp/oma-unrestricted-2026-10-09/test-final-repaired.log",
+      "sha256": "9855d6897c1d48f821a5bc957c0ef14421952719ff93c64290f5ca54557f8e5a"
+    }
+  },
+  "nativeLanes": {
+    "kernel": {
+      "status": "PASS",
+      "execution": "EXECUTED",
+      "command": "OMA_TEST_SYSTEMD=1 node scripts/verify-lane.mjs kernel --out <new-directory>",
+      "totals": {
+        "tests": 68,
+        "pass": 68,
+        "fail": 0,
+        "cancelled": 0,
+        "skipped": 0,
+        "todo": 0
+      },
+      "startedAt": "2026-10-09T10:51:40.055Z",
+      "endedAt": "2026-10-09T10:53:26.140Z",
+      "report": {
+        "path": "/tmp/oma-unrestricted-2026-10-09/kernel-unlimited/result.json",
+        "sha256": "2663b86129e53c4c292901a86049a87ab61c2cfee4988cb7304a7f08c4739d10"
+      },
+      "stdout": {
+        "path": "/tmp/oma-unrestricted-2026-10-09/kernel-unlimited/tests.stdout.log",
+        "sha256": "e5c6a25f4aea470da2bce1db152319e51b26fad902c4279632fc45f81d48786d"
+      },
+      "stderr": {
+        "path": "/tmp/oma-unrestricted-2026-10-09/kernel-unlimited/tests.stderr.log",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "sourceRecordChangesAfterCapture": [],
+      "qualification": "actual user-systemd/native/socket/cgroup oracles; unsupported environment is not a pass"
+    },
+    "crash": {
+      "status": "PASS",
+      "execution": "EXECUTED",
+      "command": "OMA_TEST_SYSTEMD=1 node scripts/verify-lane.mjs crash --out <new-directory>",
+      "totals": {
+        "tests": 63,
+        "pass": 63,
+        "fail": 0,
+        "cancelled": 0,
+        "skipped": 0,
+        "todo": 0
+      },
+      "startedAt": "2026-10-09T10:54:10.639Z",
+      "endedAt": "2026-10-09T10:54:59.295Z",
+      "report": {
+        "path": "/tmp/oma-unrestricted-2026-10-09/crash-final/result.json",
+        "sha256": "9057b1015b35c70a4b96829f794ca58a93a13493d03fe95342647df38ec1920c"
+      },
+      "stdout": {
+        "path": "/tmp/oma-unrestricted-2026-10-09/crash-final/tests.stdout.log",
+        "sha256": "5aa0dd90b7552e3e8952084f160f5f693dbe83aa181da6169d870ab8f93f3ffb"
+      },
+      "stderr": {
+        "path": "/tmp/oma-unrestricted-2026-10-09/crash-final/tests.stderr.log",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "sourceRecordChangesAfterCapture": [],
+      "qualification": "primitive SIGSTOP/parent-SIGKILL and restart; not an entrypoint-crash or VM-power-loss attestation"
+    }
+  },
+  "checks": {
+    "build": {
+      "status": "PASS",
+      "exitCode": 0,
+      "command": "npm run build",
+      "log": {
+        "path": "/tmp/oma-unrestricted-2026-10-09/build-twentieth.log",
+        "sha256": "cccfcd5d5169e7cc8604508632ef031166923f10ded462df8caca2efb931ff40"
+      }
+    },
+    "typecheck": {
+      "status": "PASS",
+      "exitCode": 0,
+      "command": "npm run typecheck",
+      "log": {
+        "path": "/tmp/oma-unrestricted-2026-10-09/typecheck-unlimited.log",
+        "sha256": "cc5f8db3e8f9500e18fe0677c06fdbeadf01257cb4632bad7be2a52e2ca79f52"
+      }
+    },
+    "architectureBeforeResultRecording": {
+      "status": "PASS",
+      "exitCode": 0,
+      "command": "npm run check:architecture",
+      "log": {
+        "path": "/tmp/oma-unrestricted-2026-10-09/architecture-unlimited.log",
+        "sha256": "fe54d1297a6ade5ab312f82bc8d2b9e4dd5dee4d7f839246ac1ee49784bfe1be"
+      }
+    },
+    "dependencies": {
+      "status": "PASS",
+      "exitCode": 0,
+      "command": "npm audit --json",
+      "knownVulnerabilities": 0,
+      "report": {
+        "path": "/tmp/oma-unrestricted-2026-10-09/npm-audit-final.json",
+        "sha256": "2e26243abd4458690c22d36a295d29eb7b38eb9ac336f8ce68ffd213a662215d"
+      }
+    }
+  },
+  "inputAtExecution": {
+    "files": 15376,
+    "digest": "8cb5c9c1b0bf0f760205ab88dfd4401cbc3cb1f1bf5cde631ac9c314fd667cca"
+  },
+  "sourceBinding": {
+    "sourceMap": {
+      "path": "/tmp/oma-unrestricted-2026-10-09/final-unlimited-service-source-digests.json",
+      "sha256": "3531508bba7f7fb69ee43f8cdeac2d25e1b3493604ee43ebb2e34d761e77db21"
+    },
+    "finalByteComparison": {
+      "sourceFiles": 15376,
+      "changes": [],
+      "when": "After full local, kernel and crash lanes and all final startup runs; before result documentation/evidence changes."
+    },
+    "changedProductionFilesWithCurrentByteBoundReview": 45,
+    "changedExecutionFiles": [
+      {
+        "path": "implementation/systemd/resident.service.in",
+        "sha256": "2de20d1dd7fe9a48023026d60ea935f724ae4fd295029e7b01188877afa84892",
+        "execution": "covered by selected tests and/or structural checks; see named oracles in review notes"
+      },
+      {
+        "path": "platform/guest/network/80-oma.network",
+        "sha256": "d96a8773afbb771246dd7423afdde619fe48ab40a51d721632141fae486ab7f3",
+        "execution": "NOT_RUN"
+      },
+      {
+        "path": "platform/guest/systemd/oma-guesthost.service",
+        "sha256": "8477cf5b30159a71e984b713750e58d49e53d36e88db21d93e93a3b868dc22ef",
+        "execution": "NOT_RUN"
+      },
+      {
+        "path": "platform/host/vmhelper/Sources/oma-vmhelper/main.swift",
+        "sha256": "a18f8dc0dbd3fca6ad3160d5b526b9720e7400c4b75f86f874cc3b7838b5b066",
+        "execution": "NOT_RUN"
+      },
+      {
+        "path": "scripts/architecture/rules/surface-rules.mjs",
+        "sha256": "39204916880ffe7952d04bbf0082086ee41b08c909ee6c000310005cad117699",
+        "execution": "covered by selected tests and/or structural checks; see named oracles in review notes"
+      },
+      {
+        "path": "scripts/vendor-pi-mcp-adapter.mjs",
+        "sha256": "3e7e382cab8351fb1db291c4479e387592b71658783831820160efd455deccdb",
+        "execution": "covered by selected tests and/or structural checks; see named oracles in review notes"
+      },
+      {
+        "path": "scripts/vendor-pi-web-access.mjs",
+        "sha256": "b262756cb85cbf6ac517436e399ee37e9b2db6eabf686bcb340dfce7d0cf6d1e",
+        "execution": "covered by selected tests and/or structural checks; see named oracles in review notes"
+      },
+      {
+        "path": "src/broker.ts",
+        "sha256": "5a2d070f475d317a7132764e4dd0468ed1fe6be07b7be6062b0edaac7e3455bc",
+        "execution": "covered by selected tests and/or structural checks; see named oracles in review notes"
+      },
+      {
+        "path": "src/config.ts",
+        "sha256": "96ea2bdab03224bf54c615e01551e1864744e6eca1a7ade2a26a50e20091bf56",
+        "execution": "covered by selected tests and/or structural checks; see named oracles in review notes"
+      },
+      {
+        "path": "src/config/defaults.ts",
+        "sha256": "95ae1af98463d135c99f1531672507700a7216ea2fecdd5732f63f61fb7384e0",
+        "execution": "covered by selected tests and/or structural checks; see named oracles in review notes"
+      },
+      {
+        "path": "src/domain/egress.ts",
+        "sha256": "67fc67811d1db54e1287b7fd93bca557f4923b67e23d85ba596eb5da31df0fed",
+        "execution": "covered by selected tests and/or structural checks; see named oracles in review notes"
+      },
+      {
+        "path": "src/domain/integration-policy.ts",
+        "sha256": "a3f036b4ce7bc0224b47c9c54bad8500e0029981e974f4eb7c47acdebb8b5cce",
+        "execution": "covered by selected tests and/or structural checks; see named oracles in review notes"
+      },
+      {
+        "path": "src/domain/lineage.ts",
+        "sha256": "6e084373a1af8d039936563863348b9a55c161d258c02c58da43e5ec4cfb9c74",
+        "execution": "covered by selected tests and/or structural checks; see named oracles in review notes"
+      },
+      {
+        "path": "src/domain/resources.ts",
+        "sha256": "34a53522d0f19ce445ddd196eaa813d1d1aabac831ff2a55140d1a3b672d9876",
+        "execution": "covered by selected tests and/or structural checks; see named oracles in review notes"
+      },
+      {
+        "path": "src/entry/broker.ts",
+        "sha256": "1e8a168aa61df6df6c28e6d4801c659f43934ba091ec8fe32ca13ff41c34d5cf",
+        "execution": "covered by selected tests and/or structural checks; see named oracles in review notes"
+      },
+      {
+        "path": "src/extension/contained-files.ts",
+        "sha256": "f1ba8bb2f5f0d629ef99bdfa4bb9bc57a501768d480ffe0f27621f1b86a32061",
+        "execution": "covered by selected tests and/or structural checks; see named oracles in review notes"
+      },
+      {
+        "path": "src/extension/contained-tools.ts",
+        "sha256": "5d9d3203713ae38062f2c67f18837d21e709fb34ec46a8c4e4f0daa0b215fad6",
+        "execution": "covered by selected tests and/or structural checks; see named oracles in review notes"
+      },
+      {
+        "path": "src/extension/egress-bridge.ts",
+        "sha256": "4689c8a6fce01517f14407271b533780265c2decb52c91887cdddb0200651654",
+        "execution": "covered by selected tests and/or structural checks; see named oracles in review notes"
+      },
+      {
+        "path": "src/extension/mcp-tools.ts",
+        "sha256": "2bd18b29e2522d06349467a8a8a39275bfc3eafd5ba059045337474c6997414d",
+        "execution": "covered by selected tests and/or structural checks; see named oracles in review notes"
+      },
+      {
+        "path": "src/extension/vendor/pi-mcp-adapter/manifest.json",
+        "sha256": "21a9513fdfe3cafadbaeb58d939e23c8e7556cae939373d305299a4a74050f62",
+        "execution": "covered by selected tests and/or structural checks; see named oracles in review notes"
+      },
+      {
+        "path": "src/extension/vendor/pi-mcp-adapter/runtime/index.js",
+        "sha256": "ec1fff5a002e1bfce9e6183825c5780c72ad8affaffd4e63679734f835281706",
+        "execution": "covered by selected tests and/or structural checks; see named oracles in review notes"
+      },
+      {
+        "path": "src/extension/vendor/pi-web-access/manifest.json",
+        "sha256": "60095d2b39ff931e34385a895f286e47e8cbd9a20664a231b828e9f0d00a366b",
+        "execution": "covered by selected tests and/or structural checks; see named oracles in review notes"
+      },
+      {
+        "path": "src/extension/vendor/pi-web-access/runtime/index.js",
+        "sha256": "90558f5c056e0d28acff28e462feb7130f56721509646c12849cee3ebc391449",
+        "execution": "covered by selected tests and/or structural checks; see named oracles in review notes"
+      },
+      {
+        "path": "src/extension/vendor/pi-web-access/runtime/ssrf-protection.js",
+        "sha256": "47ff598d123793dd2ee7549eb9bdcb8dec8a23923738a7825f465d477798e63d",
+        "execution": "covered by selected tests and/or structural checks; see named oracles in review notes"
+      },
+      {
+        "path": "src/extension/vendor/pi-web-access/runtime/utils.js",
+        "sha256": "580cffdb1bdd4b89d397965063f35c6b47bfb466a21a46fcaf1e034adf764f87",
+        "execution": "covered by selected tests and/or structural checks; see named oracles in review notes"
+      },
+      {
+        "path": "src/extension/web-tools.ts",
+        "sha256": "fa720567b4c8308148547bba451e238e118859795b8f1f83573a9e6649302383",
+        "execution": "covered by selected tests and/or structural checks; see named oracles in review notes"
+      },
+      {
+        "path": "src/extension/workspace-guard.ts",
+        "sha256": "023cdd389843c4531b7254497c57c2a8e536bd0c7f9e8d577b8471be73b03a0f",
+        "execution": "covered by selected tests and/or structural checks; see named oracles in review notes"
+      },
+      {
+        "path": "src/git/integration-policy.ts",
+        "sha256": "08604958b19c26b2ff56b4feb4051d125416aae3731ca8ba8e0a6000c5bd6453",
+        "execution": "covered by selected tests and/or structural checks; see named oracles in review notes"
+      },
+      {
+        "path": "src/git/paths.ts",
+        "sha256": "4974cfd551ebdbe6dafb5748bc4771e8fb05a51f6196349373c4b92bac7feb0a",
+        "execution": "covered by selected tests and/or structural checks; see named oracles in review notes"
+      },
+      {
+        "path": "src/git/quarantine.ts",
+        "sha256": "55fcd0aa4d1112f493a0a9705f91d6d9a8bd432968c99c71c6cb4aa0dd368866",
+        "execution": "covered by selected tests and/or structural checks; see named oracles in review notes"
+      },
+      {
+        "path": "src/leaf.ts",
+        "sha256": "9fcec657737cb6b672ed26fb163ca18691561efc4ad7d5867ff96852f3506684",
+        "execution": "covered by selected tests and/or structural checks; see named oracles in review notes"
+      },
+      {
+        "path": "src/lifecycle/policy.ts",
+        "sha256": "f821cfc17de02d16bdc545d65b411fb281019e1a96c5dccaedbd732200fc7874",
+        "execution": "covered by selected tests and/or structural checks; see named oracles in review notes"
+      },
+      {
+        "path": "src/pi-compat/interactive-tools.ts",
+        "sha256": "27bd2f43c340c9a2ff473fdaefeaee97265afb73d31ce2c00ea5cfec08ae4fa7",
+        "execution": "covered by selected tests and/or structural checks; see named oracles in review notes"
+      },
+      {
+        "path": "src/pi-compat/pi-private.d.ts",
+        "sha256": "6c812c3e1934d4e64d870f558ddf9161c48da65a17f964c2658c32e3b4edecda",
+        "execution": "covered by selected tests and/or structural checks; see named oracles in review notes"
+      },
+      {
+        "path": "src/pi-extension.ts",
+        "sha256": "868aa2af324a2ddc14c76c51a62978ab94d99f59571ba13f72a7662b5093ee37",
+        "execution": "covered by selected tests and/or structural checks; see named oracles in review notes"
+      },
+      {
+        "path": "src/platform/host/egress.ts",
+        "sha256": "7ca7a21fa6347d372477c9760b9d8b93e4c83bc92bb9a9e1a375c4adc4c27fe4",
+        "execution": "covered by selected tests and/or structural checks; see named oracles in review notes"
+      },
+      {
+        "path": "src/process/async.ts",
+        "sha256": "693e13be0520590517ddbc745912395222c9d40e48f50fe06b939e09de3576cf",
+        "execution": "covered by selected tests and/or structural checks; see named oracles in review notes"
+      },
+      {
+        "path": "src/runner.ts",
+        "sha256": "a4aa0244cdcddafe62cf66a776173cced56d38a68c48b03b736eeeb96dcb690b",
+        "execution": "covered by selected tests and/or structural checks; see named oracles in review notes"
+      },
+      {
+        "path": "src/runtime/candidate-checks.ts",
+        "sha256": "f4d02e7e754c2d4012c117864c36a30078352a5f144e15bee97d4985575a5052",
+        "execution": "covered by selected tests and/or structural checks; see named oracles in review notes"
+      },
+      {
+        "path": "src/runtime/client-preload.ts",
+        "sha256": "1085d9f626e2ab3e2430dce5d3dad540a142f0b5ad14b2f6ee95399666185bed",
+        "execution": "covered by selected tests and/or structural checks; see named oracles in review notes"
+      },
+      {
+        "path": "src/runtime/connect-proxy.ts",
+        "sha256": "ec15345a3168f2b91634b3c2b4b8f20abe427f3f9f7af738da1bef76e0afd39b",
+        "execution": "covered by selected tests and/or structural checks; see named oracles in review notes"
+      },
+      {
+        "path": "src/runtime/pi-adapter.ts",
+        "sha256": "80f69e14e8169a0856172ad10f97413f75b29f3baa453141088ff0413d964863",
+        "execution": "covered by selected tests and/or structural checks; see named oracles in review notes"
+      },
+      {
+        "path": "src/runtime/pi-packages.ts",
+        "sha256": "582a6402b747f2656de9dcf6601cba2114d169bc3a13b702e0544e1a9f669149",
+        "execution": "covered by selected tests and/or structural checks; see named oracles in review notes"
+      },
+      {
+        "path": "src/runtime/pi-spawn-plan.ts",
+        "sha256": "fd764e68d69fa8e39450af9318f82d37d06f72018e8e68502e37be19cd6c2d03",
+        "execution": "covered by selected tests and/or structural checks; see named oracles in review notes"
+      },
+      {
+        "path": "src/sandbox.ts",
+        "sha256": "7cd9feb1243d34fcfa5926e4213fc2b021bdb83c383977ece224095881a5d8f4",
+        "execution": "covered by selected tests and/or structural checks; see named oracles in review notes"
+      },
+      {
+        "path": "src/storage/quota.ts",
+        "sha256": "1da57efbe017c7c8c83fcc30efc201e07afd158f3fab0ab63767b3d6be8938e7",
+        "execution": "covered by selected tests and/or structural checks; see named oracles in review notes"
+      },
+      {
+        "path": "src/tui/packages-apply.ts",
+        "sha256": "39c8266b98c6e9098317da75e62228cf2ba08fff0277b6d12cd74c523f67392a",
+        "execution": "covered by selected tests and/or structural checks; see named oracles in review notes"
+      },
+      {
+        "path": "src/tui/session.ts",
+        "sha256": "3b7c02764f40f54c4cb21ef9b9850f9f404b9e9e57e948c7031c5b173f0d7d1e",
+        "execution": "covered by selected tests and/or structural checks; see named oracles in review notes"
+      },
+      {
+        "path": "src/tui/sources/settings.ts",
+        "sha256": "ed44c2ff7c7af3630cf87a89e1e29b786bdd1998087c31330cb9d407701faaaa",
+        "execution": "covered by selected tests and/or structural checks; see named oracles in review notes"
+      },
+      {
+        "path": "src/tui/view/dashboard.ts",
+        "sha256": "8f3fb8841d78cf413fbe8397cc45818dcf78f695b4e24a4b5198e47beaa7e919",
+        "execution": "covered by selected tests and/or structural checks; see named oracles in review notes"
+      },
+      {
+        "path": "src/units.ts",
+        "sha256": "8e856eec19c18c9eaa8a0048737c732df9cb84eba204852266273b37e0727ba8",
+        "execution": "covered by selected tests and/or structural checks; see named oracles in review notes"
+      },
+      {
+        "path": "test/action-admission.test.ts",
+        "sha256": "e58c69c82aff09d37d5b7e7d5ae3d10e7206a6a4d89f84841a07f32b3e07e574",
+        "execution": "covered by selected tests and/or structural checks; see named oracles in review notes"
+      },
+      {
+        "path": "test/adversarial-contract-fixes.test.ts",
+        "sha256": "3393fc196557dee97bee32abf02375fd66b2482fd6bff1f27dcc7eb285345e8f",
+        "execution": "covered by selected tests and/or structural checks; see named oracles in review notes"
+      },
+      {
+        "path": "test/adversarial-repairs.test.ts",
+        "sha256": "774e175cbab889f6862e4faf50a7951da55ed565905970cfbf836eb706833992",
+        "execution": "covered by selected tests and/or structural checks; see named oracles in review notes"
+      },
+      {
+        "path": "test/authority.test.ts",
+        "sha256": "8ccf575a3d5a13506ba73fdcb187bebc7d19492689a981bb39a9920df1aaf106",
+        "execution": "covered by selected tests and/or structural checks; see named oracles in review notes"
+      },
+      {
+        "path": "test/broker-composition-policy.test.mjs",
+        "sha256": "7ff6108ac1668036f5ae7d04fdd2e05b4e95d526b4eac6cc0449b5ed82f1ffbf",
+        "execution": "covered by selected tests and/or structural checks; see named oracles in review notes"
+      },
+      {
+        "path": "test/candidate-checks.test.ts",
+        "sha256": "e780e5cbe7e145cc54f7b102a3fb1fbe20acb40879063fe5173f278ccf605b81",
+        "execution": "covered by selected tests and/or structural checks; see named oracles in review notes"
+      },
+      {
+        "path": "test/config-edit-descriptors.types.ts",
+        "sha256": "61ca89cc528d290fcbc942b08b0df4e549dbca7e3ad1dd2cc606d186b4304394",
+        "execution": "covered by selected tests and/or structural checks; see named oracles in review notes"
+      },
+      {
+        "path": "test/config-editing.test.ts",
+        "sha256": "e525043feb1a66582dbd7fa8fa5fa4964e8b6dd9419cb31a75d46f3d60b99437",
+        "execution": "covered by selected tests and/or structural checks; see named oracles in review notes"
+      },
+      {
+        "path": "test/config-generations.test.ts",
+        "sha256": "ea784bf410fc482723f16ab2ca364904bd129b6c567856e5eefd235b2b57bebe",
+        "execution": "covered by selected tests and/or structural checks; see named oracles in review notes"
+      },
+      {
+        "path": "test/consistency-decisions.test.mjs",
+        "sha256": "6b4e3ebcbc71d57b952ff75a4cda565551c4e3331fdd42a4eb7b0cbd0febc10c",
+        "execution": "covered by selected tests and/or structural checks; see named oracles in review notes"
+      },
+      {
+        "path": "test/contained-tools.test.ts",
+        "sha256": "6b8584681fbf9c9b56dff2b30762e90133d7fec982e3c1541a6b540afb28ee4a",
+        "execution": "covered by selected tests and/or structural checks; see named oracles in review notes"
+      },
+      {
+        "path": "test/crash-kill-boundaries.test.ts",
+        "sha256": "e95f77da765a17788c4c1ee49749e3bf37a6255a49195f9239527e669aec872a",
+        "execution": "covered by selected tests and/or structural checks; see named oracles in review notes"
+      },
+      {
+        "path": "test/domain-policy.test.ts",
+        "sha256": "64ac90dc5583a16190820b8871607f1f56684aa137d1c139d38b1c7b061b8e4c",
+        "execution": "covered by selected tests and/or structural checks; see named oracles in review notes"
+      },
+      {
+        "path": "test/dr18-closures.test.ts",
+        "sha256": "d5ff3ff61dc9555ae3ed01ee20502e7acd7938622f3bdfcc4c0134da81bd02ae",
+        "execution": "covered by selected tests and/or structural checks; see named oracles in review notes"
+      },
+      {
+        "path": "test/egress-connect.test.ts",
+        "sha256": "058754c25502af374bf49cc3bcd6330024382f495013f27643582202d4c7d348",
+        "execution": "covered by selected tests and/or structural checks; see named oracles in review notes"
+      },
+      {
+        "path": "test/extension-editing.test.ts",
+        "sha256": "567ca4c8bcbaf4f7fb0759017780aa8c436d93999cf9df34fcfcdb14215d8bf0",
+        "execution": "covered by selected tests and/or structural checks; see named oracles in review notes"
+      },
+      {
+        "path": "test/fixtures/crash-worker.ts",
+        "sha256": "f5c8e2b122bcf84f510abf5783d6f5ab4cf419a0a4a21487b92354171682a5ec",
+        "execution": "covered by selected tests and/or structural checks; see named oracles in review notes"
+      },
+      {
+        "path": "test/fixtures/principal-engine.mjs",
+        "sha256": "d435ccb4f50b5c1125dfd001220fea833b8dc03d1d6813af623dd4ef360b1613",
+        "execution": "covered by selected tests and/or structural checks; see named oracles in review notes"
+      },
+      {
+        "path": "test/fixtures/surface-crash-worker.ts",
+        "sha256": "999303a8156fde15b875f616b715c15894367f32206e9d88b8104f979b07ede8",
+        "execution": "covered by selected tests and/or structural checks; see named oracles in review notes"
+      },
+      {
+        "path": "test/hashline-bundle.test.ts",
+        "sha256": "3048c98b4366313a20857e0c75e4ac06dcbed446d84159e42a54250cfa64b30f",
+        "execution": "covered by selected tests and/or structural checks; see named oracles in review notes"
+      },
+      {
+        "path": "test/interactive-startup.test.ts",
+        "sha256": "afbc1d57271d8b3e8ce2764bca39c6ac16567ee7ec0a5f761e42ad5ac0e34da2",
+        "execution": "covered by selected tests and/or structural checks; see named oracles in review notes"
+      },
+      {
+        "path": "test/lsp-bundle.test.ts",
+        "sha256": "61263f4823c7aad6b4416f3e3eab9c638b0dd5f43a30e903648f7ed9ea7da18f",
+        "execution": "covered by selected tests and/or structural checks; see named oracles in review notes"
+      },
+      {
+        "path": "test/mcp-bundle.test.ts",
+        "sha256": "a8fa3bea761ff55110981e5043a0fa9239a3c96efc98182bbd9f1e60602b10ca",
+        "execution": "covered by selected tests and/or structural checks; see named oracles in review notes"
+      },
+      {
+        "path": "test/operations-config.test.ts",
+        "sha256": "fe530ffb5f18a8199eda6a4c12b86d1fed3a8b7211da23cc6599cc1e2c374024",
+        "execution": "covered by selected tests and/or structural checks; see named oracles in review notes"
+      },
+      {
+        "path": "test/p24-deployment-gates.test.ts",
+        "sha256": "b40f00542cf8c30d2cd6c35f2dd3d06c47aa6d6af96fb41f795aa8ac779efa86",
+        "execution": "covered by selected tests and/or structural checks; see named oracles in review notes"
+      },
+      {
+        "path": "test/phase4.test.ts",
+        "sha256": "5e096c6764b206244d73c2ff8a25296cae9bef4e7bed067b64d333030a842445",
+        "execution": "covered by selected tests and/or structural checks; see named oracles in review notes"
+      },
+      {
+        "path": "test/phase5.test.ts",
+        "sha256": "38e35647f4c39e2c646016778cd5f9f58fa423e7a92b09e07038abbae7fd1da5",
+        "execution": "covered by selected tests and/or structural checks; see named oracles in review notes"
+      },
+      {
+        "path": "test/pi-runtime.test.ts",
+        "sha256": "65119bfd3575aa48bf345b7fca0e098a72ca86d1c38e93daf362fabf02f5f72a",
+        "execution": "covered by selected tests and/or structural checks; see named oracles in review notes"
+      },
+      {
+        "path": "test/platform-egress.test.ts",
+        "sha256": "7057b62dfd3801e4f6a4ecba9cee7dfe01a7369e6bb9120215b00b796e75dde0",
+        "execution": "covered by selected tests and/or structural checks; see named oracles in review notes"
+      },
+      {
+        "path": "test/platform-packages.test.ts",
+        "sha256": "8205eda702c61e44dbe96016052597dcb6e7fea922ff11c6bcc574fd019ed386",
+        "execution": "covered by selected tests and/or structural checks; see named oracles in review notes"
+      },
+      {
+        "path": "test/priority-0.test.ts",
+        "sha256": "50b0cc3b69f9eb7fd077a71066a5dc0909b81f948e7c5b3e60f20ebb18614977",
+        "execution": "covered by selected tests and/or structural checks; see named oracles in review notes"
+      },
+      {
+        "path": "test/quarantine-profile.test.ts",
+        "sha256": "67b303d8682ca1ce4ae3f2e5e087ebf927f520fabf0cfe9d7a26d223a0e6a08f",
+        "execution": "covered by selected tests and/or structural checks; see named oracles in review notes"
+      },
+      {
+        "path": "test/r13-authority-lineage.test.ts",
+        "sha256": "f31877d3cec3369908d2e2e6db53f9287b67b4811c5a616f01f27742fde6855b",
+        "execution": "covered by selected tests and/or structural checks; see named oracles in review notes"
+      },
+      {
+        "path": "test/r19-integration-policy.test.ts",
+        "sha256": "7243a131a99664ecfe5ebdf76821ab4ebad9aeec20b18a125dcd4da22507ed0a",
+        "execution": "covered by selected tests and/or structural checks; see named oracles in review notes"
+      },
+      {
+        "path": "test/resident-confinement.test.ts",
+        "sha256": "13cfea6c56a8030cf4404a13961ffbec14cb11faf3d8305429c130db952b046e",
+        "execution": "covered by selected tests and/or structural checks; see named oracles in review notes"
+      },
+      {
+        "path": "test/sandbox-environment.test.ts",
+        "sha256": "d71a294fccdf02db570fced794e430b53ee6ec8bc833100cdd171a1d627f14b3",
+        "execution": "covered by selected tests and/or structural checks; see named oracles in review notes"
+      },
+      {
+        "path": "test/scenario-boundaries.test.ts",
+        "sha256": "3244af49b038ec36ca4b25b94a08b72515a8543693122380cefbaf89f6989ce0",
+        "execution": "covered by selected tests and/or structural checks; see named oracles in review notes"
+      },
+      {
+        "path": "test/scenario-worker-autonomy.test.ts",
+        "sha256": "78bf9e5b61b9daf127f986c309c26a589344b1adbda4d1e5ce9e189ec86f952a",
+        "execution": "covered by selected tests and/or structural checks; see named oracles in review notes"
+      },
+      {
+        "path": "test/session-entry-composition.test.mjs",
+        "sha256": "4ae48c1e68b95935b669009c9a29ddea84bdf72028add32769a812c0eff9fe3e",
+        "execution": "covered by selected tests and/or structural checks; see named oracles in review notes"
+      },
+      {
+        "path": "test/settings-apply-time.test.ts",
+        "sha256": "f5e39a4da20a78a63c45503725dfa1225280eff3f367dde18b3fe84925068b8e",
+        "execution": "covered by selected tests and/or structural checks; see named oracles in review notes"
+      },
+      {
+        "path": "test/settlement-headroom.test.ts",
+        "sha256": "3f50a1581c5c86fcfa3e3dcd058d5575de4836a131598930583b12d0af29603c",
+        "execution": "covered by selected tests and/or structural checks; see named oracles in review notes"
+      },
+      {
+        "path": "test/storage-reservation.test.ts",
+        "sha256": "c17d5c6590baf377a77b10a661c14c93eaf4ccab656480314fbc083d918d37ab",
+        "execution": "covered by selected tests and/or structural checks; see named oracles in review notes"
+      },
+      {
+        "path": "test/surface-process.test.ts",
+        "sha256": "cba86ec99e4f496e0db09afc7fe4a3babb7eb5333277e2d89cec52088ab55c7e",
+        "execution": "covered by selected tests and/or structural checks; see named oracles in review notes"
+      },
+      {
+        "path": "test/tui-integration-defects.test.ts",
+        "sha256": "d5cd9dee0d59804d2084089c49a799b1ae1668cedbe7817bb98985c933130044",
+        "execution": "covered by selected tests and/or structural checks; see named oracles in review notes"
+      },
+      {
+        "path": "test/tui-sources.test.ts",
+        "sha256": "8bfdbe37fdaee2f6a439027a12e7affb9a664510950c734db5f1cef763fae0ef",
+        "execution": "covered by selected tests and/or structural checks; see named oracles in review notes"
+      },
+      {
+        "path": "test/unread-observations.test.ts",
+        "sha256": "953c6adbd83ae16160c977c6acd11e5a61cd9ffd01349f31c34ff10249a0a513",
+        "execution": "covered by selected tests and/or structural checks; see named oracles in review notes"
+      },
+      {
+        "path": "test/unrestricted-runtime.test.ts",
+        "sha256": "4f83a497e110dd7b4dc0c41266f4a73e05b129bac64ba289d4d7afb716c8f61a",
+        "execution": "covered by selected tests and/or structural checks; see named oracles in review notes"
+      },
+      {
+        "path": "test/web-bundle.test.ts",
+        "sha256": "8fc208d7dd29e3f518f5e0e5484c6200d8c68c3c932720f6cce5a9158d85c259",
+        "execution": "covered by selected tests and/or structural checks; see named oracles in review notes"
+      },
+      {
+        "path": "test/worker-autonomy.test.ts",
+        "sha256": "7841855751ec5bc9dce7a5f4e7b11ca391c4f69cab7d64a9496dea1c043f29ee",
+        "execution": "covered by selected tests and/or structural checks; see named oracles in review notes"
+      }
+    ],
+    "recordBinding": "Runtime source/tests were frozen during executions and compared afterward. Result documents and this evidence are subsequent outputs; runtime PASS does not certify their future bytes. The validation digest is refreshed for separate structural checks after recording."
+  },
+  "startup": {
+    "before": {
+      "command": "python3 scripts/benchmark-startup.py --node /opt/oma-test-node/bin/node --runs 1 --wait-broker --early-tool",
+      "exitCode": 1,
+      "log": {
+        "path": "/tmp/oma-unrestricted-2026-10-09/startup-before.log",
+        "sha256": "01774f674fb5f03d0dfaa3868211bad5fd135b17062136f8a20efbeb552dd619"
+      },
+      "runs": [
+        {
+          "mode": "society",
+          "run": 1,
+          "artifacts": "/tmp/oma-startup-benchmark-24198snq",
+          "screenSeconds": 2.931350263999775,
+          "requestSeconds": 3.179400956,
+          "responseSeconds": 15.279719311976805,
+          "brokerSeconds": 14.561101583,
+          "brokerToolSeconds": 15.261669056,
+          "brokerToolState": "succeeded-once",
+          "quitSeconds": 0.6416635510977358,
+          "exit": 0
+        }
+      ]
+    },
+    "personal": {
+      "command": "python3 scripts/benchmark-startup.py --node /opt/oma-test-node/bin/node --mode personal --runs 3",
+      "exitCode": 0,
+      "log": {
+        "path": "/tmp/oma-unrestricted-2026-10-09/startup-personal-final.log",
+        "sha256": "c0b616edb1af5bf0d09bde21b14cff5add516458feaaeff41832eff12eee8161"
+      },
+      "runs": [
+        {
+          "mode": "personal",
+          "run": 1,
+          "artifacts": "/tmp/oma-startup-benchmark-iqx14_rf",
+          "screenSeconds": 1.247250169981271,
+          "requestSeconds": 1.492491257,
+          "responseSeconds": 1.5545051828958094,
+          "brokerSeconds": null,
+          "brokerToolSeconds": null,
+          "brokerToolState": null,
+          "quitSeconds": 0.1238838629797101,
+          "exit": 0
+        },
+        {
+          "mode": "personal",
+          "run": 2,
+          "artifacts": "/tmp/oma-startup-benchmark-3u1dzwun",
+          "screenSeconds": 1.2333778110332787,
+          "requestSeconds": 1.473750475,
+          "responseSeconds": 1.5365235980134457,
+          "brokerSeconds": null,
+          "brokerToolSeconds": null,
+          "brokerToolState": null,
+          "quitSeconds": 0.10720772389322519,
+          "exit": 0
+        },
+        {
+          "mode": "personal",
+          "run": 3,
+          "artifacts": "/tmp/oma-startup-benchmark-lpv7pern",
+          "screenSeconds": 1.2445756650995463,
+          "requestSeconds": 1.512169922,
+          "responseSeconds": 1.5555760820861906,
+          "brokerSeconds": null,
+          "brokerToolSeconds": null,
+          "brokerToolState": null,
+          "quitSeconds": 0.15684914193116128,
+          "exit": 0
+        }
+      ]
+    },
+    "societyConversation": {
+      "command": "python3 scripts/benchmark-startup.py --node /opt/oma-test-node/bin/node --runs 3",
+      "exitCode": 0,
+      "log": {
+        "path": "/tmp/oma-unrestricted-2026-10-09/startup-society-chat-final.log",
+        "sha256": "4262f6ee98e2b6473b03a4b0d45d43e987bb5d9dd047cf924a84e8b63457d38f"
+      },
+      "runs": [
+        {
+          "mode": "society",
+          "run": 1,
+          "artifacts": "/tmp/oma-startup-benchmark-0rnpqhwx",
+          "screenSeconds": 2.989160779165104,
+          "requestSeconds": 3.244577375,
+          "responseSeconds": 3.2639068050775677,
+          "brokerSeconds": null,
+          "brokerToolSeconds": null,
+          "brokerToolState": null,
+          "quitSeconds": 0.16509904502891004,
+          "exit": 0
+        },
+        {
+          "mode": "society",
+          "run": 2,
+          "artifacts": "/tmp/oma-startup-benchmark-x_yi4k0n",
+          "screenSeconds": 3.079029029002413,
+          "requestSeconds": 3.329700768,
+          "responseSeconds": 3.349195188144222,
+          "brokerSeconds": null,
+          "brokerToolSeconds": null,
+          "brokerToolState": null,
+          "quitSeconds": 0.15778066287748516,
+          "exit": 0
+        },
+        {
+          "mode": "society",
+          "run": 3,
+          "artifacts": "/tmp/oma-startup-benchmark-bs_giow1",
+          "screenSeconds": 2.9520905211102217,
+          "requestSeconds": 3.198160642,
+          "responseSeconds": 3.2185098140034825,
+          "brokerSeconds": null,
+          "brokerToolSeconds": null,
+          "brokerToolState": null,
+          "quitSeconds": 0.15501711913384497,
+          "exit": 0
+        }
+      ]
+    },
+    "societyImmediateTool": {
+      "command": "python3 scripts/benchmark-startup.py --node /opt/oma-test-node/bin/node --runs 3 --wait-broker --early-tool",
+      "exitCode": 1,
+      "log": {
+        "path": "/tmp/oma-unrestricted-2026-10-09/startup-society-final.log",
+        "sha256": "214e9d8bbb89ba1e5470209fdbf66025a071b34477b7b77064b83bf6781a8031"
+      },
+      "runs": [
+        {
+          "mode": "society",
+          "run": 1,
+          "artifacts": "/tmp/oma-startup-benchmark-fvsbslsn",
+          "screenSeconds": 3.134410513099283,
+          "requestSeconds": 3.395712701,
+          "responseSeconds": 15.728724163025618,
+          "brokerSeconds": 14.966749272,
+          "brokerToolSeconds": 15.720233002,
+          "brokerToolState": "succeeded-once",
+          "quitSeconds": 0.6395587569568306,
+          "exit": 0
+        },
+        {
+          "mode": "society",
+          "run": 2,
+          "artifacts": "/tmp/oma-startup-benchmark-n0jt75y8",
+          "screenSeconds": 3.0447278211358935,
+          "requestSeconds": 3.295432576,
+          "responseSeconds": 15.644122648052871,
+          "brokerSeconds": 14.865383065,
+          "brokerToolSeconds": 15.626383793,
+          "brokerToolState": "succeeded-once",
+          "quitSeconds": 0.6403916769195348,
+          "exit": 0
+        },
+        {
+          "mode": "society",
+          "run": 3,
+          "artifacts": "/tmp/oma-startup-benchmark-fxpt1ifw",
+          "screenSeconds": 3.0388355320319533,
+          "requestSeconds": 3.310305041,
+          "responseSeconds": 15.544228802900761,
+          "brokerSeconds": 14.757316919,
+          "brokerToolSeconds": 15.492000341,
+          "brokerToolState": "succeeded-once",
+          "quitSeconds": 0.6587295189965516,
+          "exit": 0
+        }
+      ]
+    },
+    "budget": {
+      "personalUnder5Seconds": "PASS",
+      "societyConversationUnder5Seconds": "PASS",
+      "societyFullPreparationUnder5Seconds": "FAIL",
+      "oneSecondTarget": "FAIL"
+    },
+    "method": "Actual OMA entry and bundled Pi in a PTY; fresh HOME/data per run, one serial group at a time after all build/tests. Local scripted model only. Filesystem caches not flushed. Immediate-tool succeeded-once means exactly one succeeded society.set row observed in SQLite."
+  },
+  "diagnosticAttemptsPreserved": [
+    {
+      "log": {
+        "path": "/tmp/oma-unrestricted-2026-10-09/test-third.log",
+        "sha256": "9906d69917b54aa17e21ef63d99e8af72551b9354e698c1dce219ee83b399454"
+      },
+      "serialPass": 9,
+      "parallelPass": 3879,
+      "parallelFail": 56,
+      "cause": "Environment runner and stale surface fixtures; remaining removed heartbeat calls caused real quarantine failure and were corrected."
+    },
+    {
+      "log": {
+        "path": "/tmp/oma-unrestricted-2026-10-09/test-final.log",
+        "sha256": "114b30b598e8286160d0026ccb8143eb1035bcc5fde54de60f3d8d057581dd55"
+      },
+      "serialPass": 9,
+      "parallelPass": 3936,
+      "parallelFail": 1,
+      "cause": "Historical extension import fixture lacked the production reader lease. Fixture now pins before import, production client-preload is tested directly."
+    },
+    {
+      "report": {
+        "path": "/tmp/oma-unrestricted-2026-10-09/kernel-final/result.json",
+        "sha256": "4391c7bd56b9e560c91150b869ad8693443c34ed233fb0f470af0b8f1db9abc5"
+      },
+      "pass": 67,
+      "fail": 1,
+      "cause": "Omitting TasksMax still inherited systemd DefaultTasksMax=38426. Resident and check units now explicitly use TasksMax=infinity; final native tests observe infinity."
+    }
+  ],
+  "limitations": [
+    "macOS Virtualization.framework/APFS/Keychain/AF_VSOCK native and VM boot NOT_RUN on this Linux host.",
+    "The external signed guest image must install platform/guest/network/80-oma.network, provide virtio_net and networkd/resolved, and connect resolv.conf. No guest-image builder exists in this repository; image packaging/boot was NOT_RUN.",
+    "Legacy package generations without the reader-lease marker are retained because absence of old readers cannot be established. New marked generations are collected only after the last shared flock closes; collector SIGKILL tombstones are recovered.",
+    "Paid providers, VM power loss, host reboot and full release qualification NOT_RUN.",
+    "This batch directly reviews 45 changed production files and affected ownership; regenerated metadata does not renew inherited unreviewed-file or historical lane claims.",
+    "Personal/Society conversation meet five seconds, but the one-second target and first Society full preparation/tool five-second target remain unmet."
+  ]
+}

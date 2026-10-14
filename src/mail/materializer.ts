@@ -1,24 +1,44 @@
-import { lstatSync } from "node:fs";
+import { closeSync, fsyncSync, lstatSync, openSync, writeSync } from "node:fs";
+import { readableBody } from "./display.js";
+import { sha256Hex } from "../domain/canonical-json.js";
 import type { Address, MessagePlan } from "../../implementation/contracts.js";
 import { Store, type DeliveryRow, type OperationRow } from "../store.js";
+import { ownedMessages } from "../durable.js";
 import { StoreError } from "../domain/errors.js";
-import { mailObjectPathAt, mailArchivePathAt, mailInboxPathAt } from "../storage/paths.js";
+import { mailObjectPathAt, mailAudiencePathAt, mailInboxPathAt, mailInboxArrivalPathAt } from "../storage/paths.js";
 import { publishImmutableFile, readImmutableBytes } from "../storage/immutable-file.js";
+import { entryAt, withinDirectory } from "../storage/contained-fs.js";
 import { parseDisplayedAddress } from "./addresses.js";
-import { parseEmlHeaders, type ParsedEmlHeaders } from "./headers.js";
+import { decodeSubject, parseEmlHeaders, type ParsedEmlHeaders } from "./headers.js";
+import { consumeIntegrationPublication, type IntegrationPublicationEvidence } from "../git/integration-publication.js";
 import { consumeSubmissionPublication, type SubmissionPublicationEvidence } from "../git/publication.js";
 import { consumeContextPublication, type ContextPublicationEvidence } from "../git/context-publication.js";
 import { consumeCreationPublication, type CreationPublicationEvidence } from "../lifecycle/create-publication.js";
 
-export type PublicationEvidence = SubmissionPublicationEvidence | ContextPublicationEvidence | CreationPublicationEvidence;
-export function operationMessage(operation: OperationRow): MessagePlan {
-  switch (operation.kind) {
-    case "mail.send": case "agent.continue": case "git.submit": case "context.publish": return operation.plan.message;
-    case "agent.create":
-      if (operation.plan.initialMessage !== null) return operation.plan.initialMessage;
-      throw new StoreError("STORE_CORRUPT", "linked create owns no separate initial message");
-    default: throw new StoreError("STORE_CORRUPT", `operation ${operation.kind} owns no message`);
-  }
+export type PublicationEvidence = IntegrationPublicationEvidence | SubmissionPublicationEvidence | ContextPublicationEvidence | CreationPublicationEvidence;
+/** The messages an accepted plan names, empty for a plan that names none. */
+export function namedMessages(operation: OperationRow): readonly MessagePlan[] {
+  return ownedMessages(operation.plan);
+}
+/** Pre-accept ownership of a frozen message object follows the accepted plan,
+ * not row existence: only a plan naming this id and sha256 owns it. A linked
+ * create, another message or another kind owns none of it. */
+export function frozenMessageDisposition(store: Pick<Store, "getOperationById">, operationId: string,
+  message: { readonly id: string; readonly sha256: string }): "unaccepted-known" | "accepted-referenced" | "accepted-unreferenced" {
+  const operation = store.getOperationById(operationId);
+  if (operation === null) return "unaccepted-known";
+  const named = namedMessages(operation);
+  return named.some(candidate => candidate.id === message.id && candidate.sha256 === message.sha256)
+    ? "accepted-referenced" : "accepted-unreferenced";
+}
+export function operationMessage(operation: OperationRow, messageId?: string): MessagePlan {
+  const owned = namedMessages(operation);
+  const message = messageId === undefined
+    ? (owned.length === 1 ? owned[0]! : null)
+    : owned.find(candidate => candidate.id === messageId) ?? null;
+  if (message !== null) return message;
+  throw new StoreError("STORE_CORRUPT", operation.kind === "agent.create"
+    ? "linked create owns no separate initial message" : `operation ${operation.kind} owns no message`);
 }
 
 /** Adds physical source/header/hash proof and the sole archive/inbox effect loop
@@ -26,7 +46,8 @@ export function operationMessage(operation: OperationRow): MessagePlan {
  */
 export class MailMaterializer {
   constructor(private readonly store: Store, private readonly stateRoot: string, private readonly society: string) {}
-  headers(message: MessagePlan): ParsedEmlHeaders {
+  headers(message: MessagePlan): ParsedEmlHeaders { return this.checked(message).headers; }
+  private checked(message: MessagePlan): { headers: ParsedEmlHeaders; bytes: Buffer } {
     const path = mailObjectPathAt(this.stateRoot, message.id);
     const bytes = readImmutableBytes(path, message.sha256, message.bytes);
     let headers: ParsedEmlHeaders;
@@ -59,7 +80,7 @@ export class MailMaterializer {
           actual.candidate !== expected.candidate || actual.policyRevision !== expected.policyRevision)
         throw new StoreError("STORE_CORRUPT", `mail approval metadata mismatch: ${message.id}`);
     } else if (actual) throw new StoreError("STORE_CORRUPT", `unexpected mail approval metadata: ${message.id}`);
-    return headers;
+    return { headers, bytes };
   }
   private requiredOperation(id: string): OperationRow {
     const operation = this.store.getOperationById(id);
@@ -69,13 +90,14 @@ export class MailMaterializer {
   }
   ordinary(id: string): void {
     const operation = this.requiredOperation(id);
-    if (operation.kind !== "mail.send" && operation.kind !== "agent.continue")
+    if (operation.kind !== "attest.record" && operation.kind !== "mail.send" && operation.kind !== "agent.continue")
       throw new StoreError("INVALID_REQUEST", `operation ${operation.kind} uses gated publication`);
     this.publish(operation);
   }
   gated(id: string, proof: PublicationEvidence | undefined): void {
     const operation = this.requiredOperation(id);
     switch (operation.kind) {
+      case "git.integrate": consumeIntegrationPublication(proof, operation); break;
       case "git.submit": consumeSubmissionPublication(proof, operation); break;
       case "context.publish": consumeContextPublication(proof, operation); break;
       case "agent.create": consumeCreationPublication(proof, operation); break;
@@ -84,32 +106,60 @@ export class MailMaterializer {
     this.publish(operation);
   }
   private publish(operation: OperationRow): void {
-    const message = operationMessage(operation);
+    const messages = namedMessages(operation);
+    // A review operation may legitimately own no mail; nothing publishes then.
+    if (messages.length === 0) return;
     const deliveries = this.store.deliveriesForOperation(operation.id);
-    const expected = new Set(message.recipients);
-    const actual = new Set<string>();
-    for (const delivery of deliveries) {
-      if (delivery.operationId !== operation.id || delivery.messageId !== message.id ||
-        !expected.has(delivery.recipient) || actual.has(delivery.recipient))
-        throw new StoreError("STORE_CORRUPT", `delivery snapshot mismatch for ${operation.id}`);
-      actual.add(delivery.recipient);
-    }
-    if (expected.size !== message.recipients.length || actual.size !== expected.size)
+    const ownedIds = new Set(messages.map(message => message.id));
+    if (deliveries.some(delivery => !ownedIds.has(delivery.messageId)))
       throw new StoreError("STORE_CORRUPT", `delivery snapshot mismatch for ${operation.id}`);
-    this.headers(message);
-    publishImmutableFile(mailObjectPathAt(this.stateRoot, message.id), mailArchivePathAt(this.stateRoot, message.id), message.sha256);
-    for (const delivery of deliveries) {
-      this.publishDelivery(message, delivery);
-      this.store.transaction(tx => tx.markMaterialized(delivery.messageId, delivery.recipient));
+    for (const message of messages) {
+      const owned = deliveries.filter(delivery => delivery.messageId === message.id);
+      const expected = new Set(message.recipients);
+      const actual = new Set<string>();
+      for (const delivery of owned) {
+        if (delivery.operationId !== operation.id ||
+          !expected.has(delivery.recipient) || actual.has(delivery.recipient))
+          throw new StoreError("STORE_CORRUPT", `delivery snapshot mismatch for ${operation.id}`);
+        actual.add(delivery.recipient);
+      }
+      if (expected.size !== message.recipients.length || actual.size !== expected.size)
+        throw new StoreError("STORE_CORRUPT", `delivery snapshot mismatch for ${operation.id}`);
+      const { headers, bytes } = this.checked(message);
+      if (operation.kind === "context.publish" && operation.plan.goalMail) {
+        const goal = operation.plan.entries.find(entry => entry.path === "GOAL.md")!;
+        const body = Buffer.from(readableBody(bytes.toString("utf8")));
+        if (body.length !== goal.bytes || sha256Hex(body) !== goal.sha256 || decodeSubject(headers.subject) !== operation.plan.goalMail.subject)
+          throw new StoreError("STORE_CORRUPT", "GOAL mail differs from the accepted document or subject");
+      }
+      publishImmutableFile(mailObjectPathAt(this.stateRoot, message.id), mailAudiencePathAt(this.stateRoot, message), message.sha256);
+      for (const delivery of owned) {
+        this.publishDelivery(message, delivery);
+        this.store.transaction(tx => tx.markMaterialized(delivery.messageId, delivery.recipient));
+      }
     }
   }
   private publishDelivery(message: MessagePlan, delivery: DeliveryRow): void {
     const object = mailObjectPathAt(this.stateRoot, message.id);
     const current = mailInboxPathAt(this.stateRoot, delivery.recipient, message.id, "cur");
     const fresh = mailInboxPathAt(this.stateRoot, delivery.recipient, message.id, "new");
+    let arrivedNew = false;
     if (lstatSync(current, { throwIfNoEntry: false })) {
       publishImmutableFile(object, current, message.sha256);
-      if (lstatSync(fresh, { throwIfNoEntry: false })) publishImmutableFile(object, fresh, message.sha256);
-    } else publishImmutableFile(object, fresh, message.sha256);
+      if (lstatSync(fresh, { throwIfNoEntry: false })) { publishImmutableFile(object, fresh, message.sha256); arrivedNew = true; }
+    } else { publishImmutableFile(object, fresh, message.sha256); arrivedNew = true; }
+    // AV-11: a link into new/ is an arrival; its time belongs to this delivery,
+    // not to the immutable object inode it points at. The journal is appended
+    // and durable before the delivery is marked materialized.
+    if (arrivedNew) this.recordArrival(delivery.recipient, message.id);
+  }
+  private recordArrival(recipient: string, messageId: string): void {
+    // Resolve the inbox directory once and append through that descriptor: the
+    // name the journal is created under is the inode the delivery used.
+    withinDirectory(mailInboxArrivalPathAt(this.stateRoot, recipient), (parent, name) => {
+      const fd = openSync(entryAt(parent, name), "a", 0o600);
+      try { writeSync(fd, `${Date.now()} ${messageId}\n`); fsyncSync(fd); }
+      finally { closeSync(fd); }
+    });
   }
 }

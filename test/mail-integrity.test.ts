@@ -95,3 +95,62 @@ test("MAIL-005/008: replies and batch preparation reject corrupt originals; dupl
     assert.deepEqual(readFileSync(current), original);
   } finally { store.close(); removeTree(root); }
 });
+
+test("mail-v1: a worker-audience message publishes only under mail/workers and reaches each recipient inbox", async () => {
+  const root = mkdtempSync(join(tmpdir(), "oma-mail-workers-"));
+  const store = new Store(join(root, "runtime.sqlite"));
+  try {
+    store.transaction(() => {
+      for (const name of ["principal", "alice", "bob"])
+        store.insertAgent({ name, role: name === "principal" ? "principal" : "resident", profile: "p",
+          desired: "enabled", incarnation: 1, ...storedSpec(ALL_CAPS, "p", name), createdBy: null });
+    });
+    const { mail } = gitFixture(root, store);
+    const { generateOperationId, generateMessageId } = await import("../src/ids.js");
+    const { reviewRequestNameFor } = await import("../src/domain/identifiers.js");
+    const { requestHash } = await import("../src/hash.js");
+    const { mailObjectPathAt, mailArchivePathAt, mailWorkersPathAt, mailInboxPathAt } = await import("../src/storage/paths.js");
+    const { ensureDurableDirectory, writeExclusiveFsyncedFile } = await import("../src/storage/durable-fs.js");
+    const { buildEml } = await import("../src/mail/serialize.js");
+    const operationId = generateOperationId();
+    const name = reviewRequestNameFor("merge", operationId);
+    const messageId = generateMessageId(operationId, 0);
+    const eml = await buildEml({ from: "alice@crash.oma.invalid", to: ["residents@crash.oma.invalid"],
+      replyTo: ["alice@crash.oma.invalid"], subject: "review", body: "review thread", kind: "message",
+      contextRevision: null, inReplyTo: null, references: [], messageId: `${messageId}@crash.oma.invalid` });
+    const message = { id: messageId, objectPath: `mail/objects/${messageId}.eml`, sha256: eml.sha256,
+      bytes: eml.bytes, dateMs: eml.dateMs, to: ["residents"], recipients: ["alice", "bob"], kind: "message" as const,
+      contextRevision: null, replyHeaders: { replyTo: ["alice"], inReplyTo: null, references: [] },
+      audience: "workers" as const,
+      review: { role: "thread" as const, request: operationId, name, revision: 0 } };
+    const candidate = "2".repeat(40), base = "1".repeat(40);
+    const fact = { kind: "merge.open" as const, version: 1, name, title: "Fix", reason: "needed",
+      tier: "MEDIUM" as const,
+      identity: { repo: "project", targetRef: "refs/heads/main", expectedBase: base, candidate, policyRevision: "p1" },
+      submitters: ["alice"] };
+    const payload = { kind: "merge.open", tier: "MEDIUM", title: "Fix", reason: "needed", candidate, base };
+    ensureDurableDirectory(join(root, "mail", "objects"));
+    writeExclusiveFsyncedFile(mailObjectPathAt(root, messageId), Buffer.from(eml.text, "utf8"), 0o444);
+    store.transaction(tx => {
+      assert.equal(tx.acceptOperation({ id: operationId, actor: "alice", requestKey: `review-${operationId}`,
+        requestHash: requestHash("attest.record", payload), kind: "attest.record",
+        payloadJson: JSON.stringify(payload),
+        planJson: JSON.stringify({ kind: "attest.record", fact, messages: [message] }) }), "inserted");
+      tx.insertDeliveries([
+        { messageId, recipient: "alice", operationId },
+        { messageId, recipient: "bob", operationId },
+      ]);
+    });
+    // The workers archive exists on any provisioned root; provision runs before
+    // a broker touches mail.
+    mkdirSync(join(root, "mail", "workers", "cur"), { recursive: true });
+    await mail.materialize(operationId);
+    assert.equal(existsSync(mailWorkersPathAt(root, messageId)), true);
+    assert.equal(existsSync(mailArchivePathAt(root, messageId)), false,
+      "worker mail never lands in the public archive");
+    for (const recipient of ["alice", "bob"]) {
+      assert.equal(existsSync(mailInboxPathAt(root, recipient, messageId, "new")), true);
+      assert.equal(store.getDelivery(messageId, recipient)?.materialized, 1);
+    }
+  } finally { store.close(); removeTree(root); }
+});

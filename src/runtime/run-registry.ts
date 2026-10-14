@@ -4,6 +4,7 @@ import { join } from "node:path";
 import type { Actor, RunLease } from "../../implementation/contracts.js";
 import { StoreError } from "../domain/errors.js";
 import { parseCgroupPopulation } from "../units/observe.js";
+import type { SettlementQuiescence } from "../mail/batches.js";
 
 export interface CgroupIdentity { readonly dev: bigint; readonly ino: bigint }
 export type Population = "empty" | "populated" | "removed" | "unknown";
@@ -28,7 +29,11 @@ type RunState =
   | { readonly phase: "revoked-awaiting-death" }
   | { readonly phase: "closed" };
 
-/** Native owner. ENOENT alone is not evidence: the pinned directory must be removed. */
+/** Native owner. A missing `cgroup.events` is evidence only through the pinned
+ * descriptor of a directory that was seen to hold one: that core file exists
+ * for a cgroup's whole life, so its absence below the same pinned inode means
+ * the kernel removed the cgroup. The directory's link count is not a signal:
+ * cgroup2 keeps it unchanged after removal (observed on Linux 6.12). */
 export function pinCgroup(path: string): CgroupPin {
   if (!path.startsWith("/") || path === "/" || path.includes("\0") || path.split("/").some(part => part === "." || part === ".."))
     throw new StoreError("AUTH_FAILED", "invalid observed cgroup path");
@@ -38,16 +43,22 @@ export function pinCgroup(path: string): CgroupPin {
     const st = fstatSync(fd, { bigint: true });
     if (!st.isDirectory()) throw new StoreError("AUTH_FAILED", "cgroup pin is not a directory");
     const identity = Object.freeze({ dev: st.dev, ino: st.ino });
+    let observedEvents = false;
     return {
       fd, identity,
       population() {
         if (closed) return "unknown";
-        try { return parseCgroupPopulation(readFileSync(`/proc/self/fd/${fd}/cgroup.events`, "utf8")); }
+        let events: string;
+        try { events = readFileSync(`/proc/self/fd/${fd}/cgroup.events`, "utf8"); }
         catch (error) {
           if ((error as NodeJS.ErrnoException).code !== "ENOENT") return "unknown";
+          if (observedEvents) return "removed";
           try { return fstatSync(fd, { bigint: true }).nlink === 0n ? "removed" : "unknown"; }
           catch { return "unknown"; }
         }
+        const population = parseCgroupPopulation(events);
+        if (population !== "unknown") observedEvents = true;
+        return population;
       },
       matches(currentPath) {
         if (closed) return false;
@@ -67,6 +78,7 @@ export function pinCgroup(path: string): CgroupPin {
 /** Owns the cgroup FD from opening through revoked-awaiting-death. */
 export class OwnedRun {
   private state: RunState = { phase: "opening" };
+  private waiting = false;
   readonly identity: RunIdentity;
   constructor(actor: Actor, incarnation: number, invocationId: string, private readonly pin: CgroupPin) {
     this.identity = Object.freeze({ actor, incarnation, invocationId, cgroupIdentity: pin.identity });
@@ -77,6 +89,10 @@ export class OwnedRun {
   get lease(): RunLease | null { return this.state.phase === "live" ? this.state.lease : null; }
   population(): Population { return this.state.phase === "closed" ? "unknown" : this.pin.population(); }
   matches(path: string): boolean { return this.state.phase === "live" && this.pin.matches(path); }
+  confirmOpening(cgroup: string): void {
+    if (this.state.phase !== "opening" || !this.pin.matches(cgroup) || this.pin.population() !== "populated")
+      throw new StoreError("STALE_RUN", "opening run is revoked or its pinned cgroup changed");
+  }
   publish(endpoint: RunEndpoint): RunLease {
     if (this.state.phase !== "opening") {
       endpoint.done();
@@ -85,6 +101,13 @@ export class OwnedRun {
     const lease = Object.freeze({ actor: this.identity.actor, incarnation: this.identity.incarnation, socketHostPath: endpoint.socketHostPath });
     this.state = { phase: "live", lease, endpoint };
     return lease;
+  }
+  /** RUN-003: ephemeral intent belongs to this live incarnation, never its successor. */
+  wait(incarnation: number, observe: boolean): boolean {
+    if (this.state.phase !== "live" || incarnation !== this.identity.incarnation)
+      throw new StoreError("STALE_RUN", "wait requires the current live run");
+    if (!observe) this.waiting = true;
+    return this.waiting;
   }
   revoke(): void {
     if (this.state.phase === "closed" || this.state.phase === "revoked-awaiting-death") return;
@@ -126,6 +149,21 @@ export class RunRegistry {
     try { previous?.done(); }
     catch (error) { record.revoke(); throw error; }
     return record;
+  }
+  /** D01/BATCH-004: while `actor`'s next run is opening, `begin` has proven its
+   * previous invocation's cgroup empty or removed (or this broker has run none
+   * since its startup quiesced every unit), and the next run has no endpoint.
+   * That is the only authority to settle the previous incarnation's receipts,
+   * and it ends when the run is published, revoked or replaced. */
+  settlementQuiescence(actor: Actor): SettlementQuiescence {
+    const record = this.records.get(actor);
+    if (!record || record.phase !== "opening")
+      throw new StoreError("STALE_RUN", "no opening run holds receipt settlement authority");
+    const confirm = (): void => {
+      if (this.records.get(actor) !== record || record.phase !== "opening")
+        throw new StoreError("STALE_RUN", "receipt settlement authority ended with its opening run");
+    };
+    return Object.freeze({ actor, incarnation: record.identity.incarnation - 1, confirm });
   }
   close(): void {
     let failed: unknown;

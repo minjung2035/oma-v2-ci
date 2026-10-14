@@ -1,0 +1,451 @@
+import { describe, expect, it } from "vitest";
+import {
+  isRec,
+  visLines,
+  rejectUnknownFields,
+  makePrepareArguments,
+  truncateToBytes,
+  decodeStringArray,
+  assertByteLimit,
+  isModeUnsupported,
+  literalEscapeHints,
+} from "../../src/utils";
+
+describe("isRec", () => {
+  it("returns true for plain objects", () => {
+    expect(isRec({})).toBe(true);
+    expect(isRec({ a: 1 })).toBe(true);
+    expect(isRec({ key: "value" })).toBe(true);
+  });
+
+  it("returns false for null", () => {
+    expect(isRec(null)).toBe(false);
+  });
+
+  it("returns false for arrays", () => {
+    expect(isRec([])).toBe(false);
+    expect(isRec([1, 2, 3])).toBe(false);
+  });
+
+  it("returns false for primitives", () => {
+    expect(isRec("string")).toBe(false);
+    expect(isRec(42)).toBe(false);
+    expect(isRec(true)).toBe(false);
+    expect(isRec(undefined)).toBe(false);
+  });
+
+  it("returns false for functions", () => {
+    expect(isRec(() => {})).toBe(false);
+  });
+
+  it("returns true for Date objects (they are objects)", () => {
+    expect(isRec(new Date())).toBe(true);
+  });
+});
+
+describe("visLines", () => {
+  it("returns an empty array for empty string", () => {
+    expect(visLines("")).toEqual([]);
+  });
+
+  it("splits a multi-line string without trailing newline", () => {
+    expect(visLines("a\nb\nc")).toEqual(["a", "b", "c"]);
+  });
+
+  it("strips the trailing empty line when content ends with newline", () => {
+    expect(visLines("a\nb\nc\n")).toEqual(["a", "b", "c"]);
+  });
+
+  it("handles a single line without trailing newline", () => {
+    expect(visLines("hello")).toEqual(["hello"]);
+  });
+
+  it("handles a single line with trailing newline", () => {
+    expect(visLines("hello\n")).toEqual(["hello"]);
+  });
+
+  it("handles content with only a newline (one blank line)", () => {
+    expect(visLines("\n")).toEqual([""]);
+  });
+
+  it("handles multiple trailing newlines", () => {
+    expect(visLines("a\nb\n\n")).toEqual(["a", "b", ""]);
+  });
+
+  it("preserves blank lines in the middle", () => {
+    expect(visLines("a\n\nb")).toEqual(["a", "", "b"]);
+  });
+});
+
+
+describe("rejectUnknownFields", () => {
+  it("does not throw when all fields are allowed", () => {
+    const obj = { path: "test.txt", changes: [] };
+    const allowed = new Set(["path", "changes"]);
+    expect(() => rejectUnknownFields(obj, allowed, "Request")).not.toThrow();
+  });
+
+  it("does not throw for an empty object", () => {
+    const obj = {};
+    const allowed = new Set(["path", "changes"]);
+    expect(() => rejectUnknownFields(obj, allowed, "Request")).not.toThrow();
+  });
+
+  it("does not throw when only a subset of allowed fields is present", () => {
+    const obj = { path: "test.txt" };
+    const allowed = new Set(["path", "changes"]);
+    expect(() => rejectUnknownFields(obj, allowed, "Request")).not.toThrow();
+  });
+
+  it("throws [E_BAD_SHAPE] for a single unknown field", () => {
+    const obj = { path: "test.txt", unknown_field: "value" };
+    const allowed = new Set(["path"]);
+    expect(() => rejectUnknownFields(obj, allowed, "Request")).toThrow(
+      /^\[E_BAD_SHAPE\]/,
+    );
+  });
+
+  it("includes the unknown field name in the error message", () => {
+    const obj = { path: "test.txt", extra: "value" };
+    const allowed = new Set(["path"]);
+    expect(() => rejectUnknownFields(obj, allowed, "Request")).toThrow(
+      /extra/,
+    );
+  });
+
+  it("includes the label in the error message", () => {
+    const obj = { path: "test.txt", extra: "value" };
+    const allowed = new Set(["path"]);
+    expect(() => rejectUnknownFields(obj, allowed, "Edit request")).toThrow(
+      /Edit request/,
+    );
+  });
+
+  it("reports multiple unknown fields", () => {
+    const obj = { path: "test.txt", a: 1, b: 2, c: 3 };
+    const allowed = new Set(["path"]);
+    expect(() => rejectUnknownFields(obj, allowed, "Request")).toThrow(
+      /a, b, c/,
+    );
+  });
+
+  it("appends the hint string when provided", () => {
+    const obj = { path: "test.txt", extra: "value" };
+    const allowed = new Set(["path"]);
+    expect(() =>
+      rejectUnknownFields(obj, allowed, "Edit 0", "Each edit takes only { replacement_lines, remove_from, remove_to }."),
+    ).toThrow(/Each edit takes only/);
+  });
+
+  it("does not append a trailing period when hint is omitted", () => {
+    const obj = { path: "test.txt", extra: "value" };
+    const allowed = new Set(["path"]);
+    const fn = () => rejectUnknownFields(obj, allowed, "Request");
+    expect(fn).toThrow();
+    expect(fn).toThrow(/\.$/);
+  });
+
+  it("handles an empty allowed set (all fields rejected)", () => {
+    const obj = { a: 1, b: 2 };
+    const allowed = new Set<string>();
+    expect(() => rejectUnknownFields(obj, allowed, "Request")).toThrow(/a, b/);
+  });
+
+  it("treats inherited properties as unknown (does not check prototype)", () => {
+    const proto = { inherited: true };
+    const obj = Object.create(proto);
+    obj.own = "value";
+    const allowed = new Set(["own"]);
+    expect(() => rejectUnknownFields(obj, allowed, "Request")).not.toThrow();
+  });
+
+  it("reports fields in insertion order", () => {
+    const obj = { z: 1, a: 2, m: 3 };
+    const allowed = new Set(["x"]);
+    expect(() => rejectUnknownFields(obj, allowed, "Request")).toThrow(
+      /z, a, m/,
+    );
+  });
+});
+
+describe("makePrepareArguments", () => {
+  it("passes through non-record input", () => {
+    const prepare = makePrepareArguments();
+    expect(prepare(null)).toBeNull();
+    expect(prepare(42)).toBe(42);
+    expect(prepare("x")).toBe("x");
+  });
+
+  it("normalizes file_path to path", () => {
+    const prepare = makePrepareArguments();
+    const result = prepare({ file_path: "a.txt", offset: 1 });
+    expect(result).toEqual({ path: "a.txt", offset: 1 });
+  });
+
+  it("normalizes replace_from and replace_to to remove_from and remove_to", () => {
+    const prepare = makePrepareArguments();
+    const result = prepare({ replace_from: "a", replace_to: "b" });
+    expect(result).toEqual({ remove_from: "a", remove_to: "b" });
+  });
+
+  it("normalizes each remove field only when it is missing", () => {
+    const prepare = makePrepareArguments();
+    const result = prepare({ remove_from: "a", replace_from: "b", replace_to: "c" });
+    expect(result).toEqual({ remove_from: "a", replace_from: "b", remove_to: "c" });
+  });
+
+  it("does not mutate the original input", () => {
+    const prepare = makePrepareArguments();
+    const input = { file_path: "a.txt" };
+    prepare(input);
+    expect(input).toEqual({ file_path: "a.txt" });
+  });
+
+  it("keeps an explicit path when file_path is also present", () => {
+    const prepare = makePrepareArguments();
+    const result = prepare({ path: "a.txt", file_path: "b.txt" });
+    expect(result).toEqual({ path: "a.txt", file_path: "b.txt" });
+  });
+
+  it("normalizes from and to to remove_from and remove_to", () => {
+    const prepare = makePrepareArguments();
+    const result = prepare({ from: "a", to: "b" });
+    expect(result).toEqual({ remove_from: "a", remove_to: "b" });
+  });
+
+  it("normalizes from and to only when the remove field is missing", () => {
+    const prepare = makePrepareArguments();
+    const result = prepare({ remove_from: "a", from: "b", to: "c" });
+    expect(result).toEqual({ remove_from: "a", from: "b", remove_to: "c" });
+  });
+});
+
+describe("truncateToBytes", () => {
+  it("returns strings within the byte budget unchanged", () => {
+    expect(truncateToBytes("abc", 3)).toBe("abc");
+    expect(truncateToBytes("", 0)).toBe("");
+  });
+
+  it("cuts ASCII strings at the byte budget", () => {
+    expect(truncateToBytes("abcdef", 3)).toBe("abc");
+  });
+
+  it("cuts multibyte strings at a character boundary", () => {
+    expect(truncateToBytes("éééé", 5)).toBe("éé");
+  });
+
+  it("never splits a surrogate pair", () => {
+    const emoji = "😀".repeat(10);
+    const cut = truncateToBytes(emoji, 7);
+    expect(cut.isWellFormed()).toBe(true);
+    expect(Buffer.byteLength(cut, "utf-8")).toBeLessThanOrEqual(7);
+    expect(cut).toBe("😀");
+  });
+});
+
+describe("decodeStringArray", () => {
+  it("decodes a bare string holding a JSON array", () => {
+    expect(decodeStringArray('["alpha", "beta"]')).toEqual(["alpha", "beta"]);
+  });
+
+  it("decodes a single-element array holding a JSON array", () => {
+    expect(decodeStringArray(['["alpha", "beta"]'])).toEqual(["alpha", "beta"]);
+    expect(decodeStringArray(['["solo"]'])).toEqual(["solo"]);
+  });
+
+  it("decodes escapes and raw control characters", () => {
+    const tab = String.fromCharCode(9);
+    const newline = String.fromCharCode(10);
+    const backslash = String.fromCharCode(92);
+    expect(decodeStringArray('["tab' + tab + 'here", "plain"]')).toEqual(["tab" + tab + "here", "plain"]);
+    expect(decodeStringArray('["a' + backslash + 'nb", "caf' + backslash + 'u00e9"]')).toEqual(["a" + newline + "b", "café"]);
+    expect(decodeStringArray('["alpha",' + newline + '"beta"]')).toEqual(["alpha", "beta"]);
+  });
+
+  it("returns undefined for values that are not stringified string arrays", () => {
+    expect(decodeStringArray("hello")).toBeUndefined();
+    expect(decodeStringArray("[]")).toBeUndefined();
+    expect(decodeStringArray("[1, 2]")).toBeUndefined();
+    expect(decodeStringArray('["ok", 7]')).toBeUndefined();
+    expect(decodeStringArray("[bare]")).toBeUndefined();
+    expect(decodeStringArray('["open"')).toBeUndefined();
+    expect(decodeStringArray("   ")).toBeUndefined();
+    expect(decodeStringArray(42)).toBeUndefined();
+    expect(decodeStringArray(null)).toBeUndefined();
+    expect(decodeStringArray(["alpha", "beta"])).toBeUndefined();
+    expect(decodeStringArray([])).toBeUndefined();
+  });
+});
+
+describe("decodeStringArray leniency", () => {
+  it("decodes trailing commas", () => {
+    expect(decodeStringArray('["alpha", "beta",]')).toEqual(["alpha", "beta"]);
+    expect(decodeStringArray(['["alpha", "beta",]'])).toEqual(["alpha", "beta"]);
+    expect(decodeStringArray('["solo", ]')).toEqual(["solo"]);
+  });
+
+  it("decodes single-quoted strings", () => {
+    expect(decodeStringArray("['alpha', 'beta']")).toEqual(["alpha", "beta"]);
+    expect(decodeStringArray("['it\\'s', \"fine\"]")).toEqual(["it's", "fine"]);
+  });
+
+  it("decodes escaped quotes", () => {
+    expect(decodeStringArray('["say \\"hi\\"", "b"]')).toEqual(['say "hi"', "b"]);
+  });
+
+  it("decodes fenced JSON blocks", () => {
+    expect(decodeStringArray('```json\n["alpha", "beta"]\n```')).toEqual(["alpha", "beta"]);
+    expect(decodeStringArray('```\n["alpha"]\n```')).toEqual(["alpha"]);
+  });
+
+  it("unwraps array syntax", () => {
+    const warnings: string[] = [];
+    expect(decodeStringArray(['["alpha"]'], warnings)).toEqual(["alpha"]);
+    expect(warnings).toEqual([]);
+  });
+
+  it("uses the provided label in warnings", () => {
+    const warnings: string[] = [];
+    decodeStringArray('["alpha", 7]', warnings, "lines");
+    expect(warnings[0]).toContain("lines looked like a JSON array");
+  });
+
+  it("warns instead of silently keeping unparseable string-array text", () => {
+    const warnings: string[] = [];
+    expect(decodeStringArray('["alpha", 7]', warnings)).toBeUndefined();
+    expect(warnings).toHaveLength(1);
+    expect(warnings[0]).toContain("looked like a JSON array but could not be parsed");
+    expect(warnings[0]).toContain("literal line");
+  });
+
+  it("does not warn for plain text or non-string arrays", () => {
+    const warnings: string[] = [];
+    expect(decodeStringArray("hello", warnings)).toBeUndefined();
+    expect(decodeStringArray("[1, 2]", warnings)).toBeUndefined();
+    expect(decodeStringArray("[bare]", warnings)).toBeUndefined();
+    expect(warnings).toHaveLength(0);
+  });
+
+  it("decodes standard JSON escapes", () => {
+    expect(decodeStringArray('["a\\\\b", "a\\/b", "a\\bb", "a\\fb", "a\\rb", "a\\tb"]')).toEqual([
+      "a\\b",
+      "a/b",
+      "a\bb",
+      "a\fb",
+      "a\rb",
+      "a\tb",
+    ]);
+  });
+
+  it("rejects malformed escape and comma shapes", () => {
+    expect(decodeStringArray('["\\u12"]')).toBeUndefined();
+    expect(decodeStringArray('["\\uZZZZ"]')).toBeUndefined();
+    expect(decodeStringArray('["a\\]')).toBeUndefined();
+    expect(decodeStringArray("[  ]")).toBeUndefined();
+    expect(decodeStringArray("[,]")).toBeUndefined();
+    expect(decodeStringArray('["a", ,]')).toBeUndefined();
+  });
+
+  it("unwraps a stringified array followed by a JS method call", () => {
+    expect(decodeStringArray('["alpha", "beta"].map(s => s)')).toEqual(["alpha", "beta"]);
+    expect(decodeStringArray('["alpha", "beta"].slice(0, 1)')).toEqual(["alpha", "beta"]);
+    expect(decodeStringArray(['["alpha"].map(s => s)'])).toEqual(["alpha"]);
+    expect(decodeStringArray('["alpha", "beta",].map(s => s)')).toEqual(["alpha", "beta"]);
+  });
+
+  it("warns for a malformed stringified array of strings", () => {
+    const warnings: string[] = [];
+    expect(decodeStringArray('["alpha", 7].map(s => s)', warnings)).toBeUndefined();
+    expect(decodeStringArray('["alpha", 7', warnings)).toBeUndefined();
+    expect(warnings).toHaveLength(2);
+    expect(warnings[0]).toContain("looked like a JSON array");
+    expect(warnings[1]).toContain("looked like a JSON array");
+  });
+
+  it("does not warn for an envelope line that parseText unwraps", () => {
+    const warnings: string[] = [];
+    expect(decodeStringArray('["  "version": "2.8.4","].', warnings)).toBeUndefined();
+    expect(warnings).toHaveLength(0);
+  });
+});
+
+describe("decodeStringArray control bytes", () => {
+  it("decodes raw control bytes inside segments", () => {
+    const bs = String.fromCharCode(8);
+    const lf = String.fromCharCode(10);
+    const ff = String.fromCharCode(12);
+    const cr = String.fromCharCode(13);
+    const nul = String.fromCharCode(0);
+    const backslash = String.fromCharCode(92);
+    expect(decodeStringArray('["a' + bs + 'b"]')).toEqual(["a" + bs + "b"]);
+    expect(decodeStringArray('["a' + lf + 'b"]')).toEqual(["a" + lf + "b"]);
+    expect(decodeStringArray('["a' + ff + 'b"]')).toEqual(["a" + ff + "b"]);
+    expect(decodeStringArray('["a' + cr + 'b"]')).toEqual(["a" + cr + "b"]);
+    expect(decodeStringArray('["a' + nul + 'b"]')).toEqual(["a" + nul + "b"]);
+    expect(decodeStringArray('["a' + backslash + 'qb"]')).toBeUndefined();
+  });
+});
+
+describe("assertByteLimit", () => {
+  it("allows content at the limit and rejects content over it", () => {
+    expect(() => assertByteLimit("abc", "f.txt", 3)).not.toThrow();
+    expect(() => assertByteLimit("abcd", "f.txt", 3)).toThrow(/^\[E_FILE_TOO_LARGE\] File is too large: f\.txt/);
+  });
+
+  it("measures UTF-8 bytes rather than characters", () => {
+    expect(() => assertByteLimit("é", "f.txt", 2)).not.toThrow();
+    expect(() => assertByteLimit("é", "f.txt", 1)).toThrow(/E_FILE_TOO_LARGE/);
+  });
+
+  it("reports the exceeded limit in megabytes", () => {
+    const oneMb = 1024 * 1024;
+    expect(() => assertByteLimit("a".repeat(oneMb + 1), "f.txt", oneMb)).toThrow(/exceeds the 1MB size limit/);
+  });
+});
+
+describe("isModeUnsupported", () => {
+  it("classifies filesystem mode-enforcement failures", () => {
+    expect(isModeUnsupported(Object.assign(new Error("denied"), { code: "EPERM" }))).toBe(true);
+    expect(isModeUnsupported(Object.assign(new Error("denied"), { code: "ENOTSUP" }))).toBe(true);
+    expect(isModeUnsupported(Object.assign(new Error("denied"), { code: "EOPNOTSUPP" }))).toBe(true);
+    expect(isModeUnsupported(Object.assign(new Error("denied"), { code: "EACCES" }))).toBe(false);
+    expect(isModeUnsupported(new Error("denied"))).toBe(false);
+  });
+});
+
+describe("literalEscapeHints", () => {
+  it("reports literal escape sequences in order", () => {
+    expect(literalEscapeHints([String.raw`stable\u200bCheckout`], "lines")).toEqual([String.raw`[H_LITERAL_ESCAPE] lines: "\u200b" written as literal text`]);
+    expect(literalEscapeHints([String.raw`a\nb`], "lines")).toEqual([String.raw`[H_LITERAL_ESCAPE] lines: "\n" written as literal text`]);
+    expect(literalEscapeHints([String.raw`say \"hi\"`], "lines")).toEqual([String.raw`[H_LITERAL_ESCAPE] lines: "\"" written as literal text`]);
+    expect(literalEscapeHints([String.raw`\n\t`], "lines")).toEqual([
+      String.raw`[H_LITERAL_ESCAPE] lines: "\n" written as literal text`,
+      String.raw`[H_LITERAL_ESCAPE] lines: "\t" written as literal text`,
+    ]);
+  });
+
+  it("reports each distinct escape once and caps the list at three", () => {
+    expect(literalEscapeHints([String.raw`\u200b`, String.raw`\u2060`, String.raw`\u200b`], "lines")).toEqual([
+      String.raw`[H_LITERAL_ESCAPE] lines: "\u200b" written as literal text`,
+      String.raw`[H_LITERAL_ESCAPE] lines: "\u2060" written as literal text`,
+    ]);
+    expect(literalEscapeHints([String.raw`\u200b \u2060 \u00a0 \u2011`], "lines")).toHaveLength(3);
+  });
+
+  it("returns an empty list for real characters and plain text", () => {
+    expect(literalEscapeHints(["stable\u200bCheckout"], "lines")).toEqual([]);
+    expect(literalEscapeHints(["a\nb"], "lines")).toEqual([]);
+    expect(literalEscapeHints([String.raw`/^\d+\.\d+$/`], "lines")).toEqual([]);
+    expect(literalEscapeHints([], "lines")).toEqual([]);
+  });
+
+  it("skips valid surrogate pairs and the dedicated placeholder", () => {
+    expect(literalEscapeHints([String.raw`\uD83D\uDE00`], "lines")).toEqual([]);
+    expect(literalEscapeHints([String.raw`\uDDDD`], "lines")).toEqual([]);
+    expect(literalEscapeHints([String.raw`\uD83D`], "lines")).toEqual([String.raw`[H_LITERAL_ESCAPE] lines: "\uD83D" written as literal text`]);
+  });
+
+  it("skips simple escapes in a line that also has a real break", () => {
+    expect(literalEscapeHints([String.raw`a\nb` + "\nc"], "lines")).toEqual([]);
+  });
+});

@@ -10,6 +10,24 @@ const KINDS = Object.freeze({
   message: true, question: true, result: true, alert: true, context: true,
   approval_required: true, critical: true,
 } satisfies Record<MailInput["kind"], true>);
+/** The most header bytes an OMA mail reader accepts before the blank line. */
+export const MAIL_HEADER_BYTES = 256 * 1024;
+/** P0V-36, P0-2: the most bytes a stored message can take when its body is
+ * within `bodyBytes`. The two are different units: the body limit counts the
+ * UTF-8 text the sender wrote, and the stored message is that text after its
+ * transfer encoding, plus its header block. Quoted-printable is the widest
+ * retained legacy encoding (fresh bodies use Base64): every byte may become "=XX", and every output
+ * line of at most 76 characters may end in a soft break ("=" CRLF). A reader
+ * that bounded the stored file by the body limit refused ordinary mail (a
+ * Korean body of about 190 KB, under a 256 KiB body limit). */
+export function storedMailBytes(bodyBytes: number): number {
+  const encoded = 3 * bodyBytes;
+  return MAIL_HEADER_BYTES + encoded + 3 * Math.ceil(encoded / 73) + 2;
+}
+/** MAIL-003/P0V-118: one header value is one string line, never coerced. */
+export function mailHeaderValueCheck(value: unknown): string | null {
+  return typeof value !== "string" ? "not a string" : /[\r\n]/.test(value) ? "contains CR/LF" : null;
+}
 export function isMailKind(value: unknown): value is MailInput["kind"] {
   return typeof value === "string" && Object.hasOwn(KINDS, value);
 }
@@ -27,13 +45,13 @@ export function logicalAddressCheck(value: unknown): string | null {
 }
 
 /** Supported OMA header identity, intentionally not a general RFC message-id
- * parser and not the internal MessageId parser. Keep accepted legacy bare IDs.
+ * parser and not the internal MessageId parser. A header id is always
+ * `id@society.oma.invalid`; the pre-release bare form is not a header identity.
  */
 export function headerMessageIdCheck(value: unknown): string | null {
   if (typeof value !== "string") return "expected message identity string";
   const at = value.indexOf("@");
-  if (at < 0) return isValidMessageId(value) ? null : "invalid message id";
-  if (value.indexOf("@", at + 1) >= 0) return "invalid message id";
+  if (at < 0 || value.indexOf("@", at + 1) >= 0) return "invalid message id";
   return isValidMessageId(value.slice(0, at)) && /^[a-z][a-z0-9-]{0,31}\.oma\.invalid$/.test(value.slice(at + 1))
     ? null : "invalid message id";
 }
@@ -45,7 +63,8 @@ export function parseRfcMessageId(value: unknown): RfcMessageId | null {
     ? value as RfcMessageId : null;
 }
 
-/** This tuple is a mail claim. It is never an authorization attestation. */
+/** One exact tuple grammar. Its container determines whether it is a mail claim
+ * or authenticated attestation; these bytes alone never confer authority. */
 export function exactCandidateCheck(value: unknown): string | null {
   if (value === null || typeof value !== "object" || Array.isArray(value)) return "expected approval identity object";
   const identity = value as Record<string, unknown>;

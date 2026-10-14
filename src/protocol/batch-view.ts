@@ -2,7 +2,7 @@ import type { PreparedBatch } from "../../implementation/contracts/runtime.js";
 import type { BatchViewLimits } from "../ports/runtime.js";
 export type { BatchViewLimits } from "../ports/runtime.js";
 import {
-  isValidActorName,
+  isValidActor,
   isValidBatchId,
   isValidMessageId,
 } from "../domain/identifiers.js";
@@ -54,7 +54,10 @@ export function decodeBatchView(
     Object.keys(item).some((key) => !keys.includes(key)) ||
     item.id !== expectedId ||
     typeof item.agent !== "string" ||
-    !isValidActorName(item.agent) ||
+    // PR-002: a batch is delivered to a Resident or to the Principal. Every
+    // other reserved name -- a list, a topic, a host unit -- is an address,
+    // never a recipient of a delivery.
+    !isValidActor(item.agent) ||
     typeof item.incarnation !== "number" ||
     !Number.isSafeInteger(item.incarnation) ||
     item.incarnation < 0 ||

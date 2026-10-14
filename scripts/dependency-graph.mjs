@@ -441,7 +441,7 @@ export function dependencyEvidence(graph, layers = LATTICE) {
   };
 }
 export const EVIDENCE_PATH =
-  "docs/architecture-improvement/evidence/p5-dependency-graph.json";
+  "implementation/evidence/dependency-graph.json";
 export function evidenceFor(rootDir = process.cwd()) {
   return dependencyEvidence(collectDependencyGraph({ rootDir }));
 }

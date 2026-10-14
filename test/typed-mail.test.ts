@@ -9,7 +9,7 @@ const approvalFor = {
   repo: "project" as const, targetRef: "refs/heads/main" as const,
   expectedBase: "a".repeat(40), candidate: "b".repeat(40), policyRevision: "policy-1",
 };
-const check = mailParamsCheck(new Set(["a"]), {
+const check = mailParamsCheck({
   frameBytes: 1048576, mailBodyBytes: 262144, subjectBytes: 1024,
   addresses: 32, replyReferences: 64, contextFiles: 128, contextBytes: 1048576,
   bundleBytes: 1048576,
@@ -41,7 +41,7 @@ test("MAIL-003: approval identity is emitted as broker metadata", async () => {
   const eml = await buildEml({
     from: "a@demo.oma.invalid", to: ["principal@demo.oma.invalid"], replyTo: [],
     subject: "review", body: "not an approval", kind: "approval_required",
-    contextRevision: null, inReplyTo: null, references: [], messageId: "test@demo.oma.invalid",
+    contextRevision: null, inReplyTo: null, references: [], messageId: "m-00000000-0000-4000-8000-000000000001-0@demo.oma.invalid",
     approvalFor: identity,
   });
   const decoded = JSON.parse(execFileSync("python3", ["-c",

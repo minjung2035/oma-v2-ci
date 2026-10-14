@@ -4,6 +4,7 @@ import path from "node:path";
 import crypto from "node:crypto";
 import { pathToFileURL } from "node:url";
 import ts from "typescript";
+import { eachNode, propertyName, strip } from "./architecture/rules/shared.mjs";
 import { resolveExportDeclaration } from "./contract-surface.mjs";
 import {
   DEFAULT_POLICY,
@@ -12,6 +13,7 @@ import {
 import {
   EVIDENCE_PATH,
   architectureSources,
+  adjacencyOf,
   createArchitectureProgram,
   cyclicComponents,
   dependencyEvidence,
@@ -117,29 +119,8 @@ export function runtimeImportClosure({
   return { reachable, external, findings, graph };
 }
 
-function eachNode(node, visit) {
-  visit(node);
-  ts.forEachChild(node, (child) => eachNode(child, visit));
-}
-function propertyName(node) {
-  return node && (ts.isIdentifier(node) || ts.isStringLiteralLike(node))
-    ? node.text
-    : null;
-}
 function declaredName(node) {
   return node.name ? propertyName(node.name) : null;
-}
-function strip(node) {
-  while (
-    node &&
-    (ts.isParenthesizedExpression(node) ||
-      ts.isAsExpression(node) ||
-      ts.isTypeAssertionExpression(node) ||
-      ts.isNonNullExpression(node) ||
-      ts.isSatisfiesExpression(node))
-  )
-    node = node.expression;
-  return node;
 }
 function underlyingSymbol(checker, node) {
   let symbol = checker.getSymbolAtLocation(node);
@@ -349,87 +330,11 @@ export function analyzeProgram(
     sources.map((source) => relative(root, source.fileName)),
   );
   const declarations = new Map(),
-    graph = new Map(),
     findings = [],
     reported = new Set();
   const sourceByFile = new Map(
     sources.map((source) => [relative(root, source.fileName), source]),
   );
-  // Frozen v1 aliases: CFG-005 canonical vocabulary owners and the legacy Transaction facade.
-  // No directory-wide exemption, and no implementation exception on internal ports.
-  const frozenContractAliases = [
-    [
-      "implementation/contracts/module-contracts.ts",
-      "src/store.ts",
-      "../../src/store.js",
-      "Transaction",
-    ],
-    [
-      "implementation/contracts/host.ts",
-      "src/domain/resources.ts",
-      "../../src/domain/resources.js",
-      "ResourceLimits",
-    ],
-    [
-      "implementation/contracts/host.ts",
-      "src/domain/limits.ts",
-      "../../src/domain/limits.js",
-      "ProtocolLimits",
-    ],
-    [
-      "implementation/contracts/identity.ts",
-      "src/domain/capabilities.ts",
-      "../../src/domain/capabilities.js",
-      "Capability",
-    ],
-  ];
-  const isFrozenContractAlias = (finding) => {
-    if (finding.kind !== "type") return false;
-    const allowed = frozenContractAliases.find(
-      ([file, target, specifier]) =>
-        file === finding.file &&
-        target === finding.target &&
-        specifier === finding.specifier,
-    );
-    if (!allowed) return false;
-    const source = sourceByFile.get(finding.file);
-    let matches = 0;
-    let targetReferences = 0;
-    if (source)
-      eachNode(source, (node) => {
-        if (ts.isImportDeclaration(node) || ts.isExportDeclaration(node)) {
-          if (
-            node.moduleSpecifier &&
-            ts.isStringLiteralLike(node.moduleSpecifier) &&
-            node.moduleSpecifier.text === finding.specifier
-          )
-            targetReferences++;
-          return;
-        }
-        if (!ts.isImportTypeNode(node)) return;
-        const argument = node.argument;
-        if (
-          !ts.isLiteralTypeNode(argument) ||
-          !ts.isStringLiteralLike(argument.literal) ||
-          argument.literal.text !== finding.specifier
-        )
-          return;
-        targetReferences++;
-        const parent = node.parent;
-        if (
-          node.qualifier?.getText(source) === allowed[3] &&
-          !node.isTypeOf &&
-          !node.typeArguments?.length &&
-          ts.isTypeAliasDeclaration(parent) &&
-          parent.name.text === allowed[3] &&
-          !parent.typeParameters?.length &&
-          parent.modifiers?.length === 1 &&
-          parent.modifiers[0].kind === ts.SyntaxKind.ExportKeyword
-        )
-          matches++;
-      });
-    return matches === 1 && targetReferences === 1;
-  };
   const report = (rule, node, reason) => {
     const source = node.getSourceFile();
     const start = node.getStart(source),
@@ -535,7 +440,6 @@ export function analyzeProgram(
       );
   };
   for (const source of sources) {
-    graph.set(relative(root, source.fileName), new Set());
     checkTransactionCompatibilityLeak(source);
     if (isInternalPort(relative(root, source.fileName))) {
       // P17 contract, not a taste heuristic: this surface must erase completely.
@@ -743,7 +647,6 @@ export function analyzeProgram(
               node,
               `Pure kernel owner imports a non-value capability: ${specifier}`,
             );
-          if (target) graph.get(file).add(target);
           if ((target && isTest(target)) || isTest(specifier))
             report(
               "production-test-import",
@@ -784,11 +687,14 @@ export function analyzeProgram(
             );
         }
       }
-      if (
-        ts.isCallExpression(node) &&
-        isNativeSetAdd(checker, node) &&
-        booleanUse(node)
-      )
+      // booleanUse walks the parent chain with no checker queries, so it is
+      // the one cheap gate ahead of resolving the signature. There is no
+      // callee-name gate and cannot be one: an aliased member resolves to
+      // Set.add's declaration under any accessed name (`{ foo:
+      // Set<string>["add"] }`, `{ m: new Set().add }`, `box["foo"]`), so the
+      // resolved signature -- never the syntax's text -- decides which method
+      // a call reaches.
+      if (ts.isCallExpression(node) && booleanUse(node) && isNativeSetAdd(checker, node))
         report(
           "set-add-membership",
           node,
@@ -876,7 +782,18 @@ export function analyzeProgram(
       }
       if (ts.isObjectLiteralExpression(node)) {
         const properties = node.properties.filter(ts.isPropertyAssignment);
-        const schemaProperties = properties.filter((property) => {
+        // Either report needs at least three schema-shaped properties whose
+        // names are all in one field table, so fewer than three properties
+        // named in the union of both tables can never fire -- skip the type
+        // queries entirely in that case.
+        const fieldNames = properties.filter((property) => {
+          const name = propertyName(property.name);
+          return (
+            name !== null &&
+            (resourceFields.has(name) || limitFields.has(name))
+          );
+        });
+        const schemaProperties = fieldNames.length < 3 ? [] : properties.filter((property) => {
           const value = strip(property.initializer);
           return (
             checker.getTypeAtLocation(value).getCallSignatures().length > 0 ||
@@ -964,7 +881,8 @@ export function analyzeProgram(
       }
     });
   }
-  for (const group of stronglyConnected(graph))
+  const productionRuntime = adjacencyOf(programGraph, "runtime");
+  for (const group of stronglyConnected(productionRuntime))
     report(
       "runtime-import-cycle",
       sourceByFile.get(group[0]),
@@ -982,44 +900,24 @@ export function analyzeProgram(
       sourceByFile.get(finding.file) ?? anchor,
       finding.reason,
     );
-  for (const finding of contractOwnershipFindings(latticeEdges)) {
-    if (isFrozenContractAlias(finding)) continue;
+  // Contract -> implementation references are now zero; the plan-driven rule
+  // module owns the allowlist, so no exemption is applied here.
+  for (const finding of contractOwnershipFindings(latticeEdges))
     report(
       finding.rule,
       sourceByFile.get(finding.file) ?? anchor,
       finding.reason,
     );
-  }
   for (const finding of kernelFindings(programGraph))
     report(
       finding.rule,
       sourceByFile.get(finding.file) ?? anchor,
       finding.reason,
     );
-  const unionAdjacency = new Map(
-    [...production].sort().map((file) => [file, new Set()]),
-  );
-  const productionRuntime = new Map(
-    [...production].sort().map((file) => [file, new Set()]),
-  );
-  const runtimeSelfLoop = new Set();
-  for (const edge of latticeEdges) {
-    unionAdjacency.get(edge.from).add(edge.to);
-    if (edge.kind === "runtime") {
-      productionRuntime.get(edge.from).add(edge.to);
-      if (edge.from === edge.to) runtimeSelfLoop.add(edge.from);
-    }
-  }
-  const runtimeGroups = new Set(
-    stronglyConnected(productionRuntime)
-      .filter((group) => group.length > 1 || runtimeSelfLoop.has(group[0]))
-      .map((group) => group.join("\0")),
-  );
-  const unionGroups = stronglyConnected(unionAdjacency)
-    .filter(
-      (group) => group.length > 1 || unionAdjacency.get(group[0]).has(group[0]),
-    )
-    .filter((group) => !runtimeGroups.has(group.join("\0")));
+  // Reuse the evidence graph's adjacency semantics, including self-imports.
+  const runtimeGroups = new Set(stronglyConnected(productionRuntime).map(group => group.join("\0")));
+  const unionAdjacency = adjacencyOf(programGraph, "all");
+  const unionGroups = stronglyConnected(unionAdjacency).filter(group => !runtimeGroups.has(group.join("\0")));
   for (const finding of cycleFindings(unionGroups))
     report(
       finding.rule,

@@ -6,11 +6,11 @@ import { createTransport } from "nodemailer";
 import { encodeWord } from "nodemailer/lib/mime-funcs";
 import type { MailInput, Oid } from "../../implementation/contracts.js";
 import { StoreError } from "../domain/errors.js";
-import { exactCandidateCheck } from "../domain/mail-values.js";
+import { exactCandidateCheck, mailHeaderValueCheck } from "../domain/mail-values.js";
 import { sha256Hex } from "../domain/canonical-json.js";
 import { actorAddress, displayAddress, rfcMessageIdFor } from "./addresses.js";
 import { freezeMessageDate, freezeMessageFacts, type FrozenMessageFacts, type MessageFactsInput, type RenderedMessage } from "./facts.js";
-import { parseEmlHeaders, type ParsedEmlHeaders } from "./headers.js";
+import { MAX_HEADER_LINE_BYTES, decodeSubject, parseEmlHeaders, type ParsedEmlHeaders } from "./headers.js";
 
 /** Compatibility input for callers testing the pre-refactor serializer. These
  * are RFC presentation values, not MessagePlan logical routing/authority.
@@ -23,8 +23,12 @@ export interface EmlParams {
 export interface EmlEmission { text: string; bytes: number; sha256: string; dateMs: number }
 export interface RenderedMessageWithHeaders extends RenderedMessage { readonly headerFacts: Readonly<ParsedEmlHeaders> }
 
-function assertNoCrlf(value: string, what: string): void {
-  if (/[\r\n]/.test(value)) throw new StoreError("INVALID_REQUEST", `${what} contains CR/LF`);
+/** P0V-118 (G07-02): a header value is a string on one line. A value of
+ * another type is refused here as the request it is, not coerced into its
+ * spelling ("undefined") and left to fail later as a TypeError. */
+function assertNoCrlf(value: unknown, what: string): void {
+  const invalid = mailHeaderValueCheck(value);
+  if (invalid) throw new StoreError("INVALID_REQUEST", `${what} ${invalid}`);
 }
 
 /** Retain the exact pinned transport/sendMail options and authoritative header
@@ -34,15 +38,25 @@ function assertNoCrlf(value: string, what: string): void {
 export async function buildEml(p: EmlParams): Promise<EmlEmission> {
   if (p.approvalFor) { const error = exactCandidateCheck(p.approvalFor); if (error) throw new StoreError("INVALID_REQUEST", error); }
   assertNoCrlf(p.subject, "subject");
+  for (const [list, what] of [[p.to, "to"], [p.replyTo, "replyTo"], [p.references, "references"]] as const)
+    if (!Array.isArray(list)) throw new StoreError("INVALID_REQUEST", `${what} is not a list`);
+  if (typeof p.body !== "string") throw new StoreError("INVALID_REQUEST", "body is not a string");
   for (const header of [p.from, ...p.to, ...p.replyTo, p.messageId, ...(p.inReplyTo ? [p.inReplyTo] : []), ...p.references]) assertNoCrlf(header, "header");
   const dateMs = freezeMessageDate(p.dateMs);
+  // RFC 2047 words preserve whitespace and literal encoded-word syntax, as
+  // well as giving an unbroken long subject legal fold points.
+  const encodedSubject = Buffer.byteLength(p.subject, "utf8") + "Subject: ".length > MAX_HEADER_LINE_BYTES ||
+    p.subject !== p.subject.trim() || /[ \t]{2}|=\?|[\x00-\x1f\x7f]/.test(p.subject);
   const transporter = createTransport({ streamTransport: true, buffer: true, newline: "\r\n" });
   const info = await transporter.sendMail({
     from: p.from, to: p.to.join(", "), replyTo: p.replyTo.length > 0 ? p.replyTo.join(", ") : undefined,
-    subject: p.subject, text: p.body, messageId: `<${p.messageId}>`,
+    // MAIL-003/P0-2: preserve the text's bytes, including LF, BOM and no final
+    // newline. 7bit/quoted-printable normalize them; accepted mail is never rebuilt.
+    subject: encodedSubject ? undefined : p.subject, text: { content: Buffer.from(p.body, "utf8"), contentTransferEncoding: "base64" }, messageId: `<${p.messageId}>`,
     ...(p.inReplyTo ? { inReplyTo: `<${p.inReplyTo}>` } : {}),
     ...(p.references.length > 0 ? { references: p.references.map(reference => `<${reference}>`) } : {}),
     date: new Date(dateMs), headers: {
+      ...(encodedSubject ? { Subject: { prepared: true, foldLines: true, value: encodeWord(p.subject, "B", 52) } } : {}),
       "X-OMA-Kind": p.kind, ...(p.contextRevision ? { "X-OMA-Context": p.contextRevision } : {}),
       ...(p.approvalFor ? {
         "X-OMA-Approval-Repo": p.approvalFor.repo, "X-OMA-Approval-Target": p.approvalFor.targetRef,
@@ -56,6 +70,11 @@ export async function buildEml(p: EmlParams): Promise<EmlEmission> {
   const sha256 = sha256Hex(raw);
   const text = raw.toString("utf8");
   if (!Buffer.from(text, "utf8").equals(raw)) throw new StoreError("INTERNAL_ERROR", "MIME adapter emitted unsupported non-UTF-8 bytes");
+  // Every fresh caller, including submit/context, must reject unreadable mail
+  // before it can become accepted immutable evidence. Recovery remains strict.
+  const headers = parseEmlHeaders(text, { maxHeaderBytes: raw.byteLength });
+  if (decodeSubject(headers.subject) !== p.subject)
+    throw new StoreError("INTERNAL_ERROR", "MIME emission differs from the requested subject");
   return { text, bytes: raw.byteLength, sha256, dateMs };
 }
 

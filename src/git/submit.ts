@@ -7,11 +7,13 @@ import type { OperationOf } from "../storage/operation-codec.js";
 import type { PlanFor } from "../durable.js";
 import { MailModule, buildEml, expandAddresses, defaultReplyTo, defaultLogicalReplyTo, actorAddress } from "../mail.js";
 import { assertCurrentActor, capabilitiesOf } from "../authority.js";
-import { StoreError, ERROR_METADATA, classifyError, type EffectKnowledge } from "../domain/errors.js";
+import { StoreError, AcceptedFailure, acceptedFailure, type EffectKnowledge, acceptedFailurePolicy, failureMessage } from "../domain/errors.js";
 import { requestHash, canonicalRequestParams } from "../hash.js";
 import { generateOperationId, generateMessageId, isValidRequestKey } from "../ids.js";
 import { publishedRefFor, mailObjectRelativePath } from "../domain/derived.js";
-import { prepareSubmitSpool, requireFrozenBundle, withFrozenBundle, type PreparedSubmitSpool } from "../storage/submit-spool.js";
+import { prepareSubmitSpool, requireFrozenBundle, withFrozenBundle, type FrozenBundle } from "../storage/submit-spool.js";
+import { PreacceptScope, type PreacceptRegistration } from "../storage/preaccept-artifact.js";
+import { frozenMessageDisposition } from "../mail/materializer.js";
 import { decodeMutationPayload } from "../protocol/request-codec.js";
 import { receiptOfOperation } from "../storage/receipt-projector.js";
 import { submitResult } from "../protocol/operation-results.js";
@@ -45,6 +47,7 @@ export class SubmitCoordinator {
     this.active.set(id, task); return task;
   }
   private publicationAuthority(actorName: string, auth?: AuthContext): void {
+    if (!this.store.societyOpen()) throw new StoreError("AGENT_NOT_READY", "society execution is closed");
     const current = this.store.getAgent(actorName);
     if (current?.desired === "stopped" || current?.desired === "retired")
       throw new StoreError("CANCELLED_BEFORE_COMMIT", "stop or retire intent precedes submit publication");
@@ -55,19 +58,19 @@ export class SubmitCoordinator {
       throw new StoreError("CAPABILITY_DENIED", "current submit recovery authority is unavailable");
   }
   private rejectAccepted(id: string, error: unknown, recovering: boolean, knowledge: EffectKnowledge): never {
-    const code = error instanceof StoreError ? error.code : "INTERNAL_ERROR";
-    const category = ERROR_METADATA[code].category;
-    const failure = classifyError({ code, phase: recovering ? "recovering" : "accepted", effectKnowledge: knowledge,
-      observationKind: category === "integrity" || code === "STREAM_INVALID" ? "corrupt" :
-        category === "transient" || category === "ambiguous" || category === "internal" ? "unavailable" : "rejected" });
+    const failure = acceptedFailurePolicy(error, recovering ? "recovering" : "accepted", knowledge);
     if (failure.terminal === "failed") this.store.transaction(tx => tx.setOperationFailed(id, failure.code));
     if (failure.terminal === "unknown") this.store.transaction(tx => tx.setOperationUnknown(id));
-    throw new StoreError(failure.code, error instanceof StoreError ? error.message : "submit effect or observation failed");
+    throw new AcceptedFailure(failure.code, failureMessage(error) ?? "submit effect or observation failed", knowledge);
   }
-  private cleanPreaccept(spool: PreparedSubmitSpool, operationId: string): void {
-    let accepted: boolean | null = null;
-    try { accepted = this.store.getOperationById(operationId) !== null; } catch { /* DB uncertainty cannot authorize deletion. */ }
-    if (accepted === false) spool.discardUnaccepted(); else spool.retainForOperation();
+  /** The spool belongs to the operation only if its accepted plan names this
+   * exact bundle, or names none when none was spooled. */
+  private bundleDisposition(id: string, bundle: FrozenBundle | null): ReturnType<PreacceptRegistration["observe"]> {
+    const operation = this.store.getOperationById(id);
+    if (operation === null) return "unaccepted-known";
+    const named = operation.kind === "git.submit" ? operation.plan.bundle : undefined;
+    return named !== undefined && (named === null ? bundle === null
+      : bundle !== null && named.path === bundle.path && named.sha256 === bundle.sha256) ? "accepted-referenced" : "accepted-unreferenced";
   }
   async submit(auth: AuthContext, key: string, input: SubmitInput, bytes: AsyncIterable<Uint8Array>): Promise<Receipt> {
     assertCurrentActor(this.store, auth, "git.submit");
@@ -80,19 +83,27 @@ export class SubmitCoordinator {
     Object.freeze(request);
     const hash = requestHash("git.submit", canonicalRequestParams("git.submit", request));
     const claim = this.store.claimKey(auth.actor, key, hash);
-    if (claim === "retry") return receiptOfOperation(this.store.getOperation(auth.actor, key)!);
+    if (claim === "retry") return receiptOfOperation(this.store.retriedOperation(auth.actor, key));
     if (claim === "reused") throw reused(auth.actor, key);
     this.effects.verifyObjectFormat([request.candidate, ...request.prerequisites]);
     const id = generateOperationId(); const messageId = generateMessageId(id, 0);
     const spool = await prepareSubmitSpool(this.paths.stateRoot, id, request.bundle, bytes);
-    let committed = false;
+    // The spool and the frozen result mail are owned by nobody until the plan
+    // that names them is accepted; one settlement decides both, and a refusal
+    // stays the first error reported.
+    const scope: PreacceptScope = new PreacceptScope();
+    let claimResult: "inserted" | "retry";
     try {
+      scope.register({ operationId: id, resource: spool.bundle?.path ?? `${id}:no-bundle`, owner: spool,
+        observe: () => this.bundleDisposition(id, spool.bundle) });
       const logicalTo = [...new Set(request.to.length ? request.to : ["commons"])].sort() as Address[];
       const display = expandAddresses(this.store, logicalTo, this.paths.society).displayTo;
       const publishedRef = publishedRefFor(auth.actor, id);
       const eml = await this.resultEml(auth.actor, request, display, publishedRef, messageId);
-      this.mail.freezeObject(messageId, eml);
-      const claimResult = this.store.transaction(tx => {
+      const artifact = this.mail.freezeObject(messageId, eml);
+      scope.register({ operationId: id, resource: artifact.path, owner: artifact,
+        observe: () => frozenMessageDisposition(this.store, id, { id: messageId, sha256: eml.sha256 }) });
+      claimResult = this.store.transaction(tx => {
         assertCurrentActor(this.store, auth, "git.submit");
         const current = this.store.claimKey(auth.actor, key, hash);
         if (current === "retry") return "retry" as const;
@@ -108,20 +119,17 @@ export class SubmitCoordinator {
         if (result !== "retry") tx.insertDeliveries(recipients.map(recipient => ({ messageId, recipient, operationId: id })));
         return result;
       });
-      if (claimResult === "retry") { this.cleanPreaccept(spool, id); return receiptOfOperation(this.store.getOperation(auth.actor, key)!); }
-      committed = true; spool.retainForOperation();
+    } catch (error) { scope.settleFailure(error); }
+    scope.settle();
+    if (claimResult === "retry") return receiptOfOperation(this.store.retriedOperation(auth.actor, key));
+    // The submission is accepted: a failure from here is reported as accepted.
+    try {
       await this.exclusive(id, () => this.executeAccepted(this.operation(id), auth));
       return receiptOfOperation(this.operation(id));
-    } catch (error) {
-      if (!committed) {
-        try { this.cleanPreaccept(spool, id); }
-        catch (cleanup) { throw new AggregateError([error, cleanup], "submit admission and owned cleanup failed"); }
-      }
-      throw error;
-    }
+    } catch (error) { throw acceptedFailure(error); }
   }
   private async resultEml(actor: Actor, input: SubmitInput, displayTo: string[], publishedRef: string, messageId: string) {
-    const body = `${input.body}\n\n게시됨: ${publishedRef}\nCommit: ${input.candidate}\n${input.paths.length ? `경로: ${input.paths.join(", ")}\n` : ""}git fetch origin ${publishedRef}; git show FETCH_HEAD\n`;
+    const body = `${input.body}\n\nPublished: ${publishedRef}\nCommit: ${input.candidate}\n${input.paths.length ? `Paths: ${input.paths.join(", ")}\n` : ""}git fetch origin ${publishedRef}; git show FETCH_HEAD\n`;
     return buildEml({ from: actorAddress(actor, this.paths.society), to: displayTo,
       replyTo: defaultReplyTo(actorAddress(actor, this.paths.society), displayTo), subject: input.subject,
       kind: "result", contextRevision: null, inReplyTo: null, references: [], messageId: `${messageId}@${this.paths.society}.oma.invalid`, body });

@@ -79,7 +79,7 @@ function envOf(withGit: boolean): Env {
       libdir: "/l",
       state: join(dir, "state"),
       society,
-      agent: "",
+      agent: "", config: join(dir, "state", "config.json"), run: join(dir, "oma", society),
     },
     join(dir, "xdg"),
   );
@@ -92,8 +92,7 @@ function envOf(withGit: boolean): Env {
       worldDir: join(dir, "state", "world"),
       society,
       quarantineTmpBytes: 64 * 1024 * 1024,
-      quarantineResources: { cpuSeconds: 30, memoryBytes: 512 * 1024 * 1024, tasks: 4096 },
-      checkTimeoutSeconds: 30,
+      quarantineResources: { cpuSeconds: 30, memoryBytes: 512 * 1024 * 1024, tasks: 4096, timeoutSeconds: 30, silenceSeconds: 30 },
     };
     git = new GitModule(paths, store, mail, null);
   }
@@ -336,12 +335,27 @@ test("T68b: reconcile never overwrites a moved published ref; ref==candidate rec
 });
 
 
-test("T68c: canonical repo integrity is asserted; start-limit surface reported without reset", () => {
+test("T68c: canonical repo integrity is asserted; start-limit surface reported without reset", async () => {
   const env = envOf(true);
   try {
     seedBare(env);
-    env.recon.assertCanonicalHealthy(); // clean repo passes
+    await env.recon.assertCanonicalHealthyAsync(); // clean repo passes; P0-2: the one health observation
     assert.deepEqual(env.recon.startLimitState(), []); // no units installed => none
+  } finally {
+    env.seal();
+  }
+});
+
+test("T68d: a dead run's fsck diagnostic spool is collected -- residue neither blocks nor survives the health observation", async () => {
+  const env = envOf(true);
+  try {
+    seedBare(env);
+    const diagnostics = `${join(env.dir, "state", "repos", "project.git")}.fsck.stderr`;
+    writeFileSync(diagnostics, "residue of a dead observation\n");
+    await env.recon.assertCanonicalHealthyAsync();
+    assert.equal(existsSync(diagnostics), false, "the spool is collected when the observation ends");
+    // And the next observation runs unblocked: residue never pretends one is live.
+    await env.recon.assertCanonicalHealthyAsync();
   } finally {
     env.seal();
   }

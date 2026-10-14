@@ -4,8 +4,56 @@
 export const subprocessResponsibilities = Object.freeze({
   "src/process/run.ts": "bounded synchronous command mechanism and final no-await observations",
   "src/process/async.ts": "bounded asynchronous child and pipe lifecycle mechanism",
-  "src/process/policies.ts": "explicit host editor with inherited terminal I/O via runProcessSync",
-  "src/rpc-client.ts": "long-lived Pi JSONL session with bounded framing, writes, drain and close",
+  // PI-001: the trusted extension cannot import src/process, and the engine's
+  // exec cannot pass a private descriptor, so the extension owns this one child.
+  // PI-001: engine grep/fd inherit global config and expose no spawn options.
+  // This read-only process searches a descriptor-created copy with clean env.
+  "src/extension/contained-search.ts": "bounded search-only process group over private copied inputs, with abort/stall-observation/output cleanup",
+});
+/** REC-007: the places that start a child without handing it the society
+ * lease, and why each one may. An entry is a claim that this child cannot be a
+ * writer of the society outliving the society's ownership -- not a note that
+ * the fence has not been wired up yet. The fence rule fails when one of these
+ * stops being true, in either direction.
+ */
+export const fenceExemptSpawnOwners = Object.freeze({
+  "src/extension/contained-search.ts#searchWorkspace":
+    "read-only source traversal and engine search over a private temporary copy; the oversized answer may also be written into the caller's own workspace through the serialized contained writer -- never a society write or credential; parent pipe EOF aborts its owned copy and walker group",
+  "src/extension/contained-search.ts#completeSearchText":
+    "the complete-rendering walker runs inside the owned search child, over the same private copy it made; the child's own pipe-EOF abort and group kill bound it, and it writes no society state",
+
+  // The bounded command mechanism. Its descriptors are the caller's to choose
+  // (`inheritedFds`). Its callers run systemctl, systemd-run, resize2fs and
+  // git; none of them writes a society's state itself. A society session that
+  // systemd-run starts runs `oma`, which takes the society lease on its own.
+  "src/process/async.ts#startProcess":
+    "bounded command whose inherited descriptors are the caller's; not a society writer",
+  // SB-001: a confined Resident. The fence is deliberately not handed across
+  // the sandbox boundary: the lease is a listening socket, and a process
+  // inside the confinement holding it could answer the probe that names the
+  // society's owner. A Resident that outlives its broker is bounded by the
+  // sandbox's own lifetime and by the runner's supervision, not by this lease,
+  // and closing that gap properly needs a descendant-death boundary the kernel
+  // enforces (a cgroup), not a wider fence.
+  "src/process/async.ts#spawnSandboxed":
+    "bubblewrap confinement boundary; a listening lease inside a sandbox would be answerable from inside it",
+  "src/runtime/pi-adapter.ts#deliver":
+    "Resident engine started through the confinement boundary above",
+  // macos-platform §4.6: the guest's society session. Its program is the
+  // product's own `oma`, which takes the society lease itself (HostTenure) and
+  // hands it down to its engine and broker; the holder that starts it owns no
+  // society and has no lease to pass.
+  // macos-platform §2.1: the Mac's VM helper. It owns no society; the guest's
+  // societies are bounded by the VM, which runs inside the helper and ends
+  // with it, and the helper ends when omahostd's channel to it closes.
+  "src/platform/host/vz-driver.ts#launch":
+    "the VM helper, which holds no society; everything in the guest ends with the VM it runs",
+  "src/process/async.ts#spawnInTerminal":
+    "a society session's `oma`, which takes the society lease itself; its holder has none to hand down",
+  // MODE-003/005: Personal is a separate Human session, not a Society role.
+  // It holds a history-writer lock but no Society authority or writable state.
+  "src/process/async.ts#spawnSessionInteractive":
+    "independent Human session with its own inherited history lock and IPC; no Society role, state or lease",
 });
 export const DEFAULT_POLICY = Object.freeze({
   capabilityOwner: "src/domain/capabilities.ts",
@@ -16,16 +64,18 @@ export const DEFAULT_POLICY = Object.freeze({
   identityOwner: "src/domain/request-identity.ts",
   sqliteOwners: Object.freeze(["src/store.ts"]),
   subprocessOwners: Object.freeze(Object.keys(subprocessResponsibilities)),
-  // PI-002: the compiled trusted extension is one self-contained file that cannot
-  // import host runtime at all. Its identity grammar is an exact single-file mirror,
-  // and the equivalence of both decoders is pinned by test/id-contracts.test.ts.
-  // This is not a general permission to restate identifier grammars.
+  // PI-001/002: the trusted extension cannot import host runtime at all (the
+  // extension-closure rule holds that), so its batch-view identity grammar is an
+  // exact mirror, and the equivalence of both decoders is pinned by
+  // test/id-contracts.test.ts. This is not a general permission to restate
+  // identifier grammars.
   identifierMirrors: Object.freeze({
-    "src/pi-extension.ts": "self-contained compiled Pi extension mirroring the batch-view identity grammar",
+    "src/extension/batch-view.ts": "trusted Pi extension mirroring the batch-view identity grammar and, for CLI-001/INV04, the address and request-key grammar of the CLI slots it fills",
   }),
   // The framed transport is intentionally I/O, unlike the codecs next to it.
   // This does not allow fs, process, SQLite, Store or entrypoint imports here.
-  protocolIoModules: Object.freeze({ "src/protocol/channel.ts": Object.freeze(["node:net"]) }),
+  protocolIoModules: Object.freeze({ "src/protocol/channel.ts": Object.freeze(["node:net"]),
+    "src/protocol/connection.ts": Object.freeze(["node:net"]) }),
 });
 export function pureBoundaryViolation(file, specifier, target, effectModules, policy = DEFAULT_POLICY) {
   if (!/^src\/(?:domain|protocol)\//.test(file)) return false;

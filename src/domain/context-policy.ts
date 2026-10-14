@@ -1,6 +1,7 @@
 /** CTX-001/002: pure context-document policy. No filesystem, Git, defaults, or normalization. */
 import { isValidWirePath } from "./identifiers.js";
 import type { ContextEntry } from "../../implementation/contracts/values.js";
+import { utf8Decoder } from "./utf8.js";
 
 /** Traversal may descend into this one directory; file admission is separate. */
 export function isContextDirectoryPath(value: unknown): value is "decisions" { return value === "decisions"; }
@@ -76,18 +77,24 @@ export function isContextEntries(value: unknown, bounds: ContextEntryBounds = {}
   return contextEntriesCheck(value, bounds) === null;
 }
 
-/** Incremental version of exactly the existing content policy. TextDecoder
- * retains only an incomplete UTF-8 code point, including a split leading BOM.
+/** Incremental version of exactly the existing content policy. The decoder
+ * retains only an incomplete UTF-8 code point; a U+FEFF is text (P0V-86).
  * No newline rewriting, whitespace trimming or new Markdown blacklist occurs.
  */
 export class ContextTextValidator {
-  private readonly decoder = new TextDecoder("utf-8", { fatal: true });
+  private readonly decoder = utf8Decoder();
   private failure: string | null;
   private nonempty = false;
+  private started = false;
   private finished = false;
   constructor(private readonly path: string) { this.failure = contextPathCheck(path); }
   private text(value: string): string | null {
-    if (value.length > 0) this.nonempty = true;
+    // P0V-86: the decoder keeps a U+FEFF, as it keeps every character. For
+    // whether a document is empty, one that begins it is the signature an
+    // editor writes into an empty UTF-8 file, not content.
+    const content = this.started ? value : value.replace(/^\uFEFF/, "");
+    if (value.length > 0) this.started = true;
+    if (content.length > 0) this.nonempty = true;
     if (/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/.test(value)) this.failure = "binary context is forbidden";
     return this.failure;
   }

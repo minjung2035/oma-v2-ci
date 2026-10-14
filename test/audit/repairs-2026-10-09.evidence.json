@@ -1,0 +1,534 @@
+{
+  "schema": 1,
+  "recordedAt": "2026-10-09T06:30:16.693907+00:00",
+  "baseHead": "0364e99cbbb07726097da2b923a03d185c8fcd73",
+  "branch": "feat/macos-hidden-vm",
+  "subagentsUsed": false,
+  "scope": "Direct repair of AV-20261008-01..13 and affected owners; additional unexpected restrictions recorded. Historical bug reproducers preserved.",
+  "environment": {
+    "node": "v24.21.0",
+    "platform": "Linux",
+    "uid": 1001,
+    "actualUserSystemd": true,
+    "cgroupV2": true,
+    "bubblewrap": true,
+    "paidProviderCalls": false,
+    "inference": "isolated local scripted provider",
+    "startupRunsSerial": true,
+    "filesystemCacheFlushed": false
+  },
+  "fullSuite": {
+    "status": "PASS",
+    "command": "npm test",
+    "exitCode": 0,
+    "phases": [
+      {
+        "tests": 9,
+        "pass": 9,
+        "fail": 0,
+        "cancelled": 0,
+        "skipped": 0,
+        "todo": 0
+      },
+      {
+        "tests": 3929,
+        "pass": 3929,
+        "fail": 0,
+        "cancelled": 0,
+        "skipped": 0,
+        "todo": 0
+      }
+    ],
+    "totalTests": 3938,
+    "excludedNativeFiles": 9,
+    "inputAtExecution": {
+      "files": 15374,
+      "digest": "924ba992c8f836bffc9a8f550ce4acc82a3151bc444b488262f212b5de9ae822"
+    },
+    "verificationSourceMapSha256": "0a6e997af526ae8bdcf85bdbf7e07ae7a0a199f37784e9a85c57382c759f127b",
+    "logSha256": "cc53ae55b9c625657bc307a840f8021626a1be05044cc045c369fc294640145c",
+    "binding": "Final report/document changes are subsequent records, not a claim that the full suite executed against its own future evidence."
+  },
+  "nativeLanes": {
+    "kernel": {
+      "status": "PASS",
+      "execution": "EXECUTED",
+      "totals": {
+        "tests": 65,
+        "pass": 65,
+        "fail": 0,
+        "cancelled": 0,
+        "skipped": 0,
+        "todo": 0
+      },
+      "command": "OMA_TEST_SYSTEMD=1 node scripts/verify-lane.mjs kernel --out <new-directory>",
+      "startedAt": "2026-10-09T06:17:41.502Z",
+      "endedAt": "2026-10-09T06:19:23.539Z",
+      "testLogSha256": "4c0737b7f72b71b0481593d674ef64ccdf0ddf349693de302fc18c88a2b1104a",
+      "reportSha256": "fc966206362c6a5fe677ff99625752d7c8411fd1a8cc1766eb2006e02e5dfcd3",
+      "recordChangesAfterSourceCapture": [
+        "docs/HANDOFF.md",
+        "docs/implementation/validation.md",
+        "docs/user-expectation-ledger.md",
+        "implementation/review-ledger.json",
+        "implementation/review-notes.json",
+        "production-loc-hashes.json"
+      ],
+      "qualification": "Linux native mechanisms; no macOS, paid provider or VM power loss qualification"
+    },
+    "crash": {
+      "status": "PASS",
+      "execution": "EXECUTED",
+      "totals": {
+        "tests": 63,
+        "pass": 63,
+        "fail": 0,
+        "cancelled": 0,
+        "skipped": 0,
+        "todo": 0
+      },
+      "command": "OMA_TEST_SYSTEMD=1 node scripts/verify-lane.mjs crash --out <new-directory>",
+      "startedAt": "2026-10-09T06:20:21.127Z",
+      "endedAt": "2026-10-09T06:21:21.852Z",
+      "testLogSha256": "4ca10632f17248df22139ab53687f1e5dcaf7fa534d66c3f9c944bbd6b2cb0c1",
+      "reportSha256": "4fd8fa5956f32901f691616d273bb55f1f2a0f2e94ebc7bfbb25f8be12349612",
+      "recordChangesAfterSourceCapture": [
+        "docs/HANDOFF.md",
+        "docs/implementation/validation.md",
+        "docs/user-expectation-ledger.md"
+      ],
+      "qualification": "Linux native mechanisms; no macOS, paid provider or VM power loss qualification"
+    }
+  },
+  "nativeCandidateControls": {
+    "command": "node test/audit/repairs-2026-10-09/native-checks.mjs",
+    "cases": [
+      {
+        "name": "baseline",
+        "result": "succeeded",
+        "memoryBytes": 268435456,
+        "kind": "exited",
+        "exitCode": 0
+      },
+      {
+        "name": "unaligned-memory",
+        "result": "succeeded",
+        "memoryBytes": 268435457,
+        "kind": "exited",
+        "exitCode": 0
+      },
+      {
+        "name": "verbose-success",
+        "result": "succeeded",
+        "memoryBytes": 268435456,
+        "kind": "exited",
+        "exitCode": 0
+      },
+      {
+        "name": "config-executor-deadline",
+        "validated": true,
+        "result": "succeeded"
+      }
+    ],
+    "scriptSha256": "843a1f4d59cd4e292b2d274cf85bc955d4ea1b269562bc0575fd65657340c194",
+    "logSha256": "4c54e781961e102656762dadeab04732865d70ab256c2ac74da328899c5c61fd"
+  },
+  "otherChecks": [
+    {
+      "command": "npm run build",
+      "status": "PASS",
+      "exitCode": 0,
+      "logSha256": "cccfcd5d5169e7cc8604508632ef031166923f10ded462df8caca2efb931ff40"
+    },
+    {
+      "command": "npm run typecheck",
+      "status": "PASS",
+      "exitCode": 0,
+      "logSha256": "cc5f8db3e8f9500e18fe0677c06fdbeadf01257cb4632bad7be2a52e2ca79f52"
+    },
+    {
+      "command": "npm run check:architecture",
+      "status": "PASS",
+      "exitCode": 0,
+      "logSha256": "907d9c5a378eea66d20b433eb1cb57986ffad0ed4e230cb97092b24780ef6cfd"
+    }
+  ],
+  "npmAudit": {
+    "command": "npm audit --json",
+    "status": "PASS",
+    "vulnerabilities": {
+      "info": 0,
+      "low": 0,
+      "moderate": 0,
+      "high": 0,
+      "critical": 0,
+      "total": 0
+    },
+    "nodemailer": "10.0.16",
+    "logSha256": "2e26243abd4458690c22d36a295d29eb7b38eb9ac336f8ce68ffd213a662215d"
+  },
+  "startup": {
+    "baselineEvidence": "test/audit/startup-2026-10-08.evidence.json",
+    "baselineSeconds": 146.7,
+    "measurements": {
+      "societyEarlyTool": {
+        "command": "python3 scripts/benchmark-startup.py --node <node24> --runs 3 --wait-broker --early-tool",
+        "runs": [
+          {
+            "mode": "society",
+            "run": 1,
+            "screenSeconds": 2.9864554489031434,
+            "requestSeconds": 3.226811293,
+            "responseSeconds": 15.401713541010395,
+            "brokerSeconds": 14.66508059,
+            "brokerToolSeconds": 15.381546362,
+            "brokerToolState": "succeeded-once",
+            "quitSeconds": 0.6322244049515575,
+            "exit": 0
+          },
+          {
+            "mode": "society",
+            "run": 2,
+            "screenSeconds": 2.9434382140170783,
+            "requestSeconds": 3.18809809,
+            "responseSeconds": 15.37077406118624,
+            "brokerSeconds": 14.656251718,
+            "brokerToolSeconds": 15.350628624,
+            "brokerToolState": "succeeded-once",
+            "quitSeconds": 0.6445161649025977,
+            "exit": 0
+          },
+          {
+            "mode": "society",
+            "run": 3,
+            "screenSeconds": 2.927837122930214,
+            "requestSeconds": 3.165726096,
+            "responseSeconds": 15.208196857012808,
+            "brokerSeconds": 14.466407915,
+            "brokerToolSeconds": 15.185069884,
+            "brokerToolState": "succeeded-once",
+            "quitSeconds": 0.6865480458363891,
+            "exit": 0
+          }
+        ],
+        "budgetSeconds": 5,
+        "budgetStatus": "FAIL",
+        "measuredFields": [
+          "requestSeconds",
+          "brokerSeconds",
+          "brokerToolSeconds"
+        ],
+        "logSha256": "733211ea011ecc9296e921c811b835a9f665670bcb8419c92761fac502a1ee26"
+      },
+      "personal": {
+        "command": "python3 scripts/benchmark-startup.py --node <node24> --mode personal --runs 3",
+        "runs": [
+          {
+            "mode": "personal",
+            "run": 1,
+            "screenSeconds": 1.24118220503442,
+            "requestSeconds": 1.489449568,
+            "responseSeconds": 1.5299414519686252,
+            "brokerSeconds": null,
+            "brokerToolSeconds": null,
+            "brokerToolState": null,
+            "quitSeconds": 0.1242042281664908,
+            "exit": 0
+          },
+          {
+            "mode": "personal",
+            "run": 2,
+            "screenSeconds": 1.2239345321431756,
+            "requestSeconds": 1.469353266,
+            "responseSeconds": 1.5093655830714852,
+            "brokerSeconds": null,
+            "brokerToolSeconds": null,
+            "brokerToolState": null,
+            "quitSeconds": 0.11867575603537261,
+            "exit": 0
+          },
+          {
+            "mode": "personal",
+            "run": 3,
+            "screenSeconds": 1.243753198068589,
+            "requestSeconds": 1.485717031,
+            "responseSeconds": 1.5314678640570492,
+            "brokerSeconds": null,
+            "brokerToolSeconds": null,
+            "brokerToolState": null,
+            "quitSeconds": 0.11369237001053989,
+            "exit": 0
+          }
+        ],
+        "budgetSeconds": 5,
+        "budgetStatus": "PASS",
+        "measuredFields": [
+          "requestSeconds"
+        ],
+        "logSha256": "fd713c2ef6360f45298c9baa2dbedf80f242dcb9d34777858ff3942aa4c43ea3"
+      },
+      "societyConversation": {
+        "command": "python3 scripts/benchmark-startup.py --node <node24> --runs 3",
+        "runs": [
+          {
+            "mode": "society",
+            "run": 1,
+            "screenSeconds": 2.985611468087882,
+            "requestSeconds": 3.240674352,
+            "responseSeconds": 3.2661326341331005,
+            "brokerSeconds": null,
+            "brokerToolSeconds": null,
+            "brokerToolState": null,
+            "quitSeconds": 0.14617044595070183,
+            "exit": 0
+          },
+          {
+            "mode": "society",
+            "run": 2,
+            "screenSeconds": 2.974178788950667,
+            "requestSeconds": 3.227543329,
+            "responseSeconds": 3.251918555935845,
+            "brokerSeconds": null,
+            "brokerToolSeconds": null,
+            "brokerToolState": null,
+            "quitSeconds": 0.14630625885911286,
+            "exit": 0
+          },
+          {
+            "mode": "society",
+            "run": 3,
+            "screenSeconds": 2.9537344039417803,
+            "requestSeconds": 3.195380622,
+            "responseSeconds": 3.217890372965485,
+            "brokerSeconds": null,
+            "brokerToolSeconds": null,
+            "brokerToolState": null,
+            "quitSeconds": 0.14064937899820507,
+            "exit": 0
+          }
+        ],
+        "budgetSeconds": 5,
+        "budgetStatus": "PASS",
+        "measuredFields": [
+          "requestSeconds"
+        ],
+        "logSha256": "b90e460d87a08c60399c5fb85d3795267aa8a37baaaf87c67f0166c493b5e5d2"
+      }
+    },
+    "idealOneSecondStatus": "UNMET",
+    "fullSocietyFiveSecondStatus": "FAIL",
+    "historicalUnsafeLocalCloneMeasurements": "Superseded: importing the Human local object store admitted private index/stash objects; not current qualification.",
+    "measurementLimitations": [
+      "Fresh isolated HOME/data for every run; existing checkout and OS page cache.",
+      "Actual OMA entry, bundled Pi, PTY, broker and SQLite operation; provider is scripted.",
+      "Conversation readiness, broker readiness and first successful tool are separate clocks."
+    ]
+  },
+  "unexpectedRestrictions": {
+    "ledger": "docs/user-expectation-ledger.md",
+    "ids": [
+      "SC-01",
+      "SC-02",
+      "SC-03",
+      "SC-04",
+      "SC-05",
+      "SC-06",
+      "SC-07",
+      "SC-08",
+      "SC-09",
+      "SC-10",
+      "SC-11",
+      "SC-12",
+      "SC-13",
+      "SC-14",
+      "SC-15",
+      "SC-16",
+      "SC-17",
+      "SC-18",
+      "SC-19",
+      "SC-20",
+      "SC-21",
+      "SC-22",
+      "SC-23",
+      "SC-24",
+      "SC-25",
+      "SC-26",
+      "SC-27",
+      "SC-28",
+      "SC-29",
+      "SC-30",
+      "SC-31",
+      "SC-32"
+    ],
+    "count": 32,
+    "evidence": "Current source observations; not an end-to-end execution against every external service.",
+    "sourceHashes": {
+      "src/client/index.ts": "e3dd696d638d0c490f9e3c0c568714832c44f2edd036ebb9ed7b47148f59c476",
+      "src/config/defaults.ts": "7ad6ced8757a06a7ef28500591c71e2ff97388599098f056f1a8d0d415e15000",
+      "src/domain/child-policy.ts": "1bdddbc8af35a1a0932196ceff65c0f54c7e948b400d95c7826d34773ffa093c",
+      "src/domain/egress.ts": "3ed3e87d6964412a527123511912e4392549fcf22f3667217ce0e72a5d58b3fb",
+      "src/domain/resources.ts": "2e40245a6ceb07b415a03419aca29431c7f386b7e19deb98432794157d57d687",
+      "src/domain/tool-surface.ts": "dc9c6c8da0fcea6ad78a55e88db1f2518dc048cc4e3021067c293394bbcdd724",
+      "src/entry/pi-interactive-host.ts": "a22a4821822e5517dd2baebb9763d2d9216d3fb58cf14f4175749459f30f733a",
+      "src/entry/pi-personal.ts": "a3fdfc7a097017cda8168dfd21e523f108278a10dcf365bd837d948aa87a8b42",
+      "src/extension/mcp-tools.ts": "238dcf7e95709d791bc3f39ffffffd4c2750d76ee70f66ebd2ddc8fb074b563d",
+      "src/extension/principal-channel.ts": "62680fcf1a6877ba0b8339491378775d1b81a2e28f444b9450df9b33fd548863",
+      "src/extension/tool-surface.ts": "4a4be7a456376adaa92ba1ccf631cad4f5d35fcdc4097327ba747a4c3d395b65",
+      "src/extension/web-tools.ts": "b156619712debec326707113ca9162ffd99c05b92ec614ba8d5a82a785bd627c",
+      "src/extension/workspace-guard.ts": "ca61e44dc251edc58ebcadecfce649bef61ed304793c9fb600c194d377e15923",
+      "src/git/integration-policy.ts": "30d9e0b798caf952c8af34e7ad4e0a020be0e34219644f0aeaf27e72eb0e0759",
+      "src/git/observe.ts": "77195062f9e243c16491d5aa1a04466229f2003599789b026d62bc2b8ca4b02a",
+      "src/git/project-snapshot.ts": "10b939adb76fecac83573f970f2a9d2c1f0367721bf9caac47d0cfa0549bc6bb",
+      "src/lifecycle.ts": "09a300d33a65fd26fe9117727194b2609ea8a87d1e16b2b35759aef96bd2deac",
+      "src/lifecycle/workspace.ts": "38946fb0091823a1e8bc09bb74d152cd4a9758977aef514229788c6239b48a02",
+      "src/pi-compat/env.ts": "529df80bf209cbb5fe8ba14454531509917d0dfa8bb42e0e48af381830c9ab69",
+      "src/pi-compat/interactive-tool-setup.ts": "c1d8510d823b928b75e7ebd5717ce2b3a64fba4f28498322f519762b75614b91",
+      "src/pi-compat/interactive-tools.ts": "a542cd453f3b716a98f8d1ea6a9c2aad21207aab9528bd10140d1e76475ec3f8",
+      "src/pi-compat/settings.ts": "03032f56701862679f5e4b908bb93fb0cbb0f3d79ad4d85a009841a7abaafe50",
+      "src/runtime/candidate-checks.ts": "a7f6c83599f0447ec4cf5199ffb74bb552371c63dc5455ab729efe179b8ff637",
+      "src/runtime/connect-proxy.ts": "a55d2b12474e6b6ba67bddcbb7b3d77ad8ad76080e8bf49476a4d4c9e568e748",
+      "src/runtime/inference-relay.ts": "9c6370ef15c5987024a1f8918fefa1f6dc43c270d0a7930119c21a042e9cf71d",
+      "src/runtime/pi-packages.ts": "593274e7928fcea4da4bfba7bcbeca7ef96576be760b41fd03069abea0db997b",
+      "src/runtime/pi-runtime.ts": "8bd4eb7f16b9347e7375366740e68e11279c147394c17e506e8d0a3388dcbe8a",
+      "src/runtime/pi-spawn-plan.ts": "21d6d0b7421849ffaa76db957b119a203dc18f2d7bbf26f63e31409fac1c010b",
+      "src/runtime/provision.ts": "1b9f7b18443078393484470651ee785e4f2b859fb5aab23b72729930079ab8c5",
+      "src/runtime/resident-rootfs.ts": "e4fe3426105edfc56f99efb2a406050fb3606c0979984f5b66ef9aa4348ee608",
+      "src/runtime/session-catalog.ts": "f2d686f770318b18ecf9d7a942d11774292068a1407c24d1f229838cafb9fe86",
+      "src/runtime/session-mode.ts": "8d8c05c4a1f495498db4d8292898e8bd02c0a3e22fd5a8541bc5531ed7d19310",
+      "src/runtime/society-lease.ts": "f979f74a7189ff98e870026788422c3da8b055e00943045a53e343916b27aa25",
+      "src/sandbox.ts": "b757f4f5f8b8eed58bab6cb476d35b1ec489e8fc2d245a5783a5e1b480b1f410",
+      "src/storage/quota.ts": "ae283cda732df8b6b818063b2569f59c440deb1280c76a77c6df7c46423de9bb",
+      "src/tui/packages-apply.ts": "894460b4bbffc560656ae9cb5095ecd26aaf4c5cda7bcbe32635b601d630b7ec"
+    }
+  },
+  "functionalSourceHashes": {
+    "implementation/durable-boundaries.json": "4f14f5a471838c4d7e306cd62582a903a52af031ea3ddc27518cc353f0966811",
+    "implementation/traceability.json": "40ece7c86a114d083d6c9a022b8fdd60265d27000770839fb3fd6949d6f0ff36",
+    "package-lock.json": "ef5190477076578a94725e360c48191a1f829d3c354473e341f1395325434251",
+    "package.json": "437adfeafdf142f7997956a2c5caacc8fcc58b393c21141d401a3c83fe811c58",
+    "platform/guest/bridge/oma-vsock-bridge.c": "f1d300b55429a4ba8aed4e85eef6bc0fe761a4e296d595a5d1a47742fea74ab9",
+    "production-files.txt": "3e5b0f9c847d1dca380549b3a8c76e60e2f6935aa399a521f06ea70220b2a969",
+    "production-loc-hashes.json": "d9a8e3158e052d5f15e1e2d8a7c81208b968c78375f8bc4e6c7f8835534e6ef1",
+    "scripts/architecture/rules/owned-state-rules.mjs": "a0ba5dece1f449a2e16153cd035717edd3530468b05d8ac3020ef878279e4991",
+    "scripts/architecture/rules/surface-rules.mjs": "fd963c05e68fdf0824023e1faebd2c63f962c8b5ca8e300740928ffab24063be",
+    "scripts/benchmark-startup.py": "fc241a95c1f730e717e02dbd463bae6a2723149727746e3da67c817356cef51a",
+    "scripts/kernel-zones.mjs": "44b73e5369e96b395f63e75ab5ae5b44efd404a432798adfba1cc9bdcd14fcef",
+    "src/broker.ts": "aeccac82b639c9966e5fa5595a8f965c8b17a38ebe9d2e93c5c806a5081f7b3d",
+    "src/broker/connection.ts": "ee31ba055b782d0b5cd9ff48c1047994a6f4b42126574b545cf624db5366f2d3",
+    "src/broker/internal-dispatcher.ts": "67ec5556f339a33db87944f5b6f0b84cdc706767908e4fdf046a543e67da7494",
+    "src/broker/public-dispatcher.ts": "6bf82f4f80f847d25b62786d4b5ab886a894e2a99de6f8470da24bc1fec88dfe",
+    "src/client/index.ts": "e3dd696d638d0c490f9e3c0c568714832c44f2edd036ebb9ed7b47148f59c476",
+    "src/config.ts": "cc0ed766e0d55e8ffe0c0a470f1a72cfa9ad6809a05e72b1cdac3e45a0f3b387",
+    "src/domain/admission.ts": "88bd5677efc21316fd6e69f508ca9ed85756286243d2da39513956639552f21e",
+    "src/domain/deployment.ts": "629cb247111d35889960b4ee7c6c53c99ab6f4180941ecf265af65d65fd85d68",
+    "src/domain/integer-fields.ts": "5785874ffad3f580afdd815de57fdf26ad4702167b2f0aec5a60c0586587d11f",
+    "src/domain/resources.ts": "2e40245a6ceb07b415a03419aca29431c7f386b7e19deb98432794157d57d687",
+    "src/entry/broker.ts": "8c11b66e29a770324d985bc9dae06b85657d03fdf6fe559bcb24a38cb4c64860",
+    "src/entry/oma-society.ts": "4a5253b0ce3b3cc710ddc9c4f2016ba6441b2da9d18b41954966fd20eaec404b",
+    "src/entry/pi-interactive-host.ts": "a22a4821822e5517dd2baebb9763d2d9216d3fb58cf14f4175749459f30f733a",
+    "src/entry/pi-personal.ts": "a3fdfc7a097017cda8168dfd21e523f108278a10dcf365bd837d948aa87a8b42",
+    "src/entry/prepare-society.ts": "57d84ccf4ff270112486c744ea9abe2299efeea672374a5a247c8003658e58b8",
+    "src/extension/mail-tools.ts": "b7e8510e8da56e1d7cd284edbb4283401c5a3989162e2066efb23d52de0845ed",
+    "src/extension/principal-channel.ts": "62680fcf1a6877ba0b8339491378775d1b81a2e28f444b9450df9b33fd548863",
+    "src/extension/vendor-bundle.ts": "7e831836219a87696809b9a18d371bbbcdaaccd979dbd2fbf2a4126d2b8d002a",
+    "src/git/integration-policy.ts": "30d9e0b798caf952c8af34e7ad4e0a020be0e34219644f0aeaf27e72eb0e0759",
+    "src/git/project-snapshot.ts": "10b939adb76fecac83573f970f2a9d2c1f0367721bf9caac47d0cfa0549bc6bb",
+    "src/git/repository-health.ts": "ff373a248744d87001058072ab871d61074bba42ca5766fe993c366a8b9e96b0",
+    "src/lifecycle/society.ts": "ba1b774132f8297c524ac6613071dbfc63b74c74f9c13aff16dbea30fe7e180b",
+    "src/lifecycle/workspace.ts": "38946fb0091823a1e8bc09bb74d152cd4a9758977aef514229788c6239b48a02",
+    "src/pi-compat/interactive-tool-setup.ts": "c1d8510d823b928b75e7ebd5717ce2b3a64fba4f28498322f519762b75614b91",
+    "src/pi-compat/interactive-tools.ts": "a542cd453f3b716a98f8d1ea6a9c2aad21207aab9528bd10140d1e76475ec3f8",
+    "src/pi-compat/pi-private.d.ts": "510aada3d5269ff2704716ad64c532572e6786094f9f0beed20bb615910ae0b6",
+    "src/pi-compat/settings-object.ts": "126753973027352fd7cdbe4cf9fe3140872e75e4099eb23c85bec562c9ef407f",
+    "src/pi-compat/settings-preload.ts": "65f3f56b18262748edd58ac04f0234d6c3377f81355e4faab6b09437e3f0adce",
+    "src/pi-compat/settings.ts": "03032f56701862679f5e4b908bb93fb0cbb0f3d79ad4d85a009841a7abaafe50",
+    "src/platform/host/files.ts": "1f7bc01e96d7aa7d8003a15f1d3ad035846a9fde0889be1ccf8cdda436462022",
+    "src/process/async.ts": "c5e28e3effe2bb3b3e0cf362bc2f621962c46c5dfa426a18d6f73d87d4b3c14c",
+    "src/process/command.ts": "28e15d6ba5e9bd5d8d56bd837d2931ae744972c8c76679c17349182b975e2cf1",
+    "src/process/deadline.ts": "8fd7efad16f3518ada16c7fe3860da55c58c191f992cf1b3790e58564097fa23",
+    "src/process/run.ts": "099f7ff9a8774d9f499649f10b2ece7df1dc952cd4e2264bfb6a21ae6a6b210f",
+    "src/reconcile.ts": "0b080d52c94b69839dde19d2fc8847b71dd38d25b55c69d96196278a6d252fde",
+    "src/review.ts": "8529f964a79d29272a8e60b6bfc772821198a3b005acfdead99d26b611fff256",
+    "src/runtime/broker-supervisor.ts": "4583a66e461274873d76f92fb51b98d38958e9169a2a3cd8964f2ae08777d122",
+    "src/runtime/candidate-checks.ts": "a7f6c83599f0447ec4cf5199ffb74bb552371c63dc5455ab729efe179b8ff637",
+    "src/runtime/deployment-manifest.ts": "e304f0107cd464aae5bec19521d4250cbc364d44c495f08c09d87496be5100a9",
+    "src/runtime/host-tenure.ts": "fe453d5ca33868a3ba1c27ee3d741009cca8ee422189b4a44d7161aa28929838",
+    "src/runtime/locked-files.ts": "efcc6de42dfb7d77a18f3d6f85046776846ca727e4140d803016db2db8d921be",
+    "src/runtime/personal-session.ts": "e6bbaa4de5de5694bc9757a0ac0f1cfc23fa200ff3531535c2154569e33bc90a",
+    "src/runtime/pi-packages.ts": "593274e7928fcea4da4bfba7bcbeca7ef96576be760b41fd03069abea0db997b",
+    "src/runtime/pi-presentation.ts": "05f73869725ecc99e5f4145195bc688a755e1c98abfce7e4275fd5930e543217",
+    "src/runtime/pi-runtime.ts": "8bd4eb7f16b9347e7375366740e68e11279c147394c17e506e8d0a3388dcbe8a",
+    "src/runtime/provision.ts": "1b9f7b18443078393484470651ee785e4f2b859fb5aab23b72729930079ab8c5",
+    "src/runtime/session-catalog.ts": "f2d686f770318b18ecf9d7a942d11774292068a1407c24d1f229838cafb9fe86",
+    "src/runtime/society-lease.ts": "f979f74a7189ff98e870026788422c3da8b055e00943045a53e343916b27aa25",
+    "src/runtime/society-preparation.ts": "84cb34b22c4e175cb0025a646d7f6000b24ea656175ebf53990b178d5b0b0cec",
+    "src/storage/directory.ts": "477543e8326e91ae61cc4b152467844cfac07a42e6be9c69ed13958c684072df",
+    "src/storage/project-preparation.ts": "52c98eaf7f2f93e5d60d012bca4d03a0b4cd93f38fe2b268f58c2d54ce383de5",
+    "src/storage/quota.ts": "ae283cda732df8b6b818063b2569f59c440deb1280c76a77c6df7c46423de9bb",
+    "src/storage/snapshot-reader.ts": "849e4bdc2dc9ea241950fd2dba151c33c69f3010b819595de485c12c477ff7c9",
+    "src/tui/login.ts": "2a035d592f5035d25861528cecb7a49c193d472282541132517182752f1b3ce3",
+    "src/tui/packages-apply.ts": "894460b4bbffc560656ae9cb5095ecd26aaf4c5cda7bcbe32635b601d630b7ec",
+    "src/tui/project-settings.ts": "b4837465923927326874ae7a0cd73a0a4286dc0f519d3492f6a3050fce64a155",
+    "src/tui/session.ts": "43f1a088b22a5014874fb39d03f800995c7c1f50a457e461b8a94dafbac80a87",
+    "src/units.ts": "22123a85e001e7059223117943fdab109c32cb015486df82d6502bb03866045d",
+    "test/action-admission.test.ts": "1806c17095c668ff5817e291d582b515baf320c3edba8811f99252c532f999e8",
+    "test/adversarial-repairs.test.ts": "667fc0ecf5e05d5f93764312e2993dcae36ea47a3b41ea5b5b5bbba49e5566e2",
+    "test/architecture-rule-modules.test.mjs": "40df9b70a83a9114db3fa434a31dd8643f6b177566909f56630abcc33e0ef04b",
+    "test/broker-composition-policy.test.mjs": "ef7494e7f334d76bea170b3607c9f62fe01e1912dec6351e5b88b0b176b55940",
+    "test/canonical-command.test.mjs": "3593e5504014a458d2fa6af915c52e54debfd7e8e259ca2e60635020b409deb7",
+    "test/domain-policy.test.ts": "de8ceb142113af10d357e6fe8f5e74b141ca3d18bb73b4c303c18fffe9aa7920",
+    "test/dr18-closures.test.ts": "db7ab0574077325637abd8a4cae712818e5a74eda980839ab8ca6e7e9a7afdc8",
+    "test/fixtures/relay-idle.c": "c14fd0e5141ae235ff1b84145f371656fbd7664c262941564040741b1d1f0777",
+    "test/fixtures/startup-pty.mjs": "c9e4eb41d46fdaa7ae5dd8c1f79fe9174b245572b95711a4aa0396d06337dcdd",
+    "test/host-tenure.test.ts": "01a344c8dbf3400b3b22900b07d28eb68d42e487926db34bb9b7435cc08a0949",
+    "test/interactive-host-ownership.test.mjs": "323832ba20a08276269b65615d13cfab59f0c9526ef1d136f22e48890703030e",
+    "test/interactive-startup.test.ts": "62e004f0716572f67f9dbc2e53c0ace9a72fe6b697086518324fb67c0bcf086a",
+    "test/model-effort.test.ts": "93ca772130a3111de2638fa92b3e40b210b6ad93f425f785bf92deac4a383f5c",
+    "test/oma-composition-policy.test.mjs": "3e85ca7aa6e6bda358c1182907569da61c676258745149549d7e774ec9e4ffde",
+    "test/p24-deployment-gates.test.ts": "60e958aaa58c4177de8cc019f6757869282dabf962cc5e4347b278fa32b74f0a",
+    "test/personal-engine-ownership.test.mjs": "f22bfa50b25341139e30b33411bc07488bc536056c061160ad5ad50587cbf0b9",
+    "test/personal-history-lifetime.test.ts": "509767aea87dea50840af9010ac27697bf26dbdc1a9cf11059841bfc7faa1a75",
+    "test/personal-session-ownership.test.mjs": "1af191a5031d5f514c90d9b31471d513356765e86805bcc432cf3602f407398d",
+    "test/pi-compat.test.ts": "b4b7d447924be4da2159be12695825c3b240ad98151a3f89d1d0df6534f368eb",
+    "test/pi-runtime.test.ts": "214255f38336b51425d1a0007ec41fec8b0eb7b2490e3297f32864eb57f6cdc1",
+    "test/pi-settings-platform.test.mjs": "4716b20affeafcba8f100ff5c8b6a19b3139a0d542b4ba606b01b193e25c3541",
+    "test/platform-packages.test.ts": "103029971ec4ac762c0d2fe9bbc368c98d98584a88eb1301566f6aa48a4f498f",
+    "test/principal-channel.test.ts": "5f334573f7c670a0b3dcce6b97e9598bdc9346e3af1280cbf4addc1468c58db5",
+    "test/principal-tools.test.ts": "868b4e5e03936fab677bcbc1889c1e524cc297426e9c6acd7219227b191612e9",
+    "test/project-snapshot.test.ts": "21355f9d416e1efc1475ad6b80cdcbf60974647fb45c185fd3630115347fa81e",
+    "test/public-validation-policy.test.mjs": "f97f55a6c13776f83dfee939a253e147eb8ec972e207772a83b5d56ff67693dd",
+    "test/r14-connection-lifecycle.test.ts": "9e462e461a83fe211510246caf6897ed7be4c1106b7713ad1e2ed0878b3c2c7e",
+    "test/relay-idle.test.mjs": "c9947bcdadb4406f252faa8f950b0551f4e9b8ab8e62698405535c1ccb6ab8fc",
+    "test/session-process-owner.test.mjs": "8a6bfdc7b4c5a5a888082771fc2d5ad532609eea32f79d5afd70840af48d2ce9",
+    "test/settlement-headroom.test.ts": "bf3a1d5fd85c976acbbb3dfae3c37090f5e24af023b931a36d7437bd75062969",
+    "test/society-preparation.test.ts": "b29ea86e36bd7dada391b7b5d84a26359f859843c004c61cdc73c10e4fef4089",
+    "test/storage-reservation.test.ts": "2a6de1e01aba491192af4225f56b739b984c0de44088baa9bcbba7f9d1579169"
+  },
+  "failuresFoundDuringRepair": [
+    {
+      "kind": "Human local clone imported private packed index/stash objects",
+      "fixedBy": "Git protocol clone; strengthened DR18 oracle"
+    },
+    {
+      "kind": "Quota observation changed sealed context directory 0555 to 0755 and wedged the next broker restart",
+      "observedKernelTotals": {
+        "tests": 65,
+        "passCount": 64,
+        "failed": 1
+      },
+      "logSha256": "2cab4c21863da175aac6847ea0640008a1abe237520cd4eee63a5930b0f74e8f",
+      "fixedBy": "Read/search-only observation repair; unchanged strict validator; native restart passed"
+    },
+    {
+      "kind": "Stale fixture API/async observation count and sync timeout refusal type; missing oma/cloc in test PATH",
+      "action": "Updated public API fixtures, restored sync refusal contract, installed isolated executable link for the test run; prior logs retained"
+    }
+  ],
+  "limitations": [
+    "Full first Society authority exceeds the requested 5-second limit; remains open.",
+    "Retained immutable package generations increase disk use until the installation owner can prove readers ended.",
+    "Static provenance rules do not prove arbitrary dynamic call targets; inherited unreviewed files are not silently approved.",
+    "macOS Virtualization.framework/APFS/Keychain/AF_VSOCK native validation NOT_RUN.",
+    "Paid-provider calls, VM power loss, host reboot and full release qualification NOT_RUN."
+  ]
+}

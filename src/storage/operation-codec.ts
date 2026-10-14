@@ -6,16 +6,24 @@ import type { Json } from "../../implementation/contracts/identity.js";
 import type { MessagePlan, MutationMethod } from "../../implementation/contracts/durable.js";
 import type { PublicMethods } from "../../implementation/contracts/public-wire.js";
 import {
-  operationPlanCheck, operationResultRelationCheck, resolvedSpecCheck,
+  ownedMessages, operationPlanCheck, operationResultRelationCheck, resolvedSpecCheck,
   type OperationPlanContext, type PlanFor, type RepositoryIdentity, type ResultFor,
 } from "../durable.js";
-import { isValidActor, isValidOperationId, isValidRequestKey } from "../domain/identifiers.js";
+import {
+  isValidActor, isValidOperationId, isValidRequestKey, isDerivedRequestKey,
+  applyRequestKeyFor, refreshKeyOrdinalOf,
+} from "../domain/identifiers.js";
 import type { Actor, OperationId, RequestKey } from "../domain/identifiers.js";
+import {
+  attestationTarget, attestationRelationProblem, reviewFactRelationProblem,
+  type ReviewRequestReference,
+} from "../domain/attestation-relations.js";
 import { snapshotJson, canonicalJson } from "../domain/canonical-json.js";
 import { resolvedSpecDigest } from "../domain/spec-identity.js";
 import { requestHash } from "../hash.js";
 import { StoreError, isErrorCode, isPreacceptOnlyFailure } from "../domain/errors.js";
 import { isMutationMethod } from "../protocol/receipt-codec.js";
+import { PUBLIC_METHODS } from "../protocol/methods.js";
 import { decodeMutationPayload } from "../protocol/request-codec.js";
 import { operationResultCheck } from "../validate.js";
 
@@ -38,10 +46,10 @@ const PLAN = Symbol("ValidatedOperationPlan");
 const OPERATION = Symbol("DecodedOperation");
 export type ValidatedPlan<K extends MutationMethod> = PlanFor<K> & { readonly [PLAN]: true };
 
-/** P1/P3-1: pure kind -> validator metadata. Every entry binds the same existing
- * checks this module already called; no new validation, effect, recovery
- * decision or state is introduced. The `satisfies` below is the compile-time
- * exhaustiveness gate: a new OperationPlan kind without its codec does not build.
+/** P1/P3-1: codec keys are derived from the public method registry. The mapped
+ * type retains its actual mutation keys, so `satisfies` independently rejects
+ * an OperationPlan kind with no registered mutation. Semantic plan, result and
+ * relation validators still have their own exhaustiveness checks.
  */
 export interface OperationCodec {
   readonly planCheck: (plan: unknown, context: OperationPlanContext) => string | null;
@@ -54,19 +62,12 @@ const codecFor = (kind: MutationMethod): OperationCodec => Object.freeze({
   relationsCheck: (plan: unknown, result: unknown, context: OperationPlanContext) =>
     operationResultRelationCheck(kind, plan, result, context),
 });
-export const OPERATION_CODECS = Object.freeze({
-  "mail.send": codecFor("mail.send"),
-  "agent.continue": codecFor("agent.continue"),
-  "mail.ack": codecFor("mail.ack"),
-  "route.follow": codecFor("route.follow"),
-  "route.unfollow": codecFor("route.unfollow"),
-  "agent.create": codecFor("agent.create"),
-  "agent.start": codecFor("agent.start"),
-  "agent.stop": codecFor("agent.stop"),
-  "git.submit": codecFor("git.submit"),
-  "git.integrate": codecFor("git.integrate"),
-  "context.publish": codecFor("context.publish"),
-}) satisfies Record<MutationMethod, OperationCodec>;
+type RegisteredCodecs = {
+  readonly [K in keyof typeof PUBLIC_METHODS as typeof PUBLIC_METHODS[K]["mode"] extends "mutation" ? K : never]: OperationCodec;
+};
+export const OPERATION_CODECS = Object.freeze(Object.fromEntries(
+  Object.keys(PUBLIC_METHODS).filter(isMutationMethod).map(kind => [kind, codecFor(kind)]),
+) as RegisteredCodecs) satisfies Record<MutationMethod, OperationCodec>;
 interface IdentityFields {
   readonly id: OperationId;
   readonly actor: Actor;
@@ -94,6 +95,8 @@ export interface OperationRelations {
   operation(id: string): unknown | null;
   agent(name: string): unknown | null;
   deliveries(operationId: string): readonly unknown[];
+  /** Required when decoding a DR27 fact; absent only in old v1 snapshots. */
+  attestation?(operationId: string): unknown | null;
 }
 export interface OperationDecodeContext {
   readonly stateRoot: string;
@@ -121,16 +124,50 @@ function sameSet(left: readonly string[], right: readonly string[]): boolean {
   const a = [...new Set(left)].sort(); const b = [...new Set(right)].sort();
   return a.length === b.length && a.every((value, index) => value === b[index]);
 }
-function ownMessage(plan: PlanFor<MutationMethod>): MessagePlan | null {
-  switch (plan.kind) {
-    case "mail.send": case "agent.continue": case "git.submit": case "context.publish": return plan.message;
-    case "agent.create": return plan.initialMessage;
-    default: return null;
-  }
-}
 function validatePayloadRelation(plan: PlanFor<MutationMethod>, payload: unknown): void {
   if (!record(payload)) corrupt("accepted payload is not an object");
   switch (plan.kind) {
+    case "society.set": if (plan.state !== payload.state) corrupt("society state differs from payload"); return;
+    case "attest.record":
+      if ("messages" in plan) {
+        const fact = plan.fact;
+        switch (fact.kind) {
+          case "merge.open":
+            if (!record(payload) || payload.kind !== "merge.open" || payload.tier !== fact.tier ||
+                payload.title !== fact.title || payload.reason !== fact.reason ||
+                payload.candidate !== fact.identity.candidate || payload.base !== fact.identity.expectedBase)
+              corrupt("merge request payload differs from frozen fact");
+            return;
+          case "challenge.open":
+            if (!record(payload) || payload.kind !== "challenge.open" || payload.merge !== fact.target.name ||
+                payload.tier !== fact.tier || payload.title !== fact.title || payload.reason !== fact.reason)
+              corrupt("challenge request payload differs from frozen fact");
+            if (fact.prepared !== (payload.candidate === undefined && payload.base === undefined))
+              corrupt("challenge preparation differs from payload");
+            if (payload.candidate !== undefined &&
+                (payload.candidate !== fact.identity.candidate || payload.base !== fact.identity.expectedBase))
+              corrupt("challenge identity differs from payload");
+            return;
+          case "review":
+            if (!record(payload) || payload.kind !== "review" || payload.body !== fact.body)
+              corrupt("review payload differs from frozen fact");
+            return;
+          case "vote":
+            if (!record(payload) || payload.kind !== "vote" || payload.verdict !== fact.verdict ||
+                payload.body !== fact.body || fact.approval !== (payload.approval ?? null))
+              corrupt("vote payload differs from frozen fact");
+            return;
+          case "cancel":
+            if (!record(payload) || payload.kind !== "cancel" || payload.reason !== fact.reason)
+              corrupt("cancel payload differs from frozen fact");
+            return;
+          case "refresh":
+            if (!same(payload, fact)) corrupt("refresh payload differs from frozen fact");
+            return;
+        }
+      }
+      if (!same(plan.fact, payload)) corrupt("attestation differs from its authenticated request");
+      return;
     case "mail.send": {
       if (plan.message.kind !== payload.kind || !same(plan.message.approvalFor ?? null, payload.approvalFor ?? null)) corrupt("mail kind/approval identity differs from payload");
       const to = payload.to as string[];
@@ -149,6 +186,10 @@ function validatePayloadRelation(plan: PlanFor<MutationMethod>, payload: unknown
       return;
     case "git.integrate":
       if (plan.candidate !== payload.candidate || plan.base !== payload.expected) corrupt("integrate base/candidate differs from payload");
+      if (plan.merge !== undefined) {
+        if (payload.tier !== plan.merge.tier) corrupt("merge tier differs from payload");
+      } else if (plan.publication ? plan.publication.tiered.requested !== (payload.tier ?? "LOW") : payload.tier !== undefined)
+        corrupt("integration tier request differs from its accepted policy");
       return;
     case "git.submit": {
       if (plan.candidate !== payload.candidate || plan.exportRef !== payload.exportRef || !sameSet(plan.prerequisites, payload.prerequisites as string[])) corrupt("submit identity differs from payload");
@@ -161,6 +202,7 @@ function validatePayloadRelation(plan: PlanFor<MutationMethod>, payload: unknown
       return;
     }
     case "context.publish": {
+      if (!same(plan.goalMail ?? null, payload.goalMail ?? null)) corrupt("GOAL mail differs from its explicit accepted intent");
       if (plan.base !== payload.expected || !same(plan.entries, payload.entries)) corrupt("context frozen base/entries differ from payload");
       if (!record(payload.content)) corrupt("context content descriptor is missing");
       const total = plan.entries.reduce((sum, entry) => sum + entry.bytes, 0);
@@ -169,18 +211,23 @@ function validatePayloadRelation(plan: PlanFor<MutationMethod>, payload: unknown
     }
   }
 }
-function validateDeliveries(id: string, message: MessagePlan | null, rows: readonly unknown[]): void {
-  if (message === null) {
+function validateDeliveries(id: string, messages: readonly MessagePlan[], rows: readonly unknown[]): void {
+  if (messages.length === 0) {
     if (rows.length !== 0) corrupt("operation without an owned message has delivery rows");
     return;
   }
-  const recipients = new Set<string>();
+  const seen = new Set<string>();
   for (const raw of rows) {
-    if (!record(raw) || raw.operation_id !== id || raw.message_id !== message.id || !isValidActor(raw.recipient)) corrupt("delivery identity differs from operation/message");
-    if (recipients.has(raw.recipient) || !message.recipients.includes(raw.recipient)) corrupt("duplicate or extra delivery recipient");
-    recipients.add(raw.recipient);
+    if (!record(raw) || raw.operation_id !== id || !isValidActor(raw.recipient)) corrupt("delivery identity differs from operation/message");
+    const message = messages.find(candidate => candidate.id === raw.message_id);
+    if (message === undefined || !message.recipients.includes(raw.recipient)) corrupt("duplicate or extra delivery recipient");
+    const delivery = `${raw.message_id as string}/${raw.recipient}`;
+    if (seen.has(delivery)) corrupt("duplicate or extra delivery recipient");
+    seen.add(delivery);
   }
-  if (recipients.size !== message.recipients.length || message.recipients.some(recipient => !recipients.has(recipient))) corrupt("delivery rows do not match the frozen recipient set");
+  for (const message of messages)
+    for (const recipient of message.recipients)
+      if (!seen.has(`${message.id}/${recipient}`)) corrupt("delivery rows do not match the frozen recipient set");
 }
 
 /** All identity facts and relational observations are required arguments. No
@@ -193,7 +240,9 @@ export function decodeOperation(raw: unknown, context: OperationDecodeContext): 
     if (!record(value)) corrupt("operation row is not an object");
     const keys = ["id", "actor", "request_key", "request_hash", "kind", "payload_json", "plan_json", "state", "result_json", "error_code", "created_at_ms", "updated_at_ms"];
     if (Object.keys(value).length !== keys.length || keys.some(key => !Object.hasOwn(value, key))) corrupt("operation row has missing or unknown columns");
-    if (!isValidOperationId(value.id) || !isValidActor(value.actor) || !isValidRequestKey(value.request_key) || typeof value.request_hash !== "string" || !/^[0-9a-f]{64}$/.test(value.request_hash) || !isMutationMethod(value.kind)) corrupt("operation identity is invalid");
+    if (!isValidOperationId(value.id) || !isValidActor(value.actor) ||
+        (!isValidRequestKey(value.request_key) && !isDerivedRequestKey(value.request_key)) ||
+        typeof value.request_hash !== "string" || !/^[0-9a-f]{64}$/.test(value.request_hash) || !isMutationMethod(value.kind)) corrupt("operation identity is invalid");
     if (typeof value.payload_json !== "string" || typeof value.plan_json !== "string" || !safeInteger(value.created_at_ms) || !safeInteger(value.updated_at_ms)) corrupt("operation JSON/timestamps are invalid");
     if (value.state !== "pending" && value.state !== "unknown" && value.state !== "succeeded" && value.state !== "failed") corrupt("operation state is invalid");
     if (active.has(value.id)) corrupt("existingCreation cycle detected");
@@ -219,7 +268,86 @@ export function decodeOperation(raw: unknown, context: OperationDecodeContext): 
       // operation-context checks. Workflow code consumes the returned union.
       const plan = planRaw as PlanFor<MutationMethod>;
       validatePayloadRelation(plan, payload);
-      validateDeliveries(value.id, ownMessage(plan), context.relations.deliveries(value.id));
+      validateDeliveries(value.id, ownedMessages(plan), context.relations.deliveries(value.id));
+      // Broker-derived keys exist only for a merge plan's apply or a refresh fact.
+      const mergePlan = plan.kind === "git.integrate" ? plan.merge : undefined;
+      const refreshFact = plan.kind === "attest.record" && "messages" in plan && plan.fact.kind === "refresh"
+        ? plan.fact : undefined;
+      if (mergePlan !== undefined) {
+        if (value.request_key !== applyRequestKeyFor(mergePlan.request)) corrupt("merge integration requires its derived apply key");
+      } else if (refreshFact !== undefined) {
+        if (refreshKeyOrdinalOf(value.request_key, refreshFact.request) === null)
+          corrupt("refresh fact requires its derived request key");
+      } else if (isDerivedRequestKey(value.request_key)) {
+        corrupt("a derived request key belongs only to a merge plan or refresh fact");
+      }
+      if (plan.kind === "attest.record") {
+        const index = context.relations.attestation?.(value.id);
+        if (!record(index) || Object.keys(index).length !== 2 || index.operation_id !== value.id ||
+            !safeInteger(index.sequence) || index.sequence < 1) corrupt("attestation acceptance index is missing or invalid");
+        const targetId = attestationTarget(plan.fact);
+        const targetRaw = targetId === null ? null : context.relations.operation(targetId);
+        const target = targetRaw === null ? null : decode(targetRaw);
+        if (target?.kind === "attest.record") {
+          const earlier = context.relations.attestation?.(target.id);
+          if (!record(earlier) || !safeInteger(earlier.sequence) || earlier.sequence >= index.sequence)
+            corrupt("attestation reference is not earlier in acceptance order");
+        }
+        if ("messages" in plan) {
+          const fact = plan.fact;
+          const request: ReviewRequestReference | null = target === null ? null : {
+            actor: target.actor,
+            open: target.kind === "attest.record" && "messages" in target.plan &&
+              (target.plan.fact.kind === "merge.open" || target.plan.fact.kind === "challenge.open")
+              ? target.plan.fact : null,
+          };
+          const problem = reviewFactRelationProblem(value.actor, fact, request);
+          if (problem !== null) corrupt(problem);
+          if (request !== null && request.open !== null) {
+            // An open fact's messages name the new request itself; every other
+            // fact's name the request it references.
+            const isOpen = fact.kind === "merge.open" || fact.kind === "challenge.open";
+            const open = isOpen ? fact : request.open;
+            const requestId = isOpen ? value.id : fact.request;
+            const named = (payload as { name?: unknown }).name;
+            if ((fact.kind === "review" || fact.kind === "vote" || fact.kind === "cancel") && named !== open.name)
+              corrupt("review payload names a different request");
+            for (const message of plan.messages) {
+              if (message.review === undefined || message.review.name !== open.name || message.review.request !== requestId)
+                corrupt("review message differs from its request");
+              if (message.review.role === "approval" && !same(message.approvalFor ?? null, open.identity))
+                corrupt("approval mail names a different candidate identity");
+            }
+            // A succeeded review result names the request's frozen name.
+            const result = value.state === "succeeded" && typeof value.result_json === "string"
+              ? json(value.result_json, "operation result") : null;
+            if (record(result) && typeof result.request === "string" && result.request !== open.name)
+              corrupt("review attestation result names a different request");
+          }
+        } else {
+          const reference = target === null ? null : { actor: target.actor,
+            fact: target.kind === "attest.record" && !("messages" in target.plan) ? target.plan.fact : null,
+            integrated: target.kind === "git.integrate" && target.state === "succeeded" ? {
+              repo: target.plan.repo, targetRef: target.plan.target, expectedBase: target.plan.base,
+              candidate: target.plan.candidate, policyRevision: target.plan.policyRevision,
+            } : null };
+          const problem = attestationRelationProblem(value.actor, plan.fact, reference);
+          if (problem !== null) corrupt(problem);
+        }
+      }
+      if (plan.kind === "git.integrate" && plan.merge !== undefined) {
+        const requestRaw = context.relations.operation(plan.merge.request);
+        const request = requestRaw === null ? null : decode(requestRaw);
+        if (request === null || request.kind !== "attest.record" || !("messages" in request.plan) ||
+            (request.plan.fact.kind !== "merge.open" && request.plan.fact.kind !== "challenge.open"))
+          corrupt("merge integration names no review request");
+        const open = request.plan.fact;
+        if (request.actor !== value.actor) corrupt("merge integration actor differs from its requester");
+        if (open.name !== plan.merge.name || open.tier !== plan.merge.tier ||
+            open.identity.expectedBase !== plan.base || open.identity.candidate !== plan.candidate ||
+            open.identity.policyRevision !== plan.policyRevision)
+          corrupt("merge integration identity differs from its request");
+      }
       if (plan.kind === "agent.create") {
         const agent = context.relations.agent(plan.spec.name);
         if (!record(agent) || agent.name !== plan.spec.name || agent.profile !== plan.spec.profile || agent.spec_hash !== plan.specHash || agent.role !== "resident" || typeof agent.spec_json !== "string") corrupt("create agent/spec row identity mismatch");

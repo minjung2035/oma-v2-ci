@@ -22,10 +22,18 @@ const vectors = {
   'git.submit': { candidate: oid, exportRef: 'refs/oma/export/cli-example', prerequisites: [], to: [], subject: 'result', body: 'body', paths: [] },
   'git.integrate': { candidate: oid, expected: oid },
   'context.publish': { expected: null, entries: [{ path: 'GOAL.md', bytes: 3, sha256: digest }], content: { bytes: 3, sha256: digest, mediaType: 'application/vnd.oma.context-v1' } },
-  'operation.get': { key: 'existing-request' }, 'status.get': { agent: 'bob' },
+  'operation.get': { key: 'existing-request' },
+  'operation.read': { key: 'existing-request', offset: 3, sha256: digest },
+  'status.get': { agent: 'bob' },
   'logs.read': { agent: 'bob', sinceSeconds: 1 },
 };
-for (const [method, params] of Object.entries(vectors)) {
+// DR27 additions are separate from the historical vectors and canonical bytes.
+const additions = {
+  'society.set': { state: 'closed' },
+  'attest.record': { kind: 'peer', identity: { repo: 'project', targetRef: 'refs/heads/main', expectedBase: oid, candidate: oid, policyRevision: 'p1' }, verdict: 'APPROVE', evidence: 'Exact candidate reviewed' },
+  'review.status': { name: 'merge-1a2b3c4d' },
+};
+for (const [method, params] of Object.entries({ ...vectors, ...additions })) {
   test(`P2 wire golden: ${method} retains values and rejects extra fields`, () => {
     const before = JSON.stringify(params);
     assert.deepEqual(decodePublicParams(method, params, context), params);
@@ -34,9 +42,9 @@ for (const [method, params] of Object.entries(vectors)) {
   });
 }
 test('P2 wire golden: closed public/internal vocabularies and canonical bytes stay v1', () => {
-  assert.deepEqual(Object.keys(PUBLIC_METHODS).sort(), Object.keys(vectors).sort());
+  assert.deepEqual(Object.keys(PUBLIC_METHODS).sort(), Object.keys({ ...vectors, ...additions }).sort());
   assert.deepEqual(Object.keys(INTERNAL_METHODS).sort(), [
-    'batch.complete', 'batch.prepare', 'batch.read', 'host.principalRelay', 'host.reconcile',
+    'batch.complete', 'batch.prepare', 'batch.read', 'host.principalRelay',
     'principal.attach', 'principal.detach', 'runner.observe', 'runner.open', 'runner.pending',
   ]);
   assert.equal(canonicalJson({ method: 'mail.send', params: vectors['mail.send'] }),

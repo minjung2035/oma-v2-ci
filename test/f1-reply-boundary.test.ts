@@ -62,7 +62,7 @@ function fixture() {
   const unused = (): never => {
     throw new Error("unrelated fixture effect");
   };
-  const dispatcher = new PublicDispatcher({
+  const dispatcher = new PublicDispatcher({ waitRun: () => { throw new Error("no live run in this fixture"); },
     store: {
       listAgents: () => store.listAgents(),
       getAgent: (actor) => store.getAgent(actor),
@@ -73,7 +73,7 @@ function fixture() {
       hasOperation: (actor, key) => store.getOperation(actor, key) !== null,
     },
     mail,
-    units: { observe: unused },
+    units: { statusSnapshot: unused },
     views: { status: unused },
     git: null,
     lifecycle: {
@@ -86,6 +86,7 @@ function fixture() {
     limits,
     isDraining: () => false,
     assertAdmission: () => gate.assertAdmission(),
+    admitResource: () => () => undefined,
     refreshViews() {},
     readLogs: async () => unused(),
     failureAnswer: (id, error) => {
@@ -121,7 +122,7 @@ function fixture() {
       const original = generateOperationId();
       const linked = generateOperationId();
       const spec = makeValidResolvedSpec("bob");
-      const message = await mail.freezeCreateInitial(
+      const { message } = await mail.freezeCreateInitial(
         auth,
         original,
         "bob",

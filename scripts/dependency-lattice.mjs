@@ -1,7 +1,7 @@
 /** P5 coarse dependency DAG, refined inside L1 by kernel-zones.mjs (P13).
  * Runtime imports may stay in a layer or point downward; all runtime cycles fail.
- * Erased type cycles are reported separately and only fail across coarse layers.
- * Store/facet type-only relations deliberately retain their authoritative owner.
+ * Erased type cycles fail too: capability declarations do not refer back to their composition.
+ * Store capabilities point toward decoded values, never back to SQLite composition.
  * New files outside these prefixes fail rather than escaping the lattice.
  */
 const INTERNAL_PORT_PREFIXES = ["src/ports/", "src/module-ports.ts"];
@@ -45,9 +45,17 @@ const LAYERS = Object.freeze([
       "src/protocol/",
       "src/storage/",
       "src/cli/cache-codec.ts",
+      "src/cli/request-intent.ts",
+      "src/client/",
       "src/mail/addresses.ts",
       "src/mail/facts.ts",
       "src/mail/headers.ts",
+      // Bound floors and thread-body measurements: pure leaf policy the
+      // config schema validates against, like the mail leaves above.
+      "src/mail/review-bounds.ts",
+      // The confined Resident's path tables and host/inside translations:
+      // pure policy the config schema and lifecycle mounts both read.
+      "src/resident-paths.ts",
       "src/store.ts",
     ],
   },
@@ -64,6 +72,7 @@ const LAYERS = Object.freeze([
   {
     name: "L3-workflow",
     prefixes: [
+      "src/attestation.ts",
       "src/mail/",
       "src/mail.ts",
       "src/git/",
@@ -75,6 +84,8 @@ const LAYERS = Object.freeze([
       "src/views/",
       "src/views.ts",
       "src/reconcile/",
+      "src/review.ts",
+      "src/review/",
     ],
   },
   {
@@ -84,18 +95,32 @@ const LAYERS = Object.freeze([
       "src/broker/",
       "src/broker.ts",
       "src/runtime/",
+      // Pi-version-sensitive integration points (A7): the wire union, the
+      // settings bridge and the ambient surface the engine gives OMA.
+      "src/pi-compat/",
+      "src/cli/effects.ts",
+      "src/cli/effects/",
       "src/runner.ts",
       "src/sandbox.ts",
+      // macOS host and hidden-VM guest services (docs/macos-platform.md):
+      // they compose runtime pieces the way the entries do, below the entries.
+      "src/platform/",
     ],
   },
   {
     name: "L5-entry",
     prefixes: [
       "src/entry/",
+      "src/application/",
       "src/cli/",
       "src/cli.ts",
+      // The product surface is an entry surface, like the model-facing CLI: it
+      // consumes lower layers and nothing below it imports the TUI.
+      "src/tui/",
       "src/pi-extension.ts",
-      "src/rpc-client.ts",
+      // The trusted extension's parts; the entry above composes them and the
+      // extension-closure rule keeps them free of OMA runtime imports.
+      "src/extension/",
     ],
   },
 ]);
@@ -141,21 +166,18 @@ export function latticeFindings(edges, files, layers = LAYERS) {
   return findings;
 }
 
-/** A cycle is only an architecture finding when it spans two layers, i.e. when
- * two ownership units reference each other. A cycle inside one layer is one
- * mechanism referencing itself. */
+/** Both runtime and erased type cycles obscure ownership, including within a layer. */
 export function cycleFindings(groups, layers = LAYERS) {
   const findings = [];
   for (const group of groups) {
     const names = new Set(
       group.map((file) => layerOf(file, layers)?.name ?? "unclassified"),
     );
-    if (names.size > 1)
-      findings.push({
-        rule: "type-import-cycle",
-        file: group[0],
-        reason: `Runtime/type import SCC crosses ${[...names].sort().join(", ")}: ${group.join(" -> ")}`,
-      });
+    findings.push({
+      rule: "type-import-cycle",
+      file: group[0],
+      reason: `Runtime/type import SCC in ${[...names].sort().join(", ")}: ${group.join(" -> ")}`,
+    });
   }
   return findings;
 }

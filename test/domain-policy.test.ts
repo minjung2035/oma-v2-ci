@@ -5,6 +5,7 @@ import { CAPABILITIES, isCapability } from "../src/domain/capabilities.js";
 import { RESOURCE_FIELDS, resourceLimitsCheck } from "../src/domain/resources.js";
 import { PROTOCOL_LIMIT_FIELDS, protocolLimitsCheck } from "../src/domain/limits.js";
 import { capabilitiesOf, resolvedSpecOf } from "../src/authority.js";
+import { resolvedSpecDigest } from "../src/domain/spec-identity.js";
 import { StoreError } from "../src/store.js";
 import { ALL_CAPS, resolvedSpec } from "./fixtures/spec.js";
 
@@ -40,13 +41,15 @@ for (const [title, fields, expectedUnits, check] of [
     assert.deepEqual(Object.keys(fields), Object.keys(expectedUnits));
     const one = Object.fromEntries(Object.keys(expectedUnits).map((key) => [key, 1]));
     assert.equal(check(one), null, "minimum valid control");
-    assert.equal(check(Object.fromEntries(Object.keys(expectedUnits).map((key) => [key, Number.MAX_SAFE_INTEGER]))), null);
+    const maxima = Object.fromEntries(Object.entries(fields).map(([key, field]) =>
+      [key, "maxInclusive" in field ? field.maxInclusive : Number.MAX_SAFE_INTEGER]));
+    assert.equal(check(maxima), null, "declared maximum valid control");
     const units = Object.fromEntries(Object.entries(fields).map(([key, field]) => [key, field.unit]));
     assert.deepEqual(units, expectedUnits);
     for (const [key, field] of Object.entries(fields)) {
-      assert.equal(field.minInclusive, 1);
+      assert.equal(field.minInclusive, title === "resources" ? 0 : 1);
       assert.equal(Object.isFrozen(field), true);
-      for (const value of [-1, 0, 0.5, NaN, Infinity, Number.MAX_SAFE_INTEGER + 1, "1", null, undefined])
+      for (const value of [-1, ...(title === "resources" ? [] : [0]), 0.5, NaN, Infinity, Number.MAX_SAFE_INTEGER + 1, "1", null, undefined])
         assert.notEqual(check({ ...one, [key]: value }), null, `${key} must reject ${String(value)}`);
       const missing = { ...one };
       delete missing[key];
@@ -65,12 +68,12 @@ const SPEC_BYTES = '{"name":"alice","modelProfile":"md","resources":{"memoryByte
 
 test("R02: policy deduplication preserves resolved-spec bytes and does not grant by role", () => {
   assert.equal(resolvedSpec(ALL_CAPS, "p", "alice"), SPEC_BYTES);
-  const agent = { name: "alice", profile: "p", specJson: SPEC_BYTES };
+  const agent = { name: "alice", profile: "p", specJson: SPEC_BYTES, specHash: resolvedSpecDigest(JSON.parse(SPEC_BYTES)) };
   assert.deepEqual(resolvedSpecOf(agent), JSON.parse(SPEC_BYTES));
   assert.deepEqual([...capabilitiesOf(agent)], EXPECTED_CAPABILITIES);
   assert.equal(capabilitiesOf({ specJson: resolvedSpec([], "p", "principal") }).size, 0);
   const value = JSON.parse(SPEC_BYTES);
-  value.resources.tasks = 0;
+  value.resources.tasks = -1;
   const invalid = { ...agent, specJson: JSON.stringify(value) };
   // MAINTENANCE §10: corruption is not an empty permission set. Both readers
   // fail closed instead of degrading a corrupt durable spec to "no rights".

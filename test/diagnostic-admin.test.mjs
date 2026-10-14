@@ -76,6 +76,11 @@ test("P6 admin: command budget and invalid method/ref requests cannot become suc
   const noCommands = createDiagnosticObservers(context, { invoke() { throw new Error("must not execute"); } });
   assert.equal(noCommands.git.ref(repo.repo, "--evil").kind, "unknown");
   assert.equal(noCommands.git.commit(repo.repo, "bad\nobject").kind, "unknown");
+  for (const pair of [["--evil", repo.candidate], [repo.candidate, "bad\nobject"]]) {
+    const observation = noCommands.git.ancestry(repo.repo, ...pair);
+    assert.equal(observation.kind, "unknown");
+    assert.equal(observation.evidence.status, null);
+  }
   assert.equal(noCommands.commands, 0);
 });
 test("P6 admin: canonical context tree byte/path relations are read from real Git objects", t => {

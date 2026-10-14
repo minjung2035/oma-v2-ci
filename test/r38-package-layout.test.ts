@@ -35,7 +35,7 @@ test("R38: layout-only fixture detects missing raw SQL, template, wrong root and
     for (const path of paths) populate(path);
     assert.doesNotThrow(() => assertRuntimeAssets(assets, { schema: assets.schema, systemd: assets.systemd }));
     assert.throws(() => assertRuntimeAssets(assets, { schema: join(root, "wrong.sql"), systemd: assets.systemd }), { code: "UNSUPPORTED_PROFILE" });
-    for (const missing of [assets.schema, join(assets.systemd, "broker.service.in"), assets.entries.runner]) {
+    for (const missing of [assets.schema, join(assets.systemd, "resident.service.in"), ...Object.values(assets.entries)]) {
       rmSync(missing);
       assert.throws(() => assertRuntimeAssets(assets, { schema: assets.schema, systemd: assets.systemd }), { code: "UNSUPPORTED_PROFILE" });
       populate(missing);

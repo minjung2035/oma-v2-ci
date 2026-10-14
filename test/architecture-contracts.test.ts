@@ -79,6 +79,25 @@ test("native Set.add used for truthiness is rejected, including a local alias of
   rejects("set-add-membership", { "src/bad.ts": `const seen = new Set<string>(); const alias = seen; if (!alias.add("x")) throw new Error();` });
 });
 
+test("set-add-membership fires on aliased callees -- the resolved signature, not the accessed name, decides", () => {
+  // A callee that resolves to Set.add's declaration under another name is the
+  // same misuse spelled differently: no syntactic name gate may stand between
+  // the boolean-position test and the signature resolution.
+  const output = fixture({ "src/bad.ts": [
+    `declare const box: { foo: Set<string>["add"] };`,
+    `const direct = new Set<string>();`,
+    `const obj = { m: new Set<string>().add };`,
+    `if (direct.add("c")) {}`,
+    `if (box.foo("a")) {}`,
+    `if (obj.m("z")) {}`,
+    `if (box["foo"]("b")) {}`,
+    ``,
+  ].join("\n") });
+  assert.equal(output.status, 1);
+  const fired = output.findings.filter(finding => finding.rule === "set-add-membership");
+  assert.deepEqual(fired.map(finding => finding.line), [4, 5, 6, 7], JSON.stringify(output.findings));
+});
+
 test("executable capability, method, identifier, resource and limit schema copies are rejected", () => {
   rejects("duplicate-capability-schema", {
     "src/domain/capabilities.ts": capabilityOwner,
@@ -100,11 +119,11 @@ test("executable capability, method, identifier, resource and limit schema copie
   };
   accepts({
     "src/domain/identifiers.ts": `export const NAME_RE = /^[a-z]{1,8}$/; export const OP_RE = /^op-[0-9a-f]{8}$/;`,
-    "src/pi-extension.ts": `const NAME = /^[a-z]{1,8}$/;`,
+    "src/extension/batch-view.ts": `const NAME = /^[a-z]{1,8}$/;`,
   });
   rejects("duplicate-id-schema", {
     "src/domain/identifiers.ts": `export const NAME_RE = /^[a-z]{1,8}$/; export const OP_RE = /^op-[0-9a-f]{8}$/;`,
-    "src/pi-extension.ts": `const NAME = /^[a-z]{1,8}$/; const WEAK = /^op-[0-9a-f]{2}$/;`,
+    "src/extension/batch-view.ts": `const NAME = /^[a-z]{1,8}$/; const WEAK = /^op-[0-9a-f]{2}$/;`,
   });
   const contracts = `export interface ResourceLimits {cpu: number; memory: number; tasks: number}
     export interface ProtocolLimits {frame: number; body: number; files: number}`;
@@ -158,17 +177,19 @@ test("transaction analysis follows local call aliases and rejects filesystem and
   assert.equal(positive.status, 0, JSON.stringify(positive.findings));
 });
 
-test("runtime SCCs are rejected while type-only cycles do not form runtime edges", () => {
+test("runtime and type-only SCCs are rejected by their own dependency rules", () => {
   rejects("runtime-import-cycle", {
     "src/a.ts": `import {b} from "./b.js"; export const a = () => b;`,
     "src/b.ts": `import {a} from "./a.js"; export const b = () => a;`,
   });
-  const positive = fixture({
-    // A type-only cycle inside one measured layer is not a runtime coupling.
+  const types = fixture({
     "src/domain/canonical-json.ts": `import type {B} from "./spec-identity.js"; export interface A {b: B}`,
     "src/domain/spec-identity.ts": `import type {A} from "./canonical-json.js"; export interface B {a: A}`,
   });
-  assert.equal(positive.status, 0, JSON.stringify(positive.findings));
+  assert.notEqual(types.status, 0);
+  assert.ok(types.findings.some(finding => finding.rule === "type-import-cycle"), JSON.stringify(types.findings));
+  assert.equal(types.findings.some(finding => finding.rule === "runtime-import-cycle"), false,
+    "type-only imports were incorrectly counted as runtime effects");
 });
 
 function registryFixture(missingResult: boolean): Record<string, string> {

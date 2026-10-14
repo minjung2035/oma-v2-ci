@@ -55,3 +55,14 @@ test("wire and durable manifests share path ordering and overflow rules without 
   assert.notEqual(checkWire({ ...payload, content: { ...payload.content, bytes: 11 } }), null);
   assert.equal(JSON.stringify(payload), before);
 });
+
+
+test("DR27: explicit GOAL mail meets the mail body bound before stream admission", () => {
+  const payload = { expected: null, entries, content: { bytes: 12, sha256: SHA, mediaType: "application/vnd.oma.context-v1" } };
+  const check = contextPublishParamsCheck({ ...limits, mailBodyBytes: 4 });
+  assert.equal(check(payload), null, "ordinary context files retain the context bound");
+  assert.match(check({ ...payload, goalMail: { subject: "Goal" } })!, /mail limit/);
+  assert.equal(contextPublishParamsCheck({ ...limits, mailBodyBytes: 5 })({ ...payload, goalMail: { subject: "Goal" } }), null);
+  for (const subject of ["Goal\rInjected", "Goal\nInjected"])
+    assert.match(contextPublishParamsCheck(limits)({ ...payload, goalMail: { subject } })!, /CR\/LF/);
+});

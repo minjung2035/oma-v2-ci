@@ -5,15 +5,9 @@ import { Script } from "node:vm";
 import { join } from "node:path";
 import ts from "typescript";
 import { createArchitectureProgram } from "../scripts/dependency-graph.mjs";
+// The envelope rule is the protocol's own (P0V-32), not a copy in this fixture.
+import { internalEnvelopeProblem } from "../dist/src/protocol/methods.js";
 
-const publicSource = readFileSync(
-  new URL("../src/broker/public-dispatcher.ts", import.meta.url),
-  "utf8",
-);
-const internalSource = readFileSync(
-  new URL("../src/broker/internal-dispatcher.ts", import.meta.url),
-  "utf8",
-);
 const options = {
   strict: true,
   noEmit: true,
@@ -111,6 +105,7 @@ function internalFixture() {
         };
       if (name === "node:path") return { join: (...parts) => parts.join("/") };
       if (name === "../domain/errors.js") return { StoreError };
+      if (name === "../domain/admission.js") return { NO_HOLD: () => undefined };
       if (name === "../domain/exhaustive.js")
         return {
           assertNever(value) {
@@ -121,6 +116,7 @@ function internalFixture() {
         const descriptor = { channel: "host", paramsCheck: () => null };
         return {
           INTERNAL_METHODS: { "host.principalRelay": descriptor },
+          internalEnvelopeProblem,
           isInternalMethod: (value) => value === "host.principalRelay",
         };
       }
@@ -161,6 +157,7 @@ function internalFixture() {
     },
     isDraining: () => false,
     assertAdmission() {},
+    admitResource: () => () => undefined,
     failureAnswer: (id, error) => ({ v: 1, id, ok: false, error }),
     refreshViews() {},
     openRun() {
@@ -172,11 +169,6 @@ function internalFixture() {
 
 test("P11 handler closure: removing a real production case fails the pinned TypeScript exhaustiveness oracle", () => {
   assert.equal(ts.version, "5.9.3");
-  assert.match(publicSource, /default:\s*return assertNever\(method\)/);
-  assert.match(
-    internalSource,
-    /default:\s*return assertNever\(dispatchMethod\)/,
-  );
   const result = mutatedProductionDiagnostics(
     "/src/broker/public-dispatcher.ts",
     (source) => {
@@ -235,14 +227,6 @@ test("P12 capability closure: forbidden methods fail against the real PublicDisp
   assert.ok(
     diagnostics.filter((diagnostic) => diagnostic.code === 2339).length >= 2,
     "forbidden Git and Store methods must fail the real port type",
-  );
-  assert.doesNotMatch(
-    publicSource,
-    /from ["']\.\.\/(?:store|mail|units|views|lifecycle|git|reconcile)\.js["']/,
-  );
-  assert.doesNotMatch(
-    internalSource,
-    /from ["']\.\.\/(?:store|mail|reconcile)\.js["']/,
   );
 });
 

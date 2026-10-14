@@ -2,6 +2,8 @@ import type { AuthContext } from "../../implementation/contracts/runtime.js";
 import type { MessageId } from "../../implementation/contracts/identity.js";
 import type { Receipt } from "../../implementation/contracts/durable.js";
 import { Store, reused } from "../store.js";
+import { ownedMessages } from "../durable.js";
+import { parseMessageId } from "../domain/identifiers.js";
 import { StoreError } from "../domain/errors.js";
 import { assertActorIdentity, assertCurrentActor } from "../authority.js";
 import { generateOperationId } from "../ids.js";
@@ -20,7 +22,7 @@ export class RegistryOperations {
     assertActorIdentity(this.store, auth);
     const hash = requestHash("mail.ack", { message });
     const claim = this.store.operations.classifyKey(auth.actor, key, hash);
-    if (claim === "retry") return receiptOfOperation(this.store.operations.get(auth.actor, key)!);
+    if (claim === "retry") return receiptOfOperation(this.store.retriedOperation(auth.actor, key));
     if (claim === "reused") throw reused(auth.actor, key);
     const id = generateOperationId();
     const outcome = this.store.transaction(tx => {
@@ -28,13 +30,19 @@ export class RegistryOperations {
       const accepted = tx.operations.accept({ id, actor: auth.actor, requestKey: key, requestHash: hash, kind: "mail.ack",
         payloadJson: JSON.stringify({ message }), planJson: JSON.stringify({ kind: "mail.ack", recipient: auth.actor, message }) });
       if (accepted === "retry") return accepted;
-      if (!this.store.deliveries.get(message, auth.actor))
-        throw new StoreError("REQUEST_NOT_FOUND", `no delivery of ${message} to ${auth.actor}`);
+      if (!this.store.deliveries.get(message, auth.actor)) {
+        const identity = parseMessageId(message);
+        const operation = identity === null ? null : this.store.operations.getById(identity.operationId);
+        const named = operation === null ? undefined : ownedMessages(operation.plan).find(candidate => candidate.id === message);
+        throw new StoreError("REQUEST_NOT_FOUND", named !== undefined
+          ? `${message} was not addressed to ${auth.actor}; acknowledge a message delivered to your own inbox`
+          : `message ${message} does not exist in this society; use the Message-ID of a message in your own inbox`);
+      }
       tx.deliveries.acknowledge(message, auth.actor);
       tx.operations.succeed(id, JSON.stringify({ kind: "mail.ack", message, acknowledged: true }));
       return accepted;
     });
-    return outcome === "retry" ? receiptOfOperation(this.store.operations.get(auth.actor, key)!) : lifecycleReceipt(this.store, id);
+    return outcome === "retry" ? receiptOfOperation(this.store.retriedOperation(auth.actor, key)) : lifecycleReceipt(this.store, id);
   }
 
   follow(auth: AuthContext, topic: string, subscribe: boolean, key: string): Receipt {
@@ -42,8 +50,13 @@ export class RegistryOperations {
     const kind = subscribe ? "route.follow" : "route.unfollow";
     const hash = requestHash(kind, { topic });
     const claim = this.store.operations.classifyKey(auth.actor, key, hash);
-    if (claim === "retry") return receiptOfOperation(this.store.operations.get(auth.actor, key)!);
+    if (claim === "retry") return receiptOfOperation(this.store.retriedOperation(auth.actor, key));
     if (claim === "reused") throw reused(auth.actor, key);
+    // MAIL-001/002 (DR18): topics are the Residents'. A topic's mail goes to
+    // the Residents that follow it and to no one else, so a follow by anyone
+    // else would be a subscription that delivers nothing -- refused, not kept.
+    if (auth.role !== "resident")
+      throw new StoreError("CAPABILITY_DENIED", "topics are followed by Residents; the Principal receives the mail addressed to it");
     const id = generateOperationId();
     const outcome = this.store.transaction(tx => {
       assertCurrentActor(this.store, auth);
@@ -54,6 +67,6 @@ export class RegistryOperations {
       tx.operations.succeed(id, JSON.stringify({ kind, topic, subscribed: subscribe }));
       return accepted;
     });
-    return outcome === "retry" ? receiptOfOperation(this.store.operations.get(auth.actor, key)!) : lifecycleReceipt(this.store, id);
+    return outcome === "retry" ? receiptOfOperation(this.store.retriedOperation(auth.actor, key)) : lifecycleReceipt(this.store, id);
   }
 }

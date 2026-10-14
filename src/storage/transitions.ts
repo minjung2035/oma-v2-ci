@@ -5,11 +5,10 @@ import type { DatabaseSync } from "node:sqlite";
 import { StoreError } from "../domain/errors.js";
 import { isValidActor, isValidTopicName, isValidMessageId, isValidOperationId, parseMessageId } from "../domain/identifiers.js";
 import type { LedgerReader } from "./ledger-reader.js";
-import { decodeSubscriptionRow, decodeDeliveryRow, decodeBatchRow, decodeBatchManifest, decodeUsageRow, type UsageRow } from "./rows.js";
+import { decodeSubscriptionRow, decodeDeliveryRow, decodeBatchRow, decodeBatchManifest } from "./rows.js";
 
 export interface DeliveryIdentity { messageId: string; recipient: string; operationId: string }
 export interface PreparedBatchInput { id: string; agent: string; incarnation: number; messageIds: string[]; sessionPath: string | null }
-export interface UsageReservation { requestId: string; actor: string; incarnation: number; profile: string; pricingRevision: string; reservedUnits: number }
 function corrupt(message: string): never { throw new StoreError("STORE_CORRUPT", message); }
 function conflict(message: string): never { throw new StoreError("BATCH_CONFLICT", message); }
 function changedExactlyOne(result: { changes: number | bigint }, label: string): void {
@@ -18,11 +17,6 @@ function changedExactlyOne(result: { changes: number | bigint }, label: string):
 function equalManifest(frozen: string, values: readonly string[]): void {
   const ids = decodeBatchManifest(frozen);
   if (ids.length !== values.length || ids.some((id, index) => id !== values[index])) conflict("batch manifest differs in identity, count or order");
-}
-function usageRaw(row: UsageRow) {
-  return { request_id: row.requestId, actor: row.actor, incarnation: row.incarnation, profile: row.profile,
-    pricing_revision: row.pricingRevision, reserved_units: row.reservedUnits, reported_units: row.reportedUnits,
-    outcome: row.outcome, details_json: row.detailsJson, created_at_ms: row.createdAtMs, updated_at_ms: row.updatedAtMs };
 }
 
 export class LedgerTransitions {
@@ -66,7 +60,7 @@ export class LedgerTransitions {
     const row = this.read.delivery(message, recipient);
     if (!row) corrupt("cannot materialize a missing delivery");
     if (row.materialized === 1) return; // Preserve the first durable fact time.
-    changedExactlyOne(this.db.prepare(`UPDATE deliveries SET materialized=1, materialized_at_ms=?
+    changedExactlyOne(this.db.prepare(`UPDATE deliveries SET materialized=1, materialized_at_ms=MAX(?, created_at_ms)
       WHERE message_id=? AND recipient=? AND operation_id=? AND materialized=0 AND materialized_at_ms IS NULL`)
       .run(this.now(), message, recipient, row.operationId), "materialization");
     this.read.delivery(message, recipient);
@@ -76,11 +70,14 @@ export class LedgerTransitions {
     const row = this.read.delivery(message, recipient);
     if (!row) throw new StoreError("REQUEST_NOT_FOUND", "cannot acknowledge a missing delivery");
     if (row.acknowledged === 1) return;
-    changedExactlyOne(this.db.prepare(`UPDATE deliveries SET acknowledged=1, acknowledged_at_ms=?
+    changedExactlyOne(this.db.prepare(`UPDATE deliveries SET acknowledged=1, acknowledged_at_ms=MAX(?, created_at_ms)
       WHERE message_id=? AND recipient=? AND operation_id=? AND acknowledged=0 AND acknowledged_at_ms IS NULL`)
       .run(this.now(), message, recipient, row.operationId), "acknowledgement");
     this.read.delivery(message, recipient);
   }
+  /** DR9: `incarnation` is the batch's first delivery attempt, the lease that
+   * prepares it, and it never changes. Later attempts are the later leases of
+   * the same agent; nothing here moves a batch to them. */
   insertPreparedBatch(input: PreparedBatchInput): void {
     this.requireLive();
     const manifest = JSON.stringify(input.messageIds);
@@ -99,19 +96,6 @@ export class LedgerTransitions {
     this.db.prepare(`INSERT INTO batches (id, agent, incarnation, message_ids_json, session_path, state, created_at_ms, completed_at_ms)
       VALUES (?,?,?,?,?,'prepared',?,NULL)`).run(input.id, input.agent, input.incarnation, manifest, input.sessionPath, createdAt);
     this.touchedBatches.add(input.id);
-  }
-  reassignPreparedBatches(agent: string, incarnation: number): void {
-    this.requireLive();
-    if (!Number.isSafeInteger(incarnation) || incarnation < 0 || this.read.agent(agent)?.incarnation !== incarnation)
-      conflict("batch reassignment incarnation is not current");
-    for (const batch of this.read.preparedBatches(agent)) {
-      if (batch.incarnation === incarnation) continue;
-      if (batch.incarnation > incarnation) conflict("batch incarnation cannot regress");
-      changedExactlyOne(this.db.prepare(`UPDATE batches SET incarnation=?
-        WHERE id=? AND agent=? AND incarnation=? AND state='prepared' AND completed_at_ms IS NULL`)
-        .run(incarnation, batch.id, agent, batch.incarnation), "batch reassignment");
-      this.touchedBatches.add(batch.id);
-    }
   }
   linkDeliveriesToBatch(id: string, messages: readonly string[]): void {
     this.requireLive();
@@ -140,56 +124,38 @@ export class LedgerTransitions {
     this.touchedBatches.add(id);
     this.read.batch(id);
   }
-  completeBatch(id: string, messages: readonly string[], agent: string, expectedIncarnation?: number): void {
+  /** DR9: a completion records a presentation that already happened in one of
+   * the batch's delivery attempts -- the lease it was created in up to the
+   * agent's current one. It is not a new effect, so it is bound to that attempt
+   * and its evidence, never to which lease is current now; the caller checks
+   * the requester's own authority. */
+  completeBatch(id: string, messages: readonly string[], agent: string, attempt: number, sessionPath: string): void {
     this.requireLive();
     const batch = this.read.batch(id);
     if (!batch || batch.agent !== agent) conflict("batch owner does not match");
     equalManifest(batch.messageIdsJson, messages);
-    if (expectedIncarnation !== undefined && batch.incarnation !== expectedIncarnation) conflict("batch completion incarnation differs");
-    if (batch.state === "completed") return; // Exact replay keeps all first fact timestamps.
-    if (this.read.agent(agent)?.incarnation !== batch.incarnation) conflict("batch completion incarnation is stale");
+    const owner = this.read.agent(agent);
+    if (!Number.isSafeInteger(attempt) || attempt < batch.incarnation || owner === null || attempt > owner.incarnation)
+      conflict("batch completion names no delivery attempt of this batch");
+    if (batch.state === "completed") {
+      if (batch.sessionPath !== sessionPath) conflict("completed batch session differs");
+      return; // Exact replay keeps all first fact timestamps.
+    }
+    if (batch.sessionPath !== null && batch.sessionPath !== sessionPath) conflict("prepared batch session differs");
     const at = this.now();
-    changedExactlyOne(this.db.prepare(`UPDATE batches SET state='completed', completed_at_ms=?
-      WHERE id=? AND agent=? AND incarnation=? AND state='prepared' AND completed_at_ms IS NULL`)
-      .run(at, id, agent, batch.incarnation), "batch completion");
+    changedExactlyOne(this.db.prepare(`UPDATE batches SET state='completed', completed_at_ms=MAX(?, created_at_ms), session_path=?
+      WHERE id=? AND agent=? AND incarnation=? AND state='prepared' AND completed_at_ms IS NULL AND (session_path IS NULL OR session_path=?)`)
+      .run(at, sessionPath, id, agent, batch.incarnation, sessionPath), "batch completion");
     for (const message of messages) {
-      changedExactlyOne(this.db.prepare(`UPDATE deliveries SET presented=1, presented_at_ms=?
+      // P0V-56, P0-5: presentation follows materialization as well as
+      // creation; a wall clock that stepped back in between is not a row
+      // the decoder must reject as corrupt.
+      changedExactlyOne(this.db.prepare(`UPDATE deliveries SET presented=1, presented_at_ms=MAX(?, created_at_ms, materialized_at_ms)
         WHERE message_id=? AND recipient=? AND batch_id=? AND materialized=1 AND presented=0 AND presented_at_ms IS NULL
         AND EXISTS (SELECT 1 FROM batches WHERE id=? AND agent=? AND incarnation=? AND state='completed')`)
         .run(at, message, agent, id, id, agent, batch.incarnation), "batch presentation");
     }
     this.touchedBatches.add(id);
     this.read.batch(id);
-  }
-  reserveUsage(input: UsageReservation): void {
-    this.requireLive();
-    const existing = this.read.usage(input.requestId);
-    if (existing) {
-      if (existing.actor !== input.actor || existing.incarnation !== input.incarnation || existing.profile !== input.profile ||
-          existing.pricingRevision !== input.pricingRevision || existing.reservedUnits !== input.reservedUnits)
-        throw new StoreError("REQUEST_KEY_REUSED", "usage request id already belongs to different immutable facts");
-      return; // Never reset a prior outcome or authorize provider replay.
-    }
-    const at = this.now();
-    decodeUsageRow(usageRaw({ ...input, reportedUnits: null, outcome: "reserved", detailsJson: null, createdAtMs: at, updatedAtMs: at }));
-    if (this.read.agent(input.actor)?.incarnation !== input.incarnation) throw new StoreError("STALE_RUN", "usage reservation incarnation is not current");
-    this.db.prepare(`INSERT INTO usage
-      (request_id, actor, incarnation, profile, pricing_revision, reserved_units, reported_units, outcome, details_json, created_at_ms, updated_at_ms)
-      VALUES (?,?,?,?,?,?,NULL,'reserved',NULL,?,?)`).run(input.requestId, input.actor, input.incarnation, input.profile, input.pricingRevision, input.reservedUnits, at, at);
-    this.read.usage(input.requestId);
-  }
-  settleUsage(id: string, outcome: UsageRow["outcome"], reportedUnits: number | null, detailsJson: string | null): void {
-    this.requireLive();
-    const current = this.read.usage(id);
-    if (!current) corrupt("cannot settle missing usage");
-    if (current.outcome === outcome && current.reportedUnits === reportedUnits && current.detailsJson === detailsJson) return;
-    // No provider evidence policy currently authorizes unknown -> completed/cancelled.
-    if (current.outcome !== "reserved" || outcome === "reserved") corrupt("usage outcome is immutable without verified settlement evidence");
-    const at = this.now();
-    decodeUsageRow(usageRaw({ ...current, outcome, reportedUnits, detailsJson, updatedAtMs: at }));
-    changedExactlyOne(this.db.prepare(`UPDATE usage SET outcome=?, reported_units=?, details_json=?, updated_at_ms=?
-      WHERE request_id=? AND actor=? AND incarnation=? AND outcome='reserved' AND reported_units IS NULL`)
-      .run(outcome, reportedUnits, detailsJson, at, id, current.actor, current.incarnation), "usage settlement");
-    this.read.usage(id);
   }
 }

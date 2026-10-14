@@ -2,6 +2,7 @@ import { mkdtempSync, readFileSync, readdirSync, statSync, writeFileSync, mkdirS
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { spawn } from "node:child_process";
+import { createRequire, syncBuiltinESMExports } from "node:module";
 import test, { type TestContext } from "node:test";
 import assert from "node:assert/strict";
 import { RequestCache, CacheError, type FreezeInput, type CacheReader } from "../src/request-cache.js";
@@ -144,4 +145,21 @@ test("competing processes cannot publish different bodies for one frozen identit
   if (observed.kind !== "present" || !observed.value.digest) assert.fail("winner must have a validated stream descriptor");
   const body = cache.readBody("race", observed.value.digest); assert.equal(body.kind, "present");
   if (body.kind === "present") assert.ok(["hello", "world"].includes(Buffer.from(body.value).toString()));
+});
+
+test("P0V-71 / F4, P0-3: the first freeze in a home makes every name on the cache's new path durable", t => {
+  const { home, dir, cache } = fixture(t);
+  const fs = createRequire(import.meta.url)("node:fs") as typeof import("node:fs");
+  const real = fs.fsyncSync;
+  const flushed: string[] = [];
+  t.mock.method(fs, "fsyncSync", (fd: number) => {
+    try { flushed.push(fs.readlinkSync(`/proc/self/fd/${fd}`)); } catch { /* not a path */ }
+    return real(fd);
+  });
+  syncBuiltinESMExports();
+  try {
+    assert.equal(cache.freeze(follow()).kind, "created");
+  } finally { t.mock.restoreAll(); syncBuiltinESMExports(); }
+  for (const path of [dir, join(home, ".local/state/oma"), join(home, ".local/state"), join(home, ".local"), home])
+    assert.ok(flushed.includes(path), `${path} was created but its name was never flushed: ${JSON.stringify(flushed)}`);
 });

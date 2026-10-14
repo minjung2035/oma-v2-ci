@@ -4,16 +4,14 @@
 import type { ProtocolLimits } from "../../implementation/contracts.js";
 import type { Store } from "../store.js";
 import type { MailModule } from "../mail.js";
-import type { UnitsModule } from "../units.js";
+import type { StatusRefresh } from "../views/status-refresh.js";
 import type { ViewsModule } from "../views.js";
 import type { LifecycleModule } from "../lifecycle.js";
 import type { GitModule } from "../git.js";
-import type { ReconcileModule } from "../reconcile.js";
 import type {
   InternalDispatchDependencies,
   InternalMailPort,
   InternalPeerPort,
-  InternalReconcilePort,
   InternalStorePort,
 } from "./internal-dispatcher.js";
 import type {
@@ -35,14 +33,15 @@ export type PublicDispatchPorts = Pick<
 export function createPublicDispatchPorts(
   store: Store,
   mail: MailModule,
-  units: UnitsModule,
+  status: Pick<StatusRefresh, "request">,
   views: ViewsModule,
   lifecycle: LifecycleModule,
   git: GitModule | null,
   limits: ProtocolLimits,
 ): PublicDispatchPorts {
   const publicStore: PublicStorePort = {
-    listAgents: () => store.listAgents().map((agent) => ({ name: agent.name })),
+    // WP23.03: parameter checks need which names exist, not every decoded row.
+    listAgents: () => store.agentNames().map((name) => ({ name })),
     getAgent: (actor) => {
       const agent = store.getAgent(actor);
       return agent === null
@@ -65,12 +64,13 @@ export function createPublicDispatchPorts(
       mail.send(auth, key, input, requestContext),
   };
   const publicUnits: PublicUnitsPort = {
-    observe: (agent) => units.observe(agent),
+    statusSnapshot: () => status.request(),
   };
   const publicViews: PublicViewsPort = {
-    status: (agent, observe) => views.status(agent, observe),
+    status: (agent, snapshot) => views.statusOf(snapshot, agent),
   };
   const publicLifecycle: PublicLifecyclePort = {
+    setSociety: (auth, state, key) => lifecycle.setSociety(auth, state, key),
     create: (auth, input, key) => lifecycle.create(auth, input, key),
     start: (auth, agent, key) => lifecycle.start(auth, agent, key),
     stop: (auth, agent, key) => lifecycle.stop(auth, agent, key),
@@ -82,6 +82,7 @@ export function createPublicDispatchPorts(
     git === null
       ? null
       : {
+          attestations: { record: (auth, key, input) => git.attestations.record(auth, key, input) },
           knownRefs: () => git.knownRefs(),
           isPublished: (oid) => git.isPublished(oid),
           submit: (auth, key, input, bytes) =>
@@ -89,6 +90,8 @@ export function createPublicDispatchPorts(
           integrate: (auth, key, input) => git.integrate(auth, key, input),
           publishContext: (auth, key, input, bytes) =>
             git.publishContext(auth, key, input, bytes),
+          reviews: { status: (auth, name, frameBytes, responseId) =>
+            git.reviews.status(auth, name, frameBytes, responseId) },
         };
   return {
     store: publicStore,
@@ -103,13 +106,12 @@ export function createPublicDispatchPorts(
 
 export type InternalDispatchPorts = Pick<
   InternalDispatchDependencies,
-  "store" | "mail" | "reconcile" | "stateRoot" | "peers"
+  "store" | "mail" | "stateRoot" | "peers"
 >;
 
 export function createInternalDispatchPorts(
   store: Store,
   mail: MailModule,
-  reconcile: ReconcileModule | null,
   stateRoot: string,
   peers: InternalPeerPort,
 ): InternalDispatchPorts {
@@ -118,7 +120,7 @@ export function createInternalDispatchPorts(
       const agent = store.getAgent(actor);
       return agent === null ? null : { incarnation: agent.incarnation };
     },
-    pendingDeliveryCount: (agent) => store.pendingDeliveries(agent).length,
+    pendingDeliveryCount: (agent) => store.pendingDeliveryCount(agent),
     getBatchAgent: (id) => store.getBatch(id)?.agent ?? null,
     preparedBatchIds: (agent) =>
       store.preparedBatches(agent).map((batch) => batch.id),
@@ -127,18 +129,10 @@ export function createInternalDispatchPorts(
     prepare: (auth) => mail.prepare(auth),
     complete: (auth, evidence) => mail.complete(auth, evidence),
     moveToCur: (agent, ids) => mail.moveToCur(agent, ids),
-    reconcilePending: () => mail.reconcilePending(),
   };
-  const internalReconcile: InternalReconcilePort | null =
-    reconcile === null
-      ? null
-      : {
-          sweep: () => reconcile.sweep(),
-        };
   return {
     store: internalStore,
     mail: internalMail,
-    reconcile: internalReconcile,
     stateRoot,
     peers: {
       requireRunnerUnit: (peer, agent, invocationId) => peers.requireRunnerUnit(peer, agent, invocationId),

@@ -1,12 +1,14 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, rmSync, existsSync, readdirSync } from "node:fs";
+import fs, { mkdtempSync, rmSync, existsSync, readdirSync, openSync, closeSync, fstatSync } from "node:fs";
+import { syncBuiltinESMExports } from "node:module";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createHash } from "node:crypto";
 import { SharedPeerPin } from "../src/broker/peer-pin.js";
 import { TransportSpool } from "../src/broker/transport-spool.js";
 import { StoreError } from "../src/domain/errors.js";
+import { closeEvery } from "../src/storage/contained-fs.js";
 const hash = (bytes: Buffer) => createHash("sha256").update(bytes).digest("hex");
 
 test("R14: a native peer pin closes once after both connection and executing owners release", () => {
@@ -49,4 +51,43 @@ test("R14: zero bytes are exact; mismatched length/hash never acquires execution
     wrong.append(Buffer.from("no")); assert.throws(() => wrong.seal(), StoreError); wrong.releaseConnection();
     assert.deepEqual(readdirSync(root), []);
   } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
+const openDescriptors = (): number => readdirSync("/proc/self/fd").length;
+
+test("P0V-65 / R10, P0-4: every descriptor handed to closeEvery is given back, whichever fails to close", () => {
+  const root = mkdtempSync(join(tmpdir(), "oma-close-every-"));
+  try {
+    // Two distinct numbers: the one closed first is not reused for the other.
+    const gone = openSync(root, "r");
+    const kept = openSync(root, "r");
+    closeSync(gone);
+    assert.throws(() => closeEvery(gone, undefined, kept, null), (error: NodeJS.ErrnoException) => error.code === "EBADF");
+    assert.throws(() => fstatSync(kept), (error: NodeJS.ErrnoException) => error.code === "EBADF", "the second descriptor was left open");
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
+test("P0V-65 / R10, P0-4: a spool reader that fails before its stream exists gives its descriptor back", async t => {
+  const root = mkdtempSync(join(tmpdir(), "oma-spool-gap-"));
+  t.after(() => { syncBuiltinESMExports(); rmSync(root, { recursive: true, force: true }); });
+  const bytes = Buffer.from("body\n");
+  const spool = new TransportSpool(root, { bytes: bytes.length, sha256: hash(bytes) });
+  spool.append(bytes); spool.seal();
+  const execution = spool.handoff();
+  const before = openDescriptors();
+  // The reader's identity check cannot be answered (EIO) after it opened the copy.
+  // The first fstat after arming is the containment check inside the open
+  // (which gives its own descriptor back); the second is the reader's.
+  const real = fs.fstatSync;
+  let calls = 0;
+  t.mock.method(fs, "fstatSync", ((fd: number, options?: object) => {
+    calls += 1;
+    if (calls === 2) throw Object.assign(new Error("EIO: injected"), { code: "EIO" });
+    return real(fd, options as never);
+  }) as typeof fs.fstatSync);
+  syncBuiltinESMExports();
+  await assert.rejects((async () => { for await (const chunk of execution.chunks) void chunk; })(), /EIO/);
+  assert.equal(calls, 2, "the injected failure did not reach the reader");
+  assert.equal(openDescriptors(), before, "the reader's descriptor has no owner");
+  execution.release();
 });

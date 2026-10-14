@@ -1,6 +1,6 @@
 /** IPC-008: wire receipt presentation; ledger projection belongs to storage. */
 import type { Receipt } from "../../implementation/contracts/durable.js";
-import type { CliExitCode } from "../domain/errors.js";
+import { failureText, type CliExitCode } from "../domain/errors.js";
 
 /** An absent lookup is not a durable operation or a cacheable receipt. */
 export const receiptNotFound: Receipt = Object.freeze({
@@ -12,20 +12,26 @@ export function isRequestNotFound(receipt: Receipt): boolean {
   return receipt.operation === "" && receipt.state === "failed" && receipt.error?.code === "REQUEST_NOT_FOUND";
 }
 
+function failedReceiptError(receipt: Receipt): NonNullable<Receipt["error"]> {
+  if (receipt.error === undefined) throw new TypeError("failed receipt has no failure");
+  return receipt.error;
+}
+
 export function receiptExit(receipt: Receipt): CliExitCode {
   if (receipt.state === "succeeded" || receipt.state === "pending") return 0;
   if (receipt.state === "unknown") return 3;
-  return receipt.error?.code === "UNSUPPORTED_PROFILE" || receipt.error?.code === "SPIKE_UNRESOLVED" ? 4 : 2;
+  const error = failedReceiptError(receipt);
+  return error.code === "UNSUPPORTED_PROFILE" || error.code === "SPIKE_UNRESOLVED" ? 4 : 2;
 }
 
 export function receiptLines(receipt: Receipt, key: string): readonly string[] {
   switch (receipt.state) {
     case "succeeded": return [JSON.stringify(receipt)];
-    case "pending": return ["접수됨 / 아직 완료되지 않음", `재조회: 동일 command에 --request ${key}`];
+    case "pending": return ["Accepted / not yet complete", `Query again: use --request ${key} with the same command`];
     case "unknown": return [
-      `결과 불명확: ${receipt.reason ?? "authoritative evidence required"}`,
-      `재조회: 동일 command에 --request ${key}; 새 key로 재실행하지 마세요`,
+      `Outcome unknown: ${receipt.reason ?? "authoritative evidence required"}`,
+      `Query again: use --request ${key} with the same command; do not rerun with a new key`,
     ];
-    case "failed": return [`실패: ${receipt.error?.code ?? "?"} ${receipt.error?.message ?? ""}`];
+    case "failed": return [`Failed: ${failureText(failedReceiptError(receipt))}`];
   }
 }

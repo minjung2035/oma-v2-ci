@@ -9,11 +9,11 @@ import type {
   InternalMethods,
   PreparedBatch,
 } from "../../implementation/contracts.js";
-import type { ReconcileMetrics } from "../ports/runtime.js";
 import type { BoundPeer } from "./peer-authenticator.js";
 import { StoreError } from "../domain/errors.js";
+import { NO_HOLD, type Release, type ResourceGate } from "../domain/admission.js";
 import { assertNever } from "../domain/exhaustive.js";
-import { INTERNAL_METHODS, isInternalMethod } from "../protocol/methods.js";
+import { INTERNAL_METHODS, internalEnvelopeProblem, isInternalMethod } from "../protocol/methods.js";
 import { errorAnswer, okAnswer } from "./replies.js";
 
 export interface InternalStorePort {
@@ -31,10 +31,6 @@ export interface InternalMailPort {
     evidence: BoundaryEvidence,
   ) => Promise<void>;
   readonly moveToCur: (agent: Actor, ids: readonly string[]) => number;
-  readonly reconcilePending: () => Promise<ReconcileMetrics>;
-}
-export interface InternalReconcilePort {
-  readonly sweep: () => Promise<ReconcileMetrics>;
 }
 export interface InternalPeerPort {
   readonly requireRunnerUnit: (
@@ -44,7 +40,7 @@ export interface InternalPeerPort {
   ) => void;
   readonly requireHostUnit: (
     peer: BoundPeer,
-    kind: "principal-relay" | "reconcile",
+    kind: "principal-relay",
   ) => void;
   readonly runnerActor: (peer: BoundPeer) => Actor;
   readonly runnerAuth: (
@@ -56,14 +52,31 @@ export interface InternalPeerPort {
 export interface InternalDispatchDependencies {
   readonly store: InternalStorePort;
   readonly mail: InternalMailPort;
-  readonly reconcile: InternalReconcilePort | null;
   readonly stateRoot: string;
   readonly peers: InternalPeerPort;
   isDraining(): boolean;
   assertAdmission(): void;
+  /** D04: refuses what the category would consume beyond the logical limits. */
+  admitResource: ResourceGate;
   failureAnswer(id: string, error: unknown): object;
   refreshViews(): void;
-  openRun(actor: Actor, invocationId: string): RunLease;
+  openRun(actor: Actor, invocationId: string): Promise<RunLease>;
+}
+/** What admitting an internal method needs from the broker. */
+export type InternalAdmission = Pick<InternalDispatchDependencies, "isDraining" | "assertAdmission" | "admitResource">;
+/** P0V-57, P0-2: the admission an internal method takes, whichever endpoint
+ * serves it -- the runner channel here, or the Principal host's endpoint for
+ * the same `batch.prepare` and `batch.complete`. Only a runner's own pending
+ * and observation reads pass a store fenced after corruption. */
+export async function admitInternal(method: keyof InternalMethods, admission: InternalAdmission): Promise<Release> {
+  if (admission.isDraining() || (method !== "runner.pending" && method !== "runner.observe"))
+    admission.assertAdmission();
+  const resource = INTERNAL_METHODS[method].resource;
+  const release = await admission.admitResource(resource);
+  try {
+    if (admission.isDraining() || (method !== "runner.pending" && method !== "runner.observe")) admission.assertAdmission();
+    return release;
+  } catch (error) { release(); throw error; }
 }
 type ValidatedInternalCall = {
   [M in keyof InternalMethods]: {
@@ -72,35 +85,54 @@ type ValidatedInternalCall = {
     params: InternalMethods[M];
   };
 }[keyof InternalMethods];
+/** P0V-92 (R6-15): the runner a request comes from, as the ledger knows it.
+ * A runner is authenticated from a unit and a row that exist, and no code
+ * removes an agent row, so a missing one is the ledger no longer saying who
+ * the runner is -- refused by name rather than assumed away. */
+function runnerIdentity(store: InternalStorePort, agent: Actor): { readonly incarnation: number } {
+  const identity = store.getAgentIdentity(agent);
+  if (identity === null) throw new StoreError("AUTH_FAILED", "runner identity missing");
+  return identity;
+}
+
+/** What `runner.observe` last told the broker about one agent's run: the
+ * authenticated incarnation it came from plus the wire payload verbatim.
+ * Memory-only and never authority -- the status projection keeps only the
+ * timestamp, and only while the observation's run is still the ledger's. */
+export interface RunnerObservation {
+  readonly incarnation: number;
+  readonly reason: string;
+  readonly toolName?: string;
+  readonly observedAtMs: number;
+}
+
 export class InternalDispatcher {
+  private readonly observations = new Map<Actor, RunnerObservation>();
   constructor(private readonly deps: InternalDispatchDependencies) {}
+  /** The latest diagnostic a runner volunteered, tagged with the run it was
+   * authenticated under. The status view is the consumer; it is display
+   * data, not evidence a lifecycle or admission decision may rest on. */
+  runnerObservation(agent: Actor): RunnerObservation | null {
+    return this.observations.get(agent) ?? null;
+  }
   async dispatch(
     raw: Record<string, unknown>,
     peer: BoundPeer,
     stream: AsyncIterable<Uint8Array> | null,
     channel: "runner" | "host",
   ): Promise<object> {
-    const { store, mail, peers, reconcile } = this.deps;
+    const { store, mail, peers } = this.deps;
     const id = typeof raw.id === "string" ? raw.id : "x";
     const method = typeof raw.method === "string" ? raw.method : "";
-    const paramsRaw = raw.params;
-    if (
-      raw.v !== 1 ||
-      typeof raw.id !== "string" ||
-      typeof raw.method !== "string" ||
-      typeof paramsRaw !== "object" ||
-      paramsRaw === null ||
-      Array.isArray(paramsRaw) ||
-      !Object.keys(raw).every((key) =>
-        ["v", "id", "method", "params"].includes(key),
-      )
-    )
+    const problem = internalEnvelopeProblem(raw);
+    if (problem !== null)
       return errorAnswer(id, {
         code: "INVALID_REQUEST",
-        message: "invalid internal envelope",
+        message: problem,
         retry: "never",
       });
-    const params = paramsRaw as Record<string, unknown>;
+    const params = raw.params as Record<string, unknown>;
+    let release: Release = NO_HOLD;
     try {
       if (!isInternalMethod(method))
         throw new StoreError("UNKNOWN_METHOD", `internal ${method}`);
@@ -118,11 +150,7 @@ export class InternalDispatcher {
       const invalid = descriptor.paramsCheck(params);
       if (invalid)
         throw new StoreError("INVALID_REQUEST", `${method}: ${invalid}`);
-      if (
-        this.deps.isDraining() ||
-        (method !== "runner.pending" && method !== "runner.observe")
-      )
-        this.deps.assertAdmission();
+      release = await admitInternal(method, this.deps);
       // SAFETY: params passed this method's descriptor check; retain the correlation erased by dynamic indexing.
       const call = { id, method, params } as ValidatedInternalCall;
       const { method: dispatchMethod, params: dispatchParams } = call;
@@ -135,7 +163,7 @@ export class InternalDispatcher {
           );
           return okAnswer(
             id,
-            this.deps.openRun(
+            await this.deps.openRun(
               dispatchParams.agent,
               dispatchParams.invocationId,
             ),
@@ -143,11 +171,7 @@ export class InternalDispatcher {
         }
         case "runner.pending": {
           const agent = peers.runnerActor(peer);
-          peers.runnerAuth(
-            agent,
-            store.getAgentIdentity(agent)!.incarnation,
-            peer,
-          );
+          peers.runnerAuth(agent, runnerIdentity(store, agent).incarnation, peer);
           return okAnswer(id, {
             pending: store.pendingDeliveryCount(agent),
             recoverableBatchIds: [...store.preparedBatchIds(agent)],
@@ -155,25 +179,24 @@ export class InternalDispatcher {
         }
         case "runner.observe": {
           const agent = peers.runnerActor(peer);
-          peers.runnerAuth(
-            agent,
-            store.getAgentIdentity(agent)!.incarnation,
-            peer,
-          );
-          throw new StoreError(
-            "SPIKE_UNRESOLVED",
-            "S-03 observation adapter is not pinned",
-          );
+          const identity = runnerIdentity(store, agent);
+          peers.runnerAuth(agent, identity.incarnation, peer);
+          this.observations.set(agent, Object.freeze({
+            // The run an observation belongs to is the one the caller was
+            // authenticated as -- the wire payload cannot claim another.
+            incarnation: identity.incarnation,
+            reason: dispatchParams.reason,
+            ...(dispatchParams.toolName === undefined ? {} : { toolName: dispatchParams.toolName }),
+            observedAtMs: dispatchParams.observedAtMs,
+          }));
+          return okAnswer(id, { accepted: true });
         }
         case "batch.prepare": {
           const agent = peers.runnerActor(peer);
-          const identity = store.getAgentIdentity(agent);
-          if (!identity)
-            throw new StoreError("AUTH_FAILED", "runner identity missing");
           return okAnswer(
             id,
             await mail.prepare(
-              peers.runnerAuth(agent, identity.incarnation, peer),
+              peers.runnerAuth(agent, runnerIdentity(store, agent).incarnation, peer),
             ),
           );
         }
@@ -210,14 +233,6 @@ export class InternalDispatcher {
             pending: store.pendingDeliveryCount("principal"),
           });
         }
-        case "host.reconcile": {
-          peers.requireHostUnit(peer, "reconcile");
-          const report = reconcile
-            ? await reconcile.sweep()
-            : await mail.reconcilePending();
-          this.deps.refreshViews();
-          return okAnswer(id, report);
-        }
         case "batch.read":
         case "principal.attach":
         case "principal.detach":
@@ -230,6 +245,6 @@ export class InternalDispatcher {
       }
     } catch (error) {
       return this.deps.failureAnswer(id, error);
-    }
+    } finally { release(); }
   }
 }

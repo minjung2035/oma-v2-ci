@@ -1,0 +1,289 @@
+{
+  "kind": "oma-vendored-bundle-v1",
+  "package": {
+    "name": "@narumitw/pi-lsp",
+    "version": "0.49.9",
+    "license": "MIT",
+    "repository": "https://github.com/narumiruna/pi-extensions",
+    "directory": "packages/pi-lsp",
+    "commit": "55d784704cdec1ec1534b59f78f07f139539119e",
+    "npm": {
+      "tarball": "https://registry.npmjs.org/@narumitw/pi-lsp/-/pi-lsp-0.49.9.tgz",
+      "integrity": "sha512-YQ49sPiz3sDq5+l9YuPsOcn7YC2kdRbzQr/5pBpsUi0giUqIymHEHB+G0bKx6PmOjhvStCzCSHJxU/qfTLj/yA==",
+      "shasum": "6643cec0b716bc5dc1834bdf836285b3c7569dce"
+    }
+  },
+  "generated": {
+    "runtime": "tsc emit of upstream/src library modules with OMA divergence splices applied; entry files (index.ts, pi-lsp.ts) are vendored but never compiled or loaded",
+    "tool": "scripts/vendor-pi-lsp.mjs",
+    "divergences": {
+      "command.js": {
+        "reason": "OMA deny-by-default child environment: mergeEnvironment no longer seeds the result from process.env -- the overrides map IS the language-server child's whole environment. The inherited union meant every name the adapter did not override reached the child, and the denylist that emptied names could never converge (emptying is also not stripping: loaders read an empty path-list element as the current directory). OMA's hardenedAdapter writes the complete allowlisted map; nothing else survives.",
+        "edits": 1
+      },
+      "lsp-client.js": {
+        "reason": "OMA bounds inside the wire path, all honest degradation now: stderr accumulation cap (truncation-only, with the marker tracked by an explicit dropped flag); the inbound frame bound -- a declared oversized body refuses only the request its sniffed id actually names (an unidentifiable frame is dropped and counted, never blamed on the sole pending request) and is discarded in bounded memory so the wire realigns and the server survives; accumulation with no frame boundary at all is stream garbage that refuses the pending requests and clears the buffer, again without killing the server. Pushed diagnostics are truncated with visible markers and counts (per-file count, per-message length, a tracked-document bound whose drops are flagged into resolved lists on every return path, waiter timeouts included) -- never a #fail. Every inbound frame chunk is reported to registered sinks so the caller's stall window resets on progress instead of a fixed deadline, permanent 'error' listeners on the child and its stdio keep a post-start error from crashing the engine or orphaning the server, and didOpen reports stdin backpressure through the write's own return value so the open loop awaits a bounded didDrain() instead of materializing the corpus in memory.",
+        "edits": 16
+      },
+      "lsp-client.d.ts": {
+        "reason": "OMA divergence: the emitted declaration mirrors the spliced runtime surface -- didOpen returns stdin's backpressure signal, didDrain settles a backpressured write, and the marker helpers are declared.",
+        "edits": 2
+      },
+      "runner.js": {
+        "reason": "OMA policy on what a pull response carries: a pull diagnostics array is truncated with the same visible markers and counts the client applies on the push path -- never a thrown call for size alone, and no read-time byte bound (didOpen carries the whole text either way, so a file size cap only blocks a real fix). The open loop honors stdin backpressure -- a buffered write awaits the client's bounded didDrain() so a large corpus never materializes in this process's memory while the server reads slowly. The diagnostics fan-out settles per file: one file's timeout or failure degrades its own entry to a named error marker and the completed files keep their results, while the caller's abort still refuses the call. The accumulated workspace-edit list across all selected actions stays bounded in count and newText bytes -- it refuses that one request mid-collection because a truncated edit list would fabricate a corrupt fix, which is worse than a clean refusal, and an unbounded materialization is a memory bound whose failure mode (engine OOM) is worse than the refusal. The resolve loop itself is unbounded: each codeAction/resolve round-trip is already bounded by the request timeout and the call's stall window resets on every answered frame, so a large legitimate action set completes.",
+        "edits": 6
+      },
+      "files.js": {
+        "reason": "OMA conversion of the workspace walk: the recursion became an explicit stack, so a deep tree is collected whole -- never dropped for depth (the old OMA_MAX_COLLECT_DEPTH silently stopped) and never recursed into a stack overflow. Children are pushed in reverse sorted order so pops visit them in the recursion's own depth-first order; the collected list is identical.",
+        "edits": 1
+      },
+      "text-edits.js": {
+        "reason": "OMA bounds on what a resolved code action may carry: collected workspace edits are refused past a count bound and a newText byte bound -- mid-collection, not after a flatMap materialized the whole list, and refusing only that one request (the server survives and the shutdown handshake still completes). Refusal, not truncation: a cut edit list would fabricate a corrupt fix, and an unbounded materialization is a memory bound whose failure mode is engine OOM -- both worse than a clean error. The overlap check is a sorted sweep instead of a synchronous O(n^2) pair scan no AbortSignal could interrupt, and application is one pass over the ordered edits instead of rebuilding the string once per edit.",
+        "edits": 4
+      }
+    }
+  },
+  "files": [
+    {
+      "path": "LICENSE",
+      "bytes": 1067,
+      "sha256": "5293e92f073f47012e723990a8605431b438757e9c6eb00c89868b1203e157da"
+    },
+    {
+      "path": "NOTICE",
+      "bytes": 1647,
+      "sha256": "1e9854e853b66bdc1acb084439408ef794a1a1a14a7e3dad3a723509210093c9"
+    },
+    {
+      "path": "runtime/adapters.d.ts",
+      "bytes": 528,
+      "sha256": "ac25ec9a9ad9b4cfd77054e3739c95f466959400262447ba6a604ccd4b332738"
+    },
+    {
+      "path": "runtime/adapters.js",
+      "bytes": 17746,
+      "sha256": "689cdd8140084addefe95967bb429900e527ea47fded3210c05309251f2d358a"
+    },
+    {
+      "path": "runtime/command.d.ts",
+      "bytes": 497,
+      "sha256": "f00e763e076819d38914d20d547430115fe651a68d3e66847447b9044ea2d54e"
+    },
+    {
+      "path": "runtime/command.js",
+      "bytes": 3198,
+      "sha256": "9736ff080d2bd0b5f32d23be4932de82c598d94f95902749a4d62fe983bdba7c"
+    },
+    {
+      "path": "runtime/files.d.ts",
+      "bytes": 441,
+      "sha256": "4edf4fa86873e8bd6597f1988ecc38f00c9a9bd364389f4462fcb6f857e99584"
+    },
+    {
+      "path": "runtime/files.js",
+      "bytes": 5008,
+      "sha256": "29eb1ee275e04323804e989cdb949a708d6e1890f21bb9a825be448c96d3d6d7"
+    },
+    {
+      "path": "runtime/lsp-client.d.ts",
+      "bytes": 1461,
+      "sha256": "a53a183afb5fdbb1df6e04cf0e68aa3d73d138ed2b2b6922a47e3703a29065b8"
+    },
+    {
+      "path": "runtime/lsp-client.js",
+      "bytes": 35796,
+      "sha256": "6268597985185691f76a3d1b3f320692e9dba27b6eb703aae4df9a3c66889499"
+    },
+    {
+      "path": "runtime/routes.d.ts",
+      "bytes": 1167,
+      "sha256": "251f5d189ea249e2baf59242cd25d5b03a0de64a12d6cc315fedd40debf3fe76"
+    },
+    {
+      "path": "runtime/routes.js",
+      "bytes": 3818,
+      "sha256": "1eea1ab0de2d4937b8d26f88ca611a16dec107eceeaa1606090912b5bf5b239a"
+    },
+    {
+      "path": "runtime/runner.d.ts",
+      "bytes": 1060,
+      "sha256": "0c59656cfd302cf6d988351ff1714945311ec5ac923d8781a5bbb6fa1a6a7b5c"
+    },
+    {
+      "path": "runtime/runner.js",
+      "bytes": 11405,
+      "sha256": "f7d527ebbb7464a735f2ecc3690a43e51ebe493f3774a4e08993a066d1591887"
+    },
+    {
+      "path": "runtime/session-lifecycle.d.ts",
+      "bytes": 419,
+      "sha256": "02dfc4227d52b536256e12f5b4fa9cf4465d8b8478f1c9f46c301ecea9f8e89e"
+    },
+    {
+      "path": "runtime/session-lifecycle.js",
+      "bytes": 1853,
+      "sha256": "1f08570ba313dfc57a7c4d09a5a51f53308eefefda97ac387eb6e548f5084c8e"
+    },
+    {
+      "path": "runtime/text-edits.d.ts",
+      "bytes": 440,
+      "sha256": "88a0310a6814b16870563bd5c4b9e79847cf927a0a7af61eaf8b2dd075279b57"
+    },
+    {
+      "path": "runtime/text-edits.js",
+      "bytes": 5557,
+      "sha256": "b144cf9243396bde5b2e984e41a0f00bdd3a2c2c81eb817b798794a3c7615a25"
+    },
+    {
+      "path": "runtime/types.d.ts",
+      "bytes": 2428,
+      "sha256": "af3a53419f013a19668fe291bd8e0fd0dc347e5becdbe93bb762dd9cb6afacdc"
+    },
+    {
+      "path": "runtime/types.js",
+      "bytes": 11,
+      "sha256": "8e609bb71c20b858c77f0e9f90bb1319db8477b13f9f965f1a1e18524bf50881"
+    },
+    {
+      "path": "upstream-tests/build-runtime.test.ts",
+      "bytes": 1801,
+      "sha256": "c9fd077843fec713eace3fb7bcd15c1be8ddb1415bc8568c4f0b388edce51a44"
+    },
+    {
+      "path": "upstream-tests/fixtures/diagnostics-server.mjs",
+      "bytes": 8926,
+      "sha256": "e3d23aebe8fe0ef15ce4bec76e5e307c1eca916bed937454c3cc0fd587c080dc"
+    },
+    {
+      "path": "upstream-tests/fixtures/package-smoke.mjs",
+      "bytes": 8710,
+      "sha256": "f8507d0b35d0c668d1556449bf087c4e37745db7ab1b85a891e1554cd51a7d14"
+    },
+    {
+      "path": "upstream-tests/generated-entry.test.ts",
+      "bytes": 1406,
+      "sha256": "e9f68c2736874fe9e421f14fd07313c1dac9da45e8dbba935031143b8cd4533a"
+    },
+    {
+      "path": "upstream-tests/generated-lifecycle.test.ts",
+      "bytes": 2864,
+      "sha256": "e207c47a6b9f73787ee7a59af28a05cac849c4d2cc0dfb4eac6059d4fd7979c9"
+    },
+    {
+      "path": "upstream-tests/lifecycle-support.ts",
+      "bytes": 3946,
+      "sha256": "4f9b86663dd242d00336b19b3bc33c8bdd5cdcf29370a15e7020b9d12f34f183"
+    },
+    {
+      "path": "upstream-tests/lsp-client.test.ts",
+      "bytes": 12593,
+      "sha256": "83f5b885468a61f00d75ea691ec4d89b3acc82a74136d61c506aaab55b6da699"
+    },
+    {
+      "path": "upstream-tests/lsp.test.ts",
+      "bytes": 36382,
+      "sha256": "af99383ee139c94534f66a17819783a13411648db5004e3730266a2d43de37a4"
+    },
+    {
+      "path": "upstream-tests/runner-lifecycle.test.ts",
+      "bytes": 14713,
+      "sha256": "1e7eaff2f463d835266835ea1a23c8a4996a890c18d7630a54447141892f9f27"
+    },
+    {
+      "path": "upstream-tests/session-context.test.ts",
+      "bytes": 1901,
+      "sha256": "2c1898e6fbc73bcae43d9f0cfacc7bc383e7ab24b196433669d944a458f4ad5d"
+    },
+    {
+      "path": "upstream-tests/session-lifecycle.test.ts",
+      "bytes": 10231,
+      "sha256": "59cbe48241fbf4a37a8616b202ce7b55528d78c9114aed9671c04884af5291eb"
+    },
+    {
+      "path": "upstream/LICENSE",
+      "bytes": 1067,
+      "sha256": "5293e92f073f47012e723990a8605431b438757e9c6eb00c89868b1203e157da"
+    },
+    {
+      "path": "upstream/README.md",
+      "bytes": 8342,
+      "sha256": "5d27fdda321c2ca6798e6e36c3658696c347c48a15bcc1bc23bd20328c39177c"
+    },
+    {
+      "path": "upstream/dist/index.ts",
+      "bytes": 60871,
+      "sha256": "da4b7cdee9eeae7d7d3e45f2852cf4d612403cd490bb8bf79c426552f8e7d593"
+    },
+    {
+      "path": "upstream/dist/index.ts.map",
+      "bytes": 115069,
+      "sha256": "28fc14319983b7fc3b2dfa56a389e0ae1e16e46ab60284d6031c01dc592a80f4"
+    },
+    {
+      "path": "upstream/docs/settings.md",
+      "bytes": 7761,
+      "sha256": "d04410ba58a8bb4b8fc4183c233151f4fa6f6dba5aba102ec6993f67eaac1599"
+    },
+    {
+      "path": "upstream/package.json",
+      "bytes": 1205,
+      "sha256": "4f83aeee77b260cfead8b672276b5c1ccfb84b9e67dda4b14b2b80d9320e022d"
+    },
+    {
+      "path": "upstream/src/adapters.ts",
+      "bytes": 17229,
+      "sha256": "6da81687c3f4b23ed41b671080e7f1aa68a4867e656dc84eedcc38bc99a77e34"
+    },
+    {
+      "path": "upstream/src/command.ts",
+      "bytes": 2780,
+      "sha256": "c8a688d714bec893c231b283a09702c08760cbf86b9b613772bb5b48767929cc"
+    },
+    {
+      "path": "upstream/src/files.ts",
+      "bytes": 4508,
+      "sha256": "166c5574ec03fa8efded8ab663ce026a280253eb111ac34e8aef1cf0b808eff8"
+    },
+    {
+      "path": "upstream/src/index.ts",
+      "bytes": 39,
+      "sha256": "d2a56bdfb23a8da0a380371d7f607a41f3bbd6325e011978e7996275816768f5"
+    },
+    {
+      "path": "upstream/src/lsp-client.ts",
+      "bytes": 18743,
+      "sha256": "455dcc92f34dac52b4720e594179eb620905fe7571cafb7966cd47dcaa075753"
+    },
+    {
+      "path": "upstream/src/pi-lsp.ts",
+      "bytes": 8627,
+      "sha256": "f6d84d8d58a55af99f4ec1d127b709d99b0367acb97003bb04bf47a495044215"
+    },
+    {
+      "path": "upstream/src/routes.ts",
+      "bytes": 4394,
+      "sha256": "4ebd27324af0e0165d14bac2d4ddf4401a329693c753c8ce6413c2c2a795f2ca"
+    },
+    {
+      "path": "upstream/src/runner.ts",
+      "bytes": 8272,
+      "sha256": "cd37eea152a3d64c15958ee45f548ccd73e6bb871e5739210c51fc27e286a8cd"
+    },
+    {
+      "path": "upstream/src/session-lifecycle.ts",
+      "bytes": 1882,
+      "sha256": "0adb80d1feb42b6f193216bc7a451ce0f029be2ac0fa04ec35c458c6652efff6"
+    },
+    {
+      "path": "upstream/src/text-edits.ts",
+      "bytes": 2942,
+      "sha256": "8809802fba674b88cb6e1373840850122a7f5ca62eec542f18bf277d2eb18dcc"
+    },
+    {
+      "path": "upstream/src/types.ts",
+      "bytes": 2462,
+      "sha256": "c775a4bc414a6a4c5e91ae9a56b721d1c813502aa50a2705f568b1a1642a62db"
+    }
+  ],
+  "bundleSha256": "59a572cb4c0226c3e073bb9d9ee3254977cf3ec78c1adf809103c2263fe4227a"
+}

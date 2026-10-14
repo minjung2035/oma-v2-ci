@@ -1,0 +1,41 @@
+{
+  "template_only": true,
+  "task_id": "WP00",
+  "implementation_status": "NOT_STARTED",
+  "verification_status": "NOT_RUN",
+  "source": {
+    "start_commit": null,
+    "end_commit": null,
+    "input_digest_before": null,
+    "input_digest_after": null,
+    "working_tree_diff": null
+  },
+  "decisions": [],
+  "changed_files": [],
+  "file_reviews": [],
+  "tests": [
+    {
+      "test_id": "V00A",
+      "actual_file": null,
+      "actual_case": null,
+      "command": null,
+      "exit_code": null,
+      "skipped": null,
+      "todo": null,
+      "cancelled": null,
+      "scope": null,
+      "status": "NOT_RUN",
+      "raw_evidence": null
+    }
+  ],
+  "negative_controls": [],
+  "compatibility": {
+    "class": null,
+    "reader_compatibility": null,
+    "writer_compatibility": null,
+    "rollback": null
+  },
+  "blocked": [],
+  "remaining_unknowns": [],
+  "next_allowed_tasks": []
+}

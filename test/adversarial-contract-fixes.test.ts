@@ -1,3 +1,4 @@
+import { readableBody } from "../src/mail/display.js";
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
@@ -41,7 +42,8 @@ test("adversarial: EML header casing never rewrites collision text in the body",
     messageId: `${MESSAGE_ID}@demo.oma.invalid`,
     body: "first X-Oma-Kind: marker\nX-Oma-Context: marker",
   });
-  const body = eml.text.split(/\r?\n\r?\n/, 2)[1] ?? "";
+  const body = readableBody(eml.text);
+  assert.equal(body, "first X-Oma-Kind: marker\nX-Oma-Context: marker");
   assert.match(body, /X-Oma-Kind: marker/);
   assert.match(body, /X-Oma-Context: marker/);
 });
@@ -235,7 +237,7 @@ test("adversarial: terminal operation state cannot be rewritten", () => {
   }
 });
 
-test("adversarial: lineage quota counts retired descendants", () => {
+test("adversarial: legacy lineage quotas cannot refuse new descendants", () => {
   const root = tempRoot("oma-lineage-");
   const store = new Store(join(root, "runtime.sqlite"));
   try {
@@ -247,10 +249,7 @@ test("adversarial: lineage quota counts retired descendants", () => {
     // CREATE-002/AUTH-002: a retired resident still consumes its lineage quota.
     const graph = new LineageSnapshot(store.listAgents()
       .map(agent => ({ name: agent.name, createdBy: agent.createdBy, role: agent.role })));
-    assert.throws(
-      () => assertCreateCapacity(graph, "alice", { societyAgents: 10, lineageAgents: 1 }),
-      (error: unknown) => error instanceof StoreError && error.code === "QUOTA_EXCEEDED",
-    );
+    assert.doesNotThrow(() => assertCreateCapacity(graph, "alice", { societyAgents: 10, lineageAgents: 1 }));
   } finally {
     store.close();
     rmSync(root, { recursive: true, force: true });

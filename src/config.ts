@@ -1,15 +1,29 @@
+import { EFFORT_LEVELS } from "./protocol/settings.js";
+export { EFFORT_LEVELS } from "./protocol/settings.js";
+import { tieredPolicyCheck } from "./domain/integration-policy.js";
 // MUST [CFG-001/002/005]: closed host configuration, no unlimited defaults.
-import { readFileSync } from "node:fs";
-import type { HostConfigV1 } from "../implementation/contracts.js";
+import {
+  readConfigurationSource,
+  readEditableConfigurationSource,
+  type AuthoredRoleSource,
+  type ConfigurationFileIdentity,
+  type ConfigurationLayout,
+  type ConfigurationReadObserver,
+  type RoleSettings,
+} from "./config/operations.js";
+import type { AgentProfile, EffortLevel, HostConfigV1, HostEgressConfig, ModelProfile, ResourceLimits } from "../implementation/contracts.js";
+import { egressEntryProblem, EGRESS_ALLOW_MAX } from "./domain/egress.js";
 import { StoreError } from "./domain/errors.js";
+import { requireResidentRootfs } from "./resident-paths.js";
 import { isValidActorName, isValidSocietyName, isValidWirePath } from "./domain/identifiers.js";
-import { parseJsonObject } from "./frame.js";
 import { isCapability } from "./domain/capabilities.js";
 import { RESOURCE_FIELDS } from "./domain/resources.js";
-import { PROTOCOL_LIMIT_FIELDS } from "./domain/limits.js";
+import { MIN_MIXED_BATCH_MESSAGES, PROTOCOL_LIMIT_FIELDS } from "./domain/limits.js";
+import { mailBodyBytesFits, minimumMailBodyBytes } from "./mail/review-bounds.js";
 import type { IntegerField } from "./domain/integer-fields.js";
 import { isDeploymentDigest } from "./domain/deployment.js";
 import { isLogResponseFrameLimit } from "./protocol/log-response.js";
+import { isAbsolute, normalize } from "node:path";
 export { resolveChildSpec } from "./domain/child-policy.js";
 
 function err(message: string): never { throw new StoreError("INVALID_REQUEST", `config: ${message}`); }
@@ -29,43 +43,179 @@ function needArray(value: unknown, what: string): unknown[] {
   if (!Array.isArray(value)) err(`${what} must be an array`);
   return value;
 }
-function closedKeys(record: Record<string, unknown>, keys: readonly string[], what: string): void {
-  for (const key of Object.keys(record)) if (!keys.includes(key)) err(what === "root" ? `unknown top-level field ${key}` : `${what}.${key} unknown`);
+/** A closed record: `keys` are required, `optional` may be absent, nothing else is allowed. */
+function closedKeys(record: Record<string, unknown>, keys: readonly string[], what: string, optional: readonly string[] = []): void {
+  for (const key of Object.keys(record))
+    if (!keys.includes(key) && !optional.includes(key)) err(what === "root" ? `unknown top-level field ${key}` : `${what}.${key} unknown`);
   for (const key of keys) if (!Object.hasOwn(record, key)) err(`${what}.${key} is required`);
 }
-function closedRecord(value: unknown, keys: readonly string[], what: string): Record<string, unknown> {
-  const record = needRecord(value, what); closedKeys(record, keys, what); return record;
+function closedRecord(value: unknown, keys: readonly string[], what: string, optional: readonly string[] = []): Record<string, unknown> {
+  const record = needRecord(value, what); closedKeys(record, keys, what, optional); return record;
 }
 function needIntegerFields(record: Record<string, unknown>, fields: Readonly<Record<string, IntegerField>>, what: string): void {
   closedKeys(record, Object.keys(fields), what);
-  for (const key of Object.keys(fields)) needInt(record[key], `${what}.${key}`, fields[key]!.minInclusive);
+  for (const key of Object.keys(fields)) {
+    const field = fields[key]!;
+    needInt(record[key], `${what}.${key}`, field.minInclusive);
+    if (field.maxInclusive !== undefined && (record[key] as number) > field.maxInclusive)
+      err(`${what}.${key} must be <= ${field.maxInclusive}`);
+  }
+}
+declare const VALIDATED_CONFIG: unique symbol;
+/** A complete deep snapshot produced only by the canonical runtime validator. */
+export type ValidatedConfigCandidate = HostConfigV1 & { readonly [VALIDATED_CONFIG]: true };
+
+function freezeResources(resources: ResourceLimits): ResourceLimits {
+  return Object.freeze({ ...resources });
 }
 
-export function loadConfig(path: string): HostConfigV1 {
-  let raw: unknown;
-  try { raw = parseJsonObject(readFileSync(path)).raw; }
-  catch (error) { throw new StoreError("INVALID_REQUEST", `config unreadable: ${(error as Error).message}`); }
-  const cfg = closedRecord(raw, ["schemaVersion", "society", "installation", "modelProfiles", "agentProfiles", "principalProfile", "initialResidents", "quota", "integration", "limits", "features"], "root");
+function validatedSnapshot(config: HostConfigV1): ValidatedConfigCandidate {
+  const modelProfiles: Record<string, ModelProfile> = Object.create(null);
+  for (const [name, profile] of Object.entries(config.modelProfiles))
+    modelProfiles[name] = Object.freeze({ ...profile });
+  const agentProfiles: Record<string, AgentProfile> = Object.create(null);
+  for (const [name, profile] of Object.entries(config.agentProfiles))
+    agentProfiles[name] = Object.freeze({
+      ...profile,
+      capabilities: Object.freeze([...profile.capabilities]),
+      delegable: Object.freeze([...profile.delegable]),
+      resources: freezeResources(profile.resources),
+    }) as AgentProfile;
+  const checks = config.integration.checks.map(check => {
+    const env = Object.assign(Object.create(null), check.env) as Record<string, string>;
+    return Object.freeze({
+      ...check,
+      argv: Object.freeze([...check.argv]),
+      env: Object.freeze(env),
+      resources: freezeResources(check.resources),
+    });
+  });
+  const snapshot = {
+    ...config,
+    installation: Object.freeze({ ...config.installation }),
+    modelProfiles: Object.freeze(modelProfiles),
+    agentProfiles: Object.freeze(agentProfiles),
+    initialResidents: Object.freeze(config.initialResidents.map(row => Object.freeze({ ...row }))),
+    quota: Object.freeze({ ...config.quota }),
+    integration: Object.freeze({
+      ...config.integration,
+      ...(config.integration.tiered === undefined ? {} : { tiered: Object.freeze({ ...config.integration.tiered,
+        rules: Object.freeze(config.integration.tiered.rules.map(rule => Object.freeze({ ...rule,
+          statuses: Object.freeze([...rule.statuses]) }))) }) }),
+      protectedPaths: Object.freeze([...config.integration.protectedPaths]),
+      checks: Object.freeze(checks),
+    }),
+    limits: Object.freeze({ ...config.limits }),
+    ...(config.egress === undefined ? {} : { egress: Object.freeze({
+      allow: Object.freeze([...config.egress.allow]),
+      roles: Object.freeze(Object.fromEntries(Object.entries(config.egress.roles ?? {})
+        .map(([role, entries]) => [role, Object.freeze([...entries])]))),
+    }) }),
+  };
+  // The brand is type-only; validation, copying and recursive freezing above are
+  // the runtime proof. No caller can construct this type without this boundary.
+  return Object.freeze(snapshot) as unknown as ValidatedConfigCandidate;
+}
+
+
+export interface ConfigurationSnapshot {
+  readonly config: ValidatedConfigCandidate;
+  readonly roles: Readonly<Record<string, RoleSettings>>;
+  readonly layout: ConfigurationLayout;
+  readonly authoredRoles: Readonly<Record<string, AuthoredRoleSource>>;
+  readonly sourceFiles: readonly ConfigurationFileIdentity[];
+}
+
+/** Resolve and read one complete authored source closure from one manifest read. */
+export function loadConfigurationSnapshot(path: string, observer?: ConfigurationReadObserver): ConfigurationSnapshot {
+  const source = readConfigurationSource(path, observer);
+  return Object.freeze({
+    config: validateConfig(source.host),
+    roles: source.roles,
+    layout: source.layout,
+    authoredRoles: source.authoredRoles,
+    sourceFiles: source.files,
+  });
+}
+
+/** WP14.03: an editing input for a bundle whose declared extension assets may
+ * be missing. The host configuration is validated whole; extension assets are
+ * not dereferenced, so this is never a runnable configuration. */
+export interface EditableConfiguration {
+  readonly config: ValidatedConfigCandidate;
+  readonly roles: Readonly<Record<string, { readonly prompt: string }>>;
+  readonly layout: ConfigurationLayout;
+  readonly authoredRoles: Readonly<Record<string, AuthoredRoleSource>>;
+  readonly sourceFiles: readonly ConfigurationFileIdentity[];
+  readonly extensionAssets: "unread";
+}
+export function loadEditableConfiguration(path: string): EditableConfiguration {
+  const source = readEditableConfigurationSource(path);
+  return Object.freeze({
+    config: validateConfig(source.host),
+    roles: Object.freeze(Object.fromEntries(Object.entries(source.roles).map(([name, role]) => [name, Object.freeze({ prompt: role.prompt })]))),
+    layout: source.layout,
+    authoredRoles: source.authoredRoles,
+    sourceFiles: source.files,
+    extensionAssets: "unread" as const,
+  });
+}
+
+/** Compatibility facade for callers that do not need authored source identities. */
+export function loadConfiguration(path: string) {
+  const snapshot = loadConfigurationSnapshot(path);
+  return Object.freeze({ config: snapshot.config, roles: snapshot.roles });
+}
+export function loadConfig(path: string): HostConfigV1 { return loadConfiguration(path).config; }
+/** DR13, P0-5: the host policy a running broker decides by now -- for an
+ * integration's revision and facts, and for a child's spec. One reader, one
+ * answer for "cannot be obtained": the file unreadable, or read mid-edit and
+ * invalid, is BROKER_UNAVAILABLE, not a changed policy; the work waits (a
+ * refusal to retry under the same key, or an accepted operation left for
+ * recovery). A readable policy of another society is a changed one. */
+export function readCurrentHostPolicy(path: string, society: string, load: (path: string) => HostConfigV1 = loadConfig): HostConfigV1 {
+  let current: HostConfigV1;
+  try { current = load(path); }
+  catch (error) { throw new StoreError("BROKER_UNAVAILABLE", "the host policy cannot be read now", { cause: error }); }
+  if (current.society !== society) throw new StoreError("POLICY_CHANGED", "host policy society identity changed");
+  return current;
+}
+
+export function validateConfig(raw: unknown): ValidatedConfigCandidate {
+  const cfg = closedRecord(raw, ["schemaVersion", "society", "installation", "modelProfiles", "agentProfiles", "principalProfile", "initialResidents", "quota", "integration", "limits"], "root", ["egress"]);
   if (cfg.schemaVersion !== 1) err("schemaVersion must be 1");
   const society = needString(cfg.society, "society");
   if (!isValidSocietyName(society)) err("invalid society name");
-  const installation = closedRecord(cfg.installation, ["node", "libdir", "rootfs", "deploymentDigest"], "installation");
+  const installation = closedRecord(cfg.installation, ["node", "libdir", "rootfs", "deploymentDigest"], "installation", ["packages"]);
   const node = needString(installation.node, "installation.node");
   const libdir = needString(installation.libdir, "installation.libdir");
   const rootfs = needString(installation.rootfs, "installation.rootfs");
+  requireResidentRootfs(rootfs);
   const deploymentDigest = needString(installation.deploymentDigest, "installation.deploymentDigest");
   if (!isDeploymentDigest(deploymentDigest)) err("installation.deploymentDigest must be a lowercase SHA-256 digest");
+  // DR25: where the extensions `oma pi install` installed live, when any role may name one.
+  const packages = installation.packages === undefined ? undefined : needString(installation.packages, "installation.packages");
+  if (packages !== undefined && (!isAbsolute(packages) || normalize(packages) !== packages || packages === "/"))
+    err("installation.packages must be a normalized absolute directory");
 
   const modelProfiles = needRecord(cfg.modelProfiles, "modelProfiles");
   for (const [name, value] of Object.entries(modelProfiles)) {
-    const profile = closedRecord(value, ["provider", "model", "credentialRef", "codecRevision", "pricingRevision", "maxInputTokens", "maxOutputTokens", "inferenceTimeoutSeconds"], `modelProfiles.${name}`);
-    for (const key of ["provider", "model", "credentialRef", "codecRevision", "pricingRevision"]) needString(profile[key], `modelProfiles.${name}.${key}`);
-    for (const key of ["maxInputTokens", "maxOutputTokens", "inferenceTimeoutSeconds"]) needInt(profile[key], `modelProfiles.${name}.${key}`, 1);
+    const profile = closedRecord(value, ["provider", "model", "inferenceTimeoutSeconds"], `modelProfiles.${name}`, ["thinking"]);
+    if (profile.thinking !== undefined && !(EFFORT_LEVELS as readonly unknown[]).includes(profile.thinking))
+      err(`modelProfiles.${name}.thinking must be one of ${EFFORT_LEVELS.join(", ")}`);
+    for (const key of ["provider", "model"]) needString(profile[key], `modelProfiles.${name}.${key}`);
+    needInt(profile.inferenceTimeoutSeconds, `modelProfiles.${name}.inferenceTimeoutSeconds`, 1);
   }
   const agentProfiles = needRecord(cfg.agentProfiles, "agentProfiles");
   const profileNames = new Set(Object.keys(agentProfiles));
   for (const [name, value] of Object.entries(agentProfiles)) {
-    const profile = closedRecord(value, ["modelProfile", "capabilities", "delegable", "childProfile", "resources"], `agentProfiles.${name}`);
+    // D23: a role file's own fields are closed, but a profile keeps a valid
+    // field it does not model -- a bundle authored by a newer reader must
+    // survive a screen's round-trip. Unknown keys are tolerated here and are
+    // inert: only the fields below reach the validated snapshot.
+    const profile = needRecord(value, `agentProfiles.${name}`);
+    for (const key of ["modelProfile", "capabilities", "delegable", "childProfile", "resources"] as const)
+      if (!Object.hasOwn(profile, key)) err(`agentProfiles.${name}.${key} is required`);
     const modelProfile = needString(profile.modelProfile, `agentProfiles.${name}.modelProfile`);
     if (!Object.hasOwn(modelProfiles, modelProfile)) err(`agentProfiles.${name}.modelProfile unknown`);
     if (!Array.isArray(profile.capabilities) || !Array.isArray(profile.delegable)) err(`agentProfiles.${name} capabilities/delegable arrays required`);
@@ -88,21 +238,14 @@ export function loadConfig(path: string): HostConfigV1 {
     if (!profileNames.has(profile)) err("initialResidents.profile unknown");
     needString(row.brief, "initialResidents.brief");
   }
-  const quota = closedRecord(cfg.quota, ["societyAgents", "lineageAgents", "societyUnits", "lineageUnits", "principalReservedUnits", "inferenceSlots", "principalReservedSlots", "storageBytes"], "quota");
+  const quota = closedRecord(cfg.quota, ["societyAgents", "lineageAgents", "storageBytes"], "quota");
   for (const key of Object.keys(quota)) needInt(quota[key], `quota.${key}`, 0);
   const societyAgents = needInt(quota.societyAgents, "quota.societyAgents", 0);
   const lineageAgents = needInt(quota.lineageAgents, "quota.lineageAgents", 0);
-  const societyUnits = needInt(quota.societyUnits, "quota.societyUnits", 0);
-  const principalReservedUnits = needInt(quota.principalReservedUnits, "quota.principalReservedUnits", 0);
-  const inferenceSlots = needInt(quota.inferenceSlots, "quota.inferenceSlots", 1);
-  const principalReservedSlots = needInt(quota.principalReservedSlots, "quota.principalReservedSlots", 0);
-  needInt(quota.storageBytes, "quota.storageBytes", 1);
-  if (lineageAgents > societyAgents) err("quota.lineageAgents exceeds quota.societyAgents");
-  if (initialResidents.length > societyAgents) err("initialResidents exceed quota.societyAgents");
-  if (principalReservedUnits > societyUnits) err("quota.principalReservedUnits exceeds quota.societyUnits");
-  if (principalReservedSlots > inferenceSlots) err("quota.principalReservedSlots exceeds quota.inferenceSlots");
+  needInt(quota.storageBytes, "quota.storageBytes", 0);
 
-  const integration = closedRecord(cfg.integration, ["policyRevision", "protectedPaths", "checks"], "integration");
+  const integration = closedRecord(cfg.integration, ["policyRevision", "protectedPaths", "checks"], "integration", ["tiered"]);
+  if (integration.tiered !== undefined && tieredPolicyCheck(integration.tiered) !== null) err("integration.tiered has invalid rules or authority");
   const policyRevision = needString(integration.policyRevision, "integration.policyRevision");
   const protectedPaths = needArray(integration.protectedPaths, "integration.protectedPaths");
   if (protectedPaths.some(value => typeof value !== "string" || (value !== "/" && !isValidWirePath(value.endsWith("/") ? value.slice(0, -1) : value)) || /[*?[\]{}!]/.test(value))) err("integration.protectedPaths must be safe literal paths");
@@ -119,15 +262,73 @@ export function loadConfig(path: string): HostConfigV1 {
   const limits = needRecord(cfg.limits, "limits");
   needIntegerFields(limits, PROTOCOL_LIMIT_FIELDS, "limits");
   if (!isLogResponseFrameLimit(limits.frameBytes)) err("limits.frameBytes must support a complete log response and uint32 framing");
-  const featureKeys = ["notmuch", "reflinkSeed", "formalApproval", "egress"];
-  const features = closedRecord(cfg.features, featureKeys, "features");
-  for (const key of featureKeys) if (features[key] !== false) err(`features.${key} must be false in Core v1 default build`);
-  return {
-    schemaVersion: 1, society, installation: { node, libdir, rootfs, deploymentDigest },
+  // AV-07: bounds the grammar accepts but the runtime cannot serve are refused
+  // at commit, not discovered later as INTERNAL_ERROR on accepted work. The
+  // floors are measured by the same constants the emission paths use
+  // (mail/review-bounds.ts, domain/limits.ts via mail/batch-policy.ts), so
+  // they track the runtime rather than duplicating it.
+  // An approval request carries the requester's reason plus one bound vote
+  // body per vote the floor requires: the floor model must cover the votes
+  // the policy can bind (the runtime falls back to one vote when a live
+  // policy has no tiered rules -- a request opened under an earlier policy
+  // can still emit one).
+  const approvalVotes = (integration.tiered as { highPeerFloor?: number } | undefined)?.highPeerFloor ?? 1;
+  if (!mailBodyBytesFits(limits.mailBodyBytes as number, limits.subjectBytes as number, approvalVotes)) {
+    const minimum = minimumMailBodyBytes(limits.subjectBytes as number, approvalVotes);
+    if (minimum === null)
+      err(`limits.subjectBytes and integration.tiered.highPeerFloor are too large for any safe integer limits.mailBodyBytes; ` +
+        `an approval request carries the requester's reason plus a bound vote body per required vote`);
+    err(`limits.mailBodyBytes must be at least ${minimum} for the configured limits.subjectBytes and integration.tiered.highPeerFloor; ` +
+      `a smaller bound cannot always hold a review thread revision, a completion-notice part, or an approval request`);
+  }
+  if ((limits.batchMaxMessages as number) < MIN_MIXED_BATCH_MESSAGES)
+    err(`limits.batchMaxMessages must be at least ${MIN_MIXED_BATCH_MESSAGES}; a single-message batch starves an actor whose direct and public mail are both pending`);
+  // UX-08/DR34: the egress clause is the CONNECT proxy's whole policy --
+  // endpoint names only, so it can be checked whole at commit. A present
+  // clause with no endpoints admits nothing; a named role is checked against
+  // the profiles that exist, so a typo is refused rather than silently
+  // meaning "no one".
+  let egress: HostEgressConfig | undefined;
+  if (cfg.egress !== undefined) {
+    const clause = closedRecord(cfg.egress, ["allow"], "egress", ["roles"]);
+    const allow = needArray(clause.allow, "egress.allow");
+    for (const entry of allow) {
+      const problem = egressEntryProblem(entry);
+      if (problem !== null) err(`egress.allow: ${problem}`);
+    }
+    const roles: Record<string, string[]> = Object.create(null);
+    if (clause.roles !== undefined) {
+      for (const [role, entries] of Object.entries(needRecord(clause.roles, "egress.roles"))) {
+        if (!profileNames.has(role)) err(`egress.roles.${role} is not a configured profile`);
+        const list = needArray(entries, `egress.roles.${role}`);
+        for (const entry of list) {
+          const problem = egressEntryProblem(entry);
+          if (problem !== null) err(`egress.roles.${role}: ${problem}`);
+        }
+        roles[role] = [...list] as string[];
+      }
+    }
+    if (allow.length + Object.values(roles).reduce((sum, list) => sum + list.length, 0) === 0)
+      err("egress names no endpoint; remove the clause rather than configure egress to nothing");
+    // The wire bound is on what egress.connect carries -- the resolved list.
+    // The baseline alone is every unnamed role's list, and each named role's
+    // is baseline plus its own: any resolved list over the bound is refused
+    // at commit, so a config that macOS could only refuse cannot exist.
+    if (allow.length > EGRESS_ALLOW_MAX)
+      err(`egress.allow exceeds ${EGRESS_ALLOW_MAX} entries, the wire's bound for one role's resolved list`);
+    for (const [role, list] of Object.entries(roles)) {
+      if (allow.length + list.length > EGRESS_ALLOW_MAX)
+        err(`egress.roles.${role} resolves to ${allow.length + list.length} entries, past the wire's ${EGRESS_ALLOW_MAX}-entry bound`);
+    }
+    egress = { allow: allow as string[], roles };
+  }
+  return validatedSnapshot({
+    schemaVersion: 1, society, installation: { node, libdir, rootfs, deploymentDigest, ...(packages === undefined ? {} : { packages }) },
     modelProfiles: Object.assign(Object.create(null), modelProfiles) as HostConfigV1["modelProfiles"],
     agentProfiles: Object.assign(Object.create(null), agentProfiles) as HostConfigV1["agentProfiles"],
     principalProfile, initialResidents: initialResidents as HostConfigV1["initialResidents"], quota: quota as HostConfigV1["quota"],
-    integration: { policyRevision, protectedPaths: protectedPaths as string[], checks: checks as HostConfigV1["integration"]["checks"] },
-    limits: limits as unknown as HostConfigV1["limits"], features: { notmuch: false, reflinkSeed: false, formalApproval: false, egress: false },
-  };
+    integration: { policyRevision, ...(integration.tiered === undefined ? {} : { tiered: integration.tiered as NonNullable<HostConfigV1["integration"]["tiered"]> }), protectedPaths: protectedPaths as string[], checks: checks as HostConfigV1["integration"]["checks"] },
+    limits: limits as unknown as HostConfigV1["limits"],
+    ...(egress === undefined ? {} : { egress }),
+  });
 }

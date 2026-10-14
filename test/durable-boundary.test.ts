@@ -105,7 +105,7 @@ test("ERR-001/REC-006: accepted submit bundle corruption cannot become terminal 
   seedGit(root);
   const mail = new MailModule({ stateRoot: root, society: "demo" }, store, 8);
   const git = new GitModule({ stateRoot: root, projectGit: join(root, "repos/project.git"), contextGit: join(root, "repos/context.git"), worldDir: join(root, "world"), society: "demo",
-    quarantineTmpBytes: 1024 * 1024, quarantineResources: { cpuSeconds: 1, memoryBytes: 64 * 1024 * 1024, tasks: 32 }, checkTimeoutSeconds: 1 }, store, mail);
+    quarantineTmpBytes: 1024 * 1024, quarantineResources: { cpuSeconds: 1, memoryBytes: 64 * 1024 * 1024, tasks: 32, timeoutSeconds: 1, silenceSeconds: 1 } }, store, mail);
   try {
     const bytes = readFileSync(join(root, "candidate.bundle"));
     const initial = submitFixture(root, SUBMIT_RECOVERY_OP, bytes);
@@ -184,7 +184,7 @@ test("DB-009: create initial EML is an immutable object before acceptance", asyn
   const auth: AuthContext = { actor: "alice", incarnation: 0, role: "resident", channel: "actor", capabilities: new Set(["agent.create"]),
     peer: { pid: process.pid, uid: process.getuid!(), gid: process.getgid!(), cgroup: null } };
   try {
-    const message = await mail.freezeCreateInitial(auth, CREATE_OP, "bob", "frozen brief");
+    const { message } = await mail.freezeCreateInitial(auth, CREATE_OP, "bob", "frozen brief");
     const object = mail.objectPath(message.id);
     assert.equal(existsSync(object), true);
     const bytes = readFileSync(object);

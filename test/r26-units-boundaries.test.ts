@@ -1,9 +1,10 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { StoreError } from "../src/domain/errors.js";
 import { renderUnit } from "../src/units/render.js";
 import { UNIT_COMMAND_LIMITS, type UnitCommandOutcome } from "../src/units/execute.js";
 import { parseProperties, parseUnitObservation, parseCgroupPopulation, parseCgroupProcs } from "../src/units/observe.js";
-import { UnitsModule } from "../src/units.js";
+import { UnitsModule, unitsInstallDir } from "../src/units.js";
 
 const values = { node: "/usr/bin/node", libdir: "/opt/oma", state: "/var/oma", society: "sample", agent: "worker" };
 const properties = "ActiveState=inactive\nSubState=dead\nResult=success\nExecMainStatus=0\nControlGroup=\nInvocationID=0123456789abcdef0123456789abcdef\n";
@@ -53,4 +54,16 @@ test("R26: every unit command uses finite output/time limits and explicit kill p
   assert.ok(UNIT_COMMAND_LIMITS.timeout > 0);
   assert.ok(UNIT_COMMAND_LIMITS.maxBuffer > 0);
   assert.equal(UNIT_COMMAND_LIMITS.killSignal, "SIGKILL");
+});
+
+test("R26: the unit install root is the environment's config root or a named failure, never a guessed /tmp", () => {
+  // A process with no XDG_CONFIG_HOME and no HOME has no config root; unit
+  // files written under a guessed /tmp would sit in shared space. It is named.
+  assert.equal(unitsInstallDir({ XDG_CONFIG_HOME: "/c" }), "/c/systemd/user");
+  assert.equal(unitsInstallDir({ HOME: "/h" }), "/h/.config/systemd/user");
+  assert.equal(unitsInstallDir({ XDG_CONFIG_HOME: "", HOME: "/h" }), "/h/.config/systemd/user");
+  for (const env of [{}, { HOME: "" }, { XDG_CONFIG_HOME: "", HOME: "" }])
+    assert.throws(() => unitsInstallDir(env),
+      (error: unknown) => error instanceof StoreError && error.code === "UNSUPPORTED_PROFILE" && /HOME/.test(error.message),
+      JSON.stringify(env));
 });

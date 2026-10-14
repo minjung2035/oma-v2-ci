@@ -127,8 +127,8 @@ const mutations: Array<[string, (home: string) => string[]]> = [
   ["agent.continue", () => ["agent", "continue", "--note", "hello"]],
   ["submit", (home) => ["submit", "HEAD", "--file", join(home, "input.txt")]],
   [
-    "integrate",
-    () => ["integrate", "1".repeat(40), "--expect", "2".repeat(40)],
+    "merge review",
+    (home) => ["merge", "review", "merge-abcd1234", "--file", join(home, "input.txt")],
   ],
   [
     "context.publish",
@@ -143,7 +143,10 @@ for (const [name, args] of mutations) {
       const before = readdirSync(home, { recursive: true }).sort();
       for (const options of [
         ["--request"],
-        ["--request", "--subject", "later"],
+        // AV1: an option's value is the next argument, whatever it looks like;
+        // `--request --subject` names the key "--subject". A malformed key is one
+        // outside the request-key grammar.
+        ["--request", "bad/key"],
         ["--request", ""],
         ["--request", "valid", "--request"],
         ["--request", "first", "--request", "second"],

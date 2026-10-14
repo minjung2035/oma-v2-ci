@@ -12,23 +12,20 @@ import {
   unlinkSync,
   writeFileSync,
 } from "node:fs";
-import { randomUUID } from "node:crypto";
 import { basename, dirname, join } from "node:path";
 import { sha256Hex } from "../domain/canonical-json.js";
 import { StoreError } from "../domain/errors.js";
 import {
-  ensureDurableDirectory,
+  collectDeadTemporaries,
+  createLockedTemporary,
+  ensureOwnedDurableDirectory,
   faultAt,
   isDurabilityFault,
+  temporaryNameFor,
   type DurabilityObserver,
 } from "./durable-fs.js";
-import {
-  entryAt,
-  linkDescriptor,
-  openBeneath,
-  openDirectory,
-  openRegularBeneath,
-} from "./contained-fs.js";
+import { entryAt, linkDescriptor, openDirectory, openRegularBeneath, closeEvery } from "./contained-fs.js";
+import type { PublishedIdentity } from "./preaccept-artifact.js";
 
 function checkedBytes(
   fd: number,
@@ -87,13 +84,23 @@ export function observeImmutableFile(path: string, expectedHash: string, expecte
   let parent: number | undefined;
   try {
     parent = openDirectory(dirname(path));
-    const fd = openImmutable(parent, basename(path));
+    return observeImmutableEntry(parent, basename(path), expectedHash, expectedBytes);
+  } catch (error) {
+    return failedObservation(error);
+  } finally { if (parent !== undefined) closeSync(parent); }
+}
+/** The same observation of one entry of a directory the caller already holds,
+ * so the caller can observe and then act under one resolution (FS-005, INV09). */
+export function observeImmutableEntry(parent: number, name: string, expectedHash: string, expectedBytes: number): ImmutableObservation {
+  try {
+    const fd = openImmutable(parent, name);
     try { return { kind: "present", bytes: checkedBytes(fd, expectedHash, expectedBytes).bytes }; }
     finally { closeSync(fd); }
-  } catch (error) {
-    if (error !== null && typeof error === "object" && "code" in error && error.code === "ENOENT") return { kind: "absent" };
-    return { kind: error instanceof StoreError && error.code === "STORE_CORRUPT" ? "corrupt" : "unavailable", error };
-  } finally { if (parent !== undefined) closeSync(parent); }
+  } catch (error) { return failedObservation(error); }
+}
+function failedObservation(error: unknown): ImmutableObservation {
+  if (error !== null && typeof error === "object" && "code" in error && error.code === "ENOENT") return { kind: "absent" };
+  return { kind: error instanceof StoreError && error.code === "STORE_CORRUPT" ? "corrupt" : "unavailable", error };
 }
 
 /** Consumers parse these checked bytes, never reopen the checked pathname.
@@ -114,12 +121,15 @@ export function readImmutableBytes(path: string, expectedHash: string, expectedB
  * ownership is not transferred, and accepted evidence is never collected here.
  * The caller still owns source cleanup. Same-inode writes remain outside this
  * namespace guarantee; a readonly mode alone is not a same-UID write boundary.
+ * `linked` hears the inode this call itself put at the destination, before it
+ * is validated or flushed; an existing destination is never reported.
  */
 export function publishImmutableFile(
   source: string,
   destination: string,
   expectedHash?: string,
   faults?: DurabilityObserver,
+  linked?: (identity: PublishedIdentity) => void,
 ): void {
   const sourceParent = openDirectory(dirname(source));
   let sourceFd: number | undefined;
@@ -130,27 +140,33 @@ export function publishImmutableFile(
   try {
     sourceFd = openImmutable(sourceParent, basename(source));
     const original = checkedBytes(sourceFd, expectedHash);
-    ensureDurableDirectory(dirname(destination), 0o755, faults);
+    // P0-8: every caller's destination names an oma-owned mail directory. The
+    // boundary the callers share is not this helper's to know, so the parent
+    // itself is the boundary: its leaf is oma-made (mail/objects, an inbox's
+    // new/cur/tmp, the archive) and is repaired; a mode-000 ancestor above it
+    // refuses, and the provisioning ensure repairs those at start.
+    ensureOwnedDurableDirectory(dirname(destination), dirname(destination), 0o755, faults);
     parent = openDirectory(dirname(destination));
+    // P0V-96: a copy killed before its temporary was removed left it with a
+    // free lock; every publication of this name collects it first -- one
+    // whose destination already exists never reaches the copying path.
+    collectDeadTemporaries(parent);
+    const report = (fd: number): void => {
+      const stat = fstatSync(fd);
+      linked?.({ dev: stat.dev, ino: stat.ino });
+    };
     try {
       faultAt(faults, "publication-link", "before", destination);
       linkDescriptor(sourceFd, parent, basename(destination));
+      report(sourceFd);
     } catch (error) {
       if (isDurabilityFault(error)) throw error;
       const code = (error as NodeJS.ErrnoException).code;
       if (code === "EXDEV") {
-        const name = `.${basename(destination)}.${randomUUID()}.tmp`;
+        const name = temporaryNameFor(basename(destination));
         const label = join(dirname(destination), name);
         faultAt(faults, "file-create", "before", label);
-        temporaryFd = openBeneath(
-          parent,
-          name,
-          constants.O_RDWR |
-            constants.O_CREAT |
-            constants.O_EXCL |
-            constants.O_NOFOLLOW,
-          0o600,
-        );
+        temporaryFd = createLockedTemporary(parent, name, constants.O_RDWR, 0o600);
         temporary = name;
         faultAt(faults, "file-create", "after-visible", label);
         faultAt(faults, "file-write", "before", label);
@@ -162,6 +178,7 @@ export function publishImmutableFile(
         checkedBytes(temporaryFd, original.hash);
         try {
           linkDescriptor(temporaryFd, parent, basename(destination));
+          report(temporaryFd);
         } catch (publicationError) {
           if ((publicationError as NodeJS.ErrnoException).code !== "EEXIST")
             throw publicationError;
@@ -198,10 +215,7 @@ export function publishImmutableFile(
         fsyncSync(parent);
       }
     } finally {
-      if (temporaryFd !== undefined) closeSync(temporaryFd);
-      if (parent !== undefined) closeSync(parent);
-      if (sourceFd !== undefined) closeSync(sourceFd);
-      closeSync(sourceParent);
+      closeEvery(temporaryFd, parent, sourceFd, sourceParent);
     }
   }
 }

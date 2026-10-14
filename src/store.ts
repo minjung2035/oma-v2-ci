@@ -1,39 +1,96 @@
-// MUST [DB-001..009]: sole broker writer; synchronous transactions; six entities.
+// MUST [DB-001..009]: sole broker writer; synchronous transactions.
 // No Git/systemd/fsync/await inside transactions (M-004).
 import { DatabaseSync } from "node:sqlite";
 import { readFileSync, lstatSync } from "node:fs";
 import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import type { Actor, MessageId, OperationId, RequestKey } from "../implementation/contracts/identity.js";
 import type { ErrorCode } from "../implementation/contracts/errors.js";
 import type { RepositoryIdentity, OperationPlanContext } from "./durable.js";
 import type { DecodedOperation, OperationOf } from "./storage/operation-codec.js";
-import { LedgerReader } from "./storage/ledger-reader.js";
+import { LedgerReader, type PendingWorkRows } from "./storage/ledger-reader.js";
 import { assertDirectory } from "./storage/directory.js";
 import { LEDGER_TABLES, DIAGNOSTIC_READ_LIMITS, type DiagnosticReadLimits, type DiagnosticSnapshot, type LedgerTable } from "./storage/diagnostic-snapshot.js";
-import { fullRow, safeInteger, type AgentRow, type DeliveryRow, type BatchRow, type SubscriptionRow, type UsageRow } from "./storage/rows.js";
-import { LedgerTransitions, type DeliveryIdentity, type PreparedBatchInput, type UsageReservation } from "./storage/transitions.js";
+import { fullRow, safeInteger, type AgentRow, type DeliveryRow, type BatchRow, type SubscriptionRow } from "./storage/rows.js";
+import { LedgerTransitions, type DeliveryIdentity, type PreparedBatchInput } from "./storage/transitions.js";
 import { OperationTransitions, type NewOperation } from "./storage/operation-transitions.js";
 import { OperationJournal } from "./storage/operation-journal.js";
 import { readFacets } from "./storage/facets.js";
+import type { NewAgent, StoreQueries, StoreWrites } from "./storage/store-access.js";
+export type { NewAgent } from "./storage/store-access.js";
 export { reused } from "./storage/operation-journal.js";
 import { TransactionScope, assertSynchronousResult, type SyncCallback } from "./storage/transaction.js";
 import { isValidSocietyName, isValidFullOid, isValidOperationId } from "./domain/identifiers.js";
 import { SCHEMA_USER_VERSION_READABLE, SCHEMA_USER_VERSION_WRITTEN } from "./domain/persisted-formats.js";
-import { StoreError, normalizeStorageFailure } from "./domain/errors.js";
+import { StoreError, normalizeStorageFailure, unobserved, sqlitePrimaryCode } from "./domain/errors.js";
 export { StoreError } from "./domain/errors.js";
 export type { DecodedOperation } from "./storage/operation-codec.js";
-export type { AgentRow, DeliveryRow, BatchRow, SubscriptionRow, UsageRow } from "./storage/rows.js";
+export type { AgentRow, DeliveryRow, BatchRow, SubscriptionRow } from "./storage/rows.js";
 export type { Transaction, StoreReads, StoreWrites } from "./storage/transaction.js";
 
-export const SCHEMA_PATH = fileURLToPath(new URL("../../implementation/schema-v1.sql", import.meta.url));
+export const SCHEMA_PATH = fileURLToPath(new URL("../../implementation/schema-v3.sql", import.meta.url));
 export type OperationRow = DecodedOperation;
+/** SQLITE_BUSY or SQLITE_LOCKED, read from SQLite's result code rather than
+ * from its message (P0V-69). */
 export function isBusyError(error: unknown): boolean {
-  return error instanceof Error && /busy|locked/i.test(error.message) && !(error instanceof StoreError);
+  const primary = sqlitePrimaryCode(error);
+  return primary === 5 || primary === 6;
 }
-export interface NewAgent {
-  name: Actor; specHash: string; role: "resident" | "principal"; desired: AgentRow["desired"];
-  incarnation: number; profile: string; createdBy: string | null; specJson: string;
+
+/** Existing-file compatibility only. Startup must already own the broker's
+ * single-writer fence; this observation is not a substitute for that authority.
+ * Never ignore a WAL or journal by unconditionally declaring a file immutable.
+ */
+function preflightDatabase(path: string): void {
+  if (path === ":memory:") return;
+  if (path.startsWith("file:"))
+    throw new StoreError("STORE_CORRUPT", "Store requires a filesystem path, not a SQLite URI");
+  const suffixes = ["", "-wal", "-shm", "-journal"] as const;
+  const identities = (): (string | null)[] => suffixes.map(suffix => {
+    const stat = lstatSync(path + suffix, { bigint: true, throwIfNoEntry: false });
+    if (!stat) return null;
+    if (!stat.isFile() || stat.nlink !== 1n)
+      throw new StoreError("STORE_CORRUPT", "database and sidecars must be unaliased regular files");
+    return `${stat.dev}:${stat.ino}:${stat.size}:${stat.mtimeNs}:${stat.ctimeNs}`;
+  });
+  const before = identities();
+  if (before[0] === null) {
+    if (before.slice(1).some(identity => identity !== null))
+      throw new StoreError("BROKER_UNAVAILABLE", "database is absent but sidecar evidence remains");
+    return;
+  }
+  if (before[3] !== null)
+    throw new StoreError("BROKER_UNAVAILABLE", "journal recovery cannot precede schema compatibility; evidence preserved");
+  const uri = pathToFileURL(path);
+  uri.searchParams.set("mode", "ro");
+  if (before[1] === null && before[2] === null) {
+    // Under the startup writer fence, absent sidecars mean there is no pending
+    // WAL/journal to ignore. Check the same identities again before writer setup.
+    uri.searchParams.set("immutable", "1");
+  } else {
+    if (before[1] === null || before[2] === null)
+      throw new StoreError("BROKER_UNAVAILABLE", "read-only WAL preflight requires both existing sidecars; evidence preserved");
+    // SQLite's Unix VFS must not create/rebuild its shared-memory index here.
+    uri.searchParams.set("readonly_shm", "1");
+  }
+  const db = new DatabaseSync(uri.href, { readOnly: true, allowExtension: false });
+  let failure: unknown;
+  let failed = false;
+  try {
+    const version = safeInteger(fullRow(db.prepare("PRAGMA user_version").get(), ["user_version"], "schema version").user_version, "schema version");
+    if (!SCHEMA_USER_VERSION_READABLE.includes(version) && version !== 0)
+      throw new StoreError("STORE_CORRUPT", `unexpected schema user_version ${version}; no migration was attempted`);
+    if (version === 0 && db.prepare("SELECT 1 FROM sqlite_schema LIMIT 1").get() !== undefined)
+      throw new StoreError("STORE_CORRUPT", "unversioned nonempty database is not a new OMA database");
+  } catch (error) { failed = true; failure = error; }
+  try { db.close(); }
+  catch (closeError) {
+    if (failed) throw new AggregateError([failure, closeError], "schema preflight and close failed");
+    throw closeError;
+  }
+  if (failed) throw failure;
+  if (identities().some((identity, index) => identity !== before[index]))
+    throw new StoreError("BROKER_UNAVAILABLE", "database identity changed during schema preflight; writer setup refused");
 }
 
 /** Administrator-only read connection. No Store construction, migration, WAL
@@ -62,17 +119,18 @@ export function readDiagnosticSnapshot(stateRoot: string, limits: DiagnosticRead
     const version = safeInteger(fullRow(db.prepare("PRAGMA user_version").get(), ["user_version"], "schema version").user_version, "schema version");
     if (!SCHEMA_USER_VERSION_READABLE.includes(version))
       throw new StoreError("STORE_CORRUPT", `diagnostics require a readable schema version; found ${version} and no migration was attempted`);
+    const expectedTables = LEDGER_TABLES;
     const schema = [];
     for (const row of db.prepare("SELECT name,type,sql FROM sqlite_schema WHERE name NOT LIKE 'sqlite_%' AND type IN ('table','view','trigger')").iterate()) {
-      if (schema.length >= LEDGER_TABLES.length) throw new StoreError("STORE_CORRUPT", "unexpected diagnostic database objects");
+      if (schema.length >= expectedTables.length) throw new StoreError("STORE_CORRUPT", "unexpected diagnostic database objects");
       schema.push(row);
     }
-    if (schema.length !== LEDGER_TABLES.length || schema.some(row => row.type !== "table" || typeof row.name !== "string" ||
-      !LEDGER_TABLES.some(table => table === row.name) || typeof row.sql !== "string" || /CREATE\s+VIRTUAL/i.test(row.sql)))
-      throw new StoreError("STORE_CORRUPT", "diagnostic database entity set differs from v1");
+    if (schema.length !== expectedTables.length || schema.some(row => row.type !== "table" || typeof row.name !== "string" ||
+      !expectedTables.some(table => table === row.name) || typeof row.sql !== "string" || /CREATE\s+VIRTUAL/i.test(row.sql)))
+      throw new StoreError("STORE_CORRUPT", "diagnostic database entity set differs from its schema version");
     let rows = 0, bytes = 0;
-    const tables: Record<LedgerTable, unknown[]> = { agents: [], operations: [], subscriptions: [], deliveries: [], batches: [], usage: [] };
-    for (const table of LEDGER_TABLES) {
+    const tables: Record<LedgerTable, unknown[]> = { agents: [], operations: [], subscriptions: [], deliveries: [], batches: [], attestations: [] };
+    for (const table of expectedTables) {
       // Table names come only from the closed constant, never from persisted SQL.
       for (const row of db.prepare(`SELECT * FROM ${table}`).iterate()) {
         if (++rows > limits.maxRows) throw new StoreError("LIMIT_EXCEEDED", "diagnostic row budget exceeded");
@@ -99,34 +157,53 @@ export function readDiagnosticSnapshot(stateRoot: string, limits: DiagnosticRead
 }
 
 const DEFAULT_BUSY_RETRIES = 5;
-export class Store {
+export class Store implements StoreQueries, StoreWrites {
   private readonly readViews = readFacets(this);
   readonly operations = this.readViews.operations;
+  readonly attestations = this.readViews.attestations;
   readonly agents = this.readViews.agents;
   readonly subscriptions = this.readViews.subscriptions;
   readonly deliveries = this.readViews.deliveries;
   readonly batches = this.readViews.batches;
-  readonly usage = this.readViews.usage;
   private readonly db: DatabaseSync;
   private readonly reader: LedgerReader;
   private readonly transitions: LedgerTransitions;
   private readonly journal: OperationJournal;
   private readonly transactions = new TransactionScope(this);
   private repositoryIdentity: RepositoryIdentity | null;
-  constructor(readonly path: string, readonly busyRetries: number = DEFAULT_BUSY_RETRIES, identity: RepositoryIdentity | null = null) {
+  /** P0V-126 (G02-ledger-r2-03), P0-2: the one clock every row this store
+   * writes is stamped from -- agents, operations, deliveries, subscriptions
+   * and batches alike. A reading that goes backwards is clamped where it
+   * lands (MAX(?, created_at_ms)); what the time is, is read here only. */
+  private readonly now: () => number;
+  constructor(readonly path: string, readonly busyRetries: number = DEFAULT_BUSY_RETRIES, identity: RepositoryIdentity | null = null,
+    now: () => number = () => Date.now()) {
+    this.now = now;
     this.repositoryIdentity = null;
     if (identity !== null) this.bindRepositoryIdentity(identity);
+    preflightDatabase(path);
     this.db = new DatabaseSync(path);
-    this.db.exec("PRAGMA foreign_keys = ON");
-    this.db.exec("PRAGMA journal_mode = WAL");
-    this.db.exec("PRAGMA synchronous = FULL");
-    this.db.exec("PRAGMA busy_timeout = 5000");
-    this.migrate();
-    this.reader = new LedgerReader(this.db, dirname(path), () => this.repositoryIdentity);
-    this.transitions = new LedgerTransitions(this.db, this.reader, () => this.requireTx());
-    this.journal = new OperationJournal(this.reader,
-      new OperationTransitions(this.db, this.reader, this.transactions, operation => this.planContext(operation)),
-      this.transactions);
+    // Until construction returns, this scope owns the native connection. The
+    // broker lifetime cannot retain a Store whose constructor threw.
+    try {
+      this.db.exec("PRAGMA foreign_keys = ON");
+      this.db.exec("PRAGMA journal_mode = WAL");
+      this.db.exec("PRAGMA synchronous = FULL");
+      // R6-19: the bound on how long this synchronous connection -- and so the
+      // broker's event loop -- waits for another writer's lock (validation,
+      // "known limitations"). A watchdog, if one is added, must be longer.
+      this.db.exec("PRAGMA busy_timeout = 5000");
+      this.migrate();
+      this.reader = new LedgerReader(this.db, dirname(path), () => this.repositoryIdentity);
+      this.transitions = new LedgerTransitions(this.db, this.reader, () => this.requireTx(), this.now);
+      this.journal = new OperationJournal(this.reader,
+        new OperationTransitions(this.db, this.reader, this.transactions, operation => this.planContext(operation), this.now),
+        this.transactions);
+    } catch (error) {
+      try { this.db.close(); }
+      catch (closeError) { throw new AggregateError([error, closeError], "Store initialization and close failed"); }
+      throw error;
+    }
   }
   bindRepositoryIdentity(identity: RepositoryIdentity): void {
     if (!isValidSocietyName(identity.society)) throw new StoreError("STORE_CORRUPT", "invalid repository society identity");
@@ -143,22 +220,27 @@ export class Store {
   }
   private migrate(): void {
     const version = this.userVersion();
-    // P8: the readable version set is explicit. Anything else fails closed with
-    // no migration attempt and no rewrite of the existing file.
-    if (SCHEMA_USER_VERSION_READABLE.includes(version)) return;
+    // P8 / v0.1.0 pre-release: the only readable version is the one this build
+    // writes. Anything else fails closed with no migration attempt and no
+    // rewrite of the existing file.
+    if (version === SCHEMA_USER_VERSION_WRITTEN) return;
     if (version !== 0) throw new StoreError("STORE_CORRUPT", `unexpected schema user_version ${version}; no migration was attempted`);
     let ddl: string;
     try { ddl = readFileSync(SCHEMA_PATH, "utf8"); }
-    catch (error) { throw new StoreError("STORE_CORRUPT", `schema file unreadable: ${(error as Error).message}`); }
+    catch (error) { throw unobserved(error, "the schema file") ?? new StoreError("STORE_CORRUPT", `schema file unreadable: ${(error as Error).message}`, { cause: error }); }
     try { this.db.exec(ddl); }
     catch (error) {
-      try { this.db.exec("ROLLBACK"); } catch { /* no open transaction */ }
-      const normalized = normalizeStorageFailure(error);
+      let failure: unknown = error;
+      if (this.db.isTransaction) {
+        try { this.db.exec("ROLLBACK"); }
+        catch (rollbackError) { failure = new AggregateError([error, rollbackError], "schema application and rollback failed"); }
+      }
+      const normalized = normalizeStorageFailure(failure);
       if (normalized instanceof StoreError) throw normalized;
-      throw new StoreError("STORE_CORRUPT", `migration failed: ${(error as Error).message}`);
+      throw new StoreError("STORE_CORRUPT", `schema application failed: ${(error as Error).message}`, { cause: failure });
     }
     if (this.userVersion() !== SCHEMA_USER_VERSION_WRITTEN)
-      throw new StoreError("STORE_CORRUPT", `migration did not set user_version=${SCHEMA_USER_VERSION_WRITTEN}`);
+      throw new StoreError("STORE_CORRUPT", `schema application did not set user_version=${SCHEMA_USER_VERSION_WRITTEN}`);
   }
   private userVersion(): number {
     return safeInteger(fullRow(this.db.prepare("PRAGMA user_version").get(), ["user_version"], "schema version").user_version, "schema version");
@@ -173,7 +255,9 @@ export class Store {
         }
         const normalized = normalizeStorageFailure(error);
         if (normalized instanceof StoreError) throw normalized;
-        throw new StoreError("STORE_CORRUPT", `BEGIN IMMEDIATE failed: ${(error as Error).message}`);
+        // P0V-69, P0-5: a failure SQLite does not name as corruption is not
+        // taken for it; corruption closes admission for this process.
+        throw new StoreError("INTERNAL_ERROR", `BEGIN IMMEDIATE failed: ${(error as Error).message}`, { cause: error });
       }
     }
     throw new StoreError("INTERNAL_ERROR", "invalid transaction retry configuration");
@@ -200,26 +284,40 @@ export class Store {
   private requireTx(): void { this.transactions.requireLive(); }
   insertAgent(agent: NewAgent): void {
     this.requireTx();
+    // P0V-56: one event, one reading of the clock -- two readings could put
+    // the update before the creation it belongs to.
+    const now = this.now();
     this.db.prepare(`INSERT INTO agents
       (name, spec_hash, role, desired, incarnation, profile, created_by, spec_json, created_at_ms, updated_at_ms)
       VALUES (?,?,?,?,?,?,?,?,?,?)`).run(agent.name, agent.specHash, agent.role, agent.desired, agent.incarnation,
-      agent.profile, agent.createdBy, agent.specJson, Date.now(), Date.now());
+      agent.profile, agent.createdBy, agent.specJson, now, now);
   }
   getAgent(name: string): AgentRow | null { return this.reader.agent(name); }
   listAgents(): AgentRow[] { return this.reader.agents(); }
-  updateAgent(agent: { name: string; desired?: AgentRow["desired"]; incarnation?: number; specHash?: string; specJson?: string }): void {
-    this.requireTx(); const now = Date.now();
+  /** WP23.03: names only; see LedgerReader.agentNames. */
+  agentNames(): string[] { return this.reader.agentNames(); }
+  /** P0-1: an agent row holds one past fact and two current ones. The resolved
+   * spec is fixed when the agent is created (LIFE-008) and past operations,
+   * usage and receipts are read against it, so nothing rewrites it; revoking
+   * authority is the host's current policy, not a rewrite of this fact. What
+   * moves is the desired state and the run lease, and a lease only moves
+   * forward: an incarnation used again would let a new run's facts be read as
+   * an earlier run's. */
+  updateAgent(agent: { name: string; desired?: AgentRow["desired"]; incarnation?: number }): void {
+    this.requireTx(); const now = this.now();
+    for (const key of Object.keys(agent))
+      if (key !== "name" && key !== "desired" && key !== "incarnation")
+        throw new StoreError("INTERNAL_ERROR", `agent update has no spec rewrite or other field: ${key}`);
+    const existing = this.getAgent(agent.name);
+    if (!existing) throw new StoreError("ADDRESS_NOT_FOUND", `no agent ${agent.name}`);
     if (agent.desired !== undefined) {
-      const existing = this.getAgent(agent.name);
-      if (!existing) throw new StoreError("ADDRESS_NOT_FOUND", `no agent ${agent.name}`);
       if (!validDesiredTransition(existing.desired, agent.desired)) throw new StoreError("INVALID_REQUEST", `invalid desired transition ${existing.desired}->${agent.desired}`);
-      this.db.prepare("UPDATE agents SET desired=?, updated_at_ms=? WHERE name=?").run(agent.desired, now, agent.name);
+      this.db.prepare("UPDATE agents SET desired=?, updated_at_ms=MAX(?, created_at_ms) WHERE name=?").run(agent.desired, now, agent.name);
     }
-    if (agent.incarnation !== undefined) this.db.prepare("UPDATE agents SET incarnation=?, updated_at_ms=? WHERE name=?").run(agent.incarnation, now, agent.name);
-    if (agent.specHash !== undefined || agent.specJson !== undefined) {
-      const current = this.getAgent(agent.name);
-      if (!current) throw new StoreError("ADDRESS_NOT_FOUND", `no agent ${agent.name}`);
-      this.db.prepare("UPDATE agents SET spec_hash=?, spec_json=?, updated_at_ms=? WHERE name=?").run(agent.specHash ?? current.specHash, agent.specJson ?? current.specJson, now, agent.name);
+    if (agent.incarnation !== undefined) {
+      if (!Number.isSafeInteger(agent.incarnation) || agent.incarnation <= existing.incarnation)
+        throw new StoreError("STORE_CORRUPT", `agent ${agent.name} incarnation can only move forward`);
+      this.db.prepare("UPDATE agents SET incarnation=?, updated_at_ms=MAX(?, created_at_ms) WHERE name=?").run(agent.incarnation, now, agent.name);
     }
   }
   follow(topic: string, agent: string): void { this.transitions.follow(topic, agent); }
@@ -233,9 +331,34 @@ export class Store {
     return this.journal.classifyKey(actor, key, hash);
   }
   claimOperation(operation: NewOperation): "inserted" | "retry" { return this.journal.accept(operation); }
-  acceptOperation(operation: Parameters<Store["insertOperation"]>[0]): "inserted" | "retry" { return this.claimOperation(operation); }
+  acceptOperation(operation: NewOperation): "inserted" | "retry" { return this.claimOperation(operation); }
   getOperation(actor: Actor, key: RequestKey): OperationRow | null { return this.journal.get(actor, key); }
+  /** P0V-92 (R6-15): the operation behind a key the ledger has just answered
+   * as a retry. No code removes an operation, so a missing one is a ledger
+   * that no longer says what it said -- corrupt, and said so, not a `!`. */
+  retriedOperation(actor: Actor, key: RequestKey): OperationRow {
+    const operation = this.getOperation(actor, key);
+    if (operation === null) throw new StoreError("STORE_CORRUPT", `request key ${key} was answered as a retry and has no operation`);
+    return operation;
+  }
   getOperationById(id: OperationId): OperationRow | null { return this.journal.getById(id); }
+  /** Bounded presentation lookup: ordinary mail needs no full operation decode.
+   * Only an integration's validated accepted plan can identify a notice. */
+  integrationNoticeRequester(messageId: MessageId): Actor | null {
+    const id = `op-${messageId.slice(2, 38)}`;
+    if (!this.db.prepare("SELECT id FROM operations WHERE id = ? AND kind = 'git.integrate' AND state <> 'failed'").get(id)) return null;
+    const operation = this.getOperationById(id);
+    return operation?.kind === "git.integrate" && operation.plan.merge?.notice.some(message =>
+      message.id === messageId && message.review?.role === "notice") ? operation.actor : null;
+  }
+  latestSocietyAction() { return this.reader.latestSocietyAction(); }
+  societyOpen(): boolean {
+    const action = this.latestSocietyAction();
+    return action === null || (action.plan.state === "open" && action.state === "succeeded");
+  }
+  latestAgentAction(agent: Actor, actor?: Actor) { return this.reader.latestAction(agent, actor); }
+  submittedOperations() { return this.reader.submissions(); }
+  attestationFacts() { return this.reader.attestations(); }
   findPhysicalCreate(name: Actor, specHash: string): OperationOf<"agent.create"> | null { return this.reader.physicalCreate(name, specHash); }
   recoverableOperations(): OperationId[] { return this.journal.recoverableIds(); }
   /** CTX-006: a prepared tree or current symlink is not a completed GOAL.
@@ -247,9 +370,11 @@ export class Store {
     let selected: unknown;
     try {
       selected = this.db.prepare(`SELECT id FROM operations WHERE kind='context.publish' AND state='succeeded'
-        AND json_extract(plan_json, '$.candidate')=? ORDER BY created_at_ms DESC, id DESC LIMIT 1`).get(candidate);
+        AND json_extract(plan_json, '$.candidate')=? ORDER BY rowid DESC LIMIT 1`).get(candidate);
     } catch (error) {
-      throw new StoreError(isBusyError(error) ? "DB_BUSY" : "STORE_CORRUPT", "completed context identity query failed");
+      // As every other query: busy is DB_BUSY, and the native storage owner reads the rest.
+      if (isBusyError(error)) throw new StoreError("DB_BUSY", "completed context identity query failed");
+      throw normalizeStorageFailure(error);
     }
     if (selected === undefined) return null;
     const id = fullRow(selected, ["id"], "completed context projection").id;
@@ -263,23 +388,26 @@ export class Store {
   setOperationSucceeded(id: OperationId, resultJson: string): void { this.journal.succeed(id, resultJson); }
   setOperationFailed(id: OperationId, code: ErrorCode): void { this.journal.fail(id, code); }
   setOperationUnknown(id: OperationId): void { this.journal.markUnknown(id); }
-  insertDeliveries(deliveries: DeliveryIdentity[]): void { this.transitions.insertDeliveries(deliveries); }
+  insertDeliveries(deliveries: readonly DeliveryIdentity[]): void { this.transitions.insertDeliveries(deliveries); }
   markMaterialized(message: MessageId, recipient: Actor): void { this.transitions.markMaterialized(message, recipient); }
   markAcknowledged(message: MessageId, recipient: Actor): void { this.transitions.markAcknowledged(message, recipient); }
   pendingDeliveries(agent: Actor): DeliveryRow[] { return this.reader.pendingDeliveries(agent); }
+  /** runner.pending's count: the same eligible rows, counted in SQL. */
+  pendingDeliveryCount(agent: Actor): number { return this.reader.pendingDeliveryCount(agent); }
+  pendingDeliveryRows(agent: Actor): IterableIterator<DeliveryRow> { return this.reader.pendingDeliveryRows(agent); }
   getDelivery(message: MessageId, recipient: Actor): DeliveryRow | null { return this.reader.delivery(message, recipient); }
   deliveriesForOperation(id: OperationId): DeliveryRow[] { return this.reader.operationDeliveries(id); }
   insertPreparedBatch(batch: PreparedBatchInput): void { this.transitions.insertPreparedBatch(batch); }
   getBatch(id: string): BatchRow | null { return this.reader.batch(id); }
   preparedBatches(agent: Actor): BatchRow[] { return this.reader.preparedBatches(agent); }
-  reassignPreparedBatches(agent: Actor, incarnation: number): void { this.transitions.reassignPreparedBatches(agent, incarnation); }
+  /** WP23.03: display projection only; see LedgerReader.pendingWorkRows. */
+  pendingWorkRows(): PendingWorkRows { return this.reader.pendingWorkRows(); }
   linkDeliveriesToBatch(batchId: string, messages: MessageId[]): void { this.transitions.linkDeliveriesToBatch(batchId, messages); }
-  pendingBatchesFor(agent: Actor, incarnation: number): BatchRow[] { return this.preparedBatches(agent).filter(batch => batch.incarnation === incarnation); }
-  completeBatch(batchId: string, messages: MessageId[], agent: Actor, incarnation?: number): void { this.transitions.completeBatch(batchId, messages, agent, incarnation); }
-  reserveUsage(usage: UsageReservation): void { this.transitions.reserveUsage(usage); }
-  usageRows(): UsageRow[] { return this.reader.usages(); }
-  getUsage(id: string): UsageRow | null { return this.reader.usage(id); }
-  settleUsage(id: string, outcome: UsageRow["outcome"], reportedUnits: number | null, detailsJson: string | null): void { this.transitions.settleUsage(id, outcome, reportedUnits, detailsJson); }
+  /** DR9: the prepared batches a run at `incarnation` may present -- every
+   * prepared batch created no later than that run, since a run inherits all of
+   * them when it opens. */
+  pendingBatchesFor(agent: Actor, incarnation: number): BatchRow[] { return this.preparedBatches(agent).filter(batch => batch.incarnation <= incarnation); }
+  completeBatch(batchId: string, messages: MessageId[], agent: Actor, attempt: number, sessionPath: string): void { this.transitions.completeBatch(batchId, messages, agent, attempt, sessionPath); }
 }
 function validDesiredTransition(from: AgentRow["desired"], to: AgentRow["desired"]): boolean {
   if (from === to) return true;

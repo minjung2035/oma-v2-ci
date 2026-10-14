@@ -1,0 +1,173 @@
+{
+  "version": 1,
+  "date": "2026-10-08",
+  "baseHead": "0364e99c",
+  "scope": "Actual Linux OMA/Pi/OpenTUI PTY with fresh isolated HOME/data; only inference is scripted locally. No subagents.",
+  "node": "24.21.0",
+  "pi": "1.0.1",
+  "openTui": "0.3.11",
+  "budgetSeconds": 5,
+  "baseline": {
+    "firstOutputOrFailureSeconds": 146.6731489750091,
+    "exit": 3,
+    "screenReady": false,
+    "selectedFiles": 15519,
+    "spawnSyncProfileSeconds": 136.459,
+    "profileTimeKind": "Sampled calling wall time; not child CPU usage",
+    "artifacts": "/tmp/oma-startup-nhj_86s8",
+    "traceArtifacts": "/tmp/oma-startup-xtxy7bj1",
+    "tracePartialHashObjectChildren": 8688
+  },
+  "finalMeasurements": {
+    "society": [
+      {
+        "mode": "society",
+        "run": 1,
+        "artifacts": "/tmp/oma-startup-benchmark-dkx3lem7",
+        "screenSeconds": 2.8836076389998198,
+        "requestSeconds": 3.131338768,
+        "responseSeconds": 3.154681009007618,
+        "brokerSeconds": null,
+        "quitSeconds": 0.1411532019264996,
+        "exit": 0
+      },
+      {
+        "mode": "society",
+        "run": 2,
+        "artifacts": "/tmp/oma-startup-benchmark-brvd6hv3",
+        "screenSeconds": 2.8928576069884,
+        "requestSeconds": 3.146004329,
+        "responseSeconds": 3.1707216990180314,
+        "brokerSeconds": null,
+        "quitSeconds": 0.144953923067078,
+        "exit": 0
+      },
+      {
+        "mode": "society",
+        "run": 3,
+        "artifacts": "/tmp/oma-startup-benchmark-cgfat7pj",
+        "screenSeconds": 2.879459477029741,
+        "requestSeconds": 3.129573905,
+        "responseSeconds": 3.1533609160687774,
+        "brokerSeconds": null,
+        "quitSeconds": 0.14520658110268414,
+        "exit": 0
+      }
+    ],
+    "personal": [
+      {
+        "mode": "personal",
+        "run": 1,
+        "artifacts": "/tmp/oma-startup-benchmark-v0z57uu3",
+        "screenSeconds": 1.2346986860502511,
+        "requestSeconds": 1.490004474,
+        "responseSeconds": 1.5322144231759012,
+        "brokerSeconds": null,
+        "quitSeconds": 0.10652579693123698,
+        "exit": 0
+      },
+      {
+        "mode": "personal",
+        "run": 2,
+        "artifacts": "/tmp/oma-startup-benchmark-63lelwo3",
+        "screenSeconds": 1.2192294499836862,
+        "requestSeconds": 1.481068482,
+        "responseSeconds": 1.508244798053056,
+        "brokerSeconds": null,
+        "quitSeconds": 0.11375481681898236,
+        "exit": 0
+      },
+      {
+        "mode": "personal",
+        "run": 3,
+        "artifacts": "/tmp/oma-startup-benchmark-gk3lwd36",
+        "screenSeconds": 1.2127720119897276,
+        "requestSeconds": 1.434128247,
+        "responseSeconds": 1.4948061290197074,
+        "brokerSeconds": null,
+        "quitSeconds": 0.11518230801448226,
+        "exit": 0
+      }
+    ],
+    "broker": [
+      {
+        "mode": "society",
+        "run": 1,
+        "artifacts": "/tmp/oma-startup-benchmark-rq0iokw1",
+        "screenSeconds": 2.8834006879478693,
+        "requestSeconds": 3.13939605,
+        "responseSeconds": 3.1655271030031145,
+        "brokerSeconds": 30.121015464,
+        "quitSeconds": 0.7270748070441186,
+        "exit": 0
+      }
+    ]
+  },
+  "measurementClock": "Node hrtime.bigint at actual OMA spawn; PTY screen/response observed with Python monotonic. Provider setup precedes launch.",
+  "deploymentDigest": "201991b0644a43ca17004fa9aedea71d630277aeb223fe0bed182144479c5e5d",
+  "measuredProductionChanges": {
+    "src/domain/deployment.ts": "629cb247111d35889960b4ee7c6c53c99ab6f4180941ecf265af65d65fd85d68",
+    "src/entry/broker.ts": "f08c8777334f4aa0c351ebf30c94f5c8e478fca96b09a7245ed1b37227587752",
+    "src/entry/oma-society.ts": "4a5253b0ce3b3cc710ddc9c4f2016ba6441b2da9d18b41954966fd20eaec404b",
+    "src/entry/pi-interactive-host.ts": "3f48f0c1af79c40326443968f4f09f9952edb0401fb9afce1b6e428907e36ec7",
+    "src/entry/pi-personal.ts": "8905e8401f38531d078b796eb643597c9cb49b458d7586d11e30012f3a7cb4c0",
+    "src/entry/prepare-society.ts": "11ae32246c76962df1fd3fc73d74d5ac6e6b8aeb814d4e1bdb9ac11495dc7181",
+    "src/extension/vendor-bundle.ts": "7e831836219a87696809b9a18d371bbbcdaaccd979dbd2fbf2a4126d2b8d002a",
+    "src/git/project-snapshot.ts": "8e9310b7bdd0db27d4efc953cf090c0500134f35cd56b5d28b46fbbe9d74a39a",
+    "src/pi-compat/interactive-tool-setup.ts": "c1d8510d823b928b75e7ebd5717ce2b3a64fba4f28498322f519762b75614b91",
+    "src/pi-compat/interactive-tools.ts": "a542cd453f3b716a98f8d1ea6a9c2aad21207aab9528bd10140d1e76475ec3f8",
+    "src/pi-compat/pi-private.d.ts": "3c9949b5f2cd4699dbf6efe1c8e9de0751e7635fe5d5c2dd94b935ee24454bab",
+    "src/pi-compat/settings-object.ts": "126753973027352fd7cdbe4cf9fe3140872e75e4099eb23c85bec562c9ef407f",
+    "src/pi-compat/settings.ts": "9b28517dcf12225065324d69ccac5e4d334c4cd06cd60b73a5c101d147c0f25c",
+    "src/platform/host/files.ts": "1f7bc01e96d7aa7d8003a15f1d3ad035846a9fde0889be1ccf8cdda436462022",
+    "src/runtime/broker-supervisor.ts": "4583a66e461274873d76f92fb51b98d38958e9169a2a3cd8964f2ae08777d122",
+    "src/runtime/deployment-manifest.ts": "e304f0107cd464aae5bec19521d4250cbc364d44c495f08c09d87496be5100a9",
+    "src/runtime/host-tenure.ts": "fe453d5ca33868a3ba1c27ee3d741009cca8ee422189b4a44d7161aa28929838",
+    "src/runtime/personal-session.ts": "e6bbaa4de5de5694bc9757a0ac0f1cfc23fa200ff3531535c2154569e33bc90a",
+    "src/runtime/pi-presentation.ts": "05f73869725ecc99e5f4145195bc688a755e1c98abfce7e4275fd5930e543217",
+    "src/runtime/pi-runtime.ts": "8bd4eb7f16b9347e7375366740e68e11279c147394c17e506e8d0a3388dcbe8a",
+    "src/runtime/provision.ts": "93203dafedb0e5fe29d52c37ec0e07d1a5ba8ea601be1977523ffb04844f7e8d",
+    "src/runtime/society-lease.ts": "f979f74a7189ff98e870026788422c3da8b055e00943045a53e343916b27aa25",
+    "src/runtime/society-preparation.ts": "c1f5c2d1cfe2b818094c774a58db344465481effda4e7ced61a230a5e9d3533c",
+    "src/storage/project-preparation.ts": "1199ed712e9859ab107c92df7d3141f761c4ba7a43f13a53c588556a73394e18",
+    "src/tui/project-settings.ts": "b4837465923927326874ae7a0cd73a0a4286dc0f519d3492f6a3050fce64a155",
+    "src/tui/session.ts": "43f1a088b22a5014874fb39d03f800995c7c1f50a457e461b8a94dafbac80a87"
+  },
+  "limits": [
+    "1-second target not achieved",
+    "5-second budget is actual conversation/model request, not broker or Worker readiness",
+    "Full Society preparation observed separately through a connected admin socket at 30.121 seconds",
+    "File-system/module caches are not forcibly dropped",
+    "Native macOS, paid provider, powercut and release qualification NOT_RUN"
+  ],
+  "commands": [
+    "python3 scripts/benchmark-startup.py --node /opt/oma-test-node/bin/node --runs 3",
+    "python3 scripts/benchmark-startup.py --node /opt/oma-test-node/bin/node --mode personal --runs 3",
+    "python3 scripts/benchmark-startup.py --node /opt/oma-test-node/bin/node --runs 1 --wait-broker"
+  ],
+  "authorityHandoff": {
+    "mode": "society",
+    "run": 1,
+    "artifacts": "/tmp/oma-startup-benchmark-wq3mkkpe",
+    "screenSeconds": 2.9253201640676707,
+    "requestSeconds": 3.170932594,
+    "responseSeconds": 3.194326956057921,
+    "brokerSeconds": 30.009715451,
+    "brokerToolSeconds": 30.835299164,
+    "brokerToolState": "succeeded-once",
+    "quitSeconds": 0.5063603101298213,
+    "exit": 0
+  },
+  "authorityOracle": "Real scripted model called oma_society(close) after broker listening. Read-only SQLite after actual exit contained exactly one principal/same-key society.set row in succeeded state.",
+  "localSuite": {
+    "tests": 3919,
+    "serial": 9,
+    "parallel": 3910,
+    "pass": 3919,
+    "fail": 0,
+    "cancelled": 0,
+    "skipped": 0,
+    "log": "/tmp/oma-final-full-suite.log",
+    "systemdRequiredFiles": "NOT_RUN in the local runner by design"
+  }
+}

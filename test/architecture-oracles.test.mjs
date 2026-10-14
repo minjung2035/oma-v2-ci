@@ -1,9 +1,10 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from "node:fs";
+import { mkdtempSync, mkdirSync, writeFileSync, rmSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, dirname, relative } from "node:path";
 import ts from "typescript";
+const root = new URL("../", import.meta.url);
 import {
   analyzeProgram,
   runtimeImportClosure,
@@ -267,6 +268,19 @@ test("P15 import syntax mutations share architecture and runtime closure classif
   );
 });
 
+test("DR27/P13: tier facts, retained codecs and snapshot mechanisms have distinct owners", () => {
+  const owners = {
+    "src/domain/attestation-relations.ts": "K0-values",
+    "src/domain/tier-evaluation.ts": "K0-values",
+    "src/domain/attestation.ts": "K1-codecs",
+    "src/domain/integration-policy.ts": "K1-codecs",
+    "src/domain/tier-snapshot.ts": "K1-codecs",
+    "src/storage/project-preparation.ts": "K2-mechanisms",
+    "src/storage/snapshot-reader.ts": "K2-mechanisms",
+  };
+  for (const [file, zone] of Object.entries(owners)) assert.equal(kernelZoneOf(file)?.name, zone, file);
+});
+
 test("P13 every semantic zone direction, exact membership and pure external capability are gated", () => {
   const representatives = [
     "src/domain/identifiers.ts",
@@ -411,6 +425,9 @@ test("P14 declaration-only ports retain pinned implementation conformance outsid
   );
   const host = ts.createCompilerHost(program.getCompilerOptions());
   const read = host.getSourceFile.bind(host);
+  // The mutated program re-reads only the port; every other input is the
+  // production program's own SourceFile -- parse and binding are functions of
+  // content, so shared syntax is what a reparse would produce.
   const portAst = ts.createSourceFile(port.fileName, port.text, ts.ScriptTarget.Latest, true);
   let returnTypeRange = null;
   const findOperationLookup = (node) => {
@@ -424,18 +441,19 @@ test("P14 declaration-only ports retain pinned implementation conformance outsid
   host.getSourceFile = (file, version, ...rest) =>
     file === port.fileName
       ? ts.createSourceFile(file, mutatedPort, version, true, ts.ScriptKind.TS)
-      : read(file, version, ...rest);
+      : (program.getSourceFile(file) ?? read(file, version, ...rest));
   const mutated = ts.createProgram({
     rootNames: [conformance.fileName],
     options: program.getCompilerOptions(),
     host,
   });
+  // The assertion reads one file's diagnostics; a whole-program preEmit pass
+  // would recheck every source for the same answer.
   assert.ok(
-    ts
-      .getPreEmitDiagnostics(mutated)
-      .some(
-        (d) => d.code === 2344 && d.file?.fileName === conformance.fileName,
-      ),
+    [
+      ...mutated.getSyntacticDiagnostics(conformance),
+      ...mutated.getSemanticDiagnostics(conformance),
+    ].some((d) => d.code === 2344),
     "incompatible Store must fail conformance, not just a caller",
   );
 });
@@ -487,7 +505,7 @@ test("P15 persisted evidence identity fails before rule evaluation and exact bas
     {
       "src/entry/example.ts":
         "const s = new Set(); if (s.add(1)) throw new Error();",
-      "docs/architecture-improvement/evidence/p5-dependency-graph.json":
+      "implementation/evidence/dependency-graph.json":
         JSON.stringify({ sourceFiles: [] }),
     },
     (root, program) => {
@@ -628,50 +646,64 @@ test("P23 contract ownership forbids runtime, type, inline-import and re-export 
   }, ["src/**/*.ts", "implementation/**/*.ts"]);
 });
 
-test("P23 contract ownership keeps only the exact frozen Transaction compatibility alias", () => {
-  const files = {
-    "implementation/contracts/module-contracts.ts": "export type Transaction = import(\"../../src/store.js\").Transaction;",
-    "implementation/contracts.ts": "export type { Transaction } from \"./contracts/module-contracts.js\";",
-    "src/store.ts": "export interface Transaction { commit(): void; }",
-  };
-  fixture(files, (root, program) => {
-    const findings = analyzeProgram(program, { rootDir: root, checkContracts: false, programGraph: graphFromProgram(program, { rootDir: root }) });
-    assert.deepEqual(findings.filter(finding => finding.rule === "contract-ownership"), []);
-  }, ["src/**/*.ts", "implementation/contracts.ts", "implementation/contracts/**/*.ts"]);
-  for (const extra of [
-    'export type Other = import("../../src/store.js").Transaction;',
-    'import type { Transaction as Other } from "../../src/store.js";',
-    'export type { Transaction as Other } from "../../src/store.js";',
-  ]) fixture({ ...files, "implementation/contracts/module-contracts.ts": `${files["implementation/contracts/module-contracts.ts"]} ${extra}` }, (root, program) => {
-    const findings = analyzeProgram(program, { rootDir: root, checkContracts: false, programGraph: graphFromProgram(program, { rootDir: root }) });
-    assert.ok(findings.some(finding => finding.rule === "contract-ownership"), "an additional same-target reference must not widen the exception");
-  }, ["src/**/*.ts", "implementation/contracts.ts", "implementation/contracts/**/*.ts"]);
-  fixture({ ...files, "implementation/contracts/module-contracts.ts": "export type Other = import(\"../../src/store.js\").Transaction;" }, (root, program) => {
-    const findings = analyzeProgram(program, { rootDir: root, checkContracts: false, programGraph: graphFromProgram(program, { rootDir: root }) });
-    assert.ok(findings.some(finding => finding.rule === "contract-ownership"), "renaming the compatibility alias must not widen the exception");
-  }, ["src/**/*.ts", "implementation/contracts.ts", "implementation/contracts/**/*.ts"]);
-});
-test("P23 frozen CFG-005 vocabulary aliases do not exempt new references or internal ports", () => {
+test("P23 contract ownership exempts no contract -> implementation reference", () => {
+  // The four frozen v1 aliases were migrated to contract-owned declarations, so
+  // the allowlist is gone. Each former alias must now be reported, including
+  // when it hides behind a rename or the public facade.
   for (const [file, target, name] of [
+    ["implementation/contracts/module-contracts.ts", "src/store.ts", "Transaction"],
     ["implementation/contracts/host.ts", "src/domain/resources.ts", "ResourceLimits"],
     ["implementation/contracts/host.ts", "src/domain/limits.ts", "ProtocolLimits"],
     ["implementation/contracts/identity.ts", "src/domain/capabilities.ts", "Capability"],
   ]) {
     const specifier = `../../${target.replace(/\.ts$/, ".js")}`;
-    const alias = `export type ${name} = import("${specifier}").${name};`;
-    for (const extra of ["", ` export type Added = import("${specifier}").${name};`]) fixture({
-      [file]: alias + extra, [target]: `export interface ${name} { value: string; }`,
-    }, (root, program) => {
-      const findings = analyzeProgram(program, { rootDir: root, checkContracts: false }).filter(f => f.rule === "contract-ownership");
-      assert.deepEqual(findings.map(f => f.file), extra ? [file] : [], `${file}: ${name}`);
+    const declaration = `export interface ${name} { value: string; }`;
+    for (const reference of [
+      `export type ${name} = import("${specifier}").${name};`,
+      `export type Renamed = import("${specifier}").${name};`,
+      `import type { ${name} } from "${specifier}"; export type Held = ${name};`,
+    ]) fixture({ [file]: reference, [target]: declaration }, (root, program) => {
+      const findings = analyzeProgram(program, { rootDir: root, checkContracts: false })
+        .filter(finding => finding.rule === "contract-ownership");
+      assert.deepEqual(findings.map(finding => finding.file), [file], `${file}: ${name}`);
     }, ["src/**/*.ts", "implementation/contracts/**/*.ts"]);
+    // An internal port may not launder the same reference either.
     fixture({
-      [file]: alias, [target]: `export interface ${name} { value: string; }`,
+      [target]: declaration,
       "src/ports/runtime.ts": `export type Leaked = import("${specifier}").${name};`,
     }, (root, program) => {
       const findings = analyzeProgram(program, { rootDir: root, checkContracts: false });
-      assert.ok(findings.some(f => f.rule === "contract-ownership" && f.file === "src/ports/runtime.ts"));
+      assert.ok(findings.some(finding => finding.rule === "contract-ownership" && finding.file === "src/ports/runtime.ts"));
     }, ["src/**/*.ts", "implementation/contracts/**/*.ts"]);
+  }
+});
+
+test("P23 the migrated vocabulary owners keep a two-way compile-time binding", () => {
+  // The contract now declares the closed set and the runtime descriptor must
+  // satisfy it. Dropping either side has to fail the build, not the gate.
+  const read = file => readFileSync(new URL(file, root), "utf8");
+  // A reference is an import specifier, not a mention in prose.
+  const referencesImplementation = source =>
+    /(?:import\s*\(\s*|from\s*)['"][^'"]*\.\.\/\.\.\/src\/[^'"]*['"]/.test(source);
+  assert.match(read("implementation/contracts/identity.ts"), /export type Capability =\s*\n?\s*\| 'mail\.send'/);
+  const withoutComments = file => read(file).replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/.*$/gm, "");
+  for (const file of ["implementation/contracts/identity.ts", "implementation/contracts/host.ts"])
+    assert.ok(!referencesImplementation(withoutComments(file)), `${file} must not reference implementation`);
+  // module-contracts.ts may still name the erased internal port owners, which
+  // are contracts themselves, but never a concrete storage implementation.
+  const ports = withoutComments("implementation/contracts/module-contracts.ts")
+    .match(/['"][^'"]*\.\.\/\.\.\/src\/[^'"]*['"]/g) ?? [];
+  for (const reference of ports)
+    assert.match(reference, /src\/(module-ports|ports\/)/, `unexpected implementation reference ${reference}`);
+  for (const [file, contractType] of [
+    ["src/domain/capabilities.ts", "Capability"],
+    ["src/domain/resources.ts", "ResourceLimits"],
+    ["src/domain/limits.ts", "ProtocolLimits"],
+  ]) {
+    const source = read(file);
+    assert.match(source, /implementation\/contracts\//, `${file} must bind to the contract owner`);
+    assert.match(source, /\[Missing\w+\] extends \[never\]/, `${file} must assert exhaustiveness`);
+    assert.ok(source.includes(contractType), `${file} must name ${contractType}`);
   }
 });
 

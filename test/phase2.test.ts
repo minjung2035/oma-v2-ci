@@ -42,7 +42,7 @@ function rawFrame(text: string): Buffer {
 }
 function frameOf(value: unknown): Buffer { return rawFrame(JSON.stringify(value)); }
 
-test("T02: fresh DDL applies; six entities; user_version=1; reapply rejected", () => {
+test("T02: fresh DDL applies; six entities; user_version=3; reapply rejected", () => {
   const { store, dir } = freshStore();
   let closed = false;
   try {
@@ -50,13 +50,13 @@ test("T02: fresh DDL applies; six entities; user_version=1; reapply rejected", (
     try { assert.equal(other.transaction(() => 1), 1); } finally { other.close(); }
     const sql = readFileSync(SCHEMA_PATH, "utf8");
     assert.deepEqual([...sql.matchAll(/CREATE TABLE (\w+)/g)].map(match => match[1]).sort(),
-      ["agents", "batches", "deliveries", "operations", "subscriptions", "usage"]);
+      ["agents", "attestations", "batches", "deliveries", "operations", "subscriptions"]);
     store.close(); closed = true;
     mutateRawRowAfterClose(join(dir, "runtime.sqlite"), raw => {
-      assert.equal(raw.prepare("PRAGMA user_version").get()?.user_version, 1);
+      assert.equal(raw.prepare("PRAGMA user_version").get()?.user_version, 3);
       assert.throws(() => raw.exec(sql), /already exists/);
       raw.exec("ROLLBACK");
-      assert.equal(raw.prepare("PRAGMA user_version").get()?.user_version, 1);
+      assert.equal(raw.prepare("PRAGMA user_version").get()?.user_version, 3);
     });
   } finally { if (!closed) store.close(); rmSync(dir, { recursive: true, force: true }); }
 });
@@ -73,16 +73,11 @@ test("T03: invalid enum / negative units / FK / bad flags rejected by constraint
     assert.equal(operation.state, "succeeded");
     const message = operation.plan.message.id;
     assert.equal(store.getDelivery(message, "a")?.materialized, 1);
-    const usage = uuidV4();
-    store.transaction(tx => tx.reserveUsage({ requestId: usage, actor: "a", incarnation: 1,
-      profile: "md", pricingRevision: "phase2-v1", reservedUnits: 1 }));
-    assert.equal(store.getUsage(usage)?.reservedUnits, 1);
     store.close(); closed = true;
     mutateRawRowAfterClose(join(dir, "runtime.sqlite"), raw => {
       raw.exec("PRAGMA foreign_keys=ON");
       assert.throws(() => raw.prepare("UPDATE agents SET desired=? WHERE name='a'").run("invented"), /CHECK constraint failed/);
       assert.throws(() => raw.prepare("UPDATE agents SET spec_json=? WHERE name='a'").run("not-json"), /CHECK constraint failed/);
-      assert.throws(() => raw.prepare("UPDATE usage SET reserved_units=-1 WHERE request_id=?").run(usage), /CHECK constraint failed/);
       assert.throws(() => raw.prepare("UPDATE deliveries SET materialized=2 WHERE message_id=? AND recipient='a'").run(message), /CHECK constraint failed/);
       const missingOperation = generateOperationId();
       assert.throws(() => raw.prepare(`INSERT INTO deliveries
@@ -92,7 +87,6 @@ test("T03: invalid enum / negative units / FK / bad flags rejected by constraint
     const reopened = new Store(join(dir, "runtime.sqlite"), 5, { society: "phase2" });
     try {
       assert.equal(reopened.getAgent("a")?.desired, "enabled");
-      assert.equal(reopened.getUsage(usage)?.reservedUnits, 1);
       assert.equal(reopened.getDelivery(message, "a")?.materialized, 1);
       assert.equal(reopened.getOperationById(sent.operation)?.state, "succeeded");
     } finally { reopened.close(); }
@@ -223,6 +217,10 @@ test("ids: grammar, reserved names, message ids, wire paths", () => {
   assert.ok(generateBatchId().startsWith("b-"));
   assert.ok(isValidWirePath("a/b.txt"));
   for (const path of ["../etc", "/abs", "a/../b", "a\0b"]) assert.ok(!isValidWirePath(path));
+  // AV-25a: a lone surrogate is a decoding artifact, never a wire path — letting
+  // it through would re-encode as replacement bytes and rename on disk.
+  for (const path of ["a\uD800b", "a/\uDC00\uDC00.txt", "\uDFFF"]) assert.ok(!isValidWirePath(path));
+  assert.ok(isValidWirePath("a/\u00e9.txt"), "paired non-ASCII text is still a valid path");
 });
 
 test("store: batch link cross-row invariant (DB-008/BATCH-001)", async () => {

@@ -4,12 +4,15 @@
  * Actual implementation compatibility is checked in entry/module-conformance.ts.
  * SyncUnitsPort is not the async lifecycle orchestration port; no effect, epoch,
  * return-type or host-directory trust adaptation is performed by this facade.
+ * This facade stays: the architecture surface fixture, the P2 import-migration
+ * record, the kernel-zone "compatibility-facade" classification and
+ * entry/module-conformance.ts all pin this exact path (B3).
  */
 export type {
   OperationRowsPort, StorePort, OperationReceiptPort, ReceiptProjector,
 } from "./ports/ledger.js";
 export type {
-  SyncUnitsPort, AsyncUnitsOrchestrationPort, DerivedViewsPort, ReconcileMetrics,
+  SyncUnitsPort, DerivedViewsPort, ReconcileMetrics,
   ReconcilePort, BoundRunnerPort, SandboxDirectories, SandboxCompositionInput,
   SandboxPort, UnitObserve, SandboxHost,
 } from "./ports/runtime.js";

@@ -20,15 +20,16 @@ if (process.argv.includes("--inventory")) {
   const parsed = ts.parseJsonConfigFileContent(config.config, ts.sys, process.cwd());
   const roots = ["src/entry/broker.ts", "src/entry/runner.ts", "src/entry/host.ts", "src/cli.ts", "src/pi-extension.ts"];
   const { findings } = runtimeImportClosure({ rootDir: process.cwd(), roots, manifest: production, compilerOptions: parsed.options });
-  const acceptance = inventoryAcceptance([...normativeSources, "architecture.md"].map(source => ({ source, text: readFileSync(source, "utf8") })));
+  const acceptance = inventoryAcceptance([...normativeSources, "docs/architecture.md"].map(source => ({ source, text: readFileSync(source, "utf8") })));
   // The generated inventory is not a complete dependency closure after a move.
   // Include ALL current source/test/tool inputs so an added helper or changed
   // negative test cannot hide behind an old production-files.txt snapshot.
   const authoredImplementation = sourceFiles(".", "implementation").filter(file =>
-    file !== "implementation/traceability.json" && file !== "implementation/adversarial-review.md");
-  const closure = [...new Set([...normativeSources, ...production, ...authoredImplementation,
+    file !== "implementation/traceability.json");
+  const authoredDocuments = sourceFiles(".", "docs");
+  const closure = [...new Set([...normativeSources, ...production, ...authoredImplementation, ...authoredDocuments,
     ...["src", "test", "scripts"].flatMap(directory => sourceFiles(".", directory)),
-    "architecture.md", "production-files.txt", "production-manifest.json", "package.json", "package-lock.json", "tsconfig.json", "tsconfig.build.json"] )];
+    "docs/architecture.md", "production-files.txt", "production-manifest.json", "package.json", "package-lock.json", "tsconfig.json", "tsconfig.build.json"] )];
   const failures = linkedRows.filter((row, index) => {
     const entry = entries[index];
     if (!previous.has(traceIdentity(entry)) || !["runtime", "build", "document", "optional"].includes(row.applicability) ||
@@ -50,7 +51,7 @@ if (process.argv.includes("--inventory")) {
     } catch { return true; }
   });
   for (const finding of findings) console.error(`Import closure: ${finding}`);
-  for (const scope of [acceptance.core, acceptance.tiered]) console.log(`${scope.name}: ${scope.rows.length} matrix rows; missing=[${scope.missing.join(",")}]; duplicates=[${scope.duplicate.join(",")}]; empty=[${scope.empty.join(",")}]`);
+  for (const scope of [acceptance.core, acceptance.tiered, acceptance.product]) console.log(`${scope.name}: ${scope.rows.length} matrix rows; missing=[${scope.missing.join(",")}]; duplicates=[${scope.duplicate.join(",")}]; empty=[${scope.empty.join(",")}]`);
   console.log(`${entries.length - failures.length}/${entries.length} clauses pass structural evidence checks; ${failures.length} unresolved; ${extras.length} stale/extra rows; ${findings.length} import-closure findings.`);
   console.log("Structural checks do not certify full-clause behavior, disabled-profile rejection or kernel isolation.");
   process.exitCode = failures.length || extras.length || findings.length || entries.length === 0 || !acceptance.complete ? 1 : 0;

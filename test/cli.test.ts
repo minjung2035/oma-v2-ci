@@ -82,7 +82,7 @@ function envOf(): Env {
       libdir: "/usr/lib/oma",
       state,
       society,
-      agent: "",
+      agent: "", config: join(state, "config.json"), run: join(state, "oma", society)
     },
     join(dir, "xdg"),
     {
@@ -130,14 +130,14 @@ function envOf(): Env {
       worldDir: join(state, "world"),
       society,
       quarantineTmpBytes: 64 * 1024 * 1024,
-      quarantineResources: { cpuSeconds: 30, memoryBytes: 512 * 1024 * 1024, tasks: 4096 },
-      checkTimeoutSeconds: 30,
+      quarantineResources: { cpuSeconds: 30, memoryBytes: 512 * 1024 * 1024, tasks: 4096, timeoutSeconds: 30, silenceSeconds: 30 },
     },
     store,
     mail,
     null,
   );
   const recon = new ReconcileModule(store, mail, git, units, lifecycle, {
+    hasGoal: () => true,
     activationAllowed: () => true,
     projectGit: join(state, "repos", "project.git"),
   });
@@ -581,7 +581,7 @@ test("CLI acceptance: freeze cache, same-key semantics, recovery, streamed submi
         `Environment=OMA_SCENARIOS_FILE=${join(env.dir, "scenarios.json")}`,
         `Environment=HOME=${env.dir}`,
         `WorkingDirectory=${env.dir}`,
-        `ExecStart=/usr/bin/node ${wrapPath}`,
+        `ExecStart=${process.execPath} ${wrapPath}`,
         "[Install]",
         "WantedBy=default.target",
         "",

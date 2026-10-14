@@ -72,6 +72,11 @@ test("R28: host and isolated extension preserve six-field schema and independent
   assert.equal(raw.includes("/private/session"), false);
   assert.deepEqual(hostDecode(raw, BATCH, VIEW_LIMITS), valid);
   assert.deepEqual(extensionDecode(raw, BATCH, VIEW_LIMITS), valid);
+  // PR-002: the Principal receives batches too, and both sides agree on it.
+  const principal = { ...valid, agent: "principal" };
+  const principalText = JSON.stringify(principal);
+  assert.deepEqual(hostDecode(principalText, BATCH, VIEW_LIMITS), principal);
+  assert.deepEqual(extensionDecode(principalText, BATCH, VIEW_LIMITS), principal);
   // Ordinal spellings both sides accept decode to the same id on both sides.
   for (const ordinal of ["0", "01", "1", "007"]) {
     const text = JSON.stringify({ ...valid, messageIds: [`m-${UUID}-${ordinal}`] });
@@ -79,7 +84,11 @@ test("R28: host and isolated extension preserve six-field schema and independent
     assert.deepEqual(extensionDecode(text, BATCH, VIEW_LIMITS), hostDecode(text, BATCH, VIEW_LIMITS), ordinal);
   }
   const invalid: unknown[] = [null, [], { ...valid, id: `b-${BAD_VERSION}` }, { ...valid, id: `b-${BAD_VARIANT}` },
-    { ...valid, agent: "principal" }, { ...valid, agent: "topic-test" }, { ...valid, agent: "Alice" },
+    // Every reserved name except the Principal is an address, never a
+    // recipient of a delivery (PR-002).
+    { ...valid, agent: "commons" }, { ...valid, agent: "residents" }, { ...valid, agent: "topic" },
+    { ...valid, agent: "broker" }, { ...valid, agent: "principal-relay" }, { ...valid, agent: "reconcile" },
+    { ...valid, agent: "topic-test" }, { ...valid, agent: "Alice" }, { ...valid, agent: "Principal" },
     { ...valid, incarnation: "1" }, { ...valid, incarnation: -1 }, { ...valid, incarnation: Number.MAX_SAFE_INTEGER + 1 },
     { ...valid, deliveryMode: "prompt" }, { ...valid, notice: 1 }, { ...valid, notice: "🙂".repeat(4096) },
     { ...valid, messageIds: [MESSAGE, MESSAGE] }, { ...valid, messageIds: [`m-${BAD_VERSION}-0`] },

@@ -84,7 +84,7 @@ function envOf(): Env {
       libdir: "/usr/lib/oma",
       state,
       society,
-      agent: "",
+      agent: "", config: join(state, "config.json"), run: join(state, "oma", society)
     },
     join(dir, "xdg"),
   );
@@ -121,14 +121,14 @@ function envOf(): Env {
       worldDir: join(state, "world"),
       society,
       quarantineTmpBytes: 64 * 1024 * 1024,
-      quarantineResources: { cpuSeconds: 30, memoryBytes: 512 * 1024 * 1024, tasks: 4096 },
-      checkTimeoutSeconds: 30,
+      quarantineResources: { cpuSeconds: 30, memoryBytes: 512 * 1024 * 1024, tasks: 4096, timeoutSeconds: 30, silenceSeconds: 30 },
     },
     store,
     mail,
     { policyRevision: "audit", protectedPaths: ["x.txt"], checks: [] },
   );
   const recon = new ReconcileModule(store, mail, git, units, lifecycle, {
+    hasGoal: () => true,
     activationAllowed: () => true,
     projectGit: join(state, "repos", "project.git"),
   });
@@ -815,7 +815,7 @@ test("P0-1/2/3 + P1-7/8: real-socket serialization, stream length, closed schema
         `Environment=OMA_SCENARIOS_FILE=${join(env.dir, "scenarios.json")}`,
         `Environment=OMA_OUT=${outPath}`,
         `Environment=HOME=${env.dir}`,
-        `ExecStart=/usr/bin/node ${driverPath}`,
+        `ExecStart=${process.execPath} ${driverPath}`,
         "[Install]",
         "WantedBy=default.target",
         "",
@@ -1024,7 +1024,7 @@ test("P0-C: concurrent request-key races converge on one actor-socket effect", a
       `Environment=OMA_REQUESTS_FILE=${requestsPath}`,
       `Environment=OMA_OUT=${outPath}`,
       `Environment=HOME=${env.dir}`,
-      `ExecStart=/usr/bin/node ${driverPath}`,
+      `ExecStart=${process.execPath} ${driverPath}`,
       "[Install]",
       "WantedBy=default.target",
       "",

@@ -5,6 +5,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { randomUUID } from "node:crypto";
 import type { AuthContext } from "../implementation/contracts.js";
+import { MailModule } from "../src/mail.js";
+import { ownedMessages } from "../src/durable.js";
 import { Store } from "../src/store.js";
 import { StoreError } from "../src/domain/errors.js";
 import { RegistryOperations } from "../src/lifecycle/registry-operations.js";
@@ -22,7 +24,7 @@ function fixture() {
   });
   const auth: AuthContext = { actor: "alice", role: "resident", incarnation: 1, channel: "actor",
     capabilities: new Set(ALL_CAPS), peer: { pid: process.pid, uid: process.getuid!(), gid: process.getgid!(), cgroup: null } };
-  return { store, auth, registry: new RegistryOperations(store), close() { store.close(); rmSync(root, { recursive: true, force: true }); } };
+  return { root, store, auth, registry: new RegistryOperations(store), close() { store.close(); rmSync(root, { recursive: true, force: true }); } };
 }
 const code = (expected: string) => (error: unknown) => error instanceof StoreError && error.code === expected;
 
@@ -78,4 +80,26 @@ test("R25: host refresh and transaction-time revision comparison are separate", 
   revision = "changed";
   assert.throws(() => f.store.transaction(() => policy.assertRevision(observed)), code("POLICY_CHANGED"));
   assert.equal(refreshes, 1);
+});
+
+
+test("DR27: ACK explains absent message versus another recipient without creating a fact", async t => {
+  const f = fixture(); t.after(() => f.close());
+  const mail = new MailModule({ stateRoot: f.root, society: "r25test" }, f.store, 64);
+  await mail.send(f.auth, "to-peer", { to: ["peer"], kind: "message", subject: "review", body: "body" });
+  const operation = f.store.getOperation("alice", "to-peer")!;
+  const message = ownedMessages(operation.plan)[0]!;
+  assert.throws(() => f.registry.ack(f.auth, message.id, "not-mine"), (error: unknown) =>
+    error instanceof StoreError && error.code === "REQUEST_NOT_FOUND" && /not addressed to alice/.test(error.message));
+  const absent = message.id.replace(/-[0-9]+$/, "-999");
+  assert.throws(() => f.registry.ack(f.auth, absent, "absent"), (error: unknown) =>
+    error instanceof StoreError && error.code === "REQUEST_NOT_FOUND" && /does not exist in this society/.test(error.message));
+  assert.equal(f.store.getOperation("alice", "not-mine"), null);
+  assert.equal(f.store.getOperation("alice", "absent"), null);
+  assert.equal(f.store.getDelivery(message.id, "peer")?.acknowledged, 0);
+  const peer = { ...f.auth, actor: "peer" };
+  const receipt = f.registry.ack(peer, message.id, "ack-mine");
+  assert.equal(receipt.state, "succeeded");
+  f.store.transaction(tx => tx.updateAgent({ name: "peer", desired: "stopped" }));
+  assert.deepEqual(f.registry.ack(peer, message.id, "ack-mine"), receipt);
 });

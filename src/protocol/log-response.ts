@@ -10,13 +10,8 @@ const size = (value: unknown): number =>
   Buffer.byteLength(JSON.stringify(value), "utf8");
 // Empty ID gives the smallest envelope; reserve the largest valid timestamp and
 // the longer boolean spelling. Each actual request ID is accounted for below.
-export const MIN_LOG_FRAME_BYTES = size(
-  envelope("", {
-    text: "",
-    truncated: false,
-    observedAtMs: Number.MAX_SAFE_INTEGER,
-  }),
-);
+export { MIN_LOG_FRAME_BYTES } from "../client/limits.js";
+import { MIN_LOG_FRAME_BYTES } from "../client/limits.js";
 export function isLogResponseFrameLimit(value: unknown): value is number {
   return (
     typeof value === "number" &&
@@ -59,7 +54,13 @@ export function boundedLogResponse(
       "request id leaves no room for a log response",
     );
   let low = 0;
-  let high = view.text.length;
+  // `truncated: true` must tell the truth: its spelling is one byte shorter
+  // than `false`, so a text exactly one byte over budget would otherwise be
+  // delivered whole under a flag claiming a cut that never happened. When
+  // the view was not already truncated the search is capped at a strict
+  // prefix; when it was, the truncating envelope is the full one and the
+  // search can never reach the whole text anyway.
+  let high = view.truncated ? view.text.length : Math.max(view.text.length - 1, 0);
   while (low < high) {
     const middle = Math.ceil((low + high) / 2);
     limited.result.text = prefix(view.text, middle);

@@ -1,7 +1,8 @@
 // IPC-002/003/005: one in-flight request; accepted workflow artifacts never
 // belong to socket cleanup. EOF, close, error and timeout are distinct events.
 import { ConnectionDecoder, FrameError, encodeFrame, type DecoderEvent } from "../frame.js";
-import { StoreError, publicFailure } from "../domain/errors.js";
+import { AcceptedFailure, StoreError, publicFailure } from "../domain/errors.js";
+import { deadline } from "../process/deadline.js";
 import { TransportSpool, type ConnectionSpool, type ExecutionBody, type RawDescriptor } from "./transport-spool.js";
 import type { ConnectionPeerPin } from "./peer-pin.js";
 export interface SocketEvents { data: [Buffer]; end: []; close: [boolean]; error: [Error]; drain: [] }
@@ -26,17 +27,7 @@ export interface AlarmFactory { after(seconds: number, callback: () => void): Al
 export const NODE_ALARMS: AlarmFactory = {
   after(seconds, callback) {
     if (!Number.isFinite(seconds) || seconds <= 0) throw new RangeError("invalid RPC deadline");
-    const deadline = performance.now() + seconds * 1000;
-    let cancelled = false;
-    let handle: ReturnType<typeof setTimeout> | null = null;
-    const arm = () => {
-      if (cancelled) return;
-      const remaining = deadline - performance.now();
-      if (remaining <= 0) { handle = null; cancelled = true; callback(); return; }
-      handle = setTimeout(arm, Math.max(1, Math.min(0x7fffffff, remaining)));
-    };
-    arm();
-    return { cancel() { cancelled = true; if (handle !== null) clearTimeout(handle); handle = null; } };
+    return { cancel: deadline(seconds * 1000, callback) };
   },
 };
 export interface ConnectionLimits { frameBytes: number; idleStreamSeconds: number; receiptWaitSeconds: number }
@@ -45,6 +36,8 @@ export interface RpcConnectionOptions {
   handle(raw: Record<string, unknown>, body: AsyncIterable<Uint8Array> | null): Promise<object>;
   /** Synchronous envelope/channel/capability/descriptor checks, before any spool. */
   preflight(raw: Record<string, unknown>): void;
+  /** Storage admission completes before a raw spool is created. */
+  reserve?(raw: Record<string, unknown>): Promise<void>;
   alarms?: AlarmFactory; makeSpool?: (descriptor: RawDescriptor) => ConnectionSpool;
   onClosed?: () => void; onTask?: (task: Promise<void>) => void; onCleanupError?: (error: unknown) => void;
 }
@@ -52,6 +45,7 @@ interface ReceiveTimers { idle: Alarm; receipt: Alarm | null }
 interface Task { readonly id: string; readonly body: ExecutionBody | null; readonly releasePeer: () => void }
 type State =
   | { kind: "idle"; timers: ReceiveTimers; endSeen: boolean }
+  | { kind: "admittingStream"; timers: ReceiveTimers; endSeen: boolean; raw: Record<string, unknown> }
   | { kind: "receivingStream"; timers: ReceiveTimers; endSeen: boolean; raw: Record<string, unknown>; spool: ConnectionSpool }
   | { kind: "awaitingExcessDecision"; timers: ReceiveTimers; endSeen: boolean; raw: Record<string, unknown>; spool: ConnectionSpool }
   | { kind: "executing"; deadline: Alarm; endSeen: boolean; task: Task; phase: "handling" | "backpressure" }
@@ -95,7 +89,7 @@ export class RpcConnection {
   private cleanup(action: () => void): void { try { action(); } catch (error) { this.report(error); } }
   private cancelTimers(state: State): void {
     switch (state.kind) {
-      case "idle": case "receivingStream": case "awaitingExcessDecision":
+      case "idle": case "admittingStream": case "receivingStream": case "awaitingExcessDecision":
         this.cleanup(() => state.timers.idle.cancel()); this.cleanup(() => state.timers.receipt?.cancel()); return;
       case "executing": case "closing": this.cleanup(() => state.deadline.cancel()); return;
       case "closed": return;
@@ -122,7 +116,7 @@ export class RpcConnection {
   private id(): string {
     const state = this.state;
     if (state.kind === "executing") return state.task.id;
-    if (state.kind === "receivingStream" || state.kind === "awaitingExcessDecision") return requestId(state.raw);
+    if (state.kind === "admittingStream" || state.kind === "receivingStream" || state.kind === "awaitingExcessDecision") return requestId(state.raw);
     return "x";
   }
   private errorFrame(error: unknown, id: string): Buffer {
@@ -159,6 +153,7 @@ export class RpcConnection {
     try {
       if (!Buffer.isBuffer(chunk)) throw new FrameError("INVALID_REQUEST", "RPC input must be bytes");
       if (state.kind === "executing") { this.events(this.decoder.bufferControl(chunk)); return; }
+      if (state.kind === "admittingStream") { this.decoder.bufferControl(chunk); return; }
       this.refreshInputTimer(state.timers);
       if (state.kind === "awaitingExcessDecision") { this.events(this.decoder.bufferControl(chunk)); this.decideExcess(); }
       else this.events(this.decoder.push(chunk));
@@ -169,6 +164,7 @@ export class RpcConnection {
     switch (state.kind) {
       case "closed": case "closing": return;
       case "executing": state.endSeen = true; return;
+      case "admittingStream": state.endSeen = true; return;
       case "receivingStream": this.fatal(new StoreError("STREAM_INVALID", "EOF before declared raw bytes")); return;
       case "awaitingExcessDecision": this.fatal(new StoreError("STREAM_INVALID", "EOF during excess-byte decision")); return;
       case "idle":
@@ -202,15 +198,34 @@ export class RpcConnection {
         let descriptor: RawDescriptor | null;
         try { descriptor = this.descriptor(raw); } catch (error) { this.fatal(error, requestId(raw)); return; }
         if (descriptor === null) { this.decoder.requireControlBudget(); this.dispatch(raw, null, state); return; }
-        const spool = this.options.makeSpool?.(descriptor) ?? new TransportSpool(this.options.stagingRoot, descriptor);
-        this.state = { kind: "receivingStream", raw, spool, timers: state.timers, endSeen: state.endSeen };
-        this.events(this.decoder.beginStream(descriptor.bytes)); return;
+        if (this.options.reserve === undefined) this.receiveStream(raw, descriptor, state);
+        else {
+          const pending: Extract<State, { kind: "admittingStream" }> = { kind: "admittingStream", raw, timers: state.timers, endSeen: state.endSeen };
+          this.state = pending; this.options.socket.pause();
+          const task = this.options.reserve(raw).then(() => {
+            if (this.state !== pending) return;
+            this.options.preflight(raw);
+            this.receiveStream(raw, descriptor, pending);
+            const phase = this.snapshot().phase;
+            if (phase !== "closed" && phase !== "closing") this.options.socket.resume();
+          }).catch(error => { this.fatal(error, requestId(raw)); });
+          try { this.options.onTask?.(task); } catch (error) { this.report(error); }
+        }
+        return;
       }
       if (state.kind !== "receivingStream") throw new FrameError("INVALID_REQUEST", "raw completion has no spool owner");
       state.spool.seal();
       this.state = { kind: "awaitingExcessDecision", raw: state.raw, spool: state.spool, timers: state.timers, endSeen: state.endSeen };
       this.decideExcess();
     }
+  }
+  private receiveStream(raw: Record<string, unknown>, descriptor: RawDescriptor,
+    previous: Extract<State, { kind: "idle" | "admittingStream" }>): void {
+    const spool = this.options.makeSpool?.(descriptor) ?? new TransportSpool(this.options.stagingRoot, descriptor);
+    this.state = { kind: "receivingStream", raw, spool, timers: previous.timers, endSeen: previous.endSeen };
+    this.events(this.decoder.beginStream(descriptor.bytes));
+    if (previous.endSeen && this.state.kind === "receivingStream")
+      this.fatal(new StoreError("STREAM_INVALID", "EOF before declared raw bytes"));
   }
   private decideExcess(): void {
     const state = this.state;
@@ -239,7 +254,12 @@ export class RpcConnection {
       if (!outcome.ok) { this.fatal(outcome.error, task.id); return; }
       try {
         const frame = encodeFrame(outcome.value);
-        if (frame.length > Math.min(this.options.limits.frameBytes, 0xffffffff) + 4) throw new FrameError("FRAME_TOO_LARGE", "RPC response exceeds the configured frame budget");
+        // P0V-123 (G03-broker-01, r2-02), P0-5: the request was handled before
+        // its answer was found too large to send, and this connection cannot
+        // know whether that committed an effect. It is not refused as input
+        // ("never"): its outcome is unknown, asked again under the same key.
+        if (frame.length > Math.min(this.options.limits.frameBytes, 0xffffffff) + 4)
+          throw new AcceptedFailure("FRAME_TOO_LARGE", "the RPC response exceeds the configured frame budget; the request was handled", "possible");
         if (this.options.socket.destroyed) { this.close(); return; }
         if (this.options.socket.write(frame)) this.finishWrite(task); else current.phase = "backpressure";
       } catch (error) { this.fatal(error, task.id); }

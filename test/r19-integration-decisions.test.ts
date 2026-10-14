@@ -19,6 +19,9 @@ const BASE = "1".repeat(40); const CANDIDATE = "2".repeat(40); const THIRD = "3"
 const EMPTY_DIGEST = "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945";
 const input = { candidate: CANDIDATE, expected: BASE };
 const basePolicy = (): IntegrationPolicy => ({ policyRevision: "p1", protectedPaths: [], checks: [] });
+const checkedPolicy = (): IntegrationPolicy => ({ ...basePolicy(), checks: [{ id: "trusted", argv: ["/bin/true"], env: {},
+  timeoutSeconds: 1, resources: { memoryBytes: 1024 * 1024, tasks: 16, cpuQuotaPercent: 10,
+    tmpBytes: 1024, workspaceBytes: 1024, stagingBytes: 1024, checkTimeoutSeconds: 1 } }] });
 const evidence: GitProcessEvidence = { status: 0, signal: null, stdout: Buffer.alloc(0), stderr: Buffer.alloc(0) };
 const present = <T>(value: T): GitObservation<T> => ({ kind: "present", value, evidence });
 const unavailable = <T>(): GitObservation<T> => ({ kind: "unknown", reason: "injected unavailable observation", evidence: { ...evidence, status: null } });
@@ -38,9 +41,10 @@ function fixture(policy: IntegrationPolicy | null = basePolicy(), reader: Integr
   const model: {
     main: GitObservation<string>; published: GitObservation<readonly string[]>;
     ancestry: GitObservation<boolean>; paths: GitObservation<readonly ChangedPath[]>;
+    links: GitObservation<readonly string[]>;
     cas: RefAfterCas | null; beforePaths: (() => void) | null;
   } = { main: present(BASE), published: present([CANDIDATE]), ancestry: present(true),
-    paths: present([{ status: "M", path: "file.txt" }]), cas: null, beforePaths: null };
+    paths: present([{ status: "M", path: "file.txt" }]), links: present([]), cas: null, beforePaths: null };
   const record = (name: string): void => {
     assert.equal(store.inTransaction, false, `physical observation ${name} must remain outside T-intent`);
     calls.push(name);
@@ -51,12 +55,13 @@ function fixture(policy: IntegrationPolicy | null = basePolicy(), reader: Integr
     published: () => { record("published"); return model.published; },
     ancestry: (base, candidate) => { record("ancestry"); assert.equal(base, BASE); assert.equal(candidate, CANDIDATE); return model.ancestry; },
     changedPaths: () => { record("paths"); model.beforePaths?.(); return model.paths; },
+    gitlinks: () => { record("gitlinks"); return model.links; },
     compareAndSwap: (base, candidate) => {
       record("cas"); assert.equal(base, BASE); assert.equal(candidate, CANDIDATE);
       if (model.cas !== null) return model.cas;
       model.main = present(candidate); return { kind: "candidate", oid: candidate };
     },
-    runCheck: async () => { record("check"); assert.fail("nonempty checks must remain gated"); },
+    runCheck: async () => { record("check"); },
   };
   return { root, store, auth, model, calls, effects,
     coordinator: new IntegrationCoordinator(store, effects, policy, reader),
@@ -89,7 +94,8 @@ test("R19: execution writes a complete canonical plan without a redundant result
     const row = operation(f.store, "execute");
     assert.deepEqual(Object.keys(row.plan).sort(), ["base", "candidate", "checkProfileDigest", "kind", "policyRevision", "repo", "target"]);
     assert.equal(row.plan.checkProfileDigest, EMPTY_DIGEST);
-    assert.deepEqual(f.calls, ["format", "published", "main", "main", "published", "ancestry", "paths", "main", "published", "ancestry", "paths", "cas"]);
+    assert.deepEqual(f.calls, ["format", "published", "gitlinks", "main", "main", "published", "ancestry", "gitlinks", "paths",
+      "main", "published", "ancestry", "gitlinks", "paths", "cas"]);
     const before = row.resultJson; const count = f.calls.length;
     assert.deepEqual(await f.coordinator.execute(f.auth, "execute", input), receipt);
     assert.equal(f.calls.length, count); assert.equal(operation(f.store, "execute").resultJson, before);
@@ -110,6 +116,35 @@ for (const [condition, expected] of [["missing", "CANDIDATE_NOT_PUBLISHED"], ["a
       assert.equal(f.calls.includes("cas"), false); assert.deepEqual(f.model.main, present(BASE));
       if (condition === "missing") assert.equal(f.store.getOperation("alice", condition), null);
       else assert.equal(operation(f.store, condition).state, "failed");
+    } finally { f.close(); }
+  });
+}
+
+test("UX-09/INT-001: a candidate whose tree carries gitlinks is refused with their paths before a row exists", async () => {
+  const f = fixture();
+  try {
+    f.model.links = present(["dep", "vendor/nested"]);
+    await assert.rejects(f.coordinator.execute(f.auth, "gitlinks", input), (error: unknown) =>
+      error instanceof StoreError && error.code === "UNSUPPORTED_PROFILE" &&
+      error.message.includes("dep") && error.message.includes("vendor/nested") &&
+      JSON.stringify(error.details) === JSON.stringify({ paths: ["dep", "vendor/nested"] }));
+    assert.equal(f.store.getOperation("alice", "gitlinks"), null, "the refusal precedes the operation row");
+    assert.equal(f.calls.includes("cas"), false);
+    assert.equal(f.calls.includes("check"), false, "a refused candidate never reaches a check argv");
+  } finally { f.close(); }
+});
+
+for (const condition of ["unknown", "refused", "corrupt"] as const) {
+  test(`UX-09: a ${condition} gitlink observation refuses — uncertain is never "no gitlinks"`, async () => {
+    const f = fixture();
+    try {
+      f.model.links = condition === "unknown" ? unavailable()
+        : condition === "refused" ? { kind: "refused" as const, reason: "injected candidate refusal", evidence }
+        : { kind: "corrupt" as const, reason: "injected malformed output", evidence };
+      const expected = condition === "unknown" ? "REF_STATE_UNKNOWN" : condition === "refused" ? "INVALID_REQUEST" : "STORE_CORRUPT";
+      await assert.rejects(f.coordinator.execute(f.auth, `gitlinks-${condition}`, input), code(expected));
+      assert.equal(f.store.getOperation("alice", `gitlinks-${condition}`), null);
+      assert.equal(f.calls.includes("cas"), false);
     } finally { f.close(); }
   });
 }
@@ -138,7 +173,8 @@ test("R19: a same-revision full-policy change is rejected outside the acceptance
   try {
     await assert.rejects(f.coordinator.execute(f.auth, "policy", input), code("POLICY_CHANGED"));
     assert.equal(reads, 1); assert.equal(f.calls.includes("cas"), false);
-    assert.equal(operation(f.store, "policy").errorCode, "POLICY_CHANGED");
+    // DR8: facts the broker does not hold are refused before acceptance.
+    assert.equal(f.store.getOperation("alice", "policy"), null);
   } finally { f.close(); }
 });
 
@@ -149,6 +185,39 @@ test("R19: missing policy cannot enable a production legacyDirect path", async (
     assert.deepEqual(f.calls, []); assert.equal(f.store.getOperation("alice", "no-policy"), null);
   } finally { f.close(); }
 });
+
+for (const scenario of ["success", "failure", "unknown", "stop", "policy", "main"] as const)
+  test(`INT-004: trusted check ${scenario} is reobserved before CAS and retry preserves intent`, async t => {
+    let revision = "p1";
+    const f = fixture(checkedPolicy(), () => revision); t.after(() => f.close());
+    f.effects.runCheck = async (candidate, check) => {
+      assert.equal(candidate, CANDIDATE); assert.equal(check.id, "trusted");
+      assert.equal(f.store.inTransaction, false); assert.equal(operation(f.store, "checked").state, "pending");
+      await Promise.resolve();
+      f.calls.push("check");
+      if (scenario === "failure") throw new StoreError("CHECK_FAILED", "check returned nonzero");
+      if (scenario === "unknown") throw new StoreError("REF_STATE_UNKNOWN", "manager wait unavailable");
+      if (scenario === "stop") f.store.transaction(tx => tx.updateAgent({ name: "alice", desired: "stopped" }));
+      if (scenario === "policy") revision = "p2";
+      if (scenario === "main") f.model.main = present(THIRD);
+    };
+    if (["failure", "unknown", "stop", "policy"].includes(scenario))
+      await assert.rejects(f.coordinator.execute(f.auth, "checked", input), code(
+        scenario === "failure" ? "CHECK_FAILED" : scenario === "unknown" ? "REF_STATE_UNKNOWN" :
+          scenario === "stop" ? "CANCELLED_BEFORE_COMMIT" : "POLICY_CHANGED"));
+    else {
+      const receipt = await f.coordinator.execute(f.auth, "checked", input);
+      assert.equal(receipt.state, scenario === "success" ? "succeeded" : "unknown");
+    }
+    assert.equal(f.calls.filter(value => value === "cas").length, scenario === "success" ? 1 : 0);
+    const before = operation(f.store, "checked");
+    if (scenario !== "stop") {
+      const count = f.calls.length;
+      assert.equal((await f.coordinator.execute(f.auth, "checked", input)).state, before.state);
+      assert.equal(f.calls.length, count, "same-key retry does not rerun checks or CAS");
+      assert.equal(operation(f.store, "checked").planJson, before.planJson);
+    }
+  });
 
 for (const result of ["expected", "third", "unknown"] as const) {
   test(`R19: post-CAS ${result} remains unknown and blocks another repository writer`, async () => {
@@ -217,5 +286,24 @@ test("R19: an unavailable pre-CAS observation is neither absence nor a failed ph
     assert.equal(operation(f.store, "pending").state, "pending"); assert.equal(f.calls.includes("cas"), false);
     await assert.rejects(f.coordinator.execute(f.auth, "blocked", input), code("REF_STATE_UNKNOWN"));
     assert.equal(f.store.getOperation("alice", "blocked"), null);
+  } finally { f.close(); }
+});
+
+test("P0V-64 / R09, P0-2: a refusal after acceptance that a cleanup failure was bundled with settles by its own code", async () => {
+  const f = fixture();
+  try {
+    let asked = 0;
+    f.effects.ancestry = () => {
+      asked += 1;
+      if (asked === 1) return present(true);
+      // The execution's observation is refused, and a cleanup failed beside it.
+      throw new AggregateError([new StoreError("NOT_DESCENDANT", "candidate no longer descends"), new Error("EIO while removing a temporary")]);
+    };
+    const coordinator = new IntegrationCoordinator(f.store, f.effects, basePolicy(), null);
+    await assert.rejects(coordinator.execute(f.auth, "bundled", input), code("NOT_DESCENDANT"));
+    const row = operation(f.store, "bundled");
+    assert.equal(row.state, "failed", "the refusal was read as an internal error and left the operation pending");
+    assert.equal(row.errorCode, "NOT_DESCENDANT");
+    assert.equal(f.calls.includes("cas"), false);
   } finally { f.close(); }
 });

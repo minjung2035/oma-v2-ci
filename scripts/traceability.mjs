@@ -3,9 +3,8 @@ import { readFileSync, existsSync, readdirSync, lstatSync } from "node:fs";
 import { createHash } from "node:crypto";
 import { join } from "node:path";
 export const normativeSources = Object.freeze([
-  "implementation-spec.md", "implementation/integration-policy.md", "implementation/physical-ordering.md",
-  "implementation/compliance.md", "implementation/loc-budget.md", "implementation/test-matrix.md",
-  "implementation/spikes.md", "implementation/validation.md",
+  "docs/implementation-spec.md", "docs/implementation/integration-policy.md",
+  "docs/verification-spec.md", "docs/macos-platform.md",
 ]);
 export const digest = bytes => createHash("sha256").update(bytes).digest("hex");
 export const traceIdentity = row => JSON.stringify([row.source, row.requirement, row.digest]);
@@ -87,8 +86,17 @@ export function inventoryAcceptance(documents) {
       complete: missing.length === 0 && duplicate.length === 0 && empty.length === 0 };
   };
   const core = scope("core", 1, 77), tiered = scope("tiered-target", 78, 90);
-  return { core, tiered, extra: records.filter(row => row.id < 1 || row.id > 90),
-    complete: core.complete && tiered.complete && records.every(row => row.id >= 1 && row.id <= 90) };
+  // TEST-008: product surface acceptance uses T91 onward, open-ended. A gap or an
+  // empty oracle there is a finding; several oracle rows under one ID (one
+  // meaning, e.g. T119's entry wiring) are listed, not failed. Two meanings under
+  // one ID are resolved in the matrix by a new ID, not here.
+  const productIds = records.filter(row => row.id >= 91).map(row => row.id);
+  const product = productIds.length === 0
+    ? { name: "product", first: 91, last: 90, rows: [], missing: [], duplicate: [], empty: [], complete: true }
+    : (() => { const last = Math.max(...productIds); const view = scope("product", 91, last);
+        return { ...view, complete: view.missing.length === 0 && view.empty.length === 0 }; })();
+  return { core, tiered, product, extra: records.filter(row => row.id < 1),
+    complete: core.complete && tiered.complete && product.complete && records.every(row => row.id >= 1) };
 }
 /** Real source traversal, not the possibly stale generated production-files.txt.
  * Symlinks and unsupported filesystem entries fail instead of reducing the scope.
@@ -98,6 +106,7 @@ export function sourceFiles(root, relative) {
   if (stat.isSymbolicLink()) throw new Error(`symlink in source closure: ${relative}`);
   if (stat.isFile()) return [relative];
   if (!stat.isDirectory()) throw new Error(`unsupported source closure input: ${relative}`);
-  return readdirSync(path).sort().filter(name => !(relative === "implementation" && name === "evidence"))
+  return readdirSync(path).sort().filter(name =>
+    !(relative === "implementation" && name === "evidence") && !(relative === "docs" && name === "archive"))
     .flatMap(name => sourceFiles(root, `${relative}/${name}`));
 }

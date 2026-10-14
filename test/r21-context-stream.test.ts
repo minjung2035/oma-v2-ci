@@ -1,13 +1,14 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, readFileSync, lstatSync, rmSync, existsSync, writeFileSync, readdirSync } from "node:fs";
-import { join } from "node:path";
+import { mkdirSync, mkdtempSync, readFileSync, lstatSync, rmSync, existsSync, writeFileSync, readdirSync, renameSync } from "node:fs";
+import { dirname, join } from "node:path";
 import { tmpdir } from "node:os";
 import { createHash } from "node:crypto";
 import type { BlobDescriptor, ContextEntry } from "../implementation/contracts.js";
 import { generateOperationId } from "../src/ids.js";
 import { ContextTextValidator, contextFileCheck } from "../src/domain/context-policy.js";
-import { prepareContextStream } from "../src/storage/context-stream.js";
+import { TreeLease, treeQuiescence, leasePathOf } from "../src/storage/tree-lease.js";
+import { PreparedContextTree, prepareContextStream } from "../src/storage/context-stream.js";
 import { contextStagingPathAt } from "../src/storage/paths.js";
 
 const digest = (bytes: Uint8Array): string => createHash("sha256").update(bytes).digest("hex");
@@ -56,11 +57,11 @@ test("R21: file boundaries, zero-byte non-GOAL and UTF-8 splits preserve literal
     for (const width of [1, 2, 3, 7, body.length]) {
       const id = generateOperationId();
       const tree = await prepareContextStream(root, id, entries(), descriptor(), parts(body, width));
-      assert.equal(tree, join(contextStagingPathAt(root, id), "tree"));
+      assert.equal(tree.path, join(contextStagingPathAt(root, id), "tree"));
       for (const file of files) {
-        assert.deepEqual(readFileSync(join(tree, file.path)), file.data);
-        assert.equal(lstatSync(join(tree, file.path)).mode & 0o777, 0o644);
-        assert.equal(lstatSync(join(tree, file.path)).nlink, 1);
+        assert.deepEqual(readFileSync(join(tree.path, file.path)), file.data);
+        assert.equal(lstatSync(join(tree.path, file.path)).mode & 0o777, 0o644);
+        assert.equal(lstatSync(join(tree.path, file.path)).nlink, 1);
       }
     }
   } finally { rmSync(root, { recursive: true, force: true }); }
@@ -84,8 +85,9 @@ for (const fault of ["short", "long", "aggregate-hash", "entry-hash", "invalid-t
       });
       for (const file of files) {
         assert.equal(existsSync(join(contextStagingPathAt(root, id), "tree", file.path)), false);
-        assert.deepEqual(readFileSync(join(control, file.path)), file.data);
+        assert.deepEqual(readFileSync(join(control.path, file.path)), file.data);
       }
+      assert.equal(existsSync(contextStagingPathAt(root, id)), false, "a failed preparation removes the root it created");
       assert.equal(readFileSync(sibling, "utf8"), "retained");
     } finally { rmSync(root, { recursive: true, force: true }); }
   });
@@ -100,8 +102,28 @@ test("R21: source mutations after the first await cannot alter frozen metadata",
       yield body;
     }
     const tree = await prepareContextStream(root, generateOperationId(), manifest, content, mutation());
-    assert.deepEqual(readFileSync(join(tree, "GOAL.md")), files[0]!.data);
-    assert.deepEqual(readdirSync(tree).sort(), ["GOAL.md", "RATIONALE.md", "decisions"]);
+    assert.deepEqual(readFileSync(join(tree.path, "GOAL.md")), files[0]!.data);
+    assert.deepEqual(readdirSync(tree.path).sort(), ["GOAL.md", "RATIONALE.md", "decisions"]);
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
+test("AV-18: a failed staging-root acquire releases its lease -- nothing holds it after", async () => {
+  const root = mkdtempSync(join(tmpdir(), "oma-r21-lease-"));
+  try {
+    const id = generateOperationId();
+    const staging = contextStagingPathAt(root, id);
+    mkdirSync(dirname(staging), { recursive: true });
+    // Something already stands where the staging root must be created: the
+    // acquire fails after the lease is taken, and the lease must not stay held.
+    writeFileSync(staging, "existing entry, not a directory");
+    await assert.rejects(prepareContextStream(root, id, entries(), descriptor(), parts(body, 2)));
+    assert.equal(treeQuiescence(staging).kind, "quiescent",
+      "a stranded held lease would read active and keep the tree forever");
+    assert.ok(existsSync(leasePathOf(staging)), "the lease file remains; only the hold is released");
+    rmSync(staging);
+    // Recovery sees a quiescent lease: the retry is not fenced by the dead hold.
+    const retry = await prepareContextStream(root, generateOperationId(), entries(), descriptor(), parts(body, 2));
+    assert.ok(existsSync(join(retry.path, "GOAL.md")));
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
 
@@ -111,6 +133,44 @@ test("R21: an exclusive-path collision cannot delete an earlier operation's froz
     const id = generateOperationId();
     const tree = await prepareContextStream(root, id, entries(), descriptor(), parts(body, 3));
     await assert.rejects(prepareContextStream(root, id, entries(), descriptor(), parts(body, 3)), { code: "EEXIST" });
-    for (const file of files) assert.deepEqual(readFileSync(join(tree, file.path)), file.data);
+    for (const file of files) assert.deepEqual(readFileSync(join(tree.path, file.path)), file.data);
   } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
+test("V18A: a failed preparation keeps its root when a file it created was replaced", async () => {
+  const root = mkdtempSync(join(tmpdir(), "oma-r21-replaced-"));
+  try {
+    const id = generateOperationId();
+    const goal = join(contextStagingPathAt(root, id), "tree", "GOAL.md");
+    async function* replaced(): AsyncIterable<Uint8Array> {
+      yield body.subarray(0, files[0]!.data.length);
+      // Another writer replaces the finished file this preparation created.
+      writeFileSync(`${goal}.other`, "someone else's file");
+      renameSync(`${goal}.other`, goal);
+      yield Buffer.from([0xff]);
+    }
+    await assert.rejects(prepareContextStream(root, id, entries(), descriptor(), replaced()), (error: unknown) => {
+      assert.ok(error instanceof AggregateError);
+      assert.equal((error.errors[0] as { code?: string }).code, "INVALID_REQUEST");
+      assert.ok(error.errors.some(cause => (cause as { code?: string }).code === "STORE_CORRUPT"));
+      return true;
+    });
+    assert.equal(readFileSync(goal, "utf8"), "someone else's file");
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
+test("V18A: a staging root replaced after preparation is kept, and its cleanup is reported unconfirmed", () => {
+  const base = mkdtempSync(join(tmpdir(), "oma-v18a-root-"));
+  try {
+    const root = join(base, "staging-op");
+    mkdirSync(root, { mode: 0o700 });
+    const pinned = lstatSync(root);
+    const prepared = new PreparedContextTree(join(root, "tree"), root, { dev: pinned.dev, ino: pinned.ino }, TreeLease.take(root));
+    // Something else now stands where the prepared root was.
+    renameSync(root, join(base, "moved-away"));
+    mkdirSync(root, { mode: 0o700 });
+    writeFileSync(join(root, "not-ours"), "another operation's bytes");
+    assert.throws(() => prepared.discardUnaccepted(), (error: unknown) => (error as { code?: string }).code === "REF_STATE_UNKNOWN");
+    assert.ok(existsSync(join(root, "not-ours")), "cleanup deleted a root it did not create");
+  } finally { rmSync(base, { recursive: true, force: true }); }
 });

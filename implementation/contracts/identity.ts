@@ -19,4 +19,16 @@ export type Json = null | boolean | number | string | Json[] | { [k: string]: Js
 
 export type Address = Actor | `topic/${string}`;
 
-export type Capability = import('../../src/domain/capabilities.js').Capability;
+/** Closed capability vocabulary (AUTH-001). The contract owns the literal set;
+ * src/domain/capabilities.ts owns the runtime vocabulary and validator and is
+ * checked against this declaration in both directions at compile time.
+ */
+export type Capability =
+  | 'mail.send'
+  | 'route.follow'
+  | 'agent.create'
+  | 'agent.manage.self'
+  | 'agent.manage.descendants'
+  | 'git.submit'
+  | 'code.integrate'
+  | 'context.publish';

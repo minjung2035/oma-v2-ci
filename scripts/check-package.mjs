@@ -16,6 +16,14 @@ export async function checkPackage(rootInput) {
     const rel = relative(root, realpathSync(path));
     if (rel === ".." || rel.startsWith(`..${sep}`) || isAbsolute(rel)) throw new Error("package file escapes installation root");
   }
+  // AV16: the sandbox's `oma` is installed, executable, and exactly its owner's script.
+  {
+    const command = join(root, layout.modelCommand);
+    requiredFile(command);
+    if ((lstatSync(command).mode & 0o111) === 0) throw new Error(`model command is not executable: ${layout.modelCommand}`);
+    const { modelCommandScript } = await import(pathToFileURL(join(root, "dist/src/sandbox.js")).href);
+    if (readFileSync(command, "utf8") !== modelCommandScript()) throw new Error(`model command differs from its owner: ${layout.modelCommand}`);
+  }
   for (const [template, name] of Object.entries(layout.templateEntries)) {
     const text = readFileSync(join(paths.systemd, template), "utf8");
     const starts = text.split(/\r?\n/).filter(line => line.startsWith("ExecStart="));
@@ -24,29 +32,46 @@ export async function checkPackage(rootInput) {
     if (text.includes("@LIBDIR@/dist/entry/")) throw new Error(`obsolete flattened entry: ${template}`);
   }
   const packageJson = JSON.parse(readFileSync(join(root, "package.json"), "utf8"));
+  // DR18 (C2): the install command is the package's `oma` bin, and it is the
+  // product's TUI entry -- the one the deployment layout names -- run by node.
+  if (packageJson.bin?.oma !== layout.entries.tui) throw new Error(`package bin "oma" is not the TUI entry ${layout.entries.tui}`);
+  requiredFile(join(root, layout.entries.tui));
+  if (!readFileSync(join(root, layout.entries.tui), "utf8").startsWith("#!/usr/bin/env node\n"))
+    throw new Error("the oma entry cannot be run as a command: it has no node shebang");
   const lock = JSON.parse(readFileSync(join(root, "package-lock.json"), "utf8"));
   const require = createRequire(join(root, "package.json"));
   const versions = {};
   for (const name of layout.runtimeDependencies) {
     if (!Object.hasOwn(packageJson.dependencies ?? {}, name)) throw new Error(`undeclared runtime dependency: ${name}`);
-    const resolved = require.resolve(name);
-    let directory = dirname(resolved); let found = null;
-    for (;;) {
-      const rel = relative(root, directory);
-      if (rel === ".." || rel.startsWith(`..${sep}`) || isAbsolute(rel)) throw new Error(`dependency resolved outside installation: ${name}`);
-      const manifest = join(directory, "package.json");
+    // A package may publish an exports map without a CJS main, which makes
+    // require.resolve fail even though it is installed. Locate the manifest by
+    // walking the installation's node_modules instead; the name and version are
+    // still verified against the lockfile below, so this resolves differently
+    // without checking less.
+    let found = null;
+    for (let directory = root; ; ) {
+      const manifest = join(directory, "node_modules", name, "package.json");
       if (lstatSync(manifest, { throwIfNoEntry: false })?.isFile()) {
+        const rel = relative(root, dirname(manifest));
+        if (rel === ".." || rel.startsWith(`..${sep}`) || isAbsolute(rel)) throw new Error(`dependency resolved outside installation: ${name}`);
         const value = JSON.parse(readFileSync(manifest, "utf8"));
         if (value.name === name) { found = value; break; }
       }
-      const parent = dirname(directory); if (parent === directory || directory === root) break; directory = parent;
+      const parent = dirname(directory); if (parent === directory) break; directory = parent;
     }
     const expected = lock.packages?.[`node_modules/${name}`]?.version;
     if (!found || typeof expected !== "string" || found.version !== expected) throw new Error(`installed/lock version mismatch: ${name}`);
     versions[name] = { installed: found.version, locked: expected, declaredRange: packageJson.dependencies[name] };
-    // Requiring the native boundary catches a missing Koffi binary. It does not
+    // Loading the native boundary catches a missing Koffi binary. It does not
     // attest pidfd, SO_PEERPIDFD, cgroups, user namespaces or deploymentDigest.
-    require(name);
+    // Packages without a CJS entry are verified by manifest and lockfile only.
+    if (Array.isArray(found.pi?.extensions)) {
+      for (const entry of found.pi.extensions) requiredFile(resolve(root, "node_modules", name, entry));
+      requiredFile(join(root, "node_modules", name, "LICENSE"));
+    } else try { require(name); }
+    catch (error) {
+      if (error?.code !== "ERR_PACKAGE_PATH_NOT_EXPORTED" && error?.code !== "ERR_REQUIRE_ESM") throw error;
+    }
   }
   function compiledFiles(path) {
     const stat = lstatSync(path);
@@ -55,17 +80,57 @@ export async function checkPackage(rootInput) {
     return path.endsWith(".js") ? [path] : [];
   }
   const files = [...compiledFiles(join(root, layout.compiledRoot)), join(root, layout.contract)];
+  // Vendored bundled-extension payloads live under
+  // dist/src/extension/vendor/<bundle>/ and carry their own pinned
+  // dependency closure in <bundle>/node_modules/ plus the bundle manifest's
+  // generated.dependencies table -- integrity-bound bytes, verified
+  // fail-closed by verifyVendorBundle at load. Only a bundle's runtime/
+  // tree is code OMA evaluates: a bare specifier there is declared when it
+  // is a node: builtin, a root package dependency (the host Pi API), or a
+  // name in that bundle's vendored dependency closure. The rest of the
+  // bundle -- upstream/ (the byte-exact npm snapshot, never loaded),
+  // upstream-tests/ (provenance), and node_modules/ (the pinned closure
+  // itself, whose internal specifiers are upstream's own resolution
+  // domain: an in-closure name resolves bundle-locally, a host-API peer
+  // resolves to the root install by design, and a dead optional-peer
+  // specifier fails at load exactly as it does upstream) -- is pinned
+  // input, not OMA code, so its import specifiers are not OMA's
+  // declaration boundary.
+  const vendoredDependencies = file => {
+    const rel = relative(root, file).split(sep).join("/");
+    const match = /^dist\/src\/extension\/vendor\/([^/]+)\//.exec(rel);
+    if (match === null) return null;
+    // Only runtime/ is code OMA evaluates; every other member of the
+    // bundle is integrity-pinned input.
+    if (!rel.slice(match[0].length).startsWith("runtime/")) return "skip";
+    const manifestPath = join(root, "dist/src/extension/vendor", match[1], "manifest.json");
+    try {
+      const manifest = JSON.parse(readFileSync(manifestPath, "utf8"));
+      return manifest?.generated?.dependencies ?? {};
+    } catch { return {}; }
+  };
   for (const file of files) {
     requiredFile(file);
+    const vendoredDeps = vendoredDependencies(file);
+    if (vendoredDeps === "skip") continue;
     const source = ts.createSourceFile(file, readFileSync(file, "utf8"), ts.ScriptTarget.Latest, true, ts.ScriptKind.JS);
     const verifyImport = specifier => {
       if (specifier.startsWith(".")) {
         const target = resolve(dirname(file), specifier); requiredFile(target);
         const rel = relative(root, target).split(sep).join("/");
         if (!rel.startsWith("dist/src/") && rel !== layout.contract) throw new Error(`runtime import reaches non-runtime tree: ${rel}`);
-      } else if (!specifier.startsWith("node:") && !Object.hasOwn(packageJson.dependencies ?? {}, specifier.split("/")[0])) {
+      } else if (!specifier.startsWith("node:")) {
         const packageName = specifier.startsWith("@") ? specifier.split("/").slice(0, 2).join("/") : specifier.split("/")[0];
-        if (!Object.hasOwn(packageJson.dependencies ?? {}, packageName)) throw new Error(`runtime imports undeclared or dev dependency: ${specifier}`);
+        // A vendored extension's runtime may also name the Pi host API by
+        // peer-dependency semantics: @earendil-works/* packages resolve to
+        // the deployment's own root install (never a user package -- the
+        // name must exist there to pass).
+        const hostApi = vendoredDeps !== null && packageName.startsWith("@earendil-works/") &&
+          lstatSync(join(root, "node_modules", packageName, "package.json"), { throwIfNoEntry: false })?.isFile() === true;
+        if (!Object.hasOwn(packageJson.dependencies ?? {}, packageName) &&
+            !(vendoredDeps !== null && Object.hasOwn(vendoredDeps, packageName)) &&
+            !hostApi)
+          throw new Error(`runtime imports undeclared or dev dependency: ${specifier}`);
       }
     };
     const visit = node => {

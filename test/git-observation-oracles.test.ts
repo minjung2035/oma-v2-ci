@@ -43,7 +43,7 @@ test("protected path matching retains exact-file and directory-prefix semantics"
   assert.equal(protectedPathMatches("src", "src/"), false);
   assert.equal(protectedPathMatches("src-other/main.ts", "src/"), false);
   assert.equal(protectedPathMatches("tab\tname", "tab\tname"), true);
-  assert.throws(() => protectedPathMatches("anything", "/"), RangeError);
+  assert.equal(protectedPathMatches("anything", "/"), true, "DR18: the root protects the whole tree");
 });
 
 test("ref absence needs the precise exit and empty-output evidence", () => {

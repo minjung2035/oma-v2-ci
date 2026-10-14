@@ -77,10 +77,11 @@ for (const format of ["sha1", "sha256"] as const) {
       const away = join(root, "unavailable.git");
       const freeze = mail.freezeObject.bind(mail);
       mail.freezeObject = (id, eml) => {
-        freeze(id, eml);
+        const artifact = freeze(id, eml);
         mail.freezeObject = freeze;
         // Real filesystem fault after preflight; acceptance must not turn uncertainty into failure.
         renameSync(paths.projectGit, away);
+        return artifact;
       };
       await assert.rejects(git.submit(gitAuth, "uncertain", { candidate: info.base, exportRef: info.exportRef, prerequisites: [], to: ["b"], subject: "candidate", body: "body", paths: [] }, (async function* () {})()), { code: "REF_STATE_UNKNOWN" });
       const accepted = store.getOperation("a", "uncertain")!;

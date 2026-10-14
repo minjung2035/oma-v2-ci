@@ -1,76 +1,87 @@
-# 문서 전체 색인
+# 문서 지도
 
-현재 상태·규범·제안·과거 실행 기록을 구분한다. 기록 속 “현재”, PASS 수, LOC와 source SHA는 **그 문서의 작성/실행 시점**을 뜻하며 최신 결과를 대신하지 않는다.
+문서의 진입점과 주제별 owner는 이 파일 하나가 정한다. 루트 README는 진입 링크만 제공한다. 실제 TypeScript contract·SQL schema·unit template·기계 판독 map은 코드 입력이므로 저장소의 `implementation/`에 둔다.
 
-## 현재 읽을 문서
+## 처음 읽는 사람
 
-| 문서 | 역할 |
+1. [PRIORITY-0](PRIORITY-0.md): 확정된 사실과 현재 권한을 분리하는 최상위 원칙.
+2. [PRODUCT](PRODUCT.md): 제품의 목적과 경계.
+3. [HANDOFF](HANDOFF.md): 최신 사용자 요청과 재개점.
+4. 아래 주제의 기준 문서. 실제 실행 여부와 한계는 [validation](implementation/validation.md)에서 확인한다.
+
+## 주제별 기준 문서
+
+| 찾는 내용 | 기준 문서 | 소유 범위 |
+|---|---|---|
+| 프로젝트 수정 방법 | [MAINTENANCE](MAINTENANCE.md) | 작업 규율과 변경·검증 절차 |
+| 실행·설정·세션·package·extension | [운영 안내](operations.md) | 사용 방법. wire/durable 계약을 정의하지 않음 |
+| Core 구현 계약 | [implementation-spec](implementation-spec.md) | 신원·권한·IPC·메일·Git·lifecycle·복구·제품 표면과 physical ordering·Store opening·contract owner·unit renderer |
+| 기존 tiered 정책 | [integration-policy](implementation/integration-policy.md) | 기존 attestation/finding/scope 정책. 수용 변경의 근거는 연결된 DR |
+| 다음 merge/review/challenge 구현 | [merge-review-spec](merge-review-spec.md) | 최신 대화의 설계안. 이번 정리에서 본문을 변경하지 않음 |
+| macOS host와 hidden Linux VM | [macos-platform](macos-platform.md) | RPC·VM·project·credential·image·복구 계약과 helper 안내 |
+| 시험·release evidence·LOC·qualification·fixture | [verification-spec](verification-spec.md) | 기존 TEST/COMP/LOC/SP/VAL 조항과 수용 번호의 단일 owner |
+| 현재 실행 결과·한계·재검증 | [validation](implementation/validation.md) | 현재 판정과 수치의 단일 owner. 과거 실행 이력은 archive |
+| 잔여 숫자 bound의 분류 | [limit-bounds](limit-bounds.md) | UX-38 이후 남은 bound의 인벤토리와 분류. 각 bound의 동작 계약은 소유 코드·spec 문서가 유지하며 이 파일은 인벤토리다 |
+
+같은 동작의 규범은 한 owner에서 정의하고 다른 문서는 연결한다. 문장 존재 자체가 구현 완료나 시험 통과를 뜻하지 않는다.
+
+## 현재 계약·설계안·과거 기록
+
+| 종류 | 위치 | 의미 |
+|---|---|---|
+| 최상위 원칙 | PRIORITY-0 | 모든 계약과 작업 판단의 기준 |
+| 구현·검증 계약 | 위 implementation-spec, integration-policy, macos-platform, verification-spec | 구현해야 할 조건 |
+| 설계안 | merge-review-spec | 다음 변경의 목표. 이미 활성 정책·코드로 전환됐다고 해석하지 않음 |
+| 지침 | PRODUCT, MAINTENANCE, operations | 의도와 사용 방법. 계약의 의미를 덮어쓰지 않음 |
+| 현재 상태 | HANDOFF, validation | 재개점과 실제 검증 판정 |
+| 고정 기준본 | [architecture](architecture.md) | N-001이 결박한 원문. 기존 설계의 배경과 상위 기준 |
+| 결정 기록 | [design-revisions](design-revisions.md), [consistency-decisions](implementation/consistency-decisions.md) | 규범을 정한 이유와 작성 당시의 결정 |
+| 점검 기록 | [priority-0-audit](priority-0-audit.md) | P0V/P0D 발견과 수정 근거 |
+| 보관 기록·입력 원본 | [archive](archive.md) | 과거 검증·인계, 고정 계획, 외부 리뷰와 Git snapshot |
+
+고정 architecture 원문은 수정하지 않는다. 그 원문 상대 링크가 유지되도록 연결된 문서는 `docs/implementation/`에 둔다. architecture의 오래된 UI·tier/floor·LOC 문장을 현재 동작으로 단독 인용하지 않는다. 수용된 변경은 해당 규범과 DR을 함께 확인한다. 결정 기록의 OPEN/ACCEPTED/당시 실행 결과도 현재 판정을 대신하지 않는다.
+
+### 우선순위
+
+PRIORITY-0가 최상위다. architecture는 고정 상위 기준본이며, 사용자 결정에 따라 달라진 설계는 DR에 이유를 기록하고 구현 계약이 변경된 규범을 소유한다. 불일치는 구현 결함·stale 설명·미결정 설계·명시적 미지원 중 무엇인지 표시한다. 설계안이나 과거 기록만으로 활성 권한과 과거 fact의 의미를 바꾸지 않는다.
+
+## 새 정보를 어디에 적는가
+
+| 새 정보 | 적는 곳 |
 |---|---|
-| [프로젝트 README](../README.md) | 저장소 진입점 |
-| [HANDOFF](../HANDOFF.md) | 현재 재개점과 다음 작업 |
-| [현재 검증 상태](../implementation/validation.md) | 마지막 실제 실행, source pin, 미검증 환경·release 게이트 |
-| [검증 명령 색인](../validation.md) | 명령과 lane 안내; 결과 중복 관리 안 함 |
-| [MAINTENANCE](../MAINTENANCE.md) | 장기 수정·리뷰·문서 관리 원칙 |
-| [단계별 진행 색인](architecture-improvement/progress.md) | P0–P23 구현 범위와 보고서 탐색 |
-| [implementation 지도](../implementation/README.md) | 규범·현재 metadata·historical 자료 구분 |
+| Core MUST/MUST NOT과 physical ordering·Store·contract·unit 경계 | implementation-spec |
+| 기존 tiered 정책 | integration-policy |
+| 다음 merge/review 정책의 설계 | merge-review-spec. 채택 시 그 문서의 전환 절차 적용 |
+| macOS 플랫폼 계약 | macos-platform |
+| 수용 시험·증거·qualification·측정 요구 | verification-spec |
+| 설계 선택의 이유 | design-revisions. 기존 DR 번호의 뜻을 재사용하지 않음 |
+| 계획 카드·적대적 검토의 이유 | consistency-decisions |
+| Priority 0 발견과 점검 | priority-0-audit |
+| 현재 실행 판정·로그·수치·한계 | validation |
+| 최신 요청·다음 작업·제약 | HANDOFF |
+| 반복 작업 규율·제품 의도·운영 방법 | MAINTENANCE, PRODUCT, operations |
+| 과거 시점의 긴 기록·입력 원본 | archive. 과거 PASS를 현재 PASS로 사용하지 않음 |
 
-## 규범과 제안
+문서 이동·통합은 요구 ID·수용 번호·확정된 기록의 의미를 바꾸지 않는다. 계약 이동 시 source-owners와 trace inventory를 실제 위치로 맞추고 이전 evidence를 자동 승격하지 않는다. architecture와 계획 원본의 byte 결박을 유지한다.
 
-최상위 계약은 [architecture.md](../architecture.md)와 [implementation-spec.md](../implementation-spec.md)다.
-[Physical ordering](../implementation/physical-ordering.md), [compliance](../implementation/compliance.md),
-[OPEN SPIKE](../implementation/spikes.md), [integration policy](../implementation/integration-policy.md),
-[test matrix](../implementation/test-matrix.md), [LOC/build budget](../implementation/loc-budget.md),
-[contract owner 안내](../implementation/contracts/README.md), [systemd templates](../implementation/systemd/README.md)는 구현 계약과 함께 읽는다.
+## machine-readable map
 
-아래 제안서는 검토 당시 원문이며 상위 계약을 대체하지 않는다.
+현재 source owner나 실행 수치를 문서에 복제하지 않는다.
 
-- [P0–P9 안정성 보존형 아키텍처 제안](proposals/2026-09-13-safety-preserving-architecture.md)
-- [P10–P15 dependency/capability 정제 제안](proposals/p10-p15-dependency-capability-refinement.md) — 기존 `temp.md`를 내용 변경 없이 이동
-
-## 아키텍처 변경·실행 이력
-
-**아래 보고서는 해당 단계의 source-bound 기록이다. 현재 재개 지시서가 아니다.**
-현재 검증 판정은 위 단일 기록 위치를 사용하고, 과거 실패/미착수를 현재 TODO로 그대로 옮기지 않는다.
-
-| 단계 | 기록 |
+| 파일 | 용도 |
 |---|---|
-| 초기 결정·baseline | [baseline](architecture-improvement/baseline.md) · [P0/P1 결정](architecture-improvement/decisions-p0-p1-1.md) · [P0 pinned 실행](architecture-improvement/p0-baseline-execution.md) |
-| P0 회귀 | [hash overload](architecture-improvement/p0-hash-overload.md) · [stdin encoding](architecture-improvement/p0-stdin-encoding.md) |
-| P1 | [당시 진행표](architecture-improvement/p1-progress-history.md) · [composition](architecture-improvement/p1-composition.md) · [validation](architecture-improvement/p1-validation.md) |
-| P2 이관 | [module ports](architecture-improvement/p2-module-ports.md) · [protocol](architecture-improvement/p2-protocol-imports.md) · [durable](architecture-improvement/p2-durable-imports.md) · [domain](architecture-improvement/p2-domain-imports.md) · [coordinator](architecture-improvement/p2-coordinator-imports.md) |
-| P2–P7 / P2.5 | [당시 진행표](architecture-improvement/p2-p7-progress.md) · [opaque identity](architecture-improvement/p25-identities.md) |
-| P3 | [journal](architecture-improvement/p3-journal.md) · [Store integration](architecture-improvement/p3-store-integration.md) · [recovery](architecture-improvement/p3-recovery.md) · [coordinator facets](architecture-improvement/p3-coordinator-facets.md) |
-| P4 | [logical facets](architecture-improvement/p4-facets.md) |
-| P5 | [초기 lattice](architecture-improvement/p5-dependency-lattice.md) |
-| P6 | [ledger integrity](architecture-improvement/p6-ledger.md) · [physical integrity](architecture-improvement/p6-physical.md) · [pinned 검증](architecture-improvement/p6-verification.md) |
-| P7 | [durability faults](architecture-improvement/p7-durability-faults.md) |
-| P8 | [persisted formats](architecture-improvement/p8-persisted-formats.md) |
-| P9 | [power-cut/fuzz](architecture-improvement/p9-powercut-fuzz.md) |
-| P0–P9 종합 | [ORDER-002 변경 기록](architecture-improvement/change-record.md) |
-| P10–P15 | [구조 정제·적대적 검증 보고서](architecture-improvement/p10-p15-adversarial-review.md) |
-| P16–P22 | [데이터·타입 소유권과 evolution 검증](architecture-improvement/p16-p22-refinement.md) |
-| P23 | [Internal contract ownership 정리](architecture-improvement/p23-contract-ownership.md) |
-| P24 | [Filesystem containment](architecture-improvement/p24-filesystem-containment.md) · [감사 후속·deployment codec](architecture-improvement/p24-remediation.md) |
-| F1–F4 감사 후속 | [Reply 입력·request identity·log/CLI frame](architecture-improvement/f1-f4-remediation.md) |
+| [source-owners.json](../implementation/source-owners.json) | requirement별 production owner·entrypoint·call path·negative test |
+| [mutation-owners.json](../implementation/mutation-owners.json) | durable mutation owner와 change surface |
+| [durable-boundaries.json](../implementation/durable-boundaries.json) | kill·retry·restart가 필요한 경계 |
+| [traceability.json](../implementation/traceability.json) | 규범 fingerprint와 evidence inventory |
+| [oracle-map.json](../implementation/oracle-map.json) | 계획 oracle과 verification lane |
+| [review-notes.json](../implementation/review-notes.json), [review-ledger.json](../implementation/review-ledger.json) | byte에 결박된 검토 기록과 생성 ledger |
+| [contract-direction-plan.json](../implementation/contract-direction-plan.json) | contract 의존 방향 결정 |
+| [broker-lifecycle-review.json](../implementation/broker-lifecycle-review.json) | broker lifecycle 경계 검토 |
 
-## 다른 감사와 generated evidence
-
-- [C01–C07 후속 기록](../implementation/conformance-followup.md)
-- [R37–R39 closure](../implementation/refactoring-closure.md)
-- [Generated adversarial ledger](../implementation/adversarial-review.md)
-- [기존 implementation evidence](../implementation/evidence/)
-- [단계별 architecture evidence](architecture-improvement/evidence/)
-- [재생성되는 dependency graph](architecture-improvement/evidence/p5-dependency-graph.json)
-
-Generated artifact는 실행 도구와 source에 결합한다. 특히 dependency graph JSON은 같은 경로에 재생성되므로
-과거 보고서의 당시 graph가 필요하면 그 revision의 Git snapshot을 확인한다. raw evidence를 사람이 현재 값처럼 고치지 않는다.
-
-## 문서 정리 시 보존한 snapshot
-
-중복된 인계/상태 본문은 Git history에 보존하고 현재 문서는 역할에 맞게 정리했다.
-
-- [기존 HANDOFF](https://github.com/minjung2035/oma-v2/blob/930053c307785106b0a881975cad596c943e8ac1/HANDOFF.md)
-- [기존 verification status](https://github.com/minjung2035/oma-v2/blob/930053c307785106b0a881975cad596c943e8ac1/implementation/validation.md)
-- [기존 progress](https://github.com/minjung2035/oma-v2/blob/930053c307785106b0a881975cad596c943e8ac1/docs/architecture-improvement/progress.md)
-
-오프라인에서도 `git show 930053c:<path>`로 원문을 확인할 수 있다. 규범의 의미나 과거 실행 사실을 삭제·수정한 것으로 해석하지 않는다.
+`npm run evidence:refresh`는 dependency graph, production inventory/source digests,
+review ledger, validation의 structural input binding을 순서대로 갱신한다. 구조 생성 결과는
+`runtimeProof: false`이며 새 시험 PASS를 만들지 않는다. authored review의 digest가 stale이면
+거절하므로 실제 delta 검토 후 review-notes를 기록해야 한다. 권한·durable 의미·규범 fingerprint·
+review 판정은 이 명령이 고치지 않는다. LOC 측정·trace inventory는 각 기존 도구를 사용한다.
+예전 값을 새 측정처럼 손으로 보정하지 않는다. 현재 결과는 validation이 소유한다.

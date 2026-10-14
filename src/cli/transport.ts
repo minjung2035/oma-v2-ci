@@ -1,28 +1,52 @@
 /** CLI transport policy only. Freeze/query/resend and exit codes remain in
  * the CLI request service, not in the role-neutral protocol channel.
  */
+import "../runtime/client-preload.js";
+import { Transport, socketPath } from "../client/transport.js";
+import { frameBytes, contextBytes, bundleBytes } from "../client/settings.js";
+export { socketPath };
 import type { PublicMethod } from "../../implementation/contracts.js";
-import { BrokerChannel, type RpcReply } from "../protocol/channel.js";
-import { StoreError } from "../domain/errors.js";
-import { isLogResponseFrameLimit } from "../protocol/log-response.js";
+import type { RpcReply } from "../protocol/channel.js";
+
 
 // CFG-003: sandbox supplies the host's limit; only an omitted setting uses 256 KiB.
-// Preserve the CLI's absolute 60-second deadline independently of frame sizing.
-const CLI_DEADLINE_MS = 60000;
-export async function callActor(
-  path: string, method: PublicMethod, params: Record<string, unknown>, request?: string, streamBytes?: Uint8Array,
+// One observation, not a task lifetime. Allow a 120-second preparation step
+// to answer; a longer accepted operation can be looked up under its same key.
+const transport = new Transport();
+
+/** The request frame this CLI speaks (CFG-003): the host's limit inside the
+ * sandbox, 256 KiB when unset. One owner for the transport and for how much a
+ * local file may hold to be carried in a request. */
+export function cliFrameBytes(): number { return frameBytes(); }
+
+/** P0V-78, CFG-003: the raw streams a request carries after its frame -- a
+ * context tree's documents and a submission's bundle -- are held to the bounds
+ * the broker was configured with, named into the CLI's environment beside the
+ * frame bound; only an omitted setting uses the reference value. The CLI reads
+ * no more of a local input than the stream it is for can carry. */
+export function cliContextBytes(): number { return contextBytes(); }
+export function cliBundleBytes(): number { return bundleBytes(); }
+
+/** Oversized handled answers are recovered by key, never by replaying an effect. */
+export async function callActor(path: string, method: PublicMethod, params: Record<string, unknown>,
+  request?: string, streamBytes?: Uint8Array): Promise<RpcReply<PublicMethod>[]> {
+  return transport.callActor(path, method, params, request, streamBytes) as Promise<RpcReply<PublicMethod>[]>;
+}
+
+/** TUI-004: the Principal's endpoint admits nobody until the connection proves
+ * it belongs to the session the host started. That credential reaches an
+ * engine on its private host channel and stays in the trusted extension's
+ * memory (`PrincipalChannel`, `client/codecs.ts`); nothing hands one to a CLI
+ * process, so this transport attaches with none. The broker additionally
+ * checks that a Principal connection descends from the Principal's engine, so
+ * a credential alone would not make any other process the Principal. */
+
+
+export function call(
+  method: PublicMethod,
+  params: Record<string, unknown>,
+  requestKey?: string,
+  streamBytes?: Uint8Array,
 ): Promise<RpcReply<PublicMethod>[]> {
-  const configured = process.env.OMA_FRAME_BYTES;
-  const frameBytes = configured === undefined ? 256 * 1024 : Number(configured);
-  if ((configured !== undefined && !/^[0-9]+$/.test(configured)) || !isLogResponseFrameLimit(frameBytes))
-    throw new StoreError("INVALID_REQUEST", "OMA_FRAME_BYTES must be decimal bytes supporting log responses and uint32 framing");
-  const channel = new BrokerChannel({ frameBytes, idleStreamSeconds: 60, receiptWaitSeconds: 60 });
-  const timer = setTimeout(() => channel.close(new StoreError("BROKER_UNAVAILABLE", "broker did not answer before the CLI deadline")), CLI_DEADLINE_MS);
-  try {
-    await channel.connect(path);
-    const result = await channel.call(method, params, {
-      ...(request === undefined ? {} : { request }), ...(streamBytes === undefined ? {} : { streamBytes }),
-    });
-    return [result];
-  } finally { clearTimeout(timer); channel.close(); }
+  return callActor(socketPath(), method, params, requestKey, streamBytes);
 }

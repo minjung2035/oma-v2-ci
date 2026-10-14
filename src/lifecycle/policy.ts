@@ -5,7 +5,7 @@ import type { Receipt } from "../../implementation/contracts/durable.js";
 import type { ResolvedAgentSpec } from "../../implementation/contracts/host.js";
 import type { Store } from "../store.js";
 import { StoreError } from "../domain/errors.js";
-import { LineageSnapshot, assertCreateCapacity } from "../domain/lineage.js";
+import { LineageSnapshot } from "../domain/lineage.js";
 import { resolvedSpecDigest } from "../domain/spec-identity.js";
 import { receiptOfOperation } from "../storage/receipt-projector.js";
 import { assertCurrentActor, effectiveCapabilitiesOf } from "../authority.js";
@@ -17,7 +17,7 @@ export function lifecycleReceipt(store: Pick<Store, "getOperationById">, id: str
   return receiptOfOperation(operation);
 }
 export class LifecyclePolicy {
-  constructor(private readonly store: Store, private readonly resolver: SpecResolver, private readonly quota: AgentQuota | null) {}
+  constructor(private readonly store: Store, private readonly resolver: SpecResolver, _quota: AgentQuota | null) {}
   requireManage(auth: AuthContext, target: Actor): void {
     assertCurrentActor(this.store, auth, target === auth.actor ? "agent.manage.self" : "agent.manage.descendants");
     if (target === auth.actor) return;
@@ -25,11 +25,11 @@ export class LifecyclePolicy {
     if (!new LineageSnapshot(this.store.listAgents()).isDescendant(target, auth.actor))
       throw new StoreError("CAPABILITY_DENIED", `${target} is not a descendant of ${auth.actor}`);
   }
-  enforceQuota(parent: Actor): void {
-    if (this.quota) assertCreateCapacity(new LineageSnapshot(this.store.listAgents()), parent, this.quota);
+  enforceQuota(_parent: Actor): void {
+    // DR37: agent creation has no OMA count quota.
   }
-  assertSeedCount(count: number): void {
-    if (this.quota && count > this.quota.societyAgents) throw new StoreError("QUOTA_EXCEEDED", "bootstrap exceeds society agent quota");
+  assertSeedCount(_count: number): void {
+    // DR37: bootstrap is governed by authority and available OS resources.
   }
   refresh(): string | null { this.resolver.refresh?.(); return this.resolver.revision?.() ?? null; }
   assertRevision(revision: string | null): void {

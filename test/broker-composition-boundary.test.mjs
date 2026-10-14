@@ -57,6 +57,11 @@ function fixture() {
       calls.push("listAgents");
       return state.agents;
     },
+    // WP23.03: parameter checks read names only.
+    agentNames() {
+      calls.push("agentNames");
+      return state.agents.map((agent) => agent.name);
+    },
     getAgent(actor) {
       calls.push(`getAgent:${actor}`);
       return state.agents.find((agent) => agent.name === actor) ?? null;
@@ -65,9 +70,9 @@ function fixture() {
       calls.push(`getOperation:${actor}:${key}`);
       return state.operation;
     },
-    pendingDeliveries() {
-      calls.push("pendingDeliveries");
-      return [1, 2];
+    pendingDeliveryCount() {
+      calls.push("pendingDeliveryCount");
+      return 2;
     },
     getBatch() {
       calls.push("getBatch");
@@ -100,15 +105,11 @@ function fixture() {
       return Promise.resolve({ examined: 0, repaired: 0, remaining: 0 });
     },
   };
+  // WP23: the public port sees the broker's shared status refresh only.
   const units = {
-    observe() {
-      calls.push("units.observe");
-      return {
-        activeState: "active",
-        subState: "running",
-        result: "success",
-        execMainStatus: 0,
-      };
+    request() {
+      calls.push("status.request");
+      return Promise.resolve({ observedAtMs: 1, units: new Map(), failure: null });
     },
   };
   const views = {
@@ -118,6 +119,7 @@ function fixture() {
     },
   };
   const lifecycle = {
+    setSociety() { calls.push("lifecycle.setSociety"); return "society"; },
     create() {},
     start() {},
     stop() {},
@@ -125,6 +127,14 @@ function fixture() {
     follow() {},
   };
   const git = {
+    attestations: {
+      store: { privateWriter: true },
+      record(...args) { calls.push(["attest.record", ...args]); return Promise.resolve("attestation"); },
+    },
+    reviews: {
+      store: { privateWriter: true },
+      status(...args) { calls.push(["review.status", ...args]); return "review-status"; },
+    },
     knownRefs() {
       calls.push("git.knownRefs");
       return { main: "main", published: [] };
@@ -179,23 +189,37 @@ test("P18 public composition exposes only projected capabilities and keeps looku
     "listAgents",
   ]);
   assert.deepEqual(Object.keys(ports.mail), ["send"]);
-  assert.deepEqual(Object.keys(ports.units), ["observe"]);
+  assert.deepEqual(Object.keys(ports.units), ["statusSnapshot"]);
   assert.deepEqual(Object.keys(ports.views), ["status"]);
   assert.deepEqual(Object.keys(ports.lifecycle).sort(), [
     "ack",
     "create",
     "follow",
+    "setSociety",
     "start",
     "stop",
   ]);
   assert.deepEqual(Object.keys(ports.git).sort(), [
+    "attestations",
     "integrate",
     "isPublished",
     "knownRefs",
     "publishContext",
+    "reviews",
     "submit",
   ]);
 
+  assert.equal(ports.git.attestations === git.attestations, false, "the concrete owner must not escape through a nested port");
+  assert.deepEqual(Object.keys(ports.git.attestations), ["record"]);
+  const auth = { actor: "alice" }, input = { kind: "peer" };
+  assert.equal(await ports.git.attestations.record(auth, "key", input), "attestation");
+  assert.deepEqual(calls.pop(), ["attest.record", auth, "key", input]);
+  assert.equal(ports.git.reviews === git.reviews, false, "the review owner must not escape through a nested port");
+  assert.deepEqual(Object.keys(ports.git.reviews), ["status"]);
+  assert.equal(await ports.git.reviews.status(auth, "oma_merge/cand", 16, "r1"), "review-status");
+  assert.deepEqual(calls.pop(), ["review.status", auth, "oma_merge/cand", 16, "r1"]);
+  assert.equal(ports.lifecycle.setSociety({}, "closed", "request"), "society");
+  assert.equal(calls.pop(), "lifecycle.setSociety");
   const view = ports.store.getAgent("alice");
   assert.deepEqual(Object.keys(view).sort(), [
     "desired",
@@ -241,14 +265,12 @@ test("P18 internal composition exposes narrow live capabilities without concrete
     runnerAuth() {
       return {};
     },
-    repair() {},
   };
-  const ports = createInternalDispatchPorts(store, mail, null, "/state", peers);
+  const ports = createInternalDispatchPorts(store, mail, "/state", peers);
 
   assert.deepEqual(Object.keys(ports).sort(), [
     "mail",
     "peers",
-    "reconcile",
     "stateRoot",
     "store",
   ]);
@@ -263,9 +285,7 @@ test("P18 internal composition exposes narrow live capabilities without concrete
     "complete",
     "moveToCur",
     "prepare",
-    "reconcilePending",
   ]);
-  assert.equal(ports.reconcile, null);
   assert.equal(ports.stateRoot, "/state");
   assert.notEqual(ports.peers, peers);
   assert.deepEqual(Object.keys(ports.peers).sort(), ["requireHostUnit", "requireRunnerUnit", "runnerActor", "runnerAuth"]);
@@ -275,5 +295,5 @@ test("P18 internal composition exposes narrow live capabilities without concrete
   assert.equal(ports.store.pendingDeliveryCount("alice"), 2);
   assert.equal(ports.store.getBatchAgent("batch-1"), "alice");
   assert.equal(ports.store.preparedBatchIds("alice")[0], "batch-1");
-  assert.equal(calls.includes("pendingDeliveries"), true);
+  assert.equal(calls.includes("pendingDeliveryCount"), true);
 });

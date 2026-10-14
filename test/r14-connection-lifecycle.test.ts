@@ -46,7 +46,7 @@ function deferred() {
 const digest = (body: Buffer) => ({ bytes: body.length, sha256: createHash("sha256").update(body).digest("hex") });
 const control = (id = "next") => encodeFrame({ v: 1, id, method: "status.get", params: {} });
 const streamFrame = (body: Buffer) => encodeFrame({ v: 1, id: "stream", method: "context.publish", request: "key", params: { content: { ...digest(body), mediaType: "application/vnd.oma.context-v1" } } });
-function harness(t: TestContext, handle: RpcConnectionOptions["handle"], customize: Partial<Pick<RpcConnectionOptions, "preflight" | "makeSpool">> = {}) {
+function harness(t: TestContext, handle: RpcConnectionOptions["handle"], customize: Partial<Pick<RpcConnectionOptions, "preflight" | "makeSpool" | "reserve">> = {}) {
   const root = mkdtempSync(join(tmpdir(), "oma-r14-"));
   const socket = new SocketHarness(); const alarms = new ManualAlarms();
   let closes = 0; let closed = 0;
@@ -59,6 +59,36 @@ function harness(t: TestContext, handle: RpcConnectionOptions["handle"], customi
   });
   t.after(() => { connection.close(); rmSync(root, { recursive: true, force: true }); });
   return { root, socket, alarms, peer, connection, tasks, peerCloses: () => closes, connectionCloses: () => closed };
+}
+
+for (const ending of ["success", "close", "revoke", "short EOF"] as const) {
+  test(`AV-10/P0-1/4: delayed raw admission rechecks ${ending} before creating a spool`, async t => {
+    let admit!: () => void;
+    const admission = new Promise<void>(resolve => { admit = resolve; });
+    let allowed = true, created = 0, handled = 0;
+    const body = Buffer.from("raw");
+    const h = harness(t, async (_raw, input) => {
+      handled++;
+      const chunks: Buffer[] = [];
+      for await (const bytes of input!) chunks.push(Buffer.from(bytes));
+      assert.deepEqual(Buffer.concat(chunks), body);
+      return {};
+    }, { reserve: () => admission,
+      preflight() { if (!allowed) throw new StoreError("CAPABILITY_DENIED", "revoked during admission"); },
+      makeSpool(descriptor) { created++; return new TransportSpool(h.root, descriptor); } });
+    h.socket.emit("data", Buffer.concat([streamFrame(body), ending === "short EOF" ? body.subarray(0, 1) : body]));
+    assert.equal(h.connection.snapshot().phase, "admittingStream");
+    assert.equal(created, 0); assert.deepEqual(readdirSync(h.root), []);
+    if (ending === "close") h.socket.destroy();
+    else { if (ending === "revoke") allowed = false; h.socket.emit("end"); }
+    admit();
+    await Promise.all(h.tasks);
+    // Admission can register the subsequent execution task while resolving.
+    await Promise.all(h.tasks);
+    assert.equal(created, ending === "success" || ending === "short EOF" ? 1 : 0);
+    assert.equal(handled, ending === "success" ? 1 : 0);
+    assert.deepEqual(readdirSync(h.root), []);
+  });
 }
 
 test("R14: every two-way split and single-byte feed preserves an exact four-byte header", () => {

@@ -46,7 +46,7 @@ function rowDigest(path: string): string {
   const raw = new DatabaseSync(path);
   try {
     const digest = createHash("sha256");
-    for (const table of ["agents", "operations", "deliveries", "batches", "subscriptions", "usage"]) {
+    for (const table of ["agents", "operations", "deliveries", "batches", "subscriptions", "attestations"]) {
       const rows = raw.prepare(`SELECT * FROM ${table} ORDER BY 1`).all() as unknown[];
       digest.update(JSON.stringify(rows));
     }

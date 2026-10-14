@@ -1,4 +1,6 @@
-// TEST-002: normal fixtures are contract-valid; corruption belongs in corruption.ts.
+// TEST-002: shape-valid fixtures, not complete HostConfig, live authority or installed runtime.
+// resolvedSpecCheck validates this shape; a real Store/Mail fixture must also round-trip it.
+// Corruption belongs in corruption.ts, after a validated positive control.
 import { CAPABILITIES, type Capability } from "../../src/domain/capabilities.js";
 import { resolvedSpecDigest } from "../../src/domain/spec-identity.js";
 import { resolvedSpecCheck } from "../../src/durable.js";

@@ -1,6 +1,7 @@
 // MUST [M-003]: runtime schema validation at trust boundaries; unknown fields are
 // rejected; `as SomeType` is never validation. Validators return an error string
 // or null; they do not coerce.
+export { attestationInputProblem as attestationParamsCheck } from "./domain/attestation.js";
 import type { Json, RequestKey } from "../implementation/contracts/identity.js";
 import { contextEntriesCheck } from "./domain/context-policy.js";
 import {
@@ -11,6 +12,7 @@ import {
 export { contextPathCheck, contextFileCheck } from "./domain/context-policy.js";
 import {
   exactCandidateCheck,
+  mailHeaderValueCheck,
   headerMessageIdCheck,
   messageKindCheck,
   logicalAddressCheck as checkLogicalAddress,
@@ -27,6 +29,7 @@ import {
   isValidWirePath,
   isValidMessageId,
   isValidOperationId,
+  isReviewRequestName,
 } from "./domain/identifiers.js";
 
 export type Check = (v: unknown) => string | null;
@@ -163,22 +166,13 @@ export const checkExportRef: Check = (v) =>
 /** Structural logical grammar comes from mail-values; this adds only the
  * caller-supplied registered-resident set, never a display-address fallback.
  */
-export function checkAddress(actorNames: ReadonlySet<string>): Check {
-  return (v) => {
-    const structural = checkLogicalAddress(v);
-    if (structural) return structural;
-    if (
-      v === "principal" ||
-      v === "commons" ||
-      v === "residents" ||
-      (typeof v === "string" && v.startsWith("topic/"))
-    )
-      return null;
-    return actorNames.has(v as string)
-      ? null
-      : `unknown address "${String(v)}"`;
-  };
-}
+/** An address's grammar. SCN-F04, P0-2: whether it names an agent -- and
+ * whether that agent can receive now -- is the routing owner's
+ * (`expandAddresses`), which answers ADDRESS_NOT_FOUND, AGENT_NOT_READY or
+ * AGENT_RETIRED before the request is accepted. Deciding existence here as
+ * well answered the same question a second way ("invalid params"), which told
+ * a caller neither that the name was unknown nor which one. */
+export const checkAddress: Check = (v) => checkLogicalAddress(v);
 
 export function checkBlobDescriptor(maxBytes: number): Check {
   return checkObject({
@@ -211,7 +205,41 @@ const messageIdCheck: Check = (value) =>
 const operationIdCheck: Check = (value) =>
   isValidOperationId(value) ? null : "invalid operation id";
 
-export const messagePlanCheck = checkObject({
+const requestNameCheck: Check = (value) =>
+  isReviewRequestName(value) ? null : "invalid review request name";
+/** The durable review-mail metadata grammar; role fixes kind, audience and
+ * logical addressing in the cross-field checks below. */
+const reviewMailMetaCheck: Check = (value) => {
+  if (!isPlainObject(value)) return `expected object, got ${typeName(value)}`;
+  switch ((value as { role?: unknown }).role) {
+    case "thread":
+      return checkObject({ role: checkEnum(["thread"] as const), request: operationIdCheck,
+        name: requestNameCheck, revision: checkInt({ min: 0 }) })(value);
+    case "approval": {
+      const invalid = checkObject({ role: checkEnum(["approval"] as const), request: operationIdCheck,
+        name: requestNameCheck, votes: checkArray(operationIdCheck, { min: 1 }) })(value);
+      if (invalid !== null) return invalid;
+      const votes = (value as { votes: string[] }).votes;
+      return new Set(votes).size === votes.length ? null : "duplicate approval votes";
+    }
+    case "withdrawn":
+      return checkObject({ role: checkEnum(["withdrawn"] as const), request: operationIdCheck,
+        name: requestNameCheck, approval: messageIdCheck })(value);
+    case "decision":
+      return checkObject({ role: checkEnum(["decision"] as const), request: operationIdCheck,
+        name: requestNameCheck, approval: messageIdCheck })(value);
+    case "notice": {
+      const invalid = checkObject({ role: checkEnum(["notice"] as const), request: operationIdCheck,
+        name: requestNameCheck, part: checkInt({ min: 1 }), parts: checkInt({ min: 1 }),
+        sha256: checkString({ re: /^[0-9a-f]{64}$/ }), bytes: checkInt({ min: 0 }) })(value);
+      if (invalid !== null) return invalid;
+      const meta = value as { part: number; parts: number };
+      return meta.part <= meta.parts ? null : "notice part exceeds parts";
+    }
+    default: return "invalid review mail role";
+  }
+};
+const messagePlanShapeCheck = checkObject({
   id: messageIdCheck,
   objectPath: (value) =>
     isMailObjectRelativePath(value) ? null : "invalid mail object path",
@@ -222,6 +250,8 @@ export const messagePlanCheck = checkObject({
   recipients: checkArray((v) => (v === "principal" ? null : checkActor(v))),
   kind: messageKindCheck,
   approvalFor: checkOptional(exactCandidateCheck),
+  audience: checkOptional(checkEnum(["workers"] as const)),
+  review: checkOptional(reviewMailMetaCheck),
   contextRevision: (v) => (v === null ? null : checkOid(v)),
   replyHeaders: checkObject({
     replyTo: checkArray(checkLogicalAddress),
@@ -229,10 +259,61 @@ export const messagePlanCheck = checkObject({
     references: checkArray(headerMessageIdCheck),
   }),
 });
+/** Review mail roles pin the frozen kind, logical addressing and audience. */
+export const messagePlanCheck: Check = (value) => {
+  const invalid = messagePlanShapeCheck(value);
+  if (invalid !== null) return invalid;
+  const plan = value as {
+    kind: string; to: string[]; audience?: string; approvalFor?: unknown;
+    review?: { role: string };
+  };
+  const toIs = (expected: readonly string[]) =>
+    plan.to.length === expected.length && expected.every((address, index) => plan.to[index] === address);
+  if (plan.review === undefined)
+    return plan.audience === undefined ? null : "workers audience requires review metadata";
+  const hidden = plan.audience === undefined;
+  switch (plan.review.role) {
+    case "thread":
+      return plan.kind === "message" && plan.audience === "workers" && toIs(["residents"])
+        ? null : "thread review mail is a workers-audience message to residents";
+    case "approval":
+      return plan.kind === "approval_required" && hidden && plan.approvalFor !== undefined && toIs(["principal"])
+        ? null : "approval review mail is an approval_required to the Principal";
+    case "withdrawn":
+      return plan.kind === "message" && hidden && toIs(["principal"])
+        ? null : "withdrawn review mail is a message to the Principal";
+    case "decision":
+      return plan.kind === "result" && hidden && toIs(["principal"])
+        ? null : "decision review mail is a result to the Principal";
+    case "notice":
+      return plan.kind === "result" && hidden && toIs(["commons", "principal"])
+        ? null : "notice review mail is a result to commons and the Principal";
+    default: return "invalid review mail role";
+  }
+};
 
 /** MUST [DB-009/M-003]: result_json is a closed result variant keyed by kind. */
 export function operationResultCheck(kind: string): Check {
   switch (kind) {
+    case "society.set":
+      return checkObject({ kind: checkEnum([kind]), state: checkEnum(["open", "closed"]) });
+    case "attest.record":
+      return (value) => {
+        if (!isPlainObject(value)) return `expected object, got ${typeName(value)}`;
+        if (Object.hasOwn(value, "request"))
+          return checkObject({
+            kind: checkEnum(["attest.record"] as const),
+            request: requestNameCheck,
+            messages: checkArray(messageIdCheck),
+            recipientCount: checkInt({ min: 0 }),
+          })(value);
+        return checkObject({
+          kind: checkEnum(["attest.record"] as const),
+          message: messageIdCheck,
+          recipientCount: checkInt({ min: 0 }),
+          archivePath: checkString({ min: 1 }),
+        })(value);
+      };
     case "mail.send":
     case "agent.continue":
       return checkObject({
@@ -285,6 +366,10 @@ export function operationResultCheck(kind: string): Check {
         target: checkEnum(["refs/heads/main"]),
         policyRevision: checkString({ min: 1 }),
         changed: checkBool(),
+        publication: checkOptional(checkObject({ message: messageIdCheck, recipientCount: checkInt({ min: 0 }),
+          effectiveTier: checkEnum(["LOW", "MEDIUM", "HIGH"]), authorityDigest: checkString({ re: /^[0-9a-f]{64}$/ }) })),
+        merge: checkOptional(checkObject({ name: requestNameCheck, notices: checkArray(messageIdCheck),
+          recipientCount: checkInt({ min: 0 }) })),
       });
     case "context.publish":
       return checkObject({
@@ -300,12 +385,11 @@ export function operationResultCheck(kind: string): Check {
 }
 
 export function mailParamsCheck(
-  actorNames: ReadonlySet<string>,
   l: ParamsLimits,
 ): Check {
   const shape = checkObject({
-    to: checkArray(checkAddress(actorNames), { min: 0, max: l.addresses }),
-    subject: checkString({ max: l.subjectBytes }),
+    to: checkArray(checkAddress, { min: 0, max: l.addresses }),
+    subject: value => checkString({ max: l.subjectBytes })(value) ?? mailHeaderValueCheck(value),
     kind: messageKindCheck,
     body: checkString({ max: l.mailBodyBytes }),
     approvalFor: checkOptional(exactCandidateCheck),
@@ -345,15 +429,14 @@ export const agentCreateParamsCheck: Check = checkObject({
   brief: checkString({ min: 1, max: 8 * 1024 }),
 });
 export function gitSubmitParamsCheck(
-  actorNames: ReadonlySet<string>,
   l: ParamsLimits,
 ): Check {
   return checkObject({
     candidate: checkOid,
     exportRef: checkExportRef,
     prerequisites: checkArray(checkOid, { max: 1024 }),
-    to: checkArray(checkAddress(actorNames), { min: 0, max: l.addresses }),
-    subject: checkString({ max: l.subjectBytes }),
+    to: checkArray(checkAddress, { min: 0, max: l.addresses }),
+    subject: value => checkString({ max: l.subjectBytes })(value) ?? mailHeaderValueCheck(value),
     body: checkString({ max: l.mailBodyBytes }),
     paths: checkArray(
       (v) =>
@@ -366,6 +449,7 @@ export function gitSubmitParamsCheck(
   });
 }
 export const gitIntegrateParamsCheck: Check = checkObject({
+  tier: checkOptional(checkEnum(["LOW", "MEDIUM", "HIGH"])),
   candidate: checkOid,
   expected: checkOid,
 });
@@ -383,11 +467,14 @@ export function contextPublishParamsCheck(l: ParamsLimits): Check {
         maxBytes: l.contextBytes,
       }),
     content: checkBlobDescriptor(l.contextBytes),
+    goalMail: checkOptional(checkObject({ subject: value => checkString({ min: 1, max: l.subjectBytes })(value) ?? mailHeaderValueCheck(value) })),
   });
   return (value) => {
     const invalid = shape(value);
     if (invalid) return invalid;
-    const input = value as { entries: unknown; content: { bytes: number } };
+    const input = value as { entries: { path: string; bytes: number }[]; content: { bytes: number }; goalMail?: unknown };
+    if (input.goalMail !== undefined && input.entries.find(entry => entry.path === "GOAL.md")!.bytes > l.mailBodyBytes)
+      return "GOAL mail body exceeds host mail limit";
     return contextEntriesCheck(input.entries, {
       requireSorted: true,
       contentBytes: input.content.bytes,
@@ -397,8 +484,17 @@ export function contextPublishParamsCheck(l: ParamsLimits): Check {
 export const operationGetParamsCheck: Check = checkObject({
   key: checkRequestKey,
 });
+export const operationReadParamsCheck: Check = checkObject({
+  key: checkRequestKey,
+  offset: checkInt({ min: 0 }),
+  sha256: checkOptional(checkString({ re: /^[0-9a-f]{64}$/ })),
+});
 export const statusGetParamsCheck: Check = checkObject({
   agent: checkOptional(checkActor),
+  after: checkOptional(checkActor),
+});
+export const reviewStatusParamsCheck: Check = checkObject({
+  name: checkOptional(requestNameCheck),
 });
 export const logsReadParamsCheck: Check = checkObject({
   agent: checkActor,
@@ -408,11 +504,14 @@ export const mailAckParamsCheck: Check = checkObject({
   message: messageIdCheck,
 });
 export const routeParamsCheck: Check = checkObject({ topic: checkTopic });
+export const societySetParamsCheck: Check = checkObject({ state: checkEnum(["open", "closed"]) });
 export const agentActionParamsCheck: Check = checkObject({ agent: checkActor });
 export const agentContinueParamsCheck: Check = checkObject({
   note: checkString({ min: 1, max: 64 * 1024 }),
 });
-export const agentWaitParamsCheck: Check = checkObject({});
+export const agentWaitParamsCheck: Check = checkObject({
+  observe: checkOptional(value => value === true ? null : "observe must be true"),
+});
 
 /** Validated, normalized wire values ready for the domain layer. */
 export interface ValidatedEnvelope<M> {

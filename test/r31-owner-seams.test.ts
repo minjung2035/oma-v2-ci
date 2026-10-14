@@ -14,6 +14,7 @@ import { ViewsModule } from "../src/views.js";
 import { LifecycleModule } from "../src/lifecycle.js";
 import { ALL_CAPS, TEST_RESOURCES, makeValidAgent, makeValidResolvedSpec } from "./fixtures/spec.js";
 import { sendWithStop, StopSignal } from "./fixtures/mail-faults.js";
+import { goalPublishedAt } from "./fixtures/goal.js";
 
 const auth: AuthContext = { actor: "alice", incarnation: 1, role: "resident", channel: "actor",
   capabilities: new Set(ALL_CAPS), peer: { pid: process.pid, uid: 1000, gid: 1000, cgroup: null } };
@@ -24,12 +25,14 @@ test("R31 public facade delegates status and mutation with the original authorit
   t.after(() => { try { store.close(); } finally { rmSync(root, { recursive: true, force: true }); } });
   store.transaction(tx => { tx.insertAgent(makeValidAgent("alice")); });
   const mail = new MailModule({ stateRoot: root, society: "demo" }, store, 64);
-  const units = new UnitsModule("demo", { node: process.execPath, libdir: root, state: root, society: "demo", agent: "" }, join(root, "units"), { p: TEST_RESOURCES });
-  t.mock.method(units, "observe", () => ({ activeState: "inactive", subState: "dead", result: "success", execMainStatus: 0, cgroup: "", invocationId: "" }));
+  const units = new UnitsModule("demo", { node: process.execPath, libdir: root, state: root, society: "demo", agent: "", config: join(root, "config.json"), run: join(root, "oma", "demo") }, join(root, "units"), { p: TEST_RESOURCES });
+  // WP23: status observes through the batched, asynchronous unit read.
+  t.mock.method(units, "observeStatus", async (agents: readonly string[]) =>
+    new Map(agents.map(agent => [agent, { activeState: "inactive", subState: "dead", result: "success", execMainStatus: 0, cgroup: "", invocationId: "" }])));
   const views = new ViewsModule(store, root, "demo", "p");
   const lifecycle = new LifecycleModule(store, units, { stateRoot: root, projectGit: join(root, "project.git"), society: "demo", hasGoal: () => false, activationAllowed: () => true },
     (_parent, input) => makeValidResolvedSpec(input.name, "p", ALL_CAPS, input.from, input.brief), mail);
-  const broker = new Broker(store, mail, units, views, lifecycle, null, null, { stateRoot: root, runRoot: join(root, "run"), society: "demo" });
+  const broker = new Broker(store, mail, units, views, lifecycle, null, null, { stateRoot: root, runRoot: join(root, "run"), society: "demo", hasGoal: goalPublishedAt(root) });
   const before = Date.now();
   const status = await broker.dispatch(auth, { v: 1, id: "status", method: "status.get", params: { agent: "alice" } }, null);
   assert.ok("ok" in status && status.ok === true && "result" in status);

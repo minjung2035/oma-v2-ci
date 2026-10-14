@@ -169,11 +169,11 @@ test("P7 fault derived rename: derived view replacement is idempotent and leaves
     };
     assert.throws(() => replaceDerivedFile(target, "derived-b\n", 0o600, afterRename), /fault ambiguous directory-fsync/);
     assert.equal(readFileSync(target, "utf8"), "derived-b\n", "a post-rename fault does not prove the replacement failed");
-    // A crash cannot run cleanup: its owned temporary stays until the owner
-    // removes that exact name, and the derived target already holds the bytes.
-    const crashed = readDirNames(join(root, "world")).filter(name => name.endsWith(".tmp"));
-    assert.equal(crashed.length, 1, "the crashed replacement owns exactly one temporary");
-    unlinkSync(join(root, "world", crashed[0]!));
+    // A crash cannot run cleanup: the first crash's temporary stayed until the
+    // next replacement of the same name, which collected it -- its writer's
+    // lock was free (P0V-96) -- and the post-rename one left none.
+    assert.deepEqual(readDirNames(join(root, "world")).filter(name => name.endsWith(".tmp")), [],
+      "a crashed replacement's temporary outlived the next replacement of its name");
     replaceDerivedFile(target, "derived-b\n");
     assert.equal(readFileSync(target, "utf8"), "derived-b\n");
     assert.deepEqual(readDirNames(join(root, "world")), ["agents.tsv"], "owned temporaries are not left behind");

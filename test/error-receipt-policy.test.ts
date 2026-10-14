@@ -109,7 +109,7 @@ test("receipt projection is shared and never reparses or rewrites its decoded op
 
 test("terminal receipt exit codes differ from uncertain direct failures", () => {
   assert.equal(receiptExit(receiptOfOperation(pending)), 0);
-  assert.equal(receiptLines(receiptOfOperation(pending), "frozen-1")[0], "접수됨 / 아직 완료되지 않음");
+  assert.equal(receiptLines(receiptOfOperation(pending), "frozen-1")[0], "Accepted / not yet complete");
   assert.match(receiptLines(receiptOfOperation(pending), "frozen-1")[1]!, /--request frozen-1/);
   assert.equal(receiptExit(receiptOfOperation(receiptOperation({ state: "unknown" }))), 3);
   assert.equal(receiptExit(receiptOfOperation(receiptOperation({ state: "failed", error_code: "CHECK_FAILED" }))), 2);

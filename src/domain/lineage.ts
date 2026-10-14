@@ -61,15 +61,7 @@ export class LineageSnapshot<N extends LineageNode = LineageNode> {
     return this.ancestors(name, includeSelf).some(node => node.name === ancestor);
   }
 }
-/** All resident states consume quota; principal is excluded, exactly as before. */
+/** DR37: legacy callers cannot impose society or lineage count quotas. */
 export function assertCreateCapacity<N extends LineageNode & { readonly role: "resident" | "principal" }>(
-  graph: LineageSnapshot<N>, parent: string, quota: { societyAgents: number; lineageAgents: number },
-): void {
-  const residents = graph.all().filter(node => node.role === "resident");
-  if (residents.length >= quota.societyAgents) throw new StoreError("QUOTA_EXCEEDED", "society agent quota exhausted");
-  for (const ancestor of graph.ancestors(parent)) {
-    if (ancestor.role === "principal") break;
-    const count = graph.descendants(ancestor.name, false).filter(node => node.role === "resident").length;
-    if (count >= quota.lineageAgents) throw new StoreError("QUOTA_EXCEEDED", `lineage agent quota exhausted at ${ancestor.name}`);
-  }
-}
+  _graph: LineageSnapshot<N>, _parent: string, _quota: { societyAgents: number; lineageAgents: number },
+): void {}

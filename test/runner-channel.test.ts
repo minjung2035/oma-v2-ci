@@ -1,12 +1,18 @@
 import { test } from "node:test";
+import type { PreparedBatch } from "../implementation/contracts.js";
 import assert from "node:assert/strict";
 import { createServer } from "node:net";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { BrokerChannel, RunnerModule } from "../src/runner.js";
 import { FrameParser, encodeFrame } from "../src/frame.js";
-import { actorSocketPathAt } from "../src/storage/paths.js";
+import { actorSocketPathAt, runnerSessionDirPathAt } from "../src/storage/paths.js";
+import { PI_ADAPTER_REVISION, publishDeliveryReceipt } from "../src/storage/delivery-receipt.js";
+import { generateBatchId, generateOperationId } from "../src/ids.js";
+import { messageIdForOperation } from "../src/domain/derived.js";
+import { TEST_PROTOCOL_LIMITS } from "./fixtures/limits.js";
+import { writeBoundarySession } from "./fixtures/delivery-receipt.js";
 
 test("RUN-001: broker EOF, malformed reply and local stop settle all pending calls", { timeout: 5000 }, async () => {
   for (const mode of ["eof", "malformed", "oversize", "stop", "timeout", "success"]) {
@@ -51,7 +57,7 @@ test("RUN-001: broker EOF, malformed reply and local stop settle all pending cal
   }
 });
 
-test("SP-003: a prepared runner handoff reports the unresolved adapter, not successful consumption", async () => {
+test("RUN-001: a prepared handoff requires an explicitly configured Pi adapter", async () => {
   for (const prepared of [false, true]) {
     const dir = mkdtempSync(join(tmpdir(), "oma-run-gate-"));
     const methods: string[] = [];
@@ -64,8 +70,7 @@ test("SP-003: a prepared runner handoff reports the unresolved adapter, not succ
           const raw = frame.raw;
           assert.ok(raw !== null && typeof raw === "object" && "id" in raw && "method" in raw && typeof raw.method === "string");
           methods.push(raw.method);
-          // The lease must be a real endpoint identity for this run root; the
-          // unresolved adapter gate is what the test observes, not a bad lease.
+          // The lease is valid; this fixture intentionally omits Pi adapter paths.
           const result = raw.method === "runner.open"
             ? { actor: "a", incarnation: 1, socketHostPath: actorSocketPathAt(dir, "a", 1) }
             : prepared ? { id: "b-00000000-0000-4000-8000-000000000015", agent: "a", incarnation: 1,
@@ -77,7 +82,7 @@ test("SP-003: a prepared runner handoff reports the unresolved adapter, not succ
     const runner = new RunnerModule({ runRoot: dir }, "a");
     try {
       await new Promise<void>(resolve => server.listen(join(dir, "admin.sock"), resolve));
-      if (prepared) await assert.rejects(runner.run(), { code: "SPIKE_UNRESOLVED" });
+      if (prepared) await assert.rejects(runner.run(), { code: "UNSUPPORTED_PROFILE" });
       else assert.equal(await runner.run(), 0);
       assert.deepEqual(methods, ["runner.open", "batch.prepare"]);
     } finally {
@@ -85,5 +90,56 @@ test("SP-003: a prepared runner handoff reports the unresolved adapter, not succ
       await new Promise<void>(resolve => server.close(() => resolve()));
       rmSync(dir, { recursive: true, force: true });
     }
+  }
+});
+
+/** AV21 -- D01, RUN-001: the sixth functional run found a Resident's runner
+ * exiting with BROKER_UNAVAILABLE after every delivery that took longer than
+ * idleStreamSeconds. It held the connection it opened the run with through the
+ * whole turn; the broker closed it as idle, and `batch.complete` went to a
+ * closed channel. The next incarnation settled the batch from its receipt, but
+ * each long batch cost a failed start against the unit's start limit. Here the
+ * broker closes the connection after `batch.prepare`, as its idle bound does;
+ * the receipt is already published, so the runner goes straight to completion. */
+test("AV21 / D01, RUN-001: a batch outlasting the broker's idle bound completes on a new connection", { timeout: 10000 }, async () => {
+  const dir = mkdtempSync(join(tmpdir(), "oma-av21-"));
+  const operation = generateOperationId();
+  const batch: PreparedBatch = { id: generateBatchId(), agent: "alice", incarnation: 1, messageIds: [messageIdForOperation(operation, 0)],
+    sessionPath: null, deliveryMode: "followUp", notice: "mail", indexPath: "/inbox.md" };
+  const sessions = runnerSessionDirPathAt(dir, "alice");
+  mkdirSync(sessions, { recursive: true, mode: 0o700 });
+  const sessionPath = join(sessions, "session.jsonl");
+  writeBoundarySession(sessionPath, batch, "0123abcd");
+  publishDeliveryReceipt(dir, batch, { adapterRevision: PI_ADAPTER_REVISION, batchId: batch.id, incarnation: 1, sessionPath, entryId: "0123abcd" },
+    TEST_PROTOCOL_LIMITS.frameBytes);
+  const calls: { method: string; connection: number }[] = [];
+  let connections = 0;
+  const server = createServer(peer => {
+    const connection = ++connections;
+    const parser = new FrameParser(1 << 20);
+    peer.on("error", () => {});
+    peer.on("data", chunk => {
+      assert.ok(Buffer.isBuffer(chunk));
+      for (const frame of parser.feed(chunk)) {
+        const raw = frame.raw as { id: string; method: string };
+        calls.push({ method: raw.method, connection });
+        const result = raw.method === "runner.open" ? { actor: "alice", incarnation: 1, socketHostPath: actorSocketPathAt(dir, "alice", 1) }
+          : raw.method === "batch.prepare" ? batch : { completed: true };
+        peer.write(encodeFrame({ v: 1, id: raw.id, ok: true, result }));
+        // The delivery outlasts idleStreamSeconds: the broker ends this connection.
+        if (raw.method === "batch.prepare") peer.end();
+      }
+    });
+  });
+  const runner = new RunnerModule({ runRoot: dir, stateRoot: dir }, "alice", TEST_PROTOCOL_LIMITS);
+  try {
+    await new Promise<void>(resolve => server.listen(join(dir, "admin.sock"), resolve));
+    assert.equal(await runner.run(), 0);
+    assert.deepEqual(calls.map(call => call.method), ["runner.open", "batch.prepare", "batch.complete"]);
+    assert.ok(calls[2]!.connection > calls[1]!.connection, "completion was sent on the connection the broker closed");
+  } finally {
+    await runner.stop();
+    await new Promise<void>(resolve => server.close(() => resolve()));
+    rmSync(dir, { recursive: true, force: true });
   }
 });

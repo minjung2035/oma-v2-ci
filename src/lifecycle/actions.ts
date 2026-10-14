@@ -1,6 +1,6 @@
 import type { Actor, AuthContext, OperationResult, Receipt } from "../../implementation/contracts.js";
 import { Store, reused } from "../store.js";
-import { StoreError } from "../domain/errors.js";
+import { StoreError, acceptedFailure } from "../domain/errors.js";
 import { assertActorIdentity } from "../authority.js";
 import { generateOperationId } from "../ids.js";
 import { requestHash } from "../hash.js";
@@ -25,15 +25,24 @@ export class LifecycleActions {
     const claim = this.store.claimKey(auth.actor, key, hash);
     if (claim === "reused") throw reused(auth.actor, key);
     this.policy.requireManage(auth, agent);
-    const target = this.requireTarget(agent);
-    if (!this.paths.hasGoal()) throw new StoreError("GOAL_REQUIRED", "shared GOAL not published yet");
-    const prior = claim === "retry" ? this.store.getOperation(auth.actor, key)! : null;
+    const prior = claim === "retry" ? this.store.retriedOperation(auth.actor, key) : null;
+    // AV-20261003-27, P0-1: a durably accepted same-key request replays its
+    // terminal receipt whatever the current environment says -- including a
+    // retirement or re-provisioning since acceptance, so requireTarget's
+    // desired-state fence (like the GOAL, release and activation gates below)
+    // judges only new effects, never this lookup.
     if (prior && prior.state !== "pending" && prior.state !== "unknown") return receiptOfOperation(prior);
     if (prior) {
       if (prior.kind !== "agent.start" || prior.plan.agent !== agent)
         throw new StoreError("STORE_CORRUPT", "start replay differs from accepted identity");
-      if (!this.currentIntent(prior.plan)) return this.unconfirmed(prior.id);
+      if (!this.currentIntent(prior.plan, prior.id)) return this.unconfirmed(prior.id);
     }
+    const target = this.requireTarget(agent);
+    if (!this.paths.hasGoal()) throw new StoreError("GOAL_REQUIRED", "shared GOAL not published yet");
+    if (!prior && auth.channel === "actor" && auth.role === "principal" &&
+        this.store.operations.latestAction(agent, "principal")?.kind !== "agent.stop")
+      throw new StoreError("CAPABILITY_DENIED", "the Principal may resume its force-stop; Workers manage routine starts");
+    this.requireStartRelease(auth.actor, agent);
     if (this.paths.activationAllowed() !== true)
       throw new StoreError("AGENT_NOT_READY", "broker recovery has not enabled activation");
     const observed = this.units.observe(agent);
@@ -44,6 +53,7 @@ export class LifecycleActions {
     if (!prior) {
       const accepted = this.store.transaction(tx => {
         this.policy.requireManage(auth, agent);
+        this.requireStartRelease(auth.actor, agent);
         const current = this.requireTarget(agent);
         if (current.incarnation !== target.incarnation || current.desired !== target.desired)
           throw new StoreError("STALE_RUN", "target changed before start acceptance");
@@ -53,15 +63,18 @@ export class LifecycleActions {
         if (result !== "retry") tx.updateAgent({ name: agent, desired: "enabled" });
         return result;
       });
-      if (accepted === "retry") return receiptOfOperation(this.store.getOperation(auth.actor, key)!);
+      if (accepted === "retry") return receiptOfOperation(this.store.retriedOperation(auth.actor, key));
     }
     // Synchronous final identity check -> physical action. Neither a new target
     // epoch nor an old plan is rewritten to make this comparison succeed.
-    if (!this.currentIntent({ agent, desired: "enabled", previousIncarnation: target.incarnation })) return this.unconfirmed(id);
-    try { if (!alreadyRunning) this.units.start(agent, true); }
-    catch (error) { return this.unconfirmed(id, error); }
-    this.store.transaction(tx => tx.setOperationSucceeded(id, JSON.stringify({ kind: "agent.start", agent, desired: "enabled", remainingOperations: [] })));
-    return lifecycleReceipt(this.store, id);
+    // The start intent is accepted: a failure from here is reported as accepted.
+    try {
+      if (!this.currentIntent({ agent, desired: "enabled", previousIncarnation: target.incarnation }, id)) return this.unconfirmed(id);
+      try { if (!alreadyRunning) this.units.start(agent, true); }
+      catch (error) { return this.unconfirmed(id, error); }
+      this.store.transaction(tx => tx.setOperationSucceeded(id, JSON.stringify({ kind: "agent.start", agent, desired: "enabled", remainingOperations: [] })));
+      return lifecycleReceipt(this.store, id);
+    } catch (error) { throw acceptedFailure(error); }
   }
 
   stop(auth: AuthContext, agent: Actor, key: string): Receipt {
@@ -70,14 +83,16 @@ export class LifecycleActions {
     const claim = this.store.claimKey(auth.actor, key, hash);
     if (claim === "reused") throw reused(auth.actor, key);
     this.policy.requireManage(auth, agent);
-    const target = this.requireTarget(agent);
-    const prior = claim === "retry" ? this.store.getOperation(auth.actor, key)! : null;
+    const prior = claim === "retry" ? this.store.retriedOperation(auth.actor, key) : null;
+    // Same replay precedence as start: the accepted receipt is answered before
+    // the target's current desired state can refuse the lookup.
     if (prior && prior.state !== "pending" && prior.state !== "unknown") return receiptOfOperation(prior);
     if (prior) {
       if (prior.kind !== "agent.stop" || prior.plan.agent !== agent)
         throw new StoreError("STORE_CORRUPT", "stop replay differs from accepted identity");
-      if (!this.currentIntent(prior.plan)) return this.unconfirmed(prior.id);
+      if (!this.currentIntent(prior.plan, prior.id)) return this.unconfirmed(prior.id);
     }
+    const target = this.requireTarget(agent);
     const id = prior?.id ?? generateOperationId();
     const incarnation = prior?.kind === "agent.stop" ? prior.plan.previousIncarnation : target.incarnation;
     if (!prior) {
@@ -92,16 +107,19 @@ export class LifecycleActions {
         if (result !== "retry") tx.updateAgent({ name: agent, desired: "stopped" });
         return result;
       });
-      if (accepted === "retry") return receiptOfOperation(this.store.getOperation(auth.actor, key)!);
+      if (accepted === "retry") return receiptOfOperation(this.store.retriedOperation(auth.actor, key));
     }
-    if (!this.currentIntent({ agent, desired: "stopped", previousIncarnation: incarnation })) return this.unconfirmed(id);
+    // The stop intent is accepted: a failure from here is reported as accepted.
     try {
-      this.units.stop(agent, incarnation);
-      if (!this.units.confirmDead(agent, incarnation)) return this.unconfirmed(id);
-    } catch (error) { return this.unconfirmed(id, error); }
-    const remainingOperations = this.store.recoverableOperations().filter(value => value !== id);
-    this.store.transaction(tx => tx.setOperationSucceeded(id, JSON.stringify({ kind: "agent.stop", agent, desired: "stopped", remainingOperations })));
-    return lifecycleReceipt(this.store, id);
+      if (!this.currentIntent({ agent, desired: "stopped", previousIncarnation: incarnation }, id)) return this.unconfirmed(id);
+      try {
+        this.units.stop(agent, incarnation);
+        if (!this.units.confirmDead(agent, incarnation)) return this.unconfirmed(id);
+      } catch (error) { return this.unconfirmed(id, error); }
+      const remainingOperations = this.store.recoverableOperations().filter(value => value !== id);
+      this.store.transaction(tx => tx.setOperationSucceeded(id, JSON.stringify({ kind: "agent.stop", agent, desired: "stopped", remainingOperations })));
+      return lifecycleReceipt(this.store, id);
+    } catch (error) { throw acceptedFailure(error); }
   }
 
   reconcile(id: string, allowActivation = true): void {
@@ -109,14 +127,15 @@ export class LifecycleActions {
     if (!operation || (operation.kind !== "agent.start" && operation.kind !== "agent.stop") ||
       (operation.state !== "pending" && operation.state !== "unknown")) return;
     const plan = operation.plan;
-    if (!this.currentIntent(plan)) { this.unconfirmed(id); return; }
+    if (!this.currentIntent(plan, id)) { this.unconfirmed(id); return; }
     try {
       if (plan.kind === "agent.start") {
+        this.requireStartRelease(operation.actor, plan.agent);
         if (!allowActivation || this.paths.activationAllowed() !== true || !this.paths.hasGoal()) return;
         const observed = this.units.observe(plan.agent);
         if (!["active", "activating"].includes(observed.activeState)) {
           if (!this.units.confirmDead(plan.agent, plan.previousIncarnation)) { this.unconfirmed(id); return; }
-          if (!this.currentIntent(plan)) { this.unconfirmed(id); return; }
+          if (!this.currentIntent(plan, id)) { this.unconfirmed(id); return; }
           this.units.start(plan.agent, false);
         }
       } else {
@@ -129,10 +148,15 @@ export class LifecycleActions {
     this.store.transaction(tx => tx.setOperationSucceeded(id, JSON.stringify(result)));
   }
 
-  private currentIntent(plan: { readonly agent: Actor; readonly previousIncarnation: number; readonly desired: "enabled" | "stopped" }): boolean {
+  private requireStartRelease(actor: Actor, agent: Actor): void {
+    if (actor !== "principal" && this.store.operations.latestAction(agent, "principal")?.kind === "agent.stop")
+      throw new StoreError("CAPABILITY_DENIED", `${agent} was force-stopped by the Principal; an explicit Principal/host resume is required`);
+  }
+  private currentIntent(plan: { readonly agent: Actor; readonly previousIncarnation: number; readonly desired: "enabled" | "stopped" }, id: string): boolean {
     const current = this.store.getAgent(plan.agent);
     if (!current) throw new StoreError("STORE_CORRUPT", `missing agent ${plan.agent}`);
-    return current.desired === plan.desired && current.incarnation === plan.previousIncarnation;
+    return current.desired === plan.desired && current.incarnation === plan.previousIncarnation &&
+      this.store.operations.latestAction(plan.agent)?.id === id;
   }
   private requireTarget(agent: Actor) {
     const target = this.store.getAgent(agent);

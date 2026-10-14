@@ -1,6 +1,10 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { inventoryClauses, indexTrace, applyOwnerLinks, inventoryAcceptance } from "../scripts/traceability.mjs";
+import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { inventoryClauses, indexTrace, applyOwnerLinks, inventoryAcceptance, normativeSources } from "../scripts/traceability.mjs";
+import { specInventoryFindings } from "../scripts/spec-inventory.mjs";
 
 const entries = () => inventoryClauses([{ source: "spec.md", text: "**MUST [RULE-001]** Keep the accepted identity.\n" }]);
 function reviewed() {
@@ -58,8 +62,35 @@ test("R39: core success cannot hide missing target oracles or a missing core row
 test("R39: duplicates, extra rows and malformed empty oracles cannot satisfy a fixed count", () => {
   const duplicate = inventoryAcceptance([{ source: "matrix.md", text: matrix(1, 90) + "\n" + matrix(78, 78) }]);
   assert.deepEqual(duplicate.tiered.duplicate, [78]); assert.equal(duplicate.complete, false);
-  const extra = inventoryAcceptance([{ source: "matrix.md", text: matrix(1, 91) }]);
-  assert.equal(extra.extra[0].id, 91); assert.equal(extra.complete, false);
+  // TEST-008: T91 onward is the product band, not an extra row; a gap in it is.
+  const product = inventoryAcceptance([{ source: "matrix.md", text: matrix(1, 91) }]);
+  assert.deepEqual(product.extra, []); assert.deepEqual(product.product.rows.map(row => row.id), [91]); assert.equal(product.complete, true);
+  const gap = inventoryAcceptance([{ source: "matrix.md", text: matrix(1, 90) + "\n" + matrix(92, 92) }]);
+  assert.deepEqual(gap.product.missing, [91]); assert.equal(gap.complete, false);
+  const extra = inventoryAcceptance([{ source: "matrix.md", text: matrix(1, 90) + "\n" + matrix(0, 0) }]);
+  assert.equal(extra.extra[0].id, 0); assert.equal(extra.complete, false);
   const empty = inventoryAcceptance([{ source: "matrix.md", text: "| T01 / synthetic |   |\nT02 mentioned in prose is not a row" }]);
   assert.equal(empty.complete, false); assert.ok(empty.core.empty.includes(1) || empty.core.missing.includes(1));
+});
+
+test("F-3: a clause edit without a re-fingerprinted row, and a stale row, are drift findings", () => {
+  const root = mkdtempSync(join(tmpdir(), "oma-spec-inventory-"));
+  try {
+    const clause = "**MUST [PAIR-001]** Reject unfingerprinted drift.\n";
+    for (const source of normativeSources) {
+      mkdirSync(join(root, source, ".."), { recursive: true });
+      writeFileSync(join(root, source), source === "docs/implementation-spec.md" ? clause : "");
+    }
+    mkdirSync(join(root, "implementation"), { recursive: true });
+    writeFileSync(join(root, "implementation/traceability.json"), "[]\n");
+    // No row at all: the clause is unpaired.
+    assert.equal(specInventoryFindings(root).length, 1);
+    // A fingerprinted row makes the pairing clean; a stale row beside it is drift.
+    writeFileSync(join(root, "implementation/traceability.json"), JSON.stringify(inventoryClauses(
+      normativeSources.map(source => ({ source, text: source === "docs/implementation-spec.md" ? clause : "" }))), null, 2) + "\n");
+    assert.deepEqual(specInventoryFindings(root), []);
+    // A one-line clause edit reopens the finding on both sides of the pairing.
+    writeFileSync(join(root, "docs/implementation-spec.md"), "**MUST [PAIR-001]** Reject unfingerprinted drift, twice.\n");
+    assert.equal(specInventoryFindings(root).length, 2);
+  } finally { rmSync(root, { recursive: true, force: true }); }
 });

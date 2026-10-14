@@ -4,7 +4,6 @@ import { captureLedger, assertAcceptedHistory, type LedgerSnapshot, type Invaria
 import { assertMail } from "./mail.js";
 import { assertGit, type GitInvariantPaths } from "./git.js";
 import { assertBatches } from "./batches.js";
-import { assertUsage } from "./usage.js";
 import { assertLifecycle, type LifecycleFacts } from "./lifecycle.js";
 export { captureLedger, assertAcceptedHistory } from "./store.js";
 export type { LedgerSnapshot, InvariantPhase } from "./store.js";
@@ -23,7 +22,7 @@ export interface GlobalInvariantContext {
  * Incomplete observations are returned explicitly, not counted as completion.
  */
 export function assertGlobalInvariants(store: Store, context: GlobalInvariantContext): {
-  readonly ledger: LedgerSnapshot; readonly incomplete: readonly string[]; readonly usageByActor: ReadonlyMap<string, number>;
+  readonly ledger: LedgerSnapshot; readonly incomplete: readonly string[];
 } {
   const ledger = captureLedger(store);
   if (context.before) assertAcceptedHistory(context.before, ledger);
@@ -33,5 +32,5 @@ export function assertGlobalInvariants(store: Store, context: GlobalInvariantCon
     ...assertLifecycle(ledger, context.stateRoot, context.phase, context.lifecycle),
     ...(context.git ? assertGit(ledger, context.git, context.phase) : []),
   ];
-  return Object.freeze({ ledger, incomplete: Object.freeze(incomplete), usageByActor: assertUsage(ledger) });
+  return Object.freeze({ ledger, incomplete: Object.freeze(incomplete) });
 }

@@ -1,4 +1,11 @@
-/** CFG-005/CREATE-002: vocabulary only; no role grants or storage/effect dependency. */
+/** CFG-005/CREATE-002: vocabulary only; no role grants or storage/effect dependency.
+ * The closed literal set is declared by the contract owner; this module owns the
+ * runtime vocabulary and validator that must satisfy it.
+ */
+import type { Capability } from "../../implementation/contracts/identity.js";
+
+export type { Capability };
+
 export const CAPABILITIES = Object.freeze([
   "mail.send",
   "route.follow",
@@ -8,9 +15,18 @@ export const CAPABILITIES = Object.freeze([
   "git.submit",
   "code.integrate",
   "context.publish",
-] as const);
+] as const) satisfies readonly Capability[];
 
-export type Capability = (typeof CAPABILITIES)[number];
+/** Compile-time exhaustiveness in both directions: the runtime vocabulary and
+ * the contract's literal set must name exactly the same capabilities. Adding a
+ * capability to one without the other fails the build rather than the gate.
+ */
+type MissingFromVocabulary = Exclude<Capability, (typeof CAPABILITIES)[number]>;
+type MissingFromContract = Exclude<(typeof CAPABILITIES)[number], Capability>;
+const _vocabularyCoversContract: [MissingFromVocabulary] extends [never] ? true : never = true;
+const _contractCoversVocabulary: [MissingFromContract] extends [never] ? true : never = true;
+void _vocabularyCoversContract;
+void _contractCoversVocabulary;
 
 const known: ReadonlySet<string> = new Set(CAPABILITIES);
 

@@ -10,6 +10,7 @@ import ts from "typescript";
 import { StoreError } from "../dist/src/domain/errors.js";
 import { assertNever } from "../dist/src/domain/exhaustive.js";
 import { PUBLIC_METHODS } from "../dist/src/protocol/methods.js";
+import { preacceptEvent } from "../dist/src/reconcile/preaccept.js";
 
 const kinds = Object.entries(PUBLIC_METHODS).filter(([, entry]) => entry.mode === "mutation").map(([kind]) => kind);
 function method(file, className, name) {
@@ -44,15 +45,24 @@ function fixture() {
   const value = harness([recover, startup], {
     reconcileMailOperation: async (_store, _mail, id) => { calls.push(["mail", id]); },
     observeStoreFailure: () => {},
+    recoveryCategory: kind => kind,
+    // DR10: startup's collection of artifacts made before an acceptance.
+    collectUnacceptedArtifacts: () => { calls.push(["collect"]); return { removed: [], kept: [] }; },
+    // fix/fj: startup reports the collection through this pure event builder;
+    // the empty fixture collection returns null before console is touched.
+    preacceptEvent, console,
+    dirname: path => path,
   });
   Object.assign(value, {
-    starting: false, inFlight: null, mail: {},
-    activation: allowed => allowed,
+    starting: false, inFlight: null, mail: {}, paths: {},
+    activation: allowed => allowed, admit: () => () => undefined,
     lifecycle: {
+      reconcileSociety: id => { calls.push(["society", id]); },
       reconcileCreate: async (id, allowed) => { calls.push(["create", id, allowed]); },
       reconcileAction: (id, allowed) => { calls.push(["action", id, allowed]); },
     },
-    git: { reconcile: async id => { calls.push(["git", id]); } },
+    git: { reconcile: async id => { calls.push(["git", id]); },
+      reviews: { advanceAll: async () => { calls.push(["reviews"]); } } },
     quiesceResidents: () => { calls.push(["quiesce"]); },
     assertCanonicalHealthyAsync: async () => { calls.push(["health"]); },
     retainRecoveryFailure: error => { throw error; },
@@ -64,14 +74,15 @@ test("P3 recovery: physical owners retain every existing route and activation fl
   for (const kind of kinds) {
     const { value, calls } = fixture();
     if (["mail.ack", "route.follow", "route.unfollow"].includes(kind)) {
-      await assert.rejects(value.recover({ id: kind, kind, state: "pending" }, false), { code: "SPIKE_UNRESOLVED" });
+      await assert.rejects(value.recover({ id: kind, kind, state: "pending" }, false), { code: "UNSUPPORTED_PROFILE" });
       assert.deepEqual(calls, []);
       continue;
     }
     await value.recover({ id: kind, kind, state: "pending" }, false);
     const expected = kind === "agent.create" ? ["create", kind, false]
       : ["agent.start", "agent.stop"].includes(kind) ? ["action", kind, false]
-      : ["mail.send", "agent.continue"].includes(kind) ? ["mail", kind] : ["git", kind];
+      : kind === "society.set" ? ["society", kind]
+      : ["attest.record", "mail.send", "agent.continue"].includes(kind) ? ["mail", kind] : ["git", kind];
     assert.deepEqual(calls, [expected]);
   }
 });
@@ -86,13 +97,23 @@ test("P3 recovery: missing Git owner remains gated without a fallback effect", a
 test("P3 recovery: startup keeps quiesce/health/requiesce and distinct DB-only handling", async () => {
   const { value, calls } = fixture();
   value.store = {
+    path: "/state/runtime.sqlite",
     recoverableOperations: () => kinds,
     getOperationById: id => ({ id, kind: id, state: "pending" }),
   };
   await value.startup(false, async () => { calls.push(["prepare"]); });
-  assert.deepEqual(calls.slice(0, 4), [["quiesce"], ["health"], ["quiesce"], ["prepare"]]);
-  const physical = calls.slice(4);
+  // DR10: the collection runs after the quiesce and before anything is prepared.
+  assert.deepEqual(calls.slice(0, 5), [["quiesce"], ["collect"], ["health"], ["quiesce"], ["prepare"]]);
+  // mail-v1: startup ends with a reviews advance sweep for requests that
+  // became ready while the broker was down.
+  assert.deepEqual(calls.at(-1), ["reviews"]);
+  const physical = calls.slice(5, -1);
   assert.equal(physical.length, kinds.length - 3);
+  assert.deepEqual(physical, kinds.filter(kind => !["mail.ack", "route.follow", "route.unfollow"].includes(kind)).map(kind =>
+    kind === "agent.create" ? ["create", kind, false]
+      : ["agent.start", "agent.stop"].includes(kind) ? ["action", kind, false]
+      : kind === "society.set" ? ["society", kind]
+      : ["attest.record", "mail.send", "agent.continue"].includes(kind) ? ["mail", kind] : ["git", kind]));
   assert.ok(physical.every(call => !["mail.ack", "route.follow", "route.unfollow"].includes(call[1])));
   assert.equal(value.starting, false);
 });

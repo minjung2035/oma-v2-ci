@@ -1,13 +1,18 @@
 /** INT-004/CREATE-003: pure policy facts, not check execution or authority. */
+import { integrationCheckCheck as checkShape, protectedPathCheck as protectedPath, tieredPolicyCheck } from "../domain/integration-policy.js";
+export { tieredPolicyCheck } from "../domain/integration-policy.js";
+import type { TieredPolicy } from "../../implementation/contracts/integration.js";
+import type { RiskTier } from "../../implementation/contracts/values.js";
+import { maximumTier } from "./approval.js";
+import { protectedPathMatches, type ChangedPath } from "./observe.js";
 import type { HostConfigV1, ResourceLimits } from "../../implementation/contracts.js";
 import { canonicalJson, sha256Hex } from "../hash.js";
-import { resourceLimitsCheck } from "../domain/resources.js";
-import { isValidWirePath } from "../ids.js";
 import { StoreError } from "../domain/errors.js";
-import { checkArray, checkInt, checkObject, checkOptional, checkString, type Check } from "../validate.js";
+import { checkArray, checkObject, checkOptional, checkString } from "../validate.js";
 
 /** Existing internal configuration shape. No wire or durable fields are added. */
 export interface IntegrationPolicy {
+  tiered?: TieredPolicy;
   policyRevision: string;
   protectedPaths: string[];
   checks: Array<{
@@ -15,21 +20,19 @@ export interface IntegrationPolicy {
     tmpBytes?: number; resources?: ResourceLimits;
   }>;
 }
-export interface FrozenCheck {
-  readonly id: string;
-  readonly argv: readonly string[];
-  readonly env: Readonly<Record<string, string>>;
-  readonly timeoutSeconds: number;
-  readonly tmpBytes?: number;
-  readonly resources?: Readonly<ResourceLimits>;
-}
+export type { IntegrationCheckSnapshot as FrozenCheck } from "../../implementation/contracts/integration.js";
+import type { IntegrationCheckSnapshot as FrozenCheck } from "../../implementation/contracts/integration.js";
 export interface IntegrationSnapshot {
+  readonly tiered: Readonly<TieredPolicy> | null;
   readonly policyRevision: string;
   readonly protectedPaths: readonly string[];
   readonly checks: readonly FrozenCheck[];
   /** Existing SHA256(canonicalJson(runtime checks)); do not change this recipe. */
   readonly checkProfileDigest: string;
-  /** In-memory freshness comparison only; never persisted as a new identity. */
+  /** DR8: the integration facts -- protected paths and checks -- the broker
+   * holds for its lifetime (TUI-007). The revision is not part of it: it is the
+   * host's current one (CFG-005) and is compared on its own. Tiered plans
+   * retain this digest together with the full accepted policy facts. */
   readonly policyIdentity: string;
 }
 /** Revision-only readers remain source-compatible, but production composition
@@ -37,35 +40,14 @@ export interface IntegrationSnapshot {
  */
 export type IntegrationPolicyReader = () => IntegrationPolicy | string;
 
-const commandString: Check = value => {
-  const invalid = checkString()(value);
-  return invalid ?? (typeof value === "string" && value.includes("\0") ? "command contains NUL" : null);
-};
-const environment: Check = value => {
-  if (value === null || typeof value !== "object" || Array.isArray(value)) return "expected environment object";
-  for (const [key, entry] of Object.entries(value)) {
-    if (!key || key.includes("=") || commandString(key) !== null || commandString(entry) !== null)
-      return "invalid environment entry";
-  }
-  return null;
-};
-const protectedPath: Check = value => {
-  if (typeof value !== "string") return "invalid protected path";
-  if (value === "/") return null; // recognized spelling, still explicitly gated below
-  const path = value.endsWith("/") ? value.slice(0, -1) : value;
-  return isValidWirePath(path) ? null : "invalid protected path";
-};
-const checkShape = checkObject({
-  id: checkString({ min: 1 }), argv: checkArray(commandString, { min: 1 }), env: environment,
-  timeoutSeconds: checkInt({ min: 1 }), tmpBytes: checkOptional(checkInt({ min: 1 })),
-  resources: checkOptional(resourceLimitsCheck),
-});
 const policyShape = checkObject({
+  tiered: checkOptional(tieredPolicyCheck),
   policyRevision: checkString({ min: 1 }), protectedPaths: checkArray(protectedPath), checks: checkArray(checkShape),
 });
 
 export function integrationPolicyFromConfig(config: HostConfigV1["integration"]): IntegrationPolicy {
   return {
+    ...(config.tiered === undefined ? {} : { tiered: config.tiered }),
     policyRevision: config.policyRevision,
     protectedPaths: [...config.protectedPaths],
     checks: config.checks.map(check => ({
@@ -93,23 +75,50 @@ export function snapshotIntegrationPolicy(policy: IntegrationPolicy): Integratio
       ...(check.resources === undefined ? {} : { resources: Object.freeze({ ...check.resources }) }),
     });
   });
+  const tiered = policy.tiered === undefined ? null : JSON.parse(JSON.stringify(policy.tiered)) as TieredPolicy;
+  if (tiered !== null) {
+    for (const rule of tiered.rules) { Object.freeze(rule.statuses); Object.freeze(rule); }
+    Object.freeze(tiered.rules); Object.freeze(tiered);
+  }
   const protectedPaths = Object.freeze([...policy.protectedPaths]);
   const frozenChecks = Object.freeze(checks);
   return Object.freeze({
-    policyRevision: policy.policyRevision, protectedPaths, checks: frozenChecks,
+    tiered, policyRevision: policy.policyRevision, protectedPaths, checks: frozenChecks,
     checkProfileDigest: sha256Hex(canonicalJson(frozenChecks)),
-    policyIdentity: sha256Hex(canonicalJson({ policyRevision: policy.policyRevision, protectedPaths, checks: frozenChecks })),
+    policyIdentity: sha256Hex(canonicalJson({ protectedPaths, checks: frozenChecks, ...(tiered === null ? {} : { tiered }) })),
   });
 }
 
+/** Only complete host-owned limits may reach the isolated check executor.
+ * Retained policy decoding keeps historical HIGH floors valid; a new live
+ * integration requires the Human's current minimum of two HIGH peers. */
 export function assertSupportedIntegration(snapshot: IntegrationSnapshot): void {
-  if (snapshot.checks.length !== 0)
-    throw new StoreError("SPIKE_UNRESOLVED", "S-01-CANDIDATE does not verify a bounded writable check workspace");
-  if (snapshot.protectedPaths.includes("/"))
-    throw new StoreError("SPIKE_UNRESOLVED", "root protected-path matching remains unsupported");
+  for (const check of snapshot.checks) assertCheckResources(check);
+  if (snapshot.tiered !== null && snapshot.tiered.highPeerFloor < 2)
+    throw new StoreError("UNSUPPORTED_PROFILE", "HIGH integration requires at least two eligible peers; update integration.tiered.highPeerFloor");
+}
+
+export function assertCheckResources(check: FrozenCheck): void {
+  if (checkShape(check) !== null || check.argv[0] === "")
+    throw new StoreError("UNSUPPORTED_PROFILE", "integration check profile is invalid");
+  const resources = check.resources;
+  if (resources && (check.timeoutSeconds !== resources.checkTimeoutSeconds ||
+      (check.tmpBytes !== undefined && check.tmpBytes !== resources.tmpBytes)))
+    throw new StoreError("UNSUPPORTED_PROFILE", "integration checks require their complete resource profile");
+  if (!Number.isSafeInteger(check.timeoutSeconds * 1000 + 60_000))
+    throw new StoreError("UNSUPPORTED_PROFILE", "integration check deadline cannot be enforced");
 }
 
 export function assertSameIntegrationPolicy(expected: IntegrationSnapshot, actual: IntegrationSnapshot): void {
   if (expected.policyIdentity !== actual.policyIdentity)
-    throw new StoreError("POLICY_CHANGED", "integration policy facts changed; revision alone is not authority");
+    throw new StoreError("POLICY_CHANGED", "integration policy facts changed; they apply at the next broker start");
+}
+
+export function deterministicTier(policy: Readonly<TieredPolicy>, changes: readonly ChangedPath[]): { tier: RiskTier; reasons: string[] } {
+  let tier: RiskTier = "LOW"; const reasons: string[] = [];
+  for (const [index, rule] of policy.rules.entries()) if (changes.some(change =>
+    protectedPathMatches(change.path, rule.path) && rule.statuses.includes(change.status))) {
+    tier = maximumTier(tier, rule.tier); reasons.push(`host rule ${index}: ${rule.path} => ${rule.tier}`);
+  }
+  return { tier, reasons };
 }

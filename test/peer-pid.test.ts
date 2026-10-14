@@ -6,7 +6,7 @@ import { once } from "node:events";
 import { closeSync, mkdtempSync, readFileSync, readdirSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { peerCred, peerPidFd, peerPidAlive } from "../src/leaf.js";
+import { peerCred, peerPidFd, pidfdLiveness } from "../src/leaf.js";
 import { PeerAuthenticator } from "../src/broker/peer-authenticator.js";
 
 test("AUTH-003 native: peer pidfd detects connector death while an inherited socket stays open", { timeout: 5000 }, async () => {
@@ -35,7 +35,7 @@ test("AUTH-003 native: peer pidfd detects connector death while an inherited soc
     assert.equal(peerCred(fd)?.pid, child.pid);
     pinned = peerPidFd(fd);
     assert.notEqual(pinned, null, "SO_PEERPIDFD must be supported; no PID-only fallback");
-    assert.equal(peerPidAlive(pinned!), true);
+    assert.deepEqual(pidfdLiveness(pinned!), { kind: "running" });
     const info = readFileSync(`/proc/self/fdinfo/${pinned}`, "utf8");
     const flags = Number.parseInt(/^flags:\s+([0-7]+)$/m.exec(info)![1]!, 8);
     assert.notEqual(flags & 0o2000000, 0, "peer pidfd must be close-on-exec");
@@ -44,7 +44,7 @@ test("AUTH-003 native: peer pidfd detects connector death while an inherited soc
     assert.deepEqual(await exited, [0, null]);
     assert.equal((await inherited)[0].toString(), "inherited");
     assert.equal(peer.destroyed, false);
-    assert.equal(peerPidAlive(pinned!), false, "the socket holder is not the original connector");
+    assert.deepEqual(pidfdLiveness(pinned!), { kind: "exited" }, "the socket holder is not the original connector");
     const closed = once(peer, "close");
     peer.write("q");
     await closed;

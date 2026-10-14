@@ -232,7 +232,7 @@ function brokerEnv(): BrokerEnv {
       libdir: "/usr/lib/oma",
       state,
       society,
-      agent: "",
+      agent: "", config: join(state, "config.json"), run: join(state, "oma", society)
     },
     join(dir, "xdg"),
   );
@@ -281,14 +281,16 @@ function brokerEnv(): BrokerEnv {
         cpuSeconds: 30,
         memoryBytes: 512 * 1024 * 1024,
         tasks: 4096,
+        timeoutSeconds: 30,
+        silenceSeconds: 30,
       },
-      checkTimeoutSeconds: 30,
     },
     store,
     mail,
     null,
   );
   const recon = new ReconcileModule(store, mail, git, units, lifecycle, {
+    hasGoal: () => true,
     activationAllowed: () => true,
     projectGit: join(state, "repos", "project.git"),
   });
@@ -395,7 +397,7 @@ test("B1/IPC-009: framed runner channel rejects host methods", async () => {
     const replies = await framedCall(join(env.runRoot, "admin.sock"), {
       v: 1,
       id: "h1",
-      method: "host.reconcile",
+      method: "host.principalRelay",
       params: {},
     });
     assert.equal(replies.length, 1);
@@ -652,7 +654,7 @@ test("C1: two concurrent git.submit uploads over the real actor channel — conn
           `Environment=OMA_BASE=${base}`,
           `Environment=OMA_EXPORT_REF=${envRef(name)}`,
           `Environment=HOME=${env.dir}`,
-          `ExecStart=/usr/bin/node ${helperPath}`,
+          `ExecStart=${process.execPath} ${helperPath}`,
           "[Install]",
           "WantedBy=default.target",
           "",
@@ -810,7 +812,7 @@ test("C1: two concurrent git.submit uploads over the real actor channel — conn
 // Part D — entry/broker.js ordered bootstrap (READY only after recovery)
 // ---------------------------------------------------------------------------
 
-function minimalConfig(society: string): Record<string, unknown> {
+function minimalConfig(society: string, rootfs = "/rootfs"): Record<string, unknown> {
   return {
     schemaVersion: 1,
     society,
@@ -820,18 +822,16 @@ function minimalConfig(society: string): Record<string, unknown> {
       // resolve from, or the entry refuses to start. Tests run from the package
       // root, where dist/ and implementation/ live side by side.
       libdir: process.cwd(),
-      rootfs: "/",
+      // SB-002-E: the trusted Resident rootfs must be a real non-root path.
+      // Callers that spawn a broker pass a directory they created; the decode
+      // callers keep the shape-only default.
+      rootfs,
       deploymentDigest: deploymentDigest(process.cwd()),
     },
     modelProfiles: {
       md: {
         provider: "none",
         model: "none",
-        credentialRef: "none",
-        codecRevision: "none",
-        pricingRevision: "none",
-        maxInputTokens: 1,
-        maxOutputTokens: 1,
         inferenceTimeoutSeconds: 1,
       },
     },
@@ -872,12 +872,9 @@ function minimalConfig(society: string): Record<string, unknown> {
     quota: {
       societyAgents: 8,
       lineageAgents: 4,
-      societyUnits: 1000,
-      lineageUnits: 500,
-      principalReservedUnits: 100,
-      inferenceSlots: 1,
-      principalReservedSlots: 1,
-      storageBytes: 1,
+      // D04/WP22: startup stops only past the settlement headroom, so a fresh
+      // society needs a quota its seeded repository and Store actually fit in.
+      storageBytes: 1024 * 1024 * 1024,
     },
     integration: { policyRevision: "1", protectedPaths: [], checks: [] },
     limits: {
@@ -893,12 +890,6 @@ function minimalConfig(society: string): Record<string, unknown> {
       batchMaxMessages: 32,
       idleStreamSeconds: 900,
       receiptWaitSeconds: 30,
-    },
-    features: {
-      notmuch: false,
-      reflinkSeed: false,
-      formalApproval: false,
-      egress: false,
     },
   };
 }
@@ -920,7 +911,7 @@ test("CFG-001/IPC-001: configuration and frames share strict JSON decoding", () 
         ),
       ),
       Buffer.from(
-        json.replace('"codecRevision":"none"', '"codecRevision":"\\ud800"'),
+        json.replace('"provider":"none"', '"provider":"\\ud800"'),
       ),
       Buffer.from(json.replace('"md":', '"\\ud800":')),
       Buffer.from(json.replace('"societyAgents":8', '"societyAgents":1e999')),
@@ -1065,7 +1056,9 @@ test("LIFE-009 entry: fresh broker seeds once and restart ignores population edi
     ]);
     const base = git(["rev-parse", "HEAD"]);
     git(["clone", "-q", "--bare", root, join(state, "repos", "project.git")]);
-    const cfg = minimalConfig(society);
+    const rootfs = join(dir, "rootfs");
+    mkdirSync(rootfs);
+    const cfg = minimalConfig(society, rootfs);
     cfg.initialResidents = [
       { name: "child", profile: "child", brief: "initial" },
     ];
@@ -1074,7 +1067,9 @@ test("LIFE-009 entry: fresh broker seeds once and restart ignores population edi
       JSON.stringify({ ...cfg, society: `${society}x` }),
     );
     for (const name of ["broker", "runner"]) {
-      const args = name === "runner" ? ["--agent", "child"] : [];
+      // A unit-started runner is handed the broker's location explicitly.
+      const args = name === "runner" ? ["--agent", "child", "--config", join(state, "config.json"),
+        "--state-root", state, "--run-root", join(dir, "run", "oma", society)] : [];
       const rejected = spawnSync(
         process.execPath,
         [
@@ -1096,8 +1091,9 @@ test("LIFE-009 entry: fresh broker seeds once and restart ignores population edi
     writeFileSync(join(state, "config.json"), JSON.stringify(cfg));
     await run();
     const start = readFileSync(join(state, "world", "START.md"), "utf8");
-    assert.match(start, /--subject/);
-    assert.match(start, /QUESTION.*MINIMUM CONTEXT.*UNCERTAINTY/);
+    assert.match(start, /\/inbox\.md/);
+    assert.match(start, /oma_merge/);
+    assert.match(start, /not authority/);
     assert.match(
       readFileSync(join(state, "world", "agents.tsv"), "utf8"),
       /child\tresident\tenabled\tchild/,
@@ -1154,9 +1150,11 @@ test("D1: READY=1 arrives after startup recovery (recovered mail op observable),
     mkdirSync(runRoot, { recursive: true });
     mkdirSync(join(stateRoot, "repos"), { recursive: true });
     seedProject({ dir, state: stateRoot });
+    const rootfs = join(dir, "rootfs");
+    mkdirSync(rootfs);
     writeFileSync(
       join(stateRoot, "config.json"),
-      JSON.stringify(minimalConfig(society)),
+      JSON.stringify(minimalConfig(society, rootfs)),
       "utf8",
     );
     // seed a pending mail operation (accepted-before-materialize fixture)
@@ -1295,9 +1293,11 @@ test("D2: startup recovery failure -> no READY, exit 1, nothing served", async (
     mkdirSync(runRoot, { recursive: true });
     mkdirSync(join(stateRoot, "repos"), { recursive: true });
     seedProject({ dir, state: stateRoot });
+    const rootfs = join(dir, "rootfs");
+    mkdirSync(rootfs);
     writeFileSync(
       join(stateRoot, "config.json"),
-      JSON.stringify(minimalConfig(society)),
+      JSON.stringify(minimalConfig(society, rootfs)),
       "utf8",
     );
     const store = new Store(join(stateRoot, "runtime.sqlite"));
@@ -1398,7 +1398,9 @@ test("D2: startup recovery failure -> no READY, exit 1, nothing served", async (
       });
     });
     assert.equal(exitCode, 1, "broker must exit non-zero on startup failure");
-    assert.match(stderr, new RegExp(`object missing for ${missingMessage}`));
+    // The immutable object is what is absent: the corruption is reported as a
+    // missing file, not as a malformed plan.
+    assert.match(stderr, /STORE_CORRUPT: immutable file is missing/);
     const events = existsSync(notifyLog) ? readFileSync(notifyLog, "utf8") : "";
     assert.equal(events.includes("READY=1"), false, "READY must never be sent");
     assert.equal(

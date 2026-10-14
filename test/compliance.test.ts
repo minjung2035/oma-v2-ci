@@ -22,16 +22,17 @@ test("COMP-005/006: structural evidence rejects stale, incomplete and duplicate 
     `| T${String(index + first).padStart(2, "0")} / fixture | synthetic structural oracle, not production evidence |`).join("\n");
   const sourceWalk = (path: string): string[] => {
     if (lstatSync(join(dir, path)).isFile()) return [path];
-    return readdirSync(join(dir, path)).sort().filter(name => !(path === "implementation" && name === "evidence"))
+    return readdirSync(join(dir, path)).sort().filter(name =>
+      !(path === "implementation" && name === "evidence") && !(path === "docs" && name === "archive"))
       .flatMap(name => sourceWalk(`${path}/${name}`));
   };
   try {
-    const sources = ["implementation-spec.md", "implementation/integration-policy.md", "implementation/physical-ordering.md",
-      "implementation/compliance.md", "implementation/loc-budget.md", "implementation/test-matrix.md", "implementation/spikes.md", "implementation/validation.md"];
+    const sources = ["docs/implementation-spec.md", "docs/implementation/integration-policy.md",
+      "docs/verification-spec.md", "docs/macos-platform.md"];
     for (const file of sources) put(file, "**MUST [TEST-001]** Reject absent proof.\n");
     const matrixText = "**MUST [TEST-001]** Reject absent proof.\n\n" + matrix(1, 77) + "\n\n" + matrix(78, 90) + "\n";
-    put("implementation/test-matrix.md", matrixText);
-    put("architecture.md", "Synthetic normative baseline for checker controls only.\n");
+    put("docs/verification-spec.md", matrixText);
+    put("docs/architecture.md", "Synthetic normative baseline for checker controls only.\n");
     put("package.json", JSON.stringify({ type: "module" })); put("package-lock.json", "{}\n");
     put("tsconfig.json", JSON.stringify({ compilerOptions: { module: "NodeNext", moduleResolution: "NodeNext", target: "ES2022" }, include: ["src/**/*.ts"] }));
     put("tsconfig.build.json", JSON.stringify({ extends: "./tsconfig.json" }));
@@ -47,9 +48,9 @@ test("COMP-005/006: structural evidence rejects stale, incomplete and duplicate 
     assert.equal(run("--inventory").status, 0);
     const rows = JSON.parse(readFileSync(join(dir, trace), "utf8"));
     assert.equal(rows.length, sources.length); assert.equal(run().status, 1);
-    const authored = ["src", "test", "scripts", "implementation"].flatMap(sourceWalk)
-      .filter(file => file !== trace && file !== "implementation/adversarial-review.md");
-    const inputs = [...new Set([...authored, ...sources, "architecture.md", "production-files.txt", "production-manifest.json", "package.json", "package-lock.json", "tsconfig.json", "tsconfig.build.json"])];
+    const authored = ["src", "test", "scripts", "implementation", "docs"].flatMap(sourceWalk)
+      .filter(file => file !== trace);
+    const inputs = [...new Set([...authored, ...sources, "docs/architecture.md", "production-files.txt", "production-manifest.json", "package.json", "package-lock.json", "tsconfig.json", "tsconfig.build.json"])];
     const sourceDigests = Object.fromEntries(inputs.map(file => [file, hash(file)]));
     for (const row of rows) Object.assign(row, {
       applicability: "runtime", status: "proven", rationale: "synthetic checker fixture only",
@@ -100,16 +101,16 @@ test("COMP-005/006: structural evidence rejects stale, incomplete and duplicate 
     put(roots[0]!, "import '../../test/negative.js';\n");
     const escaped = report(); assert.equal(escaped.status, 1, escaped.stderr);
     assert.match(escaped.stdout, /2 static import-closure findings/);
-    const review = readFileSync(join(dir, "implementation/adversarial-review.md"), "utf8");
+    const review = readFileSync(join(dir, "docs/archive/adversarial-review.md"), "utf8");
     assert.match(review, /Production imports a test: test\/negative.ts/);
     assert.match(review, /NOT_RUN/); assert.doesNotMatch(review, /runtime\/regression suite executed/);
     assert.equal(readFileSync(join(dir, trace), "utf8"), traceBeforeReport);
     put(roots[0]!, "export {};\n");
-    put("implementation/test-matrix.md", "**MUST [TEST-001]** Reject absent proof.\n\n" + matrix(1, 77) + "\n");
+    put("docs/verification-spec.md", "**MUST [TEST-001]** Reject absent proof.\n\n" + matrix(1, 77) + "\n");
     assert.equal(report().status, 1, "complete core cannot hide missing tiered target rows");
-    put("implementation/test-matrix.md", matrixText + matrix(78, 78) + "\n");
+    put("docs/verification-spec.md", matrixText + matrix(78, 78) + "\n");
     assert.equal(report().status, 1, "duplicate tiered row is not another proof");
-    put("implementation/test-matrix.md", "| T01 / fixture | synthetic oracle |\n");
+    put("docs/verification-spec.md", "| T01 / fixture | synthetic oracle |\n");
     assert.equal(report().status, 1, "missing acceptance rows cannot disappear from the report");
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });

@@ -1,90 +1,986 @@
 [
   {
-    "source": "implementation-spec.md",
-    "requirements": ["M-004"],
+    "source": "docs/implementation-spec.md",
+    "requirements": [
+      "M-004"
+    ],
     "owner": "src/store.ts#Store.transaction",
     "entrypoint": "src/entry/broker.ts#main",
-    "callPath": ["src/entry/broker.ts#main", "src/broker.ts#Broker", "src/store.ts#Store.transaction"],
-    "negativeTests": ["test/r37-preparation-boundaries.test.ts#R37", "test/compliance.test.ts#COMP-005/006"]
+    "callPath": [
+      "src/entry/broker.ts#main",
+      "src/broker.ts#Broker",
+      "src/store.ts#Store.transaction"
+    ],
+    "negativeTests": [
+      "test/r37-preparation-boundaries.test.ts#R37",
+      "test/compliance.test.ts#COMP-005/006"
+    ]
   },
   {
-    "source": "implementation-spec.md",
-    "requirements": ["AUTH-003"],
+    "source": "docs/implementation-spec.md",
+    "requirements": [
+      "AUTH-003"
+    ],
     "owner": "src/authority.ts#assertCurrentActor",
     "entrypoint": "src/broker.ts#Broker",
-    "callPath": ["src/broker.ts#Broker", "src/git.ts#GitModule", "src/git/submit.ts#SubmitCoordinator", "src/git/context.ts#ContextCoordinator", "src/lifecycle/create.ts#CreateCoordinator", "src/authority.ts#assertCurrentActor"],
-    "negativeTests": ["test/r37-preparation-boundaries.test.ts#R37", "test/r37-recovery-observation.test.ts#R37"]
+    "callPath": [
+      "src/broker.ts#Broker",
+      "src/git.ts#GitModule",
+      "src/git/submit.ts#SubmitCoordinator",
+      "src/git/context.ts#ContextCoordinator",
+      "src/lifecycle/create.ts#CreateCoordinator",
+      "src/authority.ts#assertCurrentActor"
+    ],
+    "negativeTests": [
+      "test/r37-preparation-boundaries.test.ts#R37",
+      "test/r37-recovery-observation.test.ts#R37"
+    ]
   },
   {
-    "source": "implementation-spec.md",
-    "requirements": ["INT-003"],
+    "source": "docs/implementation-spec.md",
+    "requirements": [
+      "INT-003"
+    ],
     "owner": "src/git/integration.ts#IntegrationCoordinator",
     "entrypoint": "src/git.ts#GitModule.integrate",
-    "callPath": ["src/git.ts#GitModule.integrate", "src/git/integration.ts#IntegrationCoordinator", "src/git/canonical-command.ts#compareAndSwapCanonicalRef"],
-    "negativeTests": ["test/crash-boundaries.test.ts#T63", "test/r37-preparation-boundaries.test.ts#R37"]
+    "callPath": [
+      "src/git.ts#GitModule.integrate",
+      "src/git/integration.ts#IntegrationCoordinator",
+      "src/git/canonical-command.ts#compareAndSwapCanonicalRef"
+    ],
+    "negativeTests": [
+      "test/crash-boundaries.test.ts#T63",
+      "test/r37-preparation-boundaries.test.ts#R37"
+    ]
   },
   {
-    "source": "implementation-spec.md",
-    "requirements": ["REC-002", "REC-003"],
+    "source": "docs/implementation-spec.md",
+    "requirements": [
+      "REC-002",
+      "REC-003"
+    ],
     "owner": "src/reconcile.ts#ReconcileModule",
     "entrypoint": "src/broker.ts#Broker",
-    "callPath": ["src/broker.ts#Broker", "src/reconcile.ts#ReconcileModule", "src/reconcile/operations.ts#OperationRecovery", "src/process/preparation.ts#PreparationExecutor"],
-    "negativeTests": ["test/r29-reconcile-accounting.test.ts#R29", "test/r37-recovery-observation.test.ts#R37", "test/r37-shutdown-observation.test.ts#R37"]
+    "callPath": [
+      "src/broker.ts#Broker",
+      "src/reconcile.ts#ReconcileModule",
+      "src/reconcile/operations.ts#OperationRecovery",
+      "src/process/preparation.ts#PreparationExecutor"
+    ],
+    "negativeTests": [
+      "test/r29-reconcile-accounting.test.ts#R29",
+      "test/r37-recovery-observation.test.ts#R37",
+      "test/r37-shutdown-observation.test.ts#R37"
+    ]
   },
   {
-    "source": "implementation-spec.md",
-    "requirements": ["UNIT-007"],
+    "source": "docs/implementation-spec.md",
+    "requirements": [
+      "UNIT-007"
+    ],
     "owner": "src/units.ts#UnitsModule",
     "entrypoint": "src/lifecycle/create.ts#CreateCoordinator",
-    "callPath": ["src/lifecycle/create.ts#CreateCoordinator", "src/lifecycle/create-publication.ts#CreationPublicationObserver", "src/units.ts#UnitsModule", "src/units/execute.ts#executeUnitCommand"],
-    "negativeTests": ["test/phase4.test.ts#UNIT", "test/r37-preparation-boundaries.test.ts#R37"]
+    "callPath": [
+      "src/lifecycle/create.ts#CreateCoordinator",
+      "src/lifecycle/create-publication.ts#CreationPublicationObserver",
+      "src/units.ts#UnitsModule",
+      "src/units/execute.ts#executeUnitCommand"
+    ],
+    "negativeTests": [
+      "test/phase4.test.ts#UNIT",
+      "test/r37-preparation-boundaries.test.ts#R37"
+    ]
   },
   {
-    "source": "implementation-spec.md",
-    "requirements": ["CTX-003", "CTX-004", "CTX-006"],
+    "source": "docs/implementation-spec.md",
+    "requirements": [
+      "CTX-003",
+      "CTX-004",
+      "CTX-006"
+    ],
     "owner": "src/git/context.ts#ContextCoordinator",
     "entrypoint": "src/git.ts#GitModule.publishContext",
-    "callPath": ["src/git.ts#GitModule.publishContext", "src/git/context.ts#ContextCoordinator", "src/git/context-repository.ts#ContextRepository", "src/git/context-publication.ts#ContextPublicationObserver", "src/git/canonical-command.ts#compareAndSwapCanonicalRef"],
-    "negativeTests": ["test/r37-preparation-boundaries.test.ts#R37", "test/crash-boundaries.test.ts#T66"]
+    "callPath": [
+      "src/git.ts#GitModule.publishContext",
+      "src/git/context.ts#ContextCoordinator",
+      "src/git/context-repository.ts#ContextRepository",
+      "src/git/context-publication.ts#ContextPublicationObserver",
+      "src/git/canonical-command.ts#compareAndSwapCanonicalRef"
+    ],
+    "negativeTests": [
+      "test/r37-preparation-boundaries.test.ts#R37",
+      "test/crash-boundaries.test.ts#T66"
+    ]
   },
   {
-    "source": "implementation-spec.md",
-    "requirements": ["LIFE-007", "LIFE-008"],
+    "source": "docs/implementation-spec.md",
+    "requirements": [
+      "LIFE-007",
+      "LIFE-008"
+    ],
     "owner": "src/lifecycle/create.ts#CreateCoordinator",
     "entrypoint": "src/lifecycle.ts#LifecycleModule",
-    "callPath": ["src/lifecycle.ts#LifecycleModule", "src/lifecycle/create.ts#CreateCoordinator", "src/lifecycle/workspace.ts#WorkspaceCoordinator", "src/lifecycle/create-publication.ts#CreationPublicationObserver"],
-    "negativeTests": ["test/r37-preparation-boundaries.test.ts#R37", "test/crash-boundaries.test.ts#T39"]
+    "callPath": [
+      "src/lifecycle.ts#LifecycleModule",
+      "src/lifecycle/create.ts#CreateCoordinator",
+      "src/lifecycle/workspace.ts#WorkspaceCoordinator",
+      "src/lifecycle/create-publication.ts#CreationPublicationObserver"
+    ],
+    "negativeTests": [
+      "test/r37-preparation-boundaries.test.ts#R37",
+      "test/crash-boundaries.test.ts#T39"
+    ]
   },
   {
-    "source": "implementation-spec.md",
-    "requirements": ["ERR-002"],
+    "source": "docs/implementation-spec.md",
+    "requirements": [
+      "ERR-002"
+    ],
     "owner": "src/domain/errors.ts#classifyError",
     "entrypoint": "src/git/submit.ts#SubmitCoordinator",
-    "callPath": ["src/git/submit.ts#SubmitCoordinator", "src/domain/errors.ts#classifyError", "src/protocol/receipts.ts#receiptOfOperation"],
-    "negativeTests": ["test/r37-async-process.test.ts#R37", "test/r37-preparation-boundaries.test.ts#R37"]
+    "callPath": [
+      "src/git/submit.ts#SubmitCoordinator",
+      "src/domain/errors.ts#classifyError",
+      "src/protocol/receipts.ts#receiptOfOperation"
+    ],
+    "negativeTests": [
+      "test/r37-async-process.test.ts#R37",
+      "test/r37-preparation-boundaries.test.ts#R37"
+    ]
   },
   {
-    "source": "implementation/physical-ordering.md",
-    "requirements": ["SEQ-003"],
+    "source": "docs/implementation-spec.md",
+    "requirements": [
+      "SEQ-003"
+    ],
     "owner": "src/runtime/broker-lifetime.ts#BrokerLifetime",
     "entrypoint": "src/entry/broker.ts#main",
-    "callPath": ["src/entry/broker.ts#main", "src/runtime/broker-lifetime.ts#BrokerLifetime", "src/runtime/broker-lifetime.ts#settleWithin", "src/process/preparation.ts#preparationShutdownBarrier"],
-    "negativeTests": ["test/r37-shutdown-observation.test.ts#R37"]
+    "callPath": [
+      "src/entry/broker.ts#main",
+      "src/runtime/broker-lifetime.ts#BrokerLifetime",
+      "src/runtime/broker-lifetime.ts#settleWithin",
+      "src/process/preparation.ts#preparationShutdownBarrier"
+    ],
+    "negativeTests": [
+      "test/r37-shutdown-observation.test.ts#R37"
+    ]
   },
   {
-    "source": "implementation/compliance.md",
-    "requirements": ["COMP-005", "COMP-006"],
+    "source": "docs/verification-spec.md",
+    "requirements": [
+      "COMP-005",
+      "COMP-006"
+    ],
     "owner": "scripts/traceability.mjs#applyOwnerLinks",
     "entrypoint": "scripts/compliance.mjs#loadTraceInventory",
-    "callPath": ["scripts/compliance.mjs#loadTraceInventory", "scripts/traceability.mjs#loadTraceInventory", "scripts/traceability.mjs#applyOwnerLinks", "scripts/traceability.mjs#indexTrace"],
-    "negativeTests": ["test/compliance.test.ts#COMP-005/006", "test/traceability-policy.test.mjs#R39"]
+    "callPath": [
+      "scripts/compliance.mjs#loadTraceInventory",
+      "scripts/traceability.mjs#loadTraceInventory",
+      "scripts/traceability.mjs#applyOwnerLinks",
+      "scripts/traceability.mjs#indexTrace"
+    ],
+    "negativeTests": [
+      "test/compliance.test.ts#COMP-005/006",
+      "test/traceability-policy.test.mjs#R39"
+    ]
   },
   {
-    "source": "implementation/test-matrix.md",
-    "requirements": ["TEST-006"],
+    "source": "docs/verification-spec.md",
+    "requirements": [
+      "TEST-006"
+    ],
     "owner": "scripts/traceability.mjs#inventoryAcceptance",
     "entrypoint": "scripts/adversarial-report.mjs#inventoryAcceptance",
-    "callPath": ["scripts/adversarial-report.mjs#inventoryAcceptance", "scripts/traceability.mjs#inventoryAcceptance"],
-    "negativeTests": ["test/traceability-policy.test.mjs#R39"]
+    "callPath": [
+      "scripts/adversarial-report.mjs#inventoryAcceptance",
+      "scripts/traceability.mjs#inventoryAcceptance"
+    ],
+    "negativeTests": [
+      "test/traceability-policy.test.mjs#R39"
+    ]
+  },
+  {
+    "source": "docs/implementation-spec.md",
+    "requirements": [
+      "TUI-001",
+      "TUI-003"
+    ],
+    "owner": "src/application/society-interaction.ts#SocietyInteraction",
+    "entrypoint": "src/entry/oma.ts#main",
+    "callPath": [
+      "src/entry/oma.ts#main",
+      "src/entry/oma-society.ts#main",
+      "src/application/society-interaction.ts#SocietyInteraction",
+      "src/tui/app.ts#TuiApp",
+      "src/tui/model.ts#step"
+    ],
+    "negativeTests": [
+      "test/tui-boundary.test.ts#T91",
+      "test/tui-boundary.test.ts#T95"
+    ]
+  },
+  {
+    "source": "docs/implementation-spec.md",
+    "requirements": [
+      "TUI-002"
+    ],
+    "owner": "src/tui/keys.ts#KeyDecoder",
+    "entrypoint": "src/entry/oma.ts#main",
+    "callPath": [
+      "src/entry/oma.ts#main",
+      "src/entry/oma-society.ts#main",
+      "src/application/society-interaction.ts#SocietyInteraction",
+      "src/tui/app.ts#TuiApp",
+      "src/tui/keys.ts#KeyDecoder",
+      "src/tui/screen.ts#openTerminal",
+      "src/tui/model.ts#step"
+    ],
+    "negativeTests": [
+      "test/tui-app.test.ts#TUI-002",
+      "test/tui-model.test.ts#key decoding",
+      "test/surface-process.test.ts#T112"
+    ]
+  },
+  {
+    "source": "docs/implementation-spec.md",
+    "requirements": [
+      "TUI-004"
+    ],
+    "owner": "src/application/society-runtime.ts#SocietyRuntime",
+    "entrypoint": "src/entry/oma.ts#main",
+    "callPath": [
+      "src/entry/oma.ts#main",
+      "src/entry/oma-society.ts#main",
+      "src/application/society-runtime.ts#SocietyRuntime",
+      "src/runtime/host-tenure.ts#HostTenure"
+    ],
+    "negativeTests": [
+      "test/oma-composition-policy.test.mjs#T119"
+    ]
+  },
+  {
+    "source": "docs/implementation-spec.md",
+    "requirements": [
+      "TUI-014"
+    ],
+    "owner": "src/entry/pi-interactive-host.ts#runInteractive",
+    "entrypoint": "src/entry/oma.ts#main",
+    "callPath": [
+      "src/entry/oma.ts#main",
+      "src/entry/oma-society.ts#main",
+      "src/application/society-runtime.ts#SocietyRuntime",
+      "src/runtime/engine/principal-session.ts#PrincipalSession.start",
+      "src/entry/pi-interactive-host.ts#runInteractive",
+      "src/tui/interactive-editor.ts#ownedEditor"
+    ],
+    "negativeTests": [
+      "test/interactive-input.test.ts#Open TUI",
+      "test/open-tui-pty.test.ts#Open TUI"
+    ]
+  },
+  {
+    "source": "docs/implementation-spec.md",
+    "requirements": [
+      "TUI-005",
+      "TUI-007",
+      "TUI-008",
+      "TUI-009"
+    ],
+    "owner": "src/domain/settings-policy.ts#applyField",
+    "entrypoint": "src/entry/oma.ts#main",
+    "callPath": [
+      "src/entry/oma.ts#main",
+      "src/entry/oma-society.ts#main",
+      "src/application/society-interaction.ts#SocietyInteraction",
+      "src/tui/app.ts#TuiApp",
+      "src/domain/settings-policy.ts#applyField",
+      "src/application/settings.ts#writeSettings"
+    ],
+    "negativeTests": [
+      "test/tui-sources.test.ts#T93",
+      "test/tui-sources.test.ts#T94",
+      "test/tui-sources.test.ts#T96"
+    ]
+  },
+  {
+    "source": "docs/implementation-spec.md",
+    "requirements": [
+      "TUI-006"
+    ],
+    "owner": "src/tui/model.ts#step",
+    "entrypoint": "src/entry/oma.ts#main",
+    "callPath": [
+      "src/entry/oma.ts#main",
+      "src/entry/oma-society.ts#main",
+      "src/application/society-interaction.ts#SocietyInteraction",
+      "src/tui/app.ts#TuiApp",
+      "src/tui/model.ts#step"
+    ],
+    "negativeTests": [
+      "test/tui-boundary.test.ts#T95"
+    ]
+  },
+  {
+    "source": "docs/implementation-spec.md",
+    "requirements": [
+      "TUI-010"
+    ],
+    "owner": "src/application/extensions.ts#toggleExtension",
+    "entrypoint": "src/entry/oma.ts#main",
+    "callPath": [
+      "src/entry/oma.ts#main",
+      "src/entry/oma-society.ts#main",
+      "src/application/society-interaction.ts#SocietyInteraction",
+      "src/tui/app.ts#TuiApp",
+      "src/application/extensions.ts#readExtensions",
+      "src/application/extensions.ts#toggleExtension"
+    ],
+    "negativeTests": [
+      "test/tui-sources.test.ts#T97",
+      "test/tui-model.test.ts#T97"
+    ]
+  },
+  {
+    "source": "docs/implementation-spec.md",
+    "requirements": [
+      "TUI-011"
+    ],
+    "owner": "src/application/mail.ts#readMailbox",
+    "entrypoint": "src/entry/oma.ts#main",
+    "callPath": [
+      "src/entry/oma.ts#main",
+      "src/entry/oma-society.ts#main",
+      "src/application/society-interaction.ts#SocietyInteraction",
+      "src/tui/app.ts#TuiApp",
+      "src/application/mail.ts#readMailbox"
+    ],
+    "negativeTests": [
+      "test/tui-sources.test.ts#T98",
+      "test/tui-boundary.test.ts#T95"
+    ]
+  },
+  {
+    "source": "docs/implementation-spec.md",
+    "requirements": [
+      "TUI-012"
+    ],
+    "owner": "src/tui/dashboard.ts#dashboardLines",
+    "entrypoint": "src/entry/oma.ts#main",
+    "callPath": [
+      "src/entry/oma.ts#main",
+      "src/entry/oma-society.ts#main",
+      "src/application/society-interaction.ts#SocietyInteraction",
+      "src/application/status-observation.ts#TuiTransport.status",
+      "src/tui/dashboard.ts#dashboardLines"
+    ],
+    "negativeTests": [
+      "test/tui-sources.test.ts#T98"
+    ]
+  },
+  {
+    "source": "docs/implementation-spec.md",
+    "requirements": [
+      "TUI-013"
+    ],
+    "owner": "src/tui/render.ts#render",
+    "entrypoint": "src/entry/oma.ts#main",
+    "callPath": [
+      "src/entry/oma.ts#main",
+      "src/entry/oma-society.ts#main",
+      "src/application/society-interaction.ts#SocietyInteraction",
+      "src/tui/app.ts#TuiApp",
+      "src/tui/render.ts#render"
+    ],
+    "negativeTests": [
+      "test/tui-boundary.test.ts#T95"
+    ]
+  },
+  {
+    "source": "docs/implementation-spec.md",
+    "requirements": [
+      "TUI-023"
+    ],
+    "owner": "src/tui/prompt.ts#appendPrompt",
+    "entrypoint": "src/entry/oma.ts#main",
+    "callPath": [
+      "src/entry/oma.ts#main",
+      "src/entry/oma-society.ts#main",
+      "src/application/society-interaction.ts#SocietyInteraction",
+      "src/tui/app.ts#TuiApp",
+      "src/tui/model.ts#step",
+      "src/tui/prompt.ts#appendPrompt",
+      "src/tui/transcript.ts#Transcript",
+      "src/domain/surface-bounds.ts#humanPromptFitsFrame",
+      "src/runtime/engine/principal-session.ts#PrincipalSession.submit"
+    ],
+    "negativeTests": [
+      "test/tui-app.test.ts#T120",
+      "test/tui-transcript.test.ts#T120",
+      "test/principal-endpoint.test.ts#T120"
+    ]
+  },
+  {
+    "source": "docs/implementation-spec.md",
+    "requirements": [
+      "TSP-001",
+      "TSP-003",
+      "TSP-004"
+    ],
+    "owner": "src/domain/tool-surface.ts#planToolSurface",
+    "entrypoint": "src/entry/runner.ts#main",
+    "callPath": [
+      "src/entry/runner.ts#main",
+      "src/config/operations.ts#readConfigurationSource",
+      "src/domain/tool-surface.ts#planToolSurface"
+    ],
+    "negativeTests": [
+      "test/tool-surface.test.ts#T99",
+      "test/tool-surface.test.ts#T100"
+    ]
+  },
+  {
+    "source": "docs/implementation-spec.md",
+    "requirements": [
+      "TSP-002",
+      "TSP-010"
+    ],
+    "owner": "src/config/operations.ts#readConfigurationSource",
+    "entrypoint": "src/entry/runner.ts#main",
+    "callPath": [
+      "src/entry/runner.ts#main",
+      "src/config/operations.ts#readConfigurationSource"
+    ],
+    "negativeTests": [
+      "test/tool-surface.test.ts#T100",
+      "test/tool-surface.test.ts#T103"
+    ]
+  },
+  {
+    "source": "docs/implementation-spec.md",
+    "requirements": [
+      "TSP-005",
+      "TSP-008"
+    ],
+    "owner": "src/pi-extension.ts#initialActiveTools",
+    "entrypoint": "src/pi-extension.ts#extension",
+    "callPath": [
+      "src/pi-extension.ts#extension",
+      "src/pi-extension.ts#initialActiveTools"
+    ],
+    "negativeTests": [
+      "test/tool-surface.test.ts#T101"
+    ]
+  },
+  {
+    "source": "docs/implementation-spec.md",
+    "requirements": [
+      "TSP-006",
+      "TSP-007"
+    ],
+    "owner": "src/pi-extension.ts#expandedActiveTools",
+    "entrypoint": "src/pi-extension.ts#extension",
+    "callPath": [
+      "src/pi-extension.ts#extension",
+      "src/pi-extension.ts#parseSurfacePlan",
+      "src/pi-extension.ts#expandedActiveTools"
+    ],
+    "negativeTests": [
+      "test/tool-surface.test.ts#T102",
+      "test/tool-surface.test.ts#T103"
+    ]
+  },
+  {
+    "source": "docs/implementation-spec.md",
+    "requirements": [
+      "TUI-016",
+      "TUI-017",
+      "TUI-018",
+      "TUI-019"
+    ],
+    "owner": "src/runtime/pi-runtime.ts#resolvePiRuntime",
+    "entrypoint": "src/entry/oma.ts#main",
+    "callPath": [
+      "src/entry/oma.ts#main",
+      "src/entry/oma-society.ts#main",
+      "src/application/society-bootstrap.ts#prepareSociety",
+      "src/application/project-session-settings.ts#ProjectSessionSettings",
+      "src/config/defaults.ts#defaultHostConfig",
+      "src/runtime/pi-runtime.ts#resolvePiRuntime",
+      "src/runtime/engine/principal-session.ts#PrincipalSession.start"
+    ],
+    "negativeTests": [
+      "test/pi-runtime.test.ts#T105",
+      "test/pi-runtime.test.ts#T106"
+    ]
+  },
+  {
+    "source": "docs/implementation-spec.md",
+    "requirements": [
+      "TUI-020"
+    ],
+    "owner": "src/tui/render.ts#cellWidth",
+    "entrypoint": "src/entry/oma.ts#main",
+    "callPath": [
+      "src/entry/oma.ts#main",
+      "src/entry/oma-society.ts#main",
+      "src/application/society-interaction.ts#SocietyInteraction",
+      "src/tui/app.ts#TuiApp",
+      "src/tui/render.ts#cellWidth"
+    ],
+    "negativeTests": [
+      "test/surface-consistency.test.ts#T107"
+    ]
+  },
+  {
+    "source": "docs/implementation-spec.md",
+    "requirements": [
+      "PR-002"
+    ],
+    "owner": "src/runtime/principal-delivery.ts#PrincipalDelivery",
+    "entrypoint": "src/entry/oma.ts#main",
+    "callPath": [
+      "src/entry/oma.ts#main",
+      "src/entry/oma-society.ts#main",
+      "src/application/society-runtime.ts#SocietyRuntime",
+      "src/runtime/engine/principal-session.ts#PrincipalSession",
+      "src/runtime/principal-delivery.ts#PrincipalDelivery",
+      "src/runtime/principal-delivery.ts#principalHostBroker",
+      "src/broker/principal-endpoint.ts#PrincipalHostEndpoint",
+      "src/extension/delivery.ts#registerDelivery",
+      "src/storage/delivery-receipt.ts#publishDeliveryReceipt"
+    ],
+    "negativeTests": [
+      "test/principal-endpoint.test.ts#T114",
+      "test/oma-composition-policy.test.mjs#T119"
+    ]
+  },
+  {
+    "source": "docs/implementation-spec.md",
+    "requirements": [
+      "IPC-011"
+    ],
+    "owner": "src/broker/principal-endpoint.ts#PrincipalEndpoint",
+    "entrypoint": "src/entry/broker.ts#main",
+    "callPath": [
+      "src/entry/broker.ts#main",
+      "src/broker.ts#Broker",
+      "src/broker/principal-endpoint.ts#PrincipalEndpoint",
+      "src/runtime/supervision-channel.ts#openSupervisionChannel",
+      "src/protocol/host-channel.ts#HostChannelReader",
+      "src/broker/process-ancestry.ts#descendsFrom"
+    ],
+    "negativeTests": [
+      "test/principal-endpoint.test.ts#T114",
+      "test/principal-channel.test.ts#T114"
+    ]
+  },
+  {
+    "source": "docs/implementation-spec.md",
+    "requirements": [
+      "CLI-001"
+    ],
+    "owner": "src/cli/arguments.ts#parseArguments",
+    "entrypoint": "src/cli.ts#main",
+    "callPath": [
+      "src/cli.ts#main",
+      "src/cli/commands/send.ts#runSendCommand",
+      "src/cli/arguments.ts#parseArguments"
+    ],
+    "negativeTests": [
+      "test/argument-boundary.test.ts#AV1",
+      "test/f2-cli-request.test.ts#F2"
+    ]
+  },
+  {
+    "source": "docs/implementation-spec.md",
+    "requirements": [
+      "PR-004"
+    ],
+    "owner": "src/protocol/methods.ts#principalRequestAllowed",
+    "entrypoint": "src/entry/oma.ts#main",
+    "callPath": [
+      "src/entry/oma.ts#main",
+      "src/entry/oma-society.ts#main",
+      "src/application/society-runtime.ts#SocietyRuntime",
+      "src/runtime/engine/principal-session.ts#PrincipalSession.start",
+      "src/storage/paths.ts#assertModelScope",
+      "src/broker/public-dispatcher.ts#PublicDispatcher",
+      "src/pi-extension.ts#extension",
+      "src/extension/tool-surface.ts#registerToolSurface",
+      "src/extension/workspace-guard.ts#guardWorkspaceTools",
+      "src/protocol/methods.ts#principalRequestAllowed"
+    ],
+    "negativeTests": [
+      "test/model-scope.test.ts#AV3",
+      "test/argument-boundary.test.ts#AV1",
+      "test/principal-stop-fence.test.ts#DR27",
+      "test/tool-surface.test.ts#DR27"
+    ]
+  },
+  {
+    "source": "docs/implementation-spec.md",
+    "requirements": [
+      "FS-003"
+    ],
+    "owner": "src/runtime/engine/principal-session.ts#principalEnvironment",
+    "entrypoint": "src/entry/oma.ts#main",
+    "callPath": [
+      "src/entry/oma.ts#main",
+      "src/entry/oma-society.ts#main",
+      "src/application/society-runtime.ts#SocietyRuntime",
+      "src/runtime/engine/principal-session.ts#principalEnvironment"
+    ],
+    "negativeTests": [
+      "test/model-scope.test.ts#AV3"
+    ]
+  },
+  {
+    "source": "docs/implementation-spec.md",
+    "requirements": [
+      "INF-007"
+    ],
+    "owner": "src/runtime/inference-relay.ts#InferenceRelay",
+    "entrypoint": "src/runner.ts#RunnerModule",
+    "callPath": [
+      "src/runner.ts#RunnerModule",
+      "src/runtime/inference-relay.ts#InferenceRelay"
+    ],
+    "negativeTests": [
+      "test/inference-relay.test.ts#AV2"
+    ]
+  },
+  {
+    "source": "docs/implementation-spec.md",
+    "requirements": [
+      "FS-005"
+    ],
+    "owner": "src/storage/contained-fs.ts#withinDirectory",
+    "entrypoint": "src/entry/broker.ts#main",
+    "callPath": [
+      "src/entry/broker.ts#main",
+      "src/broker/transport-spool.ts#TransportSpool",
+      "src/storage/contained-fs.ts#withinDirectory"
+    ],
+    "negativeTests": [
+      "test/held-parent.test.ts#AV5",
+      "test/untrusted-directories.test.ts#AV4",
+      "test/architecture-rule-modules.test.mjs#AV5"
+    ]
+  },
+  {
+    "source": "docs/implementation-spec.md",
+    "requirements": [
+      "SB-006"
+    ],
+    "owner": "src/storage/delivery-receipt.ts#observeDeliveryReceipt",
+    "entrypoint": "src/runner.ts#RunnerModule",
+    "callPath": [
+      "src/runner.ts#RunnerModule",
+      "src/storage/delivery-receipt.ts#observeDeliveryReceipt"
+    ],
+    "negativeTests": [
+      "test/untrusted-directories.test.ts#AV4",
+      "test/receipt-observation.test.ts#V06A"
+    ]
+  },
+  {
+    "source": "docs/macos-platform.md",
+    "requirements": [
+      "MAC-210"
+    ],
+    "owner": "src/platform/rpc.ts#FramedPeer",
+    "entrypoint": "src/platform/rpc-server.ts#serveRequests",
+    "callPath": [
+      "src/platform/rpc-server.ts#serveRequests",
+      "src/platform/rpc.ts#FramedPeer",
+      "src/frame.ts#FrameParser",
+      "src/platform/guest/stream.ts#serveStream",
+      "src/platform/stream-source.ts#withStreamSource",
+      "src/platform/stream-receive.ts#receiveDeclared"
+    ],
+    "negativeTests": [
+      "test/platform-rpc.test.ts#DR27",
+      "test/platform-stream-publication.test.ts#P0V-104"
+    ]
+  },
+  {
+    "source": "docs/macos-platform.md",
+    "requirements": [
+      "MAC-231"
+    ],
+    "owner": "src/platform/rpc.ts#platformFailure",
+    "entrypoint": "src/platform/rpc-server.ts#serveRequests",
+    "callPath": [
+      "src/platform/rpc-server.ts#serveRequests",
+      "src/platform/guest/stream.ts#serveStream",
+      "src/platform/host/egress.ts#EgressHost",
+      "src/platform/rpc.ts#platformFailure",
+      "src/platform/product-text.ts#productText"
+    ],
+    "negativeTests": [
+      "test/platform-rpc.test.ts#DR27",
+      "test/dr18-product-words.test.ts#DR18"
+    ]
+  },
+  {
+    "source": "docs/macos-platform.md",
+    "requirements": [
+      "MAC-240"
+    ],
+    "owner": "src/platform/guest/requests.ts#RequestLedger",
+    "entrypoint": "src/platform/guest/host.ts#GuestHost.serve",
+    "callPath": [
+      "src/platform/guest/host.ts#GuestHost.serve",
+      "src/platform/guest/project.ts#GuestProjects",
+      "src/platform/guest/requests.ts#RequestLedger",
+      "src/platform/rpc.ts#platformFailure",
+      "src/domain/errors.ts#primaryFailure"
+    ],
+    "negativeTests": [
+      "test/platform-request-ledger.test.ts#MAC-240",
+      "test/platform-request-ledger.test.ts#DR27"
+    ]
+  },
+  {
+    "source": "docs/implementation-spec.md",
+    "requirements": [
+      "MODE-001"
+    ],
+    "owner": "src/tui/session-mode.ts#chooseSessionMode",
+    "entrypoint": "src/entry/oma.ts#main",
+    "callPath": [
+      "src/entry/oma.ts#main",
+      "src/runtime/host-arguments.ts#parseOmaArguments",
+      "src/tui/session-mode.ts#chooseSessionMode"
+    ],
+    "negativeTests": [
+      "test/session-entry-composition.test.mjs#birth router",
+      "test/session-mode-selection.test.mjs#mode selector:",
+      "test/session-mode-pty.test.ts#session mode real PTY:"
+    ]
+  },
+  {
+    "source": "docs/implementation-spec.md",
+    "requirements": [
+      "MODE-002"
+    ],
+    "owner": "src/runtime/session-mode.ts#publishSessionBirth",
+    "entrypoint": "src/entry/oma.ts#main",
+    "callPath": [
+      "src/entry/oma.ts#main",
+      "src/entry/personal-host.ts#personalMain",
+      "src/runtime/personal-session.ts#personalBirth",
+      "src/runtime/session-mode.ts#publishSessionBirth"
+    ],
+    "negativeTests": [
+      "test/session-mode-record.test.ts#session mode:",
+      "test/session-history.test.ts#Session history:",
+      "test/personal-host-composition.test.mjs#Personal host"
+    ]
+  },
+  {
+    "source": "docs/implementation-spec.md",
+    "requirements": [
+      "MODE-003"
+    ],
+    "owner": "src/runtime/personal-session.ts#runPersonalSession",
+    "entrypoint": "src/entry/oma.ts#main",
+    "callPath": [
+      "src/entry/oma.ts#main",
+      "src/entry/personal-host.ts#personalMain",
+      "src/runtime/personal-session.ts#runPersonalSession",
+      "src/process/async.ts#spawnSessionInteractive",
+      "src/entry/pi-personal.ts#main"
+    ],
+    "negativeTests": [
+      "test/session-entry-composition.test.mjs#birth router",
+      "test/personal-pty.test.ts#Personal installed PTY:",
+      "test/personal-models-composition.test.mjs#Personal models:",
+      "test/personal-session-ownership.test.mjs#Personal child:",
+      "test/session-process-owner.test.mjs#Human session process:",
+      "test/personal-engine-ownership.test.mjs#Personal engine:",
+      "test/personal-history-lifetime.test.ts#Personal history actual process:"
+    ]
+  },
+  {
+    "source": "docs/implementation-spec.md",
+    "requirements": [
+      "MODE-004"
+    ],
+    "owner": "src/runtime/personal-settings.ts#updatePersonalSettings",
+    "entrypoint": "src/entry/pi-personal.ts#main",
+    "callPath": [
+      "src/entry/pi-personal.ts#main",
+      "src/entry/pi-interactive-host.ts#main",
+      "src/entry/personal-host.ts#personalMain",
+      "src/entry/oma-society.ts#piPackages",
+      "src/entry/oma-mac.ts#packages",
+      "src/runtime/engine/login.ts#runEngineLogin",
+      "src/runtime/user-files.ts#ensureUserDirectory",
+      "src/runtime/packages/store.ts#packageCommand",
+      "src/runtime/packages/store.ts#writePackageIndex",
+      "src/runtime/personal-settings.ts#reconcilePersonalSettings",
+      "src/runtime/personal-settings.ts#updatePersonalSettings",
+      "src/runtime/user-files.ts#readUserFile",
+      "src/runtime/pi-runtime.ts#prepareEngineFile",
+      "src/runtime/process-lock.ts#ProcessLock",
+      "src/process/cleanup.ts#withCleanup",
+      "src/process/cleanup.ts#withAsyncCleanup",
+      "src/runtime/extension-modules.ts#ExtensionModules"
+    ],
+    "negativeTests": [
+      "test/personal-settings.test.ts#Personal settings:",
+      "test/personal-host-composition.test.mjs#Personal host",
+      "test/personal-pty.test.ts#Personal installed PTY:",
+      "test/package-command-ownership.test.mjs#Package owner",
+      "test/engine-login-ownership.test.mjs#engine package:",
+      "test/engine-login-ownership.test.mjs#engine close:",
+      "test/host-arguments.test.ts#DR28:",
+      "test/mac-host-packages.test.ts#Mac host packages:",
+      "test/session-entry-composition.test.mjs#Package grammar:",
+      "test/session-entry-composition.test.mjs#Mac birth router:",
+      "test/platform-packages.test.ts#DR25",
+      "test/pi-packages-cli.test.ts#DR25",
+      "test/owned-cleanup.test.mjs#Owned cleanup",
+      "test/user-files.test.mjs#user files",
+      "test/pi-settings-platform.test.mjs#engine settings",
+      "test/extension-modules.test.ts#Extension modules:"
+    ]
+  },
+  {
+    "source": "docs/implementation-spec.md",
+    "requirements": [
+      "MODE-005"
+    ],
+    "owner": "src/runtime/personal-session.ts#runPersonalSession",
+    "entrypoint": "src/entry/oma.ts#main",
+    "callPath": [
+      "src/entry/oma.ts#main",
+      "src/entry/personal-host.ts#personalMain",
+      "src/runtime/personal-session.ts#runPersonalSession",
+      "src/process/async.ts#spawnSessionInteractive",
+      "src/entry/pi-personal.ts#main",
+      "src/runtime/session-catalog.ts#sessionBirthForHistory",
+      "src/application/society-transition.ts#SocietyTransition.relaunch",
+      "src/runtime/session-handoff.ts#requestHostNewSession",
+      "src/protocol/guest-history.ts#parseGuestHistoryReference",
+      "src/protocol/host-history.ts#parseHostHistoryReference",
+      "src/platform/guest/histories.ts#GuestHistories",
+      "src/platform/host/guest-histories.ts#listMacGuestHistories",
+      "src/platform/host/personal-histories.ts#inspectHostPersonalHistory",
+      "src/runtime/host-history-channel.ts#HostHistoryChannel"
+    ],
+    "negativeTests": [
+      "test/oma-composition-policy.test.mjs#MODE-005",
+      "test/oma-composition-policy.test.mjs#MODE-006",
+      "test/session-handoff-owner.test.mjs#host handoff writer:",
+      "test/session-entry-composition.test.mjs#birth router",
+      "test/personal-host-composition.test.mjs#Personal host",
+      "test/session-history.test.ts#Session history:",
+      "test/personal-pty.test.ts#Personal installed PTY:",
+      "test/personal-session-ownership.test.mjs#Personal child:",
+      "test/session-process-owner.test.mjs#Human session process:",
+      "test/personal-engine-ownership.test.mjs#Personal engine:",
+      "test/personal-history-lifetime.test.ts#Personal history actual process:",
+      "test/host-history.test.ts#DR29",
+      "test/guest-history.test.ts#DR29",
+      "test/oma-composition-policy.test.mjs#DR29",
+      "test/project-session-directories.test.mjs#DR29",
+      "test/attach-handoff-ownership.test.mjs#DR29",
+      "test/guest-session-ownership.test.mjs#DR29"
+    ]
+  },
+  {
+    "source": "docs/implementation-spec.md",
+    "requirements": [
+      "MODE-006"
+    ],
+    "owner": "src/entry/oma-mac.ts#main",
+    "entrypoint": "src/entry/oma.ts#main",
+    "callPath": [
+      "src/entry/oma.ts#main",
+      "src/entry/oma-mac.ts#main",
+      "src/entry/oma-mac.ts#observedSocieties",
+      "src/entry/personal-host.ts#personalMain",
+      "src/application/society-transition.ts#SocietyTransition.relaunch",
+      "src/runtime/session-handoff.ts#requestHostNewSession",
+      "src/process/async.ts#spawnInTerminal",
+      "src/entry/guest-session.ts#session",
+      "src/platform/guest/session.ts#TerminalSession",
+      "src/protocol/host-guest.ts#parseTerminalExit",
+      "src/platform/host/attach-client.ts#attachTerminal",
+      "src/protocol/guest-history.ts#parseGuestHistoryReference",
+      "src/protocol/host-history.ts#parseHostHistoryReference",
+      "src/platform/guest/histories.ts#GuestHistories",
+      "src/platform/host/guest-histories.ts#listMacGuestHistories",
+      "src/platform/host/personal-histories.ts#inspectHostPersonalHistory",
+      "src/runtime/host-history-channel.ts#HostHistoryChannel"
+    ],
+    "negativeTests": [
+      "test/session-entry-composition.test.mjs#birth router darwin:",
+      "test/session-entry-composition.test.mjs#Mac birth router:",
+      "test/session-entry-composition.test.mjs#Mac birth router: completed guest /new",
+      "test/personal-host-composition.test.mjs#Personal host darwin:",
+      "test/personal-models-composition.test.mjs#Personal models:",
+      "test/oma-composition-policy.test.mjs#MODE-006",
+      "test/session-handoff-owner.test.mjs#host handoff writer:",
+      "test/session-handoff.test.ts#host handoff codec:",
+      "test/guest-session-ownership.test.mjs#guest handoff:",
+      "test/attach-handoff-ownership.test.mjs#attach handoff:",
+      "test/session-process-owner.test.mjs#Guest terminal process:",
+      "test/platform-terminal-session.test.ts#MODE-006",
+      "test/platform-host-api.test.ts#MODE-006",
+      "test/mac-new-handoff-pty.test.ts#Mac host-new real PTY:",
+      "test/host-history.test.ts#DR29",
+      "test/guest-history.test.ts#DR29",
+      "test/oma-composition-policy.test.mjs#DR29",
+      "test/project-session-directories.test.mjs#DR29",
+      "test/attach-handoff-ownership.test.mjs#DR29",
+      "test/guest-session-ownership.test.mjs#DR29"
+    ]
+  },
+  {
+    "source": "docs/implementation-spec.md",
+    "requirements": [
+      "INT-002",
+      "INT-007"
+    ],
+    "owner": "src/runtime/candidate-checks.ts#CandidateChecks",
+    "entrypoint": "src/entry/broker.ts#main",
+    "callPath": [
+      "src/entry/broker.ts#main",
+      "src/git.ts#GitModule",
+      "src/runtime/candidate-checks.ts#candidateCheckCommand",
+      "src/git/integration-policy.ts#assertCheckResources",
+      "src/runtime/candidate-checks.ts#CandidateChecks"
+    ],
+    "negativeTests": [
+      "test/candidate-checks.test.ts#DR29",
+      "test/tiered-integration.test.ts#DR27"
+    ]
+  },
+  {
+    "source": "docs/macos-platform.md",
+    "requirements": [
+      "MAC-401",
+      "MAC-403"
+    ],
+    "owner": "src/platform/host/service.ts#HostService",
+    "entrypoint": "src/entry/omahostd.ts#main",
+    "callPath": [
+      "src/entry/omahostd.ts#main",
+      "src/platform/host/record.ts#readHostRecord",
+      "src/platform/host/record.ts#writeHostRecord",
+      "src/platform/host/bookmark.ts#nativeProjectBookmarks",
+      "src/platform/host/project.ts#MacGit",
+      "src/platform/host/personal-seed.ts#macProjectExtensionSeed",
+      "src/runtime/personal-settings.ts#updatePersonalSettingsAsync",
+      "src/platform/host/service.ts#HostService"
+    ],
+    "negativeTests": [
+      "test/mac-project-seed.test.ts#DR29",
+      "test/platform-host-service.test.ts#MAC-241",
+      "test/personal-settings.test.ts#DR29"
+    ]
   }
 ]

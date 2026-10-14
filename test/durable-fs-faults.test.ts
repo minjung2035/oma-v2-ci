@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { sha256Hex } from "../src/domain/canonical-json.js";
 import { StoreError } from "../src/domain/errors.js";
-import { replaceDerivedFile, fsyncTree } from "../src/storage/durable-fs.js";
+import { replaceDerivedFile, fsyncTree, ensureDurableDirectory, publishNoReplace, type DurabilityObserver } from "../src/storage/durable-fs.js";
 import { publishImmutableFile } from "../src/storage/immutable-file.js";
 import { publishImmutableFile as mailPublish, writeAtomic } from "../src/mail.js";
 
@@ -110,5 +110,99 @@ test("recursive fsync rejects a linked subtree rather than traversing its target
     fs.symlinkSync(outside, join(tree, "linked"));
     assert.throws(() => fsyncTree(tree), isCorrupt);
     assert.equal(fs.readFileSync(join(outside, "evidence"), "utf8"), "retained");
+  });
+});
+
+test("P0V-71 / F4, P0-3: a durable directory's whole path is flushed, also on the retry of a call whose flush failed", { concurrency: false }, () => {
+  const root = fs.mkdtempSync(join(tmpdir(), "oma-durable-path-"));
+  try {
+    const leaf = join(root, "a", "b", "c");
+    // The first call creates a, b and c, and its first flush fails.
+    let first = true;
+    assert.throws(() => ensureDurableDirectory(leaf, 0o700, fault => {
+      if (first && fault.point === "directory-fsync") { first = false; throw new Error("EIO: injected flush failure"); }
+    }), /EIO/);
+    // The retry creates nothing; every name on the path must still be flushed.
+    const flushed: string[] = [];
+    ensureDurableDirectory(leaf, 0o700, fault => { if (fault.point === "directory-fsync" && fault.phase === "after-visible") flushed.push(fault.path); });
+    for (const path of [leaf, join(root, "a", "b"), join(root, "a"), root])
+      assert.ok(flushed.includes(path), `${path} was not flushed on the retry: ${JSON.stringify(flushed)}`);
+  } finally { fs.rmSync(root, { recursive: true, force: true }); }
+});
+
+test("P0V-59: a no-replace publication that fails while writing leaves no file under the name, and never replaces one", { concurrency: false }, t => {
+  fixture((root, _source, target) => {
+    scoped(t, () => { t.mock.method(fs, "writeFileSync", () => { throw eio(); }); },
+      () => assert.throws(() => publishNoReplace(target, "partial unit"), isEio));
+    assert.equal(fs.existsSync(target), false, "a failed write left a file under the name");
+    assert.deepEqual(fs.readdirSync(root).filter(name => name.endsWith(".tmp")), [], "the temporary was left behind");
+    assert.equal(publishNoReplace(target, "first"), "created");
+    assert.equal(publishNoReplace(target, "second"), "existing");
+    assert.equal(fs.readFileSync(target, "utf8"), "first");
+  });
+});
+
+/** The fault-observer seam at `file-fsync`/`after-visible`, whose path is the
+ * publication's own temporary: unlinking it there is what a concurrent
+ * dead-temporary collection does to a temporary whose lock is momentarily
+ * free (P0V-96). Counts how many attempts were started (file-create/before). */
+function stealTemporaryOnce(): { observer: DurabilityObserver; attempts: () => number } {
+  let stolen = false, started = 0;
+  const observer: DurabilityObserver = fault => {
+    if (fault.point === "file-create" && fault.phase === "before") started++;
+    if (!stolen && fault.point === "file-fsync" && fault.phase === "after-visible") { stolen = true; fs.unlinkSync(fault.path); }
+  };
+  return { observer, attempts: () => started };
+}
+
+test("FJ-8: a no-replace publication whose temporary was taken restarts once and lands its bytes", () => {
+  fixture((root, _source, target) => {
+    const { observer, attempts } = stealTemporaryOnce();
+    assert.equal(publishNoReplace(target, "second attempt's bytes", 0o600, observer), "created");
+    assert.equal(attempts(), 2, "the stolen temporary restarted the publication exactly once");
+    assert.equal(fs.readFileSync(target, "utf8"), "second attempt's bytes");
+    assert.deepEqual(fs.readdirSync(root).filter(name => name.endsWith(".tmp")), [], "no temporary residue");
+  });
+});
+
+test("FJ-8: a no-replace publication that keeps losing its temporary refuses after three attempts", () => {
+  fixture((root, _source, target) => {
+    let started = 0;
+    const observer: DurabilityObserver = fault => {
+      if (fault.point === "file-create" && fault.phase === "before") started++;
+      if (fault.point === "file-fsync" && fault.phase === "after-visible") fs.unlinkSync(fault.path);
+    };
+    assert.throws(() => publishNoReplace(target, "never lands", 0o600, observer),
+      (error: unknown) => error instanceof StoreError && error.code === "INTERNAL_ERROR");
+    assert.equal(started, 3, "exactly three attempts, not an unbounded retry");
+    assert.equal(fs.existsSync(target), false);
+    assert.deepEqual(fs.readdirSync(root).filter(name => name.endsWith(".tmp")), [], "no temporary residue");
+  });
+});
+
+test("FJ-8: a derived replacement whose temporary was taken restarts once and lands its bytes", () => {
+  fixture((root, _source, target) => {
+    fs.writeFileSync(target, "old");
+    const { observer, attempts } = stealTemporaryOnce();
+    replaceDerivedFile(target, "new", 0o600, observer);
+    assert.equal(attempts(), 2, "the stolen temporary restarted the replacement exactly once");
+    assert.equal(fs.readFileSync(target, "utf8"), "new");
+    assert.deepEqual(fs.readdirSync(root).filter(name => name.endsWith(".tmp")), [], "no temporary residue");
+  });
+});
+
+test("FJ-8: a derived replacement that keeps losing its temporary refuses after three attempts", () => {
+  fixture((root, _source, target) => {
+    fs.writeFileSync(target, "old");
+    let started = 0;
+    const observer: DurabilityObserver = fault => {
+      if (fault.point === "file-create" && fault.phase === "before") started++;
+      if (fault.point === "file-fsync" && fault.phase === "after-visible") fs.unlinkSync(fault.path);
+    };
+    assert.throws(() => replaceDerivedFile(target, "new", 0o600, observer),
+      (error: unknown) => error instanceof StoreError && error.code === "INTERNAL_ERROR");
+    assert.equal(started, 3, "exactly three attempts, not an unbounded retry");
+    assert.equal(fs.readFileSync(target, "utf8"), "old", "a refused replacement keeps the old bytes");
+    assert.deepEqual(fs.readdirSync(root).filter(name => name.endsWith(".tmp")), [], "no temporary residue");
   });
 });

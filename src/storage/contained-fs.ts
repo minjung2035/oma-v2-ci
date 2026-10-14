@@ -3,9 +3,24 @@
  * No lstat/open fallback when openat2 containment is unavailable.
  */
 import { constants, closeSync, fstatSync, openSync } from "node:fs";
+import { basename, dirname } from "node:path";
 import { getSystemErrorName } from "node:util";
 import { load, errno } from "koffi";
 import { StoreError } from "../domain/errors.js";
+import { withCleanup } from "../process/cleanup.js";
+
+/** P0V-65, P0-4: gives back every descriptor it is handed, whichever of them
+ * fails to close -- Linux releases a number even when close reports an error
+ * (P0V-49), so one failure is no reason to keep the others. The first failure
+ * is reported once every close has been attempted. */
+export function closeEvery(...descriptors: readonly (number | null | undefined)[]): void {
+  let failure: { readonly error: unknown } | null = null;
+  for (const fd of descriptors) {
+    if (fd === null || fd === undefined) continue;
+    try { closeSync(fd); } catch (error) { failure ??= { error }; }
+  }
+  if (failure !== null) throw failure.error;
+}
 
 let native:
   | {
@@ -92,18 +107,22 @@ export function openRegularBeneath(directory: number, path: string): number {
     path,
     0o10000000 /* O_PATH */ | constants.O_NOFOLLOW,
   );
+  let result: number | undefined;
   try {
-    if (!fstatSync(pin).isFile())
-      throw new StoreError(
-        "STORE_CORRUPT",
-        "contained entry is not a regular file",
+    return withCleanup(() => {
+      if (!fstatSync(pin).isFile())
+        throw new StoreError(
+          "STORE_CORRUPT",
+          "contained entry is not a regular file",
+        );
+      result = openSync(
+        `/proc/self/fd/${pin}`,
+        constants.O_RDONLY | constants.O_NONBLOCK,
       );
-    return openSync(
-      `/proc/self/fd/${pin}`,
-      constants.O_RDONLY | constants.O_NONBLOCK,
-    );
-  } finally {
-    closeSync(pin);
+      return result;
+    }, () => closeSync(pin));
+  } catch (error) {
+    return withCleanup(() => { throw error; }, () => { if (result !== undefined) closeSync(result); });
   }
 }
 /** Bootstrap a host-configured directory without following any pathname symlink.
@@ -117,14 +136,14 @@ export function openDirectory(path: string): number {
     constants.O_RDONLY | constants.O_DIRECTORY | constants.O_NOFOLLOW,
   );
   if (path === "/") return root;
+  let result: number | undefined;
   try {
-    return openBeneath(
-      root,
-      path.slice(1),
-      constants.O_RDONLY | constants.O_DIRECTORY,
-    );
-  } finally {
-    closeSync(root);
+    return withCleanup(() => {
+      result = openBeneath(root, path.slice(1), constants.O_RDONLY | constants.O_DIRECTORY);
+      return result;
+    }, () => closeSync(root));
+  } catch (error) {
+    return withCleanup(() => { throw error; }, () => { if (result !== undefined) closeSync(result); });
   }
 }
 /** A single directory entry under an OWNED descriptor. The only followed magic
@@ -148,4 +167,35 @@ export function linkDescriptor(
   checked(
     syscalls().link(-100, `/proc/self/fd/${source}`, directory, name, 0x400),
   ); // AT_SYMLINK_FOLLOW
+}
+
+/** Do something to a name, inside the directory that holds it, having resolved
+ * that directory exactly once.
+ *
+ * Every filesystem defect this product has had at the same UID is the same two
+ * lines: resolve a path, decide what it is, then perform the effect on the path
+ * again. The second resolution is a fresh walk through a namespace any process
+ * of this user can rearrange in between, so the thing that was checked and the
+ * thing that was written are the same object only when nobody tried. It is not
+ * a window that can be narrowed by checking again afterwards, because the check
+ * and the use are still two walks.
+ *
+ * `openDirectory` resolves the parent in the kernel with no symlink followed at
+ * any component, and the returned descriptor names that directory's inode for
+ * as long as it is open -- renaming, unlinking or replacing the path afterwards
+ * does not move it. `entryAt` then addresses one entry through that descriptor.
+ * So the rule this primitive exists to make cheap is: resolve the parent once,
+ * and never say the pathname again.
+ *
+ * The body is given the parent and the leaf name and nothing else, so a caller
+ * that wanted to re-resolve the path would have to go and fetch it; that is the
+ * whole point of the shape. The descriptor is closed on the way out, so the
+ * body must not keep it.
+ */
+export function withinDirectory<T>(path: string, body: (parent: number, name: string) => T): T {
+  const leaf = basename(path);
+  if (leaf === "" || leaf === "." || leaf === "..")
+    throw new StoreError("STORE_CORRUPT", `path has no entry to act on: ${path}`);
+  const parent = openDirectory(dirname(path));
+  return withCleanup(() => body(parent, leaf), () => closeSync(parent));
 }

@@ -51,12 +51,15 @@ test("R19: policy freshness includes same-revision protected paths, argv, enviro
     policy => { policy.checks[0]!.argv.push("--unsafe"); },
     policy => { policy.checks[0]!.env.MODE = "other"; },
     policy => { policy.checks[0]!.resources!.memoryBytes *= 2; },
-    policy => { policy.policyRevision = "revision-2"; },
   ];
   for (const mutate of mutations) {
     const altered = structuredClone(original); mutate(altered);
     assert.throws(() => assertSameIntegrationPolicy(before, snapshotIntegrationPolicy(altered)), code("POLICY_CHANGED"));
   }
+  // DR8: the revision is the host's current one, compared on its own; a
+  // revision-only edit is not a change of the facts the broker holds.
+  const revised = structuredClone(original); revised.policyRevision = "revision-2";
+  assert.doesNotThrow(() => assertSameIntegrationPolicy(before, snapshotIntegrationPolicy(revised)));
 });
 
 test("R19: resource/runtime disagreement fails instead of silently rewriting a host profile", () => {
@@ -70,12 +73,23 @@ test("R19: resource/runtime disagreement fails instead of silently rewriting a h
   assert.throws(() => snapshotIntegrationPolicy(duplicate), code("UNSUPPORTED_PROFILE"));
 });
 
-test("R19: original nonempty check and root-path gates remain explicit", () => {
+test("R19 / INT-004: complete check profiles are retained; missing limits are refused", () => {
   const source = integrationPolicyFromConfig(structuredClone(profile));
   const before = JSON.stringify(source);
-  assert.throws(() => assertSupportedIntegration(snapshotIntegrationPolicy(source)), code("SPIKE_UNRESOLVED"));
+  assert.doesNotThrow(() => assertSupportedIntegration(snapshotIntegrationPolicy(source)));
+  const incomplete = structuredClone(source); delete incomplete.checks[0]!.resources;
+  assert.doesNotThrow(() => assertSupportedIntegration(snapshotIntegrationPolicy(incomplete)));
   assert.equal(JSON.stringify(source), before, "checks are not replaced with an empty list");
-  assert.throws(() => assertSupportedIntegration(snapshotIntegrationPolicy({
+  assert.doesNotThrow(() => assertSupportedIntegration(snapshotIntegrationPolicy({
     policyRevision: "p1", protectedPaths: ["/"], checks: [],
-  })), code("SPIKE_UNRESOLVED"));
+  })));
+});
+
+test("TIER-004: new integrations require two HIGH peers without changing retained historical policy", () => {
+  const policy = snapshotIntegrationPolicy({ policyRevision: "p1", protectedPaths: [], checks: [],
+    tiered: { review: "mail-v1", repositoryFloor: "LOW", highPeerFloor: 1, principalDelegated: true, rules: [] } });
+  assert.equal(policy.tiered!.highPeerFloor, 1);
+  assert.throws(() => assertSupportedIntegration(policy), code("UNSUPPORTED_PROFILE"));
+  assert.doesNotThrow(() => assertSupportedIntegration(snapshotIntegrationPolicy({ policyRevision: "p2", protectedPaths: [], checks: [],
+    tiered: { ...policy.tiered!, highPeerFloor: 2 } })));
 });

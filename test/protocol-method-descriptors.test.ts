@@ -21,17 +21,21 @@ type DescriptorMutation = {
 }[PublicMethod];
 export type MutationsExhaustive = Assert<Equal<DescriptorMutation, MutationMethod>>;
 
+// mailBodyBytes sits above the AV-07 floor for subjectBytes=64 (the smallest
+// servable bound, mail/review-bounds.ts minimumMailBodyBytes); under it the
+// configuration is refused before the checks these tests exercise run.
 const limits: ProtocolLimits = {
-  frameBytes: 4096, mailBodyBytes: 1024, subjectBytes: 64, addresses: 8,
+  frameBytes: 4096, mailBodyBytes: 4096, subjectBytes: 64, addresses: 8,
   replyReferences: 8, contextFiles: 8, contextBytes: 4096, bundleBytes: 8192,
   logBytes: 1024, batchMaxMessages: 8, idleStreamSeconds: 1, receiptWaitSeconds: 1,
 };
-const context = { actorNames: new Set(["alice"]), limits };
+const context = { limits };
 
-test("public/internal registries are closed, disjoint, and classify all 11 mutations", () => {
-  assert.equal(Object.keys(PUBLIC_METHODS).length, 16);
-  assert.equal(Object.keys(INTERNAL_METHODS).length, 10);
-  assert.equal(Object.values(PUBLIC_METHODS).filter(d => d.mode === "mutation").length, 11);
+test("public/internal registries are closed, disjoint, and classify all 13 mutations", () => {
+  assert.equal(Object.keys(PUBLIC_METHODS).length, 20);
+  assert.deepEqual(PUBLIC_METHODS["operation.read"].authority, ["current-actor", "own-operation"]);
+  assert.equal(Object.keys(INTERNAL_METHODS).length, 9);
+  assert.equal(Object.values(PUBLIC_METHODS).filter(d => d.mode === "mutation").length, 13);
   for (const [method, descriptor] of Object.entries(PUBLIC_METHODS)) {
     assert.equal(isInternalMethod(method), false);
     assert.equal(descriptor.key, descriptor.mode === "mutation" ? "required" : "forbidden");
@@ -56,11 +60,14 @@ test("conditional authority and stream policy are not replaced with capability-o
   assert.equal(PUBLIC_METHODS["context.publish"].stream, "required-content");
   assert.equal(INTERNAL_METHODS["batch.complete"].evidence, "boundary");
   assert.equal(INTERNAL_METHODS["principal.attach"].channel, "extension");
-  assert.equal(INTERNAL_METHODS["host.reconcile"].lease, "host-unit");
+  assert.equal(INTERNAL_METHODS["host.principalRelay"].lease, "host-unit");
 });
 
 test("the shared params decoder is closed and consumes the caller's host limits", () => {
   assert.deepEqual(decodePublicParams("agent.wait", {}, context), {});
+  assert.deepEqual(decodePublicParams("agent.wait", { observe: true }, context), { observe: true });
+  for (const observe of [false, null, 1, "true"])
+    assert.equal(decodePublicParams("agent.wait", { observe }, context), null);
   assert.equal(decodePublicParams("agent.wait", { request: "extra" }, context), null);
   const mail = { to: ["alice"], subject: "subject", kind: "message", body: "body" };
   assert.deepEqual(decodePublicParams("mail.send", mail, context), mail);
@@ -78,17 +85,14 @@ function configFixture() {
     schemaVersion: 1,
     society: "example",
     installation: { node: "/usr/bin/node", libdir: "/opt/oma", rootfs: "/opt/rootfs", deploymentDigest: "a".repeat(64) },
-    modelProfiles: { model: { provider: "test", model: "test", credentialRef: "test", codecRevision: "test",
-      pricingRevision: "test", maxInputTokens: 1, maxOutputTokens: 1, inferenceTimeoutSeconds: 1 } },
+    modelProfiles: { model: { provider: "test", model: "test", inferenceTimeoutSeconds: 1 } },
     agentProfiles: { resident: { modelProfile: "model", capabilities: [], delegable: [], childProfile: null,
       resources: Object.fromEntries(Object.entries(RESOURCE_FIELDS).map(([key, field]) => [key, Math.max(1, field.minInclusive)])) } },
     principalProfile: "resident",
     initialResidents: [{ name: "alice", profile: "resident", brief: "brief" }],
-    quota: { societyAgents: 4, lineageAgents: 4, societyUnits: 4, lineageUnits: 4,
-      principalReservedUnits: 1, inferenceSlots: 2, principalReservedSlots: 1, storageBytes: 1 },
+    quota: { societyAgents: 4, lineageAgents: 4, storageBytes: 1 },
     integration: { policyRevision: "test", protectedPaths: [], checks: [] },
     limits,
-    features: { notmuch: false, reflinkSeed: false, formalApproval: false, egress: false },
   };
 }
 

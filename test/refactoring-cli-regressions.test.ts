@@ -30,17 +30,17 @@ function validConfig() {
   return {
     schemaVersion: 1, society: "demo",
     installation: { node: "/usr/bin/node", libdir: "/usr/lib/oma", rootfs: "/srv/rootfs", deploymentDigest: "a".repeat(64) },
-    modelProfiles: { m: { provider: "p", model: "m", credentialRef: "c", codecRevision: "c1", pricingRevision: "p1",
-      maxInputTokens: 1, maxOutputTokens: 1, inferenceTimeoutSeconds: 1 } },
+    modelProfiles: { m: { provider: "p", model: "m", inferenceTimeoutSeconds: 1 } },
     agentProfiles: { p: { modelProfile: "m", capabilities: ["mail.send"], delegable: [], childProfile: null, resources } },
     principalProfile: "p", initialResidents: [{ name: "alice", profile: "p", brief: "work" }],
-    quota: { societyAgents: 10, lineageAgents: 10, societyUnits: 10, lineageUnits: 10, principalReservedUnits: 1,
-      inferenceSlots: 2, principalReservedSlots: 1, storageBytes: 1024 },
+    quota: { societyAgents: 10, lineageAgents: 10, storageBytes: 1024 },
     integration: { policyRevision: "p1", protectedPaths: [], checks: [] },
-    limits: { frameBytes: 1024, mailBodyBytes: 1024, subjectBytes: 128, addresses: 10, replyReferences: 10,
+    // mailBodyBytes clears the AV-07 floor for subjectBytes=128 (a maximal
+    // thread revision, mail/review-bounds.ts); the valid half of this test
+    // needs a configuration validation can accept.
+    limits: { frameBytes: 1024, mailBodyBytes: 4096, subjectBytes: 128, addresses: 10, replyReferences: 10,
       contextFiles: 10, contextBytes: 1024, bundleBytes: 1024, logBytes: 1024, batchMaxMessages: 10,
       idleStreamSeconds: 1, receiptWaitSeconds: 1 },
-    features: { notmuch: false, reflinkSeed: false, formalApproval: false, egress: false },
   };
 }
 function run(home: string, args: string[]) {
@@ -77,7 +77,8 @@ async function withPeer(home: string, args: string[], receipt: Receipt): Promise
         assert.ok(record(request)); assert.equal(typeof request.id, "string");
         assert.ok(typeof request.method === "string"); assert.ok(record(request.params));
         answered = true; methods.push(request.method); params.push(request.params);
-        socket.end(encodeFrame({ v: 1, id: request.id, ok: true, result: receipt }));
+        const result = request.method === "git.known" ? { hasCandidate: false, prerequisites: [] } : receipt;
+        socket.end(encodeFrame({ v: 1, id: request.id, ok: true, result }));
       } catch (error) { errors.push(error); socket.destroy(); }
     });
     socket.on("error", error => errors.push(error));
@@ -182,7 +183,7 @@ test("R01 IPC-008: missing frozen body is not an empty body or successful cached
     const positive = await withPeer(home, args, receipt);
     assert.equal(positive.code, 0, positive.stderr); assert.deepEqual(positive.methods, ["operation.get"]);
     unlinkSync(cache.bodyPath("same-key")); const result = run(home, args);
-    assert.equal(result.status, 3, result.stderr); assert.match(result.stderr, /body|본문|복구/);
+    assert.equal(result.status, 3, result.stderr); assert.match(result.stderr, /body|본문|복구|Recovery/);
   } finally { rmSync(home, { recursive: true, force: true }); }
 });
 
@@ -216,10 +217,11 @@ test("R01 CLI-002: maximum 96-character request key derives a valid export ref",
     git(["-c", "user.name=R01", "-c", "user.email=r01@example.invalid", "commit", "-qm", "fixture"]);
     const candidate = git(["rev-parse", "HEAD"]); const receipt: Receipt = { operation: OP, state: "pending" };
     const result = await withPeer(home, ["submit", "HEAD", "--request", key], receipt);
-    assert.equal(result.code, 0, result.stderr); assert.deepEqual(result.methods, ["git.submit"]);
-    assert.equal(result.params[0]?.candidate, candidate);
-    assert.match(String(result.params[0]?.exportRef), /^refs\/oma\/export\/[A-Za-z0-9._-]{1,96}$/);
-  } finally { rmSync(home, { recursive: true, force: true }); rmSync(join(tmpdir(), `oma-submit-${key}.bundle`), { force: true }); }
+    assert.equal(result.code, 0, result.stderr); assert.deepEqual(result.methods, ["git.known", "git.submit"]);
+    assert.deepEqual(result.params[0], { candidate });
+    assert.equal(result.params[1]?.candidate, candidate);
+    assert.match(String(result.params[1]?.exportRef), /^refs\/oma\/export\/[A-Za-z0-9._-]{1,96}$/);
+  } finally { rmSync(home, { recursive: true, force: true }); }
 });
 
 test("R01 IPC-008: corrupt cached JSON is never indistinguishable from absence", () => {

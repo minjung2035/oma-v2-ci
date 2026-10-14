@@ -12,7 +12,10 @@ export class StopSignal extends Error {
   constructor(readonly point: MailStopPoint) { super(`stop at ${point}`); }
 }
 
-export async function sendWithStop(mail: MailModule, store: Store, auth: AuthContext, key: string, input: MailInput, point?: MailStopPoint) {
+/** `halt` lets a child-process harness stop at the checkpoint itself, before any
+ * workflow cleanup runs; without it the stop is an exception, not process death. */
+export async function sendWithStop(mail: MailModule, store: Store, auth: AuthContext, key: string, input: MailInput, point?: MailStopPoint,
+  halt?: (point: MailStopPoint) => void) {
   if (!point) return mail.send(auth, key, input);
   const probeId = messageIdForOperation("op-00000000-0000-4000-8000-000000000001", 0);
   const root = dirname(dirname(mail.objectPath(probeId)));
@@ -21,7 +24,7 @@ export async function sendWithStop(mail: MailModule, store: Store, auth: AuthCon
   const transaction = store.transaction;
   let stopped = false;
   let inboxes = 0;
-  const stop = () => { stopped = true; throw new StopSignal(point); };
+  const stop = () => { stopped = true; halt?.(point); throw new StopSignal(point); };
   /** A directory fence fsync also runs before its entries are written
    * (ensureDurableDirectory). A boundary means the entry is already published,
    * so the condition waits for observable content. */

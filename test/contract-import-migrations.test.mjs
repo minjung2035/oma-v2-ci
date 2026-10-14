@@ -13,7 +13,10 @@ test("P2 import migration: each recorded subsystem preserves aliases and non-imp
   assert.ok(Object.keys(inventory.files).length > 0);
   for (const [file, { sourceBlob, ...expected }] of Object.entries(inventory.files)) {
     assert.match(sourceBlob, /^[0-9a-f]{40}$/);
-    assert.deepEqual(contractImportSnapshot(file, read(file), owners, { requireNarrow: true }), expected, file);
+    // Retain the migration baseline. Explicit later owner changes pin only the
+    // body; import bindings/aliases still compare against the original evidence.
+    const bodySha256 = inventory.bodyRefinements?.[file] ?? expected.bodySha256;
+    assert.deepEqual(contractImportSnapshot(file, read(file), owners, { requireNarrow: true }), { ...expected, bodySha256 }, file);
   }
 });
 test("P2 import migration: facade, wrong owner, alias drift, runtime import and code mutation cannot pass", () => {
@@ -35,8 +38,10 @@ test("P2 import migration: inline public DTO references resolve to the declared 
 });
 
 test("P17/P23 internal ports preserve untouched declarations and explicit ownership refinements", () => {
-  const { internalPorts, ownershipRefinement } = JSON.parse(read("test/fixtures/architecture-surfaces.json"));
-  const expected = { ...internalPorts, ...ownershipRefinement };
+  const { internalPorts, ownershipRefinement, candidateOwnershipRefinement } = JSON.parse(read("test/fixtures/architecture-surfaces.json"));
+  // DR29: candidate checks have their own runtime owner. The resident sandbox
+  // loses only its dead candidate method and checkResources composition field.
+  const expected = { ...internalPorts, ...ownershipRefinement, ...candidateOwnershipRefinement };
   const files = ["src/module-ports.ts", "src/ports/ledger.ts", "src/ports/runtime.ts"];
   assert.deepEqual(mergeSurfaces(files.map(file => declarationSurface(read(file), file))), expected);
 });

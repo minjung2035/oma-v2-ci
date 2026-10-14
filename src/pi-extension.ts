@@ -1,97 +1,137 @@
-// PI-002/BATCH-002: one compiled trusted extension file, no host runtime imports.
-// A custom message is a view, NOT session consumption or S-03 completion proof.
+/** The trusted Pi extension OMA loads into every engine it starts (PI-001).
+ *
+ * This file only composes; each responsibility lives in `src/extension/`. The
+ * whole extension imports no OMA runtime module — only Node built-ins, the
+ * engine's extension types and its schema library — so the same compiled
+ * files run on the host and inside a Resident's sandbox. The architecture
+ * checker holds that closure (`extension-closure`).
+ */
+import { realpathSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
-import { closeSync, constants, fstatSync, openSync, readSync } from "node:fs";
+import { registerDelivery } from "./extension/delivery.js";
+import { startEgressBridge } from "./extension/egress-bridge.js";
+import { startInferenceBridge } from "./extension/inference-bridge.js";
+import { omaToolNames, registerOmaTools } from "./extension/mail-tools.js";
+import { integerEnv } from "./extension/shared.js";
+import { PrincipalChannel } from "./extension/principal-channel.js";
+import { createToolProvenance, verifiedExtensionPaths, VERIFIED_EXTENSIONS_ENV } from "./extension/provenance.js";
+import { registerPromptBoundary } from "./extension/prompt-boundary.js";
+import { registerToolSurface } from "./extension/tool-surface.js";
+import { TOOL_SCOPE_ENV, TOOL_SCOPE_SANDBOX, PACKAGE_STORE_ENV, guardWorkspaceTools } from "./extension/workspace-guard.js";
+import { containWorkspaceTools, createContainedWriter } from "./extension/contained-tools.js";
+import { registerLspTools } from "./extension/lsp-tools.js";
+import { registerHashlineTools } from "./extension/hashline-tools.js";
+import { registerWebTools } from "./extension/web-tools.js";
+import { registerMcpTools } from "./extension/mcp-tools.js";
+import { registerAskUserQuestion } from "./extension/ask-user-question.js";
 
-export interface BatchView {
-  id: string; agent: string; incarnation: number; deliveryMode: "steer" | "followUp";
-  notice: string; messageIds: string[];
-}
-export interface BatchViewLimits { frameBytes: number; batchMaxMessages: number }
-const UUID_V4 = "[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}";
-const BATCH_ID = new RegExp(`^b-${UUID_V4}$`);
-const MESSAGE_ID = new RegExp(`^m-${UUID_V4}-(\\d+)$`);
-const ACTOR_NAME = /^[a-z][a-z0-9-]{0,31}$/;
-const RESERVED_ACTORS = new Set(["principal", "commons", "residents", "topic", "broker", "principal-relay", "reconcile"]);
-function isValidBatchActor(name: string): boolean {
-  return ACTOR_NAME.test(name) && !RESERVED_ACTORS.has(name) && !name.startsWith("topic-");
-}
-function isValidMessageId(id: string): boolean {
-  const match = MESSAGE_ID.exec(id);
-  return match !== null && Number.isSafeInteger(Number(match[1])) && Number(match[1]) >= 0;
-}
-function validLimits(value: BatchViewLimits | undefined): value is BatchViewLimits {
-  return value !== undefined && Number.isSafeInteger(value.frameBytes) && value.frameBytes > 0 &&
-    Number.isSafeInteger(value.batchMaxMessages) && value.batchMaxMessages > 0;
-}
-/** No generated source: the equivalent host owner is protocol/batch-view.ts.
- * test/id-contracts.test.ts and test/r28-adapter-boundaries.test.ts pin the
- * independent identity, schema and UTF-8 byte decisions of both implementations.
- */
-export function decodeBatchViewText(raw: string, batchId: string, limits: BatchViewLimits): BatchView | null {
-  if (!validLimits(limits) || !BATCH_ID.test(batchId) || Buffer.byteLength(raw) > limits.frameBytes) return null;
-  try {
-    const parsed: unknown = JSON.parse(raw);
-    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return null;
-    const value = parsed as Record<string, unknown>;
-    const keys = ["id", "agent", "incarnation", "deliveryMode", "notice", "messageIds"];
-    if (Object.keys(value).length !== keys.length || Object.keys(value).some(key => !keys.includes(key)) ||
-      value.id !== batchId || typeof value.agent !== "string" || !isValidBatchActor(value.agent) ||
-      typeof value.incarnation !== "number" || !Number.isSafeInteger(value.incarnation) || value.incarnation < 0 ||
-      (value.deliveryMode !== "steer" && value.deliveryMode !== "followUp") || typeof value.notice !== "string" ||
-      Buffer.byteLength(value.notice) > limits.frameBytes || !Array.isArray(value.messageIds) || value.messageIds.length > limits.batchMaxMessages ||
-      value.messageIds.some(id => typeof id !== "string" || !isValidMessageId(id)) || new Set(value.messageIds).size !== value.messageIds.length) return null;
-    return { id: value.id, agent: value.agent, incarnation: value.incarnation, deliveryMode: value.deliveryMode,
-      notice: value.notice, messageIds: [...value.messageIds] as string[] };
-  } catch { return null; }
-}
-function environmentLimits(): BatchViewLimits | undefined {
-  const source = process.env.OMA_FRAME_BYTES ?? "";
-  const count = process.env.OMA_BATCH_MAX_MESSAGES ?? "";
-  if (!/^[1-9][0-9]*$/.test(source) || !/^[1-9][0-9]*$/.test(count)) return undefined;
-  const limits = { frameBytes: Number(source), batchMaxMessages: Number(count) };
-  return validLimits(limits) ? limits : undefined;
-}
+export { decodeBatchViewText, readBatchView } from "./extension/batch-view.js";
+export { OMA_TOOL_NAMES, cliEnvironment, registerOmaTools } from "./extension/mail-tools.js";
+export { PrincipalChannel, PRINCIPAL_CHANNEL_ENV, PRINCIPAL_CHANNEL_FD } from "./extension/principal-channel.js";
+export { SOCIETY_FENCE_ENV, SOCIETY_FENCE_FD } from "./client/fence.js";
+export { PI_ADAPTER_REVISION, PI_BOUNDARY_PREFIX } from "./extension/delivery.js";
+export { createToolProvenance, verifiedExtensionPaths, VERIFIED_EXTENSIONS_ENV } from "./extension/provenance.js";
+export { registerPromptBoundary } from "./extension/prompt-boundary.js";
+export {
+  expandedActiveTools, initialActiveTools, parseSurfacePlan, registerToolSurface, type SurfaceFence,
+} from "./extension/tool-surface.js";
 
-export default function (pi: ExtensionAPI): void {
-  pi.registerCommand("oma-deliver", {
-    description: "Deliver an OMA notification batch (trusted broker view)",
-    handler: async (args: string, ctx) => {
-      const batchId = args.trim().split(/\s+/)[0] ?? "";
-      if (!BATCH_ID.test(batchId)) { ctx.ui.notify("oma-deliver: invalid batch id", "error"); return; }
-      const batch = readBatchView(batchId);
-      if (!batch) { ctx.ui.notify("oma-deliver: batch view unavailable, invalid or over limit", "error"); return; }
-      await pi.sendMessage({ customType: "oma-mail", content: batch.notice, display: true,
-        details: { batchId: batch.id, messageIds: batch.messageIds } }, { triggerTurn: true, deliverAs: batch.deliveryMode });
-      // No batch.complete request, receiptPath, tool event or agent_end attestation.
-    },
+export default async function extension(pi: ExtensionAPI) {
+  const workspace = realpathSync(process.cwd());
+  // Holds nothing unless the product attached its private channel, which it
+  // does only for the Principal's engine.
+  const channel = PrincipalChannel.open();
+  const sandboxed = process.env[TOOL_SCOPE_ENV] === TOOL_SCOPE_SANDBOX;
+  const waitRequested = registerOmaTools(pi, workspace, channel);
+  const ownTools = omaToolNames(channel.attached);
+  // D25: what may run is decided by where a tool came from -- a builtin, or an
+  // extension file this engine was spawned with after digest verification --
+  // never by the name it answers to. The tools this file registers are proven
+  // by its own path, so OMA's tools stay authorized even when the verified
+  // list is missing, and a shadow of an OMA name is not OMA's tool.
+  const verified = verifiedExtensionPaths(process.env[VERIFIED_EXTENSIONS_ENV]);
+  const provenance = createToolProvenance(
+    () => pi.getAllTools(),
+    fileURLToPath(import.meta.url),
+    verified.paths,
+  );
+  // A verified-path list that was written but cannot be read is a policy the
+  // engine is holding without being able to prove: the surface cannot be
+  // trusted, so the session must not start.
+  if (verified.malformed)
+    pi.on("session_start", () => {
+      try { process.stderr.write(`${VERIFIED_EXTENSIONS_ENV} is malformed; the verified extension set cannot be proven\n`); } catch { /* best effort */ }
+      process.exit(1);
+    });
+  // Society's prompt policy: the role prompt owns identity, append channels
+  // stay closed, the Principal's context files stay inside its workspace, and
+  // the active tools' guidance reaches the prompt Pi's own composition omits.
+  registerPromptBoundary(pi, workspace, channel.attached);
+  registerToolSurface(pi, ownTools, { permitted: provenance.permitted, own: provenance.own });
+  // C18: the environment names the installed-package store's real root, which
+  // the engine's argv advertised resources under. A read may reach it; one
+  // that cannot be resolved permits nothing, so the guard fails closed. The
+  // same roots go to the contained read tools, so a path the guard admitted
+  // under the store is the path the read effect reaches there.
+  const readableRoots: string[] = [];
+  const packageStore = process.env[PACKAGE_STORE_ENV];
+  if (packageStore !== undefined) {
+    try { readableRoots.push(realpathSync(packageStore)); } catch { /* an unobservable store root permits no reads */ }
+  }
+  guardWorkspaceTools(pi, workspace, sandboxed, channel.attached, provenance.permitted, readableRoots);
+  // One serialized writer serves every mutation path: the contained write
+  // and edit tools, and lsp_fix's contained application of server-computed
+  // edits. Containment is decided inside that serialization.
+  const workspaceWriter = createContainedWriter(workspace, null);
+  containWorkspaceTools(pi, workspace, null, sandboxed, channel.attached, readableRoots, workspaceWriter);
+  // The bundled pi-lsp extension: vendored bytes verified before tools are
+  // registered -- and before any vendored module evaluates, so the await is
+  // load-bearing -- code_intel's three tools behind it, lsp_fix reaching
+  // the filesystem only through the shared contained writer.
+  await registerLspTools(pi, { workspace, readOnly: channel.attached, write: workspaceWriter });
+  // BL3: the bundled pi-hashline-edit-pro extension -- same fail-closed
+  // verification before any vendored module evaluates. It registers the
+  // anchored `read` (replacing the contained read under the same name) and,
+  // for a role that may write, the file_edit group (replace,
+  // replace_within, insert) whose commits reach the filesystem only
+  // through the shared contained writer. Registered after the contained
+  // tools so its `read` is the effective registration.
+  await registerHashlineTools(pi, {
+    workspace,
+    readableRoots,
+    sandboxed,
+    readOnly: channel.attached,
+    write: workspaceWriter,
   });
-}
-
-/** Reads at most the configured source bound plus one overflow-detection byte.
- * The FD pins the opened regular file; a symlink/FIFO/device is never consumed.
- * Production limits are supplied by the trusted sandbox plan's clear environment.
- */
-export function readBatchView(batchId: string, viewDir = "/run/oma-view", configured?: BatchViewLimits): BatchView | null {
-  const limits = configured ?? environmentLimits();
-  if (!validLimits(limits) || !BATCH_ID.test(batchId) || !viewDir.startsWith("/") || viewDir.includes("\0") ||
-    viewDir.split("/").some(part => part === "." || part === "..")) return null;
-  let fd: number | undefined;
-  try {
-    fd = openSync(`${viewDir}/batch-${batchId}.json`, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);
-    const before = fstatSync(fd);
-    if (!before.isFile() || !Number.isSafeInteger(before.size) || before.size < 1 || before.size > limits.frameBytes) return null;
-    const buffer = Buffer.alloc(before.size + 1);
-    let total = 0;
-    while (total < buffer.length) {
-      const count = readSync(fd, buffer, total, buffer.length - total, total);
-      if (count === 0) break;
-      total += count;
-    }
-    const after = fstatSync(fd);
-    if (total !== before.size || after.size !== before.size || after.dev !== before.dev || after.ino !== before.ino ||
-      after.mtimeMs !== before.mtimeMs || after.ctimeMs !== before.ctimeMs) return null;
-    return decodeBatchViewText(new TextDecoder("utf-8", { fatal: true }).decode(buffer.subarray(0, total)), batchId, limits);
-  } catch { return null; }
-  finally { if (fd !== undefined) closeSync(fd); }
+  // BL4: the bundled pi-web-access extension -- same fail-closed bundle
+  // verification before any vendored module evaluates. The adapter
+  // installs the Society web policy (egress pin, ambient-discovery refusals)
+  // and drives upstream's own extension factory through a facade that
+  // admits exactly the web_research group: web_search, source_check,
+  // fetch_content, get_search_content. Commands and curator/browser workflows
+  // use Pi's extension API without changing the four model tool names.
+  // Shared network access makes fixed loopback ports unsafe across Workers.
+  // Publish the bridges' actual ports before adapters capture their proxy pin.
+  await startInferenceBridge(pi);
+  await startEgressBridge(pi);
+  await registerWebTools(pi);
+  // BL5: the bundled pi-mcp-adapter extension -- same fail-closed bundle
+  // verification before any vendored module evaluates. The adapter
+  // installs the Society MCP policy (OMA-owned programmatic config, egress
+  // pin, child-env scrub, credential-store pin, scratch ownership) and
+  // drives upstream's own createMcpAdapter factory through a facade that
+  // admits exactly the `mcp` proxy tool -- no second grouping layer, no
+  // commands/flags/shortcuts, and Pi's built-in MCP can never coexist
+  // (`builtin:` paths are filtered out under --no-extensions, and the
+  // facade's absent registerMcpServer keeps piSupportsMcp false).
+  // `interactive` follows the channel: only the Principal's attached
+  // engine may honor sampling/elicitation settings.
+  await registerMcpTools(pi, { interactive: channel.attached });
+  // BL2: ask_user_question exists only where a human sits at the terminal.
+  // The Principal's engine (channel attached) registers it here; Personal
+  // loads the same file as its own `-e` extension; Residents and Workers
+  // never load it, and no surface plan names it for them.
+  if (channel.attached) registerAskUserQuestion(pi);
+  registerDelivery(pi, waitRequested);
 }

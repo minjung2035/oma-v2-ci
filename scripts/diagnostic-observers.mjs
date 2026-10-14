@@ -97,5 +97,11 @@ export function createDiagnosticObservers(context, options = {}) {
       return value.activeState === "unknown" ? { kind: "unknown", reason: "UNIT_OBSERVATION_INVALID" } : { kind: "present", value };
     } catch { return { kind: "unknown", reason: "UNIT_OBSERVATION_UNAVAILABLE" }; }
   };
-  return Object.freeze({ git: Object.freeze({ ref: git.ref.bind(git), commit: git.commit.bind(git), ancestry: git.ancestry.bind(git), contextTree }), units, get commands() { return commands; } });
+  // Diagnostics report an unavailable observation, not a failed repair. The
+  // observer can refuse malformed arguments before its process runner is called.
+  const observe = method => (...args) => {
+    try { return method.apply(git, args); }
+    catch { return { kind: "unknown", reason: "GIT_OBSERVATION_UNAVAILABLE", evidence: unavailable() }; }
+  };
+  return Object.freeze({ git: Object.freeze({ ref: observe(git.ref), commit: observe(git.commit), ancestry: observe(git.ancestry), contextTree }), units, get commands() { return commands; } });
 }

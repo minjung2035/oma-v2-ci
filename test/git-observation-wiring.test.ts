@@ -30,7 +30,7 @@ for (const path of ["M secret.txt", "A", "tab\tname", "line\nname"]) {
       const mail = new MailModule({ stateRoot, society: "demo" }, store, 16);
       const module = new GitModule({
         stateRoot, society: "demo", projectGit: join(stateRoot, "project.git"), contextGit: join(stateRoot, "context.git"),
-        worldDir: join(stateRoot, "world"), quarantineTmpBytes: 1048576, checkTimeoutSeconds: 30,
+        worldDir: join(stateRoot, "world"), quarantineTmpBytes: 1048576,
       }, store, mail, { policyRevision: "p1", protectedPaths: [path], checks: [] });
       const commands: string[][] = [];
       let casCalls = 0;
@@ -43,6 +43,7 @@ for (const path of ["M secret.txt", "A", "tab\tname", "line\nname"]) {
         if (args.includes("for-each-ref")) return response(`${CANDIDATE}\n`);
         if (args.includes("rev-parse")) return response(`${BASE}\n`);
         if (args.includes("--is-ancestor")) return response();
+        if (args.includes("ls-tree")) return response();
         if (args.includes("diff-tree")) return response(`M\0${path}\0`);
         throw new Error(`unexpected Git observation: ${JSON.stringify(args)}`);
       });

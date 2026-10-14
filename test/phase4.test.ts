@@ -9,7 +9,7 @@ import {
   mkdirSync, readFileSync, symlinkSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { spawn, spawnSync } from "node:child_process";
 import { Store, StoreError } from "../src/store.js";
 import { UnitsModule, renderUnit, unitName, UNIT_TPL_DIR } from "../src/units.js";
@@ -20,11 +20,16 @@ import { Broker, peerCgroup } from "../src/broker.js";
 import { ViewsModule } from "../src/views.js";
 import { generateOperationId } from "../src/ids.js";
 import { requestHash } from "../src/hash.js";
+import { canonicalResourceLimits } from "../src/domain/resources.js";
+import { encodedResidentToolSurface } from "../src/domain/tool-surface.js";
+import { runnerReceiptPathAt } from "../src/storage/paths.js";
+import { StatusRefresh } from "../src/views/status-refresh.js";
 import { makeValidAgent } from "./fixtures/spec.js";
 import { TEST_VIEW_LIMITS } from "./fixtures/limits.js";
 import type { AuthContext, Capability, ResolvedAgentSpec, ResourceLimits } from "../implementation/contracts.js";
 
 import { cleanupOwnedSystemdUnits, requireSystemdTestManager } from "./fixtures/systemd.js";
+import { goalPublishedAt } from "./fixtures/goal.js";
 requireSystemdTestManager();
 const NODE = process.execPath;
 const TEST_RESOURCES: ResourceLimits = {
@@ -42,6 +47,19 @@ interface Env {
   lifecycle: LifecycleModule;
   views: ViewsModule;
 }
+/** P0V-59: a unit a test writes in place of a Resident's rendered one carries
+ * the identity lines that one does -- its Description and its owner, the state
+ * tree -- so the units module takes it for this society's unit, as it would a
+ * unit it rendered. A unit without them is another owner's, and no effect of
+ * this society reaches it. */
+function ownedBy(env: Env, agent: string): string {
+  const lines = readFileSync(join(UNIT_TPL_DIR, "resident.service.in"), "utf8").split("\n")
+    .filter(line => line.startsWith("Description=") || line.startsWith("X-OMA-Owner="));
+  const state = join(env.dir, "state");
+  return renderUnit(lines.join("\n"), { node: NODE, libdir: "/usr/lib/oma", state, society: env.society, agent,
+    config: join(state, "config.json"), run: join(state, "oma", env.society) });
+}
+
 function envOf(): { env: Env; cleanup: () => void } {
   const dir = mkdtempSync(join(tmpdir(), "oma-t4-"));
   const xdg = join(dir, "xdg");
@@ -53,7 +71,7 @@ function envOf(): { env: Env; cleanup: () => void } {
   mkdirSync(state, { recursive: true });
   const store = new Store(join(state, "runtime.sqlite"));
   const units = new UnitsModule(society,
-    { node: NODE, libdir: "/usr/lib/oma", state, society, agent: "" },
+    { node: NODE, libdir: "/usr/lib/oma", state, society, agent: "", config: join(state, "config.json"), run: join(state, "oma", society) },
     join(xdg, "systemd", "user"), { p: TEST_RESOURCES, child: TEST_RESOURCES });
   // Batch views require the host-configured frame and manifest limits; without
   // them the preparation boundary fails closed with UNSUPPORTED_PROFILE.
@@ -146,8 +164,8 @@ test("phase4: unit render substitutes placeholders and rejects NUL/newline", () 
 test("phase4: rendered templates pass systemd-analyze --user verify", () => {
   const { env, cleanup } = envOf();
   try {
-    const names = ["broker.service.in", "resident.service.in", "resident.path.in",
-      "principal-relay.service.in", "principal.path.in", "reconcile.service.in", "reconcile.timer.in"];
+    const names = ["resident.service.in", "resident.path.in",
+      "principal-relay.service.in", "principal.path.in"];
     // Unit dependencies (BindsTo/After) resolve through the user unit search
     // path, so the rendered set is written where systemd looks for it.
     const out = join(env.xdg, "systemd", "user");
@@ -156,13 +174,20 @@ test("phase4: rendered templates pass systemd-analyze --user verify", () => {
       const [kind, suffix] = tpl.replace(".in", "").split(".") as [string, "service" | "path" | "timer"];
       return unitName(env.society, kind === "resident" ? "a" : kind, suffix);
     };
+    // The product runs the broker itself, so there is one deployment shape:
+    // units bound to no fixed broker unit.
     const written: string[] = [];
     for (const tpl of names) {
       const text = readFileSync(join(UNIT_TPL_DIR, tpl), "utf8");
       const file = fileFor(tpl);
       writeFileSync(join(out, file), renderUnit(text, {
         node: NODE, libdir: process.cwd(), state: join(env.dir, "state"), society: env.society, agent: "a",
-        profileHex: Buffer.from("p").toString("hex"), memoryBytes: TEST_RESOURCES.memoryBytes,
+        config: join(env.dir, "config.json"), run: join(env.dir, "run", "oma", env.society),
+        profileHex: Buffer.from("p").toString("hex"), resourcesHex: Buffer.from(canonicalResourceLimits(TEST_RESOURCES)).toString("hex"),
+        // The same canonical plan UnitsModule installs (D23/TSP-005) -- the
+        // renderer requires the input the template names.
+        toolSurfaceHex: Buffer.from(encodedResidentToolSurface(), "utf8").toString("hex"),
+        memoryBytes: TEST_RESOURCES.memoryBytes,
         tasks: TEST_RESOURCES.tasks, cpuQuotaPercent: TEST_RESOURCES.cpuQuotaPercent,
       }));
       written.push(file);
@@ -173,7 +198,7 @@ test("phase4: rendered templates pass systemd-analyze --user verify", () => {
     assert.equal(r.error, undefined);
     assert.equal(r.signal, null);
     assert.equal(r.status, 0, r.stderr);
-    assert.equal(written.length, 7);
+    assert.equal(written.length, 4);
   } finally { cleanup(); }
 });
 
@@ -198,7 +223,7 @@ test("UNIT-002: systemd executes literal paths containing spaces and specifiers"
   } finally { cleanup(); }
 });
 
-test("T36: start-limit is exposed, never auto-reset; explicit start repairs", async () => {
+test("T36: explicit start-limit evidence is exposed; ambiguous failure stays ambiguous without reset", async () => {
   const { env, cleanup } = envOf();
   try {
     seedPrincipalAndA(env.store);
@@ -206,7 +231,7 @@ test("T36: start-limit is exposed, never auto-reset; explicit start repairs", as
     env.units.ensureResident("a", "p");
     const unitFile = join(env.xdg, "systemd", "user", unitName(env.society, "a", "service"));
     writeFileSync(unitFile, `[Unit]
-Description=test fail
+${ownedBy(env, "a")}
 StartLimitIntervalSec=60s
 StartLimitBurst=5
 [Service]
@@ -223,12 +248,18 @@ WantedBy=default.target
     while (waited < 12000) {
       await new Promise(resolve => setTimeout(resolve, 200));
       waited += 200;
-      if (env.units.observe("a").result === "start-limit-hit") break;
+      if (env.units.observe("a").activeState === "failed") break;
     }
-    let sawStartLimit = false;
-    for (let i = 0; i < 10; i++) if (env.units.startLimitStatus("a") !== null) sawStartLimit = true;
-    assert.equal(sawStartLimit, true);
-    assert.equal(env.units.observe("a").activeState, "failed");
+    const failed = env.units.observe("a");
+    assert.equal(failed.activeState, "failed");
+    const explicit = failed.result === "start-limit-hit";
+    assert.ok(explicit || failed.result === "exit-code");
+    for (let i = 0; i < 10; i++) assert.equal(env.units.startLimitStatus("a"), explicit ? "start_limit" : null);
+    // DR27/P0-5 supersedes WP25's cumulative-counter heuristic. Some managers
+    // retain exit-code: expose that failure, not a guessed cause or a repair.
+    assert.throws(() => env.units.start("a", false), (error: unknown) => error instanceof StoreError &&
+      error.code === (env.units.startLimitStatus("a") === "start_limit" ? "START_LIMIT" : "INTERNAL_ERROR"));
+    assert.equal(env.units.observe("a").activeState, "failed", "a refused start reset the failed state");
   } finally { cleanup(); }
 });
 
@@ -239,7 +270,7 @@ test("T37: stop saves new mail, empties cgroup, leaves unit inactive", async () 
     env.store.transaction(tx => tx.updateAgent({ name: "a", desired: "enabled" }));
     env.units.ensureResident("a", "p");
     const unitFile = join(env.xdg, "systemd", "user", unitName(env.society, "a", "service"));
-    writeFileSync(unitFile, `[Unit]\nDescription=test sleep\n[Service]\nType=exec\nExecStart=/usr/bin/sleep 60\nRestart=no\n[Install]\nWantedBy=default.target\n`);
+    writeFileSync(unitFile, `[Unit]\n${ownedBy(env, "a")}\n[Service]\nType=exec\nExecStart=/usr/bin/sleep 60\nRestart=no\n[Install]\nWantedBy=default.target\n`);
     spawnSync("systemctl", ["--user", "daemon-reload"], { stdio: "ignore" });
     spawnSync("systemctl", ["--user", "start", unitName(env.society, "a", "service")], { stdio: "ignore" });
     assert.equal(env.store.getAgent("a")!.incarnation, 1);
@@ -264,7 +295,7 @@ test("T38: stopped actor with an unconfirmed stale cgroup cannot start; incarnat
     env.store.transaction(tx => tx.updateAgent({ name: "a", desired: "stopped" }));
     env.units.ensureResident("a", "p");
     const unitFile = join(env.xdg, "systemd", "user", unitName(env.society, "a", "service"));
-    writeFileSync(unitFile, `[Unit]\nDescription=test stale sleep\n[Service]\nType=exec\nExecStart=/usr/bin/sleep 60\nRestart=no\n[Install]\nWantedBy=default.target\n`);
+    writeFileSync(unitFile, `[Unit]\n${ownedBy(env, "a")}\n[Service]\nType=exec\nExecStart=/usr/bin/sleep 60\nRestart=no\n[Install]\nWantedBy=default.target\n`);
     spawnSync("systemctl", ["--user", "daemon-reload"], { stdio: "ignore" });
     spawnSync("systemctl", ["--user", "start", unitName(env.society, "a", "service")], { stdio: "ignore" });
     // A separate current manager reaches the death oracle; the stopped target's
@@ -282,7 +313,7 @@ test("REC-001: pending start and stop effects settle from actual systemd state",
     seedGov(env);
     env.units.ensureResident("a", "p");
     const service = join(env.xdg, "systemd", "user", unitName(env.society, "a", "service"));
-    writeFileSync(service, "[Unit]\nDescription=reconcile action\n[Service]\nType=exec\nExecStart=/usr/bin/sleep 60\nRestart=no\n[Install]\nWantedBy=default.target\n");
+    writeFileSync(service, `[Unit]\n${ownedBy(env, "a")}\n[Service]\nType=exec\nExecStart=/usr/bin/sleep 60\nRestart=no\n[Install]\nWantedBy=default.target\n`);
     spawnSync("systemctl", ["--user", "daemon-reload"], { stdio: "ignore" });
     const startId = generateOperationId();
     env.store.transaction(tx => tx.acceptOperation({
@@ -332,8 +363,20 @@ test("SEQ-002: unknown old-run death stops startup before mail reconciliation", 
     Reflect.set(env.units, "confirmDead", () => false);
     Reflect.set(env.units, "stop", () => { throw new StoreError("RUN_TERMINATION_UNKNOWN", "injected unknown death"); });
     Reflect.set(env.mail, "reconcilePending", () => assert.fail("mail reconciled before death proof"));
-    const reconcile = new ReconcileModule(env.store, env.mail, null, env.units, env.lifecycle, { projectGit: join(env.dir, "state", "repos", "project.git"), activationAllowed: () => true });
-    await assert.rejects(reconcile.startup(false), /injected unknown death/);
+    const reconcile = new ReconcileModule(env.store, env.mail, null, env.units, env.lifecycle, { projectGit: join(env.dir, "state", "repos", "project.git"), hasGoal: () => true, activationAllowed: () => true });
+    // Every Resident gets its stop attempt, so the seeded pair's failures
+    // arrive aggregated under the typed outer error -- not collapsed into
+    // the first attempt's message. The cause carries each injected death.
+    await assert.rejects(reconcile.startup(false), (error: unknown) => {
+      assert.ok(error instanceof StoreError && error.code === "RUN_TERMINATION_UNKNOWN", String(error));
+      assert.match(error.message, /cannot confirm every Resident stopped/);
+      assert.ok(error.cause instanceof AggregateError, "multiple stop failures arrive aggregated");
+      assert.equal(error.cause.errors.length, 2);
+      for (const entry of error.cause.errors)
+        assert.ok(entry instanceof StoreError && entry.code === "RUN_TERMINATION_UNKNOWN" &&
+          /injected unknown death/.test(entry.message), String(entry));
+      return true;
+    });
   } finally { cleanup(); }
 });
 
@@ -343,8 +386,7 @@ test("LIFE-009: bootstrap freezes all seeds before effects and never reseeds a r
     const from = seedProjectGit(env);
     const config: Parameters<LifecycleModule["bootstrap"]>[0] = {
       principalProfile: "p", initialResidents: [{ name: "child", profile: "p", brief: "seed" }],
-      modelProfiles: { m: { provider: "none", model: "none", credentialRef: "none", codecRevision: "none", pricingRevision: "none",
-        maxInputTokens: 1, maxOutputTokens: 1, inferenceTimeoutSeconds: 1 } },
+      modelProfiles: { m: { provider: "none", model: "none", inferenceTimeoutSeconds: 1 } },
       agentProfiles: { p: { modelProfile: "m", capabilities: ["mail.send"], delegable: [], childProfile: null,
         resources: { memoryBytes: 3221225472, tasks: 128, cpuQuotaPercent: 200, tmpBytes: 1048576,
           workspaceBytes: 1048576, stagingBytes: 1048576, checkTimeoutSeconds: 30 } } },
@@ -363,7 +405,7 @@ test("LIFE-009: bootstrap freezes all seeds before effects and never reseeds a r
     mkdirSync(goal, { recursive: true });
     const start = env.units.start.bind(env.units);
     Reflect.set(env.units, "start", () => assert.fail("activation before broker READY"));
-    const reconcile = new ReconcileModule(env.store, env.mail, null, env.units, env.lifecycle, { projectGit: join(env.dir, "state", "repos", "project.git"), activationAllowed: () => true });
+    const reconcile = new ReconcileModule(env.store, env.mail, null, env.units, env.lifecycle, { projectGit: join(env.dir, "state", "repos", "project.git"), hasGoal: () => true, activationAllowed: () => true });
     await reconcile.startup(false);
     assert.equal(env.store.getOperationById(op.id)!.state, "pending");
     assert.equal(env.store.getAgent("child")!.desired, "enabled");
@@ -408,12 +450,12 @@ test("LIFE-007 race: concurrent stable-name creates publish only one mail object
     assert.equal(plans.filter(plan => plan.existingCreation === null).length, 1);
     assert.equal(plans.filter(plan => plan.initialMessage !== null).length, 1);
     // Each racing attempt freezes its own initial EML before its intent
-    // transaction, so the loser leaves one unreferenced object (FS-007) next to
-    // the winner's published object. Only the winner's object is referenced.
+    // transaction. WP17/WP20: the loser's preaccept scope owns exactly the
+    // object it froze and settles it as not accepted, so only the winner's
+    // published object remains (FS-007 without a leak).
     const objects = readdirSync(join(env.dir, "state", "mail", "objects"));
     const winner = plans.find(plan => plan.initialMessage !== null)!.initialMessage.id as string;
-    assert.ok(objects.includes(`${winner}.eml`), JSON.stringify(objects));
-    assert.equal(objects.length, 2, JSON.stringify(objects));
+    assert.deepEqual(objects, [`${winner}.eml`]);
     assert.equal(env.store.pendingDeliveries("child").length, 1);
   } finally { cleanup(); }
 });
@@ -473,7 +515,7 @@ try {
   log("ok"); process.exit(0);
 } catch (error) { log(String(error?.code ?? "") + " " + String(error?.message ?? error)); process.exit(2); }`);
     const service = join(env.xdg, "systemd", "user", unitName(env.society, "dynamic", "service"));
-    writeFileSync(service, `[Unit]\nDescription=dynamic runner\n[Service]\nType=exec\nEnvironment=OMA_RUN_ROOT=${join(env.dir, "R")}\nEnvironment=OMA_AGENT=dynamic\nExecStart=${NODE} ${wrapper}\nRestart=no\n`);
+    writeFileSync(service, `[Unit]\n${ownedBy(env, "dynamic")}\n[Service]\nType=exec\nEnvironment=OMA_RUN_ROOT=${join(env.dir, "R")}\nEnvironment=OMA_AGENT=dynamic\nExecStart=${NODE} ${wrapper}\nRestart=no\n`);
     spawnSync("systemctl", ["--user", "daemon-reload"], { stdio: "ignore" });
     broker = new Broker(env.store, env.mail, env.units, env.views, env.lifecycle, null, null, {
       stateRoot: join(env.dir, "state"), runRoot: join(env.dir, "R"), society: env.society, hasGoal: () => true,
@@ -562,7 +604,7 @@ setInterval(() => {}, 1000);
     assert.ok(probes.pending?.result, `probe failure: ${JSON.stringify(probes)}`);
     assert.deepEqual(probes.pending.result.recoverableBatchIds, [prepared.id]);
     assert.equal(probes.invalid.error.code, "INVALID_REQUEST");
-    assert.equal(probes.observe.error.code, "SPIKE_UNRESOLVED");
+    assert.deepEqual(probes.observe.result, { accepted: true });
     assert.equal(probes.unknown.error.code, "UNKNOWN_METHOD");
     // A trusted-only method is refused by the channel client before it reaches
     // the broker; no other code is a closed refusal of this boundary.
@@ -587,8 +629,14 @@ setInterval(() => {}, 1000);
     assert.equal(env.store.getAgent("dynamic")!.incarnation, 4);
     assert.equal(env.store.preparedBatches("dynamic")[0]!.id, prepared.id);
     for (let i = 0; i < 500 && !env.units.confirmDead("dynamic", 4); i++) await new Promise(resolve => setTimeout(resolve, 20));
-    const failedDir = join(env.dir, "R", "actors", "dynamic", "5");
-    writeFileSync(failedDir, "not a directory");
+    // The stray file this once planted where the incarnation's socket
+    // directory must be is no longer a failure: owned-directory repair (P0-8)
+    // collects oma-owned strays, which is itself required behavior. The open's
+    // failure moves to settlement instead -- a receipt that conflicts with the
+    // still-prepared batch holds it (P0-2), so the endpoint is never set up.
+    const failedReceipt = runnerReceiptPathAt(join(env.dir, "state"), "dynamic", prepared.id);
+    mkdirSync(dirname(failedReceipt), { recursive: true });
+    writeFileSync(failedReceipt, "not a receipt\n");
     const failureFile = join(env.dir, "failed-listener");
     writeFileSync(wrapper, `
 import { BrokerChannel } from ${JSON.stringify(join(process.cwd(), "dist", "src", "runner.js"))};
@@ -605,17 +653,23 @@ setInterval(() => {}, 1000);
     for (let i = 0; i < 500 && !existsSync(failureFile); i++) await new Promise(resolve => setTimeout(resolve, 20));
     assert.equal(existsSync(failureFile), true);
     const failedReplies = JSON.parse(readFileSync(failureFile, "utf8"));
-    assert.equal(failedReplies.first.error.code, "INTERNAL_ERROR");
+    assert.equal(failedReplies.first.error.code, "BATCH_CONFLICT");
     assert.equal(failedReplies.retry.error.code, "STALE_RUN");
-    assert.equal(env.store.getAgent("dynamic")!.incarnation, 5);
-    const failedFd = Reflect.get(broker, "runLeases").get("dynamic").cgroupFd;
+    // P0V-113: a failed endpoint takes no incarnation, but its invocation
+    // remains fenced until the pinned cgroup is proven dead.
+    assert.equal(env.store.getAgent("dynamic")!.incarnation, 4);
+    const failedRun = Reflect.get(broker, "runLeases").get("dynamic");
+    assert.equal(failedRun.phase, "revoked-awaiting-death");
+    assert.equal(failedRun.lease, null);
+    const failedFd = failedRun.cgroupFd;
     assert.match(readFileSync(`/proc/self/fd/${failedFd}/cgroup.events`, "utf8"), /^populated 1$/m);
-    env.units.stop("dynamic", 5);
-    rmSync(failedDir);
+    env.units.stop("dynamic", 4);
+    assert.equal(env.units.confirmDead("dynamic", 4), true);
+    rmSync(failedReceipt);
     writeFileSync(wrapper, originalWrapper);
     env.units.start("dynamic", false);
-    for (let i = 0; i < 500 && env.store.getAgent("dynamic")!.incarnation === 5; i++) await new Promise(resolve => setTimeout(resolve, 20));
-    assert.equal(env.store.getAgent("dynamic")!.incarnation, 6);
+    for (let i = 0; i < 500 && env.store.getAgent("dynamic")!.incarnation === 4; i++) await new Promise(resolve => setTimeout(resolve, 20));
+    assert.equal(env.store.getAgent("dynamic")!.incarnation, 5);
     assert.equal(env.store.preparedBatches("dynamic")[0]!.id, prepared.id);
   } finally {
     await broker?.drainAndClose();
@@ -631,7 +685,7 @@ test("T41/CTX-006: pre-GOAL create stays logically enabled but cannot activate u
     await env.lifecycle.create(auth("a", ["agent.create"]), { name: "child", from: base, brief: "wait for goal" }, "c1");
     assert.equal(env.store.getAgent("child")!.desired, "enabled");
     const service = join(env.xdg, "systemd", "user", unitName(env.society, "child", "service"));
-    writeFileSync(service, `[Unit]\nDescription=t41 child\n[Service]\nType=exec\nExecStart=/usr/bin/sleep 60\nRestart=no\n[Install]\nWantedBy=default.target\n`);
+    writeFileSync(service, `[Unit]\n${ownedBy(env, "child")}\n[Service]\nType=exec\nExecStart=/usr/bin/sleep 60\nRestart=no\n[Install]\nWantedBy=default.target\n`);
     spawnSync("systemctl", ["--user", "daemon-reload"], { stdio: "ignore" });
     const reconcile = new ReconcileModule(env.store, env.mail, null, env.units, env.lifecycle, {
       activationAllowed: () => true,
@@ -652,7 +706,7 @@ test("REC-007: broker singleton lock — second broker refuses the society", asy
   let b1: Broker | null = null;
   try {
     const mk = () => new Broker(env.store, env.mail, env.units, env.views, env.lifecycle, null, null, {
-      stateRoot: join(env.dir, "state"), runRoot: join(env.dir, "R"), society: env.society,
+      stateRoot: join(env.dir, "state"), runRoot: join(env.dir, "R"), society: env.society, hasGoal: goalPublishedAt(join(env.dir, "state")),
     });
     b1 = mk();
     await b1.start();
@@ -671,4 +725,112 @@ test("peerCgroup parses /proc/<pid>/cgroup", () => {
   const cg = peerCgroup(process.pid);
   assert.ok(cg !== null);
   assert.ok(cg.startsWith("/user.slice") || cg.startsWith("/"));
+});
+
+test("V25A: start/stop intents accepted for an earlier incarnation cannot act on the current run; a current stop can", async () => {
+  const { env, cleanup } = envOf();
+  try {
+    seedPrincipalAndA(env.store);
+    seedGov(env);
+    env.store.transaction(tx => tx.updateAgent({ name: "a", desired: "enabled" }));
+    env.units.ensureResident("a", "p");
+    const service = unitName(env.society, "a", "service");
+    const unitFile = join(env.xdg, "systemd", "user", service);
+    writeFileSync(unitFile, `[Unit]\n${ownedBy(env, "a")}\n[Service]\nType=exec\nExecStart=/usr/bin/sleep 60\nRestart=no\n[Install]\nWantedBy=default.target\n`);
+    spawnSync("systemctl", ["--user", "daemon-reload"], { stdio: "ignore" });
+    // A start and a stop accepted while incarnation 1 ran, left unconfirmed.
+    const accepted = (key: string, kind: "agent.start" | "agent.stop", desired: "enabled" | "stopped") => {
+      const id = generateOperationId();
+      env.store.transaction(tx => tx.acceptOperation({ id, actor: "principal", requestKey: key,
+        requestHash: requestHash(kind, { agent: "a" }), kind, payloadJson: JSON.stringify({ agent: "a" }),
+        planJson: JSON.stringify({ kind, agent: "a", previousIncarnation: 1, desired, remainingOperations: [] }) }));
+      return id;
+    };
+    const oldStart = accepted("old-start", "agent.start", "enabled");
+    const oldStop = accepted("old-stop", "agent.stop", "stopped");
+    // Since then incarnation 2 opened and is enabled; its unit is not running yet.
+    env.store.transaction(tx => tx.updateAgent({ name: "a", incarnation: 2, desired: "enabled" }));
+    env.lifecycle.reconcileAction(oldStart);
+    assert.equal(env.store.getOperationById(oldStart)!.state, "unknown", "the old start settled as if it applied");
+    assert.equal(env.units.observe("a").activeState, "inactive", "the old start started a run for incarnation 2");
+    // The current run is up.
+    spawnSync("systemctl", ["--user", "start", service], { stdio: "ignore" });
+    const running = env.units.observe("a");
+    assert.equal(running.activeState, "active");
+    const principal = auth("principal", ["agent.manage.descendants"]);
+    env.lifecycle.reconcileAction(oldStop);
+    assert.equal(env.store.getOperationById(oldStop)!.state, "unknown", "the old stop settled as if it applied");
+    // Retrying either old key reports the old intent, unconfirmed, and does nothing.
+    assert.equal(env.lifecycle.stop(principal, "a", "old-stop").state, "unknown");
+    assert.equal(env.lifecycle.start(principal, "a", "old-start").state, "unknown");
+    const after = env.units.observe("a");
+    assert.equal(after.activeState, "active", "an old intent stopped the current run");
+    assert.equal(after.invocationId, running.invocationId, "an old intent restarted the current run");
+    assert.equal(env.store.getAgent("a")!.incarnation, 2, "an old intent rewrote the current incarnation");
+    assert.equal(env.store.getAgent("a")!.desired, "enabled");
+    // The current, explicit stop acts under current authority and proves death.
+    const current = env.lifecycle.stop(principal, "a", "stop-now");
+    assert.equal(current.state, "succeeded");
+    assert.equal(env.units.confirmDead("a", 2), true);
+    assert.equal(env.units.observe("a").activeState, "inactive");
+  } finally { cleanup(); }
+});
+
+test("WP25.03 / D05: a Resident's unit carries its accepted resources, not the current profile's", () => {
+  const { env, cleanup } = envOf();
+  try {
+    // Accepted with other limits than profile "p" now declares.
+    const accepted: ResourceLimits = { ...TEST_RESOURCES, memoryBytes: 256 * 1024 * 1024, tasks: 32, cpuQuotaPercent: 50,
+      tmpBytes: 2 * 1024 * 1024, workspaceBytes: 3 * 1024 * 1024 };
+    env.units.ensureResident("a", "p", accepted);
+    const service = unitName(env.society, "a", "service");
+    const shown = spawnSync("systemctl", ["--user", "show", service, "-p", "Environment", "-p", "MemoryMax", "-p", "TasksMax"], { encoding: "utf8" }).stdout;
+    const carried = /OMA_RESOURCES_HEX=([0-9a-f]+)/.exec(shown)?.[1];
+    assert.ok(carried, `the unit's environment carries no accepted resources: ${shown}`);
+    assert.deepEqual(JSON.parse(Buffer.from(carried!, "hex").toString("utf8")), accepted);
+    assert.match(shown, /^MemoryMax=infinity$/m);
+    assert.match(shown, /^TasksMax=infinity$/m);
+  } finally { cleanup(); }
+});
+
+test("V23B: a status snapshot is display only; start, stop and death proof observe the unit again", async () => {
+  const { env, cleanup } = envOf();
+  try {
+    seedPrincipalAndA(env.store);
+    seedGov(env);
+    env.store.transaction(tx => tx.updateAgent({ name: "a", desired: "stopped" }));
+    env.units.ensureResident("a", "p");
+    const service = unitName(env.society, "a", "service");
+    writeFileSync(join(env.xdg, "systemd", "user", service), `[Unit]\n${ownedBy(env, "a")}\n[Service]\nType=exec\nExecStart=/usr/bin/sleep 60\nRestart=no\n[Install]\nWantedBy=default.target\n`);
+    spawnSync("systemctl", ["--user", "daemon-reload"], { stdio: "ignore" });
+    // One real batched observation of every agent: a is stopped, b has no unit.
+    const refresh = new StatusRefresh(() => env.store.agentNames(), agents => env.units.observeStatus(agents));
+    const snapshot = await refresh.request();
+    assert.equal(snapshot.failure, null);
+    const unitOf = (value: ReturnType<typeof snapshot.units.get>) => { assert.ok(value !== undefined && value !== "no-unit"); return value; };
+    assert.equal(unitOf(snapshot.units.get("a")).activeState, "inactive");
+    // AV9 / INV02: a unit systemd does not have is not one that ran and exited.
+    assert.equal(snapshot.units.get("b"), "no-unit");
+    const shown = env.views.statusOf(snapshot, "a")[0]!;
+    assert.equal(shown.activeState, "inactive");
+    // After the snapshot the unit really starts.
+    spawnSync("systemctl", ["--user", "start", service], { stdio: "ignore" });
+    assert.equal(env.units.observe("a").activeState, "active");
+    // The display still says what it saw, and when -- it is not current.
+    assert.equal(env.views.statusOf(snapshot, "a")[0]!.activeState, "inactive");
+    assert.ok(snapshot.observedAtMs <= Date.now());
+    // Negative control: taking the cached "inactive" as death proof would
+    // authorize acting on a live run.
+    const cachedDeathProof = (agent: string) => unitOf(snapshot.units.get(agent)).activeState === "inactive";
+    assert.equal(cachedDeathProof("a"), true, "the control does not reproduce the cached claim");
+    assert.ok(env.units.cgroupProcs("a").length > 0, "the run the cached view calls inactive is alive");
+    // The effect paths observe again and refuse.
+    assert.equal(env.units.confirmDead("a", 1), false);
+    assert.throws(() => env.lifecycle.start(auth("principal", ["agent.manage.descendants"]), "a", "v23b-start"),
+      (error: unknown) => error instanceof StoreError && error.code === "RUN_TERMINATION_UNKNOWN");
+    assert.equal(env.store.getAgent("a")!.incarnation, 1);
+    // A later refresh sees the change.
+    assert.equal(unitOf((await refresh.request()).units.get("a")).activeState, "active");
+    spawnSync("systemctl", ["--user", "stop", service], { stdio: "ignore" });
+  } finally { cleanup(); }
 });

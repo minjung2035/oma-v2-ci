@@ -3,9 +3,9 @@ import { join } from "node:path";
 import type { UnitObservation } from "../../implementation/contracts/runtime.js";
 import type { ContextEntry } from "../../implementation/contracts/values.js";
 import type { MessagePlan } from "../../implementation/contracts/durable.js";
-import type { GitObserver, GitObservation } from "../git/observe.js";
+import type { GitReadPort, GitObservation } from "../ports/git-observation.js";
 import type { AgentRow } from "../storage/rows.js";
-import { mailObjectPathAt, mailArchivePathAt, mailInboxPathAt, contextRevisionPathAt } from "../storage/paths.js";
+import { mailObjectPathAt, mailArchivePathAt, mailAudiencePathAt, mailInboxPathAt, contextRevisionPathAt } from "../storage/paths.js";
 import { contextRevisionLinkFor, maildirCurName } from "../domain/derived.js";
 import { isValidFullOid } from "../domain/identifiers.js";
 import { inspectLedger, type InspectionContext } from "./ledger.js";
@@ -13,7 +13,7 @@ import type { FileObservation, IntegrityFiles } from "./files.js";
 
 export interface IntegrityOptions {
   readonly files: IntegrityFiles;
-  readonly git?: Pick<GitObserver, "ref" | "commit" | "ancestry"> & {
+  readonly git?: GitReadPort & {
     contextTree?(repository: string, candidate: string, entries: readonly ContextEntry[]): FileObservation;
   };
   readonly units?: (agent: AgentRow) => FileObservation<UnitObservation>;
@@ -42,36 +42,50 @@ export function inspectIntegrity(snapshot: unknown, context: InspectionContext, 
   };
   const { files, git } = options;
   const actorNames = new Set(facts.agents.map(agent => agent.name));
-  const expectedObjects = new Set<string>(), expectedArchives = new Set<string>();
+  const expectedObjects = new Set<string>(), expectedArchives = new Set<string>(), expectedWorkers = new Set<string>();
   const inboxes = new Map(facts.agents.map(agent => [agent.name, { new: new Set<string>(), cur: new Set<string>() }]));
   const publishedMail = new Set<string>();
   for (const operation of facts.operations) {
-    let message: MessagePlan | null = null;
+    // mail-v1: the messages an operation owns follow its plan's union — a review
+    // attest.record owns its thread/approval/etc. mail and a merge integration
+    // its notice parts. A legacy attest.record's publication mail keeps today's
+    // coverage (none here) exactly as before.
+    let messages: readonly MessagePlan[];
     switch (operation.kind) {
-      case "mail.send": case "agent.continue": case "git.submit": case "context.publish": message = operation.plan.message; break;
-      case "agent.create": message = operation.plan.initialMessage; break;
+      case "attest.record": messages = "messages" in operation.plan ? operation.plan.messages : []; break;
+      case "mail.send": case "agent.continue": case "git.submit": case "context.publish": messages = [operation.plan.message]; break;
+      case "agent.create": messages = operation.plan.initialMessage === null ? [] : [operation.plan.initialMessage]; break;
+      case "git.integrate": messages = operation.plan.merge === undefined ? [] : operation.plan.merge.notice; break;
+      default: messages = [];
     }
-    if (!message) continue;
-    const expectation = { bytes: message.bytes, sha256: message.sha256 };
-    expectedObjects.add(`${message.id}.eml`); expectedArchives.add(maildirCurName(message.id));
-    fileResult(observe(() => files.file(mailObjectPathAt(context.stateRoot, message.id), { ...expectation, mail: { message, society: context.society, actorNames } })), "MAIL_OBJECT", operation.id, true);
-    const archive = observe(() => files.file(mailArchivePathAt(context.stateRoot, message.id), expectation));
-    fileResult(archive, "MAIL_ARCHIVE", operation.id, operation.state === "succeeded");
-    if (archive.kind === "present") publishedMail.add(operation.id);
-    else if (archive.kind === "absent" && operation.state !== "failed") pendingPublications++;
-    for (const delivery of facts.deliveries.filter(row => row.operationId === operation.id)) {
-      inboxes.get(delivery.recipient)?.new.add(message.id);
-      inboxes.get(delivery.recipient)?.cur.add(maildirCurName(message.id));
-      const current = observe(() => files.file(mailInboxPathAt(context.stateRoot, delivery.recipient, message.id, "cur"), expectation));
-      const fresh = observe(() => files.file(mailInboxPathAt(context.stateRoot, delivery.recipient, message.id, "new"), expectation));
-      fileResult(current, "INBOX_CUR", message.id); fileResult(fresh, "INBOX_NEW", message.id);
-      if (current.kind === "present" || fresh.kind === "present") publishedMail.add(operation.id);
-      if (current.kind === "present" && fresh.kind === "present") ledger.add("corrupt", "DUPLICATE_MAILBOX_NAMES", "filesystem", message.id);
-      if (delivery.materialized === 1 && current.kind === "absent" && fresh.kind === "absent") ledger.add("corrupt", "MATERIALIZED_FILE_MISSING", "filesystem", message.id);
-      if (delivery.presented === 1 && current.kind === "absent") ledger.add("corrupt", "PRESENTED_CUR_MISSING", "filesystem", message.id);
-      if (operation.state === "succeeded" && delivery.materialized !== 1) ledger.add("corrupt", "SUCCESS_WITH_UNMATERIALIZED_DELIVERY", "deliveries", message.id);
+    if (messages.length === 0) continue;
+    let archiveAbsent = false;
+    for (const message of messages) {
+      const expectation = { bytes: message.bytes, sha256: message.sha256 };
+      expectedObjects.add(`${message.id}.eml`);
+      (message.audience === "workers" ? expectedWorkers : expectedArchives).add(maildirCurName(message.id));
+      fileResult(observe(() => files.file(mailObjectPathAt(context.stateRoot, message.id), { ...expectation, mail: { message, society: context.society, actorNames } })), "MAIL_OBJECT", operation.id, true);
+      const archive = observe(() => files.file(mailAudiencePathAt(context.stateRoot, message), expectation));
+      fileResult(archive, "MAIL_ARCHIVE", operation.id, operation.state === "succeeded");
+      if (archive.kind === "present") publishedMail.add(operation.id);
+      else if (archive.kind === "absent") {
+        archiveAbsent = true;
+        if (operation.state !== "failed") pendingPublications++;
+      }
+      for (const delivery of facts.deliveries.filter(row => row.operationId === operation.id && row.messageId === message.id)) {
+        inboxes.get(delivery.recipient)?.new.add(message.id);
+        inboxes.get(delivery.recipient)?.cur.add(maildirCurName(message.id));
+        const current = observe(() => files.file(mailInboxPathAt(context.stateRoot, delivery.recipient, message.id, "cur"), expectation));
+        const fresh = observe(() => files.file(mailInboxPathAt(context.stateRoot, delivery.recipient, message.id, "new"), expectation));
+        fileResult(current, "INBOX_CUR", message.id); fileResult(fresh, "INBOX_NEW", message.id);
+        if (current.kind === "present" || fresh.kind === "present") publishedMail.add(operation.id);
+        if (current.kind === "present" && fresh.kind === "present") ledger.add("corrupt", "DUPLICATE_MAILBOX_NAMES", "filesystem", message.id);
+        if (delivery.materialized === 1 && current.kind === "absent" && fresh.kind === "absent") ledger.add("corrupt", "MATERIALIZED_FILE_MISSING", "filesystem", message.id);
+        if (delivery.presented === 1 && current.kind === "absent") ledger.add("corrupt", "PRESENTED_CUR_MISSING", "filesystem", message.id);
+        if (operation.state === "succeeded" && delivery.materialized !== 1) ledger.add("corrupt", "SUCCESS_WITH_UNMATERIALIZED_DELIVERY", "deliveries", message.id);
+      }
     }
-    if (archive.kind === "absent" && publishedMail.has(operation.id)) ledger.add("corrupt", "DELIVERY_WITHOUT_ARCHIVE", "filesystem", operation.id);
+    if (archiveAbsent && publishedMail.has(operation.id)) ledger.add("corrupt", "DELIVERY_WITHOUT_ARCHIVE", "filesystem", operation.id);
     if (operation.state === "failed" && publishedMail.has(operation.id)) ledger.add("corrupt", "FAILED_PARENT_PUBLICATION", "filesystem", operation.id);
     if (operation.kind === "agent.create" && publishedMail.has(operation.id) && facts.agents.find(agent => agent.name === operation.plan.spec.name)?.desired === "provisioning")
       ledger.add("corrupt", "CREATE_MAIL_BEFORE_READY", "filesystem", operation.id);
@@ -86,6 +100,10 @@ export function inspectIntegrity(snapshot: unknown, context: InspectionContext, 
   names(join(context.stateRoot, "mail/objects"), expectedObjects, "OBJECT_DIRECTORY", "unknown"); // Preaccept orphans are not silently repaired.
   names(join(context.stateRoot, "mail/archive/cur"), expectedArchives, "ARCHIVE_DIRECTORY");
   names(join(context.stateRoot, "mail/archive/new"), new Set(), "ARCHIVE_NEW_DIRECTORY");
+  // mail-v1: worker-only review mail lives under its own archive; a message's
+  // audience decides which directory's expected names it is counted under.
+  names(join(context.stateRoot, "mail/workers/cur"), expectedWorkers, "WORKERS_DIRECTORY");
+  names(join(context.stateRoot, "mail/workers/new"), new Set(), "WORKERS_NEW_DIRECTORY");
   const mailboxNames = observe(() => files.names(join(context.stateRoot, "mail/inboxes")));
   fileResult(mailboxNames, "MAILBOX_DIRECTORY", null);
   if (mailboxNames.kind === "present") for (const entry of mailboxNames.value)

@@ -1,6 +1,8 @@
 import { StoreError } from "../domain/errors.js";
 
 export interface ConnectionPeerPin {
+  /** The peer was observed running just now. False is "not verified running":
+   * exited or not answered, which refuse alike and prove no death. */
   alive(): boolean;
   retainForExecution(): () => void;
   releaseConnection(): void;

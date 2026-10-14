@@ -49,6 +49,32 @@ export function decodeOperationResultShape(value: unknown, expectedKind?: Mutati
   return { ok: true, value: row as OperationResult };
 }
 
+/** Whether an observation of a request may replace the one already recorded
+ * for it.
+ *
+ * A recorded receipt is an observation of durable state, and durable state
+ * does not become less settled: an operation that succeeded does not go back
+ * to pending. Nothing enforced that, so two processes observing one request
+ * key both read the same older value, both write, and the one whose write
+ * lands last decides -- a recorded success regressing to `pending` offers the
+ * Human a retry for work that already happened. Ordering the states is half of
+ * the answer; the other half is that the caller must read and write under one
+ * exclusive hold, because an order cannot be applied to a value that was
+ * already stale when it was read.
+ *
+ * Two different terminal states for one operation are a contradiction, not an
+ * update: one operation does not both succeed and fail.
+ */
+export type ReceiptOrder = "supersedes" | "stale" | "contradiction";
+
+const TERMINAL: ReadonlySet<Receipt["state"]> = new Set(["succeeded", "failed"]);
+
+export function receiptSupersession(previous: Receipt | null, observed: Receipt): ReceiptOrder {
+  if (previous === null || !TERMINAL.has(previous.state)) return "supersedes";
+  if (!TERMINAL.has(observed.state)) return "stale";
+  return previous.state === observed.state ? "stale" : "contradiction";
+}
+
 /** REQUEST_NOT_FOUND is a lookup result, not a durable operation or cached receipt. */
 export function decodeReceipt(
   value: unknown,

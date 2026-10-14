@@ -1,0 +1,8145 @@
+[
+  {
+    "path": "src/attestation.ts",
+    "lines": 46,
+    "imports": [
+      "../implementation/contracts/attestation.js",
+      "../implementation/contracts.js",
+      "./store.js",
+      "./authority.js",
+      "./domain/canonical-json.js",
+      "./domain/errors.js",
+      "./hash.js",
+      "./storage/receipt-projector.js"
+    ],
+    "functions": [
+      "record"
+    ]
+  },
+  {
+    "path": "src/authority.ts",
+    "lines": 57,
+    "imports": [
+      "../implementation/contracts/runtime.js",
+      "../implementation/contracts/identity.js",
+      "../implementation/contracts/host.js",
+      "./store.js",
+      "./domain/errors.js",
+      "./storage/rows.js",
+      "./domain/spec-identity.js"
+    ],
+    "functions": [
+      "resolvedSpecOf",
+      "capabilitiesOf",
+      "assertActorIdentity",
+      "assertCurrentActor",
+      "effectiveCapabilitiesOf",
+      "currentAuthorityGuard"
+    ]
+  },
+  {
+    "path": "src/broker.ts",
+    "lines": 580,
+    "imports": [
+      "node:net",
+      "./storage/socket-name.js",
+      "./storage/directory.js",
+      "node:path",
+      "../implementation/contracts.js",
+      "./store.js",
+      "./domain/errors.js",
+      "./domain/admission.js",
+      "./storage/paths.js",
+      "./frame.js",
+      "./broker/connection.js",
+      "./broker/peer-authenticator.js",
+      "./broker/public-dispatcher.js",
+      "./broker/internal-dispatcher.js",
+      "./broker/composition.js",
+      "./broker/logs.js",
+      "./broker/replies.js",
+      "./runtime/run-registry.js",
+      "./runtime/process-lock.js",
+      "./runtime/broker-lifetime.js",
+      "./mail.js",
+      "./units.js",
+      "./leaf.js",
+      "./lifecycle.js",
+      "./git.js",
+      "./reconcile.js",
+      "./views.js",
+      "./protocol/status-view.js",
+      "./views/status-refresh.js",
+      "./broker/principal-endpoint.js",
+      "./authority.js",
+      "./storage/quota.js"
+    ],
+    "functions": [
+      "start",
+      "notifyReady",
+      "listen",
+      "listenInternal",
+      "listenPrincipal",
+      "listenOn",
+      "refreshViews",
+      "periodicSweep",
+      "publishStatus",
+      "actorSocketDirectory",
+      "listenActor",
+      "actorSocketDirectoryAfterAdmission",
+      "closeListener",
+      "bindPeer",
+      "trustedContext",
+      "handleActor",
+      "handleInternal",
+      "cleanupError",
+      "serveFrames",
+      "fail",
+      "errorAnswer",
+      "okAnswer",
+      "failureAnswer",
+      "streamReservationBytes",
+      "preflightPublicStream",
+      "readLogs",
+      "dispatch",
+      "requireRunnerUnit",
+      "requireHostUnit",
+      "runnerActor",
+      "runnerAuth",
+      "dispatchInternal",
+      "openRun",
+      "settlePreviousIncarnation",
+      "closeAdmission",
+      "drainAndClose"
+    ]
+  },
+  {
+    "path": "src/broker/composition.ts",
+    "lines": 145,
+    "imports": [
+      "../../implementation/contracts.js",
+      "../store.js",
+      "../mail.js",
+      "../views/status-refresh.js",
+      "../views.js",
+      "../lifecycle.js",
+      "../git.js",
+      "./internal-dispatcher.js",
+      "./public-dispatcher.js",
+      "../storage/receipt-projector.js"
+    ],
+    "functions": [
+      "createPublicDispatchPorts",
+      "createInternalDispatchPorts"
+    ]
+  },
+  {
+    "path": "src/broker/connection.ts",
+    "lines": 271,
+    "imports": [
+      "../frame.js",
+      "../domain/errors.js",
+      "./transport-spool.js",
+      "./peer-pin.js"
+    ],
+    "functions": [
+      "after",
+      "cancel",
+      "record",
+      "requestId",
+      "snapshot",
+      "alarm",
+      "idle",
+      "receiptAlarm",
+      "refreshInputTimer",
+      "report",
+      "cleanup",
+      "cancelTimers",
+      "disposeConnectionState",
+      "close",
+      "reject",
+      "id",
+      "errorFrame",
+      "fatal",
+      "gracefulEnd",
+      "descriptor",
+      "events",
+      "decideExcess",
+      "dispatch",
+      "finishWrite"
+    ]
+  },
+  {
+    "path": "src/broker/internal-dispatcher.ts",
+    "lines": 247,
+    "imports": [
+      "node:fs",
+      "node:path",
+      "../../implementation/contracts.js",
+      "./peer-authenticator.js",
+      "../domain/errors.js",
+      "../domain/admission.js",
+      "../domain/exhaustive.js",
+      "../protocol/methods.js",
+      "./replies.js"
+    ],
+    "functions": [
+      "admitInternal",
+      "runnerIdentity",
+      "runnerObservation",
+      "dispatch"
+    ]
+  },
+  {
+    "path": "src/broker/logs.ts",
+    "lines": 23,
+    "imports": [
+      "../domain/derived.js",
+      "../domain/errors.js",
+      "../process/policies.js",
+      "node:string_decoder"
+    ],
+    "functions": [
+      "boundedLogOutput",
+      "readUnitLogs"
+    ]
+  },
+  {
+    "path": "src/broker/peer-authenticator.ts",
+    "lines": 128,
+    "imports": [
+      "node:net",
+      "node:fs",
+      "../../implementation/contracts.js",
+      "../store.js",
+      "../units.js",
+      "../units.js",
+      "../runtime/run-registry.js",
+      "../domain/errors.js",
+      "../authority.js",
+      "../leaf.js",
+      "./peer-pin.js"
+    ],
+    "functions": [
+      "peerCgroup",
+      "socketFd",
+      "insideCgroup",
+      "bind",
+      "context",
+      "principalContext",
+      "requireRunnerUnit",
+      "requireHostUnit",
+      "runnerActor",
+      "runnerAuth"
+    ]
+  },
+  {
+    "path": "src/broker/peer-pin.ts",
+    "lines": 45,
+    "imports": [
+      "../domain/errors.js"
+    ],
+    "functions": [
+      "alive",
+      "retainForExecution",
+      "releaseConnection",
+      "maybeClose"
+    ]
+  },
+  {
+    "path": "src/broker/principal-endpoint.ts",
+    "lines": 405,
+    "imports": [
+      "node:crypto",
+      "node:net",
+      "../../implementation/contracts.js",
+      "../domain/errors.js",
+      "../protocol/methods.js",
+      "../protocol/principal-credential.js",
+      "./replies.js",
+      "./peer-authenticator.js",
+      "./process-ancestry.js"
+    ],
+    "functions": [
+      "isHost",
+      "serveConnection",
+      "retire",
+      "register",
+      "engineRuns",
+      "close",
+      "serve",
+      "attach",
+      "close",
+      "serve",
+      "dispatch"
+    ]
+  },
+  {
+    "path": "src/broker/process-ancestry.ts",
+    "lines": 162,
+    "imports": [
+      "node:fs"
+    ],
+    "functions": [
+      "procStat",
+      "buildProbe",
+      "identity",
+      "parentOf",
+      "ended",
+      "descendsFrom",
+      "processProbeFor",
+      "processIdentity",
+      "parentOf",
+      "processEnded",
+      "descendsFrom"
+    ]
+  },
+  {
+    "path": "src/broker/public-dispatcher.ts",
+    "lines": 273,
+    "imports": [
+      "../../implementation/contracts.js",
+      "../ports/runtime.js",
+      "../views/status-refresh.js",
+      "../domain/errors.js",
+      "../domain/exhaustive.js",
+      "../domain/admission.js",
+      "../authority.js",
+      "../ids.js",
+      "../protocol/receipts.js",
+      "../protocol/methods.js",
+      "./replies.js",
+      "../protocol/status-page.js",
+      "../protocol/receipt-chunks.js",
+      "../protocol/log-response.js"
+    ],
+    "functions": [
+      "checkParams",
+      "terminalReceiptHeld",
+      "readAuthority",
+      "validatePublicRequest",
+      "preflight",
+      "dispatch",
+      "dispatchChecked",
+      "emptyStream",
+      "keyOf"
+    ]
+  },
+  {
+    "path": "src/broker/replies.ts",
+    "lines": 6,
+    "imports": [],
+    "functions": [
+      "errorAnswer",
+      "okAnswer"
+    ]
+  },
+  {
+    "path": "src/broker/transport-spool.ts",
+    "lines": 114,
+    "imports": [
+      "node:fs",
+      "node:path",
+      "node:crypto",
+      "../domain/errors.js",
+      "../storage/directory.js",
+      "../storage/contained-fs.js"
+    ],
+    "functions": [
+      "append",
+      "seal",
+      "handoff",
+      "releaseConnection",
+      "dispose"
+    ]
+  },
+  {
+    "path": "src/cli.ts",
+    "lines": 48,
+    "imports": [
+      "./cli/commands/society.js",
+      "./cli/commands/send.js",
+      "./cli/commands/routes.js",
+      "./cli/commands/agent.js",
+      "./cli/commands/submit.js",
+      "./cli/commands/merge.js",
+      "./cli/commands/context.js",
+      "./cli/commands/status.js",
+      "./cli/commands/logs.js",
+      "./cli/arguments.js",
+      "./cli/exit.js"
+    ],
+    "functions": [
+      "main"
+    ]
+  },
+  {
+    "path": "src/cli/arguments.ts",
+    "lines": 87,
+    "imports": [
+      "../ids.js",
+      "./exit.js"
+    ],
+    "functions": [
+      "parseArguments",
+      "value",
+      "values",
+      "splitSubcommand",
+      "keyOf"
+    ]
+  },
+  {
+    "path": "src/cli/cache-codec.ts",
+    "lines": 69,
+    "imports": [
+      "../../implementation/contracts.js",
+      "../domain/identifiers.js",
+      "../domain/canonical-json.js",
+      "../protocol/methods.js",
+      "../protocol/request-codec.js",
+      "../protocol/receipt-codec.js"
+    ],
+    "functions": [
+      "record",
+      "decodeStreamDigest",
+      "decodeCachedRequest"
+    ]
+  },
+  {
+    "path": "src/cli/commands/agent.ts",
+    "lines": 72,
+    "imports": [
+      "../../client/codecs.js",
+      "../request-intent.js",
+      "../arguments.js",
+      "../effects.js",
+      "../exit.js",
+      "../request-service.js",
+      "../transport.js"
+    ],
+    "functions": [
+      "runAgentCommand"
+    ]
+  },
+  {
+    "path": "src/cli/commands/context.ts",
+    "lines": 40,
+    "imports": [
+      "../../ids.js",
+      "../arguments.js",
+      "../effects/context.js",
+      "../exit.js",
+      "../request-service.js"
+    ],
+    "functions": [
+      "runContextCommand"
+    ]
+  },
+  {
+    "path": "src/cli/commands/logs.ts",
+    "lines": 37,
+    "imports": [
+      "../arguments.js",
+      "../exit.js",
+      "../transport.js"
+    ],
+    "functions": [
+      "parseDuration",
+      "runLogsCommand"
+    ]
+  },
+  {
+    "path": "src/cli/commands/merge.ts",
+    "lines": 278,
+    "imports": [
+      "../../../implementation/contracts.js",
+      "../../domain/identifiers.js",
+      "../../domain/errors.js",
+      "../arguments.js",
+      "../effects.js",
+      "../effects/submit.js",
+      "../effects/code.js",
+      "../exit.js",
+      "../request-service.js",
+      "../transport.js",
+      "../../domain/utf8.js"
+    ],
+    "functions": [
+      "requestName",
+      "openKey",
+      "dirtyWarn",
+      "ensurePublished",
+      "explicitOids",
+      "openMerge",
+      "review",
+      "vote",
+      "cancel",
+      "status",
+      "pageWindow",
+      "diff",
+      "runMergeCommand",
+      "openChallenge",
+      "runChallengeCommand"
+    ]
+  },
+  {
+    "path": "src/cli/commands/routes.ts",
+    "lines": 22,
+    "imports": [
+      "../../ids.js",
+      "../arguments.js",
+      "../exit.js",
+      "../request-service.js"
+    ],
+    "functions": [
+      "runRouteCommand"
+    ]
+  },
+  {
+    "path": "src/cli/commands/send.ts",
+    "lines": 117,
+    "imports": [
+      "../../domain/identifiers.js",
+      "../effects/goal.js",
+      "node:path",
+      "../../ids.js",
+      "../../domain/mail-values.js",
+      "../arguments.js",
+      "../effects.js",
+      "../effects/mail.js",
+      "../exit.js",
+      "../request-service.js"
+    ],
+    "functions": [
+      "runSendCommand",
+      "parseMessageArg",
+      "runAckCommand"
+    ]
+  },
+  {
+    "path": "src/cli/commands/society.ts",
+    "lines": 13,
+    "imports": [
+      "../arguments.js",
+      "../request-service.js",
+      "../exit.js"
+    ],
+    "functions": [
+      "runSocietyCommand"
+    ]
+  },
+  {
+    "path": "src/cli/commands/status.ts",
+    "lines": 22,
+    "imports": [
+      "../arguments.js",
+      "../transport.js",
+      "../exit.js"
+    ],
+    "functions": [
+      "runStatusCommand"
+    ]
+  },
+  {
+    "path": "src/cli/commands/submit.ts",
+    "lines": 59,
+    "imports": [
+      "../../../implementation/contracts.js",
+      "../arguments.js",
+      "../effects.js",
+      "../effects/submit.js",
+      "../exit.js",
+      "../request-service.js",
+      "../request-intent.js",
+      "../transport.js"
+    ],
+    "functions": [
+      "runSubmitCommand"
+    ]
+  },
+  {
+    "path": "src/cli/effects.ts",
+    "lines": 168,
+    "imports": [
+      "node:crypto",
+      "node:fs",
+      "node:path",
+      "../ids.js",
+      "../domain/identifiers.js",
+      "../domain/errors.js",
+      "../process/policies.js",
+      "../process/run.js",
+      "../client/errors.js",
+      "../client/context.js",
+      "../client/settings.js",
+      "../domain/utf8.js"
+    ],
+    "functions": [
+      "sha256Hex",
+      "readLocalFile",
+      "readLocalHead",
+      "readLocal",
+      "readBounded",
+      "readBody",
+      "recordedBase",
+      "workspaceClaimPresent",
+      "workspaceDirty",
+      "resolveOid"
+    ]
+  },
+  {
+    "path": "src/cli/effects/code.ts",
+    "lines": 97,
+    "imports": [
+      "node:path",
+      "../../domain/identifiers.js",
+      "../../domain/errors.js",
+      "../../git/observe.js",
+      "../../git/canonical-command.js",
+      "../../process/policies.js",
+      "../../process/run.js",
+      "../../client/settings.js"
+    ],
+    "functions": [
+      "readCode"
+    ]
+  },
+  {
+    "path": "src/cli/effects/context.ts",
+    "lines": 78,
+    "imports": [
+      "node:fs",
+      "node:path",
+      "../../domain/context-policy.js",
+      "../../client/errors.js",
+      "../effects.js",
+      "../../client/settings.js"
+    ],
+    "functions": [
+      "walk",
+      "prepareContextEffects"
+    ]
+  },
+  {
+    "path": "src/cli/effects/goal.ts",
+    "lines": 43,
+    "imports": [
+      "node:path",
+      "../../domain/context-policy.js",
+      "../../process/policies.js",
+      "../../client/settings.js",
+      "../../client/context.js",
+      "../effects.js",
+      "../../client/errors.js",
+      "./context.js"
+    ],
+    "functions": [
+      "prepareGoalEffects"
+    ]
+  },
+  {
+    "path": "src/cli/effects/mail.ts",
+    "lines": 32,
+    "imports": [
+      "../../mail/headers.js",
+      "../../ids.js",
+      "../../client/errors.js",
+      "../effects.js",
+      "../../domain/mail-values.js"
+    ],
+    "functions": [
+      "prepareReplyEffects"
+    ]
+  },
+  {
+    "path": "src/cli/effects/submit.ts",
+    "lines": 89,
+    "imports": [
+      "node:fs",
+      "node:path",
+      "node:os",
+      "../../../implementation/contracts.js",
+      "../../domain/errors.js",
+      "../../domain/derived.js",
+      "../../process/policies.js",
+      "../../client/errors.js",
+      "../../client/context.js",
+      "../effects.js",
+      "../../client/settings.js"
+    ],
+    "functions": [
+      "git",
+      "submitPrerequisites",
+      "submitBundle",
+      "prepareSubmitEffects"
+    ]
+  },
+  {
+    "path": "src/cli/exit.ts",
+    "lines": 113,
+    "imports": [
+      "../client/errors.js",
+      "../client/receipts.js",
+      "../../implementation/contracts.js",
+      "../domain/errors.js",
+      "../protocol/receipt-codec.js",
+      "../protocol/receipts.js"
+    ],
+    "functions": [
+      "holdOutputUntilWritten",
+      "fail",
+      "finishRead",
+      "usage",
+      "finishFailure",
+      "checkedReceipt",
+      "finishReceipt",
+      "finishUnrecordedReceipt",
+      "succeed",
+      "fatal"
+    ]
+  },
+  {
+    "path": "src/cli/request-intent.ts",
+    "lines": 33,
+    "imports": [
+      "../../implementation/contracts.js",
+      "../domain/identifiers.js",
+      "../domain/request-identity.js"
+    ],
+    "functions": [
+      "requestIntentConflict",
+      "explicitFullOid"
+    ]
+  },
+  {
+    "path": "src/cli/request-service.ts",
+    "lines": 72,
+    "imports": [
+      "../../implementation/contracts.js",
+      "../client/request-service.js",
+      "../client/errors.js",
+      "../client/runtime.js",
+      "../client/runtime.js",
+      "../domain/errors.js",
+      "./transport.js",
+      "./exit.js"
+    ],
+    "functions": [
+      "outcome",
+      "serviceOptions",
+      "requestReceipt",
+      "effect",
+      "replayOrSend"
+    ]
+  },
+  {
+    "path": "src/cli/transport.ts",
+    "lines": 53,
+    "imports": [
+      "../runtime/client-preload.js",
+      "../client/transport.js",
+      "../client/settings.js",
+      "../../implementation/contracts.js",
+      "../protocol/channel.js"
+    ],
+    "functions": [
+      "cliFrameBytes",
+      "cliContextBytes",
+      "cliBundleBytes",
+      "callActor",
+      "call"
+    ]
+  },
+  {
+    "path": "src/client/ask-user-question/envelope.ts",
+    "lines": 69,
+    "imports": [
+      "./questionnaire.js"
+    ],
+    "functions": [
+      "buildAskToolResult",
+      "formatAnswerScalar",
+      "buildAnswerSegment",
+      "buildQuestionnaireResponse"
+    ]
+  },
+  {
+    "path": "src/client/ask-user-question/model.ts",
+    "lines": 231,
+    "imports": [
+      "./questionnaire.js"
+    ],
+    "functions": [
+      "rowsOf",
+      "focusedRow",
+      "answersSoFar",
+      "isChecked",
+      "answerFor",
+      "moveDown",
+      "moveUp",
+      "nextTab",
+      "previousTab",
+      "clampRow",
+      "leaveInput",
+      "advance",
+      "toggle",
+      "confirm",
+      "commitCustom",
+      "typeText",
+      "backspace",
+      "cancel",
+      "result",
+      "rowLabel"
+    ]
+  },
+  {
+    "path": "src/client/ask-user-question/protocol.ts",
+    "lines": 72,
+    "imports": [
+      "./questionnaire.js"
+    ],
+    "functions": [
+      "isIdPayload",
+      "isAskQuestionShape",
+      "isAskRequest",
+      "isAskClaim",
+      "isAskCancel",
+      "isAskResponse"
+    ]
+  },
+  {
+    "path": "src/client/ask-user-question/questionnaire.ts",
+    "lines": 204,
+    "imports": [],
+    "functions": [
+      "isQuestionnaireResult",
+      "normalizeLineTerminators",
+      "normalizeRecord",
+      "normalizeQuestionParams",
+      "validateQuestionnaire"
+    ]
+  },
+  {
+    "path": "src/client/codecs.ts",
+    "lines": 27,
+    "imports": [],
+    "functions": [
+      "decodeCredential",
+      "encodeCredential",
+      "decodeWaitObservation",
+      "encodeWaitObservation"
+    ]
+  },
+  {
+    "path": "src/client/context.ts",
+    "lines": 13,
+    "imports": [
+      "node:async_hooks"
+    ],
+    "functions": [
+      "currentContext",
+      "inContext"
+    ]
+  },
+  {
+    "path": "src/client/errors.ts",
+    "lines": 11,
+    "imports": [],
+    "functions": [
+      "fail"
+    ]
+  },
+  {
+    "path": "src/client/fence.ts",
+    "lines": 23,
+    "imports": [
+      "node:fs"
+    ],
+    "functions": [
+      "inheritedFence",
+      "fencedStdio"
+    ]
+  },
+  {
+    "path": "src/client/index.ts",
+    "lines": 210,
+    "imports": [
+      "node:crypto",
+      "../../implementation/contracts.js",
+      "./context.js",
+      "./errors.js",
+      "./request-service.js",
+      "./runtime.js",
+      "./settings.js",
+      "./transport.js"
+    ],
+    "functions": [
+      "bodyText",
+      "requests",
+      "scope",
+      "requestReceipt",
+      "effect",
+      "bounded",
+      "preview",
+      "present",
+      "query",
+      "queryText",
+      "sendMail",
+      "sendGoal",
+      "ensurePublished",
+      "review"
+    ]
+  },
+  {
+    "path": "src/client/limits.ts",
+    "lines": 3,
+    "imports": [],
+    "functions": []
+  },
+  {
+    "path": "src/client/receipts.ts",
+    "lines": 19,
+    "imports": [
+      "node:path",
+      "../../implementation/contracts.js",
+      "./context.js"
+    ],
+    "functions": [
+      "inCallerView"
+    ]
+  },
+  {
+    "path": "src/client/request-service.ts",
+    "lines": 182,
+    "imports": [
+      "node:crypto",
+      "../../implementation/contracts.js",
+      "./errors.js",
+      "./runtime.js"
+    ],
+    "functions": [
+      "randKey",
+      "fail",
+      "payload",
+      "readFrozen",
+      "frozenBody",
+      "recorded",
+      "send",
+      "recoverReceipt",
+      "acceptanceUnknown",
+      "resolveFrozen",
+      "requestReceipt"
+    ]
+  },
+  {
+    "path": "src/client/runtime.ts",
+    "lines": 65,
+    "imports": [
+      "../../implementation/contracts.js",
+      "./codecs.js"
+    ],
+    "functions": [
+      "installRuntime",
+      "runtime"
+    ]
+  },
+  {
+    "path": "src/client/settings.ts",
+    "lines": 22,
+    "imports": [
+      "./context.js",
+      "./errors.js",
+      "./limits.js"
+    ],
+    "functions": [
+      "frameBytes",
+      "streamBound",
+      "contextBytes",
+      "bundleBytes"
+    ]
+  },
+  {
+    "path": "src/client/transport.ts",
+    "lines": 65,
+    "imports": [
+      "node:fs",
+      "../../implementation/contracts.js",
+      "./context.js",
+      "./errors.js",
+      "./settings.js",
+      "./runtime.js"
+    ],
+    "functions": [
+      "socketPath",
+      "frame",
+      "callActor",
+      "call"
+    ]
+  },
+  {
+    "path": "src/config.ts",
+    "lines": 333,
+    "imports": [
+      "./domain/integration-policy.js",
+      "./config/operations.js",
+      "../implementation/contracts.js",
+      "./domain/egress.js",
+      "./domain/errors.js",
+      "./resident-paths.js",
+      "./domain/identifiers.js",
+      "./domain/capabilities.js",
+      "./domain/resources.js",
+      "./domain/limits.js",
+      "./mail/review-bounds.js",
+      "./domain/integer-fields.js",
+      "./domain/deployment.js",
+      "./protocol/log-response.js",
+      "node:path"
+    ],
+    "functions": [
+      "err",
+      "needString",
+      "needInt",
+      "needRecord",
+      "needArray",
+      "closedKeys",
+      "closedRecord",
+      "needIntegerFields",
+      "freezeResources",
+      "validatedSnapshot",
+      "loadConfigurationSnapshot",
+      "loadEditableConfiguration",
+      "loadConfiguration",
+      "loadConfig",
+      "readCurrentHostPolicy",
+      "validateConfig"
+    ]
+  },
+  {
+    "path": "src/config/defaults.ts",
+    "lines": 159,
+    "imports": [
+      "../../implementation/contracts.js",
+      "../domain/errors.js"
+    ],
+    "functions": [
+      "defaultSocietyFor",
+      "sessionSocietyName",
+      "societyFromDirectory",
+      "defaultHostConfig"
+    ]
+  },
+  {
+    "path": "src/config/generations.ts",
+    "lines": 644,
+    "imports": [
+      "node:crypto",
+      "node:fs",
+      "node:path",
+      "../../implementation/contracts.js",
+      "../domain/errors.js",
+      "../config.js",
+      "../storage/file-digest.js",
+      "./operations.js",
+      "../storage/durable-fs.js",
+      "../storage/directory.js",
+      "../storage/contained-fs.js"
+    ],
+    "functions": [
+      "storeFailure",
+      "logicalFiles",
+      "roleBody",
+      "generationIdOf",
+      "managedGenerationOf",
+      "managedRolesOf",
+      "assertCurrent",
+      "treeBytes",
+      "sameBytes",
+      "sameEntries",
+      "publishGeneration",
+      "assertReproduces",
+      "commitManagedGeneration",
+      "commitInlineConfiguration",
+      "createInlineConfiguration",
+      "publishInline",
+      "commitRecord",
+      "journalTail",
+      "appendAll",
+      "recordCommit",
+      "generationsToKeep",
+      "collectManagedGenerations",
+      "collectTemporaries"
+    ]
+  },
+  {
+    "path": "src/config/operations.ts",
+    "lines": 404,
+    "imports": [
+      "node:fs",
+      "node:path",
+      "node:crypto",
+      "../domain/errors.js",
+      "../domain/deployment.js",
+      "../domain/identifiers.js",
+      "../frame.js",
+      "../storage/file-digest.js",
+      "../domain/utf8.js"
+    ],
+    "functions": [
+      "invalid",
+      "sourceFailure",
+      "record",
+      "closed",
+      "closedWithOptional",
+      "localPath",
+      "add",
+      "finish",
+      "bytes",
+      "json",
+      "extensionListProblem",
+      "extensionEntryProblem",
+      "extensionLocation",
+      "observeExtensionAsset",
+      "roleSettings",
+      "stringList",
+      "resolveConfigurationLayout",
+      "configurationLayout",
+      "readEditableConfigurationSource",
+      "readConfigurationSource",
+      "readSource"
+    ]
+  },
+  {
+    "path": "src/config/policy.ts",
+    "lines": 53,
+    "imports": [
+      "../../implementation/contracts.js",
+      "../domain/child-policy.js",
+      "../domain/canonical-json.js",
+      "../domain/errors.js"
+    ],
+    "functions": [
+      "freezePolicy",
+      "createChildSpecResolver",
+      "refresh"
+    ]
+  },
+  {
+    "path": "src/config/role-prompts.ts",
+    "lines": 327,
+    "imports": [
+      "../domain/derived.js"
+    ],
+    "functions": []
+  },
+  {
+    "path": "src/diagnostics/files.ts",
+    "lines": 168,
+    "imports": [
+      "node:fs",
+      "node:crypto",
+      "node:path",
+      "../domain/context-policy.js",
+      "./mail.js",
+      "../domain/mail-values.js",
+      "../../implementation/contracts/values.js"
+    ],
+    "functions": [
+      "sameIdentity",
+      "parents",
+      "names",
+      "file",
+      "symlink",
+      "contextTree"
+    ]
+  },
+  {
+    "path": "src/diagnostics/integrity.ts",
+    "lines": 180,
+    "imports": [
+      "node:path",
+      "../../implementation/contracts/runtime.js",
+      "../../implementation/contracts/values.js",
+      "../../implementation/contracts/durable.js",
+      "../git/observe.js",
+      "../storage/rows.js",
+      "../storage/paths.js",
+      "../domain/derived.js",
+      "../domain/identifiers.js",
+      "./ledger.js",
+      "./files.js"
+    ],
+    "functions": [
+      "inspectIntegrity"
+    ]
+  },
+  {
+    "path": "src/diagnostics/ledger.ts",
+    "lines": 200,
+    "imports": [
+      "node:path",
+      "../storage/diagnostic-snapshot.js",
+      "../storage/operation-codec.js",
+      "../storage/rows.js",
+      "../domain/lineage.js",
+      "../domain/identifiers.js",
+      "../durable.js",
+      "../storage/rows.js",
+      "../domain/persisted-formats.js",
+      "../domain/errors.js"
+    ],
+    "functions": [
+      "add",
+      "report",
+      "record",
+      "closed",
+      "inspectLedger"
+    ]
+  },
+  {
+    "path": "src/diagnostics/mail.ts",
+    "lines": 29,
+    "imports": [
+      "../../implementation/contracts/durable.js",
+      "../mail/headers.js",
+      "../mail/addresses.js"
+    ],
+    "functions": [
+      "mailHeadersMatch"
+    ]
+  },
+  {
+    "path": "src/domain/admission.ts",
+    "lines": 42,
+    "imports": [
+      "./errors.js"
+    ],
+    "functions": [
+      "observe",
+      "close",
+      "assertAdmission",
+      "releaseOnce",
+      "bindAdmissionGate",
+      "assertNewAcceptance",
+      "observeStoreFailure"
+    ]
+  },
+  {
+    "path": "src/domain/attestation-relations.ts",
+    "lines": 71,
+    "imports": [
+      "../../implementation/contracts/attestation.js",
+      "../../implementation/contracts/values.js"
+    ],
+    "functions": [
+      "sameExactCandidate",
+      "attestationTarget",
+      "attestationRelationProblem",
+      "reviewFactRelationProblem"
+    ]
+  },
+  {
+    "path": "src/domain/attestation.ts",
+    "lines": 159,
+    "imports": [
+      "./mail-values.js",
+      "./identifiers.js"
+    ],
+    "functions": [
+      "object",
+      "attestationProblem",
+      "reviewInputProblem",
+      "reviewFactProblem",
+      "attestationInputProblem"
+    ]
+  },
+  {
+    "path": "src/domain/canonical-json.ts",
+    "lines": 113,
+    "imports": [
+      "node:crypto",
+      "../../implementation/contracts/identity.js",
+      "./errors.js"
+    ],
+    "functions": [
+      "tooDeep",
+      "sortKey",
+      "sortedUnique",
+      "snapshotJson",
+      "appendCanonical",
+      "canonicalJson",
+      "sha256Hex"
+    ]
+  },
+  {
+    "path": "src/domain/capabilities.ts",
+    "lines": 41,
+    "imports": [
+      "../../implementation/contracts/identity.js"
+    ],
+    "functions": [
+      "isCapability",
+      "capabilityCheck"
+    ]
+  },
+  {
+    "path": "src/domain/child-policy.ts",
+    "lines": 42,
+    "imports": [
+      "../../implementation/contracts.js",
+      "./errors.js"
+    ],
+    "functions": [
+      "resolveChildSpec"
+    ]
+  },
+  {
+    "path": "src/domain/context-policy.ts",
+    "lines": 122,
+    "imports": [
+      "./identifiers.js",
+      "../../implementation/contracts/values.js",
+      "./utf8.js"
+    ],
+    "functions": [
+      "isContextDirectoryPath",
+      "contextPathCheck",
+      "contextPathsCheck",
+      "contextEntriesCheck",
+      "isContextEntries",
+      "text",
+      "append",
+      "finish",
+      "contextFileCheck"
+    ]
+  },
+  {
+    "path": "src/domain/deployment.ts",
+    "lines": 57,
+    "imports": [],
+    "functions": [
+      "isDeploymentDigest"
+    ]
+  },
+  {
+    "path": "src/domain/derived.ts",
+    "lines": 208,
+    "imports": [
+      "node:crypto",
+      "./identifiers.js"
+    ],
+    "functions": [
+      "required",
+      "messageIdForOperation",
+      "publishedRefFor",
+      "exportRefForRequestKey",
+      "isExportRef",
+      "isPublishedRef",
+      "isMailObjectRelativePath",
+      "submitStagingFor",
+      "submitBundleFor",
+      "contextNoopRefFor",
+      "contextStagingFor",
+      "agentRootFor",
+      "workspaceFor",
+      "runnerViewFor",
+      "batchViewFileName",
+      "batchViewFor",
+      "runnerReceiptFor",
+      "runnerSessionDirFor",
+      "sessionDirFor",
+      "modelWorkspaceFor",
+      "mailObjectFileName",
+      "mailObjectRelativePath",
+      "maildirCurName",
+      "mailArchiveRelativePath",
+      "mailArchiveDisplayPath",
+      "mailWorkersRelativePath",
+      "mailWorkersDisplayPath",
+      "mailAudienceDisplayPath",
+      "mailInboxRelativePath",
+      "mailInboxArrivalRelativePath",
+      "contextRevisionLinkFor",
+      "contextRevisionFor",
+      "contextRevisionDisplayPath",
+      "actorSocketDirectoryFor",
+      "actorSocketFor",
+      "unitNameFor",
+      "residentUnitsFor",
+      "isMessageIdForOperation",
+      "isPublishedRefFor",
+      "isMailObjectRelativePathFor"
+    ]
+  },
+  {
+    "path": "src/domain/egress.ts",
+    "lines": 161,
+    "imports": [
+      "../../implementation/contracts.js"
+    ],
+    "functions": [
+      "egressEntryProblem",
+      "normalizeEgressHost",
+      "egressEntryMatches",
+      "egressPolicyFor",
+      "allowsEgressEndpoint",
+      "parseConnectTarget",
+      "connectHostProblem"
+    ]
+  },
+  {
+    "path": "src/domain/errors.ts",
+    "lines": 347,
+    "imports": [
+      "../../implementation/contracts/errors.js",
+      "./capabilities.js",
+      "./identifiers.js"
+    ],
+    "functions": [
+      "primaryFailure",
+      "normalizeStorageFailure",
+      "sqliteValueOutOfRange",
+      "sqlitePrimaryCode",
+      "unobserved",
+      "publishedUnconfirmed",
+      "errorCodeOf",
+      "isErrorCode",
+      "isPreacceptOnlyFailure",
+      "classifyError",
+      "restated",
+      "acceptedFailure",
+      "acceptedFailurePolicy",
+      "failureMessage",
+      "terminalFailure",
+      "publicFailure",
+      "publicDetails",
+      "failureText",
+      "errorExit"
+    ]
+  },
+  {
+    "path": "src/domain/exhaustive.ts",
+    "lines": 5,
+    "imports": [],
+    "functions": [
+      "assertNever"
+    ]
+  },
+  {
+    "path": "src/domain/identifiers.ts",
+    "lines": 194,
+    "imports": [],
+    "functions": [
+      "isPlatformUuid",
+      "isValidActorName",
+      "isValidActor",
+      "isValidSocietyName",
+      "isValidTopicName",
+      "isValidRequestKey",
+      "isDerivedRequestKey",
+      "applyRequestKeyFor",
+      "refreshRequestKeyFor",
+      "refreshKeyOrdinalOf",
+      "isReviewRequestName",
+      "reviewRequestNameFor",
+      "legacyReviewRequestNameFor",
+      "reviewRequestNameOwnedBy",
+      "isValidOperationId",
+      "isValidBatchId",
+      "isValidMessageId",
+      "isValidFullOid",
+      "isValidWirePath",
+      "parseActor",
+      "parseResidentName",
+      "parseSocietyName",
+      "parseTopicName",
+      "parseRequestKey",
+      "parseOperationId",
+      "parseBatchId",
+      "parseMessageFileId",
+      "parseFullOid",
+      "parseRepositoryRelativePath",
+      "parseMessageId"
+    ]
+  },
+  {
+    "path": "src/domain/integer-fields.ts",
+    "lines": 33,
+    "imports": [],
+    "functions": [
+      "integerFieldsCheck"
+    ]
+  },
+  {
+    "path": "src/domain/integration-policy.ts",
+    "lines": 46,
+    "imports": [
+      "./identifiers.js",
+      "./resources.js",
+      "../validate.js"
+    ],
+    "functions": []
+  },
+  {
+    "path": "src/domain/limits.ts",
+    "lines": 47,
+    "imports": [
+      "./integer-fields.js",
+      "../../implementation/contracts/host.js"
+    ],
+    "functions": [
+      "isProtocolLimits"
+    ]
+  },
+  {
+    "path": "src/domain/lineage.ts",
+    "lines": 76,
+    "imports": [
+      "./errors.js",
+      "./identifiers.js"
+    ],
+    "functions": [
+      "corrupt",
+      "node",
+      "all",
+      "ancestors",
+      "descendants",
+      "isDescendant",
+      "assertCreateCapacity"
+    ]
+  },
+  {
+    "path": "src/domain/mail-values.ts",
+    "lines": 85,
+    "imports": [
+      "../../implementation/contracts/values.js",
+      "./identifiers.js"
+    ],
+    "functions": [
+      "storedMailBytes",
+      "mailHeaderValueCheck",
+      "isMailKind",
+      "messageKindCheck",
+      "isLogicalAddress",
+      "logicalAddressCheck",
+      "headerMessageIdCheck",
+      "parseRfcMessageId",
+      "exactCandidateCheck",
+      "isExactCandidateIdentity"
+    ]
+  },
+  {
+    "path": "src/domain/persisted-formats.ts",
+    "lines": 118,
+    "imports": [
+      "./identifiers.js",
+      "../protocol/receipt-codec.js"
+    ],
+    "functions": [
+      "classifyPersistedPlan",
+      "planPortability",
+      "isHistoricalResult",
+      "oidMatchesFormat"
+    ]
+  },
+  {
+    "path": "src/domain/request-identity.ts",
+    "lines": 95,
+    "imports": [
+      "../../implementation/contracts/identity.js",
+      "../../implementation/contracts/durable.js",
+      "../../implementation/contracts/public-wire.js",
+      "./canonical-json.js"
+    ],
+    "functions": [
+      "canonicalRequestParams",
+      "buildRequestIdentity",
+      "requestParamsEqual",
+      "objectProjection",
+      "firstRequestProjectionMismatch"
+    ]
+  },
+  {
+    "path": "src/domain/resources.ts",
+    "lines": 54,
+    "imports": [
+      "./integer-fields.js",
+      "../../implementation/contracts/host.js",
+      "./errors.js"
+    ],
+    "functions": [
+      "isResourceLimits",
+      "canonicalResourceLimits",
+      "parseCanonicalResourceLimits",
+      "assertStorageQuotaSupported"
+    ]
+  },
+  {
+    "path": "src/domain/review-evaluation.ts",
+    "lines": 247,
+    "imports": [
+      "./errors.js",
+      "../../implementation/contracts/errors.js",
+      "../../implementation/contracts/identity.js",
+      "../../implementation/contracts/attestation.js",
+      "../../implementation/contracts/durable.js",
+      "../../implementation/contracts/values.js"
+    ],
+    "functions": [
+      "requestOf",
+      "freeze",
+      "reviewState",
+      "withdrawReason",
+      "planEffects"
+    ]
+  },
+  {
+    "path": "src/domain/session-mode.ts",
+    "lines": 6,
+    "imports": [],
+    "functions": [
+      "isSessionMode"
+    ]
+  },
+  {
+    "path": "src/domain/spec-identity.ts",
+    "lines": 16,
+    "imports": [
+      "node:crypto",
+      "../../implementation/contracts/host.js",
+      "./canonical-json.js"
+    ],
+    "functions": [
+      "resolvedSpecDigest"
+    ]
+  },
+  {
+    "path": "src/domain/tier-evaluation.ts",
+    "lines": 88,
+    "imports": [
+      "../../implementation/contracts/values.js",
+      "./attestation-relations.js",
+      "./canonical-json.js",
+      "./errors.js",
+      "../../implementation/contracts/integration.js"
+    ],
+    "functions": [
+      "maximumTier",
+      "evaluateTier"
+    ]
+  },
+  {
+    "path": "src/domain/tier-snapshot.ts",
+    "lines": 53,
+    "imports": [
+      "../../implementation/contracts/integration.js",
+      "../../implementation/contracts/values.js",
+      "./identifiers.js",
+      "./canonical-json.js",
+      "./attestation-relations.js",
+      "./mail-values.js",
+      "./tier-evaluation.js",
+      "./integration-policy.js",
+      "../validate.js"
+    ],
+    "functions": [
+      "tieredAcceptanceRelation"
+    ]
+  },
+  {
+    "path": "src/domain/tool-surface.ts",
+    "lines": 356,
+    "imports": [
+      "./errors.js"
+    ],
+    "functions": [
+      "invalid",
+      "assertName",
+      "assertUnique",
+      "assertAcyclic",
+      "planToolSurface",
+      "codeIntelGroup",
+      "fileEditGroup",
+      "webResearchGroup",
+      "residentToolSurfaceConfig",
+      "principalToolSurfaceConfig",
+      "encodedResidentToolSurface",
+      "encodedPrincipalToolSurface",
+      "encodeToolSurfacePlan",
+      "depthOf"
+    ]
+  },
+  {
+    "path": "src/domain/unseen-text.ts",
+    "lines": 22,
+    "imports": [],
+    "functions": []
+  },
+  {
+    "path": "src/domain/utf8.ts",
+    "lines": 24,
+    "imports": [],
+    "functions": [
+      "utf8Decoder",
+      "decodeUtf8"
+    ]
+  },
+  {
+    "path": "src/durable.ts",
+    "lines": 581,
+    "imports": [
+      "./domain/tier-snapshot.js",
+      "./domain/attestation.js",
+      "node:path",
+      "../implementation/contracts/durable.js",
+      "./domain/capabilities.js",
+      "./domain/resources.js",
+      "./domain/spec-identity.js",
+      "./domain/context-policy.js",
+      "./domain/derived.js",
+      "./storage/paths.js",
+      "./validate.js",
+      "./domain/identifiers.js"
+    ],
+    "functions": [
+      "ownedMessages",
+      "operationPlanShapeCheck",
+      "operationPlanCheck",
+      "operationResultRelationCheck"
+    ]
+  },
+  {
+    "path": "src/entry/broker.ts",
+    "lines": 258,
+    "imports": [
+      "node:path",
+      "../runtime/user-files.js",
+      "../store.js",
+      "../mail.js",
+      "../units.js",
+      "../views.js",
+      "../lifecycle.js",
+      "../broker.js",
+      "../protocol/host-channel.js",
+      "../runtime/supervision-channel.js",
+      "../git.js",
+      "../runtime/candidate-checks.js",
+      "../git/quarantine.js",
+      "../runtime/provision.js",
+      "../runtime/society-preparation.js",
+      "node:fs",
+      "../git/integration-policy.js",
+      "../reconcile.js",
+      "../config.js",
+      "../config/policy.js",
+      "../runtime/process-lock.js",
+      "../runtime/society-lease.js",
+      "../runtime/broker-lifetime.js",
+      "../runtime/assets.js",
+      "../runtime/deployment-manifest.js",
+      "../storage/quota.js",
+      "../authority.js",
+      "../domain/errors.js",
+      "../ids.js",
+      "../storage/paths.js",
+      "../sandbox.js"
+    ],
+    "functions": [
+      "usage",
+      "main"
+    ]
+  },
+  {
+    "path": "src/entry/guest-packages.ts",
+    "lines": 25,
+    "imports": [
+      "../domain/errors.js",
+      "../tui/packages-apply.js",
+      "../tui/words.js"
+    ],
+    "functions": [
+      "argOf",
+      "main"
+    ]
+  },
+  {
+    "path": "src/entry/guest-provision.ts",
+    "lines": 48,
+    "imports": [
+      "node:fs",
+      "node:path",
+      "../storage/directory.js",
+      "../process/run.js",
+      "../platform/guest/identity.js",
+      "../platform/guest/provision.js"
+    ],
+    "functions": [
+      "fail",
+      "main"
+    ]
+  },
+  {
+    "path": "src/entry/guest-session.ts",
+    "lines": 70,
+    "imports": [
+      "node:net",
+      "node:fs",
+      "../storage/socket-name.js",
+      "../leaf.js",
+      "../platform/guest/session.js",
+      "../runtime/broker-lifetime.js",
+      "../tui/words.js",
+      "../runtime/session-handoff.js"
+    ],
+    "functions": [
+      "fail"
+    ]
+  },
+  {
+    "path": "src/entry/guestctl.ts",
+    "lines": 45,
+    "imports": [
+      "../platform/guest/identity.js",
+      "../platform/guest/server.js",
+      "../platform/guest/control.js",
+      "../platform/guest/linux-system.js",
+      "../protocol/host-guest.js",
+      "../runtime/broker-lifetime.js"
+    ],
+    "functions": [
+      "argOf"
+    ]
+  },
+  {
+    "path": "src/entry/guesthost.ts",
+    "lines": 86,
+    "imports": [
+      "node:path",
+      "../platform/guest/identity.js",
+      "../platform/guest/server.js",
+      "../platform/guest/host.js",
+      "../platform/guest/systemd-launcher.js",
+      "../platform/guest/egress.js",
+      "../platform/guest/requests.js",
+      "../platform/guest/project.js",
+      "../platform/guest/stream.js",
+      "../platform/guest/archive.js",
+      "../platform/guest/packages.js",
+      "../domain/deployment.js",
+      "../platform/guest/host.js",
+      "../protocol/host-guest.js"
+    ],
+    "functions": [
+      "argOf"
+    ]
+  },
+  {
+    "path": "src/entry/host.ts",
+    "lines": 36,
+    "imports": [
+      "node:path",
+      "../protocol/channel.js",
+      "../ids.js",
+      "../runtime/assets.js"
+    ],
+    "functions": [
+      "usage",
+      "main"
+    ]
+  },
+  {
+    "path": "src/entry/module-conformance.ts",
+    "lines": 31,
+    "imports": [
+      "../module-ports.js",
+      "../store.js",
+      "../units.js",
+      "../views.js",
+      "../reconcile.js",
+      "../runner.js",
+      "../sandbox.js",
+      "../ports/ledger.js",
+      "../storage/operation-codec.js",
+      "../storage/receipt-projector.js"
+    ],
+    "functions": []
+  },
+  {
+    "path": "src/entry/oma-mac.ts",
+    "lines": 222,
+    "imports": [
+      "node:fs",
+      "../runtime/user-files.js",
+      "node:crypto",
+      "node:url",
+      "node:path",
+      "node:os",
+      "../platform/rpc.js",
+      "../domain/errors.js",
+      "../platform/host/api-client.js",
+      "../platform/host/attach-client.js",
+      "../protocol/host-guest.js",
+      "../runtime/pi-packages.js",
+      "../runtime/local-package.js",
+      "../runtime/personal-settings.js",
+      "../runtime/host-arguments.js",
+      "../runtime/process-lock.js",
+      "../tui/login.js",
+      "../tui/session-mode.js",
+      "../runtime/session-catalog.js",
+      "../runtime/session-mode.js",
+      "../domain/errors.js",
+      "../process/cleanup.js",
+      "../protocol/guest-history.js",
+      "../domain/identifiers.js",
+      "../platform/host/personal-histories.js"
+    ],
+    "functions": [
+      "say",
+      "observedSocieties",
+      "call",
+      "packages",
+      "main"
+    ]
+  },
+  {
+    "path": "src/entry/oma-society.ts",
+    "lines": 1021,
+    "imports": [
+      "node:fs",
+      "node:path",
+      "node:url",
+      "../ids.js",
+      "../domain/errors.js",
+      "../domain/deployment.js",
+      "../domain/tool-surface.js",
+      "../runtime/assets.js",
+      "../runtime/pi-runtime.js",
+      "../storage/directory.js",
+      "../tui/app.js",
+      "../tui/exit.js",
+      "../tui/words.js",
+      "../tui/panel-terminal.js",
+      "../tui/dashboard.js",
+      "../tui/session.js",
+      "../runtime/principal-delivery.js",
+      "../runtime/pi-rpc.js",
+      "../tui/transport.js",
+      "../tui/sources/mail.js",
+      "../domain/mail-values.js",
+      "../tui/sources/extensions.js",
+      "../tui/sources/settings.js",
+      "../runtime/pi-packages.js",
+      "../runtime/local-package.js",
+      "../tui/project-settings.js",
+      "../runtime/personal-settings.js",
+      "../config/generations.js",
+      "../config/defaults.js",
+      "../hash.js",
+      "../runtime/provision.js",
+      "../runtime/broker-supervisor.js",
+      "../runtime/host-arguments.js",
+      "../runtime/session-mode.js",
+      "../runtime/session-catalog.js",
+      "../runtime/session-handoff.js",
+      "../runtime/host-history-channel.js",
+      "../protocol/host-history.js",
+      "../protocol/guest-history.js",
+      "../runtime/session-history.js",
+      "../runtime/host-tenure.js",
+      "../runtime/society-lease.js",
+      "../runtime/deployment-manifest.js",
+      "../tui/model.js",
+      "../tui/prompt.js",
+      "../runtime/broker-lifetime.js",
+      "../tui/login.js",
+      "../runtime/egress-forwarder.js"
+    ],
+    "functions": [
+      "usage",
+      "login",
+      "piPackages",
+      "fail",
+      "main"
+    ]
+  },
+  {
+    "path": "src/entry/oma.ts",
+    "lines": 42,
+    "imports": [
+      "node:fs",
+      "node:path",
+      "../runtime/host-arguments.js",
+      "../runtime/assets.js",
+      "../runtime/session-catalog.js",
+      "../runtime/session-mode.js",
+      "../tui/session-mode.js",
+      "../tui/exit.js",
+      "../tui/words.js"
+    ],
+    "functions": [
+      "main"
+    ]
+  },
+  {
+    "path": "src/entry/omahostd.ts",
+    "lines": 104,
+    "imports": [
+      "node:fs",
+      "node:crypto",
+      "node:fs",
+      "node:path",
+      "../platform/host/image.js",
+      "../platform/host/vz-driver.js",
+      "../platform/host/service.js",
+      "../platform/host/resolver.js",
+      "../platform/host/record.js",
+      "../protocol/host-guest.js",
+      "../runtime/broker-lifetime.js",
+      "../platform/host/bookmark.js",
+      "../platform/host/files.js"
+    ],
+    "functions": [
+      "fail",
+      "main"
+    ]
+  },
+  {
+    "path": "src/entry/personal-host.ts",
+    "lines": 72,
+    "imports": [
+      "node:fs",
+      "node:path",
+      "node:url",
+      "../config/defaults.js",
+      "../hash.js",
+      "../domain/errors.js",
+      "../domain/deployment.js",
+      "../runtime/session-catalog.js",
+      "../runtime/session-mode.js",
+      "../runtime/personal-session.js",
+      "../runtime/personal-settings.js",
+      "../platform/host/personal-seed.js",
+      "../protocol/guest-history.js",
+      "../platform/host/guest-histories.js",
+      "../tui/sources/settings.js"
+    ],
+    "functions": [
+      "personalMain"
+    ]
+  },
+  {
+    "path": "src/entry/pi-interactive-host.ts",
+    "lines": 714,
+    "imports": [
+      "../runtime/client-preload.js",
+      "node:net",
+      "node:fs",
+      "node:os",
+      "node:path",
+      "node:module",
+      "@earendil-works/pi-coding-agent",
+      "../runtime/interactive-channel.js",
+      "../runtime/pi-rpc.js",
+      "../tui/interactive-editor.js",
+      "../tui/compact-tools.js",
+      "../runtime/interactive-display.js",
+      "../tui/panel-style.js",
+      "../tui/project-session-directories.js",
+      "../protocol/host-history.js",
+      "../tui/open-tui-brand.js",
+      "../runtime/pi-presentation.js",
+      "../pi-compat/env.js",
+      "../pi-compat/commands.js",
+      "../pi-compat/interactive-mode.js",
+      "../runtime/extension-modules.js",
+      "../tui/ask-user-question/presenter.js",
+      "../tui/limits.js",
+      "../domain/unseen-text.js",
+      "../config.js",
+      "../../implementation/contracts.js"
+    ],
+    "functions": [
+      "effortLevelsOf",
+      "omaExportCommand",
+      "omaCrashHint",
+      "omaTerminalTitle",
+      "isDeliveryCommand",
+      "rpcPromptOptions",
+      "setThinkingBlockHidden",
+      "projectDisplay",
+      "runInteractive",
+      "invalidate",
+      "render",
+      "invalidate",
+      "handleInput",
+      "invalidate",
+      "dispose"
+    ]
+  },
+  {
+    "path": "src/entry/pi-interactive.ts",
+    "lines": 9,
+    "imports": [
+      "./pi-interactive-host.js"
+    ],
+    "functions": []
+  },
+  {
+    "path": "src/entry/pi-personal.ts",
+    "lines": 389,
+    "imports": [
+      "node:fs",
+      "node:module",
+      "node:path",
+      "@earendil-works/pi-coding-agent",
+      "../domain/errors.js",
+      "../domain/deployment.js",
+      "../runtime/session-mode.js",
+      "../runtime/session-catalog.js",
+      "../runtime/personal-settings.js",
+      "../runtime/pi-packages.js",
+      "../runtime/extension-integrity.js",
+      "../runtime/extension-modules.js",
+      "../runtime/pi-runtime.js",
+      "../runtime/pi-presentation.js",
+      "../pi-compat/env.js",
+      "../pi-compat/interactive-mode.js",
+      "../runtime/personal-models.js",
+      "../runtime/society-slot.js",
+      "../protocol/guest-history.js",
+      "../platform/host/guest-histories.js",
+      "../tui/open-tui-brand.js",
+      "../tui/ask-user-question/presenter.js"
+    ],
+    "functions": [
+      "main"
+    ]
+  },
+  {
+    "path": "src/entry/prepare-society.ts",
+    "lines": 27,
+    "imports": [
+      "node:fs",
+      "../runtime/society-lease.js",
+      "../runtime/provision.js",
+      "../client/fence.js",
+      "../domain/errors.js"
+    ],
+    "functions": []
+  },
+  {
+    "path": "src/entry/runner.ts",
+    "lines": 147,
+    "imports": [
+      "node:path",
+      "../runner.js",
+      "../config.js",
+      "../ids.js",
+      "../domain/errors.js",
+      "../runtime/pi-runtime.js",
+      "../storage/directory.js",
+      "node:fs",
+      "../runtime/resident-rootfs.js",
+      "../sandbox.js",
+      "../runtime/pi-packages.js",
+      "../domain/deployment.js",
+      "../domain/resources.js",
+      "../domain/egress.js",
+      "../runtime/assets.js",
+      "../runtime/broker-lifetime.js"
+    ],
+    "functions": [
+      "usage"
+    ]
+  },
+  {
+    "path": "src/extension/ask-user-question.ts",
+    "lines": 220,
+    "imports": [
+      "@earendil-works/pi-coding-agent",
+      "typebox",
+      "../client/ask-user-question/protocol.js",
+      "../client/ask-user-question/questionnaire.js",
+      "../client/ask-user-question/envelope.js"
+    ],
+    "functions": [
+      "registerAskUserQuestion",
+      "execute",
+      "extension"
+    ]
+  },
+  {
+    "path": "src/extension/batch-view.ts",
+    "lines": 192,
+    "imports": [
+      "node:fs",
+      "node:path",
+      "./utf8.js"
+    ],
+    "functions": [
+      "exactObject",
+      "validActorName",
+      "validAddress",
+      "validRequestKey",
+      "logicalFromDisplay",
+      "validTopicName",
+      "validFullOid",
+      "validMessageId",
+      "validLimits",
+      "decodeManifest",
+      "decodeBatchViewText",
+      "readBatchView"
+    ]
+  },
+  {
+    "path": "src/extension/child-env.ts",
+    "lines": 144,
+    "imports": [
+      "node:path"
+    ],
+    "functions": [
+      "tokenValueAllowed",
+      "egressProxyValue",
+      "admittedChildEnv",
+      "childEnvScratchEntries",
+      "buildChildEnv"
+    ]
+  },
+  {
+    "path": "src/extension/contained-files.ts",
+    "lines": 383,
+    "imports": [
+      "node:fs",
+      "node:crypto",
+      "node:path",
+      "node:os",
+      "node:timers/promises"
+    ],
+    "functions": [
+      "entryAt",
+      "componentsWithin",
+      "errnoCode",
+      "refusedLink",
+      "isDescriptorOverrun",
+      "descriptorRefusal",
+      "openDirectoryWithin",
+      "openEntryWithin",
+      "ownedFile",
+      "withFileWithin",
+      "readWithin",
+      "accessWithin",
+      "writeGrowthWithin",
+      "writeWithin",
+      "writeWithinUnchanged",
+      "mkdirWithin",
+      "isDirectoryWithin",
+      "existsWithin",
+      "withSearchSnapshot",
+      "searchSnapshot",
+      "readdirWithin"
+    ]
+  },
+  {
+    "path": "src/extension/contained-search.ts",
+    "lines": 495,
+    "imports": [
+      "node:child_process",
+      "node:fs",
+      "node:readline",
+      "node:crypto",
+      "node:path",
+      "node:os",
+      "@earendil-works/pi-coding-agent",
+      "./contained-files.js",
+      "@earendil-works/pi-coding-agent"
+    ],
+    "functions": [
+      "searchChildBody",
+      "finishSearchResult",
+      "shownPath",
+      "completeSearchText",
+      "searchWorkspace"
+    ]
+  },
+  {
+    "path": "src/extension/contained-tools.ts",
+    "lines": 114,
+    "imports": [
+      "node:path",
+      "@earendil-works/pi-coding-agent",
+      "./contained-files.js",
+      "./contained-search.js",
+      "./workspace-guard.js"
+    ],
+    "functions": [
+      "createContainedWriter",
+      "containWorkspaceTools"
+    ]
+  },
+  {
+    "path": "src/extension/delivery.ts",
+    "lines": 139,
+    "imports": [
+      "node:path",
+      "@earendil-works/pi-coding-agent",
+      "./batch-view.js",
+      "./shared.js"
+    ],
+    "functions": [
+      "registerDelivery"
+    ]
+  },
+  {
+    "path": "src/extension/egress-bridge.ts",
+    "lines": 52,
+    "imports": [
+      "node:path",
+      "node:net",
+      "@earendil-works/pi-coding-agent",
+      "./shared.js"
+    ],
+    "functions": [
+      "startEgressBridge"
+    ]
+  },
+  {
+    "path": "src/extension/hashline-tools.ts",
+    "lines": 479,
+    "imports": [
+      "node:fs",
+      "node:fs/promises",
+      "node:os",
+      "node:path",
+      "@earendil-works/pi-coding-agent",
+      "./contained-files.js",
+      "./workspace-guard.js",
+      "./vendor-bundle.js"
+    ],
+    "functions": [
+      "loadHashlineRuntime",
+      "stateDirFor",
+      "redirectHashlineState",
+      "registerHashlineTools"
+    ]
+  },
+  {
+    "path": "src/extension/inference-bridge.ts",
+    "lines": 83,
+    "imports": [
+      "node:path",
+      "node:net",
+      "@earendil-works/pi-coding-agent",
+      "./shared.js"
+    ],
+    "functions": [
+      "startInferenceBridge"
+    ]
+  },
+  {
+    "path": "src/extension/lsp-tools.ts",
+    "lines": 675,
+    "imports": [
+      "node:fs",
+      "node:os",
+      "node:path",
+      "@earendil-works/pi-coding-agent",
+      "typebox",
+      "./contained-files.js",
+      "./shared.js",
+      "./vendor-bundle.js",
+      "./child-env.js",
+      "./vendor/pi-lsp/runtime/types.js"
+    ],
+    "functions": [
+      "hardenedAdapter",
+      "lspChildEnvironment",
+      "clampTimeout",
+      "liveFiles",
+      "loadVendoredRuntime",
+      "registerLspTools",
+      "execute",
+      "execute",
+      "execute"
+    ]
+  },
+  {
+    "path": "src/extension/mail-tools.ts",
+    "lines": 429,
+    "imports": [
+      "node:fs",
+      "node:path",
+      "@earendil-works/pi-coding-agent",
+      "typebox",
+      "./batch-view.js",
+      "../client/index.js",
+      "../client/codecs.js",
+      "./principal-channel.js",
+      "./principal-tools.js",
+      "./review-tools.js",
+      "./shared.js",
+      "./utf8.js"
+    ],
+    "functions": [
+      "omaToolNames",
+      "mailId",
+      "readBoundedMail",
+      "readableMail",
+      "replyPathFor",
+      "readBoundedText",
+      "messageIdOf",
+      "boundedBytes",
+      "indexBound",
+      "cliEnvironment",
+      "registerOmaTools",
+      "execute",
+      "execute",
+      "execute",
+      "execute"
+    ]
+  },
+  {
+    "path": "src/extension/mcp-tools.ts",
+    "lines": 580,
+    "imports": [
+      "node:crypto",
+      "node:fs",
+      "node:os",
+      "node:path",
+      "@earendil-works/pi-coding-agent",
+      "./vendor-bundle.js",
+      "./child-env.js",
+      "./vendor/pi-mcp-adapter/runtime/utils.js",
+      "./vendor/pi-mcp-adapter/runtime/types.js",
+      "./vendor/pi-mcp-adapter/runtime/index.js"
+    ],
+    "functions": [
+      "configError",
+      "isCommandSink",
+      "rejectCommandSinks",
+      "normalizeServer",
+      "normalizeSettings",
+      "normalizeOmaMcpConfig",
+      "withSdkEnvTombstones",
+      "ensurePrivateDir",
+      "oauthFileKey",
+      "mcpFacade",
+      "registerTool",
+      "registerCommand",
+      "registerFlag",
+      "registerShortcut",
+      "exec",
+      "egressPinnedProxy",
+      "registerMcpTools",
+      "mcpChildEnvironment"
+    ]
+  },
+  {
+    "path": "src/extension/principal-channel.ts",
+    "lines": 92,
+    "imports": [
+      "node:fs",
+      "node:net",
+      "../client/codecs.js"
+    ],
+    "functions": [
+      "detached",
+      "open",
+      "current",
+      "push",
+      "clear"
+    ]
+  },
+  {
+    "path": "src/extension/principal-tools.ts",
+    "lines": 49,
+    "imports": [
+      "@earendil-works/pi-coding-agent",
+      "typebox",
+      "./shared.js",
+      "./review-tools.js",
+      "../client/index.js"
+    ],
+    "functions": [
+      "registerPrincipalTools",
+      "execute",
+      "execute"
+    ]
+  },
+  {
+    "path": "src/extension/prompt-boundary.ts",
+    "lines": 89,
+    "imports": [
+      "node:fs",
+      "node:path",
+      "@earendil-works/pi-coding-agent"
+    ],
+    "functions": [
+      "inside",
+      "workspaceContext",
+      "toolGuidance",
+      "registerPromptBoundary"
+    ]
+  },
+  {
+    "path": "src/extension/provenance.ts",
+    "lines": 81,
+    "imports": [
+      "node:fs",
+      "node:path",
+      "@earendil-works/pi-coding-agent"
+    ],
+    "functions": [
+      "canonical",
+      "verifiedExtensionPaths",
+      "createToolProvenance",
+      "permitted",
+      "own"
+    ]
+  },
+  {
+    "path": "src/extension/review-tools.ts",
+    "lines": 162,
+    "imports": [
+      "../client/index.js",
+      "@earendil-works/pi-coding-agent",
+      "typebox",
+      "./shared.js",
+      "./batch-view.js"
+    ],
+    "functions": [
+      "only",
+      "nameOf",
+      "registerReviewTools",
+      "execute"
+    ]
+  },
+  {
+    "path": "src/extension/shared.ts",
+    "lines": 88,
+    "imports": [
+      "node:crypto",
+      "./batch-view.js"
+    ],
+    "functions": [
+      "integerEnv",
+      "textResult",
+      "refused",
+      "actorNameOf",
+      "canonical",
+      "answeredAlike",
+      "requestKeyOf"
+    ]
+  },
+  {
+    "path": "src/extension/tool-surface.ts",
+    "lines": 228,
+    "imports": [
+      "@earendil-works/pi-coding-agent",
+      "typebox",
+      "./shared.js"
+    ],
+    "functions": [
+      "stringArray",
+      "parseSurfacePlan",
+      "initialActiveTools",
+      "expandedActiveTools",
+      "defaultFatal",
+      "registerToolSurface",
+      "execute"
+    ]
+  },
+  {
+    "path": "src/extension/utf8.ts",
+    "lines": 10,
+    "imports": [],
+    "functions": [
+      "decodeUtf8"
+    ]
+  },
+  {
+    "path": "src/extension/vendor-bundle.ts",
+    "lines": 137,
+    "imports": [
+      "node:crypto",
+      "node:fs",
+      "node:path",
+      "node:url"
+    ],
+    "functions": [
+      "bundleFiles",
+      "readManifest",
+      "verifyVendorBundle",
+      "vendoredBundleDir"
+    ]
+  },
+  {
+    "path": "src/extension/web-tools.ts",
+    "lines": 215,
+    "imports": [
+      "node:path",
+      "@earendil-works/pi-coding-agent",
+      "./vendor-bundle.js",
+      "./vendor/pi-web-access/runtime/utils.js"
+    ],
+    "functions": [
+      "egressPinnedProxy",
+      "webFacade",
+      "registerTool",
+      "registerCommand",
+      "registerShortcut",
+      "exec",
+      "registerWebTools"
+    ]
+  },
+  {
+    "path": "src/extension/workspace-guard.ts",
+    "lines": 182,
+    "imports": [
+      "node:fs",
+      "node:path",
+      "@earendil-works/pi-coding-agent"
+    ],
+    "functions": [
+      "inside",
+      "allowedWorkspacePath",
+      "workspaceUsage",
+      "inputPaths",
+      "admittedRoot",
+      "guardWorkspaceTools"
+    ]
+  },
+  {
+    "path": "src/frame.ts",
+    "lines": 221,
+    "imports": [
+      "node:util",
+      "./validate.js",
+      "./protocol/byte-queue.js",
+      "./domain/utf8.js",
+      "./domain/canonical-json.js"
+    ],
+    "functions": [
+      "findDuplicateKey",
+      "jsonStructure",
+      "encodeFrame",
+      "isJsonObject",
+      "parseJsonObject",
+      "checkedLimit",
+      "frameHead",
+      "tooLarge",
+      "poison",
+      "feed",
+      "finish",
+      "streaming",
+      "poison",
+      "invalid",
+      "guardedDrain",
+      "push",
+      "bufferControl",
+      "requireControlBudget",
+      "resumeParsing",
+      "beginStream",
+      "drain",
+      "excessStatus",
+      "finish"
+    ]
+  },
+  {
+    "path": "src/git.ts",
+    "lines": 213,
+    "imports": [
+      "./git/observe.js",
+      "./protocol/request-codec.js",
+      "../implementation/contracts/values.js",
+      "./attestation.js",
+      "../implementation/contracts.js",
+      "./store.js",
+      "./storage/operation-codec.js",
+      "./domain/errors.js",
+      "./domain/exhaustive.js",
+      "./mail.js",
+      "./ids.js",
+      "./git/observe.js",
+      "./git/canonical-command.js",
+      "./git/integration.js",
+      "./review.js",
+      "./git/submit.js",
+      "./git/publication.js",
+      "./git/quarantine.js",
+      "./git/context.js",
+      "./git/context-repository.js",
+      "./git/context-publication.js",
+      "./git/paths.js",
+      "./git/integration-policy.js",
+      "./process/policies.js"
+    ],
+    "functions": [
+      "withWriter",
+      "objectFormat",
+      "casRef",
+      "submit",
+      "submitters",
+      "canonicalHas",
+      "quarantineImport",
+      "publishRef",
+      "integrate",
+      "isPublished",
+      "currentMain",
+      "runCheck",
+      "publishContext",
+      "currentContext",
+      "prepareContextCandidate",
+      "publishContextSnapshot",
+      "reconcileContext",
+      "hasCommittedContext",
+      "reconcile",
+      "knownRefs"
+    ]
+  },
+  {
+    "path": "src/git/approval.ts",
+    "lines": 3,
+    "imports": [],
+    "functions": []
+  },
+  {
+    "path": "src/git/attestation-snapshot.ts",
+    "lines": 37,
+    "imports": [
+      "../../implementation/contracts/values.js",
+      "../storage/operation-codec.js",
+      "../domain/errors.js",
+      "../domain/attestation-relations.js",
+      "./approval.js"
+    ],
+    "functions": [
+      "attestationSnapshot"
+    ]
+  },
+  {
+    "path": "src/git/canonical-command.ts",
+    "lines": 217,
+    "imports": [
+      "node:fs",
+      "node:os",
+      "node:path",
+      "../process/policies.js",
+      "../domain/errors.js",
+      "../process/run.js",
+      "../domain/utf8.js",
+      "../hash.js",
+      "./observe.js",
+      "../domain/identifiers.js"
+    ],
+    "functions": [
+      "evidence",
+      "createCanonicalObserver",
+      "compareAndSwapCanonicalRef",
+      "createCanonicalRef",
+      "authorizeCanonicalNoop",
+      "canonicalMergeDiff",
+      "mergeDiffText",
+      "canonicalRevertCommit",
+      "headLines"
+    ]
+  },
+  {
+    "path": "src/git/context-publication.ts",
+    "lines": 61,
+    "imports": [
+      "../storage/operation-codec.js",
+      "./canonical-command.js",
+      "./observe.js",
+      "../domain/errors.js"
+    ],
+    "functions": [
+      "witness",
+      "hasNoopWitness",
+      "authorizeNoop",
+      "observe",
+      "consumeContextPublication"
+    ]
+  },
+  {
+    "path": "src/git/context-repository.ts",
+    "lines": 289,
+    "imports": [
+      "node:fs",
+      "node:path",
+      "../../implementation/contracts.js",
+      "../storage/operation-codec.js",
+      "../domain/errors.js",
+      "../domain/context-policy.js",
+      "../domain/derived.js",
+      "../ids.js",
+      "../hash.js",
+      "../storage/context-files.js",
+      "../storage/paths.js",
+      "../storage/tree-lease.js",
+      "../storage/durable-fs.js",
+      "../storage/contained-fs.js",
+      "../storage/context-snapshot.js",
+      "../process/run.js",
+      "../process/preparation.js",
+      "../process/policies.js",
+      "./paths.js",
+      "./observe.js",
+      "./context-publication.js",
+      "../domain/utf8.js"
+    ],
+    "functions": [
+      "text",
+      "oneLine",
+      "command",
+      "success",
+      "prepareCommand",
+      "prepareSuccess",
+      "exists",
+      "current",
+      "observedObjectFormat",
+      "initialize",
+      "writeEntry",
+      "importCandidate",
+      "preparationQuiescent",
+      "prepareCandidate",
+      "blobs",
+      "assertGoalOnly",
+      "blob",
+      "verifyCandidate",
+      "ensureCandidate",
+      "publishSnapshot",
+      "snapshotReady"
+    ]
+  },
+  {
+    "path": "src/git/context.ts",
+    "lines": 232,
+    "imports": [
+      "../../implementation/contracts.js",
+      "../store.js",
+      "../storage/operation-codec.js",
+      "../durable.js",
+      "../authority.js",
+      "../domain/errors.js",
+      "../hash.js",
+      "../ids.js",
+      "../domain/derived.js",
+      "../storage/paths.js",
+      "../storage/context-files.js",
+      "../storage/context-stream.js",
+      "../protocol/request-codec.js",
+      "../storage/receipt-projector.js",
+      "../storage/preaccept-artifact.js",
+      "../mail.js",
+      "../mail/materializer.js",
+      "./context-publication.js",
+      "./observe.js"
+    ],
+    "functions": [
+      "operation",
+      "receipt",
+      "preacceptDisposition",
+      "unknown",
+      "requireWriterSlot",
+      "requireRecoveryAuthority",
+      "rejectAccepted",
+      "materializeAndSettle",
+      "publish",
+      "reconcile"
+    ]
+  },
+  {
+    "path": "src/git/integration-policy.ts",
+    "lines": 125,
+    "imports": [
+      "../domain/integration-policy.js",
+      "../../implementation/contracts/integration.js",
+      "../../implementation/contracts/values.js",
+      "./approval.js",
+      "./observe.js",
+      "../../implementation/contracts.js",
+      "../hash.js",
+      "../domain/errors.js",
+      "../validate.js",
+      "../../implementation/contracts/integration.js"
+    ],
+    "functions": [
+      "integrationPolicyFromConfig",
+      "snapshotIntegrationPolicy",
+      "assertSupportedIntegration",
+      "assertCheckResources",
+      "assertSameIntegrationPolicy",
+      "deterministicTier"
+    ]
+  },
+  {
+    "path": "src/git/integration-publication.ts",
+    "lines": 41,
+    "imports": [
+      "../storage/operation-codec.js",
+      "./observe.js",
+      "../domain/errors.js"
+    ],
+    "functions": [
+      "integration",
+      "consumeIntegrationPublication"
+    ]
+  },
+  {
+    "path": "src/git/integration.ts",
+    "lines": 408,
+    "imports": [
+      "../../implementation/contracts/integration.js",
+      "../../implementation/contracts/values.js",
+      "../mail.js",
+      "../storage/preaccept-artifact.js",
+      "./integration-publication.js",
+      "./tiered-authority.js",
+      "../../implementation/contracts.js",
+      "../store.js",
+      "../storage/operation-codec.js",
+      "../durable.js",
+      "../authority.js",
+      "../domain/errors.js",
+      "../hash.js",
+      "../ids.js",
+      "../storage/receipt-projector.js",
+      "../protocol/operation-results.js",
+      "./observe.js",
+      "./integration-policy.js"
+    ],
+    "functions": [
+      "observed",
+      "policy",
+      "boundPolicy",
+      "currentIntegrationPolicy",
+      "currentPolicy",
+      "verifyCurrentPolicy",
+      "operation",
+      "receipt",
+      "succeed",
+      "unknown",
+      "requireWriterSlot",
+      "requireExecuteAuthority",
+      "requireRecoveryAuthority",
+      "requireEligible",
+      "identity",
+      "evaluate",
+      "revalidateTier",
+      "hasNoopWitness",
+      "authorizeNoop",
+      "stillAtBase",
+      "rejectAccepted",
+      "execute",
+      "applyMerge",
+      "reconcile"
+    ]
+  },
+  {
+    "path": "src/git/observe.ts",
+    "lines": 309,
+    "imports": [
+      "node:fs",
+      "../domain/errors.js",
+      "../domain/identifiers.js",
+      "../domain/utf8.js"
+    ],
+    "functions": [
+      "gitRefArgument",
+      "gitOidArgument",
+      "observed",
+      "requireNoGitlinks",
+      "parseNameStatusZ",
+      "lsTreeHeader",
+      "gitlinkRecord",
+      "parseGitlinksZ",
+      "parseGitlinksFd",
+      "parseGitlinksPath",
+      "protectedPathMatches",
+      "text",
+      "uncertain",
+      "diagnostic",
+      "unknown",
+      "corrupt",
+      "refused",
+      "line",
+      "ref",
+      "objectFormat",
+      "commit",
+      "ancestry",
+      "commits",
+      "published",
+      "changedPaths",
+      "gitlinks",
+      "classifyRefAfterCas"
+    ]
+  },
+  {
+    "path": "src/git/paths.ts",
+    "lines": 23,
+    "imports": [],
+    "functions": []
+  },
+  {
+    "path": "src/git/project-snapshot.ts",
+    "lines": 222,
+    "imports": [
+      "node:fs",
+      "node:path",
+      "node:crypto",
+      "../domain/errors.js",
+      "../process/run.js",
+      "../process/policies.js",
+      "../storage/snapshot-reader.js",
+      "../storage/project-preparation.js"
+    ],
+    "functions": [
+      "paths",
+      "record",
+      "writeTree",
+      "withProjectSnapshot"
+    ]
+  },
+  {
+    "path": "src/git/publication.ts",
+    "lines": 49,
+    "imports": [
+      "../storage/operation-codec.js",
+      "./observe.js",
+      "../domain/errors.js"
+    ],
+    "functions": [
+      "submission",
+      "consumeSubmissionPublication"
+    ]
+  },
+  {
+    "path": "src/git/quarantine.ts",
+    "lines": 240,
+    "imports": [
+      "node:fs",
+      "node:crypto",
+      "node:path",
+      "../storage/directory.js",
+      "../storage/tree-lease.js",
+      "../storage/contained-fs.js",
+      "./paths.js",
+      "../domain/errors.js",
+      "../process/run.js",
+      "../process/preparation.js",
+      "../process/policies.js",
+      "./canonical-command.js"
+    ],
+    "functions": [
+      "classificationText",
+      "importBundle"
+    ]
+  },
+  {
+    "path": "src/git/submit.ts",
+    "lines": 180,
+    "imports": [
+      "../../implementation/contracts.js",
+      "../store.js",
+      "../storage/operation-codec.js",
+      "../durable.js",
+      "../mail.js",
+      "../authority.js",
+      "../domain/errors.js",
+      "../hash.js",
+      "../ids.js",
+      "../domain/derived.js",
+      "../storage/submit-spool.js",
+      "../storage/preaccept-artifact.js",
+      "../mail/materializer.js",
+      "../protocol/request-codec.js",
+      "../storage/receipt-projector.js",
+      "../protocol/operation-results.js",
+      "./publication.js",
+      "./observe.js"
+    ],
+    "functions": [
+      "operation",
+      "exclusive",
+      "publicationAuthority",
+      "rejectAccepted",
+      "bundleDisposition",
+      "submit",
+      "resultEml",
+      "publishMailAndSettle",
+      "executeAccepted",
+      "reconcile",
+      "reconcileAccepted"
+    ]
+  },
+  {
+    "path": "src/git/tiered-authority.ts",
+    "lines": 38,
+    "imports": [
+      "../../implementation/contracts/values.js",
+      "../../implementation/contracts/integration.js",
+      "../store.js",
+      "./integration-policy.js",
+      "./integration-policy.js",
+      "./approval.js",
+      "./attestation-snapshot.js",
+      "../domain/errors.js",
+      "./observe.js"
+    ],
+    "functions": [
+      "evaluate"
+    ]
+  },
+  {
+    "path": "src/hash.ts",
+    "lines": 19,
+    "imports": [
+      "./domain/request-identity.js"
+    ],
+    "functions": [
+      "requestHash"
+    ]
+  },
+  {
+    "path": "src/ids.ts",
+    "lines": 28,
+    "imports": [
+      "node:crypto",
+      "./domain/identifiers.js"
+    ],
+    "functions": [
+      "uuidV4",
+      "generateOperationId",
+      "generateBatchId"
+    ]
+  },
+  {
+    "path": "src/leaf.ts",
+    "lines": 409,
+    "imports": [
+      "node:fs",
+      "koffi",
+      "node:os"
+    ],
+    "functions": [
+      "lib",
+      "peerCred",
+      "peerPidFd",
+      "livenessFromPoll",
+      "pidfdLiveness",
+      "sdNotifyReady",
+      "lockFileDescriptor",
+      "abstractAddress",
+      "drop",
+      "holdAbstractName",
+      "abstractNameHolder",
+      "abstractNameHeld",
+      "socketDescriptor",
+      "hasNativeLeaf"
+    ]
+  },
+  {
+    "path": "src/lifecycle.ts",
+    "lines": 46,
+    "imports": [
+      "../implementation/contracts.js",
+      "./domain/errors.js",
+      "./store.js",
+      "./units.js",
+      "./mail.js",
+      "./lifecycle/policy.js",
+      "./lifecycle/workspace.js",
+      "./lifecycle/create.js",
+      "./lifecycle/society.js",
+      "./lifecycle/actions.js",
+      "./lifecycle/registry-operations.js",
+      "./lifecycle/contracts.js"
+    ],
+    "functions": [
+      "setSociety",
+      "reconcileSociety",
+      "bootstrap",
+      "create",
+      "start",
+      "stop",
+      "ack",
+      "follow",
+      "reconcileCreate",
+      "reconcileAction"
+    ]
+  },
+  {
+    "path": "src/lifecycle/actions.ts",
+    "lines": 175,
+    "imports": [
+      "../../implementation/contracts.js",
+      "../store.js",
+      "../domain/errors.js",
+      "../authority.js",
+      "../ids.js",
+      "../hash.js",
+      "../storage/receipt-projector.js",
+      "../units.js",
+      "./contracts.js",
+      "./policy.js"
+    ],
+    "functions": [
+      "start",
+      "stop",
+      "reconcile",
+      "requireStartRelease",
+      "currentIntent",
+      "requireTarget",
+      "unconfirmed"
+    ]
+  },
+  {
+    "path": "src/lifecycle/contracts.ts",
+    "lines": 24,
+    "imports": [
+      "../../implementation/contracts/identity.js",
+      "../../implementation/contracts/values.js",
+      "../../implementation/contracts/host.js",
+      "../../implementation/contracts/durable.js"
+    ],
+    "functions": []
+  },
+  {
+    "path": "src/lifecycle/create-publication.ts",
+    "lines": 62,
+    "imports": [
+      "node:path",
+      "../storage/operation-codec.js",
+      "../store.js",
+      "../units.js",
+      "../domain/errors.js",
+      "../storage/directory.js",
+      "../storage/paths.js",
+      "../process/policies.js"
+    ],
+    "functions": [
+      "ready",
+      "consumeCreationPublication"
+    ]
+  },
+  {
+    "path": "src/lifecycle/create.ts",
+    "lines": 261,
+    "imports": [
+      "node:path",
+      "../../implementation/contracts.js",
+      "../store.js",
+      "../domain/errors.js",
+      "../domain/spec-identity.js",
+      "../domain/derived.js",
+      "../storage/receipt-projector.js",
+      "../ids.js",
+      "../hash.js",
+      "../authority.js",
+      "../storage/paths.js",
+      "../storage/durable-fs.js",
+      "../storage/preaccept-artifact.js",
+      "../mail/materializer.js",
+      "../mail.js",
+      "../units.js",
+      "./contracts.js",
+      "./policy.js",
+      "./workspace.js",
+      "./create-publication.js"
+    ],
+    "functions": [
+      "bootstrap",
+      "create",
+      "reconcile",
+      "settleLinked",
+      "finish",
+      "finishAccepted",
+      "requireMail"
+    ]
+  },
+  {
+    "path": "src/lifecycle/policy.ts",
+    "lines": 45,
+    "imports": [
+      "../../implementation/contracts/identity.js",
+      "../../implementation/contracts/values.js",
+      "../../implementation/contracts/runtime.js",
+      "../../implementation/contracts/durable.js",
+      "../../implementation/contracts/host.js",
+      "../store.js",
+      "../domain/errors.js",
+      "../domain/lineage.js",
+      "../domain/spec-identity.js",
+      "../storage/receipt-projector.js",
+      "../authority.js",
+      "./contracts.js"
+    ],
+    "functions": [
+      "lifecycleReceipt",
+      "requireManage",
+      "enforceQuota",
+      "assertSeedCount",
+      "refresh",
+      "assertRevision",
+      "resolve"
+    ]
+  },
+  {
+    "path": "src/lifecycle/registry-operations.ts",
+    "lines": 73,
+    "imports": [
+      "../../implementation/contracts/runtime.js",
+      "../../implementation/contracts/identity.js",
+      "../../implementation/contracts/durable.js",
+      "../store.js",
+      "../durable.js",
+      "../domain/identifiers.js",
+      "../domain/errors.js",
+      "../authority.js",
+      "../ids.js",
+      "../hash.js",
+      "../storage/receipt-projector.js",
+      "./policy.js"
+    ],
+    "functions": [
+      "ack",
+      "follow"
+    ]
+  },
+  {
+    "path": "src/lifecycle/society.ts",
+    "lines": 115,
+    "imports": [
+      "../../implementation/contracts.js",
+      "../store.js",
+      "../domain/errors.js",
+      "../authority.js",
+      "../ids.js",
+      "../hash.js",
+      "../protocol/request-codec.js",
+      "../storage/receipt-projector.js",
+      "../storage/operation-codec.js",
+      "../units.js",
+      "../domain/admission.js"
+    ],
+    "functions": [
+      "quiesceResidents",
+      "requirePrincipal",
+      "set",
+      "reconcileById",
+      "reconcile",
+      "requireOpeningAuthority",
+      "apply",
+      "receipt"
+    ]
+  },
+  {
+    "path": "src/lifecycle/workspace.ts",
+    "lines": 147,
+    "imports": [
+      "node:fs",
+      "node:path",
+      "../storage/operation-codec.js",
+      "../domain/errors.js",
+      "../resident-paths.js",
+      "../ids.js",
+      "../storage/paths.js",
+      "../storage/durable-fs.js",
+      "../storage/staged-tree.js",
+      "../storage/directory.js",
+      "../storage/tree-lease.js",
+      "../storage/contained-fs.js",
+      "../process/policies.js",
+      "../process/preparation.js",
+      "../process/run.js",
+      "./contracts.js"
+    ],
+    "functions": [
+      "git",
+      "prepareGit",
+      "canonicalMain",
+      "assertCanonicalBase",
+      "ensure",
+      "prepare",
+      "prepareLeased"
+    ]
+  },
+  {
+    "path": "src/mail.ts",
+    "lines": 214,
+    "imports": [
+      "./durable.js",
+      "./storage/directory.js",
+      "node:path",
+      "../implementation/contracts.js",
+      "./store.js",
+      "./domain/errors.js",
+      "./storage/receipt-projector.js",
+      "./authority.js",
+      "./ids.js",
+      "./storage/paths.js",
+      "./hash.js",
+      "./storage/durable-fs.js",
+      "./storage/immutable-file.js",
+      "./storage/preaccept-artifact.js",
+      "./mail/serialize.js",
+      "./mail/facts.js",
+      "./mail/routing.js",
+      "./mail/headers.js",
+      "./mail/materializer.js",
+      "./mail/batches.js",
+      "./mail/reconcile.js",
+      "./protocol/batch-view.js"
+    ],
+    "functions": [
+      "objectPath",
+      "archivePath",
+      "inboxNewPath",
+      "inboxCurPath",
+      "send",
+      "sendOwned",
+      "replyHeaders",
+      "freezeCreateInitial",
+      "freezeReviewMessage",
+      "publishCreateInitial",
+      "freezeObject",
+      "publishGated",
+      "materialize",
+      "prepare",
+      "complete",
+      "settleFromReceipt",
+      "moveToCur",
+      "reconcilePending"
+    ]
+  },
+  {
+    "path": "src/mail/addresses.ts",
+    "lines": 45,
+    "imports": [
+      "../../implementation/contracts/identity.js",
+      "../domain/identifiers.js",
+      "../domain/mail-values.js",
+      "./facts.js"
+    ],
+    "functions": [
+      "actorAddress",
+      "listAddress",
+      "topicAddress",
+      "displayAddress",
+      "rfcMessageIdFor",
+      "defaultReplyTo",
+      "parseDisplayedAddress"
+    ]
+  },
+  {
+    "path": "src/mail/batch-policy.ts",
+    "lines": 44,
+    "imports": [
+      "../../implementation/contracts.js",
+      "../domain/errors.js",
+      "../domain/limits.js"
+    ],
+    "functions": [
+      "selectBatch",
+      "batchViewOf"
+    ]
+  },
+  {
+    "path": "src/mail/batches.ts",
+    "lines": 219,
+    "imports": [
+      "node:fs",
+      "../storage/contained-fs.js",
+      "node:path",
+      "../../implementation/contracts.js",
+      "../store.js",
+      "../domain/errors.js",
+      "../ids.js",
+      "../domain/derived.js",
+      "../storage/paths.js",
+      "../storage/durable-fs.js",
+      "../storage/immutable-file.js",
+      "../storage/batch-view.js",
+      "../protocol/batch-view.js",
+      "../storage/delivery-receipt.js",
+      "../storage/rows.js",
+      "./materializer.js",
+      "./batch-policy.js",
+      "./headers.js"
+    ],
+    "functions": [
+      "messagePlan",
+      "noticeFor",
+      "snapshot",
+      "finishPrepared",
+      "prepare",
+      "complete",
+      "settleFromReceipt",
+      "moveToCur",
+      "heldParent",
+      "oneLine",
+      "batchOf",
+      "batchNotice"
+    ]
+  },
+  {
+    "path": "src/mail/display.ts",
+    "lines": 53,
+    "imports": [
+      "../domain/utf8.js"
+    ],
+    "functions": [
+      "readableMail",
+      "headerEnd",
+      "readableBody"
+    ]
+  },
+  {
+    "path": "src/mail/facts.ts",
+    "lines": 103,
+    "imports": [
+      "../../implementation/contracts/identity.js",
+      "../../implementation/contracts/values.js",
+      "../../implementation/contracts/durable.js",
+      "../domain/identifiers.js",
+      "../domain/mail-values.js",
+      "../domain/derived.js",
+      "../domain/errors.js"
+    ],
+    "functions": [
+      "freezeMessageDate",
+      "freezeMessageFacts",
+      "selectReplyTargets",
+      "defaultLogicalReplyTo",
+      "messagePlanFrom"
+    ]
+  },
+  {
+    "path": "src/mail/headers.ts",
+    "lines": 179,
+    "imports": [
+      "../domain/mail-values.js",
+      "../domain/identifiers.js",
+      "../domain/errors.js",
+      "../domain/utf8.js"
+    ],
+    "functions": [
+      "headerBlock",
+      "headerWords",
+      "decodeSubject",
+      "displaySubject",
+      "singleId",
+      "references",
+      "addresses",
+      "rfc5322Date",
+      "dateMs",
+      "parseEmlHeaders"
+    ]
+  },
+  {
+    "path": "src/mail/materializer.ts",
+    "lines": 166,
+    "imports": [
+      "node:fs",
+      "./display.js",
+      "../domain/canonical-json.js",
+      "../../implementation/contracts.js",
+      "../store.js",
+      "../durable.js",
+      "../domain/errors.js",
+      "../storage/paths.js",
+      "../storage/immutable-file.js",
+      "../storage/contained-fs.js",
+      "./addresses.js",
+      "./headers.js",
+      "../git/integration-publication.js",
+      "../git/publication.js",
+      "../git/context-publication.js",
+      "../lifecycle/create-publication.js"
+    ],
+    "functions": [
+      "namedMessages",
+      "frozenMessageDisposition",
+      "operationMessage",
+      "headers",
+      "checked",
+      "requiredOperation",
+      "ordinary",
+      "gated",
+      "publish",
+      "publishDelivery",
+      "recordArrival"
+    ]
+  },
+  {
+    "path": "src/mail/reconcile.ts",
+    "lines": 77,
+    "imports": [
+      "../storage/immutable-file.js",
+      "../store.js",
+      "../durable.js",
+      "../domain/errors.js"
+    ],
+    "functions": [
+      "reviewRequestName",
+      "reconcileMailOperation",
+      "reconcileOrdinaryMail"
+    ]
+  },
+  {
+    "path": "src/mail/review-bounds.ts",
+    "lines": 231,
+    "imports": [
+      "../../implementation/contracts.js",
+      "../../implementation/contracts/attestation.js",
+      "../domain/review-evaluation.js",
+      "../domain/errors.js"
+    ],
+    "functions": [
+      "threadHeadText",
+      "describeEntryText",
+      "boundVoteText",
+      "approvalBodyText",
+      "maximalThreadNeeds",
+      "maximalApprovalNeeds",
+      "boundNeeds",
+      "mailBodyBytesFits",
+      "minimumMailBodyBytes"
+    ]
+  },
+  {
+    "path": "src/mail/routing.ts",
+    "lines": 39,
+    "imports": [
+      "../../implementation/contracts.js",
+      "../store.js",
+      "../domain/errors.js",
+      "./addresses.js"
+    ],
+    "functions": [
+      "expandAddresses",
+      "logicalReplyAddress"
+    ]
+  },
+  {
+    "path": "src/mail/serialize.ts",
+    "lines": 113,
+    "imports": [
+      "nodemailer",
+      "nodemailer/lib/mime-funcs",
+      "../../implementation/contracts.js",
+      "../domain/errors.js",
+      "../domain/mail-values.js",
+      "../domain/canonical-json.js",
+      "./addresses.js",
+      "./facts.js",
+      "./headers.js"
+    ],
+    "functions": [
+      "assertNoCrlf",
+      "buildEml",
+      "same",
+      "renderFrozenMessage",
+      "buildFrozenMessage"
+    ]
+  },
+  {
+    "path": "src/module-ports.ts",
+    "lines": 19,
+    "imports": [],
+    "functions": []
+  },
+  {
+    "path": "src/pi-compat/commands.ts",
+    "lines": 12,
+    "imports": [],
+    "functions": []
+  },
+  {
+    "path": "src/pi-compat/env.ts",
+    "lines": 25,
+    "imports": [],
+    "functions": []
+  },
+  {
+    "path": "src/pi-compat/interactive-mode.ts",
+    "lines": 69,
+    "imports": [
+      "@earendil-works/pi-coding-agent"
+    ],
+    "functions": [
+      "interactiveInternalsOf"
+    ]
+  },
+  {
+    "path": "src/pi-compat/interactive-tool-setup.ts",
+    "lines": 22,
+    "imports": [
+      "node:module",
+      "node:path",
+      "node:url"
+    ],
+    "functions": [
+      "resolve"
+    ]
+  },
+  {
+    "path": "src/pi-compat/interactive-tools.ts",
+    "lines": 8,
+    "imports": [
+      "@earendil-works/pi-coding-agent/dist/utils/tools-manager.js"
+    ],
+    "functions": [
+      "ensureTool"
+    ]
+  },
+  {
+    "path": "src/pi-compat/pi-private.d.ts",
+    "lines": 6,
+    "imports": [],
+    "functions": [
+      "getToolPath"
+    ]
+  },
+  {
+    "path": "src/pi-compat/session.ts",
+    "lines": 27,
+    "imports": [],
+    "functions": [
+      "sessionHeaderIdentity"
+    ]
+  },
+  {
+    "path": "src/pi-compat/settings-object.ts",
+    "lines": 10,
+    "imports": [
+      "../domain/errors.js"
+    ],
+    "functions": [
+      "settingsObject"
+    ]
+  },
+  {
+    "path": "src/pi-compat/settings.ts",
+    "lines": 108,
+    "imports": [
+      "@earendil-works/pi-coding-agent",
+      "../domain/errors.js",
+      "../runtime/locked-files.js",
+      "../runtime/oma-theme.js",
+      "./settings-object.js"
+    ],
+    "functions": [
+      "withLock",
+      "withLock",
+      "loadedSettings",
+      "prepareEngineInteractiveSettings"
+    ]
+  },
+  {
+    "path": "src/pi-compat/wire.ts",
+    "lines": 45,
+    "imports": [
+      "@earendil-works/pi-coding-agent"
+    ],
+    "functions": []
+  },
+  {
+    "path": "src/pi-extension.ts",
+    "lines": 136,
+    "imports": [
+      "node:fs",
+      "node:url",
+      "@earendil-works/pi-coding-agent",
+      "./extension/delivery.js",
+      "./extension/egress-bridge.js",
+      "./extension/inference-bridge.js",
+      "./extension/mail-tools.js",
+      "./extension/shared.js",
+      "./extension/principal-channel.js",
+      "./extension/provenance.js",
+      "./extension/prompt-boundary.js",
+      "./extension/tool-surface.js",
+      "./extension/workspace-guard.js",
+      "./extension/contained-tools.js",
+      "./extension/lsp-tools.js",
+      "./extension/hashline-tools.js",
+      "./extension/web-tools.js",
+      "./extension/mcp-tools.js",
+      "./extension/ask-user-question.js"
+    ],
+    "functions": [
+      "extension"
+    ]
+  },
+  {
+    "path": "src/platform/guest/archive.ts",
+    "lines": 71,
+    "imports": [
+      "node:crypto",
+      "node:fs",
+      "node:path",
+      "../../storage/directory.js",
+      "../../domain/errors.js",
+      "../../domain/identifiers.js",
+      "../../process/run.js",
+      "./requests.js"
+    ],
+    "functions": [
+      "sha256",
+      "manifestOf",
+      "create"
+    ]
+  },
+  {
+    "path": "src/platform/guest/control.ts",
+    "lines": 163,
+    "imports": [
+      "../../domain/errors.js",
+      "../rpc.js",
+      "./server.js"
+    ],
+    "functions": [
+      "setTime",
+      "freeze",
+      "thaw",
+      "release",
+      "end",
+      "powerOff",
+      "serve"
+    ]
+  },
+  {
+    "path": "src/platform/guest/egress.ts",
+    "lines": 247,
+    "imports": [
+      "node:net",
+      "node:fs",
+      "../../storage/socket-name.js",
+      "../../frame.js",
+      "../rpc.js",
+      "../../protocol/host-guest.js"
+    ],
+    "functions": [
+      "park",
+      "take",
+      "wait",
+      "close",
+      "startEgressService",
+      "serve"
+    ]
+  },
+  {
+    "path": "src/platform/guest/histories.ts",
+    "lines": 69,
+    "imports": [
+      "node:path",
+      "node:fs",
+      "@earendil-works/pi-coding-agent",
+      "../../domain/errors.js",
+      "../../protocol/host-guest.js",
+      "../../domain/identifiers.js",
+      "../../protocol/guest-history.js",
+      "../../runtime/project-binding.js",
+      "../../runtime/session-mode.js",
+      "../../runtime/session-history.js",
+      "../../storage/paths.js"
+    ],
+    "functions": [
+      "birth",
+      "inspect",
+      "list"
+    ]
+  },
+  {
+    "path": "src/platform/guest/host.ts",
+    "lines": 263,
+    "imports": [
+      "node:net",
+      "../../protocol/connection.js",
+      "node:path",
+      "node:fs",
+      "../../domain/errors.js",
+      "../../domain/identifiers.js",
+      "../../process/policies.js",
+      "../../runtime/provision.js",
+      "../rpc.js",
+      "./server.js",
+      "../../protocol/host-guest.js",
+      "./project.js",
+      "./requests.js",
+      "./packages.js",
+      "./archive.js",
+      "../../config/defaults.js",
+      "../../hash.js",
+      "../../storage/paths.js",
+      "../../config.js",
+      "../../domain/deployment.js",
+      "./histories.js",
+      "../../protocol/guest-history.js"
+    ],
+    "functions": [
+      "stateRoot",
+      "mirrorOf",
+      "projectExtensions",
+      "list",
+      "open",
+      "resume",
+      "openAlone",
+      "close",
+      "maintenanceBegin",
+      "maintenanceEnd",
+      "reapOwner",
+      "serve",
+      "need",
+      "terminal"
+    ]
+  },
+  {
+    "path": "src/platform/guest/identity.ts",
+    "lines": 51,
+    "imports": [
+      "node:fs",
+      "node:path",
+      "../../domain/errors.js",
+      "../../domain/persisted-formats.js",
+      "../../protocol/host-guest.js",
+      "./server.js"
+    ],
+    "functions": [
+      "readJson",
+      "systemUser",
+      "readGuestIdentity"
+    ]
+  },
+  {
+    "path": "src/platform/guest/linux-system.ts",
+    "lines": 145,
+    "imports": [
+      "node:fs",
+      "node:path",
+      "node:util",
+      "koffi",
+      "../../domain/errors.js",
+      "../../process/run.js",
+      "../../config.js",
+      "./control.js"
+    ],
+    "functions": [
+      "libc",
+      "failed",
+      "readNumbers",
+      "meminfo",
+      "deviceOf",
+      "receiptWaitFloor",
+      "linuxGuestSystem",
+      "setWallClock",
+      "health",
+      "freeze",
+      "thaw",
+      "grow",
+      "powerOff",
+      "schedule"
+    ]
+  },
+  {
+    "path": "src/platform/guest/packages.ts",
+    "lines": 79,
+    "imports": [
+      "node:fs",
+      "node:path",
+      "node:os",
+      "../../domain/errors.js",
+      "../../process/run.js",
+      "../../process/run.js",
+      "../../protocol/host-guest.js",
+      "../../runtime/pi-packages.js",
+      "./requests.js",
+      "./project.js",
+      "./project.js"
+    ],
+    "functions": [
+      "replace"
+    ]
+  },
+  {
+    "path": "src/platform/guest/project.ts",
+    "lines": 138,
+    "imports": [
+      "node:crypto",
+      "node:fs",
+      "node:path",
+      "../../domain/errors.js",
+      "../../domain/identifiers.js",
+      "../../process/policies.js",
+      "../../storage/paths.js",
+      "../../protocol/host-guest.js",
+      "./requests.js"
+    ],
+    "functions": [
+      "git",
+      "sha256File",
+      "bundleObjectFormat",
+      "mirrorOf",
+      "import",
+      "export"
+    ]
+  },
+  {
+    "path": "src/platform/guest/provision.ts",
+    "lines": 126,
+    "imports": [
+      "node:fs",
+      "node:os",
+      "node:path",
+      "../../domain/errors.js",
+      "../../process/run.js",
+      "../../protocol/host-guest.js",
+      "./identity.js",
+      "../../storage/durable-fs.js"
+    ],
+    "functions": [
+      "provisionDecision",
+      "instanceCheck",
+      "parseCmdline",
+      "allZero",
+      "hasFilesystem",
+      "makeFilesystem",
+      "readInstance",
+      "writeInstance"
+    ]
+  },
+  {
+    "path": "src/platform/guest/pty.ts",
+    "lines": 79,
+    "imports": [
+      "node:fs",
+      "node:util",
+      "koffi",
+      "../../domain/errors.js"
+    ],
+    "functions": [
+      "libc",
+      "failed",
+      "openPseudoTerminal",
+      "setWindowSize"
+    ]
+  },
+  {
+    "path": "src/platform/guest/requests.ts",
+    "lines": 137,
+    "imports": [
+      "../../domain/canonical-json.js",
+      "node:fs",
+      "node:path",
+      "../../domain/errors.js",
+      "../../storage/durable-fs.js",
+      "../rpc.js",
+      "../../protocol/host-guest.js"
+    ],
+    "functions": [
+      "exactKeys",
+      "isIntent",
+      "isPlatformFailure",
+      "isOutcome",
+      "name",
+      "read",
+      "readRecord",
+      "staging",
+      "run",
+      "answer",
+      "status"
+    ]
+  },
+  {
+    "path": "src/platform/guest/server.ts",
+    "lines": 150,
+    "imports": [
+      "node:net",
+      "node:fs",
+      "../../storage/socket-name.js",
+      "../../leaf.js",
+      "../rpc.js",
+      "../../protocol/host-guest.js"
+    ],
+    "functions": [
+      "startGuestServer",
+      "accept",
+      "serveRequests",
+      "safeRefuse"
+    ]
+  },
+  {
+    "path": "src/platform/guest/session.ts",
+    "lines": 260,
+    "imports": [
+      "node:fs",
+      "node:tty",
+      "node:net",
+      "node:child_process",
+      "node:stream",
+      "../../frame.js",
+      "../../protocol/host-history.js",
+      "../../process/async.js",
+      "./pty.js",
+      "../terminal-modes.js",
+      "../../protocol/host-guest.js"
+    ],
+    "functions": [
+      "start",
+      "onEnd",
+      "terminate",
+      "accept",
+      "fromProgram",
+      "fromScreen",
+      "attach",
+      "drop",
+      "finish",
+      "requestHistory",
+      "historyUnavailable"
+    ]
+  },
+  {
+    "path": "src/platform/guest/stream.ts",
+    "lines": 118,
+    "imports": [
+      "node:stream/promises",
+      "../stream-source.js",
+      "node:crypto",
+      "node:fs",
+      "../../storage/contained-fs.js",
+      "node:net",
+      "../../frame.js",
+      "../../domain/errors.js",
+      "../rpc.js",
+      "../stream-receive.js",
+      "../../protocol/host-guest.js",
+      "./requests.js"
+    ],
+    "functions": [
+      "serveStream",
+      "receive"
+    ]
+  },
+  {
+    "path": "src/platform/guest/systemd-launcher.ts",
+    "lines": 71,
+    "imports": [
+      "node:path",
+      "../../domain/errors.js",
+      "../../process/run.js",
+      "./host.js",
+      "../../runtime/session-catalog.js"
+    ],
+    "functions": [
+      "systemdSessionLauncher",
+      "start",
+      "stop"
+    ]
+  },
+  {
+    "path": "src/platform/host/api-client.ts",
+    "lines": 19,
+    "imports": [
+      "../../frame.js",
+      "../../protocol/host-api.js",
+      "../../protocol/host-guest.js",
+      "../rpc.js"
+    ],
+    "functions": [
+      "hostApiRequest"
+    ]
+  },
+  {
+    "path": "src/platform/host/archive-crypto.ts",
+    "lines": 153,
+    "imports": [
+      "node:crypto",
+      "node:fs",
+      "../../domain/errors.js",
+      "../../process/cleanup.js",
+      "../stream-receive.js",
+      "./files.js"
+    ],
+    "functions": [
+      "nonce",
+      "aad",
+      "readFully",
+      "writeAll",
+      "write",
+      "finish",
+      "seal",
+      "sealedArchiveSink",
+      "encryptArchive",
+      "decryptArchive"
+    ]
+  },
+  {
+    "path": "src/platform/host/attach-client.ts",
+    "lines": 155,
+    "imports": [
+      "node:net",
+      "../../frame.js",
+      "../rpc.js",
+      "../terminal-modes.js",
+      "../../runtime/broker-lifetime.js",
+      "../../protocol/host-api.js",
+      "../../process/cleanup.js",
+      "../../frame.js",
+      "../../protocol/host-history.js",
+      "../../protocol/host-guest.js"
+    ],
+    "functions": [
+      "exchange",
+      "attachTerminal"
+    ]
+  },
+  {
+    "path": "src/platform/host/bookmark.ts",
+    "lines": 47,
+    "imports": [
+      "node:path",
+      "../../domain/errors.js",
+      "../../process/run.js",
+      "./bundle.js"
+    ],
+    "functions": [
+      "bundledProjectBookmarks",
+      "nativeProjectBookmarks",
+      "create",
+      "resolve"
+    ]
+  },
+  {
+    "path": "src/platform/host/bundle.ts",
+    "lines": 12,
+    "imports": [
+      "node:path",
+      "../../domain/errors.js"
+    ],
+    "functions": [
+      "macBundleResources"
+    ]
+  },
+  {
+    "path": "src/platform/host/egress.ts",
+    "lines": 361,
+    "imports": [
+      "node:net",
+      "node:crypto",
+      "../../frame.js",
+      "../../runtime/inference-relay.js",
+      "../../runtime/connect-proxy.js",
+      "../../runtime/engine-auth.js",
+      "../rpc.js",
+      "../../protocol/host-guest.js",
+      "../../domain/egress.js",
+      "../../domain/errors.js"
+    ],
+    "functions": [
+      "fill",
+      "await",
+      "placeholder",
+      "connect",
+      "connectTunnel",
+      "enqueue",
+      "offer",
+      "dialTunnel",
+      "release",
+      "forgetBoot",
+      "stop"
+    ]
+  },
+  {
+    "path": "src/platform/host/files.ts",
+    "lines": 378,
+    "imports": [
+      "node:crypto",
+      "node:fs",
+      "node:path",
+      "../../runtime/assets.js",
+      "../../domain/errors.js",
+      "../../process/cleanup.js",
+      "../../leaf.js",
+      "../../storage/project-preparation.js"
+    ],
+    "functions": [
+      "ensureHostUserDirectory",
+      "createTemporary",
+      "close",
+      "temporaryPath",
+      "fsyncDirectory",
+      "publishTemporary",
+      "publishMade",
+      "linkInto",
+      "discardTemporary",
+      "replaceFile",
+      "collectTemporaries",
+      "repairHostOwnedPath",
+      "ensureHostOwnedDirectory",
+      "createHostStagingDirectory",
+      "makeHostStagedDirectories",
+      "writeHostStagedFile",
+      "removeOwnedPath",
+      "collectHostStageStray",
+      "fsyncStagedFile",
+      "fsyncStagedTree",
+      "publishHostStaged",
+      "removeHostStaged",
+      "listHostStaged",
+      "repairHostStagedEntryMode",
+      "prepareHostProjectDirectory",
+      "dispose"
+    ]
+  },
+  {
+    "path": "src/platform/host/guest-histories.ts",
+    "lines": 70,
+    "imports": [
+      "node:fs",
+      "node:path",
+      "@earendil-works/pi-coding-agent",
+      "../../domain/errors.js",
+      "../../protocol/guest-history.js",
+      "./record.js",
+      "./bookmark.js",
+      "./bundle.js",
+      "./project.js",
+      "./api-client.js"
+    ],
+    "functions": [
+      "request",
+      "inspectMacGuestHistory",
+      "listMacGuestHistories"
+    ]
+  },
+  {
+    "path": "src/platform/host/guest-link.ts",
+    "lines": 89,
+    "imports": [
+      "node:net",
+      "../rpc.js",
+      "../../protocol/host-guest.js"
+    ],
+    "functions": [
+      "onReboot",
+      "hello",
+      "observe",
+      "json",
+      "bytes"
+    ]
+  },
+  {
+    "path": "src/platform/host/host-api.ts",
+    "lines": 242,
+    "imports": [
+      "node:net",
+      "node:fs",
+      "../../storage/socket-name.js",
+      "node:crypto",
+      "../../domain/errors.js",
+      "../rpc.js",
+      "../guest/server.js",
+      "./peer.js",
+      "../../protocol/host-guest.js",
+      "../../runtime/pi-packages.js",
+      "node:path",
+      "../../protocol/host-api.js",
+      "./lifecycle.js",
+      "../../domain/identifiers.js",
+      "../../protocol/guest-history.js",
+      "./snapshot.js"
+    ],
+    "functions": [
+      "startHostApi",
+      "sameToken",
+      "accept",
+      "refuseAndClose",
+      "serve"
+    ]
+  },
+  {
+    "path": "src/platform/host/image.ts",
+    "lines": 81,
+    "imports": [
+      "node:crypto",
+      "node:fs",
+      "node:path",
+      "../rpc.js"
+    ],
+    "functions": [
+      "sha256Of",
+      "verifyImage",
+      "bootableWith"
+    ]
+  },
+  {
+    "path": "src/platform/host/keychain-client.ts",
+    "lines": 142,
+    "imports": [
+      "node:child_process",
+      "node:net",
+      "node:path",
+      "../../domain/errors.js",
+      "../../process/async.js",
+      "./keychain.js",
+      "./bundle.js"
+    ],
+    "functions": [
+      "bundledKeychainHelper",
+      "launch",
+      "withWriter",
+      "fail",
+      "received",
+      "ask",
+      "get",
+      "put",
+      "close"
+    ]
+  },
+  {
+    "path": "src/platform/host/keychain.ts",
+    "lines": 101,
+    "imports": [
+      "../../domain/errors.js",
+      "../../process/cleanup.js",
+      "../../runtime/engine-auth.js",
+      "../../runtime/process-lock.js",
+      "../../runtime/user-files.js",
+      "node:path",
+      "node:timers/promises"
+    ],
+    "functions": [
+      "parse",
+      "serialized",
+      "keychainCredentials",
+      "read",
+      "list",
+      "modify",
+      "delete"
+    ]
+  },
+  {
+    "path": "src/platform/host/lifecycle.ts",
+    "lines": 372,
+    "imports": [
+      "../rpc.js",
+      "../rpc.js",
+      "./guest-link.js"
+    ],
+    "functions": [
+      "assertActive",
+      "cancel",
+      "after",
+      "observe",
+      "delay",
+      "open",
+      "close",
+      "request",
+      "unavailable",
+      "onState",
+      "enter",
+      "report",
+      "start",
+      "boot",
+      "woke",
+      "watch",
+      "healthy",
+      "stop",
+      "drain",
+      "drainGuest",
+      "force",
+      "stoppedByDriver",
+      "afterCrash"
+    ]
+  },
+  {
+    "path": "src/platform/host/peer.ts",
+    "lines": 22,
+    "imports": [
+      "node:net",
+      "koffi",
+      "../../leaf.js"
+    ],
+    "functions": [
+      "peerUid"
+    ]
+  },
+  {
+    "path": "src/platform/host/personal-histories.ts",
+    "lines": 55,
+    "imports": [
+      "node:fs",
+      "node:path",
+      "@earendil-works/pi-coding-agent",
+      "../../domain/errors.js",
+      "../../protocol/host-history.js",
+      "../../protocol/host-guest.js",
+      "../../runtime/session-mode.js",
+      "../../runtime/session-catalog.js",
+      "../../runtime/session-history.js"
+    ],
+    "functions": [
+      "inspectHostPersonalHistory",
+      "hostPersonalHistoryQuery"
+    ]
+  },
+  {
+    "path": "src/platform/host/personal-seed.ts",
+    "lines": 45,
+    "imports": [
+      "node:fs",
+      "node:path",
+      "../../domain/errors.js",
+      "../../config/operations.js",
+      "../../domain/deployment.js",
+      "./record.js",
+      "./bookmark.js",
+      "./project.js",
+      "./api-client.js",
+      "./bundle.js"
+    ],
+    "functions": [
+      "macProjectExtensionSeed"
+    ]
+  },
+  {
+    "path": "src/platform/host/project.ts",
+    "lines": 181,
+    "imports": [
+      "node:stream/promises",
+      "node:crypto",
+      "node:fs",
+      "node:path",
+      "node:os",
+      "../../git/project-snapshot.js",
+      "./files.js",
+      "node:net",
+      "../../domain/errors.js",
+      "../../frame.js",
+      "../../process/policies.js",
+      "../../process/run.js",
+      "../rpc.js",
+      "../stream-source.js",
+      "../stream-receive.js",
+      "./record.js"
+    ],
+    "functions": [
+      "identity",
+      "verifyIdentity",
+      "run",
+      "bundle",
+      "fetchExport",
+      "sha256File",
+      "putStream",
+      "getStream",
+      "fileSink"
+    ]
+  },
+  {
+    "path": "src/platform/host/record.ts",
+    "lines": 98,
+    "imports": [
+      "node:fs",
+      "node:path",
+      "node:crypto",
+      "../../domain/errors.js",
+      "../../protocol/host-guest.js",
+      "./files.js",
+      "../../domain/identifiers.js"
+    ],
+    "functions": [
+      "projectRecord",
+      "newHostRecord",
+      "readHostRecord",
+      "writeHostRecord"
+    ]
+  },
+  {
+    "path": "src/platform/host/resolver.ts",
+    "lines": 28,
+    "imports": [
+      "../../domain/errors.js",
+      "../../runtime/engine-auth.js",
+      "./keychain.js",
+      "../../protocol/host-guest.js",
+      "node:path"
+    ],
+    "functions": [
+      "hostResolver",
+      "withWriter"
+    ]
+  },
+  {
+    "path": "src/platform/host/service.ts",
+    "lines": 466,
+    "imports": [
+      "node:net",
+      "node:crypto",
+      "node:fs",
+      "node:path",
+      "./guest-link.js",
+      "./lifecycle.js",
+      "./egress.js",
+      "./host-api.js",
+      "./record.js",
+      "./bookmark.js",
+      "./project.js",
+      "../package-archive.js",
+      "./archive-crypto.js",
+      "./snapshot.js",
+      "./files.js",
+      "../../runtime/process-lock.js",
+      "../../process/cleanup.js",
+      "../../runtime/user-files.js",
+      "node:timers/promises",
+      "../../domain/errors.js",
+      "./keychain.js",
+      "./keychain.js",
+      "../../protocol/host-guest.js",
+      "../../runtime/connect-proxy.js"
+    ],
+    "functions": [
+      "storageFloor",
+      "assertRoom",
+      "archiveKey",
+      "start",
+      "startHeld",
+      "shutdown"
+    ]
+  },
+  {
+    "path": "src/platform/host/snapshot.ts",
+    "lines": 134,
+    "imports": [
+      "node:fs",
+      "node:crypto",
+      "node:path",
+      "../../domain/errors.js",
+      "../../process/cleanup.js",
+      "./files.js",
+      "./guest-link.js"
+    ],
+    "functions": [
+      "sequenceOf",
+      "snapshotIdOf",
+      "openSnapshotStore",
+      "publish",
+      "snapshotStopped",
+      "snapshotRunning",
+      "pruneSnapshots"
+    ]
+  },
+  {
+    "path": "src/platform/host/vz-driver.ts",
+    "lines": 164,
+    "imports": [
+      "node:net",
+      "node:path",
+      "node:child_process",
+      "../rpc.js",
+      "../../domain/errors.js",
+      "../../process/async.js",
+      "./lifecycle.js",
+      "./keychain.js"
+    ],
+    "functions": [
+      "launch",
+      "onStopped",
+      "onPower",
+      "received",
+      "channelGone",
+      "helperGone",
+      "ask",
+      "start",
+      "forceStop",
+      "connect",
+      "get",
+      "put",
+      "close"
+    ]
+  },
+  {
+    "path": "src/platform/package-archive.ts",
+    "lines": 191,
+    "imports": [
+      "node:fs",
+      "../storage/contained-fs.js",
+      "node:fs/promises",
+      "node:path",
+      "../domain/utf8.js",
+      "../domain/errors.js"
+    ],
+    "functions": [
+      "pathProblem",
+      "writePackageArchive",
+      "readPackageArchive"
+    ]
+  },
+  {
+    "path": "src/platform/product-text.ts",
+    "lines": 26,
+    "imports": [
+      "node:os"
+    ],
+    "functions": [
+      "productText"
+    ]
+  },
+  {
+    "path": "src/platform/rpc.ts",
+    "lines": 327,
+    "imports": [
+      "node:net",
+      "../protocol/connection.js",
+      "../frame.js",
+      "../domain/errors.js",
+      "./product-text.js",
+      "../protocol/host-guest.js"
+    ],
+    "functions": [
+      "unknownOutcome",
+      "platformFailure",
+      "phaseBudget",
+      "connectSocket",
+      "responseResult",
+      "detach",
+      "receive",
+      "end",
+      "onFrame",
+      "onClose",
+      "send",
+      "request",
+      "answer",
+      "refuse",
+      "close",
+      "closeAfterFlush",
+      "readHello",
+      "sendHello",
+      "sendHelloForBytes",
+      "readLeadingResponse",
+      "readLeadingFrame"
+    ]
+  },
+  {
+    "path": "src/platform/stream-receive.ts",
+    "lines": 66,
+    "imports": [
+      "node:crypto",
+      "node:net",
+      "../domain/errors.js"
+    ],
+    "functions": [
+      "receiveDeclared"
+    ]
+  },
+  {
+    "path": "src/platform/stream-source.ts",
+    "lines": 30,
+    "imports": [
+      "node:fs",
+      "./rpc.js"
+    ],
+    "functions": [
+      "borrowedFileRange",
+      "withStreamSource"
+    ]
+  },
+  {
+    "path": "src/platform/terminal-modes.ts",
+    "lines": 64,
+    "imports": [],
+    "functions": [
+      "feed",
+      "changed",
+      "replay",
+      "undo"
+    ]
+  },
+  {
+    "path": "src/ports/ledger.ts",
+    "lines": 31,
+    "imports": [
+      "../../implementation/contracts/identity.js",
+      "../../implementation/contracts/durable.js",
+      "../../implementation/contracts/errors.js"
+    ],
+    "functions": []
+  },
+  {
+    "path": "src/ports/runtime.ts",
+    "lines": 100,
+    "imports": [
+      "../../implementation/contracts/identity.js",
+      "../../implementation/contracts/runtime.js",
+      "../../implementation/contracts/host.js"
+    ],
+    "functions": []
+  },
+  {
+    "path": "src/process/async.ts",
+    "lines": 406,
+    "imports": [
+      "node:child_process",
+      "node:fs",
+      "node:perf_hooks",
+      "./command.js",
+      "../domain/errors.js",
+      "../client/fence.js"
+    ],
+    "functions": [
+      "startProcess",
+      "cancel",
+      "cancel",
+      "runProcess",
+      "validDirectSpawn",
+      "stopOwnedChild",
+      "spawnOwnedRpc",
+      "spawnOwnedInteractive",
+      "spawnSupervisedService",
+      "spawnInTerminal",
+      "spawnInteractive",
+      "spawnSessionInteractive",
+      "sandboxCommandBoundary",
+      "deliverSandboxFilter",
+      "deliverSandboxBytes",
+      "spawnSandboxed"
+    ]
+  },
+  {
+    "path": "src/process/cleanup.ts",
+    "lines": 29,
+    "imports": [],
+    "functions": [
+      "withCleanup",
+      "withAsyncCleanup"
+    ]
+  },
+  {
+    "path": "src/process/command.ts",
+    "lines": 97,
+    "imports": [],
+    "functions": [
+      "positive",
+      "spoolPath",
+      "validateCommand",
+      "snapshotCommand",
+      "processErrorCode"
+    ]
+  },
+  {
+    "path": "src/process/host-loss.ts",
+    "lines": 7,
+    "imports": [],
+    "functions": [
+      "stopOnHostLoss"
+    ]
+  },
+  {
+    "path": "src/process/policies.ts",
+    "lines": 66,
+    "imports": [
+      "../domain/errors.js",
+      "./run.js"
+    ],
+    "functions": [
+      "requireTextExit",
+      "runGitText",
+      "runQuarantineCommand",
+      "runJournal",
+      "journalView"
+    ]
+  },
+  {
+    "path": "src/process/preparation.ts",
+    "lines": 78,
+    "imports": [
+      "../domain/errors.js",
+      "./async.js",
+      "./command.js"
+    ],
+    "functions": [
+      "preparationShutdownBarrier",
+      "reverifyStale",
+      "run",
+      "requirePreparedSuccess"
+    ]
+  },
+  {
+    "path": "src/process/run.ts",
+    "lines": 100,
+    "imports": [
+      "node:child_process",
+      "node:fs",
+      "node:perf_hooks",
+      "./command.js",
+      "../domain/utf8.js",
+      "../client/fence.js"
+    ],
+    "functions": [
+      "bytes",
+      "classify",
+      "runProcessSync",
+      "decodeProcessText"
+    ]
+  },
+  {
+    "path": "src/protocol/alarm.ts",
+    "lines": 34,
+    "imports": [
+      "node:perf_hooks"
+    ],
+    "functions": [
+      "alarm",
+      "cancel"
+    ]
+  },
+  {
+    "path": "src/protocol/batch-view.ts",
+    "lines": 130,
+    "imports": [
+      "../../implementation/contracts/runtime.js",
+      "../ports/runtime.js",
+      "../domain/identifiers.js",
+      "../domain/errors.js"
+    ],
+    "functions": [
+      "validBatchViewLimits",
+      "decodeBatchView",
+      "decodeBatchViewText",
+      "encodeBatchView"
+    ]
+  },
+  {
+    "path": "src/protocol/byte-queue.ts",
+    "lines": 55,
+    "imports": [],
+    "functions": [
+      "append",
+      "clear",
+      "compact",
+      "shift",
+      "peek",
+      "take",
+      "uint32BE",
+      "ownRemainder"
+    ]
+  },
+  {
+    "path": "src/protocol/channel.ts",
+    "lines": 177,
+    "imports": [
+      "node:net",
+      "node:crypto",
+      "../../implementation/contracts.js",
+      "../domain/errors.js",
+      "../domain/identifiers.js",
+      "../domain/canonical-json.js",
+      "../frame.js",
+      "./methods.js",
+      "./response-codec.js",
+      "./alarm.js"
+    ],
+    "functions": [
+      "record",
+      "connect",
+      "current",
+      "touch",
+      "call",
+      "flush",
+      "receive",
+      "close",
+      "fail"
+    ]
+  },
+  {
+    "path": "src/protocol/connection.ts",
+    "lines": 54,
+    "imports": [
+      "node:net",
+      "../domain/errors.js"
+    ],
+    "functions": [
+      "connectEndpoint",
+      "endpointListening"
+    ]
+  },
+  {
+    "path": "src/protocol/guest-history.ts",
+    "lines": 35,
+    "imports": [
+      "../domain/identifiers.js",
+      "../domain/errors.js"
+    ],
+    "functions": [
+      "isGuestHistoryReference",
+      "checkedGuestHistory",
+      "guestHistoryReference",
+      "parseGuestHistoryReference"
+    ]
+  },
+  {
+    "path": "src/protocol/host-api.ts",
+    "lines": 45,
+    "imports": [],
+    "functions": [
+      "hostApiHelloProblem"
+    ]
+  },
+  {
+    "path": "src/protocol/host-channel.ts",
+    "lines": 103,
+    "imports": [
+      "./principal-credential.js",
+      "../client/codecs.js"
+    ],
+    "functions": [
+      "encodeHostMessage",
+      "decodeHostMessage",
+      "push",
+      "fail"
+    ]
+  },
+  {
+    "path": "src/protocol/host-guest.ts",
+    "lines": 380,
+    "imports": [
+      "../../implementation/contracts/errors.js",
+      "../domain/egress.js",
+      "../domain/errors.js",
+      "../domain/identifiers.js",
+      "../frame.js",
+      "./host-history.js",
+      "./guest-history.js"
+    ],
+    "functions": [
+      "portOf",
+      "isPlatformErrorCode",
+      "isUuid",
+      "isRequestKey",
+      "exactKeys",
+      "helloParamsProblem",
+      "helloResultProblem",
+      "negotiate",
+      "requestProblem",
+      "responseProblem",
+      "encodeTerminalFrame",
+      "encodeTerminalJson",
+      "feed",
+      "finish",
+      "resizePayload",
+      "parseResize",
+      "parseTerminalJson",
+      "parseTerminalExit",
+      "isNewSessionHandoff",
+      "isResumeSessionHandoff",
+      "checkedResumeHistoryReference",
+      "runProblem",
+      "egressPlaceholderProblem",
+      "egressOpenProblem",
+      "egressConnectProblem",
+      "egressPlaceholderResultProblem"
+    ]
+  },
+  {
+    "path": "src/protocol/host-history.ts",
+    "lines": 61,
+    "imports": [
+      "../domain/identifiers.js",
+      "../domain/errors.js"
+    ],
+    "functions": [
+      "hostHistoryReference",
+      "isHostHistoryReference",
+      "parseHostHistoryReference",
+      "parseHostHistoryQuery",
+      "checkedHostHistoryPage"
+    ]
+  },
+  {
+    "path": "src/protocol/jsonl.ts",
+    "lines": 90,
+    "imports": [
+      "../domain/errors.js",
+      "../domain/utf8.js"
+    ],
+    "functions": [
+      "feed",
+      "append",
+      "finish",
+      "close"
+    ]
+  },
+  {
+    "path": "src/protocol/log-response.ts",
+    "lines": 73,
+    "imports": [
+      "../../implementation/contracts.js",
+      "../domain/errors.js",
+      "../client/limits.js"
+    ],
+    "functions": [
+      "envelope",
+      "isLogResponseFrameLimit",
+      "prefix",
+      "boundedLogResponse"
+    ]
+  },
+  {
+    "path": "src/protocol/methods.ts",
+    "lines": 487,
+    "imports": [
+      "../../implementation/contracts/identity.js",
+      "../../implementation/contracts/public-wire.js",
+      "../../implementation/contracts/internal-wire.js",
+      "../../implementation/contracts/durable.js",
+      "../../implementation/contracts/host.js",
+      "../domain/identifiers.js",
+      "../domain/errors.js",
+      "../domain/admission.js",
+      "../validate.js"
+    ],
+    "functions": [
+      "principalRequestAllowed",
+      "isPublicMethod",
+      "decodePublicParams",
+      "internalEnvelopeProblem",
+      "isInternalMethod",
+      "resourceCategoryOf"
+    ]
+  },
+  {
+    "path": "src/protocol/operation-results.ts",
+    "lines": 34,
+    "imports": [
+      "../durable.js",
+      "../storage/operation-codec.js"
+    ],
+    "functions": [
+      "integrationResult",
+      "submitResult"
+    ]
+  },
+  {
+    "path": "src/protocol/principal-credential.ts",
+    "lines": 74,
+    "imports": [],
+    "functions": [
+      "isPrincipalCredential",
+      "isPrincipalSessionHandle",
+      "credentialMatches",
+      "sessionHandleMatches",
+      "sameFixedString"
+    ]
+  },
+  {
+    "path": "src/protocol/receipt-chunks.ts",
+    "lines": 56,
+    "imports": [
+      "../../implementation/contracts.js",
+      "../domain/canonical-json.js",
+      "../domain/errors.js",
+      "./receipt-codec.js",
+      "../frame.js"
+    ],
+    "functions": [
+      "receiptChunk",
+      "collectReceipt"
+    ]
+  },
+  {
+    "path": "src/protocol/receipt-codec.ts",
+    "lines": 114,
+    "imports": [
+      "../../implementation/contracts/errors.js",
+      "../../implementation/contracts/identity.js",
+      "../../implementation/contracts/durable.js",
+      "../domain/identifiers.js",
+      "../domain/canonical-json.js",
+      "../domain/errors.js",
+      "../validate.js",
+      "./methods.js"
+    ],
+    "functions": [
+      "isMutationMethod",
+      "record",
+      "snapshot",
+      "decodeFailure",
+      "decodeOperationResultShape",
+      "receiptSupersession",
+      "decodeReceipt"
+    ]
+  },
+  {
+    "path": "src/protocol/receipts.ts",
+    "lines": 38,
+    "imports": [
+      "../../implementation/contracts/durable.js",
+      "../domain/errors.js"
+    ],
+    "functions": [
+      "isRequestNotFound",
+      "failedReceiptError",
+      "receiptExit",
+      "receiptLines"
+    ]
+  },
+  {
+    "path": "src/protocol/request-codec.ts",
+    "lines": 20,
+    "imports": [
+      "../../implementation/contracts/durable.js",
+      "../../implementation/contracts/public-wire.js",
+      "../domain/canonical-json.js",
+      "./methods.js"
+    ],
+    "functions": [
+      "decodeMutationPayload"
+    ]
+  },
+  {
+    "path": "src/protocol/response-codec.ts",
+    "lines": 126,
+    "imports": [
+      "../../implementation/contracts.js",
+      "../domain/errors.js",
+      "../domain/identifiers.js",
+      "../validate.js",
+      "./methods.js",
+      "./receipt-codec.js"
+    ],
+    "functions": [
+      "isRpcMethod",
+      "invalid",
+      "record",
+      "decodeRpcReply"
+    ]
+  },
+  {
+    "path": "src/protocol/run-lease.ts",
+    "lines": 82,
+    "imports": [
+      "node:path",
+      "../../implementation/contracts.js",
+      "../domain/identifiers.js",
+      "../storage/paths.js",
+      "../domain/errors.js"
+    ],
+    "functions": [
+      "trustedAbsolutePath",
+      "decodeRunLease",
+      "assertValidatedRunLease"
+    ]
+  },
+  {
+    "path": "src/protocol/status-page.ts",
+    "lines": 22,
+    "imports": [
+      "../../implementation/contracts.js",
+      "../domain/errors.js"
+    ],
+    "functions": [
+      "statusPage"
+    ]
+  },
+  {
+    "path": "src/protocol/status-view.ts",
+    "lines": 77,
+    "imports": [
+      "../../implementation/contracts.js"
+    ],
+    "functions": [
+      "statusViewPath",
+      "encodeStatusView",
+      "isAgentStatus",
+      "decodeStatusView"
+    ]
+  },
+  {
+    "path": "src/reconcile.ts",
+    "lines": 267,
+    "imports": [
+      "node:async_hooks",
+      "../implementation/contracts.js",
+      "./store.js",
+      "./domain/errors.js",
+      "./domain/exhaustive.js",
+      "./domain/admission.js",
+      "./process/policies.js",
+      "./process/preparation.js",
+      "./mail.js",
+      "./mail/reconcile.js",
+      "./reconcile/operations.js",
+      "./git.js",
+      "./units.js",
+      "./lifecycle/society.js",
+      "./lifecycle.js",
+      "./views/pending-work.js",
+      "./reconcile/preaccept.js",
+      "./storage/tree-lease.js",
+      "./storage/directory.js",
+      "node:path"
+    ],
+    "functions": [
+      "recoveryCategory",
+      "activation",
+      "admit",
+      "quiesceResidents",
+      "quiesceForShutdown",
+      "startup",
+      "recover",
+      "retainRecoveryFailure",
+      "sweep",
+      "observeUnits",
+      "startLimitState",
+      "assertCanonicalHealthyAsync"
+    ]
+  },
+  {
+    "path": "src/reconcile/operations.ts",
+    "lines": 105,
+    "imports": [
+      "node:async_hooks",
+      "node:perf_hooks",
+      "../store.js",
+      "../domain/errors.js",
+      "../mail/reconcile.js"
+    ],
+    "functions": [
+      "sweep",
+      "perform"
+    ]
+  },
+  {
+    "path": "src/reconcile/preaccept.ts",
+    "lines": 173,
+    "imports": [
+      "node:fs",
+      "node:path",
+      "../store.js",
+      "../domain/identifiers.js",
+      "../storage/paths.js",
+      "../storage/directory.js",
+      "../storage/tree-lease.js",
+      "../mail/materializer.js"
+    ],
+    "functions": [
+      "preacceptEvent",
+      "names",
+      "collectUnacceptedArtifacts"
+    ]
+  },
+  {
+    "path": "src/request-cache.ts",
+    "lines": 270,
+    "imports": [
+      "node:fs",
+      "node:path",
+      "../implementation/contracts.js",
+      "./domain/identifiers.js",
+      "./domain/request-identity.js",
+      "./domain/canonical-json.js",
+      "./frame.js",
+      "./protocol/receipt-codec.js",
+      "./cli/cache-codec.js",
+      "./storage/durable-fs.js",
+      "./storage/contained-fs.js",
+      "./leaf.js"
+    ],
+    "functions": [
+      "ioObservation",
+      "requirePresent",
+      "sameIdentity",
+      "freezeInput",
+      "dir",
+      "ensureDir",
+      "path",
+      "bodyPath",
+      "readMetadata",
+      "read",
+      "readBody",
+      "existing",
+      "prepareReplay",
+      "freeze",
+      "withReceiptLock",
+      "updateReceipt"
+    ]
+  },
+  {
+    "path": "src/resident-paths.ts",
+    "lines": 177,
+    "imports": [
+      "./domain/deployment.js",
+      "./domain/errors.js",
+      "./ports/runtime.js"
+    ],
+    "functions": [
+      "nodeToolchainMounts",
+      "modelCommandScript",
+      "requireResidentRootfs",
+      "residentProjectGit",
+      "hostSessionPath",
+      "residentMounts",
+      "confinedPath"
+    ]
+  },
+  {
+    "path": "src/review.ts",
+    "lines": 1282,
+    "imports": [
+      "../implementation/contracts.js",
+      "../implementation/contracts/attestation.js",
+      "./storage/operation-codec.js",
+      "./store.js",
+      "./mail.js",
+      "./authority.js",
+      "./domain/attestation.js",
+      "./domain/canonical-json.js",
+      "./domain/errors.js",
+      "./domain/admission.js",
+      "./domain/identifiers.js",
+      "./git/canonical-command.js",
+      "./mail/review-bounds.js",
+      "./domain/derived.js",
+      "./mail/routing.js",
+      "./mail/addresses.js",
+      "./storage/preaccept-artifact.js",
+      "./mail/materializer.js",
+      "./storage/receipt-projector.js",
+      "./hash.js",
+      "../implementation/contracts/public-wire.js",
+      "./ids.js",
+      "./git/integration-policy.js",
+      "./domain/tier-evaluation.js",
+      "./git/observe.js",
+      "./domain/review-evaluation.js"
+    ],
+    "functions": [
+      "observed",
+      "openRequests",
+      "requestByName",
+      "inputFor",
+      "factNames",
+      "record",
+      "accept",
+      "acceptPrepared",
+      "assertUnchanged",
+      "sameDecision",
+      "duplicateName",
+      "prepare",
+      "duplicateChallenge",
+      "assertChallengeUnchanged",
+      "prepareChallenge",
+      "ensureChallengePublished",
+      "prepareOpen",
+      "prepareEntry",
+      "prepareCancel",
+      "finishEntry",
+      "entryEmissions",
+      "referencesTo",
+      "allMessages",
+      "lastThreadMessage",
+      "threadRevisionCount",
+      "cutSubject",
+      "threadBody",
+      "approvalBody",
+      "freeze",
+      "advance",
+      "advanceAll",
+      "advanceGate",
+      "advanceRequest",
+      "acceptRefresh",
+      "assertApplicable",
+      "createIntegration",
+      "markOversize",
+      "noticeDocument",
+      "mainObservation",
+      "status",
+      "workerStatus",
+      "principalStatus",
+      "splitNotice"
+    ]
+  },
+  {
+    "path": "src/runner.ts",
+    "lines": 494,
+    "imports": [
+      "node:path",
+      "../implementation/contracts.js",
+      "node:path",
+      "./sandbox.js",
+      "./runtime/pi-spawn-plan.js",
+      "./runtime/inference-relay.js",
+      "./runtime/connect-proxy.js",
+      "./domain/egress.js",
+      "./runtime/egress-forwarder.js",
+      "./runtime/engine-auth.js",
+      "./runtime/resident-rootfs.js",
+      "./domain/errors.js",
+      "./runtime/pi-packages.js",
+      "./protocol/channel.js",
+      "./storage/delivery-receipt.js",
+      "./protocol/run-lease.js",
+      "./runtime/pi-adapter.js",
+      "./domain/errors.js",
+      "./storage/durable-fs.js",
+      "./storage/paths.js",
+      "./config/operations.js"
+    ],
+    "functions": [
+      "stop",
+      "connect",
+      "open",
+      "prepareBatch",
+      "openRelay",
+      "openConnectProxy",
+      "adapter",
+      "confinement",
+      "noteObservation",
+      "consume",
+      "run"
+    ]
+  },
+  {
+    "path": "src/runtime/assets.ts",
+    "lines": 141,
+    "imports": [
+      "node:fs",
+      "node:path",
+      "../domain/deployment.js",
+      "../domain/errors.js"
+    ],
+    "functions": [
+      "runtimeAssets",
+      "assertRuntimeAssets",
+      "assertHostDirectoryLayout",
+      "assertStateRoot",
+      "hostLaunchLocation",
+      "launchLocationArgv",
+      "launchedPath",
+      "launchedLocation"
+    ]
+  },
+  {
+    "path": "src/runtime/broker-lifetime.ts",
+    "lines": 93,
+    "imports": [
+      "../domain/errors.js",
+      "../broker/connection.js",
+      "../process/preparation.js"
+    ],
+    "functions": [
+      "settleWithin",
+      "retainStore",
+      "attach",
+      "start",
+      "shutdown"
+    ]
+  },
+  {
+    "path": "src/runtime/broker-supervisor.ts",
+    "lines": 350,
+    "imports": [
+      "node:net",
+      "../protocol/connection.js",
+      "node:path",
+      "../process/async.js",
+      "./process-lock.js",
+      "./assets.js",
+      "../protocol/host-channel.js"
+    ],
+    "functions": [
+      "brokerListening",
+      "disownedHandle",
+      "superviseBroker",
+      "onReady",
+      "onLost",
+      "onDisowned",
+      "register",
+      "stop"
+    ]
+  },
+  {
+    "path": "src/runtime/candidate-checks.ts",
+    "lines": 145,
+    "imports": [
+      "../process/command.js",
+      "../process/run.js",
+      "./sandbox-seccomp.js",
+      "./resident-rootfs.js",
+      "../sandbox.js",
+      "../protocol/run-lease.js",
+      "../ids.js",
+      "../hash.js",
+      "../domain/errors.js",
+      "../git/paths.js",
+      "../git/integration-policy.js",
+      "../git/canonical-command.js",
+      "../git/observe.js"
+    ],
+    "functions": [
+      "candidateCheckCommand",
+      "run",
+      "refuseGitlinks"
+    ]
+  },
+  {
+    "path": "src/runtime/client-preload.ts",
+    "lines": 3,
+    "imports": [
+      "./client-runtime.js"
+    ],
+    "functions": []
+  },
+  {
+    "path": "src/runtime/client-runtime.ts",
+    "lines": 40,
+    "imports": [
+      "../request-cache.js",
+      "../protocol/channel.js",
+      "../domain/canonical-json.js",
+      "../domain/identifiers.js",
+      "../domain/request-identity.js",
+      "../protocol/receipt-codec.js",
+      "../protocol/receipts.js",
+      "../protocol/receipt-chunks.js",
+      "../protocol/methods.js",
+      "../domain/limits.js",
+      "../domain/errors.js",
+      "../cli/request-intent.js",
+      "../cli/effects.js",
+      "../cli/effects/goal.js",
+      "../cli/effects/mail.js",
+      "../cli/effects/submit.js",
+      "../cli/effects/code.js",
+      "../client/runtime.js",
+      "../client/receipts.js",
+      "../storage/output-spool.js"
+    ],
+    "functions": [
+      "installClientRuntime"
+    ]
+  },
+  {
+    "path": "src/runtime/connect-proxy.ts",
+    "lines": 488,
+    "imports": [
+      "node:http",
+      "node:net",
+      "node:dns",
+      "node:fs",
+      "../domain/egress.js",
+      "../storage/socket-name.js",
+      "../domain/errors.js"
+    ],
+    "functions": [
+      "v4Private",
+      "v4AddressPrivate",
+      "v6Bytes",
+      "isPublicConnectAddress",
+      "defaultLookup",
+      "defaultConnect",
+      "makePublicDial",
+      "auditTarget",
+      "refuse",
+      "open",
+      "close"
+    ]
+  },
+  {
+    "path": "src/runtime/deployment-manifest.ts",
+    "lines": 155,
+    "imports": [
+      "node:fs",
+      "node:path",
+      "node:crypto",
+      "../domain/deployment.js",
+      "../domain/errors.js",
+      "../storage/contained-fs.js"
+    ],
+    "functions": [
+      "deploymentManifest",
+      "deploymentDigest",
+      "assertDeploymentDigest"
+    ]
+  },
+  {
+    "path": "src/runtime/egress-forwarder.ts",
+    "lines": 368,
+    "imports": [
+      "node:crypto",
+      "node:fs",
+      "../storage/socket-name.js",
+      "node:net",
+      "node:path",
+      "../domain/errors.js",
+      "../frame.js",
+      "./pi-rpc.js",
+      "../protocol/host-guest.js",
+      "../domain/egress.js"
+    ],
+    "functions": [
+      "oneFrame",
+      "requestEgressPlaceholder",
+      "requestEgressConnect",
+      "enqueue",
+      "offer",
+      "listen",
+      "close",
+      "freeLoopbackPort",
+      "openPrincipalEgress",
+      "egressRequired",
+      "adoptPrincipalEgress"
+    ]
+  },
+  {
+    "path": "src/runtime/engine-auth.ts",
+    "lines": 142,
+    "imports": [
+      "node:crypto",
+      "node:path",
+      "../domain/errors.js"
+    ],
+    "functions": [
+      "randomLike",
+      "candidateFor",
+      "placeholderFor",
+      "resolveEngineAuth"
+    ]
+  },
+  {
+    "path": "src/runtime/extension-integrity.ts",
+    "lines": 58,
+    "imports": [
+      "../storage/file-digest.js",
+      "../domain/errors.js"
+    ],
+    "functions": [
+      "assertExtensionIntegrity",
+      "verifiedPaths"
+    ]
+  },
+  {
+    "path": "src/runtime/extension-modules.ts",
+    "lines": 43,
+    "imports": [
+      "node:crypto",
+      "node:module",
+      "node:url"
+    ],
+    "functions": [
+      "refresh",
+      "close"
+    ]
+  },
+  {
+    "path": "src/runtime/host-arguments.ts",
+    "lines": 93,
+    "imports": [
+      "../domain/errors.js",
+      "../domain/identifiers.js",
+      "../protocol/host-guest.js",
+      "../domain/session-mode.js"
+    ],
+    "functions": [
+      "refuse",
+      "options",
+      "parseOmaArguments",
+      "parseMacArguments"
+    ]
+  },
+  {
+    "path": "src/runtime/host-history-channel.ts",
+    "lines": 88,
+    "imports": [
+      "node:net",
+      "../frame.js",
+      "../domain/errors.js",
+      "../protocol/host-history.js",
+      "../protocol/host-guest.js",
+      "./session-handoff.js",
+      "./pi-rpc.js"
+    ],
+    "functions": [
+      "open",
+      "query",
+      "pages",
+      "inspect",
+      "finish",
+      "close"
+    ]
+  },
+  {
+    "path": "src/runtime/host-tenure.ts",
+    "lines": 233,
+    "imports": [
+      "./society-lease.js",
+      "../domain/errors.js"
+    ],
+    "functions": [
+      "take",
+      "assertOwned",
+      "adopt",
+      "hold",
+      "closeHoldings",
+      "brokerReady",
+      "brokerLost",
+      "principalRegistered",
+      "principalUnregistered",
+      "end",
+      "abandon"
+    ]
+  },
+  {
+    "path": "src/runtime/inference-relay.ts",
+    "lines": 623,
+    "imports": [
+      "node:http",
+      "node:https",
+      "node:stream",
+      "node:net",
+      "node:fs",
+      "../storage/socket-name.js",
+      "../domain/errors.js",
+      "./pi-rpc.js",
+      "../protocol/run-lease.js"
+    ],
+    "functions": [
+      "parsedOrigin",
+      "seen",
+      "targetPath",
+      "enqueue",
+      "offer",
+      "open",
+      "detached",
+      "accept",
+      "checked",
+      "observe",
+      "carriesPlaceholder",
+      "slotted",
+      "slottedTarget",
+      "outboundHeaders",
+      "tripwire",
+      "headersCarryKey",
+      "guarded",
+      "transform",
+      "refuse",
+      "refuseTunnel",
+      "admit",
+      "upstreamOptions",
+      "forward",
+      "serve",
+      "tunnel",
+      "serveTunnel",
+      "close"
+    ]
+  },
+  {
+    "path": "src/runtime/interactive-channel.ts",
+    "lines": 72,
+    "imports": [
+      "node:net",
+      "../protocol/jsonl.js",
+      "./pi-rpc.js"
+    ],
+    "functions": [
+      "send",
+      "release"
+    ]
+  },
+  {
+    "path": "src/runtime/interactive-display.ts",
+    "lines": 64,
+    "imports": [
+      "@earendil-works/pi-coding-agent",
+      "@earendil-works/pi-tui",
+      "../domain/unseen-text.js"
+    ],
+    "functions": [
+      "displayCopy",
+      "safeToolPresentation"
+    ]
+  },
+  {
+    "path": "src/runtime/local-package.ts",
+    "lines": 902,
+    "imports": [
+      "node:crypto",
+      "node:path",
+      "node:fs",
+      "node:stream/promises",
+      "node:zlib",
+      "node:os",
+      "node:url",
+      "../domain/errors.js",
+      "../config/operations.js",
+      "./pi-packages.js",
+      "../storage/contained-fs.js",
+      "../storage/directory.js",
+      "../storage/durable-fs.js",
+      "../platform/package-archive.js",
+      "../platform/host/files.js"
+    ],
+    "functions": [
+      "copyFdRange",
+      "descendBeneath",
+      "collectStageStray",
+      "linuxStaging",
+      "make",
+      "write",
+      "writeFrom",
+      "publish",
+      "close",
+      "hostStaging",
+      "writeFrom",
+      "close",
+      "localSourcePath",
+      "checkStoreBoundary",
+      "packageManifest",
+      "stagedName",
+      "stagedComponent",
+      "budgetFile",
+      "copyIntoStage",
+      "staging",
+      "stageDirectory",
+      "stageFile",
+      "stageLocalPackage",
+      "stageArchive",
+      "archiveName",
+      "tarString",
+      "tarNumber",
+      "tarChecksum",
+      "paxRecords",
+      "extractTar",
+      "readMetadata",
+      "pruneLocalStage"
+    ]
+  },
+  {
+    "path": "src/runtime/locked-files.ts",
+    "lines": 37,
+    "imports": [
+      "node:path",
+      "../process/cleanup.js",
+      "./process-lock.js",
+      "./user-files.js"
+    ],
+    "functions": [
+      "lockedReplace",
+      "lockedUserReplace",
+      "lockedOwnedReplace"
+    ]
+  },
+  {
+    "path": "src/runtime/oma-theme.ts",
+    "lines": 33,
+    "imports": [],
+    "functions": []
+  },
+  {
+    "path": "src/runtime/personal-models.ts",
+    "lines": 31,
+    "imports": [
+      "node:path",
+      "../domain/errors.js",
+      "@earendil-works/pi-coding-agent"
+    ],
+    "functions": [
+      "personalModels"
+    ]
+  },
+  {
+    "path": "src/runtime/personal-session.ts",
+    "lines": 97,
+    "imports": [
+      "../process/async.js",
+      "node:path",
+      "node:crypto",
+      "node:os",
+      "../domain/errors.js",
+      "../process/host-loss.js",
+      "../domain/deployment.js",
+      "./process-lock.js",
+      "./user-files.js",
+      "./session-mode.js",
+      "./pi-runtime.js"
+    ],
+    "functions": [
+      "personalEnvironment",
+      "personalBirth",
+      "runPersonalSession"
+    ]
+  },
+  {
+    "path": "src/runtime/personal-settings.ts",
+    "lines": 218,
+    "imports": [
+      "node:fs",
+      "node:path",
+      "../domain/errors.js",
+      "../process/cleanup.js",
+      "../domain/deployment.js",
+      "../config/operations.js",
+      "./user-files.js",
+      "./process-lock.js",
+      "./pi-packages.js",
+      "./session-mode.js",
+      "../storage/file-digest.js",
+      "./extension-integrity.js"
+    ],
+    "functions": [
+      "localEntryProblem",
+      "personalExtensionEntry",
+      "personalEntryProblem",
+      "checked",
+      "readPersonalSettings",
+      "personalExtensionRoots",
+      "observeLocalAsset",
+      "selectedAsset",
+      "updatePersonalSettings",
+      "updatePersonalSettingsAsync",
+      "commitPersonalSettings",
+      "reconcilePersonalSettings",
+      "personalExtensions"
+    ]
+  },
+  {
+    "path": "src/runtime/pi-adapter.ts",
+    "lines": 418,
+    "imports": [
+      "../process/async.js",
+      "node:fs",
+      "node:path",
+      "../../implementation/contracts.js",
+      "../domain/limits.js",
+      "../domain/errors.js",
+      "../storage/delivery-receipt.js",
+      "./extension-integrity.js",
+      "./pi-rpc.js",
+      "./pi-spawn-plan.js",
+      "../sandbox.js",
+      "./pi-runtime.js"
+    ],
+    "functions": [
+      "failure",
+      "deadline",
+      "rearm",
+      "hold",
+      "cancel",
+      "boundaryOf",
+      "waitOf",
+      "waitObservationOf",
+      "runnerObservationOf",
+      "spawnPlan",
+      "hostBoundary",
+      "deliver"
+    ]
+  },
+  {
+    "path": "src/runtime/pi-packages.ts",
+    "lines": 534,
+    "imports": [
+      "node:path",
+      "node:fs",
+      "../domain/errors.js",
+      "../config/operations.js",
+      "./user-files.js",
+      "../protocol/host-guest.js",
+      "../storage/directory.js",
+      "../platform/host/files.js"
+    ],
+    "functions": [
+      "packageStoreDir",
+      "localPackageSource",
+      "installedPackageSource",
+      "packageCommand",
+      "configuredPackageSources",
+      "packageStoreRoot",
+      "escapes",
+      "resourceEntryProblem",
+      "resourceList",
+      "indexBytes",
+      "readPackageIndex",
+      "packageResourcePaths",
+      "writePackageIndex",
+      "reconciledEntries",
+      "packageActivation",
+      "packageListLines"
+    ]
+  },
+  {
+    "path": "src/runtime/pi-presentation.ts",
+    "lines": 22,
+    "imports": [
+      "node:path",
+      "./oma-theme.js",
+      "./pi-runtime.js",
+      "./user-files.js",
+      "../pi-compat/settings.js"
+    ],
+    "functions": [
+      "preparePiInteractive"
+    ]
+  },
+  {
+    "path": "src/runtime/pi-rpc.ts",
+    "lines": 308,
+    "imports": [
+      "node:child_process",
+      "node:stream",
+      "../../implementation/contracts.js",
+      "../domain/errors.js",
+      "../protocol/jsonl.js",
+      "../protocol/alarm.js",
+      "../pi-compat/wire.js"
+    ],
+    "functions": [
+      "assertPiRpcLimits",
+      "unwritten",
+      "commandWasNotWritten",
+      "onEvent",
+      "finishWrite",
+      "send",
+      "close",
+      "terminate"
+    ]
+  },
+  {
+    "path": "src/runtime/pi-runtime.ts",
+    "lines": 193,
+    "imports": [
+      "node:fs",
+      "../storage/contained-fs.js",
+      "./locked-files.js",
+      "./user-files.js",
+      "../pi-compat/settings-object.js",
+      "node:url",
+      "node:path",
+      "../domain/errors.js",
+      "../process/cleanup.js"
+    ],
+    "functions": [
+      "prepareEngineFile",
+      "preparePiRetry",
+      "engineFile",
+      "regularFile",
+      "entryFromPackage",
+      "bundledEntry",
+      "piAgentDir",
+      "resolvePiRuntime",
+      "piIsolationEnv"
+    ]
+  },
+  {
+    "path": "src/runtime/pi-spawn-plan.ts",
+    "lines": 342,
+    "imports": [
+      "../../implementation/contracts.js",
+      "./extension-integrity.js",
+      "./pi-packages.js",
+      "./pi-runtime.js",
+      "node:path",
+      "node:url",
+      "../sandbox.js",
+      "../protocol/run-lease.js",
+      "../domain/errors.js",
+      "../domain/mail-values.js",
+      "../storage/paths.js",
+      "./sandbox-seccomp.js",
+      "../config/role-prompts.js",
+      "../mail/addresses.js"
+    ],
+    "functions": [
+      "pathView",
+      "omaEnvironment",
+      "residentHints",
+      "engineArgv",
+      "planPiSpawn"
+    ]
+  },
+  {
+    "path": "src/runtime/principal-delivery.ts",
+    "lines": 251,
+    "imports": [
+      "../../implementation/contracts.js",
+      "../protocol/channel.js",
+      "../domain/errors.js",
+      "../storage/delivery-receipt.js",
+      "../storage/paths.js",
+      "./pi-adapter.js",
+      "./pi-rpc.js"
+    ],
+    "functions": [
+      "principalHostBroker",
+      "tick",
+      "rememberFailure",
+      "complete",
+      "deliverOne"
+    ]
+  },
+  {
+    "path": "src/runtime/process-lock.ts",
+    "lines": 76,
+    "imports": [
+      "node:fs",
+      "node:path",
+      "../leaf.js",
+      "../domain/errors.js",
+      "../process/cleanup.js"
+    ],
+    "functions": [
+      "acquire",
+      "tryAcquire",
+      "assertHeld",
+      "close"
+    ]
+  },
+  {
+    "path": "src/runtime/project-binding.ts",
+    "lines": 64,
+    "imports": [
+      "node:fs",
+      "node:path",
+      "../domain/errors.js",
+      "../domain/identifiers.js",
+      "../storage/contained-fs.js"
+    ],
+    "functions": [
+      "observeProjectBinding"
+    ]
+  },
+  {
+    "path": "src/runtime/provision.ts",
+    "lines": 466,
+    "imports": [
+      "node:crypto",
+      "node:fs",
+      "node:path",
+      "../domain/errors.js",
+      "../domain/identifiers.js",
+      "../domain/derived.js",
+      "../process/policies.js",
+      "../git/project-snapshot.js",
+      "../git/canonical-command.js",
+      "../storage/durable-fs.js",
+      "../storage/directory.js",
+      "../storage/tree-lease.js",
+      "../storage/contained-fs.js",
+      "./resident-rootfs.js",
+      "../storage/paths.js",
+      "./project-binding.js"
+    ],
+    "functions": [
+      "residentRootfsPath",
+      "projectHead",
+      "git",
+      "ensureBareRepository",
+      "hasCanonicalMain",
+      "createCanonicalMain",
+      "seedFromProject",
+      "seedEmptyRoot",
+      "provisionSociety",
+      "gitlinksOnMain",
+      "refreshProjectMirror",
+      "repairSociety",
+      "stateRootHasSociety",
+      "projectBindingDecision",
+      "collectRepositoryStaging",
+      "collectBindingTemporaries",
+      "publishProjectBinding"
+    ]
+  },
+  {
+    "path": "src/runtime/resident-rootfs.ts",
+    "lines": 247,
+    "imports": [
+      "node:fs",
+      "node:path",
+      "../domain/errors.js",
+      "../domain/deployment.js",
+      "../sandbox.js",
+      "../storage/directory.js",
+      "../storage/contained-fs.js"
+    ],
+    "functions": [
+      "kind",
+      "kindAt",
+      "kindOf",
+      "hostSystemLayout",
+      "ensureOwned",
+      "lostRace",
+      "ensureFile",
+      "readExisting",
+      "ensureLink",
+      "productSurfaceMasks",
+      "prepareResidentRootfs"
+    ]
+  },
+  {
+    "path": "src/runtime/run-registry.ts",
+    "lines": 176,
+    "imports": [
+      "node:fs",
+      "node:path",
+      "../../implementation/contracts.js",
+      "../domain/errors.js",
+      "../units/observe.js",
+      "../mail/batches.js"
+    ],
+    "functions": [
+      "pinCgroup",
+      "population",
+      "matches",
+      "close",
+      "population",
+      "matches",
+      "confirmOpening",
+      "publish",
+      "wait",
+      "revoke",
+      "done",
+      "get",
+      "values",
+      "begin",
+      "settlementQuiescence",
+      "close"
+    ]
+  },
+  {
+    "path": "src/runtime/sandbox-seccomp.ts",
+    "lines": 98,
+    "imports": [
+      "../domain/errors.js"
+    ],
+    "functions": [
+      "assemble",
+      "sandboxSeccompFilter"
+    ]
+  },
+  {
+    "path": "src/runtime/session-catalog.ts",
+    "lines": 55,
+    "imports": [
+      "node:fs",
+      "node:path",
+      "../domain/errors.js",
+      "../domain/identifiers.js",
+      "../storage/paths.js",
+      "./project-binding.js",
+      "./session-mode.js",
+      "./session-history.js"
+    ],
+    "functions": [
+      "sessionBirthForHistory",
+      "sessionHistoryDirectories"
+    ]
+  },
+  {
+    "path": "src/runtime/session-handoff.ts",
+    "lines": 23,
+    "imports": [
+      "node:fs",
+      "../frame.js",
+      "../process/cleanup.js"
+    ],
+    "functions": [
+      "requestHostNewSession"
+    ]
+  },
+  {
+    "path": "src/runtime/session-history.ts",
+    "lines": 27,
+    "imports": [
+      "../domain/errors.js",
+      "./user-files.js",
+      "./session-mode.js",
+      "../pi-compat/session.js"
+    ],
+    "functions": [
+      "inspectSessionHistory",
+      "assertSessionHistory"
+    ]
+  },
+  {
+    "path": "src/runtime/session-mode.ts",
+    "lines": 72,
+    "imports": [
+      "node:path",
+      "../domain/errors.js",
+      "../domain/identifiers.js",
+      "../domain/session-mode.js",
+      "../storage/paths.js",
+      "./user-files.js"
+    ],
+    "functions": [
+      "checked",
+      "newSessionBirth",
+      "readSessionBirth",
+      "publishSessionBirth",
+      "requireSessionMode",
+      "sessionRootForHistory"
+    ]
+  },
+  {
+    "path": "src/runtime/society-lease.ts",
+    "lines": 229,
+    "imports": [
+      "node:crypto",
+      "node:fs",
+      "../leaf.js",
+      "../process/async.js",
+      "./assets.js",
+      "../domain/errors.js"
+    ],
+    "functions": [
+      "societyLeaseName",
+      "tryHoldSociety",
+      "leaseOf",
+      "release",
+      "inheritedFence",
+      "claimSocietyFence"
+    ]
+  },
+  {
+    "path": "src/runtime/society-preparation.ts",
+    "lines": 24,
+    "imports": [
+      "node:path",
+      "../process/async.js",
+      "../domain/errors.js"
+    ],
+    "functions": [
+      "prepareSociety"
+    ]
+  },
+  {
+    "path": "src/runtime/society-slot.ts",
+    "lines": 71,
+    "imports": [
+      "node:path",
+      "../hash.js",
+      "../config/defaults.js",
+      "../ids.js",
+      "./project-binding.js",
+      "./provision.js",
+      "./session-mode.js"
+    ],
+    "functions": [
+      "projectSociety",
+      "checkSocietySlot"
+    ]
+  },
+  {
+    "path": "src/runtime/supervision-channel.ts",
+    "lines": 92,
+    "imports": [
+      "node:fs",
+      "node:net",
+      "../leaf.js",
+      "../broker/process-ancestry.js",
+      "../protocol/host-channel.js",
+      "../broker/principal-endpoint.js"
+    ],
+    "functions": [
+      "openSupervisionChannel"
+    ]
+  },
+  {
+    "path": "src/runtime/user-files.ts",
+    "lines": 97,
+    "imports": [
+      "node:fs",
+      "node:path",
+      "../domain/errors.js",
+      "../process/cleanup.js",
+      "../domain/utf8.js",
+      "./assets.js",
+      "../storage/contained-fs.js",
+      "../storage/durable-fs.js",
+      "../platform/host/files.js"
+    ],
+    "functions": [
+      "ensureUserDirectory",
+      "ensureOwnedUserDirectory",
+      "readUserFile",
+      "publishUserFile",
+      "replaceUserFile"
+    ]
+  },
+  {
+    "path": "src/sandbox.ts",
+    "lines": 157,
+    "imports": [
+      "node:path",
+      "node:fs",
+      "../implementation/contracts.js",
+      "./domain/errors.js",
+      "./protocol/run-lease.js",
+      "./protocol/batch-view.js",
+      "./storage/paths.js",
+      "./resident-paths.js",
+      "./ports/runtime.js"
+    ],
+    "functions": [
+      "setenvPairs",
+      "requireResidentContext",
+      "resolvedBindSource",
+      "residentArgv",
+      "validateSandboxHost",
+      "resident"
+    ]
+  },
+  {
+    "path": "src/storage/batch-view.ts",
+    "lines": 72,
+    "imports": [
+      "node:path",
+      "../../implementation/contracts.js",
+      "../../implementation/contracts/durable.js",
+      "../domain/derived.js",
+      "../protocol/batch-view.js",
+      "./paths.js",
+      "./durable-fs.js"
+    ],
+    "functions": [
+      "earlierLines",
+      "publishBatchView"
+    ]
+  },
+  {
+    "path": "src/storage/contained-fs.ts",
+    "lines": 202,
+    "imports": [
+      "node:fs",
+      "node:path",
+      "node:util",
+      "koffi",
+      "../domain/errors.js",
+      "../process/cleanup.js"
+    ],
+    "functions": [
+      "closeEvery",
+      "syscalls",
+      "checked",
+      "relativeName",
+      "openBeneath",
+      "openRegularBeneath",
+      "openDirectory",
+      "entryAt",
+      "linkDescriptor",
+      "withinDirectory"
+    ]
+  },
+  {
+    "path": "src/storage/context-files.ts",
+    "lines": 62,
+    "imports": [
+      "node:fs",
+      "../../implementation/contracts.js",
+      "../domain/errors.js",
+      "../hash.js",
+      "../domain/context-policy.js",
+      "./contained-fs.js"
+    ],
+    "functions": [
+      "readFrozenLength",
+      "readContextEntry"
+    ]
+  },
+  {
+    "path": "src/storage/context-snapshot.ts",
+    "lines": 114,
+    "imports": [
+      "node:fs",
+      "node:path",
+      "../../implementation/contracts.js",
+      "../ids.js",
+      "../domain/derived.js",
+      "../domain/context-policy.js",
+      "../domain/errors.js",
+      "./paths.js",
+      "./context-files.js",
+      "./durable-fs.js",
+      "./staged-tree.js",
+      "./contained-fs.js",
+      "./directory.js",
+      "../process/cleanup.js",
+      "./tree-lease.js"
+    ],
+    "functions": [
+      "verifyContextRevision",
+      "sealRevision",
+      "publishContextRevision"
+    ]
+  },
+  {
+    "path": "src/storage/context-stream.ts",
+    "lines": 214,
+    "imports": [
+      "node:fs",
+      "node:crypto",
+      "node:path",
+      "../../implementation/contracts.js",
+      "../domain/errors.js",
+      "../domain/context-policy.js",
+      "./paths.js",
+      "./directory.js",
+      "./tree-lease.js",
+      "./contained-fs.js",
+      "./durable-fs.js",
+      "./preaccept-artifact.js"
+    ],
+    "functions": [
+      "releaseWriting",
+      "retainForOperation",
+      "discardUnaccepted",
+      "acquireStagingRoot",
+      "discardFailedPreparation",
+      "prepareContextStream"
+    ]
+  },
+  {
+    "path": "src/storage/delivery-receipt.ts",
+    "lines": 453,
+    "imports": [
+      "node:fs",
+      "node:path",
+      "../../implementation/contracts.js",
+      "../domain/errors.js",
+      "../domain/identifiers.js",
+      "../frame.js",
+      "./durable-fs.js",
+      "./contained-fs.js",
+      "./paths.js"
+    ],
+    "functions": [
+      "isCheckedReceipt",
+      "attemptsOf",
+      "invalid",
+      "errnoOf",
+      "openFailure",
+      "readBoundedFd",
+      "requireBytes",
+      "record",
+      "sessionPathCheck",
+      "checkReceipt",
+      "decodeDeliveryReceipt",
+      "claimedIdentity",
+      "observeDeliveryReceipt",
+      "deliveryDecision",
+      "requireVerifiedReceipt",
+      "readDeliveryReceipt",
+      "isBoundaryEntry",
+      "makeBoundaryDurable",
+      "publishDeliveryReceipt"
+    ]
+  },
+  {
+    "path": "src/storage/diagnostic-snapshot.ts",
+    "lines": 24,
+    "imports": [],
+    "functions": []
+  },
+  {
+    "path": "src/storage/directory.ts",
+    "lines": 272,
+    "imports": [
+      "node:fs",
+      "node:path",
+      "../domain/errors.js",
+      "../process/cleanup.js",
+      "./contained-fs.js"
+    ],
+    "functions": [
+      "componentsOf",
+      "assertDirectory",
+      "ensureDirectory",
+      "repairOwnerBits",
+      "openOwnedDirectory",
+      "openOwnedDirectoryPath",
+      "ensureOwnedDirectory",
+      "removeOwnedTree",
+      "removeUnusedTree",
+      "removeOwnedFile",
+      "listOwnedDirectory",
+      "repairOwnedEntryMode"
+    ]
+  },
+  {
+    "path": "src/storage/durable-fs.ts",
+    "lines": 400,
+    "imports": [
+      "node:fs",
+      "node:crypto",
+      "node:path",
+      "../domain/errors.js",
+      "./directory.js",
+      "./contained-fs.js",
+      "../leaf.js"
+    ],
+    "functions": [
+      "faultAt",
+      "fsyncHeldDir",
+      "fsyncDir",
+      "ensureDurableDirectory",
+      "flushDirectoryChain",
+      "ensureOwnedDurableDirectory",
+      "fsyncFile",
+      "cleanupOwnedTemporary",
+      "cleanupAfterFailure",
+      "writeExclusiveFsyncedFile",
+      "writeExclusiveFsyncedEntry",
+      "publishNoReplace",
+      "temporaryNameFor",
+      "createLockedTemporary",
+      "collectDeadTemporaries",
+      "publishOnce",
+      "replaceDerivedFile",
+      "fsyncTree"
+    ]
+  },
+  {
+    "path": "src/storage/facets.ts",
+    "lines": 71,
+    "imports": [
+      "../store.js"
+    ],
+    "functions": [
+      "freezeTable",
+      "bind",
+      "readFacets",
+      "writeFacets"
+    ]
+  },
+  {
+    "path": "src/storage/file-digest.ts",
+    "lines": 27,
+    "imports": [
+      "node:crypto",
+      "node:fs"
+    ],
+    "functions": [
+      "fileDigest"
+    ]
+  },
+  {
+    "path": "src/storage/immutable-file.ts",
+    "lines": 222,
+    "imports": [
+      "node:fs",
+      "node:path",
+      "../domain/canonical-json.js",
+      "../domain/errors.js",
+      "./durable-fs.js",
+      "./contained-fs.js",
+      "./preaccept-artifact.js"
+    ],
+    "functions": [
+      "checkedBytes",
+      "openImmutable",
+      "observeImmutableFile",
+      "observeImmutableEntry",
+      "failedObservation",
+      "readImmutableBytes",
+      "publishImmutableFile"
+    ]
+  },
+  {
+    "path": "src/storage/ledger-reader.ts",
+    "lines": 340,
+    "imports": [
+      "node:sqlite",
+      "../domain/identifiers.js",
+      "../durable.js",
+      "../domain/lineage.js",
+      "./operation-codec.js",
+      "./rows.js"
+    ],
+    "functions": [
+      "readScope",
+      "all",
+      "rawAgent",
+      "lineage",
+      "requiredAgent",
+      "agentAt",
+      "operationAt",
+      "batchAt",
+      "agent",
+      "agentNames",
+      "agents",
+      "subscription",
+      "subscriptions",
+      "batchMembership",
+      "context",
+      "operationRow",
+      "operation",
+      "operationById",
+      "latestSocietyAction",
+      "latestAction",
+      "submissions",
+      "attestations",
+      "physicalCreate",
+      "recoverableIds",
+      "deliveryCore",
+      "deliveryRow",
+      "delivery",
+      "pendingDeliveryRows",
+      "pendingDeliveries",
+      "pendingDeliveryCount",
+      "operationDeliveries",
+      "batchRow",
+      "batchScoped",
+      "batch",
+      "pendingWorkRows",
+      "preparedBatches"
+    ]
+  },
+  {
+    "path": "src/storage/operation-codec.ts",
+    "lines": 401,
+    "imports": [
+      "../../implementation/contracts/errors.js",
+      "../../implementation/contracts/identity.js",
+      "../../implementation/contracts/durable.js",
+      "../../implementation/contracts/public-wire.js",
+      "../durable.js",
+      "../domain/identifiers.js",
+      "../domain/identifiers.js",
+      "../domain/attestation-relations.js",
+      "../domain/canonical-json.js",
+      "../domain/spec-identity.js",
+      "../hash.js",
+      "../domain/errors.js",
+      "../protocol/receipt-codec.js",
+      "../protocol/request-codec.js",
+      "../validate.js"
+    ],
+    "functions": [
+      "record",
+      "corrupt",
+      "safeInteger",
+      "json",
+      "freeze",
+      "same",
+      "sameSet",
+      "validatePayloadRelation",
+      "validateDeliveries",
+      "decodeOperation"
+    ]
+  },
+  {
+    "path": "src/storage/operation-journal.ts",
+    "lines": 60,
+    "imports": [
+      "../../implementation/contracts/identity.js",
+      "../../implementation/contracts/errors.js",
+      "./ledger-reader.js",
+      "./operation-transitions.js",
+      "./transaction.js",
+      "../domain/errors.js"
+    ],
+    "functions": [
+      "reused",
+      "get",
+      "getById",
+      "recoverableIds",
+      "classifyKey",
+      "insert",
+      "accept",
+      "prepare",
+      "succeed",
+      "fail",
+      "markUnknown"
+    ]
+  },
+  {
+    "path": "src/storage/operation-transitions.ts",
+    "lines": 82,
+    "imports": [
+      "node:sqlite",
+      "../../implementation/contracts/identity.js",
+      "../../implementation/contracts/errors.js",
+      "../../implementation/contracts/durable.js",
+      "../validate.js",
+      "../durable.js",
+      "./operation-codec.js",
+      "./ledger-reader.js",
+      "./transaction.js",
+      "./rows.js",
+      "../domain/errors.js"
+    ],
+    "functions": [
+      "insert",
+      "updatePlan",
+      "succeed",
+      "fail",
+      "unknown"
+    ]
+  },
+  {
+    "path": "src/storage/output-spool.ts",
+    "lines": 57,
+    "imports": [
+      "node:crypto",
+      "node:path",
+      "../domain/canonical-json.js",
+      "./durable-fs.js",
+      "./file-digest.js"
+    ],
+    "functions": [
+      "spoolDirectory",
+      "spoolOutput"
+    ]
+  },
+  {
+    "path": "src/storage/paths.ts",
+    "lines": 135,
+    "imports": [
+      "node:path",
+      "../domain/errors.js",
+      "../domain/derived.js"
+    ],
+    "functions": [
+      "projectSettingsPathAt",
+      "agentRootPathAt",
+      "workspacePathAt",
+      "runnerViewPathAt",
+      "batchViewPathAt",
+      "runnerReceiptPathAt",
+      "runnerSessionDirPathAt",
+      "projectGitPathAt",
+      "projectMirrorPathAt",
+      "sessionDirPathAt",
+      "modelWorkspacePathAt",
+      "assertModelScope",
+      "mailObjectPathAt",
+      "mailArchivePathAt",
+      "mailWorkersPathAt",
+      "mailAudiencePathAt",
+      "mailInboxPathAt",
+      "mailInboxArrivalPathAt",
+      "submitStagingPathAt",
+      "submitBundlePathAt",
+      "contextStagingPathAt",
+      "contextRevisionPathAt",
+      "actorSocketDirectoryAt",
+      "actorSocketPathAt",
+      "matches",
+      "isWorkspacePathFor",
+      "isSubmitStagingPathFor",
+      "isSubmitBundlePathFor",
+      "isContextStagingPathFor",
+      "isMailObjectPathFor",
+      "isMailArchivePathFor",
+      "isActorSocketPathFor"
+    ]
+  },
+  {
+    "path": "src/storage/preaccept-artifact.ts",
+    "lines": 208,
+    "imports": [
+      "node:fs",
+      "node:path",
+      "../domain/errors.js",
+      "./contained-fs.js"
+    ],
+    "functions": [
+      "observePublished",
+      "observePublishedIdentity",
+      "removeOwnedInode",
+      "retainForOperation",
+      "discardUnaccepted",
+      "publishedArtifact",
+      "register",
+      "settle",
+      "settleFailure"
+    ]
+  },
+  {
+    "path": "src/storage/project-preparation.ts",
+    "lines": 56,
+    "imports": [
+      "node:fs",
+      "node:path",
+      "./contained-fs.js",
+      "./directory.js",
+      "./tree-lease.js"
+    ],
+    "functions": [
+      "projectContentName",
+      "prepareProjectDirectory",
+      "dispose",
+      "disposeProjectPreparation"
+    ]
+  },
+  {
+    "path": "src/storage/quota.ts",
+    "lines": 166,
+    "imports": [
+      "node:fs",
+      "node:path",
+      "../domain/resources.js",
+      "../domain/errors.js",
+      "../domain/admission.js"
+    ],
+    "functions": [
+      "allocatedBytes",
+      "observedStorageBytes",
+      "assertStorageQuotaAdmission",
+      "reserve",
+      "startupState",
+      "admit",
+      "check"
+    ]
+  },
+  {
+    "path": "src/storage/receipt-projector.ts",
+    "lines": 37,
+    "imports": [
+      "../../implementation/contracts/durable.js",
+      "../domain/errors.js",
+      "../ports/ledger.js",
+      "../protocol/receipt-codec.js"
+    ],
+    "functions": [
+      "receiptOfOperation"
+    ]
+  },
+  {
+    "path": "src/storage/rows.ts",
+    "lines": 154,
+    "imports": [
+      "../../implementation/contracts/host.js",
+      "../domain/errors.js",
+      "../durable.js",
+      "../domain/spec-identity.js",
+      "../domain/identifiers.js",
+      "../domain/identifiers.js"
+    ],
+    "functions": [
+      "rowCorrupt",
+      "fullRow",
+      "safeInteger",
+      "text",
+      "identity",
+      "choice",
+      "flag",
+      "optionalTime",
+      "parseJson",
+      "decodeAgentSpec",
+      "decodeAgentRow",
+      "decodeSubscriptionRow",
+      "decodeDeliveryRow",
+      "decodeBatchManifest",
+      "decodeBatchRow",
+      "decodeOperationIdProjection"
+    ]
+  },
+  {
+    "path": "src/storage/snapshot-reader.ts",
+    "lines": 127,
+    "imports": [
+      "node:fs",
+      "koffi",
+      "node:util",
+      "../domain/errors.js",
+      "./contained-fs.js"
+    ],
+    "functions": [
+      "calls",
+      "opened",
+      "sameSnapshotFile",
+      "close",
+      "entry",
+      "copySnapshotFile"
+    ]
+  },
+  {
+    "path": "src/storage/socket-name.ts",
+    "lines": 22,
+    "imports": [
+      "node:fs",
+      "../domain/errors.js"
+    ],
+    "functions": [
+      "clearSocketName"
+    ]
+  },
+  {
+    "path": "src/storage/staged-tree.ts",
+    "lines": 116,
+    "imports": [
+      "node:fs",
+      "node:crypto",
+      "node:path",
+      "../domain/errors.js",
+      "./durable-fs.js",
+      "./directory.js",
+      "./contained-fs.js"
+    ],
+    "functions": [
+      "requireDirectory",
+      "publishStagedDirectory",
+      "replaceDerivedSymlink"
+    ]
+  },
+  {
+    "path": "src/storage/submit-spool.ts",
+    "lines": 162,
+    "imports": [
+      "node:fs",
+      "node:crypto",
+      "node:path",
+      "../../implementation/contracts.js",
+      "../domain/errors.js",
+      "./contained-fs.js",
+      "./preaccept-artifact.js",
+      "./durable-fs.js",
+      "./paths.js"
+    ],
+    "functions": [
+      "code",
+      "retainForOperation",
+      "discardUnaccepted",
+      "prepareSubmitSpool",
+      "openVerifiedBundle",
+      "observeFrozenBundle",
+      "withFrozenBundle",
+      "requireFrozenBundle"
+    ]
+  },
+  {
+    "path": "src/storage/transaction.ts",
+    "lines": 72,
+    "imports": [
+      "node:async_hooks",
+      "../domain/errors.js",
+      "../domain/admission.js",
+      "../store.js",
+      "../ports/ledger.js",
+      "./facets.js"
+    ],
+    "functions": [
+      "assertSynchronousResult",
+      "requireScope",
+      "requireLive",
+      "recordInserted",
+      "insertedIds",
+      "requireUnaccepted",
+      "run"
+    ]
+  },
+  {
+    "path": "src/storage/transitions.ts",
+    "lines": 162,
+    "imports": [
+      "node:sqlite",
+      "../domain/errors.js",
+      "../domain/identifiers.js",
+      "./ledger-reader.js",
+      "./rows.js"
+    ],
+    "functions": [
+      "corrupt",
+      "conflict",
+      "changedExactlyOne",
+      "equalManifest",
+      "validatePending",
+      "reset",
+      "follow",
+      "insertDeliveries",
+      "markMaterialized",
+      "markAcknowledged",
+      "insertPreparedBatch",
+      "linkDeliveriesToBatch",
+      "completeBatch"
+    ]
+  },
+  {
+    "path": "src/storage/tree-lease.ts",
+    "lines": 99,
+    "imports": [
+      "node:fs",
+      "../leaf.js",
+      "../domain/errors.js",
+      "./contained-fs.js",
+      "./directory.js"
+    ],
+    "functions": [
+      "leasePathOf",
+      "openLease",
+      "take",
+      "release",
+      "treeQuiescence",
+      "collectLeasedTree"
+    ]
+  },
+  {
+    "path": "src/store.ts",
+    "lines": 413,
+    "imports": [
+      "node:sqlite",
+      "node:fs",
+      "node:path",
+      "node:url",
+      "../implementation/contracts/identity.js",
+      "../implementation/contracts/errors.js",
+      "./durable.js",
+      "./storage/operation-codec.js",
+      "./storage/ledger-reader.js",
+      "./storage/directory.js",
+      "./storage/diagnostic-snapshot.js",
+      "./storage/rows.js",
+      "./storage/transitions.js",
+      "./storage/operation-transitions.js",
+      "./storage/operation-journal.js",
+      "./storage/facets.js",
+      "./storage/transaction.js",
+      "./domain/identifiers.js",
+      "./domain/persisted-formats.js",
+      "./domain/errors.js"
+    ],
+    "functions": [
+      "isBusyError",
+      "preflightDatabase",
+      "readDiagnosticSnapshot",
+      "bindRepositoryIdentity",
+      "planContext",
+      "close",
+      "migrate",
+      "userVersion",
+      "begin",
+      "transaction",
+      "requireTx",
+      "insertAgent",
+      "getAgent",
+      "listAgents",
+      "agentNames",
+      "updateAgent",
+      "follow",
+      "unfollow",
+      "subscribers",
+      "allSubscriptions",
+      "insertOperation",
+      "claimKey",
+      "claimOperation",
+      "acceptOperation",
+      "getOperation",
+      "retriedOperation",
+      "getOperationById",
+      "latestSocietyAction",
+      "societyOpen",
+      "latestAgentAction",
+      "submittedOperations",
+      "attestationFacts",
+      "findPhysicalCreate",
+      "recoverableOperations",
+      "findSucceededContext",
+      "updateOperationPlanJson",
+      "setOperationSucceeded",
+      "setOperationFailed",
+      "setOperationUnknown",
+      "insertDeliveries",
+      "markMaterialized",
+      "markAcknowledged",
+      "pendingDeliveries",
+      "pendingDeliveryCount",
+      "pendingDeliveryRows",
+      "getDelivery",
+      "deliveriesForOperation",
+      "insertPreparedBatch",
+      "getBatch",
+      "preparedBatches",
+      "pendingWorkRows",
+      "linkDeliveriesToBatch",
+      "pendingBatchesFor",
+      "completeBatch",
+      "validDesiredTransition"
+    ]
+  },
+  {
+    "path": "src/tui/app.ts",
+    "lines": 302,
+    "imports": [
+      "./keys.js",
+      "../domain/exhaustive.js",
+      "../domain/errors.js",
+      "./words.js",
+      "./model.js",
+      "./view/index.js",
+      "./model.js",
+      "./transcript.js",
+      "./prompt.js",
+      "./screen.js"
+    ],
+    "functions": [
+      "refresh",
+      "line",
+      "append",
+      "setBusy",
+      "note",
+      "returnPrompt",
+      "close",
+      "feed",
+      "key",
+      "apply",
+      "run",
+      "saved",
+      "draw",
+      "selectedMail"
+    ]
+  },
+  {
+    "path": "src/tui/ask-user-question/component.ts",
+    "lines": 194,
+    "imports": [
+      "@earendil-works/pi-tui",
+      "../../client/ask-user-question/model.js",
+      "../../client/ask-user-question/questionnaire.js",
+      "../limits.js"
+    ],
+    "functions": [
+      "createAskComponent",
+      "render",
+      "handleInput",
+      "invalidate",
+      "renderTabBar",
+      "renderQuestion",
+      "withPreviewPane",
+      "renderReview",
+      "renderFooter"
+    ]
+  },
+  {
+    "path": "src/tui/ask-user-question/presenter.ts",
+    "lines": 149,
+    "imports": [
+      "./component.js",
+      "../../client/ask-user-question/model.js",
+      "../../client/ask-user-question/protocol.js",
+      "../../client/ask-user-question/questionnaire.js"
+    ],
+    "functions": [
+      "registerAskUserQuestionPresenter"
+    ]
+  },
+  {
+    "path": "src/tui/cells.ts",
+    "lines": 11,
+    "imports": [
+      "@earendil-works/pi-tui"
+    ],
+    "functions": []
+  },
+  {
+    "path": "src/tui/compact-tools.ts",
+    "lines": 423,
+    "imports": [
+      "@earendil-works/pi-tui",
+      "../domain/unseen-text.js",
+      "./limits.js"
+    ],
+    "functions": [
+      "toolDisplayName",
+      "indicatorStrength",
+      "indicatorTone",
+      "paintIndicator",
+      "formatDurationMs",
+      "normalizeLineEndings",
+      "resultText",
+      "countLines",
+      "inline",
+      "listed",
+      "callSummary",
+      "failureSummary",
+      "render",
+      "invalidate",
+      "add",
+      "render",
+      "invalidate",
+      "underRail",
+      "railed",
+      "createCompactToolRuntime",
+      "agentStarted",
+      "agentEnded",
+      "toolStarted",
+      "toolEnded",
+      "bindRender",
+      "reset"
+    ]
+  },
+  {
+    "path": "src/tui/dashboard.ts",
+    "lines": 64,
+    "imports": [
+      "../../implementation/contracts.js",
+      "../protocol/status-view.js",
+      "./model.js",
+      "./transport.js",
+      "./words.js"
+    ],
+    "functions": [
+      "activeCount",
+      "createdCount",
+      "dashboardData"
+    ]
+  },
+  {
+    "path": "src/tui/exit.ts",
+    "lines": 57,
+    "imports": [
+      "node:fs",
+      "../../implementation/contracts/errors.js",
+      "../domain/errors.js",
+      "./words.js"
+    ],
+    "functions": [
+      "exitFor",
+      "codeFor",
+      "fail",
+      "done"
+    ]
+  },
+  {
+    "path": "src/tui/interactive-editor.ts",
+    "lines": 118,
+    "imports": [
+      "@earendil-works/pi-tui",
+      "@earendil-works/pi-tui",
+      "./limits.js"
+    ],
+    "functions": [
+      "presented",
+      "get",
+      "ownedEditor",
+      "set",
+      "get"
+    ]
+  },
+  {
+    "path": "src/tui/keys.ts",
+    "lines": 405,
+    "imports": [
+      "@earendil-works/pi-tui",
+      "./limits.js",
+      "../domain/utf8.js",
+      "../domain/unseen-text.js"
+    ],
+    "functions": [
+      "pastedText",
+      "actionOf",
+      "decodeText",
+      "decodeKept",
+      "chars",
+      "isCsiFinal",
+      "push",
+      "resetText",
+      "afterPaste",
+      "addPasteByte",
+      "endPaste",
+      "flushPending",
+      "finish"
+    ]
+  },
+  {
+    "path": "src/tui/limits.ts",
+    "lines": 159,
+    "imports": [],
+    "functions": [
+      "humanPromptRequestId",
+      "humanPromptByteLimit",
+      "humanPromptFrameBytes",
+      "humanPromptFitsFrame"
+    ]
+  },
+  {
+    "path": "src/tui/login.ts",
+    "lines": 49,
+    "imports": [
+      "node:path",
+      "../runtime/pi-runtime.js",
+      "../process/async.js",
+      "../runtime/user-files.js"
+    ],
+    "functions": [
+      "runEngineLogin"
+    ]
+  },
+  {
+    "path": "src/tui/mail-names.ts",
+    "lines": 48,
+    "imports": [],
+    "functions": [
+      "workerOrdinals",
+      "mailPartyName",
+      "mailNamerFor"
+    ]
+  },
+  {
+    "path": "src/tui/model.ts",
+    "lines": 468,
+    "imports": [
+      "./keys.js",
+      "./limits.js",
+      "./prompt.js",
+      "../domain/exhaustive.js"
+    ],
+    "functions": [
+      "mailIdentity",
+      "mailIndex",
+      "categoryOf",
+      "itemCount",
+      "cursorOf",
+      "withCursor",
+      "move",
+      "closed",
+      "selectedField",
+      "fieldById",
+      "beginEdit",
+      "commitEdit",
+      "stepEdit",
+      "stepExtensions",
+      "stepMailDetail",
+      "stepPanelRoot",
+      "conversationTransition",
+      "stepConversation",
+      "step"
+    ]
+  },
+  {
+    "path": "src/tui/open-tui-brand.ts",
+    "lines": 193,
+    "imports": [
+      "./cells.js"
+    ],
+    "functions": [
+      "replaceLeftColumn",
+      "swapText",
+      "brandHeader",
+      "replaceColumn",
+      "brandFooter"
+    ]
+  },
+  {
+    "path": "src/tui/packages-apply.ts",
+    "lines": 81,
+    "imports": [
+      "node:crypto",
+      "node:fs",
+      "node:path",
+      "../domain/errors.js",
+      "../config/defaults.js",
+      "../hash.js",
+      "../platform/package-archive.js",
+      "../runtime/pi-packages.js",
+      "../storage/durable-fs.js",
+      "../storage/directory.js",
+      "../storage/staged-tree.js",
+      "./project-settings.js"
+    ],
+    "functions": [
+      "digestOf",
+      "applyPackageArchive"
+    ]
+  },
+  {
+    "path": "src/tui/panel-style.ts",
+    "lines": 32,
+    "imports": [],
+    "functions": [
+      "stylePanel"
+    ]
+  },
+  {
+    "path": "src/tui/panel-terminal.ts",
+    "lines": 112,
+    "imports": [
+      "./screen.js",
+      "../runtime/pi-rpc.js",
+      "./limits.js"
+    ],
+    "functions": [
+      "whenUnclaimed",
+      "cancelStartup",
+      "onKeys",
+      "onResize",
+      "repaint",
+      "draw",
+      "handoff",
+      "size",
+      "open",
+      "reclaim",
+      "restore"
+    ]
+  },
+  {
+    "path": "src/tui/project-session-directories.ts",
+    "lines": 70,
+    "imports": [
+      "../runtime/pi-rpc.js",
+      "../protocol/host-history.js",
+      "../domain/errors.js"
+    ],
+    "functions": [
+      "read",
+      "snapshot",
+      "accept",
+      "close"
+    ]
+  },
+  {
+    "path": "src/tui/project-settings.ts",
+    "lines": 127,
+    "imports": [
+      "node:fs",
+      "node:path",
+      "../domain/errors.js",
+      "../config/defaults.js",
+      "../domain/identifiers.js",
+      "../runtime/deployment-manifest.js",
+      "../runtime/pi-packages.js",
+      "../runtime/provision.js",
+      "../runtime/user-files.js",
+      "./words.js",
+      "./sources/settings.js"
+    ],
+    "functions": [
+      "ensureProjectSettings",
+      "applyPackageChange"
+    ]
+  },
+  {
+    "path": "src/tui/prompt.ts",
+    "lines": 105,
+    "imports": [
+      "./limits.js"
+    ],
+    "functions": [
+      "withoutLastGrapheme",
+      "appendPrompt",
+      "erasePrompt",
+      "pastePrompt",
+      "returnedPrompt",
+      "submitPrompt"
+    ]
+  },
+  {
+    "path": "src/tui/screen.ts",
+    "lines": 135,
+    "imports": [
+      "./limits.js"
+    ],
+    "functions": [
+      "openTerminal",
+      "draw",
+      "onKeys",
+      "onResize",
+      "repaint",
+      "restore",
+      "releaseTerminalResources",
+      "restoreTerminalModes"
+    ]
+  },
+  {
+    "path": "src/tui/session-mode.ts",
+    "lines": 91,
+    "imports": [
+      "../domain/session-mode.js",
+      "../process/host-loss.js",
+      "./keys.js",
+      "./screen.js",
+      "./view/index.js"
+    ],
+    "functions": [
+      "chooseSessionMode",
+      "chooseSociety",
+      "chooseTerminalItem"
+    ]
+  },
+  {
+    "path": "src/tui/session.ts",
+    "lines": 746,
+    "imports": [
+      "node:crypto",
+      "node:path",
+      "node:url",
+      "../../implementation/contracts.js",
+      "../process/async.js",
+      "../runtime/interactive-channel.js",
+      "../runtime/host-tenure.js",
+      "../runtime/pi-rpc.js",
+      "node:net",
+      "../protocol/host-channel.js",
+      "../storage/paths.js",
+      "../runtime/pi-rpc.js",
+      "../runtime/extension-integrity.js",
+      "../runtime/pi-runtime.js",
+      "../config.js",
+      "../domain/errors.js",
+      "./words.js",
+      "../domain/mail-values.js",
+      "../domain/unseen-text.js",
+      "../runtime/pi-packages.js",
+      "./limits.js",
+      "./prompt.js",
+      "../config/role-prompts.js"
+    ],
+    "functions": [
+      "newSessionHandle",
+      "principalSessionDir",
+      "principalWorkspace",
+      "principalEnvironment",
+      "principalSessionProfile",
+      "sessionArgv",
+      "sessionEnv",
+      "textOf",
+      "projectEvent",
+      "queuePreviewLine",
+      "sendUi",
+      "start",
+      "observe",
+      "own",
+      "emitQueue",
+      "free",
+      "write",
+      "handBack",
+      "nextRequestId",
+      "sendPrompt",
+      "grant",
+      "onEvent",
+      "deliver",
+      "release",
+      "submit",
+      "close"
+    ]
+  },
+  {
+    "path": "src/tui/sources/extensions.ts",
+    "lines": 213,
+    "imports": [
+      "node:fs",
+      "node:path",
+      "../../domain/errors.js",
+      "../words.js",
+      "../../domain/deployment.js",
+      "../../config.js",
+      "../../config/operations.js",
+      "../../runtime/pi-packages.js",
+      "../../config/generations.js",
+      "./settings.js",
+      "../model.js",
+      "../limits.js"
+    ],
+    "functions": [
+      "scanLibdir",
+      "rowsOf",
+      "readExtensions",
+      "nextEntries",
+      "toggleExtension"
+    ]
+  },
+  {
+    "path": "src/tui/sources/mail.ts",
+    "lines": 349,
+    "imports": [
+      "node:fs",
+      "node:path",
+      "../model.js",
+      "../mail-names.js",
+      "../limits.js",
+      "../../mail/headers.js",
+      "../../mail/display.js",
+      "../../domain/errors.js",
+      "../words.js"
+    ],
+    "functions": [
+      "principalMailbox",
+      "parseMessage",
+      "addressName",
+      "recipientNames",
+      "readBounded",
+      "listDir",
+      "arrivalJournal",
+      "threadKeyOf",
+      "entriesIn",
+      "rowsIn",
+      "foldThreads",
+      "byArrival",
+      "readMailbox",
+      "unreadCount",
+      "readBody"
+    ]
+  },
+  {
+    "path": "src/tui/sources/settings.ts",
+    "lines": 540,
+    "imports": [
+      "node:crypto",
+      "node:fs",
+      "node:path",
+      "../../../implementation/contracts.js",
+      "../../domain/errors.js",
+      "../../config.js",
+      "../../config/operations.js",
+      "../../domain/deployment.js",
+      "../../storage/paths.js",
+      "../../storage/durable-fs.js",
+      "../../config/generations.js",
+      "../model.js",
+      "../limits.js"
+    ],
+    "functions": [
+      "followsEngine",
+      "engineName",
+      "engineModelChoiceOf",
+      "workerModelText",
+      "workerProfileOf",
+      "residentProfiles",
+      "workerTarget",
+      "bootstrapStateOf",
+      "fieldsOf",
+      "settingsOf",
+      "projectSettingsPath",
+      "sessionConfigOf",
+      "roleSetOf",
+      "commitRoleSet",
+      "readSettingsForEditing",
+      "projectBundle",
+      "deriveSessionSettings",
+      "readSettings",
+      "revisionFor",
+      "assertKnown",
+      "withSeedCount",
+      "applyField",
+      "sameMeaning",
+      "revised",
+      "commitInlineEdit",
+      "writeSettings",
+      "commitManagedEdit",
+      "roleRevisionInput",
+      "commitField"
+    ]
+  },
+  {
+    "path": "src/tui/transcript.ts",
+    "lines": 94,
+    "imports": [
+      "./limits.js"
+    ],
+    "functions": [
+      "byCodePoints",
+      "storedLines",
+      "append",
+      "push"
+    ]
+  },
+  {
+    "path": "src/tui/transport.ts",
+    "lines": 78,
+    "imports": [
+      "node:fs",
+      "../../implementation/contracts.js",
+      "../protocol/channel.js",
+      "../protocol/status-view.js"
+    ],
+    "functions": [
+      "limitsOf",
+      "read",
+      "status"
+    ]
+  },
+  {
+    "path": "src/tui/view/dashboard.ts",
+    "lines": 66,
+    "imports": [
+      "../model.js"
+    ],
+    "functions": [
+      "clock",
+      "dashboardRows"
+    ]
+  },
+  {
+    "path": "src/tui/view/index.ts",
+    "lines": 5,
+    "imports": [],
+    "functions": []
+  },
+  {
+    "path": "src/tui/view/labels.ts",
+    "lines": 20,
+    "imports": [
+      "../model.js"
+    ],
+    "functions": [
+      "applyLabel",
+      "extensionLabel"
+    ]
+  },
+  {
+    "path": "src/tui/view/layout.ts",
+    "lines": 14,
+    "imports": [
+      "../limits.js"
+    ],
+    "functions": []
+  },
+  {
+    "path": "src/tui/view/notice.ts",
+    "lines": 55,
+    "imports": [
+      "../model.js",
+      "./labels.js",
+      "../../domain/exhaustive.js"
+    ],
+    "functions": [
+      "worded",
+      "noticeText"
+    ]
+  },
+  {
+    "path": "src/tui/view/screens.ts",
+    "lines": 248,
+    "imports": [
+      "../model.js",
+      "./dashboard.js",
+      "./layout.js",
+      "./notice.js",
+      "./labels.js",
+      "./text.js"
+    ],
+    "functions": [
+      "fieldValue",
+      "frame",
+      "windowed",
+      "conversation",
+      "header",
+      "rowsFor",
+      "extensionsScreen",
+      "mailDetailParts",
+      "screenNotice",
+      "mailScrollLimit",
+      "mailDetail",
+      "render"
+    ]
+  },
+  {
+    "path": "src/tui/view/session-mode.ts",
+    "lines": 27,
+    "imports": [
+      "../../domain/session-mode.js",
+      "./text.js"
+    ],
+    "functions": [
+      "renderSessionMode",
+      "renderSocietyChoice"
+    ]
+  },
+  {
+    "path": "src/tui/view/text.ts",
+    "lines": 83,
+    "imports": [
+      "../cells.js",
+      "../../domain/unseen-text.js"
+    ],
+    "functions": [
+      "displayable",
+      "clusters",
+      "fit",
+      "pad",
+      "wrap"
+    ]
+  },
+  {
+    "path": "src/tui/words.ts",
+    "lines": 41,
+    "imports": [
+      "../domain/errors.js",
+      "../platform/product-text.js",
+      "./limits.js"
+    ],
+    "functions": [
+      "surfaceWords",
+      "errorWords",
+      "humanStream"
+    ]
+  },
+  {
+    "path": "src/units.ts",
+    "lines": 427,
+    "imports": [
+      "node:fs",
+      "node:path",
+      "node:url",
+      "../implementation/contracts.js",
+      "./domain/errors.js",
+      "./domain/resources.js",
+      "./domain/tool-surface.js",
+      "./domain/derived.js",
+      "./storage/durable-fs.js",
+      "./units/render.js",
+      "./units/execute.js",
+      "./units/observe.js"
+    ],
+    "functions": [
+      "unitsInstallDir",
+      "lineOf",
+      "renderedExecArgv",
+      "effectiveExecArgv",
+      "unitCommandError",
+      "assertUserManagerReachable",
+      "bindIncarnationReader",
+      "command",
+      "commandAsync",
+      "run",
+      "install",
+      "assertOwnUnit",
+      "foreign",
+      "ownerOf",
+      "sameOwner",
+      "identity",
+      "residentForeign",
+      "assertResidentNamesFree",
+      "agentFrom",
+      "ensureResident",
+      "ensurePrincipal",
+      "verifyPath",
+      "start",
+      "stop",
+      "unitCgroup",
+      "observationArgs",
+      "observe",
+      "observeAsync",
+      "observeStatus",
+      "cgroupProcs",
+      "confirmDead",
+      "startLimitStatus"
+    ]
+  },
+  {
+    "path": "src/units/execute.ts",
+    "lines": 50,
+    "imports": [
+      "../process/run.js"
+    ],
+    "functions": [
+      "unknown",
+      "executeUnitCommand",
+      "observeUnitCommand"
+    ]
+  },
+  {
+    "path": "src/units/observe.ts",
+    "lines": 64,
+    "imports": [
+      "../../implementation/contracts/runtime.js",
+      "./execute.js"
+    ],
+    "functions": [
+      "parseProperties",
+      "unknownObservation",
+      "parseUnitObservation",
+      "parseCgroupPopulation",
+      "parseCgroupProcs"
+    ]
+  },
+  {
+    "path": "src/units/render.ts",
+    "lines": 81,
+    "imports": [
+      "../domain/errors.js",
+      "../domain/identifiers.js"
+    ],
+    "functions": [
+      "renderUnit"
+    ]
+  },
+  {
+    "path": "src/validate.ts",
+    "lines": 528,
+    "imports": [
+      "../implementation/contracts/identity.js",
+      "./domain/context-policy.js",
+      "./domain/derived.js",
+      "./domain/mail-values.js",
+      "./domain/identifiers.js"
+    ],
+    "functions": [
+      "isPlainObject",
+      "typeName",
+      "checkObject",
+      "checkOptional",
+      "checkString",
+      "checkInt",
+      "checkBool",
+      "checkEnum",
+      "checkArray",
+      "checkJson",
+      "checkFiniteNumber",
+      "checkBlobDescriptor",
+      "operationResultCheck",
+      "mailParamsCheck",
+      "gitSubmitParamsCheck",
+      "contextPublishParamsCheck",
+      "ok"
+    ]
+  },
+  {
+    "path": "src/views.ts",
+    "lines": 240,
+    "imports": [
+      "node:path",
+      "../implementation/contracts.js",
+      "./store.js",
+      "./storage/durable-fs.js",
+      "./storage/directory.js",
+      "./protocol/status-view.js",
+      "./storage/batch-view.js",
+      "./mail/materializer.js",
+      "./domain/derived.js",
+      "./protocol/batch-view.js",
+      "./views/pending-work.js",
+      "./domain/errors.js",
+      "./views/status-refresh.js",
+      "./ports/runtime.js"
+    ],
+    "functions": [
+      "fieldEscape",
+      "observeRunnerSource",
+      "refreshWorld",
+      "startText",
+      "principalMailText",
+      "publishInbox",
+      "publishStatus",
+      "statusOf",
+      "status"
+    ]
+  },
+  {
+    "path": "src/views/pending-work.ts",
+    "lines": 114,
+    "imports": [
+      "../../implementation/contracts.js",
+      "../store.js",
+      "../storage/ledger-reader.js",
+      "../domain/errors.js",
+      "../storage/rows.js"
+    ],
+    "functions": [
+      "pendingWork",
+      "pendingWorkByAgent"
+    ]
+  },
+  {
+    "path": "src/views/status-refresh.ts",
+    "lines": 73,
+    "imports": [
+      "../../implementation/contracts.js"
+    ],
+    "functions": [
+      "request",
+      "start"
+    ]
+  }
+]

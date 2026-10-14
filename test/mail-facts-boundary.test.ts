@@ -4,8 +4,10 @@ import { createHash } from "node:crypto";
 import { createTransport } from "nodemailer";
 import { encodeWord } from "nodemailer/lib/mime-funcs";
 import { freezeMessageFacts, messagePlanFrom, defaultLogicalReplyTo } from "../src/mail/facts.js";
-import { renderFrozenMessage } from "../src/mail/serialize.js";
-import { parseEmlHeaders } from "../src/mail/headers.js";
+import { buildEml, renderFrozenMessage } from "../src/mail/serialize.js";
+import { headerEnd, readableBody } from "../src/mail/display.js";
+import { readableMail as extensionReadableMail } from "../src/extension/mail-tools.js";
+import { decodeSubject, parseEmlHeaders } from "../src/mail/headers.js";
 import { parseRfcMessageId, headerMessageIdCheck, exactCandidateCheck } from "../src/domain/mail-values.js";
 import { parseMessageFileId } from "../src/domain/identifiers.js";
 import { displayAddress, defaultReplyTo } from "../src/mail/addresses.js";
@@ -19,17 +21,18 @@ const approvalFor = { repo: "project" as const, targetRef: "refs/heads/main" as 
   expectedBase: "a".repeat(40), candidate: "b".repeat(40), policyRevision: "검토정책-1" };
 const invalid = (error: unknown): boolean => error instanceof StoreError && error.code === "INVALID_REQUEST";
 
-/** Independent pre-refactor serializer fixture: the expected byte buffer does
+/** Independent pinned serializer fixture: the expected byte buffer does
  * not call buildEml, any facts builder, the parser, or the production hash code.
  */
-async function legacyBytes(subject: string, body: string): Promise<Buffer> {
+async function pinnedBytes(subject: string, body: string): Promise<Buffer> {
   const transporter = createTransport({ streamTransport: true, buffer: true, newline: "\r\n" });
   const info = await transporter.sendMail({
     from: "alice@demo.oma.invalid", to: "principal@demo.oma.invalid",
-    replyTo: "alice@demo.oma.invalid", subject, text: body,
+    replyTo: "alice@demo.oma.invalid", text: { content: Buffer.from(body), contentTransferEncoding: "base64" },
     messageId: `<${id}@demo.oma.invalid>`, inReplyTo: `<${second}>`,
     references: [`<${first}>`, `<${second}>`], date: new Date(dateMs),
     headers: {
+      Subject: { prepared: true, foldLines: true, value: encodeWord(subject, "B", 52) },
       "X-OMA-Kind": "approval_required",
       "X-OMA-Approval-Repo": "project", "X-OMA-Approval-Target": "refs/heads/main",
       "X-OMA-Approval-Base": "a".repeat(40), "X-OMA-Approval-Candidate": "b".repeat(40),
@@ -53,7 +56,7 @@ test("frozen logical facts produce byte-identical pinned MIME and one timestamp"
   assert.deepEqual(facts.to, ["principal"]); assert.deepEqual(facts.replyHeaders.references, [first, second]);
   const subject = "한글 제목 / frozen " .repeat(8);
   const body = "본문 UTF-8\nX-OMA-Kind: text in the body is not a header\n";
-  const expected = await legacyBytes(subject, body);
+  const expected = await pinnedBytes(subject, body);
   const emitted = await renderFrozenMessage(facts, { subject, body });
   assert.deepEqual(Buffer.from(emitted.text, "utf8"), expected);
   assert.equal(emitted.sha256, createHash("sha256").update(expected).digest("hex"));
@@ -71,6 +74,26 @@ test("frozen logical facts produce byte-identical pinned MIME and one timestamp"
   assert.deepEqual(plan.replyHeaders.references, [first, second]);
 });
 
+test("folded approval policy preserves the exact revision and encoded whitespace", async () => {
+  const revision = "rev-52224b22672dc0d77f224ccb93c05042";
+  // Independent wire fixture: the first word is on a continuation line.
+  const wire = ["X-OMA-Kind: approval_required", "X-OMA-Approval-Repo: project",
+    "X-OMA-Approval-Target: refs/heads/main", `X-OMA-Approval-Base: ${"a".repeat(40)}`,
+    `X-OMA-Approval-Candidate: ${"b".repeat(40)}`, "X-OMA-Approval-Policy:",
+    " =?UTF-8?B?cmV2LTUyMjI0YjIyNjcyZGMwZDc3ZjIyNGNjYjkzYzA1MDQy?="].join("\r\n");
+  assert.equal(parseEmlHeaders(wire).approvalFor?.policyRevision, revision);
+  for (const policyRevision of [revision, "p".repeat(128), "  검토정책 " + "p".repeat(40) + "  "]) {
+    const facts = freezeMessageFacts({ id, sender: "alice", society: "demo", to: ["principal"],
+      kind: "approval_required", contextRevision: null, dateMs,
+      approvalFor: { ...approvalFor, policyRevision },
+      replyHeaders: { replyTo: ["alice"], inReplyTo: null, references: [] } });
+    const emitted = await renderFrozenMessage(facts, { subject: "HIGH approval", body: "Review the exact candidate." });
+    assert.match(emitted.text, /X-Oma-Approval-Policy:\r\n[ \t]=\?UTF-8\?B\?/);
+    assert.equal(emitted.headerFacts.approvalFor?.policyRevision, policyRevision);
+    assert.equal(messagePlanFrom(emitted, ["principal"]).approvalFor?.policyRevision, policyRevision);
+  }
+});
+
 test("logical and RFC reply selection share policy without sharing grammars", () => {
   assert.deepEqual(defaultLogicalReplyTo("alice", ["bob", "commons", "topic/work"]), ["commons", "topic/work"]);
   assert.deepEqual(defaultLogicalReplyTo("alice", ["bob"]), ["alice"]);
@@ -79,8 +102,13 @@ test("logical and RFC reply selection share policy without sharing grammars", ()
   assert.equal(parseMessageFileId(first), null);
   assert.equal(parseRfcMessageId(first), first);
   assert.equal(parseRfcMessageId(id), null);
-  assert.equal(headerMessageIdCheck(id), null); // retained accepted bare ancestry
+  // #28: a header Message-ID is always `id@society.oma.invalid`; the bare
+  // pre-release form is not a header identity on the wire.
+  assert.notEqual(headerMessageIdCheck(id), null);
   assert.equal(headerMessageIdCheck(first), null);
+  assert.equal(headerMessageIdCheck(`${id}@demo.oma.invalid`), null);
+  assert.notEqual(headerMessageIdCheck(`${id}@other.example`), null);
+  assert.notEqual(headerMessageIdCheck(`a@b@${id}`), null);
   assert.notEqual(exactCandidateCheck({ ...approvalFor, approved: true }), null);
 });
 
@@ -88,7 +116,7 @@ const headerFixture = [
   "fRoM: alice@demo.oma.invalid", "tO: principal@demo.oma.invalid",
   "sUbJeCt: =?UTF-8?B?7KCc66qp?=", "\tcontinued",
   `mEsSaGe-Id: <${id}@demo.oma.invalid>`, `In-Reply-To: <${second}>`,
-  `References: <${second}>`, ` <${first}> <${second}> <${id}>`,
+  `References: <${second}>`, ` <${first}> <${second}> <${id}@demo.oma.invalid>`,
   "Date: Sat, 01 Jan 2000 00:00:00 +0000", "X-OMA-Kind: message",
   "MIME-Version: 1.0", "Content-Type: text/plain; charset=utf-8",
   "Content-Transfer-Encoding: 8bit",
@@ -97,7 +125,7 @@ const headerFixture = [
 test("independent folded header fixture retains order duplicates and second precision", () => {
   const bytes = Buffer.concat([Buffer.from(`${headerFixture}\r\n\r\n`), Buffer.from([255, 0, 254])]);
   const result = parseEmlHeaders(bytes);
-  assert.deepEqual(result.references, [second, first, second, id]);
+  assert.deepEqual(result.references, [second, first, second, `${id}@demo.oma.invalid`]);
   assert.equal(result.subject, "=?UTF-8?B?7KCc66qp?=\ncontinued");
   assert.equal(result.messageId, `${id}@demo.oma.invalid`);
   assert.equal(result.dateMs, 946684800000);
@@ -107,6 +135,9 @@ test("independent folded header fixture retains order duplicates and second prec
 test("parser rejects ambiguous fields unsupported MIME invalid tuples and bounds", () => {
   for (const damage of [
     `${headerFixture}\r\nMESSAGE-ID: <${first}>`,
+    // #28: the bare pre-release form is not a header identity anywhere it appears.
+    headerFixture.replace(`<${id}@demo.oma.invalid>`, `<${id}>`),
+    headerFixture.replace(`<${second}>`, `<${second.replace("@demo.oma.invalid", "")}>`, ),
     headerFixture.replace("alice@demo.oma.invalid", "alice@another@demo.oma.invalid"),
     headerFixture.replace("alice@demo.oma.invalid", "Alice <alice@demo.oma.invalid>"),
     headerFixture.replace("text/plain; charset=utf-8", "multipart/mixed; boundary=x"),
@@ -121,4 +152,19 @@ test("parser rejects ambiguous fields unsupported MIME invalid tuples and bounds
   assert.throws(() => freezeMessageFacts({ id, sender: "alice", society: "demo", to: ["principal"],
     kind: "approval_required", contextRevision: null,
     replyHeaders: { replyTo: ["alice"], inReplyTo: null, references: [] } }), invalid);
+});
+
+
+test("MAIL-003/DR27: fresh MIME preserves exact body and subject bytes in both readers", async () => {
+  for (const body of ["", "plain", "plain\n", "a\nb\n", "\ufeffgoal", "Goal\r\nSecond\n", "한글\n", "a".repeat(4096)]) {
+    for (const subject of ["Goal", "  Goal  ", "a  b", "a\tb", "=?UTF-8?B?Z29hbA==?=", "한글 ".repeat(5), "a".repeat(998)]) {
+      const emitted = await buildEml({ from: "alice@demo.oma.invalid", to: ["bob@demo.oma.invalid"], replyTo: [],
+        subject, body, kind: "message", contextRevision: null, inReplyTo: null, references: [], messageId: `${id}@demo.oma.invalid`, dateMs });
+      assert.equal(readableBody(emitted.text), body);
+      const shown = extensionReadableMail(emitted.text); const end = headerEnd(shown);
+      assert.equal(shown.slice(end.at + end.length), body);
+      assert.equal(decodeSubject(parseEmlHeaders(emitted.text).subject), subject);
+      assert.equal(emitted.bytes, Buffer.byteLength(emitted.text));
+    }
+  }
 });

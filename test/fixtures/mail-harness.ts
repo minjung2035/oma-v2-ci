@@ -2,7 +2,7 @@
 import { join } from "node:path";
 import { Store } from "../../src/store.js";
 import { MailModule } from "../../src/mail.js";
-import { sendWithStop, StopSignal, type MailStopPoint } from "./mail-faults.js";
+import { sendWithStop, type MailStopPoint } from "./mail-faults.js";
 import type { AuthContext, MailInput } from "../../implementation/contracts.js";
 import { makeValidAgent } from "./spec.js";
 
@@ -48,19 +48,16 @@ if (role === "send") {
     subject: process.env.OMA_SUBJECT ?? "crash test", kind: "message", body: process.env.OMA_BODY ?? "body",
   };
   try {
-    const receipt = await sendWithStop(mail, store, auth, process.env.OMA_KEY ?? "k", input, stopPoint(process.env.OMA_STOP));
+    const receipt = await sendWithStop(mail, store, auth, process.env.OMA_KEY ?? "k", input, stopPoint(process.env.OMA_STOP), point => {
+      console.log(`BOUNDARY:${point}`);
+      process.kill(process.pid, "SIGSTOP");
+    });
     console.log(`RECEIPT:${JSON.stringify(receipt)}`);
     store.close(); process.exit(0);
   } catch (error) {
-    if (error instanceof StopSignal) {
-      console.log(`BOUNDARY:${error.point}`);
-      process.kill(process.pid, "SIGSTOP");
-    } else {
-      console.log(`ERROR:${error instanceof Error ? error.message : String(error)}`);
-      store.close(); process.exit(2);
-    }
+    console.log(`ERROR:${error instanceof Error ? error.message : String(error)}`);
+    store.close(); process.exit(2);
   }
-  await new Promise(() => { /* parent SIGKILLs at the verified boundary */ });
 }
 store.close();
 process.exit(1);

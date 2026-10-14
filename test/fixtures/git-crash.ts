@@ -19,7 +19,7 @@ export function gitCommand(root: string, args: string[]): string {
 export function gitFixture(root: string, store: Store) {
   const paths: GitPaths = {
     stateRoot: root, projectGit: join(root, "repos/project.git"), contextGit: join(root, "repos/context.git"), worldDir: join(root, "world"), society: "crash",
-    quarantineTmpBytes: 256 * 1024 * 1024, quarantineResources: { cpuSeconds: 30, memoryBytes: 512 * 1024 * 1024, tasks: 4096 }, checkTimeoutSeconds: 30,
+    quarantineTmpBytes: 256 * 1024 * 1024, quarantineResources: { cpuSeconds: 30, memoryBytes: 512 * 1024 * 1024, tasks: 4096, timeoutSeconds: 30, silenceSeconds: 30 },
   };
   const mail = new MailModule({ stateRoot: root, society: "crash" }, store, 64);
   const git = new GitModule(paths, store, mail, { policyRevision: "crash-policy", protectedPaths: [], checks: [] });

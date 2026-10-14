@@ -1,14 +1,18 @@
 /** CFG-001: canonical byte pin for the OMA installation, not S-01 qualification.
  * The trusted installer supplies the expected digest out-of-band in host config.
  * No mutable manifest file is trusted, and no runtime state is written here. */
-import { closeSync, fstatSync, readSync, opendirSync } from "node:fs";
-import { basename, dirname, join } from "node:path";
+import { constants, closeSync, fstatSync, readSync, opendirSync } from "node:fs";
+import { dirname } from "node:path";
 import { createHash } from "node:crypto";
 import { DEPLOYMENT_LAYOUT, isDeploymentDigest } from "../domain/deployment.js";
-import { StoreError } from "../domain/errors.js";
-import { openDirectory, openRegularBeneath } from "../storage/contained-fs.js";
+import { StoreError, unobserved } from "../domain/errors.js";
+import { openBeneath, openDirectory, openRegularBeneath } from "../storage/contained-fs.js";
 
-const MAX_ENTRIES = 4096;
+// The entry bound is sized for the compiled tree plus the vendored
+// extension payloads it ships: a vendored bundle is a full dependency
+// closure (pi-web-access alone is ~11k pinned files), each of which this
+// walk must hash -- the bound refuses absurd inventories, not honest ones.
+const MAX_ENTRIES = 32768;
 const MAX_BYTES = 256 * 1024 * 1024;
 export interface DeploymentFile {
   readonly path: string;
@@ -24,19 +28,17 @@ export function deploymentManifest(root: string): DeploymentManifest {
   const files: DeploymentFile[] = [];
   let entries = 0;
   let total = 0;
-  const file = (path: string): void => {
+  // One scratch buffer and one held directory per traversal level. Reopening
+  // every parent and allocating 64 KiB per asset made the 14k-file payload
+  // expensive even though its bytes must still all be hashed.
+  const buffer = Buffer.alloc(64 * 1024);
+  const file = (parent: number, name: string, path: string): void => {
     if (++entries > MAX_ENTRIES)
       throw new StoreError(
         "UNSUPPORTED_PROFILE",
         "deployment inventory exceeds bound",
       );
-    const parent = openDirectory(dirname(join(root, path)));
-    let fd: number;
-    try {
-      fd = openRegularBeneath(parent, basename(path));
-    } finally {
-      closeSync(parent);
-    }
+    const fd = openRegularBeneath(parent, name);
     try {
       const before = fstatSync(fd);
       total += before.size;
@@ -46,7 +48,6 @@ export function deploymentManifest(root: string): DeploymentManifest {
           "deployment bytes exceed bound",
         );
       const digest = createHash("sha256");
-      const buffer = Buffer.alloc(64 * 1024);
       let offset = 0;
       while (offset < before.size) {
         const count = readSync(
@@ -85,13 +86,13 @@ export function deploymentManifest(root: string): DeploymentManifest {
       closeSync(fd);
     }
   };
-  const tree = (path: string, depth = 0): void => {
+  const tree = (parent: number, name: string, path: string, depth = 0): void => {
     if (++entries > MAX_ENTRIES || depth > 32)
       throw new StoreError(
         "UNSUPPORTED_PROFILE",
         "deployment inventory exceeds bound",
       );
-    const fd = openDirectory(join(root, path));
+    const fd = openBeneath(parent, name, constants.O_RDONLY | constants.O_DIRECTORY);
     try {
       const directory = opendirSync(`/proc/self/fd/${fd}`);
       try {
@@ -100,8 +101,8 @@ export function deploymentManifest(root: string): DeploymentManifest {
           child;
           child = directory.readSync()
         ) {
-          if (child.isDirectory()) tree(`${path}/${child.name}`, depth + 1);
-          else if (child.isFile()) file(`${path}/${child.name}`);
+          if (child.isDirectory()) tree(fd, child.name, `${path}/${child.name}`, depth + 1);
+          else if (child.isFile()) file(fd, child.name, `${path}/${child.name}`);
           else
             throw new StoreError(
               "UNSUPPORTED_PROFILE",
@@ -115,25 +116,27 @@ export function deploymentManifest(root: string): DeploymentManifest {
       closeSync(fd);
     }
   };
+  let rootFd: number | undefined;
   try {
-    tree(DEPLOYMENT_LAYOUT.compiledRoot);
-    tree(dirname(DEPLOYMENT_LAYOUT.contract));
-    tree(DEPLOYMENT_LAYOUT.systemd);
+    rootFd = openDirectory(root.replace(/\/+$/, "") || "/");
+    for (const path of [DEPLOYMENT_LAYOUT.compiledRoot, dirname(DEPLOYMENT_LAYOUT.contract), DEPLOYMENT_LAYOUT.systemd])
+      tree(rootFd, path, path);
     for (const path of [
       DEPLOYMENT_LAYOUT.schema,
+      DEPLOYMENT_LAYOUT.modelCommand,
       "package.json",
       "package-lock.json",
     ])
-      file(path);
+      file(rootFd, path, path);
     files.sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0));
     return Object.freeze({ version: 1, files: Object.freeze(files) });
   } catch (cause) {
-    throw new StoreError(
+    throw unobserved(cause, "the deployment inventory") ?? new StoreError(
       "UNSUPPORTED_PROFILE",
       "deployment inventory could not be verified",
       { cause },
     );
-  }
+  } finally { if (rootFd !== undefined) closeSync(rootFd); }
 }
 
 /** JSON key order and sorted relative POSIX paths are part of this v1 byte codec. */

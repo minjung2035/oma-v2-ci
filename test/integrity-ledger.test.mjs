@@ -23,14 +23,14 @@ function fullFixture(t) {
     tx.operations.insert({ id, actor: "alice", requestKey: "mail", requestHash: requestHash("mail.send", payload), kind: "mail.send", payloadJson: JSON.stringify(payload), planJson: JSON.stringify(plan) });
     tx.deliveries.insert([{ messageId: message, operationId: id, recipient: "alice" }]);
   });
-  store.transaction(tx => { tx.deliveries.materialize(message, "alice"); tx.batches.prepare({ id: batch, agent: "alice", incarnation: 0, messageIds: [message], sessionPath: null }); tx.batches.link(batch, [message]); tx.subscriptions.follow("design", "alice"); tx.usage.reserve({ requestId: "usage", actor: "alice", incarnation: 0, profile: "fixture-model", pricingRevision: "one", reservedUnits: 10 }); });
+  store.transaction(tx => { tx.deliveries.materialize(message, "alice"); tx.batches.prepare({ id: batch, agent: "alice", incarnation: 0, messageIds: [message], sessionPath: null }); tx.batches.link(batch, [message]); tx.subscriptions.follow("design", "alice"); });
   return { ...fixture, id, message, batch, raw: () => structuredClone(readDiagnosticSnapshot(fixture.root)) };
 }
 test("P6 ledger: all six entities are inspected without changing accepted bytes or flags", t => {
   const f = fullFixture(t), before = f.store.getOperationById(f.id), snapshot = f.raw();
   const report = inspectLedger(snapshot, context(f.root)).report;
   assert.equal(report.status, "PASS", JSON.stringify(report));
-  assert.deepEqual(report.scanned, { agents: 2, operations: 1, subscriptions: 1, deliveries: 1, batches: 1, usage: 1 });
+  assert.deepEqual(report.scanned, { agents: 2, operations: 1, subscriptions: 1, deliveries: 1, batches: 1, attestations: 0 });
   assert.equal(report.pendingOperations, 1);
   assert.deepEqual(f.store.getOperationById(f.id), before);
   assert.equal(f.store.getDelivery(f.message, "alice").presented, 0);
@@ -51,7 +51,7 @@ test("P6 reader: symlink database, linked ancestor and unsupported version are r
   assert.throws(() => readDiagnosticSnapshot(linked), code("STORE_CORRUPT"));
   const alias = join(f.root, "alias"); symlinkSync(linked, alias);
   assert.throws(() => readDiagnosticSnapshot(alias), code("STORE_CORRUPT"));
-  const db = new DatabaseSync(join(f.root, "runtime.sqlite")); db.exec("PRAGMA user_version=2"); db.close();
+  const db = new DatabaseSync(join(f.root, "runtime.sqlite")); db.exec("PRAGMA user_version=77"); db.close();
   const before = hash(join(f.root, "runtime.sqlite"));
   assert.throws(() => readDiagnosticSnapshot(f.root), code("STORE_CORRUPT"));
   assert.equal(hash(join(f.root, "runtime.sqlite")), before);
@@ -64,7 +64,7 @@ test("P6 reader: budgets refuse incomplete snapshots rather than returning an em
 });
 test("P6 ledger: each malformed closed row is rejected and payloads are not printed", t => {
   const f = fullFixture(t);
-  for (const table of ["agents", "operations", "subscriptions", "deliveries", "batches", "usage"]) {
+  for (const table of ["agents", "operations", "subscriptions", "deliveries", "batches"]) {
     const raw = f.raw(); raw.tables[table][0].injectedSecret = "do-not-output";
     const report = inspectLedger(raw, context(f.root)).report;
     assert.equal(report.status, "FAIL", table);
@@ -82,9 +82,9 @@ test("P6 ledger: exact delivery/batch membership, ownership and presentation are
     const raw = f.raw(); mutate(raw); assert.equal(inspectLedger(raw, context(f.root)).report.status, "FAIL");
   }
 });
-test("P6 ledger: usage profile/incarnation and operation hash/result relations remain closed", t => {
+test("P6 ledger: operation hash/result relations remain closed", t => {
   const f = fullFixture(t);
-  for (const mutate of [raw => { raw.tables.usage[0].profile = "another"; }, raw => { raw.tables.usage[0].incarnation = 1; }, raw => { raw.tables.operations[0].request_hash = "b".repeat(64); }, raw => { raw.tables.operations[0].updated_at_ms = 0; }]) {
+  for (const mutate of [raw => { raw.tables.operations[0].request_hash = "b".repeat(64); }, raw => { raw.tables.operations[0].updated_at_ms = 0; }]) {
     const raw = f.raw(); mutate(raw); assert.equal(inspectLedger(raw, context(f.root)).report.status, "FAIL");
   }
 });
@@ -99,7 +99,7 @@ test("P6 ledger: historical route state and explicit unknown are not rewritten t
 });
 test("P6 ledger: absent table, failed SQLite checks and truncated issues never become PASS", t => {
   const f = fullFixture(t);
-  const missing = f.raw(); delete missing.tables.usage;
+  const missing = f.raw(); delete missing.tables.attestations;
   assert.equal(inspectLedger(missing, context(f.root)).report.status, "FAIL");
   const bad = f.raw(); bad.integrity = ["bad"]; bad.foreignKeys = [{}];
   const report = inspectLedger(bad, context(f.root), { maxIssues: 1 }).report;

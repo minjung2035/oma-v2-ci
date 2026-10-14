@@ -99,3 +99,30 @@ test("R16: shutdown attempts every native close even if an endpoint cleanup thro
   registry.close();
   assert.equal(alice.closes(), 1);
 });
+
+test("DR27/RUN-003: wait belongs only to a live incarnation and never survives replacement", () => {
+  const old = observedPin(10); const next = observedPin(11); const sibling = observedPin(12);
+  let acquisitions = 0;
+  const registry = new RunRegistry(path => path === "/bob" ? sibling.pin : acquisitions++ === 0 ? old.pin : next.pin);
+  const run = registry.begin("alice", 1, first, "/alice");
+  assert.throws(() => run.wait(1, false), { code: "STALE_RUN" });
+  run.publish({ socketHostPath: "/a", done() {} });
+  const bob = registry.begin("bob", 1, first, "/bob");
+  bob.publish({ socketHostPath: "/b", done() {} });
+  assert.equal(run.wait(1, true), false);
+  assert.throws(() => run.wait(2, false), { code: "STALE_RUN" });
+  assert.equal(run.wait(1, false), true);
+  assert.equal(run.wait(1, false), true);
+  assert.equal(run.wait(1, true), true);
+  assert.equal(bob.wait(1, true), false);
+  run.revoke();
+  assert.throws(() => run.wait(1, true), { code: "STALE_RUN" });
+  old.population("empty");
+  const replacement = registry.begin("alice", 2, second, "/alice");
+  replacement.publish({ socketHostPath: "/a2", done() {} });
+  assert.throws(() => run.wait(1, false), { code: "STALE_RUN" });
+  assert.throws(() => replacement.wait(1, false), { code: "STALE_RUN" });
+  assert.equal(replacement.wait(2, true), false);
+  registry.close();
+  assert.throws(() => replacement.wait(2, false), { code: "STALE_RUN" });
+});

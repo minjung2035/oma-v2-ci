@@ -4,22 +4,47 @@ import type { Actor } from "../implementation/contracts.js";
 import { Store } from "./store.js";
 import { StoreError, classifyError, errorCodeOf } from "./domain/errors.js";
 import { assertNever } from "./domain/exhaustive.js";
-import { observeStoreFailure } from "./domain/admission.js";
-import { runGitText, GIT_ENV } from "./process/policies.js";
+import { NO_HOLD, observeStoreFailure, type Release, type ResourceCategory, type ResourceGate } from "./domain/admission.js";
+import { repositoryHealthCommand, requireHealthyRepository } from "./git/repository-health.js";
+import { createCanonicalObserver } from "./git/canonical-command.js";
 import { PreparationExecutor } from "./process/preparation.js";
 import { MailModule } from "./mail.js";
 import { reconcileMailOperation, type RecoveryCounts } from "./mail/reconcile.js";
 import { OperationRecovery, type RecoveryRow } from "./reconcile/operations.js";
 import { GitModule } from "./git.js";
 import { UnitsModule } from "./units.js";
+import { quiesceResidents } from "./lifecycle/society.js";
 import { LifecycleModule } from "./lifecycle.js";
 import { pendingWork } from "./views/pending-work.js";
+import { collectUnacceptedArtifacts, preacceptEvent, type PreacceptCollection } from "./reconcile/preaccept.js";
+import { TreeLease, treeQuiescence } from "./storage/tree-lease.js";
+import { removeOwnedFile } from "./storage/directory.js";
+import { dirname } from "node:path";
 
 export interface ReconcilePaths {
-  projectGit: string; hasGoal?: () => boolean; activationAllowed(): boolean;
+  projectGit: string; hasGoal: () => boolean; activationAllowed(): boolean;
+  /** Ephemeral fresh provisioning observation, under this same society lease. */
+  freshVerifiedMain?: string;
   /** Existing host receiptWaitSeconds; not a new configuration/wire field. */
   sweepBudgetSeconds?: number;
+  /** D04: admits each recovery stage by what it would consume. Absent only in a
+   * profile without a storage quota; the broker composition always passes it. */
+  resourceGate?: ResourceGate;
 }
+/** A recovery stage's category. Git and create recovery may import, CAS, prepare
+ * a workspace or activate, so they are never disguised as settlement. */
+function recoveryCategory(kind: RecoveryRow["kind"]): ResourceCategory {
+  switch (kind) {
+    case "attest.record": case "mail.send": case "agent.continue": case "mail.ack": case "route.follow": case "route.unfollow": return "settle";
+    case "society.set": case "agent.stop": return "safety-control";
+    case "agent.create": case "agent.start": case "git.submit": case "git.integrate": case "context.publish": return "admit";
+    default: return assertNever(kind);
+  }
+}
+/** REC-002: the reference interval between physical reconciliation sweeps.
+ * The broker runs them in-process on `setInterval` for its own lifetime
+ * (broker.ts); there is no external reconcile timer unit. */
+export const RECONCILE_INTERVAL_MS = 5_000;
 export interface UnitRecoveryDiagnostic { readonly agent: string; readonly outcome: "observed" | "started" | "stopped" | "unknown"; readonly reason: string | null }
 const sweepScope = new AsyncLocalStorage<ReconcileModule>();
 export class ReconcileModule {
@@ -28,32 +53,49 @@ export class ReconcileModule {
   private readonly operations: OperationRecovery;
   private readonly healthExecutor = new PreparationExecutor();
   private healthTask: Promise<void> | null = null;
+  private freshVerifiedMain: string | undefined;
   private diagnostics: readonly UnitRecoveryDiagnostic[] = [];
   constructor(private readonly store: Store, private readonly mail: MailModule, private readonly git: GitModule | null,
     private readonly units: UnitsModule, private readonly lifecycle: LifecycleModule, private readonly paths: ReconcilePaths) {
     if (typeof paths.activationAllowed !== "function")
       throw new StoreError("UNSUPPORTED_PROFILE", "recovery requires an explicit activation gate");
+    this.freshVerifiedMain = paths.freshVerifiedMain;
     this.operations = new OperationRecovery({ snapshot: () => store.recoverableOperations(), read: id => store.getOperationById(id),
       recover: operation => this.recover(operation, true), failure: error => this.retainRecoveryFailure(error),
       ...(paths.sweepBudgetSeconds === undefined ? {} : { budgetSeconds: paths.sweepBudgetSeconds }) });
   }
   get operationOutcomes() { return this.operations.lastOutcomes; }
+  /** DR10: what the last startup collected of the artifacts made before an
+   * acceptance that never happened, and what it kept and why. */
+  get preacceptCollection(): PreacceptCollection | null { return this.collected; }
+  private collected: PreacceptCollection | null = null;
   get unitDiagnostics(): readonly UnitRecoveryDiagnostic[] { return this.diagnostics; }
-  private activation(allowed = true): boolean { return allowed && this.paths.activationAllowed() === true; }
+  private activation(allowed = true): boolean { return allowed && this.paths.activationAllowed() === true && this.store.societyOpen(); }
+  private async admit(category: ResourceCategory): Promise<Release> { return await this.paths.resourceGate?.(category) ?? NO_HOLD; }
+  /** Every resident gets its stop attempt; one unconfirmed death does not skip the rest. */
   private quiesceResidents(): void {
-    for (const agent of this.store.listAgents()) {
-      if (agent.role !== "resident") continue;
-      if (!this.units.confirmDead(agent.name, agent.incarnation)) this.units.stop(agent.name, agent.incarnation);
-      if (!this.units.confirmDead(agent.name, agent.incarnation)) throw new StoreError("RUN_TERMINATION_UNKNOWN", `startup cannot prove ${agent.name} terminated`);
-    }
+    quiesceResidents(this.store, this.units);
   }
+  /** D03: the drain of a broker whose Residents are bound to no unit. The
+   * same per-resident stop and death proof as startup, so a later startup finds
+   * nothing it has to stop. */
+  quiesceForShutdown(): void { this.quiesceResidents(); }
   async startup(allowActivation = true, prepare?: () => Promise<void>): Promise<void> {
     if (this.starting || this.inFlight) throw new StoreError("BROKER_UNAVAILABLE", "startup cannot share an active recovery pass");
     this.starting = true;
     try {
       this.quiesceResidents();
+      // DR10: before any request is admitted, and before bootstrap freezes its
+      // own briefs. The state root is the Store's (store.ts planContext).
+      this.collected = collectUnacceptedArtifacts(dirname(this.store.path), this.store);
+      const preaccept = preacceptEvent(this.collected, dirname(this.store.path));
+      if (preaccept !== null) console.error(JSON.stringify(preaccept));
       if (this.git) {
-        await this.assertCanonicalHealthyAsync();
+        const fresh = this.freshVerifiedMain;
+        this.freshVerifiedMain = undefined;
+        const main = fresh === undefined ? null : createCanonicalObserver().ref(this.paths.projectGit, "refs/heads/main");
+        if (main === null || main.kind !== "present" || main.value !== fresh)
+          await this.assertCanonicalHealthyAsync();
         // An earlier death observation is not a token valid across fsck's await.
         this.quiesceResidents();
       }
@@ -63,34 +105,53 @@ export class ReconcileModule {
         const operation = this.store.getOperationById(id);
         if (!operation || (operation.state !== "pending" && operation.state !== "unknown")) continue;
         switch (operation.kind) {
-          case "mail.send": case "agent.continue":
-            try { await reconcileMailOperation(this.store, this.mail, id); }
+          case "attest.record": case "mail.send": case "agent.continue":
+            try {
+              const release = await this.admit(recoveryCategory(operation.kind));
+              try { await reconcileMailOperation(this.store, this.mail, id); } finally { release(); }
+            }
             catch (error) { this.retainRecoveryFailure(error); }
             break;
-          case "agent.create": case "agent.start": case "agent.stop":
+          case "society.set": case "agent.create": case "agent.start": case "agent.stop":
           case "git.submit": case "git.integrate": case "context.publish":
-            await this.recover(operation, allowActivation); break;
+            // AV-20: one operation's recoverable failure must not end startup;
+            // the same containment the sweep applies retains it. Corruption
+            // still propagates (retainRecoveryFailure rethrows store-blocks).
+            try { await this.recover(operation, allowActivation); }
+            catch (error) { this.retainRecoveryFailure(error); }
+            break;
           // These operations commit their complete effect within a single DB T.
           // Preserve startup's lack of a physical replay for a nonterminal row.
           case "mail.ack": case "route.follow": case "route.unfollow": break;
           default: assertNever(operation);
         }
       }
+      // mail-v1 §5.4: startup advances every request that became ready while
+      // the broker was down; a failure is a recovery observation, not a gate.
+      // The new effects an advance produces (refresh facts, an integration and
+      // its notice mail) pass the same resource gate as any recovery effect.
+      if (this.git !== null)
+        try { await this.git.reviews.advanceAll(this.paths.resourceGate); }
+        catch (error) { this.retainRecoveryFailure(error); }
     } catch (error) { observeStoreFailure(this.store, error); throw error; }
     finally { this.starting = false; }
   }
   private async recover(operation: RecoveryRow, allowed: boolean): Promise<void> {
-    switch (operation.kind) {
-      case "mail.send": case "agent.continue": await reconcileMailOperation(this.store, this.mail, operation.id); return;
-      case "agent.create": await this.lifecycle.reconcileCreate(operation.id, this.activation(allowed)); return;
-      case "agent.start": case "agent.stop": this.lifecycle.reconcileAction(operation.id, this.activation(allowed)); return;
-      case "git.submit": case "git.integrate": case "context.publish":
-        if (!this.git) throw new StoreError("UNSUPPORTED_PROFILE", "Git recovery owner unavailable");
-        await this.git.reconcile(operation.id); return;
-      case "mail.ack": case "route.follow": case "route.unfollow":
-        throw new StoreError("SPIKE_UNRESOLVED", "operation has no safe physical recovery handler");
-      default: assertNever(operation.kind);
-    }
+    const release = await this.admit(recoveryCategory(operation.kind));
+    try {
+      switch (operation.kind) {
+        case "society.set": this.lifecycle.reconcileSociety(operation.id); return;
+        case "attest.record": case "mail.send": case "agent.continue": await reconcileMailOperation(this.store, this.mail, operation.id); return;
+        case "agent.create": await this.lifecycle.reconcileCreate(operation.id, this.activation(allowed)); return;
+        case "agent.start": case "agent.stop": this.lifecycle.reconcileAction(operation.id, this.activation(allowed)); return;
+        case "git.submit": case "git.integrate": case "context.publish":
+          if (!this.git) throw new StoreError("UNSUPPORTED_PROFILE", "Git recovery owner unavailable");
+          await this.git.reconcile(operation.id); return;
+        case "mail.ack": case "route.follow": case "route.unfollow":
+          throw new StoreError("UNSUPPORTED_PROFILE", "operation has no safe physical recovery handler");
+        default: assertNever(operation.kind);
+      }
+    } finally { release(); }
   }
   private retainRecoveryFailure(error: unknown): void {
     const code = errorCodeOf(error);
@@ -112,6 +173,11 @@ export class ReconcileModule {
     const work = Promise.resolve().then(() => sweepScope.run(this, async () => {
       try {
         const counts = await this.operations.sweep();
+        // mail-v1 §5.4: the 5 s sweep retries advance for ready requests; the
+        // refresh/integration effects it creates are newly admitted work.
+        if (this.git !== null)
+          try { await this.git.reviews.advanceAll(this.paths.resourceGate); }
+          catch (error) { this.retainRecoveryFailure(error); }
         await this.observeUnits();
         return counts;
       } catch (error) { observeStoreFailure(this.store, error); throw error; }
@@ -133,9 +199,13 @@ export class ReconcileModule {
           if (current.desired === "retired") {
             diagnostics.push({ agent: agent.name, outcome: "unknown", reason: "retired_during_observation" }); continue;
           }
-          if (current.desired === "stopped") {
+          if (current.desired === "stopped" || !this.store.societyOpen()) {
             // Do not trust an old async inactive observation as death proof.
             if (!this.units.confirmDead(current.name, current.incarnation)) {
+              (await this.admit("safety-control"))();
+              const latest = this.store.getAgent(current.name);
+              if (!latest || latest.incarnation !== current.incarnation ||
+                (latest.desired !== "stopped" && this.store.societyOpen())) continue;
               this.units.stop(current.name, current.incarnation);
               diagnostics.push({ agent: current.name, outcome: "stopped", reason: null });
             } else diagnostics.push({ agent: current.name, outcome: "observed", reason: null });
@@ -144,12 +214,18 @@ export class ReconcileModule {
           if (observation.activeState === "unknown") {
             diagnostics.push({ agent: current.name, outcome: "unknown", reason: "RUN_TERMINATION_UNKNOWN" }); continue;
           }
-          if (current.desired === "enabled" && this.activation() && (!this.paths.hasGoal || this.paths.hasGoal())) {
+          if (current.desired === "enabled" && this.activation() && this.paths.hasGoal()) {
             const { hasPendingWork } = pendingWork(this.store, current.name);
             if (hasPendingWork && ["inactive", "dead"].includes(observation.activeState)) {
               const fresh = this.units.observe(current.name);
               if (["inactive", "dead"].includes(fresh.activeState)) {
                 // Current desired/incarnation/activation check -> start has no await.
+                (await this.admit("admit"))();
+                const latest = this.store.getAgent(current.name);
+                if (!latest || latest.incarnation !== current.incarnation || latest.specHash !== current.specHash ||
+                  latest.desired !== "enabled" || !this.activation() || !this.paths.hasGoal()) continue;
+                const final = this.units.observe(current.name);
+                if (!["inactive", "dead"].includes(final.activeState)) continue;
                 this.units.start(current.name, false);
                 diagnostics.push({ agent: current.name, outcome: "started", reason: null }); continue;
               }
@@ -159,7 +235,7 @@ export class ReconcileModule {
           diagnostics.push({ agent: current.name, outcome: "observed", reason: null });
         } catch (error) {
           this.retainRecoveryFailure(error);
-          const reason = error instanceof StoreError ? error.code : "INTERNAL_ERROR";
+          const reason = errorCodeOf(error);
           diagnostics.push({ agent: agent.name, outcome: "unknown", reason });
           console.error(JSON.stringify({ event: "reconcile.unit", agent: agent.name, code: reason }));
         }
@@ -174,18 +250,29 @@ export class ReconcileModule {
     }
     return result;
   }
-  /** Compatibility observation for synchronous callers, not the startup path. */
-  assertCanonicalHealthy(): void {
-    const result = runGitText(["fsck", "--strict", "--no-reflogs"], { gitDir: this.paths.projectGit, timeout: 30000, maxBuffer: 1024 * 1024 });
-    if (result.status !== 0) throw new StoreError("STORE_CORRUPT", "canonical repository health observation failed");
-  }
+  /** P0-2: the one observation of the canonical repository's health. A git
+   * that did not finish is unknown (REF_STATE_UNKNOWN); only a completed fsck
+   * that reports damage is corruption. */
   assertCanonicalHealthyAsync(): Promise<void> {
     if (this.healthTask) return this.healthTask;
-    const task = this.healthExecutor.run({ executable: "/usr/bin/git",
-      argv: ["--git-dir", this.paths.projectGit, "fsck", "--strict", "--no-reflogs"], env: GIT_ENV,
-      timeoutMs: 30000, stdoutBytes: 1024 * 1024, stderrBytes: 1024 * 1024 }).then(result => {
-      if (result.kind !== "exited") throw new StoreError("REF_STATE_UNKNOWN", "canonical health observation is uncertain");
-      if (result.exitCode !== 0) throw new StoreError("STORE_CORRUPT", "canonical repository health observation failed");
+    const task = Promise.resolve().then(async () => {
+      if (this.healthExecutor.blocked) {
+        // The killed fsck's lease on the repository answers whether its
+        // children are gone -- the stale unknown clears on that observation.
+        const observed = this.healthExecutor.reverifyStale(
+          () => { try { return treeQuiescence(this.paths.projectGit).kind; } catch { return "unknown"; } });
+        if (observed !== "quiescent") throw new StoreError("REF_STATE_UNKNOWN", `canonical health observation is ${observed}`);
+      }
+      const lease = TreeLease.take(this.paths.projectGit);
+      // fsck on a big canonical repository cannot fit a fixed deadline: its
+      // own --progress stream re-arms the silence window, and the stream is
+      // spooled rather than bounded in memory.
+      const diagnostics = `${this.paths.projectGit}.fsck.stderr`;
+      try {
+        try { removeOwnedFile(diagnostics); } catch { /* residue cannot block health */ }
+        const result = await this.healthExecutor.run(repositoryHealthCommand(this.paths.projectGit, diagnostics), undefined, [lease.descriptor]);
+        requireHealthyRepository(result);
+      } finally { lease.release(); try { removeOwnedFile(diagnostics); } catch { /* diagnostic residue */ } }
     }).finally(() => { if (this.healthTask === task) this.healthTask = null; });
     this.healthTask = task; return task;
   }

@@ -3,7 +3,13 @@ import type { AgentCreateInput } from "../../implementation/contracts/values.js"
 import type { HostConfigV1, ResolvedAgentSpec } from "../../implementation/contracts/host.js";
 import type { MessagePlan, OperationPlan } from "../../implementation/contracts/durable.js";
 
-export interface LifecyclePaths { stateRoot: string; projectGit: string; society: string; hasGoal(): boolean; activationAllowed(): boolean }
+export interface LifecyclePaths {
+  stateRoot: string; projectGit: string; society: string; hasGoal(): boolean; activationAllowed(): boolean;
+  /** GIT-002: the canonical repository as a Resident's Git reaches it -- its
+   * sandbox mount. A new workspace's `origin` names it. The host path is
+   * used only by trusted provisioning to clone the canonical repository. */
+  residentProjectGit?: string;
+}
 export interface SpecResolver {
   (parent: { name: Actor; profile: string; role: "resident" | "principal"; desired: string; capabilities: readonly Capability[] }, input: AgentCreateInput): ResolvedAgentSpec | null;
   refresh?: () => void;

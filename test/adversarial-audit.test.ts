@@ -1,4 +1,4 @@
-// Adversarial audit tests for implementation-spec.md cross-checks.
+// Adversarial audit tests for docs/implementation-spec.md cross-checks.
 // Targets gaps that happy-path phase tests are unlikely to catch.
 import { test } from "node:test";
 import assert from "node:assert/strict";
@@ -21,7 +21,7 @@ import {
   defaultReplyTo,
   parseEmlHeaders,
 } from "../src/mail.js";
-import { candidateArgv } from "../src/sandbox.js";
+import { candidateCheckCommand } from "../src/runtime/candidate-checks.js";
 import { renderUnit, unitName, UNIT_TPL_DIR } from "../src/units.js";
 import { Broker } from "../src/broker.js";
 import { Store } from "../src/store.js";
@@ -32,6 +32,7 @@ import { UnitsModule } from "../src/units.js";
 import { ReconcileModule } from "../src/reconcile.js";
 import type { AuthContext, ProtocolLimits } from "../implementation/contracts.js";
 import { resolvedSpecDigest } from "../src/domain/spec-identity.js";
+import { goalPublishedAt } from "./fixtures/goal.js";
 
 const LIMITS: ProtocolLimits = {
   frameBytes: 262144,
@@ -119,7 +120,7 @@ function auth(actor = "a"): AuthContext {
 // ---------------------------------------------------------------------------
 
 test("AUD-1: unit renderer rejects unsafe values and escapes specifiers", () => {
-  const template = "[Service]\nExecStart=@NODE@ @LIBDIR@ @STATE@ @SOCIETY@ @AGENT@\n";
+  const template = "[Service]\nExecStart=@NODE@ @LIBDIR@ @STATE_ARG@ @SOCIETY@ @AGENT@\n[Path]\nDirectoryNotEmpty=@STATE@/new\n";
   assert.throws(
     () =>
       renderUnit(template, {
@@ -139,12 +140,17 @@ test("AUD-1: unit renderer rejects unsafe values and escapes specifiers", () => 
     agent: "a",
   });
   assert.match(rendered, /oma%%q/);
-  assert.match(rendered, /state\\x20with\\x20space/);
+  // An ExecStart word is C-unescaped by systemd; a path setting is read
+  // verbatim, so the same root is escaped for one and not the other.
+  assert.match(rendered, /^ExecStart=.* \/tmp\/state\\x20with\\x20space /m);
+  assert.match(rendered, /^DirectoryNotEmpty=\/tmp\/state with space\/new$/m);
+  assert.throws(() => renderUnit("DirectoryNotEmpty=@STATE@", {
+    node: "/usr/bin/node", libdir: "/opt/oma", state: " /tmp/leading", society: "demo", agent: "a",
+  }), /cannot be a systemd path setting/);
 });
 
 test("AUD-2: generated units preserve the fixed cgroup/lifecycle boundary", () => {
   const resident = readFileSync(join(UNIT_TPL_DIR, "resident.service.in"), "utf8");
-  const broker = readFileSync(join(UNIT_TPL_DIR, "broker.service.in"), "utf8");
   // MUST [UNIT-003]: the reference resident profile is fixed, not caller-selected.
   assert.match(resident, /^KillMode=control-group$/m);
   assert.match(resident, /^Restart=on-failure$/m);
@@ -154,23 +160,32 @@ test("AUD-2: generated units preserve the fixed cgroup/lifecycle boundary", () =
   assert.match(resident, /^StartLimitBurst=5$/m);
   assert.match(resident, /^Type=exec$/m);
   // MUST [UNIT-002]: ExecStart is a fixed renderer template, not caller argv.
-  assert.match(resident, /^ExecStart=@NODE@ @LIBDIR@\/dist\/src\/entry\/runner\.js --society @SOCIETY@ --agent @AGENT@$/m);
+  // D03: it carries the broker's resolved launch location, never a default.
+  assert.match(resident, /^ExecStart=@NODE@ @LIBDIR@\/dist\/src\/entry\/runner\.js --society @SOCIETY@ --agent @AGENT@ --config @CONFIG_ARG@ --state-root @STATE_ARG@ --run-root @RUN_ARG@$/m);
+  // D03/UNIT-001/004: the product owns the foreground broker itself — there is
+  // no broker.service to bind to and the unit names its own state tree instead.
+  assert.match(resident, /^X-OMA-Owner=@STATE@$/m);
+  assert.doesNotMatch(resident, /^(?:BindsTo|After|Requires|PartOf)=/m);
+  assert.doesNotMatch(resident, /BROKER_UNIT/);
   // Filesystem/network isolation is owned by the sandbox profile (SB-001/SB-002),
   // not by a systemd property; the unit must not widen it.
   assert.doesNotMatch(resident, /^(?:AmbientCapabilities|CapabilityBoundingSet|User|Group)=/m);
-  assert.match(broker, /^Restart=on-failure$/m);
-  assert.match(broker, /^Type=notify$/m);
+  assert.match(resident, /^RestartSteps=4$/m);
+  assert.match(resident, /^RestartMaxDelaySec=12s$/m);
+  assert.match(resident, /^StartLimitIntervalSec=60s$/m);
+  assert.match(resident, /^StartLimitBurst=5$/m);
+  // systemd's geometric intervals, including the refusal-triggering attempt:
+  // 3, 4.24, 6, 8.49, 12 seconds must still fit in the rate-limit window.
+  const delays = Array.from({ length: 5 }, (_, i) => 3 * (12 / 3) ** (i / 4));
+  assert.ok(delays.reduce((sum, delay) => sum + delay, 0) < 60);
 });
 
 test("AUD-3: candidate sandbox argv does not inherit host environment", () => {
-  const argv = candidateArgv(
-    {
-      rootfs: "/rootfs",
-      node: "/usr/bin/node",
-      pi: "/usr/bin/pi",
-      piModeArgs: [],
-      tmpBytes: 1024,
-      checkResources: {
+  const argv = candidateCheckCommand(
+    { stateRoot: "/state", projectGit: "/state/project.git", contextGit: "/state/context.git", worldDir: "/state/world",
+      society: "demo", quarantineTmpBytes: 1024, checkRootfs: "/rootfs", checkNode: process.execPath, checkAssetsDir: "/checks" },
+    "a".repeat(40), { id: "audit", argv: ["/checks/run"], env: { SAFE: "1" }, timeoutSeconds: 1,
+      resources: {
         memoryBytes: 1024,
         tasks: 8,
         cpuQuotaPercent: 100,
@@ -179,13 +194,7 @@ test("AUD-3: candidate sandbox argv does not inherit host environment", () => {
         stagingBytes: 1024,
         checkTimeoutSeconds: 1,
       },
-    },
-    "/candidate",
-    "/checks",
-    1024,
-    ["/checks/run"],
-    { SAFE: "1" },
-  );
+    }, []).argv;
   const clear = argv.indexOf("--clearenv");
   assert.ok(clear >= 0);
   assert.ok(argv.includes("SAFE"));
@@ -254,7 +263,7 @@ test("AUD-8: actor socket paths remain under Linux sun_path", () => {
     const mail = new MailModule({ stateRoot: root, society: "demo" }, store, 64);
     const units = new UnitsModule(
       "demo",
-      { node: process.execPath, libdir: "/opt/oma", state: root, society: "demo", agent: "" },
+      { node: process.execPath, libdir: "/opt/oma", state: root, society: "demo", agent: "", config: join(root, "config.json"), run: join(root, "oma", "demo") },
       root,
     );
     const views = new ViewsModule(store, root, "demo", "p");
@@ -277,7 +286,7 @@ test("AUD-8: actor socket paths remain under Linux sun_path", () => {
       lifecycle,
       null,
       null,
-      { stateRoot: root, runRoot, society: "demo" },
+      { stateRoot: root, runRoot, society: "demo", hasGoal: goalPublishedAt(root) },
       LIMITS,
     );
     const socketDirectory = Reflect.get(broker, "actorSocketDirectory") as (
@@ -317,7 +326,7 @@ test("AUD-9: public dispatch rejects top-level request on read/ephemeral methods
     );
     const units = new UnitsModule(
       "demo",
-      { node: process.execPath, libdir: "/opt/oma", state: root, society: "demo", agent: "" },
+      { node: process.execPath, libdir: "/opt/oma", state: root, society: "demo", agent: "", config: join(root, "config.json"), run: join(root, "oma", "demo") },
       root,
     );
     const mail = new MailModule({ stateRoot: root, society: "demo" }, store, 64);
@@ -337,7 +346,7 @@ test("AUD-9: public dispatch rejects top-level request on read/ephemeral methods
       lifecycle,
       null,
       null,
-      { stateRoot: root, runRoot: join(root, "run"), society: "demo" },
+      { stateRoot: root, runRoot: join(root, "run"), society: "demo", hasGoal: goalPublishedAt(root) },
       LIMITS,
     );
     const reply = await broker.dispatch(

@@ -1,13 +1,14 @@
 // VIEW-001/002: real validated rows are inputs; numeric expectations are independent oracles.
 import test, { type TestContext } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, statSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { AuthContext } from "../implementation/contracts.js";
 import { Store } from "../src/store.js";
+import { PRINCIPAL_MAIL_FILENAME } from "../src/domain/derived.js";
 import { MailModule } from "../src/mail.js";
-import { ViewsModule, fieldEsce } from "../src/views.js";
+import { ViewsModule, fieldEscape } from "../src/views.js";
 import { pendingWork } from "../src/views/pending-work.js";
 import { generateBatchId } from "../src/ids.js";
 import { ALL_CAPS, makeValidAgent } from "./fixtures/spec.js";
@@ -54,12 +55,12 @@ test("R30 empty, unbatched, prepared, mixed and acknowledged work all use messag
   assert.ok(Number.isSafeInteger(views.unitObservations[0]!.observedAtMs));
   // Low-level ledger characterization only; this does not authorize S-03's public batch.complete.
   // The next batch is prepared only after the first completes, never concurrently.
-  f.store.transaction(tx => { tx.completeBatch(first, messages.slice(0, 10), "alice", 1); });
+  f.store.transaction(tx => { tx.completeBatch(first, messages.slice(0, 10), "alice", 1, "/session/first"); });
   assert.equal(pendingWork(f.store, "alice").pendingMessages, 3);
   const second = prepare(f.store, messages.slice(10));
   assert.deepEqual(pendingWork(f.store, "alice"), { pendingDeliveryMessages: 0, preparedBatchCount: 1,
     preparedMessageCount: 3, pendingMessages: 3, hasPendingWork: true });
-  f.store.transaction(tx => { tx.completeBatch(second, messages.slice(10), "alice", 1); });
+  f.store.transaction(tx => { tx.completeBatch(second, messages.slice(10), "alice", 1, "/session/second"); });
   assert.deepEqual(pendingWork(f.store, "alice"), { pendingDeliveryMessages: 0, preparedBatchCount: 0,
     preparedMessageCount: 0, pendingMessages: 0, hasPendingWork: false });
 });
@@ -97,12 +98,30 @@ test("R30 rebuildable world files preserve durable receipts and exclude private 
   const receiptBefore = f.store.getOperation("alice", "r30-0")!.resultJson;
   const views = new ViewsModule(f.store, f.root, "demo", "p");
   views.refreshWorld();
-  const paths = ["agents.tsv", "topics.tsv", "START.md"];
+  const paths = ["agents.tsv", "topics.tsv", "START.md", PRINCIPAL_MAIL_FILENAME];
   const expected = paths.map(path => readFileSync(join(f.root, "world", path), "utf8"));
-  for (const path of paths) rmSync(join(f.root, "world", path));
+  for (const path of paths) {
+    // Every derived world file is read-only to its readers.
+    assert.equal(statSync(join(f.root, "world", path)).mode & 0o777, 0o444, `${path} mode`);
+    rmSync(join(f.root, "world", path));
+  }
   views.refreshWorld();
   assert.deepEqual(paths.map(path => readFileSync(join(f.root, "world", path), "utf8")), expected);
   assert.equal(expected.join("\n").includes("private-body-0"), false);
+  // The map names the guide at the one derived path the prompts also spell.
+  const start = expected[paths.indexOf("START.md")]!;
+  assert.ok(start.includes(`/world/${PRINCIPAL_MAIL_FILENAME}`), "START.md names the Principal mail guide");
+  // FI-3: the map states what the sandbox does not have, so a Worker does not
+  // discover it one failed command at a time.
+  const sandbox = start.slice(start.indexOf("## Sandbox"));
+  assert.ok(start.includes("## Sandbox"), "START.md has a sandbox section");
+  for (const fact of [/egress proxy/i, /HTTPS_PROXY/, /`git push`/, /oma submit/, /`\/tmp`/, /end(s)? with the batch|end when the batch ends/i,
+    /docker/i, /submodules/i, /\$OMA_CPUS/, /`nproc`/, /\$OMA_MEMORY_BYTES/, /\$OMA_TASKS/, /`npm`/])
+    assert.match(sandbox, fact);
+  const guide = expected[paths.indexOf(PRINCIPAL_MAIL_FILENAME)]!;
+  assert.match(guide, /most expensive resource/);
+  assert.doesNotMatch(guide, /[ᄀ-ᅟ㄰-㆏가-힯]/u, "the guide is English-only");
   assert.equal(f.store.getOperation("alice", "r30-0")!.resultJson, receiptBefore);
-  assert.equal(fieldEsce("동료\tmetadata\nline\r"), "동료\\tmetadata\\nline");
+  // P0V-94: the carriage return is escaped, not dropped.
+  assert.equal(fieldEscape("동료\tmetadata\nline\r"), "동료\\tmetadata\\nline\\r");
 });

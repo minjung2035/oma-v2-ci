@@ -62,7 +62,10 @@ test("CTX-002/FS-003: a rejected context publish leaves no staging artifact", as
     store.transaction(() => store.insertAgent(makeValidAgent("a")));
     const { git } = gitFixture(root, store);
     const stagingDir = join(root, "staging");
-    const stagingEntries = () => (existsSync(stagingDir) ? readdirSync(stagingDir).filter(name => name.startsWith("context-")).sort() : []);
+    // P0V-77: a kept tree keeps its lease beside it; the trees are counted apart.
+    const stagingNames = () => (existsSync(stagingDir) ? readdirSync(stagingDir).filter(name => name.startsWith("context-")).sort() : []);
+    const stagingEntries = () => stagingNames().filter(name => !name.endsWith(".lease"));
+    const stagingLeases = () => stagingNames().filter(name => name.endsWith(".lease"));
     const publish = (key: string, expected: string | null, files: Array<{ path: string; bytes: Buffer }>) => {
       const sorted = [...files].sort((a, b) => a.path < b.path ? -1 : a.path > b.path ? 1 : 0);
       const body = Buffer.concat(sorted.map(file => file.bytes));
@@ -84,6 +87,7 @@ test("CTX-002/FS-003: a rejected context publish leaves no staging artifact", as
     // Stale base with valid content: a conflict, and still no artifact.
     await assert.rejects(publish("staging-stale", null, [goal]), { code: "CONTEXT_CONFLICT" });
     assert.deepEqual(stagingEntries(), acceptedStaging, "refused requests add no staging artifact");
+    assert.deepEqual(stagingLeases(), acceptedStaging.map(name => `${name}.lease`), "a refused request's lease goes with its tree");
     assert.equal(store.getOperation("a", "staging-malformed"), null);
     assert.equal(store.getOperation("a", "staging-stale"), null);
   } finally { store.close(); removeTree(root); }

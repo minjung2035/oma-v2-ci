@@ -196,7 +196,10 @@ test("P04: first cur parent flush precedes removing new; a flush fault preserves
       "renameSync",
       (source: fs.PathLike, destination: fs.PathLike) => {
         rename(source, destination);
-        events.push(`rename:${destination}`);
+        // AV5: the move names its entry through the held directory; the event
+        // records the directory that descriptor names, as the path did before.
+        const held = /^\/proc\/self\/fd\/(\d+)\/([^/]+)$/.exec(String(destination));
+        events.push(`rename:${held ? `${fs.readlinkSync(`/proc/self/fd/${held[1]}`)}/${held[2]}` : destination}`);
       },
     );
     syncBuiltinESMExports();
@@ -236,6 +239,20 @@ test("P06: successful and concurrent sends leave no per-request directory or sta
     ]);
     assert.deepEqual(fs.readdirSync(join(f.root, "staging")), ["mail-objects"]);
     assert.deepEqual(fs.readdirSync(join(f.root, "staging/mail-objects")), []);
+    // A concurrent loser published its object before acceptance; the object
+    // directory must hold exactly the objects the accepted ledger names.
+    const named = ["send-0", "send-1", "send-2", "send-3", "send-4", "same"]
+      .map((key) => {
+        const operation = f.store.getOperation("alice", key)!;
+        if (operation.kind !== "mail.send") throw new Error("wrong fixture kind");
+        return `${operation.plan.message.id}.eml`;
+      })
+      .sort();
+    assert.equal(new Set(named).size, 6);
+    assert.deepEqual(
+      fs.readdirSync(join(f.root, "mail/objects")).sort(),
+      named,
+    );
   } finally {
     f.close();
   }

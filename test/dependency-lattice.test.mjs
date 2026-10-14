@@ -19,7 +19,9 @@ function analyze(files) {
       writeFileSync(absolute, contents);
       return absolute;
     });
-    const program = ts.createProgram(paths, { noEmit: true, strict: true, types: [], target: ts.ScriptTarget.ES2022,
+    // No lib files: the fixture programs only need their own modules resolved
+    // for the lattice/type-cycle graph, so parsing lib.*.d.ts is pure cost.
+    const program = ts.createProgram(paths, { noEmit: true, strict: true, types: [], lib: [], target: ts.ScriptTarget.ES2022,
       module: ts.ModuleKind.NodeNext, moduleResolution: ts.ModuleResolutionKind.NodeNext });
     return analyzeProgram(program, { rootDir: root, checkContracts: false })
       .filter(finding => LATTICE_RULES.has(finding.rule));
@@ -38,6 +40,7 @@ test("P5 lattice: the measured layer order is kernel < facts < workflow < orches
     ["implementation/contracts.ts", "L0-contracts"],
   ]);
   assert.equal(layerOf("src/domain/identifiers.ts").index < layerOf("src/mail.ts").index, true);
+  assert.equal(layerOf("src/attestation.ts")?.name, "L3-workflow", "attestation coordinates acceptance and publication, not primitive facts");
 });
 
 test("P5 lattice: a reverse runtime edge fails and the forward edge does not", () => {
@@ -78,16 +81,20 @@ test("P5 lattice: a type-only reference may not form a cycle across two layers",
   assert.match(findings[0].reason, /L1-kernel, L4-orchestration/);
 });
 
-test("P5 lattice: one layer is one mechanism, so an intra-layer type cycle is not a crossing", () => {
+test("DR44: Store capabilities cannot form a type cycle with their composition even within one layer", () => {
   const findings = analyze({
     "src/storage/facets.ts": typeRef("../store.js"),
     "src/store.ts": typeRef("./storage/facets.js"),
   });
-  assert.deepEqual(findings, []);
+  assert.deepEqual(findings.map(finding => finding.rule), ["type-import-cycle"]);
 });
 
 test("P5 lattice: the current production graph satisfies the enforced lattice", () => {
   const program = createArchitectureProgram(process.cwd());
-  const findings = analyzeProgram(program, { rootDir: process.cwd() }).filter(finding => LATTICE_RULES.has(finding.rule));
+  // The lattice, kernel and type-cycle findings are all evaluated from the
+  // import graph before the contract-exhaustiveness section runs, so disabling
+  // contract checks cannot change any finding this filter keeps.
+  const findings = analyzeProgram(program, { rootDir: process.cwd(), checkContracts: false })
+    .filter(finding => LATTICE_RULES.has(finding.rule));
   assert.deepEqual(findings, [], JSON.stringify(findings, null, 2));
 });

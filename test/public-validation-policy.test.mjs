@@ -3,6 +3,10 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { Script } from "node:vm";
 import ts from "typescript";
+import { publicDetails } from "../dist/src/domain/errors.js";
+// w10 moved this constant to the client limits module; the fixture loads the
+// real compiled value rather than re-deriving the bound a second way.
+import { MIN_LOG_FRAME_BYTES } from "../dist/src/client/limits.js";
 
 /** The real dispatcher and reply construction run against controlled metadata,
  * decoder and effect boundaries. This is not a wire-schema or transport proof.
@@ -34,16 +38,21 @@ function fixture(transform = source => source) {
     return exports;
   }
   const replies = load("../src/broker/replies.ts", {});
-  const logResponse = load("../src/protocol/log-response.ts", { "../domain/errors.js": { StoreError } });
+  const logResponse = load("../src/protocol/log-response.ts", { "../domain/errors.js": { StoreError },
+    "../client/limits.js": { MIN_LOG_FRAME_BYTES } });
   const { PublicDispatcher } = load("../src/broker/public-dispatcher.ts", {
-    "../domain/errors.js": { StoreError },
+    // DR3: which facts a failure may carry has one owner, used as it is.
+    "../domain/errors.js": { StoreError, publicDetails },
     "../domain/exhaustive.js": { assertNever(value) { throw new TypeError(`unhandled closed variant: ${String(value)}`); } },
+    "../domain/admission.js": { NO_HOLD: () => undefined },
     "../authority.js": { capabilitiesOf: actor => actor.capabilities },
     "../ids.js": { isValidRequestKey: key => typeof key === "string" && /^key-[0-9]+$/.test(key) },
     "../protocol/receipts.js": { receiptOfOperation: value => value, receiptNotFound: { status: "not-found" } },
     "../protocol/methods.js": { PUBLIC_METHODS: table, isPublicMethod: method => Object.hasOwn(table, method),
       decodePublicParams(_method, params) { calls.params++; return state.rejectParams || !params || typeof params !== "object" ? null : params; } },
     "../protocol/log-response.js": logResponse,
+    "../protocol/status-page.js": { statusPage: (id, observedAtMs, agents) => replies.okAnswer(id, { observedAtMs, agents }) },
+    "../protocol/receipt-chunks.js": { receiptChunk() { throw new Error("unexpected chunk read in validation fixture"); } },
     "./replies.js": replies,
   }, transform);
   const effect = async (...args) => { calls.effects.push(args); return { accepted: true }; };
@@ -52,11 +61,17 @@ function fixture(transform = source => source) {
       getAgent() { calls.actors++; if (state.observationError) throw state.observationError; return state.actor; },
       listAgents: () => state.actor ? [state.actor] : [],
       hasOperation() { calls.operationChecks++; calls.order.push("operation"); if (state.throwOnOperationCheck) throw new Error("unexpected operation lookup"); return false; },
+      // The terminal-replay read runs only after the admission fence fired;
+      // this fixture holds no minted receipt, so the fence's answer stands.
+      getReceipt() { calls.receiptReads = (calls.receiptReads ?? 0) + 1; return null; },
     },
-    mail: { send: effect }, units: {}, views: { status: () => [] }, lifecycle: {}, limits: {},
+    mail: { send: effect }, units: { statusSnapshot: async () => ({ observedAtMs: 1, units: new Map(), failure: null }) },
+    views: { status: () => [] }, lifecycle: {}, limits: {},
     git: { submit: effect, publishContext: effect, isPublished() { calls.order.push("published"); return false; } },
+    waitRun: () => true,
     isDraining: () => state.draining,
     assertAdmission() { calls.admission++; if (state.denyAdmission) throw new StoreError("BROKER_UNAVAILABLE", "admission closed"); },
+    admitResource: () => () => undefined,
     failureAnswer: (id, error) => replies.errorAnswer(id, { code: error.code ?? "INTERNAL_ERROR", message: error.message, retry: "never" }),
     refreshViews() { calls.refresh++; },
   };
@@ -131,7 +146,8 @@ test("P1 public validation: successful requests re-read and re-decode rather tha
     dispatcher.preflight(auth, raw);
     const result = await dispatcher.dispatch(auth, raw, body());
     assert.equal(result.ok, true); assert.equal(result.id, raw.id);
-    assert.equal(calls.actors, 2); assert.equal(calls.params, 2); assert.equal(calls.admission, 2);
+    // Preflight, before storage admission, and after its asynchronous scan.
+    assert.equal(calls.actors, 3); assert.equal(calls.params, 3); assert.equal(calls.admission, 3);
     assert.equal(calls.effects.length, 1); assert.equal(calls.refresh, 1);
   }
 });
@@ -161,7 +177,7 @@ test("P1 public validation: bundle-omitted submission without a stream remains v
   const { dispatcher, auth, calls } = fixture();
   const result = await dispatcher.dispatch(auth, request({ params: {} }), null);
   assert.equal(result.ok, true); assert.equal(calls.effects.length, 1);
-  assert.equal(calls.actors, 1); assert.equal(calls.admission, 1);
+  assert.equal(calls.actors, 2); assert.equal(calls.admission, 2);
 });
 
 test("P11 public mail.send without approval does not inspect the operation ledger", async () => {

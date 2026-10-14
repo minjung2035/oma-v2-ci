@@ -2,12 +2,21 @@
 import { TextDecoder } from "node:util";
 import { checkString } from "./validate.js";
 import { ByteQueue } from "./protocol/byte-queue.js";
+import { decodeUtf8 } from "./domain/utf8.js";
+import { JSON_NESTING_LIMIT } from "./domain/canonical-json.js";
 const unicodeString = checkString();
 export class FrameError extends Error {
   constructor(readonly code: "FRAME_TOO_LARGE" | "INVALID_REQUEST", message: string) { super(message); this.name = "FrameError"; }
 }
 /** Reject duplicate object keys, including escaped spelling of the same key. */
 export function findDuplicateKey(text: string): string | null {
+  const structure = jsonStructure(text);
+  return structure?.kind === "duplicate" ? structure.key : null;
+}
+/** What a JSON text's structure shows before it is parsed, in one iterative
+ * pass: its first duplicated object key, or nesting past JSON_NESTING_LIMIT
+ * (P0V-119), which no recursive walk after the parse then meets. */
+function jsonStructure(text: string): { readonly kind: "duplicate"; readonly key: string } | { readonly kind: "too-deep" } | null {
   interface Container { isObj: boolean; keys: Set<string> | null; expectKey: boolean }
   const stack: Container[] = [];
   let index = 0;
@@ -28,11 +37,12 @@ export function findDuplicateKey(text: string): string | null {
         let key: unknown;
         try { key = JSON.parse(text.slice(index, end)); } catch { return null; }
         if (typeof key !== "string") return null;
-        if (top.keys!.has(key)) return key;
+        if (top.keys!.has(key)) return { kind: "duplicate", key };
         top.keys!.add(key); top.expectKey = false;
       }
       index = end; continue;
     }
+    if ((char === "{" || char === "[") && stack.length >= JSON_NESTING_LIMIT) return { kind: "too-deep" };
     if (char === "{") stack.push({ isObj: true, keys: new Set(), expectKey: true });
     else if (char === "[") stack.push({ isObj: false, keys: null, expectKey: false });
     else if (char === "}" || char === "]") stack.pop();
@@ -46,7 +56,6 @@ export function encodeFrame(value: unknown): Buffer {
   const out = Buffer.alloc(4 + body.length); out.writeUInt32BE(body.length, 0); body.copy(out, 4);
   return out;
 }
-const utf8 = new TextDecoder("utf-8", { fatal: true });
 /** Only the JSON root shape is established here; request fields remain unknown. */
 export interface ParsedFrame { raw: Record<string, unknown>; text: string }
 function isJsonObject(value: unknown): value is Record<string, unknown> {
@@ -54,9 +63,10 @@ function isJsonObject(value: unknown): value is Record<string, unknown> {
 }
 export function parseJsonObject(bytes: Uint8Array): ParsedFrame {
   let text: string;
-  try { text = utf8.decode(bytes); } catch { throw new FrameError("INVALID_REQUEST", "invalid UTF-8 in JSON"); }
-  const duplicate = findDuplicateKey(text);
-  if (duplicate !== null) throw new FrameError("INVALID_REQUEST", `duplicate JSON key "${duplicate}"`);
+  try { text = decodeUtf8(bytes); } catch { throw new FrameError("INVALID_REQUEST", "invalid UTF-8 in JSON"); }
+  const structure = jsonStructure(text);
+  if (structure?.kind === "too-deep") throw new FrameError("INVALID_REQUEST", `JSON nesting exceeds ${JSON_NESTING_LIMIT}`);
+  if (structure?.kind === "duplicate") throw new FrameError("INVALID_REQUEST", `duplicate JSON key "${structure.key}"`);
   let raw: unknown;
   try {
     raw = JSON.parse(text, (key: string, value: unknown) => {
@@ -72,6 +82,24 @@ function checkedLimit(maximum: number): number {
   if (!Number.isSafeInteger(maximum) || maximum < 0) throw new RangeError("invalid frame byte limit");
   return Math.min(maximum, 0xffffffff);
 }
+/** B7: the three-way decision every consumer makes on the queue's head. Fewer
+ * than four header bytes or an incomplete body means wait; past the bound is
+ * the one fatal size verdict; otherwise the declared body length is ready to
+ * take. Reading the decision consumes nothing, so probe and drain paths share
+ * it. */
+type FrameHead =
+  | { readonly kind: "pending" }
+  | { readonly kind: "ready"; readonly bodyBytes: number }
+  | { readonly kind: "too-large"; readonly declared: number };
+function frameHead(queue: ByteQueue, bound: number): FrameHead {
+  if (queue.length < 4) return { kind: "pending" };
+  const length = queue.uint32BE();
+  if (length > bound) return { kind: "too-large", declared: length };
+  return queue.length < length + 4 ? { kind: "pending" } : { kind: "ready", bodyBytes: length };
+}
+function tooLarge(declared: number, maxFrameBytes: number): FrameError {
+  return new FrameError("FRAME_TOO_LARGE", `frame length ${declared} exceeds max ${maxFrameBytes}`);
+}
 /** Arbitrary byte splits; no retained body exceeds one declared frame. */
 export class FrameParser {
   private readonly bytes = new ByteQueue();
@@ -85,12 +113,12 @@ export class FrameParser {
     const frames: ParsedFrame[] = [];
     try {
       this.bytes.append(chunk);
-      while (this.bytes.length >= 4) {
-        const length = this.bytes.uint32BE();
-        if (length > this.bound) throw new FrameError("FRAME_TOO_LARGE", `frame length ${length} exceeds max ${this.maxFrameBytes}`);
-        if (this.bytes.length < length + 4) break;
+      while (true) {
+        const head = frameHead(this.bytes, this.bound);
+        if (head.kind === "pending") break;
+        if (head.kind === "too-large") throw tooLarge(head.declared, this.maxFrameBytes);
         this.bytes.take(4); // exact header, including headers split across four chunks
-        frames.push(parseJsonObject(this.bytes.take(length)));
+        frames.push(parseJsonObject(this.bytes.take(head.bodyBytes)));
       }
       this.bytes.ownRemainder(this.bound + 4);
       return frames;
@@ -169,22 +197,20 @@ export class ConnectionDecoder {
       const done = this.stream; this.stream = null;
       return [{ kind: "stream", bytes: done.chunks ? Buffer.concat(done.chunks, done.total) : Buffer.alloc(0) }];
     }
-    if (this.queue.length < 4) return [];
-    const length = this.queue.uint32BE();
-    if (length > this.bound) throw new FrameError("FRAME_TOO_LARGE", `frame length ${length} exceeds max ${this.maxFrameBytes}`);
-    if (this.queue.length < length + 4) return [];
+    const head = frameHead(this.queue, this.bound);
+    if (head.kind === "pending") return [];
+    if (head.kind === "too-large") throw tooLarge(head.declared, this.maxFrameBytes);
     this.queue.take(4); // shift() intentionally returns only one raw chunk
-    return [{ kind: "frame", frame: parseJsonObject(this.queue.take(length)) }];
+    return [{ kind: "frame", frame: parseJsonObject(this.queue.take(head.bodyBytes)) }];
   }
   /** Probe without consuming a possible next frame or accepting a raw mutation. */
   excessStatus(): "clean" | "next" | "pending" | "excess" {
     if (this.failure) return "excess";
     if (this.queue.length === 0) return "clean";
-    if (this.queue.length < 4) return "pending";
-    const length = this.queue.uint32BE();
-    if (length > this.bound) return "excess";
-    if (this.queue.length < length + 4) return "pending";
-    try { parseJsonObject(this.queue.peek(length + 4).subarray(4)); return "next"; } catch { return "excess"; }
+    const head = frameHead(this.queue, this.bound);
+    if (head.kind === "pending") return "pending";
+    if (head.kind === "too-large") return "excess";
+    try { parseJsonObject(this.queue.peek(head.bodyBytes + 4).subarray(4)); return "next"; } catch { return "excess"; }
   }
   finish(): DecoderEvent[] {
     if (this.failure) return this.invalid(this.failure);

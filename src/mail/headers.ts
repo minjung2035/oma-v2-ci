@@ -6,9 +6,10 @@
  * case-insensitive; References remain ordered, including repeated ancestors.
  * Body bytes are never decoded, reserialized or hashed by this parser.
  */
-import { headerMessageIdCheck, isMailKind, exactCandidateCheck } from "../domain/mail-values.js";
+import { MAIL_HEADER_BYTES, headerMessageIdCheck, isMailKind, exactCandidateCheck } from "../domain/mail-values.js";
 import { isValidFullOid } from "../domain/identifiers.js";
 import { StoreError } from "../domain/errors.js";
+import { decodeUtf8 } from "../domain/utf8.js";
 
 export interface ParsedEmlHeaders {
   from: string | null; to: string[] | null; subject: string | null; dateMs: number | null;
@@ -18,9 +19,8 @@ export interface ParsedEmlHeaders {
     candidate: string | null; policyRevision: string | null } | null;
 }
 export interface HeaderReadLimits { readonly maxHeaderBytes: number }
-const DEFAULT_HEADER_LIMIT = 256 * 1024;
-const MAX_LINE_BYTES = 998;
-const utf8 = new TextDecoder("utf-8", { fatal: true, ignoreBOM: true });
+const DEFAULT_HEADER_LIMIT = MAIL_HEADER_BYTES;
+export const MAX_HEADER_LINE_BYTES = 998;
 const allowed = new Set([
   "from", "to", "reply-to", "subject", "date", "message-id", "in-reply-to", "references",
   "mime-version", "content-type", "content-transfer-encoding", "content-disposition",
@@ -35,12 +35,15 @@ const unfold = (value: string): string => value.replace(/\n/g, " ");
  */
 function headerBlock(input: string | Uint8Array, limit: number): string {
   if (!Number.isSafeInteger(limit) || limit < 1) return invalid("invalid header limit");
+  // P0V-118 (G07-03): one rule for what a header block is, whichever form it
+  // arrived in: the bytes a message was stored as and the text it is read
+  // from are judged alike once each is text.
+  const accepted = (block: string): string =>
+    Buffer.byteLength(block, "utf8") > limit || /\p{Cs}/u.test(block) ? invalid("header byte/Unicode limit") : block;
   if (typeof input === "string") {
     const crlf = input.indexOf("\r\n\r\n"); const lf = input.indexOf("\n\n");
     const ends = [crlf, lf].filter(index => index >= 0);
-    const block = ends.length ? input.slice(0, Math.min(...ends)) : input;
-    if (Buffer.byteLength(block, "utf8") > limit || /\p{Cs}/u.test(block)) return invalid("header byte/Unicode limit");
-    return block;
+    return accepted(ends.length ? input.slice(0, Math.min(...ends)) : input);
   }
   let end = input.byteLength;
   const scanned = Math.min(input.byteLength, limit + 4);
@@ -49,27 +52,44 @@ function headerBlock(input: string | Uint8Array, limit: number): string {
     if (input[i] === 13 && input[i + 1] === 10 && input[i + 2] === 13 && input[i + 3] === 10) { end = i; break; }
   }
   if (end > limit) return invalid("header byte limit");
-  try { return utf8.decode(input.subarray(0, end)); } catch { return invalid("header is not UTF-8"); }
+  let text: string;
+  try { text = decodeUtf8(input.subarray(0, end)); } catch { return invalid("header is not UTF-8"); }
+  return accepted(text);
 }
 
-function policyWords(value: string): string {
+function headerWords(value: string, allowQuotedPrintable = false): string {
   const source = unfold(value);
-  const pattern = /=\?UTF-8\?B\?([A-Za-z0-9+/]*={0,2})\?=/gi;
+  const pattern = /=\?UTF-8\?([BQ])\?([^?\s]*)\?=/gi;
   let output = ""; let last = 0; let previousEncoded = false;
   for (const match of source.matchAll(pattern)) {
     const index = match.index ?? 0;
     const gap = source.slice(last, index);
-    if (gap.includes("=?")) return invalid("unsupported policy encoded word");
+    if (gap.includes("=?")) return invalid("unsupported encoded word");
     if (!(previousEncoded && /^\s*$/.test(gap))) output += gap;
-    const encoded = match[1]!;
-    const bytes = Buffer.from(encoded, "base64");
-    if (!encoded || encoded.length % 4 !== 0 || bytes.toString("base64") !== encoded) return invalid("malformed policy Base64");
-    try { output += utf8.decode(bytes); } catch { return invalid("malformed policy UTF-8"); }
+    const encoded = match[2]!; let bytes: Buffer;
+    if (match[1]!.toUpperCase() === "B") {
+      bytes = Buffer.from(encoded, "base64");
+      if (!encoded || encoded.length % 4 !== 0 || bytes.toString("base64") !== encoded) return invalid("malformed Base64 word");
+    } else {
+      if (!allowQuotedPrintable || !encoded || /[^\x21-\x7e]|=(?![0-9a-f]{2})/i.test(encoded)) return invalid("unsupported Q word");
+      bytes = Buffer.from(encoded.replace(/_/g, " ").replace(/=([0-9a-f]{2})/gi, (_word, hex: string) => String.fromCharCode(parseInt(hex, 16))), "latin1");
+    }
+    try { output += decodeUtf8(bytes); } catch { return invalid("malformed encoded UTF-8"); }
     last = index + match[0].length; previousEncoded = true;
   }
   const tail = source.slice(last);
-  if (tail.includes("=?")) return invalid("unsupported policy encoded word");
+  if (tail.includes("=?")) return invalid("unsupported encoded word");
   return output + tail;
+}
+/** Decode the pinned writer's UTF-8 words once for reply composition. The raw
+ * parser projection stays unchanged for existing durable/header consumers. */
+export function decodeSubject(value: string | null): string {
+  return headerWords(unfold(value ?? "").trim(), true);
+}
+/** A subject as a reader should see it (BATCH-002): decoded, or, when it is
+ * not something this writer produces, the header exactly as it arrived. */
+export function displaySubject(value: string | null): string {
+  try { return decodeSubject(value); } catch { return unfold(value ?? "").trim(); }
 }
 function singleId(value: string | undefined): string | null {
   if (value === undefined) return null;
@@ -116,7 +136,7 @@ export function parseEmlHeaders(input: string | Uint8Array, limits: HeaderReadLi
   for (const raw of block.split("\n")) {
     const line = raw.endsWith("\r") ? raw.slice(0, -1) : raw;
     if (line === "") continue;
-    if (Buffer.byteLength(line, "utf8") > MAX_LINE_BYTES || /[\x00-\x08\x0b-\x1f\x7f]/.test(line)) return invalid("invalid line length/control character");
+    if (Buffer.byteLength(line, "utf8") > MAX_HEADER_LINE_BYTES || /[\x00-\x08\x0b-\x1f\x7f]/.test(line)) return invalid("invalid line length/control character");
     if (/^[ \t]/.test(line)) {
       if (current === null) return invalid("orphan folded line");
       headers[current] = `${headers[current]}\n${line.trim()}`;
@@ -143,9 +163,12 @@ export function parseEmlHeaders(input: string | Uint8Array, limits: HeaderReadLi
   };
   const revision = unfolded("x-oma-context");
   if (revision !== null && !isValidFullOid(revision)) return invalid("invalid context OID");
+  // Remove wire folding whitespace before decoding; whitespace encoded in
+  // the revision itself remains part of the exact approval identity.
+  const approvalPolicy = unfolded("x-oma-approval-policy");
   const approval = { repo: unfolded("x-oma-approval-repo"), targetRef: unfolded("x-oma-approval-target"),
     expectedBase: unfolded("x-oma-approval-base"), candidate: unfolded("x-oma-approval-candidate"),
-    policyRevision: headers["x-oma-approval-policy"] === undefined ? null : policyWords(headers["x-oma-approval-policy"]) };
+    policyRevision: approvalPolicy === null ? null : headerWords(approvalPolicy) };
   const hasApproval = Object.values(approval).some(value => value !== null);
   if (hasApproval && (kind !== "approval_required" || exactCandidateCheck(approval) !== null)) return invalid("inconsistent approval identity");
   if (kind === "approval_required" && !hasApproval) return invalid("missing approval identity");

@@ -33,7 +33,7 @@ function envOf(integration: IntegrationPolicy | null = null, policyRevisionReade
   const paths: GitPaths = {
     stateRoot: join(dir, "state"), projectGit: join(dir, "state/repos/project.git"), contextGit: join(dir, "state/repos/context.git"),
     worldDir: join(dir, "state/world"), society, quarantineTmpBytes: 256 * 1024 * 1024,
-    quarantineResources: { cpuSeconds: 30, memoryBytes: 512 * 1024 * 1024, tasks: 4096 }, checkTimeoutSeconds: 30,
+    quarantineResources: { cpuSeconds: 30, memoryBytes: 512 * 1024 * 1024, tasks: 4096, timeoutSeconds: 30, silenceSeconds: 30 },
   };
   const policy = integration ?? { policyRevision: "p1", protectedPaths: [], checks: [] };
   const git = new GitModule(paths, store, mail, policy, policyRevisionReader);
@@ -209,30 +209,64 @@ test("INT-003: accepted stop intent cancels before main CAS", async () => {
 });
 
 test("T62: policy revision is reread before CAS and a race fails closed", async () => {
-  let reads = 0; const env = envOf(null, () => { reads++; return "p2"; });
+  // Accepted under p1, changed to p2 before CAS: the re-check fails closed (D02).
+  let reads = 0; const env = envOf(null, () => (++reads === 1 ? "p1" : "p2"));
   try {
     const { base, candidate } = publishedFastForward(env);
     await assert.rejects(env.git.integrate(auth("a", ["code.integrate"]), "policy-race", { candidate, expected: base }), failure("POLICY_CHANGED"));
-    assert.equal(reads, 1); assert.equal(main(env), base); assert.equal(env.store.getOperation("a", "policy-race")?.state, "failed");
+    assert.equal(reads, 2); assert.equal(main(env), base); assert.equal(env.store.getOperation("a", "policy-race")?.state, "failed");
   } finally { env.seal(); }
 });
 
-test("T62-negative: unreadable authoritative policy cannot integrate", async () => {
+test("DR8 / CFG-005, TUI-007: an integration after a revision-only edit is judged by the host's current revision", async () => {
+  // The broker started under p1; the Human's edit made it p2 and left the facts
+  // alone. The thirteenth functional run found every later integrate refused.
+  const env = envOf(null, () => "p2");
+  try {
+    const { base, candidate } = publishedFastForward(env);
+    const receipt = await env.git.integrate(auth("a", ["code.integrate"]), "after-edit", { candidate, expected: base });
+    assert.equal(receipt.state, "succeeded");
+    assert.equal(main(env), candidate);
+    const accepted = env.store.getOperation("a", "after-edit");
+    assert.ok(accepted?.kind === "git.integrate");
+    assert.equal(accepted.plan.policyRevision, "p2", "accepted under the revision the broker started with");
+  } finally { env.seal(); }
+});
+
+test("T62-negative, DR13: a policy that cannot be read cannot integrate, and is not called a changed one", async () => {
   const env = envOf(null, () => { throw new Error("malformed policy"); });
   try {
     const { base, candidate } = publishedFastForward(env);
-    await assert.rejects(env.git.integrate(auth("a", ["code.integrate"]), "policy-malformed", { candidate, expected: base }), failure("POLICY_CHANGED"));
-    assert.equal(main(env), base); assert.equal(env.store.getOperation("a", "policy-malformed")?.state, "failed");
+    await assert.rejects(env.git.integrate(auth("a", ["code.integrate"]), "policy-malformed", { candidate, expected: base }), failure("BROKER_UNAVAILABLE"));
+    // Refused before acceptance: nothing is accepted under a policy that cannot be read.
+    assert.equal(main(env), base); assert.equal(env.store.getOperation("a", "policy-malformed"), null);
   } finally { env.seal(); }
 });
 
-test("T62-resource: unresolved workspace/staging limits fail closed before candidate execution", async () => {
+test("DR13 / INT-003, P0-5: a policy unreadable at CAS leaves the accepted integration pending, and recovery integrates once it reads", async () => {
+  // Readable at acceptance (p1), unreadable just before CAS, readable again later.
+  let reads = 0; let readable = true;
+  const env = envOf(null, () => { reads += 1; if (reads === 2) readable = false; if (!readable) throw new Error("EIO"); return "p1"; });
+  try {
+    const { base, candidate } = publishedFastForward(env);
+    await assert.rejects(env.git.integrate(auth("a", ["code.integrate"]), "policy-gone", { candidate, expected: base }), failure("BROKER_UNAVAILABLE"));
+    const pending = env.store.getOperation("a", "policy-gone");
+    assert.equal(pending?.state, "pending", "not knowing the policy is not a failed integration");
+    assert.equal(main(env), base, "nothing moved without a policy");
+    readable = true;
+    await env.git.reconcile(pending!.id);
+    assert.equal(env.store.getOperation("a", "policy-gone")?.state, "succeeded");
+    assert.equal(main(env), candidate);
+  } finally { env.seal(); }
+});
+
+test("T62-resource / DR18: a policy with integration checks is not supported and fails closed before candidate execution", async () => {
   const env = envOf({ policyRevision: "p1", protectedPaths: [], checks: [{ id: "resource-boundary", argv: ["true"], env: {}, timeoutSeconds: 1, tmpBytes: 1024,
     resources: { memoryBytes: 64 * 1024 * 1024, tasks: 16, cpuQuotaPercent: 10, tmpBytes: 1024, workspaceBytes: 1024, stagingBytes: 1024, checkTimeoutSeconds: 1 } }] });
   env.paths.checkRootfs = "/trusted/rootfs"; env.paths.checkAssetsDir = "/trusted/checks";
   try {
     const { base, candidate } = publishedFastForward(env);
-    await assert.rejects(env.git.integrate(auth("a", ["code.integrate"]), "resource-boundary", { candidate, expected: base }), failure("SPIKE_UNRESOLVED")); assert.equal(main(env), base);
+    await assert.rejects(env.git.integrate(auth("a", ["code.integrate"]), "resource-boundary", { candidate, expected: base }), failure("UNSUPPORTED_PROFILE")); assert.equal(main(env), base);
   } finally { env.seal(); }
 });
 

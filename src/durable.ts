@@ -1,8 +1,11 @@
 // MUST [DB-009/M-003]: closed durable shapes and mandatory intrinsic relations.
 // No Store, filesystem reads, current defaults, or physical effects belong here.
+import { tieredAcceptanceCheck, tieredAcceptanceRelation } from "./domain/tier-snapshot.js";
+import { attestationProblem, reviewFactProblem } from "./domain/attestation.js";
 import { isAbsolute } from "node:path";
 import type {
   MutationMethod,
+  MessagePlan,
   OperationPlan,
   OperationResult,
 } from "../implementation/contracts/durable.js";
@@ -12,6 +15,7 @@ import { resolvedSpecDigest } from "./domain/spec-identity.js";
 import { contextEntriesCheck as checkContextEntries } from "./domain/context-policy.js";
 import {
   messageIdForOperation,
+  contextNoopRefFor,
   isMailObjectRelativePathFor,
   isPublishedRefFor,
   residentUnitsFor,
@@ -24,6 +28,7 @@ import {
 } from "./storage/paths.js";
 import {
   checkArray,
+  checkOptional,
   checkEnum,
   checkInt,
   checkObject,
@@ -41,6 +46,8 @@ import {
   isValidMessageId,
   isValidOperationId,
   isValidSocietyName,
+  isReviewRequestName,
+  reviewRequestNameOwnedBy,
 } from "./domain/identifiers.js";
 
 /** Split the legacy grouped kind members without changing persisted JSON. */
@@ -56,6 +63,20 @@ export type ResultFor<K extends MutationMethod> = NarrowKind<
 export type PlanFor<K extends MutationMethod> = K extends "git.integrate"
   ? NarrowKind<OperationPlan, K> & { result?: ResultFor<"git.integrate"> }
   : NarrowKind<OperationPlan, K>;
+/** The messages owned by an immutable accepted plan, not by a file or a
+ * present-day recipient lookup. All ledger/publication readers share this.
+ * Review facts own zero or more; legacy kinds own at most one at ordinal zero. */
+export function ownedMessages(plan: OperationPlan): readonly MessagePlan[] {
+  switch (plan.kind) {
+    case "attest.record": return "messages" in plan ? plan.messages : [plan.message];
+    case "mail.send": case "agent.continue": case "git.submit": case "context.publish": return [plan.message];
+    case "agent.create": return plan.initialMessage === null ? [] : [plan.initialMessage];
+    case "git.integrate":
+      if (plan.merge !== undefined) return plan.merge.notice;
+      return plan.publication === undefined ? [] : [plan.publication.message];
+    default: return [];
+  }
+}
 export interface RepositoryIdentity {
   readonly society: string;
 }
@@ -102,8 +123,20 @@ const integrateFields = {
   candidate: checkOid,
   policyRevision: nonEmpty,
   checkProfileDigest: sha256Check,
+  publication: checkOptional(checkObject({ message: messagePlanCheck, noopRef: value => value === null ? null : nonEmpty(value), tiered: tieredAcceptanceCheck })),
+  merge: checkOptional(checkObject({
+    version: (value) => value === 1 ? null : "merge plan must declare version 1",
+    request: operationIdCheck,
+    name: (value) => isReviewRequestName(value) ? null : "invalid merge request name",
+    tier: checkEnum(["LOW", "MEDIUM", "HIGH"] as const),
+    notice: checkArray(messagePlanCheck),
+  })),
+
 };
 const integrateBaseCheck = checkObject(integrateFields);
+/** Rows accepted before the plan/result split still carry the settled result
+ * inside the immutable plan. The grammar only exists for decoding them; no
+ * code path writes it now. */
 const integrateWithResultCheck = checkObject({
   ...integrateFields,
   result: operationResultCheck("git.integrate"),
@@ -117,6 +150,15 @@ const publishedRefShape: Check = (value) => {
     : "invalid published ref";
 };
 const checks = {
+  "society.set": checkObject({ kind: checkEnum(["society.set"]), state: checkEnum(["open", "closed"]) }),
+  "attest.record": (value) => {
+    if (value === null || typeof value !== "object" || Array.isArray(value)) return "expected object";
+    if (Object.hasOwn(value, "messages"))
+      return checkObject({ kind: checkEnum(["attest.record"] as const),
+        fact: (fact) => reviewFactProblem(fact), messages: checkArray(messagePlanCheck) })(value);
+    return checkObject({ kind: checkEnum(["attest.record"] as const),
+      fact: (fact) => attestationProblem(fact), message: messagePlanCheck })(value);
+  },
   "mail.send": checkObject({
     kind: checkEnum(["mail.send"] as const),
     message: messagePlanCheck,
@@ -195,6 +237,8 @@ const checks = {
     entries: contextEntriesCheck,
     stagingPath: nonEmpty,
     message: messagePlanCheck,
+    goalMail: checkOptional(checkObject({ subject: checkString({ min: 1 }) })),
+    noopRef: checkOptional(value => value === null ? null : nonEmpty(value)),
   }),
 } satisfies Record<MutationMethod, Check>;
 
@@ -220,16 +264,14 @@ export function operationPlanCheck(
     )
       return "missing or invalid operation identity context";
     const plan = value as PlanFor<MutationMethod>;
-    const message =
-      "message" in plan && typeof plan.message === "object"
-        ? plan.message
-        : plan.kind === "agent.create"
-          ? plan.initialMessage
-          : null;
-    if (message !== null) {
-      // All v1 plans that own an EML have exactly one message at documented ordinal zero.
+    const messages = ownedMessages(plan);
+    const reviewOwned = (plan.kind === "attest.record" && "messages" in plan) ||
+      (plan.kind === "git.integrate" && plan.merge !== undefined);
+    for (const [ordinal, message] of messages.entries()) {
+      if (!reviewOwned && (message.review !== undefined || message.audience !== undefined))
+        return "a non-review plan cannot own review mail";
       if (
-        message.id !== messageIdForOperation(context.operationId, 0) ||
+        message.id !== messageIdForOperation(context.operationId, ordinal) ||
         !isMailObjectRelativePathFor(message.objectPath, {
           messageId: message.id,
         })
@@ -239,6 +281,7 @@ export function operationPlanCheck(
         return "duplicate frozen recipient";
     }
     switch (plan.kind) {
+      case "society.set": return context.actor === "principal" ? null : "society control requires the Principal actor";
       case "mail.ack":
         return plan.recipient === context.actor
           ? null
@@ -321,6 +364,9 @@ export function operationPlanCheck(
           ? null
           : "submit message kind/context mismatch";
       case "context.publish":
+        if (plan.noopRef !== undefined && plan.noopRef !== (plan.base === plan.candidate ? contextNoopRefFor(context.operationId) : null))
+          return "context no-op witness differs from its accepted identity";
+        if (plan.goalMail && context.actor !== "principal") return "GOAL mail requires the Principal actor";
         if (
           !isContextStagingPathFor(plan.stagingPath, {
             stateRoot: context.stateRoot,
@@ -337,9 +383,70 @@ export function operationPlanCheck(
           return "context message must retain its residents address";
         return null;
       case "git.integrate":
+        if (plan.publication) {
+          const tiered = plan.publication.tiered;
+          const invalid = tieredAcceptanceRelation(tiered, { repo: plan.repo, targetRef: plan.target,
+            expectedBase: plan.base, candidate: plan.candidate, policyRevision: plan.policyRevision }, context.actor, plan.checkProfileDigest);
+          if (invalid !== null) return invalid;
+          const levels = ["LOW", "MEDIUM", "HIGH"];
+          if (levels.indexOf(tiered.effective) < levels.indexOf(tiered.requested))
+            return "accepted tier is below the requested tier";
+          if ([tiered.approvers, tiered.activeFloors].some(values => new Set(values).size !== values.length))
+            return "integration authority contains duplicate evidence";
+          if (tiered.objections.length !== 0) return "accepted integration has active objections";
+          if (tiered.approvers.includes("principal") || tiered.approvers.includes(context.actor))
+            return "integration requester or Principal is counted as a peer";
+          if (tiered.effective !== "LOW" && tiered.approvers.length === 0)
+            return "accepted integration lacks an eligible peer";
+          if (tiered.effective === "HIGH" && tiered.principalDecision === null)
+            return "accepted HIGH integration lacks a Principal decision";
+        }
+        if (plan.publication && plan.publication.noopRef !== (plan.base === plan.candidate ? `refs/oma/integrations/${context.operationId}` : null))
+          return "integration no-op witness differs from its accepted identity";
+        if (plan.publication && (plan.publication.message.kind !== "result" || plan.publication.message.to.length !== 1 ||
+            plan.publication.message.to[0] !== "commons")) return "integration publication must name commons result mail";
+        if (plan.merge !== undefined) {
+          if (plan.publication !== undefined) return "merge and publication are mutually exclusive";
+          if (!reviewRequestNameOwnedBy("merge", plan.merge.request, plan.merge.name) &&
+              !reviewRequestNameOwnedBy("challenge", plan.merge.request, plan.merge.name))
+            return "merge request name differs from its request operation";
+          for (const [index, notice] of plan.merge.notice.entries()) {
+            const meta = notice.review;
+            if (meta === undefined || meta.role !== "notice" || meta.request !== plan.merge.request ||
+                meta.name !== plan.merge.name || meta.part !== index + 1 || meta.parts !== plan.merge.notice.length)
+              return "merge notice part differs from its plan";
+          }
+        }
         if (plan.result)
           return operationResultRelationCheck(kind, plan, plan.result, context);
         return null;
+      case "attest.record": {
+        if (!("messages" in plan))
+          return plan.message.kind === "result" && plan.message.to.length === 1 && plan.message.to[0] === "commons"
+            ? null : "attestation publication must name commons as result mail";
+        const fact = plan.fact;
+        if (fact.kind === "merge.open" || fact.kind === "challenge.open") {
+          if (!reviewRequestNameOwnedBy(fact.kind === "merge.open" ? "merge" : "challenge", context.operationId, fact.name))
+            return "request name differs from its operation identity";
+        }
+        const request = fact.kind === "merge.open" || fact.kind === "challenge.open"
+          ? context.operationId : fact.request;
+        const roles: Record<string, readonly string[]> = {
+          "merge.open": ["thread"], "challenge.open": ["thread"], review: ["thread"],
+          vote: ["thread", "approval", "withdrawn", "decision"],
+          cancel: ["thread", "withdrawn"], refresh: ["thread", "withdrawn", "approval"],
+        };
+        for (const message of plan.messages) {
+          const meta = message.review;
+          if (meta === undefined || meta.request !== request)
+            return "review message does not name the accepted request";
+          if (!roles[fact.kind]!.includes(meta.role))
+            return "review message role does not fit its fact";
+          if ((fact.kind === "merge.open" || fact.kind === "challenge.open") && meta.name !== fact.name)
+            return "review message names a different request";
+        }
+        return null;
+      }
       case "agent.start":
       case "agent.stop":
       case "mail.send":
@@ -365,6 +472,37 @@ export function operationResultRelationCheck(
     return "result kind differs from accepted plan";
   const row = result as unknown as Record<string, unknown>;
   switch (plan.kind) {
+    case "society.set": return row.state === plan.state ? null : "society result differs from accepted state";
+    case "attest.record": {
+      if ("messages" in plan) {
+        if (typeof row.request !== "string" || !isReviewRequestName(row.request) ||
+            !Array.isArray(row.messages) || typeof row.recipientCount !== "number")
+          return "review attestation result variant mismatch";
+        if ((plan.fact.kind === "merge.open" || plan.fact.kind === "challenge.open") && row.request !== plan.fact.name)
+          return "attestation result request differs from frozen name";
+        for (const [index, message] of plan.messages.entries()) {
+          if (row.messages[index] !== message.id)
+            return "attestation result messages differ from frozen plan";
+          if (message.review !== undefined && message.review.name !== row.request)
+            return "attestation result request differs from its mail";
+        }
+        if ((row.messages as unknown[]).length !== plan.messages.length)
+          return "attestation result messages differ from frozen plan";
+        const recipients = plan.messages.reduce((total, message) => total + message.recipients.length, 0);
+        return row.recipientCount === recipients ? null : "attestation result recipient count differs from frozen plan";
+      }
+      if (
+        row.message !== plan.message.id ||
+        row.recipientCount !== plan.message.recipients.length
+      )
+        return "mail result differs from frozen message/recipient snapshot";
+      return isMailArchivePathFor(row.archivePath, {
+        stateRoot: context.stateRoot,
+        messageId: plan.message.id,
+      })
+        ? null
+        : "archive path differs from accepted message";
+    }
     case "mail.send":
     case "agent.continue":
       if (
@@ -413,10 +551,24 @@ export function operationResultRelationCheck(
       ] as const)
         if (row[field] !== plan[field])
           return `integrate result ${field} differs from accepted plan`;
-      // Preserve the historical optional result shape and its explicit changed fact.
-      return plan.result && row.changed !== plan.result.changed
-        ? "integrate changed flag differs from accepted result"
-        : null;
+      if (row.changed !== (plan.base !== plan.candidate))
+        return "integrate result changed flag differs from accepted plan";
+      if (plan.publication) {
+        const publication = row.publication as Record<string, unknown> | undefined;
+        if (!publication || publication.message !== plan.publication.message.id ||
+            publication.recipientCount !== plan.publication.message.recipients.length ||
+            publication.effectiveTier !== plan.publication.tiered.effective || publication.authorityDigest !== plan.publication.tiered.authorityDigest)
+          return "integration publication differs from accepted plan";
+      } else if (row.publication !== undefined) return "historical integration cannot gain a publication";
+      if (plan.merge !== undefined) {
+        const merge = row.merge as { name?: unknown; notices?: unknown; recipientCount?: unknown } | undefined;
+        if (merge === undefined || merge === null || merge.name !== plan.merge.name ||
+            !Array.isArray(merge.notices) || merge.notices.length !== plan.merge.notice.length ||
+            plan.merge.notice.some((notice, index) => (merge.notices as unknown[])[index] !== notice.id) ||
+            merge.recipientCount !== plan.merge.notice.reduce((total, notice) => total + notice.recipients.length, 0))
+          return "integration merge result differs from accepted plan";
+      } else if (row.merge !== undefined) return "historical integration cannot gain merge notices";
+      return null;
     case "context.publish":
       return row.previous === plan.base &&
         row.revision === plan.candidate &&

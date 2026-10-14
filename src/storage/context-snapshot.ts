@@ -12,10 +12,12 @@ import { contextEntriesCheck } from "../domain/context-policy.js";
 import { StoreError } from "../domain/errors.js";
 import { contextRevisionPathAt } from "./paths.js";
 import { assertContextDirectory, readContextEntry } from "./context-files.js";
-import { ensureDurableDirectory, fsyncDir, fsyncTree, writeExclusiveFsyncedFile } from "./durable-fs.js";
+import { ensureOwnedDurableDirectory, fsyncDir, fsyncTree, writeExclusiveFsyncedFile } from "./durable-fs.js";
 import { publishStagedDirectory, replaceDerivedSymlink } from "./staged-tree.js";
 import { entryAt, openBeneath, openDirectory } from "./contained-fs.js";
-import { removeOwnedTree } from "./directory.js";
+import { removeOwnedFile, removeOwnedTree } from "./directory.js";
+import { withCleanup } from "../process/cleanup.js";
+import { TreeLease, leasePathOf } from "./tree-lease.js";
 
 /** Complete permitted tree verification; no writes or silent byte repair.
  * Mode validation is explicit because a new temporary has not been sealed yet.
@@ -74,21 +76,37 @@ export function publishContextRevision(
   if (invalid || !isValidFullOid(candidate)) throw new StoreError("STORE_CORRUPT", invalid ?? "invalid context revision");
   assertContextDirectory(source);
   const revisions = join(worldDir, "context", "revisions");
-  ensureDurableDirectory(revisions);
+  ensureOwnedDurableDirectory(revisions, worldDir, 0o755);
   const destination = contextRevisionPathAt(worldDir, candidate);
   if (!lstatSync(destination, { throwIfNoEntry: false })) {
     const temporary = join(revisions, `.prepare-${candidate}-${generateOperationId()}`);
-    ensureDurableDirectory(temporary);
-    try {
+    // AV-20261003-19 (P0-4): the temporary is lease-owned from creation, so a
+    // publication interrupted between creation and the atomic rename leaves a
+    // residue whose quiescence startup recovery can prove -- not an ownerless
+    // tree that counts against storage quota forever.
+    const lease = TreeLease.take(temporary);
+    // Everything after `take` is inside the same release-on-failure guard:
+    // a failure while the tree is being made must not strand the lease fd
+    // or leave its ".lease" reading active until process exit (AV-18 shape).
+    // withCleanup owns the shape: a cleanup failure beside an in-flight
+    // publish failure is retained beside it (P0-4), never substituted for it,
+    // and the release still runs exactly once.
+    withCleanup(() => {
+      ensureOwnedDurableDirectory(temporary, worldDir, 0o755);
       for (const entry of entries) {
         const bytes = readContextEntry(source, entry);
         const target = join(temporary, entry.path);
-        ensureDurableDirectory(dirname(target));
+        ensureOwnedDurableDirectory(dirname(target), worldDir, 0o755);
         writeExclusiveFsyncedFile(target, bytes, 0o644);
       }
       sealRevision(temporary, entries);
       publishStagedDirectory(temporary, destination, root => verifyContextRevision(root, entries, true), "context-single-link");
-    } finally { removeOwnedTree(temporary); }
+    }, () => withCleanup(() => {
+      // Any residue this leaves -- tree, lease or both -- is named for the
+      // startup collector, which removes it once the lease proves quiescence.
+      removeOwnedTree(temporary);
+      removeOwnedFile(leasePathOf(temporary));
+    }, () => lease.release()));
   }
   sealRevision(destination, entries);
   replaceDerivedSymlink(join(worldDir, "context", "current"), contextRevisionLinkFor(candidate));
