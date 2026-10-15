@@ -18,7 +18,7 @@ import { ReviewAuthorityReader } from "./authority.js";
 import { isOpenFact, PRINCIPAL, type OpenRequest, type PreparedReview, type ReviewEffects } from "./types.js";
 export class ReviewAcceptance {
   constructor(private readonly store: Store, private readonly mail: Pick<MailModule, "materialize">,
-    private readonly ledger: ReviewAuthorityReader, private readonly effects: Pick<ReviewEffects, "publishCandidateRef">,
+    private readonly ledger: ReviewAuthorityReader, private readonly effects: Pick<ReviewEffects, "publishCandidateRef" | "main" | "cancelMerge">,
     private readonly society: string) {}
   /** The shared acceptance tail: T re-derivation, recipients, operation +
    * deliveries, settle, materialize, succeeded. `auth` is null for
@@ -29,6 +29,17 @@ export class ReviewAcceptance {
       key: string, hash: string, scope: PreacceptScope): Promise<Receipt> {
     let txClaim: "inserted" | "retry";
     try {
+      // There is no await between this observation and acceptance. A CAS may
+      // already have happened while its notices are still materializing (or
+      // before a crash); a pending DB row alone cannot authorize cancellation.
+      if (prepared.fact.kind === "cancel" && prepared.before?.integration?.state === "pending") {
+        const main = this.effects.main();
+        if (main.kind === "corrupt") throw new StoreError("STORE_CORRUPT", "canonical main observation is malformed");
+        if (main.kind === "present" && main.value === prepared.before.identity.candidate)
+          throw new StoreError("REQUEST_CLOSED", "the request is already applied; use oma_challenge");
+        if (main.kind !== "present" || main.value !== prepared.before.identity.expectedBase)
+          throw new StoreError("REF_STATE_UNKNOWN", "the request's integration outcome is unknown");
+      }
       txClaim = this.store.transaction(tx => {
         if (auth !== null) {
           const agent = assertCurrentActor(this.store, auth, "mail.send");
@@ -56,6 +67,9 @@ export class ReviewAcceptance {
         return accepted;
       });
     } catch (error) { return scope.settleFailure(error); }
+    // The committed control must reach the process owner even if releasing
+    // preparation artifacts or materializing its notice subsequently fails.
+    if (txClaim === "inserted" && prepared.fact.kind === "cancel") this.effects.cancelMerge?.(prepared.fact.request);
     scope.settle();
     if (txClaim === "retry") return receiptOfOperation(this.store.retriedOperation(actor, key));
     // §7: the accepted prepared challenge's revert is published under the

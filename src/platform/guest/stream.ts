@@ -11,9 +11,10 @@
  */
 import { pipeline } from "node:stream/promises";
 import { borrowedFileRange, withStreamSource } from "../stream-source.js";
-import { createHash } from "node:crypto";
-import { closeSync, constants, fstatSync, fsyncSync, statfsSync, unlinkSync, writeSync } from "node:fs";
-import { entryAt, openBeneath, withinDirectory } from "../../storage/contained-fs.js";
+import { createHash, randomUUID } from "node:crypto";
+import { basename, dirname } from "node:path";
+import { constants, fstatSync, fsyncSync, statfsSync, unlinkSync, writeSync } from "node:fs";
+import { closeEvery, entryAt, linkDescriptor, openBeneath, openDirectory, withinDirectory } from "../../storage/contained-fs.js";
 import type { Socket } from "node:net";
 import { encodeFrame } from "../../frame.js";
 import { StoreError } from "../../domain/errors.js";
@@ -97,21 +98,36 @@ export async function serveStream(socket: Socket, options: StreamOptions): Promi
  * sha256 is the declared one. A stream that ends short, runs long, hashes
  * differently or cannot be written leaves nothing behind (P0V-104: the one
  * receiver, `receiveDeclared`). */
-function receive(socket: Socket, head: Buffer, target: string, bytes: number, sha256: string): Promise<void> {
+async function receive(socket: Socket, head: Buffer, target: string, bytes: number, sha256: string): Promise<void> {
   // The ledger's directory is resolved once and the staging file named
   // through it (FS-005): the oma user's other processes share this uid.
-  const fd = withinDirectory(target, (parent, name) => {
-    try { unlinkSync(entryAt(parent, name)); } catch { /* none staged yet */ }
-    return openBeneath(parent, name, constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | constants.O_NOFOLLOW, 0o600);
-  });
-  let open = true;
-  const close = (): void => { if (open) { open = false; closeSync(fd); } };
-  return receiveDeclared(socket, head, { bytes, sha256 }, {
-    write: chunk => { for (let at = 0; at < chunk.length;) at += writeSync(fd, chunk, at, chunk.length - at); },
-    complete: () => { try { fsyncSync(fd); } finally { close(); } },
-    abandon: () => {
-      try { close(); } catch { /* already closed */ }
-      try { withinDirectory(target, (parent, name) => { unlinkSync(entryAt(parent, name)); }); } catch { /* already gone */ }
-    },
-  });
+  const parent = openDirectory(dirname(target));
+  const name = basename(target), temporary = `.${name}.${randomUUID()}.partial`;
+  let fd: number | undefined;
+  try {
+    fd = openBeneath(parent, temporary, constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | constants.O_NOFOLLOW, 0o600);
+    const sink = fd;
+    await receiveDeclared(socket, head, { bytes, sha256 }, {
+      write: chunk => { for (let at = 0; at < chunk.length;) at += writeSync(sink, chunk, at, chunk.length - at); },
+      complete: () => { fsyncSync(sink); },
+      abandon: () => { /* this attempt's temporary is removed in finally */ },
+    });
+    try { linkDescriptor(sink, parent, name); }
+    catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error;
+      // A completed put is immutable. Same-key retries may share its bytes,
+      // but neither a late success nor a late disconnect can replace it.
+      const prior = openBeneath(parent, name, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);
+      await withStreamSource(prior, async source => {
+        const info = fstatSync(source), hash = createHash("sha256");
+        if (!info.isFile() || info.size !== bytes) throw new StoreError("STREAM_INVALID", "this key already stages different bytes");
+        if (bytes > 0) for await (const chunk of borrowedFileRange(source, bytes)) hash.update(chunk as Buffer);
+        if (hash.digest("hex") !== sha256) throw new StoreError("STREAM_INVALID", "this key already stages different bytes");
+      });
+    }
+    fsyncSync(parent);
+  } finally {
+    try { if (fd !== undefined) unlinkSync(entryAt(parent, temporary)); }
+    finally { closeEvery(fd, parent); }
+  }
 }

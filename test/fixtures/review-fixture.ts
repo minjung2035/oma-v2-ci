@@ -2,7 +2,7 @@
  * throwaway society with a canonical project repo. Shared by merge-review and
  * challenge-review. */
 import assert from "node:assert/strict";
-import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { Store } from "../../src/store.js";
@@ -14,6 +14,7 @@ import type { ReviewFact } from "../../implementation/contracts/attestation.js";
 import { applyRequestKeyFor } from "../../src/domain/identifiers.js";
 import { readableMail } from "../../src/mail/display.js";
 import { makeValidAgent, ALL_CAPS } from "./spec.js";
+import { removeTree } from "./cleanup.js";
 import type { AuthContext, MessagePlan } from "../../implementation/contracts.js";
 import type { IntegrationPolicy } from "../../src/git/integration-policy.js";
 import type { OperationOf } from "../../src/storage/operation-codec.js";
@@ -29,7 +30,7 @@ export interface FixtureOptions {
   readonly mailBodyBytes?: number;
   readonly bundleBytes?: number;
   readonly checks?: IntegrationPolicy["checks"];   // integration check fixtures
-  readonly runCheck?: (candidate: string, check: unknown) => Promise<void> | void;
+  readonly runCheck?: (candidate: string, check: unknown, cancellation?: AbortSignal) => Promise<void> | void;
 }
 export function fixture(options: FixtureOptions = {}) {
   const root = mkdtempSync(join(tmpdir(), "oma-merge-review-"));
@@ -71,7 +72,7 @@ export function fixture(options: FixtureOptions = {}) {
   let module = new GitModule(paths, store, mail, policy,
     options.reader === undefined ? () => policy : () => options.reader!(policy),
     options.runCheck === undefined ? null
-      : (candidate, check) => Promise.resolve(options.runCheck!(candidate, check)),
+      : (candidate, check, cancellation) => Promise.resolve(options.runCheck!(candidate, check, cancellation)),
     bounds);
   const auth = (actor = "alice"): AuthContext => ({ actor, role: actor === "principal" ? "principal" : "resident",
     incarnation: actor === "principal" ? 0 : 1, capabilities: new Set(ALL_CAPS), channel: "actor",
@@ -137,9 +138,9 @@ export function fixture(options: FixtureOptions = {}) {
       mail = new MailModule(paths, store, 64); module = new GitModule(paths, store, mail, policy,
         options.reader === undefined ? () => policy : () => options.reader!(policy),
         options.runCheck === undefined ? null
-          : (candidate, check) => Promise.resolve(options.runCheck!(candidate, check)),
+          : (candidate, check, cancellation) => Promise.resolve(options.runCheck!(candidate, check, cancellation)),
         bounds); },
-    close() { store.close(); rmSync(root, { recursive: true, force: true }); } };
+    close() { store.close(); removeTree(root); } };
 }
 
 export const isOpenish = (fact: unknown): fact is { name: string } =>

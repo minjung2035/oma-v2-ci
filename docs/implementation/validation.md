@@ -1,5 +1,25 @@
 # OMA v2 — 현재 검증 상태
 
+## 기존 결함·설치 안내 수정 (2026-10-15, DR45)
+
+기준 `d18f62d1`의 기존 실행 경로를 수정했다. [DR45](../design-revisions.md#dr45--감사에서-확인한-실행재시도-결함과-운영-안내-수정)는 guest 최초 seed, host import 재시도, 겹친 stream 전송, 변화 없는 bundle, 긴 검사 중 취소·context 게시, review 이력 조회, credential 분할 응답, Personal 최초 확장 상속과 broker spawn 실패를 다룬다. Worker별 clone, LOW 자동 병합과 DR37의 네트워크·자원 정책은 유지했다. Linux checkout 설치 조건과 미제공 macOS 앱·VM 배포물은 [운영 안내](../operations.md)에 명시했다.
+
+첫 전체 로컬 시험은 4,047 PASS / 7 FAIL이었다. context 복구의 동기 예외 2건은 Promise 오류 계약으로 복원했다. 기존 모드 선택창을 가정한 PTY 2건은 현재의 명시적 Personal 전환·일반 종료로 수정했다. 실제 spawn 실패에서 종료 오류가 일회성 listener를 소진하는 경로, N-001의 오래된 architecture hash, startup 정리 함수가 빠진 시험용 RequestLedger도 수정했다. 집중 재실행에서 남은 옛 화면 문구 assertion까지 현재 Personal 화면과 터미널 반환 순서로 대조했다.
+
+| 실행 | 결과 | 범위 |
+|---|---|---|
+| `npm test` | **4,054/4,054 PASS** | 416 files; 직렬 9 + 병렬 4,045; fail/cancel/skip/todo 0 |
+| 실제 candidate check 회귀 | **1/1 PASS** | systemd/bwrap에서 네트워크·기존 제한 초과 실행, owner 종료와 요청 취소 각각의 cgroup descendant 종료 관측 |
+| build / typecheck | PASS | Linux, Node.js v24.21.0; CI의 Node.js 26 실행 증거가 아님 |
+| `check:architecture` | PASS | inventory·규칙·의존 방향·transaction·durable boundary·문서·spec inventory 모두 통과 |
+| 보고서 반영 뒤 입력·검토·문서 회귀 | **38/38 PASS** | source inventory, review closure, consistency decisions, traceability policy |
+
+실제 Git·socket 시험은 신규/기존 mirror의 dirty·untracked 내용 보존, no-change/rewind bundle, 업로드 전 단절·성공 응답 유실·영구 거절 뒤 host 재시작, 동일 key의 변경 payload 거절, 오래된 재시도의 checkpoint 역행 방지와 bundle 해제를 검증했다. 겹친 stream과 늦은 연결 종료는 이미 완성된 파일을 훼손하지 않는다. 취소 수락 뒤 준비물 정리가 실패해도 검사 중단은 전달되며, CAS 후 완료 공지가 지연된 요청은 취소 성공으로 표시하지 않는다. 12개 완료/대기 review의 sweep·목록은 각각 이력을 한 번 읽는다. 분할 credential 바이트는 relay 밖으로 먼저 전달되지 않는다.
+
+전체 실행 입력은 15,468개 파일, SHA-256 `629f9a1a1dd3663ac63172834f055e7b656e60645dc7e8fd860d1efb4bd8e487`이다. 실행 뒤에는 이 결과 기록과 N-001 traceability fingerprint만 추가로 갱신했다. 최초 구조 검사에서 해당 fingerprint 누락을 발견했으며 최종 구조·입력 결박 검사는 별도 실행으로 통과했다. 원시 성공/실패 로그, 실행 입력 map과 결과는 `/home/dev/oma-audit-artifacts/repairs-2026-10-15`에 보존한다. 작업 폴더의 사용자 메모는 수정하지 않고 같은 변경을 적용한 별도 worktree에서 전체 시험·문서 검사를 실행했다.
+
+native macOS VM·Keychain과 실제 provider 호출, 나머지 systemd-required 전체 lane 및 power-loss 검증은 **NOT_RUN**이다. 이미 생성된 canonical main은 자동 재작성하지 않는다. 51개 기존 `NOT_REVIEWED`를 포함한 검토 범위와 과거 native/release 판정은 이번 local PASS로 갱신하지 않는다.
+
 ## 실제 task: gpt-6.1-sol medium (2026-10-12)
 
 기준 `d543c84c`에서 Human이 Principal·Worker를 6.1 sol medium으로 지정하고 실제 코딩
@@ -393,7 +413,7 @@ native·macOS VM boot·power loss는 미실행이다. 이전 kernel/crash PASS�
 충족했다고 주장할 수 없다. raw log는 `/tmp/oma-host-ownership-2026-10-09`에 보존한다.
 
 현재 구조 검사의 입력 identity(생성 자체는 runtime PASS가 아니다):
-verification input digest `60702b741c34d7e7a2bb3b3c2b5f0fd381f528e50f1aa7d0700d3a2999415e1c` (15464 files).
+verification input digest `1fd7141f3563f96371958fd3c976c0c72c55945c56461ef972f5dbbcab93cde7` (15468 files).
 
 ## 이전 실행 결과: 지정한 제한 제거·기능 복구 (2026-10-09, DR37)
 

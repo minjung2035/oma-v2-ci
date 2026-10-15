@@ -96,7 +96,10 @@ export class MacGit {
       });
       return { bytes: statSync(out).size, sha256: await sha256File(out), head: snapshotHead };
     }
-    const base = since !== null && (await this.run(repo, ["cat-file", "-e", `${since}^{commit}`])).status === 0 ? [`^${since}`] : [];
+    // Git refuses an empty bundle. If the receiver already has this tip (or
+    // a descendant after a rewind), send a valid full bundle of the named ref.
+    const base = since !== null && (await this.run(repo, ["cat-file", "-e", `${since}^{commit}`])).status === 0 &&
+      (await this.run(repo, ["merge-base", "--is-ancestor", head.stdout.trim(), since])).status !== 0 ? [`^${since}`] : [];
     const made = await this.run(repo, ["bundle", "create", "-q", out, `refs/heads/${branch}`, ...base]);
     if (made.status !== 0) throw new StoreError("INTERNAL_ERROR", "the project could not be bundled");
     return { bytes: statSync(out).size, sha256: await sha256File(out), head: head.stdout.trim() };

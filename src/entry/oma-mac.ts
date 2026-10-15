@@ -34,7 +34,7 @@ import { isValidSocietyName } from "../domain/identifiers.js";
 import { hostPersonalHistoryQuery, inspectHostPersonalHistory } from "../platform/host/personal-histories.js";
 
 function say(line: string, code: number): never { process.stderr.write(`${line}\n`); process.exit(code); }
-const USAGE = `usage: oma [--mode society|personal] [--resume <history>]\n       oma bind <society> | attach <society> [--takeover] | status | list | open <society> --project <id> | stop\n${PACKAGE_USAGE.replace(/^usage: /, "       ")}\n       oma pi install|remove|update|list ... [--project <id> | --host-only]`;
+const USAGE = `usage: oma [--mode society|personal] [--resume <history>]\n       oma --mode personal [--no-project-extensions]\n       oma bind <society> | attach <society> [--takeover] | status | list | open <society> --project <id> | stop\n${PACKAGE_USAGE.replace(/^usage: /, "       ")}\n       oma pi install|remove|update|list ... [--project <id> | --host-only]`;
 let home: string, socketPath: string, token: string;
 
 const STATES: Record<string, string> = { stopped: "Stopped", booting: "Starting", handshaking: "Starting", ready: "Running",
@@ -134,7 +134,8 @@ async function main(argv: readonly string[]): Promise<void> {
     }
     if (mode === "personal") {
       const { personalMain } = await import("./personal-host.js");
-      await personalMain({ dataRoot: home, cwd, packages: join(home, "packages"), ...(resume === undefined ? {} : { resume }) });
+      await personalMain({ dataRoot: home, cwd, packages: join(home, "packages"), ...(resume === undefined ? {} : { resume }),
+        ...(parsed.noProjectExtensions ? { noProjectExtensions: true } : {}) });
       return;
     }
   }

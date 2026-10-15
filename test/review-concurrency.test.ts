@@ -23,6 +23,31 @@ test("DR44: Integration's pre-CAS authority never calls the public Review workfl
   } finally { f.close(); }
 });
 
+test("cancel cannot claim success after CAS while the integration notice is still pending", { timeout: 10_000 }, async () => {
+  const f = fixture();
+  let release!: () => void, entered!: () => void;
+  const gate = new Promise<void>(resolve => { release = resolve; });
+  const materializing = new Promise<void>(resolve => { entered = resolve; });
+  const materialize = f.mail.publishGated.bind(f.mail);
+  f.mail.publishGated = async (...args) => {
+    if (f.store.getOperationById(args[0])?.kind === "git.integrate") { entered(); await gate; }
+    return materialize(...args);
+  };
+  let opening: Promise<Receipt> | undefined;
+  try {
+    const candidate = f.candidateWith({ "after-cas.txt": "landed" });
+    await f.submit("alice", candidate);
+    opening = f.open("alice", { tier: "LOW", candidate }, "open-cas");
+    await materializing;
+    assert.equal(f.applyOp("alice", "open-cas")!.state, "pending");
+    assert.equal(f.git(["rev-parse", "refs/heads/main"]), candidate);
+    await assert.rejects(f.cancel("alice", f.requestName("open-cas"), "too-late"), { code: "REQUEST_CLOSED" });
+    assert.equal(f.store.getOperation("alice", "too-late"), null);
+    release(); await opening;
+    assert.equal(f.applyOp("alice", "open-cas")!.state, "succeeded");
+  } finally { release(); await opening; f.close(); }
+});
+
 test("DR44: review acceptance snapshots recipients without mutating frozen thread or completion plans", async () => {
   const f = fixture();
   try {

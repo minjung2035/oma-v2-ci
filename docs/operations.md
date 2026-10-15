@@ -2,20 +2,23 @@
 
 ## 실행
 
-빌드한 checkout의 설치 경로다. Registry 배포와 플랫폼별 실제 지원 판정은 [validation](implementation/validation.md)을 확인한다.
+아래는 **Linux checkout** 설치 경로다. Society 실행에는 Linux의 user systemd/cgroup, bubblewrap와 user namespace, Git 및 프로젝트가 요구하는 도구가 필요하다. CI의 Node.js 버전은 26이며, 빌드 성공만으로 이 실행 조건이 충족되는 것은 아니다. Registry 배포와 플랫폼별 실제 지원 판정은 [validation](implementation/validation.md)을 확인한다.
 
 ```sh
 npm ci
 npm run build
 npm install -g .
+cd /absolute/path/to/your/project
 oma
 ```
 
 프로젝트 디렉터리에서 `oma`로 시작한다. 엔진은 함께 배포되며 별도 Pi 설치를 요구하지 않는다. 기본 설정과 Society/Personal·로그인·package 동작은 아래 안내를 따른다.
 
+**macOS에서는 이 checkout의 `npm install -g .`만으로 사용할 수 없다.** Darwin 진입점은 OMA.app의 host service, bundle 안의 helper·Git·release key·guest image를 요구하며 Personal의 credential 경로도 bundle의 Keychain helper에 의존한다. 현재 저장소에는 설치 가능한 OMA.app/VM 이미지 배포물이 없다. macOS 코드는 개발·검증 대상이며, 위 명령을 Mac용 설치 절차로 사용하지 않는다. `--host-only` package 관리 가능 여부는 전체 제품의 설치·실행 가능 여부와 별개다.
+
 ## 역할별 운영 설정
 
-모델·역할별 extension 목록·프롬프트를 broker/runner 코드와 분리한다. `resident`, `verifier`, `principal`은 **운영 프로필 이름**이며 새 권한 종류가 아니다. 권한·delegation·resource cap은 기존 `agentProfile` 검증을 그대로 통과해야 한다.
+모델·역할별 extension 목록·프롬프트를 broker/runner 코드와 분리한다. `resident`, `verifier`, `principal`은 **운영 프로필 이름**이며 새 권한 종류가 아니다. 권한·delegation은 기존 `agentProfile` 검증을 그대로 통과해야 한다. DR37 이후 자원 필드는 기존 설정 호환을 위해 읽지만 제한으로 집행하지 않는다.
 
 ## 세션 모드
 
@@ -24,6 +27,8 @@ oma
 Mac의 `oma pi install npm:<package> --host-only`는 앱·Host API token·VM 없이 기존 host package store/index만 갱신한다. `remove`, `update`, `list`에도 같은 선택을 사용할 수 있다. 설치만으로 Personal 확장을 켜지 않으므로 Personal의 Config > Extensions에서 명시적으로 선택한다. `--host-only`는 Pi에 전달되지 않으며 `--project`와 함께 쓸 수 없고 Linux에서는 거절한다. 이 flag가 없으면 기존 Society guest 동기화가 필요하며 앱이 없거나 관측이 실패해도 host-only로 대신 실행하지 않는다.
 
 Mac Personal 시작은 Host API token 조회·VM 시작 전 host 경로로 분기한다. Linux에서 실행한 Mac entry·Darwin 경계 주입 시험은 native macOS 지원·내구성 증거가 아니다. Mac 최초 project 확장 선택과 guest Society history 연결을 포함한 현재 검증·미완료·차단 범위는 [validation](implementation/validation.md)이 소유한다.
+
+최초 Personal 설정에서 프로젝트 확장을 가져오지 않으려면 `oma --mode personal --no-project-extensions`로 시작한다. 읽을 수 없는 bookmark·프로젝트 설정 때문에 첫 실행이 막혔을 때도 명시적으로 이 선택을 할 수 있다. 기존 Personal 확장 선택은 유지되며 이 flag로 지워지지 않는다. 저장된 history 재개에는 사용할 수 없다. 기본 경로는 관측 실패를 빈 확장 목록으로 바꾸지 않고 오류를 보고한다.
 
 ## 기존 설정 분리
 
@@ -133,7 +138,7 @@ tree scan quota를 kernel hard cap이나 ENOSPC에도 성공하는 보장으로 
 
 Core extension은 shell/powershell tool을 거절하고 built-in file tool을 agent workspace 안으로 제한하며 OMA mail read/send/ack/status만 고정 argv로 노출한다. Pi project extension/skill/prompt/context 자동 탐색은 끈다. 추가 role extension은 이 제한 밖의 trusted code가 될 수 있으므로 운영자가 별도 검토해야 한다.
 
-Broker는 `quota.storageBytes`가 유효하면 시작하고, 시작 및 각 public/internal admission에서 owned state tree 사용량을 관측한다. streamed body의 선언 bytes와 role별 workspace write/edit도 사전 제한한다. 따라서 S-01/S-03의 unconditional `SPIKE_UNRESOLVED` 차단은 없다. 실제 systemd/READY와 외부 same-UID writer에 대한 kernel filesystem quota는 별도 release-hardening 범위다. S-03의 run 중 steer는 v1에 없다([DR18](design-revisions.md)). 가격·usage·error/cancel codec은 동봉 엔진이 소유하므로(INF-001) OMA의 hardening 범위가 아니며, v1에는 비용 상한이 없다(DR18).
+DR37 이후 OMA는 storage/agent count, memory/tasks/CPU/tmp/workspace/staging/check-timeout 상한을 admission이나 systemd property로 집행하지 않는다. `quota`와 과거 resource 필드는 설정 호환을 위해 읽으며 운영 제한으로 해석하지 않는다. 실제 디스크 부족·권한·호스트 자원 고갈은 실패할 수 있다. stream의 선언 크기·해시 일치 검사는 계속 수행한다. S-03의 run 중 steer는 v1에 없다([DR18](design-revisions.md)). 가격·usage·error/cancel codec은 동봉 엔진이 소유하며 OMA에는 비용 상한이 없다.
 
 ### Resident의 현재 run 양보
 
@@ -146,7 +151,7 @@ Resident sandbox의 `oma agent wait`는 실행 중인 도구의 결과가 기록
 
 ## 봉인된 Resident의 provider 경로
 
-Society의 Resident는 항상 bwrap 안에서 실행된다. 설정 없이 시작한 society의 `installation.rootfs`는 OMA가 state root 아래에 만든 rootfs이며(`SB-007`), 빈 mount target 위에 host 운영체제의 `/usr` 등을 RO로 겹친다. 그 안에는 provider credential도 network도 없다(`PR-004`, `SB-004`). 엔진은 host의 relay socket을 통해 provider에 닿는다(`INF-005`/`INF-006`).
+Society의 Resident는 항상 bwrap 안에서 실행된다. 설정 없이 시작한 society의 `installation.rootfs`는 OMA가 state root 아래에 만든 rootfs이며(`SB-007`), 빈 mount target 위에 host 운영체제의 `/usr` 등을 RO로 겹친다. provider credential은 sandbox에 전달하지 않는다. DR37에 따라 `--share-net`으로 host/guest 네트워크를 공유하며 일반 egress는 제한하지 않는다. credential을 사용하는 엔진 요청은 host의 relay socket을 통해 provider에 닿는다(`INF-005`/`INF-006`).
 
 - credential은 runner가 동봉 엔진으로 OMA 소유 agent directory에서 해석하고 한 delivery 동안만 relay에 둔다(`INF-008`). 로그인은 `oma login`으로 엔진 자체 흐름을 한 번 연다([DR18](design-revisions.md)).
 - sandbox의 엔진은 진짜 key와 같은 모양의 자리표시자를 받는다. relay는 나가는 길에 인증 header(`authorization`, `x-api-key`, `api-key`, `x-goog-api-key`)와 `key` query parameter에서만 진짜 key로 바꾼다. 그 밖(request path, 다른 header·query)에 자리표시자가 있으면 요청을 거절하고, 응답에 진짜 key의 바이트가 나타나면 sandbox에 닿기 전에 끊는다(INF-007, INF-008).
@@ -156,7 +161,7 @@ Society의 Resident는 항상 bwrap 안에서 실행된다. 설정 없이 시작
 - sandbox 안의 provider 설정에 들어가는 key는 자리표시자다. 운영자가 sandbox 안에서 `/login`을 실행하면 진짜 토큰이 sandbox 안에 쓰여 이 모델이 무너진다. 하지 않는다.
 - `installation.rootfs`는 정규화된 비-root 절대 경로여야 한다. `/`는 `UNSUPPORTED_PROFILE` startup failure이며 RunnerModule 구성 전에 거절한다. bwrap/user namespace가 없거나 spawn이 실패해도 host 실행으로 대체하지 않는다([DR31](design-revisions.md)). `oma login`과 `oma pi`의 대화형 엔진은 Resident가 아니며 이 sandbox 계약을 적용하지 않는다.
 - Resident 환경은 host 환경을 상속하지 않는다(`--clearenv`). `LANG`/`LC_ALL=C.UTF-8`, `TZ=UTC`, `TERM=xterm-256color`, `TMPDIR=/tmp`, `SHELL=/bin/sh`, `USER`/`LOGNAME=agent`를 설정한다. `XDG_DATA_HOME=/home/agent/.local/share`, `XDG_RUNTIME_DIR=/home/agent/.run`은 confined home의 private 디렉터리다. PATH는 pinned OMA/Node, confined home의 `.local/bin`, `/usr/bin`, `/bin` 순서다.
-- 존재하는 DNS/NSS/hosts/timezone 파일과 CA 디렉터리만 RO bind한다. 없는 파일(깨진 symlink 포함)은 mount 계획에서 제외하며 `/etc` 전체를 노출하지 않는다. network namespace와 일반 egress 비활성화는 그대로다.
+- 존재하는 DNS/NSS/hosts/timezone 파일과 CA 디렉터리만 RO bind한다. 없는 파일(깨진 symlink 포함)은 mount 계획에서 제외하며 `/etc` 전체를 노출하지 않는다. filesystem/pid/user 격리는 유지하고 네트워크는 공유한다.
 - macOS guest의 package engine과 Society session도 UTC, `/bin/sh`, `USER`/`LOGNAME=oma`, `/tmp`를 명시한다. 이는 guest 환경 구성 계약이며 native macOS VM 실행 증거는 별도다.
 
 ## Dashboard 관측
@@ -165,7 +170,9 @@ broker는 `status.get`과 같은 답을 state root의 `status.json`(`0600`)으�
 
 ## 첫 시작
 
-`oma`를 처음 실행한 디렉터리가 git 저장소면 그 커밋된 `HEAD`로 canonical `main`을 시작한다(`TUI-022`). 커밋되지 않은 변경은 가져오지 않으며, 이후 그 디렉터리의 새 커밋은 society 이력을 움직이지 않는다. 저장소가 아니거나 커밋이 아직 없으면 빈 root commit으로 시작한다. 저장소를 읽을 수 없거나(권한·손상) 기존 canonical 저장소를 읽을 수 없으면 빈 저장소로 대신하지 않고 시작을 멈춘다.
+`oma`의 최초 Society 실행은 현재 프로젝트의 작업 트리를 snapshot으로 가져와 canonical `main`을 만든다(DR27). Git 저장소에서는 커밋된 이력과 함께 **미커밋 tracked 변경·삭제 및 ignore되지 않은 untracked 파일**을 포함한다. Git 저장소가 아니거나 첫 커밋 전이어도 현재 파일을 가져오며, 포함할 파일이 없을 때만 빈 root commit으로 시작한다. Human의 HEAD·index·작업 파일은 바꾸지 않는다. 이후 시작은 기존 canonical 이력을 유지하며 원본 디렉터리의 새 변경을 자동 반영하지 않는다. 읽기 실패·손상은 빈 저장소로 대신하지 않고 시작을 멈춘다.
+
+Mac의 첫 import도 해당 작업 트리 snapshot을 bundle로 전송한다. Guest는 작업 트리가 없는 mirror의 imported HEAD를 최초 canonical seed로 사용한다. 같은 import key의 재시도는 host 재시작 후에도 처음 준비한 bundle을 재사용하며, 완료 뒤에는 작은 요청·결과 기록만 남긴다. 새 파일 상태를 가져오려면 새 요청 key를 사용한다. 변화 없는 incremental import/export도 유효한 bundle로 완료한다.
 
 ### 프로젝트 식별과 바인딩 (D05, WP16)
 

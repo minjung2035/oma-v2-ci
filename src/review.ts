@@ -59,9 +59,10 @@ export class ReviewModule {
     // DR8: the fact names the host's current revision; facts must be the bound ones.
     const policy = this.effects.currentPolicy();
     const run = async () => this.accept(auth, key, value, hash, policy);
-    // Cancel holds the writer so a pending integration cannot CAS past it.
+    // Cancel acceptance and the final CAS gate are synchronous. Checks may be
+    // awaiting external work, so their execution lock must not exclude cancel.
     let receipt: Receipt;
-    try { receipt = value.kind === "cancel" ? await this.effects.withWriter(run) : await run(); }
+    try { receipt = await run(); }
     catch (error) { observeStoreFailure(this.store, error); throw error; }
     // §5.4: an accepted open or vote may make the request ready; advance inside
     // its own try/catch so no application failure rewrites this receipt.

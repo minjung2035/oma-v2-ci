@@ -16,16 +16,16 @@ function load(file, dependencies, globals = {}) {
 const normalized = { LANG: 'C.UTF-8', LC_ALL: 'C.UTF-8', TZ: 'UTC', TERM: 'xterm-256color', SHELL: '/bin/sh', USER: 'oma', LOGNAME: 'oma', TMPDIR: '/tmp' };
 
 test('F34 guesthost: package engines and Society launcher get normalized env, not host inheritance', async () => {
-  let packages, launcher;
+  let packages, launcher, collected = false;
   const Empty = class {};
   load('src/entry/guesthost.ts', {
     'node:path': path,
     '../platform/guest/identity.js': { systemUser: () => ({}) },
-    '../platform/guest/server.js': { startGuestServer: async () => {} },
+    '../platform/guest/server.js': { startGuestServer: async () => { assert.equal(collected, true); } },
     '../platform/guest/host.js': { GuestHost: Empty, listening: async () => false },
     '../platform/guest/systemd-launcher.js': { systemdSessionLauncher: options => { launcher = options; return {}; } },
     '../platform/guest/egress.js': { EgressPool: Empty, startEgressService: async () => {} },
-    '../platform/guest/requests.js': { RequestLedger: Empty },
+    '../platform/guest/requests.js': { RequestLedger: class { collectStreamTemporaries() { collected = true; } } },
     '../platform/guest/project.js': { GuestProjects: Empty },
     '../platform/guest/stream.js': { serveStream() {} },
     '../platform/guest/archive.js': { GuestArchives: Empty },
@@ -33,6 +33,7 @@ test('F34 guesthost: package engines and Society launcher get normalized env, no
     '../domain/deployment.js': { DEPLOYMENT_LAYOUT: { entries: { guestPackages: 'guest-packages.js' } } },
     '../protocol/host-guest.js': { PLATFORM_FRAME_BYTES: 65536 },
   }, { process: { argv: ['node', 'guesthost'], execPath: '/usr/bin/node', env: { HOME: '/guest/home', LANG: 'host', TZ: 'host', SHELL: '/host/shell', USER: 'host', SECRET_SENTINEL: 'host-only' }, exit() { assert.fail('entry exited'); } } });
+  assert.equal(collected, true);
   for (const env of [packages.env, launcher.env]) {
     for (const [key, value] of Object.entries(normalized)) assert.equal(env[key], value, key);
     assert.equal(env.HOME, '/guest/home'); assert.equal(env.SECRET_SENTINEL, undefined);

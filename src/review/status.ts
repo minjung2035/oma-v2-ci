@@ -26,7 +26,7 @@ export class ReviewStatus {
     const main = this.mainObservation();
     if (auth.role === "principal") return this.principalStatus(name);
     if (name !== undefined) return this.workerStatus(name, main, frameBytes, responseId);
-    const opens = [...this.ledger.openRequests()].reverse();   // newest first
+    const opens = this.ledger.projection().reverse();   // newest first
     const requests: ReviewRequestSummary[] = [];
     const summaryOf = (open: OpenRequest,
         state: ReviewState): ReviewRequestSummary => {
@@ -36,8 +36,8 @@ export class ReviewStatus {
       return { name: state.name, kind: state.kind, tier: state.tier, title: plan.fact.title,
         requester: state.requester, display: state.display };
     };
-    for (const [index, open] of opens.entries()) {
-      const state = reviewState(this.ledger.inputFor(open));
+    for (const [index, { open, input }] of opens.entries()) {
+      const state = reviewState(input);
       const candidate = { requests: [...requests, summaryOf(open, state)],
         omitted: opens.length - (index + 1), main };
       if (Buffer.byteLength(JSON.stringify({ v: 1, id: responseId, ok: true, result: candidate })) > frameBytes)

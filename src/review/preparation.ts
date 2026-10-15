@@ -247,8 +247,8 @@ Challenge ${name}` });
           { details: { name: input.name, state: "applied" } });
       if (before.integration.state === "unknown")
         throw new StoreError("REF_STATE_UNKNOWN", "the request's integration outcome is unknown");
-      // pending: we hold the writer, so the pending integration cannot CAS past
-      // this cancel; it will fail CANCELLED_BEFORE_COMMIT at its pre-CAS check.
+      // Pending cancellation is rechecked against main immediately before T.
+      // An accepted cancel wins the integration's synchronous pre-CAS gate.
     }
     const fact: ReviewFact = { kind: "cancel", version: 1, request: open.operation.id, reason: input.reason };
     return this.finishEntry(auth, input, open, openFact, inputFor, before, fact, scope);

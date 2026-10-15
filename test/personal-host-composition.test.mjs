@@ -67,6 +67,16 @@ function world({ platform = 'linux', saved = false, config = true, snapshot = {}
   return { ...module.exports, effects, seeds, launches, replacements, process };
 }
 for (const platform of ['linux', 'darwin']) {
+  test(`Personal host ${platform}: explicit first inheritance opt-out does not observe unavailable projects`, async () => {
+    const w = world({ platform, configError: new Error('unrelated bookmark is stale') });
+    await w.personalMain({ ...options, noProjectExtensions: true });
+    assert.deepEqual(plain(w.seeds), [[]]);
+    assert.equal(w.launches.length, 1);
+    assert.equal(w.effects.some(item => ['project', 'config-read', 'mac-seed'].includes(item[0])), false);
+    const resumed = world({ platform });
+    await assert.rejects(resumed.personalMain({ ...options, noProjectExtensions: true, resume: '/saved/history.jsonl' }), { code: 'INVALID_REQUEST' });
+    assert.equal(resumed.effects.length, 0);
+  });
   test(`Personal host ${platform}: first choice belongs to the settings writer before birth and child`, async () => {
     const w = world({ platform }); await w.personalMain(options);
     const names = w.effects.map(item => item[0]);

@@ -14,12 +14,13 @@
  * broker's, the only writer of its Store (REC-007); nothing here writes it.
  */
 import { canonicalJson, sha256Hex } from "../../domain/canonical-json.js";
-import { readFileSync } from "node:fs";
+import { closeSync, fsyncSync, readFileSync, readdirSync, unlinkSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { StoreError, primaryFailure, unobserved } from "../../domain/errors.js";
 import { publishNoReplace, ensureOwnedDurableDirectory } from "../../storage/durable-fs.js";
+import { entryAt, openDirectory } from "../../storage/contained-fs.js";
 import { PlatformError, platformFailure } from "../rpc.js";
-import { isPlatformErrorCode, isRequestKey, type PlatformFailure } from "../../protocol/host-guest.js";
+import { isPlatformErrorCode, isRequestKey, isUuid, type PlatformFailure } from "../../protocol/host-guest.js";
 
 interface Intent { readonly key: string; readonly method: string; readonly digest: string }
 type Outcome = { readonly ok: true; readonly result: Record<string, unknown> } | { readonly ok: false; readonly error: PlatformFailure };
@@ -58,6 +59,22 @@ export class RequestLedger {
     // P0-8/DR32: the request ledger is oma's own; its leaf is repaired, its
     // parent never is.
     ensureOwnedDurableDirectory(dir, dirname(dir), 0o700);
+  }
+
+  /** Called by the single guest service before accepting streams. A killed
+   * connection's private temporary has no request meaning; completed staging
+   * and intent/outcome records are never collected here. */
+  collectStreamTemporaries(): void {
+    const directory = openDirectory(this.dir);
+    try {
+      for (const name of readdirSync(`/proc/self/fd/${directory}`)) {
+        const parts = name.split(".");
+        if (parts.length === 5 && parts[0] === "" && /^[0-9a-f]{64}$/.test(parts[1]!) &&
+            parts[2] === "bundle" && isUuid(parts[3]) && parts[4] === "partial")
+          unlinkSync(entryAt(directory, name));
+      }
+      fsyncSync(directory);
+    } finally { closeSync(directory); }
   }
 
   private name(key: string): string { return sha256Hex(key); }

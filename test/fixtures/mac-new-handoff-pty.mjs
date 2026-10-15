@@ -1,4 +1,4 @@
-// Actual Mac CLI/attach/holder then installed oma birth UI on Linux, not native VM evidence.
+// Actual Mac CLI/attach/holder then explicit Personal birth on Linux, not native VM evidence.
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
 import { connect } from 'node:net';
@@ -62,7 +62,7 @@ try {
     assert.equal(provider.seen.length, 1);
     assert.ok(provider.seen[0].body.tools.some(tool => tool.function.name === 'write'));
     assert.ok(provider.seen[0].body.tools.every(tool => !tool.function.name.startsWith('oma_')));
-  } else { assert.equal(ending, 'cancel'); assert.equal(personal.length, 0); assert.equal(provider.seen.length, 0); }
+  } else { assert.equal(ending, 'close'); assert.equal(personal.length, 0); assert.equal(provider.seen.length, 0); }
   assert.equal(existsSync(join(guest, '.personal')), false);
   writeFileSync(join(root, 'facts.json'), JSON.stringify({ starts, attaches, requests: provider.seen.length, births: personal.length, cwd }));
 } finally {

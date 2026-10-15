@@ -38,12 +38,12 @@ export class GitModule {
   private readonly contextCoordinator: ContextCoordinator;
   private readonly contextRepository: ContextRepository;
   private readonly quarantine: QuarantineImporter;
-  private writerActive = false;
+  private readonly writers = new Set<"project" | "context">();
   private readonly observations = createCanonicalObserver();
   constructor(
     private readonly paths: GitPaths, private readonly store: Store, mail: MailModule,
     integration: IntegrationPolicy | null = null, policyRevisionReader: PolicyRevisionReader | null = null,
-    private readonly candidateCheck: ((candidate: Oid, check: FrozenCheck) => Promise<void>) | null = null,
+    private readonly candidateCheck: ((candidate: Oid, check: FrozenCheck, cancellation?: AbortSignal) => Promise<void>) | null = null,
     reviewBounds: ReviewBounds = { mailBodyBytes: 256 * 1024, subjectBytes: 512, bundleBytes: 256 * 1024 * 1024 },
   ) {
     this.store.bindRepositoryIdentity({ society: paths.society });
@@ -56,7 +56,7 @@ export class GitModule {
       changedPaths: (base, candidate) => this.observations.changedPaths(paths.projectGit, base, candidate),
       gitlinks: candidate => this.observations.gitlinks(paths.projectGit, candidate),
       compareAndSwap: (base, candidate) => this.casRef(paths.projectGit, "refs/heads/main", candidate, base),
-      runCheck: (candidate, check) => this.runCheck(candidate, check),
+      runCheck: (candidate, check, cancellation) => this.runCheck(candidate, check, cancellation),
       noopWitness: ref => this.observations.ref(paths.projectGit, ref),
       authorizeNoop: (ref, candidate) => authorizeCanonicalNoop(this.observations, paths.projectGit, ref, candidate),
       submitters: (base, candidate) => this.submitters(base, candidate),
@@ -75,6 +75,7 @@ export class GitModule {
       prepareRevert: input => canonicalRevertCommit(paths.projectGit, { ...input, society: paths.society }),
       publishCandidateRef: (ref, candidate) => this.publishRef(ref, candidate),
       applyMerge: operation => this.integrationCoordinator.applyMerge(operation),
+      cancelMerge: request => this.integrationCoordinator.cancelMerge(request),
       withWriter: work => this.withWriter(work),
     }, reviewBounds, paths.society, reviewAuthority);
     this.attestations = new AttestationModule(store,
@@ -102,11 +103,11 @@ export class GitModule {
   /** One main writer, no retained waiting chain. Busy requests have not entered
    * admission and retry the SAME key; accepted/unknown rows still form a barrier.
    */
-  private async withWriter<T>(work: () => Promise<T>): Promise<T> {
-    if (this.writerActive) throw new StoreError("BROKER_UNAVAILABLE", "repository writer is busy; retry the same request key", { details: { reason: "busy" } });
-    this.writerActive = true;
+  private async withWriter<T>(work: () => Promise<T>, repository: "project" | "context" = "project"): Promise<T> {
+    if (this.writers.has(repository)) throw new StoreError("BROKER_UNAVAILABLE", "repository writer is busy; retry the same request key", { details: { reason: "busy" } });
+    this.writers.add(repository);
     // Preserve the former await-previous pre-admission scheduling boundary.
-    try { return await Promise.resolve().then(work); } finally { this.writerActive = false; }
+    try { return await Promise.resolve().then(work); } finally { this.writers.delete(repository); }
   }
   private objectFormat(repo: string, oids: readonly string[] = []): "sha1" | "sha256" {
     const format = observed(this.observations.objectFormat(repo), "repository object format");
@@ -159,12 +160,12 @@ export class GitModule {
   }
   isPublished(oid: Oid): boolean { return observed(this.observations.published(this.paths.projectGit), "published refs").includes(oid); }
   private currentMain(): Oid { return observed(this.observations.ref(this.paths.projectGit, "refs/heads/main"), "canonical main ref"); }
-  private runCheck(candidate: Oid, check: FrozenCheck): Promise<void> {
+  private runCheck(candidate: Oid, check: FrozenCheck, cancellation?: AbortSignal): Promise<void> {
     if (!this.candidateCheck) throw new StoreError("UNSUPPORTED_PROFILE", "trusted candidate check executor is unavailable");
-    return this.candidateCheck(candidate, check);
+    return this.candidateCheck(candidate, check, cancellation);
   }
   publishContext(auth: AuthContext, key: string, input: ContextInput, bytes: AsyncIterable<Uint8Array>): Promise<Receipt> {
-    return this.withWriter(() => this.contextCoordinator.publish(auth, key, input, bytes));
+    return this.withWriter(() => this.contextCoordinator.publish(auth, key, input, bytes), "context");
   }
   private currentContext(): Oid | null { return this.contextRepository.current(); }
   private prepareContextCandidate(tree: string, entries: ContextEntry[], expected: Oid | null): Oid | Promise<Oid> {
@@ -190,7 +191,8 @@ export class GitModule {
     const operation = this.store.findSucceededContext(revision);
     return operation !== null && this.contextRepository.snapshotReady(operation.plan);
   }
-  reconcile(operationId: string): Promise<void> {
+  async reconcile(operationId: string): Promise<void> {
+    const repository = this.store.getOperationById(operationId)?.kind === "context.publish" ? "context" : "project";
     return this.withWriter(async () => {
       const operation = this.store.getOperationById(operationId);
       if (!operation || (operation.state !== "pending" && operation.state !== "unknown")) return;
@@ -203,7 +205,7 @@ export class GitModule {
         case "agent.create": case "agent.start": case "agent.stop": return;
         default: assertNever(operation);
       }
-    });
+    }, repository);
   }
   knownRefs(): { main: string; published: string[] } {
     return { main: this.currentMain(), published: [...observed(this.observations.published(this.paths.projectGit), "known published refs")] };

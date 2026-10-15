@@ -24,7 +24,7 @@ import { SocietyInteraction } from "../application/society-interaction.js";
 import { SocietyTransition } from "../application/society-transition.js";
 
 function usage(): never {
-  humanStream().write("usage: oma [--society <name>] [--config <path>] [--bind-project]\n       oma login\n" +
+  humanStream().write("usage: oma [--society <name>] [--config <path>] [--bind-project]\n       oma --mode personal [--no-project-extensions]\n       oma [--mode society|personal] --resume <history>\n       oma login\n" +
     `${PACKAGE_USAGE.replace(/^usage: /, "       ")}\n`);
   process.exit(0);
 }

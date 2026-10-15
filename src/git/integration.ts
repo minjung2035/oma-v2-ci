@@ -37,7 +37,7 @@ export interface IntegrationEffects {
    * added, so changed-path diffs cannot stand in for this observation. */
   gitlinks(candidate: Oid): GitObservation<readonly string[]>;
   compareAndSwap(base: Oid, candidate: Oid): RefAfterCas;
-  runCheck(candidate: Oid, check: FrozenCheck): Promise<void>;
+  runCheck(candidate: Oid, check: FrozenCheck, cancellation?: AbortSignal): Promise<void>;
   noopWitness?(ref: string): GitObservation<Oid>;
   authorizeNoop?(ref: string, candidate: Oid): GitObservation<Oid>;
   submitters?(base: Oid, candidate: Oid): readonly string[];
@@ -52,6 +52,8 @@ function observed<T>(observation: GitObservation<T>, description: string): T {
 
 export class IntegrationCoordinator {
   private readonly bound: IntegrationSnapshot | null;
+  private readonly checking = new Map<OperationId, AbortController>();
+  cancelMerge(request: OperationId): void { this.checking.get(request)?.abort(); }
   constructor(
     private readonly store: Store,
     private readonly effects: IntegrationEffects,
@@ -324,7 +326,16 @@ export class IntegrationCoordinator {
       assertSupportedIntegration(policy);
       this.verifyCurrentPolicy(plan.policyRevision);
       this.requireEligible(policy, plan.base, plan.candidate);
-      for (const check of policy.checks) await this.effects.runCheck(plan.candidate, check);
+      if (this.reviewGate === null) throw new StoreError("STORE_CORRUPT", "review gate owner is unavailable");
+      this.reviewGate.assertApplicable(plan.merge.request);
+      const cancellation = new AbortController();
+      this.checking.set(plan.merge.request, cancellation);
+      try {
+        for (const check of policy.checks) {
+          await this.effects.runCheck(plan.candidate, check, cancellation.signal);
+          if (cancellation.signal.aborted) throw new StoreError("CANCELLED_BEFORE_COMMIT", "the request was cancelled during checks");
+        }
+      } finally { this.checking.delete(plan.merge.request); }
       if (!this.stillAtBase(operation)) return;
       this.requireEligible(policy, plan.base, plan.candidate);
       this.verifyCurrentPolicy(plan.policyRevision);
