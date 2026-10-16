@@ -4,7 +4,9 @@
 
 문서 상태: **규범 초안 / SPIKE 미해결 / production release 불가**. 작성일: 2026-09-07. 정책 확장 반영: 2026-09-09.
 
-**MUST [N-001]** 구현의 상위 규범은 [docs/architecture.md](architecture.md)이며, WP01 D01–D06 및 DR41 모듈 경계 대조 후 이 계약의 기준본 SHA-256은 `39613e469209210632007e5f8f91293ff288dc2785dcda010b62f55fe7250e88`이다. 구현 시작 및 release 때 기준본 hash를 확인한다. hash 변경 시 이 계약을 자동 적용하지 않고 차이를 검토한다.
+**MUST [N-001]** 구현의 상위 규범은 [docs/architecture.md](architecture.md)이며, WP01 D01–D06, DR41 모듈 경계 및 DR45의 기존 Mail 표면 변경 대조 후 이 계약의 기준본 SHA-256은 `8de5ea0c6c632fa7e09e8188d7035cf94aa3165fdfeb122631af3f39bee132c7`이다. 구현 시작 및 release 때 기준본 hash를 확인한다. hash 변경 시 이 계약을 자동 적용하지 않고 차이를 검토한다.
+
+DR45 대조는 이전 기준본 `39613e469209210632007e5f8f91293ff288dc2785dcda010b62f55fe7250e88` 이후의 §23.11 변경 한 건이다. 기존 커밋 `d18f62d1`의 society 전체 공개 메일·실제 발신자·파생 자동 공지 표시를 해당 구현과 대조했다. Principal prompt 전달 범위와 durable 사실의 소유권은 유지하며, 이번 수정에서 architecture 원문은 변경하지 않았다.
 
 이전 기준본 `7588b31e7518ded1d439f604400ca0984cccd30936428e00eac03b6032f29fab`까지의 링크/제품 표면 변경 기록은 Git history에 보존한다. 이번 WP01은 §6 mode별 runtime gate, §7 exact old receipt 정산 순서, §12 no-op과 applied CAS 구별, §23 project binding 및 실제 적용 시점을 [D01–D06 결과](implementation/consistency-decisions.md)와 대조했다. runtime source가 이 변경을 이미 만족한다는 뜻이 아니며 지정 WP의 regression/runtime evidence 전에는 그 차이가 해소되지 않는다.
 

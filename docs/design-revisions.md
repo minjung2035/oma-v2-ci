@@ -1677,3 +1677,50 @@ runtimeProof:false다. stale/중복 binding 거절과 idempotence를 음성 대�
 Society root의 deferred UI/transition 연결과 나머지 Pi UI hook은 잔여 변경 비용으로 명시한다.
 정적 지표·fresh 실행·환경 한계는 [validation](implementation/validation.md), 읽는 순서와
 변경 책임은 [Application 경계 안내](application-boundaries.md)에 기록한다.
+
+## DR45 — 감사에서 확인한 실행·재시도 결함과 운영 안내 수정
+
+2026-10-15. Human은 Worker별 독립 clone 구조는 유지하고 나머지 기존 코드 결함과 설치
+안내를 수정하도록 요청했다. LOW의 사전 승인 없는 적용과 DR37의 네트워크·자원 정책을
+유지한다. macOS 앱·VM 이미지 제작은 이번 범위가 아니다.
+
+Guest import mirror는 bare commit source다. 이전의 checkout 없는 non-bare mirror도
+Society launch 전에 같은 seed 의미로 전환한다. 이미 있는 canonical main은 덮어쓰지 않는다.
+최초 dirty/untracked snapshot의 host import intent와 bundle은 지원 디렉터리에 함께
+durable publication한 뒤 전송한다. 같은 key는 재시작 뒤에도 원래 바이트를 사용하고,
+다른 payload는 거절한다. 완료 결과를 보존한 뒤 bundle을 제거하며 오래된 재시도가
+더 최신 lastImport checkpoint를 되돌리지 않는다. Guest stream.put은 attempt별 temp를
+쓰고 검증 후 no-replace publication한다. 동일 key의 동일 바이트는 재사용하되 다른
+바이트와 뒤늦은 연결 종료는 완성된 파일을 교체·삭제할 수 없다. incremental range가
+비었을 때는 같은 ref를 담은 유효한 full bundle로 import/export를 완료한다.
+재시작 때 미게시 import 준비 디렉터리와 stream 임시 파일만 정리하고 수락된 request·완성
+bundle은 보존한다. 명시적으로 재시도 불가인 실패도 원래 결과를 저장한 뒤 host bundle을
+해제하며, 결과 불명의 bundle은 같은 key 재시도를 위해 유지한다.
+
+Review list와 sweep 발견 단계는 한 동기 projection 안에서 attestation을 한 번 decode하고
+요청별로 묶는다. 완료된 이력은 요청마다 전체 이력을 다시 읽지 않으며 accepted challenge
+ref의 복구는 유지한다. 이 projection은 acceptance나 CAS 권한이 아니고, 해당 경계는
+항상 현재 원장을 다시 읽는다.
+
+Project writer는 integration/check를 계속 직렬화한다. 별도 context repository는 자기
+writer를 사용한다. Cancel fact는 긴 검사 잠금과 독립적으로 수락할 수 있으며, pending
+integration에 대한 취소 직전 main 관측과 T 사이에는 await가 없다. 이미 CAS된 main이나
+관측 불능은 취소 성공으로 표시하지 않는다. 수락된 cancel은 진행 중 check의 cgroup 종료를
+요청하고, 실제 check owner가 반환되기 전까지 project writer는 유지한다. 최종 동기
+review gate→writer slot→CAS는 유지하며, 재시작 후 취소된 요청은 검사 전에도 거절한다.
+
+Inference relay는 credential일 수 있는 suffix를 아직 내보내지 않고 보류한다. 완전한
+credential을 발견하면 앞 chunk의 prefix까지 전달하지 않은 채 연결을 끊고, credential과
+무관한 바이트는 즉시 전달한다. 정상 EOF의 불완전 일치는 원래 응답 그대로 끝낸다.
+
+최초 Personal의 프로젝트 확장 상속은 `--mode personal --no-project-extensions`로
+명시적으로 생략할 수 있다. 기존 Personal 선택과 saved history는 바꾸지 않으며, 기본
+경로의 관측 실패는 계속 오류다. Worker prompt와 운영 안내는 DR37 및 최초 snapshot의
+실제 파일 포함 범위를 따른다. Linux checkout 설치와 미제공 macOS 앱 배포를 구분한다.
+
+전체 회귀에서 broker spawn 실패 뒤 종료 오류와 비동기 spawn 오류가 연달아 발생할 때
+일회성 error listener가 소진되는 경로를 확인했다. PID 없는 child에 종료를 요청하지
+않고 child 수명 동안 오류를 계속 관측한다. context 복구는 기존 Promise 오류 계약을
+보존한다. 이전 모드 선택창을 가정하던 Mac PTY 시험은 현재 명시적 Personal 전환과
+일반 종료를 실제 CLI/holder로 검증한다. §23.11의 기존 Mail 변경을 대조한 N-001 hash도
+현재 architecture 바이트에 결박하며 architecture 원문은 수정하지 않는다.

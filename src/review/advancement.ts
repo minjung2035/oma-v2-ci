@@ -38,8 +38,25 @@ export class ReviewAdvancement {
    * refusal must not starve the others; corruption always propagates. */
   async advanceAll(admit?: ResourceGate): Promise<void> {
     await this.effects.withWriter(async () => {
-      for (const open of this.ledger.openRequests()) {
-        try { await this.advanceRequest(open, admit); }
+      let main: ReturnType<ReviewEffects["main"]> | undefined;
+      for (const { open, input } of this.ledger.projection()) {
+        try {
+          const state = reviewState(input);
+          // Terminal history cannot become live again. Its accepted challenge
+          // publication still needs repair, but no fresh ledger scan per row.
+          if (state.terminal !== null || state.integration !== null) this.repairChallenge(open);
+          else {
+            main ??= this.effects.main();
+            if (main.kind === "corrupt") throw new StoreError("STORE_CORRUPT", "canonical main observation is malformed");
+            const stale = main.kind === "present" && main.value !== state.identity.expectedBase;
+            if (!state.ready && !stale && (state.approval === null || state.approvalValid)) this.repairChallenge(open);
+            else {
+              // Only discovery is shared. Re-read live authority inside the
+              // request, then discard the main observation after every await.
+              try { await this.advanceRequest(open, admit); } finally { main = undefined; }
+            }
+          }
+        }
         catch (error) {
           if (error instanceof StoreError && error.code === "STORE_CORRUPT") throw error;
           console.error(JSON.stringify({ event: "review.advance", request: open.operation.id,
@@ -56,6 +73,12 @@ export class ReviewAdvancement {
     return admit ?? this.effects.admitResource ?? (() => NO_HOLD);
   }
 
+  private repairChallenge(open: OpenRequest): void {
+    const fact = open.operation.plan.fact;
+    if (fact.kind === "challenge.open" && fact.prepared)
+      this.acceptance.ensureChallengePublished(open.operation.id, open.operation.actor, fact);
+  }
+
   private async advanceRequest(open: OpenRequest,
       admit?: ResourceGate): Promise<void> {
     const openPlan = open.operation.plan;
@@ -66,8 +89,7 @@ export class ReviewAdvancement {
     // fact; a crash after T is repaired here, at every sweep. This is
     // settlement of accepted work, not fresh acceptance, so it precedes the
     // admission hold below.
-    if (openFact.kind === "challenge.open" && openFact.prepared)
-      this.acceptance.ensureChallengePublished(open.operation.id, open.operation.actor, openFact);
+    this.repairChallenge(open);
     let state = reviewState(this.ledger.inputFor(open));
     const gate = this.advanceGate(admit);
     // 1. A broker-derived refresh fact: main moved (request goes stale), or a

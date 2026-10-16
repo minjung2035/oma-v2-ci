@@ -674,7 +674,7 @@ test("SB-005: systemd timeout kills candidate descendants", { timeout: 10000 }, 
   }
 });
 
-test("DR37: real candidate checks use network, outlive legacy caps and stop their whole cgroup on owner loss", { timeout: 20000 }, async t => {
+test("DR37: real candidate checks use network, outlive legacy caps and stop their whole cgroup on owner loss or request cancellation", { timeout: 20000 }, async t => {
   const { residentOptions, prepareResident } = await import('./fixtures/resident.js');
   const { runGitText } = await import('../src/process/policies.js');
   const { CandidateChecks } = await import('../src/runtime/candidate-checks.js');
@@ -697,7 +697,7 @@ test("DR37: real candidate checks use network, outlive legacy caps and stop thei
   const paths = { stateRoot: dir, projectGit: project, contextGit: join(dir,'context.git'), worldDir: join(dir,'world'),
     society: 'demo', quarantineTmpBytes: 1, checkRootfs: opts.confinement.host.rootfs,
     checkNode: opts.confinement.host.node, checkAssetsDir: process.cwd() };
-  const owner = new AbortController(); let hits = 0; let cgroup: string | undefined;
+  let interrupt = new AbortController(); let hits = 0; let cgroup: string | undefined;
   const server = createServer((req,res) => {
     hits++; res.end('network-ok');
     if(req.url === '/spawned') void (async () => {
@@ -708,7 +708,7 @@ test("DR37: real candidate checks use network, outlive legacy caps and stop thei
       assert.equal(observed.kind,'exited'); cgroup=observed.stdout.toString().trim();
       const tasks=await runProcess({executable:'/usr/bin/systemctl',argv:['--user','show',unit,'--property=TasksMax','--value'],
         env:{...process.env},timeoutMs:5000,stdoutBytes:4096,stderrBytes:4096});
-      assert.equal(tasks.kind,'exited');assert.equal(tasks.stdout.toString().trim(),'infinity');owner.abort();
+      assert.equal(tasks.kind,'exited');assert.equal(tasks.stdout.toString().trim(),'infinity');interrupt.abort();
     })();
   });
   server.listen(0,'127.0.0.1'); await once(server,'listening');
@@ -718,12 +718,16 @@ test("DR37: real candidate checks use network, outlive legacy caps and stop thei
   function make(code:string) { return { id:'unrestricted',argv:[RESIDENT_PATHS.node,'--input-type=module','-e',code],env:{},timeoutSeconds:1,resources }; }
   await new CandidateChecks(paths).run(candidate,make(`await fetch('${url}/ordinary');await new Promise(r=>setTimeout(r,1500));`));
   assert.equal(hits,1,'the actual checker reached the host service and passed beyond its old deadline');
-  await assert.rejects(new CandidateChecks(paths,undefined,undefined,owner.signal).run(candidate,make(`
+  for (const reason of ['owner', 'request'] as const) {
+    interrupt = new AbortController(); cgroup = undefined;
+    await assert.rejects(new CandidateChecks(paths,undefined,undefined,reason === 'owner' ? interrupt.signal : undefined).run(candidate,make(`
 const {spawn}=await import('node:child_process');spawn(process.execPath,['-e','setInterval(()=>{},1000)'],{stdio:'ignore'});
-await fetch('${url}/spawned');setInterval(()=>{},1000);`)), {code:'REF_STATE_UNKNOWN'});
-  assert.ok(cgroup?.startsWith('/'),'the checker cgroup was actually observed before cancellation');
-  const events = `/sys/fs/cgroup${cgroup}/cgroup.events`;
-  assert.ok(!existsSync(events) || /^populated 0$/m.test(readFileSync(events,'utf8')),'descendants survived owner shutdown');
+await fetch('${url}/spawned');setInterval(()=>{},1000);`), reason === 'request' ? interrupt.signal : undefined),
+      {code:reason === 'owner' ? 'REF_STATE_UNKNOWN' : 'CANCELLED_BEFORE_COMMIT'});
+    assert.ok((cgroup as string | undefined)?.startsWith('/'),'the checker cgroup was actually observed before cancellation');
+    const events = `/sys/fs/cgroup${cgroup}/cgroup.events`;
+    assert.ok(!existsSync(events) || /^populated 0$/m.test(readFileSync(events,'utf8')),`descendants survived ${reason} cancellation`);
+  }
 });
 
 test("DR37: MCP command credentials execute through the installed adapter policy", async t => {

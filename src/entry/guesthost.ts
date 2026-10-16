@@ -27,6 +27,7 @@ const runtimeDir = process.env.XDG_RUNTIME_DIR ?? "/run/user/1000";
 const dataHome = process.env.XDG_DATA_HOME ?? join(dataDir, "data");
 
 const ledger = new RequestLedger(join(dataDir, "requests"));
+ledger.collectStreamTemporaries();
 const projects = new GuestProjects(join(dataDir, "projects"), join(dataHome, "oma"), ledger);
 // DR25: the engine's processes run as the society sessions do.
 const engineEnv = {

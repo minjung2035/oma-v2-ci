@@ -2,8 +2,8 @@
   {
     "requirement": "N-001",
     "source": "docs/implementation-spec.md",
-    "digest": "82b1e9688abe320fce01acccbfee0064228df713763c9421b8cea10a010cca75",
-    "normativeText": "**MUST [N-001]** 구현의 상위 규범은 [docs/architecture.md](architecture.md)이며, WP01 D01–D06 및 DR41 모듈 경계 대조 후 이 계약의 기준본 SHA-256은 `39613e469209210632007e5f8f91293ff288dc2785dcda010b62f55fe7250e88`이다. 구현 시작 및 release 때 기준본 hash를 확인한다. hash 변경 시 이 계약을 자동 적용하지 않고 차이를 검토한다.",
+    "digest": "efc793f176e85bffa30514bc9a392d8dd72c2250fdfc23e4ef2875d2353dad3a",
+    "normativeText": "**MUST [N-001]** 구현의 상위 규범은 [docs/architecture.md](architecture.md)이며, WP01 D01–D06, DR41 모듈 경계 및 DR45의 기존 Mail 표면 변경 대조 후 이 계약의 기준본 SHA-256은 `8de5ea0c6c632fa7e09e8188d7035cf94aa3165fdfeb122631af3f39bee132c7`이다. 구현 시작 및 release 때 기준본 hash를 확인한다. hash 변경 시 이 계약을 자동 적용하지 않고 차이를 검토한다.",
     "applicability": "unclassified",
     "rationale": "Requires production-path review; no inference from test names.",
     "owner": null,

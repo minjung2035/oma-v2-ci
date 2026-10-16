@@ -9,6 +9,15 @@ import { parseOmaArguments, parseMacArguments } from "../src/runtime/host-argume
 import { packageCommand } from "../src/runtime/packages/store.js";
 
 const project = "00000000-0000-4000-8000-000000000001";
+test("Personal project inheritance can be explicitly skipped only for a fresh Personal session", () => {
+  for (const parse of [parseOmaArguments, parseMacArguments]) {
+    assert.deepEqual(parse(["--mode", "personal", "--no-project-extensions"]),
+      { kind: "session", society: undefined, config: undefined, bindProject: false, mode: "personal", noProjectExtensions: true });
+    for (const args of [["--no-project-extensions"], ["--mode", "society", "--no-project-extensions"],
+      ["--mode", "personal", "--no-project-extensions", "--resume", "/saved"]])
+      assert.throws(() => parse(args), { code: "INVALID_REQUEST" });
+  }
+});
 test("DR27: Linux host values cannot become options; package tails retain their own grammar", () => {
   assert.deepEqual(parseOmaArguments(["--config", "--help", "--society", "demo", "--bind-project"]),
     { kind: "session", config: "--help", society: "demo", bindProject: true });

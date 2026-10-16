@@ -434,19 +434,23 @@ test("AV2 / INF-007: a response that carries the key back is cut off before it r
       { status: 401, chunks: [`{"error":"Incorrect API key provided: ${secret}"}`], delayMs: 0 },
       // ...split across two writes...
       { status: 200, chunks: [`data: ${secret.slice(0, 17)}`, `${secret.slice(17)}\n\n`], delayMs: 0, gapMs: 50 },
+      { status: 200, chunks: [`data: ${secret.slice(0, -1)}`, `${secret.slice(-1)}\n\n`], delayMs: 0, gapMs: 50 },
+      { status: 200, chunks: [...secret], delayMs: 0, gapMs: 2 },
       // ...or in a header.
       { status: 200, chunks: ["ok"], delayMs: 0, headers: { "x-echo": secret } },
     ]) {
       provider.reply = reply;
       const received = await collect(socket.path, "/messages", { authorization: `Bearer ${placeholder}` });
-      assert.ok(!received.bytes.includes(secret) && !received.bytes.includes(secret.slice(17)),
+      assert.ok(received.bytes === "" || received.bytes === "data: ",
         `the key reached the sandbox: ${received.status} ${received.bytes}`);
     }
-    assert.equal(relay.observe().failed, 3);
+    assert.equal(relay.observe().failed, 5);
     assert.equal(relay.observe().inFlight, 0);
     // A response without the key passes unchanged.
     provider.reply = { status: 200, chunks: ["a", "b"], delayMs: 0 };
     assert.deepEqual(await collect(socket.path, "/messages", { authorization: `Bearer ${placeholder}` }), { status: 200, bytes: "ab" });
+    provider.reply = { status: 200, chunks: ["sk-proj-", "unrelated", secret.slice(0, 6)], delayMs: 0, gapMs: 10 };
+    assert.equal((await collect(socket.path, "/messages", {})).bytes, `sk-proj-unrelated${secret.slice(0, 6)}`);
   } finally { await relay.close(); await provider.close(); socket.clean(); }
 });
 

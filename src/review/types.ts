@@ -39,7 +39,9 @@ export interface ReviewEffects {
 
   /** §5.3: execute an accepted merge integration inside the held writer. */
   applyMerge(operation: OperationOf<"git.integrate">): Promise<void>;
-  /** Cancellation serializes with integration CAS through the same writer. */
+  /** Stop an executing check after its cancel fact is durably accepted. */
+  cancelMerge?(request: OperationId): void;
+  /** Serialize project integrations, including their checks. */
   withWriter<T>(work: () => Promise<T>): Promise<T>;
   /** AV-01: the resource admission fresh advance effects (a broker-derived
    * refresh or a new integration and its completion mail) must pass. Recovery

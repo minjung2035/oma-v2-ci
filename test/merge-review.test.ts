@@ -28,6 +28,7 @@ import { fixture, empty, messages, inboxCount, messageText, workerFile,
 import type { AuthContext, MessagePlan } from "../implementation/contracts.js";
 import type { IntegrationPolicy } from "../src/git/integration-policy.js";
 import type { OperationOf } from "../src/storage/operation-codec.js";
+import { PreacceptScope } from "../src/storage/preaccept-artifact.js";
 
 test("mail-v1: a LOW merge request applies itself and mails the completion notice", async () => {
   const f = fixture(); try {
@@ -660,10 +661,12 @@ test("mail-v1: cancelling a request with a pending integration wins the pre-CAS 
   } finally { f.close(); }
 });
 
-test("mail-v1: a busy writer refuses a cancel while a merge is executing", async () => {
+test("mail-v1: a running check permits context publication and is stopped by an accepted cancel", async () => {
   let release!: () => void; let checking = false;
   const gate = new Promise<void>(resolve => { release = resolve; });
-  const f = fixture({ checks: [CHECK], runCheck: () => { checking = true; return gate; } });
+  const f = fixture({ checks: [CHECK], runCheck: (_candidate, _check, cancellation) => {
+    checking = true; cancellation!.addEventListener("abort", release, { once: true }); return gate;
+  } });
   try {
     const candidate = f.candidateWith({ "one.txt": "a" });
     await f.submit("alice", candidate);
@@ -671,15 +674,75 @@ test("mail-v1: a busy writer refuses a cancel while a merge is executing", async
     const name = f.requestName("open");
     const voting = f.vote("bob", name, "approve", "ok", "v-bob");
     while (!checking) await new Promise(resolve => setTimeout(resolve, 1));
-    // The writer is held by the in-flight apply; cancel serializes and is busy.
-    await assert.rejects(f.cancel("alice", name), (error: unknown) =>
-      (error as { code: string }).code === "BROKER_UNAVAILABLE");
+    const body = Buffer.from("updated goal\n"), sha256 = sha256Hex(body);
+    const context = await f.module.publishContext(f.auth("principal"), "goal-during-check", {
+      expected: null, entries: [{ path: "GOAL.md", bytes: body.length, sha256 }],
+      content: { bytes: body.length, sha256, mediaType: "application/vnd.oma.context-v1" },
+    }, (async function* () { yield body; })());
+    assert.equal(context.state, "succeeded");
     await assert.rejects(f.module.reviews.advanceAll(), { code: "BROKER_UNAVAILABLE" });
-    release();
+    assert.equal((await f.cancel("alice", name)).state, "succeeded");
     await voting;
-    assert.equal(f.git(["rev-parse", "refs/heads/main"]), candidate, "the merge completed");
-    assert.equal(f.stateOf(name).display, "applied");
+    assert.equal(f.git(["rev-parse", "refs/heads/main"]), f.base, "cancel prevented the merge");
+    assert.equal(f.stateOf(name).terminal, "cancelled");
+    assert.equal(f.applyOp("alice", "open")!.errorCode, "CANCELLED_BEFORE_COMMIT");
+    await f.module.reviews.advanceAll();
+  } finally { release(); f.close(); }
+});
+
+test("DR45: review history is decoded once per waiting/terminal sweep and status list", async () => {
+  const f = fixture();
+  try {
+    const candidate = f.candidateWith({ "history.txt": "one" });
+    await f.submit("alice", candidate);
+    for (let i = 0; i < 8; i++) {
+      await f.open("alice", { tier: "MEDIUM", candidate }, `history-${i}`);
+      await f.cancel("alice", f.requestName(`history-${i}`), `cancel-${i}`);
+    }
+    for (let i = 0; i < 4; i++) {
+      const waiting = f.candidateWith({ "waiting.txt": `${i}` });
+      await f.submit("alice", waiting, `submit-wait-${i}`);
+      await f.open("alice", { tier: "MEDIUM", candidate: waiting }, `wait-${i}`);
+    }
+    const original = f.store.attestationFacts.bind(f.store); let reads = 0;
+    f.store.attestationFacts = () => { reads += 1; return original(); };
+    await f.module.reviews.advanceAll();
+    assert.equal(reads, 1, "waiting and completed requests must not each rescan history");
+    reads = 0;
+    const status = f.module.reviews.status(f.auth("bob"), undefined, 64 * 1024, "history");
+    assert.ok("requests" in status); assert.equal(status.requests.length, 12);
+    assert.equal(reads, 1);
   } finally { f.close(); }
+});
+
+test("DR45: accepted cancel interrupts checks even when its preparation cleanup fails", { timeout: 10_000 }, async () => {
+  let release!: () => void, entered!: () => void, aborted = false;
+  const gate = new Promise<void>(resolve => { release = resolve; });
+  const checking = new Promise<void>(resolve => { entered = resolve; });
+  const f = fixture({ checks: [CHECK], runCheck: (_candidate, _check, signal) => {
+    signal!.addEventListener("abort", () => { aborted = true; release(); }, { once: true }); entered(); return gate;
+  } });
+  const settle = PreacceptScope.prototype.settle;
+  let voting: Promise<unknown> | undefined;
+  try {
+    const candidate = f.candidateWith({ "cancel-cleanup.txt": "pending" });
+    await f.submit("alice", candidate);
+    await f.open("alice", { tier: "MEDIUM", candidate }, "open-cleanup");
+    const name = f.requestName("open-cleanup");
+    voting = f.vote("bob", name, "approve", "checked", "vote-cleanup");
+    await checking;
+    PreacceptScope.prototype.settle = function () {
+      const result = settle.call(this);
+      if (f.store.getOperation("alice", "cancel-cleanup") !== null)
+        throw new StoreError("BROKER_UNAVAILABLE", "injected cleanup failure");
+      return result;
+    };
+    await assert.rejects(f.cancel("alice", name, "cancel-cleanup"), /cleanup failure/);
+    assert.equal(aborted, true);
+    await voting;
+    assert.equal(f.git(["rev-parse", "refs/heads/main"]), f.base);
+    assert.equal(f.stateOf(name).terminal, "cancelled");
+  } finally { PreacceptScope.prototype.settle = settle; release(); await voting; f.close(); }
 });
 
 test("mail-v1: only the first ready request on a base applies; the other goes stale by refresh", async () => {

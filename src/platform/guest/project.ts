@@ -26,6 +26,16 @@ function git(argv: readonly string[], cwd?: string): { status: number; stdout: s
 }
 const BRANCH = /^(?!-)(?!.*\.\.)(?!.*\/\/)(?!\/)[A-Za-z0-9._/-]{1,200}(?<!\/)(?<!\.lock)$/;
 
+/** Guest-owned mirrors have no working tree to snapshot. Older releases made
+ * a non-bare repository without checking it out; preserve its objects/refs but
+ * identify it as a commit source before the Society's first provisioning. */
+export function prepareMirrorForSeed(mirror: string): void {
+  const bare = git(["-C", mirror, "rev-parse", "--is-bare-repository"]);
+  if (bare.status !== 0 || (bare.stdout.trim() !== "true" &&
+      git(["-C", mirror, "config", "core.bare", "true"]).status !== 0))
+    throw new StoreError("BROKER_UNAVAILABLE", "the imported project mirror could not be prepared");
+}
+
 export async function sha256File(path: string): Promise<string> {
   const hash = createHash("sha256");
   for await (const chunk of createReadStream(path)) hash.update(chunk as Buffer);
@@ -84,7 +94,7 @@ export class GuestProjects {
       const format = bundleObjectFormat(staged);
       const mirror = this.mirrorOf(projectId);
       if (!existsSync(mirror)) {
-        const made = git(["init", "-q", `--object-format=${format}`, mirror]);
+        const made = git(["init", "--bare", "-q", `--object-format=${format}`, mirror]);
         if (made.status !== 0) throw new StoreError("INTERNAL_ERROR", "the project mirror could not be made");
       } else if (git(["-C", mirror, "rev-parse", "--show-object-format"]).stdout.trim() !== format)
         throw new StoreError("BUNDLE_INVALID", "the bundle's object format is not the project's");
@@ -128,7 +138,8 @@ export class GuestProjects {
       const canonical = projectGitPathAt(join(this.societiesDir, params.society));
       const head = git(["--git-dir", canonical, "rev-parse", "--verify", "refs/heads/main^{commit}"]);
       if (head.status !== 0) throw new StoreError("INVALID_REQUEST", "the society has no main to export");
-      const since = typeof params.since === "string" && git(["--git-dir", canonical, "cat-file", "-e", `${params.since}^{commit}`]).status === 0
+      const since = typeof params.since === "string" && git(["--git-dir", canonical, "cat-file", "-e", `${params.since}^{commit}`]).status === 0 &&
+        git(["--git-dir", canonical, "merge-base", "--is-ancestor", head.stdout.trim(), params.since]).status !== 0
         ? [`^${params.since}`] : [];
       const staged = this.ledger.staging(key as string, "export.bundle");
       const made = git(["--git-dir", canonical, "bundle", "create", "-q", staged, "refs/heads/main", ...since]);

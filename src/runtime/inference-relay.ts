@@ -108,19 +108,21 @@ class Refusal extends Error {
 }
 const OUTSIDE_SLOT = "the credential placeholder is outside a credential slot";
 
-/** INF-007: the key's bytes in a response. The tail of each chunk is kept so a key
- * split across two chunks is seen too. Nothing is rewritten: a response either
- * passes unchanged or is cut off. */
+/** INF-007: withhold a possible key prefix until it can be ruled out. Merely
+ * remembering bytes already forwarded detects a split key too late. Bytes
+ * which cannot start the key pass immediately, including small SSE events. */
 class CredentialTripwire {
   private tail = Buffer.alloc(0);
   constructor(private readonly secret: Buffer) {}
-  /** True once the key has appeared in what was inspected so far. */
-  seen(chunk: Buffer): boolean {
+  inspect(chunk: Buffer): Buffer {
     const window = Buffer.concat([this.tail, chunk]);
-    if (window.indexOf(this.secret) >= 0) return true;
-    this.tail = window.subarray(Math.max(0, window.length - (this.secret.length - 1)));
-    return false;
+    if (window.indexOf(this.secret) >= 0) throw new Error("the credential is in the response");
+    let held = Math.min(window.length, this.secret.length - 1);
+    while (held > 0 && !window.subarray(window.length - held).equals(this.secret.subarray(0, held))) held -= 1;
+    this.tail = Buffer.from(window.subarray(window.length - held));
+    return window.subarray(0, window.length - held);
   }
+  finish(): Buffer { return this.tail; }
 }
 
 /** The origin a request is resolved against to canonicalise it. Nothing is sent
@@ -385,9 +387,10 @@ export class InferenceRelay {
     const wire = this.tripwire();
     const guard = new Transform({
       transform(chunk: Buffer, _encoding, done) {
-        if (wire !== null && wire.seen(chunk)) { done(new Error("the credential is in the response")); return; }
-        done(null, chunk);
+        try { done(null, wire === null ? chunk : wire.inspect(chunk)); }
+        catch (error) { done(error as Error); }
       },
+      flush(done) { done(null, wire?.finish()); },
     });
     guard.on("error", cut);
     return guard;

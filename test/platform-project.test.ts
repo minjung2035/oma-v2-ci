@@ -6,10 +6,10 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { connect, type Server } from "node:net";
-import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { encodeFrame } from "../src/frame.js";
 import { PlatformError, readLeadingFrame } from "../src/platform/rpc.js";
 import { startGuestServer, type GuestIdentity } from "../src/platform/guest/server.js";
@@ -20,6 +20,9 @@ import { serveStream } from "../src/platform/guest/stream.js";
 import { GuestLink } from "../src/platform/host/guest-link.js";
 import { MacGit, fileSink, getStream, putStream } from "../src/platform/host/project.js";
 import { HOST_GUEST_PROTOCOL, PLATFORM_FRAME_BYTES } from "../src/protocol/host-guest.js";
+import { provisionSociety } from "../src/runtime/provision.js";
+import { ProjectSyncCoordinator } from "../src/platform/host/project-sync.js";
+import { newHostRecord, readHostRecord, writeHostRecord } from "../src/platform/host/record.js";
 
 const INSTANCE = randomUUID();
 const git = (cwd: string, ...args: string[]): string => {
@@ -88,6 +91,118 @@ test("§6.3/MAC-411/MV-50: import fills the mirror's refs/remotes/mac and HEAD, 
   await putStream(await w.link.bytes("stream"), "import-2", w.transfer("i2"), PLATFORM_FRAME_BYTES);
   assert.equal((await w.request("project.import", { projectId, branch: "main", bundle: { bytes: incremental.bytes, sha256: incremental.sha256 } }, "import-2")).head, second);
   assert.equal(git(mirror, "rev-parse", "HEAD"), second);
+});
+
+for (const legacy of [false, true]) test(`first Society provisioning preserves the imported tree (legacy mirror: ${legacy})`, async t => {
+  const w = await world(t), projectId = randomUUID();
+  writeFileSync(join(w.mac, "one"), "dirty tracked bytes\n");
+  writeFileSync(join(w.mac, "untracked"), "new bytes\n");
+  const bundled = await w.macGit.bundle(w.mac, "main", null, w.transfer("seed"));
+  const mirror = join(w.projectsDir, projectId);
+  if (legacy) {
+    mkdirSync(mirror); git(mirror, "init", "-q");
+    git(mirror, "fetch", "-q", w.transfer("seed"), "+refs/heads/main:refs/remotes/mac/main");
+    git(mirror, "update-ref", "--no-deref", "HEAD", bundled.head);
+  } else {
+    await putStream(await w.link.bytes("stream"), "seed", w.transfer("seed"), PLATFORM_FRAME_BYTES);
+    await w.request("project.import", { projectId, branch: "main", bundle: { bytes: bundled.bytes, sha256: bundled.sha256 } }, "seed");
+  }
+  await w.request("society.open", { society: "demo", projectId });
+  await provisionSociety(join(w.societiesDir, "demo"), { projectDir: mirror });
+  const canonical = join(w.societiesDir, "demo", "repos", "project.git");
+  assert.equal(git(canonical, "rev-parse", "main"), bundled.head);
+  assert.equal(git(canonical, "show", "main:one"), "dirty tracked bytes");
+  assert.equal(git(canonical, "show", "main:untracked"), "new bytes");
+  assert.equal(git(w.mac, "rev-parse", "HEAD"), w.first);
+});
+
+test("unchanged import/export and a rewound branch still produce usable bundles", async t => {
+  const w = await world(t);
+  const same = await w.macGit.bundle(w.mac, "main", w.first, w.transfer("same"));
+  assert.equal(same.head, w.first);
+  git(w.mac, "bundle", "verify", w.transfer("same"));
+  const newer = commit(w.mac, "later");
+  git(w.mac, "update-ref", "refs/heads/main", w.first);
+  assert.equal((await w.macGit.bundle(w.mac, "main", newer, w.transfer("rewound"))).head, w.first);
+  const canonical = join(w.societiesDir, "demo", "repos", "project.git");
+  mkdirSync(join(w.societiesDir, "demo", "repos"), { recursive: true });
+  git(w.dir, "clone", "-q", "--bare", w.mac, canonical);
+  assert.equal((await w.request("project.export", { society: "demo", since: w.first }, "same-export")).head, w.first);
+  await getStream(await w.link.bytes("stream"), "same-export", () => fileSink(w.transfer("same-export")), PLATFORM_FRAME_BYTES);
+  assert.equal((await w.macGit.fetchExport(w.mac, w.transfer("same-export"))).head, w.first);
+});
+
+test("overlapping same-key puts cannot remove or overwrite a completed retry", async t => {
+  const w = await world(t), key = "overlapping-put", body = Buffer.from("complete bundle bytes");
+  const sha256 = createHash("sha256").update(body).digest("hex");
+  const first = (await w.link.bytes("stream")).socket;
+  first.write(encodeFrame({ v: 1, id: "put", method: "stream.put", params: { key, bytes: body.length, sha256 } }));
+  first.write(body.subarray(0, 1));
+  const staged = w.ledger.staging(key, "bundle"), parent = join(staged, "..");
+  const partials = () => readdirSync(parent).filter(name => name.endsWith(".partial"));
+  for (let i = 0; i < 200 && !partials().some(name => statSync(join(parent, name)).size > 0); i++)
+    await new Promise(resolve => setTimeout(resolve, 5));
+  assert.equal(partials().length, 1);
+  writeFileSync(w.transfer("put"), body);
+  await putStream(await w.link.bytes("stream"), key, w.transfer("put"), PLATFORM_FRAME_BYTES);
+  first.destroy();
+  for (let i = 0; i < 200 && partials().length > 0; i++) await new Promise(resolve => setTimeout(resolve, 5));
+  assert.deepEqual(readFileSync(staged), body);
+  assert.deepEqual(partials(), []);
+  await putStream(await w.link.bytes("stream"), key, w.transfer("put"), PLATFORM_FRAME_BYTES);
+  writeFileSync(w.transfer("put"), "conflicting bytes");
+  await assert.rejects(putStream(await w.link.bytes("stream"), key, w.transfer("put"), PLATFORM_FRAME_BYTES), code("STREAM_INVALID"));
+  assert.deepEqual(readFileSync(staged), body);
+  const orphan = `.${staged.split("/").at(-1)!}.${randomUUID()}.partial`;
+  writeFileSync(join(parent, orphan), "interrupted upload");
+  w.ledger.collectStreamTemporaries();
+  assert.equal(existsSync(join(parent, orphan)), false);
+  assert.deepEqual(readFileSync(staged), body, "startup cleanup preserves the completed put");
+});
+
+for (const fault of ["before-upload", "lost-result", "permanent-refusal"] as const) test(`host retries the frozen dirty snapshot after restart: ${fault}`, async t => {
+  const w = await world(t), recordPath = join(w.dir, "host-record.json"), projectId = randomUUID();
+  const identity = await w.macGit.identity(w.mac);
+  writeHostRecord(recordPath, { ...newHostRecord(), projects: [{ ...identity, projectId, society: "demo", displayName: "demo", bookmark: "YQ==" }] });
+  const options = { link: w.link, git: "/usr/bin/git", recordPath,
+    record: (update: (value: NonNullable<ReturnType<typeof readHostRecord>>) => NonNullable<ReturnType<typeof readHostRecord>>) =>
+      writeHostRecord(recordPath, update(readHostRecord(recordPath)!)),
+    bookmarks: { create: async () => "YQ==", resolve: async () => w.mac }, transfer: w.dir, room: () => {} };
+  const bytes = w.link.bytes.bind(w.link), json = w.link.json.bind(w.link);
+  if (fault === "before-upload") w.link.bytes = async () => { throw new Error("lost upload connection"); };
+  else w.link.json = async (...args) => {
+    const peer = await json(...args), request = peer.request.bind(peer);
+    peer.request = async (...args) => {
+      if (fault === "permanent-refusal") throw new PlatformError({ code: "BUNDLE_INVALID", message: "lost bundle prerequisites", retry: "never" });
+      await request(...args); throw new Error("lost import result");
+    };
+    return peer;
+  };
+  writeFileSync(join(w.mac, "one"), "original dirty snapshot\n");
+  const params = { projectId, macRepo: w.mac, branch: "main", since: null };
+  await assert.rejects(new ProjectSyncCoordinator(options).importProject("frozen", params), /lost/);
+  w.link.bytes = bytes; w.link.json = json;
+  writeFileSync(join(w.mac, "one"), "changed while disconnected\n");
+  const coordinator = new ProjectSyncCoordinator(options);
+  if (fault === "permanent-refusal") {
+    w.link.bytes = async () => { throw new Error("terminal retry must not connect"); };
+    await assert.rejects(coordinator.importProject("frozen", params), code("BUNDLE_INVALID"));
+    for (const name of readdirSync(join(w.dir, "imports")))
+      assert.deepEqual(readdirSync(join(w.dir, "imports", name)), ["request.json"]);
+    assert.equal(readHostRecord(recordPath)!.projects[0]!.lastImport, undefined);
+    return;
+  }
+  const result = await coordinator.importProject("frozen", params);
+  assert.equal(git(join(w.projectsDir, projectId), "show", `${result.head}:one`), "original dirty snapshot");
+  assert.equal(readHostRecord(recordPath)!.projects[0]!.lastImport?.head, result.head);
+  assert.deepEqual(await coordinator.importProject("frozen", params), result);
+  await assert.rejects(coordinator.importProject("frozen", { ...params, branch: "other" }), { code: "REQUEST_KEY_REUSED" });
+  const newer = await coordinator.importProject("new-import", params);
+  assert.notEqual(newer.head, result.head);
+  await coordinator.importProject("frozen", params);
+  assert.equal(readHostRecord(recordPath)!.projects[0]!.lastImport?.head, newer.head);
+  for (const name of readdirSync(join(w.dir, "imports")))
+    assert.deepEqual(readdirSync(join(w.dir, "imports", name)), ["request.json"], "only the receipt remains after completion");
 });
 
 test("UX-09/MV-50: an incremental import names the gitlink paths a bundle cannot carry", async t => {

@@ -16,7 +16,9 @@ import { inspectMacGuestHistory } from "../platform/host/guest-histories.js";
 import { readSettingsForEditing, projectSettingsPath, roleSetOf } from "../application/settings.js";
 
 export async function personalMain(options: { readonly dataRoot: string; readonly cwd: string; readonly resume?: string;
-  readonly packages?: string }): Promise<void> {
+  readonly packages?: string; readonly noProjectExtensions?: boolean }): Promise<void> {
+  if (options.noProjectExtensions && options.resume !== undefined)
+    throw new StoreError("INVALID_REQUEST", "--no-project-extensions requires a new Personal session");
   const libdir = resolve(fileURLToPath(new URL("../../../", import.meta.url)));
   const packages = options.packages ?? join(options.dataRoot, ".packages");
   // Only an explicitly saved project selection is inherited once. It never
@@ -29,7 +31,14 @@ export async function personalMain(options: { readonly dataRoot: string; readonl
   if (realpathSync(cwd) !== cwd || !lstatSync(cwd).isDirectory())
     throw new StoreError("INVALID_REQUEST", "Personal cwd no longer identifies its saved directory");
   await updatePersonalSettingsAsync({ dataRoot: options.dataRoot, libdir, packages }, async () => {
-    if (process.platform === "darwin") return await macProjectExtensionSeed(options.dataRoot, cwd, libdir);
+    if (options.noProjectExtensions) return [];
+    if (process.platform === "darwin") {
+      try { return await macProjectExtensionSeed(options.dataRoot, cwd, libdir); }
+      catch (error) {
+        throw new StoreError(error instanceof StoreError ? error.code : "BROKER_UNAVAILABLE",
+          "Project extensions could not be read. Repair the project binding, or start with --mode personal --no-project-extensions to skip their initial inheritance.");
+      }
+    }
     const project = defaultSocietyFor(cwd, sha256Hex(cwd));
     const config = projectSettingsPath(options.dataRoot, project);
     if (lstatSync(config, { throwIfNoEntry: false }) === undefined) return [];

@@ -187,7 +187,7 @@ async function main(): Promise<void> {
     const checks = new CandidateChecks(gitPaths, undefined, undefined, preparationAbort.signal);
     const git = new GitModule(gitPaths, store, mail, integrationPolicy,
       () => integrationPolicyFromConfig(readCurrentHostPolicy(configPath, society).integration),
-      (candidate, check) => checks.run(candidate, check),
+      (candidate, check, cancellation) => checks.run(candidate, check, cancellation),
       { mailBodyBytes: cfg.limits.mailBodyBytes, subjectBytes: cfg.limits.subjectBytes,
         bundleBytes: cfg.limits.bundleBytes });
     const hasGoal = (): boolean => git.hasCommittedContext();

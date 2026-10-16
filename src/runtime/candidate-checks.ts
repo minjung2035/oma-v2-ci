@@ -101,8 +101,10 @@ export class CandidateChecks {
     private readonly execute: (command: CommandSpec) => Promise<ProcessObservation> = runProcess,
     private readonly observations: Pick<GitObserver, "gitlinks"> = createCanonicalObserver(),
     private readonly ownerSignal?: AbortSignal) {}
-  async run(candidate: string, check: FrozenCheck): Promise<void> {
+  async run(candidate: string, check: FrozenCheck, cancellationSignal?: AbortSignal): Promise<void> {
     if (this.ownerSignal?.aborted) throw new StoreError("REF_STATE_UNKNOWN", "check owner is stopping");
+    if (cancellationSignal?.aborted) throw new StoreError("CANCELLED_BEFORE_COMMIT", "the request was cancelled before checks");
+    const signal = AbortSignal.any([this.ownerSignal, cancellationSignal].filter((value): value is AbortSignal => value !== undefined));
     const command = candidateCheckCommand(this.paths, candidate, check);
     let settled = false;
     let cancellation: Promise<void> | undefined;
@@ -119,11 +121,12 @@ export class CandidateChecks {
         }
       })();
     };
-    this.ownerSignal?.addEventListener("abort", stop, { once: true });
+    signal.addEventListener("abort", stop, { once: true });
     let observation: ProcessObservation;
     try { observation = await this.execute(command); }
-    finally { settled = true; this.ownerSignal?.removeEventListener("abort", stop); await cancellation; }
+    finally { settled = true; signal.removeEventListener("abort", stop); await cancellation; }
     if (this.ownerSignal?.aborted) throw new StoreError("REF_STATE_UNKNOWN", `trusted check ${check.id} was interrupted by owner shutdown`);
+    if (cancellationSignal?.aborted) throw new StoreError("CANCELLED_BEFORE_COMMIT", "the request was cancelled during checks");
     if (observation.kind !== "exited")
       throw new StoreError("REF_STATE_UNKNOWN", `trusted check ${check.id} outcome is ${observation.kind}`);
     if (observation.exitCode === 0) return;

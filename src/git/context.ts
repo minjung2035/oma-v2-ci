@@ -1,6 +1,6 @@
 /** CTX-001..006: immutable context intent, then canonical ref, snapshot,
  * current pointer, notification and terminal settlement. Recovery never prepares
- * a new candidate. The Git facade serializes this coordinator with main writers.
+ * a new candidate. The Git facade serializes writers of this context repository.
  */
 import type { AuthContext, ContextEntry, Oid, Receipt, PublicMethods, Address } from "../../implementation/contracts.js";
 import { Store, reused } from "../store.js";

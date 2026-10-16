@@ -22,7 +22,7 @@ import { observeProjectBinding, stateRootHasSociety } from "../../runtime/provis
 import type { FramedPeer } from "../rpc.js";
 import { serveRequests } from "../rpc-server.js";
 import { encodeTerminalJson, isRequestKey, isUuid, type HelloParams } from "../../protocol/host-guest.js";
-import type { GuestProjects } from "./project.js";
+import { prepareMirrorForSeed, type GuestProjects } from "./project.js";
 import type { RequestLedger } from "./requests.js";
 import type { GuestPackages } from "./packages.js";
 import type { GuestArchives } from "./archive.js";
@@ -148,6 +148,7 @@ export class GuestHost {
       if (resume !== undefined) throw new StoreError("ATTACH_CONFLICT", "That Society already has an open session");
       return { state: "running" };
     }
+    prepareMirrorForSeed(mirror);
     await this.options.launcher.start(society, mirror, resume);
     return { state: "running" };
   }

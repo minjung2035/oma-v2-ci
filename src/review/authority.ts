@@ -30,11 +30,38 @@ export class ReviewAuthorityReader implements ReviewAuthority {
   }
 
   inputFor(open: OpenRequest): ReviewStateInput {
+    return this.inputFrom(open, this.store.attestationFacts(), this.eligible());
+  }
+
+  /** One synchronous projection for list/sweep/duplicate discovery. Never
+   * retain it across an await as acceptance or CAS authority. Each fact is
+   * decoded once and assigned to its request once, including challenge links. */
+  projection(): { open: OpenRequest; input: ReviewStateInput }[] {
+    const facts = this.store.attestationFacts(), eligible = this.eligible();
+    const entries = new Map<OperationId, OpenRequest[]>();
+    for (const entry of facts) {
+      const fact = entry.operation.plan.fact;
+      const request = fact.kind === "challenge.open" ? fact.target.request
+        : "request" in fact ? fact.request : undefined;
+      if (request === undefined) continue;
+      const list = entries.get(request) ?? [];
+      list.push(entry);
+      entries.set(request, list);
+    }
+    return facts.filter(entry => isOpenFact(entry.operation.plan.fact)).map(open =>
+      ({ open, input: this.inputFrom(open, entries.get(open.operation.id) ?? [], eligible) }));
+  }
+
+  private eligible(): ReadonlySet<string> {
+    return new Set(this.store.listAgents().filter(agent => agent.role === "resident" && agent.desired === "enabled").map(agent => agent.name));
+  }
+
+  private inputFrom(open: OpenRequest, facts: readonly OpenRequest[], eligible: ReadonlySet<string>): ReviewStateInput {
     const openPlan = open.operation.plan;
     if (!("messages" in openPlan)) throw new StoreError("STORE_CORRUPT", "review open owns no message list");
     const openEntry: ReviewEntry = { sequence: open.sequence, operation: open.operation.id,
       actor: open.operation.actor, fact: openPlan.fact, messages: openPlan.messages };
-    const entries: ReviewEntry[] = this.store.attestationFacts()
+    const entries: ReviewEntry[] = facts
       .filter(candidate => candidate.sequence > open.sequence && candidate.operation.id !== open.operation.id &&
         "messages" in candidate.operation.plan && this.factNames(candidate.operation.plan.fact, open.operation.id))
       .map(candidate => {
@@ -48,8 +75,7 @@ export class ReviewAuthorityReader implements ReviewAuthority {
       integration: applied === null ? null
         : { operation: applied.id, state: applied.state,
             errorCode: applied.state === "failed" ? applied.errorCode : null },
-      eligible: new Set(this.store.listAgents()
-        .filter(agent => agent.role === "resident" && agent.desired === "enabled").map(agent => agent.name)),
+      eligible,
       highPeerFloor: this.highPeerFloor };
   }
 
@@ -113,13 +139,13 @@ export class ReviewAuthorityReader implements ReviewAuthority {
   }
 
   duplicateName(fact: Extract<ReviewFact, { kind: "merge.open" }>): string | null {
-    for (const open of this.openRequests()) {
+    for (const { open, input } of this.projection()) {
       const existing = open.operation.plan.fact;
       if (!isOpenFact(existing)) continue;
       if (existing.kind !== fact.kind || existing.identity.candidate !== fact.identity.candidate ||
         existing.identity.expectedBase !== fact.identity.expectedBase || existing.tier !== fact.tier ||
         existing.identity.policyRevision !== fact.identity.policyRevision) continue;
-      const state = reviewState(this.inputFor(open));
+      const state = reviewState(input);
       if (state.terminal === null && state.integration === null) return existing.name;
     }
     return null;
@@ -128,11 +154,11 @@ export class ReviewAuthorityReader implements ReviewAuthority {
   /** §7: an applied challenge of the same target is a hard duplicate; a live
    * challenge with the same revert identity is one too. */
   duplicateChallenge(fact: Extract<ReviewFact, { kind: "challenge.open" }>): string | null {
-    for (const open of this.openRequests()) {
+    for (const { open, input } of this.projection()) {
       const existing = open.operation.plan.fact;
       if (!isOpenFact(existing) || existing.kind !== "challenge.open" ||
           existing.target.request !== fact.target.request) continue;
-      const state = reviewState(this.inputFor(open));
+      const state = reviewState(input);
       if (state.integration?.state === "succeeded") return existing.name;
       if (state.terminal === null && state.integration === null &&
           existing.identity.expectedBase === fact.identity.expectedBase &&

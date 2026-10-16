@@ -29,7 +29,8 @@ async function main(argv: readonly string[]): Promise<void> {
   }
   if (mode === "personal") {
     const { personalMain } = await import("./personal-host.js");
-    await personalMain({ dataRoot, cwd, ...(resume === undefined ? {} : { resume }) });
+    await personalMain({ dataRoot, cwd, ...(resume === undefined ? {} : { resume }),
+      ...(command.noProjectExtensions ? { noProjectExtensions: true } : {}) });
   } else {
     if (resume !== undefined) process.env[RESUME_SESSION_ENV] = resume;
     await import("./oma-society.js");

@@ -195,10 +195,12 @@ export async function superviseBroker(options: SuperviseOptions): Promise<Broker
     // why in an `error` event afterwards. It is observed from here, before any
     // path below can return, so that report reaches the Human instead of
     // ending this process as an unhandled event.
-    child.once("error", error => { say(`broker failed: ${error.message}`); });
+    // A failed termination can emit another error before the queued spawn
+    // failure. Observe both for the whole owned child's lifetime.
+    child.on("error", error => { say(`broker failed: ${error.message}`); });
     const channel = child.stdio[HOST_CHANNEL_FD];
     if (child.pid === undefined || !channel || !("write" in channel)) {
-      child.kill("SIGKILL");
+      if (child.pid !== undefined) child.kill("SIGKILL");
       return "the broker process did not start";
     }
     const generation: Generation = { child, channel: channel as Socket, ready: false, pending: null };
