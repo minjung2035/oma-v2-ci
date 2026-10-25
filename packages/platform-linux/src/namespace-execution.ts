@@ -96,7 +96,18 @@ export async function launchBlockedNamespace(command: CommandSpec, controls: Nam
     reader?.destroy();
     if (reader !== undefined && !reader.closed) { try { await once(reader, "close"); } catch (cleanup) { error = new AggregateError([error, cleanup]); } }
     if (task !== undefined) await task.closed;
-    const notStarted = task === undefined || (await task.result).kind === "spawn-failed";
+    const observation = task === undefined ? undefined : await task.result;
+    const notStarted = task === undefined || observation?.kind === "spawn-failed";
+    // Keep setup stderr available when init disappears before it can be pinned.
+    // These diagnostics never promote child close to whole-scope death.
+    if (observation !== undefined && error instanceof Error) {
+      try { Object.defineProperty(error, "namespaceLaunch", { enumerable: true, value: Object.freeze({
+        kind: observation.kind, exitCode: observation.exitCode, signal: observation.signal,
+        stderr: observation.stderr.toString("utf8"), stderrTruncated: observation.stderrTruncated,
+        stderrForwarded: observation.stderrForwarded === true,
+      }) }); }
+      catch (diagnosticFailure) { error = new AggregateError([error, diagnosticFailure], "namespace launch diagnostics could not be retained"); }
+    }
     try { return withCleanup(() => { throw error; }, () => cleanupAll([
       closeControls,
       () => { if (informationReader !== undefined) { const fd = informationReader; informationReader = undefined; closeSync(fd); } },

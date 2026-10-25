@@ -1436,7 +1436,7 @@
     },
     {
       "path": "packages/platform-linux/src/namespace-execution.ts",
-      "sha256": "578fe2afdb7273c0e80bf5f40b2681adac616b1df8050e134f0861e212333f86"
+      "sha256": "abc9c0e5c7dd8a9cefcb2c64fdd4d52b5fb17891cf9125074308d20a566cca69"
     },
     {
       "path": "packages/platform-linux/src/resident-rootfs.ts",
