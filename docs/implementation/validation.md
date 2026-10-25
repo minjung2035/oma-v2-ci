@@ -11,12 +11,15 @@
 
 | 실제 입력·실행 | 결과와 범위 |
 |---|---|
+| `d5d65ed4` 실제 CI `40243911993` | Mac26/15·Ubuntu 공통 각각 **56/56**, Ubuntu peer3/3·native33/33 PASS. Linux 선택 integration은 **179/180 FAIL**: 실제 full-filesystem child의 옛 unshare가 uid_map 권한 거절로 미실행. 세 OS input `218696cec4ea5d1dee5cac3969d2a85e526d4114828aa6952004a9e9b5ceaded`·전후 동일. 양 Darwin gate는 계속 OPEN/BLOCKED·각15개 실제 관측. zip5개 SHA256 확인·원시 `ci-d5d65ed4/` 보존. 전체 workflow 성공으로 표시하지 않음 |
+| full-filesystem의 native primitive 전환 | 옛 unshare+shell mount를 pinned bwrap의 실제4MiB tmpfs로 대체. 실제 ENOSPC·STORAGE_FULL·accepted mail 원본/게시 검증을 모두 유지했고 global userns 설정을 바꾸지 않음. 추가 native asset/준비 시험과 함께 **21/21 PASS**·skip0, input `5e5793b5df95997edbcf014f55ed8cd7fec98b41908b10921ae40c42d419c39a`(15597개)·전후 동일. `native-full-fs-replacement-*` 보존. 후속 CI 재실행 필요 |
+| `d5d65ed4` 이후 독립 모듈 설치 재검증 | **26/26 PASS**. 각 tarball을 선언한 dependency closure만으로 설치하고 public entries·authored declarations·해당 installed runtime을 검증. 외부 SDK declaration44개는 별도 진단이며 authored 오류0개. input `d05e9255f5df7f17f61bc83469997e6bd296362d475ab6c630ee50c805b222c5`·전후 동일. `native-d5-independent-install.log` 보존 |
 | 선택 native integration의 단일 고정 입력 실행 | strict/noEmitOnError로19개 시험 파일을 컴파일하고 **180/180 PASS**·skip/cancel/todo0. input `8dcd2c2ec5c10709a5f73d5502db7061097281864c39c677293d9b88405663fe`(15597개)·전후 동일. `native-selected-integration-{before,after}.json`, `native-selected-integration-real.log`. 실제 Native/Pi·권한·receipt·Worker·durable SIGKILL을 같은 실행에서 검증. 전체 root type/module 검사는 여전히 별도 FAIL이며 Mac 제품 qualification이 아님 |
 | `6d8263eb` 실제 CI `40239657753` | Mac26/15·Ubuntu 공통 각각 **54/54**, Ubuntu peer/leaf **3/3**, 실제 native **31/31 PASS**·skip0. 세 OS input `2c2cdee2d33c5cf83392cf626a988748c0aff5f492ef84735e9dd34d7de723fb`·전후 동일. Darwin 양쪽 각15개 실제 관측 후 계속 OPEN/BLOCKED. zip5개 SHA256 확인·원시 결과와 요약을 `ci-6d8263eb/`에 보존 |
 | 실제 Native Resident/Broker/Pi 통합과 종료 수리 | **25/25 시나리오**, 실제 Resident6개를 포함한 공통 수명·shutdown **34/34 PASS**·skip0. input `b6a41d6ce65c8964788337a8b91fc19067fffe9343fc537aa72858b123a5a577`(15594개)·전후 동일. 자동 생성 첫 실행·현재 grant·provider 실패·SIGKILL·broker 교체·receipt·tool plan 거절을 실제 Pi/sandbox로 확인. `native-resident-drain-{scenarios,policies}.log` 보존. root 전체 PASS가 아님 |
 | systemd 시험의 실제 native 전환 | strict 부분 컴파일 후 정책·권한·accepted fact **71/71 PASS**, input `db9e3ef267d7076bdc3ff1fb0f44a798e5e449f98711a686e8493a65ca370dfe`. 별도 입력 `62abb6d454cbe99a3dfec064faa4ddab4b73c81f5e92e1d5188b1b626286f392`에서 Worker/sandbox **38/38**, 실제 durable SIGKILL **46/46 PASS**·각 전후 동일·skip0. `native-policy-71-real.log`, `native-connected-{worker,crash}-regressions-real.log` 보존. 당시 시나리오25개 중1개 실패도 보존했으며 위 수리 후25/25와 합산하지 않음 |
 | 전환 중 재현한 통합 실패 | 첫18개 시나리오 중2개 실패: 자동 시작으로 초기 mail이 cur로 이동하는 fixture 차이, 종료된 Store 재접근. 이후25개 중1개 실패: runner.open 뒤 옛 incarnation으로 stop하고 diagnostic close가 teardown 뒤 도착함. 실패·전후 input과 원시 로그를 보존했으며 skip·죽음 보장 완화로 해결하지 않음 |
-| 최신 root 전체 strict typecheck | **FAIL, 79개 진단**. `native-root-after-connected.log`. 제거된 unit/host relay API와 기존 물리 시험의 전환이 남았다. 선택 native integration의 PASS를 root 전체 PASS로 표시하지 않음 |
+| 최신 root 전체 strict typecheck | **FAIL, 61개 진단**. `native-root-after-layout.log`. 이전79개 진단은 `native-root-after-connected.log`에 보존했다. 제거된 unit/host relay API와 기존 물리 시험의 전환이 남았다. 선택 native integration의 PASS를 root 전체 PASS로 표시하지 않음 |
 | `64cb2cad` 실제 CI `40237516208` | Mac26/15·Ubuntu 공통 각각 **54/54**, Ubuntu peer/leaf **3/3**, 실제 native 실행·SIGKILL·sender·Git·Resident **24/24 PASS**. build26/26·세 OS 동일 input `d568e62424b4c30f0d9729fb94436c0ffedcbaf93ff3bca5b3a08aadfb5caf10`(15591개), 각 전후 동일. Ubuntu bwrap 한정 AppArmor profile을 명시했고 전역 제한1은 그대로다. Darwin gate는 계속 OPEN/BLOCKED. zip5개 SHA256 확인·원시 artifact는 `ci-64cb2cad/` |
 | 위 CI 이전의 Ubuntu 실제 실패 | `e62881f3`·`ffcb1140`에서 init pin 이전 종료를 재현. 추가 launcher 관측에서 실제 exit1·`bwrap: setting up uid map: Permission denied` 확인. unknown journal을 빈 목록으로 치환하지 않았고 실패 archive도 보존. OS의 application별 userns 권한을 설정한 뒤 동일 scope/격리/권한 시험을 실행해 위 결과를 얻음 |
 | 후속 FD·로그·runtime 수정의 Linux 실행 | 옵션처럼 생긴 env 값 오분류, log open 뒤 hard link 도입 시 쓰기, diagnostic 실패 후 stop의 stale active 상태를 재현·수정. 실제 OS 및 공통 정책 **57/57**, 별도 strict 부분 컴파일 후 기존 권한·accepted fact·mail/storage/reconcile **37/37 PASS**·skip0. input `6a69b12e11d829ef9fda6268dca2ca2ba3a8f88af58b6d639096bb6df531ba20`(15594개), 두 실행 전후 동일. 원시 `native-log-and-runtime-fixed-*`, `native-policy-after-runtime-fixes.log` 보존. root 전체 strict typecheck는 여전히 FAIL |
@@ -157,7 +160,7 @@ DR48은 ACL/xattr·special file·nested mount·읽을 수 없는 파일·복원�
 
 아래 값은 **구조 검사의 현재 입력 identity**다. digest 생성은 runtime PASS를 만들지 않는다.
 
-verification input digest `d05e9255f5df7f17f61bc83469997e6bd296362d475ab6c630ee50c805b222c5` (15597 files).
+verification input digest `56991abb99703cec806c932adf310dcf89f1319e06782403bf66729f30bb8030` (15597 files).
 
 현재 source 목록은 [production-files.txt](../../production-files.txt), per-file SHA-256은 [production-loc-hashes.json](../../production-loc-hashes.json)이 소유한다. `npm run check:inventory`는 cloc 없이 source bytes를 확인한다. `npm run evidence:refresh`의 구조 재생성과 실제 runtime 실행은 별도다.
 

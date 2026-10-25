@@ -17,7 +17,7 @@ import { Store } from "@oma/storage";
 import { MailModule } from "@oma/mail";
 import { GitModule } from "@oma/git";
 import { ReconcileModule } from "@oma/reconcile";
-import { UnitsModule } from "@oma/platform-linux/units";
+import { PolicyExecution } from "./fixtures/execution.js";
 import type { LifecycleModule } from "@oma/lifecycle";
 
 function historyFixture(t: import("node:test").TestContext) {
@@ -122,8 +122,7 @@ test("AV-07/P0: a consumed provisioning proof cannot hide later repository corru
         worldDir: join(root, "world"), society: "fixture" };
     const mail = createMailModule(paths, store, 64);
     const git = createGitModule(paths, store, mail, { policyRevision: "fixture", protectedPaths: [], checks: [] });
-    const units = new UnitsModule("fixture", { node: process.execPath, libdir: process.cwd(),
-        state: root, society: "fixture", agent: "" });
+    const units = new PolicyExecution();
     // No agents or accepted operations exist; lifecycle effects are unreachable.
     const reconcile = createReconcileModule(store, mail, git, null, units, {} as LifecycleModule, { projectGit, freshVerifiedMain: main, hasGoal: () => false, activationAllowed: () => false });
     await reconcile.startup(false);

@@ -12,7 +12,7 @@ import { ContextRepository } from "@oma/git/context-repository";
 import { CreateCoordinator } from "@oma/lifecycle/create";
 import { WorkspaceCoordinator } from "@oma/git/workspace";
 import { LifecyclePolicy } from "@oma/lifecycle/policy";
-import { UnitsModule } from "@oma/platform-linux/units";
+import { PolicyExecution } from "./fixtures/execution.js";
 import { gitFixture, seedGit, gitCommand, gitAuth } from "./fixtures/git-crash.js";
 import { makeValidAgent, makeValidResolvedSpec, ALL_CAPS } from "./fixtures/spec.js";
 import { removeTree } from "./fixtures/cleanup.js";
@@ -119,7 +119,7 @@ test("R37: creation awaits a real private workspace before unit publication and 
   const paths = { stateRoot: f.root, projectGit: f.paths.projectGit, society: "crash", hasGoal: () => false, activationAllowed: () => true };
   const workspace = new WorkspaceCoordinator(paths); const original = workspace.ensure.bind(workspace);
   workspace.ensure = async plan => { await original(plan); entered.resolve(); await release.promise; };
-  const units = new UnitsModule("crash", { node: process.execPath, libdir: process.cwd(), state: f.root, society: "crash", agent: "", config: join(f.root, "config.json"), run: join(f.root, "oma", "crash") }, join(f.root, "units"));
+  const units = new PolicyExecution();
   let unitPublications = 0;
   units.ensureResident = () => { unitPublications++; throw new Error("unit publication must not be reached after revocation"); };
   const policy = new LifecyclePolicy(lifecycleLedger(f.store), (_parent, input) => makeValidResolvedSpec(input.name, "p", ALL_CAPS, input.from, input.brief));
@@ -157,7 +157,7 @@ test("AV27 / GIT-002: a new workspace's origin is the canonical repository as it
       const paths = { stateRoot: f.root, projectGit: f.paths.projectGit, society: "crash", hasGoal: () => false, activationAllowed: () => true,
         ...(residentProjectGit === undefined ? {} : { residentProjectGit }) };
       const workspace = new WorkspaceCoordinator(paths);
-      const units = new UnitsModule("crash", { node: process.execPath, libdir: process.cwd(), state: f.root, society: "crash", agent: "", config: join(f.root, "config.json"), run: join(f.root, "oma", "crash") }, join(f.root, "units"));
+      const units = new PolicyExecution();
       // Stop after the workspace: this is about what the preparation left.
       units.ensureResident = () => { throw new Error("stop after the workspace"); };
       const policy = new LifecyclePolicy(lifecycleLedger(f.store), (_parent, input) => makeValidResolvedSpec(input.name, "p", ALL_CAPS, input.from, input.brief));

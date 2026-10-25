@@ -126,8 +126,14 @@ test("V22B: on a real full filesystem new work is STORAGE_FULL and accepted mail
   const mount = mkdtempSync(join(tmpdir(), "oma-full-fs-"));
   try {
     const harness = new URL("./fixtures/full-fs-harness.js", import.meta.url).pathname;
-    const child = spawnSync("unshare", ["-rm", "sh", "-c", 'mount -t tmpfs -o size=4m tmpfs "$0" && mkdir "$0/state" && exec "$1" "$2" "$0/state"',
-      mount, process.execPath, harness], { encoding: "utf8", timeout: 60_000 });
+    const state = join(mount, "state");
+    // The same pinned user-namespace primitive used by the native execution
+    // lane mounts a real 4 MiB tmpfs. No shell, synthetic quota or global
+    // userns permission change substitutes for the ENOSPC observation below.
+    const child = spawnSync("/usr/bin/bwrap", ["--unshare-user", "--unshare-pid", "--new-session", "--die-with-parent",
+      "--bind", "/", "/", "--dev-bind", "/dev", "/dev", "--proc", "/proc",
+      "--size", "4194304", "--tmpfs", mount, "--dir", state,
+      "--", process.execPath, harness, state], { encoding: "utf8", timeout: 60_000 });
     assert.equal(child.status, 0, `the full-filesystem child must run: ${child.stderr}`);
     const line = child.stdout.split("\n").find(value => value.startsWith("REPORT:"));
     assert.ok(line, child.stdout + child.stderr);
