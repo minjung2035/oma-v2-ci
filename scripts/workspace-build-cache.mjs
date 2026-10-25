@@ -45,10 +45,15 @@ function compilerInputs(root, directory) {
   const info = JSON.parse(readFileSync(join(directory, ".tsbuildinfo"), "utf8"));
   if (info.version !== ts.version || !Array.isArray(info.fileNames) || !Array.isArray(info.fileInfos) ||
       info.fileNames.length !== info.fileInfos.length) throw new Error(`unsupported compiler input record: ${directory}`);
-  const versions = new Map(info.fileNames.map((name, index) => [resolve(directory, name), info.fileInfos[index]]));
+  // Build-info keys use the compiler host's canonical spelling on a
+  // case-insensitive filesystem. SourceFile.fileName retains import spelling.
+  // Use that same host identity for both, while keeping full version/format
+  // equality and every positive/negative resolver observation.
+  const canonical = name => host.getCanonicalFileName(resolve(name));
+  const versions = new Map(info.fileNames.map((name, index) => [canonical(resolve(directory, name)), info.fileInfos[index]]));
   const sources = program.getSourceFiles();
   const changed = sources.flatMap(source => {
-    const entry = versions.get(resolve(root, source.fileName));
+    const entry = versions.get(canonical(resolve(root, source.fileName)));
     const expectedVersion = typeof entry === "string" ? entry : entry?.version;
     const expectedFormat = typeof entry === "string" ? undefined : entry?.impliedFormat;
     return source.version !== expectedVersion || source.impliedNodeFormat !== expectedFormat
