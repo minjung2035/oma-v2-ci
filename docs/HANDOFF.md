@@ -9,6 +9,13 @@ Linux/macOS 공통 native 실행을 실제 구현·검증하는 것이다. 이�
 
 ## 작업 상태
 
+- push된 구현 checkpoint는 `7707de9d117a3be1c571d7661732de69b18a9bb9`다. 실제 CI
+  `40235030613`의 Mac26/15·Ubuntu 공통은 각각54/54 PASS·동일 입력·build26/26이다.
+  Darwin gate는 각각15개 실제 관측 뒤 BLOCKED이며 완화하지 않았다. Ubuntu는 제거된
+  sd_notify import의 옛 시험이 실패해 후속 Linux 실행 시험이 미실행됐다. 해당 시험 이관과
+  실패와 독립적인 Linux 실행 step의 실행 조건 수리 후 다시 push/CI를 확인한다.
+- checkpoint의 workspace421/421과 독립 설치26/26이 통과했다. Root type/module 시험의
+  native 전환은 계속 남아 있다. public export 위반을 숨기려고 삭제된 export를 복구하지 않는다.
 - 2026-10-26 실제 경로 연결: 공통 ExecutionCoordinator + hash-chain journal + blocked
   namespace gate를 Resident·candidate·quarantine에 연결했다. systemd/path/journald와
   host relay production 경로를 제거했으며 Worker private argv의 owner는 Linux adapter다.

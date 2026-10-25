@@ -1,0 +1,72 @@
+/** Common Resident policy with real Linux scope/journal effects. References
+ * and the monotonic clock are explicit policy inputs, never kernel mocks. */
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { setTimeout } from 'node:timers/promises';
+import { ExecutionJournal } from '@oma/storage/execution-journal';
+import { ExecutionCoordinator } from '@oma/process/owned-execution';
+import { ResidentRuntime } from '@oma/process/resident-runtime';
+import { launchBlockedNamespace } from '@oma/platform-linux/namespace-execution';
+import { runnerScope } from '@oma/platform-linux/runner-scope';
+import { observeNamespaceProcess, pinNamespaceInit } from '@oma/native/pid-namespace';
+assert.equal(process.platform, 'linux');
+function fixture(t, program = 'setInterval(()=>{},1000)') {
+  const root = mkdtempSync(join(tmpdir(), 'oma-native-resident-')); ExecutionJournal.initialize(root);
+  const journal = ExecutionJournal.open(root), owner = new ExecutionCoordinator(journal,
+    witness => observeNamespaceProcess(witness.pid), witness => pinNamespaceInit(witness.pid));
+  let clock = 0, incarnation = 1, begins = 0, revocations = 0, hints = 0; const errors = [];
+  const tickets = [];
+  const runtime = new ResidentRuntime({ references: () => ({ profile: 'p', modelProfile: 'm' }), incarnation: () => incarnation,
+    confirmDead: actor => owner.confirmDead(`resident:${actor}`), revoke: () => revocations++, hint: () => hints++, failure: error => errors.push(error),
+    async begin(actor, _references, authorize, prepared, signal) {
+      begins++;
+      const ticket = await owner.begin({ slot: `resident:${actor}`, signal, authorize, prepared,
+        launch: () => launchBlockedNamespace(runnerScope({ executable: process.execPath, argv: ['-e', program],
+          env: { PATH: '/usr/bin:/bin', HOME: root }, timeoutMs: null, stdoutBytes: 4096, stderrBytes: 4096 }), { signal }) });
+      tickets.push(ticket); return ticket;
+    },
+  }, () => clock);
+  t.after(async () => { await runtime.stop('alice', incarnation); await owner.drain(); journal.close(); rmSync(root, { recursive: true }); assert.deepEqual(errors, []); });
+  return { runtime, owner, journal, tickets, begins: () => begins, revocations: () => revocations, hints: () => hints,
+    advance: milliseconds => { clock += milliseconds; }, epoch: value => { incarnation = value; } };
+}
+test('Resident actual scope: concurrent starts share one launch and old stops cannot kill a later incarnation', { timeout: 15000 }, async t => {
+  const f = fixture(t); f.runtime.ensureResident('alice', 'p', 'm');
+  await Promise.all([f.runtime.start('alice', false), f.runtime.start('alice', false)]);
+  assert.equal(f.begins(), 1); const first = f.runtime.observe('alice');
+  assert.equal(first.activeState, 'active'); const borrowed = f.runtime.pin(first.scope);
+  assert.equal(borrowed.population(), 'populated');
+  f.epoch(2);
+  await assert.rejects(f.runtime.stop('alice', 1), { code: 'STALE_RUN' });
+  assert.equal(borrowed.population(), 'populated'); assert.equal(f.revocations(), 0);
+  await f.runtime.stop('alice', 2); await f.tickets[0].completion;
+  assert.equal(borrowed.population(), 'empty'); assert.equal(f.runtime.confirmDead('alice', 2), true); borrowed.close();
+  await f.runtime.start('alice', true); assert.equal(f.begins(), 2);
+  assert.notEqual(f.runtime.observe('alice').invocationId, first.invocationId);
+  assert.deepEqual(f.journal.entries().length, 1);
+});
+test('Resident actual failures respect geometric backoff and five starts per monotonic minute', { timeout: 15000 }, async t => {
+  const f = fixture(t, 'process.exitCode=1');
+  for (let attempt = 0; attempt < 5; attempt++) {
+    await f.runtime.start('alice', false); await f.tickets[attempt].completion; await setTimeout(0);
+    assert.equal(f.runtime.observe('alice').activeState, 'failed'); assert.equal(f.runtime.restartDue('alice'), false);
+    const delay = 3000 * 4 ** (Math.min(attempt, 4) / 4);
+    f.advance(delay - 0.5); assert.equal(f.runtime.restartDue('alice'), false);
+    await assert.rejects(f.runtime.start('alice', false), { code: 'BROKER_UNAVAILABLE' });
+    f.advance(0.5); assert.equal(f.runtime.restartDue('alice'), true);
+  }
+  await assert.rejects(f.runtime.start('alice', false), { code: 'START_LIMIT' });
+  assert.equal(f.begins(), 5); assert.equal(f.runtime.startLimitStatus('alice'), 'start_limit');
+  await f.runtime.start('alice', true); assert.equal(f.begins(), 6);
+  await f.tickets[5].completion;
+});
+test('Resident accepted references refuse replacement and current authority refusal creates no running scope', { timeout: 15000 }, async t => {
+  const f = fixture(t);
+  assert.throws(() => f.runtime.ensureResident('alice', 'p', 'replacement'), { code: 'STORE_CORRUPT' });
+  const denied = new Error('current authority revoked');
+  await assert.rejects(f.runtime.start('alice', false, () => { throw denied; }), error => error === denied);
+  assert.equal(f.owner.confirmDead('resident:alice'), true); assert.deepEqual(f.journal.entries(), []);
+});

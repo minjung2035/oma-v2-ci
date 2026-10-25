@@ -11,6 +11,9 @@
 
 | 실제 입력·실행 | 결과와 범위 |
 |---|---|
+| `7707de9d` 실제 CI `40235030613` | Mac26/15·Ubuntu 공통 시험 각각 **54/54 PASS**·build26/26·세 OS 동일 input `df788571bb8a51a39e945d8262c5484a630ade3c22f4f5841432d4a5adf6cbd6`(15590개), 각 전후 동일. Darwin 두 gate job은 BLOCKED·각 15개 실제 관측·Keychain SDK typecheck PASS. Ubuntu 후속 native-leaf는 제거된 sd_notify import로 2 PASS/1 FAIL이며 새 Linux execution step은 미실행. 전체 workflow 성공이 아님. artifact 5개 zip SHA256 확인·원시 로그를 `ci-7707de9d/`에 보존 |
+| 직접 경로의 workspace·독립 설치 | workspace 시험 **421/421 PASS**·skip0. 첫 독립 설치 실행은 lifecycle smoke의 동기 assertion 때문에 실패했으며 async assertion 전환 뒤 **26/26 packed install/public declaration/import/해당 runtime smoke PASS**. 외부 SDK 선언 진단과 authored declaration 결과는 원시 로그에서 구분한다. `native-connected-workspace-tests.log`, `native-connected-isolation{,-fixed}.log` 보존. 전체 root 회귀는 별도 미완료 |
+| 후속 native 회귀 | 제거된 notify 시험을 보관한 실제 peer/leaf **3/3 PASS**. 공통 ResidentRuntime과 실제 Linux scope/journal의 동시 시작·옛 incarnation 중지 거절·geometric backoff·5/60s start-limit·권한 거절 **3/3 PASS**. `native-legacy-leaf-fixed.log`, `native-resident-first-real.log` 보존. 후속 source의 Ubuntu CI는 재실행 필요 |
 | 직접 native 경로와 공통 OS/정책의 확대 실행 | **80/80 PASS**, fail/skip/cancel/todo0. Linux 실제 namespace·sender·Git sandbox와 공통 FD/파일/로그/종료 정책·protocol·Restic dump oracle을 함께 실행. input `84b40cf23b96c72a8f0f5da5d570bf6c9cd4393862adf64a5778d53d75a0d19f`(15590개), 전후 동일. `native-connected-current-linux.log`와 before/after JSON 보존. 전체 local 및 Darwin qualification 아님 |
 | 2026-10-26 직접 native 경로의 실제 관련 시험 | **33/33 PASS**, fail/skip/cancel/todo0. Linux 실제 bwrap0.12·kernel namespace/pidfd·SIGKILL 5개 경계·setsid double fork/FD 폐기·SCM_RIGHTS transfer와 64 FD 반환 반복·credential 위조 거절·candidate checkout/exec·quarantine 검증/import·POSIX FD·로그 정책·shutdown fence. 일부 policy 단위 시험도 포함하며 G-*나 전체 Linux/Mac 제품 qualification으로 승격하지 않음. input `f6ee85ab6055581bf7f400bbf47b452652bb7f15feab63cc7a91852e6c9b44db`(15590개), 전후 동일. 원시 `native-connected-fixed-real.log`와 before/after JSON 보존 |
 | 위 실제 경로의 발견·수정 | 취소 후 gate release, pre-gate 부모 SIGKILL 후 init 생존, quarantine mount target 누락, private argv NUL 검증 누락을 실제 재현 후 수정. 첫 실패 로그를 삭제하지 않음. witness 없는 opening은 unknown으로 보존하며 이 사례의 기대된 거절을 복구 완료로 세지 않음 |
@@ -145,7 +148,7 @@ DR48은 ACL/xattr·special file·nested mount·읽을 수 없는 파일·복원�
 
 아래 값은 **구조 검사의 현재 입력 identity**다. digest 생성은 runtime PASS를 만들지 않는다.
 
-verification input digest `df788571bb8a51a39e945d8262c5484a630ade3c22f4f5841432d4a5adf6cbd6` (15590 files).
+verification input digest `dbd9facb8695635ac3dbdace373b8b68b9ca5d2e8942dfbe81441d61ebd2a076` (15591 files).
 
 현재 source 목록은 [production-files.txt](../../production-files.txt), per-file SHA-256은 [production-loc-hashes.json](../../production-loc-hashes.json)이 소유한다. `npm run check:inventory`는 cloc 없이 source bytes를 확인한다. `npm run evidence:refresh`의 구조 재생성과 실제 runtime 실행은 별도다.
 
