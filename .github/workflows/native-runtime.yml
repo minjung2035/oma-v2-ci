@@ -50,6 +50,37 @@ jobs:
           /usr/bin/bwrap --version > .scratch/native-runtime/bubblewrap-version.txt
           sha256sum /usr/bin/bwrap > .scratch/native-runtime/bubblewrap-sha256.txt
           uname -a > .scratch/native-runtime/kernel.txt
+      - name: Load the bubblewrap user namespace permission on the disposable Ubuntu host
+        if: runner.os == 'Linux'
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import re, subprocess, json
+          evidence = Path('.scratch/native-runtime')
+          setting = Path('/proc/sys/kernel/apparmor_restrict_unprivileged_userns')
+          before = setting.read_bytes()
+          (evidence / 'userns-restriction-before.txt').write_bytes(before)
+          with (evidence / 'apparmor-profiles-before.txt').open('wb') as out:
+              subprocess.run(['sudo', 'cat', '/sys/kernel/security/apparmor/profiles'], stdout=out, check=True)
+          attachment = re.compile(r'^\s*(?:profile\s+(?:"[^"]+"|\S+)\s+)?(?:"/usr/bin/bwrap"|/usr/bin/bwrap)(?=\s|\{)', re.M)
+          matching = [p for p in Path('/etc/apparmor.d').iterdir() if p.is_file() and attachment.search(p.read_text())]
+          if len(matching) > 1:
+              raise RuntimeError('multiple AppArmor attachments for pinned bwrap: ' + repr(matching))
+          profile = evidence / 'bwrap.apparmor'
+          if matching:
+              profile.write_bytes(matching[0].read_bytes())
+              source = str(matching[0])
+          else:
+              # Ubuntu's application-specific userns permission; no global
+              # sysctl change and no replacement of OMA's namespace/seccomp tests.
+              profile.write_text('abi <abi/4.0>,\ninclude <tunables/global>\nprofile oma-native-ci-bwrap /usr/bin/bwrap flags=(unconfined) {\n  userns,\n}\n')
+              source = 'explicit CI profile for /usr/bin/bwrap'
+          subprocess.run(['sudo', 'apparmor_parser', '-r', str(profile)], check=True)
+          after = setting.read_bytes()
+          (evidence / 'userns-restriction-after.txt').write_bytes(after)
+          assert before == after, 'the global user namespace restriction must remain unchanged'
+          (evidence / 'apparmor-setup.json').write_text(json.dumps({'profileSource': source, 'globalRestrictionUnchanged': True}))
+          PY
       - name: Verify Linux pidfd and Unix credential lifetimes on the real kernel
         if: runner.os == 'Linux'
         run: |
@@ -59,6 +90,9 @@ jobs:
         run: |
           export OMA_NATIVE_EVIDENCE_DIR="$PWD/.scratch/native-runtime"
           if ! node --test test/native-process-scope.test.mjs test/native-resident-runtime.test.mjs test/native-credential-stream.test.mjs test/native-unix-message.test.mjs test/native-git-execution.test.mjs > .scratch/native-runtime/linux-execution-tests.log 2>&1; then cat .scratch/native-runtime/linux-execution-tests.log; exit 1; fi
+      - name: Preserve actual Ubuntu kernel permission observations
+        if: ${{ always() && runner.os == 'Linux' }}
+        run: sudo dmesg --notime > .scratch/native-runtime/kernel-permissions.log
       - name: Confirm verification inputs did not change during execution
         if: always()
         run: |

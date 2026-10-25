@@ -2,7 +2,14 @@
 
 ## 실행
 
-아래는 **Linux checkout** 설치 경로다. Node.js 26을 사용하는 환경에서 저장소 루트에서 설치·빌드한다. Society 실행에는 Linux의 user systemd/cgroup, bubblewrap와 user namespace, Git 및 프로젝트가 요구하는 도구가 필요하다. CI의 Node.js 버전은 26이며, 빌드 성공만으로 이 실행 조건이 충족되는 것은 아니다. Registry 배포와 플랫폼별 실제 지원 판정은 [validation](implementation/validation.md)을 확인한다.
+아래는 **Linux checkout** 설치 경로다. Node.js 26을 사용하는 환경에서 저장소 루트에서 설치·빌드한다. DR49의 foreground native Society는 bubblewrap 0.12의 FD mount/gate 기능, user·PID namespace와 pidfd, SO_PEERPIDFD를 제공하는 Linux kernel, Git 및 프로젝트 도구를 요구한다. 실행·wake·로그는 공통 TypeScript owner가 담당한다. CI의 Node.js 버전은 26이며, 빌드 성공만으로 이 실행 조건이 충족되는 것은 아니다. Registry 배포와 플랫폼별 실제 지원 판정은 [validation](implementation/validation.md)을 확인한다.
+
+Ubuntu의 AppArmor user namespace 제한이 활성화된 환경에서는 고정 `/usr/bin/bwrap`에
+application별 `userns` 권한이 필요하다. CI는 distro의 해당 profile을 로드하거나 그 binary에만
+적용하는 명시적 profile을 기록해 사용하며, 전역 user namespace 제한 값을 바꾸지 않는다.
+[Ubuntu의 해당 권한 설명](https://ubuntu.com/blog/ubuntu-23-10-restricted-unprivileged-user-namespaces)을
+따르며 실제 namespace/seccomp·FD·종료 시험을 그대로 실행한다. `uid map: Permission denied`는
+실행 성공이나 scope 사망 증거가 아니다. journal의 witness 없는 opening은 unknown으로 남는다.
 
 ```sh
 npm ci
@@ -54,7 +61,9 @@ password를 잃으면 복원할 수 없다. 다른 경로로 파일을 일부만
 
 Mac의 `oma pi install npm:<package> --host-only`는 앱·Host API token·VM 없이 기존 host package store/index만 갱신한다. `remove`, `update`, `list`에도 같은 선택을 사용할 수 있다. 설치만으로 Personal 확장을 켜지 않으므로 Personal의 Config > Extensions에서 명시적으로 선택한다. `--host-only`는 Pi에 전달되지 않으며 `--project`와 함께 쓸 수 없고 Linux에서는 거절한다. 이 flag가 없으면 기존 Society guest 동기화가 필요하며 앱이 없거나 관측이 실패해도 host-only로 대신 실행하지 않는다.
 
-Mac Personal 시작은 Host API token 조회·VM 시작 전 host 경로로 분기한다. Linux에서 실행한 Mac entry·Darwin 경계 주입 시험은 native macOS 지원·내구성 증거가 아니다. Mac 최초 project 확장 선택과 guest Society history 연결을 포함한 현재 검증·미완료·차단 범위는 [validation](implementation/validation.md)이 소유한다.
+Mac도 공통 native 진입점을 사용하며 VM 실행 경로는 제거했다. 현재 G-PROCESS·G-FILES·G-AUTH가
+미해결이므로 Mac 제품 실행은 효과 전에 거절한다. 기존 VM 데이터·history·accepted plan을 자동
+변환하거나 삭제하지 않는다. 공통 primitive 시험 성공과 실제 Mac 제품 지원은 [validation](implementation/validation.md)에서 구분한다.
 
 최초 Personal 설정에서 프로젝트 확장을 가져오지 않으려면 `oma --mode personal --no-project-extensions`로 시작한다. 읽을 수 없는 bookmark·프로젝트 설정 때문에 첫 실행이 막혔을 때도 명시적으로 이 선택을 할 수 있다. 기존 Personal 확장 선택은 유지되며 이 flag로 지워지지 않는다. 저장된 history 재개에는 사용할 수 없다. 기본 경로는 관측 실패를 빈 확장 목록으로 바꾸지 않고 오류를 보고한다.
 
@@ -188,7 +197,8 @@ Society의 Resident는 항상 bwrap 안에서 실행된다. 설정 없이 시작
 - `installation.rootfs`는 정규화된 비-root 절대 경로여야 한다. `/`는 `UNSUPPORTED_PROFILE` startup failure이며 RunnerModule 구성 전에 거절한다. bwrap/user namespace가 없거나 spawn이 실패해도 host 실행으로 대체하지 않는다([DR31](design-revisions.md)). `oma login`과 `oma pi`의 대화형 엔진은 Resident가 아니며 이 sandbox 계약을 적용하지 않는다.
 - Resident 환경은 host 환경을 상속하지 않는다(`--clearenv`). `LANG`/`LC_ALL=C.UTF-8`, `TZ=UTC`, `TERM=xterm-256color`, `TMPDIR=/tmp`, `SHELL=/bin/sh`, `USER`/`LOGNAME=agent`를 설정한다. `XDG_DATA_HOME=/home/agent/.local/share`, `XDG_RUNTIME_DIR=/home/agent/.run`은 confined home의 private 디렉터리다. PATH는 pinned OMA/Node, confined home의 `.local/bin`, `/usr/bin`, `/bin` 순서다.
 - 존재하는 DNS/NSS/hosts/timezone 파일과 CA 디렉터리만 RO bind한다. 없는 파일(깨진 symlink 포함)은 mount 계획에서 제외하며 `/etc` 전체를 노출하지 않는다. filesystem/pid/user 격리는 유지하고 네트워크는 공유한다.
-- macOS guest의 package engine과 Society session도 UTC, `/bin/sh`, `USER`/`LOGNAME=oma`, `/tmp`를 명시한다. 이는 guest 환경 구성 계약이며 native macOS VM 실행 증거는 별도다.
+- 과거 guest 환경은 현재 실행 계약이 아니다. Darwin은 검증된 native backend가 연결되기 전
+  Linux 환경 값을 빌려 실행하지 않으며, 과거 VM 설정으로 fallback하지 않는다.
 
 ## Dashboard 관측
 
