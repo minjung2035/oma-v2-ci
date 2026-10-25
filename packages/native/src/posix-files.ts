@@ -1,6 +1,6 @@
 /** Directory-relative effects. Publication/repair policy belongs to shared TS
  * storage owners. No pathname reconstructed from a directory FD is accepted. */
-import { closeSync, fstatSync, type Stats } from "node:fs";
+import { closeSync, constants, fstatSync, type Stats } from "node:fs";
 import { errno, load } from "koffi";
 import { getSystemErrorName } from "node:util";
 import { StoreError } from "@oma/domain/errors";
@@ -47,7 +47,7 @@ export function statAt(fd: number, name: string, options: { readonly throwIfNoEn
 export function statAt(fd: number, name: string, options?: { readonly throwIfNoEntry: false }): Stats | undefined {
   entry(fd, name);
   let pin: number;
-  try { pin = openBeneath(fd, name, 0o10000000); }
+  try { pin = openBeneath(fd, name, 0o10000000 | constants.O_NOFOLLOW); }
   catch (error) { if (options && (error as NodeJS.ErrnoException).code === "ENOENT") return undefined; throw error; }
   return withCleanup(() => fstatSync(pin), () => closeSync(pin));
 }

@@ -1,4 +1,5 @@
 import { createBroker } from "../broker/broker-composition.js";
+import { assertNativeRuntime } from "../runtime/native-support.js";
 import { createReconcileModule } from "../broker/reconcile-composition.js";
 import { createLifecycleModule } from "../broker/lifecycle-composition.js";
 import { createGitServices } from "../broker/git-composition.js";
@@ -63,6 +64,7 @@ catch (error) {
 }
 const { stateRoot, runRoot, configPath } = location;
 async function main(): Promise<void> {
+    assertNativeRuntime();
     assertHostDirectoryLayout(runRoot, true);
     // P0-8: the run root's parent (`…/oma` under the runtime dir) is oma's own;
     // a mode-000 directory there is repaired within that boundary, not wedged on.

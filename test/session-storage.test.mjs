@@ -11,7 +11,7 @@ import { makeValidAgent } from "../dist/test/fixtures/spec.js";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { SessionStorage } from "#oma-test/app/runtime/session-storage";
-import { managedResticPath } from "#oma-test/app/runtime/restic";
+import { managedResticPath } from "@oma/storage/restic-tool";
 import { tryHoldSociety } from "#oma-test/app/runtime/society-lease";
 import { digestCacheTrees } from "@oma/storage/cache-trees";
 

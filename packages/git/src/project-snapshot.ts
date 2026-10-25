@@ -9,7 +9,7 @@ import { runProcessSync, decodeProcessText } from "@oma/process/run";
 import { GIT_ENV, requireTextExit } from "@oma/process/policies";
 import { withCleanup } from "@oma/native/cleanup";
 import { SnapshotReader, copySnapshotFile, sameSnapshotFile } from "@oma/native/snapshot-reader";
-import { prepareProjectDirectory } from "./linux-project-preparation.js";
+import { prepareProjectDirectory } from "./project-preparation.js";
 import { type ProjectPreparation } from "./project-preparation.js";
 
 /** Commands that inspect the Human's repository must not run its programs.

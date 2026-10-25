@@ -13,7 +13,6 @@ import { PrincipalDelivery, principalHostBroker } from "../runtime/principal-del
 import type { PiEvent } from "@oma/engine/pi-rpc";
 import { superviseBroker, type BrokerHandle } from "../runtime/broker-supervisor.js";
 import type { HostTenure } from "../runtime/host-tenure.js";
-import { adoptPrincipalEgress, type PrincipalEgress } from "../runtime/egress-forwarder.js";
 import { limitsOf } from "./status-observation.js";
 import type { PromptOutcome } from "@oma/domain/settings";
 import type { SocietyBootstrap, PreparedSociety } from "./society-bootstrap.js";
@@ -30,7 +29,6 @@ export class SocietyRuntime {
   get finished(): boolean { return this.finishing; }
   private disowned = false;
   private broker: BrokerHandle | null = null;
-  private principalEgress: PrincipalEgress | null = null;
   private delivery: PrincipalDelivery | null = null;
   private currentHandle = newSessionHandle();
   private preparationStartFailed = false;
@@ -46,32 +44,13 @@ export class SocietyRuntime {
       onEvent: line => { if (!/^(broker (ready|listening)\b|Restored rootfs entry\b)/.test(line))
         this.view.notice(`broker: ${line}`); this.view.draw(); },
     });
+    // Startup may finish after shutdown claimed this runtime. Return the late
+    // owned broker before registering an engine or acquiring display polling.
+    if (this.finishing) { await this.broker?.stop(); return; }
     // OMA runs the engine it shipped with; it never resolves Pi from PATH, and it
     // gives that engine its own agent directory so a Pi the user installed keeps
     // its configuration, extensions and sessions to itself. It starts without
     // authority: the credential reaches it later, on a private socket.
-    // DR18 (D-4 with D-10): in the macOS guest the Principal's engine reaches its
-    // provider through the guest's egress, as a Resident's does -- one
-    // placeholder and forwarder for this process, kept across engine restarts.
-    // On Linux the environment names no egress socket and this is null.
-    // P0V-114 (G04-01): it is the tenure's -- opened only by the owner, closed as
-    // the tenure ends however it ends, and closed at once if the tenure ended
-    // while it was opening. Where the environment names an egress socket (the
-    // macOS guest), it is the engine's only provider path: an open that fails is
-    // a start failure, not a degradable notice -- the guest's engine has no
-    // other provider path, so the error propagates instead of starting an
-    // engine that can only fail against it.
-    const egressOwner = this.tenure;
-    if (egressOwner !== null) {
-      const egressProfile = principalSessionProfile(this.bootstrap.configPath, this.bootstrap.society);
-      this.principalEgress = await adoptPrincipalEgress(egressOwner, { society: this.bootstrap.society, runRoot: this.bootstrap.runRoot, provider: egressProfile.provider, model: egressProfile.model, inferenceSeconds: egressProfile.inferenceSeconds,
-        modelProfile: this.config.agentProfiles[this.config.principalProfile]?.modelProfile ?? this.config.principalProfile,
-        frameBytes: this.config.limits.frameBytes, deadlineMs: this.config.limits.receiptWaitSeconds * 1000, env: process.env,
-        // A listener error past the forwarder's start is reported on this
-        // screen and absorbed there -- this process is the forwarder's host,
-        // and the path it paid for stays bound for the engine to retry.
-        onError: error => { this.view.notice(`The engine's provider path survived a listener error: ${this.view.errorWords(error)}`); this.view.draw(); } });
-    }
     if (this.broker === null) {
       // No tenure, so no broker was ever started and nothing was written. The
       // product is a Control Panel over state another `oma` owns.
@@ -93,9 +72,6 @@ export class SocietyRuntime {
         this.startSessionOnce(true);
       }
     }
-  }
-  private withEgress(environment: Record<string, string>): Record<string, string> {
-    return this.principalEgress === null ? environment : { ...environment, ...this.principalEgress.env };
   }
   private startEngine(owner: HostTenure): PrincipalSession {
     const piRuntime = resolvePiRuntime({
@@ -120,7 +96,7 @@ export class SocietyRuntime {
       // Resident's unit environment feeds its runner -- produced by the
       // deployment, never authored configuration.
       toolSurface: encodedPrincipalToolSurface(),
-      fence: owner.fence }, profile, limitsOf(this.config.limits), this.withEgress(principalEnvironment({ stateRoot: this.bootstrap.stateRoot, runRoot: this.bootstrap.runRoot, libdir: this.config.installation.libdir }, profile, this.config.limits)), {
+      fence: owner.fence }, profile, limitsOf(this.config.limits), principalEnvironment({ stateRoot: this.bootstrap.stateRoot, runRoot: this.bootstrap.runRoot, libdir: this.config.installation.libdir }, profile, this.config.limits), {
       errorWords: error => this.view.errorWords(error),
       onAcquire: engine => owner.adopt(engine),
       // WP09.03: every callback is this engine's; a late one from an engine

@@ -57,9 +57,7 @@ export const DEPLOYMENT_LAYOUT = Object.freeze({
   // systemd unit, so it is absent from templateEntries by design.
   entries: Object.freeze({ broker: "apps/oma/dist/entry/broker.js", preparation: "apps/oma/dist/entry/prepare-society.js", runner: "apps/oma/dist/entry/runner.js", host: "apps/oma/dist/entry/host.js", tui: "apps/oma/dist/entry/oma.js", interactive: "apps/oma/dist/entry/pi-interactive.js",
     society: "apps/oma/dist/entry/oma-society.js", personalHost: "apps/oma/dist/entry/personal-host.js", personal: "apps/oma/dist/entry/pi-personal.js",
-    mac: "apps/oma/dist/entry/oma-mac.js",
-    // DR25: the macOS engine's side of `oma pi`, run by its guest host service.
-    guestSession: "apps/oma/dist/entry/guest-session.js", guestPackages: "apps/oma/dist/entry/guest-packages.js" }),
+  }),
   templateEntries: Object.freeze({ "resident.service.in": "runner",
     "principal-relay.service.in": "host" } as const),
   // TUI-003: the host product's files, relative to the installation. The
@@ -80,8 +78,7 @@ export const DEPLOYMENT_LAYOUT = Object.freeze({
     "packages/engine/dist/pi-compat/interactive-tools.js", "packages/engine/src/pi-compat/interactive-tools.ts", "packages/engine/src/pi-compat/pi-private.d.ts",
     "packages/engine/dist/pi-presentation.js", "packages/engine/src/pi-presentation.ts",
     "apps/oma/dist/entry/oma-society.js", "apps/oma/src/entry/oma-society.ts", "apps/oma/dist/entry/personal-host.js", "apps/oma/src/entry/personal-host.ts",
-    "apps/oma/dist/entry/pi-personal.js", "apps/oma/src/entry/pi-personal.ts", "packages/engine/dist/personal.js", "packages/engine/src/personal.ts", "packages/engine/dist/interactive.js", "packages/engine/src/interactive.ts",
-    "apps/oma/dist/entry/oma-mac.js", "apps/oma/src/entry/oma-mac.ts"] as const),
+    "apps/oma/dist/entry/pi-personal.js", "apps/oma/src/entry/pi-personal.ts", "packages/engine/dist/personal.js", "packages/engine/src/personal.ts", "packages/engine/dist/interactive.js", "packages/engine/src/interactive.ts"] as const),
   // The engine and its terminal measurement library ship with the product, so
   // they are pinned like any other runtime dependency (TUI-016).
   runtimeDependencies: Object.freeze([

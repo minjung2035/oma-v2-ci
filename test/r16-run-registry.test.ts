@@ -69,7 +69,7 @@ for (const population of ["empty", "removed"] as const) {
     assert.equal(old.closes(), 1);
     assert.equal(next.closes(), 0);
     assert.equal(current.identity.incarnation, 2);
-    assert.deepEqual(current.identity.cgroupIdentity, { dev: 1n, ino: 11n });
+    assert.deepEqual(current.identity.scopeIdentity, { dev: 1n, ino: 11n });
     current.revoke(); // A failed endpoint retains the attempted invocation fence.
     assert.throws(() => registry.begin("alice", 3, second, "/new"), { code: "STALE_RUN" });
     registry.close();

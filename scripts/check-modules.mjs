@@ -11,7 +11,7 @@ export const ALLOWED_WORKSPACE_DEPENDENCIES = Object.freeze({
   config: ["contracts", "domain", "protocol", "native", "storage"],
   git: ["contracts", "domain", "protocol", "process", "native", "storage"],
   app: ["broker","client","config","contracts","domain","engine","extension","git","lifecycle","mail","native","platform-linux","platform-mac","process","protocol","reconcile","review","storage","tool-hashline","tool-lsp","tool-mcp","tool-runtime","tool-web","tui"],
-  "platform-mac": ["contracts", "domain", "protocol", "native", "process", "git"],
+  "platform-mac": ["contracts", "domain", "protocol", "native", "process"],
   "platform-linux": ["contracts", "domain", "protocol", "native", "process", "storage"],
   engine: ["contracts", "domain", "protocol", "client", "process"],
   broker: ["contracts", "domain", "protocol", "native", "process"],
@@ -233,6 +233,10 @@ export function moduleFindings(root = process.cwd()) {
   // Root consumers also use exports; they cannot bypass a boundary by location.
   for (const directory of ["src", "test", "scripts", "implementation/tests"]) for (const file of sourceFiles(resolve(root, directory))) {
     if (file.includes(`${sep}vendor${sep}`)) continue;
+    // Historical audit programs are preserved records and are not build/test
+    // inputs. Retiring a runtime must not rewrite the imports in past reviews.
+    // Active tests and fixtures keep the export/private-import enforcement.
+    if (slash(relative(root, file)).startsWith("test/audit/")) continue;
     const source = ts.createSourceFile(file, readFileSync(file, "utf8"), ts.ScriptTarget.Latest, true);
     scanReferences(source, specifier => {
         if (specifier.startsWith("#oma-test/")) {

@@ -2,7 +2,6 @@ import { SessionManager, SessionSelectorComponent, type ExtensionContext } from 
 import { lstatSync } from "node:fs";
 import { StoreError } from "@oma/domain/errors";
 import type { SessionMode } from "@oma/domain/session-mode";
-import { isGuestHistoryReference } from "@oma/protocol/guest-history";
 import { adaptInteractiveMode } from "./pi-compat/interactive-mode.js";
 import type { PersonalEngineInput, PersonalEnginePorts } from "./personal-ports.js";
 import type { PersonalSessionState } from "./personal-state.js";
@@ -64,14 +63,6 @@ export function createPersonalHistory(input: PersonalEngineInput, ports: Persona
       if (!current(epoch) || state.replacing) return { cancelled: true };
       state.replacing = true;
       try {
-        if (process.platform === "darwin" && isGuestHistoryReference(file)) {
-          await ports.history.inspectGuest(file);
-          if (!current(epoch)) return { cancelled: true };
-          if (options && Object.values(options).some(value => value !== undefined))
-            throw new StoreError("INVALID_REQUEST", "Cross-birth resume cannot carry callbacks or cwd overrides");
-          if (await beforeSwitch("resume", file)) await transition(epoch, file);
-          return { cancelled: true };
-        }
         const target = await ports.history.target(file, birth.cwd);
         if (!current(epoch)) return { cancelled: true };
         if (target.id === birth.id && target.mode === "personal") return await sameBirthSwitch(file, options);
@@ -92,13 +83,6 @@ export function createPersonalHistory(input: PersonalEngineInput, ports: Persona
           signal?.throwIfAborted();
           const sessions = await SessionManager.listAll(entry.dir, undefined, signal);
           found.push(...sessions.map(info => ({ ...info, name: `[${entry.mode === "personal" ? "Personal" : "Society"}] ${info.name ?? ""}`.trim() })));
-        }
-        if (process.platform === "darwin") {
-          try { found.push(...await ports.history.listGuests(signal)); }
-          catch (error) {
-            signal?.throwIfAborted();
-            if (current(epoch)) ctx.ui.notify(`Guest histories unavailable: ${String(error)}`, "warning");
-          }
         }
         return current(epoch) ? found.sort((a, b) => b.modified.getTime() - a.modified.getTime()) : [];
       };

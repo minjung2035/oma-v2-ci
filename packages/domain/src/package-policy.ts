@@ -23,3 +23,10 @@ export const PACKAGE_ARCHIVE_BOUNDS = Object.freeze({
   /** Bytes of one path component: NAME_MAX -- format-mandated. */
   componentBytes: 255,
 });
+
+
+export const PACKAGE_USAGE = "usage: oma pi install <npm:… | git:… | https://… | ssh://… | local dir, tarball or file>\n" +
+  "       oma pi remove <source>\n" +
+  "       oma pi update <source> | --extension <source> | --extensions\n" +
+  "       oma pi list\n" +
+  "Packages carry extensions, skills, prompt templates and themes; a local path is copied into the store.";

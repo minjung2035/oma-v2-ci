@@ -1,20 +1,16 @@
 /** Human-owned settings and session metadata, never a Society sandbox boundary.
- * Linux retains held-directory resolution; macOS uses the host's private-file
- * publication primitives. Mutable callers hold their own writer lock (P0-3).
+ * Both kernels use the shared held-directory
+ * publication policy; unsupported primitives refuse before effects. Mutable callers hold their own writer lock (P0-3).
  * No caller may interpret a failed read as an absent file. */
-import { closeSync, constants, fstatSync, openSync, readSync, writeFileSync } from "node:fs";
-import { basename, dirname } from "node:path";
+import { closeSync, fstatSync, readSync } from "node:fs";
 import { StoreError } from "@oma/domain/errors";
 import { withCleanup } from "@oma/native/cleanup";
 import { decodeUtf8 } from "@oma/domain/utf8";
-import { assertHostDirectoryLayout } from "@oma/native/directory-layout";
 import { openRegularBeneath, withinDirectory } from "@oma/native/files";
 import { ensureDurableDirectory, ensureOwnedDurableDirectory, publishNoReplace, replaceDerivedFile, type DurabilityObserver } from "@oma/storage/durable-fs";
-import { createTemporary, discardTemporary, ensureHostOwnedDirectory, ensureHostUserDirectory, fsyncDirectory, publishMade, replaceFile } from "@oma/platform-mac/files";
 
 export function ensureUserDirectory(path: string): void {
-  if (process.platform !== "darwin") { ensureDurableDirectory(path, 0o700); return; }
-  ensureHostUserDirectory(path);
+  ensureDurableDirectory(path, 0o700);
 }
 
 /** `ensureUserDirectory` for a path whose tail oma owns -- the package store
@@ -23,11 +19,9 @@ export function ensureUserDirectory(path: string): void {
  * directory): every component from it down gets the owner-bits repair the
  * owned sweeps make, so a mode-000 store root cannot wedge the open the way
  * the plain walk did. The ancestors above it are the user's and are never
- * rewritten. `faults` is the durability-fault seam the Linux ensure carries;
- * the host's ensure flushes the same chain without it. */
+ * rewritten. `faults` observes the same durability boundaries on both kernels. */
 export function ensureOwnedUserDirectory(path: string, ownedFrom: string, faults?: DurabilityObserver): void {
-  if (process.platform !== "darwin") { ensureOwnedDurableDirectory(path, ownedFrom, 0o700, faults); return; }
-  ensureHostOwnedDirectory(path, ownedFrom);
+  ensureOwnedDurableDirectory(path, ownedFrom, 0o700, faults);
 }
 
 /** Immutable publications may still have their temporary hardlink after a crash.
@@ -65,31 +59,18 @@ export function readUserFile(path: string, bound: number, options: { readonly si
     }, () => closeSync(fd));
   };
   try {
-    if (process.platform !== "darwin") return withinDirectory(path, (parent, name) => read(openRegularBeneath(parent, name)));
-    assertHostDirectoryLayout(dirname(path), true);
-    return read(openSync(path, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK));
+    return withinDirectory(path, (parent, name) => read(openRegularBeneath(parent, name)));
   } catch (error) { if (!observed && (error as NodeJS.ErrnoException).code === "ENOENT") return null; throw error; }
 }
 
 /** Immutable birth facts: a retry never replaces the bytes already named. */
 export function publishUserFile(path: string, bytes: string): "created" | "existing" {
-  if (process.platform !== "darwin") return publishNoReplace(path, bytes);
-  assertHostDirectoryLayout(dirname(path));
-  const temporary = createTemporary(dirname(path), basename(path));
-  return withCleanup(() => {
-    withCleanup(() => writeFileSync(temporary.fd, bytes), () => temporary.close());
-    const result = publishMade(temporary.path, dirname(path), basename(path));
-    // Also on EEXIST: a publisher may have died before flushing the name.
-    fsyncDirectory(dirname(path));
-    return result;
-  }, () => discardTemporary(temporary));
+  return publishNoReplace(path, bytes);
 }
 
 /** Derived settings only; not for a session's mode or another birth fact. */
 export function replaceUserFile(path: string, bytes: string): void {
-  if (process.platform !== "darwin") { replaceDerivedFile(path, bytes); return; }
-  assertHostDirectoryLayout(dirname(path));
-  replaceFile(dirname(path), basename(path), bytes);
+  replaceDerivedFile(path, bytes);
 }
 
 /** Mutable engine files serialize through locked-files.js, the one locked

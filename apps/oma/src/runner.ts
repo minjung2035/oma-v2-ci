@@ -13,7 +13,6 @@ import { type SandboxDirectories as ResidentDirectories } from "@oma/contracts/r
 import type { PiConfinement, PiEgress, PiInference } from "@oma/engine/pi-spawn-plan";
 import { InferenceRelay } from "./runtime/inference-relay.js";
 import { ConnectProxy, makePublicDial, type ConnectDial, type EgressAudit } from "./runtime/connect-proxy.js";
-import { EGRESS_SOCKET_ENV, EgressForwarder, requestEgressConnect, requestEgressPlaceholder } from "./runtime/egress-forwarder.js";
 import { placeholderFor, resolveEngineAuth } from "@oma/engine/engine-auth";
 import { productSurfaceMasks } from "@oma/platform-linux/resident-rootfs";
 import { StoreError } from "@oma/domain/errors";
@@ -179,24 +178,6 @@ export class RunnerModule {
     const socketHostPath = join(dirname(this.lease.socketHostPath), "inference.sock");
     if (Buffer.byteLength(socketHostPath) > 107)
       throw new StoreError("UNSUPPORTED_PROFILE", "relay socket path exceeds Linux sun_path");
-    // DR18 (D-10): in the macOS guest the credential stays on the host; the
-    // run asks the guest's egress service for its placeholder and forwards the
-    // engine's connections there.
-    const egress = process.env[EGRESS_SOCKET_ENV];
-    if (egress !== undefined && egress.length > 0) {
-      if (!this.paths.society) throw new StoreError("UNSUPPORTED_PROFILE", "confined inference configuration is incomplete");
-      const run = { society: this.paths.society, actor: this.lease.actor, incarnation: this.lease.incarnation };
-      const issued = await requestEgressPlaceholder({ socket: egress, frameBytes: this.limits.frameBytes, deadlineMs: this.limits.receiptWaitSeconds * 1000 },
-        run, this.profile.model.provider, this.profile.model.model, this.profile.model.inferenceTimeoutSeconds);
-      // AV-15: the placeholder's lease is the forwarder's -- closing the
-      // forwarder (the delivery's finally) ends the run's relay on the host.
-      const forwarder = await EgressForwarder.listen(socketHostPath, egress,
-        { placeholderId: issued.placeholderId, ...run, modelProfile: this.profile.modelProfile }, 4, issued);
-      // The host-issued run owns each tunnel. Destination access is unrestricted.
-      const connectDial: ConnectDial = (host, port) => requestEgressConnect({ socket: egress,
-        frameBytes: this.limits!.frameBytes, deadlineMs: this.limits!.receiptWaitSeconds * 1000 }, issued, run, host, port);
-      return { relay: forwarder, connectDial, inference: { socketHostPath, provider: issued.provider, model: issued.model, placeholder: issued.placeholder } };
-    }
     const auth = await resolveEngineAuth(piAgentDir, this.profile.model.provider, this.profile.model.model);
     const placeholder = placeholderFor(auth.apiKey);
     const relay = await InferenceRelay.open(socketHostPath,

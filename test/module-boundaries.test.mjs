@@ -23,14 +23,14 @@ test("DR44: conversation and native lifecycle boundaries also reject erased, def
   for (const [file, target, rule] of [
     ["apps/oma/src/application/society-interaction.ts", "@oma/engine/principal-session", "society-conversation-boundary"],
     ["apps/oma/src/application/society-runtime.ts", "@oma/tui/words", "society-conversation-boundary"],
-    ["packages/platform-linux/src/session-launcher.ts", "../../../apps/oma/src/platform/guest/host.js", "platform-adapter-boundary"],
-    ["packages/platform-mac/src/vz-driver.ts", "../../../apps/oma/src/platform/host/lifecycle.js", "platform-adapter-boundary"],
+    ["packages/platform-linux/src/sandbox.ts", "../../../apps/oma/src/application/society-runtime.js", "platform-adapter-boundary"],
+    ["packages/platform-mac/src/keychain-client.ts", "../../../apps/oma/src/application/society-transition.js", "platform-adapter-boundary"],
   ]) for (const text of [
     `import type { X } from "${target}";`, `export type { X } from "${target}";`,
     `type X = import("${target}").X;`, `import("${target}");`, `require("${target}");`,
   ]) assert.equal(findings({ [file]: text }).some(row => row.rule === rule), true, text);
   assert.deepEqual(findings({
-    "packages/platform-linux/src/session-launcher.ts": 'import type { SessionLauncher } from "@oma/contracts/platform-lifecycle";',
+    "packages/platform-linux/src/sandbox.ts": 'import type { SandboxPlan } from "@oma/contracts";',
     "apps/oma/src/application/society-interaction.ts": 'import type { ConversationUi } from "./society-conversation.js";',
   }), []);
 });

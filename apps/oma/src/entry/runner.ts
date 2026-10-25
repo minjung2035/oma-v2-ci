@@ -1,6 +1,7 @@
 // RUN-001/UNIT-003: one bound runner identity with trusted Pi RPC delivery.
 // The fixed unit supplies a broker-rendered profile; this process never reads SQLite.
 import { dirname, join } from "node:path";
+import { assertNativeRuntime } from "../runtime/native-support.js";
 import { RunnerModule } from "../runner.js";
 import { loadConfiguration } from "@oma/config";
 import { isValidActorName, isValidSocietyName } from "@oma/domain/identifiers";
@@ -34,6 +35,8 @@ let location: LaunchLocation;
 try { location = launchedLocation(args, society); }
 catch (error) { console.error(`runner: ${error instanceof Error ? error.message : String(error)}`); usage(); }
 const { stateRoot, runRoot, configPath } = location;
+try { assertNativeRuntime(); }
+catch (error) { console.error(`runner: ${error instanceof Error ? error.message : String(error)}`); process.exit(4); }
 const configuration = loadConfiguration(configPath);
 const cfg = configuration.config;
 requireResidentRootfs(cfg.installation.rootfs);

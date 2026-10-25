@@ -68,7 +68,7 @@ export class Broker {
   private lastSweepFailure: string | null = null;
   private starting: Promise<void> | null = null;
   private closing: Promise<void> | null = null;
-  private readonly runLeases = new RunRegistry();
+  private readonly runLeases: RunRegistry;
   private readonly health = new AdmissionGate();
   private readonly peers: PeerAuthenticator;
   private readonly publicDispatcher: PublicDispatcher;
@@ -86,6 +86,7 @@ export class Broker {
   ) {
     if (typeof processLock?.assertHeld !== "function")
       throw new StoreError("BROKER_UNAVAILABLE", "broker requires its owner's held process lock");
+    this.runLeases = new RunRegistry(dependencies.acquireRunScope);
     const { ledger: store, mail, units, views, reconcile } = dependencies;
     this.store = store; this.units = units; this.views = views; this.reconcile = reconcile;
     this.mail = mail;

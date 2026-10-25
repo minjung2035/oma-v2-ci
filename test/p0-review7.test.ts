@@ -230,12 +230,12 @@ test("P0V-114 / G04-02, G04-03, G03-05: one owner clears a socket's name before 
 test("P0V-114 / G04-03: a server's close removes its own name, and not a name the next server bound meanwhile", async t => {
   const { createServer } = await import("node:net");
   const { existsSync } = await import("node:fs");
-  const { EgressForwarder } = await import("#oma-test/app/runtime/egress-forwarder");
+  const { InferenceRelay } = await import("#oma-test/app/runtime/inference-relay");
   const dir = mkdtempSync(join(tmpdir(), "oma-sock-"));
   t.after(() => { rmSync(dir, { recursive: true, force: true }); });
   const path = join(dir, "principal-inference.sock");
   const run = { placeholderId: UUID, society: "demo", actor: "principal", incarnation: 0, modelProfile: "p" };
-  const first = await EgressForwarder.listen(path, join(dir, "egress.sock"), run, 1);
+  const first = await InferenceRelay.open(path, { origin: "https://fixture.invalid", headers: {} }, { concurrent: 1, timeoutMs: 1000 });
   const closing = first.close();
   assert.equal(existsSync(path), false, "the closing forwarder's name is gone as close returns");
   const next = createServer();

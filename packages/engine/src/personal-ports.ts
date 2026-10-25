@@ -1,4 +1,4 @@
-import type { ModelRuntime, SessionInfo } from "@earendil-works/pi-coding-agent";
+import type { ModelRuntime } from "@earendil-works/pi-coding-agent";
 import type { VerifiedExtension, PackageResourcePaths } from "@oma/contracts/assets";
 import type { SessionMode } from "@oma/domain/session-mode";
 import type { EngineStartEffects } from "./ports.js";
@@ -23,8 +23,6 @@ export interface PersonalEnginePorts extends EngineStartEffects {
   readonly history: {
     target(file: string, cwd: string): Promise<{ readonly id: string; readonly mode: SessionMode }>;
     directories(cwd: string): readonly { readonly dir: string; readonly mode: SessionMode }[];
-    inspectGuest(file: string): Promise<unknown>;
-    listGuests(signal?: AbortSignal): Promise<SessionInfo[]>;
   };
   acquireCredentials(): Promise<{ readonly modelRuntime: ModelRuntime; close(): Promise<void> } | undefined>;
 }

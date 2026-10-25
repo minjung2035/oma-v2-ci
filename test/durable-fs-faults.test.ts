@@ -66,11 +66,13 @@ test("a derived write failure before rename preserves the old file and removes o
 test("an uncertain rename can leave the new derived file visible and is never reported as no effect", { concurrency: false }, t => {
   fixture((root, _source, target) => {
     fs.writeFileSync(target, "old");
-    scoped(t, () => {
-      t.mock.method(fs, "renameSync", (...[from, to]: Parameters<typeof native.rename>) => { native.rename(from, to); throw eio(); });
-    }, () => assert.throws(() => replaceDerivedFile(target, "new"), isEio));
+    assert.throws(() => replaceDerivedFile(target, "new", 0o600, fault => {
+      if (fault.point === "derived-rename" && fault.phase === "after-visible") throw eio();
+    }), isEio);
     assert.equal(fs.readFileSync(target, "utf8"), "new");
     assert.deepEqual(fs.readdirSync(root).sort(), ["source.eml", "target.eml"]);
+    replaceDerivedFile(target, "new");
+    assert.equal(fs.readFileSync(target, "utf8"), "new", "retry preserves the already visible bytes");
   });
 });
 

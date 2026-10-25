@@ -25,12 +25,7 @@ import test, { type TestContext } from "node:test";
 import type { ResolvedAgentSpec } from "@oma/contracts";
 import { Broker } from "@oma/broker";
 import { LifecycleModule } from "@oma/lifecycle";
-import { EgressPool, startEgressService } from "#oma-test/app/platform/guest/egress";
-import { startGuestServer, type GuestIdentity } from "#oma-test/app/platform/guest/server";
-import { startHostApi, type HostApiBackend } from "#oma-test/app/platform/host/host-api";
-import { PLATFORM_FRAME_BYTES } from "@oma/protocol/host-guest";
 import { ConnectProxy, type EgressAudit } from "#oma-test/app/runtime/connect-proxy";
-import { EgressForwarder } from "#oma-test/app/runtime/egress-forwarder";
 import { InferenceRelay } from "#oma-test/app/runtime/inference-relay";
 import type { UnitsModule } from "@oma/platform-linux/units";
 import { ViewsModule } from "#oma-test/app/views";
@@ -116,96 +111,6 @@ test("post-listen: a refusing audit sink cannot throw out of the proxy listener'
 
 const RUN = { placeholderId: randomUUID(), society: "demo", actor: "principal", incarnation: 0, modelProfile: "default" };
 
-test("post-listen: the forwarder reports an accept-class error on its host's journal and keeps the socket bound", async t => {
-  const { path } = scratch(t);
-  const socketPath = path("principal-inference.sock");
-  const reported: string[] = [];
-  // The seam oma-society wires to its screen: the host's own journal.
-  const forwarder = await EgressForwarder.listen(socketPath, path("egress.sock"), RUN, 4, null,
-    error => { reported.push(error.message); });
-  t.after(() => forwarder.close());
-  const server = Reflect.get(forwarder, "server") as Server;
-  expectPermanent(server);
-  server.emit("error", acceptError());
-  assert.deepEqual(reported, ["accept failed"]);
-  assert.equal(server.listening, true);
-  await stillServing(socketPath);
-});
-
-test("post-listen: a journal that throws inside the forwarder's emit is caught at the boundary", async t => {
-  const { path } = scratch(t);
-  const forwarder = await EgressForwarder.listen(path("principal-inference.sock"), path("egress.sock"), RUN, 4, null,
-    () => { throw new Error("the notice channel is dead"); });
-  t.after(() => forwarder.close());
-  const server = Reflect.get(forwarder, "server") as Server;
-  server.emit("error", acceptError());
-  assert.equal(server.listening, true);
-});
-
-test("post-listen: the runner's forwarder journals on its stderr by default", async t => {
-  const { path } = scratch(t);
-  const socketPath = path("inference.sock");
-  // runner.ts calls listen with no onError: the unit's stderr is its journal.
-  const forwarder = await EgressForwarder.listen(socketPath, path("egress.sock"), RUN, 4, null);
-  t.after(() => forwarder.close());
-  const lines = journal(t);
-  const server = Reflect.get(forwarder, "server") as Server;
-  server.emit("error", acceptError());
-  assert.ok(lines.some(line => line.includes("accept failed")));
-  await stillServing(socketPath);
-});
-
-const identity = (): GuestIdentity => ({ instanceId: randomUUID(), guestImage: "test", bootId: randomUUID(),
-  stateSchema: { written: 1, readable: [1] }, capabilities: [] });
-
-test("post-listen: the guest server absorbs an accept-class error -- the shared listener covers guesthost and guestctl", async t => {
-  const { path } = scratch(t);
-  const socketPath = path("society.sock");
-  const lines = journal(t);
-  const server = await startGuestServer({ socketPath,
-    bridge: { uid: process.getuid!(), gid: process.getgid!() }, identity, channels: {},
-    frameBytes: PLATFORM_FRAME_BYTES, helloDeadlineMs: 1000, requestTimeoutMs: 1000 });
-  t.after(() => server.close());
-  expectPermanent(server);
-  server.emit("error", acceptError());
-  assert.ok(lines.some(line => line.includes("accept failed")), "the unit's journal got the error");
-  assert.equal(server.listening, true);
-  await stillServing(socketPath);
-});
-
-test("post-listen: the guest egress service absorbs an accept-class error", async t => {
-  const { path } = scratch(t);
-  const socketPath = path("oma-egress.sock");
-  const pool = new EgressPool();
-  const lines = journal(t);
-  const server = await startEgressService({ socketPath, pool, frameBytes: PLATFORM_FRAME_BYTES, deadlineMs: 1000 });
-  t.after(() => { pool.close(); server.close(); });
-  expectPermanent(server);
-  server.emit("error", acceptError());
-  assert.ok(lines.some(line => line.includes("accept failed")));
-  assert.equal(server.listening, true);
-  await stillServing(socketPath);
-});
-
-test("post-listen: the Host API absorbs an accept-class error", async t => {
-  const { path } = scratch(t);
-  const socketPath = path("hostapi.sock");
-  const lines = journal(t);
-  const backend: HostApiBackend = {
-    state: () => "ready", start: async () => {}, stop: async () => "stopped",
-    society: async () => { throw new Error("unused"); }, terminal: async () => { throw new Error("unused"); },
-    importProject: async () => { throw new Error("unused"); }, exportProject: async () => { throw new Error("unused"); },
-    archive: async () => { throw new Error("unused"); }, syncPackages: async () => { throw new Error("unused"); },
-  };
-  const server = await startHostApi({ socketPath, token: "t", backend, frameBytes: PLATFORM_FRAME_BYTES,
-    helloDeadlineMs: 1000, requestTimeoutMs: 1000, uid: process.getuid!() });
-  t.after(() => server.close());
-  expectPermanent(server);
-  server.emit("error", acceptError());
-  assert.ok(lines.some(line => line.includes("accept failed")));
-  assert.equal(server.listening, true);
-  await stillServing(socketPath);
-});
 
 test("post-listen: the broker's listener survives a dead journal sink -- the cleanup write cannot escape the emit", async t => {
   // `listen`'s permanent 'error' listener ends in `cleanupError`, whose

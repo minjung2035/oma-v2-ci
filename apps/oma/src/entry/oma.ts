@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 /** Birth-only routing. A Personal start never loads the Society product. */
 import { realpathSync } from "node:fs";
+import { PACKAGE_USAGE } from "@oma/domain/package-policy";
 import { dirname, join } from "node:path";
 import { parseOmaArguments } from "../runtime/host-arguments.js";
 import { hostLaunchLocation } from "../runtime/assets.js";
@@ -13,8 +14,15 @@ import { enableProcessCompileCache } from "../runtime/compile-cache.js";
 
 async function main(argv: readonly string[]): Promise<void> {
   enableProcessCompileCache();
-  if (process.platform === "darwin") { await import("./oma-mac.js"); return; }
   const command = parseOmaArguments(argv);
+  if (command.kind === "help") {
+    process.stderr.write("usage: oma [--society <name>] [--config <path>] [--bind-project]\n       oma --mode personal [--no-project-extensions]\n       oma [--mode society|personal] --resume <history>\n       oma login\n" + PACKAGE_USAGE.replace(/^usage: /, "       ") + "\n");
+    return;
+  }
+  if (process.platform === "darwin") {
+    const { assertNativeRuntime } = await import("../runtime/native-support.js");
+    assertNativeRuntime();
+  }
   if (command.kind !== "session") { await import("./oma-society.js"); return; }
   const cwd = realpathSync(process.cwd());
   const dataRoot = dirname(hostLaunchLocation("personal", process.env).stateRoot);

@@ -46,8 +46,6 @@ export const fenceExemptSpawnOwners = Object.freeze({
   // macos-platform §2.1: the Mac's VM helper. It owns no society; the guest's
   // societies are bounded by the VM, which runs inside the helper and ends
   // with it, and the helper ends when omahostd's channel to it closes.
-  "packages/platform-mac/src/vz-driver.ts#launch":
-    "the VM helper, which holds no society; everything in the guest ends with the VM it runs",
   "packages/process/src/async.ts#spawnInTerminal":
     "a society session's `oma`, which takes the society lease itself; its holder has none to hand down",
   // MODE-003/005: Personal is a separate Human session, not a Society role.

@@ -12,7 +12,6 @@ import * as utf8 from "@oma/domain/utf8";
 import * as assets from "@oma/native/directory-layout";
 import * as contained from "@oma/native/files";
 import * as durable from "@oma/storage/durable-fs";
-import * as host from "@oma/platform-mac/files";
 import * as cleanup from "@oma/native/cleanup";
 
 const code = ts.transpileModule(fs.readFileSync(process.env.OMA_USER_FILES_SOURCE ?? 'apps/oma/src/runtime/user-files.ts', 'utf8'), {
@@ -22,7 +21,7 @@ function load(platform, changes = {}) {
   const module = { exports: {} };
   const dependencies = { 'node:fs': fs, 'node:path': path, '@oma/domain/errors': errors,
     '@oma/domain/utf8': utf8, '@oma/native/directory-layout': assets, "@oma/native/files": contained,
-    "@oma/storage/durable-fs": durable, '@oma/platform-mac/files': host, "@oma/native/cleanup": cleanup, ...changes };
+    "@oma/storage/durable-fs": durable, "@oma/native/cleanup": cleanup, ...changes };
   new Script(code).runInNewContext({ module, exports: module.exports, Buffer, process: { platform },
     require(name) { assert.ok(Object.hasOwn(dependencies, name), name); return dependencies[name]; } });
   return module.exports;
@@ -124,17 +123,6 @@ for (const platform of ['linux', 'darwin']) {
     assert.throws(() => api.readUserFile(file, 64), { code: 'STORE_CORRUPT' }); assert.equal(calls, 1);
   });
 }
-for (const after of [false, true]) test(`Darwin metadata publication: ${after ? 'visible' : 'pre-link'} failure does not overwrite on retry`, t => {
-  const root = fixture(t), file = path.join(root, 'record'); const problem = new Error('injected publication'); let armed = true;
-  const api = load('darwin', { '@oma/platform-mac/files': { ...host, publishMade(...args) {
-    if (armed) { armed = false; if (after) host.publishMade(...args); throw problem; }
-    return host.publishMade(...args);
-  } } });
-  assert.throws(() => api.publishUserFile(file, 'first'), error => error === problem);
-  assert.equal(fs.existsSync(file), after); assert.ok(fs.readdirSync(root).every(name => name === 'record'));
-  assert.equal(api.publishUserFile(file, 'second'), after ? 'existing' : 'created');
-  assert.equal(api.readUserFile(file, 64), after ? 'first' : 'second');
-});
 for (const platform of ['linux', 'darwin']) for (const failed of [false, true])
   test(`user files ${platform}: ${failed ? 'read and' : 'only'} close failure is not absence or success`, t => {
     const root = fixture(t), file = path.join(root, 'record'); fs.writeFileSync(file, 'first');
@@ -150,24 +138,27 @@ for (const platform of ['linux', 'darwin']) for (const failed of [false, true])
     });
     assert.equal(returned, 1); assert.equal(fs.readFileSync(file, 'utf8'), 'first');
   });
-for (const after of [false, true]) test(`Darwin metadata publication: ${after ? 'visible' : 'pre-link'} primary survives temporary cleanup failure`, t => {
-  const root = fixture(t), file = path.join(root, 'record');
-  const primary = new errors.StoreError('BROKER_UNAVAILABLE', 'fixture publication', { details: { publication: 'unconfirmed' } });
-  const secondary = Object.assign(new Error('fixture discard failed'), { code: 'ENOSPC' }); let returned = 0;
-  const api = load('darwin', { '@oma/platform-mac/files': { ...host,
-    publishMade(...args) { if (after) host.publishMade(...args); throw primary; },
-    discardTemporary(temporary) { returned++; host.discardTemporary(temporary); throw secondary; },
-  } });
-  assert.throws(() => api.publishUserFile(file, 'first'), error => {
-    assert.ok(error instanceof AggregateError); assert.deepEqual(error.errors, [primary, secondary]);
-    assert.equal(errors.primaryFailure(error), primary); assert.equal(errors.errorCodeOf(error), primary.code); return true;
+
+for (const visible of [false, true]) for (const cleanupFailed of [false, true])
+  test(`shared metadata publication: ${visible ? 'visible' : 'pre-link'} primary and cleanup retain knowledge on retry (${cleanupFailed})`, t => {
+    const root = fixture(t), file = path.join(root, 'record');
+    const primary = new Error('publication failed'), secondary = new Error('cleanup failed');
+    let armed = true;
+    const api = load(process.platform, { '@oma/storage/durable-fs': { ...durable,
+      publishNoReplace(target, bytes) {
+        return durable.publishNoReplace(target, bytes, 0o600, fault => {
+          if (!armed) return;
+          if (fault.point === 'publication-link' && fault.phase === (visible ? 'after-visible' : 'before')) throw primary;
+          if (cleanupFailed && fault.point === 'temporary-cleanup' && fault.phase === 'before') throw secondary;
+        });
+      },
+    } });
+    assert.throws(() => api.publishUserFile(file, 'first'), error => {
+      if (!cleanupFailed) return error === primary;
+      assert.ok(error instanceof AggregateError); assert.deepEqual(error.errors, [primary, secondary]); return true;
+    });
+    assert.equal(fs.existsSync(file), visible);
+    armed = false;
+    assert.equal(api.publishUserFile(file, 'second'), visible ? 'existing' : 'created');
+    assert.equal(api.readUserFile(file, 64), visible ? 'first' : 'second');
   });
-  assert.equal(returned, 1); assert.equal(fs.existsSync(file), after);
-  if (after) assert.equal(fs.readFileSync(file, 'utf8'), 'first');
-});
-test('Darwin metadata publication: retry flushes an existing destination name', t => {
-  const root = fixture(t), file = path.join(root, 'record'); let flushed = 0;
-  const api = load('darwin', { '@oma/platform-mac/files': { ...host, fsyncDirectory(dir) { flushed++; host.fsyncDirectory(dir); } } });
-  api.publishUserFile(file, 'first'); const before = flushed; api.publishUserFile(file, 'second');
-  assert.equal(flushed, before + 1); assert.equal(api.readUserFile(file, 64), 'first');
-});

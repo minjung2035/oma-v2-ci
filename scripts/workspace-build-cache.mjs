@@ -47,11 +47,16 @@ function compilerInputs(root, directory) {
       info.fileNames.length !== info.fileInfos.length) throw new Error(`unsupported compiler input record: ${directory}`);
   const versions = new Map(info.fileNames.map((name, index) => [resolve(directory, name), info.fileInfos[index]]));
   const sources = program.getSourceFiles();
-  if (sources.length !== versions.size || sources.some(source => {
+  const changed = sources.flatMap(source => {
     const entry = versions.get(resolve(root, source.fileName));
-    return source.version !== (typeof entry === "string" ? entry : entry?.version) ||
-      source.impliedNodeFormat !== (typeof entry === "string" ? undefined : entry?.impliedFormat);
-  })) throw new Error(`compiler inputs changed during workspace build: ${directory}`);
+    const expectedVersion = typeof entry === "string" ? entry : entry?.version;
+    const expectedFormat = typeof entry === "string" ? undefined : entry?.impliedFormat;
+    return source.version !== expectedVersion || source.impliedNodeFormat !== expectedFormat
+      ? [{ file: source.fileName, version: source.version, expectedVersion,
+        format: source.impliedNodeFormat, expectedFormat }] : [];
+  });
+  if (sources.length !== versions.size || changed.length) throw new Error(
+    `compiler inputs changed during workspace build: ${directory}\n${JSON.stringify({ sources: sources.length, recorded: versions.size, changed: changed.slice(0, 20) })}`);
   return [...observations.values()];
 }
 

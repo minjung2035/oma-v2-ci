@@ -26,7 +26,6 @@ import { fsyncHeldDir } from "@oma/storage/durable-fs";
 import { StoreError, unobserved } from "@oma/domain/errors";
 import { PACKAGE_ENTRY_PREFIX, extensionEntryProblem } from "@oma/config/operations";
 import { readUserFile, replaceUserFile } from "../user-files.js";
-import { isUuid } from "@oma/protocol/host-guest";
 import { listOwnedDirectory, repairOwnedEntryMode } from "@oma/storage/directory";
 import type { PackageDirectories } from "../../ports/package-files.js";
 
@@ -133,14 +132,11 @@ export type PackageCommand =
       /** C20: a path on this machine `install` was given -- staged into the
        * store by the caller (local-package.ts), never installed where it lies. */
       readonly local?: string;
-      readonly projectId?: string; readonly hostOnly?: true }
+      }
   | { readonly kind: "refused"; readonly words: string };
 
-export const PACKAGE_USAGE = "usage: oma pi install <npm:… | git:… | https://… | ssh://… | local dir, tarball or file>\n" +
-  "       oma pi remove <source>\n" +
-  "       oma pi update <source> | --extension <source> | --extensions\n" +
-  "       oma pi list\n" +
-  "Packages carry extensions, skills, prompt templates and themes; a local path is copied into the store.";
+export { PACKAGE_USAGE } from "@oma/domain/package-policy";
+import { PACKAGE_USAGE } from "@oma/domain/package-policy";
 
 /** A source the engine's package manager fetches into the store itself. A
  * local path is copied in by staging first (C20), so it is not one. */
@@ -164,7 +160,7 @@ export function installedPackageSource(source: string): boolean {
  * does over the store runs as it ships; refused are only what would reach
  * past oma -- a project's own `.pi/` (the user's Pi's), the engine itself,
  * which oma's installation pins, and anything that is not a package command. */
-export function packageCommand(args: readonly string[], macProject = false): PackageCommand {
+export function packageCommand(args: readonly string[]): PackageCommand {
   const [name, ...rest] = args;
   const refused = (words: string): PackageCommand => Object.freeze({ kind: "refused", words: `${words}\n${PACKAGE_USAGE}` });
   const command = name;
@@ -175,7 +171,7 @@ export function packageCommand(args: readonly string[], macProject = false): Pac
   const given = new Set<string>();
   const positional: string[] = [];
   const forwarded = [name!];
-  let extension: string | undefined, projectId: string | undefined;
+  let extension: string | undefined;
   for (let index = 0; index < rest.length; index++) {
     const word = rest[index]!;
     const option = word === "-h" ? "--help" : word;
@@ -184,29 +180,25 @@ export function packageCommand(args: readonly string[], macProject = false): Pac
     if (["--self", "--all", "--force", "--models"].includes(option))
       return refused("The engine is updated with oma itself; oma pi update updates installed packages.");
     if (option.startsWith("-")) {
-      if (option !== "--help" && !(command === "update" && ["--extensions", "--extension"].includes(option)) && !(macProject && ["--project", "--host-only"].includes(option)))
+      if (option === "--project" || option === "--host-only")
+        return refused("VM package selectors have been retired; native sessions use the common local package store.");
+      if (option !== "--help" && !(command === "update" && ["--extensions", "--extension"].includes(option)))
         return refused(`Unknown package option ${word}.`);
       if (given.has(option)) return refused(`${option} must be given once.`);
       given.add(option);
-      if (option === "--extension" || option === "--project") {
+      if (option === "--extension") {
         const value = rest[++index];
         if (!value || value.includes("\0")) return refused(`${option} requires a value.`);
-        if (option === "--project") {
-          if (!isUuid(value)) return refused("--project names a project by its id.");
-          projectId = value;
-        } else {
           // The pinned package manager cannot represent an option-like source.
           // Refuse it, rather than forwarding it as a different engine option.
           if (value.startsWith("-")) return refused("--extension requires a package source, not an engine option.");
           extension = value; forwarded.push(word, value);
-        }
-      } else if (option !== "--host-only") forwarded.push(word);
+      } else forwarded.push(word);
     } else {
       if (!word || word.includes("\0")) return refused("A package source must be nonempty.");
       positional.push(word); forwarded.push(word);
     }
   }
-  if (given.has("--host-only") && projectId !== undefined) return refused("--host-only does not select a Society project.");
   if (positional.length > 1 || (command === "list" && positional.length > 0)) return refused(`oma pi ${name} has too many sources.`);
   if (command === "update") {
     if (Number(extension !== undefined) + Number(given.has("--extensions")) + positional.length > 1)
@@ -226,9 +218,7 @@ export function packageCommand(args: readonly string[], macProject = false): Pac
     // indexing and pinning as a remote package's.
     if (command === "install" && !REMOTE_SOURCE.test(positional[0]!)) local = positional[0];
   }
-  return Object.freeze({ kind: "run", command, args: Object.freeze(forwarded), ...(local === undefined ? {} : { local }),
-    ...(projectId === undefined ? {} : { projectId }),
-    ...(given.has("--host-only") ? { hostOnly: true as const } : {}) });
+  return Object.freeze({ kind: "run", command, args: Object.freeze(forwarded), ...(local === undefined ? {} : { local }) });
 }
 
 /** The package sources the store's own `settings.json` names -- the package

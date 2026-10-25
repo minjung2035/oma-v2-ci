@@ -1,5 +1,6 @@
 /** The application binds concrete owners to Broker's exact live capabilities. */
 import { dirname, join } from "node:path";
+import { pinCgroup } from "@oma/native/cgroup";
 import type { Actor, ProtocolLimits } from "@oma/contracts";
 import type { Store } from "@oma/storage";
 import type { MailModule } from "@oma/mail";
@@ -45,6 +46,7 @@ export function createBroker(input: BrokerComposition): Broker {
   const { store, mail, units, views, lifecycle, git, reviews, reconcile, paths, limits, lock, principalHost } = input;
   const status = new StatusRefresh(() => store.agentNames(), agents => units.observeStatus(agents));
   const dependencies: BrokerDependencies = {
+    acquireRunScope: pinCgroup,
     ledger: brokerLedger(store),
     mail: Object.freeze<BrokerMail>({ prepare: auth => mail.prepare(auth), complete: (auth, evidence) => mail.complete(auth, evidence),
       settleFromReceipt: (quiescence, batch) => mail.settleFromReceipt(quiescence, batch) }),

@@ -1,7 +1,6 @@
 import { getSupportedThinkingLevels as effortLevelsOf } from '@earendil-works/pi-ai';
 import { ModelSelectorComponent, ThinkingSelectorComponent, SessionSelectorComponent, SessionManager, type AgentSession, type ExtensionContext, type SessionInfo } from '@earendil-works/pi-coding-agent';
 import { dirname } from 'node:path';
-import { parseHostHistoryReference } from '@oma/protocol/host-history';
 import type { ProjectSessionDirectories } from './session-directories.js';
 import type { InteractiveView } from './interactive-view.js';
 import type { InteractiveState, InteractiveOutput } from './interactive-state.js';
@@ -122,14 +121,7 @@ export function createInteractiveSelections(view: InteractiveView, state: Intera
                 const snapshot = await sessionDirs.snapshot(signal);
                 if (snapshot.error !== undefined && view.current(epoch))
                     view.notify(snapshot.error, "warning");
-                const found: SessionInfo[] = snapshot.histories.map(info => {
-                    const identity = parseHostHistoryReference(info.reference);
-                    return {
-                        path: info.reference, id: identity.sessionId, cwd: project, name: `[Personal] ${info.name ?? identity.sessionId}`,
-                        created: new Date(info.created), modified: new Date(info.modified), firstMessage: info.firstMessage,
-                        messageCount: info.messageCount, allMessagesText: `${info.name ?? ""} ${info.firstMessage}`
-                    };
-                });
+                const found: SessionInfo[] = [];
                 for (const dir of snapshot.dirs) {
                     signal?.throwIfAborted();
                     if (!view.current(epoch))

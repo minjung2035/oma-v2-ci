@@ -127,6 +127,26 @@
     "./transport-spool": {
       "types": "./dist/transport-spool.d.ts",
       "default": "./dist/transport-spool.js"
+    },
+    "./restic-tar": {
+      "types": "./dist/restic-tar.d.ts",
+      "default": "./dist/restic-tar.js"
+    },
+    "./restic-verification": {
+      "types": "./dist/restic-verification.d.ts",
+      "default": "./dist/restic-verification.js"
+    },
+    "./package-staging": {
+      "types": "./dist/package-staging.d.ts",
+      "default": "./dist/package-staging.js"
+    },
+    "./package-tar": {
+      "types": "./dist/package-tar.d.ts",
+      "default": "./dist/package-tar.js"
+    },
+    "./restic-tool": {
+      "types": "./dist/restic-tool.d.ts",
+      "default": "./dist/restic-tool.js"
     }
   },
   "scripts": {

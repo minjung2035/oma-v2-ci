@@ -20,10 +20,6 @@
       "types": "./dist/extension-modules.d.ts",
       "default": "./dist/extension-modules.js"
     },
-    "./host-history-channel": {
-      "types": "./dist/host-history-channel.d.ts",
-      "default": "./dist/host-history-channel.js"
-    },
     "./interactive": {
       "types": "./dist/interactive.d.ts",
       "default": "./dist/interactive.js"

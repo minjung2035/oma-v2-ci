@@ -3,7 +3,6 @@ import type { PersonalSettingsLocation } from "../runtime/personal-settings.js";
 import { personalExtensions, personalExtensionEntry, updatePersonalSettings } from "../runtime/personal-settings.js";
 import { packageResourcePaths, readPackageIndex } from "../runtime/packages/index.js";
 import { sessionBirthForHistory, sessionHistoryDirectories } from "../runtime/session-catalog.js";
-import { inspectMacGuestHistory, listMacGuestHistories } from "../platform/host/guest-histories.js";
 import { personalModels } from "../runtime/personal-models.js";
 import { engineStartEffects } from "./start-effects.js";
 import { enginePresentation } from "./presentation.js";
@@ -19,8 +18,6 @@ export function personalEnginePorts(location: PersonalSettingsLocation, agentDir
     }, history: {
       target: (file, cwd) => sessionBirthForHistory(location.dataRoot, file, cwd),
       directories: cwd => sessionHistoryDirectories(location.dataRoot, cwd),
-      inspectGuest: file => inspectMacGuestHistory(location.dataRoot, file),
-      listGuests: signal => listMacGuestHistories(location.dataRoot, location.libdir, signal),
     }, acquireCredentials: () => personalModels(location.libdir, agentDir),
   };
 }

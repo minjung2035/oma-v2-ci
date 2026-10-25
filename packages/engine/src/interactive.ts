@@ -65,7 +65,7 @@ export async function runInteractive(input: {
             return;
         if (human.receive(event))
             return;
-        if (event.type === 'session_dirs' || event.type === 'host_history_page')
+        if (event.type === 'session_dirs')
             sessionDirs.accept(event);
         else
             view.receive(event, choices);

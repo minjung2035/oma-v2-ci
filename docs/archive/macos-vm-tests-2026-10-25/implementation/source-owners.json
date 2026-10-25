@@ -1,0 +1,990 @@
+[
+  {
+    "source": "docs/implementation-spec.md",
+    "requirements": [
+      "M-004"
+    ],
+    "owner": "packages/storage/src/store.ts#Store.transaction",
+    "entrypoint": "apps/oma/src/entry/broker.ts#main",
+    "callPath": [
+      "apps/oma/src/entry/broker.ts#main",
+      "packages/broker/src/index.ts#Broker",
+      "packages/storage/src/store.ts#Store.transaction"
+    ],
+    "negativeTests": [
+      "test/r37-preparation-boundaries.test.ts#R37",
+      "test/compliance.test.ts#COMP-005/006"
+    ]
+  },
+  {
+    "source": "docs/implementation-spec.md",
+    "requirements": [
+      "AUTH-003"
+    ],
+    "owner": "packages/domain/src/authority.ts#assertCurrentActor",
+    "entrypoint": "packages/broker/src/index.ts#Broker",
+    "callPath": [
+      "packages/broker/src/index.ts#Broker",
+      "packages/git/src/index.ts#GitModule",
+      "packages/git/src/submit.ts#SubmitCoordinator",
+      "packages/git/src/context.ts#ContextCoordinator",
+      "packages/lifecycle/src/create.ts#CreateCoordinator",
+      "packages/domain/src/authority.ts#assertCurrentActor"
+    ],
+    "negativeTests": [
+      "test/r37-preparation-boundaries.test.ts#R37",
+      "test/r37-recovery-observation.test.ts#R37"
+    ]
+  },
+  {
+    "source": "docs/implementation-spec.md",
+    "requirements": [
+      "INT-003"
+    ],
+    "owner": "packages/git/src/integration.ts#IntegrationCoordinator",
+    "entrypoint": "packages/git/src/index.ts#GitModule.integrate",
+    "callPath": [
+      "packages/git/src/index.ts#GitModule.integrate",
+      "packages/git/src/integration.ts#IntegrationCoordinator",
+      "packages/git/src/canonical-command.ts#compareAndSwapCanonicalRef"
+    ],
+    "negativeTests": [
+      "test/crash-boundaries.test.ts#T63",
+      "test/r37-preparation-boundaries.test.ts#R37"
+    ]
+  },
+  {
+    "source": "docs/implementation-spec.md",
+    "requirements": [
+      "REC-002",
+      "REC-003"
+    ],
+    "owner": "packages/reconcile/src/index.ts#ReconcileModule",
+    "entrypoint": "packages/broker/src/index.ts#Broker",
+    "callPath": [
+      "packages/broker/src/index.ts#Broker",
+      "packages/reconcile/src/index.ts#ReconcileModule",
+      "packages/reconcile/src/operations.ts#OperationRecovery",
+      "packages/process/src/preparation.ts#PreparationExecutor"
+    ],
+    "negativeTests": [
+      "test/r29-reconcile-accounting.test.ts#R29",
+      "test/r37-recovery-observation.test.ts#R37",
+      "test/r37-shutdown-observation.test.ts#R37"
+    ]
+  },
+  {
+    "source": "docs/implementation-spec.md",
+    "requirements": [
+      "UNIT-007"
+    ],
+    "owner": "packages/platform-linux/src/units.ts#UnitsModule",
+    "entrypoint": "packages/lifecycle/src/create.ts#CreateCoordinator",
+    "callPath": [
+      "packages/lifecycle/src/create.ts#CreateCoordinator",
+      "packages/lifecycle/src/create-publication.ts#CreationPublicationObserver",
+      "packages/platform-linux/src/units.ts#UnitsModule",
+      "packages/platform-linux/src/units/execute.ts#executeUnitCommand"
+    ],
+    "negativeTests": [
+      "test/phase4.test.ts#UNIT",
+      "test/r37-preparation-boundaries.test.ts#R37"
+    ]
+  },
+  {
+    "source": "docs/implementation-spec.md",
+    "requirements": [
+      "CTX-003",
+      "CTX-004",
+      "CTX-006"
+    ],
+    "owner": "packages/git/src/context.ts#ContextCoordinator",
+    "entrypoint": "packages/git/src/index.ts#GitModule.publishContext",
+    "callPath": [
+      "packages/git/src/index.ts#GitModule.publishContext",
+      "packages/git/src/context.ts#ContextCoordinator",
+      "packages/git/src/context-repository.ts#ContextRepository",
+      "packages/git/src/context-publication.ts#ContextPublicationObserver",
+      "packages/git/src/canonical-command.ts#compareAndSwapCanonicalRef"
+    ],
+    "negativeTests": [
+      "test/r37-preparation-boundaries.test.ts#R37",
+      "test/crash-boundaries.test.ts#T66"
+    ]
+  },
+  {
+    "source": "docs/implementation-spec.md",
+    "requirements": [
+      "LIFE-007",
+      "LIFE-008"
+    ],
+    "owner": "packages/lifecycle/src/create.ts#CreateCoordinator",
+    "entrypoint": "packages/lifecycle/src/index.ts#LifecycleModule",
+    "callPath": [
+      "packages/lifecycle/src/index.ts#LifecycleModule",
+      "packages/lifecycle/src/create.ts#CreateCoordinator",
+      "packages/git/src/workspace.ts#WorkspaceCoordinator",
+      "packages/lifecycle/src/create-publication.ts#CreationPublicationObserver"
+    ],
+    "negativeTests": [
+      "test/r37-preparation-boundaries.test.ts#R37",
+      "test/crash-boundaries.test.ts#T39"
+    ]
+  },
+  {
+    "source": "docs/implementation-spec.md",
+    "requirements": [
+      "ERR-002"
+    ],
+    "owner": "packages/domain/src/errors.ts#classifyError",
+    "entrypoint": "packages/git/src/submit.ts#SubmitCoordinator",
+    "callPath": [
+      "packages/git/src/submit.ts#SubmitCoordinator",
+      "packages/domain/src/errors.ts#classifyError",
+      "packages/protocol/src/receipts.ts#receiptOfOperation"
+    ],
+    "negativeTests": [
+      "test/r37-async-process.test.ts#R37",
+      "test/r37-preparation-boundaries.test.ts#R37"
+    ]
+  },
+  {
+    "source": "docs/implementation-spec.md",
+    "requirements": [
+      "SEQ-003"
+    ],
+    "owner": "packages/broker/src/lifetime.ts#BrokerLifetime",
+    "entrypoint": "apps/oma/src/entry/broker.ts#main",
+    "callPath": [
+      "apps/oma/src/entry/broker.ts#main",
+      "packages/broker/src/lifetime.ts#BrokerLifetime",
+      "packages/broker/src/lifetime.ts#settleWithin",
+      "packages/process/src/preparation.ts#preparationShutdownBarrier"
+    ],
+    "negativeTests": [
+      "test/r37-shutdown-observation.test.ts#R37"
+    ]
+  },
+  {
+    "source": "docs/verification-spec.md",
+    "requirements": [
+      "COMP-005",
+      "COMP-006"
+    ],
+    "owner": "scripts/traceability.mjs#applyOwnerLinks",
+    "entrypoint": "scripts/compliance.mjs#loadTraceInventory",
+    "callPath": [
+      "scripts/compliance.mjs#loadTraceInventory",
+      "scripts/traceability.mjs#loadTraceInventory",
+      "scripts/traceability.mjs#applyOwnerLinks",
+      "scripts/traceability.mjs#indexTrace"
+    ],
+    "negativeTests": [
+      "test/compliance.test.ts#COMP-005/006",
+      "test/traceability-policy.test.mjs#R39"
+    ]
+  },
+  {
+    "source": "docs/verification-spec.md",
+    "requirements": [
+      "TEST-006"
+    ],
+    "owner": "scripts/traceability.mjs#inventoryAcceptance",
+    "entrypoint": "scripts/adversarial-report.mjs#inventoryAcceptance",
+    "callPath": [
+      "scripts/adversarial-report.mjs#inventoryAcceptance",
+      "scripts/traceability.mjs#inventoryAcceptance"
+    ],
+    "negativeTests": [
+      "test/traceability-policy.test.mjs#R39"
+    ]
+  },
+  {
+    "source": "docs/implementation-spec.md",
+    "requirements": [
+      "TUI-001",
+      "TUI-003"
+    ],
+    "owner": "apps/oma/src/application/society-interaction.ts#SocietyInteraction",
+    "entrypoint": "apps/oma/src/entry/oma.ts#main",
+    "callPath": [
+      "apps/oma/src/entry/oma.ts#main",
+      "apps/oma/src/entry/oma-society.ts#main",
+      "apps/oma/src/application/society-interaction.ts#SocietyInteraction",
+      "packages/tui/src/app.ts#TuiApp",
+      "packages/tui/src/model.ts#step"
+    ],
+    "negativeTests": [
+      "test/tui-boundary.test.ts#T91",
+      "test/tui-boundary.test.ts#T95"
+    ]
+  },
+  {
+    "source": "docs/implementation-spec.md",
+    "requirements": [
+      "TUI-002"
+    ],
+    "owner": "packages/tui/src/keys.ts#KeyDecoder",
+    "entrypoint": "apps/oma/src/entry/oma.ts#main",
+    "callPath": [
+      "apps/oma/src/entry/oma.ts#main",
+      "apps/oma/src/entry/oma-society.ts#main",
+      "apps/oma/src/application/society-interaction.ts#SocietyInteraction",
+      "packages/tui/src/app.ts#TuiApp",
+      "packages/tui/src/keys.ts#KeyDecoder",
+      "packages/tui/src/screen.ts#openTerminal",
+      "packages/tui/src/model.ts#step"
+    ],
+    "negativeTests": [
+      "test/tui-app.test.ts#TUI-002",
+      "test/tui-model.test.ts#key decoding",
+      "test/surface-process.test.ts#T112"
+    ]
+  },
+  {
+    "source": "docs/implementation-spec.md",
+    "requirements": [
+      "TUI-004"
+    ],
+    "owner": "apps/oma/src/application/society-runtime.ts#SocietyRuntime",
+    "entrypoint": "apps/oma/src/entry/oma.ts#main",
+    "callPath": [
+      "apps/oma/src/entry/oma.ts#main",
+      "apps/oma/src/entry/oma-society.ts#main",
+      "apps/oma/src/application/society-runtime.ts#SocietyRuntime",
+      "apps/oma/src/runtime/host-tenure.ts#HostTenure"
+    ],
+    "negativeTests": [
+      "test/oma-composition-policy.test.mjs#T119"
+    ]
+  },
+  {
+    "source": "docs/implementation-spec.md",
+    "requirements": [
+      "TUI-014"
+    ],
+    "owner": "packages/engine/src/interactive.ts#runInteractive",
+    "entrypoint": "apps/oma/src/entry/oma.ts#main",
+    "callPath": [
+      "apps/oma/src/entry/oma.ts#main",
+      "apps/oma/src/entry/oma-society.ts#main",
+      "apps/oma/src/application/society-runtime.ts#SocietyRuntime",
+      "packages/engine/src/principal-session.ts#PrincipalSession.start",
+      "packages/engine/src/interactive.ts#runInteractive",
+      "packages/engine/src/interactive-extension.ts#createInteractiveExtension",
+      "packages/engine/src/interactive-input.ts#createInteractiveInput",
+      "packages/engine/src/pi-compat/prompt-editor.ts#ownedEditor"
+    ],
+    "negativeTests": [
+      "packages/engine/test/interactive-input.test.mjs#Open TUI",
+      "test/open-tui-pty.test.ts#Open TUI"
+    ]
+  },
+  {
+    "source": "docs/implementation-spec.md",
+    "requirements": [
+      "TUI-005",
+      "TUI-007",
+      "TUI-008",
+      "TUI-009"
+    ],
+    "owner": "packages/domain/src/settings-policy.ts#applyField",
+    "entrypoint": "apps/oma/src/entry/oma.ts#main",
+    "callPath": [
+      "apps/oma/src/entry/oma.ts#main",
+      "apps/oma/src/entry/oma-society.ts#main",
+      "apps/oma/src/application/society-interaction.ts#SocietyInteraction",
+      "packages/tui/src/app.ts#TuiApp",
+      "packages/domain/src/settings-policy.ts#applyField",
+      "apps/oma/src/application/settings.ts#writeSettings"
+    ],
+    "negativeTests": [
+      "test/tui-sources.test.ts#T93",
+      "test/tui-sources.test.ts#T94",
+      "test/tui-sources.test.ts#T96"
+    ]
+  },
+  {
+    "source": "docs/implementation-spec.md",
+    "requirements": [
+      "TUI-006"
+    ],
+    "owner": "packages/tui/src/model.ts#step",
+    "entrypoint": "apps/oma/src/entry/oma.ts#main",
+    "callPath": [
+      "apps/oma/src/entry/oma.ts#main",
+      "apps/oma/src/entry/oma-society.ts#main",
+      "apps/oma/src/application/society-interaction.ts#SocietyInteraction",
+      "packages/tui/src/app.ts#TuiApp",
+      "packages/tui/src/model.ts#step"
+    ],
+    "negativeTests": [
+      "test/tui-boundary.test.ts#T95"
+    ]
+  },
+  {
+    "source": "docs/implementation-spec.md",
+    "requirements": [
+      "TUI-010"
+    ],
+    "owner": "apps/oma/src/application/extensions.ts#toggleExtension",
+    "entrypoint": "apps/oma/src/entry/oma.ts#main",
+    "callPath": [
+      "apps/oma/src/entry/oma.ts#main",
+      "apps/oma/src/entry/oma-society.ts#main",
+      "apps/oma/src/application/society-interaction.ts#SocietyInteraction",
+      "packages/tui/src/app.ts#TuiApp",
+      "apps/oma/src/application/extensions.ts#readExtensions",
+      "apps/oma/src/application/extensions.ts#toggleExtension"
+    ],
+    "negativeTests": [
+      "test/tui-sources.test.ts#T97",
+      "test/tui-model.test.ts#T97"
+    ]
+  },
+  {
+    "source": "docs/implementation-spec.md",
+    "requirements": [
+      "TUI-011"
+    ],
+    "owner": "apps/oma/src/application/mail.ts#readMailbox",
+    "entrypoint": "apps/oma/src/entry/oma.ts#main",
+    "callPath": [
+      "apps/oma/src/entry/oma.ts#main",
+      "apps/oma/src/entry/oma-society.ts#main",
+      "apps/oma/src/application/society-interaction.ts#SocietyInteraction",
+      "packages/tui/src/app.ts#TuiApp",
+      "apps/oma/src/application/mail.ts#readMailbox"
+    ],
+    "negativeTests": [
+      "test/tui-sources.test.ts#T98",
+      "test/tui-boundary.test.ts#T95"
+    ]
+  },
+  {
+    "source": "docs/implementation-spec.md",
+    "requirements": [
+      "TUI-012"
+    ],
+    "owner": "packages/tui/src/dashboard.ts#dashboardLines",
+    "entrypoint": "apps/oma/src/entry/oma.ts#main",
+    "callPath": [
+      "apps/oma/src/entry/oma.ts#main",
+      "apps/oma/src/entry/oma-society.ts#main",
+      "apps/oma/src/application/society-interaction.ts#SocietyInteraction",
+      "apps/oma/src/application/status-observation.ts#TuiTransport.status",
+      "packages/tui/src/dashboard.ts#dashboardLines"
+    ],
+    "negativeTests": [
+      "test/tui-sources.test.ts#T98"
+    ]
+  },
+  {
+    "source": "docs/implementation-spec.md",
+    "requirements": [
+      "TUI-013"
+    ],
+    "owner": "packages/tui/src/render.ts#render",
+    "entrypoint": "apps/oma/src/entry/oma.ts#main",
+    "callPath": [
+      "apps/oma/src/entry/oma.ts#main",
+      "apps/oma/src/entry/oma-society.ts#main",
+      "apps/oma/src/application/society-interaction.ts#SocietyInteraction",
+      "packages/tui/src/app.ts#TuiApp",
+      "packages/tui/src/render.ts#render"
+    ],
+    "negativeTests": [
+      "test/tui-boundary.test.ts#T95"
+    ]
+  },
+  {
+    "source": "docs/implementation-spec.md",
+    "requirements": [
+      "TUI-023"
+    ],
+    "owner": "packages/tui/src/prompt.ts#appendPrompt",
+    "entrypoint": "apps/oma/src/entry/oma.ts#main",
+    "callPath": [
+      "apps/oma/src/entry/oma.ts#main",
+      "apps/oma/src/entry/oma-society.ts#main",
+      "apps/oma/src/application/society-interaction.ts#SocietyInteraction",
+      "packages/tui/src/app.ts#TuiApp",
+      "packages/tui/src/model.ts#step",
+      "packages/tui/src/prompt.ts#appendPrompt",
+      "packages/tui/src/transcript.ts#Transcript",
+      "packages/domain/src/surface-bounds.ts#humanPromptFitsFrame",
+      "packages/engine/src/principal-session.ts#PrincipalSession.submit"
+    ],
+    "negativeTests": [
+      "test/tui-app.test.ts#T120",
+      "test/tui-transcript.test.ts#T120",
+      "test/principal-endpoint.test.ts#T120"
+    ]
+  },
+  {
+    "source": "docs/implementation-spec.md",
+    "requirements": [
+      "TSP-001",
+      "TSP-003",
+      "TSP-004"
+    ],
+    "owner": "packages/domain/src/tool-surface.ts#planToolSurface",
+    "entrypoint": "apps/oma/src/entry/runner.ts#main",
+    "callPath": [
+      "apps/oma/src/entry/runner.ts#main",
+      "packages/config/src/operations.ts#readConfigurationSource",
+      "packages/domain/src/tool-surface.ts#planToolSurface"
+    ],
+    "negativeTests": [
+      "test/tool-surface.test.ts#T99",
+      "test/tool-surface.test.ts#T100"
+    ]
+  },
+  {
+    "source": "docs/implementation-spec.md",
+    "requirements": [
+      "TSP-002",
+      "TSP-010"
+    ],
+    "owner": "packages/config/src/operations.ts#readConfigurationSource",
+    "entrypoint": "apps/oma/src/entry/runner.ts#main",
+    "callPath": [
+      "apps/oma/src/entry/runner.ts#main",
+      "packages/config/src/operations.ts#readConfigurationSource"
+    ],
+    "negativeTests": [
+      "test/tool-surface.test.ts#T100",
+      "test/tool-surface.test.ts#T103"
+    ]
+  },
+  {
+    "source": "docs/implementation-spec.md",
+    "requirements": [
+      "TSP-005",
+      "TSP-008"
+    ],
+    "owner": "packages/tool-runtime/src/tool-surface.ts#initialActiveTools",
+    "entrypoint": "packages/extension/src/index.ts#extension",
+    "callPath": [
+      "packages/extension/src/index.ts#extension",
+      "packages/tool-runtime/src/tool-surface.ts#registerToolSurface",
+      "packages/tool-runtime/src/tool-surface.ts#initialActiveTools"
+    ],
+    "negativeTests": [
+      "test/tool-surface.test.ts#T101"
+    ]
+  },
+  {
+    "source": "docs/implementation-spec.md",
+    "requirements": [
+      "TSP-006",
+      "TSP-007"
+    ],
+    "owner": "packages/tool-runtime/src/tool-surface.ts#expandedActiveTools",
+    "entrypoint": "packages/extension/src/index.ts#extension",
+    "callPath": [
+      "packages/extension/src/index.ts#extension",
+      "packages/tool-runtime/src/tool-surface.ts#registerToolSurface",
+      "packages/tool-runtime/src/tool-surface.ts#parseSurfacePlan",
+      "packages/tool-runtime/src/tool-surface.ts#expandedActiveTools"
+    ],
+    "negativeTests": [
+      "test/tool-surface.test.ts#T102",
+      "test/tool-surface.test.ts#T103"
+    ]
+  },
+  {
+    "source": "docs/implementation-spec.md",
+    "requirements": [
+      "TUI-016",
+      "TUI-017",
+      "TUI-018",
+      "TUI-019"
+    ],
+    "owner": "packages/engine/src/pi-runtime.ts#resolvePiRuntime",
+    "entrypoint": "apps/oma/src/entry/oma.ts#main",
+    "callPath": [
+      "apps/oma/src/entry/oma.ts#main",
+      "apps/oma/src/entry/oma-society.ts#main",
+      "apps/oma/src/application/society-bootstrap.ts#prepareSociety",
+      "apps/oma/src/application/project-session-settings.ts#ProjectSessionSettings",
+      "packages/config/src/defaults.ts#defaultHostConfig",
+      "packages/engine/src/pi-runtime.ts#resolvePiRuntime",
+      "packages/engine/src/principal-session.ts#PrincipalSession.start"
+    ],
+    "negativeTests": [
+      "test/pi-runtime.test.ts#T105",
+      "test/pi-runtime.test.ts#T106"
+    ]
+  },
+  {
+    "source": "docs/implementation-spec.md",
+    "requirements": [
+      "TUI-020"
+    ],
+    "owner": "packages/tui/src/render.ts#cellWidth",
+    "entrypoint": "apps/oma/src/entry/oma.ts#main",
+    "callPath": [
+      "apps/oma/src/entry/oma.ts#main",
+      "apps/oma/src/entry/oma-society.ts#main",
+      "apps/oma/src/application/society-interaction.ts#SocietyInteraction",
+      "packages/tui/src/app.ts#TuiApp",
+      "packages/tui/src/render.ts#cellWidth"
+    ],
+    "negativeTests": [
+      "test/surface-consistency.test.ts#T107"
+    ]
+  },
+  {
+    "source": "docs/implementation-spec.md",
+    "requirements": [
+      "PR-002"
+    ],
+    "owner": "apps/oma/src/runtime/principal-delivery.ts#PrincipalDelivery",
+    "entrypoint": "apps/oma/src/entry/oma.ts#main",
+    "callPath": [
+      "apps/oma/src/entry/oma.ts#main",
+      "apps/oma/src/entry/oma-society.ts#main",
+      "apps/oma/src/application/society-runtime.ts#SocietyRuntime",
+      "packages/engine/src/principal-session.ts#PrincipalSession",
+      "apps/oma/src/runtime/principal-delivery.ts#PrincipalDelivery",
+      "apps/oma/src/runtime/principal-delivery.ts#principalHostBroker",
+      "packages/broker/src/principal-endpoint.ts#PrincipalHostEndpoint",
+      "packages/extension/src/delivery.ts#registerDelivery",
+      "packages/storage/src/delivery-receipt.ts#publishDeliveryReceipt"
+    ],
+    "negativeTests": [
+      "test/principal-endpoint.test.ts#T114",
+      "test/oma-composition-policy.test.mjs#T119"
+    ]
+  },
+  {
+    "source": "docs/implementation-spec.md",
+    "requirements": [
+      "IPC-011"
+    ],
+    "owner": "packages/broker/src/principal-endpoint.ts#PrincipalEndpoint",
+    "entrypoint": "apps/oma/src/entry/broker.ts#main",
+    "callPath": [
+      "apps/oma/src/entry/broker.ts#main",
+      "packages/broker/src/index.ts#Broker",
+      "packages/broker/src/principal-endpoint.ts#PrincipalEndpoint",
+      "apps/oma/src/runtime/supervision-channel.ts#openSupervisionChannel",
+      "packages/protocol/src/host-channel.ts#HostChannelReader",
+      "packages/broker/src/process-ancestry.ts#descendsFrom"
+    ],
+    "negativeTests": [
+      "test/principal-endpoint.test.ts#T114",
+      "test/principal-channel.test.ts#T114"
+    ]
+  },
+  {
+    "source": "docs/implementation-spec.md",
+    "requirements": [
+      "CLI-001"
+    ],
+    "owner": "apps/oma/src/cli/arguments.ts#parseArguments",
+    "entrypoint": "apps/oma/src/cli.ts#main",
+    "callPath": [
+      "apps/oma/src/cli.ts#main",
+      "apps/oma/src/cli/commands/send.ts#runSendCommand",
+      "apps/oma/src/cli/arguments.ts#parseArguments"
+    ],
+    "negativeTests": [
+      "test/argument-boundary.test.ts#AV1",
+      "test/f2-cli-request.test.ts#F2"
+    ]
+  },
+  {
+    "source": "docs/implementation-spec.md",
+    "requirements": [
+      "PR-004"
+    ],
+    "owner": "packages/protocol/src/methods.ts#principalRequestAllowed",
+    "entrypoint": "apps/oma/src/entry/oma.ts#main",
+    "callPath": [
+      "apps/oma/src/entry/oma.ts#main",
+      "apps/oma/src/entry/oma-society.ts#main",
+      "apps/oma/src/application/society-runtime.ts#SocietyRuntime",
+      "packages/engine/src/principal-session.ts#PrincipalSession.start",
+      "packages/domain/src/paths.ts#assertModelScope",
+      "packages/broker/src/public-dispatcher.ts#PublicDispatcher",
+      "packages/extension/src/index.ts#extension",
+      "packages/tool-runtime/src/tool-surface.ts#registerToolSurface",
+      "packages/tool-runtime/src/workspace-guard.ts#guardWorkspaceTools",
+      "packages/protocol/src/methods.ts#principalRequestAllowed"
+    ],
+    "negativeTests": [
+      "test/model-scope.test.ts#AV3",
+      "test/argument-boundary.test.ts#AV1",
+      "test/principal-stop-fence.test.ts#DR27",
+      "test/tool-surface.test.ts#DR27"
+    ]
+  },
+  {
+    "source": "docs/implementation-spec.md",
+    "requirements": [
+      "FS-003"
+    ],
+    "owner": "packages/engine/src/principal-session.ts#principalEnvironment",
+    "entrypoint": "apps/oma/src/entry/oma.ts#main",
+    "callPath": [
+      "apps/oma/src/entry/oma.ts#main",
+      "apps/oma/src/entry/oma-society.ts#main",
+      "apps/oma/src/application/society-runtime.ts#SocietyRuntime",
+      "packages/engine/src/principal-session.ts#principalEnvironment"
+    ],
+    "negativeTests": [
+      "test/model-scope.test.ts#AV3"
+    ]
+  },
+  {
+    "source": "docs/implementation-spec.md",
+    "requirements": [
+      "INF-007"
+    ],
+    "owner": "apps/oma/src/runtime/inference-relay.ts#InferenceRelay",
+    "entrypoint": "apps/oma/src/runner.ts#RunnerModule",
+    "callPath": [
+      "apps/oma/src/runner.ts#RunnerModule",
+      "apps/oma/src/runtime/inference-relay.ts#InferenceRelay"
+    ],
+    "negativeTests": [
+      "test/inference-relay.test.ts#AV2"
+    ]
+  },
+  {
+    "source": "docs/implementation-spec.md",
+    "requirements": [
+      "FS-005"
+    ],
+    "owner": "packages/native/src/files.ts#withinDirectory",
+    "entrypoint": "apps/oma/src/entry/broker.ts#main",
+    "callPath": [
+      "apps/oma/src/entry/broker.ts#main",
+      "packages/storage/src/transport-spool.ts#TransportSpool",
+      "packages/native/src/files.ts#withinDirectory"
+    ],
+    "negativeTests": [
+      "test/held-parent.test.ts#AV5",
+      "test/untrusted-directories.test.ts#AV4",
+      "test/architecture-rule-modules.test.mjs#AV5"
+    ]
+  },
+  {
+    "source": "docs/implementation-spec.md",
+    "requirements": [
+      "SB-006"
+    ],
+    "owner": "packages/storage/src/delivery-receipt.ts#observeDeliveryReceipt",
+    "entrypoint": "apps/oma/src/runner.ts#RunnerModule",
+    "callPath": [
+      "apps/oma/src/runner.ts#RunnerModule",
+      "packages/storage/src/delivery-receipt.ts#observeDeliveryReceipt"
+    ],
+    "negativeTests": [
+      "test/untrusted-directories.test.ts#AV4",
+      "test/receipt-observation.test.ts#V06A"
+    ]
+  },
+  {
+    "source": "docs/macos-platform.md",
+    "requirements": [
+      "MAC-210"
+    ],
+    "owner": "apps/oma/src/platform/rpc.ts#FramedPeer",
+    "entrypoint": "apps/oma/src/platform/rpc-server.ts#serveRequests",
+    "callPath": [
+      "apps/oma/src/platform/rpc-server.ts#serveRequests",
+      "apps/oma/src/platform/rpc.ts#FramedPeer",
+      "packages/protocol/src/frame.ts#FrameParser",
+      "apps/oma/src/platform/guest/stream.ts#serveStream",
+      "apps/oma/src/platform/stream-source.ts#withStreamSource",
+      "apps/oma/src/platform/stream-receive.ts#receiveDeclared"
+    ],
+    "negativeTests": [
+      "test/platform-rpc.test.ts#DR27",
+      "test/platform-stream-publication.test.ts#P0V-104"
+    ]
+  },
+  {
+    "source": "docs/macos-platform.md",
+    "requirements": [
+      "MAC-231"
+    ],
+    "owner": "apps/oma/src/platform/rpc.ts#platformFailure",
+    "entrypoint": "apps/oma/src/platform/rpc-server.ts#serveRequests",
+    "callPath": [
+      "apps/oma/src/platform/rpc-server.ts#serveRequests",
+      "apps/oma/src/platform/guest/stream.ts#serveStream",
+      "apps/oma/src/platform/host/egress.ts#EgressHost",
+      "apps/oma/src/platform/rpc.ts#platformFailure",
+      "packages/domain/src/product-text.ts#productText"
+    ],
+    "negativeTests": [
+      "test/platform-rpc.test.ts#DR27",
+      "test/dr18-product-words.test.ts#DR18"
+    ]
+  },
+  {
+    "source": "docs/macos-platform.md",
+    "requirements": [
+      "MAC-240"
+    ],
+    "owner": "apps/oma/src/platform/guest/requests.ts#RequestLedger",
+    "entrypoint": "apps/oma/src/platform/guest/host.ts#GuestHost.serve",
+    "callPath": [
+      "apps/oma/src/platform/guest/host.ts#GuestHost.serve",
+      "apps/oma/src/platform/guest/project.ts#GuestProjects",
+      "apps/oma/src/platform/guest/requests.ts#RequestLedger",
+      "apps/oma/src/platform/rpc.ts#platformFailure",
+      "packages/domain/src/errors.ts#primaryFailure"
+    ],
+    "negativeTests": [
+      "test/platform-request-ledger.test.ts#MAC-240",
+      "test/platform-request-ledger.test.ts#DR27"
+    ]
+  },
+  {
+    "source": "docs/implementation-spec.md",
+    "requirements": [
+      "MODE-001"
+    ],
+    "owner": "packages/tui/src/session-mode.ts#chooseSessionMode",
+    "entrypoint": "apps/oma/src/entry/oma.ts#main",
+    "callPath": [
+      "apps/oma/src/entry/oma.ts#main",
+      "apps/oma/src/runtime/host-arguments.ts#parseOmaArguments",
+      "packages/tui/src/session-mode.ts#chooseSessionMode"
+    ],
+    "negativeTests": [
+      "test/session-entry-composition.test.mjs#birth router",
+      "test/session-mode-selection.test.mjs#mode selector:",
+      "test/session-mode-pty.test.ts#session mode real PTY:"
+    ]
+  },
+  {
+    "source": "docs/implementation-spec.md",
+    "requirements": [
+      "MODE-002"
+    ],
+    "owner": "apps/oma/src/runtime/session-mode.ts#publishSessionBirth",
+    "entrypoint": "apps/oma/src/entry/oma.ts#main",
+    "callPath": [
+      "apps/oma/src/entry/oma.ts#main",
+      "apps/oma/src/entry/personal-host.ts#personalMain",
+      "apps/oma/src/runtime/personal-session.ts#personalBirth",
+      "apps/oma/src/runtime/session-mode.ts#publishSessionBirth"
+    ],
+    "negativeTests": [
+      "test/session-mode-record.test.ts#session mode:",
+      "test/session-history.test.ts#Session history:",
+      "test/personal-host-composition.test.mjs#Personal host"
+    ]
+  },
+  {
+    "source": "docs/implementation-spec.md",
+    "requirements": [
+      "MODE-003"
+    ],
+    "owner": "apps/oma/src/runtime/personal-session.ts#runPersonalSession",
+    "entrypoint": "apps/oma/src/entry/oma.ts#main",
+    "callPath": [
+      "apps/oma/src/entry/oma.ts#main",
+      "apps/oma/src/entry/personal-host.ts#personalMain",
+      "apps/oma/src/runtime/personal-session.ts#runPersonalSession",
+      "packages/process/src/async.ts#spawnSessionInteractive",
+      "packages/engine/src/personal.ts#main"
+    ],
+    "negativeTests": [
+      "test/session-entry-composition.test.mjs#birth router",
+      "test/personal-pty.test.ts#Personal installed PTY:",
+      "test/personal-models-composition.test.mjs#Personal models:",
+      "test/personal-session-ownership.test.mjs#Personal child:",
+      "test/session-process-owner.test.mjs#Human session process:",
+      "packages/engine/test/personal-engine-ownership.test.mjs#Personal engine:",
+      "test/personal-history-lifetime.test.ts#Personal history actual process:"
+    ]
+  },
+  {
+    "source": "docs/implementation-spec.md",
+    "requirements": [
+      "MODE-004"
+    ],
+    "owner": "apps/oma/src/runtime/personal-settings.ts#updatePersonalSettings",
+    "entrypoint": "packages/engine/src/personal.ts#main",
+    "callPath": [
+      "packages/engine/src/personal.ts#main",
+      "packages/engine/src/interactive.ts#runInteractive",
+      "apps/oma/src/entry/personal-host.ts#personalMain",
+      "apps/oma/src/entry/oma-society.ts#piPackages",
+      "apps/oma/src/entry/oma-mac.ts#packages",
+      "packages/engine/src/login.ts#runEngineLogin",
+      "apps/oma/src/runtime/user-files.ts#ensureUserDirectory",
+      "apps/oma/src/runtime/packages/store.ts#packageCommand",
+      "apps/oma/src/runtime/packages/store.ts#writePackageIndex",
+      "apps/oma/src/runtime/personal-settings.ts#reconcilePersonalSettings",
+      "apps/oma/src/runtime/personal-settings.ts#updatePersonalSettings",
+      "apps/oma/src/runtime/user-files.ts#readUserFile",
+      "packages/engine/src/pi-runtime.ts#prepareEngineFile",
+      "packages/native/src/process-lock.ts#ProcessLock",
+      "packages/native/src/cleanup.ts#withCleanup",
+      "packages/native/src/cleanup.ts#withAsyncCleanup",
+      "packages/engine/src/extension-modules.ts#ExtensionModules"
+    ],
+    "negativeTests": [
+      "test/personal-settings.test.ts#Personal settings:",
+      "test/personal-host-composition.test.mjs#Personal host",
+      "test/personal-pty.test.ts#Personal installed PTY:",
+      "test/package-command-ownership.test.mjs#Package owner",
+      "packages/engine/test/engine-login-ownership.test.mjs#engine package:",
+      "packages/engine/test/engine-login-ownership.test.mjs#engine close:",
+      "test/host-arguments.test.ts#DR28:",
+      "test/mac-host-packages.test.ts#Mac host packages:",
+      "test/session-entry-composition.test.mjs#Package grammar:",
+      "test/session-entry-composition.test.mjs#Mac birth router:",
+      "test/platform-packages.test.ts#DR25",
+      "test/pi-packages-cli.test.ts#DR25",
+      "test/owned-cleanup.test.mjs#Owned cleanup",
+      "test/user-files.test.mjs#user files",
+      "test/pi-settings-platform.test.mjs#engine settings",
+      "test/extension-modules.test.ts#Extension modules:"
+    ]
+  },
+  {
+    "source": "docs/implementation-spec.md",
+    "requirements": [
+      "MODE-005"
+    ],
+    "owner": "apps/oma/src/runtime/personal-session.ts#runPersonalSession",
+    "entrypoint": "apps/oma/src/entry/oma.ts#main",
+    "callPath": [
+      "apps/oma/src/entry/oma.ts#main",
+      "apps/oma/src/entry/personal-host.ts#personalMain",
+      "apps/oma/src/runtime/personal-session.ts#runPersonalSession",
+      "packages/process/src/async.ts#spawnSessionInteractive",
+      "packages/engine/src/personal.ts#main",
+      "apps/oma/src/runtime/session-catalog.ts#sessionBirthForHistory",
+      "apps/oma/src/application/society-transition.ts#SocietyTransition.relaunch",
+      "apps/oma/src/runtime/session-handoff.ts#requestHostNewSession",
+      "packages/protocol/src/guest-history.ts#parseGuestHistoryReference",
+      "packages/protocol/src/host-history.ts#parseHostHistoryReference",
+      "apps/oma/src/platform/guest/histories.ts#GuestHistories",
+      "apps/oma/src/platform/host/guest-histories.ts#listMacGuestHistories",
+      "apps/oma/src/platform/host/personal-histories.ts#inspectHostPersonalHistory",
+      "packages/engine/src/host-history-channel.ts#HostHistoryChannel"
+    ],
+    "negativeTests": [
+      "test/oma-composition-policy.test.mjs#MODE-005",
+      "test/oma-composition-policy.test.mjs#MODE-006",
+      "test/session-handoff-owner.test.mjs#host handoff writer:",
+      "test/session-entry-composition.test.mjs#birth router",
+      "test/personal-host-composition.test.mjs#Personal host",
+      "test/session-history.test.ts#Session history:",
+      "test/personal-pty.test.ts#Personal installed PTY:",
+      "test/personal-session-ownership.test.mjs#Personal child:",
+      "test/session-process-owner.test.mjs#Human session process:",
+      "packages/engine/test/personal-engine-ownership.test.mjs#Personal engine:",
+      "test/personal-history-lifetime.test.ts#Personal history actual process:",
+      "test/host-history.test.ts#DR29",
+      "test/guest-history.test.ts#DR29",
+      "test/oma-composition-policy.test.mjs#DR29",
+      "test/project-session-directories.test.mjs#DR29",
+      "test/attach-handoff-ownership.test.mjs#DR29",
+      "test/guest-session-ownership.test.mjs#DR29"
+    ]
+  },
+  {
+    "source": "docs/implementation-spec.md",
+    "requirements": [
+      "MODE-006"
+    ],
+    "owner": "apps/oma/src/entry/oma-mac.ts#main",
+    "entrypoint": "apps/oma/src/entry/oma.ts#main",
+    "callPath": [
+      "apps/oma/src/entry/oma.ts#main",
+      "apps/oma/src/entry/oma-mac.ts#main",
+      "apps/oma/src/entry/oma-mac.ts#observedSocieties",
+      "apps/oma/src/entry/personal-host.ts#personalMain",
+      "apps/oma/src/application/society-transition.ts#SocietyTransition.relaunch",
+      "apps/oma/src/runtime/session-handoff.ts#requestHostNewSession",
+      "packages/process/src/async.ts#spawnInTerminal",
+      "apps/oma/src/entry/guest-session.ts#session",
+      "apps/oma/src/platform/guest/session.ts#TerminalSession",
+      "packages/protocol/src/host-guest.ts#parseTerminalExit",
+      "apps/oma/src/platform/host/attach-client.ts#attachTerminal",
+      "packages/protocol/src/guest-history.ts#parseGuestHistoryReference",
+      "packages/protocol/src/host-history.ts#parseHostHistoryReference",
+      "apps/oma/src/platform/guest/histories.ts#GuestHistories",
+      "apps/oma/src/platform/host/guest-histories.ts#listMacGuestHistories",
+      "apps/oma/src/platform/host/personal-histories.ts#inspectHostPersonalHistory",
+      "packages/engine/src/host-history-channel.ts#HostHistoryChannel"
+    ],
+    "negativeTests": [
+      "test/session-entry-composition.test.mjs#birth router darwin:",
+      "test/session-entry-composition.test.mjs#Mac birth router:",
+      "test/session-entry-composition.test.mjs#Mac birth router: completed guest /new",
+      "test/personal-host-composition.test.mjs#Personal host darwin:",
+      "test/personal-models-composition.test.mjs#Personal models:",
+      "test/oma-composition-policy.test.mjs#MODE-006",
+      "test/session-handoff-owner.test.mjs#host handoff writer:",
+      "test/session-handoff.test.ts#host handoff codec:",
+      "test/guest-session-ownership.test.mjs#guest handoff:",
+      "test/attach-handoff-ownership.test.mjs#attach handoff:",
+      "test/session-process-owner.test.mjs#Guest terminal process:",
+      "test/platform-terminal-session.test.ts#MODE-006",
+      "test/platform-host-api.test.ts#MODE-006",
+      "test/mac-new-handoff-pty.test.ts#Mac host-new real PTY:",
+      "test/host-history.test.ts#DR29",
+      "test/guest-history.test.ts#DR29",
+      "test/oma-composition-policy.test.mjs#DR29",
+      "test/project-session-directories.test.mjs#DR29",
+      "test/attach-handoff-ownership.test.mjs#DR29",
+      "test/guest-session-ownership.test.mjs#DR29"
+    ]
+  },
+  {
+    "source": "docs/implementation-spec.md",
+    "requirements": [
+      "INT-002",
+      "INT-007"
+    ],
+    "owner": "apps/oma/src/runtime/candidate-checks.ts#CandidateChecks",
+    "entrypoint": "apps/oma/src/entry/broker.ts#main",
+    "callPath": [
+      "apps/oma/src/entry/broker.ts#main",
+      "packages/git/src/index.ts#GitModule",
+      "apps/oma/src/runtime/candidate-checks.ts#candidateCheckCommand",
+      "packages/domain/src/integration-policy.ts#assertCheckResources",
+      "apps/oma/src/runtime/candidate-checks.ts#CandidateChecks"
+    ],
+    "negativeTests": [
+      "test/candidate-checks.test.ts#DR29",
+      "test/tiered-integration.test.ts#DR27"
+    ]
+  },
+  {
+    "source": "docs/macos-platform.md",
+    "requirements": [
+      "MAC-401",
+      "MAC-403"
+    ],
+    "owner": "apps/oma/src/platform/host/service.ts#HostService",
+    "entrypoint": "apps/oma/src/entry/omahostd.ts#main",
+    "callPath": [
+      "apps/oma/src/entry/omahostd.ts#main",
+      "packages/platform-mac/src/record.ts#readHostRecord",
+      "packages/platform-mac/src/record.ts#writeHostRecord",
+      "packages/platform-mac/src/bookmark.ts#nativeProjectBookmarks",
+      "apps/oma/src/platform/host/project.ts#MacGit",
+      "apps/oma/src/platform/host/personal-seed.ts#macProjectExtensionSeed",
+      "apps/oma/src/runtime/personal-settings.ts#updatePersonalSettingsAsync",
+      "apps/oma/src/platform/host/service.ts#HostService"
+    ],
+    "negativeTests": [
+      "test/mac-project-seed.test.ts#DR29",
+      "test/platform-host-service.test.ts#MAC-241",
+      "test/personal-settings.test.ts#DR29"
+    ]
+  }
+]

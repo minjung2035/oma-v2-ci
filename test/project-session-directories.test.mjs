@@ -4,7 +4,6 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { Script } from 'node:vm';
 import ts from 'typescript';
-import * as histories from "@oma/protocol/host-history";
 import { StoreError } from "@oma/domain/errors";
 const source = readFileSync('packages/engine/src/session-directories.ts', 'utf8');
 const code = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText;
@@ -25,7 +24,6 @@ function world(send, waitMs = 5000) {
   new Script(deadlineCode).runInNewContext({ ...clock, module: deadlines, exports: deadlines.exports });
   new Script(code).runInNewContext({ ...clock, module, exports: module.exports,
     require(name) {
-      if (name === '@oma/protocol/host-history') return histories;
       if (name === '@oma/domain/errors') return { StoreError };
       assert.equal(name, '@oma/protocol/alarm'); return deadlines.exports;
     } });
@@ -43,27 +41,6 @@ test('DR29: session selector waits across the native timer limit without an earl
   assert.equal(w.timers.size, 0);
 });
 const flush = async () => { for (let i = 0; i < 5; i++) await Promise.resolve(); };
-const hostInfo = () => ({ reference: histories.hostHistoryReference({ birthId: '11111111-1111-4111-8111-111111111111', file: 'saved.jsonl', sessionId: 'saved-id' }),
-  created: '2026-10-02T00:00:00Z', modified: '2026-10-02T00:00:00Z', messageCount: 1, firstMessage: 'Saved Human request' });
-test('DR29: host metadata belongs to the matching selector and requires its completed directory reply', async () => {
-  const w = world(), promise = w.query.snapshot(), info = hostInfo();
-  w.query.accept({ type: 'host_history_page', id: 'old-selector', page: { sessions: [info], after: null } });
-  w.query.accept({ type: 'host_history_page', id: w.sent[0].id, page: { sessions: [info], after: null } });
-  w.answer(0, ['/guest']);
-  const result = await completed(promise);
-  assert.equal(result.histories.length, 1); assert.equal(result.histories[0].reference, info.reference);
-  assert.equal(histories.parseHostHistoryReference(result.histories[0].reference).sessionId, 'saved-id'); assert.equal(result.histories[0].messageCount, 1);
-  assert.deepEqual(plain(result.dirs), ['/own', '/guest']); assert.equal(w.timers.size, 0);
-});
-test('DR29: an unfinished or malformed host list cannot be displayed as a complete saved-history observation', async () => {
-  for (const malformed of [false, true]) {
-    const w = world(), promise = w.query.snapshot(), info = hostInfo();
-    w.query.accept({ type: 'host_history_page', id: w.sent[0].id, page: { sessions: [{ ...info, ...(malformed ? { cwd: '/host' } : {}) }], after: null } });
-    if (!malformed) w.fire([...w.timers][0]);
-    const result = await completed(promise); assert.equal(result.histories.length, 0); assert.ok(result.error);
-    assert.equal(w.timers.size, 0);
-  }
-});
 const plain = value => Array.from(value);
 async function completed(promise) {
   let result;

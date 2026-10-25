@@ -2,11 +2,10 @@
  * The engine owns this child until actual close; EOF only rejects requests. */
 import type { ChildProcess } from "node:child_process";
 import type { Socket } from "node:net";
-import { dirname, join } from "node:path";
+import { isAbsolute, join, normalize } from "node:path";
 import { StoreError } from "@oma/domain/errors";
 import { spawnSupervisedService, stopOwnedChild } from "@oma/process/async";
 import type { KeychainStore } from "@oma/contracts/credentials";
-import { macBundleResources } from "./bundle.js";
 import { NativeChannel } from "./native-channel.js";
 
 /** P0-6: the helper channel is waited on only so long (NB-30). A wedged
@@ -40,8 +39,9 @@ export function nativeKeychainStore(
 
 /** Resources may contain the installation; never search PATH or another bundle. */
 export function bundledKeychainHelper(libdir: string): string {
-  const resources = macBundleResources(libdir);
-  return join(dirname(resources), "MacOS", "oma-vmhelper");
+  if (!isAbsolute(libdir) || libdir === "/" || libdir.includes("\0") || normalize(libdir) !== libdir)
+    throw new StoreError("UNSUPPORTED_PROFILE", "Keychain helper requires the exact normalized installation root");
+  return join(libdir, "packages/platform-mac/dist/keychain/oma-keychain");
 }
 
 export class KeychainClient implements KeychainStore {
@@ -63,7 +63,7 @@ export class KeychainClient implements KeychainStore {
   }
 
   static async launch(libdir: string, fence?: number, deadlines?: KeychainDeadlines): Promise<KeychainClient> {
-    const child = spawnSupervisedService(bundledKeychainHelper(libdir), ["--keychain-only"], { PATH: "/usr/bin:/bin" }, true, fence);
+    const child = spawnSupervisedService(bundledKeychainHelper(libdir), [], { PATH: "/usr/bin:/bin" }, true, fence);
     const ended = new Promise<void>(resolve => child.once("close", () => resolve()));
     try {
       const channel = child.stdio[3];

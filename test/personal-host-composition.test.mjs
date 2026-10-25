@@ -1,5 +1,4 @@
 import * as sessionHandoffMeaning from "@oma/protocol/session-handoff";
-import * as hostErrorMeaning from "@oma/protocol/host-errors";
 import * as hostLossMeaning from "@oma/process/host-loss";
 import * as deploymentMeaning from "@oma/domain/deployment";
 /** Production Human lifecycle over controlled owners; no service, VM or provider. */
@@ -29,7 +28,6 @@ function world({ platform = 'linux', saved = false, config = true, snapshot = {}
   };
   const dependencies = {
 "@oma/protocol/session-handoff": sessionHandoffMeaning,
-"@oma/protocol/host-errors": hostErrorMeaning,
 "@oma/process/host-loss": hostLossMeaning,
 "@oma/domain/deployment": deploymentMeaning,
 
@@ -74,7 +72,6 @@ function world({ platform = 'linux', saved = false, config = true, snapshot = {}
   new Script(code).runInNewContext({ module, exports: module.exports, process, URL,
     require(name) {
 if (name === "@oma/protocol/session-handoff" && !Object.hasOwn(dependencies, name)) return sessionHandoffMeaning;
-if (name === "@oma/protocol/host-errors" && !Object.hasOwn(dependencies, name)) return hostErrorMeaning;
 if (name === "@oma/process/host-loss" && !Object.hasOwn(dependencies, name)) return hostLossMeaning;
 if (name === "@oma/domain/deployment" && !Object.hasOwn(dependencies, name)) return deploymentMeaning;
  assert.ok(Object.hasOwn(dependencies, name), `Personal host must not load ${name}`); return dependencies[name]; } });
@@ -97,8 +94,8 @@ for (const platform of ['linux', 'darwin']) {
     assert.ok(names.indexOf('settings-take') < names.indexOf('config-read') || platform === 'darwin');
     assert.ok(names.indexOf('settings-return') < names.indexOf('birth'));
     assert.ok(names.indexOf('birth') < names.indexOf('engine'));
-    assert.deepEqual(plain(w.seeds), platform === 'darwin' ? [['extensions/mac.js']] : [['society-core', 'extensions/user.js']]);
-    assert.equal(names.includes('config-read'), platform !== 'darwin');
+    assert.deepEqual(plain(w.seeds), [['society-core', 'extensions/user.js']]);
+    assert.equal(names.includes('config-read'), true);
     assert.equal(w.process.exitCode, 0);
   });
   test(`Personal host ${platform}: existing choices need no old project observation`, async () => {
@@ -192,16 +189,4 @@ test('Personal host: Node without in-place restart refuses after writer return, 
   const w = world({ exec: false, run: async () => ({ code: 0, next: {} }) });
   await assert.rejects(w.personalMain(options), { code: 'UNSUPPORTED_PROFILE' });
   assert.equal(w.launches.length, 1); assert.equal(w.replacements.length, 0);
-});
-test('DR29: Mac Personal releases its actual child before inspecting a guest reference and replacing the host', async () => {
-  let finish;
-  const reference = 'oma-guest-history:controlled', w = world({ platform: 'darwin', run: () => new Promise(resolve => { finish = resolve; }) });
-  const pending = w.personalMain(options); pending.catch(() => {}); await flush();
-  assert.equal(w.effects.some(item => item[0] === 'guest-history'), false);
-  finish({ code: 0, next: { session: reference } }); await pending;
-  const names = w.effects.map(item => item[0]);
-  assert.ok(names.indexOf('engine-return') < names.indexOf('guest-history'));
-  assert.ok(names.indexOf('guest-history') < names.indexOf('exec'));
-  assert.equal(w.replacements[0][2].OMA_RESUME_SESSION, reference);
-  assert.equal(names.includes('chdir'), false, 'a guest reference must not become a host pathname');
 });

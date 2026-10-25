@@ -1,5 +1,5 @@
+import * as nativeSupportMeaning from "#oma-test/app/runtime/native-support";
 import * as sessionHandoffMeaning from "@oma/protocol/session-handoff";
-import * as hostErrorMeaning from "@oma/protocol/host-errors";
 import * as hostLossMeaning from "@oma/process/host-loss";
 import * as deploymentMeaning from "@oma/domain/deployment";
 import * as settingsPolicy from "@oma/domain/settings-policy";
@@ -19,7 +19,6 @@ import ts from "typescript";
 import { codeFor, exitFor } from "#oma-test/app/application/exit";
 import { parseOmaArguments } from "#oma-test/app/runtime/host-arguments";
 import { HOST_LOSS_SIGNALS } from "@oma/process/host-loss";
-import { hostHistoryReference } from "@oma/protocol/host-history";
 import { encodedPrincipalToolSurface } from "@oma/domain/tool-surface";
 
 /** A production module compiled and run with its own controlled boundary.
@@ -36,7 +35,6 @@ function loadSource(relative, deps) {
     exports: module_.exports, module: module_, setTimeout, clearTimeout, Promise,
     require(name) {
 if (name === "@oma/protocol/session-handoff" && !Object.hasOwn(deps, name)) return sessionHandoffMeaning;
-if (name === "@oma/protocol/host-errors" && !Object.hasOwn(deps, name)) return hostErrorMeaning;
 if (name === "@oma/process/host-loss" && !Object.hasOwn(deps, name)) return hostLossMeaning;
 if (name === "@oma/domain/deployment" && !Object.hasOwn(deps, name)) return deploymentMeaning;
 
@@ -97,7 +95,7 @@ function brokerStandIn(state, credentials, disownedReason = null) {
 
 async function run({ brokerState = { kind: "started", pid: 1 }, credentials = ["1".repeat(64), "2".repeat(64)],
   disowned = null, leased = true, engineExits = true, startFailures = 0, acquiredFailures = 0,
-  brokerAlreadyListening = false, untrustedRunRoot = false, binding = "fresh", rereadFails = false, commitRefused = false, startupFailure = null, statusReply = null, onEgress = null,
+  brokerAlreadyListening = false, untrustedRunRoot = false, binding = "fresh", rereadFails = false, commitRefused = false, startupFailure = null, statusReply = null, onBrokerStart = null,
   resumeBirth = null, resumeError = null, resumeReply = null, hostNew = false, hostHistory = null, tenureGraceMs, frameBytes = 262144,
   projectPointerRead = () => "controlled-settings-version", env = {}, argv = ["node", "oma", "--society", "fixture"] } = {}) {
   // DR24: a start without a society is a new session of the project; the
@@ -147,8 +145,8 @@ async function run({ brokerState = { kind: "started", pid: 1 }, credentials = ["
     return settings;
   };
   const modules = {
+    "../runtime/native-support.js": nativeSupportMeaning,
 "@oma/protocol/session-handoff": sessionHandoffMeaning,
-"@oma/protocol/host-errors": hostErrorMeaning,
 "@oma/process/host-loss": hostLossMeaning,
 "@oma/domain/deployment": deploymentMeaning,
 
@@ -393,6 +391,7 @@ async function run({ brokerState = { kind: "started", pid: 1 }, credentials = ["
       },
       superviseBroker: async options => {
         calls.push("superviseBroker");
+        onBrokerStart?.(handlers);
         assert.equal("sessionHandle" in options, false, "a session handle was put where the broker's environment could carry it");
         // A broker without the fence can outlive the lease it writes under.
         assert.equal(options.fence, FENCE, "the broker was started without the society lease descriptor");
@@ -411,7 +410,7 @@ async function run({ brokerState = { kind: "started", pid: 1 }, credentials = ["
     // `oma login` (DR18, D-9); a start never reaches it.
     "@oma/engine/login": { runEngineLogin: () => { throw new Error("a start ran the engine's login"); } },
     // DR18 (D-10): the environment names no egress socket here, as on Linux.
-    "../runtime/egress-forwarder.js": { adoptPrincipalEgress: async () => { onEgress?.(handlers); return null; } },
+    "../runtime/egress-forwarder.js": { adoptPrincipalEgress: async () => {  return null; } },
     // DR18 (D-1): an error's words as Linux shows them.
     "@oma/tui/words": { errorWords: error => (error instanceof Error ? error.message : String(error)), surfaceWords: text => text,
       humanStream: () => process.stderr },
@@ -1203,7 +1202,7 @@ test("DR27/P0-4: a disowned host keeps its observation-only display until the Hu
   society.ports.quit(); await society.settle(); assert.equal(society.intervals.size, 0);
 });
 test("DR27/P0-4: shutdown during startup cannot acquire a later display poll", async () => {
-  const society = await run({ onEgress: handlers => handlers.SIGTERM() });
+  const society = await run({ onBrokerStart: handlers => handlers.SIGTERM() });
   assert.equal(society.intervals.size, 0);
   assert.equal(society.calls.includes("status"), false);
 });
@@ -1217,14 +1216,6 @@ test("Session mode: Society switches to a fresh Personal session only after actu
   assert.deepEqual(Array.from(argv), ["node", "/lib/apps/oma/dist/entry/oma.js", "--mode", "personal"]);
   assert.equal(env.OMA_RESUME_SESSION, undefined);
 });
-test("Session mode: guest Society carries the Personal choice to the host after actual engine exit", async () => {
-  const calls = [], hostHistory = { async finish(reference, mode) { calls.push([reference, mode]); }, close() {} };
-  const society = await run({ engineExits: false, hostHistory }); society.broker.fireReady(); await society.settle();
-  society.started.sink.onUi({ type: "switch", mode: "personal" }); await society.settle();
-  assert.deepEqual(calls, []);
-  society.started.confirmDeath(); await society.until(() => calls.length === 1);
-  assert.deepEqual(calls, [[null, "personal"]]); assert.equal(society.restarts.length, 0);
-});
 test("DR27/P0-4: relaunch returns the display poll before waiting for the engine", async () => {
   const society = await run({ engineExits: false }); society.broker.fireReady(); await society.settle();
   const old = [...society.intervals][0]; const live = society.started; assert.ok(live);
@@ -1237,29 +1228,6 @@ test("DR27/P0-4: relaunch returns the display poll before waiting for the engine
 
 const PERSONAL_BIRTH = { id: "personal-fixture", mode: "personal", cwd: "/saved-personal" };
 const PERSONAL_HISTORY = "/state/oma/.personal/personal-fixture/history/fixture.jsonl";
-
-test("DR29/MODE-006: host Personal handoff waits for actual outgoing exit beyond the bounded tenure grace", async () => {
-  const selected = "oma-host-history:controlled", calls = [];
-  const hostHistory = { async inspect(reference) { calls.push(["inspect", reference]); }, async finish(reference) { calls.push(["finish", reference]); }, close() { calls.push(["close"]); }, async pages() {} };
-  const society = await run({ engineExits: false, tenureGraceMs: 1, hostHistory });
-  society.broker.fireReady(); await society.settle(); const live = society.started;
-  live.sink.onUi({ type: "switch", session: selected }); await society.settle();
-  await society.until(() => society.lease.releases === 1);
-  assert.deepEqual(calls, [["inspect", selected]]); assert.equal(society.broker.stops, 0);
-  assert.equal(society.calls.includes("exit:0"), false); assert.equal(society.restarts.length, 0);
-  live.confirmDeath(); await society.until(() => calls.some(call => call[0] === "finish"));
-  assert.deepEqual(calls, [["inspect", selected], ["finish", selected]]);
-  assert.equal(society.broker.stops, 1); assert.equal(society.calls.includes("exit:0"), true);
-  assert.equal(society.restarts.length, 0);
-});
-test("DR29/MODE-006: failed host history admission leaves the outgoing Society and writer running", async () => {
-  const hostHistory = { async inspect() { throw new Error("host history replaced"); }, async finish() { assert.fail("failed admission handed off"); }, close() {}, async pages() {} };
-  const society = await run({ hostHistory }); society.broker.fireReady(); await society.settle(); const live = society.started;
-  live.sink.onUi({ type: "switch", session: "oma-host-history:controlled" }); await society.settle();
-  assert.equal(live.closes, 0); assert.equal(society.broker.stops, 0); assert.equal(society.restarts.length, 0);
-  assert.ok(live.uiEvents.some(event => event.type === "notice" && /replaced/.test(event.text)));
-  society.handlers.SIGTERM(); await society.settle();
-});
 
 test("MODE-005: Society resumes Personal in its saved cwd only after the outgoing writer dies", async () => {
   const society = await run({ engineExits: false, resumeBirth: PERSONAL_BIRTH, argv: ["node", "oma", "--society", "fixture", "--bind-project"] });
@@ -1283,19 +1251,6 @@ test("MODE-005: /new removes stale resume and binding intent instead of changing
   assert.equal(Object.hasOwn(env, "OMA_RESUME_SESSION"), false);
   assert.deepEqual(Array.from(argv), ["node", "/lib/apps/oma/dist/entry/oma.js"]);
   assert.equal(society.calls.filter(call => call.startsWith("publishSessionBirth:")).length, 1);
-});
-
-test("MODE-006: guest /new reaches the host only after the outgoing writer dies and its broker is returned", async () => {
-  const society = await run({ engineExits: false, hostNew: true });
-  society.broker.fireReady(); await society.settle(); const live = society.started;
-  live.sink.onUi({ type: "switch" }); await society.settle();
-  assert.equal(society.calls.includes("host-new"), false); assert.equal(society.broker.stops, 0);
-  live.confirmDeath();
-  await society.until(() => society.calls.includes("exit:0") || society.restarts.length > 0);
-  assert.equal(society.calls.includes("exit:0"), true, "guest /new must return to the host, not exec inside the guest");
-  assert.equal(society.broker.stops, 1); assert.equal(society.lease.releases, 1);
-  assert.equal(society.restarts.length, 0); assert.equal(society.calls.some(call => call.startsWith("chdir:")), false);
-  assert.ok(society.calls.indexOf("lease.release") < society.calls.indexOf("host-new"));
 });
 
 test("MODE-005: failed resume admission leaves the current Society and its display alive", async () => {
@@ -1342,55 +1297,4 @@ test("MODE-005/P0-4: one pending resume owns admission; duplicate switch cannot 
   resolve(PERSONAL_BIRTH); await society.until(() => society.restarts.length === 1);
   assert.equal(live.closes, 1); assert.equal(society.broker.stops, 1);
   assert.equal(society.restarts[0][2].OMA_RESUME_SESSION, PERSONAL_HISTORY);
-});
-
-
-test("DR43: Application history pages preserve metadata, correlation and the UI byte limit", async () => {
-  const sessions = Array.from({ length: 8 }, (_, index) => ({
-    reference: hostHistoryReference({ birthId: "11111111-1111-4111-8111-111111111111",
-      file: `history${index}.jsonl`, sessionId: `session-${index}` }),
-    created: "2026-10-10T00:00:00Z", modified: "2026-10-10T00:00:00Z",
-    messageCount: index, firstMessage: `History ${index}`,
-  }));
-  const hostHistory = { async pages(publish) { publish({ sessions, after: null }); }, close() {} };
-  const society = await run({ hostHistory, frameBytes: 1280 });
-  const live = society.started;
-  live.sink.onUi({ type: "sessions_request", id: "dr43-pages" }); await society.settle();
-  const pages = live.uiEvents.filter(event => event.type === "host_history_page");
-  assert.ok(pages.length > 1, "the page must be split, not dropped or exceed the frame limit");
-  assert.deepEqual(pages.flatMap(event => event.page.sessions), sessions);
-  for (const event of pages) {
-    assert.equal(event.id, "dr43-pages"); assert.ok(Buffer.byteLength(JSON.stringify(event)) <= 1280);
-  }
-  assert.equal(live.uiEvents.at(-1).type, "session_dirs");
-  assert.equal(live.uiEvents.at(-1).id, "dr43-pages");
-  society.handlers.SIGTERM(); await society.settle();
-});
-
-test("DR43: a history observation from an exited engine cannot publish into its successor", async () => {
-  let release;
-  const hostHistory = { async pages(publish) {
-    await new Promise(resolve => { release = resolve; }); publish({ sessions: [], after: null });
-  }, close() {} };
-  const society = await run({ hostHistory }); society.broker.fireReady(); await society.settle();
-  const outgoing = society.started;
-  outgoing.sink.onUi({ type: "sessions_request", id: "dr43-stale" });
-  outgoing.running = false; outgoing.sink.onEnd("engine ended"); outgoing.confirmDeath(); await society.settle();
-  assert.equal(society.ports.submitPrompt("/restart").kind, "accepted"); await society.settle();
-  const successor = society.started; assert.notEqual(successor, outgoing);
-  release(); await society.settle();
-  for (const engine of [outgoing, successor])
-    assert.equal(engine.uiEvents.some(event => event.id === "dr43-stale"), false);
-  society.handlers.SIGTERM(); await society.settle();
-});
-
-test("DR43: display construction failure returns the already acquired host channel and tenure", async () => {
-  let closed = 0;
-  const society = await run({ startupFailure: "display-transport", hostHistory: { close() { closed++; } } });
-  assert.equal(closed, 1);
-  assert.equal(society.lease.releases, 1);
-  assert.equal(society.lease.holds, false);
-  assert.equal(society.calls.includes("TuiApp"), false);
-  assert.equal(society.calls.includes("superviseBroker"), false);
-  assert.equal(society.started, null);
 });

@@ -1,5 +1,5 @@
+import * as restartPolicy from "@oma/process/restart-policy";
 import * as sessionHandoffMeaning from "@oma/protocol/session-handoff";
-import * as hostErrorMeaning from "@oma/protocol/host-errors";
 import * as hostLossMeaning from "@oma/process/host-loss";
 import * as deploymentMeaning from "@oma/domain/deployment";
 // DR27/P0-4: production supervision over fake children, private channels and time.
@@ -16,8 +16,8 @@ async function world() {
   const children = [], timers = new Set(), readers = [], messages = [];
   const module = { exports: {} };
   const dependencies = {
+    "@oma/process/restart-policy": restartPolicy,
 "@oma/protocol/session-handoff": sessionHandoffMeaning,
-"@oma/protocol/host-errors": hostErrorMeaning,
 "@oma/process/host-loss": hostLossMeaning,
 "@oma/domain/deployment": deploymentMeaning,
 
@@ -45,7 +45,6 @@ async function world() {
     clearTimeout(timer) { timers.delete(timer); },
     require(name) {
 if (name === "@oma/protocol/session-handoff" && !Object.hasOwn(dependencies, name)) return sessionHandoffMeaning;
-if (name === "@oma/protocol/host-errors" && !Object.hasOwn(dependencies, name)) return hostErrorMeaning;
 if (name === "@oma/process/host-loss" && !Object.hasOwn(dependencies, name)) return hostLossMeaning;
 if (name === "@oma/domain/deployment" && !Object.hasOwn(dependencies, name)) return deploymentMeaning;
  assert.ok(Object.hasOwn(dependencies, name), name); return dependencies[name]; },

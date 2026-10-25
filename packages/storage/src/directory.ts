@@ -1,4 +1,4 @@
-import { mkdirAt, unlinkAt } from "@oma/native/posix-files";
+import { mkdirAt, unlinkAt, statAt } from "@oma/native/posix-files";
 /** Directory traversal uses held descriptors and kernel no-symlink resolution.
  * These capabilities protect namespace traversal, not same-inode writes or S-06 durability.
  */
@@ -308,6 +308,20 @@ export function removeOwnedFile(path: string): void {
     catch (error) { if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error; }
     fsyncSync(parent);
   } finally { closeSync(parent); }
+}
+/** Caller-owned unaccepted/temporary entry, under an already held parent.
+ * Publication callers retain their destination capability through replacement;
+ * no renamed root or replacement ancestor can redirect the removal. */
+export function removeOwnedEntryAt(parent: number, name: string): void {
+  const observed = statAt(parent, name, { throwIfNoEntry: false });
+  if (observed === undefined) return;
+  if (!observed.isDirectory()) { unlinkAt(parent, name); fsyncSync(parent); return; }
+  const root = openOwnedDirectory(parent, name);
+  try {
+    for (const child of readdirSync(`/proc/self/fd/${root}`)) removeOwnedEntryAt(root, child);
+    fsyncSync(root);
+  } finally { closeSync(root); }
+  unlinkAt(parent, name, true); fsyncSync(parent);
 }
 /** The entries of one caller-owned directory, or null when it cannot be
  * listed -- absent, another entry type, or unreadable even after the mode

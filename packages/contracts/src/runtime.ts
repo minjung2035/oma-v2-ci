@@ -32,6 +32,15 @@ export interface RunLease { actor: Actor; incarnation: number; socketHostPath: s
 
 export interface UnitObservation { activeState: string; subState: string; result: string; execMainStatus: number; cgroup: string; invocationId: string }
 
+/** A live kernel scope capability, not a durable DTO or authority token. The
+ * common run owner cannot interpret the OS identity or infer death from EOF. */
+export interface ExecutionScopePin {
+  readonly identity: unknown;
+  population(): "empty" | "populated" | "removed" | "unknown";
+  matches(scope: string): boolean;
+  close(): void;
+}
+
 export interface SandboxPlan { argv: readonly string[]; env: Readonly<Record<string,string>>; inheritedFds: readonly number[] }
 
 

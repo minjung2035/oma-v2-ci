@@ -20,14 +20,19 @@ jobs:
           node-version: '26.0.0'
           package-manager-cache: false
       - name: Install locked dependencies
-        run: npm ci
+        run: |
+          mkdir -p .scratch/native-runtime
+          git rev-parse HEAD > .scratch/native-runtime/source-head.txt
+          node --input-type=module -e 'console.log(JSON.stringify({platform:process.platform,arch:process.arch,versions:process.versions,image:process.env.ImageVersion}))' > .scratch/native-runtime/environment.json
+          if ! npm ci > .scratch/native-runtime/install.log 2>&1; then cat .scratch/native-runtime/install.log; exit 1; fi
       - name: Build the same 25 workspaces on the actual OS
-        run: npm run build:workspaces
+        run: |
+          if ! npm run build:workspaces > .scratch/native-runtime/build.log 2>&1; then cat .scratch/native-runtime/build.log; exit 1; fi
       - name: Run shared production primitives and streaming verification
         run: |
           mkdir -p .scratch/native-runtime
           git rev-parse HEAD > .scratch/native-runtime/source-head.txt
-          node --test test/native-primitives.test.mjs test/restic-tar.test.mjs > .scratch/native-runtime/tests.log 2>&1
+          node --test test/native-primitives.test.mjs test/native-profile.test.mjs test/restic-tar.test.mjs > .scratch/native-runtime/tests.log 2>&1
       - name: Preserve shared runtime evidence
         if: always()
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
@@ -51,6 +56,9 @@ jobs:
           package-manager-cache: false
       - name: Observe real Darwin gates
         run: node scripts/verify-native.mjs .scratch/native-evidence
+      - name: Compile the standalone credential primitive without VM frameworks
+        if: always()
+        run: xcrun swiftc -typecheck packages/platform-mac/src/keychain/main.swift > .scratch/native-evidence/keychain-typecheck.log 2>&1
       - name: Preserve raw observations, including blocked gates
         if: always()
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6

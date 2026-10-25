@@ -175,30 +175,14 @@ DR46 전환 기록: 위 T117의 network 차단 절과 그 --unshare-all 전용 f
 
 **MUST [TEST-005]** [contracts.type-test.ts](../implementation/tests/contracts.type-test.ts)를 strict/noUncheckedIndexedAccess/exactOptionalPropertyTypes와 noEmit으로 검사한다. 모든 mutation의 request 필수, public method 분류의 완전성·배타성, read/wait의 top-level request 금지, agent.create의 profile/capabilities 입력 금지 및 ResolvedAgentSpec 변수의 wire 입력 거절을 유지한다. 이 compile-only 회귀 검사는 T05/T13의 runtime validator 검사를 대체하지 않는다.
 
-## macOS 플랫폼 oracle ([DR18](design-revisions.md))
+## native 플랫폼 oracle (DR49)
 
-[macos-platform](macos-platform.md) §10.3의 MV oracle은 그 ID로 남는다. 이 절은 각 MV가 어느 lane의 어느 시험으로 증명되는지 잇는다.
-시험은 제목의 앞부분으로 적는다. `platform` lane은 `npm run verify:platform`이고, mac-* lane은 Mac에서만 돈다(아직 NOT_RUN).
-
-| MV | lane | 시험 또는 상태 |
-|---|---|---|
-| MV-06 | platform | `MAC-650 / D-7:` |
-| MV-10 | platform | `MAC-230:`, `MAC-231:`, `MAC-211:` |
-| MV-12 | platform(mac-vm은 NOT_RUN) | `§4.6/MV-12:`, `MAC-221/MV-12:` |
-| MV-13 | platform | `MV-13:`, `MAC-704:` |
-| MV-20 | platform의 Linux bwrap(mac-security는 NOT_RUN) | `MAC-205/MV-20:`, SCN-C08 |
-| MV-21 | platform(mac-security는 NOT_RUN) | `MAC-202:` |
-| MV-25 | platform(mac-security는 NOT_RUN) | `MAC-712:`, `MAC-710/711:` |
-| MV-26 | platform(mac-security는 NOT_RUN) | `MAC-601/MV-26:` |
-| MV-32 | platform(mac-vm은 NOT_RUN) | `MAC-620:`, `P0V-82 / MAC-620:` |
-| MV-33 | platform의 봉인 부분(복원 왕복은 mac-vm, NOT_RUN) | `§8.4/MV-33:` |
-| MV-34 | platform(mac-vm은 NOT_RUN) | `MAC-303:`, `MAC-303/MV-34:` |
-| MV-50 | platform의 mirror 부분(mac-e2e는 NOT_RUN) | `§6.3/MAC-411/MV-50:` |
-| MV-51 | platform의 export 부분(mac-e2e는 NOT_RUN) | `§6.4/MAC-420/MV-51:` |
-| MV-53 | platform | `MAC-412:`, `MV-53:` |
-| MV-54 | platform | `MAC-404/MV-54:` |
-| MV-60 | platform, mac-e2e | NOT_BUILT: host의 terminal attach로 guest의 `oma`를 움직이는 시나리오가 아직 없다 |
-| MV-01–05, MV-11, MV-22–24, MV-30, MV-31, MV-35, MV-40–43, MV-52, MV-61, MV-62 | mac-vm, mac-security, mac-powercut, mac-e2e, CI | NOT_RUN: Apple Silicon Mac과 Virtualization.framework가 필요하다 |
+과거 VM의 MAC/MV/T 수용 번호·원문은 [폐기한 VM 시험 기록](archive/macos-vm-tests-2026-10-25/README.md)에
+보존한다. 그 결과는 native PASS에 합산하지 않는다. 현재 요구는 [NATIVE-001–007](macos-platform.md)과
+[native 명세의 CI 계약](macos-native-spec.md#12-mac-없이-개발하는-ci-계약)이다. G-PROCESS·G-FILES·G-AUTH는
+각각 실제 Darwin kernel probe·공격 fixture·원시 artifact로 검증하며 OPEN/BLOCKED/SETUP_FAILED는 실패다.
+Linux의 공통 TS 시험과 Mac의 실제 OS 시험을 구분하고 전체 후손 종료·source quiescence·파일 원본·권한·
+receipt 보장을 mock이나 조건부 skip으로 닫지 않는다.
 
 ## Requirement → production path → executable evidence
 

@@ -8,11 +8,6 @@ import { removeUnusedTree } from "@oma/storage/directory";
 import { principalSessionDir, principalWorkspace } from "@oma/engine/principal-session";
 import { RESUME_SESSION_ENV } from "@oma/protocol/session-handoff";
 import { sessionBirthForHistory } from "../runtime/session-catalog.js";
-import { requestHostNewSession } from "../runtime/session-handoff.js";
-import type { HostHistoryChannel } from "@oma/engine/host-history-channel";
-import { isHostHistoryReference } from "@oma/protocol/host-history";
-import { guestHistoryReference } from "@oma/protocol/guest-history";
-import { inspectSessionHistory } from "../runtime/session-history.js";
 import { tryHoldSociety } from "../runtime/society-lease.js";
 import { errorWords } from "@oma/tui/words";
 import { exitFor } from "./exit.js";
@@ -23,11 +18,10 @@ export class SocietyTransition {
   constructor(private readonly bootstrap: SocietyBootstrap, private readonly prepared: PreparedSociety, private readonly libdir: string, private readonly runtime: Pick<SocietyRuntime, "session" | "finished" | "beginFinish" | "end">, private readonly interaction: {
     close(): void;
     restore(): void;
-  }, private readonly hostHistories: HostHistoryChannel | null, private readonly fail: (text: string, code: ReturnType<typeof exitFor>) => never) { }
+  }, private readonly fail: (text: string, code: ReturnType<typeof exitFor>) => never) { }
   async shutdown(code: number): Promise<void> {
     if (!this.runtime.beginFinish())
       return;
-    this.hostHistories?.close();
     this.interaction.close();
     await this.runtime.end(false);
     this.removeIfUnused();
@@ -61,23 +55,7 @@ export class SocietyTransition {
     this.relaunchPending = true;
     try {
       let resumeCwd = this.bootstrap.canonicalProjectPath;
-      let guestResume: string | undefined;
-      const hostResume = resume !== null && isHostHistoryReference(resume);
-      if (hostResume) {
-        try {
-          if (this.hostHistories === null)
-            throw new StoreError("INVALID_REQUEST", "Host Personal histories require a Mac host screen");
-          await this.hostHistories.inspect(resume);
-          if (this.runtime.finished || this.runtime.session !== outgoing)
-            return;
-        }
-        catch (error) {
-          if (!this.runtime.finished && this.runtime.session === outgoing)
-            outgoing?.sendUi({ type: "notice", text: errorWords(error) });
-          return;
-        }
-      }
-      else if (resume !== null) {
+      if (resume !== null) {
         let birth;
         try {
           birth = await sessionBirthForHistory(this.bootstrap.dataRoot, resume, this.bootstrap.canonicalProjectPath);
@@ -87,14 +65,7 @@ export class SocietyTransition {
           resumeCwd = realpathSync(birth.cwd);
           if (resumeCwd !== birth.cwd || !statSync(resumeCwd).isDirectory())
             throw new StoreError("INVALID_REQUEST", "Session cwd no longer identifies its saved directory");
-          if (this.hostHistories !== null) {
-            if (birth.mode !== "society")
-              throw new StoreError("INVALID_REQUEST", "Personal histories must be observed on the host");
-            const header = await inspectSessionHistory(resume, birth, principalWorkspace(join(this.bootstrap.dataRoot, birth.id)));
-            guestResume = guestHistoryReference({ projectId: basename(birth.cwd), society: birth.id, file: basename(resume), sessionId: header.id });
-            if (this.runtime.finished || this.runtime.session !== outgoing)
-              return;
-          }
+
         }
         catch (error) {
           if (!this.runtime.finished && this.runtime.session === outgoing)
@@ -125,17 +96,6 @@ export class SocietyTransition {
       await this.runtime.end(true);
       this.removeIfUnused();
       this.interaction.restore();
-      // A hidden-VM session returns a new birth to the Mac, only after its
-      // actual engine and owned broker ended. No guest Personal or guest path.
-      if (this.hostHistories !== null) {
-        await this.hostHistories.finish(guestResume ?? resume, mode);
-        process.exit(0);
-        return;
-      }
-      if (resume === null && requestHostNewSession(mode)) {
-        process.exit(0);
-        return;
-      }
       const env: NodeJS.ProcessEnv = { ...process.env };
       delete env[RESUME_SESSION_ENV];
       if (resume !== null)

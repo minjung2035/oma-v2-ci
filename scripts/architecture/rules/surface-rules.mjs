@@ -844,9 +844,9 @@ function moduleBoundaryRules(root, findings) {
       if ((file === "apps/oma/src/application/society-runtime.ts" && target?.startsWith("packages/tui/src/")) ||
           (file === "apps/oma/src/application/society-interaction.ts" && ["login", "principal-events", "principal-launch", "principal-session", "session-directories"].some(name => target === `packages/engine/src/${name}.ts`)))
         findings.push(finding("society-conversation-boundary", file, `imports ${target}; conversation commands and presentation observations use society-conversation`));
-      if (["packages/platform-mac/src/vz-driver.ts", "packages/platform-linux/src/session-launcher.ts"].includes(file) &&
-          ["apps/oma/src/platform/host/lifecycle.ts", "apps/oma/src/platform/host/service.ts", "apps/oma/src/platform/guest/host.ts"].includes(target))
-        findings.push(finding("platform-adapter-boundary", file, `imports ${target}; lifecycle adapters receive platform-lifecycle capabilities`));
+      if (["packages/platform-mac/src/", "packages/platform-linux/src/"].some(prefix => file.startsWith(prefix)) &&
+          target?.startsWith("apps/oma/src/"))
+        findings.push(finding("platform-adapter-boundary", file, `imports ${target}; platform adapters receive capabilities from App composition`));
       if (!file.startsWith("apps/oma/src/runtime/packages/") && target === "apps/oma/src/runtime/packages/store.ts")
         findings.push(finding("package-public-api", file, "imports the package store implementation instead of runtime/packages/index"));
     }

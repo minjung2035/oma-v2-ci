@@ -34,16 +34,26 @@ master 병합·배포는 하지 않는다. 실제 실행 결과의 정본은 val
 - P3: broker의 ancestry/reuse 판정은 하나이며 `/proc`와 libproc 관측만 native leaf로
   분리했다. broker supervisor의 기존 monotonic window·backoff를 process package의
   RestartPolicy가 담당한다. 이 자체로 systemd 실행 관리의 전환이 끝난 것은 아니다.
-- P5의 독립 작업: Restic dump는 App의 기존 세션 보관 owner가 streaming hash·PAX·link·
-  entry coverage·EOF를 검증한다. GNU tar와 inline child script를 제거한다. JSON inventory가
+- P5의 독립 작업: Restic dump는 storage의 Restic 검증 owner가 streaming hash·PAX·link·
+  entry coverage·EOF를 검증한다. App은 storage API를 호출하는 조립만 맡고 GNU tar와 inline child script를 제거한다. JSON inventory가
   정확한 nanosecond metadata와 원본 inode 관계를 별도로 검증하며 source 재관측,
   checkpoint 게시, cold commit, 회수, restore 순서는 유지한다. 관측용 content hash/link/inode는
   메모리에만 추가하며 durable checkpoint 형식·digest 정의는 바꾸지 않는다.
 
 P4의 Darwin 실행과 P6 제품 지원은 gate가 해결되기 전 완료로 판정하지 않는다.
-P2의 entry pin/reopen, P3의 Resident supervisor, P5의 quarantine/checker/설치, P6의 VM 제거,
+P2의 entry pin/reopen, P3의 Resident supervisor, P5의 quarantine/checker/설치, P6의 제품 실행 연결,
 P7의 최종 owner/규범 대조는 별도 잔여 작업이다. 공통 코드의 시험 성공을 해당 전체 단계의
 완료로 승격하지 않는다.
+
+VM-only App host/guest·entry·VZ·guest 자산·protocol은 실행 소스에서 제거했다. 과거 시험은
+원문을 archive에 보존하고 native PASS에 합산하지 않는다. Keychain은 VM framework 없는
+독립 primitive로 분리했으며 Darwin 컴파일과 signed release 실행은 각각 별도 검증이다.
+Restic child/FD 수명은 process, tar/inventory/tool 파일 검증은 storage, App은 두 API의
+조립을 맡는다. storage→process 의존을 추가하지 않고 dump callback으로 연결한다.
+
+이 checkpoint의 Linux 실제 Restic·durable fault 회귀는 27/27 통과했다. production 그래프
+472 files에서 runtime/type union 순환·unresolved import는 모두 0개이며 모듈 경계 위반
+negative control 3/3을 통과했다. 전체 회귀와 최종 source-bound qualification은 아직 남았다.
 
 ### 최초 Darwin 실행
 

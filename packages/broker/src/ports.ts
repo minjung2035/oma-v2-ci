@@ -160,6 +160,7 @@ export interface BrokerEffects {
   closeLedger(): void;
 }
 export interface BrokerDependencies {
+  readonly acquireRunScope: (scope: string) => import("@oma/contracts/runtime").ExecutionScopePin;
   readonly ledger: BrokerLedger;
   readonly mail: BrokerMail;
   readonly units: BrokerUnits;

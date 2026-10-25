@@ -6,7 +6,6 @@ import { readFileSync } from 'node:fs';
 import * as path from 'node:path';
 import { Script } from 'node:vm';
 import ts from 'typescript';
-import { macBundleResources } from "@oma/platform-mac/bundle";
 
 import { NativeChannel } from "@oma/platform-mac/native-channel";
 const code = ts.transpileModule(readFileSync(new URL('../src/keychain-client.ts', import.meta.url), 'utf8'), {
@@ -19,7 +18,6 @@ function world({ fault, noChannel = false, spawnError, timers } = {}) {
   const children = [], launches = [];
   const deps = {
     './native-channel.js': { NativeChannel },
-    './bundle.js': { macBundleResources },
     'node:path': path, '@oma/domain/errors': { StoreError },
     "@oma/process/async": {
       spawnSupervisedService(...args) {
@@ -48,17 +46,17 @@ function answer(channel, fields = {}, index = 0) {
 }
 const unavailable = error => error.code === 'BROKER_UNAVAILABLE';
 
-test('Keychain client: fixed signed bundle path, no PATH lookup or other bundle fallback', () => {
+test('Keychain client: fixed installation path, no PATH lookup', () => {
   const w = world();
-  assert.equal(w.bundledKeychainHelper(libdir), '/fixture/OMA.app/Contents/MacOS/oma-vmhelper');
-  for (const dir of ['/fixture/install', '/fixture/Resources/install', '/'])
+  assert.equal(w.bundledKeychainHelper(libdir), '/fixture/OMA.app/Contents/Resources/install/packages/platform-mac/dist/keychain/oma-keychain');
+  for (const dir of ['relative', '/fixture/../install', '/'])
     assert.throws(() => w.bundledKeychainHelper(dir), { code: 'UNSUPPORTED_PROFILE' });
   assert.equal(w.launches.length, 0);
 });
 test('Keychain client: only get/put requests; fragmented UTF-8 responses retain correlation', async () => {
   const w = world(), client = await w.KeychainClient.launch(libdir);
   assert.deepEqual(JSON.parse(JSON.stringify(w.launches[0].slice(0, 4))),
-    ['/fixture/OMA.app/Contents/MacOS/oma-vmhelper', ['--keychain-only'], { PATH: '/usr/bin:/bin' }, true]);
+    ['/fixture/OMA.app/Contents/Resources/install/packages/platform-mac/dist/keychain/oma-keychain', [], { PATH: '/usr/bin:/bin' }, true]);
   assert.equal(w.launches[0][4], undefined);
   const { child, channel } = w.children[0];
   const first = client.get('engine-managed'), second = client.get('other');

@@ -76,14 +76,6 @@
       "types": "./dist/presentation.d.ts",
       "default": "./dist/presentation.js"
     },
-    "./guest-control": {
-      "types": "./dist/guest-control.d.ts",
-      "default": "./dist/guest-control.js"
-    },
-    "./platform-lifecycle": {
-      "types": "./dist/platform-lifecycle.d.ts",
-      "default": "./dist/platform-lifecycle.js"
-    },
     "./stream": {
       "types": "./dist/stream.d.ts",
       "default": "./dist/stream.js"

@@ -666,9 +666,12 @@ relay는 자리표시자를 provider가 key를 읽는 자리에서만 진짜 key
 
 **MUST [MODE-004]** Personal 확장 선택은 `<data>/oma/.personal/settings.json`의 독립 revision으로 영속 보존한다. 최초 project 선택에서 Society core를 제외한 명시적 사용자 확장만 이어받고, 이후 변경은 Principal/Worker 설정을 바꾸지 않는다. 동일 OMA package store/index·extension validation/digest 규칙을 재사용하며 설치 코드를 중복하지 않는다. writer lock 아래 최신 설정을 읽어 전체 검증·변환·atomic replacement하고 update/remove 뒤 경로를 reconcile한다. 읽기 실패를 빈 선택이나 전부 삭제로 해석하지 않는다. Personal Config는 model·effort·extensions·고정 mode만 표시한다.
 
-**MUST [MODE-005]** `/resume`는 저장된 모드로 열며 변환하지 않고, fork도 출처 모드를 유지한다. `/new`는 현재 모드의 새 세션을 선택창 없이 연다. 첫 대화 전 idle 세션의 `/society`는 모드 선택을 제공한다. 다른 모드 선택 시 현재 writer의 실제 종료를 관측한 뒤 `oma --mode personal|society`로 재진입해 같은 프로젝트의 세션을 열며, 기존 birth·history를 변환하거나 이어 쓰지 않는다. Personal→Society는 표준 project binding·ownership·provisioning 경로로 같은 프로젝트의 새 Society 세션을 연다. 선택창·before-switch hook 대기 중 세션이 바뀌거나 작업이 시작되면 전환하지 않는다. macOS의 Society→Personal은 실제 guest writer 종료 뒤 모드만 host로 전달해 native Personal을 열고, Personal→Society는 Host API로 관측된 실행 중 Society에 연결한다. IPC EOF이나 timeout만으로 writer 종료를 인정하지 않는다. legacy Society는 관측된 기존 project binding으로만 식별하며 경로 형태만으로 외부 Pi history를 수입하지 않는다. Society open/close는 협업 상태이며 Personal 시작은 다른 Society나 개별 force-stop 사실을 바꾸지 않는다.
+**MUST [MODE-005]** `/resume`는 저장된 모드로 열며 변환하지 않고, fork도 출처 모드를 유지한다. `/new`는 현재 모드의 새 세션을 선택창 없이 연다. 첫 대화 전 idle 세션의 `/society`는 모드 선택을 제공한다. 다른 모드 선택 시 현재 writer의 실제 종료를 관측한 뒤 `oma --mode personal|society`로 재진입해 같은 프로젝트의 세션을 열며, 기존 birth·history를 변환하거나 이어 쓰지 않는다. Personal→Society는 표준 project binding·ownership·provisioning 경로로 같은 프로젝트의 새 Society 세션을 연다. 선택창·before-switch hook 대기 중 세션이 바뀌거나 작업이 시작되면 전환하지 않는다. DR49 native 경로에서는 두 OS가 같은 세션 전환 owner를 쓰며, VM/Host API handoff는 폐기했다. IPC EOF이나 timeout만으로 writer 종료를 인정하지 않는다. legacy Society는 관측된 기존 project binding으로만 식별하며 경로 형태만으로 외부 Pi history를 수입하지 않는다. Society open/close는 협업 상태이며 Personal 시작은 다른 Society나 개별 force-stop 사실을 바꾸지 않는다.
 
-**MUST [MODE-006]** macOS Personal은 Host API token 조회·VM 시작보다 먼저 Mac host 실행으로 분기한다. 기존 Society open/attach/status/list/stop 및 hidden VM 계약은 바꾸지 않는다. Society `/new`의 birth 선택은 guest writer의 실제 종료 뒤 host로 반환하며 guest에서 Personal을 시작하지 않는다. 경로 없는 transient 전환과 protocol 3 / Host API 2의 메시지 의미는 [macos-platform §4.6](macos-platform.md)이 소유한다. 플랫폼별 사용자 메타데이터 조립은 runtime이 소유하며 Linux의 held-directory containment를 Mac 지원 때문에 완화하지 않는다. Linux에서 Darwin 분기를 주입한 시험은 native macOS 실행·내구성 증거가 아니다.
+MODE-006은 DR49로 폐기했다. 이 번호의 옛 VM/Host API/guest→host 전환 의미는
+[원문 기록](archive/macos-vm-tests-2026-10-25/docs/implementation-spec.md)에 보존한다.
+새 native 경계는 [NATIVE-001–007](macos-platform.md)을 따르며 Linux의 파일 containment나
+Principal 권한을 완화하지 않는다. 이 ID를 새 native 요구에 재사용하지 않는다.
 
 ### Society 표면과 공통 엔진
 

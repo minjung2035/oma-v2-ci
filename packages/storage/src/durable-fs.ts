@@ -1,3 +1,4 @@
+import { withCleanup } from "@oma/native/cleanup";
 import { unlinkAt, renameAt, linkAt } from "@oma/native/posix-files";
 // FS-001..003 / P7: syscall ordering, not artifact authority or S-06 evidence.
 // Immutable publication and derived replacement are deliberately separate APIs.
@@ -274,7 +275,7 @@ function publishOnce(parent: number, name: string, target: string, data: string 
   faultAt(faults, "file-create", "before", temporary);
   const fd = createLockedTemporary(parent, temp, constants.O_WRONLY, mode);
   let crashed = false;
-  try {
+  return withCleanup(() => {
     faultAt(faults, "file-create", "after-visible", temporary);
     try {
       faultAt(faults, "file-write", "before", temporary);
@@ -289,7 +290,8 @@ function publishOnce(parent: number, name: string, target: string, data: string 
       throw error;
     }
     let result: "created" | "existing" = "created";
-    try {
+    return withCleanup(() => {
+      try {
       faultAt(faults, "publication-link", "before", target);
       try { linkAt(parent, temp, parent, name); }
       catch (error) {
@@ -303,19 +305,20 @@ function publishOnce(parent: number, name: string, target: string, data: string 
     } catch (error) {
       crashed = isDurabilityFault(error);
       throw error;
-    } finally {
+      }
+      return result;
+    }, () => {
       if (!crashed) {
         faultAt(faults, "temporary-cleanup", "before", temporary);
         try { unlinkAt(parent, temp); }
         catch (error) { if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error; }
         fsyncHeldDir(parent, dirname(target), faults);
       }
-    }
-    return result;
-  } finally {
+    });
+  }, () => {
     // The lock ends with the descriptor -- here, or at this process's death.
     closeSync(fd);
-  }
+  });
 }
 
 /** Derived-only replacement: exclusive temporary -> file fsync -> close ->

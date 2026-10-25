@@ -9,9 +9,7 @@ import { withProjectSnapshot } from "@oma/git/project-snapshot";
 import { StoreError } from "@oma/domain/errors";
 import { SnapshotReader, copySnapshotFile } from "@oma/native/snapshot-reader";
 import { GIT_ENV } from "@oma/process/policies";
-import { prepareProjectDirectory } from "@oma/git/linux-project-preparation";
-import { prepareHostProjectDirectory } from "@oma/platform-mac/files";
-import { MacGit } from "@oma/git/host-project";
+import { prepareProjectDirectory } from "@oma/git/project-preparation";
 
 function fixture(t: import("node:test").TestContext, format: "sha1" | "sha256" = "sha1") {
   const root = mkdtempSync(join(tmpdir(), "oma-snapshot-"));
@@ -183,27 +181,14 @@ test("DR27: unreadable content and raced parent symlinks refuse a snapshot rathe
     assert.throws(() => copySnapshotFile(entry, "tracked", () => {}), /changed during the snapshot/);
   } finally { closeSync(entry.descriptor); }
 });
-test("DR27: the Mac's initial bundle carries the same dirty snapshot without a source commit", async t => {
-  const f = fixture(t); writeFileSync(join(f.project, "tracked"), "Mac work in progress\n");
-  const index = readFileSync(join(f.project, ".git", "index"));
-  const out = join(f.root, "snapshot.bundle");
-  const result = await new MacGit("/usr/bin/git", prepareHostProjectDirectory).bundle(f.project, "main", null, out);
-  assert.notEqual(result.head, f.parent);
-  assert.equal(f.run("rev-parse", "HEAD"), f.parent);
-  assert.deepEqual(readFileSync(join(f.project, ".git", "index")), index);
-  const clone = join(f.root, "clone");
-  const fetched = spawnSync("git", ["clone", "--quiet", "--branch", "main", out, clone], { env: GIT_ENV });
-  assert.equal(fetched.status, 0, fetched.stderr.toString());
-  assert.equal(readFileSync(join(clone, "tracked"), "utf8"), "Mac work in progress\n");
-});
 
-for (const host of [false, true]) {
+for (const host of [false]) {
   test(`DR27: ${host ? "host" : "society"} snapshot survives async consumption and is collected after settlement`, async t => {
     const f = fixture(t);
     let release!: () => void;
     const ready = new Promise<void>(resolve => { release = resolve; });
     let repository = "";
-    const pending = withProjectSnapshot({ ...f.options, ...(host ? { prepare: prepareHostProjectDirectory } : {}) }, async snapshot => {
+    const pending = withProjectSnapshot({ ...f.options, prepare: prepareProjectDirectory }, async snapshot => {
       repository = snapshot.repository;
       await ready;
       assert.equal(snapshot.git(["show", `${snapshot.head}:tracked`]), "initial");
@@ -219,7 +204,7 @@ for (const host of [false, true]) {
   for (const asynchronous of [false, true]) {
     test(`DR27: ${host ? "host" : "society"} snapshot cleans up after ${asynchronous ? "async" : "sync"} consumer failure`, async t => {
       const f = fixture(t); const failure = new Error("consumer failed");
-      const consume = () => withProjectSnapshot({ ...f.options, ...(host ? { prepare: prepareHostProjectDirectory } : {}) }, () => {
+      const consume = () => withProjectSnapshot({ ...f.options, prepare: prepareProjectDirectory }, () => {
         if (asynchronous) return Promise.reject(failure);
         throw failure;
       });
@@ -249,10 +234,10 @@ test("DR27/P0-4: cleanup attempts every owner and retains the consumer failure f
   assert.deepEqual(readdirSync(f.root).filter(name => name.startsWith(".snapshot")), []);
 });
 
-for (const host of [false, true]) test(`DR27/FS-005: ${host ? "host" : "society"} preparation never adopts an existing tree`, t => {
+for (const host of [false]) test(`DR27/FS-005: ${host ? "host" : "society"} preparation never adopts an existing tree`, t => {
   const f = fixture(t); const path = join(f.root, "existing"); mkdirSync(path);
   const bytes = join(path, "keep"); writeFileSync(bytes, "not ours");
-  assert.throws(() => (host ? prepareHostProjectDirectory : prepareProjectDirectory)(path), { code: "EEXIST" });
+  assert.throws(() => prepareProjectDirectory(path), { code: "EEXIST" });
   assert.equal(readFileSync(bytes, "utf8"), "not ours");
   assert.equal(existsSync(`${path}.lease`), false);
 });

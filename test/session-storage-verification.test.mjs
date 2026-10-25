@@ -3,9 +3,9 @@ import assert from "node:assert/strict";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { verifyResticInventory } from "#oma-test/app/runtime/restic-verification";
+import { verifyResticInventory } from "@oma/storage/restic-verification";
 import { parseStorageState } from "#oma-test/app/runtime/session-storage-state";
-import { requireResticSuccess } from "#oma-test/app/runtime/restic";
+import { requireResticSuccess } from "@oma/process/restic";
 
 const snapshot = "a".repeat(64);
 const source = { paths: new Set(["repos", "repos/file"]), metadata: new Map([

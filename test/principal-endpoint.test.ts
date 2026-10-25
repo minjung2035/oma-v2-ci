@@ -1700,7 +1700,7 @@ test("P0V-60 / R05, P0-2: the Principal's capabilities are read against what the
   t.after(() => { store.close(); rmSync(root, { recursive: true, force: true }); });
   store.transaction(() => store.insertAgent({ name: "principal", specHash: resolvedSpecDigest(PRINCIPAL_SPEC), role: "principal",
     desired: "enabled", incarnation: 0, profile: "p", createdBy: null, specJson: JSON.stringify(PRINCIPAL_SPEC) }));
-  const peers = new PeerAuthenticator(store, {} as UnitsModule, new RunRegistry(), "demo", () => undefined);
+  const peers = new PeerAuthenticator(store, {} as UnitsModule, new RunRegistry(() => { throw new Error("this Principal-only test has no Worker scope"); }), "demo", () => undefined);
   const peer = { pid: process.pid, uid: process.getuid!(), gid: process.getgid!(), alive: () => true,
     retainForExecution: () => () => undefined, releaseConnection: () => undefined } as BoundPeer;
   let standing = true;

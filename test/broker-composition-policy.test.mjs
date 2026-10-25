@@ -1,5 +1,4 @@
 import * as sessionHandoffMeaning from "@oma/protocol/session-handoff";
-import * as hostErrorMeaning from "@oma/protocol/host-errors";
 import * as hostLossMeaning from "@oma/process/host-loss";
 import * as deploymentMeaning from "@oma/domain/deployment";
 import test from "node:test";
@@ -35,7 +34,6 @@ async function compose(environment, { lockHeld = true, claim = "taken", cgroup =
         integration: { checks: [] }, limits: { receiptWaitSeconds: 1 }, agentProfiles: {}, modelProfiles: {} };
     const modules = {
 "@oma/protocol/session-handoff": sessionHandoffMeaning,
-"@oma/protocol/host-errors": hostErrorMeaning,
 "@oma/process/host-loss": hostLossMeaning,
 "@oma/domain/deployment": deploymentMeaning,
 
@@ -169,7 +167,6 @@ async function compose(environment, { lockHeld = true, claim = "taken", cgroup =
     await new Script(executable, { filename: "broker-composition.cjs" }).runInNewContext({
         exports: {}, process, AbortController, console: { error(...parts) { lines.push(parts.join(" ")); } }, require(name) {
 if (name === "@oma/protocol/session-handoff" && !Object.hasOwn(modules, name)) return sessionHandoffMeaning;
-if (name === "@oma/protocol/host-errors" && !Object.hasOwn(modules, name)) return hostErrorMeaning;
 if (name === "@oma/process/host-loss" && !Object.hasOwn(modules, name)) return hostLossMeaning;
 if (name === "@oma/domain/deployment" && !Object.hasOwn(modules, name)) return deploymentMeaning;
 

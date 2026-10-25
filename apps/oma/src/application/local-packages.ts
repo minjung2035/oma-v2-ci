@@ -52,15 +52,12 @@ import { fileURLToPath } from "node:url";
 import { createGunzip } from "node:zlib";
 import { PACKAGE_ENTRY_PREFIX, extensionEntryProblem } from "@oma/config/operations";
 import { StoreError, unobserved } from "@oma/domain/errors";
-import {
-	createHostStagingDirectory, listHostStaged,
-	removeHostStaged
-} from "@oma/platform-mac/files";
-import { PACKAGE_ARCHIVE_BOUNDS } from "../platform/package-archive.js";
+
+import { PACKAGE_ARCHIVE_BOUNDS } from "@oma/domain/package-policy";
 import { entryAt, openBeneath, withinDirectory } from "@oma/native/files";
 import { listOwnedDirectory, openOwnedDirectoryPath, removeOwnedFile, removeOwnedTree } from "@oma/storage/directory";
-import { STAGING_PREFIX, collectStageStray, hostStaging, linuxStaging, type StageArea } from "../platform/package-staging.js";
-import { extractTar } from "../runtime/packages/tar.js";
+import { STAGING_PREFIX, collectStageStray, ownedStaging, type StageArea } from "@oma/storage/package-staging";
+import { extractTar } from "@oma/storage/package-tar";
 import { PACKAGE_LOCAL_DIR, configuredPackageSources, escapes, packageStoreRoot, resourceEntryProblem } from "../runtime/packages/index.js";
 /** The conventional directories the engine's resolver collects a package's
  * skills, prompt templates, themes and extensions from when its `pi`
@@ -194,7 +191,7 @@ function copyIntoStage(source: string, area: StageArea, rel: string, budget: Sta
 /** One staging area inside the store (a rename must stay on one file system),
  * always given back; what it produced is renamed out before it goes. */
 function staging(root: string, fill: (area: StageArea) => { readonly made: string; readonly name: string }): string {
-  const area = process.platform === "darwin" ? hostStaging(root) : linuxStaging(root);
+  const area = ownedStaging(root);
   try {
     const { made, name } = fill(area);
     area.publish(made, name);
@@ -243,8 +240,7 @@ export async function stageLocalPackage(store: string, given: string): Promise<s
     try { return lstatSync(store, { throwIfNoEntry: false }); } catch { return undefined; }
   })();
   if (slot !== undefined && !slot.isDirectory()) {
-    if (process.platform === "darwin") { try { removeHostStaged(store); } catch { /* checked below */ } }
-    else withinDirectory(store, (parent, name) => collectStageStray(parent, dirname(store), [name]));
+    withinDirectory(store, (parent, name) => collectStageStray(parent, dirname(store), [name]));
     // A stray the collection could not take stands as the corruption it is
     // -- never resolved through to whatever a link names.
     const held = (() => {
@@ -293,11 +289,9 @@ async function stageArchive(store: string, source: string): Promise<string> {
   // store's held parent; the Mac has no openat2, so there the host's file
   // owner makes it by path under the owned-boundary repair
   // `createHostStagingDirectory` gives every host staging area.
-  const darwin = process.platform === "darwin";
   let spool: string;
   try {
-    if (darwin) spool = createHostStagingDirectory(store, STAGING_PREFIX, dirname(store));
-    else {
+    {
       const storeFd = openOwnedDirectoryPath(store);
       const spoolName = `${STAGING_PREFIX}${randomUUID()}`;
       spool = join(store, spoolName);
@@ -320,8 +314,7 @@ async function stageArchive(store: string, source: string): Promise<string> {
         // stream yields a chunk at a time, so the inflated archive is
         // never a buffer in memory either.
         const flags = constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | constants.O_NOFOLLOW;
-        const out = darwin ? openSync(tar, flags, 0o600)
-          : withinDirectory(tar, (parent, name) => openBeneath(parent, name, flags, 0o600));
+        const out = withinDirectory(tar, (parent, name) => openBeneath(parent, name, flags, 0o600));
         try {
           await pipeline(createReadStream(source), createGunzip(), async chunks => {
             for await (const chunk of chunks) writeSync(out, chunk as Buffer);
@@ -350,7 +343,7 @@ async function stageArchive(store: string, source: string): Promise<string> {
         before.size !== after.size || before.mtimeMs !== after.mtimeMs || before.ctimeMs !== after.ctimeMs)
       throw new StoreError("POLICY_CHANGED", "the package archive changed while it was read");
     return staged;
-  } finally { if (darwin) removeHostStaged(spool); else removeOwnedTree(spool); }
+  } finally { removeOwnedTree(spool); }
 }
 
 function archiveName(source: string): string {
@@ -361,7 +354,6 @@ function archiveName(source: string): string {
  * left -- that no configured source still names are dead content. Runs after
  * each `oma pi` change: a removed local package's copy goes with its entry. */
 export function pruneLocalStage(store: string): void {
-  const darwin = process.platform === "darwin";
   /** Dead content that cannot go yet is left for the next change's sweep: a
    * single bad entry -- one that vanished or changed type as the sweep
    * reached it, one a same-UID stray made unremovable -- never aborts the
@@ -369,8 +361,7 @@ export function pruneLocalStage(store: string): void {
    * change. */
   const remove = (path: string, directory: boolean): void => {
     try {
-      if (darwin) removeHostStaged(path);
-      else if (directory) removeOwnedTree(path); else removeOwnedFile(path);
+      if (directory) removeOwnedTree(path); else removeOwnedFile(path);
     } catch { /* retention beats a wedge */ }
   };
   // The store's own slot is the sweep's too: a file or a link where the
@@ -395,7 +386,7 @@ export function pruneLocalStage(store: string): void {
    * directory that stays loses nothing. What still cannot be listed -- an
    * entry that vanished or stopped being a directory as the sweep reached
    * it -- is kept whole: dead content surviving one sweep beats a wedge. */
-  const list = darwin ? listHostStaged : listOwnedDirectory;
+  const list = listOwnedDirectory;
   const top = list(root);
   if (top === null) return;
   for (const entry of top)

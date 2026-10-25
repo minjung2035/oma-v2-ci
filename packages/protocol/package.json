@@ -28,25 +28,9 @@
       "types": "./dist/frame.d.ts",
       "default": "./dist/frame.js"
     },
-    "./guest-history": {
-      "types": "./dist/guest-history.d.ts",
-      "default": "./dist/guest-history.js"
-    },
-    "./host-api": {
-      "types": "./dist/host-api.d.ts",
-      "default": "./dist/host-api.js"
-    },
     "./host-channel": {
       "types": "./dist/host-channel.d.ts",
       "default": "./dist/host-channel.js"
-    },
-    "./host-guest": {
-      "types": "./dist/host-guest.d.ts",
-      "default": "./dist/host-guest.js"
-    },
-    "./host-history": {
-      "types": "./dist/host-history.d.ts",
-      "default": "./dist/host-history.js"
     },
     "./jsonl": {
       "types": "./dist/jsonl.d.ts",
@@ -123,10 +107,6 @@
     "./session-handoff": {
       "types": "./dist/session-handoff.d.ts",
       "default": "./dist/session-handoff.js"
-    },
-    "./host-errors": {
-      "types": "./dist/host-errors.d.ts",
-      "default": "./dist/host-errors.js"
     }
   },
   "scripts": {

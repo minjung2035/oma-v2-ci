@@ -1,14 +1,14 @@
 // AUTH-003/RUN-001: a pathname or dead connector is not proof that a run is dead.
 import type { Actor, RunLease } from "@oma/contracts";
 import { StoreError } from "@oma/domain/errors";
-import { pinCgroup, type CgroupIdentity, type CgroupPin, type Population } from "@oma/native/cgroup";
-import type { SettlementQuiescence } from "@oma/contracts/runtime";
+import type { ExecutionScopePin, SettlementQuiescence } from "@oma/contracts/runtime";
+type Population = ReturnType<ExecutionScopePin["population"]>;
 
 export interface RunIdentity {
   readonly actor: Actor;
   readonly incarnation: number;
   readonly invocationId: string;
-  readonly cgroupIdentity: CgroupIdentity;
+  readonly scopeIdentity: unknown;
 }
 export interface RunEndpoint { readonly socketHostPath: string; done(): void }
 export type RunPhase = "opening" | "live" | "revoked-awaiting-death" | "closed";
@@ -23,12 +23,11 @@ export class OwnedRun {
   private state: RunState = { phase: "opening" };
   private waiting = false;
   readonly identity: RunIdentity;
-  constructor(actor: Actor, incarnation: number, invocationId: string, private readonly pin: CgroupPin) {
-    this.identity = Object.freeze({ actor, incarnation, invocationId, cgroupIdentity: pin.identity });
+  constructor(actor: Actor, incarnation: number, invocationId: string, private readonly pin: ExecutionScopePin) {
+    this.identity = Object.freeze({ actor, incarnation, invocationId, scopeIdentity: pin.identity });
   }
   get phase(): RunPhase { return this.state.phase; }
   get invocationId(): string { return this.identity.invocationId; }
-  get cgroupFd(): number { return this.pin.fd; }
   get lease(): RunLease | null { return this.state.phase === "live" ? this.state.lease : null; }
   population(): Population { return this.state.phase === "closed" ? "unknown" : this.pin.population(); }
   matches(path: string): boolean { return this.state.phase === "live" && this.pin.matches(path); }
@@ -70,7 +69,9 @@ export class OwnedRun {
 /** One registry owns each run pin; connection pidfds remain with SharedPeerPin. */
 export class RunRegistry {
   private readonly records = new Map<Actor, OwnedRun>();
-  constructor(private readonly acquire: (path: string) => CgroupPin = pinCgroup) {}
+  constructor(private readonly acquire: (scope: string) => ExecutionScopePin) {
+    if (typeof acquire !== "function") throw new StoreError("UNSUPPORTED_PROFILE", "run registry requires its platform scope observer");
+  }
   get(actor: Actor): OwnedRun | undefined { return this.records.get(actor); }
   values(): IterableIterator<OwnedRun> { return this.records.values(); }
   begin(actor: Actor, incarnation: number, invocationId: string, cgroup: string): OwnedRun {

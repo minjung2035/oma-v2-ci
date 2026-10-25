@@ -11,9 +11,6 @@ import { RESUME_SESSION_ENV } from "@oma/protocol/session-handoff";
 import { sessionRootForHistory } from "../runtime/session-mode.js";
 import { personalBirth, runPersonalSession } from "../runtime/personal-session.js";
 import { updatePersonalSettingsAsync } from "../runtime/personal-settings.js";
-import { macProjectExtensionSeed } from "../platform/host/personal-seed.js";
-import { isGuestHistoryReference } from "@oma/protocol/guest-history";
-import { inspectMacGuestHistory } from "../platform/host/guest-histories.js";
 import { readSettingsForEditing, projectSettingsPath, roleSetOf } from "../application/settings.js";
 
 export async function personalMain(options: { readonly dataRoot: string; readonly cwd: string; readonly resume?: string;
@@ -33,13 +30,6 @@ export async function personalMain(options: { readonly dataRoot: string; readonl
     throw new StoreError("INVALID_REQUEST", "Personal cwd no longer identifies its saved directory");
   await updatePersonalSettingsAsync({ dataRoot: options.dataRoot, libdir, packages }, async () => {
     if (options.noProjectExtensions) return [];
-    if (process.platform === "darwin") {
-      try { return await macProjectExtensionSeed(options.dataRoot, cwd, libdir); }
-      catch (error) {
-        throw new StoreError(error instanceof StoreError ? error.code : "BROKER_UNAVAILABLE",
-          "Project extensions could not be read. Repair the project binding, or start with --mode personal --no-project-extensions to skip their initial inheritance.");
-      }
-    }
     const project = defaultSocietyFor(cwd, sha256Hex(cwd));
     const config = projectSettingsPath(options.dataRoot, project);
     if (lstatSync(config, { throwIfNoEntry: false }) === undefined) return [];
@@ -72,15 +62,10 @@ export async function personalMain(options: { readonly dataRoot: string; readonl
     process.execve(process.execPath, [process.execPath, ...process.execArgv, join(libdir, DEPLOYMENT_LAYOUT.entries.tui), "--society", project], env);
   }
   if (ended.next.session !== undefined) {
-    if (process.platform === "darwin" && isGuestHistoryReference(ended.next.session)) {
-      await inspectMacGuestHistory(options.dataRoot, ended.next.session);
-      env[RESUME_SESSION_ENV] = ended.next.session;
-    } else {
       const birth = await sessionBirthForHistory(options.dataRoot, ended.next.session, cwd);
       env[RESUME_SESSION_ENV] = ended.next.session;
       // Personal histories use their saved cwd, not the window they were found in.
       if (birth.mode === "personal") process.chdir(realpathSync(birth.cwd));
-    }
   }
   process.execve(process.execPath, [process.execPath, ...process.execArgv, join(libdir, DEPLOYMENT_LAYOUT.entries.tui),
     ...(ended.next.session === undefined ? ["--mode", "personal"] : [])], env);

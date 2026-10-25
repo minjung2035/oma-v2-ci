@@ -1,6 +1,7 @@
 /** DR35: bounded repository/rootfs preparation, owned by the broker. Keeping
  * synchronous Git in this child lets the broker observe host loss immediately. */
 import { realpathSync } from "node:fs";
+import { assertNativeRuntime } from "../runtime/native-support.js";
 import { claimSocietyFence } from "../runtime/society-lease.js";
 import { observeProjectBinding, provisionSociety } from "../runtime/provision.js";
 import { SOCIETY_FENCE_ENV, SOCIETY_FENCE_FD } from "@oma/process/fence";
@@ -10,6 +11,7 @@ import { repositoryHealthCommand, requireHealthyRepository } from "@oma/git/repo
 import { TreeLease } from "@oma/storage/tree-lease";
 
 try {
+  assertNativeRuntime();
   const [stateRoot, society, projectDir, ...extra] = process.argv.slice(2);
   if (stateRoot === undefined || society === undefined || projectDir === undefined || extra.length !== 0 ||
       process.env[SOCIETY_FENCE_ENV] !== String(SOCIETY_FENCE_FD))

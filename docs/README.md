@@ -28,14 +28,14 @@
 |---|---|
 | [implementation-spec](implementation-spec.md) | 신원·권한·IPC·메일·Git·lifecycle·복구·제품 표면·물리 순서·Store·unit renderer |
 | [integration-policy](implementation/integration-policy.md) | 기존 tiered integration 정책. 수용된 변경은 해당 DR과 함께 확인 |
-| [macos-platform](macos-platform.md) | 현재 소스에 남아 있는 macOS host와 Linux guest의 VM·RPC·project·credential 계약 |
+| [macos-platform](macos-platform.md) | DR49 native 전환·VM 폐기·선행 gate·모듈 경계 계약 |
 | [verification-spec](verification-spec.md) | 수용 번호·시험·증거·LOC·qualification 요구 |
 
-계약의 존재는 구현 완료나 시험 통과를 뜻하지 않는다. macOS 네이티브 전환과 크로스플랫폼 개편은 이번 문서 정리의 구현 범위가 아니다.
+계약의 존재는 구현 완료나 시험 통과를 뜻하지 않는다. 사용자 구현 지시로 DR49 native 전환을 진행 중이며, 실제 범위와 차단 조건은 validation을 따른다.
 
-## 검토 중인 설계안
+## 구현 중인 전환
 
-[macOS native 전환 명세](macos-native-spec.md)는 VM을 폐기하고 공통 TypeScript 실행부와 최소 OS 경계로 전환하는 제안이다. Mac 개발 장비 없이 GitHub CI로 검증하는 절차와 미해결 선행 조건을 포함한다. 기존 VM 계약의 대체 채택이나 native 지원 완료를 뜻하지 않는다.
+[macOS native 전환 명세](macos-native-spec.md)는 VM을 폐기하고 공통 TypeScript 실행부와 최소 OS 경계로 전환하는 채택된 구현 명세다. Mac 개발 장비 없이 GitHub CI로 검증하는 절차와 미해결 선행 조건을 포함한다. 설계 채택과 native 지원 완료는 구분한다.
 
 ## 기준본과 결정 기록
 

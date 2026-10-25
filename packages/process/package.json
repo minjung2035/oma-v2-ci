@@ -47,6 +47,10 @@
     "./restart-policy": {
       "types": "./dist/restart-policy.d.ts",
       "default": "./dist/restart-policy.js"
+    },
+    "./restic": {
+      "types": "./dist/restic.d.ts",
+      "default": "./dist/restic.js"
     }
   },
   "scripts": {

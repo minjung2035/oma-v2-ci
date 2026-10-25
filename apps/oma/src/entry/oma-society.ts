@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import { engineLoginDirectory } from "../engine/start-effects.js";
+import { assertNativeRuntime } from "../runtime/native-support.js";
 /** Product composition: command selection, admitted session, and process signal wiring. */
 import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -18,7 +19,6 @@ import { parseOmaArguments } from "../runtime/host-arguments.js";
 import { tryHoldSociety } from "../runtime/society-lease.js";
 import { runEngineLogin } from "@oma/engine/login";
 import { HOST_LOSS_SIGNALS } from "@oma/process/host-loss";
-import { HostHistoryChannel } from "@oma/engine/host-history-channel";
 import { identifyProject, bootstrapSociety, prepareSociety } from "../application/society-bootstrap.js";
 import { SocietyRuntime } from "../application/society-runtime.js";
 import { SocietyInteraction } from "../application/society-interaction.js";
@@ -110,6 +110,7 @@ function fail(message: string, code: ReturnType<typeof codeFor>): never {
 async function main(argv: readonly string[]): Promise<void> {
   const command = parseOmaArguments(argv);
   if (command.kind === "help") usage();
+  assertNativeRuntime();
   if (command.kind === "session" && command.mode === "personal")
     fail("Personal cannot start through the Society entry", exitFor("INVALID_REQUEST"));
   const packages = command.kind === "pi" ? packageCommand(command.args) : null;
@@ -136,11 +137,10 @@ async function main(argv: readonly string[]): Promise<void> {
     },
     notice: text => interaction.notice(text), fail,
   });
-  const histories = HostHistoryChannel.open(prepared.configuration.settings.config.limits.receiptWaitSeconds);
   // Register the channel immediately, before display construction can fail.
-  abandon = () => { histories?.close(); bootstrap.tenure?.abandon(); };
+  abandon = () => { bootstrap.tenure?.abandon(); };
   let transition: SocietyTransition;
-  interaction = new SocietyInteraction(bootstrap, prepared.configuration, histories, {
+  interaction = new SocietyInteraction(bootstrap, prepared.configuration, {
     session: () => runtime?.session ?? null, owned: () => owner() !== null,
     sessionDirectory: () => runtime!.sessionDirectory,
     finished: () => runtime?.finished ?? false,
@@ -148,13 +148,12 @@ async function main(argv: readonly string[]): Promise<void> {
     shutdown: code => transition.shutdown(code), relaunch: (resume, mode) => transition.relaunch(resume, mode),
   }, cleanup => {
     abandon = () => {
-      histories?.close();
       if (runtime !== undefined) runtime.abandon(); else bootstrap.tenure?.abandon();
       cleanup();
     };
   });
   runtime = new SocietyRuntime(bootstrap, prepared, interaction);
-  transition = new SocietyTransition(bootstrap, prepared, libdir, runtime, interaction, histories, fail);
+  transition = new SocietyTransition(bootstrap, prepared, libdir, runtime, interaction, fail);
   process.on("uncaughtException", error => {
     abandon?.(); humanStream().write(`oma: ${errorWords(error)}\n`); process.exit(codeFor(error));
   });

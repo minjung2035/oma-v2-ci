@@ -87,14 +87,6 @@
     "./project-preparation": {
       "types": "./dist/project-preparation.d.ts",
       "default": "./dist/project-preparation.js"
-    },
-    "./linux-project-preparation": {
-      "types": "./dist/linux-project-preparation.d.ts",
-      "default": "./dist/linux-project-preparation.js"
-    },
-    "./host-project": {
-      "types": "./dist/host-project.d.ts",
-      "default": "./dist/host-project.js"
     }
   },
   "scripts": {

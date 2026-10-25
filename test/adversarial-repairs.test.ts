@@ -8,8 +8,6 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import { fixtureStorageBytes } from "./fixtures/storage-usage.js";
 import { createEngineSettings, prepareEngineInteractiveSettings } from "@oma/engine/pi-compat/settings";
 import { runProcess } from "@oma/process/async";
-import { writePackageArchive } from "#oma-test/app/platform/package-archive";
-import { applyPackageArchive } from "#oma-test/app/application/packages-apply";
 import { PACKAGE_STORE, pinPackageGeneration } from "#oma-test/app/runtime/packages/store";
 import { spawnSync } from "node:child_process";
 import { withOwnedSettingsLock } from "#oma-test/app/runtime/locked-files";
@@ -129,35 +127,4 @@ process.stdout.write(JSON.stringify({errors:settings.drainErrors().length}));`;
   });
   assert.equal(write().errors, 0);
   assert.equal(JSON.parse(readFileSync(join(root, "settings.json"), "utf8")).defaultModel, "cli-model");
-});
-
-test("AV-03/13: old imported code survives replacements and corrupt replay state has no publication effects", async t => {
-  const root = mkdtempSync(join(tmpdir(), "oma-repair-packages-"));
-  t.after(() => rmSync(root, { recursive: true, force: true }));
-  const data = join(root, "data"), store = join(root, "mac"), pkg = join(store, "npm/node_modules/reader");
-  mkdirSync(data); mkdirSync(pkg, { recursive: true });
-  writeFileSync(join(store, "settings.json"), JSON.stringify({ packages: ["npm:reader"] }));
-  writeFileSync(join(pkg, "package.json"), JSON.stringify({ name: "reader", version: "1.0.0", pi: { extensions: ["./extension.mjs"] } }));
-  writeFileSync(join(pkg, "extension.mjs"), "import {readFileSync} from 'node:fs';export default function(){};export const asset=()=>readFileSync(new URL('./asset.txt',import.meta.url),'utf8');");
-  const installation = fileURLToPath(new URL("../../", import.meta.url));
-  let reader: { asset(): string } | undefined;
-  for (let version = 1; version <= 3; version++) {
-    writeFileSync(join(pkg, "asset.txt"), String(version));
-    const archive = join(root, `archive-${version}`); await writePackageArchive(store, archive);
-    await applyPackageArchive({ data, archive, libdir: installation });
-    if (version === 1) {
-      const generation = realpathSync(join(data, PACKAGE_STORE));
-      pinPackageGeneration(generation); // The engine acquires this before loading extension code.
-      reader = await import(pathToFileURL(join(generation, "npm/node_modules/reader/extension.mjs")).href);
-    }
-  }
-  assert.equal(reader!.asset(), "1");
-  const selected = realpathSync(join(data, PACKAGE_STORE));
-  const archive = join(root, "damaged"); await writePackageArchive(store, archive);
-  for (const before of [null, [{ source: "npm:reader", entries: ["packages:../escape.js"], skills: [], prompts: [], themes: [] }]]) {
-    writeFileSync(`${archive}.before.json`, JSON.stringify({ kind: "oma-package-before-image-v1", before, previous: null }));
-    const steps: string[] = [];
-    await assert.rejects(applyPackageArchive({ data, archive, libdir: installation }, step => steps.push(step)), { code: "STORE_CORRUPT" });
-    assert.deepEqual(steps, []); assert.equal(realpathSync(join(data, PACKAGE_STORE)), selected);
-  }
 });

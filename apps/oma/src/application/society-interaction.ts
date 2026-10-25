@@ -10,7 +10,6 @@ import { societyPanelPorts } from "./society-panel.js";
 import { TuiTransport, type Observation } from "./status-observation.js";
 import { sessionHistoryDirectories } from "../runtime/session-catalog.js";
 import type { PiEvent } from "@oma/engine/pi-rpc";
-import type { HostHistoryChannel } from "@oma/engine/host-history-channel";
 import type { ProjectSessionSettings } from "./project-session-settings.js";
 import type { SocietyBootstrap } from "./society-bootstrap.js";
 import type { ConversationCommands, ConversationUi, SocietyConversationView } from "./society-conversation.js";
@@ -28,7 +27,7 @@ export class SocietyInteraction implements SocietyConversationView {
   } = { model: null, thinking: null };
   private readonly early: string[] = [];
   private saidLeftOut = "";
-  constructor(private readonly bootstrap: SocietyBootstrap, private readonly configuration: ProjectSessionSettings, private readonly histories: HostHistoryChannel | null, private readonly commands: ConversationCommands, acquired: (cleanup: () => void) => void) {
+  constructor(private readonly bootstrap: SocietyBootstrap, private readonly configuration: ProjectSessionSettings, private readonly commands: ConversationCommands, acquired: (cleanup: () => void) => void) {
     this.transport = new TuiTransport(bootstrap.stateRoot, bootstrap.society, configuration.settings.config.limits.frameBytes);
     this.terminal = new PanelTerminal({ input: process.stdin, output: process.stdout }, () => this.app.snapshot.open);
     acquired(() => this.restore());
@@ -94,36 +93,11 @@ export class SocietyInteraction implements SocietyConversationView {
     else if (event.type === "sessions_request" && typeof event.id === "string") {
       const id = event.id;
       void (async () => {
-        let error: string | undefined;
-        try {
-          await this.histories?.pages(page => {
-            if (this.commands.finished() || this.commands.session() !== live)
-              return;
-            let sessions: typeof page.sessions[number][] = [];
-            const publish = (): void => { if (sessions.length > 0)
-              live.sendUi({ type: "host_history_page", id, page: { sessions, after: null } }); };
-            for (const info of page.sessions) {
-              const event = { type: "host_history_page", id, page: { sessions: [...sessions, info], after: null } };
-              if (Buffer.byteLength(JSON.stringify(event)) > this.configuration.settings.config.limits.frameBytes) {
-                publish();
-                sessions = [];
-              }
-              const single = { type: "host_history_page", id, page: { sessions: [info], after: null } };
-              if (Buffer.byteLength(JSON.stringify(single)) > this.configuration.settings.config.limits.frameBytes)
-                throw new StoreError("FRAME_TOO_LARGE", "Host history metadata exceeds the UI frame limit");
-              sessions.push(info);
-            }
-            publish();
-          });
-        }
-        catch {
-          error = "Host Personal histories could not be observed; attach a host terminal and try again";
-        }
         if (!this.commands.finished() && this.commands.session() === live)
           live.sendUi({ type: "session_dirs", id,
             dirs: sessionHistoryDirectories(this.bootstrap.dataRoot, this.bootstrap.canonicalProjectPath).map(entry => entry.dir),
             current: this.commands.sessionDirectory(),
-            ...(error === undefined ? {} : { error }) });
+          });
       })().catch(error => { if (!this.commands.finished() && this.commands.session() === live)
         live.sendUi({ type: "session_dirs", id, dirs: [], error: errorWords(error) }); });
     }

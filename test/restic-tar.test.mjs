@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
-import { ResticTarVerifier } from "#oma-test/app/runtime/restic-tar";
+import { ResticTarVerifier } from "@oma/storage/restic-tar";
 
 const hash = bytes => createHash("sha256").update(bytes).digest("hex");
 const metadata = (type, extra = {}) => ({ type, mode: type === "dir" ? 0o700 : 0o600,

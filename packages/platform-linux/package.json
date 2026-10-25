@@ -8,14 +8,6 @@
     "dist"
   ],
   "exports": {
-    "./guest-assets": {
-      "types": "./dist/guest-assets.d.ts",
-      "default": "./dist/guest-assets.js"
-    },
-    "./guest-system": {
-      "types": "./dist/guest-system.d.ts",
-      "default": "./dist/guest-system.js"
-    },
     "./resident-rootfs": {
       "types": "./dist/resident-rootfs.d.ts",
       "default": "./dist/resident-rootfs.js"
@@ -27,10 +19,6 @@
     "./sandbox-seccomp": {
       "types": "./dist/sandbox-seccomp.d.ts",
       "default": "./dist/sandbox-seccomp.js"
-    },
-    "./session-launcher": {
-      "types": "./dist/session-launcher.d.ts",
-      "default": "./dist/session-launcher.js"
     },
     "./units": {
       "types": "./dist/units.d.ts",
@@ -69,8 +57,7 @@
   },
   "oma": {
     "assets": [
-      "systemd",
-      "guest"
+      "systemd"
     ],
     "isolationSmoke": "test/installed-runtime.mjs"
   }
