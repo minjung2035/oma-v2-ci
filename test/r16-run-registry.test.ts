@@ -1,14 +1,15 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { RunRegistry } from "@oma/broker/run-registry";
-import { type CgroupPin, type Population } from "@oma/native/cgroup";
+import type { ExecutionScopePin } from "@oma/contracts/runtime";
+type Population = ReturnType<ExecutionScopePin["population"]>;
 
 function observedPin(fd: number) {
   let population: Population = "populated";
   let current = true;
   let closes = 0;
-  const pin: CgroupPin = {
-    fd, identity: Object.freeze({ dev: 1n, ino: BigInt(fd) }),
+  const pin: ExecutionScopePin = {
+    identity: Object.freeze({ dev: 1n, ino: BigInt(fd) }),
     population: () => population,
     matches: () => current && closes === 0,
     close: () => { closes++; },
@@ -19,7 +20,7 @@ function observedPin(fd: number) {
 const first = "1".repeat(32);
 const second = "2".repeat(32);
 
-test("R16: revoked endpoint retains its cgroup pin and cannot reissue the same invocation", () => {
+test("R16: revoked endpoint retains its scope pin and cannot reissue the same invocation", () => {
   const observation = observedPin(10);
   const registry = new RunRegistry(() => observation.pin);
   const record = registry.begin("alice", 1, first, "/society/alice");
@@ -41,7 +42,7 @@ test("R16: revoked endpoint retains its cgroup pin and cannot reissue the same i
 });
 
 for (const population of ["populated", "unknown"] as const) {
-  test(`R16: old ${population} cgroup blocks a new incarnation before a new FD is acquired`, () => {
+  test(`R16: old ${population} scope blocks a new incarnation before a new FD is acquired`, () => {
     const old = observedPin(10); const next = observedPin(11);
     let acquisitions = 0;
     const registry = new RunRegistry(() => acquisitions++ === 0 ? old.pin : next.pin);
@@ -56,7 +57,7 @@ for (const population of ["populated", "unknown"] as const) {
   });
 }
 
-for (const population of ["empty", "removed"] as const) {
+for (const population of ["empty"] as const) {
   test(`R16: observed ${population} permits one ownership transfer and closes only the old pin`, () => {
     const old = observedPin(10); const next = observedPin(11);
     let acquisitions = 0;
@@ -77,7 +78,7 @@ for (const population of ["empty", "removed"] as const) {
   });
 }
 
-test("R16: matching pathname cannot substitute a replacement cgroup inode", () => {
+test("R16: matching pathname cannot substitute a replacement scope inode", () => {
   const observation = observedPin(10);
   const registry = new RunRegistry(() => observation.pin);
   const record = registry.begin("alice", 1, first, "/same-path");

@@ -13,7 +13,7 @@ import { launchBlockedNamespace } from '@oma/platform-linux/namespace-execution'
 import { runnerScope } from '@oma/platform-linux/runner-scope';
 import { observeNamespaceProcess, pinNamespaceInit } from '@oma/native/pid-namespace';
 assert.equal(process.platform, 'linux');
-function fixture(t, program = 'setInterval(()=>{},1000)') {
+function fixture(t, program = 'setInterval(()=>{},1000)', completionError = null) {
   const root = mkdtempSync(join(tmpdir(), 'oma-native-resident-')); ExecutionJournal.initialize(root);
   const journal = ExecutionJournal.open(root), owner = new ExecutionCoordinator(journal,
     witness => observeNamespaceProcess(witness.pid), witness => pinNamespaceInit(witness.pid));
@@ -23,13 +23,17 @@ function fixture(t, program = 'setInterval(()=>{},1000)') {
     confirmDead: actor => owner.confirmDead(`resident:${actor}`), revoke: () => revocations++, hint: () => hints++, failure: error => errors.push(error),
     async begin(actor, _references, authorize, prepared, signal) {
       begins++;
-      const ticket = await owner.begin({ slot: `resident:${actor}`, signal, authorize, prepared,
+      const physical = await owner.begin({ slot: `resident:${actor}`, signal, authorize, prepared,
         launch: () => launchBlockedNamespace(runnerScope({ executable: process.execPath, argv: ['-e', program],
           env: { PATH: '/usr/bin:/bin', HOME: root }, timeoutMs: null, stdoutBytes: 4096, stderrBytes: 4096 }), { signal }) });
+      // A diagnostic owner can fail after the physical scope completed. This
+      // injects that policy error; kernel population and death stay real.
+      const ticket = completionError === null ? physical : Object.freeze({ ...physical,
+        completion: physical.completion.then(() => { throw completionError; }) });
       tickets.push(ticket); return ticket;
     },
   }, () => clock);
-  t.after(async () => { await runtime.stop('alice', incarnation); await owner.drain(); journal.close(); rmSync(root, { recursive: true }); assert.deepEqual(errors, []); });
+  t.after(async () => { await runtime.stop('alice', incarnation); await owner.drain(); journal.close(); rmSync(root, { recursive: true }); assert.deepEqual(errors, completionError === null ? [] : [completionError]); });
   return { runtime, owner, journal, tickets, begins: () => begins, revocations: () => revocations, hints: () => hints,
     advance: milliseconds => { clock += milliseconds; }, epoch: value => { incarnation = value; } };
 }
@@ -69,4 +73,12 @@ test('Resident accepted references refuse replacement and current authority refu
   const denied = new Error('current authority revoked');
   await assert.rejects(f.runtime.start('alice', false, () => { throw denied; }), error => error === denied);
   assert.equal(f.owner.confirmDead('resident:alice'), true); assert.deepEqual(f.journal.entries(), []);
+});
+test('Resident diagnostic failure remains an unknown outcome after independently confirmed stop', { timeout: 15000 }, async t => {
+  const diagnostic = new Error('diagnostic completion was not observed'), f = fixture(t, 'process.exitCode=0', diagnostic);
+  await f.runtime.start('alice', false); await assert.rejects(f.tickets[0].completion, error => error === diagnostic);
+  assert.equal(f.runtime.observe('alice').activeState, 'unknown');
+  await f.runtime.stop('alice', 1);
+  const observed = f.runtime.observe('alice'); assert.equal(observed.activeState, 'inactive'); assert.equal(observed.result, 'unknown');
+  assert.equal(f.runtime.confirmDead('alice', 1), true);
 });

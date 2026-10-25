@@ -16,13 +16,13 @@ import { resolvedSpecOf } from "@oma/domain/agent-spec";
 import { LifecycleModule } from "@oma/lifecycle";
 import { MailModule } from "@oma/mail";
 import { Store } from "@oma/storage";
-import { UnitsModule } from "@oma/platform-linux/units";
+import { PolicyExecution } from "./fixtures/execution.js";
 import { provisionSociety } from "#oma-test/app/runtime/provision";
 import { projectGitPathAt, workspacePathAt } from "@oma/domain/paths";
 import { commitField, INITIAL_WORKERS, readSettings } from "#oma-test/app/application/settings";
 import { makeValidAgent } from "./fixtures/spec.js";
 
-class ScriptedUnits extends UnitsModule {
+class ScriptedUnits extends PolicyExecution {
   readonly started: string[] = [];
   override assertResidentNamesFree(): void {}
   override ensureResident(): void {}
@@ -35,7 +35,7 @@ function fixture(t: TestContext) {
   t.after(() => { store.close(); rmSync(root, { recursive: true, force: true }); });
   const config = defaultHostConfig({ society: "demo", node: process.execPath, libdir: process.cwd(), rootfs: join(root, "rootfs"), deploymentDigest: "a".repeat(64) });
   const path = join(root, "config.json"); writeFileSync(path, JSON.stringify(config));
-  const units = new ScriptedUnits("demo", { node: process.execPath, libdir: root, state: root, society: "demo", agent: "" }, join(root, "units"));
+  const units = new ScriptedUnits();
   const projectGit = projectGitPathAt(root);
   const from = execFileSync("/usr/bin/git", ["--git-dir", projectGit, "rev-parse", "main"], { encoding: "utf8" }).trim();
   const lifecycle = () => {

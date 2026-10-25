@@ -159,7 +159,9 @@ export class ResidentRuntime<Witness> {
         if (success) { record.failures = 0; if (record.wake) this.ports.hint(); }
         else this.retry(record);
       }, error => {
-        record.uncertain = true; this.cancelRetry(record); this.ports.failure(error);
+        record.uncertain = true;
+        record.observation = { ...record.observation, activeState: "unknown", subState: "unknown", result: "unknown", execMainStatus: -1 };
+        this.cancelRetry(record); this.ports.failure(error);
       });
     }, error => {
       record.observation = { ...record.observation, activeState: this.ports.confirmDead(actor) ? "failed" : "unknown", result: "launch-failed", subState: "failed" };
@@ -186,6 +188,7 @@ export class ResidentRuntime<Witness> {
       if (record.ticket !== null) await record.ticket.stop();
       if (!this.ports.confirmDead(actor)) throw new StoreError("RUN_TERMINATION_UNKNOWN", "Resident scope termination is not confirmed");
       record.uncertain = false;
+      record.observation = { ...record.observation, activeState: "inactive", subState: "dead" };
     })().finally(() => { if (record.stopping === task) record.stopping = null; });
     record.stopping = task; return task;
   }

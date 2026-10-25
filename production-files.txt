@@ -353,6 +353,7 @@ packages/native/src/process-observation.ts
 packages/native/src/snapshot-reader.ts
 packages/native/src/unix-message.ts
 packages/platform-linux/package.json
+packages/platform-linux/src/bubblewrap-arguments.ts
 packages/platform-linux/src/candidate-sandbox.ts
 packages/platform-linux/src/credential-stream.ts
 packages/platform-linux/src/git-sandbox.ts

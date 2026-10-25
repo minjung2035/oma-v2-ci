@@ -10,16 +10,15 @@ import assert from "node:assert/strict";
 import { chmodSync, mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type { AuthContext, MailInput, UnitObservation } from "@oma/contracts";
+import type { AuthContext, MailInput, ExecutionObservation } from "@oma/contracts";
 import { Store } from "@oma/storage";
 import { MailModule } from "@oma/mail";
 import { Broker } from "@oma/broker";
-import { UnitsModule } from "@oma/platform-linux/units";
+import { PolicyExecution } from "./fixtures/execution.js";
 import { ViewsModule } from "#oma-test/app/views";
 import { LifecycleModule } from "@oma/lifecycle";
 import { ReconcileModule } from "@oma/reconcile";
 import { StoreError, publicFailure } from "@oma/domain/errors";
-import { parseUnitObservation } from "@oma/platform-linux/units/observe";
 import { ALL_CAPS, makeValidAgent, makeValidResolvedSpec } from "./fixtures/spec.js";
 import { removeTree } from "./fixtures/cleanup.js";
 import { padTree } from "./fixtures/storage-pad.js";
@@ -29,20 +28,17 @@ import { goalPublishedAt } from "./fixtures/goal.js";
 
 const auth: AuthContext = { actor: "alice", incarnation: 1, role: "resident", channel: "actor",
   capabilities: new Set(ALL_CAPS), peer: { pid: process.pid, uid: process.getuid!(), gid: process.getgid!(), cgroup: null } };
-const idle = parseUnitObservation({ kind: "succeeded", status: 0, signal: null, stderr: "",
-  stdout: `ActiveState=inactive\nSubState=dead\nResult=success\nExecMainStatus=0\nControlGroup=/oma-test\nInvocationID=${"1".repeat(32)}\n` });
-const running = parseUnitObservation({ kind: "succeeded", status: 0, signal: null, stderr: "",
-  stdout: `ActiveState=active\nSubState=running\nResult=success\nExecMainStatus=0\nControlGroup=/oma-test\nInvocationID=${"2".repeat(32)}\n` });
+const idle: ExecutionObservation = { activeState: "inactive", subState: "dead", result: "success", execMainStatus: 0, scope: "", invocationId: "1".repeat(32) };
+const running: ExecutionObservation = { activeState: "active", subState: "running", result: "success", execMainStatus: 0, scope: "fixture-scope", invocationId: "2".repeat(32) };
 
 /** Unit control is scripted: this suite is about which effects are admitted, not systemd. */
-class ScriptedUnits extends UnitsModule {
-  starts: string[] = []; stops: string[] = []; state = new Map<string, UnitObservation>(); stubborn = new Set<string>();
-  constructor(root: string) { super("demo", { node: process.execPath, libdir: root, state: root, society: "demo", agent: "" }, join(root, "units")); }
-  override observe(agent: string): UnitObservation { return this.state.get(agent) ?? idle; }
-  override async observeAsync(agent: string): Promise<UnitObservation> { return this.observe(agent); }
+class ScriptedUnits extends PolicyExecution {
+  starts: string[] = []; stops: string[] = []; state = new Map<string, ExecutionObservation>(); stubborn = new Set<string>();
+  override observe(agent: string): ExecutionObservation { return this.state.get(agent) ?? idle; }
+  override async observeAsync(agent: string): Promise<ExecutionObservation> { return this.observe(agent); }
   override confirmDead(agent: string): boolean { return this.observe(agent).activeState !== "active"; }
   override start(agent: string): void { this.starts.push(agent); }
-  override stop(agent: string): UnitObservation {
+  override stop(agent: string): ExecutionObservation {
     this.stops.push(agent);
     if (!this.stubborn.has(agent)) this.state.set(agent, idle);
     return this.observe(agent);
@@ -71,7 +67,7 @@ function society(t: TestContext) {
     tx.insertAgent(makeValidAgent("carol", { createdBy: "principal" }));
   });
   const mail = createMailModule({ stateRoot: root, society: "demo" }, store, 64);
-  const units = new ScriptedUnits(root);
+  const units = new ScriptedUnits();
   const views = new ViewsModule(store, root, "demo", "p");
   const lifecycle = createLifecycleModule(store, units, { stateRoot: root, projectGit: join(root, "project.git"), society: "demo", hasGoal: () => true, activationAllowed: () => true },
     (_parent, input) => makeValidResolvedSpec(input.name, "p", ALL_CAPS, input.from, input.brief), mail);
@@ -134,7 +130,6 @@ test("V21B: over the storage limit runner reads answer and settlement uses its n
 
 test("V21B: over the storage limit recovery settles safety stages and settles new effects and settlement", async t => {
   const f = society(t);
-  t.mock.method(f.peers, "requireHostUnit", () => undefined);
   // Accepted mail whose publication was lost: settling it writes derived views.
   await assert.rejects(sendWithStop(f.mail, f.store, auth, "lost", { to: ["carol"], subject: "held", kind: "message", body: "held" }, "accepted"));
   assert.equal(f.store.getOperation("alice", "lost")?.state, "pending");
@@ -156,7 +151,6 @@ test("V21B: over the storage limit recovery settles safety stages and settles ne
 
 test("V21B: within the limit the same recovery settles the mail and activates the waiting unit", async t => {
   const f = society(t);
-  t.mock.method(f.peers, "requireHostUnit", () => undefined);
   await assert.rejects(sendWithStop(f.mail, f.store, auth, "lost", { to: ["carol"], subject: "held", kind: "message", body: "held" }, "accepted"));
   const report = await answer(f.reconcile.sweep().then(result => ({ ok: true as const, result })));
   assert.deepEqual(report, { ok: true, result: { examined: 1, repaired: 1, remaining: 0 } });

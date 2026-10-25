@@ -89,7 +89,7 @@ jobs:
         if: ${{ !cancelled() && runner.os == 'Linux' }}
         run: |
           export OMA_NATIVE_EVIDENCE_DIR="$PWD/.scratch/native-runtime"
-          if ! node --test test/native-process-scope.test.mjs test/native-resident-runtime.test.mjs test/native-credential-stream.test.mjs test/native-unix-message.test.mjs test/native-git-execution.test.mjs > .scratch/native-runtime/linux-execution-tests.log 2>&1; then cat .scratch/native-runtime/linux-execution-tests.log; exit 1; fi
+          if ! node --test test/native-process-scope.test.mjs test/native-resident-runtime.test.mjs test/native-resident-logs.test.mjs test/native-credential-stream.test.mjs test/native-unix-message.test.mjs test/native-git-execution.test.mjs > .scratch/native-runtime/linux-execution-tests.log 2>&1; then cat .scratch/native-runtime/linux-execution-tests.log; exit 1; fi
       - name: Preserve actual Ubuntu kernel permission observations
         if: ${{ always() && runner.os == 'Linux' }}
         run: sudo dmesg --notime > .scratch/native-runtime/kernel-permissions.log

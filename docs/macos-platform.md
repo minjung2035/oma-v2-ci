@@ -107,6 +107,8 @@ accepted plan·receipt·권한의 원본으로 사용하지 않는다.
 **MUST [NATIVE-016]** DR53의 full diagnostic spool과 bounded public log view는 분리한다.
 actor·invocation·현재 incarnation·stream·시각과 원본 byte를 저장하고, 서로 다른 incarnation의
 UTF-8 조각을 합치지 않는다. 부분 frame·UTF-8 tail·읽기 실패를 성공한 빈 로그로 표시하지 않는다.
+저장 owner는 append 전후와 close 때 held regular inode의 단일 link와 알려진 길이를 확인한다.
+중간 alias·unlink·외부 쓰기·부분 기록은 poison되며 bytes를 지우거나 성공으로 마감하지 않는다.
 
 **MUST [NATIVE-017]** DR55 candidate setup은 exact checkout 뒤 check argv를 exec하기 전에
 private 준비 상태를 보낸다. host가 현재 authority·취소 상태를 다시 확인하고 별도 private gate에

@@ -1,6 +1,6 @@
 {
   "kind": "oma-production-source-digests-v1",
-  "manifest": "25713093055679d5d1037aba43d69d645dc4f25249a7c552844a4c3c04c23e32",
+  "manifest": "ba4bd9144dd4131c39b50a0374a1257bc1e9d7c014fb8f718e537c2c7c3f376c",
   "files": [
     {
       "path": "apps/oma/package.json",
@@ -1423,6 +1423,10 @@
       "sha256": "c22ff45231178de5ee51d85d6064deac39add71ecc59b0cd372107368b73a22f"
     },
     {
+      "path": "packages/platform-linux/src/bubblewrap-arguments.ts",
+      "sha256": "b4501caac3bc3324ad49be55078a316e3de585118bb1e401311574eade6b05bf"
+    },
+    {
       "path": "packages/platform-linux/src/candidate-sandbox.ts",
       "sha256": "6d1e6e80e3e48809209e1ccc7d8c8d14f55e8a93a54be99df9393bdb0fc0fa41"
     },
@@ -1436,7 +1440,7 @@
     },
     {
       "path": "packages/platform-linux/src/namespace-execution.ts",
-      "sha256": "abc9c0e5c7dd8a9cefcb2c64fdd4d52b5fb17891cf9125074308d20a566cca69"
+      "sha256": "695602fb88e51a5f1cee5ad36b77d4d5d4d2341501255a52e054a0ef45a59b22"
     },
     {
       "path": "packages/platform-linux/src/resident-rootfs.ts",
@@ -1456,7 +1460,7 @@
     },
     {
       "path": "packages/platform-linux/src/worker-spawn.ts",
-      "sha256": "122eb73eeee916e0eed1b36c0846c0ab871b1715786ec9f5ad9f3030641c7f2e"
+      "sha256": "414f88499e9b8c7d9c838c3ab2e6ea23099a95a23ef290c1d09ffb506f8d2c93"
     },
     {
       "path": "packages/platform-mac/package.json",
@@ -1536,7 +1540,7 @@
     },
     {
       "path": "packages/process/src/resident-runtime.ts",
-      "sha256": "fa4949745397ae720e2f581957bdb981459577bc189d8675f5bbb2a174ca4e8f"
+      "sha256": "414ce4076b6d72255febac1128c14d8f92bbe0dd424474d44dc688749e87668b"
     },
     {
       "path": "packages/process/src/resident-supervisor.ts",
@@ -1836,7 +1840,7 @@
     },
     {
       "path": "packages/storage/src/resident-logs.ts",
-      "sha256": "d3d6aed4c60ca56656c996716bc8c6da1024d132f167ab604d67c8c440bd8cbc"
+      "sha256": "d15e9a3e8e1896a0961f50eb4f6803caf6eaade7ae454bac37a6cbf1f3fff37e"
     },
     {
       "path": "packages/storage/src/restic-tar.ts",

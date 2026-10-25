@@ -10,6 +10,7 @@ import { startProcess } from "@oma/process/async";
 import type { CommandSpec } from "@oma/process/command";
 import { ExecutionNotStarted, type BlockedExecution } from "@oma/process/owned-execution";
 import { StoreError } from "@oma/domain/errors";
+import { parseBubblewrapArguments } from "./bubblewrap-arguments.js";
 
 export type { NamespaceInitIdentity };
 export interface NamespaceLaunchOptions {
@@ -20,10 +21,12 @@ export interface NamespaceLaunchOptions {
 export async function launchBlockedNamespace(command: CommandSpec, controls: NamespaceLaunchOptions = {}): Promise<BlockedExecution<NamespaceInitIdentity>> {
   if (controls.signal?.aborted) throw new ExecutionNotStarted(new StoreError("CANCELLED_BEFORE_COMMIT", "namespace launch was cancelled"));
   if (process.platform !== "linux" || command.executable !== "/usr/bin/bwrap") throw new ExecutionNotStarted(new StoreError("UNSUPPORTED_PROFILE", "namespace execution requires the fixed Linux bubblewrap backend"));
-  const separator = command.argv.indexOf("--"), options = separator < 0 ? command.argv : command.argv.slice(0, separator);
+  let options: readonly string[];
+  try { options = parseBubblewrapArguments(command.argv).options.map(option => option.flag); }
+  catch (error) { throw new ExecutionNotStarted(error); }
   if (!(options.includes("--unshare-pid") || options.includes("--unshare-all")) || !options.includes("--die-with-parent") ||
       options.includes("--share-pid") || options.includes("--as-pid-1") ||
-      options.some(value => ["--info-fd", "--block-fd", "--sync-fd"].includes(value)))
+      options.some(value => ["--info-fd", "--block-fd", "--sync-fd", "--args"].includes(value)))
     throw new ExecutionNotStarted(new StoreError("UNSUPPORTED_PROFILE", "namespace launch requires its own init and owned control descriptors"));
   let info: ReturnType<typeof namespaceControlPipe>;
   try { info = namespaceControlPipe(); } catch (error) { throw new ExecutionNotStarted(error); }

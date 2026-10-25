@@ -9,6 +9,13 @@ Linux/macOS 공통 native 실행을 실제 구현·검증하는 것이다. 이�
 
 ## 작업 상태
 
+- `64cb2cad` CI `40237516208`에서 공통 Mac26/15·Ubuntu 각54/54와 Ubuntu peer3/3·실행24/24가
+  실제 통과했다. 전역 userns 제한1을 유지한 bwrap별 AppArmor 권한을 사용했다. 양 Darwin gate는
+  각15개 실제 관측 후 계속 BLOCKED다. 원시 zip5개 SHA256을 확인해 `ci-64cb2cad/`에 보존했다.
+- 이후 env option grammar·log의 중간 hardlink/길이·diagnostic 오류 후 Resident stop 관측을
+  수정했다. 실제 OS/공통57/57와 별도 strict 부분 컴파일한 기존 policy/receipt/reconcile37/37가
+  입력 변경0으로 통과했다. 현재 root typecheck는 아직 FAIL이며, 제거된 unit API의 실제 시험
+  전환과 Native Resident/Broker 전체 통합이 남았다. policy fixture는 native gate proof가 아니다.
 - push된 구현 checkpoint는 `7707de9d117a3be1c571d7661732de69b18a9bb9`다. 실제 CI
   `40235030613`의 Mac26/15·Ubuntu 공통은 각각54/54 PASS·동일 입력·build26/26이다.
   Darwin gate는 각각15개 실제 관측 뒤 BLOCKED이며 완화하지 않았다. Ubuntu는 제거된

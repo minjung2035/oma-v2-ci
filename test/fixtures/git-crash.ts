@@ -1,6 +1,6 @@
 import { createGitModule } from "#oma-test/app/broker/git-composition";
 import { createMailModule } from "#oma-test/app/broker/mail-composition";
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, writeFileSync, existsSync } from "node:fs";
 import { join } from "node:path";
 import { spawnSync } from "node:child_process";
 import { GitModule, type GitPaths } from "@oma/git";
@@ -12,6 +12,12 @@ import { isValidFullOid } from "@oma/domain/identifiers";
 import { checkExportRef } from "@oma/domain/validation";
 import { ALL_CAPS } from "./spec.js";
 import type { AuthContext } from "@oma/contracts";
+import { ExecutionJournal } from "@oma/storage/execution-journal";
+import { ExecutionRuntime } from "#oma-test/app/runtime/execution-runtime";
+import { quarantineExecution } from "#oma-test/app/runtime/quarantine-execution";
+import { prepareResidentRootfs, hostSystemLayout } from "@oma/platform-linux/resident-rootfs";
+import { withAsyncCleanup } from "@oma/native/cleanup";
+import type { QuarantineExecution } from "@oma/git/quarantine";
 export const gitAuth: AuthContext = { actor: "a", incarnation: 1, role: "resident", channel: "actor", capabilities: new Set(ALL_CAPS), peer: { pid: process.pid, uid: process.getuid!(), gid: process.getgid!(), cgroup: null } };
 export function gitCommand(root: string, args: string[]): string {
     const out = spawnSync("/usr/bin/git", args, { cwd: root, env: gitEnv, encoding: "utf8", timeout: 30000, maxBuffer: 4 * 1024 * 1024, killSignal: "SIGKILL" });
@@ -22,9 +28,25 @@ export function gitCommand(root: string, args: string[]): string {
 export function gitFixture(root: string, store: Store) {
     const paths: GitPaths = {
         stateRoot: root, projectGit: join(root, "repos/project.git"), contextGit: join(root, "repos/context.git"), worldDir: join(root, "world"), society: "crash",
+        checkRootfs: join(root, "native-fixture-rootfs"), checkNode: process.execPath, checkAssetsDir: process.cwd(),
+    };
+    // Disposable fixture state is explicitly initialized. Every effect uses
+    // the production scope/journal and Linux sandbox; there is no host Git
+    // import fallback. Each phase drains its owner before returning to Git.
+    if (!existsSync(join(root, "execution/scopes.jsonl"))) ExecutionJournal.initialize(root);
+    prepareResidentRootfs(paths.checkRootfs!, hostSystemLayout(), process.getuid!(), process.getgid!());
+    let active: ExecutionRuntime | null = null;
+    const quarantine: QuarantineExecution = {
+      confirmDead: () => active === null && ExecutionJournal.inspect(root).length === 0,
+      async execute(request, authorize) {
+        if (active !== null) throw new Error("test execution owner is already active or unconfirmed");
+        const owner = new ExecutionRuntime(root); active = owner;
+        return withAsyncCleanup(() => quarantineExecution(paths, owner).execute(request, authorize),
+          async () => { await owner.close(); active = null; });
+      },
     };
     const mail = createMailModule({ stateRoot: root, society: "crash" }, store, 64);
-    const git = createGitModule(paths, store, mail, { policyRevision: "crash-policy", protectedPaths: [], checks: [] });
+    const git = createGitModule(paths, store, mail, { policyRevision: "crash-policy", protectedPaths: [], checks: [] }, null, null, quarantine);
     return { git, mail, paths };
 }
 export function seedGit(root: string, format: "sha1" | "sha256" = "sha1"): void {

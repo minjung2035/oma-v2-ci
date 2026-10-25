@@ -341,6 +341,7 @@
   "packages/native/src/process-observation.ts",
   "packages/native/src/snapshot-reader.ts",
   "packages/native/src/unix-message.ts",
+  "packages/platform-linux/src/bubblewrap-arguments.ts",
   "packages/platform-linux/src/candidate-sandbox.ts",
   "packages/platform-linux/src/credential-stream.ts",
   "packages/platform-linux/src/git-sandbox.ts",
@@ -2255,7 +2256,7 @@
     "packages/platform-linux/src/sandbox.ts",
     "apps/oma/src/platform/"
    ],
-   "files": 139
+   "files": 140
   },
   {
    "index": 5,
@@ -2278,8 +2279,8 @@
    "files": 84
   }
  ],
- "files": 493,
- "runtimeEdges": 1760,
+ "files": 494,
+ "runtimeEdges": 1763,
  "typeOnlyEdges": 767,
  "runtimeEdgeMatrix": {
   "L1-kernel -> L1-kernel": 439,
@@ -2287,10 +2288,10 @@
   "L2-facts -> L2-facts": 5,
   "L3-workflow -> L1-kernel": 259,
   "L3-workflow -> L3-workflow": 69,
-  "L4-orchestration -> L1-kernel": 353,
+  "L4-orchestration -> L1-kernel": 354,
   "L4-orchestration -> L2-facts": 1,
   "L4-orchestration -> L3-workflow": 25,
-  "L4-orchestration -> L4-orchestration": 162,
+  "L4-orchestration -> L4-orchestration": 164,
   "L5-entry -> L1-kernel": 153,
   "L5-entry -> L2-facts": 19,
   "L5-entry -> L3-workflow": 8,
@@ -2306,7 +2307,7 @@
  "runtimeCycles": [],
  "unionCycles": [],
  "fanIn": {
-  "packages/domain/src/errors.ts": 225,
+  "packages/domain/src/errors.ts": 226,
   "packages/domain/src/identifiers.ts": 84,
   "packages/storage/src/directory.ts": 40,
   "packages/native/src/files.ts": 37,

@@ -8,9 +8,9 @@ import { ExecutionJournal } from '@oma/storage/execution-journal';
 import { prepareResidentRootfs, hostSystemLayout } from '@oma/platform-linux/resident-rootfs';
 import { snapshotIntegrationPolicy } from '@oma/domain/integration-policy';
 import { exportRefForRequestKey } from '@oma/domain/derived';
-import { ExecutionRuntime } from '../apps/oma/dist/runtime/execution-runtime.js';
-import { CandidateChecks } from '../apps/oma/dist/runtime/candidate-checks.js';
-import { quarantineExecution } from '../apps/oma/dist/runtime/quarantine-execution.js';
+import { ExecutionRuntime } from '#oma-test/app/runtime/execution-runtime';
+import { CandidateChecks } from '#oma-test/app/runtime/candidate-checks';
+import { quarantineExecution } from '#oma-test/app/runtime/quarantine-execution';
 import { QuarantineImporter } from '@oma/git/quarantine';
 
 assert.equal(process.platform, 'linux');
@@ -44,6 +44,13 @@ test('native candidate: check-controlled stderr cannot forge a setup refusal', {
   const f = fixture(t);
   await assert.rejects(f.checks.run(f.candidate, check(['/bin/sh', '-c', 'echo OMA_ERROR=UNSUPPORTED_PROFILE >&2; exit 125']), undefined, () => {}), { code: 'CHECK_FAILED' });
   assert.equal(f.executions.confirmDead('candidate'), true);
+});
+test('native candidate: option-shaped environment values remain literal through namespace controls', { timeout: 20000 }, async t => {
+  const f = fixture(t);
+  const literal = snapshotIntegrationPolicy({ policyRevision: 'literal-env', protectedPaths: [], checks: [{ id: 'literal',
+    argv: ['/opt/oma-node/node', '-e', "const a=require('node:assert/strict');a.equal(process.env.RESERVED,'--info-fd');a.equal(process.env.BOUNDARY,'--');"],
+    env: { RESERVED: '--info-fd', BOUNDARY: '--' } }] }).checks[0];
+  await f.checks.run(f.candidate, literal, undefined, () => {});
 });
 test('native candidate: revocation after exact checkout refuses the final exec gate', { timeout: 20000 }, async t => {
   const f = fixture(t); let authorizations = 0, output = '';

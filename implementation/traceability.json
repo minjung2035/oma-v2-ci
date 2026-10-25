@@ -5323,8 +5323,8 @@
   {
     "requirement": "NATIVE-016",
     "source": "docs/macos-platform.md",
-    "digest": "7e6c0a7ddfec623fcfd50816ee515c4aa75afcf2c270c51070de8b3861e9d376",
-    "normativeText": "**MUST [NATIVE-016]** DR53의 full diagnostic spool과 bounded public log view는 분리한다.\nactor·invocation·현재 incarnation·stream·시각과 원본 byte를 저장하고, 서로 다른 incarnation의\nUTF-8 조각을 합치지 않는다. 부분 frame·UTF-8 tail·읽기 실패를 성공한 빈 로그로 표시하지 않는다.",
+    "digest": "dff44af11b1b7cf849edb849a20ef98ff322844a0605f7bf462e0bbbb3e3ba77",
+    "normativeText": "**MUST [NATIVE-016]** DR53의 full diagnostic spool과 bounded public log view는 분리한다.\nactor·invocation·현재 incarnation·stream·시각과 원본 byte를 저장하고, 서로 다른 incarnation의\nUTF-8 조각을 합치지 않는다. 부분 frame·UTF-8 tail·읽기 실패를 성공한 빈 로그로 표시하지 않는다.\n저장 owner는 append 전후와 close 때 held regular inode의 단일 link와 알려진 길이를 확인한다.\n중간 alias·unlink·외부 쓰기·부분 기록은 poison되며 bytes를 지우거나 성공으로 마감하지 않는다.",
     "applicability": "unclassified",
     "rationale": "Requires production-path review; no inference from test names.",
     "owner": "packages/process/src/resident-logs.ts#residentLogView",

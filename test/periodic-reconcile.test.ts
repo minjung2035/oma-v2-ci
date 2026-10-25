@@ -19,29 +19,26 @@ import { existsSync, mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
-import type { UnitObservation, AuthContext } from "@oma/contracts";
+import type { ExecutionObservation, AuthContext } from "@oma/contracts";
 import { Store } from "@oma/storage";
 import { MailModule } from "@oma/mail";
 import { Broker } from "@oma/broker";
-import { UnitsModule } from "@oma/platform-linux/units";
+import { PolicyExecution } from "./fixtures/execution.js";
 import { ViewsModule } from "#oma-test/app/views";
 import { LifecycleModule } from "@oma/lifecycle";
 import type { ReconcileModule } from "@oma/reconcile";
 import { RECONCILE_INTERVAL_MS } from "@oma/domain/recovery-policy";
-import { parseUnitObservation } from "@oma/platform-linux/units/observe";
 import { ALL_CAPS, makeValidAgent, makeValidResolvedSpec } from "./fixtures/spec.js";
 import { removeTree } from "./fixtures/cleanup.js";
 import { goalPublishedAt } from "./fixtures/goal.js";
 
-const idle = parseUnitObservation({ kind: "succeeded", status: 0, signal: null, stderr: "",
-  stdout: `ActiveState=inactive\nSubState=dead\nResult=success\nExecMainStatus=0\nControlGroup=/oma-test\nInvocationID=${"1".repeat(32)}\n` });
+const idle: ExecutionObservation = { activeState: "inactive", subState: "dead", result: "success", execMainStatus: 0, scope: "", invocationId: "1".repeat(32) };
 
 /** Unit control is scripted: this suite is about when the broker sweeps, not systemd. */
-class ScriptedUnits extends UnitsModule {
-  constructor(root: string) { super("demo", { node: process.execPath, libdir: root, state: root, society: "demo", agent: "" }, join(root, "units")); }
-  override observe(): UnitObservation { return idle; }
-  override async observeAsync(): Promise<UnitObservation> { return idle; }
-  override async observeStatus(): Promise<ReadonlyMap<string, UnitObservation | "no-unit">> { return new Map(); }
+class ScriptedUnits extends PolicyExecution {
+  override observe(): ExecutionObservation { return idle; }
+  override async observeAsync(): Promise<ExecutionObservation> { return idle; }
+  override async observeStatus(): Promise<ReadonlyMap<string, ExecutionObservation | "no-unit">> { return new Map(); }
   override confirmDead(): boolean { return true; }
 }
 
@@ -65,7 +62,7 @@ function society(t: TestContext) {
   const store = new Store(join(root, "runtime.sqlite"), 5, { society: "demo" });
   store.transaction(tx => { tx.insertAgent(makeValidAgent("principal")); tx.insertAgent(makeValidAgent("bob")); });
   const mail = createMailModule({ stateRoot: root, society: "demo" }, store, 64, 24, undefined, () => broker.hintWork());
-  const units = new ScriptedUnits(root);
+  const units = new ScriptedUnits();
   const views = new ViewsModule(store, root, "demo", "p");
   const lifecycle = createLifecycleModule(store, units, { stateRoot: root, projectGit: join(root, "project.git"), society: "demo", hasGoal: () => true, activationAllowed: () => true },
     (_parent, input) => makeValidResolvedSpec(input.name, "p", ALL_CAPS, input.from, input.brief), mail);

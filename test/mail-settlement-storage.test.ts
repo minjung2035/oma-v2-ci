@@ -10,16 +10,15 @@ import { spawnSync } from "node:child_process";
 import { mkdtempSync, readFileSync, rmdirSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type { AuthContext, MailInput, ProtocolLimits, UnitObservation } from "@oma/contracts";
+import type { AuthContext, MailInput, ProtocolLimits, ExecutionObservation } from "@oma/contracts";
 import { Store } from "@oma/storage";
 import { MailModule } from "@oma/mail";
 import { Broker } from "@oma/broker";
-import { UnitsModule } from "@oma/platform-linux/units";
+import { PolicyExecution } from "./fixtures/execution.js";
 import { ViewsModule } from "#oma-test/app/views";
 import { LifecycleModule } from "@oma/lifecycle";
 import { ReconcileModule } from "@oma/reconcile";
 import { StoreError, errorCodeOf } from "@oma/domain/errors";
-import { parseUnitObservation } from "@oma/platform-linux/units/observe";
 import { ALL_CAPS, makeValidAgent, makeValidResolvedSpec } from "./fixtures/spec.js";
 import { removeTree } from "./fixtures/cleanup.js";
 import { sendWithStop } from "./fixtures/mail-faults.js";
@@ -34,17 +33,15 @@ const LIMITS: ProtocolLimits = { frameBytes: TREE_MARGIN_BYTES, mailBodyBytes: 6
 const TREE_BYTES = 1024 * 1024 * 1024;
 const auth: AuthContext = { actor: "alice", incarnation: 1, role: "resident", channel: "actor",
   capabilities: new Set(ALL_CAPS), peer: { pid: process.pid, uid: process.getuid!(), gid: process.getgid!(), cgroup: null } };
-const idle = parseUnitObservation({ kind: "succeeded", status: 0, signal: null, stderr: "",
-  stdout: `ActiveState=inactive\nSubState=dead\nResult=success\nExecMainStatus=0\nControlGroup=/oma-test\nInvocationID=${"1".repeat(32)}\n` });
+const idle: ExecutionObservation = { activeState: "inactive", subState: "dead", result: "success", execMainStatus: 0, scope: "", invocationId: "1".repeat(32) };
 
-class ScriptedUnits extends UnitsModule {
+class ScriptedUnits extends PolicyExecution {
   starts: string[] = [];
-  constructor(root: string) { super("demo", { node: process.execPath, libdir: root, state: root, society: "demo", agent: "" }, join(root, "units")); }
-  override observe(): UnitObservation { return idle; }
-  override async observeAsync(): Promise<UnitObservation> { return idle; }
+  override observe(): ExecutionObservation { return idle; }
+  override async observeAsync(): Promise<ExecutionObservation> { return idle; }
   override confirmDead(): boolean { return true; }
   override start(agent: string): void { this.starts.push(agent); }
-  override stop(): UnitObservation { return idle; }
+  override stop(): ExecutionObservation { return idle; }
 }
 const work: MailInput = { to: ["carol"], subject: "work", kind: "message", body: "work" };
 
@@ -57,7 +54,7 @@ function society(t: TestContext, residents: readonly string[] = ["alice", "carol
     for (const name of residents) tx.insertAgent(makeValidAgent(name, { createdBy: "principal" }));
   });
   const mail = createMailModule({ stateRoot: root, society: "demo" }, store, 64);
-  const units = new ScriptedUnits(root);
+  const units = new ScriptedUnits();
   const views = new ViewsModule(store, root, "demo", "p");
   const lifecycle = createLifecycleModule(store, units, { stateRoot: root, projectGit: join(root, "project.git"), society: "demo", hasGoal: () => true, activationAllowed: () => true },
     (_parent, input) => makeValidResolvedSpec(input.name, "p", ALL_CAPS, input.from, input.brief), mail);

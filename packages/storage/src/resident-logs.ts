@@ -36,17 +36,23 @@ export class ResidentLogStore {
       const stat = fstatSync(acquired!); if (!stat.isFile() || stat.nlink !== 1 || stat.size !== 0) refuse();
     } catch (error) { return withCleanup(() => { throw error; }, () => { if (acquired !== undefined) closeSync(acquired); }); }
     const fd = acquired!;
-    let closed = false, failed = false;
+    let closed = false, failed = false, size = 0n;
+    const verify = (): void => {
+      const stat = fstatSync(fd, { bigint: true });
+      if (!stat.isFile() || stat.nlink !== 1n || stat.size !== size) refuse();
+    };
     return Object.freeze({ append(entry: ResidentLogEntry) {
       if (closed || failed || !valid(entry) || entry.actor !== actor || entry.invocationId !== invocationId) refuse();
       const bytes = Buffer.from(canonicalJson({ version: 1, actor, invocationId, incarnation: entry.incarnation,
         atMs: entry.atMs, stream: entry.stream, data: Buffer.from(entry.bytes).toString("base64") }) + "\n");
       try {
-        for (let offset = 0; offset < bytes.length;) { const n = writeSync(fd, bytes, offset, bytes.length - offset); if (n <= 0) refuse(); offset += n; }
+        verify();
+        for (let offset = 0; offset < bytes.length;) { const n = writeSync(fd, bytes, offset, bytes.length - offset); if (n <= 0) refuse(); offset += n; size += BigInt(n); }
+        verify();
       } catch (error) { failed = true; throw error; }
     }, close() {
       if (closed) return; closed = true;
-      withCleanup(() => fsyncSync(fd), () => closeSync(fd));
+      withCleanup(() => { verify(); fsyncSync(fd); if (failed) refuse(); }, () => closeSync(fd));
     } });
   }
   *read(actor: string): Generator<ResidentLogObservation> {

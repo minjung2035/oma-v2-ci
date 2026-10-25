@@ -7,7 +7,7 @@ import { tmpdir } from "node:os";
 import { Store } from "@oma/storage";
 import { sha256Hex } from "@oma/domain/canonical-json";
 import { LifecycleModule } from "@oma/lifecycle";
-import { UnitsModule } from "@oma/platform-linux/units";
+import { PolicyExecution } from "./fixtures/execution.js";
 import { gitFixture, gitAuth, seedGit } from "./fixtures/git-crash.js";
 import { ALL_CAPS, makeValidAgent, makeValidResolvedSpec } from "./fixtures/spec.js";
 
@@ -25,7 +25,7 @@ for (const method of ["mail.send", "git.submit", "git.integrate", "context.publi
       const { git, mail, paths } = gitFixture(root, store);
       // This is a preaccept authority test, not a systemd fixture. Every module
       // uses the same immutable society identity; no real unit is installed.
-      const units = new UnitsModule(paths.society, { node: process.execPath, libdir: process.cwd(), state: root, society: paths.society, agent: "", config: join(root, "config.json"), run: join(root, "oma", paths.society) });
+      const units = new PolicyExecution();
       const lifecycle = createLifecycleModule(store, units,
         { stateRoot: root, projectGit: paths.projectGit, society: paths.society, hasGoal: () => false, activationAllowed: () => true },
         (_parent, input) => makeValidResolvedSpec(input.name, "p", ALL_CAPS, input.from, input.brief), mail);
