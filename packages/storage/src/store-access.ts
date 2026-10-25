@@ -49,7 +49,7 @@ export interface StoreWrites {
   follow: LedgerTransitions["follow"];
   unfollow(topic: string, agent: string): void;
   insertDeliveries: LedgerTransitions["insertDeliveries"];
-  markMaterialized(message: MessageId, recipient: Actor): void;
+  markMaterialized: LedgerTransitions["markMaterialized"];
   markAcknowledged(message: MessageId, recipient: Actor): void;
   insertPreparedBatch: LedgerTransitions["insertPreparedBatch"];
   linkDeliveriesToBatch: LedgerTransitions["linkDeliveriesToBatch"];

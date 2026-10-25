@@ -24,6 +24,13 @@ Linux/macOS 공통 native 실행을 실제 구현·검증하는 것이다. 이�
 - 실제 CI `40202613809`: Mac 26/15 common-runtime 각각 20/20, Ubuntu 19/19. 별도 gate job은 BLOCKED다.
 - `0d471551`의 CI `40202936879`에서도 위 공통 결과를 재현했다. 실제 SCM_RIGHTS 인계 뒤
   connector 생존·종료 모두 kernel peer PID는 holder를 가리켰으나 G-AUTH 전체 증명은 아니다.
+- `8c9ef61d`는 P2 관련 회귀192/192·독립 workspace 설치25/25 PASS다. CI `40207646347`의
+  공통 runtime은 Mac 26/15 각각21/21·Ubuntu20/20, 세 OS input digest가 동일하다. 별도 gate는
+  BLOCKED이며, queue한 connector 바이트를 읽기 전후 LOCAL_PEERPID가 holder인 반례를 보존했다.
+  이후 CLI context의 held descriptor 연결은 별도 진행·검증한다.
+- P3에서 COMMIT 뒤 materialization hint→Broker.hintWork→process CoalescedWake→Reconcile
+  경로를 실제 연결했다. 활성 하나/pending 하나·owner async context·close/drain과 이전 scope
+  confirmDead를 지킨다. 실제 직접 scope·공통 로그·Resident backoff 전체 연결은 여전히 남았다.
 - 첫 전체 local은 FAIL52·SKIP70, 입력 변경0으로 끝났고 원시 실패를 보존했다. 유지되는
   회귀의 native fault/모듈 연결과 실제 bwrap 환경을 수리했다. 부분 시험 성공을 전체 PASS로
   표시하지 않는다. `982658de`의 수리 후 전체 local은 3640/3640 PASS, skip0·입력 변경0이다.

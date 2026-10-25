@@ -23,6 +23,10 @@
 | `982658de`: 수리 후 고정 입력 전체 local | **3640/3640 PASS**. serial9·parallel3631, fail/cancel/skip/todo0. exit0·signal null, 실행 전후 입력 변경0 |
 | `982658de`: 실제 macOS 26/15·Ubuntu CI | Mac 각각 20/20, Ubuntu 19/19 PASS. 별도 Darwin gate는 BLOCKED. artifact zip SHA-256 확인 후 원본 보존 |
 | P2 handle 연결 후 Linux 부분 회귀 | strict typecheck·build·정적 gate PASS. 관련 192개 중 191 PASS·1 FAIL은 옛 renameSync fault가 호출되지 않은 시험이었다. 실제 renameat 게시 후 flush에 fault를 옮긴 저장 회귀 12/12, 모듈/문서/trace 28/28 PASS. 전체 재실행 결과로 합성하지 않음 |
+| `8c9ef61d`: P2 관련 고정 입력 회귀 | **192/192 PASS**, fail/cancel/skip/todo0·exit0·signal null·입력 변경0. 원본 `p2-handles-fixed{.log,-before.json,-after.json,-status.json}` |
+| `8c9ef61d`: workspace 독립 설치 | **25/25 PASS**. tarball을 선언한 의존 closure만으로 설치하고 공개 entry·자체 declaration·해당 installed-runtime smoke 확인. 외부 SDK declaration 진단44개는 원시 로그에 별도 남음 |
+| `8c9ef61d`: 실제 Mac 26/15·Ubuntu CI | Mac 각각 21/21, Ubuntu 20/20 PASS. 세 OS의 input digest가 `ab24d1368aea45d3e95aee4c0417bd6e65c7404dbeed44685213dd59447111f8`(15556개)로 동일. gate job은 계속 BLOCKED |
+| P3 wake·CLI handle 연결 후 Linux 회귀 | build·strict typecheck·transaction 검사 PASS. captured T·wake·drain·현재 authority·CLI 입력 관련127/127, 실제 Mail→살아 있는 Broker hint 연결·same-key·rollback 관련30/30 PASS. 서로 다른 부분 실행이며 전체 PASS로 합성하지 않음 |
 | 실제 macOS 26/15 Keychain | 독립 Swift primitive SDK typecheck PASS. signed Keychain·release 실행·TCC는 미실행 |
 | 현재 source의 전체 local·독립 설치·최종 architecture/trace qualification | 미완료. 일부 이전 실행 PASS를 합산하지 않음 |
 
@@ -33,7 +37,8 @@
 [40201962210](https://github.com/minjung2035/oma-v2/actions/runs/40201962210),
 [40202613809](https://github.com/minjung2035/oma-v2/actions/runs/40202613809),
 [40202936879](https://github.com/minjung2035/oma-v2/actions/runs/40202936879),
-[40205394437](https://github.com/minjung2035/oma-v2/actions/runs/40205394437).
+[40205394437](https://github.com/minjung2035/oma-v2/actions/runs/40205394437),
+[40207646347](https://github.com/minjung2035/oma-v2/actions/runs/40207646347).
 모든 실패 artifact를 보존한다. 원시 local 로그는
 `/home/dev/oma-audit-artifacts/native-2026-10-25/`에 있다. 새/변경 source는 NOT_REVIEWED이며
 고정 architecture·authored review·과거 검토 기록은 변경하지 않는다.
@@ -50,6 +55,12 @@
 `local-repaired-after.json`, `local-repaired-status.json`이다. 실행 뒤의 파일 handle 변경은
 이 전체 PASS의 입력이 아니다. 이 입력에서도 local runner가 별도로 제외한 service/cgroup
 suite 9개는 NOT_RUN이며 Darwin 세 gate의 proof로 합산하지 않는다.
+
+`8c9ef61d`의 실제 Mac 26/15에서 connector가 인계 전에 queue한 첫 바이트를 읽기 전·후
+모두 LOCAL_PEERPID는 holder를 가리켰다. 두 process는 살아 있었다. 현재 endpoint의 마지막
+PID를 각 요청의 발신자로 간주할 수 없다는 반례이며 G-AUTH를 OPEN으로 유지한다.
+SHA-256을 확인한 원본 zip·probe·SDK·시험·input artifact는 `ci-8c9ef61d/`에 보존했다.
+그 뒤 CLI context의 held descriptor 연결은 위 runtime/설치 결과의 입력에 포함되지 않는다.
 
 남은 구현은 [전환 기록](native-transition.md)을 따른다. 직접 실행 scope·auth·owned 파일
 pin/reopen·quarantine/checker·설치와 P7 최종 대조가 남아 있으며 full support 완료가 아니다.
@@ -121,7 +132,7 @@ DR48은 ACL/xattr·special file·nested mount·읽을 수 없는 파일·복원�
 
 아래 값은 **구조 검사의 현재 입력 identity**다. digest 생성은 runtime PASS를 만들지 않는다.
 
-verification input digest `ab24d1368aea45d3e95aee4c0417bd6e65c7404dbeed44685213dd59447111f8` (15556 files).
+verification input digest `f7750bfd598ef32554bc06176af265645a69c2a2735a66393abcf847aaaa3292` (15558 files).
 
 현재 source 목록은 [production-files.txt](../../production-files.txt), per-file SHA-256은 [production-loc-hashes.json](../../production-loc-hashes.json)이 소유한다. `npm run check:inventory`는 cloc 없이 source bytes를 확인한다. `npm run evidence:refresh`의 구조 재생성과 실제 runtime 실행은 별도다.
 

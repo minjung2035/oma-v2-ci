@@ -186,6 +186,8 @@ export class ReconcileModule {
                   latest.desired !== "enabled" || !this.activation() || !this.paths.hasGoal()) continue;
                 const final = this.units.observe(current.name);
                 if (!["inactive", "dead"].includes(final.activeState)) continue;
+                if (!this.units.confirmDead(current.name, current.incarnation))
+                  throw new StoreError("RUN_TERMINATION_UNKNOWN", "previous execution scope is not confirmed dead");
                 this.units.start(current.name, false);
                 diagnostics.push({ agent: current.name, outcome: "started", reason: null }); continue;
               }

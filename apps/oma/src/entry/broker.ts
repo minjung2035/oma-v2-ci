@@ -223,7 +223,8 @@ async function main(): Promise<void> {
         assertUserManagerReachable();
         const store = new Store(join(stateRoot, "runtime.sqlite"), undefined, { society });
         lifetime.retainStore(() => store.close());
-        const mail = createMailModule({ stateRoot, society }, store, cfg.limits.replyReferences, cfg.limits.batchMaxMessages, cfg.limits);
+        const mail = createMailModule({ stateRoot, society }, store, cfg.limits.replyReferences, cfg.limits.batchMaxMessages,
+            cfg.limits, () => broker.hintWork());
         const units = new UnitsModule(society, { node: cfg.installation.node, libdir: cfg.installation.libdir, state: stateRoot, society, agent: "",
             config: configPath, run: runRoot }, undefined, agent => store.getAgent(agent)?.incarnation ?? null);
         const views = new ViewsModule(store, stateRoot, society, cfg.principalProfile, cfg.limits);

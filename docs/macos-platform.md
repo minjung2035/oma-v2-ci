@@ -55,6 +55,13 @@ Git은 Git 검증, native/platform-*는 OS primitive를 맡는다. 아래 모듈
 manifest·owner map·경계 검사·negative control과 함께 갱신한다. 허용 목록만 넓혀 private
 접근이나 책임 침범을 숨기지 않는다. 나머지 NATIVE-001/007 계약과 원래 ID의 기록은 보존한다.
 
+**MUST [NATIVE-009]** materialization의 0→1 전이가 commit된 뒤에만 내부 wake hint를
+보낸다. hint는 accepted 작업·새 queue·실행 권한·후손 종료 증명이 아니다. process의 공통
+coalescer는 활성 callback 하나와 pending hint 하나를 유지하고 요청자의 transaction/recovery
+async context를 빌리지 않는다. broker 종료는 pending hint를 취소하고 활성 작업을 drain한다.
+재시작·sweep은 원래 ledger와 Maildir, 현재 desired/incarnation/GOAL을 다시 읽으며, 새 실행
+직전에는 이전 scope의 독립적인 종료 관측을 요구한다. unknown은 새 실행의 근거가 아니다.
+
 ## 현재 구현의 한계
 
 Darwin CI에서 NOTE_TRACK 거절과 setsid 후손 생존, mode-000 event pin 거절을 실제로 관측했다.

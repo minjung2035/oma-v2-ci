@@ -5137,5 +5137,33 @@
     "status": "unverified",
     "verification": "NOT_RUN",
     "invalidationReason": "authoritative owner, entrypoint, call path or negative-test locator changed"
+  },
+  {
+    "requirement": "NATIVE-009",
+    "source": "docs/macos-platform.md",
+    "digest": "9c6676c11b357b65e7938bac62e1ffadcab9971edf7703f889526e08b92941f5",
+    "normativeText": "**MUST [NATIVE-009]** materialization의 0→1 전이가 commit된 뒤에만 내부 wake hint를\n보낸다. hint는 accepted 작업·새 queue·실행 권한·후손 종료 증명이 아니다. process의 공통\ncoalescer는 활성 callback 하나와 pending hint 하나를 유지하고 요청자의 transaction/recovery\nasync context를 빌리지 않는다. broker 종료는 pending hint를 취소하고 활성 작업을 drain한다.\n재시작·sweep은 원래 ledger와 Maildir, 현재 desired/incarnation/GOAL을 다시 읽으며, 새 실행\n직전에는 이전 scope의 독립적인 종료 관측을 요구한다. unknown은 새 실행의 근거가 아니다.",
+    "applicability": "unclassified",
+    "rationale": "Requires production-path review; no inference from test names.",
+    "owner": "packages/process/src/coalesced-wake.ts#CoalescedWake.request",
+    "entrypoint": "apps/oma/src/entry/broker.ts#main",
+    "callPath": [
+      "apps/oma/src/entry/broker.ts#main",
+      "apps/oma/src/broker/mail-composition.ts#mailLedger",
+      "packages/storage/src/transitions.ts#LedgerTransitions.markMaterialized",
+      "packages/broker/src/index.ts#Broker.hintWork",
+      "packages/process/src/coalesced-wake.ts#CoalescedWake.request",
+      "packages/reconcile/src/index.ts#ReconcileModule.sweep"
+    ],
+    "negativeTests": [
+      "packages/process/test/coalesced-wake.test.mjs#hints during an active callback",
+      "packages/process/test/coalesced-wake.test.mjs#close leaves the active callback",
+      "test/mail-arrival-durability.test.mjs#native wake:",
+      "test/r37-recovery-observation.test.ts#R37: delayed recovery observation"
+    ],
+    "evidence": null,
+    "status": "unverified",
+    "verification": "NOT_RUN",
+    "invalidationReason": "authoritative owner, entrypoint, call path or negative-test locator changed"
   }
 ]

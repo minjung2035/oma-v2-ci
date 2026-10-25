@@ -55,15 +55,16 @@ export class LedgerTransitions {
       this.touchedOperations.add(input.operationId);
     }
   }
-  markMaterialized(message: string, recipient: string): void {
+  markMaterialized(message: string, recipient: string): boolean {
     this.requireLive();
     const row = this.read.delivery(message, recipient);
     if (!row) corrupt("cannot materialize a missing delivery");
-    if (row.materialized === 1) return; // Preserve the first durable fact time.
+    if (row.materialized === 1) return false; // Preserve the first durable fact time.
     changedExactlyOne(this.db.prepare(`UPDATE deliveries SET materialized=1, materialized_at_ms=MAX(?, created_at_ms)
       WHERE message_id=? AND recipient=? AND operation_id=? AND materialized=0 AND materialized_at_ms IS NULL`)
       .run(this.now(), message, recipient, row.operationId), "materialization");
     this.read.delivery(message, recipient);
+    return true;
   }
   markAcknowledged(message: string, recipient: string): void {
     this.requireLive();

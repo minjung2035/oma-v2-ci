@@ -4,6 +4,7 @@
 export const subprocessResponsibilities = Object.freeze({
   "packages/process/src/run.ts": "bounded synchronous command mechanism and final no-await observations",
   "packages/process/src/async.ts": "bounded asynchronous child and pipe lifecycle mechanism",
+  "packages/process/src/coalesced-wake.ts": "one active callback and one pending memory hint, without activation or durable authority",
   // PI-001: the trusted extension cannot import src/process, and the engine's
   // exec cannot pass a private descriptor, so the extension owns this one child.
   // PI-001: engine grep/fd inherit global config and expose no spawn options.

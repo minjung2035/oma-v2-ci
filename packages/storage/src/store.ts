@@ -418,7 +418,7 @@ export class Store implements StoreQueries, StoreWrites {
   setOperationFailed(id: OperationId, code: ErrorCode): void { this.journal.fail(id, code); }
   setOperationUnknown(id: OperationId): void { this.journal.markUnknown(id); }
   insertDeliveries(deliveries: readonly DeliveryIdentity[]): void { this.transitions.insertDeliveries(deliveries); }
-  markMaterialized(message: MessageId, recipient: Actor): void { this.transitions.markMaterialized(message, recipient); }
+  markMaterialized(message: MessageId, recipient: Actor): boolean { return this.transitions.markMaterialized(message, recipient); }
   markAcknowledged(message: MessageId, recipient: Actor): void { this.transitions.markAcknowledged(message, recipient); }
   pendingDeliveries(agent: Actor): DeliveryRow[] { return this.reader.pendingDeliveries(agent); }
   /** runner.pending's count: the same eligible rows, counted in SQL. */

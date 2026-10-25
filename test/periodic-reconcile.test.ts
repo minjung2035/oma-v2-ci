@@ -19,7 +19,7 @@ import { existsSync, mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
-import type { UnitObservation } from "@oma/contracts";
+import type { UnitObservation, AuthContext } from "@oma/contracts";
 import { Store } from "@oma/storage";
 import { MailModule } from "@oma/mail";
 import { Broker } from "@oma/broker";
@@ -63,8 +63,8 @@ function countingRecovery() {
 function society(t: TestContext) {
   const root = mkdtempSync(join(tmpdir(), "oma-av20-"));
   const store = new Store(join(root, "runtime.sqlite"), 5, { society: "demo" });
-  store.transaction(tx => { tx.insertAgent(makeValidAgent("principal")); });
-  const mail = createMailModule({ stateRoot: root, society: "demo" }, store, 64);
+  store.transaction(tx => { tx.insertAgent(makeValidAgent("principal")); tx.insertAgent(makeValidAgent("bob")); });
+  const mail = createMailModule({ stateRoot: root, society: "demo" }, store, 64, 24, undefined, () => broker.hintWork());
   const units = new ScriptedUnits(root);
   const views = new ViewsModule(store, root, "demo", "p");
   const lifecycle = createLifecycleModule(store, units, { stateRoot: root, projectGit: join(root, "project.git"), society: "demo", hasGoal: () => true, activationAllowed: () => true },
@@ -74,7 +74,7 @@ function society(t: TestContext) {
   let drained = false;
   const drain = async () => { if (!drained) { drained = true; await broker.drainAndClose(); } };
   t.after(async () => { try { await drain(); } finally { removeTree(root); } });
-  return { broker, recovery, drain };
+  return { broker, recovery, drain, mail, store };
 }
 /** Lets the promise work an interval started run to the end. */
 const settle = () => new Promise<void>(resolve => { setImmediate(resolve); });
@@ -113,6 +113,40 @@ test("AV20 / REC-002: the drain waits for a sweep the interval started, as for a
   f.recovery.release();
   await closing;
   assert.equal(closed, true);
+});
+
+test("native wake: a burst and in-flight hints retain one active sweep and one fresh pass", async t => {
+  const f = society(t);
+  await f.broker.start(); f.recovery.hold = true;
+  for (let i = 0; i < 1000; i++) f.broker.hintWork();
+  await settle(); assert.equal(f.recovery.sweeps, 1);
+  for (let i = 0; i < 1000; i++) f.broker.hintWork();
+  await settle(); assert.equal(f.recovery.sweeps, 1);
+  f.recovery.hold = false; f.recovery.release(); await settle();
+  assert.equal(f.recovery.sweeps, 2);
+  f.broker.closeAdmission(); f.broker.hintWork(); await settle();
+  assert.equal(f.recovery.sweeps, 2);
+});
+
+test("native wake: closing admission cancels a hint queued before dispatch", async t => {
+  const f = society(t); await f.broker.start();
+  f.broker.hintWork(); f.broker.closeAdmission(); await settle();
+  assert.equal(f.recovery.sweeps, 0);
+});
+
+test("native wake: committed Mail reaches the live Broker and a same-key receipt does not wake again", async t => {
+  const f = society(t); await f.broker.start();
+  const auth: AuthContext = { actor: "principal", incarnation: 0, role: "principal", channel: "host",
+    capabilities: new Set(ALL_CAPS), peer: { pid: process.pid, uid: process.getuid!(), gid: process.getgid!(), cgroup: null } };
+  const input = { to: ["bob"], subject: "committed wake", kind: "message" as const, body: "original bytes" };
+  const first = await f.mail.send(auth, "committed-wake", input);
+  assert.equal(first.state, "succeeded"); await settle();
+  assert.equal(f.recovery.sweeps, 1);
+  const accepted = f.store.getOperation("principal", "committed-wake")!;
+  const plan = accepted.planJson;
+  assert.deepEqual(await f.mail.send(auth, "committed-wake", input), first); await settle();
+  assert.equal(f.recovery.sweeps, 1);
+  assert.equal(f.store.getOperation("principal", "committed-wake")!.planJson, plan);
 });
 
 test("AV20 / D03, INV04: no external reconcile or broker unit ships -- the in-process sweep and its five-second interval are the only owner", () => {

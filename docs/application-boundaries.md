@@ -100,3 +100,8 @@ process, tar/inventory/tool 파일 검증과 package staging은 storage, 조립�
 아래 모듈은 App을 import하지 않는다. 새 모듈이나 정당한 공개 의존성을 추가할 때는
 책임과 DAG를 먼저 명시하고 manifest·검사·독립 설치를 함께 갱신한다. 허용 목록만
 확장해 경계 위반을 숨기지 않는다.
+
+materialization commit 뒤의 hint는 App의 Mail ledger adapter가 연결하며 정책 판정은 하지
+않는다. process의 `CoalescedWake`가 중복과 활성 작업 수명을 조정하고 Broker가 drain에
+연결한다. 실행 여부는 기존 Reconcile owner가 ledger·Maildir·현재 desired/GOAL/incarnation과
+독립 scope death proof를 다시 읽어 정한다. 이 연결은 systemd backend의 최종 제거를 뜻하지 않는다.

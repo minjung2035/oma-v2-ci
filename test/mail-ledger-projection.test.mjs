@@ -20,7 +20,9 @@ test('DR46 Mail: a projected transaction cannot escape its original root transac
  assert.equal('db' in ledger,false);assert.equal('insertAgent' in ledger,false);assert.equal('close' in ledger,false);
  assert.equal('insertAgent' in saved,false);assert.equal('operations' in saved,false);
  assert.throws(()=>saved.setOperationSucceeded('op-missing','{}'),refused);
+ assert.throws(()=>saved.markMaterialized('m-missing','bob'),refused);
  store.transaction(()=>assert.throws(()=>saved.setOperationSucceeded('op-missing','{}'),refused));
+ store.transaction(()=>assert.throws(()=>saved.markMaterialized('m-missing','bob'),refused));
  ledger.transaction(tx=>{assert.notEqual(tx,saved);assert.throws(()=>saved.setOperationSucceeded('op-missing','{}'),refused);});
  assert.equal(store.inTransaction,false);
 });

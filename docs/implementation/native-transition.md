@@ -113,3 +113,34 @@ P2나 Darwin filesystem qualification 완료를 주장하지 않는다.
 현재 모듈 경계의 해석은 DR50/NATIVE-008을 따른다. 25개를 고정 개수로 두지 않으며,
 새 독립 책임은 새 workspace로 분리할 수 있다. 현재 파일 handle 연결에는 기존
 native/storage/config/Git/App owner가 맞으므로 새 만능 공통 모듈을 추가하지 않았다.
+
+`8c9ef61d`의 고정 입력 P2 회귀는 192/192, workspace 독립 설치는 25/25 통과했다.
+[CI 40207646347](https://github.com/minjung2035/oma-v2/actions/runs/40207646347)의 공통 runtime은
+Mac 26/15 각각 21/21·Ubuntu 20/20이며 동일한 verification input digest를 기록했다.
+별도 gate는 계속 BLOCKED다. queuedTransfer probe에서 인계 전에 connector가 보낸 첫
+바이트를 읽기 전·후 모두 LOCAL_PEERPID는 holder였고 두 process는 살아 있었다.
+last endpoint PID는 queued request의 sender proof가 아니다. 이는 G-AUTH의 실제 반례이며
+auth 정책을 UID/PID-only로 완화하지 않는다. 이후 CLI context의 directory/entry 접근도
+native handle API로 연결하며 이 변경의 시험은 앞 결과와 구분한다.
+
+### P3의 commit hint와 공통 wake 수명
+
+`CoalescedWake`는 process의 공통 TS owner다. 활성 callback 하나·pending bit 하나만
+유지하며 callback은 생성 owner의 async context에서 실행한다. Reconcile 안에서 발생한
+hint가 그 recovery context를 빌려 자기 sweep을 await하는 일을 막는다. 실패는 그대로
+caller에게 반환하고, close는 대기 hint를 취소하며 이미 활성인 callback을 종료 proof로
+취급하지 않는다.
+
+materialized 0→1 여부는 기존 storage transition owner가 판정하고 transient boolean으로
+반환한다. SQL·첫 확정 시각·durable 형식은 바꾸지 않는다. App Mail ledger adapter는 원장을
+독립 조회하지 않고 captured T의 반환값으로 수신자만 모아 COMMIT 뒤
+Broker.hintWork로 연결한다. rollback·terminal same-key·이미 materialized된 행의 재확인은
+새 hint를 만들지 않는다. Broker는 주기 timer와 hint를 같은 coalescer에 연결하며 drain이
+활성 task를 기다린다. 실행 권한/desired/GOAL/incarnation/원장·Maildir 판정은 기존 Reconcile
+owner에 남는다. inactive status 외에 confirmDead가 필요하며 unknown이면 실행하지 않는다.
+이는 P3의 실제 연결이며 직접 sandbox scope·공통 로그·Resident backoff 전체는 아직 남았다.
+
+CLI context의 held-root 교체 회귀를 포함한 관련50/50과 wake/captured T/authority 관련127/127,
+실제 Mail→살아 있는 Broker hint 연결을 포함한30/30을 통과했다. 서로 다른 부분 실행이며
+현재 입력의 전체 회귀·독립 설치·실제 Mac 결과는 별도로 다시 확인한다. 이전 partial 입력의
+독립 설치 결과를 마지막 storage transient 반환값 변경의 검증으로 재사용하지 않는다.

@@ -1,4 +1,4 @@
-import { createMailModule } from "#oma-test/app/broker/mail-composition";
+import { createMailModule, mailLedger } from "#oma-test/app/broker/mail-composition";
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -58,6 +58,34 @@ if(process.argv[2]==='arrival-crash-worker'){
  test('DR46-F05: ordinary arrival publication records a complete line',async t=>{
    const f=world(t);assert.equal((await f.mail().send(auth,'normal',input)).state,'succeeded');
    completeArrival(f,message(f,'normal').plan.message.id);
+ });
+ test('native wake: materialized hints run after commit and retain the original receipt',async t=>{
+   const f=world(t), hints=[];
+   const mail=createMailModule({stateRoot:f.root,society:'demo'},f.store,64,24,undefined,actor=>{
+     assert.equal(f.store.inTransaction,false,'a wake cannot execute inside the publication transaction');
+     const row=message(f,'wake-after-commit');
+     assert.equal(f.store.getDelivery(row.plan.message.id,actor).materialized,1);
+     completeArrival(f,row.plan.message.id); hints.push(actor);
+   });
+   const first=await mail.send(auth,'wake-after-commit',input);
+   assert.equal(first.state,'succeeded'); assert.deepEqual(hints,['bob']);
+   assert.deepEqual(await mail.send(auth,'wake-after-commit',input),first);
+   assert.deepEqual(hints,['bob'],'a terminal same-key receipt creates no new delivery effect');
+ });
+ test('native wake: rollback emits no materialized hint and preserves the accepted plan',async t=>{
+   const f=world(t), restore=injectArrivalWrite(()=>0);
+   try{assert.equal((await f.mail().send(auth,'rollback-hint',input)).state,'pending');}finally{restore();}
+   const row=message(f,'rollback-hint'), before=row.planJson, hints=[], failure=Error('abort publication transaction');
+   const ledger=mailLedger(f.store,actor=>hints.push(actor));
+   assert.throws(()=>ledger.transaction(tx=>{tx.markMaterialized(row.plan.message.id,'bob');throw failure;}),error=>error===failure);
+   assert.deepEqual(hints,[]); assert.equal(f.store.inTransaction,false);
+   assert.equal(message(f,'rollback-hint').planJson,before);
+   assert.equal(f.store.getDelivery(row.plan.message.id,'bob').materialized,0);
+   const mail=createMailModule({stateRoot:f.root,society:'demo'},f.store,64,24,undefined,actor=>hints.push(actor));
+   assert.deepEqual(await mail.reconcilePending(),{examined:1,repaired:1,remaining:0});
+   assert.deepEqual(hints,['bob']);
+   ledger.transaction(tx=>tx.markMaterialized(row.plan.message.id,'bob'));
+   assert.deepEqual(hints,['bob'],'re-confirming a materialized row cannot feed a recovery wake loop');
  });
  test('DR46-F05: short arrival writes persist every byte before materialized',async t=>{
    const f=world(t);let calls=0;

@@ -908,6 +908,28 @@
     ]
   },
   {
+    "source": "docs/macos-platform.md",
+    "requirements": [
+      "NATIVE-009"
+    ],
+    "owner": "packages/process/src/coalesced-wake.ts#CoalescedWake.request",
+    "entrypoint": "apps/oma/src/entry/broker.ts#main",
+    "callPath": [
+      "apps/oma/src/entry/broker.ts#main",
+      "apps/oma/src/broker/mail-composition.ts#mailLedger",
+      "packages/storage/src/transitions.ts#LedgerTransitions.markMaterialized",
+      "packages/broker/src/index.ts#Broker.hintWork",
+      "packages/process/src/coalesced-wake.ts#CoalescedWake.request",
+      "packages/reconcile/src/index.ts#ReconcileModule.sweep"
+    ],
+    "negativeTests": [
+      "packages/process/test/coalesced-wake.test.mjs#hints during an active callback",
+      "packages/process/test/coalesced-wake.test.mjs#close leaves the active callback",
+      "test/mail-arrival-durability.test.mjs#native wake:",
+      "test/r37-recovery-observation.test.ts#R37: delayed recovery observation"
+    ]
+  },
+  {
     "source": "docs/implementation-spec.md",
     "requirements": [
       "UNIT-006"

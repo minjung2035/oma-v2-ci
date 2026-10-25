@@ -17,6 +17,7 @@ import { type InternalAdmission } from "./ports.js";
 import { readUnitLogs } from "./logs.js";
 import { errorAnswer, okAnswer } from "./replies.js";
 import { RunRegistry } from "./run-registry.js";
+import { CoalescedWake } from "@oma/process/coalesced-wake";
 import { ProcessLock } from "@oma/native/process-lock";
 import { settleWithin } from "./lifetime.js";
 import { sdNotifyReady } from "@oma/native/linux";
@@ -66,6 +67,8 @@ export class Broker {
   private statusTimer: ReturnType<typeof setInterval> | null = null;
   private reconcileTimer: ReturnType<typeof setInterval> | null = null;
   private lastSweepFailure: string | null = null;
+  private readonly sweepWake = new CoalescedWake(() => this.performSweep());
+  private sweepTask: Promise<void> | null = null;
   private starting: Promise<void> | null = null;
   private closing: Promise<void> | null = null;
   private readonly runLeases: RunRegistry;
@@ -220,22 +223,41 @@ export class Broker {
     catch (error) { this.health.observe(error); console.error("world view refresh failed:", error instanceof Error ? error.message : String(error)); }
     this.publishStatus();
   }
-  /** REC-002: one sweep per interval. A sweep still running is joined, not
-   * doubled (`ReconcileModule.sweep`), and the drain waits for it like any
-   * dispatched task. A failure is reported once until it changes: the next
-   * interval is the retry, and the Human's terminal is not a log to fill. */
+  /** A committed materialization supplies a hint, never activation authority.
+   * Reconcile reads current ledger/GOAL/desired/incarnation and native status. */
+  hintWork(): void { this.periodicSweep(); }
+
+  private async performSweep(): Promise<void> {
+    const reconcile = this.reconcile;
+    if (reconcile === null || !this.running || this.draining) return;
+    try { this.health.assertAdmission(); } catch { return; }
+    await reconcile.sweep();
+    this.lastSweepFailure = null;
+    this.refreshViews();
+  }
+
+  /** One active task and one pending hint, regardless of caller count. A hint
+   * during a sweep requests one fresh pass after it; the drain owns that task. */
   private periodicSweep(): void {
     const reconcile = this.reconcile;
     if (reconcile === null || !this.running || this.draining) return;
     try { this.health.assertAdmission(); } catch { return; }
-    const task = reconcile.sweep().then(() => { this.lastSweepFailure = null; this.refreshViews(); }, (error: unknown) => {
-      this.health.observe(error);
-      const code = errorCodeOf(error);
-      if (code !== this.lastSweepFailure) console.error(JSON.stringify({ event: "reconcile.sweep", code }));
-      this.lastSweepFailure = code;
-    });
+    const task = this.sweepWake.request();
+    if (this.sweepTask === task) return;
+    this.sweepTask = task;
     this.executingTasks.add(task);
-    void task.finally(() => { this.executingTasks.delete(task); });
+    const release = (): void => {
+      this.executingTasks.delete(task);
+      if (this.sweepTask === task) this.sweepTask = null;
+    };
+    void task.then(release, (error: unknown) => {
+      try {
+        this.health.observe(error);
+        const code = errorCodeOf(error);
+        if (code !== this.lastSweepFailure) console.error(JSON.stringify({ event: "reconcile.sweep", code }));
+        this.lastSweepFailure = code;
+      } finally { release(); }
+    });
   }
   /** TUI-021: unit state changes without a broker transaction, so the status
    * view is also republished on a timer. A failure here is reported and left:
@@ -467,6 +489,7 @@ export class Broker {
   closeAdmission(): void {
     if (this.draining) return;
     this.draining = true; this.running = false; this.health.close();
+    this.sweepWake.close();
     if (this.statusTimer !== null) { clearInterval(this.statusTimer); this.statusTimer = null; }
     if (this.reconcileTimer !== null) { clearInterval(this.reconcileTimer); this.reconcileTimer = null; }
     // Absence is the truthful status of a broker that is going away; an old

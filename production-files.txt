@@ -363,6 +363,7 @@ packages/platform-mac/src/native-assets.ts
 packages/platform-mac/src/native-channel.ts
 packages/process/package.json
 packages/process/src/async.ts
+packages/process/src/coalesced-wake.ts
 packages/process/src/command.ts
 packages/process/src/deadline.ts
 packages/process/src/fence.ts

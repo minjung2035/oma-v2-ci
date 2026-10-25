@@ -2,13 +2,41 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import { linkSync, mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import fs from "node:fs";
+import { syncBuiltinESMExports } from "node:module";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { readContextEntry, assertContextDirectory } from "@oma/storage/context-files";
 import { StoreError } from "@oma/domain/errors";
+import { prepareContextEffects } from "#oma-test/app/cli/effects/context";
 
 const isCorrupt = (error: unknown): boolean => error instanceof StoreError && error.code === "STORE_CORRUPT";
 const hash = (bytes: Uint8Array): string => createHash("sha256").update(bytes).digest("hex");
+
+test("context CLI keeps the held source after its pathname is replaced", () => {
+  const root = mkdtempSync(join(tmpdir(), "oma-context-held-source-"));
+  const source = join(root, "source"), moved = join(root, "moved"), original = fs.fstatSync;
+  const expected = Buffer.from("# held source\n");
+  mkdirSync(source); writeFileSync(join(source, "GOAL.md"), expected);
+  let replaced = false;
+  try {
+    fs.fstatSync = ((...args: Parameters<typeof fs.fstatSync>) => {
+      const stat = original(...args);
+      if (!replaced && fs.readlinkSync(`/proc/self/fd/${args[0]}`) === join(source, "GOAL.md")) {
+        replaced = true;
+        fs.renameSync(source, moved); mkdirSync(source);
+        writeFileSync(join(source, "GOAL.md"), "# replacement source\n");
+      }
+      return stat;
+    }) as typeof fs.fstatSync;
+    syncBuiltinESMExports();
+    const result = prepareContextEffects(source);
+    assert.equal(replaced, true);
+    assert.deepEqual(result.content, expected);
+    assert.deepEqual(result.entries, [{ path: "GOAL.md", bytes: expected.length, sha256: hash(expected) }]);
+    assert.equal(fs.readFileSync(join(source, "GOAL.md"), "utf8"), "# replacement source\n");
+  } finally { fs.fstatSync = original; syncBuiltinESMExports(); rmSync(root, { recursive: true, force: true }); }
+});
 
 test("context effects read and verify the same supported regular file", () => {
   const root = mkdtempSync(join(tmpdir(), "oma-context-file-identity-"));

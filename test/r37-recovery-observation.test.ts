@@ -30,19 +30,21 @@ const unknown = parseUnitObservation({ kind: "unknown", status: null, signal: nu
 class ObservedUnits extends UnitsModule {
   readonly entered = deferred(); readonly release = deferred();
   starts = 0; stops = 0; result: UnitObservation = idle;
+  deathConfirmed = false;
   constructor(root: string) { super("crash", { node: process.execPath, libdir: process.cwd(), state: root, society: "crash", agent: "" }); }
   override async observeAsync(): Promise<UnitObservation> { this.entered.resolve(); await this.release.promise; return this.result; }
   override observe(): UnitObservation { return this.result; }
-  override confirmDead(): boolean { return false; }
+  override confirmDead(): boolean { return this.deathConfirmed; }
   override start(): void { this.starts++; }
   override stop(): UnitObservation { this.stops++; return idle; }
 }
 
-for (const change of ["none", "stop", "incarnation", "shutdown", "unknown"] as const) {
+for (const change of ["none", "stop", "incarnation", "shutdown", "unknown", "death-unknown"] as const) {
   test(`R37: delayed recovery observation rechecks ${change}`, { timeout: 10000 }, async () => {
     const root = mkdtempSync(join(tmpdir(), "oma-r37-recovery-"));
     const store = new Store(join(root, "runtime.sqlite"));
     const units = new ObservedUnits(root);
+    units.deathConfirmed = change === "none";
     let activation = true; let sweep: Promise<unknown> | undefined;
     try {
       store.transaction(tx => {
@@ -70,7 +72,8 @@ for (const change of ["none", "stop", "incarnation", "shutdown", "unknown"] as c
       assert.equal(units.stops, change === "stop" ? 1 : 0);
       const diagnostic = reconcile.unitDiagnostics.find(value => value.agent === "a");
       assert.ok(diagnostic);
-      if (change === "incarnation" || change === "unknown") assert.equal(diagnostic.outcome, "unknown");
+      if (change === "incarnation" || change === "unknown" || change === "death-unknown") assert.equal(diagnostic.outcome, "unknown");
+      if (change === "death-unknown") assert.equal(diagnostic.reason, "RUN_TERMINATION_UNKNOWN");
     } finally { units.release.resolve(); await sweep?.catch(() => undefined); store.close(); rmSync(root, { recursive: true, force: true }); }
   });
 }
