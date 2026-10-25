@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
-import { sha256Hex } from '../dist/src/domain/canonical-json.js';
+import { sha256Hex } from "@oma/domain/canonical-json";
 
 const vectors = [
   ['', 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855'],

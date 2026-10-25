@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { contextEntriesCheck } from "../src/domain/context-policy.js";
+import { contextEntriesCheck } from "@oma/domain/context-policy";
 
 const digest = "0123456789abcdef".repeat(4);
 const goal = Object.freeze({ path: "GOAL.md", bytes: 12, sha256: digest });

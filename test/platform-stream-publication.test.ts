@@ -8,11 +8,12 @@ import { createHash, randomBytes } from "node:crypto";
 import { mkdtempSync, readFileSync, readdirSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { receiveDeclared, type StreamSink } from "../src/platform/stream-receive.js";
-import { decryptArchive, sealedArchiveSink } from "../src/platform/host/archive-crypto.js";
-import { getStream } from "../src/platform/host/project.js";
-import { encodeFrame } from "../src/frame.js";
-import { PLATFORM_FRAME_BYTES } from "../src/protocol/host-guest.js";
+import { receiveDeclared } from "#oma-test/app/platform/stream-receive";
+import { type StreamSink } from "@oma/contracts/stream";
+import { decryptArchive, sealedArchiveSink } from "@oma/platform-mac/archive-crypto";
+import { getStream } from "#oma-test/app/platform/host/project";
+import { encodeFrame } from "@oma/protocol/frame";
+import { PLATFORM_FRAME_BYTES } from "@oma/protocol/host-guest";
 
 const KEY = randomBytes(32);
 const sha = (bytes: Buffer): string => createHash("sha256").update(bytes).digest("hex");

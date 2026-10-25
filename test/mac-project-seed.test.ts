@@ -1,3 +1,5 @@
+import { spawnSync } from "node:child_process";
+import { prepareHostProjectDirectory } from "@oma/platform-mac/files";
 /** Real Git identities over controlled bookmarks; no native Mac/VM claim. */
 import test from "node:test";
 import assert from "node:assert/strict";
@@ -5,22 +7,23 @@ import { mkdirSync, mkdtempSync, renameSync, rmSync, writeFileSync } from "node:
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { randomUUID } from "node:crypto";
-import { MacGit } from "../src/platform/host/project.js";
-import { newHostRecord, readHostRecord, writeHostRecord, type ProjectRecord } from "../src/platform/host/record.js";
-import { macProjectExtensionSeed } from "../src/platform/host/personal-seed.js";
-import { bundledProjectBookmarks, nativeProjectBookmarks } from "../src/platform/host/bookmark.js";
-import { DEPLOYMENT_LAYOUT } from "../src/domain/deployment.js";
+import { MacGit } from "@oma/git/host-project";
+import { newHostRecord, readHostRecord, writeHostRecord, type ProjectRecord } from "@oma/platform-mac/record";
+import { macProjectExtensionSeed } from "#oma-test/app/platform/host/personal-seed";
+import { bundledProjectBookmarks, nativeProjectBookmarks } from "@oma/platform-mac/bookmark";
+import { DEPLOYMENT_LAYOUT } from "@oma/domain/deployment";
 
 async function world(t: import("node:test").TestContext, format: "sha1" | "sha256" = "sha1") {
   const dir = mkdtempSync(join(tmpdir(), "oma-mac-seed-"));
   t.after(() => rmSync(dir, { recursive: true, force: true }));
-  const git = new MacGit("/usr/bin/git");
+  const git = new MacGit("/usr/bin/git", prepareHostProjectDirectory);
   const make = async (name: string) => {
     const repo = join(dir, name); mkdirSync(repo);
-    assert.equal((await git.run(repo, ["init", "-q", "-b", "main", `--object-format=${format}`])).status, 0);
+    const prepare = (args: string[]) => spawnSync("/usr/bin/git", ["-C", repo, ...args], { encoding: "utf8", env: { PATH: "/usr/bin:/bin" } });
+    assert.equal(prepare(["init", "-q", "-b", "main", `--object-format=${format}`]).status, 0);
     writeFileSync(join(repo, "a"), name);
-    await git.run(repo, ["add", "a"]);
-    assert.equal((await git.run(repo, ["-c", "user.name=t", "-c", "user.email=t@invalid", "commit", "-qm", name])).status, 0);
+    assert.equal(prepare(["add", "a"]).status, 0);
+    assert.equal(prepare(["-c", "user.name=t", "-c", "user.email=t@invalid", "commit", "-qm", name]).status, 0);
     return repo;
   };
   const repo = await make("project"), location = new Map<string, string>();

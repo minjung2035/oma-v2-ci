@@ -5,9 +5,9 @@
 // from outside the process, so the evidence is what a next start would see.
 import { writeFileSync } from "node:fs";
 import { join } from "node:path";
-import type { HostConfigV1 } from "../../implementation/contracts.js";
-import { defaultHostConfig } from "../../src/config/defaults.js";
-import { INITIAL_WORKERS, commitField, readSettings } from "../../src/application/settings.js";
+import type { HostConfig } from "@oma/contracts";
+import { defaultHostConfig } from "@oma/config/defaults";
+import { INITIAL_WORKERS, commitField, readSettings } from "#oma-test/app/application/settings";
 
 const [root, point] = process.argv.slice(2);
 if (!root || !point) throw new Error("surface crash worker requires its owned root and boundary");
@@ -22,7 +22,7 @@ const checkpoint = (name: string): void => {
 };
 
 const path = join(root, "config.json");
-const seed: HostConfigV1 = defaultHostConfig({
+const seed: HostConfig = defaultHostConfig({
   society: "crash", node: process.execPath, libdir: root, rootfs: join(root, "rootfs"),
   deploymentDigest: "c".repeat(64),
 });

@@ -23,8 +23,8 @@ import assert from "node:assert/strict";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, renameSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { replaceDerivedFile } from "../dist/src/storage/durable-fs.js";
-import { publishStagedDirectory, replaceDerivedSymlink } from "../dist/src/storage/staged-tree.js";
+import { replaceDerivedFile } from "@oma/storage/durable-fs";
+import { publishStagedDirectory, replaceDerivedSymlink } from "@oma/storage/staged-tree";
 
 /** A state tree, a directory an adversary of the same UID controls, and the
  * swap that points the first name at the second. */
@@ -140,10 +140,10 @@ test("S-06/FS-005: replacing a derived symlink is idempotent and leaves no tempo
  */
 test("S-06/FS-005: every mutating syscall in the storage primitives names an entry under a held descriptor", () => {
   const guarded = [
-    "src/storage/durable-fs.ts",
-    "src/storage/staged-tree.ts",
-    "src/storage/directory.ts",
-    "src/request-cache.ts",
+    "packages/storage/src/durable-fs.ts",
+    "packages/storage/src/staged-tree.ts",
+    "packages/storage/src/directory.ts",
+    "apps/oma/src/request-cache.ts",
   ];
   // Reads grant no authority to place bytes and are not part of this rule.
   const mutators = /\b(renameSync|symlinkSync|unlinkSync|linkSync|mkdirSync|rmdirSync|rmSync|fchmodSync)\s*\(/g;

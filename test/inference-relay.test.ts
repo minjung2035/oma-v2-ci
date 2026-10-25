@@ -14,7 +14,7 @@ import type { IncomingMessage, ServerResponse } from "node:http";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { InferenceRelay } from "../src/runtime/inference-relay.js";
+import { InferenceRelay } from "#oma-test/app/runtime/inference-relay";
 import { tlsProvider } from "./fixtures/tls-provider.js";
 
 /** The sandbox bridge, as the core extension runs it: a loopback port whose
@@ -343,7 +343,7 @@ test("P0V-34 / N11, P0-4: a tunnel whose engine leaves before the upgrade comple
 });
 
 test("V27B: idle connections to the relay are bounded, and a request is carried once they end", { timeout: 30_000 }, async () => {
-  const { RELAY_CONNECTIONS_PER_REQUEST } = await import("../src/runtime/inference-relay.js");
+  const { RELAY_CONNECTIONS_PER_REQUEST } = await import("#oma-test/app/runtime/inference-relay");
   const provider = await tlsProvider();
   const socket = scratchSocket();
   const relay = await InferenceRelay.open(socket.path,

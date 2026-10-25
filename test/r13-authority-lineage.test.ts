@@ -3,13 +3,14 @@ import assert from "node:assert/strict";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type { AuthContext, Capability, HostConfigV1 } from "../implementation/contracts.js";
-import { Store, StoreError } from "../src/store.js";
-import { LineageSnapshot, assertCreateCapacity } from "../src/domain/lineage.js";
-import { assertActorIdentity, assertCurrentActor, currentAuthorityGuard, capabilitiesOf } from "../src/authority.js";
-import { createChildSpecResolver } from "../src/config/policy.js";
-import { resolveChildSpec } from "../src/domain/child-policy.js";
-import { makeValidAgent, TEST_RESOURCES } from "./fixtures/spec.js";
+import type { AuthContext, Capability, HostConfig } from "@oma/contracts";
+import { Store } from "@oma/storage";
+import { StoreError } from "@oma/domain/errors";
+import { LineageSnapshot } from "@oma/domain/lineage";
+import { assertActorIdentity, assertCurrentActor, currentAuthorityGuard, capabilitiesOf } from "@oma/domain/authority";
+import { createChildSpecResolver } from "@oma/config/policy";
+import { resolveChildSpec } from "@oma/domain/child-policy";
+import { makeValidAgent } from "./fixtures/spec.js";
 
 /* R13 method-specific authentication/replay ordering (not a generic bypass):
 | Method | Before lookup/replay | New effect / reservation | Stopped/retired actor |
@@ -46,23 +47,6 @@ test("R13: deep and wide trees have no invented depth or argument-count policy",
   assert.equal(wide.isDescendant("root", "root", true), true);
 });
 
-test("R13: concurrent candidates are not refused by legacy society quotas", async () => {
-  const root = mkdtempSync(join(tmpdir(), "oma-lineage-quota-"));
-  const store = new Store(join(root, "runtime.sqlite"));
-  try {
-    store.transaction(tx => tx.insertAgent(makeValidAgent("alice")));
-    const results = await Promise.allSettled(["bob", "carol"].map(async name => {
-      await Promise.resolve();
-      store.transaction(tx => {
-        assertCreateCapacity(new LineageSnapshot(store.listAgents()), "alice", { societyAgents: 2, lineageAgents: 2 });
-        tx.insertAgent(makeValidAgent(name, { createdBy: "alice" }));
-      });
-    }));
-    assert.equal(results.filter(result => result.status === "fulfilled").length, 2);
-    assert.equal(store.listAgents().length, 3);
-  } finally { store.close(); rmSync(root, { recursive: true, force: true }); }
-});
-
 test("R13: current guards re-read lease revocation, incarnation and desired state after a wait", async () => {
   const root = mkdtempSync(join(tmpdir(), "oma-live-authority-"));
   const store = new Store(join(root, "runtime.sqlite"));
@@ -85,16 +69,15 @@ test("R13: current guards re-read lease revocation, incarnation and desired stat
   } finally { store.close(); rmSync(root, { recursive: true, force: true }); }
 });
 
-function config(): HostConfigV1 {
+function config(): HostConfig {
   return {
-    schemaVersion: 1, society: "demo", installation: { node: "/node", libdir: "/lib", rootfs: "/rootfs", deploymentDigest: "a".repeat(64) },
+    schemaVersion: 3, society: "demo", installation: { node: "/node", libdir: "/lib", rootfs: "/rootfs", deploymentDigest: "a".repeat(64) },
     modelProfiles: { md: { provider: "none", model: "none", inferenceTimeoutSeconds: 1 } },
-    agentProfiles: { p: { modelProfile: "md", capabilities: ["agent.create", "mail.send"], delegable: ["mail.send"], childProfile: "p", resources: { ...TEST_RESOURCES } } },
+    agentProfiles: { p: { modelProfile: "md", capabilities: ["agent.create", "mail.send"], delegable: ["mail.send"], childProfile: "p" } },
     principalProfile: "p", initialResidents: [],
-    quota: { societyAgents: 10, lineageAgents: 10, storageBytes: 1000 },
     integration: { policyRevision: "v1", protectedPaths: [], checks: [] },
-    limits: { frameBytes: 1000, mailBodyBytes: 1000, subjectBytes: 512, addresses: 64, replyReferences: 64, contextFiles: 10, contextBytes: 1000, bundleBytes: 1000, logBytes: 1000, batchMaxMessages: 10, idleStreamSeconds: 30, receiptWaitSeconds: 30 },
-  };
+    limits: { frameBytes: 1000, mailBodyBytes: 1000, subjectBytes: 512, addresses: 64, replyReferences: 64, contextFiles: 10, contextBytes: 1000, bundleBytes: 1000, logBytes: 1000, batchMaxMessages: 10, idleStreamSeconds: 30, receiptWaitSeconds: 30 }
+};
 }
 
 test("R13: pure delegation never expands Principal; refresh fails closed and never reads inside T", () => {

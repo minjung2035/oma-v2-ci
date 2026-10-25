@@ -1,11 +1,13 @@
+import { serializePlanIntent } from "./fixtures/plan.js";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { DatabaseSync } from "node:sqlite";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { Store, StoreError } from "../src/store.js";
-import { requestHash } from "../src/hash.js";
+import { Store } from "@oma/storage";
+import { StoreError } from "@oma/domain/errors";
+import { requestHash } from "@oma/domain/request-identity";
 import { ALL_CAPS, resolvedSpec, storedSpec } from "./fixtures/spec.js";
 
 const OP = "op-00000000-0000-4000-8000-000000000081";
@@ -29,7 +31,7 @@ function seed(path: string): Store {
       requestHash: requestHash("route.follow", { topic: "dev" }),
       kind: "route.follow",
       payloadJson: JSON.stringify({ topic: "dev" }),
-      planJson: JSON.stringify({
+      planJson: serializePlanIntent({
         kind: "route.follow",
         topic: "dev",
         agent: "alice",

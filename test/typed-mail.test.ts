@@ -1,8 +1,8 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { mailParamsCheck } from "../src/validate.js";
-import { buildEml } from "../src/mail.js";
-import { requestHash } from "../src/hash.js";
+import { mailParamsCheck } from "@oma/domain/validation";
+import { buildEml } from "@oma/mail";
+import { requestHash } from "@oma/domain/request-identity";
 import { execFileSync } from "node:child_process";
 
 const approvalFor = {

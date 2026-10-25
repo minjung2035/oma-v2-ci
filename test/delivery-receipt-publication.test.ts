@@ -4,17 +4,14 @@ import fs, { existsSync, fstatSync, lstatSync, mkdirSync, mkdtempSync, readFileS
 import { syncBuiltinESMExports } from "node:module";
 import { basename, dirname, join } from "node:path";
 import { tmpdir } from "node:os";
-import type { PreparedBatch } from "../implementation/contracts.js";
-import { generateBatchId, generateOperationId } from "../src/ids.js";
-import { messageIdForOperation } from "../src/domain/derived.js";
-import {
-  PI_ADAPTER_REVISION,
-  publishDeliveryReceipt,
-  readDeliveryReceipt,
-  type DeliveryBoundary,
-} from "../src/storage/delivery-receipt.js";
-import { DurabilityFaultError, type DurabilityFault, type DurabilityObserver } from "../src/storage/durable-fs.js";
-import { runnerReceiptPathAt, runnerSessionDirPathAt } from "../src/storage/paths.js";
+import type { PreparedBatch } from "@oma/contracts";
+import { generateBatchId, generateOperationId } from "@oma/native/identity";
+import { messageIdForOperation } from "@oma/domain/derived";
+import { PI_ADAPTER_REVISION } from "@oma/protocol/delivery-boundary";
+import { publishDeliveryReceipt, readDeliveryReceipt } from "@oma/storage/delivery-receipt";
+import { type DeliveryBoundary } from "@oma/contracts";
+import { DurabilityFaultError, type DurabilityFault, type DurabilityObserver } from "@oma/storage/durable-fs";
+import { runnerReceiptPathAt, runnerSessionDirPathAt } from "@oma/domain/paths";
 import { TEST_VIEW_LIMITS } from "./fixtures/limits.js";
 
 function fixture() {

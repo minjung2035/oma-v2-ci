@@ -18,7 +18,7 @@ for (const ending of ["personal", "close"]) test(`Mac host-new real PTY: ${endin
     // expect still proceeds after expect_timeout like a short wait.
     steps: ending === "personal" ? [
       { write: hex("P"), wait: 0.3, expect: hex("host-personal-requested"), expect_timeout: 8 },
-      { write: hex("q"), wait: 0.5, expect: hex("Let's build something great"), expect_timeout: 15 },
+      { write: hex("q"), wait: 0.5, expect: hex("Your ideas, in motion"), expect_timeout: 15 },
         { write: hex("Confirm the new host session\r"), wait: 0.3, expect: hex("HOST_NEW_PERSONAL_COMPLETE"), expect_timeout: 8 },
       { write: hex("\x04"), wait: 2 }]
       : [{ write: hex("q"), wait: 0.5 }],

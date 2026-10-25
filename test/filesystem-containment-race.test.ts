@@ -18,22 +18,22 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { sha256Hex } from "../src/hash.js";
+import { sha256Hex } from "@oma/domain/canonical-json";
 import {
   openDirectory,
   openRegularBeneath,
-} from "../src/storage/contained-fs.js";
-import { publishImmutableFile } from "../src/storage/immutable-file.js";
-import { readContextEntry } from "../src/storage/context-files.js";
-import { withFrozenBundle } from "../src/storage/submit-spool.js";
-import { runProcess } from "../src/process/async.js";
-import { writeExclusiveFsyncedFile } from "../src/storage/durable-fs.js";
+} from "@oma/native/files";
+import { publishImmutableFile } from "@oma/storage/immutable-file";
+import { readContextEntry } from "@oma/storage/context-files";
+import { withFrozenBundle } from "@oma/storage/submit-spool";
+import { runProcess } from "@oma/process/async";
+import { writeExclusiveFsyncedFile } from "@oma/storage/durable-fs";
 
 const good = Buffer.from("checked bytes\n");
 const hash = sha256Hex(good);
 
 test("FS containment: syscall ABI remains valid across fresh foreign stacks", () => {
-  const module = new URL("../src/storage/contained-fs.js", import.meta.url).href;
+  const module = new URL(import.meta.resolve("@oma/native/files"), import.meta.url).href;
   const script = `import { openDirectory } from ${JSON.stringify(module)};
     import { closeSync, fstatSync } from 'node:fs';
     for (let i = 0; i < 20; i++) {

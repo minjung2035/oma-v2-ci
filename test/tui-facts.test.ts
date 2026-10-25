@@ -9,9 +9,9 @@ import assert from "node:assert/strict";
 import { mkdirSync, mkdtempSync, readdirSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { TuiApp, type AppPorts } from "../src/tui/app.js";
-import type { Terminal } from "../src/tui/screen.js";
-import { principalMailbox, readBody, readMailbox, unreadCount } from "../src/application/mail.js";
+import { TuiApp, type AppPorts } from "@oma/tui/app";
+import type { Terminal } from "@oma/tui/screen";
+import { principalMailbox, readBody, readMailbox, unreadCount } from "#oma-test/app/application/mail";
 import { unknownDashboard } from "./fixtures/dashboard.js";
 
 const ESC = String.fromCharCode(27);

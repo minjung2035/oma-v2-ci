@@ -6,14 +6,15 @@ import { once } from "node:events";
 import { mkdtempSync, mkdirSync, existsSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { FrameParser, encodeFrame } from "../src/frame.js";
+import { DEPLOYMENT_LAYOUT } from "@oma/domain/deployment";
+import { FrameParser, encodeFrame } from "@oma/protocol/frame";
 
-const entry = (name: string) => join(import.meta.dirname, "..", "src", "entry", `${name}.js`);
+const entry = (name: "broker" | "runner" | "host") => join(import.meta.dirname, "../..", DEPLOYMENT_LAYOUT.entries[name]);
 
 test("ID-001: entrypoints reject traversal before filesystem or socket effects", () => {
   const dir = mkdtempSync(join(tmpdir(), "oma-entry-name-"));
   try {
-    for (const name of ["broker", "runner", "host"]) {
+    for (const name of ["broker", "runner", "host"] as const) {
       const args = name === "host" ? ["principal-relay"] : name === "runner" ? ["--agent", "a"] : [];
       const result = spawnSync(process.execPath, [entry(name), ...args, "--society", "../escape"], {
         env: { ...process.env, XDG_DATA_HOME: dir, XDG_RUNTIME_DIR: dir }, encoding: "utf8", timeout: 3000,

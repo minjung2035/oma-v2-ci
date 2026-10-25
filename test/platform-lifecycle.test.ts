@@ -8,12 +8,12 @@ import { mkdirSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { randomUUID } from "node:crypto";
-import { PlatformError } from "../src/platform/rpc.js";
-import type { SessionLauncher } from "../src/platform/guest/host.js";
+import { PlatformError } from "@oma/protocol/host-errors";
+import type { SessionLauncher } from "#oma-test/app/platform/guest/host";
 import { LocalDriver, listenSilently } from "./fixtures/local-guest.js";
-import { GuestLink } from "../src/platform/host/guest-link.js";
-import { VmLifecycle, type VmState } from "../src/platform/host/lifecycle.js";
-import { HOST_GUEST_PROTOCOL, PLATFORM_FRAME_BYTES } from "../src/protocol/host-guest.js";
+import { GuestLink } from "#oma-test/app/platform/host/guest-link";
+import { VmLifecycle, type VmState } from "#oma-test/app/platform/host/lifecycle";
+import { HOST_GUEST_PROTOCOL, PLATFORM_FRAME_BYTES } from "@oma/protocol/host-guest";
 
 const INSTANCE = randomUUID();
 

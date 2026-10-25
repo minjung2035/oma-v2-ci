@@ -5,11 +5,11 @@ import { EventEmitter } from 'node:events';
 import { readFileSync } from 'node:fs';
 import { Script } from 'node:vm';
 import ts from 'typescript';
-import { FrameParser, encodeFrame } from '../dist/src/frame.js';
-import * as terminalProtocol from '../dist/src/protocol/host-guest.js';
-import * as historyProtocol from '../dist/src/protocol/host-history.js';
-import { parseJsonObject } from '../dist/src/frame.js';
-const code = ts.transpileModule(readFileSync(process.env.OMA_GUEST_SESSION_SOURCE ?? 'src/platform/guest/session.ts', 'utf8'), {
+import { FrameParser, encodeFrame } from "@oma/protocol/frame";
+import * as terminalProtocol from "@oma/protocol/host-guest";
+import * as historyProtocol from "@oma/protocol/host-history";
+import { parseJsonObject } from "@oma/protocol/frame";
+const code = ts.transpileModule(readFileSync(process.env.OMA_GUEST_SESSION_SOURCE ?? 'apps/oma/src/platform/guest/session.ts', 'utf8'), {
   compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
 }).outputText;
 function world({ pid = 100 } = {}) {
@@ -27,12 +27,12 @@ function world({ pid = 100 } = {}) {
   const dependencies = {
     'node:fs': { closeSync(fd) { closed.push(fd); } },
     'node:tty': { default: { ReadStream } },
-    '../../process/async.js': { spawnInTerminal() { return child; } },
-    './pty.js': { openPseudoTerminal() { return { master: 10, slave: 11 }; }, setWindowSize() {} },
+    "@oma/process/async": { spawnInTerminal() { return child; } },
+    "@oma/native/pty": { openPseudoTerminal() { return { master: 10, slave: 11 }; }, setWindowSize() {} },
     '../terminal-modes.js': { TerminalModes: class { feed() {} replay() { return ''; } } },
-    '../../frame.js': { FrameParser, encodeFrame, parseJsonObject },
-    '../../protocol/host-guest.js': terminalProtocol,
-    '../../protocol/host-history.js': historyProtocol,
+    '@oma/protocol/frame': { FrameParser, encodeFrame, parseJsonObject },
+    '@oma/protocol/host-guest': terminalProtocol,
+    '@oma/protocol/host-history': historyProtocol,
   };
   const module = { exports: {} };
   new Script(code).runInNewContext({ module, exports: module.exports, Buffer,

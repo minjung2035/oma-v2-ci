@@ -1,16 +1,20 @@
+import { gitLedger } from "#oma-test/app/broker/git-ledger";
+import { serializePlanIntent } from "./fixtures/plan.js";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type { AuthContext, Capability } from "../implementation/contracts.js";
-import { Store, StoreError } from "../src/store.js";
-import type { OperationOf } from "../src/storage/operation-codec.js";
-import { generateOperationId } from "../src/ids.js";
-import { requestHash } from "../src/hash.js";
-import { IntegrationCoordinator, type IntegrationEffects } from "../src/git/integration.js";
-import type { IntegrationPolicy, IntegrationPolicyReader } from "../src/git/integration-policy.js";
-import type { GitObservation, GitProcessEvidence, ChangedPath, RefAfterCas } from "../src/git/observe.js";
+import type { AuthContext, Capability } from "@oma/contracts";
+import { Store } from "@oma/storage";
+import { StoreError } from "@oma/domain/errors";
+import type { OperationOf } from "@oma/protocol/operation-codec";
+import { generateOperationId } from "@oma/native/identity";
+import { requestHash } from "@oma/domain/request-identity";
+import { IntegrationCoordinator, type IntegrationEffects } from "@oma/git/integration";
+import type { IntegrationPolicy, IntegrationPolicyReader } from "@oma/domain/integration-policy";
+import type { GitObservation, GitProcessEvidence, ChangedPath } from "@oma/contracts/git";
+import type { RefAfterCas } from "@oma/git/observe";
 import { makeValidAgent } from "./fixtures/spec.js";
 
 // Unit decision oracles use an actual Store and explicitly injected observations.
@@ -20,8 +24,7 @@ const EMPTY_DIGEST = "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f111612
 const input = { candidate: CANDIDATE, expected: BASE };
 const basePolicy = (): IntegrationPolicy => ({ policyRevision: "p1", protectedPaths: [], checks: [] });
 const checkedPolicy = (): IntegrationPolicy => ({ ...basePolicy(), checks: [{ id: "trusted", argv: ["/bin/true"], env: {},
-  timeoutSeconds: 1, resources: { memoryBytes: 1024 * 1024, tasks: 16, cpuQuotaPercent: 10,
-    tmpBytes: 1024, workspaceBytes: 1024, stagingBytes: 1024, checkTimeoutSeconds: 1 } }] });
+   }] });
 const evidence: GitProcessEvidence = { status: 0, signal: null, stdout: Buffer.alloc(0), stderr: Buffer.alloc(0) };
 const present = <T>(value: T): GitObservation<T> => ({ kind: "present", value, evidence });
 const unavailable = <T>(): GitObservation<T> => ({ kind: "unknown", reason: "injected unavailable observation", evidence: { ...evidence, status: null } });
@@ -64,7 +67,7 @@ function fixture(policy: IntegrationPolicy | null = basePolicy(), reader: Integr
     runCheck: async () => { record("check"); },
   };
   return { root, store, auth, model, calls, effects,
-    coordinator: new IntegrationCoordinator(store, effects, policy, reader),
+    coordinator: new IntegrationCoordinator(gitLedger(store), effects, policy, reader),
     revoke: () => { capabilities = new Set(); },
     close: () => { store.close(); rmSync(root, { recursive: true, force: true }); },
   };
@@ -73,14 +76,13 @@ function operation(store: Store, key: string): OperationOf<"git.integrate"> {
   const row = store.getOperation("alice", key);
   assert.ok(row?.kind === "git.integrate"); return row;
 }
-function accept(store: Store, key: string, legacy = false): string {
+function accept(store: Store, key: string): string {
   const id = generateOperationId();
-  const plan = { kind: "git.integrate", repo: "project", target: "refs/heads/main", base: BASE,
+  const plan = {policyIdentity: "02c010d0ad2a2e60c59a05b83368e8699b97567828b4f75ffa160dfd35b1bb70", noopRef: null,  kind: "git.integrate", repo: "project", target: "refs/heads/main", base: BASE,
     candidate: CANDIDATE, policyRevision: "p1", checkProfileDigest: EMPTY_DIGEST,
-    ...(legacy ? { result: { kind: "git.integrate", base: BASE, candidate: CANDIDATE,
-      target: "refs/heads/main", policyRevision: "p1", changed: true } } : {}) };
+    };
   store.transaction(tx => tx.acceptOperation({ id, actor: "alice", requestKey: key, kind: "git.integrate",
-    requestHash: requestHash("git.integrate", input), payloadJson: JSON.stringify(input), planJson: JSON.stringify(plan) }));
+    requestHash: requestHash("git.integrate", input), payloadJson: JSON.stringify(input), planJson: serializePlanIntent(plan) }));
   return id;
 }
 
@@ -92,7 +94,7 @@ test("R19: execution writes a complete canonical plan without a redundant result
     assert.deepEqual(receipt.result, { kind: "git.integrate", base: BASE, candidate: CANDIDATE,
       target: "refs/heads/main", policyRevision: "p1", changed: true });
     const row = operation(f.store, "execute");
-    assert.deepEqual(Object.keys(row.plan).sort(), ["base", "candidate", "checkProfileDigest", "kind", "policyRevision", "repo", "target"]);
+    assert.deepEqual(Object.keys(row.plan).sort(), ["base", "candidate", "checkProfileDigest", "kind", "noopRef", "policyIdentity", "policyRevision", "repo", "target"]);
     assert.equal(row.plan.checkProfileDigest, EMPTY_DIGEST);
     assert.deepEqual(f.calls, ["format", "published", "gitlinks", "main", "main", "published", "ancestry", "gitlinks", "paths",
       "main", "published", "ancestry", "gitlinks", "paths", "cas"]);
@@ -189,7 +191,7 @@ test("R19: missing policy cannot enable a production legacyDirect path", async (
 for (const scenario of ["success", "failure", "unknown", "stop", "policy", "main"] as const)
   test(`INT-004: trusted check ${scenario} is reobserved before CAS and retry preserves intent`, async t => {
     let revision = "p1";
-    const f = fixture(checkedPolicy(), () => revision); t.after(() => f.close());
+    const f = fixture(checkedPolicy(), () => ({ ...checkedPolicy(), policyRevision: revision })); t.after(() => f.close());
     f.effects.runCheck = async (candidate, check) => {
       assert.equal(candidate, CANDIDATE); assert.equal(check.id, "trusted");
       assert.equal(f.store.inTransaction, false); assert.equal(operation(f.store, "checked").state, "pending");
@@ -235,11 +237,11 @@ for (const result of ["expected", "third", "unknown"] as const) {
   });
 }
 
-for (const legacy of [false, true]) {
-  test(`R19: recovery of ${legacy ? "legacy-result" : "canonical"} intent settles candidate without replaying execute`, async () => {
+{
+  test("R19: recovery of canonical intent settles candidate without replaying execute", async () => {
     const f = fixture(null);
     try {
-      const id = accept(f.store, "recover", legacy); const before = operation(f.store, "recover").planJson;
+      const id = accept(f.store, "recover"); const before = operation(f.store, "recover").planJson;
       f.model.main = present(CANDIDATE);
       f.store.transaction(tx => tx.updateAgent({ name: "alice", desired: "stopped" }));
       await f.coordinator.reconcile(operation(f.store, "recover"));
@@ -299,7 +301,7 @@ test("P0V-64 / R09, P0-2: a refusal after acceptance that a cleanup failure was 
       // The execution's observation is refused, and a cleanup failed beside it.
       throw new AggregateError([new StoreError("NOT_DESCENDANT", "candidate no longer descends"), new Error("EIO while removing a temporary")]);
     };
-    const coordinator = new IntegrationCoordinator(f.store, f.effects, basePolicy(), null);
+    const coordinator = new IntegrationCoordinator(gitLedger(f.store), f.effects, basePolicy(), null);
     await assert.rejects(coordinator.execute(f.auth, "bundled", input), code("NOT_DESCENDANT"));
     const row = operation(f.store, "bundled");
     assert.equal(row.state, "failed", "the refusal was read as an internal error and left the operation pending");

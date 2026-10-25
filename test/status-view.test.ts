@@ -9,10 +9,10 @@ import assert from "node:assert/strict";
 import { mkdtempSync, readFileSync, rmSync, statSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { Store } from "../src/store.js";
-import { ViewsModule } from "../src/views.js";
-import { decodeStatusView, encodeStatusView, statusViewPath } from "../src/protocol/status-view.js";
-import { TuiTransport } from "../src/application/status-observation.js";
+import { Store } from "@oma/storage";
+import { ViewsModule } from "#oma-test/app/views";
+import { decodeStatusView, encodeStatusView, statusViewPath } from "@oma/protocol/status-view";
+import { TuiTransport } from "#oma-test/app/application/status-observation";
 
 test("T118 what the broker publishes is what the Dashboard accepts, and only its owner can read it", () => {
   const root = mkdtempSync(join(tmpdir(), "oma-status-view-"));

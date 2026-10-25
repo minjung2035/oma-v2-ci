@@ -1,4 +1,8 @@
-import * as packagePolicy from "../dist/src/domain/package-policy.js";
+import * as sessionHandoffMeaning from "@oma/protocol/session-handoff";
+import * as hostErrorMeaning from "@oma/protocol/host-errors";
+import * as hostLossMeaning from "@oma/process/host-loss";
+import * as deploymentMeaning from "@oma/domain/deployment";
+import * as packagePolicy from "@oma/domain/package-policy";
 /** Actual birth routers at controlled effect boundaries; no real service, VM or provider. */
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -7,7 +11,7 @@ import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { Script } from 'node:vm';
 import ts from 'typescript';
-import * as cleanup from '../dist/src/process/cleanup.js';
+import * as cleanup from "@oma/native/cleanup";
 
 class StoreError extends Error { constructor(code, message) { super(message); this.code = code; } }
 function compile(file, deps, host, expose = false) {
@@ -15,10 +19,15 @@ function compile(file, deps, host, expose = false) {
   // Expose only the entry's main call; its routing and effect order are unchanged.
   if (expose) source = source.slice(0, source.lastIndexOf('main(process.argv.slice(2))')) + 'export { main };';
   const code = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } })
-    .outputText.replaceAll('import.meta.url', '"file:///fixture/dist/src/entry/oma-mac.js"');
+    .outputText.replaceAll('import.meta.url', '"file:///fixture/apps/oma/dist/entry/oma-mac.js"');
   const module = { exports: {} };
   new Script(code, { filename: file }).runInNewContext({ module, exports: module.exports, process: host, Buffer, URL,
-    require(name) { assert.ok(Object.hasOwn(deps, name), `${file}: uncontrolled ${name}`); return deps[name]; } });
+    require(name) {
+if (name === "@oma/protocol/session-handoff" && !Object.hasOwn(deps, name)) return sessionHandoffMeaning;
+if (name === "@oma/protocol/host-errors" && !Object.hasOwn(deps, name)) return hostErrorMeaning;
+if (name === "@oma/process/host-loss" && !Object.hasOwn(deps, name)) return hostLossMeaning;
+if (name === "@oma/domain/deployment" && !Object.hasOwn(deps, name)) return deploymentMeaning;
+ assert.ok(Object.hasOwn(deps, name), `${file}: uncontrolled ${name}`); return deps[name]; } });
   return module.exports;
 }
 function world(platform, { selected = 'personal', birth, birthError, societies = [{ society: 'demo', running: true }], societyReply = { societies }, end, attachEnd, packages = false, tokenError } = {}) {
@@ -28,23 +37,30 @@ function world(platform, { selected = 'personal', birth, birthError, societies =
     stdin: { isTTY: true }, stdout: { isTTY: true, write: line => output.push(line), on() {}, off() {} },
     stderr: { write: line => output.push(line) }, exit(code) { throw { exit: code }; },
     execPath: '/fixture/node', execArgv: ['--fixture'], execve(...args) { effects.push(['exec', ...args]); } };
-  const grammar = compile('src/runtime/host-arguments.ts', {
-    '../domain/errors.js': { StoreError }, '../domain/identifiers.js': { isValidSocietyName: value => typeof value === 'string' && /^[a-z][a-z0-9-]*$/.test(value) },
-    '../protocol/host-guest.js': { isUuid: value => typeof value === 'string' && /^[a-f0-9-]{36}$/.test(value) },
-    '../domain/session-mode.js': { isSessionMode: value => value === 'society' || value === 'personal' },
+  const grammar = compile('apps/oma/src/runtime/host-arguments.ts', {
+    '@oma/domain/errors': { StoreError }, '@oma/domain/identifiers': { isValidSocietyName: value => typeof value === 'string' && /^[a-z][a-z0-9-]*$/.test(value) },
+    '@oma/protocol/host-guest': { isUuid: value => typeof value === 'string' && /^[a-f0-9-]{36}$/.test(value) },
+    '@oma/domain/session-mode': { isSessionMode: value => value === 'society' || value === 'personal' },
   }, host);
-  const packageGrammar = compile(process.env.OMA_PACKAGE_GRAMMAR_SOURCE ?? 'src/runtime/packages/store.ts', {
-    'node:fs': {}, 'node:path': path, '../../domain/errors.js': { StoreError },
-    '../../leaf.js': {}, '../../storage/contained-fs.js': {}, '../../storage/durable-fs.js': {},
-    '../../config/operations.js': { PACKAGE_ENTRY_PREFIX: 'packages:', extensionEntryProblem() {} },
-    '../user-files.js': {}, '../../protocol/host-guest.js': { isUuid: value => typeof value === 'string' && /^[a-f0-9-]{36}$/.test(value) },
-    '../../storage/directory.js': { listOwnedDirectory() { return null; } },
-    '../../domain/package-policy.js': packagePolicy,
+  const packageGrammar = compile(process.env.OMA_PACKAGE_GRAMMAR_SOURCE ?? 'apps/oma/src/runtime/packages/store.ts', {
+    "@oma/engine/package-resources": {},
+    'node:fs': {}, 'node:path': path, '@oma/domain/errors': { StoreError },
+    "@oma/native/linux": {}, "@oma/native/files": {}, "@oma/storage/durable-fs": {},
+    "@oma/config/operations": { PACKAGE_ENTRY_PREFIX: 'packages:', extensionEntryProblem() {} },
+    '../user-files.js': {}, '@oma/protocol/host-guest': { isUuid: value => typeof value === 'string' && /^[a-f0-9-]{36}$/.test(value) },
+    "@oma/storage/directory": { listOwnedDirectory() { return null; } },
+    '@oma/domain/package-policy': packagePolicy,
   }, host);
   const catalogue = { RESUME_SESSION_ENV: 'OMA_RESUME_SESSION', sessionBirthForHistory(...args) {
     effects.push(['birth', ...args]); if (birthError) throw birthError; return birth;
   } };
   const deps = {
+"@oma/protocol/session-handoff": sessionHandoffMeaning,
+"@oma/protocol/host-errors": hostErrorMeaning,
+"@oma/process/host-loss": hostLossMeaning,
+"@oma/domain/deployment": deploymentMeaning,
+
+    "../engine/start-effects.js": {engineLoginDirectory: {}},
     '../platform/package-files.js': { packageDirectories: {} },
     'node:fs': { realpathSync: value => value, readFileSync(file) { effects.push(['token', file]); if (tokenError) throw tokenError; return 'fixture-token'; } },
     'node:path': path, 'node:url': { fileURLToPath }, 'node:os': { constants: { signals: {} } },
@@ -55,11 +71,11 @@ function world(platform, { selected = 'personal', birth, birthError, societies =
     '../runtime/session-mode.js': { requireSessionMode(value, requested) {
       if (requested !== undefined && value.mode !== requested) throw new StoreError('INVALID_REQUEST', 'mode cannot change');
     }, readSessionBirth: () => birth ?? null },
-    '../tui/session-mode.js': { async chooseSessionMode() { effects.push(['chooser']); return selected; },
+    '@oma/tui/session-mode': { async chooseSessionMode() { effects.push(['chooser']); return selected; },
       async chooseSociety(_streams, items) { choices.push({ items }); return end === 'cancel' ? null : items.at(-1); } },
     './personal-host.js': { async personalMain(options) { effects.push(['personal']); personal.push(options); } },
     './oma-society.js': { loaded: effects }, './oma-mac.js': { loaded: effects },
-    '../application/exit.js': {}, '../tui/words.js': {},
+    '../application/exit.js': {}, '@oma/tui/words': {},
     '../runtime/user-files.js': { ensureUserDirectory(directory) { effects.push(['mkdir', directory]); },
       ensureOwnedUserDirectory(directory, ownedFrom) {
         effects.push(['mkdir', directory]);
@@ -68,7 +84,7 @@ function world(platform, { selected = 'personal', birth, birthError, societies =
         assert.equal(ownedFrom, '/fixture/home/Library/Application Support/OMA',
           `the owned boundary is the app home, got ${ownedFrom}`);
       } },
-    '../frame.js': { encodeFrame: value => value },
+    '@oma/protocol/frame': { encodeFrame: value => value },
     '../platform/rpc.js': { PlatformError: class extends Error {},
       async connectSocket() { effects.push(['host-api']); return { write(value) { effects.push(['request', value.method, value.params]); }, unshift() {}, destroy() {} }; },
       async readLeadingResponse(_socket, id) { return { rest: Buffer.alloc(0), result: id === 'h' ? {} : societyReply }; } },
@@ -82,9 +98,9 @@ function world(platform, { selected = 'personal', birth, birthError, societies =
     '../platform/host/api-client.js': { async hostApiRequest(_socket, _token, method, params) {
       effects.push(['host-api']); effects.push(['request', 'hello', {}]); effects.push(['request', method, params]); return societyReply;
     } },
-    '../protocol/guest-history.js': { isGuestHistoryReference: value => value.startsWith('oma-guest-history:'),
+    '@oma/protocol/guest-history': { isGuestHistoryReference: value => value.startsWith('oma-guest-history:'),
       parseGuestHistoryReference() { return { projectId: 'fixture-project', society: 'demo', file: 'saved.jsonl', sessionId: 'saved-id' }; } },
-    '../protocol/host-api.js': { HOST_API_VERSION: 1 }, '../protocol/host-guest.js': { PLATFORM_FRAME_BYTES: 262144 },
+    '@oma/protocol/host-api': { HOST_API_VERSION: 1 }, '@oma/protocol/host-guest': { PLATFORM_FRAME_BYTES: 262144 },
     '../runtime/packages/index.js': { PACKAGE_USAGE: 'usage: oma pi ...', packageCommand(args) {
       assert.equal(packages, true, 'not a package test');
       return packageGrammar.packageCommand(args, true);
@@ -92,17 +108,17 @@ function world(platform, { selected = 'personal', birth, birthError, societies =
     '../application/local-packages.js': { stageLocalPackage(_store, source) { effects.push(['stage-local', source]); return 'local/staged-fixture'; },
       pruneLocalStage() { effects.push(['prune-local']); } },
     '../runtime/personal-settings.js': { reconcilePersonalSettings() { assert.equal(packages, true); effects.push(['reconcile']); } },
-    '../runtime/process-lock.js': { ProcessLock: { tryAcquire() { effects.push(['lock']); assert.equal(packages, true);
+    "@oma/native/process-lock": { ProcessLock: { tryAcquire() { effects.push(['lock']); assert.equal(packages, true);
       return { descriptor: 17, assertHeld() {}, close() { effects.push(['return']); } }; } } },
-    '../runtime/engine/login.js': { runEngineLogin(options) { effects.push(['engine-login']);
+    "@oma/engine/login": { runEngineLogin(_directoryOwner, options) { effects.push(['engine-login']);
       assert.equal(options.packages.args.includes('--host-only'), false, 'host selector reached Pi'); return 0; } },
-    '../process/cleanup.js': cleanup,
-    '../domain/errors.js': { StoreError }, '../domain/identifiers.js': { isValidSocietyName: value => typeof value === 'string' && /^[a-z][a-z0-9-]*$/.test(value) },
+    "@oma/native/cleanup": cleanup,
+    '@oma/domain/errors': { StoreError }, '@oma/domain/identifiers': { isValidSocietyName: value => typeof value === 'string' && /^[a-z][a-z0-9-]*$/.test(value) },
   };
   // Observe dynamic import admission rather than merely counting fake engine calls.
   for (const [name, effect] of [['./oma-society.js', 'society-import'], ['./oma-mac.js', 'mac-import']])
     Object.defineProperty(deps, name, { get() { effects.push([effect]); return {}; } });
-  const api = compile(platform === 'darwin' ? process.env.OMA_MAC_ENTRY_SOURCE ?? 'src/entry/oma-mac.ts' : 'src/entry/oma.ts', deps, host, true);
+  const api = compile(platform === 'darwin' ? process.env.OMA_MAC_ENTRY_SOURCE ?? 'apps/oma/src/entry/oma-mac.ts' : 'apps/oma/src/entry/oma.ts', deps, host, true);
   return { ...api, packageCommand: packageGrammar.packageCommand, effects, personal, choices, attached, output, host };
 }
 const plain = value => JSON.parse(JSON.stringify(value));
@@ -186,7 +202,7 @@ test('Mac birth router: guest Personal choice re-enters the host with an explici
   const w = world('darwin', { attachEnd: { kind: 'exit', code: 0, signal: null, next: 'new', mode: 'personal' } });
   await w.main(['attach', 'demo']);
   const call = w.effects.find(item => item[0] === 'exec');
-  assert.deepEqual(Array.from(call[2]), ['/fixture/node', '--fixture', '/fixture/dist/src/entry/oma.js', '--mode', 'personal']);
+  assert.deepEqual(Array.from(call[2]), ['/fixture/node', '--fixture', '/fixture/apps/oma/dist/entry/oma.js', '--mode', 'personal']);
   assert.equal(Object.hasOwn(call[3], 'OMA_RESUME_SESSION'), false);
 });
 test('Mac birth router: completed guest /new restarts the host without stale resume or guest cwd', async () => {
@@ -194,7 +210,7 @@ test('Mac birth router: completed guest /new restarts the host without stale res
   w.host.env.OMA_RESUME_SESSION = '/guest/history.jsonl';
   await w.main(['attach', 'demo']);
   const call = w.effects.find(item => item[0] === 'exec'); assert.ok(call);
-  assert.deepEqual(Array.from(call[2]), ['/fixture/node', '--fixture', '/fixture/dist/src/entry/oma.js']);
+  assert.deepEqual(Array.from(call[2]), ['/fixture/node', '--fixture', '/fixture/apps/oma/dist/entry/oma.js']);
   assert.equal(Object.hasOwn(call[3], 'OMA_RESUME_SESSION'), false); assert.equal(call[3].HOME, '/fixture/home');
   assert.equal(w.personal.length, 0); assert.equal(w.effects.some(item => item[1] === 'engine.stop' || item[1] === 'society.open'), false);
 });

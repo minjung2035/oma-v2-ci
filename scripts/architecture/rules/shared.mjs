@@ -10,27 +10,36 @@ export const readText = (root, relative) => fs.readFileSync(absolute(root, relat
 export const finding = (rule, file, reason) => ({ rule, file, reason });
 
 /** Vendored bundled-extension payloads are byte-pinned upstream snapshots
- * (src/extension/vendor/<pkg>/: upstream sources, generated runtime and the
+ * (packages/tool-NAME/src/vendor/PKG/: upstream sources, generated runtime and the
  * hash-manifest), not authored OMA code. Every authored-code rule -- state
  * tree ownership, fence propagation, product vocabulary, the extension's own
  * closure -- judges files it can review, and a vendored file's review is the
  * recorded digest, so the tree is data to these rules and never enumerated. */
-export const VENDORED_EXTENSION_DIR = "src/extension/vendor";
+export const VENDORED_EXTENSION_DIRS = Object.freeze(["tool-lsp", "tool-hashline", "tool-web", "tool-mcp"].map(name => `packages/${name}/src/vendor`));
+export const isVendoredExtension = file => VENDORED_EXTENSION_DIRS.some(dir => file.startsWith(`${dir}/`));
 
 export function filesUnder(root, relative, extension = ".ts") {
   const base = absolute(root, relative);
   if (!fs.existsSync(base)) return [];
-  const vendored = absolute(root, VENDORED_EXTENSION_DIR);
+  const vendored = new Set(VENDORED_EXTENSION_DIRS.map(dir => absolute(root, dir)));
   const out = [];
   const walk = current => {
     for (const entry of fs.readdirSync(current, { withFileTypes: true })) {
       const next = path.join(current, entry.name);
-      if (entry.isDirectory()) { if (next !== vendored) walk(next); }
+      if (entry.isDirectory()) { if (!vendored.has(next)) walk(next); }
       else if (entry.isFile() && entry.name.endsWith(extension)) out.push(slash(path.relative(root, next)));
     }
   };
   walk(base);
   return out.sort();
+}
+
+/** Authored runtime sources, including independently built workspaces. */
+export function authoredFiles(root) {
+  const packages = absolute(root, "packages");
+  return [...filesUnder(root, "src"), ...filesUnder(root, "apps/oma/src"), ...(fs.existsSync(packages)
+    ? fs.readdirSync(packages, { withFileTypes: true }).filter(entry => entry.isDirectory())
+      .flatMap(entry => filesUnder(root, `packages/${entry.name}/src`)) : [])].sort();
 }
 
 // One rule-check invocation reads one syntax snapshot. Nothing survives the
@@ -100,7 +109,7 @@ function publicMethodsObject(source) {
 export function registryOwnerSymbol(root, owner, mutation) {
   if (typeof owner?.symbolTemplate === "string") return owner.symbolTemplate.replaceAll("{mutation}", mutation);
   if (owner?.symbolFromMethod === "paramsCheck" && typeof owner.path === "string") {
-    const file = "src/protocol/methods.ts";
+    const file = "packages/protocol/src/methods.ts";
     const source = sourceOf(root, file);
     const table = publicMethodsObject(source);
     const method = table?.properties.find(node => ts.isPropertyAssignment(node) && propertyName(node.name) === mutation);
@@ -127,7 +136,7 @@ export function registryOwnerSymbol(root, owner, mutation) {
 }
 
 export function mutationMethods(root) {
-  const source = sourceOf(root, "src/protocol/methods.ts");
+  const source = sourceOf(root, "packages/protocol/src/methods.ts");
   const table = publicMethodsObject(source);
   if (!table) throw new Error("PUBLIC_METHODS object not found");
   const mutations = [];
@@ -145,6 +154,10 @@ export function mutationMethods(root) {
 }
 
 export function normalizeRelativeImport(fromFile, specifier) {
+  if (/^(?:test\/|implementation\/tests\/)/.test(fromFile) && /^#oma-test\/app\/[a-z][a-z0-9/-]*$/.test(specifier))
+    return `apps/oma/src/${specifier.slice("#oma-test/app/".length)}.ts`;
+  const workspace = /^@oma\/([a-z-]+)(?:\/(.+))?$/.exec(specifier);
+  if (workspace) return `${workspace[1] === "app" ? "apps/oma" : `packages/${workspace[1]}`}/src/${workspace[2] ?? "index"}.ts`;
   if (!specifier.startsWith(".")) return null;
   const raw = slash(path.normalize(path.join(path.dirname(fromFile), specifier)));
   return raw.endsWith(".js") ? `${raw.slice(0, -3)}.ts` : raw;

@@ -5,7 +5,7 @@
 // behaviour: the method surface the broker actually dispatches.
 import test from "node:test";
 import assert from "node:assert/strict";
-import { PUBLIC_METHODS, INTERNAL_METHODS } from "../src/protocol/methods.js";
+import { PUBLIC_METHODS, INTERNAL_METHODS } from "@oma/protocol/methods";
 
 test("T95/TUI-001: the product surface adds no wire or internal socket method", () => {
   // The closed method surface is the one the broker already dispatches. A TUI

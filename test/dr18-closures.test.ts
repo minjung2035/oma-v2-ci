@@ -1,3 +1,5 @@
+import { generateOperationId } from "@oma/native/identity";
+import { lifecycleLedger } from "#oma-test/app/broker/lifecycle-ledger";
 /** DR18: the decisions that closed the open questions and spikes, each held
  * by a test of what the product now does. */
 import test from "node:test";
@@ -5,12 +7,12 @@ import assert from "node:assert/strict";
 import { mkdtempSync, rmSync, symlinkSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { Store } from "../src/store.js";
-import { StoreError } from "../src/domain/errors.js";
-import { RegistryOperations } from "../src/lifecycle/registry-operations.js";
+import { Store } from "@oma/storage";
+import { StoreError } from "@oma/domain/errors";
+import { RegistryOperations } from "@oma/lifecycle/registry-operations";
 import { makeValidAgent } from "./fixtures/spec.js";
-import { NON_LOCAL_FILESYSTEMS, assertStateRoot } from "../src/runtime/assets.js";
-import { spawnSandboxed } from "../src/process/async.js";
+import { NON_LOCAL_FILESYSTEMS, assertStateRoot } from "#oma-test/app/runtime/assets";
+import { spawnSandboxed } from "@oma/process/async";
 
 const peer = { pid: 1, uid: 1000, gid: 1000, cgroup: null };
 
@@ -20,7 +22,7 @@ test("DR18 / MAIL-001/002: a topic is followed by Residents; the Principal's fol
   const store = new Store(join(dir, "runtime.sqlite"));
   t.after(() => store.close());
   store.transaction(tx => { tx.insertAgent(makeValidAgent("principal")); tx.insertAgent(makeValidAgent("worker-a")); });
-  const registry = new RegistryOperations(store);
+  const registry = new RegistryOperations(lifecycleLedger(store), { nextOperationId: generateOperationId });
   const principal = { actor: "principal", incarnation: store.getAgent("principal")!.incarnation, role: "principal" as const,
     channel: "host" as const, capabilities: new Set(["route.follow" as const]), peer };
   assert.throws(() => registry.follow(principal, "release", true, "p-follow"),
@@ -34,21 +36,21 @@ test("DR18 / MAIL-001/002: a topic is followed by Residents; the Principal's fol
 });
 
 test("DR18 / S-01-CANDIDATE: checks without resource profiles are refused, and the root protects every change", async () => {
-  const { protectedPathMatches } = await import("../src/git/observe.js");
-  const { assertSupportedIntegration, snapshotIntegrationPolicy } = await import("../src/git/integration-policy.js");
-  for (const path of ["README.md", "src/a.ts", "deep/er/file", ".github/workflows/ci.yml"])
+  const { protectedPathMatches } = await import("@oma/domain/git-facts");
+  const { assertSupportedIntegration, snapshotIntegrationPolicy } = await import("@oma/domain/integration-policy");
+  for (const path of ["README.md", "apps/oma/src/a.ts", "deep/er/file", ".github/workflows/ci.yml"])
     assert.equal(protectedPathMatches(path, "/"), true, path);
-  assert.equal(protectedPathMatches("src/a.ts", "docs/"), false);
+  assert.equal(protectedPathMatches("apps/oma/src/a.ts", "docs/"), false);
   assert.equal(protectedPathMatches("docs/a.md", "docs/"), true);
   assert.doesNotThrow(() => assertSupportedIntegration(snapshotIntegrationPolicy({ policyRevision: "p", protectedPaths: [],
-    checks: [{ id: "test", argv: ["/usr/bin/true"], env: {}, timeoutSeconds: 0 }] })));
+    checks: [{ id: "test", argv: ["/usr/bin/true"], env: {} }] })));
 });
 
 test("DR18 / D-9, DR24: `oma login` hands the terminal to the engine's own login over the Human's one engine home, needing no session", async t => {
   const { chmodSync, existsSync, mkdirSync: mkdir, readdirSync, writeFileSync } = await import("node:fs");
   const { spawnSync } = await import("node:child_process");
-  const { tryHoldSociety } = await import("../src/runtime/society-lease.js");
-  const { ENGINE_HOME } = await import("../src/runtime/pi-runtime.js");
+  const { tryHoldSociety } = await import("#oma-test/app/runtime/society-lease");
+  const { ENGINE_HOME } = await import("@oma/engine/pi-runtime");
   const root = mkdtempSync(join(tmpdir(), "oma-login-"));
   t.after(() => rmSync(root, { recursive: true, force: true }));
   const repo = join(new URL(".", import.meta.url).pathname, "..", "..");
@@ -60,7 +62,7 @@ test("DR18 / D-9, DR24: `oma login` hands the terminal to the engine's own login
   const engine = join(root, "fake-pi.sh");
   writeFileSync(engine, "#!/bin/sh\nprintf 'dir=%s\\n' \"$PI_CODING_AGENT_DIR\"\n[ -e /proc/self/fd/4 ] && echo fence-held\nprintf ok > \"$PI_CODING_AGENT_DIR/logged-in\"\nexit 0\n");
   chmodSync(engine, 0o755);
-  const login = () => spawnSync(process.execPath, [join(repo, "dist/src/entry/oma.js"), "login"],
+  const login = () => spawnSync(process.execPath, [join(repo, "apps/oma/dist/entry/oma.js"), "login"],
     { cwd: project, env: { ...env, OMA_PI_COMMAND: engine }, encoding: "utf8", timeout: 60_000 });
 
   const done = login();
@@ -83,8 +85,8 @@ test("DR18 / D-9, DR24: `oma login` hands the terminal to the engine's own login
 test("DR18 / D-8: every start brings the project's committed branch history into the society's mirror, and nothing else of the project", async t => {
   const { spawnSync } = await import("node:child_process");
   const { mkdirSync: mkdir, writeFileSync } = await import("node:fs");
-  const { provisionSociety } = await import("../src/runtime/provision.js");
-  const { projectMirrorPathAt } = await import("../src/storage/paths.js");
+  const { provisionSociety } = await import("#oma-test/app/runtime/provision");
+  const { projectMirrorPathAt } = await import("@oma/domain/paths");
   const root = mkdtempSync(join(tmpdir(), "oma-mirror-"));
   t.after(() => rmSync(root, { recursive: true, force: true }));
   const project = join(root, "project");

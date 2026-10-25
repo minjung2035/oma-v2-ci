@@ -1,56 +1,70 @@
+import { createGitModule } from "#oma-test/app/broker/git-composition";
+import { createMailModule } from "#oma-test/app/broker/mail-composition";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { spawnSync } from "node:child_process";
-import { GitModule, gitEnv, type GitPaths } from "../../src/git.js";
-import { MailModule } from "../../src/mail.js";
-import { Store } from "../../src/store.js";
-import { sha256Hex } from "../../src/hash.js";
-import { isValidFullOid } from "../../src/ids.js";
-import { checkExportRef } from "../../src/validate.js";
+import { GitModule, type GitPaths } from "@oma/git";
+import { GIT_ENV as gitEnv } from "@oma/process/policies";
+import { MailModule } from "@oma/mail";
+import { Store } from "@oma/storage";
+import { sha256Hex } from "@oma/domain/canonical-json";
+import { isValidFullOid } from "@oma/domain/identifiers";
+import { checkExportRef } from "@oma/domain/validation";
 import { ALL_CAPS } from "./spec.js";
-import type { AuthContext } from "../../implementation/contracts.js";
-
+import type { AuthContext } from "@oma/contracts";
 export const gitAuth: AuthContext = { actor: "a", incarnation: 1, role: "resident", channel: "actor", capabilities: new Set(ALL_CAPS), peer: { pid: process.pid, uid: process.getuid!(), gid: process.getgid!(), cgroup: null } };
 export function gitCommand(root: string, args: string[]): string {
-  const out = spawnSync("/usr/bin/git", args, { cwd: root, env: gitEnv, encoding: "utf8", timeout: 30000, maxBuffer: 4 * 1024 * 1024, killSignal: "SIGKILL" });
-  if (out.error || out.signal || out.status !== 0) throw new Error(`git ${args.join(" ")}: ${out.stderr ?? out.error?.message ?? "unknown outcome"}`);
-  return out.stdout.trim();
+    const out = spawnSync("/usr/bin/git", args, { cwd: root, env: gitEnv, encoding: "utf8", timeout: 30000, maxBuffer: 4 * 1024 * 1024, killSignal: "SIGKILL" });
+    if (out.error || out.signal || out.status !== 0)
+        throw new Error(`git ${args.join(" ")}: ${out.stderr ?? out.error?.message ?? "unknown outcome"}`);
+    return out.stdout.trim();
 }
 export function gitFixture(root: string, store: Store) {
-  const paths: GitPaths = {
-    stateRoot: root, projectGit: join(root, "repos/project.git"), contextGit: join(root, "repos/context.git"), worldDir: join(root, "world"), society: "crash",
-    quarantineTmpBytes: 256 * 1024 * 1024, quarantineResources: { cpuSeconds: 30, memoryBytes: 512 * 1024 * 1024, tasks: 4096, timeoutSeconds: 30, silenceSeconds: 30 },
-  };
-  const mail = new MailModule({ stateRoot: root, society: "crash" }, store, 64);
-  const git = new GitModule(paths, store, mail, { policyRevision: "crash-policy", protectedPaths: [], checks: [] });
-  return { git, mail, paths };
+    const paths: GitPaths = {
+        stateRoot: root, projectGit: join(root, "repos/project.git"), contextGit: join(root, "repos/context.git"), worldDir: join(root, "world"), society: "crash",
+    };
+    const mail = createMailModule({ stateRoot: root, society: "crash" }, store, 64);
+    const git = createGitModule(paths, store, mail, { policyRevision: "crash-policy", protectedPaths: [], checks: [] });
+    return { git, mail, paths };
 }
 export function seedGit(root: string, format: "sha1" | "sha256" = "sha1"): void {
-  const seed = join(root, "seed"); mkdirSync(seed, { recursive: true }); mkdirSync(join(root, "repos"), { recursive: true });
-  gitCommand(seed, ["init", "-q", "-b", "main", `--object-format=${format}`]);
-  writeFileSync(join(seed, "base.txt"), "base\n".repeat(4096)); gitCommand(seed, ["add", "."]);
-  const commit = () => gitCommand(seed, ["-c", "user.name=Fixture", "-c", "user.email=fixture@localhost", "commit", "-qm", "fixture"]);
-  commit(); const base = gitCommand(seed, ["rev-parse", "HEAD"]);
-  gitCommand(root, ["clone", "--bare", seed, join(root, "repos/project.git")]);
-  gitCommand(root, ["init", "--bare", "-b", "main", `--object-format=${format}`, join(root, "repos/context.git")]);
-  writeFileSync(join(seed, "change.txt"), "candidate\n"); gitCommand(seed, ["add", "."]); commit();
-  const candidate = gitCommand(seed, ["rev-parse", "HEAD"]); const exportRef = "refs/oma/export/crash";
-  gitCommand(seed, ["update-ref", exportRef, candidate]);
-  gitCommand(seed, ["bundle", "create", join(root, "candidate.bundle"), exportRef, `^${base}`]);
-  writeFileSync(join(root, "git-fixture.json"), JSON.stringify({ base, candidate, exportRef }));
+    const seed = join(root, "seed");
+    mkdirSync(seed, { recursive: true });
+    mkdirSync(join(root, "repos"), { recursive: true });
+    gitCommand(seed, ["init", "-q", "-b", "main", `--object-format=${format}`]);
+    writeFileSync(join(seed, "base.txt"), "base\n".repeat(4096));
+    gitCommand(seed, ["add", "."]);
+    const commit = () => gitCommand(seed, ["-c", "user.name=Fixture", "-c", "user.email=fixture@localhost", "commit", "-qm", "fixture"]);
+    commit();
+    const base = gitCommand(seed, ["rev-parse", "HEAD"]);
+    gitCommand(root, ["clone", "--bare", seed, join(root, "repos/project.git")]);
+    gitCommand(root, ["init", "--bare", "-b", "main", `--object-format=${format}`, join(root, "repos/context.git")]);
+    writeFileSync(join(seed, "change.txt"), "candidate\n");
+    gitCommand(seed, ["add", "."]);
+    commit();
+    const candidate = gitCommand(seed, ["rev-parse", "HEAD"]);
+    const exportRef = "refs/oma/export/crash";
+    gitCommand(seed, ["update-ref", exportRef, candidate]);
+    gitCommand(seed, ["bundle", "create", join(root, "candidate.bundle"), exportRef, `^${base}`]);
+    writeFileSync(join(root, "git-fixture.json"), JSON.stringify({ base, candidate, exportRef }));
 }
-function isFixtureInfo(value: unknown): value is { base: string; candidate: string; exportRef: string } {
-  return value !== null && typeof value === "object" && !Array.isArray(value) && Object.keys(value).length === 3 &&
-    "base" in value && isValidFullOid(value.base) && "candidate" in value && isValidFullOid(value.candidate) &&
-    "exportRef" in value && typeof value.exportRef === "string" && checkExportRef(value.exportRef) === null;
+function isFixtureInfo(value: unknown): value is {
+    base: string;
+    candidate: string;
+    exportRef: string;
+} {
+    return value !== null && typeof value === "object" && !Array.isArray(value) && Object.keys(value).length === 3 &&
+        "base" in value && isValidFullOid(value.base) && "candidate" in value && isValidFullOid(value.candidate) &&
+        "exportRef" in value && typeof value.exportRef === "string" && checkExportRef(value.exportRef) === null;
 }
 export async function submitFixture(root: string, git: GitModule, key = "git-crash") {
-  const info: unknown = JSON.parse(readFileSync(join(root, "git-fixture.json"), "utf8"));
-  if (!isFixtureInfo(info)) throw new Error("normal Git fixture metadata is invalid");
-  const bytes = readFileSync(join(root, "candidate.bundle"));
-  return git.submit(gitAuth, key, { candidate: info.candidate, exportRef: info.exportRef, prerequisites: [info.base], to: ["b"], subject: "candidate", body: "fixed candidate", paths: ["change.txt"], bundle: { bytes: bytes.length, sha256: sha256Hex(bytes), mediaType: "application/x-git-bundle" } }, (async function* () { yield bytes; })());
+    const info: unknown = JSON.parse(readFileSync(join(root, "git-fixture.json"), "utf8"));
+    if (!isFixtureInfo(info))
+        throw new Error("normal Git fixture metadata is invalid");
+    const bytes = readFileSync(join(root, "candidate.bundle"));
+    return git.submit(gitAuth, key, { candidate: info.candidate, exportRef: info.exportRef, prerequisites: [info.base], to: ["b"], subject: "candidate", body: "fixed candidate", paths: ["change.txt"], bundle: { bytes: bytes.length, sha256: sha256Hex(bytes), mediaType: "application/x-git-bundle" } }, (async function* () { yield bytes; })());
 }
 export async function contextFixture(git: GitModule) {
-  const bytes = Buffer.from("# GOAL\nverify crash recovery\n");
-  return git.publishContext(gitAuth, "git-crash", { expected: null, entries: [{ path: "GOAL.md", bytes: bytes.length, sha256: sha256Hex(bytes) }], content: { bytes: bytes.length, sha256: sha256Hex(bytes), mediaType: "application/vnd.oma.context-v1" } }, (async function* () { yield bytes; })());
+    const bytes = Buffer.from("# GOAL\nverify crash recovery\n");
+    return git.publishContext(gitAuth, "git-crash", { expected: null, entries: [{ path: "GOAL.md", bytes: bytes.length, sha256: sha256Hex(bytes) }], content: { bytes: bytes.length, sha256: sha256Hex(bytes), mediaType: "application/vnd.oma.context-v1" } }, (async function* () { yield bytes; })());
 }

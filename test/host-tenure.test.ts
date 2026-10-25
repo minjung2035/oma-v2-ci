@@ -13,8 +13,9 @@ import assert from "node:assert/strict";
 import { fstatSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { HostTenure, type FencedEngine } from "../src/runtime/host-tenure.js";
-import { tryHoldSociety } from "../src/runtime/society-lease.js";
+import { HostTenure } from "#oma-test/app/runtime/host-tenure";
+import { type FencedEngine } from "@oma/contracts/runtime";
+import { tryHoldSociety } from "#oma-test/app/runtime/society-lease";
 
 const scratch = (): string => mkdtempSync(join(tmpdir(), "oma-tenure-"));
 

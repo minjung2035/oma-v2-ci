@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { lstatSync } from "node:fs";
 import { join } from "node:path";
-import { workspacePathAt, isActorSocketPathFor } from "../../src/storage/paths.js";
+import { workspacePathAt, isActorSocketPathFor } from "@oma/domain/paths";
 import type { LedgerSnapshot, InvariantPhase } from "./store.js";
 
 export interface ObservedRunFact {

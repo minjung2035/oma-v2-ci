@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { mailNamerFor, mailPartyName } from "../src/tui/mail-names.js";
+import { mailNamerFor, mailPartyName } from "@oma/tui/mail-names";
 
 /** Actual names remain stable across roster changes. */
 

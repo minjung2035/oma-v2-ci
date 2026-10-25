@@ -1,22 +1,26 @@
+import { lifecycleLedger } from "#oma-test/app/broker/lifecycle-ledger";
+import { createMailModule } from "#oma-test/app/broker/mail-composition";
+import { serializePlanIntent } from "./fixtures/plan.js";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { chmodSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import type { AuthContext, MailInput } from "../implementation/contracts.js";
-import { Store } from "../src/store.js";
-import { MailModule } from "../src/mail.js";
-import { operationMessage } from "../src/mail/materializer.js";
-import { RegistryOperations } from "../src/lifecycle/registry-operations.js";
-import { PublicDispatcher } from "../src/broker/public-dispatcher.js";
-import { errorAnswer } from "../src/broker/replies.js";
-import { publicFailure } from "../src/domain/errors.js";
-import { AdmissionGate, bindAdmissionGate } from "../src/domain/admission.js";
-import { resolvedSpecDigest } from "../src/domain/spec-identity.js";
-import { residentUnitsFor } from "../src/domain/derived.js";
-import { generateOperationId, generateMessageId } from "../src/ids.js";
-import { requestHash } from "../src/hash.js";
-import { receiptOfOperation } from "../src/storage/receipt-projector.js";
+import type { AuthContext, MailInput } from "@oma/contracts";
+import { Store } from "@oma/storage";
+import { MailModule } from "@oma/mail";
+import { operationMessage } from "@oma/mail/materializer";
+import { RegistryOperations } from "@oma/lifecycle/registry-operations";
+import { PublicDispatcher } from "@oma/broker/public-dispatcher";
+import { errorAnswer } from "@oma/broker/replies";
+import { publicFailure } from "@oma/domain/errors";
+import { AdmissionGate, bindAdmissionGate } from "@oma/domain/admission";
+import { resolvedSpecDigest } from "@oma/domain/spec-identity";
+import { residentUnitsFor } from "@oma/domain/derived";
+import { generateOperationId } from "@oma/native/identity";
+import { messageIdForOperation as generateMessageId } from "@oma/domain/derived";
+import { requestHash } from "@oma/domain/request-identity";
+import { receiptOfOperation } from "@oma/protocol/receipt-projector";
 import {
   ALL_CAPS,
   makeValidAgent,
@@ -44,7 +48,7 @@ function fixture() {
     tx.insertAgent(makeValidAgent("alice"));
     tx.insertAgent(makeValidAgent("bob", { createdBy: "alice" }));
   });
-  const mail = new MailModule(
+  const mail = createMailModule(
     { stateRoot: root, society: "fixture" },
     store,
     64,
@@ -75,7 +79,8 @@ function fixture() {
     mail,
     units: { statusSnapshot: unused },
     views: { status: unused },
-    git: null,
+    review: null,
+git: null,
     lifecycle: {
       create: async () => unused(),
       start: unused,
@@ -86,7 +91,7 @@ function fixture() {
     limits,
     isDraining: () => false,
     assertAdmission: () => gate.assertAdmission(),
-    admitResource: () => () => undefined,
+
     refreshViews() {},
     readLogs: async () => unused(),
     failureAnswer: (id, error) => {
@@ -147,7 +152,7 @@ function fixture() {
           requestKey: "original-create",
           requestHash: requestHash("agent.create", payload),
           payloadJson: JSON.stringify(payload),
-          planJson: JSON.stringify(plan),
+          planJson: serializePlanIntent(plan),
         });
         tx.insertDeliveries([
           { operationId: original, messageId: message.id, recipient: "bob" },
@@ -159,7 +164,7 @@ function fixture() {
           requestKey: "linked-create",
           requestHash: requestHash("agent.create", payload),
           payloadJson: JSON.stringify(payload),
-          planJson: JSON.stringify({
+          planJson: serializePlanIntent({
             ...plan,
             existingCreation: original,
             initialMessage: null,
@@ -178,7 +183,7 @@ function fixture() {
 test("F1: semantic reply errors leave admission healthy and later mail is accepted", async () => {
   const f = fixture();
   try {
-    const follow = new RegistryOperations(f.store).follow(
+    const follow = new RegistryOperations(lifecycleLedger(f.store), { nextOperationId: generateOperationId }).follow(
       f.auth,
       "work",
       true,

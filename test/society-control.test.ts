@@ -1,21 +1,26 @@
+import { createReconcileModule } from "#oma-test/app/broker/reconcile-composition";
+import { generateOperationId } from "@oma/native/identity";
+import { lifecycleLedger } from "#oma-test/app/broker/lifecycle-ledger";
+import { createLifecycleModule } from "#oma-test/app/broker/lifecycle-composition";
+import { createMailModule } from "#oma-test/app/broker/mail-composition";
 /** DR27 / P0: whole-society execution is a durable fence, not a mass desired-state edit. */
 import test, { type TestContext } from "node:test";
 import assert from "node:assert/strict";
 import { mkdtempSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import type { AuthContext, UnitObservation } from "../implementation/contracts.js";
-import { Store, readDiagnosticSnapshot } from "../src/store.js";
-import { ReconcileModule } from "../src/reconcile.js";
-import { LifecycleModule } from "../src/lifecycle.js";
-import { SocietyControl } from "../src/lifecycle/society.js";
-import { parseUnitObservation } from "../src/units/observe.js";
-import { UnitsModule } from "../src/units.js";
-import { MailModule } from "../src/mail.js";
-import { assertCurrentActor } from "../src/authority.js";
-import { AcceptedFailure, StoreError } from "../src/domain/errors.js";
-import { inspectLedger } from "../src/diagnostics/ledger.js";
-import { ALL_CAPS, TEST_RESOURCES, makeValidAgent } from "./fixtures/spec.js";
+import type { AuthContext, UnitObservation } from "@oma/contracts";
+import { Store, readDiagnosticSnapshot } from "@oma/storage";
+import { ReconcileModule } from "@oma/reconcile";
+import { LifecycleModule } from "@oma/lifecycle";
+import { SocietyControl } from "@oma/lifecycle/society";
+import { parseUnitObservation } from "@oma/platform-linux/units/observe";
+import { UnitsModule } from "@oma/platform-linux/units";
+import { MailModule } from "@oma/mail";
+import { assertCurrentActor } from "@oma/domain/authority";
+import { AcceptedFailure, StoreError } from "@oma/domain/errors";
+import { inspectLedger } from "#oma-test/app/diagnostics/ledger";
+import { ALL_CAPS, makeValidAgent } from "./fixtures/spec.js";
 
 class ControlledUnits extends UnitsModule {
   readonly stops: { agent: string; incarnation: number | undefined }[] = [];
@@ -25,7 +30,7 @@ class ControlledUnits extends UnitsModule {
   observing: (() => Promise<void>) | undefined;
   onStop: (() => void) | undefined;
   constructor(root: string) {
-    super("demo", { node: process.execPath, libdir: root, state: root, society: "demo", agent: "" }, join(root, "units"), { p: TEST_RESOURCES });
+    super("demo", { node: process.execPath, libdir: root, state: root, society: "demo", agent: "" }, join(root, "units"));
   }
   override stop(agent: string, incarnation: number): UnitObservation {
     this.stops.push({ agent, incarnation }); this.onStop?.();
@@ -54,7 +59,7 @@ function fixture(t: TestContext) {
   const auth = (actor = "principal"): AuthContext => ({ actor, role: actor === "principal" ? "principal" : "resident",
     incarnation: actor === "principal" ? 0 : actor === "bob" ? 4 : 1, channel: "actor", capabilities: new Set(ALL_CAPS),
     peer: { pid: process.pid, uid: process.getuid!(), gid: process.getgid!(), cgroup: null } });
-  return { root, units, auth, get store() { return store; }, get control() { return new SocietyControl(store, units); },
+  return { root, units, auth, get store() { return store; }, get control() { return new SocietyControl(lifecycleLedger(store), units, { nextOperationId: generateOperationId }); },
     time(value: number) { now = value; }, reopen() { store.close(); store = new Store(path, 0, { society: "demo" }, () => now); } };
 }
 const code = (value: string) => (error: unknown) => error instanceof StoreError && error.code === value;
@@ -151,7 +156,7 @@ test("DR27/P0: corruption after acceptance remains an accepted failure and does 
 });
 
 test("DR27: closed society keeps queued and prepared mail without an automatic Principal or Resident turn", async t => {
-  const f = fixture(t); const mail = new MailModule({ stateRoot: f.root, society: "demo" }, f.store, 64, 24, { frameBytes: 1024 * 1024, batchMaxMessages: 24 });
+  const f = fixture(t); const mail = createMailModule({ stateRoot: f.root, society: "demo" }, f.store, 64, 24, { frameBytes: 1024 * 1024, batchMaxMessages: 24 });
   await mail.send(f.auth("alice"), "mail", { to: ["principal"], subject: "Keep this task", body: "unfinished", kind: "message" });
   const prepared = await mail.prepare(f.auth()); assert.ok(prepared);
   const batch = f.store.getBatch(prepared.id); const pending = f.store.pendingDeliveries("principal");
@@ -163,10 +168,10 @@ test("DR27: closed society keeps queued and prepared mail without an automatic P
 });
 
 test("DR27: reopen resumes enabled pending-mail Workers through reconciliation, never force-stopped Workers", async t => {
-  const f = fixture(t); const mail = new MailModule({ stateRoot: f.root, society: "demo" }, f.store, 64);
+  const f = fixture(t); const mail = createMailModule({ stateRoot: f.root, society: "demo" }, f.store, 64);
   const paths = { stateRoot: f.root, projectGit: join(f.root, "project.git"), society: "demo", hasGoal: () => true, activationAllowed: () => true };
-  const lifecycle = new LifecycleModule(f.store, f.units, paths, () => null, mail);
-  const reconcile = new ReconcileModule(f.store, mail, null, f.units, lifecycle, paths);
+  const lifecycle = createLifecycleModule(f.store, f.units, paths, () => null, mail);
+  const reconcile = createReconcileModule(f.store, mail, null, null, f.units, lifecycle, paths);
   await mail.send(f.auth(), "work", { to: ["alice", "bob"], subject: "Work", body: "Continue", kind: "message" });
   f.control.set(f.auth(), "closed", "close"); await reconcile.sweep();
   assert.deepEqual(f.units.starts, []);

@@ -1,3 +1,4 @@
+import { serializePlanIntent } from "../dist/test/fixtures/plan.js";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { DatabaseSync } from "node:sqlite";
@@ -5,11 +6,12 @@ import { randomUUID, createHash } from "node:crypto";
 import { readFileSync, existsSync, symlinkSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
 import { ledgerFixture, routeOperation, routeResult } from "./helpers/ledger-fixture.mjs";
-import { readDiagnosticSnapshot } from "../dist/src/store.js";
-import { inspectLedger } from "../dist/src/diagnostics/ledger.js";
-import { DIAGNOSTIC_READ_LIMITS } from "../dist/src/storage/diagnostic-snapshot.js";
-import { generateOperationId, generateMessageId, generateBatchId } from "../dist/src/ids.js";
-import { requestHash } from "../dist/src/hash.js";
+import { readDiagnosticSnapshot } from "@oma/storage";
+import { inspectLedger } from "#oma-test/app/diagnostics/ledger";
+import { DIAGNOSTIC_READ_LIMITS } from "@oma/storage/diagnostic-snapshot";
+import { generateOperationId, generateBatchId } from "@oma/native/identity";
+import { messageIdForOperation as generateMessageId } from "@oma/domain/derived";
+import { requestHash } from "@oma/domain/request-identity";
 const context = root => ({ stateRoot: root, society: "fixture" });
 const code = expected => error => error?.code === expected;
 const hash = path => createHash("sha256").update(readFileSync(path)).digest("hex");
@@ -20,7 +22,7 @@ function fullFixture(t) {
   const plan = { kind: "mail.send", message: { id: message, objectPath: `mail/objects/${message}.eml`, sha256: "a".repeat(64), bytes: 1, dateMs: Date.now(),
     to: ["alice"], recipients: ["alice"], kind: "message", contextRevision: null, replyHeaders: { replyTo: ["alice"], inReplyTo: null, references: [] } } };
   store.transaction(tx => {
-    tx.operations.insert({ id, actor: "alice", requestKey: "mail", requestHash: requestHash("mail.send", payload), kind: "mail.send", payloadJson: JSON.stringify(payload), planJson: JSON.stringify(plan) });
+    tx.operations.insert({ id, actor: "alice", requestKey: "mail", requestHash: requestHash("mail.send", payload), kind: "mail.send", payloadJson: JSON.stringify(payload), planJson: serializePlanIntent(plan) });
     tx.deliveries.insert([{ messageId: message, operationId: id, recipient: "alice" }]);
   });
   store.transaction(tx => { tx.deliveries.materialize(message, "alice"); tx.batches.prepare({ id: batch, agent: "alice", incarnation: 0, messageIds: [message], sessionPath: null }); tx.batches.link(batch, [message]); tx.subscriptions.follow("design", "alice"); });

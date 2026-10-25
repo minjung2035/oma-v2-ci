@@ -17,7 +17,7 @@ Linux에서 시험한 것(`test/platform-*.test.ts`, `test/sandbox-seccomp.test.
 
 | 영역 | 코드 | 조항 |
 |---|---|---|
-| host↔guest protocol, 연결, hello | `src/protocol/host-guest.ts`, `src/protocol/connection.ts`, `src/platform/rpc.ts`, `src/platform/product-text.ts` | MAC-210/211/230/231/241/250 |
+| host↔guest protocol, 연결, hello | `packages/protocol/src/host-guest.ts`, `packages/client/src/connection.ts`, `src/platform/rpc.ts`, `packages/domain/src/product-text.ts` | MAC-210/211/230/231/241/250 |
 | guest 연결 경계 | `platform/guest/bridge/oma-vsock-bridge.c`, `platform/guest/systemd/*`, `platform/guest/sysusers.d/oma.conf`, `src/platform/guest/server.ts` | MAC-202(CID와 `SO_PEERCRED`) |
 | guestctl | `src/platform/guest/control.ts`, `linux-system.ts`, `src/entry/guestctl.ts` | §4.4, MAC-320, MAC-620 |
 | 첫 설치 | `src/platform/guest/provision.ts`, `src/entry/guest-provision.ts`, `oma-provision.service` | MAC-303 |
@@ -25,9 +25,9 @@ Linux에서 시험한 것(`test/platform-*.test.ts`, `test/sandbox-seccomp.test.
 | egress | `src/platform/guest/egress.ts`, `src/platform/host/egress.ts`, `InferenceRelay.detached` | MAC-225, MAC-710..712 |
 | request 원장과 stream | `src/platform/guest/{requests,stream}.ts`, `src/platform/stream-source.ts`, `src/platform/stream-receive.ts` | MAC-240/241, §4.8, P0-7 등록 |
 | project identity와 sync | `src/platform/guest/project.ts`, `src/platform/host/{record,bookmark,bundle,project,project-sync}.ts`, `src/platform/host/personal-seed.ts` | §6, MAC-401/403/404, MAC-411/412, MAC-420 |
-| saved history 관측·모드 재개 | `src/protocol/{guest-history,host-history}.ts`, `src/platform/guest/histories.ts`, `src/platform/host/{guest-histories,personal-histories,session-gateway}.ts`, `src/runtime/host-history-channel.ts` | MODE-005/006, MAC-220..222/230/250 |
+| saved history 관측·모드 재개 | `packages/protocol/src/{guest-history,host-history}.ts`, `src/platform/guest/histories.ts`, `src/platform/host/{guest-histories,personal-histories,session-gateway}.ts`, `src/runtime/host-history-channel.ts` | MODE-005/006, MAC-220..222/230/250 |
 | host 수명과 조립 | `src/platform/host/{guest-link,lifecycle,service,record}.ts` | MAC-301, MAC-320, MAC-330, MAC-331, MAC-601 |
-| Host API와 Mac 명령 | `src/protocol/host-api.ts`, `src/platform/host/{host-api,peer,attach-client}.ts`, `src/entry/oma-mac.ts` | MAC-020/021/222/251 |
+| Host API와 Mac 명령 | `packages/protocol/src/host-api.ts`, `src/platform/host/{host-api,peer,attach-client}.ts`, `src/entry/oma-mac.ts` | MAC-020/021/222/251 |
 | credential | `src/platform/host/{keychain,resolver}.ts`, `resolveEngineAuth`의 선택 저장소 | MAC-701/702/704 |
 | image | `src/platform/host/image.ts`, `scripts/platform/sign-image.mjs` | MAC-601, MAC-611 |
 | VM helper 규약(Node 쪽) | `src/platform/host/vz-driver.ts` | §2.1, §9.1, §9.3, MAC-701/702(Keychain을 helper에게 묻는 channel) |
@@ -36,8 +36,8 @@ Linux에서 시험한 것(`test/platform-*.test.ts`, `test/sandbox-seccomp.test.
 | sandbox filter | `src/runtime/sandbox-seccomp.ts`, `src/sandbox.ts`의 `--seccomp 3`, `src/runtime/pi-adapter.ts`의 filter channel | MAC-205(D-5) |
 | guest의 provider 길 | `src/runtime/egress-forwarder.ts`, `platform/guest/environment.d/60-oma-egress.conf`, runner의 `openRelay` | MAC-710(D-10, D-4) |
 | 가져온 commit을 actor가 쓰는 길 | `src/runtime/provision.ts`의 `refreshProjectMirror`, `src/sandbox.ts`의 mirror mount | MAC-411(D-8) |
-| 로그인 | `src/tui/login.ts`, `oma login` | MAC-704(D-9) |
-| 제품 문구 | `src/tui/words.ts`, guest session의 `OMA_PRODUCT_TEXT` | MAC-022(D-1) |
+| 로그인 | `packages/tui/src/login.ts`, `oma login` | MAC-704(D-9) |
+| 제품 문구 | `packages/tui/src/words.ts`, guest session의 `OMA_PRODUCT_TEXT` | MAC-022(D-1) |
 
 **NOT_BUILT**(Mac에서만 빌드·시험한다): `platform/host/vmhelper`(Swift), `src/entry/omahostd.ts`와 `src/entry/oma-mac.ts`의 실제 실행.
 
@@ -190,7 +190,7 @@ TUI의 관측 규칙(TUI-011·TUI-012: unknown을 0으로 바꾸지 않는다, �
 다른 프로세스가 token을 읽을 수 있다는 점은 경계가 아니다(§3.4 A4). credential의 보호는 Keychain이 맡는다(MAC-701).
 
 **MUST [MAC-022]** guest의 `oma`가 화면에 쓰는 문구는 MAC-001을 지킨다. 지금 TUI의 오류 문구 가운데 host 경로나 errno 이름을 담는 곳은
-제품 문구와 코드로 바꾸고, 원문은 guest 로그에 남긴다. 오류의 말은 `src/tui/words.ts` 한 곳에서 읽는다. guest의 terminal session이
+제품 문구와 코드로 바꾸고, 원문은 guest 로그에 남긴다. 오류의 말은 `packages/tui/src/words.ts` 한 곳에서 읽는다. guest의 terminal session이
 `OMA_PRODUCT_TEXT=1`을 주고 프로그램의 stderr를 자기 것(journal)으로 둔다. Linux 배포본에서는 그 말이 사람 자신의 경로와 이름이므로 그대로
 보인다(D-1, DR18). 모델과 도구가 transcript에 쓰는 내용은 작업의 내용이며 이 조항 밖이다: guest의 작업공간 경로가 거기 보일 수 있다.
 (v2 후보: guest의 project를 Mac의 경로와 같은 곳에 두는 것. Lima와 Docker Desktop이 home을 같은 경로로 mount하는 방식이다.)
@@ -398,7 +398,7 @@ DR29 `/resume`: host Personal history는 `oma-host-history:` 참조(birth UUID·
 
 선택된 host 이력은 outgoing writer를 종료하기 전에 관측한다. outgoing engine의 실제 exit(ordinary quit의 bounded tenure grace와 구별), owned broker 반환 뒤 한 번의 strict `{next: "resume", history: <opaque reference>}`와 private EOF를 보낸다. holder는 child의 정상 실제 종료와 terminal drain도 확인한 뒤 exit를 내보낸다. host attach cleanup 뒤 Personal birth/header/cwd를 다시 확인하고 기존 Personal writer lock을 통해 재개한다. guest Society의 다른 saved history로 옮길 때도 host에 참조를 반환한다. guest execve는 private descriptor를 보존하지 않으므로 새 holder가 새 채널을 소유한다. 실패·손상·관측 불명확은 새 birth/resume 권한이 아니다. `/new`의 기존 선택창 의미와 Linux 직접 실행의 로컬 resume은 유지된다. native macOS 실행 증거는 아직 없다.
 
-DR28에서 이 전환은 guest protocol 3 / Host API 2로 도입됐다. DR29의 project binding·설정 관측 추가가 guest protocol을 4로 올렸고, `egress.placeholder`의 `hold` 필드(AV-15)가 5였다(MAC-250/251). `egress.connect`(DR34, UX-08)가 현재 **6**다. Host API는 **3**이다. 이전 guest의 `next` 없는 exit는 기존 종료 의미를 유지하고 새 전환으로 추정하지 않는다. Linux 직접 실행에는 이 holder descriptor가 없으므로 기존 execve 경로를 유지한다.
+DR28에서 이 전환은 guest protocol 3 / Host API 2로 도입됐다. DR29의 project binding·설정 관측 추가가 guest protocol을 4로 올렸고, `egress.placeholder`의 `hold` 필드(AV-15)가 5였다(MAC-250/251). `egress.connect`(DR34, UX-08)가 6을 도입했고 DR46의 현재 protocol은 **7**이다. Host API는 **3**이다. 현재 형식에서 `next` 없는 exit는 종료이며 새 전환으로 추정하지 않는다. 이전 guest protocol과의 상호 통신은 지원하지 않는다. Linux 직접 실행에는 이 holder descriptor가 없으므로 기존 execve 경로를 유지한다.
 
 **attach.** attach는 `resize`로 시작한다. holder는 이렇게 한다.
 
@@ -438,30 +438,30 @@ prompt·설정·확장은 terminal 안의 TUI가 한다. 그래서 prompt에는 
 - `quota`에 inference slot 필드는 없다 — 제거되었다. 동시성의 기준은 relay의 `concurrent: 4`이며, 이 판단은 guest의
   broker가 한다(MAC-713). host는 따르지 않는다.
 
-egress 연결의 첫 message(guest→host)는 둘 가운데 하나다.
+egress 연결의 첫 message(guest→host)는 다음 셋 가운데 하나다.
 
 ```
-egress.placeholder { v: 1, id, method: "egress.placeholder", params: { credentialRef, provider, model, run: { society, actor, incarnation }, hold: true } }
+egress.placeholder { v: 1, id, method: "egress.placeholder", params: { credentialRef, provider, model, run: { society, actor, incarnation }, inferenceSeconds } }
   → { v: 1, id, ok: true, result: { placeholderId, placeholder, provider, model } }   // 엔진을 띄우기 전, run마다 한 번. MAC-704
 
 egress.open { v: 1, id, method: "egress.open", params: { placeholderId, society, actor, incarnation, modelProfile } }
 
-egress.connect { v: 1, id, method: "egress.connect", params: { placeholderId, run: { society, actor, incarnation }, host, port, role, allow } }
-  → { v: 1, id, ok: true, result: {} }   // ok 뒤 같은 연결이 raw tunnel이 된다 (protocol 6, DR34)
+egress.connect { v: 1, id, method: "egress.connect", params: { placeholderId, run: { society, actor, incarnation }, host, port } }
+  → { v: 1, id, ok: true, result: {} }   // ok 뒤 같은 연결이 raw tunnel이 된다 (protocol 7, DR34/DR46)
 ```
 
-두 message는 요청 envelope를 쓴다(§4.2). guest 안의 client(runner, `oma`)는 guesthost의 egress socket(`$XDG_RUNTIME_DIR/oma-egress.sock`)에
+세 message는 요청 envelope를 쓴다(§4.2). guest 안의 client(runner, `oma`)는 guesthost의 egress socket(`$XDG_RUNTIME_DIR/oma-egress.sock`)에
 같은 message를 보내고, guesthost가 pool의 연결 하나에 그대로 옮긴다. host는 `egress.open`의 run(society, actor, incarnation)이 그
 자리표시자를 받은 run과 같을 때만 연결한다. guest의 엔진은 INF-006의 bridge로 provider를 등록하고, 그 provider 이름과 자리표시자는 `egress.placeholder`의 답이다(D-10).
-`egress.placeholder`는 작은 요청과 응답으로 끝난다. `hold: true`(protocol 5)이면 그 연결이 열린 채로 run의 lease가 된다 -- run이 끝나
-forwarder가 닫히면 lease도 닫히고, host는 그 끝을 run의 끝으로 읽는다. `hold`가 없으면(v4) 응답과 함께 연결이 닫히고 run은 다음
-`bootId`까지 산다. 엔진의 provider 설정에는 이 자리표시자가 들어간다(§7.4).
+`egress.placeholder`는 protocol 7에서 명시한 `inferenceSeconds`와 현재 run identity를 필수로 보낸다.
+성공한 연결은 항상 run의 열린 lease다. forwarder가 닫히면 lease도 닫히고 host는 그 끝을 run의
+끝으로 읽는다. 옛 optional `hold`와 host timeout 대체 형식은 받지 않는다(DR46).
 `egress.open` 뒤에는 엔진이 쓴 HTTP/1.1 byte가 그대로 흐르고, 응답 byte가 반대로 흐른다(INF-005). host의 Relay는 `placeholderId`로
 그 run의 자리표시자와 credential을 찾는다. 자리표시자는 run의 lease가 끊어지거나 `bootId`가 바뀌면 버린다. host 쪽 규칙은 §7.4에 있다.
 
-`egress.connect`(protocol 6, DR37)는 run의 CONNECT tunnel 하나를 연다. guest의 runner가 세운 per-delivery CONNECT proxy가
+`egress.connect`(현재 protocol 7, DR37/DR46)는 run의 CONNECT tunnel 하나를 연다. guest의 runner가 세운 per-delivery CONNECT proxy가
 Resident의 `HTTPS_PROXY` 요청을 받으면 이 message로 host에 다이얼을 청한다. host의 현재 네트워크 정책은 목적지·포트 제한 없이
-연결하는 것이다. 사설 주소와 literal도 연결한다. `role`/`allow`는 protocol 6 호환용 guest 선언이며 문법만 검사한다.
+연결하는 것이다. 사설 주소와 literal도 연결한다. `role`/`allow`는 제거한 이전 guest 선언으로, 현재 decoder가 거부한다.
 사용자가 승인한 host 정책이나 검증된 role의 증거로 사용하지 않는다. host가 발급한 자리표시자와 run의
 society·actor·incarnation 일치는 계속 검사한다. run이 낸 tunnel은 run과 함께 끝난다(`release`/`forgetBoot`).
 provider credential은 기존 relay에서 관리한다. CONNECT 대상이나 guest의 role 선언으로 credential 목적지를 변경하지 않는다.
@@ -516,7 +516,7 @@ Archive의 endpoint 부재는 stopped의 증거가 아니며 launcher의 명시�
 
 **MUST [MAC-250]** protocol 버전은 정수 하나다. 메시지 모양이나 뜻이 바뀌면 올린다. host는 두 버전을 모두 말한다. 하나는 자기가
 동봉한 image의 protocol이다. 다른 하나는 직전 image의 protocol이다. update가 실패해 직전 image로 되돌아가 부팅할 때 필요하다(§8.3의
-rollback). guest는 자기 버전 하나만 말한다. 메시지 schema의 원본은 `src/protocol/host-guest.ts`(순수 codec, K1)다. host와 guest가 모두
+rollback). guest는 자기 버전 하나만 말한다. 메시지 schema의 원본은 `packages/protocol/src/host-guest.ts`(순수 codec, K1)다. host와 guest가 모두
 Node이므로 양쪽은 같은 codec을 쓴다. Swift helper가 말하는 것은 VM 제어와 Keychain뿐이고 이 protocol을 말하지 않는다.
 
 **MUST [MAC-251]** Host API(`omahostd` ↔ OMA.app·`oma` 명령)도 정수 버전 하나를 가진다. host UI는 자기 버전과 직전 버전을 말한다.
@@ -1231,7 +1231,7 @@ admission(D04)만으로는 Mac이 가득 차는 것을 막지 못한다. Mac의 
 
 | 항목 | 바뀌는 규범 | 결정 |
 |---|---|---|
-| D-1 | TUI-* 문구 규칙 | 오류의 말은 `src/tui/words.ts` 한 곳에서 읽는다. guest의 terminal session 아래에서는 Linux 경로·unit 이름·errno 이름이 든 말을 오류 코드로 바꾸고 원문을 guest 로그에 남긴다(MAC-022). Linux에서는 사람 자신의 말이므로 그대로 보인다 |
+| D-1 | TUI-* 문구 규칙 | 오류의 말은 `packages/tui/src/words.ts` 한 곳에서 읽는다. guest의 terminal session 아래에서는 Linux 경로·unit 이름·errno 이름이 든 말을 오류 코드로 바꾸고 원문을 guest 로그에 남긴다(MAC-022). Linux에서는 사람 자신의 말이므로 그대로 보인다 |
 | D-4 | INF-001, INF-007, T116 | credential 저장소는 엔진의 agent 디렉터리가 아니라 host Keychain backend다. Principal의 엔진도 자리표시자와 relay를 쓴다(`openPrincipalEgress`) |
 | D-5 | SB-001 | sandbox baseline에 `AF_VSOCK` socket 금지 seccomp를 더했다(Linux 배포본에도. 해가 없고 vsock이 있는 host에서 필요하다) |
 | D-7 | WP10, `principal-delivery`, `broker-supervisor`, CLI transport | 경과 시간은 monotonic clock으로 잰다(MAC-650의 세 곳, 구현했다). Linux에도 같은 이유가 있다(시계 조정) |

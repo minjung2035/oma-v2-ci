@@ -6,10 +6,10 @@ import { once } from "node:events";
 import { mkdtempSync, readdirSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { startProcess, runProcess, spawnSandboxed, stopOwnedChild } from "../src/process/async.js";
-import { runProcessSync } from "../src/process/run.js";
-import { PreparationExecutor } from "../src/process/preparation.js";
-import type { CommandSpec } from "../src/process/command.js";
+import { startProcess, runProcess, spawnSandboxed, stopOwnedChild } from "@oma/process/async";
+import { runProcessSync } from "@oma/process/run";
+import { PreparationExecutor } from "@oma/process/preparation";
+import type { CommandSpec } from "@oma/process/command";
 
 // These are test budgets, not new production defaults or measured performance.
 function command(code: string, overrides: Partial<CommandSpec> = {}): CommandSpec {

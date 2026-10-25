@@ -3,9 +3,9 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { mkdtempSync, rmSync } from "node:fs";
 import { join } from "node:path";
-import { Client, ClientError } from "../src/client/index.js";
-import { installRuntime } from "../src/client/runtime.js";
-import { CLIENT_RUNTIME, installClientRuntime } from "../src/runtime/client-runtime.js";
+import { Client, ClientError } from "@oma/client";
+import { installRuntime } from "@oma/client/runtime";
+import { CLIENT_RUNTIME, installClientRuntime } from "#oma-test/app/runtime/client-runtime";
 
 const operation = "op-00000000-0000-4000-8000-000000000001";
 

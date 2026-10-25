@@ -1,3 +1,7 @@
+import * as sessionHandoffMeaning from "@oma/protocol/session-handoff";
+import * as hostErrorMeaning from "@oma/protocol/host-errors";
+import * as hostLossMeaning from "@oma/process/host-loss";
+import * as deploymentMeaning from "@oma/domain/deployment";
 /** Production Human lifecycle over controlled owners; no service, VM or provider. */
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -7,9 +11,9 @@ import { fileURLToPath } from 'node:url';
 import { Script } from 'node:vm';
 import ts from 'typescript';
 
-const code = ts.transpileModule(readFileSync(process.env.OMA_PERSONAL_HOST_SOURCE ?? 'src/entry/personal-host.ts', 'utf8'), {
+const code = ts.transpileModule(readFileSync(process.env.OMA_PERSONAL_HOST_SOURCE ?? 'apps/oma/src/entry/personal-host.ts', 'utf8'), {
   compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
-}).outputText.replaceAll('import.meta.url', '"file:///fixture/dist/src/entry/personal-host.js"');
+}).outputText.replaceAll('import.meta.url', '"file:///fixture/apps/oma/dist/entry/personal-host.js"');
 class StoreError extends Error { constructor(code, message) { super(message); this.code = code; } }
 const flush = async () => { for (let i = 0; i < 20; i++) await Promise.resolve(); };
 const plain = value => JSON.parse(JSON.stringify(value));
@@ -24,6 +28,11 @@ function world({ platform = 'linux', saved = false, config = true, snapshot = {}
     ...(exec ? { execve(...args) { effects.push(['exec']); replacements.push(args); } } : {}),
   };
   const dependencies = {
+"@oma/protocol/session-handoff": sessionHandoffMeaning,
+"@oma/protocol/host-errors": hostErrorMeaning,
+"@oma/process/host-loss": hostLossMeaning,
+"@oma/domain/deployment": deploymentMeaning,
+
     'node:fs': {
       realpathSync(cwd) { effects.push(['realpath', cwd]); return realCwd ?? cwd; },
       lstatSync(file) {
@@ -32,9 +41,9 @@ function world({ platform = 'linux', saved = false, config = true, snapshot = {}
       },
     },
     'node:path': path, 'node:url': { fileURLToPath },
-    '../config/defaults.js': { defaultSocietyFor(cwd) { effects.push(['project', cwd]); return 'fixture-project'; } },
-    '../hash.js': { sha256Hex: () => 'fixture-hash' }, '../domain/errors.js': { StoreError },
-    '../domain/deployment.js': { DEPLOYMENT_LAYOUT: { entries: { tui: 'dist/src/entry/oma.js' } } },
+    "@oma/config/defaults": { defaultSocietyFor(cwd) { effects.push(['project', cwd]); return 'fixture-project'; } },
+    '@oma/domain/canonical-json': { sha256Hex: () => 'fixture-hash' }, '@oma/domain/errors': { StoreError },
+    '@oma/domain/deployment': { DEPLOYMENT_LAYOUT: { entries: { tui: 'apps/oma/dist/entry/oma.js' } } },
     '../runtime/session-catalog.js': { RESUME_SESSION_ENV: 'OMA_RESUME_SESSION', async sessionBirthForHistory(_data, file, cwd) {
       effects.push(['catalogue', file, cwd]); if (birthError) throw birthError;
       return file === '/next/history.jsonl' ? nextBirth : birth;
@@ -53,7 +62,7 @@ function world({ platform = 'linux', saved = false, config = true, snapshot = {}
       effects.push(['mac-seed', cwd]); if (configError) throw configError;
       return ['extensions/mac.js'];
     } },
-    '../protocol/guest-history.js': { isGuestHistoryReference: value => value.startsWith('oma-guest-history:') },
+    '@oma/protocol/guest-history': { isGuestHistoryReference: value => value.startsWith('oma-guest-history:') },
     '../platform/host/guest-histories.js': { async inspectMacGuestHistory() { effects.push(['guest-history']); } },
     '../application/settings.js': {
       projectSettingsPath: () => '/fixture/project-config.json',
@@ -63,7 +72,12 @@ function world({ platform = 'linux', saved = false, config = true, snapshot = {}
   };
   const module = { exports: {} };
   new Script(code).runInNewContext({ module, exports: module.exports, process, URL,
-    require(name) { assert.ok(Object.hasOwn(dependencies, name), `Personal host must not load ${name}`); return dependencies[name]; } });
+    require(name) {
+if (name === "@oma/protocol/session-handoff" && !Object.hasOwn(dependencies, name)) return sessionHandoffMeaning;
+if (name === "@oma/protocol/host-errors" && !Object.hasOwn(dependencies, name)) return hostErrorMeaning;
+if (name === "@oma/process/host-loss" && !Object.hasOwn(dependencies, name)) return hostLossMeaning;
+if (name === "@oma/domain/deployment" && !Object.hasOwn(dependencies, name)) return deploymentMeaning;
+ assert.ok(Object.hasOwn(dependencies, name), `Personal host must not load ${name}`); return dependencies[name]; } });
   return { ...module.exports, effects, seeds, launches, replacements, process };
 }
 for (const platform of ['linux', 'darwin']) {
@@ -133,7 +147,7 @@ for (const [label, next, target] of [['new', {}, undefined], ['Personal resume',
     assert.ok(w.effects.findIndex(item => item[0] === 'engine-return') < w.effects.findIndex(item => item[0] === 'exec'));
     const [executable, argv, env] = w.replacements[0];
     assert.equal(executable, '/fixture/node');
-    assert.deepEqual(Array.from(argv), ['/fixture/node', '--fixture-node-arg', '/fixture/dist/src/entry/oma.js',
+    assert.deepEqual(Array.from(argv), ['/fixture/node', '--fixture-node-arg', '/fixture/apps/oma/dist/entry/oma.js',
       ...(label === 'new' ? ['--mode', 'personal'] : [])]);
     assert.equal(env.OMA_RESUME_SESSION, next.session); assert.equal(env.OMA_HOST_HOME, '/fixture/data');
     assert.deepEqual(w.effects.filter(item => item[0] === 'chdir'), target?.mode === 'personal' ? [['chdir', target.cwd]] : []);
@@ -144,7 +158,7 @@ for (const platform of ['linux', 'darwin']) test(`Personal host ${platform}: mod
   assert.equal(w.replacements.length, 0);
   finish({ code: 0, next: { mode: 'society' } }); await pending;
   const [, argv, env] = w.replacements[0];
-  assert.deepEqual(Array.from(argv), ['/fixture/node', '--fixture-node-arg', '/fixture/dist/src/entry/oma.js', '--mode', 'society']);
+  assert.deepEqual(Array.from(argv), ['/fixture/node', '--fixture-node-arg', '/fixture/apps/oma/dist/entry/oma.js', '--mode', 'society']);
   assert.equal(env.OMA_RESUME_SESSION, undefined);
   assert.deepEqual(w.effects.filter(item => item[0] === 'chdir'), [['chdir', options.cwd]]);
 });
@@ -157,7 +171,7 @@ test('Personal host: /society re-enters as a fresh `oma --society` birth after t
   assert.deepEqual(w.effects.filter(item => item[0] === 'chdir'), [['chdir', '/fixture/project']]);
   const [executable, argv, env] = w.replacements[0];
   assert.equal(executable, '/fixture/node');
-  assert.deepEqual(Array.from(argv), ['/fixture/node', '--fixture-node-arg', '/fixture/dist/src/entry/oma.js', '--society', 'fixture-project']);
+  assert.deepEqual(Array.from(argv), ['/fixture/node', '--fixture-node-arg', '/fixture/apps/oma/dist/entry/oma.js', '--society', 'fixture-project']);
   assert.equal(env.OMA_RESUME_SESSION, undefined, 'a fresh Society birth is never a resume');
 });
 test('Personal host: /society names only this project\'s own Society', async () => {

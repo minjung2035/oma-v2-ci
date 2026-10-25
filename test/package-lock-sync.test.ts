@@ -12,7 +12,7 @@ import { fileURLToPath } from "node:url";
 import { join } from "node:path";
 
 const root = fileURLToPath(new URL("../../", import.meta.url));
-interface LockEntry { version?: string; dev?: boolean; dependencies?: Record<string, string>; optionalDependencies?: Record<string, string> }
+interface LockEntry { version?: string; dev?: boolean; link?: boolean; resolved?: string; dependencies?: Record<string, string>; optionalDependencies?: Record<string, string> }
 
 test("V31B: every declared dependency is locked as the same kind, and its production closure is not marked dev", () => {
   const manifest = JSON.parse(readFileSync(join(root, "package.json"), "utf8")) as { dependencies: Record<string, string>; devDependencies: Record<string, string> };
@@ -34,6 +34,12 @@ test("V31B: every declared dependency is locked as the same kind, and its produc
     seen.add(key);
     const entry = lock.packages[key]!;
     assert.notEqual(entry.dev, true, `${key} is in the production closure but locked as dev`);
+    // A workspace link owns no dependency list; follow its actual locked target.
+    if (entry.link) {
+      assert.ok(entry.resolved && lock.packages[entry.resolved], `${key} has no locked workspace target`);
+      visit(entry.resolved);
+      return;
+    }
     for (const name of Object.keys(entry.dependencies ?? {})) {
       const placed = place(name, key);
       assert.ok(placed, `${key} depends on ${name}, which the lockfile does not place`);

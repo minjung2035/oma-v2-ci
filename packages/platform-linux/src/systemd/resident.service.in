@@ -1,0 +1,32 @@
+# MUST [UNIT-001..004], DR46-F01: accepted role and model references are frozen.
+# Model contents are read from that reference at activation.
+# D03: the launch location is the broker's resolved one. The product runs the
+# broker itself, so there is no fixed broker unit to bind this unit to.
+[Unit]
+Description=OMA @SOCIETY@ resident @AGENT@
+# P0V-59: the state tree this unit belongs to; systemd ignores X- keys.
+X-OMA-Owner=@STATE@
+StartLimitIntervalSec=60s
+StartLimitBurst=5
+[Service]
+# DR37: disable the manager's finite DefaultTasksMax as well as OMA caps.
+TasksMax=infinity
+Type=exec
+Environment=OMA_PROFILE_HEX=@PROFILE_HEX@
+Environment=OMA_MODEL_PROFILE_HEX=@MODEL_PROFILE_HEX@
+# D23/TSP-005: the deployment's encoded Resident tool-surface plan, hex like
+# the profile and model reference. The runner decodes it once into the profile it
+# hands the spawn plan; the surface is never authored role configuration.
+Environment=OMA_TOOL_SURFACE_HEX=@TOOL_SURFACE_HEX@
+ExecStart=@NODE@ @LIBDIR@/apps/oma/dist/entry/runner.js --society @SOCIETY@ --agent @AGENT@ --config @CONFIG_ARG@ --state-root @STATE_ARG@ --run-root @RUN_ARG@
+Restart=on-failure
+# DR27: bound crash pressure without bypassing the five-start/60s breaker.
+RestartSec=3s
+RestartSteps=4
+RestartMaxDelaySec=12s
+KillMode=control-group
+TimeoutStopSec=10s
+OOMPolicy=kill
+UMask=0077
+StandardOutput=journal
+StandardError=journal

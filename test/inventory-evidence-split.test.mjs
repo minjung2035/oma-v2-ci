@@ -10,12 +10,16 @@ function fixture(t) {
   const root = mkdtempSync(join(tmpdir(), "oma-loc-evidence-"));
   t.after(() => rmSync(root, { recursive: true, force: true }));
   const put = (path, bytes) => { mkdirSync(dirname(join(root, path)), { recursive: true }); writeFileSync(join(root, path), bytes); };
-  const schemas = ['schema-v1.sql', 'schema-v2.sql', 'schema-v3.sql', 'schema-v1-to-v2.sql', 'schema-v2-to-v3.sql'];
-  put('production-manifest.json', JSON.stringify(['src', 'implementation/contracts.ts', 'implementation/systemd', ...schemas.map(name => `implementation/${name}`)]));
-  put('src/entry.ts', 'export const value = 1;\n');
-  put('implementation/contracts.ts', 'export {};\n');
-  for (const schema of schemas) put(`implementation/${schema}`, 'SELECT 1;\n');
-  put('implementation/systemd/resident.service.in', '[Service]\nExecStart=/bin/true\n');
+  const schemas = ['schema-v4.sql'];
+  put('production-manifest.json', JSON.stringify(['apps/oma/src', 'apps/oma/package.json', 'packages/contracts/src', 'packages/contracts/package.json', 'packages/storage/src', 'packages/storage/package.json', 'packages/platform-linux/src', 'packages/platform-linux/package.json']));
+  put('apps/oma/package.json', '{}\n');
+  put('apps/oma/src/entry.ts', 'export const value = 1;\n');
+  put('packages/contracts/src/index.ts', 'export {};\n');
+  put('packages/contracts/package.json', '{}\n');
+  put('packages/platform-linux/package.json', '{}');
+  put('packages/storage/package.json', '{}\n');
+  for (const schema of schemas) put(`packages/storage/src/${schema}`, 'SELECT 1;\n');
+  put('packages/platform-linux/src/systemd/resident.service.in', '[Service]\nExecStart=/bin/true\n');
   put('implementation/cloc-systemd.lang', readFileSync(new URL('../implementation/cloc-systemd.lang', import.meta.url)));
   for (const name of ['loc.mjs', 'production-inventory.mjs']) put(`scripts/${name}`, readFileSync(new URL(`../scripts/${name}`, import.meta.url)));
   const files = writeProductionInventory(root);
@@ -34,7 +38,7 @@ test('K63: check:inventory binds source bytes with no cloc and no LOC/report fil
   assert.equal(JSON.parse(checked.stdout).loc, 'CI_ARTIFACT_ONLY');
   f.put('production-loc.json', 'not a LOC report');
   assert.equal(f.cli('production-inventory.mjs', [], true).status, 0);
-  f.put('src/entry.ts', 'export const value = 2;\n');
+  f.put('apps/oma/src/entry.ts', 'export const value = 2;\n');
   assert.throws(() => assertSourceDigests(f.root), /stale production source digests/);
   assert.equal(f.cli('production-inventory.mjs', [], true).status, 1);
   assert.equal(f.cli('loc.mjs', ['--inventory-only'], true).status, 0);
@@ -74,7 +78,7 @@ test('K63: CI measures into an artifact directory without rewriting committed so
   const repeated = f.cli('loc.mjs', ['--out', output]);
   assert.equal(repeated.status, 0, repeated.stderr);
   assert.equal(readFileSync(join(output, 'production-loc.json'), 'utf8'), reportBefore, 'measurement noise must not change artifact identity');
-  f.put('src/entry.ts', 'export const changed = 2;\n');
+  f.put('apps/oma/src/entry.ts', 'export const changed = 2;\n');
   assert.equal(f.cli('loc.mjs', ['--out', output]).status, 1, 'a CI generator must not bless stale committed digests');
   assert.equal(readFileSync(join(f.root, 'production-loc-hashes.json'), 'utf8'), snapshot[1]);
 });
@@ -84,23 +88,23 @@ test('K63: non-code inventory files are classified by cloc verdict, never silent
   // Vendored-payload style members cloc cannot count -- no recognized
   // language, no bytes. The report must carry them under nonCode with
   // cloc's own verdict, not drop them (LOC-001..007 accounting).
-  f.put('src/vendored/LICENSE', 'MIT License\n\nPermission is hereby granted, free of charge.\n');
-  f.put('src/empty.ts', '');
+  f.put('apps/oma/src/vendored/LICENSE', 'MIT License\n\nPermission is hereby granted, free of charge.\n');
+  f.put('apps/oma/src/empty.ts', '');
   // A .txt counts as cloc's Text language -- the classification is cloc's
   // decline set, not a file-kind guess, so this one stays a code row.
-  f.put('src/vendored/NOTICE.txt', 'This product includes third-party software.\n');
+  f.put('apps/oma/src/vendored/NOTICE.txt', 'This product includes third-party software.\n');
   const files = writeProductionInventory(f.root);
   writeSourceDigests(f.root, files);
   const output = join(f.root, 'evidence');
   const run = f.cli('loc.mjs', ['--out', output]);
   assert.equal(run.status, 0, run.stderr);
   const report = JSON.parse(readFileSync(join(output, 'production-loc.json'), 'utf8'));
-  assert.equal(report['src/vendored/LICENSE'], undefined, 'no fabricated code row for an uncountable file');
-  assert.equal(report['src/empty.ts'], undefined);
-  assert.equal(report.nonCode['src/vendored/LICENSE'], 'language unknown (#3)');
-  assert.equal(report.nonCode['src/empty.ts'], 'zero sized file');
-  assert.equal(report['src/vendored/NOTICE.txt'].language, 'Text', 'a text file stays counted');
-  assert.equal(report.nonCode['src/vendored/NOTICE.txt'], undefined);
+  assert.equal(report['apps/oma/src/vendored/LICENSE'], undefined, 'no fabricated code row for an uncountable file');
+  assert.equal(report['apps/oma/src/empty.ts'], undefined);
+  assert.equal(report.nonCode['apps/oma/src/vendored/LICENSE'], 'language unknown (#3)');
+  assert.equal(report.nonCode['apps/oma/src/empty.ts'], 'zero sized file');
+  assert.equal(report['apps/oma/src/vendored/NOTICE.txt'].language, 'Text', 'a text file stays counted');
+  assert.equal(report.nonCode['apps/oma/src/vendored/NOTICE.txt'], undefined);
   assert.equal(assertMeasurementCurrent(f.root, files, { evidenceRoot: output }).status, 'SOURCE_BOUND');
   const hashes = JSON.parse(readFileSync(join(output, 'production-measurement-hashes.json'), 'utf8'));
   assert.equal(hashes.files.length, files.length, 'the byte binding still covers the classified files');
@@ -110,13 +114,13 @@ test('K63: non-code inventory files are classified by cloc verdict, never silent
   // a file is refused wherever it appears.
   const { clocCoverage } = await import('../scripts/production-inventory.mjs');
   const dropped = JSON.parse(JSON.stringify(report));
-  delete dropped.nonCode['src/vendored/LICENSE'];
-  assert.throws(() => clocCoverage(dropped, files), /cloc omitted or misclassified src\/vendored\/LICENSE/);
+  delete dropped.nonCode['apps/oma/src/vendored/LICENSE'];
+  assert.throws(() => clocCoverage(dropped, files), /cloc omitted or misclassified apps\/oma\/src\/vendored\/LICENSE/);
   const bogus = JSON.parse(JSON.stringify(report));
-  bogus.nonCode['src/vendored/LICENSE'] = 'not a non-code verdict';
+  bogus.nonCode['apps/oma/src/vendored/LICENSE'] = 'not a non-code verdict';
   assert.throws(() => clocCoverage(bogus, files), /not a recognized non-code reason/);
   const bothCounted = JSON.parse(JSON.stringify(report));
-  bothCounted['src/vendored/LICENSE'] = { code: 1, blank: 0, comment: 0 };
+  bothCounted['apps/oma/src/vendored/LICENSE'] = { code: 1, blank: 0, comment: 0 };
   assert.throws(() => clocCoverage(bothCounted, files), /both counts and classifies/);
   // And the gate wraps the same rule: recorded evidence that dropped a
   // file from both halves does not pass as covering the inventory.

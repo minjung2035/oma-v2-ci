@@ -1,0 +1,61 @@
+{
+  "name": "@oma/process",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "license": "UNLICENSED",
+  "files": [
+    "dist"
+  ],
+  "exports": {
+    "./async": {
+      "types": "./dist/async.d.ts",
+      "default": "./dist/async.js"
+    },
+    "./command": {
+      "types": "./dist/command.d.ts",
+      "default": "./dist/command.js"
+    },
+    "./deadline": {
+      "types": "./dist/deadline.d.ts",
+      "default": "./dist/deadline.js"
+    },
+    "./fence": {
+      "types": "./dist/fence.d.ts",
+      "default": "./dist/fence.js"
+    },
+    "./host-loss": {
+      "types": "./dist/host-loss.d.ts",
+      "default": "./dist/host-loss.js"
+    },
+    "./policies": {
+      "types": "./dist/policies.d.ts",
+      "default": "./dist/policies.js"
+    },
+    "./preparation": {
+      "types": "./dist/preparation.d.ts",
+      "default": "./dist/preparation.js"
+    },
+    "./run": {
+      "types": "./dist/run.d.ts",
+      "default": "./dist/run.js"
+    },
+    "./writer": {
+      "types": "./dist/writer.d.ts",
+      "default": "./dist/writer.js"
+    }
+  },
+  "scripts": {
+    "build": "node ../../scripts/build-workspaces.mjs @oma/process",
+    "typecheck": "npm run build",
+    "test": "node --test test/*.test.mjs"
+  },
+  "dependencies": {
+    "@oma/domain": "0.1.0",
+    "@oma/native": "0.1.0"
+  },
+  "devDependencies": {
+    "@types/node": "^26.0.0",
+    "typescript": "5.9.3"
+  }
+}

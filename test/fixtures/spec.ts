@@ -1,25 +1,19 @@
 // TEST-002: shape-valid fixtures, not complete HostConfig, live authority or installed runtime.
 // resolvedSpecCheck validates this shape; a real Store/Mail fixture must also round-trip it.
 // Corruption belongs in corruption.ts, after a validated positive control.
-import { CAPABILITIES, type Capability } from "../../src/domain/capabilities.js";
-import { resolvedSpecDigest } from "../../src/domain/spec-identity.js";
-import { resolvedSpecCheck } from "../../src/durable.js";
-import type { ResolvedAgentSpec } from "../../implementation/contracts.js";
-import type { NewAgent } from "../../src/store.js";
+import { CAPABILITIES, type Capability } from "@oma/domain/capabilities";
+import { resolvedSpecDigest } from "@oma/domain/spec-identity";
+import { resolvedSpecCheck } from "@oma/domain/durable";
+import type { ResolvedAgentSpec } from "@oma/contracts";
+import type { NewAgent } from "@oma/contracts/ledger";
 
 export const ALL_CAPS: readonly Capability[] = CAPABILITIES;
-/** Explicit test reference values, never production resource defaults. */
-export const TEST_RESOURCES = Object.freeze({
-  memoryBytes: 3221225472, tasks: 128, cpuQuotaPercent: 200, tmpBytes: 1048576,
-  workspaceBytes: 1048576, stagingBytes: 1048576, checkTimeoutSeconds: 30,
-});
-
 export function makeValidResolvedSpec(
   name = "alice", profile = "p", capabilities: readonly Capability[] = ALL_CAPS,
   from = "0000000000000000000000000000000000000000", brief = "test",
 ): ResolvedAgentSpec {
   const spec: ResolvedAgentSpec = {
-    name, modelProfile: "md", resources: { ...TEST_RESOURCES }, from, brief, profile,
+    name, modelProfile: "md", from, brief, profile,
     capabilities: [...capabilities],
   };
   const invalid = resolvedSpecCheck(spec);

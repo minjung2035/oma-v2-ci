@@ -4,8 +4,8 @@ import { createHash } from "node:crypto";
 import { linkSync, mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { readContextEntry, assertContextDirectory } from "../src/storage/context-files.js";
-import { StoreError } from "../src/domain/errors.js";
+import { readContextEntry, assertContextDirectory } from "@oma/storage/context-files";
+import { StoreError } from "@oma/domain/errors";
 
 const isCorrupt = (error: unknown): boolean => error instanceof StoreError && error.code === "STORE_CORRUPT";
 const hash = (bytes: Uint8Array): string => createHash("sha256").update(bytes).digest("hex");

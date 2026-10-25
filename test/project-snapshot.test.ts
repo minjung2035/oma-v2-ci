@@ -5,13 +5,13 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import childProcess, { spawnSync } from "node:child_process";
 import { syncBuiltinESMExports } from "node:module";
-import { withProjectSnapshot } from "../src/git/project-snapshot.js";
-import { StoreError } from "../src/domain/errors.js";
-import { SnapshotReader, copySnapshotFile } from "../src/storage/snapshot-reader.js";
-import { GIT_ENV } from "../src/process/policies.js";
-import { prepareProjectDirectory } from "../src/storage/project-preparation.js";
-import { prepareHostProjectDirectory } from "../src/platform/host/files.js";
-import { MacGit } from "../src/platform/host/project.js";
+import { withProjectSnapshot } from "@oma/git/project-snapshot";
+import { StoreError } from "@oma/domain/errors";
+import { SnapshotReader, copySnapshotFile } from "@oma/native/snapshot-reader";
+import { GIT_ENV } from "@oma/process/policies";
+import { prepareProjectDirectory } from "@oma/git/linux-project-preparation";
+import { prepareHostProjectDirectory } from "@oma/platform-mac/files";
+import { MacGit } from "@oma/git/host-project";
 
 function fixture(t: import("node:test").TestContext, format: "sha1" | "sha256" = "sha1") {
   const root = mkdtempSync(join(tmpdir(), "oma-snapshot-"));
@@ -131,7 +131,7 @@ test("DR27: the Mac's initial bundle carries the same dirty snapshot without a s
   const f = fixture(t); writeFileSync(join(f.project, "tracked"), "Mac work in progress\n");
   const index = readFileSync(join(f.project, ".git", "index"));
   const out = join(f.root, "snapshot.bundle");
-  const result = await new MacGit("/usr/bin/git").bundle(f.project, "main", null, out);
+  const result = await new MacGit("/usr/bin/git", prepareHostProjectDirectory).bundle(f.project, "main", null, out);
   assert.notEqual(result.head, f.parent);
   assert.equal(f.run("rev-parse", "HEAD"), f.parent);
   assert.deepEqual(readFileSync(join(f.project, ".git", "index")), index);

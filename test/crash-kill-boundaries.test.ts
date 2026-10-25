@@ -13,21 +13,23 @@ import { spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type { PreparedBatch } from "../implementation/contracts.js";
-import { loadConfiguration, loadConfigurationSnapshot, validateConfig, type ConfigurationSnapshot } from "../src/config.js";
-import { collectManagedGenerations, commitInlineConfiguration } from "../src/config/generations.js";
-import { applyField, commitManagedEdit, readSettings, INITIAL_WORKERS } from "../src/application/settings.js";
-import { replaceDerivedFile, type DurabilityFault } from "../src/storage/durable-fs.js";
-import { publishImmutableFile } from "../src/storage/immutable-file.js";
-import { PI_ADAPTER_REVISION, deliveryDecision, observeDeliveryReceipt, publishDeliveryReceipt, readDeliveryReceipt, type DeliveryBoundary } from "../src/storage/delivery-receipt.js";
-import { runnerReceiptPathAt, runnerSessionDirPathAt } from "../src/storage/paths.js";
-import { generateBatchId, generateOperationId } from "../src/ids.js";
-import { messageIdForOperation } from "../src/domain/derived.js";
+import type { PreparedBatch } from "@oma/contracts";
+import { loadConfiguration, loadConfigurationSnapshot, validateConfig, type ConfigurationSnapshot } from "@oma/config";
+import { collectManagedGenerations, commitInlineConfiguration, commitManagedGeneration, managedGenerationOf } from "@oma/config/generations";
+import { applyField, commitManagedEdit, readSettings, INITIAL_WORKERS } from "#oma-test/app/application/settings";
+import { replaceDerivedFile, type DurabilityFault } from "@oma/storage/durable-fs";
+import { publishImmutableFile } from "@oma/storage/immutable-file";
+import { PI_ADAPTER_REVISION } from "@oma/protocol/delivery-boundary";
+import { deliveryDecision, observeDeliveryReceipt, publishDeliveryReceipt, readDeliveryReceipt } from "@oma/storage/delivery-receipt";
+import { type DeliveryBoundary } from "@oma/contracts";
+import { runnerReceiptPathAt, runnerSessionDirPathAt } from "@oma/domain/paths";
+import { generateBatchId, generateOperationId } from "@oma/native/identity";
+import { messageIdForOperation } from "@oma/domain/derived";
 import { createCompleteConfigurationFixture } from "./fixtures/configuration.js";
 import { TEST_VIEW_LIMITS } from "./fixtures/limits.js";
 
 const TIMEOUT = { timeout: 300_000 };
-const moduleUrl = (path: string): string => new URL(path, import.meta.url).href;
+const moduleUrl = (specifier: string): string => import.meta.resolve(specifier);
 
 /** Runs `body` in a child that is SIGKILLed at its `crash`-th durability
  * point; `body` receives the observer as `faults`. */
@@ -66,14 +68,16 @@ test("V13A / P0-7: a managed commit SIGKILLed at any durability point leaves the
   } finally { probe.close(); }
   const published = points.findIndex(point => point.point === "derived-rename" && point.phase === "after-visible" && point.path.endsWith("/operations/config.json"));
   assert.ok(points.length >= 10 && published > 0, `durability points: ${points.length}, manifest at ${published}`);
+  assert.ok(points.some(point => point.path.endsWith("/committed-v2") && point.point === "file-fsync" && point.phase === "after-visible"),
+    "the current journal flush must participate in actual kill injection");
   for (let crash = 0; crash < points.length; crash++) {
     const f = createCompleteConfigurationFixture();
     try {
       const before = loadConfigurationSnapshot(f.path);
       const oldRevision = before.config.integration.policyRevision;
       const run = killedAt(crash, `
-        const { loadConfigurationSnapshot, validateConfig } = await import(${JSON.stringify(moduleUrl("../src/config.js"))});
-        const { commitManagedEdit } = await import(${JSON.stringify(moduleUrl("../src/application/settings.js"))});
+        const { loadConfigurationSnapshot, validateConfig } = await import(${JSON.stringify(import.meta.resolve("@oma/config"))});
+        const { commitManagedEdit } = await import(${JSON.stringify(moduleUrl("#oma-test/app/application/settings"))});
         const snapshot = loadConfigurationSnapshot(${JSON.stringify(f.path)});
         const principal = snapshot.config.agentProfiles.principal;
         const next = validateConfig({ ...snapshot.config, agentProfiles: { ...snapshot.config.agentProfiles, principal: { ...principal, modelProfile: "review" } } });
@@ -93,6 +97,58 @@ test("V13A / P0-7: a managed commit SIGKILLed at any durability point leaves the
   }
 });
 
+test("DR46 / P0-7: SIGKILL in a short journal append preserves the manifest and exact candidate retry", TIMEOUT, () => {
+  for (const cut of [1, 66, 133, 134]) {
+    const f = createCompleteConfigurationFixture();
+    try {
+      for (const logBytes of [5, 6]) {
+        const snapshot = loadConfigurationSnapshot(f.path);
+        commitManagedGeneration(snapshot, { config: validateConfig({ ...snapshot.config,
+          limits: { ...snapshot.config.limits, logBytes },
+          integration: { ...snapshot.config.integration, policyRevision: `journal-${logBytes}` } }) });
+      }
+      const snapshot = loadConfigurationSnapshot(f.path);
+      const previous = managedGenerationOf(snapshot)!;
+      const candidate = validateConfig({ ...snapshot.config, limits: { ...snapshot.config.limits, logBytes: 7 },
+        integration: { ...snapshot.config.integration, policyRevision: "journal-next" } });
+      const journal = join(f.output, ".oma-config", "committed-v2");
+      const manifestBytes = readFileSync(f.path), journalBytes = readFileSync(journal);
+      const run = spawnSync(process.execPath, ["--input-type=module", "-e", `
+        import fs from "node:fs";
+        import { syncBuiltinESMExports } from "node:module";
+        import { loadConfigurationSnapshot, validateConfig } from ${JSON.stringify(import.meta.resolve("@oma/config"))};
+        import { commitManagedGeneration } from ${JSON.stringify(import.meta.resolve("@oma/config/generations"))};
+        const raw = fs.writeSync; let written = 0;
+        fs.writeSync = function (...args) {
+          const target = fs.readlinkSync("/proc/self/fd/" + args[0]) === ${JSON.stringify(journal)};
+          if (target) args[3] = 1;
+          const count = Reflect.apply(raw, fs, args);
+          if (target && (written += count) >= ${cut}) process.kill(process.pid, "SIGKILL");
+          return count;
+        };
+        syncBuiltinESMExports();
+        commitManagedGeneration(loadConfigurationSnapshot(${JSON.stringify(f.path)}), {
+          config: validateConfig(${JSON.stringify(candidate)}) });
+      `], { encoding: "utf8", timeout: 60_000 });
+      assert.equal(run.signal, "SIGKILL", `${cut}: ${run.stderr}`);
+      assert.deepEqual(readFileSync(f.path), manifestBytes, `manifest changed after ${cut} journal bytes`);
+      const partial = readFileSync(journal);
+      assert.deepEqual(partial.subarray(0, journalBytes.length), journalBytes);
+      assert.equal(partial.length, journalBytes.length + cut);
+      const reopened = loadConfigurationSnapshot(f.path);
+      assert.equal(managedGenerationOf(reopened), previous);
+      const committed = commitManagedGeneration(reopened, { config: candidate });
+      assert.equal(committed.kind, "committed");
+      const after = loadConfigurationSnapshot(f.path);
+      assert.deepEqual(after.config, candidate);
+      assert.equal(managedGenerationOf(after), committed.generation);
+      collectManagedGenerations(after);
+      assert.deepEqual(new Set(readdirSync(join(f.output, ".oma-config", "generations"))),
+        new Set([previous, committed.generation]), "retry retains the actual rollback predecessor");
+    } finally { f.close(); }
+  }
+});
+
 test("DR12 / P0-7: an inline commit SIGKILLed at any durability point leaves the old file or one the loader loads", TIMEOUT, () => {
   const probe = createCompleteConfigurationFixture();
   const points: DurabilityFault[] = [];
@@ -108,9 +164,9 @@ test("DR12 / P0-7: an inline commit SIGKILLed at any durability point leaves the
     const f = createCompleteConfigurationFixture();
     try {
       const run = killedAt(crash, `
-        const { validateConfig } = await import(${JSON.stringify(moduleUrl("../src/config.js"))});
-        const { commitInlineConfiguration } = await import(${JSON.stringify(moduleUrl("../src/config/generations.js"))});
-        const { applyField, readSettings, INITIAL_WORKERS } = await import(${JSON.stringify(moduleUrl("../src/application/settings.js"))});
+        const { validateConfig } = await import(${JSON.stringify(import.meta.resolve("@oma/config"))});
+        const { commitInlineConfiguration } = await import(${JSON.stringify(import.meta.resolve("@oma/config/generations"))});
+        const { applyField, readSettings, INITIAL_WORKERS } = await import(${JSON.stringify(moduleUrl("#oma-test/app/application/settings"))});
         const settings = readSettings(${JSON.stringify(f.input)});
         commitInlineConfiguration(settings.snapshot, validateConfig(applyField(settings, INITIAL_WORKERS, ${limit})), faults);`);
       const at = `${crash} (${points[crash]!.point}/${points[crash]!.phase})`;
@@ -154,7 +210,7 @@ test("DR11 / V05A / P0-7: a receipt publication SIGKILLed at any durability poin
     const f = fixture();
     try {
       const run = killedAt(crash, `
-        const { publishDeliveryReceipt } = await import(${JSON.stringify(moduleUrl("../src/storage/delivery-receipt.js"))});
+        const { publishDeliveryReceipt } = await import(${JSON.stringify(import.meta.resolve("@oma/storage/delivery-receipt"))});
         publishDeliveryReceipt(${JSON.stringify(f.root)}, ${JSON.stringify(f.batch)}, ${JSON.stringify(f.boundary)}, ${TEST_VIEW_LIMITS.frameBytes}, faults);`);
       const at = `${crash} (${points[crash]!.point}/${points[crash]!.phase})`;
       assert.equal(run.signal, "SIGKILL", `not killed at ${at}: ${String(run.stdout)}${String(run.stderr)}`);
@@ -189,7 +245,7 @@ test("P0V-96 / P0-7: a derived-file replacement SIGKILLed at any point leaves th
       const target = join(root, "view.md");
       writeFileSync(target, "old\n");
       const run = killedAt(crash, `
-        const { replaceDerivedFile } = await import(${JSON.stringify(moduleUrl("../src/storage/durable-fs.js"))});
+        const { replaceDerivedFile } = await import(${JSON.stringify(import.meta.resolve("@oma/storage/durable-fs"))});
         replaceDerivedFile(${JSON.stringify(target)}, "new\\n", 0o600, faults);`);
       const at = `${crash} (${points[crash]!.point}/${points[crash]!.phase})`;
       assert.equal(run.signal, "SIGKILL", `not killed at ${at}: ${String(run.stdout)}${String(run.stderr)}`);
@@ -220,7 +276,7 @@ test("T23 / P0V-96: an immutable publication copied across filesystems and SIGKI
     try {
       const destination = join(root, "object.eml");
       const run = killedAt(crash, `
-        const { publishImmutableFile } = await import(${JSON.stringify(moduleUrl("../src/storage/immutable-file.js"))});
+        const { publishImmutableFile } = await import(${JSON.stringify(import.meta.resolve("@oma/storage/immutable-file"))});
         publishImmutableFile(${JSON.stringify(source)}, ${JSON.stringify(destination)}, undefined, faults);`);
       const at = `${crash} (${points[crash]!.point}/${points[crash]!.phase})`;
       assert.equal(run.signal, "SIGKILL", `not killed at ${at}: ${String(run.stdout)}${String(run.stderr)}`);
@@ -259,11 +315,11 @@ const fsyncCount = (body: string): number => {
 };
 
 test("V26B / P0-7: a request freeze SIGKILLed at any flush leaves no request, the whole request, or an orphan body it refuses to rebuild from", TIMEOUT, async () => {
-  const { RequestCache } = await import("../src/request-cache.js");
+  const { RequestCache } = await import("#oma-test/app/request-cache");
   const { makeValidFrozenRequest } = await import("./fixtures/valid.js");
   const input = makeValidFrozenRequest("kill-1", "hello");
   const freeze = (home: string) => `
-    const { RequestCache } = await import(${JSON.stringify(moduleUrl("../src/request-cache.js"))});
+    const { RequestCache } = await import(${JSON.stringify(moduleUrl("#oma-test/app/request-cache"))});
     new RequestCache(${JSON.stringify(home)}).freeze(${JSON.stringify(input)}, Buffer.from("hello"));`;
   const probe = mkdtempSync(join(tmpdir(), "oma-freeze-kill-"));
   let flushes = 0;
@@ -299,10 +355,10 @@ test("V26B / P0-7: a request freeze SIGKILLed at any flush leaves no request, th
 });
 
 test("D05 / P0-7: a project binding SIGKILLed at any flush is absent or whole, and the next start collects what it left", TIMEOUT, async () => {
-  const { collectBindingTemporaries, observeProjectBinding, publishProjectBinding } = await import("../src/runtime/provision.js");
+  const { collectBindingTemporaries, observeProjectBinding, publishProjectBinding } = await import("#oma-test/app/runtime/provision");
   const binding = { society: "demo", canonicalProjectPath: "/project" };
   const publish = (root: string) => `
-    const { publishProjectBinding } = await import(${JSON.stringify(moduleUrl("../src/runtime/provision.js"))});
+    const { publishProjectBinding } = await import(${JSON.stringify(moduleUrl("#oma-test/app/runtime/provision"))});
     publishProjectBinding(${JSON.stringify(root)}, ${JSON.stringify(binding)});`;
   const probe = mkdtempSync(join(tmpdir(), "oma-binding-kill-"));
   let flushes = 0;

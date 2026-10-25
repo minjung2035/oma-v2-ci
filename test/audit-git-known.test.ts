@@ -1,9 +1,9 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import type { AuthContext } from "../implementation/contracts.js";
-import { PublicDispatcher } from "../src/broker/public-dispatcher.js";
-import { decodeRpcReply } from "../src/protocol/response-codec.js";
-import { encodeFrame } from "../src/frame.js";
+import type { AuthContext } from "@oma/contracts";
+import { PublicDispatcher } from "@oma/broker/public-dispatcher";
+import { decodeRpcReply } from "@oma/protocol/response-codec";
+import { encodeFrame } from "@oma/protocol/frame";
 import { makeValidAgent } from "./fixtures/spec.js";
 
 function fixture(frameBytes: number, main: string, published: string[]) {
@@ -27,6 +27,7 @@ function fixture(frameBytes: number, main: string, published: string[]) {
       ack: unused,
       follow: unused,
     },
+    review: null,
     git: {
       knownRefs: () => ({ main, published }),
       isPublished: unused,
@@ -50,7 +51,7 @@ function fixture(frameBytes: number, main: string, published: string[]) {
     },
     isDraining: () => false,
     assertAdmission() {},
-    admitResource: () => () => undefined,
+
     refreshViews() {},
     readLogs: async () => unused(),
     failureAnswer(_id, error) {

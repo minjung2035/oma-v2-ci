@@ -19,14 +19,14 @@ import * as zlib from 'node:zlib';
 import { tmpdir } from 'node:os';
 import { Script } from 'node:vm';
 import ts from 'typescript';
-import * as errors from '../dist/src/domain/errors.js';
-import * as operations from '../dist/src/config/operations.js';
-import * as piPackages from '../dist/src/runtime/packages/index.js';
-import * as durable from '../dist/src/storage/durable-fs.js';
-import * as tar from '../dist/src/runtime/packages/tar.js';
-import * as packageArchive from '../dist/src/platform/package-archive.js';
-import * as host from '../dist/src/platform/host/files.js';
-import * as policy from '../dist/src/domain/package-policy.js';
+import * as errors from "@oma/domain/errors";
+import * as operations from "@oma/config/operations";
+import * as piPackages from "#oma-test/app/runtime/packages/index";
+import * as durable from "@oma/storage/durable-fs";
+import * as tar from "#oma-test/app/runtime/packages/tar";
+import * as packageArchive from "#oma-test/app/platform/package-archive";
+import * as host from "@oma/platform-mac/files";
+import * as policy from "@oma/domain/package-policy";
 
 const unsupported = () => {
   throw new errors.StoreError('UNSUPPORTED_PROFILE',
@@ -38,7 +38,7 @@ const containedStub = new Proxy({}, { get: () => unsupported });
 const directoryStub = new Proxy({}, { get: () => unsupported });
 
 const code = ts.transpileModule(
-  fs.readFileSync(process.env.OMA_LOCAL_PACKAGE_SOURCE ?? 'src/application/local-packages.ts', 'utf8'), {
+  fs.readFileSync(process.env.OMA_LOCAL_PACKAGE_SOURCE ?? 'apps/oma/src/application/local-packages.ts', 'utf8'), {
     compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
   }).outputText;
 function load(platform, changes = {}) {
@@ -46,14 +46,14 @@ function load(platform, changes = {}) {
   const dependencies = {
     'node:crypto': crypto, 'node:path': path, 'node:fs': fs, 'node:stream/promises': streams,
     'node:zlib': zlib, 'node:os': os, 'node:url': url,
-    '../domain/errors.js': errors, '../config/operations.js': operations,
-    '../runtime/packages/index.js': piPackages, '../storage/contained-fs.js': containedStub,
-    '../storage/directory.js': directoryStub, '../storage/durable-fs.js': durable,
-    '../platform/package-archive.js': packageArchive, '../platform/host/files.js': host,
-    './host/files.js': host, '../domain/package-policy.js': policy,
+    '@oma/domain/errors': errors, "@oma/config/operations": operations,
+    '../runtime/packages/index.js': piPackages, "@oma/native/files": containedStub,
+    "@oma/storage/directory": directoryStub, "@oma/storage/durable-fs": durable,
+    '../platform/package-archive.js': packageArchive, '@oma/platform-mac/files': host,
+    "@oma/platform-mac/files": host, '@oma/domain/package-policy': policy,
     ...changes };
   const stage = { exports: {} };
-  const stageCode = ts.transpileModule(fs.readFileSync('src/platform/package-staging.ts', 'utf8'), {
+  const stageCode = ts.transpileModule(fs.readFileSync('apps/oma/src/platform/package-staging.ts', 'utf8'), {
     compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
   }).outputText;
   const context = output => ({ module: output, exports: output.exports, Buffer, process: { platform },

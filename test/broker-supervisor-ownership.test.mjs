@@ -1,3 +1,7 @@
+import * as sessionHandoffMeaning from "@oma/protocol/session-handoff";
+import * as hostErrorMeaning from "@oma/protocol/host-errors";
+import * as hostLossMeaning from "@oma/process/host-loss";
+import * as deploymentMeaning from "@oma/domain/deployment";
 // DR27/P0-4: production supervision over fake children, private channels and time.
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -5,23 +9,28 @@ import { EventEmitter } from 'node:events';
 import { readFileSync } from 'node:fs';
 import { Script } from 'node:vm';
 import ts from 'typescript';
-const code = ts.transpileModule(readFileSync('src/runtime/broker-supervisor.ts', 'utf8'), {
+const code = ts.transpileModule(readFileSync('apps/oma/src/runtime/broker-supervisor.ts', 'utf8'), {
   compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
 }).outputText;
 async function world() {
   const children = [], timers = new Set(), readers = [], messages = [];
   const module = { exports: {} };
   const dependencies = {
+"@oma/protocol/session-handoff": sessionHandoffMeaning,
+"@oma/protocol/host-errors": hostErrorMeaning,
+"@oma/process/host-loss": hostLossMeaning,
+"@oma/domain/deployment": deploymentMeaning,
+
     'node:path': { join: (...parts) => parts.join('/') },
-    '../protocol/connection.js': { endpointListening: async () => false },
-    './process-lock.js': { SOCIETY_OWNED_EXIT: 73 },
+    '@oma/client/connection': { endpointListening: async () => false },
+    "@oma/native/process-lock": { SOCIETY_OWNED_EXIT: 73 },
     './assets.js': { launchLocationArgv: () => [] },
-    '../protocol/host-channel.js': {
+    '@oma/protocol/host-channel': {
       HOST_CHANNEL_ENV: 'CHANNEL', HOST_CHANNEL_FD: 3,
       HostChannelReader: class { constructor(accept) { this.accept = accept; readers.push(this); } push() {} },
       encodeHostMessage: value => JSON.stringify(value),
     },
-    '../process/async.js': {
+    "@oma/process/async": {
       SOCIETY_FENCE_ENV: 'FENCE', SOCIETY_FENCE_FD: 4,
       spawnSupervisedService() {
         const channel = Object.assign(new EventEmitter(), { write() { return true; } });
@@ -34,7 +43,12 @@ async function world() {
   new Script(code).runInNewContext({ module, exports: module.exports, process: { env: {} }, performance: { now: () => 0 },
     setTimeout(run, ms) { const timer = { run, ms, unref() {} }; timers.add(timer); return timer; },
     clearTimeout(timer) { timers.delete(timer); },
-    require(name) { assert.ok(Object.hasOwn(dependencies, name), name); return dependencies[name]; },
+    require(name) {
+if (name === "@oma/protocol/session-handoff" && !Object.hasOwn(dependencies, name)) return sessionHandoffMeaning;
+if (name === "@oma/protocol/host-errors" && !Object.hasOwn(dependencies, name)) return hostErrorMeaning;
+if (name === "@oma/process/host-loss" && !Object.hasOwn(dependencies, name)) return hostLossMeaning;
+if (name === "@oma/domain/deployment" && !Object.hasOwn(dependencies, name)) return deploymentMeaning;
+ assert.ok(Object.hasOwn(dependencies, name), name); return dependencies[name]; },
   });
   const handle = await module.exports.superviseBroker({ node: 'fake', libdir: '/fake', society: 'demo', stateRoot: '/state', runRoot: '/run', configPath: '/config', onEvent: message => messages.push(message) });
   return { handle, children, timers, readers, messages,

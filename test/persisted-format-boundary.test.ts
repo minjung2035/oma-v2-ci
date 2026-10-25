@@ -1,3 +1,4 @@
+import { serializePlanIntent } from "./fixtures/plan.js";
 // P8: persisted format inventory, version boundary and portability policy.
 // Nothing here rewrites accepted bytes; the oracles assert exactly that.
 import test from "node:test";
@@ -6,13 +7,15 @@ import { cpSync, mkdirSync, mkdtempSync, readFileSync } from "node:fs";
 import { DatabaseSync } from "node:sqlite";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { Store, StoreError } from "../src/store.js";
-import { requestHash, sha256Hex } from "../src/hash.js";
+import { Store } from "@oma/storage";
+import { StoreError } from "@oma/domain/errors";
+import { requestHash } from "@oma/domain/request-identity";
+import { sha256Hex } from "@oma/domain/canonical-json";
 import { classifyPersistedPlan, planPortability, HOST_DERIVED_PLAN_FIELDS,
-  PLAN_FORMAT_WRITTEN, SCHEMA_USER_VERSION_WRITTEN, V1_PLAN_FIELDS } from "../src/domain/persisted-formats.js";
-import { publishImmutableFile } from "../src/mail.js";
-import { writeExclusiveFsyncedFile } from "../src/storage/durable-fs.js";
-import { submitBundlePathAt } from "../src/storage/paths.js";
+  PLAN_FORMAT_WRITTEN, SCHEMA_USER_VERSION_WRITTEN, CURRENT_PLAN_FIELDS } from "@oma/protocol/persisted-formats";
+import { publishImmutableFile } from "@oma/storage/immutable-file";
+import { writeExclusiveFsyncedFile } from "@oma/storage/durable-fs";
+import { submitBundlePathAt } from "@oma/domain/paths";
 import { makeValidAgent, storedSpec, ALL_CAPS } from "./fixtures/spec.js";
 import { removeTree } from "./fixtures/cleanup.js";
 import { mutateRawRowAfterClose } from "./fixtures/corruption.js";
@@ -52,8 +55,11 @@ test("P8 version boundary: a fresh database is the current schema and an unknown
 });
 
 test("P8 plan format: unknown shapes are classified unknown and never upgraded", () => {
-  assert.equal(PLAN_FORMAT_WRITTEN, "v1");
-  assert.deepEqual(classifyPersistedPlan({ kind: "mail.send" }), { format: "v1" });
+  assert.equal(PLAN_FORMAT_WRITTEN, "v2");
+  assert.deepEqual(classifyPersistedPlan({ version: 2, intent: { kind: "mail.send" } }), { format: "v2" });
+  for (const value of [{ kind: "mail.send" }, { version: 1, intent: { kind: "mail.send" } },
+    { version: 2, intent: { kind: "mail.send" }, extra: true }, { version: 2, intent: null }])
+    assert.equal(classifyPersistedPlan(value).format, "unknown");
   assert.equal(classifyPersistedPlan({ kind: "mail.send", version: "v2" }).format, "unknown");
   assert.equal(classifyPersistedPlan({ kind: "not.a.kind" }).format, "unknown");
   assert.equal(classifyPersistedPlan(null).format, "unknown");
@@ -73,7 +79,7 @@ test("P8 host-derived locators: a copied state root keeps readable bytes but not
     const payload = { candidate: "1".repeat(40), exportRef: "refs/oma/export/format", prerequisites: [], to: [], subject: "s", body: "", paths: [],
       bundle: { bytes: bundleBytes.length, sha256: sha256Hex(bundleBytes), mediaType: "application/x-git-bundle" } };
     const messageId = `m-00000000-0000-4000-8000-0000000000c1-0`;
-    const planJson = JSON.stringify({
+    const planJson = serializePlanIntent({
       kind: "git.submit", candidate: payload.candidate, exportRef: payload.exportRef, prerequisites: [],
       bundle: { path: submitBundlePathAt(root, OP), sha256: sha256Hex(bundleBytes), bytes: bundleBytes.length },
       publishedRef: `refs/oma/published/a/${OP}`,
@@ -88,20 +94,20 @@ test("P8 host-derived locators: a copied state root keeps readable bytes but not
       store.insertDeliveries([{ messageId, recipient: "a", operationId: OP }]);
     });
     const plan = JSON.parse(planJson);
-    assert.deepEqual(classifyPersistedPlan(plan), { format: "v1" });
+    assert.deepEqual(classifyPersistedPlan(plan), { format: "v2" });
     // P0V-89 (R6-12): whether a locator belongs to this root is the ledger's
     // reading of the row, not a separate check a caller may forget to make.
     assert.equal(store.getOperationById(OP as never)?.id, OP, "the root that derived the locator reads it");
-    const findings = planPortability([{ kind: "git.submit", plan }, { kind: "mail.send", plan: { kind: "mail.send" } }]);
+    const findings = planPortability([{ kind: "git.submit", plan }, { kind: "mail.send", plan: { version: 2, intent: { kind: "mail.send" } } }]);
     assert.deepEqual(findings[0], { kind: "git.submit", fields: ["bundle.path"], portable: false });
     assert.deepEqual(findings[1], { kind: "mail.send", fields: [], portable: true });
     assert.deepEqual([...HOST_DERIVED_PLAN_FIELDS].sort(), ["bundle.path", "stagingPath", "workspacePath"]);
-    assert.ok(V1_PLAN_FIELDS.some(field => field.class === "historical-result"));
+    assert.ok(CURRENT_PLAN_FIELDS.some(field => field.class === "historical-result"));
 
     const persistedBefore = store.getOperationById(OP as never)!.planJson;
     store.close();
 
-    // Restore into a different root: v1 bytes stay readable and are not rewritten,
+    // Restore into a different root: current envelope bytes stay readable and are not rewritten,
     // and the host-derived locator is reported instead of silently re-derived.
     cpSync(root, other, { recursive: true });
     const restored = new Store(join(other, "runtime.sqlite"));
@@ -111,13 +117,13 @@ test("P8 host-derived locators: a copied state root keeps readable bytes but not
       (error: unknown) => error instanceof StoreError && error.code === "STORE_CORRUPT");
     assert.equal(rawPlanJson(join(other, "runtime.sqlite"), OP), persistedBefore, "restore does not rewrite accepted plan bytes");
     const restoredPlan = JSON.parse(rawPlanJson(join(other, "runtime.sqlite"), OP));
-    assert.deepEqual(classifyPersistedPlan(restoredPlan), { format: "v1" });
+    assert.deepEqual(classifyPersistedPlan(restoredPlan), { format: "v2" });
     assert.deepEqual(planPortability([{ kind: "git.submit", plan: restoredPlan }])[0]!.fields, ["bundle.path"]);
     restored.close();
   } finally { removeTree(root); removeTree(other); }
 });
 
-test("P8 rewrite prohibition: a legacy plan with an unusable locator stays byte-identical", () => {
+test("P8 rewrite prohibition: an accepted plan with an unusable locator stays byte-identical", () => {
   const root = mkdtempSync(join(tmpdir(), "oma-format-rewrite-"));
   try {
     const path = join(root, "runtime.sqlite");
@@ -126,7 +132,7 @@ test("P8 rewrite prohibition: a legacy plan with an unusable locator stays byte-
       bundle: { bytes: 1, sha256: "a".repeat(64), mediaType: "application/x-git-bundle" } };
     const messageId = "m-00000000-0000-4000-8000-0000000000c2-0";
     const OP2 = "op-00000000-0000-4000-8000-0000000000c2";
-    const legacy = JSON.stringify({
+    const legacy = serializePlanIntent({
       kind: "git.submit", candidate: payload.candidate, exportRef: payload.exportRef, prerequisites: [],
       bundle: { path: submitBundlePathAt(root, OP2), sha256: "a".repeat(64), bytes: 1 }, publishedRef: `refs/oma/published/a/${OP2}`,
       message: { id: messageId, objectPath: `mail/objects/${messageId}.eml`, sha256: "a".repeat(64), bytes: 1, dateMs: 1,
@@ -145,7 +151,7 @@ test("P8 rewrite prohibition: a legacy plan with an unusable locator stays byte-
     store.close();
     const reopened = new Store(path);
     assert.equal(reopened.getOperationById(OP2 as never)!.planJson, legacy, "no read path rewrites the plan");
-    assert.deepEqual(classifyPersistedPlan(JSON.parse(legacy)), { format: "v1" });
+    assert.deepEqual(classifyPersistedPlan(JSON.parse(legacy)), { format: "v2" });
     // No repair is attempted for the missing staging file: it is not derived.
     assert.throws(() => publishImmutableFile(join(root, "missing"), join(root, "target")), /ENOENT|STORE_CORRUPT/);
     reopened.close();
@@ -155,9 +161,9 @@ test("P8 rewrite prohibition: a legacy plan with an unusable locator stays byte-
 test("P8 inventory: every classified field belongs to the closed persisted surface", () => {
   const allowed = ["intrinsic-identity", "immutable-logical-fact", "derived-durable-identity",
     "host-derived-physical-locator", "reconstructable-presentation", "historical-result"];
-  for (const field of V1_PLAN_FIELDS) {
+  for (const field of CURRENT_PLAN_FIELDS) {
     assert.ok(allowed.includes(field.class), field.field);
-    assert.ok(field.kind === "*" || classifyPersistedPlan({ kind: field.kind, workspacePath: "/x", stagingPath: "/x", bundle: { path: "/x" }, spec: {} }).format === "v1", field.kind);
+    assert.ok(field.kind === "*" || classifyPersistedPlan({ version: 2, intent: { kind: field.kind, workspacePath: "/x", stagingPath: "/x", bundle: { path: "/x" }, spec: {} } }).format === "v2", field.kind);
   }
   assert.ok(storedSpec(ALL_CAPS, "p", "a").specHash.length === 64);
 });

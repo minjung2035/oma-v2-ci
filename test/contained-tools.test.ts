@@ -1,7 +1,7 @@
 /** R6-01 / R6-18 (PR-004, architecture §4): the model's file tools make their
  * effects through the containment primitives -- a link anywhere on the way,
- * dangling or not, is refused rather than followed, and the workspace quota
- * is decided at the moment of the write. The tools are the engine's own,
+ * dangling or not, is refused rather than followed. Writes are serialized.
+ * The tools are the engine's own,
  * registered with OMA's operations, and are run here the way the engine runs
  * them. */
 import test from "node:test";
@@ -11,18 +11,18 @@ import { spawn } from "node:child_process";
 import { setTimeout as delay } from "node:timers/promises";
 import { tmpdir } from "node:os";
 import { basename, join, sep } from "node:path";
-import { containWorkspaceTools } from "../src/extension/contained-tools.js";
-import { guardWorkspaceTools, workspaceUsage } from "../src/extension/workspace-guard.js";
+import { containWorkspaceTools } from "@oma/tool-runtime/contained-tools";
+import { guardWorkspaceTools } from "@oma/tool-runtime/workspace-guard";
 
 type Tool = { name: string; execute(id: string, params: Record<string, unknown>, signal: undefined, update: undefined, ctx: unknown): Promise<{ content: { type: string; text?: string }[] }> };
 
-function world(t: import("node:test").TestContext, quota: number | null = 1024 * 1024, sandboxed = false) {
+function world(t: import("node:test").TestContext, sandboxed = false) {
   const base = realpathSync(mkdtempSync(join(tmpdir(), "oma-contained-")));
   t.after(() => rmSync(base, { recursive: true, force: true }));
   const workspace = join(base, "workspace"); mkdirSync(workspace);
   const outside = join(base, "host-home"); mkdirSync(outside);
   const tools: Record<string, Tool> = {};
-  containWorkspaceTools({ registerTool: (tool: Tool) => { tools[tool.name] = tool; } } as never, workspace, quota, sandboxed);
+  containWorkspaceTools({ registerTool: (tool: Tool) => { tools[tool.name] = tool; } } as never, workspace, sandboxed);
   const run = async (name: string, params: Record<string, unknown>): Promise<string> => {
     const result = await tools[name]!.execute("call", params, undefined, undefined, { cwd: workspace });
     return result.content.map(part => part.text ?? "").join("");
@@ -87,7 +87,7 @@ test("C18 / PR-004: a read the guard admitted under the package-store root reach
   symlinkSync(join(outside, "secret"), join(store, "npm", "pkg", "link.md"));
   const tools: Record<string, Tool> = {};
   containWorkspaceTools({ registerTool: (tool: Tool) => { tools[tool.name] = tool; } } as never,
-    workspace, 1024 * 1024, false, false, [store]);
+    workspace, false, false, [store]);
   const run = async (name: string, params: Record<string, unknown>): Promise<string> => {
     const result = await tools[name]!.execute("call", params, undefined, undefined, { cwd: workspace });
     return result.content.map(part => part.text ?? "").join("");
@@ -125,24 +125,19 @@ test("C18 / PR-004: a read the guard admitted under the package-store root reach
     await assert.rejects(run(name, params), /outside|link|not followed/, name);
 });
 
-test("P0V-74 / R6-18: the quota is decided at the write, so two writes that each fit cannot together exceed it", async t => {
-  const { workspace, run } = world(t, 1000);
-  const results = await Promise.allSettled([run("write", { path: "one", content: "x".repeat(600) }), run("write", { path: "two", content: "y".repeat(600) })]);
-  assert.deepEqual(results.map(result => result.status).sort(), ["fulfilled", "fulfilled"]);
-  assert.equal([existsSync(join(workspace, "one")), existsSync(join(workspace, "two"))].filter(Boolean).length, 2);
-});
+
 
 test("SB-001: inside the sandbox only write and edit are replaced; reading is the mount plan's", t => {
-  const { tools } = world(t, 1024, true);
+  const { tools } = world(t, true);
   assert.deepEqual(Object.keys(tools).sort(), ["edit", "write"]);
 });
 
 test("G10-02: search snapshots hold the source root through replacement and remove private copies on every outcome", async t => {
-  const { withSearchSnapshot } = await import("../src/extension/contained-files.js");
+  const { withSearchSnapshot } = await import("@oma/tool-runtime/contained-files");
   const { workspace, outside } = world(t);
   writeFileSync(join(workspace, "a.txt"), "workspace text");
   writeFileSync(join(outside, "secret.txt"), "host secret");
-  const pending = withSearchSnapshot(workspace, ".", 1024, undefined, async snapshot => {
+  const pending = withSearchSnapshot(workspace, ".", undefined, async snapshot => {
     assert.equal(readFileSync(join(snapshot, "a.txt"), "utf8"), "workspace text");
     assert.equal(existsSync(join(snapshot, "secret.txt")), false);
     return snapshot;
@@ -152,22 +147,22 @@ test("G10-02: search snapshots hold the source root through replacement and remo
   assert.equal(existsSync(snapshot), false);
   rmSync(workspace); renameSync(workspace + "-held", workspace);
   let failedSnapshot = "";
-  await assert.rejects(withSearchSnapshot(workspace, ".", 1024, undefined, async path => {
+  await assert.rejects(withSearchSnapshot(workspace, ".", undefined, async path => {
     failedSnapshot = path; throw new Error("injected walker failure");
   }), /injected walker failure/);
   assert.equal(existsSync(failedSnapshot), false);
-  assert.equal(await withSearchSnapshot(workspace, ".", 4, undefined, async () => "copied"), "copied");
+  assert.equal(await withSearchSnapshot(workspace, ".", undefined, async () => "copied"), "copied");
   const controller = new AbortController();
-  const cancelled = withSearchSnapshot(workspace, ".", 1024, controller.signal, async () => assert.fail("cancelled search ran"));
+  const cancelled = withSearchSnapshot(workspace, ".", controller.signal, async () => assert.fail("cancelled search ran"));
   controller.abort(); await assert.rejects(cancelled, /aborted/);
 });
 
 test("G10-02 / P0-4: a snapshot's name is declared before the directory can exist -- exists implies announced", async t => {
-  const { withSearchSnapshot } = await import("../src/extension/contained-files.js");
+  const { withSearchSnapshot } = await import("@oma/tool-runtime/contained-files");
   const { workspace } = world(t);
   writeFileSync(join(workspace, "a.txt"), "needle\n");
   const announced: string[] = [];
-  const result = await withSearchSnapshot(workspace, ".", 1 << 20, undefined, async snapshot => {
+  const result = await withSearchSnapshot(workspace, ".", undefined, async snapshot => {
     // The announced name is the directory the snapshot actually lives under.
     assert.equal(snapshot, join(tmpdir(), announced.at(-1)!, "workspace"));
     return "done";
@@ -186,7 +181,7 @@ test("G10-02 / P0-4: a snapshot's name is declared before the directory can exis
 });
 
 test("G10-02 / P0-4: an already-taken snapshot name is announced again fresh before the retry", async t => {
-  const { withSearchSnapshot } = await import("../src/extension/contained-files.js");
+  const { withSearchSnapshot } = await import("@oma/tool-runtime/contained-files");
   const { workspace } = world(t);
   writeFileSync(join(workspace, "a.txt"), "needle\n");
   const announced: string[] = [];
@@ -194,7 +189,7 @@ test("G10-02 / P0-4: an already-taken snapshot name is announced again fresh bef
   // Registered before the await: a withSearchSnapshot that rejects after
   // the steal must not leave the planted oma-search-* directory behind.
   t.after(() => { if (stolen !== "") rmSync(join(tmpdir(), stolen), { recursive: true, force: true }); });
-  const result = await withSearchSnapshot(workspace, ".", 1 << 20, undefined, async snapshot => {
+  const result = await withSearchSnapshot(workspace, ".", undefined, async snapshot => {
     assert.equal(snapshot, join(tmpdir(), announced.at(-1)!, "workspace"));
     return "done";
   }, undefined, name => {
@@ -239,9 +234,9 @@ test("G10-02 / P0-4: killing the search caller during copying leaves no snapshot
   // production-only test hook. Observe the actual child and actual snapshot.
   for (let n = 0; n < 500; n++) writeFileSync(join(workspace, `${n}.txt`), "needle\n".repeat(1000));
   const script = `const {searchWorkspace}=await import(process.argv[1]);
-    await searchWorkspace('grep',process.argv[2],{pattern:'needle'},10000000);`;
+    await searchWorkspace('grep',process.argv[2],{pattern:'needle'});`;
   const parent = spawn(process.execPath, ["--input-type=module", "-e", script,
-    new URL("../src/extension/contained-search.js", import.meta.url).href, workspace],
+    new URL(import.meta.resolve("@oma/tool-runtime/contained-search"), import.meta.url).href, workspace],
     { env: { ...process.env, TMPDIR: temporary }, stdio: "ignore" });
   const exited = new Promise<void>(resolve => parent.once("close", () => resolve()));
   let children: number[] = [];
@@ -249,7 +244,10 @@ test("G10-02 / P0-4: killing the search caller during copying leaves no snapshot
     parent.kill("SIGKILL"); await exited;
     for (const pid of children) { try { process.kill(-pid, "SIGKILL"); } catch { /* already gone */ } }
   });
-  for (let n = 0; n < 500 && readdirSync(temporary).length === 0; n++) await delay(5);
+  // Startup includes loading the real engine in two processes. The test
+  // proves cleanup after a kill during copying; its 15 s timeout bounds the
+  // observation without imposing an unrelated 2.5 s engine startup budget.
+  while (parent.exitCode === null && !t.signal.aborted && readdirSync(temporary).length === 0) await delay(5);
   assert.ok(readdirSync(temporary).some(name => name.startsWith("oma-search-")), "no live snapshot observed");
   children = readFileSync(`/proc/${parent.pid}/task/${parent.pid}/children`, "utf8").trim().split(/\s+/).filter(Boolean).map(Number);
   assert.equal(children.length, 1, "the copy and walker must have one process owner");
@@ -276,10 +274,10 @@ for (const outcome of ["abort", "parent-death"] as const) test(`G10-02 / P0-4: $
   const script = `const {searchWorkspace}=await import(process.argv[1]);
     const controller=new AbortController();
     if(process.argv[3]==='abort'){process.stdin.resume();process.stdin.once('data',()=>controller.abort());}
-    try{await searchWorkspace('grep',process.argv[2],{pattern:'needle'},1000000,controller.signal);process.exitCode=2;}
+    try{await searchWorkspace('grep',process.argv[2],{pattern:'needle'},controller.signal);process.exitCode=2;}
     catch{process.exitCode=0;}finally{process.stdin.pause();}`;
   const parent = spawn(process.execPath, ["--input-type=module", "-e", script,
-    new URL("../src/extension/contained-search.js", import.meta.url).href, workspace, outcome],
+    new URL(import.meta.resolve("@oma/tool-runtime/contained-search"), import.meta.url).href, workspace, outcome],
     { env: { ...process.env, TMPDIR: temporary, PI_CODING_AGENT_DIR: agent }, stdio: ["pipe", "ignore", "ignore"] });
   const exited = new Promise<number | null>(resolve => parent.once("close", code => resolve(code)));
   parent.stdin.on("error", () => {});
@@ -314,10 +312,10 @@ test("G10-02 / P0-4: a search child killed externally mid-copy still has its ann
   // an OOM killer or an operator would. The child cannot run its own cleanup
   // then, so the announced-name sweep on `close` is the only owner left.
   const script = `const {searchWorkspace}=await import(process.argv[1]);
-    try{await searchWorkspace('grep',process.argv[2],{pattern:'needle'},10000000);process.exitCode=3;}
+    try{await searchWorkspace('grep',process.argv[2],{pattern:'needle'});process.exitCode=3;}
     catch{process.exitCode=0;}`;
   const parent = spawn(process.execPath, ["--input-type=module", "-e", script,
-    new URL("../src/extension/contained-search.js", import.meta.url).href, workspace],
+    new URL(import.meta.resolve("@oma/tool-runtime/contained-search"), import.meta.url).href, workspace],
     { env: { ...process.env, TMPDIR: temporary }, stdio: "ignore" });
   const exited = new Promise<number | null>(resolve => parent.once("close", code => resolve(code)));
   t.after(async () => { try { parent.kill("SIGKILL"); } catch {} await exited; });
@@ -346,10 +344,10 @@ test("G10-02 / P0-4: a child killed the moment its snapshot exists still leaves 
   // A copy long enough that the directory is observable before it finishes.
   for (let n = 0; n < 300; n++) writeFileSync(join(workspace, `${n}.txt`), "needle\n".repeat(300));
   const script = `const {searchWorkspace}=await import(process.argv[1]);
-    try{await searchWorkspace('grep',process.argv[2],{pattern:'needle'},10000000);process.exitCode=3;}
+    try{await searchWorkspace('grep',process.argv[2],{pattern:'needle'});process.exitCode=3;}
     catch{process.exitCode=0;}`;
   const parent = spawn(process.execPath, ["--input-type=module", "-e", script,
-    new URL("../src/extension/contained-search.js", import.meta.url).href, workspace],
+    new URL(import.meta.resolve("@oma/tool-runtime/contained-search"), import.meta.url).href, workspace],
     { env: { ...process.env, TMPDIR: temporary }, stdio: "ignore" });
   const exited = new Promise<number | null>(resolve => parent.once("close", code => resolve(code)));
   t.after(async () => { try { parent.kill("SIGKILL"); } catch {} await exited; });
@@ -388,7 +386,7 @@ test("G10-02 / P0-4: the child's declaration bytes reach the pipe before the sna
       async()=>{await new Promise(r=>setTimeout(r,400));return '{"done":1}';});
     process.stdout.write(out+'\\n');`;
   const child = spawn(process.execPath, ["--input-type=module", "-e", script,
-    new URL("../src/extension/contained-search.js", import.meta.url).href, workspace],
+    new URL(import.meta.resolve("@oma/tool-runtime/contained-search"), import.meta.url).href, workspace],
     { env: { ...process.env, TMPDIR: temporary }, stdio: ["ignore", "pipe", "ignore"] });
   // close fires once after stdio drains -- every byte the child wrote is
   // in hand by then. Attach before polling so the event is never missed.
@@ -457,7 +455,7 @@ test("G10-02 / P0: a hidden byte/line bound is not the answer -- long lines and 
 });
 
 test("G10-02 / P0: an answer beyond one result is spooled into the workspace, and the named path is one the model's own tools can read", { timeout: 90000 }, async t => {
-  const { workspace, tools, run } = world(t, 4 << 20);
+  const { workspace, tools, run } = world(t);
   // One 1.3 MiB matching line: the complete answer cannot ride inline.
   writeFileSync(join(workspace, "huge.txt"), `needle${"y".repeat(1_300_000)}\n`);
   const result = await tools["grep"]!.execute("call", { pattern: "needle" }, undefined, undefined, { cwd: workspace });
@@ -486,35 +484,23 @@ test("G10-02 / P0: an answer beyond one result is spooled into the workspace, an
   assert.match(await run("read", { path: file! }), /exceeds|Line 1/, "read did not reach the spooled file");
   const searched = await run("grep", { pattern: "needle", path: file!, limit: 1 });
   assert.match(searched, /needle/, "grep could not read the file the result named");
-  // The complete bytes really are there, and the quota counts them like any
-  // authored file.
+  // The model can read every byte of the saved answer.
   const saved = readFileSync(file!, "utf8");
   assert.ok(saved.startsWith("huge.txt:1: needle"), "the saved answer is not the complete rendering");
   assert.equal(Buffer.byteLength(saved) > 1_300_000, true);
-  assert.ok(workspaceUsage(workspace, 4 << 20) > 1_300_000, "the spool is not charged to the workspace quota");
 });
 
-test("G10-02 / P0: a spool the quota cannot hold is not a silent truncation -- the complete result rides inline with the reason", { timeout: 60000 }, async t => {
-  const { workspace, tools } = world(t, 2 << 20);
-  writeFileSync(join(workspace, "huge.txt"), `needle${"y".repeat(1_300_000)}\n`);
-  const result = await tools["grep"]!.execute("call", { pattern: "needle" }, undefined, undefined, { cwd: workspace });
-  const text = result.content.map((part: { text?: string }) => part.text ?? "").join("");
-  assert.match(text, /complete/);
-  const spool = readdirSync(join(workspace, ".oma", "search-results"));
-  assert.equal(spool.length, 1);
-  assert.ok(readFileSync(join(workspace, ".oma", "search-results", spool[0]!)).length > 1_300_000);
 
-});
 
 test("G10-02 / P0: a stalled child is refused and its group and copy are swept", { timeout: 20000 }, async t => {
   const { base, workspace } = world(t);
   const temporary = join(base, "temporary"); mkdirSync(temporary);
   writeFileSync(join(workspace, "a.txt"), "needle\n");
   const script = `const {searchWorkspace}=await import(process.argv[1]);
-    try{await searchWorkspace('grep',process.argv[2],{pattern:'needle'},1000000,undefined,300);process.exitCode=3;}
+    try{await searchWorkspace('grep',process.argv[2],{pattern:'needle'},undefined,300);process.exitCode=3;}
     catch(error){process.exitCode=/produced no output/.test(String(error&&error.message))?0:2;}`;
   const parent = spawn(process.execPath, ["--input-type=module", "-e", script,
-    new URL("../src/extension/contained-search.js", import.meta.url).href, workspace],
+    new URL(import.meta.resolve("@oma/tool-runtime/contained-search"), import.meta.url).href, workspace],
     { env: { ...process.env, TMPDIR: temporary }, stdio: "ignore" });
   const exited = new Promise<number | null>(resolve => parent.once("close", code => resolve(code)));
   t.after(async () => { try { parent.kill("SIGKILL"); } catch {} await exited; });
@@ -552,12 +538,12 @@ console.log(JSON.stringify({type:'match',data:{path:{text:target+'/a.txt'},line_
 `, { mode: 0o755 });
   const script = `const {searchWorkspace}=await import(process.argv[1]);
     try{
-      const result=await searchWorkspace('grep',process.argv[2],{pattern:'needle'},1000000,undefined,1000);
+      const result=await searchWorkspace('grep',process.argv[2],{pattern:'needle'},undefined,1000);
       const text=result&&result.content&&result.content[0]&&result.content[0].text||'';
       process.exitCode=/a\\.txt:1: needle/.test(text)?0:3;
     }catch(error){console.error(String(error&&error.message||error));process.exitCode=2;}`;
   const parent = spawn(process.execPath, ["--input-type=module", "-e", script,
-    new URL("../src/extension/contained-search.js", import.meta.url).href, workspace],
+    new URL(import.meta.resolve("@oma/tool-runtime/contained-search"), import.meta.url).href, workspace],
     { env: { ...process.env, TMPDIR: temporary, PI_CODING_AGENT_DIR: agent }, stdio: ["ignore", "ignore", "inherit"] });
   const code = await new Promise<number | null>(resolve => parent.once("close", resolve));
   assert.equal(code, 0, "a heartbeating child inside its progress window was cut as a stall");
@@ -579,10 +565,10 @@ process.on('SIGTERM',()=>{});
 setInterval(()=>{},1000);
 `, { mode: 0o755 });
   const script = `const {searchWorkspace}=await import(process.argv[1]);
-    try{await searchWorkspace('grep',process.argv[2],{pattern:'needle'},1000000,undefined,600);process.exitCode=3;}
+    try{await searchWorkspace('grep',process.argv[2],{pattern:'needle'},undefined,600);process.exitCode=3;}
     catch(error){process.exitCode=/only heartbeats/.test(String(error&&error.message))?0:2;}`;
   const parent = spawn(process.execPath, ["--input-type=module", "-e", script,
-    new URL("../src/extension/contained-search.js", import.meta.url).href, workspace],
+    new URL(import.meta.resolve("@oma/tool-runtime/contained-search"), import.meta.url).href, workspace],
     { env: { ...process.env, TMPDIR: temporary, PI_CODING_AGENT_DIR: agent }, stdio: ["ignore", "ignore", "ignore"] });
   const exited = new Promise<number | null>(resolve => parent.once("close", code => resolve(code)));
   t.after(async () => { try { parent.kill("SIGKILL"); } catch {} await exited; });
@@ -624,12 +610,12 @@ else{(async()=>{const{setTimeout:d}=require('node:timers/promises');for(let i=0;
 `, { mode: 0o755 });
   const script = `const {searchWorkspace}=await import(process.argv[1]);
     try{
-      const result=await searchWorkspace('grep',process.argv[2],{pattern:'needle'},1000000,undefined,300);
+      const result=await searchWorkspace('grep',process.argv[2],{pattern:'needle'},undefined,300);
       const text=result&&result.content&&result.content[0]&&result.content[0].text||'';
       process.exitCode=/m9\\.txt:1: needle/.test(text)?0:3;
     }catch(error){console.error(String(error&&error.message||error));process.exitCode=2;}`;
   const parent = spawn(process.execPath, ["--input-type=module", "-e", script,
-    new URL("../src/extension/contained-search.js", import.meta.url).href, workspace],
+    new URL(import.meta.resolve("@oma/tool-runtime/contained-search"), import.meta.url).href, workspace],
     { env: { ...process.env, TMPDIR: temporary, PI_CODING_AGENT_DIR: agent }, stdio: ["ignore", "ignore", "inherit"] });
   const code = await new Promise<number | null>(resolve => parent.once("close", resolve));
   assert.equal(code, 0, "a child whose real progress was sparse was cut by the heartbeat-only ceiling");
@@ -637,13 +623,13 @@ else{(async()=>{const{setTimeout:d}=require('node:timers/promises');for(let i=0;
 
 test("G10-02 / P0: depth is never refused -- a tree past every historical level bound copies whole", { timeout: 30000 }, async t => {
   const { workspace } = world(t);
-  const { withSearchSnapshot } = await import("../src/extension/contained-files.js");
+  const { withSearchSnapshot } = await import("@oma/tool-runtime/contained-files");
   // 180 levels: past the former 128 refusal and past what recursion by path
   // could hold open, but nowhere near an operating-system limit.
   let deep = workspace;
   for (let n = 0; n < 180; n++) { deep = join(deep, "d"); mkdirSync(deep); }
   writeFileSync(join(deep, "leaf.txt"), "needle at depth\n");
-  const seen = await withSearchSnapshot(workspace, ".", 1 << 20, undefined, async snapshot => {
+  const seen = await withSearchSnapshot(workspace, ".", undefined, async snapshot => {
     const leaf = join(snapshot, ...Array.from({ length: 180 }, () => "d"), "leaf.txt");
     assert.equal(readFileSync(leaf, "utf8"), "needle at depth\n");
     return existsSync(leaf);
@@ -661,7 +647,7 @@ test("G10-02 / P0-4: a descriptor-starved copy refuses in words -- EMFILE/ENFILE
   for (let n = 0; n < 400; n++) { deep = join(deep, "d"); mkdirSync(deep); }
   writeFileSync(join(deep, "leaf.txt"), "needle\n");
   const script = `const {searchWorkspace}=await import(process.argv[1]);
-    try{await searchWorkspace('grep',process.argv[2],{pattern:'needle'},10000000);process.exitCode=3;}
+    try{await searchWorkspace('grep',process.argv[2],{pattern:'needle'});process.exitCode=3;}
     catch(error){const m=String(error&&error.message||error);process.stdout.write(m);
       process.exitCode=/file descriptors/.test(m)?0:2;}`;
   // The fd ceiling is set with prlimit's direct argv -- the local lane
@@ -669,7 +655,7 @@ test("G10-02 / P0-4: a descriptor-starved copy refuses in words -- EMFILE/ENFILE
   // child the script spawns inherits it.
   const parent = spawn("prlimit", ["--nofile=96:96",
     process.execPath, "--input-type=module", "-e", script,
-    new URL("../src/extension/contained-search.js", import.meta.url).href, workspace],
+    new URL(import.meta.resolve("@oma/tool-runtime/contained-search"), import.meta.url).href, workspace],
     { env: { ...process.env, TMPDIR: temporary }, stdio: ["ignore", "pipe", "inherit"] });
   const exited = new Promise<number | null>(resolve => parent.once("close", code => resolve(code)));
   t.after(async () => { try { parent.kill("SIGKILL"); } catch {} await exited; });
@@ -680,7 +666,7 @@ test("G10-02 / P0-4: a descriptor-starved copy refuses in words -- EMFILE/ENFILE
 
 test("G10-02 / R6-01: a destination directory swapped mid-copy cannot carry a write through a link", { timeout: 30000 }, async t => {
   const { base, workspace, outside } = world(t);
-  const { withSearchSnapshot } = await import("../src/extension/contained-files.js");
+  const { withSearchSnapshot } = await import("@oma/tool-runtime/contained-files");
   mkdirSync(join(workspace, "d"));
   // Enough entries that the copy is still inside `d` when the swap lands.
   for (let n = 0; n < 2000; n++) writeFileSync(join(workspace, "d", `${n}.txt`), "x".repeat(2048));
@@ -690,7 +676,7 @@ test("G10-02 / R6-01: a destination directory swapped mid-copy cannot carry a wr
   // that -- the destination's own name is swapped for a link after the real
   // directory exists and is open.
   let baseName = "";
-  const done = withSearchSnapshot(workspace, ".", 1 << 23, undefined, async () => "used",
+  const done = withSearchSnapshot(workspace, ".", undefined, async () => "used",
     undefined, name => { baseName = name; });
   const destinationDir = (): string => join(tmpdir(), baseName, "workspace", "d");
   for (let n = 0; n < 15000; n++) {
@@ -714,8 +700,8 @@ test("G10-02 / R6-01: a destination directory swapped mid-copy cannot carry a wr
 });
 
 test("PI-001: the extension's entryAt mirrors the storage primitive -- it accepts and refuses the same entries and names the same path", async () => {
-  const { entryAt: mirror } = await import("../src/extension/contained-files.js");
-  const { entryAt: original } = await import("../src/storage/contained-fs.js");
+  const { entryAt: mirror } = await import("@oma/tool-runtime/contained-files");
+  const { entryAt: original } = await import("@oma/native/files");
   const outcome = (entry: (fd: number, name: string) => string, fd: number, name: string): string => {
     try { return entry(fd, name); } catch { return "refused"; }
   };
@@ -724,77 +710,25 @@ test("PI-001: the extension's entryAt mirrors the storage primitive -- it accept
 });
 
 
-test("DR27/INV10: empty files and parents have finite cost; a refused write creates neither", async t => {
-  const { workspace, run } = world(t, 4);
-  assert.equal(workspaceUsage(workspace, 4), 1);
-  await run("write", { path: "a/b/empty", content: "" });
-  assert.equal(workspaceUsage(workspace, 100), 4);
-  await run("write", { path: "a/b/empty", content: "" });
-  await run("write", { path: "next", content: "" });
-  await run("write", { path: "refused/parent/empty", content: "" });
-  assert.equal(existsSync(join(workspace, "next")), true);
-  assert.equal(existsSync(join(workspace, "refused")), true);
-  assert.equal(workspaceUsage(workspace, 100), 8);
-});
 
-test("DR27/INV10: concurrent empty-file writes and their parent directories share the same quota owner", async t => {
-  const { workspace, run } = world(t, 3);
-  const results = await Promise.allSettled([run("write", { path: "a/empty", content: "" }), run("write", { path: "b/empty", content: "" })]);
-  assert.deepEqual(results.map(result => result.status).sort(), ["fulfilled", "fulfilled"]);
-  assert.equal(readdirSync(workspace).length, 2);
-  assert.ok(workspaceUsage(workspace, 100) > 3);
-});
 
-test("DR27/INV10: aliases cost metadata once per name and data once per inode; links are not followed", t => {
-  const { workspace, outside } = world(t);
-  writeFileSync(join(workspace, "a"), "data");
-  linkSync(join(workspace, "a"), join(workspace, "b"));
-  assert.equal(workspaceUsage(workspace, 100), 7);
-  mkdirSync(join(workspace, "empty")); assert.equal(workspaceUsage(workspace, 100), 8);
-  symlinkSync("../host-home", join(workspace, "link"));
-  const before = workspaceUsage(workspace, 100);
-  writeFileSync(join(outside, "large"), "x".repeat(200));
-  assert.equal(workspaceUsage(workspace, 100), before);
-});
+
+
+
 
 test("FI-4: a workspace holding a real project's Git history and installed dependencies still takes a small write", async t => {
-  // The quota bounds what the agent authors through its tools. History the
-  // clone came with and the trees a package manager or build regenerates
-  // (made through the shell, which the quota never bounded) are not that.
-  const { workspace, run } = world(t, 64 * 1024);
+  // Existing Git/build/dependency trees do not affect contained writer ownership.
+  const { workspace, run } = world(t);
   const bulk = "x".repeat(256 * 1024);
   for (const directory of [".git/objects/pack", "node_modules/left-pad", "packages/app/node_modules/react", ".venv/lib",
     "target/debug", "dist", "build"]) {
     mkdirSync(join(workspace, directory), { recursive: true });
     writeFileSync(join(workspace, directory, "artifact"), bulk);
   }
-  await run("write", { path: "src/index.ts", content: "export const answer = 42;\n" });
-  await run("edit", { path: "src/index.ts", edits: [{ oldText: "42", newText: "43" }] });
-  assert.equal(readFileSync(join(workspace, "src/index.ts"), "utf8"), "export const answer = 43;\n");
+  await run("write", { path: "apps/oma/src/index.ts", content: "export const answer = 42;\n" });
+  await run("edit", { path: "apps/oma/src/index.ts", edits: [{ oldText: "42", newText: "43" }] });
+  assert.equal(readFileSync(join(workspace, "apps/oma/src/index.ts"), "utf8"), "export const answer = 43;\n");
   // What the agent authors still counts, wherever it sits outside those trees.
-  writeFileSync(join(workspace, "src", "generated.json"), bulk);
-  await run("write", { path: "src/more.ts", content: "x" });
-});
-
-test("FI-4: the excluded trees are skipped by directory name only, never as files or at the root", t => {
-  const { workspace } = world(t);
-  writeFileSync(join(workspace, "build"), "data");
-  mkdirSync(join(workspace, "node_modules")); writeFileSync(join(workspace, "node_modules", "pkg"), "x".repeat(50));
-  // The root (1) and a file named like an excluded tree (1 + 4) are counted;
-  // the excluded directory and everything under it are not.
-  assert.equal(workspaceUsage(workspace, 100), 58);
-  // A workspace that is itself named like an excluded tree is still counted.
-  assert.equal(workspaceUsage(join(workspace, "node_modules"), 100), 52);
-});
-
-test("DR27/P0V-122: at the exact quota an equal-size edit and a shrinking write remain allowed", async t => {
-  const { workspace, run } = world(t, 5);
-  await run("write", { path: "a", content: "abc" });
-  assert.equal(workspaceUsage(workspace, 5), 5);
-  await run("edit", { path: "a", edits: [{ oldText: "abc", newText: "def" }] });
-  await run("write", { path: "a", content: "grow" });
-  assert.equal(readFileSync(join(workspace, "a"), "utf8"), "grow");
-  await run("write", { path: "a", content: "" });
-  await run("write", { path: "b", content: "xy" });
-  assert.equal(workspaceUsage(workspace, 5), 5);
+  writeFileSync(join(workspace, "apps/oma/src", "generated.json"), bulk);
+  await run("write", { path: "apps/oma/src/more.ts", content: "x" });
 });

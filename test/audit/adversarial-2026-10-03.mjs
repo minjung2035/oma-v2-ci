@@ -1,3 +1,5 @@
+import { createReconcileModule } from "#oma-test/app/broker/reconcile-composition";
+import { createGitModule } from "#oma-test/app/broker/git-composition";
 /** Standalone adversarial contract oracles for checkpoint a75c299.
  * Intentionally outside the normal test runner's root-level inventory.
  * These assert the REQUIRED behavior and fail while the reported bugs exist.
@@ -13,11 +15,11 @@ import { readdirSync } from "node:fs";
 import { join } from "node:path";
 import { execFileSync } from "node:child_process";
 import { fixture, messageText } from "../../dist/test/fixtures/review-fixture.js";
-import { GitModule } from "../../dist/src/git.js";
-import { ReconcileModule } from "../../dist/src/reconcile.js";
+import { GitModule } from "@oma/git";
+import { ReconcileModule } from "@oma/reconcile";
 import { StoreError } from "../../dist/src/domain/errors.js";
-import { canonicalMergeDiff } from "../../dist/src/git/canonical-command.js";
-import { readCode } from "../../dist/src/cli/effects/code.js";
+import { canonicalMergeDiff } from "@oma/git/canonical-command";
+import { readCode } from "#oma-test/app/cli/effects/code";
 import { GIT_ENV } from "../../dist/src/process/policies.js";
 import { defaultHostConfig } from "../../dist/src/config/defaults.js";
 import { validateConfig } from "../../dist/src/config.js";
@@ -58,7 +60,7 @@ test("AV-20261003-01: a quota refusal must prevent a sweep from accepting a new 
     const storage = new StorageAdmission(f.root, 1, 0);
     assert.throws(() => storage.admit("admit"), { code: "QUOTA_EXCEEDED" });
     const units = { observeAsync: async () => ({ activeState: "inactive" }), confirmDead: () => true };
-    const reconcile = new ReconcileModule(f.store, f.mail, f.module, units, {}, {
+    const reconcile = createReconcileModule(f.store, f.mail, f.module, null, units, {}, {
       projectGit: f.projectGit, hasGoal: () => false, activationAllowed: () => false,
       resourceGate: category => {
         admissions.push(category);
@@ -121,7 +123,7 @@ test("AV-20261003-03a: same-key terminal review replay must survive a review-mod
     f.reopen();
     const policy = { ...f.policy, tiered: { ...f.policy.tiered } };
     delete policy.tiered.review;
-    const next = new GitModule(pathsOf(f), f.store, f.mail, policy, () => policy);
+    const next = createGitModule(pathsOf(f), f.store, f.mail, policy, () => policy);
     t.diagnostic(`historical operation remains ${f.store.getOperation("alice", "open").state}`);
     const replay = await next.attestations.record(f.auth("alice"), "open", input);
     assert.deepEqual(replay, accepted);
@@ -137,7 +139,7 @@ test("AV-20261003-03b: same-key terminal review replay must survive lower curren
     const accepted = await f.module.attestations.record(f.auth("alice"), "open", input);
     assert.equal(accepted.state, "succeeded");
     f.reopen();
-    const next = new GitModule(pathsOf(f), f.store, f.mail, f.policy, () => f.policy, null,
+    const next = createGitModule(pathsOf(f), f.store, f.mail, f.policy, () => f.policy, null,
       { mailBodyBytes: 2000, subjectBytes: 512, bundleBytes: 256 * 1024 });
     t.diagnostic(`historical operation remains ${f.store.getOperation("alice", "open").state}`);
     const replay = await next.attestations.record(f.auth("alice"), "open", input);
@@ -249,7 +251,7 @@ test("AV-20261003-07: a validated 4096-byte mail bound must allow a small LOW me
     const name = f.requestName("open");
     // Repeat the normal recovery owner to distinguish a deferred application
     // from a permanent bound mismatch.
-    await f.module.reviews.advanceAll();
+    await f.reviews.advanceAll();
     t.diagnostic(JSON.stringify({ validatedMailBodyBytes: 4096,
       display: f.stateOf(name).display, integration: f.applyOp("alice", "open")?.state ?? null }));
     assert.equal(f.git(["rev-parse", "refs/heads/main"]), candidate,

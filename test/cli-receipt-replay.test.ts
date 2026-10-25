@@ -6,11 +6,11 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createServer, type Server, type Socket } from "node:net";
 import { execFile, spawn } from "node:child_process";
-import { RequestCache } from "../src/request-cache.js";
-import { FrameParser, encodeFrame } from "../src/frame.js";
-import { receiptNotFound } from "../src/protocol/receipts.js";
+import { RequestCache } from "#oma-test/app/request-cache";
+import { FrameParser, encodeFrame } from "@oma/protocol/frame";
+import { receiptNotFound } from "@oma/protocol/receipts";
 
-const cli = fileURLToPath(new URL("../src/cli.js", import.meta.url));
+const cli = fileURLToPath(new URL("../../apps/oma/dist/cli.js", import.meta.url));
 const operation = "op-12345678-1234-4234-8234-123456789abc";
 const success = { operation, state: "succeeded", result: { kind: "route.follow", topic: "commons", subscribed: true } };
 const notFound = { operation: "", state: "failed", error: { code: "REQUEST_NOT_FOUND", message: "absent", retry: "same-key" } };
@@ -282,7 +282,7 @@ test("AV28 / ERR-001: the CLI shows the actual value a conflict names", { timeou
   try {
     const body = join(home, "body.txt");
     writeFileSync(body, "reason\n");
-    const result = await run(home, ["merge", "review", "merge-abcd1234", "--file", body, "--request", "av28-cli"]);
+    const result = await run(home, ["merge", "review", "merge-abcd1234-0000-4000-8000-000000000000", "--file", body, "--request", "av28-cli"]);
     assert.equal(result.code, 2, result.stderr);
     assert.match(result.stderr, new RegExp(`STALE_BASE: Main differs from expected; retry against actual \\(actual: ${actual}\\)`));
   } finally { await broker.close(); rmSync(home, { recursive: true, force: true }); }

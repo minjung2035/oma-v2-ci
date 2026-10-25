@@ -1,3 +1,4 @@
+import { DEPLOYMENT_LAYOUT } from "@oma/domain/deployment";
 /** macos-platform §4.5, §4.6 (MAC-412, MAC-220, MV-12): guesthost over its
  * real guest server -- the society channel and a terminal relayed to a real
  * session holder on a real pseudo-terminal. The holder runs a stand-in TUI
@@ -12,19 +13,20 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { randomUUID } from "node:crypto";
-import { FramedPeer, PlatformError, sendHello, sendHelloForBytes } from "../src/platform/rpc.js";
-import { startGuestServer, type GuestIdentity } from "../src/platform/guest/server.js";
-import { GuestHost, listening, type SessionLauncher } from "../src/platform/guest/host.js";
-import type { GuestArchives } from "../src/platform/guest/archive.js";
-import { publishProjectBinding } from "../src/runtime/provision.js";
+import { FramedPeer, sendHello, sendHelloForBytes } from "#oma-test/app/platform/rpc";
+import { PlatformError } from "@oma/protocol/host-errors";
+import { startGuestServer, type GuestIdentity } from "#oma-test/app/platform/guest/server";
+import { GuestHost, listening, type SessionLauncher } from "#oma-test/app/platform/guest/host";
+import type { GuestArchives } from "#oma-test/app/platform/guest/archive";
+import { publishProjectBinding } from "#oma-test/app/runtime/provision";
 import { holdSocketNames } from "./fixtures/socket-names.js";
 import {
   HOST_GUEST_PROTOCOL, PLATFORM_FRAME_BYTES, TerminalFrameParser, encodeTerminalFrame, parseTerminalJson, resizePayload,
   type HelloParams,
-} from "../src/protocol/host-guest.js";
+} from "@oma/protocol/host-guest";
 
 const here = fileURLToPath(new URL(".", import.meta.url));
-const holderEntry = join(here, "..", "src", "entry", "guest-session.js");
+const holderEntry = join(here, "../..", DEPLOYMENT_LAYOUT.entries.guestSession);
 const fakeTui = join(here, "..", "..", "test", "fixtures", "fake-tui.mjs");
 const INSTANCE = randomUUID();
 const self = { uid: process.getuid!(), gid: process.getgid!() };

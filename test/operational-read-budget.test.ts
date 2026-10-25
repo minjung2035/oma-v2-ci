@@ -1,3 +1,4 @@
+import { serializePlanIntent } from "./fixtures/plan.js";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { DatabaseSync } from "node:sqlite";
@@ -5,20 +6,21 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { randomUUID } from "node:crypto";
-import { LedgerReader } from "../src/storage/ledger-reader.js";
-import { StoreError } from "../src/domain/errors.js";
-import { readDiagnosticSnapshot, Store } from "../src/store.js";
-import { requestHash } from "../src/hash.js";
-import { messageIdForOperation, publishedRefFor } from "../src/domain/derived.js";
-import { reviewRequestNameFor } from "../src/domain/identifiers.js";
+import { LedgerReader } from "@oma/storage/ledger-reader";
+import { StoreError } from "@oma/domain/errors";
+import { readDiagnosticSnapshot, Store } from "@oma/storage";
+import { requestHash } from "@oma/domain/request-identity";
+import { messageIdForOperation, publishedRefFor } from "@oma/domain/derived";
+import { reviewRequestNameFor } from "@oma/domain/identifiers";
 import { makeValidAgent } from "./fixtures/spec.js";
-import { pendingWork, pendingWorkByAgent } from "../src/views/pending-work.js";
-import { ViewsModule } from "../src/views.js";
-import { InternalDispatcher, type InternalDispatchDependencies } from "../src/broker/internal-dispatcher.js";
-import { createInternalDispatchPorts } from "../src/broker/composition.js";
-import type { MailModule } from "../src/mail.js";
-import type { BoundPeer } from "../src/broker/peer-authenticator.js";
-import type { AuthContext } from "../implementation/contracts.js";
+import { pendingWork, pendingWorkByAgent } from "#oma-test/app/views/pending-work";
+import { ViewsModule } from "#oma-test/app/views";
+import { InternalDispatcher, projectInternalPeers } from "@oma/broker/internal-dispatcher";
+import { type InternalDispatchDependencies } from "@oma/broker/ports";
+import { createInternalDispatchDataPorts } from "#oma-test/app/broker/composition";
+import type { MailModule } from "@oma/mail";
+import type { BoundPeer } from "@oma/broker/ports";
+import type { AuthContext } from "@oma/contracts";
 
 /** P0 BATCH-1 oracle: operational ledger reads carry no shared diagnostics
  * budget. A society past the former 10k-row cap still answers every read the
@@ -45,7 +47,7 @@ function sendOperation(index: number): SendFixture {
     contextRevision: null,
     replyHeaders: { replyTo: ["alice"], inReplyTo: null, references: [] } } };
   return { id, key, messageId,
-    payloadJson: JSON.stringify(payload), planJson: JSON.stringify(plan),
+    payloadJson: JSON.stringify(payload), planJson: serializePlanIntent(plan),
     hash: requestHash("mail.send", payload) };
 }
 function submitOperation(index: number): SendFixture {
@@ -61,7 +63,7 @@ function submitOperation(index: number): SendFixture {
       contextRevision: null,
       replyHeaders: { replyTo: [], inReplyTo: null, references: [] } } };
   return { id, key, messageId,
-    payloadJson: JSON.stringify(payload), planJson: JSON.stringify(plan),
+    payloadJson: JSON.stringify(payload), planJson: serializePlanIntent(plan),
     hash: requestHash("git.submit", payload) };
 }
 function attestOperation(index: number): SendFixture {
@@ -74,7 +76,7 @@ function attestOperation(index: number): SendFixture {
       submitters: ["alice"] },
     messages: [] };
   return { id, key, messageId: messageIdForOperation(id, 0),
-    payloadJson: JSON.stringify(payload), planJson: JSON.stringify(plan),
+    payloadJson: JSON.stringify(payload), planJson: serializePlanIntent(plan),
     hash: requestHash("attest.record", payload) };
 }
 
@@ -185,11 +187,11 @@ test("G02-ledger-r2: operational reads return complete results past the former d
       runnerActor: () => "alice" as const,
       runnerAuth: () => ({ actor: "alice" }) as unknown as AuthContext,
     };
-    const ports = createInternalDispatchPorts(store, {} as unknown as MailModule, root, peers);
+    const ports = { ...createInternalDispatchDataPorts(store, {} as unknown as MailModule, root), peers: projectInternalPeers(peers) };
     const dispatcher = new InternalDispatcher({
-      store: ports.store, mail: ports.mail, stateRoot: root, peers: ports.peers,
+      store: ports.store, mail: ports.mail, principalInboxNewEntries: ports.principalInboxNewEntries, peers: ports.peers,
       isDraining: () => false, assertAdmission: () => undefined,
-      admitResource: () => () => undefined,
+
       failureAnswer: (id: string, error: unknown) => ({ v: 1, id, ok: false, error }),
       refreshViews: () => undefined,
       openRun: () => Promise.reject(new Error("no run is opened here")),

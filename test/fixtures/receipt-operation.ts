@@ -1,8 +1,9 @@
+import { serializePlanIntent } from "./plan.js";
 /** Receipt tests start from supported persisted bytes, not forged decoder brands. */
-import { requestHash } from "../../src/hash.js";
+import { requestHash } from "@oma/domain/request-identity";
 import {
   decodeOperation, type OperationDecodeContext, type OperationOf, type RawOperationRecord,
-} from "../../src/storage/operation-codec.js";
+} from "@oma/protocol/operation-codec";
 
 export const receiptOperationId = "op-00000000-0000-4000-8000-000000000001";
 const payload = { topic: "work" };
@@ -13,7 +14,7 @@ export const receiptOperationRecord: RawOperationRecord = Object.freeze({
   request_hash: requestHash("route.follow", payload),
   kind: "route.follow",
   payload_json: JSON.stringify(payload),
-  plan_json: JSON.stringify({ kind: "route.follow", topic: "work", agent: "alice" }),
+  plan_json: serializePlanIntent({ kind: "route.follow", topic: "work", agent: "alice" }),
   state: "pending",
   result_json: null,
   error_code: null,

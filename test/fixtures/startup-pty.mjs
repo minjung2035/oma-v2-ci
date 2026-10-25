@@ -34,7 +34,7 @@ try {
   writeFileSync(join(engine, 'settings.json'), JSON.stringify({ ...settings, defaultProvider: 'fake', defaultModel: 'scripted' }));
   launch = process.hrtime.bigint();
   writeFileSync(join(root, 'launch.json'), JSON.stringify({ monotonicNs: String(launch) }));
-  const child = spawn(process.execPath, [fileURLToPath(new URL('../../dist/src/entry/oma.js', import.meta.url)), '--mode', mode], {
+  const child = spawn(process.execPath, [fileURLToPath(new URL("../../apps/oma/dist/entry/oma.js", import.meta.url)), '--mode', mode], {
     cwd: project, stdio: 'inherit', env: { PATH: `${process.execPath.slice(0, process.execPath.lastIndexOf('/'))}:/usr/bin:/bin`,
       HOME: join(root, 'home'), XDG_DATA_HOME: join(root, 'data'), XDG_RUNTIME_DIR: process.env.XDG_RUNTIME_DIR,
       LANG: 'C.UTF-8', TERM: 'xterm-256color' },

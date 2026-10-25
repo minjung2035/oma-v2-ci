@@ -12,7 +12,7 @@ import {
   ASK_CLAIM_EVENT,
   ASK_RESPONSE_EVENT,
   ASK_CANCEL_EVENT,
-} from "../src/client/ask-user-question/protocol.js";
+} from "@oma/protocol/ask-user-question";
 import {
   CUSTOM_OPTION_LABEL,
   MAX_OPTIONS,
@@ -24,7 +24,7 @@ import {
   type AskQuestion,
   type QuestionParams,
   type QuestionnaireResult,
-} from "../src/client/ask-user-question/questionnaire.js";
+} from "@oma/domain/ask-user-question/questionnaire";
 import {
   DECLINE_MESSAGE,
   ENVELOPE_PREFIX,
@@ -33,17 +33,17 @@ import {
   buildAnswerSegment,
   buildQuestionnaireResponse,
   formatAnswerScalar,
-} from "../src/client/ask-user-question/envelope.js";
-import { QuestionnaireModel } from "../src/client/ask-user-question/model.js";
-import askExtension, { registerAskUserQuestion } from "../src/extension/ask-user-question.js";
-import { registerAskUserQuestionPresenter } from "../src/tui/ask-user-question/presenter.js";
-import { createAskComponent } from "../src/tui/ask-user-question/component.js";
+} from "@oma/domain/ask-user-question/envelope";
+import { QuestionnaireModel } from "@oma/domain/ask-user-question/model";
+import askExtension, { registerAskUserQuestion } from "@oma/extension/ask-user-question";
+import { registerAskUserQuestionPresenter } from "@oma/tui/ask-user-question/presenter";
+import { createAskComponent } from "@oma/tui/ask-user-question/component";
 import {
   ASK_USER_QUESTION_TOOL_NAME as SURFACE_NAME,
   planToolSurface,
   principalToolSurfaceConfig,
   residentToolSurfaceConfig,
-} from "../src/domain/tool-surface.js";
+} from "@oma/domain/tool-surface";
 
 // ---------- fixtures ----------
 

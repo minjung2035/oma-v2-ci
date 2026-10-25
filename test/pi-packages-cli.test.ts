@@ -7,15 +7,15 @@ import { chmodSync, lstatSync, readFileSync, existsSync, mkdirSync, mkdtempSync,
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { spawn, spawnSync } from "node:child_process";
-import { loadConfiguration } from "../src/config.js";
-import { defaultSocietyFor } from "../src/config/defaults.js";
-import { sha256Hex } from "../src/hash.js";
-import { packageResourcePaths, readPackageIndex } from "../src/runtime/packages/store.js";
-import { readExtensions, toggleExtension } from "../src/application/extensions.js";
+import { loadConfiguration } from "@oma/config";
+import { defaultSocietyFor } from "@oma/config/defaults";
+import { sha256Hex } from "@oma/domain/canonical-json";
+import { packageResourcePaths, readPackageIndex } from "#oma-test/app/runtime/packages/store";
+import { readExtensions, toggleExtension } from "#oma-test/app/application/extensions";
 import { fakeNpmRegistry } from "./fixtures/fake-npm-registry.js";
-import { readPersonalSettings, updatePersonalSettings } from "../src/runtime/personal-settings.js";
+import { readPersonalSettings, updatePersonalSettings } from "#oma-test/app/runtime/personal-settings";
 
-const ENTRY = new URL("../src/entry/oma.js", import.meta.url).pathname;
+const ENTRY = new URL("../../apps/oma/dist/entry/oma.js", import.meta.url).pathname;
 const TIMEOUT = { timeout: 180_000 };
 
 test("DR25: oma pi install puts a package in oma's store and turns its extension on for this project's Principal and Workers; remove takes it away", TIMEOUT, async t => {

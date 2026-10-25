@@ -6,14 +6,15 @@ import { tmpdir } from "node:os";
 import { execFile, spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { createServer } from "node:net";
-import { FrameParser, encodeFrame } from "../src/frame.js";
-import { NodeIntegrityFiles } from "../src/diagnostics/files.js";
-import { receiptExit, receiptLines } from "../src/protocol/receipts.js";
-import { sha256Hex } from "../src/hash.js";
-import { generateOperationId, generateMessageId } from "../src/ids.js";
-import { MAIL_HEADER_BYTES } from "../src/domain/mail-values.js";
-import { rfc5322Date } from "../src/mail/headers.js";
-import type { MailHeaderExpectation } from "../src/diagnostics/mail.js";
+import { FrameParser, encodeFrame } from "@oma/protocol/frame";
+import { NodeIntegrityFiles } from "#oma-test/app/diagnostics/files";
+import { receiptExit, receiptLines } from "@oma/protocol/receipts";
+import { sha256Hex } from "@oma/domain/canonical-json";
+import { generateOperationId } from "@oma/native/identity";
+import { messageIdForOperation as generateMessageId } from "@oma/domain/derived";
+import { MAIL_HEADER_BYTES } from "@oma/domain/mail-values";
+import { rfc5322Date } from "@oma/mail/headers";
+import type { MailHeaderExpectation } from "#oma-test/app/diagnostics/mail";
 
 test("NB-28: receipt presentation cannot invent a failed outcome without a failure", () => {
   const invalid = { operation: generateOperationId(), state: "failed" as const };
@@ -23,7 +24,7 @@ test("NB-28: receipt presentation cannot invent a failed outcome without a failu
 
 for (const action of ["finishReceipt", "finishUnrecordedReceipt"] as const) {
   test(`NB-28: ${action} refuses a failed receipt without error as unknown`, () => {
-    const exits = fileURLToPath(new URL("../src/cli/exit.js", import.meta.url));
+    const exits = fileURLToPath(new URL(import.meta.resolve("#oma-test/app/cli/exit")));
     const result = spawnSync(process.execPath, ["--input-type=module", "-e",
       `import { ${action} } from ${JSON.stringify(exits)}; ${action}({operation:${JSON.stringify(generateOperationId())},state:'failed'}, 'original', 'cache unavailable', false);`],
     { encoding: "utf8", timeout: 5000 });
@@ -86,7 +87,7 @@ test("NB-28: actual Mac CLI status is stdout, consistent with list", async t => 
   });
   t.after(() => server.close());
   await new Promise<void>((resolve, reject) => { server.once("error", reject); server.listen(join(home, "run/hostapi.sock"), resolve); });
-  const entry = fileURLToPath(new URL("../src/entry/oma-mac.js", import.meta.url));
+  const entry = fileURLToPath(new URL("../../apps/oma/dist/entry/oma-mac.js", import.meta.url));
   for (const [command, expected] of [["status", "OMA engine: Running\n"], ["list", "demo\tRunning\n"]]) {
     const result = await new Promise<{ code: number | string; stdout: string; stderr: string }>(resolve => {
       execFile(process.execPath, [entry, command!], { cwd: home, encoding: "utf8", timeout: 10000,

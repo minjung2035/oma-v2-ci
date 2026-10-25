@@ -1,3 +1,5 @@
+import { createLifecycleModule } from "#oma-test/app/broker/lifecycle-composition";
+import { createMailModule } from "#oma-test/app/broker/mail-composition";
 /** DR27/CREATE-002/P0: host seeds and Worker delegation are separate authorities.
  * Real ledger, mail and private Git clones; unit installation is scripted. */
 import test, { type TestContext } from "node:test";
@@ -6,18 +8,18 @@ import { execFileSync } from "node:child_process";
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type { AuthContext } from "../implementation/contracts.js";
-import { defaultHostConfig } from "../src/config/defaults.js";
-import { createChildSpecResolver } from "../src/config/policy.js";
-import { resolveChildSpec } from "../src/domain/child-policy.js";
-import { resolvedSpecOf } from "../src/authority.js";
-import { LifecycleModule } from "../src/lifecycle.js";
-import { MailModule } from "../src/mail.js";
-import { Store } from "../src/store.js";
-import { UnitsModule } from "../src/units.js";
-import { provisionSociety } from "../src/runtime/provision.js";
-import { projectGitPathAt, workspacePathAt } from "../src/storage/paths.js";
-import { commitField, INITIAL_WORKERS, readSettings } from "../src/application/settings.js";
+import type { AuthContext } from "@oma/contracts";
+import { defaultHostConfig } from "@oma/config/defaults";
+import { createChildSpecResolver } from "@oma/config/policy";
+import { resolveChildSpec } from "@oma/domain/child-policy";
+import { resolvedSpecOf } from "@oma/domain/agent-spec";
+import { LifecycleModule } from "@oma/lifecycle";
+import { MailModule } from "@oma/mail";
+import { Store } from "@oma/storage";
+import { UnitsModule } from "@oma/platform-linux/units";
+import { provisionSociety } from "#oma-test/app/runtime/provision";
+import { projectGitPathAt, workspacePathAt } from "@oma/domain/paths";
+import { commitField, INITIAL_WORKERS, readSettings } from "#oma-test/app/application/settings";
 import { makeValidAgent } from "./fixtures/spec.js";
 
 class ScriptedUnits extends UnitsModule {
@@ -37,10 +39,10 @@ function fixture(t: TestContext) {
   const projectGit = projectGitPathAt(root);
   const from = execFileSync("/usr/bin/git", ["--git-dir", projectGit, "rev-parse", "main"], { encoding: "utf8" }).trim();
   const lifecycle = () => {
-    const mail = new MailModule({ stateRoot: root, society: "demo" }, store, config.limits.addresses,
+    const mail = createMailModule({ stateRoot: root, society: "demo" }, store, config.limits.addresses,
       config.limits.batchMaxMessages, config.limits);
-    return new LifecycleModule(store, units, { stateRoot: root, projectGit, society: "demo", hasGoal: () => false, activationAllowed: () => true },
-      createChildSpecResolver(() => config, () => store.inTransaction), mail, config.quota);
+    return createLifecycleModule(store, units, { stateRoot: root, projectGit, society: "demo", hasGoal: () => false, activationAllowed: () => true },
+      createChildSpecResolver(() => config, () => store.inTransaction), mail);
   };
   const auth = (name: string): AuthContext => {
     const agent = store.getAgent(name)!;
@@ -124,12 +126,10 @@ test("DR27/CREATE-002: host delegation and current lease can narrow child capabi
   assert.deepEqual(resolvedSpecOf(f.store.getAgent("child")!).capabilities, ["agent.create", "mail.send"]);
 });
 
-for (const boundary of ["lineageAgents", "societyAgents"] as const) test(`DR27: Worker creation obeys ${boundary} without accepted orphans`, async t => {
+test("DR46: successive Worker creations each retain their accepted identity", async t => {
   const f = fixture(t), lifecycle = f.lifecycle();
   await lifecycle.bootstrap(f.config);
   await lifecycle.reconcileCreate(f.store.getOperation("principal", "bootstrap-worker-1")!.id);
-  f.config.quota.lineageAgents = 1;
-  if (boundary === "societyAgents") f.config.quota.societyAgents = 2;
   assert.equal((await lifecycle.create(f.auth("worker-1"), { name: "first", from: f.from, brief: "work" }, "first")).state, "succeeded");
   assert.equal((await lifecycle.create(f.auth("worker-1"), { name: "excess", from: f.from, brief: "work" }, "excess")).state, "succeeded");
   assert.ok(f.store.getAgent("excess"));
@@ -144,19 +144,5 @@ test("DR27/CFG-002: initial Worker count persists with a non-delegating Principa
     assert.equal(saved.initialResidents.length, count);
     assert.ok(saved.initialResidents.every(seed => seed.profile === "resident" && seed.brief.length > 0));
     assert.deepEqual(saved.agentProfiles, profiles);
-  }
-});
-
-test("FI-6/UNIT-003: the reference profile gives a Worker a dev-workload budget -- 4 GiB and 256 tasks", () => {
-  // A build or test run is the engine, a shell, npm and a runner's workers:
-  // each Node alone is a dozen threads, and every thread is a task.
-  const config = defaultHostConfig({ society: "demo", node: "/usr/bin/node", libdir: "/opt/oma", rootfs: "/rootfs", deploymentDigest: "a".repeat(64) });
-  for (const name of ["principal", "resident"]) {
-    const resources = config.agentProfiles[name]!.resources;
-    assert.equal(resources.memoryBytes, 0, `${name} MemoryMax`);
-    assert.equal(resources.tasks, 0, `${name} TasksMax`);
-    // Not re-tuned: CPU and the byte bounds stay where they were.
-    assert.deepEqual([resources.cpuQuotaPercent, resources.tmpBytes, resources.workspaceBytes],
-      [0, 0, 0], name);
   }
 });

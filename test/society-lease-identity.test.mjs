@@ -24,10 +24,10 @@ import { spawnSync } from "node:child_process";
 import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
 import { join } from "node:path";
-import { abstractNameHeld, holdAbstractName, lockFileDescriptor } from "../dist/src/leaf.js";
-import { inheritedFence, societyLeaseName, tryHoldSociety, claimSocietyFence } from "../dist/src/runtime/society-lease.js";
+import { abstractNameHeld, holdAbstractName, lockFileDescriptor } from "@oma/native/linux";
+import { inheritedFence, societyLeaseName, tryHoldSociety, claimSocietyFence } from "#oma-test/app/runtime/society-lease";
 
-const LEASE_MODULE = fileURLToPath(new URL("../dist/src/runtime/society-lease.js", import.meta.url));
+const LEASE_MODULE = fileURLToPath(new URL(import.meta.resolve("#oma-test/app/runtime/society-lease")));
 
 function stateRoot(tag) {
   const base = mkdtempSync(join(tmpdir(), `oma-lease-${tag}-`));

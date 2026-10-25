@@ -5,6 +5,7 @@ import { availableParallelism, tmpdir } from "node:os";
 import { join } from "node:path";
 import { once } from "node:events";
 import { localTestFiles, serialTestFiles, systemdTestFiles, unrunDirectives, unrunTests } from "./verification-lanes.mjs";
+import { workspaceTestFiles } from "./check-modules.mjs";
 // This runner has no selection surface: any argument is a mistake (or `npm
 // test -- foo`), and silently running the whole suite is the exact behavior
 // the mistake would not expect.
@@ -21,6 +22,7 @@ const sources = readdirSync("test")
 if (JSON.stringify(compiled) !== JSON.stringify(sources))
   throw new Error("compiled/source test inventories differ; rebuild required");
 const files = [
+  ...workspaceTestFiles(process.cwd()),
   ...localTestFiles(compiled).map((file) => `dist/test/${file}`),
   ...readdirSync("test")
     .filter((file) => file.endsWith(".test.mjs"))

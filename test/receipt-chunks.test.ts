@@ -1,27 +1,32 @@
+import { TransportSpool } from "@oma/storage/transport-spool";
+import { testBroker } from "./helpers/broker-fixture.js";
+import { createLifecycleModule } from "#oma-test/app/broker/lifecycle-composition";
+import { createMailModule } from "#oma-test/app/broker/mail-composition";
+import { serializePlanIntent } from "./fixtures/plan.js";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createServer, type Socket } from "node:net";
-import { FrameParser, encodeFrame } from "../src/frame.js";
-import { callActor } from "../src/cli/transport.js";
-import type { AuthContext, Receipt, Request } from "../implementation/contracts.js";
-import { Store } from "../src/store.js";
-import { Broker } from "../src/broker.js";
-import { RpcConnection } from "../src/broker/connection.js";
-import { SharedPeerPin } from "../src/broker/peer-pin.js";
-import { MailModule } from "../src/mail.js";
-import { LifecycleModule } from "../src/lifecycle.js";
-import { ViewsModule } from "../src/views.js";
-import type { UnitsModule } from "../src/units.js";
-import { requestHash } from "../src/hash.js";
-import { receiptOfOperation } from "../src/storage/receipt-projector.js";
+import { FrameParser, encodeFrame } from "@oma/protocol/frame";
+import { callActor } from "#oma-test/app/cli/transport";
+import type { AuthContext, Receipt, Request } from "@oma/contracts";
+import { Store } from "@oma/storage";
+import { Broker } from "@oma/broker";
+import { RpcConnection } from "@oma/broker/connection";
+import { SharedPeerPin } from "@oma/broker/peer-pin";
+import { MailModule } from "@oma/mail";
+import { LifecycleModule } from "@oma/lifecycle";
+import { ViewsModule } from "#oma-test/app/views";
+import type { UnitsModule } from "@oma/platform-linux/units";
+import { requestHash } from "@oma/domain/request-identity";
+import { receiptOfOperation } from "@oma/protocol/receipt-projector";
 import { ALL_CAPS, makeValidAgent, makeValidResolvedSpec } from "./fixtures/spec.js";
 import { TEST_PROTOCOL_LIMITS } from "./fixtures/limits.js";
-import { collectReceipt, receiptChunk } from "../src/protocol/receipt-chunks.js";
-import { decodeRpcReply } from "../src/protocol/response-codec.js";
-import { RequestCache, readCacheFile } from "../src/request-cache.js";
+import { collectReceipt, receiptChunk } from "@oma/protocol/receipt-chunks";
+import { decodeRpcReply } from "@oma/protocol/response-codec";
+import { RequestCache, readCacheFile } from "#oma-test/app/request-cache";
 
 const operation = "op-12345678-1234-4234-8234-123456789abc";
 const receipt: Receipt = { operation, state: "succeeded", result: { kind: "agent.stop", agent: "alice", desired: "stopped",
@@ -104,8 +109,8 @@ test("G03-broker-01 / IPC-006: a stalled chunk connection is closed after one ob
   const root = mkdtempSync(join(tmpdir(), "oma-chunk-deadline-"));
   const sockets = new Set<Socket>(); let calls = 0; let clock = 0;
   t.mock.method(performance, "now", () => clock);
-  const { installRuntime } = await import("../src/client/runtime.js");
-  const { CLIENT_RUNTIME, installClientRuntime } = await import("../src/runtime/client-runtime.js");
+  const { installRuntime } = await import("@oma/client/runtime");
+  const { CLIENT_RUNTIME, installClientRuntime } = await import("#oma-test/app/runtime/client-runtime");
   // A 1 s observation window (the smallest legal policy): the chunk read's own
   // budget, small enough to see stall detection on a deliberately silent peer.
   installRuntime({ ...CLIENT_RUNTIME, observationSeconds: 1 });
@@ -156,13 +161,12 @@ test("G03-broker-01: durable stop receipt survives a lost chunk and broker resta
     observeStatus: async () => new Map() } as unknown as UnitsModule;
   const open = () => {
     const store = new Store(join(root, "runtime.sqlite"), 5, { society: "demo" });
-    const mail = new MailModule({ stateRoot: root, society: "demo" }, store, 24);
+    const mail = createMailModule({ stateRoot: root, society: "demo" }, store, 24);
     const views = new ViewsModule(store, root, "demo", "p", limits);
-    const lifecycle = new LifecycleModule(store, units, { stateRoot: root, projectGit: join(root, "project.git"), society: "demo",
+    const lifecycle = createLifecycleModule(store, units, { stateRoot: root, projectGit: join(root, "project.git"), society: "demo",
       hasGoal: () => true, activationAllowed: () => true },
       (_parent, input) => makeValidResolvedSpec(input.name, "p", ALL_CAPS, input.from, input.brief), mail);
-    return { store, broker: new Broker(store, mail, units, views, lifecycle, null, null,
-      { stateRoot: root, runRoot: join(root, "run"), society: "demo", hasGoal: () => true }, limits) };
+    return { store, broker: testBroker({ store: store, mail: mail, units: units, views: views, lifecycle: lifecycle, git: null, reviews: null, reconcile: null, paths: { stateRoot: root, runRoot: join(root, "run"), society: "demo", hasGoal: () => true }, limits: limits }) };
   };
   let current = open();
   const auth = (actor: string): AuthContext => ({ actor, incarnation: 1, role: "resident", channel: "actor",
@@ -173,7 +177,7 @@ test("G03-broker-01: durable stop receipt survives a lost chunk and broker resta
       const topic = `pending-${n}`;
       tx.acceptOperation({ id: `op-12345678-1234-4234-8234-${n.toString().padStart(12, "0")}`, actor: "alice", requestKey: topic,
         requestHash: requestHash("route.follow", { topic }), kind: "route.follow", payloadJson: JSON.stringify({ topic }),
-        planJson: JSON.stringify({ kind: "route.follow", topic, agent: "alice" }) });
+        planJson: serializePlanIntent({ kind: "route.follow", topic, agent: "alice" }) });
     }
   });
   const sockets = new Set<Socket>();
@@ -181,7 +185,7 @@ test("G03-broker-01: durable stop receipt survives a lost chunk and broker resta
   const servers = ["alice", "bob"].map(actor => {
     const server = createServer({ allowHalfOpen: true }, socket => {
       sockets.add(socket); socket.once("close", () => sockets.delete(socket));
-      new RpcConnection({ socket, peer: new SharedPeerPin(() => true, () => {}), limits, stagingRoot: join(root, "staging"),
+      new RpcConnection({ socket, peer: new SharedPeerPin(() => true, () => {}), limits, makeSpool: descriptor => new TransportSpool(join(root, "staging"), descriptor),
         preflight() {}, onTask(task) { tasks.add(task); void task.finally(() => tasks.delete(task)); },
         async handle(raw, stream) {
           if (raw.method === "operation.read") {

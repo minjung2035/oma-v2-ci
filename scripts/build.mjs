@@ -21,8 +21,17 @@ function requireSuccessfulChild(result, phase) {
     console.error(`${phase} failed: ${result.error?.message ?? result.signal}`);
     process.exit(1);
   }
-  if (result.status !== 0) process.exit(result.status ?? 1);
+  if (result.status !== 0) {
+    if (result.stdout) console.error(result.stdout);
+    if (result.stderr) console.error(result.stderr);
+    process.exit(result.status ?? 1);
+  }
 }
+
+const workspaceBuild = spawnSync(process.execPath, [join(root, "scripts/build-workspaces.mjs")], {
+  cwd: root, stdio: "inherit", timeout: 600000, killSignal: "SIGKILL",
+});
+requireSuccessfulChild(workspaceBuild, "Workspace compilation");
 
 // A no-change rebuild is pure cost: `tsc --listFilesOnly` resolves the exact
 // file set the compile will read, so hashing every listed input (plus the
@@ -59,26 +68,12 @@ const listed = spawnSync(process.execPath, [tsc, "-p", join(root, "tsconfig.buil
   cwd: root, encoding: "utf8", timeout: 120000, killSignal: "SIGKILL",
 });
 requireSuccessfulChild(listed, "Compiler input discovery");
-// Vendored bundled-extension payloads are excluded from tsc's file list (the
-// tsconfigs exempt the tree) but are still build inputs: they are copied to
-// dist verbatim below, so a vendored byte change must poison the skip stamp.
-const vendoredInputs = [];
-const collectVendored = dir => {
-  for (const entry of readdirSync(dir, { withFileTypes: true })) {
-    const absolute = join(dir, entry.name);
-    if (entry.isDirectory()) collectVendored(absolute);
-    else if (entry.isFile()) vendoredInputs.push(slash(relative(root, absolute)));
-  }
-};
-const vendorSource = join(root, "src", "extension", "vendor");
-if (lstatSync(vendorSource, { throwIfNoEntry: false })?.isDirectory()) collectVendored(vendorSource);
-vendoredInputs.sort();
 const extraInputs = ["tsconfig.json", "tsconfig.build.json", "package.json", "package-lock.json",
   join("node_modules", "typescript", "package.json"),
   // The build logic itself and the checker it drives are inputs too: an edit
   // to either changes what a build produces and must not ride a stale skip.
   join("scripts", "build.mjs"), join("scripts", "check-package.mjs"),
-  ...vendoredInputs];
+];
 for (const name of [...listed.stdout.trim().split(/\r?\n/).sort(), ...extraInputs]) {
   const absolute = resolve(root, name);
   hash.update(relative(root, absolute).split(sep).join("/"));
@@ -125,38 +120,12 @@ if (!fresh) {
     cwd: root, stdio: "inherit", timeout: 600000, killSignal: "SIGKILL",
   });
   requireSuccessfulChild(compiled, "TypeScript compilation");
-  // The vendored bundled-extension payloads are excluded from compilation
-  // (tsconfig exclude), but they are deployed payload: the trusted
-  // extension's adapter statically imports runtime/ and the deployment
-  // digest's dist walk must cover every vendored byte. The copy is exact --
-  // byte-identical, no rewrites -- so the source-side bundle digest
-  // (manifest.json) also covers the deployed tree.
-  if (lstatSync(vendorSource, { throwIfNoEntry: false })?.isDirectory()) {
-    const copyTree = (from, to) => {
-      mkdirSync(to, { recursive: true });
-      for (const entry of readdirSync(from, { withFileTypes: true })) {
-        const sourceEntry = join(from, entry.name), targetEntry = join(to, entry.name);
-        if (entry.isDirectory()) copyTree(sourceEntry, targetEntry);
-        else if (entry.isFile()) writeFileSync(targetEntry, readFileSync(sourceEntry));
-        else throw new Error(`nonregular vendored payload entry: ${slash(relative(root, sourceEntry))}`);
-      }
-    };
-    copyTree(vendorSource, join(output, "src", "extension", "vendor"));
-  }
+
 }
 // Rebuilding a linked package must preserve executable permissions for its commands.
 const manifest = JSON.parse(readFileSync(join(root, "package.json"), "utf8"));
 const commands = typeof manifest.bin === "string" ? [manifest.bin] : Object.values(manifest.bin ?? {});
 for (const command of commands) chmodSync(join(root, command), 0o755);
-// AV16, CLI-001: the sandbox's `oma` command, written from its one owner.
-{
-  const { DEPLOYMENT_LAYOUT } = await import(pathToFileURL(join(output, "src/domain/deployment.js")).href);
-  const { modelCommandScript } = await import(pathToFileURL(join(output, "src/sandbox.js")).href);
-  const command = join(root, DEPLOYMENT_LAYOUT.modelCommand);
-  mkdirSync(dirname(command), { recursive: true });
-  writeFileSync(command, modelCommandScript(), { mode: 0o755 });
-  chmodSync(command, 0o755);
-}
 // The stamp is recorded only after every build-owned write -- the model
 // command above lands inside dist -- so the recorded set is the whole tree.
 if (!fresh) {

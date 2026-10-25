@@ -1,3 +1,6 @@
+import { testBroker } from "./helpers/broker-fixture.js";
+import { createLifecycleModule } from "#oma-test/app/broker/lifecycle-composition";
+import { createMailModule } from "#oma-test/app/broker/mail-composition";
 /** V30A (WP30, D01): an independent state model of one prepared batch's
  * delivery evidence, run against the composed runtime -- real Store, Mail,
  * receipt files and Broker.openRun after a broker restart -- over seeded event
@@ -19,16 +22,16 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { chmodSync, existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import type { PreparedBatch, ResolvedAgentSpec } from "../implementation/contracts.js";
-import { Broker } from "../src/broker.js";
-import { LifecycleModule } from "../src/lifecycle.js";
-import { ViewsModule } from "../src/views.js";
-import type { UnitsModule } from "../src/units.js";
-import { publishDeliveryReceipt } from "../src/storage/delivery-receipt.js";
-import { runnerReceiptPathAt } from "../src/storage/paths.js";
+import type { PreparedBatch, ResolvedAgentSpec } from "@oma/contracts";
+import { Broker } from "@oma/broker";
+import { LifecycleModule } from "@oma/lifecycle";
+import { ViewsModule } from "#oma-test/app/views";
+import type { UnitsModule } from "@oma/platform-linux/units";
+import { publishDeliveryReceipt } from "@oma/storage/delivery-receipt";
+import { runnerReceiptPathAt } from "@oma/domain/paths";
 import { boundaryOf, completeSession, preparedFixture } from "./fixtures/delivery-receipt.js";
-import { Store } from "../src/store.js";
-import { MailModule } from "../src/mail.js";
+import { Store } from "@oma/storage";
+import { MailModule } from "@oma/mail";
 import { TEST_VIEW_LIMITS } from "./fixtures/limits.js";
 
 const OWN_CGROUP = readFileSync("/proc/self/cgroup", "utf8").trim().split("\n")[0]!.slice(3);
@@ -63,16 +66,15 @@ async function restart(w: World): Promise<Broker & { tryOpen(): Promise<{ incarn
   if (w.broker) { await w.broker.drainAndClose(); w.broker = null; }
   else w.store.close();
   w.store = new Store(join(w.root, "runtime.sqlite"));
-  w.mail = new MailModule({ stateRoot: w.root, society: "demo" }, w.store, 64, TEST_VIEW_LIMITS.batchMaxMessages, TEST_VIEW_LIMITS);
+  w.mail = createMailModule({ stateRoot: w.root, society: "demo" }, w.store, 64, TEST_VIEW_LIMITS.batchMaxMessages, TEST_VIEW_LIMITS);
   const id = (++w.invocations).toString(16).padStart(32, "0");
   const units = { onRevokeRun: undefined, bindIncarnationReader: () => undefined, unitCgroup: () => "",
     observe: () => ({ activeState: "active", subState: "running", result: "success", execMainStatus: 0, cgroup: OWN_CGROUP, invocationId: id }),
   } as unknown as UnitsModule;
-  const lifecycle = new LifecycleModule(w.store, units, { stateRoot: w.root, projectGit: join(w.root, "repos", "project.git"),
+  const lifecycle = createLifecycleModule(w.store, units, { stateRoot: w.root, projectGit: join(w.root, "repos", "project.git"),
     society: "demo", hasGoal: () => true, activationAllowed: () => true },
     (_parent: unknown, input: { name: string; from: string; brief: string }) => ({ ...input }) as unknown as ResolvedAgentSpec, w.mail);
-  const broker = new Broker(w.store, w.mail, units, new ViewsModule(w.store, w.root, "demo", "p", TEST_VIEW_LIMITS), lifecycle,
-    null, null, { stateRoot: w.root, runRoot: join(w.root, "run"), society: "demo", hasGoal: () => true });
+  const broker = testBroker({ store: w.store, mail: w.mail, units: units, views: new ViewsModule(w.store, w.root, "demo", "p", TEST_VIEW_LIMITS), lifecycle: lifecycle, git: null, reviews: null, reconcile: null, paths: { stateRoot: w.root, runRoot: join(w.root, "run"), society: "demo", hasGoal: () => true } });
   await broker.start();
   w.broker = broker;
   const opened = (Reflect.get(broker, "openRun") as (actor: string, invocation: string) => Promise<{ incarnation: number }>).bind(broker);

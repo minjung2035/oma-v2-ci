@@ -4,8 +4,8 @@ import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import ts from "typescript";
-import { freezeMessageFacts, messagePlanFrom } from "../src/mail/facts.js";
-import { renderFrozenMessage } from "../src/mail/serialize.js";
+import { freezeMessageFacts, messagePlanFrom } from "@oma/mail/facts";
+import { renderFrozenMessage } from "@oma/mail/serialize";
 
 const root = fileURLToPath(new URL("../../", import.meta.url));
 const id = "m-11111111-1111-4111-8111-111111111111-0";
@@ -32,15 +32,15 @@ test("pure header runtime closure excludes mail coordinator SQLite transport and
       }
       if (!specifier || !ts.isStringLiteral(specifier)) continue;
       const target = specifier.text;
-      assert.ok(target.startsWith("."), `pure header closure imports external runtime ${target}`);
-      const next = resolve(dirname(path), target.replace(/\.js$/, ".ts"));
-      assert.notEqual(next, resolve(root, "src/mail.ts"));
-      assert.notEqual(next, resolve(root, "src/store.ts"));
-      assert.notEqual(next, resolve(root, "src/mail/serialize.ts"));
+      assert.ok(target.startsWith(".") || target.startsWith("@oma/domain/"), `pure header closure imports external runtime ${target}`);
+      const next = target.startsWith("@oma/") ? fileURLToPath(import.meta.resolve(target)) : resolve(dirname(path), target);
+      assert.notEqual(next, fileURLToPath(import.meta.resolve("@oma/mail")));
+      assert.notEqual(next, fileURLToPath(import.meta.resolve("@oma/storage")));
+      assert.notEqual(next, fileURLToPath(import.meta.resolve("@oma/mail/serialize")));
       visit(next);
     }
   };
-  visit(resolve(root, "src/mail/headers.ts"));
+  visit(fileURLToPath(import.meta.resolve("@oma/mail/headers")));
   assert.ok(seen.size >= 3);
 });
 

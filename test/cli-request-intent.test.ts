@@ -6,16 +6,16 @@ import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
 import { spawn, spawnSync } from "node:child_process";
 import { createServer } from "node:net";
-import type { Json, MutationMethod } from "../implementation/contracts.js";
-import { RequestCache } from "../src/request-cache.js";
-import { generateOperationId } from "../src/ids.js";
-import { FrameParser, encodeFrame } from "../src/frame.js";
-import { explicitFullOid, requestIntentConflict } from "../src/cli/request-intent.js";
-import { StoreError, publicFailure } from "../src/domain/errors.js";
+import type { Json, MutationMethod } from "@oma/contracts";
+import { RequestCache } from "#oma-test/app/request-cache";
+import { generateOperationId } from "@oma/native/identity";
+import { FrameParser, encodeFrame } from "@oma/protocol/frame";
+import { explicitFullOid, requestIntentConflict } from "#oma-test/app/cli/request-intent";
+import { StoreError, publicFailure } from "@oma/domain/errors";
 
 const oid = "a".repeat(40);
 const otherOid = "b".repeat(40);
-const cli = fileURLToPath(new URL("../src/cli.js", import.meta.url));
+const cli = fileURLToPath(new URL("../../apps/oma/dist/cli.js", import.meta.url));
 
 function invoke(home: string, args: string[]) {
   return spawnSync(process.execPath, [cli, ...args], {

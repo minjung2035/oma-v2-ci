@@ -1,14 +1,13 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import type { ErrorCode } from "../implementation/contracts.js";
+import type { ErrorCode } from "@oma/contracts";
 import {
   ERROR_METADATA, StoreError, classifyError, errorExit, isErrorCode,
   isPreacceptOnlyFailure, publicFailure, type ErrorContext,
-} from "../src/domain/errors.js";
-import { StoreError as StoreCompatibilityError } from "../src/store.js";
-import { receiptOf as mailReceipt } from "../src/mail.js";
-import { receiptOfOperation, type ReceiptOperation } from "../src/storage/receipt-projector.js";
-import { receiptExit, receiptLines, receiptNotFound, isRequestNotFound } from "../src/protocol/receipts.js";
+} from "@oma/domain/errors";
+import { receiptOfOperation } from "@oma/protocol/receipt-projector";
+import { type OperationLookup } from "@oma/contracts/durable";
+import { receiptExit, receiptLines, receiptNotFound, isRequestNotFound } from "@oma/protocol/receipts";
 import { receiptOperation } from "./fixtures/receipt-operation.js";
 
 const pending = receiptOperation();
@@ -68,12 +67,10 @@ test("all public error codes preserve terminal rows and cannot authorize ambiguo
   }
   assert.equal(isErrorCode("__proto__"), false);
   assert.equal(isErrorCode("NEW_UNREVIEWED_ERROR"), false);
-  assert.equal(StoreCompatibilityError, StoreError, "existing StoreError imports retain instanceof identity");
 });
 
 test("receipt projection is shared and never reparses or rewrites its decoded operation", () => {
-  assert.equal(mailReceipt, receiptOfOperation);
-  const rows: ReceiptOperation[] = [
+  const rows: OperationLookup[] = [
     pending,
     receiptOperation({ state: "unknown" }),
     receiptOperation({ state: "failed", error_code: "CHECK_FAILED" }),
@@ -82,7 +79,6 @@ test("receipt projection is shared and never reparses or rewrites its decoded op
   for (const row of rows) {
     const before = JSON.stringify(row);
     const first = receiptOfOperation(row);
-    assert.deepEqual(mailReceipt(row), first);
     assert.deepEqual(receiptOfOperation(row), first);
     assert.equal(JSON.stringify(row), before, "projection must not normalize durable bytes");
     assert.equal(Object.isFrozen(row), true);

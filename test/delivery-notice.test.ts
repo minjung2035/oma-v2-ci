@@ -1,3 +1,5 @@
+import {renderBatchView} from "@oma/mail/batch-view";
+import { createMailModule } from "#oma-test/app/broker/mail-composition";
 /** AV10 -- BATCH-002 as a reader meets it: the notice names each message by
  * its subject, and the index it points to can be read by the agent it is for.
  *
@@ -11,14 +13,14 @@ import assert from "node:assert/strict";
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type { AuthContext, Capability } from "../implementation/contracts.js";
-import { Store } from "../src/store.js";
-import { MailModule } from "../src/mail.js";
-import { readableMail, registerOmaTools, replyPathFor } from "../src/extension/mail-tools.js";
-import { buildEml } from "../src/mail/serialize.js";
-import { readableMail as runtimeReadableMail } from "../src/mail/display.js";
-import { parseMessage, readBody } from "../src/application/mail.js";
-import { PrincipalChannel } from "../src/extension/principal-channel.js";
+import type { AuthContext, Capability } from "@oma/contracts";
+import { Store } from "@oma/storage";
+import { MailModule } from "@oma/mail";
+import { readableMail, registerOmaTools, replyPathFor } from "@oma/extension/mail-tools";
+import { buildEml } from "@oma/mail/serialize";
+import { readableMail as runtimeReadableMail } from "@oma/mail/display";
+import { parseMessage, readBody } from "#oma-test/app/application/mail";
+import { PrincipalChannel } from "@oma/extension/principal-channel";
 import { makeValidAgent } from "./fixtures/spec.js";
 import { TEST_VIEW_LIMITS } from "./fixtures/limits.js";
 
@@ -32,7 +34,7 @@ test("AV10 / BATCH-002: a delivery notice shows a subject as its sender wrote it
   const store = new Store(join(root, "runtime.sqlite"));
   try {
     store.transaction(tx => { tx.insertAgent(makeValidAgent("a")); tx.insertAgent(makeValidAgent("b")); });
-    const mail = new MailModule({ stateRoot: root, society: "demo" }, store, 64, 24, TEST_VIEW_LIMITS);
+    const mail = createMailModule({ stateRoot: root, society: "demo" }, store, 64, 24, TEST_VIEW_LIMITS);
     await mail.send(auth("b", ["mail.send"]), "korean", { to: ["a"], subject: "OMA 기능 점검 — 자체 메일", kind: "question", body: "본문" });
     const batch = await mail.prepare(auth("a", []));
     assert.ok(batch);
@@ -259,14 +261,14 @@ test("P0V-45 / N22, P0-2: a reader keeps the body's leading U+FEFF and finds the
  * unfinished work as already handled. DR5: the index told readers to `cat` a
  * body its writer stored with a transfer encoding. */
 test("DR6 / D01, BATCH-002: a batch presented again says so, a new one does not, and the index names the reader", async () => {
-  const { REDELIVERY_NOTICE } = await import("../src/mail/batches.js");
+  const { REDELIVERY_NOTICE } = await import("@oma/mail/batches");
   const { readFileSync } = await import("node:fs");
-  const { runnerViewPathAt } = await import("../src/storage/paths.js");
+  const { runnerViewPathAt } = await import("@oma/domain/paths");
   const root = mkdtempSync(join(tmpdir(), "oma-dr6-"));
   const store = new Store(join(root, "runtime.sqlite"));
   try {
     store.transaction(tx => { tx.insertAgent(makeValidAgent("a")); tx.insertAgent(makeValidAgent("b")); });
-    const mail = new MailModule({ stateRoot: root, society: "demo" }, store, 64, 24, TEST_VIEW_LIMITS);
+    const mail = createMailModule({ stateRoot: root, society: "demo" }, store, 64, 24, TEST_VIEW_LIMITS);
     await mail.send(auth("b", ["mail.send"]), "work", { to: ["a"], subject: "작업", kind: "question", body: "sleep 90 뒤에 commit" });
     const first = await mail.prepare(auth("a", []));
     assert.ok(first);
@@ -290,14 +292,14 @@ test("DR6 / D01, BATCH-002: a batch presented again says so, a new one does not,
 test("mail-v1: the batch index folds thread revisions of one request, keeping every id", async () => {
   const root = mkdtempSync(join(tmpdir(), "oma-index-fold-"));
   try {
-    const { publishBatchView } = await import("../src/storage/batch-view.js");
-    const { runnerViewPathAt } = await import("../src/storage/paths.js");
+    const { publishBatchView } = await import("@oma/storage/batch-view");
+    const { runnerViewPathAt } = await import("@oma/domain/paths");
     const op = "op-00000000-0000-4000-8000-000000000010";
     const rev0 = "m-00000000-0000-4000-8000-000000000020-0";
     const rev1 = "m-00000000-0000-4000-8000-000000000021-0";
     const rev2 = "m-00000000-0000-4000-8000-000000000022-0";
     const plain = "m-00000000-0000-4000-8000-000000000030-0";
-    const meta = (id: string, revision: number) => ({ review: { role: "thread" as const, request: op, name: "merge-deadbeef", revision },
+    const meta = (id: string, revision: number) => ({ review: { role: "thread" as const, request: op, name: "merge-deadbeef-0000-4000-8000-000000000000", revision },
       displayPath: `/mail/workers/cur/${id}:2,` });
     const info: Record<string, { review?: unknown; displayPath: string }> = {
       [rev0]: meta(rev0, 0), [rev1]: meta(rev1, 1), [rev2]: meta(rev2, 2),
@@ -306,7 +308,7 @@ test("mail-v1: the batch index folds thread revisions of one request, keeping ev
     const batch = { id: "b-00000000-0000-4000-8000-000000000099", agent: "a", incarnation: 1,
       messageIds: [rev0, rev1, rev2, plain], sessionPath: null, deliveryMode: "followUp" as const,
       notice: "mail", indexPath: "/inbox.md" as const };
-    publishBatchView(root, batch as never, TEST_VIEW_LIMITS, undefined, (id) => (info[id] ?? null) as never);
+    publishBatchView(root, batch as never, renderBatchView(batch as never, TEST_VIEW_LIMITS, (id) => (info[id] ?? null) as never));
     const index = readFileSync(join(runnerViewPathAt(root, "a"), "inbox.md"), "utf8");
     // The latest revision stands in the numbered list; the earlier ones are
     // named on its row instead of rows of their own.

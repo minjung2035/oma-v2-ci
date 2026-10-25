@@ -1,8 +1,8 @@
 // R03 boundary vectors, authored NOT_RUN. No live Git or kernel evidence claimed.
 import test from "node:test";
 import assert from "node:assert/strict";
-import { isExportRef, isPublishedRef, isMailObjectRelativePath } from "../src/domain/derived.js";
-import { checkExportRef, operationResultCheck, messagePlanCheck } from "../src/validate.js";
+import { isExportRef, isPublishedRef, isMailObjectRelativePath } from "@oma/domain/derived";
+import { checkExportRef, operationResultCheck, messagePlanCheck } from "@oma/domain/validation";
 
 const MESSAGE = "m-00000000-0000-4000-8000-000000000003-0";
 const REF = "refs/oma/published/alice/op-00000000-0000-4000-8000-000000000003";

@@ -9,10 +9,10 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type { MailInput } from "../implementation/contracts.js";
-import { Store } from "../src/store.js";
-import { RequestCache } from "../src/request-cache.js";
-import { decodeSubject, parseEmlHeaders } from "../src/mail/headers.js";
+import type { MailInput } from "@oma/contracts";
+import { Store } from "@oma/storage";
+import { RequestCache } from "#oma-test/app/request-cache";
+import { decodeSubject, parseEmlHeaders } from "@oma/mail/headers";
 import { gitAuth, gitFixture } from "./fixtures/git-crash.js";
 import { makeValidAgent } from "./fixtures/spec.js";
 import { runCliWithPeer } from "./fixtures/cli-peer.js";

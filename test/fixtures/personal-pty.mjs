@@ -1,14 +1,15 @@
+import { encodePackageIndex } from "#oma-test/app/runtime/packages/index";
 // Installed oma, real bundled Pi/Open TUI and tools; only inference is scripted.
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
 import { mkdirSync, readFileSync, readdirSync, realpathSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { scriptedProvider, call, tools, text, failing, lastUserText, toolResults } from '../../dist/test/fixtures/scripted-provider.js';
-import { updatePersonalSettings } from '../../dist/src/runtime/personal-settings.js';
-import { defaultSocietyFor } from '../../dist/src/config/defaults.js';
-import { sha256Hex } from '../../dist/src/hash.js';
-import { ensureProjectSettings } from '../../dist/src/application/project-settings.js';
-import { readExtensions, toggleExtension } from '../../dist/src/application/extensions.js';
+import { updatePersonalSettings } from "#oma-test/app/runtime/personal-settings";
+import { defaultSocietyFor } from "@oma/config/defaults";
+import { sha256Hex } from "@oma/domain/canonical-json";
+import { ensureProjectSettings } from "#oma-test/app/application/project-settings";
+import { readExtensions, toggleExtension } from "#oma-test/app/application/extensions";
 
 const [root, ending = 'tools'] = process.argv.slice(2);
 const cwd = join(root, 'project'), outside = join(root, 'user', 'hyprland.conf');
@@ -47,7 +48,7 @@ export default pi => {
     parameters: { type: 'object', properties: {}, required: [] },
     async execute() { return { content: [{ type: 'text', text: 'EXTENSION_TOOL_COMPLETE' }], details: {} }; } });
 };\n`);
-writeFileSync(join(store, 'oma-extensions.json'), JSON.stringify([{ source: 'npm:local-fixture', entries: ['packages:fixture.mjs'] }]));
+writeFileSync(join(store, 'oma-extensions.json'), encodePackageIndex([{ source: 'npm:local-fixture', entries: ['packages:fixture.mjs'], skills: [], prompts: [], themes: [] }]));
 const projectSeed = ending.startsWith('project-seed');
 // A bound project still lets an unused Personal session open the mode picker.
 if (ending === 'society-bound') {

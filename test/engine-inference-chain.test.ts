@@ -13,11 +13,11 @@ import { createServer } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { InferenceRelay } from "../src/runtime/inference-relay.js";
-import { placeholderFor, resolveEngineAuth } from "../src/runtime/engine-auth.js";
-import { resolvePiRuntime } from "../src/runtime/pi-runtime.js";
-import { spawnOwnedRpc } from "../src/process/async.js";
-import { PiRpcClient } from "../src/runtime/pi-rpc.js";
+import { InferenceRelay } from "#oma-test/app/runtime/inference-relay";
+import { placeholderFor, resolveEngineAuth } from "@oma/engine/engine-auth";
+import { resolvePiRuntime } from "@oma/engine/pi-runtime";
+import { spawnOwnedRpc } from "@oma/process/async";
+import { PiRpcClient } from "@oma/engine/pi-rpc";
 import { tlsProvider } from "./fixtures/tls-provider.js";
 
 const root = fileURLToPath(new URL("../../", import.meta.url));
@@ -144,7 +144,7 @@ test("T116 the real engine, given only a placeholder, reaches the provider with 
       ...runtime.args, "--mode", "rpc", "--no-approve", "--no-context-files", "--no-skills",
       "--no-prompt-templates", "--no-extensions", "--exclude-tools", "bash,powershell",
       "--session-dir", sessionDir, "--name", "oma-chain",
-      "-e", join(root, "dist/src/pi-extension.js"),
+      "-e", join(root, "packages/extension/dist/index.js"),
       "--model", "anthropic/claude-fable-5",
     ], work, {
       HOME: work, PATH: process.env.PATH ?? "/usr/bin:/bin",

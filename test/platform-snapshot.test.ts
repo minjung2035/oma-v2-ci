@@ -6,11 +6,11 @@ import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdir
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { randomUUID } from "node:crypto";
-import { GuestLink } from "../src/platform/host/guest-link.js";
-import type { FramedPeer } from "../src/platform/rpc.js";
-import { openSnapshotStore, pruneSnapshots, snapshotIdOf, snapshotRunning, snapshotStopped } from "../src/platform/host/snapshot.js";
-import type { SessionLauncher } from "../src/platform/guest/host.js";
-import { HOST_GUEST_PROTOCOL, PLATFORM_FRAME_BYTES } from "../src/protocol/host-guest.js";
+import { GuestLink } from "#oma-test/app/platform/host/guest-link";
+import type { FramedPeer } from "#oma-test/app/platform/rpc";
+import { openSnapshotStore, pruneSnapshots, snapshotIdOf, snapshotRunning, snapshotStopped } from "#oma-test/app/platform/host/snapshot";
+import type { SessionLauncher } from "#oma-test/app/platform/guest/host";
+import { HOST_GUEST_PROTOCOL, PLATFORM_FRAME_BYTES } from "@oma/protocol/host-guest";
 import { LocalDriver, listenSilently } from "./fixtures/local-guest.js";
 import { holdSocketNames } from "./fixtures/socket-names.js";
 import type { Server } from "node:net";

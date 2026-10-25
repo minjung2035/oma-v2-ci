@@ -3,9 +3,9 @@ import assert from "node:assert/strict";
 import { chmodSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { Broker, boundedLogOutput } from "../src/broker.js";
-import { UnitsModule } from "../src/units.js";
-import type { ProtocolLimits, UnitObservation } from "../implementation/contracts.js";
+import { Broker, boundedLogOutput } from "@oma/broker";
+import { UnitsModule } from "@oma/platform-linux/units";
+import type { ProtocolLimits, UnitObservation } from "@oma/contracts";
 
 const observation: UnitObservation = {
   activeState: "inactive",
@@ -30,7 +30,7 @@ test("RUN-001: confirmDead is fenced by the durable monotonic incarnation", () =
       society: "demo",
       agent: "",
     };
-    const units = new UnitsModule("demo", values, root, {}, () => 7);
+    const units = new UnitsModule("demo", values, root, () => 7);
     fakeObservation(units);
     assert.equal(units.confirmDead("alice", 6), true, "empty fixed cgroup proves historical incarnations are dead");
     assert.equal(units.confirmDead("alice", 7), true, "current durable incarnation may use empty fixed-cgroup evidence");
@@ -54,7 +54,7 @@ test("RUN-001: authoritative incarnation binding replaces a stale constructor re
       society: "demo",
       agent: "",
     };
-    const units = new UnitsModule("demo", values, root, {}, () => 99);
+    const units = new UnitsModule("demo", values, root, () => 99);
     fakeObservation(units);
     assert.equal(units.confirmDead("alice", 4), true);
     units.bindIncarnationReader(() => 3);

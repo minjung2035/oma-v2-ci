@@ -1,3 +1,4 @@
+import { GUEST_IMAGE_ASSETS } from "@oma/platform-linux/guest-assets";
 /** MAC-202: the guest's only vsock code. The bridge is built here from its
  * source and driven over this machine's own vsock loopback, as systemd drives
  * it in the guest (one instance per accepted connection, the socket as fd 3).
@@ -11,7 +12,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-const SOURCE = fileURLToPath(new URL("../../platform/guest/bridge/oma-vsock-bridge.c", import.meta.url));
+const SOURCE = join(GUEST_IMAGE_ASSETS, "bridge", "oma-vsock-bridge.c");
 
 function vsockLoopback(): boolean {
   const probe = spawnSync("python3", ["-c", `

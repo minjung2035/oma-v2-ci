@@ -3,11 +3,12 @@ import assert from "node:assert/strict";
 import { mkdtempSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { BrokerLifetime, HOST_LOSS_SIGNALS, settleWithin } from "../src/runtime/broker-lifetime.js";
-import { ProcessLock } from "../src/runtime/process-lock.js";
-import { AdmissionGate, bindAdmissionGate } from "../src/domain/admission.js";
-import { StoreError } from "../src/domain/errors.js";
-import { Store } from "../src/store.js";
+import { BrokerLifetime, settleWithin } from "@oma/broker/lifetime";
+import { HOST_LOSS_SIGNALS } from "@oma/process/host-loss";
+import { ProcessLock } from "@oma/native/process-lock";
+import { AdmissionGate, bindAdmissionGate } from "@oma/domain/admission";
+import { StoreError } from "@oma/domain/errors";
+import { Store } from "@oma/storage";
 import { makeValidAgent } from "./fixtures/spec.js";
 import { makeValidOperation } from "./fixtures/valid.js";
 
@@ -118,13 +119,13 @@ test("AV31 / D03, LIFE-006: a hung-up terminal ends the broker through its drain
   const { tmpdir } = await import("node:os");
   const { join } = await import("node:path");
   const { fileURLToPath } = await import("node:url");
-  const lifetime = fileURLToPath(new URL("../src/runtime/broker-lifetime.js", import.meta.url));
+  const hostLoss = fileURLToPath(new URL(import.meta.resolve("@oma/process/host-loss")));
   const root = mkdtempSync(join(tmpdir(), "oma-av31-"));
   try {
     for (const signal of HOST_LOSS_SIGNALS) {
       const marker = join(root, signal);
       const child = spawn(process.execPath, ["--input-type=module", "-e", `
-        const { stopOnHostLoss } = await import(${JSON.stringify(lifetime)});
+        const { stopOnHostLoss } = await import(${JSON.stringify(hostLoss)});
         const { writeFileSync } = await import("node:fs");
         stopOnHostLoss(() => { setTimeout(() => { writeFileSync(${JSON.stringify(marker)}, "drained"); process.exit(0); }, 200); });
         process.stdout.write("ready\\n"); setInterval(() => {}, 1000);`], { stdio: ["ignore", "pipe", "inherit"] });

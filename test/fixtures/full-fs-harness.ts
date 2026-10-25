@@ -1,3 +1,4 @@
+import { createMailModule } from "#oma-test/app/broker/mail-composition";
 /** V22B child: runs inside a private user+mount namespace whose state root is a
  * real, size-limited tmpfs filled to ENOSPC. It reports what new work and the
  * completion of an already accepted mail did on the full filesystem. The
@@ -5,11 +6,11 @@
  */
 import { closeSync, existsSync, openSync, readFileSync, readdirSync, writeSync } from "node:fs";
 import { join } from "node:path";
-import type { AuthContext } from "../../implementation/contracts.js";
-import { Store } from "../../src/store.js";
-import { MailModule } from "../../src/mail.js";
-import { errorCodeOf } from "../../src/domain/errors.js";
-import { sha256Hex } from "../../src/hash.js";
+import type { AuthContext } from "@oma/contracts";
+import { Store } from "@oma/storage";
+import { MailModule } from "@oma/mail";
+import { errorCodeOf } from "@oma/domain/errors";
+import { sha256Hex } from "@oma/domain/canonical-json";
 import { ALL_CAPS, makeValidAgent } from "./spec.js";
 import { sendWithStop } from "./mail-faults.js";
 
@@ -17,7 +18,7 @@ const root = process.argv[2];
 if (!root) throw new Error("full-fs harness requires its tmpfs state root");
 const store = new Store(join(root, "runtime.sqlite"));
 store.transaction(tx => { tx.insertAgent(makeValidAgent("a")); tx.insertAgent(makeValidAgent("b")); });
-const mail = new MailModule({ stateRoot: root, society: "full" }, store, 64);
+const mail = createMailModule({ stateRoot: root, society: "full" }, store, 64);
 const auth: AuthContext = { actor: "a", incarnation: 1, role: "resident", channel: "actor", capabilities: new Set(ALL_CAPS),
   peer: { pid: process.pid, uid: process.getuid!(), gid: process.getgid!(), cgroup: null } };
 const input = (subject: string) => ({ to: ["b"], subject, kind: "message" as const, body: "x".repeat(2048) });

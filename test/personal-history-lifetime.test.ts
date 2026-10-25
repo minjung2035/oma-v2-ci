@@ -4,11 +4,11 @@ import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
-import { personalBirth, runPersonalSession } from "../src/runtime/personal-session.js";
-import { ProcessLock } from "../src/runtime/process-lock.js";
-import { DEPLOYMENT_LAYOUT } from "../src/domain/deployment.js";
-import { PI_PACKAGE } from "../src/runtime/pi-runtime.js";
+import { dirname, join } from "node:path";
+import { personalBirth, runPersonalSession } from "#oma-test/app/runtime/personal-session";
+import { ProcessLock } from "@oma/native/process-lock";
+import { DEPLOYMENT_LAYOUT } from "@oma/domain/deployment";
+import { PI_PACKAGE } from "@oma/engine/pi-runtime";
 
 const fixtureChild = `
 const fs = require('node:fs'), path = require('node:path');
@@ -27,9 +27,10 @@ function fixture(): { directory: string; lockPath: string; options: Parameters<t
   const dataRoot = join(directory, "data"), libdir = join(directory, "install"), packages = join(directory, "signals");
   mkdirSync(packages); mkdirSync(dataRoot);
   const entry = join(libdir, DEPLOYMENT_LAYOUT.entries.personal), engine = join(libdir, "node_modules", PI_PACKAGE);
-  mkdirSync(join(libdir, "dist", "src", "entry"), { recursive: true }); mkdirSync(engine, { recursive: true });
-  mkdirSync(join(libdir, "dist", "src", "pi-compat"), { recursive: true });
-  writeFileSync(join(libdir, "dist", "src", "pi-compat", "interactive-tool-setup.js"), "// fixture engine has no interactive tool imports\n");
+  mkdirSync(join(libdir, "apps", "oma", "dist", "entry"), { recursive: true }); mkdirSync(engine, { recursive: true });
+  const toolsPreload = join(libdir, DEPLOYMENT_LAYOUT.interactiveToolsPreload);
+  mkdirSync(dirname(toolsPreload), { recursive: true });
+  writeFileSync(toolsPreload, "// fixture engine has no interactive tool imports\n");
   writeFileSync(entry, fixtureChild); writeFileSync(join(engine, "package.json"), JSON.stringify({ name: PI_PACKAGE, bin: { pi: "fixture.js" } }));
   writeFileSync(join(engine, "fixture.js"), "// resolver fixture; never executed\n");
   const { root } = personalBirth(dataRoot, directory);
@@ -76,7 +77,7 @@ test("Personal history actual process: inherited lock survives an exited parent 
     const { directory, lockPath, options } = fixture(), parentEntry = join(directory, "parent.mjs");
     writeFileSync(parentEntry, `
 import { existsSync } from 'node:fs';
-import { runPersonalSession } from ${JSON.stringify(new URL("../src/runtime/personal-session.js", import.meta.url).href)};
+import { runPersonalSession } from ${JSON.stringify(new URL(import.meta.resolve("#oma-test/app/runtime/personal-session")).href)};
 const options = ${JSON.stringify(options)};
 void runPersonalSession(options).catch(() => process.exit(84));
 const deadline = setTimeout(() => process.exit(85), 10000);

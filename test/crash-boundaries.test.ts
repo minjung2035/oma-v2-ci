@@ -1,3 +1,4 @@
+import { createMailModule } from "#oma-test/app/broker/mail-composition";
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { fork, spawnSync } from "node:child_process";
@@ -5,12 +6,13 @@ import { fileURLToPath } from "node:url";
 import { mkdtempSync, rmSync, readdirSync, existsSync, readFileSync, writeFileSync, statSync, symlinkSync, linkSync, chmodSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { Store } from "../src/store.js";
-import { sha256Hex } from "../src/hash.js";
-import { MailModule, publishImmutableFile } from "../src/mail.js";
+import { Store } from "@oma/storage";
+import { sha256Hex } from "@oma/domain/canonical-json";
+import { MailModule } from "@oma/mail";
+import { publishImmutableFile } from "@oma/storage/immutable-file";
 import { makeValidAgent } from "./fixtures/spec.js";
 import { TEST_VIEW_LIMITS } from "./fixtures/limits.js";
-import type { AuthContext, MailInput } from "../implementation/contracts.js";
+import type { AuthContext, MailInput } from "@oma/contracts";
 import { gitFixture, gitAuth, seedGit, gitCommand, submitFixture } from "./fixtures/git-crash.js";
 import { lifecycleFixture } from "./fixtures/lifecycle-crash.js";
 import { removeTree } from "./fixtures/cleanup.js";
@@ -56,7 +58,7 @@ for (const point of ["stage", "object", "accepted", "archive", "inbox-a", "inbox
     let open = true;
     try {
       seedAgents(store);
-      let mail = new MailModule({ stateRoot: root, society: "crash" }, store, 64, TEST_VIEW_LIMITS.batchMaxMessages, TEST_VIEW_LIMITS);
+      let mail = createMailModule({ stateRoot: root, society: "crash" }, store, 64, TEST_VIEW_LIMITS.batchMaxMessages, TEST_VIEW_LIMITS);
       const batchPoint = point === "prepared" || point === "cur";
       if (batchPoint) await mail.send(auth, "crash-send", input);
       store.close();
@@ -64,7 +66,7 @@ for (const point of ["stage", "object", "accepted", "archive", "inbox-a", "inbox
       await killAt(root, point);
       store = new Store(join(root, "runtime.sqlite"));
       open = true;
-      mail = new MailModule({ stateRoot: root, society: "crash" }, store, 64, TEST_VIEW_LIMITS.batchMaxMessages, TEST_VIEW_LIMITS);
+      mail = createMailModule({ stateRoot: root, society: "crash" }, store, 64, TEST_VIEW_LIMITS.batchMaxMessages, TEST_VIEW_LIMITS);
       const accepted = store.getOperation("a", "crash-send");
       if (point === "stage" || point === "object") {
         assert.equal(accepted, null);
@@ -73,7 +75,7 @@ for (const point of ["stage", "object", "accepted", "archive", "inbox-a", "inbox
         assert.equal((await mail.send(auth, "crash-send", input)).state, "succeeded");
       } else {
         assert.ok(accepted);
-        const message = JSON.parse(accepted.planJson).message;
+        const message = JSON.parse(accepted.planJson).intent.message;
         const original = readFileSync(mail.objectPath(message.id));
         if (point === "inbox-b") mail.moveToCur("b", [message.id]);
         await mail.reconcilePending();
@@ -184,7 +186,7 @@ for (const point of ["submit-accepted", "submit-import", "submit-ref", "submit-m
       const { git, mail, paths } = gitFixture(root, store);
       const accepted = store.getOperation("a", "git-crash");
       assert.ok(accepted, "durable acceptance must survive SIGKILL");
-      const plan = JSON.parse(accepted.planJson);
+      const plan = JSON.parse(accepted.planJson).intent;
       const original = plan.message ? readFileSync(mail.objectPath(plan.message.id)) : null;
       if (point === "submit-accepted") {
         const bad = Buffer.from("not a Git bundle\n");
@@ -195,7 +197,7 @@ for (const point of ["submit-accepted", "submit-import", "submit-ref", "submit-m
         }, (async function* () { yield bad; })()), { code: "BUNDLE_INVALID" });
         const other = store.getOperation("b", "git-crash")!;
         assert.equal(other.state, "failed");
-        assert.notEqual(JSON.parse(other.planJson).bundle.path, plan.bundle.path);
+        assert.notEqual(JSON.parse(other.planJson).intent.bundle.path, plan.bundle.path);
         assert.equal(sha256Hex(readFileSync(plan.bundle.path)), plan.bundle.sha256);
       }
       if (point === "ctx-accepted") {
@@ -223,7 +225,7 @@ for (const point of ["submit-accepted", "submit-import", "submit-ref", "submit-m
       } else if (point.startsWith("int-")) {
         assert.equal(gitCommand(root, ["--git-dir", paths.projectGit, "rev-parse", "refs/heads/main"]), info.candidate);
       } else {
-        const candidate = JSON.parse(recovered.planJson).candidate;
+        const candidate = JSON.parse(recovered.planJson).intent.candidate;
         if (plan.candidate) assert.equal(candidate, plan.candidate);
         assert.equal(candidate.length, format === "sha1" ? 40 : 64);
         assert.equal(gitCommand(root, ["--git-dir", paths.contextGit, "rev-parse", "refs/heads/main"]), candidate);
@@ -254,7 +256,7 @@ for (const point of ["error-stage-before", "error-stage-after", "error-archive-b
         store = new Store(join(root, "runtime.sqlite")); open = true;
         assert.equal(store.getOperation("a", "crash-send"), null);
         assert.deepEqual(files(join(root, "mail/archive/cur")), []);
-        const mail = new MailModule({ stateRoot: root, society: "crash" }, store, 64, TEST_VIEW_LIMITS.batchMaxMessages, TEST_VIEW_LIMITS);
+        const mail = createMailModule({ stateRoot: root, society: "crash" }, store, 64, TEST_VIEW_LIMITS.batchMaxMessages, TEST_VIEW_LIMITS);
         assert.equal((await mail.send(auth, "crash-send", input)).state, "succeeded");
       } else {
         assert.equal(outcome.state, "pending");
@@ -262,7 +264,7 @@ for (const point of ["error-stage-before", "error-stage-after", "error-archive-b
         store = new Store(join(root, "runtime.sqlite")); open = true;
         assert.equal(store.getOperation("a", "crash-send")!.id, outcome.operation);
         assert.equal(store.getOperation("a", "crash-send")!.state, "pending");
-        const mail = new MailModule({ stateRoot: root, society: "crash" }, store, 64, TEST_VIEW_LIMITS.batchMaxMessages, TEST_VIEW_LIMITS);
+        const mail = createMailModule({ stateRoot: root, society: "crash" }, store, 64, TEST_VIEW_LIMITS.batchMaxMessages, TEST_VIEW_LIMITS);
         await mail.reconcilePending();
         assert.equal(store.getOperation("a", "crash-send")!.state, "succeeded");
         assert.equal(store.getOperation("a", "crash-send")!.id, outcome.operation);
@@ -292,7 +294,7 @@ for (const point of ["boot-stage", "boot-intent", "boot-object", "boot-workspace
         assert.equal(store.listAgents().length, 3, "all bootstrap identities commit together");
         assert.ok(before.every(Boolean));
         for (const op of before) {
-          const message = JSON.parse(op!.planJson).initialMessage;
+          const message = JSON.parse(op!.planJson).intent.initialMessage;
           if (existsSync(fixture.mail.objectPath(message.id))) rmSync(join(root, "staging", `${message.id}.eml`), { force: true });
         }
       }
@@ -302,7 +304,7 @@ for (const point of ["boot-stage", "boot-intent", "boot-object", "boot-workspace
         const op = store.getOperation("principal", `bootstrap-${name}`)!;
         if (before[index]) assert.equal(op.id, before[index]!.id);
         assert.equal(op.state, "succeeded");
-        const plan = JSON.parse(op.planJson);
+        const plan = JSON.parse(op.planJson).intent;
         assert.equal(gitCommand(root, ["-C", plan.workspacePath, "rev-parse", "HEAD"]), plan.spec.from);
         assert.equal(store.getAgent(name)!.incarnation, 0, "pre-GOAL must not execute a runner");
         assert.equal(fixture.units.observe(name).activeState, "inactive");
@@ -314,7 +316,7 @@ for (const point of ["boot-stage", "boot-intent", "boot-object", "boot-workspace
       const bootObjects = files(join(root, "mail/objects"));
       assert.equal(bootObjects.length, point === "boot-object" ? 3 : 2, JSON.stringify(bootObjects));
       for (const name of ["child", "peer"]) {
-        const initial = JSON.parse(store.getOperation("principal", `bootstrap-${name}`)!.planJson).initialMessage.id;
+        const initial = JSON.parse(store.getOperation("principal", `bootstrap-${name}`)!.planJson).intent.initialMessage.id;
         assert.ok(bootObjects.includes(`${initial}.eml`), JSON.stringify(bootObjects));
       }
       assert.equal(files(join(root, "mail/archive/cur")).length, 2);
@@ -363,7 +365,7 @@ for (const point of ["create-stage", "create-intent", "create-object", "create-w
       // unreferenced object; FS-007 forbids automatic removal, so it survives
       // next to the accepted initial message.
       const createObjects = files(join(root, "mail/objects"));
-      const acceptedInitial = JSON.parse(op.planJson).initialMessage.id;
+      const acceptedInitial = JSON.parse(op.planJson).intent.initialMessage.id;
       assert.ok(createObjects.includes(`${acceptedInitial}.eml`), JSON.stringify(createObjects));
       assert.equal(createObjects.length, point === "create-object" ? 2 : 1, JSON.stringify(createObjects));
       assert.equal(files(join(root, "mail/archive/cur")).length, 1);
@@ -383,7 +385,7 @@ for (const kind of ["symlink", "hardlink"]) {
       await killAt(root, "submit-accepted");
       store = new Store(join(root, "runtime.sqlite")); open = true;
       const op = store.getOperation("a", "git-crash")!;
-      const plan = JSON.parse(op.planJson);
+      const plan = JSON.parse(op.planJson).intent;
       const external = join(root, "replacement.bundle");
       writeFileSync(external, readFileSync(plan.bundle.path));
       rmSync(plan.bundle.path);

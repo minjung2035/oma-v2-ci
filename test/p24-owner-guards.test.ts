@@ -3,16 +3,16 @@ import assert from "node:assert/strict";
 import { mkdtempSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import type { AuthContext } from "../implementation/contracts.js";
-import { Store } from "../src/store.js";
-import { operationPlanCheck } from "../src/durable.js";
-import { assertActorIdentity, assertCurrentActor } from "../src/authority.js";
-import { generateOperationId } from "../src/ids.js";
-import { resolvedSpecDigest } from "../src/domain/spec-identity.js";
-import { residentUnitsFor } from "../src/domain/derived.js";
-import { LifecycleModule } from "../src/lifecycle.js";
-import { ReconcileModule } from "../src/reconcile.js";
-import { ProcessLock } from "../src/runtime/process-lock.js";
+import type { AuthContext } from "@oma/contracts";
+import { Store } from "@oma/storage";
+import { operationPlanCheck } from "@oma/domain/durable";
+import { assertActorIdentity, assertCurrentActor } from "@oma/domain/authority";
+import { generateOperationId } from "@oma/native/identity";
+import { resolvedSpecDigest } from "@oma/domain/spec-identity";
+import { residentUnitsFor } from "@oma/domain/derived";
+import { LifecycleModule } from "@oma/lifecycle";
+import { ReconcileModule } from "@oma/reconcile";
+import { ProcessLock } from "@oma/native/process-lock";
 import { makeValidAgent, makeValidResolvedSpec } from "./fixtures/spec.js";
 import { makeValidMessagePlan } from "./fixtures/valid.js";
 import { lifecycleReplayFixture } from "./fixtures/lifecycle-replay.js";
@@ -118,6 +118,7 @@ test("P08: missing activation gates fail at construction and an explicit closed 
       () =>
         Reflect.construct(ReconcileModule, [
           f.store,
+          null,
           null,
           null,
           f.units,

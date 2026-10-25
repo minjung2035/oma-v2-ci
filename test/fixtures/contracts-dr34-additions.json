@@ -1,3 +1,0 @@
-{
-  "HostEgressConfig": "export interface HostEgressConfig {\n  allow: string[];\n  roles?: { [role: string]: string[] };\n}"
-}

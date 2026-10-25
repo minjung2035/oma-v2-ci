@@ -22,11 +22,11 @@ import { spawn } from "node:child_process";
 import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
 import { join } from "node:path";
-import { receiptSupersession } from "../dist/src/protocol/receipt-codec.js";
-import { RequestCache, CacheError } from "../dist/src/request-cache.js";
+import { receiptSupersession } from "@oma/protocol/receipt-codec";
+import { RequestCache, CacheError } from "#oma-test/app/request-cache";
 
-const CACHE_MODULE = fileURLToPath(new URL("../dist/src/request-cache.js", import.meta.url));
-const LEAF_MODULE = fileURLToPath(new URL("../dist/src/leaf.js", import.meta.url));
+const CACHE_MODULE = fileURLToPath(new URL(import.meta.resolve("#oma-test/app/request-cache")));
+const LEAF_MODULE = fileURLToPath(new URL(import.meta.resolve("@oma/native/linux"), import.meta.url));
 const OP = "op-12345678-1234-4234-8234-123456789abc";
 const OTHER_OP = "op-87654321-4321-4321-8321-cba987654321";
 

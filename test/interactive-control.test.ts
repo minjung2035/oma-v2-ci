@@ -1,12 +1,13 @@
+import { engineStartEffects } from "#oma-test/app/engine/start-effects";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { once } from "node:events";
 import { mkdtempSync, mkdirSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { PrincipalSession } from "../src/runtime/engine/principal-session.js";
-import { tryHoldSociety } from "../src/runtime/society-lease.js";
-import { PiRpcClient, type PiEvent } from "../src/runtime/pi-rpc.js";
+import { PrincipalSession } from "@oma/engine/principal-session";
+import { tryHoldSociety } from "#oma-test/app/runtime/society-lease";
+import { PiRpcClient, type PiEvent } from "@oma/engine/pi-rpc";
 
 for (const mode of ["silent", "before-ready", "ready-twice", "future", "duplicate"]) {
   test(`DR22: UI control ${mode} never creates a second Human run`, { timeout: 8000 }, async () => {
@@ -16,10 +17,10 @@ for (const mode of ["silent", "before-ready", "ready-twice", "future", "duplicat
     const lease = tryHoldSociety(root); assert.ok(lease);
     const events: PiEvent[] = [];
     let ended = 0;
-    const session = PrincipalSession.start({ piCommand: process.execPath,
+    const session = PrincipalSession.start(engineStartEffects, { piCommand: process.execPath,
       interactiveEntry: join(process.cwd(), "test/fixtures/interactive-control.mjs"), fence: lease.fence,
       coreExtension: "/nonexistent/core.js", sessionDir: sessions, workspace, home: workspace },
-    { society: "demo", provider: "fake", model: "scripted", extensions: [], workspaceBytes: 1024 },
+    { society: "demo", provider: "fake", model: "scripted", extensions: [] },
     { frameBytes: 4096, idleStreamSeconds: 1, receiptWaitSeconds: 1 }, { CONTROL_CASE: mode },
     { onLine: () => {}, onBusy: () => {}, onPromptFailed: () => {}, onEnd: () => { ended += 1; } });
     session.onEvent(event => events.push(event));
@@ -67,10 +68,10 @@ test("DR27/P0-4: interactive Principal setup failure returns startup and private
     client?.close(); client?.child.kill("SIGKILL"); await closed;
     lease.release(); rmSync(root, { recursive: true, force: true });
   });
-  assert.throws(() => PrincipalSession.start({ piCommand: process.execPath,
+  assert.throws(() => PrincipalSession.start(engineStartEffects, { piCommand: process.execPath,
     interactiveEntry: join(process.cwd(), "test/fixtures/interactive-control.mjs"), fence: lease.fence,
     coreExtension: "/nonexistent/core.js", sessionDir: sessions, workspace, home: workspace },
-  { society: "demo", provider: "fake", model: "scripted", extensions: [], workspaceBytes: 1024 },
+  { society: "demo", provider: "fake", model: "scripted", extensions: [] },
   { frameBytes: 4096, idleStreamSeconds: 1, receiptWaitSeconds: 5 }, { CONTROL_CASE: "silent" },
   { onLine: () => {}, onBusy: () => {}, onPromptFailed: () => {}, onEnd: () => { endings++; } }), error => error === problem);
   assert.ok(client);

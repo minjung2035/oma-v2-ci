@@ -15,7 +15,7 @@ const FORBIDDEN_COMMAND_IMPORTS = new Set([
 /** Command modules may orchestrate helpers/transport, but do not own raw I/O primitives. */
 export function importRuleFindings(root) {
   const findings = [];
-  for (const file of filesUnder(root, "src/cli/commands")) {
+  for (const file of filesUnder(root, "apps/oma/src/cli/commands")) {
     const source = sourceOf(root, file);
     for (const { specifier } of importSpecifiers(source)) {
       const lowLevel = FORBIDDEN_COMMAND_IMPORTS.has(specifier) ||

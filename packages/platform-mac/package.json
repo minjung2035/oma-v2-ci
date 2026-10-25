@@ -1,0 +1,75 @@
+{
+  "name": "@oma/platform-mac",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "license": "UNLICENSED",
+  "files": [
+    "dist"
+  ],
+  "exports": {
+    "./files": {
+      "types": "./dist/files.d.ts",
+      "default": "./dist/files.js"
+    },
+    "./bundle": {
+      "types": "./dist/bundle.d.ts",
+      "default": "./dist/bundle.js"
+    },
+    "./bookmark": {
+      "types": "./dist/bookmark.d.ts",
+      "default": "./dist/bookmark.js"
+    },
+    "./archive-crypto": {
+      "types": "./dist/archive-crypto.d.ts",
+      "default": "./dist/archive-crypto.js"
+    },
+    "./image": {
+      "types": "./dist/image.d.ts",
+      "default": "./dist/image.js"
+    },
+    "./record": {
+      "types": "./dist/record.d.ts",
+      "default": "./dist/record.js"
+    },
+    "./native-channel": {
+      "types": "./dist/native-channel.d.ts",
+      "default": "./dist/native-channel.js"
+    },
+    "./keychain-client": {
+      "types": "./dist/keychain-client.d.ts",
+      "default": "./dist/keychain-client.js"
+    },
+    "./vz-driver": {
+      "types": "./dist/vz-driver.d.ts",
+      "default": "./dist/vz-driver.js"
+    },
+    "./native-assets": {
+      "types": "./dist/native-assets.d.ts",
+      "default": "./dist/native-assets.js"
+    }
+  },
+  "scripts": {
+    "build": "node ../../scripts/build-workspaces.mjs @oma/platform-mac",
+    "typecheck": "npm run build",
+    "test": "node --test test/*.test.mjs"
+  },
+  "dependencies": {
+    "@oma/contracts": "0.1.0",
+    "@oma/domain": "0.1.0",
+    "@oma/protocol": "0.1.0",
+    "@oma/native": "0.1.0",
+    "@oma/process": "0.1.0",
+    "@oma/git": "0.1.0"
+  },
+  "devDependencies": {
+    "@types/node": "^26.0.0",
+    "typescript": "5.9.3"
+  },
+  "oma": {
+    "assets": [
+      "vmhelper"
+    ],
+    "isolationSmoke": "test/installed-runtime.mjs"
+  }
+}

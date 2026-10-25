@@ -6,7 +6,7 @@ import { join } from "node:path";
 import { spawn } from "node:child_process";
 import { once } from "node:events";
 import { createServer, connect } from "node:net";
-import { hasNativeLeaf, peerCred, sdNotifyReady, socketDescriptor } from "../src/leaf.js";
+import { hasNativeLeaf, peerCred, sdNotifyReady, socketDescriptor } from "@oma/native/linux";
 
 test("UNIT-004: failed notify calls reject invalid addresses and do not leak descriptors", () => {
   assert.equal(hasNativeLeaf(), true);

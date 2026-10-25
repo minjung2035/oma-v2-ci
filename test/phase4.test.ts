@@ -1,3 +1,8 @@
+import { testBroker } from "./helpers/broker-fixture.js";
+import { createReconcileModule } from "#oma-test/app/broker/reconcile-composition";
+import { createLifecycleModule } from "#oma-test/app/broker/lifecycle-composition";
+import { createMailModule } from "#oma-test/app/broker/mail-composition";
+import { serializePlanIntent } from "./fixtures/plan.js";
 // Phase 4 acceptance: units render/verify, real systemd user lifecycle
 // (start-limit, cgroup death, stop-with-incoming-mail), capability escape,
 // broker singleton lock. XDG_CONFIG_HOME alone does not isolate a live manager.
@@ -11,32 +16,28 @@ import {
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { spawn, spawnSync } from "node:child_process";
-import { Store, StoreError } from "../src/store.js";
-import { UnitsModule, renderUnit, unitName, UNIT_TPL_DIR } from "../src/units.js";
-import { MailModule } from "../src/mail.js";
-import { LifecycleModule } from "../src/lifecycle.js";
-import { ReconcileModule } from "../src/reconcile.js";
-import { Broker, peerCgroup } from "../src/broker.js";
-import { ViewsModule } from "../src/views.js";
-import { generateOperationId } from "../src/ids.js";
-import { requestHash } from "../src/hash.js";
-import { canonicalResourceLimits } from "../src/domain/resources.js";
-import { encodedResidentToolSurface } from "../src/domain/tool-surface.js";
-import { runnerReceiptPathAt } from "../src/storage/paths.js";
-import { StatusRefresh } from "../src/views/status-refresh.js";
+import { Store } from "@oma/storage";
+import { StoreError } from "@oma/domain/errors";
+import { UnitsModule, renderUnit, unitName, UNIT_TPL_DIR } from "@oma/platform-linux/units";
+import { MailModule } from "@oma/mail";
+import { LifecycleModule } from "@oma/lifecycle";
+import { ReconcileModule } from "@oma/reconcile";
+import { Broker, peerCgroup } from "@oma/broker";
+import { ViewsModule } from "#oma-test/app/views";
+import { generateOperationId } from "@oma/native/identity";
+import { requestHash } from "@oma/domain/request-identity";
+
+import { encodedResidentToolSurface } from "@oma/domain/tool-surface";
+import { runnerReceiptPathAt } from "@oma/domain/paths";
+import { StatusRefresh } from "@oma/broker/status-refresh";
 import { makeValidAgent } from "./fixtures/spec.js";
 import { TEST_VIEW_LIMITS } from "./fixtures/limits.js";
-import type { AuthContext, Capability, ResolvedAgentSpec, ResourceLimits } from "../implementation/contracts.js";
+import type { AuthContext, Capability, ResolvedAgentSpec } from "@oma/contracts";
 
 import { cleanupOwnedSystemdUnits, requireSystemdTestManager } from "./fixtures/systemd.js";
 import { goalPublishedAt } from "./fixtures/goal.js";
 requireSystemdTestManager();
 const NODE = process.execPath;
-const TEST_RESOURCES: ResourceLimits = {
-  memoryBytes: 512 * 1024 * 1024, tasks: 64, cpuQuotaPercent: 100,
-  tmpBytes: 64 * 1024 * 1024, workspaceBytes: 1024 * 1024 * 1024,
-  stagingBytes: 1024 * 1024 * 1024, checkTimeoutSeconds: 30,
-};
 interface Env {
   dir: string;
   xdg: string;
@@ -72,16 +73,14 @@ function envOf(): { env: Env; cleanup: () => void } {
   const store = new Store(join(state, "runtime.sqlite"));
   const units = new UnitsModule(society,
     { node: NODE, libdir: "/usr/lib/oma", state, society, agent: "", config: join(state, "config.json"), run: join(state, "oma", society) },
-    join(xdg, "systemd", "user"), { p: TEST_RESOURCES, child: TEST_RESOURCES });
+    join(xdg, "systemd", "user"));
   // Batch views require the host-configured frame and manifest limits; without
   // them the preparation boundary fails closed with UNSUPPORTED_PROFILE.
-  const mail = new MailModule({ stateRoot: state, society }, store, 64, TEST_VIEW_LIMITS.batchMaxMessages, TEST_VIEW_LIMITS);
+  const mail = createMailModule({ stateRoot: state, society }, store, 64, TEST_VIEW_LIMITS.batchMaxMessages, TEST_VIEW_LIMITS);
   const resolver = (_parent: { profile: string }, input: { name: string; from: string; brief: string }): ResolvedAgentSpec => ({
     ...input, modelProfile: "m", profile: "child", capabilities: ["mail.send", "route.follow"],
-    resources: { memoryBytes: 3221225472, tasks: 128, cpuQuotaPercent: 200, tmpBytes: 1048576,
-      workspaceBytes: 1048576, stagingBytes: 1048576, checkTimeoutSeconds: 30 },
   });
-  const lifecycle = new LifecycleModule(store, units, {
+  const lifecycle = createLifecycleModule(store, units, {
     stateRoot: state, projectGit: join(state, "repos", "project.git"), society,
     hasGoal: () => existsSync(join(state, "world", "context", "current")),
     activationAllowed: () => true,
@@ -183,12 +182,10 @@ test("phase4: rendered templates pass systemd-analyze --user verify", () => {
       writeFileSync(join(out, file), renderUnit(text, {
         node: NODE, libdir: process.cwd(), state: join(env.dir, "state"), society: env.society, agent: "a",
         config: join(env.dir, "config.json"), run: join(env.dir, "run", "oma", env.society),
-        profileHex: Buffer.from("p").toString("hex"), resourcesHex: Buffer.from(canonicalResourceLimits(TEST_RESOURCES)).toString("hex"),
+        profileHex: Buffer.from("p").toString("hex"), modelProfileHex: Buffer.from("md").toString("hex"),
         // The same canonical plan UnitsModule installs (D23/TSP-005) -- the
         // renderer requires the input the template names.
         toolSurfaceHex: Buffer.from(encodedResidentToolSurface(), "utf8").toString("hex"),
-        memoryBytes: TEST_RESOURCES.memoryBytes,
-        tasks: TEST_RESOURCES.tasks, cpuQuotaPercent: TEST_RESOURCES.cpuQuotaPercent,
       }));
       written.push(file);
     }
@@ -205,7 +202,7 @@ test("phase4: rendered templates pass systemd-analyze --user verify", () => {
 test("UNIT-002: systemd executes literal paths containing spaces and specifiers", () => {
   const { env, cleanup } = envOf();
   try {
-    env.units.ensureResident("a", "p");
+    env.units.ensureResident("a", "p", "md");
     const libdir = join(env.dir, 'space % $HOME "quote"');
     mkdirSync(libdir);
     const output = join(env.dir, "literal-path.json");
@@ -228,7 +225,7 @@ test("T36: explicit start-limit evidence is exposed; ambiguous failure stays amb
   try {
     seedPrincipalAndA(env.store);
     seedGov(env);
-    env.units.ensureResident("a", "p");
+    env.units.ensureResident("a", "p", "md");
     const unitFile = join(env.xdg, "systemd", "user", unitName(env.society, "a", "service"));
     writeFileSync(unitFile, `[Unit]
 ${ownedBy(env, "a")}
@@ -268,13 +265,13 @@ test("T37: stop saves new mail, empties cgroup, leaves unit inactive", async () 
   try {
     seedPrincipalAndA(env.store);
     env.store.transaction(tx => tx.updateAgent({ name: "a", desired: "enabled" }));
-    env.units.ensureResident("a", "p");
+    env.units.ensureResident("a", "p", "md");
     const unitFile = join(env.xdg, "systemd", "user", unitName(env.society, "a", "service"));
     writeFileSync(unitFile, `[Unit]\n${ownedBy(env, "a")}\n[Service]\nType=exec\nExecStart=/usr/bin/sleep 60\nRestart=no\n[Install]\nWantedBy=default.target\n`);
     spawnSync("systemctl", ["--user", "daemon-reload"], { stdio: "ignore" });
     spawnSync("systemctl", ["--user", "start", unitName(env.society, "a", "service")], { stdio: "ignore" });
     assert.equal(env.store.getAgent("a")!.incarnation, 1);
-    const mail = new MailModule({ stateRoot: join(env.dir, "state"), society: env.society }, env.store, 64);
+    const mail = createMailModule({ stateRoot: join(env.dir, "state"), society: env.society }, env.store, 64);
     const receipt = await mail.send(auth("b", ["mail.send"]), "k1", { to: ["a"], subject: "s", kind: "message", body: "x" });
     assert.equal((receipt.result as { recipientCount: number }).recipientCount, 1);
     assert.equal(readdirSync(join(env.dir, "state", "mail", "inboxes", "a", "new")).length, 1);
@@ -293,7 +290,7 @@ test("T38: stopped actor with an unconfirmed stale cgroup cannot start; incarnat
     seedPrincipalAndA(env.store);
     seedGov(env);
     env.store.transaction(tx => tx.updateAgent({ name: "a", desired: "stopped" }));
-    env.units.ensureResident("a", "p");
+    env.units.ensureResident("a", "p", "md");
     const unitFile = join(env.xdg, "systemd", "user", unitName(env.society, "a", "service"));
     writeFileSync(unitFile, `[Unit]\n${ownedBy(env, "a")}\n[Service]\nType=exec\nExecStart=/usr/bin/sleep 60\nRestart=no\n[Install]\nWantedBy=default.target\n`);
     spawnSync("systemctl", ["--user", "daemon-reload"], { stdio: "ignore" });
@@ -311,7 +308,7 @@ test("REC-001: pending start and stop effects settle from actual systemd state",
   try {
     seedPrincipalAndA(env.store);
     seedGov(env);
-    env.units.ensureResident("a", "p");
+    env.units.ensureResident("a", "p", "md");
     const service = join(env.xdg, "systemd", "user", unitName(env.society, "a", "service"));
     writeFileSync(service, `[Unit]\n${ownedBy(env, "a")}\n[Service]\nType=exec\nExecStart=/usr/bin/sleep 60\nRestart=no\n[Install]\nWantedBy=default.target\n`);
     spawnSync("systemctl", ["--user", "daemon-reload"], { stdio: "ignore" });
@@ -320,7 +317,7 @@ test("REC-001: pending start and stop effects settle from actual systemd state",
       id: startId, actor: "principal", requestKey: "recover-start",
       requestHash: requestHash("agent.start", { agent: "a" }), kind: "agent.start",
       payloadJson: JSON.stringify({ agent: "a" }),
-      planJson: JSON.stringify({ kind: "agent.start", agent: "a", previousIncarnation: 1, desired: "enabled", remainingOperations: [] }),
+      planJson: serializePlanIntent({ kind: "agent.start", agent: "a", previousIncarnation: 1, desired: "enabled", remainingOperations: [] }),
     }));
     env.lifecycle.reconcileAction(startId);
     assert.equal(env.store.getOperationById(startId)!.state, "succeeded");
@@ -331,7 +328,7 @@ test("REC-001: pending start and stop effects settle from actual systemd state",
         id: stopId, actor: "principal", requestKey: "recover-stop",
         requestHash: requestHash("agent.stop", { agent: "a" }), kind: "agent.stop",
         payloadJson: JSON.stringify({ agent: "a" }),
-        planJson: JSON.stringify({ kind: "agent.stop", agent: "a", previousIncarnation: 1, desired: "stopped", remainingOperations: [] }),
+        planJson: serializePlanIntent({ kind: "agent.stop", agent: "a", previousIncarnation: 1, desired: "stopped", remainingOperations: [] }),
       });
     });
     env.lifecycle.reconcileAction(stopId);
@@ -363,7 +360,7 @@ test("SEQ-002: unknown old-run death stops startup before mail reconciliation", 
     Reflect.set(env.units, "confirmDead", () => false);
     Reflect.set(env.units, "stop", () => { throw new StoreError("RUN_TERMINATION_UNKNOWN", "injected unknown death"); });
     Reflect.set(env.mail, "reconcilePending", () => assert.fail("mail reconciled before death proof"));
-    const reconcile = new ReconcileModule(env.store, env.mail, null, env.units, env.lifecycle, { projectGit: join(env.dir, "state", "repos", "project.git"), hasGoal: () => true, activationAllowed: () => true });
+    const reconcile = createReconcileModule(env.store, env.mail, null, null, env.units, env.lifecycle, { projectGit: join(env.dir, "state", "repos", "project.git"), hasGoal: () => true, activationAllowed: () => true });
     // Every Resident gets its stop attempt, so the seeded pair's failures
     // arrive aggregated under the typed outer error -- not collapsed into
     // the first attempt's message. The cause carries each injected death.
@@ -387,15 +384,13 @@ test("LIFE-009: bootstrap freezes all seeds before effects and never reseeds a r
     const config: Parameters<LifecycleModule["bootstrap"]>[0] = {
       principalProfile: "p", initialResidents: [{ name: "child", profile: "p", brief: "seed" }],
       modelProfiles: { m: { provider: "none", model: "none", inferenceTimeoutSeconds: 1 } },
-      agentProfiles: { p: { modelProfile: "m", capabilities: ["mail.send"], delegable: [], childProfile: null,
-        resources: { memoryBytes: 3221225472, tasks: 128, cpuQuotaPercent: 200, tmpBytes: 1048576,
-          workspaceBytes: 1048576, stagingBytes: 1048576, checkTimeoutSeconds: 30 } } },
+      agentProfiles: { p: { modelProfile: "m", capabilities: ["mail.send"], delegable: [], childProfile: null } },
     };
     await env.lifecycle.bootstrap(config);
     const op = env.store.getOperation("principal", "bootstrap-child")!;
     assert.equal(op.state, "pending");
     assert.equal(env.store.getAgent("child")!.desired, "provisioning");
-    assert.equal(JSON.parse(op.planJson).spec.from, from);
+    assert.equal(JSON.parse(op.planJson).intent.spec.from, from);
     assert.equal(existsSync(join(env.dir, "state", "agents", "child", "workspace")), false);
     await assert.rejects(env.lifecycle.bootstrap({ ...config, initialResidents: [] }), /seed set changed/);
     await assert.rejects(env.lifecycle.bootstrap({ ...config, initialResidents: [{ name: "child", profile: "p", brief: "changed" }] }), /seed spec changed/);
@@ -405,7 +400,7 @@ test("LIFE-009: bootstrap freezes all seeds before effects and never reseeds a r
     mkdirSync(goal, { recursive: true });
     const start = env.units.start.bind(env.units);
     Reflect.set(env.units, "start", () => assert.fail("activation before broker READY"));
-    const reconcile = new ReconcileModule(env.store, env.mail, null, env.units, env.lifecycle, { projectGit: join(env.dir, "state", "repos", "project.git"), hasGoal: () => true, activationAllowed: () => true });
+    const reconcile = createReconcileModule(env.store, env.mail, null, null, env.units, env.lifecycle, { projectGit: join(env.dir, "state", "repos", "project.git"), hasGoal: () => true, activationAllowed: () => true });
     await reconcile.startup(false);
     assert.equal(env.store.getOperationById(op.id)!.state, "pending");
     assert.equal(env.store.getAgent("child")!.desired, "enabled");
@@ -433,7 +428,7 @@ test("T39/LIFE-007: same name + same resolved spec converges without a second ph
     assert.equal(second.state, "succeeded");
     assert.equal(env.store.listAgents().filter(agent => agent.name === "child").length, 1);
     const linked = env.store.getOperation("a", "c2")!;
-    const plan = JSON.parse(linked.planJson) as { existingCreation: string | null };
+    const plan = JSON.parse(linked.planJson).intent as { existingCreation: string | null };
     assert.equal(plan.existingCreation, first.operation);
     assert.equal(existsSync(join(env.dir, "state", "agents", "child", "workspace")), true);
   } finally { cleanup(); }
@@ -446,7 +441,7 @@ test("LIFE-007 race: concurrent stable-name creates publish only one mail object
     const from = seedProjectGit(env);
     const receipts = await Promise.all(["race-1", "race-2"].map(key => env.lifecycle.create(auth("a", ["agent.create"]),
       { name: "child", from, brief: "same" }, key)));
-    const plans = receipts.map(receipt => JSON.parse(env.store.getOperationById(receipt.operation)!.planJson));
+    const plans = receipts.map(receipt => JSON.parse(env.store.getOperationById(receipt.operation)!.planJson).intent);
     assert.equal(plans.filter(plan => plan.existingCreation === null).length, 1);
     assert.equal(plans.filter(plan => plan.initialMessage !== null).length, 1);
     // Each racing attempt freezes its own initial EML before its intent
@@ -478,13 +473,11 @@ test("CREATE-003: resolved child policy is rechecked at T-create-intent", async 
     seedPrincipalAndA(env.store);
     const base = seedProjectGit(env);
     let resolutions = 0;
-    const lifecycle = new LifecycleModule(env.store, env.units, {
+    const lifecycle = createLifecycleModule(env.store, env.units, {
       stateRoot: join(env.dir, "state"), projectGit: join(env.dir, "state", "repos", "project.git"), society: env.society, hasGoal: () => false,
       activationAllowed: () => true,
     }, (_parent, input) => ({
       ...input, modelProfile: "m",
-      resources: { memoryBytes: 3221225472, tasks: 128, cpuQuotaPercent: 200, tmpBytes: 1048576,
-        workspaceBytes: 1048576, stagingBytes: 1048576, checkTimeoutSeconds: 30 },
       profile: ++resolutions === 1 ? "child" : "p", capabilities: ["mail.send"],
     }), env.mail);
     const receipt = await lifecycle.create(auth("a", ["agent.create"]), { name: "policy-child", from: base, brief: "frozen" }, "policy-race");
@@ -509,7 +502,7 @@ test("T-create-ready: a dynamically created Resident opens a fenced runner", asy
     writeFileSync(wrapper, `import { writeFileSync } from "node:fs";
 const log = (text) => { try { writeFileSync(${JSON.stringify(wrapperLog)}, text + "\\n"); } catch { /* diagnostic only */ } };
 try {
-  const { RunnerModule } = await import(${JSON.stringify(join(process.cwd(), "dist", "src", "runner.js"))});
+  const { RunnerModule } = await import(${JSON.stringify(join(process.cwd(), "apps", "oma", "dist", "runner.js"))});
   const runner = new RunnerModule({ runRoot: process.env.OMA_RUN_ROOT }, process.env.OMA_AGENT);
   await runner.run();
   log("ok"); process.exit(0);
@@ -517,9 +510,9 @@ try {
     const service = join(env.xdg, "systemd", "user", unitName(env.society, "dynamic", "service"));
     writeFileSync(service, `[Unit]\n${ownedBy(env, "dynamic")}\n[Service]\nType=exec\nEnvironment=OMA_RUN_ROOT=${join(env.dir, "R")}\nEnvironment=OMA_AGENT=dynamic\nExecStart=${NODE} ${wrapper}\nRestart=no\n`);
     spawnSync("systemctl", ["--user", "daemon-reload"], { stdio: "ignore" });
-    broker = new Broker(env.store, env.mail, env.units, env.views, env.lifecycle, null, null, {
+    broker = testBroker({ store: env.store, mail: env.mail, units: env.units, views: env.views, lifecycle: env.lifecycle, git: null, reviews: null, reconcile: null, paths: {
       stateRoot: join(env.dir, "state"), runRoot: join(env.dir, "R"), society: env.society, hasGoal: () => true,
-    });
+    } });
     await broker.start();
     const started = spawn("systemctl", ["--user", "start", unitName(env.society, "dynamic", "service")], { stdio: "ignore" });
     const code = await new Promise<number | null>(resolve => started.on("exit", resolve));
@@ -537,7 +530,7 @@ try {
     assert.equal(env.units.observe("dynamic").execMainStatus, 2, "an unverified Pi adapter must not report a successful run");
     assert.equal(env.store.pendingDeliveries("dynamic").length, 0);
     assert.equal(readdirSync(join(env.dir, "state", "mail", "inboxes", "dynamic", "new")).length, 0);
-    const reconcile = new ReconcileModule(env.store, env.mail, null, env.units, env.lifecycle, {
+    const reconcile = createReconcileModule(env.store, env.mail, null, null, env.units, env.lifecycle, {
       activationAllowed: () => true,
       projectGit: join(env.dir, "state", "repos", "project.git"), hasGoal: () => true,
     });
@@ -563,8 +556,8 @@ try {
     const closedFile = join(env.dir, "connection-closed");
     const originalWrapper = readFileSync(wrapper, "utf8");
     writeFileSync(wrapper, `
-import { BrokerChannel } from ${JSON.stringify(join(process.cwd(), "dist", "src", "runner.js"))};
-import { FrameParser, encodeFrame } from ${JSON.stringify(join(process.cwd(), "dist", "src", "frame.js"))};
+import { BrokerChannel } from ${JSON.stringify(join(process.cwd(), "apps", "oma", "dist", "runner.js"))};
+import { FrameParser, encodeFrame } from ${JSON.stringify(join(process.cwd(), "apps", "oma", "dist", "frame.js"))};
 import { connect } from 'node:net';
 import { writeFileSync } from 'node:fs';
 try {
@@ -639,7 +632,7 @@ setInterval(() => {}, 1000);
     writeFileSync(failedReceipt, "not a receipt\n");
     const failureFile = join(env.dir, "failed-listener");
     writeFileSync(wrapper, `
-import { BrokerChannel } from ${JSON.stringify(join(process.cwd(), "dist", "src", "runner.js"))};
+import { BrokerChannel } from ${JSON.stringify(join(process.cwd(), "apps", "oma", "dist", "runner.js"))};
 import { writeFileSync } from 'node:fs';
 const admin = new BrokerChannel();
 await admin.connect(process.env.OMA_RUN_ROOT + '/admin.sock');
@@ -687,7 +680,7 @@ test("T41/CTX-006: pre-GOAL create stays logically enabled but cannot activate u
     const service = join(env.xdg, "systemd", "user", unitName(env.society, "child", "service"));
     writeFileSync(service, `[Unit]\n${ownedBy(env, "child")}\n[Service]\nType=exec\nExecStart=/usr/bin/sleep 60\nRestart=no\n[Install]\nWantedBy=default.target\n`);
     spawnSync("systemctl", ["--user", "daemon-reload"], { stdio: "ignore" });
-    const reconcile = new ReconcileModule(env.store, env.mail, null, env.units, env.lifecycle, {
+    const reconcile = createReconcileModule(env.store, env.mail, null, null, env.units, env.lifecycle, {
       activationAllowed: () => true,
       projectGit: join(env.dir, "state", "repos", "project.git"),
       hasGoal: () => existsSync(join(env.dir, "state", "world", "context", "current")),
@@ -705,9 +698,9 @@ test("REC-007: broker singleton lock — second broker refuses the society", asy
   const { env, cleanup } = envOf();
   let b1: Broker | null = null;
   try {
-    const mk = () => new Broker(env.store, env.mail, env.units, env.views, env.lifecycle, null, null, {
+    const mk = () => testBroker({ store: env.store, mail: env.mail, units: env.units, views: env.views, lifecycle: env.lifecycle, git: null, reviews: null, reconcile: null, paths: {
       stateRoot: join(env.dir, "state"), runRoot: join(env.dir, "R"), society: env.society, hasGoal: goalPublishedAt(join(env.dir, "state")),
-    });
+    } });
     b1 = mk();
     await b1.start();
     // A second broker refuses at the first ownership boundary it reaches: the
@@ -733,7 +726,7 @@ test("V25A: start/stop intents accepted for an earlier incarnation cannot act on
     seedPrincipalAndA(env.store);
     seedGov(env);
     env.store.transaction(tx => tx.updateAgent({ name: "a", desired: "enabled" }));
-    env.units.ensureResident("a", "p");
+    env.units.ensureResident("a", "p", "md");
     const service = unitName(env.society, "a", "service");
     const unitFile = join(env.xdg, "systemd", "user", service);
     writeFileSync(unitFile, `[Unit]\n${ownedBy(env, "a")}\n[Service]\nType=exec\nExecStart=/usr/bin/sleep 60\nRestart=no\n[Install]\nWantedBy=default.target\n`);
@@ -743,7 +736,7 @@ test("V25A: start/stop intents accepted for an earlier incarnation cannot act on
       const id = generateOperationId();
       env.store.transaction(tx => tx.acceptOperation({ id, actor: "principal", requestKey: key,
         requestHash: requestHash(kind, { agent: "a" }), kind, payloadJson: JSON.stringify({ agent: "a" }),
-        planJson: JSON.stringify({ kind, agent: "a", previousIncarnation: 1, desired, remainingOperations: [] }) }));
+        planJson: serializePlanIntent({ kind, agent: "a", previousIncarnation: 1, desired, remainingOperations: [] }) }));
       return id;
     };
     const oldStart = accepted("old-start", "agent.start", "enabled");
@@ -776,22 +769,7 @@ test("V25A: start/stop intents accepted for an earlier incarnation cannot act on
   } finally { cleanup(); }
 });
 
-test("WP25.03 / D05: a Resident's unit carries its accepted resources, not the current profile's", () => {
-  const { env, cleanup } = envOf();
-  try {
-    // Accepted with other limits than profile "p" now declares.
-    const accepted: ResourceLimits = { ...TEST_RESOURCES, memoryBytes: 256 * 1024 * 1024, tasks: 32, cpuQuotaPercent: 50,
-      tmpBytes: 2 * 1024 * 1024, workspaceBytes: 3 * 1024 * 1024 };
-    env.units.ensureResident("a", "p", accepted);
-    const service = unitName(env.society, "a", "service");
-    const shown = spawnSync("systemctl", ["--user", "show", service, "-p", "Environment", "-p", "MemoryMax", "-p", "TasksMax"], { encoding: "utf8" }).stdout;
-    const carried = /OMA_RESOURCES_HEX=([0-9a-f]+)/.exec(shown)?.[1];
-    assert.ok(carried, `the unit's environment carries no accepted resources: ${shown}`);
-    assert.deepEqual(JSON.parse(Buffer.from(carried!, "hex").toString("utf8")), accepted);
-    assert.match(shown, /^MemoryMax=infinity$/m);
-    assert.match(shown, /^TasksMax=infinity$/m);
-  } finally { cleanup(); }
-});
+
 
 test("V23B: a status snapshot is display only; start, stop and death proof observe the unit again", async () => {
   const { env, cleanup } = envOf();
@@ -799,7 +777,7 @@ test("V23B: a status snapshot is display only; start, stop and death proof obser
     seedPrincipalAndA(env.store);
     seedGov(env);
     env.store.transaction(tx => tx.updateAgent({ name: "a", desired: "stopped" }));
-    env.units.ensureResident("a", "p");
+    env.units.ensureResident("a", "p", "md");
     const service = unitName(env.society, "a", "service");
     writeFileSync(join(env.xdg, "systemd", "user", service), `[Unit]\n${ownedBy(env, "a")}\n[Service]\nType=exec\nExecStart=/usr/bin/sleep 60\nRestart=no\n[Install]\nWantedBy=default.target\n`);
     spawnSync("systemctl", ["--user", "daemon-reload"], { stdio: "ignore" });

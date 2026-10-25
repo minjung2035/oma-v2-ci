@@ -7,22 +7,22 @@ import * as path from 'node:path';
 import { tmpdir } from 'node:os';
 import { Script } from 'node:vm';
 import ts from 'typescript';
-import * as errors from '../dist/src/domain/errors.js';
-import * as utf8 from '../dist/src/domain/utf8.js';
-import * as assets from '../dist/src/runtime/assets.js';
-import * as contained from '../dist/src/storage/contained-fs.js';
-import * as durable from '../dist/src/storage/durable-fs.js';
-import * as host from '../dist/src/platform/host/files.js';
-import * as cleanup from '../dist/src/process/cleanup.js';
+import * as errors from "@oma/domain/errors";
+import * as utf8 from "@oma/domain/utf8";
+import * as assets from "@oma/native/directory-layout";
+import * as contained from "@oma/native/files";
+import * as durable from "@oma/storage/durable-fs";
+import * as host from "@oma/platform-mac/files";
+import * as cleanup from "@oma/native/cleanup";
 
-const code = ts.transpileModule(fs.readFileSync(process.env.OMA_USER_FILES_SOURCE ?? 'src/runtime/user-files.ts', 'utf8'), {
+const code = ts.transpileModule(fs.readFileSync(process.env.OMA_USER_FILES_SOURCE ?? 'apps/oma/src/runtime/user-files.ts', 'utf8'), {
   compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
 }).outputText;
 function load(platform, changes = {}) {
   const module = { exports: {} };
-  const dependencies = { 'node:fs': fs, 'node:path': path, '../domain/errors.js': errors,
-    '../domain/utf8.js': utf8, './assets.js': assets, '../storage/contained-fs.js': contained,
-    '../storage/durable-fs.js': durable, '../platform/host/files.js': host, '../process/cleanup.js': cleanup, ...changes };
+  const dependencies = { 'node:fs': fs, 'node:path': path, '@oma/domain/errors': errors,
+    '@oma/domain/utf8': utf8, '@oma/native/directory-layout': assets, "@oma/native/files": contained,
+    "@oma/storage/durable-fs": durable, '@oma/platform-mac/files': host, "@oma/native/cleanup": cleanup, ...changes };
   new Script(code).runInNewContext({ module, exports: module.exports, Buffer, process: { platform },
     require(name) { assert.ok(Object.hasOwn(dependencies, name), name); return dependencies[name]; } });
   return module.exports;
@@ -126,7 +126,7 @@ for (const platform of ['linux', 'darwin']) {
 }
 for (const after of [false, true]) test(`Darwin metadata publication: ${after ? 'visible' : 'pre-link'} failure does not overwrite on retry`, t => {
   const root = fixture(t), file = path.join(root, 'record'); const problem = new Error('injected publication'); let armed = true;
-  const api = load('darwin', { '../platform/host/files.js': { ...host, publishMade(...args) {
+  const api = load('darwin', { '@oma/platform-mac/files': { ...host, publishMade(...args) {
     if (armed) { armed = false; if (after) host.publishMade(...args); throw problem; }
     return host.publishMade(...args);
   } } });
@@ -154,7 +154,7 @@ for (const after of [false, true]) test(`Darwin metadata publication: ${after ? 
   const root = fixture(t), file = path.join(root, 'record');
   const primary = new errors.StoreError('BROKER_UNAVAILABLE', 'fixture publication', { details: { publication: 'unconfirmed' } });
   const secondary = Object.assign(new Error('fixture discard failed'), { code: 'ENOSPC' }); let returned = 0;
-  const api = load('darwin', { '../platform/host/files.js': { ...host,
+  const api = load('darwin', { '@oma/platform-mac/files': { ...host,
     publishMade(...args) { if (after) host.publishMade(...args); throw primary; },
     discardTemporary(temporary) { returned++; host.discardTemporary(temporary); throw secondary; },
   } });
@@ -167,7 +167,7 @@ for (const after of [false, true]) test(`Darwin metadata publication: ${after ? 
 });
 test('Darwin metadata publication: retry flushes an existing destination name', t => {
   const root = fixture(t), file = path.join(root, 'record'); let flushed = 0;
-  const api = load('darwin', { '../platform/host/files.js': { ...host, fsyncDirectory(dir) { flushed++; host.fsyncDirectory(dir); } } });
+  const api = load('darwin', { '@oma/platform-mac/files': { ...host, fsyncDirectory(dir) { flushed++; host.fsyncDirectory(dir); } } });
   api.publishUserFile(file, 'first'); const before = flushed; api.publishUserFile(file, 'second');
   assert.equal(flushed, before + 1); assert.equal(api.readUserFile(file, 64), 'first');
 });

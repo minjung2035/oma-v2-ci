@@ -8,7 +8,7 @@
  * Not provider evidence (P0-5).
  */
 import test from "node:test";
-import type { AuthContext, Request } from "../implementation/contracts.js";
+import type { AuthContext, Request } from "@oma/contracts";
 import { RESIDENT_TEST_OPTIONS } from "./fixtures/resident.js";
 import assert from "node:assert/strict";
 import { closeSync, existsSync, ftruncateSync, mkdirSync, openSync, readFileSync, readlinkSync, symlinkSync, writeFileSync } from "node:fs";
@@ -16,10 +16,9 @@ import { spawnSync } from "node:child_process";
 import { join } from "node:path";
 import { withScenario, SCENARIO_LIMITS } from "./fixtures/scenario.js";
 import { call, text, textOf, toolResults, tools, type ChatRequest } from "./fixtures/scripted-provider.js";
-import { principalWorkspace } from "../src/runtime/engine/principal-session.js";
-import { workspacePathAt } from "../src/storage/paths.js";
-import { workspaceUsage } from "../src/extension/workspace-guard.js";
-import { sha256Hex } from "../src/hash.js";
+import { principalWorkspace } from "@oma/engine/principal-session";
+import { workspacePathAt } from "@oma/domain/paths";
+import { sha256Hex } from "@oma/domain/canonical-json";
 
 const TIMEOUT = { timeout: 180_000 };
 const lastResult = (request: ChatRequest | undefined): string => toolResults(request ?? { messages: [] }).at(-1)?.text ?? "";
@@ -77,7 +76,7 @@ test("SCN-B02: the retained context CLI input refuses an oversized stream before
     // Exercise the CLI's production input owner without restoring the removed
     // model-facing directory tool or weakening the separate mail body bound.
     const result = spawnSync(process.execPath, ["--input-type=module", "-e",
-      `import { prepareContextEffects } from ${JSON.stringify(new URL("../src/cli/effects/context.js", import.meta.url).href)}; import { fatal } from ${JSON.stringify(new URL("../src/cli/exit.js", import.meta.url).href)}; try { prepareContextEffects(process.argv[1]); } catch (error) { fatal(error); }`, directory],
+      `import { prepareContextEffects } from ${JSON.stringify(new URL(import.meta.resolve("#oma-test/app/cli/effects/context")).href)}; import { fatal } from ${JSON.stringify(new URL(import.meta.resolve("#oma-test/app/cli/exit")).href)}; try { prepareContextEffects(process.argv[1]); } catch (error) { fatal(error); }`, directory],
     { encoding: "utf8", env: { OMA_CONTEXT_BYTES: String(SCENARIO_LIMITS.contextBytes) }, timeout: 10_000 });
     assert.equal(result.status, 2, result.stderr);
     assert.match(result.stderr, /larger than a request can carry \(8388608 bytes\)/);
@@ -108,28 +107,7 @@ test("SCN-B03: a Worker's write through a workspace link is refused; an ordinary
   });
 });
 
-test("SCN-B04: concurrent Worker writes cannot exceed the workspace quota; the one that fits lands (P0V-74, R6-18)", RESIDENT_TEST_OPTIONS, async () => {
-  await withScenario({ residents: ["worker-a", "worker-b"] }, async s => {
-    const workspace = workspacePathAt(s.root, "worker-a");
-    const quota = JSON.parse(s.store.getAgent("worker-a")!.specJson).resources.workspaceBytes as number;
-    const body = "x".repeat(200);
-    await s.residentSends("worker-b", { to: ["worker-a"], subject: "Files", body: "Write two files." }, "task");
-    s.script((_request, index) => {
-      if (index !== 0) return text("썼습니다.");
-      const used = workspaceUsage(workspace, quota);
-      const filler = openSync(join(workspace, "filler.bin"), "w");
-      try { ftruncateSync(filler, quota - used - 301); } finally { closeSync(filler); }
-      return tools(call("write", { path: "a.txt", content: body }, "w-a"), call("write", { path: "b.txt", content: body }, "w-b"));
-    });
-    const run = await s.activate("worker-a"); assert.equal(run.code, 0, run.stderr);
-    const landed = ["a.txt", "b.txt"].filter(name => existsSync(join(workspace, name)));
-    assert.equal(landed.length, 2, `both writes must land: ${landed.join(" ")}`);
-    assert.equal(readFileSync(join(workspace, landed[0]!), "utf8"), body);
-    const results = toolResults(s.provider.seen[1]!.body).map(result => result.text).join("\n");
-    assert.doesNotMatch(results, /quota would be exceeded/, results);
-    assert.ok(workspaceUsage(workspace, quota + 4096) > quota);
-  });
-});
+
 
 test("SCN-B05: mail accepted after the clock was set back reaches the Principal after the mail accepted before it (P0V-87)", TIMEOUT, async () => {
   const wall = Date.now;
@@ -218,7 +196,7 @@ test("SCN-B08: a body that begins with U+FEFF is stored and read back with it (P
 });
 
 test("SCN-B09 / S-02: the Principal's model cannot read the engine's credential, by any spelling of its path, nor list the society's state", TIMEOUT, async () => {
-  const { piAgentDir } = await import("../src/runtime/pi-runtime.js");
+  const { piAgentDir } = await import("@oma/engine/pi-runtime");
   await withScenario({}, async s => {
     const credential = join(piAgentDir(s.root), "auth.json");
     mkdirSync(piAgentDir(s.root), { recursive: true });
@@ -255,30 +233,5 @@ test("SCN-B10 / S-02: a hundred commons messages reach no Principal session; the
     assert.deepEqual([...s.inbox("principal", "new"), ...s.inbox("principal", "cur")].map(name => name.replace(/:2,.*$/, "")), [question.result.result.message],
       "commons mail reached the Principal's mailbox");
     assert.equal((await s.deliver()).kind === "delivered", false, "a second delivery found more for the Principal");
-  });
-});
-
-
-test("DR27/INV10: a Worker cannot exhaust its workspace with empty files or parents, and can still rewrite an existing empty file", RESIDENT_TEST_OPTIONS, async () => {
-  await withScenario({ residents: ["worker-a", "worker-b"] }, async s => {
-    const workspace = workspacePathAt(s.root, "worker-a");
-    const quota = JSON.parse(s.store.getAgent("worker-a")!.specJson).resources.workspaceBytes as number;
-    await s.residentSends("worker-b", { to: ["worker-a"], subject: "Empty files", body: "Write empty files." }, "task");
-    s.script((_request, index) => {
-      if (index === 0) {
-        const filler = openSync(join(workspace, "filler.bin"), "w");
-        try { ftruncateSync(filler, quota - workspaceUsage(workspace, quota) - 2); } finally { closeSync(filler); }
-        return tools(call("write", { path: "fits/empty", content: "" }));
-      }
-      if (index === 1) return tools(call("write", { path: "refused/empty", content: "" }));
-      if (index === 2) return tools(call("write", { path: "fits/empty", content: "" }));
-      return text("Done.");
-    });
-    const run = await s.activate("worker-a"); assert.equal(run.code, 0, run.stderr);
-    assert.equal(readFileSync(join(workspace, "fits/empty"), "utf8"), "");
-    assert.equal(existsSync(join(workspace, "refused")), true);
-    assert.doesNotMatch(lastResult(s.provider.seen[2]!.body), /quota would be exceeded/);
-    assert.doesNotMatch(lastResult(s.provider.seen[3]!.body), /quota|error|refus/i);
-    assert.ok(workspaceUsage(workspace, quota + 4096) > quota);
   });
 });

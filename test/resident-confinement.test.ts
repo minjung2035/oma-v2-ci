@@ -1,3 +1,4 @@
+import { residentEngineEffects } from "#oma-test/app/engine/resident-effects";
 /** SB-001..006: what a Resident's engine is actually started with.
  *
  * The mount plan used to exist without a caller, so nothing checked that the
@@ -9,21 +10,23 @@ import assert from "node:assert/strict";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { PiAdapter } from "../src/runtime/pi-adapter.js";
-import { RunnerModule } from "../src/runner.js";
-import { RESIDENT_SYSTEM_PROMPT } from "../src/config/role-prompts.js";
-import { TOOL_SCOPE_ENV, TOOL_SCOPE_SANDBOX, type PiConfinement } from "../src/runtime/pi-spawn-plan.js";
-import { TOOL_SCOPE_ENV as MIRRORED_ENV, TOOL_SCOPE_SANDBOX as MIRRORED_SANDBOX, guardWorkspaceTools } from "../src/extension/workspace-guard.js";
-import { containWorkspaceTools, createContainedWriter } from "../src/extension/contained-tools.js";
-import { principalEnvironment, sessionEnv } from "../src/runtime/engine/principal-session.js";
-import { RESIDENT_INFERENCE_PORT, RESIDENT_PATHS, confinedPath, hostSessionPath, residentArgv, residentProjectGit, requireResidentRootfs, type ResidentDirectories } from "../src/sandbox.js";
-import { decodeRunLease } from "../src/protocol/run-lease.js";
-import { actorSocketPathAt, agentRootPathAt, runnerSessionDirPathAt, runnerViewPathAt, workspacePathAt } from "../src/storage/paths.js";
+import { PiAdapter } from "@oma/engine/pi-adapter";
+import { RunnerModule } from "#oma-test/app/runner";
+import { RESIDENT_SYSTEM_PROMPT } from "@oma/domain/role-prompts";
+import { TOOL_SCOPE_ENV, TOOL_SCOPE_SANDBOX, type PiConfinement } from "@oma/engine/pi-spawn-plan";
+import { TOOL_SCOPE_ENV as MIRRORED_ENV, TOOL_SCOPE_SANDBOX as MIRRORED_SANDBOX, guardWorkspaceTools } from "@oma/tool-runtime/workspace-guard";
+import { containWorkspaceTools, createContainedWriter } from "@oma/tool-runtime/contained-tools";
+import { principalEnvironment, sessionEnv } from "@oma/engine/principal-session";
+import { RESIDENT_INFERENCE_PORT, RESIDENT_PATHS, confinedPath, hostSessionPath, residentProjectGit, requireResidentRootfs } from "@oma/domain/resident-paths";
+import { residentArgv } from "@oma/platform-linux/sandbox";
+import { type SandboxDirectories as ResidentDirectories } from "@oma/contracts/runtime";
+import { decodeRunLease } from "@oma/protocol/run-lease";
+import { actorSocketPathAt, agentRootPathAt, runnerSessionDirPathAt, runnerViewPathAt, workspacePathAt } from "@oma/domain/paths";
 import { createEditToolDefinition } from "@earendil-works/pi-coding-agent";
 
 const RESOURCES = Object.freeze({
   memoryBytes: 1 << 30, tasks: 64, cpuQuotaPercent: 100,
-  tmpBytes: 1 << 20, workspaceBytes: 1 << 20, stagingBytes: 1 << 20, checkTimeoutSeconds: 30,
+  stagingBytes: 1 << 20, checkTimeoutSeconds: 30,
 });
 const LIMITS = Object.freeze({
   frameBytes: 65536, idleStreamSeconds: 30, receiptWaitSeconds: 30,
@@ -56,14 +59,15 @@ function fixture(): Fixture {
   };
   for (const path of Object.values(dirs)) mkdirSync(path, { recursive: true });
   mkdirSync(join(dirs.archive, "cur"), { recursive: true });
-  mkdirSync(join(libdir, "dist", "src"), { recursive: true });
+  mkdirSync(join(libdir, "apps", "oma", "dist"), { recursive: true });
+  mkdirSync(join(libdir, "packages/extension/dist"), { recursive: true });
   mkdirSync(join(libdir, "engine"), { recursive: true });
   mkdirSync(join(runRoot, "actors", actor, "1"), { recursive: true });
   const paths = Object.freeze({
     piCommand: process.execPath,
     piEntry: join(libdir, "engine", "cli.js"),
-    coreExtension: join(libdir, "dist", "src", "pi-extension.js"),
-    cli: join(libdir, "dist", "src", "cli.js"),
+    coreExtension: join(libdir, "packages", "extension", "dist", "index.js"),
+    cli: join(libdir, "apps", "oma", "dist", "cli.js"),
     piAgentDir: join(stateRoot, "pi"),
     mailArchive: join(dirs.archive, "cur"),
     workerArchive: join(dirs.workerArchive, "cur"), projectGit: dirs.projectGit,
@@ -75,7 +79,6 @@ function fixture(): Fixture {
     host: {
       rootfs: join(root, "rootfs"), libdir, node: "/usr/bin/node",
       pi: confinedPath({ libdir: libdir }, dirs, paths.piEntry), piModeArgs: [],
-      tmpBytes: RESOURCES.tmpBytes,
       stateRoot, runRoot, limits: { frameBytes: LIMITS.frameBytes, batchMaxMessages: LIMITS.batchMaxMessages },
     },
     lease, directories: dirs,
@@ -92,20 +95,20 @@ function fixture(): Fixture {
   };
   const profile = {
     provider: "pi", model: "current", inferenceSeconds: 600, prompt: "",
-    workspaceBytes: RESOURCES.workspaceBytes, extensions: [],
+    extensions: [],
   };
-  const adapter = new PiAdapter({
+  const adapter = new PiAdapter(residentEngineEffects, {
     actor, society: "s", limits: LIMITS, profile, paths: adapterPaths, confinement,
   });
   return { root, stateRoot, libdir, dirs, adapter, confinement, paths };
 }
 
 function missingConfinementAdapter(f: Fixture): PiAdapter {
-  return new PiAdapter({
+  return new PiAdapter(residentEngineEffects, {
     actor: "alice", society: "s", limits: LIMITS,
     profile: {
       provider: "pi", model: "current", inferenceSeconds: 600, prompt: "",
-      workspaceBytes: RESOURCES.workspaceBytes, extensions: [],
+      extensions: [],
     },
     paths: {
       piCommand: f.paths.piCommand!, piArgs: [f.paths.piEntry!], piAgentDir: f.paths.piAgentDir!,
@@ -127,7 +130,7 @@ test("F34/F35: Resident environment is deterministic, confined, and never inheri
     for (let i = 0; i < plan.args.length; i++)
       if (plan.args[i] === "--setenv") env[plan.args[i + 1]!] = plan.args[i + 2]!;
     assert.deepEqual(Object.fromEntries(["HOME", "PATH", "LANG", "LC_ALL", "TZ", "TERM", "TMPDIR", "SHELL", "USER", "LOGNAME", "XDG_DATA_HOME", "XDG_RUNTIME_DIR"].map(key => [key, env[key]])), {
-      HOME: "/home/agent", PATH: "/opt/oma/dist/libexec:/opt/oma-node:/home/agent/.local/bin:/usr/bin:/bin",
+      HOME: "/home/agent", PATH: "/opt/oma/apps/oma/dist/libexec:/opt/oma-node:/home/agent/.local/bin:/usr/bin:/bin",
       LANG: "C.UTF-8", LC_ALL: "C.UTF-8", TZ: "UTC", TERM: "xterm-256color", TMPDIR: "/tmp",
       SHELL: "/bin/sh", USER: "agent", LOGNAME: "agent", XDG_DATA_HOME: "/home/agent/.local/share", XDG_RUNTIME_DIR: "/home/agent/.run",
     });
@@ -217,10 +220,10 @@ test("T113 the engine's system prompt is the role's, or the built-in Resident pr
     const bare = engineArgs(f.adapter);
     assert.equal(bare[bare.indexOf("--system-prompt") + 1], RESIDENT_SYSTEM_PROMPT);
     assert.equal(bare.includes("--append-system-prompt"), false);
-    const authored = new PiAdapter({
+    const authored = new PiAdapter(residentEngineEffects, {
       actor: "alice", society: "s", limits: LIMITS,
       profile: { provider: "pi", model: "current", inferenceSeconds: 600, prompt: "a role prompt",
-        workspaceBytes: RESOURCES.workspaceBytes, extensions: [] },
+        extensions: [] },
       paths: {
         piCommand: f.paths.piCommand!, piArgs: [f.paths.piEntry!], piAgentDir: f.paths.piAgentDir!,
         coreExtension: f.paths.coreExtension!, cli: f.paths.cli!,
@@ -285,12 +288,11 @@ test("DR25: a Resident's sandbox mounts the installed packages read-only, and it
     const file = join(packages, "npm", "node_modules", "oma-hello-ext", "extensions", "hello.ts");
     mkdirSync(join(file, ".."), { recursive: true });
     writeFileSync(file, "export default function () {}\n");
-    const profile = { provider: "pi", model: "current", inferenceSeconds: 600, prompt: "", workspaceBytes: RESOURCES.workspaceBytes,
-      extensions: [{ path: file, sha256: "0".repeat(64) }] };
+    const profile = { provider: "pi", model: "current", inferenceSeconds: 600, prompt: "", extensions: [{ path: file, sha256: "0".repeat(64) }] };
     const adapterPaths = { piCommand: f.paths.piCommand!, piArgs: [f.paths.piEntry!], piAgentDir: f.paths.piAgentDir!,
       coreExtension: f.paths.coreExtension!, cli: f.paths.cli!, workspace: f.dirs.workspace, sessionDir: f.dirs.sessions,
       agentHome: f.dirs.home, mailArchive: f.paths.mailArchive!, workerArchive: f.paths.workerArchive!, projectGit: f.paths.projectGit!, batchView: f.dirs.view, socket: f.paths.socket! };
-    const plan = new PiAdapter({ actor: "alice", society: "s", limits: LIMITS, profile, paths: adapterPaths,
+    const plan = new PiAdapter(residentEngineEffects, { actor: "alice", society: "s", limits: LIMITS, profile, paths: adapterPaths,
       confinement: { ...f.confinement, host: { ...f.confinement.host, packages } } }).spawnPlan();
     const at = plan.args.indexOf(packages);
     assert.deepEqual(plan.args.slice(at - 1, at + 2), ["--ro-bind", packages, RESIDENT_PATHS.packages]);
@@ -298,7 +300,7 @@ test("DR25: a Resident's sandbox mounts the installed packages read-only, and it
       "the engine was not given the package's extension at its mount");
     assert.ok(!plan.args.some(value => value.includes(f.paths.piAgentDir!)), "the engine home was mounted");
     // With no package store declared, a package's file is under no mount: refused, not handed over.
-    assert.throws(() => new PiAdapter({ actor: "alice", society: "s", limits: LIMITS, profile, paths: adapterPaths,
+    assert.throws(() => new PiAdapter(residentEngineEffects, { actor: "alice", society: "s", limits: LIMITS, profile, paths: adapterPaths,
       confinement: f.confinement }).spawnPlan(), /outside every mount/);
   } finally { rmSync(f.root, { recursive: true, force: true }); }
 });
@@ -449,7 +451,7 @@ test("AV25 / BATCH-006, TSP-009, P0V-122: an edit is judged by its exact growth 
   try {
     writeFileSync(join(workspace, "a.txt"), `one\ntwo\n${"z".repeat(900)}\n`);
     const tools: Record<string, { execute(id: string, params: Record<string, unknown>, signal: undefined, update: undefined, ctx: unknown): Promise<unknown> }> = {};
-    containWorkspaceTools({ registerTool: (tool: { name: string }) => { tools[tool.name] = tool as never; } } as never, workspace, 1024, true);
+    containWorkspaceTools({ registerTool: (tool: { name: string }) => { tools[tool.name] = tool as never; } } as never, workspace, true);
     const edit = (params: Record<string, unknown>): Promise<unknown> => tools.edit!.execute("call", params, undefined, undefined, { cwd: workspace });
     let handler: ((event: { toolName: string; input: Record<string, unknown> }) => unknown) | null = null;
     guardWorkspaceTools({ on: (_name: string, listener: typeof handler) => { handler = listener; } } as never, workspace, true);
@@ -478,7 +480,7 @@ test("AV27 / SB-002-E, GIT-002: a Resident reaches the canonical repository at i
 });
 
 test("SB-002-E: the K0 rootfs check and the run-lease predicate give one verdict", async () => {
-  const { trustedAbsolutePath } = await import("../src/protocol/run-lease.js");
+  const { trustedAbsolutePath } = await import("@oma/protocol/run-lease");
   const cases = [
     "/", "/a", "/state/rootfs", "/a/", "//a", "/a//b", "/a/./b", "/a/../b",
     "/a/b/.", "/a/b/..", "/a/b/.x", "/a/b/..x", "/a/x..", "a/b", "./a", "",
@@ -513,9 +515,9 @@ test("mail-v1: the worker archive is a read-only Resident mount its environment 
 });
 
 test("mail-v1: the Principal's host engine is given no worker archive", async () => {
-  const { principalEnvironment } = await import("../src/runtime/engine/principal-session.js");
+  const { principalEnvironment } = await import("@oma/engine/principal-session");
   const env = principalEnvironment({ stateRoot: "/srv/oma", runRoot: "/run/oma", libdir: "/opt/oma" },
-    { society: "s", provider: "pi", model: "current", workspaceBytes: 1024, extensions: [] } as never,
+    { society: "s", provider: "pi", model: "current", extensions: [] } as never,
     { frameBytes: 1024, mailBodyBytes: 1024, batchMaxMessages: 4, contextBytes: 1 << 20, bundleBytes: 1 << 20 } as never);
   assert.equal("OMA_WORKER_ARCHIVE" in env, false);
 });
@@ -535,14 +537,13 @@ test("TSP-005/D23: the surface plan is the declared profile's -- nothing ambient
     piCommand: f.paths.piCommand!, piArgs: [f.paths.piEntry!], piAgentDir: f.paths.piAgentDir!,
     coreExtension: f.paths.coreExtension!, cli: f.paths.cli!,
     confinement: { rootfs: f.confinement.host.rootfs, libdir: f.libdir, node: "/usr/bin/node",
-      systemBinds: [], tmpBytes: RESOURCES.tmpBytes },
+      systemBinds: [] },
   };
   const model = { provider: "pi", model: "current", inferenceTimeoutSeconds: 600 };
   const adapterOf = (toolSurface?: string): PiAdapter => {
     const runner = new RunnerModule(runnerPaths, "alice",
-      { ...LIMITS, subjectBytes: 1024, addresses: 8, replyReferences: 8, contextFiles: 8, logBytes: 1 << 20 }, {
-      name: "resident", model, workspaceBytes: RESOURCES.workspaceBytes,
-      ...(toolSurface === undefined ? {} : { toolSurface }) });
+      { ...LIMITS, subjectBytes: 1024, addresses: 8, replyReferences: 8, contextFiles: 8, logBytes: 1 << 20 }, {modelProfile: "md",
+      name: "resident", model, ...(toolSurface === undefined ? {} : { toolSurface }) });
     Reflect.set(runner, "lease", f.confinement.lease);
     return (Reflect.get(runner, "adapter") as (batch: unknown, inference?: unknown) => PiAdapter)
       .call(runner, {}, undefined);
@@ -576,12 +577,12 @@ test("PR-004: every engine writes without an OMA workspace quota", async () => {
   try {
     assert.equal(f.adapter.spawnPlan().args.includes("OMA_WORKSPACE_BYTES"), false);
     const principal = principalEnvironment({ stateRoot: "/srv/oma", runRoot: "/run/oma", libdir: "/opt/oma" },
-      { society: "s", provider: "pi", model: "current", workspaceBytes: 2048, extensions: [] },
+      { society: "s", provider: "pi", model: "current", extensions: [] },
       { frameBytes: 1024, mailBodyBytes: 1024, batchMaxMessages: 4, addresses: 64, contextBytes: 1 << 20, bundleBytes: 1 << 20 });
     assert.equal(principal.OMA_WORKSPACE_BYTES, undefined);
     const workspace = mkdtempSync(join(tmpdir(), "oma-unlimited-write-"));
     try {
-      await createContainedWriter(workspace, null)("file.txt", "content");
+      await createContainedWriter(workspace)("file.txt", "content");
       assert.equal(readFileSync(join(workspace, "file.txt"), "utf8"), "content");
     } finally { rmSync(workspace, { recursive: true, force: true }); }
   } finally { rmSync(f.root, { recursive: true, force: true }); }

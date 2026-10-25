@@ -12,25 +12,24 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import { Script } from 'node:vm';
 import ts from 'typescript';
-import * as errors from '../dist/src/domain/errors.js';
-import * as policies from '../dist/src/process/policies.js';
-import * as realRun from '../dist/src/process/run.js';
-import * as utf8 from '../dist/src/domain/utf8.js';
-import * as hash from '../dist/src/hash.js';
-import * as observe from '../dist/src/git/observe.js';
-import * as identifiers from '../dist/src/domain/identifiers.js';
+import * as errors from "@oma/domain/errors";
+import * as policies from "@oma/process/policies";
+import * as realRun from "@oma/process/run";
+import * as utf8 from "@oma/domain/utf8";
+import * as observe from "@oma/git/observe";
+import * as identifiers from "@oma/domain/identifiers";
 
 const code = ts.transpileModule(
-  fs.readFileSync(process.env.OMA_CANONICAL_COMMAND_SOURCE ?? 'src/git/canonical-command.ts', 'utf8'), {
+  fs.readFileSync(process.env.OMA_CANONICAL_COMMAND_SOURCE ?? 'packages/git/src/canonical-command.ts', 'utf8'), {
     compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
   }).outputText;
 function load(changes = {}) {
   const module = { exports: {} };
   const dependencies = {
     'node:fs': fs, 'node:os': os, 'node:path': path,
-    '../process/policies.js': policies, '../domain/errors.js': errors, '../process/run.js': realRun,
-    '../domain/utf8.js': utf8, '../hash.js': hash, './observe.js': observe,
-    '../domain/identifiers.js': identifiers, ...changes };
+    "@oma/process/policies": policies, '@oma/domain/errors': errors, "@oma/process/run": realRun,
+    '@oma/domain/utf8': utf8, './observe.js': observe,
+    '@oma/domain/identifiers': identifiers, ...changes };
   new Script(code).runInNewContext({ module, exports: module.exports, Buffer, process,
     require(name) { assert.ok(Object.hasOwn(dependencies, name), name); return dependencies[name]; } });
   return module.exports;
@@ -51,7 +50,7 @@ test('GIT-004: a canonical ls-tree spool that cannot be opened answers typed evi
     if (spec.stdoutSpool !== undefined) throw starvation;
     return realRun.runProcessSync(spec);
   } };
-  const api = load({ 'node:fs': fsWrap, '../process/run.js': run });
+  const api = load({ 'node:fs': fsWrap, "@oma/process/run": run });
   const observation = api.createCanonicalObserver().gitlinks('/repo', 'a'.repeat(40));
   assert.equal(observation.kind, 'unknown', 'a failed observation is evidence, not a throw');
   // The injected error is this realm's; the module under test re-wraps it in

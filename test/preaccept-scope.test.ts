@@ -3,16 +3,13 @@ import assert from "node:assert/strict";
 import { existsSync, mkdtempSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { Store } from "../src/store.js";
-import { PreparationExecutor } from "../src/process/preparation.js";
-import type { CommandSpec } from "../src/process/command.js";
+import { Store } from "@oma/storage";
+import { PreparationExecutor } from "@oma/process/preparation";
+import type { CommandSpec } from "@oma/process/command";
 import { makeValidAgent } from "./fixtures/spec.js";
 import { makeValidOperation } from "./fixtures/valid.js";
-import {
-  PreacceptScope,
-  publishedArtifact,
-  type PreacceptOwner,
-} from "../src/storage/preaccept-artifact.js";
+import { PreacceptScope, publishedArtifact } from "@oma/storage/preaccept-artifact";
+import { type PreacceptOwner } from "@oma/contracts/files";
 
 class ObservedOwner implements PreacceptOwner {
   retained = 0;
@@ -63,7 +60,7 @@ test("V17A: uncertain native preparation quiescence retains the resource", {
   skip: process.platform !== "linux",
   timeout: 10000,
 }, async () => {
-  const module = await import("../src/storage/preaccept-artifact.js") as Record<string, any>;
+  const module = await import("@oma/storage/preaccept-artifact") as Record<string, any>;
   const executor = new PreparationExecutor();
   const controller = new AbortController();
   const running = executor.run(command("setInterval(()=>{},1000)"), controller.signal);
@@ -85,7 +82,7 @@ test("V17A: uncertain native preparation quiescence retains the resource", {
 });
 
 test("V17A: scope preserves the primary cause, aggregates cleanup, and reports dispositions", async () => {
-  const module = await import("../src/storage/preaccept-artifact.js") as Record<string, any>;
+  const module = await import("@oma/storage/preaccept-artifact") as Record<string, any>;
   assert.equal(typeof module.PreacceptScope, "function", "PreacceptScope is not implemented");
   const root = mkdtempSync(join(tmpdir(), "oma-preaccept-scope-"));
   try {
@@ -114,7 +111,7 @@ test("V17A: scope preserves the primary cause, aggregates cleanup, and reports d
 });
 
 test("V17A: cleanup-unconfirmed can retry once without creating new ownership", async () => {
-  const module = await import("../src/storage/preaccept-artifact.js") as Record<string, any>;
+  const module = await import("@oma/storage/preaccept-artifact") as Record<string, any>;
   const owner = new ObservedOwner(1);
   const scope = new module.PreacceptScope();
   scope.register({ operationId: "op-retry", resource: "retryable", owner,
@@ -130,7 +127,7 @@ test("V17A: cleanup-unconfirmed can retry once without creating new ownership", 
 });
 
 test("V17A: identity loss is cleanup-unconfirmed and never deletes the replacement", async () => {
-  const module = await import("../src/storage/preaccept-artifact.js") as Record<string, any>;
+  const module = await import("@oma/storage/preaccept-artifact") as Record<string, any>;
   assert.equal(typeof module.PreacceptScope, "function", "PreacceptScope is not implemented");
   const root = mkdtempSync(join(tmpdir(), "oma-preaccept-identity-"));
   try {
@@ -157,7 +154,7 @@ test("V17A: identity loss is cleanup-unconfirmed and never deletes the replaceme
 });
 
 test("V17B: an accepted row that does not reference the artifact discards it", async () => {
-  const module = await import("../src/storage/preaccept-artifact.js") as Record<string, any>;
+  const module = await import("@oma/storage/preaccept-artifact") as Record<string, any>;
   assert.equal(typeof module.PreacceptScope, "function", "PreacceptScope is not implemented");
   const root = mkdtempSync(join(tmpdir(), "oma-preaccept-linked-"));
   const store = new Store(join(root, "runtime.sqlite"));

@@ -1,5 +1,5 @@
 // A controlled Human program under the actual holder. No engine or VM.
-import { HostHistoryChannel } from '../../dist/src/runtime/host-history-channel.js';
+import { HostHistoryChannel } from "@oma/engine/host-history-channel";
 const channel = HostHistoryChannel.open(5);
 if (channel === null) throw new Error('missing private channel');
 process.stdin.setRawMode(true); process.stdin.resume();

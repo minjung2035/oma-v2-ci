@@ -28,7 +28,7 @@ const repo = fileURLToPath(new URL("..", import.meta.url));
 const FILES = {
   "package.json": JSON.stringify({
     name: "build-stamp-fixture", private: true, type: "module",
-    bin: { oma: "dist/src/entry/oma.js" }, dependencies: {},
+    bin: { oma: "apps/oma/dist/entry/oma.js" }, dependencies: { "@oma/contracts": "0.1.0", "@oma/domain": "0.1.0" },
   }, null, 2),
   "package-lock.json": JSON.stringify({ name: "build-stamp-fixture", lockfileVersion: 3, packages: { "": {} } }, null, 2),
   // Only an input to the stamp hash; tsc reads the build config alone.
@@ -38,31 +38,36 @@ const FILES = {
       rootDir: ".", outDir: "dist", module: "nodenext", moduleResolution: "nodenext",
       target: "es2022", strict: true, skipLibCheck: true, types: [],
     },
-    include: ["src/**/*.ts", "implementation/contracts.ts"],
+    include: ["test/**/*.ts"],
   }, null, 2),
-  "implementation/schema-v3.sql": "SELECT 1;\n",
-  "implementation/contracts.ts": "export const fixtureContract = 1;\n",
-  "implementation/systemd/runner.service.in": "[Service]\nExecStart=@NODE@ @LIBDIR@/dist/src/entry/oma.js --serve\n",
-  "src/domain/deployment.ts": `export const DEPLOYMENT_LAYOUT = Object.freeze({
-    compiledRoot: "dist/src", contract: "dist/implementation/contracts.js",
-    schema: "implementation/schema-v3.sql", systemd: "implementation/systemd",
-    extension: "dist/src/pi-extension.js", modelCommand: "dist/libexec/oma",
-    entries: Object.freeze({ tui: "dist/src/entry/oma.js" }),
-    templateEntries: Object.freeze({ "runner.service.in": "tui" }),
-    runtimeDependencies: Object.freeze([]),
-  });`,
-  "src/runtime/assets.ts": `import { DEPLOYMENT_LAYOUT } from "../domain/deployment.js";
-  export function runtimeAssets(root: string) {
-    return Object.freeze({ root, schema: root + "/" + DEPLOYMENT_LAYOUT.schema, systemd: root + "/" + DEPLOYMENT_LAYOUT.systemd });
-  }
-  export function assertRuntimeAssets(assets: { schema: string; systemd: string },
-      observed: { schema: string; systemd: string }): void {
-    if (assets.schema !== observed.schema || assets.systemd !== observed.systemd) throw new Error("layout disagreement");
+  "packages/domain/src/schema.sql": "SELECT 1;\n",
+  "packages/contracts/src/index.ts": "export const fixtureContract = 1;\n",
+  ...Object.fromEntries(["contracts", "domain"].flatMap(name => [
+    [`packages/${name}/package.json`, JSON.stringify({ name: `@oma/${name}`, version: "0.1.0", type: "module", exports: {
+      [name === "contracts" ? "." : "./deployment"]: {
+        types: `./dist/${name === "contracts" ? "index" : "deployment"}.d.ts`,
+        default: `./dist/${name === "contracts" ? "index" : "deployment"}.js`,
+      },
+    }, ...(name === "domain" ? { oma: { assets: ["schema.sql"] } } : {}) })],
+    [`packages/${name}/tsconfig.json`, JSON.stringify({ compilerOptions: { rootDir: "src", outDir: "dist", module: "nodenext",
+      moduleResolution: "nodenext", target: "es2022", strict: true, skipLibCheck: true, types: [], composite: true,
+      declaration: true, tsBuildInfoFile: ".tsbuildinfo" }, include: ["src/**/*.ts"] })],
+  ])),
+  "apps/oma/src/test-systemd/runner.service.in": "[Service]\nExecStart=@NODE@ @LIBDIR@/apps/oma/dist/entry/oma.js --serve\n",
+  "packages/domain/src/deployment.ts": "export const DEPLOYMENT_LAYOUT = Object.freeze({\n    workspaces: [{ name: \"@oma/contracts\", root: \"packages/contracts\" }, { name: \"@oma/domain\", root: \"packages/domain\" }, { name: \"@oma/app\", root: \"apps/oma\" }],\n    compiledRoot: \"apps/oma/dist\", contract: \"packages/contracts/dist/index.js\",\n    schema: \"packages/domain/dist/schema.sql\", systemd: \"apps/oma/dist/test-systemd\",\n    extension: \"packages/extension/dist/index.js\", modelCommand: \"apps/oma/dist/libexec/oma\", modelCommandBuilder: \"packages/domain/dist/resident-paths.js\",\n    entries: Object.freeze({ tui: \"apps/oma/dist/entry/oma.js\" }),\n    templateEntries: Object.freeze({ \"runner.service.in\": \"tui\" }),\n    runtimeDependencies: Object.freeze([]),\n  });",
+  "apps/oma/src/runtime/assets.ts": "import { DEPLOYMENT_LAYOUT } from \"@oma/domain/deployment\";\n  export function runtimeAssets(root: string) {\n    return Object.freeze({ root, schema: root + \"/\" + DEPLOYMENT_LAYOUT.schema, systemd: root + \"/\" + DEPLOYMENT_LAYOUT.systemd });\n  }\n  export function assertRuntimeAssets(assets: { schema: string; systemd: string },\n      observed: { schema: string; systemd: string }): void {\n    if (assets.schema !== observed.schema || assets.systemd !== observed.systemd) throw new Error(\"layout disagreement\");\n  }",
+  "test/probe.ts": "export const fixture = 1;\n",
+  "apps/oma/package.json": JSON.stringify({ name: "@oma/app", version: "0.1.0", private: true, type: "module",
+    dependencies: {"@oma/domain":"0.1.0", "@oma/contracts":"0.1.0"}, bin:{oma:"dist/entry/oma.js"},
+    exports:{"./runtime/assets":{types:"./dist/runtime/assets.d.ts",default:"./dist/runtime/assets.js"}},
+    oma:{assets:["test-systemd"],modelCommand:"libexec/oma"} }),
+  "apps/oma/tsconfig.json": JSON.stringify({compilerOptions:{rootDir:"src",outDir:"dist",module:"nodenext",moduleResolution:"nodenext",
+    target:"es2022",strict:true,skipLibCheck:true,types:[],composite:true,declaration:true,tsBuildInfoFile:".tsbuildinfo"},
+    include:["src/**/*.ts"],references:[{path:"../../packages/contracts"},{path:"../../packages/domain"}] }),
+  "packages/domain/src/resident-paths.ts": `export function modelCommandScript(): string {
+    return "#!/bin/sh\\nexec node apps/oma/dist/entry/oma.js \\"$@\\"\\n";
   }`,
-  "src/sandbox.ts": `export function modelCommandScript(): string {
-    return "#!/bin/sh\\nexec node dist/src/entry/oma.js \\"$@\\"\\n";
-  }`,
-  "src/entry/oma.ts": "#!/usr/bin/env node\nexport {};\n",
+  "apps/oma/src/entry/oma.ts": "#!/usr/bin/env node\nexport {};\n",
 };
 
 function fixture(t) {
@@ -73,9 +78,13 @@ function fixture(t) {
     writeFileSync(join(root, name), content);
   }
   mkdirSync(join(root, "scripts"));
-  for (const script of ["build.mjs", "check-package.mjs"])
+  for (const script of ["build.mjs", "check-package.mjs", "build-workspaces.mjs", "check-modules.mjs", "workspace-assets.mjs"])
     writeFileSync(join(root, "scripts", script), readFileSync(join(repo, "scripts", script)));
-  symlinkSync(join(repo, "node_modules"), join(root, "node_modules"), "dir");
+  mkdirSync(join(root, "node_modules/@oma"), { recursive: true });
+  symlinkSync(join(repo, "node_modules/typescript"), join(root, "node_modules/typescript"), "dir");
+  for (const name of ["contracts", "domain"])
+    symlinkSync(join(root, "packages", name), join(root, "node_modules/@oma", name), "dir");
+  symlinkSync(join(root, "apps/oma"), join(root, "node_modules/@oma/app"), "dir");
   return root;
 }
 
@@ -89,7 +98,7 @@ function build(root) {
 }
 
 test("DR44: discovery, compile and package launch failures cannot certify a build with status zero", t => {
-  for (const [phase, signal] of [[1, false], [2, false], [3, false], [1, true]]) {
+  for (const [phase, signal] of [[1, false], [2, false], [3, false], [4, false], [1, true]]) {
     const root = fixture(t);
     writeFileSync(join(root, "inject-child.mjs"), `
 import cp from "node:child_process";
@@ -123,10 +132,10 @@ function assertRebuild(root, target, change, message) {
   }
 }
 
-test("build stamp: a no-change build skips tsc instead of rewriting outputs", t => {
+test("build stamp: a no-change root test compile preserves its recorded outputs", t => {
   const root = fixture(t);
   build(root);
-  const target = join(root, "dist/src/sandbox.js");
+  const target = join(root, "dist/test/probe.js");
   const emitted = statSync(target).ino;
   build(root);
   assert.equal(statSync(target).ino, emitted, "the skip path rewrote a recorded output");
@@ -135,7 +144,7 @@ test("build stamp: a no-change build skips tsc instead of rewriting outputs", t 
 test("build stamp: appended, same-size-patched, swapped or removed outputs force a rebuild", t => {
   const root = fixture(t);
   build(root);
-  const target = join(root, "dist/src/domain/deployment.js");
+  const target = join(root, "dist/test/probe.js");
   const pristine = readFileSync(target);
   assertRebuild(root, target, () => appendFileSync(target, "// CORRUPTED\n"),
     "appended bytes did not force a rebuild");
@@ -163,11 +172,11 @@ test("build stamp: appended, same-size-patched, swapped or removed outputs force
 test("build stamp: extra files and directories in dist force a rebuild", t => {
   const root = fixture(t);
   build(root);
-  const extra = join(root, "dist/src/junk-extra.js");
+  const extra = join(root, "dist/test/junk-extra.js");
   writeFileSync(extra, "// junk\n");
   build(root);
   assert.equal(existsSync(extra), false, "an extra dist file survived the skip path");
-  const stray = join(root, "dist/src/stray-dir");
+  const stray = join(root, "dist/test/stray-dir");
   mkdirSync(stray);
   build(root);
   assert.equal(existsSync(stray), false, "an extra dist directory survived the skip path");
@@ -176,19 +185,19 @@ test("build stamp: extra files and directories in dist force a rebuild", t => {
 test("build stamp: a stamp without per-output hashes cannot skip", t => {
   const root = fixture(t);
   build(root);
-  const target = join(root, "dist/src/sandbox.js");
+  const target = join(root, "dist/test/probe.js");
   const stamp = JSON.parse(readFileSync(join(root, "dist/.build-stamp.json"), "utf8"));
   // The retired format listed names only; its `existsSync` check is exactly
   // the hole, so a same-digest old-format stamp must still rebuild.
   assertRebuild(root, target, () => {
-    writeFileSync(join(root, "dist/.build-stamp.json"), JSON.stringify({ digest: stamp.digest, outputs: ["src/sandbox.js"] }));
+    writeFileSync(join(root, "dist/.build-stamp.json"), JSON.stringify({ digest: stamp.digest, outputs: ["test/probe.js"] }));
   }, "a name-only stamp skipped the compile");
 });
 
 test("build stamp: an edit to the build's own scripts is an input, not a free ride on the old stamp", t => {
   const root = fixture(t);
   build(root);
-  const target = join(root, "dist/src/sandbox.js");
+  const target = join(root, "dist/test/probe.js");
   // The hashed input set once covered sources and configs but not the build
   // logic itself: a build.mjs or check-package.mjs edit changed what the
   // build produces while the stamp proved "inputs unchanged".
@@ -204,7 +213,7 @@ test("build stamp: a mode-000 directory inside dist cannot wedge drift recovery"
   // The extra directory already fails the recorded-set check; rmSync's blind
   // listing then died EACCES on the mode-000 subdirectory and the build could
   // never recover. The drift removal repairs owner bits before listing.
-  const locked = join(root, "dist/src/locked");
+  const locked = join(root, "apps/oma/dist/locked");
   mkdirSync(locked);
   writeFileSync(join(locked, "x.js"), "x\n");
   chmodSync(locked, 0o000);

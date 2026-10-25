@@ -1,3 +1,8 @@
+import type { RawDescriptor } from "@oma/contracts/files";
+import { TransportSpool } from "@oma/storage/transport-spool";
+import { testBroker } from "./helpers/broker-fixture.js";
+import { createLifecycleModule } from "#oma-test/app/broker/lifecycle-composition";
+import { serializePlanIntent } from "./fixtures/plan.js";
 /** The seventh review (adversarial, 2026-09-28): the core's findings, each
  * held by what the product now does. Platform findings are in
  * platform-stream-publication, platform-host-service and platform-snapshot. */
@@ -6,12 +11,12 @@ import assert from "node:assert/strict";
 import { closeSync, mkdirSync, mkdtempSync, openSync, readdirSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { requestKeyOf } from "../src/extension/shared.js";
-import { publishNoReplace } from "../src/storage/durable-fs.js";
-import { replaceDerivedSymlink } from "../src/storage/staged-tree.js";
-import { lockFileDescriptor } from "../src/leaf.js";
-import { RequestCache, readCacheFile, type CacheReader } from "../src/request-cache.js";
-import { StoreError } from "../src/domain/errors.js";
+import { requestKeyOf } from "@oma/tool-runtime/shared";
+import { publishNoReplace } from "@oma/storage/durable-fs";
+import { replaceDerivedSymlink } from "@oma/storage/staged-tree";
+import { lockFileDescriptor } from "@oma/native/linux";
+import { RequestCache, readCacheFile, type CacheReader } from "#oma-test/app/request-cache";
+import { StoreError } from "@oma/domain/errors";
 
 const UUID = "0123abcd-0000-4000-8000-00000000beef";
 
@@ -96,10 +101,10 @@ test("P0V-112 / G02-ledger-r2-02: request metadata larger than a request and its
 });
 
 test("P0V-113 / G03-broker-r2-01: a run that could not be opened leaves the incarnation where it was, and its endpoint closed", async t => {
-  const { Broker } = await import("../src/broker.js");
-  const { LifecycleModule } = await import("../src/lifecycle.js");
-  const { ViewsModule } = await import("../src/views.js");
-  const { RunRegistry } = await import("../src/runtime/run-registry.js");
+  const { Broker } = await import("@oma/broker");
+  const { LifecycleModule } = await import("@oma/lifecycle");
+  const { ViewsModule } = await import("#oma-test/app/views");
+  const { RunRegistry } = await import("@oma/broker/run-registry");
   const { preparedFixture } = await import("./fixtures/delivery-receipt.js");
   const { TEST_VIEW_LIMITS } = await import("./fixtures/limits.js");
   let invocation = "c".repeat(32);
@@ -108,10 +113,9 @@ test("P0V-113 / G03-broker-r2-01: a run that could not be opened leaves the inca
     onRevokeRun: undefined, bindIncarnationReader: () => undefined, unitCgroup: () => "",
     observe: () => ({ activeState: "active", subState: "running", result: "success", execMainStatus: 0, cgroup: "/oma/alice", invocationId: invocation }),
   } as never;
-  const lifecycle = new LifecycleModule(f.store, units, { stateRoot: f.root, projectGit: join(f.root, "repos", "project.git"), society: "demo",
+  const lifecycle = createLifecycleModule(f.store, units, { stateRoot: f.root, projectGit: join(f.root, "repos", "project.git"), society: "demo",
     hasGoal: () => true, activationAllowed: () => true }, ((_parent: unknown, input: Record<string, unknown>) => ({ ...input })) as never, f.mail);
-  const broker = new Broker(f.store, f.mail, units, new ViewsModule(f.store, f.root, "demo", "p", TEST_VIEW_LIMITS), lifecycle, null, null,
-    { stateRoot: f.root, runRoot: join(f.root, "run"), society: "demo", hasGoal: () => true });
+  const broker = testBroker({ store: f.store, mail: f.mail, units: units, views: new ViewsModule(f.store, f.root, "demo", "p", TEST_VIEW_LIMITS), lifecycle: lifecycle, git: null, reviews: null, reconcile: null, paths: { stateRoot: f.root, runRoot: join(f.root, "run"), society: "demo", hasGoal: () => true } });
   t.after(async () => { try { await broker.drainAndClose(); } catch { f.store.close(); } finally { rmSync(f.root, { recursive: true, force: true }); } });
   // Each invocation's cgroup, as the kernel reports it: populated until it dies.
   const cgroups: { population: "populated" | "empty" }[] = [];
@@ -122,7 +126,7 @@ test("P0V-113 / G03-broker-r2-01: a run that could not be opened leaves the inca
   await broker.start();
   const openRun = (): Promise<{ incarnation: number }> => (Reflect.get(broker, "openRun") as (actor: string, id: string) => Promise<{ incarnation: number }>).call(broker, "alice", invocation);
   const incarnation = (): number => f.store.getAgent("alice")!.incarnation;
-  const servers = (): number => (Reflect.get(broker, "listeners") as import("../src/broker/listeners.js").BrokerListeners).size;
+  const servers = (): number => (Reflect.get(broker, "listeners") as import("@oma/broker/listeners").BrokerListeners).size;
   const nextInvocation = (): void => { cgroups.at(-1)!.population = "empty"; invocation = String(cgroups.length).padStart(32, "d"); };
   const before = incarnation(); const listening = servers();
   // The endpoint could not be made (a full disk, a path too long).
@@ -207,7 +211,7 @@ test("P0V-113 / G03-broker-r2-01: a run that could not be opened leaves the inca
 test("P0V-114 / G04-02, G04-03, G03-05: one owner clears a socket's name before a server listens there; a name already gone is no failure, and a file that is not a socket is kept", async t => {
   const { spawnSync } = await import("node:child_process");
   const { existsSync, lstatSync, readFileSync } = await import("node:fs");
-  const { clearSocketName } = await import("../src/storage/socket-name.js");
+  const { clearSocketName } = await import("@oma/storage/socket-name");
   const dir = mkdtempSync(join(tmpdir(), "oma-sock-"));
   t.after(() => { rmSync(dir, { recursive: true, force: true }); });
   const path = join(dir, "a.sock");
@@ -226,7 +230,7 @@ test("P0V-114 / G04-02, G04-03, G03-05: one owner clears a socket's name before 
 test("P0V-114 / G04-03: a server's close removes its own name, and not a name the next server bound meanwhile", async t => {
   const { createServer } = await import("node:net");
   const { existsSync } = await import("node:fs");
-  const { EgressForwarder } = await import("../src/runtime/egress-forwarder.js");
+  const { EgressForwarder } = await import("#oma-test/app/runtime/egress-forwarder");
   const dir = mkdtempSync(join(tmpdir(), "oma-sock-"));
   t.after(() => { rmSync(dir, { recursive: true, force: true }); });
   const path = join(dir, "principal-inference.sock");
@@ -242,8 +246,8 @@ test("P0V-114 / G04-03: a server's close removes its own name, and not a name th
 });
 
 test("P0V-114 / G04-01: what a tenure holds ends with it, before the society is free; one handed over after the end is closed at once", async t => {
-  const { HostTenure } = await import("../src/runtime/host-tenure.js");
-  const { tryHoldSociety } = await import("../src/runtime/society-lease.js");
+  const { HostTenure } = await import("#oma-test/app/runtime/host-tenure");
+  const { tryHoldSociety } = await import("#oma-test/app/runtime/society-lease");
   const root = mkdtempSync(join(tmpdir(), "oma-tenure-"));
   t.after(() => { rmSync(root, { recursive: true, force: true }); });
   const takeable = (): boolean => { const other = tryHoldSociety(root); other?.release(); return other !== null; };
@@ -265,7 +269,7 @@ test("P0V-114 / G04-01: what a tenure holds ends with it, before the society is 
 });
 
 test("P0V-115 / G05-02: a unit carries a society's and an agent's name only when it needs no escape anywhere it lands", async () => {
-  const { renderUnit } = await import("../src/units/render.js");
+  const { renderUnit } = await import("@oma/platform-linux/units/render");
   const values = { node: "/n", libdir: "/l", state: "/s", society: "demo", agent: "alice" };
   const template = "Description=OMA @SOCIETY@ @AGENT@\nExecStart=@NODE@ --society @SOCIETY@ --agent @AGENT@\nUnit=oma-@SOCIETY@-@AGENT@.service";
   assert.equal(renderUnit(template, values), "Description=OMA demo alice\nExecStart=/n --society demo --agent alice\nUnit=oma-demo-alice.service");
@@ -278,8 +282,8 @@ test("P0V-115 / G05-02: a unit carries a society's and an agent's name only when
 });
 
 test("P0V-116 / G06-01, G06-02: a word git could read as an option never reaches it, and is not observed as absent or as the expected value", async () => {
-  const { GitObserver } = await import("../src/git/observe.js");
-  const { compareAndSwapCanonicalRef, createCanonicalRef } = await import("../src/git/canonical-command.js");
+  const { GitObserver } = await import("@oma/git/observe");
+  const { compareAndSwapCanonicalRef, createCanonicalRef } = await import("@oma/git/canonical-command");
   const runs: string[][] = [];
   const observer = new GitObserver(args => { runs.push([...args]); return { status: 1, signal: null, stdout: new Uint8Array(), stderr: new Uint8Array() }; });
   const oid = "a".repeat(40);
@@ -300,7 +304,7 @@ test("P0V-116 / G06-01, G06-02: a word git could read as an option never reaches
 });
 
 test("P0V-117 / G07-01: a descriptor that is not a pidfd is no answer about a process, not an exited one", async () => {
-  const { pidfdLiveness } = await import("../src/leaf.js");
+  const { pidfdLiveness } = await import("@oma/native/linux");
   // /dev/null polls readable, exactly as a pidfd of an exited process does.
   const fd = openSync("/dev/null", "r");
   try { assert.deepEqual(pidfdLiveness(fd), { kind: "failed", errno: 9 }); }
@@ -309,8 +313,8 @@ test("P0V-117 / G07-01: a descriptor that is not a pidfd is no answer about a pr
 });
 
 test("P0V-118 / G07-02, G07-03: a message's values are refused as the request they are; a header block is judged by one rule in either form", async () => {
-  const { buildEml } = await import("../src/mail/serialize.js");
-  const { parseEmlHeaders } = await import("../src/mail/headers.js");
+  const { buildEml } = await import("@oma/mail/serialize");
+  const { parseEmlHeaders } = await import("@oma/mail/headers");
   const id = "m-00000000-0000-4000-8000-000000000118-0";
   const valid = { from: "a@demo.oma.invalid", to: ["principal@demo.oma.invalid"], replyTo: [], subject: "hello", kind: "message" as const,
     contextRevision: null, inReplyTo: null, references: [], messageId: `${id}@demo.oma.invalid`, body: "body" };
@@ -325,10 +329,10 @@ test("P0V-118 / G07-02, G07-03: a message's values are refused as the request th
 });
 
 test("P0V-119 / G08-01, G09-01, G09-02: JSON nested past one named bound is refused as a request, by the parser and by the codec, never as a stack overflow", async () => {
-  const { JSON_NESTING_LIMIT, canonicalJson, snapshotJson } = await import("../src/domain/canonical-json.js");
-  const { parseJsonObject, FrameError } = await import("../src/frame.js");
-  const { decodeMutationPayload } = await import("../src/protocol/request-codec.js");
-  const { buildRequestIdentity } = await import("../src/domain/request-identity.js");
+  const { JSON_NESTING_LIMIT, canonicalJson, snapshotJson } = await import("@oma/domain/canonical-json");
+  const { parseJsonObject, FrameError } = await import("@oma/protocol/frame");
+  const { decodeMutationPayload } = await import("@oma/protocol/request-codec");
+  const { buildRequestIdentity } = await import("@oma/domain/request-identity");
   const nested = (levels: number): unknown => { let value: unknown = 0; for (let i = 0; i < levels; i++) value = [value]; return value; };
   const text = (levels: number): string => `{"a":${"[".repeat(levels)}0${"]".repeat(levels)}}`;
   assert.equal(JSON_NESTING_LIMIT, 64);
@@ -347,7 +351,7 @@ test("P0V-119 / G08-01, G09-01, G09-02: JSON nested past one named bound is refu
 });
 
 test("G08-03: the canonical spelling of numbers is Number::toString, held by golden vectors", async () => {
-  const { canonicalJson, sha256Hex } = await import("../src/domain/canonical-json.js");
+  const { canonicalJson, sha256Hex } = await import("@oma/domain/canonical-json");
   assert.equal(canonicalJson([0, -0, 1, -1, 1.5, 0.1 + 0.2, 1e21, 1e-7, 5e-324, 1.7976931348623157e308, 9007199254740991, 123e-20, 100, 2 ** 53]),
     "[0,0,1,-1,1.5,0.30000000000000004,1e+21,1e-7,5e-324,1.7976931348623157e+308,9007199254740991,1.23e-18,100,9007199254740992]");
   // Computed apart from this code: printf '%s' '<text>' | sha256sum.
@@ -358,7 +362,7 @@ test("G08-03: the canonical spelling of numbers is Number::toString, held by gol
 
 test("P0V-120 / G10-04: the provider names only a port the bridge holds -- no one's while it has none, then the one the kernel gave it", async t => {
   const { createServer, connect } = await import("node:net");
-  const { startInferenceBridge } = await import("../src/extension/inference-bridge.js");
+  const { startInferenceBridge } = await import("@oma/extension/inference-bridge");
   const dir = mkdtempSync(join(tmpdir(), "oma-bridge-"));
   const listening = (server: import("node:net").Server, at: number | string): Promise<void> =>
     new Promise(resolve => { typeof at === "number" ? server.listen(at, "127.0.0.1", resolve) : server.listen(at, resolve); });
@@ -388,7 +392,7 @@ test("P0V-120 / G10-04: the provider names only a port the bridge holds -- no on
 });
 
 test("P0V-121 / G10-05: a journal prefix stands only when the view's own bound ended the read", async () => {
-  const { journalView } = await import("../src/process/policies.js");
+  const { journalView } = await import("@oma/process/policies");
   const observed = (kind: string, truncated: boolean, exitCode: number | null = null) => ({ kind, exitCode, stdout: Buffer.from("prefix"), stderr: Buffer.alloc(0),
     stdoutTruncated: truncated, stderrTruncated: false, signal: null, errorCode: null, elapsedMs: 1 }) as never;
   assert.deepEqual(journalView(observed("output-limited", true)), { bytes: Buffer.from("prefix"), truncated: true });
@@ -401,7 +405,7 @@ test("P0V-121 / G10-05: a journal prefix stands only when the view's own bound e
 
 test("P0V-122 / G10-02: the pinned engine searches only copied single-link files, including context-zero grep", async t => {
   const { readFileSync, realpathSync } = await import("node:fs");
-  const { containWorkspaceTools } = await import("../src/extension/contained-tools.js");
+  const { containWorkspaceTools } = await import("@oma/tool-runtime/contained-tools");
   const base = realpathSync(mkdtempSync(join(tmpdir(), "oma-grep-")));
   t.after(() => { rmSync(base, { recursive: true, force: true }); });
   const workspace = join(base, "workspace"); mkdirSync(workspace);
@@ -409,7 +413,7 @@ test("P0V-122 / G10-02: the pinned engine searches only copied single-link files
   symlinkSync(join(base, "secret"), join(workspace, "linked"));
   writeFileSync(join(workspace, "notes.txt"), "a secret of the workspace\n");
   const tools: Record<string, { execute(id: string, params: Record<string, unknown>, signal: undefined, update: undefined, ctx: unknown): Promise<{ content: { text?: string }[] }> }> = {};
-  containWorkspaceTools({ registerTool: (tool: { name: string }) => { tools[tool.name] = tool as never; } } as never, workspace, 1024, false);
+  containWorkspaceTools({ registerTool: (tool: { name: string }) => { tools[tool.name] = tool as never; } } as never, workspace, false);
   assert.ok(tools.grep, "grep is registered with contained operations");
   await assert.rejects(tools.grep.execute("call", { pattern: "secret", path: "linked" }, undefined, undefined, { cwd: workspace }), /link|not followed|outside/);
   // A match's lines are read as read reads: not through a file that has another name.
@@ -437,9 +441,9 @@ test("P0V-122 / G10-02: the pinned engine searches only copied single-link files
 
 test("P0V-123 / G03-broker-01, r2-02: an answer too large to send after the request was handled is an unknown outcome, asked again under the same key", async t => {
   const { EventEmitter } = await import("node:events");
-  const { RpcConnection } = await import("../src/broker/connection.js");
-  const { SharedPeerPin } = await import("../src/broker/peer-pin.js");
-  const { encodeFrame, FrameParser } = await import("../src/frame.js");
+  const { RpcConnection } = await import("@oma/broker/connection");
+  const { SharedPeerPin } = await import("@oma/broker/peer-pin");
+  const { encodeFrame, FrameParser } = await import("@oma/protocol/frame");
   class Sock extends EventEmitter {
     destroyed = false; output: Buffer[] = [];
     pause(): void {} resume(): void {}
@@ -451,7 +455,7 @@ test("P0V-123 / G03-broker-01, r2-02: an answer too large to send after the requ
   t.after(() => { rmSync(root, { recursive: true, force: true }); });
   const socket = new Sock(); const tasks: Promise<unknown>[] = [];
   let handled = false;
-  new RpcConnection({ socket, peer: new SharedPeerPin(() => true, () => undefined), stagingRoot: root,
+  new RpcConnection({ socket, peer: new SharedPeerPin(() => true, () => undefined), makeSpool: (descriptor: RawDescriptor) => new TransportSpool(root, descriptor),
     limits: { frameBytes: 256, idleStreamSeconds: 2, receiptWaitSeconds: 5 },
     handle: async () => { handled = true; return { v: 1, id: "req", ok: true, result: { big: "x".repeat(2000) } }; },
     preflight: () => undefined, onTask: (task: Promise<unknown>) => { tasks.push(task); } } as never);
@@ -464,7 +468,7 @@ test("P0V-123 / G03-broker-01, r2-02: an answer too large to send after the requ
 });
 
 test("P0V-124 / G03-broker-r2-04: one judgment of whether a peer runs inside a unit's cgroup", async () => {
-  const { insideCgroup } = await import("../src/broker/peer-authenticator.js");
+  const { insideCgroup } = await import("@oma/broker/peer-authenticator");
   const unit = "/user.slice/app.slice/oma-demo-alice.service";
   assert.equal(insideCgroup(unit, unit), true);
   assert.equal(insideCgroup(`${unit}/payload`, unit), true);
@@ -475,7 +479,7 @@ test("P0V-124 / G03-broker-r2-04: one judgment of whether a peer runs inside a u
 });
 
 test("P0V-126 / G02-ledger-r2-03: every row a store writes is stamped from its one clock, clamped where it steps back", async t => {
-  const { Store } = await import("../src/store.js");
+  const { Store } = await import("@oma/storage");
   const { makeValidAgent } = await import("./fixtures/spec.js");
   const root = mkdtempSync(join(tmpdir(), "oma-clock-"));
   let clock = 5_000_000;
@@ -491,13 +495,13 @@ test("P0V-126 / G02-ledger-r2-03: every row a store writes is stamped from its o
   store.transaction(tx => { tx.updateAgent({ name: "alice", desired: "stopped" }); });
   assert.equal(store.getAgent("alice")!.updatedAtMs, 6_000_000);
   // An operation is stamped from the same clock.
-  const { requestHash } = await import("../src/hash.js");
+  const { requestHash } = await import("@oma/domain/request-identity");
   const { makeValidMessagePlan } = await import("./fixtures/valid.js");
   const operation = "op-00000000-0000-4000-8000-000000000126";
   const input = { to: ["alice"], subject: "clock", kind: "message", body: "clock\n" };
   clock = 7_000_000;
   store.transaction(tx => { tx.acceptOperation({ id: operation, actor: "alice", requestKey: "clock-126", requestHash: requestHash("mail.send", input),
-    kind: "mail.send", payloadJson: JSON.stringify(input), planJson: JSON.stringify({ kind: "mail.send", message: makeValidMessagePlan(operation) }) });
+    kind: "mail.send", payloadJson: JSON.stringify(input), planJson: serializePlanIntent({ kind: "mail.send", message: makeValidMessagePlan(operation) }) });
     tx.insertDeliveries([{ messageId: "m-00000000-0000-4000-8000-000000000126-0", recipient: "alice", operationId: operation }]); });
   const row = store.getOperationById(operation as never)!;
   assert.deepEqual([row.createdAtMs, row.updatedAtMs], [7_000_000, 7_000_000]);
@@ -505,12 +509,12 @@ test("P0V-126 / G02-ledger-r2-03: every row a store writes is stamped from its o
 
 
 test("P0V-127 / G05-04: another owner's unit proves neither death nor an empty process list", async t => {
-  const { UnitsModule, renderUnit } = await import("../src/units.js");
+  const { UnitsModule, renderUnit } = await import("@oma/platform-linux/units");
   const dir = mkdtempSync(join(tmpdir(), "oma-foreign-death-"));
   t.after(() => { rmSync(dir, { recursive: true, force: true }); });
   const values = { node: process.execPath, libdir: process.cwd(), state: join(dir, "ours"), society: "demo", agent: "alice",
     config: join(dir, "config.json"), run: join(dir, "run") };
-  const units = new UnitsModule("demo", values, dir, {}, () => 1);
+  const units = new UnitsModule("demo", values, dir, () => 1);
   let revoked = 0;
   units.onRevokeRun = () => { revoked++; };
   for (const [suffix, description] of [["service", "OMA @SOCIETY@ resident @AGENT@"], ["path", "Wake OMA @SOCIETY@ resident @AGENT@ on mail"]]) {

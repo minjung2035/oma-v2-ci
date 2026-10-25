@@ -5,8 +5,8 @@ import { RESIDENT_TEST_OPTIONS } from "./fixtures/resident.js";
 import assert from "node:assert/strict";
 import { withScenario } from "./fixtures/scenario.js";
 import { call, text, tools, toolResults } from "./fixtures/scripted-provider.js";
-import { readSettings, writeSettings } from "../src/application/settings.js";
-import { resolvedSpecOf } from "../src/authority.js";
+import { readSettings, writeSettings } from "#oma-test/app/application/settings";
+import { resolvedSpecOf } from "@oma/domain/agent-spec";
 
 const create = "printf 'Review the implementation independently.\\n' > brief.txt && oma agent create peer --from HEAD --file brief.txt --request delegate-peer";
 
@@ -49,7 +49,7 @@ test("DR27: a Worker creates a peer without Principal orchestration, resumes its
 test("DR27: legacy quotas do not block a Worker creating a peer", RESIDENT_TEST_OPTIONS, async () => {
   await withScenario({ residents: ["worker-a"], confined: true }, async s => {
     const config = readSettings(s.configPath).config;
-    writeSettings(s.configPath, { ...config, quota: { ...config.quota, societyAgents: 1, lineageAgents: 1 } });
+    writeSettings(s.configPath, { ...config, limits: { ...config.limits, logBytes: 1 } });
     await s.restartBroker();
     s.script([tools(call("oma_mail_send", { to: ["worker-a"], subject: "Work", body: "Try collaborating." })), text("Assigned.")]);
     await s.prompt("Ask for work.");

@@ -5,16 +5,16 @@ import { readFileSync } from 'node:fs';
 import { EventEmitter } from 'node:events';
 import { Script } from 'node:vm';
 import ts from 'typescript';
-import { FrameError, FrameParser, encodeFrame } from '../dist/src/frame.js';
-import { StoreError } from '../dist/src/domain/errors.js';
+import { FrameError, FrameParser, encodeFrame } from "@oma/protocol/frame";
+import { StoreError } from "@oma/domain/errors";
 const functionText = (file, name) => {
   const source = ts.createSourceFile(file, readFileSync(file, 'utf8'), ts.ScriptTarget.Latest, true);
   const node = source.statements.find(node => ts.isFunctionDeclaration(node) && node.name?.text === name);
   assert.ok(node); return node.getText(source).replace(/^export /, '');
 };
 // fix/fp: alarm lives in protocol/alarm.ts; pi-rpc.js only re-exports it.
-const code = ts.transpileModule(functionText('src/protocol/alarm.ts', 'alarm') + '\n' +
-  functionText('src/runtime/egress-forwarder.ts', 'oneFrame') + '\nexports.read = oneFrame;',
+const code = ts.transpileModule(functionText('packages/protocol/src/alarm.ts', 'alarm') + '\n' +
+  functionText('apps/oma/src/runtime/egress-forwarder.ts', 'oneFrame') + '\nexports.read = oneFrame;',
   { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText;
 function world(milliseconds) {
   const timers = new Set(), exports = {}; let now = 0, destroys = 0;

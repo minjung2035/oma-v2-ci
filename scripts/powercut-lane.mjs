@@ -80,7 +80,7 @@ export function runRecovery(executable, args, { env, timeoutMs = 120000, stopMs 
   });
 }
 function recover(stateRoot, society) {
-  return runRecovery(process.execPath, [path.join(SELF, "..", "dist", "src", "entry", "broker.js"), "--society", society], {
+  return runRecovery(process.execPath, [path.join(SELF, "..", "apps", "oma", "dist", "entry", "broker.js"), "--society", society], {
     env: { ...process.env, XDG_DATA_HOME: path.dirname(path.dirname(stateRoot)), NOTIFY_SOCKET: "" },
   });
 }

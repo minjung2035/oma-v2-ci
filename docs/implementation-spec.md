@@ -28,9 +28,9 @@ DR45 대조는 이전 기준본 `39613e469209210632007e5f8f91293ff288dc2785dcda0
 
 | 파일 | 용도 |
 |---|---|
-| [implementation/schema-v3.sql](../implementation/schema-v3.sql) | 여섯 기본 DB entity의 실행 가능한 초기 DDL |
+| [implementation/schema-v4.sql](../packages/storage/src/schema-v4.sql) | 여섯 기본 DB entity의 실행 가능한 초기 DDL |
 | [docs/implementation/integration-policy.md](implementation/integration-policy.md) | 제안 검토·tiered authority·challenge/floor·Principal packet 계약 |
-| [implementation/contracts.ts](../implementation/contracts.ts) | 모듈 및 closed IPC 타입 계약. 실행 코드 아님 |
+| [packages/contracts/src/index.ts](../packages/contracts/src/index.ts) | 모듈 및 closed IPC 타입 계약. 실행 코드 아님 |
 | [docs/verification-spec.md](verification-spec.md#qualification-계약) | 미확정 부분, 실험, release gate |
 | [docs/verification-spec.md](verification-spec.md#oma-core-v1--검증-계약) | 기능·장애·격리·수용 시험 |
 | [implementation/systemd/](implementation-spec.md#unit-renderer-계약) | 설치 renderer에 입력할 unit template |
@@ -65,7 +65,7 @@ A-008은 2026-09-28 사용자 결정으로 철회했다([DR20](design-revisions.
 
 **MUST [M-001]** application/extension/CLI/runner는 TypeScript로 작성하여 고정된 Node.js runtime에서 실행한다. Pi extension도 TypeScript다. Python supervisor, shell 업무 engine, 별도 Go/Rust broker로 대체하지 않는다. syscall에 필요한 최소 native leaf의 필요성·binding은 `S-01`로 검증한다.
 
-**MUST [M-002]** 모듈 경계는 다음 표와 [contracts.ts](../implementation/contracts.ts)를 따른다. 같은 책임의 파일 분할은 허용하지만 공개 서비스·권한·durable entity를 늘리지 않는다. 실행 파일 entrypoint는 조립만 하고 로직을 중복하지 않는다.
+**MUST [M-002]** 모듈 경계는 다음 표와 [contracts.ts](../packages/contracts/src/index.ts)를 따른다. 같은 책임의 파일 분할은 허용하지만 공개 서비스·권한·durable entity를 늘리지 않는다. 실행 파일 entrypoint는 조립만 하고 로직을 중복하지 않는다.
 
 | 모듈 | 소유 책임·주요 함수 | 의존 가능 경계 | 소유하면 안 되는 것 |
 |---|---|---|---|
@@ -96,13 +96,13 @@ A-008은 2026-09-28 사용자 결정으로 철회했다([DR20](design-revisions.
 
 **MUST [ID-003]** Git OID는 repository의 object format에 맞는 full lowercase hex만 wire에서 받는다. symbolic revision은 CLI가 freeze한 뒤 전송한다. hash 길이를 SHA-1 40자로 고정하지 않는다. wire path는 `/` 구분 상대 경로이고 NUL, `.`/`..` component, 절대 경로를 거절한다.
 
-**MUST [CFG-001]** `config.json`은 host만 수정하며 다음 폐쇄된 정보를 가진다: schemaVersion=1, society, trusted rootfs/install path, pinned deployment manifest digest, agent profile map, 초기 population, society/lineage agent·usage cap, Principal slot/budget reserve, provider credential reference, protected path 목록, candidate check argv/env/resource profile, policy revision, storage/resource/protocol limits, optional notmuch/approval/egress flags. secret 값은 파일에 넣지 않고 host credential reference로 해석한다.
+**MUST [CFG-001]** DR46: `config.json`은 host가 소유하는 폐쇄된 schema 3 `HostConfig`다. society, trusted rootfs/install path, pinned deployment digest, model/agent profile, 초기 Worker, protected path와 candidate check, policy revision, 실제 protocol 한계를 검증한다. 이전 schema와 삭제된 quota/egress 필드, 미지 profile 필드는 명시적으로 거절하며 자동 변환·덮어쓰기·삭제하지 않는다. secret은 설정에 저장하지 않고 실행 시 엔진/host credential owner가 해석한다.
 
-**MUST [CFG-002]** 기본 quota 금액·model ID·provider 가격·기능성 검사 명령은 bootstrap 때 Human host 설정으로 필수 제공한다. missing 값을 무제한·검사 없음·가장 비싼 모델로 채우지 않는다. `requiredChecks: []`는 host가 명시적으로 선택한 경우만 허용한다. quota 계산은 최소 화폐 단위 정수이며 JS에서는 safe integer 검사 또는 bigint/decimal string 경계를 사용한다.
+**MUST [CFG-002]** model과 기능성 검사 명령은 host 설정으로 정하고 전체 validator로 확인한다. 명시한 빈 검사 목록은 허용한다. DR37/DR46: 이 조항의 과거 quota 금액·provider 가격·화폐 계산 요구는 폐기했다. 과금은 엔진과 provider 설정이 소유하고 OMA는 효과 없는 quota 필드를 받지 않는다.
 
-**MUST [CFG-005]** `contracts.ts`의 `HostConfigV1`을 기본 profile의 폐쇄된 설정 schema로 사용한다. 숫자는 유한한 non-negative safe integer이고 slot/size/timeout은 양수다. Principal reserve는 total을 초과하지 않는다. quota는 Core v1 society 수명 누계이며 자동 월별 reset을 추가하지 않는다. 금액 단위·가격 codec은 host deployment manifest에 고정한다. `protectedPaths`는 glob이 아닌 repository 상대 literal path 또는 `/`로 끝나는 subtree prefix다. diff의 추가/수정/삭제 양쪽 path를 모두 검사한다. D02: 전체 후보를 loader와 동일한 validator로 검사하고 host/model/role/prompt/extension 선택의 의미가 바뀌면 새 policy revision을 지정하여 outstanding integrate가 재검사하게 한다. 비교에서 revision 자체를 제외하고 공백·동일 의미 재저장은 policy 변경으로 만들지 않는다. generation identity와 policy revision은 별개이며 기존 request/spec/check-profile hash recipe는 바꾸지 않는다.
+**MUST [CFG-005]** `@oma/contracts/host`의 `HostConfig`와 `@oma/config`의 단일 validator가 현재 설정 schema 3를 소유한다(DR46). 숫자는 유한한 safe integer이고 각 실제 descriptor의 범위를 따른다. `protectedPaths`는 glob이 아닌 repository 상대 literal path 또는 `/`로 끝나는 subtree prefix다. diff의 추가/수정/삭제 양쪽 path를 모두 검사한다. D02: 전체 후보를 loader와 동일한 validator로 검사하고 host/model/role/prompt/extension 선택의 의미가 바뀌면 새 policy revision을 지정하여 outstanding integrate가 재검사하게 한다. 비교에서 revision 자체를 제외하고 공백·동일 의미 재저장은 policy 변경으로 만들지 않는다. generation identity와 policy revision은 별개이며 이미 접수한 bytes와 hash의 의미는 바꾸지 않는다.
 
-운영 파일 분리는 authoring 입력 `kind: "oma-operations-v1"`로 제공한다. host가 명시한 한 manifest snapshot에서 폐쇄형 HostConfigV1과 source layout을 함께 조합·검증한다. 수동 bundle의 다중 파일 동시 편집은 지원하지 않는다. D02의 관리형 편집은 immutable generation을 완성·flush한 뒤 기존 manifest를 마지막에 replace/parent-fsync하며, expected-version 비교부터 publication까지 한 owner가 직렬화한다. outcome-unconfirmed에서는 재관측 전 overwrite/rollback하지 않는다. role prompt는 index-root 기준이고 metadata는 wire·ledger schema나 실행 권한을 확장하지 않는다. 변경은 다음 해당 역할 engine 시작에 새 snapshot으로 읽고 accepted evidence는 다시 쓰지 않는다. old reader 호환·bounded retention·구버전 writer 금지·명시 export는 WP13 gate이며 실제 지원 여부와 수동 형식의 제한은 [운영 설정 안내](operations.md)에 구분한다. 추가 extension 실행에는 기존 PI/deployment 검증 gate가 그대로 적용된다.
+운영 파일 분리는 authoring 입력 `kind: "oma-operations-v1"`로 제공한다. host가 명시한 한 manifest snapshot에서 폐쇄형 HostConfig과 source layout을 함께 조합·검증한다. 수동 bundle의 다중 파일 동시 편집은 지원하지 않는다. D02의 관리형 편집은 immutable generation을 완성·flush한 뒤 기존 manifest를 마지막에 replace/parent-fsync하며, expected-version 비교부터 publication까지 한 owner가 직렬화한다. outcome-unconfirmed에서는 재관측 전 overwrite/rollback하지 않는다. role prompt는 index-root 기준이고 metadata는 wire·ledger schema나 실행 권한을 확장하지 않는다. 변경은 다음 해당 역할 engine 시작에 새 snapshot으로 읽고 accepted evidence는 다시 쓰지 않는다. 동일 빌드 reader lease·bounded retention·명시 export는 유지한다. DR46의 journal은 `committed-v2` 하나이며 이전 `committed`가 있으면 startup·edit·collection을 거부한다. 이전 빌드 호환은 제공하지 않으며 실제 지원 여부와 수동 형식의 제한은 [운영 설정 안내](operations.md)에 구분한다. 추가 extension 실행에는 기존 PI/deployment 검증 gate가 그대로 적용된다.
 
 **MUST [CFG-003]** wire resource 기본값은 frame 256 KiB, mail body 256 KiB, subject 512 UTF-8 bytes, logical address 64개, reply reference 64개, context 파일 256개/합계 8 MiB, bundle 256 MiB, logs 1 MiB, accepted connection당 미완료 control request 1개다. host는 명시적으로 낮추거나 높일 수 있고 모든 endpoint에서 같은 값으로 검증한다. 이 값은 전용 preview 기능이나 본문의 자동 절단 규칙이 아니다. 초과 입력은 접수 전에 거절하고 파일/Git 사용을 안내한다.
 
@@ -161,7 +161,7 @@ A-008은 2026-09-28 사용자 결정으로 철회했다([DR20](design-revisions.
 
 ## 5. DB schema, transaction, 허용 상태
 
-**MUST [DB-001; arch §14]** base entity는 `agents`, `operations`, `subscriptions`, `deliveries`, `batches`, `attestations` 여섯 개뿐이다. [schema-v3.sql](../implementation/schema-v3.sql)을 base 초기 migration으로 실행한다. tiered persistence는 POL-006/S-08/S-10의 후속 계약 전 지원하지 않는다. migration version은 SQLite `user_version`을 사용하고 migrations table을 추가하지 않는다. 기존 native-v2 DB를 변환·공유하지 않는다.
+**MUST [DB-001; arch §14]** base entity는 `agents`, `operations`, `subscriptions`, `deliveries`, `batches`, `attestations` 여섯 개뿐이다. [schema-v4.sql](../packages/storage/src/schema-v4.sql)을 base 초기 migration으로 실행한다. DR46: `user_version=4` 하나만 읽고 쓰며 이전 DB는 쓰기 connection 이전에 거절하고 보존한다. migrations table·변환·자동 삭제는 제공하지 않는다. operation plan은 `{version:2,intent:...}`의 닫힌 envelope이며 원본 bytes를 읽기나 복구에서 보충하지 않는다.
 
 **MUST [DB-002]** broker만 DB를 쓴다. 연결마다 foreign_keys=ON, synchronous=FULL, busy_timeout=5000, WAL을 확인한다. 일반 mutation은 `BEGIN IMMEDIATE`; schema migration은 `BEGIN EXCLUSIVE`다. commit 성공 전에 accepted/succeeded를 반환하지 않는다. DB_BUSY는 같은 key retry, DB 손상은 mutation 중단으로 처리한다.
 
@@ -296,7 +296,7 @@ D01 publication은 private same-filesystem temp에 bounded bytes를 쓰고 file 
 
 ## 8. Resident·Principal·Pi 경계
 
-**MUST [PI-001; arch §§7–8]** trusted runner가 bwrap 안에서 `pi --mode rpc`를 실행하고 RPC stdin/stdout을 private pipe로 다룬다. Pi extension은 `src/pi-extension.ts`의 신뢰된 compiled artifact만 기본 로드한다. agent workspace의 extension/config를 host runner에서 import하지 않는다. Pi의 discovery 차단 옵션은 pinned 버전 실험으로 확인한다.
+**MUST [PI-001; arch §§7–8]** trusted runner가 bwrap 안에서 `pi --mode rpc`를 실행하고 RPC stdin/stdout을 private pipe로 다룬다. Pi extension은 `packages/extension/src/index.ts`의 신뢰된 compiled artifact만 기본 로드한다. agent workspace의 extension/config를 host runner에서 import하지 않는다. Pi의 discovery 차단 옵션은 pinned 버전 실험으로 확인한다.
 
 **MUST [PI-002]** runner는 trusted `oma-deliver` extension command를 RPC prompt로 호출한다. extension은 batch ID의 소유를 확인한 후 다음 형태로 전달한다. Peer content를 Human role prompt로 꾸미지 않는다.
 
@@ -380,7 +380,7 @@ Live batch.prepare/complete는 이 broker를 시작한 host endpoint에서만 �
 
 **S-01-CANDIDATE 판정 ([DR18](design-revisions.md)).** v1은 candidate check를 돌리지 않는다. candidate별 kernel 자원 한도가 검증되지 않은 채 host에서 candidate 코드를 돌리는 것은 검사가 없는 것보다 나쁘다. candidate는 만든 곳(그 Resident의 sandbox)에서 시험하고, 사람이 쓰는 CI는 게시된 ref를 그대로 받는다. nonempty `integration.checks`와 `sandbox.candidate`·`git.runCheck`는 `UNSUPPORTED_PROFILE`이다. checks를 자동으로 []로 바꾸어 회피하지 않는다. transient systemd-run/service/scope, userland polling, broker 전체 cgroup 한도만을 candidate별 격리로 취급하는 방식은 뒤에 이 기능을 더할 때도 허용하지 않는다.
 
-**MUST [INT-007]** 실제 spawn의 candidate OID/argv/env/resources는 검증된 check snapshot과 정확히 같아야 한다. builder unit test만 통과하고 production이 다른 cwd/config/default를 쓰는 것을 금지한다. timeout/signal/검사 후손 잔존/관측 불명확은 CHECK_FAILED 또는 대조 전 pending/unknown이며 PASS가 아니다. host check exit 0만으로 아직 살아 있는 background process를 무시하고 종료했다고 기록하지 않는다. 실제 candidate 출처와 kernel limits를 production entrypoint 시험에서 확인한다. UX-09: sandbox checkout의 gitlink 거절은 bare exit이 아니라 `OMA_ERROR=UNSUPPORTED_PROFILE`와 gitlink마다 `OMA_GITLINK=<path>`를 stderr에 남기고, host는 그 marker로만 code를 분류한다 — resource gate와 code를 공유하는 bare 125는 CHECK_FAILED로 남는다. 거절은 check argv 이전이며 경로는 sandbox 출력이 아니라 불변 candidate에서 다시 관측한다.
+**MUST [INT-007]** 실제 spawn의 candidate OID/argv/env는 검증된 check snapshot과 정확히 같아야 한다. builder unit test만 통과하고 production이 다른 cwd/config/default를 쓰는 것을 금지한다. timeout/signal/검사 후손 잔존/관측 불명확은 CHECK_FAILED 또는 대조 전 pending/unknown이며 PASS가 아니다. host check exit 0만으로 아직 살아 있는 background process를 무시하고 종료했다고 기록하지 않는다. 실제 candidate 출처와 sandbox/종료 ownership를 production entrypoint 시험에서 확인한다. UX-09: sandbox checkout의 gitlink 거절은 bare exit이 아니라 `OMA_ERROR=UNSUPPORTED_PROFILE`와 gitlink마다 `OMA_GITLINK=<path>`를 stderr에 남기고, host는 그 marker로만 code를 분류한다 — 거절 marker가 없는 bare 125는 CHECK_FAILED로 남는다. 거절은 check argv 이전이며 경로는 sandbox 출력이 아니라 불변 candidate에서 다시 관측한다.
 
 **MUST [INT-003]** project main mutation은 repo별 메모리 mutex와 pending integrate operation 검사로 직렬화한다. 먼저 T-integrate-intent, 그 뒤 검사·Git CAS, 마지막 T-integrate-done다. crash 후 unresolved integrate가 있으면 새로운 main writer를 시작하지 않는다. CAS 바로 전에 main/policy/capability/stop intent를 재검사한다.
 
@@ -426,11 +426,11 @@ Live batch.prepare/complete는 이 broker를 시작한 host endpoint에서만 �
 
 **MUST [CREATE-001]** model-facing `agent.create`의 `params`는 `AgentCreateInput`으로 고정하고 `name`, CLI가 freeze한 full `from` OID, UTF-8 `brief`만 받는다. `profile`/`capabilities`는 CLI 옵션·wire 입력·request cache의 caller payload에 넣지 않는다. 해당 field가 들어오면 값이 host default와 같더라도 INVALID_REQUEST로 거절하고, 무시하거나 caller 선호로 사용하지 않는다. TypeScript의 `profile?: never`/`capabilities?: never`는 이러한 입력 금지 제약이며 선택 입력이 아니다. 다른 unknown field도 기존 strict validator 규칙으로 거절한다.
 
-**MUST [CREATE-002]** broker만 `ResolvedAgentSpec`의 최종 profile/capabilities/modelProfile/resources를 결정한다. modelProfile/resources는 선택한 자식 host profile에서 복사해 고정한다. 인증된 부모의 `agents.profile`에 대응하는 host `AgentProfile`을 찾고 그 `childProfile`을 선택한다. null이면 CAPABILITY_DENIED, 참조하는 profile이 없으면 UNSUPPORTED_PROFILE로 접수 전에 거절한다. 자식 capabilities는 `인증된 부모의 현재 유효 capabilities ∩ 부모 profile.delegable ∩ 선택한 자식 profile.capabilities`의 전체 교집합에, 선택한 자식 profile.capabilities가 host가 직접 주는 권한(`code.integrate`, AUTH-001)을 가지면 그것을 더해 중복 제거·사전순 정렬한 값이다. Principal도 동일한 명시적 host 위임을 적용하며 role로 교집합을 확대하지 않는다. CLI/모델이 host 설정을 대신 해석해 resolved spec을 전송하지 않는다. host의 초기 population 설정은 이 actor-facing 입력과 별개다.
+**MUST [CREATE-002]** broker만 `ResolvedAgentSpec`의 최종 profile/capabilities/modelProfile를 결정한다. modelProfile 참조는 선택한 자식 host profile에서 복사해 고정한다(DR46). 효과 없는 resource 필드는 삭제되었다. 인증된 부모의 `agents.profile`에 대응하는 host `AgentProfile`을 찾고 그 `childProfile`을 선택한다. null이면 CAPABILITY_DENIED, 참조하는 profile이 없으면 UNSUPPORTED_PROFILE로 접수 전에 거절한다. 자식 capabilities는 `인증된 부모의 현재 유효 capabilities ∩ 부모 profile.delegable ∩ 선택한 자식 profile.capabilities`의 전체 교집합에, 선택한 자식 profile.capabilities가 host가 직접 주는 권한(`code.integrate`, AUTH-001)을 가지면 그것을 더해 중복 제거·사전순 정렬한 값이다. Principal도 동일한 명시적 host 위임을 적용하며 role로 교집합을 확대하지 않는다. CLI/모델이 host 설정을 대신 해석해 resolved spec을 전송하지 않는다. host의 초기 population 설정은 이 actor-facing 입력과 별개다.
 
-**MUST [CREATE-003]** `operations.payload_json`과 request_hash는 정규화한 `AgentCreateInput`만 포함한다. `plan_json.spec` 및 `agents.spec_json`에는 broker가 확정한 `ResolvedAgentSpec`을 저장하고 `spec_hash`는 그 전체 canonical spec의 hash다. 접수 transaction에서 부모 권한과 선택한 host 정책이 resolution 때와 같은지 재검사하고 달라졌으면 접수 전에 다시 계산한다. 같은 key의 accepted 요청은 새 host default를 해석하기 전에 기존 hash/receipt를 조회하고 저장된 resolved spec으로 복구한다. 재시도로 profile/capabilities를 재선택하거나 확대하지 않는다. 다른 key의 stable-name dedup은 최종 resolved spec hash를 비교하므로 host default 변경으로 spec이 달라졌으면 AGENT_CONFLICT다. 현재 권한의 폐기와 run 차단은 기존 AUTH/LIFE 규칙을 계속 적용한다.
+**MUST [CREATE-003]** `operations.payload_json`과 request_hash는 정규화한 `AgentCreateInput`만 포함한다. `plan_json.intent.spec` 및 `agents.spec_json`에는 broker가 확정한 `ResolvedAgentSpec`을 저장하고 `spec_hash`는 그 전체 canonical spec의 hash다. 접수 transaction에서 부모 권한과 선택한 host 정책이 resolution 때와 같은지 재검사하고 달라졌으면 접수 전에 다시 계산한다. 같은 key의 accepted 요청은 새 host default를 해석하기 전에 기존 hash/receipt를 조회하고 저장된 resolved spec으로 복구한다. 재시도로 profile/capabilities를 재선택하거나 확대하지 않는다. 다른 key의 stable-name dedup은 최종 resolved spec hash를 비교하므로 host default 변경으로 spec이 달라졌으면 AGENT_CONFLICT다. 현재 권한의 폐기와 run 차단은 기존 AUTH/LIFE 규칙을 계속 적용한다.
 
-**MUST [LIFE-008]** initialResidents는 최초 bootstrap seed만 지정하며 runtime registry가 아니다. ready 이후 모든 actor의 identity/profile/capabilities/modelProfile/resources/from/parent는 agents의 검증된 resolved spec 및 created_by에서 가져온다. `ResolvedAgentSpec`은 생성 시 선택한 host profile의 modelProfile 참조와 ResourceLimits 전체를 포함하고 spec_hash에 포함한다. runner/unit renderer/authenticator는 `initialResidents.find()`나 seed 부재 시 default profile을 사용하지 않는다. 호스트의 현재 credential/가격/명시적 권한 폐기 정책은 계속 적용하되 persisted 권한·자원 상한을 조용히 확대하지 않는다. 저장된 profile/model 참조를 현재 배포가 지원하지 못하면 UNSUPPORTED_PROFILE로 차단하고 임의 대체하지 않는다. DB column name/profile과 spec의 대응 값이 다르면 STORE_CORRUPT다. 부모는 created_by가 원본이며 새 parent registry를 만들지 않는다.
+**MUST [LIFE-008]** initialResidents는 최초 bootstrap seed만 지정하며 runtime registry가 아니다. ready 이후 모든 actor의 identity/profile/capabilities/modelProfile/from/parent는 agents의 검증된 resolved spec 및 created_by에서 가져온다. `ResolvedAgentSpec`은 생성 시 선택한 host profile의 modelProfile 참조를 포함하고 spec_hash에 포함한다(DR46). unit은 accepted profile/modelProfile을 전달하며 runner가 현재 역할의 modelProfile 참조로 바꾸지 않는다. 고정 참조의 모델 내용은 다음 활성화에 읽는다. runner/unit renderer/authenticator는 `initialResidents.find()`나 seed 부재 시 default profile을 사용하지 않는다. 호스트의 현재 credential/가격/명시적 권한 폐기 정책은 계속 적용하되 persisted 권한과 참조를 조용히 바꾸지 않는다. 저장된 profile/model 참조를 현재 배포가 지원하지 못하면 UNSUPPORTED_PROFILE로 차단하고 임의 대체하지 않는다. DB column name/profile과 spec의 대응 값이 다르면 STORE_CORRUPT다. 부모는 created_by가 원본이며 새 parent registry를 만들지 않는다.
 
 **MUST [LIFE-009]** 최초 bootstrap 중 seed마다 stable-name create intent를 남기고 같은 intent로 중단 복구한다. bootstrap seed가 추가/삭제됐다는 이유로 다음 broker restart 때 agent를 자동 생성/삭제/중지하지 않는다. 최초 GOAL publication 이후는 seed 보충 단계가 아니며 explicit lifecycle 경로만 사용한다. 최초 bootstrap 도중 seed 설정 변경은 지원하지 않는다. 중단 복구는 기존 seed create intent부터 재개하며 host는 원래 seed 설정을 유지해야 한다. 이미 기록된 intent와 현재 seed spec이 다르면 AGENT_CONFLICT로 중단한다. bootstrap 완료/중단은 기존 최초 context ref와 provisioning/create intent로 대조하고 새로운 bootstrap 상태 DB를 만들지 않는다.
 
@@ -504,7 +504,7 @@ bwrap --unshare-all --new-session --die-with-parent --cap-drop ALL --seccomp 3
 
 **MUST [SB-003]** stdin/stdout/stderr와 명시적으로 검증한 RPC pipe 외 상속 FD를 닫는다. runner admin FD, provider socket, host credential FD, systemd bus, SSH agent, desktop socket을 전달하지 않는다. OMA actor socket에는 자기 limited API만 존재한다. 다른 actor endpoint는 mount하지 않는다. rootfs의 기존 symlink/mount target이 다른 host path를 노출하지 않는지 검사한다.
 
-**MUST [SB-004]** private network가 기본이다. provider는 actor inference stream→broker만 사용한다. project egress는 v0.1에서 OPTIONAL로 도입됐다([DR34](design-revisions.md), UX-08): `HostConfigV1.egress`가 endpoint allowlist를 선언하면 runner는 delivery당 하나의 HTTP CONNECT proxy unix socket을 `--ro-bind`로 `/run/oma/egress.sock`에 두고, trusted extension이 loopback `HTTP(S)_PROXY`/`ALL_PROXY`를 세운다. CONNECT·authority-form·443만 허용하고, request header는 proxy에서 끝나며, 이름은 host 측에서 resolve해 모든 answer를 private/special-use 대역으로 screen하고 literal을 pin한다. 절(節)이 없거나 role의 해석이 비면 socket도 변수도 없고, 그 부재로 profile이 `UNSUPPORTED_PROFILE`이 되지는 않는다. host network 공유로 대체하지 않고, SSH·raw TCP/UDP·SOCKS5는 v0.1 밖이다. 별도 S-01 escape 시험은 egress-connect suite가 담당한다.
+**MUST [SB-004]** DR37/DR46: Resident의 네트워크와 실제 OS 용량을 제한하는 OMA 정책은 두지 않는다. project CONNECT proxy는 대상 host와 port 문법을 검증하고 요청 header를 proxy에서 끝내며, 연결·dial·queue 자원은 실제 종료까지 owner가 보유한다. macOS guest의 CONNECT는 host가 발급한 현재 run identity에만 연결하고 lease 종료·boot 변경 뒤 새 연결을 열지 않는다. protocol 7은 guest의 옛 role/allow 선언을 거부한다. provider credential은 별도의 host relay가 소유하며 project tunnel에 넘기지 않는다.
 
 **MUST [SB-005]** candidate-check sandbox는 staged candidate checkout만 RW, trusted check assets RO, tmp cap, private network, no actor/admin/inference socket이다. Git quarantine은 필요한 broker objects만 RO와 자기 staging만 RW다. Principal tools는 public world/mail/Git RO+자기 scratch RW만 갖고 Human session directory는 없다.
 
@@ -545,7 +545,7 @@ relay는 자리표시자를 provider가 key를 읽는 자리에서만 진짜 key
 
 **MUST NOT [INF-004]** OMA relay·broker·adapter가 결과 불명확한 inference를 자체 재전송하거나 재시도를 위해 도구가 실행된 turn 전체를 다시 시작한다. 일시적 provider 실패의 재시도 여부는 INF-001의 동봉 엔진 한 곳에서 판정한다. 연결 단절 시 서버가 이미 처리·과금했을 가능성은 남으므로, 엔진 재시도가 inference의 exactly-once 실행·과금을 보장한다고 주장하지 않는다. 취소가 과금 취소를 보장한다고 가정하지 않는다. 엔진이 보고하지 않은 비용을 0으로 간주하지 않는다.
 
-**MUST [INF-009]** multi-agent 비용 상한은 이제 OMA 계약이 집행하는 값이 아니다. `quota`의 unit 관련 필드는 host가 선언하는 운영 의도로 남지만, 실제 과금 경계는 엔진과 provider 설정이 소유한다. OMA가 집행하지 않는 것을 집행한다고 표시하지 않는다.
+**MUST [INF-009]** multi-agent 비용 상한은 OMA가 집행하는 값이 아니다. DR46: 효과 없는 quota 선언과 호출 계약을 제거한다. 실제 과금 경계는 엔진과 provider 설정이 소유하며, OMA가 집행하지 않는 것을 집행한다고 표시하지 않는다.
 
 `usage` 표와 여섯 durable entity는 DB-001 그대로 유지한다. persisted v1 schema를 이 변경으로 바꾸지 않는다. 그 표에 쓰는 주체가 없다는 사실은 [validation](implementation/validation.md)에 기록한다.
 
@@ -680,7 +680,7 @@ relay는 자리표시자를 provider가 key를 읽는 자리에서만 진짜 key
 
 **MUST [TUI-004; arch §23.3]** Principal Pi session의 실행 권한은 OMA host가 소유한다. DR22에 따라 대화형 화면은 동봉 Pi InteractiveMode와 원본 pi-open-tui가 담당하고, headless adapter와 Resident는 RPC를 사용한다. 대화형 editor의 제출도 부모 PrincipalSession의 admission을 거쳐야 하며 Pi의 steer/follow-up 경로로 우회하지 않는다. PR-001의 단일 attach, PR-003의 private context 보존, PR-004의 model-facing tool 제한은 이 entrypoint가 그대로 진다. Principal의 논리 identity는 bootstrap 때 만들고 TUI 실행 여부와 독립적으로 유지한다. TUI 종료는 새 Principal 생성의 trigger가 아니다. society당 engine은 하나이며 그 하나를 정하는 것은 REC-007의 host lease다. DR35: private 대화 engine은 이 프로세스의 lease·프로젝트 binding·설정·private 경로가 확인되고 broker를 시작한 뒤 준비할 수 있다. Principal 권한은 이 프로세스가 띄운 broker가 복구와 rootfs 수리 뒤 준비를 알리고 같은 engine의 등록에 credential을 발급한 뒤에만 생긴다. engine 생성·broker pid·화면 표시를 Principal 권한이나 Society 준비 완료로 해석하지 않는다. 소유하지 못함이 확정되면(lease를 다른 프로세스가 쥠, 다른 broker가 이미 듣고 있음, broker를 띄우지 못함, 자식이 소유 status로 끝남, 재시작 한도 소진) engine을 시작하지 않는다. 이미 시작한 engine에 대해서도 같다. 소유를 잃는 사건은 통지가 아니라 teardown이다: 그 순간 살아 있던 session을 닫고 전달을 멈춘 **뒤에** lease를 놓는다. 닫았다는 것은 신호를 보냈다는 뜻이고 죽었다는 뜻이 아니므로, 정상 종료는 운영체제가 engine을 거두었음을 확인한 뒤에 lease를 놓는다 — 상한을 두되, REC-007의 상속된 fence가 그 상한을 넘긴 경우까지 덮는다. 소유가 허락하는 모든 것은 한 객체에 묻는다: 시작·전달·설정 쓰기·확장 토글·종료가 각각의 flag가 아니라 같은 tenure에게 묻고, lease를 잡지 못한 Control Panel은 설정과 확장을 포함해 society의 어떤 바이트도 쓰지 못한다. lease를 놓은 다음부터는 다른 `oma`가 society를 가져갈 수 있으므로, 그 경계를 넘어 살아남은 session은 두 번째 engine을 시작하는 것과 같은 위반이다. 소유를 잃은 뒤에 broker가 다시 준비를 알리더라도 engine을 다시 시작하지 않는다. 이 프로세스에는 principal host endpoint와 credential이 없어 그 engine은 society에 요청할 authority가 없으면서 같은 private workspace와 같은 session 기록의 두 번째 writer가 되기 때문이며, 그 경우 제품은 같은 상태를 보는 Control Panel로 남고 그 이유를 화면에 적는다.
 
-**MUST [TUI-005]** Principal의 model 선택 대상은 host가 `HostConfigV1`에 선언한 model profile 이름뿐이다. caller는 provider, URL, header, credential, 가격, token 상한을 지정하지 못한다. 선택은 host authority를 고쳐 쓰는 것이므로 CFG-005의 policy revision 갱신을 동반하고, **다음 Principal session부터** 적용한다. 진행 중인 session이나 stream의 model을 바꾸지 않는다.
+**MUST [TUI-005]** Principal의 model 선택 대상은 host가 `HostConfig`에 선언한 model profile 이름뿐이다. caller는 provider, URL, header, credential, 가격, token 상한을 지정하지 못한다. 선택은 host authority를 고쳐 쓰는 것이므로 CFG-005의 policy revision 갱신을 동반하고, **다음 Principal session부터** 적용한다. 진행 중인 session이나 stream의 model을 바꾸지 않는다.
 
 session 경계를 넘지 않는 per-request 전환은 하지 않는다. inference는 동봉 엔진이 소유하므로(INF-001) OMA에는 요청마다 model을 바꾸거나 예산을 검사하는 경로가 없다. `principal.attach`(IPC-011)는 Principal CLI의 credential handshake이지 model 전환 경로가 아니다. 호출 경로 없이 선택 API만 추가해 구현된 것처럼 표시하지 않는다(TRACE-002).
 
@@ -716,7 +716,7 @@ session 경계를 넘지 않는 per-request 전환은 하지 않는다. inferenc
 
 동봉 엔진의 상태는 전적으로 이 디렉터리에 둔다. 사용자의 Pi 상태를 읽거나 쓰지 않으며, 사용자 Pi 설치 여부에 동작이 달라지지 않는다. 자격 증명·모델 선택은 동봉 엔진이 자기 메커니즘으로 이 디렉터리 안에서 처리하므로 OMA가 별도의 인증·모델 관리 표면을 만들지 않는다.
 
-**MUST [TUI-019]** 설정 파일 없이 동작한다. 초기화 명령을 요구하거나 사용자가 `HostConfigV1`을 작성하게 만들지 않는다. D05: 새 society의 기본 이름은 canonical absolute Linux project path의 digest와 bounded slug에서 유도하고 전체 경로 binding을 mutation 전에 대조한다. 설정이 없으면 실제 설정을 만든다. 기존 slug-only state를 자동 rename/재바인딩하지 않는다. legacy binding 부재는 명시적 operator 검토 전 쓰기를 막고 mismatch는 --society로도 숨기지 않는다. 새 metadata의 형식·권한·backup·구버전 writer 제한은 [D05 결과](implementation/consistency-decisions.md)의 C2 범위를 따른다.
+**MUST [TUI-019]** 설정 파일 없이 동작한다. 초기화 명령을 요구하거나 사용자가 `HostConfig`을 작성하게 만들지 않는다. D05: 새 society의 기본 이름은 canonical absolute Linux project path의 digest와 bounded slug에서 유도하고 전체 경로 binding을 mutation 전에 대조한다. 설정이 없으면 실제 설정을 만든다. 기존 slug-only state를 자동 rename/재바인딩하지 않는다. legacy binding 부재는 명시적 operator 검토 전 쓰기를 막고 mismatch는 --society로도 숨기지 않는다. 새 metadata의 형식·권한·backup·구버전 writer 제한은 [D05 결과](implementation/consistency-decisions.md)의 C2 범위를 따른다.
 
 자격 증명·모델 선택·그 기억은 **동봉 엔진이 이미 갖고 있는 흐름**이므로 OMA가 다시 만들지 않는다. 기본 model profile은 엔진의 현재 연결로 해석되는 값이며 OMA는 provider나 credential을 스스로 주장하지 않는다. 남는 것은 society·role capability·multi-agent 예산처럼 엔진에 개념이 없는 OMA 고유 영역이고, 여기에 보수적인 값을 쓴다. 생성값은 bounded하고 디스크에 기록되며 Control Panel에서 수정 가능해야 한다. Resident에게 `code.integrate`를 기본으로 주지 않는다.
 
@@ -738,11 +738,11 @@ session 경계를 넘지 않는 per-request 전환은 하지 않는다. inferenc
 
 **MUST [TSP-001; arch §23.10]** role의 tool 표면 투영은 `DIRECT`/`DISABLED`/`GROUPED` 세 모드와 group DAG로 닫는다. group member는 `{tool}` 또는 `{group}`의 명시 참조뿐이며 접두사·정규식·의미 기반 매칭을 도입하지 않는다. 다음은 모두 거절한다: 중복 group 이름, 자기 참조, cycle, 알 수 없는 group/root 참조, 한 tool의 중복 소속, disabled tool의 group 소속, 같은 tool의 direct/grouped 동시 지정, group 이름과 tool selector 충돌, 이름 문법 위반.
 
-**MUST [TSP-002]** 투영은 authored 설정 필드가 아니라 runtime plumbing이다. role 파일의 필드 집합은 닫혀 있으므로 `toolSurface` 키가 나타나는 role 파일은 `INVALID_REQUEST`로 config 로드를 실패시킨다(D23). 기존 닫힌 `HostConfigV1`, wire schema, ledger schema, DB entity를 확장하지 않는다. plan은 `OMA_TOOL_SURFACE` 환경 변수로만 sandbox에 도달하고, resident 안의 trusted extension이 session 시작 때 파싱해 malformed이면 fail closed한다(TSP-007).
+**MUST [TSP-002]** 투영은 authored 설정 필드가 아니라 runtime plumbing이다. role 파일의 필드 집합은 닫혀 있으므로 `toolSurface` 키가 나타나는 role 파일은 `INVALID_REQUEST`로 config 로드를 실패시킨다(D23). 기존 닫힌 `HostConfig`, wire schema, ledger schema, DB entity를 확장하지 않는다. plan은 `OMA_TOOL_SURFACE` 환경 변수로만 sandbox에 도달하고, resident 안의 trusted extension이 session 시작 때 파싱해 malformed이면 fail closed한다(TSP-007).
 
 **MUST [TSP-003]** 투영은 bounded다. group 32개, group당 member 16개, 중첩 깊이 4, 선언 이름 총 512개, group description 512 bytes를 기본 상한으로 하며 host는 더 낮출 수 있다. 상한 초과는 접수 전에 거절한다.
 
-**MUST [TSP-004]** 검증과 평탄화의 단일 owner는 `src/domain/tool-surface.ts`다. group 해석·cycle 검출·root 유도를 sandbox 안이나 다른 계층에서 다시 구현하지 않는다. sandbox로 전달되는 것은 이미 검증된 평탄한 plan이다.
+**MUST [TSP-004]** 검증과 평탄화의 단일 owner는 `packages/domain/src/tool-surface.ts`다. group 해석·cycle 검출·root 유도를 sandbox 안이나 다른 계층에서 다시 구현하지 않는다. sandbox로 전달되는 것은 이미 검증된 평탄한 plan이다.
 
 **MUST [TSP-005]** 활성 tool 집합은 다음 산술로 정한다. `disabled`는 항상 비활성, `grouped`는 소속 group을 열기 전까지 비활성, `direct`는 활성, 그 외 등록된 tool은 `defaultMode`를 따르며, root group은 활성으로 시작한다. `defaultMode`는 `DIRECT`와 `DISABLED`만 허용한다. role이 투영을 선언하지 않으면 등록된 tool을 그대로 보여준다.
 
@@ -823,7 +823,7 @@ Owner가 이동해도 위 SEQ 규범의 의미가 자동으로 바뀌는 것은 
 
 ## Store opening: compatibility before writer setup
 
-`src/store.ts` owns this boundary. This is a C1 correction, not a schema migration,
+`packages/storage/src/store.ts` owns this boundary. This is a C1 correction, not a schema migration,
 a second writer, a new recovery service, or a live-authority decision. Current
 verification status belongs exclusively to [validation.md](implementation/validation.md).
 
@@ -956,7 +956,7 @@ relay's own surface went away.
 **Reviewed contract change, 2026-09-19 (direction).** The four frozen reverse dependencies
 recorded in `../contract-direction-plan.json` were removed. `Capability`,
 `ResourceLimits` and `ProtocolLimits` are now declared here, and the runtime
-descriptors in `src/domain/` are bound to them by compile-time exhaustiveness
+descriptors in `packages/domain/src/` are bound to them by compile-time exhaustiveness
 checks in both directions. The `Transaction` alias was deleted rather than
 replaced by a port: `StorePort.transaction` takes a zero-argument callback and
 nothing consumed the contract's `Transaction`, so a port would have been an
@@ -973,7 +973,7 @@ surface is not regenerated: the test projects out exactly these two additions,
 each of which must occur once, as it does for IPC-008's receipt paging.
 
 **Reviewed contract change, 2026-09-29 (installed packages, DR25).**
-`HostConfigV1.installation` gains one optional field, `packages?: string`,
+`HostConfig.installation` gains one optional field, `packages?: string`,
 the absolute directory the packages `oma pi install` installs live in. A
 configuration without it means what it meant before; a role's extension entry
 that names an installed package (`packages:<path>`) needs it. No wire method,

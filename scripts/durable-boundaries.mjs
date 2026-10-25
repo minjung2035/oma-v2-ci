@@ -25,17 +25,20 @@ export const PRIMITIVES = Object.freeze({
   publishContextRevision: "file-publication", publishProjectBinding: "file-publication",
   prepareSubmitSpool: "file-publication", prepareContextStream: "file-publication",
   publishDeliveryReceipt: "receipt",
+  appendMailArrival: "file-publication", publishInboxMessage: "file-publication",
+  publishImmutableEntry: "file-publication", publishMailArchive: "file-publication", freezeMailObject: "file-publication",
   commitManagedGeneration: "config-commit", commitInlineConfiguration: "config-commit", createInlineConfiguration: "config-commit",
-  compareAndSwapCanonicalRef: "git-cas", createCanonicalRef: "git-cas", casRef: "git-cas", compareAndSwap: "git-cas", publishRef: "git-cas",
+  authorizeCanonicalNoop: "git-cas", compareAndSwapCanonicalRef: "git-cas", createCanonicalRef: "git-cas", casRef: "git-cas", compareAndSwap: "git-cas", publishRef: "git-cas",
   removeOwnedTree: "collection", removeOwnedFile: "collection", collectLeasedTree: "collection",
 });
 /** The primitives' own modules: their internal calls are the mechanism, not boundaries. */
 export const PRIMITIVE_MODULES = Object.freeze([
-  "src/store.ts", "src/storage/transaction.ts", "src/storage/transitions.ts", "src/storage/operation-transitions.ts",
-  "src/storage/operation-journal.ts", "src/storage/durable-fs.ts", "src/storage/immutable-file.ts", "src/storage/staged-tree.ts",
-  "src/storage/contained-fs.ts", "src/storage/directory.ts", "src/storage/delivery-receipt.ts", "src/storage/context-snapshot.ts",
-  "src/storage/submit-spool.ts", "src/storage/context-stream.ts", "src/storage/batch-view.ts", "src/config/generations.ts",
-  "src/git/canonical-command.ts", "src/storage/tree-lease.ts", "src/runtime/user-files.ts",
+  "packages/storage/src/store.ts", "packages/storage/src/transaction.ts", "packages/storage/src/transitions.ts", "packages/storage/src/operation-transitions.ts",
+  "packages/storage/src/operation-journal.ts", "packages/storage/src/durable-fs.ts", "packages/storage/src/immutable-file.ts", "packages/storage/src/staged-tree.ts",
+  "packages/native/src/files.ts", "packages/storage/src/directory.ts", "packages/storage/src/delivery-receipt.ts", "packages/storage/src/context-snapshot.ts",
+  "packages/storage/src/mailbox.ts", // held mailbox physical operations; Mail owns the decisions
+  "packages/storage/src/submit-spool.ts", "packages/storage/src/context-stream.ts", "packages/storage/src/batch-view.ts", "packages/config/src/generations.ts",
+  "packages/git/src/canonical-command.ts", "packages/storage/src/tree-lease.ts", "apps/oma/src/runtime/user-files.ts",
 ]);
 
 function calleeName(expression) {
@@ -60,12 +63,12 @@ function ownerOf(node, source) {
  * `writeAtomic`), and under OMA the durable effects route through the
  * adapter's contained seams — the boundary owner is the adapter plus the
  * shared contained writer, which the registry and its tests cover. */
-const VENDORED_PREFIX = "src/extension/vendor/";
+import { isVendoredExtension } from "./architecture/rules/shared.mjs";
 
 /** Every production call of a durable primitive, grouped by the function around it. */
 export function durableBoundaries(root = process.cwd()) {
   const files = readFileSync(join(root, "production-files.txt"), "utf8").split("\n")
-    .filter(file => file.startsWith("src/") && file.endsWith(".ts") && !file.startsWith(VENDORED_PREFIX));
+    .filter(file => file.endsWith(".ts") && !file.endsWith(".d.ts") && !isVendoredExtension(file));
   const owners = new Map();
   for (const file of files) {
     if (PRIMITIVE_MODULES.includes(file)) continue;

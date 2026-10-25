@@ -5,10 +5,10 @@ import { syncBuiltinESMExports } from "node:module";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createHash } from "node:crypto";
-import { SharedPeerPin } from "../src/broker/peer-pin.js";
-import { TransportSpool } from "../src/broker/transport-spool.js";
-import { StoreError } from "../src/domain/errors.js";
-import { closeEvery } from "../src/storage/contained-fs.js";
+import { SharedPeerPin } from "@oma/broker/peer-pin";
+import { TransportSpool } from "@oma/storage/transport-spool";
+import { StoreError } from "@oma/domain/errors";
+import { closeEvery } from "@oma/native/files";
 const hash = (bytes: Buffer) => createHash("sha256").update(bytes).digest("hex");
 
 test("R14: a native peer pin closes once after both connection and executing owners release", () => {

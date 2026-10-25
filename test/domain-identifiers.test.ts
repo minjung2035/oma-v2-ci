@@ -4,28 +4,28 @@ import assert from "node:assert/strict";
 import { mkdtempSync, mkdirSync, writeFileSync, rmSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import type { Receipt } from "../implementation/contracts.js";
+import type { Receipt } from "@oma/contracts";
 import {
   parseActor, parseResidentName, parseSocietyName, parseTopicName, parseRequestKey,
   parseOperationId, parseBatchId, parseMessageFileId, parseMessageId, parseFullOid, parseRepositoryRelativePath,
-} from "../src/domain/identifiers.js";
+} from "@oma/domain/identifiers";
 import {
   messageIdForOperation, publishedRefFor, exportRefForRequestKey, submitStagingFor,
   contextStagingFor, workspaceFor, batchViewFor, mailObjectRelativePath,
   mailArchiveRelativePath, mailInboxRelativePath, contextRevisionFor, contextRevisionLinkFor,
   actorSocketFor, residentUnitsFor, isMessageIdForOperation, isPublishedRefFor, isMailObjectRelativePathFor,
-} from "../src/domain/derived.js";
+} from "@oma/domain/derived";
 import {
   workspacePathAt, submitBundlePathAt, contextStagingPathAt, mailObjectPathAt, mailArchivePathAt,
   actorSocketPathAt, isWorkspacePathFor, isSubmitBundlePathFor, isContextStagingPathFor,
   isMailArchivePathFor, isActorSocketPathFor,
-} from "../src/storage/paths.js";
-import { parseEmlHeaders } from "../src/mail.js";
-import { contextPathCheck } from "../src/validate.js";
-import { operationPlanCheck } from "../src/durable.js";
-import { readBatchView } from "../src/pi-extension.js";
+} from "@oma/domain/paths";
+import { parseEmlHeaders } from "@oma/mail";
+import { contextPathCheck } from "@oma/domain/validation";
+import { operationPlanCheck } from "@oma/domain/durable";
+import { readBatchView } from "@oma/tool-runtime/batch-view";
 import { TEST_VIEW_LIMITS } from "./fixtures/limits.js";
-import { RequestCache } from "../src/request-cache.js";
+import { RequestCache } from "#oma-test/app/request-cache";
 import { runCliWithLookup } from "./fixtures/cli-lookup.js";
 
 const OP = "op-00000000-0000-4000-8000-000000000003";
@@ -76,8 +76,8 @@ test("R03: internal IDs, RFC ancestry and context paths do not share a grammar",
     (error: unknown) => (error as { code?: string }).code === "INVALID_REQUEST");
   assert.throws(() => parseEmlHeaders("References: <root@elsewhere.invalid>\r\n\r\nbody"),
     (error: unknown) => (error as { code?: string }).code === "INVALID_REQUEST");
-  assert.equal(parseRepositoryRelativePath("src/file.ts"), "src/file.ts");
-  assert.notEqual(contextPathCheck("src/file.ts"), null); assert.equal(contextPathCheck("GOAL.md"), null);
+  assert.equal(parseRepositoryRelativePath("apps/oma/src/file.ts"), "apps/oma/src/file.ts");
+  assert.notEqual(contextPathCheck("apps/oma/src/file.ts"), null); assert.equal(contextPathCheck("GOAL.md"), null);
   for (const path of ["", "/GOAL.md", "../GOAL.md", "a/../GOAL.md", "a//b", "a/./b", "a\0b"]) assert.equal(parseRepositoryRelativePath(path), null);
 });
 

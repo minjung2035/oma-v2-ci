@@ -3,43 +3,45 @@
 // a regex over source cannot tell an import from a comment, so those tests
 // passed or failed on prose. Every rule here reads the syntax tree.
 import ts from "typescript";
+import { readFileSync } from "node:fs";
 import { extractEdges } from "../../dependency-graph.mjs";
-import { eachNode, exists, filesUnder, finding, normalizeRelativeImport, propertyName, sourceOf, strip, VENDORED_EXTENSION_DIR } from "./shared.mjs";
+import { authoredFiles, eachNode, exists, filesUnder, finding, normalizeRelativeImport, propertyName, sourceOf, strip, isVendoredExtension } from "./shared.mjs";
 
-const EXTENSION_ENTRY = "src/pi-extension.ts";
+const EXTENSION_ENTRY = "packages/extension/src/index.ts";
 const EXTENSION_EXTERNALS = new Set(["@earendil-works/pi-coding-agent", "typebox"]);
 // TUI-020: each engine primitive has one owner, and only these names are borrowed.
 const ENGINE_PRIMITIVE_OWNERS = Object.freeze({
   // DR37: this pinned compatibility seam updates Pi's existing autocomplete
   // provider after its own installer completes; it owns no terminal layout.
-  "src/pi-compat/interactive-tools.ts": Object.freeze(["CombinedAutocompleteProvider", "AutocompleteProvider"]),
-  "src/tui/cells.ts": Object.freeze(["visibleWidth"]),
-  "src/tui/keys.ts": Object.freeze(["parseKey"]),
+  "packages/engine/src/pi-compat/interactive-tools.ts": Object.freeze(["CombinedAutocompleteProvider", "AutocompleteProvider"]),
+  "packages/engine/src/open-tui-brand.ts": Object.freeze(["visibleWidth"]),
+  "packages/tui/src/cells.ts": Object.freeze(["visibleWidth"]),
+  "packages/tui/src/keys.ts": Object.freeze(["parseKey"]),
   // DR22: upstream owns the conversation; these adapters own input and lifetime, not layout.
-  "src/pi-compat/interactive-editor.ts": Object.freeze(["EditorComponent", "matchesKey"]),
-  "src/tui/interactive-editor.ts": Object.freeze(["EditorComponent"]),
+  "packages/engine/src/pi-compat/interactive-editor.ts": Object.freeze(["EditorComponent", "matchesKey"]),
+  "packages/engine/src/pi-compat/prompt-editor.ts": Object.freeze(["EditorComponent"]),
   // B1: ANSI-aware fitting and wrapping for the compact tool rows, and the
   // Component contract they are drawn through; the engine's own types are
   // met structurally, so the surface never imports the coding-agent package.
-  "src/tui/compact-tools.ts": Object.freeze(["Component", "truncateToWidth", "wrapTextWithAnsi"]),
+  "packages/tui/src/compact-tools.ts": Object.freeze(["Component", "truncateToWidth", "wrapTextWithAnsi"]),
   // BL2: the questionnaire overlay borrows the key matcher, the ANSI-aware
   // width helpers and the real-cursor marker; its state machine stays pure.
-  "src/tui/ask-user-question/component.ts": Object.freeze([
+  "packages/tui/src/ask-user-question/component.ts": Object.freeze([
     "CURSOR_MARKER", "isKeyRelease", "isKeyRepeat", "matchesKey",
     "truncateToWidth", "visibleWidth", "wrapTextWithAnsi",
   ]),
-  "src/runtime/interactive-display.ts": Object.freeze(["Text"]),
+  "packages/engine/src/interactive-display.ts": Object.freeze(["Text"]),
 });
-const VIEW = "src/tui/view/";
-const VIEW_SEAM = "src/tui/view/index.ts";
+const VIEW = "packages/tui/src/view/";
+const VIEW_SEAM = "packages/tui/src/view/index.ts";
 // The chooser owns the terminal before a session/app exists, never alongside it.
-const VIEW_CALLERS = new Set(["src/tui/app.ts", "src/tui/session-mode.ts"]);
-const VIEW_MAY_IMPORT = [VIEW, "src/tui/model.ts", "src/domain/surface-bounds.ts", "src/tui/cells.ts", "src/domain/", "implementation/contracts"];
+const VIEW_CALLERS = new Set(["packages/tui/src/app.ts", "packages/tui/src/session-mode.ts"]);
+const VIEW_MAY_IMPORT = [VIEW, "packages/tui/src/model.ts", "packages/domain/src/surface-bounds.ts", "packages/tui/src/cells.ts", "packages/domain/src/", "packages/contracts/src"];
 // TUI-006: presentation writes belong to Application. Package staging keeps
 // its independent descriptor/host-file checks in owned-state-rules.
 // exit.ts's writeSync targets the process's own stdout/stderr fd before
 // process.exit (NB-06: a buffered stream write can be dropped); it owns no file.
-const TUI_WRITE_OWNERS = new Set(["src/application/settings.ts", "src/application/extensions.ts", "src/application/exit.ts", "src/application/local-packages.ts"]);
+const TUI_WRITE_OWNERS = new Set(["apps/oma/src/application/settings.ts", "apps/oma/src/application/extensions.ts", "apps/oma/src/application/exit.ts", "apps/oma/src/application/local-packages.ts"]);
 const WRITE_CALLS = new Set([
   "writeFileSync", "appendFileSync", "renameSync", "unlinkSync", "rmSync", "mkdirSync", "copyFileSync",
   "symlinkSync", "writeSync", "truncateSync", "replaceDerivedFile", "writeExclusiveFsyncedFile", "moveToCur",
@@ -47,38 +49,39 @@ const WRITE_CALLS = new Set([
 const LEDGER_MODULES = new Set(["node:sqlite", "better-sqlite3"]);
 // The deployment layout names the product surface in order to hide it from
 // Residents (TUI-003); that is the one legitimate mention on the Resident side.
-const PRODUCT_SURFACE_DECLARATION = "src/domain/deployment.ts";
+const PRODUCT_SURFACE_DECLARATION = "packages/domain/src/deployment.ts";
 // Host entries also run as separately installed processes; no router edge is
 // required for their product/model boundary to be enforced.
 const PRODUCT_ENTRIES = Object.freeze([
-  "src/entry/oma.ts", "src/entry/oma-society.ts", "src/entry/oma-mac.ts", "src/entry/personal-host.ts",
-  "src/entry/pi-personal.ts", "src/entry/pi-interactive.ts", "src/entry/pi-interactive-host.ts",
+  "apps/oma/src/entry/oma.ts", "apps/oma/src/entry/oma-society.ts", "apps/oma/src/entry/oma-mac.ts", "apps/oma/src/entry/personal-host.ts",
+  "apps/oma/src/entry/pi-personal.ts", "packages/engine/src/personal.ts", "apps/oma/src/entry/pi-interactive.ts", "packages/engine/src/interactive.ts",
 ]);
-const isProductFile = file => file.startsWith("src/tui/") || file.startsWith("src/application/") || PRODUCT_ENTRIES.includes(file);
-const TUI_FORBIDDEN_CLOSURE = ["src/store.ts", "src/storage/transaction.ts", "src/storage/rows.ts", "src/durable.ts"];
-const PRODUCT_DECLARATIONS = new Set(["src/domain/surface-bounds.ts", "src/tui/view/layout.ts", "src/domain/tool-surface.ts", "src/config/defaults.ts"]);
+const isProductFile = file => file.startsWith("packages/tui/src/") || file.startsWith("apps/oma/src/application/") || PRODUCT_ENTRIES.includes(file);
+const TUI_FORBIDDEN_CLOSURE = ["packages/storage/src/store.ts", "packages/storage/src/transaction.ts", "packages/storage/src/rows.ts", "packages/domain/src/durable.ts"];
+const PRODUCT_DECLARATIONS = new Set(["packages/domain/src/surface-bounds.ts", "packages/tui/src/view/layout.ts", "packages/domain/src/tool-surface.ts", "packages/config/src/defaults.ts"]);
 // Arch §23: closed unions whose switch must end in assertNever, so a new case
 // cannot fall through unnoticed.
 const CLOSED_SWITCHES = Object.freeze([
-  { file: "src/tui/app.ts", discriminant: "effect.kind", subject: "effect" },
-  { file: "src/tui/view/notice.ts", discriminant: "notice.kind", subject: "notice" },
-  { file: "src/broker/public-dispatcher.ts", discriminant: "method", subject: "method" },
-  { file: "src/broker/internal-dispatcher.ts", discriminant: "dispatchMethod", subject: "dispatchMethod" },
+  { file: "packages/tui/src/app.ts", discriminant: "effect.kind", subject: "effect" },
+  { file: "packages/tui/src/view/notice.ts", discriminant: "notice.kind", subject: "notice" },
+  { file: "packages/broker/src/public-dispatcher.ts", discriminant: "method", subject: "method" },
+  { file: "packages/broker/src/internal-dispatcher.ts", discriminant: "dispatchMethod", subject: "dispatchMethod" },
 ]);
 // P11/P12: dispatchers reach modules through ports, never directly.
 const DISPATCHER_FORBIDDEN = Object.freeze({
-  "src/broker/public-dispatcher.ts": ["src/store.ts", "src/mail.ts", "src/units.ts", "src/views.ts", "src/lifecycle.ts", "src/git.ts", "src/reconcile.ts"],
-  "src/broker/internal-dispatcher.ts": ["src/store.ts", "src/mail.ts", "src/reconcile.ts"],
+  "packages/broker/src/public-dispatcher.ts": ["packages/storage/src/store.ts", "packages/mail/src/index.ts", "packages/platform-linux/src/units.ts", "apps/oma/src/views.ts", "packages/lifecycle/src/index.ts", "packages/git/src/index.ts", "packages/reconcile/src/index.ts"],
+  "packages/broker/src/internal-dispatcher.ts": ["packages/storage/src/store.ts", "packages/mail/src/index.ts", "packages/reconcile/src/index.ts"],
 });
 // The model-facing CLI parses only mail headers; it never loads the mail module.
 const CLI_MAIL_FORBIDDEN = Object.freeze({
-  "src/cli.ts": ["src/mail.ts"],
-  "src/cli/effects/mail.ts": ["src/mail.ts"],
+  "apps/oma/src/cli.ts": ["packages/mail/src/index.ts"],
+  "apps/oma/src/cli/effects/mail.ts": ["packages/mail/src/index.ts"],
 });
 
 const present = (root, files) => files.filter(file => exists(root, file));
-const productFiles = root => [...filesUnder(root, "src/tui"), ...present(root, ["src/domain/tool-surface.ts", "src/config/defaults.ts"])];
-const extensionFiles = root => [...present(root, [EXTENSION_ENTRY]), ...filesUnder(root, "src/extension")];
+const productFiles = root => [...filesUnder(root, "packages/tui/src"), ...present(root, ["packages/domain/src/tool-surface.ts", "packages/config/src/defaults.ts"])];
+const TOOL_SOURCE_ROOTS = Object.freeze(["tool-runtime", "tool-lsp", "tool-hashline", "tool-web", "tool-mcp"].map(name => `packages/${name}/src`));
+const extensionFiles = root => [...filesUnder(root, "packages/extension/src"), ...TOOL_SOURCE_ROOTS.flatMap(dir => filesUnder(root, dir))];
 
 /** Module edges, marking those erased at build time. */
 function edges(source) {
@@ -142,9 +145,9 @@ function calleeName(node) {
 }
 
 function internalMethodNames(root) {
-  if (!exists(root, "src/protocol/methods.ts")) return new Set();
+  if (!exists(root, "packages/protocol/src/methods.ts")) return new Set();
   const names = new Set();
-  const source = sourceOf(root, "src/protocol/methods.ts");
+  const source = sourceOf(root, "packages/protocol/src/methods.ts");
   for (const statement of source.statements) {
     if (!ts.isVariableStatement(statement)) continue;
     for (const declaration of statement.declarationList.declarations) {
@@ -163,7 +166,7 @@ function internalMethodNames(root) {
 function extensionRules(root, findings) {
   const files = extensionFiles(root);
   const members = new Set(files);
-  for (const file of [...files, ...filesUnder(root, "src/client")]) {
+  for (const file of [...files, ...filesUnder(root, "packages/client/src")]) {
     const source = sourceOf(root, file);
     // PI-001: the extension runs on the host and inside the sandbox from the
     // same files, so it may import nothing of OMA's runtime.
@@ -172,15 +175,16 @@ function extensionRules(root, findings) {
       if (target === null) {
         if (!edge.specifier.startsWith("node:") && !(members.has(file) && EXTENSION_EXTERNALS.has(edge.specifier)))
           findings.push(finding("extension-closure", file, `imports ${edge.specifier}; the extension may use only Node built-ins, the engine's extension API and typebox`));
-      } else if (!(members.has(file) && target.startsWith("src/extension/")) && !target.startsWith("src/client/") &&
-        !(edge.typeOnly && (target === "implementation/contracts.ts" || target.startsWith("implementation/contracts/")))) {
+      } else if (!(members.has(file) && target.startsWith("packages/extension/src/")) &&
+        !["packages/client/src/", "packages/domain/src/", "packages/protocol/src/", ...TOOL_SOURCE_ROOTS.map(dir => `${dir}/`)].some(prefix => target.startsWith(prefix)) &&
+        !(edge.typeOnly && (target === "packages/contracts/src/index.ts" || target.startsWith("packages/contracts/src/")))) {
         findings.push(finding("extension-closure", file, `imports ${target}; the extension imports no OMA runtime module`));
       }
       // BL1/F6: a static edge into the vendored bundle evaluates unverified
       // bytes at module load -- before verifyVendorBundle can run. Only a
       // dynamic import() behind verification may reach vendored code; a
       // type-only edge erases at compile and stays legal.
-      if (!edge.typeOnly && members.has(file) && target !== null && target.startsWith(`${VENDORED_EXTENSION_DIR}/`))
+      if (!edge.typeOnly && members.has(file) && target !== null && isVendoredExtension(target))
         findings.push(finding("extension-dynamic-load", file, `statically imports ${target}; a static vendored edge evaluates before verifyVendorBundle -- only dynamic import() behind verification may load vendored code`));
     }
     eachNode(source, node => {
@@ -194,7 +198,7 @@ function extensionRules(root, findings) {
         const argument = node.arguments[0];
         const specifier = argument !== undefined && ts.isStringLiteralLike(argument) ? argument.text : null;
         const vendored = specifier !== null &&
-          normalizeRelativeImport(file, specifier)?.startsWith(`${VENDORED_EXTENSION_DIR}/`) === true;
+          isVendoredExtension(normalizeRelativeImport(file, specifier) ?? "");
         if (!vendored)
           findings.push(finding("extension-dynamic-load", file, "the trusted extension loads no code at run time outside a verified vendored bundle"));
       } else if (["require", "createRequire"].includes(calleeName(node)))
@@ -207,18 +211,18 @@ function extensionRules(root, findings) {
       if (executes) findings.push(finding("extension-execute", file, "the extension never invokes a tool handler itself"));
     });
   }
-  for (const file of filesUnder(root, "src")) {
+  for (const file of authoredFiles(root)) {
     if (members.has(file)) continue;
     for (const edge of edges(sourceOf(root, file))) {
       const target = normalizeRelativeImport(file, edge.specifier);
-      if (target?.startsWith("src/extension/"))
+      if (target?.startsWith("packages/extension/src/"))
         findings.push(finding("extension-closure", file, `imports ${target}; only ${EXTENSION_ENTRY} composes the extension`));
     }
   }
 }
 
 function engineRules(root, findings) {
-  for (const file of filesUnder(root, "src")) {
+  for (const file of authoredFiles(root)) {
     for (const edge of edges(sourceOf(root, file))) {
       if (!edge.specifier.startsWith("@earendil-works/")) continue;
       const owned = ENGINE_PRIMITIVE_OWNERS[file];
@@ -226,7 +230,7 @@ function engineRules(root, findings) {
         if (!owned) findings.push(finding("engine-primitive-owner", file, "imports the engine's terminal library without being its declared owner"));
         else for (const name of edge.names)
           if (!owned.includes(name)) findings.push(finding("engine-primitive-owner", file, `borrows ${name}; only ${owned.join(", ")} is owned here, and layout is not borrowed`));
-      } else if (file.startsWith("src/tui/")) {
+      } else if (file.startsWith("packages/tui/src/")) {
         findings.push(finding("engine-primitive-owner", file, `imports ${edge.specifier}; the product surface borrows only declared primitives`));
       }
     }
@@ -234,7 +238,7 @@ function engineRules(root, findings) {
 }
 
 function viewRules(root, findings) {
-  for (const file of filesUnder(root, "src")) {
+  for (const file of authoredFiles(root)) {
     const inView = file.startsWith(VIEW);
     for (const edge of edges(sourceOf(root, file))) {
       const target = normalizeRelativeImport(file, edge.specifier);
@@ -253,7 +257,7 @@ function viewRules(root, findings) {
 
 function surfaceEffectRules(root, findings) {
   const internal = internalMethodNames(root);
-  for (const file of [...filesUnder(root, "src/tui"), ...filesUnder(root, "src/application")]) {
+  for (const file of [...filesUnder(root, "packages/tui/src"), ...filesUnder(root, "apps/oma/src/application")]) {
     const source = sourceOf(root, file);
     eachNode(source, node => {
       if (ts.isCallExpression(node) && WRITE_CALLS.has(calleeName(node)) && !TUI_WRITE_OWNERS.has(file))
@@ -261,9 +265,9 @@ function surfaceEffectRules(root, findings) {
     });
     for (const edge of edges(source)) {
       const target = normalizeRelativeImport(file, edge.specifier);
-      if (LEDGER_MODULES.has(edge.specifier) || target === "src/store.ts")
+      if (LEDGER_MODULES.has(edge.specifier) || target === "packages/storage/src/store.ts")
         findings.push(finding("tui-ledger", file, "the product surface owns no durable store"));
-      if (target === "src/protocol/channel.ts" && !(file === "src/application/status-observation.ts" && edge.typeOnly))
+      if (target === "packages/client/src/channel.ts" && !(file === "apps/oma/src/application/status-observation.ts" && edge.typeOnly))
         findings.push(finding("tui-transport-owner", file, "the product surface reaches the broker only through its transport owner"));
     }
     for (const { text } of literalTexts(source))
@@ -273,17 +277,17 @@ function surfaceEffectRules(root, findings) {
 
 function closureRules(root, findings) {
   for (const file of runtimeClosure(root, PRODUCT_ENTRIES)) {
-    if (file === "src/cli.ts" || file.startsWith("src/cli/commands/") || file === "src/cli/arguments.ts" || file === "src/cli/exit.ts")
+    if (file === "apps/oma/src/cli.ts" || file.startsWith("apps/oma/src/cli/commands/") || file === "apps/oma/src/cli/arguments.ts" || file === "apps/oma/src/cli/exit.ts")
       findings.push(finding("product-cli-separation", file, "the host product reaches the model-facing command surface"));
     if (TUI_FORBIDDEN_CLOSURE.includes(file))
       findings.push(finding("tui-ledger", file, "the host product reaches the durable store owner"));
   }
-  if (exists(root, "src/cli.ts"))
-    for (const file of runtimeClosure(root, "src/cli.ts"))
+  if (exists(root, "apps/oma/src/cli.ts"))
+    for (const file of runtimeClosure(root, "apps/oma/src/cli.ts"))
       if (isProductFile(file))
         findings.push(finding("product-cli-separation", file, "the model-facing CLI reaches the host product"));
   // TUI-003: nothing a Resident runs can reach or name the product entrypoint.
-  const resident = new Set([...runtimeClosure(root, "src/entry/runner.ts"), ...runtimeClosure(root, EXTENSION_ENTRY)]);
+  const resident = new Set([...runtimeClosure(root, "apps/oma/src/entry/runner.ts"), ...runtimeClosure(root, EXTENSION_ENTRY)]);
   for (const file of resident) {
     if (isProductFile(file)) {
       findings.push(finding("resident-product-surface", file, "the Resident closure reaches the host product"));
@@ -291,7 +295,11 @@ function closureRules(root, findings) {
     }
     if (file === PRODUCT_SURFACE_DECLARATION) continue;
     for (const { text } of literalTexts(sourceOf(root, file)))
-      if (/\/tui\//.test(text) || PRODUCT_ENTRIES.some(entry => text.includes(entry.slice(4, -3))))
+      if (/\/tui\//.test(text) || PRODUCT_ENTRIES.some(entry => {
+        const stem = entry.slice(0, -3);
+        return (entry.startsWith("apps/oma/src/") ? [stem, stem.slice("apps/oma/src/".length), stem.replace("/src/", "/dist/")] : [stem, stem.replace("/src/", "/dist/")])
+          .some(path => text.includes(path));
+      }))
         findings.push(finding("resident-product-surface", file, `names the host product (${text})`));
   }
 }
@@ -299,12 +307,12 @@ function closureRules(root, findings) {
 function vocabularyRules(root, findings) {
   // TUI-014: Pi is an engine, never a path the product offers. DR25: `oma pi
   // <command>` is oma's own command, which runs the engine's over oma's store.
-  for (const file of [...filesUnder(root, "src/tui"), ...present(root, PRODUCT_ENTRIES)])
+  for (const file of [...filesUnder(root, "packages/tui/src"), ...present(root, PRODUCT_ENTRIES)])
     for (const { text } of literalTexts(sourceOf(root, file)))
       if (/(?<!\boma )\bpi (?:config|install|update)\b/.test(text))
         findings.push(finding("product-pi-command", file, `offers a Pi command (${text})`));
   // TUI-003: the model-facing surfaces do not advertise the Human's panel.
-  for (const file of [...filesUnder(root, "src/cli"), ...present(root, ["src/cli.ts", "src/views.ts"])])
+  for (const file of [...filesUnder(root, "apps/oma/src/cli"), ...present(root, ["apps/oma/src/cli.ts", "apps/oma/src/views.ts"])])
     for (const { text } of literalTexts(sourceOf(root, file)))
       if (/Ctrl\+X|Control Panel/.test(text))
         findings.push(finding("model-surface-product-words", file, `advertises the Control Panel (${text})`));
@@ -334,7 +342,7 @@ function productCodeRules(root, findings) {
 
 function userPiRules(root, findings) {
   // TUI-017: OMA's engine state lives under OMA; the user's Pi is never named.
-  for (const file of filesUnder(root, "src")) {
+  for (const file of authoredFiles(root)) {
     const source = sourceOf(root, file);
     for (const edge of edges(source))
       if ((edge.specifier === "node:os" || edge.specifier === "os") && edge.names.includes("homedir"))
@@ -344,7 +352,7 @@ function userPiRules(root, findings) {
         findings.push(finding("user-pi-state", file, "reads the user's home directory"));
     });
     for (const { text } of literalTexts(source))
-      if (/(^|\/)\.pi(\/|$)/.test(text) && !(file === "src/pi-compat/settings.ts" && text === ".pi"))
+      if (/(^|\/)\.pi(\/|$)/.test(text) && !(file === "apps/oma/src/engine/settings-files.ts" && text === ".pi"))
         // Personal's trusted project settings use Pi's ordinary .pi scope;
         // this storage never names the Human's global ~/.pi engine home.
         findings.push(finding("user-pi-state", file, `names the user's Pi state (${text})`));
@@ -352,7 +360,7 @@ function userPiRules(root, findings) {
 }
 
 function ownerShapeRules(root, findings) {
-  const settings = "src/domain/settings-policy.ts";
+  const settings = "packages/domain/src/settings-policy.ts";
   if (exists(root, settings)) {
     const source = sourceOf(root, settings);
     let switches = 0;
@@ -395,14 +403,14 @@ function ownerShapeRules(root, findings) {
 // and the tools in between rebuilt the environment from a list that never
 // mentioned it, so every OMA tool failed authentication while every test
 // passed.
-const ENV_PRODUCER = "src/runtime/engine/principal-launch.ts";
+const ENV_PRODUCER = "packages/engine/src/principal-launch.ts";
 const ENV_PRODUCER_FUNCTION = "principalEnvironment";
 // Everything the tools put in the CLI's environment: the list copied from the
 // engine's own environment, and what the process owner adds itself.
 const ENV_FORWARDERS = Object.freeze([
-  { file: "src/extension/mail-tools.ts", fn: "cliEnvironment" },
+  { file: "packages/extension/src/mail-tools.ts", fn: "cliEnvironment" },
 ]);
-const ENV_CONSUMER = "src/client/settings.ts";
+const ENV_CONSUMER = "packages/client/src/settings.ts";
 // `socketPath` reads names only to derive an endpoint when none was given; a
 // caller that was given one never reaches them, so they are not requirements.
 const ENV_CONSUMER_DERIVATION = "socketPath";
@@ -571,7 +579,7 @@ function producedNames(root) {
 function principalSessionEnvRules(root, findings) {
   // Every spelling: a string, an object key, a property read. A rule that only
   // looked at strings would miss `{ OMA_PRINCIPAL_CREDENTIAL: value }`.
-  for (const file of filesUnder(root, "src")) {
+  for (const file of authoredFiles(root)) {
     const named = new Set();
     eachNode(sourceOf(root, file), node => {
       if ((ts.isStringLiteralLike(node) || ts.isIdentifier(node)) && SECRET_ENV_NAMES.has(node.text)) named.add(node.text);
@@ -605,7 +613,7 @@ function principalSessionEnvRules(root, findings) {
  * is therefore the mistake itself, whatever the value.
  */
 function principalTurnOwnerRules(root, findings) {
-  for (const file of filesUnder(root, "src")) {
+  for (const file of authoredFiles(root)) {
     let named = false;
     eachNode(sourceOf(root, file), node => {
       if ((ts.isStringLiteralLike(node) || ts.isIdentifier(node)) && node.text === "streamingBehavior") named = true;
@@ -622,18 +630,18 @@ function principalTurnOwnerRules(root, findings) {
  * (process/host-loss.ts), so a handler for one of them alone -- and the
  * default action on the others -- cannot be written. */
 const TERMINATION_SIGNALS = Object.freeze(["SIGHUP", "SIGINT", "SIGQUIT", "SIGTERM"]);
-const HOST_LOSS_OWNER = "src/process/host-loss.ts";
+const HOST_LOSS_OWNER = "packages/domain/src/host-signals.ts";
 const LISTENER_METHODS = new Set(["on", "once", "addListener", "prependListener", "prependOnceListener"]);
 /** The owners with a drain, not the birth-only router: the broker, a
  * Resident's runner, Society host, Personal child holder, pre-session chooser,
  * Mac service and attach client, guest session holder and guestctl. */
 const DRAINING_PROCESSES = Object.freeze([
-  "src/entry/broker.ts", "src/entry/runner.ts", "src/entry/oma-society.ts", "src/entry/omahostd.ts",
-  "src/runtime/personal-session.ts", "src/tui/session-mode.ts",
-  "src/entry/guest-session.ts", "src/entry/guestctl.ts", "src/platform/host/attach-client.ts",
+  "apps/oma/src/entry/broker.ts", "apps/oma/src/entry/runner.ts", "apps/oma/src/entry/oma-society.ts", "apps/oma/src/entry/omahostd.ts",
+  "apps/oma/src/runtime/personal-session.ts", "packages/tui/src/session-mode.ts",
+  "apps/oma/src/entry/guest-session.ts", "apps/oma/src/entry/guestctl.ts", "apps/oma/src/platform/host/attach-client.ts",
 ]);
 function hostLossSignalRules(root, findings) {
-  for (const file of filesUnder(root, "src")) {
+  for (const file of authoredFiles(root)) {
     eachNode(sourceOf(root, file), node => {
       if (!ts.isCallExpression(node) || !ts.isPropertyAccessExpression(node.expression)) return;
       if (!LISTENER_METHODS.has(node.expression.name.text)) return;
@@ -668,15 +676,15 @@ function hostLossSignalRules(root, findings) {
 }
 
 /** P0V-86 (R6-09): one reading of UTF-8. A decoder is made only by the owner
- * and by the extension's mirror of it (PI-001), and both refuse malformed
+ * alone; all consumers import its public API. It refuses malformed
  * bytes and keep a U+FEFF: `fatal: true, ignoreBOM: true`. */
-const UTF8_OWNERS = Object.freeze(["src/domain/utf8.ts", "src/extension/utf8.ts"]);
+const UTF8_OWNERS = Object.freeze(["packages/domain/src/utf8.ts"]);
 function utf8DecoderRules(root, findings) {
-  for (const file of filesUnder(root, "src")) {
+  for (const file of authoredFiles(root)) {
     eachNode(sourceOf(root, file), node => {
       if (!ts.isNewExpression(node) || !ts.isIdentifier(node.expression) || node.expression.text !== "TextDecoder") return;
       if (!UTF8_OWNERS.includes(file)) {
-        findings.push(finding("utf8-decoder-owner", file, "makes its own TextDecoder; UTF-8 is read through src/domain/utf8.ts (the extension: src/extension/utf8.ts)"));
+        findings.push(finding("utf8-decoder-owner", file, "makes its own TextDecoder; UTF-8 is read through @oma/domain/utf8"));
         return;
       }
       const options = node.arguments?.[1];
@@ -689,18 +697,18 @@ function utf8DecoderRules(root, findings) {
 }
 
 /** DR18 (D-1, MAC-022): an error's words reach the product surface through
- * one reading, `src/tui/words.ts`, which on a Mac's screen keeps only product
+ * one reading, `packages/tui/src/words.ts`, which on a Mac's screen keeps only product
  * text and sends the rest to the guest's log. So no other file of the `oma`
  * process reads a thrown value's words itself: no `instanceof Error` test, no
  * `.message`, no `String()` of a caught value. The views only lay out what
  * already passed that reading. The engine's own message event is the
  * transcript's content, not OMA's words. */
-const WORDS_OWNER = "src/tui/words.ts";
-const ENGINE_CONTENT = Object.freeze({ "src/runtime/engine/principal-session.ts": "event" });
+const WORDS_OWNER = "packages/tui/src/words.ts";
+const ENGINE_CONTENT = Object.freeze({ "packages/engine/src/principal-session.ts": "event" });
 function errorWordsRules(root, findings) {
-  const files = [...filesUnder(root, "src/tui").filter(file => file !== WORDS_OWNER && !file.startsWith(VIEW)),
-    ...filesUnder(root, "src/application").filter(file => file !== "src/application/local-packages.ts"),
-    ...present(root, ["src/entry/oma.ts", "src/entry/oma-society.ts"])];
+  const files = [...filesUnder(root, "packages/tui/src").filter(file => file !== WORDS_OWNER && !file.startsWith(VIEW)),
+    ...filesUnder(root, "apps/oma/src/application").filter(file => file !== "apps/oma/src/application/local-packages.ts"),
+    ...present(root, ["apps/oma/src/entry/oma.ts", "apps/oma/src/entry/oma-society.ts"])];
   for (const file of files) {
     const caught = new Set();
     const source = sourceOf(root, file);
@@ -711,13 +719,13 @@ function errorWordsRules(root, findings) {
     eachNode(source, node => {
       if (ts.isBinaryExpression(node) && node.operatorToken.kind === ts.SyntaxKind.InstanceOfKeyword
         && ts.isIdentifier(node.right) && node.right.text === "Error")
-        findings.push(finding("error-words-owner", file, "reads a thrown value's words itself (instanceof Error); use errorWords from src/tui/words.ts"));
+        findings.push(finding("error-words-owner", file, "reads a thrown value's words itself (instanceof Error); use errorWords from packages/tui/src/words.ts"));
       if (ts.isPropertyAccessExpression(node) && node.name.text === "message"
         && !(ts.isIdentifier(node.expression) && ENGINE_CONTENT[file] === node.expression.text))
-        findings.push(finding("error-words-owner", file, `reads .message of ${node.expression.getText(source)}; an error's words come from errorWords (src/tui/words.ts)`));
+        findings.push(finding("error-words-owner", file, `reads .message of ${node.expression.getText(source)}; an error's words come from errorWords (packages/tui/src/words.ts)`));
       if (ts.isCallExpression(node) && ts.isIdentifier(node.expression) && node.expression.text === "String"
         && node.arguments.length === 1 && ts.isIdentifier(node.arguments[0]) && caught.has(node.arguments[0].text))
-        findings.push(finding("error-words-owner", file, "turns a caught value into text with String(); use errorWords from src/tui/words.ts"));
+        findings.push(finding("error-words-owner", file, "turns a caught value into text with String(); use errorWords from packages/tui/src/words.ts"));
     });
   }
 }
@@ -728,7 +736,7 @@ function errorWordsRules(root, findings) {
  * enum, so stored receipts that carry it are still read. Opening a spike
  * again is a design revision, not a new throw. */
 function openSpikeRules(root, findings) {
-  for (const file of filesUnder(root, "src")) {
+  for (const file of authoredFiles(root)) {
     eachNode(sourceOf(root, file), node => {
       if (!ts.isNewExpression(node) || !ts.isIdentifier(node.expression) || node.expression.text !== "StoreError") return;
       const first = node.arguments?.[0];
@@ -747,13 +755,13 @@ function openSpikeRules(root, findings) {
  * no caller to catch what it throws -- an exception there ends the whole
  * process, not the one stream. So a data callback makes no synchronous file
  * effect outside a try that hands the failure on (the one receiver,
- * `src/platform/stream-receive.ts`, is the model). The callback is the
+ * `apps/oma/src/platform/stream-receive.ts`, is the model). The callback is the
  * function given to `.on`/`.once("data", ...)`, found inline, as a function
  * or constant of the same file, or as a member of the class it names. */
 const SYNC_FILE_EFFECTS = new Set(["writeSync", "fsyncSync", "fdatasyncSync", "closeSync", "openSync", "unlinkSync", "renameSync",
   "ftruncateSync", "truncateSync", "linkSync", "symlinkSync", "mkdirSync", "rmSync", "rmdirSync", "appendFileSync", "writeFileSync", "copyFileSync"]);
 function socketCallbackEffectRules(root, findings) {
-  for (const file of filesUnder(root, "src")) {
+  for (const file of authoredFiles(root)) {
     const source = sourceOf(root, file);
     const named = new Map();
     eachNode(source, node => {
@@ -794,7 +802,7 @@ function socketCallbackEffectRules(root, findings) {
  * registry, and no seam exists for that either. */
 function extensionRegistryRules(root, findings) {
   const mutators = new Set(["set", "delete", "clear"]);
-  for (const file of filesUnder(root, "src")) {
+  for (const file of authoredFiles(root)) {
     eachNode(sourceOf(root, file), node => {
       if (!ts.isCallExpression(node)) return;
       const callee = strip(node.expression);
@@ -808,40 +816,38 @@ function extensionRegistryRules(root, findings) {
 }
 
 // Public subpath APIs avoid an eager barrel that loads every UI adapter.
-export const TUI_PUBLIC_SUBPATHS = Object.freeze([
-  "app", "model", "screen", "words", "society-panel", "mail-names", "session-mode",
-  "compact-tools", "interactive-editor", "open-tui-brand", "panel-style", "panel-terminal",
-  "ask-user-question/presenter",
-]);
-const TUI_PUBLIC_APIS = new Set(TUI_PUBLIC_SUBPATHS.map(name => `src/tui/${name}.ts`));
+export const TUI_PUBLIC_SUBPATHS = Object.freeze(Object.keys(JSON.parse(
+  readFileSync(new URL("../../../packages/tui/package.json", import.meta.url), "utf8"),
+).exports).map(name => name.slice(2)));
+const TUI_PUBLIC_APIS = new Set(TUI_PUBLIC_SUBPATHS.map(name => `packages/tui/src/${name}.ts`));
 function moduleBoundaryRules(root, findings) {
-  for (const file of filesUnder(root, "src")) {
+  for (const file of authoredFiles(root)) {
     const extracted = extractEdges({ source: sourceOf(root, file),
       resolve: specifier => normalizeRelativeImport(file, specifier) });
     const references = [...extracted.edges, ...extracted.external.map(specifier => ({ specifier }))];
     for (const edge of references) {
       const target = normalizeRelativeImport(file, edge.specifier);
-      if (file.startsWith("src/tui/")) {
-        if (target !== null && ["src/runtime/", "src/application/", "src/storage/", "src/config/", "src/broker/"].some(prefix => target.startsWith(prefix)) ||
-            target === "src/config.ts" || target !== null && target.startsWith("src/platform/") &&
-              !(file === "src/tui/words.ts" && target === "src/platform/product-text.ts") ||
-            ["src/broker.ts", "src/store.ts", "src/runner.ts", "src/reconcile.ts", "src/lifecycle.ts"].includes(target) ||
+      if (file.startsWith("packages/tui/src/")) {
+        if (target !== null && ["apps/oma/src/runtime/", "apps/oma/src/application/", "packages/storage/src/", "packages/config/src/", "apps/oma/src/broker/"].some(prefix => target.startsWith(prefix)) ||
+            target === "packages/config/src/index.ts" || target !== null && target.startsWith("apps/oma/src/platform/") &&
+              !(file === "packages/tui/src/words.ts" && target === "packages/domain/src/product-text.ts") ||
+            ["packages/broker/src/index.ts", "packages/storage/src/store.ts", "apps/oma/src/runner.ts", "packages/reconcile/src/index.ts", "packages/lifecycle/src/index.ts"].includes(target) ||
             ["fs", "fs/promises", "child_process", "net", "sqlite"].includes(edge.specifier.replace(/^node:/, "")))
           findings.push(finding("tui-module-boundary", file, `imports ${edge.specifier}; file, configuration and process effects belong to Application/Runtime ports`));
-      } else if (target?.startsWith("src/tui/") && !TUI_PUBLIC_APIS.has(target))
+      } else if (target?.startsWith("packages/tui/src/") && !TUI_PUBLIC_APIS.has(target))
         findings.push(finding("tui-public-api", file, `imports private presentation module ${target}`));
-      if (file.startsWith("src/runtime/") && target !== null && ["src/tui/", "src/application/"].some(prefix => target.startsWith(prefix)))
+      if ((file.startsWith("apps/oma/src/runtime/") || file.startsWith("packages/engine/src/")) && target !== null && ["packages/tui/src/", "apps/oma/src/application/"].some(prefix => target.startsWith(prefix)))
         findings.push(finding("runtime-module-boundary", file, `imports ${target}; Runtime receives product policy through its ports`));
-      if ((file === "src/application/society-runtime.ts" && target?.startsWith("src/tui/")) ||
-          (file === "src/application/society-interaction.ts" && target?.startsWith("src/runtime/engine/")))
+      if ((file === "apps/oma/src/application/society-runtime.ts" && target?.startsWith("packages/tui/src/")) ||
+          (file === "apps/oma/src/application/society-interaction.ts" && ["login", "principal-events", "principal-launch", "principal-session", "session-directories"].some(name => target === `packages/engine/src/${name}.ts`)))
         findings.push(finding("society-conversation-boundary", file, `imports ${target}; conversation commands and presentation observations use society-conversation`));
-      if (["src/platform/host/vz-driver.ts", "src/platform/guest/systemd-launcher.ts"].includes(file) &&
-          ["src/platform/host/lifecycle.ts", "src/platform/host/service.ts", "src/platform/guest/host.ts"].includes(target))
+      if (["packages/platform-mac/src/vz-driver.ts", "packages/platform-linux/src/session-launcher.ts"].includes(file) &&
+          ["apps/oma/src/platform/host/lifecycle.ts", "apps/oma/src/platform/host/service.ts", "apps/oma/src/platform/guest/host.ts"].includes(target))
         findings.push(finding("platform-adapter-boundary", file, `imports ${target}; lifecycle adapters receive platform-lifecycle capabilities`));
-      if (!file.startsWith("src/runtime/packages/") && target === "src/runtime/packages/store.ts")
+      if (!file.startsWith("apps/oma/src/runtime/packages/") && target === "apps/oma/src/runtime/packages/store.ts")
         findings.push(finding("package-public-api", file, "imports the package store implementation instead of runtime/packages/index"));
     }
-    if (file.startsWith("src/tui/") && extracted.unresolved.some(edge => edge.reason === "nonliteral"))
+    if (file.startsWith("packages/tui/src/") && extracted.unresolved.some(edge => edge.reason === "nonliteral"))
       findings.push(finding("tui-module-boundary", file, "loads a computed module; presentation adapters use declared dependencies"));
   }
 }

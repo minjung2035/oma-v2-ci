@@ -1,11 +1,14 @@
+import { serializePlanIntent } from "./plan.js";
 // Normal fixture constructors. Independent golden expectations must not call these as their oracle.
-import type { MessagePlan } from "../../implementation/contracts.js";
-import type { Store, BatchRow } from "../../src/store.js";
-import type { FreezeInput } from "../../src/request-cache.js";
-import { generateOperationId, generateBatchId } from "../../src/ids.js";
-import { messageIdForOperation, mailObjectRelativePath } from "../../src/domain/derived.js";
-import { requestHash, sha256Hex } from "../../src/hash.js";
-import { operationPlanCheck } from "../../src/durable.js";
+import type { MessagePlan } from "@oma/contracts";
+import type { Store } from "@oma/storage";
+import type { BatchRow } from "@oma/contracts/ledger";
+import type { FreezeInput } from "#oma-test/app/request-cache";
+import { generateOperationId, generateBatchId } from "@oma/native/identity";
+import { messageIdForOperation, mailObjectRelativePath } from "@oma/domain/derived";
+import { requestHash } from "@oma/domain/request-identity";
+import { sha256Hex } from "@oma/domain/canonical-json";
+import { operationPlanCheck } from "@oma/domain/durable";
 
 export function makeValidOperation(options: {
   stateRoot: string; id?: string; actor?: string; requestKey?: string; topic?: string;
@@ -18,7 +21,7 @@ export function makeValidOperation(options: {
   const invalid = operationPlanCheck(plan.kind, { operationId: id, actor, stateRoot: options.stateRoot, repositoryIdentity: null })(plan);
   if (invalid) throw new Error(`invalid normal operation fixture: ${invalid}`);
   return { id, actor, requestKey: options.requestKey ?? "durable", requestHash: requestHash(plan.kind, payload), kind: plan.kind,
-    payloadJson: JSON.stringify(payload), planJson: JSON.stringify(plan) };
+    payloadJson: JSON.stringify(payload), planJson: serializePlanIntent(plan) };
 }
 
 export function makeValidMessagePlan(operationId: string, options: {

@@ -8,20 +8,21 @@ import fs, { mkdtempSync, rmSync, writeFileSync, renameSync, openSync, fstatSync
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { randomUUID } from "node:crypto";
-import { encodeFrame } from "../src/frame.js";
-import { StoreError } from "../src/domain/errors.js";
-import { FramedPeer, PlatformError, connectSocket, readLeadingFrame, readLeadingResponse } from "../src/platform/rpc.js";
+import { encodeFrame } from "@oma/protocol/frame";
+import { StoreError } from "@oma/domain/errors";
+import { FramedPeer, connectSocket, readLeadingFrame, readLeadingResponse } from "#oma-test/app/platform/rpc";
+import { PlatformError } from "@oma/protocol/host-errors";
 import { syncBuiltinESMExports } from "node:module";
-import { borrowedFileRange } from "../src/platform/stream-source.js";
-import { receiveDeclared } from "../src/platform/stream-receive.js";
-import { serveRequests } from "../src/platform/rpc-server.js";
-import { serveStream } from "../src/platform/guest/stream.js";
-import { RequestLedger } from "../src/platform/guest/requests.js";
+import { borrowedFileRange } from "#oma-test/app/platform/stream-source";
+import { receiveDeclared } from "#oma-test/app/platform/stream-receive";
+import { serveRequests } from "#oma-test/app/platform/rpc-server";
+import { serveStream } from "#oma-test/app/platform/guest/stream";
+import { RequestLedger } from "#oma-test/app/platform/guest/requests";
 import { createHash } from "node:crypto";
-import { putStream } from "../src/platform/host/project.js";
-import { EgressHost } from "../src/platform/host/egress.js";
-import { GuestLink } from "../src/platform/host/guest-link.js";
-import { HOST_GUEST_PROTOCOL, PLATFORM_FRAME_BYTES } from "../src/protocol/host-guest.js";
+import { putStream } from "#oma-test/app/platform/host/project";
+import { EgressHost } from "#oma-test/app/platform/host/egress";
+import { GuestLink } from "#oma-test/app/platform/host/guest-link";
+import { HOST_GUEST_PROTOCOL, PLATFORM_FRAME_BYTES } from "@oma/protocol/host-guest";
 
 async function pair(t: TestContext) {
   const dir = mkdtempSync(join(tmpdir(), "oma-rpc-"));
@@ -238,8 +239,10 @@ test("DR27: host egress pool releases a half-closed slot and replaces it", async
   const host = new EgressHost({
     open: async () => { const { client, remote } = await pair(t); peers.push(remote); return { socket: client, rest: Buffer.alloc(0) }; },
     resolve: async () => { throw new Error("no provider may be called"); },
-    frameBytes: PLATFORM_FRAME_BYTES, maxPool: 1, limits: { concurrent: 1, timeoutMs: 100 }, retry: { initialMs: 10, maxMs: 20 },
-  });
+    frameBytes: PLATFORM_FRAME_BYTES, maxPool: 1,
+    concurrent: 1,
+    retry: { initialMs: 10, maxMs: 20 }
+});
   t.after(() => host.stop());
   await host.fill();
   assert.equal(host.pooled, 1);
@@ -494,14 +497,17 @@ test("DR27: a host egress observation failure is not a permanent placeholder ref
   const { client, remote } = await pair(t);
   let opened = false;
   const host = new EgressHost({
-    open: async () => { if (opened) throw new Error("fixture has one socket"); opened = true; return { socket: client, rest: Buffer.alloc(0) }; },
+    open: async () => { if (opened)
+        throw new Error("fixture has one socket"); opened = true; return { socket: client, rest: Buffer.alloc(0) }; },
     resolve: async () => { throw new StoreError("BROKER_UNAVAILABLE", "the provider cannot be observed now"); },
-    limits: { timeoutMs: 100, concurrent: 1 }, frameBytes: PLATFORM_FRAME_BYTES, maxPool: 1,
-  });
+    concurrent: 1,
+    frameBytes: PLATFORM_FRAME_BYTES, maxPool: 1
+});
   t.after(() => host.stop()); await host.fill();
   remote.write(encodeFrame({ v: 1, id: "placeholder", method: "egress.placeholder", params: {
     credentialRef: "engine-managed", provider: "anthropic", model: "test", run: { society: "demo", actor: "alice", incarnation: 1 },
-  } }));
+    inferenceSeconds: 5
+} }));
   await assert.rejects(observed(readLeadingResponse(remote, "placeholder", PLATFORM_FRAME_BYTES, 1000)), error => {
     assert.ok(error instanceof PlatformError);
     assert.equal(error.failure.code, "BROKER_UNAVAILABLE"); assert.equal(error.failure.retry, "same-key"); return true;
@@ -541,15 +547,18 @@ for (const entry of channelFailures) {
       } else {
         let opened = false;
         const host = new EgressHost({
-          open: async () => { if (opened) throw new Error("fixture has one socket"); opened = true; return { socket: client, rest: Buffer.alloc(0) }; },
-          resolve: async () => { throw entry.error; },
-          limits: { timeoutMs: 100, concurrent: 1 }, frameBytes: PLATFORM_FRAME_BYTES, maxPool: 1,
-        });
+    open: async () => { if (opened)
+        throw new Error("fixture has one socket"); opened = true; return { socket: client, rest: Buffer.alloc(0) }; },
+    resolve: async () => { throw entry.error; },
+    concurrent: 1,
+    frameBytes: PLATFORM_FRAME_BYTES, maxPool: 1
+});
         t.after(() => host.stop()); await host.fill();
         socket = remote; id = "placeholder";
         remote.write(encodeFrame({ v: 1, id, method: "egress.placeholder", params: {
-          credentialRef: "engine-managed", provider: "anthropic", model: "test", run: { society: "demo", actor: "alice", incarnation: 1 },
-        } }));
+    credentialRef: "engine-managed", provider: "anthropic", model: "test", run: { society: "demo", actor: "alice", incarnation: 1 },
+    inferenceSeconds: 5
+} }));
       }
       await assert.rejects(observed(readLeadingResponse(socket, id, PLATFORM_FRAME_BYTES, 1000)), error => {
         assert.ok(error instanceof PlatformError);

@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { RunRegistry, type CgroupPin, type Population } from "../src/runtime/run-registry.js";
+import { RunRegistry } from "@oma/broker/run-registry";
+import { type CgroupPin, type Population } from "@oma/native/cgroup";
 
 function observedPin(fd: number) {
   let population: Population = "populated";

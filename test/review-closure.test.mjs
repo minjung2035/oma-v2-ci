@@ -9,16 +9,17 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { execFileSync } from "node:child_process";
 import { GIT_PLUMBING_LIMITS, LEDGER, ORACLE_MAP, approval, oracleFindings, reviewFindings } from "../scripts/review-closure.mjs";
-import { CANONICAL_PROCESS_LIMITS } from "../dist/src/git/canonical-command.js";
+import { CANONICAL_PROCESS_LIMITS } from "@oma/git/canonical-command";
 
 const ledger = () => JSON.parse(readFileSync(LEDGER, "utf8"));
 const problems = value => reviewFindings(".", value).map(finding => finding.problem);
 const recount = value => { const counted = {}; for (const entry of value.files) counted[entry.status] = (counted[entry.status] ?? 0) + 1; value.summary = counted; return value; };
-/** The committed ledger with one reviewed file put back to NOT_REVIEWED: the
- * oracles below hold whether or not the tree still has unreviewed files. */
+/** A local ledger fixture with one current file NOT_REVIEWED. A full move may
+ * invalidate every READ_UNCHANGED claim; that must not disable refusal tests. */
 const withUnreviewed = () => {
   const value = ledger();
-  const index = value.files.findIndex(entry => entry.status === "READ_UNCHANGED");
+  const index = value.files.findIndex(entry => entry.status !== "REMOVED");
+  assert.ok(index >= 0, "the review fixture needs a current production file");
   Object.assign(value.files[index], { status: "NOT_REVIEWED", by: [], oracles: [] });
   delete value.files[index].note;
   return { value: recount(value), index };
@@ -59,9 +60,10 @@ test("V32A: verification git plumbing runs under the canonical process bound", (
 
 test("V32A: a working-tree review is bound to the reviewed file bytes", () => {
   const value = ledger();
-  const entry = value.files.find(entry => entry.sha256 !== undefined);
-  assert.ok(entry, "no byte-bound working-tree review");
-  entry.sha256 = "0".repeat(64);
+  const entry = value.files.find(entry => entry.status !== "REMOVED");
+  assert.ok(entry, "the local review fixture needs a current file");
+  // Only this parsed fixture claims review; the real ledger remains unreviewed.
+  Object.assign(entry, { status: "CHANGED_WITH_ORACLE", by: ["fixture-only"], oracles: ["fixture-only"], sha256: "0".repeat(64) });
   assert.ok(problems(value).includes("reviewed change digest is stale"));
 });
 
@@ -96,7 +98,8 @@ test("V32A: an assignment is not a review, and a claimed review needs real oracl
   assert.ok(problems(edit(value => { Object.assign(value.files[index], { status: "READ_UNCHANGED", by: ["WP32"], oracles: ["V99Z"] }); }))
     .includes("oracle V99Z is not a test in this tree"));
   assert.ok(problems(edit(value => { value.files.splice(index, 1); })).some(problem => /missing from the ledger/.test(problem)));
-  const summary = structuredClone(base); summary.summary.NOT_REVIEWED -= 1; summary.summary.READ_UNCHANGED += 1;
+  const summary = structuredClone(base); summary.summary.NOT_REVIEWED -= 1;
+  summary.summary.READ_UNCHANGED = (summary.summary.READ_UNCHANGED ?? 0) + 1;
   assert.ok(problems(summary).some(problem => /summary says/.test(problem)), "a hand-edited count passed");
 });
 

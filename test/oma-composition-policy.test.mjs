@@ -1,9 +1,13 @@
-import * as settingsPolicy from "../dist/src/domain/settings-policy.js";
+import * as sessionHandoffMeaning from "@oma/protocol/session-handoff";
+import * as hostErrorMeaning from "@oma/protocol/host-errors";
+import * as hostLossMeaning from "@oma/process/host-loss";
+import * as deploymentMeaning from "@oma/domain/deployment";
+import * as settingsPolicy from "@oma/domain/settings-policy";
 /** T119 / TUI-002, PR-001, PR-002, LIFE-006: the product entrypoint's wiring.
  *
  * Every part of the Principal's path had a test and the path was still broken,
  * twice, because nothing ran the file that wires the parts together. This runs
- * the real `src/entry/oma-society.ts` with controlled module boundaries and no host
+ * the real `apps/oma/src/entry/oma-society.ts` with controlled module boundaries and no host
  * I/O, and asserts the order and the values it passes between them.
  */
 import test from "node:test";
@@ -12,11 +16,11 @@ import { readFileSync } from "node:fs";
 import * as path from "node:path";
 import { Script } from "node:vm";
 import ts from "typescript";
-import { codeFor, exitFor } from "../dist/src/application/exit.js";
-import { parseOmaArguments } from "../dist/src/runtime/host-arguments.js";
-import { HOST_LOSS_SIGNALS } from "../dist/src/runtime/broker-lifetime.js";
-import { hostHistoryReference } from "../dist/src/protocol/host-history.js";
-import { encodedPrincipalToolSurface } from "../dist/src/domain/tool-surface.js";
+import { codeFor, exitFor } from "#oma-test/app/application/exit";
+import { parseOmaArguments } from "#oma-test/app/runtime/host-arguments";
+import { HOST_LOSS_SIGNALS } from "@oma/process/host-loss";
+import { hostHistoryReference } from "@oma/protocol/host-history";
+import { encodedPrincipalToolSurface } from "@oma/domain/tool-surface";
 
 /** A production module compiled and run with its own controlled boundary.
  *
@@ -31,6 +35,11 @@ function loadSource(relative, deps) {
   new Script(compiled, { filename: relative }).runInNewContext({
     exports: module_.exports, module: module_, setTimeout, clearTimeout, Promise,
     require(name) {
+if (name === "@oma/protocol/session-handoff" && !Object.hasOwn(deps, name)) return sessionHandoffMeaning;
+if (name === "@oma/protocol/host-errors" && !Object.hasOwn(deps, name)) return hostErrorMeaning;
+if (name === "@oma/process/host-loss" && !Object.hasOwn(deps, name)) return hostLossMeaning;
+if (name === "@oma/domain/deployment" && !Object.hasOwn(deps, name)) return deploymentMeaning;
+
       assert.ok(Object.hasOwn(deps, name), `uncontrolled dependency in ${relative}: ${name}`);
       return deps[name];
     },
@@ -94,14 +103,14 @@ async function run({ brokerState = { kind: "started", pid: 1 }, credentials = ["
   // DR24: a start without a society is a new session of the project; the
   // ownership rules below are asked of the society a start names.
   const expected = argv.includes("--society") ? argv[argv.indexOf("--society") + 1] : "fixture-new";
-  const source = readFileSync(process.env.OMA_SOCIETY_ENTRY_SOURCE ?? new URL("../src/entry/oma-society.ts", import.meta.url), "utf8");
+  const source = readFileSync(process.env.OMA_SOCIETY_ENTRY_SOURCE ?? new URL("../apps/oma/src/entry/oma-society.ts", import.meta.url), "utf8");
   const compiled = ts.transpileModule(source, { compilerOptions: {
     module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022,
   } }).outputText
     // The entry resolves its installation directory from its own module URL,
     // which CommonJS has no equivalent for. Only that one expression is
     // substituted; nothing else about the file is rewritten.
-    .replaceAll("import.meta.url", JSON.stringify("file:///lib/dist/src/entry/oma-society.js"));
+    .replaceAll("import.meta.url", JSON.stringify("file:///lib/apps/oma/dist/entry/oma-society.js"));
   const calls = [];
   const restarts = [];
   const lines = [];
@@ -121,7 +130,7 @@ async function run({ brokerState = { kind: "started", pid: 1 }, credentials = ["
       limits: { frameBytes, mailBodyBytes: 262144, batchMaxMessages: 24, idleStreamSeconds: 30, receiptWaitSeconds: 30 },
       principalProfile: "principal",
       initialResidents: [],
-      agentProfiles: { principal: { modelProfile: "m", resources: { workspaceBytes: 4096 } } },
+      agentProfiles: { principal: { modelProfile: "m" } },
       modelProfiles: { m: { provider: "pi", model: "current" } },
     },
     fields: [],
@@ -138,6 +147,13 @@ async function run({ brokerState = { kind: "started", pid: 1 }, credentials = ["
     return settings;
   };
   const modules = {
+"@oma/protocol/session-handoff": sessionHandoffMeaning,
+"@oma/protocol/host-errors": hostErrorMeaning,
+"@oma/process/host-loss": hostLossMeaning,
+"@oma/domain/deployment": deploymentMeaning,
+
+    "../engine/start-effects.js": {engineLoginDirectory: {}, engineStartEffects: {}},
+    "../engine/principal-profile.js": {principalSessionProfile: () => ({ society: "fixture", provider: "pi", model: "current", extensions: [], inferenceSeconds: 600 })},
     "node:path": path,
     "node:fs": { existsSync: () => true, mkdirSync() {}, realpathSync: path => { calls.push(`realpath:${path}`); return path === "/saved-personal" ? path : "/project"; },
       readdirSync: () => [], statSync: () => ({ mtimeMs: 1, size: 1, isDirectory: () => true }) },
@@ -152,28 +168,28 @@ async function run({ brokerState = { kind: "started", pid: 1 }, credentials = ["
       async sessionBirthForHistory(...args) { calls.push("sessionBirthForHistory"); if (resumeError) throw resumeError; return resumeReply ? await resumeReply(...args) : resumeBirth; },
       sessionHistoryDirectories() { calls.push("sessionHistoryDirectories"); return []; },
     },
-    "../ids.js": { isValidSocietyName: () => true },
+    "@oma/domain/identifiers": { isValidSocietyName: () => true },
     // The path checks are the product's own; what this harness controls is
     // only whether they pass, because what is under test here is when the
     // entry asks -- before it takes the society, and before it writes.
-    "../runtime/assets.js": {
+    "@oma/native/directory-layout": { assertHostDirectoryLayout: (root, allowMissing) => {
+        calls.push(`assertHostDirectoryLayout:${root}`);
+        assert.equal(allowMissing, true, "the run root was required to exist before it had been made");
+        if (untrustedRunRoot) throw new StoreError("INVALID_ARGUMENT", "host directory ancestors must be real directories, not symlinks");
+      } },
+"../runtime/assets.js": {
       // The host decides the location once, from its own environment.
       hostLaunchLocation: (society, env, configPath) => {
         calls.push("hostLaunchLocation");
         return { society, stateRoot: path.join(env.XDG_DATA_HOME, "oma", society), runRoot: path.join(env.XDG_RUNTIME_DIR, "oma", society),
           configPath: configPath ?? path.join(env.XDG_DATA_HOME, "oma", society, "config.json") };
       },
-      assertHostDirectoryLayout: (root, allowMissing) => {
-        calls.push(`assertHostDirectoryLayout:${root}`);
-        assert.equal(allowMissing, true, "the run root was required to exist before it had been made");
-        if (untrustedRunRoot) throw new StoreError("INVALID_ARGUMENT", "host directory ancestors must be real directories, not symlinks");
-      },
     },
-    "../domain/deployment.js": { DEPLOYMENT_LAYOUT: { extension: "dist/src/pi-extension.js", cli: "dist/src/cli.js",
-      entries: { interactive: "dist/src/entry/pi-interactive.js", tui: "dist/src/entry/oma.js" } } },
-    "../domain/mail-values.js": { storedMailBytes: bodyBytes => bodyBytes },
-    "../runtime/pi-runtime.js": { resolvePiRuntime: () => ({ executable: "node", args: [], agentDir: "/state/oma/.engine", source: "bundled" }) },
-    "../storage/directory.js": { ensureDirectory() {},
+    "@oma/domain/deployment": { DEPLOYMENT_LAYOUT: { extension: "packages/extension/dist/index.js", cli: "apps/oma/dist/cli.js",
+      entries: { interactive: "apps/oma/dist/entry/pi-interactive.js", tui: "apps/oma/dist/entry/oma.js" } } },
+    "@oma/domain/mail-values": { storedMailBytes: bodyBytes => bodyBytes },
+    "@oma/engine/pi-runtime": { resolvePiRuntime: () => ({ executable: "node", args: [], agentDir: "/state/oma/.engine", source: "bundled" }) },
+    "@oma/storage/directory": { ensureDirectory() {},
       ensureOwnedDirectory(directory, ownedFrom, mode) {
         // The boundary is oma's data root itself: `ensureOwnedDirectory(store,
         // store)` or a user-rooted boundary would leave the store's own parent
@@ -184,7 +200,7 @@ async function run({ brokerState = { kind: "started", pid: 1 }, credentials = ["
         assert.equal(mode, 0o700);
       },
       removeUnusedTree: path => { calls.push(`removeUnusedTree:${path}`); } },
-    "../tui/app.js": { TuiApp: class {
+    "@oma/tui/app": { TuiApp: class {
       constructor(ports) { calls.push("TuiApp"); capturedPorts = ports; }
       close() { calls.push("app.close"); }
       refresh() { calls.push("app.refresh"); } draw() { calls.push("app.draw"); } line(text) { lines.push(text); } setBusy() {} note() {}
@@ -192,12 +208,12 @@ async function run({ brokerState = { kind: "started", pid: 1 }, credentials = ["
     // The product's own exit reading (DR13); only the exit itself is stood in for.
     "../application/exit.js": { codeFor, exitFor, fail: (reason, code) => { calls.push(`fail:${code}`); calls.push(`holdsAtFail:${lease.holds}`); throw new Error(`fail: ${reason}`); } },
     // One terminal owner: this process's panel, or the engine's screen.
-    "../tui/panel-terminal.js": { PanelTerminal: class {
+    "@oma/tui/panel-terminal": { PanelTerminal: class {
       restore() { calls.push("restore"); } onResize() {} onKeys() {} handoff() {} reclaim() { calls.push("reclaim"); } open() {} size() {} draw() {}
       whenUnclaimed() {}
     } },
-    "../tui/dashboard.js": { dashboardData: () => ({}) },
-    "../runtime/engine/principal-session.js": {
+    "@oma/tui/dashboard": { dashboardData: () => ({}) },
+    "@oma/engine/principal-session": {
       newSessionHandle: () => "h".repeat(32),
       // The entry must take the session directory from its owner and pass it
       // through untouched. A path spelled out here would be a second, silent
@@ -212,9 +228,8 @@ async function run({ brokerState = { kind: "started", pid: 1 }, credentials = ["
         calls.push(`principalEnvironment/${args.length}`);
         return { ...SESSION_ENVIRONMENT };
       },
-      principalSessionProfile: () => ({ society: "fixture", provider: "pi", model: "current", workspaceBytes: 4096, extensions: [] }),
       PrincipalSession: class {
-        static start(paths, profile, limits, environment, sink) {
+        static start(_effects, paths, profile, limits, environment, sink) {
           calls.push("PrincipalSession.start");
           if (startFailures-- > 0) throw new Error("injected engine start failure");
           // The engine the entry is holding, not a snapshot of its arguments:
@@ -311,14 +326,13 @@ async function run({ brokerState = { kind: "started", pid: 1 }, credentials = ["
       pruneLocalStage: () => { throw new Error("a start pruned the local stage"); } },
     "../runtime/personal-settings.js": { reconcilePersonalSettings() { throw new Error("a Society start reconciled Personal choices"); } },
     "../runtime/session-handoff.js": { requestHostNewSession() { calls.push("host-new"); return hostNew; } },
-    "../runtime/host-history-channel.js": { HostHistoryChannel: { open() { return hostHistory; } } },
-    "../protocol/host-history.js": { isHostHistoryReference: value => value.startsWith("oma-host-history:") },
-    "../protocol/guest-history.js": { guestHistoryReference() { throw new Error("Guest reference requires a host history channel"); } },
+    "@oma/engine/host-history-channel": { HostHistoryChannel: { open() { return hostHistory; } } },
+    "@oma/protocol/host-history": { isHostHistoryReference: value => value.startsWith("oma-host-history:") },
+    "@oma/protocol/guest-history": { guestHistoryReference() { throw new Error("Guest reference requires a host history channel"); } },
     "../runtime/session-history.js": { inspectSessionHistory() { throw new Error("Guest inspection requires a host history channel"); } },
-    "../hash.js": { sha256Hex: bytes => { calls.push("sha256Hex"); return "f".repeat(64); } },
-    "../config/defaults.js": { defaultHostConfig: () => ({}), defaultSocietyFor: (path, digest) => { calls.push(`defaultSocietyFor:${path}:${digest.length}`); return "fixture"; },
-      sessionSocietyName: project => `${project}-new`,
-      societyFromDirectory: () => "old-slug" },
+    "@oma/domain/canonical-json": { sha256Hex: bytes => { calls.push("sha256Hex"); return "f".repeat(64); } },
+    "@oma/config/defaults": { defaultHostConfig: () => ({}), defaultSocietyFor: (path, digest) => { calls.push(`defaultSocietyFor:${path}:${digest.length}`); return "fixture"; },
+      sessionSocietyName: project => `${project}-new` },
     "../runtime/provision.js": {
       // D05: the binding scenario is controlled; the decision itself is the
       // product's pure rule, exercised against real files in project-binding.test.
@@ -330,7 +344,7 @@ async function run({ brokerState = { kind: "started", pid: 1 }, credentials = ["
         if (binding === "mismatch") return { kind: "bound", binding: { kind: "oma-project-binding-v1", society: expected, canonicalProjectPath: "/elsewhere" } };
         return { kind: "absent" };
       },
-      stateRootHasSociety: root => root === `/state/oma/${expected}` ? binding === "bound" || binding === "mismatch" : binding === "legacy" && root === "/state/oma/old-slug",
+      stateRootHasSociety: root => root === `/state/oma/${expected}` ? binding === "bound" || binding === "mismatch" : false,
       projectBindingDecision: input => {
         calls.push("projectBindingDecision");
         if (input.observation.kind === "bound")
@@ -349,13 +363,13 @@ async function run({ brokerState = { kind: "started", pid: 1 }, credentials = ["
       },
       residentRootfsPath: () => "/state/rootfs",
     },
-    "../domain/errors.js": { StoreError },
+    "@oma/domain/errors": { StoreError },
     // The real tenure over a controlled lease: what the entry may do, and when,
     // is the thing under test here.
     // `/resume` asks whether the chosen session is free; a start never does.
     "../runtime/society-lease.js": { tryHoldSociety: () => { throw new Error("a start probed another session"); } },
-    "../runtime/host-tenure.js": loadSource("src/runtime/host-tenure.ts", {
-      "../domain/errors.js": { StoreError },
+    "../runtime/host-tenure.js": loadSource("apps/oma/src/runtime/host-tenure.ts", {
+      "@oma/domain/errors": { StoreError },
       "./society-lease.js": {
         tryHoldSociety: stateRoot => {
           calls.push("tryHoldSociety");
@@ -391,39 +405,39 @@ async function run({ brokerState = { kind: "started", pid: 1 }, credentials = ["
     "../runtime/deployment-manifest.js": { deploymentDigest: () => "a".repeat(64) },
     // D23/TSP-005: the Principal's declared surface plan, produced by the
     // deployment -- the real encoder, not a stand-in.
-    "../domain/tool-surface.js": { encodedPrincipalToolSurface },
+    "@oma/domain/tool-surface": { encodedPrincipalToolSurface },
     // The one list of the signals that end a process with a drain (AV31).
-    "../runtime/broker-lifetime.js": { HOST_LOSS_SIGNALS },
+    "@oma/broker/lifetime": { HOST_LOSS_SIGNALS },
     // `oma login` (DR18, D-9); a start never reaches it.
-    "../runtime/engine/login.js": { runEngineLogin: () => { throw new Error("a start ran the engine's login"); } },
+    "@oma/engine/login": { runEngineLogin: () => { throw new Error("a start ran the engine's login"); } },
     // DR18 (D-10): the environment names no egress socket here, as on Linux.
     "../runtime/egress-forwarder.js": { adoptPrincipalEgress: async () => { onEgress?.(handlers); return null; } },
     // DR18 (D-1): an error's words as Linux shows them.
-    "../tui/words.js": { errorWords: error => (error instanceof Error ? error.message : String(error)), surfaceWords: text => text,
+    "@oma/tui/words": { errorWords: error => (error instanceof Error ? error.message : String(error)), surfaceWords: text => text,
       humanStream: () => process.stderr },
-    "../config/generations.js": { collectManagedGenerations: () => { calls.push("collectManagedGenerations"); return []; } },
+    "@oma/config/generations": { collectManagedGenerations: () => { calls.push("collectManagedGenerations"); return []; } },
   };
   // Exercise the actual extracted settings owner with the same effect
   // boundaries as the entry, so write ownership and read-back still run.
-  modules["../application/project-session-settings.js"] = loadSource("src/application/project-session-settings.ts", {
+  modules["../application/project-session-settings.js"] = loadSource("apps/oma/src/application/project-session-settings.ts", {
     "../runtime/user-files.js": { readUserFile: projectPointerRead },
-    "../config/operations.js": { CONFIGURATION_DOCUMENT_BYTES: 16777216 },
+    "@oma/config/operations": { CONFIGURATION_DOCUMENT_BYTES: 16777216 },
     "../runtime/deployment-manifest.js": modules["../runtime/deployment-manifest.js"],
     "../runtime/packages/index.js": modules["../runtime/packages/index.js"],
-    "../tui/words.js": modules["../tui/words.js"],
+    "@oma/tui/words": modules["@oma/tui/words"],
     "./extensions.js": modules["../application/extensions.js"],
     "./settings.js": modules["../application/settings.js"],
     "./project-settings.js": modules["../application/project-settings.js"],
   });
-  modules["../tui/society-panel.js"] = loadSource("src/tui/society-panel.ts", {
-    "./dashboard.js": modules["../tui/dashboard.js"],
-    "../domain/settings-policy.js": { ...settingsPolicy, ...modules["../application/settings.js"] },
+  modules["@oma/tui/society-panel"] = loadSource("packages/tui/src/society-panel.ts", {
+    "./dashboard.js": modules["@oma/tui/dashboard"],
+    "@oma/domain/settings-policy": { ...settingsPolicy, ...modules["../application/settings.js"] },
     "./settings.js": modules["../application/settings.js"],
-    "../domain/mail-values.js": modules["../domain/mail-values.js"],
+    "@oma/domain/mail-values": modules["@oma/domain/mail-values"],
   });
-  modules["../application/society-panel.js"] = loadSource("src/application/society-panel.ts", {
-    "../tui/society-panel.js": modules["../tui/society-panel.js"],
-    "../domain/mail-values.js": modules["../domain/mail-values.js"],
+  modules["../application/society-panel.js"] = loadSource("apps/oma/src/application/society-panel.ts", {
+    "@oma/tui/society-panel": modules["@oma/tui/society-panel"],
+    "@oma/domain/mail-values": modules["@oma/domain/mail-values"],
     "./mail.js": modules["../application/mail.js"],
   });
   modules["../platform/package-files.js"] = { packageDirectories: {} };
@@ -447,9 +461,9 @@ async function run({ brokerState = { kind: "started", pid: 1 }, credentials = ["
   };
   // Run the real Application owners, retaining all prior controlled effect boundaries.
   const byFile = new Map(Object.entries(modules).map(([name, value]) =>
-    [name.startsWith(".") ? path.posix.normalize(path.posix.join("src/entry", name)) : name, value]));
+    [name.startsWith(".") ? path.posix.normalize(path.posix.join("apps/oma/src/entry", name)) : name, value]));
   const owners = new Set(["society-bootstrap", "society-runtime", "society-interaction", "society-transition"]
-    .map(name => `src/application/${name}.js`));
+    .map(name => `apps/oma/src/application/${name}.js`));
   function dependency(from, name) {
     const file = name.startsWith(".") ? path.posix.normalize(path.posix.join(path.posix.dirname(from), name)) : name;
     if (byFile.has(file)) return byFile.get(file);
@@ -463,7 +477,7 @@ async function run({ brokerState = { kind: "started", pid: 1 }, credentials = ["
     byFile.set(file, module_.exports); return module_.exports;
   }
   const completion = new Script(compiled, { filename: "oma-composition.cjs" }).runInNewContext({
-    ...context, require: name => dependency("src/entry/oma-society.js", name),
+    ...context, require: name => dependency("apps/oma/src/entry/oma-society.js", name),
   });
   await completion;
   // Two turns, because a teardown now waits for the engine's exit before it
@@ -985,15 +999,6 @@ test("D05/WP16: a society bound to another project is refused before any write, 
   assert.equal(calls.some(call => call.startsWith("publishProjectBinding")), false);
 });
 
-test("D05/WP16: an earlier default-name society of this project is pointed out, not silently replaced by a new one", async () => {
-  const society = await run({ binding: "legacy", argv: ["node", "oma"] }).catch(error => ({ error }));
-  const calls = society.calls ?? [];
-  assert.ok(society.error ? /old-slug/.test(String(society.error)) : calls.some(call => /^exit:/.test(call)), calls.join(" "));
-  for (const effect of ["readSettings", "writeSettings", "provisionSociety", "superviseBroker"])
-    assert.equal(calls.includes(effect), false, `${effect} ran instead of pointing at the earlier society`);
-  assert.equal(calls.some(call => call.startsWith("publishProjectBinding")), false);
-});
-
 test("WP15.03: a save whose configuration cannot be read back is reported as saved-unread, and no stale value is shown as current", async () => {
   const society = await run({ rereadFails: true });
   const ports = society.ports;
@@ -1209,7 +1214,7 @@ test("Session mode: Society switches to a fresh Personal session only after actu
   assert.equal(society.restarts.length, 0);
   live.confirmDeath(); await society.until(() => society.restarts.length === 1);
   const [, argv, env] = society.restarts[0];
-  assert.deepEqual(Array.from(argv), ["node", "/lib/dist/src/entry/oma.js", "--mode", "personal"]);
+  assert.deepEqual(Array.from(argv), ["node", "/lib/apps/oma/dist/entry/oma.js", "--mode", "personal"]);
   assert.equal(env.OMA_RESUME_SESSION, undefined);
 });
 test("Session mode: guest Society carries the Personal choice to the host after actual engine exit", async () => {
@@ -1263,7 +1268,7 @@ test("MODE-005: Society resumes Personal in its saved cwd only after the outgoin
   assert.equal(live.closes, 1); assert.equal(society.restarts.length, 0); assert.equal(society.broker.stops, 0);
   live.confirmDeath(); await society.until(() => society.restarts.length === 1);
   const [node, argv, env] = society.restarts[0];
-  assert.equal(node, "node"); assert.deepEqual(Array.from(argv), ["node", "/lib/dist/src/entry/oma.js"]);
+  assert.equal(node, "node"); assert.deepEqual(Array.from(argv), ["node", "/lib/apps/oma/dist/entry/oma.js"]);
   assert.equal(env.OMA_RESUME_SESSION, PERSONAL_HISTORY);
   assert.ok(society.calls.indexOf("chdir:/saved-personal") < society.calls.indexOf("execve"));
   assert.equal(society.broker.stops, 1); assert.equal(society.lease.releases, 1);
@@ -1276,7 +1281,7 @@ test("MODE-005: /new removes stale resume and binding intent instead of changing
   society.started.sink.onUi({ type: "switch" }); await society.until(() => society.restarts.length === 1);
   const [, argv, env] = society.restarts[0];
   assert.equal(Object.hasOwn(env, "OMA_RESUME_SESSION"), false);
-  assert.deepEqual(Array.from(argv), ["node", "/lib/dist/src/entry/oma.js"]);
+  assert.deepEqual(Array.from(argv), ["node", "/lib/apps/oma/dist/entry/oma.js"]);
   assert.equal(society.calls.filter(call => call.startsWith("publishSessionBirth:")).length, 1);
 });
 

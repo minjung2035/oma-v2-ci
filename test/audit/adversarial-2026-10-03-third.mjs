@@ -11,12 +11,12 @@ import { syncBuiltinESMExports } from "node:module";
 import { connect, createServer } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { InferenceRelay } from "../../dist/src/runtime/inference-relay.js";
-import { EgressForwarder, requestEgressPlaceholder } from "../../dist/src/runtime/egress-forwarder.js";
-import { EgressHost } from "../../dist/src/platform/host/egress.js";
-import { EgressPool, startEgressService } from "../../dist/src/platform/guest/egress.js";
+import { InferenceRelay } from "#oma-test/app/runtime/inference-relay";
+import { EgressForwarder, requestEgressPlaceholder } from "#oma-test/app/runtime/egress-forwarder";
+import { EgressHost } from "#oma-test/app/platform/host/egress";
+import { EgressPool, startEgressService } from "#oma-test/app/platform/guest/egress";
 import { encodeFrame } from "../../dist/src/frame.js";
-import { RequestLedger } from "../../dist/src/platform/guest/requests.js";
+import { RequestLedger } from "#oma-test/app/platform/guest/requests";
 import { StoreError } from "../../dist/src/domain/errors.js";
 
 const RUN = { society: "demo", actor: "alice", incarnation: 3 };

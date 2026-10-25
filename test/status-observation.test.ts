@@ -1,3 +1,4 @@
+import { createMailModule } from "#oma-test/app/broker/mail-composition";
 /** WP23 (D04): the pieces status display is built from. The shared refresh is
  * single-flight and bounded; batched unit observation binds every answer to its
  * unit; the whole-society pending projection counts exactly what the per-agent
@@ -8,15 +9,15 @@ import assert from "node:assert/strict";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type { AuthContext, UnitObservation } from "../implementation/contracts.js";
-import { Store } from "../src/store.js";
-import { MailModule } from "../src/mail.js";
-import { UnitsModule, STATUS_CHUNK, unitCommandError, type UnitCommandOutcome } from "../src/units.js";
-import { StatusRefresh } from "../src/views/status-refresh.js";
-import { ViewsModule } from "../src/views.js";
-import { pendingWork, pendingWorkByAgent } from "../src/views/pending-work.js";
-import { generateBatchId } from "../src/ids.js";
-import { ALL_CAPS, TEST_RESOURCES, makeValidAgent } from "./fixtures/spec.js";
+import type { AuthContext, UnitObservation } from "@oma/contracts";
+import { Store } from "@oma/storage";
+import { MailModule } from "@oma/mail";
+import { UnitsModule, STATUS_CHUNK, unitCommandError, type UnitCommandOutcome } from "@oma/platform-linux/units";
+import { StatusRefresh } from "@oma/broker/status-refresh";
+import { ViewsModule } from "#oma-test/app/views";
+import { pendingWork, pendingWorkByAgent } from "#oma-test/app/views/pending-work";
+import { generateBatchId } from "@oma/native/identity";
+import { ALL_CAPS, makeValidAgent } from "./fixtures/spec.js";
 import { mutateRawRowAfterClose } from "./fixtures/corruption.js";
 
 const idle: UnitObservation = { activeState: "inactive", subState: "dead", result: "success", execMainStatus: 0, cgroup: "", invocationId: "" };
@@ -69,7 +70,7 @@ test("WP23.02: a hung observation costs each caller the budget and an unknown, a
 });
 
 function scriptedShow(root: string, answer: (units: string[]) => UnitCommandOutcome): { units: UnitsModule; calls: string[][] } {
-  const units = new UnitsModule("demo", { node: process.execPath, libdir: root, state: root, society: "demo", agent: "" }, join(root, "u"), { p: TEST_RESOURCES });
+  const units = new UnitsModule("demo", { node: process.execPath, libdir: root, state: root, society: "demo", agent: "" }, join(root, "u"));
   const calls: string[][] = [];
   Reflect.set(units, "commandAsync", async (argv: readonly string[]) => {
     const names = argv.filter(word => word.endsWith(".service"));
@@ -138,7 +139,7 @@ const auth: AuthContext = { actor: "alice", incarnation: 1, role: "resident", ch
 async function ledger(t: TestContext) {
   const root = mkdtempSync(join(tmpdir(), "oma-wp23-pending-"));
   const store = new Store(join(root, "runtime.sqlite"), 5, { society: "demo" });
-  const f = { root, store, mail: new MailModule({ stateRoot: root, society: "demo" }, store, 64) };
+  const f = { root, store, mail: createMailModule({ stateRoot: root, society: "demo" }, store, 64) };
   t.after(() => { try { f.store.close(); } catch { /* reopened stores are closed by their case */ } finally { rmSync(root, { recursive: true, force: true }); } });
   f.store.transaction(tx => {
     tx.insertAgent(makeValidAgent("principal"));
@@ -226,7 +227,7 @@ test("AV12 / INV02, T36: an explicit start resets only a failed unit; an unloade
   try {
     const script = (state: string) => {
       const calls: string[][] = [];
-      const units = new UnitsModule("demo", { node: process.execPath, libdir: root, state: root, society: "demo", agent: "" }, join(root, "u"), { p: TEST_RESOURCES });
+      const units = new UnitsModule("demo", { node: process.execPath, libdir: root, state: root, society: "demo", agent: "" }, join(root, "u"));
       let started = false;
       Reflect.set(units, "command", (argv: readonly string[]): UnitCommandOutcome => {
         calls.push([...argv]);

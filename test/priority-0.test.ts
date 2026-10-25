@@ -1,3 +1,6 @@
+import { testBroker } from "./helpers/broker-fixture.js";
+import { createReconcileModule } from "#oma-test/app/broker/reconcile-composition";
+import { createLifecycleModule } from "#oma-test/app/broker/lifecycle-composition";
 /** Priority 0 (docs/PRIORITY-0.md): the fixes the file-by-file audit
  * (docs/priority-0-audit.md) derived from it, each tested where its
  * decision takes effect. DR9 and DR11 are also tested beside their owners
@@ -9,41 +12,41 @@ import fs from "node:fs";
 import { syncBuiltinESMExports } from "node:module";
 import { existsSync, mkdirSync, readdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { generateOperationId } from "../src/ids.js";
-import { messageIdForOperation } from "../src/domain/derived.js";
-import { collectUnacceptedArtifacts } from "../src/reconcile/preaccept.js";
-import { ReconcileModule } from "../src/reconcile.js";
-import { UnitsModule as Units, assertUserManagerReachable, unitCommandError, type UnitsModule } from "../src/units.js";
-import type { LifecycleModule } from "../src/lifecycle.js";
+import { generateOperationId } from "@oma/native/identity";
+import { messageIdForOperation } from "@oma/domain/derived";
+import { collectUnacceptedArtifacts } from "@oma/storage/preaccept-collection";
+import { ReconcileModule } from "@oma/reconcile";
+import { UnitsModule as Units, assertUserManagerReachable, unitCommandError, type UnitsModule } from "@oma/platform-linux/units";
+import type { LifecycleModule } from "@oma/lifecycle";
 import { preparedFixture } from "./fixtures/delivery-receipt.js";
-import { readCurrentHostPolicy } from "../src/config.js";
-import { defaultHostConfig } from "../src/config/defaults.js";
-import { loadConfiguration, validateConfig } from "../src/config.js";
-import { collectManagedGenerations, commitInlineConfiguration, createInlineConfiguration } from "../src/config/generations.js";
-import { applyField, commitField, readSettings, INITIAL_WORKERS } from "../src/application/settings.js";
-import { DurabilityFaultError, type DurabilityObserver } from "../src/storage/durable-fs.js";
+import { readCurrentHostPolicy } from "@oma/config";
+import { defaultHostConfig } from "@oma/config/defaults";
+import { loadConfiguration, validateConfig } from "@oma/config";
+import { collectManagedGenerations, commitInlineConfiguration, createInlineConfiguration } from "@oma/config/generations";
+import { applyField, commitField, readSettings, INITIAL_WORKERS } from "#oma-test/app/application/settings";
+import { DurabilityFaultError, type DurabilityObserver } from "@oma/storage/durable-fs";
 import { createCompleteConfigurationFixture } from "./fixtures/configuration.js";
-import { Client, ClientError } from "../src/client/index.js";
-import { installRuntime } from "../src/client/runtime.js";
-import { CLIENT_RUNTIME, installClientRuntime } from "../src/runtime/client-runtime.js";
-import { containWorkspaceTools } from "../src/extension/contained-tools.js";
-import { collectBindingTemporaries, observeProjectBinding, projectBindingDecision, publishProjectBinding, stateRootHasSociety } from "../src/runtime/provision.js";
-import { ERROR_METADATA, errorExit, StoreError, unobserved } from "../src/domain/errors.js";
-import { loadConfig } from "../src/config.js";
-import { assertExtensionIntegrity } from "../src/runtime/extension-integrity.js";
-import { assertHostDirectoryLayout } from "../src/runtime/assets.js";
-import { assertDirectory } from "../src/storage/directory.js";
-import { codeFor } from "../src/application/exit.js";
-import type { ErrorCode } from "../implementation/contracts/errors.js";
-import { Broker } from "../src/broker.js";
-import { ViewsModule } from "../src/views.js";
-import { statusViewPath } from "../src/protocol/status-view.js";
-import type { ResolvedAgentSpec } from "../implementation/contracts.js";
+import { Client, ClientError } from "@oma/client";
+import { installRuntime } from "@oma/client/runtime";
+import { CLIENT_RUNTIME, installClientRuntime } from "#oma-test/app/runtime/client-runtime";
+import { containWorkspaceTools } from "@oma/tool-runtime/contained-tools";
+import { collectBindingTemporaries, observeProjectBinding, projectBindingDecision, publishProjectBinding, stateRootHasSociety } from "#oma-test/app/runtime/provision";
+import { ERROR_METADATA, errorExit, StoreError, unobserved } from "@oma/domain/errors";
+import { loadConfig } from "@oma/config";
+import { assertExtensionIntegrity } from "#oma-test/app/runtime/extension-integrity";
+import { assertHostDirectoryLayout } from "@oma/native/directory-layout";
+import { assertDirectory } from "@oma/storage/directory";
+import { codeFor } from "#oma-test/app/application/exit";
+import type { ErrorCode } from "@oma/contracts/errors";
+import { Broker } from "@oma/broker";
+import { ViewsModule } from "#oma-test/app/views";
+import { statusViewPath } from "@oma/protocol/status-view";
+import type { ResolvedAgentSpec } from "@oma/contracts";
 import { TEST_VIEW_LIMITS } from "./fixtures/limits.js";
 import { chmodSync, mkdtempSync, readFileSync, rmSync, statSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { Store } from "../src/store.js";
-import { LifecycleModule as Lifecycle } from "../src/lifecycle.js";
+import { Store } from "@oma/storage";
+import { LifecycleModule as Lifecycle } from "@oma/lifecycle";
 import { gitFixture, gitAuth, seedGit } from "./fixtures/git-crash.js";
 import { ALL_CAPS, makeValidAgent, makeValidResolvedSpec } from "./fixtures/spec.js";
 
@@ -94,7 +97,7 @@ test("DR10: startup recovery collects before anything is admitted or bootstrappe
     const left = strandedArtifacts(f.root, f.mail);
     const units = { confirmDead: () => true, stop: () => undefined, observeAsync: async () => ({ activeState: "inactive" }),
       bindIncarnationReader: () => undefined } as unknown as UnitsModule;
-    const reconcile = new ReconcileModule(f.store, f.mail, null, units, {} as LifecycleModule,
+    const reconcile = createReconcileModule(f.store, f.mail, null, null, units, {} as LifecycleModule,
       { projectGit: join(f.root, "repos", "project.git"), hasGoal: () => true, activationAllowed: () => false });
     let seenByBootstrap: boolean | null = null;
     await reconcile.startup(false, async () => { seenByBootstrap = existsSync(left.object); });
@@ -130,7 +133,7 @@ test("AV-19: a stranded context .prepare-* tree is collected; an accepted or unp
 async function preacceptEvents(t: import("node:test").TestContext, f: Awaited<ReturnType<typeof preparedFixture>>) {
   const units = { confirmDead: () => true, stop: () => undefined, observeAsync: async () => ({ activeState: "inactive" }),
     bindIncarnationReader: () => undefined } as unknown as UnitsModule;
-  const reconcile = new ReconcileModule(f.store, f.mail, null, units, {} as LifecycleModule,
+  const reconcile = createReconcileModule(f.store, f.mail, null, null, units, {} as LifecycleModule,
     { projectGit: join(f.root, "repos", "project.git"), hasGoal: () => true, activationAllowed: () => false });
   const printed: string[] = [];
   const error = t.mock.method(console, "error", (...args: unknown[]) => { printed.push(args.map(String).join(" ")); });
@@ -248,7 +251,7 @@ test("P0V-10 / CREATE-003, P0-1: a host policy edited after a create was accepte
     // transaction); an edit lands right after acceptance and would resolve a
     // child with fewer capabilities from then on.
     let resolutions = 0;
-    const lifecycle = new Lifecycle(store, units,
+    const lifecycle = createLifecycleModule(store, units,
       { stateRoot: root, projectGit: paths.projectGit, society: paths.society, hasGoal: () => false, activationAllowed: () => true },
       (_parent, input) => makeValidResolvedSpec(input.name, "p", ++resolutions <= 2 ? ALL_CAPS : ["mail.send"], input.from, input.brief), mail);
     const receipt = await lifecycle.create({ ...gitAuth, capabilities: new Set(ALL_CAPS) }, { name: "child", from: info.base, brief: "brief" }, "p0v10");
@@ -281,7 +284,7 @@ test("DR12 / P0-3, CONFIG-CONTRACT: an inline edit from a snapshot that is no lo
     const settings = readSettings(f.input);
     assert.equal(settings.layout.kind, "inline");
     // The Human edits the file by hand after the screen read it.
-    const manual = { ...f.config, quota: { ...f.config.quota, societyAgents: f.config.initialResidents.length + 5 } };
+    const manual = { ...f.config, limits: { ...f.config.limits, logBytes: f.config.initialResidents.length + 5 } };
     writeFileSync(f.input, JSON.stringify(manual));
     assert.throws(() => commitField(settings, INITIAL_WORKERS, f.config.initialResidents.length + 1), { code: "POLICY_CHANGED" });
     assert.equal(JSON.parse(readFileSync(f.input, "utf8")).initialResidents.length, manual.initialResidents.length, "the newer edit is not lost");
@@ -328,7 +331,7 @@ test("DR12: a first-run configuration is created where none exists and never ove
     const first = validateConfig(f.config);
     assert.equal(createInlineConfiguration(path, first), "created");
     const bytes = readFileSync(path); const inode = statSync(path).ino;
-    const other = validateConfig({ ...f.config, quota: { ...f.config.quota, societyAgents: f.config.initialResidents.length + 1 } });
+    const other = validateConfig({ ...f.config, limits: { ...f.config.limits, logBytes: f.config.initialResidents.length + 1 } });
     assert.equal(createInlineConfiguration(path, other), "existing");
     assert.deepEqual(readFileSync(path), bytes); assert.equal(statSync(path).ino, inode);
     assert.deepEqual(readdirSync(f.root).filter(name => name.endsWith(".tmp")), [], "no temporary is left behind");
@@ -359,7 +362,7 @@ test("P0V-15 / P0-5: a workspace entry that cannot be observed is not zero bytes
     mkdirSync(locked); writeFileSync(join(locked, "big.bin"), "x".repeat(64));
     // P0V-122: the quota's one owner is the contained write.
     const tools: Record<string, { execute(id: string, params: Record<string, unknown>, signal: undefined, update: undefined, ctx: unknown): Promise<unknown> }> = {};
-    containWorkspaceTools({ registerTool: (tool: { name: string }) => { tools[tool.name] = tool as never; } } as never, workspace, 1024, true);
+    containWorkspaceTools({ registerTool: (tool: { name: string }) => { tools[tool.name] = tool as never; } } as never, workspace, true);
     const write = (path: string): Promise<unknown> => tools.write!.execute("call", { path, content: "hello" }, undefined, undefined, { cwd: workspace });
     await write("note.txt");
     chmodSync(locked, 0o600); // listable, but its entries cannot be looked at
@@ -375,11 +378,10 @@ test("P0-7: a draining broker removes its status view, so a view that is there i
   const units = { onRevokeRun: undefined, bindIncarnationReader: () => undefined, unitCgroup: () => "",
     observe: () => ({ activeState: "active", subState: "running", result: "success", execMainStatus: 0, cgroup, invocationId: "a".repeat(32) }),
     observeStatus: async () => new Map() } as unknown as UnitsModule;
-  const lifecycle = new Lifecycle(f.store, units, { stateRoot: f.root, projectGit: join(f.root, "repos", "project.git"),
+  const lifecycle = createLifecycleModule(f.store, units, { stateRoot: f.root, projectGit: join(f.root, "repos", "project.git"),
     society: "demo", hasGoal: () => true, activationAllowed: () => true },
     (_parent: unknown, input: { name: string; from: string; brief: string }) => ({ ...input }) as unknown as ResolvedAgentSpec, f.mail);
-  const broker = new Broker(f.store, f.mail, units, new ViewsModule(f.store, f.root, "demo", "p", TEST_VIEW_LIMITS), lifecycle, null, null,
-    { stateRoot: f.root, runRoot: join(f.root, "run"), society: "demo", hasGoal: () => true });
+  const broker = testBroker({ store: f.store, mail: f.mail, units: units, views: new ViewsModule(f.store, f.root, "demo", "p", TEST_VIEW_LIMITS), lifecycle: lifecycle, git: null, reviews: null, reconcile: null, paths: { stateRoot: f.root, runRoot: join(f.root, "run"), society: "demo", hasGoal: () => true } });
   try {
     await broker.start();
     for (let wait = 0; wait < 200 && !existsSync(statusViewPath(f.root)); wait++) await new Promise(resolve => setTimeout(resolve, 10));

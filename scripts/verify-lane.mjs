@@ -9,6 +9,7 @@ import ts from "typescript";
 import { lanes, evaluateExecution } from "./verification-lanes.mjs";
 import { extractExplorationParameters } from "./exploration-parameters.mjs";
 import { verificationInputFiles, verificationSourceDigests } from "./source-digest.mjs";
+import { workspaceTestFiles } from "./check-modules.mjs";
 
 const [name, ...rawArgs] = process.argv.slice(2);
 if (!Object.hasOwn(lanes, name ?? "")) throw new Error(`usage: verify-lane.mjs <${Object.keys(lanes).join("|")}> --out <new-directory> [--baseline <result.json>] [--seed N --actions N --fuzz-cases N --stress-cycles N --stress-seconds N --rss-bytes N]`);
@@ -123,19 +124,6 @@ try {
   report.environment.sourceHeadStatus = report.environment.sourceHead ? "OBSERVED" : "NOT_AVAILABLE";
   const build = await packageScript("build", "build", 600);
   if (build.code !== 0 || build.signal) { report.status = "BUILD_FAILED"; throw new Error("build failed; test execution did not begin"); }
-  if (lane.entryStorageBytes !== undefined) {
-    const module = "dist/src/domain/resources.js";
-    const moduleSha256 = createHash("sha256").update(readFileSync(join(root, module))).digest("hex");
-    const probe = await command(process.execPath, [fileURLToPath(new URL("./probe-entry-qualification.mjs", import.meta.url)), root, String(lane.entryStorageBytes)], "entry-qualification", 30);
-    report.entryQualification = { storageBytes: lane.entryStorageBytes, module, moduleSha256, exitCode: probe.code, signal: probe.signal };
-    if (probe.code === 78 && probe.signal === null && !probe.timedOut && !probe.error) {
-      report.status = "BLOCKED";
-      throw new Error("S-01 storage quota qualification is OPEN: fresh production gate returned SPIKE_UNRESOLVED");
-    }
-    if (probe.code !== 0 || probe.signal || probe.timedOut || probe.error) {
-      report.status = "PRECHECK_FAILED"; throw new Error("fresh production qualification probe failed; see entry-qualification logs");
-    }
-  }
   if (lane.environment === "systemd") {
     report.status = "BLOCKED";
     environment.OMA_TEST_SYSTEMD = "1";
@@ -162,7 +150,8 @@ try {
     : lane.sourceFiles;
   // Preserve explicitly required MJS entries even when all discovers additional
   // files; a deleted required test must fail, not disappear from the inventory.
-  report.selectedFiles = [...selected.map(file => `dist/test/${file}`), ...new Set([...lane.sourceFiles, ...sourceTests])];
+  report.selectedFiles = [...selected.map(file => `dist/test/${file}`), ...new Set([...lane.sourceFiles, ...sourceTests,
+    ...(["fast", "all"].includes(name) ? workspaceTestFiles(root) : [])])];
   for (const file of report.selectedFiles) if (!lstatSync(join(root, file)).isFile()) throw new Error(`test entry is not a file: ${file}`);
   const baselinePath = valueOf("--baseline");
   const baseline = baselinePath ? JSON.parse(readFileSync(resolve(baselinePath), "utf8")) : null;

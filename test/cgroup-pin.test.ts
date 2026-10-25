@@ -6,8 +6,8 @@ import { spawnSync } from "node:child_process";
 import { mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { pinCgroup } from "../src/runtime/run-registry.js";
-import { parseCgroupPopulation } from "../src/units/observe.js";
+import { pinCgroup } from "@oma/native/cgroup";
+import { parseCgroupPopulation } from "@oma/domain/cgroup-population";
 import { cleanupOwnedSystemdUnits, requireSystemdTestManager } from "./fixtures/systemd.js";
 
 requireSystemdTestManager();

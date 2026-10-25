@@ -1,9 +1,10 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, rmSync, symlinkSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join, resolve } from "node:path";
+import { dirname, join, resolve } from "node:path";
+import { createRequire } from "node:module";
 import { pathToFileURL } from "node:url";
 import { TUI_PUBLIC_SUBPATHS } from "../scripts/architecture/rules/surface-rules.mjs";
 
@@ -25,15 +26,22 @@ for (const name of ["tui", "extension"]) test(`DR41: independent ${name} artifac
       await import(pathToFileURL(join(output, entry.default)).href);
     }
   } else {
-    assert.deepEqual(manifest.pi.extensions, ["./src/pi-extension.js"]);
-    assert.equal(typeof (await import(pathToFileURL(join(output, manifest.exports["."])).href)).default, "function");
-    const { verifyVendorBundle } = await import(pathToFileURL(join(output, "src/extension/vendor-bundle.js")).href);
-    const vendorRoot = join(output, "src/extension/vendor"), bundles = readdirSync(vendorRoot);
-    assert.ok(bundles.length > 0);
-    for (const bundle of bundles) assert.ok(verifyVendorBundle(join(vendorRoot, bundle)).files > 0);
-    const first = join(vendorRoot, bundles[0]);
-    writeFileSync(join(first, "unlisted.js"), "throw new Error('must never load');\n");
-    assert.throws(() => verifyVendorBundle(first), /unlisted/);
+    assert.deepEqual(manifest.pi.extensions, ["./dist/index.js"]);
+    assert.equal(typeof (await import(pathToFileURL(join(output, manifest.exports["."].default)).href)).default, "function");
+    const { verifyVendorBundle } = await import(import.meta.resolve("@oma/tool-runtime/vendor-bundle"));
+    // Each actual tool dependency owns its payload. The extension artifact
+    // composes them without shipping a parallel vendor tree.
+    assert.equal(existsSync(join(output, "dist/vendor")), false);
+    const require = createRequire(join(output, "package.json"));
+    for (const [tool, bundle] of [["lsp", "pi-lsp"], ["hashline", "pi-hashline-edit-pro"],
+      ["web", "pi-web-access"], ["mcp", "pi-mcp-adapter"]]) {
+      const name = `@oma/tool-${tool}`;
+      assert.equal(manifest.dependencies[name], "0.1.0");
+      const owned = join(dirname(require.resolve(name)), "vendor", bundle);
+      assert.ok(verifyVendorBundle(owned).files > 0);
+    }
+    // Corruption of an actual owned payload is checked by vendor-owner-binding.
+
   }
   assert.throws(() => execFileSync(process.execPath, ["scripts/build-module.mjs", name, "--out", output], { stdio: "pipe" }),
     error => /output already exists/.test(error.stderr.toString()));

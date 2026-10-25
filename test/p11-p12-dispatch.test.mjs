@@ -6,7 +6,7 @@ import { join } from "node:path";
 import ts from "typescript";
 import { createArchitectureProgram } from "../scripts/dependency-graph.mjs";
 // The envelope rule is the protocol's own (P0V-32), not a copy in this fixture.
-import { internalEnvelopeProblem } from "../dist/src/protocol/methods.js";
+import { internalEnvelopeProblem } from "@oma/protocol/methods";
 
 const options = {
   strict: true,
@@ -81,7 +81,7 @@ function internalFixture() {
     }
   };
   const source = readFileSync(
-    new URL("../src/broker/internal-dispatcher.ts", import.meta.url),
+    new URL("../packages/broker/src/internal-dispatcher.ts", import.meta.url),
     "utf8",
   );
   const compiled = ts.transpileModule(source, {
@@ -104,15 +104,15 @@ function internalFixture() {
           },
         };
       if (name === "node:path") return { join: (...parts) => parts.join("/") };
-      if (name === "../domain/errors.js") return { StoreError };
-      if (name === "../domain/admission.js") return { NO_HOLD: () => undefined };
-      if (name === "../domain/exhaustive.js")
+      if (name === "@oma/domain/errors") return { StoreError };
+      if (name === "@oma/domain/admission") return { NO_HOLD: () => undefined };
+      if (name === "@oma/domain/exhaustive")
         return {
           assertNever(value) {
             throw new TypeError(String(value));
           },
         };
-      if (name === "../protocol/methods.js") {
+      if (name === "@oma/protocol/methods") {
         const descriptor = { channel: "host", paramsCheck: () => null };
         return {
           INTERNAL_METHODS: { "host.principalRelay": descriptor },
@@ -157,7 +157,7 @@ function internalFixture() {
     },
     isDraining: () => false,
     assertAdmission() {},
-    admitResource: () => () => undefined,
+
     failureAnswer: (id, error) => ({ v: 1, id, ok: false, error }),
     refreshViews() {},
     openRun() {
@@ -170,7 +170,7 @@ function internalFixture() {
 test("P11 handler closure: removing a real production case fails the pinned TypeScript exhaustiveness oracle", () => {
   assert.equal(ts.version, "5.9.3");
   const result = mutatedProductionDiagnostics(
-    "/src/broker/public-dispatcher.ts",
+    "/packages/broker/src/public-dispatcher.ts",
     (source) => {
       const mutated = source.replace(
         'case "status.get": {',
@@ -185,7 +185,7 @@ test("P11 handler closure: removing a real production case fails the pinned Type
     },
   );
   const internalResult = mutatedProductionDiagnostics(
-    "/src/broker/internal-dispatcher.ts",
+    "/packages/broker/src/internal-dispatcher.ts",
     (source) => {
       const mutated = source.replace(
         'case "runner.open": {',
@@ -219,7 +219,7 @@ test("P11 handler closure: removing a real production case fails the pinned Type
 
 test("P12 capability closure: forbidden methods fail against the real PublicDispatchDependencies type", () => {
   const diagnostics = virtualDiagnostics(`
-    import type { PublicDispatchDependencies } from "../src/broker/public-dispatcher.js";
+    import type { PublicDispatchDependencies } from "@oma/broker/ports";
     declare const deps: PublicDispatchDependencies;
     deps.git?.reconcile();
     deps.store.transaction();

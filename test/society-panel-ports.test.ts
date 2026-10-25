@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { defaultHostConfig } from "../src/config/defaults.js";
-import { societyPanelPorts, type PanelState, type SocietySettingsView } from "../src/tui/society-panel.js";
+import { defaultHostConfig } from "@oma/config/defaults";
+import { societyPanelPorts, type PanelState, type SocietySettingsView } from "@oma/tui/society-panel";
 
 function fixture() {
   const config = defaultHostConfig({ society: "demo", node: "/node", libdir: "/lib/", rootfs: "/rootfs", deploymentDigest: "a".repeat(64) });

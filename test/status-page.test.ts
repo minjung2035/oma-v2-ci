@@ -1,8 +1,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import type { AgentStatus } from "../implementation/contracts.js";
-import { statusPage } from "../src/protocol/status-page.js";
-import { decodeRpcReply } from "../src/protocol/response-codec.js";
+import type { AgentStatus } from "@oma/contracts";
+import { statusPage } from "@oma/protocol/status-page";
+import { decodeRpcReply } from "@oma/protocol/response-codec";
 const row = (agent: string): AgentStatus => ({ agent, desired: "enabled", activeState: null, subState: null,
   unitResult: null, execMainStatus: null, pending: 0, preparedBatches: 0, reason: null, runnerObservedAtMs: null });
 

@@ -1,3 +1,4 @@
+import { createMailModule } from "#oma-test/app/broker/mail-composition";
 // P9: the power-cut lane must refuse to run anywhere but a disposable VM, and it
 // must stay a separate failure model from the SIGKILL crash lane.
 import test from "node:test";
@@ -8,7 +9,7 @@ import { join, dirname } from "node:path";
 import { randomUUID } from "node:crypto";
 import { powercutGuards, prepareCheckpoint, verifyCheckpoint, observe, runRecovery } from "../scripts/powercut-lane.mjs";
 import { physicalLedger } from "./helpers/physical-ledger.mjs";
-import { MailModule } from "../dist/src/mail.js";
+import { MailModule } from "@oma/mail";
 
 const script = new URL("../scripts/powercut-lane.mjs", import.meta.url).pathname;
 // Even on a disposable VM, ordinary tests must never authorize a host restart.
@@ -66,7 +67,7 @@ function dummy(t) {
   const fixture = physicalLedger(t);
   const context = { stateRoot: fixture.root, society: "fixture", failureModel: "simulation" };
   let boot = randomUUID(), cuts = 0, checkpoint;
-  const mail = () => new MailModule(fixture.context, fixture.store, 64, 24, { frameBytes: 256 * 1024, batchMaxMessages: 24 });
+  const mail = () => createMailModule(fixture.context, fixture.store, 64, 24, { frameBytes: 256 * 1024, batchMaxMessages: 24 });
   const ports = {
     bootId: () => boot,
     observe: () => observe(fixture.root, "fixture"),

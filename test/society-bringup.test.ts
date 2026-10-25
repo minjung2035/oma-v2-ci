@@ -13,12 +13,12 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { createServer } from "node:net";
-import { provisionSociety, repairSociety } from "../src/runtime/provision.js";
-import { hostSystemLayout } from "../src/runtime/resident-rootfs.js";
-import { brokerListening, superviseBroker } from "../src/runtime/broker-supervisor.js";
-import { ProcessLock, SOCIETY_OWNED_EXIT } from "../src/runtime/process-lock.js";
-import { SOCIETY_FENCE_ENV, SOCIETY_FENCE_FD } from "../src/process/async.js";
-import { tryHoldSociety } from "../src/runtime/society-lease.js";
+import { provisionSociety, repairSociety } from "#oma-test/app/runtime/provision";
+import { hostSystemLayout } from "@oma/platform-linux/resident-rootfs";
+import { brokerListening, superviseBroker } from "#oma-test/app/runtime/broker-supervisor";
+import { ProcessLock, SOCIETY_OWNED_EXIT } from "@oma/native/process-lock";
+import { SOCIETY_FENCE_ENV, SOCIETY_FENCE_FD } from "@oma/process/async";
+import { tryHoldSociety } from "#oma-test/app/runtime/society-lease";
 
 const scratch = (): string => mkdtempSync(join(tmpdir(), "oma-bringup-"));
 const git = (gitDir: string, argv: readonly string[]): string =>
@@ -321,7 +321,7 @@ test("T115 REC-007: two first starts racing on one state root both survive it", 
     const state = join(root, "state");
     const gate = join(root, "go");
     const script = join(root, "race.mjs");
-    const entry = pathToFileURL(join(process.cwd(), "dist/src/runtime/provision.js")).href;
+    const entry = pathToFileURL(join(process.cwd(), "apps/oma/dist/runtime/provision.js")).href;
     writeFileSync(script, `
       import { existsSync } from "node:fs";
       import { provisionSociety } from ${JSON.stringify(entry)};
@@ -364,16 +364,16 @@ test("T115 REC-007: two first starts racing on one state root both survive it", 
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
 
-/** Writes a stand-in broker at `<root>/lib/dist/src/entry/broker.js`. It speaks
+/** Writes a stand-in broker at `<root>/lib/apps/oma/dist/entry/broker.js`. It speaks
  * the real supervision channel on descriptor 3 through the real codec, and its
  * behaviour is chosen by `script`, which runs with `channel` (a Socket),
  * `send(message)`, `reader(onMessage)` and `runs` (how many times this broker
  * has been started, counted in a file) in scope. */
 function standInBroker(root: string, script: string): string {
   const libdir = join(root, "lib");
-  const entry = join(libdir, "dist", "src", "entry");
+  const entry = join(libdir, "apps", "oma", "dist", "entry");
   mkdirSync(entry, { recursive: true });
-  const codec = pathToFileURL(join(process.cwd(), "dist/src/protocol/host-channel.js")).href;
+  const codec = pathToFileURL(join(process.cwd(), "packages/protocol/dist/host-channel.js")).href;
   writeFileSync(join(entry, "broker.js"), `
     import { Socket } from "node:net";
     import { appendFileSync, readFileSync } from "node:fs";
@@ -510,7 +510,7 @@ test("T115 a refusal that names another session does not refuse the registration
 test("T115 a broker that says the society already has an owner disowns the host, and is not restarted", async () => {
   const root = scratch();
   try {
-    // Exactly what `src/entry/broker.ts` does when it loses the race for the
+    // Exactly what `apps/oma/src/entry/broker.ts` does when it loses the race for the
     // society lock. A restart would only lose it again, and in the meantime
     // this process must not behave as an owner.
     const libdir = standInBroker(root, `process.exit(${SOCIETY_OWNED_EXIT});`);
@@ -574,7 +574,7 @@ test("T119/REC-007 the broker the product starts is handed the society lease and
   assert.ok(lease, "the test could not take the society lease it needs to hold");
   const held = statSync(root) && fstatSync(lease.fence, { bigint: true });
   try {
-    const entry = join(root, "lib", "dist", "src", "entry");
+    const entry = join(root, "lib", "apps", "oma", "dist", "entry");
     mkdirSync(entry, { recursive: true });
     const report = join(root, "broker-env.json");
     // A stand-in only for the broker's body; the descriptor it is handed and
@@ -637,7 +637,7 @@ test("T119/REC-007 a broker started outside the product answers to the society l
     const stdio: ("ignore" | "pipe" | number)[] = ["ignore", "pipe", "pipe"];
     if (fenced) { stdio.push("ignore"); stdio.push(lease.fence); }
     const result = spawnSync(process.execPath,
-      [join(process.cwd(), "dist", "src", "entry", "broker.js"), "--society", society],
+      [join(process.cwd(), "apps", "oma", "dist", "entry", "broker.js"), "--society", society],
       { env, stdio, encoding: "utf8", timeout: 20_000 });
     return { status: result.status, stderr: result.stderr ?? "" };
   };
@@ -687,7 +687,7 @@ test("T115 the real broker entry refuses to be the second owner of a society, an
   assert.ok(held, "the test could not take the society lock it needs to hold");
   const run = (): { status: number | null; stderr: string } => {
     const result = spawnSync(process.execPath,
-      [join(process.cwd(), "dist", "src", "entry", "broker.js"), "--society", society],
+      [join(process.cwd(), "apps", "oma", "dist", "entry", "broker.js"), "--society", society],
       { env: { ...process.env, XDG_RUNTIME_DIR: join(root, "run"), XDG_DATA_HOME: join(root, "data"), NOTIFY_SOCKET: "" },
         encoding: "utf8", timeout: 20_000 });
     return { status: result.status, stderr: result.stderr ?? "" };
@@ -819,9 +819,9 @@ test("T115 the audit's orphan -- a host killed outright takes its broker with it
   // this pass without proving anything. Its exit reason is recorded, so the
   // test can tell "the host went away" from any other ending.
   const libdir = join(root, "lib");
-  const entry = join(libdir, "dist", "src", "entry");
+  const entry = join(libdir, "apps", "oma", "dist", "entry");
   mkdirSync(entry, { recursive: true });
-  const supervision = pathToFileURL(join(process.cwd(), "dist/src/runtime/supervision-channel.js")).href;
+  const supervision = pathToFileURL(join(process.cwd(), "apps/oma/dist/runtime/supervision-channel.js")).href;
   const reasonFile = join(root, "exit-reason");
   writeFileSync(join(entry, "broker.js"), `
     import { writeFileSync } from "node:fs";
@@ -837,7 +837,7 @@ test("T115 the audit's orphan -- a host killed outright takes its broker with it
   // The host is a real separate process running the real supervisor, so it can
   // be killed with SIGKILL -- no handler, no cleanup, exactly the case a crash
   // handler cannot cover.
-  const supervisor = pathToFileURL(join(process.cwd(), "dist/src/runtime/broker-supervisor.js")).href;
+  const supervisor = pathToFileURL(join(process.cwd(), "apps/oma/dist/runtime/broker-supervisor.js")).href;
   const host = spawn(process.execPath, ["--input-type=module", "-e", `
     const { superviseBroker } = await import(${JSON.stringify(supervisor)});
     const broker = await superviseBroker({ node: process.execPath, libdir: ${JSON.stringify(libdir)}, society: "probe",

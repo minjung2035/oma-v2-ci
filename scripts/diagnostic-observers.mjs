@@ -1,14 +1,14 @@
 /** Administrator-only read adapters. Fixed commands, no repair or provider calls. */
 import { join } from "node:path";
 import { performance } from "node:perf_hooks";
-import { sha256Hex } from "../dist/src/domain/canonical-json.js";
-import { contextEntriesCheck } from "../dist/src/domain/context-policy.js";
-import { GitObserver } from "../dist/src/git/observe.js";
-import { runProcessSync, decodeProcessText } from "../dist/src/process/run.js";
-import { parseUnitObservation } from "../dist/src/units/observe.js";
-import { assertDirectory } from "../dist/src/storage/directory.js";
-import { unitNameFor, isPublishedRef } from "../dist/src/domain/derived.js";
-import { isValidFullOid, isValidSocietyName } from "../dist/src/domain/identifiers.js";
+import { sha256Hex } from "@oma/domain/canonical-json";
+import { contextEntriesCheck } from "@oma/domain/context-policy";
+import { GitObserver } from "@oma/git/observe";
+import { runProcessSync, decodeProcessText } from "@oma/process/run";
+import { parseUnitObservation } from "@oma/platform-linux/units/observe";
+import { assertDirectory } from "@oma/storage/directory";
+import { unitNameFor, isPublishedRef } from "@oma/domain/derived";
+import { isValidFullOid, isValidSocietyName } from "@oma/domain/identifiers";
 
 export const DIAGNOSTIC_PROCESS_LIMITS = Object.freeze({ timeoutMs: 30000, maxCommands: 256, commandMs: 10000 });
 export function createDiagnosticObservers(context, options = {}) {

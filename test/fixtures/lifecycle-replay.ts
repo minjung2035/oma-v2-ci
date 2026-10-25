@@ -1,17 +1,20 @@
+import { createLifecycleModule } from "#oma-test/app/broker/lifecycle-composition";
+import { createMailModule } from "#oma-test/app/broker/mail-composition";
+import { serializePlanIntent } from "./plan.js";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type { AuthContext, ProtocolLimits, UnitObservation } from "../../implementation/contracts.js";
-import { Store } from "../../src/store.js";
-import { MailModule } from "../../src/mail.js";
-import { LifecycleModule } from "../../src/lifecycle.js";
-import { UnitsModule } from "../../src/units.js";
-import { PublicDispatcher } from "../../src/broker/public-dispatcher.js";
-import { errorAnswer } from "../../src/broker/replies.js";
-import { publicFailure } from "../../src/domain/errors.js";
-import { receiptOfOperation } from "../../src/storage/receipt-projector.js";
-import { generateOperationId } from "../../src/ids.js";
-import { requestHash } from "../../src/hash.js";
+import type { AuthContext, ProtocolLimits, UnitObservation } from "@oma/contracts";
+import { Store } from "@oma/storage";
+import { MailModule } from "@oma/mail";
+import { LifecycleModule } from "@oma/lifecycle";
+import { UnitsModule } from "@oma/platform-linux/units";
+import { PublicDispatcher } from "@oma/broker/public-dispatcher";
+import { errorAnswer } from "@oma/broker/replies";
+import { publicFailure } from "@oma/domain/errors";
+import { receiptOfOperation } from "@oma/protocol/receipt-projector";
+import { generateOperationId } from "@oma/native/identity";
+import { requestHash } from "@oma/domain/request-identity";
 import { makeValidAgent, makeValidResolvedSpec, ALL_CAPS } from "./spec.js";
 
 export type ActionKind = "agent.start" | "agent.stop";
@@ -56,9 +59,9 @@ export function lifecycleReplayFixture() {
     tx.insertAgent(makeValidAgent("a", { createdBy: "manager" }));
   });
   const units = new ObservedUnits("replay", { node: process.execPath, libdir: process.cwd(), state: root, society: "replay", agent: "" }, join(root, "units"));
-  const mail = new MailModule({ stateRoot: root, society: "replay" }, store, 64);
+  const mail = createMailModule({ stateRoot: root, society: "replay" }, store, 64);
   const controls = { hasGoal: true, allowActivation: true };
-  const lifecycle = new LifecycleModule(store, units, { stateRoot: root, projectGit: join(root, "project.git"), society: "replay",
+  const lifecycle = createLifecycleModule(store, units, { stateRoot: root, projectGit: join(root, "project.git"), society: "replay",
     hasGoal: () => controls.hasGoal, activationAllowed: () => controls.allowActivation },
     (_parent, input) => makeValidResolvedSpec(input.name, "p", ALL_CAPS, input.from, input.brief), mail);
   const capabilities = new Set(ALL_CAPS);
@@ -69,10 +72,11 @@ export function lifecycleReplayFixture() {
     getReceipt: (actor: string, key: string) => { const operation = store.getOperation(actor, key); return operation ? receiptOfOperation(operation) : null; },
     hasOperation: (actor: string, key: string) => store.getOperation(actor, key) !== null,
   };
-  const dispatcher = new PublicDispatcher({ waitRun: () => { throw new Error("no live run in this fixture"); }, store: publicStore, mail, lifecycle, git: null,
+  const dispatcher = new PublicDispatcher({ waitRun: () => { throw new Error("no live run in this fixture"); }, store: publicStore, mail, lifecycle, review: null,
+git: null,
     units: { statusSnapshot: () => Promise.reject(new Error("status is not part of the action replay fixture")) },
     views: { status: () => { throw new Error("status is not part of the action replay fixture"); } }, limits,
-    isDraining: () => false, assertAdmission() {}, admitResource: () => () => undefined, refreshViews() {},
+    isDraining: () => false, assertAdmission() {},  refreshViews() {},
     failureAnswer: (id, error) => errorAnswer(id, publicFailure(error)),
     readLogs: async () => { throw new Error("logs are not part of the action replay fixture"); } });
   return { root, store, units, lifecycle, dispatcher, auth, capabilities, controls,
@@ -87,7 +91,7 @@ export function lifecycleReplayFixture() {
         tx.updateAgent({ name: "a", desired });
         tx.acceptOperation({ id, actor: auth.actor, requestKey: key, requestHash: requestHash(kind, { agent: "a" }), kind,
           payloadJson: JSON.stringify({ agent: "a" }),
-          planJson: JSON.stringify({ kind, agent: "a", previousIncarnation: target.incarnation, desired, remainingOperations: [] }) });
+          planJson: serializePlanIntent({ kind, agent: "a", previousIncarnation: target.incarnation, desired, remainingOperations: [] }) });
         if (state === "unknown") tx.setOperationUnknown(id);
       });
       return store.getOperationById(id)!;

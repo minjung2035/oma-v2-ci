@@ -1,3 +1,4 @@
+import { createMailModule } from "#oma-test/app/broker/mail-composition";
 /** P0 durable-lookup precedence: the wire's params limit checks bound only new
  * work. A same-key request the ledger already accepted is classified by wire
  * grammar plus its durable record -- the recorded receipt for a true replay,
@@ -12,13 +13,13 @@ import assert from "node:assert/strict";
 import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type { AuthContext, ProtocolLimits, Request } from "../implementation/contracts.js";
-import { Store } from "../src/store.js";
-import { MailModule } from "../src/mail.js";
-import { PublicDispatcher } from "../src/broker/public-dispatcher.js";
-import { errorAnswer } from "../src/broker/replies.js";
-import { publicFailure } from "../src/domain/errors.js";
-import { receiptOfOperation } from "../src/storage/receipt-projector.js";
+import type { AuthContext, ProtocolLimits, Request } from "@oma/contracts";
+import { Store } from "@oma/storage";
+import { MailModule } from "@oma/mail";
+import { PublicDispatcher } from "@oma/broker/public-dispatcher";
+import { errorAnswer } from "@oma/broker/replies";
+import { publicFailure } from "@oma/domain/errors";
+import { receiptOfOperation } from "@oma/protocol/receipt-projector";
 import { makeValidAgent, ALL_CAPS } from "./fixtures/spec.js";
 import { removeTree } from "./fixtures/cleanup.js";
 
@@ -42,7 +43,7 @@ function fixture(t: TestContext) {
     tx.insertAgent(makeValidAgent("alice", { createdBy: "principal" }));
     tx.insertAgent(makeValidAgent("bob", { createdBy: "principal" }));
   });
-  const mail = new MailModule({ stateRoot: root, society: "demo" }, store, 64);
+  const mail = createMailModule({ stateRoot: root, society: "demo" }, store, 64);
   const profile = { current: LOOSE };
   const dispatcher = new PublicDispatcher({
     store: {
@@ -55,12 +56,13 @@ function fixture(t: TestContext) {
     units: { statusSnapshot: () => Promise.reject(new Error("status is not part of this fixture")) },
     views: { status: () => { throw new Error("status is not part of this fixture"); } },
     lifecycle: {} as never,
-    git: null,
+    review: null,
+git: null,
     get limits() { return profile.current; },
     waitRun: () => { throw new Error("no live run in this fixture"); },
     isDraining: () => false,
     assertAdmission() {},
-    admitResource: () => () => undefined,
+
     failureAnswer: (id, error) => errorAnswer(id, publicFailure(error)),
     refreshViews() {},
     readLogs: async () => { throw new Error("logs are not part of this fixture"); },

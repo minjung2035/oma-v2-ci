@@ -1,19 +1,18 @@
+import { createMailModule } from "#oma-test/app/broker/mail-composition";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type { AuthContext } from "../implementation/contracts.js";
-import { MailModule } from "../src/mail.js";
-import {
-  PI_ADAPTER_REVISION,
-  publishDeliveryReceipt,
-} from "../src/storage/delivery-receipt.js";
-import { Store } from "../src/store.js";
+import type { AuthContext } from "@oma/contracts";
+import { MailModule } from "@oma/mail";
+import { PI_ADAPTER_REVISION } from "@oma/protocol/delivery-boundary";
+import { publishDeliveryReceipt } from "@oma/storage/delivery-receipt";
+import { Store } from "@oma/storage";
 import {
   runnerReceiptPathAt,
   runnerSessionDirPathAt,
-} from "../src/storage/paths.js";
+} from "@oma/domain/paths";
 import { ALL_CAPS, storedSpec } from "./fixtures/spec.js";
 import { TEST_VIEW_LIMITS } from "./fixtures/limits.js";
 import { writeBoundarySession } from "./fixtures/delivery-receipt.js";
@@ -47,7 +46,7 @@ test("S-03: only the pinned durable Pi boundary receipt completes a prepared bat
       createdBy: null,
     }),
   );
-  const mail = new MailModule(
+  const mail = createMailModule(
     { stateRoot: root, society: "demo" },
     store,
     64,

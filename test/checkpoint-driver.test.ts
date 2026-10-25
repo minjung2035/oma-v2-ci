@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { spawnSync } from "node:child_process";
-import { Store } from "../src/store.js";
+import { Store } from "@oma/storage";
 import { makeValidAgent } from "./fixtures/spec.js";
 import {
   CheckpointFailure,

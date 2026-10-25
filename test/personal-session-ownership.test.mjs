@@ -8,7 +8,7 @@ import { constants } from 'node:os';
 import { Script } from 'node:vm';
 import ts from 'typescript';
 
-const code = ts.transpileModule(readFileSync('src/runtime/personal-session.ts', 'utf8'), {
+const code = ts.transpileModule(readFileSync('apps/oma/src/runtime/personal-session.ts', 'utf8'), {
   compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
 }).outputText;
 const signals = ['SIGTERM', 'SIGINT', 'SIGHUP', 'SIGQUIT'];
@@ -31,14 +31,14 @@ function world({ fault, spawnError, lockError, closeError, contended = false, pl
   const spawn = (...args) => { launches.push(args); operations.push(['spawn']); if (spawnError) throw spawnError; return child; };
   const deps = {
     'node:path': path, 'node:crypto': { randomUUID: () => 'fixture-id' }, 'node:os': { constants },
-    '../domain/errors.js': { StoreError }, '../process/host-loss.js': { HOST_LOSS_SIGNALS: signals },
-    '../domain/session-mode.js': { isSessionMode: value => value === 'personal' || value === 'society' },
-    '../domain/deployment.js': { DEPLOYMENT_LAYOUT: { entries: { personal: 'dist/src/entry/pi-personal.js' } } },
-    '../process/async.js': { spawnSessionInteractive: spawn, stopOwnedChild(value) { assert.equal(value, child); child.kill('SIGKILL'); } },
-    './process-lock.js': { ProcessLock: { tryAcquire() { return contended ? null : lease; } } },
+    '@oma/domain/errors': { StoreError }, "@oma/process/host-loss": { HOST_LOSS_SIGNALS: signals },
+    '@oma/domain/session-mode': { isSessionMode: value => value === 'personal' || value === 'society' },
+    '@oma/domain/deployment': { DEPLOYMENT_LAYOUT: { interactiveToolsPreload: 'packages/engine/dist/pi-compat/interactive-tool-setup.js', entries: { personal: 'apps/oma/dist/entry/pi-personal.js' } } },
+    "@oma/process/async": { spawnSessionInteractive: spawn, stopOwnedChild(value) { assert.equal(value, child); child.kill('SIGKILL'); } },
+    '@oma/native/process-lock': { ProcessLock: { tryAcquire() { return contended ? null : lease; } } },
     './user-files.js': { ensureOwnedUserDirectory() {} },
     './session-mode.js': { readSessionBirth: () => ({ mode: 'personal', cwd: '/fixture/cwd', history: '/fixture/history' }) },
-    './pi-runtime.js': { PI_AGENT_DIR_ENV: 'PI_CODING_AGENT_DIR', resolvePiRuntime: () => ({ agentDir: '/fixture/engine' }) },
+    '@oma/engine/pi-runtime': { PI_AGENT_DIR_ENV: 'PI_CODING_AGENT_DIR', resolvePiRuntime: () => ({ agentDir: '/fixture/engine' }) },
   };
   fault?.({ host, child, lease });
   const module = { exports: {} };
@@ -70,7 +70,7 @@ test('Personal child: common process owner receives saved cwd, history descripto
   const w = world(), run = w.runPersonalSession({ ...options, resume: '/fixture/history/saved.jsonl' });
   const [executable, argv, cwd, env, descriptor] = w.launches[0];
   assert.equal(executable, '/fixture/node'); assert.equal(cwd, '/fixture/cwd'); assert.equal(descriptor, 73);
-  assert.deepEqual(Array.from(argv), ['--import', '/fixture/install/dist/src/pi-compat/interactive-tool-setup.js', '/fixture/install/dist/src/entry/pi-personal.js', '--root', options.root,
+  assert.deepEqual(Array.from(argv), ['--import', '/fixture/install/packages/engine/dist/pi-compat/interactive-tool-setup.js', '/fixture/install/apps/oma/dist/entry/pi-personal.js', '--root', options.root,
     '--data-root', options.dataRoot, '--libdir', options.libdir, '--packages', options.packages, '--resume', '/fixture/history/saved.jsonl']);
   assert.equal(env.HOME, '/fixture/home'); assert.equal(env.PATH, '/usr/bin:/bin'); assert.equal(env.PI_OFFLINE, '1');
   assert.equal(env.PI_CODING_AGENT_DIR, '/fixture/engine'); assert.equal(env.OMA_ACTOR, undefined); assert.equal(env.PI_SESSION, undefined);

@@ -8,7 +8,7 @@ import { spawnSync } from "node:child_process";
 import {
   processProbeFor, hostProcessProbe, processIdentity, parentOf, processEnded, descendsFrom,
   type ProcessObservation, type ProcessIdentity,
-} from "../src/broker/process-ancestry.js";
+} from "@oma/broker/process-ancestry";
 
 test("the Linux substrate answers from real /proc, unchanged", () => {
   const probe = processProbeFor("linux");

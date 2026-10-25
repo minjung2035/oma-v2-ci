@@ -4,11 +4,11 @@ import { existsSync, mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync 
 import { createServer } from "node:net";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { defaultSocietyFor, sessionSocietyName } from "../src/config/defaults.js";
-import { isValidSocietyName } from "../src/domain/identifiers.js";
-import { removeUnusedTree } from "../src/storage/directory.js";
-import { projectSettingsPath, sessionConfigOf } from "../src/application/settings.js";
-import { defaultHostConfig } from "../src/config/defaults.js";
+import { defaultSocietyFor, sessionSocietyName } from "@oma/config/defaults";
+import { isValidSocietyName } from "@oma/domain/identifiers";
+import { removeUnusedTree } from "@oma/storage/directory";
+import { projectSettingsPath, sessionConfigOf } from "#oma-test/app/application/settings";
+import { defaultHostConfig } from "@oma/config/defaults";
 
 test("DR24: every session of a project has a society name of its own, valid, and named for its project", () => {
   const project = defaultSocietyFor("/home/me/a-very-long-project-directory-name", "f".repeat(64));
@@ -26,10 +26,10 @@ test("DR24: every session of a project has a society name of its own, valid, and
 test("DR24: a session's configuration is the project's, with its own name, rootfs and installation", () => {
   const project = defaultHostConfig({ society: "proj", node: "/old/node", libdir: "/old/", rootfs: "/data/proj/rootfs", deploymentDigest: "a".repeat(64) });
   const own = { society: "proj-1", node: "/usr/bin/node", libdir: "/opt/oma/", rootfs: "/data/proj-1/rootfs", deploymentDigest: "b".repeat(64) };
-  const session = sessionConfigOf({ ...project, quota: { ...project.quota, societyAgents: 6 } }, own);
+  const session = sessionConfigOf({ ...project, limits: { ...project.limits, logBytes: 6 } }, own);
   assert.equal(session.society, "proj-1");
   assert.deepEqual(session.installation, { node: own.node, libdir: own.libdir, rootfs: own.rootfs, deploymentDigest: own.deploymentDigest });
-  assert.equal(session.quota.societyAgents, 6, "a project setting holds in the session");
+  assert.equal(session.limits.logBytes, 6, "a project setting holds in the session");
   assert.equal(projectSettingsPath("/data/oma", "proj"), "/data/oma/.projects/proj/config.json");
 });
 

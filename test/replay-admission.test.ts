@@ -1,3 +1,5 @@
+import { createMailModule } from "#oma-test/app/broker/mail-composition";
+import { serializePlanIntent } from "./fixtures/plan.js";
 /** P0 replay-before-admission: a replay of an already-minted terminal receipt
  * is a read, not a new claim. The dispatcher looks up a key-required request's
  * durable receipt before the admission fence: a succeeded/failed row is
@@ -13,15 +15,15 @@ import assert from "node:assert/strict";
 import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type { AuthContext, ProtocolLimits, Request } from "../implementation/contracts.js";
-import { Store } from "../src/store.js";
-import { MailModule } from "../src/mail.js";
-import { PublicDispatcher } from "../src/broker/public-dispatcher.js";
-import { errorAnswer } from "../src/broker/replies.js";
-import { publicFailure, StoreError } from "../src/domain/errors.js";
-import { AdmissionGate } from "../src/domain/admission.js";
-import { receiptOfOperation } from "../src/storage/receipt-projector.js";
-import { requestHash } from "../src/hash.js";
+import type { AuthContext, ProtocolLimits, Request } from "@oma/contracts";
+import { Store } from "@oma/storage";
+import { MailModule } from "@oma/mail";
+import { PublicDispatcher } from "@oma/broker/public-dispatcher";
+import { errorAnswer } from "@oma/broker/replies";
+import { publicFailure, StoreError } from "@oma/domain/errors";
+import { AdmissionGate } from "@oma/domain/admission";
+import { receiptOfOperation } from "@oma/protocol/receipt-projector";
+import { requestHash } from "@oma/domain/request-identity";
 import { makeValidAgent, ALL_CAPS } from "./fixtures/spec.js";
 import { makeValidMessagePlan } from "./fixtures/valid.js";
 import { removeTree } from "./fixtures/cleanup.js";
@@ -45,7 +47,7 @@ function fixture(t: TestContext) {
     tx.insertAgent(makeValidAgent("alice", { createdBy: "principal" }));
     tx.insertAgent(makeValidAgent("bob", { createdBy: "principal" }));
   });
-  const mail = new MailModule({ stateRoot: root, society: "demo" }, store, 64);
+  const mail = createMailModule({ stateRoot: root, society: "demo" }, store, 64);
   const admission = new AdmissionGate();
   const flags = { draining: false };
   const dispatcher = new PublicDispatcher({
@@ -59,12 +61,13 @@ function fixture(t: TestContext) {
     units: { statusSnapshot: () => Promise.reject(new Error("status is not part of this fixture")) },
     views: { status: () => { throw new Error("status is not part of this fixture"); } },
     lifecycle: {} as never,
-    git: null,
+    review: null,
+git: null,
     limits: LIMITS,
     waitRun: () => { throw new Error("no live run in this fixture"); },
     isDraining: () => flags.draining,
     assertAdmission: () => admission.assertAdmission(),
-    admitResource: () => () => undefined,
+
     failureAnswer: (id, error) => errorAnswer(id, publicFailure(error)),
     refreshViews() {},
     readLogs: async () => { throw new Error("logs are not part of this fixture"); },
@@ -117,7 +120,7 @@ test("replay-before-admission: pending and unknown rows are not minted receipts 
     for (const [id, key] of [[pendingId, "key-pending"], [unknownId, "key-unknown"]] as const) {
       const message = makeValidMessagePlan(id, { recipient: "bob" });
       tx.acceptOperation({ id, actor: "alice", requestKey: key, requestHash: requestHash("mail.send", INPUT),
-        kind: "mail.send", payloadJson: JSON.stringify(INPUT), planJson: JSON.stringify({ kind: "mail.send", message }) });
+        kind: "mail.send", payloadJson: JSON.stringify(INPUT), planJson: serializePlanIntent({ kind: "mail.send", message }) });
       tx.insertDeliveries([{ messageId: message.id, recipient: "bob", operationId: id }]);
     }
     tx.setOperationUnknown(unknownId);

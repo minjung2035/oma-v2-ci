@@ -1,12 +1,12 @@
 /** mail-v1 review quorum/status owner: reviewState + planEffects are pure. */
 import test from "node:test";
 import assert from "node:assert/strict";
-import type { MessageId, OperationId } from "../implementation/contracts.js";
-import type { ExactCandidateIdentity, MessagePlan } from "../implementation/contracts.js";
-import type { ReviewFact } from "../implementation/contracts/attestation.js";
-import { StoreError } from "../src/domain/errors.js";
+import type { MessageId, OperationId } from "@oma/contracts";
+import type { ExactCandidateIdentity, MessagePlan } from "@oma/contracts";
+import type { ReviewFact } from "@oma/contracts/attestation";
+import { StoreError } from "@oma/domain/errors";
 import { reviewState, planEffects, type ReviewEntry, type ReviewState,
-  type ReviewStateInput } from "../src/domain/review-evaluation.js";
+  type ReviewStateInput } from "@oma/domain/review-evaluation";
 
 const OP = (n: number): OperationId => `op-00000000-0000-4000-8000-${String(n).padStart(12, "0")}`;
 const MID = (n: number): MessageId => `m-00000000-0000-4000-8000-${String(n).padStart(12, "0")}-0`;
@@ -17,11 +17,11 @@ const ELIGIBLE = new Set(["alice", "bob", "carol", "dave"]);
 const open = (tier: "LOW" | "MEDIUM" | "HIGH", kind: "merge.open" | "challenge.open" = "merge.open",
     id = OP(1), sequence = 1): ReviewEntry => {
   const fact: ReviewFact = kind === "merge.open"
-    ? { kind: "merge.open", version: 1, name: "merge-00000000", title: "t", reason: "r",
+    ? { kind: "merge.open", version: 1, name: "merge-00000000-0000-4000-8000-000000000000", title: "t", reason: "r",
         tier, identity, submitters: ["alice"] }
-    : { kind: "challenge.open", version: 1, name: "challenge-00000000", title: "t", reason: "r",
+    : { kind: "challenge.open", version: 1, name: "challenge-00000000-0000-4000-8000-000000000000", title: "t", reason: "r",
         tier: tier === "MEDIUM" ? "HIGH" : tier, identity, submitters: ["alice"], prepared: true,
-        target: { name: "merge-ffffffff", request: OP(90), integration: OP(91), identity, tier: "LOW" } };
+        target: { name: "merge-ffffffff-0000-4000-8000-000000000000", request: OP(90), integration: OP(91), identity, tier: "LOW" } };
   return { sequence, operation: id, actor: "alice", fact, messages: [] };
 };
 const vote = (sequence: number, actor: string, verdict: "approve" | "reject",
@@ -45,10 +45,10 @@ const reviewMessage = (id: string, request: string, name: string, review: Messag
      contextRevision: null, replyHeaders: { replyTo: [], inReplyTo: null, references: [] },
      ...(review?.role === "thread" ? { audience: "workers" as const } : {}),
      ...(review === undefined ? {} : { review }) });
-const approvalMessage = (id: string, votes: readonly string[], request = OP(1), name = "merge-00000000"): MessagePlan =>
+const approvalMessage = (id: string, votes: readonly string[], request = OP(1), name = "merge-00000000-0000-4000-8000-000000000000"): MessagePlan =>
   ({ ...reviewMessage(id, request, name, { role: "approval", request, name, votes: [...votes] }),
      kind: "approval_required", approvalFor: identity });
-const withdrawnMessage = (id: string, approval: string, request = OP(1), name = "merge-00000000"): MessagePlan =>
+const withdrawnMessage = (id: string, approval: string, request = OP(1), name = "merge-00000000-0000-4000-8000-000000000000"): MessagePlan =>
   reviewMessage(id, request, name, { role: "withdrawn", request, name, approval });
 const withMessages = (entry: ReviewEntry, messages: readonly MessagePlan[]): ReviewEntry =>
   ({ ...entry, messages });
@@ -65,7 +65,7 @@ test("LOW merge is ready immediately; missing is empty", () => {
   const s = state(open("LOW"), []);
   assert.equal(s.ready, true); assert.equal(s.display, "applying");
   assert.deepEqual(s.missing, []); assert.equal(s.required, 0);
-  assert.equal(s.name, "merge-00000000"); assert.equal(s.requester, "alice");
+  assert.equal(s.name, "merge-00000000-0000-4000-8000-000000000000"); assert.equal(s.requester, "alice");
   assert.deepEqual(s.authors, ["alice"]);
 });
 

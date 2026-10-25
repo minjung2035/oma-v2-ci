@@ -8,6 +8,7 @@ import { dirname, resolve } from 'node:path';
 import { Script } from 'node:vm';
 import * as tui from '@earendil-works/pi-tui';
 import ts from 'typescript';
+import { workspaceSource } from './fixtures/workspace-source.mjs';
 
 function world({ tty = true, columns = 80, rows = 24, fault, societies } = {}) {
   const host = new EventEmitter(), input = new EventEmitter(), output = new EventEmitter();
@@ -26,7 +27,8 @@ function world({ tty = true, columns = 80, rows = 24, fault, societies } = {}) {
       Buffer, TextDecoder, process: host, performance: { now: () => now },
       setTimeout(run) { const timer = { run }; timers.add(timer); return timer; },
       clearTimeout(timer) { timers.delete(timer); },
-      require(name) { return name === '@earendil-works/pi-tui' ? tui : load(resolve(dirname(file), name.replace(/\.js$/, '.ts'))); },
+      require(name) { return name === '@earendil-works/pi-tui' ? tui : load(name.startsWith('@oma/')
+        ? workspaceSource(name) : resolve(dirname(file), name.replace(/\.js$/, '.ts'))); },
     });
     return module.exports;
   }
@@ -37,7 +39,7 @@ function world({ tty = true, columns = 80, rows = 24, fault, societies } = {}) {
     tick() { for (const timer of [...timers]) { timers.delete(timer); timer.run(); } },
   };
   fault?.(w);
-  const chooser = load('src/tui/session-mode.ts');
+  const chooser = load('packages/tui/src/session-mode.ts');
   w.result = societies === undefined ? chooser.chooseSessionMode({ input, output }) : chooser.chooseSociety({ input, output }, societies);
   return w;
 }

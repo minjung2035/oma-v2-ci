@@ -3,9 +3,9 @@ import assert from "node:assert/strict";
 import { mkdtempSync, mkdirSync, writeFileSync, rmSync, linkSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { publishMailNoticeView } from "../src/views/mail-notices.js";
-import { mailNoticeViewPath } from "../src/storage/mail-notices.js";
-import { readSocietyMail, principalMailbox, unreadCount } from "../src/application/mail.js";
+import { publishMailNoticeView } from "#oma-test/app/views/mail-notices";
+import { mailNoticeViewPath } from "@oma/storage/mail-notices";
+import { readSocietyMail, principalMailbox, unreadCount } from "#oma-test/app/application/mail";
 
 test("Society mail includes sent GOAL, peer replies and board; notices use ledger provenance and real names", () => {
   const root = mkdtempSync(join(tmpdir(), "oma-society-mail-"));

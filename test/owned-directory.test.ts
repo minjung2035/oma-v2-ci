@@ -10,7 +10,7 @@ import assert from "node:assert/strict";
 import { chmodSync, closeSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { ensureOwnedDirectory, listOwnedDirectory, openOwnedDirectoryPath, removeOwnedTree, removeUnusedTree } from "../src/storage/directory.js";
+import { ensureOwnedDirectory, listOwnedDirectory, openOwnedDirectoryPath, removeOwnedTree, removeUnusedTree } from "@oma/storage/directory";
 
 /** A failing case can strand mode-000 directories under the fixture root;
  * give the bits back best-effort before the recursive remove. */

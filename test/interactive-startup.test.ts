@@ -14,7 +14,7 @@ const read = fs.readFileSync;
 fs.readFileSync = (path, ...args) => String(path).endsWith('/pi-coding-agent/package.json')
   ? JSON.stringify({ version: '1.0.2' }) : read(path, ...args);
 syncBuiltinESMExports();
-await assert.rejects(import(${JSON.stringify(new URL("../src/pi-compat/interactive-tool-setup.js", import.meta.url).href)}),
+await assert.rejects(import(${JSON.stringify(new URL(import.meta.resolve("@oma/engine/pi-compat/interactive-tool-setup")).href)}),
   /Unsupported Pi search-tool adapter version: 1.0.2/);
 console.log('PASS');
 `], { encoding: "utf8", timeout: 10_000 });
@@ -32,10 +32,11 @@ registerHooks({ resolve(specifier, context, next) {
   assert.notEqual(specifier, '@earendil-works/pi-coding-agent', 'host path/retry setup loaded the interactive SDK');
   return next(specifier, context);
 } });
-const runtime = await import(${JSON.stringify(new URL("../src/runtime/pi-runtime.js", import.meta.url).href)});
+const runtime = await import(${JSON.stringify(new URL(import.meta.resolve("@oma/engine/pi-runtime")).href)});
 const resolved = runtime.resolvePiRuntime({ libdir: ${JSON.stringify(process.cwd())}, stateRoot: ${JSON.stringify(join(root, "society"))} });
 assert.equal(resolved.source, 'bundled');
-runtime.preparePiRetry(${JSON.stringify(root)});
+const {engineSettingsFiles}=await import(${JSON.stringify(new URL(import.meta.resolve("#oma-test/app/engine/settings-files")).href)});
+runtime.preparePiRetry(engineSettingsFiles, ${JSON.stringify(root)});
 console.log('PASS');
 `], { encoding: "utf8", timeout: 10_000, env: { HOME: root, PATH: "/usr/bin:/bin" } });
     assert.equal(result.status, 0, result.stderr);
@@ -51,7 +52,7 @@ test("DR37/DR44: public autocomplete wrapper restores late fd results without ch
     const binary = join(root, "fd");
     writeFileSync(binary, `#!${process.execPath}\nconst args=process.argv;const base=args[args.indexOf('--base-directory')+1];for(const p of require('node:fs').readdirSync(base,{recursive:true}))if(p.endsWith('.ts'))console.log(p);\n`, { mode: 0o755 });
     const result = spawnSync(process.execPath, ["--import",
-      new URL("../src/pi-compat/interactive-tool-setup.js", import.meta.url).href, "--input-type=module", "-e", `
+      new URL(import.meta.resolve("@oma/engine/pi-compat/interactive-tool-setup")).href, "--input-type=module", "-e", `
 import assert from 'node:assert/strict';
 import {registerHooks} from 'node:module';
 const engine=new URL('./modes/interactive/interactive-mode.js',import.meta.resolve('@earendil-works/pi-coding-agent')).href;
@@ -65,7 +66,7 @@ registerHooks({load(url,context,next){
 const ui=await import(engine);assert.equal(ui.ready,undefined);
 const {CombinedAutocompleteProvider}=await import('@earendil-works/pi-tui');
 const prototype=CombinedAutocompleteProvider.prototype.getSuggestions;
-const {withSearchTools}=await import(${JSON.stringify(new URL("../src/pi-compat/interactive-tools.js", import.meta.url).href)});
+const {withSearchTools}=await import(${JSON.stringify(new URL(import.meta.resolve("@oma/engine/pi-compat/interactive-tools")).href)});
 const upstream=new CombinedAutocompleteProvider([{name:'test'}],${JSON.stringify(root)},null);
 const provider=withSearchTools(upstream,${JSON.stringify(root)});
 assert.equal(withSearchTools(provider,${JSON.stringify(root)}),provider,'reload stacked another search wrapper');
@@ -90,7 +91,7 @@ test("DR35 the interactive import observes search tools without downloading; too
   const root = mkdtempSync(join(tmpdir(), "oma-interactive-startup-"));
   try {
     const result = spawnSync(process.execPath, ["--import",
-      new URL("../src/pi-compat/interactive-tool-setup.js", import.meta.url).href, "--input-type=module", "-e", `
+      new URL(import.meta.resolve("@oma/engine/pi-compat/interactive-tool-setup")).href, "--input-type=module", "-e", `
 import assert from 'node:assert/strict';
 import childProcess from 'node:child_process';
 import { registerHooks, syncBuiltinESMExports } from 'node:module';

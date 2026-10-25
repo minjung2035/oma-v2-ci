@@ -2,7 +2,7 @@
 import type {
   AgentCreateInput, ResolvedAgentSpec, MutationMethod, ReadMethod,
   EphemeralMethod, PublicMethod, Request, RequestKey,
-} from '../contracts.js';
+} from '@oma/contracts';
 
 type Assert<T extends true> = T;
 type Equal<A, B> = [A] extends [B] ? ([B] extends [A] ? true : false) : false;

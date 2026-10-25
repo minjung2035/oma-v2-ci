@@ -4,11 +4,11 @@
  * The Korean mirror of each prompt is preserved in the doc comment above its
  * constant as human documentation; the string the model receives is
  * English-only. The filename the Resident prompt and the world map both spell
- * is derived once in src/domain/derived.ts. */
+ * is derived once in packages/domain/src/derived.ts. */
 import test from "node:test";
 import assert from "node:assert/strict";
-import { PRINCIPAL_MAIL_FILENAME } from "../src/domain/derived.js";
-import { PRINCIPAL_SYSTEM_PROMPT, RESIDENT_SYSTEM_PROMPT } from "../src/config/role-prompts.js";
+import { PRINCIPAL_MAIL_FILENAME } from "@oma/domain/derived";
+import { PRINCIPAL_SYSTEM_PROMPT, RESIDENT_SYSTEM_PROMPT } from "@oma/domain/role-prompts";
 
 /** Hangul syllables and jamo: any Korean text at all, not one remembered phrase. */
 const HANGUL = /[ᄀ-ᅟ㄰-㆏가-힯]/u;

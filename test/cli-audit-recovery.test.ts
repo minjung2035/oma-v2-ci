@@ -4,9 +4,10 @@ import { mkdtempSync, mkdirSync, rmSync, writeFileSync, readFileSync, unlinkSync
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { execFileSync } from "node:child_process";
-import { generateOperationId, generateMessageId } from "../src/ids.js";
-import { RequestCache } from "../src/request-cache.js";
-import { sha256Hex } from "../src/hash.js";
+import { generateOperationId } from "@oma/native/identity";
+import { messageIdForOperation as generateMessageId } from "@oma/domain/derived";
+import { RequestCache } from "#oma-test/app/request-cache";
+import { sha256Hex } from "@oma/domain/canonical-json";
 import { runCliWithPeer } from "./fixtures/cli-peer.js";
 
 const git = (cwd: string, args: string[]) => execFileSync("/usr/bin/git", args, {
@@ -30,7 +31,7 @@ for (const kind of ["merge", "challenge"] as const) {
       writeFileSync(file, "original reason\n");
       const key = "original-open";
       const args = [kind, "open", "--tier", "LOW", "--title", "title", "--file", file, "--request", key,
-        ...(kind === "challenge" ? ["--merge", "merge-abcd1234", "--candidate", "HEAD", "--base", "origin/main"] : [])];
+        ...(kind === "challenge" ? ["--merge", "merge-abcd1234-0000-4000-8000-000000000000", "--candidate", "HEAD", "--base", "origin/main"] : [])];
       const submit = succeeded({ kind: "git.submit", candidate, publishedRef: `refs/oma/published/alice/${generateOperationId()}`,
         message: generateMessageId(generateOperationId(), 0), recipientCount: 1 });
       const first = await runCliWithPeer(home, home, args, async request => {
@@ -59,13 +60,13 @@ for (const kind of ["merge", "challenge"] as const) {
       assert.equal(frozen.kind, "present", "the parent must freeze before publication can interrupt it");
       if (frozen.kind !== "present") assert.fail("parent missing");
       const original = { kind: `${kind}.open`, tier: "LOW", title: "title", reason: "original reason\n", candidate, base,
-        ...(kind === "challenge" ? { merge: "merge-abcd1234" } : {}) };
+        ...(kind === "challenge" ? { merge: "merge-abcd1234-0000-4000-8000-000000000000" } : {}) };
       assert.deepEqual(frozen.value.params, original);
       if (interruption === "failed" || interruption === "unrecorded") return;
       git(home, ["-c", "user.name=T", "-c", "user.email=t@t", "commit", "-qm", "moved", "--allow-empty"]);
       git(home, ["update-ref", "-d", "refs/remotes/origin/main"]);
       unlinkSync(file);
-      const opened = succeeded({ kind: "attest.record", request: `${kind}-1234abcd`,
+      const opened = succeeded({ kind: "attest.record", request: `${kind}-1234abcd-0000-4000-8000-000000000000`,
         messages: [generateMessageId(generateOperationId(), 0)], recipientCount: 1 });
       const retry = await runCliWithPeer(home, home, args, async request => {
         if (request.method === "operation.get") return frame(request,
@@ -123,8 +124,8 @@ test("NB-19: malformed filename and unsafe ordinal are not coerced to an ID", as
 for (const args of [
   ["agent", "--request", "position", "start", "alice"],
   ["agent", "--note", "continue", "continue", "--request", "position"],
-  ["merge", "--request", "position", "review", "merge-abcd1234", "--file", "body.md"],
-  ["challenge", "--file", "review", "cancel", "challenge-abcd1234", "--request", "position"],
+  ["merge", "--request", "position", "review", "merge-abcd1234-0000-4000-8000-000000000000", "--file", "body.md"],
+  ["challenge", "--file", "review", "cancel", "challenge-abcd1234-0000-4000-8000-000000000000", "--request", "position"],
   ["context", "--expect", "none", "publish", "context", "--request", "position"],
 ]) {
   test(`NB-28: options before subcommand retain value slots (${args[0]})`, async t => {
@@ -135,7 +136,7 @@ for (const args of [
     const params = args[0] === "agent" ? args.includes("start") ? { agent: "alice" } : { note: "continue" }
       : args[0] === "context" ? { expected: null, entries: [{ path: "GOAL.md", bytes: 1, sha256 }],
         content: { bytes: 1, sha256, mediaType: "application/vnd.oma.context-v1" } }
-      : { kind: args[0] === "merge" ? "review" : "cancel", name: `${args[0]}-abcd1234`,
+      : { kind: args[0] === "merge" ? "review" : "cancel", name: `${args[0]}-abcd1234-0000-4000-8000-000000000000`,
         ...(args[0] === "merge" ? { body: "frozen" } : { reason: "frozen" }) };
     const method = args[0] === "agent" ? args.includes("start") ? "agent.start" : "agent.continue"
       : args[0] === "context" ? "context.publish" : "attest.record";
@@ -178,9 +179,9 @@ for (const kind of ["merge", "challenge"] as const) {
     const file = join(home, "reason.md"), key = "kill-parent";
     writeFileSync(file, "before kill\n");
     const args = [kind, "open", "--tier", "LOW", "--title", "kill", "--file", file, "--request", key,
-      ...(kind === "challenge" ? ["--merge", "merge-abcd1234", "--candidate", "HEAD", "--base", "origin/main"] : [])];
+      ...(kind === "challenge" ? ["--merge", "merge-abcd1234-0000-4000-8000-000000000000", "--candidate", "HEAD", "--base", "origin/main"] : [])];
     const preload = join(home, "kill.mjs");
-    writeFileSync(preload, `import { RequestCache } from ${JSON.stringify(new URL("../src/request-cache.js", import.meta.url).href)};
+    writeFileSync(preload, `import { RequestCache } from ${JSON.stringify(new URL(import.meta.resolve("#oma-test/app/request-cache")).href)};
       const freeze = RequestCache.prototype.freeze;
       RequestCache.prototype.freeze = function(input, body) {
         const result = freeze.call(this, input, body);
@@ -223,7 +224,7 @@ test("NB-17: concurrent same-key opens preserve one frozen parent identity", asy
   const file = join(home, "reason.md"), preload = join(home, "home.mjs");
   writeFileSync(file, "one intent\n");
   writeFileSync(preload, `process.env.HOME=${JSON.stringify(home)};`);
-  const receipt = succeeded({ kind: "attest.record", request: "merge-abcd1234",
+  const receipt = succeeded({ kind: "attest.record", request: "merge-abcd1234-0000-4000-8000-000000000000",
     messages: [generateMessageId(generateOperationId(), 0)], recipientCount: 1 });
   const params = { kind: "merge.open", tier: "LOW", title: "same", reason: "one intent\n", candidate, base: candidate };
   let accepted = false;

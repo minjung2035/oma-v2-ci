@@ -1,12 +1,14 @@
+import { serializePlanIntent } from "./fixtures/plan.js";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { SQLInputValue } from "node:sqlite";
-import { Store, StoreError } from "../src/store.js";
-import { requestHash } from "../src/hash.js";
-import { decodeAgentRow, decodeDeliveryRow, decodeOperationIdProjection, safeInteger } from "../src/storage/rows.js";
+import { Store } from "@oma/storage";
+import { StoreError } from "@oma/domain/errors";
+import { requestHash } from "@oma/domain/request-identity";
+import { decodeAgentRow, decodeDeliveryRow, decodeOperationIdProjection, safeInteger } from "@oma/storage/rows";
 import { makeValidAgent } from "./fixtures/spec.js";
 import { makeValidMessagePlan } from "./fixtures/valid.js";
 import { mutateRawRowAfterClose } from "./fixtures/corruption.js";
@@ -24,7 +26,7 @@ function seed(path: string): Store {
     store.insertAgent(makeValidAgent("alice"));
     store.insertAgent(makeValidAgent("bob"));
     store.insertOperation({ id: OP, actor: "alice", requestKey: "mail-r10", requestHash: requestHash("mail.send", payload), kind: "mail.send",
-      payloadJson: JSON.stringify(payload), planJson: JSON.stringify({ kind: "mail.send", message }) });
+      payloadJson: JSON.stringify(payload), planJson: serializePlanIntent({ kind: "mail.send", message }) });
     store.insertDeliveries([{ messageId: MESSAGE, recipient: "alice", operationId: OP }]);
     store.markMaterialized(MESSAGE, "alice");
     store.insertPreparedBatch({ id: BATCH, agent: "alice", incarnation: 1, messageIds: [MESSAGE], sessionPath: null });

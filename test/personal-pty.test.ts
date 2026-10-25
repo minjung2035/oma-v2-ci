@@ -31,13 +31,13 @@ for (const ending of ["tools", "config", "empty-extensions", "extensions", "new"
     const prompt = birth("Change the temporary user config\r", responseMarker);
     const steps = ending === "config" ? [step("\x18", "Config — Personal"), step("\r", "scripted-thinking"),
       step("scripted-thinking", "scripted-thinking"), step("\r", "Thinking Level"), step("\x1b[B\r", "minimal effort", 0.5), prompt]
-      : ending === "empty-extensions" ? [step("\x18", "Config — Personal"), step("\x1b[B\r", "Let's build something great"),
+      : ending === "empty-extensions" ? [step("\x18", "Config — Personal"), step("\x1b[B\r", "Your ideas, in motion"),
         step("\r", "Personal extension choice saved"), prompt]
       : ending === "extensions" ? [prompt, step("\x18", "Config — Personal"), step("\x1b[B\r", "PERSONAL_RESPONSE_COMPLETE"),
         step("\r", "Personal extension choice saved"), prompt]
-      : ending === "new" ? [prompt, birth("/new\r", "Let's build something great", 0.5), prompt]
+      : ending === "new" ? [prompt, birth("/new\r", "Your ideas, in motion", 0.5), prompt]
       : ending === "society-bound" ? [step("/society\r", "Session mode", 0.5),
-        step("\r", "Let's build something great", 0.5), prompt,
+        step("\r", "Your ideas, in motion", 0.5), prompt,
         step("/society\r", "before starting a conversation", 0.5)]
       : ending === "project-seed-resume" ? [prompt, step("/fixture-break-project\r", "EXTENSION_TOOL_COMPLETE", 0.5),
         step("/resume\r", "[Personal]", 0.5), birth("\r", "PERSONAL_RESPONSE_COMPLETE", 0.5), prompt]
@@ -54,7 +54,7 @@ for (const ending of ["tools", "config", "empty-extensions", "extensions", "new"
       : ending === "cancel" ? [step("Cancel this turn\r", "Cancel this turn", 0.5), step("\x1b", "Operation aborted", 0.5), prompt]
       : [prompt];
     const run = spawnSync("python3", [join(fixtures, "pty-harness.py"), JSON.stringify({
-      argv: [process.execPath, join(fixtures, "personal-pty.mjs"), root, ending], ready: hex("Let's build something great"),
+      argv: [process.execPath, join(fixtures, "personal-pty.mjs"), root, ending], ready: hex("Your ideas, in motion"),
       steps: [...steps, { write: hex("\x04"), wait: 2 }],
     })], { encoding: "utf8", timeout: 55_000, maxBuffer: 16 * 1024 * 1024 });
     assert.equal(run.status, 0, run.stderr);
@@ -65,7 +65,7 @@ for (const ending of ["tools", "config", "empty-extensions", "extensions", "new"
     assert.equal(engineExit.code, ending === "reload-failure" ? 1 : 0, output.slice(-8000)); assert.equal(engineExit.signal, null);
     assert.equal(result.echo, true); assert.equal(result.icanon, true);
     assert.ok(output.includes("\x1b[?1049l")); assert.match(output, /oma.{0,40}v0\.1\.0/);
-    assert.match(output, /Personal/); assert.match(output, /Let's build something great/); assert.match(output, /╭/);
+    assert.match(output, /Personal/); assert.match(output, /Your ideas, in motion/); assert.match(output, /╭/);
     assert.doesNotMatch(output, /OMA_PI_BOUNDARY_V1|SOCIETY_PROMPT_SENTINEL|PROJECT_CONTEXT_SENTINEL/);
     if (ending === "config") { assert.match(output, /Config — Personal/); assert.match(output, /Thinking Level/); }
     if (ending.includes("extensions")) assert.match(output, /Personal extension choice saved/);

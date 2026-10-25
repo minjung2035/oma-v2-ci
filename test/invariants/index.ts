@@ -1,5 +1,5 @@
-import type { Store } from "../../src/store.js";
-import type { BatchViewLimits } from "../../src/protocol/batch-view.js";
+import type { Store } from "@oma/storage";
+import type { BatchViewLimits } from "@oma/protocol/batch-view";
 import { captureLedger, assertAcceptedHistory, type LedgerSnapshot, type InvariantPhase } from "./store.js";
 import { assertMail } from "./mail.js";
 import { assertGit, type GitInvariantPaths } from "./git.js";

@@ -1,3 +1,4 @@
+import { residentEngineEffects } from "#oma-test/app/engine/resident-effects";
 /** AV14 -- arch §7: the runner joins one Pi session to the mail queue, and an
  * activation resumes it ("resume Pi session or create a new session"); PR-003/TUI-004:
  * the Principal's Human context stays in its existing session.
@@ -16,12 +17,12 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { PiAdapter } from "../src/runtime/pi-adapter.js";
+import { PiAdapter } from "@oma/engine/pi-adapter";
 import { residentOptions, prepareResident, RESIDENT_TEST_OPTIONS } from "./fixtures/resident.js";
-import { spawnSandboxed } from "../src/process/async.js";
-import { RESIDENT_PATHS } from "../src/sandbox.js";
-import { resolvePiRuntime } from "../src/runtime/pi-runtime.js";
-import { sessionArgv } from "../src/runtime/engine/principal-session.js";
+import { spawnSandboxed } from "@oma/process/async";
+import { RESIDENT_PATHS } from "@oma/domain/resident-paths";
+import { resolvePiRuntime } from "@oma/engine/pi-runtime";
+import { sessionArgv } from "@oma/engine/principal-session";
 
 const LIBDIR = fileURLToPath(new URL("../../", import.meta.url));
 const LIMITS = { frameBytes: 1 << 20, idleStreamSeconds: 60, receiptWaitSeconds: 30, batchMaxMessages: 4, mailBodyBytes: 1 << 16, addresses: 64, contextBytes: 1 << 20, bundleBytes: 1 << 20 };
@@ -71,7 +72,7 @@ test("AV14 / arch §7: a Resident's activation resumes its existing session inst
     const runtime = resolvePiRuntime({ stateRoot: root, libdir: LIBDIR });
     const options = residentOptions(root, LIBDIR, runtime.args[0]!);
     prepareResident(options);
-    const adapter = new PiAdapter({ ...options, limits: LIMITS });
+    const adapter = new PiAdapter(residentEngineEffects, { ...options, limits: LIMITS });
     const plan = adapter.spawnPlan();
     const prior = priorSession(options.paths.sessionDir, RESIDENT_PATHS.workspace);
     assert.equal(await openedSession(plan.command, plan.args, plan.cwd, plan.env, plan.filter), join(RESIDENT_PATHS.sessions, prior.split("/").at(-1)!),
@@ -85,9 +86,9 @@ test("AV14 / PR-003, TUI-004: a TUI run resumes the Principal's existing session
     const runtime = resolvePiRuntime({ stateRoot: root, libdir: LIBDIR });
     const workspace = join(root, "workspace"); const sessions = join(root, "sessions"); const agent = join(root, "agent");
     for (const path of [workspace, sessions, agent]) mkdirSync(path, { recursive: true });
-    const args = sessionArgv({ piCommand: runtime.executable, piArgs: [...runtime.args], coreExtension: join(LIBDIR, "dist/src/pi-extension.js"),
+    const args = sessionArgv({ piCommand: runtime.executable, piArgs: [...runtime.args], coreExtension: join(LIBDIR, "packages/extension/dist/index.js"),
       sessionDir: sessions, workspace, home: workspace, piAgentDir: agent } as never,
-      { society: "s", provider: "pi", model: "current", extensions: [], workspaceBytes: 1 << 20 } as never);
+      { society: "s", provider: "pi", model: "current", extensions: [] } as never);
     const prior = priorSession(sessions, workspace);
     assert.equal(await openedSession(runtime.executable, [...runtime.args, ...args], workspace,
       { HOME: workspace, PATH: "/usr/bin:/bin", PI_CODING_AGENT_DIR: agent }), prior,

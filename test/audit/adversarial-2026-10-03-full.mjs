@@ -1,3 +1,4 @@
+import { createReconcileModule } from "#oma-test/app/broker/reconcile-composition";
 /** Full-audit REQUIRED-behavior oracles. Only disposable local fixtures.
  * Current defects intentionally fail; restore builtin hooks and close every
  * test-owned descriptor even after an assertion fails. */
@@ -12,12 +13,13 @@ import { spawnSync } from 'node:child_process';
 import { prepareContextStream } from '../../dist/src/storage/context-stream.js';
 import { contextStagingPathAt } from '../../dist/src/storage/paths.js';
 import { treeQuiescence, leasePathOf } from '../../dist/src/storage/tree-lease.js';
-import { generateOperationId } from '../../dist/src/ids.js';
-import { collectUnacceptedArtifacts } from '../../dist/src/reconcile/preaccept.js';
-import { ReconcileModule } from '../../dist/src/reconcile.js';
+import { generateOperationId } from "@oma/native/identity";
+import { collectUnacceptedArtifacts } from "@oma/storage/preaccept-collection";
+import { ReconcileModule } from "@oma/reconcile";
 import { Store, StoreError } from '../../dist/src/store.js';
 import { requestHash } from '../../dist/src/hash.js';
-import { GitObserver, observed } from '../../dist/src/git/observe.js';
+import { GitObserver } from "@oma/git/observe";
+import { observed } from "@oma/domain/git-facts";
 import { CAPABILITIES } from '../../dist/src/domain/capabilities.js';
 import { resolvedSpecDigest } from '../../dist/src/domain/spec-identity.js';
 
@@ -123,7 +125,7 @@ test('AV-20261003-20: startup must contain a recoverable non-mail failure like t
       reconcileCreate: async () => { throw new StoreError('REF_STATE_UNKNOWN', 'fixture'); },
     };
     const units = { stop: () => {}, confirmDead: () => true };
-    const reconcile = new ReconcileModule(store, {}, null, units, lifecycle, {
+    const reconcile = createReconcileModule(store, {}, null, null, units, lifecycle, {
       projectGit: join(root, 'repos', 'project.git'),
       hasGoal: () => true, activationAllowed: () => true,
     });

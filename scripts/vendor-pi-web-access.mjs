@@ -1,6 +1,7 @@
 #!/usr/bin/env node
+import { NPM_METADATA_PACKAGING, preserveNpmMetadata, vendorPackagingProblems } from "./vendor-bundle-lib.mjs";
 /** Vendored pi-web-access bundle maintenance — the only writer of
- * `src/extension/vendor/pi-web-access/runtime/` and `manifest.json`.
+ * `apps/oma/src/extension/vendor/pi-web-access/runtime/` and `manifest.json`.
  *
  * `upstream/` is the exact npm tarball snapshot of pi-web-access (verified
  * against `package/npm integrity` and `shasum` at vendoring time) and is
@@ -49,7 +50,7 @@ import {
 } from "./vendor-bundle-lib.mjs";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
-const BUNDLE_DIR = join(root, "src/extension/vendor/pi-web-access");
+const BUNDLE_DIR = join(root, "packages/tool-web/src/vendor/pi-web-access");
 const UPSTREAM_DIR = join(BUNDLE_DIR, "upstream");
 const RUNTIME_DIR = join(BUNDLE_DIR, "runtime");
 const UPSTREAM_TESTS_DIR = join(BUNDLE_DIR, "upstream-tests");
@@ -837,7 +838,7 @@ function packageMetadata() {
  * even when every file record and the bundle digest still match. Exported
  * so the regression test can drive the same function the check runs. */
 export function manifestMetadataProblems(manifest) {
-  const problems = divergenceProblems(manifest, OMA_DIVERGENCES);
+  const problems = [...divergenceProblems(manifest, OMA_DIVERGENCES), ...vendorPackagingProblems(manifest, BUNDLE_DIR)];
   const expectedPackage = packageMetadata();
   if (canonical(manifest?.package) !== canonical(expectedPackage))
     problems.push("manifest package does not match the pinned upstream identity");
@@ -876,6 +877,7 @@ function writeRuntime() {
 }
 
 function writeManifest() {
+  preserveNpmMetadata(BUNDLE_DIR);
   const records = bundleRecords(BUNDLE_DIR);
   const manifest = {
     kind: "oma-vendored-bundle-v1",
@@ -890,6 +892,7 @@ function writeManifest() {
       tool: "scripts/vendor-pi-web-access.mjs",
       divergences: divergenceMetadata(OMA_DIVERGENCES),
       dependencies: DEPENDENCIES,
+      packaging: NPM_METADATA_PACKAGING,
       upstreamTests:
         "upstream-tests/ is the repository's test/ tree at the vendored " +
         "commit (the npm tarball ships no tests); kept for provenance " +

@@ -212,8 +212,8 @@
   {
     "requirement": "M-002",
     "source": "docs/implementation-spec.md",
-    "digest": "7c8ba2d4ecb4e6dd7e6dfd0258d81e9ae3f3591e10930b3f6bfa0d2f1eba1313",
-    "normativeText": "**MUST [M-002]** 모듈 경계는 다음 표와 [contracts.ts](../implementation/contracts.ts)를 따른다. 같은 책임의 파일 분할은 허용하지만 공개 서비스·권한·durable entity를 늘리지 않는다. 실행 파일 entrypoint는 조립만 하고 로직을 중복하지 않는다.",
+    "digest": "6635bde6dfda98d78a437ab127cab046be54d291f5769805127e5e094ff7a934",
+    "normativeText": "**MUST [M-002]** 모듈 경계는 다음 표와 [contracts.ts](../packages/contracts/src/index.ts)를 따른다. 같은 책임의 파일 분할은 허용하지만 공개 서비스·권한·durable entity를 늘리지 않는다. 실행 파일 entrypoint는 조립만 하고 로직을 중복하지 않는다.",
     "applicability": "unclassified",
     "rationale": "Requires production-path review; no inference from test names.",
     "owner": null,
@@ -244,12 +244,12 @@
     "normativeText": "**MUST [M-004]** `Store.transaction` callback은 동기식이다. transaction 안에서 await, Git, systemd, fsync, provider 호출을 수행하지 않는다. subprocess는 argv 배열로 실행하고 shell 문자열 보간을 사용하지 않는다. stdout/stderr는 설정된 크기를 넘으면 bounded spool 또는 명시적 실패로 처리하며 메모리에 무한 수집하지 않는다.",
     "applicability": "unclassified",
     "rationale": "Requires production-path review; no inference from test names.",
-    "owner": "src/store.ts#Store.transaction",
-    "entrypoint": "src/entry/broker.ts#main",
+    "owner": "packages/storage/src/store.ts#Store.transaction",
+    "entrypoint": "apps/oma/src/entry/broker.ts#main",
     "callPath": [
-      "src/entry/broker.ts#main",
-      "src/broker.ts#Broker",
-      "src/store.ts#Store.transaction"
+      "apps/oma/src/entry/broker.ts#main",
+      "packages/broker/src/index.ts#Broker",
+      "packages/storage/src/store.ts#Store.transaction"
     ],
     "negativeTests": [
       "test/r37-preparation-boundaries.test.ts#R37",
@@ -305,8 +305,8 @@
   {
     "requirement": "CFG-001",
     "source": "docs/implementation-spec.md",
-    "digest": "05eb42085ac5a9040371f8d2c1c8b8370ea418a6fc946db7c84a4202b9d33527",
-    "normativeText": "**MUST [CFG-001]** `config.json`은 host만 수정하며 다음 폐쇄된 정보를 가진다: schemaVersion=1, society, trusted rootfs/install path, pinned deployment manifest digest, agent profile map, 초기 population, society/lineage agent·usage cap, Principal slot/budget reserve, provider credential reference, protected path 목록, candidate check argv/env/resource profile, policy revision, storage/resource/protocol limits, optional notmuch/approval/egress flags. secret 값은 파일에 넣지 않고 host credential reference로 해석한다.",
+    "digest": "01ec5553cf116eea1e863f0e3d5db0cf0c21b9bed8231db62a7584506cd3c288",
+    "normativeText": "**MUST [CFG-001]** DR46: `config.json`은 host가 소유하는 폐쇄된 schema 3 `HostConfig`다. society, trusted rootfs/install path, pinned deployment digest, model/agent profile, 초기 Worker, protected path와 candidate check, policy revision, 실제 protocol 한계를 검증한다. 이전 schema와 삭제된 quota/egress 필드, 미지 profile 필드는 명시적으로 거절하며 자동 변환·덮어쓰기·삭제하지 않는다. secret은 설정에 저장하지 않고 실행 시 엔진/host credential owner가 해석한다.",
     "applicability": "unclassified",
     "rationale": "Requires production-path review; no inference from test names.",
     "owner": null,
@@ -319,8 +319,8 @@
   {
     "requirement": "CFG-002",
     "source": "docs/implementation-spec.md",
-    "digest": "8082043122ed84b9fd03188a944756ebab3924430324dbb660c2710eba8b2232",
-    "normativeText": "**MUST [CFG-002]** 기본 quota 금액·model ID·provider 가격·기능성 검사 명령은 bootstrap 때 Human host 설정으로 필수 제공한다. missing 값을 무제한·검사 없음·가장 비싼 모델로 채우지 않는다. `requiredChecks: []`는 host가 명시적으로 선택한 경우만 허용한다. quota 계산은 최소 화폐 단위 정수이며 JS에서는 safe integer 검사 또는 bigint/decimal string 경계를 사용한다.",
+    "digest": "245222436000ca1089303724205ece8ab409edc9b0636d1316280e9d88b65ff9",
+    "normativeText": "**MUST [CFG-002]** model과 기능성 검사 명령은 host 설정으로 정하고 전체 validator로 확인한다. 명시한 빈 검사 목록은 허용한다. DR37/DR46: 이 조항의 과거 quota 금액·provider 가격·화폐 계산 요구는 폐기했다. 과금은 엔진과 provider 설정이 소유하고 OMA는 효과 없는 quota 필드를 받지 않는다.",
     "applicability": "unclassified",
     "rationale": "Requires production-path review; no inference from test names.",
     "owner": null,
@@ -333,8 +333,8 @@
   {
     "requirement": "CFG-005",
     "source": "docs/implementation-spec.md",
-    "digest": "5470b216163f1189f6fa9f628ad7b134a3209881eb7e246642dc2a8ff428bc17",
-    "normativeText": "**MUST [CFG-005]** `contracts.ts`의 `HostConfigV1`을 기본 profile의 폐쇄된 설정 schema로 사용한다. 숫자는 유한한 non-negative safe integer이고 slot/size/timeout은 양수다. Principal reserve는 total을 초과하지 않는다. quota는 Core v1 society 수명 누계이며 자동 월별 reset을 추가하지 않는다. 금액 단위·가격 codec은 host deployment manifest에 고정한다. `protectedPaths`는 glob이 아닌 repository 상대 literal path 또는 `/`로 끝나는 subtree prefix다. diff의 추가/수정/삭제 양쪽 path를 모두 검사한다. D02: 전체 후보를 loader와 동일한 validator로 검사하고 host/model/role/prompt/extension 선택의 의미가 바뀌면 새 policy revision을 지정하여 outstanding integrate가 재검사하게 한다. 비교에서 revision 자체를 제외하고 공백·동일 의미 재저장은 policy 변경으로 만들지 않는다. generation identity와 policy revision은 별개이며 기존 request/spec/check-profile hash recipe는 바꾸지 않는다.",
+    "digest": "250ed4a2185f4601ee920a749e908d8e717baf13206d7e54ec23cf48d58bf9ea",
+    "normativeText": "**MUST [CFG-005]** `@oma/contracts/host`의 `HostConfig`와 `@oma/config`의 단일 validator가 현재 설정 schema 3를 소유한다(DR46). 숫자는 유한한 safe integer이고 각 실제 descriptor의 범위를 따른다. `protectedPaths`는 glob이 아닌 repository 상대 literal path 또는 `/`로 끝나는 subtree prefix다. diff의 추가/수정/삭제 양쪽 path를 모두 검사한다. D02: 전체 후보를 loader와 동일한 validator로 검사하고 host/model/role/prompt/extension 선택의 의미가 바뀌면 새 policy revision을 지정하여 outstanding integrate가 재검사하게 한다. 비교에서 revision 자체를 제외하고 공백·동일 의미 재저장은 policy 변경으로 만들지 않는다. generation identity와 policy revision은 별개이며 이미 접수한 bytes와 hash의 의미는 바꾸지 않는다.",
     "applicability": "unclassified",
     "rationale": "Requires production-path review; no inference from test names.",
     "owner": null,
@@ -407,15 +407,15 @@
     "normativeText": "**MUST [AUTH-003]** per-incarnation pathname listener에 actor를 고정하고 SO_PEERCRED 및 실제 systemd cgroup을 검증한다. 같은 UID, payload actor, 환경 변수, unit처럼 보이는 문자열은 증명이 아니다. 이전 incarnation 연결을 닫고 이후 요청을 `STALE_RUN`으로 거절한다. 실행 인증과 이미 접수된 broker-owned effect의 복구를 구분한다.",
     "applicability": "unclassified",
     "rationale": "Requires production-path review; no inference from test names.",
-    "owner": "src/authority.ts#assertCurrentActor",
-    "entrypoint": "src/broker.ts#Broker",
+    "owner": "packages/domain/src/authority.ts#assertCurrentActor",
+    "entrypoint": "packages/broker/src/index.ts#Broker",
     "callPath": [
-      "src/broker.ts#Broker",
-      "src/git.ts#GitModule",
-      "src/git/submit.ts#SubmitCoordinator",
-      "src/git/context.ts#ContextCoordinator",
-      "src/lifecycle/create.ts#CreateCoordinator",
-      "src/authority.ts#assertCurrentActor"
+      "packages/broker/src/index.ts#Broker",
+      "packages/git/src/index.ts#GitModule",
+      "packages/git/src/submit.ts#SubmitCoordinator",
+      "packages/git/src/context.ts#ContextCoordinator",
+      "packages/lifecycle/src/create.ts#CreateCoordinator",
+      "packages/domain/src/authority.ts#assertCurrentActor"
     ],
     "negativeTests": [
       "test/r37-preparation-boundaries.test.ts#R37",
@@ -461,13 +461,13 @@
     "normativeText": "**MUST [FS-003]** CLI cache는 `/home/agent/.local/state/oma/requests/<key>.json`이며 freeze된 request, body/bundle digest, 마지막 receipt만 저장한다. broker 원본이 아니고 모델이 변조할 수 있다. broker는 항상 다시 검증한다. Principal CLI의 대응 cache는 자기 private scratch 안에 둔다. 여기서 별도 queue/자동 replay engine을 만들지 않는다.",
     "applicability": "unclassified",
     "rationale": "Requires production-path review; no inference from test names.",
-    "owner": "src/runtime/engine/principal-session.ts#principalEnvironment",
-    "entrypoint": "src/entry/oma.ts#main",
+    "owner": "packages/engine/src/principal-session.ts#principalEnvironment",
+    "entrypoint": "apps/oma/src/entry/oma.ts#main",
     "callPath": [
-      "src/entry/oma.ts#main",
-      "src/entry/oma-society.ts#main",
-      "src/application/society-runtime.ts#SocietyRuntime",
-      "src/runtime/engine/principal-session.ts#principalEnvironment"
+      "apps/oma/src/entry/oma.ts#main",
+      "apps/oma/src/entry/oma-society.ts#main",
+      "apps/oma/src/application/society-runtime.ts#SocietyRuntime",
+      "packages/engine/src/principal-session.ts#principalEnvironment"
     ],
     "negativeTests": [
       "test/model-scope.test.ts#AV3"
@@ -498,12 +498,12 @@
     "normativeText": "**MUST [FS-005]** state root/DB/private/runner receipt는 기본 host mode 0700 directory, 0600 file이다. 공개 원문은 host 0444이고 모델 mount는 RO다. 같은 host UID에서 파일 mode만으로 sandbox 경계를 주장하지 않는다. staging path에는 no-follow/exclusive-create를 사용하고 agent symlink를 따라 host file을 열지 않는다.",
     "applicability": "unclassified",
     "rationale": "Requires production-path review; no inference from test names.",
-    "owner": "src/storage/contained-fs.ts#withinDirectory",
-    "entrypoint": "src/entry/broker.ts#main",
+    "owner": "packages/native/src/files.ts#withinDirectory",
+    "entrypoint": "apps/oma/src/entry/broker.ts#main",
     "callPath": [
-      "src/entry/broker.ts#main",
-      "src/broker/transport-spool.ts#TransportSpool",
-      "src/storage/contained-fs.ts#withinDirectory"
+      "apps/oma/src/entry/broker.ts#main",
+      "packages/storage/src/transport-spool.ts#TransportSpool",
+      "packages/native/src/files.ts#withinDirectory"
     ],
     "negativeTests": [
       "test/held-parent.test.ts#AV5",
@@ -546,8 +546,8 @@
   {
     "requirement": "DB-001; arch §14",
     "source": "docs/implementation-spec.md",
-    "digest": "1b2aa9694e1e8fb68ae08ee3c1ef16bd56ac8f30a292d645beefa06a8156b434",
-    "normativeText": "**MUST [DB-001; arch §14]** base entity는 `agents`, `operations`, `subscriptions`, `deliveries`, `batches`, `attestations` 여섯 개뿐이다. [schema-v3.sql](../implementation/schema-v3.sql)을 base 초기 migration으로 실행한다. tiered persistence는 POL-006/S-08/S-10의 후속 계약 전 지원하지 않는다. migration version은 SQLite `user_version`을 사용하고 migrations table을 추가하지 않는다. 기존 native-v2 DB를 변환·공유하지 않는다.",
+    "digest": "5a19cbdb8fec380c0c137c519ca9fb1e0cca10b33f44753e513b516caf5a06f2",
+    "normativeText": "**MUST [DB-001; arch §14]** base entity는 `agents`, `operations`, `subscriptions`, `deliveries`, `batches`, `attestations` 여섯 개뿐이다. [schema-v4.sql](../packages/storage/src/schema-v4.sql)을 base 초기 migration으로 실행한다. DR46: `user_version=4` 하나만 읽고 쓰며 이전 DB는 쓰기 connection 이전에 거절하고 보존한다. migrations table·변환·자동 삭제는 제공하지 않는다. operation plan은 `{version:2,intent:...}`의 닫힌 envelope이며 원본 bytes를 읽기나 복구에서 보충하지 않는다.",
     "applicability": "unclassified",
     "rationale": "Requires production-path review; no inference from test names.",
     "owner": null,
@@ -802,15 +802,15 @@
     "normativeText": "**MUST [IPC-011]** internal channel도 동일한 bounded frame/error 형식을 사용하며 `InternalRequest`/`InternalResponse`로 제한한다. runner.open은 검증된 unit invocation에만 lease를 반환하고, batch.complete의 성공 응답은 DB complete commit 뒤에만 보낸다. runner.observe는 메모리 관측값이며 durable row를 추가하지 않는다. principal.attach의 credential 발급·교환 handshake는 OMA가 소유해 직접 기동한 session에 한해 확정한다. host-only channel은 host가 broker를 spawn할 때 연 socketpair(descriptor 3)이며, host는 그 peer로 식별되므로 secret이 필요 없다. broker는 이 channel이 있을 때만 principal endpoint를 열고, 두 endpoint가 listening된 뒤에 준비를 알린다. host는 자신의 자식인 engine을 등록하고, broker는 그 engine이 실제로 host의 자식인지 확인한 뒤 credential을 channel로 돌려준다. credential과 session handle은 파일에도, 어떤 프로세스의 환경에도, 명령행에도 두지 않는다 — 셋 다 같은 UID의 다른 프로세스가 읽을 수 있기 때문이다. host→engine, trusted extension→CLI로도 socketpair로만 전달하며, pipe와 달리 socket은 `/proc/<pid>/fd`로 다시 열 수 없다. attach는 credential과 handle에 더해 연결한 프로세스가 등록된 engine의 자손일 것을 요구하므로, credential을 얻었어도 engine이 시작하지 않은 프로세스는 Principal이 아니다. attach 이전 요청과 위조·이전 run의 credential은 `AUTH_FAILED`, 다른 session handle은 `ATTACH_CONFLICT`다. 재등록과 broker 재시작은 새 credential을 발급하고 이전 것은 무효다. 권한은 attach 시점에 받은 context가 아니라 현재 등록 세대에 대한 binding이며 모든 요청과 preflight에서 재확인한다. 자손 관계도 attach 때 한 번 보고 마는 것이 아니라 요청마다 `/proc`에서 다시 계산한다 — engine이 죽으면 그 자손은 init으로 reparent되어 더 이상 어떤 engine의 자손도 아니고, attach 때의 판정을 기억해 두면 죽은 engine이 남긴 프로세스가 Principal 권한을 계속 쓰게 된다. engine이 죽었음은 pid가 아니라 pid와 시작 시각의 쌍으로 판정하며, 그 사실이 확인되면 그 session 전체를 은퇴시킨다. 은퇴는 거절을 먼저 쓴 뒤에 일어나므로 요청자는 끊김이 아니라 `AUTH_FAILED`를 받는다. 재등록·broker 교체·endpoint 종료는 이전 세대에 attach된 연결을 그 자리에서 끊으므로, 이미 연결을 들고 있던 engine도 다음 요청을 통과시키지 못한다. host endpoint는 host임을 확인한 뒤 먼저 method 표면을 판정하고(서빙하지 않는 method는 `UNKNOWN_METHOD`), 그 다음에 이 broker의 Principal 등록 유무를 본다 — method의 존재 여부는 등록 여부에 의존하지 않으며 error class가 caller의 재시도를 결정하기 때문이다. host의 channel이 닫히면 broker는 스스로 멈춘다. ptrace가 같은 UID 사이에서 제한되지 않는 host(Yama scope 0)에서는 어떤 user-space 검사도 두 프로세스를 구별하지 못하며, 이는 host의 성질로 적어 둔다. 사용자가 따로 띄운 외부 Pi session에 attach하는 경로는 여전히 확정하지 않으며 S-02의 model-facing tool 통과 기준도 그대로 남는다. host relay/reconcile 응답은 실제 처리된 개수를 반환하고 timeout은 작업 성공으로 꾸미지 않는다. 대량 Principal backlog에서 oneshot timeout/start-limit 반복이 발생하지 않는 처리량·자원 조건은 S-06 필수 시험이다.",
     "applicability": "unclassified",
     "rationale": "Requires production-path review; no inference from test names.",
-    "owner": "src/broker/principal-endpoint.ts#PrincipalEndpoint",
-    "entrypoint": "src/entry/broker.ts#main",
+    "owner": "packages/broker/src/principal-endpoint.ts#PrincipalEndpoint",
+    "entrypoint": "apps/oma/src/entry/broker.ts#main",
     "callPath": [
-      "src/entry/broker.ts#main",
-      "src/broker.ts#Broker",
-      "src/broker/principal-endpoint.ts#PrincipalEndpoint",
-      "src/runtime/supervision-channel.ts#openSupervisionChannel",
-      "src/protocol/host-channel.ts#HostChannelReader",
-      "src/broker/process-ancestry.ts#descendsFrom"
+      "apps/oma/src/entry/broker.ts#main",
+      "packages/broker/src/index.ts#Broker",
+      "packages/broker/src/principal-endpoint.ts#PrincipalEndpoint",
+      "apps/oma/src/runtime/supervision-channel.ts#openSupervisionChannel",
+      "packages/protocol/src/host-channel.ts#HostChannelReader",
+      "packages/broker/src/process-ancestry.ts#descendsFrom"
     ],
     "negativeTests": [
       "test/principal-endpoint.test.ts#T114",
@@ -1090,8 +1090,8 @@
   {
     "requirement": "PI-001; arch §§7–8",
     "source": "docs/implementation-spec.md",
-    "digest": "3745a31e53b639403cf9fd859dd6dc2a161a1fda2be97b5abc4f4541963d1f5c",
-    "normativeText": "**MUST [PI-001; arch §§7–8]** trusted runner가 bwrap 안에서 `pi --mode rpc`를 실행하고 RPC stdin/stdout을 private pipe로 다룬다. Pi extension은 `src/pi-extension.ts`의 신뢰된 compiled artifact만 기본 로드한다. agent workspace의 extension/config를 host runner에서 import하지 않는다. Pi의 discovery 차단 옵션은 pinned 버전 실험으로 확인한다.",
+    "digest": "160d5580cfc3174b2dc1d047a559d0f79deffd75df824d0dcafdd11f50fa74e8",
+    "normativeText": "**MUST [PI-001; arch §§7–8]** trusted runner가 bwrap 안에서 `pi --mode rpc`를 실행하고 RPC stdin/stdout을 private pipe로 다룬다. Pi extension은 `packages/extension/src/index.ts`의 신뢰된 compiled artifact만 기본 로드한다. agent workspace의 extension/config를 host runner에서 import하지 않는다. Pi의 discovery 차단 옵션은 pinned 버전 실험으로 확인한다.",
     "applicability": "unclassified",
     "rationale": "Requires production-path review; no inference from test names.",
     "owner": null,
@@ -1192,18 +1192,18 @@
     "normativeText": "**MUST [PR-002]** D01/D06: principal-relay는 mailbox new 항목마다 durable 수신 기록과 원문을 확인하여 모두 cur로 이동한다. 기존 질문/batch가 pending이어도 새 항목의 인수는 계속한다. relay는 모델을 호출하지 않으며 UI가 없으면 새 batch를 prepare하지 않는다. 재연결한 host가 제한된 pending batch를 인수하고 trusted extension이 custom message로 전달한다.",
     "applicability": "unclassified",
     "rationale": "Requires production-path review; no inference from test names.",
-    "owner": "src/runtime/principal-delivery.ts#PrincipalDelivery",
-    "entrypoint": "src/entry/oma.ts#main",
+    "owner": "apps/oma/src/runtime/principal-delivery.ts#PrincipalDelivery",
+    "entrypoint": "apps/oma/src/entry/oma.ts#main",
     "callPath": [
-      "src/entry/oma.ts#main",
-      "src/entry/oma-society.ts#main",
-      "src/application/society-runtime.ts#SocietyRuntime",
-      "src/runtime/engine/principal-session.ts#PrincipalSession",
-      "src/runtime/principal-delivery.ts#PrincipalDelivery",
-      "src/runtime/principal-delivery.ts#principalHostBroker",
-      "src/broker/principal-endpoint.ts#PrincipalHostEndpoint",
-      "src/extension/delivery.ts#registerDelivery",
-      "src/storage/delivery-receipt.ts#publishDeliveryReceipt"
+      "apps/oma/src/entry/oma.ts#main",
+      "apps/oma/src/entry/oma-society.ts#main",
+      "apps/oma/src/application/society-runtime.ts#SocietyRuntime",
+      "packages/engine/src/principal-session.ts#PrincipalSession",
+      "apps/oma/src/runtime/principal-delivery.ts#PrincipalDelivery",
+      "apps/oma/src/runtime/principal-delivery.ts#principalHostBroker",
+      "packages/broker/src/principal-endpoint.ts#PrincipalHostEndpoint",
+      "packages/extension/src/delivery.ts#registerDelivery",
+      "packages/storage/src/delivery-receipt.ts#publishDeliveryReceipt"
     ],
     "negativeTests": [
       "test/principal-endpoint.test.ts#T114",
@@ -1249,19 +1249,19 @@
     "normativeText": "**MUST [PR-004]** Principal host Pi의 모든 model-facing shell/read/write/edit 및 동적으로 등록된 tool 경로를 sandbox-backed 구현으로 제한한다. extension attach credential·Human 원본 session·provider credential을 model tool sandbox에 mount하지 않는다. trusted extension은 session 접근이 필요하지만 model에게 그 권한을 위임하지 않는다.",
     "applicability": "unclassified",
     "rationale": "Requires production-path review; no inference from test names.",
-    "owner": "src/protocol/methods.ts#principalRequestAllowed",
-    "entrypoint": "src/entry/oma.ts#main",
+    "owner": "packages/protocol/src/methods.ts#principalRequestAllowed",
+    "entrypoint": "apps/oma/src/entry/oma.ts#main",
     "callPath": [
-      "src/entry/oma.ts#main",
-      "src/entry/oma-society.ts#main",
-      "src/application/society-runtime.ts#SocietyRuntime",
-      "src/runtime/engine/principal-session.ts#PrincipalSession.start",
-      "src/storage/paths.ts#assertModelScope",
-      "src/broker/public-dispatcher.ts#PublicDispatcher",
-      "src/pi-extension.ts#extension",
-      "src/extension/tool-surface.ts#registerToolSurface",
-      "src/extension/workspace-guard.ts#guardWorkspaceTools",
-      "src/protocol/methods.ts#principalRequestAllowed"
+      "apps/oma/src/entry/oma.ts#main",
+      "apps/oma/src/entry/oma-society.ts#main",
+      "apps/oma/src/application/society-runtime.ts#SocietyRuntime",
+      "packages/engine/src/principal-session.ts#PrincipalSession.start",
+      "packages/domain/src/paths.ts#assertModelScope",
+      "packages/broker/src/public-dispatcher.ts#PublicDispatcher",
+      "packages/extension/src/index.ts#extension",
+      "packages/tool-runtime/src/tool-surface.ts#registerToolSurface",
+      "packages/tool-runtime/src/workspace-guard.ts#guardWorkspaceTools",
+      "packages/protocol/src/methods.ts#principalRequestAllowed"
     ],
     "negativeTests": [
       "test/model-scope.test.ts#AV3",
@@ -1421,14 +1421,14 @@
     "normativeText": "**MUST [INT-002]** candidate 검사는 별도 sandbox의 해당 C checkout에서 host 지정 argv/env로 수행한다. 검사의 stdout 'PASS'가 아닌 실제 exit code/timeout을 사용한다. candidate가 수정할 수 있는 검사 script가 존재한다는 사실만으로 trusted 검사 정책을 대체하지 않는다. test sandbox에 actor/admin socket, credential, shared repo RW, workspace 밖 host FS를 노출하지 않는다.",
     "applicability": "unclassified",
     "rationale": "Requires production-path review; no inference from test names.",
-    "owner": "src/runtime/candidate-checks.ts#CandidateChecks",
-    "entrypoint": "src/entry/broker.ts#main",
+    "owner": "apps/oma/src/runtime/candidate-checks.ts#CandidateChecks",
+    "entrypoint": "apps/oma/src/entry/broker.ts#main",
     "callPath": [
-      "src/entry/broker.ts#main",
-      "src/git.ts#GitModule",
-      "src/runtime/candidate-checks.ts#candidateCheckCommand",
-      "src/git/integration-policy.ts#assertCheckResources",
-      "src/runtime/candidate-checks.ts#CandidateChecks"
+      "apps/oma/src/entry/broker.ts#main",
+      "packages/git/src/index.ts#GitModule",
+      "apps/oma/src/runtime/candidate-checks.ts#candidateCheckCommand",
+      "packages/domain/src/integration-policy.ts#assertCheckResources",
+      "apps/oma/src/runtime/candidate-checks.ts#CandidateChecks"
     ],
     "negativeTests": [
       "test/candidate-checks.test.ts#DR29",
@@ -1442,18 +1442,18 @@
   {
     "requirement": "INT-007",
     "source": "docs/implementation-spec.md",
-    "digest": "d57fd64f30f0e4626ace1499cb1e4f6948dbe94c1f3ea9993f259f94b46768ce",
-    "normativeText": "**MUST [INT-007]** 실제 spawn의 candidate OID/argv/env/resources는 검증된 check snapshot과 정확히 같아야 한다. builder unit test만 통과하고 production이 다른 cwd/config/default를 쓰는 것을 금지한다. timeout/signal/검사 후손 잔존/관측 불명확은 CHECK_FAILED 또는 대조 전 pending/unknown이며 PASS가 아니다. host check exit 0만으로 아직 살아 있는 background process를 무시하고 종료했다고 기록하지 않는다. 실제 candidate 출처와 kernel limits를 production entrypoint 시험에서 확인한다. UX-09: sandbox checkout의 gitlink 거절은 bare exit이 아니라 `OMA_ERROR=UNSUPPORTED_PROFILE`와 gitlink마다 `OMA_GITLINK=<path>`를 stderr에 남기고, host는 그 marker로만 code를 분류한다 — resource gate와 code를 공유하는 bare 125는 CHECK_FAILED로 남는다. 거절은 check argv 이전이며 경로는 sandbox 출력이 아니라 불변 candidate에서 다시 관측한다.",
+    "digest": "dbd588594c007cf8e5d71773cd662f98de6b9f0b30c9417f52353a008d50eb43",
+    "normativeText": "**MUST [INT-007]** 실제 spawn의 candidate OID/argv/env는 검증된 check snapshot과 정확히 같아야 한다. builder unit test만 통과하고 production이 다른 cwd/config/default를 쓰는 것을 금지한다. timeout/signal/검사 후손 잔존/관측 불명확은 CHECK_FAILED 또는 대조 전 pending/unknown이며 PASS가 아니다. host check exit 0만으로 아직 살아 있는 background process를 무시하고 종료했다고 기록하지 않는다. 실제 candidate 출처와 sandbox/종료 ownership를 production entrypoint 시험에서 확인한다. UX-09: sandbox checkout의 gitlink 거절은 bare exit이 아니라 `OMA_ERROR=UNSUPPORTED_PROFILE`와 gitlink마다 `OMA_GITLINK=<path>`를 stderr에 남기고, host는 그 marker로만 code를 분류한다 — 거절 marker가 없는 bare 125는 CHECK_FAILED로 남는다. 거절은 check argv 이전이며 경로는 sandbox 출력이 아니라 불변 candidate에서 다시 관측한다.",
     "applicability": "unclassified",
     "rationale": "Requires production-path review; no inference from test names.",
-    "owner": "src/runtime/candidate-checks.ts#CandidateChecks",
-    "entrypoint": "src/entry/broker.ts#main",
+    "owner": "apps/oma/src/runtime/candidate-checks.ts#CandidateChecks",
+    "entrypoint": "apps/oma/src/entry/broker.ts#main",
     "callPath": [
-      "src/entry/broker.ts#main",
-      "src/git.ts#GitModule",
-      "src/runtime/candidate-checks.ts#candidateCheckCommand",
-      "src/git/integration-policy.ts#assertCheckResources",
-      "src/runtime/candidate-checks.ts#CandidateChecks"
+      "apps/oma/src/entry/broker.ts#main",
+      "packages/git/src/index.ts#GitModule",
+      "apps/oma/src/runtime/candidate-checks.ts#candidateCheckCommand",
+      "packages/domain/src/integration-policy.ts#assertCheckResources",
+      "apps/oma/src/runtime/candidate-checks.ts#CandidateChecks"
     ],
     "negativeTests": [
       "test/candidate-checks.test.ts#DR29",
@@ -1471,12 +1471,12 @@
     "normativeText": "**MUST [INT-003]** project main mutation은 repo별 메모리 mutex와 pending integrate operation 검사로 직렬화한다. 먼저 T-integrate-intent, 그 뒤 검사·Git CAS, 마지막 T-integrate-done다. crash 후 unresolved integrate가 있으면 새로운 main writer를 시작하지 않는다. CAS 바로 전에 main/policy/capability/stop intent를 재검사한다.",
     "applicability": "unclassified",
     "rationale": "Requires production-path review; no inference from test names.",
-    "owner": "src/git/integration.ts#IntegrationCoordinator",
-    "entrypoint": "src/git.ts#GitModule.integrate",
+    "owner": "packages/git/src/integration.ts#IntegrationCoordinator",
+    "entrypoint": "packages/git/src/index.ts#GitModule.integrate",
     "callPath": [
-      "src/git.ts#GitModule.integrate",
-      "src/git/integration.ts#IntegrationCoordinator",
-      "src/git/canonical-command.ts#compareAndSwapCanonicalRef"
+      "packages/git/src/index.ts#GitModule.integrate",
+      "packages/git/src/integration.ts#IntegrationCoordinator",
+      "packages/git/src/canonical-command.ts#compareAndSwapCanonicalRef"
     ],
     "negativeTests": [
       "test/crash-boundaries.test.ts#T63",
@@ -1578,14 +1578,14 @@
     "normativeText": "**MUST [CTX-003]** context.git의 canonical ref는 `refs/heads/main`으로 고정한다. 기존 revision을 parent로 한 commit을 broker trusted identity로 생성하고 op plan에 candidate C를 영속화한다. 첫 publish expected=null은 ref absent를 뜻한다. `git update-ref refs/heads/main C B` 또는 첫 생성의 zero-OID CAS를 사용한다. CAS 실패는 CONTEXT_CONFLICT+actual revision이다.",
     "applicability": "unclassified",
     "rationale": "Requires production-path review; no inference from test names.",
-    "owner": "src/git/context.ts#ContextCoordinator",
-    "entrypoint": "src/git.ts#GitModule.publishContext",
+    "owner": "packages/git/src/context.ts#ContextCoordinator",
+    "entrypoint": "packages/git/src/index.ts#GitModule.publishContext",
     "callPath": [
-      "src/git.ts#GitModule.publishContext",
-      "src/git/context.ts#ContextCoordinator",
-      "src/git/context-repository.ts#ContextRepository",
-      "src/git/context-publication.ts#ContextPublicationObserver",
-      "src/git/canonical-command.ts#compareAndSwapCanonicalRef"
+      "packages/git/src/index.ts#GitModule.publishContext",
+      "packages/git/src/context.ts#ContextCoordinator",
+      "packages/git/src/context-repository.ts#ContextRepository",
+      "packages/git/src/context-publication.ts#ContextPublicationObserver",
+      "packages/git/src/canonical-command.ts#compareAndSwapCanonicalRef"
     ],
     "negativeTests": [
       "test/r37-preparation-boundaries.test.ts#R37",
@@ -1603,14 +1603,14 @@
     "normativeText": "**MUST [CTX-004]** context CAS 뒤 `world/context/revisions/C`를 immutable 완성·fsync하고 relative current symlink를 atomic 교체한 뒤 고정 residents notification을 공개한다. crash 후 ref==C이면 missing snapshot/symlink/mail을 보충한다. 다음 context mutation 전에 미완료 publication을 대조한다. ref==B이면 현재 조건으로 재시도하고 제3 OID면 unknown으로 멈춘다.",
     "applicability": "unclassified",
     "rationale": "Requires production-path review; no inference from test names.",
-    "owner": "src/git/context.ts#ContextCoordinator",
-    "entrypoint": "src/git.ts#GitModule.publishContext",
+    "owner": "packages/git/src/context.ts#ContextCoordinator",
+    "entrypoint": "packages/git/src/index.ts#GitModule.publishContext",
     "callPath": [
-      "src/git.ts#GitModule.publishContext",
-      "src/git/context.ts#ContextCoordinator",
-      "src/git/context-repository.ts#ContextRepository",
-      "src/git/context-publication.ts#ContextPublicationObserver",
-      "src/git/canonical-command.ts#compareAndSwapCanonicalRef"
+      "packages/git/src/index.ts#GitModule.publishContext",
+      "packages/git/src/context.ts#ContextCoordinator",
+      "packages/git/src/context-repository.ts#ContextRepository",
+      "packages/git/src/context-publication.ts#ContextPublicationObserver",
+      "packages/git/src/canonical-command.ts#compareAndSwapCanonicalRef"
     ],
     "negativeTests": [
       "test/r37-preparation-boundaries.test.ts#R37",
@@ -1642,14 +1642,14 @@
     "normativeText": "**MUST [CTX-006]** 첫 context publication이 끝나기 전 Resident는 생성만 가능하고 path 활성화/inference를 하지 않는다. 첫 성공 후 enabled Residents의 path를 활성화하고 notification으로 시작한다. 새 Resident는 생성 당시 최신 context와 brief만 받고 부모 전체 session이나 과거 commons backlog를 복사하지 않는다.",
     "applicability": "unclassified",
     "rationale": "Requires production-path review; no inference from test names.",
-    "owner": "src/git/context.ts#ContextCoordinator",
-    "entrypoint": "src/git.ts#GitModule.publishContext",
+    "owner": "packages/git/src/context.ts#ContextCoordinator",
+    "entrypoint": "packages/git/src/index.ts#GitModule.publishContext",
     "callPath": [
-      "src/git.ts#GitModule.publishContext",
-      "src/git/context.ts#ContextCoordinator",
-      "src/git/context-repository.ts#ContextRepository",
-      "src/git/context-publication.ts#ContextPublicationObserver",
-      "src/git/canonical-command.ts#compareAndSwapCanonicalRef"
+      "packages/git/src/index.ts#GitModule.publishContext",
+      "packages/git/src/context.ts#ContextCoordinator",
+      "packages/git/src/context-repository.ts#ContextRepository",
+      "packages/git/src/context-publication.ts#ContextPublicationObserver",
+      "packages/git/src/canonical-command.ts#compareAndSwapCanonicalRef"
     ],
     "negativeTests": [
       "test/r37-preparation-boundaries.test.ts#R37",
@@ -1709,13 +1709,13 @@
     "normativeText": "**MUST [UNIT-007]** systemctl effect 성공은 subprocess spawn이 아니라 정상 exit status와 해당 effect의 후속 actual observation으로 판정한다. nonzero/timeout/signal/malformed 결과를 성공으로 바꾸지 않는다. daemon-reload는 정상 exit와 대상 unit의 LoadState=loaded 및 렌더링한 설정 일치, enable/disable은 unit-file 상태, path start/stop은 path 실제 상태, service stop은 inactive와 cgroup 후손 사망을 확인한다. 관측 실패는 succeeded가 아니며 accepted op는 실제 효과를 대조한다. 짧게 실행 후 정상 종료한 Resident start는 동일 InvocationID의 정상 종료와 pending 재검사를 허용하되 전혀 시작 안 된 inactive와 구분한다. 정확한 systemd property/binding 증거는 S-01/S-06에 pin한다.",
     "applicability": "unclassified",
     "rationale": "Requires production-path review; no inference from test names.",
-    "owner": "src/units.ts#UnitsModule",
-    "entrypoint": "src/lifecycle/create.ts#CreateCoordinator",
+    "owner": "packages/platform-linux/src/units.ts#UnitsModule",
+    "entrypoint": "packages/lifecycle/src/create.ts#CreateCoordinator",
     "callPath": [
-      "src/lifecycle/create.ts#CreateCoordinator",
-      "src/lifecycle/create-publication.ts#CreationPublicationObserver",
-      "src/units.ts#UnitsModule",
-      "src/units/execute.ts#executeUnitCommand"
+      "packages/lifecycle/src/create.ts#CreateCoordinator",
+      "packages/lifecycle/src/create-publication.ts#CreationPublicationObserver",
+      "packages/platform-linux/src/units.ts#UnitsModule",
+      "packages/platform-linux/src/units/execute.ts#executeUnitCommand"
     ],
     "negativeTests": [
       "test/phase4.test.ts#UNIT",
@@ -1785,8 +1785,8 @@
   {
     "requirement": "CREATE-002",
     "source": "docs/implementation-spec.md",
-    "digest": "171583b980ff11cbec38d041d68d7f9aec5f4eb2f49ffd5085dd631dac57db21",
-    "normativeText": "**MUST [CREATE-002]** broker만 `ResolvedAgentSpec`의 최종 profile/capabilities/modelProfile/resources를 결정한다. modelProfile/resources는 선택한 자식 host profile에서 복사해 고정한다. 인증된 부모의 `agents.profile`에 대응하는 host `AgentProfile`을 찾고 그 `childProfile`을 선택한다. null이면 CAPABILITY_DENIED, 참조하는 profile이 없으면 UNSUPPORTED_PROFILE로 접수 전에 거절한다. 자식 capabilities는 `인증된 부모의 현재 유효 capabilities ∩ 부모 profile.delegable ∩ 선택한 자식 profile.capabilities`의 전체 교집합에, 선택한 자식 profile.capabilities가 host가 직접 주는 권한(`code.integrate`, AUTH-001)을 가지면 그것을 더해 중복 제거·사전순 정렬한 값이다. Principal도 동일한 명시적 host 위임을 적용하며 role로 교집합을 확대하지 않는다. CLI/모델이 host 설정을 대신 해석해 resolved spec을 전송하지 않는다. host의 초기 population 설정은 이 actor-facing 입력과 별개다.",
+    "digest": "d02c89b90bfe9b587df467031fc5ee2c736c7e1642a644a84db7f3226d9d46b6",
+    "normativeText": "**MUST [CREATE-002]** broker만 `ResolvedAgentSpec`의 최종 profile/capabilities/modelProfile를 결정한다. modelProfile 참조는 선택한 자식 host profile에서 복사해 고정한다(DR46). 효과 없는 resource 필드는 삭제되었다. 인증된 부모의 `agents.profile`에 대응하는 host `AgentProfile`을 찾고 그 `childProfile`을 선택한다. null이면 CAPABILITY_DENIED, 참조하는 profile이 없으면 UNSUPPORTED_PROFILE로 접수 전에 거절한다. 자식 capabilities는 `인증된 부모의 현재 유효 capabilities ∩ 부모 profile.delegable ∩ 선택한 자식 profile.capabilities`의 전체 교집합에, 선택한 자식 profile.capabilities가 host가 직접 주는 권한(`code.integrate`, AUTH-001)을 가지면 그것을 더해 중복 제거·사전순 정렬한 값이다. Principal도 동일한 명시적 host 위임을 적용하며 role로 교집합을 확대하지 않는다. CLI/모델이 host 설정을 대신 해석해 resolved spec을 전송하지 않는다. host의 초기 population 설정은 이 actor-facing 입력과 별개다.",
     "applicability": "unclassified",
     "rationale": "Requires production-path review; no inference from test names.",
     "owner": null,
@@ -1799,8 +1799,8 @@
   {
     "requirement": "CREATE-003",
     "source": "docs/implementation-spec.md",
-    "digest": "3a856ec07528e269360f381bdf114f11369d9d1ec03acc0661d46b36c863697b",
-    "normativeText": "**MUST [CREATE-003]** `operations.payload_json`과 request_hash는 정규화한 `AgentCreateInput`만 포함한다. `plan_json.spec` 및 `agents.spec_json`에는 broker가 확정한 `ResolvedAgentSpec`을 저장하고 `spec_hash`는 그 전체 canonical spec의 hash다. 접수 transaction에서 부모 권한과 선택한 host 정책이 resolution 때와 같은지 재검사하고 달라졌으면 접수 전에 다시 계산한다. 같은 key의 accepted 요청은 새 host default를 해석하기 전에 기존 hash/receipt를 조회하고 저장된 resolved spec으로 복구한다. 재시도로 profile/capabilities를 재선택하거나 확대하지 않는다. 다른 key의 stable-name dedup은 최종 resolved spec hash를 비교하므로 host default 변경으로 spec이 달라졌으면 AGENT_CONFLICT다. 현재 권한의 폐기와 run 차단은 기존 AUTH/LIFE 규칙을 계속 적용한다.",
+    "digest": "b932a78c0e66916e354fd562f85cb9caca0b591845624e7809ca512506507f8e",
+    "normativeText": "**MUST [CREATE-003]** `operations.payload_json`과 request_hash는 정규화한 `AgentCreateInput`만 포함한다. `plan_json.intent.spec` 및 `agents.spec_json`에는 broker가 확정한 `ResolvedAgentSpec`을 저장하고 `spec_hash`는 그 전체 canonical spec의 hash다. 접수 transaction에서 부모 권한과 선택한 host 정책이 resolution 때와 같은지 재검사하고 달라졌으면 접수 전에 다시 계산한다. 같은 key의 accepted 요청은 새 host default를 해석하기 전에 기존 hash/receipt를 조회하고 저장된 resolved spec으로 복구한다. 재시도로 profile/capabilities를 재선택하거나 확대하지 않는다. 다른 key의 stable-name dedup은 최종 resolved spec hash를 비교하므로 host default 변경으로 spec이 달라졌으면 AGENT_CONFLICT다. 현재 권한의 폐기와 run 차단은 기존 AUTH/LIFE 규칙을 계속 적용한다.",
     "applicability": "unclassified",
     "rationale": "Requires production-path review; no inference from test names.",
     "owner": null,
@@ -1813,17 +1813,17 @@
   {
     "requirement": "LIFE-008",
     "source": "docs/implementation-spec.md",
-    "digest": "993b542fc67102e7111ab8c7b8717996d485909ffcc6802d70f11a11f26eec0c",
-    "normativeText": "**MUST [LIFE-008]** initialResidents는 최초 bootstrap seed만 지정하며 runtime registry가 아니다. ready 이후 모든 actor의 identity/profile/capabilities/modelProfile/resources/from/parent는 agents의 검증된 resolved spec 및 created_by에서 가져온다. `ResolvedAgentSpec`은 생성 시 선택한 host profile의 modelProfile 참조와 ResourceLimits 전체를 포함하고 spec_hash에 포함한다. runner/unit renderer/authenticator는 `initialResidents.find()`나 seed 부재 시 default profile을 사용하지 않는다. 호스트의 현재 credential/가격/명시적 권한 폐기 정책은 계속 적용하되 persisted 권한·자원 상한을 조용히 확대하지 않는다. 저장된 profile/model 참조를 현재 배포가 지원하지 못하면 UNSUPPORTED_PROFILE로 차단하고 임의 대체하지 않는다. DB column name/profile과 spec의 대응 값이 다르면 STORE_CORRUPT다. 부모는 created_by가 원본이며 새 parent registry를 만들지 않는다.",
+    "digest": "9887bb6667b59ed4be3bfab6f1e3915e9699b6f8d3539aac6df1a524661bec50",
+    "normativeText": "**MUST [LIFE-008]** initialResidents는 최초 bootstrap seed만 지정하며 runtime registry가 아니다. ready 이후 모든 actor의 identity/profile/capabilities/modelProfile/from/parent는 agents의 검증된 resolved spec 및 created_by에서 가져온다. `ResolvedAgentSpec`은 생성 시 선택한 host profile의 modelProfile 참조를 포함하고 spec_hash에 포함한다(DR46). unit은 accepted profile/modelProfile을 전달하며 runner가 현재 역할의 modelProfile 참조로 바꾸지 않는다. 고정 참조의 모델 내용은 다음 활성화에 읽는다. runner/unit renderer/authenticator는 `initialResidents.find()`나 seed 부재 시 default profile을 사용하지 않는다. 호스트의 현재 credential/가격/명시적 권한 폐기 정책은 계속 적용하되 persisted 권한과 참조를 조용히 바꾸지 않는다. 저장된 profile/model 참조를 현재 배포가 지원하지 못하면 UNSUPPORTED_PROFILE로 차단하고 임의 대체하지 않는다. DB column name/profile과 spec의 대응 값이 다르면 STORE_CORRUPT다. 부모는 created_by가 원본이며 새 parent registry를 만들지 않는다.",
     "applicability": "unclassified",
     "rationale": "Requires production-path review; no inference from test names.",
-    "owner": "src/lifecycle/create.ts#CreateCoordinator",
-    "entrypoint": "src/lifecycle.ts#LifecycleModule",
+    "owner": "packages/lifecycle/src/create.ts#CreateCoordinator",
+    "entrypoint": "packages/lifecycle/src/index.ts#LifecycleModule",
     "callPath": [
-      "src/lifecycle.ts#LifecycleModule",
-      "src/lifecycle/create.ts#CreateCoordinator",
-      "src/lifecycle/workspace.ts#WorkspaceCoordinator",
-      "src/lifecycle/create-publication.ts#CreationPublicationObserver"
+      "packages/lifecycle/src/index.ts#LifecycleModule",
+      "packages/lifecycle/src/create.ts#CreateCoordinator",
+      "packages/git/src/workspace.ts#WorkspaceCoordinator",
+      "packages/lifecycle/src/create-publication.ts#CreationPublicationObserver"
     ],
     "negativeTests": [
       "test/r37-preparation-boundaries.test.ts#R37",
@@ -1869,13 +1869,13 @@
     "normativeText": "**MUST [LIFE-007]** 같은 이름/spec에 다른 request key로 create가 오면 기존 create operation에 연결한 `existingCreation` plan을 만들고 clone/unit/mail을 추가 생성하지 않는다. 새 key의 operation은 기존 provisioning 결과를 대조해 같은 agent 결과로 끝낸다. 이는 create 한 종류의 stable-name dedup이며 범용 dependency/workflow graph가 아니다. provisioning actor에 대한 model start/stop은 AGENT_NOT_READY로 거절한다. already enabled이며 현재 cgroup이 정상인 agent.start는 idempotent no-op이고 incarnation을 증가시키지 않는다.",
     "applicability": "unclassified",
     "rationale": "Requires production-path review; no inference from test names.",
-    "owner": "src/lifecycle/create.ts#CreateCoordinator",
-    "entrypoint": "src/lifecycle.ts#LifecycleModule",
+    "owner": "packages/lifecycle/src/create.ts#CreateCoordinator",
+    "entrypoint": "packages/lifecycle/src/index.ts#LifecycleModule",
     "callPath": [
-      "src/lifecycle.ts#LifecycleModule",
-      "src/lifecycle/create.ts#CreateCoordinator",
-      "src/lifecycle/workspace.ts#WorkspaceCoordinator",
-      "src/lifecycle/create-publication.ts#CreationPublicationObserver"
+      "packages/lifecycle/src/index.ts#LifecycleModule",
+      "packages/lifecycle/src/create.ts#CreateCoordinator",
+      "packages/git/src/workspace.ts#WorkspaceCoordinator",
+      "packages/lifecycle/src/create-publication.ts#CreationPublicationObserver"
     ],
     "negativeTests": [
       "test/r37-preparation-boundaries.test.ts#R37",
@@ -2057,8 +2057,8 @@
   {
     "requirement": "SB-004",
     "source": "docs/implementation-spec.md",
-    "digest": "2aaed6e7ea0e2467c5a0d134567ebfd46241a5738a87cdc680f704358cc31902",
-    "normativeText": "**MUST [SB-004]** private network가 기본이다. provider는 actor inference stream→broker만 사용한다. project egress는 v0.1에서 OPTIONAL로 도입됐다([DR34](design-revisions.md), UX-08): `HostConfigV1.egress`가 endpoint allowlist를 선언하면 runner는 delivery당 하나의 HTTP CONNECT proxy unix socket을 `--ro-bind`로 `/run/oma/egress.sock`에 두고, trusted extension이 loopback `HTTP(S)_PROXY`/`ALL_PROXY`를 세운다. CONNECT·authority-form·443만 허용하고, request header는 proxy에서 끝나며, 이름은 host 측에서 resolve해 모든 answer를 private/special-use 대역으로 screen하고 literal을 pin한다. 절(節)이 없거나 role의 해석이 비면 socket도 변수도 없고, 그 부재로 profile이 `UNSUPPORTED_PROFILE`이 되지는 않는다. host network 공유로 대체하지 않고, SSH·raw TCP/UDP·SOCKS5는 v0.1 밖이다. 별도 S-01 escape 시험은 egress-connect suite가 담당한다.",
+    "digest": "8aa333237adf6af80e239e73c71af5f19d7d3df04fbe3aec456bfc232c06f32f",
+    "normativeText": "**MUST [SB-004]** DR37/DR46: Resident의 네트워크와 실제 OS 용량을 제한하는 OMA 정책은 두지 않는다. project CONNECT proxy는 대상 host와 port 문법을 검증하고 요청 header를 proxy에서 끝내며, 연결·dial·queue 자원은 실제 종료까지 owner가 보유한다. macOS guest의 CONNECT는 host가 발급한 현재 run identity에만 연결하고 lease 종료·boot 변경 뒤 새 연결을 열지 않는다. protocol 7은 guest의 옛 role/allow 선언을 거부한다. provider credential은 별도의 host relay가 소유하며 project tunnel에 넘기지 않는다.",
     "applicability": "unclassified",
     "rationale": "Requires production-path review; no inference from test names.",
     "owner": null,
@@ -2089,11 +2089,11 @@
     "normativeText": "**MUST [SB-006]** sandbox의 writable session/CLI files는 model-origin data다. 보안·effect completion의 증거는 trusted runner receipt와 broker ledger가 소유한다. 모델이 session JSON에 완료 문구를 써서 presented/approval을 위조할 수 없어야 한다. 이에 필요한 정확한 Pi receipt 검증은 S-03 gate다.",
     "applicability": "unclassified",
     "rationale": "Requires production-path review; no inference from test names.",
-    "owner": "src/storage/delivery-receipt.ts#observeDeliveryReceipt",
-    "entrypoint": "src/runner.ts#RunnerModule",
+    "owner": "packages/storage/src/delivery-receipt.ts#observeDeliveryReceipt",
+    "entrypoint": "apps/oma/src/runner.ts#RunnerModule",
     "callPath": [
-      "src/runner.ts#RunnerModule",
-      "src/storage/delivery-receipt.ts#observeDeliveryReceipt"
+      "apps/oma/src/runner.ts#RunnerModule",
+      "packages/storage/src/delivery-receipt.ts#observeDeliveryReceipt"
     ],
     "negativeTests": [
       "test/untrusted-directories.test.ts#AV4",
@@ -2167,11 +2167,11 @@
     "normativeText": "**MUST NOT [INF-007]** 엔진의 agent directory를 Resident mount 계획에 넣지 않는다. sandbox 안에 진짜 credential을 두는 어떤 형태도 — agent별 복사본, society 공용 read-only mount, 환경 변수 — `PR-004` 위반이다. sandbox 안의 provider 설정에 들어가는 key는 relay가 교체할 자리표시자다.",
     "applicability": "unclassified",
     "rationale": "Requires production-path review; no inference from test names.",
-    "owner": "src/runtime/inference-relay.ts#InferenceRelay",
-    "entrypoint": "src/runner.ts#RunnerModule",
+    "owner": "apps/oma/src/runtime/inference-relay.ts#InferenceRelay",
+    "entrypoint": "apps/oma/src/runner.ts#RunnerModule",
     "callPath": [
-      "src/runner.ts#RunnerModule",
-      "src/runtime/inference-relay.ts#InferenceRelay"
+      "apps/oma/src/runner.ts#RunnerModule",
+      "apps/oma/src/runtime/inference-relay.ts#InferenceRelay"
     ],
     "negativeTests": [
       "test/inference-relay.test.ts#AV2"
@@ -2226,8 +2226,8 @@
   {
     "requirement": "INF-009",
     "source": "docs/implementation-spec.md",
-    "digest": "040af556bfa1774454cfa69586ae541159b5d5b0460ab1cd0914da9c500866fc",
-    "normativeText": "**MUST [INF-009]** multi-agent 비용 상한은 이제 OMA 계약이 집행하는 값이 아니다. `quota`의 unit 관련 필드는 host가 선언하는 운영 의도로 남지만, 실제 과금 경계는 엔진과 provider 설정이 소유한다. OMA가 집행하지 않는 것을 집행한다고 표시하지 않는다.",
+    "digest": "2b8aae6132610b9371ac374b9fa15051b6c86bd02d0424f083698c02c94eb565",
+    "normativeText": "**MUST [INF-009]** multi-agent 비용 상한은 OMA가 집행하는 값이 아니다. DR46: 효과 없는 quota 선언과 호출 계약을 제거한다. 실제 과금 경계는 엔진과 provider 설정이 소유하며, OMA가 집행하지 않는 것을 집행한다고 표시하지 않는다.",
     "applicability": "unclassified",
     "rationale": "Requires production-path review; no inference from test names.",
     "owner": null,
@@ -2258,12 +2258,12 @@
     "normativeText": "**MUST [CLI-001; arch §§9,14,23.2]** base model-facing command allowlist는 다음과 같다. 이 표는 Resident rootfs 안의 `oma` 실행 파일만 규정하며, host의 동명 TUI 실행 파일은 TUI-002가 별도로 규정한다. tiered의 추가 authority 문법은 S-08/S-10 gate이며 현재 허용된 것으로 추정하지 않는다. JSON wire method가 존재해도 새 subcommand를 자동 생성하지 않는다. `--help`는 현재 사용 가능한 명령만 출력하며 TUI나 Control Panel을 노출하지 않는다. Linux의 cat/head/tail/rg/find/git을 대체하는 preview/query language를 만들지 않는다.",
     "applicability": "unclassified",
     "rationale": "Requires production-path review; no inference from test names.",
-    "owner": "src/cli/arguments.ts#parseArguments",
-    "entrypoint": "src/cli.ts#main",
+    "owner": "apps/oma/src/cli/arguments.ts#parseArguments",
+    "entrypoint": "apps/oma/src/cli.ts#main",
     "callPath": [
-      "src/cli.ts#main",
-      "src/cli/commands/send.ts#runSendCommand",
-      "src/cli/arguments.ts#parseArguments"
+      "apps/oma/src/cli.ts#main",
+      "apps/oma/src/cli/commands/send.ts#runSendCommand",
+      "apps/oma/src/cli/arguments.ts#parseArguments"
     ],
     "negativeTests": [
       "test/argument-boundary.test.ts#AV1",
@@ -2379,12 +2379,12 @@
     "normativeText": "**MUST [ERR-002]** failed는 effect가 발생하지 않았거나 문서화한 terminal 실패가 확정된 경우다. 일부 공개 ref/mail이 생긴 뒤의 일시 장애는 pending으로 남긴다. unknown은 시스템이 effect 여부를 증명할 수 없을 때 사용한다. network timeout을 UNKNOWN Git ref로 단정하지 않고 broker가 실제 ref를 대조한다.",
     "applicability": "unclassified",
     "rationale": "Requires production-path review; no inference from test names.",
-    "owner": "src/domain/errors.ts#classifyError",
-    "entrypoint": "src/git/submit.ts#SubmitCoordinator",
+    "owner": "packages/domain/src/errors.ts#classifyError",
+    "entrypoint": "packages/git/src/submit.ts#SubmitCoordinator",
     "callPath": [
-      "src/git/submit.ts#SubmitCoordinator",
-      "src/domain/errors.ts#classifyError",
-      "src/protocol/receipts.ts#receiptOfOperation"
+      "packages/git/src/submit.ts#SubmitCoordinator",
+      "packages/domain/src/errors.ts#classifyError",
+      "packages/protocol/src/receipts.ts#receiptOfOperation"
     ],
     "negativeTests": [
       "test/r37-async-process.test.ts#R37",
@@ -2430,13 +2430,13 @@
     "normativeText": "**MUST [REC-002]** reconcile sweep은 broker가 자기 수명 동안 in-process `setInterval`로 실행하며 간격은 reference 5초이고 모델을 호출하지 않는다(외부 timer unit은 없다). 한 sweep의 filesystem/provider 장애가 나머지 독립 mailbox 점검을 영구 막지 않도록 bounded work를 수행한다. 동시에 두 sweep을 실행하지 않고 이미 실행 중이면 기존 sweep에 합류/skip한다. no-progress retry는 로그와 다음 sweep으로 제한하고 tight loop를 만들지 않는다.",
     "applicability": "unclassified",
     "rationale": "Requires production-path review; no inference from test names.",
-    "owner": "src/reconcile.ts#ReconcileModule",
-    "entrypoint": "src/broker.ts#Broker",
+    "owner": "packages/reconcile/src/index.ts#ReconcileModule",
+    "entrypoint": "packages/broker/src/index.ts#Broker",
     "callPath": [
-      "src/broker.ts#Broker",
-      "src/reconcile.ts#ReconcileModule",
-      "src/reconcile/operations.ts#OperationRecovery",
-      "src/process/preparation.ts#PreparationExecutor"
+      "packages/broker/src/index.ts#Broker",
+      "packages/reconcile/src/index.ts#ReconcileModule",
+      "packages/reconcile/src/operations.ts#OperationRecovery",
+      "packages/process/src/preparation.ts#PreparationExecutor"
     ],
     "negativeTests": [
       "test/r29-reconcile-accounting.test.ts#R29",
@@ -2455,13 +2455,13 @@
     "normativeText": "**MUST [REC-003]** 각 crash 지점의 복구는 [test matrix](verification-spec.md#oma-core-v1--검증-계약)의 oracle을 만족해야 한다. shutdown에서 새 mutation acceptance를 중단하고 진행 중 DB transaction을 마친 뒤 fd를 닫는다. 강제 kill을 피할 수 있다고 가정하지 않는다. SQLite commit과 Git ref update를 한 atomic transaction이라고 기술하지 않는다.",
     "applicability": "unclassified",
     "rationale": "Requires production-path review; no inference from test names.",
-    "owner": "src/reconcile.ts#ReconcileModule",
-    "entrypoint": "src/broker.ts#Broker",
+    "owner": "packages/reconcile/src/index.ts#ReconcileModule",
+    "entrypoint": "packages/broker/src/index.ts#Broker",
     "callPath": [
-      "src/broker.ts#Broker",
-      "src/reconcile.ts#ReconcileModule",
-      "src/reconcile/operations.ts#OperationRecovery",
-      "src/process/preparation.ts#PreparationExecutor"
+      "packages/broker/src/index.ts#Broker",
+      "packages/reconcile/src/index.ts#ReconcileModule",
+      "packages/reconcile/src/operations.ts#OperationRecovery",
+      "packages/process/src/preparation.ts#PreparationExecutor"
     ],
     "negativeTests": [
       "test/r29-reconcile-accounting.test.ts#R29",
@@ -2578,12 +2578,12 @@
     "normativeText": "**MUST [MODE-001]** 새 세션의 모드는 `society`(기본값) 또는 `personal`이다. OMA 실행 시 모드 선택창을 띄우지 않으며 TTY·비TTY 모두 생략한 모드는 Society다. `oma --mode society|personal`은 시작 모드를 명시한다. 처음 세션을 열고 아직 대화를 시작하지 않은 idle 상태에서는 `/society`로 Personal·Society를 선택한다. 선택 취소·현재 모드 선택은 세션을 유지하며, 대화·실행 중인 작업이 있으면 전환을 거절한다. Personal과 `--society/--config/--bind-project`의 조합은 효과 전에 거절한다. 지원하지 않는 모드를 조용히 Society로 실행하지 않는다.",
     "applicability": "unclassified",
     "rationale": "Requires production-path review; no inference from test names.",
-    "owner": "src/tui/session-mode.ts#chooseSessionMode",
-    "entrypoint": "src/entry/oma.ts#main",
+    "owner": "packages/tui/src/session-mode.ts#chooseSessionMode",
+    "entrypoint": "apps/oma/src/entry/oma.ts#main",
     "callPath": [
-      "src/entry/oma.ts#main",
-      "src/runtime/host-arguments.ts#parseOmaArguments",
-      "src/tui/session-mode.ts#chooseSessionMode"
+      "apps/oma/src/entry/oma.ts#main",
+      "apps/oma/src/runtime/host-arguments.ts#parseOmaArguments",
+      "packages/tui/src/session-mode.ts#chooseSessionMode"
     ],
     "negativeTests": [
       "test/session-entry-composition.test.mjs#birth router",
@@ -2602,13 +2602,13 @@
     "normativeText": "**MUST [MODE-002]** 모드는 session identity·시작 cwd·history 위치와 함께 version이 있는 birth descriptor로 시작 효과 전에 no-replace 게시한다. Society는 기존 state root, Personal은 `<data>/oma/.personal/<UUID>/`와 그 `history/`를 사용한다. 저장된 identity·mode·경로는 인자·재시작으로 덮어쓰지 않는다. 손상·알 수 없는 version·잘못된 경로는 다른 모드나 새 세션으로 재해석하지 않는다. 별도 전역 mode DB를 만들지 않는다.",
     "applicability": "unclassified",
     "rationale": "Requires production-path review; no inference from test names.",
-    "owner": "src/runtime/session-mode.ts#publishSessionBirth",
-    "entrypoint": "src/entry/oma.ts#main",
+    "owner": "apps/oma/src/runtime/session-mode.ts#publishSessionBirth",
+    "entrypoint": "apps/oma/src/entry/oma.ts#main",
     "callPath": [
-      "src/entry/oma.ts#main",
-      "src/entry/personal-host.ts#personalMain",
-      "src/runtime/personal-session.ts#personalBirth",
-      "src/runtime/session-mode.ts#publishSessionBirth"
+      "apps/oma/src/entry/oma.ts#main",
+      "apps/oma/src/entry/personal-host.ts#personalMain",
+      "apps/oma/src/runtime/personal-session.ts#personalBirth",
+      "apps/oma/src/runtime/session-mode.ts#publishSessionBirth"
     ],
     "negativeTests": [
       "test/session-mode-record.test.ts#session mode:",
@@ -2627,14 +2627,14 @@
     "normativeText": "**MUST [MODE-003]** Personal은 동봉 Pi/Open TUI와 기본 read/write/edit/bash·탐색 도구, 사용자가 명시적으로 선택한 확장을 사용한다. 실제 시작 cwd와 일반 사용자 OS 권한으로 프로젝트 밖 사용자 파일을 다루되 권한 상승이나 sandbox 우회를 제공하지 않는다. Society broker·Worker·mail·GOAL·통합·리뷰·quota를 생성하거나 로드하지 않고 Principal prompt·core extension·actor/socket/credential-channel 환경을 가져오지 않는다. Society Principal의 read-only·메일·상위 리뷰 권한은 그대로 유지한다.",
     "applicability": "unclassified",
     "rationale": "Requires production-path review; no inference from test names.",
-    "owner": "src/runtime/personal-session.ts#runPersonalSession",
-    "entrypoint": "src/entry/oma.ts#main",
+    "owner": "apps/oma/src/runtime/personal-session.ts#runPersonalSession",
+    "entrypoint": "apps/oma/src/entry/oma.ts#main",
     "callPath": [
-      "src/entry/oma.ts#main",
-      "src/entry/personal-host.ts#personalMain",
-      "src/runtime/personal-session.ts#runPersonalSession",
-      "src/process/async.ts#spawnSessionInteractive",
-      "src/entry/pi-personal.ts#main"
+      "apps/oma/src/entry/oma.ts#main",
+      "apps/oma/src/entry/personal-host.ts#personalMain",
+      "apps/oma/src/runtime/personal-session.ts#runPersonalSession",
+      "packages/process/src/async.ts#spawnSessionInteractive",
+      "packages/engine/src/personal.ts#main"
     ],
     "negativeTests": [
       "test/session-entry-composition.test.mjs#birth router",
@@ -2642,7 +2642,7 @@
       "test/personal-models-composition.test.mjs#Personal models:",
       "test/personal-session-ownership.test.mjs#Personal child:",
       "test/session-process-owner.test.mjs#Human session process:",
-      "test/personal-engine-ownership.test.mjs#Personal engine:",
+      "packages/engine/test/personal-engine-ownership.test.mjs#Personal engine:",
       "test/personal-history-lifetime.test.ts#Personal history actual process:"
     ],
     "evidence": null,
@@ -2657,34 +2657,34 @@
     "normativeText": "**MUST [MODE-004]** Personal 확장 선택은 `<data>/oma/.personal/settings.json`의 독립 revision으로 영속 보존한다. 최초 project 선택에서 Society core를 제외한 명시적 사용자 확장만 이어받고, 이후 변경은 Principal/Worker 설정을 바꾸지 않는다. 동일 OMA package store/index·extension validation/digest 규칙을 재사용하며 설치 코드를 중복하지 않는다. writer lock 아래 최신 설정을 읽어 전체 검증·변환·atomic replacement하고 update/remove 뒤 경로를 reconcile한다. 읽기 실패를 빈 선택이나 전부 삭제로 해석하지 않는다. Personal Config는 model·effort·extensions·고정 mode만 표시한다.",
     "applicability": "unclassified",
     "rationale": "Requires production-path review; no inference from test names.",
-    "owner": "src/runtime/personal-settings.ts#updatePersonalSettings",
-    "entrypoint": "src/entry/pi-personal.ts#main",
+    "owner": "apps/oma/src/runtime/personal-settings.ts#updatePersonalSettings",
+    "entrypoint": "packages/engine/src/personal.ts#main",
     "callPath": [
-      "src/entry/pi-personal.ts#main",
-      "src/entry/pi-interactive-host.ts#main",
-      "src/entry/personal-host.ts#personalMain",
-      "src/entry/oma-society.ts#piPackages",
-      "src/entry/oma-mac.ts#packages",
-      "src/runtime/engine/login.ts#runEngineLogin",
-      "src/runtime/user-files.ts#ensureUserDirectory",
-      "src/runtime/packages/store.ts#packageCommand",
-      "src/runtime/packages/store.ts#writePackageIndex",
-      "src/runtime/personal-settings.ts#reconcilePersonalSettings",
-      "src/runtime/personal-settings.ts#updatePersonalSettings",
-      "src/runtime/user-files.ts#readUserFile",
-      "src/runtime/pi-runtime.ts#prepareEngineFile",
-      "src/runtime/process-lock.ts#ProcessLock",
-      "src/process/cleanup.ts#withCleanup",
-      "src/process/cleanup.ts#withAsyncCleanup",
-      "src/runtime/extension-modules.ts#ExtensionModules"
+      "packages/engine/src/personal.ts#main",
+      "packages/engine/src/interactive.ts#runInteractive",
+      "apps/oma/src/entry/personal-host.ts#personalMain",
+      "apps/oma/src/entry/oma-society.ts#piPackages",
+      "apps/oma/src/entry/oma-mac.ts#packages",
+      "packages/engine/src/login.ts#runEngineLogin",
+      "apps/oma/src/runtime/user-files.ts#ensureUserDirectory",
+      "apps/oma/src/runtime/packages/store.ts#packageCommand",
+      "apps/oma/src/runtime/packages/store.ts#writePackageIndex",
+      "apps/oma/src/runtime/personal-settings.ts#reconcilePersonalSettings",
+      "apps/oma/src/runtime/personal-settings.ts#updatePersonalSettings",
+      "apps/oma/src/runtime/user-files.ts#readUserFile",
+      "packages/engine/src/pi-runtime.ts#prepareEngineFile",
+      "packages/native/src/process-lock.ts#ProcessLock",
+      "packages/native/src/cleanup.ts#withCleanup",
+      "packages/native/src/cleanup.ts#withAsyncCleanup",
+      "packages/engine/src/extension-modules.ts#ExtensionModules"
     ],
     "negativeTests": [
       "test/personal-settings.test.ts#Personal settings:",
       "test/personal-host-composition.test.mjs#Personal host",
       "test/personal-pty.test.ts#Personal installed PTY:",
       "test/package-command-ownership.test.mjs#Package owner",
-      "test/engine-login-ownership.test.mjs#engine package:",
-      "test/engine-login-ownership.test.mjs#engine close:",
+      "packages/engine/test/engine-login-ownership.test.mjs#engine package:",
+      "packages/engine/test/engine-login-ownership.test.mjs#engine close:",
       "test/host-arguments.test.ts#DR28:",
       "test/mac-host-packages.test.ts#Mac host packages:",
       "test/session-entry-composition.test.mjs#Package grammar:",
@@ -2708,23 +2708,23 @@
     "normativeText": "**MUST [MODE-005]** `/resume`는 저장된 모드로 열며 변환하지 않고, fork도 출처 모드를 유지한다. `/new`는 현재 모드의 새 세션을 선택창 없이 연다. 첫 대화 전 idle 세션의 `/society`는 모드 선택을 제공한다. 다른 모드 선택 시 현재 writer의 실제 종료를 관측한 뒤 `oma --mode personal|society`로 재진입해 같은 프로젝트의 세션을 열며, 기존 birth·history를 변환하거나 이어 쓰지 않는다. Personal→Society는 표준 project binding·ownership·provisioning 경로로 같은 프로젝트의 새 Society 세션을 연다. 선택창·before-switch hook 대기 중 세션이 바뀌거나 작업이 시작되면 전환하지 않는다. macOS의 Society→Personal은 실제 guest writer 종료 뒤 모드만 host로 전달해 native Personal을 열고, Personal→Society는 Host API로 관측된 실행 중 Society에 연결한다. IPC EOF이나 timeout만으로 writer 종료를 인정하지 않는다. legacy Society는 관측된 기존 project binding으로만 식별하며 경로 형태만으로 외부 Pi history를 수입하지 않는다. Society open/close는 협업 상태이며 Personal 시작은 다른 Society나 개별 force-stop 사실을 바꾸지 않는다.",
     "applicability": "unclassified",
     "rationale": "Requires production-path review; no inference from test names.",
-    "owner": "src/runtime/personal-session.ts#runPersonalSession",
-    "entrypoint": "src/entry/oma.ts#main",
+    "owner": "apps/oma/src/runtime/personal-session.ts#runPersonalSession",
+    "entrypoint": "apps/oma/src/entry/oma.ts#main",
     "callPath": [
-      "src/entry/oma.ts#main",
-      "src/entry/personal-host.ts#personalMain",
-      "src/runtime/personal-session.ts#runPersonalSession",
-      "src/process/async.ts#spawnSessionInteractive",
-      "src/entry/pi-personal.ts#main",
-      "src/runtime/session-catalog.ts#sessionBirthForHistory",
-      "src/application/society-transition.ts#SocietyTransition.relaunch",
-      "src/runtime/session-handoff.ts#requestHostNewSession",
-      "src/protocol/guest-history.ts#parseGuestHistoryReference",
-      "src/protocol/host-history.ts#parseHostHistoryReference",
-      "src/platform/guest/histories.ts#GuestHistories",
-      "src/platform/host/guest-histories.ts#listMacGuestHistories",
-      "src/platform/host/personal-histories.ts#inspectHostPersonalHistory",
-      "src/runtime/host-history-channel.ts#HostHistoryChannel"
+      "apps/oma/src/entry/oma.ts#main",
+      "apps/oma/src/entry/personal-host.ts#personalMain",
+      "apps/oma/src/runtime/personal-session.ts#runPersonalSession",
+      "packages/process/src/async.ts#spawnSessionInteractive",
+      "packages/engine/src/personal.ts#main",
+      "apps/oma/src/runtime/session-catalog.ts#sessionBirthForHistory",
+      "apps/oma/src/application/society-transition.ts#SocietyTransition.relaunch",
+      "apps/oma/src/runtime/session-handoff.ts#requestHostNewSession",
+      "packages/protocol/src/guest-history.ts#parseGuestHistoryReference",
+      "packages/protocol/src/host-history.ts#parseHostHistoryReference",
+      "apps/oma/src/platform/guest/histories.ts#GuestHistories",
+      "apps/oma/src/platform/host/guest-histories.ts#listMacGuestHistories",
+      "apps/oma/src/platform/host/personal-histories.ts#inspectHostPersonalHistory",
+      "packages/engine/src/host-history-channel.ts#HostHistoryChannel"
     ],
     "negativeTests": [
       "test/oma-composition-policy.test.mjs#MODE-005",
@@ -2736,7 +2736,7 @@
       "test/personal-pty.test.ts#Personal installed PTY:",
       "test/personal-session-ownership.test.mjs#Personal child:",
       "test/session-process-owner.test.mjs#Human session process:",
-      "test/personal-engine-ownership.test.mjs#Personal engine:",
+      "packages/engine/test/personal-engine-ownership.test.mjs#Personal engine:",
       "test/personal-history-lifetime.test.ts#Personal history actual process:",
       "test/host-history.test.ts#DR29",
       "test/guest-history.test.ts#DR29",
@@ -2757,26 +2757,26 @@
     "normativeText": "**MUST [MODE-006]** macOS Personal은 Host API token 조회·VM 시작보다 먼저 Mac host 실행으로 분기한다. 기존 Society open/attach/status/list/stop 및 hidden VM 계약은 바꾸지 않는다. Society `/new`의 birth 선택은 guest writer의 실제 종료 뒤 host로 반환하며 guest에서 Personal을 시작하지 않는다. 경로 없는 transient 전환과 protocol 3 / Host API 2의 메시지 의미는 [macos-platform §4.6](macos-platform.md)이 소유한다. 플랫폼별 사용자 메타데이터 조립은 runtime이 소유하며 Linux의 held-directory containment를 Mac 지원 때문에 완화하지 않는다. Linux에서 Darwin 분기를 주입한 시험은 native macOS 실행·내구성 증거가 아니다.",
     "applicability": "unclassified",
     "rationale": "Requires production-path review; no inference from test names.",
-    "owner": "src/entry/oma-mac.ts#main",
-    "entrypoint": "src/entry/oma.ts#main",
+    "owner": "apps/oma/src/entry/oma-mac.ts#main",
+    "entrypoint": "apps/oma/src/entry/oma.ts#main",
     "callPath": [
-      "src/entry/oma.ts#main",
-      "src/entry/oma-mac.ts#main",
-      "src/entry/oma-mac.ts#observedSocieties",
-      "src/entry/personal-host.ts#personalMain",
-      "src/application/society-transition.ts#SocietyTransition.relaunch",
-      "src/runtime/session-handoff.ts#requestHostNewSession",
-      "src/process/async.ts#spawnInTerminal",
-      "src/entry/guest-session.ts#session",
-      "src/platform/guest/session.ts#TerminalSession",
-      "src/protocol/host-guest.ts#parseTerminalExit",
-      "src/platform/host/attach-client.ts#attachTerminal",
-      "src/protocol/guest-history.ts#parseGuestHistoryReference",
-      "src/protocol/host-history.ts#parseHostHistoryReference",
-      "src/platform/guest/histories.ts#GuestHistories",
-      "src/platform/host/guest-histories.ts#listMacGuestHistories",
-      "src/platform/host/personal-histories.ts#inspectHostPersonalHistory",
-      "src/runtime/host-history-channel.ts#HostHistoryChannel"
+      "apps/oma/src/entry/oma.ts#main",
+      "apps/oma/src/entry/oma-mac.ts#main",
+      "apps/oma/src/entry/oma-mac.ts#observedSocieties",
+      "apps/oma/src/entry/personal-host.ts#personalMain",
+      "apps/oma/src/application/society-transition.ts#SocietyTransition.relaunch",
+      "apps/oma/src/runtime/session-handoff.ts#requestHostNewSession",
+      "packages/process/src/async.ts#spawnInTerminal",
+      "apps/oma/src/entry/guest-session.ts#session",
+      "apps/oma/src/platform/guest/session.ts#TerminalSession",
+      "packages/protocol/src/host-guest.ts#parseTerminalExit",
+      "apps/oma/src/platform/host/attach-client.ts#attachTerminal",
+      "packages/protocol/src/guest-history.ts#parseGuestHistoryReference",
+      "packages/protocol/src/host-history.ts#parseHostHistoryReference",
+      "apps/oma/src/platform/guest/histories.ts#GuestHistories",
+      "apps/oma/src/platform/host/guest-histories.ts#listMacGuestHistories",
+      "apps/oma/src/platform/host/personal-histories.ts#inspectHostPersonalHistory",
+      "packages/engine/src/host-history-channel.ts#HostHistoryChannel"
     ],
     "negativeTests": [
       "test/session-entry-composition.test.mjs#birth router darwin:",
@@ -2812,14 +2812,14 @@
     "normativeText": "**MUST [TUI-001; arch §23.1]** OMA의 공개 UX와 명령 namespace는 OMA가 소유하고 Pi는 내부 실행 엔진이다. Pi command를 이름만 바꾼 wrapper를 만들지 않는다. 이 절은 새 durable entity, 새 daemon, 새 effect queue, 새 socket method, 새 model-facing subcommand를 도입하지 않으며 A-006/A-007의 제한을 그대로 받는다. TUI가 표시하는 모든 값은 기존 관측 경로에서, TUI가 일으키는 모든 변경은 기존 mutation 또는 host config 경계에서 나온다.",
     "applicability": "unclassified",
     "rationale": "Requires production-path review; no inference from test names.",
-    "owner": "src/application/society-interaction.ts#SocietyInteraction",
-    "entrypoint": "src/entry/oma.ts#main",
+    "owner": "apps/oma/src/application/society-interaction.ts#SocietyInteraction",
+    "entrypoint": "apps/oma/src/entry/oma.ts#main",
     "callPath": [
-      "src/entry/oma.ts#main",
-      "src/entry/oma-society.ts#main",
-      "src/application/society-interaction.ts#SocietyInteraction",
-      "src/tui/app.ts#TuiApp",
-      "src/tui/model.ts#step"
+      "apps/oma/src/entry/oma.ts#main",
+      "apps/oma/src/entry/oma-society.ts#main",
+      "apps/oma/src/application/society-interaction.ts#SocietyInteraction",
+      "packages/tui/src/app.ts#TuiApp",
+      "packages/tui/src/model.ts#step"
     ],
     "negativeTests": [
       "test/tui-boundary.test.ts#T91",
@@ -2837,16 +2837,16 @@
     "normativeText": "**MUST [TUI-002; arch §23.2]** `oma`는 두 개의 서로 다른 실행 파일이다. host 설치 PATH의 것은 Human TUI이고, Resident rootfs 안의 것은 CLI-001의 model-facing CLI다. 두 실행 파일은 argv 파서, capability, 연결 소켓, 설정 접근을 공유하지 않는다. 공유 가능한 것은 frame codec과 transport처럼 부작용과 권한이 없는 leaf뿐이다. Human TUI의 terminal decoder는 stdin read를 key 경계로 가정하지 않고 같은 stream에서 분할된 UTF-8 code point와 ESC/CSI report를 다음 read까지 이어서 완성한다. incomplete report의 보유량은 선언된 작은 한도를 가지며 unknown report는 prompt 문자로 누출하지 않는다. 시작하고 끝나지 않은 모든 token(분할 UTF-8, 미완 ESC/CSI, 열린 paste)은 선언된 deadline을 가지며, deadline이 지나면 보유분을 포기한다. deadline이 없으면 Human이 다음에 누르는 key가 미완 report의 마지막 byte로 소비되어 사라진다. 분할 UTF-8의 deadline은 decoder가 스스로 관측 가능해야 한다. 포기한 미완 code point는 U+FFFD로 대체해 prompt에 넣지 않고 그것을 기다리던 decode state와 함께 버리며, terminal이 만든 U+FFFD도 key로 취급하지 않는다. TUI는 terminal의 bracketed paste(DEC 2004)를 화면 취득 시 켜고 반납 시 끄며, 한 paste를 개행마다의 Enter가 아니라 하나의 입력 경계로 받는다. paste는 제출이 아니라 draft 편집이며, 한도를 넘었거나 terminal이 끝내지 않은 paste는 남은 prefix를 전달하지 않고 전체를 거절한다. paste 경계 자체는 host terminal이 DEC 2004를 지킨다는 전제 위에 있으므로(clipboard 안의 `ESC[201~`를 그대로 흘리는 terminal은 그 전제를 깬다), TUI는 그 전제에만 기대지 않는다: paste end marker 뒤 같은 read에 남은 byte는 key로 해석하지 않고 그 paste의 내용으로 흡수하며, paste 종료 후 선언된 짧은 구간 안에 도착한 Enter는 제출이 아니라 그 paste의 개행으로 처리한다. 이 구간은 선언된 한도이고, 그 안의 Enter를 제출로 인정하지 않는 것은 정상 동작이다. 대화 Backspace는 UTF-16 code unit이 아니라 grapheme cluster 하나를 지운다. 표시·paste 경로는 Unicode Cc와 Cf 제어·서식 문자를 제거하되 정상 grapheme 구성을 위한 ZWNJ(U+200C)·ZWJ(U+200D)는 보존한다. paste의 TAB·LF는 편집용으로 보존하며 표시 경로의 TAB은 공백으로 바꾼다. bidi 제어는 표시 순서를 바꿀 수 없어야 하고, 폭 0의 정상 grapheme을 단지 폭이 없다는 이유로 버리지 않는다(DR19).",
     "applicability": "unclassified",
     "rationale": "Requires production-path review; no inference from test names.",
-    "owner": "src/tui/keys.ts#KeyDecoder",
-    "entrypoint": "src/entry/oma.ts#main",
+    "owner": "packages/tui/src/keys.ts#KeyDecoder",
+    "entrypoint": "apps/oma/src/entry/oma.ts#main",
     "callPath": [
-      "src/entry/oma.ts#main",
-      "src/entry/oma-society.ts#main",
-      "src/application/society-interaction.ts#SocietyInteraction",
-      "src/tui/app.ts#TuiApp",
-      "src/tui/keys.ts#KeyDecoder",
-      "src/tui/screen.ts#openTerminal",
-      "src/tui/model.ts#step"
+      "apps/oma/src/entry/oma.ts#main",
+      "apps/oma/src/entry/oma-society.ts#main",
+      "apps/oma/src/application/society-interaction.ts#SocietyInteraction",
+      "packages/tui/src/app.ts#TuiApp",
+      "packages/tui/src/keys.ts#KeyDecoder",
+      "packages/tui/src/screen.ts#openTerminal",
+      "packages/tui/src/model.ts#step"
     ],
     "negativeTests": [
       "test/tui-app.test.ts#TUI-002",
@@ -2865,14 +2865,14 @@
     "normativeText": "**MUST NOT [TUI-003]** host TUI의 실행 파일·소스·설정·소켓을 §12의 sandbox mount 목록에 추가한다. 설치 디렉터리를 통째로 mount하는 경우(`SB-002`) 배포 layout이 선언한 product surface 경로(`dist/src/tui`, `dist/src/entry/oma.js`와 그 원본)는 같은 mount 계획 안에서 가려야 하며, 가린 자리는 쓰기 가능한 공간이 되어서도 안 된다. Resident의 `--help`, 도움말 텍스트, 오류 메시지에서 TUI나 Control Panel을 발견할 수 없어야 한다. 모델이 host TUI가 여는 어떤 endpoint에도 연결할 수 없어야 한다.",
     "applicability": "unclassified",
     "rationale": "Requires production-path review; no inference from test names.",
-    "owner": "src/application/society-interaction.ts#SocietyInteraction",
-    "entrypoint": "src/entry/oma.ts#main",
+    "owner": "apps/oma/src/application/society-interaction.ts#SocietyInteraction",
+    "entrypoint": "apps/oma/src/entry/oma.ts#main",
     "callPath": [
-      "src/entry/oma.ts#main",
-      "src/entry/oma-society.ts#main",
-      "src/application/society-interaction.ts#SocietyInteraction",
-      "src/tui/app.ts#TuiApp",
-      "src/tui/model.ts#step"
+      "apps/oma/src/entry/oma.ts#main",
+      "apps/oma/src/entry/oma-society.ts#main",
+      "apps/oma/src/application/society-interaction.ts#SocietyInteraction",
+      "packages/tui/src/app.ts#TuiApp",
+      "packages/tui/src/model.ts#step"
     ],
     "negativeTests": [
       "test/tui-boundary.test.ts#T91",
@@ -2890,13 +2890,13 @@
     "normativeText": "**MUST [TUI-004; arch §23.3]** Principal Pi session의 실행 권한은 OMA host가 소유한다. DR22에 따라 대화형 화면은 동봉 Pi InteractiveMode와 원본 pi-open-tui가 담당하고, headless adapter와 Resident는 RPC를 사용한다. 대화형 editor의 제출도 부모 PrincipalSession의 admission을 거쳐야 하며 Pi의 steer/follow-up 경로로 우회하지 않는다. PR-001의 단일 attach, PR-003의 private context 보존, PR-004의 model-facing tool 제한은 이 entrypoint가 그대로 진다. Principal의 논리 identity는 bootstrap 때 만들고 TUI 실행 여부와 독립적으로 유지한다. TUI 종료는 새 Principal 생성의 trigger가 아니다. society당 engine은 하나이며 그 하나를 정하는 것은 REC-007의 host lease다. DR35: private 대화 engine은 이 프로세스의 lease·프로젝트 binding·설정·private 경로가 확인되고 broker를 시작한 뒤 준비할 수 있다. Principal 권한은 이 프로세스가 띄운 broker가 복구와 rootfs 수리 뒤 준비를 알리고 같은 engine의 등록에 credential을 발급한 뒤에만 생긴다. engine 생성·broker pid·화면 표시를 Principal 권한이나 Society 준비 완료로 해석하지 않는다. 소유하지 못함이 확정되면(lease를 다른 프로세스가 쥠, 다른 broker가 이미 듣고 있음, broker를 띄우지 못함, 자식이 소유 status로 끝남, 재시작 한도 소진) engine을 시작하지 않는다. 이미 시작한 engine에 대해서도 같다. 소유를 잃는 사건은 통지가 아니라 teardown이다: 그 순간 살아 있던 session을 닫고 전달을 멈춘 **뒤에** lease를 놓는다. 닫았다는 것은 신호를 보냈다는 뜻이고 죽었다는 뜻이 아니므로, 정상 종료는 운영체제가 engine을 거두었음을 확인한 뒤에 lease를 놓는다 — 상한을 두되, REC-007의 상속된 fence가 그 상한을 넘긴 경우까지 덮는다. 소유가 허락하는 모든 것은 한 객체에 묻는다: 시작·전달·설정 쓰기·확장 토글·종료가 각각의 flag가 아니라 같은 tenure에게 묻고, lease를 잡지 못한 Control Panel은 설정과 확장을 포함해 society의 어떤 바이트도 쓰지 못한다. lease를 놓은 다음부터는 다른 `oma`가 society를 가져갈 수 있으므로, 그 경계를 넘어 살아남은 session은 두 번째 engine을 시작하는 것과 같은 위반이다. 소유를 잃은 뒤에 broker가 다시 준비를 알리더라도 engine을 다시 시작하지 않는다. 이 프로세스에는 principal host endpoint와 credential이 없어 그 engine은 society에 요청할 authority가 없으면서 같은 private workspace와 같은 session 기록의 두 번째 writer가 되기 때문이며, 그 경우 제품은 같은 상태를 보는 Control Panel로 남고 그 이유를 화면에 적는다.",
     "applicability": "unclassified",
     "rationale": "Requires production-path review; no inference from test names.",
-    "owner": "src/application/society-runtime.ts#SocietyRuntime",
-    "entrypoint": "src/entry/oma.ts#main",
+    "owner": "apps/oma/src/application/society-runtime.ts#SocietyRuntime",
+    "entrypoint": "apps/oma/src/entry/oma.ts#main",
     "callPath": [
-      "src/entry/oma.ts#main",
-      "src/entry/oma-society.ts#main",
-      "src/application/society-runtime.ts#SocietyRuntime",
-      "src/runtime/host-tenure.ts#HostTenure"
+      "apps/oma/src/entry/oma.ts#main",
+      "apps/oma/src/entry/oma-society.ts#main",
+      "apps/oma/src/application/society-runtime.ts#SocietyRuntime",
+      "apps/oma/src/runtime/host-tenure.ts#HostTenure"
     ],
     "negativeTests": [
       "test/oma-composition-policy.test.mjs#T119"
@@ -2909,19 +2909,19 @@
   {
     "requirement": "TUI-005",
     "source": "docs/implementation-spec.md",
-    "digest": "f25d9ccc52c1a9650ddaefc9d161a88dee06a776599526c77e29ae788799f24a",
-    "normativeText": "**MUST [TUI-005]** Principal의 model 선택 대상은 host가 `HostConfigV1`에 선언한 model profile 이름뿐이다. caller는 provider, URL, header, credential, 가격, token 상한을 지정하지 못한다. 선택은 host authority를 고쳐 쓰는 것이므로 CFG-005의 policy revision 갱신을 동반하고, **다음 Principal session부터** 적용한다. 진행 중인 session이나 stream의 model을 바꾸지 않는다.",
+    "digest": "8a110d05f75872f5034a52030ec3a384efe329291b3b09de4a7e26cd3ef67dfc",
+    "normativeText": "**MUST [TUI-005]** Principal의 model 선택 대상은 host가 `HostConfig`에 선언한 model profile 이름뿐이다. caller는 provider, URL, header, credential, 가격, token 상한을 지정하지 못한다. 선택은 host authority를 고쳐 쓰는 것이므로 CFG-005의 policy revision 갱신을 동반하고, **다음 Principal session부터** 적용한다. 진행 중인 session이나 stream의 model을 바꾸지 않는다.",
     "applicability": "unclassified",
     "rationale": "Requires production-path review; no inference from test names.",
-    "owner": "src/domain/settings-policy.ts#applyField",
-    "entrypoint": "src/entry/oma.ts#main",
+    "owner": "packages/domain/src/settings-policy.ts#applyField",
+    "entrypoint": "apps/oma/src/entry/oma.ts#main",
     "callPath": [
-      "src/entry/oma.ts#main",
-      "src/entry/oma-society.ts#main",
-      "src/application/society-interaction.ts#SocietyInteraction",
-      "src/tui/app.ts#TuiApp",
-      "src/domain/settings-policy.ts#applyField",
-      "src/application/settings.ts#writeSettings"
+      "apps/oma/src/entry/oma.ts#main",
+      "apps/oma/src/entry/oma-society.ts#main",
+      "apps/oma/src/application/society-interaction.ts#SocietyInteraction",
+      "packages/tui/src/app.ts#TuiApp",
+      "packages/domain/src/settings-policy.ts#applyField",
+      "apps/oma/src/application/settings.ts#writeSettings"
     ],
     "negativeTests": [
       "test/tui-sources.test.ts#T93",
@@ -2940,14 +2940,14 @@
     "normativeText": "**MUST NOT [TUI-006]** 현재 model 선택, 읽음 상태, UI 위치, 최근 화면 같은 TUI 상태를 여섯 durable entity에 추가하거나 새 표·컬럼·sidecar 파일로 저장한다. 재시작 후에도 유지되어야 하는 선택은 host config의 해당 필드로 표현하고, 그 외 UI 상태는 A-007의 메모리 전용 runtime 상태로 두며 crash 후 원본에서 재구성한다.",
     "applicability": "unclassified",
     "rationale": "Requires production-path review; no inference from test names.",
-    "owner": "src/tui/model.ts#step",
-    "entrypoint": "src/entry/oma.ts#main",
+    "owner": "packages/tui/src/model.ts#step",
+    "entrypoint": "apps/oma/src/entry/oma.ts#main",
     "callPath": [
-      "src/entry/oma.ts#main",
-      "src/entry/oma-society.ts#main",
-      "src/application/society-interaction.ts#SocietyInteraction",
-      "src/tui/app.ts#TuiApp",
-      "src/tui/model.ts#step"
+      "apps/oma/src/entry/oma.ts#main",
+      "apps/oma/src/entry/oma-society.ts#main",
+      "apps/oma/src/application/society-interaction.ts#SocietyInteraction",
+      "packages/tui/src/app.ts#TuiApp",
+      "packages/tui/src/model.ts#step"
     ],
     "negativeTests": [
       "test/tui-boundary.test.ts#T95"
@@ -2964,15 +2964,15 @@
     "normativeText": "**MUST [TUI-007; arch §23.6]** 값 확정 시 저장하고 별도 Save 단계나 dirty state를 두지 않는다. 편집 중 Esc는 확정 전 값으로 되돌린다. 화면은 각 항목의 **적용 시점**을 함께 표시한다.",
     "applicability": "unclassified",
     "rationale": "Requires production-path review; no inference from test names.",
-    "owner": "src/domain/settings-policy.ts#applyField",
-    "entrypoint": "src/entry/oma.ts#main",
+    "owner": "packages/domain/src/settings-policy.ts#applyField",
+    "entrypoint": "apps/oma/src/entry/oma.ts#main",
     "callPath": [
-      "src/entry/oma.ts#main",
-      "src/entry/oma-society.ts#main",
-      "src/application/society-interaction.ts#SocietyInteraction",
-      "src/tui/app.ts#TuiApp",
-      "src/domain/settings-policy.ts#applyField",
-      "src/application/settings.ts#writeSettings"
+      "apps/oma/src/entry/oma.ts#main",
+      "apps/oma/src/entry/oma-society.ts#main",
+      "apps/oma/src/application/society-interaction.ts#SocietyInteraction",
+      "packages/tui/src/app.ts#TuiApp",
+      "packages/domain/src/settings-policy.ts#applyField",
+      "apps/oma/src/application/settings.ts#writeSettings"
     ],
     "negativeTests": [
       "test/tui-sources.test.ts#T93",
@@ -2991,15 +2991,15 @@
     "normativeText": "**MUST [TUI-008]** `initialResidents`에 대응하는 항목은 bootstrap seed로만 표시하고 실행 중 society의 Resident 수를 바꾸는 값으로 제시하지 않는다. LIFE-009에 따라 값 변경이 다음 재시작에 agent를 자동 생성·삭제·중지하지 않는다. 현재 Resident를 늘리거나 줄이는 조작은 설정 항목이 아니라 명시적 lifecycle 행위로 분리해 표시한다.",
     "applicability": "unclassified",
     "rationale": "Requires production-path review; no inference from test names.",
-    "owner": "src/domain/settings-policy.ts#applyField",
-    "entrypoint": "src/entry/oma.ts#main",
+    "owner": "packages/domain/src/settings-policy.ts#applyField",
+    "entrypoint": "apps/oma/src/entry/oma.ts#main",
     "callPath": [
-      "src/entry/oma.ts#main",
-      "src/entry/oma-society.ts#main",
-      "src/application/society-interaction.ts#SocietyInteraction",
-      "src/tui/app.ts#TuiApp",
-      "src/domain/settings-policy.ts#applyField",
-      "src/application/settings.ts#writeSettings"
+      "apps/oma/src/entry/oma.ts#main",
+      "apps/oma/src/entry/oma-society.ts#main",
+      "apps/oma/src/application/society-interaction.ts#SocietyInteraction",
+      "packages/tui/src/app.ts#TuiApp",
+      "packages/domain/src/settings-policy.ts#applyField",
+      "apps/oma/src/application/settings.ts#writeSettings"
     ],
     "negativeTests": [
       "test/tui-sources.test.ts#T93",
@@ -3018,15 +3018,15 @@
     "normativeText": "**MUST [TUI-009]** 이미 생성된 Resident의 `ResolvedAgentSpec.modelProfile` 참조는 LIFE-008에 따라 고정이다. 설정 화면은 참조가 가리키는 profile의 내용만 바꾸고 참조 자체를 바꾸지 않는다. 저장된 참조를 현재 배포가 해석하지 못하면 `UNSUPPORTED_PROFILE`로 차단하고 임의 profile로 대체하지 않는다. config 의미가 바뀌면 CFG-005/D02의 정책에 따라 policy revision을 갱신한다.",
     "applicability": "unclassified",
     "rationale": "Requires production-path review; no inference from test names.",
-    "owner": "src/domain/settings-policy.ts#applyField",
-    "entrypoint": "src/entry/oma.ts#main",
+    "owner": "packages/domain/src/settings-policy.ts#applyField",
+    "entrypoint": "apps/oma/src/entry/oma.ts#main",
     "callPath": [
-      "src/entry/oma.ts#main",
-      "src/entry/oma-society.ts#main",
-      "src/application/society-interaction.ts#SocietyInteraction",
-      "src/tui/app.ts#TuiApp",
-      "src/domain/settings-policy.ts#applyField",
-      "src/application/settings.ts#writeSettings"
+      "apps/oma/src/entry/oma.ts#main",
+      "apps/oma/src/entry/oma-society.ts#main",
+      "apps/oma/src/application/society-interaction.ts#SocietyInteraction",
+      "packages/tui/src/app.ts#TuiApp",
+      "packages/domain/src/settings-policy.ts#applyField",
+      "apps/oma/src/application/settings.ts#writeSettings"
     ],
     "negativeTests": [
       "test/tui-sources.test.ts#T93",
@@ -3045,15 +3045,15 @@
     "normativeText": "**MUST [TUI-010; arch §23.7]** Extensions 화면의 목록 출처는 host가 `installation.libdir` 아래에 이미 배치한 파일과, [DR25](design-revisions.md)에 따라 Human이 `oma pi install`로 oma의 패키지 저장소(`installation.packages`)에 설치한 패키지의 extension 파일뿐이다. 설치는 `oma pi`의 명시 명령으로만 하며 화면에서의 임의 경로 입력, 자동 탐색, 네트워크 설치를 허용하지 않는다. core OMA extension은 항상 첫 항목으로 고정하고 해제할 수 없다. 선택한 항목의 SHA-256을 기록하고 실행 직전에 다시 확인한다. [DR26](design-revisions.md)에 따라 확장 실행 코드는 설정 문서의 1 MiB/합계 8 MiB 제한에 포함하지 않으며, 고정 메모리로 파일을 해시하고 읽기 전후 동일성을 확인한다. 추가 extension은 Pi host process와 동일 권한의 trusted deployment code이며 model tool로 취급하지 않는다. 이 화면은 host 전용이고 모델·workspace·mail 내용이 목록·선택·적용에 영향을 주지 못한다.",
     "applicability": "unclassified",
     "rationale": "Requires production-path review; no inference from test names.",
-    "owner": "src/application/extensions.ts#toggleExtension",
-    "entrypoint": "src/entry/oma.ts#main",
+    "owner": "apps/oma/src/application/extensions.ts#toggleExtension",
+    "entrypoint": "apps/oma/src/entry/oma.ts#main",
     "callPath": [
-      "src/entry/oma.ts#main",
-      "src/entry/oma-society.ts#main",
-      "src/application/society-interaction.ts#SocietyInteraction",
-      "src/tui/app.ts#TuiApp",
-      "src/application/extensions.ts#readExtensions",
-      "src/application/extensions.ts#toggleExtension"
+      "apps/oma/src/entry/oma.ts#main",
+      "apps/oma/src/entry/oma-society.ts#main",
+      "apps/oma/src/application/society-interaction.ts#SocietyInteraction",
+      "packages/tui/src/app.ts#TuiApp",
+      "apps/oma/src/application/extensions.ts#readExtensions",
+      "apps/oma/src/application/extensions.ts#toggleExtension"
     ],
     "negativeTests": [
       "test/tui-sources.test.ts#T97",
@@ -3071,14 +3071,14 @@
     "normativeText": "**MUST [TUI-011; arch §23.8]** Mail 화면의 읽지 않음 표시는 기존 `deliveries` flag에서 파생한 값이며 새 durable 상태가 아니다. ACK 조작은 MAIL-009의 의미만 갖는다. UI 문구가 `presented=understood`, `ack=approved`, `ack=읽음 완료`를 암시해서는 안 된다(NEG-002). 기본 대상은 공개된 society 전체 메일(Principal 발신 GOAL, Worker 간 메일, 자동 공지 포함)이다. 각 메일은 독립 행으로 표시하고 실제 발신자 이름을 유지한다. 자동 merge 완료 공지는 ledger의 notice 메타데이터로 구분해 OMA / notice로 표시하며 요청 Worker는 상세에 표시한다. 읽지 않음 표시는 Principal 전달 대기만 뜻한다. commons/topic을 Principal prompt에 자동 주입하지 않는 A-003은 그대로 유지한다.",
     "applicability": "unclassified",
     "rationale": "Requires production-path review; no inference from test names.",
-    "owner": "src/application/mail.ts#readMailbox",
-    "entrypoint": "src/entry/oma.ts#main",
+    "owner": "apps/oma/src/application/mail.ts#readMailbox",
+    "entrypoint": "apps/oma/src/entry/oma.ts#main",
     "callPath": [
-      "src/entry/oma.ts#main",
-      "src/entry/oma-society.ts#main",
-      "src/application/society-interaction.ts#SocietyInteraction",
-      "src/tui/app.ts#TuiApp",
-      "src/application/mail.ts#readMailbox"
+      "apps/oma/src/entry/oma.ts#main",
+      "apps/oma/src/entry/oma-society.ts#main",
+      "apps/oma/src/application/society-interaction.ts#SocietyInteraction",
+      "packages/tui/src/app.ts#TuiApp",
+      "apps/oma/src/application/mail.ts#readMailbox"
     ],
     "negativeTests": [
       "test/tui-sources.test.ts#T98",
@@ -3096,14 +3096,14 @@
     "normativeText": "**MUST [TUI-012; arch §23.5]** Dashboard의 모든 수치는 VIEW-002의 관측 규칙을 따른다. 관측 시각을 함께 보유하고, unknown이나 disconnected를 running·0·성공으로 바꾸지 않는다. INF-004의 불확정 비용은 확정분과 구분해 표시하며 하나의 합계나 백분율로 뭉개지 않는다. broker에 연결하지 못하면 cached 값임과 관측 시각을 표시한다.",
     "applicability": "unclassified",
     "rationale": "Requires production-path review; no inference from test names.",
-    "owner": "src/tui/dashboard.ts#dashboardLines",
-    "entrypoint": "src/entry/oma.ts#main",
+    "owner": "packages/tui/src/dashboard.ts#dashboardLines",
+    "entrypoint": "apps/oma/src/entry/oma.ts#main",
     "callPath": [
-      "src/entry/oma.ts#main",
-      "src/entry/oma-society.ts#main",
-      "src/application/society-interaction.ts#SocietyInteraction",
-      "src/application/status-observation.ts#TuiTransport.status",
-      "src/tui/dashboard.ts#dashboardLines"
+      "apps/oma/src/entry/oma.ts#main",
+      "apps/oma/src/entry/oma-society.ts#main",
+      "apps/oma/src/application/society-interaction.ts#SocietyInteraction",
+      "apps/oma/src/application/status-observation.ts#TuiTransport.status",
+      "packages/tui/src/dashboard.ts#dashboardLines"
     ],
     "negativeTests": [
       "test/tui-sources.test.ts#T98"
@@ -3120,14 +3120,14 @@
     "normativeText": "**MUST [TUI-013; arch §23.9]** 제품 UI는 Resident를 `worker`로 표시할 수 있으나 wire, DB, persisted 표현에는 사용하지 않는다. 표시 용어와 규범 용어의 대응은 한 곳에서 정의하고 계층마다 다시 만들지 않는다.",
     "applicability": "unclassified",
     "rationale": "Requires production-path review; no inference from test names.",
-    "owner": "src/tui/render.ts#render",
-    "entrypoint": "src/entry/oma.ts#main",
+    "owner": "packages/tui/src/render.ts#render",
+    "entrypoint": "apps/oma/src/entry/oma.ts#main",
     "callPath": [
-      "src/entry/oma.ts#main",
-      "src/entry/oma-society.ts#main",
-      "src/application/society-interaction.ts#SocietyInteraction",
-      "src/tui/app.ts#TuiApp",
-      "src/tui/render.ts#render"
+      "apps/oma/src/entry/oma.ts#main",
+      "apps/oma/src/entry/oma-society.ts#main",
+      "apps/oma/src/application/society-interaction.ts#SocietyInteraction",
+      "packages/tui/src/app.ts#TuiApp",
+      "packages/tui/src/render.ts#render"
     ],
     "negativeTests": [
       "test/tui-boundary.test.ts#T95"
@@ -3144,18 +3144,20 @@
     "normativeText": "**MUST [TUI-014; arch §23.10]** DR22에 따라 Pi/Open TUI의 원본 표시·명령·단축키·설정을 그대로 사용한다. OMA는 일반 Human 입력의 목적지만 소유한다: 일반 입력과 follow-up 키는 PrincipalSession의 run 순서로 가고, Pi의 built-in command, extension command, `!` shell, `/settings`, `/open-tui`는 Pi가 처리한다. 사람이 입력한 `/oma-deliver`는 거부하며 이 명령은 OMA의 mail 전달만 보낸다. [DR24](design-revisions.md)에 따라 세션을 엔진 개발자에게 올리는 `/bug`와 다른 곳의 세션 파일을 가져오는 `/import`도 거부하고, 터미널 제목·`/export` 기본 이름과 위치·확장 충돌 안내는 엔진이 아니라 oma와 Human의 프로젝트를 가리킨다. OMA 관리는 Ctrl+X와 `/oma`의 Control Panel이 담당한다. [DR24](design-revisions.md)에 따라 `/new`와 `/resume`(및 엔진의 해당 키)은 OMA 세션을 열고, Config의 Principal model·Worker model 행은 각각 한 줄(`model · effort`)이며 Enter로 엔진의 model 목록과 그 model의 effort 목록을 차례로 연다.",
     "applicability": "unclassified",
     "rationale": "Requires production-path review; no inference from test names.",
-    "owner": "src/entry/pi-interactive-host.ts#runInteractive",
-    "entrypoint": "src/entry/oma.ts#main",
+    "owner": "packages/engine/src/interactive.ts#runInteractive",
+    "entrypoint": "apps/oma/src/entry/oma.ts#main",
     "callPath": [
-      "src/entry/oma.ts#main",
-      "src/entry/oma-society.ts#main",
-      "src/application/society-runtime.ts#SocietyRuntime",
-      "src/runtime/engine/principal-session.ts#PrincipalSession.start",
-      "src/entry/pi-interactive-host.ts#runInteractive",
-      "src/tui/interactive-editor.ts#ownedEditor"
+      "apps/oma/src/entry/oma.ts#main",
+      "apps/oma/src/entry/oma-society.ts#main",
+      "apps/oma/src/application/society-runtime.ts#SocietyRuntime",
+      "packages/engine/src/principal-session.ts#PrincipalSession.start",
+      "packages/engine/src/interactive.ts#runInteractive",
+      "packages/engine/src/interactive-extension.ts#createInteractiveExtension",
+      "packages/engine/src/interactive-input.ts#createInteractiveInput",
+      "packages/engine/src/pi-compat/prompt-editor.ts#ownedEditor"
     ],
     "negativeTests": [
-      "test/interactive-input.test.ts#Open TUI",
+      "packages/engine/test/interactive-input.test.mjs#Open TUI",
       "test/open-tui-pty.test.ts#Open TUI"
     ],
     "evidence": null,
@@ -3170,16 +3172,16 @@
     "normativeText": "**MUST [TUI-016; arch §23.11]** OMA는 Pi 엔진을 함께 배포하고, 실행할 엔진을 이 설치본이 가져온 것으로만 해석한다. `PATH` 탐색과 `/usr/bin/pi` 같은 대체 경로 fallback을 두지 않는다. 엔진이 없는 설치본은 `UNSUPPORTED_PROFILE`로 실패하며, 어떤 Pi가 실행됐는지 불확실한 상태로 진행하지 않는다. headless/RPC의 운영자 명시적 pin은 허용하되 절대 경로여야 하고 존재하지 않으면 거절한다. DR22 대화형 entry는 동봉 SDK와 원본 확장의 결합만 지원하므로 host-pinned 엔진을 명시적으로 거절하며 다른 엔진으로 조용히 대체하지 않는다. 엔진 entry는 동봉 패키지가 선언한 `bin`에서 읽고 저장소가 경로를 추측하지 않는다.",
     "applicability": "unclassified",
     "rationale": "Requires production-path review; no inference from test names.",
-    "owner": "src/runtime/pi-runtime.ts#resolvePiRuntime",
-    "entrypoint": "src/entry/oma.ts#main",
+    "owner": "packages/engine/src/pi-runtime.ts#resolvePiRuntime",
+    "entrypoint": "apps/oma/src/entry/oma.ts#main",
     "callPath": [
-      "src/entry/oma.ts#main",
-      "src/entry/oma-society.ts#main",
-      "src/application/society-bootstrap.ts#prepareSociety",
-      "src/application/project-session-settings.ts#ProjectSessionSettings",
-      "src/config/defaults.ts#defaultHostConfig",
-      "src/runtime/pi-runtime.ts#resolvePiRuntime",
-      "src/runtime/engine/principal-session.ts#PrincipalSession.start"
+      "apps/oma/src/entry/oma.ts#main",
+      "apps/oma/src/entry/oma-society.ts#main",
+      "apps/oma/src/application/society-bootstrap.ts#prepareSociety",
+      "apps/oma/src/application/project-session-settings.ts#ProjectSessionSettings",
+      "packages/config/src/defaults.ts#defaultHostConfig",
+      "packages/engine/src/pi-runtime.ts#resolvePiRuntime",
+      "packages/engine/src/principal-session.ts#PrincipalSession.start"
     ],
     "negativeTests": [
       "test/pi-runtime.test.ts#T105",
@@ -3197,16 +3199,16 @@
     "normativeText": "**MUST [TUI-017]** 실행하는 엔진에는 OMA가 소유한 agent 디렉터리를 지정한다. 지정하지 않으면 엔진이 사용자의 `~/.pi` 설정·extension·session을 공유하므로, 사용자가 별도로 설치한 Pi와 상태가 섞인다. [DR24](design-revisions.md)에 따라 이 디렉터리는 Human 한 명의 엔진 home(`<data>/oma/.engine`)이며 모든 세션이 공유하고 세션(society)마다 따로 두지 않는다. 로그인·기본 model·effort·테마·키 설정은 이 home에서 모든 세션에 유지되고, 대화·mail·Worker·git은 각 세션의 state root에 남아 그 경계에서 backup/restore·삭제된다.",
     "applicability": "unclassified",
     "rationale": "Requires production-path review; no inference from test names.",
-    "owner": "src/runtime/pi-runtime.ts#resolvePiRuntime",
-    "entrypoint": "src/entry/oma.ts#main",
+    "owner": "packages/engine/src/pi-runtime.ts#resolvePiRuntime",
+    "entrypoint": "apps/oma/src/entry/oma.ts#main",
     "callPath": [
-      "src/entry/oma.ts#main",
-      "src/entry/oma-society.ts#main",
-      "src/application/society-bootstrap.ts#prepareSociety",
-      "src/application/project-session-settings.ts#ProjectSessionSettings",
-      "src/config/defaults.ts#defaultHostConfig",
-      "src/runtime/pi-runtime.ts#resolvePiRuntime",
-      "src/runtime/engine/principal-session.ts#PrincipalSession.start"
+      "apps/oma/src/entry/oma.ts#main",
+      "apps/oma/src/entry/oma-society.ts#main",
+      "apps/oma/src/application/society-bootstrap.ts#prepareSociety",
+      "apps/oma/src/application/project-session-settings.ts#ProjectSessionSettings",
+      "packages/config/src/defaults.ts#defaultHostConfig",
+      "packages/engine/src/pi-runtime.ts#resolvePiRuntime",
+      "packages/engine/src/principal-session.ts#PrincipalSession.start"
     ],
     "negativeTests": [
       "test/pi-runtime.test.ts#T105",
@@ -3220,20 +3222,20 @@
   {
     "requirement": "TUI-019",
     "source": "docs/implementation-spec.md",
-    "digest": "fe8d995697e1bd9ce174018409faa8b2a2e4be422178ea7d575611d83352bd4d",
-    "normativeText": "**MUST [TUI-019]** 설정 파일 없이 동작한다. 초기화 명령을 요구하거나 사용자가 `HostConfigV1`을 작성하게 만들지 않는다. D05: 새 society의 기본 이름은 canonical absolute Linux project path의 digest와 bounded slug에서 유도하고 전체 경로 binding을 mutation 전에 대조한다. 설정이 없으면 실제 설정을 만든다. 기존 slug-only state를 자동 rename/재바인딩하지 않는다. legacy binding 부재는 명시적 operator 검토 전 쓰기를 막고 mismatch는 --society로도 숨기지 않는다. 새 metadata의 형식·권한·backup·구버전 writer 제한은 [D05 결과](implementation/consistency-decisions.md)의 C2 범위를 따른다.",
+    "digest": "47f00129f45c02e9dc57d2ad7cc64a3125a06c3e81a3a0388b288b9f83429314",
+    "normativeText": "**MUST [TUI-019]** 설정 파일 없이 동작한다. 초기화 명령을 요구하거나 사용자가 `HostConfig`을 작성하게 만들지 않는다. D05: 새 society의 기본 이름은 canonical absolute Linux project path의 digest와 bounded slug에서 유도하고 전체 경로 binding을 mutation 전에 대조한다. 설정이 없으면 실제 설정을 만든다. 기존 slug-only state를 자동 rename/재바인딩하지 않는다. legacy binding 부재는 명시적 operator 검토 전 쓰기를 막고 mismatch는 --society로도 숨기지 않는다. 새 metadata의 형식·권한·backup·구버전 writer 제한은 [D05 결과](implementation/consistency-decisions.md)의 C2 범위를 따른다.",
     "applicability": "unclassified",
     "rationale": "Requires production-path review; no inference from test names.",
-    "owner": "src/runtime/pi-runtime.ts#resolvePiRuntime",
-    "entrypoint": "src/entry/oma.ts#main",
+    "owner": "packages/engine/src/pi-runtime.ts#resolvePiRuntime",
+    "entrypoint": "apps/oma/src/entry/oma.ts#main",
     "callPath": [
-      "src/entry/oma.ts#main",
-      "src/entry/oma-society.ts#main",
-      "src/application/society-bootstrap.ts#prepareSociety",
-      "src/application/project-session-settings.ts#ProjectSessionSettings",
-      "src/config/defaults.ts#defaultHostConfig",
-      "src/runtime/pi-runtime.ts#resolvePiRuntime",
-      "src/runtime/engine/principal-session.ts#PrincipalSession.start"
+      "apps/oma/src/entry/oma.ts#main",
+      "apps/oma/src/entry/oma-society.ts#main",
+      "apps/oma/src/application/society-bootstrap.ts#prepareSociety",
+      "apps/oma/src/application/project-session-settings.ts#ProjectSessionSettings",
+      "packages/config/src/defaults.ts#defaultHostConfig",
+      "packages/engine/src/pi-runtime.ts#resolvePiRuntime",
+      "packages/engine/src/principal-session.ts#PrincipalSession.start"
     ],
     "negativeTests": [
       "test/pi-runtime.test.ts#T105",
@@ -3251,14 +3253,14 @@
     "normativeText": "**MUST [TUI-020; arch §23.13]** 엔진이 이미 소유한 산술·프로토콜 프리미티브를 다시 구현하지 않는다. 빌려오는 프리미티브마다 소유 모듈을 하나로 두고 그 목록을 실행 가능한 검사로 고정한다. DR22의 대화형 표시는 원본 Pi/Open TUI에 위임한다. OMA는 renderer를 복제하거나 dependency를 patch하지 않으며 입력 안전성과 실행 권한 adapter만 소유한다. Ctrl+X 관리 기능의 데이터·action은 OMA가 소유하고 원본 UI의 custom component로 표시한다. headless/fallback 표시 프리미티브의 소유 경계는 유지한다.",
     "applicability": "unclassified",
     "rationale": "Requires production-path review; no inference from test names.",
-    "owner": "src/tui/render.ts#cellWidth",
-    "entrypoint": "src/entry/oma.ts#main",
+    "owner": "packages/tui/src/render.ts#cellWidth",
+    "entrypoint": "apps/oma/src/entry/oma.ts#main",
     "callPath": [
-      "src/entry/oma.ts#main",
-      "src/entry/oma-society.ts#main",
-      "src/application/society-interaction.ts#SocietyInteraction",
-      "src/tui/app.ts#TuiApp",
-      "src/tui/render.ts#cellWidth"
+      "apps/oma/src/entry/oma.ts#main",
+      "apps/oma/src/entry/oma-society.ts#main",
+      "apps/oma/src/application/society-interaction.ts#SocietyInteraction",
+      "packages/tui/src/app.ts#TuiApp",
+      "packages/tui/src/render.ts#cellWidth"
     ],
     "negativeTests": [
       "test/surface-consistency.test.ts#T107"
@@ -3289,18 +3291,18 @@
     "normativeText": "**MUST [TUI-023; arch §23.6]** 대화 표면의 OMA 소유 메모리 입력은 선언된 한도를 가진다. DR22 대화형 conversation history는 upstream engine이 소유하며 아래 OMA transcript 보유 상한을 충족한다고 주장하지 않는다. OMA fallback transcript는 최근 500 논리 줄, 전체 256 KiB, 한 줄당 1 KiB의 세 한도를 동시에 만족하는 범위만 보유하고 모든 생산자가 하나의 append 경로를 사용한다. 보유량의 단위는 append 호출 수가 아니라 줄과 byte이며, 한 번의 append가 몇 줄이든 그 줄들이 줄 한도에 계산된다. 줄 자르기는 UTF-8 code point 경계에서 수행해 저장된 줄이 깨진 byte로 끝나지 않는다. 작성 중인 Human prompt는 최대 16 KiB의 UTF-8 source bytes만 보유하며, 현재 `frameBytes`가 더 작으면 완전한 Pi prompt command의 JSON envelope까지 직렬화한 크기가 그 frame 안에 드는 더 작은 값까지만 받는다. 문자 수로 byte 한도를 대신하거나 JSON escaping 비용을 누락하지 않는다. 붙여넣기도 같은 경계를 거치고 초과 부분에서 더 자라지 않는다. 어느 부분이든 한도를 넘은 입력은 보관한 bounded prefix를 정상 prompt로 가장해 제출하지 않고 **전체 prompt를 제출하지 않으며** 화면에 한도 초과를 명시적으로 표시한다(문구는 원인별로 다르며, 거절된 paste는 `붙여넣기 한도 초과`로 아무것도 입력되지 않았음을 말한다). Human이 편집해 초과 상태를 해제한 뒤에만 제출할 수 있다. 초과 상태는 그것을 만든 원인(Human이 입력한 문자 / 거절된 paste)을 함께 보유하며, 화면이 안내하는 해제 방법과 실제 편집 동작이 원인별로 일치해야 한다. 거절된 paste는 draft에 아무것도 추가하지 않았으므로 그 뒤의 첫 편집은 draft의 문자를 지우지 않고 초과 상태만 해제한다. 아무것도 추가하지 않은 paste의 해제가 Human이 입력해 둔 마지막 grapheme을 소비해서는 안 된다. 실행 중인 run을 기다리는 Human prompt는 host에서 최대 16개만 보유하며, 초과 입력은 조용히 버리지 않고 접수 전에 거절한다. session이 prompt를 수락했는지는 제출과 같은 step에서 동기적으로 답하며, transcript에는 수락된 prompt만 들어간다. 거절된 prompt는 화면에 보낸 것처럼 남기지 않고 원문 그대로 draft로 되돌리며 거절 사유를 표시한다. 수락된 뒤 전송이 실패한 prompt는 그 prompt를 식별할 수 있게 원문과 함께 보고한다. 수락 시점에 이미 echo된 여러 prompt 가운데 무엇이 전달되지 않았는지 알 수 없는 보고는 이 요구를 만족하지 않는다. 실패한 원문은 transcript에 보존하며, draft가 비어 있으면 draft로 복원하고, 알림은 그 원문이 어디에 남았는지 말한다. 실패 뒤에도 대기 중인 나머지 prompt는 순서대로 계속 전송한다.",
     "applicability": "unclassified",
     "rationale": "Requires production-path review; no inference from test names.",
-    "owner": "src/tui/prompt.ts#appendPrompt",
-    "entrypoint": "src/entry/oma.ts#main",
+    "owner": "packages/tui/src/prompt.ts#appendPrompt",
+    "entrypoint": "apps/oma/src/entry/oma.ts#main",
     "callPath": [
-      "src/entry/oma.ts#main",
-      "src/entry/oma-society.ts#main",
-      "src/application/society-interaction.ts#SocietyInteraction",
-      "src/tui/app.ts#TuiApp",
-      "src/tui/model.ts#step",
-      "src/tui/prompt.ts#appendPrompt",
-      "src/tui/transcript.ts#Transcript",
-      "src/domain/surface-bounds.ts#humanPromptFitsFrame",
-      "src/runtime/engine/principal-session.ts#PrincipalSession.submit"
+      "apps/oma/src/entry/oma.ts#main",
+      "apps/oma/src/entry/oma-society.ts#main",
+      "apps/oma/src/application/society-interaction.ts#SocietyInteraction",
+      "packages/tui/src/app.ts#TuiApp",
+      "packages/tui/src/model.ts#step",
+      "packages/tui/src/prompt.ts#appendPrompt",
+      "packages/tui/src/transcript.ts#Transcript",
+      "packages/domain/src/surface-bounds.ts#humanPromptFitsFrame",
+      "packages/engine/src/principal-session.ts#PrincipalSession.submit"
     ],
     "negativeTests": [
       "test/tui-app.test.ts#T120",
@@ -3333,16 +3335,16 @@
     "normativeText": "**MUST NOT [TUI-018]** 동봉한 엔진을 수정해 제품 동작을 만든다. OMA의 동작은 신뢰된 core extension이 소유한다. 수정하지 않은 동봉 엔진은 upstream 의존이므로 A-009의 production LOC 계산 대상이 아니며, 엔진을 수정하는 순간 LOC-003에 따라 계산 대상이 된다. 측정에서 제외된다는 이유로 엔진 수정 금지가 완화되지는 않는다.",
     "applicability": "unclassified",
     "rationale": "Requires production-path review; no inference from test names.",
-    "owner": "src/runtime/pi-runtime.ts#resolvePiRuntime",
-    "entrypoint": "src/entry/oma.ts#main",
+    "owner": "packages/engine/src/pi-runtime.ts#resolvePiRuntime",
+    "entrypoint": "apps/oma/src/entry/oma.ts#main",
     "callPath": [
-      "src/entry/oma.ts#main",
-      "src/entry/oma-society.ts#main",
-      "src/application/society-bootstrap.ts#prepareSociety",
-      "src/application/project-session-settings.ts#ProjectSessionSettings",
-      "src/config/defaults.ts#defaultHostConfig",
-      "src/runtime/pi-runtime.ts#resolvePiRuntime",
-      "src/runtime/engine/principal-session.ts#PrincipalSession.start"
+      "apps/oma/src/entry/oma.ts#main",
+      "apps/oma/src/entry/oma-society.ts#main",
+      "apps/oma/src/application/society-bootstrap.ts#prepareSociety",
+      "apps/oma/src/application/project-session-settings.ts#ProjectSessionSettings",
+      "packages/config/src/defaults.ts#defaultHostConfig",
+      "packages/engine/src/pi-runtime.ts#resolvePiRuntime",
+      "packages/engine/src/principal-session.ts#PrincipalSession.start"
     ],
     "negativeTests": [
       "test/pi-runtime.test.ts#T105",
@@ -3374,12 +3376,12 @@
     "normativeText": "**MUST [TSP-001; arch §23.10]** role의 tool 표면 투영은 `DIRECT`/`DISABLED`/`GROUPED` 세 모드와 group DAG로 닫는다. group member는 `{tool}` 또는 `{group}`의 명시 참조뿐이며 접두사·정규식·의미 기반 매칭을 도입하지 않는다. 다음은 모두 거절한다: 중복 group 이름, 자기 참조, cycle, 알 수 없는 group/root 참조, 한 tool의 중복 소속, disabled tool의 group 소속, 같은 tool의 direct/grouped 동시 지정, group 이름과 tool selector 충돌, 이름 문법 위반.",
     "applicability": "unclassified",
     "rationale": "Requires production-path review; no inference from test names.",
-    "owner": "src/domain/tool-surface.ts#planToolSurface",
-    "entrypoint": "src/entry/runner.ts#main",
+    "owner": "packages/domain/src/tool-surface.ts#planToolSurface",
+    "entrypoint": "apps/oma/src/entry/runner.ts#main",
     "callPath": [
-      "src/entry/runner.ts#main",
-      "src/config/operations.ts#readConfigurationSource",
-      "src/domain/tool-surface.ts#planToolSurface"
+      "apps/oma/src/entry/runner.ts#main",
+      "packages/config/src/operations.ts#readConfigurationSource",
+      "packages/domain/src/tool-surface.ts#planToolSurface"
     ],
     "negativeTests": [
       "test/tool-surface.test.ts#T99",
@@ -3393,15 +3395,15 @@
   {
     "requirement": "TSP-002",
     "source": "docs/implementation-spec.md",
-    "digest": "5fb9bd7863c8fdc5d6d948f4201bc036df70ec9018d282c5d900d09bfd702901",
-    "normativeText": "**MUST [TSP-002]** 투영은 authored 설정 필드가 아니라 runtime plumbing이다. role 파일의 필드 집합은 닫혀 있으므로 `toolSurface` 키가 나타나는 role 파일은 `INVALID_REQUEST`로 config 로드를 실패시킨다(D23). 기존 닫힌 `HostConfigV1`, wire schema, ledger schema, DB entity를 확장하지 않는다. plan은 `OMA_TOOL_SURFACE` 환경 변수로만 sandbox에 도달하고, resident 안의 trusted extension이 session 시작 때 파싱해 malformed이면 fail closed한다(TSP-007).",
+    "digest": "1fc8379ced206d7b1e950bf40e80d88a0ed1107fa5c2864ce2db79b02ba285b4",
+    "normativeText": "**MUST [TSP-002]** 투영은 authored 설정 필드가 아니라 runtime plumbing이다. role 파일의 필드 집합은 닫혀 있으므로 `toolSurface` 키가 나타나는 role 파일은 `INVALID_REQUEST`로 config 로드를 실패시킨다(D23). 기존 닫힌 `HostConfig`, wire schema, ledger schema, DB entity를 확장하지 않는다. plan은 `OMA_TOOL_SURFACE` 환경 변수로만 sandbox에 도달하고, resident 안의 trusted extension이 session 시작 때 파싱해 malformed이면 fail closed한다(TSP-007).",
     "applicability": "unclassified",
     "rationale": "Requires production-path review; no inference from test names.",
-    "owner": "src/config/operations.ts#readConfigurationSource",
-    "entrypoint": "src/entry/runner.ts#main",
+    "owner": "packages/config/src/operations.ts#readConfigurationSource",
+    "entrypoint": "apps/oma/src/entry/runner.ts#main",
     "callPath": [
-      "src/entry/runner.ts#main",
-      "src/config/operations.ts#readConfigurationSource"
+      "apps/oma/src/entry/runner.ts#main",
+      "packages/config/src/operations.ts#readConfigurationSource"
     ],
     "negativeTests": [
       "test/tool-surface.test.ts#T100",
@@ -3419,12 +3421,12 @@
     "normativeText": "**MUST [TSP-003]** 투영은 bounded다. group 32개, group당 member 16개, 중첩 깊이 4, 선언 이름 총 512개, group description 512 bytes를 기본 상한으로 하며 host는 더 낮출 수 있다. 상한 초과는 접수 전에 거절한다.",
     "applicability": "unclassified",
     "rationale": "Requires production-path review; no inference from test names.",
-    "owner": "src/domain/tool-surface.ts#planToolSurface",
-    "entrypoint": "src/entry/runner.ts#main",
+    "owner": "packages/domain/src/tool-surface.ts#planToolSurface",
+    "entrypoint": "apps/oma/src/entry/runner.ts#main",
     "callPath": [
-      "src/entry/runner.ts#main",
-      "src/config/operations.ts#readConfigurationSource",
-      "src/domain/tool-surface.ts#planToolSurface"
+      "apps/oma/src/entry/runner.ts#main",
+      "packages/config/src/operations.ts#readConfigurationSource",
+      "packages/domain/src/tool-surface.ts#planToolSurface"
     ],
     "negativeTests": [
       "test/tool-surface.test.ts#T99",
@@ -3438,16 +3440,16 @@
   {
     "requirement": "TSP-004",
     "source": "docs/implementation-spec.md",
-    "digest": "38886632526f9266a734a7fa101d9a966dbb53690e0253cb6575c52bbaed1340",
-    "normativeText": "**MUST [TSP-004]** 검증과 평탄화의 단일 owner는 `src/domain/tool-surface.ts`다. group 해석·cycle 검출·root 유도를 sandbox 안이나 다른 계층에서 다시 구현하지 않는다. sandbox로 전달되는 것은 이미 검증된 평탄한 plan이다.",
+    "digest": "96baf18ed9887d9b8367f198931a9afdb1f70e51e5c9a2349cb2034452d379dd",
+    "normativeText": "**MUST [TSP-004]** 검증과 평탄화의 단일 owner는 `packages/domain/src/tool-surface.ts`다. group 해석·cycle 검출·root 유도를 sandbox 안이나 다른 계층에서 다시 구현하지 않는다. sandbox로 전달되는 것은 이미 검증된 평탄한 plan이다.",
     "applicability": "unclassified",
     "rationale": "Requires production-path review; no inference from test names.",
-    "owner": "src/domain/tool-surface.ts#planToolSurface",
-    "entrypoint": "src/entry/runner.ts#main",
+    "owner": "packages/domain/src/tool-surface.ts#planToolSurface",
+    "entrypoint": "apps/oma/src/entry/runner.ts#main",
     "callPath": [
-      "src/entry/runner.ts#main",
-      "src/config/operations.ts#readConfigurationSource",
-      "src/domain/tool-surface.ts#planToolSurface"
+      "apps/oma/src/entry/runner.ts#main",
+      "packages/config/src/operations.ts#readConfigurationSource",
+      "packages/domain/src/tool-surface.ts#planToolSurface"
     ],
     "negativeTests": [
       "test/tool-surface.test.ts#T99",
@@ -3465,11 +3467,12 @@
     "normativeText": "**MUST [TSP-005]** 활성 tool 집합은 다음 산술로 정한다. `disabled`는 항상 비활성, `grouped`는 소속 group을 열기 전까지 비활성, `direct`는 활성, 그 외 등록된 tool은 `defaultMode`를 따르며, root group은 활성으로 시작한다. `defaultMode`는 `DIRECT`와 `DISABLED`만 허용한다. role이 투영을 선언하지 않으면 등록된 tool을 그대로 보여준다.",
     "applicability": "unclassified",
     "rationale": "Requires production-path review; no inference from test names.",
-    "owner": "src/pi-extension.ts#initialActiveTools",
-    "entrypoint": "src/pi-extension.ts#extension",
+    "owner": "packages/tool-runtime/src/tool-surface.ts#initialActiveTools",
+    "entrypoint": "packages/extension/src/index.ts#extension",
     "callPath": [
-      "src/pi-extension.ts#extension",
-      "src/pi-extension.ts#initialActiveTools"
+      "packages/extension/src/index.ts#extension",
+      "packages/tool-runtime/src/tool-surface.ts#registerToolSurface",
+      "packages/tool-runtime/src/tool-surface.ts#initialActiveTools"
     ],
     "negativeTests": [
       "test/tool-surface.test.ts#T101"
@@ -3486,12 +3489,13 @@
     "normativeText": "**MUST [TSP-006]** group을 여는 것은 **활성화이며 실행이 아니다**. 직계 자식만 기존 활성 집합에 합집합으로 더하고, 같은 group을 다시 열어도 결과가 같아야 한다. 다른 extension이 활성화한 tool을 제거하지 않는다. OMA가 다른 extension의 tool handler를 대신 호출하거나 인자를 재해석하는 경로를 만들지 않는다. 드러난 tool은 Pi의 기존 pipeline이 실행하므로 tool_call/tool_result, 권한·safety 훅, 원본 schema, 실행 모드가 보존된다.",
     "applicability": "unclassified",
     "rationale": "Requires production-path review; no inference from test names.",
-    "owner": "src/pi-extension.ts#expandedActiveTools",
-    "entrypoint": "src/pi-extension.ts#extension",
+    "owner": "packages/tool-runtime/src/tool-surface.ts#expandedActiveTools",
+    "entrypoint": "packages/extension/src/index.ts#extension",
     "callPath": [
-      "src/pi-extension.ts#extension",
-      "src/pi-extension.ts#parseSurfacePlan",
-      "src/pi-extension.ts#expandedActiveTools"
+      "packages/extension/src/index.ts#extension",
+      "packages/tool-runtime/src/tool-surface.ts#registerToolSurface",
+      "packages/tool-runtime/src/tool-surface.ts#parseSurfacePlan",
+      "packages/tool-runtime/src/tool-surface.ts#expandedActiveTools"
     ],
     "negativeTests": [
       "test/tool-surface.test.ts#T102",
@@ -3509,12 +3513,13 @@
     "normativeText": "**MUST [TSP-007]** sandbox가 받은 plan을 읽을 수 없거나 형식이 맞지 않으면 fail closed한다. 모르는 값은 무시하고 진행하는 것이 아니라 OMA 자신이 등록한 tool만 남긴다. 투영 적용 실패가 `DISABLED`로 의도한 tool을 노출시키는 결과로 이어져서는 안 된다.",
     "applicability": "unclassified",
     "rationale": "Requires production-path review; no inference from test names.",
-    "owner": "src/pi-extension.ts#expandedActiveTools",
-    "entrypoint": "src/pi-extension.ts#extension",
+    "owner": "packages/tool-runtime/src/tool-surface.ts#expandedActiveTools",
+    "entrypoint": "packages/extension/src/index.ts#extension",
     "callPath": [
-      "src/pi-extension.ts#extension",
-      "src/pi-extension.ts#parseSurfacePlan",
-      "src/pi-extension.ts#expandedActiveTools"
+      "packages/extension/src/index.ts#extension",
+      "packages/tool-runtime/src/tool-surface.ts#registerToolSurface",
+      "packages/tool-runtime/src/tool-surface.ts#parseSurfacePlan",
+      "packages/tool-runtime/src/tool-surface.ts#expandedActiveTools"
     ],
     "negativeTests": [
       "test/tool-surface.test.ts#T102",
@@ -3532,11 +3537,12 @@
     "normativeText": "**MUST [TSP-008]** 투영은 OMA가 등록한 mail/status tool을 제거하지 못한다. role 선언이 그 이름을 disabled로 지정해도 활성 상태를 유지한다. 투영이 agent를 자기 협업 수단 없이 남기지 않는다.",
     "applicability": "unclassified",
     "rationale": "Requires production-path review; no inference from test names.",
-    "owner": "src/pi-extension.ts#initialActiveTools",
-    "entrypoint": "src/pi-extension.ts#extension",
+    "owner": "packages/tool-runtime/src/tool-surface.ts#initialActiveTools",
+    "entrypoint": "packages/extension/src/index.ts#extension",
     "callPath": [
-      "src/pi-extension.ts#extension",
-      "src/pi-extension.ts#initialActiveTools"
+      "packages/extension/src/index.ts#extension",
+      "packages/tool-runtime/src/tool-surface.ts#registerToolSurface",
+      "packages/tool-runtime/src/tool-surface.ts#initialActiveTools"
     ],
     "negativeTests": [
       "test/tool-surface.test.ts#T101"
@@ -3567,11 +3573,11 @@
     "normativeText": "**MUST NOT [TSP-010]** 투영을 위해 extension을 동적으로 로드한다. role extension의 로딩과 검증은 기존 operations 계약과 Pi의 `-e` 경로가 소유한다. 임의 경로 import, cwd 기반 설정 탐색, 자동 탐색을 추가하지 않는다. 투영은 이미 등록된 tool의 표면만 다룬다.",
     "applicability": "unclassified",
     "rationale": "Requires production-path review; no inference from test names.",
-    "owner": "src/config/operations.ts#readConfigurationSource",
-    "entrypoint": "src/entry/runner.ts#main",
+    "owner": "packages/config/src/operations.ts#readConfigurationSource",
+    "entrypoint": "apps/oma/src/entry/runner.ts#main",
     "callPath": [
-      "src/entry/runner.ts#main",
-      "src/config/operations.ts#readConfigurationSource"
+      "apps/oma/src/entry/runner.ts#main",
+      "packages/config/src/operations.ts#readConfigurationSource"
     ],
     "negativeTests": [
       "test/tool-surface.test.ts#T100",
@@ -3743,13 +3749,13 @@
     "normativeText": "**MUST [SEQ-003]** lock 전 허용 작업은 argv/path 문법 검사와 lock 획득에 필요한 trusted runtime directory mkdir/open뿐이다. state root 초기화, SQLite constructor/open, migration, Git/systemd effect, reconciliation을 import/constructor의 side effect로 실행하지 않는다. DB 연결 factory는 lock 획득 이후에만 호출한다. 동시 두 broker 시험에서 loser가 DB-open seam에 도달하지 않았음을 검증한다.",
     "applicability": "unclassified",
     "rationale": "Requires production-path review; no inference from test names.",
-    "owner": "src/runtime/broker-lifetime.ts#BrokerLifetime",
-    "entrypoint": "src/entry/broker.ts#main",
+    "owner": "packages/broker/src/lifetime.ts#BrokerLifetime",
+    "entrypoint": "apps/oma/src/entry/broker.ts#main",
     "callPath": [
-      "src/entry/broker.ts#main",
-      "src/runtime/broker-lifetime.ts#BrokerLifetime",
-      "src/runtime/broker-lifetime.ts#settleWithin",
-      "src/process/preparation.ts#preparationShutdownBarrier"
+      "apps/oma/src/entry/broker.ts#main",
+      "packages/broker/src/lifetime.ts#BrokerLifetime",
+      "packages/broker/src/lifetime.ts#settleWithin",
+      "packages/process/src/preparation.ts#preparationShutdownBarrier"
     ],
     "negativeTests": [
       "test/r37-shutdown-observation.test.ts#R37"
@@ -5161,8 +5167,8 @@
   {
     "requirement": "MAC-022",
     "source": "docs/macos-platform.md",
-    "digest": "a200096c617fdb2465113b3a2d0301ebdb2eb17bc3e35da8c5cfcf1a9f8e5d76",
-    "normativeText": "**MUST [MAC-022]** guest의 `oma`가 화면에 쓰는 문구는 MAC-001을 지킨다. 지금 TUI의 오류 문구 가운데 host 경로나 errno 이름을 담는 곳은\n제품 문구와 코드로 바꾸고, 원문은 guest 로그에 남긴다. 오류의 말은 `src/tui/words.ts` 한 곳에서 읽는다. guest의 terminal session이\n`OMA_PRODUCT_TEXT=1`을 주고 프로그램의 stderr를 자기 것(journal)으로 둔다. Linux 배포본에서는 그 말이 사람 자신의 경로와 이름이므로 그대로\n보인다(D-1, DR18). 모델과 도구가 transcript에 쓰는 내용은 작업의 내용이며 이 조항 밖이다: guest의 작업공간 경로가 거기 보일 수 있다.\n(v2 후보: guest의 project를 Mac의 경로와 같은 곳에 두는 것. Lima와 Docker Desktop이 home을 같은 경로로 mount하는 방식이다.)",
+    "digest": "db7050880299a382ea83f5e7f0fed1890bf14ff1c8811825d5876ed11d155d50",
+    "normativeText": "**MUST [MAC-022]** guest의 `oma`가 화면에 쓰는 문구는 MAC-001을 지킨다. 지금 TUI의 오류 문구 가운데 host 경로나 errno 이름을 담는 곳은\n제품 문구와 코드로 바꾸고, 원문은 guest 로그에 남긴다. 오류의 말은 `packages/tui/src/words.ts` 한 곳에서 읽는다. guest의 terminal session이\n`OMA_PRODUCT_TEXT=1`을 주고 프로그램의 stderr를 자기 것(journal)으로 둔다. Linux 배포본에서는 그 말이 사람 자신의 경로와 이름이므로 그대로\n보인다(D-1, DR18). 모델과 도구가 transcript에 쓰는 내용은 작업의 내용이며 이 조항 밖이다: guest의 작업공간 경로가 거기 보일 수 있다.\n(v2 후보: guest의 project를 Mac의 경로와 같은 곳에 두는 것. Lima와 Docker Desktop이 home을 같은 경로로 mount하는 방식이다.)",
     "applicability": "unclassified",
     "rationale": "Requires production-path review; no inference from test names.",
     "owner": null,
@@ -5249,15 +5255,15 @@
     "normativeText": "**MUST [MAC-210]** JSON channel(control, society)의 message는 기존 OMA frame 형식을 쓴다: 4바이트 big-endian 길이 + UTF-8 JSON.\nparser도 broker의 것을 그대로 쓴다. 한도는 `PLATFORM_FRAME_BYTES`(256 KiB)다. byte channel(egress, stream)은 hello 뒤 첫 message로\n무엇을 싣는지 선언하고, 이어서 byte를 그대로 보낸다. stream은 `{bytes, sha256}`을 선언하고, 받는 쪽은 선언한 길이와 hash를 확인한\n뒤에만 그 stream을 사실로 쓴다(기존 transport-spool과 같은 규칙). terminal channel의 frame은 §4.6에 있다.",
     "applicability": "unclassified",
     "rationale": "Requires production-path review; no inference from test names.",
-    "owner": "src/platform/rpc.ts#FramedPeer",
-    "entrypoint": "src/platform/rpc-server.ts#serveRequests",
+    "owner": "apps/oma/src/platform/rpc.ts#FramedPeer",
+    "entrypoint": "apps/oma/src/platform/rpc-server.ts#serveRequests",
     "callPath": [
-      "src/platform/rpc-server.ts#serveRequests",
-      "src/platform/rpc.ts#FramedPeer",
-      "src/frame.ts#FrameParser",
-      "src/platform/guest/stream.ts#serveStream",
-      "src/platform/stream-source.ts#withStreamSource",
-      "src/platform/stream-receive.ts#receiveDeclared"
+      "apps/oma/src/platform/rpc-server.ts#serveRequests",
+      "apps/oma/src/platform/rpc.ts#FramedPeer",
+      "packages/protocol/src/frame.ts#FrameParser",
+      "apps/oma/src/platform/guest/stream.ts#serveStream",
+      "apps/oma/src/platform/stream-source.ts#withStreamSource",
+      "apps/oma/src/platform/stream-receive.ts#receiveDeclared"
     ],
     "negativeTests": [
       "test/platform-rpc.test.ts#DR27",
@@ -5359,14 +5365,14 @@
     "normativeText": "**MUST [MAC-231]** guest는 host로 보내는 값에서 Linux 구현 세부를 뺀다. unit 이름, cgroup 경로, state root 경로, errno 이름이\n해당한다. 기존 status view의 `reason`처럼 이런 것을 담을 수 있는 field는 제품 어휘의 코드로 바꿔 보낸다. 예: `NO_UNIT_REASON`은\n`\"no-run\"`이 된다. 원문은 guest 로그와 진단 묶음에만 남는다.",
     "applicability": "unclassified",
     "rationale": "Requires production-path review; no inference from test names.",
-    "owner": "src/platform/rpc.ts#platformFailure",
-    "entrypoint": "src/platform/rpc-server.ts#serveRequests",
+    "owner": "apps/oma/src/platform/rpc.ts#platformFailure",
+    "entrypoint": "apps/oma/src/platform/rpc-server.ts#serveRequests",
     "callPath": [
-      "src/platform/rpc-server.ts#serveRequests",
-      "src/platform/guest/stream.ts#serveStream",
-      "src/platform/host/egress.ts#EgressHost",
-      "src/platform/rpc.ts#platformFailure",
-      "src/platform/product-text.ts#productText"
+      "apps/oma/src/platform/rpc-server.ts#serveRequests",
+      "apps/oma/src/platform/guest/stream.ts#serveStream",
+      "apps/oma/src/platform/host/egress.ts#EgressHost",
+      "apps/oma/src/platform/rpc.ts#platformFailure",
+      "packages/domain/src/product-text.ts#productText"
     ],
     "negativeTests": [
       "test/platform-rpc.test.ts#DR27",
@@ -5384,14 +5390,14 @@
     "normativeText": "**MUST [MAC-240]** RPC로 state를 바꾸는 요청은 모두 request key를 가진다. 대상은 project import·export, archive·restore,\nmaintenance다. guesthost는 key마다 효과 **전에** intent를, 끝난 뒤 결과를 자기 원장(`/var/lib/oma/requests/`)에 기존 durable 쓰기\nprimitive로 publish한다. society의 원장(broker의 Store)에는 쓰지 않는다. 그것의 writer는 broker 하나다(REC-007). prompt·설정·확장은\nRPC가 아니라 guest의 TUI가 하므로 이 조항 밖이다(§4.6).",
     "applicability": "unclassified",
     "rationale": "Requires production-path review; no inference from test names.",
-    "owner": "src/platform/guest/requests.ts#RequestLedger",
-    "entrypoint": "src/platform/guest/host.ts#GuestHost.serve",
+    "owner": "apps/oma/src/platform/guest/requests.ts#RequestLedger",
+    "entrypoint": "apps/oma/src/platform/guest/host.ts#GuestHost.serve",
     "callPath": [
-      "src/platform/guest/host.ts#GuestHost.serve",
-      "src/platform/guest/project.ts#GuestProjects",
-      "src/platform/guest/requests.ts#RequestLedger",
-      "src/platform/rpc.ts#platformFailure",
-      "src/domain/errors.ts#primaryFailure"
+      "apps/oma/src/platform/guest/host.ts#GuestHost.serve",
+      "apps/oma/src/platform/guest/project.ts#GuestProjects",
+      "apps/oma/src/platform/guest/requests.ts#RequestLedger",
+      "apps/oma/src/platform/rpc.ts#platformFailure",
+      "packages/domain/src/errors.ts#primaryFailure"
     ],
     "negativeTests": [
       "test/platform-request-ledger.test.ts#MAC-240",
@@ -5419,8 +5425,8 @@
   {
     "requirement": "MAC-250",
     "source": "docs/macos-platform.md",
-    "digest": "9c2613d2f053843b1a530553b62e3205f7f0c37d712d1c5a8dd59f53143ce933",
-    "normativeText": "**MUST [MAC-250]** protocol 버전은 정수 하나다. 메시지 모양이나 뜻이 바뀌면 올린다. host는 두 버전을 모두 말한다. 하나는 자기가\n동봉한 image의 protocol이다. 다른 하나는 직전 image의 protocol이다. update가 실패해 직전 image로 되돌아가 부팅할 때 필요하다(§8.3의\nrollback). guest는 자기 버전 하나만 말한다. 메시지 schema의 원본은 `src/protocol/host-guest.ts`(순수 codec, K1)다. host와 guest가 모두\nNode이므로 양쪽은 같은 codec을 쓴다. Swift helper가 말하는 것은 VM 제어와 Keychain뿐이고 이 protocol을 말하지 않는다.",
+    "digest": "627c1fd51aa0cfbb58cd07e0c87670002addb57c1910c0592100618ff7b2c8f0",
+    "normativeText": "**MUST [MAC-250]** protocol 버전은 정수 하나다. 메시지 모양이나 뜻이 바뀌면 올린다. host는 두 버전을 모두 말한다. 하나는 자기가\n동봉한 image의 protocol이다. 다른 하나는 직전 image의 protocol이다. update가 실패해 직전 image로 되돌아가 부팅할 때 필요하다(§8.3의\nrollback). guest는 자기 버전 하나만 말한다. 메시지 schema의 원본은 `packages/protocol/src/host-guest.ts`(순수 codec, K1)다. host와 guest가 모두\nNode이므로 양쪽은 같은 codec을 쓴다. Swift helper가 말하는 것은 VM 제어와 Keychain뿐이고 이 protocol을 말하지 않는다.",
     "applicability": "unclassified",
     "rationale": "Requires production-path review; no inference from test names.",
     "owner": null,
@@ -5591,17 +5597,17 @@
     "normativeText": "**MUST [MAC-401]** project는 host가 기록한다. 기록은 `host-record.json`의 `projects[]`다.",
     "applicability": "unclassified",
     "rationale": "Requires production-path review; no inference from test names.",
-    "owner": "src/platform/host/service.ts#HostService",
-    "entrypoint": "src/entry/omahostd.ts#main",
+    "owner": "apps/oma/src/platform/host/service.ts#HostService",
+    "entrypoint": "apps/oma/src/entry/omahostd.ts#main",
     "callPath": [
-      "src/entry/omahostd.ts#main",
-      "src/platform/host/record.ts#readHostRecord",
-      "src/platform/host/record.ts#writeHostRecord",
-      "src/platform/host/bookmark.ts#nativeProjectBookmarks",
-      "src/platform/host/project.ts#MacGit",
-      "src/platform/host/personal-seed.ts#macProjectExtensionSeed",
-      "src/runtime/personal-settings.ts#updatePersonalSettingsAsync",
-      "src/platform/host/service.ts#HostService"
+      "apps/oma/src/entry/omahostd.ts#main",
+      "packages/platform-mac/src/record.ts#readHostRecord",
+      "packages/platform-mac/src/record.ts#writeHostRecord",
+      "packages/platform-mac/src/bookmark.ts#nativeProjectBookmarks",
+      "apps/oma/src/platform/host/project.ts#MacGit",
+      "apps/oma/src/platform/host/personal-seed.ts#macProjectExtensionSeed",
+      "apps/oma/src/runtime/personal-settings.ts#updatePersonalSettingsAsync",
+      "apps/oma/src/platform/host/service.ts#HostService"
     ],
     "negativeTests": [
       "test/mac-project-seed.test.ts#DR29",
@@ -5634,17 +5640,17 @@
     "normativeText": "**MUST [MAC-403]** host는 import·export 전마다 bookmark를 해석한다. 그리고 그 디렉터리의 repo가 기록과 같은 project인지 확인한다.\n확인하는 것은 셋이다: `objectFormat`이 같다, `rootCommits` 가운데 하나 이상이 여전히 닿는다, `git rev-parse --git-common-dir`이 존재한다.\nbookmark가 해석되지 않거나 다른 repo면 \"프로젝트를 찾을 수 없음\"으로 멈춘다. 다른 repo에 쓰지 않는다. 사용자가 새 위치를 고르면\n다시 확인한 뒤 bookmark만 바꾼다.",
     "applicability": "unclassified",
     "rationale": "Requires production-path review; no inference from test names.",
-    "owner": "src/platform/host/service.ts#HostService",
-    "entrypoint": "src/entry/omahostd.ts#main",
+    "owner": "apps/oma/src/platform/host/service.ts#HostService",
+    "entrypoint": "apps/oma/src/entry/omahostd.ts#main",
     "callPath": [
-      "src/entry/omahostd.ts#main",
-      "src/platform/host/record.ts#readHostRecord",
-      "src/platform/host/record.ts#writeHostRecord",
-      "src/platform/host/bookmark.ts#nativeProjectBookmarks",
-      "src/platform/host/project.ts#MacGit",
-      "src/platform/host/personal-seed.ts#macProjectExtensionSeed",
-      "src/runtime/personal-settings.ts#updatePersonalSettingsAsync",
-      "src/platform/host/service.ts#HostService"
+      "apps/oma/src/entry/omahostd.ts#main",
+      "packages/platform-mac/src/record.ts#readHostRecord",
+      "packages/platform-mac/src/record.ts#writeHostRecord",
+      "packages/platform-mac/src/bookmark.ts#nativeProjectBookmarks",
+      "apps/oma/src/platform/host/project.ts#MacGit",
+      "apps/oma/src/platform/host/personal-seed.ts#macProjectExtensionSeed",
+      "apps/oma/src/runtime/personal-settings.ts#updatePersonalSettingsAsync",
+      "apps/oma/src/platform/host/service.ts#HostService"
     ],
     "negativeTests": [
       "test/mac-project-seed.test.ts#DR29",

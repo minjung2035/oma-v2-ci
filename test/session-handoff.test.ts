@@ -1,8 +1,8 @@
 /** MODE-005/006 and MAC-230: path-free requests and exact terminal outcomes. */
 import test from "node:test";
 import assert from "node:assert/strict";
-import { FrameParser, encodeFrame } from "../src/frame.js";
-import { TerminalFrameParser, encodeTerminalFrame, isNewSessionHandoff, parseTerminalExit } from "../src/protocol/host-guest.js";
+import { FrameParser, encodeFrame } from "@oma/protocol/frame";
+import { TerminalFrameParser, encodeTerminalFrame, isNewSessionHandoff, parseTerminalExit } from "@oma/protocol/host-guest";
 
 const exit = (value: unknown) => parseTerminalExit(Buffer.from(JSON.stringify(value)));
 test("host handoff codec: old exits remain exits; only a successful exact exit requests a new birth", () => {

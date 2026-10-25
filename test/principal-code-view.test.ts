@@ -4,8 +4,8 @@ import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync, symlinkSyn
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { spawnSync } from "node:child_process";
-import { readCode } from "../src/cli/effects/code.js";
-import { GIT_ENV } from "../src/process/policies.js";
+import { readCode } from "#oma-test/app/cli/effects/code";
+import { GIT_ENV } from "@oma/process/policies";
 
 function fixture(t: import("node:test").TestContext, format: "sha1" | "sha256") {
   const root = mkdtempSync(join(tmpdir(), "oma-code-")); t.after(() => rmSync(root, { recursive: true, force: true }));

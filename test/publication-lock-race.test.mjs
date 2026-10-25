@@ -6,18 +6,18 @@ import * as path from "node:path";
 import { tmpdir } from "node:os";
 import { Script } from "node:vm";
 import ts from "typescript";
-import * as directory from "../dist/src/storage/directory.js";
-import * as contained from "../dist/src/storage/contained-fs.js";
-import * as errors from "../dist/src/domain/errors.js";
-import * as leaf from "../dist/src/leaf.js";
+import * as directory from "@oma/storage/directory";
+import * as contained from "@oma/native/files";
+import * as errors from "@oma/domain/errors";
+import * as leaf from "@oma/native/linux";
 
 test("DR39: a collector between temporary creation and locking cannot remove the live publication", () => {
   const root = fs.mkdtempSync(path.join(tmpdir(), "oma-publish-lock-"));
   const parent = contained.openDirectory(root);
   let raced = false, production;
   const deps = { "node:fs": fs, "node:crypto": crypto, "node:path": path,
-    "./directory.js": directory, "./contained-fs.js": contained, "../domain/errors.js": errors,
-    "../leaf.js": { lockFileDescriptor(fd) {
+    "./directory.js": directory, "@oma/native/files": contained, "@oma/domain/errors": errors,
+    "@oma/native/linux": { lockFileDescriptor(fd) {
       if (!raced) {
         raced = true;
         const before = fs.readdirSync(root);
@@ -26,7 +26,7 @@ test("DR39: a collector between temporary creation and locking cannot remove the
       }
       return leaf.lockFileDescriptor(fd);
     } } };
-  const code = ts.transpileModule(fs.readFileSync(new URL("../src/storage/durable-fs.ts", import.meta.url), "utf8"),
+  const code = ts.transpileModule(fs.readFileSync(new URL("../packages/storage/src/durable-fs.ts", import.meta.url), "utf8"),
     { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText;
   const module = { exports: {} };
   new Script(code).runInNewContext({ exports: module.exports, module, Buffer, process,

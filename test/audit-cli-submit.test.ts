@@ -10,9 +10,9 @@ import {
 } from "node:fs";
 import { join, dirname } from "node:path";
 import { tmpdir } from "node:os";
-import { Store } from "../src/store.js";
-import { RequestCache } from "../src/request-cache.js";
-import type { SubmitInput } from "../src/git/submit.js";
+import { Store } from "@oma/storage";
+import { RequestCache } from "#oma-test/app/request-cache";
+import type { SubmitInput } from "@oma/git/submit";
 import {
   gitAuth,
   gitCommand,

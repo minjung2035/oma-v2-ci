@@ -37,8 +37,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import type { Readable } from "node:stream";
-import { CHANNEL_FD, SOCIETY_FENCE_ENV, SOCIETY_FENCE_FD, spawnOwnedRpc, spawnSupervisedService } from "../src/process/async.js";
-import { societyLeaseName, tryHoldSociety } from "../src/runtime/society-lease.js";
+import { CHANNEL_FD, SOCIETY_FENCE_ENV, SOCIETY_FENCE_FD, spawnOwnedRpc, spawnSupervisedService } from "@oma/process/async";
+import { societyLeaseName, tryHoldSociety } from "#oma-test/app/runtime/society-lease";
 import { runCliProcess, type CliResult } from "./fixtures/cli-child.js";
 
 const scratch = (): string => mkdtempSync(join(tmpdir(), "oma-lease-"));
@@ -56,7 +56,7 @@ function otherProcess(stateRoot: string, scriptRoot: string): {
   readonly kill: () => void;
 } {
   const script = join(scriptRoot, "holder.mjs");
-  const entry = pathToFileURL(join(process.cwd(), "dist/src/runtime/society-lease.js")).href;
+  const entry = pathToFileURL(join(process.cwd(), "apps/oma/dist/runtime/society-lease.js")).href;
   writeFileSync(script, [
     `import { tryHoldSociety } from ${JSON.stringify(entry)};`,
     `const lease = tryHoldSociety(${JSON.stringify(stateRoot)});`,
@@ -254,7 +254,7 @@ function killableHost(stateRoot: string, scriptRoot: string, fenced: boolean): {
   readonly kill: () => Promise<void>;
 } {
   const script = join(scriptRoot, `host-${fenced ? "fenced" : "bare"}.mjs`);
-  const entry = pathToFileURL(join(process.cwd(), "dist/src/runtime/society-lease.js")).href;
+  const entry = pathToFileURL(join(process.cwd(), "apps/oma/dist/runtime/society-lease.js")).href;
   writeFileSync(script, [
     `import { spawn } from "node:child_process";`,
     `import { tryHoldSociety } from ${JSON.stringify(entry)};`,
@@ -359,7 +359,7 @@ test("T119/REC-007 a descendant the engine started keeps the society too", async
   // the same property, checked one level further out rather than assumed.
   const root = scratch();
   const script = join(root, "grandparent.mjs");
-  const entry = pathToFileURL(join(process.cwd(), "dist/src/runtime/society-lease.js")).href;
+  const entry = pathToFileURL(join(process.cwd(), "apps/oma/dist/runtime/society-lease.js")).href;
   const stateRoot = join(root, "state");
   writeFileSync(script, [
     `import { spawn } from "node:child_process";`,
@@ -588,7 +588,7 @@ function engineStartingACli(scriptRoot: string, fence: number, declare: boolean)
   const cliScript = join(scriptRoot, "cli.mjs");
   const engineScript = join(scriptRoot, "engine.mjs");
   const reportPath = join(scriptRoot, "cli.json");
-  const module = pathToFileURL(join(process.cwd(), "dist/src/process/run.js")).href;
+  const module = pathToFileURL(join(process.cwd(), "packages/process/dist/run.js")).href;
   // The CLI answers with the inode behind its own descriptor, its pid, and
   // what its environment told it -- then stays alive, which is the state the
   // attack depends on.

@@ -142,7 +142,7 @@ indicator, "Done in Xs · N lines" 컨트롤 행, 인자 확장)**. 명령/silen
   Principal에도 보이는 Pi 기본 도구(read/ls/grep 등)는 compact chrome으로
   감싸되 이름은 그대로.
 - 회색 배경: `renderShell:"self"`가 bg shell을 아예 안 씀(theme 편집 불필요).
-- 위치: `src/tui/compact-tools.ts`(renderer) + OMA extension에서 등록.
+- 위치: `packages/tui/src/compact-tools.ts`(renderer) + OMA extension에서 등록.
   Worker/Resident에는 적용 안 함(Principal만 노출 — tool surface에서 이미 닫힘).
 - `/compact-tools` 사용자 명령은 만들지 않음 — OMA 기본 surface 정책으로 compact가 상시.
 - 제외할 upstream 잔재: `compact-tools.json` 설정, silent mode, claude/codex 스타일,
@@ -150,7 +150,7 @@ indicator, "Done in Xs · N lines" 컨트롤 행, 인자 확장)**. 명령/silen
 
 ### B2. `/thinking show` 토글
 - **반박 수정**: `/thinking`은 Pi builtin이라 `extensionCommand`가 절대 못 봄 —
-  `src/tui/interactive-editor.ts`의 **ownedEditor submit 체인에서 isCommand/builtin
+  `src/pi-compat/prompt-editor.ts`의 **ownedEditor submit 체인에서 isCommand/builtin
   라우팅보다 먼저** `show|hide` 정확 일치를 가로챈다. bare `/thinking`은 upstream
   level 선택에 그대로 통과.
 - private `toggleThinkingBlockVisibility()` 호출(공개 API 없음 — oracle에 member
@@ -166,13 +166,13 @@ indicator, "Done in Xs · N lines" 컨트롤 행, 인자 확장)**. 명령/silen
 ### B4. 메일 TUI 역할명 가독화
 - 메일 목록/상세 진입 전 발신자/수신자 표시를 `worker`(전체 전송)/`worker1` 등
   (개별)/`principal`로 매핑 — 현재 애매한 역할명 대신 roster 기반 표시명.
-  위치: `src/tui/` 메일 뷰어(transcript/mail 패널) + 표시명 유틸 — 조사 후 확정.
+  위치: `packages/tui/src/` 메일 뷰어(transcript/mail 패널) + 표시명 유틸 — 조사 후 확정.
 - (별도 완료) Worker 프롬프트의 메일 제목 지시는 fix/pg2가 처리.
 
 ### B 실행 결과 (B1–B4 구현 완료, 커밋 분리)
 
 - **B1 — `88ea1be`**: `pi.registerToolRenderer()` 공개 seam으로 `renderShell:"self"`
-  compact renderer 등록(`src/tui/compact-tools.ts`). live 상태 점·한 줄 인자 요약·
+  compact renderer 등록(`packages/tui/src/compact-tools.ts`). live 상태 점·한 줄 인자 요약·
   `Done in Xs · N lines` 컨트롤 행·인자/출력 확장, `oma_` 접두어는 표시만 제거 —
   wire/registry 이름 불변. author result renderer는 확장 본문에 보존, 인디케이터
   리페인트는 보이지 않는 belowEditor 위젯의 `requestRender()`로 구동. 타이밍은
@@ -188,7 +188,7 @@ indicator, "Done in Xs · N lines" 컨트롤 행, 인자 확장)**. 명령/silen
   handback·shutdown에서 `undefined`로 제거. 위젯 행은 한정·sanitized, 실제
   제출 문장은 불변.
 - **B4 — `617dce1`**: 메일 목록/상세 발신자와 상세의 새 `To:` 행이 roster
-  기반 표시명(`src/tui/mail-names.ts` 순수 매핑): `residents`/`commons`→
+  기반 표시명(`packages/tui/src/mail-names.ts` 순수 매핑): `residents`/`commons`→
   `worker`(전체 전송), roster의 `worker<N>`(이름순, `principal` 제외)는 개별
   발신/수신자, `principal`, `topic-<x>`→`topic/<x>`. roster는 broker 발행
   status view의 agent 목록 — 미관측 시 actor명은 헤더 원문 유지(추측 금지).
@@ -295,14 +295,14 @@ web/lsp/mcp 도구는 **Principal과 Worker 모두에 제공** —
    스키마는 rpiv-ask-user-question 2.12.0 호환 (question 1-4, header,
    option 2-4{label,description,preview?}, multiSelect, custom 항상 가능,
    일괄 답변+submit, cancel structured result, machine-readable details).
-   위치 `src/extension/ask-user-question.ts` + `src/tui/ask-user-question/`.
+   위치 `packages/extension/src/ask-user-question.ts` + `packages/tui/src/ask-user-question/`.
    DIRECT 노출. Worker schema 미노출(role surface에서 닫힘).
    OpenTUI 정식 hook 추가(private hack 금지 — OMA 소유니까).
-2. **hashline** — `src/extension/vendor/pi-hashline-edit-pro/` vendored.
+2. **hashline** — `packages/tool-hashline/src/vendor/pi-hashline-edit-pro/` vendored.
    anchors+replace/replace_within/insert+validation+stale refusal+post-edit diff.
    write는 OMA contained fs/quota 경유. 기존 edit와 장기 공존 금지 — 수렴 시점 명시.
    제외: copy/move/anchor_grep/undo/config UI/global state.
-3. **pi-lsp** — `src/extension/vendor/pi-lsp/` vendored. tools:
+3. **pi-lsp** — `packages/tool-lsp/src/vendor/pi-lsp/` vendored. tools:
    lsp_diagnostics/lsp_fix(preview 기본, 실제 write는 contained writer)/lsp_status.
    OMA wrapper가 spawn/cancel/death/root/PATH/bounds 소유. server 미탑재=unavailable
    (clean과 구분). per-call lifecycle 유지(daemon은 benchmark 없이 만들지 않음).
@@ -321,7 +321,7 @@ web/lsp/mcp 도구는 **Principal과 Worker 모두에 제공** —
    web_research{web_search,source_check,fetch_content,get_search_content}.
 
 경계 원칙(스펙 §7): extension이 role/authority를 바꾸지 않음; vendored source는
-`src/extension/vendor/`에 upstream snapshot+MIT notice+manifest; runtime fetch 금지;
+각 `packages/tool-*/src/vendor/`에 upstream snapshot+MIT notice+manifest; runtime fetch 금지;
 user packages와 분리; upstream code+tests 최대 재사용, OMA 경계는 얇은 adapter;
 깨진 vendor 파일은 startup fail-closed + deployment digest 포함.
 

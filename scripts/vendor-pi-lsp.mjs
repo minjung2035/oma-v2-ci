@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /** Vendored pi-lsp bundle maintenance — the only writer of
- * `src/extension/vendor/pi-lsp/runtime/` and `manifest.json`.
+ * `packages/tool-lsp/src/vendor/pi-lsp/runtime/` and `manifest.json`.
  *
  * `upstream/` is the exact npm tarball snapshot of @narumitw/pi-lsp and is
  * never touched here. `runtime/` is tsc's emit of the upstream library
@@ -32,7 +32,7 @@ import {
 } from "./vendor-bundle-lib.mjs";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
-const BUNDLE_DIR = join(root, "src/extension/vendor/pi-lsp");
+const BUNDLE_DIR = join(root, "packages/tool-lsp/src/vendor/pi-lsp");
 const UPSTREAM_DIR = join(BUNDLE_DIR, "upstream");
 const RUNTIME_DIR = join(BUNDLE_DIR, "runtime");
 const MANIFEST_PATH = join(BUNDLE_DIR, "manifest.json");

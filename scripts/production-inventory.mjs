@@ -26,7 +26,7 @@ export function collectProductionFiles(rootInput = process.cwd()) {
     if (stat.isDirectory()) return readdirSync(file).sort().flatMap(name => expand(`${entry}/${name}`));
     if (!stat.isFile()) throw new Error(`nonregular production source: ${entry}`);
     if (entry.endsWith(".md")) return [];
-    if (entry.endsWith(".in") && !entry.startsWith("implementation/systemd/")) throw new Error(`unsupported .in language: ${entry}`);
+    if (entry.endsWith(".in") && !entry.startsWith("packages/platform-linux/src/systemd/")) throw new Error(`unsupported .in language: ${entry}`);
     return [slash(entry)];
   };
   const files = manifest.flatMap(expand).sort();
@@ -34,7 +34,9 @@ export function collectProductionFiles(rootInput = process.cwd()) {
     throw new Error("duplicate production source identity");
   // These are fixed runtime source roots, not a previous generated file list.
   // Removing a root from the input manifest cannot silently lower coverage/LOC.
-  const required = ["src", "implementation/contracts.ts", "implementation/schema-v3.sql", "implementation/systemd"].flatMap(expand);
+  const workspaces = readdirSync(join(root, "packages"), { withFileTypes: true }).filter(entry => entry.isDirectory());
+  const required = ["apps/oma/src", "apps/oma/package.json",
+    ...workspaces.flatMap(entry => [`packages/${entry.name}/src`, `packages/${entry.name}/package.json`])].flatMap(expand);
   const listed = new Set(files);
   const missing = required.filter(file => !listed.has(file));
   if (missing.length) throw new Error(`production manifest omits current runtime sources: ${missing.join(", ")}`);
@@ -170,7 +172,7 @@ export function measureWithCloc(root, files, cloc = "cloc") {
     const ignored = join(scratch, "ignored.json");
     writeFileSync(list, `${files.join("\n")}\n`);
     execFileSync(cloc, [`--list-file=${list}`, "--by-file", "--skip-uniqueness",
-      "--read-lang-def=implementation/cloc-systemd.lang", `--ignored=${ignored}`, "--json", `--out=${out}`], { cwd: root, stdio: "ignore", timeout: 600000, killSignal: "SIGKILL" });
+      "--read-lang-def=implementation/cloc-systemd.lang", "--force-lang=OMA systemd,conf", `--ignored=${ignored}`, "--json", `--out=${out}`], { cwd: root, stdio: "ignore", timeout: 600000, killSignal: "SIGKILL" });
     const report = JSON.parse(readFileSync(out, "utf8"));
     report.nonCode = {};
     for (const entry of JSON.parse(readFileSync(ignored, "utf8"))) {

@@ -1,3 +1,4 @@
+import { engineStartEffects } from "#oma-test/app/engine/start-effects";
 // V09A/V09B/V09C (WP09, D06): a real PrincipalSession over a scripted engine.
 // Ownership of the engine's run ends only on settlement, refusal or the
 // session's end; unsent Human input comes back once, in order; input whose
@@ -7,12 +8,13 @@ import assert from "node:assert/strict";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { HostTenure, type FencedEngine } from "../src/runtime/host-tenure.js";
-import { PrincipalSession } from "../src/runtime/engine/principal-session.js";
-import { PiRpcClient } from "../src/runtime/pi-rpc.js";
-import { PrincipalDelivery } from "../src/runtime/principal-delivery.js";
+import { HostTenure } from "#oma-test/app/runtime/host-tenure";
+import { type FencedEngine } from "@oma/contracts/runtime";
+import { PrincipalSession } from "@oma/engine/principal-session";
+import { PiRpcClient } from "@oma/engine/pi-rpc";
+import { PrincipalDelivery } from "#oma-test/app/runtime/principal-delivery";
 import { TEST_VIEW_LIMITS } from "./fixtures/limits.js";
-import { TurnAdmission } from "../src/domain/turn-admission.js";
+import { TurnAdmission } from "@oma/domain/turn-admission";
 
 test("DR44: turn admission isolates unknown delivery, transfers queued Humans atomically, and reports unsent input once", () => {
   const turns = new TurnAdmission();
@@ -64,9 +66,9 @@ function scripted(t?: TestContext, acquired?: (engine: FencedEngine) => void) {
   mkdirSync(join(root, "workspace")); mkdirSync(join(root, "sessions"));
   const events = { failed: [] as { text: string; reason: string }[], unconfirmed: [] as string[], ends: 0, busy: [] as boolean[] };
   const session = PrincipalSession.start(
-    { piCommand: process.execPath, piArgs: [join(process.cwd(), "test", "fixtures", "scripted-pi.mjs"), log],
+    engineStartEffects, { piCommand: process.execPath, piArgs: [join(process.cwd(), "test", "fixtures", "scripted-pi.mjs"), log],
       coreExtension: "/nonexistent/core.js", sessionDir: join(root, "sessions"), workspace: join(root, "workspace"), home: root },
-    { society: "demo", provider: "p", model: "m", extensions: [], workspaceBytes: 1024 },
+    { society: "demo", provider: "p", model: "m", extensions: [] },
     LIMITS, { PATH: process.env.PATH ?? "/usr/bin:/bin" },
     {
       ...(acquired === undefined ? {} : { onAcquire: acquired }),
@@ -196,9 +198,9 @@ test("P0V-73 / F6, P0-4: a Principal engine that could not be spawned has ended,
     mkdirSync(join(root, "agents", "principal", "runner", "view"), { recursive: true });
     mkdirSync(join(root, "workspace")); mkdirSync(join(root, "sessions"));
     const session = PrincipalSession.start(
-      { piCommand: join(root, "no-such-engine"), coreExtension: "/nonexistent/core.js", sessionDir: join(root, "sessions"),
+      engineStartEffects, { piCommand: join(root, "no-such-engine"), coreExtension: "/nonexistent/core.js", sessionDir: join(root, "sessions"),
         workspace: join(root, "workspace"), home: root },
-      { society: "demo", provider: "p", model: "m", extensions: [], workspaceBytes: 1024 },
+      { society: "demo", provider: "p", model: "m", extensions: [] },
       LIMITS, { PATH: process.env.PATH ?? "/usr/bin:/bin" },
       { onLine: () => {}, onBusy: () => {}, onEnd: () => {}, onPromptFailed: () => {}, onPromptUnconfirmed: () => {} },
     );

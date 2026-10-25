@@ -1,10 +1,11 @@
+import { createMailModule } from "#oma-test/app/broker/mail-composition";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { Store } from "../src/store.js";
-import { MailModule, buildEml, parseEmlHeaders } from "../src/mail.js";
+import { Store } from "@oma/storage";
+import { MailModule, buildEml, parseEmlHeaders } from "@oma/mail";
 import { gitFixture, gitAuth, seedGit } from "./fixtures/git-crash.js";
 import { ALL_CAPS, resolvedSpec, storedSpec } from "./fixtures/spec.js";
 
@@ -17,7 +18,7 @@ test("MAIL-004/005: direct replies return to sender, list replies retain lists, 
       store.follow("news", "b");
     });
     const { mail, git } = gitFixture(root, store);
-    const message = (actor: string, key: string) => JSON.parse(store.getOperation(actor, key)!.planJson).message;
+    const message = (actor: string, key: string) => JSON.parse(store.getOperation(actor, key)!.planJson).intent.message;
     const headers = (actor: string, key: string) => parseEmlHeaders(readFileSync(mail.objectPath(message(actor, key).id), "utf8"));
     await mail.send(gitAuth, "direct", { to: ["b"], subject: "direct", kind: "message", body: "body" });
     assert.deepEqual(headers("a", "direct").replyTo, ["a@crash.oma.invalid"]);
@@ -39,7 +40,7 @@ test("MAIL-004/005: direct replies return to sender, list replies retain lists, 
     const info = JSON.parse(readFileSync(join(root, "git-fixture.json"), "utf8"));
     await git.submit(gitAuth, "candidate", { candidate: info.base, exportRef: info.exportRef, prerequisites: [], to: ["commons"], subject: "candidate", body: "body", paths: [] }, (async function* () {})());
     assert.deepEqual(headers("a", "candidate").replyTo, ["commons@crash.oma.invalid"]);
-    const limited = new MailModule({ stateRoot: root, society: "crash" }, store, 3);
+    const limited = createMailModule({ stateRoot: root, society: "crash" }, store, 3);
     const ids = [message("a", "direct").id];
     for (let index = 0; index < 5; index++) {
       await limited.send(gitAuth, `chain-${index}`, { to: [], replyToMessage: ids.at(-1), subject: "chain", kind: "message", body: "body" });

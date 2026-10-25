@@ -1,10 +1,14 @@
+import * as sessionHandoffMeaning from "@oma/protocol/session-handoff";
+import * as hostErrorMeaning from "@oma/protocol/host-errors";
+import * as hostLossMeaning from "@oma/process/host-loss";
+import * as deploymentMeaning from "@oma/domain/deployment";
 // Exercise the actual daemon entry with controlled native boundaries on Linux.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {Script} from 'node:vm';
 import ts from 'typescript';
-const source=ts.transpileModule(readFileSync('src/entry/omahostd.ts','utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText;
+const source=ts.transpileModule(readFileSync('apps/oma/src/entry/omahostd.ts','utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText;
 const flush=async()=>{for(let i=0;i<40;i++)await Promise.resolve();};
 async function world(mode){
  const signals=new Map(),timers=new Set(),exits=[],errors=[];
@@ -16,19 +20,24 @@ async function world(mode){
  new Script(source).runInNewContext({exports,module:{exports},process:{argv:['node','omahostd','--bundle','/app'],platform:'darwin',env:{HOME:'/owned'},getuid:()=>1001,
   stderr:{write:text=>errors.push(text)},exit:code=>exits.push(code),on:(signal,fn)=>signals.set(signal,fn)},
   setTimeout(fn){const timer={fn,unref(){}};timers.add(timer);return timer;},clearTimeout:timer=>timers.delete(timer),
-  require(name){switch(name){
+  require(name){
+if (name === "@oma/protocol/session-handoff") return sessionHandoffMeaning;
+if (name === "@oma/protocol/host-errors") return hostErrorMeaning;
+if (name === "@oma/domain/deployment") return deploymentMeaning;
+switch(name){
    case 'node:fs':return {chmodSync(){},closeSync(){},constants:{O_WRONLY:1,O_CREAT:2,O_EXCL:4},ftruncateSync(){},openSync:()=>5,statSync:()=>({blocks:0}),readFileSync:path=>path.endsWith('/current')?'version':'public-key'};
    case 'node:crypto':return {createPublicKey:value=>value};
    case 'node:path':return {join:(...parts)=>parts.join('/')};
-   case '../platform/host/image.js':return {verifyImage:async()=>({version:'version',verityRoot:'hash',paths:{kernel:'k',initrd:'i',system:'s',verity:'v'},stateSchema:{written:3}}),bootableWith(){}};
-   case '../platform/host/vz-driver.js':return {VzDriver:{launch:()=>driver}};
+   case '@oma/platform-mac/image':return {verifyImage:async()=>({version:'version',verityRoot:'hash',paths:{kernel:'k',initrd:'i',system:'s',verity:'v'},stateSchema:{written:3}}),bootableWith(){}};
+   case '@oma/platform-mac/vz-driver':return {VzDriver:{launch:()=>driver}};
    case '../platform/host/service.js':return {DEFAULT_TIMINGS:{drainDeadlineMs:60},HostService:{async start(value){options=value;return service;}}};
    case '../platform/host/resolver.js':return {hostResolver:()=>()=>{}};
-   case '../platform/host/record.js':return {newHostRecord:()=>record,readHostRecord:()=>record,writeHostRecord(){}};
-   case '../protocol/host-guest.js':return {HOST_GUEST_PROTOCOL:6};
-   case '../runtime/broker-lifetime.js':return {HOST_LOSS_SIGNALS:['SIGTERM','SIGINT']};
-   case '../platform/host/bookmark.js':return {nativeProjectBookmarks:()=>({})};
-   case '../platform/host/files.js':return {ensureHostOwnedDirectory(){}};
+   case '@oma/platform-mac/record':return {newHostRecord:()=>record,readHostRecord:()=>record,writeHostRecord(){}};
+   case '@oma/protocol/host-guest':return {HOST_GUEST_PROTOCOL:7};
+   case '../platform/rpc.js':return {connectSocket(){throw new Error('unused');}};
+   case '@oma/process/host-loss':return {HOST_LOSS_SIGNALS:['SIGTERM','SIGINT']};
+   case '@oma/platform-mac/bookmark':return {nativeProjectBookmarks:()=>({})};
+   case '@oma/platform-mac/files':return {ensureHostOwnedDirectory(){}};
    default:throw new Error(`unexpected native boundary ${name}`);
   }} });
  await flush();

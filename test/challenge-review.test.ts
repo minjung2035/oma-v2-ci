@@ -6,16 +6,16 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { existsSync, readdirSync } from "node:fs";
 import { join } from "node:path";
-import { readDiagnosticSnapshot } from "../src/store.js";
-import { StoreError } from "../src/domain/errors.js";
-import { applyRequestKeyFor } from "../src/domain/identifiers.js";
-import { inspectLedger } from "../src/diagnostics/ledger.js";
-import { inspectIntegrity } from "../src/diagnostics/integrity.js";
-import { NodeIntegrityFiles } from "../src/diagnostics/files.js";
-import { createCanonicalObserver } from "../src/git/canonical-command.js";
-import { mailInboxPathAt, mailWorkersPathAt } from "../src/storage/paths.js";
+import { readDiagnosticSnapshot } from "@oma/storage";
+import { StoreError } from "@oma/domain/errors";
+import { applyRequestKeyFor } from "@oma/domain/identifiers";
+import { inspectLedger } from "#oma-test/app/diagnostics/ledger";
+import { inspectIntegrity } from "#oma-test/app/diagnostics/integrity";
+import { NodeIntegrityFiles } from "#oma-test/app/diagnostics/files";
+import { createCanonicalObserver } from "@oma/git/canonical-command";
+import { mailInboxPathAt, mailWorkersPathAt } from "@oma/domain/paths";
 import { fixture, messages, messageText } from "./fixtures/review-fixture.js";
-import type { ReviewFact } from "../implementation/contracts/attestation.js";
+import type { ReviewFact } from "@oma/contracts/attestation";
 
 /** An applied LOW merge whose candidate adds `file` on top of current main. */
 async function appliedMerge(f: ReturnType<typeof fixture>, content: string, key = "open-m") {
@@ -39,8 +39,8 @@ const publishedRefs = (f: ReturnType<typeof fixture>): string =>
 test("mail-v1: a challenge needs an applied merge and a HIGH target keeps HIGH", async () => {
   const f = fixture(); try {
     // Unknown name.
-    await assert.rejects(f.challenge("bob", { merge: "merge-00000000", tier: "LOW" }),
-      { code: "INVALID_REQUEST", message: "unknown request merge-00000000" });
+    await assert.rejects(f.challenge("bob", { merge: "merge-00000000-0000-4000-8000-000000000000", tier: "LOW" }),
+      { code: "INVALID_REQUEST", message: "unknown request merge-00000000-0000-4000-8000-000000000000" });
     // A merge that never applied (peer-needed).
     const pending = f.candidateWith({ "a.txt": "a" }); await f.submit("alice", pending, "s-p");
     await f.open("alice", { tier: "MEDIUM", candidate: pending }, "open-p");
@@ -115,7 +115,7 @@ test("mail-v1: a prepared challenge of an applied merge reverts it by vote", asy
     assert.equal(f.stateOf(chName).display, "applied");
     // The original merge stays applied.
     assert.equal(f.stateOf(name).display, "applied");
-    const mergeStatus = f.module.reviews.status(f.auth("dave"), name, 64 * 1024, "s1");
+    const mergeStatus = f.reviews.status(f.auth("dave"), name, 64 * 1024, "s1");
     assert.ok("entries" in mergeStatus); assert.equal(mergeStatus.display, "applied");
     assert.equal(mergeStatus.entries.at(-1)?.kind, "challenge.open", "the challenge is an entry of its merge");
     // The completion notice: revert title, target line, revert diff.
@@ -132,7 +132,7 @@ test("mail-v1: a prepared challenge of an applied merge reverts it by vote", asy
     const retried = await f.vote("carol", chName, "approve", "revert it", "v2");
     assert.equal(retried.operation, applying.operation);
     assert.equal(f.store.attestations.all().filter(r => r.operation.actor === "carol").length, 1);
-    const status = f.module.reviews.status(f.auth("dave"), chName, 64 * 1024, "s2");
+    const status = f.reviews.status(f.auth("dave"), chName, 64 * 1024, "s2");
     assert.ok("entries" in status);
     assert.deepEqual(status.target, { name, integration: f.applyOp("alice", "open-m")!.id,
       identity: openFact(f, chName).target.identity });
@@ -206,14 +206,14 @@ test("mail-v1: a refused open never publishes; a crash before publication is rep
     // stands, and the sweep publishes the ref exactly once.
     // The failure stays armed through the eager advance: the whole broker is
     // "dead" until reopen swaps in a module with the real effects.
-    const effects = (f.module.reviews as unknown as { effects: { publishCandidateRef: (r: string, c: string) => void } }).effects;
+    const effects = (f.reviews as unknown as { effects: { publishCandidateRef: (r: string, c: string) => void } }).effects;
     const realPublish = effects.publishCandidateRef.bind(effects);
     effects.publishCandidateRef = () => { throw new StoreError("BROKER_UNAVAILABLE", "process died before publication"); };
     const receipt = await f.challenge("alice", { merge: name, tier: "LOW" }, "ch-crash");
     assert.equal(receipt.state, "succeeded", "a post-T publication failure keeps the receipt");
     assert.equal(aliceRefs().length, 1, "the crash left no published ref");
     f.reopen();   // the failed module is gone; recovery repairs
-    await f.module.reviews.advanceAll();
+    await f.reviews.advanceAll();
     const now = aliceRefs();
     assert.equal(now.length, 2, "recovery published the challenge ref once");
     const chName = f.requestName("ch-crash");
@@ -222,7 +222,7 @@ test("mail-v1: a refused open never publishes; a crash before publication is rep
     assert.ok(published, `the challenge candidate ref was published: ${now}`);
     assert.equal(published.split(" ")[1], fact.identity.candidate);
     // A second sweep does not republish; the challenge still reviews/approves.
-    await f.module.reviews.advanceAll();
+    await f.reviews.advanceAll();
     assert.equal(aliceRefs().length, 2);
     void realPublish;
     await f.vote("bob", chName, "approve", "ok", "v1");
@@ -317,7 +317,7 @@ test("mail-v1: duplicate and stale challenges of one merge", async () => {
     await f.vote("bob", chA, "approve", "ok", "a1");
     await f.vote("carol", chA, "approve", "ok", "a2");
     assert.equal(f.stateOf(chA).display, "applied");
-    await f.module.reviews.advanceAll();
+    await f.reviews.advanceAll();
     assert.equal(f.stateOf(chB).display, "stale");
     await assert.rejects(f.vote("dave", chB, "approve", "late", "b1"), { code: "REQUEST_CLOSED" });
     // A new challenge after one applied names the applied one.

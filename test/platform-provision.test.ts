@@ -7,8 +7,8 @@ import { chmodSync, closeSync, existsSync, ftruncateSync, mkdtempSync, openSync,
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { randomUUID } from "node:crypto";
-import { allZero, hasFilesystem, instanceCheck, makeFilesystem, parseCmdline, provisionDecision, readInstance, writeInstance } from "../src/platform/guest/provision.js";
-import { bundleObjectFormat } from "../src/platform/guest/project.js";
+import { allZero, hasFilesystem, instanceCheck, makeFilesystem, parseCmdline, provisionDecision, readInstance, writeInstance } from "#oma-test/app/platform/guest/provision";
+import { bundleObjectFormat } from "#oma-test/app/platform/guest/project";
 
 const ID = randomUUID();
 const tools = existsSync("/usr/sbin/blkid") && existsSync("/usr/sbin/mkfs.ext4");

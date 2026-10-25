@@ -3,7 +3,9 @@
     "target": "es2022",
     "module": "nodenext",
     "moduleResolution": "nodenext",
-    "lib": ["es2022"],
+    "lib": [
+      "es2022"
+    ],
     "strict": true,
     "noUncheckedIndexedAccess": true,
     "exactOptionalPropertyTypes": true,
@@ -12,8 +14,15 @@
     "noImplicitOverride": true,
     "forceConsistentCasingInFileNames": true,
     "skipLibCheck": true,
-    "types": ["node"]
+    "types": [
+      "node"
+    ]
   },
-  "include": ["src/**/*.ts", "implementation/contracts.ts", "test/**/*.ts"],
-  "exclude": ["src/extension/vendor"]
+  "include": [
+    "test/**/*.ts",
+    "implementation/tests/**/*.ts"
+  ],
+  "exclude": [
+    "packages/*/dist"
+  ]
 }

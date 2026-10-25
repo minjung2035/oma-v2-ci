@@ -6,22 +6,23 @@
 import { connect, createServer, type Server, type Socket } from "node:net";
 import { join } from "node:path";
 import { randomUUID } from "node:crypto";
-import type { FramedPeer } from "../../src/platform/rpc.js";
-import { StoreError } from "../../src/domain/errors.js";
-import { startGuestServer, type GuestIdentity } from "../../src/platform/guest/server.js";
-import { GuestControl, type GuestSystem } from "../../src/platform/guest/control.js";
-import { GuestHost, type SessionLauncher } from "../../src/platform/guest/host.js";
-import { EgressPool } from "../../src/platform/guest/egress.js";
-import { RequestLedger } from "../../src/platform/guest/requests.js";
-import { GuestProjects } from "../../src/platform/guest/project.js";
-import { serveStream } from "../../src/platform/guest/stream.js";
-import { GuestArchives } from "../../src/platform/guest/archive.js";
-import { GuestPackages } from "../../src/platform/guest/packages.js";
-import { DEPLOYMENT_LAYOUT } from "../../src/domain/deployment.js";
+import type { FramedPeer } from "#oma-test/app/platform/rpc";
+import { StoreError } from "@oma/domain/errors";
+import { startGuestServer, type GuestIdentity } from "#oma-test/app/platform/guest/server";
+import { GuestControl } from "#oma-test/app/platform/guest/control";
+import { type GuestSystem } from "@oma/contracts/guest-control";
+import { GuestHost, type SessionLauncher } from "#oma-test/app/platform/guest/host";
+import { EgressPool } from "#oma-test/app/platform/guest/egress";
+import { RequestLedger } from "#oma-test/app/platform/guest/requests";
+import { GuestProjects } from "#oma-test/app/platform/guest/project";
+import { serveStream } from "#oma-test/app/platform/guest/stream";
+import { GuestArchives } from "#oma-test/app/platform/guest/archive";
+import { GuestPackages } from "#oma-test/app/platform/guest/packages";
+import { DEPLOYMENT_LAYOUT } from "@oma/domain/deployment";
 import { fileURLToPath } from "node:url";
-import { listening } from "../../src/platform/guest/host.js";
-import type { VmDriver, VmStopCause } from "../../src/platform/host/lifecycle.js";
-import { GUEST_PORTS, PLATFORM_FRAME_BYTES } from "../../src/protocol/host-guest.js";
+import { listening } from "#oma-test/app/platform/guest/host";
+import type { VmDriver, VmStopCause } from "@oma/contracts/platform-lifecycle";
+import { GUEST_PORTS, PLATFORM_FRAME_BYTES } from "@oma/protocol/host-guest";
 
 const self = { uid: process.getuid!(), gid: process.getgid!() };
 
@@ -29,7 +30,7 @@ export interface Guest { readonly control: string; readonly society: string; rea
 
 /** Runs guestctl and guesthost here; `power.off` stops "the VM" unless the
  * guest is told to ignore it. */
-export class LocalDriver implements VmDriver {
+export class LocalDriver implements VmDriver<Socket> {
   pool = new EgressPool();
   running: Guest | null = null;
   starts = 0;

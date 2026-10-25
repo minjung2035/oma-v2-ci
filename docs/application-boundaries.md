@@ -109,9 +109,9 @@ Pi와 Pi TUI 1.0.1만 허용한다. 이 버전을 올릴 때는 preload·실제 
 
 | 위치 | 역할 | 참조 규칙 |
 |---|---|---|
-| `implementation/contracts/` | Core 공개 행위·fact·state 계약 | 구현 파일을 참조하지 않음 |
-| `src/domain/` | 식별자·값의 의미·순수 정책 | transport/adapter/application을 모름 |
-| `src/protocol/` | request/result/session DTO와 wire codec | protocol shape를 검증하며 실행 효과를 소유하지 않음 |
+| `packages/contracts/src/` | Core 공개 행위·fact·state 계약 | 구현 파일을 참조하지 않음 |
+| `packages/domain/src/` | 식별자·값의 의미·순수 정책 | transport/adapter/application을 모름 |
+| `packages/protocol/src/` | request/result/session DTO와 wire codec | protocol shape를 검증하며 실행 효과를 소유하지 않음 |
 | `src/ports/` | 내부 capability 계약 | 필요한 행위만 노출하며 concrete owner를 가져오지 않음 |
 | `src/application/` | use case와 product interaction 조정 | 계약과 하위 owner를 연결; TUI에 data와 좁은 command를 전달 |
 | `src/platform/` adapter | OS·외부 서비스 효과 | 계약을 구현하며 product/Application으로 역참조하지 않음 |

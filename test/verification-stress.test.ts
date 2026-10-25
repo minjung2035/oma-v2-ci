@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { JsonlReader } from "../src/protocol/jsonl.js";
+import { JsonlReader } from "@oma/protocol/jsonl";
 
 test("R35 stress: 10000 bounded JSONL events dispatch without a retained event queue", () => {
   const reader = new JsonlReader(128); let events = 0;

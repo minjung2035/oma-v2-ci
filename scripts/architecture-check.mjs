@@ -353,94 +353,7 @@ export function analyzeProgram(
       reason,
     });
   };
-  const transactionAliasSymbol = (symbol, seen = new Set()) => {
-    if (!symbol || seen.has(symbol)) return false;
-    seen.add(symbol);
-    if (symbol.flags & ts.SymbolFlags.Alias)
-      return transactionAliasSymbol(checker.getAliasedSymbol(symbol), seen);
-    for (const declaration of symbol.declarations ?? []) {
-      if (!ts.isTypeAliasDeclaration(declaration)) continue;
-      const file = relative(root, declaration.getSourceFile().fileName);
-      if (
-        file === "implementation/contracts/module-contracts.ts" &&
-        declaration.name.text === "Transaction"
-      ) {
-        const type = declaration.type;
-        if (
-          ts.isImportTypeNode(type) &&
-          ts.isLiteralTypeNode(type.argument) &&
-          ts.isStringLiteralLike(type.argument.literal) &&
-          type.argument.literal.text === "../../src/store.js" &&
-          type.qualifier?.getText(declaration.getSourceFile()) === "Transaction"
-        )
-          return true;
-      }
-      if (
-        transactionAliasSymbol(
-          checker.getTypeAtLocation(declaration).aliasSymbol,
-          seen,
-        )
-      )
-        return true;
-      if (ts.isTypeReferenceNode(declaration.type)) {
-        const target = checker.getSymbolAtLocation(declaration.type.typeName);
-        if (transactionAliasSymbol(target, seen)) return true;
-      }
-    }
-    return false;
-  };
-  const isExactTransactionAliasName = (node) => {
-    const parent = node.parent;
-    return (
-      ts.isIdentifier(node) &&
-      ts.isTypeAliasDeclaration(parent) &&
-      parent.name === node &&
-      parent.name.text === "Transaction" &&
-      relative(root, parent.getSourceFile().fileName) ===
-        "implementation/contracts/module-contracts.ts"
-    );
-  };
-  const isExactRootTransactionReExport = (node) => {
-    if (
-      !ts.isIdentifier(node) ||
-      node.text !== "Transaction" ||
-      relative(root, node.getSourceFile().fileName) !==
-        "implementation/contracts.ts"
-    )
-      return false;
-    for (let current = node.parent; current; current = current.parent) {
-      if (ts.isExportDeclaration(current))
-        return (
-          current.isTypeOnly &&
-          current.moduleSpecifier?.text === "./contracts/module-contracts.js"
-        );
-    }
-    return false;
-  };
-  const checkTransactionCompatibilityLeak = (source) => {
-    const file = relative(root, source.fileName);
-    if (!isContractOwner(file)) return;
-    let leak = null;
-    eachNode(source, (node) => {
-      if (
-        leak ||
-        !ts.isIdentifier(node) ||
-        isExactTransactionAliasName(node) ||
-        isExactRootTransactionReExport(node)
-      )
-        return;
-      if (transactionAliasSymbol(checker.getSymbolAtLocation(node)))
-        leak = node;
-    });
-    if (leak)
-      report(
-        "contract-ownership",
-        leak,
-        "Only the frozen module-contracts Transaction compatibility alias may name the concrete Store transaction type",
-      );
-  };
   for (const source of sources) {
-    checkTransactionCompatibilityLeak(source);
     if (isInternalPort(relative(root, source.fileName))) {
       // P17 contract, not a taste heuristic: this surface must erase completely.
       // Preserve value imports to reject accidental runtime capabilities even if unused.
@@ -517,7 +430,7 @@ export function analyzeProgram(
   const fieldsOf = (name) => {
     const declaration = canonicalDeclaration(
       name,
-      "implementation/contracts.ts",
+      "packages/contracts/src/index.ts",
     );
     return new Set(
       declaration
@@ -527,8 +440,7 @@ export function analyzeProgram(
         : [],
     );
   };
-  const resourceFields = fieldsOf("ResourceLimits"),
-    limitFields = fieldsOf("ProtocolLimits");
+  const limitFields = fieldsOf("ProtocolLimits");
   const idPatterns = new Set();
   const idSource = sourceByFile.get(policy.identifierOwner);
   if (idSource)
@@ -725,28 +637,10 @@ export function analyzeProgram(
         node.kind === ts.SyntaxKind.RegularExpressionLiteral &&
         file !== policy.identifierOwner
       ) {
-        const mirror = policy.identifierMirrors?.[file];
-        if (idPatterns.has(node.text)) {
-          // A declared mirror may restate the owner's grammar verbatim; any other
-          // file duplicating it is a second schema owner.
-          if (!mirror)
-            report(
-              "duplicate-id-schema",
-              node,
-              "Executable identifier grammar duplicates the canonical owner",
-            );
-        } else if (
-          mirror &&
-          /(?:^|[^A-Za-z0-9_])(?:op-|m-|b-)/.test(node.text)
-        ) {
-          // The exemption is conditional: a mirror may not ship its own id grammar.
-          report(
-            "duplicate-id-schema",
-            node,
-            `Mirrored identifier grammar must match ${policy.identifierOwner} verbatim`,
-          );
-        }
+        if (idPatterns.has(node.text)) report("duplicate-id-schema", node,
+          "Executable identifier grammar duplicates the canonical owner");
       }
+
       if (ts.isArrayLiteralExpression(node)) {
         const values = node.elements
           .filter(ts.isStringLiteralLike)
@@ -782,15 +676,14 @@ export function analyzeProgram(
       }
       if (ts.isObjectLiteralExpression(node)) {
         const properties = node.properties.filter(ts.isPropertyAssignment);
-        // Either report needs at least three schema-shaped properties whose
-        // names are all in one field table, so fewer than three properties
-        // named in the union of both tables can never fire -- skip the type
+        // The report needs at least three schema-shaped protocol fields,
+        // so fewer than three properties from that field table can never fire -- skip the type
         // queries entirely in that case.
         const fieldNames = properties.filter((property) => {
           const name = propertyName(property.name);
           return (
             name !== null &&
-            (resourceFields.has(name) || limitFields.has(name))
+            limitFields.has(name)
           );
         });
         const schemaProperties = fieldNames.length < 3 ? [] : properties.filter((property) => {
@@ -808,16 +701,6 @@ export function analyzeProgram(
         const keys = schemaProperties.map((property) =>
           propertyName(property.name),
         );
-        if (
-          keys.length >= 3 &&
-          file !== policy.resourceOwner &&
-          keys.every((key) => resourceFields.has(key))
-        )
-          report(
-            "duplicate-resource-schema",
-            node,
-            "Executable resource schema duplicates its field table",
-          );
         if (
           keys.length >= 3 &&
           file !== policy.limitOwner &&
@@ -931,7 +814,7 @@ export function analyzeProgram(
       const table = canonicalDeclaration(tableName, policy.methodOwner);
       const contract = canonicalDeclaration(
         typeName,
-        "implementation/contracts.ts",
+        "packages/contracts/src/index.ts",
       );
       if (!table || !contract) {
         report(
@@ -960,7 +843,7 @@ export function analyzeProgram(
     compareKeys("INTERNAL_METHODS", "InternalMethods");
     const plan = canonicalDeclaration(
       "OperationPlan",
-      "implementation/contracts.ts",
+      "packages/contracts/src/index.ts",
     );
     const registry = canonicalDeclaration("OPERATION_CODECS");
     const kinds = new Set();
@@ -1124,11 +1007,11 @@ export function runArchitectureCheck(rootDir = process.cwd(), baseline = []) {
     manifest,
     compilerOptions: program.getCompilerOptions(),
     roots: [
-      "src/entry/broker.ts",
-      "src/entry/runner.ts",
-      "src/entry/host.ts",
-      "src/cli.ts",
-      "src/pi-extension.ts",
+      "apps/oma/src/entry/broker.ts",
+      "apps/oma/src/entry/runner.ts",
+      "apps/oma/src/entry/host.ts",
+      "apps/oma/src/cli.ts",
+      "packages/extension/src/index.ts",
     ],
   });
   return {

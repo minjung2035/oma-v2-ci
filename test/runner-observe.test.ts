@@ -11,15 +11,15 @@ import assert from "node:assert/strict";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { runnerObservationOf } from "../src/runtime/pi-adapter.js";
-import { PI_ADAPTER_REVISION } from "../src/storage/delivery-receipt.js";
-import { InternalDispatcher } from "../src/broker/internal-dispatcher.js";
-import { ViewsModule } from "../src/views.js";
-import { RunnerModule } from "../src/runner.js";
-import { Store } from "../src/store.js";
-import { StoreError } from "../src/domain/errors.js";
+import { runnerObservationOf } from "@oma/engine/pi-adapter";
+import { PI_ADAPTER_REVISION } from "@oma/protocol/delivery-boundary";
+import { InternalDispatcher } from "@oma/broker/internal-dispatcher";
+import { ViewsModule } from "#oma-test/app/views";
+import { RunnerModule } from "#oma-test/app/runner";
+import { Store } from "@oma/storage";
+import { StoreError } from "@oma/domain/errors";
 import { makeValidAgent } from "./fixtures/spec.js";
-import type { PreparedBatch } from "../implementation/contracts.js";
+import type { PreparedBatch } from "@oma/contracts";
 
 const batch = Object.freeze({
   id: "batch-1", agent: "alice", incarnation: 1, messageIds: [],
@@ -54,10 +54,10 @@ function dispatcherWith(incarnation: number) {
     store: { getAgentIdentity: () => ({ incarnation }), pendingDeliveryCount: () => 0,
       getBatchAgent: () => null, preparedBatchIds: () => [] },
     mail: { prepare: async () => null, complete: async () => {}, moveToCur: () => 0 } as never,
-    stateRoot: "/nonexistent",
+    principalInboxNewEntries: () => { throw new Error("runner diagnostics do not list the Principal inbox"); },
     peers: { requireRunnerUnit: () => {}, requireHostUnit: () => {}, runnerActor: () => "alice",
       runnerAuth: () => ({} as never) },
-    isDraining: () => false, assertAdmission: () => {}, admitResource: () => () => {},
+    isDraining: () => false, assertAdmission: () => {},
     failureAnswer: (id: string, error: unknown) => ({ id, ok: false,
       code: (error as { code?: string }).code, message: (error as Error).message }),
     refreshViews: () => {}, openRun: () => { throw new Error("no run is opened here"); },

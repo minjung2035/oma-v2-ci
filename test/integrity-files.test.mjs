@@ -1,14 +1,15 @@
+import { serializePlanIntent } from "../dist/test/fixtures/plan.js";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { chmodSync, linkSync, unlinkSync, writeFileSync, symlinkSync, mkdirSync, existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { randomUUID } from "node:crypto";
 import { physicalLedger } from "./helpers/physical-ledger.mjs";
-import { inspectIntegrity } from "../dist/src/diagnostics/integrity.js";
-import { NodeIntegrityFiles, FILE_INSPECTION_LIMITS } from "../dist/src/diagnostics/files.js";
-import { sha256Hex } from "../dist/src/hash.js";
-import { publishImmutableFile } from "../dist/src/storage/immutable-file.js";
-import { writeExclusiveFsyncedFile } from "../dist/src/storage/durable-fs.js";
+import { inspectIntegrity } from "#oma-test/app/diagnostics/integrity";
+import { NodeIntegrityFiles, FILE_INSPECTION_LIMITS } from "#oma-test/app/diagnostics/files";
+import { sha256Hex } from "@oma/domain/canonical-json";
+import { publishImmutableFile } from "@oma/storage/immutable-file";
+import { writeExclusiveFsyncedFile } from "@oma/storage/durable-fs";
 const inspect = (f, overrides = {}) => inspectIntegrity(f.snapshot(), f.context, { files: new NodeIntegrityFiles(), ...overrides });
 const has = (report, code) => report.issues.some(issue => issue.code === code);
 test("P6 files: accepted pending intent with immutable source is consistent but not complete", t => {
@@ -86,11 +87,12 @@ test("P6 files: a matching file hash does not hide contradictory frozen headers"
 
 test("P6 files: worker-audience mail is expected under mail/workers, never the public archive", async t => {
   const f = physicalLedger(t); f.publish();
-  const { generateOperationId, generateMessageId } = await import("../dist/src/ids.js");
-  const { reviewRequestNameFor } = await import("../dist/src/domain/identifiers.js");
-  const { requestHash } = await import("../dist/src/hash.js");
-  const { mailWorkersPathAt, mailObjectPathAt: objectPathAt, mailInboxPathAt: inboxPathAt } = await import("../dist/src/storage/paths.js");
-  const { buildEml } = await import("../dist/src/mail/serialize.js");
+  const { generateOperationId } = await import("@oma/native/identity");
+    const { messageIdForOperation: generateMessageId } = await import("@oma/domain/derived");
+  const { reviewRequestNameFor } = await import("@oma/domain/identifiers");
+  const { requestHash } = await import("@oma/domain/request-identity");
+  const { mailWorkersPathAt, mailObjectPathAt: objectPathAt, mailInboxPathAt: inboxPathAt } = await import("@oma/domain/paths");
+  const { buildEml } = await import("@oma/mail/serialize");
   const id = generateOperationId(), name = reviewRequestNameFor("merge", id), mid = generateMessageId(id, 0);
   const candidate = "2".repeat(40), base = "1".repeat(40);
   const identity = { repo: "project", targetRef: "refs/heads/main", expectedBase: base, candidate, policyRevision: "p1" };
@@ -109,7 +111,7 @@ test("P6 files: worker-audience mail is expected under mail/workers, never the p
   f.store.transaction(tx => {
     tx.operations.insert({ id, actor: "alice", requestKey: randomUUID(), requestHash: requestHash("attest.record", payload),
       kind: "attest.record", payloadJson: JSON.stringify(payload),
-      planJson: JSON.stringify({ kind: "attest.record", fact, messages: [message] }) });
+      planJson: serializePlanIntent({ kind: "attest.record", fact, messages: [message] }) });
     tx.deliveries.insert([{ messageId: mid, recipient: "alice", operationId: id }]);
   });
   publishImmutableFile(object, mailWorkersPathAt(f.root, mid), eml.sha256);

@@ -1,3 +1,6 @@
+import { testBroker } from "./helpers/broker-fixture.js";
+import { createLifecycleModule } from "#oma-test/app/broker/lifecycle-composition";
+import { createMailModule } from "#oma-test/app/broker/mail-composition";
 /** V23A (WP23, D04): unit status is diagnostic observation. Collecting it must
  * not stall the broker's event loop, pile up concurrent systemctl processes or
  * queue unbounded work, whatever the number of agents or the speed of the
@@ -12,15 +15,15 @@ import assert from "node:assert/strict";
 import { mkdtempSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type { AuthContext } from "../implementation/contracts.js";
-import { Store } from "../src/store.js";
-import { MailModule } from "../src/mail.js";
-import { Broker } from "../src/broker.js";
-import { UnitsModule, type UnitCommandOutcome } from "../src/units.js";
-import { ViewsModule } from "../src/views.js";
-import { LifecycleModule } from "../src/lifecycle.js";
-import { decodeStatusView, statusViewPath } from "../src/protocol/status-view.js";
-import { ALL_CAPS, TEST_RESOURCES, makeValidAgent, makeValidResolvedSpec } from "./fixtures/spec.js";
+import type { AuthContext } from "@oma/contracts";
+import { Store } from "@oma/storage";
+import { MailModule } from "@oma/mail";
+import { Broker } from "@oma/broker";
+import { UnitsModule, type UnitCommandOutcome } from "@oma/platform-linux/units";
+import { ViewsModule } from "#oma-test/app/views";
+import { LifecycleModule } from "@oma/lifecycle";
+import { decodeStatusView, statusViewPath } from "@oma/protocol/status-view";
+import { ALL_CAPS, makeValidAgent, makeValidResolvedSpec } from "./fixtures/spec.js";
 import { removeTree } from "./fixtures/cleanup.js";
 import { goalPublishedAt } from "./fixtures/goal.js";
 
@@ -49,7 +52,7 @@ function showOutput(argv: readonly string[], state: (unit: string) => string): s
 interface Meter { commands: number; inFlight: number; maxInFlight: number; syncMs: number }
 function modelledUnits(root: string, meter: Meter, options: { hang?: () => boolean; fail?: () => boolean } = {}): UnitsModule {
   const units = new UnitsModule("demo", { node: process.execPath, libdir: root, state: root, society: "demo", agent: "" },
-    join(root, "units"), { p: TEST_RESOURCES });
+    join(root, "units"));
   const state = (): string => "inactive";
   // One-off measurement against the real user manager (units not found answer
   // as inactive); the lanes run the fitted model.
@@ -87,11 +90,11 @@ function society(t: TestContext, options: { hang?: () => boolean; fail?: () => b
   });
   const meter: Meter = { commands: 0, inFlight: 0, maxInFlight: 0, syncMs: 0 };
   const units = modelledUnits(root, meter, options);
-  const mail = new MailModule({ stateRoot: root, society: "demo" }, store, 64);
+  const mail = createMailModule({ stateRoot: root, society: "demo" }, store, 64);
   const views = new ViewsModule(store, root, "demo", "p");
-  const lifecycle = new LifecycleModule(store, units, { stateRoot: root, projectGit: join(root, "project.git"), society: "demo", hasGoal: () => true, activationAllowed: () => true },
+  const lifecycle = createLifecycleModule(store, units, { stateRoot: root, projectGit: join(root, "project.git"), society: "demo", hasGoal: () => true, activationAllowed: () => true },
     (_parent, input) => makeValidResolvedSpec(input.name, "p", ALL_CAPS, input.from, input.brief), mail);
-  const broker = new Broker(store, mail, units, views, lifecycle, null, null, { stateRoot: root, runRoot: join(root, "run"), society: "demo", hasGoal: goalPublishedAt(root) });
+  const broker = testBroker({ store: store, mail: mail, units: units, views: views, lifecycle: lifecycle, git: null, reviews: null, reconcile: null, paths: { stateRoot: root, runRoot: join(root, "run"), society: "demo", hasGoal: goalPublishedAt(root) } });
   t.after(async () => { try { await broker.drainAndClose(); } catch { store.close(); } finally { removeTree(root); } });
   const call = async (request: Record<string, unknown>) => {
     const started = performance.now();

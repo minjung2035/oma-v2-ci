@@ -1,9 +1,10 @@
 // R01: run the synchronous ancestry walk in a child so a cycle cannot hang the suite.
-// This is a lifecycle quota boundary test, not a kernel or broker E2E test.
+// This checks lineage integrity; no unit or broker is involved.
 import { DatabaseSync } from "node:sqlite";
 import { join } from "node:path";
-import { Store, StoreError } from "../../src/store.js";
-import { assertCreateCapacity, LineageSnapshot } from "../../src/domain/lineage.js";
+import { Store } from "@oma/storage";
+import { StoreError } from "@oma/domain/errors";
+import { LineageSnapshot } from "@oma/domain/lineage";
 import { makeValidAgent } from "./spec.js";
 
 const root = process.argv[2];
@@ -23,10 +24,10 @@ try {
       raw.prepare("UPDATE agents SET created_by=? WHERE name=?").run("a", "b");
     } finally { raw.close(); }
   }
-  // No unit operation is involved in this pure quota walk.
+  // The ancestry walk must terminate or reject the corrupt graph.
   const graph = new LineageSnapshot(store.listAgents()
     .map(agent => ({ name: agent.name, createdBy: agent.createdBy, role: agent.role })));
-  assertCreateCapacity(graph, "c", { societyAgents: 10, lineageAgents: 10 });
+  graph.ancestors("c");
   process.stdout.write("OK\n");
 } catch (error) {
   if (!(error instanceof StoreError) || error.code !== "STORE_CORRUPT") throw error;

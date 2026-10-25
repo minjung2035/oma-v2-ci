@@ -1,107 +1,8 @@
 {
- "schema": 1,
- "sourceCommit": "6b3583814e1586da1efac06559914ef5556d4ebb",
- "note": "internalPorts retains pre-P17 declarations. ownershipRefinement is the explicit P23 delta: minimal receipt lookup, synchronous query transaction and host-owned batch limits. Dispatch snapshots remain reviewed P16/P18 capabilities plus the explicit WP21 delta: both dependency sets gain the D04 admitResource gate. mail-v1 adds workerArchive to SandboxDirectories.",
- "internalPorts": {
-  "BoundRunnerPort": {
-   "exported": true,
-   "sha256": "48ab8f4ce002f8de3d18402e410cfdd29fc250cbb91c0c26c46a281fa17a5a2a"
-  },
-  "DerivedViewsPort": {
-   "exported": true,
-   "sha256": "71b78f5e880d81abd0139f3a9aed9135b1c5d5a04a0a3818637ba0be24b588cd"
-  },
-  "OperationReceiptPort": {
-   "exported": true,
-   "sha256": "97d47ab733ec0fbd1821ec31482ae82e6e484d792c3870fa8ea33f824f20f861"
-  },
-  "OperationRowsPort": {
-   "exported": true,
-   "sha256": "4f223fb50f4948db780cd223f5c07d9e112a59dbf19ac8b57e64e1abfe23c789"
-  },
-  "ReceiptProjector": {
-   "exported": true,
-   "sha256": "a17f2fd83f735d75feeb5152f897d393458a7e1aecd1abf928bd9129fd01cfb3"
-  },
-  "ReconcileMetrics": {
-   "exported": true,
-   "sha256": "6bd63dab59ffaf9b253d0b4bc88ec2c834083103b050ad26983f4e6b159a27f7"
-  },
-  "ReconcilePort": {
-   "exported": true,
-   "sha256": "d67d1c04dd5c386a438e02e092bb9914065bcad68d15fa46834c6decd9b6d404"
-  },
-  "SandboxCompositionInput": {
-   "exported": true,
-   "sha256": "8856a687abc1b79930b03c17268fd8b5fdd576dd1dd4e7f79d0b52df0862fcd1"
-  },
-  "SandboxDirectories": {
-   "exported": true,
-   "sha256": "0e6841a5a879f7e59c111ef86cc2ae4dadea7b7a4c55af918445f28aac3ad4c2"
-  },
-  "SandboxHost": {
-   "exported": true,
-   "sha256": "2c3e05b679d8a0de4c331880c6323ababf9dbce3f7942a0a04e8e15a02d41416"
-  },
-  "SandboxPort": {
-   "exported": true,
-   "sha256": "dbad98300f5a7096e1255a8ac087046b0a893a19b46f60c4a620414a746b6137"
-  },
-  "StorePort": {
-   "exported": true,
-   "sha256": "9cef16e042a8f138387f98f31aefef79a63b576c2c3a003505f8b7f4232135fa"
-  },
-  "SyncUnitsPort": {
-   "exported": true,
-   "sha256": "8c595a2774c641f61291967397c286ca38c8cab2a69c49d3deffa5aa3e2d6261"
-  },
-  "UnitObserve": {
-   "exported": true,
-   "sha256": "68021841357991e1f178cf981a5d21baac5c66800e9c65e21df663142e2b320d"
-  }
- },
- "ownershipRefinement": {
-  "OperationRowsPort": {
-   "exported": true,
-   "sha256": "878009871e54f8437a1918dc16baa9b7fd1677719d3ac2c684058ecd64cc5c1a"
-  },
-  "StorePort": {
-   "exported": true,
-   "sha256": "fcfaff58bb666fb330f9ac5d18b7e039f3c042c6fde44d0acdf455f9c1160ee9"
-  },
-  "ReceiptProjector": {
-   "exported": true,
-   "sha256": "57a6d04e7e7e56d454d0f32cc0d9e45cfaa32d927342191609f45c03e12bc690"
-  },
-  "OperationLookup": {
-   "exported": true,
-   "sha256": "111427f8b44a9bab5fdd35394a7cee1f029e93108335f8c3b310c3ae7154af1c"
-  },
-  "SynchronousResult": {
-   "exported": true,
-   "sha256": "eff6ca6b80ff4d8f6d0a57857d75e79347fad0f7eb8da7d64cf45d271bbef60e"
-  },
-  "BatchViewLimits": {
-   "exported": true,
-   "sha256": "7c2b8b5b64fdd22cc23b59bc4cea13607b9e8ac802b8873c1d2508fe91bd0c84"
-  }
- },
- "candidateOwnershipRefinement": {
-  "SandboxHost": {
-   "exported": true,
-   "sha256": "ccd0bae853e20568595a65e3a98975b91ecb63e0ba1c162268ccfa00dc667065"
-  },
-  "SandboxPort": {
-   "exported": true,
-   "sha256": "94550d4ab7e5ead7be82d0bd240f1d565bbe63b049c7e768c9775cc5b6cf6b83"
-  },
-  "SandboxDirectories": {
-   "exported": true,
-   "sha256": "cbdea3a940fc0fcb7934223cfd4655c86cd1806bfd99b6c5964f60a8e9d7aab9"
-  }
- },
+ "schema": 2,
+ "note": "DR46 current Broker consumer interfaces. Includes every current capability without projecting an older contract; removes the inert D04 resource gate. No historical execution or authored review is renewed. DR46 separates the actual Review port from Git and wires it explicitly; only PublicReviewPort, PublicGitPort and PublicDispatchDependencies are intentionally updated. DR46 Broker moves every consumer interface to the acyclic Broker ports owner and diagnostic DTOs to contracts/runtime. Only the existing InternalDispatchDependencies changes: a fixed principalInboxNewEntries capability replaces a filesystem stateRoot. New ledger/incarnation, effects and runtime ports are explicit; prior review is not renewed. DR46 Engine moves the exact FencedEngine child-lifetime declaration to contracts/runtime; all existing interfaces and wire contracts stay unchanged. Historical review is not renewed.",
  "dispatch": {
-  "src/broker/public-dispatcher.ts": {
+  "packages/broker/src/ports.ts": {
    "PublicAgentView": {
     "exported": true,
     "sha256": "179716fe688298b6fe4d7da5be3c72bf9ba656bb2968538c7231ea41271cd0b2"
@@ -124,18 +25,20 @@
    },
    "PublicLifecyclePort": {
     "exported": true,
-    "sha256": "44de497b03e4ff3424e2e050653c3175b72fbb0b87f9d64f43d992530bd2a8fa"
+    "sha256": "c5c056f51f846484be0b0bb8bb53cafab7cba31bde78770e7b2d0f83b9bc727b"
+   },
+   "PublicReviewPort": {
+    "exported": true,
+    "sha256": "ad9183874c3b73cbc9b2649563734b25a9bb55ed0c704a8dcc713127a2ef38d2"
    },
    "PublicGitPort": {
     "exported": true,
-    "sha256": "32946a085be0bcfaa4f54ed6c008b410d46f945c9bc3aebbb6be809866a8ad1d"
+    "sha256": "533e28ec95d592719afbca8f13f0f9f1ee35dc1a0d643e02fc95606b1e345b30"
    },
    "PublicDispatchDependencies": {
     "exported": true,
-    "sha256": "ccb432d8c7814138b0019f6d775c1dac4bf901fa072e56a6e5eb50a935c4d583"
-   }
-  },
-  "src/broker/internal-dispatcher.ts": {
+    "sha256": "475da2b5a6d8e982ee576257551286e3d3444ced49d51f41cefde36157cd97db"
+   },
    "InternalStorePort": {
     "exported": true,
     "sha256": "1762329b0b87a7037b9226fcdc55fa85a61aa9984e7830ee330f2d991f5329cd"
@@ -150,11 +53,121 @@
    },
    "InternalDispatchDependencies": {
     "exported": true,
-    "sha256": "00faf5c837e8492d049122c20af97553fdfd4441ab948b57f977f7ff072806a4"
+    "sha256": "525d1621245f72a4084a6fc9a42b75d4e332ff73a9709326ec9c230e345a9f0f"
+   },
+   "BrokerTransaction": {
+    "exported": true,
+    "sha256": "72d829a7eabecc206faedf520cb3bdbf5625bf79ec054555cfef066a0532f24c"
+   },
+   "BrokerLedger": {
+    "exported": true,
+    "sha256": "acb3c484addfc4b71c2381e2ff1f829b5efb0af006f9d703a731e018879cc072"
+   },
+   "BrokerMail": {
+    "exported": true,
+    "sha256": "d64f0c1c03b1d9993ac488e1b3f4adc10072555d289bd05e796244a77dc89a8a"
+   },
+   "BrokerUnits": {
+    "exported": true,
+    "sha256": "22f36e999de73308620338764608fb49a75359ed1eacb57c00f9d6336bffba08"
+   },
+   "BrokerViews": {
+    "exported": true,
+    "sha256": "ec9318ff0d50d11d957f77db27b600bf7c4010852b7174dcbecd01e1c7d47ca8"
+   },
+   "BrokerReconcile": {
+    "exported": true,
+    "sha256": "1a4fe90daf1e6241314915725426453e6b5a0774d15e5c67462aa7bb3106700e"
+   },
+   "BrokerStatusRefresh": {
+    "exported": true,
+    "sha256": "4f0e2cebbe42734ddac34971a031b4d86316684229fd225d43e00b351406b821"
+   },
+   "BrokerEffects": {
+    "exported": true,
+    "sha256": "5992a9999f1ad763846fc2f77dfdfa76078820a4884ea28446bb12c6c3a3bff5"
+   },
+   "BrokerDependencies": {
+    "exported": true,
+    "sha256": "55b6f93a2d5398bf33f05973d7d5b5e569cd9f48c276ac38779b2338ce13789a"
+   }
+  },
+  "packages/contracts/src/runtime.ts": {
+   "AuthContext": {
+    "exported": true,
+    "sha256": "aca45745786185d994c694214077bdab77b18170bc478a8207922dda1efafdac"
+   },
+   "AgentStatus": {
+    "exported": true,
+    "sha256": "dc66e39a310c4b106bb4808bbf0562c26f493cd4520fdce90a9501c6080680e3"
+   },
+   "PreparedBatch": {
+    "exported": true,
+    "sha256": "b3627dfa363ddd0d0718e056cdd613509166352a80f8ae1b1e1434dfe822c4f9"
+   },
+   "BoundaryEvidence": {
+    "exported": true,
+    "sha256": "6e573b0640105f4b5f885fdbd3ac4f9e4ce131fa04eb10122071a6d0ff65cb22"
+   },
+   "RunLease": {
+    "exported": true,
+    "sha256": "66eb75f6ddd92db298eb464a64f05f242812aec8e5f51b490df6ca805f54d73c"
+   },
+   "UnitObservation": {
+    "exported": true,
+    "sha256": "adf5e9b72c97b2c746f2adf9966e1490268d47bf5185ff0f2a72e7bc2d2fc77b"
+   },
+   "SandboxPlan": {
+    "exported": true,
+    "sha256": "c162ce778bc3788e423f36d4b68ec6245ede25ca1737ae9c102d7cbca21ba119"
+   },
+   "SandboxDirectories": {
+    "exported": true,
+    "sha256": "cbdea3a940fc0fcb7934223cfd4655c86cd1806bfd99b6c5964f60a8e9d7aab9"
+   },
+   "SandboxHost": {
+    "exported": true,
+    "sha256": "9799b432870d275beb2315be1ecf49ae63d7fc8de0c8223c4c493844b706113c"
+   },
+   "DeliveryBoundary": {
+    "exported": true,
+    "sha256": "d68d9cc7994e5caada1aba9774c867d595720051eddabd0271870185bd4f09de"
+   },
+   "DeliveryReceipt": {
+    "exported": true,
+    "sha256": "ebd1085e3987f4367b206424d430227caedd036782319dc6fccb3f7b79fd25b0"
+   },
+   "BatchViewDocuments": {
+    "exported": true,
+    "sha256": "4e8efb6a53a407725980a0cd216a71a91aef1b823d2395180683ffda7aed3ddb"
+   },
+   "RecoveryCounts": {
+    "exported": true,
+    "sha256": "ce49c2da570b663507e7fe1c15bc7aa44fca8d626aae9dbdd3c5e36a07427c1c"
+   },
+   "PreacceptCollection": {
+    "exported": true,
+    "sha256": "5fd7666638392680103da0a4dc8da1f9ed7351d7858856fa99e74c43ab979c1b"
+   },
+   "SettlementQuiescence": {
+    "exported": true,
+    "sha256": "a35d2cfdaaaacd352961e43f2876d20c3540b303e6c74ee367b20ce5636b4649"
+   },
+   "StatusSnapshot": {
+    "exported": true,
+    "sha256": "5880d81419050b3911f5b7f099e73e9b69e699473a5d44e299baab5b4fabe472"
    },
    "RunnerObservation": {
     "exported": true,
     "sha256": "b8709f45d3037cced0c4d9fcfaab80a2070b30df36d7a7bc01cc1b3000ecd7ac"
+   },
+   "UnitObserve": {
+    "exported": true,
+    "sha256": "68021841357991e1f178cf981a5d21baac5c66800e9c65e21df663142e2b320d"
+   },
+   "FencedEngine": {
+    "exported": true,
+    "sha256": "f872c74084e1b87a852976ee44c9c1aa4ebd599dd834f1b113ecbc0d21277996"
    }
   }
  }

@@ -15,19 +15,19 @@ test("P0-7: every durable boundary in the code has a registered kill/retry/resta
 test("P0-7: a new boundary without a test, a stale entry, or a test that does not exist is a finding", () => {
   const root = mkdtempSync(join(tmpdir(), "oma-p0-7-"));
   try {
-    mkdirSync(join(root, "src")); mkdirSync(join(root, "test")); mkdirSync(join(root, "implementation"));
-    writeFileSync(join(root, "production-files.txt"), "src/owner.ts\n");
-    writeFileSync(join(root, "src/owner.ts"), "export function commitIt(store) { store.transaction(tx => tx.x()); }\n");
+    mkdirSync(join(root, "apps/oma/src"), {recursive:true}); mkdirSync(join(root, "test")); mkdirSync(join(root, "implementation"));
+    writeFileSync(join(root, "production-files.txt"), "apps/oma/src/owner.ts\n");
+    writeFileSync(join(root, "apps/oma/src/owner.ts"), "export function commitIt(store) { store.transaction(tx => tx.x()); }\n");
     writeFileSync(join(root, "test/it.test.mjs"), 'test("kills right after commitIt", () => {});\n');
     const registry = boundaries => writeFileSync(join(root, "implementation/durable-boundaries.json"), JSON.stringify({ boundaries }));
     registry([]);
     assert.match(checkDurableBoundaries(root).join("\n"), /src\/owner\.ts#commitIt: a durable boundary \(db-commit\) has no registered/);
-    registry([{ owner: "src/owner.ts#commitIt", fact: "a fact", tests: [{ file: "test/it.test.mjs", title: "a test that is not there", injection: "logical" }] },
-      { owner: "src/owner.ts#gone", fact: "a fact", tests: [{ file: "test/it.test.mjs", title: "kills right after commitIt", injection: "logical" }] }]);
+    registry([{ owner: "apps/oma/src/owner.ts#commitIt", fact: "a fact", tests: [{ file: "test/it.test.mjs", title: "a test that is not there", injection: "logical" }] },
+      { owner: "apps/oma/src/owner.ts#gone", fact: "a fact", tests: [{ file: "test/it.test.mjs", title: "kills right after commitIt", injection: "logical" }] }]);
     const findings = checkDurableBoundaries(root).join("\n");
     assert.match(findings, /has no test titled "a test that is not there"/);
     assert.match(findings, /src\/owner\.ts#gone: registered, but no such durable boundary exists/);
-    registry([{ owner: "src/owner.ts#commitIt", fact: "a fact", tests: [{ file: "test/it.test.mjs", title: "kills right after commitIt", injection: "logical" }] }]);
+    registry([{ owner: "apps/oma/src/owner.ts#commitIt", fact: "a fact", tests: [{ file: "test/it.test.mjs", title: "kills right after commitIt", injection: "logical" }] }]);
     assert.deepEqual(checkDurableBoundaries(root), []);
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
@@ -35,12 +35,12 @@ test("P0-7: a new boundary without a test, a stale entry, or a test that does no
 test("P0-7, P0V-59: a primitive imported under another name is still a boundary", () => {
   const root = mkdtempSync(join(tmpdir(), "oma-p0-7-alias-"));
   try {
-    mkdirSync(join(root, "src")); mkdirSync(join(root, "implementation"));
-    writeFileSync(join(root, "production-files.txt"), "src/owner.ts\n");
-    writeFileSync(join(root, "src/owner.ts"),
+    mkdirSync(join(root, "apps/oma/src"), {recursive:true}); mkdirSync(join(root, "implementation"));
+    writeFileSync(join(root, "production-files.txt"), "apps/oma/src/owner.ts\n");
+    writeFileSync(join(root, "apps/oma/src/owner.ts"),
       'import { replaceDerivedFile as recordIt } from "./storage/durable-fs.js";\nexport function keep(path) { recordIt(path, "x"); }\n');
     writeFileSync(join(root, "implementation/durable-boundaries.json"), JSON.stringify({ boundaries: [] }));
-    assert.deepEqual(durableBoundaries(root).map(entry => entry.owner), ["src/owner.ts#keep"]);
+    assert.deepEqual(durableBoundaries(root).map(entry => entry.owner), ["apps/oma/src/owner.ts#keep"]);
     assert.match(checkDurableBoundaries(root).join("\n"), /src\/owner\.ts#keep: a durable boundary \(file-publication\) has no registered/);
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
@@ -48,9 +48,9 @@ test("P0-7, P0V-59: a primitive imported under another name is still a boundary"
 test("P0V-83 / R6-08: a test says how it stops the process, and its code has to show it", () => {
   const root = mkdtempSync(join(tmpdir(), "oma-p0-7-injection-"));
   try {
-    mkdirSync(join(root, "src")); mkdirSync(join(root, "test/fixtures"), { recursive: true }); mkdirSync(join(root, "implementation"));
-    writeFileSync(join(root, "production-files.txt"), "src/owner.ts\n");
-    writeFileSync(join(root, "src/owner.ts"), "export function commitIt(store) { store.transaction(tx => tx.x()); }\n");
+    mkdirSync(join(root, "apps/oma/src"), {recursive:true}); mkdirSync(join(root, "test/fixtures"), { recursive: true }); mkdirSync(join(root, "implementation"));
+    writeFileSync(join(root, "production-files.txt"), "apps/oma/src/owner.ts\n");
+    writeFileSync(join(root, "apps/oma/src/owner.ts"), "export function commitIt(store) { store.transaction(tx => tx.x()); }\n");
     writeFileSync(join(root, "test/fixtures/killer.ts"), 'export function killWorker(child) { child.kill("SIGKILL"); }\n');
     writeFileSync(join(root, "test/it.test.mjs"), [
       'import { killWorker } from "./fixtures/killer.js";',
@@ -65,7 +65,7 @@ test("P0V-83 / R6-08: a test says how it stops the process, and its code has to 
     ].join("\n"));
     const check = (title, injection) => {
       writeFileSync(join(root, "implementation/durable-boundaries.json"), JSON.stringify({ boundaries: [
-        { owner: "src/owner.ts#commitIt", fact: "a fact", tests: [{ file: "test/it.test.mjs", title, ...(injection === undefined ? {} : { injection }) }] }] }));
+        { owner: "apps/oma/src/owner.ts#commitIt", fact: "a fact", tests: [{ file: "test/it.test.mjs", title, ...(injection === undefined ? {} : { injection }) }] }] }));
       return checkDurableBoundaries(root).join("\n");
     };
     // Accept: the injection is in the test, in a helper it calls, in a fixture it imports, or in the child it runs.

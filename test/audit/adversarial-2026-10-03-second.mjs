@@ -1,3 +1,4 @@
+import { createReconcileModule } from "#oma-test/app/broker/reconcile-composition";
 /** Second-pass contract oracles. Run after build with the local-test guard.
  * REQUIRED behavior is asserted; failures document unfixed defects.
  * Only disposable Git/SQLite/files and a fixture Unix socket are used.
@@ -12,9 +13,9 @@ import { fixture, messages, workerFile } from "../../dist/test/fixtures/review-f
 import { AdmissionGate, bindAdmissionGate } from "../../dist/src/domain/admission.js";
 import { publishedRefFor } from "../../dist/src/domain/derived.js";
 import { StoreError } from "../../dist/src/domain/errors.js";
-import { ReconcileModule } from "../../dist/src/reconcile.js";
+import { ReconcileModule } from "@oma/reconcile";
 import { registerOmaTools } from "../../dist/src/extension/mail-tools.js";
-import { prepareReplyEffects } from "../../dist/src/cli/effects/mail.js";
+import { prepareReplyEffects } from "#oma-test/app/cli/effects/mail";
 import { FrameParser, encodeFrame } from "../../dist/src/frame.js";
 import { principalMailbox, readMailbox } from "../../dist/src/tui/sources/mail.js";
 import { defaultHostConfig } from "../../dist/src/config/defaults.js";
@@ -50,7 +51,7 @@ test("AV-20261003-09: observed challenge-ref corruption must immediately fence f
     catch (error) { freshError = error.code; }
     // Control: the actual sweep DOES recognize exactly the same ref conflict
     // and closes the same gate. This is a foreground/background divergence.
-    const reconcile = new ReconcileModule(f.store, f.mail, f.module,
+    const reconcile = createReconcileModule(f.store, f.mail, f.module, null,
       { observeAsync: async () => ({ activeState: "inactive" }), confirmDead: () => true }, {},
       { projectGit: f.projectGit, hasGoal: () => false, activationAllowed: () => false });
     await assert.rejects(reconcile.sweep(), { code: "STORE_CORRUPT" });

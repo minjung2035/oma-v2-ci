@@ -1,13 +1,13 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { TuiApp, type AppPorts } from "../src/tui/app.js";
+import { TuiApp, type AppPorts } from "@oma/tui/app";
 import { decodeKeys } from "./fixtures/keys.js";
-import { KeyDecoder } from "../src/tui/keys.js";
-import { StoreError } from "../src/domain/errors.js";
-import type { ConfigField, ExtensionRow, MailboxRead } from "../src/tui/model.js";
+import { KeyDecoder } from "@oma/tui/keys";
+import { StoreError } from "@oma/domain/errors";
+import type { ConfigField, ExtensionRow, MailboxRead } from "@oma/tui/model";
 import { unknownDashboard } from "./fixtures/dashboard.js";
-import type { Terminal } from "../src/tui/screen.js";
-import { CONVERSATION_BOUNDS, TERMINAL_BOUNDS, humanPromptByteLimit, humanPromptFrameBytes } from "../src/domain/surface-bounds.js";
+import type { Terminal } from "@oma/tui/screen";
+import { CONVERSATION_BOUNDS, TERMINAL_BOUNDS, humanPromptByteLimit, humanPromptFrameBytes } from "@oma/domain/surface-bounds";
 
 const ESC = String.fromCharCode(27);
 const CTRL_X = Buffer.from([0x18]);
@@ -64,7 +64,7 @@ function harness(overrides: Partial<AppPorts> = {}, frameBytes = 262144): Harnes
   ];
   const dashboard = () => unknownDashboard();
   const extensions = (): readonly ExtensionRow[] => [
-    { id: "dist/src/pi-extension.js", principal: true, workers: true, locked: true },
+    { id: "packages/extension/dist/index.js", principal: true, workers: true, locked: true },
     { id: "extensions/review.js", principal: false, workers: false, locked: false },
   ];
   const mail = (): MailboxRead => ({ rows: [

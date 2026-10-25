@@ -1,14 +1,16 @@
+import { serializePlanIntent } from "./fixtures/plan.js";
 import test, { type TestContext } from "node:test";
 import assert from "node:assert/strict";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
-import { Store, StoreError } from "../src/store.js";
-import { requestHash } from "../src/hash.js";
+import { Store } from "@oma/storage";
+import { StoreError } from "@oma/domain/errors";
+import { requestHash } from "@oma/domain/request-identity";
 import { makeValidAgent } from "./fixtures/spec.js";
 import { makeValidMessagePlan } from "./fixtures/valid.js";
-import { AdmissionGate, bindAdmissionGate } from "../src/domain/admission.js";
+import { AdmissionGate, bindAdmissionGate } from "@oma/domain/admission";
 
 const OP = "op-00000000-0000-4000-8000-000000000012";
 const MESSAGE = "m-00000000-0000-4000-8000-000000000012-0";
@@ -24,7 +26,7 @@ function fixture(t: TestContext) {
   store.transaction(tx => {
     tx.insertAgent(makeValidAgent("alice")); tx.insertAgent(makeValidAgent("bob"));
     tx.acceptOperation({ id: OP, actor: "alice", requestKey: "r12-mail", requestHash: requestHash("mail.send", input),
-      kind: "mail.send", payloadJson: JSON.stringify(input), planJson: JSON.stringify({ kind: "mail.send", message }) });
+      kind: "mail.send", payloadJson: JSON.stringify(input), planJson: serializePlanIntent({ kind: "mail.send", message }) });
     tx.insertDeliveries([{ messageId: MESSAGE, recipient: "alice", operationId: OP }]);
   });
   assert.equal(store.getDelivery(MESSAGE, "alice")?.materialized, 0);
@@ -114,7 +116,7 @@ test("P0V-56 / R01, F1: every order of the wall clock across a delivery's stages
       store.transaction(tx => {
         tx.insertAgent(makeValidAgent("alice"));
         tx.acceptOperation({ id: OP, actor: "alice", requestKey: "orders", requestHash: requestHash("mail.send", input),
-          kind: "mail.send", payloadJson: JSON.stringify(input), planJson: JSON.stringify({ kind: "mail.send", message: makeValidMessagePlan(OP) }) });
+          kind: "mail.send", payloadJson: JSON.stringify(input), planJson: serializePlanIntent({ kind: "mail.send", message: makeValidMessagePlan(OP) }) });
         tx.insertDeliveries([{ messageId: MESSAGE, recipient: "alice", operationId: OP }]);
       });
       t.mock.timers.setTime(prepared); batch(store);

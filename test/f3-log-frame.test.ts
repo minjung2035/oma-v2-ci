@@ -3,17 +3,17 @@ import assert from "node:assert/strict";
 import type {
   AuthContext,
   ProtocolLimits,
-} from "../implementation/contracts.js";
-import { PublicDispatcher } from "../src/broker/public-dispatcher.js";
-import { errorAnswer } from "../src/broker/replies.js";
-import { publicFailure } from "../src/domain/errors.js";
-import { boundedLogOutput } from "../src/broker/logs.js";
+} from "@oma/contracts";
+import { PublicDispatcher } from "@oma/broker/public-dispatcher";
+import { errorAnswer } from "@oma/broker/replies";
+import { publicFailure } from "@oma/domain/errors";
+import { boundedLogOutput } from "@oma/broker/logs";
 import {
   boundedLogResponse,
   MIN_LOG_FRAME_BYTES,
-} from "../src/protocol/log-response.js";
-import { ConnectionDecoder, encodeFrame } from "../src/frame.js";
-import { decodeRpcReply } from "../src/protocol/response-codec.js";
+} from "@oma/protocol/log-response";
+import { ConnectionDecoder, encodeFrame } from "@oma/protocol/frame";
+import { decodeRpcReply } from "@oma/protocol/response-codec";
 import { makeValidAgent } from "./fixtures/spec.js";
 
 const limits: ProtocolLimits = {
@@ -52,7 +52,8 @@ function dispatcher(text: string, frameBytes: number) {
     mail: { send: async () => unused() },
     units: { statusSnapshot: async () => ({ observedAtMs: 1, units: new Map(), failure: null }) },
     views: { status: () => [] },
-    git: null,
+    review: null,
+git: null,
     lifecycle: {
       create: async () => unused(),
       start: unused,
@@ -63,7 +64,7 @@ function dispatcher(text: string, frameBytes: number) {
     limits: { ...limits, frameBytes },
     isDraining: () => false,
     assertAdmission() {},
-    admitResource: () => () => undefined,
+
     refreshViews() {},
     failureAnswer: (id, error) => errorAnswer(id, publicFailure(error)),
     readLogs: async () => ({

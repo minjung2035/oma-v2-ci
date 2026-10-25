@@ -1,3 +1,4 @@
+import { engineSettingsFiles } from "#oma-test/app/engine/settings-files";
 // Reproduces an OPEN finding; exit 0 means the defect was observed with its control.
 import fs from 'node:fs';
 import os from 'node:os';
@@ -21,7 +22,7 @@ const child = `
 `;
 let during;
 try {
-  new OmaSettingsStorage(agentDir).withLock('global', current => {
+  new OmaSettingsStorage(engineSettingsFiles, agentDir).withLock('global', current => {
     const before = JSON.parse(current);
     const result = spawnSync(process.execPath, ['--input-type=module', '-e', child], { encoding: 'utf8', timeout: 10000 });
     if (result.status !== 0) throw new Error(`Pi save failed: ${result.status}: ${result.stderr}`);

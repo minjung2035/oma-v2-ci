@@ -15,9 +15,9 @@ import { createServer, type Server } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { buildEml } from "../src/mail/serialize.js";
+import { buildEml } from "@oma/mail/serialize";
 
-const CLI = fileURLToPath(new URL("../src/cli.js", import.meta.url));
+const CLI = fileURLToPath(new URL("../../apps/oma/dist/cli.js", import.meta.url));
 
 interface Peer { readonly path: string; readonly frames: Record<string, unknown>[]; close(): Promise<void> }
 /** Records every request frame and reports an unavailable fixture, never success. */

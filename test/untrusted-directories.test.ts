@@ -14,10 +14,10 @@ import { syncBuiltinESMExports } from "node:module";
 import { spawnSync } from "node:child_process";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { observeDeliveryReceipt, publishDeliveryReceipt } from "../src/storage/delivery-receipt.js";
-import { runnerReceiptPathAt, runnerSessionDirPathAt, workspacePathAt } from "../src/storage/paths.js";
-import { WorkspaceCoordinator } from "../src/lifecycle/workspace.js";
-import { CreationPublicationObserver } from "../src/lifecycle/create-publication.js";
+import { observeDeliveryReceipt, publishDeliveryReceipt } from "@oma/storage/delivery-receipt";
+import { runnerReceiptPathAt, runnerSessionDirPathAt, workspacePathAt } from "@oma/domain/paths";
+import { WorkspaceCoordinator } from "@oma/git/workspace";
+import { CreationPublicationObserver } from "@oma/lifecycle/create-publication";
 import { boundaryOf, completeSession, preparedFixture } from "./fixtures/delivery-receipt.js";
 import { TEST_VIEW_LIMITS } from "./fixtures/limits.js";
 
@@ -91,7 +91,7 @@ test("AV4 / INV03: once readiness is a settled fact, create recovery runs no Git
   try {
     const { projectGit, oid } = project(root);
     const workspace = workspacePathAt(root, "alice");
-    const plan = { spec: { name: "alice", from: oid, profile: "p", resources: {} }, workspacePath: workspace, specHash: "h" } as never;
+    const plan = { spec: { name: "alice", from: oid, profile: "p" }, workspacePath: workspace, specHash: "h" } as never;
     const workspaces = new WorkspaceCoordinator({ stateRoot: root, projectGit });
     await workspaces.ensure(plan, false);
     // The Resident has had its workspace: its HEAD is whatever it wrote.
@@ -104,9 +104,9 @@ test("AV4 / INV03: once readiness is a settled fact, create recovery runs no Git
     let ensured = 0;
     const agent = { specHash: "h", incarnation: 0, desired: "enabled" };
     const store = { getAgent: () => agent, transaction: (body: (tx: unknown) => unknown) => body({ updateAgent: () => { throw new Error("no change is due"); } }) };
-    const observer = new CreationPublicationObserver(store as never, { ensureResident: () => { ensured += 1; } } as never, root);
+    const observer = new CreationPublicationObserver(store as never, { ensureResident: () => { ensured += 1; } } as never, root, workspaces);
     const operation = { id: "op", actor: "principal", planJson: "{}", state: "pending",
-      plan: { existingCreation: null, initialMessage: {}, workspacePath: workspace, specHash: "h", spec: { name: "alice", from: oid, profile: "p", resources: {} } } } as never;
+      plan: { existingCreation: null, initialMessage: {}, workspacePath: workspace, specHash: "h", spec: { name: "alice", from: oid, profile: "p" } } } as never;
     assert.doesNotThrow(() => observer.ready(operation));
     agent.incarnation = 1;
     assert.doesNotThrow(() => observer.ready(operation));

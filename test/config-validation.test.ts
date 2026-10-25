@@ -1,8 +1,9 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { join } from "node:path";
-import type { HostConfigV1 } from "../implementation/contracts.js";
-import { Store } from "../src/store.js";
+import { writeFileSync } from "node:fs";
+import type { HostConfig } from "@oma/contracts";
+import { Store } from "@oma/storage";
 import { makeValidAgent } from "./fixtures/spec.js";
 import { makeValidOperation } from "./fixtures/valid.js";
 import { createCompleteConfigurationFixture } from "./fixtures/configuration.js";
@@ -13,19 +14,19 @@ import {
   commitField,
   readSettings,
   settingsOf,
-} from "../src/application/settings.js";
+} from "#oma-test/app/application/settings";
 
 test("V11C: the pure validator returns a deep immutable snapshot with own-key maps", async () => {
   const fixture = createCompleteConfigurationFixture();
   try {
-    const raw = structuredClone(fixture.config) as HostConfigV1;
+    const raw = structuredClone(fixture.config) as HostConfig;
     raw.modelProfiles["toString"] = {
       ...raw.modelProfiles.standard!,
       model: "prototype-sensitive",
     };
     raw.agentProfiles.resident!.modelProfile = "toString";
-    const module = (await import("../src/config.js")) as typeof import("../src/config.js") & {
-      validateConfig?: (value: unknown) => HostConfigV1;
+    const module = (await import("@oma/config")) as typeof import("@oma/config") & {
+      validateConfig?: (value: unknown) => HostConfig;
     };
     assert.equal(typeof module.validateConfig, "function", "pure config validator is not exported");
     const validated = module.validateConfig!(raw);
@@ -47,7 +48,7 @@ test("V11C: the pure validator returns a deep immutable snapshot with own-key ma
     assert.deepEqual(validated.agentProfiles.resident!.capabilities, []);
     assert.equal(validated.modelProfiles["toString"]!.model, "prototype-sensitive");
     assert.throws(() => {
-      (validated.initialResidents as HostConfigV1["initialResidents"]).push({
+      (validated.initialResidents as HostConfig["initialResidents"]).push({
         name: "later",
         profile: "resident",
         brief: "later",
@@ -75,6 +76,11 @@ test("V11C: zero bootstrap seeds expose no editable profile target", () => {
 
 test("V11C: config edits do not rewrite accepted Store identities or frozen specs", () => {
   const fixture = createCompleteConfigurationFixture();
+  // This is a Worker-only edit: use a reference not shared with Principal.
+  const config = structuredClone(fixture.config);
+  config.modelProfiles["principal-only"] = { ...config.modelProfiles.standard! };
+  config.agentProfiles.principal!.modelProfile = "principal-only";
+  writeFileSync(fixture.input, JSON.stringify(config));
   const store = new Store(join(fixture.root, "runtime.sqlite"));
   try {
     const agent = makeValidAgent("alice");

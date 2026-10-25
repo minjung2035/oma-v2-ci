@@ -1,28 +1,24 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, mkdirSync, readFileSync, writeFileSync, rmSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
-import { pathToFileURL } from "node:url";
+import { readFileSync } from "node:fs";
+import { Script } from "node:vm";
 import ts from "typescript";
+import { StoreError } from "@oma/domain/errors";
+import { reused } from "@oma/domain/request-identity";
 
-// Executes the actual mechanism with controlled reader/transition collaborators.
-// Full Store + SQLite characterization is a separate integration oracle.
-const root = mkdtempSync(join(tmpdir(), "oma-journal-policy-"));
-mkdirSync(join(root, "storage"));
-mkdirSync(join(root, "domain"));
-writeFileSync(join(root, "package.json"), '{"type":"module"}');
-// DR3: errors names its detail vocabulary through these two pure modules.
-for (const name of ["storage/operation-journal", "domain/errors", "domain/capabilities", "domain/identifiers"]) {
-  const source = readFileSync(`src/${name}.ts`, "utf8");
-  const output = ts.transpileModule(source, { compilerOptions: {
-    target: ts.ScriptTarget.ES2023, module: ts.ModuleKind.ESNext,
-  } });
-  writeFileSync(join(root, `${name}.js`), output.outputText);
-}
-const { OperationJournal, reused } = await import(pathToFileURL(join(root, "storage/operation-journal.js")).href);
-const { StoreError } = await import(pathToFileURL(join(root, "domain/errors.js")).href);
-process.once("exit", () => rmSync(root, { recursive: true, force: true }));
+// Execute the actual mechanism with controlled transition collaborators and
+// its declared domain dependency. SQLite characterization remains separate.
+const code = ts.transpileModule(readFileSync("packages/storage/src/operation-journal.ts", "utf8"), {
+  compilerOptions: { target: ts.ScriptTarget.ES2023, module: ts.ModuleKind.CommonJS },
+}).outputText;
+const module = { exports: {} };
+new Script(code).runInNewContext({ module, exports: module.exports,
+  require(name) {
+    assert.ok(["@oma/domain/errors", "@oma/domain/request-identity"].includes(name), name);
+    return name === "@oma/domain/errors" ? { StoreError } : { reused };
+  },
+});
+const { OperationJournal } = module.exports;
 
 function fixture() {
   let live = false, row = null, insertError = null, racedRow = null;
@@ -111,10 +107,10 @@ test("P3 Journal: readers preserve decoded object identity and recoverable order
 });
 
 test("P3 Journal: mechanism has no SQL, callback workflow, or effect import", () => {
-  const source = ts.createSourceFile("journal.ts", readFileSync("src/storage/operation-journal.ts", "utf8"), ts.ScriptTarget.Latest, true);
+  const source = ts.createSourceFile("journal.ts", readFileSync("packages/storage/src/operation-journal.ts", "utf8"), ts.ScriptTarget.Latest, true);
   const imports = source.statements.filter(ts.isImportDeclaration)
     .filter(node => !node.importClause?.isTypeOnly).map(node => node.moduleSpecifier.text);
-  assert.deepEqual(imports, ["../domain/errors.js"]);
+  assert.deepEqual(imports, ["@oma/domain/errors", "@oma/domain/request-identity"]);
   const calls = [];
   const visit = node => { if (ts.isCallExpression(node)) calls.push(node.expression.getText(source)); ts.forEachChild(node, visit); };
   visit(source);

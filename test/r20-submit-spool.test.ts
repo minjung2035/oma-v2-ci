@@ -4,11 +4,11 @@ import { createHash } from "node:crypto";
 import { chmodSync, existsSync, linkSync, mkdtempSync, readFileSync, renameSync, rmSync, statSync, symlinkSync, unlinkSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import type { BlobDescriptor } from "../implementation/contracts.js";
-import { generateOperationId } from "../src/ids.js";
-import { StoreError } from "../src/domain/errors.js";
-import { submitBundlePathAt } from "../src/storage/paths.js";
-import { prepareSubmitSpool, observeFrozenBundle, requireFrozenBundle, type PreparedSubmitSpool } from "../src/storage/submit-spool.js";
+import type { BlobDescriptor } from "@oma/contracts";
+import { generateOperationId } from "@oma/native/identity";
+import { StoreError } from "@oma/domain/errors";
+import { submitBundlePathAt } from "@oma/domain/paths";
+import { prepareSubmitSpool, observeFrozenBundle, requireFrozenBundle, type PreparedSubmitSpool } from "@oma/storage/submit-spool";
 
 // File/ownership boundary tests only. These do not claim that a namespace,
 // cgroup, systemd unit or Git candidate check was executed successfully.

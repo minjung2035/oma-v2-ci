@@ -1,18 +1,21 @@
+import { testBroker } from "./helpers/broker-fixture.js";
+import { createLifecycleModule } from "#oma-test/app/broker/lifecycle-composition";
+import { createMailModule } from "#oma-test/app/broker/mail-composition";
 // R31: real facade composition and existing fault hooks must reach the moved owners.
 import test from "node:test";
 import assert from "node:assert/strict";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type { AuthContext } from "../implementation/contracts.js";
-import { Store } from "../src/store.js";
-import { MailModule, expandAddresses } from "../src/mail.js";
-import { expandAddresses as routingOwner } from "../src/mail/routing.js";
-import { Broker } from "../src/broker.js";
-import { UnitsModule } from "../src/units.js";
-import { ViewsModule } from "../src/views.js";
-import { LifecycleModule } from "../src/lifecycle.js";
-import { ALL_CAPS, TEST_RESOURCES, makeValidAgent, makeValidResolvedSpec } from "./fixtures/spec.js";
+import type { AuthContext } from "@oma/contracts";
+import { Store } from "@oma/storage";
+import { MailModule, expandAddresses } from "@oma/mail";
+import { expandAddresses as routingOwner } from "@oma/mail/routing";
+import { Broker } from "@oma/broker";
+import { UnitsModule } from "@oma/platform-linux/units";
+import { ViewsModule } from "#oma-test/app/views";
+import { LifecycleModule } from "@oma/lifecycle";
+import { ALL_CAPS, makeValidAgent, makeValidResolvedSpec } from "./fixtures/spec.js";
 import { sendWithStop, StopSignal } from "./fixtures/mail-faults.js";
 import { goalPublishedAt } from "./fixtures/goal.js";
 
@@ -24,15 +27,15 @@ test("R31 public facade delegates status and mutation with the original authorit
   const store = new Store(join(root, "runtime.sqlite"), 5, { society: "demo" });
   t.after(() => { try { store.close(); } finally { rmSync(root, { recursive: true, force: true }); } });
   store.transaction(tx => { tx.insertAgent(makeValidAgent("alice")); });
-  const mail = new MailModule({ stateRoot: root, society: "demo" }, store, 64);
-  const units = new UnitsModule("demo", { node: process.execPath, libdir: root, state: root, society: "demo", agent: "", config: join(root, "config.json"), run: join(root, "oma", "demo") }, join(root, "units"), { p: TEST_RESOURCES });
+  const mail = createMailModule({ stateRoot: root, society: "demo" }, store, 64);
+  const units = new UnitsModule("demo", { node: process.execPath, libdir: root, state: root, society: "demo", agent: "", config: join(root, "config.json"), run: join(root, "oma", "demo") }, join(root, "units"));
   // WP23: status observes through the batched, asynchronous unit read.
   t.mock.method(units, "observeStatus", async (agents: readonly string[]) =>
     new Map(agents.map(agent => [agent, { activeState: "inactive", subState: "dead", result: "success", execMainStatus: 0, cgroup: "", invocationId: "" }])));
   const views = new ViewsModule(store, root, "demo", "p");
-  const lifecycle = new LifecycleModule(store, units, { stateRoot: root, projectGit: join(root, "project.git"), society: "demo", hasGoal: () => false, activationAllowed: () => true },
+  const lifecycle = createLifecycleModule(store, units, { stateRoot: root, projectGit: join(root, "project.git"), society: "demo", hasGoal: () => false, activationAllowed: () => true },
     (_parent, input) => makeValidResolvedSpec(input.name, "p", ALL_CAPS, input.from, input.brief), mail);
-  const broker = new Broker(store, mail, units, views, lifecycle, null, null, { stateRoot: root, runRoot: join(root, "run"), society: "demo", hasGoal: goalPublishedAt(root) });
+  const broker = testBroker({ store: store, mail: mail, units: units, views: views, lifecycle: lifecycle, git: null, reviews: null, reconcile: null, paths: { stateRoot: root, runRoot: join(root, "run"), society: "demo", hasGoal: goalPublishedAt(root) } });
   const before = Date.now();
   const status = await broker.dispatch(auth, { v: 1, id: "status", method: "status.get", params: { agent: "alice" } }, null);
   assert.ok("ok" in status && status.ok === true && "result" in status);
@@ -58,7 +61,7 @@ test("R31 acceptance fault hook still intercepts the physical Store transaction 
   const store = new Store(join(root, "runtime.sqlite"), 5, { society: "demo" });
   t.after(() => { try { store.close(); } finally { rmSync(root, { recursive: true, force: true }); } });
   store.transaction(tx => { tx.insertAgent(makeValidAgent("alice")); });
-  const mail = new MailModule({ stateRoot: root, society: "demo" }, store, 64);
+  const mail = createMailModule({ stateRoot: root, society: "demo" }, store, 64);
   await assert.rejects(sendWithStop(mail, store, auth, "r31-mail", { to: ["alice"], subject: "fault", kind: "message", body: "frozen" }, "accepted"),
     error => error instanceof StopSignal && error.point === "accepted");
   const accepted = store.getOperation("alice", "r31-mail")!;

@@ -1,20 +1,22 @@
+import { lifecycleEffects } from "#oma-test/app/broker/lifecycle-composition";
+import { lifecycleLedger } from "#oma-test/app/broker/lifecycle-ledger";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { mkdtempSync, readFileSync, existsSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { Store } from "../src/store.js";
-import { sha256Hex } from "../src/hash.js";
-import { QuarantineImporter } from "../src/git/quarantine.js";
-import { ContextRepository } from "../src/git/context-repository.js";
-import { CreateCoordinator } from "../src/lifecycle/create.js";
-import { WorkspaceCoordinator } from "../src/lifecycle/workspace.js";
-import { LifecyclePolicy } from "../src/lifecycle/policy.js";
-import { UnitsModule } from "../src/units.js";
+import { Store } from "@oma/storage";
+import { sha256Hex } from "@oma/domain/canonical-json";
+import { QuarantineImporter } from "@oma/git/quarantine";
+import { ContextRepository } from "@oma/git/context-repository";
+import { CreateCoordinator } from "@oma/lifecycle/create";
+import { WorkspaceCoordinator } from "@oma/git/workspace";
+import { LifecyclePolicy } from "@oma/lifecycle/policy";
+import { UnitsModule } from "@oma/platform-linux/units";
 import { gitFixture, seedGit, gitCommand, gitAuth } from "./fixtures/git-crash.js";
 import { makeValidAgent, makeValidResolvedSpec, ALL_CAPS } from "./fixtures/spec.js";
 import { removeTree } from "./fixtures/cleanup.js";
-import { StoreError, publicFailure } from "../src/domain/errors.js";
+import { StoreError, publicFailure } from "@oma/domain/errors";
 
 function deferred() {
   let resolve!: () => void;
@@ -120,8 +122,8 @@ test("R37: creation awaits a real private workspace before unit publication and 
   const units = new UnitsModule("crash", { node: process.execPath, libdir: process.cwd(), state: f.root, society: "crash", agent: "", config: join(f.root, "config.json"), run: join(f.root, "oma", "crash") }, join(f.root, "units"));
   let unitPublications = 0;
   units.ensureResident = () => { unitPublications++; throw new Error("unit publication must not be reached after revocation"); };
-  const policy = new LifecyclePolicy(f.store, (_parent, input) => makeValidResolvedSpec(input.name, "p", ALL_CAPS, input.from, input.brief), null);
-  const creates = new CreateCoordinator(f.store, units, paths, policy, workspace, f.mail);
+  const policy = new LifecyclePolicy(lifecycleLedger(f.store), (_parent, input) => makeValidResolvedSpec(input.name, "p", ALL_CAPS, input.from, input.brief));
+  const creates = new CreateCoordinator(lifecycleLedger(f.store), units, paths, policy, workspace, f.mail, lifecycleEffects(paths.stateRoot));
   let work: Promise<unknown> | undefined;
   try {
     work = creates.create(f.auth, { name: "child", from: f.base, brief: "child" }, "create-await");
@@ -158,8 +160,8 @@ test("AV27 / GIT-002: a new workspace's origin is the canonical repository as it
       const units = new UnitsModule("crash", { node: process.execPath, libdir: process.cwd(), state: f.root, society: "crash", agent: "", config: join(f.root, "config.json"), run: join(f.root, "oma", "crash") }, join(f.root, "units"));
       // Stop after the workspace: this is about what the preparation left.
       units.ensureResident = () => { throw new Error("stop after the workspace"); };
-      const policy = new LifecyclePolicy(f.store, (_parent, input) => makeValidResolvedSpec(input.name, "p", ALL_CAPS, input.from, input.brief), null);
-      const creates = new CreateCoordinator(f.store, units, paths, policy, workspace, f.mail);
+      const policy = new LifecyclePolicy(lifecycleLedger(f.store), (_parent, input) => makeValidResolvedSpec(input.name, "p", ALL_CAPS, input.from, input.brief));
+      const creates = new CreateCoordinator(lifecycleLedger(f.store), units, paths, policy, workspace, f.mail, lifecycleEffects(paths.stateRoot));
       await creates.create(f.auth, { name: "child", from: f.base, brief: "child" }, "create-origin").catch(() => undefined);
       const accepted = f.store.getOperation("a", "create-origin");
       assert.ok(accepted?.kind === "agent.create");

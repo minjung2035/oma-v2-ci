@@ -1,15 +1,18 @@
+import { createReconcileModule } from "#oma-test/app/broker/reconcile-composition";
+import { createLifecycleModule } from "#oma-test/app/broker/lifecycle-composition";
+import { createMailModule } from "#oma-test/app/broker/mail-composition";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type { UnitObservation } from "../implementation/contracts.js";
-import { Store } from "../src/store.js";
-import { MailModule } from "../src/mail.js";
-import { UnitsModule } from "../src/units.js";
-import { LifecycleModule } from "../src/lifecycle.js";
-import { ReconcileModule } from "../src/reconcile.js";
-import { parseUnitObservation } from "../src/units/observe.js";
+import type { UnitObservation } from "@oma/contracts";
+import { Store } from "@oma/storage";
+import { MailModule } from "@oma/mail";
+import { UnitsModule } from "@oma/platform-linux/units";
+import { LifecycleModule } from "@oma/lifecycle";
+import { ReconcileModule } from "@oma/reconcile";
+import { parseUnitObservation } from "@oma/platform-linux/units/observe";
 import { makeValidAgent, makeValidResolvedSpec, ALL_CAPS } from "./fixtures/spec.js";
 import { gitAuth } from "./fixtures/git-crash.js";
 
@@ -46,13 +49,13 @@ for (const change of ["none", "stop", "incarnation", "shutdown", "unknown"] as c
         tx.insertAgent(makeValidAgent("principal"));
         tx.insertAgent(makeValidAgent("a", { createdBy: "principal" }));
       });
-      const mail = new MailModule({ stateRoot: root, society: "crash" }, store, 64);
+      const mail = createMailModule({ stateRoot: root, society: "crash" }, store, 64);
       const pending = await mail.send({ ...gitAuth, capabilities: new Set(ALL_CAPS) }, "pending-work", { to: ["a"], subject: "work", kind: "message", body: "work" });
       assert.equal(pending.state, "succeeded");
       const paths = { stateRoot: root, projectGit: join(root, "unused.git"), society: "crash", hasGoal: () => true, activationAllowed: () => true };
-      const lifecycle = new LifecycleModule(store, units, paths,
+      const lifecycle = createLifecycleModule(store, units, paths,
         (_parent, input) => makeValidResolvedSpec(input.name, "p", ALL_CAPS, input.from, input.brief), mail);
-      const reconcile = new ReconcileModule(store, mail, null, units, lifecycle,
+      const reconcile = createReconcileModule(store, mail, null, null, units, lifecycle,
         { projectGit: paths.projectGit, hasGoal: () => true, activationAllowed: () => activation });
       assert.equal(idle.activeState, "inactive", "normal observation fixture must decode");
       sweep = reconcile.sweep();

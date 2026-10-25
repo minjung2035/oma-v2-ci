@@ -18,7 +18,8 @@ import {
 import { pathToFileURL } from "node:url";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { Store, StoreError } from "../src/store.js";
+import { Store } from "@oma/storage";
+import { StoreError } from "@oma/domain/errors";
 
 function databaseDescriptors(root: string): string[] {
   const paths: string[] = [];
@@ -123,7 +124,7 @@ for (const alias of ["uri", "hardlink"] as const) {
       );
       assert.equal(child.error, undefined);
       assert.equal(child.signal, "SIGKILL");
-      assert.equal(readFileSync(path).readUInt32BE(60), 3);
+      assert.equal(readFileSync(path).readUInt32BE(60), 4);
       const candidate =
         alias === "uri" ? pathToFileURL(path).href : join(root, "alias.sqlite");
       if (alias === "hardlink") linkSync(path, candidate);
@@ -546,8 +547,8 @@ for (const state of ["new", "existing"] as const)
       import {DatabaseSync} from 'node:sqlite';
       import {readdirSync,readlinkSync} from 'node:fs';
       const primary=new Error('reader composition failed');
-      mock.module(${JSON.stringify(new URL("../src/storage/ledger-reader.js", import.meta.url).href)}, {namedExports:{LedgerReader:class{constructor(){throw primary;}}}});
-      const {Store}=await import(${JSON.stringify(new URL("../src/store.js", import.meta.url).href)});
+      mock.module(${JSON.stringify(new URL(import.meta.resolve("@oma/storage/ledger-reader"), import.meta.url).href)}, {namedExports:{LedgerReader:class{constructor(){throw primary;}}}});
+      const {Store}=await import(${JSON.stringify(new URL(import.meta.resolve("@oma/storage"), import.meta.url).href)});
       const exec=DatabaseSync.prototype.exec; let owned;
       mock.method(DatabaseSync.prototype,'exec',function(sql){owned=this;return exec.call(this,sql);});
       assert.throws(()=>new Store(${JSON.stringify(join(root, "runtime.sqlite"))}),e=>e===primary);
@@ -584,7 +585,7 @@ for (const state of ["new", "existing"] as const)
   });
 
 for (const mode of ["delete", "retained-wal"] as const) {
-  test(`V04A: supported v3 ${mode} retains its committed operation`, () => {
+  test(`V04A: supported current schema ${mode} retains its committed operation`, () => {
     const root = mkdtempSync(join(tmpdir(), "oma-store-supported-"));
     const path = join(root, "runtime.sqlite");
     const operation = makeValidOperation({
@@ -611,7 +612,7 @@ for (const mode of ["delete", "retained-wal"] as const) {
           [
             "--input-type=module",
             "-e",
-            `import {Store} from ${JSON.stringify(new URL("../src/store.js", import.meta.url).href)};const d=new Store(${JSON.stringify(path)});d.transaction(()=>d.insertOperation(${JSON.stringify(operation)}));process.kill(process.pid,'SIGKILL');`,
+            `import {Store} from ${JSON.stringify(new URL(import.meta.resolve("@oma/storage"), import.meta.url).href)};const d=new Store(${JSON.stringify(path)});d.transaction(()=>d.insertOperation(${JSON.stringify(operation)}));process.kill(process.pid,'SIGKILL');`,
           ],
           {
             encoding: "utf8",
@@ -637,7 +638,7 @@ for (const mode of ["delete", "retained-wal"] as const) {
       assert.equal(row?.state, "pending");
       assert.equal(
         row?.planJson,
-        '{"kind":"route.follow","topic":"dev","agent":"alice"}',
+        '{"version":2,"intent":{"kind":"route.follow","topic":"dev","agent":"alice"}}',
       );
     } finally {
       store?.close();

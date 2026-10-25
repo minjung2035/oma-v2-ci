@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { decodeRpcReply } from "../src/protocol/response-codec.js";
+import { decodeRpcReply } from "@oma/protocol/response-codec";
 
 const id = "correlated-id";
 const operation = "op-00000000-0000-4000-8000-000000000015";

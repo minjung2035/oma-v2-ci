@@ -7,10 +7,10 @@ import { readFileSync, mkdtempSync, writeFileSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import vm from "node:vm";
 import ts from "typescript";
-import { StoreError } from "../dist/src/domain/errors.js";
-import { assertNever } from "../dist/src/domain/exhaustive.js";
-import { PUBLIC_METHODS } from "../dist/src/protocol/methods.js";
-import { preacceptEvent } from "../dist/src/reconcile/preaccept.js";
+import { StoreError } from "@oma/domain/errors";
+import { assertNever } from "@oma/domain/exhaustive";
+import { PUBLIC_METHODS } from "@oma/protocol/methods";
+import { preacceptEvent } from "@oma/reconcile/preaccept-event";
 
 const kinds = Object.entries(PUBLIC_METHODS).filter(([, entry]) => entry.mode === "mutation").map(([kind]) => kind);
 function method(file, className, name) {
@@ -20,9 +20,9 @@ function method(file, className, name) {
   assert.ok(node, `${file}:${className}.${name}`);
   return { node, source, text: node.getText(source) };
 }
-const recover = method("src/reconcile.ts", "ReconcileModule", "recover");
-const startup = method("src/reconcile.ts", "ReconcileModule", "startup");
-const gitReconcile = method("src/git.ts", "GitModule", "reconcile");
+const recover = method("packages/reconcile/src/index.ts", "ReconcileModule", "recover");
+const startup = method("packages/reconcile/src/index.ts", "ReconcileModule", "startup");
+const gitReconcile = method("packages/git/src/index.ts", "GitModule", "reconcile");
 function switchOf(entry) {
   let found;
   function walk(node) {
@@ -43,7 +43,6 @@ function harness(entries, globals) {
 function fixture() {
   const calls = [];
   const value = harness([recover, startup], {
-    reconcileMailOperation: async (_store, _mail, id) => { calls.push(["mail", id]); },
     observeStoreFailure: () => {},
     recoveryCategory: kind => kind,
     // DR10: startup's collection of artifacts made before an acceptance.
@@ -54,17 +53,17 @@ function fixture() {
     dirname: path => path,
   });
   Object.assign(value, {
-    starting: false, inFlight: null, mail: {}, paths: {},
+    effects: { observeStoreFailure() {}, assertCanonicalHealthy: async () => { calls.push(["health"]); }, collectUnacceptedArtifacts() { calls.push(["collect"]); return { removed: [], kept: [] }; } },
+    starting: false, inFlight: null, mail: { reconcileOperation: async id => { calls.push(["mail", id]); } }, paths: {},
     activation: allowed => allowed, admit: () => () => undefined,
     lifecycle: {
       reconcileSociety: id => { calls.push(["society", id]); },
       reconcileCreate: async (id, allowed) => { calls.push(["create", id, allowed]); },
       reconcileAction: (id, allowed) => { calls.push(["action", id, allowed]); },
     },
-    git: { reconcile: async id => { calls.push(["git", id]); },
-      reviews: { advanceAll: async () => { calls.push(["reviews"]); } } },
+    git: { reconcile: async id => { calls.push(["git", id]); } },
+    reviews: { advanceAll: async () => { calls.push(["reviews"]); } },
     quiesceResidents: () => { calls.push(["quiesce"]); },
-    assertCanonicalHealthyAsync: async () => { calls.push(["health"]); },
     retainRecoveryFailure: error => { throw error; },
   });
   return { value, calls };
@@ -127,7 +126,7 @@ test("P3 recovery: Git routes its three kinds and explicitly ignores other exist
       withWriter: async work => work(),
       integrationCoordinator: { reconcile: async operation => { calls.push(["integrate", operation.id]); } },
       submissionCoordinator: { reconcile: async operation => { calls.push(["submit", operation.id]); } },
-      reconcileContext: async operation => { calls.push(["context", operation.id]); },
+      contextCoordinator: { reconcile: async operation => { calls.push(["context", operation.id]); } },
     });
     await value.reconcile(kind);
     const owner = { "git.integrate": "integrate", "git.submit": "submit", "context.publish": "context" }[kind];
@@ -159,9 +158,9 @@ function diagnostics(entry, { extraKind = false, omitKind } = {}) {
       ? `{ id: string; kind: MutationMethod${extraKind ? ' | "fixture.new"' : ""}; state: "pending" }`
       : `DecodedOperation${extra}`;
     writeFileSync(file, `
-      import type { MutationMethod } from "../../implementation/contracts/durable.js";
-      import type { DecodedOperation } from "../../src/storage/operation-codec.js";
-      import { assertNever } from "../../src/domain/exhaustive.js";
+      import type { MutationMethod } from "../../packages/contracts/src/durable.js";
+      import type { DecodedOperation } from "@oma/protocol/operation-codec";
+      import { assertNever } from "../../packages/domain/src/exhaustive.js";
       export function check(operation: ${row}): void {
         switch (operation.kind) {
           ${body}

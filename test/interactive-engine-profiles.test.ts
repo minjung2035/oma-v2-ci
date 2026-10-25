@@ -12,7 +12,7 @@ for (const args of [["login"], ["pi", "list"]]) {
       const engine = join(root, "engine");
       writeFileSync(engine, `#!${process.execPath}\nconsole.log(JSON.stringify({ argv: process.argv.slice(2), home: process.env.HOME, lang: process.env.LANG, tz: process.env.TZ, user: process.env.USER, sentinel: process.env.OMA_INTERACTIVE_SENTINEL, engineHome: process.env.PI_CODING_AGENT_DIR, cwd: process.cwd() }));\n`, { mode: 0o700 });
       for (const name of ["home", "data", "run", "project"]) mkdirSync(join(root, name));
-      const result = spawnSync(process.execPath, [join(process.cwd(), "dist/src/entry/oma.js"), ...args], {
+      const result = spawnSync(process.execPath, [join(process.cwd(), "apps/oma/dist/entry/oma.js"), ...args], {
         cwd: join(root, "project"), encoding: "utf8", timeout: 20_000,
         env: { HOME: join(root, "home"), XDG_DATA_HOME: join(root, "data"), XDG_RUNTIME_DIR: join(root, "run"),
           PATH: "/usr/bin:/bin", OMA_PI_COMMAND: engine, LANG: "human-locale", TZ: "human-zone", USER: "human",

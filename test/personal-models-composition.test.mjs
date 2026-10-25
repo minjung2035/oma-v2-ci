@@ -7,25 +7,26 @@ import { Script } from 'node:vm';
 import ts from 'typescript';
 
 class StoreError extends Error { constructor(code, message) { super(message); this.code = code; } }
-const source = ts.transpileModule(readFileSync('src/runtime/personal-models.ts', 'utf8'), {
+const source = ts.transpileModule(readFileSync('apps/oma/src/runtime/personal-models.ts', 'utf8'), {
   compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
 }).outputText;
 function world({ platform = 'darwin', marker = '1', launchError, listError, createError, closeError } = {}) {
   const calls = [], model = {}, credentials = { async list() { calls.push(['list']); if (listError) throw listError; return []; } };
   const client = { async close() { calls.push(['close']); if (closeError) throw closeError; } };
   const deps = {
-    'node:path': path, '../domain/errors.js': { StoreError },
-    '../platform/host/keychain-client.js': { KeychainClient: { async launch(libdir) {
+    'node:path': path, '@oma/domain/errors': { StoreError },
+    '@oma/platform-mac/keychain-client': { KeychainClient: { async launch(libdir) {
       calls.push(['launch', libdir]); if (launchError) throw launchError; return client;
     } } },
-    '../platform/host/keychain.js': { keychainCredentials(...args) { calls.push(['credentials', ...args]); return credentials; } },
-    '@earendil-works/pi-coding-agent': { ModelRuntime: { async create(options) {
+    './keychain-credentials.js': { keychainCredentials(...args) { calls.push(['credentials', ...args]); return credentials; } },
+    '@oma/engine/engine-auth': { async createEngineModelRuntime(agentDir, credentials) {
+      const options = { credentials, modelsPath: path.join(agentDir, 'models.json'), allowModelNetwork: false };
       calls.push(['models', options]); if (createError) throw createError; return model;
-    } } },
+    } },
   };
   const module = { exports: {} };
   new Script(source).runInNewContext({ module, exports: module.exports, process: { platform, env: { OMA_PERSONAL_KEYCHAIN: marker } },
-    require(name) { assert.ok(Object.hasOwn(deps, name), name); if (name !== 'node:path' && name !== '../domain/errors.js') calls.push(['import', name]); return deps[name]; } });
+    require(name) { assert.ok(Object.hasOwn(deps, name), name); if (name !== 'node:path' && name !== '@oma/domain/errors' && name !== '@oma/engine/engine-auth') calls.push(['import', name]); return deps[name]; } });
   return { ...module.exports, calls, model, credentials, client };
 }
 test('Personal models: Linux never loads host Keychain or a second model runtime', async () => {

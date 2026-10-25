@@ -1,3 +1,5 @@
+import { residentEngineEffects } from "#oma-test/app/engine/resident-effects";
+import { engineStartEffects } from "#oma-test/app/engine/start-effects";
 /** AV3: an actor's model tools work in a directory that holds nothing the
  * product keeps from the model (PR-003/PR-004), and the Principal's CLI cache
  * is in that same private scratch (FS-003).
@@ -14,11 +16,11 @@ import assert from "node:assert/strict";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { assertModelScope, modelWorkspacePathAt, sessionDirPathAt, workspacePathAt, runnerSessionDirPathAt, runnerViewPathAt, agentRootPathAt } from "../src/storage/paths.js";
-import { principalEnvironment, principalWorkspace, PrincipalSession } from "../src/runtime/engine/principal-session.js";
-import { planPiSpawn } from "../src/runtime/pi-spawn-plan.js";
-import { piAgentDir } from "../src/runtime/pi-runtime.js";
-import { guardWorkspaceTools } from "../src/extension/workspace-guard.js";
+import { assertModelScope, modelWorkspacePathAt, sessionDirPathAt, workspacePathAt, runnerSessionDirPathAt, runnerViewPathAt, agentRootPathAt } from "@oma/domain/paths";
+import { principalEnvironment, principalWorkspace, PrincipalSession } from "@oma/engine/principal-session";
+import { planPiSpawn } from "@oma/engine/pi-spawn-plan";
+import { piAgentDir } from "@oma/engine/pi-runtime";
+import { guardWorkspaceTools } from "@oma/tool-runtime/workspace-guard";
 
 const code = (error: unknown): string | undefined => (error as { code?: string }).code;
 
@@ -29,7 +31,7 @@ test("AV3 / PR-003, PR-004, FS-003: the Principal's model scope holds neither th
     assert.equal(principalWorkspace(state), workspace);
     const sessions = sessionDirPathAt(state, "principal");
     const environment = principalEnvironment({ stateRoot: state, runRoot: join(state, "run"), libdir: "/opt/oma" },
-      { society: "demo", provider: "p", model: "m", extensions: [], workspaceBytes: 1024 },
+      { society: "demo", provider: "p", model: "m", extensions: [] },
       { frameBytes: 1024, mailBodyBytes: 1024, batchMaxMessages: 4, addresses: 64, contextBytes: 4096, bundleBytes: 8192 });
     // FS-003: the CLI's home, and so its request cache, is the private scratch.
     assert.equal(environment.HOME, workspace);
@@ -56,18 +58,18 @@ test("AV3 / INV04, INV09, PR-004: an engine whose workspace overlaps what the pr
   const state = "/srv/oma-av3";
   const privateSpace = join(state, "principal", "private");
   // The former Principal layout: the workspace was the private space itself.
-  assert.throws(() => PrincipalSession.start({ piCommand: "/nonexistent/pi", coreExtension: "/nonexistent/ext.js",
+  assert.throws(() => PrincipalSession.start(engineStartEffects, { piCommand: "/nonexistent/pi", coreExtension: "/nonexistent/ext.js",
     sessionDir: sessionDirPathAt(state, "principal"), workspace: privateSpace, home: privateSpace, piAgentDir: piAgentDir(state) },
-  { society: "demo", provider: "p", model: "m", extensions: [], workspaceBytes: 1024 },
+  { society: "demo", provider: "p", model: "m", extensions: [] },
   { frameBytes: 1024, idleStreamSeconds: 1, receiptWaitSeconds: 1, batchMaxMessages: 4, mailBodyBytes: 1024 } as never, {},
   { onLine: () => {}, onBusy: () => {}, onEnd: () => {}, onPromptFailed: () => {} }),
   (error: unknown) => code(error) === "UNSUPPORTED_PROFILE");
   // A workspace inside the engine's own agent directory would hand the model the
   // provider credentials (PR-004), whatever else it avoids.
-  assert.throws(() => PrincipalSession.start({ piCommand: "/nonexistent/pi", coreExtension: "/nonexistent/ext.js",
+  assert.throws(() => PrincipalSession.start(engineStartEffects, { piCommand: "/nonexistent/pi", coreExtension: "/nonexistent/ext.js",
     sessionDir: sessionDirPathAt(state, "principal"), workspace: join(piAgentDir(state), "scratch"), home: join(piAgentDir(state), "scratch"),
     piAgentDir: piAgentDir(state) },
-  { society: "demo", provider: "p", model: "m", extensions: [], workspaceBytes: 1024 },
+  { society: "demo", provider: "p", model: "m", extensions: [] },
   { frameBytes: 1024, idleStreamSeconds: 1, receiptWaitSeconds: 1, batchMaxMessages: 4, mailBodyBytes: 1024 } as never, {},
   { onLine: () => {}, onBusy: () => {}, onEnd: () => {}, onPromptFailed: () => {} }),
   (error: unknown) => code(error) === "UNSUPPORTED_PROFILE");
@@ -75,6 +77,6 @@ test("AV3 / INV04, INV09, PR-004: an engine whose workspace overlaps what the pr
   const base = residentOptions(state);
   const options = (workspace: string) => ({ ...base, paths: { ...base.paths, workspace } });
   for (const workspace of [agentRootPathAt(state, "alice"), join(runnerSessionDirPathAt(state, "alice"), "w")])
-    assert.throws(() => planPiSpawn(options(workspace)), (error: unknown) => code(error) === "UNSUPPORTED_PROFILE", workspace);
-  assert.doesNotThrow(() => planPiSpawn(options(workspacePathAt(state, "alice"))));
+    assert.throws(() => planPiSpawn(residentEngineEffects.sandbox, options(workspace)), (error: unknown) => code(error) === "UNSUPPORTED_PROFILE", workspace);
+  assert.doesNotThrow(() => planPiSpawn(residentEngineEffects.sandbox, options(workspacePathAt(state, "alice"))));
 });

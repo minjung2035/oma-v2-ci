@@ -5,10 +5,10 @@ import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { Store } from "../src/store.js";
-import { RequestCache } from "../src/request-cache.js";
-import { sha256Hex } from "../src/hash.js";
-import { contextFileCheck } from "../src/validate.js";
+import { Store } from "@oma/storage";
+import { RequestCache } from "#oma-test/app/request-cache";
+import { sha256Hex } from "@oma/domain/canonical-json";
+import { contextFileCheck } from "@oma/domain/validation";
 import { gitFixture, gitAuth, seedGit } from "./fixtures/git-crash.js";
 import { makeValidAgent } from "./fixtures/spec.js";
 import { removeTree } from "./fixtures/cleanup.js";
@@ -111,7 +111,7 @@ test("CTX-001: real CLI rejects symlink, hardlink, metadata and binary before co
         if (item.path === ".git/config") mkdirSync(join(dir, ".git"));
         writeFileSync(join(dir, item.path), item.bytes);
       }
-      const child = spawnSync(process.execPath, [fileURLToPath(new URL("../src/cli.js", import.meta.url)), "context", "publish", dir, "--expect", "none", "--request", name], {
+      const child = spawnSync(process.execPath, [fileURLToPath(new URL("../../apps/oma/dist/cli.js", import.meta.url)), "context", "publish", dir, "--expect", "none", "--request", name], {
         env: { ...process.env, HOME: join(root, "home"), OMA_SOCKET: join(root, "absent.sock") }, encoding: "utf8", timeout: 10000,
       });
       assert.equal(child.status, 2, `${name}: ${child.stderr}`);
@@ -123,7 +123,7 @@ test("CTX-001: real CLI rejects symlink, hardlink, metadata and binary before co
     writeFileSync(join(valid, "GOAL.md"), "# 한글 goal\n");
     writeFileSync(join(valid, "RATIONALE.md"), "");
     writeFileSync(join(valid, "decisions/a..b.md"), "valid\n");
-    const child = spawnSync(process.execPath, [fileURLToPath(new URL("../src/cli.js", import.meta.url)), "context", "publish", valid, "--expect", "none", "--request", "valid"], {
+    const child = spawnSync(process.execPath, [fileURLToPath(new URL("../../apps/oma/dist/cli.js", import.meta.url)), "context", "publish", valid, "--expect", "none", "--request", "valid"], {
       env: { ...process.env, HOME: join(root, "home"), OMA_SOCKET: join(root, "absent.sock") }, encoding: "utf8", timeout: 10000,
     });
     assert.equal(child.status, 3, child.stderr);

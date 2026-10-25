@@ -5,7 +5,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { withScenario } from "./fixtures/scenario.js";
 import { call, text, tools, toolResults } from "./fixtures/scripted-provider.js";
-import { readableBody } from "../src/mail/display.js";
+import { readableBody } from "@oma/mail/display";
 
 const goal = (body: string, expectedRevision: string, request: string) => tools(call("oma_mail_send", {
   to: ["residents"], subject: "Shared goal", body, intent: "goal", expectedRevision, request,

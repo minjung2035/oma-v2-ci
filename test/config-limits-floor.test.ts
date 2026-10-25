@@ -19,19 +19,19 @@
  * duplicated number. */
 import test from "node:test";
 import assert from "node:assert/strict";
-import type { Actor, ExactCandidateIdentity, HostConfigV1, MessageId, Oid, OperationId } from "../implementation/contracts.js";
-import type { ReviewFact } from "../implementation/contracts/attestation.js";
-import { validateConfig } from "../src/config.js";
-import { defaultHostConfig } from "../src/config/defaults.js";
-import { StoreError } from "../src/domain/errors.js";
+import type { Actor, ExactCandidateIdentity, HostConfig, MessageId, Oid, OperationId } from "@oma/contracts";
+import type { ReviewFact } from "@oma/contracts/attestation";
+import { validateConfig } from "@oma/config";
+import { defaultHostConfig } from "@oma/config/defaults";
+import { StoreError } from "@oma/domain/errors";
 import {
   NOTICE_PART_OVERHEAD, OMISSION_MARKER, OMISSION_MARKER_COMPACT, approvalBodyText, boundVoteText,
   describeEntryText, mailBodyBytesFits, minimumMailBodyBytes, threadHeadText,
-} from "../src/mail/review-bounds.js";
-import { MIN_MIXED_BATCH_MESSAGES } from "../src/mail/batch-policy.js";
+} from "@oma/domain/review-bounds";
+import { MIN_MIXED_BATCH_MESSAGES } from "@oma/domain/limits";
 import { createCompleteConfigurationFixture } from "./fixtures/configuration.js";
 
-function withLimits(config: HostConfigV1, limits: Partial<HostConfigV1["limits"]>): HostConfigV1 {
+function withLimits(config: HostConfig, limits: Partial<HostConfig["limits"]>): HostConfig {
   const copy = structuredClone(config);
   copy.limits = { ...copy.limits, ...limits };
   return copy;
@@ -188,10 +188,10 @@ test("FJ-4: a very large subjectBytes is decided in bounded time, and a refusal 
  * approval_required body over mailBodyBytes (and, with larger floors, over
  * the stored-mail bound oma_mail_read refuses to read).
  * ------------------------------------------------------------------------ */
-function withHighPeerFloor(config: HostConfigV1, highPeerFloor: number): HostConfigV1 {
+function withHighPeerFloor(config: HostConfig, highPeerFloor: number): HostConfig {
   const copy = structuredClone(config);
   copy.integration = { ...copy.integration,
-    tiered: { review: "mail-v1", repositoryFloor: "LOW", highPeerFloor, principalDelegated: true, rules: [] } };
+    tiered: { repositoryFloor: "LOW", highPeerFloor, principalDelegated: true, rules: [] } };
   return copy;
 }
 const namesBoth = (error: unknown): boolean => error instanceof StoreError && error.code === "INVALID_REQUEST" &&

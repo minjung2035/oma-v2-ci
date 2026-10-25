@@ -3,8 +3,8 @@ import assert from "node:assert/strict";
 import { mkdtempSync, readFileSync, renameSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { Store } from "../src/store.js";
-import { sha256Hex } from "../src/hash.js";
+import { Store } from "@oma/storage";
+import { sha256Hex } from "@oma/domain/canonical-json";
 import { gitFixture, gitAuth, gitCommand, seedGit } from "./fixtures/git-crash.js";
 import { ALL_CAPS, resolvedSpec, storedSpec } from "./fixtures/spec.js";
 import { removeTree } from "./fixtures/cleanup.js";
@@ -56,7 +56,7 @@ for (const format of ["sha1", "sha256"] as const) {
       assert.equal(second.result.previous, first.result.revision);
       assert.equal(readFileSync(join(root, "world/context/current/GOAL.md"), "utf8"), "# second goal\n");
       assert.equal(gitCommand(root, ["--git-dir", join(root, "repos/context.git"), "rev-parse", `${second.result.revision}^`]), first.result.revision);
-      const staging = ["a", "b"].map(actor => JSON.parse(store.getOperation(actor, "shared-context-key")!.planJson).stagingPath);
+      const staging = ["a", "b"].map(actor => JSON.parse(store.getOperation(actor, "shared-context-key")!.planJson).intent.stagingPath);
       assert.notEqual(staging[0], staging[1]);
     } finally { store.close(); removeTree(root); }
   });
@@ -71,7 +71,7 @@ for (const format of ["sha1", "sha256"] as const) {
       const info = JSON.parse(readFileSync(join(root, "git-fixture.json"), "utf8"));
       store.transaction(() => { for (const name of ["a", "b"]) store.insertAgent({ name, role: "resident", profile: "p", desired: "enabled", incarnation: 1, ...storedSpec(ALL_CAPS, "p", name), createdBy: null }); });
       const { git, mail, paths } = gitFixture(root, store);
-      const observe = (oid: string) => Reflect.get(git, "canonicalHas").call(git, oid);
+      const observe = (oid: string) => Reflect.get(Reflect.get(git, "repository"), "canonicalHas").call(Reflect.get(git, "repository"), oid);
       assert.equal(observe(info.base), true);
       assert.equal(observe("0".repeat(info.base.length)), false);
       const away = join(root, "unavailable.git");

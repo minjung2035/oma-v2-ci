@@ -1,17 +1,22 @@
+import { createMailModule } from "#oma-test/app/broker/mail-composition";
+import { serializePlanIntent } from "./fixtures/plan.js";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { Store, StoreError } from "../src/store.js";
-import { MailModule, buildEml, defaultLogicalReplyTo } from "../src/mail.js";
-import { generateOperationId, generateMessageId } from "../src/ids.js";
-import { requestHash } from "../src/hash.js";
-import { publishedRefFor, mailObjectRelativePath } from "../src/domain/derived.js";
-import { mailArchivePathAt } from "../src/storage/paths.js";
-import { GitObserver, type GitProcessEvidence } from "../src/git/observe.js";
-import { GitPublicationObserver, consumeSubmissionPublication } from "../src/git/publication.js";
-import type { OperationOf } from "../src/storage/operation-codec.js";
+import { Store } from "@oma/storage";
+import { StoreError } from "@oma/domain/errors";
+import { MailModule, buildEml, defaultLogicalReplyTo } from "@oma/mail";
+import { generateOperationId } from "@oma/native/identity";
+import { messageIdForOperation as generateMessageId } from "@oma/domain/derived";
+import { requestHash } from "@oma/domain/request-identity";
+import { publishedRefFor, mailObjectRelativePath } from "@oma/domain/derived";
+import { mailArchivePathAt } from "@oma/domain/paths";
+import { GitObserver } from "@oma/git/observe";
+import { type GitProcessEvidence } from "@oma/contracts/git";
+import { GitPublicationObserver, consumeSubmissionPublication } from "@oma/git/publication";
+import type { OperationOf } from "@oma/protocol/operation-codec";
 import { makeValidAgent } from "./fixtures/spec.js";
 
 // Real Store and frozen MIME bytes; injected command observations are a unit
@@ -25,7 +30,7 @@ function native(changes: Partial<GitProcessEvidence> = {}): GitProcessEvidence {
 async function fixture() {
   const root = mkdtempSync(join(tmpdir(), "oma-r20-publication-"));
   const store = new Store(join(root, "runtime.sqlite"));
-  const mail = new MailModule({ stateRoot: root, society: "demo" }, store, 64);
+  const mail = createMailModule({ stateRoot: root, society: "demo" }, store, 64);
   store.transaction(tx => {
     tx.insertAgent(makeValidAgent("alice", { capabilities: ["git.submit"] }));
     tx.insertAgent(makeValidAgent("bob"));
@@ -47,7 +52,7 @@ async function fixture() {
         replyHeaders: { replyTo: defaultLogicalReplyTo("alice", ["bob"]), inReplyTo: null, references: [] } } };
     store.transaction(tx => {
       tx.acceptOperation({ id, actor: "alice", requestKey: key, requestHash: requestHash("git.submit", input),
-        kind: "git.submit", payloadJson: JSON.stringify(input), planJson: JSON.stringify(plan) });
+        kind: "git.submit", payloadJson: JSON.stringify(input), planJson: serializePlanIntent(plan) });
       tx.insertDeliveries([{ messageId, recipient: "bob", operationId: id }]);
     });
     const operation = store.getOperationById(id);

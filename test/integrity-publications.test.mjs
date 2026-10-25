@@ -6,9 +6,9 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { physicalLedger } from "./helpers/physical-ledger.mjs";
 import { createDiagnosticObservers } from "../scripts/diagnostic-observers.mjs";
-import { inspectIntegrity } from "../dist/src/diagnostics/integrity.js";
-import { NodeIntegrityFiles } from "../dist/src/diagnostics/files.js";
-import { sha256Hex } from "../dist/src/hash.js";
+import { inspectIntegrity } from "#oma-test/app/diagnostics/integrity";
+import { NodeIntegrityFiles } from "#oma-test/app/diagnostics/files";
+import { sha256Hex } from "@oma/domain/canonical-json";
 const env = { PATH: "/usr/bin:/bin", HOME: "/nonexistent", LANG: "C", GIT_CONFIG_NOSYSTEM: "1", GIT_CONFIG_GLOBAL: "/dev/null",
   GIT_AUTHOR_NAME: "Fixture", GIT_AUTHOR_EMAIL: "fixture@example.invalid", GIT_COMMITTER_NAME: "Fixture", GIT_COMMITTER_EMAIL: "fixture@example.invalid" };
 function git(repo, args, input) {

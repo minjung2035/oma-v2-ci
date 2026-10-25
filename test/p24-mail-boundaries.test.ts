@@ -1,18 +1,19 @@
+import { createMailModule } from "#oma-test/app/broker/mail-composition";
 import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import { syncBuiltinESMExports } from "node:module";
 import { join, dirname } from "node:path";
 import { tmpdir } from "node:os";
-import type { AuthContext } from "../implementation/contracts.js";
-import { Store } from "../src/store.js";
-import { MailModule } from "../src/mail.js";
+import type { AuthContext } from "@oma/contracts";
+import { Store } from "@oma/storage";
+import { MailModule } from "@oma/mail";
 import {
   StoreError,
   publicFailure,
   normalizeStorageFailure,
-} from "../src/domain/errors.js";
-import { observeImmutableFile } from "../src/storage/immutable-file.js";
+} from "@oma/domain/errors";
+import { observeImmutableFile } from "@oma/storage/immutable-file";
 import { makeValidAgent } from "./fixtures/spec.js";
 
 function fixture() {
@@ -22,7 +23,7 @@ function fixture() {
     tx.insertAgent(makeValidAgent("alice"));
     tx.insertAgent(makeValidAgent("bob"));
   });
-  const mail = new MailModule(
+  const mail = createMailModule(
     { stateRoot: root, society: "fixture" },
     store,
     64,
@@ -174,6 +175,10 @@ test("P04: first cur parent flush precedes removing new; a flush fault preserves
     const from = f.mail.inboxNewPath("bob", id);
     const to = f.mail.inboxCurPath("bob", id);
     const mailbox = dirname(dirname(to));
+    // The held mailbox now creates both folders during delivery. Establish
+    // this test's first-cur condition explicitly, without removing any mail.
+    assert.deepEqual(fs.readdirSync(dirname(to)), []);
+    fs.rmdirSync(dirname(to));
     assert.equal(fs.existsSync(dirname(to)), false);
     const bob = { ...f.auth, actor: "bob" };
     const events: string[] = [];

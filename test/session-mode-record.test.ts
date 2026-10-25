@@ -4,9 +4,9 @@ import assert from "node:assert/strict";
 import { mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { ensureUserDirectory } from "../src/runtime/user-files.js";
+import { ensureUserDirectory } from "#oma-test/app/runtime/user-files";
 import { newSessionBirth, publishSessionBirth, readSessionBirth, requireSessionMode, SESSION_BIRTH,
-  sessionRootForHistory } from "../src/runtime/session-mode.js";
+  sessionRootForHistory } from "#oma-test/app/runtime/session-mode";
 
 const id = "00000000-0000-4000-8000-000000000001";
 function fixture(t: { after(run: () => void): void }) {

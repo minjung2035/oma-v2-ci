@@ -9,8 +9,8 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { createServer, type Socket } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { BrokerChannel } from "../src/protocol/channel.js";
-import { FrameParser, encodeFrame } from "../src/frame.js";
+import { BrokerChannel } from "@oma/client/channel";
+import { FrameParser, encodeFrame } from "@oma/protocol/frame";
 
 const ID = `rpc-${"0".repeat(8)}-0000-4000-8000-${"0".repeat(12)}`;
 const status = (reason: string) => ({ observedAtMs: 1, agents: [{ agent: "alice", desired: "enabled", activeState: null, subState: null,

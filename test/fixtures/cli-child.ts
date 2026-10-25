@@ -1,5 +1,5 @@
-import { spawnOwnedRpc } from "../../src/process/async.js";
-import { inheritedFence, SOCIETY_FENCE_ENV, SOCIETY_FENCE_FD } from "../../src/client/fence.js";
+import { spawnOwnedRpc } from "@oma/process/async";
+import { inheritedFence, SOCIETY_FENCE_ENV, SOCIETY_FENCE_FD } from "@oma/process/fence";
 
 export interface CliRun {
   node: string; cli: string; args: readonly string[]; cwd: string;

@@ -17,7 +17,7 @@ import { spawnSync } from "node:child_process";
 import { closeSync, mkdtempSync, openSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { PIDFD_POLL_ATTEMPTS, livenessFromPoll, pidfdLiveness, type PollAnswer } from "../src/leaf.js";
+import { PIDFD_POLL_ATTEMPTS, livenessFromPoll, pidfdLiveness, type PollAnswer } from "@oma/native/linux";
 
 const EINTR = 4;
 const EBADF = 9;
@@ -53,14 +53,14 @@ test("AV6 / INV02: a Principal engine /proc cannot be read for is refused for no
   const dir = mkdtempSync(join(tmpdir(), "oma-av6-"));
   try {
     const script = join(dir, "probe.mjs");
-    const module = (path: string): string => JSON.stringify(new URL(path, import.meta.url).href);
+    const module = (specifier: string): string => JSON.stringify(import.meta.resolve(specifier));
     // The endpoint lives in a process with few descriptors, so that /proc can
     // be made unreadable to it -- EMFILE -- while the engine keeps running.
     writeFileSync(script, `
 import { spawn } from "node:child_process";
 import { closeSync, openSync } from "node:fs";
-const { PrincipalEndpoint } = await import(${module("../src/broker/principal-endpoint.js")});
-const { processEnded, processIdentity } = await import(${module("../src/broker/process-ancestry.js")});
+const { PrincipalEndpoint } = await import(${module("@oma/broker/principal-endpoint")});
+const { processEnded, processIdentity } = await import(${module("@oma/broker/process-ancestry")});
 const turn = () => new Promise(resolve => setImmediate(resolve));
 const engine = spawn("/bin/sleep", ["30"], { stdio: "ignore" });
 await new Promise(resolve => engine.once("spawn", resolve));

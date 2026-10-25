@@ -14,12 +14,12 @@ import { createServer, type Socket } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { RequestCache } from "../src/request-cache.js";
-import { encodeFrame } from "../src/frame.js";
-import type { Receipt } from "../implementation/contracts.js";
+import { RequestCache } from "#oma-test/app/request-cache";
+import { encodeFrame } from "@oma/protocol/frame";
+import type { Receipt } from "@oma/contracts";
 
-const CLI = fileURLToPath(new URL("../src/cli.js", import.meta.url));
-const CACHE = new URL("../src/request-cache.js", import.meta.url).href;
+const CLI = fileURLToPath(new URL("../../apps/oma/dist/cli.js", import.meta.url));
+const CACHE = new URL(import.meta.resolve("#oma-test/app/request-cache")).href;
 const MESSAGE = "m-00000000-0000-4000-8000-000000000091-0";
 interface CliResult {
   code: number | string;
@@ -128,7 +128,7 @@ const mutations: Array<[string, (home: string) => string[]]> = [
   ["submit", (home) => ["submit", "HEAD", "--file", join(home, "input.txt")]],
   [
     "merge review",
-    (home) => ["merge", "review", "merge-abcd1234", "--file", join(home, "input.txt")],
+    (home) => ["merge", "review", "merge-abcd1234-0000-4000-8000-000000000000", "--file", join(home, "input.txt")],
   ],
   [
     "context.publish",

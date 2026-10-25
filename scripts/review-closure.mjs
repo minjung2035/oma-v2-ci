@@ -7,7 +7,8 @@
  * tree. Being assigned to a work package is not a review. Approval additionally
  * needs every required environment lane to have run.
  */
-import { readFileSync, readdirSync } from "node:fs";
+import { lstatSync, readFileSync, readdirSync } from "node:fs";
+import ts from "typescript";
 import { join } from "node:path";
 import { createHash } from "node:crypto";
 
@@ -19,7 +20,7 @@ export const STATUSES = Object.freeze([...REVIEWED, "CHANGED_WITHOUT_ORACLE", "N
 export const RELEASE_LANES = Object.freeze(["fast", "durable", "property", "stress", "kernel", "crash", "powercut", "provider", "ci"]);
 /** The one process bound every synchronous git plumbing call in this
  * verification tooling runs under: CANONICAL_PROCESS_LIMITS
- * (src/git/canonical-command.ts), restated. These scripts also run copied
+ * (packages/git/src/canonical-command.ts), restated. These scripts also run copied
  * into fixture trees where no dist/ exists, so the constant cannot be
  * imported -- a test pins the two equal. Whole-tree plumbing (`ls-tree -r`,
  * `diff --name-only -z`, `log`) emits output that scales with the repository;
@@ -27,19 +28,40 @@ export const RELEASE_LANES = Object.freeze(["fast", "durable", "property", "stre
  * the vendored bundles pushed this tree's own listing past it. */
 export const GIT_PLUMBING_LIMITS = Object.freeze({ timeout: 120000, maxBuffer: 4 * 1024 * 1024 });
 
-/** Every test name declared in the tree's test sources. */
+/** Authored test declarations, including workspace-owned tests. Source text
+ * inside a comment, fixture string or vendored payload is not an oracle. */
 export function testNames(root) {
   const names = [];
-  const walk = directory => {
-    for (const entry of readdirSync(join(root, directory), { withFileTypes: true })) {
-      const path = join(directory, entry.name);
+  const directory = path => {
+    const stat = lstatSync(join(root, path), { throwIfNoEntry: false });
+    if (stat === undefined) return false;
+    if (stat.isSymbolicLink() || !stat.isDirectory()) throw new Error(`test source root is not a real directory: ${path}`);
+    return true;
+  };
+  const walk = folder => {
+    if (!directory(folder)) return;
+    for (const entry of readdirSync(join(root, folder), { withFileTypes: true })) {
+      const path = join(folder, entry.name);
+      if (entry.isSymbolicLink()) throw new Error(`symlink in authored test sources: ${path}`);
       if (entry.isDirectory()) { if (entry.name !== "fixtures") walk(path); continue; }
-      if (!/\.test\.(ts|mjs)$/.test(entry.name)) continue;
-      for (const match of readFileSync(join(root, path), "utf8").matchAll(/\btest\(\s*(?:`([^`]*)`|"([^"]*)"|'([^']*)')/g))
-        names.push(match[1] ?? match[2] ?? match[3]);
+      if (!entry.isFile() || !/\.test\.(ts|mjs)$/.test(entry.name)) continue;
+      const source = ts.createSourceFile(path, readFileSync(join(root, path), "utf8"), ts.ScriptTarget.Latest, true);
+      const visit = node => {
+        if (ts.isCallExpression(node) && ts.isIdentifier(node.expression) && node.expression.text === "test") {
+          const label = node.arguments[0];
+          if (label && ts.isStringLiteralLike(label)) names.push(label.text);
+          else if (label && ts.isTemplateExpression(label)) names.push(label.getText(source).slice(1, -1));
+        }
+        ts.forEachChild(node, visit);
+      };
+      visit(source);
     }
   };
   walk("test");
+  if (directory("packages")) for (const entry of readdirSync(join(root, "packages"), { withFileTypes: true })) {
+    if (entry.isSymbolicLink()) throw new Error(`symlink in workspace test discovery: ${entry.name}`);
+    if (entry.isDirectory()) walk(join("packages", entry.name, "test"));
+  }
   return names;
 }
 /** An oracle id is present when some test name starts with it. */

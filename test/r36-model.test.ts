@@ -1,13 +1,14 @@
+import { createMailModule } from "#oma-test/app/broker/mail-composition";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { mkdtempSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import type { AuthContext } from "../implementation/contracts.js";
-import { Store } from "../src/store.js";
-import { StoreError } from "../src/domain/errors.js";
-import { MailModule } from "../src/mail.js";
-import { assertCurrentActor } from "../src/authority.js";
+import type { AuthContext } from "@oma/contracts";
+import { Store } from "@oma/storage";
+import { StoreError } from "@oma/domain/errors";
+import { MailModule } from "@oma/mail";
+import { assertCurrentActor } from "@oma/domain/authority";
 import { makeValidAgent, ALL_CAPS } from "./fixtures/spec.js";
 import { sendWithStop, StopSignal } from "./fixtures/mail-faults.js";
 import { assertGlobalInvariants, type LedgerSnapshot } from "./invariants/index.js";
@@ -21,7 +22,7 @@ async function replay(sequence: readonly Action[]): Promise<void> {
   const root = mkdtempSync(join(tmpdir(), "oma-r36-model-"));
   const databasePath = join(root, "runtime.sqlite");
   let store = new Store(databasePath, 5, { society: "demo" });
-  let mail = new MailModule({ stateRoot: root, society: "demo" }, store, 64, limits.batchMaxMessages, limits);
+  let mail = createMailModule({ stateRoot: root, society: "demo" }, store, 64, limits.batchMaxMessages, limits);
   let revoked = false;
   store.transaction(tx => { tx.insertAgent(makeValidAgent("alice")); });
   const model = initialModel();
@@ -43,7 +44,7 @@ async function replay(sequence: readonly Action[]): Promise<void> {
         case "restart":
           // DB connection restart; primitive SIGKILL remains in the existing crash lane.
           store.close(); store = new Store(databasePath, 5, { society: "demo" });
-          mail = new MailModule({ stateRoot: root, society: "demo" }, store, 64, limits.batchMaxMessages, limits);
+          mail = createMailModule({ stateRoot: root, society: "demo" }, store, 64, limits.batchMaxMessages, limits);
           revoked = true; break;
         case "reconcile": await mail.reconcilePending(); break;
         case "request": {

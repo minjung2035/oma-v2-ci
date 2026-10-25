@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /** Vendored pi-hashline-edit-pro bundle maintenance — the only writer of
- * `src/extension/vendor/pi-hashline-edit-pro/runtime/` and `manifest.json`.
+ * `apps/oma/src/extension/vendor/pi-hashline-edit-pro/runtime/` and `manifest.json`.
  *
  * `upstream/` is the exact npm tarball snapshot of pi-hashline-edit-pro
  * (verified against `package/npm integrity` and `shasum` at vendoring
@@ -12,7 +12,7 @@
  * in DEPENDENCIES, kept separate from anything a user-installed Pi package
  * would resolve.
  *
- * `runtime/` is tsc's emit of the upstream `src/` modules the adapter
+ * `runtime/` is tsc's emit of the upstream `apps/oma/src/` modules the adapter
  * loads, compiled with upstream's own flags (module ESNext +
  * moduleResolution bundler — upstream ships extensionless imports), with
  * two mechanical steps applied on top:
@@ -51,7 +51,7 @@ import {
 } from "./vendor-bundle-lib.mjs";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
-const BUNDLE_DIR = join(root, "src/extension/vendor/pi-hashline-edit-pro");
+const BUNDLE_DIR = join(root, "packages/tool-hashline/src/vendor/pi-hashline-edit-pro");
 const UPSTREAM_DIR = join(BUNDLE_DIR, "upstream");
 const UPSTREAM_SRC = join(UPSTREAM_DIR, "src");
 const RUNTIME_DIR = join(BUNDLE_DIR, "runtime");

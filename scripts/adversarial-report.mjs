@@ -26,7 +26,7 @@ if (manifest.some(file => !file) || new Set(manifest).size !== manifest.length) 
 const config = ts.readConfigFile("tsconfig.json", ts.sys.readFile);
 if (config.error) throw new Error(ts.flattenDiagnosticMessageText(config.error.messageText, "\n"));
 const options = ts.parseJsonConfigFileContent(config.config, ts.sys, process.cwd()).options;
-const roots = ["src/entry/broker.ts", "src/entry/runner.ts", "src/entry/host.ts", "src/cli.ts", "src/pi-extension.ts"];
+const roots = ["apps/oma/src/entry/broker.ts", "apps/oma/src/entry/runner.ts", "apps/oma/src/entry/host.ts", "apps/oma/src/cli.ts", "packages/extension/src/index.ts"];
 const { reachable, findings, external } = runtimeImportClosure({ rootDir: process.cwd(), roots, manifest, compilerOptions: options });
 const notReached = manifest.filter(file => file.endsWith(".ts") && !reachable.has(file));
 const acceptance = inventoryAcceptance([...normativeSources, "docs/architecture.md"].map(source => ({ source, text: fs.readFileSync(source, "utf8") })));

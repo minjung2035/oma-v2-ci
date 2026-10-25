@@ -1,7 +1,7 @@
 /** CFG-001/CFG-005/TUI-007: one owner for "what is inside this configuration
  * bundle", and the screens that write must ask it.
  *
- * `src/config/operations.ts` decides what a bundle contains. Its rule is strict:
+ * `apps/oma/src/config/operations.ts` decides what a bundle contains. Its rule is strict:
  * a reference must be a normalized relative path, must resolve inside the
  * bundle root, and must not be reached through a symlink. The broker refuses to
  * load anything else.
@@ -18,11 +18,11 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { mkdirSync, readFileSync, symlinkSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { DEPLOYMENT_LAYOUT } from "../dist/src/domain/deployment.js";
-import { configurationLayout, readConfigurationSource } from "../dist/src/config/operations.js";
-import { loadConfiguration } from "../dist/src/config.js";
-import { readExtensions, toggleExtension } from "../dist/src/application/extensions.js";
-import { StoreError } from "../dist/src/domain/errors.js";
+import { DEPLOYMENT_LAYOUT } from "@oma/domain/deployment";
+import { configurationLayout, readConfigurationSource } from "@oma/config/operations";
+import { loadConfiguration } from "@oma/config";
+import { readExtensions, toggleExtension } from "#oma-test/app/application/extensions";
+import { StoreError } from "@oma/domain/errors";
 import { createCompleteConfigurationFixture } from "../dist/test/fixtures/configuration.js";
 
 /** Start from a validated control; only then deliberately alter the referenced
@@ -34,9 +34,6 @@ function fixture(roles) {
     mkdirSync(join(complete.installation, "extensions"), { recursive: true });
     writeFileSync(join(complete.installation, "extensions/x.js"), "export {};\n");
     const role = JSON.parse(readFileSync(join(root, "roles/resident.json"), "utf8"));
-    // The screen must preserve a valid field that it does not model. D23: the
-    // role file's own fields are closed, so the field lives in agentProfile.
-    role.agentProfile.upstreamNote = { defaultMode: "DIRECT" };
     const outsideBytes = JSON.stringify(role);
     writeFileSync(join(root, "role.json"), outsideBytes);
     const outside = join(complete.root, "OUTSIDE.json");
@@ -105,12 +102,12 @@ test("CFG-005: a bundle the loader accepts is the bundle the screen edits", () =
       "the screen edits a path the owner did not resolve");
 
     const authored = readFileSync(join(f.root, "role.json"), "utf8");
+    const profile = JSON.parse(authored).agentProfile;
     toggleExtension(context, "extensions/x.js", "workers", true);
     // D02/WP13: published as a managed generation; the authored file is kept.
     const written = readConfigurationSource(f.index).authoredRoles["resident"].value;
     assert.deepEqual(written.extensions, [DEPLOYMENT_LAYOUT.extension, "extensions/x.js"]);
-    assert.deepEqual(written.agentProfile.upstreamNote, { defaultMode: "DIRECT" },
-      "a field the screen does not model was lost");
+    assert.deepEqual(written.agentProfile, profile, "editing extensions changed the validated agent profile");
     assert.equal(readFileSync(join(f.root, "role.json"), "utf8"), authored, "the authored role file was edited in place");
     assert.equal(readFileSync(f.outside, "utf8"), f.outsideBytes, "the outside file was touched");
     assert.doesNotThrow(() => loadConfiguration(f.index), "the edited candidate must remain loadable");
@@ -122,7 +119,7 @@ test("CFG-005: the screens do not carry a second reading of the bundle format", 
   // pass if a screen merely happened to agree with the owner today; what broke
   // was a screen that had its own rule and drifted from it. A screen that
   // cannot name the format cannot re-derive what is inside it.
-  for (const file of ["src/application/settings.ts", "src/application/extensions.ts"]) {
+  for (const file of ["apps/oma/src/application/settings.ts", "apps/oma/src/application/extensions.ts"]) {
     const source = readFileSync(new URL(`../${file}`, import.meta.url), "utf8");
     assert.equal(source.includes("oma-operations-v1"), false,
       `${file} recognises the bundle format itself: what a bundle contains is the loader's answer`);

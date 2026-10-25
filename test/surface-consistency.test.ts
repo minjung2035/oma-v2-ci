@@ -4,9 +4,9 @@
 // syntax tree now: scripts/architecture/rules/surface-rules.mjs.
 import test from "node:test";
 import assert from "node:assert/strict";
-import { SURFACE_BOUNDS } from "../src/domain/surface-bounds.js";
-import { LAYOUT_BOUNDS } from "../src/tui/view/layout.js";
-import { SURFACE_LIMITS } from "../src/domain/tool-surface.js";
+import { SURFACE_BOUNDS } from "@oma/domain/surface-bounds";
+import { LAYOUT_BOUNDS } from "@oma/tui/view/layout";
+import { SURFACE_LIMITS } from "@oma/domain/tool-surface";
 
 test("every declared bound is positive, finite and explains itself", () => {
   for (const [name, bound] of Object.entries({ ...SURFACE_BOUNDS, ...LAYOUT_BOUNDS })) {

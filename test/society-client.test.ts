@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import type { FramedPeer } from "../src/platform/rpc.js";
-import { requestSociety } from "../src/platform/society-client.js";
-import { societyResultProblem } from "../src/protocol/host-api.js";
+import type { FramedPeer } from "#oma-test/app/platform/rpc";
+import { requestSociety } from "#oma-test/app/platform/society-client";
+import { societyResultProblem } from "@oma/protocol/host-api";
 const projectId = "8f14e45f-ceea-4e7a-9f6b-1b1a2c3d4e5f";
 const peer = (result: Record<string, unknown>): Pick<FramedPeer, "request"> => ({ request: async () => result });
 

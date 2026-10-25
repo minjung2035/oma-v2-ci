@@ -1,3 +1,5 @@
+import { generateOperationId } from "@oma/native/identity";
+import { lifecycleLedger } from "#oma-test/app/broker/lifecycle-ledger";
 /** DR27/P0-7: only this fixture's child is killed. Units are local fakes; no
  * manager service, user OMA, provider or VM participates in these boundaries. */
 import test from "node:test";
@@ -6,10 +8,10 @@ import { spawnSync } from "node:child_process";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { Store } from "../src/store.js";
-import { SocietyControl } from "../src/lifecycle/society.js";
-import type { UnitsModule } from "../src/units.js";
-import type { AuthContext } from "../implementation/contracts.js";
+import { Store } from "@oma/storage";
+import { SocietyControl } from "@oma/lifecycle/society";
+import type { UnitsModule } from "@oma/platform-linux/units";
+import type { AuthContext } from "@oma/contracts";
 import { ALL_CAPS } from "./fixtures/spec.js";
 
 for (const state of ["open", "closed"] as const) {
@@ -21,8 +23,10 @@ for (const state of ["open", "closed"] as const) {
       const path = join(root, "runtime.sqlite");
       const child = spawnSync(process.execPath, ["--input-type=module", "-e", `
         import { DatabaseSync } from "node:sqlite";
-        import { Store } from ${JSON.stringify(new URL("../src/store.js", import.meta.url).href)};
-        import { SocietyControl } from ${JSON.stringify(new URL("../src/lifecycle/society.js", import.meta.url).href)};
+        import { Store } from ${JSON.stringify(new URL(import.meta.resolve("@oma/storage"), import.meta.url).href)};
+        import { lifecycleLedger } from ${JSON.stringify(new URL(import.meta.resolve("#oma-test/app/broker/lifecycle-ledger")).href)};
+        import { generateOperationId } from ${JSON.stringify(import.meta.resolve("@oma/native/identity"))};
+        import { SocietyControl } from ${JSON.stringify(new URL(import.meta.resolve("@oma/lifecycle/society")).href)};
         import { makeValidAgent, ALL_CAPS } from ${JSON.stringify(new URL("./fixtures/spec.js", import.meta.url).href)};
         const store = new Store(${JSON.stringify(path)}, 0, { society: "demo" });
         store.transaction(tx => {
@@ -32,7 +36,7 @@ for (const state of ["open", "closed"] as const) {
         });
         let dead = true;
         const units = { stop() {}, confirmDead() { return dead; } };
-        const control = new SocietyControl(store, units);
+        const control = new SocietyControl(lifecycleLedger(store), units, { nextOperationId: generateOperationId });
         const auth = { actor: "principal", role: "principal", incarnation: 0, channel: "actor",
           capabilities: new Set(ALL_CAPS), peer: { pid: process.pid, uid: process.getuid(), gid: process.getgid(), cgroup: null } };
         control.set(auth, "closed", "initial-close");
@@ -65,9 +69,9 @@ for (const state of ["open", "closed"] as const) {
       assert.equal(store.societyOpen(), point === "superseded" || (point === "settled" && state === "open"));
       const before = store.listAgents();
       const stopped: string[] = [];
-      const control = new SocietyControl(store, { stop(agent: string) {
+      const control = new SocietyControl(lifecycleLedger(store), { stop(agent: string) {
         assert.equal(store.societyOpen(), false); stopped.push(agent);
-      }, confirmDead() { return true; } } as unknown as UnitsModule);
+      }, confirmDead() { return true; } } as unknown as UnitsModule, { nextOperationId: generateOperationId });
       const auth: AuthContext = { actor: "principal", role: "principal", incarnation: 0, channel: "actor",
         capabilities: new Set(ALL_CAPS), peer: { pid: process.pid, uid: process.getuid!(), gid: process.getgid!(), cgroup: null } };
       const receipt = control.set(auth, state, "target");

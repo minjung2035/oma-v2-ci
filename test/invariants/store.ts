@@ -1,7 +1,9 @@
 import assert from "node:assert/strict";
 import { DatabaseSync } from "node:sqlite";
-import type { Store, AgentRow, OperationRow, DeliveryRow, BatchRow, SubscriptionRow } from "../../src/store.js";
-import { LineageSnapshot } from "../../src/domain/lineage.js";
+import type { Store } from "@oma/storage";
+import type { AgentRow, DeliveryRow, BatchRow, SubscriptionRow } from "@oma/contracts/ledger";
+import type { DecodedOperation as OperationRow } from "@oma/protocol/operation-codec";
+import { LineageSnapshot } from "@oma/domain/lineage";
 
 export type InvariantPhase = "settled" | "accepted-before-effect" | "partial-materialization" | "unknown-external";
 export interface LedgerSnapshot {

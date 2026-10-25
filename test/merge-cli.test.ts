@@ -8,11 +8,11 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { generateOperationId } from "../src/ids.js";
-import { StoreError, publicFailure, failureText } from "../src/domain/errors.js";
-import { attestationProblem } from "../src/domain/attestation.js";
-import { RequestCache } from "../src/request-cache.js";
-import { exportRefForRequestKey } from "../src/domain/derived.js";
+import { generateOperationId } from "@oma/native/identity";
+import { StoreError, publicFailure, failureText } from "@oma/domain/errors";
+import { exactCandidateCheck } from "@oma/domain/mail-values";
+import { RequestCache } from "#oma-test/app/request-cache";
+import { exportRefForRequestKey } from "@oma/domain/derived";
 import { runCliWithPeer } from "./fixtures/cli-peer.js";
 
 const MSG = `m-${crypto.randomUUID?.() ?? "00000000-0000-4000-8000-000000000000"}-0`;
@@ -98,7 +98,7 @@ test("mail-v1 CLI: merge open resolves HEAD + origin/main, submits once, then op
       assert.equal(r.request, "K1");
       assert.deepEqual(r.params, { kind: "merge.open", tier: "LOW", title: "the fix",
         reason: "because it fixes the thing\n", candidate, base });
-      return frame(request, openReceipt("merge-11111111"));
+      return frame(request, openReceipt("merge-11111111-0000-4000-8000-000000000000"));
     });
   assert.equal(run.status, 0, run.stderr);
   assert.deepEqual(calls, ["git.known", "git.submit", "attest.record"]);
@@ -108,7 +108,7 @@ test("mail-v1 CLI: same-key replay after HEAD moved returns the frozen request",
   const home = mkdtempSync(join(tmpdir(), "oma-merge-replay-")); t.after(() => rmSync(home, { recursive: true, force: true }));
   const { cwd } = workspace(home);
   writeFileSync(join(cwd, "r.md"), "r\n");
-  const result = openReceipt("merge-22222222");
+  const result = openReceipt("merge-22222222-0000-4000-8000-000000000000");
   const calls: string[] = [];
   const handler: Handler = async (request) => {
     const r = asRequest(request);
@@ -152,7 +152,7 @@ test("mail-v1 CLI: dirty workspace warns; known candidate skips the submit; pend
     ["merge", "open", "--tier", "LOW", "--title", "t", "--file", join(cwd, "r.md"), "--request", "K3"],
     async (request) => {
       if (asRequest(request).method === "git.known") return frame(request, { hasCandidate: true, prerequisites: [] });
-      return frame(request, openReceipt("merge-33333333"));
+      return frame(request, openReceipt("merge-33333333-0000-4000-8000-000000000000"));
     });
   assert.equal(known.status, 0, known.stderr);
   assert.match(known.stderr, /uncommitted changes that are not part of the candidate/);
@@ -221,7 +221,7 @@ test("mail-v1 CLI: a bare repository has no work tree that could be dirty", asyn
       "--candidate", "0".repeat(40), "--base", "1".repeat(40), "--request", "KB"],
     async (request) => {
       if (asRequest(request).method === "git.known") return frame(request, { hasCandidate: true, prerequisites: [] });
-      return frame(request, openReceipt("merge-44444444"));
+      return frame(request, openReceipt("merge-44444444-0000-4000-8000-000000000000"));
     });
   assert.equal(run.status, 0, run.stderr);
   assert.doesNotMatch(run.stderr, /uncommitted changes/);
@@ -241,7 +241,7 @@ test("mail-v1 CLI: `merge open` outside a repository has no workspace to observe
       "--candidate", "0".repeat(40), "--base", "1".repeat(40), "--request", "KN"],
     async (request) => {
       if (asRequest(request).method === "git.known") return frame(request, { hasCandidate: true, prerequisites: [] });
-      return frame(request, openReceipt("merge-55555555"));
+      return frame(request, openReceipt("merge-55555555-0000-4000-8000-000000000000"));
     });
   assert.equal(run.status, 0, run.stderr);
   assert.doesNotMatch(run.stderr, /uncommitted changes/);
@@ -251,7 +251,7 @@ test("mail-v1 CLI: `merge open` outside a repository has no workspace to observe
 test("mail-v1 CLI: review/vote/cancel send exact params; approval only via --approval", async t => {
   const home = mkdtempSync(join(tmpdir(), "oma-merge-facts-")); t.after(() => rmSync(home, { recursive: true, force: true }));
   const { cwd } = workspace(home);
-  const name = "merge-abcd1234";
+  const name = "merge-abcd1234-0000-4000-8000-000000000000";
   writeFileSync(join(cwd, "body.md"), "looks right\n");
   const requests: Request[] = [];
   const handler = (request: Record<string, unknown>) => { requests.push(asRequest(request)); return frame(request, openReceipt(name)); };
@@ -268,8 +268,8 @@ test("mail-v1 CLI: review/vote/cancel send exact params; approval only via --app
   assert.deepEqual(requests[3]!.params, { kind: "cancel", name, reason: "looks right\n" });
   // Grammar refusals never reach the transport.
   for (const args of [
-    ["merge", "review", "challenge-abcd1234", "--file", join(cwd, "body.md")],
-    ["challenge", "review", "merge-abcd1234", "--file", join(cwd, "body.md")],
+    ["merge", "review", "challenge-abcd1234-0000-4000-8000-000000000000", "--file", join(cwd, "body.md")],
+    ["challenge", "review", "merge-abcd1234-0000-4000-8000-000000000000", "--file", join(cwd, "body.md")],
     ["merge", "vote", name, "--verdict", "maybe", "--file", join(cwd, "body.md")],
     ["merge", "vote", name, "--verdict", "approve", "--file", join(cwd, "body.md"), "--approval", "not-a-message"],
   ]) {
@@ -282,15 +282,15 @@ test("mail-v1 CLI: review/vote/cancel send exact params; approval only via --app
 test("mail-v1 CLI: merge status answers the review.status result", async t => {
   const home = mkdtempSync(join(tmpdir(), "oma-merge-status-")); t.after(() => rmSync(home, { recursive: true, force: true }));
   const { cwd, base, candidate } = workspace(home);
-  const baseStatus = principalStatus("merge-abcd1234", base, candidate);
+  const baseStatus = principalStatus("merge-abcd1234-0000-4000-8000-000000000000", base, candidate);
   const { approval: _omit, ...minimal } = baseStatus;
   const detail = { ...minimal, reason: "r", requester: "alice",
     required: 0, approvers: [], rejectors: [],
     principal: { approval: null, sent: false, decision: null, decisionApproval: null },
     integration: null, entries: [], missing: ["missing"], main: { oid: candidate, observedAtMs: 1 } };
   const list = { requests: [], omitted: 0, main: { oid: candidate, observedAtMs: 1 } };
-  const named = await runCliWithPeer(home, cwd, ["merge", "status", "merge-abcd1234"],
-    async (request) => { assert.deepEqual(request.params, { name: "merge-abcd1234" }); return frame(request, detail); });
+  const named = await runCliWithPeer(home, cwd, ["merge", "status", "merge-abcd1234-0000-4000-8000-000000000000"],
+    async (request) => { assert.deepEqual(request.params, { name: "merge-abcd1234-0000-4000-8000-000000000000" }); return frame(request, detail); });
   assert.equal(named.status, 0, named.stderr);
   assert.deepEqual(JSON.parse(named.stdout), detail);
   const all = await runCliWithPeer(home, cwd, ["merge", "status"], (request) => frame(request, list));
@@ -303,7 +303,7 @@ test("mail-v1 CLI: merge diff pages a large diff; challenge --view original uses
   const { repo, base, candidate } = canonical(home);
   process.env.OMA_PROJECT_GIT = repo; t.after(() => { delete process.env.OMA_PROJECT_GIT; });
   delete process.env.OMA_WORKER_ARCHIVE;   // a Principal-style environment still diffs
-  const name = "merge-00c0ffee";
+  const name = "merge-00c0ffee-0000-4000-8000-000000000000";
   const statusReply = principalStatus(name, base, candidate);
   const fullBytes = gitRaw(cwd, ["--git-dir", repo, "diff", "--binary", "--full-index", "--no-ext-diff", "--no-textconv", "--no-color",
     base, candidate]);
@@ -350,9 +350,9 @@ test("mail-v1 CLI: merge diff pages a large diff; challenge --view original uses
     (request) => frame(request, empty));
   assert.equal(pastEmpty.status, 2);
   // A challenge's original view names the target merge's identity.
-  const challengeName = "challenge-00c0ffee";
+  const challengeName = "challenge-00c0ffee-0000-4000-8000-000000000000";
   const challengeStatus = { ...principalStatus(challengeName, "0".repeat(40), "1".repeat(40)), kind: "challenge",
-    target: { name: "merge-00c0ffee", integration: generateOperationId(),
+    target: { name: "merge-00c0ffee-0000-4000-8000-000000000000", integration: generateOperationId(),
       identity: { repo: "project", targetRef: "refs/heads/main", expectedBase: base, candidate, policyRevision: "p1" } } };
   const orig = JSON.parse((await runCliWithPeer(home, cwd, ["challenge", "diff", challengeName, "--view", "original"],
     (request) => frame(request, challengeStatus))).stdout);
@@ -371,28 +371,28 @@ test("mail-v1 CLI: challenge open carries the merge name; candidate+base go toge
   const requests: Request[] = [];
   // Prepared path: no candidate → no submit, just the open.
   const prepared = await runCliWithPeer(home, cwd,
-    ["challenge", "open", "--merge", "merge-abcd1234", "--tier", "HIGH", "--title", "t", "--file", join(cwd, "r.md"), "--request", "C1"],
-    (request) => { requests.push(asRequest(request)); return frame(request, openReceipt("challenge-99999999")); });
+    ["challenge", "open", "--merge", "merge-abcd1234-0000-4000-8000-000000000000", "--tier", "HIGH", "--title", "t", "--file", join(cwd, "r.md"), "--request", "C1"],
+    (request) => { requests.push(asRequest(request)); return frame(request, openReceipt("challenge-99999999-0000-4000-8000-000000000000")); });
   assert.equal(prepared.status, 0, prepared.stderr);
   assert.deepEqual(requests.map(r => r.method), ["attest.record"]);
-  assert.deepEqual(requests[0]!.params, { kind: "challenge.open", merge: "merge-abcd1234", tier: "HIGH",
+  assert.deepEqual(requests[0]!.params, { kind: "challenge.open", merge: "merge-abcd1234-0000-4000-8000-000000000000", tier: "HIGH",
     title: "t", reason: "revert it\n" });
   // Caller-provided candidate: published first like a merge open.
   const supplied = await runCliWithPeer(home, cwd,
-    ["challenge", "open", "--merge", "merge-abcd1234", "--tier", "LOW", "--title", "t", "--file", join(cwd, "r.md"),
+    ["challenge", "open", "--merge", "merge-abcd1234-0000-4000-8000-000000000000", "--tier", "LOW", "--title", "t", "--file", join(cwd, "r.md"),
       "--candidate", candidate, "--base", base, "--request", "C2"],
     async (request) => {
       if (request.method === "git.known") return frame(request, { hasCandidate: true, prerequisites: [] });
-      return frame(request, openReceipt("challenge-88888888"));
+      return frame(request, openReceipt("challenge-88888888-0000-4000-8000-000000000000"));
     });
   assert.equal(supplied.status, 0, supplied.stderr);
   assert.deepEqual(supplied.requests.map(r => r.method), ["git.known", "attest.record"]);
-  assert.deepEqual(supplied.requests[1]!.params, { kind: "challenge.open", merge: "merge-abcd1234", tier: "LOW",
+  assert.deepEqual(supplied.requests[1]!.params, { kind: "challenge.open", merge: "merge-abcd1234-0000-4000-8000-000000000000", tier: "LOW",
     title: "t", reason: "revert it\n", candidate, base });
   for (const args of [
-    ["challenge", "open", "--merge", "challenge-abcd1234", "--tier", "LOW", "--title", "t", "--file", join(cwd, "r.md")],
-    ["challenge", "open", "--merge", "merge-abcd1234", "--tier", "MEDIUM", "--title", "t", "--file", join(cwd, "r.md")],
-    ["challenge", "open", "--merge", "merge-abcd1234", "--tier", "LOW", "--title", "t", "--file", join(cwd, "r.md"), "--candidate", candidate],
+    ["challenge", "open", "--merge", "challenge-abcd1234-0000-4000-8000-000000000000", "--tier", "LOW", "--title", "t", "--file", join(cwd, "r.md")],
+    ["challenge", "open", "--merge", "merge-abcd1234-0000-4000-8000-000000000000", "--tier", "MEDIUM", "--title", "t", "--file", join(cwd, "r.md")],
+    ["challenge", "open", "--merge", "merge-abcd1234-0000-4000-8000-000000000000", "--tier", "LOW", "--title", "t", "--file", join(cwd, "r.md"), "--candidate", candidate],
   ]) {
     const refused = await runCliWithPeer(home, cwd, args, (request) => frame(request, {}));
     assert.equal(refused.status, 2, args.join(" "));
@@ -400,15 +400,13 @@ test("mail-v1 CLI: challenge open carries the merge name; candidate+base go toge
   }
 });
 
-test("DR27 (kept module-level coverage): exact attestation identity uses the shared non-coercing grammar; missing conditions survive public sanitization", () => {
+test("DR46 current review: exact candidate identity uses the shared non-coercing grammar; missing conditions survive public sanitization", () => {
   const identity = { repo: "project", targetRef: "refs/heads/main", candidate: "2".repeat(40),
     expectedBase: "1".repeat(40), policyRevision: "p1" };
-  const fact = { kind: "peer", identity, verdict: "APPROVE", evidence: "read" };
-  assert.equal(attestationProblem(fact), null);
+  assert.equal(exactCandidateCheck(identity), null);
   for (const policyRevision of ["p\n1", "p".repeat(129), ""])
-    assert.notEqual(attestationProblem({ ...fact, identity: { ...identity, policyRevision } }), null);
-  assert.notEqual(attestationProblem({ ...fact, verdict: { toString: () => "APPROVE" } }), null);
-  assert.notEqual(attestationProblem({ ...fact, identity: { ...identity, candidate: "a".repeat(64) } }), null);
+    assert.notEqual(exactCandidateCheck({ ...identity, policyRevision }), null);
+  assert.notEqual(exactCandidateCheck({ ...identity, candidate: "not-an-oid" }), null);
   const failure = publicFailure(new StoreError("INTEGRATION_CONDITIONS", "missing",
     { details: { effectiveTier: "HIGH", missing: "Principal ACCEPT" } }));
   assert.deepEqual(failure.details, { effectiveTier: "HIGH", missing: "Principal ACCEPT" });

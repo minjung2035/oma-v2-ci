@@ -18,7 +18,7 @@ if (process.argv.includes("--inventory")) {
   const config = ts.readConfigFile("tsconfig.json", ts.sys.readFile);
   if (config.error) throw new Error(ts.flattenDiagnosticMessageText(config.error.messageText, "\n"));
   const parsed = ts.parseJsonConfigFileContent(config.config, ts.sys, process.cwd());
-  const roots = ["src/entry/broker.ts", "src/entry/runner.ts", "src/entry/host.ts", "src/cli.ts", "src/pi-extension.ts"];
+  const roots = ["apps/oma/src/entry/broker.ts", "apps/oma/src/entry/runner.ts", "apps/oma/src/entry/host.ts", "apps/oma/src/cli.ts", "packages/extension/src/index.ts"];
   const { findings } = runtimeImportClosure({ rootDir: process.cwd(), roots, manifest: production, compilerOptions: parsed.options });
   const acceptance = inventoryAcceptance([...normativeSources, "docs/architecture.md"].map(source => ({ source, text: readFileSync(source, "utf8") })));
   // The generated inventory is not a complete dependency closure after a move.
@@ -28,7 +28,7 @@ if (process.argv.includes("--inventory")) {
     file !== "implementation/traceability.json");
   const authoredDocuments = sourceFiles(".", "docs");
   const closure = [...new Set([...normativeSources, ...production, ...authoredImplementation, ...authoredDocuments,
-    ...["src", "test", "scripts"].flatMap(directory => sourceFiles(".", directory)),
+    ...["apps", "packages", "test", "scripts"].flatMap(directory => sourceFiles(".", directory)),
     "docs/architecture.md", "production-files.txt", "production-manifest.json", "package.json", "package-lock.json", "tsconfig.json", "tsconfig.build.json"] )];
   const failures = linkedRows.filter((row, index) => {
     const entry = entries[index];

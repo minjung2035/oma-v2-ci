@@ -1,6 +1,8 @@
 import ts from 'typescript';
 import { resolve, relative, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { createArchitectureProgram } from './dependency-graph.mjs';
+import { authoredFiles } from './architecture/rules/shared.mjs';
 
 const EFFECTS = new Set(['spawn', 'spawnSync', 'exec', 'execSync', 'execFile', 'execFileSync',
   'fsyncSync', 'fdatasyncSync', 'readFileSync', 'writeFileSync', 'appendFileSync', 'renameSync',
@@ -9,6 +11,7 @@ const EFFECTS = new Set(['spawn', 'spawnSync', 'exec', 'execSync', 'execFile', '
 export function inspectTransactions(program, root = process.cwd()) {
   const checker = program.getTypeChecker();
   const findings = [];
+  const authored = new Set(authoredFiles(root));
   const report = (source, node, message) => {
     const at = source.getLineAndCharacterOfPosition(node.getStart(source));
     findings.push({ file: relative(root, source.fileName).split(sep).join('/'), line: at.line + 1, column: at.character + 1, message });
@@ -28,7 +31,7 @@ export function inspectTransactions(program, root = process.cwd()) {
   };
   for (const source of program.getSourceFiles()) {
     const local = relative(root, source.fileName).split(sep).join('/');
-    if (source.isDeclarationFile || !local.startsWith('src/')) continue;
+    if (source.isDeclarationFile || !authored.has(local)) continue;
     const visit = node => {
       if (ts.isCallExpression(node) && nameOf(node.expression) === 'transaction') {
         const callback = node.arguments[0];
@@ -62,12 +65,7 @@ export function inspectTransactions(program, root = process.cwd()) {
 }
 
 export function main(root = process.cwd()) {
-  const path = resolve(root, 'tsconfig.json');
-  const loaded = ts.readConfigFile(path, ts.sys.readFile);
-  if (loaded.error) throw new Error(ts.flattenDiagnosticMessageText(loaded.error.messageText, '\n'));
-  const config = ts.parseJsonConfigFileContent(loaded.config, ts.sys, root);
-  if (config.errors.length) throw new Error(config.errors.map(error => ts.flattenDiagnosticMessageText(error.messageText, '\n')).join('\n'));
-  const program = ts.createProgram(config.fileNames, { ...config.options, noEmit: true });
+  const program = createArchitectureProgram(root);
   const findings = inspectTransactions(program, root);
   for (const finding of findings) console.error(`${finding.file}:${finding.line}:${finding.column}: ${finding.message}`);
   if (findings.length) process.exitCode = 1;

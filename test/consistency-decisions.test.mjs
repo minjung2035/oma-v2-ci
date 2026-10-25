@@ -7,7 +7,7 @@ import { DatabaseSync } from "node:sqlite";
 import {
   assertSupportedIntegration,
   snapshotIntegrationPolicy,
-} from "../dist/src/git/integration-policy.js";
+} from "@oma/domain/integration-policy";
 
 const root = new URL("../", import.meta.url);
 const document = new URL("docs/implementation/consistency-decisions.md", root);
@@ -194,17 +194,12 @@ test('V01A: N-001 identifies the reviewed architecture bytes', () => {
   assert.ok(rule?.includes(digest), 'N-001 architecture hash is not the reviewed source');
 });
 
-test("V01B: conceptual states do not silently become v3 SQL state or entities", () => {
-  const ddl = readFileSync(new URL("implementation/schema-v3.sql", root));
-  assert.equal(
-    createHash("sha256").update(ddl).digest("hex"),
-    "b63409dbdf50d33f0bb0f443dbad1b5106ff4cba74c26fc626b7e8b9dfdabf52",
-    "a v3 DDL change needs separate C3 approval, not a golden refresh",
-  );
+test("DR46 schema4: the current DDL contains exactly the six ledger entities", () => {
+  const ddl = readFileSync(new URL("packages/storage/src/schema-v4.sql", root));
   const db = new DatabaseSync(":memory:");
   try {
     db.exec(ddl.toString());
-    assert.equal(db.prepare("PRAGMA user_version").get().user_version, 3);
+    assert.equal(db.prepare("PRAGMA user_version").get().user_version, 4);
     assert.deepEqual(
       db
         .prepare(
@@ -226,7 +221,7 @@ test("V01B: conceptual states do not silently become v3 SQL state or entities", 
   }
 });
 
-test("V01B: the actual unsupported integration gate is not generic success or retry", () => {
+test("DR46 check grammar: valid commands stay configured and empty argv is unsupported", () => {
   const policy = { policyRevision: "wp01", protectedPaths: [], checks: [] };
   assert.doesNotThrow(() =>
     assertSupportedIntegration(snapshotIntegrationPolicy(policy)),
@@ -236,10 +231,9 @@ test("V01B: the actual unsupported integration gate is not generic success or re
       ...policy,
       checks: [
         {
-          id: "unqualified",
-          argv: ["/usr/bin/true"],
+          id: "invalid-command",
+          argv: [],
           env: {},
-          timeoutSeconds: -1,
         },
       ],
     },

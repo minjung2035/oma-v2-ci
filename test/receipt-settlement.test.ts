@@ -7,14 +7,16 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { chmodSync, readFileSync, readdirSync, statSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import type { AuthContext } from "../implementation/contracts.js";
-import { publishDeliveryReceipt } from "../src/storage/delivery-receipt.js";
-import { agentRootPathAt } from "../src/storage/paths.js";
-import { RunRegistry, type CgroupPin, type Population } from "../src/runtime/run-registry.js";
-import { PeerAuthenticator, peerCgroup, type BoundPeer } from "../src/broker/peer-authenticator.js";
-import { InternalDispatcher } from "../src/broker/internal-dispatcher.js";
-import { createInternalDispatchPorts } from "../src/broker/composition.js";
-import type { UnitsModule } from "../src/units.js";
+import type { AuthContext } from "@oma/contracts";
+import { publishDeliveryReceipt } from "@oma/storage/delivery-receipt";
+import { agentRootPathAt } from "@oma/domain/paths";
+import { RunRegistry } from "@oma/broker/run-registry";
+import { type CgroupPin, type Population } from "@oma/native/cgroup";
+import { PeerAuthenticator, peerCgroup } from "@oma/broker/peer-authenticator";
+import { type BoundPeer } from "@oma/broker/ports";
+import { InternalDispatcher, projectInternalPeers } from "@oma/broker/internal-dispatcher";
+import { createInternalDispatchDataPorts } from "#oma-test/app/broker/composition";
+import type { UnitsModule } from "@oma/platform-linux/units";
 import { ALL_CAPS, storedSpec } from "./fixtures/spec.js";
 import { TEST_VIEW_LIMITS } from "./fixtures/limits.js";
 import { boundaryOf, completeSession, evidenceOf, preparedFixture, type ReceiptFixture } from "./fixtures/delivery-receipt.js";
@@ -107,8 +109,8 @@ function liveEndpoint(f: ReceiptFixture, registry: RunRegistry, invocation: () =
   const units = { observe: () => ({ activeState: "active", invocationId: invocation(), cgroup }),
     unitCgroup: () => cgroup } as unknown as UnitsModule;
   const peers = new PeerAuthenticator(f.store, units, registry, "demo", () => undefined);
-  const dispatcher = new InternalDispatcher({ ...createInternalDispatchPorts(f.store, f.mail, f.root, peers),
-    isDraining: () => false, assertAdmission: () => undefined, admitResource: () => () => undefined,
+  const dispatcher = new InternalDispatcher({ ...createInternalDispatchDataPorts(f.store, f.mail, f.root), peers: projectInternalPeers(peers),
+    isDraining: () => false, assertAdmission: () => undefined,
     failureAnswer: (id, error) => ({ v: 1, id, ok: false, error: { code: (error as { code?: string }).code } }),
     refreshViews: () => undefined, openRun: () => { throw new Error("no run is opened here"); } });
   return (params: Record<string, unknown>) =>

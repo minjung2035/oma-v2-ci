@@ -4,14 +4,14 @@ import { createTransport } from "nodemailer";
 import { mkdtempSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { buildEml } from "../src/mail/serialize.js";
-import { MAX_HEADER_LINE_BYTES, parseEmlHeaders } from "../src/mail/headers.js";
-import { Store } from "../src/store.js";
-import { AdmissionGate, bindAdmissionGate } from "../src/domain/admission.js";
-import { StoreError } from "../src/domain/errors.js";
-import { exportRefForRequestKey } from "../src/domain/derived.js";
-import { PreparationExecutor } from "../src/process/preparation.js";
-import { sha256Hex } from "../src/hash.js";
+import { buildEml } from "@oma/mail/serialize";
+import { MAX_HEADER_LINE_BYTES, parseEmlHeaders } from "@oma/mail/headers";
+import { Store } from "@oma/storage";
+import { AdmissionGate, bindAdmissionGate } from "@oma/domain/admission";
+import { StoreError } from "@oma/domain/errors";
+import { exportRefForRequestKey } from "@oma/domain/derived";
+import { PreparationExecutor } from "@oma/process/preparation";
+import { sha256Hex } from "@oma/domain/canonical-json";
 import {
   gitAuth,
   gitCommand,

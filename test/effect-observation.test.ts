@@ -1,3 +1,4 @@
+import { createMailModule } from "#oma-test/app/broker/mail-composition";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { join } from "node:path";
@@ -10,13 +11,13 @@ import {
   rmSync,
   writeFileSync,
 } from "node:fs";
-import { Store } from "../src/store.js";
-import { MailModule } from "../src/mail.js";
+import { Store } from "@oma/storage";
+import { MailModule } from "@oma/mail";
 import {
   readExtensions,
   toggleExtension,
-} from "../src/application/extensions.js";
-import { loadConfiguration } from "../src/config.js";
+} from "#oma-test/app/application/extensions";
+import { loadConfiguration } from "@oma/config";
 import { makeValidAgent } from "./fixtures/spec.js";
 import { observeFile, observeLedger } from "./fixtures/effect-observation.js";
 import { createCompleteConfigurationFixture } from "./fixtures/configuration.js";
@@ -33,7 +34,7 @@ test("V02C: independent raw SQL and physical Mail effects detect duplicate repla
     store.transaction((tx) => {
       for (const name of ["a", "b"]) tx.insertAgent(makeValidAgent(name));
     });
-    const mail = new MailModule(
+    const mail = createMailModule(
       { stateRoot: root, society: "crash" },
       store,
       64,
@@ -107,7 +108,7 @@ test("V02A: config editor performs an observable replacement and remains loadabl
     const before = observeFile(role);
     // The core extension is non-removable: a no-op must not replace the pointer.
     const context = readExtensions(f.path, "principal", "resident");
-    toggleExtension(context, "dist/src/pi-extension.js", "workers", false);
+    toggleExtension(context, "packages/extension/dist/index.js", "workers", false);
     assert.deepEqual(observeFile(role), before);
     mkdirSync(join(f.installation, "extensions"));
     writeFileSync(join(f.installation, "extensions/local.js"), "export {};\n");

@@ -1,8 +1,8 @@
 // Runs under a real pseudo-terminal and reports what the terminal owner did.
 // Never imported by production; it exists so the raw-mode branch is exercised
 // by an actual TTY rather than by a stubbed stream.
-import { KeyDecoder } from "../../src/tui/keys.js";
-import { openTerminal } from "../../src/tui/screen.js";
+import { KeyDecoder } from "@oma/tui/keys";
+import { openTerminal } from "@oma/tui/screen";
 
 const input = process.stdin;
 const output = process.stdout;

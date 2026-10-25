@@ -4,10 +4,10 @@ import { existsSync, mkdirSync, writeFileSync, readFileSync, realpathSync, rmSyn
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { spawnSync } from "node:child_process";
-import { loadConfig, loadConfiguration } from "../src/config.js";
-import { canonicalResourceLimits } from "../src/domain/resources.js";
-import { encodedResidentToolSurface } from "../src/domain/tool-surface.js";
-import { writePackageIndex } from "../src/runtime/packages/store.js";
+import { loadConfig, loadConfiguration } from "@oma/config";
+
+import { encodedResidentToolSurface } from "@oma/domain/tool-surface";
+import { writePackageIndex } from "#oma-test/app/runtime/packages/store";
 import { createCompleteConfigurationFixture as fixture } from "./fixtures/configuration.js";
 
 test("OPS config: migration preserves the closed host contract and does not overwrite input/output", () => {
@@ -144,7 +144,7 @@ for (const [name, file, update] of [
 }
 /** Starts the real runner entry as its unit would, stopping before Pi runs,
  * and reports what it selected. The unit's declared surface travels as hex
- * beside the profile and resources, so a call that does not override it gets
+ * beside the accepted profile and model reference, so a call that does not override it gets
  * the deployment's resident plan. */
 function runnerEntry(f: ReturnType<typeof fixture>, env: Record<string, string | undefined>) {
   env = { OMA_TOOL_SURFACE_HEX: hex(encodedResidentToolSurface()), ...env };
@@ -164,8 +164,8 @@ function runnerEntry(f: ReturnType<typeof fixture>, env: Record<string, string |
   writeFileSync(
     preload,
     `import { writeFileSync } from 'node:fs';
-    import { RunnerModule } from ${JSON.stringify(new URL("../src/runner.js", import.meta.url).href)};
-    import { packageResourcePaths } from ${JSON.stringify(new URL("../src/runtime/packages/store.js", import.meta.url).href)};
+    import { RunnerModule } from ${JSON.stringify(new URL(import.meta.resolve("#oma-test/app/runner")).href)};
+    import { packageResourcePaths } from ${JSON.stringify(new URL(import.meta.resolve("#oma-test/app/runtime/packages/index")).href)};
     RunnerModule.prototype.run = async function () {
       writeFileSync(${JSON.stringify(capture)}, JSON.stringify({ profile: this.profile, confinement: this.paths.confinement ?? null,
         packages: this.paths.packages ?? null, packageResources: packageResourcePaths(this.paths.packages) ?? null })); return 0; };`,
@@ -175,7 +175,7 @@ function runnerEntry(f: ReturnType<typeof fixture>, env: Record<string, string |
     [
       "--import",
       preload,
-      resolve("dist/src/entry/runner.js"),
+      resolve("apps/oma/dist/entry/runner.js"),
       "--society",
       "demo",
       "--agent",
@@ -198,9 +198,8 @@ const hex = (text: string): string => Buffer.from(text, "utf8").toString("hex");
 test("U1: rootfs '/' fails startup before RunnerModule can run", () => {
   const f = fixture();
   try {
-    const resources = loadConfiguration(f.path).config.agentProfiles.verifier!.resources;
     f.edit("host.json", host => { host.installation.rootfs = "/"; });
-    const result = runnerEntry(f, { OMA_PROFILE_HEX: hex("verifier"), OMA_RESOURCES_HEX: hex(canonicalResourceLimits(resources)) });
+    const result = runnerEntry(f, { OMA_PROFILE_HEX: hex("verifier"), OMA_MODEL_PROFILE_HEX: hex("review") });
     assert.notEqual(result.status, 0);
     assert.match(result.stderr, /UNSUPPORTED_PROFILE/);
     assert.doesNotMatch(result.stderr, /runs unconfined/);
@@ -211,19 +210,46 @@ test("U1: rootfs '/' fails startup before RunnerModule can run", () => {
 test("OPS config: runner entry selects the broker-rendered role at startup without executing Pi", () => {
   const f = fixture();
   try {
-    const accepted = loadConfiguration(f.path).config.agentProfiles.verifier!.resources;
-    const run = runnerEntry(f, { OMA_PROFILE_HEX: hex("verifier"), OMA_RESOURCES_HEX: hex(canonicalResourceLimits(accepted)) });
+    const run = runnerEntry(f, { OMA_PROFILE_HEX: hex("verifier"), OMA_MODEL_PROFILE_HEX: hex("review") });
     assert.equal(run.status, 0, run.stderr);
     const selected = run.selected.profile;
     assert.equal(selected.name, "verifier");
     assert.equal(selected.model.model, "model-b");
     assert.equal(
       selected.settings.extensions[0].path,
-      join(f.installation, "dist/src/pi-extension.js"),
+      join(f.installation, "packages/extension/dist/index.js"),
     );
   } finally {
     f.close();
   }
+});
+
+test("DR46-F01: a later role edit cannot retarget an accepted model reference", () => {
+  const f = fixture();
+  try {
+    const accepted = { OMA_PROFILE_HEX: hex("verifier"), OMA_MODEL_PROFILE_HEX: hex("review") };
+    const first = runnerEntry(f, accepted);
+    assert.equal(first.status, 0, first.stderr);
+    assert.equal(first.selected.profile.model.model, "model-b");
+    f.edit("roles/verifier.json", role => { role.agentProfile.modelProfile = "standard"; });
+    const afterReferenceEdit = runnerEntry(f, accepted);
+    assert.equal(afterReferenceEdit.status, 0, afterReferenceEdit.stderr);
+    assert.equal(afterReferenceEdit.selected.profile.modelProfile, "review");
+    assert.equal(afterReferenceEdit.selected.profile.model.model, "model-b");
+    f.edit("models.json", models => { models.review.model = "model-b-next"; });
+    const afterContentEdit = runnerEntry(f, accepted);
+    assert.equal(afterContentEdit.status, 0, afterContentEdit.stderr);
+    assert.equal(afterContentEdit.selected.profile.model.model, "model-b-next");
+    assert.equal(first.selected.profile.model.model, "model-b", "a previous activation snapshot stays unchanged");
+    f.edit("models.json", models => { delete models.review; });
+    const removed = runnerEntry(f, accepted);
+    assert.equal(removed.status, 4);
+    assert.match(removed.stderr, /unsupported accepted model reference/);
+    for (const model of [undefined, "", "zz", "ff", hex("missing")]) {
+      const refused = runnerEntry(f, { ...accepted, OMA_MODEL_PROFILE_HEX: model });
+      assert.equal(refused.status, 4, `invalid model channel ${model}`);
+    }
+  } finally { f.close(); }
 });
 
 /** A package store laid out as the engine's package manager installs into it. */
@@ -250,8 +276,7 @@ test("DR25/C18: the runner entry hands the package store to the spawn plan, so p
     const packages = store(f.root, { "oma-rich": richPackage });
     await writePackageIndex(packages);
     f.edit("host.json", host => { host.installation.packages = packages; });
-    const accepted = loadConfiguration(f.path).config.agentProfiles.verifier!.resources;
-    const run = runnerEntry(f, { OMA_PROFILE_HEX: hex("verifier"), OMA_RESOURCES_HEX: hex(canonicalResourceLimits(accepted)) });
+    const run = runnerEntry(f, { OMA_PROFILE_HEX: hex("verifier"), OMA_MODEL_PROFILE_HEX: hex("review") });
     assert.equal(run.status, 0, run.stderr);
     // The store's real root reaches RunnerPaths.packages -- without it
     // packageResourcePaths sees undefined and no --skill/--prompt-template/
@@ -271,8 +296,7 @@ test("DR25/C18: the runner entry hands the package store to the spawn plan, so p
 test("OMA_PI_COMMAND: an override supplies no shipped engine entry, so the runner refuses at startup -- not at first delivery", () => {
   const f = fixture();
   try {
-    const accepted = loadConfiguration(f.path).config.agentProfiles.verifier!.resources;
-    const run = runnerEntry(f, { OMA_PROFILE_HEX: hex("verifier"), OMA_RESOURCES_HEX: hex(canonicalResourceLimits(accepted)),
+    const run = runnerEntry(f, { OMA_PROFILE_HEX: hex("verifier"), OMA_MODEL_PROFILE_HEX: hex("review"),
       // A pinned executable resolves to args:[]; a confined Resident would
       // then throw UNSUPPORTED_PROFILE on every delivery. The unit must fail
       // immediately instead.
@@ -283,40 +307,12 @@ test("OMA_PI_COMMAND: an override supplies no shipped engine entry, so the runne
   } finally { f.close(); }
 });
 
-test("WP25.03 / D05: a Resident runs with its accepted resources; the current profile only names its model", () => {
-  const f = fixture();
-  try {
-    const current = loadConfiguration(f.path).config.agentProfiles.verifier!.resources;
-    // Accepted before the profile was edited: other limits than the current ones.
-    const accepted = { ...current, workspaceBytes: current.workspaceBytes + 4096, tmpBytes: current.tmpBytes + 8192,
-      checkTimeoutSeconds: current.checkTimeoutSeconds + 1 };
-    const run = runnerEntry(f, { OMA_PROFILE_HEX: hex("verifier"), OMA_RESOURCES_HEX: hex(canonicalResourceLimits(accepted)) });
-    assert.equal(run.status, 0, run.stderr);
-    assert.equal(run.selected.profile.workspaceBytes, accepted.workspaceBytes, "the engine's workspace limit came from the current profile");
-    assert.equal(run.selected.confinement.tmpBytes, accepted.tmpBytes, "the sandbox /tmp came from the current profile");
-    assert.equal(Object.hasOwn(run.selected.confinement, "checkResources"), false,
-      "candidate check resources belong to the integration profile, not the Resident sandbox");
-    assert.equal(run.selected.profile.model.model, "model-b", "the model is the current profile's");
-    // No accepted spec, or anything but its canonical text, is refused -- never
-    // replaced by the current profile.
-    const { ["workspaceBytes"]: _dropped, ...partial } = accepted;
-    for (const resources of [undefined, "", "zz", hex("{}"), hex(JSON.stringify(partial)),
-      hex(JSON.stringify({ ...accepted, workspaceBytes: -1 })), hex(JSON.stringify({ ...accepted, extra: 1 })),
-      hex(JSON.stringify(Object.fromEntries(Object.entries(accepted).reverse())))]) {
-      const refused = runnerEntry(f, { OMA_PROFILE_HEX: hex("verifier"), ...(resources === undefined ? {} : { OMA_RESOURCES_HEX: resources }) });
-      assert.equal(refused.status, 4, `resources ${resources} were accepted`);
-      assert.match(refused.stderr, /broker-rendered resources/);
-    }
-  } finally {
-    f.close();
-  }
-});
+
 
 test("F5: runner entry refuses a missing or malformed OMA_TOOL_SURFACE_HEX before Pi runs", () => {
   const f = fixture();
   try {
-    const resources = canonicalResourceLimits(loadConfiguration(f.path).config.agentProfiles.verifier!.resources);
-    const base = { OMA_PROFILE_HEX: hex("verifier"), OMA_RESOURCES_HEX: hex(resources) };
+    const base = { OMA_PROFILE_HEX: hex("verifier"), OMA_MODEL_PROFILE_HEX: hex("review") };
     // Absent: a unit this broker rendered always carries the plan.
     const missing = runnerEntry(f, { ...base, OMA_TOOL_SURFACE_HEX: undefined });
     assert.equal(missing.status, 4);
@@ -367,8 +363,7 @@ test("OPS config: rejects symlinked and oversized prompt assets", () => {
 
 for (const format of ["inline", "operations"] as const) {
   for (const defect of [
-    { name: "quota", file: "host.json", inline: ["quota"], split: ["quota"], field: "storageBytes", error: /quota\.storageBytes is required/ },
-    { name: "resources", file: "roles/resident.json", inline: ["agentProfiles", "resident", "resources"], split: ["agentProfile", "resources"], field: "memoryBytes", error: /resources\.memoryBytes is required/ },
+    { name: "protocol limits", file: "host.json", inline: ["limits"], split: ["limits"], field: "logBytes", error: /limits\.logBytes is required/ },
     { name: "model relation", file: "roles/resident.json", inline: ["agentProfiles", "resident"], split: ["agentProfile"], field: "modelProfile", error: /modelProfile unknown/ },
   ]) {
     test(`V02A: ${format} fixture rejects deliberately missing ${defect.name}`, () => {

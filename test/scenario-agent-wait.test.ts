@@ -6,8 +6,8 @@ import { existsSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { withScenario } from "./fixtures/scenario.js";
 import { call, text, tools, toolResults } from "./fixtures/scripted-provider.js";
-import type { AuthContext } from "../implementation/contracts.js";
-import { runnerReceiptPathAt, runnerSessionDirPathAt, workspacePathAt } from "../src/storage/paths.js";
+import type { AuthContext } from "@oma/contracts";
+import { runnerReceiptPathAt, runnerSessionDirPathAt, workspacePathAt } from "@oma/domain/paths";
 
 for (const ack of [false, true]) test(`DR27: wait persists tools, not delivery; explicit ACK=${ack}`, RESIDENT_TEST_OPTIONS, async () => {
   await withScenario({ residents: ["worker-a"], confined: true }, async s => {

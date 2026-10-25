@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { VENDORED_EXTENSION_DIRS } from "./architecture/rules/shared.mjs";
 /** PRIORITY-0 "문서와 식별자에도 같은 원칙", P0-7: the durable boundaries of the
  * documents are checked by machine. A requirement ID or an acceptance number,
  * once given, has one meaning (P0-1); acceptance rows live in the matrix that
@@ -72,7 +73,7 @@ export function brokenLinks(root, files) {
 
 /** Authored Markdown, including new/untracked files, with immutable archives
  * retained as records rather than evaluated as current guidance. The
- * vendored bundled-extension payload under src/extension/vendor/ is
+ * vendored bundled-extension payload under the reviewed tool workspace vendor directories is
  * byte-pinned upstream data, reviewed through its manifest digest -- its
  * README and docs/ travel with the snapshot and are not authored project
  * documentation. */
@@ -83,7 +84,7 @@ export function projectDocuments(root = ".") {
     for (const entry of readdirSync(join(root, relative), { withFileTypes: true })) {
       if (ignored.has(entry.name)) continue;
       const path = relative ? `${relative}/${entry.name}` : entry.name;
-      if (entry.isDirectory()) { if (path !== "src/extension/vendor") walk(path); }
+      if (entry.isDirectory()) { if (!VENDORED_EXTENSION_DIRS.includes(path)) walk(path); }
       else if (entry.name.endsWith(".md")) files.push(path);
     }
   };

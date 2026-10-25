@@ -1,3 +1,5 @@
+import { testBroker } from "./helpers/broker-fixture.js";
+import { createLifecycleModule } from "#oma-test/app/broker/lifecycle-composition";
 /** Post-listen 'error' settlement (WORKSTREAM §9 — 전신성 부류 전수 스캔):
  * a `server.once("error", reject)` removed after a successful listen leaves
  * zero 'error' listeners behind, so a later accept-class error
@@ -20,18 +22,18 @@ import { connect, Socket, type Server } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test, { type TestContext } from "node:test";
-import type { ResolvedAgentSpec } from "../implementation/contracts.js";
-import { Broker } from "../src/broker.js";
-import { LifecycleModule } from "../src/lifecycle.js";
-import { EgressPool, startEgressService } from "../src/platform/guest/egress.js";
-import { startGuestServer, type GuestIdentity } from "../src/platform/guest/server.js";
-import { startHostApi, type HostApiBackend } from "../src/platform/host/host-api.js";
-import { PLATFORM_FRAME_BYTES } from "../src/protocol/host-guest.js";
-import { ConnectProxy, type EgressAudit } from "../src/runtime/connect-proxy.js";
-import { EgressForwarder } from "../src/runtime/egress-forwarder.js";
-import { InferenceRelay } from "../src/runtime/inference-relay.js";
-import type { UnitsModule } from "../src/units.js";
-import { ViewsModule } from "../src/views.js";
+import type { ResolvedAgentSpec } from "@oma/contracts";
+import { Broker } from "@oma/broker";
+import { LifecycleModule } from "@oma/lifecycle";
+import { EgressPool, startEgressService } from "#oma-test/app/platform/guest/egress";
+import { startGuestServer, type GuestIdentity } from "#oma-test/app/platform/guest/server";
+import { startHostApi, type HostApiBackend } from "#oma-test/app/platform/host/host-api";
+import { PLATFORM_FRAME_BYTES } from "@oma/protocol/host-guest";
+import { ConnectProxy, type EgressAudit } from "#oma-test/app/runtime/connect-proxy";
+import { EgressForwarder } from "#oma-test/app/runtime/egress-forwarder";
+import { InferenceRelay } from "#oma-test/app/runtime/inference-relay";
+import type { UnitsModule } from "@oma/platform-linux/units";
+import { ViewsModule } from "#oma-test/app/views";
 import { preparedFixture } from "./fixtures/delivery-receipt.js";
 import { TEST_VIEW_LIMITS } from "./fixtures/limits.js";
 
@@ -87,7 +89,7 @@ test("post-listen: the CONNECT proxy absorbs an accept-class error through its a
   const socketPath = path("egress.sock");
   const audits: EgressAudit[] = [];
   const proxy = await ConnectProxy.open({ socketPath,
-    policy: { role: "worker", allow: ["example.com"] }, actor: "alice",
+    actor: "alice",
     dial: async () => new Socket(), audit: entry => audits.push(entry) });
   t.after(() => proxy.close());
   const server = Reflect.get(proxy, "server") as Server;
@@ -103,7 +105,7 @@ test("post-listen: a refusing audit sink cannot throw out of the proxy listener'
   const { path } = scratch(t);
   const socketPath = path("egress.sock");
   const proxy = await ConnectProxy.open({ socketPath,
-    policy: { role: "worker", allow: ["example.com"] }, actor: "alice",
+    actor: "alice",
     dial: async () => new Socket(), audit: () => { throw new Error("the journal is dead"); } });
   t.after(() => proxy.close());
   const server = Reflect.get(proxy, "server") as Server;
@@ -214,11 +216,10 @@ test("post-listen: the broker's listener survives a dead journal sink -- the cle
   const units = { onRevokeRun: undefined, bindIncarnationReader: () => undefined, unitCgroup: () => "",
     observe: () => ({ activeState: "active", subState: "running", result: "success", execMainStatus: 0, cgroup: "", invocationId: "a".repeat(32) }),
     observeStatus: async () => new Map() } as unknown as UnitsModule;
-  const lifecycle = new LifecycleModule(f.store, units, { stateRoot: f.root, projectGit: join(f.root, "repos", "project.git"),
+  const lifecycle = createLifecycleModule(f.store, units, { stateRoot: f.root, projectGit: join(f.root, "repos", "project.git"),
     society: "demo", hasGoal: () => true, activationAllowed: () => true },
     (_parent: unknown, input: { name: string; from: string; brief: string }) => ({ ...input }) as unknown as ResolvedAgentSpec, f.mail);
-  const broker = new Broker(f.store, f.mail, units, new ViewsModule(f.store, f.root, "demo", "p", TEST_VIEW_LIMITS), lifecycle, null, null,
-    { stateRoot: f.root, runRoot: join(f.root, "run"), society: "demo", hasGoal: () => true });
+  const broker = testBroker({ store: f.store, mail: f.mail, units: units, views: new ViewsModule(f.store, f.root, "demo", "p", TEST_VIEW_LIMITS), lifecycle: lifecycle, git: null, reviews: null, reconcile: null, paths: { stateRoot: f.root, runRoot: join(f.root, "run"), society: "demo", hasGoal: () => true } });
   // The drain is also the teardown: an emit that escaped would otherwise
   // leave both listeners bound and the process could never exit.
   t.after(() => void broker.drainAndClose().catch(() => undefined));

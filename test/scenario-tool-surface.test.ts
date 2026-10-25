@@ -7,7 +7,7 @@ import { RESIDENT_TEST_OPTIONS } from "./fixtures/resident.js";
 import assert from "node:assert/strict";
 import { withScenario } from "./fixtures/scenario.js";
 import { call, text, tools, toolResults } from "./fixtures/scripted-provider.js";
-import { encodeToolSurfacePlan, planToolSurface } from "../src/domain/tool-surface.js";
+import { encodeToolSurfacePlan, planToolSurface } from "@oma/domain/tool-surface";
 
 /** The internal plan for each shape the gate must handle. `valid` groups a
  * routine tool; `collision` names a group after an OMA tool; `unknown`

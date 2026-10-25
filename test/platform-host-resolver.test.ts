@@ -6,10 +6,11 @@ import assert from "node:assert/strict";
 import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { StoreError } from "../src/domain/errors.js";
-import { keychainCredentials, type KeychainStore } from "../src/platform/host/keychain.js";
-import { hostResolver } from "../src/platform/host/resolver.js";
-import { ProcessLock } from "../src/runtime/process-lock.js";
+import { StoreError } from "@oma/domain/errors";
+import { keychainCredentials } from "#oma-test/app/runtime/keychain-credentials";
+import { type KeychainStore } from "@oma/contracts/credentials";
+import { hostResolver } from "#oma-test/app/platform/host/resolver";
+import { ProcessLock } from "@oma/native/process-lock";
 import { renameSync } from "node:fs";
 import { setTimeout as pause } from "node:timers/promises";
 import { spawn } from "node:child_process";
@@ -60,9 +61,10 @@ test("MAC-702: a Keychain that cannot be read fails the resolution; no other cre
   });
 });
 
-test("§7.2: writes to the credential are serialized, each seeing the one before", async () => {
+test("§7.2: writes to the credential are serialized, each seeing the one before", async t => {
+  const root = mkdtempSync(join(tmpdir(), "oma-credential-current-")); t.after(() => rmSync(root, { recursive: true, force: true }));
   const keychain = memoryKeychain();
-  const store = keychainCredentials(keychain, "engine-managed");
+  const store = keychainCredentials(keychain, "engine-managed", join(root, "writer.lock"));
   await Promise.all(["a", "b", "c"].map(provider => store.modify(provider, async current => {
     assert.equal(current, undefined);
     await new Promise(r => setTimeout(r, 5));
@@ -74,8 +76,9 @@ test("§7.2: writes to the credential are serialized, each seeing the one before
   assert.equal(await store.read("b"), undefined);
 });
 
-for (const value of ["{", "null", "[]"]) test(`Keychain credential owner: corrupt ${value} is not an empty blob`, async () => {
-  const keychain = memoryKeychain({ "engine-managed": value }), store = keychainCredentials(keychain, "engine-managed");
+for (const value of ["{", "null", "[]"]) test(`Keychain credential owner: corrupt ${value} is not an empty blob`, async t => {
+  const root = mkdtempSync(join(tmpdir(), "oma-credential-corrupt-")); t.after(() => rmSync(root, { recursive: true, force: true }));
+  const keychain = memoryKeychain({ "engine-managed": value }), store = keychainCredentials(keychain, "engine-managed", join(root, "writer.lock"));
   await assert.rejects(store.read("fixture"), code("STORE_CORRUPT"));
   await assert.rejects(store.list(), code("STORE_CORRUPT"));
   await assert.rejects(store.modify("fixture", async () => ({ type: "api_key", key: "fixture" }) as never), code("STORE_CORRUPT"));
@@ -130,7 +133,7 @@ test("Keychain credential owner: concurrent processes reread the previous commit
   t.after(() => rmSync(root, { recursive: true, force: true }));
   const blob = join(root, "fixture-credentials.json"), lockPath = join(root, "credentials.lock");
   writeFileSync(blob, "{}");
-  const module = new URL("../src/platform/host/keychain.js", import.meta.url).href;
+  const module = new URL(import.meta.resolve("#oma-test/app/runtime/keychain-credentials")).href;
   const script = `import { readFileSync, writeFileSync } from "node:fs";
 import { keychainCredentials } from ${JSON.stringify(module)};
 import { setTimeout as pause } from "node:timers/promises";

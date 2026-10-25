@@ -7,7 +7,7 @@
  * tools against that CLI: a pass means the bytes a value named never left its
  * slot. The peer is a protocol fixture, not a broker.
  */
-import "../src/runtime/client-preload.js";
+import "#oma-test/app/runtime/client-preload";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
@@ -16,12 +16,13 @@ import { createServer, type Server } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { registerOmaTools, validAddress } from "../src/extension/mail-tools.js";
-import { validActorName, validRequestKey } from "../src/extension/batch-view.js";
-import { isLogicalAddress } from "../src/domain/mail-values.js";
-import { isValidActorName, isValidRequestKey } from "../src/domain/identifiers.js";
+import { registerOmaTools } from "@oma/extension/mail-tools";
+import { isLogicalAddress as validAddress } from "@oma/domain/mail-values";
+import { isValidActorName as validActorName, isValidRequestKey as validRequestKey } from "@oma/domain/identifiers";
+import { isLogicalAddress } from "@oma/domain/mail-values";
+import { isValidActorName, isValidRequestKey } from "@oma/domain/identifiers";
 
-const CLI = fileURLToPath(new URL("../src/cli.js", import.meta.url));
+const CLI = fileURLToPath(new URL("../../apps/oma/dist/cli.js", import.meta.url));
 const MESSAGE = "m-00000000-0000-4000-8000-000000000001-0";
 
 interface Peer { readonly path: string; readonly frames: Record<string, unknown>[]; close(): Promise<void> }

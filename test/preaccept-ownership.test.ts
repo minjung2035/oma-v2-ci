@@ -1,3 +1,6 @@
+import { createLifecycleModule } from "#oma-test/app/broker/lifecycle-composition";
+import { createMailModule } from "#oma-test/app/broker/mail-composition";
+import { serializePlanIntent } from "./fixtures/plan.js";
 /** Pre-accept artifact ownership across every coordinator that freezes an
  * immutable mail object before its acceptance transaction: mail.send,
  * git.submit, agent.create and context.publish. A transaction loser, a
@@ -10,22 +13,23 @@ import fs from "node:fs";
 import { basename, join } from "node:path";
 import { tmpdir } from "node:os";
 import { createTransport } from "nodemailer";
-import type { AuthContext } from "../implementation/contracts.js";
-import { Store, readDiagnosticSnapshot } from "../src/store.js";
-import { MailModule } from "../src/mail.js";
-import { StoreError } from "../src/domain/errors.js";
-import { inspectIntegrity } from "../src/diagnostics/integrity.js";
-import { NodeIntegrityFiles } from "../src/diagnostics/files.js";
-import { PreacceptArtifact, publishedArtifact } from "../src/storage/preaccept-artifact.js";
-import { generateOperationId } from "../src/ids.js";
-import { requestHash, sha256Hex } from "../src/hash.js";
-import { PreparationExecutor } from "../src/process/preparation.js";
-import { resolvedSpecDigest } from "../src/domain/spec-identity.js";
-import { workspacePathAt } from "../src/storage/paths.js";
-import { residentUnitsFor } from "../src/domain/derived.js";
-import { LifecycleModule } from "../src/lifecycle.js";
-import { UnitsModule } from "../src/units.js";
-import { ALL_CAPS, TEST_RESOURCES, makeValidResolvedSpec } from "./fixtures/spec.js";
+import type { AuthContext } from "@oma/contracts";
+import { Store, readDiagnosticSnapshot } from "@oma/storage";
+import { MailModule } from "@oma/mail";
+import { StoreError } from "@oma/domain/errors";
+import { inspectIntegrity } from "#oma-test/app/diagnostics/integrity";
+import { NodeIntegrityFiles } from "#oma-test/app/diagnostics/files";
+import { PreacceptArtifact, publishedArtifact } from "@oma/storage/preaccept-artifact";
+import { generateOperationId } from "@oma/native/identity";
+import { requestHash } from "@oma/domain/request-identity";
+import { sha256Hex } from "@oma/domain/canonical-json";
+import { PreparationExecutor } from "@oma/process/preparation";
+import { resolvedSpecDigest } from "@oma/domain/spec-identity";
+import { workspacePathAt } from "@oma/domain/paths";
+import { residentUnitsFor } from "@oma/domain/derived";
+import { LifecycleModule } from "@oma/lifecycle";
+import { UnitsModule } from "@oma/platform-linux/units";
+import { ALL_CAPS, makeValidResolvedSpec } from "./fixtures/spec.js";
 import { removeTree } from "./fixtures/cleanup.js";
 import { makeValidAgent } from "./fixtures/spec.js";
 import { gitAuth, gitCommand, gitFixture, seedGit, submitFixture, contextFixture } from "./fixtures/git-crash.js";
@@ -38,7 +42,7 @@ function expectedObjects(root: string): string[] {
   const rows = readDiagnosticSnapshot(root).tables.operations as readonly { plan_json: string; kind: string }[];
   const named = new Set<string>();
   for (const operation of rows) {
-    const plan = JSON.parse(operation.plan_json) as { message?: { id: string } | null; initialMessage?: { id: string } | null };
+    const plan = JSON.parse(operation.plan_json).intent as { message?: { id: string } | null; initialMessage?: { id: string } | null };
     const message = operation.kind === "agent.create" ? plan.initialMessage : plan.message;
     if (message) named.add(`${message.id}.eml`);
   }
@@ -48,7 +52,7 @@ function mailFixture() {
   const root = fs.mkdtempSync(join(tmpdir(), "oma-preaccept-"));
   const store = new Store(join(root, "runtime.sqlite"));
   store.transaction((tx) => { tx.insertAgent(makeValidAgent("alice")); tx.insertAgent(makeValidAgent("bob")); });
-  const mail = new MailModule({ stateRoot: root, society: "fixture" }, store, 64, 24, { frameBytes: 262144, batchMaxMessages: 24 });
+  const mail = createMailModule({ stateRoot: root, society: "fixture" }, store, 64, 24, { frameBytes: 262144, batchMaxMessages: 24 });
   const auth: AuthContext = { actor: "alice", incarnation: 1, role: "resident", channel: "actor",
     capabilities: new Set(["mail.send"]),
     peer: { pid: process.pid, uid: process.getuid!(), gid: process.getgid!(), cgroup: null } };
@@ -158,7 +162,7 @@ test("PRE-5: an accepted linked create names no initial brief, so it owns none o
     const { mail, paths } = gitFixture(root, store);
     const units = new UnitsModule(paths.society, { node: process.execPath, libdir: process.cwd(), state: root, society: paths.society, agent: "", config: join(root, "config.json"), run: join(root, "oma", paths.society) });
     const resolve = (name: string, from: string, brief: string) => makeValidResolvedSpec(name, "p", ALL_CAPS, from, brief);
-    const lifecycle = new LifecycleModule(store, units,
+    const lifecycle = createLifecycleModule(store, units,
       { stateRoot: root, projectGit: paths.projectGit, society: paths.society, hasGoal: () => false, activationAllowed: () => true },
       (_parent, input) => resolve(input.name, input.from, input.brief), mail);
     const auth = { ...gitAuth, capabilities: new Set(ALL_CAPS) };
@@ -178,7 +182,7 @@ test("PRE-5: an accepted linked create names no initial brief, so it owns none o
           profile: spec.profile, createdBy: "b", specJson: JSON.stringify(spec) });
         tx.acceptOperation({ id: originalId, actor: "b", requestKey: "original-create", requestHash: requestHash("agent.create", { name: "child", from: info.base, brief: "brief" }),
           kind: "agent.create", payloadJson: JSON.stringify({ name: "child", from: info.base, brief: "brief" }),
-          planJson: JSON.stringify({ kind: "agent.create", spec, specHash, parent: "b",
+          planJson: serializePlanIntent({ kind: "agent.create", spec, specHash, parent: "b",
             workspacePath: workspacePathAt(root, "child"), unitNames: residentUnitsFor(paths.society, "child"), initialMessage: original.message, existingCreation: null }) });
         tx.insertDeliveries([{ messageId: original.message.id, recipient: "child", operationId: originalId }]);
       });
@@ -341,7 +345,7 @@ function contextOnlyFixture() {
       content: { bytes: contextGoal.length, sha256: sha256Hex(contextGoal), mediaType: "application/vnd.oma.context-v1" } }, chunks);
   return {
     root, store, git, mail, paths, publish,
-    repository: (): object => Reflect.get(git, "contextRepository") as object,
+    repository: (): object => Reflect.get(Reflect.get(git, "repository"), "contextRepository") as object,
     moveMain: (oid: string) => { gitCommand(root, ["--git-dir", paths.contextGit, "update-ref", "refs/heads/main", oid]); },
     close() { store.close(); removeTree(root); },
   };
@@ -369,7 +373,7 @@ test("V18A: preaccept order is stream, staged tree, candidate, mail object, acce
     const events: string[] = [];
     let streamed = false;
     const accepted = () => f.store.getOperation("a", key);
-    around(t, f.git, "prepareContextCandidate", async (original, ...args) => {
+    around(t, f.repository(), "prepareCandidate", async (original, ...args) => {
       assert.equal(streamed, true, "the whole stream is validated before candidate preparation");
       assert.deepEqual(fs.readFileSync(join(String(args[0]), "GOAL.md")), contextGoal);
       assert.equal(accepted(), null);
@@ -390,7 +394,7 @@ test("V18A: preaccept order is stream, staged tree, candidate, mail object, acce
       if (before === null && accepted() !== null) events.push("acceptance");
       return result;
     });
-    around(t, f.git, "casRef", (original, ...args) => {
+    around(t, Reflect.get(f.git, "repository"), "casRef", (original, ...args) => {
       assert.equal(accepted()?.state, "pending");
       assert.deepEqual(objectsOf(f.root), expectedObjects(f.root));
       events.push("canonical");
@@ -411,12 +415,12 @@ const unacceptedPoints: ReadonlyArray<{
   { point: "a stream digest failure after staged files exist", code: "STREAM_INVALID", expected: "0".repeat(40), entrySha256: "0".repeat(64) },
   { point: "a base conflict before candidate preparation", code: "CONTEXT_CONFLICT", expected: "0".repeat(40) },
   { point: "a candidate failure after its native preparation exited", code: "STORE_CORRUPT",
-    arrange: (t, f) => around(t, f.git, "prepareContextCandidate", async (original, ...args) => {
+    arrange: (t, f) => around(t, f.repository(), "prepareCandidate", async (original, ...args) => {
       await original(...args);
       throw new StoreError("STORE_CORRUPT", "injected candidate observation failure");
     }) },
   { point: "a base conflict after candidate preparation", code: "CONTEXT_CONFLICT",
-    arrange: (t, f) => around(t, f.git, "prepareContextCandidate", async (original, ...args) => {
+    arrange: (t, f) => around(t, f.repository(), "prepareCandidate", async (original, ...args) => {
       const candidate = String(await original(...args));
       f.moveMain(candidate);
       return candidate;
@@ -442,11 +446,11 @@ const unacceptedPoints: ReadonlyArray<{
   { point: "a base conflict after the mail object was frozen", code: "CONTEXT_CONFLICT",
     arrange: (t, f) => {
       let candidate = "";
-      around(t, f.git, "prepareContextCandidate", async (original, ...args) => (candidate = String(await original(...args))));
+      around(t, f.repository(), "prepareCandidate", async (original, ...args) => (candidate = String(await original(...args))));
       around(t, f.mail, "freezeObject", (original, ...args) => { const artifact = original(...args); f.moveMain(candidate); return artifact; });
     } },
   { point: "an acceptance transaction refusal", code: "REQUEST_KEY_REUSED",
-    arrange: (t, f, key) => around(t, f.git, "prepareContextCandidate", async (original, ...args) => {
+    arrange: (t, f, key) => around(t, f.repository(), "prepareCandidate", async (original, ...args) => {
       const candidate = await original(...args);
       // Another method accepts this actor/key while the context request is unaccepted.
       await f.mail.send(gitAuth, key, racingMail);
@@ -503,7 +507,7 @@ test("V18A: an unavailable acceptance observation after refusal retains the tree
   try {
     const key = "context-unobserved";
     let refused = false;
-    around(t, f.git, "prepareContextCandidate", async (original, ...args) => {
+    around(t, f.repository(), "prepareCandidate", async (original, ...args) => {
       const candidate = await original(...args);
       await f.mail.send(gitAuth, key, racingMail);
       return candidate;
@@ -579,14 +583,14 @@ function lifecycleOnly(options: { seeded?: boolean } = {}) {
     refresh: () => { if (failRefresh) throw new StoreError("UNSUPPORTED_PROFILE", "injected host policy read failure"); },
     revision: () => "policy-1",
   });
-  const lifecycle = new LifecycleModule(store, units,
+  const lifecycle = createLifecycleModule(store, units,
     { stateRoot: root, projectGit: paths.projectGit, society: paths.society, hasGoal: () => false, activationAllowed: () => true },
     resolver, mail);
   const seed = (names: readonly string[], profile = (name: string) => name === "broken" ? "missing" : "p"): Parameters<LifecycleModule["bootstrap"]>[0] => ({
     principalProfile: "p",
     initialResidents: names.map(name => ({ name, profile: profile(name), brief: `brief for ${name}` })),
     modelProfiles: { md: { provider: "none", model: "none", inferenceTimeoutSeconds: 1 } },
-    agentProfiles: { p: { modelProfile: "md", capabilities: [...ALL_CAPS], delegable: [...ALL_CAPS], childProfile: "p", resources: { ...TEST_RESOURCES } } },
+    agentProfiles: { p: { modelProfile: "md", capabilities: [...ALL_CAPS], delegable: [...ALL_CAPS], childProfile: "p" } },
   });
   return { root, store, mail, units, lifecycle, info, seed, failRefresh: () => { failRefresh = true; },
     close() { store.close(); removeTree(root); } };

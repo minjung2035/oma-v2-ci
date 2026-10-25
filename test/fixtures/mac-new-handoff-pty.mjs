@@ -5,8 +5,8 @@ import { connect } from 'node:net';
 import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { realpathSync } from 'node:fs';
-import { startHostApi } from '../../dist/src/platform/host/host-api.js';
-import { encodeTerminalJson } from '../../dist/src/protocol/host-guest.js';
+import { startHostApi } from "#oma-test/app/platform/host/host-api";
+import { encodeTerminalJson } from '@oma/protocol/host-guest';
 import { scriptedProvider, text } from '../../dist/test/fixtures/scripted-provider.js';
 import { holdSocketNames } from '../../dist/test/fixtures/socket-names.js';
 const [root, ending = 'personal'] = process.argv.slice(2);
@@ -21,7 +21,7 @@ writeFileSync(join(run, 'token'), 'f'.repeat(64));
 const names = holdSocketNames(root);
 const preload = join(repo, 'dist/test/fixtures/socket-names.js');
 const guestSocket = join(run, 'holder.sock');
-const holder = spawn(process.execPath, ['--import', preload, join(repo, 'dist/src/entry/guest-session.js'), '--socket', guestSocket, '--cwd', guest,
+const holder = spawn(process.execPath, ['--import', preload, join(repo, 'apps/oma/dist/entry/guest-session.js'), '--socket', guestSocket, '--cwd', guest,
   '--', process.execPath, join(repo, 'test/fixtures/fake-tui.mjs')], { stdio: ['ignore', 'ignore', 'inherit'], env: { ...process.env, ...names.env } });
 const holderEnded = new Promise((resolve, reject) => { holder.once('error', reject); holder.once('close', (code, signal) => resolve({ code, signal })); });
 let starts = 0, attaches = 0;
@@ -43,7 +43,7 @@ try {
         return { socket, rest: Buffer.alloc(0) };
       } } });
   api.on('connection', socket => { sockets.add(socket); socket.once('close', () => sockets.delete(socket)); });
-  const entry = join(repo, 'dist/src/entry/oma-mac.js');
+  const entry = join(repo, 'apps/oma/dist/entry/oma-mac.js');
   // This is the actual Mac entry on this Linux machine. Its execve resolves
   // the same installed oma.js; only the native platform/VM are not exercised.
   const child = spawn(process.execPath, ['--import', preload, entry, 'attach', 'demo'], { cwd, stdio: 'inherit',

@@ -6,5 +6,7 @@
     "rootDir": ".",
     "sourceMap": false
   },
-  "include": ["src/**/*.ts", "implementation/contracts.ts", "test/**/*.ts"]
+  "include": [
+    "test/**/*.ts"
+  ]
 }

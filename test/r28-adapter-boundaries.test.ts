@@ -1,3 +1,4 @@
+import { residentEngineEffects } from "#oma-test/app/engine/resident-effects";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
@@ -5,18 +6,18 @@ import { once } from "node:events";
 import { chmodSync, mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { JsonlReader, type PiEvent } from "../src/protocol/jsonl.js";
-import { PiRpcClient } from "../src/runtime/pi-rpc.js";
-import { readBatchView } from "../src/pi-extension.js";
-import { decodeRunLease, assertValidatedRunLease } from "../src/protocol/run-lease.js";
-import { actorSocketPathAt, agentRootPathAt, workspacePathAt, runnerViewPathAt, runnerSessionDirPathAt } from "../src/storage/paths.js";
-import { SandboxModule, type SandboxHost } from "../src/sandbox.js";
-import { StoreError } from "../src/domain/errors.js";
-import { TEST_RESOURCES } from "./fixtures/spec.js";
+import { JsonlReader, type PiEvent } from "@oma/protocol/jsonl";
+import { PiRpcClient } from "@oma/engine/pi-rpc";
+import { readBatchView } from "@oma/tool-runtime/batch-view";
+import { decodeRunLease, assertValidatedRunLease } from "@oma/protocol/run-lease";
+import { actorSocketPathAt, agentRootPathAt, workspacePathAt, runnerViewPathAt, runnerSessionDirPathAt } from "@oma/domain/paths";
+import { SandboxModule } from "@oma/platform-linux/sandbox";
+import { type SandboxHost } from "@oma/contracts/runtime";
+import { StoreError } from "@oma/domain/errors";
 
-import { PiAdapter } from "../src/runtime/pi-adapter.js";
+import { PiAdapter } from "@oma/engine/pi-adapter";
 import { residentOptions, prepareResident, RESIDENT_TEST_OPTIONS } from "./fixtures/resident.js";
-import { PI_ADAPTER_REVISION, PI_BOUNDARY_PREFIX } from "../src/storage/delivery-receipt.js";
+import { PI_ADAPTER_REVISION, PI_BOUNDARY_PREFIX } from "@oma/protocol/delivery-boundary";
 const limits = { frameBytes: 4096, idleStreamSeconds: 1, receiptWaitSeconds: 1 };
 const errorCode = (expected: string) => (error: unknown) => error instanceof StoreError && error.code === expected;
 
@@ -152,8 +153,7 @@ test("R28: sandbox recipes bind decoded lease and private actor paths but never 
   assert.throws(() => decodeRunLease({ ...value, incarnation: 1 }, { actor: "alice", runRoot }), errorCode("AUTH_FAILED"));
   assert.throws(() => decodeRunLease(value, { actor: "bob", runRoot }), errorCode("AUTH_FAILED"));
   const host: SandboxHost = { rootfs: "/opt/oma/rootfs", libdir: "/opt/oma/lib", node: "/usr/bin/node", pi: "/opt/oma/lib/pi/cli.js",
-    piModeArgs: ["--mode", "rpc"], tmpBytes: TEST_RESOURCES.tmpBytes,
-    stateRoot, runRoot, limits: { frameBytes: 4096, batchMaxMessages: 24 } };
+    piModeArgs: ["--mode", "rpc"], stateRoot, runRoot, limits: { frameBytes: 4096, batchMaxMessages: 24 } };
   const sandbox = new SandboxModule(host);
   const dirs = { workspace: workspacePathAt(stateRoot, "alice"), home: join(agentRootPathAt(stateRoot, "alice"), "home"),
     archive: join(stateRoot, "mail/archive"), workerArchive: join(stateRoot, "mail/workers"), selfMail: join(stateRoot, "mail/inboxes/alice"),
@@ -216,7 +216,7 @@ process.on("SIGTERM", () => process.exit(0));
     // plan names beside it must be prepared against the effective paths.
     const effective = { ...options, paths: { ...options.paths, coreExtension: core, cli } };
     prepareResident(effective);
-    const adapter = new PiAdapter(effective);
+    const adapter = new PiAdapter(residentEngineEffects, effective);
     const boundary = await adapter.deliver(batch);
     assert.deepEqual(boundary, { adapterRevision: PI_ADAPTER_REVISION, batchId: batch.id, incarnation: 1,
       sessionPath: join(options.paths.sessionDir, "owned.jsonl"), entryId: "0123abcd" });

@@ -1,3 +1,5 @@
+import { engineSettingsFiles } from "#oma-test/app/engine/settings-files";
+import { residentEngineEffects } from "#oma-test/app/engine/resident-effects";
 /** A7/A4: the Pi compatibility boundary, held to the vendored engine itself.
  *
  * The oracle tests do not mirror Pi's literals: they read them out of the
@@ -14,17 +16,17 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
-import { StoreError } from "../src/domain/errors.js";
-import { PI_RESUME_HINT, PI_SESSION_ENV_NAMES } from "../src/pi-compat/env.js";
-import { PI_INTERACTIVE_PRIVATE_FIELDS, PI_INTERACTIVE_PRIVATE_MEMBERS } from "../src/pi-compat/interactive-mode.js";
-import { adaptInteractiveUi } from "../src/pi-compat/interactive-ui.js";
-import { sessionHeaderIdentity } from "../src/pi-compat/session.js";
-import { OmaSettingsStorage, prepareEngineInteractiveSettings } from "../src/pi-compat/settings.js";
-import type { PiInboundEvent, RpcCommand } from "../src/pi-compat/wire.js";
-import { PiRpcClient, SKIPPED_EVENT, type PiObservedEvent } from "../src/runtime/pi-rpc.js";
-import { preparePiRetry } from "../src/runtime/pi-runtime.js";
-import { planPiSpawn, type PiAdapterOptions } from "../src/runtime/pi-spawn-plan.js";
-import { ProcessLock } from "../src/runtime/process-lock.js";
+import { StoreError } from "@oma/domain/errors";
+import { PI_RESUME_HINT, PI_SESSION_ENV_NAMES } from "@oma/engine/pi-compat/env";
+import { PI_INTERACTIVE_PRIVATE_FIELDS, PI_INTERACTIVE_PRIVATE_MEMBERS } from "@oma/engine/pi-compat/interactive-mode";
+import { adaptInteractiveUi } from "@oma/engine/pi-compat/interactive-ui";
+import { sessionHeaderIdentity } from "@oma/engine/pi-compat/session";
+import { OmaSettingsStorage, prepareEngineInteractiveSettings } from "@oma/engine/pi-compat/settings";
+import type { PiInboundEvent, RpcCommand } from "@oma/engine/pi-compat/wire";
+import { PiRpcClient, SKIPPED_EVENT, type PiObservedEvent } from "@oma/engine/pi-rpc";
+import { preparePiRetry } from "@oma/engine/pi-runtime";
+import { planPiSpawn, type PiAdapterOptions } from "@oma/engine/pi-spawn-plan";
+import { ProcessLock } from "@oma/native/process-lock";
 import { residentOptions } from "./fixtures/resident.js";
 
 const scratch = (prefix: string): string => mkdtempSync(join(tmpdir(), prefix));
@@ -71,10 +73,10 @@ test("A6: the session header probe accepts only the identity the engine could ha
   assert.deepEqual(await sessionHeaderIdentity(structuredClone(good), cwd), { id: good.id, timestamp: good.timestamp });
   // A header without a version predates versioned files and is still admitted.
   const unversioned = { ...good } as Record<string, unknown>; delete unversioned.version;
-  assert.ok(await sessionHeaderIdentity(unversioned, cwd) !== null);
+  assert.equal(await sessionHeaderIdentity(unversioned, cwd), null);
   for (const header of [
     { ...good, type: "entry" }, { ...good, id: "has spaces" }, { ...good, timestamp: "not a date" },
-    { ...good, cwd: "/elsewhere" }, { ...good, version: 0 }, { ...good, version: 1 << 30 },
+    { ...good, cwd: "/elsewhere" }, { ...good, version: 0 }, { ...good, version: 1 }, { ...good, version: 2 }, { ...good, version: 1 << 30 },
     "text", null, [good],
   ]) assert.equal(await sessionHeaderIdentity(header, cwd), null, JSON.stringify(header));
 });
@@ -87,7 +89,7 @@ test("A7/U1: a Resident's confined spawn is explicit-only -- ambient process.env
   const saved = process.env;
   process.env = ambient;
   try {
-    const plan = planPiSpawn(residentOptions(root));
+    const plan = planPiSpawn(residentEngineEffects.sandbox, residentOptions(root));
     // The confined spawn is `bwrap --clearenv ... --setenv K V`: ambient names
     // can only arrive if they were explicitly copied into the argv's setenvs.
     assert.ok(plan.args.includes("--clearenv"), "the confined spawn does not clear ambient environment");
@@ -109,13 +111,13 @@ test("U1: a spawn plan without confinement is refused, not silently unconfined",
   // Simulate the deleted unconfined arm: a caller that drops confinement must
   // meet the refusal, never a direct host spawn.
   const unconstrained = { ...options, confinement: undefined } as unknown as PiAdapterOptions;
-  assert.throws(() => planPiSpawn(unconstrained), { code: "UNSUPPORTED_PROFILE" });
+  assert.throws(() => planPiSpawn(residentEngineEffects.sandbox, unconstrained), { code: "UNSUPPORTED_PROFILE" });
 });
 
 test("A4: absent settings get OMA's interactive defaults through the engine's own manager", t => {
   const root = scratch("oma-compat-settings-");
   t.after(() => rmSync(root, { recursive: true, force: true }));
-  prepareEngineInteractiveSettings(root);
+  prepareEngineInteractiveSettings(engineSettingsFiles, root);
   const settings = JSON.parse(readFileSync(join(root, "settings.json"), "utf8"));
   assert.equal(settings.theme, "oma");
   assert.equal(settings.hideThinkingBlock, true);
@@ -137,7 +139,7 @@ test("A4: the Human's choices are kept, telemetry is always off, and fields the 
     // preparePiRetry's fact, and an unknown field is the engine's own.
     retry: { enabled: true, maxRetries: 5, provider: { maxRetries: 0 } },
     customExtensionField: { nested: [1, 2] } }));
-  prepareEngineInteractiveSettings(root);
+  prepareEngineInteractiveSettings(engineSettingsFiles, root);
   const settings = JSON.parse(readFileSync(path, "utf8"));
   assert.equal(settings.theme, "dark");
   assert.equal(settings.hideThinkingBlock, false);
@@ -148,7 +150,7 @@ test("A4: the Human's choices are kept, telemetry is always off, and fields the 
   assert.deepEqual(settings.customExtensionField, { nested: [1, 2] });
   // Nothing to change is not a write: a second preparation leaves the bytes.
   const before = readFileSync(path, "utf8");
-  prepareEngineInteractiveSettings(root);
+  prepareEngineInteractiveSettings(engineSettingsFiles, root);
   assert.equal(readFileSync(path, "utf8"), before);
 });
 
@@ -159,7 +161,7 @@ test("A4: quietStartup 'header' survives as the literal Pi 1.0.1 widened in, not
   // "header" shows the startup header while still hiding the details; it is
   // not truthy-for-quiet, so the bridge must keep the literal, not Boolean() it.
   writeFileSync(path, JSON.stringify({ quietStartup: "header" }));
-  prepareEngineInteractiveSettings(root);
+  prepareEngineInteractiveSettings(engineSettingsFiles, root);
   assert.equal(JSON.parse(readFileSync(path, "utf8")).quietStartup, "header");
 });
 
@@ -167,8 +169,8 @@ test("A4: the settings bridge and the retry owner compose in both orders under o
   for (const retryFirst of [false, true]) {
     const root = scratch("oma-compat-settings-");
     t.after(() => rmSync(root, { recursive: true, force: true }));
-    if (retryFirst) { preparePiRetry(root); prepareEngineInteractiveSettings(root); }
-    else { prepareEngineInteractiveSettings(root); preparePiRetry(root); }
+    if (retryFirst) { preparePiRetry(engineSettingsFiles, root); prepareEngineInteractiveSettings(engineSettingsFiles, root); }
+    else { prepareEngineInteractiveSettings(engineSettingsFiles, root); preparePiRetry(engineSettingsFiles, root); }
     const settings = JSON.parse(readFileSync(join(root, "settings.json"), "utf8"));
     assert.equal(settings.retry.enabled, true, `order retryFirst=${retryFirst}`);
     assert.equal(settings.retry.maxRetries, 5);
@@ -186,7 +188,7 @@ test("A4: malformed or non-object settings are refused with the bytes untouched"
     writeFileSync(path, bytes);
     // Bytes the engine's own parser cannot load are store corruption, not a
     // raw engine error escaping the taxonomy (settings.ts drainErrors wrap).
-    assert.throws(() => prepareEngineInteractiveSettings(root), (error: unknown) =>
+    assert.throws(() => prepareEngineInteractiveSettings(engineSettingsFiles, root), (error: unknown) =>
       error instanceof StoreError && (error.code === "STORE_CORRUPT" || error.code === "UNSUPPORTED_PROFILE"));
     assert.deepEqual(readFileSync(path), Buffer.from(bytes), `bytes ${JSON.stringify(bytes)} changed`);
     // The writer lock came back: the next attempt can still be made.
@@ -203,11 +205,11 @@ test("A4 / P0-5: a held settings lock refuses the write, keeps the bytes, and th
   writeFileSync(path, '{"theme":"light"}');
   const lock = ProcessLock.acquire(join(root, "oma-settings.lock"));
   try {
-    assert.throws(() => prepareEngineInteractiveSettings(root), (error: unknown) =>
+    assert.throws(() => prepareEngineInteractiveSettings(engineSettingsFiles, root), (error: unknown) =>
       error instanceof StoreError && error.code === "BROKER_UNAVAILABLE");
     assert.equal(readFileSync(path, "utf8"), '{"theme":"light"}', "a refused writer changed the file");
   } finally { lock.close(); }
-  prepareEngineInteractiveSettings(root);
+  prepareEngineInteractiveSettings(engineSettingsFiles, root);
   const settings = JSON.parse(readFileSync(path, "utf8"));
   assert.equal(settings.theme, "light");
   assert.equal(settings.fullscreenExitOutput, "resume-hint");
@@ -216,7 +218,7 @@ test("A4 / P0-5: a held settings lock refuses the write, keeps the bytes, and th
 test("A4: the engine's project scope has no OMA file; a write through it is refused, a read is absent", t => {
   const root = scratch("oma-compat-settings-");
   t.after(() => rmSync(root, { recursive: true, force: true }));
-  const storage = new OmaSettingsStorage(root);
+  const storage = new OmaSettingsStorage(engineSettingsFiles, root);
   // A read-only lock answers absent, as the storage contract states.
   let seen: string | undefined | null = null;
   storage.withLock("project", current => { seen = current; return undefined; });
@@ -290,7 +292,7 @@ test("A2/DR15: the frame-overflow marker still reaches observers as OMA's own ev
 test("A7: the compat module is the only importer of engine wire names", () => {
   // The boundary fails closed by convention: production modules name Pi's
   // wire types through pi-compat, never the package directly (rpc surface).
-  const source = readFileSync(join(process.cwd(), "src", "runtime", "pi-rpc.ts"), "utf8");
+  const source = readFileSync(join(process.cwd(), "packages", "engine", "src", "pi-rpc.ts"), "utf8");
   assert.ok(!source.includes('from "@earendil-works/pi-coding-agent"'), "pi-rpc imports the package directly");
 });
 

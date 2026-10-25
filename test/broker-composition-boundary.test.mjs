@@ -1,3 +1,5 @@
+import * as nodePath from "node:path";
+import { projectInternalPeers } from "@oma/broker/internal-dispatcher";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
@@ -6,7 +8,7 @@ import ts from "typescript";
 
 function loadComposition() {
   const source = readFileSync(
-    new URL("../src/broker/composition.ts", import.meta.url),
+    new URL("../apps/oma/src/broker/composition.ts", import.meta.url),
     "utf8",
   );
   const compiled = ts.transpileModule(source, {
@@ -15,16 +17,18 @@ function loadComposition() {
       target: ts.ScriptTarget.ES2022,
     },
   });
-  const projectorCalls = [];
+  const projectorCalls = [], inboxReads = [];
   const exports = {};
   new Script(compiled.outputText, {
     filename: "broker-composition.cjs",
   }).runInNewContext({
     exports,
     require(name) {
+      if (name === "node:path") return nodePath;
+      if (name === "@oma/storage/directory") return { listOwnedDirectory: (path, options) => { assert.equal(options.required, true); inboxReads.push(path); return [{ name: "message" }]; } };
       assert.equal(
         name,
-        "../storage/receipt-projector.js",
+        "@oma/protocol/receipt-projector",
         `unexpected composition dependency: ${name}`,
       );
       return {
@@ -35,7 +39,7 @@ function loadComposition() {
       };
     },
   });
-  return { ...exports, projectorCalls };
+  return { ...exports, projectorCalls, inboxReads };
 }
 
 function fixture() {
@@ -126,15 +130,12 @@ function fixture() {
     ack() {},
     follow() {},
   };
-  const git = {
-    attestations: {
-      store: { privateWriter: true },
-      record(...args) { calls.push(["attest.record", ...args]); return Promise.resolve("attestation"); },
-    },
-    reviews: {
+  const reviews = {
+      record: (...args) => { calls.push(["attest.record", ...args]); return "attestation"; },
       store: { privateWriter: true },
       status(...args) { calls.push(["review.status", ...args]); return "review-status"; },
-    },
+  };
+  const git = {
     knownRefs() {
       calls.push("git.knownRefs");
       return { main: "main", published: [] };
@@ -156,12 +157,12 @@ function fixture() {
       return Promise.resolve("context");
     },
   };
-  return { calls, state, store, mail, units, views, lifecycle, git };
+  return { calls, state, store, mail, units, views, lifecycle, git, reviews };
 }
 
 test("P18 public composition exposes only projected capabilities and keeps lookups live", async () => {
   const { createPublicDispatchPorts, projectorCalls } = loadComposition();
-  const { calls, state, store, mail, units, views, lifecycle, git } = fixture();
+  const { calls, state, store, mail, units, views, lifecycle, git, reviews } = fixture();
   const ports = createPublicDispatchPorts(
     store,
     mail,
@@ -169,6 +170,7 @@ test("P18 public composition exposes only projected capabilities and keeps looku
     views,
     lifecycle,
     git,
+    reviews,
     { frameBytes: 1 },
   );
 
@@ -177,6 +179,7 @@ test("P18 public composition exposes only projected capabilities and keeps looku
     "lifecycle",
     "limits",
     "mail",
+    "review",
     "store",
     "units",
     "views",
@@ -200,23 +203,21 @@ test("P18 public composition exposes only projected capabilities and keeps looku
     "stop",
   ]);
   assert.deepEqual(Object.keys(ports.git).sort(), [
-    "attestations",
     "integrate",
     "isPublished",
     "knownRefs",
     "publishContext",
-    "reviews",
     "submit",
   ]);
 
-  assert.equal(ports.git.attestations === git.attestations, false, "the concrete owner must not escape through a nested port");
-  assert.deepEqual(Object.keys(ports.git.attestations), ["record"]);
-  const auth = { actor: "alice" }, input = { kind: "peer" };
-  assert.equal(await ports.git.attestations.record(auth, "key", input), "attestation");
+  assert.equal(ports.review === reviews, false, "the concrete owner must not escape through a nested port");
+  assert.deepEqual(Object.keys(ports.review).sort(), ["record", "status"]);
+  const auth = { actor: "alice" }, input = { kind: "review", name: "merge-00000000-0000-4000-8000-000000000000", body: "review" };
+  assert.equal(await ports.review.record(auth, "key", input), "attestation");
   assert.deepEqual(calls.pop(), ["attest.record", auth, "key", input]);
-  assert.equal(ports.git.reviews === git.reviews, false, "the review owner must not escape through a nested port");
-  assert.deepEqual(Object.keys(ports.git.reviews), ["status"]);
-  assert.equal(await ports.git.reviews.status(auth, "oma_merge/cand", 16, "r1"), "review-status");
+  assert.equal(ports.review === reviews, false, "the review owner must not escape through a nested port");
+  assert.deepEqual(Object.keys(ports.review).sort(), ["record", "status"]);
+  assert.equal(await ports.review.status(auth, "oma_merge/cand", 16, "r1"), "review-status");
   assert.deepEqual(calls.pop(), ["review.status", auth, "oma_merge/cand", 16, "r1"]);
   assert.equal(ports.lifecycle.setSociety({}, "closed", "request"), "society");
   assert.equal(calls.pop(), "lifecycle.setSociety");
@@ -254,7 +255,7 @@ test("P18 public composition exposes only projected capabilities and keeps looku
 });
 
 test("P18 internal composition exposes narrow live capabilities without concrete owners", () => {
-  const { createInternalDispatchPorts } = loadComposition();
+  const { createInternalDispatchDataPorts, inboxReads } = loadComposition();
   const { calls, store, mail } = fixture();
   const peers = {
     requireRunnerUnit() {},
@@ -266,12 +267,12 @@ test("P18 internal composition exposes narrow live capabilities without concrete
       return {};
     },
   };
-  const ports = createInternalDispatchPorts(store, mail, "/state", peers);
+  const ports = { ...createInternalDispatchDataPorts(store, mail, "/state"), peers: projectInternalPeers(peers) };
 
   assert.deepEqual(Object.keys(ports).sort(), [
     "mail",
     "peers",
-    "stateRoot",
+    "principalInboxNewEntries",
     "store",
   ]);
   assert.notEqual(ports.store, store);
@@ -286,7 +287,8 @@ test("P18 internal composition exposes narrow live capabilities without concrete
     "moveToCur",
     "prepare",
   ]);
-  assert.equal(ports.stateRoot, "/state");
+  assert.deepEqual([...ports.principalInboxNewEntries()], ["message"]);
+  assert.deepEqual(inboxReads, ["/state/mail/inboxes/principal/new"]);
   assert.notEqual(ports.peers, peers);
   assert.deepEqual(Object.keys(ports.peers).sort(), ["requireHostUnit", "requireRunnerUnit", "runnerActor", "runnerAuth"]);
 

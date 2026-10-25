@@ -3,9 +3,9 @@ import assert from "node:assert/strict";
 import {
   runProcessSync, runProcess, decodeProcessText,
   type CommandSpec, type NativeSyncResult, type SyncInvoker,
-} from "../src/process/run.js";
-import { requireTextExit } from "../src/process/policies.js";
-import { StoreError } from "../src/domain/errors.js";
+} from "@oma/process/run";
+import { requireTextExit } from "@oma/process/policies";
+import { StoreError } from "@oma/domain/errors";
 
 const spec: CommandSpec = {
   executable: "/usr/bin/git", argv: ["--version"],

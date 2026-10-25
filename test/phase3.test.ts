@@ -1,4 +1,5 @@
-import { readableBody } from "../src/mail/display.js";
+import { createMailModule } from "#oma-test/app/broker/mail-composition";
+import { readableBody } from "@oma/mail/display";
 // Phase 3 acceptance: maildir/routes/materializer/views (T14-T27 partial, T32)
 // plus process-kill crash tests T18-T22 using the external kill harness.
 import { test } from "node:test";
@@ -9,22 +10,22 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { Store } from "../src/store.js";
-import type { SyncCallback } from "../src/storage/transaction.js";
-import {
-  MailModule, buildEml, parseEmlHeaders, batchNotice, topicAddress, actorAddress, listAddress,
-} from "../src/mail.js";
+import { Store } from "@oma/storage";
+import type { SyncCallback } from "@oma/storage/transaction";
+import { MailModule, buildEml, parseEmlHeaders, batchNotice, topicAddress, listAddress } from "@oma/mail";
+import { actorAddress } from "@oma/domain/actor-address";
 import type { MailStopPoint } from "./fixtures/mail-faults.js";
-import { writeAtomic } from "../src/views.js";
-import type { AuthContext, Capability } from "../implementation/contracts.js";
-import { generateOperationId, generateMessageId } from "../src/ids.js";
+import { writeAtomic } from "#oma-test/app/views";
+import type { AuthContext, Capability } from "@oma/contracts";
+import { generateOperationId } from "@oma/native/identity";
+import { messageIdForOperation as generateMessageId } from "@oma/domain/derived";
 import { makeValidAgent } from "./fixtures/spec.js";
 
 function fresh(): { store: Store; mail: MailModule; dir: string; society: string } {
   const dir = mkdtempSync(join(tmpdir(), "oma-t3-"));
   const society = "demo";
   const store = new Store(join(dir, "runtime.sqlite"));
-  const mail = new MailModule({ stateRoot: dir, society }, store, 64);
+  const mail = createMailModule({ stateRoot: dir, society }, store, 64);
   return { store, mail, dir, society };
 }
 function seal(s: { store: Store; dir: string }): void {
@@ -56,7 +57,7 @@ test("T14: commons routing keeps stopped, excludes retired/provisioning/principa
     ["e", "resident", "provisioning"], ["principal", "principal", "enabled"]]);
   const receipt = await mail.send(auth("a"), "k1", { to: ["commons"], subject: "s", kind: "message", body: "x" });
   const op = inTx(store, () => store.getOperation("a", "k1"))!;
-  const plan = JSON.parse(op.planJson) as { message: { recipients: string[]; id: string } };
+  const plan = JSON.parse(op.planJson).intent as { message: { recipients: string[]; id: string } };
   assert.deepEqual([...plan.message.recipients].sort(), ["a", "b", "c"]);
   assert.equal((receipt.result as { recipientCount: number }).recipientCount, 3);
   const deliveries = inTx(store, () => store.deliveriesForOperation(op.id));
@@ -84,13 +85,13 @@ test("T16: follow/unfollow, union dedupe, snapshot fixed after membership change
   // post with follow present; union of b + topic/auth must not duplicate b
   await mail.send(auth("a"), "k1", { to: ["b", `topic/${topic}`], subject: "s", kind: "message", body: "x" });
   const op = inTx(store, () => store.getOperation("a", "k1"))!;
-  const plan = JSON.parse(op.planJson) as { message: { recipients: string[] } };
+  const plan = JSON.parse(op.planJson).intent as { message: { recipients: string[] } };
   assert.equal(plan.message.recipients.length, 1);
   assert.deepEqual(plan.message.recipients, ["b"]);
   // membership change after acceptance does not affect the stored snapshot
   inTx(store, () => store.unfollow(topic, "b"));
   const op2 = inTx(store, () => store.getOperation("a", "k1"))!;
-  assert.equal((JSON.parse(op2.planJson) as { message: { recipients: string[] } }).message.recipients.length, 1);
+  assert.equal((JSON.parse(op2.planJson).intent as { message: { recipients: string[] } }).message.recipients.length, 1);
   const receipt2 = await mail.send(auth("a"), "k2", { to: [`topic/${topic}`], subject: "s", kind: "message", body: "x" });
   assert.equal((receipt2.result as { recipientCount: number }).recipientCount, 0);
   seal({ store, dir });
@@ -210,14 +211,14 @@ test("T20: kill after acceptance -> reconcile completes archive and all recipien
   const op = inTx(store, () => store.getOperation("a", "k20"))!;
   assert.equal(op.state, "pending");
   assert.equal(existsSync(join(dir, "mail", "archive", "cur")), false);
-  const mail = new MailModule({ stateRoot: dir, society: "demo" }, store, 64);
+  const mail = createMailModule({ stateRoot: dir, society: "demo" }, store, 64);
   const res = await mail.reconcilePending();
   assert.equal(res.repaired, 1);
   assert.equal(readdirSync(join(dir, "mail", "archive", "cur")).length, 1);
   for (const r of ["b", "c"]) {
     assert.equal(readdirSync(join(dir, "mail", "inboxes", r, "new")).length, 1);
     assert.equal(inTx(store, (): number => store.getDelivery(
-      (JSON.parse(op.planJson) as { message: { id: string } }).message.id, r,
+      (JSON.parse(op.planJson).intent as { message: { id: string } }).message.id, r,
     )!.materialized), 1);
   }
   assert.equal(inTx(store, () => store.getOperation("a", "k20")!.state), "succeeded");
@@ -232,8 +233,8 @@ test("T21: partial fanout a+b done, b in cur -> reconcile adds only c, no duplic
   assert.ok(out.some(l => l.startsWith("BOUNDARY:inbox-2")));
   const store = new Store(join(dir, "runtime.sqlite"));
   const op = inTx(store, () => store.getOperation("a", "k21"))!;
-  const msgId = (JSON.parse(op.planJson) as { message: { id: string } }).message.id;
-  const mail = new MailModule({ stateRoot: dir, society: "demo" }, store, 64);
+  const msgId = (JSON.parse(op.planJson).intent as { message: { id: string } }).message.id;
+  const mail = createMailModule({ stateRoot: dir, society: "demo" }, store, 64);
   mail.moveToCur("b", [msgId]);
   assert.equal(readdirSync(join(dir, "mail", "inboxes", "b", "new")).length, 0);
   assert.equal(readdirSync(join(dir, "mail", "inboxes", "b", "cur")).length, 1);
@@ -252,9 +253,9 @@ test("T22: link published before materialized flag -> reconcile completes, no du
   const out = await sendAndKill(dir, "inbox-1", { OMA_TO: "a,b", OMA_KEY: "k22" });
   assert.ok(out.some(l => l.startsWith("BOUNDARY:inbox-1")));
   const store = new Store(join(dir, "runtime.sqlite"));
-  const mail = new MailModule({ stateRoot: dir, society: "demo" }, store, 64);
+  const mail = createMailModule({ stateRoot: dir, society: "demo" }, store, 64);
   const op = inTx(store, () => store.getOperation("a", "k22"))!;
-  const msgId = (JSON.parse(op.planJson) as { message: { id: string } }).message.id;
+  const msgId = (JSON.parse(op.planJson).intent as { message: { id: string } }).message.id;
   assert.equal(readdirSync(join(dir, "mail", "inboxes", "a", "new")).length, 1);
   assert.equal(inTx(store, () => store.getDelivery(msgId, "a")!.materialized), 0);
   const res = await mail.reconcilePending();

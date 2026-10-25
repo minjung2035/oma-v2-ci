@@ -107,6 +107,7 @@ export function sourceFiles(root, relative) {
   if (stat.isFile()) return [relative];
   if (!stat.isDirectory()) throw new Error(`unsupported source closure input: ${relative}`);
   return readdirSync(path).sort().filter(name =>
+    !(/^(?:packages\/[^/]+|apps\/oma)$/.test(relative) && ["dist", "node_modules", ".tsbuildinfo"].includes(name)) &&
     !(relative === "implementation" && name === "evidence") && !(relative === "docs" && name === "archive"))
     .flatMap(name => sourceFiles(root, `${relative}/${name}`));
 }

@@ -2,7 +2,7 @@
   "description": "P0-7 (PRIORITY-0.md): every durable boundary the code has (scripts/durable-boundaries.mjs finds them) and the tests that kill, retry or restart right after it and check that what was made durable means what it meant. Generated owners are checked against the code; a new boundary without an entry fails the gate. Each test says how it stops the process (injection: sigkill, in-process-fault or logical, P0V-83), and the gate checks that the test's code shows it.",
   "boundaries": [
     {
-      "owner": "src/broker.ts#Broker.closeAdmission",
+      "owner": "apps/oma/src/broker/broker-composition.ts#createBroker",
       "fact": "a draining broker's status view is gone (a derived view; absence says the broker is going away)",
       "tests": [
         {
@@ -13,7 +13,7 @@
       ]
     },
     {
-      "owner": "src/broker.ts#Broker.openRun",
+      "owner": "packages/broker/src/index.ts#Broker.openRun",
       "fact": "the agent's run lease (incarnation); DR9: prepared batches are not rewritten",
       "tests": [
         {
@@ -34,7 +34,7 @@
       ]
     },
     {
-      "owner": "src/application/society-bootstrap.ts#bootstrapSociety",
+      "owner": "apps/oma/src/application/society-bootstrap.ts#bootstrapSociety",
       "fact": "the state root's project binding (D05)",
       "tests": [
         {
@@ -50,7 +50,7 @@
       ]
     },
     {
-      "owner": "src/git.ts#GitModule.casRef",
+      "owner": "packages/git/src/repository.ts#GitRepository.casRef",
       "fact": "a canonical ref moved by CAS (the adapter every coordinator's CAS goes through)",
       "tests": [
         {
@@ -67,11 +67,20 @@
           "file": "test/git-effect-evidence.test.ts",
           "title": "V24A: a recovery CAS that loses to a third writer after its checks is unknown, never applied",
           "injection": "logical"
+        },
+        {
+          "file": "test/integration-witness-kill.test.ts",
+          "title": "DR46 witness kill:",
+          "injection": "sigkill",
+          "points": [
+            "compareAndSwap",
+            "authorizeNoop"
+          ]
         }
       ]
     },
     {
-      "owner": "src/git.ts#GitModule.constructor",
+      "owner": "packages/git/src/repository.ts#GitRepository.constructor",
       "fact": "the CAS effects wired into the coordinators",
       "tests": [
         {
@@ -87,7 +96,7 @@
       ]
     },
     {
-      "owner": "src/git.ts#GitModule.publishRef",
+      "owner": "packages/git/src/repository.ts#GitRepository.publishRef",
       "fact": "a published candidate ref (refs/oma/published/*)",
       "tests": [
         {
@@ -106,7 +115,7 @@
       ]
     },
     {
-      "owner": "src/git/context-repository.ts#ContextRepository.publishSnapshot",
+      "owner": "packages/git/src/context-repository.ts#ContextRepository.publishSnapshot",
       "fact": "the immutable context revision and the current pointer",
       "tests": [
         {
@@ -121,7 +130,7 @@
       ]
     },
     {
-      "owner": "src/git/context-repository.ts#ContextRepository.writeEntry",
+      "owner": "packages/git/src/context-repository.ts#ContextRepository.writeEntry",
       "fact": "a context file in the preparation or snapshot work tree",
       "tests": [
         {
@@ -142,7 +151,7 @@
       ]
     },
     {
-      "owner": "src/git/context.ts#ContextCoordinator.materializeAndSettle",
+      "owner": "packages/git/src/context.ts#ContextCoordinator.materializeAndSettle",
       "fact": "the context notification and the operation's success",
       "tests": [
         {
@@ -156,7 +165,7 @@
       ]
     },
     {
-      "owner": "src/git/context.ts#ContextCoordinator.publish",
+      "owner": "packages/git/src/context.ts#ContextCoordinator.publish",
       "fact": "the accepted context intent, its staging, message object and CAS",
       "tests": [
         {
@@ -176,7 +185,7 @@
       ]
     },
     {
-      "owner": "src/git/context.ts#ContextCoordinator.reconcile",
+      "owner": "packages/git/src/context.ts#ContextCoordinator.reconcile",
       "fact": "a recovered context CAS",
       "tests": [
         {
@@ -191,7 +200,7 @@
       ]
     },
     {
-      "owner": "src/git/context.ts#ContextCoordinator.rejectAccepted",
+      "owner": "packages/git/src/context.ts#ContextCoordinator.rejectAccepted",
       "fact": "an accepted context publication's failed or unknown state",
       "tests": [
         {
@@ -202,7 +211,7 @@
       ]
     },
     {
-      "owner": "src/git/context.ts#ContextCoordinator.unknown",
+      "owner": "packages/git/src/context.ts#ContextCoordinator.unknown",
       "fact": "an accepted context publication's unknown state",
       "tests": [
         {
@@ -213,7 +222,7 @@
       ]
     },
     {
-      "owner": "src/git/integration.ts#IntegrationCoordinator.applyMerge",
+      "owner": "packages/git/src/integration.ts#IntegrationCoordinator.applyMerge",
       "fact": "a reviewed merge's main CAS and its completion-notice publication",
       "tests": [
         {
@@ -234,7 +243,7 @@
       ]
     },
     {
-      "owner": "src/git/integration.ts#IntegrationCoordinator.execute",
+      "owner": "packages/git/src/integration.ts#IntegrationCoordinator.execute",
       "fact": "the accepted integration intent and the main CAS",
       "tests": [
         {
@@ -255,7 +264,7 @@
       ]
     },
     {
-      "owner": "src/git/integration.ts#IntegrationCoordinator.reconcile",
+      "owner": "packages/git/src/integration.ts#IntegrationCoordinator.reconcile",
       "fact": "a recovered main CAS",
       "tests": [
         {
@@ -271,7 +280,7 @@
       ]
     },
     {
-      "owner": "src/git/integration.ts#IntegrationCoordinator.rejectAccepted",
+      "owner": "packages/git/src/integration.ts#IntegrationCoordinator.rejectAccepted",
       "fact": "an accepted integration's failed or unknown state",
       "tests": [
         {
@@ -287,7 +296,7 @@
       ]
     },
     {
-      "owner": "src/git/integration.ts#IntegrationCoordinator.succeed",
+      "owner": "packages/git/src/integration.ts#IntegrationCoordinator.succeed",
       "fact": "an integration's success after its CAS",
       "tests": [
         {
@@ -306,7 +315,7 @@
       ]
     },
     {
-      "owner": "src/git/integration.ts#IntegrationCoordinator.unknown",
+      "owner": "packages/git/src/integration.ts#IntegrationCoordinator.unknown",
       "fact": "an integration whose CAS outcome is not known",
       "tests": [
         {
@@ -317,7 +326,7 @@
       ]
     },
     {
-      "owner": "src/git/quarantine.ts#QuarantineImporter.importBundle",
+      "owner": "packages/git/src/quarantine.ts#QuarantineImporter.importBundle",
       "fact": "the removal of a settled quarantine namespace",
       "tests": [
         {
@@ -331,7 +340,7 @@
       ]
     },
     {
-      "owner": "src/git/submit.ts#SubmitCoordinator.executeAccepted",
+      "owner": "packages/git/src/submit.ts#SubmitCoordinator.executeAccepted",
       "fact": "an accepted submission's import and published ref",
       "tests": [
         {
@@ -346,7 +355,7 @@
       ]
     },
     {
-      "owner": "src/git/submit.ts#SubmitCoordinator.publishMailAndSettle",
+      "owner": "packages/git/src/submit.ts#SubmitCoordinator.publishMailAndSettle",
       "fact": "the submission's result mail and success",
       "tests": [
         {
@@ -361,7 +370,7 @@
       ]
     },
     {
-      "owner": "src/git/submit.ts#SubmitCoordinator.reconcileAccepted",
+      "owner": "packages/git/src/submit.ts#SubmitCoordinator.reconcileAccepted",
       "fact": "a recovered submission",
       "tests": [
         {
@@ -381,18 +390,18 @@
       ]
     },
     {
-      "owner": "src/git/submit.ts#SubmitCoordinator.rejectAccepted",
+      "owner": "packages/git/src/submit.ts#SubmitCoordinator.rejectAccepted",
       "fact": "an accepted submission's failed or unknown state",
       "tests": [
         {
-          "file": "test/action-admission.test.ts",
+          "file": "test/unrestricted-admission.test.ts",
           "title": "V21B: a submit effect failure recorded as unknown is reported for same-key lookup",
           "injection": "in-process-fault"
         }
       ]
     },
     {
-      "owner": "src/git/submit.ts#SubmitCoordinator.submit",
+      "owner": "packages/git/src/submit.ts#SubmitCoordinator.submit",
       "fact": "the accepted submission intent, its bundle and result message",
       "tests": [
         {
@@ -416,7 +425,7 @@
       ]
     },
     {
-      "owner": "src/lifecycle/actions.ts#LifecycleActions.reconcile",
+      "owner": "packages/lifecycle/src/actions.ts#LifecycleActions.reconcile",
       "fact": "a recovered start/stop",
       "tests": [
         {
@@ -432,7 +441,7 @@
       ]
     },
     {
-      "owner": "src/lifecycle/actions.ts#LifecycleActions.start",
+      "owner": "packages/lifecycle/src/actions.ts#LifecycleActions.start",
       "fact": "an accepted start intent and its desired state",
       "tests": [
         {
@@ -448,7 +457,7 @@
       ]
     },
     {
-      "owner": "src/lifecycle/actions.ts#LifecycleActions.stop",
+      "owner": "packages/lifecycle/src/actions.ts#LifecycleActions.stop",
       "fact": "an accepted stop intent and its desired state",
       "tests": [
         {
@@ -464,7 +473,7 @@
       ]
     },
     {
-      "owner": "src/lifecycle/actions.ts#LifecycleActions.unconfirmed",
+      "owner": "packages/lifecycle/src/actions.ts#LifecycleActions.unconfirmed",
       "fact": "a start/stop whose physical outcome is not known",
       "tests": [
         {
@@ -475,7 +484,7 @@
       ]
     },
     {
-      "owner": "src/lifecycle/create-publication.ts#CreationPublicationObserver.ready",
+      "owner": "packages/lifecycle/src/create-publication.ts#CreationPublicationObserver.ready",
       "fact": "a created agent's readiness (provisioning -> enabled)",
       "tests": [
         {
@@ -497,7 +506,7 @@
       ]
     },
     {
-      "owner": "src/lifecycle/create.ts#CreateCoordinator.bootstrap",
+      "owner": "packages/lifecycle/src/create.ts#CreateCoordinator.bootstrap",
       "fact": "the bootstrap seed intents and agents",
       "tests": [
         {
@@ -513,7 +522,7 @@
       ]
     },
     {
-      "owner": "src/lifecycle/create.ts#CreateCoordinator.create",
+      "owner": "packages/lifecycle/src/create.ts#CreateCoordinator.create",
       "fact": "an accepted create intent, its agent row and initial message",
       "tests": [
         {
@@ -529,7 +538,7 @@
       ]
     },
     {
-      "owner": "src/lifecycle/create.ts#CreateCoordinator.finishAccepted",
+      "owner": "packages/lifecycle/src/create.ts#CreateCoordinator.finishAccepted",
       "fact": "a created agent's workspace, units and success",
       "tests": [
         {
@@ -545,7 +554,7 @@
       ]
     },
     {
-      "owner": "src/lifecycle/create.ts#CreateCoordinator.settleLinked",
+      "owner": "packages/lifecycle/src/create.ts#CreateCoordinator.settleLinked",
       "fact": "a linked create's terminal state",
       "tests": [
         {
@@ -556,7 +565,7 @@
       ]
     },
     {
-      "owner": "src/lifecycle/registry-operations.ts#RegistryOperations.ack",
+      "owner": "packages/lifecycle/src/registry-operations.ts#RegistryOperations.ack",
       "fact": "an acknowledgement and its operation, in one transaction",
       "tests": [
         {
@@ -567,7 +576,7 @@
       ]
     },
     {
-      "owner": "src/lifecycle/registry-operations.ts#RegistryOperations.follow",
+      "owner": "packages/lifecycle/src/registry-operations.ts#RegistryOperations.follow",
       "fact": "a subscription change and its operation, in one transaction",
       "tests": [
         {
@@ -583,7 +592,7 @@
       ]
     },
     {
-      "owner": "src/lifecycle/society.ts#SocietyControl.apply",
+      "owner": "packages/lifecycle/src/society.ts#SocietyControl.apply",
       "fact": "a close/open outcome or unknown observation; only proved quiescence and current opening authority can release execution",
       "tests": [
         {
@@ -598,7 +607,7 @@
       ]
     },
     {
-      "owner": "src/lifecycle/society.ts#SocietyControl.reconcile",
+      "owner": "packages/lifecycle/src/society.ts#SocietyControl.reconcile",
       "fact": "a superseded unresolved intent stays unknown without acting on newer execution",
       "tests": [
         {
@@ -612,7 +621,7 @@
       ]
     },
     {
-      "owner": "src/lifecycle/society.ts#SocietyControl.set",
+      "owner": "packages/lifecycle/src/society.ts#SocietyControl.set",
       "fact": "an accepted open/close intent fences activation before physical work; its key and plan survive restart",
       "tests": [
         {
@@ -626,7 +635,7 @@
       ]
     },
     {
-      "owner": "src/lifecycle/workspace.ts#WorkspaceCoordinator.prepare",
+      "owner": "packages/git/src/workspace.ts#WorkspaceCoordinator.prepare",
       "fact": "a created agent's published workspace; after publication the clone's lease is collected (R6-04)",
       "tests": [
         {
@@ -648,7 +657,7 @@
       ]
     },
     {
-      "owner": "src/lifecycle/workspace.ts#WorkspaceCoordinator.prepareLeased",
+      "owner": "packages/git/src/workspace.ts#WorkspaceCoordinator.prepareLeased",
       "fact": "a created agent's published workspace (the publication, inside the preparation that holds the clone's lease, R6-04)",
       "tests": [
         {
@@ -670,12 +679,12 @@
       ]
     },
     {
-      "owner": "src/mail.ts#MailModule.freezeObject",
+      "owner": "packages/mail/src/index.ts#MailModule.freezeObject",
       "fact": "a frozen message object (and the removal of its staging copy)",
       "tests": [
         {
           "file": "test/crash-boundaries.test.ts",
-          "title": "T18\u2013T22/T27 primitive SIGKILL at",
+          "title": "T18–T22/T27 primitive SIGKILL at",
           "injection": "sigkill",
           "points": [
             "stage",
@@ -695,12 +704,12 @@
       ]
     },
     {
-      "owner": "src/mail.ts#MailModule.sendOwned",
+      "owner": "packages/mail/src/index.ts#MailModule.sendOwned",
       "fact": "an accepted send or attestation, its immutable plan, recipients and deliveries",
       "tests": [
         {
           "file": "test/crash-boundaries.test.ts",
-          "title": "T18\u2013T22/T27 primitive SIGKILL at",
+          "title": "T18–T22/T27 primitive SIGKILL at",
           "injection": "sigkill",
           "points": [
             "accepted"
@@ -719,7 +728,7 @@
       ]
     },
     {
-      "owner": "src/mail/batches.ts#BatchCoordinator.complete",
+      "owner": "packages/mail/src/batches.ts#BatchCoordinator.complete",
       "fact": "a batch's completion and its deliveries' presentation",
       "tests": [
         {
@@ -735,12 +744,12 @@
       ]
     },
     {
-      "owner": "src/mail/batches.ts#BatchCoordinator.finishPrepared",
+      "owner": "packages/mail/src/batches.ts#BatchCoordinator.finishPrepared",
       "fact": "the batch view and the new->cur mailbox move",
       "tests": [
         {
           "file": "test/crash-boundaries.test.ts",
-          "title": "T18\u2013T22/T27 primitive SIGKILL at",
+          "title": "T18–T22/T27 primitive SIGKILL at",
           "injection": "sigkill",
           "points": [
             "cur"
@@ -754,12 +763,12 @@
       ]
     },
     {
-      "owner": "src/mail/batches.ts#BatchCoordinator.prepare",
+      "owner": "packages/mail/src/batches.ts#BatchCoordinator.prepare",
       "fact": "a prepared batch and its delivery links",
       "tests": [
         {
           "file": "test/crash-boundaries.test.ts",
-          "title": "T18\u2013T22/T27 primitive SIGKILL at",
+          "title": "T18–T22/T27 primitive SIGKILL at",
           "injection": "sigkill",
           "points": [
             "prepared"
@@ -768,7 +777,7 @@
       ]
     },
     {
-      "owner": "src/mail/batches.ts#BatchCoordinator.settleFromReceipt",
+      "owner": "packages/mail/src/batches.ts#BatchCoordinator.settleFromReceipt",
       "fact": "a batch completed from its receipt at a run's rollover",
       "tests": [
         {
@@ -784,12 +793,12 @@
       ]
     },
     {
-      "owner": "src/mail/materializer.ts#MailMaterializer.publish",
+      "owner": "packages/mail/src/materializer.ts#MailMaterializer.publish",
       "fact": "the archive copy and each delivery's materialization",
       "tests": [
         {
           "file": "test/crash-boundaries.test.ts",
-          "title": "T18\u2013T22/T27 primitive SIGKILL at",
+          "title": "T18–T22/T27 primitive SIGKILL at",
           "injection": "sigkill",
           "points": [
             "archive"
@@ -803,22 +812,27 @@
       ]
     },
     {
-      "owner": "src/mail/materializer.ts#MailMaterializer.publishDelivery",
-      "fact": "a recipient's mailbox name",
+      "owner": "packages/mail/src/materializer.ts#MailMaterializer.publishDelivery",
+      "fact": "a recipient's mailbox name and the full arrival journal record before materialization",
       "tests": [
         {
           "file": "test/crash-boundaries.test.ts",
-          "title": "T18\u2013T22/T27 primitive SIGKILL at",
+          "title": "T18–T22/T27 primitive SIGKILL at",
           "injection": "sigkill",
           "points": [
             "inbox-a",
             "inbox-b"
           ]
+        },
+        {
+          "file": "test/mail-arrival-durability.test.mjs",
+          "title": "DR46-F05: SIGKILL during a real arrival append, retry and restart retain the accepted message",
+          "injection": "sigkill"
         }
       ]
     },
     {
-      "owner": "src/mail/reconcile.ts#reconcileMailOperation",
+      "owner": "packages/mail/src/reconcile.ts#reconcileMailOperation",
       "fact": "a recovered send's success",
       "tests": [
         {
@@ -834,7 +848,7 @@
       ]
     },
     {
-      "owner": "src/platform/guest/archive.ts#GuestArchives.create",
+      "owner": "apps/oma/src/platform/guest/archive.ts#GuestArchives.create",
       "fact": "the archive staging scratch under the request ledger (the manifest's scratch and the staged tar) is removed when the archive is made -- a dead archive's scratch does not survive it",
       "tests": [
         {
@@ -845,7 +859,7 @@
       ]
     },
     {
-      "owner": "src/platform/guest/provision.ts#writeInstance",
+      "owner": "apps/oma/src/platform/guest/provision.ts#writeInstance",
       "fact": "the data disk's instance record, written once at the first boot (MAC-303); P0V-106: published whole, never replaced by another instance's",
       "tests": [
         {
@@ -856,7 +870,7 @@
       ]
     },
     {
-      "owner": "src/platform/guest/requests.ts#RequestLedger.run",
+      "owner": "apps/oma/src/platform/guest/requests.ts#RequestLedger.run",
       "fact": "macOS guesthost's request ledger: a keyed request's intent before its effect and its outcome after (MAC-240/241), each published once",
       "tests": [
         {
@@ -872,7 +886,7 @@
       ]
     },
     {
-      "owner": "src/reconcile.ts#ReconcileModule.assertCanonicalHealthyAsync",
+      "owner": "packages/git/src/canonical-health.ts#CanonicalHealthObserver.assertHealthy",
       "fact": "the canonical fsck diagnostic spool is collected when the health observation ends -- residue never blocks or survives the next observation",
       "tests": [
         {
@@ -883,7 +897,7 @@
       ]
     },
     {
-      "owner": "src/reconcile/preaccept.ts#collectUnacceptedArtifacts",
+      "owner": "packages/storage/src/preaccept-collection.ts#collectUnacceptedArtifacts",
       "fact": "the removal of what no accepted plan owns (DR10)",
       "tests": [
         {
@@ -899,7 +913,7 @@
       ]
     },
     {
-      "owner": "src/request-cache.ts#RequestCache.freeze",
+      "owner": "apps/oma/src/request-cache.ts#RequestCache.freeze",
       "fact": "a frozen request: its body, then its metadata, each published without replacing",
       "tests": [
         {
@@ -925,7 +939,7 @@
       ]
     },
     {
-      "owner": "src/request-cache.ts#RequestCache.updateReceipt",
+      "owner": "apps/oma/src/request-cache.ts#RequestCache.updateReceipt",
       "fact": "the last receipt a request's cache recorded",
       "tests": [
         {
@@ -946,7 +960,7 @@
       ]
     },
     {
-      "owner": "src/review/acceptance.ts#ReviewAcceptance.acceptPrepared",
+      "owner": "packages/review/src/acceptance.ts#ReviewAcceptance.acceptPrepared",
       "fact": "a review fact's acceptance (caller or broker-derived refresh) with its mail",
       "tests": [
         {
@@ -962,7 +976,7 @@
       ]
     },
     {
-      "owner": "src/review/acceptance.ts#ReviewAcceptance.acceptIntegration",
+      "owner": "packages/review/src/acceptance.ts#ReviewAcceptance.acceptIntegration",
       "fact": "the request's single integration intent and its frozen completion notices",
       "tests": [
         {
@@ -978,7 +992,7 @@
       ]
     },
     {
-      "owner": "src/runner.ts#RunnerModule.consume",
+      "owner": "apps/oma/src/runner.ts#RunnerModule.consume",
       "fact": "a Resident's delivery receipt (DR11: after its session entry is durable)",
       "tests": [
         {
@@ -999,7 +1013,7 @@
       ]
     },
     {
-      "owner": "src/platform/package-staging.ts#linuxStaging",
+      "owner": "apps/oma/src/platform/package-staging.ts#linuxStaging",
       "fact": "DR25/C20: a staged local package's copy under local/<name> is whole or absent -- published by one rename after a durable fill; a dead copy or an interrupted staging area is collected, never half-seen",
       "tests": [
         {
@@ -1010,7 +1024,7 @@
       ]
     },
     {
-      "owner": "src/application/local-packages.ts#pruneLocalStage",
+      "owner": "apps/oma/src/application/local-packages.ts#pruneLocalStage",
       "fact": "DR25/C20: dead staged copies and interrupted staging areas under local/ are removed -- a removal nothing accepted owns, run after every oma pi change",
       "tests": [
         {
@@ -1021,7 +1035,7 @@
       ]
     },
     {
-      "owner": "src/application/local-packages.ts#stageArchive",
+      "owner": "apps/oma/src/application/local-packages.ts#stageArchive",
       "fact": "a staged archive's inflated spool scratch is removed with the call -- residue under the staging prefix is collected, never live content",
       "tests": [
         {
@@ -1032,7 +1046,7 @@
       ]
     },
     {
-      "owner": "src/runtime/locked-files.ts#lockedReplace",
+      "owner": "apps/oma/src/runtime/locked-files.ts#lockedReplace",
       "fact": "the engine-owned files (the engine home's settings.json under Pi SettingsManager semantics, retry, presentation, keybindings, open-tui) merged and replaced atomically under the writer's lock by the one locked read-modify-replace; a refused or dead write leaves the previous bytes",
       "tests": [
         {
@@ -1063,7 +1077,7 @@
       ]
     },
     {
-      "owner": "src/runtime/personal-settings.ts#commitPersonalSettings",
+      "owner": "apps/oma/src/runtime/personal-settings.ts#commitPersonalSettings",
       "fact": "DR28/29: the sync and async locked Personal settings wrappers publish through one shared commit; failed first observations consume no choice, saved choices skip observation, and retry preserves package edits.",
       "tests": [
         {
@@ -1084,7 +1098,7 @@
       ]
     },
     {
-      "owner": "src/runtime/packages/store.ts#writePackageIndex",
+      "owner": "apps/oma/src/runtime/packages/store.ts#writePackageIndex",
       "fact": "DR25: the package store's extension index, replaced atomically with the engine's answer after every oma pi change; a change whose index was not written is picked up by the next",
       "tests": [
         {
@@ -1100,7 +1114,7 @@
       ]
     },
     {
-      "owner": "src/runtime/principal-delivery.ts#PrincipalDelivery.deliverOne",
+      "owner": "apps/oma/src/runtime/principal-delivery.ts#PrincipalDelivery.deliverOne",
       "fact": "the Principal's delivery receipt (DR11)",
       "tests": [
         {
@@ -1121,7 +1135,7 @@
       ]
     },
     {
-      "owner": "src/runtime/provision.ts#collectBindingTemporaries",
+      "owner": "apps/oma/src/runtime/provision.ts#collectBindingTemporaries",
       "fact": "the removal of a binding publication's leftover temporary",
       "tests": [
         {
@@ -1137,7 +1151,7 @@
       ]
     },
     {
-      "owner": "src/runtime/provision.ts#collectRepositoryStaging",
+      "owner": "apps/oma/src/runtime/provision.ts#collectRepositoryStaging",
       "fact": "a repository staging a crashed start left is removed, with its lease, only when the lease proves nothing still writes it (R6-04)",
       "tests": [
         {
@@ -1148,7 +1162,7 @@
       ]
     },
     {
-      "owner": "src/runtime/provision.ts#createCanonicalMain",
+      "owner": "apps/oma/src/runtime/provision.ts#createCanonicalMain",
       "fact": "the canonical main, made once and only from nothing (P0V-85): the ref observed after the CAS, kept by every later start",
       "tests": [
         {
@@ -1164,7 +1178,7 @@
       ]
     },
     {
-      "owner": "src/runtime/provision.ts#ensureBareRepository",
+      "owner": "apps/oma/src/runtime/provision.ts#ensureBareRepository",
       "fact": "a society's canonical repository, moved into place from its staging",
       "tests": [
         {
@@ -1175,7 +1189,7 @@
       ]
     },
     {
-      "owner": "src/runtime/provision.ts#publishProjectBinding",
+      "owner": "apps/oma/src/runtime/provision.ts#publishProjectBinding",
       "fact": "the state root's project binding (D05)",
       "tests": [
         {
@@ -1191,7 +1205,7 @@
       ]
     },
     {
-      "owner": "src/runtime/session-mode.ts#publishSessionBirth",
+      "owner": "apps/oma/src/runtime/session-mode.ts#publishSessionBirth",
       "fact": "DR28: immutable mode, identity, cwd and history published once; retries retain the first bytes, never reinterpret conflicting or corrupt records",
       "tests": [
         {
@@ -1207,7 +1221,7 @@
       ]
     },
     {
-      "owner": "src/storage/output-spool.ts#spoolOutput",
+      "owner": "packages/storage/src/output-spool.ts#spoolOutput",
       "fact": "a caller's complete oversized answer as a digest-named file under its own state directory -- delivery only, no receipt or ledger fact",
       "tests": [
         {
@@ -1223,7 +1237,7 @@
       ]
     },
     {
-      "owner": "src/storage/project-preparation.ts#prepareProjectDirectory",
+      "owner": "packages/git/src/linux-project-preparation.ts#prepareProjectDirectory",
       "fact": "a snapshot preparation retains its lease until its owner and descendants release it; partial cleanup is recoverable and never adopts an existing tree",
       "tests": [
         {
@@ -1244,7 +1258,7 @@
       ]
     },
     {
-      "owner": "src/application/packages-apply.ts#applyOwnedPackageArchive",
+      "owner": "apps/oma/src/application/packages-apply.ts#applyOwnedPackageArchive",
       "fact": "DR25 on macOS: the Mac's packages published as one immutable generation under the digest of what arrived, the store's link switched to it, what it replaced recorded once for the request, and the generations no engine can read collected; a run after a stop at any step ends where an uninterrupted one does",
       "tests": [
         {
@@ -1260,7 +1274,7 @@
       ]
     },
     {
-      "owner": "src/application/settings.ts#commitInlineEdit",
+      "owner": "apps/oma/src/application/settings.ts#commitInlineEdit",
       "fact": "an inline configuration generation (DR12)",
       "tests": [
         {
@@ -1281,7 +1295,7 @@
       ]
     },
     {
-      "owner": "src/application/settings.ts#commitManagedEdit",
+      "owner": "apps/oma/src/application/settings.ts#commitManagedEdit",
       "fact": "a managed configuration generation (D02)",
       "tests": [
         {
@@ -1293,11 +1307,16 @@
           "file": "test/crash-kill-boundaries.test.ts",
           "title": "V13A / P0-7: a managed commit SIGKILLed at any durability point",
           "injection": "sigkill"
+        },
+        {
+          "file": "test/crash-kill-boundaries.test.ts",
+          "title": "DR46 / P0-7: SIGKILL in a short journal append preserves the manifest and exact candidate retry",
+          "injection": "sigkill"
         }
       ]
     },
     {
-      "owner": "src/application/settings.ts#commitRoleSet",
+      "owner": "apps/oma/src/application/settings.ts#commitRoleSet",
       "fact": "DR25: a whole role set committed as one managed generation -- an inline configuration becoming a bundle, a session taking on its project's roles -- against the snapshot it was read as",
       "tests": [
         {
@@ -1313,7 +1332,7 @@
       ]
     },
     {
-      "owner": "src/application/settings.ts#writeSettings",
+      "owner": "apps/oma/src/application/settings.ts#writeSettings",
       "fact": "a first-run or replaced configuration (DR12)",
       "tests": [
         {
@@ -1329,7 +1348,7 @@
       ]
     },
     {
-      "owner": "src/units.ts#UnitsModule.prepareUnit",
+      "owner": "packages/platform-linux/src/units.ts#UnitsModule.prepareUnit",
       "fact": "an installed unit file",
       "tests": [
         {
@@ -1351,7 +1370,7 @@
       ]
     },
     {
-      "owner": "src/views.ts#ViewsModule.publishInbox",
+      "owner": "apps/oma/src/views.ts#ViewsModule.publishInbox",
       "fact": "a derived inbox view (rebuilt from the ledger)",
       "tests": [
         {
@@ -1367,7 +1386,7 @@
       ]
     },
     {
-      "owner": "src/views.ts#ViewsModule.publishStatus",
+      "owner": "apps/oma/src/views.ts#ViewsModule.publishStatus",
       "fact": "a derived status view (rebuilt from observation)",
       "tests": [
         {
@@ -1388,7 +1407,7 @@
       ]
     },
     {
-      "owner": "src/views.ts#ViewsModule.refreshWorld",
+      "owner": "apps/oma/src/views.ts#ViewsModule.refreshWorld",
       "fact": "the derived world views (agents, topics, START)",
       "tests": [
         {
@@ -1404,7 +1423,7 @@
       ]
     },
     {
-      "owner": "src/pi-compat/settings.ts#OmaSettingsStorage.withLock",
+      "owner": "apps/oma/src/engine/settings-files.ts#(module)",
       "fact": "trusted Human project settings, atomically replaced under OMA and Pi file locks; explicit choices survive restart and retry",
       "tests": [
         {
@@ -1415,7 +1434,7 @@
       ]
     },
     {
-      "owner": "src/runtime/packages/store.ts#collectPackageGenerations",
+      "owner": "apps/oma/src/runtime/packages/store.ts#collectPackageGenerations",
       "fact": "DR37: collect only marked, noncurrent generations after exclusive directory lease; live engines and unleased legacy generations retain their files; retry after collection is idempotent",
       "tests": [
         {
@@ -1431,7 +1450,7 @@
       ]
     },
     {
-      "owner": "src/views/mail-notices.ts#publishMailNoticeView",
+      "owner": "apps/oma/src/views/mail-notices.ts#publishMailNoticeView",
       "fact": "host-only notice presentation rebuilt from accepted integration facts; no new mail or acknowledgement",
       "tests": [
         {
@@ -1442,6 +1461,183 @@
         {
           "file": "test/crash-kill-boundaries.test.ts",
           "title": "P0V-96 / P0-7: a derived-file replacement SIGKILLed at any point",
+          "injection": "sigkill"
+        }
+      ]
+    },
+    {
+      "owner": "packages/git/src/repository.ts#GitRepository.authorizeNoop",
+      "fact": "the accepted direct no-op authorization witness, bound to operation and candidate",
+      "tests": [
+        {
+          "file": "test/integration-witness-kill.test.ts",
+          "title": "DR46 witness kill:",
+          "injection": "sigkill",
+          "points": [
+            "compareAndSwap",
+            "authorizeNoop"
+          ]
+        },
+        {
+          "file": "test/tiered-integration.test.ts",
+          "title": "a no-op witness is not created when main differs; a matching witness survives main moving later",
+          "injection": "logical"
+        }
+      ]
+    },
+    {
+      "owner": "packages/git/src/context-publication.ts#ContextPublicationObserver.authorizeNoop",
+      "fact": "the exact accepted context no-op authorization witness, before snapshot and mail publication",
+      "tests": [
+        {
+          "file": "test/integration-witness-kill.test.ts",
+          "title": "DR46 context witness kill:",
+          "injection": "sigkill",
+          "points": [
+            "authorizeNoop"
+          ]
+        }
+      ]
+    },
+    {
+      "owner": "apps/oma/src/broker/mail-composition.ts#mailLedger",
+      "fact": "Mail invokes the original synchronous Store root T through its captured capability projection",
+      "tests": [
+        {
+          "file": "test/mail-ledger-projection.test.mjs",
+          "title": "DR46 Mail: a projected transaction cannot escape its original root transaction",
+          "injection": "logical"
+        },
+        {
+          "file": "test/mail-arrival-durability.test.mjs",
+          "title": "DR46-F05: SIGKILL during a real arrival append, retry and restart retain the accepted message",
+          "injection": "sigkill"
+        }
+      ]
+    },
+    {
+      "owner": "apps/oma/src/broker/mail-effects.ts#freezeMailObject",
+      "fact": "the physical frozen object and exactly its preaccept inode ownership",
+      "tests": [
+        {
+          "file": "test/crash-boundaries.test.ts",
+          "title": "T18–T22/T27 primitive SIGKILL at",
+          "injection": "sigkill",
+          "points": [
+            "stage",
+            "object"
+          ]
+        },
+        {
+          "file": "test/phase3.test.ts",
+          "title": "T19: kill after object fsync -> unreferenced object, no recipients; resend OK",
+          "injection": "sigkill"
+        },
+        {
+          "file": "test/priority-0.test.ts",
+          "title": "DR10 / P0-4: what a broker made before an acceptance that never happened is collected",
+          "injection": "logical"
+        }
+      ]
+    },
+    {
+      "owner": "apps/oma/src/broker/mail-effects.ts#mailEffects",
+      "fact": "the physical archive/batch-view adapters called through Mail-owned bounded effect ports",
+      "tests": [
+        {
+          "file": "test/crash-boundaries.test.ts",
+          "title": "T18–T22/T27 primitive SIGKILL at",
+          "injection": "sigkill",
+          "points": [
+            "cur"
+          ]
+        },
+        {
+          "file": "test/p24-mail-boundaries.test.ts",
+          "title": "P04: first cur parent flush precedes removing new; a flush fault preserves prepared recovery",
+          "injection": "in-process-fault"
+        },
+        {
+          "file": "test/crash-boundaries.test.ts",
+          "title": "T18–T22/T27 primitive SIGKILL at",
+          "injection": "sigkill",
+          "points": [
+            "stage",
+            "object"
+          ]
+        },
+        {
+          "file": "test/phase3.test.ts",
+          "title": "T19: kill after object fsync -> unreferenced object, no recipients; resend OK",
+          "injection": "sigkill"
+        },
+        {
+          "file": "test/priority-0.test.ts",
+          "title": "DR10 / P0-4: what a broker made before an acceptance that never happened is collected",
+          "injection": "logical"
+        }
+      ]
+    },
+    {
+      "owner": "apps/oma/src/broker/git-ledger.ts#gitLedger",
+      "fact": "Git invokes the original synchronous Store root T through captured write closures; accepted bytes survive process death",
+      "tests": [
+        {
+          "file": "test/git-review-ledger-projection.test.mjs",
+          "title": "captured writes cannot escape T or borrow a later T",
+          "injection": "logical"
+        },
+        {
+          "file": "test/git-review-acceptance-kill.test.ts",
+          "title": "ledger: SIGKILL after projected acceptance, retry and restart preserve intent",
+          "injection": "sigkill"
+        }
+      ]
+    },
+    {
+      "owner": "apps/oma/src/broker/review-composition.ts#reviewLedger",
+      "fact": "Review invokes the original synchronous Store root T through captured write closures; accepted bytes survive process death",
+      "tests": [
+        {
+          "file": "test/git-review-ledger-projection.test.mjs",
+          "title": "captured writes cannot escape T or borrow a later T",
+          "injection": "logical"
+        },
+        {
+          "file": "test/git-review-acceptance-kill.test.ts",
+          "title": "ledger: SIGKILL after projected acceptance, retry and restart preserve intent",
+          "injection": "sigkill"
+        }
+      ]
+    },
+    {
+      "owner": "apps/oma/src/broker/lifecycle-ledger.ts#lifecycleLedger",
+      "fact": "Lifecycle invokes the original synchronous Store root T through its captured capability projection; same-key history survives process death",
+      "tests": [
+        {
+          "file": "test/lifecycle-ledger-projection.test.mjs",
+          "title": "DR46 Lifecycle: every captured write refuses escape or borrowing a later root transaction",
+          "injection": "logical"
+        },
+        {
+          "file": "test/society-crash.test.ts",
+          "title": "SIGKILL after",
+          "injection": "sigkill"
+        }
+      ]
+    },
+    {
+      "owner": "apps/oma/src/broker/broker-composition.ts#brokerLedger",
+      "fact": "Broker incarnation writes use the original synchronous captured root T; before/after commit restart retains the exact earlier acceptance and receipt",
+      "tests": [
+        {
+          "file": "test/broker-ledger-projection.test.mjs",
+          "title": "DR46 Broker: incarnation writes retain the original captured T and refuse stale or borrowed scopes",
+          "injection": "logical"
+        },
+        {
+          "file": "test/broker-ledger-projection.test.mjs",
+          "title": "DR46 Broker ledger: SIGKILL ",
           "injection": "sigkill"
         }
       ]

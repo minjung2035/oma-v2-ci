@@ -1,3 +1,4 @@
+import { GUEST_IMAGE_ASSETS } from "@oma/platform-linux/guest-assets";
 /** MAC-2xx §4: the host-guest protocol, the guest's connection server and its
  * control channel, over real unix sockets. The machine effects are a recording
  * stand-in; what is under test is what the guest decides. */
@@ -8,16 +9,18 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "nod
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { randomUUID } from "node:crypto";
-import { FramedPeer, PlatformError, sendHello } from "../src/platform/rpc.js";
-import { startGuestServer, type GuestIdentity } from "../src/platform/guest/server.js";
-import { FREEZE_LIMIT_MS, FREEZE_MARGIN_MS, GuestControl, type GuestSystem, type ReceiptWaitFloor } from "../src/platform/guest/control.js";
-import { receiptWaitFloor } from "../src/platform/guest/linux-system.js";
-import { defaultHostConfig } from "../src/config/defaults.js";
-import { StoreError } from "../src/domain/errors.js";
+import { FramedPeer, sendHello } from "#oma-test/app/platform/rpc";
+import { PlatformError } from "@oma/protocol/host-errors";
+import { startGuestServer, type GuestIdentity } from "#oma-test/app/platform/guest/server";
+import { FREEZE_LIMIT_MS, FREEZE_MARGIN_MS, GuestControl } from "#oma-test/app/platform/guest/control";
+import { type GuestSystem, type ReceiptWaitFloor } from "@oma/contracts/guest-control";
+import { receiptWaitFloor } from "#oma-test/app/platform/guest/receipt-wait";
+import { defaultHostConfig } from "@oma/config/defaults";
+import { StoreError } from "@oma/domain/errors";
 import {
   HOST_GUEST_PROTOCOL, PLATFORM_FRAME_BYTES, helloParamsProblem, negotiate, type HelloParams,
-} from "../src/protocol/host-guest.js";
-import { productText } from "../src/platform/product-text.js";
+} from "@oma/protocol/host-guest";
+import { productText } from "@oma/domain/product-text";
 
 const INSTANCE = randomUUID();
 const identity = (): GuestIdentity => ({ instanceId: INSTANCE, guestImage: "2026.09.1", bootId: randomUUID(),
@@ -226,7 +229,7 @@ test("P0V-82 / MAC-620: a freeze ends with the process that holds it, and after 
   control.release();
   assert.deepEqual(system.calls, ["freeze", "thaw"], "a released freeze is thawed once, and its deadline never fires after");
   // What outlives the process: systemd's post-stop runs the same entry to thaw.
-  const unit = readFileSync(new URL("../../platform/guest/systemd/oma-guestctl.service", import.meta.url), "utf8");
+  const unit = readFileSync(join(GUEST_IMAGE_ASSETS, "systemd", "oma-guestctl.service"), "utf8");
   const line = (key: string) => unit.split("\n").find(entry => entry.startsWith(`${key}=`))?.slice(key.length + 1).split(" ") ?? [];
   const [start, post] = [line("ExecStart"), line("ExecStopPost")];
   assert.deepEqual(post.slice(0, 2), start.slice(0, 2), "the post-stop is not guestctl itself");

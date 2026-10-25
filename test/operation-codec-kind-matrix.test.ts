@@ -1,10 +1,11 @@
+import { serializePlanIntent } from "./fixtures/plan.js";
 import test from "node:test";
 import assert from "node:assert/strict";
-import type { Json, MessagePlan, MutationMethod, ResolvedAgentSpec } from "../implementation/contracts.js";
-import { decodeOperation, OPERATION_CODECS, type RawOperationRecord, type OperationDecodeContext } from "../src/storage/operation-codec.js";
-import { StoreError } from "../src/domain/errors.js";
-import { requestHash } from "../src/hash.js";
-import { resolvedSpecDigest } from "../src/domain/spec-identity.js";
+import type { Json, MessagePlan, MutationMethod, ResolvedAgentSpec } from "@oma/contracts";
+import { decodeOperation, OPERATION_CODECS, type RawOperationRecord, type OperationDecodeContext } from "@oma/protocol/operation-codec";
+import { StoreError } from "@oma/domain/errors";
+import { requestHash } from "@oma/domain/request-identity";
+import { resolvedSpecDigest } from "@oma/domain/spec-identity";
 
 // Fixed independent identities/paths. The hash builder supplies valid controls;
 // deliberately corrupted hashes below are never recomputed into a passing oracle.
@@ -17,8 +18,6 @@ const stateRoot = "/srv/oma/demo";
 const spec: ResolvedAgentSpec = {
   name: "alice", from: base, brief: "Frozen brief", profile: "resident", modelProfile: "model",
   capabilities: ["mail.send"],
-  resources: { memoryBytes: 1073741824, tasks: 64, cpuQuotaPercent: 100, tmpBytes: 16777216,
-    workspaceBytes: 1073741824, stagingBytes: 16777216, checkTimeoutSeconds: 30 },
 };
 const specHash = resolvedSpecDigest(spec);
 const agent = { name: "alice", profile: spec.profile, spec_hash: specHash, spec_json: JSON.stringify(spec),
@@ -40,13 +39,17 @@ const resultMail = message("result", ["commons"]);
 const contextMail = message("context", ["residents"], candidate);
 const entries = [{ path: "GOAL.md", bytes: 4, sha256: digest }];
 const integrateResult = { kind: "git.integrate", base, candidate, target: "refs/heads/main", policyRevision: "p1", changed: true };
-const review = { kind: "peer", identity: { repo: "project", targetRef: "refs/heads/main", expectedBase: base,
-  candidate, policyRevision: "p1" }, verdict: "APPROVE", evidence: "reviewed" };
+const reviewName = `merge-${id.slice(3)}`;
+const review = { kind: "merge.open", version: 1, name: reviewName, title: "Review", reason: "Read the diff", tier: "LOW",
+  identity: { repo: "project", targetRef: "refs/heads/main", expectedBase: base, candidate, policyRevision: "p1" }, submitters: ["alice"] };
+const reviewMail: MessagePlan = { ...mail, to: ["residents"], audience: "workers",
+  review: { role: "thread", request: id, name: reviewName, revision: 0 } };
 const fixtures: Fixture[] = [
   { kind: "society.set", payload: { state: "closed" }, plan: { kind: "society.set", state: "closed" },
     result: { kind: "society.set", state: "closed" } },
-  { kind: "attest.record", payload: review, plan: { kind: "attest.record", fact: review, message: resultMail }, owned: resultMail,
-    result: { kind: "attest.record", message: messageId, recipientCount: 1, archivePath: `${stateRoot}/mail/archive/cur/${messageId}:2,` } },
+  { kind: "attest.record", payload: { kind: "merge.open", title: "Review", reason: "Read the diff", tier: "LOW", candidate, base },
+    plan: { kind: "attest.record", fact: review, messages: [reviewMail] }, owned: reviewMail,
+    result: { kind: "attest.record", request: reviewName, messages: [messageId], recipientCount: 1 } },
   { kind: "mail.send", payload: { to: ["alice"], subject: "subject", kind: "message", body: "body" },
     plan: { kind: "mail.send", message: mail }, owned: mail,
     result: { kind: "mail.send", message: messageId, recipientCount: 1, archivePath: `${stateRoot}/mail/archive/cur/${messageId}:2,` } },
@@ -68,16 +71,16 @@ const fixtures: Fixture[] = [
       publishedRef: `refs/oma/published/alice/${id}`, message: resultMail }, owned: resultMail,
     result: { kind: "git.submit", candidate, publishedRef: `refs/oma/published/alice/${id}`, message: messageId, recipientCount: 1 } },
   { kind: "git.integrate", payload: { candidate, expected: base },
-    plan: { kind: "git.integrate", repo: "project", target: "refs/heads/main", base, candidate, policyRevision: "p1", checkProfileDigest: digest },
+    plan: {policyIdentity: "02c010d0ad2a2e60c59a05b83368e8699b97567828b4f75ffa160dfd35b1bb70", noopRef: null,  kind: "git.integrate", repo: "project", target: "refs/heads/main", base, candidate, policyRevision: "p1", checkProfileDigest: digest },
     result: integrateResult },
   { kind: "context.publish", payload: { expected: null, entries, content: { bytes: 4, sha256: digest, mediaType: "application/vnd.oma.context-v1" } },
-    plan: { kind: "context.publish", base: null, candidate, target: "refs/heads/main", entries,
+    plan: {noopRef: null,  kind: "context.publish", base: null, candidate, target: "refs/heads/main", entries,
       stagingPath: `${stateRoot}/staging/context-${id}`, message: contextMail }, owned: contextMail,
     result: { kind: "context.publish", previous: null, revision: candidate, message: messageId, recipientCount: 1 } },
 ];
 function raw(fixture: Fixture): RawOperationRecord {
   return { id, actor: fixture.kind === "society.set" ? "principal" : "alice", request_key: "frozen", request_hash: requestHash(fixture.kind, fixture.payload), kind: fixture.kind,
-    payload_json: JSON.stringify(fixture.payload), plan_json: JSON.stringify(fixture.plan), state: "pending",
+    payload_json: JSON.stringify(fixture.payload), plan_json: serializePlanIntent(fixture.plan), state: "pending",
     result_json: null, error_code: null, created_at_ms: 1, updated_at_ms: 1 };
 }
 function context(fixture: Fixture): OperationDecodeContext {
@@ -142,14 +145,19 @@ test("all thirteen kinds preserve raw bytes and decode consistent state-specific
   }
 });
 
-test("legacy integrate result is accepted without rewriting and its relation is checked", () => {
+test("DR46 plan envelope: bare, prior-version and embedded-result plans refuse without rewriting input", () => {
   const fixture = fixtures.find(entry => entry.kind === "git.integrate");
   assert.ok(fixture);
   const input = raw(fixture);
-  const legacy = { ...JSON.parse(String(input.plan_json)), result: integrateResult };
-  const plan_json = JSON.stringify(legacy, null, 2);
-  assert.equal(decodeOperation({ ...input, plan_json }, context(fixture)).planJson, plan_json);
-  assert.throws(() => decodeOperation({ ...input, plan_json: JSON.stringify({ ...legacy, result: { ...integrateResult, candidate: base } }) }, context(fixture)), isCorrupt);
+  const envelope = JSON.parse(String(input.plan_json));
+  assert.equal(decodeOperation(input, context(fixture)).planJson, input.plan_json);
+  for (const invalid of [envelope.intent, { ...envelope, version: 1 }, { ...envelope, extra: true },
+    { ...envelope, intent: { ...envelope.intent, result: integrateResult } }]) {
+    const text = JSON.stringify(invalid, null, 2);
+    const damaged = { ...input, plan_json: text };
+    assert.throws(() => decodeOperation(damaged, context(fixture)), isCorrupt);
+    assert.equal(damaged.plan_json, text);
+  }
 });
 
 test("create unit ownership cannot be inferred from a plan without trusted society identity", () => {

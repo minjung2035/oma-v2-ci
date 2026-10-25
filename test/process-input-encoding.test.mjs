@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { runProcessSync } from "../dist/src/process/run.js";
+import { runProcessSync } from "@oma/process/run";
 const command = input => ({ executable: process.execPath,
   argv: ["-e", "process.stdin.on('data', bytes => process.stdout.write(bytes))"],
   env: { PATH: "/usr/bin:/bin" }, input, timeoutMs: 5000, stdoutBytes: 65536, stderrBytes: 65536 });

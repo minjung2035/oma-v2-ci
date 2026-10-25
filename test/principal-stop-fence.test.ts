@@ -1,13 +1,15 @@
+import { generateOperationId } from "@oma/native/identity";
+import { lifecycleLedger } from "#oma-test/app/broker/lifecycle-ledger";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { join } from "node:path";
 import { rmSync } from "node:fs";
-import type { AuthContext } from "../implementation/contracts.js";
-import { Store } from "../src/store.js";
-import { LifecycleActions } from "../src/lifecycle/actions.js";
-import { LifecyclePolicy } from "../src/lifecycle/policy.js";
+import type { AuthContext } from "@oma/contracts";
+import { Store } from "@oma/storage";
+import { LifecycleActions } from "@oma/lifecycle/actions";
+import { LifecyclePolicy } from "@oma/lifecycle/policy";
 import { lifecycleReplayFixture } from "./fixtures/lifecycle-replay.js";
-import { PUBLIC_METHODS } from "../src/protocol/methods.js";
+import { PUBLIC_METHODS } from "@oma/protocol/methods";
 
 function principal(auth: AuthContext): AuthContext {
   return { ...auth, actor: "principal", incarnation: 0, role: "principal", channel: "host" };
@@ -28,8 +30,8 @@ test("DR27: a Principal stop survives Worker stop, restart and same-key replay; 
   closed = true; f.store.close();
   const reopened = new Store(join(f.root, "runtime.sqlite"));
   try {
-    const actions = new LifecycleActions(reopened, f.units, { stateRoot: f.root, projectGit: join(f.root, "project.git"),
-      society: "replay", hasGoal: () => true, activationAllowed: () => true }, new LifecyclePolicy(reopened, () => null, null));
+    const actions = new LifecycleActions(lifecycleLedger(reopened), f.units, { stateRoot: f.root,
+      society: "replay", hasGoal: () => true, activationAllowed: () => true }, new LifecyclePolicy(lifecycleLedger(reopened), () => null), { nextOperationId: generateOperationId });
     assert.throws(() => actions.start(f.auth, "a", "after-restart"), /force-stopped/);
     assert.equal(actions.start(p, "a", "explicit-resume").state, "succeeded");
     assert.equal(actions.stop(f.auth, "a", "ordinary-stop").state, "succeeded");

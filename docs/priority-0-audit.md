@@ -3,6 +3,48 @@
 이 문서는 **점검 기록**이다([문서 지도](README.md)). [PRIORITY-0.md](PRIORITY-0.md)의 적용 절차가 요구하는 기록이며, 다음 점검도 새 파일을 만들지 않고 이 문서를 갱신한다.
 여기의 판정은 각 기준점의 코드에 대한 것이다. 지금의 검증 상태와 수치는 [validation.md](implementation/validation.md)가 소유한다.
 
+## DR46-F05 — arrival 부분 쓰기의 배달 완료 승격 (2026-10-24)
+
+수정 전 실제 owner: `src/mail/materializer.ts#MailMaterializer.recordArrival`의 단일 writeSync가
+반환한 byte 수를 확인하지 않았다. 실제 send가 부분 arrival을 남기고 succeeded/materialized=1로
+끝나는 것을 재현했다. 0-byte 쓰기도 성공으로 승격됐다(P0-5/7). 부분 append에서 실제 SIGKILL한
+뒤 복구하면 미완성 숫자 tail과 새 timestamp가 붙어 유효한 arrival을 만들지 못했다.
+`mail-arrival-short-write-reproduction.log`와 수정 전 `mail-arrival-before-final.log`의
+정상1 PASS/음성3 FAIL이 원시 근거다. 입력15,530개 `8f56c06b…`, 변화0.
+첫 시험 초안의 timestamp oracle는 safe integer를 검사하지 않아 kill 사례를 놓쳤다. 그 원시
+`mail-arrival-before.log`(1 PASS/2 FAIL)도 보존하고 oracle를 실제 reader의 숫자 조건으로 강화했다.
+수정 결정은 DR46이며 현재 실행 판정은 validation이 소유한다.
+
+수정 owner는 storage/arrival-journal의 appendMailArrival이다. pinned regular append 파일을
+소유 primitive로 열어 owner bits만 더하고, 부분 쓰기는 계속하며0-byte는 거절한다. 미완성
+tail 뒤에는 newline을 먼저 두고 file/parent를 flush한다. 수정 후130개 집중 중 실제4개
+arrival/복구와4개 owned inode 거절·수리 시험이 통과했다. 범위와 입력은 validation이 소유한다.
+
+## DR46-F02 — vendor 검증 대상과 실제 load 대상 불일치 (2026-10-24)
+
+상태: **REPRODUCED_LOCAL**, 수정 전 기록. 임시로 복사한 실제 LSP registration API에서
+`bundleDir`로 정상 probe를 검증하게 하고 owner 내부 command.js를 변조했다.
+실제 owner를 직접 검증하면 거절됐지만 registerLspTools는 변조 모듈을 평가하고 세 도구를
+등록했다. 단순 파일 존재나 코드 추측이 아닌 실제 entry 실행이다. 의존은 명시적으로 현재
+제품 설치에 연결했고 systemd/provider 실행은 아니다.
+원시 근거 `vendor-owner-mismatch-repro.json`과 `reproduce-vendor-owner-mismatch.mjs`는
+외부 modularization-2026-10-23 디렉터리에 보존한다. 재현 entry SHA는
+`84c268ce6a00d4e998b33e2d4070a3d397a14eba1aede064537c5040e68299e1`이다.
+추가 실제 등록 오라클 `vendor-owner-binding-before.log`는 네 tool 모두에서 변조 모듈 평가와
+도구 등록을 재현했다(0 PASS / 4 FAIL, 입력 `aa989840…`, 변화 0). 수정 뒤 같은 오라클이
+거절을 확인해야 한다. 과거 실패 근거는 보존한다.
+
+판정: 한 디렉터리를 검증한 관측을 다른 디렉터리의 바이트가 검증된 사실로 사용했다(P0-1/2/5).
+현재 제품이 쓰지 않는 bundleDir override를 제거하고, registration은 실제 import하는
+owner-local bundle만 검증한다. 테스트 전용 override를 다른 이름으로 남기지 않는다.
+실제 owner 파일을 변조하고 별도의 정상 probe를 제공해도 모듈 평가·도구 등록 이전에
+거절하는 negative oracle를 네 tool 모두에 추가한다. 이전 양성 설치 검증을 수정 후의
+증거로 승격하지 않으며 현재 판정은 validation이 기록한다.
+
+수정 오라클: bundleDir override와 빈 WebToolsOptions를 제거한 뒤 같은 실제 owner 시험 네 건이
+모두 거절을 확인했다. `vendor-owner-final.log`의 219/219 중 이 네 건은
+payload 평가 false·등록 0·거절 exit 1이다. 현재 실행 범위와 입력 identity는 validation이 소유한다.
+
 ## 수정 재검증 — 2026-10-09 (DR36)
 
 사용자가 전체 수정·검증·푸시를 지시했다. 아래 2026-10-08의 13개 OPEN과 결함 재현 evidence는
@@ -76,10 +118,10 @@ HEAD만으로 이번 판정을 재현할 수 없다. 실제 source·compiled own
 
 ### AV-20261008-01 — quota walk가 owned 손상을 복구하지 않는다
 
-[quota.ts](../src/storage/quota.ts)의 `observedStorageBytes`는 pathname `lstatSync`/`readdirSync`를
+[quota.ts](design-revisions.md#dr46--출시-전-레거시-제거와-workspace-분리) (당시 quota 경로, DR46에서 제거됨)의 `observedStorageBytes`는 pathname `lstatSync`/`readdirSync`를
 직접 사용한다. root 아래 `opaque/fact`를 만든 뒤 `opaque`를 mode 000으로 바꾸면 UID 1001에서
 관측·`startupState`·`admit` 모두 `BROKER_UNAVAILABLE`, 원인 `EACCES`이고 mode는 000 그대로다.
-양성 대조에서는 같은 tree를 관측하고 startup이 admitted였다. [broker.ts](../src/entry/broker.ts):173의
+양성 대조에서는 같은 tree를 관측하고 startup이 admitted였다. [broker.ts](../apps/oma/src/entry/broker.ts):173의
 startup probe 때문에 한 하위 entry의 권한 손상이 전체 broker 기동을 막을 수 있다.
 unknown으로 거절하는 P0-5는 지키지만 owned 접근 primitive에 복구가 내장되어야 한다는 P0-8은 지키지 않는다.
 
@@ -89,12 +131,12 @@ contained repair를 적용하는 것이다. 권한 손상과 실제 quota 초과
 
 ### AV-20261008-02 — OMA와 Pi가 같은 설정을 다른 잠금으로 저장한다
 
-[locked-files.ts](../src/runtime/locked-files.ts):14는 `oma-settings.lock`을 사용한다.
-[settings.ts](../src/pi-compat/settings.ts):85는 잠금 안에서 읽은 전체 JSON을 변환해 교체하며,
+[locked-files.ts](../apps/oma/src/runtime/locked-files.ts):14는 `oma-settings.lock`을 사용한다.
+[settings.ts](../packages/engine/src/pi-compat/settings.ts):85는 잠금 안에서 읽은 전체 JSON을 변환해 교체하며,
 "동시 writer는 이 잠금을 지나야 한다"고 전제한다. 그러나 실제 두 interactive entry는
-`SettingsManager.create`를 사용한다([Society](../src/entry/pi-interactive-host.ts):576,
-[Personal](../src/entry/pi-personal.ts):244). pinned Pi `FileSettingsStorage`의 잠금은 `settings.json.lock`이다.
-[piAgentDir](../src/runtime/pi-runtime.ts):161은 Society와 Personal에 공통 Human engine home을 준다.
+`SettingsManager.create`를 사용한다([Society](../packages/engine/src/interactive.ts):576,
+[Personal](../apps/oma/src/entry/pi-personal.ts):244). pinned Pi `FileSettingsStorage`의 잠금은 `settings.json.lock`이다.
+[piAgentDir](../packages/engine/src/pi-runtime.ts):161은 Society와 Personal에 공통 Human engine home을 준다.
 따라서 기존 창이 모델 선택을 저장하는 동안 새 창의 준비가 같은 파일을 교체할 수 있다.
 
 실제 OMA 잠금 hold의 read/replace 사이에 별도 프로세스의 실제 Pi setter+flush를 실행했다.
@@ -108,9 +150,9 @@ Pi의 `new-provider/new-model` 저장 완료와 파일 내용까지 확인했지
 
 ### AV-20261008-03 — "직전 세대까지 보존"은 reader 사망 증거가 아니다
 
-[packages-apply.ts](../src/application/packages-apply.ts):71–73은 현재와 직전 generation만 남기며 나머지를 삭제한다.
-그동안 [guest packages](../src/platform/guest/packages.ts) → [guest host](../src/platform/guest/host.ts) →
-[host sync](../src/platform/host/service.ts)의 경로에는 기존 세대의 모든 reader가 끝났다는 검사가 없다.
+[packages-apply.ts](../apps/oma/src/application/packages-apply.ts):71–73은 현재와 직전 generation만 남기며 나머지를 삭제한다.
+그동안 [guest packages](../apps/oma/src/platform/guest/packages.ts) → [guest host](../apps/oma/src/platform/guest/host.ts) →
+[host sync](../apps/oma/src/platform/host/service.ts)의 경로에는 기존 세대의 모든 reader가 끝났다는 검사가 없다.
 archive의 open race를 막는 `archiving` latch는 packages.replace의 reader 수명 보호가 아니다.
 
 첫 세대의 실제 확장 module을 import하고 상대 경로 asset을 읽었다. 첫 교체 뒤에는 여전히 읽히지만
@@ -123,7 +165,7 @@ archive의 open race를 막는 `archiving` latch는 packages.replace의 reader �
 
 ### AV-20261008-04 — check의 로그 1 MiB가 실행 수명 상한이다
 
-[candidate-checks.ts](../src/runtime/candidate-checks.ts):107은 stdout/stderr 각각 1 MiB이고 spool이 없다.
+[candidate-checks.ts](../apps/oma/src/runtime/candidate-checks.ts):107은 stdout/stderr 각각 1 MiB이고 spool이 없다.
 이 값은 preview 크기가 아니라 overflow 시 프로세스를 중단시키는 값이다.
 실제 user systemd·cgroup·bubblewrap 검사에서 `/bin/true`는 성공했고,
 `head -c 1048577 /dev/zero; exit 0`은 `output-limited`, exitCode null,
@@ -137,7 +179,7 @@ unknown을 PASS로 바꾸지는 않으므로 그 안전 경계는 유지된다.
 
 ### AV-20261008-05 — 커널 page 정렬을 설정의 byte 동등성으로 검사한다
 
-[candidate-checks.ts](../src/runtime/candidate-checks.ts):27의 resource gate는 `memory.max`와 요청 bytes의
+[candidate-checks.ts](../apps/oma/src/runtime/candidate-checks.ts):27의 resource gate는 `memory.max`와 요청 bytes의
 문자열 동등성을 요구한다. config/resource validator는 page 정렬을 요구하지 않는다.
 실제 같은 check의 268435456 bytes는 성공하고 268435457 bytes는 `/bin/true`에 도달하기 전에
 exit 125, `CHECK_FAILED`가 된다. 별도 kernel 관측에서 67108865 bytes 요청의 `memory.max`는 67108864였다.
@@ -150,9 +192,9 @@ exit 125, `CHECK_FAILED`가 된다. 별도 kernel 관측에서 67108865 bytes �
 ### AV-20261008-06 — 설정과 executor의 deadline 유효 범위가 다르다
 
 `validateConfig`는 complete check resource의 `checkTimeoutSeconds=2147484`를 받지만,
-[integration-policy.ts](../src/git/integration-policy.ts):108은 ms 변환+60,000이 `0x7fffffff`를 넘으면
+[integration-policy.ts](../packages/domain/src/integration-policy.ts):108은 ms 변환+60,000이 `0x7fffffff`를 넘으면
 `UNSUPPORTED_PROFILE: integration check deadline cannot be enforced`를 던진다.
-[broker entry](../src/entry/broker.ts):177은 이 지원 검사를 기동 시 실행한다.
+[broker entry](../apps/oma/src/entry/broker.ts):177은 이 지원 검사를 기동 시 실행한다.
 유효성 검증과 실행 지원 판단이 서로 다른 owner의 숫자 범위를 사용한다.
 
 재현: native-checks의 `config-executor-deadline`. 실제 validator와 startup에 쓰이는 지원 함수를 호출했다.
@@ -164,8 +206,8 @@ exit 125, `CHECK_FAILED`가 된다. 별도 kernel 관측에서 67108865 bytes �
 기존 DR35 측정은 broker 준비 전 plaintext 대화를 5초 안에 가능하게 했으며 전체 준비 약 30.1초도 공개했다.
 추가 실제 PTY oracle에서는 첫 모델 응답이 곧바로 `oma_society`를 호출하게 했다.
 2026-10-08 관측: 모델 요청 3.198초, 도구 결과 3.238초에 `Acceptance status unknown`과 same-key 복구 안내.
-2026-10-09 재현도 요청 3.129초, 도구 결과 3.176초에 같은 결과였다. [oma-society](../src/entry/oma-society.ts)의
-engine 선기동과 [transport](../src/client/transport.ts)의 즉시 연결 사이에 Society readiness 대기가 없다.
+2026-10-09 재현도 요청 3.129초, 도구 결과 3.176초에 같은 결과였다. [oma-society](../apps/oma/src/entry/oma-society.ts)의
+engine 선기동과 [transport](../packages/client/src/transport.ts)의 즉시 연결 사이에 Society readiness 대기가 없다.
 
 재현: [early-tool-benchmark.py](../test/audit/adversarial-2026-10-08/early-tool-benchmark.py)와 함께 있는 PTY fixture.
 실제 제품·bundled Pi·tool이며 모델만 로컬 대본이다. 준비 전 권한을 발급하거나 성공을 꾸민 것은 아니다.
@@ -174,7 +216,7 @@ engine 선기동과 [transport](../src/client/transport.ts)의 즉시 연결 사
 
 ### AV-20261008-08 — 끝난 relay 방향의 fd가 poll에서 계속 깨어난다
 
-[oma-vsock-bridge.c](../platform/guest/bridge/oma-vsock-bridge.c):86은 끝난 방향도 `events=0`인 fd로 poll에 남긴다.
+[oma-vsock-bridge.c](../packages/platform-linux/src/guest/bridge/oma-vsock-bridge.c):86은 끝난 방향도 `events=0`인 fd로 poll에 남긴다.
 peer의 완전 종료 후 `POLLHUP`는 계속 반환되지만 `!open` 조건 때문에 처리하지 않는다.
 반대편이 아직 열려 있으면 loop가 기다리지 않고 돈다.
 정확한 production `relay()`를 C harness에 include해 Unix socketpair로 실행했다.
@@ -186,8 +228,8 @@ native Linux C relay의 EOF/poll 경계 증거다. AF_VSOCK peer 인증, Swift h
 
 ### AV-20261008-09 — 준비 전체의 120초가 내부 작업의 허용 시간을 무효화한다
 
-[society-preparation.ts](../src/runtime/society-preparation.ts):14의 `timeoutMs:120_000`은 진행과 무관한 전체 마감이다.
-child의 [project-snapshot.ts](../src/git/project-snapshot.ts):106은 Git 명령 하나에 `10*60_000`을 허용하고
+[society-preparation.ts](../apps/oma/src/runtime/society-preparation.ts):14의 `timeoutMs:120_000`은 진행과 무관한 전체 마감이다.
+child의 [project-snapshot.ts](../packages/git/src/project-snapshot.ts):106은 Git 명령 하나에 `10*60_000`을 허용하고
 여러 snapshot/seed/mirror 작업이 순차 실행된다. 큰 source tree나 느린 디스크에서 정상 진행 중인
 준비도 바깥 120초에 잘릴 수 있다. 새 마감은 기존 [limit-bounds](limit-bounds.md) 목록에도 없다.
 
@@ -197,7 +239,7 @@ child의 [project-snapshot.ts](../src/git/project-snapshot.ts):106은 Git 명령
 
 ### AV-20261008-10 — quota의 동기 전체 walk가 모든 새 admission의 비용이다
 
-[quota.ts](../src/storage/quota.ts)의 `reserve`/`admit`/`check`는 매번 전체 tree를 동기로 관측하며 캐시하지 않는다.
+[quota.ts](design-revisions.md#dr46--출시-전-레거시-제거와-workspace-분리) (당시 quota 경로, DR46에서 제거됨)의 `reserve`/`admit`/`check`는 매번 전체 tree를 동기로 관측하며 캐시하지 않는다.
 실제 owner의 별도 microbenchmark에서 5,000파일 admission은 19–28ms,
 30,000파일은 131–155ms였다. 30,000파일에서 세 번 연속 호출한 동안 zero-delay timer도 431.8ms 지연됐다.
 측정값은 machine/workload별 값이며 실제 모든 요청의 latency나 시작 2분의 원인으로 확대하지 않는다.
@@ -220,7 +262,7 @@ damage/kill/retry oracle를 gate 의미에 포함한다. PASS를 runtime/P0 전�
 
 ### AV-20261008-12 — Pi의 공개 계산을 다시 유지하는 내부 helper
 
-[pi-interactive-host.ts](../src/entry/pi-interactive-host.ts):40의 `effortLevelsOf`는 pinned Pi AI의
+[pi-interactive-host.ts](../packages/engine/src/interactive.ts):40의 `effortLevelsOf`는 pinned Pi AI의
 공개 `getSupportedThinkingLevels`와 같은 filtering을 별도로 구현한다. `pi-ai/dist/index.js`는
 `models.js`를 공개 export한다. 기존 parity 시험은 drift를 찾지만 같은 의미의 owner를 둘 유지할 필요까지 증명하지 않는다.
 
@@ -231,10 +273,10 @@ model surface의 풍부함이나 필수 sandbox/fencing 구조를 과잉 설계�
 
 ### AV-20261008-13 — 손상된 package snapshot을 적용 뒤에야 소비한다
 
-[packages-apply.ts](../src/application/packages-apply.ts):50은 `${archive}.before.json`을 `JSON.parse` 뒤 type assertion만 한다.
+[packages-apply.ts](../apps/oma/src/application/packages-apply.ts):50은 `${archive}.before.json`을 `JSON.parse` 뒤 type assertion만 한다.
 `publishNoReplace`가 existing을 돌려줘도 기존 내용의 shape/relation을 검증하지 않는다.
 `{before:null,previous:null}`을 주입한 실제 archive 적용은 `recorded → published → switched → collected`까지
-진행하고 나서 [project-settings.ts](../src/application/project-settings.ts):72의 `before.some`에서 TypeError가 났다.
+진행하고 나서 [project-settings.ts](../apps/oma/src/application/project-settings.ts):72의 `before.some`에서 TypeError가 났다.
 실패 뒤 선택된 store의 asset은 이미 `generation 4`였으며 이전 세대 수집도 실행됐다.
 
 재현: package-generation oracle의 `damagedRecord`. 실제 owned 기록의 통제된 byte 손상이다.
@@ -1207,8 +1249,8 @@ P0V-74–P0V-95를 고쳤다(R6-19는 의도된 한계로 문서화, 종료 신�
 
 ### AV-20261003-01 — 복구에서 새 효과의 quota admission 누락
 
-위치: [reconcile.ts](../src/reconcile.ts) `startup`의 112–117행, `sweep`의 157–160행;
-[review.ts](../src/review.ts) `advanceAll`, `createIntegration`의 939–1009행.
+위치: [reconcile.ts](../packages/reconcile/src/index.ts) `startup`의 112–117행, `sweep`의 157–160행;
+[review.ts](../packages/review/src/index.ts) `advanceAll`, `createIntegration`의 939–1009행.
 
 Fact는 이미 접수된 MEDIUM open과 승인표다. 하지만 그 표에 따른 integration은 아직 접수되지 않았고,
 새 완료 메일 object·operation·delivery·CAS는 새 소비다. 기존 operation 복구는 `resourceGate`를 호출하지만,
@@ -1224,8 +1266,8 @@ main을 candidate로 바꾼다. Units 관측만 로컬 stub이며 실제 manager
 
 ### AV-20261003-02 — 요청 이름의 충돌이 다른 candidate를 적용
 
-위치: [identifiers.ts](../src/domain/identifiers.ts) `reviewRequestNameFor`의 88–90행;
-[review.ts](../src/review.ts) `requestByName`의 127–131행과 open acceptance.
+위치: [identifiers.ts](../packages/domain/src/identifiers.ts) `reviewRequestNameFor`의 88–90행;
+[review.ts](../packages/review/src/index.ts) `requestByName`의 127–131행과 open acceptance.
 
 이름은 UUID의 앞 8자리, 즉 32 bit만 사용한다. acceptance는 동일 이름의 다른 immutable ID를 검사하지 않고,
 조회는 이름이 처음 일치하는 row를 고른다. duplicate scan은 candidate/base/tier/policy만 검사하므로 이 충돌을 막지 못한다.
@@ -1241,8 +1283,8 @@ main을 candidate로 바꾼다. Units 관측만 로컬 stub이며 실제 manager
 
 ### AV-20261003-03 — 과거 same-key lookup 앞의 현재 정책·한도 검사
 
-위치: [review.ts](../src/review.ts) `record`의 168–179행;
-[attestation.ts](../src/attestation.ts) `record`의 34–47행.
+위치: [review.ts](../packages/review/src/index.ts) `record`의 168–179행;
+`src/attestation.ts` `record`의 34–47행(당시 경로; DR46에서 삭제됨).
 
 600-byte reason을 가진 open을 succeeded로 접수하고 Store를 닫았다 다시 연다. 같은 입력·key를 새 GitModule로 보내면,
 `review: mail-v1`을 없앤 경우 `UNSUPPORTED_PROFILE`, `mailBodyBytes`를 2000으로 낮춘 경우
@@ -1255,7 +1297,7 @@ historical replay가 현재 정책으로 거절되는 API 계약 위반이며, t
 
 ### AV-20261003-04 — 여러 파일 준비의 부분 실패에 수명 owner가 없음
 
-위치: [review.ts](../src/review.ts) `freeze`의 811–817행,
+위치: [review.ts](../packages/review/src/index.ts) `freeze`의 811–817행,
 `accept`의 203–206행, `acceptPrepared`의 216–223행; `createIntegration`도 같은 `freeze`를 사용한다.
 
 HIGH의 두 번째 peer approve는 worker thread와 Principal approval 두 emission을 준비한다.
@@ -1269,8 +1311,8 @@ preaccept 실패마다 파일이 쌓이고, 다음 시작 전까지 quota를 소
 
 ### AV-20261003-05 — raw diff와 완료 evidence의 encoding drift
 
-위치: [canonical-command.ts](../src/git/canonical-command.ts) `canonicalMergeDiff`의 78–79행;
-[code.ts](../src/cli/effects/code.ts) `readCode`와 공통 `runGitText` text decoder.
+위치: [canonical-command.ts](../packages/git/src/canonical-command.ts) `canonicalMergeDiff`의 78–79행;
+[code.ts](../apps/oma/src/cli/effects/code.ts) `readCode`와 공통 `runGitText` text decoder.
 
 `ff 0a` 두 bytes로 된 text blob은 Git의 binary 판정에 걸리지 않아 `git diff --binary --full-index`도
 patch 본문에 raw `ff`를 출력한다. `Buffer.toString('utf8')`는 예외를 던지지 않고 이를 `ef bf bd`로 치환한다.
@@ -1283,7 +1325,7 @@ patch 본문에 raw `ff`를 출력한다. `Buffer.toString('utf8')`는 예외를
 
 ### AV-20261003-06 — frozen 공지와 acceptance 시점 리뷰 상태가 다름
 
-위치: [review.ts](../src/review.ts) `createIntegration`의 952–964행과 974–981행.
+위치: [review.ts](../packages/review/src/index.ts) `createIntegration`의 952–964행과 974–981행.
 
 MEDIUM을 승인한 Bob의 첫 vote로 만든 완료 notice의 freeze를 await 경계에서 멈춘다.
 그 사이 Bob의 새로운 approve와 `UPDATED review must appear` 본문을 정상 접수한 뒤 freeze를 재개한다.
@@ -1295,8 +1337,8 @@ acceptance는 `fresh.ready`만 검사한다. readiness가 계속 true면, 공지
 
 ### AV-20261003-07 — 지원되는 설정과 notice part 최소 크기 불일치
 
-위치: [limits.ts](../src/domain/limits.ts) `PROTOCOL_LIMIT_FIELDS.mailBodyBytes`의 7행;
-[review.ts](../src/review.ts) `splitNotice`의 1166–1169행과 `record`의 195–197행.
+위치: [limits.ts](../packages/domain/src/limits.ts) `PROTOCOL_LIMIT_FIELDS.mailBodyBytes`의 7행;
+[review.ts](../packages/review/src/index.ts) `splitNotice`의 1166–1169행과 `record`의 195–197행.
 
 전체 `validateConfig(defaultHostConfig(...))`는 `mailBodyBytes=4096`을 허용한다.
 그 설정의 작은 LOW open은 succeeded로 접수되지만 notice budget이 `mailBodyBytes - 4096 = 0`이 되어
@@ -1312,7 +1354,7 @@ validator가 지원한다고 표시한 범위에 대한 기능 결함이다. 설
 `npm run check:architecture`는 첫 `check:inventory`에서
 `production-loc-hashes.json was taken from a different file list`로 exit 1이다.
 실제 production inventory는 356 files, hash 기록은 355 files다.
-`src/config/role-prompts.ts`가 빠졌으며 defaults, pi-interactive-host, mail-tools, principal-tools, review-tools,
+`packages/config/src/role-prompts.ts`가 빠졌으며 defaults, pi-interactive-host, mail-tools, principal-tools, review-tools,
 pi-spawn-plan, tui/session, views의 source hashes도 다르다. 현재 production 코드를 검증한 artifact로 사용할 수 없다.
 
 기존 HANDOFF/validation의 “새 merge-review는 다음 구현 설계”도 최신 구현 commit과 다르다.
@@ -1342,9 +1384,9 @@ pi-spawn-plan, tui/session, views의 source hashes도 다르다. 현재 producti
 
 ### AV-20261003-09 — foreground가 손상 관측을 fence에 전달하지 않음
 
-위치: [review.ts](../src/review.ts) `record`의 193–198행과 `acceptPrepared`의 253–258행;
-[admission.ts](../src/domain/admission.ts) `AdmissionGate.observe`, `observeStoreFailure`;
-[reconcile.ts](../src/reconcile.ts) `retainRecoveryFailure`의 138–147행.
+위치: [review.ts](../packages/review/src/index.ts) `record`의 193–198행과 `acceptPrepared`의 253–258행;
+[admission.ts](../packages/domain/src/admission.ts) `AdmissionGate.observe`, `observeStoreFailure`;
+[reconcile.ts](../packages/reconcile/src/index.ts) `retainRecoveryFailure`의 138–147행.
 
 LOW merge를 적용한 뒤 HIGH prepared challenge를 연다. 로컬 physical corruption fault로 해당 challenge의
 `refs/oma/published/bob/<operation>`을 revert candidate와 다른 정상 commit으로 만든다. DB row는 변조하지 않는다.
@@ -1360,9 +1402,10 @@ receipt 보존을 이유로 STORE_CORRUPT 관측까지 삼키지 않는다.
 
 ### AV-20261003-10 — Worker archive reply resolver 누락
 
-위치: [mail-tools.ts](../src/extension/mail-tools.ts) `readBoundedMail`의 69–87행,
+위치: 당시 `src/extension/mail-tools.ts` `readBoundedMail`의 69–87행
+([현재 owner](../packages/extension/src/mail-tools.ts)),
 `oma_mail_send.execute`의 365–366행;
-[mail.ts](../src/cli/effects/mail.ts) `prepareReplyEffects`.
+[mail.ts](../apps/oma/src/cli/effects/mail.ts) `prepareReplyEffects`.
 
 MEDIUM open의 worker-only thread를 실제 oma_mail_read로 읽으면 성공한다. CLI의 공통 reply reader에 실제 worker
 archive path를 직접 주어도 정상 Message-ID를 반환한다. 그러나 같은 path를 oma_mail_send.replyTo에 주면 extension이
@@ -1375,8 +1418,8 @@ ID만 남긴 뒤 `mail/archive/cur/<id>:2,`로 다시 조립한다. CLI는 존�
 
 ### AV-20261003-11 — freeze timestamp를 arrival로 표시
 
-위치: [mail.ts](../src/application/mail.ts) `readBounded`의 100행, `entriesIn`, `foldThreads`, `byArrival`;
-[materializer.ts](../src/mail/materializer.ts) `publishDelivery`의 141–148행.
+위치: [mail.ts](../apps/oma/src/application/mail.ts) `readBounded`의 100행, `entriesIn`, `foldThreads`, `byArrival`;
+[materializer.ts](../packages/mail/src/materializer.ts) `publishDelivery`의 141–148행.
 
 첫 mail.send를 실제 접수한 뒤 post-accept materialization만 일시 실패시켜 pending으로 둔다.
 15 ms 뒤 두 번째 mail.send는 접수·전달이 완료된다. 그다음 실제 reconcilePending이 첫 메일을 새 inbox entry로 전달한다.
@@ -1390,8 +1433,8 @@ unread 상태나 durable delivery 자체가 사라지는 문제는 아니고, �
 
 ### AV-20261003-12 — bounded thread가 기존 요청의 종료 경로를 막음
 
-위치: [review.ts](../src/review.ts) `threadBody`의 749–790행,
-`finishEntry`와 `entryEmissions`의 643–697행; [attestation.ts](../src/domain/attestation.ts) `reviewInputProblem`.
+위치: [review.ts](../packages/review/src/index.ts) `threadBody`의 749–790행,
+`finishEntry`와 `entryEmissions`의 643–697행; [attestation.ts](../packages/domain/src/attestation.ts) `reviewInputProblem`.
 
 전체 validator가 지원하는 `mailBodyBytes=2048`에서 MEDIUM open을 접수한다. 각각 입력 한도 안의 500-byte review들을
 먼저 넣어 omission 경계를 실행하고, 짧은 review들로 남은 공간을 채운다. 정상 접수한 review는 총 40개다.
@@ -1412,9 +1455,9 @@ unread 상태나 durable delivery 자체가 사라지는 문제는 아니고, �
 
 | 파일 | 읽은 owner/경계와 확인 | 판정 한계 |
 |---|---|---|
-| `src/config/generations.ts` | generation identity, source 재검사, loader reproduce, pointer commit | 선택 함수 검토와 V13 fixture PASS. 실제 process kill/powercut 미실행 |
-| `src/config/operations.ts` | source closure·extension asset reader | snapshot/operations config fixture PASS. 전체 경로 무결함 판정 아님 |
-| `src/config/policy.ts` | refresh 실패 시 이전 authority 제거, T 밖의 host read | 코드 검토, 별도 신규 위반 미확정 |
+| `packages/config/src/generations.ts` | generation identity, source 재검사, loader reproduce, pointer commit | 선택 함수 검토와 V13 fixture PASS. 실제 process kill/powercut 미실행 |
+| `packages/config/src/operations.ts` | source closure·extension asset reader | snapshot/operations config fixture PASS. 전체 경로 무결함 판정 아님 |
+| `packages/config/src/policy.ts` | refresh 실패 시 이전 authority 제거, T 밖의 host read | 코드 검토, 별도 신규 위반 미확정 |
 | `src/authority.ts` | identity/current capability 분리 | 선택 authority/registry fixture PASS |
 | `src/lifecycle/actions.ts` | currentIntent, start/stop normal/recovery 비대칭 | 코드 검토. 실제 unit effect 미실행 |
 | `src/lifecycle/registry-operations.ts` | identity-only replay와 fresh ack/follow acceptance | R25 fixture PASS |
@@ -1452,7 +1495,7 @@ session identity, storage transitions와 platform request ledger를 읽고 독�
 
 ### AV-20261003-13 — 실패한 relay opener가 listener를 잃음
 
-위치: [inference-relay.ts](../src/runtime/inference-relay.ts)의 `open`, 182–192행.
+위치: [inference-relay.ts](../apps/oma/src/runtime/inference-relay.ts)의 `open`, 182–192행.
 
 실제 임시 Unix socket에서 `listen`이 성공한 다음 해당 socket의 `chmodSync`에만 EIO를 주입한다.
 `open`은 EIO로 reject되지만 HTTP server의 `listening`은 true이고 socket 이름도 남는다.
@@ -1466,8 +1509,8 @@ session identity, storage transitions와 platform request ledger를 읽고 독�
 
 ### AV-20261003-14 — revoke 뒤 늦게 끝난 resolver가 권한을 재생성
 
-위치: [host/egress.ts](../src/platform/host/egress.ts)의 `placeholder`, 89–97행과 `forgetBoot`/`stop`, 124–131행.
-호출 경계: [host/service.ts](../src/platform/host/service.ts)의 `link.onReboot`와 `shutdown`.
+위치: [host/egress.ts](../apps/oma/src/platform/host/egress.ts)의 `placeholder`, 89–97행과 `forgetBoot`/`stop`, 124–131행.
+호출 경계: [host/service.ts](../apps/oma/src/platform/host/service.ts)의 `link.onReboot`와 `shutdown`.
 
 실제 guest service의 정상 placeholder 요청을 host resolver의 await에서 멈춘다.
 `forgetBoot` 또는 `stop`이 완료되어 `activeRuns=0`인 것을 확인한 뒤 이전 resolver를 재개한다.
@@ -1484,9 +1527,9 @@ session identity, storage transitions와 platform request ledger를 읽고 독�
 
 ### AV-20261003-15 — guest run 끝과 host run 끝이 연결되지 않음
 
-위치: [egress-forwarder.ts](../src/runtime/egress-forwarder.ts)의 `close`, 119–126행;
-[runner.ts](../src/runner.ts)의 `openRelay`/`consume`, 168–172행과 314–317행;
-[host/egress.ts](../src/platform/host/egress.ts)의 `release`/`forgetBoot`, 115–125행.
+위치: [egress-forwarder.ts](../apps/oma/src/runtime/egress-forwarder.ts)의 `close`, 119–126행;
+[runner.ts](../apps/oma/src/runner.ts)의 `openRelay`/`consume`, 168–172행과 314–317행;
+[host/egress.ts](../apps/oma/src/platform/host/egress.ts)의 `release`/`forgetBoot`, 115–125행.
 
 MAC-225는 run이 끝나면 placeholder를 폐기한다. 그러나 runner의 실제 delivery finally가 호출하는 forwarder close는
 guest socket과 forwarding connection만 닫는다. host에 run 끝을 알리는 경로가 없으며 host의 `release` 호출자는 boot 폐기뿐이다.
@@ -1504,7 +1547,7 @@ guest의 실제 run owner와 host relay owner 사이의 종료 전달·끊긴 �
 
 ### AV-20261003-16 — detached 경로에서 idle 연결 제한이 사라짐
 
-위치: [inference-relay.ts](../src/runtime/inference-relay.ts)의 constructor 172–174행과 `accept`, 207–211행.
+위치: [inference-relay.ts](../apps/oma/src/runtime/inference-relay.ts)의 constructor 172–174행과 `accept`, 207–211행.
 
 일반 relay는 `server.maxConnections=4×concurrent`를 설정한다. detached relay는 socket을
 `server.emit("connection", socket)`으로 직접 넘기므로 net.Server의 listen acceptance 제한이 실행되지 않는다.
@@ -1517,7 +1560,7 @@ host pool의 `maxPool`은 **대기 중 연결 수**이고 넘긴 active 연결 �
 
 ### AV-20261003-17 — durable outcome의 타입을 검증하지 않는 원장
 
-위치: [guest/requests.ts](../src/platform/guest/requests.ts)의 `read`, `answer`와 `status`.
+위치: [guest/requests.ts](../apps/oma/src/platform/guest/requests.ts)의 `read`, `answer`와 `status`.
 
 정상 effect의 `INVALID_REQUEST`로 `{ok:false,error:...}` outcome을 durable하게 기록하고 `refused` 관측을 확인한다.
 임시 파일의 `ok`만 문자열 `"false"`로 바꾸는 physical corruption fault를 주입한 다음 RequestLedger를 새로 연다.
@@ -1537,7 +1580,7 @@ run replay와 status가 같은 판정을 사용한다. 깨진 기록은 REQUEST_
 | 파일 | 읽은 fact/owner와 경계 | 판정·한계 |
 |---|---|---|
 | `src/storage/quota.ts` | fresh allocation scan, stream reservation, settlement headroom | 추가 미확정. 외부 writer/SQLite growth의 hard quota는 의도적으로 보장하지 않음 |
-| `src/storage/transitions.ts` | immutable batch/delivery identity, touched rows, usage settlement | 추가 미확정. INF-009에 따라 unit cap의 production 호출 부재는 의도된 예외 |
+| `packages/storage/src/transitions.ts` | immutable batch/delivery identity, touched rows, usage settlement | 추가 미확정. INF-009에 따라 unit cap의 production 호출 부재는 의도된 예외 |
 | `src/domain/lineage.ts` | copied snapshot, duplicate/cycle, descendant capacity | 추가 미확정. deep/random graph campaign 없음 |
 | `src/runtime/inference-relay.ts` | construction failure, detached socket, forward/tunnel close, byte guard | AV-13/16. upstream setup throw와 split-secret prefix 가설은 미확정이며 발견으로 세지 않음 |
 | `src/runtime/egress-forwarder.ts` | placeholder·socket·upstream handover와 close | AV-15. 관련 chmod callback 실패는 별도 재현하지 않음 |
@@ -1580,7 +1623,7 @@ production manifest 356개와 추가 계약·native·배포·build/verification 
 
 ### AV-20261003-18 — context 준비 실패가 이미 획득한 lease를 반환하지 않음 (P2)
 
-근거: [context-stream.ts](../src/storage/context-stream.ts)의 `acquireStagingRoot`.
+근거: [context-stream.ts](../packages/storage/src/context-stream.ts)의 `acquireStagingRoot`.
 `TreeLease.take(staging)` 다음 `openDirectory(dirname(staging))`가 `try` 밖에 있어,
 이 디렉터리 열기가 실패하면 `lease.release()`까지 도달하지 않는다. 호출자는
 준비 객체를 받지 못하므로 반환할 owner도 없다. P0-4의 생성 즉시 소유권·실패 시 반환 위반이다.
@@ -1619,14 +1662,14 @@ required-behavior oracle로 등록했으며 현재 실패한다. 나머지는 �
 
 ### AV-20261003-19 — `.prepare-*` context revision 임시 tree의 소유자·수거자 부재
 
-근거: [context-snapshot.ts](../src/storage/context-snapshot.ts)의 `publishContextRevision`, 70–95행.
+근거: [context-snapshot.ts](../packages/storage/src/context-snapshot.ts)의 `publishContextRevision`, 70–95행.
 `.prepare-${candidate}-${operationId}`를 만들고 파일을 쓴 뒤 `sealRevision`·`publishStagedDirectory`로
 게시하고, 삭제는 `finally { removeOwnedTree(temporary) }`뿐이다. `TreeLease.take`도 소유권 기록도 없다.
 생성~`finally` 사이의 kill/power-loss는 `stateRoot/world/context/revisions` 아래에 완성된 context tree를 남긴다.
 
-수거자가 없다: `collectUnacceptedArtifacts`([preaccept.ts](../src/reconcile/preaccept.ts) 40–104행)는
-mail objects·staging만 스캔하고, `collectRepositoryStaging`([provision.ts](../src/runtime/provision.ts)
-391–400행)은 `stateRoot/repos`만 본다. [quota.ts](../src/storage/quota.ts) 14–60행의
+수거자가 없다: `collectUnacceptedArtifacts`([preaccept.ts](../packages/storage/src/preaccept-collection.ts) 40–104행)는
+mail objects·staging만 스캔하고, `collectRepositoryStaging`([provision.ts](../apps/oma/src/runtime/provision.ts)
+391–400행)은 `stateRoot/repos`만 본다. [quota.ts](design-revisions.md#dr46--출시-전-레거시-제거와-workspace-분리) (당시 quota 경로, DR46에서 제거됨) 14–60행의
 `observedStorageBytes(stateRoot)`는 state root 전체를 재귀하므로 잔재가 영구히 쿼터에 계상된다.
 lease가 없으므로 미래의 수거자조차 `collectLeasedTree`의 quiescence 증명(`unknown`)을 통과할 수 없다.
 
@@ -1641,11 +1684,11 @@ startup 수거 범위에 포함하고, quiescence를 증명할 수 없는 잔재
 
 ### AV-20261003-20 — startup 복구가 비-mail operation의 실패를 격리하지 않음
 
-근거: [reconcile.ts](../src/reconcile.ts) 103–105행. `startup()`은 mail 계열이 아닌 pending/unknown
+근거: [reconcile.ts](../packages/reconcile/src/index.ts) 103–105행. `startup()`은 mail 계열이 아닌 pending/unknown
 operation에 대해 `await this.recover(...)`를 지역 catch 없이 호출한다. 실패는 startup의 바깥 catch로
 전파되어 `observeStoreFailure` 후 프로세스를 죽인다. 대조로 mail 경로는 `retainRecoveryFailure`로
 격리하고, 주기 `sweep()`은 `OperationRecovery.perform`이 op마다 같은 격리를 한다
-([reconcile/operations.ts](../src/reconcile/operations.ts)).
+([reconcile/operations.ts](../packages/reconcile/src/operations.ts)).
 
 [전수 감사 oracle](../test/audit/adversarial-2026-10-03-full.mjs)은 pending `agent.start` operation을
 만들고 `reconcileAction`이 지속 `REF_STATE_UNKNOWN`을 던지게 했다. 같은 op에 대해 `sweep()`은
@@ -1657,17 +1700,17 @@ store-scope 손상만 치명으로 유지한다.
 
 ### AV-20261003-21 — `VzDriver.get`이 malformed Keychain 응답을 absent로 격하
 
-근거: [vz-driver.ts](../src/platform/host/vz-driver.ts) 128–131행. `typeof answer.value === "string" ? answer.value : undefined`로, `ok:true`이지만 value가 비문자열이면 `undefined`를 반환한다 — "item not found"와 구분 불가. 형제 구현 `KeychainClient.get`([keychain-client.ts](../src/platform/host/keychain-client.ts) 101–107행)는 같은 상황에서 채널을 실패시킨다.
+근거: [vz-driver.ts](../packages/platform-mac/src/vz-driver.ts) 128–131행. `typeof answer.value === "string" ? answer.value : undefined`로, `ok:true`이지만 value가 비문자열이면 `undefined`를 반환한다 — "item not found"와 구분 불가. 형제 구현 `KeychainClient.get`([keychain-client.ts](../packages/platform-mac/src/keychain-client.ts) 101–107행)는 같은 상황에서 채널을 실패시킨다.
 
-결과: [service.ts](../src/platform/host/service.ts) 71–77행 `archiveKey()`는 `get → undefined → randomBytes(32) → put`을 직렬화 없이 실행한다. mangled 응답 하나가 새 임의 key로 저장된 archive key를 덮어써, 이전에 게시한 모든 `.omaarchive`를 복호화 불가로 만든다. durable fact가 나중 관측으로 재해석되는 P0-5/3 위반. macOS lane `NOT_RUN` — 정적 확정. 미수정.
+결과: [service.ts](../apps/oma/src/platform/host/service.ts) 71–77행 `archiveKey()`는 `get → undefined → randomBytes(32) → put`을 직렬화 없이 실행한다. mangled 응답 하나가 새 임의 key로 저장된 archive key를 덮어써, 이전에 게시한 모든 `.omaarchive`를 복호화 불가로 만든다. durable fact가 나중 관측으로 재해석되는 P0-5/3 위반. macOS lane `NOT_RUN` — 정적 확정. 미수정.
 
 수정 방향: `KeychainClient`와 같은 strict 응답 검증으로 malformed을 absent와 구분하고,
 `archiveKey`를 `keychainCredentials`와 같은 직렬화 create-if-absent 패턴으로 옮긴다.
 
 ### AV-20261003-22 — `archiveKey` get→put TOCTOU
 
-근거: [service.ts](../src/platform/host/service.ts) `archiveKey`. `get` 결과 없음 → `put`까지
-직렬화·프로세스 락이 없다([keychain.ts](../src/platform/host/keychain.ts)가 가진 `withWriter` 패턴 부재).
+근거: [service.ts](../apps/oma/src/platform/host/service.ts) `archiveKey`. `get` 결과 없음 → `put`까지
+직렬화·프로세스 락이 없다([keychain.ts](../apps/oma/src/runtime/keychain-credentials.ts)가 가진 `withWriter` 패턴 부재).
 두 프로세스/시점이 동시에 absent를 관측하면 나중 `put`이 이기고, 패자가 방금 쓴 archive는
 승자 key로만 열린다. durable secret의 생성-owner가 둘 이상이 되는 P0-2/4 위반. `NOT_RUN`. 미수정.
 
@@ -1675,7 +1718,7 @@ store-scope 손상만 치명으로 유지한다.
 
 ### AV-20261003-23 — guesthost maintenance lease의 owner 사망 후 잔류
 
-근거: [guest/host.ts](../src/platform/guest/host.ts) 61, 128, 161–171행. `maintenance`는 request key를
+근거: [guest/host.ts](../apps/oma/src/platform/guest/host.ts) 61, 128, 161–171행. `maintenance`는 request key를
 키로 하는 `Set`이고 해제는 두 번째 요청(`maintenance.end`)뿐이다. 연결 소유자가 죽으면 key가 잔류하고
 `maintenance.size > 0`이면 `society.open`이 `BROKER_UNAVAILABLE`로 영구 거부된다. 대조로
 `archiving`/`opening`은 자기 정리 경로가 있다. lease 해제가 별도 요청인 자원에 peer-close sweep이 없는
@@ -1685,7 +1728,7 @@ P0-4 위반. `NOT_RUN`. 미수정.
 
 ### AV-20261003-24 — `workerStatus`의 unbounded `entries` projection
 
-근거: [review.ts](../src/review.ts) 1052–1083행 `status()`는 list 분기만 probe/shrink로 frame 예산을
+근거: [review.ts](../packages/review/src/index.ts) 1052–1083행 `status()`는 list 분기만 probe/shrink로 frame 예산을
 적용하고, 1085–1131행 `workerStatus`는 `frameBytes`를 받지 않아 `entries` 전체를 직렬화한다.
 `public-dispatcher.ts` 216–219행은 `frameBytes`를 정상 전달하므로 예산은 `status()` 안에서만 유실된다.
 caller review/vote/cancel은 entry당 ~90–130B로 무한 누적되어(기본 256KiB에서 ~2,400–3,200 entries),
@@ -1698,11 +1741,11 @@ accepted-failure가 된다. 그 요청의 `oma merge status/diff`·`oma challeng
 
 ### AV-20261003-25 — unrepresentable candidate 이름이 `STORE_CORRUPT`로 분류 → society fence
 
-근거: [git/observe.ts](../src/git/observe.ts) `parseNameStatusZ` 154행 → `corrupt` → `observed()` →
-`StoreError("STORE_CORRUPT")` → `AdmissionGate.observe`([admission.ts](../src/domain/admission.ts))
+근거: [git/observe.ts](../packages/git/src/observe.ts) `parseNameStatusZ` 154행 → `corrupt` → `observed()` →
+`StoreError("STORE_CORRUPT")` → `AdmissionGate.observe`([admission.ts](../packages/domain/src/admission.ts))
 → society 전체 admission fence.
 
-Trigger A(latent): [identifiers.ts](../src/domain/identifiers.ts) `isValidWirePath` 114–121행이 `\p{Cs}`를
+Trigger A(latent): [identifiers.ts](../packages/domain/src/identifiers.ts) `isValidWirePath` 114–121행이 `\p{Cs}`를
 거부하지 않아 lone surrogate가 context path가 되고, native 인코딩(WTF-8) 후 strict decode에서
 `STORE_CORRUPT`가 된다. wire 경계(frame.ts:73)는 surrogate를 거부하므로 현재 wire 트리거는 차단되지만
 `context-policy`·`protectedPaths`·`submit.paths` 등 비프레임 진입에 문법 구멍이 남는다.
@@ -1722,7 +1765,7 @@ unrepresentable 입력이 durable 손상으로 읽히지 않게 한다. strict d
 
 ### AV-20261003-26 — Swift helper의 `PortBridge` 부분 생성 누수
 
-근거: [main.swift](../platform/host/vmhelper/Sources/oma-vmhelper/main.swift) `vm.start` 180–202행.
+근거: [main.swift](../packages/platform-mac/src/vmhelper/Sources/oma-vmhelper/main.swift) `vm.start` 180–202행.
 `machine = vm` 배정 뒤 `config.ports.map { try PortBridge(...) }`에서 후속 bridge 생성이 throw하면
 이미 만든 bridge들이 폐기된다 — `stopBridges` 미호출, listener FD·accept thread·`.sock` 잔재,
 `machine`은 running VM을 보유. 거절된 start가 자원을 남기고 재시도는 `ADDRESS_ALREADY_IN_USE`만 돌려준다.
@@ -1732,7 +1775,7 @@ unrepresentable 입력이 durable 손상으로 읽히지 않게 한다. strict d
 
 ### AV-20261003-27 — GOAL 게이트가 same-key terminal receipt 반환보다 먼저 throw
 
-근거: [lifecycle/actions.ts](../src/lifecycle/actions.ts) start/stop 경로. GOAL 게이트가 같은
+근거: [lifecycle/actions.ts](../packages/lifecycle/src/actions.ts) start/stop 경로. GOAL 게이트가 같은
 request-key의 기존 terminal receipt 반환보다 먼저 throw하므로, 과거에 접수된 same-key 요청도 현재
 GOAL 상태로 거절되고 receipt가 분실된다. AV-03과 동일한 "현재 검사가 과거 receipt보다 먼저" 패턴의
 다른 자리 — P0-1 위반. 정적 확정. 미수정.
@@ -1742,8 +1785,8 @@ GOAL 상태로 거절되고 receipt가 분실된다. AV-03과 동일한 "현재 
 ### AV-20261003-28 — listen 콜백 안의 `chmodSync` 4개 추가 자리 (AV-13 계열)
 
 근거: AV-13과 같은 mechanism — `listen` 성공 뒤 콜백에서 `chmodSync`가 실패하면 bound socket과
-실행 중 listener가 owner 없이 남는다. 추가 자리: [egress-forwarder.ts](../src/runtime/egress-forwarder.ts)
-~110–115행, [host-api.ts](../src/platform/host/host-api.ts) `startHostApi`, [guest-session.ts](../src/entry/guest-session.ts)
+실행 중 listener가 owner 없이 남는다. 추가 자리: [egress-forwarder.ts](../apps/oma/src/runtime/egress-forwarder.ts)
+~110–115행, [host-api.ts](../apps/oma/src/platform/host/host-api.ts) `startHostApi`, [guest-session.ts](../apps/oma/src/entry/guest-session.ts)
 ~52행, `startEgressService`. `startGuestServer`는 같은 실패에서 server를 닫는 대조 경로다.
 P0-4 위반. 개별 재현은 하지 않았고 정적 일치로 묶는다. 미수정.
 
@@ -1842,3 +1885,39 @@ succeeded 제출물의 absent ref가 `REF_STATE_UNKNOWN`(보수적이지만 revi
 
 NB-23/NB-29가 이번 pass 최고 심각도다 — 정상 VM 정지 경로에서도 손상된 host-record.json 하나로 데몬 죽음 +
 orphan VM이 재현된다. 전부 정적 확정이며 macOS lane은 `NOT_RUN`.
+
+## DR46 추가 관측 (2026-10-24)
+
+**DR46-F01 — FIXED_LOCAL / systemd activation NOT_RUN: Resident의 frozen modelProfile 참조가 현재 역할 설정으로 바뀐다.**
+발견 당시(10 workspace 입력 `d6089338…`): P0-1/P0-3, LIFE-008/TUI-009. [`ResolvedAgentSpec`](../packages/contracts/src/host.ts)의
+modelProfile은 수락된 spec/hash에 들어가지만 [`UnitsModule.ensureResident`](../packages/platform-linux/src/units.ts)는
+profile과 resource만 unit에 전달하고, [`runner entry`](../apps/oma/src/entry/runner.ts)는 현재
+agentProfiles[profile].modelProfile을 다시 선택한다. 실제 runner entry를 실행하고 엔진 실행만
+capture한 재현에서 frozen `review` / `model-b`가 역할 참조 편집 뒤 `standard` / `model-a`로
+바뀌었다. source 계약과 entry 해석에 대한 재현이며 실제 systemd activation/provider 증거는 아니다.
+원시 근거는 외부 `frozen-model-reference-repro.json`이다. 수락된 참조 전달과 현재 모델 내용의
+적용 시점을 분리했다. 현재 unit은 수락된 profile/modelProfile 참조를 명시적으로 전달하며, runner는 고정 참조의 모델 내용만 다음 활성화에 읽는다. Worker 편집도 기존 참조 내용을 수정하며 Principal과 공유된 참조의 역할 단독 편집은 거절한다. `resource-current-repairs.log`의 실제 runner entry capture 및 Worker 편집 회귀가 통과했다(214/214 집중 집합, 입력 `6a1297d3…`, 변화 0). `resource-current-focused.log`의 실제 confined Worker SCN-X01/X02도 모델/effort 적용을 확인했다(입력 `377306c7…`). real systemd activation/provider/power-loss 증명으로 확대하지 않는다.
+
+**DR46-F03 — FIXED_LOCAL: 분리 checkout의 preload owner 경로 회귀.**
+`src/runtime/pi-spawn-plan.ts`의 dirname(coreExtension) 계산은 extension 이동 후 실제
+app/runtime preload 대신 존재하지 않는 extension 하위 파일을 가리킨다. P0-4/P0-7: engine보다
+먼저 package generation lease/client runtime 초기화를 수행하는 실제 owner를 경로 추정으로
+잃지 않아야 한다. `test/preload-owner.test.mjs`가 실제 installation asset 존재와 plan API의
+NODE_OPTIONS를 비교해 1 FAIL을 확인했다. 입력 15,524개 `849f6731…`, 변화0.
+원시 로그 `preload-owner-before.log`는 유지하며 현재 root 14 workspace의 실패로 소급하지 않는다.
+
+**DR46-F04 — FIXED_LOCAL: 현재 제품과 다른 namespace fixture의 네트워크 보장 과장.**
+P0-5/P0-7/INV09. `test/resident-sandbox-live.test.ts`의 rootfs probe는 직접 --unshare-all을
+실행하며 현재 production recipe의 --share-net을 쓰지 않았다. root 14 전체 실행에서 해당
+fixture가 PASS여도 현재 제품의 네트워크 차단 증거가 아니다. 실제 recipe 기반 로컬 marker
+교환과 namespace 음성 제어로 교체하며 파일/credential containment 검사는 유지한다.
+
+DR46-F03/F04 수정 후 실행: `extension-current-final.log` **162/162 PASS**, skip/cancel/todo0.
+입력 15,525개 `bb62e0249cdd300a9b672a5b4fe3d34bc69f2a440a3a48b94539d70d64fbb792`, 변화0.
+실제 preload asset 존재/plan 경로, 실제 bundled Pi의 confined delivery/receipt·installed CLI와
+production recipe의 host-loopback marker 교환·unshared 음성 제어·host 파일 비가시성을 확인했다.
+이는 local Linux 증거이며 systemd activation/native Mac/VM/provider/power-loss 증거가 아니다.
+
+
+DR46 Reconcile 이동의 현재 링크는 복구 workflow와 Storage collection의 실제 owner를
+가리킨다. 위 과거 행 번호·판정·검토 범위는 새 소스의 검토 완료를 뜻하지 않는다.

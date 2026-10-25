@@ -1,3 +1,4 @@
+import { DEPLOYMENT_LAYOUT } from "@oma/domain/deployment";
 /** MAC-020/021/222/251: the Host API and the Mac's attach client, down to a
  * real guest session on this machine (a stand-in TUI on a real pty). */
 import assert from "node:assert/strict";
@@ -10,19 +11,20 @@ import { join } from "node:path";
 import { PassThrough, Writable } from "node:stream";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
-import { encodeFrame } from "../src/frame.js";
-import { GuestHost, listening, type SessionLauncher } from "../src/platform/guest/host.js";
-import { startGuestServer, type GuestIdentity } from "../src/platform/guest/server.js";
-import { attachTerminal, type AttachTerminal } from "../src/platform/host/attach-client.js";
-import { GuestLink } from "../src/platform/host/guest-link.js";
-import { startHostApi, type HostApiBackend } from "../src/platform/host/host-api.js";
-import { PlatformError, readLeadingFrame } from "../src/platform/rpc.js";
-import { HOST_API_VERSION } from "../src/protocol/host-api.js";
-import { GUEST_PORTS, HOST_GUEST_PROTOCOL, PLATFORM_FRAME_BYTES } from "../src/protocol/host-guest.js";
+import { encodeFrame } from "@oma/protocol/frame";
+import { GuestHost, listening, type SessionLauncher } from "#oma-test/app/platform/guest/host";
+import { startGuestServer, type GuestIdentity } from "#oma-test/app/platform/guest/server";
+import { attachTerminal, type AttachTerminal } from "#oma-test/app/platform/host/attach-client";
+import { GuestLink } from "#oma-test/app/platform/host/guest-link";
+import { startHostApi, type HostApiBackend } from "#oma-test/app/platform/host/host-api";
+import { PlatformError } from "@oma/protocol/host-errors";
+import { readLeadingFrame } from "#oma-test/app/platform/rpc";
+import { HOST_API_VERSION } from "@oma/protocol/host-api";
+import { GUEST_PORTS, HOST_GUEST_PROTOCOL, PLATFORM_FRAME_BYTES } from "@oma/protocol/host-guest";
 import { holdSocketNames } from "./fixtures/socket-names.js";
 
 const here = fileURLToPath(new URL(".", import.meta.url));
-const holderEntry = join(here, "..", "src", "entry", "guest-session.js");
+const holderEntry = join(here, "../..", DEPLOYMENT_LAYOUT.entries.guestSession);
 const fakeTui = join(here, "..", "..", "test", "fixtures", "fake-tui.mjs");
 const INSTANCE = randomUUID();
 const self = { uid: process.getuid!(), gid: process.getgid!() };
@@ -158,7 +160,7 @@ test("MODE-006: host-new crosses the real guest holder and Host API only after c
 });
 
 test("P0V-81 / AV31: a Mac client asked to end puts its terminal back and leaves the session running", { skip: setsid ? false : "util-linux setsid is not available" }, async t => {
-  const { HOST_LOSS_SIGNALS } = await import("../src/runtime/broker-lifetime.js");
+  const { HOST_LOSS_SIGNALS } = await import("@oma/process/host-loss");
   const { apiSocket, token, projectId } = await world(t);
   await call(apiSocket, token, "society.open", { society: "demo", projectId });
   for (const signal of HOST_LOSS_SIGNALS) {

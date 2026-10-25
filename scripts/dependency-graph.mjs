@@ -7,6 +7,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import ts from "typescript";
+import { appTestSource } from "./check-modules.mjs";
 import { LATTICE, layerOf } from "./dependency-lattice.mjs";
 import { kernelEvidence } from "./kernel-zones.mjs";
 
@@ -81,13 +82,41 @@ export function runtimeModuleReference(node) {
   return null;
 }
 
+/** Analysis binds public workspace APIs to their one source definition. The
+ * runtime and package builds still use ordinary package exports and artifacts;
+ * no compiler paths or runtime aliases are installed. */
+export function installWorkspaceSourceResolution(host, options, rootDir = process.cwd()) {
+  const root = path.resolve(rootDir);
+  host.resolveModuleNames = (names, from) => names.map(specifier => {
+    if (specifier.startsWith("#oma-test/")) {
+      const source = appTestSource(root, specifier, from);
+      return source ? { resolvedFileName: path.resolve(root, source), extension: ts.Extension.Ts, isExternalLibraryImport: false } : undefined;
+    }
+    const workspace = /^@oma\/([a-z-]+)(?:\/(.+))?$/.exec(specifier);
+    if (workspace) {
+      const directory = path.join(root, ...(workspace[1] === "app" ? ["apps", "oma"] : ["packages", workspace[1]]));
+      const manifestPath = path.join(directory, "package.json");
+      if (fs.existsSync(manifestPath)) {
+        const manifest = JSON.parse(fs.readFileSync(manifestPath, "utf8"));
+        const entry = manifest.exports?.[workspace[2] ? `./${workspace[2]}` : "."];
+        if (!entry || typeof entry.types !== "string" || !/^\.\/dist\/.+\.d\.ts$/.test(entry.types)) return undefined;
+        const source = path.resolve(directory, "src", entry.types.slice("./dist/".length).replace(/\.d\.ts$/, ".ts"));
+        if (!source.startsWith(path.join(directory, "src") + path.sep) || !fs.existsSync(source)) return undefined;
+        return { resolvedFileName: source, extension: ts.Extension.Ts, isExternalLibraryImport: false };
+      }
+    }
+    return ts.resolveModuleName(specifier, from, options, ts.sys).resolvedModule;
+  });
+  return host;
+}
+
 /** Canonical production Program. Tests are checked by tsc, never evidence roots. */
 export function createArchitectureProgram(
   rootDir = process.cwd(),
-  configName = "tsconfig.json",
+  configName,
 ) {
   const root = path.resolve(rootDir);
-  const configPath = path.resolve(root, configName);
+  const configPath = path.resolve(root, configName ?? (fs.existsSync(path.join(root, "tsconfig.architecture.json")) ? "tsconfig.architecture.json" : "tsconfig.json"));
   const config = ts.readConfigFile(configPath, ts.sys.readFile);
   if (config.error)
     throw new Error(
@@ -106,11 +135,13 @@ export function createArchitectureProgram(
         getNewLine: () => "\n",
       }),
     );
+  const options = { ...parsed.options, noEmit: true };
   return ts.createProgram({
     rootNames: parsed.fileNames.filter((file) =>
       isArchitectureSource(root, file),
     ),
-    options: { ...parsed.options, noEmit: true },
+    options,
+    host: installWorkspaceSourceResolution(ts.createCompilerHost(options), options, root),
   });
 }
 
@@ -152,9 +183,13 @@ export function resolveInternalModule(
     ts.sys,
   ).resolvedModule;
   if (!resolved) return null;
-  const target = slash(
+  let target = slash(
     path.relative(path.resolve(rootDir), resolved.resolvedFileName),
   );
+  if (/^(?:packages\/[^/]+|apps\/oma)\/dist\/.+\.d\.ts$/.test(target)) {
+    const source = target.replace("/dist/", "/src/").replace(/\.d\.ts$/, ".ts");
+    if (fs.existsSync(path.join(rootDir, source))) target = source;
+  }
   return target === ".." ||
     target.startsWith("../") ||
     path.isAbsolute(target) ||

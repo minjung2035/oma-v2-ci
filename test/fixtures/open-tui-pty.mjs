@@ -3,11 +3,11 @@ import assert from 'node:assert/strict';
 import { writeFileSync, readdirSync, readFileSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { createHash } from 'node:crypto';
-import { principalSessionDir } from '../../dist/src/runtime/engine/principal-session.js';
+import { principalSessionDir } from "@oma/engine/principal-session";
 import { startScenario } from '../../dist/test/fixtures/scenario.js';
 import { call, tools, text, delayed, lastUserText } from '../../dist/test/fixtures/scripted-provider.js';
-import { PanelTerminal } from '../../dist/src/tui/panel-terminal.js';
-import { TuiApp } from '../../dist/src/tui/app.js';
+import { PanelTerminal } from '@oma/tui/panel-terminal';
+import { TuiApp } from '@oma/tui/app';
 
 const [side, ending] = process.argv.slice(2);
 let session;
@@ -18,7 +18,7 @@ const app = new TuiApp({
   configFields: () => [], extensions: () => [], body: () => null,
   mail: () => ({ rows: [], unreadable: null, omitted: 0 }),
   dashboard: () => ({ status: { kind: 'unknown', observedAtMs: 0, reason: 'Fixture observation' },
-    configuredWorkers: 1, workerLimit: 4, unread: null, principalModel: { configured: 'scripted', session: 'scripted' }, rootfs: null }),
+    configuredWorkers: 1, unread: null, principalModel: { configured: 'scripted', session: 'scripted' }, rootfs: null }),
   setField: () => { throw new Error('unexpected write'); }, setExtension: () => { throw new Error('unexpected write'); },
   submitPrompt: value => session.submit(value), quit: () => resolveQuit(),
 }, terminal, 262144);

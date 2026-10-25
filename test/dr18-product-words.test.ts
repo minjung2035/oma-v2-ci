@@ -7,8 +7,8 @@ import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
-const words = fileURLToPath(new URL("../src/tui/words.js", import.meta.url));
-const exit = fileURLToPath(new URL("../src/application/exit.js", import.meta.url));
+const words = fileURLToPath(new URL(import.meta.resolve("@oma/tui/words")));
+const exit = fileURLToPath(new URL(import.meta.resolve("#oma-test/app/application/exit")));
 
 function run(script: string, productText: boolean): { stdout: string; stderr: string; status: number | null } {
   const env: Record<string, string> = { PATH: process.env.PATH ?? "/usr/bin:/bin" };

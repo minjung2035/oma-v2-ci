@@ -1,20 +1,18 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { tmpdir } from "node:os";
-import { StoreError } from "../src/domain/errors.js";
-import { DEPLOYMENT_LAYOUT } from "../src/domain/deployment.js";
-import { readConfigurationSource } from "../src/config/operations.js";
-import { guardWorkspaceTools } from "../src/extension/workspace-guard.js";
+import { StoreError } from "@oma/domain/errors";
+import { DEPLOYMENT_LAYOUT } from "@oma/domain/deployment";
+import { readConfigurationSource } from "@oma/config/operations";
+import { guardWorkspaceTools } from "@oma/tool-runtime/workspace-guard";
 import {
   SURFACE_LIMITS, encodeToolSurfacePlan, planToolSurface,
   type GroupSpec, type ToolSurfaceConfig,
-} from "../src/domain/tool-surface.js";
-import {
-  OMA_TOOL_NAMES, expandedActiveTools, initialActiveTools, parseSurfacePlan, registerToolSurface,
-  type SurfaceFence,
-} from "../src/pi-extension.js";
+} from "@oma/domain/tool-surface";
+import { OMA_TOOL_NAMES } from "@oma/extension/mail-tools";
+import { expandedActiveTools, initialActiveTools, parseSurfacePlan, registerToolSurface, type SurfaceFence } from "@oma/tool-runtime/tool-surface";
 
 const invalid = (error: unknown): boolean => error instanceof StoreError && error.code === "INVALID_REQUEST";
 
@@ -191,7 +189,7 @@ test("D23: a role file cannot declare a projection -- the field fails the load, 
   const dir = mkdtempSync(join(tmpdir(), "oma-surface-cfg-"));
   try {
     const libdir = join(dir, "lib");
-    mkdirSync(join(libdir, "dist", "src"), { recursive: true });
+    mkdirSync(dirname(join(libdir, DEPLOYMENT_LAYOUT.extension)), { recursive: true });
     writeFileSync(join(libdir, DEPLOYMENT_LAYOUT.extension), "export {};\n");
     writeFileSync(join(dir, "host.json"), JSON.stringify({ installation: { libdir } }));
     writeFileSync(join(dir, "models.json"), JSON.stringify({}));

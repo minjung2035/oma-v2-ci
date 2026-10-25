@@ -1,0 +1,14 @@
+# MUST [PR-002,UNIT-001]: Host entry calls the existing broker, not another daemon.
+[Unit]
+Description=OMA @SOCIETY@ Principal mail relay
+# P0V-59: the state tree this unit belongs to; systemd ignores X- keys.
+X-OMA-Owner=@STATE@
+StartLimitIntervalSec=60s
+StartLimitBurst=5
+[Service]
+Type=oneshot
+ExecStart=@NODE@ @LIBDIR@/apps/oma/dist/entry/host.js principal-relay --society @SOCIETY@ --run-root @RUN_ARG@
+TimeoutStartSec=10s
+UMask=0077
+StandardOutput=journal
+StandardError=journal

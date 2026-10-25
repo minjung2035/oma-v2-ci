@@ -1,3 +1,4 @@
+import { prepareHostProjectDirectory } from "@oma/platform-mac/files";
 /** macos-platform §6 (MAC-404, MAC-411/412, MAC-420, MAC-240/241, §4.8,
  * MV-50/51/53/54): project sync end to end with real git -- the host's git on
  * a "Mac" repository, the stream channel, and guesthost's mirror, ledger and
@@ -10,19 +11,21 @@ import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSyn
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createHash, randomUUID } from "node:crypto";
-import { encodeFrame } from "../src/frame.js";
-import { PlatformError, readLeadingFrame } from "../src/platform/rpc.js";
-import { startGuestServer, type GuestIdentity } from "../src/platform/guest/server.js";
-import { GuestHost } from "../src/platform/guest/host.js";
-import { GuestProjects } from "../src/platform/guest/project.js";
-import { RequestLedger } from "../src/platform/guest/requests.js";
-import { serveStream } from "../src/platform/guest/stream.js";
-import { GuestLink } from "../src/platform/host/guest-link.js";
-import { MacGit, fileSink, getStream, putStream } from "../src/platform/host/project.js";
-import { HOST_GUEST_PROTOCOL, PLATFORM_FRAME_BYTES } from "../src/protocol/host-guest.js";
-import { provisionSociety } from "../src/runtime/provision.js";
-import { ProjectSyncCoordinator } from "../src/platform/host/project-sync.js";
-import { newHostRecord, readHostRecord, writeHostRecord } from "../src/platform/host/record.js";
+import { encodeFrame } from "@oma/protocol/frame";
+import { PlatformError } from "@oma/protocol/host-errors";
+import { readLeadingFrame } from "#oma-test/app/platform/rpc";
+import { startGuestServer, type GuestIdentity } from "#oma-test/app/platform/guest/server";
+import { GuestHost } from "#oma-test/app/platform/guest/host";
+import { GuestProjects } from "#oma-test/app/platform/guest/project";
+import { RequestLedger } from "#oma-test/app/platform/guest/requests";
+import { serveStream } from "#oma-test/app/platform/guest/stream";
+import { GuestLink } from "#oma-test/app/platform/host/guest-link";
+import { MacGit } from "@oma/git/host-project";
+import { fileSink, getStream, putStream } from "#oma-test/app/platform/host/project";
+import { HOST_GUEST_PROTOCOL, PLATFORM_FRAME_BYTES } from "@oma/protocol/host-guest";
+import { provisionSociety } from "#oma-test/app/runtime/provision";
+import { ProjectSyncCoordinator } from "#oma-test/app/platform/host/project-sync";
+import { newHostRecord, readHostRecord, writeHostRecord } from "@oma/platform-mac/record";
 
 const INSTANCE = randomUUID();
 const git = (cwd: string, ...args: string[]): string => {
@@ -51,7 +54,7 @@ async function world(t: import("node:test").TestContext) {
   const link = new GuestLink({ connect: async () => { const s = connect(guestSocket); await new Promise<void>((ok, f) => { s.once("connect", ok); s.once("error", f); }); return s; } },
     { hostVersion: "1.0.0", installationId: randomUUID(), instanceId: INSTANCE, expectImage: "2026.09.1", protocol: { min: HOST_GUEST_PROTOCOL, max: HOST_GUEST_PROTOCOL } },
     { frameBytes: PLATFORM_FRAME_BYTES, helloDeadlineMs: 2000, requestTimeoutMs: 30_000 });
-  const peers: import("../src/platform/rpc.js").FramedPeer[] = [];
+  const peers: import("#oma-test/app/platform/rpc").FramedPeer[] = [];
   t.after(async () => { for (const peer of peers) peer.close(); await new Promise(r => guest.close(r)); rmSync(dir, { recursive: true, force: true }); });
   const request = async (method: string, params: Record<string, unknown>, key?: string) => {
     const peer = await link.json("society"); peers.push(peer);
@@ -71,7 +74,7 @@ async function world(t: import("node:test").TestContext) {
   git(mac, "config", "core.hooksPath", hooks);
   git(mac, "config", "core.fsmonitor", join(dir, "fsmonitor.sh"));
   const transfer = (name: string) => join(dir, `${name}.bundle`);
-  return { dir, mac, marker, first, link, request, projectsDir, societiesDir, ledger, transfer, macGit: new MacGit("/usr/bin/git") };
+  return { dir, mac, marker, first, link, request, projectsDir, societiesDir, ledger, transfer, macGit: new MacGit("/usr/bin/git", prepareHostProjectDirectory) };
 }
 const code = (expected: string) => (error: unknown) => error instanceof PlatformError && error.failure.code === expected;
 

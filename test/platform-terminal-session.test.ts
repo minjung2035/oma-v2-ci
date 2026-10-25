@@ -1,3 +1,4 @@
+import { DEPLOYMENT_LAYOUT } from "@oma/domain/deployment";
 /** macos-platform §4.6 (MAC-220..222, MV-12): a society's terminal session
  * holder, run as the real entry on a real pseudo-terminal, with a stand-in
  * TUI that draws only when something changes -- as the product's does. */
@@ -8,20 +9,20 @@ import { connect, type Socket } from "node:net";
 import { existsSync, mkdtempSync, mkdirSync, writeFileSync, readdirSync, readlinkSync, rmSync } from "node:fs";
 import { randomUUID } from "node:crypto";
 import { CURRENT_SESSION_VERSION } from "@earendil-works/pi-coding-agent";
-import { newSessionBirth, publishSessionBirth } from "../src/runtime/session-mode.js";
-import { hostPersonalHistoryQuery } from "../src/platform/host/personal-histories.js";
-import { parseHostHistoryQuery } from "../src/protocol/host-history.js";
+import { newSessionBirth, publishSessionBirth } from "#oma-test/app/runtime/session-mode";
+import { hostPersonalHistoryQuery } from "#oma-test/app/platform/host/personal-histories";
+import { parseHostHistoryQuery } from "@oma/protocol/host-history";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { TerminalModes } from "../src/platform/terminal-modes.js";
+import { TerminalModes } from "#oma-test/app/platform/terminal-modes";
 import { holdSocketNames } from "./fixtures/socket-names.js";
 import {
   TerminalFrameParser, encodeTerminalFrame, encodeTerminalJson, parseTerminalJson, resizePayload, type TerminalFrame,
-} from "../src/protocol/host-guest.js";
+} from "@oma/protocol/host-guest";
 
 const here = fileURLToPath(new URL(".", import.meta.url));
-const holderEntry = join(here, "..", "src", "entry", "guest-session.js");
+const holderEntry = join(here, "../..", DEPLOYMENT_LAYOUT.entries.guestSession);
 const fakeTui = join(here, "..", "..", "test", "fixtures", "fake-tui.mjs");
 const setsid = existsSync("/usr/bin/setsid");
 
@@ -230,7 +231,7 @@ test("§4.6: a connection that does not begin with attach is dropped and the pro
 });
 
 test("MAC-320 / P0V-81: a holder asked to stop, by any signal that asks, asks its program to end and ends with its status", { skip: setsid ? false : "util-linux setsid is not available" }, async t => {
-  const { HOST_LOSS_SIGNALS } = await import("../src/runtime/broker-lifetime.js");
+  const { HOST_LOSS_SIGNALS } = await import("@oma/process/host-loss");
   for (const signal of HOST_LOSS_SIGNALS) {
     const { child, exited } = await holder(t);
     await new Promise(r => setTimeout(r, 300));

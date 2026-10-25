@@ -1,3 +1,4 @@
+import { connectSocket } from "#oma-test/app/platform/rpc";
 /** macos-platform §2.1, §9.1, §9.3, MAC-701: the Node side of the VM helper's
  * channel, against a stand-in helper that speaks the same protocol. The
  * Swift helper itself is built and tested only on a Mac (mac-unit). */
@@ -8,8 +9,8 @@ import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { StoreError } from "../src/domain/errors.js";
-import { VzDriver, type VzDeadlines } from "../src/platform/host/vz-driver.js";
+import { StoreError } from "@oma/domain/errors";
+import { VzDriver, type VzDeadlines } from "@oma/platform-mac/vz-driver";
 
 const fakeHelper = join(fileURLToPath(new URL(".", import.meta.url)), "..", "..", "test", "fixtures", "fake-vmhelper.mjs");
 
@@ -21,7 +22,7 @@ async function world(t: import("node:test").TestContext, env: Record<string, str
   await new Promise<void>(resolve => guest.listen(guestPath, resolve));
   const driver = VzDriver.launch({ executable: process.execPath, argv: [fakeHelper],
     env: { PATH: process.env.PATH ?? "/usr/bin", FAKE_GUEST_PORT_700: guestPath, FAKE_KEYCHAIN: join(dir, "keychain.json"), ...env } },
-    dir, { kernel: "k", initrd: "i", cmdline: "c", disks: [], cpus: 2, memoryBytes: 1 << 30, consoleLog: join(dir, "console.log"), ports: [700] }, deadlines);
+    dir, { kernel: "k", initrd: "i", cmdline: "c", disks: [], cpus: 2, memoryBytes: 1 << 30, consoleLog: join(dir, "console.log"), ports: [700] }, connectSocket, deadlines);
   const stops: number[] = [];
   driver.onStopped(() => stops.push(Date.now()));
   t.after(async () => { driver.close(); await new Promise(r => guest.close(r)); rmSync(dir, { recursive: true, force: true }); });

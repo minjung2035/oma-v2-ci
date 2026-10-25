@@ -18,28 +18,10 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 const source = fileURLToPath(new URL("../../", import.meta.url));
 const CHECK = pathToFileURL(join(source, "scripts/check-package.mjs")).href;
 const ENGINE = "@earendil-works/pi-coding-agent";
-
-/** The production dependency directories the lockfile names. */
-function productionModules(): string[] {
-  const lock = JSON.parse(readFileSync(join(source, "package-lock.json"), "utf8")) as { packages: Record<string, { dev?: boolean; optional?: boolean }> };
-  const tops = new Set<string>();
-  for (const [key, entry] of Object.entries(lock.packages)) {
-    if (!key.startsWith("node_modules/") || entry.dev === true) continue;
-    // Another platform's optional binary is locked but not installed here.
-    if (entry.optional === true && !existsSync(join(source, key))) continue;
-    const parts = key.split("/");
-    tops.add(parts[1]!.startsWith("@") ? parts.slice(0, 3).join("/") : parts.slice(0, 2).join("/"));
-  }
-  return [...tops].sort();
-}
+import { copyInstalledProduct, productionModulePaths } from "./fixtures/installation.js";
 
 function install(prefix: string, options: { engine?: boolean } = {}): void {
-  for (const path of ["dist", "implementation/schema-v3.sql", "implementation/systemd", "package.json", "package-lock.json"])
-    cpSync(join(source, path), join(prefix, path), { recursive: true });
-  for (const module of productionModules()) {
-    if (options.engine === false && module === `node_modules/${ENGINE}`) continue;
-    cpSync(join(source, module), join(prefix, module), { recursive: true, verbatimSymlinks: true });
-  }
+  copyInstalledProduct(source, prefix, options);
 }
 
 /** Runs `script` with node, refusing any module resolution or file read into the source tree. */
@@ -80,9 +62,9 @@ test("V31A: the installation alone resolves its entries, schema, templates and i
     const run = guarded(work, `
 import { spawnSync } from "node:child_process";
 const prefix = ${JSON.stringify(prefix)};
-const { resolvePiRuntime } = await import(prefix + "/dist/src/runtime/pi-runtime.js");
-const { runtimeAssets, assertRuntimeAssets } = await import(prefix + "/dist/src/runtime/assets.js");
-const { DEPLOYMENT_LAYOUT } = await import(prefix + "/dist/src/domain/deployment.js");
+const { resolvePiRuntime } = await import(prefix + "/packages/engine/dist/pi-runtime.js");
+const { runtimeAssets, assertRuntimeAssets } = await import(prefix + "/apps/oma/dist/runtime/assets.js");
+const { DEPLOYMENT_LAYOUT } = await import(prefix + "/packages/domain/dist/deployment.js");
 const assets = runtimeAssets(prefix);
 assertRuntimeAssets(assets, { schema: prefix + "/" + DEPLOYMENT_LAYOUT.schema, systemd: prefix + "/" + DEPLOYMENT_LAYOUT.systemd });
 const runtime = resolvePiRuntime({ stateRoot: ${JSON.stringify(join(work, "state"))}, libdir: prefix });
@@ -123,10 +105,10 @@ test("V31A: an installation without its engine is refused, not handed another in
     // find it. 1.0.1 does not vendor its dependencies inside the package, so a
     // real foreign installation is the whole production closure, not the engine
     // directory alone.
-    for (const module of productionModules())
+    for (const module of productionModulePaths(source))
         cpSync(join(source, module), join(work, module), { recursive: true, verbatimSymlinks: true });
     const run = guarded(work, `
-const { resolvePiRuntime } = await import(${JSON.stringify(prefix)} + "/dist/src/runtime/pi-runtime.js");
+const { resolvePiRuntime } = await import(${JSON.stringify(prefix)} + "/packages/engine/dist/pi-runtime.js");
 try { const runtime = resolvePiRuntime({ stateRoot: ${JSON.stringify(join(work, "state"))}, libdir: ${JSON.stringify(prefix)} }); console.log(JSON.stringify({ bundle: runtime.bundle })); }
 catch (error) { console.log(JSON.stringify({ code: error.code, message: error.message })); }
 `);
@@ -140,10 +122,10 @@ catch (error) { console.log(JSON.stringify({ code: error.code, message: error.me
 test("V31B: the package check names a missing asset, a stale entry and a dependency that is not the locked one", { timeout: 120_000 }, async () => {
   const { checkPackage } = await import(CHECK) as { checkPackage(root: string): Promise<unknown> };
   for (const [name, damage, expected] of [
-    ["missing unit template", (prefix: string) => rmSync(join(prefix, "implementation/systemd/resident.service.in")), /resident\.service\.in|missing|asset/i],
-    ["stale entry", (prefix: string) => rmSync(join(prefix, "dist/src/entry/runner.js")), /runner\.js|missing/i],
-    ["missing Personal engine", (prefix: string) => rmSync(join(prefix, "dist/src/entry/pi-personal.js")), /pi-personal\.js|missing/i],
-    ["missing Personal host", (prefix: string) => rmSync(join(prefix, "dist/src/entry/personal-host.js")), /personal-host\.js|missing/i],
+    ["missing unit template", (prefix: string) => rmSync(join(prefix, "packages/platform-linux/dist/systemd/resident.service.in")), /resident\.service\.in|missing|asset/i],
+    ["stale entry", (prefix: string) => rmSync(join(prefix, "apps/oma/dist/entry/runner.js")), /runner\.js|missing/i],
+    ["missing Personal engine", (prefix: string) => rmSync(join(prefix, "apps/oma/dist/entry/pi-personal.js")), /pi-personal\.js|missing/i],
+    ["missing Personal host", (prefix: string) => rmSync(join(prefix, "apps/oma/dist/entry/personal-host.js")), /personal-host\.js|missing/i],
     ["unlocked dependency", (prefix: string) => {
       const manifest = join(prefix, "node_modules/nodemailer/package.json");
       const value = JSON.parse(readFileSync(manifest, "utf8"));

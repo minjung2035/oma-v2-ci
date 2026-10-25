@@ -1,27 +1,29 @@
+import { sha256Hex } from "@oma/domain/canonical-json";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { tmpdir } from "node:os";
-import type { HostConfigV1 } from "../implementation/contracts.js";
-import { StoreError } from "../src/domain/errors.js";
-import { DEPLOYMENT_LAYOUT } from "../src/domain/deployment.js";
-import { CAPABILITIES, isCapability } from "../src/domain/capabilities.js";
-import { RESOURCE_FIELDS } from "../src/domain/resources.js";
-import { PROTOCOL_LIMIT_FIELDS } from "../src/domain/limits.js";
-import { loadConfig } from "../src/config.js";
-import { readConfigurationSource } from "../src/config/operations.js";
-import { defaultHostConfig, societyFromDirectory } from "../src/config/defaults.js";
-import { readSettings } from "../src/application/settings.js";
-import { PUBLIC_METHODS, INTERNAL_METHODS } from "../src/protocol/methods.js";
+import type { HostConfig } from "@oma/contracts";
+import { StoreError } from "@oma/domain/errors";
+import { DEPLOYMENT_LAYOUT } from "@oma/domain/deployment";
+import { HOST_CONFIGURATION_VERSION } from "@oma/domain/config-format";
+import { CAPABILITIES, isCapability } from "@oma/domain/capabilities";
+
+import { PROTOCOL_LIMIT_FIELDS } from "@oma/domain/limits";
+import { loadConfig } from "@oma/config";
+import { readConfigurationSource } from "@oma/config/operations";
+import { defaultHostConfig, defaultSocietyFor } from "@oma/config/defaults";
+import { readSettings } from "#oma-test/app/application/settings";
+import { PUBLIC_METHODS, INTERNAL_METHODS } from "@oma/protocol/methods";
 
 const scratch = (prefix: string): string => mkdtempSync(join(tmpdir(), prefix));
 
-function installedConfig(root: string): HostConfigV1 {
-  mkdirSync(join(root, "dist", "src"), { recursive: true });
+function installedConfig(root: string): HostConfig {
+  mkdirSync(dirname(join(root, DEPLOYMENT_LAYOUT.extension)), { recursive: true });
   writeFileSync(join(root, DEPLOYMENT_LAYOUT.extension), "export {};\n");
   return defaultHostConfig({
-    society: societyFromDirectory(root), node: process.execPath,
+    society: defaultSocietyFor(root, sha256Hex(root)), node: process.execPath,
     libdir: root, rootfs: join(root, "rootfs"), deploymentDigest: "b".repeat(64),
   });
 }
@@ -33,15 +35,12 @@ test("the generated configuration passes core's own closed validator unchanged",
     writeFileSync(path, JSON.stringify(installedConfig(root), null, 2));
     // Not a relaxed parse: this is the validator broker and runner use.
     const loaded = loadConfig(path);
-    assert.equal(loaded.schemaVersion, 1);
+    assert.equal(loaded.schemaVersion, HOST_CONFIGURATION_VERSION);
 
     // Every capability the product grants must be in core's closed vocabulary.
     for (const profile of Object.values(loaded.agentProfiles)) {
       for (const capability of [...profile.capabilities, ...profile.delegable])
         assert.ok(isCapability(capability), `unknown capability ${capability}`);
-      // Resource and limit descriptors are core's; the product fills every key.
-      for (const field of Object.keys(RESOURCE_FIELDS))
-        assert.ok(Object.hasOwn(profile.resources, field), `missing resource ${field}`);
     }
     for (const field of Object.keys(PROTOCOL_LIMIT_FIELDS))
       assert.ok(Object.hasOwn(loaded.limits, field), `missing limit ${field}`);
@@ -76,7 +75,7 @@ test("D23: a tool surface declared in a role fails the load -- it is internal po
   const root = scratch("oma-couple-surface-");
   try {
     const libdir = join(root, "lib");
-    mkdirSync(join(libdir, "dist", "src"), { recursive: true });
+    mkdirSync(dirname(join(libdir, DEPLOYMENT_LAYOUT.extension)), { recursive: true });
     writeFileSync(join(libdir, DEPLOYMENT_LAYOUT.extension), "export {};\n");
     writeFileSync(join(root, "prompt.md"), "");
     writeFileSync(join(root, "host.json"), JSON.stringify({ installation: { libdir } }));

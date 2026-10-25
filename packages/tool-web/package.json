@@ -1,0 +1,38 @@
+{
+  "name": "@oma/tool-web",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "license": "UNLICENSED",
+  "files": [
+    "dist"
+  ],
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "node ../../scripts/build-workspaces.mjs @oma/tool-web",
+    "typecheck": "npm run build",
+    "test": "node --test test/*.test.mjs"
+  },
+  "dependencies": {
+    "@oma/tool-runtime": "0.1.0",
+    "@earendil-works/pi-coding-agent": "1.0.1",
+    "typebox": "1.3.27",
+    "@earendil-works/pi-tui": "1.0.1",
+    "@earendil-works/pi-ai": "1.0.3"
+  },
+  "devDependencies": {
+    "@types/node": "^26.0.0",
+    "typescript": "5.9.3"
+  },
+  "oma": {
+    "assets": [
+      "vendor/pi-web-access"
+    ],
+    "isolationSmoke": "test/installed-runtime.mjs"
+  }
+}

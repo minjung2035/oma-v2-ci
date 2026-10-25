@@ -1,3 +1,4 @@
+import { createMailModule } from "#oma-test/app/broker/mail-composition";
 // P7: deterministic durability fault matrix over the low-level primitives.
 // A fault is injected only into a targeted low-level effect (TEST-002); the
 // workflow path itself carries no fault hook. Each case then runs the required
@@ -9,13 +10,14 @@ import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, unlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { Store } from "../src/store.js";
-import { MailModule, publishImmutableFile } from "../src/mail.js";
+import { Store } from "@oma/storage";
+import { MailModule } from "@oma/mail";
+import { publishImmutableFile } from "@oma/storage/immutable-file";
 import { DurabilityFaultError, replaceDerivedFile, writeExclusiveFsyncedFile,
-  type DurabilityObserver, type DurabilityPhase, type DurabilityPoint } from "../src/storage/durable-fs.js";
-import { readDiagnosticSnapshot } from "../src/store.js";
-import { inspectIntegrity } from "../src/diagnostics/integrity.js";
-import { NodeIntegrityFiles } from "../src/diagnostics/files.js";
+  type DurabilityObserver, type DurabilityPhase, type DurabilityPoint } from "@oma/storage/durable-fs";
+import { readDiagnosticSnapshot } from "@oma/storage";
+import { inspectIntegrity } from "#oma-test/app/diagnostics/integrity";
+import { NodeIntegrityFiles } from "#oma-test/app/diagnostics/files";
 import { makeValidAgent } from "./fixtures/spec.js";
 import { sendWithStop } from "./fixtures/mail-faults.js";
 import { removeTree } from "./fixtures/cleanup.js";
@@ -43,7 +45,7 @@ function integrityOf(root: string) {
 async function acceptedMailRoot(root: string) {
   const store = new Store(join(root, "runtime.sqlite"));
   store.transaction(() => { for (const name of ["a", "b"]) store.insertAgent(makeValidAgent(name)); });
-  const mail = new MailModule({ stateRoot: root, society: "demo" }, store, 8);
+  const mail = createMailModule({ stateRoot: root, society: "demo" }, store, 8);
   // Accepted intent with the physical publication deliberately not performed.
   await assert.rejects(sendWithStop(mail, store, { ...gitAuth, actor: "a" }, "fault-matrix",
     { to: ["b"], subject: "fault matrix", kind: "message", body: "immutable payload" }, "accepted"), /stop at accepted/);
@@ -68,7 +70,7 @@ for (const [point, phase] of PUBLICATION_POINTS) {
       const accepted = await acceptedMailRoot(root);
       store = accepted.store;
       const operation = store.getOperation("a", "fault-matrix")!;
-      const plan = JSON.parse(operation.planJson) as { message: { id: string; sha256: string; bytes: number } };
+      const plan = JSON.parse(operation.planJson).intent as { message: { id: string; sha256: string; bytes: number } };
       const object = accepted.mail.objectPath(plan.message.id as never);
       const archive = accepted.mail.archivePath(plan.message.id as never);
       const bytesBefore = readFileSync(object);
@@ -91,7 +93,7 @@ for (const [point, phase] of PUBLICATION_POINTS) {
       // Restart-equivalent: the faulted process is gone, a new one reopens.
       store.close(); store = null;
       const reopened = new Store(join(root, "runtime.sqlite"));
-      const mail = new MailModule({ stateRoot: root, society: "demo" }, reopened, 8);
+      const mail = createMailModule({ stateRoot: root, society: "demo" }, reopened, 8);
       const before = integrityOf(root);
       assert.ok(["PASS", "PARTIAL"].includes(before.status), JSON.stringify(before.issues ?? before));
 

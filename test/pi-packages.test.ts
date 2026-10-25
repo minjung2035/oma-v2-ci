@@ -1,3 +1,6 @@
+import { PACKAGE_INDEX_KIND, encodePackageIndex } from "#oma-test/app/runtime/packages/index";
+import { residentEngineEffects } from "#oma-test/app/engine/resident-effects";
+import { engineLoginDirectory } from "#oma-test/app/engine/start-effects";
 import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
@@ -5,24 +8,24 @@ import { syncBuiltinESMExports } from "node:module";
 import { existsSync, lstatSync, mkdirSync, readdirSync, realpathSync, rmSync, statSync, symlinkSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { createCompleteConfigurationFixture } from "./fixtures/configuration.js";
-import { loadConfiguration, loadConfigurationSnapshot } from "../src/config.js";
-import { DurabilityFaultError, type DurabilityFault } from "../src/storage/durable-fs.js";
-import { CORE_EXTENSION, readExtensions, toggleExtension } from "../src/application/extensions.js";
-import { commitRoleSet, deriveSessionSettings, projectBundle, readSettings, readSettingsForEditing, roleSetOf, writeSettings } from "../src/application/settings.js";
-import { PACKAGE_INDEX, PACKAGE_INDEX_BYTES, PACKAGE_LOCAL_DIR, packageCommand, packageListLines, packageResourcePaths, readPackageIndex, reconciledEntries, writePackageIndex, type InstalledPackage } from "../src/runtime/packages/store.js";
-import { pruneLocalStage, stageLocalPackage } from "../src/application/local-packages.js";
-import { sessionArgv } from "../src/runtime/engine/principal-session.js";
-import { planPiSpawn } from "../src/runtime/pi-spawn-plan.js";
-import { decodeRunLease } from "../src/protocol/run-lease.js";
-import { applyPackageChange, ensureProjectSettings } from "../src/application/project-settings.js";
-import { RESIDENT_PATHS, confinedPath } from "../src/sandbox.js";
-import { actorSocketPathAt, agentRootPathAt, projectGitPathAt, projectMirrorPathAt, runnerSessionDirPathAt, runnerViewPathAt, workspacePathAt } from "../src/storage/paths.js";
-import { runEngineLogin } from "../src/runtime/engine/login.js";
-import { assertExtensionIntegrity } from "../src/runtime/extension-integrity.js";
+import { loadConfiguration, loadConfigurationSnapshot } from "@oma/config";
+import { DurabilityFaultError, type DurabilityFault } from "@oma/storage/durable-fs";
+import { CORE_EXTENSION, readExtensions, toggleExtension } from "#oma-test/app/application/extensions";
+import { commitRoleSet, deriveSessionSettings, projectBundle, readSettings, readSettingsForEditing, roleSetOf, writeSettings } from "#oma-test/app/application/settings";
+import { PACKAGE_INDEX, PACKAGE_INDEX_BYTES, PACKAGE_LOCAL_DIR, packageCommand, packageListLines, packageResourcePaths, readPackageIndex, reconciledEntries, writePackageIndex, type InstalledPackage } from "#oma-test/app/runtime/packages/store";
+import { pruneLocalStage, stageLocalPackage } from "#oma-test/app/application/local-packages";
+import { sessionArgv } from "@oma/engine/principal-session";
+import { planPiSpawn } from "@oma/engine/pi-spawn-plan";
+import { decodeRunLease } from "@oma/protocol/run-lease";
+import { applyPackageChange, ensureProjectSettings } from "#oma-test/app/application/project-settings";
+import { RESIDENT_PATHS, confinedPath } from "@oma/domain/resident-paths";
+import { actorSocketPathAt, agentRootPathAt, projectGitPathAt, projectMirrorPathAt, runnerSessionDirPathAt, runnerViewPathAt, workspacePathAt } from "@oma/domain/paths";
+import { runEngineLogin } from "@oma/engine/login";
+import { assertExtensionIntegrity } from "#oma-test/app/runtime/extension-integrity";
 import { createHash } from "node:crypto";
 import { gzipSync } from "node:zlib";
 import { chmodSync, readFileSync } from "node:fs";
-import { listOwnedDirectory } from "../src/storage/directory.js";
+import { listOwnedDirectory } from "@oma/storage/directory";
 
 const HELLO = "packages:npm/node_modules/oma-hello-ext/extensions/hello.ts";
 
@@ -60,12 +63,12 @@ test("DR41: the package filesystem port cannot publish an empty index when an ow
 
 test("DR25: oma pi runs the engine's package commands over oma's store, and refuses what would reach past oma", () => {
   for (const args of [["install", "npm:@foo/bar@1.0.0"], ["install", "git:github.com/foo/bar"], ["install", "https://github.com/foo/bar"],
-    ["remove", "npm:@foo/bar"], ["uninstall", "npm:@foo/bar"], ["update", "npm:@foo/bar"], ["update", "--extensions"],
+    ["remove", "npm:@foo/bar"], ["update", "npm:@foo/bar"], ["update", "--extensions"],
     ["update", "--extension", "npm:@foo/bar"], ["list"], ["install", "--help"]]) {
     const decision = packageCommand(args);
     assert.equal(decision.kind, "run", args.join(" "));
   }
-  assert.deepEqual(packageCommand(["uninstall", "npm:x"]), { kind: "run", command: "remove", args: ["uninstall", "npm:x"] });
+  assert.equal(packageCommand(["uninstall", "npm:x"]).kind, "refused");
   // C20: a path on this machine is accepted and marked for the caller to stage
   // into the store; it is never forwarded to the engine where it lies.
   for (const [args, local] of [
@@ -127,8 +130,8 @@ test("DR25: the engine names a package's extensions; the index keeps them by pac
     assert.deepEqual((await writePackageIndex(packages)).map(item => item.source), ["npm:oma-hello-ext", "npm:oma-two"]);
     assert.deepEqual(readPackageIndex(packages).find(item => item.source === "npm:oma-two")?.entries, ["packages:npm/node_modules/oma-two/two.ts"]);
     // A package that moved its extension, one removed, and an entry of no package.
-    const before: InstalledPackage[] = [{ source: "npm:a", entries: ["packages:a/one.ts"] }, { source: "npm:b", entries: ["packages:b/x.ts"] }];
-    const after: InstalledPackage[] = [{ source: "npm:a", entries: ["packages:a/two.ts", "packages:a/three.ts"] }];
+    const before: InstalledPackage[] = [{ source: "npm:a", entries: ["packages:a/one.ts"] , skills: [], prompts: [], themes: [] }, { source: "npm:b", entries: ["packages:b/x.ts"] , skills: [], prompts: [], themes: [] }];
+    const after: InstalledPackage[] = [{ source: "npm:a", entries: ["packages:a/two.ts", "packages:a/three.ts"] , skills: [], prompts: [], themes: [] }];
     assert.deepEqual(reconciledEntries([CORE_EXTENSION, "packages:a/one.ts", "extensions/own.js", "packages:b/x.ts"], before, after),
       [CORE_EXTENSION, "packages:a/two.ts", "packages:a/three.ts", "extensions/own.js"]);
     assert.deepEqual(reconciledEntries([CORE_EXTENSION], before, after), [CORE_EXTENSION], "a package a role did not use is not turned on");
@@ -1242,11 +1245,11 @@ test("DR25: a project's inline settings become a managed bundle that runs as it 
     const context = readExtensions(readSettingsForEditing(projectPath).snapshot!, "principal", "resident", readPackageIndex(packages));
     assert.equal(context.rows.find(row => row.id === HELLO)?.source, undefined, "no index yet: not offered");
     const offered = readExtensions(readSettingsForEditing(projectPath).snapshot!, "principal", "resident",
-      [{ source: "npm:oma-hello-ext", entries: [HELLO] }]);
+      [{ source: "npm:oma-hello-ext", entries: [HELLO] , skills: [], prompts: [], themes: [] }]);
     assert.deepEqual(offered.rows.find(row => row.id === HELLO), { id: HELLO, principal: false, workers: false, locked: false, source: "npm:oma-hello-ext" });
     toggleExtension(offered, HELLO, "workers", true);
     toggleExtension(readExtensions(readSettingsForEditing(projectPath).snapshot!, "principal", "resident",
-      [{ source: "npm:oma-hello-ext", entries: [HELLO] }]), HELLO, "principal", true);
+      [{ source: "npm:oma-hello-ext", entries: [HELLO] , skills: [], prompts: [], themes: [] }]), HELLO, "principal", true);
 
     // Each session, now and later, is made with the project's roles and its own installation.
     const own = { society: "demo-2", node: process.execPath, libdir: f.installation, rootfs: "/rootfs2", deploymentDigest: "b".repeat(64), packages };
@@ -1298,18 +1301,18 @@ test("P0-8/DR25: settings hidden by a degraded oma-owned ancestor are repaired a
     // create branch would have seeded from (quota 5).
     writeSettings(join(settingsDir, "config.json"), { ...f.config, society: project }, dataRoot);
     assert.equal(projectBundle(join(settingsDir, "config.json"), dataRoot).layout.kind, "operations");
-    const grown = f.config.quota.societyAgents + 1;
+    const grown = f.config.limits.logBytes + 1;
     writeSettings(join(societyDir, "config.json"), { ...f.config, society: project,
-      quota: { ...f.config.quota, societyAgents: grown, lineageAgents: grown } }, dataRoot);
+      limits: { ...f.config.limits, logBytes: grown } }, dataRoot);
     for (const degraded of [settingsDir, join(dataRoot, ".projects")]) {
       chmodSync(degraded, 0o000);
       try {
         assert.equal(existsSync(join(settingsDir, "config.json")), false, "the ancestor really hides the settings file");
         const ensured = ensureProjectSettings(dataRoot, project, f.installation);
-        assert.equal(ensured.config.quota.societyAgents, f.config.quota.societyAgents,
+        assert.equal(ensured.config.limits.logBytes, f.config.limits.logBytes,
           "the committed settings were not replaced by the seed the hidden probe could not see");
       } finally { chmodSync(degraded, 0o700); }
-      assert.equal(loadConfiguration(join(settingsDir, "config.json")).config.quota.societyAgents, f.config.quota.societyAgents);
+      assert.equal(loadConfiguration(join(settingsDir, "config.json")).config.limits.logBytes, f.config.limits.logBytes);
     }
   } finally { f.close(); }
 });
@@ -1326,12 +1329,12 @@ test("P0-8/DR25: a seed candidate that cannot be observed refuses, never reads a
     // installation carries the inventory files it enumerates -- without
     // them the ensure refused there first and the hidden seed was never
     // the thing being judged.
-    for (const asset of ["dist/implementation/contracts.js", "implementation/schema-v3.sql",
+    for (const asset of ["packages/contracts/dist/index.js", "packages/storage/src/schema-v4.sql",
       "dist/libexec/oma", "package.json", "package-lock.json"]) {
       mkdirSync(join(f.installation, dirname(asset)), { recursive: true });
       writeFileSync(join(f.installation, asset), "{}\n");
     }
-    mkdirSync(join(f.installation, "implementation/systemd"), { recursive: true });
+    mkdirSync(join(f.installation, "packages/platform-linux/dist/systemd"), { recursive: true });
     const societyDir = join(dataRoot, project);
     mkdirSync(societyDir, { recursive: true });
     writeSettings(join(societyDir, "config.json"), { ...f.config, society: project }, dataRoot);
@@ -1360,9 +1363,9 @@ test("P0-8/DR25: a package change still reaches a project its degraded settings 
     projectBundle(otherPath, dataRoot);
     // The Workers chose the package's extension; it is committed.
     const context = readExtensions(readSettingsForEditing(otherPath).snapshot!, "principal", "resident",
-      [{ source: "npm:oma-hello-ext", entries: [HELLO] }]);
+      [{ source: "npm:oma-hello-ext", entries: [HELLO] , skills: [], prompts: [], themes: [] }]);
     toggleExtension(context, HELLO, "workers", true);
-    const installed: InstalledPackage[] = [{ source: "npm:oma-hello-ext", entries: [HELLO] }];
+    const installed: InstalledPackage[] = [{ source: "npm:oma-hello-ext", entries: [HELLO] , skills: [], prompts: [], themes: [] }];
     chmodSync(otherDir, 0o000);
     try {
       const applied = applyPackageChange({ dataRoot, project: null, libdir: f.installation, before: installed, after: [] });
@@ -1435,7 +1438,7 @@ test("DR25: the engine oma runs for a package command sees oma's store as its di
     const packages = join(f.root, "packages");
     const stateRoot = join(f.root, "oma", "demo");
     mkdirSync(stateRoot, { recursive: true });
-    const code = await runEngineLogin({ stateRoot, libdir: f.installation, override: engine, fence: 1,
+    const code = await runEngineLogin(engineLoginDirectory, { stateRoot, libdir: f.installation, override: engine, fence: 1,
       env: { PATH: process.env.PATH, PI_CODING_AGENT_DIR: "/home/me/.pi/agent", PI_CODING_AGENT_SESSION_DIR: "/home/me/.pi/sessions" },
       packages: { store: packages, args: ["install", "npm:x"] } });
     assert.equal(code, 0);
@@ -1470,8 +1473,8 @@ test("DR25: a corrupt installed-package index is not an empty package store", ()
   const f = createCompleteConfigurationFixture();
   try {
     const packages = store(f.root, { "oma-hello-ext": hello });
-    for (const content of ["{broken", "{}", "[null]", JSON.stringify([{ source: "npm:x", entries: ["packages:../x.js"] }]),
-      JSON.stringify([{ source: "npm:x", entries: [] }, { source: "npm:x", entries: [] }])]) {
+    for (const content of ["{broken", "{}", JSON.stringify({kind: PACKAGE_INDEX_KIND, packages:[null]}), JSON.stringify({kind: PACKAGE_INDEX_KIND, packages:[{ source: "npm:x", entries: ["packages:../x.js"], skills: [], prompts: [], themes: [] }]}),
+      JSON.stringify({kind: PACKAGE_INDEX_KIND, packages:[{ source: "npm:x", entries: [], skills: [], prompts: [], themes: [] }, { source: "npm:x", entries: [], skills: [], prompts: [], themes: [] }]})]) {
       writeFileSync(join(packages, "oma-extensions.json"), content);
       assert.throws(() => readPackageIndex(packages), { code: "STORE_CORRUPT" });
     }
@@ -1485,9 +1488,9 @@ test("UX-20: the package index bound is a named, stated limit -- a realistic mul
     const packages = store(f.root, { "oma-hello-ext": hello });
     // A heavy but realistic install: tens of thousands of indexed resource files.
     // The same document was refused as "not a bounded regular file" at 1 MiB.
-    const heavy = [{ source: "npm:skills-pack", entries: [],
+    const heavy = [{ source: "npm:skills-pack", entries: [], prompts: [], themes: [],
       skills: Array.from({ length: 24_000 }, (_, i) => `packages:npm/node_modules/skills-pack/skills/skill-${i}/SKILL.md`) }];
-    const text = `${JSON.stringify(heavy, null, 2)}\n`;
+    const text = encodePackageIndex(heavy);
     assert.ok(Buffer.byteLength(text) > 1024 * 1024, "the fixture must exceed the old 1 MiB bound");
     assert.ok(Buffer.byteLength(text) <= PACKAGE_INDEX_BYTES, "the fixture must fit the configured bound");
     writeFileSync(join(packages, PACKAGE_INDEX), text);
@@ -1495,8 +1498,8 @@ test("UX-20: the package index bound is a named, stated limit -- a realistic mul
 
     // Over the configured bound the refusal names it -- a limit, not corrupt bytes.
     const over = [{ source: "npm:x", entries: [], skills: Array.from({ length: 200_000 },
-      (_, i) => `packages:npm/node_modules/x/skills/skill-${i}/SKILL.md`) }];
-    writeFileSync(join(packages, PACKAGE_INDEX), JSON.stringify(over));
+      (_, i) => `packages:npm/node_modules/x/skills/skill-${i}/SKILL.md`) , prompts: [], themes: [] }];
+    writeFileSync(join(packages, PACKAGE_INDEX), JSON.stringify({kind: PACKAGE_INDEX_KIND, packages: over}));
     assert.ok(statSync(join(packages, PACKAGE_INDEX)).size > PACKAGE_INDEX_BYTES);
     assert.throws(() => readPackageIndex(packages),
       { code: "LIMIT_EXCEEDED", message: new RegExp(`exceeds its ${PACKAGE_INDEX_BYTES}-byte bound`) });
@@ -1516,7 +1519,7 @@ test("DR26 / P0V-51: extension install accepts a valid Principal-only project wi
     writeSettings(path, { ...f.config, installation: { ...f.config.installation, packages },
       agentProfiles: { principal: f.config.agentProfiles.principal! }, initialResidents: [] });
     const result = applyPackageChange({ dataRoot: f.root, project: "demo", libdir: f.config.installation.libdir,
-      before: [], after: [{ source: "npm:oma-hello-ext", entries: [HELLO] }] });
+      before: [], after: [{ source: "npm:oma-hello-ext", entries: [HELLO] , skills: [], prompts: [], themes: [] }] });
     assert.equal(result.ok, true, result.said.join("\n"));
     assert.match(result.said.join("\n"), /Principal from their next start/);
     assert.doesNotMatch(result.said.join("\n"), /Principal and Workers from/);
@@ -1562,21 +1565,20 @@ test("C18: the package index keeps skills, prompts and themes, not only extensio
   } finally { f.close(); }
 });
 
-test("C18: an index written before resources were indexed still reads, and a malformed list is not silently none", () => {
+test("DR46: previous package-index shapes refuse without rewriting bytes, current malformed lists remain errors", () => {
   const f = createCompleteConfigurationFixture();
   try {
     const packages = store(f.root, { "oma-hello-ext": hello });
-    // The pre-C18 shape: source + entries only.
-    writeFileSync(join(packages, PACKAGE_INDEX), JSON.stringify([{ source: "npm:oma-hello-ext", entries: [HELLO] }]));
-    const legacy = readPackageIndex(packages);
-    assert.deepEqual(legacy, [{ source: "npm:oma-hello-ext", entries: [HELLO], skills: [], prompts: [], themes: [] }]);
-    assert.equal(packageResourcePaths(packages), undefined, "no resources means no argv");
+    const old = JSON.stringify([{ source: "npm:oma-hello-ext", entries: [HELLO] }]);
+    writeFileSync(join(packages, PACKAGE_INDEX), old);
+    assert.throws(() => readPackageIndex(packages), { code: "UNSUPPORTED_PROFILE" });
+    assert.equal(readFileSync(join(packages, PACKAGE_INDEX), "utf8"), old);
 
     for (const content of [
-      JSON.stringify([{ source: "npm:x", entries: [], skills: ["bare.md"] }]),
-      JSON.stringify([{ source: "npm:x", entries: [], prompts: ["packages:../out.md"] }]),
-      JSON.stringify([{ source: "npm:x", entries: [], themes: ["packages:a.json", "packages:a.json"] }]),
-      JSON.stringify([{ source: "npm:x", entries: [], skills: "packages:x" }]),
+      JSON.stringify({kind: PACKAGE_INDEX_KIND, packages:[{ source: "npm:x", entries: [], skills: ["bare.md"], prompts: [], themes: [] }]}),
+      JSON.stringify({kind: PACKAGE_INDEX_KIND, packages:[{ source: "npm:x", entries: [], skills: [], prompts: ["packages:../out.md"], themes: [] }]}),
+      JSON.stringify({kind: PACKAGE_INDEX_KIND, packages:[{ source: "npm:x", entries: [], skills: [], prompts: [], themes: ["packages:a.json", "packages:a.json"] }]}),
+      JSON.stringify({kind: PACKAGE_INDEX_KIND, packages:[{ source: "npm:x", entries: [], skills: "packages:x", prompts: [], themes: [] }]}),
     ]) {
       writeFileSync(join(packages, PACKAGE_INDEX), content);
       assert.throws(() => readPackageIndex(packages), { code: "STORE_CORRUPT" }, content);
@@ -1595,7 +1597,7 @@ test("C18: an engine's argv names the package resources -- host paths unconfined
 
     // The Principal's argv.
     const argv = sessionArgv({ piCommand: "/x/pi", coreExtension: "/x/core.js", sessionDir: "/s", workspace: "/w", home: "/h" },
-      { society: "s", provider: "p", model: "m", extensions: [], workspaceBytes: 1, packageResources: resources });
+      { society: "s", provider: "p", model: "m", extensions: [], packageResources: resources });
     assert.deepEqual(argv.slice(argv.indexOf("--skill"), argv.indexOf("--skill") + 2), ["--skill", skill]);
     assert.ok(argv.includes("--prompt-template")); assert.ok(argv.includes("--theme"));
 
@@ -1614,19 +1616,18 @@ test("C18: an engine's argv names the package resources -- host paths unconfined
       workspace: dirs.workspace, sessionDir: dirs.sessions, agentHome: dirs.home, mailArchive: dirs.archive,
       workerArchive: dirs.workerArchive, projectGit: dirs.projectGit, batchView: dirs.view,
       socket: actorSocketPathAt(runRoot, "a", 1) };
-    const profile = { provider: "pi", model: "current", inferenceSeconds: 1, prompt: "", workspaceBytes: 1,
-      extensions: [], packageResources: resources };
+    const profile = { provider: "pi", model: "current", inferenceSeconds: 1, prompt: "", extensions: [], packageResources: resources };
     const limits = { frameBytes: 1, idleStreamSeconds: 1, receiptWaitSeconds: 1, batchMaxMessages: 1, mailBodyBytes: 1, contextBytes: 1, bundleBytes: 1 };
 
     const confinement = {
       host: { rootfs: join(f.root, "rootfs"), libdir: f.installation, packages: root, node: "/usr/bin/node",
         pi: `${RESIDENT_PATHS.libdir}/engine/cli.js`, piModeArgs: [],
-        tmpBytes: 1024, stateRoot: state, runRoot: join(f.root, "run"),
+        stateRoot: state, runRoot: join(f.root, "run"),
         limits: { frameBytes: 1, batchMaxMessages: 1 } },
       lease: decodeRunLease({ actor: "a", incarnation: 1, socketHostPath: paths.socket }, { actor: "a", runRoot }),
       directories: dirs,
     };
-    const confined = planPiSpawn({ actor: "a", society: "s", paths, profile, limits, confinement } as never);
+    const confined = planPiSpawn(residentEngineEffects.sandbox, { actor: "a", society: "s", paths, profile, limits, confinement } as never);
     const mounted = `${RESIDENT_PATHS.packages}/npm/node_modules/oma-rich`;
     for (const [flag, suffix] of [["--skill", "/skills/roll/SKILL.md"], ["--prompt-template", "/prompts/review.md"], ["--theme", "/themes/dark.json"]] as const) {
       const at = confined.args.indexOf(flag);
@@ -1641,13 +1642,13 @@ test("C18: an engine's argv names the package resources -- host paths unconfined
     // Without a mounted store the variable is absent rather than misleading.
     // (No mount can coexist with resources beneath it: the plan would rightly
     // refuse, so the no-store profile carries no package resources either.)
-    const unmounted = planPiSpawn({ actor: "a", society: "s", paths,
+    const unmounted = planPiSpawn(residentEngineEffects.sandbox, { actor: "a", society: "s", paths,
       profile: { ...profile, packageResources: undefined }, limits,
       confinement: { ...confinement, host: { ...confinement.host, packages: undefined } } } as never);
     assert.equal(unmounted.args.includes("OMA_PACKAGE_STORE"), false);
     // A resource under no mount must not reach a confined engine at all.
     const stray = { ...resources, skills: [join(f.root, "elsewhere", "SKILL.md")] };
-    assert.throws(() => planPiSpawn({ actor: "a", society: "s", paths,
+    assert.throws(() => planPiSpawn(residentEngineEffects.sandbox, { actor: "a", society: "s", paths,
       profile: { ...profile, packageResources: stray }, limits, confinement } as never), /outside every mount/);
   } finally { f.close(); }
 });

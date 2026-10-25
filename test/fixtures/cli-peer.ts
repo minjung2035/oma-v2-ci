@@ -1,11 +1,12 @@
+import { TransportSpool } from "@oma/storage/transport-spool";
 import assert from "node:assert/strict";
 import { createServer } from "node:net";
 import { execFile } from "node:child_process";
 import { mkdirSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { RpcConnection } from "../../src/broker/connection.js";
-import { SharedPeerPin } from "../../src/broker/peer-pin.js";
+import { RpcConnection } from "@oma/broker/connection";
+import { SharedPeerPin } from "@oma/broker/peer-pin";
 
 /** Actual CLI and RPC framing with a controlled local application peer. No live
  * broker startup, authentication, user-manager or deployment proof is implied. */
@@ -29,7 +30,7 @@ export async function runCliWithPeer(
   const server = createServer((socket) => {
     const connection = new RpcConnection({
       socket,
-      stagingRoot: home,
+      makeSpool: descriptor => new TransportSpool(home, descriptor),
       peer: new SharedPeerPin(
         () => true,
         () => {},
@@ -82,7 +83,7 @@ export async function runCliWithPeer(
         process.execPath,
         [
           ...(preload ? ["--import", preload] : []),
-          fileURLToPath(new URL("../../src/cli.js", import.meta.url)),
+          fileURLToPath(new URL("../../../apps/oma/dist/cli.js", import.meta.url)),
           ...args,
         ],
         {

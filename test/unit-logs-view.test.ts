@@ -6,8 +6,8 @@ import assert from "node:assert/strict";
 import { chmodSync, mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { readUnitLogs } from "../src/broker/logs.js";
-import { StoreError } from "../src/domain/errors.js";
+import { readUnitLogs } from "@oma/broker/logs";
+import { StoreError } from "@oma/domain/errors";
 import { removeTree } from "./fixtures/cleanup.js";
 
 /** A fake journalctl on PATH: stdout bytes, stderr bytes, exit code. */

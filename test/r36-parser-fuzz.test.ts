@@ -1,11 +1,12 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { FrameParser, FrameError, parseJsonObject } from "../src/frame.js";
-import { parseNameStatusZ } from "../src/git/observe.js";
-import { parseProperties, parseUnitObservation, parseCgroupPopulation, parseCgroupProcs } from "../src/units/observe.js";
-import { parseEmlHeaders } from "../src/mail/headers.js";
-import { decodeAgentRow } from "../src/storage/rows.js";
-import { StoreError } from "../src/domain/errors.js";
+import { FrameParser, FrameError, parseJsonObject } from "@oma/protocol/frame";
+import { parseNameStatusZ } from "@oma/git/observe";
+import { parseProperties, parseUnitObservation, parseCgroupProcs } from "@oma/platform-linux/units/observe";
+import { parseCgroupPopulation } from "@oma/domain/cgroup-population";
+import { parseEmlHeaders } from "@oma/mail/headers";
+import { decodeAgentRow } from "@oma/storage/rows";
+import { StoreError } from "@oma/domain/errors";
 import { makeValidAgent } from "./fixtures/spec.js";
 import { corruptValueForTest } from "./fixtures/corruption.js";
 import { Seeded, PRNG_REVISION, integerParameter, replayMetadata, recordExplorationFailure, minimizeSequence } from "./model/reproducible.js";

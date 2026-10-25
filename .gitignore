@@ -18,7 +18,14 @@ production-measurement-hashes.json
 # under a vendored bundle re-includes itself after the general rules above.
 # The same holds for the byte-exact upstream snapshot: pi-web-access's npm
 # tarball ships its own dist/ bundle, which is vendored for provenance.
-!src/extension/vendor/*/node_modules/
-!src/extension/vendor/*/node_modules/**
-!src/extension/vendor/*/upstream/
-!src/extension/vendor/*/upstream/**
+!packages/tool-*/src/vendor/*/node_modules/
+!packages/tool-*/src/vendor/*/node_modules/**
+!packages/tool-*/src/vendor/*/upstream/
+!packages/tool-*/src/vendor/*/upstream/**
+
+# Authored workspace mail modules remain visible.
+!packages/mail/
+*.tsbuildinfo
+
+apps/*/dist/
+apps/*/node_modules/

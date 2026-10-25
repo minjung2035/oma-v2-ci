@@ -1,9 +1,9 @@
 /** Explicit host-side migration; never edits the input or an existing output. */
 import { mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
-import { loadConfiguration } from "../dist/src/config.js";
-import { DEPLOYMENT_LAYOUT } from "../dist/src/domain/deployment.js";
-import { ACTOR_NAME_RE } from "../dist/src/domain/identifiers.js";
+import { loadConfiguration } from "@oma/config";
+import { DEPLOYMENT_LAYOUT } from "@oma/domain/deployment";
+import { ACTOR_NAME_RE } from "@oma/domain/identifiers";
 
 const [input, destination, ...extra] = process.argv.slice(2);
 if (!input || !destination || extra.length) {

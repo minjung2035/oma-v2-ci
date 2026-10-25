@@ -1,12 +1,13 @@
+import { createLifecycleModule } from "#oma-test/app/broker/lifecycle-composition";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { Store } from "../src/store.js";
-import { sha256Hex } from "../src/hash.js";
-import { LifecycleModule } from "../src/lifecycle.js";
-import { UnitsModule } from "../src/units.js";
+import { Store } from "@oma/storage";
+import { sha256Hex } from "@oma/domain/canonical-json";
+import { LifecycleModule } from "@oma/lifecycle";
+import { UnitsModule } from "@oma/platform-linux/units";
 import { gitFixture, gitAuth, seedGit } from "./fixtures/git-crash.js";
 import { ALL_CAPS, makeValidAgent, makeValidResolvedSpec } from "./fixtures/spec.js";
 
@@ -25,7 +26,7 @@ for (const method of ["mail.send", "git.submit", "git.integrate", "context.publi
       // This is a preaccept authority test, not a systemd fixture. Every module
       // uses the same immutable society identity; no real unit is installed.
       const units = new UnitsModule(paths.society, { node: process.execPath, libdir: process.cwd(), state: root, society: paths.society, agent: "", config: join(root, "config.json"), run: join(root, "oma", paths.society) });
-      const lifecycle = new LifecycleModule(store, units,
+      const lifecycle = createLifecycleModule(store, units,
         { stateRoot: root, projectGit: paths.projectGit, society: paths.society, hasGoal: () => false, activationAllowed: () => true },
         (_parent, input) => makeValidResolvedSpec(input.name, "p", ALL_CAPS, input.from, input.brief), mail);
       const auth = { ...gitAuth, capabilities: new Set(ALL_CAPS) };

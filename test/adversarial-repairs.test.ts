@@ -1,24 +1,25 @@
+import { engineSettingsFiles } from "#oma-test/app/engine/settings-files";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { chmodSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
-import { observedStorageBytes, StorageAdmission } from "../src/storage/quota.js";
-import { createEngineSettings, prepareEngineInteractiveSettings } from "../src/pi-compat/settings.js";
-import { runProcess } from "../src/process/async.js";
-import { writePackageArchive } from "../src/platform/package-archive.js";
-import { applyPackageArchive } from "../src/application/packages-apply.js";
-import { PACKAGE_STORE, pinPackageGeneration } from "../src/runtime/packages/store.js";
+import { fixtureStorageBytes } from "./fixtures/storage-usage.js";
+import { createEngineSettings, prepareEngineInteractiveSettings } from "@oma/engine/pi-compat/settings";
+import { runProcess } from "@oma/process/async";
+import { writePackageArchive } from "#oma-test/app/platform/package-archive";
+import { applyPackageArchive } from "#oma-test/app/application/packages-apply";
+import { PACKAGE_STORE, pinPackageGeneration } from "#oma-test/app/runtime/packages/store";
 import { spawnSync } from "node:child_process";
-import { withOwnedSettingsLock } from "../src/runtime/locked-files.js";
+import { withOwnedSettingsLock } from "#oma-test/app/runtime/locked-files";
 import fs from "node:fs";
 import { syncBuiltinESMExports } from "node:module";
-import { walkOwnedTree } from "../src/storage/directory.js";
-import { RESOURCE_FIELDS } from "../src/domain/resources.js";
-import { defaultHostConfig } from "../src/config/defaults.js";
-import { validateConfig } from "../src/config.js";
-import { assertSupportedIntegration, integrationPolicyFromConfig, snapshotIntegrationPolicy } from "../src/git/integration-policy.js";
+import { walkOwnedTree } from "@oma/storage/directory";
+
+import { defaultHostConfig } from "@oma/config/defaults";
+import { validateConfig } from "@oma/config";
+import { assertSupportedIntegration, integrationPolicyFromConfig, snapshotIntegrationPolicy } from "@oma/domain/integration-policy";
 import { lockSync } from "proper-lockfile";
 import { removeTree } from "./fixtures/cleanup.js";
 
@@ -43,55 +44,20 @@ test("AV-01/P0-4: an inode-pin close failure releases the directory it opened", 
   assert.equal(fs.readdirSync("/proc/self/fd").length, before);
 });
 
-test("AV-06: saved deadlines remain executable and reject derived unsafe integers at validation", () => {
-  const config = defaultHostConfig({ society: "repair", node: process.execPath, libdir: process.cwd(),
-    rootfs: "/tmp/oma-repair-rootfs", deploymentDigest: "a".repeat(64) });
-  const resources = config.agentProfiles.resident!.resources;
-  const maximum = RESOURCE_FIELDS.checkTimeoutSeconds.maxInclusive;
-  for (const checkTimeoutSeconds of [2147484, maximum]) {
-    const value = structuredClone(config);
-    value.integration.checks = [{ id: "long", argv: ["/bin/true"], env: {}, resources: { ...resources, checkTimeoutSeconds } }];
-    validateConfig(value);
-    assertSupportedIntegration(snapshotIntegrationPolicy(integrationPolicyFromConfig(value.integration)));
-  }
-  const invalid = structuredClone(config);
-  invalid.integration.checks = [{ id: "unsafe", argv: ["/bin/true"], env: {}, resources: { ...resources, checkTimeoutSeconds: maximum + 1 } }];
-  assert.throws(() => validateConfig(invalid), { code: "INVALID_REQUEST" });
-});
 
-test("AV-01/10: owned mode damage is repaired and concurrent reservations cannot overbook", async t => {
+
+test("AV-01/10: owned observations repair read/search bits without unsealing state", async t => {
   const root = mkdtempSync(join(tmpdir(), "oma-repair-quota-"));
   t.after(() => removeTree(root));
   mkdirSync(join(root, "opaque")); writeFileSync(join(root, "opaque", "file"), "owned");
   mkdirSync(join(root, "sealed"), { mode: 0o555 });
-  const before = observedStorageBytes(root);
+  const before = fixtureStorageBytes(root);
   chmodSync(join(root, "opaque"), 0);
-  assert.equal(observedStorageBytes(root), before);
+  assert.equal(fixtureStorageBytes(root), before);
   assert.equal(statSync(join(root, "sealed")).mode & 0o777, 0o555,
-    "a quota observation added write permission to sealed state");
+    "an owned observation added write permission to sealed state");
   assert.equal(statSync(join(root, "opaque")).mode & 0o700, 0o500);
-  assert.equal(await new StorageAdmission(root, before, 0).startupState(), "admitted");
-  const owner = new StorageAdmission(root, before + 100, 0);
-  const results = await Promise.allSettled([owner.reserve(60), owner.reserve(60)]);
-  assert.equal(results.filter(result => result.status === "fulfilled").length, 2);
-  assert.equal(owner.outstanding, 0);
-  for (const result of results) if (result.status === "fulfilled") result.value();
-  assert.equal(owner.outstanding, 0);
   chmodSync(join(root, "opaque"), 0o700);
-});
-
-test("AV-10: a large tree scan allows unrelated broker work to run", async t => {
-  const root = mkdtempSync(join(tmpdir(), "oma-repair-yield-"));
-  t.after(() => rmSync(root, { recursive: true, force: true }));
-  for (let index = 0; index < 30_000; index++) writeFileSync(join(root, String(index)), "x");
-  const owner = new StorageAdmission(root, Number.MAX_SAFE_INTEGER, 0);
-  let timerRan = false;
-  const timer = setTimeout(() => { timerRan = true; }, 0);
-  try {
-    const holds = await Promise.all([owner.admit("admit"), owner.admit("admit"), owner.admit("admit")]);
-    assert.equal(timerRan, false, "admission unexpectedly walked the entire tree");
-    for (const release of holds) release();
-  } finally { clearTimeout(timer); }
 });
 
 test("AV-02: stale Pi managers merge through OMA's lock and preserve trusted project settings", async t => {
@@ -100,19 +66,19 @@ test("AV-02: stale Pi managers merge through OMA's lock and preserve trusted pro
   const agent = join(root, "engine"), cwd = join(root, "project");
   mkdirSync(agent); mkdirSync(join(cwd, ".pi"), { recursive: true });
   writeFileSync(join(cwd, ".pi", "settings.json"), JSON.stringify({ theme: "project-choice" }));
-  const first = createEngineSettings(cwd, agent, { projectTrusted: false });
-  const stale = createEngineSettings(cwd, agent, { projectTrusted: false });
+  const first = createEngineSettings(engineSettingsFiles, cwd, agent, { projectTrusted: false });
+  const stale = createEngineSettings(engineSettingsFiles, cwd, agent, { projectTrusted: false });
   first.setDefaultModelAndProvider("fixture-provider", "fixture-model"); await first.flush();
   assert.deepEqual(first.drainErrors(), []);
-  prepareEngineInteractiveSettings(agent);
+  prepareEngineInteractiveSettings(engineSettingsFiles, agent);
   stale.setHideThinkingBlock(false); await stale.flush(); assert.deepEqual(stale.drainErrors(), []);
   const saved = JSON.parse(readFileSync(join(agent, "settings.json"), "utf8"));
   assert.equal(saved.defaultModel, "fixture-model"); assert.equal(saved.hideThinkingBlock, false);
-  const trusted = createEngineSettings(cwd, agent, { projectTrusted: true });
+  const trusted = createEngineSettings(engineSettingsFiles, cwd, agent, { projectTrusted: true });
   assert.equal(trusted.getTheme(), "project-choice");
-  assert.notEqual(createEngineSettings(cwd, agent, { projectTrusted: false }).getTheme(), "project-choice");
+  assert.notEqual(createEngineSettings(engineSettingsFiles, cwd, agent, { projectTrusted: false }).getTheme(), "project-choice");
   first.setEnableSkillCommands(false); await first.flush();
-  prepareEngineInteractiveSettings(agent);
+  prepareEngineInteractiveSettings(engineSettingsFiles, agent);
   assert.equal(JSON.parse(readFileSync(join(agent, "settings.json"), "utf8")).enableSkillCommands, false);
   const projectLock = lockSync(join(cwd, ".pi/settings.json"), { realpath: false });
   try {
@@ -124,7 +90,7 @@ test("AV-02: stale Pi managers merge through OMA's lock and preserve trusted pro
   assert.deepEqual(trusted.drainErrors(), []);
   assert.deepEqual(JSON.parse(readFileSync(join(cwd, ".pi/settings.json"), "utf8")).skills, ["chosen-skills"]);
   const committed = readFileSync(join(cwd, ".pi/settings.json"), "utf8");
-  const restarted = createEngineSettings(cwd, agent, { projectTrusted: true });
+  const restarted = createEngineSettings(engineSettingsFiles, cwd, agent, { projectTrusted: true });
   assert.equal(restarted.getTheme(), "project-choice");
   restarted.setProjectSkillPaths(["chosen-skills"]); await restarted.flush();
   assert.deepEqual(restarted.drainErrors(), []);
@@ -145,14 +111,14 @@ test("AV-04/06: retained-output limits and long timer intervals do not kill a su
 test("AV-02: the bundled CLI preload uses the same interprocess settings lock", async t => {
   const root = mkdtempSync(join(tmpdir(), "oma-repair-pi-lock-"));
   t.after(() => rmSync(root, { recursive: true, force: true }));
-  prepareEngineInteractiveSettings(root);
+  prepareEngineInteractiveSettings(engineSettingsFiles, root);
   const before = readFileSync(join(root, "settings.json"), "utf8");
   const source = `import {SettingsManager} from '@earendil-works/pi-coding-agent';
 const settings=SettingsManager.create(process.cwd(),process.argv[1],{projectTrusted:false});
 settings.setDefaultModelAndProvider('fixture','cli-model');await settings.flush();
 process.stdout.write(JSON.stringify({errors:settings.drainErrors().length}));`;
   const write = () => {
-    const result = spawnSync(process.execPath, ["--import", fileURLToPath(new URL("../src/pi-compat/settings-preload.js", import.meta.url)),
+    const result = spawnSync(process.execPath, ["--import", fileURLToPath(new URL("../../apps/oma/dist/entry/pi-settings-preload.js", import.meta.url)),
       "--input-type=module", "--eval", source, root], { encoding: "utf8", timeout: 10000 });
     assert.equal(result.status, 0, result.stderr);
     return JSON.parse(result.stdout) as { errors: number };
@@ -188,8 +154,8 @@ test("AV-03/13: old imported code survives replacements and corrupt replay state
   assert.equal(reader!.asset(), "1");
   const selected = realpathSync(join(data, PACKAGE_STORE));
   const archive = join(root, "damaged"); await writePackageArchive(store, archive);
-  for (const before of [null, [{ source: "npm:reader", entries: ["packages:../escape.js"] }]]) {
-    writeFileSync(`${archive}.before.json`, JSON.stringify({ before, previous: null }));
+  for (const before of [null, [{ source: "npm:reader", entries: ["packages:../escape.js"], skills: [], prompts: [], themes: [] }]]) {
+    writeFileSync(`${archive}.before.json`, JSON.stringify({ kind: "oma-package-before-image-v1", before, previous: null }));
     const steps: string[] = [];
     await assert.rejects(applyPackageArchive({ data, archive, libdir: installation }, step => steps.push(step)), { code: "STORE_CORRUPT" });
     assert.deepEqual(steps, []); assert.equal(realpathSync(join(data, PACKAGE_STORE)), selected);

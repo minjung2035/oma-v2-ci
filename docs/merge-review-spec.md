@@ -299,15 +299,15 @@ Principal은 프로젝트 전체 읽기와 요청의 `diff`로 판단한다. `om
 
 | 책임 | 우선 활용할 현재 경로 | 구현 결과 |
 |---|---|---|
-| 후보 게시·main CAS·효과 정산 | `src/git/submit.ts`, `src/git/integration.ts`, `src/git/tiered-authority.ts` | 합병과 revert가 같은 physical boundary 사용 |
-| 리뷰/표 판정 | `src/domain/tier-evaluation.ts`, `src/attestation.ts` | 새 정책의 단일 판정 owner. legacy 판정과 version으로 구분 |
+| 후보 게시·main CAS·효과 정산 | `src/git/submit.ts`, `src/git/integration.ts`, `src/review/authority.ts` | 합병과 revert가 같은 physical boundary 사용 |
+| 리뷰/표 판정 | `packages/domain/src/review-evaluation.ts`, `src/review.ts` | 현재 mail review의 단일 판정 owner. DR46에서 이전 attestation decoder 제거 |
 | 자동 메일·artifact·수신자 | `src/mail.ts`, `src/mail/routing.ts`, `src/mail/materializer.ts` | audience별 immutable revision, 고정 완료 공지 |
-| 새 도착·읽음·thread view | `src/mail/batches.ts`, `src/extension/delivery.ts`, `src/runtime/principal-delivery.ts`, `src/tui/sources/mail.ts` | 갱신마다 새 delivery, 같은 logical thread로 표시 |
-| 모델 schema·역할 제한 | `src/extension/principal-tools.ts`, `src/extension/mail-tools.ts`, `src/pi-extension.ts`, `src/protocol/methods.ts`, `src/extension/workspace-guard.ts` | 역할별 action과 raw 호출의 동일 제한 |
-| diff 조회·프로젝트 읽기 | `src/cli/effects/code.ts`, `src/extension/contained-tools.ts` | 정확한 후보 diff, Principal 전체 프로젝트 읽기 유지 |
-| durable/wire 선언·설정 | `implementation/contracts/`, 기존 schema·generation owner | 새 version의 closed 계약, atomic 활성화 |
+| 새 도착·읽음·thread view | `src/mail/batches.ts`, `src/extension/delivery.ts`, `src/runtime/principal-delivery.ts`, `packages/tui/src/sources/mail.ts` | 갱신마다 새 delivery, 같은 logical thread로 표시 |
+| 모델 schema·역할 제한 | `src/extension/principal-tools.ts`, `src/extension/mail-tools.ts`, `src/pi-extension.ts`, `packages/protocol/src/methods.ts`, `packages/tool-runtime/src/workspace-guard.ts` | 역할별 action과 raw 호출의 동일 제한 |
+| diff 조회·프로젝트 읽기 | `src/cli/effects/code.ts`, `packages/tool-runtime/src/contained-tools.ts` | 정확한 후보 diff, Principal 전체 프로젝트 읽기 유지 |
+| durable/wire 선언·설정 | `packages/contracts/src/`, 기존 schema·generation owner | 새 version의 closed 계약, atomic 활성화 |
 
-제거 범위는 **새 live 모델 경로의** 구형 Principal git/decision/revoke/finding/scope 도구, 중복 승인 우회, finding/scope 기반 새 live floor 평가다. 더 이상 쓰지 않는 wrapper·정책 분기는 제거한다. 과거 fact의 decoder·receipt·accepted 작업의 정산 경로는 남긴다. legacy 호환을 명목으로 모델에 구형 제어 경로를 함께 노출하지 않는다.
+제거 범위는 **새 live 모델 경로의** 구형 Principal git/decision/revoke/finding/scope 도구, 중복 승인 우회, finding/scope 기반 새 live floor 평가다. 더 이상 쓰지 않는 wrapper·정책 분기는 제거한다. DR46은 이전 빌드의 fact decoder를 제거한다. 현재 빌드에서 수락한 receipt·pending/unknown 작업의 정산 경로와 exact bytes는 유지한다. legacy 호환을 명목으로 모델에 구형 제어 경로를 함께 노출하지 않는다.
 
 Worker/Principal 시스템 프롬프트와 도구 설명도 같은 contract에서 맞춘다. Worker는 필요한 이유를 작성하고 메일을 보고 diff/review/vote를 수행한다. Principal은 전달된 HIGH를 판단하며 peer 리뷰를 배정하거나 모든 요청을 polling하지 않는다. LOW/MEDIUM 완료 공지는 자동으로 받는다. 프롬프트 지시문만으로 금지 action이나 메일 audience를 제어하지 않는다.
 

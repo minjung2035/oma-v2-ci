@@ -1,3 +1,6 @@
+import { testBroker } from "./helpers/broker-fixture.js";
+import { createLifecycleModule } from "#oma-test/app/broker/lifecycle-composition";
+import { createMailModule } from "#oma-test/app/broker/mail-composition";
 /** V07A/V07B (WP07, D01): a Resident's next run settles the previous
  * incarnation's receipts before rollover.
  *
@@ -9,16 +12,16 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { chmodSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import type { AuthContext, ResolvedAgentSpec } from "../implementation/contracts.js";
-import { Broker } from "../src/broker.js";
-import { LifecycleModule } from "../src/lifecycle.js";
-import { ViewsModule } from "../src/views.js";
-import type { UnitsModule } from "../src/units.js";
-import { publishDeliveryReceipt } from "../src/storage/delivery-receipt.js";
-import { Store } from "../src/store.js";
-import { MailModule } from "../src/mail.js";
-import { REDELIVERY_NOTICE } from "../src/mail/batches.js";
-import { runnerReceiptPathAt } from "../src/storage/paths.js";
+import type { AuthContext, ResolvedAgentSpec } from "@oma/contracts";
+import { Broker } from "@oma/broker";
+import { LifecycleModule } from "@oma/lifecycle";
+import { ViewsModule } from "#oma-test/app/views";
+import type { UnitsModule } from "@oma/platform-linux/units";
+import { publishDeliveryReceipt } from "@oma/storage/delivery-receipt";
+import { Store } from "@oma/storage";
+import { MailModule } from "@oma/mail";
+import { REDELIVERY_NOTICE } from "@oma/mail/batches";
+import { runnerReceiptPathAt } from "@oma/domain/paths";
 import { boundaryOf, completeSession, preparedFixture, type ReceiptFixture } from "./fixtures/delivery-receipt.js";
 import { TEST_VIEW_LIMITS } from "./fixtures/limits.js";
 
@@ -38,11 +41,10 @@ function unitsNaming(invocation: () => string): UnitsModule {
 async function restartedBroker(f: ReceiptFixture, invocation: () => string): Promise<Broker> {
   const units = unitsNaming(invocation);
   const resolver = (_parent: unknown, input: { name: string; from: string; brief: string }) => ({ ...input }) as unknown as ResolvedAgentSpec;
-  const lifecycle = new LifecycleModule(f.store, units, { stateRoot: f.root, projectGit: join(f.root, "repos", "project.git"),
+  const lifecycle = createLifecycleModule(f.store, units, { stateRoot: f.root, projectGit: join(f.root, "repos", "project.git"),
     society: "demo", hasGoal: () => true, activationAllowed: () => true }, resolver, f.mail);
   const views = new ViewsModule(f.store, f.root, "demo", "p", TEST_VIEW_LIMITS);
-  const broker = new Broker(f.store, f.mail, units, views, lifecycle, null, null,
-    { stateRoot: f.root, runRoot: join(f.root, "run"), society: "demo", hasGoal: () => true });
+  const broker = testBroker({ store: f.store, mail: f.mail, units: units, views: views, lifecycle: lifecycle, git: null, reviews: null, reconcile: null, paths: { stateRoot: f.root, runRoot: join(f.root, "run"), society: "demo", hasGoal: () => true } });
   await broker.start();
   return broker;
 }
@@ -109,7 +111,7 @@ test("DR9: a receipt of an earlier attempt that appears after a later run opened
     await broker.drainAndClose(); broker = null;
     const store = new Store(join(f.root, "runtime.sqlite"));
     const reopened = Object.assign(Object.create(Object.getPrototypeOf(f)), f, {
-      store, mail: new MailModule({ stateRoot: f.root, society: "demo" }, store, 64, TEST_VIEW_LIMITS.batchMaxMessages, TEST_VIEW_LIMITS),
+      store, mail: createMailModule({ stateRoot: f.root, society: "demo" }, store, 64, TEST_VIEW_LIMITS.batchMaxMessages, TEST_VIEW_LIMITS),
     }) as ReceiptFixture;
     broker = await restartedBroker(reopened, () => SECOND);
     assert.equal((await openRun(broker, SECOND)).incarnation, 3);

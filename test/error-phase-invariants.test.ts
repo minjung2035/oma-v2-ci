@@ -1,13 +1,13 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import type { ErrorCode } from "../implementation/contracts.js";
+import type { ErrorCode } from "@oma/contracts";
 import {
   ERROR_METADATA, StoreError, classifyError, errorExit, isErrorCode,
   isPreacceptOnlyFailure, publicFailure,
   type EffectKnowledge, type ErrorPhase, type ObservationKind,
-} from "../src/domain/errors.js";
-import { receiptOfOperation } from "../src/storage/receipt-projector.js";
-import { receiptNotFound, isRequestNotFound, receiptExit, receiptLines } from "../src/protocol/receipts.js";
+} from "@oma/domain/errors";
+import { receiptOfOperation } from "@oma/protocol/receipt-projector";
+import { receiptNotFound, isRequestNotFound, receiptExit, receiptLines } from "@oma/protocol/receipts";
 import { receiptOperation, receiptOperationId } from "./fixtures/receipt-operation.js";
 
 const phases: readonly ErrorPhase[] = ["preaccept", "accepted", "recovering", "terminal"];

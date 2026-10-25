@@ -1,17 +1,20 @@
-/** Test-only accepted-v1 fixture. Production never imports this file. */
+import { serializePlanIntent } from "../../dist/test/fixtures/plan.js";
+/** Test-only current accepted fixture. Production never imports this file. */
 import { chmodSync, existsSync, lstatSync, mkdtempSync, readdirSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { randomUUID } from "node:crypto";
-import { Store, readDiagnosticSnapshot } from "../../dist/src/store.js";
+import { Store, readDiagnosticSnapshot } from "@oma/storage";
 import { agentRecord } from "./ledger-fixture.mjs";
-import { generateOperationId, generateMessageId } from "../../dist/src/ids.js";
-import { sha256Hex, requestHash } from "../../dist/src/hash.js";
-import { ensureDurableDirectory, writeExclusiveFsyncedFile } from "../../dist/src/storage/durable-fs.js";
-import { publishImmutableFile } from "../../dist/src/storage/immutable-file.js";
-import { publishedRefFor } from "../../dist/src/domain/derived.js";
-import { mailObjectPathAt, mailArchivePathAt, mailInboxPathAt, contextStagingPathAt } from "../../dist/src/storage/paths.js";
-import { rfc5322Date } from "../../dist/src/mail/headers.js";
+import { generateOperationId } from "@oma/native/identity";
+import { messageIdForOperation as generateMessageId } from "@oma/domain/derived";
+import { sha256Hex } from "@oma/domain/canonical-json";
+import { requestHash } from "@oma/domain/request-identity";
+import { ensureDurableDirectory, writeExclusiveFsyncedFile } from "@oma/storage/durable-fs";
+import { publishImmutableFile } from "@oma/storage/immutable-file";
+import { publishedRefFor } from "@oma/domain/derived";
+import { mailObjectPathAt, mailArchivePathAt, mailInboxPathAt, contextStagingPathAt } from "@oma/domain/paths";
+import { rfc5322Date } from "@oma/mail/headers";
 /** Published context revisions are 0555; cleanup needs the owner write bit
  * on every directory it empties (mirrors test/fixtures/cleanup.ts). */
 export function removeTree(root) {
@@ -56,10 +59,10 @@ export function physicalLedger(t, options = {}) {
   ensureDurableDirectory(join(root, "mail/objects")); writeExclusiveFsyncedFile(object, bytes, 0o444);
   const plan = kind === "mail.send" ? { kind, message } : kind === "git.submit" ?
     { kind, candidate, exportRef: payload.exportRef, prerequisites: [], bundle: null, publishedRef: publishedRefFor("alice", id), message } :
-    { kind, base: null, candidate, target: "refs/heads/main", entries: options.entries, stagingPath: contextStagingPathAt(root, id), message };
+    { kind, base: null, candidate, noopRef: null, target: "refs/heads/main", entries: options.entries, stagingPath: contextStagingPathAt(root, id), message };
   store.transaction(tx => {
     tx.operations.insert({ id, actor: "alice", requestKey: randomUUID(), requestHash: requestHash(kind, payload),
-      kind, payloadJson: JSON.stringify(payload), planJson: JSON.stringify(plan) });
+      kind, payloadJson: JSON.stringify(payload), planJson: serializePlanIntent(plan) });
     tx.deliveries.insert([{ messageId, recipient: "alice", operationId: id }]);
   });
   return { root, id, message, bytes, object, archive, kind, plan, context: { stateRoot: root, society: "fixture" },

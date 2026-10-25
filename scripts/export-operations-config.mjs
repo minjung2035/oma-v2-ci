@@ -3,7 +3,7 @@
  * never flattens it in place and never overwrites an existing output. */
 import { mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
-import { loadConfigurationSnapshot } from "../dist/src/config.js";
+import { loadConfigurationSnapshot } from "@oma/config";
 
 const [input, destination, ...extra] = process.argv.slice(2);
 if (!input || !destination || extra.length) {

@@ -15,7 +15,7 @@
  * commit) is recorded metadata, verified once at vendoring time.
  */
 import { createHash } from "node:crypto";
-import { copyFileSync, mkdirSync, mkdtempSync, lstatSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { copyFileSync, mkdirSync, mkdtempSync, lstatSync, readdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, relative, sep } from "node:path";
 
@@ -153,4 +153,40 @@ export function bundleRecordProblems(manifest, bundleDir, manifestName = "manife
   for (const path of listed.keys()) if (!records.some(record => record.path === path)) problems.push(`manifest names missing file: ${path}`);
   if (manifest.bundleSha256 !== bundleDigest(records)) problems.push("bundle digest does not cover current files");
   return problems;
+}
+
+/** npm omits .npmignore from tarballs. Preserve this non-runtime npm metadata
+ * under a stored name, with original bytes and provenance explicitly pinned. */
+export const NPM_METADATA_PACKAGING = Object.freeze([Object.freeze({
+  upstreamPath: "node_modules/isexe/.npmignore",
+  storedPath: "node_modules/isexe/npmignore.oma-vendor",
+  sha256: "ca06e7ce01ccdd1f477910e1cd1339c23119ecf2386350b8ad876983e1da92ea",
+})]);
+
+export function vendorPackagingProblems(manifest, directory) {
+  const problems = [];
+  if (canonical(manifest?.generated?.packaging) !== canonical(NPM_METADATA_PACKAGING))
+    problems.push("manifest generated.packaging differs from the declared npm metadata preservation");
+  for (const entry of NPM_METADATA_PACKAGING) {
+    if (lstatSync(join(directory, entry.upstreamPath), { throwIfNoEntry: false }))
+      problems.push(`npm-omitted metadata still uses its unpublished name: ${entry.upstreamPath}`);
+    const path = join(directory, entry.storedPath);
+    const stat = lstatSync(path, { throwIfNoEntry: false });
+    if (!stat?.isFile() || stat.isSymbolicLink() || sha256(readFileSync(path)) !== entry.sha256)
+      problems.push(`preserved npm metadata differs: ${entry.storedPath}`);
+  }
+  return problems;
+}
+
+export function preserveNpmMetadata(directory) {
+  for (const entry of NPM_METADATA_PACKAGING) {
+    const source = join(directory, entry.upstreamPath), stored = join(directory, entry.storedPath);
+    const stat = lstatSync(source, { throwIfNoEntry: false });
+    if (!stat) continue;
+    if (!stat.isFile() || stat.isSymbolicLink() || sha256(readFileSync(source)) !== entry.sha256 ||
+        lstatSync(stored, { throwIfNoEntry: false })) throw new Error("refuse to replace unknown npm metadata");
+    renameSync(source, stored);
+  }
+  const problems = vendorPackagingProblems({ generated: { packaging: NPM_METADATA_PACKAGING } }, directory);
+  if (problems.length) throw new Error(problems.join("\n"));
 }

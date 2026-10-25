@@ -13,7 +13,7 @@ import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { realpathSync } from "node:fs";
-import { createToolProvenance, verifiedExtensionPaths } from "../src/pi-extension.js";
+import { createToolProvenance, verifiedExtensionPaths } from "@oma/tool-runtime/provenance";
 import type { ToolInfo } from "@earendil-works/pi-coding-agent";
 
 /** A tool record as the engine reports it: a name plus where it came from. */
@@ -124,9 +124,9 @@ test("D25: the spawn plans write the verified list the engine reads, in the same
   // The two sides must never disagree about the name: session.ts and
   // pi-spawn-plan.ts mirror the constant because the extension's files may not
   // be imported there (PI-001), so a test binds the mirror.
-  const { VERIFIED_EXTENSIONS_ENV } = await import("../src/pi-extension.js");
-  const { sessionEnv } = await import("../src/runtime/engine/principal-session.js");
-  const spawnPlan = await import("../src/runtime/pi-spawn-plan.js");
+  const { VERIFIED_EXTENSIONS_ENV } = await import("@oma/tool-runtime/provenance");
+  const { sessionEnv } = await import("@oma/engine/principal-session");
+  const spawnPlan = await import("@oma/engine/pi-spawn-plan");
   assert.equal(VERIFIED_EXTENSIONS_ENV, "OMA_VERIFIED_EXTENSIONS");
   assert.equal(spawnPlan.VERIFIED_EXTENSIONS_ENV, VERIFIED_EXTENSIONS_ENV);
 
@@ -135,8 +135,7 @@ test("D25: the spawn plans write the verified list the engine reads, in the same
     const core = join(dir, "core.js"); writeFileSync(core, "export {};\n");
     const ext = join(dir, "ext.js"); writeFileSync(ext, "export {};\n");
     const env = sessionEnv({ HOME: "/h" }, {
-      society: "demo", provider: "pi", model: "current", workspaceBytes: 1,
-      extensions: [{ path: ext, sha256: "0".repeat(64) }],
+      society: "demo", provider: "pi", model: "current", extensions: [{ path: ext, sha256: "0".repeat(64) }],
     }, { coreExtension: core });
     assert.deepEqual(verifiedExtensionPaths(env[VERIFIED_EXTENSIONS_ENV]),
       { paths: [core, ext], malformed: false }, "the env is the -e argv list, core first");

@@ -1,3 +1,4 @@
+import { TransportSpool } from "@oma/storage/transport-spool";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { connect, createServer, Socket } from "node:net";
@@ -6,21 +7,20 @@ import { setTimeout as delay } from "node:timers/promises";
 import { constants, closeSync, mkdirSync, mkdtempSync, openSync, readdirSync, readlinkSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { RpcConnection } from "../src/broker/connection.js";
-import { SharedPeerPin } from "../src/broker/peer-pin.js";
-import { peerPidFd, pidfdLiveness } from "../src/leaf.js";
-import { encodeFrame } from "../src/frame.js";
-import { sha256Hex } from "../src/hash.js";
-import { OperationRecovery, type RecoveryRow } from "../src/reconcile/operations.js";
-import { parseOperationId } from "../src/domain/identifiers.js";
-import { runProcess } from "../src/process/run.js";
-import { TEST_RESOURCES } from "./fixtures/spec.js";
+import { RpcConnection } from "@oma/broker/connection";
+import { SharedPeerPin } from "@oma/broker/peer-pin";
+import { peerPidFd, pidfdLiveness } from "@oma/native/linux";
+import { encodeFrame } from "@oma/protocol/frame";
+import { sha256Hex } from "@oma/domain/canonical-json";
+import { OperationRecovery, type RecoveryRow } from "@oma/reconcile/operations";
+import { parseOperationId } from "@oma/domain/identifiers";
+import { runProcess } from "@oma/process/run";
 import { Seeded, integerParameter, replayMetadata, recordExplorationFailure } from "./model/reproducible.js";
 
 const seed = integerParameter("OMA_TEST_SEED", 0x3657ee, 0xffffffff);
 const cycles = integerParameter("OMA_TEST_STRESS_CYCLES", 64, 100000);
 const seconds = integerParameter("OMA_TEST_STRESS_SECONDS", 60, 3600);
-const rssBudget = integerParameter("OMA_TEST_RSS_BYTES", TEST_RESOURCES.memoryBytes, Number.MAX_SAFE_INTEGER);
+const rssBudget = integerParameter("OMA_TEST_RSS_BYTES", 3 * 1024 ** 3, Number.MAX_SAFE_INTEGER);
 const limits = { frameBytes: 256 * 1024, idleStreamSeconds: 30, receiptWaitSeconds: 30 };
 function fdSnapshot(): { total: number; pidfds: number; cgroupFds: number } {
   const entries = readdirSync("/proc/self/fd"); let pidfds = 0, cgroupFds = 0;
@@ -69,7 +69,7 @@ test(`R36 stress native transport seed=${seed} cycles=${cycles} durationBudgetSe
     const tasks: Promise<void>[] = []; let calls = 0;
     const clientClosed = new Promise<void>(resolve => client.once("close", () => resolve()));
     const peerClosed = new Promise<void>(resolve => peer.once("close", () => resolve()));
-    const connection = new RpcConnection({ socket: peer, peer: owner, limits, stagingRoot: staging,
+    const connection = new RpcConnection({ socket: peer, peer: owner, limits, makeSpool: descriptor => new TransportSpool(staging, descriptor),
       preflight: raw => { assert.equal(raw.method, "context.publish"); },
       handle: async raw => { calls++; return { v: 1, id: raw.id, ok: true, result: {} }; },
       onTask: task => tasks.push(task), onCleanupError: error => cleanupErrors.push(error) });

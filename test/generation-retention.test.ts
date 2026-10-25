@@ -15,10 +15,10 @@ import assert from "node:assert/strict";
 import fs, { chmodSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { syncBuiltinESMExports } from "node:module";
 import { join } from "node:path";
-import { loadConfigurationSnapshot, validateConfig } from "../src/config.js";
-import { collectManagedGenerations, MANAGED_DIRECTORY } from "../src/config/generations.js";
-import { commitManagedEdit } from "../src/application/settings.js";
-import { StoreError } from "../src/domain/errors.js";
+import { loadConfigurationSnapshot, validateConfig } from "@oma/config";
+import { collectManagedGenerations, MANAGED_DIRECTORY } from "@oma/config/generations";
+import { commitManagedEdit } from "#oma-test/app/application/settings";
+import { StoreError } from "@oma/domain/errors";
 import { createCompleteConfigurationFixture } from "./fixtures/configuration.js";
 
 type Fixture = ReturnType<typeof createCompleteConfigurationFixture>;
@@ -27,12 +27,12 @@ type Fixture = ReturnType<typeof createCompleteConfigurationFixture>;
 function commitEach(f: Fixture, agents: readonly number[]): string[] {
   return agents.map(count => {
     const snapshot = loadConfigurationSnapshot(f.path);
-    const result = commitManagedEdit(snapshot, validateConfig({ ...snapshot.config, quota: { ...snapshot.config.quota, societyAgents: count } }));
+    const result = commitManagedEdit(snapshot, validateConfig({ ...snapshot.config, limits: { ...snapshot.config.limits, logBytes: count } }));
     assert.equal(result.kind, "committed");
     return result.generation!;
   });
 }
-const journalOf = (f: Fixture): string => join(f.output, MANAGED_DIRECTORY, "committed");
+const journalOf = (f: Fixture): string => join(f.output, MANAGED_DIRECTORY, "committed-v2");
 const generationsOf = (f: Fixture): string => join(f.output, MANAGED_DIRECTORY, "generations");
 const recorded = (f: Fixture): string[] => readFileSync(journalOf(f), "utf8").split("\n").filter(Boolean);
 /** The journal without its last record. */
@@ -92,10 +92,34 @@ test("AV7 / INV02, P0V-61: when no record says what the current generation's com
     mkdirSync(join(generationsOf(f), unrecorded));
     collectManagedGenerations(loadConfigurationSnapshot(f.path));
     assert.deepEqual(new Set(readdirSync(generationsOf(f))), new Set([...committed, unrecorded]));
-    // A journal an earlier release wrote -- ids alone -- cannot say either.
+    // A current append cut after its first generation and later closed off
+    // cannot say either. These are partial current records, not old decoding.
     writeFileSync(journalOf(f), committed.map(id => `${id}\n`).join(""));
     collectManagedGenerations(loadConfigurationSnapshot(f.path));
     assert.deepEqual(new Set(readdirSync(generationsOf(f))), new Set([...committed, unrecorded]));
+  } finally { f.close(); }
+});
+
+test("DR46: retired journal names refuse load, edit and collection without changing existing bytes", () => {
+  const f = createCompleteConfigurationFixture();
+  try {
+    commitEach(f, [5, 6, 7]);
+    const snapshot = loadConfigurationSnapshot(f.path);
+    const manifest = readFileSync(f.path);
+    const journal = readFileSync(journalOf(f));
+    const generations = readdirSync(generationsOf(f)).sort();
+    const retired = join(f.output, MANAGED_DIRECTORY, "committed");
+    writeFileSync(retired, "earlier development journal\n");
+    const mismatch = (error: unknown) => error instanceof StoreError && error.code === "INVALID_REQUEST" &&
+      /new development state directory/.test(error.message);
+    assert.throws(() => loadConfigurationSnapshot(f.path), mismatch);
+    assert.throws(() => commitManagedEdit(snapshot, validateConfig({ ...snapshot.config,
+      limits: { ...snapshot.config.limits, logBytes: 8 } })), mismatch);
+    assert.throws(() => collectManagedGenerations(snapshot), mismatch);
+    assert.deepEqual(readFileSync(f.path), manifest);
+    assert.deepEqual(readFileSync(journalOf(f)), journal);
+    assert.deepEqual(readdirSync(generationsOf(f)).sort(), generations);
+    assert.equal(readFileSync(retired, "utf8"), "earlier development journal\n");
   } finally { f.close(); }
 });
 
@@ -109,7 +133,7 @@ test("P0V-61 / R06, P0-3: a configuration that returns (A, B, A) keeps B, the ge
     const attempt = (count: number): void => {
       const snapshot = loadConfigurationSnapshot(f.path);
       let result;
-      try { result = commitManagedEdit(snapshot, validateConfig({ ...snapshot.config, quota: { ...snapshot.config.quota, societyAgents: count } })); }
+      try { result = commitManagedEdit(snapshot, validateConfig({ ...snapshot.config, limits: { ...snapshot.config.limits, logBytes: count } })); }
       catch { return; }
       if (result.kind === "committed") { made.push({ previous: manifest, id: result.generation! }); manifest = result.generation!; }
     };
@@ -176,7 +200,27 @@ test("AV7 / INV02: an existing generation that cannot be read is not reported as
     // Going back to the first value publishes the first generation again, which
     // must be compared with the one on disk before it is reused.
     const snapshot = loadConfigurationSnapshot(f.path);
-    assert.throws(() => commitManagedEdit(snapshot, validateConfig({ ...snapshot.config, quota: { ...snapshot.config.quota, societyAgents: 5 } })),
+    assert.throws(() => commitManagedEdit(snapshot, validateConfig({ ...snapshot.config, limits: { ...snapshot.config.limits, logBytes: 5 } })),
       (error: unknown) => !(error instanceof StoreError && /holds other bytes/.test(error.message)) && (error as NodeJS.ErrnoException).code === "EACCES");
   } finally { f.close(); }
+});
+
+test("DR46 / P0-5: a journal append that writes zero bytes refuses without replacing the manifest", t => {
+  const f = createCompleteConfigurationFixture();
+  const real = fs.writeSync;
+  try {
+    commitEach(f, [5]);
+    const snapshot = loadConfigurationSnapshot(f.path);
+    const manifest = readFileSync(f.path), journal = readFileSync(journalOf(f));
+    t.mock.method(fs, "writeSync", ((fd: number, ...args: unknown[]) => {
+      if (fs.readlinkSync(`/proc/self/fd/${fd}`) === journalOf(f)) return 0;
+      return Reflect.apply(real, fs, [fd, ...args]);
+    }) as typeof fs.writeSync);
+    syncBuiltinESMExports();
+    assert.throws(() => commitManagedEdit(snapshot, validateConfig({ ...snapshot.config,
+      limits: { ...snapshot.config.limits, logBytes: 6 } })),
+      (error: unknown) => error instanceof StoreError && error.code === "BROKER_UNAVAILABLE");
+    assert.deepEqual(readFileSync(f.path), manifest);
+    assert.deepEqual(readFileSync(journalOf(f)), journal);
+  } finally { t.mock.restoreAll(); syncBuiltinESMExports(); f.close(); }
 });

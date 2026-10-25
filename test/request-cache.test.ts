@@ -5,8 +5,8 @@ import { spawn } from "node:child_process";
 import { createRequire, syncBuiltinESMExports } from "node:module";
 import test, { type TestContext } from "node:test";
 import assert from "node:assert/strict";
-import { RequestCache, CacheError, type FreezeInput, type CacheReader } from "../src/request-cache.js";
-import { decodeReceipt } from "../src/protocol/receipt-codec.js";
+import { RequestCache, CacheError, type FreezeInput, type CacheReader } from "#oma-test/app/request-cache";
+import { decodeReceipt } from "@oma/protocol/receipt-codec";
 import { makeValidFrozenRequest as context } from "./fixtures/valid.js";
 import { corruptValueForTest, replaceArtifactBytes } from "./fixtures/corruption.js";
 
@@ -115,7 +115,7 @@ test("receipt updates cannot replace immutable request fields or change operatio
 });
 
 test("competing processes cannot publish different bodies for one frozen identity", async t => {
-  const { home, cache } = fixture(t); const sourceUrl = new URL("../src/request-cache.js", import.meta.url).href;
+  const { home, cache } = fixture(t); const sourceUrl = new URL(import.meta.resolve("#oma-test/app/request-cache")).href;
   const run = (text: string) => {
     const source = `import { RequestCache } from ${JSON.stringify(sourceUrl)};
       const cache = new RequestCache(${JSON.stringify(home)}); console.log('ready');

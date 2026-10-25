@@ -1,13 +1,13 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { decodeKeys } from "./fixtures/keys.js";
-import type { Key } from "../src/tui/keys.js";
+import type { Key } from "@oma/tui/keys";
 import {
   INITIAL, categoryOf, cursorOf, step,
   type ConfigField, type Effect, type PanelData, type State,
-} from "../src/tui/model.js";
-import { render } from "../src/tui/view/index.js";
-import { cellWidth, fit } from "../src/tui/view/text.js";
+} from "@oma/tui/model";
+import { render } from "@oma/tui/view/index";
+import { cellWidth, fit } from "@oma/tui/view/text";
 import { unknownDashboard } from "./fixtures/dashboard.js";
 
 const FRAME_BYTES = 262144;
@@ -20,7 +20,7 @@ const data: PanelData = Object.freeze({
     { kind: "link", id: "extensions", label: "Extensions" },
   ]),
   extensions: Object.freeze([
-    { id: "dist/src/pi-extension.js", principal: true, workers: true, locked: true },
+    { id: "packages/extension/dist/index.js", principal: true, workers: true, locked: true },
     { id: "extensions/review.js", principal: false, workers: true, locked: false },
   ]),
   mail: Object.freeze([

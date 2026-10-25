@@ -1,8 +1,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { BrokerLifetime } from "../src/runtime/broker-lifetime.js";
-import { PreparationExecutor } from "../src/process/preparation.js";
-import type { CommandSpec } from "../src/process/command.js";
+import { BrokerLifetime } from "@oma/broker/lifetime";
+import { PreparationExecutor } from "@oma/process/preparation";
+import type { CommandSpec } from "@oma/process/command";
 
 function command(code: string): CommandSpec {
   return { executable: process.execPath, argv: ["-e", code], env: { PATH: process.env.PATH },

@@ -2,9 +2,9 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { copyFileSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join, relative } from "node:path";
-import { loadConfiguration, loadConfigurationSnapshot } from "../src/config.js";
-import { configurationLayout } from "../src/config/operations.js";
-import { readExtensions } from "../src/application/extensions.js";
+import { loadConfiguration, loadConfigurationSnapshot } from "@oma/config";
+import { configurationLayout } from "@oma/config/operations";
+import { readExtensions } from "#oma-test/app/application/extensions";
 import { createCompleteConfigurationFixture } from "./fixtures/configuration.js";
 
 function readJson(path: string): Record<string, any> {

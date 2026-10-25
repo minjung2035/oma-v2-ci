@@ -3,11 +3,12 @@ import assert from "node:assert/strict";
 import { createRequire, syncBuiltinESMExports } from "node:module";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { sha256Hex } from "../src/domain/canonical-json.js";
-import { StoreError } from "../src/domain/errors.js";
-import { replaceDerivedFile, fsyncTree, ensureDurableDirectory, publishNoReplace, type DurabilityObserver } from "../src/storage/durable-fs.js";
-import { publishImmutableFile } from "../src/storage/immutable-file.js";
-import { publishImmutableFile as mailPublish, writeAtomic } from "../src/mail.js";
+import { sha256Hex } from "@oma/domain/canonical-json";
+import { StoreError } from "@oma/domain/errors";
+import { replaceDerivedFile, fsyncTree, ensureDurableDirectory, publishNoReplace, type DurabilityObserver } from "@oma/storage/durable-fs";
+import { publishImmutableFile } from "@oma/storage/immutable-file";
+import { publishImmutableFile as mailPublish } from "@oma/storage/immutable-file";
+import { replaceDerivedFile as writeAtomic } from "@oma/storage/durable-fs";
 
 // Node's built-in module namespace has live exports. Update them only inside a
 // synchronous, serialized test scope and restore before leaving that scope.
@@ -32,8 +33,6 @@ function fixture(run: (root: string, source: string, target: string, bytes: Buff
 }
 
 test("immutable and derived callers use different shared owners", () => {
-  assert.equal(mailPublish, publishImmutableFile);
-  assert.equal(writeAtomic, replaceDerivedFile);
   fixture((root, source, target, bytes) => {
     publishImmutableFile(source, target, sha256Hex(bytes));
     assert.deepEqual(fs.readFileSync(target), bytes);

@@ -7,8 +7,8 @@ import ts from "typescript";
 
 export async function checkPackage(rootInput) {
   const root = realpathSync(rootInput);
-  const { DEPLOYMENT_LAYOUT: layout } = await import(pathToFileURL(join(root, "dist/src/domain/deployment.js")).href);
-  const { assertRuntimeAssets, runtimeAssets } = await import(pathToFileURL(join(root, "dist/src/runtime/assets.js")).href);
+  const { DEPLOYMENT_LAYOUT: layout } = await import(pathToFileURL(join(root, "packages/domain/dist/deployment.js")).href);
+  const { assertRuntimeAssets, runtimeAssets } = await import(pathToFileURL(join(root, "apps/oma/dist/runtime/assets.js")).href);
   const paths = runtimeAssets(root);
   assertRuntimeAssets(paths, { schema: join(root, layout.schema), systemd: join(root, layout.systemd) });
   function requiredFile(path) {
@@ -21,7 +21,7 @@ export async function checkPackage(rootInput) {
     const command = join(root, layout.modelCommand);
     requiredFile(command);
     if ((lstatSync(command).mode & 0o111) === 0) throw new Error(`model command is not executable: ${layout.modelCommand}`);
-    const { modelCommandScript } = await import(pathToFileURL(join(root, "dist/src/sandbox.js")).href);
+    const { modelCommandScript } = await import(pathToFileURL(join(root, layout.modelCommandBuilder)).href);
     if (readFileSync(command, "utf8") !== modelCommandScript()) throw new Error(`model command differs from its owner: ${layout.modelCommand}`);
   }
   for (const [template, name] of Object.entries(layout.templateEntries)) {
@@ -39,49 +39,82 @@ export async function checkPackage(rootInput) {
   if (!readFileSync(join(root, layout.entries.tui), "utf8").startsWith("#!/usr/bin/env node\n"))
     throw new Error("the oma entry cannot be run as a command: it has no node shebang");
   const lock = JSON.parse(readFileSync(join(root, "package-lock.json"), "utf8"));
-  const require = createRequire(join(root, "package.json"));
+  const dependencyOwners = [{ name: packageJson.name, directory: root, manifest: packageJson, lockPath: "" },
+    ...layout.workspaces.map(workspace => {
+      const directory = join(root, workspace.root), path = join(directory, "package.json");
+      requiredFile(path);
+      const manifest = JSON.parse(readFileSync(path, "utf8"));
+      if (manifest.name !== workspace.name) throw new Error(`workspace dependency owner identity mismatch: ${workspace.root}`);
+      return { name: workspace.name, directory, manifest, lockPath: workspace.root };
+    })];
   const versions = {};
   for (const name of layout.runtimeDependencies) {
-    if (!Object.hasOwn(packageJson.dependencies ?? {}, name)) throw new Error(`undeclared runtime dependency: ${name}`);
-    // A package may publish an exports map without a CJS main, which makes
-    // require.resolve fail even though it is installed. Locate the manifest by
-    // walking the installation's node_modules instead; the name and version are
-    // still verified against the lockfile below, so this resolves differently
-    // without checking less.
-    let found = null;
-    for (let directory = root; ; ) {
-      const manifest = join(directory, "node_modules", name, "package.json");
-      if (lstatSync(manifest, { throwIfNoEntry: false })?.isFile()) {
-        const rel = relative(root, dirname(manifest));
-        if (rel === ".." || rel.startsWith(`..${sep}`) || isAbsolute(rel)) throw new Error(`dependency resolved outside installation: ${name}`);
-        const value = JSON.parse(readFileSync(manifest, "utf8"));
-        if (value.name === name) { found = value; break; }
+    const owners = dependencyOwners.filter(owner => Object.hasOwn(owner.manifest.dependencies ?? {}, name));
+    if (owners.length === 0) throw new Error(`undeclared runtime dependency: ${name}`);
+    let canonicalVersion;
+    const verifiedOwners = [];
+    for (const owner of owners) {
+      const declaredRange = owner.manifest.dependencies[name];
+      if (lock.packages?.[owner.lockPath]?.dependencies?.[name] !== declaredRange)
+        throw new Error(`runtime dependency declaration/lock mismatch: ${owner.name}/${name}`);
+      // Resolve at the actual declaring package. A hoisted or nested copy is
+      // allowed only inside this installation and at its own locked version.
+      // Reading its manifest also supports exports maps without a CJS entry.
+      let found = null, installedAt = null, expected;
+      for (let directory = owner.directory; ; directory = dirname(directory)) {
+        const manifest = join(directory, "node_modules", name, "package.json");
+        if (lstatSync(manifest, { throwIfNoEntry: false })?.isFile()) {
+          const packageDirectory = realpathSync(dirname(manifest));
+          const offset = relative(root, packageDirectory);
+          if (offset === ".." || offset.startsWith(`..${sep}`) || isAbsolute(offset))
+            throw new Error(`dependency resolved outside installation: ${owner.name}/${name}`);
+          const value = JSON.parse(readFileSync(manifest, "utf8"));
+          if (value.name !== name) throw new Error(`installed dependency identity mismatch: ${owner.name}/${name}`);
+          installedAt = offset.split(sep).join("/");
+          expected = lock.packages?.[installedAt]?.version;
+          found = value; break;
+        }
+        if (directory === root) break;
+        const parent = dirname(directory);
+        if (parent === directory || relative(root, parent).startsWith(`..${sep}`)) break;
       }
-      const parent = dirname(directory); if (parent === directory) break; directory = parent;
+      if (!found || typeof expected !== "string" || found.version !== expected)
+        throw new Error(`installed/lock version mismatch: ${owner.name}/${name}`);
+      if (canonicalVersion !== undefined && canonicalVersion !== found.version)
+        throw new Error(`runtime dependency owners use different versions: ${name}`);
+      canonicalVersion = found.version;
+      verifiedOwners.push({ name: owner.name, declaredRange, installedAt });
+      // Loading the native boundary catches missing Koffi binaries, without
+      // claiming kernel/cgroup/namespace or deploymentDigest qualification.
+      if (Array.isArray(found.pi?.extensions)) {
+        for (const entry of found.pi.extensions) requiredFile(resolve(root, installedAt, entry));
+        requiredFile(join(root, installedAt, "LICENSE"));
+      } else try { createRequire(join(owner.directory, "package.json"))(name); }
+      catch (error) {
+        if (error?.code !== "ERR_PACKAGE_PATH_NOT_EXPORTED" && error?.code !== "ERR_REQUIRE_ESM") throw error;
+      }
     }
-    const expected = lock.packages?.[`node_modules/${name}`]?.version;
-    if (!found || typeof expected !== "string" || found.version !== expected) throw new Error(`installed/lock version mismatch: ${name}`);
-    versions[name] = { installed: found.version, locked: expected, declaredRange: packageJson.dependencies[name] };
-    // Loading the native boundary catches a missing Koffi binary. It does not
-    // attest pidfd, SO_PEERPIDFD, cgroups, user namespaces or deploymentDigest.
-    // Packages without a CJS entry are verified by manifest and lockfile only.
-    if (Array.isArray(found.pi?.extensions)) {
-      for (const entry of found.pi.extensions) requiredFile(resolve(root, "node_modules", name, entry));
-      requiredFile(join(root, "node_modules", name, "LICENSE"));
-    } else try { require(name); }
-    catch (error) {
-      if (error?.code !== "ERR_PACKAGE_PATH_NOT_EXPORTED" && error?.code !== "ERR_REQUIRE_ESM") throw error;
-    }
+    versions[name] = { installed: canonicalVersion, locked: canonicalVersion,
+      declaredRange: verifiedOwners[0].declaredRange, owners: verifiedOwners };
   }
+  const moduleDirectories = [];
   function compiledFiles(path) {
     const stat = lstatSync(path);
     if (stat.isSymbolicLink()) throw new Error("compiled runtime must not contain source symlinks");
-    if (stat.isDirectory()) return readdirSync(path).sort().flatMap(name => compiledFiles(join(path, name)));
+    if (stat.isDirectory()) {
+      if (path.endsWith(`${sep}node_modules`)) moduleDirectories.push(path);
+      return readdirSync(path).sort().flatMap(name => compiledFiles(join(path, name)));
+    }
     return path.endsWith(".js") ? [path] : [];
   }
-  const files = [...compiledFiles(join(root, layout.compiledRoot)), join(root, layout.contract)];
+  for (const workspace of layout.workspaces) {
+    requiredFile(join(root, workspace.root, "package.json"));
+  }
+  const files = [...new Set([...compiledFiles(join(root, layout.compiledRoot)),
+    ...layout.workspaces.flatMap(workspace => compiledFiles(join(root, workspace.root, "dist")))])];
+  assertRuntimeAssets(paths, { schema: join(root, layout.schema), systemd: join(root, layout.systemd) }, moduleDirectories);
   // Vendored bundled-extension payloads live under
-  // dist/src/extension/vendor/<bundle>/ and carry their own pinned
+  // packages/tool-NAME/dist/vendor/<bundle>/ and carry their own pinned
   // dependency closure in <bundle>/node_modules/ plus the bundle manifest's
   // generated.dependencies table -- integrity-bound bytes, verified
   // fail-closed by verifyVendorBundle at load. Only a bundle's runtime/
@@ -96,18 +129,22 @@ export async function checkPackage(rootInput) {
   // specifier fails at load exactly as it does upstream) -- is pinned
   // input, not OMA code, so its import specifiers are not OMA's
   // declaration boundary.
+  const workspaceBundles = layout.workspaces.flatMap(workspace => {
+    const manifest = JSON.parse(readFileSync(join(root, workspace.root, "package.json"), "utf8"));
+    return (manifest.oma?.assets ?? []).filter(asset => /^vendor\/[^/]+$/.test(asset))
+      .map(asset => `${workspace.root}/dist/${asset}/`);
+  });
+  const vendorManifests = new Map();
   const vendoredDependencies = file => {
     const rel = relative(root, file).split(sep).join("/");
-    const match = /^dist\/src\/extension\/vendor\/([^/]+)\//.exec(rel);
-    if (match === null) return null;
-    // Only runtime/ is code OMA evaluates; every other member of the
-    // bundle is integrity-pinned input.
-    if (!rel.slice(match[0].length).startsWith("runtime/")) return "skip";
-    const manifestPath = join(root, "dist/src/extension/vendor", match[1], "manifest.json");
-    try {
-      const manifest = JSON.parse(readFileSync(manifestPath, "utf8"));
-      return manifest?.generated?.dependencies ?? {};
-    } catch { return {}; }
+    const bundleRoot = workspaceBundles.find(prefix => rel.startsWith(prefix));
+    if (bundleRoot === undefined) return null;
+    if (!rel.slice(bundleRoot.length).startsWith("runtime/")) return "skip";
+    if (!vendorManifests.has(bundleRoot)) {
+      const manifest = JSON.parse(readFileSync(join(root, bundleRoot, "manifest.json"), "utf8"));
+      vendorManifests.set(bundleRoot, manifest?.generated?.dependencies ?? {});
+    }
+    return vendorManifests.get(bundleRoot);
   };
   for (const file of files) {
     requiredFile(file);
@@ -118,7 +155,8 @@ export async function checkPackage(rootInput) {
       if (specifier.startsWith(".")) {
         const target = resolve(dirname(file), specifier); requiredFile(target);
         const rel = relative(root, target).split(sep).join("/");
-        if (!rel.startsWith("dist/src/") && rel !== layout.contract) throw new Error(`runtime import reaches non-runtime tree: ${rel}`);
+        if (!rel.startsWith("apps/oma/dist/") && !layout.workspaces.some(workspace => rel.startsWith(`${workspace.root}/dist/`)))
+          throw new Error(`runtime import reaches non-runtime tree: ${rel}`);
       } else if (!specifier.startsWith("node:")) {
         const packageName = specifier.startsWith("@") ? specifier.split("/").slice(0, 2).join("/") : specifier.split("/")[0];
         // A vendored extension's runtime may also name the Pi host API by
@@ -127,7 +165,9 @@ export async function checkPackage(rootInput) {
         // name must exist there to pass).
         const hostApi = vendoredDeps !== null && packageName.startsWith("@earendil-works/") &&
           lstatSync(join(root, "node_modules", packageName, "package.json"), { throwIfNoEntry: false })?.isFile() === true;
-        if (!Object.hasOwn(packageJson.dependencies ?? {}, packageName) &&
+        const workspace = layout.workspaces.find(workspace => file.startsWith(join(root, workspace.root, "dist") + sep));
+        const declared = workspace ? JSON.parse(readFileSync(join(root, workspace.root, "package.json"), "utf8")) : packageJson;
+        if (!Object.hasOwn(declared.dependencies ?? {}, packageName) &&
             !(vendoredDeps !== null && Object.hasOwn(vendoredDeps, packageName)) &&
             !hostApi)
           throw new Error(`runtime imports undeclared or dev dependency: ${specifier}`);

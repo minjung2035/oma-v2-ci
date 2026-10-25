@@ -2,9 +2,10 @@ import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { lstatSync, readlinkSync } from "node:fs";
 import { join } from "node:path";
-import { GitObserver, type GitObservation } from "../../src/git/observe.js";
-import { GIT_ENV } from "../../src/process/policies.js";
-import { contextRevisionPathAt } from "../../src/storage/paths.js";
+import { GitObserver } from "@oma/git/observe";
+import { type GitObservation } from "@oma/contracts/git";
+import { GIT_ENV } from "@oma/process/policies";
+import { contextRevisionPathAt } from "@oma/domain/paths";
 import type { LedgerSnapshot, InvariantPhase } from "./store.js";
 import { matchingFile } from "./mail.js";
 

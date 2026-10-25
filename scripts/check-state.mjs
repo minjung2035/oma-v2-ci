@@ -2,13 +2,13 @@
 /** P6 admin verification entry. No public oma subcommand and no repair mode. */
 import { isAbsolute, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
-import { readDiagnosticSnapshot } from "../dist/src/store.js";
-import { DIAGNOSTIC_READ_LIMITS } from "../dist/src/storage/diagnostic-snapshot.js";
-import { inspectLedger } from "../dist/src/diagnostics/ledger.js";
-import { inspectIntegrity } from "../dist/src/diagnostics/integrity.js";
-import { NodeIntegrityFiles } from "../dist/src/diagnostics/files.js";
-import { isValidSocietyName } from "../dist/src/domain/identifiers.js";
-import { canonicalJson, sha256Hex } from "../dist/src/domain/canonical-json.js";
+import { readDiagnosticSnapshot } from "@oma/storage";
+import { DIAGNOSTIC_READ_LIMITS } from "@oma/storage/diagnostic-snapshot";
+import { inspectLedger } from "@oma/app/diagnostics/ledger";
+import { inspectIntegrity } from "@oma/app/diagnostics/integrity";
+import { NodeIntegrityFiles } from "@oma/app/diagnostics/files";
+import { isValidSocietyName } from "@oma/domain/identifiers";
+import { canonicalJson, sha256Hex } from "@oma/domain/canonical-json";
 import { createDiagnosticObservers } from "./diagnostic-observers.mjs";
 
 export function parseDiagnosticArgs(args) {

@@ -1,3 +1,5 @@
+import { testBroker } from "./helpers/broker-fixture.js";
+import { createLifecycleModule } from "#oma-test/app/broker/lifecycle-composition";
 /** V26A / INV10 (adversarial): a Resident reaches its own actor socket, and
  * every connection there costs the broker a socket and a peer pidfd. A flood of
  * connections is held to ACTOR_CONNECTIONS by the kernel listener, costs the
@@ -10,12 +12,12 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { connect, type Socket } from "node:net";
 import { join } from "node:path";
-import type { ResolvedAgentSpec } from "../implementation/contracts.js";
-import { ACTOR_CONNECTIONS, Broker } from "../src/broker.js";
-import { LifecycleModule } from "../src/lifecycle.js";
-import { ViewsModule } from "../src/views.js";
-import type { UnitsModule } from "../src/units.js";
-import { FrameParser, encodeFrame } from "../src/frame.js";
+import type { ResolvedAgentSpec } from "@oma/contracts";
+import { ACTOR_CONNECTIONS, Broker } from "@oma/broker";
+import { LifecycleModule } from "@oma/lifecycle";
+import { ViewsModule } from "#oma-test/app/views";
+import type { UnitsModule } from "@oma/platform-linux/units";
+import { FrameParser, encodeFrame } from "@oma/protocol/frame";
 import { preparedFixture } from "./fixtures/delivery-receipt.js";
 import { TEST_VIEW_LIMITS } from "./fixtures/limits.js";
 
@@ -28,11 +30,10 @@ test("V26A: a connection flood on an actor socket is bounded, and the Resident i
   const units = { onRevokeRun: undefined, bindIncarnationReader: () => undefined, unitCgroup: () => "",
     observe: () => ({ activeState: "active", subState: "running", result: "success", execMainStatus: 0, cgroup: OWN_CGROUP, invocationId: id }),
   } as unknown as UnitsModule;
-  const lifecycle = new LifecycleModule(f.store, units, { stateRoot: f.root, projectGit: join(f.root, "repos", "project.git"), society: "demo",
+  const lifecycle = createLifecycleModule(f.store, units, { stateRoot: f.root, projectGit: join(f.root, "repos", "project.git"), society: "demo",
     hasGoal: () => true, activationAllowed: () => true },
     (_parent: unknown, input: { name: string; from: string; brief: string }) => ({ ...input }) as unknown as ResolvedAgentSpec, f.mail);
-  const broker = new Broker(f.store, f.mail, units, new ViewsModule(f.store, f.root, "demo", "p", TEST_VIEW_LIMITS), lifecycle, null, null,
-    { stateRoot: f.root, runRoot: join(f.root, "run"), society: "demo", hasGoal: () => true });
+  const broker = testBroker({ store: f.store, mail: f.mail, units: units, views: new ViewsModule(f.store, f.root, "demo", "p", TEST_VIEW_LIMITS), lifecycle: lifecycle, git: null, reviews: null, reconcile: null, paths: { stateRoot: f.root, runRoot: join(f.root, "run"), society: "demo", hasGoal: () => true } });
   const flood: Socket[] = [];
   try {
     await broker.start();

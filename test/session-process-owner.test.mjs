@@ -1,49 +1,29 @@
 /** Actual process-owner source with a controlled native spawn; no process is started. */
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync, fstatSync } from 'node:fs';
+import { readFileSync } from 'node:fs';
 import { Script } from 'node:vm';
 import ts from 'typescript';
-import { deadline } from '../dist/src/process/deadline.js';
+import { deadline } from "@oma/process/deadline";
 
-const code = ts.transpileModule(readFileSync(process.env.OMA_ASYNC_PROCESS_SOURCE ?? 'src/process/async.ts', 'utf8'), {
+const code = ts.transpileModule(readFileSync(process.env.OMA_ASYNC_PROCESS_SOURCE ?? "packages/process/src/async.ts", 'utf8'), {
   compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
 }).outputText;
-// The w10 client move gave async.ts a '../client/fence.js' import. The mock
-// below is the real fence.ts port: same constants, same slot layout, the same
-// validation, with fstatSync bound to the real syscall.
-const SOCIETY_FENCE_ENV = 'OMA_SOCIETY_FENCE_FD', SOCIETY_FENCE_FD = 4;
-function inheritedFence(env = process.env) {
-  const declared = env[SOCIETY_FENCE_ENV];
-  if (declared === undefined) return undefined;
-  if (!/^[0-9]{1,4}$/.test(declared)) throw new Error(`${SOCIETY_FENCE_ENV} is not a descriptor number`);
-  const fd = Number(declared);
-  let kind;
-  try { kind = fstatSync(fd); }
-  catch { throw new Error(`${SOCIETY_FENCE_ENV} names descriptor ${fd}, which is not open`); }
-  if (!kind.isSocket()) throw new Error(`${SOCIETY_FENCE_ENV} names descriptor ${fd}, which is not the society lease`);
-  return fd;
-}
-function fencedStdio(base, channel, fence) {
-  if (fence === undefined) return channel === 'pipe' ? [...base, channel] : [...base];
-  const stdio = [...base];
-  while (stdio.length < SOCIETY_FENCE_FD - 1) stdio.push('ignore');
-  stdio.push(channel, fence);
-  return stdio;
-}
+import { SOCIETY_FENCE_ENV, SOCIETY_FENCE_FD, inheritedFence, fencedStdio } from "@oma/process/fence";
+
 function world() {
   const calls = [], child = {};
   class StoreError extends Error { constructor(code, message) { super(message); this.code = code; } }
   const deps = {
     'node:child_process': { spawn(...args) { calls.push(args); return child; } },
-    'node:perf_hooks': { performance: { now: () => 0 } }, './command.js': {}, '../domain/errors.js': { StoreError },
+    'node:perf_hooks': { performance: { now: () => 0 } }, './command.js': {}, '@oma/domain/errors': { StoreError },
     './deadline.js': { deadline },
     // The output-spool import is real; no spec in this harness names a spool
     // path, so opening or writing one is a harness bug, not a code path.
     'node:fs': { constants: { O_WRONLY: 1, O_CREAT: 64, O_TRUNC: 512, O_NOFOLLOW: 256, O_RDONLY: 0 },
       openSync() { throw new Error('no spool path was declared in this harness'); },
       closeSync() {}, writeSync() { throw new Error('no spool path was declared in this harness'); } },
-    '../client/fence.js': { SOCIETY_FENCE_ENV, SOCIETY_FENCE_FD, inheritedFence, fencedStdio },
+    "./fence.js": { SOCIETY_FENCE_ENV, SOCIETY_FENCE_FD, inheritedFence, fencedStdio },
   };
   const module = { exports: {} };
   new Script(code).runInNewContext({ module, exports: module.exports,

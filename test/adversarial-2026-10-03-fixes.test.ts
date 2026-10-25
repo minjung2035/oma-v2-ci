@@ -1,3 +1,5 @@
+import { createReconcileModule } from "#oma-test/app/broker/reconcile-composition";
+import { serializePlanIntent } from "./fixtures/plan.js";
 /** Permanent reproduction tests for the 2026-10-03 adversarial Priority-0
  * audit fixes. Each test fails on the code as audited and holds the fix:
  *
@@ -22,22 +24,24 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { prepareContextStream } from "../src/storage/context-stream.js";
-import { publishContextRevision } from "../src/storage/context-snapshot.js";
-import { contextStagingPathAt } from "../src/storage/paths.js";
-import { TreeLease, leasePathOf, treeQuiescence } from "../src/storage/tree-lease.js";
-import { generateOperationId } from "../src/ids.js";
-import { collectUnacceptedArtifacts } from "../src/reconcile/preaccept.js";
-import { ReconcileModule } from "../src/reconcile.js";
-import { Store, StoreError } from "../src/store.js";
-import { requestHash } from "../src/hash.js";
-import { GitObserver, observed, parseNameStatusZ } from "../src/git/observe.js";
-import { isValidWirePath } from "../src/domain/identifiers.js";
-import { readBounded } from "../src/cli/effects.js";
+import { prepareContextStream } from "@oma/storage/context-stream";
+import { publishContextRevision } from "@oma/storage/context-snapshot";
+import { contextStagingPathAt } from "@oma/domain/paths";
+import { TreeLease, leasePathOf, treeQuiescence } from "@oma/storage/tree-lease";
+import { generateOperationId } from "@oma/native/identity";
+import { collectUnacceptedArtifacts } from "@oma/storage/preaccept-collection";
+import { ReconcileModule } from "@oma/reconcile";
+import { Store } from "@oma/storage";
+import { StoreError } from "@oma/domain/errors";
+import { requestHash } from "@oma/domain/request-identity";
+import { GitObserver, parseNameStatusZ } from "@oma/git/observe";
+import { observed } from "@oma/domain/git-facts";
+import { isValidWirePath } from "@oma/domain/identifiers";
+import { readBounded } from "#oma-test/app/cli/effects";
 import { makeValidAgent } from "./fixtures/spec.js";
-import type { MailModule } from "../src/mail.js";
-import type { UnitsModule } from "../src/units.js";
-import type { LifecycleModule } from "../src/lifecycle.js";
+import type { MailModule } from "@oma/mail";
+import type { UnitsModule } from "@oma/platform-linux/units";
+import type { LifecycleModule } from "@oma/lifecycle";
 
 test("AV-20261003-18: a failure after the staging lease is taken releases the lease", async t => {
   const root = mkdtempSync(join(tmpdir(), "oma-av18-"));
@@ -221,7 +225,7 @@ test("AV-20261003-20: startup contains a recoverable non-mail failure like the s
       store.insertAgent(makeValidAgent("a", { desired: "stopped", incarnation: 0 }));
       store.insertOperation({
         id, actor: "a", requestKey: "k-startup-wedge", requestHash: requestHash("agent.start", payload),
-        kind: "agent.start", payloadJson: JSON.stringify(payload), planJson: JSON.stringify(plan),
+        kind: "agent.start", payloadJson: JSON.stringify(payload), planJson: serializePlanIntent(plan),
       });
     });
     const lifecycle = {
@@ -230,7 +234,7 @@ test("AV-20261003-20: startup contains a recoverable non-mail failure like the s
       reconcileCreate: async () => { throw new StoreError("REF_STATE_UNKNOWN", "fixture"); },
     } as unknown as LifecycleModule;
     const units = { stop: () => undefined, confirmDead: () => true } as unknown as UnitsModule;
-    const reconcile = new ReconcileModule(store, {} as MailModule, null, units, lifecycle, {
+    const reconcile = createReconcileModule(store, {} as MailModule, null, null, units, lifecycle, {
       projectGit: join(root, "repos", "project.git"), hasGoal: () => true, activationAllowed: () => true,
     });
     await assert.doesNotReject(reconcile.sweep(), "the periodic path already contained the failure");

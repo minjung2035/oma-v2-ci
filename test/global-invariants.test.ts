@@ -1,3 +1,4 @@
+import { createMailModule } from "#oma-test/app/broker/mail-composition";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { fork } from "node:child_process";
@@ -5,9 +6,9 @@ import { DatabaseSync } from "node:sqlite";
 import { mkdtempSync, rmSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { Store } from "../src/store.js";
-import { MailModule } from "../src/mail.js";
-import { generateBatchId } from "../src/ids.js";
+import { Store } from "@oma/storage";
+import { MailModule } from "@oma/mail";
+import { generateBatchId } from "@oma/native/identity";
 import { makeValidAgent } from "./fixtures/spec.js";
 import { TEST_VIEW_LIMITS } from "./fixtures/limits.js";
 import { gitFixture, gitAuth, seedGit, gitCommand, submitFixture } from "./fixtures/git-crash.js";
@@ -39,7 +40,7 @@ function normal(root: string) {
   if (store.listAgents().length === 0) store.transaction(tx => {
     for (const name of ["a", "b", "c"]) tx.insertAgent(makeValidAgent(name));
   });
-  const mail = new MailModule({ stateRoot: root, society: "crash" }, store, 64, 24, TEST_VIEW_LIMITS);
+  const mail = createMailModule({ stateRoot: root, society: "crash" }, store, 64, 24, TEST_VIEW_LIMITS);
   return { store, mail };
 }
 function context(root: string, phase: InvariantPhase) { return { stateRoot: root, society: "crash", phase, viewLimits: TEST_VIEW_LIMITS }; }

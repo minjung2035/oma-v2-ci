@@ -6,10 +6,10 @@ import assert from "node:assert/strict";
 import { mkdtempSync, readFileSync, existsSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { Store } from "../src/store.js";
+import { Store } from "@oma/storage";
 import { makeValidAgent } from "./fixtures/spec.js";
 import { gitFixture, gitAuth, gitCommand, seedGit } from "./fixtures/git-crash.js";
-import type { SubmitInput } from "../src/git/submit.js";
+import type { SubmitInput } from "@oma/git/submit";
 
 async function* empty(): AsyncIterable<Uint8Array> {}
 function fixture(format: "sha1" | "sha256") {

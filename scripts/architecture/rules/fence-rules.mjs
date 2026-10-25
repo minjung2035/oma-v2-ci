@@ -20,7 +20,7 @@
  */
 import ts from "typescript";
 import { fenceExemptSpawnOwners, DEFAULT_POLICY } from "../../architecture-owners.mjs";
-import { eachNode, filesUnder, finding, sourceOf, strip } from "./shared.mjs";
+import { authoredFiles, eachNode, filesUnder, finding, sourceOf, strip } from "./shared.mjs";
 
 /** The raw mechanisms. Only a spawn owner may call these at all; that is the
  * subprocess-owner rule's job, and this one asks what they pass. */
@@ -57,7 +57,7 @@ export function fenceRuleFindings(root) {
   const findings = [];
   const owners = new Set(DEFAULT_POLICY.subprocessOwners);
   const claimed = new Set();
-  for (const file of filesUnder(root, "src")) {
+  for (const file of authoredFiles(root)) {
     const source = sourceOf(root, file);
     eachNode(source, node => {
       if (!ts.isCallExpression(node)) return;

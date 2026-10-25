@@ -3,8 +3,8 @@
 // file; the terminal itself only sees what the product writes.
 import { appendFileSync } from "node:fs";
 const [root, side, mode] = process.argv.slice(2);
-const { openTerminal } = await import(`${root}/src/tui/screen.js`);
-const { KeyDecoder } = await import(`${root}/src/tui/keys.js`);
+const { openTerminal } = await import("@oma/tui/screen");
+const { KeyDecoder } = await import("@oma/tui/keys");
 const note = value => appendFileSync(side, `${JSON.stringify(value)}\n`);
 const terminal = openTerminal({ input: process.stdin, output: process.stdout });
 note({ opened: true, columns: terminal.columns, rows: terminal.rows });

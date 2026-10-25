@@ -3,10 +3,11 @@ import {
   parseActor, parseResidentName, parseOperationId, parseBatchId, parseMessageFileId,
   parseFullOid, parseRequestKey, type Actor, type ResidentName, type OperationId,
   type BatchId, type MessageId, type FullOid, type RequestKey,
-} from "../../src/domain/identifiers.js";
-import { generateOperationId, generateBatchId, generateMessageId } from "../../src/ids.js";
-import { isPublishedRefFor, isMessageIdForOperation } from "../../src/domain/derived.js";
-import { isWorkspacePathFor, isActorSocketPathFor } from "../../src/storage/paths.js";
+} from "@oma/domain/identifiers";
+import { generateOperationId, generateBatchId } from "@oma/native/identity";
+import { messageIdForOperation as generateMessageId } from "@oma/domain/derived";
+import { isPublishedRefFor, isMessageIdForOperation } from "@oma/domain/derived";
+import { isWorkspacePathFor, isActorSocketPathFor } from "@oma/domain/paths";
 
 type Assert<T extends true> = T;
 type Equal<A, B> = [A] extends [B] ? ([B] extends [A] ? true : false) : false;
@@ -43,11 +44,11 @@ function parsersPreserveTheWireRepresentation(raw: unknown): void {
   const key = parseRequestKey(raw);
   if (actor !== null) { const wire: string = actor; }
   if (resident !== null) { const wire: string = resident; }
-  if (operation !== null) { const wire: import("../contracts.js").OperationId = operation; }
-  if (batch !== null) { const wire: import("../contracts.js").BatchId = batch; }
-  if (message !== null) { const wire: import("../contracts.js").MessageId = message; }
-  if (oid !== null) { const wire: import("../contracts.js").Oid = oid; }
-  if (key !== null) { const wire: import("../contracts.js").RequestKey = key; }
+  if (operation !== null) { const wire: import("@oma/contracts").OperationId = operation; }
+  if (batch !== null) { const wire: import("@oma/contracts").BatchId = batch; }
+  if (message !== null) { const wire: import("@oma/contracts").MessageId = message; }
+  if (oid !== null) { const wire: import("@oma/contracts").Oid = oid; }
+  if (key !== null) { const wire: import("@oma/contracts").RequestKey = key; }
 }
 
 function relationsRequireExpectedIdentity(value: unknown): void {

@@ -178,8 +178,8 @@ test("R35 mail and submit preaccept oracles are required by durable and all lane
 });
 
 test("R35 action category and admission oracles are required by their lanes", () => {
-  assert.ok(lanes.fast.files.includes("method-resource-categories.test.js"));
-  assert.ok(lanes.durable.files.includes("action-admission.test.js"));
+  assert.ok(lanes.fast.files.includes("request-validation-order.test.js"));
+  assert.ok(lanes.durable.files.includes("unrestricted-admission.test.js"));
   for (const [lane, id] of [["fast", "V21A:"], ["durable", "V21B:"]]) {
     assert.ok(lanes[lane].requiredNames.includes(id));
     assert.ok(lanes.all.requiredNames.includes(id));
@@ -188,8 +188,8 @@ test("R35 action category and admission oracles are required by their lanes", ()
 });
 
 test("R35 storage reservation and settlement headroom oracles are required by their lanes", () => {
-  assert.ok(lanes.stress.files.includes("storage-reservation.test.js"));
-  assert.ok(lanes.durable.files.includes("settlement-headroom.test.js"));
+  assert.ok(lanes.stress.files.includes("stream-body-ownership.test.js"));
+  assert.ok(lanes.durable.files.includes("mail-settlement-storage.test.js"));
   for (const [lane, id] of [["stress", "V22A:"], ["durable", "V22B:"]]) {
     assert.ok(lanes[lane].requiredNames.includes(id));
     assert.ok(lanes.all.requiredNames.includes(id));

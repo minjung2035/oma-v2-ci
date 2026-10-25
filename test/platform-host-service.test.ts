@@ -8,21 +8,21 @@ import { spawnSync } from "node:child_process";
 import { randomBytes, randomUUID } from "node:crypto";
 import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
-import { encodeFrame } from "../src/frame.js";
-import { readLeadingFrame, type FramedPeer } from "../src/platform/rpc.js";
-import type { SessionLauncher } from "../src/platform/guest/host.js";
-import { archiveKey, HostService, type HostServiceOptions } from "../src/platform/host/service.js";
-import { ProcessLock } from "../src/runtime/process-lock.js";
-import { StoreError } from "../src/domain/errors.js";
-import { newHostRecord, readHostRecord, writeHostRecord } from "../src/platform/host/record.js";
-import { HOST_GUEST_PROTOCOL, PLATFORM_FRAME_BYTES } from "../src/protocol/host-guest.js";
-import { HOST_API_VERSION } from "../src/protocol/host-api.js";
+import { encodeFrame } from "@oma/protocol/frame";
+import { readLeadingFrame, type FramedPeer } from "#oma-test/app/platform/rpc";
+import type { SessionLauncher } from "#oma-test/app/platform/guest/host";
+import { archiveKey, HostService, type HostServiceOptions } from "#oma-test/app/platform/host/service";
+import { ProcessLock } from "@oma/native/process-lock";
+import { StoreError } from "@oma/domain/errors";
+import { newHostRecord, readHostRecord, writeHostRecord } from "@oma/platform-mac/record";
+import { HOST_GUEST_PROTOCOL, PLATFORM_FRAME_BYTES } from "@oma/protocol/host-guest";
+import { HOST_API_VERSION } from "@oma/protocol/host-api";
 import { LocalDriver, listenSilently } from "./fixtures/local-guest.js";
 import { CURRENT_SESSION_VERSION } from "@earendil-works/pi-coding-agent";
-import { newSessionBirth, publishSessionBirth } from "../src/runtime/session-mode.js";
-import { publishProjectBinding } from "../src/runtime/provision.js";
-import { modelWorkspacePathAt } from "../src/storage/paths.js";
-import { inspectMacGuestHistory, listMacGuestHistories } from "../src/platform/host/guest-histories.js";
+import { newSessionBirth, publishSessionBirth } from "#oma-test/app/runtime/session-mode";
+import { publishProjectBinding } from "#oma-test/app/runtime/provision";
+import { modelWorkspacePathAt } from "@oma/domain/paths";
+import { inspectMacGuestHistory, listMacGuestHistories } from "#oma-test/app/platform/host/guest-histories";
 
 function memoryKeychain() {
   const items = new Map<string, string>();
@@ -177,7 +177,7 @@ test("MAC-211/MAC-712: after the guest reboots, no placeholder of the last boot 
   // What the guest's egress service does for a runner: one placeholder.
   const pooled = driver.pool.take()!;
   pooled.write(encodeFrame({ v: 1, id: "p", method: "egress.placeholder",
-    params: { credentialRef: "engine-managed", provider: "anthropic", model: "m", run: { society: "demo", actor: "alice", incarnation: 1 } } }));
+    params: { credentialRef: "engine-managed", provider: "anthropic", model: "m", run: { society: "demo", actor: "alice", incarnation: 1 }, inferenceSeconds: 5 } }));
   assert.equal((await readLeadingFrame(pooled, PLATFORM_FRAME_BYTES, 5000)).frame.ok, true);
   assert.equal(service.egress.activeRuns, 1);
   await driver.crash();

@@ -7,7 +7,7 @@ import {
   EXTENSIONS,
   fieldsOf,
   readSettings,
-} from "../src/application/settings.js";
+} from "#oma-test/app/application/settings";
 
 test("V11B: one own-key descriptor registry covers every editable field and policy", () => {
   assert.equal(Object.getPrototypeOf(EDITABLE_FIELD_DESCRIPTORS), null);

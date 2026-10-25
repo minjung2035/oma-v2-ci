@@ -1,32 +1,72 @@
-/** R40 compile-only checks. Never imported by production; compilation is NOT_RUN. */
+import type { BrokerLedger } from "@oma/broker/ports";
+import type { ReconcileLedger } from "@oma/reconcile/ports";
+/** Compile-only port and wire checks included by the root typecheck. */
 import type {
   Actor, AgentStatus, InternalMethods, InternalResults, OperationId, PublicMethod,
   Receipt, RunLease, SandboxPlan, UnitObservation,
-  Store as StoreContract, UnitsModule as UnitsContract, ViewsModule as ViewsContract,
-  ReconcileModule as ReconcileContract, RunnerModule as RunnerContract,
-  SandboxModule as SandboxContract,
-} from "../contracts.js";
-import type { Store, OperationRow } from "../../src/store.js";
-import type { UnitsModule } from "../../src/units.js";
-import type { ViewsModule } from "../../src/views.js";
-import type { ReconcileModule } from "../../src/reconcile.js";
-import type { RunnerModule } from "../../src/runner.js";
-import type { SandboxModule } from "../../src/sandbox.js";
-import type { OperationReceiptPort } from "../../src/module-ports.js";
+} from "@oma/contracts";
+import type { Store } from "@oma/storage";
+import type { DecodedOperation as OperationRow } from "@oma/protocol/operation-codec";
+import type { MailLedger } from "@oma/mail/ports";
+import type { GitLedger } from "@oma/git/ports";
+import type { ReviewLedger } from "@oma/review/ports";
+import type { LifecycleLedger } from "@oma/lifecycle/ports";
+import type { UnitsModule } from "@oma/platform-linux/units";
+import type { ViewsModule } from "#oma-test/app/views";
+import type { ReconcileModule } from "@oma/reconcile";
+import type { RunnerModule } from "#oma-test/app/runner";
+import type { SandboxModule } from "@oma/platform-linux/sandbox";
+import type { StorePort, OperationReceiptPort } from "#oma-test/app/ports/ledger";
+import type { SyncUnitsPort, DerivedViewsPort, ReconcilePort, BoundRunnerPort, SandboxPort } from "#oma-test/app/ports/runtime";
 
 type Assert<T extends true> = T;
 type Equal<A, B> = [A] extends [B] ? ([B] extends [A] ? true : false) : false;
 
-// These assignments are direct actual-object facade checks, not assertion adapters.
+function mailTransactionScope(ledger: MailLedger) {
+  // @ts-expect-error Mail cannot return an async continuation from root T.
+  ledger.transaction(async () => "late");
+  // @ts-expect-error A thenable also escapes the synchronous root T.
+  ledger.transaction(() => Promise.resolve("late") as PromiseLike<string>);
+  ledger.transaction(tx => {
+    // @ts-expect-error Mail has no agent-creation capability.
+    tx.insertAgent({});
+  });
+}
+function featureTransactionScopes(git: GitLedger, review: ReviewLedger) {
+  // @ts-expect-error Git cannot retain a continuation in root T.
+  git.transaction(async () => "late");
+  // @ts-expect-error Review cannot retain a thenable in root T.
+  review.transaction(() => Promise.resolve("late") as PromiseLike<string>);
+  git.transaction(tx => {
+    // @ts-expect-error The Git transaction cannot create an agent.
+    tx.insertAgent({});
+  });
+  review.transaction(tx => {
+    // @ts-expect-error Review facts cannot rewrite a failed terminal operation.
+    tx.setOperationFailed("missing", "INTERNAL_ERROR");
+  });
+}
+function lifecycleTransactionScope(ledger: LifecycleLedger) {
+  // @ts-expect-error Lifecycle cannot keep an async continuation in root T.
+  ledger.transaction(async () => "late");
+  // @ts-expect-error A thenable is outside Lifecycle's synchronous root T.
+  ledger.transaction(() => Promise.resolve("late") as PromiseLike<string>);
+  ledger.transaction(tx => {
+    // @ts-expect-error Lifecycle does not settle Mail's prepared batches.
+    tx.completeBatch("missing", [], "alice", 1, "session");
+  });
+}
+
+// Actual implementations must satisfy consumer-owned capabilities.
 function actualPorts(store: Store, units: UnitsModule, views: ViewsModule,
   reconcile: ReconcileModule, runner: RunnerModule, sandbox: SandboxModule) {
   return {
-    store: store satisfies StoreContract,
-    units: units satisfies UnitsContract,
-    views: views satisfies ViewsContract,
-    reconcile: reconcile satisfies ReconcileContract,
-    runner: runner satisfies RunnerContract,
-    sandbox: sandbox satisfies SandboxContract,
+    store: store satisfies StorePort,
+    units: units satisfies SyncUnitsPort,
+    views: views satisfies DerivedViewsPort,
+    reconcile: reconcile satisfies ReconcilePort,
+    runner: runner satisfies BoundRunnerPort,
+    sandbox: sandbox satisfies SandboxPort,
   };
 }
 
@@ -43,6 +83,7 @@ type SandboxReturnsPlan = Assert<Equal<ReturnType<SandboxModule["resident"]>, Sa
 
 // Independent wire inventories: adding/removing a wire method is not R40 alias repair.
 type PublicWireUnchanged = Assert<Equal<PublicMethod,
+  "society.set" | "attest.record" | "operation.read" | "review.status" |
   "mail.send" | "mail.ack" | "route.follow" | "route.unfollow" |
   "agent.create" | "agent.start" | "agent.stop" | "agent.continue" | "agent.wait" |
   "git.known" | "git.submit" | "git.integrate" | "context.publish" |
@@ -53,8 +94,8 @@ type InternalWireUnchanged = Assert<Equal<keyof InternalMethods,
   "runner.observe" | "principal.attach" | "principal.detach" | "host.principalRelay"
 >>;
 
-function rejectedChanges(store: Store, units: UnitsContract, views: ViewsContract,
-  reconcile: ReconcileContract, runner: RunnerContract, sandbox: SandboxContract, lease: RunLease) {
+function rejectedChanges(store: Store, units: SyncUnitsPort, views: DerivedViewsPort,
+  reconcile: ReconcilePort, runner: BoundRunnerPort, sandbox: SandboxPort, lease: RunLease) {
   // @ts-expect-error The durable row still contains plan/hash/identity, not a wire receipt.
   const receipt: Receipt | null = store.getOperation("alice", "key");
   // @ts-expect-error A row query is not a receipt projection service.
@@ -82,3 +123,25 @@ export type {
   ViewIsSynchronous, MetricsPreserved, RunnerIsBound, RunnerExitPreserved,
   SandboxReturnsPlan, PublicWireUnchanged, InternalWireUnchanged,
 };
+
+function recoveryHasNoLedgerWriter(ledger: ReconcileLedger) {
+  // @ts-expect-error Recovery ordering cannot mint a transaction or acceptance.
+  ledger.transaction(() => undefined);
+  // @ts-expect-error Physical collection gets its trusted root from composition.
+  ledger.path;
+  // @ts-expect-error Recovery cannot rewrite lifecycle desire.
+  ledger.updateAgent({ name: "alice", desired: "enabled" });
+}
+
+function brokerTransactionScope(ledger: BrokerLedger) {
+  // @ts-expect-error Broker incarnation writes cannot keep asynchronous T continuations.
+  ledger.transaction(async () => "late");
+  // @ts-expect-error Thenables cannot escape the captured root T.
+  ledger.transaction(() => Promise.resolve("late") as PromiseLike<string>);
+  ledger.transaction(tx => {
+    // @ts-expect-error Broker cannot accept a workflow intent.
+    tx.acceptOperation({});
+    // @ts-expect-error Its write capability cannot rewrite desire or frozen spec.
+    tx.updateAgent({ name: "alice", desired: "stopped" });
+  });
+}

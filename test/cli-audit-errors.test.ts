@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { execFileSync, spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
-import { RequestCache } from "../src/request-cache.js";
+import { RequestCache } from "#oma-test/app/request-cache";
 import { runCliWithPeer } from "./fixtures/cli-peer.js";
 
 const git = (cwd: string, args: string[]) => execFileSync("/usr/bin/git", args, {
@@ -17,8 +17,8 @@ for (const [code, exit] of [
   ["REF_STATE_UNKNOWN", 3], ["DEADLINE_EXCEEDED", 3], ["STORE_CORRUPT", 3], ["UNSUPPORTED_PROFILE", 4],
 ] as const) {
   test(`NB-16: top-level ${code} keeps its declared exit`, () => {
-    const errors = fileURLToPath(new URL("../src/domain/errors.js", import.meta.url));
-    const exits = fileURLToPath(new URL("../src/cli/exit.js", import.meta.url));
+    const errors = fileURLToPath(new URL(import.meta.resolve("@oma/domain/errors")));
+    const exits = fileURLToPath(new URL(import.meta.resolve("#oma-test/app/cli/exit")));
     const result = spawnSync(process.execPath, ["--input-type=module", "-e",
       `import { StoreError } from ${JSON.stringify(errors)}; import { fatal } from ${JSON.stringify(exits)}; fatal(new StoreError(${JSON.stringify(code)}, 'controlled builder failure'));`],
     { cwd: process.cwd(), encoding: "utf8", timeout: 5000 });
@@ -28,8 +28,8 @@ for (const [code, exit] of [
 }
 
 test("NB-16: accepted conflict bundled with cleanup stays unknown", () => {
-  const errors = fileURLToPath(new URL("../src/domain/errors.js", import.meta.url));
-  const exits = fileURLToPath(new URL("../src/cli/exit.js", import.meta.url));
+  const errors = fileURLToPath(new URL(import.meta.resolve("@oma/domain/errors")));
+  const exits = fileURLToPath(new URL(import.meta.resolve("#oma-test/app/cli/exit")));
   const result = spawnSync(process.execPath, ["--input-type=module", "-e",
     `import { AcceptedFailure } from ${JSON.stringify(errors)}; import { fatal } from ${JSON.stringify(exits)}; fatal(new AggregateError([new AcceptedFailure('POLICY_CHANGED', 'accepted conflict', 'possible'), new Error('cleanup')]));`],
   { encoding: "utf8", timeout: 5000 });

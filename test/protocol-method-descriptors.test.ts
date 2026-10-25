@@ -3,13 +3,13 @@ import assert from "node:assert/strict";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import type { InternalMethods, MutationMethod, PublicMethod, ProtocolLimits } from "../implementation/contracts.js";
+import type { InternalMethods, MutationMethod, PublicMethod, ProtocolLimits } from "@oma/contracts";
 import {
   PUBLIC_METHODS, INTERNAL_METHODS, isPublicMethod, isInternalMethod, decodePublicParams,
-} from "../src/protocol/methods.js";
-import { loadConfig } from "../src/config.js";
-import { RESOURCE_FIELDS } from "../src/domain/resources.js";
-import { MIN_LOG_FRAME_BYTES } from "../src/protocol/log-response.js";
+} from "@oma/protocol/methods";
+import { loadConfig } from "@oma/config";
+
+import { MIN_LOG_FRAME_BYTES } from "@oma/protocol/log-response";
 
 // Both directions matter: a table cannot omit a union member or add a wire method.
 type Equal<A, B> = [A] extends [B] ? [B] extends [A] ? true : false : false;
@@ -82,18 +82,16 @@ test("the shared params decoder is closed and consumes the caller's host limits"
 
 function configFixture() {
   return {
-    schemaVersion: 1,
+    schemaVersion: 3,
     society: "example",
     installation: { node: "/usr/bin/node", libdir: "/opt/oma", rootfs: "/opt/rootfs", deploymentDigest: "a".repeat(64) },
     modelProfiles: { model: { provider: "test", model: "test", inferenceTimeoutSeconds: 1 } },
-    agentProfiles: { resident: { modelProfile: "model", capabilities: [], delegable: [], childProfile: null,
-      resources: Object.fromEntries(Object.entries(RESOURCE_FIELDS).map(([key, field]) => [key, Math.max(1, field.minInclusive)])) } },
+    agentProfiles: { resident: { modelProfile: "model", capabilities: [], delegable: [], childProfile: null } },
     principalProfile: "resident",
     initialResidents: [{ name: "alice", profile: "resident", brief: "brief" }],
-    quota: { societyAgents: 4, lineageAgents: 4, storageBytes: 1 },
     integration: { policyRevision: "test", protectedPaths: [], checks: [] },
-    limits,
-  };
+    limits
+};
 }
 
 test("integration rejects unknown keys and initial residents reject a repeated name", () => {

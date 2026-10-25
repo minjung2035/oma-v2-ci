@@ -8,12 +8,11 @@ import test, { type TestContext } from "node:test";
 import assert from "node:assert/strict";
 import { chmodSync, existsSync, mkdirSync, readFileSync, rmSync, unlinkSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
-import type { PreparedBatch } from "../implementation/contracts.js";
-import { RunnerModule } from "../src/runner.js";
-import {
-  PI_ADAPTER_REVISION, isCheckedReceipt, observeDeliveryReceipt, publishDeliveryReceipt, type ReceiptObservation,
-} from "../src/storage/delivery-receipt.js";
-import { agentRootPathAt, runnerSessionDirPathAt } from "../src/storage/paths.js";
+import type { PreparedBatch } from "@oma/contracts";
+import { RunnerModule } from "#oma-test/app/runner";
+import { PI_ADAPTER_REVISION } from "@oma/protocol/delivery-boundary";
+import { isCheckedReceipt, observeDeliveryReceipt, publishDeliveryReceipt, type ReceiptObservation } from "@oma/storage/delivery-receipt";
+import { agentRootPathAt, runnerSessionDirPathAt } from "@oma/domain/paths";
 import { TEST_PROTOCOL_LIMITS, TEST_VIEW_LIMITS } from "./fixtures/limits.js";
 import { ENTRY, boundaryOf, completeSession, evidenceOf, preparedFixture, type ReceiptFixture as Fixture } from "./fixtures/delivery-receipt.js";
 

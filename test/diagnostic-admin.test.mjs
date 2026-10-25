@@ -1,3 +1,4 @@
+import { serializePlanIntent } from "../dist/test/fixtures/plan.js";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
@@ -8,8 +9,9 @@ import { ledgerFixture } from "./helpers/ledger-fixture.mjs";
 import { physicalLedger } from "./helpers/physical-ledger.mjs";
 import { createDiagnosticObservers } from "../scripts/diagnostic-observers.mjs";
 import { parseDiagnosticArgs, checkState } from "../scripts/check-state.mjs";
-import { generateOperationId } from "../dist/src/ids.js";
-import { requestHash, sha256Hex } from "../dist/src/hash.js";
+import { generateOperationId } from "@oma/native/identity";
+import { requestHash } from "@oma/domain/request-identity";
+import { sha256Hex } from "@oma/domain/canonical-json";
 const env = { PATH: "/usr/bin:/bin", HOME: "/nonexistent", LANG: "C", LC_ALL: "C", GIT_CONFIG_NOSYSTEM: "1", GIT_CONFIG_GLOBAL: "/dev/null",
   GIT_AUTHOR_NAME: "Fixture", GIT_AUTHOR_EMAIL: "fixture@example.invalid", GIT_COMMITTER_NAME: "Fixture", GIT_COMMITTER_EMAIL: "fixture@example.invalid" };
 function git(repo, args, input) {
@@ -32,7 +34,7 @@ function acceptedIntegration(store, base, candidate) {
   const id = generateOperationId(), payload = { expected: base, candidate };
   store.transaction(tx => {
     tx.operations.insert({ id, actor: "alice", requestKey: id, kind: "git.integrate", requestHash: requestHash("git.integrate", payload), payloadJson: JSON.stringify(payload),
-      planJson: JSON.stringify({ kind: "git.integrate", repo: "project", target: "refs/heads/main", base, candidate, policyRevision: "fixture", checkProfileDigest: "a".repeat(64) }) });
+      planJson: serializePlanIntent({ kind: "git.integrate", repo: "project", target: "refs/heads/main", base, candidate, policyRevision: "fixture", checkProfileDigest: "a".repeat(64), policyIdentity: "b".repeat(64), noopRef: null }) });
     tx.operations.succeed(id, JSON.stringify({ kind: "git.integrate", base, candidate, target: "refs/heads/main", policyRevision: "fixture", changed: true }));
   });
   return id;

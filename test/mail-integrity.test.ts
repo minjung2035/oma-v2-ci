@@ -1,10 +1,12 @@
+import { serializePlanIntent } from "./fixtures/plan.js";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { mkdtempSync, mkdirSync, readFileSync, writeFileSync, rmSync, symlinkSync, linkSync, existsSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { tmpdir } from "node:os";
-import { Store, StoreError } from "../src/store.js";
-import * as productionMail from "../src/mail.js";
+import { Store } from "@oma/storage";
+import { StoreError } from "@oma/domain/errors";
+import * as productionMail from "@oma/mail";
 import { gitFixture, gitAuth, seedGit } from "./fixtures/git-crash.js";
 import { ALL_CAPS, resolvedSpec, storedSpec } from "./fixtures/spec.js";
 import { sendWithStop } from "./fixtures/mail-faults.js";
@@ -37,7 +39,7 @@ for (const gated of [false, true]) {
           await assert.rejects(sendWithStop(mail, store, gitAuth, "original", { to: ["b"], subject: "original", kind: "message", body: "body" }, "accepted"));
         }
         const operation = store.getOperation("a", "original")!;
-        const plan = JSON.parse(operation.planJson);
+        const plan = JSON.parse(operation.planJson).intent;
         const id = plan.message.id;
         const object = mail.objectPath(id);
         const bad = Buffer.from(readFileSync(object));
@@ -48,7 +50,7 @@ for (const gated of [false, true]) {
           // Accepted plan bytes are immutable through the Store API, so this
           // boundary violation uses the explicit raw corruption fixture.
           delete plan.message.sha256;
-          corruptOperationForTest(join(root, "runtime.sqlite"), operation.id, "plan_json", JSON.stringify(plan));
+          corruptOperationForTest(join(root, "runtime.sqlite"), operation.id, "plan_json", serializePlanIntent(plan));
         } else if (fault === "source") overwritePublished(object, bad);
         else if (fault === "symlink" || fault === "dangling") symlinkSync(fault === "symlink" ? object : join(root, "missing"), target);
         else writeFileSync(target, bad);
@@ -76,7 +78,7 @@ test("MAIL-005/008: replies and batch preparation reject corrupt originals; dupl
     });
     const { mail } = gitFixture(root, store);
     await mail.send(gitAuth, "original", { to: ["b"], subject: "original", kind: "message", body: "body" });
-    const plan = JSON.parse(store.getOperation("a", "original")!.planJson);
+    const plan = JSON.parse(store.getOperation("a", "original")!.planJson).intent;
     const id = plan.message.id;
     const object = mail.objectPath(id);
     const original = readFileSync(object);
@@ -106,12 +108,13 @@ test("mail-v1: a worker-audience message publishes only under mail/workers and r
           desired: "enabled", incarnation: 1, ...storedSpec(ALL_CAPS, "p", name), createdBy: null });
     });
     const { mail } = gitFixture(root, store);
-    const { generateOperationId, generateMessageId } = await import("../src/ids.js");
-    const { reviewRequestNameFor } = await import("../src/domain/identifiers.js");
-    const { requestHash } = await import("../src/hash.js");
-    const { mailObjectPathAt, mailArchivePathAt, mailWorkersPathAt, mailInboxPathAt } = await import("../src/storage/paths.js");
-    const { ensureDurableDirectory, writeExclusiveFsyncedFile } = await import("../src/storage/durable-fs.js");
-    const { buildEml } = await import("../src/mail/serialize.js");
+    const { generateOperationId } = await import("@oma/native/identity");
+    const { messageIdForOperation: generateMessageId } = await import("@oma/domain/derived");
+    const { reviewRequestNameFor } = await import("@oma/domain/identifiers");
+    const { requestHash } = await import("@oma/domain/request-identity");
+    const { mailObjectPathAt, mailArchivePathAt, mailWorkersPathAt, mailInboxPathAt } = await import("@oma/domain/paths");
+    const { ensureDurableDirectory, writeExclusiveFsyncedFile } = await import("@oma/storage/durable-fs");
+    const { buildEml } = await import("@oma/mail/serialize");
     const operationId = generateOperationId();
     const name = reviewRequestNameFor("merge", operationId);
     const messageId = generateMessageId(operationId, 0);
@@ -135,7 +138,7 @@ test("mail-v1: a worker-audience message publishes only under mail/workers and r
       assert.equal(tx.acceptOperation({ id: operationId, actor: "alice", requestKey: `review-${operationId}`,
         requestHash: requestHash("attest.record", payload), kind: "attest.record",
         payloadJson: JSON.stringify(payload),
-        planJson: JSON.stringify({ kind: "attest.record", fact, messages: [message] }) }), "inserted");
+        planJson: serializePlanIntent({ kind: "attest.record", fact, messages: [message] }) }), "inserted");
       tx.insertDeliveries([
         { messageId, recipient: "alice", operationId },
         { messageId, recipient: "bob", operationId },

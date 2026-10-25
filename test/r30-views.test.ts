@@ -1,16 +1,17 @@
+import { createMailModule } from "#oma-test/app/broker/mail-composition";
 // VIEW-001/002: real validated rows are inputs; numeric expectations are independent oracles.
 import test, { type TestContext } from "node:test";
 import assert from "node:assert/strict";
 import { mkdtempSync, readFileSync, rmSync, statSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type { AuthContext } from "../implementation/contracts.js";
-import { Store } from "../src/store.js";
-import { PRINCIPAL_MAIL_FILENAME } from "../src/domain/derived.js";
-import { MailModule } from "../src/mail.js";
-import { ViewsModule, fieldEscape } from "../src/views.js";
-import { pendingWork } from "../src/views/pending-work.js";
-import { generateBatchId } from "../src/ids.js";
+import type { AuthContext } from "@oma/contracts";
+import { Store } from "@oma/storage";
+import { PRINCIPAL_MAIL_FILENAME } from "@oma/domain/derived";
+import { MailModule } from "@oma/mail";
+import { ViewsModule, fieldEscape } from "#oma-test/app/views";
+import { pendingWork } from "#oma-test/app/views/pending-work";
+import { generateBatchId } from "@oma/native/identity";
 import { ALL_CAPS, makeValidAgent } from "./fixtures/spec.js";
 import { mutateRawRowAfterClose } from "./fixtures/corruption.js";
 
@@ -19,7 +20,7 @@ async function fixture(t: TestContext, count: number) {
   const context = { root, store: new Store(join(root, "runtime.sqlite"), 5, { society: "demo" }) };
   t.after(() => { try { context.store.close(); } finally { rmSync(root, { recursive: true, force: true }); } });
   context.store.transaction(tx => { tx.insertAgent(makeValidAgent("alice")); });
-  const mail = new MailModule({ stateRoot: root, society: "demo" }, context.store, 64);
+  const mail = createMailModule({ stateRoot: root, society: "demo" }, context.store, 64);
   const auth: AuthContext = { actor: "alice", incarnation: 1, role: "resident", channel: "actor",
     capabilities: new Set(ALL_CAPS), peer: { pid: 1, uid: 1000, gid: 1000, cgroup: null } };
   for (let index = 0; index < count; index++) {
@@ -116,8 +117,11 @@ test("R30 rebuildable world files preserve durable receipts and exclude private 
   const sandbox = start.slice(start.indexOf("## Sandbox"));
   assert.ok(start.includes("## Sandbox"), "START.md has a sandbox section");
   for (const fact of [/egress proxy/i, /HTTPS_PROXY/, /`git push`/, /oma submit/, /`\/tmp`/, /end(s)? with the batch|end when the batch ends/i,
-    /docker/i, /submodules/i, /\$OMA_CPUS/, /`nproc`/, /\$OMA_MEMORY_BYTES/, /\$OMA_TASKS/, /`npm`/])
+    /docker/i, /submodules/i, /`npm`/])
     assert.match(sandbox, fact);
+  assert.doesNotMatch(sandbox, /allowlisted HTTPS|only if the Human configured|everything else.*fails/i);
+  assert.match(sandbox, /shares the host\/guest network/);
+  assert.match(sandbox, /HTTPS_PROXY.*when present/);
   const guide = expected[paths.indexOf(PRINCIPAL_MAIL_FILENAME)]!;
   assert.match(guide, /most expensive resource/);
   assert.doesNotMatch(guide, /[ᄀ-ᅟ㄰-㆏가-힯]/u, "the guide is English-only");

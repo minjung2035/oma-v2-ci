@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { lstatSync, readFileSync } from "node:fs";
-import { batchViewPathAt, mailInboxPathAt } from "../../src/storage/paths.js";
-import { decodeBatchViewText, type BatchViewLimits } from "../../src/protocol/batch-view.js";
+import { batchViewPathAt, mailInboxPathAt } from "@oma/domain/paths";
+import { decodeBatchViewText, type BatchViewLimits } from "@oma/protocol/batch-view";
 import type { LedgerSnapshot, InvariantPhase } from "./store.js";
 
 export function assertBatches(snapshot: LedgerSnapshot, root: string, phase: InvariantPhase, limits: BatchViewLimits): readonly string[] {

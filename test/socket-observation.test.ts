@@ -7,12 +7,12 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { randomUUID } from "node:crypto";
-import { connectEndpoint, endpointListening } from "../src/protocol/connection.js";
-import { StoreError } from "../src/domain/errors.js";
-import { GuestHost, listening } from "../src/platform/guest/host.js";
-import { GuestArchives } from "../src/platform/guest/archive.js";
-import { RequestLedger } from "../src/platform/guest/requests.js";
-import { brokerListening, superviseBroker } from "../src/runtime/broker-supervisor.js";
+import { connectEndpoint, endpointListening } from "@oma/client/connection";
+import { StoreError } from "@oma/domain/errors";
+import { GuestHost, listening } from "#oma-test/app/platform/guest/host";
+import { GuestArchives } from "#oma-test/app/platform/guest/archive";
+import { RequestLedger } from "#oma-test/app/platform/guest/requests";
+import { brokerListening, superviseBroker } from "#oma-test/app/runtime/broker-supervisor";
 
 function refused(t: TestContext, code: string): Socket[] {
   const sockets: Socket[] = [];

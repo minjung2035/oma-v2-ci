@@ -9,8 +9,8 @@ import { appendFileSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { PlatformError } from "../src/platform/rpc.js";
-import { bootableWith, verifyImage } from "../src/platform/host/image.js";
+import { PlatformError } from "@oma/protocol/host-errors";
+import { bootableWith, verifyImage } from "@oma/platform-mac/image";
 
 const signer = join(fileURLToPath(new URL(".", import.meta.url)), "..", "..", "scripts", "platform", "sign-image.mjs");
 const release = generateKeyPairSync("ed25519");

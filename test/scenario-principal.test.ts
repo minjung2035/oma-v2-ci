@@ -18,7 +18,7 @@ import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { withScenario } from "./fixtures/scenario.js";
 import { call, continuesTurn, delayed, failing, lastUserText, text, textOf, toolResults, tools, type ChatRequest, type Reply } from "./fixtures/scripted-provider.js";
-import { principalSessionDir, principalWorkspace } from "../src/runtime/engine/principal-session.js";
+import { principalSessionDir, principalWorkspace } from "@oma/engine/principal-session";
 
 const TIMEOUT = { timeout: 120_000 };
 
@@ -28,7 +28,7 @@ const lastResult = (request: ChatRequest | undefined): string => toolResults(req
 test("SCN-P01: a Human asks about code; the Principal reads canonical main without orchestration", TIMEOUT, async () => {
   // mail-v1: the Principal reads code only as a review request's patch; an
   // unknown name answers with the visibility refusal, not a listing.
-  await withScenario({ residents: ["worker-a"], script: [tools(call("oma_merge", { action: "diff", name: "merge-01234567" })), text("코드를 확인했습니다.")] }, async s => {
+  await withScenario({ residents: ["worker-a"], script: [tools(call("oma_merge", { action: "diff", name: "merge-01234567-0000-4000-8000-000000000000" })), text("코드를 확인했습니다.")] }, async s => {
     const turn = await s.prompt("현재 프로젝트 코드를 확인해줘");
     assert.equal(s.provider.seen.length, 2, "the model was not asked again with the tool's result");
     const offered = (s.provider.seen[0]!.body.tools ?? []).map(tool => tool.function?.name);
@@ -409,7 +409,7 @@ test("SCN-F11: a provider that stops answering mid-turn does not wedge the sessi
   await withScenario({ residents: ["worker-a"] }, async s => {
     s.script((_request, index) => (index < 3 ? { kind: "hang" } : text("이제 답합니다.")));
     await s.prompt("응답해", 60_000);
-    s.script([tools(call("oma_merge", { action: "diff", name: "merge-01234567" })), text("상태 확인")]);
+    s.script([tools(call("oma_merge", { action: "diff", name: "merge-01234567-0000-4000-8000-000000000000" })), text("상태 확인")]);
     await s.prompt("상태", 30_000);
     assert.match(lastResult(s.provider.seen.at(-1)!.body), /CAPABILITY_DENIED|Insufficient permission/);
   });
@@ -522,7 +522,7 @@ test("SCN-F13: a model's answer larger than a frame does not end the session; it
     assert.equal(s.operations("principal").filter(row => row.state === "succeeded").length, 0);
     assert.deepEqual(s.inbox("worker-a"), []);
     // The session goes on.
-    s.script([tools(call("oma_merge", { action: "diff", name: "merge-01234567" })), text("계속 동작합니다.")]);
+    s.script([tools(call("oma_merge", { action: "diff", name: "merge-01234567-0000-4000-8000-000000000000" })), text("계속 동작합니다.")]);
     await s.prompt("상태");
     assert.match(lastResult(s.provider.seen.at(-1)!.body), /CAPABILITY_DENIED|Insufficient permission/);
   });

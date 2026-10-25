@@ -15,10 +15,10 @@ import { existsSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { withScenario, type Scenario } from "./fixtures/scenario.js";
 import { call, lastUserText, text, toolResults, tools, type ChatRequest } from "./fixtures/scripted-provider.js";
-import { projectGitPathAt } from "../src/storage/paths.js";
-import { inspectLedger } from "../src/diagnostics/ledger.js";
-import { readableBody } from "../src/mail/display.js";
-import { readDiagnosticSnapshot } from "../src/store.js";
+import { projectGitPathAt } from "@oma/domain/paths";
+import { inspectLedger } from "#oma-test/app/diagnostics/ledger";
+import { readableBody } from "@oma/mail/display";
+import { readDiagnosticSnapshot } from "@oma/storage";
 
 const TIMEOUT = { timeout: 120_000 };
 const LAST = "line.txt";

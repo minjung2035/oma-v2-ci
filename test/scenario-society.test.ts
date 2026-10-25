@@ -1,7 +1,7 @@
 /** Scenario tests: Residents and the whole society, with only the model scripted.
  *
  * Everything of fixtures/scenario.ts, plus the product's own runner process
- * (dist/src/entry/runner.js) started for a Resident the way its unit starts
+ * (apps/oma/dist/entry/runner.js) started for a Resident the way its unit starts
  * it: it opens a run on the broker's runner endpoint, takes one prepared
  * batch, delivers it into a fresh bundled engine whose tools reach the broker
  * through the run's actor socket, publishes the receipt and completes the
@@ -16,8 +16,8 @@ import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 
 import { dirname, join } from "node:path";
 import { withScenario, type Scenario } from "./fixtures/scenario.js";
 import { call, continuesTurn, delayed, lastUserText, text, textOf, toolResults, tools, type ChatRequest, type Reply } from "./fixtures/scripted-provider.js";
-import { WORKER_MODEL, commitField, commitRoleSet, readSettings, readSettingsForEditing, roleSetOf, writeSettings } from "../src/application/settings.js";
-import { runnerReceiptPathAt, workspacePathAt } from "../src/storage/paths.js";
+import { WORKER_MODEL, commitField, commitRoleSet, readSettings, readSettingsForEditing, roleSetOf, writeSettings } from "#oma-test/app/application/settings";
+import { runnerReceiptPathAt, workspacePathAt } from "@oma/domain/paths";
 
 import { RESIDENT_TEST_OPTIONS as TIMEOUT } from "./fixtures/resident.js";
 import { CONFINED_MODEL, CONFINED_MODEL_2, CONFINED_THINKING_MODEL } from "./fixtures/scripted-provider.js";

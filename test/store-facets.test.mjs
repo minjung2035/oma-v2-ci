@@ -1,13 +1,15 @@
+import { serializePlanIntent } from "../dist/test/fixtures/plan.js";
 /** P4: facets share the same on-disk Store, not alternate connection fakes. */
 import test from "node:test";
 import assert from "node:assert/strict";
 import { mkdtempSync, writeFileSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { execFileSync } from "node:child_process";
-import { READ_FACETS, WRITE_FACETS, WRITE_METHODS } from "../dist/src/storage/facets.js";
-import { AdmissionGate, bindAdmissionGate } from "../dist/src/domain/admission.js";
-import { generateBatchId, generateMessageId, generateOperationId } from "../dist/src/ids.js";
-import { requestHash } from "../dist/src/hash.js";
+import { READ_FACETS, WRITE_FACETS, WRITE_METHODS } from "@oma/storage/facets";
+import { AdmissionGate, bindAdmissionGate } from "@oma/domain/admission";
+import { generateBatchId, generateOperationId } from "@oma/native/identity";
+import { messageIdForOperation as generateMessageId } from "@oma/domain/derived";
+import { requestHash } from "@oma/domain/request-identity";
 import { ledgerFixture, routeOperation, routeResult, agentRecord } from "./helpers/ledger-fixture.mjs";
 
 const code = expected => error => error?.code === expected;
@@ -85,7 +87,7 @@ test("P4 facets: admission blocks new intents but permits explicit existing sett
     to: ["alice"], recipients: ["alice"], kind: "message", contextRevision: null, replyHeaders: { replyTo: ["alice"], inReplyTo: null, references: [] } } };
   store.transaction(tx => {
     tx.operations.accept({ id, actor: "alice", requestKey: "mail", requestHash: requestHash("mail.send", payload),
-      kind: "mail.send", payloadJson: JSON.stringify(payload), planJson: JSON.stringify(plan) });
+      kind: "mail.send", payloadJson: JSON.stringify(payload), planJson: serializePlanIntent(plan) });
     tx.deliveries.insert([{ messageId: message, recipient: "alice", operationId: id }]);
   });
   const gate = new AdmissionGate();
@@ -127,22 +129,7 @@ test("P4 facets: compile-time method separation and argument types remain enforc
   const dir = mkdtempSync(join(process.cwd(), "test", ".facets-types-"));
   try {
     const file = join(dir, "fixture.ts");
-    writeFileSync(file, `
-      import type { Store } from "../../src/store.js";
-      import type { Transaction } from "../../src/storage/transaction.js";
-      declare const store: Store;
-      declare const tx: Transaction;
-      store.operations.getById("op");
-      tx.operations.unknown("op");
-      // @ts-expect-error reads never expose a transition
-      store.operations.succeed("op", "{}");
-      // @ts-expect-error transitions never invent a second read implementation
-      tx.operations.getById("op");
-      // @ts-expect-error preserve concrete batch arguments
-      tx.batches.complete("id", "made-up-outcome");
-      // @ts-expect-error facet objects cannot be replaced on a scoped transaction
-      tx.operations = store.operations;
-    `);
+    writeFileSync(file, "\n      import type { Store } from \"../../packages/storage/dist/store.js\";\n      import type { Transaction } from \"../../packages/storage/dist/transaction.js\";\n      declare const store: Store;\n      declare const tx: Transaction;\n      store.operations.getById(\"op\");\n      tx.operations.unknown(\"op\");\n      // @ts-expect-error reads never expose a transition\n      store.operations.succeed(\"op\", \"{}\");\n      // @ts-expect-error transitions never invent a second read implementation\n      tx.operations.getById(\"op\");\n      // @ts-expect-error preserve concrete batch arguments\n      tx.batches.complete(\"id\", \"made-up-outcome\");\n      // @ts-expect-error facet objects cannot be replaced on a scoped transaction\n      tx.operations = store.operations;\n    ");
     execFileSync(process.execPath, ["node_modules/typescript/bin/tsc", "--noEmit",
       "--target", "ES2023", "--module", "NodeNext", "--moduleResolution", "NodeNext",
       "--strict", "--noUncheckedIndexedAccess", "--exactOptionalPropertyTypes", "--skipLibCheck", file],

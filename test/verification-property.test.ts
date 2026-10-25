@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { JsonlReader, type PiEvent } from "../src/protocol/jsonl.js";
+import { JsonlReader, type PiEvent } from "@oma/protocol/jsonl";
 
 const SEED = 0x35c0ffee;
 const CASES = 512;

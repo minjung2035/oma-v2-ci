@@ -2,17 +2,17 @@
  * real-provider functional runs, each tested where its decision takes effect. */
 import test from "node:test";
 import assert from "node:assert/strict";
-import type { HostConfigV1 } from "../implementation/contracts.js";
-import { defaultHostConfig } from "../src/config/defaults.js";
-import { HOST_GRANTED, resolveChildSpec } from "../src/domain/child-policy.js";
-import { commitField, readSettings, WORKER_INTEGRATE } from "../src/application/settings.js";
-import { applyLabel } from "../src/tui/view/labels.js";
+import type { HostConfig } from "@oma/contracts";
+import { defaultHostConfig } from "@oma/config/defaults";
+import { HOST_GRANTED, resolveChildSpec } from "@oma/domain/child-policy";
+import { commitField, readSettings, WORKER_INTEGRATE } from "#oma-test/app/application/settings";
+import { applyLabel } from "@oma/tui/view/labels";
 import { createCompleteConfigurationFixture } from "./fixtures/configuration.js";
 
-const defaults = (): HostConfigV1 => defaultHostConfig({ society: "demo", node: "/usr/bin/node", libdir: "/opt/oma",
+const defaults = (): HostConfig => defaultHostConfig({ society: "demo", node: "/usr/bin/node", libdir: "/opt/oma",
   rootfs: "/state/rootfs", deploymentDigest: "a".repeat(64) });
 const input = { name: "worker", from: "a".repeat(40), brief: "b" };
-function created(cfg: HostConfigV1): readonly string[] {
+function created(cfg: HostConfig): readonly string[] {
   const parent = cfg.agentProfiles.parent!;
   const child = resolveChildSpec(cfg, { name: "parent", profile: "parent", capabilities: parent.capabilities }, input);
   assert.ok(child);
@@ -73,7 +73,7 @@ test("DR4 / TUI-019, TUI-007, LIFE-008: the Human turns worker integrate on and 
  * its code, so "BROKER_UNAVAILABLE: BROKER_UNAVAILABLE" was all a caller
  * learnt, and facts the spec returns were erased with the internals. */
 test("DR3 / ERR-001: a failure carries only the facts its code may, and every code has its words", async () => {
-  const { ERROR_DESCRIPTIONS, ERROR_METADATA, StoreError, failureText, publicDetails, publicFailure } = await import("../src/domain/errors.js");
+  const { ERROR_DESCRIPTIONS, ERROR_METADATA, StoreError, failureText, publicDetails, publicFailure } = await import("@oma/domain/errors");
   assert.deepEqual(Object.keys(ERROR_DESCRIPTIONS).sort(), Object.keys(ERROR_METADATA).sort());
   const oid = "1".repeat(40);
   const carried = (code: Parameters<typeof publicDetails>[0], details: Record<string, unknown>) =>
@@ -97,9 +97,9 @@ test("DR3 / AUTH-001: a capability revoked before acceptance names the capabilit
   const { mkdtempSync, rmSync } = await import("node:fs");
   const { tmpdir } = await import("node:os");
   const { join } = await import("node:path");
-  const { Store } = await import("../src/store.js");
-  const { assertCurrentActor } = await import("../src/authority.js");
-  const { publicFailure } = await import("../src/domain/errors.js");
+  const { Store } = await import("@oma/storage");
+  const { assertCurrentActor } = await import("@oma/domain/authority");
+  const { publicFailure } = await import("@oma/domain/errors");
   const { makeValidAgent } = await import("./fixtures/spec.js");
   const root = mkdtempSync(join(tmpdir(), "oma-dr3-"));
   const store = new Store(join(root, "runtime.sqlite"));
@@ -116,7 +116,7 @@ test("DR3 / AUTH-001: a capability revoked before acceptance names the capabilit
  * hang-up there killed it mid-drain. A supervised service leads its own
  * session; its lifetime is its channel and an explicit stop. */
 test("DR7 / D03: a supervised service leads its own session, apart from its starter's terminal", async () => {
-  const { spawnSupervisedService } = await import("../src/process/async.js");
+  const { spawnSupervisedService } = await import("@oma/process/async");
   const { readFileSync } = await import("node:fs");
   const sessionOf = (stat: string): number => Number(stat.slice(stat.lastIndexOf(")") + 2).split(" ")[3]);
   const child = spawnSupervisedService(process.execPath, ["-e",
@@ -133,7 +133,7 @@ test("DR7 / D03: a supervised service leads its own session, apart from its star
 test("DR3: a failure after acceptance keeps the facts its code may carry", async () => {
   // The thirteenth run: a create refused while another completed said
   // BROKER_UNAVAILABLE without its reason, because the accepted wrapper dropped it.
-  const { StoreError, acceptedFailure, publicFailure } = await import("../src/domain/errors.js");
+  const { StoreError, acceptedFailure, publicFailure } = await import("@oma/domain/errors");
   const wrapped = acceptedFailure(new StoreError("BROKER_UNAVAILABLE", "another accepted creation is completing", { details: { reason: "busy" } }));
   assert.deepEqual(publicFailure(wrapped).details, { reason: "busy" });
 });

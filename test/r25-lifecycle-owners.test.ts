@@ -1,16 +1,19 @@
+import { generateOperationId } from "@oma/native/identity";
+import { lifecycleLedger } from "#oma-test/app/broker/lifecycle-ledger";
+import { createMailModule } from "#oma-test/app/broker/mail-composition";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { randomUUID } from "node:crypto";
-import type { AuthContext } from "../implementation/contracts.js";
-import { MailModule } from "../src/mail.js";
-import { ownedMessages } from "../src/durable.js";
-import { Store } from "../src/store.js";
-import { StoreError } from "../src/domain/errors.js";
-import { RegistryOperations } from "../src/lifecycle/registry-operations.js";
-import { LifecyclePolicy } from "../src/lifecycle/policy.js";
+import type { AuthContext } from "@oma/contracts";
+import { MailModule } from "@oma/mail";
+import { ownedMessages } from "@oma/domain/durable";
+import { Store } from "@oma/storage";
+import { StoreError } from "@oma/domain/errors";
+import { RegistryOperations } from "@oma/lifecycle/registry-operations";
+import { LifecyclePolicy } from "@oma/lifecycle/policy";
 import { makeValidAgent, makeValidResolvedSpec, ALL_CAPS } from "./fixtures/spec.js";
 
 function fixture() {
@@ -24,7 +27,7 @@ function fixture() {
   });
   const auth: AuthContext = { actor: "alice", role: "resident", incarnation: 1, channel: "actor",
     capabilities: new Set(ALL_CAPS), peer: { pid: process.pid, uid: process.getuid!(), gid: process.getgid!(), cgroup: null } };
-  return { root, store, auth, registry: new RegistryOperations(store), close() { store.close(); rmSync(root, { recursive: true, force: true }); } };
+  return { root, store, auth, registry: new RegistryOperations(lifecycleLedger(store), { nextOperationId: generateOperationId }), close() { store.close(); rmSync(root, { recursive: true, force: true }); } };
 }
 const code = (expected: string) => (error: unknown) => error instanceof StoreError && error.code === expected;
 
@@ -56,7 +59,7 @@ test("R25: identity-only subscription replay does not authorize a fresh stopped-
 
 test("R25: management scope uses the same lineage and current live lease", t => {
   const f = fixture(); t.after(() => f.close());
-  const policy = new LifecyclePolicy(f.store, (_parent, input) => makeValidResolvedSpec(input.name, "p", ALL_CAPS, input.from, input.brief), null);
+  const policy = new LifecyclePolicy(lifecycleLedger(f.store), (_parent, input) => makeValidResolvedSpec(input.name, "p", ALL_CAPS, input.from, input.brief));
   assert.doesNotThrow(() => policy.requireManage(f.auth, "alice"));
   assert.doesNotThrow(() => policy.requireManage(f.auth, "child"));
   assert.throws(() => policy.requireManage(f.auth, "peer"), code("CAPABILITY_DENIED"));
@@ -73,7 +76,7 @@ test("R25: host refresh and transaction-time revision comparison are separate", 
     refresh() { assert.equal(f.store.inTransaction, false); refreshes++; },
     revision() { return revision; },
   });
-  const policy = new LifecyclePolicy(f.store, resolver, null);
+  const policy = new LifecyclePolicy(lifecycleLedger(f.store), resolver);
   const observed = policy.refresh();
   assert.equal(refreshes, 1);
   f.store.transaction(() => policy.assertRevision(observed));
@@ -85,7 +88,7 @@ test("R25: host refresh and transaction-time revision comparison are separate", 
 
 test("DR27: ACK explains absent message versus another recipient without creating a fact", async t => {
   const f = fixture(); t.after(() => f.close());
-  const mail = new MailModule({ stateRoot: f.root, society: "r25test" }, f.store, 64);
+  const mail = createMailModule({ stateRoot: f.root, society: "r25test" }, f.store, 64);
   await mail.send(f.auth, "to-peer", { to: ["peer"], kind: "message", subject: "review", body: "body" });
   const operation = f.store.getOperation("alice", "to-peer")!;
   const message = ownedMessages(operation.plan)[0]!;

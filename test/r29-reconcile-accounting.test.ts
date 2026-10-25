@@ -1,8 +1,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { OperationRecovery, type RecoveryRow } from "../src/reconcile/operations.js";
-import { StoreError } from "../src/domain/errors.js";
-import { generateOperationId } from "../src/ids.js";
+import { OperationRecovery, type RecoveryRow } from "@oma/reconcile/operations";
+import { StoreError } from "@oma/domain/errors";
+import { generateOperationId } from "@oma/native/identity";
 
 function rows() {
   const mail: RecoveryRow = { id: generateOperationId(), kind: "mail.send", state: "pending" };

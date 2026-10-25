@@ -1,9 +1,9 @@
 /** Runtime schemas, not host authorization or transport/kernel evidence. */
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { PUBLIC_METHODS, INTERNAL_METHODS, decodePublicParams } from '../dist/src/protocol/methods.js';
-import { decodeReceipt } from '../dist/src/protocol/receipt-codec.js';
-import { canonicalJson } from '../dist/src/domain/canonical-json.js';
+import { PUBLIC_METHODS, INTERNAL_METHODS, decodePublicParams } from "@oma/protocol/methods";
+import { decodeReceipt } from "@oma/protocol/receipt-codec";
+import { canonicalJson } from "@oma/domain/canonical-json";
 
 const oid = 'a'.repeat(40), digest = 'b'.repeat(64);
 const operation = 'op-00000000-0000-4000-8000-000000000001';
@@ -30,11 +30,11 @@ const vectors = {
 // DR27 additions are separate from the historical vectors and canonical bytes.
 const additions = {
   'society.set': { state: 'closed' },
-  'attest.record': { kind: 'peer', identity: { repo: 'project', targetRef: 'refs/heads/main', expectedBase: oid, candidate: oid, policyRevision: 'p1' }, verdict: 'APPROVE', evidence: 'Exact candidate reviewed' },
-  'review.status': { name: 'merge-1a2b3c4d' },
+  'attest.record': { kind: 'review', name: 'merge-1a2b3c4d-0000-4000-8000-000000000001', body: 'Exact candidate reviewed' },
+  'review.status': { name: 'merge-1a2b3c4d-0000-4000-8000-000000000001' },
 };
 for (const [method, params] of Object.entries({ ...vectors, ...additions })) {
-  test(`P2 wire golden: ${method} retains values and rejects extra fields`, () => {
+  test(`${["attest.record", "review.status"].includes(method) ? "DR46 current wire" : "P2 wire golden"}: ${method} retains values and rejects extra fields`, () => {
     const before = JSON.stringify(params);
     assert.deepEqual(decodePublicParams(method, params, context), params);
     assert.equal(JSON.stringify(params), before);

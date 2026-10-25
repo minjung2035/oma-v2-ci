@@ -2,7 +2,7 @@
 // one sets, draws only when something changed (a start, a resize, Ctrl-L),
 // echoes what it is sent, and restores the modes when it quits on "q".
 import { spawn } from "node:child_process";
-import { requestHostNewSession } from "../../dist/src/runtime/session-handoff.js";
+import { requestHostNewSession } from "#oma-test/app/runtime/session-handoff";
 process.stdin.setRawMode(true);
 let frame = 0, requestedNew = false, exitCode = 0;
 const out = text => process.stdout.write(text);

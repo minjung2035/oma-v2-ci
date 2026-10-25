@@ -8,7 +8,7 @@
  * validation into execute() must be refused, never forwarded to the CLI. */
 import test from "node:test";
 import assert from "node:assert/strict";
-import { registerOmaTools } from "../src/pi-extension.js";
+import { registerOmaTools } from "@oma/extension/mail-tools";
 
 /** The env registerOmaTools needs before it registers anything. */
 const ENV = { OMA_CLI_PATH: "/oma/cli.js", OMA_AGENT_HOME: "/home/agent", OMA_MAIL_ARCHIVE: "/mail/cur",
@@ -32,7 +32,7 @@ const str = (extra: object = {}) => ({ type: "string", ...extra });
 const named = (values: readonly string[]) => ({ anyOf: values.map(v => ({ type: "string", const: v })) });
 const request = { request: str({ description: REQUEST_DESC }) };
 
-const reviewCommon = { name: str({ description: "the request's generated name (merge-/challenge- + the request's full UUID; 8-hex names minted before stay readable)" }),
+const reviewCommon = { name: str({ description: "the request's generated name (merge-/challenge- + the request's full UUID)" }),
   verdict: named(["approve", "reject"]), body: str(), path: str(), cursor: { type: "integer", minimum: 0 }, ...request };
 const reviewPrincipal = (extra: object = {}) => ({ type: "object", required: ["action"], properties: {
   action: named(["diff", "vote"]), approval: str({ description: "the approval message id the vote answers; required" }),
@@ -108,7 +108,7 @@ test("D26: the tool result envelope is one text block plus details, never bare t
   await assert.rejects(() => read.execute("call-1", { messageId: "/inbox.md" }),
     /no delivery index/, "a call without its backing view fails, not fabricates");
   // The envelope the shared helper produces -- the shape every tool returns.
-  const { textResult } = await import("../src/extension/shared.js");
+  const { textResult } = await import("@oma/tool-runtime/shared");
   assert.deepEqual(textResult("hello", { request: "k" }),
     { content: [{ type: "text", text: "hello" }], details: { request: "k" } });
   assert.deepEqual(textResult("only text"), { content: [{ type: "text", text: "only text" }], details: {} });

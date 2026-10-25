@@ -1,12 +1,13 @@
+import { serializePlanIntent } from "./fixtures/plan.js";
 import test from "node:test";
 import assert from "node:assert/strict";
-import type { MessagePlan, MutationMethod, ResolvedAgentSpec } from "../implementation/contracts.js";
-import { StoreError } from "../src/domain/errors.js";
-import { resolvedSpecDigest } from "../src/domain/spec-identity.js";
-import { requestHash } from "../src/hash.js";
+import type { MessagePlan, MutationMethod, ResolvedAgentSpec } from "@oma/contracts";
+import { StoreError } from "@oma/domain/errors";
+import { resolvedSpecDigest } from "@oma/domain/spec-identity";
+import { requestHash } from "@oma/domain/request-identity";
 import {
   decodeOperation, type OperationDecodeContext, type RawOperationRecord,
-} from "../src/storage/operation-codec.js";
+} from "@oma/protocol/operation-codec";
 
 const OP = "op-00000000-0000-4000-8000-000000000001";
 const OTHER = "op-00000000-0000-4000-8000-000000000002";
@@ -32,10 +33,6 @@ interface Fixture {
 function fixture(kind: MutationMethod): Fixture {
   const spec: ResolvedAgentSpec = {
     name: "alice", from: BASE, brief: "Accepted brief", profile: "p", capabilities: [], modelProfile: "md",
-    resources: {
-      memoryBytes: 3221225472, tasks: 128, cpuQuotaPercent: 200, tmpBytes: 1048576,
-      workspaceBytes: 1048576, stagingBytes: 1048576, checkTimeoutSeconds: 30,
-    },
   };
   const message: MessagePlan = {
     id: MESSAGE, objectPath: `mail/objects/${MESSAGE}.eml`, sha256: DIGEST,
@@ -43,12 +40,14 @@ function fixture(kind: MutationMethod): Fixture {
     contextRevision: null, replyHeaders: { replyTo: ["alice"], inReplyTo: null, references: [] },
   };
   const entries = [{ path: "GOAL.md", bytes: 1, sha256: DIGEST }];
-  const fact = { kind: "peer", identity: { repo: "project", targetRef: "refs/heads/main", expectedBase: BASE,
-    candidate: CANDIDATE, policyRevision: "p1" }, verdict: "APPROVE", evidence: "Reviewed exact candidate" };
+  const name = `merge-${OP.slice(3)}`;
+  const fact = { kind: "merge.open", version: 1, name, title: "Review", reason: "Read the exact diff", tier: "LOW",
+    identity: { repo: "project", targetRef: "refs/heads/main", expectedBase: BASE, candidate: CANDIDATE, policyRevision: "p1" }, submitters: ["alice"] };
   const cases = {
     "society.set": { payload: { state: "closed" }, plan: { kind, state: "closed" }, result: { kind, state: "closed" } },
-    "attest.record": { payload: fact, plan: { kind, fact, message: { ...message, kind: "result", to: ["commons"] } },
-      result: { kind, message: MESSAGE, recipientCount: 1, archivePath: `${ROOT}/mail/archive/cur/${MESSAGE}:2,` } },
+    "attest.record": { payload: { kind: "merge.open", title: "Review", reason: "Read the exact diff", tier: "LOW", candidate: CANDIDATE, base: BASE },
+      plan: { kind, fact, messages: [{ ...message, audience: "workers", to: ["residents"], review: { role: "thread", request: OP, name, revision: 0 } }] },
+      result: { kind, request: name, messages: [MESSAGE], recipientCount: 1 } },
     "mail.send": {
       payload: { to: ["alice"], subject: "subject", kind: "message", body: "body" },
       plan: { kind, message },
@@ -99,13 +98,13 @@ function fixture(kind: MutationMethod): Fixture {
     },
     "git.integrate": {
       payload: { candidate: CANDIDATE, expected: BASE },
-      plan: { kind, repo: "project", target: "refs/heads/main", base: BASE, candidate: CANDIDATE, policyRevision: "p1", checkProfileDigest: DIGEST },
+      plan: {policyIdentity: "02c010d0ad2a2e60c59a05b83368e8699b97567828b4f75ffa160dfd35b1bb70", noopRef: null,  kind, repo: "project", target: "refs/heads/main", base: BASE, candidate: CANDIDATE, policyRevision: "p1", checkProfileDigest: DIGEST },
       result: { kind, base: BASE, candidate: CANDIDATE, target: "refs/heads/main", policyRevision: "p1", changed: true },
     },
     "context.publish": {
       payload: { expected: null, entries, content: { bytes: 1, sha256: DIGEST, mediaType: "application/vnd.oma.context-v1" } },
       plan: {
-        kind, base: null, candidate: CANDIDATE, target: "refs/heads/main", entries,
+        kind, noopRef: null, base: null, candidate: CANDIDATE, target: "refs/heads/main", entries,
         stagingPath: `${ROOT}/staging/context-${OP}`,
         message: { ...message, kind: "context", to: ["residents"], contextRevision: CANDIDATE },
       },
@@ -118,7 +117,7 @@ function fixture(kind: MutationMethod): Fixture {
   const raw: RawOperationRecord = {
     id: OP, actor: kind === "society.set" || kind === "agent.create" || kind === "context.publish" ? "principal" : "alice",
     request_key: "accepted-fixture", request_hash: requestHash(kind, selected.payload), kind,
-    payload_json: JSON.stringify(selected.payload), plan_json: JSON.stringify(selected.plan),
+    payload_json: JSON.stringify(selected.payload), plan_json: serializePlanIntent(selected.plan),
     state: "pending", result_json: null, error_code: null, created_at_ms: 1000, updated_at_ms: 1000,
   };
   const context: OperationDecodeContext = {
@@ -174,7 +173,7 @@ for (const kind of KINDS) {
       { ...f.raw, request_hash: "0".repeat(64) }, { ...f.raw, request_key: "" },
       { ...f.raw, created_at_ms: "1000" }, { ...f.raw, updated_at_ms: 0.5 },
       { ...f.raw, payload_json: "{" }, { ...f.raw, plan_json: "{" },
-      { ...f.raw, plan_json: JSON.stringify({ ...f.plan, unrecognized: true }) },
+      { ...f.raw, plan_json: serializePlanIntent({ ...f.plan, unrecognized: true }) },
       { ...f.raw, state: "pending", result_json: JSON.stringify(f.result) },
       { ...f.raw, state: "unknown", error_code: "CHECK_FAILED" },
       { ...f.raw, state: "succeeded", result_json: null },
@@ -186,19 +185,11 @@ for (const kind of KINDS) {
   });
 }
 
-test("the historical integrate plan.result variant keeps decoding and settling (#29)", () => {
+test("DR46 result separation: an embedded plan result is rejected, and the terminal result still matches intent", () => {
   const f = fixture("git.integrate");
-  const decoded = decodeOperation(f.raw, f.context);
-  assert.equal(decoded.kind, "git.integrate");
-  // Rows accepted before the plan/result split embed the terminal result in
-  // the immutable plan. They remain decodable and the embedded value, checked
-  // against the plan's own fields, wins when the pending row settles.
-  const embedded = decodeOperation({ ...f.raw, state: "succeeded",
-    result_json: JSON.stringify(f.result),
-    plan_json: JSON.stringify({ ...f.plan, result: f.result }) }, f.context);
-  assert.equal(embedded.kind, "git.integrate");
-  assert.equal(embedded.state, "succeeded");
-  // The operation's own terminal result still has to describe the plan's diff.
+  assert.equal(decodeOperation(f.raw, f.context).kind, "git.integrate");
+  corrupts({ ...f.raw, state: "succeeded", result_json: JSON.stringify(f.result),
+    plan_json: serializePlanIntent({ ...f.plan, result: f.result }) }, f.context);
   corrupts({ ...f.raw, state: "succeeded", result_json: JSON.stringify({ ...f.result, changed: false }) }, f.context);
 });
 
@@ -219,7 +210,7 @@ test("delivery observations match the exact frozen message and recipient set", (
 test("create aliases require the original identity and reject cycles without recursion overflow", () => {
   const f = fixture("agent.create");
   const aliasPlan = { ...f.plan, initialMessage: null, existingCreation: OP };
-  const alias = { ...f.raw, id: OTHER, request_key: "linked-fixture", plan_json: JSON.stringify(aliasPlan) };
+  const alias = { ...f.raw, id: OTHER, request_key: "linked-fixture", plan_json: serializePlanIntent(aliasPlan) };
   const context: OperationDecodeContext = {
     ...f.context,
     relations: { ...f.context.relations, operation: id => id === OP ? f.raw : null },
@@ -228,7 +219,7 @@ test("create aliases require the original identity and reject cycles without rec
   corrupts(alias, { ...context, relations: { ...context.relations, operation: () => null } });
   corrupts(alias, { ...context, repositoryIdentity: null });
   corrupts(alias, { ...context, repositoryIdentity: { society: "other" } });
-  const first = { ...f.raw, plan_json: JSON.stringify({ ...f.plan, initialMessage: null, existingCreation: OTHER }) };
+  const first = { ...f.raw, plan_json: serializePlanIntent({ ...f.plan, initialMessage: null, existingCreation: OTHER }) };
   const cycle: OperationDecodeContext = {
     ...context,
     relations: { ...context.relations, deliveries: () => [], operation: id => id === OP ? first : id === OTHER ? alias : null },

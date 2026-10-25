@@ -6,18 +6,18 @@ import { createHash } from "node:crypto";
 import { createServer, type Socket } from "node:net";
 import { mkdtempSync, readFileSync, rmSync, unlinkSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { Client, ClientError } from "../src/client/index.js";
-import { RequestService } from "../src/client/request-service.js";
-import { currentContext } from "../src/client/context.js";
-import { installRuntime, type Reply } from "../src/client/runtime.js";
-import { CLIENT_RUNTIME, installClientRuntime } from "../src/runtime/client-runtime.js";
-import { RequestCache, CacheError } from "../src/request-cache.js";
-import { registerOmaTools } from "../src/extension/mail-tools.js";
-import { PrincipalChannel } from "../src/extension/principal-channel.js";
-import { encodeCredential } from "../src/client/codecs.js";
-import { FrameParser, encodeFrame } from "../src/frame.js";
-import { receiptChunk } from "../src/protocol/receipt-chunks.js";
-import { receiptNotFound } from "../src/protocol/receipts.js";
+import { Client, ClientError } from "@oma/client";
+import { RequestService } from "@oma/client/request-service";
+import { currentContext } from "@oma/client/context";
+import { installRuntime, type Reply } from "@oma/client/runtime";
+import { CLIENT_RUNTIME, installClientRuntime } from "#oma-test/app/runtime/client-runtime";
+import { RequestCache, CacheError } from "#oma-test/app/request-cache";
+import { registerOmaTools } from "@oma/extension/mail-tools";
+import { PrincipalChannel } from "@oma/extension/principal-channel";
+import { encodeCredential } from "@oma/protocol/client-codecs";
+import { FrameParser, encodeFrame } from "@oma/protocol/frame";
+import { receiptChunk } from "@oma/protocol/receipt-chunks";
+import { receiptNotFound } from "@oma/protocol/receipts";
 
 const operation = "op-00000000-0000-4000-8000-000000000001";
 const message = "m-00000000-0000-4000-8000-000000000001-0";
@@ -281,8 +281,8 @@ test("P0 an oversized answer still previews when it cannot be saved, and says wh
 test("P0 the output spool is content-named: the same answer is one file, and a same-named file of other bytes is not overwritten", async () => {
   const root = scratch();
   try {
-    const { spoolOutput } = await import("../src/storage/output-spool.js");
-    const { sha256Hex } = await import("../src/domain/canonical-json.js");
+    const { spoolOutput } = await import("@oma/storage/output-spool");
+    const { sha256Hex } = await import("@oma/domain/canonical-json");
     const bytes = Buffer.from("the complete answer");
     const first = spoolOutput(root, bytes);
     assert.equal(first, join(root, ".local", "state", "oma", "output", `output-${sha256Hex(bytes)}.txt`));
@@ -338,7 +338,7 @@ test("a frozen submit is replayed under <key>.submit even though recovery text n
       if (method === "git.submit") return { ok: true, result: { operation, state: "succeeded",
         result: { kind: "git.submit", candidate, publishedRef: `refs/oma/published/alice/${operation}`, message: "m-00000000-0000-4000-8000-000000000002-0", recipientCount: 1 } } };
       return { ok: true, result: { operation, state: "succeeded",
-        result: { kind: "attest.record", request: "merge-00000002", messages: ["m-00000000-0000-4000-8000-000000000003-0"], recipientCount: 1 } } };
+        result: { kind: "attest.record", request: "merge-00000002-0000-4000-8000-000000000000", messages: ["m-00000000-0000-4000-8000-000000000003-0"], recipientCount: 1 } } };
     } }) });
   // Replay: `open.submit` is frozen, the ledger answers REQUEST_NOT_FOUND, and
   // the frozen request is resent -- under its own key, not the display key.
@@ -372,7 +372,7 @@ test("mail-v1/E27: the tool path's submit notice names the engine's actor, like 
           : frame.raw.method === "git.submit" ? { operation, state: "succeeded",
               result: { kind: "git.submit", candidate, publishedRef: `refs/oma/published/alice/${operation}`, message, recipientCount: 1 } }
           : { operation, state: "succeeded",
-              result: { kind: "attest.record", request: "merge-00000002", messages: [message], recipientCount: 1 } };
+              result: { kind: "attest.record", request: "merge-00000002-0000-4000-8000-000000000000", messages: [message], recipientCount: 1 } };
         socket.write(encodeFrame({ v: 1, id: frame.raw.id, ok: true, result }));
       }
     });

@@ -4,8 +4,8 @@ import assert from "node:assert/strict";
 import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, readlinkSync, symlinkSync, unlinkSync, lstatSync, readdirSync, chmodSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { Store } from "../src/store.js";
-import { sha256Hex } from "../src/hash.js";
+import { Store } from "@oma/storage";
+import { sha256Hex } from "@oma/domain/canonical-json";
 import { makeValidAgent } from "./fixtures/spec.js";
 import { seedGit, gitFixture, gitAuth } from "./fixtures/git-crash.js";
 

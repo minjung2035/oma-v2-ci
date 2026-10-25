@@ -17,9 +17,9 @@ function findings(files) {
 
 test("PI-001 admits the shared client and erased contract shapes, not host runtime", () => {
   assert.deepEqual(findings({
-    "src/pi-extension.ts": 'import { client } from "./client/index.js";',
-    "src/client/index.ts": 'import type { Receipt } from "../../implementation/contracts.js"; import { connect } from "node:net"; export const client = connect;',
-    "src/extension/a.ts": 'import type { Receipt } from "../../implementation/contracts.js";',
+    "packages/extension/src/index.ts": "import { client } from \"../../client/src/index.js\";",
+    "packages/client/src/index.ts": "import type { Receipt } from \"../../contracts/src/index.js\"; import { connect } from \"node:net\"; export const client = connect;",
+    "packages/extension/src/a.ts": "import type { Receipt } from \"../../contracts/src/index.js\";",
   }), []);
   for (const content of [
     'import { Receipt } from "../../implementation/contracts.js";',
@@ -28,22 +28,22 @@ test("PI-001 admits the shared client and erased contract shapes, not host runti
     'import { x } from "koffi";',
     'export const load = () => import("../store.js");',
     'import { a } from "../extension/a.js";',
-  ]) assert.ok(findings({ "src/client/index.ts": content }).length > 0, content);
+  ]) assert.ok(findings({ "packages/client/src/index.ts": content }).length > 0, content);
 });
 
 test("E27/E30: dead process plumbing and the unused incarnation environment are absent", () => {
   // The shim that re-exported fence helpers under a removed process's name.
-  assert.equal(existsSync("src/extension/cli-process.ts"), false);
-  assert.doesNotMatch(readFileSync("src/extension/mail-tools.ts", "utf8"), /runCliProcess|runCli\(|OMA_CLI_PATH|cli-process/);
+  assert.equal(existsSync("packages/extension/src/cli-process.ts"), false);
+  assert.doesNotMatch(readFileSync("packages/extension/src/mail-tools.ts", "utf8"), /runCliProcess|runCli\(|OMA_CLI_PATH|cli-process/);
   // The credential-descriptor contract died with the extension-spawned CLI.
-  assert.doesNotMatch(readFileSync("src/cli/transport.ts", "utf8"), /OMA_PRINCIPAL_CREDENTIAL_FD|readPresentedGrant|presentedGrant/);
-  assert.doesNotMatch(readFileSync("src/sandbox.ts", "utf8"), /OMA_INCARNATION/);
-  for (const path of ["src/protocol/host-channel.ts", "src/extension/principal-channel.ts"])
-    assert.match(readFileSync(path, "utf8"), /client\/codecs\.js/);
+  assert.doesNotMatch(readFileSync("apps/oma/src/cli/transport.ts", "utf8"), /OMA_PRINCIPAL_CREDENTIAL_FD|readPresentedGrant|presentedGrant/);
+  assert.doesNotMatch(readFileSync("packages/platform-linux/src/sandbox.ts", "utf8"), /OMA_INCARNATION/);
+  for (const path of ["packages/protocol/src/host-channel.ts", "packages/extension/src/principal-channel.ts"])
+    assert.match(readFileSync(path, "utf8"), /client-codecs/);
 });
 
 test("credential and wait codecs are shared, closed, and reject malformed input", async () => {
-  const { encodeCredential, decodeCredential, encodeWaitObservation, decodeWaitObservation } = await import("../dist/src/client/codecs.js");
+  const { encodeCredential, decodeCredential, encodeWaitObservation, decodeWaitObservation } = await import("@oma/protocol/client-codecs");
   const grant = { credential: "a".repeat(64), sessionHandle: "b".repeat(32) };
   assert.deepEqual(decodeCredential(encodeCredential(grant).slice(0, -1)), grant);
   for (const line of ["", encodeCredential(grant), `credential ${"A".repeat(64)} ${grant.sessionHandle}`, `credential ${grant.credential} ${grant.sessionHandle} extra`, `credential ${grant.credential}\t${grant.sessionHandle}`])

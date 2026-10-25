@@ -276,6 +276,8 @@ current product gates them. This plan does not implement those unrelated feature
 
 ## WP01.04 — semantic change surfaces, not a universal registry
 
+DR46 updates the owner paths and current format constraints in this table; it does not claim WP01 originally approved schema 4.
+
 The paths below identify existing owners to review when implementing the named
 WPs; listing a path does not certify its implementation. Public vocabulary,
 persistent encodings and effect authority stay independent. C2 config metadata
@@ -283,11 +285,11 @@ is host authoring data, not a new operation/message/batch state.
 
 | Surface | Existing owner paths | Allowed semantic input/output change | Must remain unchanged | Owning WP |
 |---|---|---|---|---|
-| surface.public | src/protocol/methods.ts, implementation/contracts/public-wire.ts, implementation/contracts/internal-wire.ts | add internal action-category metadata to existing method decisions; no new RPC | key rules, method names, strict payload/error/correlation and live authentication | WP21, WP26 |
-| surface.durable | src/storage/operation-codec.ts, src/storage/transitions.ts, implementation/contracts/durable.ts, implementation/schema-v3.sql | validated exact evidence selects existing transitions before rollover; ownership scope settles current plans | six entities, user_version=3, state enums, request/spec/receipt bytes; no golden refresh | WP04, WP06, WP07, WP17, WP20, WP24 |
-| surface.editor | src/config.ts, src/config/operations.ts, src/application/settings.ts, src/application/extensions.ts | pure full validator plus snapshot/source/version and closed edit descriptors; generation writer owns publication | HostConfigV1 keys, role metadata semantics, index-root prompt references, no implicit delegation change | WP11, WP12, WP13, WP14, WP15, WP16 |
-| surface.resources | src/domain/resources.ts, src/storage/quota.ts | explicit action policy, bounded reservation transfer and diagnostic snapshot; freeze derivation/budgets in WP22 | resource field vocabulary, integer/size validation, no cost accounting or stale cache authorization | WP21, WP22, WP23 |
-| surface.authority | src/broker.ts, src/runtime/principal-delivery.ts, src/runtime/engine/principal-session.ts | separate live complete from narrow trusted recovery; single correlated run owner across await | current peer/incarnation checks, single writer, inherited fence and real descendant death | WP03, WP07, WP08, WP09, WP10, WP25 |
+| surface.public | packages/protocol/src/methods.ts, packages/contracts/src/public-wire.ts, packages/contracts/src/internal-wire.ts | add internal action-category metadata to existing method decisions; no new RPC | key rules, method names, strict payload/error/correlation and live authentication | WP21, WP26 |
+| surface.durable | packages/protocol/src/operation-codec.ts, packages/storage/src/transitions.ts, packages/contracts/src/durable.ts, packages/storage/src/schema-v4.sql | validated exact evidence selects existing transitions before rollover; ownership scope settles current plans | six entities, DR46 current schema 4 only; state enums and exact accepted request/spec/receipt bytes | WP04, WP06, WP07, WP17, WP20, WP24 |
+| surface.editor | packages/config/src/index.ts, packages/config/src/operations.ts, apps/oma/src/application/settings.ts, apps/oma/src/application/extensions.ts | pure full validator plus snapshot/source/version and closed edit descriptors; generation writer owns publication | DR46 HostConfig schema 3 fields, role metadata semantics, index-root prompt references, no implicit delegation change | WP11, WP12, WP13, WP14, WP15, WP16 |
+| surface.resources | scripts/check-legacy.mjs, packages/domain/src/admission.ts | DR46 retires this resource-policy surface and bans reintroduction; the actual integrity/drain gate keeps its owner | retired field vocabulary has no runtime owner; unknown handling and actual resource lifetime ownership remain | WP21, WP22, WP23 |
+| surface.authority | packages/broker/src/index.ts, apps/oma/src/runtime/principal-delivery.ts, packages/engine/src/principal-session.ts | separate live complete from narrow trusted recovery; single correlated run owner across await | current peer/incarnation checks, single writer, inherited fence and real descendant death | WP03, WP07, WP08, WP09, WP10, WP25 |
 | surface.evidence | implementation/source-owners.json, implementation/mutation-owners.json, production-files.txt, scripts/verification-lanes.mjs | update actual owner/caller/test trace when runtime responsibility moves; include new production sources | generated evidence must be recomputed, not hand merged; no static/runtime proof inflation | WP29, WP30, WP31, WP32 |
 
 No wire/DDL/durable codec/type declaration changes are needed by WP01. Existing
@@ -369,7 +371,7 @@ explicit manager start, never by reconcile. V25A: an old start/stop intent, by
 reconcile or by same-key retry, leaves the current incarnation's run untouched
 and settles `unknown`; a current stop succeeds and proves death.
 
-WP25.03 — the Resident unit is rendered once, at creation, from the accepted spec:
+WP25.03 historical resource transport (superseded by DR37/DR46; this is not the current unit contract) — the Resident unit is rendered once, at creation, from the accepted spec:
 MemoryMax/TasksMax/CPUQuota and `OMA_RESOURCES_HEX` (the canonical resource text).
 The runner takes workspace, `/tmp` and check limits from that text and refuses to
 start without it; only the model comes from the current profile at activation
@@ -454,7 +456,7 @@ The terminal's reader already reports a missing, unreadable, malformed, foreign 
 stale view as unknown with its reason (T118), unchanged.
 
 Scope: the `status.get` owner is `src/broker/public-dispatcher.ts` and its ports
-`src/broker/composition.ts`, and the Store facade is `src/store.ts`; they were changed
+`src/broker/composition.ts`, and the Store facade is `packages/storage/packages/storage/src/store.ts`; they were changed
 beyond the card's candidate list because the status path runs through them. Not
 changed or measured here: the storage admission tree scan (a fresh, correctness-critical
 final check per admitted mutation, D04/WP22), `refreshWorld` on each mutation (4-6 ms
@@ -470,20 +472,20 @@ process or owner. Budget: the bound it enforces (encoded bytes unless said).
 
 | File | Trust boundary | Budget / relation | Success means |
 |---|---|---|---|
-| `src/frame.ts` | bytes from any peer | uint32 length ≤ configured frame bytes; strict UTF-8 JSON, duplicate keys, surrogates, unsafe integers refused; a fatal error never resynchronizes | one JSON object root, fields still unknown |
-| `src/protocol/byte-queue.ts` | caller-owned chunks | frame-sized copies only | bytes delivered in order |
-| `src/protocol/jsonl.ts` | engine stdout | bounded line, LF only, no implicit final line; a well-formed line over the bound is skipped whole and reported (DR15) | one line handed to its owner |
-| `src/protocol/channel.ts` (`BrokerChannel`) | broker socket | one request in flight; request and response ≤ frame bytes after encoding; idle and receipt deadlines; stream bytes equal the descriptor | a decoded reply for this request id |
-| `src/protocol/response-codec.ts` | broker reply | id, version and method discriminator must match; closed result per method | a transport fact, not replay authority |
-| `src/protocol/receipt-codec.ts` | receipt bytes (broker or cache) | closed shape; REQUEST_NOT_FOUND only with an empty operation; `receiptSupersession` orders observations of one operation | structural receipt, not ledger authority |
-| `src/protocol/request-codec.ts` | frozen cache/ledger payload | closed caller DTO per mutation method | structurally valid payload; broker still checks authority |
-| `src/protocol/methods.ts` | method name and params | closed public/internal method sets; params decoded per method with current actor names; internal resource category | a known method with decoded params |
-| `src/protocol/log-response.ts` | journal text | whole v1 response ≤ frame bytes including envelope, id and escaping; truncation flagged | a decodable bounded response |
-| `src/protocol/batch-view.ts` | prepared batch view | UTF-8 bytes, never UTF-16 length | six-field projection |
-| `src/protocol/host-channel.ts` | inherited descriptor | one bounded line per message | one closed host message |
-| `src/protocol/principal-credential.ts` | credential line | fixed-format credential and session handle | a well-formed credential, not authority |
-| `src/protocol/run-lease.ts` | `runner.open` result | paths checked against composition facts | transport identity, not live authority |
-| `src/protocol/status-view.ts` | host-private view file | schema, society, observation time, closed rows | a view; staleness is the reader's decision |
+| `packages/protocol/src/frame.ts` | bytes from any peer | uint32 length ≤ configured frame bytes; strict UTF-8 JSON, duplicate keys, surrogates, unsafe integers refused; a fatal error never resynchronizes | one JSON object root, fields still unknown |
+| `packages/protocol/src/byte-queue.ts` | caller-owned chunks | frame-sized copies only | bytes delivered in order |
+| `packages/protocol/src/jsonl.ts` | engine stdout | bounded line, LF only, no implicit final line; a well-formed line over the bound is skipped whole and reported (DR15) | one line handed to its owner |
+| `packages/client/src/channel.ts` (`BrokerChannel`) | broker socket | one request in flight; request and response ≤ frame bytes after encoding; idle and receipt deadlines; stream bytes equal the descriptor | a decoded reply for this request id |
+| `packages/protocol/src/response-codec.ts` | broker reply | id, version and method discriminator must match; closed result per method | a transport fact, not replay authority |
+| `packages/protocol/src/receipt-codec.ts` | receipt bytes (broker or cache) | closed shape; REQUEST_NOT_FOUND only with an empty operation; `receiptSupersession` orders observations of one operation | structural receipt, not ledger authority |
+| `packages/protocol/src/request-codec.ts` | frozen cache/ledger payload | closed caller DTO per mutation method | structurally valid payload; broker still checks authority |
+| `packages/protocol/src/methods.ts` | method name and params | closed public/internal method sets; params decoded per method with current actor names; internal resource category | a known method with decoded params |
+| `packages/protocol/src/log-response.ts` | journal text | whole v1 response ≤ frame bytes including envelope, id and escaping; truncation flagged | a decodable bounded response |
+| `packages/protocol/src/batch-view.ts` | prepared batch view | UTF-8 bytes, never UTF-16 length | six-field projection |
+| `packages/protocol/src/host-channel.ts` | inherited descriptor | one bounded line per message | one closed host message |
+| `packages/protocol/src/principal-credential.ts` | credential line | fixed-format credential and session handle | a well-formed credential, not authority |
+| `packages/protocol/src/run-lease.ts` | `runner.open` result | paths checked against composition facts | transport identity, not live authority |
+| `packages/protocol/src/status-view.ts` | host-private view file | schema, society, observation time, closed rows | a view; staleness is the reader's decision |
 | `src/broker/connection.ts` | one actor/host connection | one in-flight request; response ≤ frame bytes; EOF/close/error/timeout distinct; accepted work is not socket-owned | a reply written or a failure closed |
 | `src/broker/replies.ts` | none | envelope only | `ok`/`error` envelope |
 | `src/cli/transport.ts` | environment (socket, frame bytes, credential descriptor) | 60 s CLI deadline; frame bytes decimal and within log-response bounds | replies of one call |
@@ -718,7 +720,7 @@ and the package check names a missing unit template, a missing entry and a
 dependency version that is not the locked one.
 
 WP31.04 — launch location and config path reach every unit (WP03), and a Resident
-runs with its accepted resources, not the current generation's (WP25). Old units
+historically ran with its accepted resources (WP25; superseded by DR37/DR46). Old units
 without those are refused and must be recreated; managed config generations are
 not readable by earlier writers. Not covered: other Node versions and
 distributions, an `npm ci --omit=dev` install from the registry (offline here), and

@@ -1,5 +1,6 @@
 /** Actual changeset measurements. Owner intersections are an inventory join,
  * never an inference that every intersected feature changed. */
+import { isVendoredExtension } from "./architecture/rules/shared.mjs";
 import { execFileSync } from "node:child_process";
 
 const git = (root, args) => execFileSync("git", args, { cwd: root, encoding: "utf8" });
@@ -11,7 +12,7 @@ export function changeLocality(root, base, until, inventory = []) {
     ...(until === undefined ? [] : [to]), "--"]));
   if (until === undefined) files.push(...split(git(root, ["ls-files", "--others", "--exclude-standard", "-z"])));
   const changedFiles = [...new Set(files)].sort();
-  const category = file => file.startsWith("src/extension/vendor/") ? "vendor" : file.startsWith("src/") ? "source"
+  const category = file => isVendoredExtension(file) ? "vendor" : file.startsWith("apps/oma/src/") || /^packages\/[^/]+\/src\//.test(file) ? "source"
     : file.startsWith("test/") ? "tests" : file.startsWith("scripts/") ? "tools" : "metadata";
   const counts = { source: 0, tests: 0, tools: 0, metadata: 0, vendor: 0 };
   for (const file of changedFiles) counts[category(file)]++;

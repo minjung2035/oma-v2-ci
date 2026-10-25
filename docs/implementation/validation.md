@@ -1,5 +1,568 @@
 # OMA v2 — 현재 검증 상태
 
+## DR47 코드 품질 보완 수용 (2026-10-25)
+
+[품질 보완 명세](../code-quality-improvement-spec.md)의 CQ47-01..05를 구현했다.
+Config는 모든 등록 FD cleanup을 한 번씩 시도하고 최초 오류와 후속 오류를 보존한다.
+Keychain close는 한 종료 Promise를 공유하고 child가 먼저 종료되거나 deadline이 끝나면
+타이머를 해제하며 실제 child close까지 소유한다. 실제 로컬 FD와 통제된 helper 종료의
+새 negative 검사를 포함한 focused147/147이 통과했다(이전 중간 입력의 진단 실행).
+
+runInteractive는 물리 AST 함수 범위575→94줄이며 입력·선택·UI epoch/panel·session event·RPC·
+SDK 생성·disposal을 의미 owner로 분리했다. App의 공개 subpath는140→4개로 줄였다.
+실제 소비자인 installer assets와 admin diagnostics3개를 남기고136개 퇴역 경로에
+호환 alias를 남기지 않았다. Root integration만 native private Node import로 동일 App
+compiled module을 검증한다. production·다른 workspace·target 변조·퇴역 API의 우회는 거절한다.
+Host raw SDK private 접근0, 잔여13 methods/1 field는 단일 version/shape 검사 adapter가
+소유한다. SDK private 의존 자체를 제거했다고 주장하지 않는다.
+
+현재 코드의 전체 build와 strict typecheck, 전체 static gate가 PASS다.
+입력15663개 `4afed4b8591227f4b5d85a2f360b03d30356cf08866f361648137a128a0b1965`에서 전체 local은
+**4126/4126 PASS**(serial9 + parallel4117, 469 files, concurrency4),
+fail/cancel/skip/todo0, 전후 bytes 변경0이다. Native/Config/Engine/Mac/App 독립 tarball
+설치5개도 같은 입력에서 PASS, 변경0이다. App의 공개4개와 실제 bin, 퇴역된 내부 경로
+거절, Engine의 compiler-owned JSON과 checked adapter를 설치 상태에서 확인했다.
+자체 선언 진단0이며 기존 SDK 외부 선언 진단44는 별도로 기록한다.
+
+원시 근거는 /home/dev/oma-audit-artifacts/quality-improvement-2026-10-25/의
+local-full-first.log·*-status.json·*-before.json·*-after.json, changed-isolation.log,
+focused-final.log, architecture-first.log, build-all-final.log, change-metrics.json이다.
+이전 red 재현은 code-quality-2026-10-25/fault-probes.json에 그대로 보존했다.
+실행 중 source/docs/build/install을 쓰지 않았고 첫 serial9 동안 CPU 작업을 병행하지 않았다.
+실행 후 문서3개만 갱신한 관계는 completion-evidence.json이 소유하며 기록 뒤 binding을 재검사한다.
+
+Priority0의 durable bytes·현재 권한·unknown·captured T/동일 Store gate 의미와
+immutable architecture/review-notes의 해시를 유지했다. 새/변경 코드는 NOT_REVIEWED이며
+과거 review를 재승인하지 않았다. 실제 systemd/cgroup·Mac/VM/Keychain·provider·power-loss는
+계속 NOT_RUN이다. private bwrap overlay의 local PASS를 실환경 qualification으로 세지 않는다.
+
+
+
+
+## DR46 Lifecycle 독립 전환과 root18 후속 검증 (2026-10-24)
+
+root18 fresh build와 전체 정적 gate는 PASS다(`build-eighteen-root.log`,
+`architecture-eighteen-root.log`). `eighteen-local-full.log`는 serial9 PASS와
+parallel4,063 PASS/2 FAIL, 합계4,072 PASS/2 FAIL이다. 입력15,561개
+`f8d7692266462b67dfce9f9c832b51747dbe276fe83ec38a052d3acdc3bbeaee`, 변화0,
+skip/cancel/todo0이다. P08 reflective fixture에 새 독립 Review 인자가 빠졌고 P22의 현재
+dispatch surface pin에는 의도적으로 분리한 세 interface가 반영되지 않았다. 실제 missing
+activation 거절 조건은 유지하면서 현재 생성자 모양으로 바꾸고 PublicReviewPort·PublicGitPort·
+PublicDispatchDependencies의 actual surface만 갱신했다(`review-dispatch-surface-repair.json`).
+wire·나머지 interface·negative mutation 판정이나 과거 authored review는 갱신하지 않는다.
+두 root fixture와 binding은 exact before/after SHA로만 Lifecycle 전환 baseline에 반영했다.
+`eighteen-guards-final.log`는 P08/P22 positive/R38 **3/3 PASS**,
+입력15,561개 `99323e921601c8b90d344308c998c126ba69236a21d5cf16f1ed57a742728417`,
+변화0이다. 이전 raw 전체2 FAIL을 전체 PASS로 합성하지 않는다.
+
+독립 checkout의 `@oma/lifecycle`은 실제9개 feature src, 명시적9개 공개 entry와 기능 시험을
+소유한다. 생성·bootstrap·start/stop·society open/close·ack/follow·recovery와 creation proof의
+판정을 유지한다. 구체 Store/Units/Mail·filesystem/process/native를 feature에 넘기지 않는다.
+live ledger 조회와10개의 원래 captured transaction closure, 필요한 unit/workspace/Mail/
+identity·artifact scope·directory effect를 app에서 연결한다. 기존 constructor의 repository
+identity와 live incarnation reader 연결도 app이 소유한다. feature의 activation gate 거절은
+그 연결 전에 수행한다. LifecyclePaths의 사용하지 않는 Git/origin 필드는 physical composition
+입력으로 분리했으며 실제 confined origin 선택은 그대로 유지한다.
+
+실제 clone/staging·contained inode·TreeLease·native preparation/unknown lifetime 구현은
+`@oma/git/workspace`로 이동했다. provisioning HEAD의 물리적 관측도 그 owner가 수행한다.
+accepted base/spec/incarnation 비교, 단위 설치, provisioning→enabled의 원래 root T와
+opaque creation evidence mint/WeakMap/consume은 Lifecycle의 원래 판정 owner에 남긴다.
+readiness가 입증된 뒤 Resident가 소유한 workspace를 재해석하지 않는다. 같은 spec/plan/
+receipt와 실시간 stop·권한·activation 조건, 모든 Resident 정지 시도와 unknown death 처리를
+유지한다. 새로운 callback bag·old constructor facade·원래 tx를 빌리는 ambient write는 없다.
+
+첫 port typecheck는 아직 옮기지 않은 직접 collaborator/alias 생성자11건을 거절했다
+(`typecheck-lifecycle-ports-first.log`). 실제 projection/ID/scope와 새 mandatory 효과를 연결하고
+현재 worker bootstrap·SIGKILL child import를 공개 API로 바꿨다. 최종 공식 typecheck
+`typecheck-lifecycle-final.log`도 PASS이며 새로운 T의 compile-only async/thenable 및
+부적절한 batch 권한 거절을 포함한다. repaired direct typecheck와
+새19개 workspace build `build-lifecycle-first.log`는 PASS다. 전체 정적 gate
+`architecture-lifecycle-first.log`도 PASS, production14,278개/위반0, durable strongest
+injection은61 SIGKILL/11 in-process-fault/23 logical이다.
+
+`lifecycle-focused.log`는 **227/227 PASS**, skip/cancel/todo0,
+`isolation-lifecycle.log`는 **19개 모두** 독립 tarball 설치·공개 entry·자산·자체
+declaration/runtime PASS다. 두 실행의 입력15,569개
+`d897504a6985a29f5534dfdf58b7fa3aa8f89fc99312f909d9c98a8755a77df3`, 변화0이다.
+10개 stale tx closure·후속 T 빌리기·Promise/thenable 거절·live incarnation/intent·실제 SQLite
+SIGKILL 후 같은 key 재시작·stop fence·권한 취소 뒤 async workspace/units 경계·frozen spec와
+origin·owned/untrusted directory·held preaccept·bootstrap/서로 다른 진행 상태를 포함한다.
+installed Lifecycle runtime은 ledger 구현/Git/native 없이 자신의 closure에서 current authority,
+lineage, activation gate 누락 거절과 모든 Resident의 quiescence를 확인한다. 실제 systemd unit
+설치나 macOS/VM·provider turn·전원 차단의 증거는 아니다. 기존 Pi 외부 declaration 진단44건과
+author-owned 진단0을 구분한다. actual root source 반영과 새 전체 실행은 별도 원본이 소유한다.
+전체25개 전환의 완료 표시는 아니다.
+
+## DR46 Git·Review 독립 전환과 root16 후속 검증 (2026-10-24)
+
+root16 첫 전체 `sixteen-local-full.log`는 serial9 PASS와 parallel4,050 PASS/4 FAIL,
+합계4,059 PASS/4 FAIL이었다. 입력15,545개
+`d53fe850b9d75dfc4936b94f80669a81802a21083bd026eb2f9dbe328283cba2`, 변화0이다.
+실패는 미리 생긴 cur를 없는 것으로 가정한 P04 fixture, ambient unique-symbol 선언을
+실행 코드로 본 계약 검사, 옛 Mail 복구 함수 mock 두 건이다. 실제 첫-cur 조건을 빈 디렉터리
+제거로 만들고, initializer 없는 declare const unique symbol만 허용하며, 현재 Mail 복구
+진입점을 연결했다. 기존 flush 실패·prepared 보존·복구·route 판정은 유지한다.
+`sixteen-fixture-final.log`는13/13 PASS, 입력15,545개
+`05c2ad4c8465e0c99b76222ee315a550e8deb5a7ac373704fe301ccafc7518ce`, 변화0이다.
+후속 전체 `sixteen-local-final-full.log`는4,062 PASS/1 FAIL이다. 같은 입력이며 변화0,
+skip/cancel/todo0이다. 남은 R38 실패는 fixture 수정 전 verification binding을 갱신하지 않은
+기록 오류다. `sixteen-binding-repair.json`은 binding만 바뀌고 정규화 입력 digest는 같음을
+확인한다. `sixteen-provenance-final.log`는 해당 R38 **1/1 PASS**다. 두 raw 전체 FAIL은
+합성한 전체 PASS로 바꾸지 않는다.
+
+독립 checkout의 실제 Git/Review src·public exports·직접 의존·기능 시험을 각각
+`@oma/git`, `@oma/review`로 옮겼다. Git workflow import는 canonical command adapter를
+평가하지 않으며 실제 repository adapter는 별도 공개 entry다. Git은 Mail/Review 구현이나
+type에 의존하지 않는다. Review는 Mail과 공통 contracts/domain/protocol만 사용한다.
+app은 독립 ReviewAuthorityReader를 먼저 만들고 Git의 동기 pre-CAS gate와 Review에 연결한다.
+Git 객체의 reviews 조립/노출은 제거했고 broker/reconcile에는 별도 review port를 연결한다.
+Git5개/Review3개 transaction method는 원래 root T의 captured closure이며 stale callback,
+다음 T 빌리기, Promise/thenable 탈출과 live transaction getter를 실제 Store로 검사한다.
+Review의 corruption 관측은 원래 Store admission gate에 연결하며 이미 접수된 복구 쓰기와
+새 acceptance를 구분한다. proof mint/WeakMap·receipt decoder와 single writer의 owner는 유지한다.
+
+Mail이 logical notification·RFC/MIME·freeze를 소유하고 Git은 알림 내용을 선택한다.
+기존 submit/context의 literal RFC 옵션과 같은 Date에서 실제 발행 bytes/hash/metadata를
+비교했다. 공통 Git observation/ChangedPath DTO, preaccept owner/파일 artifact 선언과 알림
+초안은 contracts가 소유한다. 순수 policy/tier/경로/관측 해석과 diff 표시 함수는 domain의
+실제 구현 하나를 사용한다. 물리적 관측·CAS·quarantine·snapshot은 Git에 남긴다.
+
+`request-identity-production-call-audit.json`은 authored production471개 파일의18개 호출을
+검사했다. 별도 stream 인자를 넘기는 유일한 호출은 폐기할 facade 내부 forwarding이었다.
+실제 stream descriptor는 이미 params에 있다. request-hash facade와 옛 세 번째 인자·분기는
+제거하고 원래의 method+params hash recipe와 모든 기존 literal byte vector를 유지한다.
+옛 stream-positive와 facade 함수 identity 판정은 퇴역한다. 제거한 인자는 새 DR46 음성
+검사에서 명시적으로 거절하며, 실제 Store의 다른 payload 재사용 오류와 원래 code/message를
+새 domain owner에서 검사한다. 이미 접수된 stored hash/plan/result는 재해시·재작성하지 않는다.
+
+첫 `git-review-focused.log`는412 PASS/41 FAIL, 입력15,561개
+`5dee9b7fcb48a792e9a381adb68154e47d6306dbe161b4e4241af7aff17f9f6d`, 변화0이었다.
+실패한 기존 private fault seam과 composition mock을 실제 repository/현재 factory로 옮겼다.
+옛 협력 객체에 없던 freeze를 새 adapter에 추가한 부분은 원래 mutability로 되돌린다.
+captured transaction projection과 발급 증거의 freeze는 유지한다. GOAL 모순 음성 검사는
+읽기 전용 EML을 수정하다 실패하는 대신 실제 notification port에서 hash-valid인 다른
+bytes/metadata를 만들어 동일한 corruption 판정을 확인한다. 잘못 작성한 새 corruption
+oracle은 일반 agent 쓰기 대신 실제 새 acceptOperation을 거절하는지 확인한다.
+어떤 복구/권한/바이트 판정도 통과를 위해 반대로 바꾸지 않았다.
+
+최종 공식 typecheck `typecheck-git-review-final.log`도 PASS이며 새 transaction port의
+compile-only async/thenable·권한 제한 검사를 포함한다.
+현재 새 build `build-git-review-runtime-repair.log`와 전체 정적 gate
+`architecture-git-review-runtime-repair.log`는 PASS다. production14,274개, 위반0,
+durable strongest injection은60 SIGKILL/11 in-process-fault/23 logical이다.
+이전 gate의 옮겨진 boundary owner·미등록 projection·parameterized test title 참조와
+빌드 중 생성한 stale graph 실패도 각각 raw log에 남긴다. 빌드가 끝난 뒤 evidence를 갱신한다.
+`git-review-repaired.log`는 **475/475 PASS**, skip/cancel/todo0,
+`isolation-git-review-repaired.log`는 **18개 모두** 독립 tarball 설치·공개 entry·자산·자체
+declaration/runtime PASS다. 두 실행의 입력15,561개
+`1706b86e93d81a81d977288631686aa1977a381b1767b4fe38e02de48328a232`, 변화0이다.
+실제 Git/Review acceptance 직후 SIGKILL·같은 key retry·재시작·원본 mail/plan/terminal 보존을
+포함한다. Git17개/Review3개 공개 entry와 installed canonical CAS/ref·current eligible vote/
+cancel gate를 선언한 closure에서 실행했다. 자체 declaration 진단0이며 기존 Pi 외부 진단은
+extension/tool-runtime/네 tool에서 각각44건으로 별도다. 실제 macOS/VM·user systemd·provider
+turn·전원 차단은 이 검사로 실행했다고 주장하지 않는다. root 반영/새 build/전체 local 결과는
+별도 transfer/build/local artifact가 소유하며 전체25개 전환은 아직 미완료다.
+
+Git/Review actual root 전환은 `git-review-transfer-result.json` APPLIED 277개,
+conflicts0이다. 변경 전 원본 archive는 `git-review-root-before.tar.gz`이며 `.git`, 설치물,
+build output을 Source 대신 복사하지 않았다. 현재 root18개 workspace의 새 실행 결과는
+`build-eighteen-root.log`, `architecture-eighteen-root.log`, `eighteen-local-full.log`,
+`eighteen-local-status.json` 원본이 소유한다. 위의 과거 raw FAIL이나 stage PASS를 root의
+새 전체 PASS로 재해석하지 않는다. authored231개 MJS의 `node --check`는0 failures였으며
+provider turn을 실행하지 않았다(`authored-js-syntax-git-review.log`).
+
+## DR46 독립 workspace 전환: 검증 진행 중 (2026-10-24)
+
+root15 새 build와 전체 정적 gate는 PASS다(`build-fifteen-root.log`,
+`architecture-fifteen-root.log`). 그 입력의 전체 local `fifteen-local-full.log`는 serial9/9 PASS,
+parallel3,946 PASS/91 FAIL로 끝났다(합계3,955 PASS/91 FAIL), skip/cancel/todo0.
+입력15,526개 `594200e5a687b98d66a5b2dc7efd346117be948670becdb81f655b534873a5d2`, 변화0.
+실패는 compliance fixture의 새 production root 미포함1건, deadline fixture의 옛 부모 경로22건,
+surface/TUI fixture의 같은 부모 경로20건, interactive VM fixture의 새 protocol import46건,
+source-digest fixture의 제거된 tsconfig 기대2건이다. raw FAIL을 보존하며 이를 전체 PASS로 바꾸지 않는다.
+별도 `fifteen-deadlines-diagnostic.log`도 같은 실제 파일의22 FAIL/1 PASS로 부모 누락을 확인했다.
+
+업무 port 기초는 독립 checkout에서 진행 중이다. 공통 row/NewOperation/NewAgent DTO를
+contracts로, 실제 닫힌 frozen spec parser와 최소 authority reader를 domain으로, 같은 receipt
+projection 구현을 protocol로 옮겼다. storage의 SQL/row 관계 검증·실제 transaction scope는
+유지하며 옛 public type/error/projector convenience 경로를 제거했다. pure authority 원래 시험은
+domain/test가 소유한다. 실제 업무별 consumer port와 모듈 분리는 아직 남아 있다.
+첫 build는 PASS(`build-business-foundation-first.log`)였다. 추가 root15 fixture 수리 중 한 시도의
+빠진 dirname import는 compiler가 거절했다(`build-business-foundation-repairs.log`, exit2).
+해당 import와 나머지 TUI/source-digest fixture를 고친 현재 build는
+`build-business-foundation-current.log`에서 PASS다. root의 고정 입력은 수리 중 변경하지 않았다.
+
+첫 집중 `business-foundation-focused.log`는 218 PASS/17 FAIL이었다. 입력15,529개
+`268b2e422d23c14d214dcfe71ff20dc1d372d18310bf5d1a15bb726f00d9d242`, 변화0.
+남은 실패는 broker VM mock의 옛 authority import15건과 실제 SIGKILL 후 새 packages 설치
+디렉터리까지 임시 파일로 간주하던 fixture2건이다. mock은 실제 domain/agent-spec owner를
+연결하고, SIGKILL fixture는 실행 전 설치 트리 전체와 재시작 후 트리를 재귀 비교한다.
+수정 후 `business-foundation-final.log`는 **235/235 PASS**, skip/cancel/todo0이다.
+입력15,529개 `ad1408a306f3ac686e57d48821d5d7fec761f49d17832358cae17cb129971232`, 변화0.
+root15의 실패91건과 권한·frozen row·receipt·preaccept·실제 confined delivery 회귀가 포함된다.
+같은 입력의 `isolation-business-foundation.log`는 **15개 모두** 외부 tarball 설치·공개 API·
+소유 자산·자체 declarations PASS다. 외부 Pi declaration 진단44건의 구분은 유지한다.
+이는 선택한 회귀와 설치 검사 결과이며 root 전체 local PASS는 아니다.
+
+공통 기초는 원래 root에114개 source 파일을 충돌 없이 반영했다
+(`business-foundation-transfer-result.json`: APPLIED, conflicts0). 변경 전 working-tree byte는
+`business-foundation-root-before.tar.gz`에 보관했다. root fresh build와 전체 정적 gate도 PASS다
+(`build-business-foundation-root.log`, `architecture-business-foundation-root.log`). root 전체 local
+`business-foundation-root-local-full.log`는 serial9/9 PASS, parallel4,021 PASS/16 FAIL로 끝났다
+(합계4,030 PASS/16 FAIL), skip/cancel/todo0. 입력15,529개
+`990835f3649e186a34a228f6293c308da11dbf7862d19d56567726e945b468c0`, 변화0.
+16건은 public validation VM fixture의 옛 authority import key였다. root와 stage의 같은 fixture만
+실제 domain/authority import에 맞춰 고쳤다. `foundation-public-validation-final.log`16/16 PASS,
+입력15,529개 `0f3aa7d298e38278d0a2d1932d7fe3adcf592d6ec40d94ab003cb8712bc22638`, 변화0.
+raw 전체 FAIL을 집중 PASS로 덮어쓰지 않는다.
+
+독립 checkout의 Mail ledger port는 현재 필요한 조회와7개 transaction method만 노출한다.
+broker 조립이 원래 tx closure를 동결해 전달하며 ambient Store mutation은 전달하지 않는다.
+DR46-F05 수정 전 `mail-arrival-before-final.log`: 정상1 PASS/음성3 FAIL,
+입력15,530개 `8f56c06b71c8ec13f81afb75ad163a65e490dc6b8f20b7ec167f656fcd24a901`, 변화0.
+실제 partial/0-byte append와 SIGKILL 뒤 붙은 timestamp를 materialized/succeeded로 승격하던
+결함이다. owned append primitive가 regular inode를 pin/repair하고 완전한 record와 parent를
+flush하도록 고쳤다. zero progress는 pending으로 남고, 끊긴 tail은 원문을 지우지 않고 줄을 닫는다.
+첫 Mail 집중 `mail-ledger-focused.log`는115 PASS/15 FAIL이다. 입력15,535개
+`6b39b67c339e85273e9e66c27350654c19a31fa52c78e2e7328fae445b03c7bd`, 변화0.
+15건은 새 조립 import에 대한 VM mock key를 다른 상대경로로 쓴 시험 수리 오류였다.
+현재 `mail-ledger-final.log`는 **130/130 PASS**, skip/cancel/todo0.
+입력15,535개 `3bcdfacb7cba00d46678b15113770217c29e2d254193cd4e14957ac4bb216a9c`, 변화0.
+부분/정지 append·실제 SIGKILL/retry/restart·반복 복구, owned mode-000/link/FIFO 거절,
+transaction 탈출/다음 T 재사용/Promise·thenable 거절과 기존 mail/batch/receipt/preaccept가 포함된다.
+첫 build는 PASS다(`build-mail-ledger-first.log`). 첫 typecheck의 새 compile-only thenable
+fixture가 PromiseLike 형식을 만족하지 않아 미사용 ts-expect-error로 실패했다. 올바른
+PromiseLike 음성 입력으로 고친 root tsc는 `typecheck-mail-ledger-final.log`에서 PASS다.
+그 입력에서는 Mail의 physical effect port와 package 전환이 남아 있었다.
+
+Mail physical effect port의 첫 집중 `mail-effects-focused.log`는212 PASS/1 FAIL,
+skip/cancel/todo0이다. 입력15,541개
+`d872a2947e91a41a0ab08d23ee39babe444ea0739753a896a576f8ee27a73f7c`, 변화0.
+실제 held inode 게시/관측/이동/arrival과 부분 acquisition FD 반환, arrival의 file/parent fsync
+오류, 기존 namespace/immutable/fault/SIGKILL/receipt가 통과했다. V20B 한 건은 owned mode-500을
+unavailable로 가정한 fixture였다. P0-8 수리가 성공하는 경우와 실제 I/O 실패가 pending을
+유지하는 경우를 분리했고 같은 제목의 완료 조건/수락 bytes 불변 의미는 유지한다.
+첫 effect build는 scope variable의 never-return flow annotation 누락을 compiler가 거절했다
+(`build-mail-effects-first.log`, exit2). 명시적 MailPreacceptScope annotation으로 고친 fresh build는
+`build-mail-effects-current.log`에서 PASS다. txClaim의 임의 기본값으로 우회하지 않았다.
+
+현재 분리 checkout에 `@oma/mail`의 실제15개 소스·14개 명시적 public entry·자체 batch 시험과
+필수 MailLedger/MailEffects가 있다. DB/파일/receipt/parent effect의 실제 owner는 app 조립이
+연결한다. storage는 caller-held inbox capability와 동일 immutable publication 구현을 쓰고,
+Mail은 기존 라우팅·metadata/body·배달/정산 결정과 단일 순수 batch renderer를 소유한다.
+첫 workspace build는 root에만 runtime dependency를 요구한 check-package에서 nodemailer를
+거절했다(`build-mail-workspace-first.log`). 실제 선언 owner별 lock/설치 경계/동일 버전 검증으로
+고친 `build-mail-workspace-current.log`는 PASS다. deployment layout에도 실제 Mail을 포함했다.
+`modules-mail-workspace.log` 위반0과 `mail-owned-api-smoke.log`의 MIME/body/routing/batch API
+검사도 통과했다. 이 smoke는 현재 checkout API이며 아직 외부 tarball 설치 증거가 아니다.
+후속 타입/전체 정적 gate·집중 회귀·16개 독립 설치·root 반영은 이어서 실행한다.
+
+현재 Mail workspace의 공식 typecheck와 새 build는 PASS다
+(`typecheck-mail-workspace.log`, `build-mail-workspace-final.log`). 첫 전체 정적 gate
+`architecture-mail-workspace.log`는 owned-state exception이 불필요하다는 guard에서 FAIL했다.
+새 mailbox의 모든 효과가 held descriptor를 사용해 원래 규칙으로 보호되므로 그 exemption을
+제거했다. modules/legacy/inventory는 통과했으며 이후 architecture/transaction/durable/document/
+spec gate는 이 첫 aggregate에서 미실행이다. 후속 전체 gate를 별도로 실행한다.
+
+수정 후 `architecture-mail-workspace-repair.log`는 전체 PASS다. production14,266개,
+위반0이며 durable strongest injection은58 SIGKILL/11 in-process-fault/23 logical이다.
+같은 입력의 `mail-workspace-focused.log`는 **305/305 PASS**, skip/cancel/todo0,
+`isolation-mail-workspace.log`는 **16개 모두** tarball 독립 설치·공개 entry·자산 exact-set/SHA·
+자체 declaration/runtime PASS다. 입력15,545개
+`b039d1897b027ecb013a2e2420ed49f265e450eb39884627de2e2eb5b868814b`, 두 실행 모두 변화0.
+Mail14개 public entry와 실제 installed MIME/header/body/routing/batch renderer는 storage/native/
+app 없이 자기 선언 closure에서 실행했다. caller-held copy fallback, scope 탈출, owned mode 수리,
+동일 inode와 acquisition 실패의 실제 FD 반환, file/parent flush 오류와 SIGKILL 복구를 포함한다.
+기존 Pi declaration 외부 진단은 extension/tool-runtime/네 tool에서 각44건이며 별도다.
+
+추가 실제 Node syntax 검사 `authored-js-syntax-first.log`는213개 authored MJS 중 한 파일을
+거절했다. functional-pi-smoke의 import가 shebang 앞에 놓여 Node가 파싱하지 못했다.
+shebang을 첫 줄로 되돌리고 실제 소비자가 없는 workspaceBytes와 폐기된 quota 설명도 제거했다.
+이 검사는 provider turn을 실행하지 않으며 해당 functional/provider qualification은 NOT_RUN이다.
+과거 provider 없는 extension surface smoke를 이 provider script의 성공으로 확대하지 않는다.
+
+15번째 `@oma/extension`은 독립 checkout에서 실제 조립·핵심 도구·delivery·channel·bridge·
+prompt 소스와 기능 시험을 소유한다. 원래 root에 반영했으며 전체 모듈 전환은 미완료다.
+
+root 14 workspace의 새 build 후 전체 local `fourteen-local-full.log`: serial **9/9 PASS**,
+parallel **4,026 PASS/7 FAIL** (합계 4,035 PASS/7 FAIL), skip/cancel/todo0.
+입력 15,519개 `f8d21a57eb9c4a450fa27cb1bc07ba1428c4b8253560108a9c7a1a545c047121`, 변화0.
+7건은 build fixture가 현재 build-workspaces의 workspace-assets helper를 복사하지 않은 같은
+원인이었다. raw FAIL을 보존한다. 새 build 후 root 정적 gate는
+`architecture-fourteen-root-afterbuild.log`에서 통과했다. 빌드 전 graph가 오래됐던 첫 root gate의
+FAIL도 보존하며 뒤의 PASS로 덮어쓰지 않는다.
+
+extension 첫 집중 `extension-focused.log`: **418 PASS/45 FAIL**, 입력 15,523개
+`d4c024b4187f84328faec94387d90a53b29b542b602ca82ddb89825d2bac76e2`, 변화0.
+새 경로의 부모 디렉터리를 만들지 않은 fixture와 두 잘못된 상대 경로·임시 디렉터리 cleanup을
+고쳤다. `extension-repaired.log`: **481 PASS/1 FAIL**, 입력 15,524개
+`e3b75e4fa9d81edfe376c6a68ef526ed4abeab4b1f197b3df43d10a2819d3a42`, 변화0.
+마지막 한 건도 tool-surface fixture의 같은 부모 경로 문제였다.
+
+DR46-F03은 이동한 extension dirname에서 app preload를 추정하던 분리 checkout의 회귀다.
+`preload-owner-before.log` **0 PASS/1 FAIL**, 입력 15,524개
+`849f67312f6c4dd99733d40dbf5f930baabc2cdf12f8c33ad343548f537980c6`, 변화0으로 먼저 확인했다.
+현재는 Resident/Principal이 DEPLOYMENT_LAYOUT의 실제 app-owned preload를 사용한다.
+DR46-F04의 옛 T117 unshare-only probe는 제품의 network 차단 증거가 아니므로 퇴역했다.
+새 시험은 실제 planPiSpawn→spawnSandboxed의 host-loopback marker와 --share-net 제거 음성
+제어를 비교하며 파일/credential 봉인도 유지한다. 기존 T117의 나머지 실제 경로는 유지한다.
+
+수정 후 `extension-current-final.log`: **162/162 PASS**, skip/cancel/todo0. 입력 15,525개
+`bb62e0249cdd300a9b672a5b4fe3d34bc69f2a440a3a48b94539d70d64fbb792`, 변화0.
+root에서 실패했던 build-stamp 7건, 새 preload/namespace 오라클, 실제 bundled Pi confined
+delivery/receipt·custom mail·installed CLI, receipt publication/observation/rollover/kill 경계가 포함된다.
+같은 입력의 `extension-functional.log`도 실제 Pi가 새 core 경로를 로드하고 예상 활성 도구를
+보고했다. model turn이 없는 profile의 group expansion은 관찰되지 않았으므로 그 부분은
+이 실행의 PASS가 아니다. provider/systemd/native Mac/VM/power-loss qualification도 아니다.
+`isolation-extension.log` 첫 시도는 새 installed smoke의 messageId fixture가 ordinal을
+누락해 runtime read에서 거절됐다. 앞 4개 package만 완료했고 이후 package는 이 실행에서
+미실행이다. 입력 `59650f38895ead075c10c0bc38a39af49d726226f5ed66e5d691f21a1117ad5b`, 변화0.
+실제 domain/derived 생성자로 양성 fixture를 고치고 전체 설치를 별도로 재실행한다.
+`isolation-extension-final.log`는 **15개 모두** tarball 외부 설치·공개 API·자산 exact-set/SHA·
+자체 declarations PASS다. 새 extension의 실제 조립 등록·archive read·Personal ask entry와
+네 tool의 installed registration/LSP 진단·종료/hashline read도 통과했다. 입력 15,525개
+`f4e5e6f78a220dfd99f3a74d2fda764dfe1ba25173b013f91716682c23521748`, 변화0.
+외부 Pi declaration 진단은 extension/tool-runtime/네 tool에서 각44건으로 별도이며 upstream
+타입 전체 PASS로 확대하지 않는다.
+공식 `npm run typecheck`와 새 build도 PASS다(`typecheck-extension-final.log`,
+`build-extension-transfer.log`). `isolation-extension-transfer.log`의 최종 설치 재검사도 15개 모두 PASS다. 입력 15,525개
+`7d84f2f52273695c967b8fdbace5018c20be07875077c8421a54a535bc2816c6`, 변화0.
+최종 compiled artifact를 외부 설치한 같은 등록/read/asset/declaration 오라클이며 외부 Pi
+진단과 실제 플랫폼의 미실행 범위는 위와 같다.
+최종 metadata 첫 갱신은 production manifest의 새 extension 소스/manifest 누락을 실제 coverage
+guard가 거절해 digests 단계에서 중단했다(`digests-extension-transfer.log`). 그 실행의 review/
+binding/aggregate gate는 미실행이다. 실제 두 owner root를 명시해 inventory를 보완하며 검사를
+약화하지 않는다.
+metadata의 다음 시도는 review oracle 발견기가 root test만 읽어 이동된 post-listen 시험을
+찾지 못하고 review 단계에서 중단했다(`reviews-extension-transfer-repair.log`). binding/aggregate
+gate는 미실행이다. 같은 ID/입력/assertion을 실제 workspace/test에서 발견하도록 고치고 주석/
+fixture 문자열을 AST로 배제했다. immutable review-notes는 그대로이며 새 byte/path는 계속
+NOT_REVIEWED다. `extension-review-final.log` **29/29 PASS**, skip/cancel/todo0, 입력 15,526개
+`c38dab6c641b755b2af0daaac3f6d08dfb990467f4285458bce105b8dd24eaae`, 변화0. 실제 생성기/장부/
+oracle 음성 제어와 extension 자체 시험이 포함된다. `npm run build:extension`도 실제 독립
+workspace build로 PASS다(`build-extension-alias.log`).
+`architecture-extension-complete.log` 첫 aggregate는 modules/legacy/inventory/rules/lattice/
+transactions/durable이 위반0이었으나, audit의 옛 mail-tools 링크1건으로 documents FAIL이었다.
+spec inventory는 앞 단계 실패로 미실행이다. 역사적 경로/행/발견 의미는 그대로 적고 현재 owner
+링크만 복구했다. 이후 metadata와 전체 gate를 다시 결박한다.
+module/legacy/architecture-rules 자체 검사는 각 위반0이다. tarball/타입/전체 정적 검증은 이어서
+실행하며 이 집중 결과를 현재 15 workspace 전체 local PASS로 승격하지 않는다.
+
+14 workspace 전체 정적 gate 첫 실행 `architecture-four-tools-first.log`는 문서 링크 5건으로
+FAIL이었다. module/legacy/inventory/rules/lattice/transaction/durable 경계는 위반 0이었고
+spec inventory는 앞 단계 실패로 실행되지 않았다. 링크 target을 실제 새 owner로 수정했다.
+optional proxy의 조건부 안내를 확인한 `conditional-guide-final.log`는 **11/11 PASS**,
+skip/cancel/todo 0. 입력 15,519개
+`5a3d30c932761543d8054acf93889706390d84ed5a90b2b0c68182517e7db801`, 변화 0.
+수정 후 공식 `npm run typecheck`도 PASS다(`typecheck-vendor-owner-final.log`).
+문서 target 수정 후 `architecture-four-tools-second.log`는 전체 PASS, 위반 0이다.
+production 14,252개, verification input 15,519개
+`00b186db82f5216fe8cfab8753818fe7f9e344c691e21e88dfcd78fe8d110541`, runtimeProof false다.
+독립 artifact 시험도 현재 소유 구조에 맞춰 실제 선언 tool 의존의 bundle을 검증하게 고쳤다.
+`module-build-four-tools.log`는 TUI/extension artifact와 module-relative layout **4/4 PASS**,
+skip/cancel/todo 0. 입력 `6deeeedb320e74834faf88472e6b6211b959a217ad477f32136869be7a059c04`, 변화 0.
+자산 변조 거절 의미는 실제 owner를 사용하는 DR46-F02 오라클이 유지한다.
+이 기록 후 구조 binding과 전체 정적 gate를 갱신하며 root 반영/전체 local은 별도 실행한다.
+
+DR46-F02 실제 owner binding: 첫 entry 재현 뒤 같은 통합 오라클이 네 tool 모두에서 변조
+payload 평가·도구 등록을 확인했다. `vendor-owner-binding-before.log` **0 PASS / 4 FAIL**,
+입력 15,519개 `aa989840e68a728562b30a2c26ce5d649a93b62a85745aadfaf3ebd302eaf2bd`, 변화 0.
+실제 import 대상만 검증하게 고치고 미사용 override·빈 WebToolsOptions를 삭제했다.
+`vendor-owner-final.log`는 **219/219 PASS**, skip/cancel/todo 0,
+입력 15,519개 `8d5bff876a12bb36de007e93998f90cc247316e5cede10621d006a3e15472dc7`, 변화 0.
+같은 네 오라클에서 모듈 평가 false·도구 0·세션 거절 exit 1을 확인했다. 상태는 FIXED_LOCAL이며
+실제 systemd/provider 실행으로 표시하지 않는다. 실제 공유 네트워크 코드와 어긋난 옛 START
+allowlist/선택 proxy 설명도 고치고 R30의 불변 시험을 유지했다.
+
+수정 후 `isolation-vendor-owner-final.log`: 현재 14개 모두 tarball 외부 설치·runtime API·
+자산 exact-set/SHA·자체 declaration PASS이며 네 tool의 실제 installed registration,
+LSP fixture 진단/종료와 hashline read도 PASS다. 외부 Pi 선언 44건은 각 관련 package에서 별도다.
+네 vendor 유지 스크립트 `--check`도 현재 runtime emit/pin 일치를 확인했다
+(`vendor-check-{lsp,hashline,web,mcp}.log`). web/MCP upstream emit의 타입 진단은 로그에
+그대로 남아 있으므로 upstream TypeScript 전체가 깨끗하다는 판정이 아니다.
+
+네 tool 분리 집중 `four-tools-focused.log`: **420 PASS**, 정적 시험 파일 2개는 공통 검사
+파일의 주석 문법 오류로 load FAIL(그 안의 case는 이 실행에서 실행되지 않음).
+입력 15,514개 `a71daf4130ae08541037a4a2b4f531343e35005704bcbc129a620291ff8a1215`, 변화 0.
+주석을 고친 `four-tools-guards-repair.log`는 두 파일 **26/26 PASS**, skip/cancel/todo 0,
+입력 15,514개 `3823a89daa6ed17fff4c03308c57657914afe19c8ade7b3c5aa334ee8d0ce8c5`, 변화 0.
+420건은 package 소유 기능 시험과 기존 실패 helper/current-only fixture 수정,
+실제 integration/context witness 및 journal SIGKILL/restart/retry를 포함한다.
+
+14 package의 tarball·선언 의존 closure 외부 설치·자산 전체 대조·자체 declaration은
+`isolation-four-tools-second.log`에서 모두 PASS다. 첫 시도는 npm pack의 큰 JSON 목록이
+execFileSync의 기본 pipe buffer를 넘어 도구 FAIL였다(`isolation-four-tools-first.log`).
+목록을 truncate하지 않고 owned scratch 파일로 받아 해결했다. 이어
+`isolation-four-tools-registration.log`도 14개 모두 PASS다. 실제 외부 설치에서 네 tool의 등록,
+fixture LSP server 진단 호출/종료, hashline의 contained read를 실행했다. 실제 provider task나
+systemd 증거는 아니다. tool-runtime/네 tool의 upstream Pi declaration 진단은 각 44개이며
+자체 declaration의 PASS와 구분한다. 나머지 9 package의 외부 진단은 0이다.
+
+npm이 제외하는 web/MCP의 isexe `.npmignore`는 원래 bytes/SHA를 명시한 보관 이름으로 옮겼다.
+현재 source와 설치물의 exact-set·빈 디렉터리·전수 SHA 비교 및 실제 등록 전 verifier를 모두
+통과했다. runtime JS·의존 버전·upstream/ snapshot은 바꾸지 않았고 raw 실험의 누락 판정을
+보존했다. 소유 자산 검사 negative control은 `test-assets-packaging.log` 4/4 PASS다.
+
+원래 root의 Host3/DB4/plan2 전체 local 재실행: **3,991 PASS / 45 FAIL**,
+skip/cancel/todo 0. 직렬 8 PASS/1 FAIL, 병렬 3,983 PASS/44 FAIL.
+15,499개 입력 `c0be8f4edf792636994b1f4ce383b22abf9a6bc372d067bf26c8cd6a7cbfda28`,
+전후 변화 0. `current-format-local-{before,after,status}.json`과
+`current-format-local-full.log`를 보존한다. 형식 전환에서 남은 helper/양성 DTO/구 schema
+fixture, 퇴역 resource·decoder assertion, 삭제된 owner를 가리킨 검증 fixture를 수정 중이다.
+응답성의 50ms 기준은 완화하지 않았다. 같은 root에서 다른 작업을 실행하지 않은 단독 재실행
+`status-responsiveness-alone.log`는 **4/4 PASS**다. 전체 실패 판정을 이 결과로 지우지 않는다.
+
+LSP 분리와 CLI/config/goal fixture 수정 집중 `lsp-focused.log`: **176/176 PASS**,
+skip/cancel/todo 0. 입력 15,503개
+`b21ffd870e70cc0987cb859c95f8b67b8a5646d170ab501a38ec472482908a41`, 전후 변화 0.
+이후 네 tool의 기능 시험을 소유 package로 옮겼으며 새로운 입력에서 재검증한다.
+
+10 workspace 이후 입력 고정 전체 local 실행은 직렬 9 PASS, 병렬 **4,042 PASS / 5 FAIL**이다.
+총 4,051 PASS / 5 FAIL, skip/cancel/todo 0. 430 files, 입력 15,504개 SHA-256
+`d608933848728f3836adea3609ecfde035213e674e42320f518a7356fb0abc1f`, 실행 전후 변화 0건.
+`ten-local-{before,after,status}.json` / `ten-local-full.log`가 원시 근거다. 실패는 layout-only
+fixture의 builder/workspace 링크 누락, 이전 설정 schema assertion, 미지 profile 보존 fixture,
+모든 옛 review가 무효화되면 빈 index를 고르던 검증 fixture 2건이다. 이 다섯 곳을 수정하고
+집중 19/19가 `test-ten-local-repairs.log`에서 통과했다. 이 집중 수정을 전체 PASS로 기록하지 않는다.
+
+DR46-F01은 실제 runner entry capture에서 재현한 후 Host3/DB4 전환에서 FIXED_LOCAL로 수정했다.
+재현 당시 `review`가 현재 역할 설정의 `standard`로 재지정됐다. 실제 systemd/provider 검증으로 표시하지 않는다.
+
+Host3/DB4/plan2 전환 집중: `resource-current-focused.log`는 **265 PASS / 8 FAIL**, 입력
+15,498개 `377306c769ee13e776c8016f4c06ba4ca76833c1adb363ec789d5a5b34842db8`, 변화 0이다.
+그중 1개는 잘못 포함한 systemd 전용 파일의 환경 BLOCKED이며 나머지는 fixture의 예외 종류·
+기존 short name·정책 hash였다. 이 실행에서 actual confined Worker SCN-X01/X02가 통과했다.
+외부 selection에 있던 미존재 managed-generation-kill은 Node가 실행하지 않았으므로 coverage에 포함하지 않는다.
+수정 후 `resource-current-repairs.log`는 **214/214 PASS**, skip/cancel/todo 0, 입력 15,499개
+`6a1297d35a02016ea25b9dbdf83ee293261bc2a23ef867556b73c97ae28fe710`, 변화 0이다.
+새 실제 SHA-1/SHA-256 CAS/no-op witness SIGKILL·restart·권한/정책 변경·같은 요청 재시도
+4건과 기존 journal short-write/receipt/config 실제 SIGKILL, runner entry capture, current-only
+형식 거절, LSP/hashline contained writer를 포함한다. 이전 DB 1/2/3·Host 1/2·bare plan은
+읽기 변환이나 삭제 없이 거부했다. 개별 workspace 소유 테스트도 `resource-workspace-tests.log`에서
+10개 package, 총 **18 PASS**, fail/skip/cancel/todo 0이다. 이 결과는 전체 모듈 개편 완료나
+새 구조의 전체 local PASS가 아니다. 이후 정적 지도·문서 변경은 별도로 다시 결박한다.
+
+canonical no-op을 실제 경계 primitive로 등록한 뒤 aggregate가 context authorization owner의
+미등록 시험 1건을 발견했다(`architecture-resource-current.log`; 앞선 module/legacy/inventory/
+architecture/transaction group은 통과, aggregate는 FAIL). 예외로 제외하지 않고 context 실제
+witness SIGKILL을 추가했다. `context-witness-final.log`는 **64/64 PASS**, skip/cancel/todo 0,
+입력 15,499개 `f2c53aa899a8ae698ebf5997a569f832a3c99149cdfd365dcba5d7b0a022bb32`,
+변화 0이다. 직접 통합 CAS/no-op 4건에 context authorization 2건을 더한 실제 SIGKILL/restart/
+retry와 빈 preaccept scope/미사용 별칭 제거, current DDL/삭제 재도입 negative control을 포함한다.
+이후 전체 정적 gate는 `architecture-resource-final.log`에서 모두 PASS다. production inventory
+14,248개, module/legacy/rules/architecture/transaction/durable/document/spec 위반 0건이다.
+입력 15,499개 `9225b5d8d7bc78dd661f8deab17b655302e12a785039ca3a8e207216a30399b7`,
+runtimeProof false다. root에 충돌 없이 반영한 뒤 새 build와 전체 local을 재실행한다.
+
+`isolation-resource-current.log`: 현재 열 package를 pack해 선언 의존 closure만으로 외부 설치한
+runtime API와 자체 declaration이 모두 통과했다. upstream Pi declaration 진단은 44개 별도로
+기록했다. 나머지 package의 외부 진단은 0이며 외부 타입까지 통과했다고 표현하지 않는다.
+
+journal flush 주입 보충: 제품 build와 설정/generation/실제 SIGKILL 집중 **29/29 PASS**,
+skip/cancel/todo 0 (`test-journal-kill-final.log`). journal append·file flush·parent flush를 실제
+kill observer에 포함했다. 강제로 1바이트씩 쓴 뒤 1/66/133/134번째 byte에서 SIGKILL해 manifest
+불변과 같은 candidate 재시도·rollback predecessor를 확인했다. 0바이트 write는 교체 없이
+거부한다. 이후 전체 local suite는 이 입력을 고정해 실행하며 별도 결과로 기록한다.
+
+설정/guest 형식 전환: HostConfig schema 2와 host/guest protocol 7의 build 및 집중
+**196/196 PASS**, skip/cancel/todo 0 (`test-config-v2-final.log`). 실제 키 대체·CONNECT·열린
+lease·run 종료·설정 generation·session·TUI 연결을 검사했다. guest의 옛 optional hold 조건이
+새 lease를 닫는 회귀와 이전 request fixture를 수정한 뒤 실행했다. 중단한 `test-config-v2.log`는
+PASS가 아니다. 이후 journal 형식과 닫힌 profile 변경은 별도 재검증 중이다.
+
+도구 공통 실행 패키지 전환: 열 번째 `@oma/tool-runtime` 추가 후 build 통과, 구조 규칙 위반 0건.
+도구·vendor·child 취소/종료·독립 extension 빌드 집중 실행은 **246 PASS / 1 FAIL**,
+skip/cancel/todo 0 (`test-tool-runtime.log`). 실패는 아직 갱신 전인 source graph identity 결박이며
+실제 구조 gate를 우회하지 않고 metadata 갱신 후 재실행한다. schema 2의 journal·닫힌 profile과
+실제 SIGKILL/namespace 회귀는 수정 후 **64/64 PASS** (`test-journal-repairs.log`).
+이후 플랫폼 공통 journal 관측·문법 사본 제거·quarantine 선언 삭제는 최종 재검증 중이다.
+
+10 workspace의 제품 lockfile 기반 tarball 격리 설치·runtime public API·OMA declaration은
+모두 통과했다 (`isolation-ten-workspaces-final.log`). tool-runtime이 참조하는 upstream Pi
+declaration 진단 **44건**은 별도 외부 진단이며 OMA 선언의 PASS에 포함하지 않는다. 나머지
+9개 패키지의 외부 진단은 0건이다. 최초의 새 registry 해석은 전이 버전 API 불일치로 실패했고,
+lock 고정 뒤 전체 외부 declaration 검사도 upstream 오류로 실패했다. 두 로그를 보존한다.
+검증기는 제품 lock의 선언한 폐쇄만 설치하고, OMA의 모든 public declaration을 엄격히 검사한다.
+의존 선택 음성 대조 3/3 및 자체 선언 오류·누락 import·root Node type 누출 음성 대조 1/1 통과.
+
+세션 레거시 정리: typecheck/build와 집중 **190/190 PASS**, skip/cancel/todo 0
+(`test-history.log`). birth 기록 없는 Society history는 bytes를 유지하고 재개를 거부하며,
+현재 birth 기록과 같은 빌드의 중단 시작 복구는 유지한다. 옛 basename Society 검색은 제거했다.
+
+소스/패키지·설정 강제 종료 합동 실행: **1,001 PASS / 106 FAIL**, skip/cancel/todo 0.
+입력 15,495개 SHA-256 `9ea5b418dc2be4cc8bf13be1819d326842be250a86ec5e90710583d3c716ff8d`,
+실행 전후 변경 0 (`config-source-{before,after,status}.json`, `config-source-checks.log`).
+공개 API로 이동하지 않은 fixture·옛 lane probe와 테스트 이름, 분석기의 workspace 해석 누락을
+수정한 후 집중 **149/149 PASS** (`test-config-source-repairs.log`). 새 negative control 2개는
+설치된 declaration에 가려지는 owned-path 전달과 workspace transaction 효과를 실제 거부한다.
+이 집중 통과를 수정 후 전체 suite PASS로 기록하지 않는다.
+
+설정 패키지 전환 진행: `@oma/config` 추가 후 typecheck/build 통과. 설정 게시·불변 snapshot 2개와
+배포 namespace 3개 **5/5 PASS**, build stamp 회귀 **7/7 PASS**. config/파일/receipt 강제 종료
+집중 실행은 36개 중 34 PASS/2 FAIL이었고, 실패한 child의 이전 설정 경로를 공개 API resolve로
+수정했다. 수정 후 재실행은 아직 전이다. DB/wire/config 형식은 이 이동 단계에서 바꾸지 않았다.
+
+저장 패키지 전환 진행: `@oma/storage`가 SQLite·파일 primitive·schema를 소유한다. 이 단계의
+root typecheck와 제품 build, package-local rollback/만료 권한/thenable 거부 **3/3 PASS**.
+무효 quota gate 제거와 nested workspace 해석 검사는 집중 실행 **30/30 PASS**, skip/cancel/todo 0
+(`runtime-storage-resolution-final.log`, 아래 artifact 디렉터리). 이후 storage 이동 집중 실행은
+125개 중 116 PASS/9 FAIL이었으며, 옛 child import·negative fixture·schema 중복 hash 수집과
+미갱신 입력 binding을 수정해 재검증 중이다. 이 숫자는 전체 개편의 완료 판정이 아니다.
+
+아래의 일곱 workspace/110개 실행 기록은 storage 이동 **이전 입력**의 기록이다.
+
+기준 `dc21c13e`에서 [모듈화 명세](../modularization-spec.md)에 따라
+contracts/domain/protocol/client/TUI와 native/process의 실행 소스를 일곱 workspace로 옮겼다.
+공개 exports·직접 의존·빌드 순서·배포 해시·검증 입력에 패키지를 포함한다.
+옛 import facade와 효과 없는 lifecycle quota 계약을 삭제했다. 나머지 기능 패키지와
+설정·저장·egress·과거 형식 정리는 진행 대상으로 남아 있다. 전체 개편 완료 판정이 아니다.
+
+이 전환은 DB schema/wire 형식을 변경하지 않으며, acceptance transaction과 실제 자원 소유권을
+옮기거나 복제하지 않는다. 기존 리뷰의 SHA와 경로가 달라진 항목은 `NOT_REVIEWED`로 남긴다.
+`review-ledger --invalidate-stale`는 이전 claim의 경로·SHA·무효 사유를 보존하고
+`review-notes.json`을 수정하지 않는다. 생성된 graph·inventory·fingerprint는 실행 증거가 아니다.
+
+첫 입력 고정 전체 local 실행은 실패했다. serial 4 PASS / 5 SKIP,
+parallel 3,688 PASS / 294 FAIL / 66 SKIP이며, 입력 15,486개 SHA-256은
+`be32433697d13307f35e4e38e259e8305b7555440e2c64d5100d8fe58d6ba459`이다.
+전후 입력이 같음을 확인했다. 경로를 보유한 VM/소스 fixture와 실행 환경을 수정했고
+이후 입력 고정 전체 재검증을 실행했다. 수정·빌드와 겹친 중간 실행은 현재 코드의 PASS로 사용하지 않는다.
+
+현재 환경은 Linux, Node.js 26.0.0이다. private toolchain에 설치한 `oma`, Corepack 0.34.0,
+bubblewrap 0.12.0을 사용한다. 호스트 `/usr/bin`을 변경하지 않고 임시 user namespace overlay에
+실제 `/usr/bin/bwrap`을 제공하며 `/dev`를 device bind한다. 초기 overlay의 device 접근 오류와
+설치 명령 누락으로 중단한 집중 실행도 원시 로그에 남긴다. 실제 user systemd/cgroup lane,
+macOS native·VM·provider task·power loss는 이번 환경에서 `NOT_RUN`이다.
+이전 native 결과나 과거 리뷰를 이번 바이트에 재승인하지 않는다.
+
+원시 로그와 입력 map: `/home/dev/oma-audit-artifacts/modularization-2026-10-23/`.
+두 번째 전체 local 실행은 420개 파일, concurrency 4에서 **4,048 PASS / 1 FAIL**이다.
+serial 9 PASS, parallel 4,039 PASS / 1 FAIL이며 fail 외 cancel/skip/todo는 모두 0이다.
+입력 15,482개 SHA-256 `1b16f6fbafffc9b35a48992ea6940fc2e538764c80a8e490587b429a68605526`의
+전후 파일별 해시 변화는 0건이다. 실패는 이동한 TUI 경로가 sandbox 숨김 목록에 빠진 것이다.
+목록과 실제 경로 검사를 수정한 뒤 실제 sandbox 6/6이 통과했다. source/dist·workspace link·
+private prompt adapter는 읽을 수 없고 Worker의 CLI·extension·relay는 동작한다.
+이 집중 PASS를 수정 후 전체 suite PASS라고 표시하지 않는다.
+
+다섯 기반 패키지의 외부 tarball 설치·공개 API·declaration 검사는 모두 통과했다.
+native/process 추가 후에는 다시 검사한다. 일곱 패키지와 root의 typecheck가 통과했고,
+그 과정에서 종전 include에서 누락된 compile-only port fixture를 현재 port로 고쳐 실제 검사에
+포함했다. native/process 이동 이후 전체 suite는 아직 미실행이다.
+
+native/process 추가 뒤 집중 실제 실행은 **110/110 PASS**이며 cancel/skip/todo 0이다.
+FD·process ownership·관측·CLI·lease·Principal channel·설치 digest·실제 Resident sandbox를
+검사했다. 입력 15,488개 SHA-256
+`b21d640c177dbfc30a443cb053925cfc6b6aefadb0db73a1ed06656cd1a6843c`의 전후 변화는 0건이다.
+`native-process-runtime-{before,after,status}.json`과 `native-process-runtime.log`가 원시 근거다.
+소스/패키지 테스트 실행의 30개 fixture 실패는 수정 후 관련 89/89가 통과했다. 일곱 패키지의
+격리 tarball 설치·공개 API·declaration이 통과했고 전체 구조 검사도 위반 0건으로 통과했다.
+패키지 로컬 테스트의 비공개 타 패키지 접근·미선언 의존·devDependency를 통한 역방향 type
+참조를 막는 음성 대조도 5/5로 통과했다. 이후 결과 문서·인계 입력은 별도 기록 바이트다.
+`foundation-local-{before,after,status}.json`과 `foundation-local-full.log`, `mask-fix-live.log`가
+각 결과의 입력과 원시 실행을 보존한다.
+
+
 ## 기존 결함·설치 안내 수정 (2026-10-15, DR45)
 
 기준 `d18f62d1`의 기존 실행 경로를 수정했다. [DR45](../design-revisions.md#dr45--감사에서-확인한-실행재시도-결함과-운영-안내-수정)는 guest 최초 seed, host import 재시도, 겹친 stream 전송, 변화 없는 bundle, 긴 검사 중 취소·context 게시, review 이력 조회, credential 분할 응답, Personal 최초 확장 상속과 broker spawn 실패를 다룬다. Worker별 clone, LOW 자동 병합과 DR37의 네트워크·자원 정책은 유지했다. Linux checkout 설치 조건과 미제공 macOS 앱·VM 배포물은 [운영 안내](../operations.md)에 명시했다.
@@ -66,7 +629,7 @@ Principal/broker의 역할을 명시한다. model-facing 영문과 한국어 com
 `node --test dist/test/role-prompts.test.js dist/test/prompt-boundary.test.js dist/test/resident-confinement.test.js`
 35/35 PASS, fail/cancel/skip/todo 0이다. 영어 model input과 기본/custom prompt가 실제 Resident
 spawn plan에 전달되는 기존 oracle를 실행했다. 소환을 실제로 선택한 모델의 운영 증거는 아니다.
-변경한 생산 파일은 `src/config/role-prompts.ts` 한 개이며 SHA-256은
+변경한 생산 파일은 `packages/config/src/role-prompts.ts` 한 개이며 SHA-256은
 `ae884a04324ea98c95c3d5b9014e8857607f1f1a70f95d827693f7f790f2a2d2`다.
 구조·메타데이터 검사와 raw logs는
 `/home/dev/oma-audit-artifacts/worker-reviewers-2026-10-12/result.json`에 별도로 보존한다.
@@ -413,7 +976,7 @@ native·macOS VM boot·power loss는 미실행이다. 이전 kernel/crash PASS�
 충족했다고 주장할 수 없다. raw log는 `/tmp/oma-host-ownership-2026-10-09`에 보존한다.
 
 현재 구조 검사의 입력 identity(생성 자체는 runtime PASS가 아니다):
-verification input digest `1fd7141f3563f96371958fd3c976c0c72c55945c56461ef972f5dbbcab93cde7` (15468 files).
+verification input digest `b34782cbb70232ed4798e183043a5bf6e6971984d6c772bed23be3a2e73c43f4` (15663 files).
 
 ## 이전 실행 결과: 지정한 제한 제거·기능 복구 (2026-10-09, DR37)
 
@@ -1094,12 +1657,12 @@ DR34 후반에서 미뤄 둔 "listen 성공 후 `.off`로 유일한 'error' 리�
 |---|---|---|
 | merge-diff 뷰 bound 정렬 | PASS | `src/cli/effects/code.ts` — production merge-diff의 캡처 bound를 고정 768 KiB에서 `bundleBytes()+1`로 교체. 이전 값은 wire가 선언한 완료-notice 문서 bound(기본 256 MiB)보다 좁은 자의적 거절이었고 `commands/merge.ts`의 오류 문구(`cliBundleBytes()` 명명)와 불일치했다. `+1`은 "정확히 수용"과 "1바이트 초과"를 구별한다. revision 해석(ref/published/ancestry 관측)의 출력 bound도 고유 768 KiB에서 `CANONICAL_PROCESS_LIMITS.maxBuffer`(4 MiB)로 정렬 — broker의 canonical observer와 같은 명령 같은 bound. 고정 MAXIMUM(768 KiB)은 production이 도달하지 않는 show/diff/log/ls-tree/grep 뷰만 묶는 TEST-ONLY bound로 주석과 함께 남았다 |
 | workspaceDirty 불리언 관측 | PASS | `src/cli/effects.ts` — `git status --porcelain`을 더는 텍스트 maxBuffer로 읽지 않고 직접 관측한다: 캡처된 stdout이 1바이트라도 있으면 dirty(절단된 목록도 증거), 성공적으로 빈 목록만 clean. 이전에는 256 KiB를 넘는 정직한 dirty 워크스페이스가 `merge open`에서 LIMIT_EXCEEDED로 죽을 수 있었다. timed-out/stalled/spawn-failed는 `requireTextExit`가 계속 던진다 — 실패를 clean으로 읽지 않는다 |
-| ReadScope 주석 교정 | PASS | `src/storage/ledger-reader.ts` — "fresh read/snapshot" 인상을 주던 주석을 정확한 기술로 교체: memoized 항목은 그 컬렉션 안에서 키로 처음 읽은 row bytes의 디코딩이며 DB 스냅샷이 아니고, 컬렉션 도중 다른 writer가 바꾼 row는 재관측되지 않는다(새 바이트가 필요하면 새 scope). 동작 변경 없음 |
+| ReadScope 주석 교정 | PASS | `packages/storage/src/ledger-reader.ts` — "fresh read/snapshot" 인상을 주던 주석을 정확한 기술로 교체: memoized 항목은 그 컬렉션 안에서 키로 처음 읽은 row bytes의 디코딩이며 DB 스냅샷이 아니고, 컬렉션 도중 다른 writer가 바꾼 row는 재관측되지 않는다(새 바이트가 필요하면 새 scope). 동작 변경 없음 |
 | 문서 정밀 수정 | PASS | LSP 오라클 서술을 "17 fail-before"에서 "14 fail-before + 3 회귀 가드(구 동작 부재로 대조 불가)"로 이 파일과 WORKSTREAM 양쪽 정정; WORKSTREAM의 B1 fixture 문구를 102 `.test.mjs` + 보조 2종(`isolate-env.mjs` 프리로드·`pdf-fixture.mjs` 헬퍼, fixture는 후자 하나)으로 정밀화 |
 | 잔여 거절 판정 | PASS | limit-bounds §7의 26종 전부가 wire/format/integrity/의도적 자원 보호/jitter 중 하나로 귀결 — 스윕에서 변환 가능한데 남은 거절은 셋이었고 전부 제거(merge-diff 뷰 bound·workspaceDirty porcelain 캡·code view published-ref 캡 비대칭). 대표 잔여: merge-diff>bundleBytes(PROTOCOL), 로컬 파일>1요청 프레임(PROTOCOL, 대체 채널 없음), LSP workspace-edit 2048/4 MiB(INTEGRITY — 절단 fix=오염), human prompt 16 KiB+frame(PROTOCOL+RESOURCE), 설정/패키지 문서 bound(RESOURCE, 방어적·자의적으로 명시), 진단 스냅샷(RESOURCE, 운영 읽기와 무관) |
 | build / typecheck | PASS | `npm run build` + `tsc --noEmit` 0 오류 |
 | architecture gates | PASS | check:inventory(SOURCE_DIGESTS_CURRENT)·rules 0·lattice(dependency-graph evidence 재생성)·transactions·boundaries·documents·spec-inventory 전부 0 findings |
-| review ledger | PASS | `src/cli/effects.ts`·`src/cli/effects/code.ts` 신규 byte-bound 리뷰 + `src/storage/ledger-reader.ts` 재결박(모두 fresh re-read 후 새 sha256), `npm run review:ledger` 재생성 — CHANGED_WITH_ORACLE 14065·NOT_REVIEWED 59·READ_UNCHANGED 50·REMOVED 8 |
+| review ledger | PASS | `src/cli/effects.ts`·`src/cli/effects/code.ts` 신규 byte-bound 리뷰 + `packages/storage/src/ledger-reader.ts` 재결박(모두 fresh re-read 후 새 sha256), `npm run review:ledger` 재생성 — CHANGED_WITH_ORACLE 14065·NOT_REVIEWED 59·READ_UNCHANGED 50·REMOVED 8 |
 | 집중 회귀 | PASS | `node --test dist/test/principal-code-view.test.js dist/test/merge-cli.test.js dist/test/operational-read-budget.test.js` 16/16 · `dist/test/effect-observation.test.js dist/test/git-effect-evidence.test.js dist/test/merge-review.test.js` 38/38 · `dist/test/scenario-merge-review.test.js` 9/9 |
 | 전체 `npm test` | PASS* | `node scripts/test-local.mjs` 로컬 lane 399 files → 3,900 tests, 3,898 PASS; 실패 2건의 정직한 내역: (a) SCN-L02는 8-way 병렬 aggregate에서만 재현되는 기존 타이밍 flake로 해당 파일 단독 재실행 40/40 PASS(이전 절들에도 같은 양상이 기록됨); (b) R38은 이 절과 신규 문서(limit-bounds.md)가 반영되기 전의 stale verification-input digest로, 이 트리의 digest로 재결박 후 `production-inventory` 재실행 확인. 한 차례 이전 실행은 정산 중 dist 재생성이 suite와 경주한 환경 간섭으로 wedge됐고(SCN-C09/C10·R04–R07·S01·society-bringup), 관련 파일 4종 단독 재실행 96/96 PASS 후의 실행이 위 결과다. systemd-required 9 파일은 test-local이 `OMA_TEST_SYSTEMD=0` 고정으로 설계상 분리 — "환경 부재"는 stale한 오기였고, 실제 lane 실행 결과는 다음 절에 기록한다 |
 | systemd-required 9 파일 (verify-lane kernel·crash) | EXECUTED+PASS | 다음 절의 실기록 — `verify-lane.mjs kernel` 12파일 65/65·`crash` 2파일 63/63, 이 호스트의 실제 user systemd에서 전종 초록 |
@@ -1207,3 +1770,321 @@ node --test test/document-integrity.test.mjs test/traceability-policy.test.mjs
 ```
 
 바뀐 검사·owner 경로의 관련 회귀를 이어 실행한다. 환경이 필요한 suite는 허용 환경과 기존 거절을 먼저 확인한다. 새 durable 경계에는 의미 있는 negative control과 kill·retry·restart oracle를 연결하고 결과를 여기에 기록한다. 전체 suite 수를 위해 실행 금지를 우회하지 않는다.
+
+DR46 extension 최종 정적 결박: `architecture-extension-current.log`의 전체 gate가 PASS다.
+production 14,254개, 모든 gate 위반0이며 strongest boundary 주입55/11/23은 유지한다.
+입력 15,526개 `eb5eb3a0c0c89ac71e2f5b2a162137bd2b11e24b28163c21a0c8c7e505cbed5f`,
+runtimeProof false. `extension-transfer-result.json`: APPLIED139, conflicts0, 빈 디렉터리1개 정리.
+이전 working-tree 원본은 외부 `extension-root-before.tar.gz`에 먼저 보관했다. root15의 새 build와
+전체 local은 별도 실행하며 위의 독립 checkout 결과를 root 전체 PASS로 승격하지 않는다.
+
+DR46 Mail 최종 source 반영: `mail-transfer-result.json`은 APPLIED210, conflicts0이며 빈
+디렉터리1개를 정리했다. root의 변경 전 working-tree bytes는 `mail-root-before.tar.gz`에
+먼저 보관했다. `authored-js-syntax-final.log`는213개 모두 parse PASS이며 provider 실행은 아니다.
+반영 직전 `architecture-mail-transfer.log` 전체 gate도 PASS다. root16의 새 build·binding·
+전체 local은 별도로 실행하며 위 stage 결과를 root 전체 PASS로 승격하지 않는다.
+
+
+Lifecycle source의 actual root 전환은 `lifecycle-transfer-result.json` APPLIED101 files,
+conflicts0이다. Root19의 새 build/정적 gate/전체 local 원본은 `build-nineteen-root.log`,
+`architecture-nineteen-root.log`, `nineteen-local-full.log`, `nineteen-local-status.json`이다.
+과거 raw FAIL이나 stage227/19 PASS를 root 전체 PASS로 재해석하지 않는다.
+
+
+Root19 전체 local 원본 `nineteen-local-full.log`는 serial9 PASS와 parallel4065 PASS/3 FAIL,
+합계4074 PASS/3 FAIL이다. skip/cancel/todo0, input15569개
+`3f0746a2eb920c024f341dc2ffbc5da1387883b41e5e797255eaa5cf1b247838`, changed[]였다.
+3 FAIL은 coordinator-facets MJS의 RegistryOperations 생성3곳이 새 ledger/ID port 없이
+구체 Store를 전달한 실제 미전환 호출부다. assertion이나 입력·판정은 줄이지 않고 실제
+lifecycleLedger와 Native ID owner를 연결했다(`nineteen-facets-fixture-repair.json`).
+재실행 `nineteen-facets-final.log`는4/4 PASS, skip/cancel/todo0이며 input15569개
+`98cff831dbd2b62b94872ff96e71eb05c3bc72292bec9683c03898b758d9faa4`, changed[]다.
+검증 binding은 normalized narrative를 바꾸지 않고 고쳤고 후속 source transfer의
+expected root hash도 두 파일만 기록했다. 과거 전체 FAIL을 전체 PASS로 승격하지 않는다.
+
+Reconcile 단계는 독립 checkout20개 workspace에서 작업 중이다. 실제 read-only 복구 port,
+Git health/Storage collection owner와4개 공개 API·설치 runtime 검사 입력을 추가했다.
+현재 source의 결과는 `build-reconcile-final.log`, `architecture-reconcile-first.log`,
+`reconcile-focused.log`, `isolation-reconcile.log`, `typecheck-reconcile-final.log` 원본만이
+소유한다. 파일 존재나 예정 명령을 PASS로 세지 않는다. Root19 이후 남은6개 중 하나이며
+아직 전체25개 완료나 native/platform qualification을 주장하지 않는다.
+
+
+Reconcile 독립 checkout 검증: `architecture-reconcile-docs.log`의 전체 정적 gate가 PASS이며
+production14284개, findings0, durable strongest61 SIGKILL/11 in-process-fault/23 logical이다.
+원래 `architecture-reconcile-first.log`는 fsck collection boundary의 옛 등록2건으로 FAIL,
+`architecture-reconcile-boundary.log`는 실제 이동 후 남은 doc link5건으로 FAIL이었다. 실제
+physical owner 등록/링크만 고쳤고 기존 제목·assertion·리뷰 판정을 바꾸지 않았다.
+새20개 workspace build는 `build-reconcile-boundary.log`, 공식 타입 검사는
+`typecheck-reconcile-final.log`가 소유한다.
+`reconcile-repaired.log`는 163/163 PASS; skip/cancel/todo0. Input15578 files `af0594adb4f2f6adea24c2a54290621cabdec8829ec5d2e3ce191a3a563dd134`, changed[].
+원래 `reconcile-focused.log`는147 PASS/1 FAIL이었다. class mock을 object factory로 바꾸며
+필요한 separator를 누락한 실제 syntax 오류를 수정했다. assertion은 바꾸지 않았다.
+`authored-js-syntax-reconcile-repaired.json`은236개 authored MJS의 parse-only0 failures다.
+`isolation-reconcile.log`는 원래 input15578개
+`7abcfd57e89c537cc5ce2efad6e1b950134b3ad9a8df0407118d7875d7bfde2c`, changed[]에서20개 package 모두 packed independent install/공개 entry/authored
+선언을 통과했다. Reconcile4개 API와 실제 shared sweep/live gate/identity/stop smoke,
+Git actual bare-repo fsck/동일 in-flight lease/손상 거절/diagnostic spool 수거도 설치 runtime으로
+실행했다. 순수 coordinator fixture를 systemd/실제 Resident death 또는 native platform
+qualification으로 부르지 않는다. SDK 외부 선언 진단과 authored 선언 결과는 별도다.
+두 실행 입력의 실제 normalized 차이는 root composition MJS fixture 한 파일뿐이며
+production/package/build input은 동일하다(`reconcile-isolation-input-relation.json`).
+서로 다른 input digest를 같은 실행으로 덮어쓰지 않는다. 전체 설치 검사는 package bytes가
+바뀌지 않은 fixture 문법 수정 때문에 반복하지 않았다.
+Root19 source의 전체 raw3 FAIL과 targeted4 PASS는 위 기록 그대로 유지한다.
+
+
+Reconcile actual root 전환은 `reconcile-transfer-result.json` APPLIED74 files/conflicts0이며
+변경 전 원본은 `reconcile-root-before.tar.gz`다. Root20 새 build·정적 gate와 guard/provenance
+원본은 `build-twenty-root.log`, `architecture-twenty-root.log`, `twenty-guards.log`다.
+전체25개 개편의 완료나 root20 전체 local PASS로 세지 않는다.
+
+
+Broker stage21 작업 중: 실제 최소 port와 runtime/app/Native/Storage 소유자를 나눴다.
+처음 `build-broker-first.log`는 RunLease import1건, `build-broker-ports.log`는 새 API 미전환
+시험 호출7건, `build-broker-callers.log`는 Native 내부 self-import의 package check로 FAIL.
+실제 import/호출부를 고친 `build-broker-native.log`는 build/package PASS였다.
+초기 `broker-owner-smoke.log`3/3 PASS는 실제 Unix listener/drain/외부 소유 flock과
+짧은 write 전체 bytes·zero-write 오류1회·실제2개 FD close를 확인했다. skip/cancel/todo0,
+input15590개 `9cfdcc592eaff680a6880a1d3d5b9d4efb3445a271cad5c36893a239ac26949d`, changed[].
+이것은 실제 systemd/Resident death나 power-loss qualification이 아니다. F06 root19의
+원래 무한 루프 재현과 이 stage-local 수정 검증을 구별하며 root20에는 아직 미반영이다.
+후속 read-only count owner/Scope T/SIGKILL·AST surface/negative control을 더한 새 build는
+`build-broker-boundaries.log`가 소유한다. 새 `broker-ledger-projection.test.mjs`의 결과와
+21개 독립 설치·전체 정적 gate·공식 타입 검사는 각각 실행 원본으로만 판정한다.
+
+
+Broker stage21의 `architecture-broker-boundary.log`는 전체 정적 gate PASS, production14291개,
+findings0, durable strongest62 SIGKILL/11 in-process-fault/23 logical이다. 첫 static은 stale
+owned-state 예외와 raw listing2건, 다음은 이동한 status-view collection 등록2건으로 FAIL였다.
+예외를 새 파일로 복사하지 않고 실제 owned primitive/physical owner로 고쳤다.
+`typecheck-broker-final.log`는 공식 PASS이며 Broker의 no-async/no-accept/spec-write generic
+T 검사도 포함한다. `authored-js-syntax-broker-current.json`은241개 parse-only0 failures였다.
+
+첫 집중 원본 `broker-focused.log`는397 PASS/20 FAIL/1 cancelled/skip0, input15592개
+`2a2237a15493e658a73813b2aa45e16dcf297c2ba924d091a583af386bae90dd`, changed[]였다.
+15개는 이전 Native/Broker/Process VM module key, 3개는 제거한 Broker pass-through에 걸린
+spy, 1개는 fixture Store 이중 close, 1개는 이전 lattice path였고 cancel1은 옛 signal helper
+URI의 조기 child exit 뒤 ready wait였다. 판정·timeout·권한 검사를 줄이거나 facade를 되살리지
+않고 실제 owner에 맞췄다. single close fixture와 test-owned Broker lifetime도 정리했다.
+중간 `build-broker-fixture-repair.log`는 다른 Git-only fixture에 과도하게 들어간 cleanup1건의
+타입 FAIL이고, 그것만 되돌린 `build-broker-fixture-final.log`는 build/package PASS다.
+수정 후 `broker-repaired.log`는 418/418 PASS; skip/cancel/todo0. Input15592 files `1220cb591804f0a14cb61e29d423b768ebfd6ff7d440eb61a7a32c6177926637`, changed[].
+실제 projected root T before/after SIGKILL2건에서 incarnation rollback/commit과 이전 receipt의
+모든 bytes·same-key retry를 확인했다. 이는 SQLite boundary 증거이며 실제 systemd run/death,
+provider turn, power-loss qualification을 뜻하지 않는다.
+
+`isolation-broker.log`는 원래15592개 input
+`2a2237a15493e658a73813b2aa45e16dcf297c2ba924d091a583af386bae90dd`, changed[]에서21개
+모두 packed independent install/public API/authored declarations PASS다. Broker15개 entry,
+실제 Unix listener/drain/native flock lifetime과 no SQLite/Mail/Git/Lifecycle/Reconcile closure를
+설치 runtime으로 확인했다. 두 input의 차이는 root test5개와 validation binding만이며
+production/package/build input은 동일하다(`broker-isolation-input-relation.json`). 서로 다른
+입력을 한 실행으로 덮어쓰지 않고, package bytes를 바꾸지 않은 test repair 때문에 전체
+설치 검사를 반복하지 않았다. SDK 외부 선언44 진단과 authored 결과는 구별한다.
+F06 zero-write와 Principal owned-listing 수정은 이 stage-local 검증에 포함됐으나 actual root
+반영은 별도 source transfer 기록이 소유한다. Root20 전체 local PASS로 승격하지 않는다.
+
+
+Broker actual root 전환: `broker-transfer-result.json` APPLIED177 files/conflicts0,
+변경 직전 working-tree 원본 `broker-root-before.tar.gz`. 실제 root21의 새 원본은
+`install-twentyone-root.log`, `build-twentyone-root.log`, `architecture-twentyone-root.log`,
+`twentyone-guards.log`다. Stage418개 집중/21개 tarball PASS와 root 전체 local을 구별한다.
+4개 구현 모듈과 실제 플랫폼 qualification이 남았으므로 전체25개 완료로 표시하지 않는다.
+
+
+## DR46 Engine 독립 전환 — stage22 (2026-10-24)
+
+actual root 반영은 별도 source transfer가 소유한다. 독립 사본의 `@oma/engine`은 SDK host·RPC·
+Principal session·Resident adapter·settings 변환·private Pi adapter와 Open TUI 문자열/버전
+wrapping의 실제 소스를 소유한다. 실제 파일/lock·확장 digest 재검증·sandbox·birth/history·
+설정 선택·credential helper와 TUI의 질문/compact/panel 구현은 app이 원래 owner로 연결한다.
+Engine의 내부 의존은 contracts/domain/protocol/process뿐이며 Store/config/Mail/TUI/platform
+구현 import나 옛 root pi-compat facade가 없다. 원래 한 lock hold, project re-read conflict,
+현재 권한·정확한 bytes·실제 child 종료와 상속 fence를 유지한다.
+
+`engine-final.log`: 493/493 PASS, fail/cancel/skip/todo0, 입력15621개 `8844fb26a1ce2772944b6c00fadad1c6067118557c1dbb02aa6bf5db99a3ca72`, changed[].
+`isolation-engine-repaired.log`: 같은 입력에서22개 모두 tarball 독립 npm ci·공개 API·authored
+선언 검사 PASS. Engine32개 공개 entry의 실제 SDK settings/child RPC/종료와 no Storage·Mail·
+config·TUI·Broker closure를 설치물에서 실행했다. SDK 외부 선언44 진단은 authored 결과와
+구별한다. 이는 scripted transport와 로컬 lock/process 검증이며 provider turn·systemd/cgroup·
+실제 Mac/VM·power-loss qualification은 NOT_RUN이다. `typecheck-engine-final.log`의 공식
+명령은 PASS, authored MJS250개 parse-only도 실패0이다. `architecture-engine-repaired.log`의
+모든 정적 gate가 PASS이며 durable strongest62 SIGKILL/11 fault/23 logical을 유지한다.
+
+원본 `engine-focused.log`는454 PASS/39 FAIL, `engine-repaired.log`는491 PASS/2 FAIL,
+skip/cancel0이었다. 이전 source/module/fixture asset 경로와 분리한 실제 product surface의
+negative fixture를 현재 owner로 맞췄고 Native의 실제 local import에 flock fault를 연결했다.
+세 과거/무version session 허용 사례는 같은 뜻의 ID로 재사용하지 않고 별도 DR46 refusal
+이름으로 바꿨다. 현재 pinned SDK header만 승인하고, saved bytes와 birth는 그대로 둔다.
+`engine-focused-failure-classification.json`이 각 실제 입력과 분류를 보존한다. 첫 설치 원본
+`isolation-engine.log` FAIL은 새 probe child의 newline quoting 오류이며 String.raw와 transport
+종료 시 pending response 거절로 고쳤다. 판정/timeout을 줄이거나 옛 fallback을 복구하지 않았다.
+
+`engine-common-surface-relation.json`은 기존40 interface의 hash가 모두 같고 기존 FencedEngine
+선언 하나만 common runtime에 추가됐음을 기록한다. Wire 변경은 없다. Engine의 배포 asset
+`pi-compat/contacts.json`은 남은 private 접점·정확한 의존 버전·원래 검증 범위의 단일 목록이다.
+DR46 `engineFile`은 실제 production caller0의 dead API와 그 전용 cleanup2건만 퇴역시켰다.
+Role prompt literal·extension asset DTO와 verifiedPaths·actorAddress literal의 owner를 실제
+순수/common 모듈로 옮겼으며 판정 사본을 만들지 않았다. Historical review를 새 승인으로
+갱신하지 않았고 immutable architecture/review notes의 bytes는 그대로다.
+
+
+## DR46 Engine 실제 root22 반영
+
+`engine-transfer-result.json`은226 files APPLIED, conflicts0이고 원본 working-tree bytes는
+`engine-root-before.tar.gz`에 보관했다. 새22개 build/package 검사와 전체 정적 gate는 PASS
+(`build-twentytwo-root.log`, `architecture-twentytwo-root.log`).
+`twentytwo-guards.log`: 28/28 PASS, fail/cancel/skip/todo0, 입력15621개 `4f61df80bde31f6b921d85f5d449c8110b431f8276e9bdaed945649630b9b081`, changed[].
+실제 root 입력에서 원래 권한 gate/단일 captured T/SIGKILL, settings lock/current header·birth
+불변/상속 FD·real child 종료, owned listing과 zero-progress descriptor cleanup을 확인했다.
+이 결과는 전체 local PASS나 실제 systemd/Mac/VM/provider/power-loss qualification이 아니다.
+
+Linux 독립 stage23: 집중404/404와23개 tarball 외부 설치가 같은15,628개 입력 5b762ea9cda4330b2ae2212a66f707eb189e496fa2d4d7d89e1fb9b160923905에서 PASS, 전후 입력 변경0. 첫398/6 및 재실행403/1 실패는 원본 로그에 보존했다. 중첩 systemd 자산의 배포 목록 중복 집계를 실제 순회 owner에서 고쳤다. Linux systemd/cgroup 실제 서비스 qualification은 NOT_RUN이다.
+
+
+## DR46 Linux/Mac/App 소스 전환과 stage 검증 (2026-10-24)
+
+최종 source transfer는 final25-transfer-result.json의808 files APPLIED/conflicts0이며 변경 직전
+원본은 final25-root-before.tar.gz다. 실제 root25의 새 install/build/full-local 결과는 후속 절에서
+별도로 기록한다. stage 결과를 root 전체 PASS로 승격하지 않는다.
+
+Mac stage: mac-repaired.log 296/296 PASS, skip/cancel/todo0. 입력15640개
+284711e31283a6daf26dc479c4539b5aaabbc4d99ee394c44fd80396cde9c2c2, changed[].
+원본 mac-focused.log 290 PASS/6 FAIL은 이전 URL/native 경계 fixture/물리 mock seam 수정 전
+결과다. 실제 Mac 파일 zero-write stall과 cleanup을 고쳤으며 원시 재현을 보존한다.
+
+App stage: app-focused.log 944 PASS/351 FAIL(1295 tests), app-repaired.log 1291 PASS/12 FAIL
+(1303 tests), skip/cancel/todo0. 각각15644 files 입력 d4c3f40d559739de557e7b449091323bfe17923b99cb8fe8f2f9e6fe44a8a1fd,
+355b88191b034486b4fbccdf27530ef85e4e12963a30a4a1bb1e462af64a4862, changed[].
+synthetic 개별 패키지 fixture의 src까지 과도하게 바꾼 경로 치환, 실제 SDK/lock/settings/physical
+owner에 맞지 않던 collaborator, 남은 실행 URL과 타입 owner를 수정했다. product surface 검사도
+App의 src→dist를 올바르게 대응하도록 고쳐 실제 negative control이 계속 거부하도록 했다.
+판정·deadline·오류/FD cleanup 단언을 줄이거나 옛 facade를 복구하지 않았다.
+
+마지막 실행/cleanup 집중 app-entry-cleanup-final.log는115 PASS/1 FAIL(116 tests), 입력15644개
+0fe4f57465719e4b6d3fa80c3b17c222552d13146b4e3b141b47b7d909b5f069, changed[].
+남은 review fixture의 두 번째 옛 diagnostic path를 고친 app-review-final.log는1/1 PASS,
+입력15644개 0a9db6d169ec968e6e57d1e002584e0ddf959509d160a82234d0064167726c74, changed[].
+앞선 전체 실패를 새 전체 PASS로 바꾸지 않는다. architecture-app-final.log의 전체 static은 PASS다.
+
+isolation-final25.log는24개 workspace의 독립 tarball/npm ci/API/authored declarations/자산을
+통과한 뒤 App의 설치 bin probe에서 FAIL했다. 입력15644개
+0a9db6d169ec968e6e57d1e002584e0ddf959509d160a82234d0064167726c74, changed[].
+검증용 isolated lock 생성기가 workspace bin을 누락해 링크가 없었다. 실제 manifest의 bin을
+보존하고 spawn 실패도 명확히 검사하도록 고쳤다. 전체25개를 pack하는 App-only 재검증
+isolation-app-repaired.log는140개 공개 API·자체 선언·전체 의존 자산·실제 설치된 oma --help를
+통과했다. 입력15644개 17eb569c182ddfd628a3b731ef42cd475b59658e30899106a59e7c1a1c3f4687, changed[].
+final25-isolation-input-relation.json은 두 입력의 차이4개를 명시하며 실행/package bytes는 같다.
+이전24개 closure의 lock은 달라지지 않는다. 외부 Pi SDK 선언44 진단은 자체 선언 PASS와 구별한다.
+실제 Mac/VM/Keychain·Linux manager 서비스·real provider·power-loss qualification은 NOT_RUN이다.
+
+
+DR46 변경 범위/비용 측정: final25-locality.json은 실제 manifest와 import graph를 사용한다.
+전환 전 graph457 files/runtime1911/type547, 현재514 files/runtime1941/type756, 양쪽 unresolved0이다.
+선언 분리로 늘어난 edge를 품질 점수나 성능 개선으로 해석하지 않는다. Web package build closure는
+5개 workspace, TUI는4개다. Domain의 공통 정책 변경은 더 넓은 dependent closure를 재검증한다.
+실제 fresh-process public import 측정에서 Engine brand55개/TUI screen66개/Web entry4개 모듈을
+로드했으며 SQLite·Broker·Storage·Lifecycle·플랫폼 구현을 로드하지 않았다. 해당 entry의 결과이며
+전체 제품 startup closure로 확대하지 않는다(runtime-{brand,tui,web}-load.json).
+
+같은 Node26 개발 환경의 현재 TUI build4.310초/test2개0.215초, Web build14.998초/test9개18.960초를
+측정했다(final25-build-startup-timings.json). 패키지 build 초기에는 별도 cloc 측정을 병행했으므로
+경쟁 없는 benchmark나 개편 전후 비교로 부르지 않는다. Personal actual PTY/local scripted provider
+3회는 화면1.549/1.845/1.640초, 응답2.058/2.323/2.111초, 종료 모두0이다.
+원시 terminal/launch/request/exit와 지표를 measurement-personal-startup.log의 임시 위치에 보존한다.
+실제 provider와 Society 서비스 startup은 NOT_RUN이며 비교 가능한 개편 전 시간 baseline은 없다.
+
+LOC 측정은 SOURCE_BOUND 결과를 얻지 못했다. 첫 시도는 Linux environment.d/sysusers.d의 conf
+분류 누락으로 거부했다. conf를 systemd 언어로 명시한 뒤 전체 inventory를 세었지만 cloc2.08이
+같은 두 vendored TS bytes에 대해 반복 실행마다 서로 다른 code/comment 수를 냈다. 단독2파일
+3회와 Perl hash seed 고정4회에서도 재현했다(cloc-two-file-repeats.json,
+cloc-fixed-seed-repeats.json). 원본 bytes의 SHA 변화는0이다. fresh re-measure gate를 완화하거나
+파일을 제외하지 않았고 최종 LOC 및 감소율은 NOT_RUN/UNRELIABLE로 둔다. 원시 loc-final25*.log와
+미승인 report는 남기되 통과한 측정치로 사용하지 않는다. source inventory/digest 검사는 별개다.
+
+
+## DR46 원본25 첫 전체 local — 실패 원본 보존
+
+final25-root-local.log는 serial9 PASS와 parallel4096개 중4078 PASS/18 FAIL이다.
+합계4105 tests/4087 PASS/18 FAIL, cancel/skip/todo0. 입력15644개
+4a7f16ae54f4d9b85cc0c9392e567b3992a41625347ba6da984422be3e472f26, 전후 changed[].
+root의 새 npm ci, clean build55.971초, 공식 typecheck41.994초는 PASS다. build 뒤 npm rebuild
+--ignore-scripts로 실제 workspace bin을 연결하고 기존 개발용 oma 링크도 새 App entry로 갱신했다.
+첫 정적 검사는 남아 있던 빈 src 디렉터리4개로 FAIL했고, 파일 삭제 없이 빈 디렉터리만 정리한
+architecture-final25-root-repaired.log는 전체 PASS다. 원래 FAIL 로그는 남겼다.
+
+18개 실패는 옛 unit/Resident PATH 단언4개, synthetic source/디렉터리 불일치3개,
+자식 프로세스의 옛 module URL7개, 제거한 Broker pass-through의 사용되지 않는 mock3개,
+workspace target을 따라가지 않는 lock 검증1개다.
+분류의 항목 경계는 final25-full-fixture-repairs.json의 실제12개 test 파일 변경과 원본 오류를
+함께 본다. 구체적으로 context/bundle child2개, settings/request/binding child4개, liveness child1개가
+현재 공개 owner를 사용하도록 바뀌었다. 기존 SIGKILL 지점·메모리/stream bound·원본 bytes·
+terminal/receipt·실제 FD/child·sandbox 격리와 usage/exit 단언은 유지한다. lock 검증은 실제
+link.resolved target으로 이어져 전체 production closure의 non-dev 조건을 계속 검사한다.
+이 변경은 test/fixture만이며 production bytes는 변경하지 않았다. 수정 후 집중과 새 전체 결과는
+별도로 기록하며 첫 전체 FAIL을 PASS로 바꾸지 않는다.
+
+
+수정 후 원본 집중 final25-root-fixtures.log:112/112 PASS, fail/cancel/skip/todo0.
+입력15644개 8230908056e7bd47c279e02869bb5b758b11da6d28a51cf2bdd3ffcf7921d47e, changed[].
+실제 settings/request/binding SIGKILL·retry/restart, /proc EMFILE unknown, 메모리/stream bound,
+accepted mail 복구/terminal·frozen bytes, real sandbox CLI·격리와 전체 runtime lock closure를 포함한다.
+첫 전체 실패를 이 집중 결과로 승격하지 않고 새 전체 실행으로 확인한다.
+
+
+## DR46-F08 status 인코딩 비용과 재검증
+
+final25-root-local-repaired.log의 첫 serial 구간은8 PASS/1 FAIL이었다. V23A read lag59ms가
+기존50ms 기준을 넘었으며 같은 제품 코드의 앞선 전체 실행에서는45ms였다. 나머지 실행을
+원인 조사 목적으로 중단했다(final25-root-local-repaired-interruption.json). 원시 실행은
+signal SIGKILL, 입력15644개 04adc00c4262d10ec8363946205f8440b6115c1044b4170485f74dac1941ac60,
+changed[]이며 전체 결과로 계산하지 않는다. 시험 기준·timeout·fixture 부하를 낮추지 않았다.
+
+Protocol/status-page는 각 행마다 누적 전체 응답을 재직렬화했다. 원본 probe는64행에서
+row 직렬화2080회,16페이지 burst12.14–16.62ms였다(status-page-before-probe.json).
+각 행 UTF8 bytes와 comma를 누적하고 기존 continuation 공간을 그대로 예약하는 선형 계산은
+64회, burst0.68–3.56ms였다(status-page-after-probe.json). 원본 함수와 frame0..4096,
+empty/single/multiple rows·cursor·UTF8/제어/escape id/값의98328개 경우를 비교해 결과 JSON의
+정확한 bytes 또는 오류 code/message가 모두 같았다. corpus SHA는
+ef954425da4da405960262d8473d9fa0390560049e6cb0f77f59e7b1e325f475다.
+이는 해당 helper의 현재 환경 측정이며 전체 제품 startup 개선율로 해석하지 않는다.
+
+새 package-owned status-page.test.mjs의3개 회귀는 PASS다. 실제 기존 V23A cold process3회는
+read lag16/24/27ms, mixed47/43/44ms, p95 294/290/285ms로 원래50/100/1000ms 기준을 통과했다.
+원시 status-linear-cold-{1,2,3}.log를 보존한다. 단일 관측 부하의 비용을 줄인 수정이며 권한,
+accepted bytes·terminal·receipt, unknown, 실제 child/FD 수명은 변경하지 않았다.
+앞선 stage/root package byte 일치 관계 뒤 Protocol의 이1개 runtime source가 바뀌었으므로
+새 Protocol/Broker/App 설치 검증과 원본 전체 local로 확인한다.
+
+
+## DR46 최종 원본25 로컬 검증 (2026-10-24)
+
+**코드 전환과 가능한 로컬 검증은 완료. 실제 플랫폼 qualification은 미완료다.**
+원본 final25-root-final.log는 serial9/9와 parallel4099/4099, 합계 **4108/4108 PASS**다.
+fail/cancel/skip/todo0, status0/signal null, 입력15645개
+2d8ca17fe14204634d87ca99f5d9cdf5b34ae62e235600cdfca0c22aefa37d43, 전후 changed[].
+실제 기존 V23A는 read lag40ms/mixed45ms/p95 283ms, pending620 상태는lag20ms로 원래 기준을
+통과했다. 기존 durable/권한/bytes·terminal·receipt·unknown·자원 수명 조건과 새 status 선형
+회귀3개를 포함한다. 첫 전체4105개 중18 FAIL과 후속 응답성 FAIL/중단 기록도 그대로 남긴다.
+
+동일 입력의 isolation-status-linear.log는 최신 Protocol30/Broker15/App140 공개 entry와 자체
+declaration, 설치 자산과 runtime을 PASS했다. Protocol의 새3개 byte/cursor/linear-work 회귀를
+실제 독립 설치물로도 실행했다. 앞선25개 설치 증거 이후 바뀐 runtime source는 Protocol의
+status-page.ts 하나이며 공개 declaration bytes는 그대로다. 나머지 workspace의 원시 설치
+결과와 stage/root source 관계를 보존한다. App의 외부 SDK declaration44 진단은 별도이며
+이를 외부 타입 전체 PASS로 부르지 않는다. 새 clean build/package 검사는
+build-status-linear-root.log에서 PASS다. 이전 공식 typecheck PASS와 새 strict compile도 보존한다.
+
+전체 실행이 끝난 뒤 이 결과와 인계를 기록한다. runtime의 원래 입력과 기록 후 입력을
+동일하다고 바꾸지 않고 final25-post-runtime-input-relation.json에서 실제 차이를 기록한다.
+현재 source 결박/구조 판정은 refresh-final25-post-runtime-*와 architecture-final25-post-runtime.log,
+실행 proof는 위의 원래 raw log/입력 map이 소유한다. 과거 reviewed notes를 갱신하거나 새 승인으로
+만들지 않았다. immutable architecture와 review-notes의 SHA도 원래 값 그대로 유지한다.
+
+미실행: local runner가 명시적으로 제외한 실제 systemd/cgroup9개 파일, 실제 macOS/VM/Keychain,
+real-provider turn, 실제 power-loss qualification. 현재 user manager는 running이지만 dev는
+disposable qualification 계정이 아니고 호스트 /usr/bin/bwrap도 없다. private namespace의
+로컬 bwrap/실제 Linux FD·lock·SIGKILL·C bridge·scripted provider 결과로 이를 대체하지 않는다.
+필수 실제 환경 검사가 남아 있으므로 명세의 개편 전체 qualification 완료로 표시하지 않는다.
+LOC는 cloc2.08의 같은-source 반복 결과 불일치로 UNRELIABLE이며 유효한 최종 감소율을 주장하지 않는다.

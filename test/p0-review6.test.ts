@@ -1,3 +1,7 @@
+import { residentEngineEffects } from "#oma-test/app/engine/resident-effects";
+import { testBroker } from "./helpers/broker-fixture.js";
+import { createLifecycleModule } from "#oma-test/app/broker/lifecycle-composition";
+import { createMailModule } from "#oma-test/app/broker/mail-composition";
 /** The sixth review's regressions (docs/priority-0-audit.md,
  * "6차 점검", P0V-74 on): each is the review's counterexample, run against
  * the code that fixed it. */
@@ -10,11 +14,11 @@ import { randomUUID } from "node:crypto";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { Store } from "../src/store.js";
-import { StoreError, errorCodeOf, publicFailure } from "../src/domain/errors.js";
-import { AdmissionGate } from "../src/domain/admission.js";
+import { Store, SCHEMA_PATH } from "@oma/storage";
+import { StoreError, errorCodeOf, publicFailure } from "@oma/domain/errors";
+import { AdmissionGate } from "@oma/domain/admission";
 
-const schemaPath = join(fileURLToPath(new URL(".", import.meta.url)), "..", "..", "implementation", "schema-v3.sql");
+const schemaPath = SCHEMA_PATH;
 
 test("P0V-75 / R6-02, P0-5: an INTEGER the driver cannot hand over is corruption the fence sees, and nothing else with that code is", t => {
   const root = mkdtempSync(join(tmpdir(), "oma-overflow-"));
@@ -46,8 +50,8 @@ test("P0V-75 / R6-02, P0-5: an INTEGER the driver cannot hand over is corruption
 });
 
 test("P0V-76 / R6-03: an Enter after a paste's burst submits even when the wall clock was set back meanwhile", async () => {
-  const { KeyDecoder } = await import("../src/tui/keys.js");
-  const { TERMINAL_BOUNDS } = await import("../src/domain/surface-bounds.js");
+  const { KeyDecoder } = await import("@oma/tui/keys");
+  const { TERMINAL_BOUNDS } = await import("@oma/domain/surface-bounds");
   const wall = Date.now;
   let offset = 0;
   // The wall clock is under the test's hand from before the decoder exists.
@@ -64,11 +68,11 @@ test("P0V-76 / R6-03: an Enter after a paste's burst submits even when the wall 
 // ---- R6-04: native preparation trees carry a proof of their makers' death ----
 import { spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, readdirSync, writeFileSync } from "node:fs";
-import { TreeLease, collectLeasedTree, leasePathOf, treeQuiescence } from "../src/storage/tree-lease.js";
-import { collectRepositoryStaging, provisionSociety } from "../src/runtime/provision.js";
-import { collectUnacceptedArtifacts } from "../src/reconcile/preaccept.js";
+import { TreeLease, collectLeasedTree, leasePathOf, treeQuiescence } from "@oma/storage/tree-lease";
+import { collectRepositoryStaging, provisionSociety } from "#oma-test/app/runtime/provision";
+import { collectUnacceptedArtifacts } from "@oma/storage/preaccept-collection";
 
-const leaseModule = join(fileURLToPath(new URL(".", import.meta.url)), "..", "src", "storage", "tree-lease.js");
+const leaseModule = fileURLToPath(import.meta.resolve("@oma/storage/tree-lease"));
 /** A maker that takes a tree's lease, makes the tree, starts a child that
  * inherits the lease (as a git or a namespace command would), and is then
  * SIGKILLed. Answers the surviving child's pid. */
@@ -147,7 +151,7 @@ test("P0V-77 / R6-04: startup recovery collects an unaccepted quarantine or cont
 });
 
 test("R6-04: a synchronous command inherits the descriptors it is given, from 3 on, as a git holding a lease must", async t => {
-  const { runProcessSync } = await import("../src/process/run.js");
+  const { runProcessSync } = await import("@oma/process/run");
   const root = mkdtempSync(join(tmpdir(), "oma-inherit-"));
   t.after(() => rmSync(root, { recursive: true, force: true }));
   const lease = TreeLease.take(join(root, "tree"));
@@ -161,9 +165,7 @@ test("R6-04: a synchronous command inherits the descriptors it is given, from 3 
 
 /** A CLI effect run in its own process: `fail` ends the process it runs in. */
 function cliChild(script: string, options: { cwd?: string; env?: Record<string, string> } = {}) {
-  const at = (module: string) => new URL(module, import.meta.url).href;
-  const source = script.replace(/@(\.\.\/src\/[\w/.-]+\.js)/g, (_all, module: string) => at(module));
-  return spawnSync(process.execPath, ["--input-type=module", "-e", source], {
+  return spawnSync(process.execPath, ["--input-type=module", "-e", script], {
     cwd: options.cwd, encoding: "utf8", timeout: 60_000,
     env: { PATH: process.env.PATH ?? "/usr/bin:/bin", ...options.env },
   });
@@ -180,7 +182,7 @@ test("P0V-78 / R6-05, INV10: a context tree is read only up to the context strea
   ftruncateSync(big, 64 * 1024 * 1024);
   closeSync(big);
   const prepare = `
-    import { prepareContextEffects } from "@../src/cli/effects/context.js";
+    import { prepareContextEffects } from ${JSON.stringify(import.meta.resolve("#oma-test/app/cli/effects/context"))};
     process.on("exit", () => process.stdout.write(JSON.stringify({ arrayBuffers: process.memoryUsage().arrayBuffers })));
     // w10: fail() throws a ClientError the CLI's fatal() ends; the child ends it the same way.
     try {
@@ -219,7 +221,7 @@ test("P0V-78 / R6-05, INV10: a submission's bundle is read only up to the bundle
   git("commit", "-q", "-m", "a");
   const candidate = git("rev-parse", "HEAD");
   const submit = `
-    import { prepareSubmitEffects } from "@../src/cli/effects/submit.js";
+    import { prepareSubmitEffects } from ${JSON.stringify(import.meta.resolve("#oma-test/app/cli/effects/submit"))};
     try {
       const prepared = prepareSubmitEffects(${JSON.stringify(candidate)}, "cli-${randomUUID()}", { hasCandidate: false, prerequisites: [] });
       process.stdout.write(JSON.stringify({ bytes: prepared.content.length }));
@@ -234,19 +236,19 @@ test("P0V-78 / R6-05, INV10: a submission's bundle is read only up to the bundle
 });
 
 test("P0V-78 / R6-05, CFG-003: every environment the CLI runs in carries the society's stream bounds, and an omitted one is the reference value", async () => {
-  const { principalEnvironment } = await import("../src/runtime/engine/principal-session.js");
-  const { cliEnvironment } = await import("../src/extension/mail-tools.js");
-  const { cliBundleBytes, cliContextBytes } = await import("../src/cli/transport.js");
-  const { defaultHostConfig } = await import("../src/config/defaults.js");
+  const { principalEnvironment } = await import("@oma/engine/principal-session");
+  const { cliEnvironment } = await import("@oma/extension/mail-tools");
+  const { cliBundleBytes, cliContextBytes } = await import("#oma-test/app/cli/transport");
+  const { defaultHostConfig } = await import("@oma/config/defaults");
   const limits = { frameBytes: 256 * 1024, mailBodyBytes: 1024, batchMaxMessages: 4, addresses: 64, contextBytes: 12345, bundleBytes: 67890 };
   const principal = principalEnvironment({ stateRoot: "/srv/oma", runRoot: "/run/oma", libdir: "/opt/oma" },
-    { society: "demo", provider: "pi", model: "current", workspaceBytes: 1024, extensions: [] }, limits);
+    { society: "demo", provider: "pi", model: "current", extensions: [] }, limits);
   assert.equal(principal.OMA_CONTEXT_BYTES, "12345");
   assert.equal(principal.OMA_BUNDLE_BYTES, "67890");
   // A Resident's engine, whose shell and tools run the same CLI.
-  const { planPiSpawn } = await import("../src/runtime/pi-spawn-plan.js");
+  const { planPiSpawn } = await import("@oma/engine/pi-spawn-plan");
   const options = residentOptions("/srv/oma");
-  const resident = planPiSpawn({ ...options, limits: { ...options.limits, ...limits } });
+  const resident = planPiSpawn(residentEngineEffects.sandbox, { ...options, limits: { ...options.limits, ...limits } });
   assert.equal(resident.args[resident.args.indexOf("OMA_CONTEXT_BYTES") + 1], "12345");
   assert.equal(resident.args[resident.args.indexOf("OMA_BUNDLE_BYTES") + 1], "67890");
   const saved = { context: process.env.OMA_CONTEXT_BYTES, bundle: process.env.OMA_BUNDLE_BYTES };
@@ -272,7 +274,7 @@ test("P0V-78 / R6-05, CFG-003: every environment the CLI runs in carries the soc
 });
 
 test("P0V-79 / R6-06: an SS3 report is one key or none, never an Escape and the characters behind it", async () => {
-  const { KeyDecoder } = await import("../src/tui/keys.js");
+  const { KeyDecoder } = await import("@oma/tui/keys");
   const { decodeKeys } = await import("./fixtures/keys.js");
   const ss3 = (text: string) => decodeKeys(Buffer.from(`\u001bO${text}`));
   // Application cursor mode's arrows are the arrows.
@@ -299,7 +301,7 @@ test("P0V-79 / R6-06: an SS3 report is one key or none, never an Escape and the 
 });
 
 test("P0V-79 / R6-06: the terminal owner asks for normal cursor keys when it takes the terminal and whenever it repaints", async () => {
-  const { openTerminal } = await import("../src/tui/screen.js");
+  const { openTerminal } = await import("@oma/tui/screen");
   const input = { isTTY: false, resume() {}, pause() {}, on() {}, setRawMode() {} } as unknown as NodeJS.ReadStream;
   const written: string[] = [];
   const output = { columns: 80, rows: 24, write(text: string) { written.push(text); return true; }, on() {} } as unknown as NodeJS.WriteStream;
@@ -314,7 +316,7 @@ test("P0V-79 / R6-06: the terminal owner asks for normal cursor keys when it tak
 
 /** A child that publishes `bytes` at `target` and is SIGKILLed at `point`/`phase`. */
 function publishKilledAt(target: string, bytes: string, point: string, phase: string) {
-  const module = new URL("../src/storage/durable-fs.js", import.meta.url).href;
+  const module = new URL(import.meta.resolve("@oma/storage/durable-fs"), import.meta.url).href;
   return spawnSync(process.execPath, ["--input-type=module", "-e", `
     const { publishNoReplace } = await import(${JSON.stringify(module)});
     publishNoReplace(${JSON.stringify(target)}, ${JSON.stringify(bytes)}, 0o600, fault => {
@@ -324,7 +326,7 @@ function publishKilledAt(target: string, bytes: string, point: string, phase: st
 }
 
 test("P0V-83, P0V-84 / R6-08: a no-replace publication killed at any step leaves its name absent or whole, and the next one collects what it left", async t => {
-  const { publishNoReplace } = await import("../src/storage/durable-fs.js");
+  const { publishNoReplace } = await import("@oma/storage/durable-fs");
   const root = mkdtempSync(join(tmpdir(), "oma-no-replace-"));
   t.after(() => rmSync(root, { recursive: true, force: true }));
   const points = [["file-create", "before"], ["file-create", "after-visible"], ["file-write", "before"], ["file-write", "ambiguous"],
@@ -350,10 +352,10 @@ test("P0V-83, P0V-84 / R6-08: a no-replace publication killed at any step leaves
 });
 
 test("P0V-84 / R6-08, P0V-111: a temporary whose writer is alive is not collected, nor one written without a lock", async t => {
-  const { publishNoReplace } = await import("../src/storage/durable-fs.js");
+  const { publishNoReplace } = await import("@oma/storage/durable-fs");
   const root = mkdtempSync(join(tmpdir(), "oma-no-replace-live-"));
   t.after(() => rmSync(root, { recursive: true, force: true }));
-  const module = new URL("../src/storage/durable-fs.js", import.meta.url).href;
+  const module = new URL(import.meta.resolve("@oma/storage/durable-fs"), import.meta.url).href;
   const { spawn } = await import("node:child_process");
   // A writer stopped between its write and its link: alive, holding its lock.
   const child = spawn(process.execPath, ["--input-type=module", "-e", `
@@ -379,7 +381,7 @@ test("P0V-84 / R6-08, P0V-111: a temporary whose writer is alive is not collecte
 });
 
 test("P0V-85 / R6-08, P0-7: provisioning killed at the canonical main's creation leaves no main or the one it made, and the next start keeps it", async t => {
-  const provision = new URL("../src/runtime/provision.js", import.meta.url).href;
+  const provision = new URL(import.meta.resolve("#oma-test/app/runtime/provision")).href;
   for (const point of ["before-main", "after-main"] as const) {
     const stateRoot = mkdtempSync(join(tmpdir(), `oma-main-${point}-`));
     t.after(() => rmSync(stateRoot, { recursive: true, force: true }));
@@ -419,8 +421,7 @@ test("P0V-85 / R6-08, P0-7: provisioning killed at the canonical main's creation
 });
 
 test("P0V-86 / R6-09, IPC-001: every UTF-8 reading keeps a U+FEFF as the character it is, so strict JSON refuses a BOM", async () => {
-  const owner = await import("../src/domain/utf8.js");
-  const mirror = await import("../src/extension/utf8.js");
+  const owner = await import("@oma/domain/utf8");
   const vectors: Array<[string, Uint8Array]> = [
     ["leading BOM", Buffer.from("﻿a")], ["BOM only", Buffer.from("﻿")], ["inner BOM", Buffer.from("a﻿b")],
     ["two BOMs", Buffer.from("﻿﻿")], ["Korean", Buffer.from("한글")], ["empty", new Uint8Array(0)],
@@ -428,7 +429,6 @@ test("P0V-86 / R6-09, IPC-001: every UTF-8 reading keeps a U+FEFF as the charact
   ];
   const answer = (decode: (bytes: Uint8Array) => string, bytes: Uint8Array) => { try { return { text: decode(bytes) }; } catch { return { refused: true }; } };
   for (const [name, bytes] of vectors) {
-    assert.deepEqual(answer(mirror.decodeUtf8, bytes), answer(owner.decodeUtf8, bytes), `the extension's mirror differs on ${name}`);
     const expected = answer(bytes => Buffer.from(bytes).toString("utf8"), bytes);
     if (!("refused" in answer(owner.decodeUtf8, bytes))) assert.deepEqual(answer(owner.decodeUtf8, bytes), expected, `${name} is not read as its bytes`);
   }
@@ -440,25 +440,25 @@ test("P0V-86 / R6-09, IPC-001: every UTF-8 reading keeps a U+FEFF as the charact
     assert.equal(decoder.decode(bom.subarray(0, split), { stream: true }) + decoder.decode(bom.subarray(split)), "x﻿y", `split at ${split}`);
   }
   // The wire: a BOM-prefixed frame is not JSON (G06's `== BOM at start ==`).
-  const { parseJsonObject } = await import("../src/frame.js");
+  const { parseJsonObject } = await import("@oma/protocol/frame");
   assert.throws(() => parseJsonObject(Buffer.from('﻿{"a":1}')), (error: unknown) => (error as { code?: string }).code === "INVALID_REQUEST");
   assert.deepEqual(parseJsonObject(Buffer.from('{"a":"﻿"}')).raw, { a: "﻿" }, "a U+FEFF inside a string is data");
   // The engine's JSONL: a BOM-prefixed line is not an event.
-  const { JsonlReader } = await import("../src/protocol/jsonl.js");
+  const { JsonlReader } = await import("@oma/protocol/jsonl");
   const reader = new JsonlReader(1024);
   assert.throws(() => reader.feed(Buffer.from('﻿{"type":"x"}\n'), () => {}), /malformed UTF-8 or JSON/);
   // A process's output is its bytes.
-  const { decodeProcessText } = await import("../src/process/run.js");
+  const { decodeProcessText } = await import("@oma/process/run");
   assert.equal(decodeProcessText(Buffer.from("﻿line\n")), "﻿line\n");
   // Context: the text keeps it; a document of nothing but it is still empty.
-  const { contextFileCheck } = await import("../src/domain/context-policy.js");
+  const { contextFileCheck } = await import("@oma/domain/context-policy");
   assert.equal(contextFileCheck("GOAL.md", Buffer.from("﻿")), "GOAL.md must not be empty");
   assert.equal(contextFileCheck("GOAL.md", Buffer.from("﻿﻿")), null, "only the one that begins the document is its signature");
   assert.equal(contextFileCheck("GOAL.md", Buffer.from("﻿goal")), null);
 });
 
 test("P0V-87 / R6-10: mail accepted after the clock was set back is still delivered after the mail accepted before it", async t => {
-  const { MailModule } = await import("../src/mail.js");
+  const { MailModule } = await import("@oma/mail");
   const { makeValidAgent } = await import("./fixtures/spec.js");
   const dir = mkdtempSync(join(tmpdir(), "oma-order-"));
   t.after(() => rmSync(dir, { recursive: true, force: true }));
@@ -470,7 +470,7 @@ test("P0V-87 / R6-10: mail accepted after the clock was set back is still delive
   const store = new Store(join(dir, "runtime.sqlite"));
   t.after(() => store.close());
   store.transaction(() => { for (const name of ["a", "b"]) store.insertAgent(makeValidAgent(name, { desired: "enabled", incarnation: 1 })); });
-  const mail = new MailModule({ stateRoot: dir, society: "demo" }, store, 64);
+  const mail = createMailModule({ stateRoot: dir, society: "demo" }, store, 64);
   const auth = { actor: "a", incarnation: 1, role: "resident" as const, channel: "actor" as const, capabilities: new Set(["mail.send" as const]),
     peer: { pid: 1, uid: 1000, gid: 1000, cgroup: null } };
   try {
@@ -484,7 +484,7 @@ test("P0V-87 / R6-10: mail accepted after the clock was set back is still delive
   assert.ok(stamps.every((stamp, index) => index === 0 || stamp < stamps[index - 1]!), `the wall clock was not set back between acceptances: ${stamps.join(" ")}`);
   const accepted = [0, 1, 2, 3, 4].map(index => {
     const operation = store.transaction(() => store.getOperation("a", `order-${index}`))!;
-    return (JSON.parse(operation.planJson) as { message: { id: string } }).message.id;
+    return (JSON.parse(operation.planJson).intent as { message: { id: string } }).message.id;
   });
   assert.deepEqual(store.pendingDeliveries("b").map(row => row.messageId), accepted, "the recipient reads its mail in another order than it was accepted");
   assert.deepEqual(store.pendingWorkRows().unbatched.filter(row => row.recipient === "b").map(row => row.messageId), accepted);
@@ -494,9 +494,9 @@ test("P0V-87 / R6-10: ledger SQL that orders by a wall-clock column is refused",
   const { transactionRuleFindings } = await import(new URL("../../scripts/architecture/rules/transaction-rules.mjs", import.meta.url).href);
   const root = mkdtempSync(join(tmpdir(), "oma-order-rule-"));
   try {
-    mkdirSync(join(root, "src"), { recursive: true }); mkdirSync(join(root, "implementation"));
+    mkdirSync(join(root, "apps/oma/src"), { recursive: true }); mkdirSync(join(root, "implementation"));
     writeFileSync(join(root, "implementation/mutation-owners.json"), JSON.stringify({ mutations: {} }));
-    const findings = (sql: string) => { writeFileSync(join(root, "src/reader.ts"), `export const q = \`${sql}\`;`);
+    const findings = (sql: string) => { writeFileSync(join(root, "apps/oma/src/reader.ts"), `export const q = \`${sql}\`;`);
       return (transactionRuleFindings(root) as Array<{ rule: string }>).filter(value => value.rule === "ledger-order-clock"); };
     assert.equal(findings("SELECT * FROM deliveries WHERE recipient=? ORDER BY rowid").length, 0);
     assert.equal(findings("SELECT * FROM batches ORDER BY agent, rowid").length, 0, "a column that is not a clock may lead");
@@ -507,7 +507,7 @@ test("P0V-87 / R6-10: ledger SQL that orders by a wall-clock column is refused",
 });
 
 test("P0V-88 / R6-11: a sweep observes a recovery failure once, and still observes a failure of its own", async () => {
-  const { OperationRecovery } = await import("../src/reconcile/operations.js");
+  const { OperationRecovery } = await import("@oma/reconcile/operations");
   const row = { id: "op1", kind: "git.submit", state: "pending" } as never;
   // The review's counterexample: the observer's own verdict comes back to it.
   const seen: unknown[] = [];
@@ -527,9 +527,9 @@ test("P0V-88 / R6-11: a sweep observes a recovery failure once, and still observ
 });
 
 test("P0V-90 / R6-13: a generation already present is reused only if it holds these files and nothing else", async () => {
-  const { loadConfigurationSnapshot, validateConfig } = await import("../src/config.js");
-  const { commitManagedEdit } = await import("../src/application/settings.js");
-  const { MANAGED_DIRECTORY } = await import("../src/config/generations.js");
+  const { loadConfigurationSnapshot, validateConfig } = await import("@oma/config");
+  const { commitManagedEdit } = await import("#oma-test/app/application/settings");
+  const { MANAGED_DIRECTORY } = await import("@oma/config/generations");
   const { createCompleteConfigurationFixture } = await import("./fixtures/configuration.js");
   const { chmodSync } = await import("node:fs");
   type Snapshot = ReturnType<typeof loadConfigurationSnapshot>;
@@ -558,16 +558,16 @@ test("P0V-90 / R6-13: a generation already present is reused only if it holds th
 });
 
 test("P0V-92 / R6-15: a runner or a retried key the ledger no longer knows is refused by name, not assumed away", async t => {
-  const { InternalDispatcher } = await import("../src/broker/internal-dispatcher.js");
+  const { InternalDispatcher } = await import("@oma/broker/internal-dispatcher");
   const peer = { pid: process.pid, uid: process.getuid!(), gid: process.getgid!(), alive: () => true,
     retainForExecution: () => () => undefined, releaseConnection: () => undefined };
   const dispatcher = new InternalDispatcher({
     store: { getAgentIdentity: () => null, pendingDeliveryCount: () => 0, getBatchAgent: () => null, preparedBatchIds: () => [] },
     mail: { prepare: async () => null, complete: async () => {}, moveToCur: () => 0 } as never,
-    stateRoot: "/nonexistent",
+    principalInboxNewEntries: () => { throw new Error("runner diagnostics do not list the Principal inbox"); },
     peers: { requireRunnerUnit: () => {}, requireHostUnit: () => {}, runnerActor: () => "alice",
       runnerAuth: () => { throw new Error("authenticated a runner the ledger does not know"); } },
-    isDraining: () => false, assertAdmission: () => {}, admitResource: () => () => {},
+    isDraining: () => false, assertAdmission: () => {},
     failureAnswer: (id, error) => ({ id, ok: false, code: (error as { code?: string }).code, message: (error as Error).message }),
     refreshViews: () => {}, openRun: () => { throw new Error("no run is opened here"); },
   });
@@ -586,23 +586,23 @@ test("P0V-92 / R6-15: a runner or a retried key the ledger no longer knows is re
 });
 
 test("P0V-93 / R6-16: a run is opened on the GOAL owner's answer, and an answer it cannot give is not \"no GOAL\"", async t => {
-  const { MailModule } = await import("../src/mail.js");
-  const { Broker } = await import("../src/broker.js");
-  const { UnitsModule } = await import("../src/units.js");
-  const { ViewsModule } = await import("../src/views.js");
-  const { LifecycleModule } = await import("../src/lifecycle.js");
-  const { ALL_CAPS, TEST_RESOURCES, makeValidAgent, makeValidResolvedSpec } = await import("./fixtures/spec.js");
+  const { MailModule } = await import("@oma/mail");
+  const { Broker } = await import("@oma/broker");
+  const { UnitsModule } = await import("@oma/platform-linux/units");
+  const { ViewsModule } = await import("#oma-test/app/views");
+  const { LifecycleModule } = await import("@oma/lifecycle");
+  const { ALL_CAPS, makeValidAgent, makeValidResolvedSpec } = await import("./fixtures/spec.js");
   const root = mkdtempSync(join(tmpdir(), "oma-goal-owner-"));
   const store = new Store(join(root, "runtime.sqlite"), 5, { society: "demo" });
   t.after(() => { try { store.close(); } finally { rmSync(root, { recursive: true, force: true }); } });
   store.transaction(tx => { tx.insertAgent(makeValidAgent("alice", { desired: "enabled", incarnation: 1 })); });
-  const mail = new MailModule({ stateRoot: root, society: "demo" }, store, 64);
-  const units = new UnitsModule("demo", { node: process.execPath, libdir: root, state: root, society: "demo", agent: "", config: join(root, "config.json"), run: join(root, "oma", "demo") }, join(root, "units"), { p: TEST_RESOURCES });
+  const mail = createMailModule({ stateRoot: root, society: "demo" }, store, 64);
+  const units = new UnitsModule("demo", { node: process.execPath, libdir: root, state: root, society: "demo", agent: "", config: join(root, "config.json"), run: join(root, "oma", "demo") }, join(root, "units"));
   const views = new ViewsModule(store, root, "demo", "p");
-  const lifecycle = new LifecycleModule(store, units, { stateRoot: root, projectGit: join(root, "project.git"), society: "demo", hasGoal: () => false, activationAllowed: () => true },
+  const lifecycle = createLifecycleModule(store, units, { stateRoot: root, projectGit: join(root, "project.git"), society: "demo", hasGoal: () => false, activationAllowed: () => true },
     (_parent, input) => makeValidResolvedSpec(input.name, "p", ALL_CAPS, input.from, input.brief), mail);
   let answer: () => boolean = () => false;
-  const broker = new Broker(store, mail, units, views, lifecycle, null, null, { stateRoot: root, runRoot: join(root, "run"), society: "demo", hasGoal: () => answer() });
+  const broker = testBroker({ store: store, mail: mail, units: units, views: views, lifecycle: lifecycle, git: null, reviews: null, reconcile: null, paths: { stateRoot: root, runRoot: join(root, "run"), society: "demo", hasGoal: () => answer() } });
   const openRun = (Reflect.get(broker, "openRun") as (actor: string, invocation: string) => Promise<unknown>).bind(broker);
   await assert.rejects(() => openRun("alice", "inv"), (error: unknown) => error instanceof StoreError && error.code === "GOAL_REQUIRED");
   // The owner could not look (EACCES, EIO): that is its answer, not a missing GOAL.
@@ -611,7 +611,7 @@ test("P0V-93 / R6-16: a run is opened on the GOAL owner's answer, and an answer 
 });
 
 test("P0V-94 / R6-17: a derived TSV field escapes every control character itself, reversibly", async () => {
-  const { fieldEscape } = await import("../src/views.js");
+  const { fieldEscape } = await import("#oma-test/app/views");
   assert.equal(fieldEscape("a\tb\nc\rd\\e"), "a\\tb\\nc\\rd\\\\e");
   assert.equal(fieldEscape("\u001b[2Jx\u0000\u007f\u0085"), "\\x1b[2Jx\\x00\\x7f\\x85", "a terminal instruction or a C1 control reached the reader");
   assert.equal(fieldEscape("동료 😀"), "동료 😀", "text is not touched");
@@ -626,13 +626,12 @@ test("P0V-94 / R6-17: a derived TSV field escapes every control character itself
 });
 
 test("P0V-95 / R6-20: a unit that names no owner is nobody's to replace -- whichever tree it names -- and the manager's ExecStart format is read in one place", async t => {
-  const { UnitsModule, effectiveExecArgv } = await import("../src/units.js");
-  const { TEST_RESOURCES } = await import("./fixtures/spec.js");
+  const { UnitsModule, effectiveExecArgv } = await import("@oma/platform-linux/units");
   const dir = mkdtempSync(join(tmpdir(), "oma-unit-owner-"));
   t.after(() => rmSync(dir, { recursive: true, force: true }));
   const values = { node: process.execPath, libdir: process.cwd(), state: join(dir, "tree"), society: "demo", agent: "",
     config: join(dir, "tree", "config.json"), run: join(dir, "run") };
-  const units = new UnitsModule("demo", values, dir, { p: TEST_RESOURCES }, () => 1);
+  const units = new UnitsModule("demo", values, dir, () => 1);
   // An earlier release's unit with this name and Description, naming no tree.
   writeFileSync(join(dir, "oma-demo-erin.service"), "[Unit]\nDescription=OMA demo resident erin\n[Service]\nExecStart=/n /l/runner.js --society demo --agent erin\n");
   assert.throws(() => units.assertResidentNamesFree("erin"),
@@ -650,8 +649,7 @@ test("P0V-95 / R6-20: a unit that names no owner is nobody's to replace -- which
   assert.equal(effectiveExecArgv("/usr/bin/node /opt/oma/runner.js"), null, "an answer in another form is not read as the argv");
 });
 
-import { UnitsModule } from "../src/units.js";
-import { TEST_RESOURCES } from "./fixtures/spec.js";
+import { UnitsModule } from "@oma/platform-linux/units";
 
 test("P0V-98 / P0V-59, P0-3: the first Resident a user installs makes the unit directory it is installed into", t => {
   // Found by the kernel lane of the v22 binding: a user manager whose unit
@@ -665,12 +663,12 @@ test("P0V-98 / P0V-59, P0-3: the first Resident a user installs makes the unit d
   const installDir = join(dir, "config", "systemd", "user");
   const state = join(dir, "tree");
   const units = new UnitsModule("demo", { node: process.execPath, libdir: process.cwd(), state, society: "demo", agent: "",
-    config: join(state, "config.json"), run: join(dir, "run") }, installDir, { p: TEST_RESOURCES }, () => 1);
+    config: join(state, "config.json"), run: join(dir, "run") }, installDir, () => 1);
   // Whatever the stand-in manager then answers -- it does not report the
   // fragment it loaded, and a lane's guard refuses systemctl outright -- the
   // install stops after publishing; what matters here is that it got that far.
   let failure: unknown = null;
-  try { units.ensureResident("alice", "p", TEST_RESOURCES); } catch (error) { failure = error; }
+  try { units.ensureResident("alice", "p", "md"); } catch (error) { failure = error; }
   assert.ok(existsSync(installDir) && readdirSync(installDir).includes("oma-demo-alice.service"),
     `the unit was not published into the directory it made: ${String(failure)}`);
 });

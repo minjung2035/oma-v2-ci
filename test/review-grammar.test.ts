@@ -1,3 +1,4 @@
+import { serializePlanIntent } from "./fixtures/plan.js";
 /** mail-v1 review grammar: wire inputs, frozen facts, review mail metadata and
  * ledger decode relations for the review attest.record/git.integrate variants. */
 import test from "node:test";
@@ -6,17 +7,18 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { DatabaseSync } from "node:sqlite";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import type { ExactCandidateIdentity, MessagePlan, MutationMethod } from "../implementation/contracts.js";
-import type { ReviewFact } from "../implementation/contracts/attestation.js";
-import { Store, readDiagnosticSnapshot } from "../src/store.js";
-import { inspectLedger } from "../src/diagnostics/ledger.js";
-import { StoreError } from "../src/domain/errors.js";
-import { attestationParamsCheck, messagePlanCheck } from "../src/validate.js";
-import { reviewFactProblem } from "../src/domain/attestation.js";
+import type { ExactCandidateIdentity, MessagePlan, MutationMethod } from "@oma/contracts";
+import type { ReviewFact } from "@oma/contracts/attestation";
+import { Store, readDiagnosticSnapshot } from "@oma/storage";
+import { inspectLedger } from "#oma-test/app/diagnostics/ledger";
+import { StoreError } from "@oma/domain/errors";
+import { attestationParamsCheck, messagePlanCheck } from "@oma/domain/validation";
+import { reviewFactProblem } from "@oma/domain/attestation";
 import { isDerivedRequestKey, isReviewRequestName, applyRequestKeyFor, refreshRequestKeyFor,
-  reviewRequestNameFor, legacyReviewRequestNameFor, reviewRequestNameOwnedBy } from "../src/domain/identifiers.js";
-import { requestHash } from "../src/hash.js";
-import { generateOperationId, generateMessageId } from "../src/ids.js";
+  reviewRequestNameFor, reviewRequestNameOwnedBy } from "@oma/domain/identifiers";
+import { requestHash } from "@oma/domain/request-identity";
+import { generateOperationId } from "@oma/native/identity";
+import { messageIdForOperation as generateMessageId } from "@oma/domain/derived";
 import { makeValidAgent } from "./fixtures/spec.js";
 
 const CANDIDATE = "2".repeat(40);
@@ -27,7 +29,7 @@ const LIMITS = { mailBodyBytes: 1 << 20, subjectBytes: 512 };
 const ok = (value: unknown) => assert.equal(attestationParamsCheck(value, LIMITS), null);
 const bad = (value: unknown) => assert.notEqual(attestationParamsCheck(value, LIMITS), null);
 const OP = "op-00000000-0000-4000-8000-000000000001";
-const NAME = "merge-00000000";
+const NAME = "merge-00000000-0000-4000-8000-000000000001";
 const MSG = "m-00000000-0000-4000-8000-000000000001-0";
 
 test("identifiers: derived request keys and review request names", () => {
@@ -40,24 +42,24 @@ test("identifiers: derived request keys and review request names", () => {
   assert.equal(isDerivedRequestKey(`~apply.not-an-op`), false);
   assert.equal(isDerivedRequestKey("plain-key"), false);
   assert.equal(isReviewRequestName(NAME), true);
-  assert.equal(isReviewRequestName("challenge-0000000a"), true);
+  assert.equal(isReviewRequestName("challenge-0000000a"), false);
   assert.equal(isReviewRequestName("merge-0000000G"), false);
   assert.equal(isReviewRequestName("merge-0000000"), false);
   // AV-02: a fresh name carries the operation's whole UUID -- two opens can no
   // longer collide on an 8-hex truncation and exchange facts meant for each
-  // other. The short shape stays decodable for facts minted before the fix.
+  // other. Short pre-release names are refused by the current grammar.
   assert.equal(reviewRequestNameFor("merge", "op-0123abcd-4567-4000-8000-000000000000"),
     "merge-0123abcd-4567-4000-8000-000000000000");
   assert.equal(reviewRequestNameFor("challenge", OP), "challenge-00000000-0000-4000-8000-000000000001");
-  assert.equal(legacyReviewRequestNameFor("merge", OP), "merge-00000000");
+  assert.equal(isReviewRequestName("merge-00000000"), false);
   assert.equal(isReviewRequestName("merge-0123abcd-4567-4000-8000-000000000000"), true);
   assert.equal(isReviewRequestName("challenge-0123abcd-4567-4000-8000-000000000000"), true);
   assert.equal(isReviewRequestName("merge-0123abcd-4567-4000-8000-00000000000"), false);
   assert.equal(isReviewRequestName("merge-0123abcd-4567-4000-8000-0000000000000"), false);
   assert.equal(isReviewRequestName("merge-0123ABCD-4567-4000-8000-000000000000"), false);
-  // Ownership admits exactly the two grammars for this operation's own name.
+  // Ownership admits only this operation's full UUID name.
   assert.equal(reviewRequestNameOwnedBy("merge", OP, "merge-00000000-0000-4000-8000-000000000001"), true);
-  assert.equal(reviewRequestNameOwnedBy("merge", OP, "merge-00000000"), true);
+  assert.equal(reviewRequestNameOwnedBy("merge", OP, "merge-00000000"), false);
   assert.equal(reviewRequestNameOwnedBy("challenge", OP, "merge-00000000"), false);
   assert.equal(reviewRequestNameOwnedBy("merge", OP, "merge-0123abcd"), false);
   assert.equal(reviewRequestNameOwnedBy("merge", OP, "merge-0123abcd-4567-4000-8000-000000000000"), false);
@@ -71,11 +73,11 @@ test("wire: every valid ReviewInput kind is accepted", () => {
   ok({ kind: "challenge.open", merge: NAME, tier: "HIGH", title: "Revert", reason: "broke prod",
     candidate: CANDIDATE, base: BASE });
   ok({ kind: "review", name: NAME, body: "looks fine" });
-  ok({ kind: "review", name: "challenge-0000000a", body: "looks fine" });
+  ok({ kind: "review", name: "challenge-0000000a-0000-4000-8000-000000000000", body: "looks fine" });
   ok({ kind: "vote", name: NAME, verdict: "approve", body: "ship it" });
-  ok({ kind: "vote", name: "challenge-0000000a", verdict: "reject", body: "no", approval: MSG });
+  ok({ kind: "vote", name: "challenge-0000000a-0000-4000-8000-000000000000", verdict: "reject", body: "no", approval: MSG });
   ok({ kind: "cancel", name: NAME, reason: "superseded" });
-  ok({ kind: "cancel", name: "challenge-0000000a", reason: "superseded" });
+  ok({ kind: "cancel", name: "challenge-0000000a-0000-4000-8000-000000000000", reason: "superseded" });
 });
 
 test("wire: malformed review inputs are refused", () => {
@@ -157,7 +159,7 @@ test("durable: frozen review fact grammar", () => {
   assert.equal(reviewFactProblem({ kind: "refresh", version: 1, request: OP, main: null }), null);
   assert.equal(reviewFactProblem({ kind: "refresh", version: 1, request: OP, main: CANDIDATE }), null);
   assert.notEqual(reviewFactProblem({ kind: "refresh", version: 1, request: OP, main: "bad" }), null);
-  const challenge = { kind: "challenge.open", version: 1, name: "challenge-0000000a", title: "t", reason: "r",
+  const challenge = { kind: "challenge.open", version: 1, name: "challenge-0000000a-0000-4000-8000-000000000000", title: "t", reason: "r",
     tier: "HIGH", identity, submitters: ["alice"], prepared: true,
     target: { name: NAME, request: OP, integration: "op-00000000-0000-4000-8000-000000000002", identity, tier: "LOW" } };
   assert.equal(reviewFactProblem(challenge), null);
@@ -199,7 +201,7 @@ function accept(store: Store, id: string, actor: string, key: string, kind: Muta
     payload: unknown, plan: unknown, deliveries: readonly [string, string][] = []): void {
   store.transaction(tx => {
     const accepted = tx.acceptOperation({ id, actor, requestKey: key, requestHash: requestHash(kind, payload),
-      kind, payloadJson: JSON.stringify(payload), planJson: JSON.stringify(plan) });
+      kind, payloadJson: JSON.stringify(payload), planJson: serializePlanIntent(plan) });
     assert.equal(accepted, "inserted");
     if (deliveries.length)
       tx.insertDeliveries(deliveries.map(([messageId, recipient]) => ({ messageId, recipient, operationId: id })));
@@ -216,7 +218,7 @@ function openMerge(store: Store): { id: string; name: string } {
     candidate: CANDIDATE, base: BASE };
   store.transaction(tx => tx.acceptOperation({ id, actor: "alice", requestKey: `merge-${id}`, kind: "attest.record",
     requestHash: requestHash("attest.record", payload), payloadJson: JSON.stringify(payload),
-    planJson: JSON.stringify({ kind: "attest.record", fact, messages: [] }) }));
+    planJson: serializePlanIntent({ kind: "attest.record", fact, messages: [] }) }));
   return { id, name };
 }
 
@@ -257,7 +259,7 @@ test("decode: vote with thread + approval messages referencing the request", () 
     f.store.transaction(tx => {
       assert.equal(tx.acceptOperation({ id, actor: "bob", requestKey: `vote-${id}`, kind: "attest.record",
         requestHash: requestHash("attest.record", payload), payloadJson: JSON.stringify(payload),
-        planJson: JSON.stringify({ kind: "attest.record", fact, messages: [thread, approval] }) }), "inserted");
+        planJson: serializePlanIntent({ kind: "attest.record", fact, messages: [thread, approval] }) }), "inserted");
       tx.insertDeliveries([
         { messageId: thread.id, recipient: "alice", operationId: id },
         { messageId: thread.id, recipient: "bob", operationId: id },
@@ -290,13 +292,13 @@ test("decode: merge integration under its derived apply key", () => {
     const notice = message(id, 0, { kind: "result", to: ["commons", "principal"], recipients: ["alice", "principal"],
       review: { role: "notice", request: open.id, name: open.name, part: 1, parts: 1, sha256: "f".repeat(64), bytes: 100 } });
     const payload = { candidate: CANDIDATE, expected: BASE, tier: "LOW" };
-    const plan = { kind: "git.integrate", repo: "project", target: "refs/heads/main", base: BASE,
+    const plan = {policyIdentity: "02c010d0ad2a2e60c59a05b83368e8699b97567828b4f75ffa160dfd35b1bb70", noopRef: null,  kind: "git.integrate", repo: "project", target: "refs/heads/main", base: BASE,
       candidate: CANDIDATE, policyRevision: "p1", checkProfileDigest: "e".repeat(64),
       merge: { version: 1, request: open.id, name: open.name, tier: "LOW", notice: [notice] } };
     f.store.transaction(tx => {
       assert.equal(tx.acceptOperation({ id, actor: "alice", requestKey: applyRequestKeyFor(open.id), kind: "git.integrate",
         requestHash: requestHash("git.integrate", payload), payloadJson: JSON.stringify(payload),
-        planJson: JSON.stringify(plan) }), "inserted");
+        planJson: serializePlanIntent(plan) }), "inserted");
       tx.insertDeliveries([
         { messageId: notice.id, recipient: "alice", operationId: id },
         { messageId: notice.id, recipient: "principal", operationId: id },
@@ -355,7 +357,7 @@ test("decode: apply key that names a different request is corrupt", () => {
       review: { role: "notice", request: open.id, name: open.name, part: 1, parts: 1,
         sha256: "f".repeat(64), bytes: 10 } });
     const payload = { candidate: CANDIDATE, expected: BASE, tier: "LOW" };
-    const plan = { kind: "git.integrate", repo: "project", target: "refs/heads/main", base: BASE,
+    const plan = {policyIdentity: "02c010d0ad2a2e60c59a05b83368e8699b97567828b4f75ffa160dfd35b1bb70", noopRef: null,  kind: "git.integrate", repo: "project", target: "refs/heads/main", base: BASE,
       candidate: CANDIDATE, policyRevision: "p1", checkProfileDigest: "e".repeat(64),
       merge: { version: 1, request: open.id, name: open.name, tier: "LOW", notice: [notice] } };
     accept(f.store, id, "alice", applyRequestKeyFor(open.id), "git.integrate", payload, plan);
@@ -364,20 +366,5 @@ test("decode: apply key that names a different request is corrupt", () => {
     decodeCorrupt(f.store, id);
     patch(f.path, id, { request_key: `key-${id}` });
     decodeCorrupt(f.store, id);
-  } finally { f.close(); }
-});
-
-test("decode: legacy attest.record plan is unchanged", () => {
-  const f = fixture();
-  try {
-    const fact = { kind: "peer", identity, verdict: "APPROVE", evidence: "read the diff" };
-    const id = generateOperationId();
-    const legacy = message(id, 0, { kind: "result", to: ["commons"], recipients: [] });
-    f.store.transaction(tx => tx.acceptOperation({ id, actor: "alice", requestKey: `peer-${id}`, kind: "attest.record",
-      requestHash: requestHash("attest.record", fact), payloadJson: JSON.stringify(fact),
-      planJson: JSON.stringify({ kind: "attest.record", fact, message: legacy }) }));
-    const operation = f.store.operations.getById(id);
-    assert.ok(operation && operation.kind === "attest.record" && !("messages" in operation.plan));
-    ledgerClean(f.root);
   } finally { f.close(); }
 });

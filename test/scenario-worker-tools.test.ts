@@ -1,3 +1,4 @@
+import { TransportSpool } from "@oma/storage/transport-spool";
 /** mail-v1 Worker review loop end-to-end through the model-facing tools.
  *
  * A real society runs (provisioned state, broker, Principal session); each
@@ -14,7 +15,7 @@
  * are captured in outer variables and asserted only after execute() resolves
  * (a throw inside a provider callback only reports "provider failed").
  */
-import "../src/runtime/client-preload.js";
+import "#oma-test/app/runtime/client-preload";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
@@ -23,23 +24,23 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 
 import { createServer, type Server } from "node:net";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
-import type { Actor, AuthContext, Capability, Request } from "../implementation/contracts.js";
-import { capabilitiesOf } from "../src/authority.js";
-import { RpcConnection } from "../src/broker/connection.js";
-import { SharedPeerPin } from "../src/broker/peer-pin.js";
-import { PrincipalChannel } from "../src/extension/principal-channel.js";
-import { registerOmaTools } from "../src/extension/mail-tools.js";
-import { storedMailBytes } from "../src/domain/mail-values.js";
-import { readableBody } from "../src/mail/display.js";
-import { inspectLedger } from "../src/diagnostics/ledger.js";
-import { readDiagnosticSnapshot } from "../src/store.js";
+import type { Actor, AuthContext, Capability, Request } from "@oma/contracts";
+import { capabilitiesOf } from "@oma/domain/authority";
+import { RpcConnection } from "@oma/broker/connection";
+import { SharedPeerPin } from "@oma/broker/peer-pin";
+import { PrincipalChannel } from "@oma/extension/principal-channel";
+import { registerOmaTools } from "@oma/extension/mail-tools";
+import { storedMailBytes } from "@oma/domain/mail-values";
+import { readableBody } from "@oma/mail/display";
+import { inspectLedger } from "#oma-test/app/diagnostics/ledger";
+import { readDiagnosticSnapshot } from "@oma/storage";
 import { agentRootPathAt, actorSocketDirectoryAt, actorSocketPathAt, projectGitPathAt, runnerViewPathAt, workspacePathAt }
-  from "../src/storage/paths.js";
+  from "@oma/domain/paths";
 import { SCENARIO_LIMITS, withScenario, type Scenario } from "./fixtures/scenario.js";
 
 const TIMEOUT = { timeout: 120_000 };
 const SOCIETY = "demo";
-const CLI = fileURLToPath(new URL("../src/cli.js", import.meta.url));
+const CLI = fileURLToPath(new URL("../../apps/oma/dist/cli.js", import.meta.url));
 const GIT = "/usr/bin/git";
 
 /** The tool result's one text block is the CLI's stdout. */
@@ -119,7 +120,7 @@ async function actorSocket(s: Scenario, actor: Actor, frames: Record<string, unk
   const server: Server = createServer(socket => {
     const connection = new RpcConnection({
       socket,
-      stagingRoot: join(s.root, "staging"),
+      makeSpool: descriptor => new TransportSpool(join(s.root, "staging"), descriptor),
       peer: new SharedPeerPin(() => true, () => {}),
       limits: { frameBytes: SCENARIO_LIMITS.frameBytes,
         idleStreamSeconds: SCENARIO_LIMITS.idleStreamSeconds, receiptWaitSeconds: SCENARIO_LIMITS.receiptWaitSeconds },

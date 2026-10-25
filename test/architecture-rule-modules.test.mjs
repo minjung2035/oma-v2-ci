@@ -38,28 +38,28 @@ const minimalMethods = `export const PUBLIC_METHODS = {
 const ownerMap = () => ({
   version: 1,
   registryOwners: {
-    method: { path: "src/protocol/methods.ts", symbolTemplate: 'PUBLIC_METHODS["{mutation}"]' },
+    method: { path: "packages/protocol/src/methods.ts", symbolTemplate: 'PUBLIC_METHODS["{mutation}"]' },
   },
   requiredMutationDimensions: ["workflow", "persistence", "recovery", "cli", "tests"],
   recoveryStrategies: { "transaction-complete": "db", "physical-replay": "physical" },
   fanoutStages: ["method", "tests"],
   mutations: {
     "mail.send": {
-      workflow: [{ path: "src/owner.ts", symbol: "run" }],
-      persistence: [{ path: "src/owner.ts", symbol: "run" }],
+      workflow: [{ path: "apps/oma/src/owner.ts", symbol: "run" }],
+      persistence: [{ path: "apps/oma/src/owner.ts", symbol: "run" }],
       recovery: { strategy: "transaction-complete", owners: [] },
-      cli: [{ path: "src/owner.ts", symbol: "run" }],
+      cli: [{ path: "apps/oma/src/owner.ts", symbol: "run" }],
       tests: [{ path: "test/owner.test.ts", symbol: "oracle" }],
     },
   },
 });
 
 test("architecture imports rule accepts helper-based command orchestration", () => withFixture({
-  "src/cli/commands/send.ts": `import { readBody } from "../effects.js"; export const run = readBody;`,
+  "apps/oma/src/cli/commands/send.ts": `import { readBody } from "../effects.js"; export const run = readBody;`,
 }, root => assert.deepEqual(importRuleFindings(root), [])));
 
 test("architecture imports rule rejects raw command I/O", () => withFixture({
-  "src/cli/commands/send.ts": `import { readFileSync } from "node:fs"; export const run = readFileSync;`,
+  "apps/oma/src/cli/commands/send.ts": `import { readFileSync } from "node:fs"; export const run = readFileSync;`,
 }, root => assert.ok(importRuleFindings(root).some(value => value.rule === "cli-command-import"))));
 
 test("architecture transaction rule accepts transaction-complete owner with no replay", () => withFixture({
@@ -68,14 +68,14 @@ test("architecture transaction rule accepts transaction-complete owner with no r
 
 test("architecture transaction rule rejects physical owner on transaction-complete mutation", () => {
   const map = ownerMap();
-  map.mutations["mail.send"].recovery.owners.push({ path: "src/recover.ts", symbol: "recover" });
+  map.mutations["mail.send"].recovery.owners.push({ path: "apps/oma/src/recover.ts", symbol: "recover" });
   return withFixture({ "implementation/mutation-owners.json": map }, root =>
     assert.ok(transactionRuleFindings(root).some(value => value.rule === "transaction-complete-recovery")));
 });
 
 test("architecture ownership rule accepts exhaustive machine-readable owners", () => withFixture({
-  "src/protocol/methods.ts": minimalMethods,
-  "src/owner.ts": "export const run = 1;",
+  "packages/protocol/src/methods.ts": minimalMethods,
+  "apps/oma/src/owner.ts": "export const run = 1;",
   "test/owner.test.ts": "export const oracle = 1;",
   "implementation/mutation-owners.json": ownerMap(),
 }, root => assert.deepEqual(ownershipRuleFindings(root), [])));
@@ -84,8 +84,8 @@ test("architecture ownership rule rejects mutation vocabulary drift", () => {
   const map = ownerMap();
   map.mutations["route.follow"] = map.mutations["mail.send"];
   return withFixture({
-    "src/protocol/methods.ts": minimalMethods,
-    "src/owner.ts": "export const run = 1;",
+    "packages/protocol/src/methods.ts": minimalMethods,
+    "apps/oma/src/owner.ts": "export const run = 1;",
     "test/owner.test.ts": "export const oracle = 1;",
     "implementation/mutation-owners.json": map,
   }, root => assert.ok(ownershipRuleFindings(root).some(value => value.rule === "mutation-ownership-exhaustiveness")));
@@ -93,13 +93,13 @@ test("architecture ownership rule rejects mutation vocabulary drift", () => {
 
 for (const ambiguous of [false, true]) test(`DR39 architecture ownership: validator locator is ${ambiguous ? "refused when ambiguous" : "derived from the method, including aliases"}`, () => {
   const map = ownerMap();
-  map.registryOwners.validation = { path: "src/validate.ts", symbolFromMethod: "paramsCheck" };
+  map.registryOwners.validation = { path: "packages/domain/src/validation.ts", symbolFromMethod: "paramsCheck" };
   return withFixture({
-    "src/protocol/methods.ts": `import { mailParamsCheck as checkMail, checkString } from "../validate.js";
+    "packages/protocol/src/methods.ts": `import { mailParamsCheck as checkMail, checkString } from "@oma/domain/validation";
       export const PUBLIC_METHODS = { "mail.send": { mode: "mutation",
         paramsCheck: context => ${ambiguous ? "value => checkMail(context)(value) ?? checkString()(value)" : "checkMail(context)"} } };`,
-    "src/validate.ts": "export const mailParamsCheck = 1; export const checkString = 2;",
-    "src/owner.ts": "export const run = 1;",
+    "packages/domain/src/validation.ts": "export const mailParamsCheck = 1; export const checkString = 2;",
+    "apps/oma/src/owner.ts": "export const run = 1;",
     "test/owner.test.ts": "export const oracle = 1;",
     "implementation/mutation-owners.json": map,
   }, root => {
@@ -115,44 +115,29 @@ test("architecture schema duplication rule accepts centralized registry dimensio
 
 test("architecture schema duplication rule rejects per-mutation central registry copies", () => {
   const map = ownerMap();
-  map.mutations["mail.send"].method = { path: "src/other.ts", symbol: "duplicate" };
+  map.mutations["mail.send"].method = { path: "apps/oma/src/other.ts", symbol: "duplicate" };
   return withFixture({ "implementation/mutation-owners.json": map }, root =>
     assert.ok(schemaDuplicationFindings(root).some(value => value.rule === "mutation-registry-duplication")));
 });
 
-const directionPlan = () => ({
-  version: 1,
-  targetFrozenContractAliases: 0,
-  currentFrozenContractAliases: 1,
-  items: {
-    capability: {
-      contract: "implementation/contracts/identity.ts",
-      implementation: "src/domain/capabilities.ts",
-      symbol: "Capability",
-    },
-  },
-});
-
-test("architecture contract-direction rule accepts only explicitly planned frozen debt", () => withFixture({
-  "implementation/contracts.ts": "export {};",
-  "implementation/contracts/identity.ts": `export type Capability = import('../../src/domain/capabilities.js').Capability;`,
-  "implementation/contract-direction-plan.json": directionPlan(),
+test("architecture contract-direction accepts contract-owned declarations", () => withFixture({
+  "packages/contracts/src/index.ts": 'export type { Capability } from "./identity.js";',
+  "packages/contracts/src/identity.ts": 'export type Capability = "mail.send";',
 }, root => assert.deepEqual(contractDirectionFindings(root), [])));
 
-test("architecture contract-direction rule rejects a new unplanned implementation dependency", () => withFixture({
-  "implementation/contracts.ts": "export {};",
-  "implementation/contracts/identity.ts": `export type Capability = import('../../src/domain/capabilities.js').Capability; export type Leak = import('../../src/store.js').Transaction;`,
-  "implementation/contract-direction-plan.json": directionPlan(),
-}, root => assert.ok(contractDirectionFindings(root).some(value => value.rule === "contract-direction"))));
+test("architecture contract-direction refuses implementation and internal-port aliases", () => withFixture({
+  "packages/contracts/src/identity.ts": 'export type Capability = import("@oma/domain/capabilities").Capability;',
+  "packages/contracts/src/index.ts": 'export type Store = import("../../../src/ports/ledger.js").StorePort;',
+}, root => assert.equal(contractDirectionFindings(root).length, 2)));
 
 test("architecture effect ownership rule accepts dedicated effect, transport and exit owners", () => withFixture({
-  "src/cli/effects.ts": `import { readFileSync } from "node:fs"; export const read = readFileSync;`,
-  "src/cli/transport.ts": `import { existsSync } from "node:fs"; export const probe = existsSync;`,
-  "src/cli/exit.ts": `export const stop = () => process.exit(2);`,
+  "apps/oma/src/cli/effects.ts": `import { readFileSync } from "node:fs"; export const read = readFileSync;`,
+  "apps/oma/src/cli/transport.ts": `import { existsSync } from "node:fs"; export const probe = existsSync;`,
+  "apps/oma/src/cli/exit.ts": `export const stop = () => process.exit(2);`,
 }, root => assert.deepEqual(effectOwnershipFindings(root), [])));
 
 test("architecture effect ownership rule rejects raw I/O and exit outside owners", () => withFixture({
-  "src/cli/rogue.ts": `import { readFileSync } from "node:fs"; export const stop = () => { readFileSync('x'); process.exit(2); };`,
+  "apps/oma/src/cli/rogue.ts": `import { readFileSync } from "node:fs"; export const stop = () => { readFileSync('x'); process.exit(2); };`,
 }, root => {
   const findings = effectOwnershipFindings(root);
   assert.ok(findings.some(value => value.rule === "cli-effect-owner"));
@@ -173,12 +158,12 @@ test("V29A: the exit-owner rule catches every spelling of process.exit it claims
     ["globalThis", "export const stop = () => globalThis.process.exit(2);"],
     ["module import", "import { exit } from 'node:process'; export const stop = () => exit(2);"],
     ["default module import", "import proc from 'process'; export const stop = () => proc.exit(2);"],
-  ]) withFixture({ "src/cli/rogue.ts": text }, root =>
+  ]) withFixture({ "apps/oma/src/cli/rogue.ts": text }, root =>
     assert.ok(effectOwnershipFindings(root).some(value => value.rule === "cli-exit-owner"), `${name} escaped the rule`));
 });
 
 test("V29A: the exit-owner rule leaves alone what only looks like process.exit", () => withFixture({
-  "src/cli/similar.ts": [
+  "apps/oma/src/cli/similar.ts": [
     "const app = { exit: (code: number) => code, process: { exit: () => 0 } };",
     "export const a = () => app.exit(2);",
     "export const b = () => app.process.exit();",
@@ -186,7 +171,7 @@ test("V29A: the exit-owner rule leaves alone what only looks like process.exit",
     "// process.exit(2) in a comment",
     "export const d = () => process.env.HOME;",
   ].join("\n"),
-  "src/cli/exit.ts": "export const stop = () => process.exit(2);",
+  "apps/oma/src/cli/exit.ts": "export const stop = () => process.exit(2);",
 }, root => assert.deepEqual(effectOwnershipFindings(root), [])));
 
 /** REC-007: the rule that has to catch the next unfenced child.
@@ -201,21 +186,21 @@ test("V29A: the exit-owner rule leaves alone what only looks like process.exit",
 const fenceFindings = (root, rule) => fenceRuleFindings(root).filter(value => value.rule === rule);
 
 test("architecture fence rule accepts a child started with the society lease", () => withFixture({
-  "src/process/run.ts": `import { spawn } from "node:child_process";
+  "packages/process/src/run.ts": `import { spawn } from "node:child_process";
 export function runCliProcess(run: CliRun, fence: number | null) {
   return spawn(run.node, run.args, { env: run.env, stdio: childStdio(fence) });
 }`,
 }, root => assert.deepEqual(fenceFindings(root, "fence-propagation"), [])));
 
 test("architecture fence rule rejects a child started without the society lease", () => withFixture({
-  "src/process/run.ts": `import { spawn } from "node:child_process";
+  "packages/process/src/run.ts": `import { spawn } from "node:child_process";
 export function runCliProcess(run: CliRun) {
   return spawn(run.node, run.args, { env: run.env, stdio: ["ignore", "pipe", "pipe"] });
 }`,
 }, root => {
   const found = fenceFindings(root, "fence-propagation");
   assert.equal(found.length, 1, JSON.stringify(found));
-  assert.match(found[0].reason, /src\/process\/run\.ts#runCliProcess/);
+  assert.match(found[0].reason, /packages\/process\/src\/run\.ts#runCliProcess/);
 }));
 
 test("architecture fence rule names the enclosing function, not whatever declaration encloses the call", () => withFixture({
@@ -224,7 +209,7 @@ test("architecture fence rule names the enclosing function, not whatever declara
   // exemption written for the real function would then never be claimed. An
   // exemption that cannot be matched to the spawn it excuses is worse than no
   // exemption: it reads as a decision that was made and is not in force.
-  "src/runtime/resident.ts": `export async function startResident(options: Options) {
+  "apps/oma/src/runtime/resident.ts": `export async function startResident(options: Options) {
   const child = spawnSandboxed(options.command, options.args, options.env);
   return child;
 }`,
@@ -235,11 +220,11 @@ test("architecture fence rule names the enclosing function, not whatever declara
 }));
 
 test("architecture fence rule never accepts a comment as a propagated descriptor", () => withFixture({
-  "src/process/run.ts": `import { spawn } from "node:child_process";
+  "packages/process/src/run.ts": `import { spawn } from "node:child_process";
 export function runCliProcess(run: CliRun) {
   return spawn(run.node, run.args, { /* society fence is absent */ stdio: [0, 1, 2] });
 }`,
-  "src/process/async.ts": `import { spawn } from "node:child_process";
+  "packages/process/src/async.ts": `import { spawn } from "node:child_process";
 export function spawnInTerminal(program: string) {
   return spawn(program, [], { /* private handoff, not a society fence */ stdio: [0, 1, 2, "pipe"] });
 }`,
@@ -249,7 +234,7 @@ export function spawnInTerminal(program: string) {
 }));
 
 test("architecture fence rule rejects a written exemption for a spawn that is not there", () => withFixture({
-  "src/process/async.ts": "export const nothing = 1;",
+  "packages/process/src/async.ts": "export const nothing = 1;",
 }, root => {
   const stale = fenceFindings(root, "fence-exemption-stale").map(value => value.reason);
   for (const site of Object.keys(fenceExemptSpawnOwners))
@@ -270,19 +255,14 @@ export function ${name}(fence: number) { return spawn("/bin/true", [], { stdio: 
 });
 
 test("AV5 / FS-005: the state-tree rule accepts effects through a held parent, a descriptor or a primitive", () => withFixture({
-  "src/storage/directory.ts": `import { mkdirSync } from "node:fs"; export function ensureDirectory(path) { mkdirSync(path); }`,
-  "src/mail/move.ts": `import { renameSync, unlinkSync, writeFileSync, openSync, constants, mkdirSync } from "node:fs";
-import { entryAt, withinDirectory } from "../storage/contained-fs.js";
-export function move(a, b, fd) {
-  withinDirectory(a, (parent, name) => renameSync(entryAt(parent, name), entryAt(parent, "x")));
-  withinDirectory(b, (parent, name) => { mkdirSync(entryAt(parent, name)); unlinkSync(entryAt(parent, name)); });
-  writeFileSync(fd, "bytes");
-  return openSync(a, constants.O_RDONLY | constants.O_NOFOLLOW);
-}`,
-  "src/broker.ts": `import { unlinkSync } from "node:fs"; export function listen(path) { unlinkSync(path); }`,
+  "packages/storage/src/directory.ts": `import { mkdirSync } from "node:fs"; export function ensureDirectory(path) { mkdirSync(path); }`,
+  "apps/oma/src/mail/move.ts": "import { renameSync, unlinkSync, writeFileSync, openSync, constants, mkdirSync } from \"node:fs\";\nimport { entryAt, withinDirectory } from \"../../packages/native/src/files.js\";\nexport function move(a, b, fd) {\n  withinDirectory(a, (parent, name) => renameSync(entryAt(parent, name), entryAt(parent, \"x\")));\n  withinDirectory(b, (parent, name) => { mkdirSync(entryAt(parent, name)); unlinkSync(entryAt(parent, name)); });\n  writeFileSync(fd, \"bytes\");\n  return openSync(a, constants.O_RDONLY | constants.O_NOFOLLOW);\n}",
+  "packages/storage/src/socket-name.ts": `import { unlinkSync } from "node:fs"; export function clear(path) { unlinkSync(path); }`,
 }, root => assert.deepEqual(stateTreeFindings(root), [])));
 
 test("AV5 / FS-005: the state-tree rule rejects a mutation that names a path", () => {
+  withFixture({ "packages/broker/src/index.ts": `import { unlinkSync } from "node:fs"; export function listen(path) { unlinkSync(path); }` },
+    root => assert.ok(stateTreeFindings(root).some(value => value.rule === "state-tree-held-parent"), "Broker must use its declared physical socket owner"));
   for (const [name, body] of [
     ["rename", `renameSync(join(root, "a"), join(root, "b"));`],
     ["unlink", `unlinkSync(path);`],
@@ -292,7 +272,7 @@ test("AV5 / FS-005: the state-tree rule rejects a mutation that names a path", (
     ["write", `writeFileSync(join(root, "view.json"), "{}");`],
     ["held name kept in a variable", `const name = entryAt(parent, "x"); unlinkSync(name);`],
   ]) withFixture({
-    "src/views/example.ts": `import fs, { renameSync, unlinkSync, mkdirSync, openSync, writeFileSync, constants } from "node:fs";
+    "apps/oma/src/views/example.ts": `import fs, { renameSync, unlinkSync, mkdirSync, openSync, writeFileSync, constants } from "node:fs";
 import { join } from "node:path";
 export function effect(root, path, parent, entryAt) { ${body} }`,
   }, root => assert.ok(stateTreeFindings(root).some(value => value.rule === "state-tree-held-parent"), `${name} escaped the rule`));
@@ -304,28 +284,18 @@ test("AV5 / FS-005: the real tree changes the state tree only through held paren
 });
 
 test("state-root-judgement (DR18, S-06): a state root is judged by assertStateRoot, never by its layout alone", () => {
-  withFixture({ "src/runtime/assets.ts": "export function assertStateRoot(stateRoot) { assertHostDirectoryLayout(stateRoot, true); }",
-    "src/entry/broker.ts": "assertStateRoot(stateRoot); assertHostDirectoryLayout(runRoot, true); assertHostDirectoryLayout(cfg.installation.libdir);" },
+  withFixture({ "apps/oma/src/runtime/assets.ts": "export function assertStateRoot(stateRoot) { assertHostDirectoryLayout(stateRoot, true); }",
+    "apps/oma/src/entry/broker.ts": "assertStateRoot(stateRoot); assertHostDirectoryLayout(runRoot, true); assertHostDirectoryLayout(cfg.installation.libdir);" },
   root => assert.deepEqual(stateRootFindings(root), []));
   for (const text of ["assertHostDirectoryLayout(stateRoot, true);", "assertHostDirectoryLayout(location.stateRoot);"])
-    withFixture({ "src/runtime/society-lease.ts": text },
+    withFixture({ "apps/oma/src/runtime/society-lease.ts": text },
       root => assert.ok(stateRootFindings(root).some(value => value.rule === "state-root-judgement"), text));
   const repository = fileURLToPath(new URL("..", import.meta.url));
   assert.deepEqual(stateRootFindings(repository), []);
 });
 
 test("P0-8/DR32: the owned-state rule accepts the owned primitives and held parents", () => withFixture({
-  "src/views/example.ts": `import { renameSync, unlinkSync, mkdirSync, writeFileSync, openSync, constants, readdirSync } from "node:fs";
-import { entryAt, withinDirectory } from "../storage/contained-fs.js";
-import { ensureOwnedDirectory, ensureOwnedDurableDirectory, ensureOwnedUserDirectory } from "../storage/durable-fs.js";
-export function effect(root, parent, fd) {
-  ensureOwnedDirectory(join(root, "mail"), root, 0o700);
-  ensureOwnedDurableDirectory(join(root, "mail", "inboxes"), root, 0o700);
-  ensureOwnedUserDirectory(join(root, "engine"), join(root, ".local", "state", "oma"));
-  withinDirectory(join(root, "a"), (held, name) => renameSync(entryAt(held, name), entryAt(held, "x")));
-  writeFileSync(fd, "bytes");
-  return openSync(join(root, "sockets", "lease"), constants.O_RDONLY | constants.O_NOFOLLOW);
-}`,
+  "apps/oma/src/views/example.ts": "import { renameSync, unlinkSync, mkdirSync, writeFileSync, openSync, constants, readdirSync } from \"node:fs\";\nimport { entryAt, withinDirectory } from \"../../packages/native/src/files.js\";\nimport { ensureOwnedDirectory, ensureOwnedDurableDirectory, ensureOwnedUserDirectory } from \"../../packages/storage/src/durable-fs.js\";\nexport function effect(root, parent, fd) {\n  ensureOwnedDirectory(join(root, \"mail\"), root, 0o700);\n  ensureOwnedDurableDirectory(join(root, \"mail\", \"inboxes\"), root, 0o700);\n  ensureOwnedUserDirectory(join(root, \"engine\"), join(root, \".local\", \"state\", \"oma\"));\n  withinDirectory(join(root, \"a\"), (held, name) => renameSync(entryAt(held, name), entryAt(held, \"x\")));\n  writeFileSync(fd, \"bytes\");\n  return openSync(join(root, \"sockets\", \"lease\"), constants.O_RDONLY | constants.O_NOFOLLOW);\n}",
 }, root => assert.deepEqual(ownedStateFindings(root), [])));
 
 test("P0-8/DR32: the owned-state rule rejects a plain ensure or mutation on an oma-owned tail", () => {
@@ -339,7 +309,7 @@ test("P0-8/DR32: the owned-state rule rejects a plain ensure or mutation on an o
     ["plain list of an owned root", `readdirSync(join(stateRoot, "mail", "inboxes"));`],
     ["plain probe of an owned root", `lstatSync(join(paths.stateRoot, "world"));`],
   ]) withFixture({
-    "src/views/example.ts": `import { renameSync, unlinkSync, mkdirSync, rmSync, readdirSync, lstatSync } from "node:fs";
+    "apps/oma/src/views/example.ts": `import { renameSync, unlinkSync, mkdirSync, rmSync, readdirSync, lstatSync } from "node:fs";
 import { ensureDirectory, ensureDurableDirectory } from "../storage/durable-fs.js";
 import { ensureUserDirectory } from "../runtime/user-files.js";
 import { lockedUserReplace } from "../runtime/locked-files.js";
@@ -351,7 +321,7 @@ export function effect(root, stateRoot, paths, agentDir, fn) { ${body} }`,
 
 test("P0-8/DR32: the owned-state rule leaves user-path observations and descriptors alone, but still audits mutations", () => {
   withFixture({
-    "src/tui/example.ts": `import { existsSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
+    "packages/tui/src/example.ts": `import { existsSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 export function effect(cwd, fd, project) {
   if (existsSync(join(cwd, "oma.json"))) readdirSync(project);
@@ -363,7 +333,7 @@ export function effect(cwd, fd, project) {
   // A mutation still answers the audit: the user-path file carries its
   // exemption in the rule's map, so a plain mutation is never invisible.
   withFixture({
-    "src/tui/example.ts": `import { mkdtempSync, rmSync } from "node:fs";
+    "packages/tui/src/example.ts": `import { mkdtempSync, rmSync } from "node:fs";
 import { join } from "node:path";
 export function effect(cwd) { const scratch = mkdtempSync(join(cwd, "oma-")); rmSync(scratch, { recursive: true, force: true }); }`,
   }, root => assert.ok(ownedStateFindings(root).some(value => value.rule === "owned-state-raw-access")));
@@ -389,17 +359,17 @@ test("P0-8/DR32: the owned-state rule reaches node:fs/promises bindings, not loo
     ["async symlink's created name", `import { symlink } from "node:fs/promises"; export const f = async (target, staged) => symlink(target, staged);`],
     ["async observation of an owned root", `import { readdir } from "node:fs/promises"; export const f = async store => readdir(store);`],
   ]) withFixture({
-    "src/views/example.ts": text,
+    "apps/oma/src/views/example.ts": text,
   }, root => assert.ok(ownedStateFindings(root).some(value => /owned-state-(raw-access|raw-observation)/.test(value.rule)),
     `${name} escaped the rule`));
   // And what only looks like the module is left alone: local functions with
   // the same names, methods on an object that is not the promises namespace,
   // and an async observation of a caller-owned path.
   withFixture({
-    "src/views/example.ts": `const open = async p => p; const readdir = async d => [];
+    "apps/oma/src/views/example.ts": `const open = async p => p; const readdir = async d => [];
 const db = { open: async p => p, mkdir: async p => p };
 export const f = async (p, d) => { await open(p); await readdir(d); await db.open(p); await db.mkdir(p); };`,
-    "src/views/other.ts": `import * as fsp from "node:fs/promises"; export const f = async path => fsp.readdir(path);`,
+    "apps/oma/src/views/other.ts": `import * as fsp from "node:fs/promises"; export const f = async path => fsp.readdir(path);`,
   }, root => assert.deepEqual(ownedStateFindings(root), []));
 });
 
@@ -421,17 +391,17 @@ test("P0-8/DR32: the owned-state rule reaches the callback spellings and the re-
     ["callback observation of an owned root", `import { lstat } from "node:fs"; export const f = stateRoot => lstat(stateRoot, () => {});`],
     ["callback mkdir", `import { mkdir } from "node:fs"; export const f = p => mkdir(p, () => {});`],
   ]) withFixture({
-    "src/views/example.ts": text,
+    "apps/oma/src/views/example.ts": text,
   }, root => assert.ok(ownedStateFindings(root).some(value => /owned-state-(raw-access|raw-observation)/.test(value.rule)),
     `${name} escaped the rule`));
   // And what only wears the spelling stays unflagged: a local function, a
   // member of an object bound to no module, and an alias of an import that
   // came from somewhere else are never fs calls.
   withFixture({
-    "src/views/example.ts": `const w = p => p; export const f = p => w(p);`,
-    "src/views/other.ts": `const fs = { writeFileSync: p => p }; const w = fs.writeFileSync; export const f = p => w(p);`,
-    "src/views/third.ts": `import { writeFileSync } from "somewhere-else"; const w = writeFileSync; export const f = p => w(p, "x");`,
-    "src/views/fourth.ts": `import { stat } from "node:fs"; export const f = p => stat(p, () => {});`,
+    "apps/oma/src/views/example.ts": `const w = p => p; export const f = p => w(p);`,
+    "apps/oma/src/views/other.ts": `const fs = { writeFileSync: p => p }; const w = fs.writeFileSync; export const f = p => w(p);`,
+    "apps/oma/src/views/third.ts": `import { writeFileSync } from "somewhere-else"; const w = writeFileSync; export const f = p => w(p, "x");`,
+    "apps/oma/src/views/fourth.ts": `import { stat } from "node:fs"; export const f = p => stat(p, () => {});`,
   }, root => assert.deepEqual(ownedStateFindings(root), []));
 });
 
@@ -444,7 +414,7 @@ test("P0-8/DR32: shadowed member aliases settle at the first binding instead of 
   // diverged on the rule that rebound: its returning at all is the
   // termination proof, and both calls still flag.
   withFixture({
-    "src/views/example.ts": `import { writeFileSync, readFileSync } from "node:fs";
+    "apps/oma/src/views/example.ts": `import { writeFileSync, readFileSync } from "node:fs";
 export function a(p) { const w = writeFileSync; return w(p, "x"); }
 export function b(p) { const w = readFileSync; return w(p); }`,
   }, root => {
@@ -463,7 +433,7 @@ export function b(p) { const w = fs.readFileSync; return w(p); }`,
     `import { open, readdir } from "node:fs/promises";
 export async function a(p) { const o = open; return (await o(p, "w")).close(); }
 export async function b(p) { const o = readdir; return o(p); }`,
-  ]) withFixture({ "src/views/example.ts": text }, root =>
+  ]) withFixture({ "apps/oma/src/views/example.ts": text }, root =>
     assert.equal(ownedStateFindings(root).length, 2, text));
 });
 
@@ -474,25 +444,25 @@ test("P0-8/DR32: an owned tail under its alias names still flags a raw observati
   // audited the same way.
   for (const name of ["store", "generations", "real", "local", "destPath", "staged", "mirror", "packageStore", "dataDir", "journal"])
     withFixture({
-      "src/views/example.ts": `import { lstatSync } from "node:fs";
+      "apps/oma/src/views/example.ts": `import { lstatSync } from "node:fs";
 export function probe(${name}) { return lstatSync(${name}); }`,
     }, root => assert.ok(ownedStateFindings(root).some(value => value.rule === "owned-state-raw-observation"),
       `${name} escaped the rule`));
   // A name the rule does not claim -- `path`, `dir`, `root` -- stays out of
   // the observation arm's reach; the mutation arm audits the file regardless.
   withFixture({
-    "src/views/example.ts": `import { lstatSync } from "node:fs";
+    "apps/oma/src/views/example.ts": `import { lstatSync } from "node:fs";
 export function probe(path) { return lstatSync(path); }`,
   }, root => assert.deepEqual(ownedStateFindings(root), []));
 });
 
 test("P0-8: owned provenance survives a generic callee parameter and cross-file alias", () => withFixture({
-  "src/entry/example.ts": `import { observe } from "../storage/probe.js"; export function run(stateRoot: string) { const alias = stateRoot; return observe(alias); }`,
-  "src/storage/probe.ts": `import { readdirSync } from "node:fs"; export function observe(root: string) { const path = root; return readdirSync(path); }`,
-}, root => assert.ok(ownedStateFindings(root).some(value => value.file === "src/storage/probe.ts" && value.rule === "owned-state-raw-observation"))));
+  "apps/oma/src/entry/example.ts": `import { observe } from "../storage/probe.js"; export function run(stateRoot: string) { const alias = stateRoot; return observe(alias); }`,
+  "apps/oma/src/storage/probe.ts": `import { readdirSync } from "node:fs"; export function observe(root: string) { const path = root; return readdirSync(path); }`,
+}, root => assert.ok(ownedStateFindings(root).some(value => value.file === "apps/oma/src/storage/probe.ts" && value.rule === "owned-state-raw-observation"))));
 
 test("P0-8: a generic user path is not tainted by another function's parameter", () => withFixture({
-  "src/example.ts": `import { readdirSync } from "node:fs"; function one(stateRoot: string) { return stateRoot; } function two(root: string) { return readdirSync(root); } export { one, two };`,
+  "apps/oma/src/example.ts": `import { readdirSync } from "node:fs"; function one(stateRoot: string) { return stateRoot; } function two(root: string) { return readdirSync(root); } export { one, two };`,
 }, root => assert.deepEqual(ownedStateFindings(root), [])));
 
 test("P0-8/DR32: the owned-state rule reports a stale exemption", () => {
@@ -502,16 +472,16 @@ test("P0-8/DR32: the owned-state rule reports a stale exemption", () => {
 
 
 test("DR40: Architecture syntax snapshots expire between checks and after an exception", () => {
-  withFixture({ "src/probe.ts": "export const version = 1;" }, root => {
-    const file = join(root, "src/probe.ts");
+  withFixture({ "apps/oma/src/probe.ts": "export const version = 1;" }, root => {
+    const file = join(root, "apps/oma/src/probe.ts");
     withSourceSnapshot(() => {
-      const before = sourceOf(root, "src/probe.ts");
+      const before = sourceOf(root, "apps/oma/src/probe.ts");
       writeFileSync(file, "export const version = 2;");
-      assert.equal(sourceOf(root, "src/probe.ts"), before);
+      assert.equal(sourceOf(root, "apps/oma/src/probe.ts"), before);
     });
-    assert.match(sourceOf(root, "src/probe.ts").text, /version = 2/);
-    assert.throws(() => withSourceSnapshot(() => { sourceOf(root, "src/probe.ts"); throw new Error("oracle"); }), /oracle/);
+    assert.match(sourceOf(root, "apps/oma/src/probe.ts").text, /version = 2/);
+    assert.throws(() => withSourceSnapshot(() => { sourceOf(root, "apps/oma/src/probe.ts"); throw new Error("oracle"); }), /oracle/);
     writeFileSync(file, "export const version = 3;");
-    assert.match(withSourceSnapshot(() => sourceOf(root, "src/probe.ts")).text, /version = 3/);
+    assert.match(withSourceSnapshot(() => sourceOf(root, "apps/oma/src/probe.ts")).text, /version = 3/);
   });
 });

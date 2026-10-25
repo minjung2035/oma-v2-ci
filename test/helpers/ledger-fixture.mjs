@@ -1,18 +1,17 @@
-/** Test-only valid v1 ledger construction; never imported by production. */
+import { serializePlanIntent } from "../../dist/test/fixtures/plan.js";
+/** Test-only current ledger construction; never imported by production. */
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';
-import { Store } from '../../dist/src/store.js';
-import { canonicalJson } from '../../dist/src/domain/canonical-json.js';
-import { resolvedSpecDigest } from '../../dist/src/domain/spec-identity.js';
-import { requestHash } from '../../dist/src/hash.js';
+import { Store } from "@oma/storage";
+import { canonicalJson } from '@oma/domain/canonical-json';
+import { resolvedSpecDigest } from '@oma/domain/spec-identity';
+import { requestHash } from "@oma/domain/request-identity";
 
 export function agentRecord(name, createdBy = null) {
   const spec = { name, from: 'a'.repeat(40), brief: 'fixture', profile: 'fixture',
-    capabilities: ['mail.send', 'route.follow'], modelProfile: 'fixture-model',
-    resources: { memoryBytes: 1048576, tasks: 8, cpuQuotaPercent: 100,
-      tmpBytes: 1048576, workspaceBytes: 1048576, stagingBytes: 1048576, checkTimeoutSeconds: 30 } };
+    capabilities: ['mail.send', 'route.follow'], modelProfile: 'fixture-model' };
   return { name, specHash: resolvedSpecDigest(spec), role: name === 'principal' ? 'principal' : 'resident',
     desired: 'enabled', incarnation: 0, profile: spec.profile, createdBy, specJson: canonicalJson(spec) };
 }
@@ -21,7 +20,7 @@ export function routeOperation(overrides = {}) {
   const payload = { topic: overrides.topic ?? 'design' };
   return { id: `op-${randomUUID()}`, actor, requestKey: randomUUID(),
     requestHash: requestHash(kind, payload), kind, payloadJson: canonicalJson(payload),
-    planJson: canonicalJson({ kind, agent: actor, topic: payload.topic }), ...overrides };
+    planJson: serializePlanIntent({ kind, agent: actor, topic: payload.topic }), ...overrides };
 }
 export function routeResult(operation) {
   return canonicalJson({ kind: operation.kind, topic: JSON.parse(operation.payloadJson).topic,

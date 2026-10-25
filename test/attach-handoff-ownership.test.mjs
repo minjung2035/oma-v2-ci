@@ -1,3 +1,7 @@
+import * as sessionHandoffMeaning from "@oma/protocol/session-handoff";
+import * as hostErrorMeaning from "@oma/protocol/host-errors";
+import * as hostLossMeaning from "@oma/process/host-loss";
+import * as deploymentMeaning from "@oma/domain/deployment";
 // MAC-222/230 and MODE-006: actual attach owner over controlled transport/terminal.
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -5,12 +9,12 @@ import { EventEmitter } from 'node:events';
 import { readFileSync } from 'node:fs';
 import { Script } from 'node:vm';
 import ts from 'typescript';
-import * as protocol from '../dist/src/protocol/host-guest.js';
-import { TerminalModes } from '../dist/src/platform/terminal-modes.js';
-import { withAsyncCleanup } from '../dist/src/process/cleanup.js';
-import { parseJsonObject } from '../dist/src/frame.js';
-import * as histories from '../dist/src/protocol/host-history.js';
-const code = ts.transpileModule(readFileSync(process.env.OMA_ATTACH_CLIENT_SOURCE ?? 'src/platform/host/attach-client.ts', 'utf8'), {
+import * as protocol from "@oma/protocol/host-guest";
+import { TerminalModes } from "#oma-test/app/platform/terminal-modes";
+import { withAsyncCleanup } from "@oma/native/cleanup";
+import { parseJsonObject } from "@oma/protocol/frame";
+import * as histories from "@oma/protocol/host-history";
+const code = ts.transpileModule(readFileSync(process.env.OMA_ATTACH_CLIENT_SOURCE ?? 'apps/oma/src/platform/host/attach-client.ts', 'utf8'), {
   compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
 }).outputText;
 const flush = async () => { for (let i = 0; i < 20; i++) await Promise.resolve(); };
@@ -24,17 +28,27 @@ async function world(fault, rest = Buffer.alloc(0), observe) {
     setRawMode(on) { raw.push(on); if (fault === 'raw-acquire' && on || fault === 'raw-return' && !on) throw problem; },
     resume() { this.paused = false; }, pause() { this.paused = true; } });
   const deps = {
+"@oma/protocol/session-handoff": sessionHandoffMeaning,
+"@oma/protocol/host-errors": hostErrorMeaning,
+"@oma/process/host-loss": hostLossMeaning,
+"@oma/domain/deployment": deploymentMeaning,
+
     '../rpc.js': { async connectSocket() { return socket; }, async readLeadingResponse(_socket, id) { return { result: {}, rest: id === 'attach' ? rest : Buffer.alloc(0) }; } },
-    '../../frame.js': { encodeFrame: value => value, parseJsonObject }, '../terminal-modes.js': { TerminalModes },
-    '../../protocol/host-history.js': histories,
-    '../../process/cleanup.js': { withAsyncCleanup },
-    '../../runtime/broker-lifetime.js': { HOST_LOSS_SIGNALS: ['SIGTERM'] },
-    '../../protocol/host-api.js': { HOST_API_VERSION: 2 }, '../../protocol/host-guest.js': protocol,
+    '@oma/protocol/frame': { encodeFrame: value => value, parseJsonObject }, '../terminal-modes.js': { TerminalModes },
+    '@oma/protocol/host-history': histories,
+    "@oma/native/cleanup": { withAsyncCleanup },
+    "@oma/broker/lifetime": { HOST_LOSS_SIGNALS: ['SIGTERM'] },
+    '@oma/protocol/host-api': { HOST_API_VERSION: 2 }, '@oma/protocol/host-guest': protocol,
   };
   const module = { exports: {} };
   new Script(code).runInNewContext({ module, exports: module.exports, Buffer, Promise, AggregateError,
     process: { on(name, listener) { signals.set(name, listener); }, off(name) { signals.delete(name); } },
-    require(name) { assert.ok(Object.hasOwn(deps, name), name); return deps[name]; } });
+    require(name) {
+if (name === "@oma/protocol/session-handoff" && !Object.hasOwn(deps, name)) return sessionHandoffMeaning;
+if (name === "@oma/protocol/host-errors" && !Object.hasOwn(deps, name)) return hostErrorMeaning;
+if (name === "@oma/process/host-loss" && !Object.hasOwn(deps, name)) return hostLossMeaning;
+if (name === "@oma/domain/deployment" && !Object.hasOwn(deps, name)) return deploymentMeaning;
+ assert.ok(Object.hasOwn(deps, name), name); return deps[name]; } });
   let settled = false;
   const pending = module.exports.attachTerminal({ socketPath: '/fixture', token: 'fixture', society: 'demo', takeover: false,
     histories: observe,

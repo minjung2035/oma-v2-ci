@@ -65,7 +65,7 @@ for iteration in range(args.runs):
                     pass
             now = time.monotonic()
             if start is not None:
-                if screen is None and b"Let's build something great" in output:
+                if screen is None and b"Your ideas, in motion" in output:
                     screen = now - start
                 # Let the screen's ready notification reach the host before
                 # sending ordinary terminal input through its actual editor.

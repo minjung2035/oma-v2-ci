@@ -17,57 +17,61 @@ function fixture() {
     mkdirSync(dirname(join(root, file)), { recursive: true });
     writeFileSync(join(root, file), bytes);
   };
-  const schemas = ["schema-v3.sql"]
-    .map(name => `implementation/${name}`);
-  const roots = ["implementation/contracts.ts", ...schemas, "implementation/systemd", "src"];
+  const schemas = ["schema-v4.sql"]
+    .map(name => `packages/storage/src/${name}`);
+  const roots = ["apps/oma/src", "apps/oma/package.json",
+    ...["contracts", "domain", "client", "process", "storage", "platform-linux"].flatMap(name => [`packages/${name}/src`, `packages/${name}/package.json`])];
   put("production-manifest.json", JSON.stringify(roots));
-  put("implementation/contracts.ts");
+  put("apps/oma/src/entry.ts");
+  put("apps/oma/package.json", "{}\n");
+  put("packages/contracts/src/index.ts");
+  for (const name of ["contracts", "domain", "client", "process", "storage", "platform-linux"]) put(`packages/${name}/package.json`, "{}\n");
   for (const schema of schemas) put(schema, "SELECT 1;\n");
-  put("implementation/systemd/resident.service.in", "[Service]\nExecStart=/bin/true\n");
-  put("src/domain/capabilities.ts");
-  put("src/protocol/channel.ts");
-  put("src/storage/transaction.ts");
-  put("src/process/run.ts");
-  put("src/process/async.ts");
+  put("packages/platform-linux/src/systemd/resident.service.in", "[Service]\nExecStart=/bin/true\n");
+  put("packages/domain/src/capabilities.ts");
+  put("packages/client/src/channel.ts");
+  put("packages/storage/src/transaction.ts");
+  put("packages/process/src/run.ts");
+  put("packages/process/src/async.ts");
   return { root, roots, put, close() { rmSync(root, { recursive: true, force: true }); } };
 }
 test("R38 C05: every witnessed new owner is enumerated without requiring cloc", () => {
   const f = fixture();
   try {
     const files = writeProductionInventory(f.root);
-    for (const file of ["src/domain/capabilities.ts", "src/protocol/channel.ts", "src/storage/transaction.ts", "src/process/run.ts", "src/process/async.ts"])
+    for (const file of ["packages/domain/src/capabilities.ts", "packages/client/src/channel.ts", "packages/storage/src/transaction.ts", "packages/process/src/run.ts", "packages/process/src/async.ts"])
       assert.ok(files.includes(file), file);
     assert.deepEqual(assertProductionInventory(f.root), files);
     assert.equal(readFileSync(join(f.root, "production-files.txt"), "utf8"), files.join("\n") + "\n");
-    f.put("src/process/new-owner.ts");
+    f.put("packages/process/src/new-owner.ts");
     assert.throws(() => assertProductionInventory(f.root), /stale production-files/);
     writeProductionInventory(f.root);
-    assert.ok(assertProductionInventory(f.root).includes("src/process/new-owner.ts"));
+    assert.ok(assertProductionInventory(f.root).includes("packages/process/src/new-owner.ts"));
   } finally { f.close(); }
 });
 test("R38 C05: omission, duplicate identity and out-of-root paths cannot lower the inventory", () => {
   const f = fixture();
   try {
-    f.put("production-manifest.json", JSON.stringify(f.roots.filter(root => root !== "src")));
+    f.put("production-manifest.json", JSON.stringify(f.roots.filter(root => root !== "apps/oma/src")));
     assert.throws(() => collectProductionFiles(f.root), /omits current runtime sources/);
-    f.put("production-manifest.json", JSON.stringify([...f.roots, "src/process/run.ts"]));
+    f.put("production-manifest.json", JSON.stringify([...f.roots, "packages/process/src/run.ts"]));
     assert.throws(() => collectProductionFiles(f.root), /duplicate production source/);
     f.put("production-manifest.json", JSON.stringify(["../outside"]));
     assert.throws(() => collectProductionFiles(f.root), /invalid production manifest path/);
     f.put("production-manifest.json", JSON.stringify(f.roots));
-    f.put("src/unsupported.in", "not a systemd input\n");
+    f.put("apps/oma/src/unsupported.in", "not a systemd input\n");
     assert.throws(() => collectProductionFiles(f.root), /unsupported .in language/);
   } finally { f.close(); }
 });
 test("R38 C05: equal bytes in distinct source files are counted, symlink sources are rejected", () => {
   const f = fixture();
   try {
-    f.put("src/duplicate-a.ts", "export const same = 1;\n");
-    f.put("src/duplicate-b.ts", "export const same = 1;\n");
+    f.put("apps/oma/src/duplicate-a.ts", "export const same = 1;\n");
+    f.put("apps/oma/src/duplicate-b.ts", "export const same = 1;\n");
     const files = collectProductionFiles(f.root);
-    assert.ok(files.includes("src/duplicate-a.ts"));
-    assert.ok(files.includes("src/duplicate-b.ts"));
-    symlinkSync("duplicate-a.ts", join(f.root, "src/link.ts"));
+    assert.ok(files.includes("apps/oma/src/duplicate-a.ts"));
+    assert.ok(files.includes("apps/oma/src/duplicate-b.ts"));
+    symlinkSync("duplicate-a.ts", join(f.root, "apps/oma/src/link.ts"));
     assert.throws(() => collectProductionFiles(f.root), /symlink/);
   } finally { f.close(); }
 });
@@ -130,7 +134,7 @@ test("R38: the measured artifacts are bound to the source they were taken from",
 
     // A file whose bytes changed after measurement.
     measure();
-    f.put("src/process/async.ts", "export const changed = 1;\n");
+    f.put("packages/process/src/async.ts", "export const changed = 1;\n");
     assert.throws(() => check(), /stale production source digests/);
     measure();
     assert.doesNotThrow(() => check());
@@ -159,13 +163,13 @@ test("R38: the measured artifacts are bound to the source they were taken from",
     // A row outside the manifest inflating the total.
     measure();
     const inflated = JSON.parse(readFileSync(join(f.root, "production-loc.json"), "utf8"));
-    inflated["src/not-production.ts"] = { code: 900, blank: 0, comment: 0 };
+    inflated["apps/oma/src/not-production.ts"] = { code: 900, blank: 0, comment: 0 };
     f.put("production-loc.json", JSON.stringify(inflated));
     assert.throws(() => check(), /outside the manifest/);
 
     // A new production file the records never saw.
     measure();
-    f.put("src/process/added.ts");
+    f.put("packages/process/src/added.ts");
     assert.throws(() => check(), /invalid production source digests|different file list/);
   } finally { f.close(); }
 });
@@ -179,11 +183,11 @@ test("R38: the pinned tool re-measures real source and catches a forged count", 
     // The real language definition, so the systemd templates are counted the
     // way the production run counts them.
     f.put("implementation/cloc-systemd.lang", readFileSync(new URL("../implementation/cloc-systemd.lang", import.meta.url)));
-    f.put("src/process/async.ts", "// a comment\nexport const a = 1;\n\nexport const b = 2;\n");
+    f.put("packages/process/src/async.ts", "// a comment\nexport const a = 1;\n\nexport const b = 2;\n");
     const files = writeProductionInventory(f.root);
     const cloc = measureWithCloc(f.root, files);
     assert.ok(cloc !== null, "cloc 2.08 is not installed; this gate cannot bind LOC to the source");
-    assert.deepEqual({ code: cloc["src/process/async.ts"].code, comment: cloc["src/process/async.ts"].comment },
+    assert.deepEqual({ code: cloc["packages/process/src/async.ts"].code, comment: cloc["packages/process/src/async.ts"].comment },
       { code: 2, comment: 1 });
     const hashOf = bytes => createHash("sha256").update(bytes).digest("hex");
     const write = report => {
@@ -198,14 +202,14 @@ test("R38: the pinned tool re-measures real source and catches a forged count", 
     write({ ...cloc, header: { ...cloc.header, n_files: files.length } });
     assert.equal(assertMeasurementCurrent(f.root).status, "SOURCE_BOUND");
     // DR20: a genuinely large source is measured, never refused by its size.
-    f.put("src/process/async.ts", "export const value = 1;\n".repeat(10001));
+    f.put("packages/process/src/async.ts", "export const value = 1;\n".repeat(10001));
     const large = measureWithCloc(f.root, files);
     write({ ...large, header: { ...large.header, n_files: files.length } });
     assert.ok(large.SUM.code > 10000);
     assert.equal(assertMeasurementCurrent(f.root).status, "SOURCE_BOUND");
     // One count off by one, the total adjusted to keep every sum consistent.
     const forged = JSON.parse(JSON.stringify(large));
-    forged["src/process/async.ts"].code += 1;
+    forged["packages/process/src/async.ts"].code += 1;
     forged.SUM.code += 1;
     write({ ...forged, header: { ...forged.header, n_files: files.length } });
     assert.throws(() => assertMeasurementCurrent(f.root), /does not match a fresh measurement/);
@@ -214,9 +218,9 @@ test("R38: the pinned tool re-measures real source and catches a forged count", 
 
 test("R38: the verification closure includes every class of local gate input", () => {
   assert.deepEqual(VERIFICATION_INPUT_ROOTS, [
-    "src", "platform", "test", "scripts", "implementation", "docs", ".github/workflows", ".gitignore",
+    "apps", "packages", "test", "scripts", "implementation", "docs", ".github/workflows", ".gitignore",
     "package.json", "package-lock.json",
-    "tsconfig.json", "tsconfig.build.json", "tsconfig.tui.json", "tsconfig.extension.json", "production-manifest.json", "production-files.txt",
+    "tsconfig.json", "tsconfig.build.json", "tsconfig.architecture.json", "production-manifest.json", "production-files.txt",
     "production-loc-hashes.json",
   ]);
   assert.deepEqual(VERIFICATION_OUTPUT_EXCLUSIONS, [
@@ -224,16 +228,16 @@ test("R38: the verification closure includes every class of local gate input", (
   ]);
   const files = verificationInputFiles(REPO);
   for (const required of [
-    "src/tui/keys.ts", "test/tui-app.test.ts", "scripts/test-local.mjs",
-    "implementation/contracts.ts", "implementation/schema-v3.sql",
-    "implementation/systemd/resident.service.in", "implementation/cloc-systemd.lang",
+    "packages/tui/src/keys.ts", "test/tui-app.test.ts", "scripts/test-local.mjs",
+    "packages/contracts/src/index.ts", "packages/storage/src/schema-v4.sql",
+    "packages/platform-linux/src/systemd/resident.service.in", "implementation/cloc-systemd.lang",
     "implementation/source-owners.json", "implementation/traceability.json",
     "docs/implementation/validation.md", "implementation/evidence/dependency-graph.json",
     "implementation/tests/contracts.type-test.ts", "docs/architecture.md", "docs/implementation-spec.md",
-    "package.json", "package-lock.json", "tsconfig.json", "tsconfig.build.json", "tsconfig.tui.json", "tsconfig.extension.json",
+    "package.json", "package-lock.json", "tsconfig.json", "tsconfig.build.json", "packages/extension/tsconfig.json",
     "production-manifest.json", "production-files.txt",
     "production-loc-hashes.json", ".github/workflows/architecture-verification.yml",
-    "platform/host/vmhelper/Sources/oma-vmhelper/main.swift", "platform/guest/network/80-oma.network", ".gitignore",
+    "packages/platform-mac/src/vmhelper/Sources/oma-vmhelper/main.swift", "packages/platform-linux/src/guest/network/80-oma.network", ".gitignore",
   ]) assert.ok(files.includes(required), required);
   assert.equal(files.includes("production-loc.json"), false);
   assert.equal(files.includes("production-measurement-hashes.json"), false);
@@ -245,18 +249,20 @@ test("R38: package, compiler, owner, spec and workflow changes all change the ve
   const f = fixture();
   try {
     for (const root of VERIFICATION_INPUT_ROOTS) {
-      if (["src", "platform", "test", "scripts", "implementation", "docs", ".github/workflows"].includes(root))
+      if (["apps", "packages", "test", "scripts", "implementation", "docs", ".github/workflows"].includes(root))
         f.put(`${root}/fixture.ts`);
       else f.put(root, `${root}\n`);
     }
     for (const file of [
+      "packages/extension/tsconfig.json",
       "implementation/source-owners.json", "docs/implementation/validation.md",
-      "implementation/evidence/dependency-graph.json", "implementation/systemd/resident.service.in",
+      "implementation/evidence/dependency-graph.json", "packages/platform-linux/src/systemd/resident.service.in",
       "docs/implementation-spec.md",
       ".github/workflows/architecture-verification.yml",
     ]) f.put(file, `${file}\n`);
     const before = verificationInputDigest(f.root);
-    for (const file of ["package.json", "tsconfig.json", "tsconfig.tui.json", "tsconfig.extension.json", "implementation/source-owners.json", "docs/implementation-spec.md", ".github/workflows/architecture-verification.yml", "platform/fixture.ts", ".gitignore"]) {
+    f.put("apps/fixture.ts");
+    for (const file of ["package.json", "tsconfig.json", "packages/extension/tsconfig.json", "implementation/source-owners.json", "docs/implementation-spec.md", ".github/workflows/architecture-verification.yml", "apps/fixture.ts", ".gitignore"]) {
       const original = readFileSync(join(f.root, file));
       f.put(file, Buffer.concat([original, Buffer.from("changed\n")]));
       assert.notDeepEqual(verificationInputDigest(f.root), before, file);
@@ -283,7 +289,7 @@ test("DR44: structural rebinding is idempotent and preserves authored outcomes a
   const f = fixture();
   try {
     for (const root of VERIFICATION_INPUT_ROOTS) {
-      if (["src", "platform", "test", "scripts", "implementation", "docs", ".github/workflows"].includes(root))
+      if (["apps", "packages", "test", "scripts", "implementation", "docs", ".github/workflows"].includes(root))
         f.put(`${root}/fixture.ts`);
       else f.put(root, `${root}\n`);
     }
@@ -332,7 +338,7 @@ test("R38: the lane's bound source is the canonical closure -- committed digests
   const f = fixture();
   try {
     for (const root of VERIFICATION_INPUT_ROOTS) {
-      if (["src", "platform", "test", "scripts", "implementation", "docs", ".github/workflows"].includes(root))
+      if (["apps", "packages", "test", "scripts", "implementation", "docs", ".github/workflows"].includes(root))
         f.put(`${root}/fixture.ts`);
       else f.put(root, `${root}\n`);
     }

@@ -1,5 +1,9 @@
 # OMA v2 작업 컨텍스트 (지속 문서)
 
+> 현재 작업: DR46 모듈화 구현(2026-10-24). 최신 재개점은 [HANDOFF](HANDOFF.md),
+> 실제 실행 판정은 [validation](implementation/validation.md)이 소유한다.
+> 아래의 브랜치·작업 프로토콜·숫자는 작성 당시의 과거 컨텍스트이며 이번 작업의 실행 결과가 아니다.
+
 > 이 문서는 대화 압축·재시작에도 작업 맥락이 유지되도록 현재 상태·기준·프로토콜을 기록한다.
 > 갱신: feat/macos-hidden-vm @ `7f12b7c` 기준 작성. 상태가 바뀌면 이 문서도 갱신한다.
 
@@ -10,7 +14,7 @@
 - 전체 스위트: **3403/3408** — 유일한 5 실패는 의도적 stale evidence 바인딩
   (review-closure V32A×2, DR27/V32A, production-inventory R38, consistency-decisions V01A)
 - 머지 후 회귀 수정 커밋: `7f12b7c` (+ 그 이전 `49d6cbb` OMA_TOOL_SURFACE 배선 복원)
-- review-ledger 상태: stale digest 5 + 미포함 신규 파일 22(src/client/*, pi-compat/*,
+- review-ledger 상태: stale digest 5 + 미포함 신규 파일 22(packages/client/src/*, pi-compat/*,
   provenance, prompt-boundary, resident-paths, client-{preload,runtime}) + 삭제 schema 3개 잔존
   → **fresh review 후에만 재바인딩, 기계적 재생성 금지**
 - validation.md 입력 digest stale (942→943 파일) — 정리 후 재생성
@@ -174,7 +178,7 @@ Pi/OS 기능을 다시 구현해서 생긴 중복·workaround·pre-release 잔�
   recovery-exhaustiveness(preacceptEvent·console을 vm globals에 추가),
   monotonic-elapsed(오라클을 client/transport.js+protocol/alarm.js로 재지정),
   egress-observation-deadlines·project-session-directories(alarm 추출을
-  src/protocol/alarm.ts로 이동).
+  packages/protocol/src/alarm.ts로 이동).
 - egress-forwarder `listen`: `clearSocketName` throw 경로에서 run lease 누수 → release 추가,
   거절된 listen이 lease를 해제하는 platform-egress 테스트 추가.
 - guest requests ledger: `status(key)`도 `intent.key === key` 바인딩 검사(run()와 동일,
@@ -561,7 +565,7 @@ Pi/OS 기능을 다시 구현해서 생긴 중복·workaround·pre-release 잔�
   단 OMA filesystem/authority/credential/lifecycle 경계 우회 부분은 실행하지 않음.
 - role/authority를 extension 때문에 바꾸지 않음 (Worker→Human 질문 금지, Principal은
   write authority 없음, web/MCP가 host credential/filesystem 권한을 암묵 획득 금지).
-- tool surface는 기존 src/domain/tool-surface.ts + src/extension/tool-surface.ts
+- tool surface는 기존 packages/domain/src/tool-surface.ts + src/extension/tool-surface.ts
   재사용 (root group/subgroup/DAG/cycle/depth4/additive/validation 이미 존재).
   새 lazy_tools/tool_router/proxy 병렬 subsystem 만들지 않음.
 
@@ -577,7 +581,7 @@ Pi/OS 기능을 다시 구현해서 생긴 중복·workaround·pre-release 잔�
    switch와 분리. dialog 열린 채 /new·/resume·reload·shutdown·resize 경계 테스트.
    OpenTUI는 OMA 소유이므로 private-field hack 대신 정식 UI hook 추가.
    DIRECT 노출(GROUPED 아님).
-   위치: src/extension/ask-user-question.ts + src/tui/ask-user-question/
+   위치: src/extension/ask-user-question.ts + packages/tui/src/ask-user-question/
 2. **pi-hashline-edit-pro 5.1.0** → `src/extension/vendor/pi-hashline-edit-pro/`
    가져올 것: 4-char anchor, line ownership, stale detection, anchored read,
    replace/replace_within/insert, 전체 validation, stale 시 write 안 함,
@@ -905,7 +909,7 @@ name collision/intended surface/hidden 미활성/idempotent reload/provenance/
   대기 — 답변은 prompt 큐·mail·session switch와 무관하게 tool call
   result로만 귀착. `executionMode: "sequential"`로 다이얼로그 겹침
   불가. UI seam은 공개 `ctx.ui.custom(factory, {overlay…})` —
-  `src/tui/ask-user-question/`(presenter + component), factory가
+  `packages/tui/src/ask-user-question/`(presenter + component), factory가
   `ctx.ui.custom` 안에서 동기 호출돼 cancelDialog가 mount 전에
   설정됨(dist의 showExtensionCustom 확인); presenter는 경계가
   마지막으로 건넨 live context를 요청 시점에 읽고(`context: () =>
@@ -1131,7 +1135,7 @@ name collision/intended surface/hidden 미활성/idempotent reload/provenance/
   변수도 없다. runner가 delivery당 CONNECT proxy(`src/runtime/connect-proxy.ts`)를
   `/run/oma/egress.sock`로 `--ro-bind`하고 extension bridge(`egress-bridge.ts`)가
   loopback 8318로 `HTTP_PROXY`/`HTTPS_PROXY`/`ALL_PROXY`를 세운다. 정책은 순수 모듈
-  `src/domain/egress.ts`(이름/`*.suffix` 문법, authority parse, role 해석). 프록시는
+  `packages/domain/src/egress.ts`(이름/`*.suffix` 문법, authority parse, role 해석). 프록시는
   CONNECT·authority-form·443만 받고 요청 header는 거기서 끝난다. 다이얼은 이름을 한 번
   resolve하고 모든 answer를 private/loopback/link-local/CGNAT/docs/reserved/multicast·
   인코딩(v4-mapped/NAT64/Teredo/6to4) 대역으로 screen한 뒤 literal을 pin한다. macOS는
@@ -1375,13 +1379,13 @@ name collision/intended surface/hidden 미활성/idempotent reload/provenance/
   (§2 1·9·13). 원칙: 크기 거절은 완전 보존+명시된 프리뷰(spool-to-disk)나
   파생 bound로, 고정 경과 마감은 진행-리셋 정체 감지로 — protocol wire bound와
   무결성·정체성 검사는 유지.
-  - 변환 6종: ①`src/client/index.ts`의 OUTPUT_BYTES=1MiB 응답 거절 제거 —
-    완전 인코딩 후 inline 경계 이하는 그대로, 초과는 `src/storage/output-spool.ts`
+  - 변환 6종: ①`packages/client/src/index.ts`의 OUTPUT_BYTES=1MiB 응답 거절 제거 —
+    완전 인코딩 후 inline 경계 이하는 그대로, 초과는 `packages/storage/src/output-spool.ts`
     (신규: caller의 OMA state 하 `output-<sha256>.txt` digest명 publishNoReplace,
     동명 타 bytes는 덮지 않고 unique fallback)에 통째 보존하고 `[preview]`+
     바이트 수+경로+request key 회답; 스풀 실패 시에도 프리뷰+실패 사유 명시.
     `client/runtime.ts` 포트 + `runtime/client-runtime.ts` 결선.
-    ②`src/client/transport.ts` 영수증 청크 — 매 `operation.read`가 새
+    ②`packages/client/src/transport.ts` 영수증 청크 — 매 `operation.read`가 새
     관측 창을 열어(청크마다 `performance.now()+observationSeconds`) 성공 수신이
     진행으로 리셋; 느린 링크의 다청크 영수증은 완료, 멈춘 broker만 종료.
     ③`src/extension/mail-tools.ts` — 저장 메시지 bound(`storedMailBound`)와
@@ -1413,7 +1417,7 @@ name collision/intended surface/hidden 미활성/idempotent reload/provenance/
     수명주기+프레임, `finishSearchResult`는 숨은-상한 감지·완전 재렌더·
     스풀 — 둘 다 단위 시험 가능), `fenceExemptSpawnOwners`에
     `completeSearchText` 등록, `OUTSIDE_STATE_TREE`·`OWNED_STATE_EXEMPTIONS`에
-    사설 tmp 트리 사유 등록, `kernel-zones`에 `src/storage/output-spool.ts`
+    사설 tmp 트리 사유 등록, `kernel-zones`에 `packages/storage/src/output-spool.ts`
     (K2), `durable-boundaries.json`에 `#spoolOutput` 경계 등록(sigkill publish
     행렬+logical 재생 참조).
   - 회귀: `client.test.ts` — 스풀 프리뷰+스풀 실패 보고+digest명 중복/변조
@@ -1916,7 +1920,7 @@ name collision/intended surface/hidden 미활성/idempotent reload/provenance/
     "14 fail-before + 3 회귀 가드"(구 동작이 없어 대조 불가)로
     WORKSTREAM·validation.md 양쪽에 정정; B1 fixture 문구를
     "102 .test.mjs + helper 2종(isolate-env preload·pdf-fixture)"로
-    정밀화; `src/storage/ledger-reader.ts`의 ReadScope 주석이
+    정밀화; `packages/storage/src/ledger-reader.ts`의 ReadScope 주석이
     스냅샷 보장을 과대 주장한 것을 컬렉션-로컬 memoization 기술로 교정.
   - 메타데이터: production-loc-hashes 재생성, review-notes의
     effects.ts·effects/code.ts 신규 byte-bound 리뷰 + ledger-reader.ts

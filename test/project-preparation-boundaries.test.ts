@@ -6,8 +6,8 @@ import fs, { existsSync, mkdtempSync, readdirSync, rmSync } from "node:fs";
 import { syncBuiltinESMExports } from "node:module";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { prepareProjectDirectory } from "../src/storage/project-preparation.js";
-import { collectLeasedTree } from "../src/storage/tree-lease.js";
+import { prepareProjectDirectory } from "@oma/git/linux-project-preparation";
+import { collectLeasedTree } from "@oma/storage/tree-lease";
 
 for (const point of ["prepared", "released", "collected"] as const) {
   test(`DR27/P0-7: snapshot preparation SIGKILL after ${point} keeps ownership recoverable`, t => {
@@ -15,8 +15,8 @@ for (const point of ["prepared", "released", "collected"] as const) {
     t.after(() => rmSync(root, { recursive: true, force: true }));
     const tree = join(root, "snapshot");
     const child = spawnSync(process.execPath, ["--input-type=module", "-e", `
-      import { prepareProjectDirectory } from ${JSON.stringify(new URL("../src/storage/project-preparation.js", import.meta.url).href)};
-      import { TreeLease } from ${JSON.stringify(new URL("../src/storage/tree-lease.js", import.meta.url).href)};
+      import { prepareProjectDirectory } from ${JSON.stringify(new URL(import.meta.resolve("@oma/git/linux-project-preparation"), import.meta.url).href)};
+      import { TreeLease } from ${JSON.stringify(new URL(import.meta.resolve("@oma/storage/tree-lease"), import.meta.url).href)};
       const owner = prepareProjectDirectory(${JSON.stringify(tree)});
       const point = ${JSON.stringify(point)};
       if (point === "prepared") process.kill(process.pid, "SIGKILL");

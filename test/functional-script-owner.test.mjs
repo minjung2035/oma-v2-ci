@@ -23,11 +23,11 @@ async function world(failure) {
       readFileSync: () => JSON.stringify({ phase: 'expanded', active: ['read', 'oma_group_probe', 'oma_mail_read', 'oma_mail_send', 'oma_mail_ack', 'oma_status', ...(events.includes('opened') ? ['grep'] : [])] }),
       rmSync() { assert.equal(childClosed, true, 'workdir removed before child death'); events.push('remove'); } },
     'node:os': { tmpdir: () => '/tmp' }, 'node:path': path,
-    '../dist/src/domain/tool-surface.js': { planToolSurface: value => value, encodeToolSurfacePlan: () => 'plan' },
-    '../dist/src/runtime/pi-runtime.js': { resolvePiRuntime: () => ({ executable: '/node', args: ['/engine'] }), piAgentDir: () => '/engine-home' },
-    '../dist/src/process/async.js': { spawnOwnedRpc: () => { events.push('spawn'); return child; }, stopOwnedChild: stop },
+    "@oma/domain/tool-surface": { planToolSurface: value => value, encodeToolSurfacePlan: () => 'plan' },
+    '@oma/engine/pi-runtime': { resolvePiRuntime: () => ({ executable: '/node', args: ['/engine'] }), piAgentDir: () => '/engine-home' },
+    "@oma/process/async": { spawnOwnedRpc: () => { events.push('spawn'); return child; }, stopOwnedChild: stop },
     './bounded-script.mjs': { enterBoundedScript: async () => true },
-    '../dist/src/runtime/pi-rpc.js': { PiRpcClient: class {
+    '@oma/engine/pi-rpc': { PiRpcClient: class {
       constructor() { if (failure === 'constructor') throw new Error('injected constructor'); }
       onEvent(handler) { listeners.add(handler); return () => { listeners.delete(handler); events.push('unsubscribe'); }; }
       async send(event) {

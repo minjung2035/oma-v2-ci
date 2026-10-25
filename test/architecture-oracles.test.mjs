@@ -27,7 +27,7 @@ import {
 } from "../scripts/kernel-zones.mjs";
 import { isInternalPort, contractOwnershipFindings } from "../scripts/dependency-lattice.mjs";
 
-function fixture(files, run, include = ["src/**/*.ts"]) {
+function fixture(files, run, include = ["apps/oma/src/**/*.ts", "packages/*/src/**/*.ts"]) {
   const root = mkdtempSync(join(tmpdir(), "oma-oracle-"));
   try {
     for (const [file, text] of Object.entries({
@@ -118,17 +118,17 @@ test("P15 SCC agrees with independent reachability oracle on exhaustive tiny and
 test("P10 full Program type-only closure is evidence, not runtime package inventory", () => {
   fixture(
     {
-      "src/ids.ts":
-        'import type {Leaf} from "../implementation/contracts/leaf.js"; export type Root = Leaf;',
-      "implementation/contracts/leaf.ts":
+      "packages/native/src/identity.ts":
+        'import type {Leaf} from "../../contracts/src/leaf.js"; export type Root = Leaf;',
+      "packages/contracts/src/leaf.ts":
         "export interface Leaf { value: string }",
       "test/only.ts":
-        'import type {Unused} from "../implementation/contracts/test-only.js";',
-      "implementation/contracts/test-only.ts": "export type Unused = number;",
+        'import type {Unused} from "../packages/contracts/src/test-only.js";',
+      "packages/contracts/src/test-only.ts": "export type Unused = number;",
     },
     (root, program) => {
       const graph = graphFromProgram(program, { rootDir: root });
-      const expected = ["implementation/contracts/leaf.ts", "src/ids.ts"];
+      const expected = ["packages/contracts/src/leaf.ts", "packages/native/src/identity.ts"];
       assert.deepEqual(graph.files, expected);
       assert.deepEqual(
         architectureSources(program, root).map((source) =>
@@ -151,28 +151,28 @@ test("P10 full Program type-only closure is evidence, not runtime package invent
           analyzeProgram(program, {
             rootDir: root,
             checkContracts: false,
-            programGraph: { ...graph, files: ["src/ids.ts"] },
+            programGraph: { ...graph, files: ["packages/native/src/identity.ts"] },
           }),
         /source identity mismatch/,
       );
       const closure = runtimeImportClosure({
         rootDir: root,
-        roots: ["src/ids.ts"],
-        manifest: ["src/ids.ts"],
+        roots: ["packages/native/src/identity.ts"],
+        manifest: ["packages/native/src/identity.ts"],
         compilerOptions: program.getCompilerOptions(),
       });
-      assert.deepEqual([...closure.reachable], ["src/ids.ts"]);
+      assert.deepEqual([...closure.reachable], ["packages/native/src/identity.ts"]);
       assert.deepEqual(closure.findings, []);
     },
-    ["src/ids.ts", "test/**/*.ts"],
+    ["packages/native/src/identity.ts", "test/**/*.ts"],
   );
 });
 
 test("P15 evidence and analyzer both report runtime self loops", () => {
-  fixture({ "src/ids.ts": 'import "./ids.js";' }, (root, program) => {
+  fixture({ "packages/native/src/identity.ts": 'import "./identity.js";' }, (root, program) => {
     const graph = graphFromProgram(program, { rootDir: root });
-    assert.deepEqual(summarize(graph).runtimeCycles, [["src/ids.ts"]]);
-    assert.deepEqual(dependencyEvidence(graph).runtimeCycles, [["src/ids.ts"]]);
+    assert.deepEqual(summarize(graph).runtimeCycles, [["packages/native/src/identity.ts"]]);
+    assert.deepEqual(dependencyEvidence(graph).runtimeCycles, [["packages/native/src/identity.ts"]]);
     assert.ok(
       analyzeProgram(program, { rootDir: root, checkContracts: false }).some(
         (f) => f.rule === "runtime-import-cycle",
@@ -193,7 +193,7 @@ test("P15 transaction effect mutations follow direct/imported/local aliases and 
     'import * as fs from "node:fs"; const {writeFileSync: write} = fs; store.transaction(() => write("/never", "x"));',
   ])
     fixture(
-      { "src/entry/example.ts": `${store}\n${effect}` },
+      { "apps/oma/src/entry/example.ts": `${store}\n${effect}` },
       (root, program) => {
         const rules = analyzeProgram(program, {
           rootDir: root,
@@ -207,7 +207,7 @@ test("P15 transaction effect mutations follow direct/imported/local aliases and 
     );
   fixture(
     {
-      "src/entry/example.ts": `${store} const pure = () => 1; const alias = pure; store.transaction(() => alias());`,
+      "apps/oma/src/entry/example.ts": `${store} const pure = () => 1; const alias = pure; store.transaction(() => alias());`,
     },
     (root, program) => {
       assert.deepEqual(
@@ -231,8 +231,8 @@ test("P15 import syntax mutations share architecture and runtime closure classif
   ])
     fixture(
       {
-        "src/entry/root.ts": source,
-        "src/entry/leaf.ts":
+        "apps/oma/src/entry/root.ts": source,
+        "apps/oma/src/entry/leaf.ts":
           "export const value = 1; export type Value = number;",
       },
       (root, program) => {
@@ -241,12 +241,12 @@ test("P15 import syntax mutations share architecture and runtime closure classif
         assert.equal(graph.edges[0].kind, kind, source);
         const closure = runtimeImportClosure({
           rootDir: root,
-          roots: ["src/entry/root.ts"],
+          roots: ["apps/oma/src/entry/root.ts"],
           manifest: graph.files,
           compilerOptions: program.getCompilerOptions(),
         });
         assert.equal(
-          closure.reachable.has("src/entry/leaf.ts"),
+          closure.reachable.has("apps/oma/src/entry/leaf.ts"),
           kind === "runtime",
           source,
         );
@@ -254,7 +254,7 @@ test("P15 import syntax mutations share architecture and runtime closure classif
       },
     );
   fixture(
-    { "src/entry/root.ts": 'const target = "./leaf.js"; void import(target);' },
+    { "apps/oma/src/entry/root.ts": "const target = \"@oma/native/linux\"; void import(target);" },
     (root, program) => {
       const graph = graphFromProgram(program, { rootDir: root });
       assert.equal(graph.unresolved.length, 1);
@@ -270,23 +270,22 @@ test("P15 import syntax mutations share architecture and runtime closure classif
 
 test("DR27/P13: tier facts, retained codecs and snapshot mechanisms have distinct owners", () => {
   const owners = {
-    "src/domain/attestation-relations.ts": "K0-values",
-    "src/domain/tier-evaluation.ts": "K0-values",
-    "src/domain/attestation.ts": "K1-codecs",
-    "src/domain/integration-policy.ts": "K1-codecs",
-    "src/domain/tier-snapshot.ts": "K1-codecs",
-    "src/storage/project-preparation.ts": "K2-mechanisms",
-    "src/storage/snapshot-reader.ts": "K2-mechanisms",
+    "packages/domain/src/attestation-relations.ts": "K0-values",
+    "packages/domain/src/risk-tier.ts": "K0-values",
+    "packages/domain/src/attestation.ts": "K1-codecs",
+    "packages/domain/src/integration-policy.ts": "K1-codecs",
+    "packages/git/src/linux-project-preparation.ts": "K2-mechanisms",
+    "packages/native/src/snapshot-reader.ts": "K2-mechanisms",
   };
   for (const [file, zone] of Object.entries(owners)) assert.equal(kernelZoneOf(file)?.name, zone, file);
 });
 
 test("P13 every semantic zone direction, exact membership and pure external capability are gated", () => {
   const representatives = [
-    "src/domain/identifiers.ts",
-    "src/protocol/methods.ts",
-    "src/process/async.ts",
-    "src/store.ts",
+    "packages/domain/src/identifiers.ts",
+    "packages/protocol/src/methods.ts",
+    "packages/process/src/async.ts",
+    "packages/storage/src/store.ts",
   ];
   for (let from = 0; from < 4; from++)
     for (let to = 0; to < 4; to++) {
@@ -310,9 +309,9 @@ test("P13 every semantic zone direction, exact membership and pure external capa
         0,
       );
     }
-  assert.equal(kernelZoneOf("src/domain/new.ts"), null);
+  assert.equal(kernelZoneOf("packages/domain/src/new.ts"), null);
   assert.equal(
-    kernelFindings({ files: ["src/domain/new.ts"], edges: [] })[0].rule,
+    kernelFindings({ files: ["packages/domain/src/new.ts"], edges: [] })[0].rule,
     "kernel-zone-unclassified",
   );
   assert.equal(
@@ -323,14 +322,14 @@ test("P13 every semantic zone direction, exact membership and pure external capa
     null,
   );
   for (const source of [
-    'import {value} from "../storage/durable-fs.js";',
-    'export {value} from "../storage/durable-fs.js";',
-    'void import("../storage/durable-fs.js");',
+    "import {value} from \"../../storage/src/durable-fs.js\";",
+    "export {value} from \"../../storage/src/durable-fs.js\";",
+    "void import(\"../../storage/src/durable-fs.js\");",
   ])
     fixture(
       {
-        "src/protocol/methods.ts": source,
-        "src/storage/durable-fs.ts": "export const value = 1;",
+        "packages/protocol/src/methods.ts": source,
+        "packages/storage/src/durable-fs.ts": "export const value = 1;",
       },
       (root, program) => {
         assert.ok(
@@ -346,7 +345,7 @@ test("P13 every semantic zone direction, exact membership and pure external capa
     'import {randomUUID} from "node:crypto";',
     'import * as crypto from "node:crypto";',
   ])
-    fixture({ "src/domain/canonical-json.ts": source }, (root, program) => {
+    fixture({ "packages/domain/src/canonical-json.ts": source }, (root, program) => {
       assert.ok(
         analyzeProgram(program, { rootDir: root, checkContracts: false }).some(
           (f) => f.rule === "kernel-external-effect",
@@ -355,7 +354,7 @@ test("P13 every semantic zone direction, exact membership and pure external capa
     });
   fixture(
     {
-      "src/domain/canonical-json.ts":
+      "packages/domain/src/canonical-json.ts":
         'import {createHash as hash} from "node:crypto";',
     },
     (root, program) => {
@@ -377,11 +376,11 @@ test("P14 declaration-only ports retain pinned implementation conformance outsid
   assert.equal(ts.version, "5.9.3");
   const program = createArchitectureProgram();
   const ports = program.getSourceFiles().filter(source => isInternalPort(relative(process.cwd(), source.fileName).replaceAll("\\", "/")));
-  const port = ports.find(source => source.fileName.endsWith("/src/ports/ledger.ts"));
+  const port = ports.find(source => source.fileName.endsWith("/apps/oma/src/ports/ledger.ts"));
   const conformance = program
     .getSourceFiles()
     .find((source) =>
-      source.fileName.endsWith("/src/entry/module-conformance.ts"),
+      source.fileName.endsWith("/apps/oma/src/entry/module-conformance.ts"),
     );
   assert.ok(
     port && conformance,
@@ -407,12 +406,12 @@ test("P14 declaration-only ports retain pinned implementation conformance outsid
       (edge) =>
         isInternalPort(edge.from) &&
         [
-          "src/store.ts",
-          "src/units.ts",
-          "src/views.ts",
-          "src/reconcile.ts",
-          "src/runner.ts",
-          "src/sandbox.ts",
+          "packages/storage/src/store.ts",
+          "apps/oma/src/units.ts",
+          "apps/oma/src/views.ts",
+          "packages/reconcile/src/index.ts",
+          "apps/oma/src/runner.ts",
+          "apps/oma/src/sandbox.ts",
         ].includes(edge.to),
     ),
   );
@@ -467,18 +466,18 @@ test("P15 local path aliases cannot masquerade as external packages to escape th
           module: "esnext",
           moduleResolution: "bundler",
           baseUrl: ".",
-          paths: { "@effect": ["src/process/run.ts"] },
+          paths: { "@effect": ["packages/process/src/run.ts"] },
           types: [],
         },
-        include: ["src/domain/identifiers.ts"],
+        include: ["packages/domain/src/identifiers.ts"],
       }),
-      "src/domain/identifiers.ts":
+      "packages/domain/src/identifiers.ts":
         'import {run} from "@effect"; export const value = run;',
-      "src/process/run.ts": "export const run = 1;",
+      "packages/process/src/run.ts": "export const run = 1;",
     },
     (root, program) => {
       const graph = graphFromProgram(program, { rootDir: root });
-      assert.equal(graph.edges[0].to, "src/process/run.ts");
+      assert.equal(graph.edges[0].to, "packages/process/src/run.ts");
       assert.equal(graph.edges[0].included, true);
       assert.equal(Object.hasOwn(graph.external, "@effect"), false);
       assert.ok(
@@ -488,13 +487,13 @@ test("P15 local path aliases cannot masquerade as external packages to escape th
       );
       const closure = runtimeImportClosure({
         rootDir: root,
-        roots: ["src/domain/identifiers.ts"],
-        manifest: ["src/domain/identifiers.ts"],
+        roots: ["packages/domain/src/identifiers.ts"],
+        manifest: ["packages/domain/src/identifiers.ts"],
         compilerOptions: program.getCompilerOptions(),
       });
-      assert.ok(closure.reachable.has("src/process/run.ts"));
+      assert.ok(closure.reachable.has("packages/process/src/run.ts"));
       assert.deepEqual(closure.findings, [
-        "Runtime import outside production manifest: src/process/run.ts",
+        "Runtime import outside production manifest: packages/process/src/run.ts",
       ]);
     },
   );
@@ -503,7 +502,7 @@ test("P15 local path aliases cannot masquerade as external packages to escape th
 test("P15 persisted evidence identity fails before rule evaluation and exact baselines stay source-bound", () => {
   fixture(
     {
-      "src/entry/example.ts":
+      "apps/oma/src/entry/example.ts":
         "const s = new Set(); if (s.add(1)) throw new Error();",
       "implementation/evidence/dependency-graph.json":
         JSON.stringify({ sourceFiles: [] }),
@@ -536,7 +535,7 @@ test("P15 persisted evidence identity fails before rule evaluation and exact bas
         );
       }
       assert.throws(
-        () => applyExactBaseline(findings, [{ ...baseline, file: "src/**" }]),
+        () => applyExactBaseline(findings, [{ ...baseline, file: "apps/oma/src/**" }]),
         /Invalid or wildcard/,
       );
       const { sourceHash, ...lineOnly } = baseline;
@@ -551,7 +550,7 @@ test("P15 persisted evidence identity fails before rule evaluation and exact bas
 test("P15 deleting the evidence directory cannot disable the mandatory freshness gate", () => {
   fixture(
     {
-      "src/entry/example.ts": "export const value = 1;",
+      "apps/oma/src/entry/example.ts": "export const value = 1;",
       "production-files.txt": "",
     },
     (root) => {
@@ -566,7 +565,7 @@ test("P15 deleting the evidence directory cannot disable the mandatory freshness
 test("P15 narrowing Store to its declared port does not hide transaction effects", () => {
   fixture(
     {
-      "src/entry/example.ts": `
+      "apps/oma/src/entry/example.ts": `
     import {writeFileSync as write} from "node:fs";
     interface StorePort { transaction(f: () => unknown): unknown; }
     declare const store: StorePort;
@@ -585,37 +584,37 @@ test("P15 narrowing Store to its declared port does not hide transaction effects
 
 test("P17 erased contracts reject runtime values, aliases and re-exports without gating type relations", () => {
   const cases = [
-    ['import type { Fact } from "../storage/operation-codec.js"; export interface Port { read(): Fact; }', false],
-    ['export type { Fact as Alias } from "../storage/operation-codec.js";', false],
+    ['import type { Fact } from "@oma/protocol/operation-codec"; export interface Port { read(): Fact; }', false],
+    ['export type { Fact as Alias } from "@oma/protocol/operation-codec";', false],
     ['declare const brand: unique symbol; export interface Port { readonly [brand]: true; }', false],
     ['export const leaked = 1;', true],
-    ['import { make as alias } from "../storage/operation-codec.js"; export const leaked = alias();', true],
-    ['import * as owner from "../storage/operation-codec.js"; export { owner };', true],
-    ['export { make as leak } from "../storage/operation-codec.js";', true],
-    ['import "../storage/operation-codec.js"; export interface Port {}', true],
+    ['import { make as alias } from "@oma/protocol/operation-codec"; export const leaked = alias();', true],
+    ['import * as owner from "@oma/protocol/operation-codec"; export { owner };', true],
+    ['export { make as leak } from "@oma/protocol/operation-codec";', true],
+    ['import "@oma/protocol/operation-codec"; export interface Port {}', true],
     ['export enum RuntimeValue { Leaked }', true],
     ['export const load = (name: string) => import(name);', true],
   ];
   // Exercise both the directory-owned contracts and the exact-file facade.
-  for (const file of ["src/ports/runtime.ts", "src/module-ports.ts"]) for (const [text, rejected] of cases) fixture({
-    [file]: file === "src/module-ports.ts" ? text.replaceAll("../storage/", "./storage/") : text,
-    "src/storage/operation-codec.ts": "export interface Fact { value: number; } export function make() { return 1; }",
-    "src/domain/identifiers.ts": "export const legitimateRuntimeValue = 1;",
+  for (const file of ["apps/oma/src/ports/runtime.ts", "apps/oma/src/ports/ledger.ts"]) for (const [text, rejected] of cases) fixture({
+    [file]: text,
+    "packages/protocol/src/operation-codec.ts": "export interface Fact { value: number; } export function make() { return 1; }",
+    "packages/domain/src/identifiers.ts": "export const legitimateRuntimeValue = 1;",
   }, (root, program) => {
     const findings = analyzeProgram(program, { rootDir: root, checkContracts: false }).filter(f => f.rule === "internal-port-runtime");
     assert.deepEqual(findings.map(f => f.file), rejected ? [file] : [], text);
     assert.equal(kernelZoneOf(file), null);
-    assert.equal(isInternalPort("src/ports-extra/fake.ts"), false);
+    assert.equal(isInternalPort("apps/oma/src/ports-extra/fake.ts"), false);
   });
 });
 test("P23 contract ownership forbids runtime, type, inline-import and re-export edges out of exact L0 contracts", () => {
-  const target = "src/storage/value.ts";
+  const target = "apps/oma/src/storage/value.ts";
   const negative = [
-    ["src/ports/runtime.ts", 'import type { Value } from "../storage/value.js"; export interface Port { value: Value; }', "type"],
-    ["src/ports/runtime.ts", 'export type { Value } from "../storage/value.js";', "type"],
-    ["src/ports/runtime.ts", 'export interface Port { value: import("../storage/value.js").Value; }', "type"],
-    ["src/ports/runtime.ts", 'import { value } from "../storage/value.js"; export const leaked = value;', "runtime"],
-    ["src/module-ports.ts", 'export type { Value } from "./storage/value.js";', "type"],
+    ["apps/oma/src/ports/runtime.ts", 'import type { Value } from "../storage/value.js"; export interface Port { value: Value; }', "type"],
+    ["apps/oma/src/ports/runtime.ts", 'export type { Value } from "../storage/value.js";', "type"],
+    ["apps/oma/src/ports/runtime.ts", 'export interface Port { value: import("../storage/value.js").Value; }', "type"],
+    ["apps/oma/src/ports/runtime.ts", 'import { value } from "../storage/value.js"; export const leaked = value;', "runtime"],
+    ["apps/oma/src/ports/ledger.ts", 'export type { Value } from "../storage/value.js";', "type"],
   ];
   for (const [file, text, kind] of negative) fixture({ [file]: text, [target]: "export interface Value { value: string; }" }, (root, program) => {
     const graph = graphFromProgram(program, { rootDir: root });
@@ -623,27 +622,27 @@ test("P23 contract ownership forbids runtime, type, inline-import and re-export 
     assert.ok(findings.some(finding => finding.rule === "contract-ownership" && finding.file === file && finding.reason.includes(target) && finding.reason.includes(`${kind} edge`)), `${file} ${kind} edge`);
   });
   fixture({
-    "implementation/contracts.ts": 'import type { Value } from "../src/storage/value.js"; export interface Root { value: Value; }',
+    "packages/contracts/src/index.ts": "import type { Value } from \"../../../apps/oma/src/storage/value.js\"; export interface Root { value: Value; }",
     [target]: "export interface Value { value: string; }",
   }, (root, program) => {
     const graph = graphFromProgram(program, { rootDir: root });
     const findings = analyzeProgram(program, { rootDir: root, checkContracts: false, programGraph: graph });
-    assert.ok(findings.some(finding => finding.rule === "contract-ownership" && finding.file === "implementation/contracts.ts" && finding.reason.includes(target)), "implementation contracts must not reference storage implementation");
-  }, ["src/**/*.ts", "implementation/contracts.ts"]);
+    assert.ok(findings.some(finding => finding.rule === "contract-ownership" && finding.file === "packages/contracts/src/index.ts" && finding.reason.includes(target)), "implementation contracts must not reference storage implementation");
+  }, ["apps/oma/src/**/*.ts", "packages/contracts/src/index.ts"]);
   fixture({
-    "implementation/contracts.ts": 'export interface Root { leaf: import("./contracts/leaf.js").Leaf; }',
-    "implementation/contracts/leaf.ts": "export interface Leaf { value: string; }",
+    "packages/contracts/src/index.ts": "export interface Root { leaf: import(\"./leaf.js\").Leaf; }",
+    "packages/contracts/src/leaf.ts": "export interface Leaf { value: string; }",
   }, (root, program) => {
     const graph = graphFromProgram(program, { rootDir: root });
     assert.deepEqual(contractOwnershipFindings(graph.edges), [], "contract-to-contract references remain valid");
-  }, ["src/**/*.ts", "implementation/contracts.ts", "implementation/contracts/**/*.ts"]);
+  }, ["apps/oma/src/**/*.ts", "packages/contracts/src/index.ts", "packages/contracts/src/**/*.ts"]);
   fixture({
-    "implementation/helper.ts": 'import type { Value } from "../src/storage/value.js"; export type Helper = Value;',
+    "implementation/helper.ts": "import type { Value } from \"../apps/oma/src/storage/value.js\"; export type Helper = Value;",
     [target]: "export interface Value { value: string; }",
   }, (root, program) => {
     const graph = graphFromProgram(program, { rootDir: root });
     assert.deepEqual(contractOwnershipFindings(graph.edges), [], "non-contract implementation files are not broad-prefix exemptions");
-  }, ["src/**/*.ts", "implementation/**/*.ts"]);
+  }, ["apps/oma/src/**/*.ts", "implementation/**/*.ts"]);
 });
 
 test("P23 contract ownership exempts no contract -> implementation reference", () => {
@@ -651,12 +650,11 @@ test("P23 contract ownership exempts no contract -> implementation reference", (
   // the allowlist is gone. Each former alias must now be reported, including
   // when it hides behind a rename or the public facade.
   for (const [file, target, name] of [
-    ["implementation/contracts/module-contracts.ts", "src/store.ts", "Transaction"],
-    ["implementation/contracts/host.ts", "src/domain/resources.ts", "ResourceLimits"],
-    ["implementation/contracts/host.ts", "src/domain/limits.ts", "ProtocolLimits"],
-    ["implementation/contracts/identity.ts", "src/domain/capabilities.ts", "Capability"],
+    ["packages/contracts/src/module-contracts.ts", "packages/storage/src/store.ts", "Transaction"],
+    ["packages/contracts/src/host.ts", "packages/domain/src/limits.ts", "ProtocolLimits"],
+    ["packages/contracts/src/identity.ts", "packages/domain/src/capabilities.ts", "Capability"],
   ]) {
-    const specifier = `../../${target.replace(/\.ts$/, ".js")}`;
+    const specifier = relative(dirname(file), target).replace(/\.ts$/, ".js");
     const declaration = `export interface ${name} { value: string; }`;
     for (const reference of [
       `export type ${name} = import("${specifier}").${name};`,
@@ -666,15 +664,15 @@ test("P23 contract ownership exempts no contract -> implementation reference", (
       const findings = analyzeProgram(program, { rootDir: root, checkContracts: false })
         .filter(finding => finding.rule === "contract-ownership");
       assert.deepEqual(findings.map(finding => finding.file), [file], `${file}: ${name}`);
-    }, ["src/**/*.ts", "implementation/contracts/**/*.ts"]);
+    }, ["apps/oma/src/**/*.ts", "packages/contracts/src/**/*.ts"]);
     // An internal port may not launder the same reference either.
     fixture({
       [target]: declaration,
-      "src/ports/runtime.ts": `export type Leaked = import("${specifier}").${name};`,
+      "apps/oma/src/ports/runtime.ts": `export type Leaked = import("${relative("apps/oma/src/ports", target).replace(/\.ts$/, ".js")}").${name};`,
     }, (root, program) => {
       const findings = analyzeProgram(program, { rootDir: root, checkContracts: false });
-      assert.ok(findings.some(finding => finding.rule === "contract-ownership" && finding.file === "src/ports/runtime.ts"));
-    }, ["src/**/*.ts", "implementation/contracts/**/*.ts"]);
+      assert.ok(findings.some(finding => finding.rule === "contract-ownership" && finding.file === "apps/oma/src/ports/runtime.ts"));
+    }, ["apps/oma/src/**/*.ts", "packages/contracts/src/**/*.ts"]);
   }
 });
 
@@ -685,23 +683,16 @@ test("P23 the migrated vocabulary owners keep a two-way compile-time binding", (
   // A reference is an import specifier, not a mention in prose.
   const referencesImplementation = source =>
     /(?:import\s*\(\s*|from\s*)['"][^'"]*\.\.\/\.\.\/src\/[^'"]*['"]/.test(source);
-  assert.match(read("implementation/contracts/identity.ts"), /export type Capability =\s*\n?\s*\| 'mail\.send'/);
+  assert.match(read("packages/contracts/src/identity.ts"), /export type Capability =\s*\n?\s*\| 'mail\.send'/);
   const withoutComments = file => read(file).replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/.*$/gm, "");
-  for (const file of ["implementation/contracts/identity.ts", "implementation/contracts/host.ts"])
+  for (const file of ["packages/contracts/src/identity.ts", "packages/contracts/src/host.ts"])
     assert.ok(!referencesImplementation(withoutComments(file)), `${file} must not reference implementation`);
-  // module-contracts.ts may still name the erased internal port owners, which
-  // are contracts themselves, but never a concrete storage implementation.
-  const ports = withoutComments("implementation/contracts/module-contracts.ts")
-    .match(/['"][^'"]*\.\.\/\.\.\/src\/[^'"]*['"]/g) ?? [];
-  for (const reference of ports)
-    assert.match(reference, /src\/(module-ports|ports\/)/, `unexpected implementation reference ${reference}`);
   for (const [file, contractType] of [
-    ["src/domain/capabilities.ts", "Capability"],
-    ["src/domain/resources.ts", "ResourceLimits"],
-    ["src/domain/limits.ts", "ProtocolLimits"],
+    ["packages/domain/src/capabilities.ts", "Capability"],
+    ["packages/domain/src/limits.ts", "ProtocolLimits"],
   ]) {
     const source = read(file);
-    assert.match(source, /implementation\/contracts\//, `${file} must bind to the contract owner`);
+    assert.match(source, /@oma\/contracts\//, `${file} must bind to the contract owner`);
     assert.match(source, /\[Missing\w+\] extends \[never\]/, `${file} must assert exhaustiveness`);
     assert.ok(source.includes(contractType), `${file} must name ${contractType}`);
   }
@@ -709,25 +700,25 @@ test("P23 the migrated vocabulary owners keep a two-way compile-time binding", (
 
 test("P23 contract ports cannot hide the concrete Transaction alias behind the public contracts facade", () => {
   fixture({
-    "src/ports/runtime.ts": "import type { Transaction } from \"../../implementation/contracts.js\"; export interface Port { transaction: Transaction; }",
-    "implementation/contracts.ts": "export type { Transaction } from \"./contracts/module-contracts.js\";",
-    "implementation/contracts/module-contracts.ts": "export type Transaction = import(\"../../src/store.js\").Transaction;",
-    "src/store.ts": "export interface Transaction { commit(): void; }",
+    "apps/oma/src/ports/runtime.ts": "import type { Transaction } from \"../../../../packages/contracts/src/index.js\"; export interface Port { transaction: Transaction; }",
+    "packages/contracts/src/index.ts": "export type { Transaction } from \"./module-contracts.js\";",
+    "packages/contracts/src/module-contracts.ts": "export type Transaction = import(\"../../storage/src/store.js\").Transaction;",
+    "packages/storage/src/store.ts": "export interface Transaction { commit(): void; }",
   }, (root, program) => {
     const findings = analyzeProgram(program, { rootDir: root, checkContracts: false, programGraph: graphFromProgram(program, { rootDir: root }) });
-    assert.ok(findings.some(finding => finding.rule === "contract-ownership" && finding.file === "src/ports/runtime.ts"), "facade-imported Transaction must remain rejected");
-  }, ["src/**/*.ts", "implementation/contracts.ts", "implementation/contracts/**/*.ts"]);
+    assert.ok(findings.some(finding => finding.rule === "contract-ownership" && finding.file === "packages/contracts/src/module-contracts.ts"), "the concrete Transaction import must remain rejected");
+  }, ["apps/oma/src/**/*.ts", "packages/contracts/src/index.ts", "packages/contracts/src/**/*.ts"]);
 });
 test("P23 hidden compatibility aliases cannot cross the canonical port boundary", () => {
   fixture({
-    "src/ports/runtime.ts": "import type { HiddenTx } from \"../../implementation/contracts.js\"; export interface Port { transaction: HiddenTx; }",
-    "implementation/contracts.ts": "export type { HiddenTx } from \"./contracts/module-contracts.js\";",
-    "implementation/contracts/module-contracts.ts": "export type Transaction = import(\"../../src/store.js\").Transaction; export type HiddenTx = Transaction;",
-    "src/store.ts": "export interface Transaction { commit(): void; }",
+    "apps/oma/src/ports/runtime.ts": "import type { HiddenTx } from \"../../../../packages/contracts/src/index.js\"; export interface Port { transaction: HiddenTx; }",
+    "packages/contracts/src/index.ts": "export type { HiddenTx } from \"./module-contracts.js\";",
+    "packages/contracts/src/module-contracts.ts": "export type Transaction = import(\"../../storage/src/store.js\").Transaction; export type HiddenTx = Transaction;",
+    "packages/storage/src/store.ts": "export interface Transaction { commit(): void; }",
   }, (root, program) => {
     const findings = analyzeProgram(program, { rootDir: root, checkContracts: false, programGraph: graphFromProgram(program, { rootDir: root }) });
-    assert.ok(findings.some(finding => finding.rule === "contract-ownership" && finding.file === "src/ports/runtime.ts"), "hidden aliases must not bypass the compatibility exception");
-  }, ["src/**/*.ts", "implementation/contracts.ts", "implementation/contracts/**/*.ts"]);
+    assert.ok(findings.some(finding => finding.rule === "contract-ownership" && finding.file === "packages/contracts/src/module-contracts.ts"), "an alias cannot hide its concrete implementation import");
+  }, ["apps/oma/src/**/*.ts", "packages/contracts/src/index.ts", "packages/contracts/src/**/*.ts"]);
 });
 
 
@@ -737,16 +728,16 @@ test("P19 type coupling evidence reports structural reasons without approving or
   const evidence = dependencyEvidence(graph).kernel;
   assert.equal(evidence.typeOnlyReview.mode, "report-only");
   assert.equal(evidence.typeOnlyReview.classificationsAreApproval, false);
-  for (const port of ["src/module-ports.ts", "src/ports/ledger.ts", "src/ports/runtime.ts"])
+  for (const port of ["apps/oma/src/ports/ledger.ts", "apps/oma/src/ports/runtime.ts"])
     assert.ok(evidence.internalPortContracts.includes(port));
   const upward = evidence.typeOnlyReview.edges.filter(edge => edge.kernelUpward);
-  assert.ok(upward.some(edge => edge.from === "src/protocol/operation-results.ts" && edge.to === "src/storage/operation-codec.ts" && edge.classification === "representation-relation"));
-  for (const classification of ["compatibility-facade", "port-conformance", "internal-port-contract"])
+  assert.ok(upward.some(edge => edge.from === "packages/protocol/src/operation-results.ts" && edge.to === "packages/protocol/src/operation-codec.ts" && edge.classification === "representation-relation"));
+  for (const classification of ["port-conformance", "internal-port-contract"])
     assert.ok(evidence.typeOnlyReview.edges.some(edge => edge.classification === classification), classification);
   assert.deepEqual(kernelFindings(graph), []);
   fixture({
-    "src/protocol/receipt-codec.ts": 'import type { Row } from "../storage/rows.js"; export type View = Row;',
-    "src/storage/rows.ts": 'export interface Row { value: string; }',
+    "packages/protocol/src/receipt-codec.ts": "import type { Row } from \"../../storage/src/rows.js\"; export type View = Row;",
+    "packages/storage/src/rows.ts": 'export interface Row { value: string; }',
   }, (root, program) => {
     const extra = graphFromProgram(program, { rootDir: root });
     assert.ok(dependencyEvidence(extra).kernel.typeOnlyReview.edges.some(edge => edge.kernelUpward));

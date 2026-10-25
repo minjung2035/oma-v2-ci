@@ -10,12 +10,12 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { syncBuiltinESMExports } from "node:module";
-import { canonicalJson } from "../src/domain/canonical-json.js";
-import { StoreError } from "../src/domain/errors.js";
-import { PlatformError } from "../src/platform/rpc.js";
-import { RequestLedger } from "../src/platform/guest/requests.js";
+import { canonicalJson } from "@oma/domain/canonical-json";
+import { StoreError } from "@oma/domain/errors";
+import { PlatformError } from "@oma/protocol/host-errors";
+import { RequestLedger } from "#oma-test/app/platform/guest/requests";
 
-const ledgerModule = join(fileURLToPath(new URL(".", import.meta.url)), "..", "src", "platform", "guest", "requests.js");
+const ledgerModule = fileURLToPath(import.meta.resolve("#oma-test/app/platform/guest/requests"));
 
 /** Runs one request in a child that SIGKILLs itself at `point`. */
 function killedAt(dir: string, point: "during-effect" | "after-outcome", effects: string): number | null {

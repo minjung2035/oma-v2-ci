@@ -6,10 +6,10 @@ import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { Script } from 'node:vm';
 import ts from 'typescript';
-import { withAsyncCleanup } from '../dist/src/process/cleanup.js';
+import { withAsyncCleanup } from "@oma/native/cleanup";
 
 function world(platform, { command = 'update', args = [command, 'npm:fixture'], code = 0, failure, cleanupFailure, synced = true, hostOnly = false, lockFailure, contended = false } = {}) {
-  const file = platform === 'darwin' ? 'src/entry/oma-mac.ts' : 'src/entry/oma-society.ts';
+  const file = platform === 'darwin' ? 'apps/oma/src/entry/oma-mac.ts' : 'apps/oma/src/entry/oma-society.ts';
   const source = readFileSync(process.env.OMA_PACKAGE_SOURCE ?? file, 'utf8');
   const parsed = ts.createSourceFile(file, source, ts.ScriptTarget.Latest, true);
   const name = platform === 'darwin' ? 'packages' : 'piPackages';
@@ -17,7 +17,7 @@ function world(platform, { command = 'update', args = [command, 'npm:fixture'], 
   assert.ok(declaration, `${name} is not in ${file}`);
   const compiled = ts.transpileModule(`${declaration.getText(parsed)}\n${name};`, {
     compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
-  }).outputText.replaceAll('import.meta.url', '"file:///fixture/dist/src/entry/oma-mac.js"');
+  }).outputText.replaceAll('import.meta.url', '"file:///fixture/apps/oma/dist/entry/oma-mac.js"');
   const calls = [], output = [], primary = new Error(`fixture ${failure} failed`);
   let held = false, returns = 0, pending;
   const step = async name => {
@@ -31,7 +31,7 @@ function world(platform, { command = 'update', args = [command, 'npm:fixture'], 
   const packageDirectories = Object.freeze({}); // Directory effects belong to the controlled index boundary.
   const run = new Script(compiled, { filename: file }).runInNewContext({
     ...path, fileURLToPath(url) { if (failure === 'location') throw primary; return fileURLToPath(url); },
-    URL, withAsyncCleanup, packageDirectories, home: '/fixture/home', exports: {},
+    URL, withAsyncCleanup, packageDirectories, engineLoginDirectory: {}, home: '/fixture/home', exports: {},
     process: { env: {}, stdout: { write(line) { output.push(line); } }, exit(value) { throw { exit: value }; } },
     ensureDirectory() { calls.push('directory'); },
     ensureOwnedDirectory(directory, ownedFrom, mode) {
@@ -52,7 +52,7 @@ function world(platform, { command = 'update', args = [command, 'npm:fixture'], 
     tryHoldSociety() { held = true; calls.push('take'); return lock; },
     packageStoreDir: () => '/fixture/packages',
     readPackageIndex() { assert.equal(held, true); calls.push('before'); if (failure === 'before') throw primary; return []; },
-    async runEngineLogin(options) { assert.equal(options.fence, 17); await step('engine'); return code; },
+    async runEngineLogin(_directoryOwner, options) { assert.equal(options.fence, 17); await step('engine'); return code; },
     async writePackageIndex(_store, directories) { assert.equal(directories, packageDirectories); await step('index'); return []; },
     stageLocalPackage(_store, source) { assert.equal(held, true); calls.push('stage'); if (failure === 'stage') throw primary; return 'local/staged'; },
     pruneLocalStage() { assert.equal(held, true); calls.push('prune'); if (failure === 'prune') throw primary; },

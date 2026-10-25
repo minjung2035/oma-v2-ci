@@ -1,6 +1,0 @@
-{
-  "extends": "./tsconfig.json",
-  "compilerOptions": { "noEmit": false, "rootDir": ".", "declaration": true },
-  "include": ["src/pi-extension.ts"],
-  "exclude": ["src/extension/vendor"]
-}

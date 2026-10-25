@@ -5,8 +5,8 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { createHash } from "node:crypto";
-import { FrameParser, encodeFrame } from "../src/frame.js";
-import { BrokerChannel } from "../src/protocol/channel.js";
+import { FrameParser, encodeFrame } from "@oma/protocol/frame";
+import { BrokerChannel } from "@oma/client/channel";
 
 async function peerFixture(handle: (socket: Socket, index: number) => void) {
   const root = mkdtempSync(join(tmpdir(), "oma-r15-channel-")); const sockets = new Set<Socket>(); let index = 0;

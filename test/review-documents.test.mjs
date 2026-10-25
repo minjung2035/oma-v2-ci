@@ -1,8 +1,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { reviewState } from "../dist/src/domain/review-evaluation.js";
-import { reviewSubject, reviewThreadBody, reviewApprovalBody, reviewNoticeDocument, splitReviewNotice } from "../dist/src/mail/review-documents.js";
-import { OMISSION_MARKER_COMPACT, NOTICE_PART_OVERHEAD } from "../dist/src/mail/review-bounds.js";
+import { reviewState } from "@oma/domain/review-evaluation";
+import { reviewSubject, reviewThreadBody, reviewApprovalBody, reviewNoticeDocument, splitReviewNotice } from "@oma/mail/review-documents";
+import { OMISSION_MARKER_COMPACT, NOTICE_PART_OVERHEAD } from "@oma/domain/review-bounds";
 
 const request = "op-11111111-1111-4111-8111-111111111111";
 const fact = { kind: "merge.open", version: 1, name: "merge-11111111-1111-4111-8111-111111111111",

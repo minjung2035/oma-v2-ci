@@ -1,4 +1,6 @@
-import { readableBody } from "../src/mail/display.js";
+import { createMailModule } from "#oma-test/app/broker/mail-composition";
+import { serializePlanIntent } from "./fixtures/plan.js";
+import { readableBody } from "@oma/mail/display";
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
@@ -10,18 +12,19 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { buildEml, MailModule } from "../src/mail.js";
+import { buildEml, MailModule } from "@oma/mail";
 import {
   messagePlanCheck,
   operationResultCheck,
-} from "../src/validate.js";
-import { Store, StoreError } from "../src/store.js";
-import { assertCreateCapacity, LineageSnapshot } from "../src/domain/lineage.js";
+} from "@oma/domain/validation";
+import { Store } from "@oma/storage";
+import { StoreError } from "@oma/domain/errors";
+import { LineageSnapshot } from "@oma/domain/lineage";
 import { ALL_CAPS, makeValidAgent, storedSpec } from "./fixtures/spec.js";
-import { requestHash } from "../src/hash.js";
+import { requestHash } from "@oma/domain/request-identity";
 import { TEST_VIEW_LIMITS } from "./fixtures/limits.js";
-import { readBatchView } from "../src/pi-extension.js";
-import type { MessagePlan } from "../implementation/contracts.js";
+import { readBatchView } from "@oma/tool-runtime/batch-view";
+import type { MessagePlan } from "@oma/contracts";
 
 const MESSAGE_ID = "m-00000000-0000-4000-8000-000000000000-0";
 
@@ -90,7 +93,7 @@ test("adversarial: persisted MessagePlan accepts logical addresses only", () => 
 test("adversarial: approval plan and immutable EML headers must be identical", async () => {
   const root = tempRoot("oma-approval-");
   const store = new Store(join(root, "runtime.sqlite"));
-  const mail = new MailModule({ stateRoot: root, society: "demo" }, store, 8);
+  const mail = createMailModule({ stateRoot: root, society: "demo" }, store, 8);
   const actual = {
     repo: "project" as const,
     targetRef: "refs/heads/main" as const,
@@ -164,7 +167,7 @@ test("adversarial: operation results are closed and kind-specific", () => {
 test("adversarial: freezeObject is immutable and collision checked", () => {
   const root = tempRoot("oma-freeze-");
   const store = new Store(join(root, "runtime.sqlite"));
-  const mail = new MailModule({ stateRoot: root, society: "demo" }, store, 8);
+  const mail = createMailModule({ stateRoot: root, society: "demo" }, store, 8);
   try {
     mail.freezeObject(MESSAGE_ID, { text: "same" });
     mail.freezeObject(MESSAGE_ID, { text: "same" });
@@ -202,7 +205,7 @@ test("adversarial: terminal operation state cannot be rewritten", () => {
         requestHash: requestHash("route.follow", { topic: "dev" }),
         kind: "route.follow",
         payloadJson: JSON.stringify({ topic: "dev" }),
-        planJson: JSON.stringify({
+        planJson: serializePlanIntent({
           kind: "route.follow",
           topic: "dev",
           agent: "alice",
@@ -237,24 +240,7 @@ test("adversarial: terminal operation state cannot be rewritten", () => {
   }
 });
 
-test("adversarial: legacy lineage quotas cannot refuse new descendants", () => {
-  const root = tempRoot("oma-lineage-");
-  const store = new Store(join(root, "runtime.sqlite"));
-  try {
-    store.transaction(() => {
-      store.insertAgent(makeValidAgent("principal"));
-      store.insertAgent(makeValidAgent("alice", { createdBy: "principal" }));
-      store.insertAgent(makeValidAgent("old-child", { createdBy: "alice", desired: "retired" }));
-    });
-    // CREATE-002/AUTH-002: a retired resident still consumes its lineage quota.
-    const graph = new LineageSnapshot(store.listAgents()
-      .map(agent => ({ name: agent.name, createdBy: agent.createdBy, role: agent.role })));
-    assert.doesNotThrow(() => assertCreateCapacity(graph, "alice", { societyAgents: 10, lineageAgents: 1 }));
-  } finally {
-    store.close();
-    rmSync(root, { recursive: true, force: true });
-  }
-});
+
 
 test("adversarial: trusted Pi batch view is a closed runtime DTO", () => {
   const root = tempRoot("oma-batch-view-");

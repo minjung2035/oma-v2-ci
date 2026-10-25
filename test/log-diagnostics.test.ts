@@ -1,3 +1,4 @@
+import { DEPLOYMENT_LAYOUT } from "@oma/domain/deployment";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
@@ -5,7 +6,7 @@ import { createServer, type Socket } from "node:net";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { FrameParser, encodeFrame } from "../src/frame.js";
+import { FrameParser, encodeFrame } from "@oma/protocol/frame";
 
 async function logs(since: string, truncated = false) {
   const root = mkdtempSync(join(tmpdir(), "oma-log-diagnostic-"));
@@ -25,7 +26,7 @@ async function logs(since: string, truncated = false) {
   });
   try {
     await new Promise<void>(resolve => server.listen(path, resolve));
-    const child = spawn(process.execPath, [join(import.meta.dirname, "../src/cli.js"), "logs", "alice", "--since", since],
+    const child = spawn(process.execPath, [join(import.meta.dirname, "../..", DEPLOYMENT_LAYOUT.cli), "logs", "alice", "--since", since],
       { env: { PATH: "/usr/bin:/bin", HOME: root, OMA_SOCKET: path }, stdio: ["ignore", "pipe", "pipe"] });
     let out = ""; let err = "";
     child.stdout.on("data", bytes => { out += String(bytes); });

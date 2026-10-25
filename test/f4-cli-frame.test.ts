@@ -4,9 +4,9 @@ import { createServer, type Socket } from "node:net";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { callActor } from "../src/cli/transport.js";
-import { FrameParser, encodeFrame } from "../src/frame.js";
-import { MIN_LOG_FRAME_BYTES } from "../src/protocol/log-response.js";
+import { callActor } from "#oma-test/app/cli/transport";
+import { FrameParser, encodeFrame } from "@oma/protocol/frame";
+import { MIN_LOG_FRAME_BYTES } from "@oma/protocol/log-response";
 
 const params = { agent: "alice", sinceSeconds: 60 };
 const mail = (bytes: number) => ({

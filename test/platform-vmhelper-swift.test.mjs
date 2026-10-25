@@ -11,7 +11,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 
-const source = readFileSync('platform/host/vmhelper/Sources/oma-vmhelper/main.swift', 'utf8');
+const source = readFileSync('packages/platform-mac/src/vmhelper/Sources/oma-vmhelper/main.swift', 'utf8');
 
 // The construction site inside start(): everything between the socket-device
 // lookup and the "channel could not be opened" refusal.

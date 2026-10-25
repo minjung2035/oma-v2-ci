@@ -1,6 +1,6 @@
 /** AV11/DR27: the Principal reviews, reads and communicates; it does not
  * orchestrate workers or write code. Real extension -> CLI -> refusing peer. */
-import "../src/runtime/client-preload.js";
+import "#oma-test/app/runtime/client-preload";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
@@ -9,13 +9,13 @@ import { createServer, type Server } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { registerOmaTools } from "../src/extension/mail-tools.js";
-import { PRINCIPAL_TOOL_NAMES } from "../src/extension/principal-tools.js";
-import { PrincipalChannel } from "../src/extension/principal-channel.js";
-import { validFullOid, validTopicName } from "../src/extension/batch-view.js";
-import { isValidFullOid, isValidTopicName } from "../src/domain/identifiers.js";
+import { registerOmaTools } from "@oma/extension/mail-tools";
+import { PRINCIPAL_TOOL_NAMES } from "@oma/extension/principal-tools";
+import { PrincipalChannel } from "@oma/extension/principal-channel";
+import { isValidFullOid as validFullOid, isValidTopicName as validTopicName } from "@oma/domain/identifiers";
+import { isValidFullOid, isValidTopicName } from "@oma/domain/identifiers";
 
-const CLI = fileURLToPath(new URL("../src/cli.js", import.meta.url));
+const CLI = fileURLToPath(new URL("../../apps/oma/dist/cli.js", import.meta.url));
 
 interface Peer { readonly path: string; readonly frames: Record<string, unknown>[]; close(): Promise<void> }
 async function peer(root: string, answer?: (frame: Record<string, unknown>) => Record<string, unknown> | null): Promise<Peer> {
@@ -106,8 +106,8 @@ test("AV11/DR27: the Principal reviews and controls safety, without orchestratio
         `${toolName} must not carry open's fields`);
       for (const params of [
         { action: "open", tier: "LOW", title: "t", reason: "r" },
-        { action: "review", name: "merge-01234567", body: "b" },
-        { action: "status" }, { action: "cancel", name: "merge-01234567", reason: "r" },
+        { action: "review", name: "merge-01234567-0000-4000-8000-000000000000", body: "b" },
+        { action: "status" }, { action: "cancel", name: "merge-01234567-0000-4000-8000-000000000000", reason: "r" },
       ] as const) await assert.rejects(() => call(toolName, params), /is not valid/);
     }
     assert.equal(fixture.frames.length, 0, "a refused action runs no CLI");
@@ -116,18 +116,18 @@ test("AV11/DR27: the Principal reviews and controls safety, without orchestratio
       ["oma_agent_lifecycle", { name: "worker", action: "retire" }],
       ["oma_agent_lifecycle", { name: "principal", action: "stop" }],
       ["oma_agent_lifecycle", { name: "--file", action: "stop" }],
-      ["oma_merge", { action: "vote", name: "merge-01234567", verdict: "approve", body: "ok" }],           // vote needs its approval
-      ["oma_merge", { action: "vote", name: "merge-01234567", verdict: "approve", body: "ok", approval: "not-a-message" }],
+      ["oma_merge", { action: "vote", name: "merge-01234567-0000-4000-8000-000000000000", verdict: "approve", body: "ok" }],           // vote needs its approval
+      ["oma_merge", { action: "vote", name: "merge-01234567-0000-4000-8000-000000000000", verdict: "approve", body: "ok", approval: "not-a-message" }],
       ["oma_merge", { action: "diff", name: "topic/dev" }],                                              // name prefix
-      ["oma_challenge", { action: "diff", name: "merge-01234567" }],                                     // kind prefix
-      ["oma_merge", { action: "vote", name: "merge-01234567", verdict: "approve", body: "ok", approval: "m-00000000-0000-4000-8000-000000000001-0", tier: "LOW" }],
+      ["oma_challenge", { action: "diff", name: "merge-01234567-0000-4000-8000-000000000000" }],                                     // kind prefix
+      ["oma_merge", { action: "vote", name: "merge-01234567-0000-4000-8000-000000000000", verdict: "approve", body: "ok", approval: "m-00000000-0000-4000-8000-000000000001-0", tier: "LOW" }],
       ["oma_mail_send", { to: ["residents"], subject: "Goal", body: "b", intent: "goal", expectedRevision: "HEAD" }],
     ] as const) await assert.rejects(() => call(name, params), /is not valid/);
     assert.equal(fixture.frames.length, 0);
     // diff is a read: the CLI asks the broker for the request's status, which
     // is what decides visibility and identity.
-    await assert.rejects(() => call("oma_merge", { action: "diff", name: "merge-01234567" }), /BROKER_UNAVAILABLE/);
-    assert.deepEqual(sent(fixture.frames, "review.status"), [{ name: "merge-01234567" }]);
+    await assert.rejects(() => call("oma_merge", { action: "diff", name: "merge-01234567-0000-4000-8000-000000000000" }), /BROKER_UNAVAILABLE/);
+    assert.deepEqual(sent(fixture.frames, "review.status"), [{ name: "merge-01234567-0000-4000-8000-000000000000" }]);
     await assert.rejects(() => call("oma_society", { action: "close", request: "close" }), /Acceptance status unknown: .*Recovery: use --request .* with the same command; do not rerun with a new key/);
     await assert.rejects(() => call("oma_society", { action: "open", request: "open" }), /Acceptance status unknown: .*Recovery: use --request .* with the same command; do not rerun with a new key/);
     assert.deepEqual(sent(fixture.frames, "society.set"), [{ state: "closed" }, { state: "open" }]);
@@ -135,15 +135,15 @@ test("AV11/DR27: the Principal reviews and controls safety, without orchestratio
     assert.deepEqual(sent(fixture.frames, "agent.stop"), [{ agent: "worker" }]);
     // The Principal's vote carries its approval id; the exact wire fact.
     const approval = "m-00000000-0000-4000-8000-000000000001-0";
-    await assert.rejects(() => call("oma_merge", { action: "vote", name: "merge-01234567", verdict: "reject",
+    await assert.rejects(() => call("oma_merge", { action: "vote", name: "merge-01234567-0000-4000-8000-000000000000", verdict: "reject",
       body: "needs another pass", approval, request: "vote-1" }),
       /Acceptance status unknown: .*Recovery: use --request .* with the same command; do not rerun with a new key/);
     assert.deepEqual(sent(fixture.frames, "attest.record").at(-1),
-      { kind: "vote", name: "merge-01234567", verdict: "reject", body: "needs another pass", approval });
-    await assert.rejects(() => call("oma_challenge", { action: "vote", name: "challenge-01234567", verdict: "approve",
+      { kind: "vote", name: "merge-01234567-0000-4000-8000-000000000000", verdict: "reject", body: "needs another pass", approval });
+    await assert.rejects(() => call("oma_challenge", { action: "vote", name: "challenge-01234567-0000-4000-8000-000000000000", verdict: "approve",
       body: "revert is right", approval, request: "vote-2" }), /Acceptance status unknown/);
     assert.deepEqual(sent(fixture.frames, "attest.record").at(-1),
-      { kind: "vote", name: "challenge-01234567", verdict: "approve", body: "revert is right", approval });
+      { kind: "vote", name: "challenge-01234567-0000-4000-8000-000000000000", verdict: "approve", body: "revert is right", approval });
     await assert.rejects(() => call("oma_mail_send", { to: ["residents"], subject: "Plan", body: "Check every feature.\n",
       intent: "goal", expectedRevision: "none", request: "goal" }), /Acceptance status unknown: .*Recovery: use --request .* with the same command; do not rerun with a new key/);
     const published = sent(fixture.frames, "context.publish")[0]!;
@@ -177,39 +177,39 @@ test("mail-v1 / CLI-001: a Worker's oma_merge and oma_challenge carry the whole 
       await assert.rejects(() => call(toolName, { action: "review", name: `${toolName.slice(4)}-01234567`, body: "b", title: "leaked" }), /is not valid/);
     }
     // The full action set reaches the wire with exact argv.
-    await assert.rejects(() => call("oma_merge", { action: "review", name: "merge-01234567", body: "try this", request: "rv1" }), /Acceptance status unknown/);
-    assert.deepEqual(sent(fixture.frames, "attest.record").at(-1), { kind: "review", name: "merge-01234567", body: "try this" });
-    await assert.rejects(() => call("oma_merge", { action: "vote", name: "merge-01234567", verdict: "approve", body: "looks right", request: "v1" }),
+    await assert.rejects(() => call("oma_merge", { action: "review", name: "merge-01234567-0000-4000-8000-000000000000", body: "try this", request: "rv1" }), /Acceptance status unknown/);
+    assert.deepEqual(sent(fixture.frames, "attest.record").at(-1), { kind: "review", name: "merge-01234567-0000-4000-8000-000000000000", body: "try this" });
+    await assert.rejects(() => call("oma_merge", { action: "vote", name: "merge-01234567-0000-4000-8000-000000000000", verdict: "approve", body: "looks right", request: "v1" }),
       /Acceptance status unknown/);
-    assert.deepEqual(sent(fixture.frames, "attest.record").at(-1), { kind: "vote", name: "merge-01234567", verdict: "approve", body: "looks right" });
-    await assert.rejects(() => call("oma_merge", { action: "cancel", name: "merge-01234567", reason: "superseded", request: "c1" }), /Acceptance status unknown/);
-    assert.deepEqual(sent(fixture.frames, "attest.record").at(-1), { kind: "cancel", name: "merge-01234567", reason: "superseded" });
-    await assert.rejects(() => call("oma_challenge", { action: "review", name: "challenge-01234567", body: "note", request: "cr" }), /Acceptance status unknown/);
-    assert.deepEqual(sent(fixture.frames, "attest.record").at(-1), { kind: "review", name: "challenge-01234567", body: "note" });
-    await assert.rejects(() => call("oma_merge", { action: "status", name: "merge-01234567" }), /BROKER_UNAVAILABLE/);
-    assert.deepEqual(sent(fixture.frames, "review.status").at(-1), { name: "merge-01234567" });
+    assert.deepEqual(sent(fixture.frames, "attest.record").at(-1), { kind: "vote", name: "merge-01234567-0000-4000-8000-000000000000", verdict: "approve", body: "looks right" });
+    await assert.rejects(() => call("oma_merge", { action: "cancel", name: "merge-01234567-0000-4000-8000-000000000000", reason: "superseded", request: "c1" }), /Acceptance status unknown/);
+    assert.deepEqual(sent(fixture.frames, "attest.record").at(-1), { kind: "cancel", name: "merge-01234567-0000-4000-8000-000000000000", reason: "superseded" });
+    await assert.rejects(() => call("oma_challenge", { action: "review", name: "challenge-01234567-0000-4000-8000-000000000000", body: "note", request: "cr" }), /Acceptance status unknown/);
+    assert.deepEqual(sent(fixture.frames, "attest.record").at(-1), { kind: "review", name: "challenge-01234567-0000-4000-8000-000000000000", body: "note" });
+    await assert.rejects(() => call("oma_merge", { action: "status", name: "merge-01234567-0000-4000-8000-000000000000" }), /BROKER_UNAVAILABLE/);
+    assert.deepEqual(sent(fixture.frames, "review.status").at(-1), { name: "merge-01234567-0000-4000-8000-000000000000" });
     // open writes the reason to a file the CLI reads and removes afterwards.
     await assert.rejects(() => call("oma_merge", { action: "open", tier: "MEDIUM", title: "Ship it", reason: "the fix", request: "o1" }), /Acceptance status unknown/);
     const opened = sent(fixture.frames, "attest.record").at(-1)!;
     assert.equal(opened.kind, "merge.open"); assert.equal(opened.tier, "MEDIUM"); assert.equal(opened.title, "Ship it");
     assert.equal(opened.reason, "the fix");
-    await assert.rejects(() => call("oma_challenge", { action: "open", merge: "merge-01234567", tier: "HIGH", title: "Revert it", reason: "regress", request: "o2" }),
+    await assert.rejects(() => call("oma_challenge", { action: "open", merge: "merge-01234567-0000-4000-8000-000000000000", tier: "HIGH", title: "Revert it", reason: "regress", request: "o2" }),
       /Acceptance status unknown/);
     const challenged = sent(fixture.frames, "attest.record").at(-1)!;
-    assert.equal(challenged.kind, "challenge.open"); assert.equal(challenged.merge, "merge-01234567");
+    assert.equal(challenged.kind, "challenge.open"); assert.equal(challenged.merge, "merge-01234567-0000-4000-8000-000000000000");
     assert.equal(challenged.candidate, undefined, "a prepared revert carries no candidate");
     assert.equal(readdirSync(root).filter(name => name.startsWith("oma-tool-")).length, 0, "evidence files are removed");
     for (const params of [
       { action: "open", tier: "LOW", title: "t", reason: "r", verdict: "approve" },                      // field is not open's
-      { action: "open", tier: "MEDIUM", title: "t", reason: "r", merge: "merge-01234567" },              // merge has no merge field
-      { action: "open", tier: "HIGH", title: "t", reason: "r", name: "merge-01234567" },                 // open takes no name
+      { action: "open", tier: "MEDIUM", title: "t", reason: "r", merge: "merge-01234567-0000-4000-8000-000000000000" },              // merge has no merge field
+      { action: "open", tier: "HIGH", title: "t", reason: "r", name: "merge-01234567-0000-4000-8000-000000000000" },                 // open takes no name
       { action: "open", tier: "LOW", title: "t", reason: "r", path: "x" },                               // diff field
     ] as const) {
       await assert.rejects(() => call("oma_merge", params), /is not valid|not valid/);
     }
-    await assert.rejects(() => call("oma_challenge", { action: "open", merge: "challenge-01234567", tier: "LOW", title: "t", reason: "r" }), /is not valid/);
-    await assert.rejects(() => call("oma_challenge", { action: "open", merge: "merge-01234567", tier: "MEDIUM", title: "t", reason: "r" }), /is not valid/);
-    await assert.rejects(() => call("oma_challenge", { action: "open", merge: "merge-01234567", tier: "LOW", title: "t", reason: "r", candidate: "x" }), /is not valid/);
+    await assert.rejects(() => call("oma_challenge", { action: "open", merge: "challenge-01234567-0000-4000-8000-000000000000", tier: "LOW", title: "t", reason: "r" }), /is not valid/);
+    await assert.rejects(() => call("oma_challenge", { action: "open", merge: "merge-01234567-0000-4000-8000-000000000000", tier: "MEDIUM", title: "t", reason: "r" }), /is not valid/);
+    await assert.rejects(() => call("oma_challenge", { action: "open", merge: "merge-01234567-0000-4000-8000-000000000000", tier: "LOW", title: "t", reason: "r", candidate: "x" }), /is not valid/);
   } finally { await fixture.close(); rmSync(root, { recursive: true, force: true }); rmSync(sockdir, { recursive: true, force: true }); }
 });
 
@@ -251,18 +251,9 @@ test("DR27/INV04: full object ids use one grammar in host and isolated extension
     for (const decode of [isValidFullOid, validFullOid]) assert.equal(decode(sample), false);
 });
 
-test("mail-v1 / INV04: the tools' request-name mirror is the wire grammar", async () => {
-  const { isReviewRequestName } = await import("../src/domain/identifiers.js");
-  const samples = ["merge-01234567", "challenge-abcdef00", "merge-0123456", "merge-012345678", "merge-0123456G",
-    "merge_01234567", "Merge-01234567", "merge-01234567 ", "challenge-0123456x", "topic/dev", "merge-", "", "mrg-01234567"];
-  for (const sample of samples) {
-    assert.equal(isReviewRequestName(sample), /^((merge)|(challenge))-[0-9a-f]{8}$/.test(sample), sample);
-  }
-});
-
 test("AV15 / BATCH-002, INV04: a tool takes the names OMA shows -- this society's RFC address, a message's file name -- as what they display", async () => {
-  const { displayAddress } = await import("../src/mail/addresses.js");
-  const { logicalFromDisplay } = await import("../src/extension/batch-view.js");
+  const { displayAddress } = await import("@oma/mail/addresses");
+  const { logicalFromDisplay } = await import("@oma/domain/display-address");
   // The mirror inverts the one owner of the display form, and nothing else.
   for (const logical of ["principal", "commons", "residents", "alice", "a-b-9", "topic/dev", "topic/a"])
     assert.equal(logicalFromDisplay(displayAddress(logical as never, "demo"), "demo"), logical, logical);
@@ -334,6 +325,6 @@ test("AV29/DR27, AV30: GOAL is explicit mail intent, and safety control accepts 
 });
 
 test("DR1 / SB-002-C: the CLI a tool starts is given this engine's archive root", async () => {
-  const { cliEnvironment } = await import("../src/extension/mail-tools.js");
+  const { cliEnvironment } = await import("@oma/extension/mail-tools");
   assert.equal(cliEnvironment("/home/agent", "/run/oma/control.sock", "/mail/archive/cur").OMA_MAIL_ARCHIVE, "/mail/archive/cur");
 });

@@ -4,10 +4,10 @@ import { mkdtempSync, mkdirSync, readFileSync, rmSync, symlinkSync, writeFileSyn
 import { dirname, join } from "node:path";
 import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
-import { DEPLOYMENT_LAYOUT } from "../src/domain/deployment.js";
-import { runtimeAssets, assertRuntimeAssets } from "../src/runtime/assets.js";
-import { SCHEMA_PATH } from "../src/store.js";
-import { UNIT_TPL_DIR } from "../src/units.js";
+import { DEPLOYMENT_LAYOUT } from "@oma/domain/deployment";
+import { runtimeAssets, assertRuntimeAssets } from "#oma-test/app/runtime/assets";
+import { SCHEMA_PATH } from "@oma/storage";
+import { UNIT_TPL_DIR } from "@oma/platform-linux/units";
 
 const project = fileURLToPath(new URL("../../", import.meta.url)).replace(/\/$/, "");
 test("R38: module-relative schema/templates and service targets match the non-flattened build", () => {
@@ -16,7 +16,7 @@ test("R38: module-relative schema/templates and service targets match the non-fl
   const config = JSON.parse(readFileSync(join(project, "tsconfig.build.json"), "utf8"));
   assert.equal(config.compilerOptions.rootDir, "."); assert.equal(config.compilerOptions.outDir, "dist");
   const typecheck = JSON.parse(readFileSync(join(project, "tsconfig.json"), "utf8"));
-  assert.ok(typecheck.include.includes("test/**/*.ts")); assert.ok(typecheck.include.includes("implementation/contracts.ts"));
+  assert.ok(typecheck.include.includes("test/**/*.ts")); assert.ok(JSON.parse(readFileSync(join(project, "packages/contracts/tsconfig.json"), "utf8")).include.includes("src/**/*.ts"));
   for (const [template, entry] of Object.entries(DEPLOYMENT_LAYOUT.templateEntries)) {
     const text = readFileSync(join(assets.systemd, template), "utf8");
     assert.ok(text.includes(`ExecStart=@NODE@ @LIBDIR@/${DEPLOYMENT_LAYOUT.entries[entry]} `));
@@ -28,14 +28,20 @@ test("R38: layout-only fixture detects missing raw SQL, template, wrong root and
   // Empty regular files model path/type facts ONLY, never full packaging or execution proof.
   const root = mkdtempSync(join(tmpdir(), "oma-layout-only-"));
   const assets = runtimeAssets(root);
-  const paths = [assets.schema, assets.contract, assets.extension, ...Object.values(assets.entries),
+  const commandBuilder = join(root, DEPLOYMENT_LAYOUT.modelCommandBuilder);
+  const paths = [assets.schema, assets.contract, assets.extension, commandBuilder, ...Object.values(assets.entries),
     ...Object.keys(DEPLOYMENT_LAYOUT.templateEntries).map(name => join(assets.systemd, name))];
   const populate = (path: string) => { mkdirSync(dirname(path), { recursive: true }); writeFileSync(path, "", { flag: "wx" }); };
   try {
     for (const path of paths) populate(path);
+    mkdirSync(join(root, "node_modules", "@oma"), { recursive: true });
+    for (const workspace of DEPLOYMENT_LAYOUT.workspaces) {
+      mkdirSync(join(root, workspace.root), { recursive: true });
+      symlinkSync(join(root, workspace.root), join(root, "node_modules", workspace.name));
+    }
     assert.doesNotThrow(() => assertRuntimeAssets(assets, { schema: assets.schema, systemd: assets.systemd }));
     assert.throws(() => assertRuntimeAssets(assets, { schema: join(root, "wrong.sql"), systemd: assets.systemd }), { code: "UNSUPPORTED_PROFILE" });
-    for (const missing of [assets.schema, join(assets.systemd, "resident.service.in"), ...Object.values(assets.entries)]) {
+    for (const missing of [assets.schema, commandBuilder, join(assets.systemd, "resident.service.in"), ...Object.values(assets.entries)]) {
       rmSync(missing);
       assert.throws(() => assertRuntimeAssets(assets, { schema: assets.schema, systemd: assets.systemd }), { code: "UNSUPPORTED_PROFILE" });
       populate(missing);

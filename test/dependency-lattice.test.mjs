@@ -30,52 +30,52 @@ function analyze(files) {
 const typeRef = to => `import type { Value } from "${to}";\nexport type Held = Value;\n`;
 
 test("P5 lattice: the measured layer order is kernel < facts < workflow < orchestration < entry", () => {
-  assert.deepEqual(["src/domain/identifiers.ts", "src/units.ts", "src/mail.ts", "src/broker.ts", "src/cli.ts", "implementation/contracts.ts"]
+  assert.deepEqual(["packages/domain/src/identifiers.ts", "packages/platform-linux/src/units.ts", "packages/mail/src/index.ts", "packages/broker/src/index.ts", "apps/oma/src/cli.ts", "packages/contracts/src/index.ts"]
     .map(file => [file, layerOf(file)?.name]), [
-    ["src/domain/identifiers.ts", "L1-kernel"],
-    ["src/units.ts", "L2-facts"],
-    ["src/mail.ts", "L3-workflow"],
-    ["src/broker.ts", "L4-orchestration"],
-    ["src/cli.ts", "L5-entry"],
-    ["implementation/contracts.ts", "L0-contracts"],
+    ["packages/domain/src/identifiers.ts", "L1-kernel"],
+    ["packages/platform-linux/src/units.ts", "L2-facts"],
+    ["packages/mail/src/index.ts", "L3-workflow"],
+    ["packages/broker/src/index.ts", "L4-orchestration"],
+    ["apps/oma/src/cli.ts", "L5-entry"],
+    ["packages/contracts/src/index.ts", "L0-contracts"],
   ]);
-  assert.equal(layerOf("src/domain/identifiers.ts").index < layerOf("src/mail.ts").index, true);
-  assert.equal(layerOf("src/attestation.ts")?.name, "L3-workflow", "attestation coordinates acceptance and publication, not primitive facts");
+  assert.equal(layerOf("packages/domain/src/identifiers.ts").index < layerOf("packages/mail/src/index.ts").index, true);
+  assert.equal(layerOf("packages/review/src/index.ts")?.name, "L3-workflow", "current mail review coordinates acceptance and publication");
 });
 
 test("P5 lattice: a reverse runtime edge fails and the forward edge does not", () => {
   const upward = analyze({
-    "src/domain/low.ts": `import { high } from "../broker/high.js"; export const low = high;`,
-    "src/broker/high.ts": `export const high = 1;`,
+    "packages/domain/src/low.ts": "import { high } from \"../../../apps/oma/src/broker/high.js\"; export const low = high;",
+    "apps/oma/src/broker/high.ts": `export const high = 1;`,
   });
   assert.equal(upward.length, 1, JSON.stringify(upward));
   assert.equal(upward[0].rule, "dependency-lattice");
-  assert.equal(upward[0].file, "src/domain/low.ts");
+  assert.equal(upward[0].file, "packages/domain/src/low.ts");
   assert.match(upward[0].reason, /L1-kernel.*L4-orchestration/);
 
   const downward = analyze({
-    "src/domain/low.ts": `export const low = 1;`,
-    "src/broker/high.ts": `import { low } from "../domain/low.js"; export const high = low;`,
+    "packages/domain/src/low.ts": `export const low = 1;`,
+    "apps/oma/src/broker/high.ts": "import { low } from \"../../../../packages/domain/src/low.js\"; export const high = low;",
   });
   assert.deepEqual(downward, []);
 
   const sameLayer = analyze({
-    "src/storage/one.ts": `import { two } from "./two.js"; export const one = two;`,
-    "src/storage/two.ts": `export const two = 2;`,
+    "packages/storage/src/one.ts": `import { two } from "./two.js"; export const one = two;`,
+    "packages/storage/src/two.ts": `export const two = 2;`,
   });
   assert.deepEqual(sameLayer, []);
 });
 
 test("P5 lattice: a file outside the measured layers fails instead of escaping the gate", () => {
-  const findings = analyze({ "src/unmeasured/thing.ts": `export const thing = 1;` });
+  const findings = analyze({ "apps/oma/src/unmeasured/thing.ts": `export const thing = 1;` });
   assert.equal(findings.length, 1, JSON.stringify(findings));
   assert.equal(findings[0].rule, "dependency-lattice-unclassified");
 });
 
 test("P5 lattice: a type-only reference may not form a cycle across two layers", () => {
   const findings = analyze({
-    "src/domain/a.ts": typeRef("../broker/b.js"),
-    "src/broker/b.ts": typeRef("../domain/a.js"),
+    "packages/domain/src/a.ts": typeRef("../../../apps/oma/src/broker/b.js"),
+    "apps/oma/src/broker/b.ts": typeRef("../../../../packages/domain/src/a.js"),
   });
   assert.deepEqual(findings.map(finding => finding.rule), ["type-import-cycle"], JSON.stringify(findings));
   assert.match(findings[0].reason, /L1-kernel, L4-orchestration/);
@@ -83,8 +83,8 @@ test("P5 lattice: a type-only reference may not form a cycle across two layers",
 
 test("DR44: Store capabilities cannot form a type cycle with their composition even within one layer", () => {
   const findings = analyze({
-    "src/storage/facets.ts": typeRef("../store.js"),
-    "src/store.ts": typeRef("./storage/facets.js"),
+    "packages/storage/src/facets.ts": typeRef("./store.js"),
+    "packages/storage/src/store.ts": typeRef("./facets.js"),
   });
   assert.deepEqual(findings.map(finding => finding.rule), ["type-import-cycle"]);
 });

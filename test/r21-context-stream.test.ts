@@ -4,12 +4,12 @@ import { mkdirSync, mkdtempSync, readFileSync, lstatSync, rmSync, existsSync, wr
 import { dirname, join } from "node:path";
 import { tmpdir } from "node:os";
 import { createHash } from "node:crypto";
-import type { BlobDescriptor, ContextEntry } from "../implementation/contracts.js";
-import { generateOperationId } from "../src/ids.js";
-import { ContextTextValidator, contextFileCheck } from "../src/domain/context-policy.js";
-import { TreeLease, treeQuiescence, leasePathOf } from "../src/storage/tree-lease.js";
-import { PreparedContextTree, prepareContextStream } from "../src/storage/context-stream.js";
-import { contextStagingPathAt } from "../src/storage/paths.js";
+import type { BlobDescriptor, ContextEntry } from "@oma/contracts";
+import { generateOperationId } from "@oma/native/identity";
+import { ContextTextValidator, contextFileCheck } from "@oma/domain/context-policy";
+import { TreeLease, treeQuiescence, leasePathOf } from "@oma/storage/tree-lease";
+import { PreparedContextTree, prepareContextStream } from "@oma/storage/context-stream";
+import { contextStagingPathAt } from "@oma/domain/paths";
 
 const digest = (bytes: Uint8Array): string => createHash("sha256").update(bytes).digest("hex");
 const files = [

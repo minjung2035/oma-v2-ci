@@ -2,12 +2,12 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   contextPathCheck, contextFileCheck, contextEntriesCheck,
-} from "../src/domain/context-policy.js";
+} from "@oma/domain/context-policy";
 import {
   contextPathCheck as wirePathCheck, contextFileCheck as wireFileCheck,
   contextPublishParamsCheck, type ParamsLimits,
-} from "../src/validate.js";
-import { contextEntriesCheck as durableEntriesCheck } from "../src/durable.js";
+} from "@oma/domain/validation";
+import { contextEntriesCheck as durableEntriesCheck } from "@oma/domain/durable";
 
 const SHA = "0123456789abcdef".repeat(4);
 const limits: ParamsLimits = {

@@ -1,3 +1,6 @@
+import { testBroker } from "./helpers/broker-fixture.js";
+import { createLifecycleModule } from "#oma-test/app/broker/lifecycle-composition";
+import { createMailModule } from "#oma-test/app/broker/mail-composition";
 /** T114 / TUI-004, AUTH-003, IPC-011, PR-001, PR-002: the Principal's path
  * into its society, run in the topology the product runs it in.
  *
@@ -16,31 +19,33 @@ import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { spawn, type ChildProcess } from "node:child_process";
 import type { Socket } from "node:net";
-import type { AuthContext, ProtocolLimits, Request, ResolvedAgentSpec } from "../implementation/contracts.js";
-import { Broker, type PrincipalHostChannel } from "../src/broker.js";
-import { PrincipalEndpoint, PrincipalHostEndpoint, type PrincipalEndpointPorts, type PrincipalHostEndpointPorts } from "../src/broker/principal-endpoint.js";
-import { PeerAuthenticator, type BoundPeer } from "../src/broker/peer-authenticator.js";
-import { RunRegistry } from "../src/runtime/run-registry.js";
-import { Store } from "../src/store.js";
-import { MailModule } from "../src/mail.js";
-import { UnitsModule } from "../src/units.js";
-import { ViewsModule } from "../src/views.js";
-import { LifecycleModule } from "../src/lifecycle.js";
-import { resolvedSpecDigest } from "../src/domain/spec-identity.js";
-import { BrokerChannel } from "../src/protocol/channel.js";
-import { credentialMatches, isPrincipalCredential, sessionHandleMatches } from "../src/protocol/principal-credential.js";
-import { StoreError } from "../src/domain/errors.js";
-import { observeStoreFailure } from "../src/domain/admission.js";
-import { encodeHostMessage } from "../src/protocol/host-channel.js";
-import { PrincipalSession, newSessionHandle, principalEnvironment, principalSessionDir, principalWorkspace } from "../src/runtime/engine/principal-session.js";
-import { CONVERSATION_BOUNDS } from "../src/domain/surface-bounds.js";
-import { TurnAdmission } from "../src/domain/turn-admission.js";
-import { provisionSociety } from "../src/runtime/provision.js";
-import { processIdentity, type ProcessIdentity } from "../src/broker/process-ancestry.js";
-import { PrincipalDelivery, principalHostBroker, type DeliverySession } from "../src/runtime/principal-delivery.js";
-import { PI_ADAPTER_REVISION, PI_BOUNDARY_PREFIX, publishDeliveryReceipt } from "../src/storage/delivery-receipt.js";
-import { sessionDirPathAt } from "../src/storage/paths.js";
-import { PiRpcClient, commandWasNotWritten, type PiEvent } from "../src/runtime/pi-rpc.js";
+import type { AuthContext, ProtocolLimits, Request, ResolvedAgentSpec } from "@oma/contracts";
+import { Broker, type PrincipalHostChannel } from "@oma/broker";
+import { PrincipalEndpoint, PrincipalHostEndpoint, type PrincipalEndpointPorts, type PrincipalHostEndpointPorts } from "@oma/broker/principal-endpoint";
+import { PeerAuthenticator } from "@oma/broker/peer-authenticator";
+import { type BoundPeer } from "@oma/broker/ports";
+import { RunRegistry } from "@oma/broker/run-registry";
+import { Store } from "@oma/storage";
+import { MailModule } from "@oma/mail";
+import { UnitsModule } from "@oma/platform-linux/units";
+import { ViewsModule } from "#oma-test/app/views";
+import { LifecycleModule } from "@oma/lifecycle";
+import { resolvedSpecDigest } from "@oma/domain/spec-identity";
+import { BrokerChannel } from "@oma/client/channel";
+import { credentialMatches, isPrincipalCredential, sessionHandleMatches } from "@oma/protocol/principal-credential";
+import { StoreError } from "@oma/domain/errors";
+import { observeStoreFailure } from "@oma/domain/admission";
+import { encodeHostMessage } from "@oma/protocol/host-channel";
+import { PrincipalSession, newSessionHandle, principalEnvironment, principalSessionDir, principalWorkspace } from "@oma/engine/principal-session";
+import { CONVERSATION_BOUNDS } from "@oma/domain/surface-bounds";
+import { TurnAdmission } from "@oma/domain/turn-admission";
+import { provisionSociety } from "#oma-test/app/runtime/provision";
+import { processIdentity, type ProcessIdentity } from "@oma/broker/process-ancestry";
+import { PrincipalDelivery, principalHostBroker, type DeliverySession } from "#oma-test/app/runtime/principal-delivery";
+import { PI_ADAPTER_REVISION, PI_BOUNDARY_PREFIX } from "@oma/protocol/delivery-boundary";
+import { publishDeliveryReceipt } from "@oma/storage/delivery-receipt";
+import { sessionDirPathAt } from "@oma/domain/paths";
+import { PiRpcClient, commandWasNotWritten, type PiEvent } from "@oma/engine/pi-rpc";
 import { writeBoundarySession } from "./fixtures/delivery-receipt.js";
 
 const LIMITS: ProtocolLimits = {
@@ -53,7 +58,6 @@ const LIMITS: ProtocolLimits = {
 const PRINCIPAL_SPEC: ResolvedAgentSpec = {
   name: "principal", from: "a".repeat(40), brief: "Principal", profile: "p",
   capabilities: ["mail.send"], modelProfile: "m",
-  resources: { memoryBytes: 1, tasks: 1, cpuQuotaPercent: 1, tmpBytes: 1, workspaceBytes: 1, stagingBytes: 1, checkTimeoutSeconds: 1 },
 };
 
 // Plain modules, run from the source tree: the build compiles TypeScript
@@ -119,14 +123,13 @@ async function startSociety(prefix: string, supervised = true, host?: HostChanne
   );
   const units = new UnitsModule("demo",
     { node: process.execPath, libdir: "/opt/oma", state: root, society: "demo", agent: "", config: join(root, "config.json"), run: join(root, "oma", "demo") }, root);
-  const mail = new MailModule({ stateRoot: root, society: "demo" }, store, 64, LIMITS.batchMaxMessages, LIMITS);
+  const mail = createMailModule({ stateRoot: root, society: "demo" }, store, 64, LIMITS.batchMaxMessages, LIMITS);
   const views = new ViewsModule(store, root, "demo", "p");
-  const lifecycle = new LifecycleModule(store, units,
+  const lifecycle = createLifecycleModule(store, units,
     { stateRoot: root, projectGit: join(root, "project.git"), society: "demo", hasGoal: () => true, activationAllowed: () => true },
     () => null, mail);
   const channel = supervised ? host ?? new HostChannel(runRoot) : null;
-  const broker = new Broker(store, mail, units, views, lifecycle, null, null,
-    { stateRoot: root, runRoot, society: "demo", hasGoal: () => true }, LIMITS, undefined, channel ?? undefined);
+  const broker = testBroker({ store: store, mail: mail, units: units, views: views, lifecycle: lifecycle, git: null, reviews: null, reconcile: null, paths: { stateRoot: root, runRoot, society: "demo", hasGoal: () => true }, limits: LIMITS, principalHost: channel ?? undefined });
   await broker.start();
   return { broker, store, root, runRoot, host: channel };
 }
@@ -167,8 +170,8 @@ class Engine {
     writeFileSync(sessionFile, `${JSON.stringify({ type: "session" })}\n`);
     const env = {
       ...principalEnvironment({ stateRoot: society.root, runRoot: society.runRoot, libdir: process.cwd() },
-        { society: "demo", provider: "pi", model: "current", workspaceBytes: 1024 * 1024, extensions: [] }, LIMITS),
-      OMA_TEST_EXTENSION: pathToFileURL(join(process.cwd(), "dist/src/pi-extension.js")).href,
+        { society: "demo", provider: "pi", model: "current", extensions: [] }, LIMITS),
+      OMA_TEST_EXTENSION: pathToFileURL(join(process.cwd(), "packages/extension/dist/index.js")).href,
       OMA_TEST_SESSION_FILE: sessionFile,
       ...overrides,
     };
@@ -556,7 +559,7 @@ test("T114 / PR-002: nothing the model runs can mark its own mail delivered", as
     // where the model's commands run -- is refused there.
     const probe = await new Promise<string>(resolve => {
       const child = spawn(process.execPath, ["--input-type=module", "-e", `
-        import { BrokerChannel } from ${JSON.stringify(pathToFileURL(join(process.cwd(), "dist/src/protocol/channel.js")).href)};
+        import { BrokerChannel } from ${JSON.stringify(pathToFileURL(join(process.cwd(), "packages/client/dist/channel.js")).href)};
         const channel = new BrokerChannel({ frameBytes: 262144, idleStreamSeconds: 5, receiptWaitSeconds: 5 });
         await channel.connect(${JSON.stringify(join(society.runRoot, "principal-host.sock"))});
         const reply = await channel.call("batch.prepare", {}).catch(error => ({ ok: false, error: { code: String(error.message) } }));

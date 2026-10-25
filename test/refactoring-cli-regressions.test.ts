@@ -9,13 +9,13 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { spawn, spawnSync } from "node:child_process";
 import { createServer, type Socket } from "node:net";
-import { loadConfig } from "../src/config.js";
-import { StoreError } from "../src/store.js";
-import { RequestCache, type CachedRequest } from "../src/request-cache.js";
-import { encodeFrame } from "../src/frame.js";
-import type { Receipt, MutationMethod } from "../implementation/contracts.js";
+import { loadConfig } from "@oma/config";
+import { StoreError } from "@oma/domain/errors";
+import { RequestCache, type CachedRequest } from "#oma-test/app/request-cache";
+import { encodeFrame } from "@oma/protocol/frame";
+import type { Receipt, MutationMethod } from "@oma/contracts";
 
-const CLI = fileURLToPath(new URL("../src/cli.js", import.meta.url));
+const CLI = fileURLToPath(new URL("../../apps/oma/dist/cli.js", import.meta.url));
 const WORKER = fileURLToPath(new URL("./fixtures/lineage-regression.js", import.meta.url));
 const OP = "op-00000000-0000-4000-8000-000000000091";
 const succeeded: Receipt = { operation: OP, state: "succeeded", result: { kind: "route.follow", topic: "dev", subscribed: true } };
@@ -25,23 +25,21 @@ function record(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === "object" && !Array.isArray(value);
 }
 function validConfig() {
-  const resources = { memoryBytes: 1024, tasks: 1, cpuQuotaPercent: 1, tmpBytes: 1024,
-    workspaceBytes: 1024, stagingBytes: 1024, checkTimeoutSeconds: 1 };
+  const resources = { memoryBytes: 1024, tasks: 1, cpuQuotaPercent: 1, stagingBytes: 1024, checkTimeoutSeconds: 1 };
   return {
-    schemaVersion: 1, society: "demo",
+    schemaVersion: 3, society: "demo",
     installation: { node: "/usr/bin/node", libdir: "/usr/lib/oma", rootfs: "/srv/rootfs", deploymentDigest: "a".repeat(64) },
     modelProfiles: { m: { provider: "p", model: "m", inferenceTimeoutSeconds: 1 } },
-    agentProfiles: { p: { modelProfile: "m", capabilities: ["mail.send"], delegable: [], childProfile: null, resources } },
+    agentProfiles: { p: { modelProfile: "m", capabilities: ["mail.send"], delegable: [], childProfile: null } },
     principalProfile: "p", initialResidents: [{ name: "alice", profile: "p", brief: "work" }],
-    quota: { societyAgents: 10, lineageAgents: 10, storageBytes: 1024 },
     integration: { policyRevision: "p1", protectedPaths: [], checks: [] },
     // mailBodyBytes clears the AV-07 floor for subjectBytes=128 (a maximal
     // thread revision, mail/review-bounds.ts); the valid half of this test
     // needs a configuration validation can accept.
     limits: { frameBytes: 1024, mailBodyBytes: 4096, subjectBytes: 128, addresses: 10, replyReferences: 10,
-      contextFiles: 10, contextBytes: 1024, bundleBytes: 1024, logBytes: 1024, batchMaxMessages: 10,
-      idleStreamSeconds: 1, receiptWaitSeconds: 1 },
-  };
+        contextFiles: 10, contextBytes: 1024, bundleBytes: 1024, logBytes: 1024, batchMaxMessages: 10,
+        idleStreamSeconds: 1, receiptWaitSeconds: 1 }
+};
 }
 function run(home: string, args: string[]) {
   return spawnSync(process.execPath, [CLI, ...args], {

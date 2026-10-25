@@ -1,3 +1,4 @@
+import { residentEngineEffects } from "#oma-test/app/engine/resident-effects";
 /** CONNECT egress: compatibility policy grammar, unrestricted destination
  * routing, address pinning, socket protocol and owned connection lifetime. */
 import test from "node:test";
@@ -7,73 +8,18 @@ import { mkdtempSync, rmSync, statSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { once } from "node:events";
-import {
-  allowsEgressEndpoint, connectHostProblem, egressEntryMatches, egressEntryProblem, egressPolicyFor,
-  normalizeEgressHost, parseConnectTarget, type EgressPolicy,
-} from "../src/domain/egress.js";
+import { connectHostProblem, parseConnectTarget } from "@oma/domain/egress";
 import {
   ConnectProxy, makePublicDial, type ConnectDial, type EgressAudit,
-} from "../src/runtime/connect-proxy.js";
-import { StoreError } from "../src/domain/errors.js";
-import { validateConfig } from "../src/config.js";
-import { defaultHostConfig } from "../src/config/defaults.js";
-import { planPiSpawn } from "../src/runtime/pi-spawn-plan.js";
-import { residentArgv, RESIDENT_PATHS } from "../src/sandbox.js";
+} from "#oma-test/app/runtime/connect-proxy";
+import { StoreError } from "@oma/domain/errors";
+import { validateConfig } from "@oma/config";
+import { defaultHostConfig } from "@oma/config/defaults";
+import { planPiSpawn } from "@oma/engine/pi-spawn-plan";
+import { residentArgv } from "@oma/platform-linux/sandbox";
+import { RESIDENT_PATHS } from "@oma/domain/resident-paths";
 import { residentOptions } from "./fixtures/resident.js";
 
-const POLICY: EgressPolicy = Object.freeze({ role: "worker", allow: Object.freeze(["registry.npmjs.org", "*.github.com", "deb.debian.org"]) });
-
-/* ---------------- policy grammar ---------------- */
-
-test("DR34: egress entries are DNS names and *.suffix wildcards, nothing else", () => {
-  for (const entry of ["registry.npmjs.org", "*.github.com", "a.b.c.example.org", "deb.debian.org", "xn--nxasmq6b.example"])
-    assert.equal(egressEntryProblem(entry), null, entry);
-  assert.notEqual(egressEntryProblem(42), null, "a non-string entry is refused");
-  for (const entry of [
-    "",                                                                         // empty
-    "10.0.0.1", "127.0.0.1", "169.254.169.254", "192.168.1.1", "100.64.0.1",      // IPv4 literals
-    "1.2.3", "2130706433", "0",                                                 // partial/bare-number encodings
-    "[::1]", "::1", "fe80::1",                                                  // IPv6 spellings
-    "*.", "*.com", "*.org", "x.*.com", "**.example.com",                   // wildcards out of place or TLD-wide
-    "registry.npmjs.org:443", "https://registry.npmjs.org",                     // ports/schemes are not entries
-    "registry.npmjs.org/path", "registry npmjs.org", "registry..npmjs..org",
-    `${"x".repeat(64)}.com`,                                                    // a label past 63
-    `${"a.".repeat(126)}x.com`,                                                 // past 253 bytes
-    "NPMJS.ORG",                                                                // entries are normalized spelling
-  ]) assert.notEqual(egressEntryProblem(entry), null, entry);
-});
-
-test("DR34: the allowlist matches normalized names; a wildcard is subdomains only, never the apex", () => {
-  assert.equal(normalizeEgressHost("Registry.NPMJS.Org."), "registry.npmjs.org");
-  assert.equal(normalizeEgressHost("a..b"), "a..b");
-  const host = normalizeEgressHost;
-  assert.ok(egressEntryMatches("*.github.com", "api.github.com"));
-  assert.ok(!egressEntryMatches("*.github.com", "github.com"));
-  assert.ok(!egressEntryMatches("registry.npmjs.org", "a.registry.npmjs.org"), "a plain entry is exact, not a suffix");
-  assert.ok(allowsEgressEndpoint(POLICY, host("registry.npmjs.org")));
-  assert.ok(allowsEgressEndpoint(POLICY, host("Registry.Npmjs.ORG.")));
-  assert.ok(allowsEgressEndpoint(POLICY, host("api.github.com")), "*.github.com covers a subdomain");
-  assert.ok(allowsEgressEndpoint(POLICY, host("a.b.github.com")), "and a deeper one");
-  assert.equal(allowsEgressEndpoint(POLICY, host("github.com")), true, "the apex itself is not under *.");
-  assert.equal(allowsEgressEndpoint(POLICY, host("evilgithub.com")), true, "a suffix without the dot is not under it");
-  assert.equal(allowsEgressEndpoint(POLICY, host("github.com.evil.org")), true);
-  assert.equal(allowsEgressEndpoint(POLICY, host("pypi.org")), true, "unlisted name");
-  assert.equal(allowsEgressEndpoint(POLICY, host("10.0.0.1")), true);
-  assert.equal(allowsEgressEndpoint(POLICY, host("")), true);
-});
-
-test("DR34: per-role resolution unions the baseline with the role's own entries; empty means no proxy", () => {
-  const config = { allow: ["registry.npmjs.org"], roles: { worker: ["deb.debian.org"], principal: [] } };
-  const worker = egressPolicyFor(config, "worker");
-  const principal = egressPolicyFor(config, "principal");
-  const nobody = egressPolicyFor(config, "nobody");
-  assert.ok(worker && allowsEgressEndpoint(worker, "deb.debian.org") && allowsEgressEndpoint(worker, "registry.npmjs.org"));
-  assert.ok(principal && allowsEgressEndpoint(principal, "registry.npmjs.org") && allowsEgressEndpoint(principal, "deb.debian.org"));
-  assert.ok(nobody && allowsEgressEndpoint(nobody, "registry.npmjs.org"), "an unlisted role still reaches the baseline");
-  assert.notEqual(egressPolicyFor(undefined, "worker"), null, "no clause, no proxy");
-  assert.notEqual(egressPolicyFor({ allow: [], roles: { worker: [] } }, "worker"), null, "an empty set is no socket at all");
-  assert.notEqual(egressPolicyFor({ allow: [], roles: { other: ["x.example"] } }, "worker"), null);
-});
 
 /* ---------------- authority grammar ---------------- */
 
@@ -170,7 +116,7 @@ async function proxyWorld(t: import("node:test").TestContext, dial: ConnectDial,
   const dir = mkdtempSync(join(tmpdir(), "oma-connect-"));
   t.after(() => rmSync(dir, { recursive: true, force: true }));
   const socketPath = join(dir, "egress.sock");
-  const proxy = await ConnectProxy.open({ socketPath, policy: POLICY, actor: "alice", dial, ...(audit === undefined ? {} : { audit }) });
+  const proxy = await ConnectProxy.open({ socketPath, actor: "alice", dial, ...(audit === undefined ? {} : { audit }) });
   t.after(() => proxy.close());
   return { proxy, socketPath };
 }
@@ -224,7 +170,7 @@ test("DR34: an allowlisted CONNECT answers 200 and the tunnel carries bytes end 
   assert.equal(await collect(trailing), "hello-tunnel", "bytes tunnel both ways");
   socket.destroy();
   assert.equal(audits.length, 1);
-  assert.deepEqual([audits[0]!.actor, audits[0]!.role, audits[0]!.target, audits[0]!.decision], ["alice", "worker", "registry.npmjs.org:443", "allow"]);
+  assert.deepEqual([audits[0]!.actor, audits[0]!.target, audits[0]!.decision], ["alice", "registry.npmjs.org:443", "allow"]);
 });
 
 test("DR34: refused CONNECTs -- unlisted names, literals, other ports -- answer 403 and nothing is dialed", async t => {
@@ -243,9 +189,9 @@ test("DR34: refused CONNECTs -- unlisted names, literals, other ports -- answer 
 test("DR34: a dial refusal answers 502/403 and the error stays a refusal, never a tunnel", async t => {
   const dir = mkdtempSync(join(tmpdir(), "oma-connect-"));
   t.after(() => rmSync(dir, { recursive: true, force: true }));
-  const refused = await ConnectProxy.open({ socketPath: join(dir, "a.sock"), policy: POLICY, actor: "alice",
+  const refused = await ConnectProxy.open({ socketPath: join(dir, "a.sock"), actor: "alice",
     dial: async () => { throw new StoreError("INVALID_REQUEST", "egress destination resolves only to private or special-use addresses"); } });
-  const broken = await ConnectProxy.open({ socketPath: join(dir, "b.sock"), policy: POLICY, actor: "alice",
+  const broken = await ConnectProxy.open({ socketPath: join(dir, "b.sock"), actor: "alice",
     dial: async () => { throw new Error("ECONNREFUSED"); } });
   t.after(async () => { await refused.close(); await broken.close(); });
   assert.equal((await connectRaw(join(dir, "a.sock"), "CONNECT registry.npmjs.org:443 HTTP/1.1\r\n\r\n")).status, 403);
@@ -371,7 +317,7 @@ test("DR34: the proxy socket obeys the same 0600 ownership discipline as every s
   const dir = mkdtempSync(join(tmpdir(), "oma-connect-"));
   t.after(() => rmSync(dir, { recursive: true, force: true }));
   const socketPath = join(dir, "egress.sock");
-  const proxy = await ConnectProxy.open({ socketPath, policy: POLICY, actor: "alice", dial: async () => new Socket() });
+  const proxy = await ConnectProxy.open({ socketPath, actor: "alice", dial: async () => new Socket() });
   t.after(() => proxy.close());
   assert.equal(statSync(socketPath).mode & 0o777, 0o600,
     "the unix listener is private to this user whatever the umask");
@@ -454,7 +400,7 @@ test("DR34: the tunnel working set queues -- it never refuses; a close grants, a
   t.after(() => rmSync(dir, { recursive: true, force: true }));
   const socketPath = join(dir, "egress.sock");
   let dialed = 0;
-  const proxy = await ConnectProxy.open({ socketPath, policy: POLICY, actor: "alice", tunnels: 1,
+  const proxy = await ConnectProxy.open({ socketPath, actor: "alice", tunnels: 1,
     dial: async () => { dialed++; return connect({ host: "127.0.0.1", port }); } });
   t.after(() => proxy.close());
   const first = await connectRaw(socketPath, "CONNECT registry.npmjs.org:443 HTTP/1.1\r\n\r\n");
@@ -494,7 +440,7 @@ test("DR34: closing the proxy ends its tunnels and removes its name", async t =>
   const dir = mkdtempSync(join(tmpdir(), "oma-connect-"));
   t.after(() => rmSync(dir, { recursive: true, force: true }));
   const socketPath = join(dir, "egress.sock");
-  const proxy = await ConnectProxy.open({ socketPath, policy: POLICY, actor: "alice", dial: async () => connect({ host: "127.0.0.1", port }) });
+  const proxy = await ConnectProxy.open({ socketPath, actor: "alice", dial: async () => connect({ host: "127.0.0.1", port }) });
   const { status, socket } = await connectRaw(socketPath, "CONNECT registry.npmjs.org:443 HTTP/1.1\r\n\r\n");
   assert.equal(status, 200);
   assert.equal(proxy.activeTunnels, 1);
@@ -514,14 +460,14 @@ test("DR34: closing the proxy ends its tunnels and removes its name", async t =>
 
 test("DR34: with an egress socket the plan binds it and exports the proxy environment; without one it exposes nothing", () => {
   const options = residentOptions("/state");
-  const plain = planPiSpawn(options).args;
+  const plain = planPiSpawn(residentEngineEffects.sandbox, options).args;
   assert.equal(plain.includes(RESIDENT_PATHS.egress), false);
   const plainEnv = Object.fromEntries(plain.flatMap((arg, index) => arg === "--setenv" ? [[plain[index + 1]!, plain[index + 2]!]] : []));
   for (const key of ["HTTP_PROXY", "http_proxy", "HTTPS_PROXY", "ALL_PROXY", "NO_PROXY", "OMA_EGRESS_PROXY_SOCKET", "OMA_EGRESS_PROXY_PORT"])
     assert.equal(plainEnv[key], undefined, key);
 
   const socketHostPath = "/state/run/agents/alice/1/egress.sock";
-  const plan = planPiSpawn({ ...options, confinement: { ...options.confinement, egress: { socketHostPath } } });
+  const plan = planPiSpawn(residentEngineEffects.sandbox, { ...options, confinement: { ...options.confinement, egress: { socketHostPath } } });
   // The inside path also appears as the OMA_EGRESS_PROXY_SOCKET value; find the
   // mount triple itself.
   const at = plan.args.findIndex((arg, index) =>
@@ -550,30 +496,10 @@ function hostWith(egress: unknown): Parameters<typeof validateConfig>[0] {
   return { ...config, egress } as Parameters<typeof validateConfig>[0];
 }
 
-test("DR34: the egress clause is Human configuration -- closed, checked whole at commit", () => {
-  const role = Object.keys(defaultHostConfig({ society: "demo", node: process.execPath, libdir: "/opt/oma", rootfs: "/rootfs", deploymentDigest: "a".repeat(64) }).agentProfiles)[0]!;
-  const valid = validateConfig(hostWith({ allow: ["registry.npmjs.org", "*.github.com"], roles: { [role]: ["deb.debian.org"] } }));
-  assert.deepEqual(valid.egress!.allow, ["registry.npmjs.org", "*.github.com"]);
-  assert.equal(Object.isFrozen(valid.egress), true);
-  // A present-but-empty clause admits nothing and is refused instead.
-  assert.throws(() => validateConfig(hostWith({ allow: [] })), /no endpoint/);
-  assert.throws(() => validateConfig(hostWith({ allow: [], roles: { [role]: [] } })), /no endpoint/);
-  // Unknown fields, bad entries, a role that is no profile: all refused.
-  assert.throws(() => validateConfig(hostWith({ allow: ["x.com"], extra: 1 })), /egress\.extra unknown/);
-  assert.throws(() => validateConfig(hostWith({ allow: ["10.0.0.1"] })), /address literal/);
-  assert.throws(() => validateConfig(hostWith({ allow: ["x.com"], roles: { ghost: ["y.com"] } })), /not a configured profile/);
-  assert.throws(() => validateConfig(hostWith({ allow: ["x.com"], roles: { [role]: "notalist" } })), /egress\.roles/);
-  assert.throws(() => validateConfig(hostWith({ allow: "registry.npmjs.org" })), /egress\.allow/);
-});
-
-test("DR34: the wire's 256-entry bound holds at commit -- the resolved list is what egress.connect carries", () => {
-  const role = Object.keys(defaultHostConfig({ society: "demo", node: process.execPath, libdir: "/opt/oma", rootfs: "/rootfs", deploymentDigest: "a".repeat(64) }).agentProfiles)[0]!;
-  // One baseline past the wire bound is refused at commit -- on macOS the
-  // resolved list rides egress.connect, which refuses a longer list, so a
-  // config Linux would run must not be committable.
-  assert.throws(() => validateConfig(hostWith({ allow: Array(257).fill("a.example") })), /256/);
-  // The bound counts the resolved list: baseline + this role's own entries.
-  assert.throws(() => validateConfig(hostWith({ allow: Array(200).fill("a.example"), roles: { [role]: Array(57).fill("b.example") } })), /256/);
-  const atBound = validateConfig(hostWith({ allow: Array(200).fill("a.example"), roles: { [role]: Array(56).fill("b.example") } }));
-  assert.equal(atBound.egress!.allow.length + atBound.egress!.roles![role]!.length, 256);
+test("DR46: current host configuration refuses removed policy fields and prior schema", () => {
+  const config = defaultHostConfig({ society: "demo", node: process.execPath, libdir: "/opt/oma", rootfs: "/rootfs", deploymentDigest: "a".repeat(64) });
+  assert.equal(config.schemaVersion, 3);
+  assert.throws(() => validateConfig({ ...config, schemaVersion: 1 }), /unsupported development configuration schema/);
+  assert.throws(() => validateConfig({ ...config, quota: { storageBytes: 1 } }), /unknown top-level field quota/);
+  assert.throws(() => validateConfig(hostWith({ allow: ["*"] })), /unknown top-level field egress/);
 });

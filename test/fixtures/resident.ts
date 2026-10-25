@@ -1,11 +1,13 @@
 import { spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, writeFileSync, realpathSync } from "node:fs";
 import { dirname, join } from "node:path";
-import { decodeRunLease } from "../../src/protocol/run-lease.js";
-import { confinedPath, type ResidentDirectories } from "../../src/sandbox.js";
-import { hostSystemLayout, prepareResidentRootfs } from "../../src/runtime/resident-rootfs.js";
-import type { PiAdapterOptions } from "../../src/runtime/pi-spawn-plan.js";
-import { actorSocketPathAt, agentRootPathAt, runnerSessionDirPathAt, runnerViewPathAt, workspacePathAt } from "../../src/storage/paths.js";
+import { decodeRunLease } from "@oma/protocol/run-lease";
+import { DEPLOYMENT_LAYOUT } from "@oma/domain/deployment";
+import { confinedPath } from "@oma/domain/resident-paths";
+import { type SandboxDirectories as ResidentDirectories } from "@oma/contracts/runtime";
+import { hostSystemLayout, prepareResidentRootfs } from "@oma/platform-linux/resident-rootfs";
+import type { PiAdapterOptions } from "@oma/engine/pi-spawn-plan";
+import { actorSocketPathAt, agentRootPathAt, runnerSessionDirPathAt, runnerViewPathAt, workspacePathAt } from "@oma/domain/paths";
 
 export const RESIDENT_TEST_OPTIONS = Object.freeze({
   timeout: 180_000,
@@ -26,13 +28,13 @@ export function residentOptions(stateRoot: string, libdir = "/opt/oma", entry = 
     mailBodyBytes: 1 << 20, addresses: 64, contextBytes: 1 << 20, bundleBytes: 1 << 20 };
   return {
     actor, society: "demo", limits,
-    profile: { provider: "pi", model: "current", inferenceSeconds: 600, prompt: "", extensions: [], workspaceBytes: 1 << 20 },
+    profile: { provider: "pi", model: "current", inferenceSeconds: 600, prompt: "", extensions: [] },
     paths: { piCommand: process.execPath, piArgs: [entry], piAgentDir: join(stateRoot, "engine"),
-      coreExtension: join(libdir, "dist/src/pi-extension.js"), cli: join(libdir, "dist/src/cli.js"),
+      coreExtension: join(libdir, "packages/extension/dist/index.js"), cli: join(libdir, "apps/oma/dist/cli.js"),
       workspace: directories.workspace, sessionDir: directories.sessions, agentHome: directories.home, mailArchive: join(directories.archive, "cur"),
       workerArchive: join(directories.workerArchive, "cur"), projectGit: directories.projectGit, batchView: directories.view, socket },
     confinement: { host: { rootfs: join(stateRoot, "rootfs"), libdir, node: process.execPath, pi: confinedPath({ libdir }, directories, entry),
-      piModeArgs: [], tmpBytes: 64 * 1024 * 1024, stateRoot, runRoot, limits },
+      piModeArgs: [], stateRoot, runRoot, limits },
       directories, lease: decodeRunLease({ actor, incarnation: 1, socketHostPath: socket }, { actor, runRoot }) },
   };
 }
@@ -45,11 +47,15 @@ export function prepareResident(options: PiAdapterOptions): void {
   writeFileSync(options.paths.socket, "");
   Object.assign(host, { systemBinds: layout.binds, node: realpathSync(process.execPath) });
   prepareResidentRootfs(host.rootfs, layout, process.getuid!(), process.getgid!());
+  // Callers supply test payload bytes; their declared installation directories
+  // follow each current asset path rather than the former extension layout.
+  for (const path of [options.paths.coreExtension, options.paths.cli])
+    mkdirSync(dirname(path), { recursive: true });
   // w10/E27: the confined engine's NODE_OPTIONS preloads the in-process client
-  // from `dirname(coreExtension)/runtime/client-preload.js`. A fixture libdir
+  // from the installation layout's app-owned preload. A fixture libdir
   // must hold every asset the spawn plan names, so the fake file is provided
   // here; a real libdir already ships it and is never replaced.
-  const preload = join(dirname(options.paths.coreExtension), "runtime", "client-preload.js");
+  const preload = join(options.confinement.host.libdir, DEPLOYMENT_LAYOUT.clientPreload);
   if (!existsSync(preload)) {
     mkdirSync(dirname(preload), { recursive: true });
     writeFileSync(preload, "// test asset: fake engines do not exercise the client preload\n");

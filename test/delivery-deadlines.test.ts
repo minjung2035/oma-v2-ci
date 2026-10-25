@@ -1,3 +1,4 @@
+import { residentEngineEffects } from "#oma-test/app/engine/resident-effects";
 // DR27 (WP10, D06): acceptance, control silence, model silence and drain
 // are separate. A delivery has no sum-of-requests wall-clock limit.
 import test from "node:test";
@@ -5,11 +6,11 @@ import assert from "node:assert/strict";
 import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { PiAdapter } from "../src/runtime/pi-adapter.js";
+import { PiAdapter } from "@oma/engine/pi-adapter";
 import { residentOptions, prepareResident, RESIDENT_TEST_OPTIONS } from "./fixtures/resident.js";
-import { errorCodeOf, primaryFailure } from "../src/domain/errors.js";
-import { alarm, PiRpcClient } from "../src/runtime/pi-rpc.js";
-import { PI_ADAPTER_REVISION, PI_BOUNDARY_PREFIX } from "../src/storage/delivery-receipt.js";
+import { errorCodeOf, primaryFailure } from "@oma/domain/errors";
+import { alarm, PiRpcClient } from "@oma/engine/pi-rpc";
+import { PI_ADAPTER_REVISION, PI_BOUNDARY_PREFIX } from "@oma/protocol/delivery-boundary";
 
 type Pacing = "malformed" | "premature-eof" | "wait-observation" | "wait-observation-error" | "wait-observation-end-stall" | "wait-observation-stale" | "eof-before-close" | "steady" | "silent-after-accept" | "never-accepts" | "silent-tool" | "unfinished-tool" | "retry-wait" | "stuck-retry" | "silent-inference" | "stuck-inference" | "compaction" | "stuck-compaction" | "compaction-end-stall" | "post-tool-stall" | "compaction-error" | "many-requests";
 
@@ -119,9 +120,8 @@ async function deliverWith(pacing: Pacing, everyMs: number, forMs: number, budge
   try {
     const options = residentOptions(root, root, fakePi(root, pacing, everyMs, forMs));
     prepareResident(options);
-    mkdirSync(join(root, "dist/src"), { recursive: true });
     writeFileSync(options.paths.coreExtension, "export default function() {}\n"); writeFileSync(options.paths.cli, "\n");
-    const adapter = new PiAdapter({ ...options,
+    const adapter = new PiAdapter(residentEngineEffects, { ...options,
       profile: { ...options.profile, inferenceSeconds: budgets.model },
       limits: { ...options.limits, idleStreamSeconds: budgets.idle, receiptWaitSeconds: budgets.accept } });
     const batch = { id: "b-00000000-0000-4000-8000-0000000000b1", agent: "alice", incarnation: 1,

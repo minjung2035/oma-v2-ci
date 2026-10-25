@@ -1,3 +1,5 @@
+import { createMailModule } from "#oma-test/app/broker/mail-composition";
+import { serializePlanIntent } from "./fixtures/plan.js";
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
@@ -11,18 +13,15 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import {
-  actorAddress,
-  buildEml,
-  listAddress,
-  MailModule,
-  publishImmutableFile,
-} from "../src/mail.js";
-import { Store, StoreError } from "../src/store.js";
+import { actorAddress } from "@oma/domain/actor-address";
+import { buildEml, listAddress, MailModule } from "@oma/mail";
+import { publishImmutableFile } from "@oma/storage/immutable-file";
+import { Store } from "@oma/storage";
+import { StoreError } from "@oma/domain/errors";
 import { mutateRawRowAfterClose } from "./fixtures/corruption.js";
 import { removeTree } from "./fixtures/cleanup.js";
-import { generateMessageId } from "../src/ids.js";
-import { requestHash } from "../src/hash.js";
+import { messageIdForOperation as generateMessageId } from "@oma/domain/derived";
+import { requestHash } from "@oma/domain/request-identity";
 import { ALL_CAPS, resolvedSpec, storedSpec } from "./fixtures/spec.js";
 
 const OP = "op-00000000-0000-4000-8000-000000000071";
@@ -32,7 +31,7 @@ async function acceptedMail(
   deliveredRecipients: readonly ("alice" | "bob")[],
 ): Promise<{ store: Store; mail: MailModule; messageId: string }> {
   const store = new Store(join(root, "runtime.sqlite"));
-  const mail = new MailModule({ stateRoot: root, society: "demo" }, store, 8);
+  const mail = createMailModule({ stateRoot: root, society: "demo" }, store, 8);
   const messageId = generateMessageId(OP as never, 0);
   const eml = await buildEml({
     from: actorAddress("alice", "demo"),
@@ -67,7 +66,7 @@ async function acceptedMail(
       requestHash: requestHash("mail.send", payload),
       kind: "mail.send",
       payloadJson: JSON.stringify(payload),
-      planJson: JSON.stringify({
+      planJson: serializePlanIntent({
         kind: "mail.send",
         message: {
           id: messageId,
@@ -112,7 +111,7 @@ test("DB-005/006: missing delivery from the accepted recipient snapshot fails cl
   });
   const reopened = new Store(join(root, "runtime.sqlite"));
   try {
-    const reopenedMail = new MailModule({ stateRoot: root, society: "demo" }, reopened, 8);
+    const reopenedMail = createMailModule({ stateRoot: root, society: "demo" }, reopened, 8);
     await assert.rejects(reopenedMail.materialize(OP as never),
       (error: unknown) => error instanceof StoreError && error.code === "STORE_CORRUPT");
     // The delivery set is part of accepted evidence: the corrupt row stays
@@ -156,7 +155,7 @@ test("FS-005: immutable publication is read-only and freezeObject removes its st
     assert.equal(statSync(dst).mode & 0o777, 0o444);
 
     const store = new Store(join(root, "runtime.sqlite"));
-    const mail = new MailModule({ stateRoot: root, society: "demo" }, store, 8);
+    const mail = createMailModule({ stateRoot: root, society: "demo" }, store, 8);
     try {
       const id = "m-00000000-0000-4000-8000-000000000072-0";
       mail.freezeObject(id as never, { text: "frozen" });

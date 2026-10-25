@@ -7,6 +7,7 @@ import { addInterfaceMember, removeInterfaceMember, setMemberResult, setMemberPa
 import {
   createArchitectureProgram,
   graphFromProgram,
+  installWorkspaceSourceResolution,
 } from "../scripts/dependency-graph.mjs";
 import { KERNEL_ZONES, kernelFindings } from "../scripts/kernel-zones.mjs";
 import {
@@ -18,13 +19,14 @@ const root = process.cwd();
 const baseline = createArchitectureProgram();
 const read = (file) => readFileSync(resolve(root, file), "utf8");
 const snapshots = JSON.parse(read("test/fixtures/architecture-surfaces.json"));
-const wire = "implementation/contracts/public-wire.ts";
-const durable = "implementation/contracts/durable.ts";
-const methods = "src/protocol/methods.ts";
-const publicDispatcher = "src/broker/public-dispatcher.ts";
-const response = "src/protocol/response-codec.ts";
-const codec = "src/storage/operation-codec.ts";
-const validate = "src/validate.ts";
+const wire = "packages/contracts/src/public-wire.ts";
+const durable = "packages/contracts/src/durable.ts";
+const methods = "packages/protocol/src/methods.ts";
+const publicDispatcher = "packages/broker/src/public-dispatcher.ts";
+const brokerPorts = "packages/broker/src/ports.ts";
+const response = "packages/protocol/src/response-codec.ts";
+const codec = "packages/protocol/src/operation-codec.ts";
+const validate = "packages/domain/src/validation.ts";
 
 // All mutations stay in compiler memory. Production files and v1 fixtures are untouched.
 // Unchanged inputs answer the baseline's own SourceFiles: parsing, binding and
@@ -34,7 +36,7 @@ const validate = "src/validate.ts";
 // is still computed by the mutation program's own checker over live sources.
 function programWith(overrides) {
   const options = baseline.getCompilerOptions();
-  const host = ts.createCompilerHost(options);
+  const host = installWorkspaceSourceResolution(ts.createCompilerHost(options), options, root);
   const original = host.getSourceFile.bind(host);
   host.getSourceFile = (file, version, ...rest) => {
     const key = relative(root, file).replaceAll("\\", "/");
@@ -79,17 +81,6 @@ const hasError = (diagnostics, file, code, text) =>
       message(d).includes(text),
   );
 function interfaceSurface(text, file) {
-  // P0V-113 changes only the existing owner's readiness result. Project that
-  // exact delta out for BOTH positive and negative capability controls.
-  if (file === "src/broker/internal-dispatcher.ts")
-    text = setMemberResult(text, "InternalDispatchDependencies", "openRun", "RunLease");
-  // Project only explicitly reviewed additions out of the frozen v1 golden.
-  if (file === publicDispatcher) {
-    text = removeInterfaceMember(text, "PublicLifecyclePort", "setSociety");
-    text = removeInterfaceMember(text, "PublicGitPort", "attestations");
-    text = removeInterfaceMember(text, "PublicDispatchDependencies", "waitRun");
-    text = setMemberParameter(text, "PublicGitPort", "integrate", "input", "{ candidate: Oid; expected: Oid }");
-  }
   const source = ts.createSourceFile(file, text, ts.ScriptTarget.Latest, true);
   return declarationSurface(
     source.statements
@@ -170,7 +161,7 @@ test("P22 A: adding a public read method requires DTO, descriptor, handler and r
     "DTO alone must not bypass descriptor closure",
   );
   changes[methods] = addRegistryProperty(read(methods), "PUBLIC_METHODS",
-    '"probe.read": { mode: "read", key: "forbidden", stream: "none", channel: "actor", result: "probe.read", capability: null, resource: "read", authority: ["current-actor"], paramsCheck: fixed(agentWaitParamsCheck) },');
+    '"probe.read": { mode: "read", key: "forbidden", stream: "none", channel: "actor", result: "probe.read", capability: null, authority: ["current-actor"], paramsCheck: fixed(agentWaitParamsCheck) },');
   assert.ok(
     hasError(fileErrors(programWith(changes), publicDispatcher), publicDispatcher, 2345, "never"),
     "descriptor must not bypass real handler closure",
@@ -217,7 +208,7 @@ test("P22 B: a new operation kind cannot omit result, codec or result-validator 
 });
 
 test("P22 C: a new kernel file fails until it receives an explicit semantic owner", () => {
-  const file = "src/domain/evolution-probe.ts";
+  const file = "packages/domain/src/evolution-probe.ts";
   const graph = graphFromProgram(
     programWith({ [file]: "export const probe = 1;" }),
   );
@@ -245,13 +236,13 @@ test("P22 D: optional repair/recover/transaction capabilities cannot silently wi
   // stays per capability below -- it is pure syntax, no program needed.
   const widened = {};
   for (const [file, port] of [
-    [publicDispatcher, "PublicStorePort"],
-    ["src/broker/internal-dispatcher.ts", "InternalStorePort"],
+    [brokerPorts, "PublicStorePort"],
+    [brokerPorts, "InternalStorePort"],
   ])
     widened[file] = ["repair", "recover", "transaction"].reduce(
       (text, capability) =>
         addInterfaceMember(text, port, `readonly ${capability}?: () => void;`),
-      read(file),
+      widened[file] ?? read(file),
     );
   assert.deepEqual(
     errors(programWith(widened)).map(message),
@@ -259,8 +250,8 @@ test("P22 D: optional repair/recover/transaction capabilities cannot silently wi
     "optional widening is not caught by ordinary assignability",
   );
   for (const [file, port] of [
-    [publicDispatcher, "PublicStorePort"],
-    ["src/broker/internal-dispatcher.ts", "InternalStorePort"],
+    [brokerPorts, "PublicStorePort"],
+    [brokerPorts, "InternalStorePort"],
   ]) {
     for (const capability of ["repair", "recover", "transaction"]) {
       const changed = addInterfaceMember(read(file), port, `readonly ${capability}?: () => void;`);
@@ -274,7 +265,7 @@ test("P22 D: optional repair/recover/transaction capabilities cannot silently wi
 });
 
 test("V29A: the request-hash set-field recipe is a closed registry of mutation methods and their array params", () => {
-  const identity = "src/domain/request-identity.ts";
+  const identity = "packages/domain/src/request-identity.ts";
   const base = read(identity);
   for (const [name, after] of [
     ["an unknown method", '"mail.sned": ["to"]'],

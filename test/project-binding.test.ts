@@ -5,13 +5,13 @@ import { spawnSync } from "node:child_process";
 import { chmodSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, statSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { defaultSocietyFor as deriveSociety, societyFromDirectory } from "../src/config/defaults.js";
-import { sha256Hex } from "../src/hash.js";
-import { ACTOR_NAME_RE } from "../src/domain/identifiers.js";
+import { defaultSocietyFor as deriveSociety } from "@oma/config/defaults";
+import { sha256Hex } from "@oma/domain/canonical-json";
+import { ACTOR_NAME_RE } from "@oma/domain/identifiers";
 import {
   observeProjectBinding, projectBindingDecision, provisionSociety, publishProjectBinding, stateRootHasSociety, PROJECT_BINDING,
-} from "../src/runtime/provision.js";
-import { StoreError } from "../src/domain/errors.js";
+} from "#oma-test/app/runtime/provision";
+import { StoreError } from "@oma/domain/errors";
 
 // The entry adapter digests the canonical path; the derivation itself is pure.
 const defaultSocietyFor = (path: string) => deriveSociety(path, sha256Hex(Buffer.from(path, "utf8")));
@@ -52,8 +52,6 @@ test("V16A: different canonical projects get different default societies; aliase
     symlinkSync(a, alias);
     assert.equal(defaultSocietyFor(realpathSync(alias)), societies[0]);
     assert.throws(() => deriveSociety(a, "not-a-digest"));
-    // The negative control: the previous basename-only default merges them.
-    assert.equal(societyFromDirectory(a), societyFromDirectory(b));
   } finally { cleanup(root); }
 });
 

@@ -13,7 +13,7 @@ import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { TransportSpool } from "../src/broker/transport-spool.js";
+import { TransportSpool } from "@oma/storage/transport-spool";
 
 test("AV5 / FS-005: a spool whose staging path is replaced after sealing reads and removes only its own file", async () => {
   const root = mkdtempSync(join(tmpdir(), "oma-av5-"));

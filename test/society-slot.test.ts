@@ -1,17 +1,16 @@
 // `/society` admission: the project's own Society slot is free only while no
 // durable record stands there — a binding, unreadable or unverifiable bytes,
-// society content, a foreign birth or a legacy Society each refuse by name —
+// society content and a foreign birth each refuse by name —
 // and the check itself never writes.
 import test from "node:test";
 import assert from "node:assert/strict";
 import { chmodSync, existsSync, mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { checkSocietySlot, projectSociety } from "../src/runtime/society-slot.js";
-import { publishProjectBinding } from "../src/runtime/provision.js";
-import { newSessionBirth, publishSessionBirth } from "../src/runtime/session-mode.js";
-import { societyFromDirectory } from "../src/config/defaults.js";
-import { PROJECT_BINDING } from "../src/runtime/project-binding.js";
+import { checkSocietySlot, projectSociety } from "#oma-test/app/runtime/society-slot";
+import { publishProjectBinding } from "#oma-test/app/runtime/provision";
+import { newSessionBirth, publishSessionBirth } from "#oma-test/app/runtime/session-mode";
+import { PROJECT_BINDING } from "#oma-test/app/runtime/project-binding";
 
 const scratch = () => realpathSync(mkdtempSync(join(tmpdir(), "oma-society-slot-")));
 const cleanup = (root: string) => { try { chmodSync(root, 0o700); } catch {} rmSync(root, { recursive: true, force: true }); };
@@ -101,18 +100,5 @@ test("society slot: a lone birth record identical to the re-entry's is crash res
     const check = checkSocietySlot(dataRoot, cwd);
     assert.equal(check.kind, "refused");
     if (check.kind === "refused") assert.match(check.reason, /different session/);
-  } finally { cleanup(base); }
-});
-
-test("society slot: a pre-binding Society under the legacy slug refuses by name", () => {
-  const base = scratch(), cwd = join(base, "myapp"), dataRoot = join(base, "data");
-  mkdirSync(cwd); mkdirSync(dataRoot);
-  const legacy = societyFromDirectory(cwd);
-  assert.notEqual(legacy, projectSociety(cwd));
-  mkdirSync(join(dataRoot, legacy, "repos"), { recursive: true });
-  try {
-    const check = checkSocietySlot(dataRoot, cwd);
-    assert.equal(check.kind, "refused");
-    if (check.kind === "refused") assert.match(check.reason, new RegExp(`legacy Society '${legacy}'`));
   } finally { cleanup(base); }
 });

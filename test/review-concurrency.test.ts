@@ -5,16 +5,16 @@
  * what the pure evaluator computes from the committed ledger. */
 import test from "node:test";
 import assert from "node:assert/strict";
-import { readDiagnosticSnapshot } from "../src/store.js";
-import { inspectLedger } from "../src/diagnostics/ledger.js";
-import type { Receipt, MessagePlan } from "../implementation/contracts.js";
+import { readDiagnosticSnapshot } from "@oma/storage";
+import { inspectLedger } from "#oma-test/app/diagnostics/ledger";
+import type { Receipt, MessagePlan } from "@oma/contracts";
 import { fixture, messages, inboxCount } from "./fixtures/review-fixture.js";
 import { makeValidAgent } from "./fixtures/spec.js";
 
 test("DR44: Integration's pre-CAS authority never calls the public Review workflow", async () => {
   const f = fixture();
   try {
-    f.module.reviews.assertApplicable = () => { throw new Error("workflow callback reached CAS"); };
+    f.reviews.assertApplicable = () => { throw new Error("workflow callback reached CAS"); };
     const candidate = f.candidateWith({ "a.txt": "independent authority\n" });
     await f.submit("alice", candidate);
     await f.open("alice", { tier: "LOW", candidate }, "no-workflow-callback");
@@ -169,7 +169,7 @@ for (const order of ["cancel-first", "vote-first"] as const) test(
           `unexpected refusal ${codeOf(o)}`);
       // Both landing is only possible when the cancel commits after the vote
       // but before the integration: the request then stays cancelled.
-      await f.module.reviews.advanceAll();   // settle a skipped advance
+      await f.reviews.advanceAll();   // settle a skipped advance
       const st = f.stateOf(name);
       if (v.ok && !c.ok) {
         assert.equal(st.display, "applied");
@@ -252,7 +252,7 @@ test("concurrent Principal votes on one approval: exactly one decision is record
     const loser = a.ok ? b : a;
     assert.ok(codeOf(loser) === "REQUEST_CLOSED" || codeOf(loser) === "BROKER_UNAVAILABLE",
       `loser refusal ${codeOf(loser)}`);
-    await f.module.reviews.advanceAll();
+    await f.reviews.advanceAll();
     const st = f.stateOf(name);
     const principalEntries = st.entries.filter(e => e.actor === "principal" && e.fact.kind === "vote");
     assert.equal(principalEntries.length, 1, "one Principal vote in the ledger");

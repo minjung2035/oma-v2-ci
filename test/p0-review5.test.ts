@@ -1,31 +1,32 @@
+import { testBroker } from "./helpers/broker-fixture.js";
+import { createLifecycleModule } from "#oma-test/app/broker/lifecycle-composition";
 // Priority 0, fifth review (external whole-codebase review of 18421f0, R01-R13):
 // regressions that belong to no single owner's test file. Each test names the
 // finding (P0V) and the review's id (R).
 import test from "node:test";
 import assert from "node:assert/strict";
-import { KeyDecoder, type Key } from "../src/tui/keys.js";
-import { INITIAL, step, type MailRow, type Notice, type PanelData, type State } from "../src/tui/model.js";
-import { mailScrollLimit, render } from "../src/tui/view/index.js";
+import { KeyDecoder, type Key } from "@oma/tui/keys";
+import { INITIAL, step, type MailRow, type Notice, type PanelData, type State } from "@oma/tui/model";
+import { mailScrollLimit, render } from "@oma/tui/view/index";
 import { unknownDashboard } from "./fixtures/dashboard.js";
-import { AcceptedFailure, StoreError, acceptedFailure, errorCodeOf, publicFailure } from "../src/domain/errors.js";
-import { AdmissionGate } from "../src/domain/admission.js";
+import { AcceptedFailure, StoreError, acceptedFailure, errorCodeOf, publicFailure } from "@oma/domain/errors";
+import { AdmissionGate } from "@oma/domain/admission";
 import { DatabaseSync } from "node:sqlite";
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { randomBytes } from "node:crypto";
-import { Store } from "../src/store.js";
-import { Broker } from "../src/broker.js";
-import { LifecycleModule } from "../src/lifecycle.js";
-import { ViewsModule } from "../src/views.js";
-import { UnitsModule, renderUnit } from "../src/units.js";
-import type { ResolvedAgentSpec } from "../implementation/contracts.js";
+import { Store } from "@oma/storage";
+import { Broker } from "@oma/broker";
+import { LifecycleModule } from "@oma/lifecycle";
+import { ViewsModule } from "#oma-test/app/views";
+import { UnitsModule, renderUnit } from "@oma/platform-linux/units";
+import type { ResolvedAgentSpec } from "@oma/contracts";
 import { preparedFixture } from "./fixtures/delivery-receipt.js";
 import { TEST_VIEW_LIMITS } from "./fixtures/limits.js";
-import { TEST_RESOURCES } from "./fixtures/spec.js";
 
 test("P0V-67 / R12, P0-2: where the terminal's reads are cut does not change the text -- a U+FEFF after the cut is kept", async () => {
-  const { decodeText } = await import("../src/tui/keys.js");
+  const { decodeText } = await import("@oma/tui/keys");
   const bom = [...Buffer.from("﻿", "utf8")];
   // The decode layer still never eats a U+FEFF as a stream BOM, wherever the
   // read cut lands...
@@ -126,11 +127,10 @@ test("P0V-69 / F2, P0-5: a BEGIN that fails with an I/O or unnamed error does no
 test("P0V-70 / F3, P0-2: a status publication that finds the ledger corrupt closes admission; a view file that failed to write does not", async () => {
   const f = await preparedFixture(1);
   const units = { onRevokeRun: undefined, bindIncarnationReader: () => undefined, unitCgroup: () => "" } as unknown as UnitsModule;
-  const lifecycle = new LifecycleModule(f.store, units, { stateRoot: f.root, projectGit: join(f.root, "repos", "project.git"), society: "demo",
+  const lifecycle = createLifecycleModule(f.store, units, { stateRoot: f.root, projectGit: join(f.root, "repos", "project.git"), society: "demo",
     hasGoal: () => true, activationAllowed: () => true },
     (_parent: unknown, input: { name: string; from: string; brief: string }) => ({ ...input }) as unknown as ResolvedAgentSpec, f.mail);
-  const broker = new Broker(f.store, f.mail, units, new ViewsModule(f.store, f.root, "demo", "p", TEST_VIEW_LIMITS), lifecycle, null, null,
-    { stateRoot: f.root, runRoot: join(f.root, "run"), society: "demo", hasGoal: () => true });
+  const broker = testBroker({ store: f.store, mail: f.mail, units: units, views: new ViewsModule(f.store, f.root, "demo", "p", TEST_VIEW_LIMITS), lifecycle: lifecycle, git: null, reviews: null, reconcile: null, paths: { stateRoot: f.root, runRoot: join(f.root, "run"), society: "demo", hasGoal: () => true } });
   const health = Reflect.get(broker, "health") as AdmissionGate;
   const publish = (failure: { readonly read?: unknown; readonly write?: unknown }): Promise<void> => {
     Reflect.set(broker, "statusRefresh", { request: () => failure.read === undefined ? Promise.resolve({ agents: [] }) : Promise.reject(failure.read) });
@@ -161,10 +161,9 @@ test("P0V-59 / R04, P0-1: a unit another state tree's society of the same name i
   writeFileSync(join(bin, "systemctl"), `#!/bin/sh\necho "$@" >> ${JSON.stringify(log)}\nexit 0\n`, { mode: 0o755 });
   const savedPath = process.env.PATH; process.env.PATH = bin;
   t.after(() => { process.env.PATH = savedPath; rmSync(dir, { recursive: true, force: true }); });
-  const resources = TEST_RESOURCES;
   const values = (state: string) => ({ node: process.execPath, libdir: process.cwd(), state, society: "demo", agent: "",
     config: join(state, "config.json"), run: join(dir, "run") });
-  const ours = new UnitsModule("demo", values(join(dir, "tree-b")), dir, { p: resources }, () => 1);
+  const ours = new UnitsModule("demo", values(join(dir, "tree-b")), dir, () => 1);
   const conflict = (error: unknown) => error instanceof StoreError && error.code === "AGENT_CONFLICT";
   // The society called demo whose state tree is tree-a installed Resident alice.
   const theirs = (template: string, agent: string, state: string) =>
@@ -174,7 +173,7 @@ test("P0V-59 / R04, P0-1: a unit another state tree's society of the same name i
   writeFileSync(join(dir, "oma-demo-alice.service"), service);
   writeFileSync(join(dir, "oma-demo-alice.path"), path);
   assert.throws(() => ours.assertResidentNamesFree("alice"), conflict, "a create was accepted onto another tree's unit");
-  assert.throws(() => ours.ensureResident("alice", "p", resources), conflict);
+  assert.throws(() => ours.ensureResident("alice", "p", "md"), conflict);
   assert.throws(() => ours.start("alice", false), conflict);
   // Stopping touches no foreign unit, but cannot prove an earlier run dead.
   assert.throws(() => ours.stop("alice", 1), { code: "RUN_TERMINATION_UNKNOWN" });
@@ -200,15 +199,14 @@ test("P0V-58 / R03, P0-5: a drain that could not prove its Residents ended says 
   // drain is not a reason to release the lock while this process lives).
   const f = await preparedFixture(1);
   const units = { onRevokeRun: undefined, bindIncarnationReader: () => undefined, unitCgroup: () => "" } as unknown as UnitsModule;
-  const lifecycle = new LifecycleModule(f.store, units, { stateRoot: f.root, projectGit: join(f.root, "repos", "project.git"), society: "demo",
+  const lifecycle = createLifecycleModule(f.store, units, { stateRoot: f.root, projectGit: join(f.root, "repos", "project.git"), society: "demo",
     hasGoal: () => true, activationAllowed: () => true },
     (_parent: unknown, input: { name: string; from: string; brief: string }) => ({ ...input }) as unknown as ResolvedAgentSpec, f.mail);
   let closed = 0;
   const close = f.store.close.bind(f.store);
   (f.store as unknown as { close(): void }).close = () => { closed += 1; close(); };
-  const broker = new Broker(f.store, f.mail, units, new ViewsModule(f.store, f.root, "demo", "p", TEST_VIEW_LIMITS), lifecycle, null, null,
-    { stateRoot: f.root, runRoot: join(f.root, "run"), society: "demo", hasGoal: () => true,
-      quiesceOnDrain: () => { throw new StoreError("RUN_TERMINATION_UNKNOWN", "cannot prove alice terminated"); } });
+  const broker = testBroker({ store: f.store, mail: f.mail, units: units, views: new ViewsModule(f.store, f.root, "demo", "p", TEST_VIEW_LIMITS), lifecycle: lifecycle, git: null, reviews: null, reconcile: null, paths: { stateRoot: f.root, runRoot: join(f.root, "run"), society: "demo", hasGoal: () => true,
+      quiesceOnDrain: () => { throw new StoreError("RUN_TERMINATION_UNKNOWN", "cannot prove alice terminated"); } } });
   try {
     await assert.rejects(broker.drainAndClose(), (error: unknown) => errorCodeOf(error) === "RUN_TERMINATION_UNKNOWN",
       "a drain that could not prove every Resident ended was reported as finished");

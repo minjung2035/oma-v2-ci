@@ -18,6 +18,8 @@
 | Core 구현 계약 | [implementation-spec](implementation-spec.md) | 신원·권한·IPC·메일·Git·lifecycle·복구·제품 표면과 physical ordering·Store opening·contract owner·unit renderer |
 | 기존 tiered 정책 | [integration-policy](implementation/integration-policy.md) | 기존 attestation/finding/scope 정책. 수용 변경의 근거는 연결된 DR |
 | 다음 merge/review/challenge 구현 | [merge-review-spec](merge-review-spec.md) | 최신 대화의 설계안. 이번 정리에서 본문을 변경하지 않음 |
+| 출시 전 레거시 제거와 독립 패키지 전환 | [modularization-spec](modularization-spec.md) | 호환성을 유지하지 않는 정리 범위, 기능별 package 경계·의존성·배포·검증의 구현 명세안 |
+| 코드 품질 보완 | [code-quality-improvement-spec](code-quality-improvement-spec.md) | cleanup 결함·interactive 책임·App API·SDK 경계의 구현 및 수용 기준 |
 | macOS host와 hidden Linux VM | [macos-platform](macos-platform.md) | RPC·VM·project·credential·image·복구 계약과 helper 안내 |
 | 시험·release evidence·LOC·qualification·fixture | [verification-spec](verification-spec.md) | 기존 TEST/COMP/LOC/SP/VAL 조항과 수용 번호의 단일 owner |
 | 현재 실행 결과·한계·재검증 | [validation](implementation/validation.md) | 현재 판정과 수치의 단일 owner. 과거 실행 이력은 archive |
@@ -32,6 +34,7 @@
 | 최상위 원칙 | PRIORITY-0 | 모든 계약과 작업 판단의 기준 |
 | 구현·검증 계약 | 위 implementation-spec, integration-policy, macos-platform, verification-spec | 구현해야 할 조건 |
 | 설계안 | merge-review-spec | 다음 변경의 목표. 이미 활성 정책·코드로 전환됐다고 해석하지 않음 |
+| 구조 개편 명세안 | modularization-spec | 출시 전 호환성 제거와 독립 모듈 전환의 목표. 실제 패키지 전환·삭제·검증 완료를 뜻하지 않음 |
 | 지침 | PRODUCT, MAINTENANCE, operations | 의도와 사용 방법. 계약의 의미를 덮어쓰지 않음 |
 | 현재 상태 | HANDOFF, validation | 재개점과 실제 검증 판정 |
 | 고정 기준본 | [architecture](architecture.md) | N-001이 결박한 원문. 기존 설계의 배경과 상위 기준 |
@@ -76,7 +79,6 @@ PRIORITY-0가 최상위다. architecture는 고정 상위 기준본이며, 사�
 | [traceability.json](../implementation/traceability.json) | 규범 fingerprint와 evidence inventory |
 | [oracle-map.json](../implementation/oracle-map.json) | 계획 oracle과 verification lane |
 | [review-notes.json](../implementation/review-notes.json), [review-ledger.json](../implementation/review-ledger.json) | byte에 결박된 검토 기록과 생성 ledger |
-| [contract-direction-plan.json](../implementation/contract-direction-plan.json) | contract 의존 방향 결정 |
 | [broker-lifecycle-review.json](../implementation/broker-lifecycle-review.json) | broker lifecycle 경계 검토 |
 
 `npm run evidence:refresh`는 dependency graph, production inventory/source digests,

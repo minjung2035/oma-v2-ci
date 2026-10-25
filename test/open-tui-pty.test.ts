@@ -32,7 +32,7 @@ for (const ending of ["normal", "resume", "kill", "mail", "retry-recover", "retr
       ...(ending === "reload-update" ? [settled("Second 한글 ✅\r", "RUN_SETTLED_2"), { write: hex("\x04"), wait: 0.3 }] : [])]
       : ending === "kill" || ending.startsWith("retry-") ? [settled("First\r", "RUN_SETTLED_1")] : [
       ...(ending === "resume" ? [step("/resume\r", "No sessions in current folder", 0.2),
-        step("\x1b", "Let's build something great", 0.2)] : []),
+        step("\x1b", "Your ideas, in motion", 0.2)] : []),
       // `/new` only queues a keystroke; the session birth is slow and emits no
       // marker of its own, so the queue drains into the next real marker
       // (`$ touch forbidden`, then the fixture's settle line).
@@ -62,7 +62,7 @@ for (const ending of ["normal", "resume", "kill", "mail", "retry-recover", "retr
     if (ending === "normal") assert.ok(output.includes("FIRST_RESPONSE_COMPLETE"));
     assert.doesNotMatch(output, /OMA_PI_BOUNDARY_V1|PRIVATE_THINKING_SENTINEL/);
     // Open TUI's own header, named for oma, with oma's key among its tips.
-    assert.match(output, /oma.{0,40}v0\.1\.0/); assert.match(output, /Let's build something great/);
+    assert.match(output, /oma.{0,40}v0\.1\.0/); assert.match(output, /Your ideas, in motion/);
     assert.match(output, /Ctrl\+X oma settings/);
     // B1: the compact row — the tool's display name and its control row; the
     // wire name `oma_mail_send` never reaches the screen (a renderer throw

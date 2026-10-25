@@ -1,0 +1,65 @@
+{
+  "name": "@oma/native",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "license": "UNLICENSED",
+  "files": [
+    "dist"
+  ],
+  "exports": {
+    "./cleanup": {
+      "types": "./dist/cleanup.d.ts",
+      "default": "./dist/cleanup.js"
+    },
+    "./files": {
+      "types": "./dist/files.d.ts",
+      "default": "./dist/files.js"
+    },
+    "./linux": {
+      "types": "./dist/linux.d.ts",
+      "default": "./dist/linux.js"
+    },
+    "./peer-uid": {
+      "types": "./dist/peer-uid.d.ts",
+      "default": "./dist/peer-uid.js"
+    },
+    "./pty": {
+      "types": "./dist/pty.d.ts",
+      "default": "./dist/pty.js"
+    },
+    "./identity": {
+      "types": "./dist/identity.d.ts",
+      "default": "./dist/identity.js"
+    },
+    "./snapshot-reader": {
+      "types": "./dist/snapshot-reader.d.ts",
+      "default": "./dist/snapshot-reader.js"
+    },
+    "./cgroup": {
+      "types": "./dist/cgroup.d.ts",
+      "default": "./dist/cgroup.js"
+    },
+    "./process-lock": {
+      "types": "./dist/process-lock.d.ts",
+      "default": "./dist/process-lock.js"
+    },
+    "./directory-layout": {
+      "types": "./dist/directory-layout.d.ts",
+      "default": "./dist/directory-layout.js"
+    }
+  },
+  "scripts": {
+    "build": "node ../../scripts/build-workspaces.mjs @oma/native",
+    "typecheck": "npm run build",
+    "test": "node --test test/*.test.mjs"
+  },
+  "dependencies": {
+    "@oma/domain": "0.1.0",
+    "koffi": "^3.2.1"
+  },
+  "devDependencies": {
+    "@types/node": "^26.0.0",
+    "typescript": "5.9.3"
+  }
+}

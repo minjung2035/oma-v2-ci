@@ -11,31 +11,31 @@ function findings(files) {
   } finally { rmSync(root, { recursive: true, force: true }); }
 }
 test("DR41: module boundaries reject implementation imports including erased type edges", () => {
-  for (const specifier of ["../runtime/pi-rpc.js", "../application/settings.js", "../storage/paths.js", "node:fs", "../config.js", "../broker.js"])
-    assert.equal(findings({ "src/tui/example.ts": `import type { X } from ${JSON.stringify(specifier)};` })[0]?.rule, "tui-module-boundary");
-  for (const text of ['import("../runtime/pi-rpc.js");', 'require("fs");', 'export type { X } from "../application/settings.js";', 'type X = import("../runtime/pi-rpc.js").X;', 'import(selectedModule);'])
-    assert.equal(findings({ "src/tui/example.ts": text })[0]?.rule, "tui-module-boundary", text);
-  assert.equal(findings({ "src/runtime/example.ts": 'import { X } from "../tui/model.js";' })[0]?.rule, "runtime-module-boundary");
-  assert.equal(findings({ "src/entry/example.ts": 'import { X } from "../tui/transcript.js";' })[0]?.rule, "tui-public-api");
-  assert.equal(findings({ "src/application/example.ts": 'import { X } from "../runtime/packages/store.js";' })[0]?.rule, "package-public-api");
+  for (const specifier of ["../../../apps/oma/src/runtime/user-files.js", "../../../apps/oma/src/application/settings.js", "../../storage/src/immutable-file.js", "node:fs", "../../config/src/index.js", "../../broker/src/index.js"])
+    assert.equal(findings({ "packages/tui/src/example.ts": `import type { X } from ${JSON.stringify(specifier)};` })[0]?.rule, "tui-module-boundary");
+  for (const text of ['import("../../../apps/oma/src/runtime/user-files.js");', 'require("fs");', 'export type { X } from "../../../apps/oma/src/application/settings.js";', 'type X = import("../../../apps/oma/src/runtime/user-files.js").X;', 'import(selectedModule);'])
+    assert.equal(findings({ "packages/tui/src/example.ts": text })[0]?.rule, "tui-module-boundary", text);
+  assert.equal(findings({ "apps/oma/src/runtime/example.ts": "import { X } from \"../../../../packages/tui/src/model.js\";" })[0]?.rule, "runtime-module-boundary");
+  assert.equal(findings({ "apps/oma/src/entry/example.ts": "import { X } from \"../../../../packages/tui/src/view/notice.js\";" })[0]?.rule, "tui-public-api");
+  assert.equal(findings({ "apps/oma/src/application/example.ts": 'import { X } from "../runtime/packages/store.js";' })[0]?.rule, "package-public-api");
 });
 test("DR44: conversation and native lifecycle boundaries also reject erased, deferred and re-exported implementation imports", () => {
   for (const [file, target, rule] of [
-    ["src/application/society-interaction.ts", "../runtime/engine/principal-session.js", "society-conversation-boundary"],
-    ["src/application/society-runtime.ts", "../tui/words.js", "society-conversation-boundary"],
-    ["src/platform/guest/systemd-launcher.ts", "./host.js", "platform-adapter-boundary"],
-    ["src/platform/host/vz-driver.ts", "./lifecycle.js", "platform-adapter-boundary"],
+    ["apps/oma/src/application/society-interaction.ts", "@oma/engine/principal-session", "society-conversation-boundary"],
+    ["apps/oma/src/application/society-runtime.ts", "@oma/tui/words", "society-conversation-boundary"],
+    ["packages/platform-linux/src/session-launcher.ts", "../../../apps/oma/src/platform/guest/host.js", "platform-adapter-boundary"],
+    ["packages/platform-mac/src/vz-driver.ts", "../../../apps/oma/src/platform/host/lifecycle.js", "platform-adapter-boundary"],
   ]) for (const text of [
     `import type { X } from "${target}";`, `export type { X } from "${target}";`,
     `type X = import("${target}").X;`, `import("${target}");`, `require("${target}");`,
   ]) assert.equal(findings({ [file]: text }).some(row => row.rule === rule), true, text);
   assert.deepEqual(findings({
-    "src/platform/guest/systemd-launcher.ts": 'import type { SessionLauncher } from "../../ports/platform-lifecycle.js";',
-    "src/application/society-interaction.ts": 'import type { ConversationUi } from "./society-conversation.js";',
+    "packages/platform-linux/src/session-launcher.ts": 'import type { SessionLauncher } from "@oma/contracts/platform-lifecycle";',
+    "apps/oma/src/application/society-interaction.ts": 'import type { ConversationUi } from "./society-conversation.js";',
   }), []);
 });
 test("DR41: Application composes public modules and TUI consumes contracts without loading their effects", () => {
-  assert.deepEqual(findings({ "src/tui/example.ts": 'import type { ConfigField } from "../protocol/settings.js";',
-    "src/application/example.ts": 'import { societyPanelPorts } from "../tui/society-panel.js"; import { readPackageIndex } from "../runtime/packages/index.js";',
-    "src/tui/words.ts": 'import { productText } from "../platform/product-text.js";' }), []);
+  assert.deepEqual(findings({ "packages/tui/src/example.ts": "import type { ConfigField } from \"../../domain/src/settings.js\";",
+    "apps/oma/src/application/example.ts": "import { societyPanelPorts } from \"../../../../packages/tui/src/society-panel.js\"; import { readPackageIndex } from \"../runtime/packages/index.js\";",
+    "packages/tui/src/words.ts": "import { productText } from \"../../domain/src/product-text.js\";" }), []);
 });

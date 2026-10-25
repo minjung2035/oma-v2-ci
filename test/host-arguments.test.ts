@@ -5,8 +5,8 @@ import { spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { parseOmaArguments, parseMacArguments } from "../src/runtime/host-arguments.js";
-import { packageCommand } from "../src/runtime/packages/store.js";
+import { parseOmaArguments, parseMacArguments } from "#oma-test/app/runtime/host-arguments";
+import { packageCommand } from "#oma-test/app/runtime/packages/store";
 
 const project = "00000000-0000-4000-8000-000000000001";
 test("Personal project inheritance can be explicitly skipped only for a fresh Personal session", () => {
@@ -82,7 +82,7 @@ test("DR27: actual Mac entry validates before trying to read a host token or cre
   const root = mkdtempSync(join(tmpdir(), "oma-mac-arguments-"));
   try {
     const home = join(root, "absent");
-    const entry = join(import.meta.dirname, "../src/entry/oma-mac.js");
+    const entry = join(import.meta.dirname, "../../apps/oma/dist/entry/oma-mac.js");
     for (const args of [["status", "extra"], ["open", "demo", "--project"], ["pi", "install", "npm:x", "--unknown"],
       ["pi", "update", "--extension", "--project", project], ["pi", "install", "npm:x", "--host-only", "--project", project],
       ["pi", "list", "--host-only", "--host-only"]]) {
@@ -112,7 +112,7 @@ test("Personal resume refuses a non-OMA history before preparing any state", () 
   const root = mkdtempSync(join(tmpdir(), "oma-personal-invalid-resume-"));
   try {
     const data = join(root, "data"), home = join(root, "home"), run = join(root, "run");
-    const result = spawnSync(process.execPath, [join(import.meta.dirname, "../src/entry/oma.js"), "--mode", "personal", "--resume", join(root, "outside.jsonl")], {
+    const result = spawnSync(process.execPath, [join(import.meta.dirname, "../../apps/oma/dist/entry/oma.js"), "--mode", "personal", "--resume", join(root, "outside.jsonl")], {
       env: { ...process.env, HOME: home, XDG_DATA_HOME: data, XDG_RUNTIME_DIR: run }, encoding: "utf8", timeout: 5000,
     });
     assert.notEqual(result.status, 0, result.stderr); assert.match(result.stderr, /not an OMA session history/);
@@ -126,7 +126,7 @@ test("NB-25/CLI-003: the Mac CLI exits by error class -- 2 a refusal, 3 an unkno
     const home = join(root, "host"), run = join(home, "run");
     mkdirSync(run, { recursive: true });
     writeFileSync(join(run, "token"), "fixture-token\n");
-    const entry = join(import.meta.dirname, "../src/entry/oma-mac.js");
+    const entry = join(import.meta.dirname, "../../apps/oma/dist/entry/oma-mac.js");
     const env = { ...process.env, HOME: root, OMA_HOST_HOME: home };
     // The service is gone but its token remains: the outcome is unknown.
     const status = spawnSync(process.execPath, [entry, "status"], { env, encoding: "utf8", timeout: 10_000 });

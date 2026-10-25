@@ -1,14 +1,16 @@
+import { createMailModule } from "#oma-test/app/broker/mail-composition";
 /** Delivery receipt fixtures: a real Store/MailModule with one prepared batch
  * and a complete Pi v3 session, not a header-only stand-in. */
 import assert from "node:assert/strict";
 import { chmodSync, existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type { AuthContext, BoundaryEvidence, PreparedBatch } from "../../implementation/contracts.js";
-import { MailModule } from "../../src/mail.js";
-import { Store } from "../../src/store.js";
-import { PI_ADAPTER_REVISION, type DeliveryBoundary } from "../../src/storage/delivery-receipt.js";
-import { runnerReceiptPathAt, runnerSessionDirPathAt } from "../../src/storage/paths.js";
+import type { AuthContext, BoundaryEvidence, PreparedBatch } from "@oma/contracts";
+import { MailModule } from "@oma/mail";
+import { Store } from "@oma/storage";
+import { PI_ADAPTER_REVISION } from "@oma/protocol/delivery-boundary";
+import { type DeliveryBoundary } from "@oma/contracts";
+import { runnerReceiptPathAt, runnerSessionDirPathAt } from "@oma/domain/paths";
 import { ALL_CAPS, storedSpec } from "./spec.js";
 import { TEST_VIEW_LIMITS } from "./limits.js";
 
@@ -57,7 +59,7 @@ export async function preparedFixture(incarnation = 1) {
   const store = new Store(join(root, "runtime.sqlite"));
   store.transaction(() => store.insertAgent({ name: "alice", ...storedSpec(ALL_CAPS, "p", "alice"), role: "resident",
     desired: "enabled", incarnation, profile: "p", createdBy: null }));
-  const mail = new MailModule({ stateRoot: root, society: "demo" }, store, 64, TEST_VIEW_LIMITS.batchMaxMessages, TEST_VIEW_LIMITS);
+  const mail = createMailModule({ stateRoot: root, society: "demo" }, store, 64, TEST_VIEW_LIMITS.batchMaxMessages, TEST_VIEW_LIMITS);
   const auth: AuthContext = { actor: "alice", incarnation, role: "resident", channel: "actor",
     capabilities: new Set(["mail.send"]), peer: { pid: 1, uid: 1, gid: 1, cgroup: null } };
   await mail.send(auth, "self", { to: ["alice"], subject: "hello", kind: "message", body: "body" });

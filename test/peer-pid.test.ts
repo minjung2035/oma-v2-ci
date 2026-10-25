@@ -6,8 +6,8 @@ import { once } from "node:events";
 import { closeSync, mkdtempSync, readFileSync, readdirSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { peerCred, peerPidFd, pidfdLiveness } from "../src/leaf.js";
-import { PeerAuthenticator } from "../src/broker/peer-authenticator.js";
+import { peerCred, peerPidFd, pidfdLiveness } from "@oma/native/linux";
+import { PeerAuthenticator } from "@oma/broker/peer-authenticator";
 
 test("AUTH-003 native: peer pidfd detects connector death while an inherited socket stays open", { timeout: 5000 }, async () => {
   const root = mkdtempSync(join(tmpdir(), "oma-peer-pid-"));

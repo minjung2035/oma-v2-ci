@@ -1,3 +1,4 @@
+import type { TestContext } from "node:test";
 /** macos-platform §4.7 / §7 (MAC-225, MAC-704, MAC-710..712, MV-13, MV-25):
  * egress end to end on one machine -- the guest's pool and its service for
  * in-guest clients, behind the real guest server, and the host's pool and
@@ -12,13 +13,13 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { randomUUID } from "node:crypto";
 import { once } from "node:events";
-import { encodeFrame } from "../src/frame.js";
-import { StoreError } from "../src/domain/errors.js";
-import { readLeadingFrame, sendHelloForBytes } from "../src/platform/rpc.js";
-import { startGuestServer, type GuestIdentity } from "../src/platform/guest/server.js";
-import { EgressPool, startEgressService } from "../src/platform/guest/egress.js";
-import { EgressHost } from "../src/platform/host/egress.js";
-import { HOST_GUEST_PROTOCOL, PLATFORM_FRAME_BYTES, type HelloParams } from "../src/protocol/host-guest.js";
+import { encodeFrame } from "@oma/protocol/frame";
+import { StoreError } from "@oma/domain/errors";
+import { readLeadingFrame, sendHelloForBytes } from "#oma-test/app/platform/rpc";
+import { startGuestServer, type GuestIdentity } from "#oma-test/app/platform/guest/server";
+import { EgressPool, startEgressService } from "#oma-test/app/platform/guest/egress";
+import { EgressHost } from "#oma-test/app/platform/host/egress";
+import { HOST_GUEST_PROTOCOL, PLATFORM_FRAME_BYTES, type HelloParams } from "@oma/protocol/host-guest";
 import { tlsProvider, type TlsProvider } from "./fixtures/tls-provider.js";
 
 // The provider's certificate is self-signed for the test, as in the relay's own tests.
@@ -37,14 +38,16 @@ const egressHello: HelloParams = { channel: "egress", protocol: { min: HOST_GUES
   hostVersion: "1.0.0", installationId: randomUUID(), instanceId: INSTANCE, expectImage: "2026.09.1" };
 const RUN = { society: "demo", actor: "alice", incarnation: 3 };
 
-async function world(t: import("node:test").TestContext, timeoutMs = 5000,
+async function world(t: import("node:test").TestContext,
   resolve?: (credentialRef: string, provider: string, model: string) => Promise<{ provider: string; model: string; origin: string; apiKey: string; headers: Record<string, string> }>,
-  extras?: { dial?: import("../src/runtime/connect-proxy.js").ConnectDial; audit?: (entry: import("../src/runtime/connect-proxy.js").EgressAudit) => void }) {
+  extras?: { dial?: import("#oma-test/app/runtime/connect-proxy").ConnectDial; audit?: (entry: import("#oma-test/app/runtime/connect-proxy").EgressAudit) => void }) {
   const dir = mkdtempSync(join(tmpdir(), "oma-egress-"));
   const provider: TlsProvider = await tlsProvider();
   const pool = new EgressPool();
   const serviceSocket = join(dir, "egress.sock");
   const service: Server = await startEgressService({ socketPath: serviceSocket, pool, frameBytes: PLATFORM_FRAME_BYTES, deadlineMs: 5000 });
+  const servicePeers = new Set<Socket>();
+  service.on("connection", socket => { servicePeers.add(socket); socket.once("close", () => servicePeers.delete(socket)); });
   const guestSocket = join(dir, "society.sock");
   const guest: Server = await startGuestServer({ socketPath: guestSocket, identity, bridge: { uid: process.getuid!(), gid: process.getgid!() },
     frameBytes: PLATFORM_FRAME_BYTES, helloDeadlineMs: 2000, requestTimeoutMs: 5000,
@@ -63,9 +66,10 @@ async function world(t: import("node:test").TestContext, timeoutMs = 5000,
     }),
     ...(extras?.dial === undefined ? {} : { dial: extras.dial }),
     ...(extras?.audit === undefined ? {} : { audit: extras.audit }),
-    limits: { concurrent: 4, timeoutMs }, frameBytes: PLATFORM_FRAME_BYTES, maxPool: 32,
+    concurrent: 4, frameBytes: PLATFORM_FRAME_BYTES, maxPool: 32,
   });
   t.after(async () => {
+    for (const socket of servicePeers) socket.destroy();
     await host.stop();
     pool.close();
     await new Promise<void>(r => service.close(() => r()));
@@ -82,10 +86,11 @@ async function ask(serviceSocket: string, method: string, params: Record<string,
   socket.write(encodeFrame({ v: 1, id: "e1", method, params }));
   return socket;
 }
-async function placeholder(serviceSocket: string, provider = "anthropic") {
-  const socket = await ask(serviceSocket, "egress.placeholder", { credentialRef: "engine-managed", provider, model: "current", run: RUN });
+async function placeholder(t: TestContext, serviceSocket: string, provider = "anthropic") {
+  const socket = await ask(serviceSocket, "egress.placeholder", { credentialRef: "engine-managed", provider, model: "current", run: RUN, inferenceSeconds: 5 });
   const { frame } = await readLeadingFrame(socket, PLATFORM_FRAME_BYTES, 5000);
-  socket.destroy();
+  socket.resume();
+  t.after(() => socket.destroy());
   return frame;
 }
 /** One engine connection: `egress.open`, then plain HTTP on the same socket. */
@@ -111,7 +116,7 @@ test("MAC-710/711: an engine in the guest reaches the provider with the host's k
   const { host, pool, provider, serviceSocket, resolved } = await world(t);
   await host.fill();
   await until(() => pool.size === 2, "two spare connections wait in the guest");
-  const answer = await placeholder(serviceSocket);
+  const answer = await placeholder(t, serviceSocket);
   assert.equal(answer.ok, true, JSON.stringify(answer));
   const result = answer.result as Record<string, string>;
   assert.notEqual(result.placeholder, SECRET);
@@ -130,10 +135,10 @@ test("MAC-712: a placeholder the host did not issue, or one used for another run
   const { host, pool, provider, serviceSocket } = await world(t);
   await host.fill();
   await until(() => pool.size === 2, "the pool");
-  const issued = (await placeholder(serviceSocket)).result as Record<string, string>;
+  const issued = (await placeholder(t, serviceSocket)).result as Record<string, string>;
   assert.equal(await post(serviceSocket, { placeholderId: randomUUID(), ...RUN, modelProfile: "default" }, issued.placeholder!), "closed");
   assert.equal(await post(serviceSocket, { placeholderId: issued.placeholderId, ...RUN, actor: "mallory", modelProfile: "default" }, issued.placeholder!), "closed");
-  assert.equal(host.activeRuns, 1, "a v4 placeholder's run lives until its boot ends");
+  assert.equal(host.activeRuns, 1, "the open placeholder lease keeps its run alive");
   await host.forgetBoot();
   assert.equal(host.activeRuns, 0);
   assert.equal(await post(serviceSocket, { placeholderId: issued.placeholderId, ...RUN, modelProfile: "default" }, issued.placeholder!), "closed",
@@ -141,11 +146,25 @@ test("MAC-712: a placeholder the host did not issue, or one used for another run
   assert.equal(provider.seen.length, 0);
 });
 
+test("DR46: incomplete and retired placeholder formats open no host run", async t => {
+  const { host, pool, serviceSocket, resolved } = await world(t);
+  await host.fill();
+  await until(() => pool.size === 2, "the pool");
+  const base = { credentialRef: "engine-managed", provider: "anthropic", model: "current", run: RUN };
+  for (const params of [base, { ...base, inferenceSeconds: 5, hold: false }, { ...base, inferenceSeconds: 5, hold: true }]) {
+    const client = await ask(serviceSocket, "egress.placeholder", params);
+    await once(client, "close");
+  }
+  assert.deepEqual(resolved, [], "invalid formats never resolve a credential");
+  assert.equal(host.activeRuns, 0);
+  assert.equal(pool.size, 2, "invalid formats never claim a pooled connection");
+});
+
 test("MV-13: the guest names a model; one the host does not know is refused, in words the guest may pass on", async t => {
   const { host, pool, serviceSocket } = await world(t);
   await host.fill();
   await until(() => pool.size === 2, "the pool");
-  const answer = await placeholder(serviceSocket, "elsewhere");
+  const answer = await placeholder(t, serviceSocket, "elsewhere");
   assert.deepEqual(answer.error, { code: "UNSUPPORTED_PROFILE", message: "the engine does not know elsewhere/current", retry: "never" });
   assert.equal(host.activeRuns, 0);
 });
@@ -174,7 +193,7 @@ test("MAC-225: a waiter's own close withdraws its claim on the pool -- capacity 
 });
 
 test("DR18 / D-10: a run in the guest asks for its placeholder and forwards the engine's connections through egress; the key is put in on the host", async t => {
-  const { EgressForwarder, requestEgressPlaceholder, openPrincipalEgress } = await import("../src/runtime/egress-forwarder.js");
+  const { EgressForwarder, requestEgressPlaceholder, openPrincipalEgress } = await import("#oma-test/app/runtime/egress-forwarder");
   const { host, pool, provider, serviceSocket, resolved } = await world(t);
   await host.fill();
   await until(() => pool.size === 2, "the pool");
@@ -218,7 +237,7 @@ test("DR18 / D-10: a run in the guest asks for its placeholder and forwards the 
 });
 
 test("DR18/DR34: the forwarder's bound is a working set -- engine connections queue, are never refused, and a departed engine withdraws", async t => {
-  const { EgressForwarder, requestEgressPlaceholder } = await import("../src/runtime/egress-forwarder.js");
+  const { EgressForwarder, requestEgressPlaceholder } = await import("#oma-test/app/runtime/egress-forwarder");
   const { host, pool, provider, serviceSocket } = await world(t);
   await host.fill();
   await until(() => pool.size === 2, "the pool");
@@ -269,7 +288,7 @@ test("AV-15: a listen refused before its socket name is cleared releases the run
   // A name clearSocketName cannot remove (not a socket) refused the audited
   // listen before the lease became the forwarder's -- and the run leaked on
   // the host: still held, never told it was over.
-  const { EgressForwarder } = await import("../src/runtime/egress-forwarder.js");
+  const { EgressForwarder } = await import("#oma-test/app/runtime/egress-forwarder");
   const dir = mkdtempSync(join(tmpdir(), "oma-forwarder-refused-"));
   t.after(() => rmSync(dir, { recursive: true, force: true }));
   const socketPath = join(dir, "inference.sock");
@@ -284,13 +303,13 @@ test("AV-15: a listen refused before its socket name is cleared releases the run
 
 
 test("DR27 / MAC-710: each run carries its model silence budget, not the host RPC budget", { timeout: 15_000 }, async t => {
-  const { host, pool, provider, serviceSocket } = await world(t, 100);
+  const { host, pool, provider, serviceSocket } = await world(t);
   await host.fill();
   await until(() => pool.size === 2, "the pool");
   const socket = await ask(serviceSocket, "egress.placeholder", { credentialRef: "engine-managed", provider: "anthropic",
     model: "current", run: RUN, inferenceSeconds: 1 });
   const { frame } = await readLeadingFrame(socket, PLATFORM_FRAME_BYTES, 5000);
-  socket.destroy();
+  t.after(() => socket.destroy());
   assert.equal(frame.ok, true);
   const issued = frame.result as Record<string, string>;
   provider.reply = { status: 200, chunks: ["reasoned"], delayMs: 300 };
@@ -307,14 +326,14 @@ test("AV-14: a credential that resolves after the boot it was asked under ended 
   let release!: () => void;
   const gate = new Promise<void>(r => { release = r; });
   let resolving = false;
-  const { host, pool, serviceSocket } = await world(t, 5000, async (_credentialRef, provider_, model) => {
+  const { host, pool, serviceSocket } = await world(t, async (_credentialRef, provider_, model) => {
     resolving = true;
     await gate;
     return { provider: provider_, model, origin: "https://provider.invalid", apiKey: SECRET, headers: {} };
   });
   await host.fill();
   await until(() => pool.size === 2, "the pool");
-  const socket = await ask(serviceSocket, "egress.placeholder", { hold: true, credentialRef: "engine-managed", provider: "anthropic", model: "current", run: RUN });
+  const socket = await ask(serviceSocket, "egress.placeholder", { credentialRef: "engine-managed", provider: "anthropic", model: "current", run: RUN, inferenceSeconds: 5 });
   const ended = new Promise(r => socket.once("close", r));
   await until(() => resolving, "the request reached the resolver");
   await host.forgetBoot();
@@ -326,14 +345,14 @@ test("AV-14: a credential that resolves after the boot it was asked under ended 
   let release2!: () => void;
   const gate2 = new Promise<void>(r => { release2 = r; });
   let resolving2 = false;
-  const stopped = await world(t, 5000, async (_credentialRef, provider_, model) => {
+  const stopped = await world(t, async (_credentialRef, provider_, model) => {
     resolving2 = true;
     await gate2;
     return { provider: provider_, model, origin: "https://provider.invalid", apiKey: SECRET, headers: {} };
   });
   await stopped.host.fill();
   await until(() => stopped.pool.size === 2, "the pool");
-  const socket2 = await ask(stopped.serviceSocket, "egress.placeholder", { credentialRef: "engine-managed", provider: "anthropic", model: "current", run: RUN });
+  const socket2 = await ask(stopped.serviceSocket, "egress.placeholder", { credentialRef: "engine-managed", provider: "anthropic", model: "current", run: RUN, inferenceSeconds: 5 });
   const ended2 = new Promise(r => socket2.once("close", r));
   await until(() => resolving2, "the request reached the resolver");
   await stopped.host.stop();
@@ -346,7 +365,7 @@ test("AV-15/§4.7 v5: the answered connection a run holds open is its lease; its
   const { host, pool, provider, serviceSocket } = await world(t);
   await host.fill();
   await until(() => pool.size === 2, "the pool");
-  const socket = await ask(serviceSocket, "egress.placeholder", { hold: true, credentialRef: "engine-managed", provider: "anthropic", model: "current", run: RUN });
+  const socket = await ask(serviceSocket, "egress.placeholder", { credentialRef: "engine-managed", provider: "anthropic", model: "current", run: RUN, inferenceSeconds: 5 });
   const { frame } = await readLeadingFrame(socket, PLATFORM_FRAME_BYTES, 5000);
   assert.equal(frame.ok, true, JSON.stringify(frame));
   const issued = frame.result as Record<string, string>;
@@ -381,7 +400,7 @@ test("DR18: the session's provider path fails closed where the environment requi
   // so the engine the session just started can never reach a provider. The
   // failure is the session's own there; only an optional path may degrade,
   // and then it is still said.
-  const { egressRequired, adoptPrincipalEgress } = await import("../src/runtime/egress-forwarder.js");
+  const { egressRequired, adoptPrincipalEgress } = await import("#oma-test/app/runtime/egress-forwarder");
   assert.equal(egressRequired({}), false);
   assert.equal(egressRequired({ OMA_EGRESS_SOCKET: "" }), false);
   assert.equal(egressRequired({ OMA_EGRESS_SOCKET: "/e.sock" }), true);
@@ -407,7 +426,7 @@ test("AV-15/§4.7 v5: a run the host ends ends the guest's forwarder; the lease 
   // host (the previous test), and the host's end of the run -- a reboot or a
   // stop the same way -- reaches the guest here. Without it the forwarder
   // kept accepting engine connections for a run the host no longer had.
-  const { EgressForwarder, requestEgressPlaceholder } = await import("../src/runtime/egress-forwarder.js");
+  const { EgressForwarder, requestEgressPlaceholder } = await import("#oma-test/app/runtime/egress-forwarder");
   const { host, pool, provider, serviceSocket } = await world(t);
   await host.fill();
   await until(() => pool.size === 2, "the pool");
@@ -448,10 +467,9 @@ test("AV-15/§4.7 v5: a run the host ends ends the guest's forwarder; the lease 
   await until(() => host.activeRuns === 0, "the ended lease's run is over on the host too");
 });
 
-/* CONNECT tunnels retain host-issued run ownership under DR37. Guest policy
- * metadata is syntactically validated, without destination restrictions. */
+/* CONNECT tunnels retain host-issued run ownership under DR37. Protocol 7
+ * rejects retired guest policy declarations before claiming a connection. */
 
-const CONNECT_POLICY = Object.freeze({ role: "worker", allow: Object.freeze(["registry.npmjs.org", "*.github.com"]) });
 
 /** A plain TCP echo on loopback stands in for the outside TLS endpoint; the
  * injected `dial` is the oracle, so no DNS runs in these tests. */
@@ -463,31 +481,30 @@ async function echoServer(t: import("node:test").TestContext): Promise<number> {
 }
 
 test("DR34: egress.connect tunnels through the pool and refuses stale runs and malformed metadata", async t => {
-  const { requestEgressConnect, requestEgressPlaceholder } = await import("../src/runtime/egress-forwarder.js");
+  const { requestEgressConnect, requestEgressPlaceholder } = await import("#oma-test/app/runtime/egress-forwarder");
   const port = await echoServer(t);
-  const audits: import("../src/runtime/connect-proxy.js").EgressAudit[] = [];
-  const { host, pool, serviceSocket } = await world(t, 5000, undefined,
+  const audits: import("#oma-test/app/runtime/connect-proxy").EgressAudit[] = [];
+  const { host, pool, serviceSocket } = await world(t, undefined,
     { dial: async () => connect({ host: "127.0.0.1", port }), audit: entry => audits.push(entry) });
   await host.fill();
   await until(() => pool.size === 2, "the pool");
   const ask = { socket: serviceSocket, frameBytes: PLATFORM_FRAME_BYTES, deadlineMs: 5000 };
   const issued = await requestEgressPlaceholder(ask, RUN, "anthropic", "current", 5);
 
-  // The allowlisted CONNECT goes through: one frame out, ok back, raw bytes.
-  const tunnel = await requestEgressConnect(ask, issued, RUN, "registry.npmjs.org", 443, CONNECT_POLICY);
+  // The current CONNECT goes through: one frame out, ok back, raw bytes.
+  const tunnel = await requestEgressConnect(ask, issued, RUN, "registry.npmjs.org", 443);
   tunnel.write("through-the-host");
   const [echoed] = await once(tunnel, "data");
   assert.equal(String(echoed), "through-the-host");
   tunnel.destroy();
-  assert.ok(audits.some(e => e.decision === "allow" && e.target === "registry.npmjs.org:443" && e.actor === "alice" && e.role === "worker"));
+  assert.ok(audits.some(e => e.decision === "allow" && e.target === "registry.npmjs.org:443" && e.actor === "alice"));
 
   // A run that is not this boot's is refused before dialing.
   for (const [host_, port_, code] of [
     ["registry.npmjs.org", 443, "STALE_RUN"],        // a run the placeholder does not stand for
   ] as const) {
     await assert.rejects(
-      requestEgressConnect(ask, issued, host_ === "registry.npmjs.org" && code === "STALE_RUN" ? { ...RUN, actor: "mallory" } : RUN,
-        host_, port_, CONNECT_POLICY),
+      requestEgressConnect(ask, issued, host_ === "registry.npmjs.org" && code === "STALE_RUN" ? { ...RUN, actor: "mallory" } : RUN, host_, port_),
       (error: unknown) => error instanceof StoreError && error.code === code, `${host_}:${port_} -> ${code}`);
   }
 
@@ -503,42 +520,40 @@ test("DR34: egress.connect tunnels through the pool and refuses stale runs and m
   // stale run, and a reboot forgets every run of the last boot.
   issued.release();
   await until(() => host.activeRuns === 0, "the released run is over on the host");
-  await assert.rejects(requestEgressConnect(ask, issued, RUN, "registry.npmjs.org", 443, CONNECT_POLICY),
+  await assert.rejects(requestEgressConnect(ask, issued, RUN, "registry.npmjs.org", 443),
     (error: unknown) => error instanceof StoreError && (error as StoreError).code === "STALE_RUN");
 });
 
-test("DR38: guest role/allow metadata cannot grant run authority or restrict host network policy", async t => {
-  const { requestEgressConnect, requestEgressPlaceholder } = await import("../src/runtime/egress-forwarder.js");
+test("DR46: unrestricted destinations still require the exact host-issued run", async t => {
+  const { requestEgressConnect, requestEgressPlaceholder } = await import("#oma-test/app/runtime/egress-forwarder");
   const port = await echoServer(t);
   const dialed: string[] = [];
-  const { host, serviceSocket } = await world(t, 5000, undefined, {
+  const { host, serviceSocket } = await world(t, undefined, {
     dial: async (name, requestedPort) => { dialed.push(`${name}:${requestedPort}`); return connect({ host: "127.0.0.1", port }); },
   });
   await host.fill();
   const ask = { socket: serviceSocket, frameBytes: PLATFORM_FRAME_BYTES, deadlineMs: 5000 };
   const issued = await requestEgressPlaceholder(ask, RUN, "anthropic", "current", 5);
-  // A guest-declared narrow list does not change the host's unrestricted policy.
-  const metadata = { role: "principal", allow: ["unrelated.example"] };
-  const tunnel = await requestEgressConnect(ask, issued, RUN, "127.0.0.1", 22, metadata);
+  // Destination access is unrestricted; the run identity remains exact.
+  const tunnel = await requestEgressConnect(ask, issued, RUN, "127.0.0.1", 22);
   t.after(() => tunnel.destroy());
   tunnel.write("unrestricted");
   assert.equal(String((await once(tunnel, "data"))[0]), "unrestricted");
   assert.deepEqual(dialed, ["127.0.0.1:22"]);
-  // Naming an elevated role and '*' still cannot use another actor's run.
-  await assert.rejects(requestEgressConnect(ask, issued, { ...RUN, actor: "mallory" }, "example.org", 443,
-    { role: "principal", allow: ["*"] }), (error: unknown) => error instanceof StoreError && error.code === "STALE_RUN");
+  // A different actor still cannot use this run.
+  await assert.rejects(requestEgressConnect(ask, issued, { ...RUN, actor: "mallory" }, "example.org", 443), (error: unknown) => error instanceof StoreError && error.code === "STALE_RUN");
   assert.deepEqual(dialed, ["127.0.0.1:22"], "a forged run must never reach the dialer");
 });
 
 test("DR34: project tunnels exceed the old concurrency limit and all close with their run", async t => {
-  const { requestEgressConnect, requestEgressPlaceholder } = await import("../src/runtime/egress-forwarder.js");
+  const { requestEgressConnect, requestEgressPlaceholder } = await import("#oma-test/app/runtime/egress-forwarder");
   const port = await echoServer(t);
-  const { host, serviceSocket } = await world(t, 5000, undefined,
+  const { host, serviceSocket } = await world(t, undefined,
     { dial: async () => connect({ host: "127.0.0.1", port }) });
   await host.fill();
   const ask = { socket: serviceSocket, frameBytes: PLATFORM_FRAME_BYTES, deadlineMs: 5000 };
   const issued = await requestEgressPlaceholder(ask, RUN, "anthropic", "current", 5);
-  const held = await Promise.all(Array.from({length: 12}, () => requestEgressConnect(ask, issued, RUN, "pypi.org", 22, CONNECT_POLICY)));
+  const held = await Promise.all(Array.from({length: 12}, () => requestEgressConnect(ask, issued, RUN, "pypi.org", 22)));
   t.after(() => held.forEach(socket => socket.destroy()));
   assert.equal(held.length, 12);
   held[11]!.write("live"); await once(held[11]!, "data");
@@ -548,13 +563,13 @@ test("DR34: project tunnels exceed the old concurrency limit and all close with 
 });
 
 test("DR34: every connect decision audits once -- the refused, the failed, and the run that ended mid-dial", async t => {
-  const { requestEgressConnect, requestEgressPlaceholder } = await import("../src/runtime/egress-forwarder.js");
+  const { requestEgressConnect, requestEgressPlaceholder } = await import("#oma-test/app/runtime/egress-forwarder");
   const port = await echoServer(t);
-  const audits: import("../src/runtime/connect-proxy.js").EgressAudit[] = [];
+  const audits: import("#oma-test/app/runtime/connect-proxy").EgressAudit[] = [];
   let openGate!: () => void;
   const gate = new Promise<void>(r => { openGate = r; });
   let dialledSlow = false;
-  const { host, pool, serviceSocket } = await world(t, 5000, undefined, {
+  const { host, pool, serviceSocket } = await world(t, undefined, {
     audit: entry => audits.push(entry),
     dial: async (host_, port_) => {
       if (host_ === "private.github.com") throw new StoreError("INVALID_REQUEST", "resolves only to private space");
@@ -570,16 +585,16 @@ test("DR34: every connect decision audits once -- the refused, the failed, and t
 
   // An INVALID_REQUEST dial is a policy refusal, not an operational failure --
   // the same word the guest-side proxy uses for it.
-  await assert.rejects(requestEgressConnect(ask, issued, RUN, "private.github.com", 443, CONNECT_POLICY),
+  await assert.rejects(requestEgressConnect(ask, issued, RUN, "private.github.com", 443),
     (error: unknown) => error instanceof StoreError && error.code === "INVALID_REQUEST");
-  await assert.rejects(requestEgressConnect(ask, issued, RUN, "wedge.github.com", 443, CONNECT_POLICY),
+  await assert.rejects(requestEgressConnect(ask, issued, RUN, "wedge.github.com", 443),
     (error: unknown) => error instanceof StoreError && error.code === "BROKER_UNAVAILABLE");
   assert.equal(audits.find(e => e.target === "private.github.com:443")!.decision, "refuse");
   assert.equal(audits.find(e => e.target === "wedge.github.com:443")!.decision, "fail");
 
   // The run ending under the dial drops the dialed socket -- and still writes
   // its one audit line; a decision path cannot pass silently.
-  const pending = requestEgressConnect(ask, issued, RUN, "slow.github.com", 443, CONNECT_POLICY);
+  const pending = requestEgressConnect(ask, issued, RUN, "slow.github.com", 443);
   const rejection = assert.rejects(pending, (error: unknown) => error instanceof StoreError && error.code === "BROKER_UNAVAILABLE");
   await until(() => dialledSlow, "the dial is in flight");
   issued.release();
@@ -593,10 +608,10 @@ test("DR34: every connect decision audits once -- the refused, the failed, and t
 });
 
 test("DR34: an audit sink that throws cannot crash the host or orphan the dialed upstream", async t => {
-  const { requestEgressConnect, requestEgressPlaceholder } = await import("../src/runtime/egress-forwarder.js");
+  const { requestEgressConnect, requestEgressPlaceholder } = await import("#oma-test/app/runtime/egress-forwarder");
   const port = await echoServer(t);
   const dialedSockets: Socket[] = [];
-  const { host, pool, serviceSocket } = await world(t, 5000, undefined, {
+  const { host, pool, serviceSocket } = await world(t, undefined, {
     audit: () => { throw new Error("journal unavailable"); },
     dial: async () => { const s = connect({ host: "127.0.0.1", port }); dialedSockets.push(s); return s; },
   });
@@ -607,21 +622,21 @@ test("DR34: an audit sink that throws cannot crash the host or orphan the dialed
 
   // The throw lands after the dial succeeded: the connect request dies with
   // its upstream rather than becoming an unhandled rejection on the host.
-  await assert.rejects(requestEgressConnect(ask, issued, RUN, "registry.npmjs.org", 443, CONNECT_POLICY),
+  await assert.rejects(requestEgressConnect(ask, issued, RUN, "registry.npmjs.org", 443),
     (error: unknown) => error instanceof StoreError);
   assert.equal(dialedSockets.length, 1);
   await until(() => dialedSockets[0]!.destroyed, "the upstream of the half-built tunnel was destroyed");
   // The host keeps serving: the run still stands and the next request is
   // processed (refused at the allowlist -- and its audit throw handled too).
   assert.equal(host.activeRuns, 1);
-  await assert.rejects(requestEgressConnect(ask, issued, RUN, "pypi.org", 443, CONNECT_POLICY),
+  await assert.rejects(requestEgressConnect(ask, issued, RUN, "pypi.org", 443),
     (error: unknown) => error instanceof StoreError);
   await until(() => pool.size >= 2, "the pool refilled after the failed requests");
   issued.release();
 });
 
 test("DR34: bytes riding with the host's answer frame are tunnel bytes, and post-answer bytes still end the lease", async t => {
-  const { requestEgressConnect, requestEgressPlaceholder } = await import("../src/runtime/egress-forwarder.js");
+  const { requestEgressConnect, requestEgressPlaceholder } = await import("#oma-test/app/runtime/egress-forwarder");
   const dir = mkdtempSync(join(tmpdir(), "oma-egress-race-"));
   t.after(() => rmSync(dir, { recursive: true, force: true }));
   const serviceSocket = join(dir, "e.sock");
@@ -635,7 +650,7 @@ test("DR34: bytes riding with the host's answer frame are tunnel bytes, and post
   await once(service.listen(serviceSocket), "listening");
   t.after(() => { service.close(); });
   const ask = { socket: serviceSocket, frameBytes: PLATFORM_FRAME_BYTES, deadlineMs: 5000 };
-  const tunnel = await requestEgressConnect(ask, { placeholderId: randomUUID() }, RUN, "registry.npmjs.org", 443, CONNECT_POLICY);
+  const tunnel = await requestEgressConnect(ask, { placeholderId: randomUUID() }, RUN, "registry.npmjs.org", 443);
   const [first] = await once(tunnel, "data");
   assert.equal(String(first), "raced-bytes",
     "bytes that rode with the answer frame reach the tunnel unchanged -- not swallowed inside the frame parser");
@@ -665,7 +680,7 @@ test("DR34: bytes reaching the placeholder lease in a LATER segment end it -- a 
   // never observed -- the lease, and the run it stands for, lived on. The
   // lease must hear late bytes the same way it hears bytes that rode with
   // the answer (AV-15).
-  const { requestEgressPlaceholder } = await import("../src/runtime/egress-forwarder.js");
+  const { requestEgressPlaceholder } = await import("#oma-test/app/runtime/egress-forwarder");
   const dir = mkdtempSync(join(tmpdir(), "oma-egress-late-"));
   t.after(() => rmSync(dir, { recursive: true, force: true }));
   const serviceSocket = join(dir, "e.sock");
@@ -698,7 +713,7 @@ test("DR34/AV-15: the host's held lease observes the run's end however it arrive
   // left the socket paused and the "data" listener alone does not resume it,
   // so the run never ended. Now the lease flows: anything it says is the
   // run's end, the same as its close.
-  const held = await ask(serviceSocket, "egress.placeholder", { hold: true, credentialRef: "engine-managed", provider: "anthropic", model: "current", run: RUN });
+  const held = await ask(serviceSocket, "egress.placeholder", { credentialRef: "engine-managed", provider: "anthropic", model: "current", run: RUN, inferenceSeconds: 5 });
   t.after(() => held.destroy());
   const { frame } = await readLeadingFrame(held, PLATFORM_FRAME_BYTES, 5000);
   assert.equal(frame.ok, true, JSON.stringify(frame));
@@ -718,7 +733,7 @@ test("DR34/AV-15: the host's held lease observes the run's end however it arrive
   await once(ridden, "connect");
   ridden.write(Buffer.concat([
     encodeFrame({ v: 1, id: "e2", method: "egress.placeholder",
-      params: { hold: true, credentialRef: "engine-managed", provider: "anthropic", model: "current", run: RUN } }),
+      params: { credentialRef: "engine-managed", provider: "anthropic", model: "current", run: RUN, inferenceSeconds: 5 } }),
     Buffer.from("bytes that are no frame"),
   ]));
   await assert.rejects(readLeadingFrame(ridden, PLATFORM_FRAME_BYTES, 5000),
@@ -743,7 +758,7 @@ test("DR34/AV-15: the host's held lease observes the run's end however it arrive
   const settled = (host as unknown as HostSeams).await(hostEnd, Buffer.alloc(0));
   guestEnd.write(Buffer.concat([
     encodeFrame({ v: 1, id: "e3", method: "egress.placeholder",
-      params: { hold: true, credentialRef: "engine-managed", provider: "anthropic", model: "current", run: RUN } }),
+      params: { credentialRef: "engine-managed", provider: "anthropic", model: "current", run: RUN, inferenceSeconds: 5 } }),
     Buffer.from("bytes that rode the request"),
   ]));
   await settled;
@@ -759,7 +774,7 @@ test("DR34: a synchronous throw inside egress.open's dispatch ends the connectio
   // rejection would reach the process unhandled). Driving the dispatch seam
   // directly keeps the test the oracle: on the defect the await itself
   // rejected, and the socket stayed open.
-  const { requestEgressPlaceholder } = await import("../src/runtime/egress-forwarder.js");
+  const { requestEgressPlaceholder } = await import("#oma-test/app/runtime/egress-forwarder");
   const { host, pool, serviceSocket } = await world(t);
   await host.fill();
   await until(() => pool.size === 2, "the pool");
@@ -826,7 +841,7 @@ test("DR34: bytes riding the host's connect answer are the tunnel's first payloa
   const service = await startEgressService({ socketPath: serviceSocket, pool, frameBytes: PLATFORM_FRAME_BYTES, deadlineMs: 5000 });
   t.after(() => { service.close(); });
   const client = await ask(serviceSocket, "egress.connect", {
-    placeholderId: randomUUID(), run: RUN, host: "registry.npmjs.org", port: 443, role: "worker", allow: ["registry.npmjs.org"] });
+    placeholderId: randomUUID(), run: RUN, host: "registry.npmjs.org", port: 443 });
   t.after(() => client.destroy());
   const { frame, rest } = await readLeadingFrame(client, PLATFORM_FRAME_BYTES, 5000);
   assert.equal(frame.ok, true, JSON.stringify(frame));
@@ -850,7 +865,7 @@ test("AV-15/DR34: the guest's held lease hears its end however it arrives -- spe
   const { host, pool, serviceSocket } = await world(t);
   await host.fill();
   await until(() => pool.size === 2, "the pool");
-  const socket = await ask(serviceSocket, "egress.placeholder", { hold: true, credentialRef: "engine-managed", provider: "anthropic", model: "current", run: RUN });
+  const socket = await ask(serviceSocket, "egress.placeholder", { credentialRef: "engine-managed", provider: "anthropic", model: "current", run: RUN, inferenceSeconds: 5 });
   t.after(() => socket.destroy());
   const { frame } = await readLeadingFrame(socket, PLATFORM_FRAME_BYTES, 5000);
   assert.equal(frame.ok, true, JSON.stringify(frame));

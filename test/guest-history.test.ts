@@ -8,13 +8,13 @@ import { randomUUID } from "node:crypto";
 import { spawnSync } from "node:child_process";
 import { createServer } from "node:net";
 import { CURRENT_SESSION_VERSION } from "@earendil-works/pi-coding-agent";
-import { GuestHistories } from "../src/platform/guest/histories.js";
-import { GuestHost } from "../src/platform/guest/host.js";
-import { publishProjectBinding } from "../src/runtime/provision.js";
-import { newSessionBirth, publishSessionBirth } from "../src/runtime/session-mode.js";
-import { modelWorkspacePathAt } from "../src/storage/paths.js";
-import { checkedGuestHistory, guestHistoryReference, parseGuestHistoryReference } from "../src/protocol/guest-history.js";
-import { PLATFORM_FRAME_BYTES } from "../src/protocol/host-guest.js";
+import { GuestHistories } from "#oma-test/app/platform/guest/histories";
+import { GuestHost } from "#oma-test/app/platform/guest/host";
+import { publishProjectBinding } from "#oma-test/app/runtime/provision";
+import { newSessionBirth, publishSessionBirth } from "#oma-test/app/runtime/session-mode";
+import { modelWorkspacePathAt } from "@oma/domain/paths";
+import { checkedGuestHistory, guestHistoryReference, parseGuestHistoryReference } from "@oma/protocol/guest-history";
+import { PLATFORM_FRAME_BYTES } from "@oma/protocol/host-guest";
 
 function world(t: import("node:test").TestContext) {
   const dir = mkdtempSync(join(tmpdir(), "oma-guest-history-"));

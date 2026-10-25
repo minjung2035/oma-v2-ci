@@ -7,12 +7,12 @@ import { tmpdir } from "node:os";
 import { randomUUID } from "node:crypto";
 import { createServer, connect, type Socket } from "node:net";
 import { CURRENT_SESSION_VERSION } from "@earendil-works/pi-coding-agent";
-import { hostHistoryReference, parseHostHistoryReference, parseHostHistoryQuery, checkedHostHistoryPage } from "../src/protocol/host-history.js";
-import { isNewSessionHandoff, parseTerminalExit, TERMINAL_FRAME_BYTES } from "../src/protocol/host-guest.js";
-import { newSessionBirth, publishSessionBirth } from "../src/runtime/session-mode.js";
-import { hostPersonalHistoryQuery, inspectHostPersonalHistory } from "../src/platform/host/personal-histories.js";
-import { HostHistoryChannel } from "../src/runtime/host-history-channel.js";
-import { FrameParser, encodeFrame } from "../src/frame.js";
+import { hostHistoryReference, parseHostHistoryReference, parseHostHistoryQuery, checkedHostHistoryPage } from "@oma/protocol/host-history";
+import { isNewSessionHandoff, parseTerminalExit, TERMINAL_FRAME_BYTES } from "@oma/protocol/host-guest";
+import { newSessionBirth, publishSessionBirth } from "#oma-test/app/runtime/session-mode";
+import { hostPersonalHistoryQuery, inspectHostPersonalHistory } from "#oma-test/app/platform/host/personal-histories";
+import { HostHistoryChannel } from "@oma/engine/host-history-channel";
+import { FrameParser, encodeFrame } from "@oma/protocol/frame";
 
 test("Session mode: host handoff accepts a mode only for a successful new session", () => {
   const valid = { code: 0, signal: null, next: "new", mode: "personal" };

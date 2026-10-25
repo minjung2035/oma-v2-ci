@@ -14,9 +14,9 @@ import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createServer, type Server } from "node:net";
-import { adoptPrincipalEgress, EGRESS_SOCKET_ENV, type EgressTenure, type PrincipalEgress } from "../src/runtime/egress-forwarder.js";
-import { FrameParser, encodeFrame } from "../src/frame.js";
-import { StoreError } from "../src/domain/errors.js";
+import { adoptPrincipalEgress, EGRESS_SOCKET_ENV, type EgressTenure, type PrincipalEgress } from "#oma-test/app/runtime/egress-forwarder";
+import { FrameParser, encodeFrame } from "@oma/protocol/frame";
+import { StoreError } from "@oma/domain/errors";
 import { removeTree } from "./fixtures/cleanup.js";
 
 function fixture(t: TestContext) {

@@ -1,10 +1,11 @@
+import { residentEngineEffects } from "#oma-test/app/engine/resident-effects";
 /** SB-001..006 + INF-005..008, live: a Resident's engine under real bubblewrap.
  *
  * Everything here is the production path except the provider, which is a local
  * TLS stand-in. The rootfs is the one `oma` generates, the mount plan is the
  * one the adapter builds, and the engine is the bundled one. Inside there is no
- * network and no credential, so the only way the provider can receive a
- * request carrying the real key is through the relay.
+ * real provider credential. These scenarios verify key substitution by the
+ * relay; current shared-network behavior has its own production-recipe probe.
  */
 import test from "node:test";
 import assert from "node:assert/strict";
@@ -14,19 +15,20 @@ import { createServer, type Server } from "node:net";
 import { tmpdir } from "node:os";
 import { basename, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { provisionSociety, residentRootfsPath } from "../src/runtime/provision.js";
-import { InferenceRelay } from "../src/runtime/inference-relay.js";
-import { placeholderFor } from "../src/runtime/engine-auth.js";
-import { PiAdapter } from "../src/runtime/pi-adapter.js";
-import { hostSystemLayout, productSurfaceMasks } from "../src/runtime/resident-rootfs.js";
-import { resolvePiRuntime } from "../src/runtime/pi-runtime.js";
-import { spawnSandboxed } from "../src/process/async.js";
-import { PiRpcClient } from "../src/runtime/pi-rpc.js";
-import { decodeRunLease } from "../src/protocol/run-lease.js";
-import { confinedPath, type ResidentDirectories } from "../src/sandbox.js";
-import { actorSocketPathAt, agentRootPathAt, runnerSessionDirPathAt, runnerViewPathAt, workspacePathAt } from "../src/storage/paths.js";
+import { provisionSociety, residentRootfsPath } from "#oma-test/app/runtime/provision";
+import { InferenceRelay } from "#oma-test/app/runtime/inference-relay";
+import { placeholderFor } from "@oma/engine/engine-auth";
+import { PiAdapter } from "@oma/engine/pi-adapter";
+import { hostSystemLayout, productSurfaceMasks } from "@oma/platform-linux/resident-rootfs";
+import { resolvePiRuntime } from "@oma/engine/pi-runtime";
+import { spawnSandboxed } from "@oma/process/async";
+import { PiRpcClient } from "@oma/engine/pi-rpc";
+import { decodeRunLease } from "@oma/protocol/run-lease";
+import { confinedPath } from "@oma/domain/resident-paths";
+import { type SandboxDirectories as ResidentDirectories } from "@oma/contracts/runtime";
+import { actorSocketPathAt, agentRootPathAt, runnerSessionDirPathAt, runnerViewPathAt, workspacePathAt } from "@oma/domain/paths";
 import { tlsProvider } from "./fixtures/tls-provider.js";
-import { observeDeliveryReceipt, publishDeliveryReceipt } from "../src/storage/delivery-receipt.js";
+import { observeDeliveryReceipt, publishDeliveryReceipt } from "@oma/storage/delivery-receipt";
 
 const root = fileURLToPath(new URL("../../", import.meta.url));
 const bwrapAvailable = spawnSync("bwrap", ["--version"]).status === 0;
@@ -91,13 +93,13 @@ test("T117 a confined Resident reaches its provider only through the relay, with
       { concurrent: 4, timeoutMs: 30000 });
 
     const runtime = resolvePiRuntime({ stateRoot, libdir: root });
-    const adapter = new PiAdapter({
+    const adapter = new PiAdapter(residentEngineEffects, {
       actor, society: "live",
       limits: { frameBytes: 1 << 20, idleStreamSeconds: 60, receiptWaitSeconds: 30, batchMaxMessages: 24, mailBodyBytes: 4096, addresses: 64, contextBytes: 1 << 20, bundleBytes: 1 << 20 },
-      profile: { provider: "pi", model: "current", inferenceSeconds: 600, prompt: "", workspaceBytes: 1 << 24, extensions: [] },
+      profile: { provider: "pi", model: "current", inferenceSeconds: 600, prompt: "", extensions: [] },
       paths: {
         piCommand: runtime.executable, piArgs: runtime.args, piAgentDir: join(stateRoot, "pi"),
-        coreExtension: join(root, "dist/src/pi-extension.js"), cli: join(root, "dist/src/cli.js"),
+        coreExtension: join(root, "packages/extension/dist/index.js"), cli: join(root, "apps/oma/dist/cli.js"),
         workspace: directories.workspace, sessionDir: directories.sessions, agentHome: directories.home,
         mailArchive: join(directories.archive, "cur"), workerArchive: join(directories.workerArchive, "cur"), projectGit: directories.projectGit, batchView: directories.view, socket: leaseSocket,
       },
@@ -106,7 +108,6 @@ test("T117 a confined Resident reaches its provider only through the relay, with
           rootfs: residentRootfsPath(stateRoot), libdir: root,
           node: realpathSync(process.execPath), systemBinds: hostSystemLayout().binds, hidden: productSurfaceMasks(root),
           pi: confinedPath({ libdir: root }, directories, runtime.args[0]!), piModeArgs: [],
-          tmpBytes: 64 * 1024 * 1024,
           stateRoot, runRoot, limits: { frameBytes: 1 << 20, batchMaxMessages: 24 },
         },
         lease, directories,
@@ -129,7 +130,7 @@ test("T117 a confined Resident reaches its provider only through the relay, with
     assert.ok(credential.includes(secret), "the provider did not receive the real key");
     for (const value of Object.values(request.headers))
       assert.ok(!String(value).includes(placeholder), "the placeholder leaked past the relay");
-    // The relay carried it; there was no other road out.
+    // The relay carried this authenticated request; this is not an egress-denial proof.
     assert.ok(relay.observe().accepted >= 1);
   } finally {
     rpc?.close();
@@ -203,13 +204,13 @@ test("V27A: the bundled engine, on the production plan, delivers a batch to a se
     relay = await InferenceRelay.open(relaySocket, { origin: provider.origin, headers: {}, substitute: { placeholder, secret } },
       { concurrent: 4, timeoutMs: 30000 });
     const runtime = resolvePiRuntime({ stateRoot, libdir: root });
-    const adapter = new PiAdapter({
+    const adapter = new PiAdapter(residentEngineEffects, {
       actor, society: "live",
       limits: { frameBytes: 1 << 20, idleStreamSeconds: 60, receiptWaitSeconds: 30, batchMaxMessages: 24, mailBodyBytes: 4096, addresses: 64, contextBytes: 1 << 20, bundleBytes: 1 << 20 },
-      profile: { provider: "anthropic", model: "claude-fable-5", inferenceSeconds: 90, prompt: "", workspaceBytes: 1 << 24, extensions: [] },
+      profile: { provider: "anthropic", model: "claude-fable-5", inferenceSeconds: 90, prompt: "", extensions: [] },
       paths: {
         piCommand: runtime.executable, piArgs: runtime.args, piAgentDir: join(stateRoot, "pi"),
-        coreExtension: join(root, "dist/src/pi-extension.js"), cli: join(root, "dist/src/cli.js"),
+        coreExtension: join(root, "packages/extension/dist/index.js"), cli: join(root, "apps/oma/dist/cli.js"),
         workspace: directories.workspace, sessionDir: directories.sessions, agentHome: directories.home,
         mailArchive: join(directories.archive, "cur"), workerArchive: join(directories.workerArchive, "cur"), projectGit: directories.projectGit, batchView: directories.view, socket: leaseSocket,
       },
@@ -218,7 +219,6 @@ test("V27A: the bundled engine, on the production plan, delivers a batch to a se
           rootfs: residentRootfsPath(stateRoot), libdir: root,
           node: realpathSync(process.execPath), systemBinds: hostSystemLayout().binds, hidden: productSurfaceMasks(root),
           pi: confinedPath({ libdir: root }, directories, runtime.args[0]!), piModeArgs: [],
-          tmpBytes: 64 * 1024 * 1024,
           stateRoot, runRoot, limits: { frameBytes: 1 << 20, batchMaxMessages: 24 },
         },
         lease, directories,
@@ -271,48 +271,6 @@ test("V27A: the bundled engine, on the production plan, delivers a batch to a se
   }
 });
 
-test("T117 inside the generated rootfs a Resident cannot see the host or leave by network", {
-  skip: bwrapAvailable ? false : "bubblewrap is not installed on this host",
-  timeout: 60000,
-}, async () => {
-  const work = mkdtempSync(join(tmpdir(), "oma-live-escape-"));
-  try {
-    const stateRoot = join(work, "s");
-    provisionSociety(stateRoot);
-    mkdirSync(join(stateRoot, "pi"), { recursive: true });
-    writeFileSync(join(stateRoot, "pi", "auth.json"), '{"secret":"host-only"}');
-    const layout = hostSystemLayout();
-    const node = realpathSync(process.execPath);
-    // The same base the Resident plan uses: the generated rootfs read-only as
-    // `/`, the operating system's programs over it, and no other host path.
-    const probe = spawnSync("bwrap", [
-      "--unshare-all", "--new-session", "--die-with-parent", "--cap-drop", "ALL",
-      "--ro-bind", residentRootfsPath(stateRoot), "/",
-      ...layout.binds.flatMap(path => ["--ro-bind", path, path]),
-      "--ro-bind", node, "/opt/oma-node/node",
-      "--proc", "/proc", "--dev", "/dev", "--tmpfs", "/tmp", "--clearenv", "--setenv", "PATH", "/usr/bin:/bin",
-      "--", "/opt/oma-node/node", "-e", `
-        const fs = require("fs"); const net = require("net");
-        const seen = p => { try { fs.accessSync(p); return true; } catch { return false; } };
-        const report = { stateRoot: seen(${JSON.stringify(stateRoot)}), credential: seen(${JSON.stringify(join(stateRoot, "pi", "auth.json"))}),
-          home: seen(${JSON.stringify(process.env.HOME ?? "/home")}), writableRoot: (() => { try { fs.writeFileSync("/x", "x"); return true; } catch { return false; } })(),
-          user: require("os").userInfo().username };
-        const socket = net.connect({ host: "1.1.1.1", port: 443 });
-        socket.setTimeout(1500, () => { report.egress = "timeout"; console.log(JSON.stringify(report)); process.exit(0); });
-        socket.on("connect", () => { report.egress = "connected"; console.log(JSON.stringify(report)); process.exit(0); });
-        socket.on("error", error => { report.egress = error.code; console.log(JSON.stringify(report)); process.exit(0); });`,
-    ], { encoding: "utf8", timeout: 30000 });
-    assert.equal(probe.status, 0, probe.stderr);
-    const report = JSON.parse(probe.stdout.trim()) as Record<string, unknown>;
-    assert.equal(report.stateRoot, false, "the host state root is visible inside");
-    assert.equal(report.credential, false, "the engine's credential file is visible inside");
-    assert.equal(report.home, false, "the host home is visible inside");
-    assert.equal(report.writableRoot, false, "the rootfs is writable from inside");
-    assert.notEqual(report.egress, "connected", "a confined Resident reached the network");
-    // The generated identity names only the agent.
-    assert.equal(report.user, "agent");
-  } finally { rmSync(work, { recursive: true, force: true }); }
-});
 
 test("T117 a confined Resident loads the trusted extension and receives mail as a custom message", {
   skip: bwrapAvailable ? false : "bubblewrap is not installed on this host",
@@ -355,13 +313,13 @@ test("T117 a confined Resident loads the trusted extension and receives mail as 
     await new Promise<void>(resolve => { control!.listen(leaseSocket, () => { resolve(); }); });
     const lease = decodeRunLease({ actor, incarnation: 1, socketHostPath: leaseSocket }, { actor, runRoot });
     const runtime = resolvePiRuntime({ stateRoot, libdir: root });
-    const adapter = new PiAdapter({
+    const adapter = new PiAdapter(residentEngineEffects, {
       actor, society: "live",
       limits: { frameBytes: 262144, idleStreamSeconds: 60, receiptWaitSeconds: 30, batchMaxMessages: 24, mailBodyBytes: 4096, addresses: 64, contextBytes: 1 << 20, bundleBytes: 1 << 20 },
-      profile: { provider: "pi", model: "current", inferenceSeconds: 600, prompt: "", workspaceBytes: 1 << 24, extensions: [] },
+      profile: { provider: "pi", model: "current", inferenceSeconds: 600, prompt: "", extensions: [] },
       paths: {
         piCommand: runtime.executable, piArgs: runtime.args, piAgentDir: join(stateRoot, "pi"),
-        coreExtension: join(root, "dist/src/pi-extension.js"), cli: join(root, "dist/src/cli.js"),
+        coreExtension: join(root, "packages/extension/dist/index.js"), cli: join(root, "apps/oma/dist/cli.js"),
         workspace: directories.workspace, sessionDir: directories.sessions, agentHome: directories.home,
         mailArchive: join(directories.archive, "cur"), workerArchive: join(directories.workerArchive, "cur"), projectGit: directories.projectGit, batchView: directories.view, socket: leaseSocket,
       },
@@ -370,7 +328,6 @@ test("T117 a confined Resident loads the trusted extension and receives mail as 
           rootfs: residentRootfsPath(stateRoot), libdir: root,
           node: realpathSync(process.execPath), systemBinds: hostSystemLayout().binds, hidden: productSurfaceMasks(root),
           pi: confinedPath({ libdir: root }, directories, runtime.args[0]!), piModeArgs: [],
-          tmpBytes: 64 * 1024 * 1024,
           stateRoot, runRoot, limits: { frameBytes: 262144, batchMaxMessages: 24 },
         },
         lease, directories,
@@ -439,16 +396,16 @@ test("T117 the host product's code cannot be read inside a Resident (TUI-003)", 
     const lease = decodeRunLease({ actor, incarnation: 1, socketHostPath: leaseSocket }, { actor, runRoot });
     const runtime = resolvePiRuntime({ stateRoot, libdir: root });
     const masks = productSurfaceMasks(root);
-    assert.ok(masks.some(mask => mask.path === "dist/src/tui"), "the built product surface should exist to hide");
-    for (const path of ["dist/src/application", "dist/src/runtime/engine", "dist/src/domain/settings-policy.js", "dist/src/domain/surface-bounds.js"])
+    assert.ok(masks.some(mask => mask.path === "packages/tui/dist"), "the built product surface should exist to hide");
+    for (const path of ["apps/oma/dist/application", "packages/engine/dist/principal-session.js", "packages/domain/dist/settings-policy.js", "packages/domain/dist/surface-bounds.js"])
       assert.ok(masks.some(mask => mask.path === path), `the moved host product must stay hidden: ${path}`);
-    const adapter = new PiAdapter({
+    const adapter = new PiAdapter(residentEngineEffects, {
       actor, society: "live",
       limits: { frameBytes: 262144, idleStreamSeconds: 60, receiptWaitSeconds: 30, batchMaxMessages: 24, mailBodyBytes: 4096, addresses: 64, contextBytes: 1 << 20, bundleBytes: 1 << 20 },
-      profile: { provider: "pi", model: "current", inferenceSeconds: 600, prompt: "", workspaceBytes: 1 << 24, extensions: [] },
+      profile: { provider: "pi", model: "current", inferenceSeconds: 600, prompt: "", extensions: [] },
       paths: {
         piCommand: runtime.executable, piArgs: runtime.args, piAgentDir: join(stateRoot, "pi"),
-        coreExtension: join(root, "dist/src/pi-extension.js"), cli: join(root, "dist/src/cli.js"),
+        coreExtension: join(root, "packages/extension/dist/index.js"), cli: join(root, "apps/oma/dist/cli.js"),
         workspace: directories.workspace, sessionDir: directories.sessions, agentHome: directories.home,
         mailArchive: join(directories.archive, "cur"), workerArchive: join(directories.workerArchive, "cur"), projectGit: directories.projectGit, batchView: directories.view, socket: leaseSocket,
       },
@@ -457,7 +414,6 @@ test("T117 the host product's code cannot be read inside a Resident (TUI-003)", 
           rootfs: residentRootfsPath(stateRoot), libdir: root,
           node: realpathSync(process.execPath), systemBinds: hostSystemLayout().binds, hidden: masks,
           pi: confinedPath({ libdir: root }, directories, runtime.args[0]!), piModeArgs: [],
-          tmpBytes: 64 * 1024 * 1024,
           stateRoot, runRoot, limits: { frameBytes: 262144, batchMaxMessages: 24 },
         },
         lease, directories,
@@ -471,18 +427,24 @@ test("T117 the host product's code cannot be read inside a Resident (TUI-003)", 
       const list = p => { try { return fs.readdirSync(p); } catch (e) { return e.code; } };
       const write = p => { try { fs.writeFileSync(p, "x"); return "written"; } catch (e) { return e.code; } };
       console.log(JSON.stringify({
-        tuiDir: list("/opt/oma/dist/src/tui"), tuiSource: list("/opt/oma/src/tui"),
-        application: list("/opt/oma/dist/src/application"), engine: list("/opt/oma/dist/src/runtime/engine"),
-        settingsPolicy: read("/opt/oma/dist/src/domain/settings-policy.js"), surfaceBounds: read("/opt/oma/dist/src/domain/surface-bounds.js"),
-        entry: read("/opt/oma/dist/src/entry/oma.js"), entrySource: read("/opt/oma/src/entry/oma.ts"),
-        writeIntoMask: write("/opt/oma/dist/src/tui/planted.js"),
-        extension: read("/opt/oma/dist/src/pi-extension.js") }));`], { encoding: "utf8", timeout: 30000, stdio }));
+        tuiDir: list("/opt/oma/packages/tui/dist"), tuiSource: list("/opt/oma/packages/tui/src"),
+        tuiLink: list("/opt/oma/node_modules/@oma/tui/dist"),
+        tuiCode: read("/opt/oma/node_modules/@oma/tui/dist/app.js"),
+        promptEditor: read("/opt/oma/packages/engine/dist/pi-compat/prompt-editor.js"),
+        application: list("/opt/oma/apps/oma/dist/application"), engine: read("/opt/oma/packages/engine/dist/principal-session.js"),
+        settingsPolicy: read("/opt/oma/packages/domain/dist/settings-policy.js"), surfaceBounds: read("/opt/oma/packages/domain/dist/surface-bounds.js"),
+        entry: read("/opt/oma/apps/oma/dist/entry/oma.js"), entrySource: read("/opt/oma/apps/oma/src/entry/oma.ts"),
+        writeIntoMask: write("/opt/oma/packages/tui/dist/planted.js"),
+        extension: read("/opt/oma/packages/extension/dist/index.js") }));`], { encoding: "utf8", timeout: 30000, stdio }));
     assert.equal(probe.status, 0, probe.stderr);
     const seen = JSON.parse(probe.stdout.trim()) as Record<string, unknown>;
     assert.deepEqual(seen.tuiDir, [], "the built product surface is readable inside");
     assert.deepEqual(seen.tuiSource, [], "the product surface's source is readable inside");
+    assert.deepEqual(seen.tuiLink, [], "the workspace link bypasses the product mask");
+    assert.equal(typeof seen.tuiCode, "string", "the workspace export remains readable through its link");
+    assert.ok(typeof seen.promptEditor === "string" || seen.promptEditor === 0, "the moved prompt adapter is readable inside");
     assert.deepEqual(seen.application, [], "the host Application is readable inside");
-    assert.deepEqual(seen.engine, [], "the Principal session owner is readable inside");
+    assert.ok(typeof seen.engine === "string" || seen.engine === 0, "the Principal session owner is readable inside");
     for (const value of [seen.settingsPolicy, seen.surfaceBounds])
       assert.ok(typeof value === "string" || value === 0, "moved presentation policy contents are readable inside");
     assert.equal(typeof seen.entry, "string", "the product entrypoint is readable inside");
@@ -522,13 +484,13 @@ test("AV16 / CLI-001, arch §11.1: inside the production sandbox `oma` is the in
     await new Promise<void>(resolve => { control!.listen(leaseSocket, () => { resolve(); }); });
     const lease = decodeRunLease({ actor, incarnation: 1, socketHostPath: leaseSocket }, { actor, runRoot });
     const runtime = resolvePiRuntime({ stateRoot, libdir: root });
-    const adapter = new PiAdapter({
+    const adapter = new PiAdapter(residentEngineEffects, {
       actor, society: "live",
       limits: { frameBytes: 262144, idleStreamSeconds: 60, receiptWaitSeconds: 30, batchMaxMessages: 24, mailBodyBytes: 4096, addresses: 64, contextBytes: 1 << 20, bundleBytes: 1 << 20 },
-      profile: { provider: "pi", model: "current", inferenceSeconds: 600, prompt: "", workspaceBytes: 1 << 24, extensions: [] },
+      profile: { provider: "pi", model: "current", inferenceSeconds: 600, prompt: "", extensions: [] },
       paths: {
         piCommand: runtime.executable, piArgs: runtime.args, piAgentDir: join(stateRoot, "pi"),
-        coreExtension: join(root, "dist/src/pi-extension.js"), cli: join(root, "dist/src/cli.js"),
+        coreExtension: join(root, "packages/extension/dist/index.js"), cli: join(root, "apps/oma/dist/cli.js"),
         workspace: directories.workspace, sessionDir: directories.sessions, agentHome: directories.home,
         mailArchive: join(directories.archive, "cur"), workerArchive: join(directories.workerArchive, "cur"), projectGit: directories.projectGit, batchView: directories.view, socket: leaseSocket,
       },
@@ -537,7 +499,6 @@ test("AV16 / CLI-001, arch §11.1: inside the production sandbox `oma` is the in
           rootfs: residentRootfsPath(stateRoot), libdir: root,
           node: realpathSync(process.execPath), systemBinds: hostSystemLayout().binds, hidden: productSurfaceMasks(root),
           pi: confinedPath({ libdir: root }, directories, runtime.args[0]!), piModeArgs: [],
-          tmpBytes: 64 * 1024 * 1024,
           stateRoot, runRoot, limits: { frameBytes: 262144, batchMaxMessages: 24 },
         },
         lease, directories,
@@ -549,7 +510,7 @@ test("AV16 / CLI-001, arch §11.1: inside the production sandbox `oma` is the in
     const probe = withFilter(plan, stdio => spawnSync(plan.command, [...plan.args.slice(0, at + 1), "/bin/sh", "-c",
       "command -v oma; command -v node; node --version; oma; echo \"exit=$?\""], { encoding: "utf8", timeout: 30000, stdio }));
     const lines = `${probe.stdout}\n${probe.stderr}`;
-    assert.match(lines, /^\/opt\/oma\/dist\/libexec\/oma$/m, `oma is not on the sandbox's PATH: ${lines.slice(0, 600)}`);
+    assert.match(lines, /^\/opt\/oma\/apps\/oma\/dist\/libexec\/oma$/m, `oma is not on the sandbox's PATH: ${lines.slice(0, 600)}`);
     assert.match(lines, /^\/opt\/oma-node\/node$/m, "node on the PATH is not the pinned Node");
     assert.match(lines, new RegExp(`^${process.version.replace(/\./g, "\\.")}$`, "m"));
     // The CLI itself ran: without arguments it prints its usage and exits 2 (CLI-003).

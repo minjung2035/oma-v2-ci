@@ -5,9 +5,9 @@ import { createRequire, syncBuiltinESMExports } from "node:module";
 import { chmodSync, existsSync, linkSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, readlinkSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { publishContextRevision, verifyContextRevision } from "../src/storage/context-snapshot.js";
-import { fsyncTree, replaceDerivedFile } from "../src/storage/durable-fs.js";
-import { StoreError } from "../src/domain/errors.js";
+import { publishContextRevision, verifyContextRevision } from "@oma/storage/context-snapshot";
+import { fsyncTree, replaceDerivedFile } from "@oma/storage/durable-fs";
+import { StoreError } from "@oma/domain/errors";
 
 const cryptoHash = (value: string): string => createHash("sha256").update(value).digest("hex");
 const revision = "a".repeat(40);

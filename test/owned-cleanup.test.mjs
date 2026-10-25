@@ -1,3 +1,4 @@
+import { decodePackageIndex } from "#oma-test/app/runtime/packages/index";
 /** Actual cleanup/lock/settings owners; effects are local fixtures or controlled.
  * No credential, native Mac, VM, service manager or provider is exercised. */
 import test from 'node:test';
@@ -9,8 +10,9 @@ import { createRequire } from 'node:module';
 import { pathToFileURL } from 'node:url';
 import { Script } from 'node:vm';
 import ts from 'typescript';
-import { withCleanup, withAsyncCleanup } from '../dist/src/process/cleanup.js';
-import { StoreError, primaryFailure, normalizeStorageFailure, errorCodeOf } from '../dist/src/domain/errors.js';
+import { withCleanup, withAsyncCleanup } from "@oma/native/cleanup";
+import { workspaceEntryForSource } from "./fixtures/workspace-source.mjs";
+import { StoreError, primaryFailure, normalizeStorageFailure, errorCodeOf } from "@oma/domain/errors";
 
 const require = createRequire(import.meta.url);
 function load(file, replacements = {}, platform = 'linux') {
@@ -21,11 +23,13 @@ function load(file, replacements = {}, platform = 'linux') {
   new Script(code, { filename: file }).runInNewContext({ module, exports: module.exports, Buffer, URL, AggregateError, performance,
     process: { platform, arch: process.arch }, require(name) {
       if (Object.hasOwn(replacements, name)) return replacements[name];
+      if (name.startsWith('.') && (file.startsWith('packages/') || file.startsWith('apps/oma/')))
+        return require(workspaceEntryForSource(join(dirname(file), name).replace(/\.js$/, '.ts')));
       return require(name.startsWith('.') ? resolve('dist', dirname(file), name) : name);
     } });
   return module.exports;
 }
-const cleanup = load('src/process/cleanup.ts');
+const cleanup = load("packages/native/src/cleanup.ts");
 const primary = new StoreError('STORE_CORRUPT', 'fixture primary');
 const secondary = Object.assign(new Error('fixture cleanup'), { code: 'ENOSPC' });
 function both(error, ...failures) {
@@ -80,10 +84,10 @@ test('Owned cleanup: nested secondary exhaustion cannot erase corruption or publ
 
 for (const failure of ['flock', 'stat', 'shape', 'contended-close']) test(`Owned cleanup ProcessLock: ${failure} returns the descriptor once without replacing the primary`, () => {
   let returned = 0;
-  const api = load('src/runtime/process-lock.ts', {
+  const api = load('packages/native/src/process-lock.ts', {
     'node:fs': { ...fs, openSync: () => 17, closeSync(fd) { assert.equal(fd, 17); returned++; throw secondary; },
       fstatSync() { if (failure === 'stat') throw primary; return { isFile: () => failure !== 'shape', nlink: 1n, dev: 1n, ino: 2n }; } },
-    '../leaf.js': { lockFileDescriptor() { if (failure === 'flock') throw primary; return { kind: failure === 'contended-close' ? 'contended' : 'held' }; } },
+    "./linux.js": { lockFileDescriptor() { if (failure === 'flock') throw primary; return { kind: failure === 'contended-close' ? 'contended' : 'held' }; } },
   });
   assert.throws(() => api.ProcessLock.tryAcquire('/fixture/lock'), error => {
     if (failure === 'contended-close') return error === secondary;
@@ -94,10 +98,10 @@ for (const failure of ['flock', 'stat', 'shape', 'contended-close']) test(`Owned
 });
 test('Owned cleanup ProcessLock: a failed close is never retried and revokes descriptor access', () => {
   let returned = 0;
-  const api = load('src/runtime/process-lock.ts', {
+  const api = load('packages/native/src/process-lock.ts', {
     'node:fs': { ...fs, openSync: () => 17, closeSync() { returned++; throw secondary; },
       fstatSync: () => ({ isFile: () => true, nlink: 1n, dev: 1n, ino: 2n }) },
-    '../leaf.js': { lockFileDescriptor: () => ({ kind: 'held' }) },
+    "./linux.js": { lockFileDescriptor: () => ({ kind: 'held' }) },
   });
   const lock = api.ProcessLock.tryAcquire('/fixture/lock');
   assert.throws(() => lock.close(), error => error === secondary); assert.doesNotThrow(() => lock.close());
@@ -107,7 +111,7 @@ test('Owned cleanup ProcessLock: a failed close is never retried and revokes des
 for (const operation of ['openDirectory', 'openRegularBeneath']) for (const succeeds of [false, true])
   test(`Owned cleanup contained: ${operation} ${succeeds ? 'untransferred result is closed' : 'primary observation survives'} when its pin close fails`, () => {
     const returned = [];
-    const api = load('src/storage/contained-fs.ts', {
+    const api = load("packages/native/src/files.ts", {
       'node:fs': { ...fs, openSync: path => path === '/' ? 11 : 19,
         fstatSync() { if (!succeeds) throw primary; return { isFile: () => true }; },
         closeSync(fd) { returned.push(fd); if (fd !== 19) throw secondary; } },
@@ -120,7 +124,7 @@ for (const operation of ['openDirectory', 'openRegularBeneath']) for (const succ
     assert.deepEqual(returned, succeeds ? [operation === 'openDirectory' ? 11 : 13, 19] : [operation === 'openDirectory' ? 11 : 13]);
   });
 test('Owned cleanup contained: directory body failure survives parent close failure', () => {
-  const api = load('src/storage/contained-fs.ts', {
+  const api = load("packages/native/src/files.ts", {
     'node:fs': { ...fs, openSync: () => 11, closeSync() { throw secondary; } },
     koffi: { errno: () => 0, load: () => ({ func: signature => signature.startsWith('long syscall') ? () => 19 : () => 0 }) },
   });
@@ -130,7 +134,7 @@ test('Owned cleanup contained: directory body failure survives parent close fail
 for (const operation of ['openDirectory', 'openRegularBeneath'])
   test(`Owned cleanup contained: ${operation} retains both failed descriptor returns`, () => {
     const returned = [], last = new Error('fixture result close failed');
-    const api = load('src/storage/contained-fs.ts', {
+    const api = load("packages/native/src/files.ts", {
       'node:fs': { ...fs, openSync: path => path === '/' ? 11 : 19,
         fstatSync: () => ({ isFile: () => true }), closeSync(fd) { returned.push(fd); throw fd === 19 ? last : secondary; } },
       koffi: { errno: () => 0, load: () => ({ func: signature => signature.startsWith('long syscall')
@@ -143,7 +147,7 @@ for (const operation of ['openDirectory', 'openRegularBeneath'])
 
 for (const failed of [false, true]) test(`Owned cleanup host temporary: ${failed ? 'failed' : 'successful'} close is never retried by discard`, () => {
   const returned = [], removed = [];
-  const api = load('src/platform/host/files.ts', { 'node:fs': { ...fs, openSync: () => 17,
+  const api = load('packages/platform-mac/src/files.ts', { 'node:fs': { ...fs, openSync: () => 17,
     closeSync(fd) { returned.push(fd); if (failed) throw secondary; }, rmSync(path) { removed.push(path); } } });
   const temporary = api.createTemporary('/fixture', 'record');
   if (failed) assert.throws(() => temporary.close(), error => error === secondary); else temporary.close();
@@ -152,7 +156,7 @@ for (const failed of [false, true]) test(`Owned cleanup host temporary: ${failed
 });
 test('Owned cleanup host temporary: discard attempts name removal even when close fails and retains both failures', () => {
   const last = new Error('fixture remove failed'), returned = [], removed = [];
-  const api = load('src/platform/host/files.ts', { 'node:fs': { ...fs, openSync: () => 17,
+  const api = load('packages/platform-mac/src/files.ts', { 'node:fs': { ...fs, openSync: () => 17,
     closeSync(fd) { returned.push(fd); throw secondary; }, rmSync(path) { removed.push(path); throw last; } } });
   const temporary = api.createTemporary('/fixture', 'record');
   assert.throws(() => api.discardTemporary(temporary), error => both(error, secondary, last));
@@ -160,7 +164,7 @@ test('Owned cleanup host temporary: discard attempts name removal even when clos
 });
 test('Owned cleanup host temporary: a published descriptor number may be reused before abandon, never closed again', () => {
   let returned = 0, reused = false;
-  const api = load('src/platform/host/files.ts', { 'node:fs': { ...fs,
+  const api = load('packages/platform-mac/src/files.ts', { 'node:fs': { ...fs,
     openSync: () => reused ? 23 : 17, closeSync(fd) { assert.equal(reused && fd === 17, false); returned++; },
     fsyncSync() {}, linkSync() {}, unlinkSync() {}, rmSync() {} } });
   const temporary = api.createTemporary('/fixture', 'record');
@@ -171,7 +175,7 @@ test('Owned cleanup host temporary: a published descriptor number may be reused 
 for (const stage of ['write', 'file-flush', 'close', 'rename', 'directory-flush'])
   test(`Owned cleanup host replacement: ${stage} failure preserves its primary beside discard failure`, () => {
     const returned = [], calls = [], removed = [], last = new Error('fixture discard failed');
-    const api = load('src/platform/host/files.ts', { 'node:fs': { ...fs,
+    const api = load('packages/platform-mac/src/files.ts', { 'node:fs': { ...fs,
       openSync(_path, flags) { return flags === fs.constants.O_RDONLY ? 23 : 17; },
       writeSync(_fd, _bytes, _at, count) { calls.push('write'); if (stage === 'write') throw primary; return count; },
       fsyncSync(fd) { calls.push(fd === 17 ? 'file-flush' : 'directory-flush');
@@ -187,7 +191,7 @@ for (const stage of ['write', 'file-flush', 'close', 'rename', 'directory-flush'
   });
 test('Owned cleanup host staged store: removal repairs directories that lost owner bits before listing them', t => {
   const root = fixture(t);
-  const api = load('src/platform/host/files.ts');
+  const api = load('packages/platform-mac/src/files.ts');
   // The Mac store is swept and published by path: rmSync(recursive) listed
   // each directory before touching it, so a mode-000 directory inside a dead
   // copy or a staging root wedged the prune's removal with EACCES -- the same
@@ -234,7 +238,7 @@ test('Owned cleanup host staged store: removal repairs directories that lost own
 });
 test('Owned cleanup host repair boundary: a `..`-spelled path inside the boundary prefix is refused, never chmods above it', t => {
   const root = fixture(t);
-  const api = load('src/platform/host/files.ts');
+  const api = load('packages/platform-mac/src/files.ts');
   // The boundary check was a lexical `path.startsWith(ownedFrom + "/")`:
   // `oma/../victim` textually qualifies, and the component walk then climbed
   // -- a slot named `..` joins to the boundary's parent, whose mode is the
@@ -253,7 +257,7 @@ test('Owned cleanup host repair boundary: a `..`-spelled path inside the boundar
 });
 test('Owned cleanup host repair boundary: a stray at an owned slot is collected -- at the boundary slot it stands', t => {
   const root = fixture(t);
-  const api = load('src/platform/host/files.ts');
+  const api = load('packages/platform-mac/src/files.ts');
   const oma = join(root, 'oma');
   fs.mkdirSync(oma);
   const victim = join(root, 'victim');
@@ -280,7 +284,7 @@ test('Owned cleanup host repair boundary: a stray at an owned slot is collected 
 });
 for (const stage of ['link', 'existing']) test(`Owned cleanup host publication: ${stage} beside removal failure is not success`, () => {
   const exists = Object.assign(new Error('fixture existing'), { code: 'EEXIST' }), returned = [], removed = [];
-  const api = load('src/platform/host/files.ts', { 'node:fs': { ...fs,
+  const api = load('packages/platform-mac/src/files.ts', { 'node:fs': { ...fs,
     openSync: () => 17, fsyncSync() {}, closeSync(fd) { returned.push(fd); },
     linkSync() { throw stage === 'link' ? primary : exists; }, rmSync(path) { removed.push(path); throw secondary; },
   } });
@@ -290,11 +294,13 @@ for (const stage of ['link', 'existing']) test(`Owned cleanup host publication: 
 for (const operation of ['encryptArchive', 'decryptArchive']) for (const stage of ['output-open', 'read'])
   test(`Owned cleanup archive: ${operation} ${stage} failure gives back every acquired descriptor without erasing its primary`, () => {
     const returned = [];
-    const api = load('src/platform/host/archive-crypto.ts', { 'node:fs': { ...fs,
+    const physicalFs = { ...fs,
       openSync(path) { if (path === '/fixture/input') return 11; if (stage === 'output-open') throw primary; return 19; },
       readSync() { throw primary; }, writeSync(_fd, _bytes, _at, count) { return count; },
       closeSync(fd) { returned.push(fd); throw secondary; },
-    } });
+    };
+    const physical = load('packages/platform-mac/src/files.ts', { 'node:fs': physicalFs });
+    const api = load('packages/platform-mac/src/archive-crypto.ts', { 'node:fs': physicalFs, './files.js': physical });
     assert.throws(() => api[operation]('/fixture/input', '/fixture/output', Buffer.alloc(32)), error => {
       assert.equal(primaryFailure(error), primary);
       if (stage === 'output-open') return both(error);
@@ -304,7 +310,7 @@ for (const operation of ['encryptArchive', 'decryptArchive']) for (const stage o
   });
 test('Owned cleanup archive: constructor failure retains temporary discard failure', () => {
   let returned = 0;
-  const api = load('src/platform/host/archive-crypto.ts', { './files.js': {
+  const api = load('packages/platform-mac/src/archive-crypto.ts', { './files.js': {
     createTemporary: () => ({ fd: 17 }), discardTemporary() { returned++; throw secondary; },
   } });
   assert.throws(() => api.sealedArchiveSink('/fixture', 'record', Buffer.alloc(0)), error => {
@@ -315,8 +321,8 @@ test('Owned cleanup archive: constructor failure retains temporary discard failu
 });
 for (const stage of ['clone', 'publish', 'success']) test(`Owned cleanup stopped snapshot: ${stage} beside discard failure retains exact outcome`, async () => {
   let returned = 0, visible = false;
-  const api = load('src/platform/host/snapshot.ts', {
-    'node:fs': { ...fs, readdirSync: () => [] }, './files.js': {
+  const api = load('apps/oma/src/platform/host/snapshot.ts', {
+    'node:fs': { ...fs, readdirSync: () => [] }, '@oma/platform-mac/files': {
       temporaryPath: () => '/fixture/partial', publishMade() { visible = true; if (stage === 'publish') throw primary; return 'created'; },
       discardTemporary(path) { assert.equal(path, '/fixture/partial'); returned++; throw secondary; },
     },
@@ -325,22 +331,7 @@ for (const stage of ['clone', 'publish', 'success']) test(`Owned cleanup stopped
     clone() { if (stage === 'clone') throw primary; } }, 'record'), error => stage === 'success' ? error === secondary : both(error));
   assert.equal(returned, 1); assert.equal(visible, stage !== 'clone');
 });
-for (const stage of ['read', 'close']) test(`Owned cleanup engine file: ${stage} and parent close failures preserve ordered ownership returns`, () => {
-  const returned = [], last = new Error('fixture parent close failed');
-  const api = load('src/runtime/pi-runtime.ts', {
-    '../storage/contained-fs.js': { openDirectory: () => 11, openRegularBeneath: () => 19 },
-    'node:fs': { ...fs, fstatSync: () => ({ isFile: () => true, size: 1, mtimeMs: 0 }),
-      readSync(_fd, bytes) { if (stage === 'read') throw primary; bytes[0] = 65; return 1; },
-      closeSync(fd) { returned.push(fd); throw fd === 19 ? secondary : last; } },
-  });
-  assert.throws(() => api.engineFile('/fixture', 'record', 64), error => {
-    if (stage === 'close') return both(error, secondary, last);
-    assert.deepEqual(error.errors[0].errors, [primary, secondary]); assert.equal(error.errors[1], last); return true;
-  });
-  assert.deepEqual(returned, [19, 11]);
-});
-
-for (const file of ['src/runtime/personal-settings.ts', 'src/runtime/pi-runtime.ts'])
+for (const file of ['apps/oma/src/runtime/personal-settings.ts', 'apps/oma/src/engine/settings-files.ts'])
   for (const failed of [false, true]) test(`Owned cleanup settings ${file}: ${failed ? 'read failure plus' : 'only'} writer close failure is not success`, t => {
     const root = fixture(t); let returned = 0, writes = 0;
     // fix/fp moved pi-runtime's lock+replace behind the shared lockedUserReplace
@@ -348,27 +339,28 @@ for (const file of ['src/runtime/personal-settings.ts', 'src/runtime/pi-runtime.
     // pi-runtime gets the real primitive loaded with the same controlled
     // internals instead of stubs it no longer calls.
     const internals = {
-      './process-lock.js': { ProcessLock: { acquire: take, tryAcquire: take } },
+      '@oma/native/process-lock': { ProcessLock: { acquire: take, tryAcquire: take } },
       './user-files.js': { ensureUserDirectory() {}, ensureOwnedUserDirectory() {}, readUserFile() { if (failed) throw primary; return null; }, replaceUserFile() { writes++; } },
-      './pi-packages.js': { readPackageIndex: () => [], reconciledEntries: entries => entries },
+      './packages/index.js': { decodePackageIndex, readPackageIndex: () => [], reconciledEntries: entries => entries },
     };
-    const api = load(file, file.endsWith('pi-runtime.ts')
-      ? { './locked-files.js': load('src/runtime/locked-files.ts', internals) }
-      : internals);
+    const locked = load('apps/oma/src/runtime/locked-files.ts', internals);
+    const files = load('apps/oma/src/engine/settings-files.ts', { '../runtime/locked-files.js': locked,
+      '../runtime/user-files.js': internals['./user-files.js'] }).engineSettingsFiles;
+    const api = file.endsWith('personal-settings.ts') ? load(file, internals) : { engineSettingsFiles: files };
     function take() { return { assertHeld() {}, close() { returned++; throw secondary; } }; }
     assert.throws(() => file.endsWith('personal-settings.ts')
-      ? api.updatePersonalSettings({ dataRoot: root, libdir: root, packages: root }) : api.preparePiRetry(root),
+      ? api.updatePersonalSettings({ dataRoot: root, libdir: root, packages: root }) : api.engineSettingsFiles.withOwnedFile(root, 'settings.json', () => '{}\n'),
     error => failed ? both(error) : error === secondary);
     assert.equal(returned, 1); assert.equal(writes, failed ? 0 : 1);
   });
 for (const failed of [false, true]) test(`Owned cleanup Keychain: controlled ${failed ? 'store failure plus' : 'only'} lock close failure retains exact outcome`, async () => {
   let returned = 0, writes = 0;
-  const writer = load('src/runtime/process-writer.ts', {
-    './process-lock.js': { ProcessLock: { tryAcquire: () => ({ descriptor: 17, assertHeld() {}, close() { returned++; throw secondary; } }) } },
+  const writer = load('packages/process/src/writer.ts', {
+    '@oma/native/process-lock': { ProcessLock: { tryAcquire: () => ({ descriptor: 17, assertHeld() {}, close() { returned++; throw secondary; } }) } },
   });
-  const api = load('src/platform/host/keychain.ts', {
-    '../../runtime/user-files.js': { ensureOwnedUserDirectory() {} },
-    '../../runtime/process-writer.js': writer,
+  const api = load('apps/oma/src/runtime/keychain-credentials.ts', {
+    './user-files.js': { ensureOwnedUserDirectory() {} },
+    '@oma/process/writer': writer,
   });
   const store = { async get() { if (failed) throw primary; return '{}'; }, async put() { writes++; } };
   const credential = api.keychainCredentials(store, 'fixture-account', '/fixture/item.lock');

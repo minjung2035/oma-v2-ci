@@ -4,7 +4,7 @@ import fs, { closeSync, mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSy
 import { syncBuiltinESMExports } from "node:module";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { SnapshotReader } from "../src/storage/snapshot-reader.js";
+import { SnapshotReader } from "@oma/native/snapshot-reader";
 
 const count = () => readdirSync("/proc/self/fd").length;
 function fixture(t: import("node:test").TestContext) {

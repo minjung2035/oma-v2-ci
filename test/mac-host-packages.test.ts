@@ -8,11 +8,11 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
 import { fakeNpmRegistry } from "./fixtures/fake-npm-registry.js";
-import { readPackageIndex } from "../src/runtime/packages/store.js";
-import { readPersonalSettings, updatePersonalSettings } from "../src/runtime/personal-settings.js";
-import { ProcessLock } from "../src/runtime/process-lock.js";
+import { readPackageIndex } from "#oma-test/app/runtime/packages/store";
+import { readPersonalSettings, updatePersonalSettings } from "#oma-test/app/runtime/personal-settings";
+import { ProcessLock } from "@oma/native/process-lock";
 
-const ENTRY = fileURLToPath(new URL("../src/entry/oma-mac.js", import.meta.url));
+const ENTRY = fileURLToPath(new URL("../../apps/oma/dist/entry/oma-mac.js", import.meta.url));
 const EXTENSION = "packages:npm/node_modules/oma-host-fixture/extensions/hello.ts";
 
 test("Mac host packages: explicit local install/list/update/remove never needs an app or changes Society settings", { timeout: 180_000 }, async t => {
@@ -70,7 +70,7 @@ test("Mac host packages: explicit local install/list/update/remove never needs a
   const hex = (value: string) => Buffer.from(value).toString("hex");
   const pty = spawnSync("python3", [join(process.cwd(), "test/fixtures/pty-harness.py"), JSON.stringify({
     argv: [process.execPath, join(process.cwd(), "test/fixtures/mac-host-packages-pty.mjs"), host, userHome, project],
-    ready: hex("Let's build something great"), steps: [{ write: hex("Use the installed host extension\r"), wait: 3 },
+    ready: hex("Your ideas, in motion"), steps: [{ write: hex("Use the installed host extension\r"), wait: 3 },
       { write: hex("\x04"), wait: 2 }],
   })], { encoding: "utf8", timeout: 55_000, maxBuffer: 16 * 1024 * 1024 });
   assert.equal(pty.status, 0, pty.stderr);

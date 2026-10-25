@@ -9,12 +9,12 @@ import { specInventoryFindings } from "../scripts/spec-inventory.mjs";
 const entries = () => inventoryClauses([{ source: "spec.md", text: "**MUST [RULE-001]** Keep the accepted identity.\n" }]);
 function reviewed() {
   return { ...entries()[0], applicability: "runtime", status: "proven", rationale: "synthetic structural-test fixture only",
-    owner: "src/owner.ts#effect", entrypoint: "src/entry.ts#main",
-    callPath: ["src/entry.ts#main", "src/owner.ts#effect"], negativeTests: ["test/negative.ts#reject"],
+    owner: "apps/oma/src/owner.ts#effect", entrypoint: "apps/oma/src/entry.ts#main",
+    callPath: ["apps/oma/src/entry.ts#main", "apps/oma/src/owner.ts#effect"], negativeTests: ["test/negative.ts#reject"],
     evidence: { synthetic: true, description: "not production execution evidence" } };
 }
-const link = () => ({ source: "spec.md", requirements: ["RULE-001"], owner: "src/owner.ts#effect", entrypoint: "src/entry.ts#main",
-  callPath: ["src/entry.ts#main", "src/owner.ts#effect"], negativeTests: ["test/negative.ts#reject"] });
+const link = () => ({ source: "spec.md", requirements: ["RULE-001"], owner: "apps/oma/src/owner.ts#effect", entrypoint: "apps/oma/src/entry.ts#main",
+  callPath: ["apps/oma/src/entry.ts#main", "apps/oma/src/owner.ts#effect"], negativeTests: ["test/negative.ts#reject"] });
 
 test("R39: same fingerprint and same links preserve the reviewed record exactly", () => {
   const row = reviewed();
@@ -23,7 +23,7 @@ test("R39: same fingerprint and same links preserve the reviewed record exactly"
 });
 test("R39: moving an owner invalidates proof without rewriting a normative fingerprint", () => {
   const row = reviewed(); const moved = link();
-  moved.owner = "src/new-owner.ts#effect"; moved.callPath = [moved.entrypoint, moved.owner];
+  moved.owner = "apps/oma/src/new-owner.ts#effect"; moved.callPath = [moved.entrypoint, moved.owner];
   const after = applyOwnerLinks(entries(), [row], [moved])[0];
   assert.equal(after.owner, moved.owner); assert.equal(after.digest, row.digest);
   assert.equal(after.status, "unverified"); assert.equal(after.evidence, null);
@@ -44,7 +44,7 @@ test("R39: duplicate, extra and malformed owner records are rejected", () => {
   assert.throws(() => applyOwnerLinks(entries(), [reviewed()], [link(), link()]), /duplicate/);
   assert.throws(() => applyOwnerLinks(entries(), [reviewed()], [{ ...link(), requirements: ["UNKNOWN"] }]), /absent/);
   assert.throws(() => applyOwnerLinks(entries(), [reviewed()], [{ ...link(), negativeTests: [] }]), /invalid/);
-  assert.throws(() => applyOwnerLinks(entries(), [reviewed()], [{ ...link(), callPath: ["src/unrelated.ts#helper"] }]), /invalid/);
+  assert.throws(() => applyOwnerLinks(entries(), [reviewed()], [{ ...link(), callPath: ["apps/oma/src/unrelated.ts#helper"] }]), /invalid/);
 });
 const matrix = (first, last) => Array.from({ length: last - first + 1 }, (_, index) =>
   `| T${String(index + first).padStart(2, "0")} / synthetic | given -> when -> reject the invalid effect |`).join("\n");

@@ -8,8 +8,8 @@
  */
 import test from "node:test";
 import assert from "node:assert/strict";
-import { Transcript, storedLines } from "../src/tui/transcript.js";
-import { CONVERSATION_BOUNDS } from "../src/domain/surface-bounds.js";
+import { Transcript, storedLines } from "@oma/tui/transcript";
+import { CONVERSATION_BOUNDS } from "@oma/domain/surface-bounds";
 
 const LINES = CONVERSATION_BOUNDS.transcriptLines.value;
 const TOTAL_BYTES = CONVERSATION_BOUNDS.transcriptBytes.value;

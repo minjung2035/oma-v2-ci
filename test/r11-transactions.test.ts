@@ -3,7 +3,8 @@ import assert from "node:assert/strict";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { Store, StoreError, type Transaction, type StoreReads } from "../src/store.js";
+import { Store, type Transaction, type StoreReads } from "@oma/storage";
+import { StoreError } from "@oma/domain/errors";
 import { makeValidAgent } from "./fixtures/spec.js";
 import { makeValidOperation } from "./fixtures/valid.js";
 

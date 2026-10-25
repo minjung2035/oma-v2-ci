@@ -8,6 +8,7 @@ import {
   readFileSync,
   rmSync,
   symlinkSync,
+  unlinkSync,
   writeFileSync,
 } from "node:fs";
 import { join, dirname } from "node:path";
@@ -15,89 +16,89 @@ import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
 import { createHash } from "node:crypto";
 import { spawnSync } from "node:child_process";
-import type { HostConfigV1 } from "../implementation/contracts.js";
-import { loadConfig } from "../src/config.js";
+import type { HostConfig } from "@oma/contracts";
+import { loadConfig } from "@oma/config";
 import {
   deploymentManifest,
   deploymentDigest,
   assertDeploymentDigest,
-} from "../src/runtime/deployment-manifest.js";
-import { assertHostDirectoryLayout } from "../src/runtime/assets.js";
-import { assertStorageQuotaSupported } from "../src/domain/resources.js";
-import { assertStorageQuotaAdmission } from "../src/storage/quota.js";
-import { ProcessLock } from "../src/runtime/process-lock.js";
-import { TEST_RESOURCES } from "./fixtures/spec.js";
+} from "#oma-test/app/runtime/deployment-manifest";
+import { assertHostDirectoryLayout } from "@oma/native/directory-layout";
+import { DEPLOYMENT_LAYOUT } from "@oma/domain/deployment";
+import { ProcessLock } from "@oma/native/process-lock";
+import { copyInstalledProduct } from "./fixtures/installation.js";
 
 const project = fileURLToPath(new URL("../../", import.meta.url));
-function config(root: string): HostConfigV1 {
+function config(root: string): HostConfig {
   return {
-    schemaVersion: 1,
+    schemaVersion: 3,
     society: "fixture",
     installation: {
-      node: process.execPath,
-      libdir: root,
-      rootfs: root,
-      deploymentDigest: deploymentDigest(root),
+        node: process.execPath,
+        libdir: root,
+        rootfs: root,
+        deploymentDigest: deploymentDigest(root),
     },
     modelProfiles: {
-      model: {
-        provider: "fixture",
-        model: "fixture",
-        inferenceTimeoutSeconds: 1,
-      },
+        model: {
+            provider: "fixture",
+            model: "fixture",
+            inferenceTimeoutSeconds: 1,
+        },
     },
     agentProfiles: {
-      p: {
-        modelProfile: "model",
-        capabilities: [],
-        delegable: [],
-        childProfile: null,
-        resources: TEST_RESOURCES,
-      },
+        p: {
+            modelProfile: "model",
+            capabilities: [],
+            delegable: [],
+            childProfile: null,
+        },
     },
     principalProfile: "p",
     initialResidents: [],
-    quota: {
-      societyAgents: 1,
-      lineageAgents: 1,
-      storageBytes: 1024,
-    },
     integration: { policyRevision: "fixture", protectedPaths: [], checks: [] },
     limits: {
-      frameBytes: 262144,
-      mailBodyBytes: 262144,
-      subjectBytes: 512,
-      addresses: 64,
-      replyReferences: 64,
-      contextFiles: 256,
-      contextBytes: 8388608,
-      bundleBytes: 268435456,
-      logBytes: 1048576,
-      batchMaxMessages: 24,
-      idleStreamSeconds: 1,
-      receiptWaitSeconds: 1,
-    },
-  };
+        frameBytes: 262144,
+        mailBodyBytes: 262144,
+        subjectBytes: 512,
+        addresses: 64,
+        replyReferences: 64,
+        contextFiles: 256,
+        contextBytes: 8388608,
+        bundleBytes: 268435456,
+        logBytes: 1048576,
+        batchMaxMessages: 24,
+        idleStreamSeconds: 1,
+        receiptWaitSeconds: 1,
+    }
+};
 }
 
 test("P02: canonical deployment manifest pins every selected byte independent of root and traversal order", () => {
   const root = mkdtempSync(join(tmpdir(), "oma-deployment-codec-"));
   const contents: Record<string, string> = {
-    "dist/src/z.js": "z\n",
-    "dist/src/nested/a.js": "a\n",
-    "dist/implementation/contracts.js": "export {};\n",
-    "implementation/systemd/resident.path.in": "[Path]\n",
-    "implementation/schema-v3.sql": "schema\n",
+    "apps/oma/dist/z.js": "z\n",
+    "apps/oma/dist/nested/a.js": "a\n",
+    "packages/contracts/dist/index.js": "export {};\n",
+    "packages/platform-linux/dist/systemd/resident.path.in": "[Path]\n",
+    "packages/storage/dist/schema-v4.sql": "schema\n",
     // AV16: the sandbox's `oma` command is pinned with the rest.
-    "dist/libexec/oma": "#!/bin/sh\n",
+    "apps/oma/dist/libexec/oma": "#!/bin/sh\n",
     "package.json": "{}",
     "package-lock.json": "{}",
   };
+  const workspaces = DEPLOYMENT_LAYOUT.workspaces;
+  for (const {name, root} of workspaces) {
+    contents[`${root}/package.json`] = JSON.stringify({ name, version: "0.1.0" });
+    contents[`${root}/dist/index.js`] = "export {};\n";
+  }
   try {
     for (const [path, bytes] of Object.entries(contents)) {
       mkdirSync(dirname(join(root, path)), { recursive: true });
       writeFileSync(join(root, path), bytes);
     }
+    mkdirSync(join(root, "node_modules/@oma"), { recursive: true });
+    for (const workspace of workspaces) symlinkSync(`../../${workspace.root}`, join(root, "node_modules", workspace.name));
     const expected = {
       version: 1,
       files: Object.keys(contents)
@@ -122,8 +123,24 @@ test("P02: canonical deployment manifest pins every selected byte independent of
       });
       writeFileSync(join(root, path), contents[path]!);
     }
-    rmSync(join(root, "dist/src/z.js"));
-    symlinkSync("nested/a.js", join(root, "dist/src/z.js"));
+    const clientLink = join(root, "node_modules/@oma/client");
+    unlinkSync(clientLink);
+    symlinkSync("../../packages/domain", clientLink);
+    assert.throws(() => deploymentDigest(root), { code: "UNSUPPORTED_PROFILE" });
+    unlinkSync(clientLink);
+    symlinkSync("../../packages/client", clientLink);
+    assert.equal(deploymentDigest(root), digest);
+    for (const lookup of ["packages/native/node_modules", "packages/node_modules", "apps/oma/dist/node_modules"]) {
+      const foreign = join(root, lookup, "@oma/domain");
+      mkdirSync(foreign, { recursive: true });
+      writeFileSync(join(foreign, "package.json"), JSON.stringify({ name: "@oma/domain", version: "0.1.0" }));
+      writeFileSync(join(foreign, "index.js"), "export const foreign = true;\n");
+      assert.throws(() => deploymentDigest(root), { code: "UNSUPPORTED_PROFILE" }, lookup);
+      rmSync(join(root, lookup), { recursive: true });
+      assert.equal(deploymentDigest(root), digest);
+    }
+    rmSync(join(root, "apps/oma/dist/z.js"));
+    symlinkSync("nested/a.js", join(root, "apps/oma/dist/z.js"));
     assert.throws(() => deploymentDigest(root), {
       code: "UNSUPPORTED_PROFILE",
     });
@@ -135,19 +152,7 @@ test("P02: canonical deployment manifest pins every selected byte independent of
 test("P02: installed broker refuses deployment mismatch BEFORE SQLite or unit effects", () => {
   const root = mkdtempSync(join(tmpdir(), "oma-deployment-entry-"));
   try {
-    for (const path of [
-      "dist/src",
-      "dist/implementation",
-      "implementation/systemd",
-      "implementation/schema-v3.sql",
-      "dist/libexec",
-      "package.json",
-      "package-lock.json",
-    ]) {
-      mkdirSync(dirname(join(root, path)), { recursive: true });
-      cpSync(join(project, path), join(root, path), { recursive: true });
-    }
-    symlinkSync(join(project, "node_modules"), join(root, "node_modules"));
+    copyInstalledProduct(project, root);
     const cfg = config(root);
     const configPath = join(root, "host.json");
     const state = join(root, "data/oma/fixture");
@@ -166,7 +171,7 @@ test("P02: installed broker refuses deployment mismatch BEFORE SQLite or unit ef
       const result = spawnSync(
         process.execPath,
         [
-          join(root, "dist/src/entry/broker.js"),
+          join(root, "apps/oma/dist/entry/broker.js"),
           "--society",
           "fixture",
           "--config",
@@ -184,7 +189,7 @@ test("P02: installed broker refuses deployment mismatch BEFORE SQLite or unit ef
       lock.close();
       return result.stderr;
     };
-    const asset = join(root, "dist/src/mail/facts.js");
+    const asset = join(root, "packages/mail/dist/facts.js");
     const bytes = readFileSync(asset);
     writeFileSync(
       asset,
@@ -220,19 +225,4 @@ test("P05: symlinked host ancestors are explicitly unsupported, not store corrup
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
-});
-
-test("P01: positive storage quota admits an observed owned tree and rejects overflow", () => {
-  const root = mkdtempSync(join(tmpdir(), "oma-storage-quota-"));
-  try {
-    writeFileSync(join(root, "payload"), Buffer.alloc(4096));
-    assert.doesNotThrow(() => assertStorageQuotaAdmission(root, 1024 * 1024));
-    assert.doesNotThrow(() => assertStorageQuotaAdmission(root, 1));
-    assert.doesNotThrow(() => assertStorageQuotaAdmission(root, 1024 * 1024, 1024 * 1024));
-  } finally {
-    rmSync(root, { recursive: true, force: true });
-  }
-  assert.doesNotThrow(() => assertStorageQuotaSupported(0));
-  for (const cap of [-1, Infinity, NaN])
-    assert.throws(() => assertStorageQuotaSupported(cap), { code: "UNSUPPORTED_PROFILE" });
 });

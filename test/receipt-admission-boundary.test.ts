@@ -1,8 +1,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { StoreError } from "../src/domain/errors.js";
-import { receiptOfOperation } from "../src/storage/receipt-projector.js";
-import { receiptExit, isRequestNotFound, receiptNotFound } from "../src/protocol/receipts.js";
+import { StoreError } from "@oma/domain/errors";
+import { receiptOfOperation } from "@oma/protocol/receipt-projector";
+import { receiptExit, isRequestNotFound, receiptNotFound } from "@oma/protocol/receipts";
 import { receiptOperation, receiptOperationRecord } from "./fixtures/receipt-operation.js";
 
 const pending = receiptOperation();

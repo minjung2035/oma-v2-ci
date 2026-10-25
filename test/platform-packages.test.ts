@@ -1,3 +1,4 @@
+import { encodePackageIndex } from "#oma-test/app/runtime/packages/index";
 /** DR25 on macOS (macos-platform §4.5 packages.replace, Host API packages.sync):
  * the packages `oma pi` installs on the Mac reach the engine whole, and the
  * engine's own `oma pi` code takes them on -- over a driver that runs the real
@@ -11,30 +12,30 @@ import { spawn, spawnSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { encodeFrame } from "../src/frame.js";
-import { readLeadingFrame } from "../src/platform/rpc.js";
-import type { SessionLauncher } from "../src/platform/guest/host.js";
-import { HostService } from "../src/platform/host/service.js";
-import { newHostRecord, writeHostRecord } from "../src/platform/host/record.js";
-import { HOST_GUEST_PROTOCOL, PLATFORM_FRAME_BYTES } from "../src/protocol/host-guest.js";
-import { HOST_API_VERSION } from "../src/protocol/host-api.js";
-import { PACKAGE_ARCHIVE_BOUNDS, readPackageArchive, writePackageArchive } from "../src/platform/package-archive.js";
-import { PACKAGE_GENERATIONS, PACKAGE_STORE, readPackageIndex, pinPackageGeneration } from "../src/runtime/packages/store.js";
-import { loadConfiguration } from "../src/config.js";
-import { defaultSocietyFor } from "../src/config/defaults.js";
-import { sha256Hex } from "../src/hash.js";
+import { encodeFrame } from "@oma/protocol/frame";
+import { readLeadingFrame } from "#oma-test/app/platform/rpc";
+import type { SessionLauncher } from "#oma-test/app/platform/guest/host";
+import { HostService } from "#oma-test/app/platform/host/service";
+import { newHostRecord, writeHostRecord } from "@oma/platform-mac/record";
+import { HOST_GUEST_PROTOCOL, PLATFORM_FRAME_BYTES } from "@oma/protocol/host-guest";
+import { HOST_API_VERSION } from "@oma/protocol/host-api";
+import { PACKAGE_ARCHIVE_BOUNDS, readPackageArchive, writePackageArchive } from "#oma-test/app/platform/package-archive";
+import { PACKAGE_GENERATIONS, PACKAGE_STORE, readPackageIndex, pinPackageGeneration } from "#oma-test/app/runtime/packages/store";
+import { loadConfiguration } from "@oma/config";
+import { defaultSocietyFor } from "@oma/config/defaults";
+import { sha256Hex } from "@oma/domain/canonical-json";
 import { LocalDriver, listenSilently } from "./fixtures/local-guest.js";
-import { RequestLedger } from "../src/platform/guest/requests.js";
-import { GuestProjects } from "../src/platform/guest/project.js";
-import { GuestPackages } from "../src/platform/guest/packages.js";
+import { RequestLedger } from "#oma-test/app/platform/guest/requests";
+import { GuestProjects } from "#oma-test/app/platform/guest/project";
+import { GuestPackages } from "#oma-test/app/platform/guest/packages";
 import { createCompleteConfigurationFixture } from "./fixtures/configuration.js";
-import { RESIDENT_PATHS, confinedPath } from "../src/sandbox.js";
-import { packageStoreRoot } from "../src/runtime/packages/store.js";
-import { applyPackageArchive, type ApplyStep } from "../src/application/packages-apply.js";
+import { RESIDENT_PATHS, confinedPath } from "@oma/domain/resident-paths";
+import { packageStoreRoot } from "#oma-test/app/runtime/packages/store";
+import { applyPackageArchive, type ApplyStep } from "#oma-test/app/application/packages-apply";
 import { fileURLToPath } from "node:url";
-import { readExtensions, toggleExtension } from "../src/application/extensions.js";
+import { readExtensions, toggleExtension } from "#oma-test/app/application/extensions";
 import { fakeNpmRegistry } from "./fixtures/fake-npm-registry.js";
-import { readPersonalSettings, updatePersonalSettings } from "../src/runtime/personal-settings.js";
+import { readPersonalSettings, updatePersonalSettings } from "#oma-test/app/runtime/personal-settings";
 import { holdSocketNames } from "./fixtures/socket-names.js";
 
 const HELLO = "packages:npm/node_modules/oma-hello-ext/extensions/hello.ts";
@@ -62,7 +63,7 @@ test("DR25/mac: the packages archive carries the store's list and installed file
   writeFileSync(join(store, "git/github.com/a/b/.git/HEAD"), "ref: refs/heads/main\n");
   writeFileSync(join(store, "git/github.com/a/b/index.ts"), "export default function () {}\n");
   mkdirSync(join(store, "tmp")); writeFileSync(join(store, "tmp", "x"), "scratch");
-  writeFileSync(join(store, "oma-extensions.json"), "[]");
+  writeFileSync(join(store, "oma-extensions.json"), encodePackageIndex([]));
   writeFileSync(join(store, "auth.json"), "{\"secret\": 1}");
   const archive = join(dir, "packages.archive");
   await writePackageArchive(store, archive);
@@ -270,12 +271,12 @@ test("DR25/mac: a store that is a link to its generation is read, pinned and mou
   try {
     const generation = join(f.root, PACKAGE_GENERATIONS, `p-${"a".repeat(64)}`);
     macStore(generation, { "oma-hello-ext": hello });
-    writeFileSync(join(generation, "oma-extensions.json"), JSON.stringify([{ source: "npm:oma-hello-ext", entries: [HELLO], skills: [], prompts: [], themes: [] }]));
+    writeFileSync(join(generation, "oma-extensions.json"), encodePackageIndex([{ source: "npm:oma-hello-ext", entries: [HELLO], skills: [], prompts: [], themes: [] }]));
     const store = join(f.root, PACKAGE_STORE);
     symlinkSync(`${PACKAGE_GENERATIONS}/p-${"a".repeat(64)}`, store);
     assert.deepEqual(readPackageIndex(store), [{ source: "npm:oma-hello-ext", entries: [HELLO], skills: [], prompts: [], themes: [] }]);
     f.edit("host.json", host => { host.installation.packages = store; });
-    f.edit("roles/resident.json", role => { role.extensions = ["dist/src/pi-extension.js", HELLO]; });
+    f.edit("roles/resident.json", role => { role.extensions = ["packages/extension/dist/index.js", HELLO]; });
     const pinned = loadConfiguration(f.path).roles.resident!.extensions.find(item => item.path.endsWith("hello.ts"))!.path;
     assert.equal(pinned, join(realpathSync(generation), "npm/node_modules/oma-hello-ext/extensions/hello.ts"));
     // The runner mounts the generation itself, so the pinned file is under the mount.
@@ -303,7 +304,7 @@ test("DR25/mac: oma pi install on the Mac installs over the Mac's store and the 
     npm_config_update_notifier: "false" };
   const mac = (...args: string[]) => new Promise<{ status: number | null; out: string }>(resolve => {
     const child = spawn(process.execPath, ["--import", new URL("./fixtures/socket-names.js", import.meta.url).href,
-      new URL("../src/entry/oma-mac.js", import.meta.url).pathname, "pi", ...args], { env, stdio: ["ignore", "pipe", "pipe"] });
+      new URL("../../apps/oma/dist/entry/oma-mac.js", import.meta.url).pathname, "pi", ...args], { env, stdio: ["ignore", "pipe", "pipe"] });
     let out = ""; child.stdout.on("data", chunk => { out += chunk; }); child.stderr.on("data", chunk => { out += chunk; });
     const timer = setTimeout(() => { child.kill("SIGKILL"); }, 150_000);
     child.on("close", status => { clearTimeout(timer); resolve({ status, out }); });
@@ -365,7 +366,7 @@ test("DR25/mac: an application stopped after any of its steps, run again for the
     // The engine's store as the last request left it: a link to an empty generation.
     const old = join(data, PACKAGE_GENERATIONS, `p-${"0".repeat(64)}`);
     mkdirSync(old, { recursive: true });
-    writeFileSync(join(old, "oma-extensions.json"), "[]");
+    writeFileSync(join(old, "oma-extensions.json"), encodePackageIndex([]));
     symlinkSync(`${PACKAGE_GENERATIONS}/p-${"0".repeat(64)}`, join(data, PACKAGE_STORE));
     const mirror = join(dir, "projects", randomUUID());
     mkdirSync(mirror, { recursive: true });

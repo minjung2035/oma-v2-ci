@@ -73,7 +73,7 @@ new-operations/
 각 role 파일은 다음 세 필드만 가진다. 그 밖의 필드는 거절한다. (이전에는 선택 필드 `toolSurface`가 있었으나, 표면 투영은 OMA의 내부 정책이므로 이제 설정에 두지 않는다 — D23.)
 
 - `agentProfile`: 기존 host 설정의 동일 프로필 객체. `modelProfile`로 `models.json`의 모델을 선택한다. capabilities/delegable/childProfile/resources는 기존 필수 계약을 유지한다.
-- `extensions`: 설치 `installation.libdir` 아래의 상대 JS/TS 파일 목록. 첫 항목은 항상 `dist/src/pi-extension.js`이며 생략·중복·자동 탐색은 허용하지 않는다. 예: `["dist/src/pi-extension.js", "extensions/verifier.js"]`.
+- `extensions`: 설치 `installation.libdir` 아래의 상대 JS/TS 파일 목록. 첫 항목은 항상 `packages/extension/dist/index.js`이며 생략·중복·자동 탐색은 허용하지 않는다. 예: `["packages/extension/dist/index.js", "extensions/verifier.js"]`.
 - `promptFile`: **config.json이 있는 디렉터리 기준** 상대 UTF-8 파일. 예: `prompts/verifier.md`.
 
 추가 extension 코드는 설치 디렉터리의 `extensions/` 등에 별도로 배치한다. 설정 로더 자체는 코드를 import하지 않지만 runner entry는 시작 직전에 기록된 SHA-256을 다시 확인한 뒤 core 및 role extension을 Pi에 명시적으로 `-e` 전달한다. 자동 탐색은 꺼 둔다. 추가 extension은 Pi host process와 같은 권한을 갖는 **trusted deployment code**이므로 model tool처럼 취급하면 안 된다. 기존 OMA 공통 extension의 프로토콜/검증 코드를 역할별로 복제하지 않는다. provider 선택·가격·codec·token 한도·credential 참조는 동봉 엔진의 것이므로(INF-001) v1 설정 schema에 없다. OMA는 가격을 계산하거나 비용을 집행하지 않으며, API key는 설정 파일에 넣는 자리가 아니다.
@@ -134,7 +134,7 @@ tree scan quota를 kernel hard cap이나 ENOSPC에도 성공하는 보장으로 
 
 ## 현재 실행 제한
 
-로딩 결과는 기존 closed `HostConfigV1`으로 검증되므로 wire/DB/persisted v1 schema를 바꾸지 않는다. Production runner는 profile의 model/provider와 prompt/extension snapshot을 새 RPC session에 전달한다. `provider=pi, model=current`는 `--model`을 생략해 현재 Pi 연결을 사용하며, 그 외 값은 `provider/model`로 Pi에 요청한다. terminal boundary의 pinned durable receipt가 일치해야 batch를 completed/presented로 commit한다.
+로딩 결과는 현재 closed `HostConfig` schema 3로 검증한다(DR46). 이전 설정과 journal 형식은 자동 변환하지 않으며 새 개발 상태 디렉터리를 사용한다. 이 설정 전환은 broker wire 형식과 별개다. Resident runner는 수락된 modelProfile 참조를 unit에서 받고 그 참조의 현재 model/provider 내용과 역할 prompt/extension snapshot을 새 RPC session에 전달한다. 역할의 참조 편집으로 기존 Agent의 수락 참조를 바꾸지 않는다. `provider=pi, model=current`는 `--model`을 생략해 현재 Pi 연결을 사용하며, 그 외 값은 `provider/model`로 Pi에 요청한다. terminal boundary의 pinned durable receipt가 일치해야 batch를 completed/presented로 commit한다.
 
 Core extension은 shell/powershell tool을 거절하고 built-in file tool을 agent workspace 안으로 제한하며 OMA mail read/send/ack/status만 고정 argv로 노출한다. Pi project extension/skill/prompt/context 자동 탐색은 끈다. 추가 role extension은 이 제한 밖의 trusted code가 될 수 있으므로 운영자가 별도 검토해야 한다.
 
@@ -206,6 +206,6 @@ Tool 표면 투영은 더 이상 role 설정이 아니다(D23). 모델에게 보
 
 현재 실행 환경의 검증 범위와 미실행 항목은 [validation](implementation/validation.md)을 확인한다. 플랫폼의 요구 조건은 [Core 계약](implementation-spec.md)과 [macOS 계약](macos-platform.md)을 따른다. 이전 WP31 지원 조합·lockfile 수정 기록은 [과거 qualification 기록](archive/qualification-before-consolidation.md#운영-문서의-wp31-지원-checkpoint)에 보존했다.
 
-호환성: WP03 이전에 렌더된 Resident unit은 launch location이 없고, WP25 이전 unit은 accepted 자원(`OMA_RESOURCES_HEX`)이 없어 runner가 시작을 거절한다. 기존 unit을 다시 렌더하는 경로는 없으므로 그런 society의 Resident는 다시 만들어야 한다. 관리형 설정 generation(WP13)은 이전 버전 writer가 알지 못하므로, 이전 바이너리로 같은 설정을 편집하지 않는다.
+DR46: HostConfig schema 3·DB schema 4·plan envelope v2·journal committed-v2·host/guest protocol 7만 지원한다. 이전 형식은 명시적으로 거절하며 자동 변환·덮어쓰기·삭제하지 않는다. 새 개발 상태 디렉터리를 사용한다. 새 Resident unit은 수락된 profile/modelProfile을 명시적으로 전달하며, 현재 역할의 참조를 대체값으로 사용하지 않는다. 같은 빌드에서 끊긴 write·run의 복구와 확정된 receipt 정산은 유지한다.
 
 Mail 화면은 society 전체의 공개된 메일을 개별 행으로 보여 준다. Principal이 보낸 GOAL·작업 지시, Worker 간 메일과 응답도 포함한다. 발신자는 실제 이름을 사용하고 자동 merge 완료 공지는 `OMA / notice`, 요청자는 상세의 `Requested by`에 표시한다. `●`는 Principal 전달 대기이며 화면에서 여는 동작은 ACK를 보내지 않는다.

@@ -1011,7 +1011,7 @@ their host counterparts); repair adds owner bits only inside the owned boundary
 never *absent* — in particular no empty index or empty listing may be committed on top
 of damage; and one bad entry must never abort a whole sweep (retention beats wedge).
 
-Enforcement: (1) the primitive set in `src/storage/directory.ts` +
+Enforcement: (1) the primitive set in `packages/storage/src/directory.ts` +
 `src/platform/host/files.ts` is the only sanctioned path for owned trees;
 (2) an architecture/static check pins that owned-path accesses do not call raw
 `readdir`/`openat`/`rm`/`lstat` outside the owned-directory module — new bypasses fail
@@ -1563,12 +1563,12 @@ Git changeset 도구로 기록한다. 검증·실패 기록과 native 한계는
 이미 있다. 무한 루프 주장 자체는 현재 소스·기존 37개 실행에서 재현되지 않았다.
 다만 중복 파서·느슨한 응답 shape·read 전체의 문자 길이 제한은 실제로 개선할 대상이다.
 
-- [NativeChannel](../src/platform/host/native-channel.ts)이 두 helper client의 줄 소비·UTF-8
+- [NativeChannel](../packages/platform-mac/src/native-channel.ts)이 두 helper client의 줄 소비·UTF-8
   바이트 제한·응답 shape·ID·pending timer를 소유한다. 기존 1 MiB helper wire 경계를 줄별로
   검사하고 여러 유효한 줄의 합으로 연결을 거절하지 않는다. Keychain의 strict correlation과
   VM의 늦은 응답 처리 차이, credential refusal의 비밀 보호를 유지한다. EOF는 요청을 끝내며
   실제 helper exit만 VM 종료의 증거다. Swift/native 실행은 별도 Mac 검증 대상이다.
-- [ProjectMutations](../src/platform/guest/project-mutations.ts)는 mirror별 import·세션
+- [ProjectMutations](../apps/oma/src/platform/guest/project-mutations.ts)는 mirror별 import·세션
   startup·bound society archive를 outcome 게시까지 직렬화한다. 서로 다른 mirror는 동시에
   진행할 수 있다. 모든 project role 설정을 쓰는 packages.replace는 같은 owner의 global exclusive
   구간을 사용한다. unbound archive도 owner에 등록해 package 설정 변경과 겹치지 않는다.
@@ -1587,12 +1587,12 @@ Git changeset 도구로 기록한다. 검증·실패 기록과 native 한계는
   unit의 not-found/inactive/dead, 두 PID 0, 빈 ControlGroup을 모두 관측해야 stopped다.
   불완전 관측은 unknown이며 archive intent를 pending으로 남긴다. GuestHost의 society/project
   fence는 stop 확인·manifest·tar·결과 게시가 끝날 때까지 새 startup/import/maintenance를 막는다.
-- [withProcessWriterLock](../src/runtime/process-writer.ts)이 Keychain credential와 archive key의
+- [withProcessWriterLock](../packages/process/src/writer.ts)이 Keychain credential와 archive key의
   monotonic contention wait·AbortSignal·inode fence·cleanup을 소유한다. credential은 기존 helper
   availability budget인 60 s, archive key는 기존 30 s를 기본으로 사용한다. lock을 취득한 write의
   수명이나 상속한 helper의 실제 close를 대기 deadline으로 잘라 성공/실패로 바꾸지 않는다.
   OS writer 앞의 중복 promise queue는 제거해 같은 프로세스의 대기도 이 contention budget에 포함한다.
-- 공통 [RPC dispatcher](../src/platform/rpc-server.ts)는 HANDOFF와 Answer를 함께 소유한다.
+- 공통 [RPC dispatcher](../apps/oma/src/platform/rpc-server.ts)는 HANDOFF와 Answer를 함께 소유한다.
   Host API와 Guest control/society가 이 module을 참조한다. Guest server의 peer authentication,
   hello·service startup 책임과 wire 버전·method·오류 의미는 유지한다.
 
@@ -1724,3 +1724,537 @@ credential을 발견하면 앞 chunk의 prefix까지 전달하지 않은 채 연
 보존한다. 이전 모드 선택창을 가정하던 Mac PTY 시험은 현재 명시적 Personal 전환과
 일반 종료를 실제 CLI/holder로 검증한다. §23.11의 기존 Mail 변경을 대조한 N-001 hash도
 현재 architecture 바이트에 결박하며 architecture 원문은 수정하지 않는다.
+
+## DR46 — 출시 전 레거시 제거와 workspace 분리
+
+사용자가 출시 전 호환성을 유지하지 않는 [모듈 전환 명세](modularization-spec.md)의 구현을 승인했다
+(2026-10-23). Priority 0가 최상위다. 이전 개발 형식을 지원하지 않는 것은 허용하지만, 이미 읽을 수
+있는 확정 사실을 현재 권한이나 설정으로 재해석하는 것은 허용하지 않는다. 형식을 제거하는 단계는
+식별값을 바꾸고 이전 상태를 명시적으로 거부하며, 기존 상태를 자동 삭제하거나 다시 쓰지 않는다.
+
+DR41의 디렉터리 단위 독립 빌드에서 npm workspace의 공개 API·직접 의존·자체 빌드·테스트로
+전환한다. 고정 architecture에 적힌 workspace 미사용과 TUI 전용 tsconfig 경로는 이 결정으로
+대체한다. 제품의 프로세스·서비스·DB 수, 단일 writer, acceptance transaction과 durable 경계는
+늘리거나 나누지 않는다. 패키지별 버전도 하나의 제품 버전으로 맞춘다.
+
+첫 전환 범위는 contracts, domain, protocol, client, TUI다. 공통 계약은 구현 port를 재수출하지
+않으며 concrete 구현을 참조하던 두 facade를 제거한다. 순수 설정·질문 모델과 lexical path 판정은
+domain, 행/영수증 codec은 protocol, 소켓 수명은 client, Pi 내부 editor 연결은 engine adapter가
+소유한다. 효과가 없던 lifecycle quota 함수·타입·호출과 그 함수만 유지하던 테스트도 제거한다.
+현재 설정·operation·receipt의 형식은 이 첫 전환에서 변경하지 않는다.
+
+확장과 TUI는 공개 contracts/domain/protocol/client 계약을 사용할 수 있다. 확장이 host 조립,
+SQLite writer, broker·플랫폼 관리 기능을 가져오는 경로는 계속 거부한다. TUI는 client 소켓을
+직접 열지 않으며 terminal primitive와 주입받은 UI port를 사용한다. 타입 의존도 순환 검사에
+포함하고 공개 API는 각 package.json의 명시적 exports가 소유한다.
+
+배포는 workspace의 compiled tree와 package.json도 해시에 결박한다. 설치된 workspace의 해석이
+manifest에 적힌 설치 내부 경로와 다르면 거부한다. 검증은 모든 workspace source·manifest·설정·
+테스트를 입력으로 포함한다. 출력과 개발 cache는 입력으로 오인하지 않는다. 기존 kill/retry/restart
+경계와 single-owner 판정은 같은 함수를 이전하며, 분리된 패키지마다 재구현하지 않는다.
+
+이 결정은 전체 개편이나 실제 플랫폼 검증의 완료 기록이 아니다. 남은 storage/native/process,
+기능 모듈, engine/tool, 플랫폼·app 조립과 추가 레거시 제거는 명세의 후속 단계다. 각 실행의 판정과
+미실행 범위는 [validation](implementation/validation.md)이 소유한다. 과거 검토·runtime evidence의
+바이트와 PASS는 새 소스로 재결박하지 않는다.
+
+DR46 구현 보충: native/process를 같은 workspace 경계로 분리한다. FD·PTY·containment와 cleanup의
+owner는 native이며, subprocess·취소·실제 close·상속 fence의 owner는 process다. 함수 본문과 자원
+반납 순서를 유지한다. root typecheck는 `implementation/tests`도 포함하며, 삭제된 구현 별칭을
+검사하던 compile-only fixture는 실제 consumer port의 conformance와 현재 wire 집합을 검사한다.
+TUI 숨김 목록은 이동한 package source/dist와 private prompt adapter를 가리킨다.
+
+DR46 저장 기반 보충: SQLite와 durable 파일 primitive는 `@oma/storage`가 소유하고, snapshot FD reader와
+암호학적 ID 생성은 `@oma/native`로 옮긴다. 기존 `src/ids.ts`의 문법 재수출 facade는 제거한다.
+설치 schema는 저장 패키지의 명시된 자산이며 소스 checkout 없이 사용한다. transaction·commit·
+파일 게시의 함수 본문과 owner는 분할하지 않는다. 이 단계는 저장 형식을 바꾸지 않는다.
+
+효과가 없던 StorageAdmission/ResourceGate의 인자·상태·reserve/release와 별도 stream 대기 단계를
+제거한다. 손상·drain의 실제 AdmissionGate와 preflight/dispatch의 현재 권한 검사, 실행이 끝날 때까지의
+spool·peer 소유는 유지한다. 관찰용 tree 크기 helper는 시험 fixture만 소유한다. D04의 자원 category
+분류는 실행 admission 계약에서 제거하며, 실제 파일 공간 부족과 accepted/unknown 판정은 그대로다.
+
+배포 검증은 각 compiled tree에서 Node가 검색하는 모든 조상과 내부 node_modules 위치의 workspace
+해석을 같은 설치의 정확한 owner 경로와 대조한다. 루트 링크만 확인하면 nested 사본이 같은 배포 해시
+아래서 다른 domain 규칙을 실행할 수 있었다. resolver cache에 기대지 않고 해석 위치를 직접 관찰한다.
+
+DR46 설정 기반 보충: `@oma/config`는 로드·검증·generation 게시·child policy snapshot과 역할 prompt를
+소유한다. 기존 generation의 commit 순서와 frozen configuration bytes는 바꾸지 않는다. 정확한
+containment를 위한 native 파일 primitive는 직접 의존으로 선언하고, 저장 패키지는 공개 파일 API만
+사용한다. 순수 Resident 경로와 review 문서 크기 판정은 domain, sandbox path DTO는 contracts가
+소유한다. sandbox와 config의 옛 문법/상수 재수출은 소비자가 실제 owner를 부르도록 제거한다.
+
+DR46 검증 보충: owned-state provenance와 transaction 분석도 public workspace API를 실제 source
+정의로 해석한다. 설치된 declaration만 보면 callee 본문의 소유 경로 전달이 끊기며, root src만
+검사하면 이동한 transaction 효과가 검사 밖으로 빠진다. 같은 해석 owner를 사용하고 모든 authored
+workspace source를 검사한다. 선언이 설치된 상태에서 workspace를 가로지르는 owned-path 전달과
+workspace 안 async/파일 transaction을 거부하는 negative control을 추가한다. 이것은 기존 P0-8과
+M-004의 적용 범위를 복원한 것으로, 예외 목록을 줄여 결함을 감추지 않는다.
+폐기된 quota 함수를 실행하던 qualification probe·lane 인자·그 전용 fixture와 존재하지 않는
+quota-observer 시험 이름도 제거한다. 실제 systemd·cgroup·rootfs 자격 검사는 그대로 필요하다.
+
+DR46 세션 정리: 이력의 birth 기록이 없으면 재개를 거부하고 새 개발 session 디렉터리를 사용하도록
+알린다. project binding과 디렉터리 배치로 birth를 만들어 내지 않으며 이력 목록에도 추정 항목을
+넣지 않는다. 실제 birth 기록의 형식과 의미는 그대로다. 같은 빌드에서 시작이 끊긴 뒤 birth를
+게시하는 정상 경로는 유지한다. D05/I49의 옛 basename Society 이름 검색과 전용 helper·fixture를
+제거한다. 기존 디렉터리는 삭제·이름 변경·묵시적 bind하지 않는다. explicit project binding과
+현재 해시 기반 Society 이름의 충돌 검사는 유지한다.
+
+DR46 형식 전환 보충: host 설정은 schema 2의 단일 `HostConfig`로 바꾼다. 효과가 없는 top-level
+quota와 egress 선언을 제거하며, 이전 schema나 제거된 필드는 명시적으로 거절한다. 저장된 파일을
+자동 변환·덮어쓰기·삭제하지 않는다. resource spec의 실제 정리는 별도 durable 형식 전환에서 한다.
+host/guest protocol은 7만 사용한다. CONNECT의 guest role/allow metadata와 placeholder의 옛
+무보유/기본 timeout fallback을 제거한다. 매 placeholder는 명시한 model silence와 열린 socket의
+run lease를 가진다. 연결 종료·boot 변경·stop까지 relay/tunnel ownership을 유지한다. destination
+허용 범위와 credential 경계는 유지하며, 이전 protocol과 상호 통신하는 호환 범위는 제공하지 않는다.
+
+DR46 journal 정리: 관리형 journal은 이름이 형식을 식별하는 `committed-v2` 하나만 사용한다.
+이전 `committed`가 존재하면 load·edit·collection 전에 형식 불일치로 거부하고 bytes를 보존한다.
+새 파일에서는 previous/current 쌍만 읽으며 lone-generation decoder를 제거한다. 새 append가 중간에
+끊긴 경우의 newline 분리와 불완전한 관측의 keep-all은 유지한다. 파일명으로 형식을 구분하므로
+같은 빌드에서 끊긴 쌍의 첫 generation을 옛 형식으로 오해해 복구를 막지 않는다. schema 2의
+agent profile도 닫힌 필드 집합으로 검증하며, 미지 필드를 보존하던 D23의 이전 빌드 호환은 제거한다.
+
+DR46 도구 기반 보충: `@oma/tool-runtime`이 contained file/search/writer와 도구 출처·surface·child 환경,
+요청 key와 vendor 검증의 공통 실행 계약을 소유한다. 각 tool이 자기 vendor asset root를 명시하고
+공통 verifier가 다른 workspace의 자산 위치를 추측하지 않는다. 파일/child/queue의 종료 owner와
+원래 request-key 계산은 유지한다. extension의 UTF-8·식별자·batch codec 사본은 제거하고 실제
+domain/protocol 공개 owner를 사용한다. 따라서 PI-001의 옛 문법 사본 예외도 제거한다. RFC 표시
+역변환은 domain의 순수 helper 하나를 부르며 실제 actor membership 권한은 각 accepting owner가
+별도로 검사한다. 이 공통 runtime은 L2 library로 두고 기능·host·SQLite 구현을 import하지 않는다.
+
+DR46 quarantine 정리: 실제 namespace import는 resource cap·timeout을 적용하지 않으므로
+QUARANTINE_RESOURCES와 GitPaths의 quarantine resource/tmp 선언·composition 인자와 그 API만
+유지하던 시험을 제거한다. unshare·격리 mount·canonical object 관측·실제 child 종료와 staging
+lease는 유지한다. VM의 실제 메모리 할당이나 일반 command 관측 deadline과 혼동하지 않는다.
+
+DR46 격리 설치 보충: 독립 tarball 검증은 제품의 단일 lockfile에서 각 package가 선언한 내부·외부
+의존 폐쇄만 선택해 `npm ci`한다. nested 배치·resolved 버전·integrity를 유지하며 루트의 다른
+의존 선언을 주입하지 않는다. 새 registry 해석은 Pi의 다른 전이 버전을 선택해 실제 API 로드를
+깨뜨렸으므로 제품의 고정 바이트 검증으로 사용하지 않는다. OMA의 공개 declaration과 consumer는
+엄격히 검사한다. 프로젝트의 외부 library 진단 제외 정책과 구분해 upstream declaration 진단은
+별도 수치로 남긴다. 자체 declaration의 잘못된 타입·누락 import와 root cwd의 Node type 누출을
+거부하는 음성 대조를 두며, 모든 public declaration이 실제 검사된 경로인지 대조한다.
+
+DR46 journal 검증 보충: 기존 설정 commit의 kill observer가 journal append·file flush·parent flush도
+지나도록 연결한다. 실제 짧은 쓰기 뒤 1/66/133/134번째 byte에서 SIGKILL하고 같은 frozen
+candidate를 재시도해 manifest와 rollback predecessor를 대조한다. journal write가 0을 반환하면
+무한 반복하거나 commit 성공으로 처리하지 않고 BROKER_UNAVAILABLE로 거부한다. 설정 commit
+point와 journal 선행 순서·불완전 기록의 보존 의미는 바꾸지 않는다.
+
+DR46-F01 수정 결정: 다음 형식의 Resident unit은 수락한 profile/modelProfile 참조를 명시적으로
+전달하고 현재 역할 설정에서 참조를 다시 만들지 않는다. 없는 frozen 참조는 거절하며 대체하지
+않는다. 참조의 모델 내용은 기존 next-activation 시점에 읽는다. Worker 모델 편집도 기존 참조의
+내용을 고치며 수락된 참조를 바꾸지 않는다. 새 기본 설정은 Principal과 Worker의 모델 참조를
+처음부터 나눈다. Principal과 공유된 Worker 참조를 한 역할만 바꾸는 편집은 묵시적 분리/재지정
+대신 거절하며, 직접 작성한 shared profile 자체는 허용한다. 현재 실행 중인 엔진의 snapshot은
+설정 편집으로 바뀌지 않는다. 구현과 종료/재시작 증거는 후속 검증으로 남긴다.
+
+DR46 자원/상태 형식 전환: HostConfig schema 3·DB user_version 4·명시적인 plan v2 envelope만
+읽고 쓴다. 효과 없는 7필드 ResourceLimits·check 자원 snapshot·runner/systemd의 자원 전달과
+표시·contained tool의 무시되는 크기 인자를 제거한다. 실제 VM RAM 할당, 프로세스 취소와 종료
+관측, model silence, protocol bounds, FD·snapshot·writer ownership은 유지한다. plan은
+{version:2,intent:...}로 새 수락 직전에 직렬화하며 기존 저장 bytes를 보충/변환하지 않는다.
+이전 DB/설정/plan 형식은 명시적으로 거절하고 보존한다. 형식 전환과 별개인 같은 빌드의
+불완전 게시·journal·unknown 보존은 계속 필요하다. 이전 자원 한도만을 증명하던 시험은
+퇴역시키며 다른 사실을 증명하는 시험의 식별자를 반대 의미로 재사용하지 않는다.
+
+DR46 시험 퇴역 기록(실행 PASS가 아님):
+- `test/adversarial-repairs.test.ts` — AV-06: saved deadlines remain executable and reject derived unsafe integers at validation
+- `test/worker-autonomy.test.ts` — FI-6/UNIT-003: the reference profile gives a Worker a dev-workload budget -- 4 GiB and 256 tasks
+- `test/phase4.test.ts` — WP25.03 / D05: a Resident's unit carries its accepted resources, not the current profile's
+- `test/operations-config.test.ts` — WP25.03 / D05: a Resident runs with its accepted resources; the current profile only names its model
+- `test/contained-tools.test.ts` — P0V-74 / R6-18: the quota is decided at the write, so two writes that each fit cannot together exceed it
+- `test/contained-tools.test.ts` — G10-02 / P0: a spool the quota cannot hold is not a silent truncation -- the complete result rides inline with the reason
+- `test/contained-tools.test.ts` — DR27/INV10: concurrent empty-file writes and their parent directories share the same quota owner
+- `test/contained-tools.test.ts` — DR27/P0V-122: at the exact quota an equal-size edit and a shrinking write remain allowed
+- `test/scenario-boundaries.test.ts` — SCN-B04: concurrent Worker writes cannot exceed the workspace quota; the one that fits lands (P0V-74, R6-18)
+- `test/scenario-boundaries.test.ts` — DR27/INV10: a Worker cannot exhaust its workspace with empty files or parents, and can still rewrite an existing empty file
+- `test/sandbox-environment.test.ts` — FI-5: legacy resource declarations do not become Worker environment limits; nproc reports the host
+- `test/sandbox-environment.test.ts` — FI-5: the runner hands the accepted resources to the engine it starts
+- `test/r19-integration-policy.test.ts` — R19: resource/runtime disagreement fails instead of silently rewriting a host profile
+- `test/r19-integration-policy.test.ts` — R19 / INT-004: complete check profiles are retained; missing limits are refused
+
+DR46 plan v2 보충: 옛 단일-message attestation과 tiered publication snapshot·짧은 request name·
+plan 내부 result를 제거한다. mail review fact와 완전 UUID request name이 현재 유일한 형식이다.
+실제 direct code.integrate는 유지하며 수락 당시 policyIdentity와 공통 noopRef를 반드시 기록한다.
+같은 빌드의 CAS·no-op witness가 확인되면 현재 정책/권한을 보기 전에 원래 결과를 정산한다.
+아직 효과가 없을 때만 현재 revision·policy identity·writer·권한을 검사한다. 이전 revision 문자열만
+반환하는 policy reader와 의미 없는 review=mail-v1 selector도 제거한다. 구형 형식용 시험은
+퇴역 기록으로 남기고 새 형식의 거절·재시작·동일 요청·효과 이후 정책 변경을 검증한다.
+
+DR46 이전 plan 전용 시험 퇴역(현재 PASS로 이관하지 않음):
+- `test/attestation-ledger.test.ts` — every removed legacy attestation kind refuses at fresh acceptance and claims no key
+- `test/attestation-ledger.test.ts` — a malformed attestation is invalid input, not a profile refusal
+- `test/attestation-ledger.test.ts` — an accepted legacy row keeps its receipt: same-key replay answers before the removed grammar
+- `test/attestation-ledger.test.ts` — durable decode and the tier evidence snapshot still read a legacy attestation row
+- `test/attestation-ledger.test.ts` — DR27: a pre-v3 database fails closed at open and at diagnostics; no migration is attempted
+- `test/tier-evaluator.test.ts` — DR27/TIER-001: every floor and the Worker's requested tier can only raise the result
+- `test/tier-evaluator.test.ts` — DR27/TIER-005: LOW needs no assigned reviewer, but does not ignore an active objection
+- `test/tier-evaluator.test.ts` — DR27/POL-004: a distinct child can approve; authenticated submitters and duplicate votes cannot
+- `test/tier-evaluator.test.ts` — DR27/TIER-006: HIGH requires delegated latest exact ACCEPT, not a prior decision resurrected by revoke
+- `test/tier-evaluator.test.ts` — DR27/CHAL-005: a floor requires an exact scope assessment for each new candidate identity
+- `test/tiered-integration.test.ts` — an accepted tiered publication plan still decodes exactly and rejects drift
+- `test/tiered-integration.test.ts` — a pending tiered publication row reconciles under its retained policy, once
+- `test/tiered-integration.test.ts` — publication proof is observed, exact and single-use for a pending publication row
+- `test/review-grammar.test.ts` — decode: legacy attest.record plan is unchanged
+
+DR46 사용량 산술 전용 시험도 퇴역한다:
+- `test/contained-tools.test.ts` — DR27/INV10: empty files and parents have finite cost; a refused write creates neither
+- `test/contained-tools.test.ts` — DR27/INV10: aliases cost metadata once per name and data once per inode; links are not followed
+- `test/contained-tools.test.ts` — FI-4: the excluded trees are skipped by directory name only, never as files or at the root
+
+DR46 검증 보충: 현재 tier policy는 HIGH peer 최소 2를 canonical grammar에서 검증하며,
+이전 floor 1 snapshot을 읽던 TIER-004의 전용 호환 경로/시험은 퇴역한다. 새 snapshot의 floor 2는
+원본 설정을 3으로 편집해도 바뀌지 않는 별도 회귀로 확인한다. direct integration의 CAS/no-op
+증거에는 실제 SHA-1/SHA-256 저장소와 SIGKILL/restart 시험을 추가하고 durable boundary 목록에
+no-op adapter owner를 등록한다. 이는 시험 등록이며 실행 PASS는 validation에만 기록한다.
+
+DR46 schema 검증 전환: V01B의 이전 schema-v3 DDL golden은 이전 형식만 동결하던 시험이므로
+퇴역한다. 사용자 승인된 본 전환은 schema 4/plan 2이며 이전 hash를 새 DDL로 단순 refresh하지
+않는다. 새 시험은 schema 4의 정확한 6 entity와 이전 형식의 무변환 거절·보존을 독립적으로
+검증한다. 배포 artifact의 SQL byte 결박은 기존 package/deployment digest owner가 수행한다.
+
+DR46 boundary 검사 보충: canonical no-op primitive를 목록에 넣자 context authorization owner의
+시험 등록 누락도 드러났다. 예외로 빼지 않고 별도의 실제 context witness SIGKILL/restart 시험을
+추가한다. 과거 direct tiered publication이 쓰던 빈 PreacceptScope와 호출자 없는 CheckProfile/
+revision-reader 별칭도 제거한다. 실제 artifact scope가 있는 review/context 경로는 유지한다.
+
+DR46 check 검증: V01B의 자원 timeout/미자격 check 전용 fixture는 퇴역한다. 현재 명령 grammar의
+완전한 argv/env를 유지하고 빈 실행 인자를 거절하는 새 DR46 oracle로 검사한다. 새 snapshot을
+실제 systemd/cgroup 지원 PASS로 표현하지 않는다.
+
+DR46 후속 LSP 전환: `@oma/tool-lsp`가 등록 코드·호출 scratch/stall owner와
+`pi-lsp` payload 전체를 소유한다. 이전 source/vendor 경로는 삭제하며 재수출하지 않는다.
+vendor byte pin은 이동으로 재생성하지 않는다. 빌드는 선언한 directory asset을 link 없이
+정확히 복사하고 compiler output과 충돌하면 거절한다. 다른 tool과의 조립은 extension에 남는다.
+
+DR46 추가 퇴역 기록: `test/goal-publication.test.ts`의
+`CTX-003/P0: legacy pending no-op has no invented witness or retroactive failed result`는
+필수 noopRef가 없고 envelope도 없는 과거 plan을 unknown으로 읽는 옛 decoder 전용 시험이었다.
+단일 현재 형식 전환에 따라 퇴역한다. 이 ID의 뜻을 현재 형식 거절로 바꾸지 않는다.
+같은 빌드의 witness 이전 unknown과 확인된 witness 정산은 기존 현재 plan 복구 시험과
+`test/integration-witness-kill.test.ts`의 실제 SIGKILL/restart/retry가 계속 검증한다.
+CLI 복구 양성 fixture의 request name은 현행 full UUID로 고쳤다.
+
+DR46 vendor 설치 결정: 실제 npm pack 실험에서 중첩 node_modules는 포함되지만
+web/MCP의 `node_modules/isexe/.npmignore`(각 23 bytes)는 npm이 항상 제외했다.
+원시 근거 `nested-vendor-pi-{web-access,mcp-adapter}-experiment.json`은 이 누락을 기록한다.
+런타임 코드·의존 버전·원본 바이트를 바꾸거나 verifier의 exact-set를 약화하지 않는다.
+두 파일만 `node_modules/isexe/npmignore.oma-vendor`라는 보관 이름으로 옮긴다.
+manifest의 generated.packaging에 원래 경로·보관 경로·원래 SHA를 기록하고 유지 스크립트는
+그 이름과 SHA를 검사한다. 원래 upstream/ snapshot과 JS/runtime payload는 그대로다.
+manifest 형식은 같은 파일 목록·해시 문법이며 새 이름을 가진 새 pin을 쓴다. 과거 manifest의
+파일 경로를 런타임에서 재해석하거나 자동 복구하지 않는다. tarball 설치 후 현재 source와
+파일·빈 디렉터리·해시 전체를 대조한다. 누락·변경·추가 파일은 계속 실패다.
+
+DR46 추가 퇴역: `mail-v1 / INV04: the tools' request-name mirror is the wire grammar`는
+현재 production이 이미 domain 단일 owner를 호출하는데 옛 8-hex 정규식 사본과 비교하던
+과거 mirror 전용 시험이다. 그 ID의 뜻을 재사용하지 않고 퇴역한다. 현재 full UUID grammar와
+짧은 이름 거절은 review-grammar/current-format-refusal이, 실제 tool의 입력 전달은
+principal-tools의 실행 오라클이 검증한다. R30의 derived world/receipt/비공개 본문 불변 시험은
+유지하며 삭제된 CPU/memory/tasks 환경 안내 assertion만 제거한다.
+
+DR46 전환 시험 후속: authority/candidate-check의 resource-only 음성 입력이 삭제 후 유효한
+base 사본으로 남아 있던 assertion 4개는 퇴역한다. 닫힌 spec·argv·모델 참조의 현행 거절은 유지한다.
+DR27의 schema3 생성·미래 schema4 거절 오라클은 해당 과거 형식의 기록으로 퇴역하며 DR46에서
+schema4 생성/무변경 재열기와 1/2/3/5/99 거절을 별도 시험한다. V04A의 physical identity·WAL·
+committed intent 불변 의미는 유지하고 fixture 버전/plan envelope만 현재 형식으로 바꾼다.
+P2의 peer attestation/short-name 양성 vector는 퇴역하고 DR46 current wire vector를 새로 둔다.
+T93의 Principal 참조 편집 오라클은 유지한다. 과거 Worker 참조 재지정 assertion은 퇴역하고
+DR46에서 기존 Worker 참조의 내용만 바뀌며 Principal은 보존되는 실행 오라클로 교체한다.
+삭제된 resource 시험의 lane requiredNames도 제거한다. 경계 수명/종료/containment 시험은 유지하며
+실제 integration/context witness kill 6건은 durable lane에 추가한다.
+네 tool의 기능 시험은 각 package/test로 옮기고 원래 ID/입력/오라클을 유지했다. 조립과 유지 script
+검증은 root에 남겼으며 duplicate 실행은 만들지 않았다. type annotation만 제거한 MJS는 제품과
+같은 Node로 실행한다. source와 deployed bundle을 서로 다른 경로에서 검증하도록 시험 관측도 고쳤다.
+
+DR46-F02 결정: 실제 LSP entry에서 정상 별도 bundleDir의 검증이 변조된 owner-local
+runtime을 허용하는 것을 재현했다. 관측 대상과 load 대상은 하나여야 한다. 출시 전
+미사용 bundleDir override와 빈 WebToolsOptions를 제거한다. 네 tool은 자기 module URL의
+bundle만 검증한다. 이전 copied-probe 전용 단위 시험 네 건은 같은 거절 의미를 보존하면서
+실제 copied owner·변조 payload·정상 별도 probe를 사용하는 통합 오라클로 옮긴다.
+이 변경은 runtime vendor JS/pin이나 사용자 durable state의 형식을 바꾸지 않는다.
+
+DR46 현재 실행 안내 정합성: 실제 sandboxArgs의 `--share-net`과 닫힌 HostConfig에 맞춰
+START.md에서 과거 allowlist/선택적 Human proxy 설정/다른 통신 전부 실패라는 안내를 제거한다.
+주입된 proxy와 실제 연결·host 권한을 설명한다. 현재 role prompt와 같은 의미이며 새 네트워크
+권한을 추가하는 변경은 아니다. R30의 derived view·receipt 불변 시험에 이 안내를 확인한다.
+
+DR46 독립 extension artifact는 더 이상 자기 vendor 사본을 만들지 않는다. 실제 선언한 네 tool
+의존이 자산을 소유하며 artifact 시험도 그 각 owner를 읽어 검증한다. mutable UX ledger의
+옛 source 링크는 현재 owner로 고쳤고 이전 발견·요구 ID와 역사적 실행 판정은 유지한다.
+
+DR46 핵심 extension 전환: 실제 조립과 Society 도구·delivery·Principal channel·bridge·prompt
+경계를 `@oma/extension`으로 옮기고 root의 pi-extension/extension 경로와 별도 tsconfig를 삭제한다.
+실행 경로는 단일 DEPLOYMENT_LAYOUT를 따르며 독립 artifact도 같은 workspace의 manifest/API를
+사용한다. 조립 entry의 과거 tool-runtime/domain 재수출은 제거하고 소비자는 실제 owner를 부른다.
+Pi 전달 revision/boundary/wait 접두사의 같은 bytes는 protocol/delivery-boundary 한곳이 소유하고
+보고 DTO는 contracts가 소유한다. storage는 여전히 실제 receipt 검증·mint·durable publication을
+소유하며 단순 DTO나 notify를 증거로 승격하지 않는다. receipt/schema/wire version은 바뀌지 않는다.
+Principal channel도 기존 protocol의 FD/env/line bound를 직접 사용한다. 과거 사본의 equality
+assertion 두 개만 퇴역하며 T114의 credential corpus·실제 읽기·spawn FD·서로 다른 권한 slot
+오라클은 유지한다. 원래 이름/뜻은 이 기록에 남기고 반대 뜻으로 재사용하지 않는다.
+bridge/prompt 단위 시험과 세 wait hook 시험은 ID·입력·assertion을 유지해 package/test로
+이동하고 UI/engine/실제 mail과의 조합 시험은 root에 둔다. durable lane은 새 시험 경로도 실행한다.
+
+DR46-F03 결정 — extension 이동 중 드러난 preload 배치 결합: 실제 Resident spawn plan은
+`dirname(coreExtension)/runtime/client-preload.js`를 계산했다. 15번째 workspace 전환 후
+실제 owner가 아닌 packages/extension/dist/runtime 파일을 가리키는 것을 실제 plan API의
+음성 오라클로 확인했다(`preload-owner-before.log`: 0 PASS/1 FAIL, 입력 `849f6731…`, 변화0).
+이것은 root 14 workspace의 기존 동작을 위반했다고 주장하는 발견이 아니라 분리 중인
+checkout의 회귀다. preload의 package-generation pin과 client runtime 초기화 owner는
+현재 app/runtime 조립이다. DEPLOYMENT_LAYOUT.clientPreload를 추가하고 Resident와 Principal은
+설치 libdir에서 그 경로를 읽는다. extension dirname 추정과 잘못된 위치의 가짜 preload
+fixture는 없앤다. 실제 설치물 존재·spawn plan과 confined 실행을 다시 검사한다.
+
+DR46-F04 결정 — 네트워크 검증의 범위: T117의 기존 rootfs probe는 제품의 --share-net 없이
+직접 --unshare-all을 실행하고 연결 실패를 제품의 egress 차단 증거로 읽었다. 현재 sandbox
+recipe는 host/guest 네트워크를 공유하므로 이 테스트의 network-only oracle과 옛 제목은
+퇴역한다. 이 과거 T117 문장의 뜻은 이 기록에 보존하며 현재 허용 의미로 재사용하지 않는다.
+새 DR46 시험은 실제 planPiSpawn→spawnSandboxed recipe에서 host state/credential/home의
+비가시성·read-only rootfs·agent identity를 검사하고, host의 임시 loopback server와 marker를
+주고받아 공유 네트워크를 확인한다. 같은 recipe에서 --share-net을 제거한 별도 음성 제어로
+probe가 실제 namespace 차이를 구별하는지도 확인한다. 외부 인터넷/VM/provider 권한을 증명하지
+않으며 제품 네트워크 권한이나 durable 형식은 바꾸지 않는다.
+
+DR46 검토 oracle 발견 경로: review-ledger 갱신은 소스가 그대로인 pi-compat/env.ts의
+post-listen oracle을 찾지 못해 중단됐다. 같은 ID/입력/assertion의 시험이 extension/test로
+이동했는데 testNames가 root test만 읽은 것이 원인이다. immutable review-notes를 다시 쓰거나
+옛 test facade를 복원하지 않는다. 실제 workspace/test를 포함해 선언을 발견하고, 문자열/주석의
+가짜 test 호출은 AST로 배제한다. production 소스의 경로/byte가 바뀐 review는 계속 무효화하며
+새 소스는 NOT_REVIEWED다. 발견 경로 확장은 기존 ID를 재해석하거나 현재 byte를 자동 승인하는
+근거가 아니다. root build:extension도 이전 독립 export utility 대신 실제 workspace build를
+호출한다. 외부 --out artifact exporter는 명시적 별도 도구로 유지한다.
+
+DR46 업무 port 전환의 공통 기초: 저장 구현에 있던 Agent/Delivery/Batch/Subscription 행 DTO와
+NewOperation/NewAgent 입력 DTO는 contracts가 소유한다. 실제 행 decoder와 SQL 관계 검증은
+storage에 남긴다. frozen agent spec의 닫힌 JSON 해석은 domain/agent-spec으로, 같은 spec의
+name/profile/hash 관계는 domain/spec-identity의 단일 판정으로 모은다. authority는 구체
+StoreReads의 Pick 대신 getAgent/societyOpen의 명시적 reader만 요구하고 효과 시점 재검증과
+capability getter 재관측을 유지한다. receipt projection의 실제 구현은 protocol로 옮기며
+storage의 옛 경로/재수출 facade는 제거한다. DB schema·plan envelope·receipt bytes·hash domain·
+단일 writer/root synchronous transaction과 같은 빌드 복구의 의미는 바꾸지 않는다.
+이 단계 자체가 Mail/Git/Review/Lifecycle/Broker의 최소 effect/ledger port 완성을 뜻하지 않는다.
+
+DR46 기초 전환의 alias 시험: error-receipt-policy의 StoreError convenience export와 Mail의
+receiptOf re-export를 서로 같은 함수라고 비교하던 assertion만 퇴역한다. 오류의 phase/observation/
+effect 분류, 원래 row JSON·terminal/result 불변과 receipt codec 거절 오라클은 유지한다.
+같은 시험 제목의 넓은 원래 의미를 반대 뜻으로 재사용하지 않는다. 순수 authority의 닫힌 spec
+시험은 ID/입력/assertion을 유지해 domain/test로 옮기며 데이터 fixture도 domain validator를 쓴다.
+
+DR46 Mail ledger port: Mail은 실제 사용하는 조회와 7개 transaction method의 명시적 port를
+소유한다. app으로 이동할 broker 조립이 Store를 연결하며 transaction projection은 원래 tx의
+captured closure만 복사한다. ambient Store mutation을 wrapper로 호출하지 않는다. projection은
+동결하며 transaction 종료 뒤나 다음 transaction 안에서 재사용해도 거절돼야 한다. 같은
+Store/root synchronous T·runtime thenable 거절·accept 직전 현재 권한 검사는 유지한다.
+
+DR46-F05 결정 — arrival append의 부분 기록: 실제 MailMaterializer는 writeSync의 반환 크기를
+무시해 잘린 journal 뒤에도 delivery.materialized와 operation.succeeded를 기록했다. 실제
+API의 부분/0-byte 쓰기와 SIGKILL 후 재시작으로 재현했다. arrival의 physical append owner는
+모든 바이트를 쓰고 파일과 parent를 flush한 뒤 반환한다. 0-byte 쓰기는 unknown으로 거절하고,
+이전 실행의 미완성 tail은 별도 줄로 닫아 새 완전한 record와 붙이지 않는다. 기존 완성 record를
+삭제하거나 원문/수락 plan/terminal을 재해석하지 않는다. owned append 파일은 pinned inode의
+regular type을 확인하고 owner bit만 더하며, link·FIFO·관측 실패를 absent로 읽지 않는다.
+부분/정지 쓰기·실제 SIGKILL·같은 key retry·재시작·반복 복구가 회귀를 소유한다.
+
+DR46 Mail effect port와 workspace: 실제 Mail/MIME·routing·batch·materialization·recovery와
+원래 순수 batch 시험은 `@oma/mail`이 소유한다. Mail은 contracts/domain/protocol과 자신이
+직접 선언한 nodemailer에만 의존한다. app 조립은 실제 Store projection·PreacceptScope와
+4개 parent-effect 소비자를 필수 port에 연결한다. proof와 checked receipt의 선언만 contracts로
+옮기며 실제 mint/WeakMap·WeakSet/consume/decoder는 기존 효과 owner에 남긴다.
+메일함 capability는 수리한 inbox/new/cur descriptor를 게시·관측·이동·arrival·flush가 끝날
+때까지 보유한다. immutable publication은 pathname/held-directory 두 entry가 같은 구현을
+쓰고 caller-owned descriptor를 닫지 않는다. 파일 권한 손상을 unavailable의 근거로 쓰던
+V20B fixture는 실제 I/O 오류로 음성 제어하며 owned mode 수리의 성공을 별도 확인한다.
+원래 batch index folding/rendering은 Mail의 순수 함수 하나로 옮기고 storage는 이미 결정된
+JSON/index 두 문서만 쓴다. 기존 wire/DB/plan/receipt bytes의 형식과 의미는 바꾸지 않는다.
+Mail의 storage API convenience 재수출과 MIN_MIXED_BATCH_MESSAGES 별칭은 제거하고 실제
+소비자를 storage/domain owner로 바꾼다. 두 함수 identity 비교 assertion만 퇴역하며 기존
+immutable/no-replace·fault/flush·recovery 시험의 제목·입력·판정을 반대 의미로 재사용하지 않는다.
+
+DR46 설치 의존 owner: `check-package`의 고정 runtime pin 목록은 필수 라이브러리의 존재를
+요구하며 루트가 직접 소유한다는 뜻이 아니다. 실제 선언한 root/workspace 각각에서 설치물을
+해석하고 owner identity·선언/lock·설치 경계·버전을 확인한다. 같은 필수 pin의 owner들은 같은
+버전이어야 한다. Mail의 nodemailer를 루트 runtime dependency로 중복 선언해 우회하지 않는다.
+배포 layout의 workspace 목록도 Mail을 포함하며 manifest와 compiled bytes를 함께 결박한다.
+
+
+DR46 Git/Review 경계: actual command/repository와 workflow entry를 분리한다. Git은 구체
+Store/Mail/Review를 받지 않으며 독립 review gate·messaging·ledger·repository port를 소비한다.
+ReviewAuthorityReader는 app에서 먼저 조립하며 Git의 최종 동기 gate와 Review가 같은 실제
+reader를 사용한다. Review workflow는 Git 밖에서 만들고 public dispatch와 reconcile에도
+별도 port로 전달한다. main/context writer·witness-first settlement·현재 authority와 policy의
+최종 동기 CAS 검사·모든 accepted byte 의미를 유지한다. SQL/명령 callback bag이나 getReview
+registry·old Git.reviews facade는 남기지 않는다.
+
+공통 observation·ChangedPath, notification draft와 preaccept owner는 contracts의 선언 한
+owner를 사용한다. 순수 integration policy/tier/diff 표시는 domain의 원래 구현으로 옮긴다.
+실제 Git process/FD/TreeLease와 publication 증거 발급·소비는 물리적 owner에 남긴다. Git과
+config의 storage 의존은 명시한 file API만 허용하며 erased Store type도 거절한다. Git5개와
+Review3개 transaction method는 원래 captured tx closure만 app에서 투영한다. corruption
+observer는 원래 Store의 admission gate에 연결하며 복구 쓰기 자체를 새 acceptance와 혼동하지 않는다.
+
+해시 정체성 정리: 현재 production 호출에는 별도 stream domain이 없고 descriptor는 params에
+있다. request-hash facade·세 번째 인자·옛 branch·Storage reused 재수출을 제거한다. 실제
+requestHash/reused는 request-identity, canonical JSON/hash primitive는 canonical-json에 둔다.
+method+params literal recipe·accepted stored hash는 바꾸지 않는다. 옛 stream-positive와
+facade alias identity assertion만 퇴역하며 새 removed-argument refusal/실제 Store key-reuse
+검사로 대체한다. hash-valid GOAL 모순 시험은 새 notification port에 올바르게 주입하고
+원래 corruption 판정과 accepted pending/CAS 보존 조건을 유지한다.
+
+
+DR46 Lifecycle 경계: 생성/실시간 권한·lineage·정지/재개·society fence·ack/follow·복구와
+creation evidence는 실제 Lifecycle use case가 소유한다. app이 최소 live query·10개 captured
+root T closure·필요한 unit/mail/workspace/identity/scope/directory port를 연결한다. 구체 Store,
+implementation Pick/ReturnType, ambient write나 old constructor facade를 두지 않는다.
+workspace clone/staging/FD/TreeLease/PreparationExecutor와 provisioning HEAD 관측은 Git의
+실제 physical adapter 한 곳이 소유한다. accepted base/spec/incarnation·unit installation과
+provisioning readiness commit/opaque evidence의 의미는 Lifecycle에서 판정하며 입증 뒤에는
+Resident의 현재 workspace로 과거 readiness를 재해석하지 않는다. 모든 Resident 정지 시도와
+unknown death, live incarnation·현재 권한과 activation, accepted hash/plan/terminal bytes와
+현재 confined origin을 그대로 유지한다. feature가 쓰지 않는 physical path 필드는 app의
+composition 입력으로 옮긴다. 실제 bootstrap의 trusted peer/ID/scope owner도 app에서 연결한다.
+
+
+DR46 Reconcile 경계: 시작/주기 복구의 순서, 동일 sweep Promise, self-await 거절, operation별
+failure containment와 현재 identity/activation/GOAL/unit 재검사는 Reconcile이 유지한다.
+구체 Store/Mail/Git/Review/Lifecycle/Units나 implementation-derived type은 가져오지 않는다.
+app은 read-only ledger와 정확한 기능/unit port를 만들고 corruption observer를 원래 Store의
+admission fence에 결박한다. 새 acceptance나 T 권한은 복구 순서 owner에게 주지 않는다.
+quiesce의 every-resident 판정은 Lifecycle의 실제 함수를 app에서 연결한다. pending-work도
+기존 full-row 검증/동기 projection 한 곳을 사용하며 단순 boolean 정책을 다시 구현하지 않는다.
+
+실제 preaccept scan/delete/owned repair/lease 관찰은 Storage의 collectUnacceptedArtifacts로
+옮긴다. accepted plan이 실제로 이름 붙인 message를 Domain.ownedMessages로 검사하며
+Mail.namedMessages 편의 facade는 제거한다. 미확인 소유권이나 child lifetime은 계속 보존하고
+reported kept로 남긴다. bounded event 표시는 Reconcile에 두며 collection/count DTO만
+contracts가 소유한다. 실제 fsck executor·spool·TreeLease와 stale-child quiescence는 Git의
+CanonicalHealthObserver로 옮기고 Reconcile은 consume-once fresh main 비교와 await 뒤
+재quiesce 순서를 유지한다. 5초 sweep 정책은 순수 Domain owner 하나에서 Broker와 공유한다.
+
+Reconcile의 옛 health proxy 메서드도 제거하며 실제 health 호출·fault 검증은 Git의 공개
+CanonicalHealthObserver API를 사용한다. 기존 T68c/T68d의 healthy/spool/assertion 의미와
+등록 제목은 유지하고 durable collection boundary만 실제 새 physical owner로 옮긴다.
+
+
+DR46 Broker 경계: authenticated transport·dispatch·peer/run authority·readiness·drain은 Broker,
+실제 Store/기능 projection과 물리 I/O 연결은 app이 소유한다. Broker는 구체 Store/Mail/
+Git/Lifecycle/Reconcile/Units/Views를 import하거나 생성하지 않는다. app의 admission callback은
+원래 Store에 같은 실제 Gate를 연결한다. incarnation 전용 captured T는 원래 tx.updateAgent의
+폐쇄된 scope만 사용하며 accept/spec/desired write를 노출하지 않는다. root T의 thenable/
+stale/cross-T refusal과 모든 accepted receipt의 의미를 유지한다.
+
+옛 direct-construction standaloneLock 호환 경로를 제거한다. 실제 product는 설정/Store보다
+먼저 획득한 Native.ProcessLock을 필수로 전달하고, Broker drain이 끝난 뒤 outer Lifetime이
+이 토큰을 해제한다. 테스트만의 fixture는 그 테스트가 연 토큰을 정상 drain 뒤 해제하며,
+이것을 production의 pre-configuration ordering 또는 실제 Resident death qualification으로
+부르지 않는다. ProcessLock의 FD/inode/flock/child-inherited lifetime은 Native에서 유지한다.
+
+실제 cgroup pin은 Native, peer 인증·현재 cgroup 비교는 Broker, 순수 cgroup.events grammar는 Domain 한 곳으로
+옮긴다. run state와 live settlement confirm closure는 Broker에 남긴다. StatusSnapshot/
+RunnerObservation/UnitObserve/SettlementQuiescence와 RecoveryCounts는 공통 선언 owner를
+사용하고 실제 확인·proof 발급은 원래 런타임 owner에 둔다. consumer port 선언을 한 acyclic
+파일로 옮기며 public/내부 data 권한과 Broker 소유 peer projection을 분리한다. 실제 같은
+PeerAuthenticator를 부르는 Broker의4개 중복 pass-through도 제거한다. event/status/sweep의
+unknown·current identity·synchronous final check 순서를 바꾸지 않는다.
+
+FS-005의 옛 Broker 전체 파일 예외도 제거한다. socket 이름은 실제 Storage owner만 지우며
+Broker의 가상 raw unlink는 negative control에서 거절한다. transport spool도 Storage가
+held-parent/file/reader FD와 same-inode handoff를 소유하고 Broker는 필수 makeSpool port만
+호출한다. 임의 shell/SQL callback registry나 old spool/constructor facade를 남기지 않는다.
+Config와 test composition이 실제 공유하던 protocol reference literal도 Domain 한 owner로
+옮기며 값과 host 설정 출력 bytes를 바꾸지 않는다.
+
+DR46-F06: 실제 TransportSpool.append가 writeSync=0에서 CPU 무한 루프에 빠짐을 root19의
+isolated child에서 재현했다(`transport-zero-write-before-fix.json`: actual branch entered,
+1.5초 ETIMEDOUT/SIGKILL, changed[]). 실제 write loop에 zero-progress 오류를 추가했으며
+Storage 짧은 write의 전체 bytes/handoff, zero 오류1회와 실제 file/directory FD close를
+검사한다. stage build/초기 owner smoke3개는 PASS이나 root20에는 아직 미반영이다.
+이 SIGKILL 재현과 unit fault 검사를 실제 power loss나 native systemd qualification으로
+세지 않는다. 당시 실패 원본은 그대로 보존한다.
+
+
+DR46 Broker owned listing: 첫 정적 gate는 옛 InternalDispatcher owned-state 예외가 이제
+불필요함과 app으로 옮긴 raw readdir를 함께 검출했다. 예외를 새 위치로 복제하지 않고 실제
+Storage.listOwnedDirectory의 held inode/owner repair를 사용한다. 이 primitive의 기존
+optional diagnostic null=unknown 의미는 유지하며, 새 required:true 관측은 실제 실패를
+그대로 전파한다. callback은 모든 entry 이름/순서를 유지하고 missing mailbox를 생성하거나
+unavailable을 empty success로 답하지 않는다. stage의 이전 실제 compiled callback은 mode000
+leaf에서 EACCES/미수리였음을 재현했다(`principal-listing-before-fix.json`, UID1000).
+그 read-capability의 실제 mode repair·전체 이름·missing/EIO 거절·held FD close 시험을
+추가했다. 이 수정의 범위와 runtime 결과를 기존 authored review 승인으로 해석하지 않는다.
+
+
+DR46 Engine 시작: 실제 source scan에서 pi-runtime.engineFile은 production 호출0개이며
+export 정의와 전용 fault-test2개만 있었다. 미출시 internal dead API와 그 전용 read/close
+시험만 제거한다(`engine-dead-reader-retirement.json`). 해당 이름/이력을 새 반대 의미의
+시험에 재사용하지 않고 다른 실제 FD/cleanup 시험은 유지한다. 이로써 죽은 reader 때문에
+Engine이 Native 파일 capability를 갖던 불필요한 의존도 제거한다. 런타임 pin 검사·실제
+current model/auth/settings·child/process/receipt/retry 수명은 별개이며 보존한다.
+Recorded extension identity는 원래 plain path/sha256 DTO였음을 실제 코드로 확인했다.
+이를 runtime proof나 WeakMap-issued authority로 설명하지 않는다. DTO/패키지 resource paths/
+FencedEngine 선언은 contracts, 순수 extension path order와 원래 role prompt literal은 Domain의
+한 owner로 옮긴다. 실제 integrity 관찰과 SDK/settings/process behavior는 다음 분리에서
+같은 호출 순서와 오류 의미를 유지한다. 현재 Engine은 구현 중이며 module22 완료가 아니다.
+
+DR46 Engine 경계 후속: SDK host 35개 소스를 실제 Engine workspace로 옮기고, 설정은 SDK 변환과 app의 실제 파일·잠금 owner를 연결한다. 한 lock hold의 read/transform/replace, project writer 충돌 검사와 cleanup 실패 전달을 유지한다. Personal의 birth·extension selection·history·Keychain helper와 TUI renderer는 app에서 구체 owner를 연결한다. Resident sandbox capability는 별도 app 조립으로 Personal closure에서 제외한다. Pi session header는 현재 pinned SDK version 하나만 승인하며 missing/이전 version 수용은 제거한다. current-version 기록의 identity/bytes나 복구 절차는 변경하지 않는다. 독립 빌드·집중 검사·설치 검사 결과가 나오기 전 전환 완료로 세지 않는다.
+
+DR46 Engine 검증 경계: compiled-module URL는 같은 workspace의 실제 authored executable TS 파일로 확인될 때만 허용한다. missing/ambient-only/다른 workspace/raw 미선언 자산은 negative control로 계속 거부한다. 계산된 private SDK URL import를 수행하는 기존 세 경우는 root의 명시적 SDK integration probe에 남기며, package module-loading 검사를 완화하지 않는다. 실제 decoder의 current header만 지원하는 변경은 새 birth/기존 기록 재작성·삭제를 수행하지 않는다.
+
+DR46 Engine SDK 접점: Open TUI finished-line matching과 version/string 의존은 기존 TUI 파일을 삭제하고 실제 Engine owner로 이동한다. ASCII logo·문구와 visibleWidth 함수 자체는 그대로 유지한다. 실제 panel styling은 TUI에 남기고 SDK host가 app의 presentation port로 연결한다. Engine이 배포하는 pi-compat/contacts.json이 남은 private 접점·정확한 의존 버전·제한의 단일 목록이며, 원본 review는 갱신하지 않는다.
+
+DR46 Linux 경계: units/sandbox/rootfs·seccomp·guest clock/filesystem/systemd launcher의 실제 OS 동작과 systemd/guest image C·service 자산을 Linux workspace로 이동한다. GuestControl의 결정과 현재 Config를 읽는 receiptWaitFloor는 App에 남기고 common GuestSystem/HealthFacts/ReceiptWaitFloor 및 lifecycle effect 선언은 contracts가 단독 소유한다. Linux는 Config/Client/Engine/App 구현을 import하지 않는다. endpoint 관찰은 App의 원래 Client 함수를 연결하고 stop의 manager proof와 endpoint 관찰을 보존한다. 현재 horizon은 요청 때마다 읽고 unknown에서는 freeze하지 않는다. 실제 root는 아직22이며 이 stage는 빌드·검증 중이다.
+
+
+DR46 Mac/App 경계: 실제 Mac 파일·암호화 archive·Keychain/native channel·image 및 Swift 입력은
+Mac workspace로 옮긴다. 공통 PlatformError는 Protocol, StreamSink/KeychainStore 선언은
+Contracts, SDK credential blob 처리는 Engine, 실제 writer lock과 helper 조립은 App이 소유한다.
+Linux project preparation과 host Git API는 Git이 소유하며 Mac은 명명된 두 host API만 소비한다.
+Keychain mutation에는 실제 cross-process lockPath가 필수이며 test-only 무잠금 fallback을
+제거한다. child EOF는 실제 종료가 아니며 상속 fence는 실제 child 종료까지 유지한다.
+
+DR46-F07: Mac 파일 쓰기는 writeSync=0에서 진행 없이 반복할 수 있었다. 실제 기존 구현을
+isolated child에서 재현하고 SIGKILL한 원본은 mac-zero-progress-before.json에 보존했다.
+Mac/files의 단일 writeHostBytes가 짧은 write를 끝까지 쓰고 zero/invalid progress를 EIO로 거부한다.
+replacement/archive/App transfer가 이 owner를 사용하며 기존 bytes·temp 제거·FD/caller 소유권을
+검사한다. native Mac qualification이나 power loss의 증거로 세지 않는다.
+
+DR46 현재 package 형식: index는 oma-installed-packages-v1 envelope와 source/entries/skills/
+prompts/themes 전체 필드를 사용한다. bare array와 과거 생략 규칙을 제거한다. Personal 설정은
+oma-personal-settings-v2, before-image는 oma-package-before-image-v1만 지원한다. 옛 형식은
+UNSUPPORTED_PROFILE로 거부하고 저장 bytes를 남긴다. 같은 빌드의 immutable before-image,
+같은 요청 retry/restart와 exact terminal 의미는 유지한다. parse 실패와 명시적 지원 불가를
+서로 삼키지 않는다. uninstall 별칭과 수기 proper-lockfile ambient 선언은 제거하고 실제 배포
+타입 패키지를 직접 개발 의존으로 선언한다.
+
+DR46 App 배치: root 실행 src는 제거하고 실제 소스를 apps/oma/src로 옮긴다. CLI/preload/
+model command/guest session과 systemd 실행 경로는 명명된 DEPLOYMENT_LAYOUT를 사용한다.
+aggregate 설치 루트를 고정 깊이로 아는 세 제품 entry만 그 capability를 가지며 다른 패키지의
+ancestor 탐색·상대 경로 escape를 허용하지 않는다. Root compiler는 통합 tests만 빌드한다.
+
+
+DR46-F08 — status page 크기 계산: 원본25의 응답성 재실행은 serial V23A의 read lag59ms로
+기존50ms 기준을 넘었다. 같은 제품 bytes의 앞선 실행은45ms였다. 원인을 검사하며 순수
+Protocol/status-page가 행을 추가할 때마다 전체 누적 응답을 JSON 직렬화하는 제곱 비용을
+확인했다.64행 한 페이지에서 row 직렬화2080회가 발생했다. 기존 wire envelope·UTF8 크기·
+continuation 예약·cursor·FRAME_TOO_LARGE의 의미를 유지하면서 각 행의 bytes를 한 번 더하는
+선형 계산으로 바꾼다. 권한/Store/accepted 사실과 타이머·50/100/1000ms 기준은 변경하지 않는다.
+이 비용이 관측한 지연의 유일한 원인이라고 단정하지 않으며 기존 실제 응답성 검사로 재검증한다.
+
+
+## DR47 — 코드 품질 보완과 App 통합 시험 경계
+
+사용자는 실제 코드 검사에서 확인한 두 cleanup 결함과 interactive/App API/SDK coupling의
+보완, 새 spec과 구현을 승인했다(2026-10-25). [품질 보완 명세](code-quality-improvement-spec.md)가
+범위와 수용 기준을 소유한다. durable/wire/권한/복구의 의미는 변경하지 않는다.
+
+App은 제품 조립 root이며 다른 기능 package가 그 내부 module에 의존하지 않는다. Root의
+integration test를 위해140개 내부 module을 public export하던 범위를 installer assets와 실제 admin diagnostic API4개로
+줄인다. Root private Node imports의 #oma-test/app/*는 root integration test만 사용할 수 있다.
+동일 authored App source의 compiled output만 대상으로 하며 다른 package·production·script의
+접근과 target 변조는 거부한다. DR46의 feature package 간 export 강제는 유지한다. 이는 App
+내부 시험의 접근 규칙을 바꾸는 결정이며 옛 public 경로의 alias/facade를 남기는 결정이 아니다.
+
+SDK 공개 hook이 없는 기존 기능은 단일 검증 adapter로 유지하고 host의 raw private cast를
+제거한다. 잔여 접점 수와 이유를 그대로 기록하며 private 의존 제거로 과장하지 않는다.

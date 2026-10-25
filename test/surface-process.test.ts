@@ -1,3 +1,4 @@
+import { dirname } from "node:path";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { fork, spawnSync } from "node:child_process";
@@ -5,9 +6,9 @@ import { mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSyn
 import { join, resolve } from "node:path";
 import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
-import { loadConfig } from "../src/config.js";
-import { openTerminal } from "../src/tui/screen.js";
-import { DEPLOYMENT_LAYOUT } from "../src/domain/deployment.js";
+import { loadConfig } from "@oma/config";
+import { openTerminal } from "@oma/tui/screen";
+import { DEPLOYMENT_LAYOUT } from "@oma/domain/deployment";
 
 const root = fileURLToPath(new URL("../../", import.meta.url));
 const scratch = (prefix: string): string => mkdtempSync(join(tmpdir(), prefix));
@@ -42,8 +43,14 @@ for (const point of ["before-write", "after-write"] as const) {
   test(`T111 real SIGKILL at ${point} leaves a configuration a next start can load`, async () => {
     const workerRoot = scratch(`oma-proc-${point}-`);
     try {
-      mkdirSync(join(workerRoot, "dist", "src"), { recursive: true });
+      mkdirSync(dirname(join(workerRoot, DEPLOYMENT_LAYOUT.extension)), { recursive: true });
       writeFileSync(join(workerRoot, DEPLOYMENT_LAYOUT.extension), "export {};\n");
+      const entries = (directory: string, prefix = ""): string[] => readdirSync(directory, { withFileTypes: true })
+        .flatMap(entry => {
+          const relative = prefix + entry.name;
+          return entry.isDirectory() ? [relative, ...entries(join(directory, entry.name), relative + "/")] : [relative];
+        }).sort();
+      const before = entries(workerRoot);
       await killAt(workerRoot, point);
 
       // Whatever the kill interrupted, the file on disk is a whole, valid
@@ -54,8 +61,8 @@ for (const point of ["before-write", "after-write"] as const) {
       assert.equal(loaded.initialResidents.length, point === "before-write" ? 1 : 12,
         "the named boundary must retain the complete old or new seed list");
 
-      const strays = readdirSync(workerRoot).filter(name => name !== "config.json" && name !== "dist");
-      assert.deepEqual(strays, [], `a temporary artefact survived the kill: ${strays.join(", ")}`);
+      assert.deepEqual(entries(workerRoot).filter(name => name !== "config.json"), before,
+        "restart must preserve the installation tree and leave no temporary artefact at any depth");
     } finally { rmSync(workerRoot, { recursive: true, force: true }); }
   });
 }

@@ -1,3 +1,4 @@
+import { createMailModule } from "#oma-test/app/broker/mail-composition";
 /** V20A/V20B: mail and submit own what they freeze before acceptance, and
  * accepted mail keeps its authoritative object while only derived views are
  * rebuilt. Real Store, MailModule, GitModule and filesystem throughout.
@@ -7,11 +8,11 @@ import assert from "node:assert/strict";
 import { createRequire, syncBuiltinESMExports } from "node:module";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import type { AuthContext, MailInput } from "../implementation/contracts.js";
-import { Store } from "../src/store.js";
-import { MailModule } from "../src/mail.js";
-import { StoreError } from "../src/domain/errors.js";
-import { sha256Hex } from "../src/hash.js";
+import type { AuthContext, MailInput } from "@oma/contracts";
+import { Store } from "@oma/storage";
+import { MailModule } from "@oma/mail";
+import { StoreError } from "@oma/domain/errors";
+import { sha256Hex } from "@oma/domain/canonical-json";
 import { makeValidAgent } from "./fixtures/spec.js";
 import { removeTree } from "./fixtures/cleanup.js";
 import { gitAuth, gitFixture, seedGit, submitFixture } from "./fixtures/git-crash.js";
@@ -28,7 +29,7 @@ function mailFixture() {
   const root = fs.mkdtempSync(join(tmpdir(), "oma-mail-scope-"));
   const store = new Store(join(root, "runtime.sqlite"));
   store.transaction((tx) => { for (const name of ["alice", "bob", "carol"]) tx.insertAgent(makeValidAgent(name)); });
-  const mail = new MailModule({ stateRoot: root, society: "fixture" }, store, 64);
+  const mail = createMailModule({ stateRoot: root, society: "fixture" }, store, 64);
   const auth: AuthContext = { actor: "alice", incarnation: 1, role: "resident", channel: "actor",
     capabilities: new Set(["mail.send"]), peer: { pid: process.pid, uid: process.getuid!(), gid: process.getgid!(), cgroup: null } };
   const input: MailInput = { to: ["topic/work"], kind: "message", subject: "frozen", body: "frozen body" };
@@ -123,15 +124,15 @@ test("V20A: a submit same-key retry after acceptance reads no new bundle, and pu
     store.transaction((tx) => { tx.insertAgent(makeValidAgent("a")); tx.insertAgent(makeValidAgent("b")); });
     seedGit(root);
     const { git, mail } = gitFixture(root, store);
-    const importBundle = Reflect.get(git, "quarantineImport") as (...args: unknown[]) => Promise<void>;
+    const importBundle = Reflect.get(Reflect.get(git, "repository"), "quarantineImport") as (...args: unknown[]) => Promise<void>;
     let imports = 0;
-    t.mock.method(git as unknown as Record<string, (...args: unknown[]) => Promise<void>>, "quarantineImport", async function (this: unknown, ...args: unknown[]) {
+    t.mock.method(Reflect.get(git, "repository") as Record<string, (...args: unknown[]) => Promise<void>>, "quarantineImport", async function (this: unknown, ...args: unknown[]) {
       if (imports++ === 0) throw new StoreError("REF_STATE_UNKNOWN", "injected loss after acceptance");
       return importBundle.apply(this, args);
     });
-    const publishRef = Reflect.get(git, "publishRef") as (...args: unknown[]) => void;
+    const publishRef = Reflect.get(Reflect.get(git, "repository"), "publishRef") as (...args: unknown[]) => void;
     let publications = 0;
-    t.mock.method(git as unknown as Record<string, (...args: unknown[]) => void>, "publishRef", function (this: unknown, ...args: unknown[]) {
+    t.mock.method(Reflect.get(git, "repository") as Record<string, (...args: unknown[]) => void>, "publishRef", function (this: unknown, ...args: unknown[]) {
       publications++; return publishRef.apply(this, args);
     });
     await assert.rejects(submitFixture(root, git, "submit-retry"), { code: "REF_STATE_UNKNOWN" });
@@ -206,7 +207,6 @@ test("V20B: a derived name holding other bytes is conflicting evidence, never ov
 });
 
 test("V20B: an existing archive without every delivery materialized never records success", async (t) => {
-  assert.notEqual(process.getuid?.(), 0, "permission-based unavailability needs a non-root test user");
   const f = mailFixture();
   try {
     f.store.transaction((tx) => tx.follow("work", "bob"));
@@ -216,13 +216,30 @@ test("V20B: an existing archive without every delivery materialized never record
     fs.linkSync(f.mail.objectPath(id), f.mail.archivePath(id));
     const inbox = join(f.root, "mail/inboxes/bob");
     fs.mkdirSync(inbox, { recursive: true });
-    fs.chmodSync(inbox, 0o500);
-    t.mock.method(console, "error", () => undefined);
-    try {
+    await patched(t, () => {
+      t.mock.method(console, "error", () => undefined);
+      t.mock.method(fs, "fsyncSync", (fd: number) => {
+        if (fs.readlinkSync(`/proc/self/fd/${fd}`) === inbox) throw eio();
+        native.fsync(fd);
+      });
+    }, async () => {
       assert.deepEqual(await f.mail.reconcilePending(), { examined: 1, repaired: 0, remaining: 1 });
       assert.equal(f.store.getOperationById(operation.id)?.state, "pending");
-    } finally { fs.chmodSync(inbox, 0o700); }
+    });
     assert.deepEqual(await f.mail.reconcilePending(), { examined: 1, repaired: 1, remaining: 0 });
+    assert.equal(f.store.getOperationById(operation.id)?.state, "succeeded");
+  } finally { f.close(); }
+});
+
+test("DR46 Mail: recovery repairs owned mailbox modes before observing deliveries", async (t) => {
+  const f = mailFixture();
+  try {
+    f.store.transaction(tx => tx.follow("work", "bob"));
+    const operation = await pendingSend(t, f);
+    const inbox = join(f.root, "mail/inboxes/bob");
+    fs.mkdirSync(inbox, { recursive: true }); fs.chmodSync(inbox, 0o500);
+    assert.deepEqual(await f.mail.reconcilePending(), { examined: 1, repaired: 1, remaining: 0 });
+    assert.equal(fs.statSync(inbox).mode & 0o700, 0o700);
     assert.equal(f.store.getOperationById(operation.id)?.state, "succeeded");
   } finally { f.close(); }
 });

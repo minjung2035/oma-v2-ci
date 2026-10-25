@@ -12,15 +12,15 @@ function analyze({ count = 2, plan, entries, omitPlan = false, omitRegistry = fa
   const names = Array.from({ length: count }, (_, index) => `fixture.operation${index}`);
   const methods = names.map(name => `${JSON.stringify(name)}: unknown`).join("; ");
   const files = {
-    "implementation/contracts.ts": [
+    "packages/contracts/src/index.ts": [
       `export interface PublicMethods { ${methods} }`,
       "export interface InternalMethods {}",
       "export type MutationMethod = keyof PublicMethods;",
       ...(omitPlan ? [] : [`export type OperationPlan = ${plan ?? names.map(name => `{ kind: ${JSON.stringify(name)} }`).join(" | ")};`]),
     ].join("\n"),
-    "src/protocol/methods.ts": `export const PUBLIC_METHODS = { ${names.map(name => `${JSON.stringify(name)}: {}`).join(", ")} };\nexport const INTERNAL_METHODS = {};`,
-    "src/storage/operation-codec.ts": omitRegistry ? "export {};" : [
-      'import type { MutationMethod } from "../../implementation/contracts.js";',
+    "packages/protocol/src/methods.ts": `export const PUBLIC_METHODS = { ${names.map(name => `${JSON.stringify(name)}: {}`).join(", ")} };\nexport const INTERNAL_METHODS = {};`,
+    "packages/protocol/src/operation-codec.ts": omitRegistry ? "export {};" : [
+      'import type { MutationMethod } from "../../contracts/src/index.js";',
       "type OperationCodec = { planCheck: () => void; resultCheck: () => void; relationsCheck: () => void };",
       `export const OPERATION_CODECS = { ${entries ?? names.map(name => `${JSON.stringify(name)}: { planCheck() {}, resultCheck() {}, relationsCheck() {} }`).join(", ")} }${typed ? " satisfies Record<MutationMethod, OperationCodec>" : ""};`,
     ].join("\n"),

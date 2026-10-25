@@ -13,10 +13,11 @@ test("P23 internal contracts expose only receipt lookup and synchronous transact
   );
   const file = resolve("test/internal-port-contract-probe.ts");
   const text = `
-    import type { StorePort, OperationLookup, ReceiptProjector } from "../src/ports/ledger.js";
-    import type { BatchViewLimits } from "../src/ports/runtime.js";
-    import type { BatchViewLimits as DecoderLimits } from "../src/protocol/batch-view.js";
-    import { receiptOfOperation } from "../src/storage/receipt-projector.js";
+    import type { OperationLookup } from "@oma/contracts/durable";
+    import type { StorePort, ReceiptProjector } from "#oma-test/app/ports/ledger";
+    import type { BatchViewLimits } from "#oma-test/app/ports/runtime";
+    import type { BatchViewLimits as DecoderLimits } from "@oma/protocol/batch-view";
+    import { receiptOfOperation } from "@oma/protocol/receipt-projector";
     declare const store: StorePort;
     const value: number = store.transaction(() => 42);
     // @ts-expect-error Promise callbacks are not synchronous transactions.
@@ -52,7 +53,7 @@ test("P23 internal contracts expose only receipt lookup and synchronous transact
       ? ts.createSourceFile(path, text, version, true)
       : original(path, version, ...rest);
   const program = ts.createProgram({
-    rootNames: [file, resolve("src/entry/module-conformance.ts")],
+    rootNames: [file, resolve("apps/oma/src/entry/module-conformance.ts")],
     options,
     host,
   });

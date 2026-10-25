@@ -1,9 +1,10 @@
+import { createMailModule } from "#oma-test/app/broker/mail-composition";
 // TEST-002: child crash harness; parent owns exactly this process and temporary society.
 import { join } from "node:path";
-import { Store } from "../../src/store.js";
-import { MailModule } from "../../src/mail.js";
+import { Store } from "@oma/storage";
+import { MailModule } from "@oma/mail";
 import { sendWithStop, type MailStopPoint } from "./mail-faults.js";
-import type { AuthContext, MailInput } from "../../implementation/contracts.js";
+import type { AuthContext, MailInput } from "@oma/contracts";
 import { makeValidAgent } from "./spec.js";
 
 const state = process.env.OMA_STATE!;
@@ -38,7 +39,7 @@ function stopPoint(value: string | undefined): MailStopPoint | undefined {
 }
 
 if (role === "send") {
-  const mail = new MailModule({ stateRoot: state, society }, store, 64);
+  const mail = createMailModule({ stateRoot: state, society }, store, 64);
   const auth: AuthContext = {
     actor: process.env.OMA_SENDER ?? "a", incarnation: 1, role: "resident", channel: "actor",
     capabilities: new Set(["mail.send"]), peer: { pid: 1, uid: 1000, gid: 1000, cgroup: null },

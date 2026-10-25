@@ -1,16 +1,17 @@
 import { test } from "node:test";
-import type { PreparedBatch } from "../implementation/contracts.js";
+import type { PreparedBatch } from "@oma/contracts";
 import assert from "node:assert/strict";
 import { createServer } from "node:net";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { BrokerChannel, RunnerModule } from "../src/runner.js";
-import { FrameParser, encodeFrame } from "../src/frame.js";
-import { actorSocketPathAt, runnerSessionDirPathAt } from "../src/storage/paths.js";
-import { PI_ADAPTER_REVISION, publishDeliveryReceipt } from "../src/storage/delivery-receipt.js";
-import { generateBatchId, generateOperationId } from "../src/ids.js";
-import { messageIdForOperation } from "../src/domain/derived.js";
+import { BrokerChannel, RunnerModule } from "#oma-test/app/runner";
+import { FrameParser, encodeFrame } from "@oma/protocol/frame";
+import { actorSocketPathAt, runnerSessionDirPathAt } from "@oma/domain/paths";
+import { PI_ADAPTER_REVISION } from "@oma/protocol/delivery-boundary";
+import { publishDeliveryReceipt } from "@oma/storage/delivery-receipt";
+import { generateBatchId, generateOperationId } from "@oma/native/identity";
+import { messageIdForOperation } from "@oma/domain/derived";
 import { TEST_PROTOCOL_LIMITS } from "./fixtures/limits.js";
 import { writeBoundarySession } from "./fixtures/delivery-receipt.js";
 

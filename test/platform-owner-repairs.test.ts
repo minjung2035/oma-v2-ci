@@ -7,18 +7,18 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { randomUUID } from "node:crypto";
 import { spawnSync } from "node:child_process";
-import { GuestProjects, sha256File } from "../src/platform/guest/project.js";
-import { GuestHost } from "../src/platform/guest/host.js";
-import { GuestArchives } from "../src/platform/guest/archive.js";
-import { GuestPackages } from "../src/platform/guest/packages.js";
-import { RequestLedger } from "../src/platform/guest/requests.js";
-import { EgressHost } from "../src/platform/host/egress.js";
-import { NativeChannel } from "../src/platform/host/native-channel.js";
-import { FramedPeer } from "../src/platform/rpc.js";
-import { PLATFORM_FRAME_BYTES } from "../src/protocol/host-guest.js";
-import { publishProjectBinding } from "../src/runtime/provision.js";
-import { ProcessLock } from "../src/runtime/process-lock.js";
-import { keychainCredentials } from "../src/platform/host/keychain.js";
+import { GuestProjects, sha256File } from "#oma-test/app/platform/guest/project";
+import { GuestHost } from "#oma-test/app/platform/guest/host";
+import { GuestArchives } from "#oma-test/app/platform/guest/archive";
+import { GuestPackages } from "#oma-test/app/platform/guest/packages";
+import { RequestLedger } from "#oma-test/app/platform/guest/requests";
+import { EgressHost } from "#oma-test/app/platform/host/egress";
+import { NativeChannel } from "@oma/platform-mac/native-channel";
+import { FramedPeer } from "#oma-test/app/platform/rpc";
+import { PLATFORM_FRAME_BYTES } from "@oma/protocol/host-guest";
+import { publishProjectBinding } from "#oma-test/app/runtime/provision";
+import { ProcessLock } from "@oma/native/process-lock";
+import { keychainCredentials } from "#oma-test/app/runtime/keychain-credentials";
 
 function deferred<T = void>() {
   let resolve!: (value: T) => void;
@@ -180,11 +180,15 @@ test("DR42: initial egress opens all fail, then the owned retry fills without ot
   await new Promise<void>(done => server.listen(path, done));
   const filled = deferred(); let attempts = 0;
   const host = new EgressHost({ open: async () => {
-    attempts++; if (attempts <= 3) throw new Error("transient");
-    const socket = connect(path); await new Promise<void>(done => socket.once("connect", done));
-    if (attempts === 5) filled.resolve(); return { socket, rest: Buffer.alloc(0) };
-  }, resolve: async () => { throw new Error("unused"); }, frameBytes: PLATFORM_FRAME_BYTES, maxPool: 2,
-  limits: { concurrent: 4, timeoutMs: 1000 }, retry: { initialMs: 10, maxMs: 20 } });
+        attempts++;
+        if (attempts <= 3)
+            throw new Error("transient");
+        const socket = connect(path);
+        await new Promise<void>(done => socket.once("connect", done));
+        if (attempts === 5)
+            filled.resolve();
+        return { socket, rest: Buffer.alloc(0) };
+    }, resolve: async () => { throw new Error("unused"); }, frameBytes: PLATFORM_FRAME_BYTES, maxPool: 2, concurrent: 4, retry: { initialMs: 10, maxMs: 20 } });
   t.after(async () => { await host.stop(); for (const socket of peers) socket.destroy(); await new Promise<void>(done => server.close(() => done())); });
   await host.fill(); assert.equal(host.pooled, 0);
   await filled.promise; await new Promise<void>(done => setImmediate(done)); assert.equal(host.pooled, 2); assert.equal(attempts, 5);
@@ -193,8 +197,8 @@ test("DR42: initial egress opens all fail, then the owned retry fills without ot
 
 test("DR42: reboot/shutdown cancel the old egress generation and discard an opening socket", async () => {
   const opened = deferred<{ socket: Socket; rest: Buffer }>(); let signal: AbortSignal | undefined, attempts = 0;
-  const host = new EgressHost({ open: async owner => { signal = owner; attempts++; return opened.promise; },
-    resolve: async () => { throw new Error("unused"); }, frameBytes: PLATFORM_FRAME_BYTES, maxPool: 2, limits: { concurrent: 4, timeoutMs: 1000 } });
+  const host = new EgressHost({ open: async (owner) => { signal = owner; attempts++; return opened.promise; },
+    resolve: async () => { throw new Error("unused"); }, frameBytes: PLATFORM_FRAME_BYTES, maxPool: 2, concurrent: 4 });
   const filling = host.fill(); await host.pause(); assert.equal(signal?.aborted, true);
   const socket = new Socket(); opened.resolve({ socket, rest: Buffer.alloc(0) }); await filling;
   assert.equal(socket.destroyed, true); assert.equal(host.pooled, 0); assert.equal(attempts, 1);

@@ -6,7 +6,7 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { pathToFileURL } from "node:url";
 import { DefaultResourceLoader, SettingsManager } from "@earendil-works/pi-coding-agent";
-import { ExtensionModules } from "../src/runtime/extension-modules.js";
+import { ExtensionModules } from "@oma/engine/extension-modules";
 
 for (const format of ["ts", "js", "mjs", "module-js"]) test(`Extension modules: ${format} reload observes changed code and rejects its next failure`, async t => {
   const root = mkdtempSync(join(tmpdir(), "oma-extension-modules-"));

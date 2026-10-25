@@ -4,10 +4,10 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { chmodSync, mkdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { loadConfiguration, loadConfigurationSnapshot } from "../src/config.js";
-import { observeExtensionAsset } from "../src/config/operations.js";
-import { CORE_EXTENSION, readExtensions, toggleExtension } from "../src/application/extensions.js";
-import { StoreError } from "../src/domain/errors.js";
+import { loadConfiguration, loadConfigurationSnapshot } from "@oma/config";
+import { observeExtensionAsset } from "@oma/config/operations";
+import { CORE_EXTENSION, readExtensions, toggleExtension } from "#oma-test/app/application/extensions";
+import { StoreError } from "@oma/domain/errors";
 import { createCompleteConfigurationFixture } from "./fixtures/configuration.js";
 
 const code = (value: string) => (error: unknown) => error instanceof StoreError && error.code === value;
@@ -84,10 +84,8 @@ test("V14B: a declared optional extension whose file is gone can be removed, and
     for (const name of ["keep-z.js", "gone.js", "keep-a.js"]) writeFileSync(join(dir, name), "export {};\n");
     f.edit("roles/resident.json", role => {
       role.extensions = [CORE_EXTENSION, "extensions/keep-z.js", "extensions/gone.js", "extensions/keep-a.js"];
-      // D23: a preserved unmodeled field lives inside agentProfile now -- the
-      // role file's own fields are closed, and toolSurface is refused outright.
-      (role.agentProfile as Record<string, unknown>).upstreamNote = { defaultMode: "DIRECT" };
     });
+    const profileBefore = loadConfigurationSnapshot(f.path).authoredRoles.resident!.value.agentProfile;
     loadConfiguration(f.path);
     rmSync(join(dir, "gone.js"));
     assert.throws(() => loadConfiguration(f.path), "the bundle no longer loads");
@@ -102,7 +100,8 @@ test("V14B: a declared optional extension whose file is gone can be removed, and
     const repaired = loadConfigurationSnapshot(f.path);
     assert.deepEqual(repaired.authoredRoles.resident!.value.extensions,
       [CORE_EXTENSION, "extensions/keep-z.js", "extensions/keep-a.js"], "order and the other declarations are kept");
-    assert.deepEqual((repaired.authoredRoles.resident!.value.agentProfile as Record<string, unknown>).upstreamNote, { defaultMode: "DIRECT" });
+    assert.deepEqual(repaired.authoredRoles.resident!.value.agentProfile,
+      profileBefore);
     assert.equal(readExtensions(f.path, "principal", "resident").mode, "full");
   } finally { f.close(); }
 });
@@ -115,7 +114,7 @@ test("V14B: the repair does not loosen the loader: another invalid field keeps t
     writeFileSync(join(dir, "gone.js"), "export {};\n");
     f.edit("roles/resident.json", role => { role.extensions = [CORE_EXTENSION, "extensions/gone.js"]; });
     rmSync(join(dir, "gone.js"));
-    f.edit("host.json", host => { host.quota.lineageAgents = -1; });
+    f.edit("host.json", host => { host.limits.logBytes = -1; });
     const context = readExtensions(f.path, "principal", "resident");
     assert.equal(context.editable, false);
     assert.equal(context.mode, "full");

@@ -1,3 +1,6 @@
+import { testBroker } from "./helpers/broker-fixture.js";
+import { createLifecycleModule } from "#oma-test/app/broker/lifecycle-composition";
+import { createMailModule } from "#oma-test/app/broker/mail-composition";
 /** AV20 -- REC-002, arch §6.5, §17.1, D03: physical state is reconciled every
  * five seconds, by whichever owner the deployment's lifetime really has.
  *
@@ -16,16 +19,17 @@ import { existsSync, mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
-import type { UnitObservation } from "../implementation/contracts.js";
-import { Store } from "../src/store.js";
-import { MailModule } from "../src/mail.js";
-import { Broker } from "../src/broker.js";
-import { UnitsModule } from "../src/units.js";
-import { ViewsModule } from "../src/views.js";
-import { LifecycleModule } from "../src/lifecycle.js";
-import { RECONCILE_INTERVAL_MS, type ReconcileModule } from "../src/reconcile.js";
-import { parseUnitObservation } from "../src/units/observe.js";
-import { ALL_CAPS, TEST_RESOURCES, makeValidAgent, makeValidResolvedSpec } from "./fixtures/spec.js";
+import type { UnitObservation } from "@oma/contracts";
+import { Store } from "@oma/storage";
+import { MailModule } from "@oma/mail";
+import { Broker } from "@oma/broker";
+import { UnitsModule } from "@oma/platform-linux/units";
+import { ViewsModule } from "#oma-test/app/views";
+import { LifecycleModule } from "@oma/lifecycle";
+import type { ReconcileModule } from "@oma/reconcile";
+import { RECONCILE_INTERVAL_MS } from "@oma/domain/recovery-policy";
+import { parseUnitObservation } from "@oma/platform-linux/units/observe";
+import { ALL_CAPS, makeValidAgent, makeValidResolvedSpec } from "./fixtures/spec.js";
 import { removeTree } from "./fixtures/cleanup.js";
 import { goalPublishedAt } from "./fixtures/goal.js";
 
@@ -34,7 +38,7 @@ const idle = parseUnitObservation({ kind: "succeeded", status: 0, signal: null, 
 
 /** Unit control is scripted: this suite is about when the broker sweeps, not systemd. */
 class ScriptedUnits extends UnitsModule {
-  constructor(root: string) { super("demo", { node: process.execPath, libdir: root, state: root, society: "demo", agent: "" }, join(root, "units"), { p: TEST_RESOURCES }); }
+  constructor(root: string) { super("demo", { node: process.execPath, libdir: root, state: root, society: "demo", agent: "" }, join(root, "units")); }
   override observe(): UnitObservation { return idle; }
   override async observeAsync(): Promise<UnitObservation> { return idle; }
   override async observeStatus(): Promise<ReadonlyMap<string, UnitObservation | "no-unit">> { return new Map(); }
@@ -60,14 +64,13 @@ function society(t: TestContext) {
   const root = mkdtempSync(join(tmpdir(), "oma-av20-"));
   const store = new Store(join(root, "runtime.sqlite"), 5, { society: "demo" });
   store.transaction(tx => { tx.insertAgent(makeValidAgent("principal")); });
-  const mail = new MailModule({ stateRoot: root, society: "demo" }, store, 64);
+  const mail = createMailModule({ stateRoot: root, society: "demo" }, store, 64);
   const units = new ScriptedUnits(root);
   const views = new ViewsModule(store, root, "demo", "p");
-  const lifecycle = new LifecycleModule(store, units, { stateRoot: root, projectGit: join(root, "project.git"), society: "demo", hasGoal: () => true, activationAllowed: () => true },
+  const lifecycle = createLifecycleModule(store, units, { stateRoot: root, projectGit: join(root, "project.git"), society: "demo", hasGoal: () => true, activationAllowed: () => true },
     (_parent, input) => makeValidResolvedSpec(input.name, "p", ALL_CAPS, input.from, input.brief), mail);
   const recovery = countingRecovery();
-  const broker = new Broker(store, mail, units, views, lifecycle, null, recovery as unknown as ReconcileModule,
-    { stateRoot: root, runRoot: join(root, "run"), society: "demo", hasGoal: goalPublishedAt(root) });
+  const broker = testBroker({ store: store, mail: mail, units: units, views: views, lifecycle: lifecycle, git: null, reviews: null, reconcile: recovery as unknown as ReconcileModule, paths: { stateRoot: root, runRoot: join(root, "run"), society: "demo", hasGoal: goalPublishedAt(root) } });
   let drained = false;
   const drain = async () => { if (!drained) { drained = true; await broker.drainAndClose(); } };
   t.after(async () => { try { await drain(); } finally { removeTree(root); } });
@@ -114,7 +117,7 @@ test("AV20 / REC-002: the drain waits for a sweep the interval started, as for a
 
 test("AV20 / D03, INV04: no external reconcile or broker unit ships -- the in-process sweep and its five-second interval are the only owner", () => {
   for (const name of ["reconcile.service.in", "reconcile.timer.in", "broker.service.in"]) {
-    assert.equal(existsSync(fileURLToPath(new URL(`../../implementation/systemd/${name}`, import.meta.url))), false,
+    assert.equal(existsSync(fileURLToPath(new URL(`../../packages/platform-linux/dist/systemd/${name}`, import.meta.url))), false,
       `${name} still ships`);
   }
   // INV04: the interval the broker starts is REC-002's five seconds itself,

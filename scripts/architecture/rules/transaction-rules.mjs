@@ -1,5 +1,5 @@
 import ts from "typescript";
-import { eachNode, filesUnder, finding, readJson, sourceOf } from "./shared.mjs";
+import { authoredFiles, eachNode, filesUnder, finding, readJson, sourceOf } from "./shared.mjs";
 
 /** Recovery metadata makes transaction-complete versus physical-replay ownership explicit. */
 export function transactionRuleFindings(root) {
@@ -38,7 +38,7 @@ export function transactionRuleFindings(root) {
  * never a wall-clock column: SQL in src that orders by an `*_at_ms` column is
  * refused. */
 function ledgerOrderRules(root, findings) {
-  for (const file of filesUnder(root, "src")) {
+  for (const file of authoredFiles(root)) {
     eachNode(sourceOf(root, file), node => {
       const text = ts.isStringLiteralLike(node) || ts.isTemplateHead(node) || ts.isTemplateMiddle(node) || ts.isTemplateTail(node) ? node.text : null;
       if (text === null) return;

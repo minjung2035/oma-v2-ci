@@ -8,7 +8,7 @@ import { createRequire } from 'node:module';
 import { pathToFileURL } from 'node:url';
 import { Script } from 'node:vm';
 import ts from 'typescript';
-import { ProcessLock } from '../dist/src/runtime/process-lock.js';
+import { ProcessLock } from "@oma/native/process-lock";
 
 // The engine package is ESM-only: a CommonJS require inside the harness cannot
 // resolve it, so the real module is imported here and handed to the sandboxed
@@ -22,26 +22,29 @@ function load(file, platform, replacements = {}) {
   new Script(code, { filename: file }).runInNewContext({ module, exports: module.exports, Buffer,
     process: { platform }, require(name) {
       if (Object.hasOwn(replacements, name)) return replacements[name];
-      return require(name.startsWith('.') ? resolve('dist', dirname(file), name) : name);
+      return require(name.startsWith('.') ? resolve((file.startsWith('packages/') || file.startsWith('apps/oma/')) ? dirname(file).replace('/src', '/dist') : 'dist/' + dirname(file), name) : name);
     } });
   return module.exports;
 }
 function fixture(t, platform, transform = value => value) {
   const root = fs.mkdtempSync(join(tmpdir(), 'oma-engine-settings-'));
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
-  const metadata = transform(load('src/runtime/user-files.ts', platform));
+  const metadata = transform(load('apps/oma/src/runtime/user-files.ts', platform));
   // The locked writer keeps the same seam: its imports of the file metadata
   // are what the transform wraps, not the module's own internals.
-  const locked = load('src/runtime/locked-files.ts', platform, { './user-files.js': metadata });
+  const locked = load('apps/oma/src/runtime/locked-files.ts', platform, { './user-files.js': metadata });
   // The settings bridge is part of the platform surface under test: it is
   // transpiled with the same fake platform and the same file metadata so a
   // darwin assertion is not silently satisfied by the host's linux branch.
-  const bridge = load('src/pi-compat/settings.ts', platform,
-    { '../runtime/locked-files.js': locked, '@earendil-works/pi-coding-agent': piPackage });
-  const runtime = load('src/runtime/pi-runtime.ts', platform, { './locked-files.js': locked });
-  const presentation = load('src/runtime/pi-presentation.ts', platform,
-    { './pi-runtime.js': runtime, '../pi-compat/settings.js': bridge });
-  const api = { ...runtime, ...presentation };
+  const files = load('apps/oma/src/engine/settings-files.ts', platform,
+    { '../runtime/locked-files.js': locked, '../runtime/user-files.js': metadata }).engineSettingsFiles;
+  const bridge = load('packages/engine/src/pi-compat/settings.ts', platform,
+    { '@earendil-works/pi-coding-agent': piPackage });
+  const runtime = load('packages/engine/src/pi-runtime.ts', platform);
+  const presentation = load('packages/engine/src/pi-presentation.ts', platform,
+    { "@oma/engine": runtime, './pi-compat/settings.js': bridge });
+  const api = { ...runtime, preparePiRetry: dir => runtime.preparePiRetry(files, dir),
+    preparePiInteractive: dir => presentation.preparePiInteractive(files, dir) };
   return { root, api, path: join(root, 'settings.json'), metadata };
 }
 const json = file => JSON.parse(fs.readFileSync(file, 'utf8'));

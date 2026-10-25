@@ -1,8 +1,7 @@
 /** T114 / PR-001, PI-001: the private channel as each end reads it.
  *
- * The trusted extension may not import OMA's protocol module, so it mirrors the
- * channel's names and credential line. These tests hold the mirror to the
- * original on every line either end could see, and exercise the extension's
+ * The trusted extension uses the protocol's channel names and credential codec.
+ * These tests exercise every line either end could see, and the extension's
  * reader and bounded mail read directly, plus the CLI's indifference to the
  * credential-descriptor contract that no longer has a producer.
  */
@@ -16,12 +15,10 @@ import { randomUUID } from "node:crypto";
 import {
   HOST_CHANNEL_ENV, HOST_CHANNEL_FD, HOST_CHANNEL_LINE_BYTES, HostChannelReader, decodeHostMessage, encodeHostMessage,
   type HostChannelMessage,
-} from "../src/protocol/host-channel.js";
-import { CHANNEL_FD as SPAWN_CHANNEL_FD, SOCIETY_FENCE_ENV as HOST_DECLARES, SOCIETY_FENCE_FD as HOST_PLACES } from "../src/process/async.js";
-import {
-  PRINCIPAL_CHANNEL_ENV, PRINCIPAL_CHANNEL_FD, PrincipalChannel, registerOmaTools,
-  SOCIETY_FENCE_ENV as EXTENSION_READS, SOCIETY_FENCE_FD as EXTENSION_PLACES,
-} from "../src/pi-extension.js";
+} from "@oma/protocol/host-channel";
+import { CHANNEL_FD as SPAWN_CHANNEL_FD, SOCIETY_FENCE_FD as HOST_PLACES } from "@oma/process/async";
+import { PrincipalChannel } from "@oma/extension/principal-channel";
+import { registerOmaTools } from "@oma/extension/mail-tools";
 
 import { runCliProcess } from "./fixtures/cli-child.js";
 
@@ -75,22 +72,13 @@ const CORPUS: readonly string[] = [
 ];
 
 test("T114: the extension's channel names are the protocol's", () => {
-  assert.equal(PRINCIPAL_CHANNEL_ENV, HOST_CHANNEL_ENV);
-  assert.equal(PRINCIPAL_CHANNEL_FD, HOST_CHANNEL_FD);
   // The slot the spawn helpers lay out the channel on is the slot the protocol
   // says the channel is. They are separate constants because the spawn helper
   // may not import the protocol, and a drift between them would move the
   // credential out from under the reader waiting for it.
   assert.equal(SPAWN_CHANNEL_FD, HOST_CHANNEL_FD);
-  // And the society lease: the extension may not import OMA's process module,
-  // so it mirrors the name and the number the host places the lease on. A
-  // mirror that drifted would be the worst of both -- the host would hand the
-  // engine a fence the extension looked for somewhere else, and the CLI would
-  // start unfenced while every fence test in the suite went on passing.
-  assert.equal(EXTENSION_READS, HOST_DECLARES);
-  assert.equal(EXTENSION_PLACES, HOST_PLACES);
-  // Nothing may share the credential's descriptor with the lease.
-  assert.notEqual(EXTENSION_PLACES, PRINCIPAL_CHANNEL_FD);
+  // Credential IPC and the inherited society lease have distinct slots.
+  assert.notEqual(HOST_PLACES, HOST_CHANNEL_FD);
 });
 
 test("T114: the extension accepts exactly the credential lines the protocol decodes", () => {
@@ -164,7 +152,7 @@ test("T114: an engine started without the product's channel holds nothing", () =
   // A Resident's engine: no marker, so descriptor 3 is not even looked at.
   assert.equal(PrincipalChannel.open({}).current(), null);
   // A marker naming another descriptor is not this product's channel.
-  assert.equal(PrincipalChannel.open({ [PRINCIPAL_CHANNEL_ENV]: "4" }).current(), null);
+  assert.equal(PrincipalChannel.open({ [HOST_CHANNEL_ENV]: "4" }).current(), null);
 });
 
 /** Runs the real CLI transport in a child that still has the removed
@@ -172,7 +160,7 @@ test("T114: an engine started without the product's channel holds nothing", () =
  * The call can only fail on connecting: there is no broker at the path. */
 function cliCalls(fd3: "socket" | "none", line: string | null): Promise<string> {
   const script = `
-    import { callActor } from ${JSON.stringify(join(process.cwd(), "dist/src/cli/transport.js"))};
+    import { callActor } from ${JSON.stringify(join(process.cwd(), "apps/oma/dist/cli/transport.js"))};
     try { await callActor("/nonexistent/socket", "status.get", {}); process.stdout.write("no error"); }
     catch (error) { process.stdout.write(String(error.code ?? error.message) + ":" + String(error.message)); }
   `;

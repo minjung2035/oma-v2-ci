@@ -12,7 +12,7 @@ const provider = await scriptedProvider([
 const engine = join(host, '.engine'); provider.configure(engine);
 const settings = JSON.parse(readFileSync(join(engine, 'settings.json'), 'utf8'));
 writeFileSync(join(engine, 'settings.json'), JSON.stringify({ ...settings, defaultProvider: 'fake', defaultModel: 'scripted' }));
-const child = spawn(process.execPath, [join(process.cwd(), 'dist/src/entry/oma-mac.js'), '--mode', 'personal'], {
+const child = spawn(process.execPath, [join(process.cwd(), 'apps/oma/dist/entry/oma-mac.js'), '--mode', 'personal'], {
   cwd, stdio: 'inherit', env: { PATH: process.env.PATH, HOME: home, OMA_HOST_HOME: host, TERM: 'xterm-256color', PI_OFFLINE: '1' },
 });
 try {

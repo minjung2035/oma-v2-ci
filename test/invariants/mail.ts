@@ -1,10 +1,12 @@
+import { mailEffects } from "#oma-test/app/broker/mail-effects";
+import { mailLedger } from "#oma-test/app/broker/mail-composition";
 import assert from "node:assert/strict";
 import { lstatSync, readFileSync } from "node:fs";
-import type { MessagePlan } from "../../implementation/contracts.js";
-import { sha256Hex } from "../../src/hash.js";
-import { mailObjectPathAt, mailArchivePathAt, mailInboxPathAt } from "../../src/storage/paths.js";
-import { operationMessage, MailMaterializer } from "../../src/mail/materializer.js";
-import type { Store } from "../../src/store.js";
+import type { MessagePlan } from "@oma/contracts";
+import { sha256Hex } from "@oma/domain/canonical-json";
+import { mailObjectPathAt, mailArchivePathAt, mailInboxPathAt } from "@oma/domain/paths";
+import { operationMessage, MailMaterializer } from "@oma/mail/materializer";
+import type { Store } from "@oma/storage";
 import type { LedgerSnapshot, InvariantPhase } from "./store.js";
 
 export function matchingFile(path: string, expected: { bytes: number; sha256: string }, required: boolean, label: string): boolean {
@@ -17,7 +19,7 @@ export function matchingFile(path: string, expected: { bytes: number; sha256: st
 }
 export function assertMail(snapshot: LedgerSnapshot, store: Store, root: string, society: string, phase: InvariantPhase): readonly string[] {
   const incomplete: string[] = [];
-  const headers = new MailMaterializer(store, root, society);
+  const headers = new MailMaterializer(mailLedger(store), society, mailEffects({stateRoot: root, society}));
   for (const operation of snapshot.operations) {
     if (!["mail.send", "agent.continue", "git.submit", "context.publish", "agent.create"].includes(operation.kind)) continue;
     if (operation.kind === "agent.create" && operation.plan.existingCreation !== null) {

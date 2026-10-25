@@ -8,6 +8,12 @@ import { readFileSync, writeFileSync } from "node:fs";
 import { GIT_PLUMBING_LIMITS, LEDGER, PLAN, oraclePresent, testNames } from "./review-closure.mjs";
 
 const root = process.cwd();
+const args = process.argv.slice(2);
+if (args.some(arg => arg !== "--invalidate-stale")) throw new Error("usage: review-ledger.mjs [--invalidate-stale]");
+// Relocation invalidates a review; it cannot renew it. This explicit mode
+// preserves authored notes and leaves current working-tree bytes NOT_REVIEWED.
+const invalidateStale = args.includes("--invalidate-stale");
+const invalidatedReviews = [];
 const plan = JSON.parse(readFileSync(PLAN, "utf8"));
 const notes = JSON.parse(readFileSync("implementation/review-notes.json", "utf8"));
 const current = readFileSync("production-files.txt", "utf8").split("\n").filter(Boolean);
@@ -18,16 +24,25 @@ const read = new Map(notes.readUnchanged.map(entry => [entry.path, entry]));
 // A reviewed working-tree implementation is not "read unchanged". Bind its
 // explicit review to exact bytes; later edits require another review.
 const reviewedPaths = new Set();
-const reviewedChanges = new Map((notes.reviewedChanges ?? []).map(entry => {
-  if (!current.includes(entry.path) || reviewedPaths.has(entry.path))
-    throw new Error(`reviewed change is not a unique production file: ${entry.path}`);
+const reviewedChanges = new Map((notes.reviewedChanges ?? []).flatMap(entry => {
+  if (reviewedPaths.has(entry.path)) throw new Error(`reviewed change is not a unique production file: ${entry.path}`);
   reviewedPaths.add(entry.path);
+  if (!current.includes(entry.path)) {
+    if (!invalidateStale) throw new Error(`reviewed change is not a unique production file: ${entry.path}`);
+    invalidatedReviews.push({ path: entry.path, sha256: entry.sha256, reason: "reviewed path removed or relocated" });
+    return [];
+  }
   const digest = createHash("sha256").update(readFileSync(entry.path)).digest("hex");
-  if (entry.sha256 !== digest) throw new Error(`reviewed change is stale: ${entry.path}`);
+  if (entry.sha256 !== digest) {
+    if (!invalidateStale) throw new Error(`reviewed change is stale: ${entry.path}`);
+    invalidatedReviews.push({ path: entry.path, sha256: entry.sha256, reason: "reviewed bytes differ from current source" });
+    return [];
+  }
   if (!entry.by?.length || !entry.oracles?.length || !entry.note || !entry.oracles.every(id => oraclePresent(names, id)))
     throw new Error(`reviewed change lacks evidence: ${entry.path}`);
-  return [entry.path, entry];
+  return [[entry.path, entry]];
 }));
+const invalidatedPaths = new Set(invalidatedReviews.map(entry => entry.path));
 const base = plan.baseline_commit;
 // A commit reviewed different bytes. Neither that history nor a clause table
 // certifies edits still in the working tree; only a byte-bound review above can.
@@ -97,7 +112,7 @@ for (const path of [...new Set([...current, ...assigned.keys()])].sort()) {
       note: review.note, sha256: review.sha256 });
     continue;
   }
-  if (changed.has(path) || !committedPaths.has(path)) {
+  if (changed.has(path) || !committedPaths.has(path) || invalidatedPaths.has(path)) {
     files.push({ path, primary, status: "NOT_REVIEWED", by: [], oracles: [],
       note: "Current working-tree bytes have no explicit byte-bound review; historical reviews do not certify these changes." });
     continue;
@@ -116,12 +131,17 @@ for (const path of [...new Set([...current, ...assigned.keys()])].sort()) {
     files.push({ path, primary, status: oracles.length > 0 ? "CHANGED_WITH_ORACLE" : "CHANGED_WITHOUT_ORACLE", by, oracles, ...note, sha256 });
   } else if (read.has(path)) {
     const note = read.get(path);
-    if (note.sha256 !== undefined && note.sha256 !== sha256)
-      throw new Error(`read-unchanged claim is stale: ${path}`);
+    if (note.sha256 !== undefined && note.sha256 !== sha256) {
+      if (!invalidateStale) throw new Error(`read-unchanged claim is stale: ${path}`);
+      invalidatedReviews.push({ path, sha256: note.sha256, reason: "read-unchanged bytes differ from current source" });
+      files.push({ path, primary, status: "NOT_REVIEWED", by: [], oracles: [], note: "Prior read claim does not certify current bytes." });
+      continue;
+    }
     files.push({ path, primary, status: "READ_UNCHANGED", by: note.by, oracles: note.oracles, note: note.note, sha256 });
   } else files.push({ path, primary, status: "NOT_REVIEWED", by: [], oracles: [] });
 }
 const summary = {};
 for (const entry of files) summary[entry.status] = (summary[entry.status] ?? 0) + 1;
-writeFileSync(LEDGER, `${JSON.stringify({ version: 1, baseline: base, summary, lanes: notes.lanes, files }, null, 1)}\n`);
+writeFileSync(LEDGER, `${JSON.stringify({ version: 1, baseline: base, summary, lanes: notes.lanes, files,
+  ...(invalidateStale ? { invalidatedReviews } : {}) }, null, 1)}\n`);
 console.log(JSON.stringify(summary));

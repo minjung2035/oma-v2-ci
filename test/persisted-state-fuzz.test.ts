@@ -1,3 +1,4 @@
+import { serializePlanIntent } from "./fixtures/plan.js";
 // P9 persisted-state fuzz: plan_json, result_json, agent spec, context manifest
 // and the persisted version classifier. The oracle is not "does not throw":
 // every rejected case must be a closed failure or an explicit unknown, must
@@ -9,14 +10,15 @@ import { mkdtempSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { DatabaseSync } from "node:sqlite";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { Store, StoreError } from "../src/store.js";
-import { requestHash } from "../src/hash.js";
-import { operationPlanCheck, operationResultRelationCheck } from "../src/durable.js";
-import { operationResultCheck } from "../src/validate.js";
-import { decodeAgentSpec } from "../src/storage/rows.js";
-import { contextEntriesCheck } from "../src/durable.js";
-import { classifyPersistedPlan } from "../src/domain/persisted-formats.js";
-import { isMutationMethod } from "../src/protocol/receipt-codec.js";
+import { Store } from "@oma/storage";
+import { StoreError } from "@oma/domain/errors";
+import { requestHash } from "@oma/domain/request-identity";
+import { operationPlanCheck, operationResultRelationCheck } from "@oma/domain/durable";
+import { operationResultCheck } from "@oma/domain/validation";
+import { decodeAgentSpec } from "@oma/domain/agent-spec";
+import { contextEntriesCheck } from "@oma/domain/durable";
+import { classifyPersistedPlan } from "@oma/protocol/persisted-formats";
+import { isMutationMethod } from "@oma/protocol/receipt-codec";
 import { makeValidAgent } from "./fixtures/spec.js";
 import { removeTree } from "./fixtures/cleanup.js";
 import { Seeded, integerParameter, recordExplorationFailure, replayMetadata } from "./model/reproducible.js";
@@ -125,11 +127,11 @@ test("P9 fuzz plan_json: rejected plans are closed failures with no repair and n
     }
     let closed = 0, accepted = 0;
     for (const plan of corpus) {
-      const classification = classifyPersistedPlan(plan);
+      const classification = classifyPersistedPlan({ version: 2, intent: plan });
       let shape: string | null;
       try { shape = operationPlanCheck("route.follow", PLAN_API)(plan); }
       catch (error) { assert.fail(`plan check escaped its rejection type: ${String(error)}`); }
-      if (classification.format === "v1" && shape === null) { accepted++; continue; }
+      if (classification.format === "v2" && shape === null) { accepted++; continue; }
       closed++;
       assert.notEqual(classification.format === "unknown" ? "unknown" : shape, null, JSON.stringify(plan)?.slice(0, 120));
     }
@@ -205,10 +207,10 @@ test("P9 fuzz persisted version classifier: unknown formats stay unknown and are
   for (const plan of PLAN_VALID) for (let index = 0; index < 16; index++) corpus.push(random.json(JSON.stringify(plan)));
   let unknown = 0;
   for (const plan of corpus) {
-    const classification = classifyPersistedPlan(plan);
-    if (classification.format === "v1") {
+    const classification = classifyPersistedPlan({ version: 2, intent: plan });
+    if (classification.format === "v2") {
       const kind = (plan as { kind?: unknown }).kind;
-      assert.ok(typeof kind === "string" && isMutationMethod(kind), "v1 classification requires a method owner kind");
+      assert.ok(typeof kind === "string" && isMutationMethod(kind), "v2 classification requires a method owner kind");
       continue;
     }
     unknown++;
@@ -250,7 +252,7 @@ test("P9 fuzz raw persisted row: a fuzzed plan_json leaves the database bytes un
     store.transaction(() => {
       store.insertAgent(makeValidAgent("a"));
       store.insertOperation({ id: OP, actor: "a", requestKey: "fuzz", requestHash: requestHash("mail.send", payload),
-        kind: "mail.send", payloadJson: JSON.stringify(payload), planJson: JSON.stringify(plan) });
+        kind: "mail.send", payloadJson: JSON.stringify(payload), planJson: serializePlanIntent(plan) });
       store.insertDeliveries([{ messageId, recipient: "a", operationId: OP }]);
     });
     store.close();

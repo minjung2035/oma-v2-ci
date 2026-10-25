@@ -2,7 +2,7 @@ import {
   EDITABLE_FIELD_DESCRIPTORS,
   type EditableField,
   type EditableFieldDescriptor,
-} from "../src/application/settings.js";
+} from "#oma-test/app/application/settings";
 
 const descriptor = null as unknown as EditableFieldDescriptor;
 const complete = {

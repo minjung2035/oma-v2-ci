@@ -1,3 +1,4 @@
+import { createMailModule } from "#oma-test/app/broker/mail-composition";
 // Phase 2 acceptance: DDL/FK/idempotency/framing/fuzz (T02-T10, TEST-001).
 // Normal data uses the actual Store/Mail boundaries. Deliberate SQL corruption
 // is isolated after the Store closes, not smuggled into the normal constructors.
@@ -6,13 +7,16 @@ import assert from "node:assert/strict";
 import { mkdtempSync, rmSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { Store, StoreError, SCHEMA_PATH } from "../src/store.js";
-import { MailModule } from "../src/mail.js";
-import { FrameParser, FrameError, findDuplicateKey } from "../src/frame.js";
-import { requestHash, sha256Hex, sortedUnique, canonicalJson } from "../src/hash.js";
-import { generateOperationId, generateBatchId, generateMessageId, uuidV4, isValidActorName,
-  isValidRequestKey, isValidFullOid, parseMessageId, isValidWirePath } from "../src/ids.js";
-import type { AuthContext } from "../implementation/contracts.js";
+import { Store, SCHEMA_PATH } from "@oma/storage";
+import { StoreError } from "@oma/domain/errors";
+import { MailModule } from "@oma/mail";
+import { FrameParser, FrameError, findDuplicateKey } from "@oma/protocol/frame";
+import { requestHash } from "@oma/domain/request-identity";
+import { sha256Hex, sortedUnique, canonicalJson } from "@oma/domain/canonical-json";
+import { generateOperationId, generateBatchId, uuidV4 } from "@oma/native/identity";
+import { messageIdForOperation as generateMessageId } from "@oma/domain/derived";
+import { isValidActorName, isValidRequestKey, isValidFullOid, parseMessageId, isValidWirePath } from "@oma/domain/identifiers";
+import type { AuthContext } from "@oma/contracts";
 import { makeValidAgent } from "./fixtures/spec.js";
 import { mutateRawRowAfterClose } from "./fixtures/corruption.js";
 
@@ -29,7 +33,7 @@ function insertAgentTx(store: Store, name: string): void {
   assert.equal(store.getAgent(name)?.name, name, "normal fixture must pass the production decoder first");
 }
 function mailFixture(store: Store, dir: string) {
-  const mail = new MailModule({ stateRoot: dir, society: "phase2" }, store, 64);
+  const mail = createMailModule({ stateRoot: dir, society: "phase2" }, store, 64);
   const auth: AuthContext = { actor: "a", incarnation: 1, role: "resident", channel: "actor",
     capabilities: new Set(["mail.send"]), peer: { pid: process.pid, uid: 1000, gid: 1000, cgroup: null } };
   return { mail, auth };
@@ -42,7 +46,7 @@ function rawFrame(text: string): Buffer {
 }
 function frameOf(value: unknown): Buffer { return rawFrame(JSON.stringify(value)); }
 
-test("T02: fresh DDL applies; six entities; user_version=3; reapply rejected", () => {
+test("DR46 schema4: fresh DDL applies; six entities; reapply rejected", () => {
   const { store, dir } = freshStore();
   let closed = false;
   try {
@@ -53,10 +57,10 @@ test("T02: fresh DDL applies; six entities; user_version=3; reapply rejected", (
       ["agents", "attestations", "batches", "deliveries", "operations", "subscriptions"]);
     store.close(); closed = true;
     mutateRawRowAfterClose(join(dir, "runtime.sqlite"), raw => {
-      assert.equal(raw.prepare("PRAGMA user_version").get()?.user_version, 3);
+      assert.equal(raw.prepare("PRAGMA user_version").get()?.user_version, 4);
       assert.throws(() => raw.exec(sql), /already exists/);
       raw.exec("ROLLBACK");
-      assert.equal(raw.prepare("PRAGMA user_version").get()?.user_version, 3);
+      assert.equal(raw.prepare("PRAGMA user_version").get()?.user_version, 4);
     });
   } finally { if (!closed) store.close(); rmSync(dir, { recursive: true, force: true }); }
 });
@@ -185,15 +189,15 @@ test("T10: different keys are distinct operations; no semantic dedup", async () 
   } finally { seal(store, dir); }
 });
 
-test("hash: canonical key sorting, set dedupe, stability, stream folding", () => {
+test("hash: canonical key sorting, set dedupe, stability, descriptor identity", () => {
   const h1 = requestHash("mail.send", { to: sortedUnique(["b", "a", "b"]), subject: "S", kind: "message", body: "x" });
   const h2 = requestHash("mail.send", { subject: "S", kind: "message", body: "x", to: sortedUnique(["a", "b"]) });
   assert.equal(h1, h2);
   assert.equal(h1.length, 64);
   assert.notEqual(requestHash("mail.send", { body: " x ", subject: "S ", kind: "message", to: [] }),
     requestHash("mail.send", { body: "x", subject: "S", kind: "message", to: [] }));
-  // Legacy explicit stream hash domain, not a claim that {} is a valid submit DTO.
-  assert.notEqual(requestHash("git.submit", {}, { bytes: 100, sha256: "c".repeat(64) }), requestHash("git.submit", {}));
+  // The current descriptor belongs to params and contributes to identity.
+  assert.notEqual(requestHash("git.submit", { bundle: { bytes: 100, sha256: "c".repeat(64) } }), requestHash("git.submit", {}));
   assert.equal(canonicalJson({ b: 1, a: [2, 1] }), '{"a":[2,1],"b":1}');
   assert.equal(sha256Hex("abc"), "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad");
 });

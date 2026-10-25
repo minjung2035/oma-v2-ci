@@ -17,8 +17,8 @@ import { mkdirSync, symlinkSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { withScenario, type Scenario } from "./fixtures/scenario.js";
 import { SCRIPTED_KEY, call, continuesTurn, text, textOf, toolResults, tools, type ChatRequest } from "./fixtures/scripted-provider.js";
-import { projectGitPathAt } from "../src/storage/paths.js";
-import { commitRoleSet, readSettings, readSettingsForEditing, roleSetOf, writeSettings } from "../src/application/settings.js";
+import { projectGitPathAt } from "@oma/domain/paths";
+import { commitRoleSet, readSettings, readSettingsForEditing, roleSetOf, writeSettings } from "#oma-test/app/application/settings";
 
 import { RESIDENT_TEST_OPTIONS as OPTIONS } from "./fixtures/resident.js";
 const isResident = (request: ChatRequest): boolean => !(request.tools ?? []).some(tool => tool.function?.name === "oma_society");
@@ -189,7 +189,7 @@ test("SCN-C08 / DR18 (D-5): a confined Resident's shell runs under the sandbox f
 });
 
 test("SCN-C09 / DR18 (D-8): the human's later commit reaches a confined Resident through the read-only mirror, which it submits by the existing path", OPTIONS, async () => {
-  const { refreshProjectMirror } = await import("../src/runtime/provision.js");
+  const { refreshProjectMirror } = await import("#oma-test/app/runtime/provision");
   const { mkdtempSync, rmSync, writeFileSync } = await import("node:fs");
   const { tmpdir } = await import("node:os");
   await withScenario({ residents: ["worker-a"], confined: true }, async s => {

@@ -3,11 +3,11 @@ import assert from "node:assert/strict";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { isValidBatchId, isValidMessageId, isValidOperationId, parseMessageId } from "../src/ids.js";
-import { mailAckParamsCheck, messagePlanCheck } from "../src/validate.js";
-import { operationPlanCheck } from "../src/durable.js";
-import { readBatchView, decodeBatchViewText as extensionDecode } from "../src/pi-extension.js";
-import { decodeBatchViewText as hostDecode, encodeBatchView } from "../src/protocol/batch-view.js";
+import { isValidBatchId, isValidMessageId, isValidOperationId, parseMessageId } from "@oma/domain/identifiers";
+import { mailAckParamsCheck, messagePlanCheck } from "@oma/domain/validation";
+import { operationPlanCheck } from "@oma/domain/durable";
+import { readBatchView } from "@oma/tool-runtime/batch-view";
+import { decodeBatchViewText as hostDecode, encodeBatchView } from "@oma/protocol/batch-view";
 
 const UUID = "00000000-0000-4000-8000-000000000001";
 const OP = `op-${UUID}`;
@@ -65,23 +65,22 @@ test("PI-002/M-003: batch view rejects non-v4 batch and message identities", () 
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
 
-test("R28: host and isolated extension preserve six-field schema and independent invalid oracles", () => {
+test("R28: the protocol codec and isolated file reader preserve the six-field schema and reject invalid input", t => {
+  const root = mkdtempSync(join(tmpdir(), "oma-batch-codec-"));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
   const valid = { id: BATCH, agent: "alice", incarnation: 1, deliveryMode: "followUp" as const, notice: "새 메일 🙂", messageIds: [MESSAGE] };
   const raw = encodeBatchView({ ...valid, sessionPath: "/private/session", indexPath: "/inbox.md" }, VIEW_LIMITS);
   assert.deepEqual(JSON.parse(raw), valid);
   assert.equal(raw.includes("/private/session"), false);
   assert.deepEqual(hostDecode(raw, BATCH, VIEW_LIMITS), valid);
-  assert.deepEqual(extensionDecode(raw, BATCH, VIEW_LIMITS), valid);
   // PR-002: the Principal receives batches too, and both sides agree on it.
   const principal = { ...valid, agent: "principal" };
   const principalText = JSON.stringify(principal);
   assert.deepEqual(hostDecode(principalText, BATCH, VIEW_LIMITS), principal);
-  assert.deepEqual(extensionDecode(principalText, BATCH, VIEW_LIMITS), principal);
   // Ordinal spellings both sides accept decode to the same id on both sides.
   for (const ordinal of ["0", "01", "1", "007"]) {
     const text = JSON.stringify({ ...valid, messageIds: [`m-${UUID}-${ordinal}`] });
     assert.deepEqual(hostDecode(text, BATCH, VIEW_LIMITS), { ...valid, messageIds: [`m-${UUID}-${ordinal}`] }, ordinal);
-    assert.deepEqual(extensionDecode(text, BATCH, VIEW_LIMITS), hostDecode(text, BATCH, VIEW_LIMITS), ordinal);
   }
   const invalid: unknown[] = [null, [], { ...valid, id: `b-${BAD_VERSION}` }, { ...valid, id: `b-${BAD_VARIANT}` },
     // Every reserved name except the Principal is an address, never a
@@ -93,18 +92,18 @@ test("R28: host and isolated extension preserve six-field schema and independent
     { ...valid, deliveryMode: "prompt" }, { ...valid, notice: 1 }, { ...valid, notice: "🙂".repeat(4096) },
     { ...valid, messageIds: [MESSAGE, MESSAGE] }, { ...valid, messageIds: [`m-${BAD_VERSION}-0`] },
     { ...valid, messageIds: [`m-${BAD_VARIANT}-0`] }, { ...valid, messageIds: [`m-${UUID}-9007199254740992`] },
-    // The extension builds its id grammar with `new RegExp` templates, so the
-    // static regex rule cannot compare it; this corpus is the mirror control.
+    // These independent malformed spellings reach the codec and actual file reader.
     { ...valid, messageIds: [`m-${UUID}-+1`] }, { ...valid, messageIds: [`m-${UUID}- 1`] },
     { ...valid, messageIds: [`m-${UUID}-0e1`] }, { ...valid, messageIds: [`m-${UUID}-1.0`] },
     { ...valid, sessionPath: "/private/session" }, { ...valid, extra: true }];
   for (const value of invalid) {
     const text = JSON.stringify(value);
     assert.equal(hostDecode(text, BATCH, VIEW_LIMITS), null);
-    assert.equal(extensionDecode(text, BATCH, VIEW_LIMITS), null);
+    writeFileSync(join(root, `batch-${BATCH}.json`), text);
+    assert.equal(readBatchView(BATCH, root, VIEW_LIMITS), null);
   }
   const bytes = Buffer.byteLength(raw);
-  for (const decode of [hostDecode, extensionDecode]) {
+  for (const decode of [hostDecode]) {
     assert.deepEqual(decode(raw, BATCH, { frameBytes: bytes, batchMaxMessages: 1 }), valid);
     assert.equal(decode(raw, BATCH, { frameBytes: bytes - 1, batchMaxMessages: 1 }), null);
     assert.equal(decode(raw, BATCH, { frameBytes: bytes, batchMaxMessages: 0 }), null);

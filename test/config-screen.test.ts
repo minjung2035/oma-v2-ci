@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { INITIAL, step, type ConfigField, type PanelData } from "../src/tui/model.js";
-import { render } from "../src/tui/view/screens.js";
+import { INITIAL, step, type ConfigField, type PanelData } from "@oma/tui/model";
+import { render } from "@oma/tui/view/screens";
 
 const fields: ConfigField[] = [
   { kind: "link", id: "principal-model", label: "Principal model", value: "anthropic/claude-opus-4-8-with-a-long-name · high", blocked: null },
@@ -9,7 +9,7 @@ const fields: ConfigField[] = [
   { kind: "choice", id: "worker-profile", label: "Worker profile", value: "default", options: ["cheap", "default", "large"], apply: "next-activation", blocked: null },
 ];
 const data = { config: fields, extensions: [], mail: [], mailUnreadable: null, mailOmitted: 0,
-  dashboard: { status: { kind: "unknown", observedAtMs: 0, reason: "n/a" }, configuredWorkers: 0, workerLimit: 4, unread: 0,
+  dashboard: { status: { kind: "unknown", observedAtMs: 0, reason: "n/a" }, configuredWorkers: 0, unread: 0,
     principalModel: { configured: "default", session: null }, rootfs: null } } as unknown as PanelData;
 const screen = (state: typeof INITIAL): string => render({ state, data, transcript: [], body: null, notice: null, busy: false, columns: 100, rows: 20 }).join("\n");
 

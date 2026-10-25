@@ -5,12 +5,12 @@ import assert from "node:assert/strict";
 import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type { BoundaryEvidence, PreparedBatch } from "../implementation/contracts.js";
-import { PrincipalDelivery, type DeliverySession } from "../src/runtime/principal-delivery.js";
-import { PI_ADAPTER_REVISION, PI_BOUNDARY_PREFIX } from "../src/storage/delivery-receipt.js";
-import type { PiEvent } from "../src/runtime/pi-rpc.js";
-import { runnerReceiptPathAt, sessionDirPathAt } from "../src/storage/paths.js";
-import { StoreError } from "../src/domain/errors.js";
+import type { BoundaryEvidence, PreparedBatch } from "@oma/contracts";
+import { PrincipalDelivery, type DeliverySession } from "#oma-test/app/runtime/principal-delivery";
+import { PI_ADAPTER_REVISION, PI_BOUNDARY_PREFIX } from "@oma/protocol/delivery-boundary";
+import type { PiEvent } from "@oma/engine/pi-rpc";
+import { runnerReceiptPathAt, sessionDirPathAt } from "@oma/domain/paths";
+import { StoreError } from "@oma/domain/errors";
 import { TEST_VIEW_LIMITS } from "./fixtures/limits.js";
 import { writeBoundarySession } from "./fixtures/delivery-receipt.js";
 

@@ -3,8 +3,8 @@ import assert from "node:assert/strict";
 import { existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, readlinkSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { publishStagedDirectory, replaceDerivedSymlink } from "../src/storage/staged-tree.js";
-import { StoreError } from "../src/domain/errors.js";
+import { publishStagedDirectory, replaceDerivedSymlink } from "@oma/storage/staged-tree";
+import { StoreError } from "@oma/domain/errors";
 
 function fixture(): { root: string; staging: string; destination: string } {
   const root = mkdtempSync(join(tmpdir(), "oma-staged-retry-"));

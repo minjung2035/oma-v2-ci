@@ -1,3 +1,6 @@
+import { residentEngineEffects } from "#oma-test/app/engine/resident-effects";
+import { testBroker } from "./helpers/broker-fixture.js";
+import { createLifecycleModule } from "#oma-test/app/broker/lifecycle-composition";
 /** Priority 0, fourth review (docs/priority-0-audit.md "4차 점검"):
  * the findings of the whole-codebase external review, each tested where its
  * decision takes effect, with the reading the fix removed as the control. */
@@ -9,43 +12,42 @@ import { chmodSync, closeSync, fstatSync, mkdtempSync, openSync, readdirSync, rm
 import { createServer, type Server } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type { ResolvedAgentSpec } from "../implementation/contracts.js";
+import type { ResolvedAgentSpec } from "@oma/contracts";
 import { runCliProcess } from "./fixtures/cli-child.js";
-import { replaceDerivedFile } from "../src/storage/durable-fs.js";
-import { StatusRefresh } from "../src/views/status-refresh.js";
-import { Broker } from "../src/broker.js";
-import { LifecycleModule } from "../src/lifecycle.js";
-import { ViewsModule } from "../src/views.js";
-import type { UnitsModule } from "../src/units.js";
-import { AcceptedFailure, StoreError, normalizeStorageFailure, publicFailure } from "../src/domain/errors.js";
-import { depthOf, planToolSurface, type GroupSpec } from "../src/domain/tool-surface.js";
-import { PiRpcClient, type PiEvent } from "../src/runtime/pi-rpc.js";
-import { validateConfig } from "../src/config.js";
-import { defaultHostConfig } from "../src/config/defaults.js";
-import { INITIAL_WORKERS, WORKER_INTEGRATE, WORKER_MODEL, WORKER_PROFILE, applyField, fieldsOf, settingsOf } from "../src/application/settings.js";
-import type { AgentStatus } from "../implementation/contracts.js";
-import { dashboardData } from "../src/tui/dashboard.js";
-import { dashboardRows } from "../src/tui/view/dashboard.js";
-import { NO_UNIT_REASON } from "../src/protocol/status-view.js";
-import { HOST_CHANNEL_ENV } from "../src/protocol/host-channel.js";
-import { registerOmaTools } from "../src/extension/mail-tools.js";
+import { replaceDerivedFile } from "@oma/storage/durable-fs";
+import { StatusRefresh } from "@oma/broker/status-refresh";
+import { Broker } from "@oma/broker";
+import { LifecycleModule } from "@oma/lifecycle";
+import { ViewsModule } from "#oma-test/app/views";
+import type { UnitsModule } from "@oma/platform-linux/units";
+import { AcceptedFailure, StoreError, normalizeStorageFailure, publicFailure } from "@oma/domain/errors";
+import { depthOf, planToolSurface, type GroupSpec } from "@oma/domain/tool-surface";
+import { PiRpcClient, type PiEvent } from "@oma/engine/pi-rpc";
+import { validateConfig } from "@oma/config";
+import { defaultHostConfig } from "@oma/config/defaults";
+import { INITIAL_WORKERS, WORKER_INTEGRATE, WORKER_MODEL, WORKER_PROFILE, applyField, fieldsOf, settingsOf } from "#oma-test/app/application/settings";
+import type { AgentStatus } from "@oma/contracts";
+import { dashboardData } from "@oma/tui/dashboard";
+import { dashboardRows } from "@oma/tui/view/dashboard";
+import { NO_UNIT_REASON } from "@oma/protocol/status-view";
+import { HOST_CHANNEL_ENV } from "@oma/protocol/host-channel";
+import { registerOmaTools } from "@oma/extension/mail-tools";
 import { mkdirSync } from "node:fs";
-import { storedMailBytes } from "../src/domain/mail-values.js";
-import { buildEml } from "../src/mail/serialize.js";
-import { principalEnvironment } from "../src/runtime/engine/principal-session.js";
-import { planPiSpawn } from "../src/runtime/pi-spawn-plan.js";
-import { agentRootPathAt, runnerSessionDirPathAt, runnerViewPathAt, workspacePathAt } from "../src/storage/paths.js";
-import { INITIAL, step, type ConfigField, type MailRow, type PanelData, type State } from "../src/tui/model.js";
-import { render } from "../src/tui/view/index.js";
-import type { Key } from "../src/tui/keys.js";
-import { readMailbox, unreadCount } from "../src/application/mail.js";
-import { READ_BOUNDS } from "../src/domain/surface-bounds.js";
+import { storedMailBytes } from "@oma/domain/mail-values";
+import { buildEml } from "@oma/mail/serialize";
+import { principalEnvironment } from "@oma/engine/principal-session";
+import { planPiSpawn } from "@oma/engine/pi-spawn-plan";
+import { agentRootPathAt, runnerSessionDirPathAt, runnerViewPathAt, workspacePathAt } from "@oma/domain/paths";
+import { INITIAL, step, type ConfigField, type MailRow, type PanelData, type State } from "@oma/tui/model";
+import { render } from "@oma/tui/view/index";
+import type { Key } from "@oma/tui/keys";
+import { readMailbox, unreadCount } from "#oma-test/app/application/mail";
+import { READ_BOUNDS } from "@oma/domain/surface-bounds";
 import { utimesSync } from "node:fs";
 import { unknownDashboard } from "./fixtures/dashboard.js";
-import { KeyDecoder } from "../src/tui/keys.js";
-import { UnitsModule as Units } from "../src/units.js";
+import { KeyDecoder } from "@oma/tui/keys";
+import { UnitsModule as Units } from "@oma/platform-linux/units";
 import { readFileSync } from "node:fs";
-import { TEST_RESOURCES } from "./fixtures/spec.js";
 import { preparedFixture } from "./fixtures/delivery-receipt.js";
 import { TEST_VIEW_LIMITS } from "./fixtures/limits.js";
 
@@ -59,7 +61,7 @@ const HANDLE = "d".repeat(32);
  * credential, because the CLI no longer reads one from anywhere. */
 function cliCalls(line: string, calls: number): Promise<string[]> {
   const script = `
-    import { callActor } from ${JSON.stringify(join(process.cwd(), "dist/src/cli/transport.js"))};
+    import { callActor } from ${JSON.stringify(join(process.cwd(), "apps/oma/dist/cli/transport.js"))};
     const results = [];
     for (let index = 0; index < ${calls}; index += 1) {
       try { await callActor("/nonexistent/socket", "status.get", {}); results.push("no error"); }
@@ -99,7 +101,7 @@ test("P0V-27 / N03, P0-4: a broker that could not be started is reported, and th
     // reports EACCES afterwards, after the supervisor has already decided.
     const node = join(dir, "node"); writeFileSync(node, "not an executable\n"); chmodSync(node, 0o600);
     const script = `
-      const { superviseBroker } = await import(${JSON.stringify(join(process.cwd(), "dist/src/runtime/broker-supervisor.js"))});
+      const { superviseBroker } = await import(${JSON.stringify(join(process.cwd(), "apps/oma/dist/runtime/broker-supervisor.js"))});
       const lines = [];
       const handle = await superviseBroker({ node: ${JSON.stringify(node)}, libdir: ${JSON.stringify(dir)}, society: "spawnfail",
         stateRoot: ${JSON.stringify(join(dir, "oma", "spawnfail"))}, runRoot: ${JSON.stringify(join(dir, "run", "oma", "spawnfail"))},
@@ -167,13 +169,12 @@ test("P0V-49 / F3, P0-4: a descriptor given back is never closed again when the 
 test("P0V-52 / F6, P0-4: a broker keeps only the listener closes still in progress", async () => {
   const f = await preparedFixture(1);
   const units = { onRevokeRun: undefined, bindIncarnationReader: () => undefined, unitCgroup: () => "" } as unknown as UnitsModule;
-  const lifecycle = new LifecycleModule(f.store, units, { stateRoot: f.root, projectGit: join(f.root, "repos", "project.git"), society: "demo",
+  const lifecycle = createLifecycleModule(f.store, units, { stateRoot: f.root, projectGit: join(f.root, "repos", "project.git"), society: "demo",
     hasGoal: () => true, activationAllowed: () => true },
     (_parent: unknown, input: { name: string; from: string; brief: string }) => ({ ...input }) as unknown as ResolvedAgentSpec, f.mail);
-  const broker = new Broker(f.store, f.mail, units, new ViewsModule(f.store, f.root, "demo", "p", TEST_VIEW_LIMITS), lifecycle, null, null,
-    { stateRoot: f.root, runRoot: join(f.root, "run"), society: "demo", hasGoal: () => true });
+  const broker = testBroker({ store: f.store, mail: f.mail, units: units, views: new ViewsModule(f.store, f.root, "demo", "p", TEST_VIEW_LIMITS), lifecycle: lifecycle, git: null, reviews: null, reconcile: null, paths: { stateRoot: f.root, runRoot: join(f.root, "run"), society: "demo", hasGoal: () => true } });
   try {
-    const listeners = Reflect.get(broker, "listeners") as import("../src/broker/listeners.js").BrokerListeners;
+    const listeners = Reflect.get(broker, "listeners") as import("@oma/broker/listeners").BrokerListeners;
     // A run endpoint per revoked run over a long-lived broker's life.
     for (let index = 0; index < 20; index += 1) {
       const server = createServer();
@@ -343,7 +344,7 @@ test("P0V-28 / N04, P0-5: a broker started as supervised whose channel cannot be
     // cannot be identified, which is not the same as there being none.
     const channel = join(dir, "not-a-socket"); writeFileSync(channel, "");
     const fd = openSync(channel, "r");
-    const child = spawn(process.execPath, [join(process.cwd(), "dist/src/entry/broker.js"), "--society", "unsupervised"], {
+    const child = spawn(process.execPath, [join(process.cwd(), "apps/oma/dist/entry/broker.js"), "--society", "unsupervised"], {
       env: { PATH: "/usr/bin:/bin", HOME: dir, XDG_DATA_HOME: join(dir, "data"), XDG_RUNTIME_DIR: join(dir, "run"), [HOST_CHANNEL_ENV]: "3" },
       stdio: ["ignore", "ignore", "pipe", fd],
     });
@@ -387,11 +388,11 @@ test("P0V-36 / N13, P0-2: a message whose body is within the body limit is read 
   const bodyBytes = 16 * 1024;
   // Both engines are told the bound of a stored message, not the body's.
   const principal = principalEnvironment({ stateRoot: "/srv/oma-n13", runRoot: "/run/oma-n13", libdir: "/opt/oma" },
-    { society: "demo", provider: "pi", model: "current", workspaceBytes: 1024, extensions: [] }, { frameBytes: 256 * 1024, mailBodyBytes: bodyBytes, batchMaxMessages: 4, addresses: 64, contextBytes: 1 << 20, bundleBytes: 1 << 20 });
+    { society: "demo", provider: "pi", model: "current", extensions: [] }, { frameBytes: 256 * 1024, mailBodyBytes: bodyBytes, batchMaxMessages: 4, addresses: 64, contextBytes: 1 << 20, bundleBytes: 1 << 20 });
   assert.equal(Number(principal.OMA_MAIL_BYTES), storedMailBytes(bodyBytes));
   const state = "/srv/oma-n13";
   const options = residentOptions(state);
-  const plan = planPiSpawn({ ...options, limits: { ...options.limits, mailBodyBytes: bodyBytes } });
+  const plan = planPiSpawn(residentEngineEffects.sandbox, { ...options, limits: { ...options.limits, mailBodyBytes: bodyBytes } });
   const told = plan.env.OMA_MAIL_BYTES ?? plan.args[plan.args.indexOf("OMA_MAIL_BYTES") + 1];
   assert.equal(Number(told), storedMailBytes(bodyBytes), "the Resident's engine was told the body limit");
 
@@ -539,13 +540,13 @@ test("P0V-26 / N02, P0-1: a unit name that is another society's or agent's is re
   const dir = mkdtempSync(join(tmpdir(), "oma-unit-owner-"));
   try {
     const units = new Units("a-b", { node: process.execPath, libdir: process.cwd(), state: join(dir, "a-b"), society: "a-b", agent: "",
-      config: join(dir, "config.json"), run: join(dir, "run", "a-b") }, dir, { p: TEST_RESOURCES });
+      config: join(dir, "config.json"), run: join(dir, "run", "a-b") }, dir);
     const conflict = (error: unknown) => error instanceof StoreError && error.code === "AGENT_CONFLICT";
     // Society a's Resident b-c holds the name society a-b's Resident c would take.
     const theirs = "[Unit]\nDescription=OMA a resident b-c\n";
     writeFileSync(join(dir, "oma-a-b-c.service"), theirs);
     assert.throws(() => units.assertResidentNamesFree("c"), conflict, "a create would be accepted onto another society's unit");
-    assert.throws(() => units.ensureResident("c", "p", TEST_RESOURCES), conflict);
+    assert.throws(() => units.ensureResident("c", "p", "md"), conflict);
     assert.equal(readFileSync(join(dir, "oma-a-b-c.service"), "utf8"), theirs, "another society's unit was replaced");
     // The owner's own unit is its to replace, and a free name is free.
     writeFileSync(join(dir, "oma-a-b-d.service"), `[Unit]\nDescription=OMA a-b resident d\nX-OMA-Owner=${join(dir, "a-b")}\n`);

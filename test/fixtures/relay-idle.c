@@ -1,6 +1,6 @@
 /* Exact production relay over Unix socketpairs; no native VM/vsock qualification. */
 #define main oma_bridge_main
-#include "../../platform/guest/bridge/oma-vsock-bridge.c"
+#include "../../packages/platform-linux/src/guest/bridge/oma-vsock-bridge.c"
 #undef main
 #include <sys/wait.h>
 #include <signal.h>

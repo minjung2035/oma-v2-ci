@@ -6,11 +6,11 @@ import { createHash } from "node:crypto";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { PERSONAL_SETTINGS_BYTES, updatePersonalSettings, updatePersonalSettingsAsync, readPersonalSettings, personalExtensions, reconcilePersonalSettings,
-  personalEntryProblem, personalExtensionEntry } from "../src/runtime/personal-settings.js";
-import { assertExtensionIntegrity } from "../src/runtime/extension-integrity.js";
-import { ProcessLock } from "../src/runtime/process-lock.js";
-import { DEPLOYMENT_LAYOUT } from "../src/domain/deployment.js";
-import { PACKAGE_INDEX } from "../src/runtime/packages/store.js";
+  personalEntryProblem, personalExtensionEntry } from "#oma-test/app/runtime/personal-settings";
+import { assertExtensionIntegrity } from "#oma-test/app/runtime/extension-integrity";
+import { ProcessLock } from "@oma/native/process-lock";
+import { DEPLOYMENT_LAYOUT } from "@oma/domain/deployment";
+import { PACKAGE_INDEX, encodePackageIndex } from "#oma-test/app/runtime/packages/store";
 
 function fixture(t: { after(run: () => void): void }) {
   const root = mkdtempSync(join(tmpdir(), "oma-personal-settings-"));
@@ -20,8 +20,8 @@ function fixture(t: { after(run: () => void): void }) {
   writeFileSync(join(location.libdir, "extensions", "user.js"), "export default () => {};\n");
   const packageEntry = "packages:extension.js";
   writeFileSync(join(location.packages, "extension.js"), "export default () => {};\n");
-  const index = (entries: readonly string[]) => writeFileSync(join(location.packages, PACKAGE_INDEX), JSON.stringify([
-    { source: "npm:fixture", entries },
+  const index = (entries: readonly string[]) => writeFileSync(join(location.packages, PACKAGE_INDEX), encodePackageIndex([
+    { source: "npm:fixture", entries, skills: [], prompts: [], themes: [] },
   ]));
   index([packageEntry]);
   return { ...location, root, packageEntry, index };
@@ -69,7 +69,7 @@ test("Personal settings: a package command preserves the first-project seed and 
   writeFileSync(join(w.packages, "next.js"), "export default () => {};\n");
   w.index(["packages:next.js"]);
   assert.deepEqual(reconcilePersonalSettings(w)?.extensions, ["packages:next.js"]);
-  writeFileSync(join(w.packages, PACKAGE_INDEX), "[]");
+  writeFileSync(join(w.packages, PACKAGE_INDEX), encodePackageIndex([]));
   assert.deepEqual(reconcilePersonalSettings(w)?.extensions, []);
   assert.deepEqual(readPersonalSettings(w.dataRoot)?.extensions, []);
 });
@@ -122,7 +122,7 @@ test("Personal settings: update preserves disabled entries and removal cannot re
   updatePersonalSettings(w, [], { entry: "packages:next.js", enabled: false });
   w.index([w.packageEntry]); assert.deepEqual(updatePersonalSettings(w).extensions, []);
   updatePersonalSettings(w, [], { entry: w.packageEntry, enabled: true });
-  writeFileSync(join(w.packages, PACKAGE_INDEX), "[]");
+  writeFileSync(join(w.packages, PACKAGE_INDEX), encodePackageIndex([]));
   assert.deepEqual(updatePersonalSettings(w).extensions, []);
   assert.deepEqual(readPersonalSettings(w.dataRoot)?.extensions, []);
 });
@@ -151,7 +151,7 @@ test("Personal settings: an unreadable index does not mean every package was rem
 });
 test("Personal settings: corrupt preference bytes are retained, never reset to defaults", t => {
   const w = fixture(t); updatePersonalSettings(w); const path = join(w.dataRoot, ".personal/settings.json");
-  for (const value of [null, [], {}, { kind: "oma-personal-settings-v1", revision: 1, extensions: [DEPLOYMENT_LAYOUT.extension], packages: [] }]) {
+  for (const value of [null, [], {}, { kind: "oma-personal-settings-v2", revision: 1, extensions: [DEPLOYMENT_LAYOUT.extension], packages: [] }]) {
     const bytes = JSON.stringify(value); writeFileSync(path, bytes);
     assert.throws(() => updatePersonalSettings(w), { code: "STORE_CORRUPT" }); assert.equal(readFileSync(path, "utf8"), bytes);
   }
@@ -225,7 +225,7 @@ test("C18/C20: the package resource lists survive a Personal settings round-trip
   // An index that carries the C18 resource lists.
   const indexed = [{ source: "npm:fixture", entries: [w.packageEntry],
     skills: ["packages:skill/SKILL.md"], prompts: ["packages:prompts/p.md"], themes: ["packages:themes/t.json"] }];
-  writeFileSync(join(w.packages, PACKAGE_INDEX), JSON.stringify(indexed));
+  writeFileSync(join(w.packages, PACKAGE_INDEX), encodePackageIndex(indexed));
   const round = updatePersonalSettings(w);
   // The stored package record now carries the lists -- and reading them back
   // must not drop them, or the next write would see a phantom change and the
@@ -242,8 +242,8 @@ test("UX-20: Personal settings embed the whole index, so their bound tracks it -
   // An index the old 1 MiB bound refused: the settings embed it whole, so the
   // document itself is multi-megabyte for a heavy but realistic install.
   const heavy = [{ source: "npm:fixture", entries: [w.packageEntry],
-    skills: Array.from({ length: 30_000 }, (_, i) => `packages:npm/node_modules/skills-pack/skills/skill-${i}/SKILL.md`) }];
-  writeFileSync(join(w.packages, PACKAGE_INDEX), JSON.stringify(heavy));
+    skills: Array.from({ length: 30_000 }, (_, i) => `packages:npm/node_modules/skills-pack/skills/skill-${i}/SKILL.md`) , prompts: [], themes: [] }];
+  writeFileSync(join(w.packages, PACKAGE_INDEX), encodePackageIndex(heavy));
   const settings = updatePersonalSettings(w);
   assert.equal(settings.packages[0]!.skills!.length, 30_000);
   assert.ok(statSync(join(w.dataRoot, ".personal/settings.json")).size > 1024 * 1024,

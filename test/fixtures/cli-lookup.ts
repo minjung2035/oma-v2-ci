@@ -4,8 +4,8 @@ import { spawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
-import type { Receipt } from "../../implementation/contracts.js";
-import { FrameParser, encodeFrame } from "../../src/frame.js";
+import type { Receipt } from "@oma/contracts";
+import { FrameParser, encodeFrame } from "@oma/protocol/frame";
 
 export interface CliLookupResult {
   readonly status: number | null;
@@ -51,7 +51,7 @@ export async function runCliWithLookup(
       server.listen(socketPath, () => { server.off("error", reject); resolve(); });
     });
     server.on("error", error => errors.push(error));
-    child = spawn(process.execPath, [fileURLToPath(new URL("../../src/cli.js", import.meta.url)), ...args], {
+    child = spawn(process.execPath, [fileURLToPath(new URL("../../../apps/oma/dist/cli.js", import.meta.url)), ...args], {
       cwd, env: { ...process.env, HOME: home, OMA_SOCKET: socketPath },
       stdio: ["ignore", "pipe", "pipe"], timeout: 5000, killSignal: "SIGKILL",
     });

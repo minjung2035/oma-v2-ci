@@ -12,18 +12,17 @@ import {
 import { join, resolve } from "node:path";
 import { tmpdir } from "node:os";
 import { spawnSync } from "node:child_process";
-import type { HostConfigV1 } from "../../implementation/contracts.js";
-import { loadConfiguration } from "../../src/config.js";
-import { TEST_RESOURCES } from "./spec.js";
+import type { HostConfig } from "@oma/contracts";
+import { loadConfiguration } from "@oma/config";
 import { TEST_PROTOCOL_LIMITS } from "./limits.js";
 
 export function createCompleteConfigurationFixture() {
   const root = mkdtempSync(join(tmpdir(), "oma-operations-"));
   try {
     const installation = join(root, "installation");
-    mkdirSync(join(installation, "dist/src"), { recursive: true });
+    mkdirSync(join(installation, "packages/extension/dist"), { recursive: true });
     writeFileSync(
-      join(installation, "dist/src/pi-extension.js"),
+      join(installation, "packages/extension/dist/index.js"),
       "export default function () {}\n",
     );
     const model = {
@@ -36,39 +35,33 @@ export function createCompleteConfigurationFixture() {
       capabilities: [],
       delegable: [],
       childProfile: null,
-      resources: { ...TEST_RESOURCES },
     };
-    const config: HostConfigV1 = {
-      schemaVersion: 1,
-      society: "demo",
-      installation: {
+    const config: HostConfig = {
+    schemaVersion: 3,
+    society: "demo",
+    installation: {
         // A node that exists here: a runner entry resolves it for confinement.
         node: process.execPath,
         libdir: installation,
         rootfs: "/rootfs",
         deploymentDigest: "a".repeat(64),
-      },
-      modelProfiles: {
+    },
+    modelProfiles: {
         standard: model,
         review: { ...model, model: "model-b" },
-      },
-      agentProfiles: {
+    },
+    agentProfiles: {
         principal: structuredClone(profile),
         resident: structuredClone(profile),
         verifier: { ...structuredClone(profile), modelProfile: "review" },
-      },
-      principalProfile: "principal",
-      initialResidents: [
+    },
+    principalProfile: "principal",
+    initialResidents: [
         { name: "worker", profile: "resident", brief: "work" },
-      ],
-      quota: {
-        societyAgents: 4,
-        lineageAgents: 4,
-        storageBytes: 1048576,
-      },
-      integration: { policyRevision: "test", protectedPaths: [], checks: [] },
-      limits: { ...TEST_PROTOCOL_LIMITS },
-    };
+    ],
+    integration: { policyRevision: "test", protectedPaths: [], checks: [] },
+    limits: { ...TEST_PROTOCOL_LIMITS }
+};
     const input = join(root, "legacy.json");
     writeFileSync(input, JSON.stringify(config));
     const output = join(root, "operations");

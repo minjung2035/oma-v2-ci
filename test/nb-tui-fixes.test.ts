@@ -18,15 +18,15 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
-import { TuiApp, type AppPorts } from "../src/tui/app.js";
-import { KeyDecoder } from "../src/tui/keys.js";
-import { dashboardData } from "../src/tui/dashboard.js";
-import { openTerminal, type Terminal } from "../src/tui/screen.js";
-import { brandFooter, swapText } from "../src/tui/open-tui-brand.js";
-import { wrap } from "../src/tui/view/text.js";
-import { defaultHostConfig } from "../src/config/defaults.js";
-import type { AgentStatus } from "../implementation/contracts.js";
-import type { ConfigField, ExtensionRow, MailboxRead } from "../src/tui/model.js";
+import { TuiApp, type AppPorts } from "@oma/tui/app";
+import { KeyDecoder } from "@oma/tui/keys";
+import { dashboardData } from "@oma/tui/dashboard";
+import { openTerminal, type Terminal } from "@oma/tui/screen";
+import { brandFooter, swapText } from "@oma/engine/open-tui-brand";
+import { wrap } from "@oma/tui/view/text";
+import { defaultHostConfig } from "@oma/config/defaults";
+import type { AgentStatus } from "@oma/contracts";
+import type { ConfigField, ExtensionRow, MailboxRead } from "@oma/tui/model";
 import { unknownDashboard } from "./fixtures/dashboard.js";
 
 const ESC = String.fromCharCode(27);
@@ -106,7 +106,7 @@ test("NB-05: Pending counts Residents only; the Principal's own count stays its 
 });
 
 test("NB-06: a failure message survives process.exit behind it, even past the pipe's buffer", () => {
-  const exit = fileURLToPath(new URL("../src/application/exit.js", import.meta.url));
+  const exit = fileURLToPath(new URL(import.meta.resolve("#oma-test/app/application/exit")));
   // Well past any pipe buffer: a buffered write() has no chance to drain
   // before process.exit. On Linux the Human's stream is stderr.
   const script = `import { fail } from ${JSON.stringify(exit)}; fail("x".repeat(300_000) + "TAIL", 2);`;

@@ -2,10 +2,10 @@
 import fs from "node:fs";
 import { syncBuiltinESMExports } from "node:module";
 import { dirname, join } from "node:path";
-import { messageIdForOperation } from "../../src/domain/derived.js";
-import type { AuthContext, MailInput } from "../../implementation/contracts.js";
-import type { MailModule } from "../../src/mail.js";
-import type { Store } from "../../src/store.js";
+import { messageIdForOperation } from "@oma/domain/derived";
+import type { AuthContext, MailInput } from "@oma/contracts";
+import type { MailModule } from "@oma/mail";
+import type { Store } from "@oma/storage";
 
 export type MailStopPoint = "stage" | "object" | "accepted" | "archive" | `inbox-${number}`;
 export class StopSignal extends Error {

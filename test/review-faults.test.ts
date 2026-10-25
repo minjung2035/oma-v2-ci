@@ -21,18 +21,18 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { existsSync, readdirSync } from "node:fs";
 import { join } from "node:path";
-import { readDiagnosticSnapshot, Store } from "../src/store.js";
-import { StoreError } from "../src/domain/errors.js";
-import { inspectLedger } from "../src/diagnostics/ledger.js";
-import { inspectIntegrity } from "../src/diagnostics/integrity.js";
-import { NodeIntegrityFiles } from "../src/diagnostics/files.js";
-import { createCanonicalObserver } from "../src/git/canonical-command.js";
-import { mailArchivePathAt, mailInboxPathAt } from "../src/storage/paths.js";
-import { applyRequestKeyFor, parseMessageId } from "../src/domain/identifiers.js";
-import { expandAddresses, type MailModule } from "../src/mail.js";
-import { sha256Hex } from "../src/hash.js";
+import { readDiagnosticSnapshot, Store } from "@oma/storage";
+import { StoreError } from "@oma/domain/errors";
+import { inspectLedger } from "#oma-test/app/diagnostics/ledger";
+import { inspectIntegrity } from "#oma-test/app/diagnostics/integrity";
+import { NodeIntegrityFiles } from "#oma-test/app/diagnostics/files";
+import { createCanonicalObserver } from "@oma/git/canonical-command";
+import { mailArchivePathAt, mailInboxPathAt } from "@oma/domain/paths";
+import { applyRequestKeyFor, parseMessageId } from "@oma/domain/identifiers";
+import { expandAddresses, type MailModule } from "@oma/mail";
+import { sha256Hex } from "@oma/domain/canonical-json";
 import { fixture, messages, inboxCount, messageText, workerFile } from "./fixtures/review-fixture.js";
-import type { MessagePlan } from "../implementation/contracts.js";
+import type { MessagePlan } from "@oma/contracts";
 
 type F = ReturnType<typeof fixture>;
 
@@ -153,7 +153,7 @@ test("mail-v1 faults: a quorum-forming vote committed without its approval mail 
     assert.equal(reviewMails(f, "approval").length, 1, "one approval exists in the whole ledger");
     // A second sweep and an advance sweep change nothing.
     assert.deepEqual(await f.mail.reconcilePending(), { examined: 0, repaired: 0, remaining: 0 });
-    await f.module.reviews.advanceAll();
+    await f.reviews.advanceAll();
     assert.equal(inboxCount(f, "principal"), 1);
     // The request was never lost: the Principal decides on the repaired approval.
     const decided = await f.vote("principal", name, "approve", "the Principal approves", "pv", approval.id);
@@ -264,7 +264,7 @@ test("mail-v1 faults: a crash midway through a multi-part completion notice leav
     // A second reconcile and the review sweep are both inert.
     await f.module.reconcile(apply.id);
     const inboxes = ["principal", ...recipients].map(actor => inboxCount(f, actor));
-    await f.module.reviews.advanceAll();
+    await f.reviews.advanceAll();
     assert.equal(f.applyOp("alice", "open")!.id, apply.id, "no second integration");
     assert.deepEqual(["principal", ...recipients].map(actor => inboxCount(f, actor)), inboxes, "nothing re-delivered");
     ledgerPass(f);
@@ -323,7 +323,7 @@ test("mail-v1 faults: a crash between the main CAS and notice materialization re
         assert.equal(materialized(g, part.id, recipient), 1);
     reassembledNotice(g, notice);
     await g.module.reconcile(apply.id);
-    await g.module.reviews.advanceAll();
+    await g.reviews.advanceAll();
     assert.equal(g.applyOp("alice", "open")!.id, apply.id, "still the one integration");
     assert.equal(g.store.getOperationById(apply.id)!.state, "succeeded");
     ledgerPass(g);
@@ -473,7 +473,7 @@ test("mail-v1 faults: a cancel committed without its withdrawn mail is delivered
       assert.equal(inboxLink(f, worker, thread.id), true);
     // Once: a second sweep adds nothing and main never moved.
     assert.deepEqual(await f.mail.reconcilePending(), { examined: 0, repaired: 0, remaining: 0 });
-    await f.module.reviews.advanceAll();
+    await f.reviews.advanceAll();
     assert.equal(inboxCount(f, "principal"), baseline + 1, "one withdrawn notice total");
     assert.equal(f.git(["rev-parse", "refs/heads/main"]), f.base);
     assert.equal(reviewMails(f, "withdrawn").length, 1);
@@ -519,7 +519,7 @@ test("mail-v1 faults: a vote accepted before its thread revision materializes re
     assert.match(text, new RegExp(`In-Reply-To: <${rev1.id}@`));
     assert.match(text, /\[2\] carol vote approve:\ncarol ok/);
     assert.deepEqual(await f.mail.reconcilePending(), { examined: 0, repaired: 0, remaining: 0 });
-    await f.module.reviews.advanceAll();
+    await f.reviews.advanceAll();
     assert.equal(f.stateOf(name).display, "applied");
     ledgerPass(f);
     integrityPass(f);

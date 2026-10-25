@@ -1,12 +1,14 @@
+import { createMailModule } from "#oma-test/app/broker/mail-composition";
 // Isolated primitive crash worker: never imported by production.
 import fs from "node:fs";
 import { syncBuiltinESMExports } from "node:module";
 import { basename, join, dirname } from "node:path";
-import { Store } from "../../src/store.js";
-import { MailModule, publishImmutableFile, parseEmlHeaders } from "../../src/mail.js";
-import type { AuthContext, MailInput } from "../../implementation/contracts.js";
-import { isValidFullOid } from "../../src/ids.js";
-import { sha256Hex } from "../../src/hash.js";
+import { Store } from "@oma/storage";
+import { MailModule, parseEmlHeaders } from "@oma/mail";
+import { publishImmutableFile } from "@oma/storage/immutable-file";
+import type { AuthContext, MailInput } from "@oma/contracts";
+import { isValidFullOid } from "@oma/domain/identifiers";
+import { sha256Hex } from "@oma/domain/canonical-json";
 import cp from "node:child_process";
 import { gitFixture, gitAuth, gitCommand, submitFixture, contextFixture } from "./git-crash.js";
 import { lifecycleFixture } from "./lifecycle-crash.js";
@@ -19,7 +21,7 @@ const point = rawPoint.replace(/^create-/, "boot-");
 if (point.startsWith("ctx-accepted")) process.umask(0o077);
 const store = new Store(join(root, "runtime.sqlite"));
 const lifecycle = point.startsWith("boot-") ? lifecycleFixture(root, store) : null;
-const mail = lifecycle?.mail ?? new MailModule({ stateRoot: root, society: "crash" }, store, 64, 24, TEST_VIEW_LIMITS);
+const mail = lifecycle?.mail ?? createMailModule({ stateRoot: root, society: "crash" }, store, 64, 24, TEST_VIEW_LIMITS);
 const checkpoint = () => {
   if (!process.send) throw new Error("parent IPC observation channel is missing");
   assertGlobalInvariants(store, { stateRoot: root, society: lifecycle?.society ?? "crash",

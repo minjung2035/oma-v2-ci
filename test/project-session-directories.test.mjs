@@ -4,12 +4,12 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { Script } from 'node:vm';
 import ts from 'typescript';
-import * as histories from '../dist/src/protocol/host-history.js';
-import { StoreError } from '../dist/src/domain/errors.js';
-const source = readFileSync('src/runtime/engine/session-directories.ts', 'utf8');
+import * as histories from "@oma/protocol/host-history";
+import { StoreError } from "@oma/domain/errors";
+const source = readFileSync('packages/engine/src/session-directories.ts', 'utf8');
 const code = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText;
 // fix/fp: alarm is declared in protocol/alarm.ts; pi-rpc.js only re-exports it.
-const deadlineSource = ts.createSourceFile('src/protocol/alarm.ts', readFileSync('src/protocol/alarm.ts', 'utf8'), ts.ScriptTarget.Latest, true);
+const deadlineSource = ts.createSourceFile('packages/protocol/src/alarm.ts', readFileSync('packages/protocol/src/alarm.ts', 'utf8'), ts.ScriptTarget.Latest, true);
 const deadline = deadlineSource.statements.find(node => ts.isFunctionDeclaration(node) && node.name?.text === 'alarm');
 assert.ok(deadline);
 const deadlineCode = ts.transpileModule(deadline.getText(deadlineSource), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText;
@@ -25,9 +25,9 @@ function world(send, waitMs = 5000) {
   new Script(deadlineCode).runInNewContext({ ...clock, module: deadlines, exports: deadlines.exports });
   new Script(code).runInNewContext({ ...clock, module, exports: module.exports,
     require(name) {
-      if (name === '../../protocol/host-history.js') return histories;
-      if (name === '../../domain/errors.js') return { StoreError };
-      assert.equal(name, '../../protocol/alarm.js'); return deadlines.exports;
+      if (name === '@oma/protocol/host-history') return histories;
+      if (name === '@oma/domain/errors') return { StoreError };
+      assert.equal(name, '@oma/protocol/alarm'); return deadlines.exports;
     } });
   const query = new module.exports.ProjectSessionDirectories('/own', waitMs / 1000, event => { sent.push(event); send?.(event); });
   return { query, sent, timers, fire(timer) { now = timer.at; timers.delete(timer); timer.run(); },

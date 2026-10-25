@@ -1,25 +1,39 @@
+import * as sessionHandoffMeaning from "@oma/protocol/session-handoff";
+import * as hostErrorMeaning from "@oma/protocol/host-errors";
+import * as hostLossMeaning from "@oma/process/host-loss";
+import * as deploymentMeaning from "@oma/domain/deployment";
 // MODE-006: actual request writer over controlled private descriptor ownership.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { Script } from 'node:vm';
 import ts from 'typescript';
-import { FrameParser, encodeFrame } from '../dist/src/frame.js';
-import { withCleanup } from '../dist/src/process/cleanup.js';
-const code = ts.transpileModule(readFileSync(process.env.OMA_SESSION_HANDOFF_SOURCE ?? 'src/runtime/session-handoff.ts', 'utf8'), {
+import { FrameParser, encodeFrame } from "@oma/protocol/frame";
+import { withCleanup } from "@oma/native/cleanup";
+const code = ts.transpileModule(readFileSync(process.env.OMA_SESSION_HANDOFF_SOURCE ?? 'apps/oma/src/runtime/session-handoff.ts', 'utf8'), {
   compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
 }).outputText;
 function world(env, failure, chunk = Infinity, closeFailure) {
   const writes = [], closed = [], module = { exports: {} };
-  const deps = { 'node:fs': {
+  const deps = {
+"@oma/protocol/session-handoff": sessionHandoffMeaning,
+"@oma/protocol/host-errors": hostErrorMeaning,
+"@oma/process/host-loss": hostLossMeaning,
+"@oma/domain/deployment": deploymentMeaning,
+ 'node:fs': {
     writeSync(fd, bytes, at, length) {
       if (failure === 'throw') throw new Error('write failed');
       const count = failure === 'zero' ? 0 : Math.min(chunk, length);
       writes.push([fd, bytes.subarray(at, at + count)]); return count;
     }, closeSync(fd) { closed.push(fd); if (closeFailure) throw closeFailure; },
-  }, '../frame.js': { encodeFrame }, '../process/cleanup.js': { withCleanup } };
+  }, '@oma/protocol/frame': { encodeFrame }, "@oma/native/cleanup": { withCleanup } };
   new Script(code).runInNewContext({ module, exports: module.exports, Buffer, process: { env },
-    require(name) { assert.ok(Object.hasOwn(deps, name), name); return deps[name]; } });
+    require(name) {
+if (name === "@oma/protocol/session-handoff" && !Object.hasOwn(deps, name)) return sessionHandoffMeaning;
+if (name === "@oma/protocol/host-errors" && !Object.hasOwn(deps, name)) return hostErrorMeaning;
+if (name === "@oma/process/host-loss" && !Object.hasOwn(deps, name)) return hostLossMeaning;
+if (name === "@oma/domain/deployment" && !Object.hasOwn(deps, name)) return deploymentMeaning;
+ assert.ok(Object.hasOwn(deps, name), name); return deps[name]; } });
   return { ...module.exports, writes, closed };
 }
 test('host handoff writer: a direct Linux session has no private request or descriptor effects', () => {

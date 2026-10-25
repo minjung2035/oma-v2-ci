@@ -1,13 +1,22 @@
+import * as sessionHandoffMeaning from "@oma/protocol/session-handoff";
+import * as hostErrorMeaning from "@oma/protocol/host-errors";
+import * as hostLossMeaning from "@oma/process/host-loss";
+import * as deploymentMeaning from "@oma/domain/deployment";
 // DR27/P0-4/P0-5: real lifecycle over manually scheduled observations.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {Script} from 'node:vm';
 import ts from 'typescript';
-const code=ts.transpileModule(readFileSync('src/platform/host/lifecycle.ts','utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText;
+const code=ts.transpileModule(readFileSync('apps/oma/src/platform/host/lifecycle.ts','utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText;
 class PlatformError extends Error {constructor(failure){super(failure.message);this.failure=failure;}}
 const module_={exports:{}};
-new Script(code).runInNewContext({exports:module_.exports,module:module_,Promise,AbortController,require(name){assert.equal(name,'../rpc.js');return {PlatformError};}});
+new Script(code).runInNewContext({exports:module_.exports,module:module_,Promise,AbortController,require(name){
+if (name === "@oma/protocol/session-handoff") return sessionHandoffMeaning;
+if (name === "@oma/protocol/host-errors") return hostErrorMeaning;
+if (name === "@oma/process/host-loss") return hostLossMeaning;
+if (name === "@oma/domain/deployment") return deploymentMeaning;
+assert.equal(name,'../rpc.js');return {PlatformError};}});
 const {VmLifecycle}=module_.exports;
 const flush=async()=>{for(let i=0;i<30;i++)await Promise.resolve();};
 const deferred=()=>{let resolve,reject;const promise=new Promise((r,j)=>{resolve=r;reject=j;});return {promise,resolve,reject};};

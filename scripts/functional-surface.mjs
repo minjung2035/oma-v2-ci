@@ -13,11 +13,11 @@
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
-import { encodeToolSurfacePlan, planToolSurface } from "../dist/src/domain/tool-surface.js";
-import { piAgentDir, resolvePiRuntime } from "../dist/src/runtime/pi-runtime.js";
-import { spawnOwnedRpc, stopOwnedChild } from "../dist/src/process/async.js";
+import { encodeToolSurfacePlan, planToolSurface } from "@oma/domain/tool-surface";
+import { piAgentDir, resolvePiRuntime } from "@oma/engine/pi-runtime";
+import { spawnOwnedRpc, stopOwnedChild } from "@oma/process/async";
 import { enterBoundedScript } from "./bounded-script.mjs";
-import { PiRpcClient } from "../dist/src/runtime/pi-rpc.js";
+import { PiRpcClient } from "@oma/engine/pi-rpc";
 
 if (await enterBoundedScript(import.meta.url, { timeoutMs: 60000 })) {
 const root = resolve(import.meta.dirname, "..");
@@ -41,7 +41,7 @@ try {
     roots: [],
   });
 
-  const core = join(root, "dist/src/pi-extension.js");
+  const core = join(root, "packages/extension/dist/index.js");
   const argv = [
     runtime.args[0], "--mode", "rpc",
     "--no-approve", "--no-context-files", "--no-skills", "--no-prompt-templates", "--no-extensions",

@@ -1,7 +1,7 @@
 // A local-only worker over the real durable leaf seam. No manager or provider.
 import { writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { replaceDerivedFile } from "../../src/storage/durable-fs.js";
+import { replaceDerivedFile } from "@oma/storage/durable-fs";
 
 const [root, mode, requested] = process.argv.slice(2);
 if (!root || !mode || !requested)

@@ -12,10 +12,10 @@
  * determinism. The seed is printed in every assertion label. */
 import test from "node:test";
 import assert from "node:assert/strict";
-import type { MessageId, OperationId } from "../implementation/contracts.js";
-import type { ExactCandidateIdentity, MessagePlan, RiskTier } from "../implementation/contracts.js";
-import type { ReviewFact } from "../implementation/contracts/attestation.js";
-import { reviewState, planEffects, type ReviewEntry, type ReviewState } from "../src/domain/review-evaluation.js";
+import type { MessageId, OperationId } from "@oma/contracts";
+import type { ExactCandidateIdentity, MessagePlan, RiskTier } from "@oma/contracts";
+import type { ReviewFact } from "@oma/contracts/attestation";
+import { reviewState, planEffects, type ReviewEntry, type ReviewState } from "@oma/domain/review-evaluation";
 
 const OP = (n: number): OperationId => `op-ff000000-0000-4000-8000-${String(n).padStart(12, "0")}`;
 const MID = (n: number): MessageId => `m-ff000000-0000-4000-8000-${String(n).padStart(12, "0")}-0`;
