@@ -75,8 +75,8 @@ export function runProcessSync(spec: CommandSpec, invoke: SyncInvoker = spawnSyn
       encoding: "buffer", shell: false, timeout: spec.timeoutMs, killSignal: "SIGKILL",
       // Preserve the existing native cap, not the sum of two legacy caps.
       maxBuffer: Math.max(1, spec.stdoutBytes, spec.stderrBytes), stdio: inheritedFds.length > 0
-        ? ["pipe", outFd ?? "pipe", errFd ?? "pipe", ...inheritedFds]
-        : fencedStdio(["pipe", outFd ?? "pipe", errFd ?? "pipe"] as const, "ignore", fence),
+        ? [spec.stdinFd ?? "pipe", outFd ?? "pipe", errFd ?? "pipe", ...inheritedFds]
+        : fencedStdio([spec.stdinFd ?? "pipe", outFd ?? "pipe", errFd ?? "pipe"] as const, "ignore", fence),
     });
   } catch (error) {
     return { kind: "spawn-failed", exitCode: null, signal: null, errorCode: errorCode(error), elapsedMs: performance.now() - started,

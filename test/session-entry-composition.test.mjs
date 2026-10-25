@@ -66,6 +66,7 @@ function world(platform, { selected = 'personal', birth, birthError, societies =
     'node:path': path, 'node:url': { fileURLToPath }, 'node:os': { constants: { signals: {} } },
     'node:crypto': { randomUUID: () => 'fixture-request' },
     '../runtime/host-arguments.js': grammar,
+    '../runtime/compile-cache.js': { enableProcessCompileCache() {} },
     '../runtime/assets.js': { hostLaunchLocation: () => ({ stateRoot: '/fixture/data/oma/personal' }) },
     '../runtime/session-catalog.js': catalogue,
     '../runtime/session-mode.js': { requireSessionMode(value, requested) {

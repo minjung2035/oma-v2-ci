@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { chmodSync, closeSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, symlinkSync, unlinkSync, writeFileSync } from "node:fs";
+import { chmodSync, closeSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, renameSync, rmSync, symlinkSync, unlinkSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import childProcess, { spawnSync } from "node:child_process";
@@ -49,9 +49,65 @@ test("startup: snapshot Git processes do not grow with file or directory count",
     assert.equal(snapshot.git(["show", `${snapshot.head}:dir-79/file`]), "bytes-79");
     assert.equal(snapshot.git(["ls-tree", "-rz", "--name-only", snapshot.head]).split("\0").length - 1, 83);
   });
-  assert.equal(calls.filter(argv => argv.includes("hash-object")).length, 1, "one batch imports all raw blobs");
+  assert.equal(calls.filter(argv => argv.includes("fast-import")).length, 1, "one stream imports all raw blobs");
   assert.ok(calls.filter(argv => argv.includes("mktree") || argv.includes("write-tree")).length <= 1,
     "Git builds the whole tree in one process");
+});
+
+test("startup: nested snapshot reads resolve current parents and reject a replacement link", t => {
+  const f = fixture(t), relative = "deep/nested/file";
+  mkdirSync(join(f.project, "deep/nested"), { recursive: true });
+  writeFileSync(join(f.project, relative), "first");
+  const reader = new SnapshotReader(f.project); t.after(() => reader.close());
+  const read = () => {
+    const entry = reader.entry(relative)!;
+    try { return readFileSync(entry.descriptor, "utf8"); }
+    finally { closeSync(entry.descriptor); }
+  };
+  assert.equal(read(), "first");
+  renameSync(join(f.project, "deep"), join(f.root, "moved"));
+  symlinkSync(join(f.root, "moved"), join(f.project, "deep"));
+  assert.throws(read, process.platform === "linux" ? { code: "STORE_CORRUPT" } : /ENOTDIR|ELOOP/);
+  unlinkSync(join(f.project, "deep"));
+  mkdirSync(join(f.project, "deep/nested"), { recursive: true });
+  writeFileSync(join(f.project, relative), "second");
+  assert.equal(read(), "second");
+});
+
+test("startup: one private stream preserves binary command-like bytes and unusual filenames", t => {
+  const f = fixture(t), bytes = Buffer.alloc(200000, 0x80), name = "odd\n\ttail";
+  Buffer.from("\ndone\nblob\nmark :999\ndata 0\n\0").copy(bytes, 65530);
+  writeFileSync(join(f.project, name), bytes);
+  let writes = 0, reads = 0;
+  withProjectSnapshot({ ...f.options, prepare(path) {
+    const prepared = prepareProjectDirectory(path);
+    return { ...prepared,
+      openContent(index) { writes++; return prepared.openContent(index); },
+      readContent(index) { reads++; return prepared.readContent(index); },
+    };
+  } }, snapshot => {
+    const result = spawnSync("/usr/bin/git", ["--git-dir", snapshot.repository, "show", `${snapshot.head}:${name}`]);
+    assert.equal(result.status, 0); assert.deepEqual(result.stdout, bytes);
+  });
+  assert.equal(writes, 1); assert.equal(reads, 1);
+});
+
+for (const damage of ["missing", "duplicate", "invalid"]) test(`snapshot refuses ${damage} import marks before publication`, t => {
+  const f = fixture(t), native = childProcess.spawnSync;
+  const mock = t.mock.method(childProcess, "spawnSync", ((executable: string, argv: string[], options: Parameters<typeof native>[2]) => {
+    const result = native(executable, argv, options);
+    const marks = argv.find(arg => arg.startsWith("--export-marks="))?.slice("--export-marks=".length);
+    if (marks !== undefined && result.status === 0) {
+      const lines = readFileSync(marks, "utf8").trimEnd().split("\n");
+      writeFileSync(marks, damage === "missing" ? lines.slice(1).join("\n") : damage === "duplicate"
+        ? [...lines, lines[0]].join("\n") : ":1 invalid-object-id\n");
+    }
+    return result;
+  }) as typeof native);
+  syncBuiltinESMExports();
+  try { assert.throws(() => withProjectSnapshot(f.options, () => assert.fail("invalid import was published")), { code: "REF_STATE_UNKNOWN" }); }
+  finally { mock.mock.restore(); syncBuiltinESMExports(); }
+  assert.deepEqual(readdirSync(f.root).filter(name => name.startsWith(".snapshot")), []);
 });
 for (const format of ["sha1", "sha256"] as const) test(`DR27: ${format} snapshot captures raw worktree bytes without touching the source`, t => {
   const f = fixture(t, format);
@@ -120,7 +176,7 @@ test("DR27: unreadable content and raced parent symlinks refuse a snapshot rathe
   try { assert.throws(() => withProjectSnapshot(f.options, () => assert.fail("published unreadable snapshot")), /EACCES/); }
   finally { chmodSync(join(f.project, "tracked"), 0o600); }
   symlinkSync(f.root, join(f.project, "escape"));
-  assert.throws(() => reader.entry("escape/hook"), /ENOTDIR|ELOOP/);
+  assert.throws(() => reader.entry("escape/hook"), process.platform === "linux" ? { code: "STORE_CORRUPT" } : /ENOTDIR|ELOOP/);
   const entry = reader.entry("tracked")!;
   try {
     writeFileSync(join(f.project, "tracked"), "changed content\n");

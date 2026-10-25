@@ -127,6 +127,7 @@
   "apps/oma/src/runtime/candidate-checks.ts",
   "apps/oma/src/runtime/client-preload.ts",
   "apps/oma/src/runtime/client-runtime.ts",
+  "apps/oma/src/runtime/compile-cache.ts",
   "apps/oma/src/runtime/connect-proxy.ts",
   "apps/oma/src/runtime/deployment-manifest.ts",
   "apps/oma/src/runtime/egress-forwarder.ts",
@@ -2130,7 +2131,7 @@
     "packages/platform-linux/src/sandbox.ts",
     "apps/oma/src/platform/"
    ],
-   "files": 180
+   "files": 181
   },
   {
    "index": 5,
@@ -2153,23 +2154,23 @@
    "files": 91
   }
  ],
- "files": 529,
- "runtimeEdges": 1968,
- "typeOnlyEdges": 796,
+ "files": 530,
+ "runtimeEdges": 1971,
+ "typeOnlyEdges": 797,
  "runtimeEdgeMatrix": {
   "L1-kernel -> L1-kernel": 365,
   "L2-facts -> L1-kernel": 39,
   "L2-facts -> L2-facts": 11,
-  "L3-workflow -> L1-kernel": 244,
-  "L3-workflow -> L3-workflow": 72,
+  "L3-workflow -> L1-kernel": 245,
+  "L3-workflow -> L3-workflow": 71,
   "L4-orchestration -> L1-kernel": 472,
   "L4-orchestration -> L2-facts": 1,
   "L4-orchestration -> L3-workflow": 29,
-  "L4-orchestration -> L4-orchestration": 245,
+  "L4-orchestration -> L4-orchestration": 246,
   "L5-entry -> L1-kernel": 178,
   "L5-entry -> L2-facts": 22,
   "L5-entry -> L3-workflow": 6,
-  "L5-entry -> L4-orchestration": 144,
+  "L5-entry -> L4-orchestration": 146,
   "L5-entry -> L5-entry": 140
  },
  "upwardTypeOnlyEdges": [
@@ -2193,8 +2194,8 @@
   "packages/domain/src/deployment.ts": 23,
   "packages/domain/src/request-identity.ts": 22,
   "packages/domain/src/surface-bounds.ts": 21,
+  "packages/native/src/cleanup.ts": 20,
   "packages/protocol/src/frame.ts": 20,
-  "packages/native/src/cleanup.ts": 19,
   "packages/process/src/run.ts": 19
  },
  "fanOut": {
@@ -2225,14 +2226,14 @@
   "node:child_process": 7,
   "node:crypto": 56,
   "node:dns": 1,
-  "node:fs": 137,
+  "node:fs": 138,
   "node:fs/promises": 3,
   "node:http": 2,
   "node:https": 1,
-  "node:module": 4,
+  "node:module": 5,
   "node:net": 38,
-  "node:os": 17,
-  "node:path": 159,
+  "node:os": 18,
+  "node:path": 160,
   "node:perf_hooks": 5,
   "node:readline": 1,
   "node:sqlite": 4,

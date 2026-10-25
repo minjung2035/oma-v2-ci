@@ -5,7 +5,7 @@ import { closeSync, constants, fstatSync, openSync, readSync, type Stats } from 
 import { errno, load } from "koffi";
 import { getSystemErrorName } from "node:util";
 import { StoreError } from "@oma/domain/errors";
-import { closeEvery } from "./files.js";
+import { closeEvery, openBeneath } from "./files.js";
 
 let native: { open: (directory: number, name: string, flags: number) => number;
   link: (directory: number, name: string, bytes: Buffer, size: number) => number } | undefined;
@@ -68,10 +68,17 @@ export class SnapshotReader {
       if (previous !== this.descriptor) closeSync(previous);
     };
     try {
-      for (const part of parts.slice(0, -1)) {
-        const next = opened(parent, part, constants.O_RDONLY | constants.O_DIRECTORY);
-        const previous = parent; parent = next;
-        if (previous !== this.descriptor) closeSync(previous);
+      // Linux resolves the whole parent beneath the held root in one kernel
+      // walk, rejecting symlinks at every component. Each entry resolves the
+      // current path again; no cached directory can hide a replacement.
+      if (process.platform === "linux" && parts.length > 1)
+        parent = openBeneath(this.descriptor, parts.slice(0, -1).join("/"), constants.O_RDONLY | constants.O_DIRECTORY);
+      else {
+        for (const part of parts.slice(0, -1)) {
+          const next = opened(parent, part, constants.O_RDONLY | constants.O_DIRECTORY);
+          const previous = parent; parent = next;
+          if (previous !== this.descriptor) closeSync(previous);
+        }
       }
       const name = parts.at(-1)!;
       pin = opened(parent, name, process.platform === "linux" ? 0o10000000 /* O_PATH */ : 0x200000 | 0x8000 /* O_SYMLINK | O_EVTONLY */);

@@ -4,6 +4,9 @@ export interface CommandSpec {
   readonly executable: string; readonly argv: readonly string[];
   readonly env: Readonly<NodeJS.ProcessEnv>; readonly cwd?: string;
   readonly input?: string | Uint8Array;
+  /** Borrow an already-open readable descriptor at its current position.
+   * The caller retains it until actual child close; mutually exclusive with input. */
+  readonly stdinFd?: number;
   /** null: the owner cancels this process; no independent total deadline. */
   readonly timeoutMs: number | null; readonly stdoutBytes: number; readonly stderrBytes: number;
   readonly stdoutOverflow?: "limit" | "discard";
@@ -78,6 +81,10 @@ export function validateCommand(spec: CommandSpec): void {
   if (spec.stderrOverflow !== undefined && spec.stderrOverflow !== "limit" && spec.stderrOverflow !== "discard") throw new TypeError("invalid subprocess stderr policy");
   if (spec.stdoutOverflow !== undefined && spec.stdoutOverflow !== "limit" && spec.stdoutOverflow !== "discard") throw new TypeError("invalid subprocess stdout policy");
   if (spec.input !== undefined && typeof spec.input !== "string" && !(spec.input instanceof Uint8Array)) throw new TypeError("invalid subprocess input");
+  if (spec.stdinFd !== undefined) {
+    positive(spec.stdinFd, "stdin descriptor", true);
+    if (spec.input !== undefined) throw new TypeError("subprocess input and stdin descriptor are mutually exclusive");
+  }
 }
 /** Called before any await; mutable byte input is privately copied as well.
  * This snapshot is a command description, never a token granting current authority.
@@ -88,6 +95,7 @@ export function snapshotCommand(source: CommandSpec): CommandSpec {
     timeoutMs: source.timeoutMs, stdoutBytes: source.stdoutBytes, stderrBytes: source.stderrBytes,
     ...(source.cwd === undefined ? {} : { cwd: source.cwd }),
     ...(source.input === undefined ? {} : { input: typeof source.input === "string" ? source.input : Buffer.from(source.input) }),
+    ...(source.stdinFd === undefined ? {} : { stdinFd: source.stdinFd }),
     ...(source.silenceMs === undefined ? {} : { silenceMs: source.silenceMs }),
     ...(source.stdoutSpool === undefined ? {} : { stdoutSpool: source.stdoutSpool }),
     ...(source.stderrSpool === undefined ? {} : { stderrSpool: source.stderrSpool }),

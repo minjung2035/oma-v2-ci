@@ -2,7 +2,7 @@
  "version": 1,
  "baseline": "b25961cc46532f5e30ff60cc381fed51c59d13ab",
  "summary": {
-  "NOT_REVIEWED": 14355,
+  "NOT_REVIEWED": 14356,
   "REMOVED": 220
  },
  "lanes": {
@@ -505,7 +505,8 @@
    "primary": null,
    "status": "NOT_REVIEWED",
    "by": [],
-   "oracles": []
+   "oracles": [],
+   "note": "Current working-tree bytes have no explicit byte-bound review; historical reviews do not certify these changes."
   },
   {
    "path": "apps/oma/src/entry/omahostd.ts",
@@ -540,14 +541,16 @@
    "primary": null,
    "status": "NOT_REVIEWED",
    "by": [],
-   "oracles": []
+   "oracles": [],
+   "note": "Current working-tree bytes have no explicit byte-bound review; historical reviews do not certify these changes."
   },
   {
    "path": "apps/oma/src/entry/prepare-society.ts",
    "primary": null,
    "status": "NOT_REVIEWED",
    "by": [],
-   "oracles": []
+   "oracles": [],
+   "note": "Current working-tree bytes have no explicit byte-bound review; historical reviews do not certify these changes."
   },
   {
    "path": "apps/oma/src/entry/runner.ts",
@@ -914,6 +917,14 @@
    "oracles": []
   },
   {
+   "path": "apps/oma/src/runtime/compile-cache.ts",
+   "primary": null,
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": [],
+   "note": "Current working-tree bytes have no explicit byte-bound review; historical reviews do not certify these changes."
+  },
+  {
    "path": "apps/oma/src/runtime/connect-proxy.ts",
    "primary": null,
    "status": "NOT_REVIEWED",
@@ -1037,7 +1048,8 @@
    "primary": null,
    "status": "NOT_REVIEWED",
    "by": [],
-   "oracles": []
+   "oracles": [],
+   "note": "Current working-tree bytes have no explicit byte-bound review; historical reviews do not certify these changes."
   },
   {
    "path": "apps/oma/src/runtime/session-catalog.ts",
@@ -2107,8 +2119,7 @@
    "primary": null,
    "status": "NOT_REVIEWED",
    "by": [],
-   "oracles": [],
-   "note": "Current working-tree bytes have no explicit byte-bound review; historical reviews do not certify these changes."
+   "oracles": []
   },
   {
    "path": "packages/engine/src/login.ts",
@@ -2143,16 +2154,14 @@
    "primary": null,
    "status": "NOT_REVIEWED",
    "by": [],
-   "oracles": [],
-   "note": "Current working-tree bytes have no explicit byte-bound review; historical reviews do not certify these changes."
+   "oracles": []
   },
   {
    "path": "packages/engine/src/personal-history.ts",
    "primary": null,
    "status": "NOT_REVIEWED",
    "by": [],
-   "oracles": [],
-   "note": "Current working-tree bytes have no explicit byte-bound review; historical reviews do not certify these changes."
+   "oracles": []
   },
   {
    "path": "packages/engine/src/personal-ports.ts",
@@ -2166,16 +2175,14 @@
    "primary": null,
    "status": "NOT_REVIEWED",
    "by": [],
-   "oracles": [],
-   "note": "Current working-tree bytes have no explicit byte-bound review; historical reviews do not certify these changes."
+   "oracles": []
   },
   {
    "path": "packages/engine/src/personal.ts",
    "primary": null,
    "status": "NOT_REVIEWED",
    "by": [],
-   "oracles": [],
-   "note": "Current working-tree bytes have no explicit byte-bound review; historical reviews do not certify these changes."
+   "oracles": []
   },
   {
    "path": "packages/engine/src/pi-adapter.ts",
@@ -2196,8 +2203,7 @@
    "primary": null,
    "status": "NOT_REVIEWED",
    "by": [],
-   "oracles": [],
-   "note": "Current working-tree bytes have no explicit byte-bound review; historical reviews do not certify these changes."
+   "oracles": []
   },
   {
    "path": "packages/engine/src/pi-compat/env.ts",
@@ -2218,8 +2224,7 @@
    "primary": null,
    "status": "NOT_REVIEWED",
    "by": [],
-   "oracles": [],
-   "note": "Current working-tree bytes have no explicit byte-bound review; historical reviews do not certify these changes."
+   "oracles": []
   },
   {
    "path": "packages/engine/src/pi-compat/interactive-tool-setup.ts",
@@ -2527,7 +2532,8 @@
    "primary": null,
    "status": "NOT_REVIEWED",
    "by": [],
-   "oracles": []
+   "oracles": [],
+   "note": "Current working-tree bytes have no explicit byte-bound review; historical reviews do not certify these changes."
   },
   {
    "path": "packages/git/src/observe.ts",
@@ -2555,14 +2561,16 @@
    "primary": null,
    "status": "NOT_REVIEWED",
    "by": [],
-   "oracles": []
+   "oracles": [],
+   "note": "Current working-tree bytes have no explicit byte-bound review; historical reviews do not certify these changes."
   },
   {
    "path": "packages/git/src/project-snapshot.ts",
    "primary": null,
    "status": "NOT_REVIEWED",
    "by": [],
-   "oracles": []
+   "oracles": [],
+   "note": "Current working-tree bytes have no explicit byte-bound review; historical reviews do not certify these changes."
   },
   {
    "path": "packages/git/src/publication.ts",
@@ -2877,7 +2885,8 @@
    "primary": null,
    "status": "NOT_REVIEWED",
    "by": [],
-   "oracles": []
+   "oracles": [],
+   "note": "Current working-tree bytes have no explicit byte-bound review; historical reviews do not certify these changes."
   },
   {
    "path": "packages/platform-linux/package.json",
@@ -3094,7 +3103,8 @@
    "primary": null,
    "status": "NOT_REVIEWED",
    "by": [],
-   "oracles": []
+   "oracles": [],
+   "note": "Current working-tree bytes have no explicit byte-bound review; historical reviews do not certify these changes."
   },
   {
    "path": "packages/platform-mac/src/image.ts",
@@ -3171,14 +3181,16 @@
    "primary": null,
    "status": "NOT_REVIEWED",
    "by": [],
-   "oracles": []
+   "oracles": [],
+   "note": "Current working-tree bytes have no explicit byte-bound review; historical reviews do not certify these changes."
   },
   {
    "path": "packages/process/src/command.ts",
    "primary": null,
    "status": "NOT_REVIEWED",
    "by": [],
-   "oracles": []
+   "oracles": [],
+   "note": "Current working-tree bytes have no explicit byte-bound review; historical reviews do not certify these changes."
   },
   {
    "path": "packages/process/src/deadline.ts",
@@ -3220,7 +3232,8 @@
    "primary": null,
    "status": "NOT_REVIEWED",
    "by": [],
-   "oracles": []
+   "oracles": [],
+   "note": "Current working-tree bytes have no explicit byte-bound review; historical reviews do not certify these changes."
   },
   {
    "path": "packages/process/src/writer.ts",
@@ -3360,8 +3373,7 @@
    "primary": null,
    "status": "NOT_REVIEWED",
    "by": [],
-   "oracles": [],
-   "note": "Current working-tree bytes have no explicit byte-bound review; historical reviews do not certify these changes."
+   "oracles": []
   },
   {
    "path": "packages/protocol/src/operation-results.ts",
@@ -3760,8 +3772,7 @@
    "primary": null,
    "status": "NOT_REVIEWED",
    "by": [],
-   "oracles": [],
-   "note": "Current working-tree bytes have no explicit byte-bound review; historical reviews do not certify these changes."
+   "oracles": []
   },
   {
    "path": "packages/storage/src/submit-spool.ts",

@@ -9,8 +9,10 @@ import { RESUME_SESSION_ENV } from "@oma/protocol/session-handoff";
 import { requireSessionMode } from "../runtime/session-mode.js";
 import { codeFor, fail } from "../application/exit.js";
 import { errorWords } from "@oma/tui/words";
+import { enableProcessCompileCache } from "../runtime/compile-cache.js";
 
 async function main(argv: readonly string[]): Promise<void> {
+  enableProcessCompileCache();
   if (process.platform === "darwin") { await import("./oma-mac.js"); return; }
   const command = parseOmaArguments(argv);
   if (command.kind !== "session") { await import("./oma-society.js"); return; }

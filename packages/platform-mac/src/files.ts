@@ -378,6 +378,7 @@ export function prepareHostProjectDirectory(path: string): ProjectPreparation {
     mkdirSync(path, { mode: 0o700 }); made = true;
     return { path, descriptor,
       openContent: (index = 0) => openSync(join(path, projectContentName(index)), constants.O_WRONLY | constants.O_CREAT | constants.O_TRUNC | constants.O_NOFOLLOW, 0o600),
+      readContent: (index = 0) => openSync(join(path, projectContentName(index)), constants.O_RDONLY | constants.O_NOFOLLOW),
       dispose() { disposeProjectPreparation(release, collect); },
     };
   } catch (error) {

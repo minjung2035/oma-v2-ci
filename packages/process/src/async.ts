@@ -47,7 +47,7 @@ export function startProcess(source: CommandSpec, options: AsyncProcessOptions =
   let child: ReturnType<typeof spawn>;
   try {
     child = spawn(spec.executable, [...spec.argv], { cwd: spec.cwd, env: { ...spec.env }, shell: false,
-      detached: ownGroup, stdio: ["pipe", "pipe", "pipe", ...inheritedFds] });
+      detached: ownGroup, stdio: [spec.stdinFd ?? "pipe", "pipe", "pipe", ...inheritedFds] });
   } catch (error) { resolveResult(empty("spawn-failed", error)); resolveClosed(); return { result, closed, cancel() {} }; }
   const out: Buffer[] = [], err: Buffer[] = [];
   let outBytes = 0, errBytes = 0, outLimited = false, errLimited = false;

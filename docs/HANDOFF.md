@@ -1,5 +1,18 @@
 # OMA v2 — 현재 인계 (2026-10-25, 품질 후속 수정)
 
+Society 기동 후속으로 새 strict protocol clone 직후의 중복 전체 검사를 줄이고,
+스냅샷을 단일 Git 입력 스트림으로 전달한다. Linux의 상위 경로 검증은 held root
+아래 한 번의 openat2 walk로 수행하며 매 파일마다 현재 경로를 다시 확인한다.
+Host와 엔진 preload에는 실패 시 source로 돌아가는 private Node compile cache를
+적용했다. 기존 mirror의 재검증, raw bytes·SHA-1/SHA-256·source 재확인, fence와 실제
+child close, canonical CAS 및 Principal authority 부여 시점은 유지한다.
+같은 프로젝트의 통제된 전후 각3회 중앙값은 화면4.50→4.27초,
+저장소 준비12.69→9.67초다. 후자는 Workers 최종 준비 시간이 아니다.
+실제 서비스 manager 동작은 차단한 PTY/local provider와 별도의 실제 Git 준비 측정이다.
+실행 입력·원시 로그·최종 검증 상태의 소유자는
+`/home/dev/oma-audit-artifacts/society-startup-2026-10-25/verification-result.json`이다.
+아래 품질 후속 검증 수치는 이전 입력의 결과다.
+
 현재 브랜치는 `work/code-quality-improvements-20261025`이며 첫 체크포인트
 `df713512`를 origin에 push했다. 원격 master의 별도 변경은 합치거나 덮어쓰지 않았다.
 후속으로 rollback 실패 연결의 재사용 차단, immutable 관찰·게시의 최초 손상 보존,

@@ -2,6 +2,7 @@ export interface ProjectPreparation {
   readonly path: string;
   readonly descriptor: number;
   openContent(index?: number): number;
+  readContent(index?: number): number;
   dispose(): void;
 }
 

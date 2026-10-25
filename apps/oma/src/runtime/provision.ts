@@ -108,7 +108,15 @@ export interface ProvisionOptions {
   readonly conversationOnly?: boolean;
   /** Internal preparation: overlap a strict check of the owned history with
    * file capture. The consumer waits before publishing canonical main. */
-  readonly verifyHistory?: (repository: string) => Promise<void>;
+  readonly verifyHistory?: (repository: string, transfer?: FreshHistoryTransfer) => Promise<void>;
+}
+
+/** Only this invocation's completed strict Git transfer into a new owned
+ * repository. Never persisted or inferred from an existing mirror. It is an
+ * observation of checked objects, not permission to publish canonical main. */
+export interface FreshHistoryTransfer {
+  readonly kind: "strict-transfer";
+  readonly repository: string;
 }
 
 /** The project's committed `HEAD` and object format, or why there is none.
@@ -316,11 +324,15 @@ export function provisionSociety(stateRoot: string, options: ProvisionOptions = 
   if (ensureBareRepository(join(stateRoot, "repos", "context.git"))) created.push(join("repos", "context.git"));
   const freshHistory = fresh && !bare && project !== null && "oid" in project;
   const concurrent = freshHistory && options.verifyHistory !== undefined;
-  const mirrorNote = options.projectDir === undefined ? null : refreshProjectMirror(stateRoot, options.projectDir, !freshHistory);
+  const mirror = options.projectDir === undefined ? { note: null, fresh: false }
+    : observeProjectMirrorRefresh(stateRoot, options.projectDir, !freshHistory);
+  const mirrorNote = mirror.note;
   // This read-only verifier inherits the tree lease. It must finish even when
   // capture fails, so no native child loses its owner during cleanup.
-  const verification = concurrent && mirrorNote === null ? options.verifyHistory!(projectMirrorPathAt(stateRoot)) : null;
-  if (freshHistory && mirrorNote === null && verification === null)
+  const mirrorPath = projectMirrorPathAt(stateRoot);
+  const verification = concurrent && mirrorNote === null ? options.verifyHistory!(mirrorPath,
+    mirror.fresh ? Object.freeze({ kind: "strict-transfer", repository: mirrorPath }) : undefined) : null;
+  if (freshHistory && mirrorNote === null && verification === null && !mirror.fresh)
     git([...repositoryHealthCommand(projectMirrorPathAt(stateRoot)).argv.slice(2).filter(arg => arg !== "--progress"),
       "--no-progress", "--no-dangling"], projectMirrorPathAt(stateRoot));
   let seedSource: ProvisionReport["seedSource"] = null;
@@ -398,20 +410,26 @@ function gitlinksOnMain(projectGit: string): string | null {
  * cannot be read now is a note, not a failed start; its answer is null when
  * the mirror is current. */
 export function refreshProjectMirror(stateRoot: string, projectDir: string, verify = true): string | null {
+  return observeProjectMirrorRefresh(stateRoot, projectDir, verify).note;
+}
+
+function observeProjectMirrorRefresh(stateRoot: string, projectDir: string, verify: boolean): { note: string | null; fresh: boolean } {
   const project = projectHead(projectDir);
   const mirror = projectMirrorPathAt(stateRoot);
   // A project that never had history has nothing to mirror, which is not news
   // at every start; one whose history the mirror holds and cannot now be read is.
-  if ("note" in project) return existsSync(mirror) ? project.note : null;
-  if (ensureBareRepository(mirror, project.format, { source: projectDir, keepHeads: true, verify })) return null;
+  if ("note" in project) return { note: existsSync(mirror) ? project.note : null, fresh: false };
+  // This path always uses --no-local plus fetch/transfer.fsckObjects=true.
+  // Git validates every received object and link before the clone exits.
+  if (ensureBareRepository(mirror, project.format, { source: projectDir, keepHeads: true, verify })) return { note: null, fresh: true };
   const format = runGitText(["rev-parse", "--show-object-format"], { gitDir: mirror });
   if (format.status !== 0 || format.stdout.trim() !== project.format)
-    return "the project's object format differs from its mirror's; the mirror was not refreshed";
+    return { note: "the project's object format differs from its mirror's; the mirror was not refreshed", fresh: false };
   const fetched = runGitText(["-c", "fetch.fsckObjects=true", "-c", "transfer.fsckObjects=true", "-c", "protocol.allow=never",
     "-c", "protocol.file.allow=always", "fetch", "--no-tags", "--prune", "--quiet", projectDir, "+refs/heads/*:refs/heads/*"],
   { gitDir: mirror, timeout: 10 * 60 * 1000 });
-  if (fetched.status !== 0) return `the project's history could not be brought into its mirror: ${fetched.stderr.trim().slice(0, 200)}`;
-  return null;
+  if (fetched.status !== 0) return { note: `the project's history could not be brought into its mirror: ${fetched.stderr.trim().slice(0, 200)}`, fresh: false };
+  return { note: null, fresh: false };
 }
 
 /** Puts back the generated rootfs entries `provisionSociety` found wrong and

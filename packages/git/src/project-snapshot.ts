@@ -7,9 +7,10 @@ import { randomBytes } from "node:crypto";
 import { StoreError } from "@oma/domain/errors";
 import { runProcessSync, decodeProcessText } from "@oma/process/run";
 import { GIT_ENV, requireTextExit } from "@oma/process/policies";
+import { withCleanup } from "@oma/native/cleanup";
 import { SnapshotReader, copySnapshotFile, sameSnapshotFile } from "@oma/native/snapshot-reader";
 import { prepareProjectDirectory } from "./linux-project-preparation.js";
-import { projectContentName, type ProjectPreparation } from "./project-preparation.js";
+import { type ProjectPreparation } from "./project-preparation.js";
 
 /** Commands that inspect the Human's repository must not run its programs.
  * In particular, ls-files would otherwise invoke core.fsmonitor. */
@@ -72,9 +73,12 @@ export function withProjectSnapshot<T>(options: {
   const prepared = (options.prepare ?? prepareProjectDirectory)(temporary);
   const descriptor = prepared.descriptor;
   let reader: SnapshotReader | undefined;
+  let content: number | undefined;
+  const closeContent = (): void => { const fd = content; content = undefined; if (fd !== undefined) closeSync(fd); };
   let active = true;
   const finish = (failures: unknown[] = []): void => {
     active = false;
+    try { closeContent(); } catch (error) { failures.push(error); }
     try { reader?.close(); } catch (error) { failures.push(error); }
     try { prepared.dispose(); } catch (error) { failures.push(error); }
     if (failures.length > 1) throw new AggregateError(failures, "project snapshot and owned cleanup failed");
@@ -99,14 +103,15 @@ export function withProjectSnapshot<T>(options: {
         return buffer.subarray(0, count);
       } finally { closeSync(fd); }
     };
-    const run = (argv: readonly string[], input?: string | Uint8Array): string => {
+    const run = (argv: readonly string[], input?: string | Uint8Array, stdinFd?: number): string => {
       if (!active) throw new StoreError("INTERNAL_ERROR", "project snapshot ownership has ended");
       const result = runProcessSync({ executable: options.executable,
         argv: [...SNAPSHOT_GIT_OPTIONS, ...argv],
         env: { ...GIT_ENV, GIT_OPTIONAL_LOCKS: "0", GIT_AUTHOR_NAME: "OMA", GIT_AUTHOR_EMAIL: "oma@localhost",
           GIT_COMMITTER_NAME: "OMA", GIT_COMMITTER_EMAIL: "oma@localhost" },
         cwd: temporary,
-        ...(input === undefined ? {} : { input }), timeoutMs: 10 * 60_000,
+        ...(input === undefined ? {} : { input }),
+        ...(stdinFd === undefined ? {} : { stdinFd }), timeoutMs: 10 * 60_000,
         stdoutBytes: 32 * 1024 * 1024, stderrBytes: 1024 * 1024,
         stdoutSpool: spoolOut, stderrSpool: spoolErr }, undefined, [descriptor]);
       // requireTextExit already maps the non-exited kinds; spooled streams
@@ -157,6 +162,16 @@ export function withProjectSnapshot<T>(options: {
     const blobs: { readonly path: string; readonly mode: string }[] = [];
     const leaves = new Set<string>();
     const scratch = Buffer.alloc(64 * 1024);
+    // One framed Git stream keeps exact binary bytes without one private file
+    // and inode per source entry. Filenames never enter this protocol.
+    const write = (bytes: Buffer): void => {
+      content ??= prepared.openContent();
+      for (let at = 0; at < bytes.length;) {
+        const count = writeSync(content, bytes, at, bytes.length - at);
+        if (count <= 0) throw new StoreError("INTERNAL_ERROR", "snapshot content write made no progress");
+        at += count;
+      }
+    };
     for (const path of selected) {
       if (path.endsWith("/")) throw new StoreError("UNSUPPORTED_PROFILE", `snapshot contains a nested repository: ${path}`);
       // A tracked directory replaced by a file or symlink deletes its old
@@ -173,17 +188,9 @@ export function withProjectSnapshot<T>(options: {
           observed.set(path, entry); continue;
         }
         leaves.add(path);
-        const out = prepared.openContent(blobs.length);
-        try {
-          const write = (bytes: Buffer): void => {
-            for (let at = 0; at < bytes.length;) {
-              const count = writeSync(out, bytes, at, bytes.length - at);
-              if (count <= 0) throw new StoreError("INTERNAL_ERROR", "snapshot content write made no progress");
-              at += count;
-            }
-          };
-          if (entry.link !== null) write(entry.link); else copySnapshotFile(entry, path, write, scratch);
-        } finally { closeSync(out); }
+        write(Buffer.from(`blob\nmark :${blobs.length + 1}\ndata ${entry.link?.length ?? entry.stat.size}\n`));
+        if (entry.link !== null) write(entry.link); else copySnapshotFile(entry, path, write, scratch);
+        write(Buffer.from("\n"));
         blobs.push({ path, mode: entry.link !== null ? "120000" : (entry.stat.mode & 0o111) !== 0 ? "100755" : "100644" });
         observed.set(path, entry);
       } finally { closeSync(entry.descriptor); }
@@ -202,17 +209,23 @@ export function withProjectSnapshot<T>(options: {
     }
     if (!sameSnapshotFile(reader.identity, fstatSync(reader.descriptor)))
       throw new StoreError("REF_STATE_UNKNOWN", "project directory changed during the snapshot");
-    // Only private, numeric spool names reach --stdin-paths. Source names may
-    // contain newlines, tabs, quotes or symlinks; they never become Git input
-    // paths here. The held reader and raw-byte/filter checks remain unchanged.
     if (blobs.length > 0) {
-      const ids = git(["hash-object", "-w", "--no-filters", "--stdin-paths"],
-        blobs.map((_, index) => `${projectContentName(index)}\n`).join("")).split("\n");
-      const oidPattern = options.format === "sha256" ? /^[0-9a-f]{64}$/ : /^[0-9a-f]{40}$/;
-      if (ids.length !== blobs.length || ids.some(oid => !oidPattern.test(oid)))
-        throw new StoreError("REF_STATE_UNKNOWN", "snapshot blob import returned an incomplete object list");
+      write(Buffer.from("done\n"));
+      closeContent();
+      const input = prepared.readContent(), marksPath = join(temporary, "git.marks");
+      withCleanup(() => run(["--git-dir", repository, "fast-import", "--quiet", "--done", `--export-marks=${marksPath}`],
+        undefined, input), () => closeSync(input));
+      const marks = new Map<number, string>();
+      const pattern = new RegExp(`^:([1-9][0-9]*) ([0-9a-f]{${options.format === "sha256" ? 64 : 40}})$`);
+      for (const line of readFileSync(marksPath, "utf8").trimEnd().split("\n")) {
+        const match = pattern.exec(line), index = match === null ? 0 : Number(match[1]);
+        if (match === null || !Number.isSafeInteger(index) || index < 1 || index > blobs.length || marks.has(index))
+          throw new StoreError("REF_STATE_UNKNOWN", "snapshot blob import returned invalid marks");
+        marks.set(index, match[2]!);
+      }
+      if (marks.size !== blobs.length) throw new StoreError("REF_STATE_UNKNOWN", "snapshot blob import returned incomplete marks");
       for (let index = 0; index < blobs.length; index++)
-        record(root, blobs[index]!.path, { mode: blobs[index]!.mode, oid: ids[index]! });
+        record(root, blobs[index]!.path, { mode: blobs[index]!.mode, oid: marks.get(index + 1)! });
     }
     const treeId = writeTree(root, git);
     const unchanged = options.parent !== null && treeId === git(["rev-parse", `${options.parent}^{tree}`]);

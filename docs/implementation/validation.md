@@ -1,5 +1,37 @@
 # OMA v2 — 현재 검증 상태
 
+## Society 기동 시간 개선 (2026-10-25)
+
+기준 commit은 `aa28212`다. 새 Human history mirror는 기존 strict protocol clone이
+이번 invocation에서 끝낸 객체·연결 검사를 관찰하며, 같은 mirror에 대한 중복 full
+fsck만 생략한다. 기존 mirror·경합에서 진 mirror는 이 관찰을 받지 못한다. 디스크에
+검증 영수증을 남기거나 재사용하지 않는다. canonical publication은 기존 대기·CAS로
+수행하고 기존 저장소 재사용 시 full 검사를 유지한다.
+
+스냅샷은 private stream 한 개를 borrowed stdin FD로 Git fast-import에 넘긴다.
+길이로 구분한 raw bytes와 별도 검증한 marks로 파일명·binary·개행·실행 비트·symlink·
+SHA-1/SHA-256 의미를 유지한다. Git 자식 수는 파일 수와 무관하다. Linux reader는
+held root 아래 부모 경로를 openat2 한 번으로 열며, 매번 현재 경로를 확인하므로 이전
+directory FD의 재사용으로 교체를 숨기지 않는다. Mac의 no-follow walk는 유지한다.
+private Node compile cache는 Society state/권한과 분리되며 link·공유 디렉터리는 거절한다.
+소스 변경·cache 실패·명시적 비활성화 시 현재 source로 실행한다.
+
+같은 설치·동일 프로젝트에서 이전 production module을 load hook으로 실행한 통제된
+전후 각3회 중앙값은 화면 **4.50→4.27초**, 첫 provider 요청 **4.77→4.54초**다.
+실제 entry·PTY·SDK·Open TUI를 실행하고 provider만 로컬 scripted fixture로 대체했다.
+실제 systemd 조작은 전파되는 preload guard로 차단했다. 별도의 실제 Git 준비 측정은
+**12.69→9.67초**이며 약24% 감소했다. 각 회차는 새 owned state를 사용하고 현재
+worktree bytes를 읽는다. baseline hook은 이전 코드의 의미를 비교하며 이전 배포의
+독립 설치 qualification을 주장하지 않는다. 저장소 준비 시간과 Workers/도구의 최종
+권한 준비는 구별하며 실제 Linux 서비스/cgroup·Mac/VM/Keychain·provider·power-loss는
+NOT_RUN이다.
+
+전후 원시 측정·손상된 history/marks·경로 교체·현재 source 재확인 회귀와 최초 실패를
+`/home/dev/oma-audit-artifacts/society-startup-2026-10-25/`에 보존한다. 최종 build,
+typecheck, static gate, 전체 local, 변경5개 package 설치 및 각 전후 input identity의
+판정은 그 안의 `verification-result.json`이 소유한다. 아래 PASS 수치는 이전 입력의
+결과다. 원칙·SDK 버전·기능은 유지하며 새/변경 코드는 NOT_REVIEWED다.
+
 ## 품질 후속 수정의 검증 소유자 (2026-10-25)
 
 첫 push 체크포인트는 `df713512`이며 현재 작업 브랜치는
@@ -992,7 +1024,7 @@ native·macOS VM boot·power loss는 미실행이다. 이전 kernel/crash PASS�
 충족했다고 주장할 수 없다. raw log는 `/tmp/oma-host-ownership-2026-10-09`에 보존한다.
 
 현재 구조 검사의 입력 identity(생성 자체는 runtime PASS가 아니다):
-verification input digest `86a3ba7c56983e541cd77a5a729f20319c86beb966fff9cb071268fa87bcd35f` (15670 files).
+verification input digest `9c5f4d99e6e4aee3e96ad9400ea64ca1b7bb09a5c37454cd4c3bbe6375750a12` (15673 files).
 
 ## 이전 실행 결과: 지정한 제한 제거·기능 복구 (2026-10-09, DR37)
 

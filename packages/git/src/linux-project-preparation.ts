@@ -21,6 +21,10 @@ export function prepareProjectDirectory(path: string): ProjectPreparation {
         if (directory === undefined) throw new Error("snapshot preparation is disposed");
         return openBeneath(directory, projectContentName(index), constants.O_WRONLY | constants.O_CREAT | constants.O_TRUNC | constants.O_NOFOLLOW, 0o600);
       },
+      readContent: (index = 0) => {
+        if (directory === undefined) throw new Error("snapshot preparation is disposed");
+        return openBeneath(directory, projectContentName(index), constants.O_RDONLY | constants.O_NOFOLLOW);
+      },
       dispose() {
         // Even a failed close is not proof of a child having exited. The
         // collector's fresh lock observation alone permits removal.

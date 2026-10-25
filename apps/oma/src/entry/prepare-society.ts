@@ -20,7 +20,10 @@ try {
   if (realpathSync(projectDir) !== projectDir || binding.kind !== "bound" || binding.binding.society !== society ||
       binding.binding.canonicalProjectPath !== projectDir)
     throw new StoreError("INVALID_REQUEST", "startup project does not match the society's committed binding");
-  const prepared = await provisionSociety(stateRoot, { projectDir, verifyHistory: async repository => {
+  const prepared = await provisionSociety(stateRoot, { projectDir, verifyHistory: async (repository, transfer) => {
+    // A new strict protocol clone has just checked all objects and links.
+    // Existing mirrors still require a new full fsck; no disk receipt is read.
+    if (transfer?.kind === "strict-transfer" && transfer.repository === repository) return;
     const lease = TreeLease.take(repository);
     try {
       // Stay in the preparation process group: its owner cancels and waits

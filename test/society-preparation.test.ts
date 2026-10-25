@@ -1,6 +1,8 @@
 import { createReconcileModule } from "#oma-test/app/broker/reconcile-composition";
 import { createGitModule } from "#oma-test/app/broker/git-composition";
 import { createMailModule } from "#oma-test/app/broker/mail-composition";
+import { runProcessSync } from "@oma/process/run";
+import { GIT_ENV } from "@oma/process/policies";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { fstatSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
@@ -17,6 +19,54 @@ import { GitModule } from "@oma/git";
 import { ReconcileModule } from "@oma/reconcile";
 import { UnitsModule } from "@oma/platform-linux/units";
 import type { LifecycleModule } from "@oma/lifecycle";
+
+function historyFixture(t: import("node:test").TestContext) {
+    const root = mkdtempSync(join(tmpdir(), "oma-fresh-history-"));
+    t.after(() => rmSync(root, { recursive: true, force: true }));
+    const project = join(root, "project"), state = join(root, "society"); mkdirSync(project);
+    const git = (args: string[], input?: string) => {
+        const result = runGitText(["-C", project, "-c", "user.name=Fixture", "-c", "user.email=fixture@localhost", ...args],
+            input === undefined ? {} : { input });
+        assert.equal(result.status, 0, result.stderr); return result.stdout.trim();
+    };
+    git(["init", "--quiet", "--initial-branch=main"]);
+    writeFileSync(join(project, "file"), "source bytes\n"); git(["add", "."]); git(["commit", "--quiet", "-m", "initial"]);
+    return { root, project, state, git };
+}
+
+test("startup: a strict transfer observation belongs only to the newly created mirror", async t => {
+    const f = historyFixture(t), observations: (string | undefined)[] = [];
+    const verifyHistory = async (repository: string, transfer?: { kind: string; repository: string }) => {
+        observations.push(transfer?.kind);
+        if (transfer !== undefined) { assert.equal(transfer.repository, repository); return; }
+        const result = runGitText(["fsck", "--strict"], { gitDir: repository });
+        if (result.status !== 0) throw new Error("existing history is corrupt");
+    };
+    await provisionSociety(f.state, { projectDir: f.project, verifyHistory });
+    assert.deepEqual(observations, ["strict-transfer"]);
+    rmSync(join(f.state, "repos/project.git"), { recursive: true });
+    mkdirSync(join(f.state, "repos/project-mirror.git/objects/aa"), { recursive: true });
+    writeFileSync(join(f.state, "repos/project-mirror.git/objects/aa", "b".repeat(38)), "damaged object");
+    await assert.rejects(provisionSociety(f.state, { projectDir: f.project, verifyHistory }), /existing history is corrupt/);
+    assert.deepEqual(observations, ["strict-transfer", undefined]);
+    assert.equal(existsSync(join(f.state, "repos/project.git")), false);
+});
+
+for (const invalid of ["missing-link", "duplicate-tree-entry"]) test(`startup: a transfer containing ${invalid} cannot grant a verification observation`, async t => {
+    const f = historyFixture(t);
+    const blob = invalid === "missing-link" ? "f".repeat(40) : f.git(["hash-object", "-w", "--stdin"], "blob");
+    const entry = Buffer.concat([Buffer.from("100644 file\0"), Buffer.from(blob, "hex")]);
+    const raw = invalid === "duplicate-tree-entry" ? Buffer.concat([entry, entry]) : entry;
+    const tree = runProcessSync({ executable: "/usr/bin/git", argv: ["-C", f.project, "hash-object", "--literally", "-w", "-t", "tree", "--stdin"],
+        env: GIT_ENV, input: raw, timeoutMs: 5000, stdoutBytes: 1024, stderrBytes: 1024 });
+    assert.equal(tree.kind, "exited"); assert.equal(tree.exitCode, 0);
+    const commit = f.git(["commit-tree", tree.stdout.toString().trim(), "-m", "invalid history"]);
+    f.git(["update-ref", "refs/heads/broken", commit]);
+    let granted = false;
+    await assert.rejects(async () => provisionSociety(f.state, { projectDir: f.project,
+        verifyHistory: async () => { granted = true; } }));
+    assert.equal(granted, false); assert.equal(existsSync(join(f.state, "repos/project.git")), false);
+});
 for (const healthy of [true, false]) {
     test(`AV-07/P0: canonical publication waits for concurrent history validation (${healthy})`, async (t) => {
         const root = mkdtempSync(join(tmpdir(), "oma-prepare-verify-"));

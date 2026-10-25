@@ -1,6 +1,6 @@
 {
   "kind": "oma-production-source-digests-v1",
-  "manifest": "ede1f8841a944c9ce6876b6593c75bcabba5a5a0ab83190d98fdfa4f6491d7bf",
+  "manifest": "7df459d2916c59f9c50b842fd429b6b72fb686e5e28dfb7791306822ee6a137a",
   "files": [
     {
       "path": "apps/oma/package.json",
@@ -280,7 +280,7 @@
     },
     {
       "path": "apps/oma/src/entry/oma.ts",
-      "sha256": "ae014f9df038e7f306fcf4557d6b0ff8fa4d021f6b30f310c420744517035e36"
+      "sha256": "1b59ec351c1c2efb5f2ca13c224d486658ee619e7455e84ae2ff3b4a41baa88b"
     },
     {
       "path": "apps/oma/src/entry/omahostd.ts",
@@ -300,11 +300,11 @@
     },
     {
       "path": "apps/oma/src/entry/pi-settings-preload.ts",
-      "sha256": "3ec6ff8c58737afc0696d21aea39098e833d891df7f854375c2e7518488d7454"
+      "sha256": "d1198c8b043bf43caf67b1647c3f2b5cb27d8e61e6fce48ff6aa55483e2de664"
     },
     {
       "path": "apps/oma/src/entry/prepare-society.ts",
-      "sha256": "08f2d379570d33692e216ef3ddc5c8bda19e864e561b5214dd48adffef42307b"
+      "sha256": "7a63432490a75c165e41627bb081c2e89ca5ae1ba697ec8e93e8d31f5d67493f"
     },
     {
       "path": "apps/oma/src/entry/runner.ts",
@@ -515,6 +515,10 @@
       "sha256": "e3c01b7f98a182729132cd90a30c5552a53c5bede388b296ef0be891dd288703"
     },
     {
+      "path": "apps/oma/src/runtime/compile-cache.ts",
+      "sha256": "87edc0d93b6bf2b99c77db7b25210bb0b1494226fe6be5654ea4659c958e2cdb"
+    },
+    {
       "path": "apps/oma/src/runtime/connect-proxy.ts",
       "sha256": "c820ae63d42eb580ad23facfc41eefb1ec217a338cfe0b7cc3a7a28abe8a7d7f"
     },
@@ -584,7 +588,7 @@
     },
     {
       "path": "apps/oma/src/runtime/provision.ts",
-      "sha256": "eaebfaf93eda626c9329c629c48f86ae76f3360ac9b35df8b9a9ff5fd50a1b93"
+      "sha256": "b9449ee6e19a7a0b54151fb3661ffd2a58610ce0e393ba281f43aba5f654aa93"
     },
     {
       "path": "apps/oma/src/runtime/session-catalog.ts",
@@ -1384,7 +1388,7 @@
     },
     {
       "path": "packages/git/src/linux-project-preparation.ts",
-      "sha256": "64ea2385a2d1743b537cee1a17d8c2bea7a198eaa115b0b01269304eb93f1824"
+      "sha256": "085dd228787aae8a0cc2534f4edb2f8d8e3e20d8567a363c8f2cf5ee1c4ec172"
     },
     {
       "path": "packages/git/src/observe.ts",
@@ -1400,11 +1404,11 @@
     },
     {
       "path": "packages/git/src/project-preparation.ts",
-      "sha256": "388fb6e9f6ac63906afffcbc37efc0d10ffe1eedd00110db0a7054904513c3d8"
+      "sha256": "5de52a3b0c8d1e64a6d602e05f428154c279c23fe411a052a8b14b14718ea8bf"
     },
     {
       "path": "packages/git/src/project-snapshot.ts",
-      "sha256": "638c8de02983fd7907beb61e9036092bb6bd86e554c568de8165f9fd32a9e162"
+      "sha256": "c3273d09a6039339d77b3fd8b3afa458d6c3181c535f18f9c3317b7571053707"
     },
     {
       "path": "packages/git/src/publication.ts",
@@ -1584,7 +1588,7 @@
     },
     {
       "path": "packages/native/src/snapshot-reader.ts",
-      "sha256": "a2b19fc30ad9a6595b6576068f52de7f35bcf3bed707fb49e8b9db331bf55c44"
+      "sha256": "f5845e61bc6a8c921b53a346b40b3f52365cac3522922e6202729ac15a92bfc9"
     },
     {
       "path": "packages/platform-linux/package.json",
@@ -1708,7 +1712,7 @@
     },
     {
       "path": "packages/platform-mac/src/files.ts",
-      "sha256": "2a1737153f7977d5b652a52d3eda56100188ee896cb51b36cb4aac8c2deaa969"
+      "sha256": "6ba086e46d68cf80de10da4373cc6962d6ed8add2d8292147a777826445fc79c"
     },
     {
       "path": "packages/platform-mac/src/image.ts",
@@ -1752,11 +1756,11 @@
     },
     {
       "path": "packages/process/src/async.ts",
-      "sha256": "b8b8ab2e90ce811c02b21fba432b967156fad89124dbfd0e9bcc3d40edbf430a"
+      "sha256": "d60f315409d63c7753ed9f9b6294047a77d3746b547da5eac2b94ef76a434666"
     },
     {
       "path": "packages/process/src/command.ts",
-      "sha256": "28e15d6ba5e9bd5d8d56bd837d2931ae744972c8c76679c17349182b975e2cf1"
+      "sha256": "ebd13ff3f3023a6bddc65f41a9dd8470b5b253840b62a356d2261c5bad36a428"
     },
     {
       "path": "packages/process/src/deadline.ts",
@@ -1780,7 +1784,7 @@
     },
     {
       "path": "packages/process/src/run.ts",
-      "sha256": "d9a5d8275831a66d0f4b91b8b0364b8c4684a9b24bbcd0bc86589bd9c281dd51"
+      "sha256": "773d5ff273011142f8c982bf78b6d90d37d8ba495b15b49a07e266ccd50e4843"
     },
     {
       "path": "packages/process/src/writer.ts",

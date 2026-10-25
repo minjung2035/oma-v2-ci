@@ -126,6 +126,7 @@ apps/oma/src/runtime/broker-supervisor.ts
 apps/oma/src/runtime/candidate-checks.ts
 apps/oma/src/runtime/client-preload.ts
 apps/oma/src/runtime/client-runtime.ts
+apps/oma/src/runtime/compile-cache.ts
 apps/oma/src/runtime/connect-proxy.ts
 apps/oma/src/runtime/deployment-manifest.ts
 apps/oma/src/runtime/egress-forwarder.ts
