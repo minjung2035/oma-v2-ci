@@ -2,7 +2,7 @@
 
 ## 실행
 
-아래는 **Linux checkout** 설치 경로다. Society 실행에는 Linux의 user systemd/cgroup, bubblewrap와 user namespace, Git 및 프로젝트가 요구하는 도구가 필요하다. CI의 Node.js 버전은 26이며, 빌드 성공만으로 이 실행 조건이 충족되는 것은 아니다. Registry 배포와 플랫폼별 실제 지원 판정은 [validation](implementation/validation.md)을 확인한다.
+아래는 **Linux checkout** 설치 경로다. Node.js 26을 사용하는 환경에서 저장소 루트에서 설치·빌드한다. Society 실행에는 Linux의 user systemd/cgroup, bubblewrap와 user namespace, Git 및 프로젝트가 요구하는 도구가 필요하다. CI의 Node.js 버전은 26이며, 빌드 성공만으로 이 실행 조건이 충족되는 것은 아니다. Registry 배포와 플랫폼별 실제 지원 판정은 [validation](implementation/validation.md)을 확인한다.
 
 ```sh
 npm ci
@@ -14,6 +14,8 @@ oma
 ```
 
 프로젝트 디렉터리에서 `oma`로 시작한다. 엔진은 함께 배포되며 별도 Pi 설치를 요구하지 않는다. 기본 설정과 Society/Personal·로그인·package 동작은 아래 안내를 따른다.
+
+## 세션 작업공간 보관
 
 Society를 닫으면 Worker가 모두 멈춘 뒤 프로젝트별 Restic 보관소에 작업공간을 중복 제거해
 저장·검증하고 원래 clone을 회수한다. 재개할 때 복원한다. Git의 staged/unstaged·untracked·
@@ -38,11 +40,13 @@ password를 잃으면 복원할 수 없다. 다른 경로로 파일을 일부만
 원본을 보존한다. 실패한 복원 stage도 진단/복구를 위해
 보존하며 같은 snapshot을 정상 복원한 후 자동 회수한다. 세부 계약은 [DR48](design-revisions.md)을 따른다.
 
+## macOS 코드와 배포 상태
+
 **macOS에서는 이 checkout의 `npm install -g .`만으로 사용할 수 없다.** Darwin 진입점은 OMA.app의 host service, bundle 안의 helper·Git·release key·guest image를 요구하며 Personal의 credential 경로도 bundle의 Keychain helper에 의존한다. 현재 저장소에는 설치 가능한 OMA.app/VM 이미지 배포물이 없다. macOS 코드는 개발·검증 대상이며, 위 명령을 Mac용 설치 절차로 사용하지 않는다. `--host-only` package 관리 가능 여부는 전체 제품의 설치·실행 가능 여부와 별개다.
 
 ## 역할별 운영 설정
 
-모델·역할별 extension 목록·프롬프트를 broker/runner 코드와 분리한다. `resident`, `verifier`, `principal`은 **운영 프로필 이름**이며 새 권한 종류가 아니다. 권한·delegation은 기존 `agentProfile` 검증을 그대로 통과해야 한다. DR37 이후 자원 필드는 기존 설정 호환을 위해 읽지만 제한으로 집행하지 않는다.
+모델·역할별 extension 목록·프롬프트를 broker/runner 코드와 분리한다. `resident`, `verifier`, `principal`은 **운영 프로필 이름**이며 새 권한 종류가 아니다. 권한·delegation은 `agentProfile` 검증을 통과해야 한다. 현재 HostConfig schema 3에는 quota·실행 자원 필드가 없으며, 이전 필드를 넣으면 거절한다.
 
 ## 세션 모드
 
@@ -60,13 +64,13 @@ Mac Personal 시작은 Host API token 조회·VM 시작 전 host 경로로 분�
 npm run config:split -- /absolute/path/to/current/config.json /absolute/path/to/new-operations
 ```
 
-입력은 기존의 유효한 host 설정이며 출력 디렉터리는 존재하지 않아야 한다. 원본·기존 출력은 덮어쓰지 않는다. 모델/가격/자원값을 임의로 기본값으로 채우지 않는다. **현재 설정에 있는 프로필**을 각각 분리하고, 새 프롬프트는 기존 동작 보존을 위해 빈 파일로 만든다.
+입력은 기존의 유효한 host 설정이며 출력 디렉터리는 존재하지 않아야 한다. 원본·기존 출력은 덮어쓰지 않는다. 모델·권한값을 임의로 기본값으로 채우지 않는다. **현재 설정에 있는 프로필**을 각각 분리하고, 새 프롬프트는 기존 동작 보존을 위해 빈 파일로 만든다.
 
 ```text
 new-operations/
   config.json             # 명시적 파일 목록
-  host.json               # 설치 경로, quota, 초기 population, integration, limits
-  models.json             # provider/model/credentialRef/codec/pricing/token/timeout
+  host.json               # schemaVersion, society, 설치 경로, 초기 Worker, integration, limits
+  models.json             # provider, model, inferenceTimeoutSeconds, 선택 thinking
   roles/
     resident.json         # agentProfile + extensions + promptFile
     verifier.json
@@ -96,11 +100,11 @@ new-operations/
 
 각 role 파일은 다음 세 필드만 가진다. 그 밖의 필드는 거절한다. (이전에는 선택 필드 `toolSurface`가 있었으나, 표면 투영은 OMA의 내부 정책이므로 이제 설정에 두지 않는다 — D23.)
 
-- `agentProfile`: 기존 host 설정의 동일 프로필 객체. `modelProfile`로 `models.json`의 모델을 선택한다. capabilities/delegable/childProfile/resources는 기존 필수 계약을 유지한다.
+- `agentProfile`: 기존 host 설정의 동일 프로필 객체. `modelProfile`로 `models.json`의 모델을 선택한다. 필드는 `modelProfile`, `capabilities`, `delegable`, `childProfile`이다. `resources`는 허용하지 않는다.
 - `extensions`: 설치 `installation.libdir` 아래의 상대 JS/TS 파일 목록. 첫 항목은 항상 `packages/extension/dist/index.js`이며 생략·중복·자동 탐색은 허용하지 않는다. 예: `["packages/extension/dist/index.js", "extensions/verifier.js"]`.
 - `promptFile`: **config.json이 있는 디렉터리 기준** 상대 UTF-8 파일. 예: `prompts/verifier.md`.
 
-추가 extension 코드는 설치 디렉터리의 `extensions/` 등에 별도로 배치한다. 설정 로더 자체는 코드를 import하지 않지만 runner entry는 시작 직전에 기록된 SHA-256을 다시 확인한 뒤 core 및 role extension을 Pi에 명시적으로 `-e` 전달한다. 자동 탐색은 꺼 둔다. 추가 extension은 Pi host process와 같은 권한을 갖는 **trusted deployment code**이므로 model tool처럼 취급하면 안 된다. 기존 OMA 공통 extension의 프로토콜/검증 코드를 역할별로 복제하지 않는다. provider 선택·가격·codec·token 한도·credential 참조는 동봉 엔진의 것이므로(INF-001) v1 설정 schema에 없다. OMA는 가격을 계산하거나 비용을 집행하지 않으며, API key는 설정 파일에 넣는 자리가 아니다.
+추가 extension 코드는 설치 디렉터리의 `extensions/` 등에 별도로 배치한다. 설정 로더 자체는 코드를 import하지 않지만 runner entry는 시작 직전에 기록된 SHA-256을 다시 확인한 뒤 core 및 role extension을 Pi에 명시적으로 `-e` 전달한다. 자동 탐색은 꺼 둔다. 추가 extension은 Pi host process와 같은 권한을 갖는 **trusted deployment code**이므로 model tool처럼 취급하면 안 된다. 기존 OMA 공통 extension의 프로토콜/검증 코드를 역할별로 복제하지 않는다. 모델 프로필에는 `provider`, `model`, `inferenceTimeoutSeconds`와 선택 `thinking`만 있다. 가격·codec·token 한도·credential 참조는 동봉 엔진이 소유하며 OMA 설정 schema에 없다(INF-001). OMA는 가격을 계산하거나 비용을 집행하지 않으며, API key는 설정 파일에 넣는 자리가 아니다.
 
 기록한 SHA-256과 시작 전 재검증은 관측한 자산 식별 정보다. 같은 UID가 검증 뒤 파일을 바꾸는 경합 전체나 trusted deployment manifest/Pi executable 승인을 대신하지 않는다.
 
@@ -110,7 +114,7 @@ new-operations/
 
 실제 모델·역할 정책을 바꿀 때는 `host.json.integration.policyRevision`도 새 값으로 갱신한다(CFG-005). 기존 accepted plan은 보존되지만 outstanding integrate는 새 policy와의 일치 여부를 다시 검사한다.
 
-읽기는 파일당 1 MiB, role 최대 64개, role별 extension 최대 16개로 제한된다. 누락·미등록 model·중복 소유·알 수 없는 필드·경로 이탈·참조 파일의 symlink·비정상 파일을 거절한다. host가 지정한 최상위 config 경로의 symlink는 실제 파일 위치로 해석한다. 상대 참조는 `..`, 절대 경로, URL을 허용하지 않는다. 설정 묶음은 host가 관리해야 하며 이 경로 검사가 전체 same-UID 경합 방어 또는 다중 파일 원자적 배포를 보장하지 않는다. 설정을 갱신하는 동안 새 프로세스를 시작하지 않는다.
+설정 로더는 문서당 16 MiB, source closure 최대 4096개 파일/64 MiB, role 최대 64개, role별 extension 최대 16개를 허용한다. 실제 정의는 [operations.ts](../packages/config/src/operations.ts)의 상수가 소유한다. 누락·미등록 model·중복 소유·알 수 없는 필드·경로 이탈·참조 파일의 symlink·비정상 파일을 거절한다. host가 지정한 최상위 config 경로의 symlink는 실제 파일 위치로 해석한다. 상대 참조는 `..`, 절대 경로, URL을 허용하지 않는다. 설정 묶음은 host가 관리해야 하며 이 경로 검사가 전체 same-UID 경합 방어 또는 다중 파일 원자적 배포를 보장하지 않는다. 설정을 갱신하는 동안 새 프로세스를 시작하지 않는다.
 
 ### 관리형 편집 (D02, WP13)
 
@@ -134,8 +138,7 @@ new-operations/
   제자리에서 고치는 writer는 파일시스템이 거절한다. 관리형으로 승격한 bundle에는 구버전
   바이너리의 편집 기능을 쓰지 않는다. 직접 지우려면 먼저 `chmod -R u+w`가 필요하다.
 - **보관 한도**: 게시된 generation 16개 또는 generation 전체 256 MiB를 넘는 편집은
-  `LIMIT_EXCEEDED`로 거절한다. 한 generation은 loader 한도(파일 256개·8 MiB) 안이므로
-  유효한 설정의 첫 편집은 언제나 가능하다. 정리는 `oma`가 society를 소유하고 broker가
+  `LIMIT_EXCEEDED`로 거절한다. 설정 로더가 읽을 수 있는 범위와 generation 보존 예산은 다르다. 정리는 `oma`가 society를 소유하고 broker가
   없는 시작 시점에만 하며, 현재와 직전 generation을 남기고 나머지와 중단된 staging·임시
   manifest를 지운다. 나이만으로 지우지 않는다. 읽기 한도는 바뀌지 않는다.
 - **export**: `npm run config:export -- <config.json> <새 디렉터리>`는 현재
@@ -153,16 +156,15 @@ D03(WP03): 제품이 띄운 broker는 config 경로·state root·run root를 Res
 정지한다. user manager의 런타임 디렉터리가 아닌 `XDG_RUNTIME_DIR`로는 시작하지 않는다
 (`UNSUPPORTED_PROFILE`). systemd가 fixed broker unit으로 broker를 실행하는 운영 방식은
 렌더링만 검증됐고 지원한다고 표시하지 않는다.
-D04의 bounded settlement/read/safety 예산 분리는 WP21–23의 구현·ENOSPC 검증 대상이며
-tree scan quota를 kernel hard cap이나 ENOSPC에도 성공하는 보장으로 해석하지 않는다.
+DR37/DR46에서 저장량·실행 자원·agent count quota는 제거했다. 실제 ENOSPC·권한·I/O 실패까지 없어지는 것은 아니다.
 
 ## 현재 실행 제한
 
 로딩 결과는 현재 closed `HostConfig` schema 3로 검증한다(DR46). 이전 설정과 journal 형식은 자동 변환하지 않으며 새 개발 상태 디렉터리를 사용한다. 이 설정 전환은 broker wire 형식과 별개다. Resident runner는 수락된 modelProfile 참조를 unit에서 받고 그 참조의 현재 model/provider 내용과 역할 prompt/extension snapshot을 새 RPC session에 전달한다. 역할의 참조 편집으로 기존 Agent의 수락 참조를 바꾸지 않는다. `provider=pi, model=current`는 `--model`을 생략해 현재 Pi 연결을 사용하며, 그 외 값은 `provider/model`로 Pi에 요청한다. terminal boundary의 pinned durable receipt가 일치해야 batch를 completed/presented로 commit한다.
 
-Core extension은 shell/powershell tool을 거절하고 built-in file tool을 agent workspace 안으로 제한하며 OMA mail read/send/ack/status만 고정 argv로 노출한다. Pi project extension/skill/prompt/context 자동 탐색은 끈다. 추가 role extension은 이 제한 밖의 trusted code가 될 수 있으므로 운영자가 별도 검토해야 한다.
+Worker는 bwrap 안의 shell과 자기 작업공간을 사용한다. Society Principal은 shell·직접 write/edit를 제외하고 읽기·메일·허용된 관리/승인 도구를 사용한다. Personal은 별도 Human 모드다. 실제 허용은 tool 이름 표시만이 아니라 역할·provenance·workspace·sandbox·broker capability로 검사한다. Society는 자동 발견 대신 선택·검증한 확장과 자원을 엔진에 전달한다. 추가 role extension은 trusted code이므로 배포 시 별도 검토한다.
 
-DR37 이후 OMA는 storage/agent count, memory/tasks/CPU/tmp/workspace/staging/check-timeout 상한을 admission이나 systemd property로 집행하지 않는다. `quota`와 과거 resource 필드는 설정 호환을 위해 읽으며 운영 제한으로 해석하지 않는다. 실제 디스크 부족·권한·호스트 자원 고갈은 실패할 수 있다. stream의 선언 크기·해시 일치 검사는 계속 수행한다. S-03의 run 중 steer는 v1에 없다([DR18](design-revisions.md)). 가격·usage·error/cancel codec은 동봉 엔진이 소유하며 OMA에는 비용 상한이 없다.
+DR37 이후 OMA는 storage/agent count, memory/tasks/CPU/tmp/workspace/staging/check-timeout 상한을 admission이나 systemd property로 집행하지 않는다. DR46의 schema 3은 `quota`와 과거 resource 필드를 거절하며 구버전 설정을 자동 변환하지 않는다. 실제 디스크 부족·권한·호스트 자원 고갈은 실패할 수 있다. stream의 선언 크기·해시 일치 검사는 계속 수행한다. S-03의 run 중 steer는 v1에 없다([DR18](design-revisions.md)). 가격·usage·error/cancel codec은 동봉 엔진이 소유하며 OMA에는 비용 상한이 없다.
 
 ### Resident의 현재 run 양보
 
@@ -212,7 +214,7 @@ OMA는 Pi 엔진을 함께 배포하고 그것만 실행한다. `PATH`에서 Pi�
 
 엔진에는 `PI_CODING_AGENT_DIR`로 society state root 아래의 OMA 소유 디렉터리를 지정한다. 지정하지 않으면 엔진이 운영자 계정의 `~/.pi` 설정·extension·session을 공유하므로, 별도로 설치한 Pi와 상태가 섞인다. 이 디렉터리는 backup/restore 범위에 포함된다.
 
-운영자가 다른 엔진을 써야 하면 `OMA_PI_COMMAND`에 절대 경로를 지정한다. 의도적 이탈이며 존재하지 않는 경로는 거절한다. 이 경우 실행되는 엔진의 신뢰·버전 확인은 운영자 책임이다.
+`OMA_PI_COMMAND`는 일부 관리·로그인 경로에서 절대 경로의 엔진을 명시하는 운영자용 override다. Society 대화형 UI는 동봉 엔진만 허용하고 이 override를 거절한다. Personal도 동봉 엔진을 사용하며 이 환경 변수의 override를 전달하지 않는다. 존재하지 않거나 상대경로인 실행 파일도 거절한다. 일반 제품 설치 방법으로 사용하지 않는다.
 
 동봉 엔진은 수정하지 않는다. 제품 동작은 신뢰된 core extension이 소유한다.
 

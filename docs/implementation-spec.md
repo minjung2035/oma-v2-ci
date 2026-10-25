@@ -1,8 +1,8 @@
 # OMA Core v1 — 구현 계약
 
-이 문서는 core 구현 계약의 단일 owner다. physical ordering·Store opening·contract owner·unit renderer 계약을 뒤쪽에 모았다. 기존 요구 ID와 의미는 유지한다. 고정 architecture와 달라진 수용 결정은 [design-revisions](design-revisions.md), 실제 실행 여부는 [validation](implementation/validation.md)이 소유한다. 다음 merge 정책은 [merge-review-spec](merge-review-spec.md)의 별도 설계안이다.
+이 문서는 core 구현 계약의 단일 owner다. physical ordering·Store opening·contract owner·unit renderer 계약을 뒤쪽에 모았다. 기존 요구 ID와 의미는 유지한다. 고정 architecture와 달라진 수용 결정은 [design-revisions](design-revisions.md), 실제 실행 여부는 [validation](implementation/validation.md)이 소유한다. 미채택 merge/review 설계안은 [보관 기록](archive.md)에 분리했다.
 
-문서 상태: **규범 초안 / SPIKE 미해결 / production release 불가**. 작성일: 2026-09-07. 정책 확장 반영: 2026-09-09.
+문서 상태: **현재 구현 계약**. 최초 작성: 2026-09-07. 열린 spike의 설계 선택은 DR18에서 정했으며, 미지원 경로는 거절한다. 실제 구현·실행·release qualification의 완료 여부는 validation을 따른다.
 
 **MUST [N-001]** 구현의 상위 규범은 [docs/architecture.md](architecture.md)이며, WP01 D01–D06, DR41 모듈 경계 및 DR45의 기존 Mail 표면 변경 대조 후 이 계약의 기준본 SHA-256은 `8de5ea0c6c632fa7e09e8188d7035cf94aa3165fdfeb122631af3f39bee132c7`이다. 구현 시작 및 release 때 기준본 hash를 확인한다. hash 변경 시 이 계약을 자동 적용하지 않고 차이를 검토한다.
 
@@ -28,12 +28,12 @@ DR45 대조는 이전 기준본 `39613e469209210632007e5f8f91293ff288dc2785dcda0
 
 | 파일 | 용도 |
 |---|---|
-| [implementation/schema-v4.sql](../packages/storage/src/schema-v4.sql) | 여섯 기본 DB entity의 실행 가능한 초기 DDL |
+| [packages/storage/src/schema-v4.sql](../packages/storage/src/schema-v4.sql) | 여섯 기본 DB entity의 실행 가능한 초기 DDL |
 | [docs/implementation/integration-policy.md](implementation/integration-policy.md) | 제안 검토·tiered authority·challenge/floor·Principal packet 계약 |
 | [packages/contracts/src/index.ts](../packages/contracts/src/index.ts) | 모듈 및 closed IPC 타입 계약. 실행 코드 아님 |
 | [docs/verification-spec.md](verification-spec.md#qualification-계약) | 미확정 부분, 실험, release gate |
 | [docs/verification-spec.md](verification-spec.md#oma-core-v1--검증-계약) | 기능·장애·격리·수용 시험 |
-| [implementation/systemd/](implementation-spec.md#unit-renderer-계약) | 설치 renderer에 입력할 unit template |
+| [unit renderer 계약](implementation-spec.md#unit-renderer-계약) | 설치 renderer에 입력할 unit template |
 | [docs/implementation-spec.md](implementation-spec.md#production-physical-effect-ordering) | production 호출 경로의 canonical 물리 순서 |
 | [docs/verification-spec.md](verification-spec.md#requirement--production-path--executable-evidence) | requirement→owner→entrypoint→실행 증거 release gate |
 | [docs/verification-spec.md](verification-spec.md#production-원본-목록과-loc-측정) | 공백/주석 제외 LOC 계산 계약 |

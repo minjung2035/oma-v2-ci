@@ -1,6 +1,6 @@
 # Tiered integration policy — 규범 확장과 검토 결정
 
-최초 채택: 2026-09-09. 이 문서는 기존 tiered 정책의 규범 owner다. 아래 OPEN·출시 차단 서술은 해당 조항을 채택한 당시의 경계를 나타낸다. 현재 구현·검증 판정은 [validation](validation.md), 다음 도구·메일 흐름의 설계는 [merge-review-spec](../merge-review-spec.md)에서 확인한다.
+최초 채택: 2026-09-09. 이 문서는 기존 tiered 정책의 규범 owner다. 아래 OPEN·출시 차단 서술은 해당 조항을 채택한 당시의 경계를 나타낸다. 현재 구현·검증 판정은 [validation](validation.md)이 소유한다. 미채택 도구·메일 흐름 설계는 [보관 기록](../archive.md)에 분리했다.
 
 현재 구현 결정은 [DR27/DR29](../design-revisions.md)의 schema·평가 snapshot·HIGH 최소 동료 수·candidate 검사 경로를 함께 적용한다. 아래 base-only/S-08/S-10 선행 차단 문구는 초기 규범의 판정이며, 사용자의 문서 충돌 override로 구현을 계속했다. 기존 accepted fact의 의미와 독립 runtime probe 차단은 유지한다. 실제 gate 완료 여부는 [validation](validation.md)이 소유한다.
 

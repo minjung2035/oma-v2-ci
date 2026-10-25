@@ -6,43 +6,27 @@ macOS에 적용하는 규범 문서다. [traceability](../scripts/traceability.m
 
 [DR28](design-revisions.md)의 Personal 모드는 [MODE-006](implementation-spec.md)의 별도 host 실행이며 이 문서의 Society hidden-VM 계약과 구별한다. Mac entry의 token/VM 이전 Personal 분기는 구현됐지만, Linux에서 플랫폼을 주입한 시험은 native Mac 실행 증거가 아니다. native 빌드·Keychain·package/guest history 연결의 현재 검증 범위는 [validation](implementation/validation.md)이 소유하며 아래 기존 Society 플랫폼 판정이 Personal 지원 완료를 뜻하지 않는다.
 
-구현: `feat/macos-hidden-vm` 브랜치. 이 문서는 그 구현과 맞춘다. 구현에서 설계가 바뀐 곳(pty attach, socket activation과 bridge,
-Node `omahostd`와 Swift helper)은 본문을 그렇게 고쳤다.
+## 현재 소스 위치와 문서의 범위
 
-### 구현 현황(2026-09-27, `feat/macos-hidden-vm`)
+이 문서는 저장소에 남아 있는 **macOS host + Linux guest 구현의 계약**이다. 현재 브랜치명이나 macOS 네이티브 전환 계획을 정의하지 않는다. 설치 가능한 앱·guest image 배포물과 실제 native 실행 증거는 제공되지 않았으며, 실행 판정은 validation이 소유한다.
 
-아래 표는 설계와 source owner를 연결하는 참조다. 작성 당시의 실행·미구현 설명을 최신 지원 판정으로 사용하지 않는다. 현재 검증과 남은 한계는 [validation](implementation/validation.md)을 따른다.
+| 영역 | 현재 코드 |
+|---|---|
+| host/guest DTO·codec | [protocol/host-guest.ts](../packages/protocol/src/host-guest.ts), [host-api.ts](../packages/protocol/src/host-api.ts) |
+| 공통 RPC·stream 연결 | [App platform](../apps/oma/src/platform) |
+| host project/session/backup 조정 | [App host](../apps/oma/src/platform/host) |
+| guest control/project/archive/package 조정 | [App guest](../apps/oma/src/platform/guest) |
+| 제품 진입점 | [oma-mac.ts](../apps/oma/src/entry/oma-mac.ts), [omahostd.ts](../apps/oma/src/entry/omahostd.ts) |
+| VZ·Keychain·bookmark·bundle·파일 adapter | [platform-mac](../packages/platform-mac/src) |
+| Swift helper | [vmhelper](../packages/platform-mac/src/vmhelper) |
+| guest systemd·vsock bridge·환경 자산 | [platform-linux guest](../packages/platform-linux/src/guest) |
+| Linux session launcher·system 명령 | [session-launcher.ts](../packages/platform-linux/src/session-launcher.ts), [guest-system.ts](../packages/platform-linux/src/guest-system.ts) |
+| Resident sandbox·seccomp·rootfs | [sandbox.ts](../packages/platform-linux/src/sandbox.ts), [sandbox-seccomp.ts](../packages/platform-linux/src/sandbox-seccomp.ts), [resident-rootfs.ts](../packages/platform-linux/src/resident-rootfs.ts) |
+| 엔진·provider 연결 | [Engine](../packages/engine/src), [App inference-relay.ts](../apps/oma/src/runtime/inference-relay.ts), [egress-forwarder.ts](../apps/oma/src/runtime/egress-forwarder.ts) |
 
-Linux에서 시험한 것(`test/platform-*.test.ts`, `test/sandbox-seccomp.test.ts`; 규칙마다 되돌리면 실패하는 변이를 확인했다):
+제품 조립과 OS adapter의 구분은 [책임 경계](application-boundaries.md)를 따른다. 과거 브랜치의 파일별 시험·미구현 목록과 rollout 구상은 [정리 전 원문](archive/documentation-cleanup-2026-10-25/macos-platform.md)에 보존한다. 그 시점의 상태를 현재 지원 판정으로 사용하지 않는다.
 
-| 영역 | 코드 | 조항 |
-|---|---|---|
-| host↔guest protocol, 연결, hello | `packages/protocol/src/host-guest.ts`, `packages/client/src/connection.ts`, `src/platform/rpc.ts`, `packages/domain/src/product-text.ts` | MAC-210/211/230/231/241/250 |
-| guest 연결 경계 | `platform/guest/bridge/oma-vsock-bridge.c`, `platform/guest/systemd/*`, `platform/guest/sysusers.d/oma.conf`, `src/platform/guest/server.ts` | MAC-202(CID와 `SO_PEERCRED`) |
-| guestctl | `src/platform/guest/control.ts`, `linux-system.ts`, `src/entry/guestctl.ts` | §4.4, MAC-320, MAC-620 |
-| 첫 설치 | `src/platform/guest/provision.ts`, `src/entry/guest-provision.ts`, `oma-provision.service` | MAC-303 |
-| terminal session과 guesthost | `src/platform/guest/{pty,session,host,systemd-launcher}.ts`, `src/entry/{guest-session,guesthost}.ts`, TUI의 Ctrl-L | §4.5, §4.6, MAC-220..222, MAC-412 |
-| egress | `src/platform/guest/egress.ts`, `src/platform/host/egress.ts`, `InferenceRelay.detached` | MAC-225, MAC-710..712 |
-| request 원장과 stream | `src/platform/guest/{requests,stream}.ts`, `src/platform/stream-source.ts`, `src/platform/stream-receive.ts` | MAC-240/241, §4.8, P0-7 등록 |
-| project identity와 sync | `src/platform/guest/project.ts`, `src/platform/host/{record,bookmark,bundle,project,project-sync}.ts`, `src/platform/host/personal-seed.ts` | §6, MAC-401/403/404, MAC-411/412, MAC-420 |
-| saved history 관측·모드 재개 | `packages/protocol/src/{guest-history,host-history}.ts`, `src/platform/guest/histories.ts`, `src/platform/host/{guest-histories,personal-histories,session-gateway}.ts`, `src/runtime/host-history-channel.ts` | MODE-005/006, MAC-220..222/230/250 |
-| host 수명과 조립 | `src/platform/host/{guest-link,lifecycle,service,record}.ts` | MAC-301, MAC-320, MAC-330, MAC-331, MAC-601 |
-| Host API와 Mac 명령 | `packages/protocol/src/host-api.ts`, `src/platform/host/{host-api,peer,attach-client}.ts`, `src/entry/oma-mac.ts` | MAC-020/021/222/251 |
-| credential | `src/platform/host/{keychain,resolver}.ts`, `resolveEngineAuth`의 선택 저장소 | MAC-701/702/704 |
-| image | `src/platform/host/image.ts`, `scripts/platform/sign-image.mjs` | MAC-601, MAC-611 |
-| VM helper 규약(Node 쪽) | `src/platform/host/vz-driver.ts` | §2.1, §9.1, §9.3, MAC-701/702(Keychain을 helper에게 묻는 channel) |
-| 백업·package/archive 전송 | `src/platform/host/{snapshot,snapshot-coordinator,archive-crypto,transfers}.ts`, `src/platform/guest/archive.ts` | REC-005, MAC-619..623, MAC-661 |
-| 시계 | `principal-delivery`, `broker-supervisor`, CLI transport | MAC-650(D-7) |
-| sandbox filter | `src/runtime/sandbox-seccomp.ts`, `src/sandbox.ts`의 `--seccomp 3`, `src/runtime/pi-adapter.ts`의 filter channel | MAC-205(D-5) |
-| guest의 provider 길 | `src/runtime/egress-forwarder.ts`, `platform/guest/environment.d/60-oma-egress.conf`, runner의 `openRelay` | MAC-710(D-10, D-4) |
-| 가져온 commit을 actor가 쓰는 길 | `src/runtime/provision.ts`의 `refreshProjectMirror`, `src/sandbox.ts`의 mirror mount | MAC-411(D-8) |
-| 로그인 | `packages/tui/src/login.ts`, `oma login` | MAC-704(D-9) |
-| 제품 문구 | `packages/tui/src/words.ts`, guest session의 `OMA_PRODUCT_TEXT` | MAC-022(D-1) |
-
-**NOT_BUILT**(Mac에서만 빌드·시험한다): `platform/host/vmhelper`(Swift), `src/entry/omahostd.ts`와 `src/entry/oma-mac.ts`의 실제 실행.
-
-아직 없는 것: OMA.app(SwiftUI), guest image build(mkosi, kernel 설정), archive 복원(R3)과 복구 모드(R1), 진단 묶음(`diag.collect`),
-`society.status`, OMA.app의 로그인 메뉴(host에서 D-9의 흐름을 여는 것), mac-* lane. `platform` lane은 `npm run verify:platform`이다.
+규범 본문에 남은 DR46 이전 자산 경로 `platform/guest/`는 현재 `packages/platform-linux/src/guest/`에 해당한다. 요구 문장의 fingerprint는 이번 정리에서 바꾸지 않는다.
 
 조항 ID: 요구는 `MAC-###`, 검증 oracle은 `MV-##`다. 기존 spec 조항은 그 ID로 인용한다. 이 문서는 기존 조항을 바꾸지 않는다.
 바꿔야 하는 것은 §12에 모았다.
@@ -1195,35 +1179,20 @@ admission(D04)만으로는 Mac이 가득 차는 것을 막지 못한다. Mac의 
 
 ---
 
-## 11. rollout(Apple Silicon 우선)
+## 11. 기존 배포 전제
 
-### 11.1 지원 범위
+아래는 DR18이 채택한 VM 배포의 전제이며 현재 배포 완료나 차기 구현 일정을 뜻하지 않는다. 당시의 M0–M4 rollout 단계와 v2 후보는 [정리 전 원문](archive/documentation-cleanup-2026-10-25/macos-platform.md)에 보존한다.
 
-- Apple Silicon(M1 이상), macOS 14 Sonoma 이상.
-- 14를 고른 이유: macOS 12부터 disk attachment의 `synchronizationMode`가 있지만, 14에서 VM 저장·복원 API와 여러 안정화가 들어왔다.
-  저장·복원은 v1에서 쓰지 않지만 v2 후보다.
-- Intel Mac: v1 밖이다. 나중에 하려면 조건이 셋이다. x86_64 guest image를 따로 build하고 검증한다. Intel self-hosted runner가 있어야 한다.
-  사용자 수요가 비용을 넘어야 한다.
+### 11.1 대상 환경
 
-### 11.2 단계
+기존 VM 설계의 대상은 Apple Silicon(M1 이상), macOS 14 이상이다. Intel Mac은 이 배포 범위 밖이다. 실제 검증·지원 판정은 validation을 따른다.
 
-| 단계 | 범위 | 나가는 조건 |
-|---|---|---|
-| M0 spike | VZ로 Debian 13 arm64 부팅, vsock 왕복, `synchronizationMode: .full` 위의 fsync 지연 측정, MV-30 시제품 | 부팅 3초 안, vsock 왕복 1 ms 안, MV-30 100회 통과 |
-| M1 내부 alpha | `omahostd`, guestctl, guesthost, society 하나, Principal만, import/export, TUI | MV-01·02·10·11·12·20–26·50·51 통과 |
-| M2 내부 beta | Resident와 bwrap, egress pool, native UI, snapshot·archive, update·rollback | 모든 MV와 guest-lanes 통과 |
-| M3 공개 beta | Developer ID 서명, notarization, 자동 update | 2주간 crash-free session 99.5% 이상, 데이터 손실 보고 0 |
-| M4 GA | Apple Silicon | 물리 전원 차단 시험 결과 기록(통과가 아니어도 된다. 그 경우 REC-004의 문구를 따른다) |
+### 11.2 배포 조건
 
-### 11.3 배포
-
-- Developer ID 서명과 hardened runtime을 쓴다. entitlement는 `com.apple.security.virtualization`이다. VM의 NAT device와 host Relay의 네트워크 요구를 배포 entitlement에 반영한다.
-- 동봉하는 Node, git, `oma-vmhelper`는 app bundle 안에서 서명한다. `omahostd`·Resolver·Relay의 JS는 bundle 봉인에 들어간다. `omahostd`는
-  bundle 안의 이 파일들만 실행한다(경로를 bundle 기준으로 고정한다). Keychain의 조건은 MAC-701·MAC-703이다.
-- update는 Sparkle(EdDSA 서명)로 한다. guest image는 app update에 함께 들어간다(lockstep). image만 따로 update하지 않는다.
-- v2 후보: image만 따로 update하기. 전제는 셋을 바꾸는 것이다. MAC-250(host가 자기 image와 직전 image의 protocol만 말한다. 따로 온 새
-  image는 host가 모르는 protocol일 수 있다), MAC-601(부팅 전에 manifest의 protocol이 host의 범위 안인지 확인한다), §8.2(image는 app
-  bundle 안에 있고 host는 둘만 둔다).
+- Developer ID 서명·hardened runtime과 `com.apple.security.virtualization` entitlement를 사용한다. VM NAT와 host Relay의 네트워크 요구를 배포 entitlement에 반영한다.
+- Node·Git·`oma-vmhelper`를 app bundle 안에서 서명하고 JS 자산을 bundle 봉인에 포함한다. 실행 경로는 bundle 기준으로 고정한다. Keychain 조건은 MAC-701·MAC-703을 따른다.
+- 기존 update 계약은 Sparkle(EdDSA 서명)과 app/guest image의 lockstep 배포다. image만 독립 갱신하지 않는다. MAC-250·MAC-601과 §8.2의 protocol/image 검사를 유지한다.
+- 전원 장애 내구성은 실제 시험과 REC-004의 보장 범위를 따른다. rollout 목표나 문서 정리로 qualification을 충족했다고 표시하지 않는다.
 
 ---
 
@@ -1264,7 +1233,7 @@ admission(D04)만으로는 Mac이 가득 차는 것을 막지 못한다. Mac의 
 
 ### 7차 검토 반영 (DR19)
 
-host의 record·archive·snapshot 게시는 `src/platform/host/files.ts`가 소유한다. 같은 디렉터리 temporary에
+host의 record·archive·snapshot 게시는 `packages/platform-mac/src/files.ts`가 소유한다. 같은 디렉터리 temporary에
 완성한 bytes를 fsync하고 no-replace link(새 파일) 또는 rename(record 교체)한 뒤 부모를 fsync한다.
 `omahostd.lock`을 먼저 확보한 단일 owner가 시작 시 자신이 쓰는 형식의 `.partial`을 회수한다.
 이 순서는 process crash·쓰기 오류 시험의 범위이며, APFS·VZ·실제 전원 차단의 증거를 대신하지 않는다.
@@ -1290,7 +1259,7 @@ DR28: `oma pi ... --host-only`는 같은 host `packages/`와 index를 갱신하�
 하는 일(macos-platform §2.1): Virtualization.framework로 guest VM을 구성·시작·정지하고, guest의 vsock port를 unix socket으로 잇고(vfkit의
 connect mode), Keychain item을 읽고 쓰고(MAC-701), 절전·깨어남을 알린다.
 
-`omahostd`와의 규약은 descriptor 3의 JSON 줄이다. Node 쪽 구현과 그 시험이 규약의 원본이다: `src/platform/host/vz-driver.ts`,
+`omahostd`와의 규약은 descriptor 3의 JSON 줄이다. Node 쪽 구현과 그 시험이 규약의 원본이다: `packages/platform-mac/src/vz-driver.ts`,
 `test/platform-vz-driver.test.ts`, 같은 규약을 말하는 시험용 helper `test/fixtures/fake-vmhelper.mjs`.
 
 | 방향 | message |

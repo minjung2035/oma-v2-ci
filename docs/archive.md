@@ -1,45 +1,48 @@
-# 과거 기록과 문서 이동
+# 과거 기록과 미채택 계획
 
-현재 지침과 과거 기록을 구분한다. 작성 당시의 current/active/OPEN/PASS와 수치는 현재 상태나 실행 지시가 아니다. 현재 재개점은 [HANDOFF](HANDOFF.md), 실행 판정은 [validation](implementation/validation.md)이 소유한다.
+현재 지침은 [문서 지도](README.md), 재개점은 [HANDOFF](HANDOFF.md), 실행 판정은 [validation](implementation/validation.md)이 소유한다. 이 문서에서 연결한 기록의 current·active·OPEN·PASS·브랜치·명령은 해당 시점의 내용이다. 현재 작업 지시나 새 입력의 검증으로 사용하지 않는다.
 
-## 저장소 안에 보관한 기록
+## 최근 정리에서 분리한 기록
 
-| 위치 | 보관 내용 | 용도 |
-|---|---|---|
-| [validation-before-consolidation](archive/validation-before-consolidation.md) | 문서 통합 전 검증 기록 전체 | 당시 로그·source binding·실행 범위·실패 이력 조사 |
-| [handoff-before-consolidation](archive/handoff-before-consolidation.md) | 통합 전 긴 인계 기록 | 이전 A~G 요청과 과거 재개 지시의 맥락 |
-| [qualification-before-consolidation](archive/qualification-before-consolidation.md) | 기존 spike 실험·채택과 운영 문서의 WP31 지원 기록 | SP 요구와 과거 환경 검증의 맥락 |
-| [traceability-before-consolidation](archive/traceability-before-consolidation.json) | 통합 전 fingerprint inventory | 이전 문서 위치·digest·evidence 사실 보존. 현재 trace가 아님 |
-| [원래 consistency plan](archive/oma-v2-consistency-plan-b25961c/) | 고정된 입력 계획 전체와 SHA256SUMS | 원문 checksum을 유지한 입력 |
-| [외부 리뷰 원문](archive/reviews/) | 외부 리뷰어의 자료 전체 | 원문 bytes를 유지한 과거 점검 |
+[2026-10-25 보관 색인](archive/documentation-cleanup-2026-10-25/README.md)에 정리 전 원문과 원래 경로를 모았다.
 
-계획과 외부 리뷰 원문은 부모 디렉터리만 이동했다. 파일 내용을 편집하지 않았다. 현재 clause owner·시험·source locator를 판단할 때는 문서 지도와 기계 판독 map을 따른다. 보관 원문의 오래된 파일 이름은 아래 이동표와 해당 시점의 Git source로 해석한다.
-
-## 문서 위치와 통합
-
-| 이전 위치 | 현재 owner |
+| 기록 | 내용 |
 |---|---|
-| 루트 PRODUCT / PRIORITY-0 / MAINTENANCE / HANDOFF | `docs/`의 같은 이름. HANDOFF는 최신 요청으로 정리하고 이전 전문은 archive |
-| 루트 architecture | [고정 기준본](architecture.md). bytes와 N-001 hash 유지 |
-| 루트 implementation-spec, implementation/physical-ordering, store-opening, contracts/README, systemd/README | [implementation-spec](implementation-spec.md). 기존 요구 ID·의미 유지 |
-| implementation/test-matrix, compliance, loc-budget, spikes, test/fixtures/README 및 validation의 VAL 조항 | [verification-spec](verification-spec.md). 기존 수용 번호와 규범 ID 유지 |
-| implementation/validation | [현재 검증 상태](implementation/validation.md). 긴 이전 전문은 archive |
-| implementation/integration-policy, consistency-decisions | `docs/implementation/`의 같은 이름. 고정 architecture의 상대 참조 유지 |
-| implementation/design-revisions, priority-0-audit | `docs/`의 같은 이름. 작성 당시의 결정·발견 기록 |
-| implementation/macos-platform, platform/host/vmhelper/README | [macos-platform](macos-platform.md) |
-| implementation/merge-review-spec | [merge-review-spec](merge-review-spec.md). 본문 유지, 이동한 상대 링크만 수정 |
-| operations/README | [운영 안내](operations.md). 루트 README의 설치 안내도 여기로 통합 |
-| implementation/README, 이전 docs/README의 병렬 색인 | [문서 지도](README.md) 하나로 통합 |
-| 루트 consistency plan / review | `docs/archive/`의 입력 원본·리뷰 디렉터리 |
+| [이전 HANDOFF](archive/documentation-cleanup-2026-10-25/HANDOFF.md), [이전 validation](archive/documentation-cleanup-2026-10-25/validation.md) | DR46–DR48 전환·중간 실패·과거 실행 입력·재개 지시 전문 |
+| [WORKSTREAM](archive/documentation-cleanup-2026-10-25/WORKSTREAM.md) | 이전 브랜치·작업 프로토콜·긴 작업 일지 |
+| [merge/review 설계안](archive/documentation-cleanup-2026-10-25/merge-review-spec.md) | 당시 제안한 다음 정책. 현재 활성 계약으로 채택하지 않음 |
+| [Pi·bundled extension 계획](archive/documentation-cleanup-2026-10-25/plan-prereq-and-bundled.md) | 이식·TUI·모드·확장 작업의 초안과 당시 실행 결과 |
+| [DR46 모듈화 명세](archive/documentation-cleanup-2026-10-25/modularization-spec.md), [DR47 품질 명세](archive/documentation-cleanup-2026-10-25/code-quality-improvement-spec.md) | 승인된 구현 범위와 수용 기준 기록. 현재 source 구조와 실행 결과는 각각 책임 경계·validation을 따름 |
+| [간소화 감사](archive/documentation-cleanup-2026-10-25/simplification-audit.md), [사용자 기대 장부](archive/documentation-cleanup-2026-10-25/user-expectation-ledger.md) | 당시 제약·개선 분류·backlog |
+| [Priority 0 감사](archive/documentation-cleanup-2026-10-25/priority-0-audit.md) | 발견 ID·재현·수정·미해결 범위 원문 |
+| [숫자 제한 장부](archive/documentation-cleanup-2026-10-25/limit-bounds.md) | UX-38/DR37/DR39 당시 값과 source 경로 |
+| [이전 유지보수 지침](archive/documentation-cleanup-2026-10-25/MAINTENANCE.md), [이전 Mac 문서](archive/documentation-cleanup-2026-10-25/macos-platform.md) | 정리 전 지침·source 안내·rollout 구상 |
 
-## 이전 Git snapshot
+원문 bytes는 유지했다. archive 안의 상대 링크와 source locator는 보관 색인의 원래 경로 및 당시 Git source 기준으로 해석한다. 현재 source owner나 새 작업을 판단할 때는 현재 문서와 기계 판독 map을 사용한다.
 
-다음 위치는 그 commit 안에서의 경로다. 현재 경로로 바꿔서 `git show`하지 않는다.
+## 이전부터 보관한 입력
 
-| snapshot | 기록 | 당시 위치 |
-|---|---|---|
-| `5a612c2` | WP00–WP32·AV·ENG1·Priority 0 카드 이력, 첫~열네 번째 감사, 중간 verification | `HANDOFF.md`, `implementation/validation.md` |
-| `11b3ae1` | 초기 architecture refinement·proposal·follow-up·closure·과거 raw evidence | `docs/architecture-improvement/`, `docs/proposals/`, `implementation/`의 당시 기록 |
+| 위치 | 내용 |
+|---|---|
+| [validation-before-consolidation](archive/validation-before-consolidation.md) | 첫 문서 통합 전 검증·입력·실패 이력 |
+| [handoff-before-consolidation](archive/handoff-before-consolidation.md) | 첫 통합 전 요청과 인계 전문 |
+| [qualification-before-consolidation](archive/qualification-before-consolidation.md) | spike 실험·채택·WP31 당시 환경 기록 |
+| [traceability-before-consolidation](archive/traceability-before-consolidation.json) | 이전 위치·fingerprint·evidence 입력. 현재 trace 아님 |
+| [원래 consistency plan](archive/oma-v2-consistency-plan-b25961c/) | SHA256SUMS가 결박한 고정 계획 원문 |
+| [외부 리뷰](archive/reviews/) | 외부 리뷰어의 원문 자료 |
+| `archive/handoff-before-dr39.md`부터 `handoff-before-dr46.md`까지 저장된 파일 | 각 변경 전 인계. 빠진 번호를 새 문서가 있다고 해석하지 않음 |
+
+고정 계획과 외부 리뷰의 본문·checksum은 변경하지 않는다. 과거 검증의 근거 파일·요구 ID·수용 번호·검토 상태도 재승인하지 않는다.
+
+## 현재 위치를 찾는 방법
+
+루트에 있던 제품·원칙·유지보수·인계 문서는 `docs/`로 모았다. Core와 physical ordering·Store·unit renderer 계약은 [implementation-spec](implementation-spec.md), 시험·qualification·LOC·fixture 계약은 [verification-spec](verification-spec.md)이 소유한다. 고정 [architecture](architecture.md)의 상대 참조를 위해 `docs/implementation/` 문서와 [unit 계약 안내](implementation/systemd/README.md)는 유지한다.
+
+실행 가능한 계약·SQL·자산은 현재 workspace 안에 있다. 실제 위치는 [책임 경계](application-boundaries.md)와 source-owner map으로 확인한다. 이전 루트 `src` 경로는 현재 runtime API가 아니다.
+
+## Git snapshot 조회
+
+아래 경로는 해당 commit 안에서의 위치다. 현재 경로로 바꿔 `git show`하지 않는다.
 
 ```sh
 git show 5a612c2:HANDOFF.md
@@ -49,4 +52,4 @@ git show 11b3ae1:implementation/refactoring-closure.md
 git ls-tree -r --name-only 11b3ae1 docs/architecture-improvement
 ```
 
-과거 finding은 현재 source에서 재현 여부를 새로 판단한다. 과거 PASS·LOC·reviewed hash를 새 source의 증거로 재결박하지 않는다. 새 긴 실행 기록을 현재 지침에 덧붙이지 말고 현재 판정과 해당 시점의 보관 기록을 나눈다.
+과거 finding은 현재 코드에서 재현 여부를 다시 판단한다. 과거 PASS·LOC·reviewed hash는 새 source의 결과가 아니다.

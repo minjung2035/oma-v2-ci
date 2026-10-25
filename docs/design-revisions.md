@@ -1727,7 +1727,7 @@ credential을 발견하면 앞 chunk의 prefix까지 전달하지 않은 채 연
 
 ## DR46 — 출시 전 레거시 제거와 workspace 분리
 
-사용자가 출시 전 호환성을 유지하지 않는 [모듈 전환 명세](modularization-spec.md)의 구현을 승인했다
+사용자가 출시 전 호환성을 유지하지 않는 [모듈 전환 명세](archive/documentation-cleanup-2026-10-25/modularization-spec.md)의 구현을 승인했다
 (2026-10-23). Priority 0가 최상위다. 이전 개발 형식을 지원하지 않는 것은 허용하지만, 이미 읽을 수
 있는 확정 사실을 현재 권한이나 설정으로 재해석하는 것은 허용하지 않는다. 형식을 제거하는 단계는
 식별값을 바꾸고 이전 상태를 명시적으로 거부하며, 기존 상태를 자동 삭제하거나 다시 쓰지 않는다.
@@ -2246,7 +2246,7 @@ continuation 예약·cursor·FRAME_TOO_LARGE의 의미를 유지하면서 각 �
 ## DR47 — 코드 품질 보완과 App 통합 시험 경계
 
 사용자는 실제 코드 검사에서 확인한 두 cleanup 결함과 interactive/App API/SDK coupling의
-보완, 새 spec과 구현을 승인했다(2026-10-25). [품질 보완 명세](code-quality-improvement-spec.md)가
+보완, 새 spec과 구현을 승인했다(2026-10-25). [품질 보완 명세](archive/documentation-cleanup-2026-10-25/code-quality-improvement-spec.md)가
 범위와 수용 기준을 소유한다. durable/wire/권한/복구의 의미는 변경하지 않는다.
 
 App은 제품 조립 root이며 다른 기능 package가 그 내부 module에 의존하지 않는다. Root의
@@ -2294,3 +2294,18 @@ Restic Linux x64/arm64 0.19.1은 공식 release archive와 executable SHA-256을
 setup 단계에서 설치한다. shutdown에서 다운로드하지 않는다. 도구 없는 hot 세션은 원본을
 유지하고, cold 세션은 도구가 복구되기 전 시작하지 않는다. 실제 service/cgroup·Mac/VM 및
 power-loss qualification은 local filesystem/fault 검증과 구별한다. 새/변경 코드는 NOT_REVIEWED다.
+
+## DR49 — VM 폐기와 공통 native 실행부
+
+2026-10-25 사용자 지시로 [native 전환 명세](macos-native-spec.md)의 구현을 채택한다.
+문서 정리만 하던 이전 범위는 종료했다. VM 전용 구현·자산·진입점은 제거하고 Linux와
+Darwin의 정책·실행 조정·인증 판정·저장 검증·복구는 공통 TypeScript owner를 사용한다.
+OS 의존은 작은 syscall/sandbox/credential primitive에 한정한다. DR18/19의 VM 제품과
+background/attach 제품 범위는 폐기한다. 과거 요구 ID와 실행 기록은 당시의 뜻을 유지한다.
+
+이 결정은 G-PROCESS/G-FILES/G-AUTH의 통과 선언이 아니다. 실제 종료·파일 capability·
+peer identity가 증명되지 않은 실행은 차단하며 VM이나 약한 대체 경로로 우회하지 않는다.
+Mac Society가 차단돼도 공통 코드와 독립적인 구현·시험은 계속한다. 새 state root를 사용하고
+기존 VM disk/state/archive·native history를 변환·삭제하지 않는다. 권한·accepted bytes·receipt·
+Store gate·incarnation 의미를 보존한다. 구현과 실제 증거는
+[전환 기록](implementation/native-transition.md)과 validation에 따로 기록한다.

@@ -1,0 +1,31 @@
+name: Native runtime
+on:
+  push:
+    branches: [work/macos-native-20261025]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  darwin-gates:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-26, macos-15]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version: '26.0.0'
+          package-manager-cache: false
+      - name: Observe real Darwin gates
+        run: node scripts/verify-native.mjs .scratch/native-evidence
+      - name: Preserve raw observations, including blocked gates
+        if: always()
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        with:
+          name: native-gates-${{ matrix.os }}-${{ github.sha }}
+          path: .scratch/native-evidence
+          if-no-files-found: error
+          retention-days: 14

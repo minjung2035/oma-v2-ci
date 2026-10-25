@@ -1,6 +1,6 @@
 # OMA — 제품의 목적과 경계
 
-이 문서는 제품 의도를 소유한다. [구현 계약](implementation-spec.md), [실행 판정](implementation/validation.md), [다음 merge 흐름](merge-review-spec.md)은 각각 해당 문서에서 확인한다.
+이 문서는 제품 의도를 소유한다. 구체적인 동작은 [구현 계약](implementation-spec.md), 실제 검증 범위는 [validation](implementation/validation.md)에서 확인한다.
 
 ## 목적
 
