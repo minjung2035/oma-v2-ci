@@ -423,7 +423,15 @@ export class Store implements StoreQueries, StoreWrites {
   pendingDeliveries(agent: Actor): DeliveryRow[] { return this.reader.pendingDeliveries(agent); }
   /** runner.pending's count: the same eligible rows, counted in SQL. */
   pendingDeliveryCount(agent: Actor): number { return this.reader.pendingDeliveryCount(agent); }
-  pendingDeliveryRows(agent: Actor): IterableIterator<DeliveryRow> { return this.reader.pendingDeliveryRows(agent); }
+  *pendingDeliveryRows(agent: Actor): IterableIterator<DeliveryRow> {
+    this.assertAvailable();
+    for (const row of this.reader.pendingDeliveryRows(agent)) {
+      // The reader may have a validated page buffered across caller work.
+      // A later rollback failure revokes that page's connection too.
+      this.assertAvailable();
+      yield row;
+    }
+  }
   getDelivery(message: MessageId, recipient: Actor): DeliveryRow | null { return this.reader.delivery(message, recipient); }
   deliveriesForOperation(id: OperationId): DeliveryRow[] { return this.reader.operationDeliveries(id); }
   insertPreparedBatch(batch: PreparedBatchInput): void { this.transitions.insertPreparedBatch(batch); }

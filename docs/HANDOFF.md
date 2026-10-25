@@ -1,4 +1,19 @@
-# OMA v2 — 현재 인계 (2026-10-25, DR47 로컬 수용 완료)
+# OMA v2 — 현재 인계 (2026-10-25, 품질 후속 수정)
+
+현재 브랜치는 `work/code-quality-improvements-20261025`이며 첫 체크포인트
+`df713512`를 origin에 push했다. 원격 master의 별도 변경은 합치거나 덮어쓰지 않았다.
+후속으로 rollback 실패 연결의 재사용 차단, immutable 관찰·게시의 최초 손상 보존,
+bridge 양방향 backpressure를 수정했다. Personal의 설정/히스토리와 operation decode의
+관계 검증을 분리했고, SDK title은 공개 Terminal 주입을 사용한다. 잔여 private
+13 methods/1 field는 기존 검증 adapter가 소유한다. workspace build는 컴파일러의
+읽기·부재·탐색 입력과 assets, 출력 bytes/mode/tsbuildinfo를 확인한 경우에만 재사용한다.
+원칙 문서는 변경하지 않았다. 새/변경 코드는 NOT_REVIEWED다.
+
+이 후속 입력의 실행 결과·입력 동일성은
+`/home/dev/oma-audit-artifacts/quality-followup-2026-10-25/verification-result.json`과
+그 옆 원시 로그가 소유한다. 아래 DR47의 PASS 수치는 이전 입력의 결과다.
+
+## 이전 DR47 입력의 수용 기록
 
 최신 사용자 요청은 [품질 보완 명세](code-quality-improvement-spec.md)의 다섯 항목 전체 구현이다.
 다섯 항목을 모두 구현했다. 전체 local4126/4126, 전체 build/strict typecheck/static gate,

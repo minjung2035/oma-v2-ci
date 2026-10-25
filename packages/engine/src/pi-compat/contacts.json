@@ -32,7 +32,7 @@
       "fields": [
         "hideThinkingBlock"
       ],
-      "reason": "Only this checked adapter accesses private hooks unavailable in the pinned public SDK. Hosts consume semantic mode controls; exact version/member shape is validated before use."
+      "reason": "Only this checked adapter accesses private hooks unavailable in the pinned public SDK. Hosts consume semantic mode controls; exact version/member shape is validated before use. Titles use the public injected Terminal rather than the private renderer field."
     },
     {
       "id": "optional-search-tool-module",

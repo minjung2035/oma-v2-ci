@@ -289,7 +289,10 @@ packages/engine/src/login.ts
 packages/engine/src/oma-theme.ts
 packages/engine/src/open-tui-brand.ts
 packages/engine/src/package-resources.ts
+packages/engine/src/personal-configuration.ts
+packages/engine/src/personal-history.ts
 packages/engine/src/personal-ports.ts
+packages/engine/src/personal-state.ts
 packages/engine/src/personal.ts
 packages/engine/src/pi-adapter.ts
 packages/engine/src/pi-compat/commands.ts

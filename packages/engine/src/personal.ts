@@ -1,3 +1,6 @@
+import { PersonalSessionState } from "./personal-state.js";
+import { createPersonalConfiguration } from "./personal-configuration.js";
+import { createPersonalHistory } from "./personal-history.js";
 import { brandHeader, brandFooter } from "./open-tui-brand.js";
 import type { PersonalEngineInput, PersonalEnginePorts } from "./personal-ports.js";
 import type { OpenTuiBrand } from "@oma/contracts/presentation";
@@ -7,9 +10,8 @@ import { lstatSync } from "node:fs";
 import { createRequire } from "node:module";
 import { dirname, join } from "node:path";
 import { createAgentSessionRuntime, createAgentSessionServices, createAgentSessionFromServices,
-  DefaultResourceLoader, hasTrustRequiringProjectResources, InteractiveMode, ModelSelectorComponent, ProjectTrustStore,
-  SessionManager, SessionSelectorComponent,
-  ThinkingSelectorComponent, VERSION, type AgentSession, type ExtensionContext, type ExtensionFactory,
+  DefaultResourceLoader, hasTrustRequiringProjectResources, InteractiveMode, ProjectTrustStore,
+  SessionManager, VERSION, type ExtensionFactory,
 } from "@earendil-works/pi-coding-agent";
 import { StoreError } from "@oma/domain/errors";
 import { createEngineSettings } from "./pi-compat/settings.js";
@@ -19,9 +21,7 @@ import { ExtensionModules } from "./extension-modules.js";
 import { preparePiRetry } from "./pi-runtime.js";
 import { preparePiInteractive } from "./pi-presentation.js";
 import { PI_RESUME_HINT } from "./pi-compat/env.js";
-import { adaptInteractiveMode } from "./pi-compat/interactive-mode.js";
-import type { SessionMode } from "@oma/domain/session-mode";
-import { isGuestHistoryReference } from "@oma/protocol/guest-history";
+import { adaptInteractiveMode, createInteractiveTerminal } from "./pi-compat/interactive-mode.js";
 
 export async function runPersonal(input: PersonalEngineInput, ports: PersonalEnginePorts): Promise<void> {
   const { withSearchTools } = await import("./pi-compat/interactive-tools.js");
@@ -43,116 +43,22 @@ export async function runPersonal(input: PersonalEngineInput, ports: PersonalEng
   const askExtension = join(libdir, DEPLOYMENT_LAYOUT.extensionAsk);
   const brand: OpenTuiBrand = { title: "oma", version: input.version,
     engineVersion: VERSION, project: birth.cwd, society: "Personal", mode: "Personal", tip: "Ctrl+X: Config" };
-  let runtime: Awaited<ReturnType<typeof createAgentSessionRuntime>> | undefined;
-  let mode: InteractiveMode | undefined, context: ExtensionContext | undefined, switching = false, replacing = false;
-  let uiEpoch = 0;
-  const current = (epoch: number): boolean => !switching && context !== undefined && epoch === uiEpoch;
-  const beforeSwitch = async (reason: "new" | "resume", file?: string): Promise<boolean> => {
-    const result = await runtime!.session.extensionRunner.emit({ type: "session_before_switch", reason,
-      ...(file === undefined ? {} : { targetSessionFile: file }) });
-    return result?.cancel !== true;
-  };
-  const transition = async (epoch: number, file?: string, society?: string, targetMode?: SessionMode): Promise<void> => {
-    if (!current(epoch)) return;
-    if ([file, society, targetMode].filter(value => value !== undefined).length > 1) throw new StoreError("INVALID_REQUEST", "A switch carries one target");
-    if (file !== undefined && !lstatSync(file).isFile()) throw new StoreError("INVALID_REQUEST", "Session history is not a regular file");
-    if (process.send === undefined || mode === undefined) throw new StoreError("BROKER_UNAVAILABLE", "Personal host channel is unavailable");
-    switching = true;
-    try {
-      // The host owns the meaning of these fields: `session` reopens a saved
-      // history, `society` re-enters as `oma --society <name>` — a new birth.
-      await new Promise<void>((resolve, reject) => process.send!({ type: "switch",
-        ...(file === undefined ? {} : { session: file }), ...(society === undefined ? {} : { society }),
-        ...(targetMode === undefined ? {} : { mode: targetMode }) },
-        error => { if (error) reject(error); else resolve(); }));
-    } catch (error) { switching = false; throw error; }
-    await adaptInteractiveMode(mode).shutdown();
-  };
-  const society = async (args: string, ctx: ExtensionContext): Promise<void> => {
-    const epoch = uiEpoch;
-    if (!current(epoch) || replacing) return;
-    const unused = (): boolean => runtime!.session.messages.length === 0 && ctx.isIdle();
-    if (!unused()) { ctx.ui.notify("Choose Personal or Society before starting a conversation. Use /new for a new session.", "warning"); return; }
-    replacing = true;
-    try {
-      const picked = args.trim() || await ctx.ui.select("Session mode — Personal", ["Personal", "Society"]);
-      if (!current(epoch) || !unused() || picked === undefined || picked.toLowerCase() === "personal") return;
-      if (picked.toLowerCase() !== "society") { ctx.ui.notify("Use /society personal or /society society.", "warning"); return; }
-      if (await beforeSwitch("new") && current(epoch) && unused()) await transition(epoch, undefined, undefined, "society");
-    }
-    finally { replacing = false; }
-  };
-  const modelConfig = async (ctx: ExtensionContext, epoch: number): Promise<void> => {
-    const session = runtime!.session;
-    const model = await ctx.ui.custom<NonNullable<AgentSession["model"]> | undefined>((tui, _theme, _keys, done) =>
-      new ModelSelectorComponent(tui, session.model, session.modelRuntime, session.scopedModels, done, () => done(undefined)));
-    if (!model || !current(epoch)) return;
-    await session.setModel(model, { persist: true });
-    if (!current(epoch)) return;
-    const levels = session.getAvailableThinkingLevels();
-    const level = levels.length <= 1 ? levels[0] : await ctx.ui.custom<AgentSession["thinkingLevel"] | undefined>((_tui, _theme, _keys, done) =>
-      new ThinkingSelectorComponent(session.thinkingLevel, levels, done, () => done(undefined), done));
-    if (level !== undefined && current(epoch)) { session.setThinkingLevel(level); runtime!.services.settingsManager.setDefaultThinkingLevel(level); }
-  };
-  const config = async (ctx: ExtensionContext): Promise<void> => {
-    const epoch = uiEpoch;
-    if (!current(epoch)) return;
-    // The trust row appears only when the folder actually holds gated
-    // resources; otherwise there is nothing the decision would change.
-    const trustRow = `Project trust — ${trustStore.get(birth.cwd) === true ? "trusted" : "not trusted"}`;
-    const choice = await ctx.ui.select("Config — Personal (fixed for this session)",
-      ["Model / effort", "Extensions", ...(projectNeedsTrust ? [trustRow] : []), "Back"]);
-    if (!current(epoch)) return;
-    if (choice === "Model / effort") { await modelConfig(ctx, epoch); return; }
-    if (choice === trustRow && projectNeedsTrust) {
-      const trusted = trustStore.get(birth.cwd) === true;
-      const picked = await ctx.ui.select(
-        `Trust ${birth.cwd}? This lets Pi load the project's .pi settings and resources (skills, prompt templates, context files). ` +
-        `Extensions stay pinned to your saved list; trusting never loads a project extension.`,
-        [trusted ? "Stop trusting this project" : "Trust this project", "Back"]);
-      if (!current(epoch) || picked === undefined || picked === "Back") return;
-      const next = !trusted;
-      // The decision is persisted before it takes effect, and the session
-      // reloads so the loader re-resolves every gated resource with it.
-      trustStore.set(birth.cwd, next);
-      runtime!.services.settingsManager.setProjectTrusted(next);
-      ctx.ui.notify(next ? "Project trusted. Reloading this session to apply it."
-        : "Project no longer trusted. Reloading this session to apply it.", "info");
-      await runtime!.session.reload();
-      return;
-    }
-    if (choice !== "Extensions") return;
-    const saved = ports.extensions.readSelection();
-    const entries = [...new Set([...saved.extensions, ...ports.extensions.availableEntries()])];
-    const rows = entries.map(entry => `${saved.extensions.includes(entry) ? "[on]" : "[off]"} ${entry}`);
-    const picked = await ctx.ui.select("Personal extensions — reload to apply", [...rows, "Add extension path", "Back"]);
-    if (!current(epoch) || picked === undefined || picked === "Back") return;
-    const raw = picked === "Add extension path" ? await ctx.ui.input("Extension entry (relative to installation, packages:..., or an absolute path)")
-      : entries[rows.indexOf(picked)];
-    // C20: an absolute path is stored under its local: spelling so the saved
-    // entry is unambiguous next to installation- and store-relative ones.
-    const entry = raw === undefined ? undefined : ports.extensions.entry(raw);
-    if (!entry || !current(epoch)) return;
-    ports.extensions.select(entry, !saved.extensions.includes(entry));
-    // Pi has not written an empty session yet. Reload preserves that manager,
-    // its pending entries and its birth instead of reopening a nonexistent file.
-    await runtime!.session.reload();
-    // Reload replaces the UI context; confirm on the screen that now owns it.
-    if (!switching) context?.ui.notify("Personal extension choice saved. Reloaded this session to apply it.", "info");
-  };
+  const state = new PersonalSessionState();
+  const config = createPersonalConfiguration(input, ports, state, { store: trustStore, needed: projectNeedsTrust });
+  const history = createPersonalHistory(input, ports, state);
   const branded = new WeakSet<object>();
   const boundary: ExtensionFactory = pi => {
     pi.registerCommand("oma", { description: "Personal Config: model, effort and extensions", handler: async (_args, ctx) => config(ctx) });
-    pi.registerCommand("society", { description: "Choose Personal or Society before starting a conversation", handler: society });
+    pi.registerCommand("society", { description: "Choose Personal or Society before starting a conversation", handler: history.society });
     pi.registerShortcut("ctrl+x", { description: "Personal Config", handler: config });
     // BL2: the ask_user_question presenter — the Personal counterpart of the
     // interactive host's seam. It reads `context` at request time so a
     // question asked with no live session resolves as a structured cancel.
-    ports.presentation.registerQuestions(pi, { context: () => context });
+    ports.presentation.registerQuestions(pi, { context: () => state.context });
     pi.on("session_start", (_event, ctx) => {
       const searchCwd = ctx.cwd;
       ctx.ui.addAutocompleteProvider(current => withSearchTools(current, searchCwd));
-      uiEpoch++; context = ctx;
+      state.enter(ctx);
       ctx.ui.setStatus("oma-mode", "Personal");
       if (!branded.has(ctx.ui)) {
         branded.add(ctx.ui);
@@ -170,7 +76,7 @@ export async function runPersonal(input: PersonalEngineInput, ports: PersonalEng
       }
       for (const missing of assets.missing) ctx.ui.notify(`Personal extension is missing: ${missing}`, "warning");
     });
-    pi.on("session_shutdown", () => { uiEpoch++; context = undefined; });
+    pi.on("session_shutdown", () => { state.leave(); });
   };
   const resume = input.resume;
   if (resume !== undefined) {
@@ -186,7 +92,7 @@ export async function runPersonal(input: PersonalEngineInput, ports: PersonalEng
   const failed = (error: unknown): void => { if (!failures.includes(error)) failures.push(error); };
   try {
   modules = new ExtensionModules(verifiedPaths(assets.extensions));
-  runtime = await createAgentSessionRuntime(async options => {
+  state.runtime = await createAgentSessionRuntime(async options => {
     if (options.cwd !== birth.cwd || options.sessionManager.getSessionDir() !== birth.history)
       throw new StoreError("INVALID_REQUEST", "Personal history cannot change its birth location");
     ports.assertExtensions(assets.extensions);
@@ -248,7 +154,7 @@ export async function runPersonal(input: PersonalEngineInput, ports: PersonalEng
         catch (error) {
           try { services.resourceLoader.getExtensions().runtime.invalidate(); }
           catch (cleanup) { error = new AggregateError([error, cleanup], "Personal reload and cleanup failed"); }
-          if (mode !== undefined) await adaptInteractiveMode(mode).fail("Personal reload failed", error);
+          if (state.mode !== undefined) await adaptInteractiveMode(state.mode).fail("Personal reload failed", error);
           throw error;
         }
       };
@@ -261,10 +167,10 @@ export async function runPersonal(input: PersonalEngineInput, ports: PersonalEng
   }, { cwd: birth.cwd, agentDir, sessionManager: manager });
   // Upstream shutdown disposes this handle before process.exit, so its dispose
   // boundary owns the helper handoff too. A finally after run cannot own that.
-  const dispose = runtime.dispose.bind(runtime), owned = runtime;
+  const dispose = state.runtime.dispose.bind(state.runtime), owned = state.runtime;
   let disposal: Promise<void> | undefined;
-  runtime.dispose = (): Promise<void> => disposal ??= (async () => {
-    uiEpoch++; context = undefined;
+  state.runtime.dispose = (): Promise<void> => disposal ??= (async () => {
+    state.leave();
     const errors: unknown[] = [];
     try { await owned.session.abort(); } catch (error) { errors.push(error); }
     try { await dispose(); } catch (error) { errors.push(error); }
@@ -273,84 +179,26 @@ export async function runPersonal(input: PersonalEngineInput, ports: PersonalEng
     if (errors.length === 1) throw errors[0];
     if (errors.length > 1) throw new AggregateError(errors, "Personal disposal failed");
   })();
-  // Every new session returns to birth selection, including an extension's call.
-  const sameBirthSwitch = runtime.switchSession.bind(runtime);
-  runtime.newSession = async options => {
-    const epoch = uiEpoch;
-    if (!current(epoch) || replacing) return { cancelled: true };
-    if (options && Object.values(options).some(value => value !== undefined))
-      throw new StoreError("INVALID_REQUEST", "A new OMA session selects its birth before extension setup");
-    replacing = true;
-    try { if (await beforeSwitch("new")) await transition(epoch); }
-    finally { replacing = false; }
-    return { cancelled: true };
-  };
-  runtime.switchSession = async (file, options) => {
-    const epoch = uiEpoch;
-    if (!current(epoch) || replacing) return { cancelled: true };
-    replacing = true;
-    try {
-      if (process.platform === "darwin" && isGuestHistoryReference(file)) {
-        await ports.history.inspectGuest(file);
-        if (!current(epoch)) return { cancelled: true };
-        if (options && Object.values(options).some(value => value !== undefined))
-          throw new StoreError("INVALID_REQUEST", "Cross-birth resume cannot carry callbacks or cwd overrides");
-        if (await beforeSwitch("resume", file)) await transition(epoch, file);
-        return { cancelled: true };
-      }
-      const target = await ports.history.target(file, birth.cwd);
-      if (!current(epoch)) return { cancelled: true };
-      if (target.id === birth.id && target.mode === "personal") return await sameBirthSwitch(file, options);
-      if (options && Object.values(options).some(value => value !== undefined))
-        throw new StoreError("INVALID_REQUEST", "Cross-birth resume cannot carry callbacks or cwd overrides");
-      if (await beforeSwitch("resume", file)) await transition(epoch, file);
-      return { cancelled: true };
-    } finally { replacing = false; }
-  };
+  history.bindRuntime();
   // Personal keeps the engine's own /import: a foreign history lands in this
   // birth's directory under the session manager's name, like a Pi user's.
-  mode = new InteractiveMode(runtime, { tuiMode: "fullscreen" });
-  const controls = adaptInteractiveMode(mode);
-  const showHistory = () => {
-    const ctx = context, epoch = uiEpoch;
-    if (!ctx || !current(epoch)) return;
-    void ctx.ui.custom<void>((tui, _theme, keybindings, done) => {
-      const load = async (_progress: unknown, signal?: AbortSignal) => {
-        const found = [];
-        for (const entry of ports.history.directories(birth.cwd)) {
-          signal?.throwIfAborted();
-          const sessions = await SessionManager.listAll(entry.dir, undefined, signal);
-          found.push(...sessions.map(info => ({ ...info, name: `[${entry.mode === "personal" ? "Personal" : "Society"}] ${info.name ?? ""}`.trim() })));
-        }
-        if (process.platform === "darwin") {
-          try { found.push(...await ports.history.listGuests(signal)); }
-          catch (error) {
-            signal?.throwIfAborted();
-            if (current(epoch)) ctx.ui.notify(`Guest histories unavailable: ${String(error)}`, "warning");
-          }
-        }
-        return current(epoch) ? found.sort((a, b) => b.modified.getTime() - a.modified.getTime()) : [];
-      };
-      return new SessionSelectorComponent(load, load, file => { done(); if (current(epoch)) void runtime!.switchSession(file)
-        .catch(error => { if (current(epoch)) ctx.ui.notify(String(error), "error"); }); },
-        done, () => { done(); if (current(epoch)) void adaptInteractiveMode(mode!).shutdown(); }, () => tui.requestRender(),
-        { keybindings, showRenameHint: false }, runtime!.session.sessionFile);
-    }).catch(error => { if (current(epoch)) ctx.ui.notify(String(error), "error"); });
-  };
-  controls.configurePersonal(runtime, showHistory);
+  const terminal = createInteractiveTerminal();
+  state.mode = new InteractiveMode(state.runtime, { tuiMode: "fullscreen", terminal });
+  const controls = adaptInteractiveMode(state.mode);
+  controls.configurePersonal(state.runtime, history.showHistory, terminal);
   // Upstream's exit hint refers to Pi, not the host that owns this birth.
   process.stdout.write = ((chunk: unknown, ...args: unknown[]) =>
     (write as (...values: unknown[]) => boolean).call(process.stdout,
       String(chunk).includes(PI_RESUME_HINT)
-        ? "Reopen this Personal session with oma --resume " + runtime!.session.sessionFile + "\n" : chunk,
+        ? "Reopen this Personal session with oma --resume " + state.runtime!.session.sessionFile + "\n" : chunk,
       ...args)) as typeof process.stdout.write;
-  await mode.run();
+  await state.mode.run();
   } catch (error) { failed(error); }
   finally {
-    uiEpoch++; context = undefined;
-    try { mode?.stop(); } catch (error) { failed(error); }
-    try { await runtime?.dispose(); } catch (error) { failed(error); }
-    if (runtime === undefined) try { modules?.close(); } catch (error) { failed(error); }
+    state.leave();
+    try { state.mode?.stop(); } catch (error) { failed(error); }
+    try { await state.runtime?.dispose(); } catch (error) { failed(error); }
+    if (state.runtime === undefined) try { modules?.close(); } catch (error) { failed(error); }
     try { await closeCredentials(); } catch (error) { failed(error); }
     process.stdout.write = write;
   }

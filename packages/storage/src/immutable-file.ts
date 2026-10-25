@@ -16,7 +16,7 @@ import {
 import { basename, dirname, join } from "node:path";
 import { sha256Hex } from "@oma/domain/canonical-json";
 import { StoreError, normalizeStorageFailure } from "@oma/domain/errors";
-import { withCleanup } from "@oma/native/cleanup";
+import { cleanupAll, withCleanup } from "@oma/native/cleanup";
 import {
   collectDeadTemporaries,
   createLockedTemporary,
@@ -26,7 +26,7 @@ import {
   temporaryNameFor,
   type DurabilityObserver,
 } from "./durable-fs.js";
-import { entryAt, linkDescriptor, openDirectory, openRegularBeneath, closeEvery } from "@oma/native/files";
+import { entryAt, linkDescriptor, openDirectory, openRegularBeneath } from "@oma/native/files";
 import type { PublishedIdentity } from "./preaccept-artifact.js";
 
 function checkedBytes(
@@ -138,99 +138,98 @@ function publishImmutable(
   let temporaryFd: number | undefined;
   let temporary: string | undefined;
   let crashed = false;
-  try {
-    sourceFd = openImmutable(sourceParent, basename(source));
-    const original = checkedBytes(sourceFd, expectedHash);
-    // P0-8: every caller's destination names an oma-owned mail directory. The
-    // boundary the callers share is not this helper's to know, so the parent
-    // itself is the boundary: its leaf is oma-made (mail/objects, an inbox's
-    // new/cur/tmp, the archive) and is repaired; a mode-000 ancestor above it
-    // refuses, and the provisioning ensure repairs those at start.
-    if (held === undefined) ensureOwnedDurableDirectory(dirname(destination), dirname(destination), 0o755, faults);
-    parent = held?.directory ?? openDirectory(dirname(destination));
-    const destinationName = held?.name ?? basename(destination);
-    // P0V-96: a copy killed before its temporary was removed left it with a
-    // free lock; every publication of this name collects it first -- one
-    // whose destination already exists never reaches the copying path.
-    collectDeadTemporaries(parent);
-    const report = (fd: number): void => {
-      const stat = fstatSync(fd);
-      linked?.({ dev: stat.dev, ino: stat.ino });
-    };
+  withCleanup(() => {
     try {
-      faultAt(faults, "publication-link", "before", destination);
-      linkDescriptor(sourceFd, parent, destinationName);
-      report(sourceFd);
-    } catch (error) {
-      if (isDurabilityFault(error)) throw error;
-      const code = (error as NodeJS.ErrnoException).code;
-      if (code === "EXDEV") {
-        const name = temporaryNameFor(basename(destination));
-        const label = join(dirname(destination), name);
-        faultAt(faults, "file-create", "before", label);
-        temporaryFd = createLockedTemporary(parent, name, constants.O_RDWR, 0o600);
-        temporary = name;
-        faultAt(faults, "file-create", "after-visible", label);
-        faultAt(faults, "file-write", "before", label);
-        writeFileSync(temporaryFd, original.bytes);
-        faultAt(faults, "file-write", "ambiguous", label);
-        faultAt(faults, "file-fsync", "ambiguous", label);
-        fsyncSync(temporaryFd);
-        faultAt(faults, "file-fsync", "after-visible", label);
-        checkedBytes(temporaryFd, original.hash);
-        try {
-          linkDescriptor(temporaryFd, parent, destinationName);
-          report(temporaryFd);
-        } catch (publicationError) {
-          if ((publicationError as NodeJS.ErrnoException).code !== "EEXIST")
-            throw publicationError;
-        }
-      } else if (code !== "EEXIST") throw error;
-    }
-    faultAt(faults, "publication-link", "after-visible", destination);
-    faultAt(faults, "destination-validate", "before", destination);
-    const published = openImmutable(parent, destinationName);
-    try {
-      checkedBytes(published, original.hash);
-      fchmodSync(published, 0o444);
-      fsyncSync(published);
-    } finally {
-      closeSync(published);
-    }
-    faultAt(faults, "destination-validate", "after-visible", destination);
-    faultAt(faults, "directory-fsync", "ambiguous", dirname(destination));
-    fsyncSync(parent);
-    faultAt(faults, "directory-fsync", "after-visible", dirname(destination));
-  } catch (error) {
-    crashed = isDurabilityFault(error);
-    throw error;
-  } finally {
-    try {
-      if (temporary !== undefined && parent !== undefined && !crashed) {
-        unlinkSync(entryAt(parent, temporary));
-        faultAt(
-          faults,
-          "temporary-cleanup",
-          "after-visible",
-          join(dirname(destination), temporary),
-        );
-        fsyncSync(parent);
+      sourceFd = openImmutable(sourceParent, basename(source));
+      const original = checkedBytes(sourceFd, expectedHash);
+      // P0-8: every caller's destination names an oma-owned mail directory. The
+      // boundary the callers share is not this helper's to know, so the parent
+      // itself is the boundary: its leaf is oma-made (mail/objects, an inbox's
+      // new/cur/tmp, the archive) and is repaired; a mode-000 ancestor above it
+      // refuses, and the provisioning ensure repairs those at start.
+      if (held === undefined) ensureOwnedDurableDirectory(dirname(destination), dirname(destination), 0o755, faults);
+      parent = held?.directory ?? openDirectory(dirname(destination));
+      const destinationName = held?.name ?? basename(destination);
+      // P0V-96: a copy killed before its temporary was removed left it with a
+      // free lock; every publication of this name collects it first -- one
+      // whose destination already exists never reaches the copying path.
+      collectDeadTemporaries(parent);
+      const report = (fd: number): void => {
+        const stat = fstatSync(fd);
+        linked?.({ dev: stat.dev, ino: stat.ino });
+      };
+      try {
+        faultAt(faults, "publication-link", "before", destination);
+        linkDescriptor(sourceFd, parent, destinationName);
+        report(sourceFd);
+      } catch (error) {
+        if (isDurabilityFault(error)) throw error;
+        const code = (error as NodeJS.ErrnoException).code;
+        if (code === "EXDEV") {
+          const name = temporaryNameFor(basename(destination));
+          const label = join(dirname(destination), name);
+          faultAt(faults, "file-create", "before", label);
+          temporaryFd = createLockedTemporary(parent, name, constants.O_RDWR, 0o600);
+          temporary = name;
+          faultAt(faults, "file-create", "after-visible", label);
+          faultAt(faults, "file-write", "before", label);
+          writeFileSync(temporaryFd, original.bytes);
+          faultAt(faults, "file-write", "ambiguous", label);
+          faultAt(faults, "file-fsync", "ambiguous", label);
+          fsyncSync(temporaryFd);
+          faultAt(faults, "file-fsync", "after-visible", label);
+          checkedBytes(temporaryFd, original.hash);
+          try {
+            linkDescriptor(temporaryFd, parent, destinationName);
+            report(temporaryFd);
+          } catch (publicationError) {
+            if ((publicationError as NodeJS.ErrnoException).code !== "EEXIST")
+              throw publicationError;
+          }
+        } else if (code !== "EEXIST") throw error;
       }
-    } finally {
-      closeEvery(temporaryFd, held === undefined ? parent : undefined, sourceFd, sourceParent);
+      faultAt(faults, "publication-link", "after-visible", destination);
+      faultAt(faults, "destination-validate", "before", destination);
+      const published = openImmutable(parent, destinationName);
+      withCleanup(() => {
+        checkedBytes(published, original.hash);
+        fchmodSync(published, 0o444);
+        fsyncSync(published);
+      }, () => closeSync(published));
+      faultAt(faults, "destination-validate", "after-visible", destination);
+      faultAt(faults, "directory-fsync", "ambiguous", dirname(destination));
+      fsyncSync(parent);
+      faultAt(faults, "directory-fsync", "after-visible", dirname(destination));
+    } catch (error) {
+      crashed = isDurabilityFault(error);
+      throw error;
     }
-  }
+  }, () => withCleanup(() => {
+    if (temporary !== undefined && parent !== undefined && !crashed) {
+      unlinkSync(entryAt(parent, temporary));
+      faultAt(
+        faults,
+        "temporary-cleanup",
+        "after-visible",
+        join(dirname(destination), temporary),
+      );
+      fsyncSync(parent);
+    }
+  }, () => cleanupAll([temporaryFd, held === undefined ? parent : undefined, sourceFd, sourceParent]
+    .map(fd => () => { if (fd !== undefined) closeSync(fd); }))));
 }
 
 /** Publish under a pathname owned by this call; source validation still
  * precedes destination creation and every held descriptor closes here. */
 export function publishImmutableFile(source: string, destination: string, expectedHash?: string,
     faults?: DurabilityObserver, linked?: (identity: PublishedIdentity) => void): void {
-  publishImmutable(source, destination, expectedHash, faults, linked);
+  try { publishImmutable(source, destination, expectedHash, faults, linked); }
+  catch (error) { throw normalizeStorageFailure(error); }
 }
 /** The caller owns and retains this destination directory. Reuse the same
  * exact publication mechanism without resolving its pathname again. */
 export function publishImmutableEntry(source: string, directory: number, name: string, destinationLabel: string,
     expectedHash?: string, faults?: DurabilityObserver, linked?: (identity: PublishedIdentity) => void): void {
-  publishImmutable(source, destinationLabel, expectedHash, faults, linked, {directory, name});
+  try { publishImmutable(source, destinationLabel, expectedHash, faults, linked, {directory, name}); }
+  catch (error) { throw normalizeStorageFailure(error); }
 }

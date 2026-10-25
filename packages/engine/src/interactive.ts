@@ -6,7 +6,7 @@ import { dirname, join } from 'node:path';
 import type { EngineSettingsFiles } from './pi-compat/settings-files.js';
 import type { EnginePresentation } from './presentation.js';
 import { PI_RESUME_HINT } from './pi-compat/env.js';
-import { adaptInteractiveMode } from './pi-compat/interactive-mode.js';
+import { adaptInteractiveMode, createInteractiveTerminal } from './pi-compat/interactive-mode.js';
 import { preparePiInteractive } from './pi-presentation.js';
 import { ExtensionModules } from './extension-modules.js';
 import { ProjectSessionDirectories } from './session-directories.js';
@@ -83,12 +83,14 @@ export async function runInteractive(input: {
         const owned = state.runtime;
         ownInteractiveRuntime(owned, view, modules, sessionDirs);
         events.follow(owned.session);
+        const terminal = createInteractiveTerminal();
         const mode = state.mode = new InteractiveMode(owned, {
+            terminal,
             tuiMode: 'fullscreen'
         });
         try {
             const controls = state.controls = adaptInteractiveMode(mode);
-            controls.configureSociety(owned, projectDir);
+            controls.configureSociety(owned, projectDir, terminal);
             await mode.init();
             if (!view.editorInstalled)
                 throw new Error('Open TUI did not install its editor');

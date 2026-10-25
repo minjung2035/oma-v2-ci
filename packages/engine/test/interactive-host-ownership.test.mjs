@@ -50,6 +50,7 @@ async function world({ setModel, init, resourceReload, dispose, fail, moduleClos
   const runtime = { session, async switchSession(path) { changes.push(['switch', path]); }, services: { resourceLoader },
     async dispose() { modules.push('dispose'); hooks.session_shutdown({ reason: 'quit' }); await dispose?.(); } };
   const dependencies = {
+    "@earendil-works/pi-tui": { ProcessTerminal: class { setTitle(title) {} } },
     "@oma/protocol/delivery-boundary": { PI_BOUNDARY_PREFIX },
     './pi-compat/interactive-tools.js': { withSearchTools: (current, cwd) => ({ current, cwd }) },
     'node:net': { Socket: class {} }, 'node:fs': { readFileSync: () => '{"version":"test"}' },

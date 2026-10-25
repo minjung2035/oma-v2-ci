@@ -88,3 +88,20 @@ test('an already rolled-back SQLite transaction needs no second rollback and rem
     assert.equal(store.getAgent('alice').desired, 'stopped');
   } finally { db.exec = exec; store.close(); }
 });
+
+test('a rollback failure revokes rows buffered by a previously started traversal', () => {
+  const store = new Store(':memory:'); seed(store);
+  const db = Reflect.get(store, 'db'), exec = db.exec.bind(db);
+  // Isolate the already-validated reader page from row relationship decoding.
+  // Resuming this page needs no fresh SQL preparation to notice revocation.
+  Reflect.get(store, 'reader').pendingDeliveryRows = function* () {
+    yield { messageId: 'first' }; yield { messageId: 'buffered' };
+  };
+  const cursor = store.pendingDeliveryRows('alice');
+  assert.equal(cursor.next().value.messageId, 'first');
+  db.exec = sql => { if (sql === 'ROLLBACK') throw new Error('rollback failed'); return exec(sql); };
+  try {
+    assert.throws(() => store.transaction(() => { throw new StoreError('INVALID_REQUEST', 'refused'); }), { code: 'INVALID_REQUEST' });
+    assert.throws(() => cursor.next(), { code: 'BROKER_UNAVAILABLE' });
+  } finally { db.exec = exec; store.close(); }
+});

@@ -1,10 +1,15 @@
 /** Checked compatibility boundary for the pinned interactive SDK. Product hosts
  * use semantic controls; this module alone owns the private member inventory. */
 import { VERSION, type InteractiveMode, type ToolDefinition, type AgentSession } from "@earendil-works/pi-coding-agent";
+import { ProcessTerminal } from "@earendil-works/pi-tui";
 import { StoreError } from "@oma/domain/errors";
 import contacts from "./contacts.json" with { type: "json" };
 import { safeToolPresentation } from "../interactive-display.js";
 import { omaCrashHint, omaExportCommand, omaTerminalTitle } from "../interactive-commands.js";
+
+/** Supply Pi's default terminal through its public option. Title policy uses
+ * this same handle instead of reaching into the private renderer. */
+export function createInteractiveTerminal(): ProcessTerminal { return new ProcessTerminal(); }
 
 /** Every private member an OMA entry replaces or wraps. */
 export const PI_INTERACTIVE_PRIVATE_MEMBERS = Object.freeze([
@@ -54,9 +59,7 @@ interface InteractiveModeInternals {
    * `/thinking hide` are sets, never an inversion of what was showing. */
   hideThinkingBlock: boolean;
   toggleThinkingBlockVisibility(): void;
-  /** `ui` is public on `InteractiveMode`; it travels here so overrides that
-   * replace a member can still reach the renderer through one handle. */
-  readonly ui: { readonly terminal: { setTitle(title: string): void } };
+
 }
 
 export interface ThinkingVisibility {
@@ -77,8 +80,8 @@ export interface InteractiveModeControl {
   shutdown(): Promise<void>;
   fail(prefix: string, error: unknown): Promise<void>;
   setThinkingHidden(hidden: boolean): boolean;
-  configureSociety(runtime: ModeRuntime, project: string): void;
-  configurePersonal(runtime: ModeRuntime, history: () => void): void;
+  configureSociety(runtime: ModeRuntime, project: string, terminal: Pick<ProcessTerminal, "setTitle">): void;
+  configurePersonal(runtime: ModeRuntime, history: () => void, terminal: Pick<ProcessTerminal, "setTitle">): void;
 }
 /** Validate the pinned contract before exposing product operations; no raw handle leaves this module. */
 export function assertInteractiveCompatibility(mode: unknown, version: string): void {
@@ -108,12 +111,12 @@ export function adaptInteractiveMode(mode: InteractiveMode): InteractiveModeCont
     fail: (prefix, error) => own.handleFatalRuntimeError(prefix, error),
     setThinkingHidden: hidden => setThinkingBlockHidden({ isHidden: () => own.hideThinkingBlock,
       toggle: () => own.toggleThinkingBlockVisibility() }, hidden),
-    configureSociety(runtime, project) {
+    configureSociety(runtime, project, terminal) {
       failure(runtime, "Interactive");
       own.renderProjectTrustWarningIfNeeded = () => {};
       own.suggestBugReport = () => {};
       own.crashReportInstructions = () => "Start oma and reopen this session with /resume.";
-      own.updateTerminalTitle = () => own.ui.terminal.setTitle(omaTerminalTitle(runtime.session.sessionManager.getSessionName(), project));
+      own.updateTerminalTitle = () => terminal.setTitle(omaTerminalTitle(runtime.session.sessionManager.getSessionName(), project));
       const engineExport = own.handleExportCommand.bind(mode);
       own.handleExportCommand = text => engineExport(omaExportCommand(own.getPathCommandArgument(text, "/export"), project, runtime.session.sessionFile) ?? text);
       const crashHint = own.getCrashExtensionHint.bind(mode);
@@ -125,11 +128,11 @@ export function adaptInteractiveMode(mode: InteractiveMode): InteractiveModeCont
       const status = own.showManagedToolStatus.bind(mode);
       own.showManagedToolStatus = value => { if (value.type === "warning") status(value); };
     },
-    configurePersonal(runtime, history) {
+    configurePersonal(runtime, history, terminal) {
       failure(runtime, "Personal");
       own.renderProjectTrustWarningIfNeeded = () => {};
       own.crashReportInstructions = () => "Start oma --mode personal and reopen this session with /resume.";
-      own.updateTerminalTitle = () => own.ui.terminal.setTitle("oma — Personal");
+      own.updateTerminalTitle = () => terminal.setTitle("oma — Personal");
       own.showSessionSelector = history;
     },
   };

@@ -1,6 +1,6 @@
 {
   "kind": "oma-production-source-digests-v1",
-  "manifest": "1fc0232302c24b3240f35acebd9c9099e5dfb15cdc2082377f4d2497e26081cc",
+  "manifest": "ede1f8841a944c9ce6876b6593c75bcabba5a5a0ab83190d98fdfa4f6491d7bf",
   "files": [
     {
       "path": "apps/oma/package.json",
@@ -1148,7 +1148,7 @@
     },
     {
       "path": "packages/engine/src/interactive.ts",
-      "sha256": "94016cc5427630942b5c7a6b4a5f2908d656cc2e443dd281b6049d761f234c55"
+      "sha256": "cbafddc5fc3f2fba5957ac53e89f14c534dc154be5be1e81fd1e6fe97459867a"
     },
     {
       "path": "packages/engine/src/login.ts",
@@ -1167,12 +1167,24 @@
       "sha256": "9ff12ed205c5df43e02fa48bcc517e6dfd4855d97f42dc4d7f9a6c9dbc407a87"
     },
     {
+      "path": "packages/engine/src/personal-configuration.ts",
+      "sha256": "0b2feaa50fc6dd4b5f81e1b49c0e369b3b9d07cb176f14a777e55c4306cb9871"
+    },
+    {
+      "path": "packages/engine/src/personal-history.ts",
+      "sha256": "d36b5dd22d1ba404aa8c765427c9afae11502d969a84521c95cd93281c9c36b0"
+    },
+    {
       "path": "packages/engine/src/personal-ports.ts",
       "sha256": "f432b0cf460fc55d74139dcce5da8445d3888f5ebf27c714869059a7db50fcfa"
     },
     {
+      "path": "packages/engine/src/personal-state.ts",
+      "sha256": "cdd1faf1bb8b240cd9d89002511e12cd5ea3a23e3f0549bf694ddd506b46679c"
+    },
+    {
       "path": "packages/engine/src/personal.ts",
-      "sha256": "8205dc40340e3b048360c9532f81594058c2db2f52db43250bf20169f7bcd6ea"
+      "sha256": "958127868fcee785e21d7a8b444ad0c5ddf9c252b190da7f6b4c97a06cb5ca24"
     },
     {
       "path": "packages/engine/src/pi-adapter.ts",
@@ -1184,7 +1196,7 @@
     },
     {
       "path": "packages/engine/src/pi-compat/contacts.json",
-      "sha256": "4deee7d2a735b8fdcbdd04ffeeb30222dc3ade23477d54cf42d8c525fe35950d"
+      "sha256": "f56b5acbc56a9442a20d461b3d9e29648b41052978b60e352b21d9f004167433"
     },
     {
       "path": "packages/engine/src/pi-compat/env.ts",
@@ -1196,7 +1208,7 @@
     },
     {
       "path": "packages/engine/src/pi-compat/interactive-mode.ts",
-      "sha256": "da74e62922024513ff52c39c75201e42587b06bd2079b630f22d7b8fc38934f7"
+      "sha256": "7f3a113955ecaf1dfb9a1c7c60c0eac51b38eca97b313612138671ef7a21f5eb"
     },
     {
       "path": "packages/engine/src/pi-compat/interactive-tool-setup.ts",
@@ -1588,7 +1600,7 @@
     },
     {
       "path": "packages/platform-linux/src/guest/bridge/oma-vsock-bridge.c",
-      "sha256": "f1d300b55429a4ba8aed4e85eef6bc0fe761a4e296d595a5d1a47742fea74ab9"
+      "sha256": "451531cc82ba897967faba62ed5e85fd6fc6b9252779c717064c20e74ba6d7ae"
     },
     {
       "path": "packages/platform-linux/src/guest/environment.d/60-oma-egress.conf",
@@ -1848,7 +1860,7 @@
     },
     {
       "path": "packages/protocol/src/operation-codec.ts",
-      "sha256": "81a57a401f12c6e9d2b5cf71963607d8ee504552a0dc831abb7103a943f6ebae"
+      "sha256": "bac52642944426823c9d233a846925fa3feb2da0f149a35dbbdc579452e43517"
     },
     {
       "path": "packages/protocol/src/operation-results.ts",
@@ -2016,7 +2028,7 @@
     },
     {
       "path": "packages/storage/src/immutable-file.ts",
-      "sha256": "3fb99c83d4618e6b783d886412e03b9c393a64fd5b730cf8cbe79df667dd50d2"
+      "sha256": "e3e5ce0c11abad82fd4ae21b2d9d4ee86fd9fa7082d49f2c8cc479e1667295db"
     },
     {
       "path": "packages/storage/src/ledger-reader.ts",
@@ -2076,7 +2088,7 @@
     },
     {
       "path": "packages/storage/src/store.ts",
-      "sha256": "e624e7bdc198764da251864a238b81d76b3309cdfaa1aac763c92ad5da57f85c"
+      "sha256": "d78312819fb519b65d9bc131e284c493c154181d7bc3eec2c5ecd257a46be9bb"
     },
     {
       "path": "packages/storage/src/submit-spool.ts",

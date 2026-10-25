@@ -57,6 +57,7 @@ function world({ fail, close, dispose, run, construct, catalog, beforeSwitch, se
     calls.push('resources-bound'); hooks.session_start({ reason: 'reload' }, context);
   };
   const dependencies = {
+    "@earendil-works/pi-tui": { ProcessTerminal: class { setTitle(title) {} } },
     '@earendil-works/pi-ai': { getSupportedThinkingLevels: () => ['off', 'high'] },
     '@oma/domain/unseen-text': { UNSEEN: /[\x00-\x1f]/g },
     './pi-compat/commands.js': { PI_BUILTIN_COMMANDS: new Set() },

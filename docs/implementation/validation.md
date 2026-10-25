@@ -1,5 +1,21 @@
 # OMA v2 — 현재 검증 상태
 
+## 품질 후속 수정의 검증 소유자 (2026-10-25)
+
+첫 push 체크포인트는 `df713512`이며 현재 작업 브랜치는
+`work/code-quality-improvements-20261025`다. 이후 변경은 rollback 실패 연결의
+재사용 차단(진행 중인 delivery traversal 포함), immutable 관찰·게시의 최초 손상 및
+cleanup 오류 보존, bridge 양방향 backpressure, Personal/operation decode 책임 분리,
+공개 Terminal 주입과 검증된 workspace build 재사용이다. SDK 버전·기존 기능·원칙을
+유지했으며 private 13 methods/1 field 의존이 남는다. 새 코드는 NOT_REVIEWED다.
+
+후속 입력의 최종 실행 상태와 전후 source identity는
+`/home/dev/oma-audit-artifacts/quality-followup-2026-10-25/verification-result.json`이
+소유한다. 같은 디렉터리의 원시 red/green, 빌드 timing, 전체 local, strict typecheck,
+static gate와 변경 package 설치 로그를 함께 본다. 아래 DR47 수치를 이 입력의
+PASS로 전용하지 않는다. 실제 Linux 서비스/cgroup, Mac/VM/Keychain, provider,
+power-loss qualification은 계속 NOT_RUN이다.
+
 ## DR47 코드 품질 보완 수용 (2026-10-25)
 
 [품질 보완 명세](../code-quality-improvement-spec.md)의 CQ47-01..05를 구현했다.
@@ -976,7 +992,7 @@ native·macOS VM boot·power loss는 미실행이다. 이전 kernel/crash PASS�
 충족했다고 주장할 수 없다. raw log는 `/tmp/oma-host-ownership-2026-10-09`에 보존한다.
 
 현재 구조 검사의 입력 identity(생성 자체는 runtime PASS가 아니다):
-verification input digest `b34782cbb70232ed4798e183043a5bf6e6971984d6c772bed23be3a2e73c43f4` (15663 files).
+verification input digest `86a3ba7c56983e541cd77a5a729f20319c86beb966fff9cb071268fa87bcd35f` (15670 files).
 
 ## 이전 실행 결과: 지정한 제한 제거·기능 복구 (2026-10-09, DR37)
 

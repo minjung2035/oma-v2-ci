@@ -78,7 +78,7 @@ function fixture(t) {
     writeFileSync(join(root, name), content);
   }
   mkdirSync(join(root, "scripts"));
-  for (const script of ["build.mjs", "check-package.mjs", "build-workspaces.mjs", "check-modules.mjs", "workspace-assets.mjs"])
+  for (const script of ["build.mjs", "check-package.mjs", "build-workspaces.mjs", "check-modules.mjs", "workspace-assets.mjs", "workspace-build-cache.mjs"])
     writeFileSync(join(root, "scripts", script), readFileSync(join(repo, "scripts", script)));
   mkdirSync(join(root, "node_modules/@oma"), { recursive: true });
   symlinkSync(join(repo, "node_modules/typescript"), join(root, "node_modules/typescript"), "dir");
@@ -219,4 +219,140 @@ test("build stamp: a mode-000 directory inside dist cannot wedge drift recovery"
   chmodSync(locked, 0o000);
   build(root);
   assert.equal(existsSync(locked), false, "the unreadable extra survived drift recovery");
+});
+
+test("workspace cache: unchanged packages retain outputs; damaged outputs, modes and compiler state are restored", t => {
+  const root = fixture(t);
+  build(root);
+  const target = join(root, "apps/oma/dist/entry/oma.js");
+  const unrelated = join(root, "packages/contracts/dist/index.js");
+  const original = readFileSync(target), inode = statSync(target).ino, unrelatedInode = statSync(unrelated).ino;
+  const warm = build(root);
+  assert.match(warm.stdout, /Workspace build: 0\/3 recompiled/);
+  assert.equal(statSync(target).ino, inode);
+  for (const change of [
+    () => { const patched = Buffer.from(original); patched[patched.length - 2] ^= 0x20; writeFileSync(target, patched); },
+    () => rmSync(target),
+    () => { rmSync(target); symlinkSync(unrelated, target); },
+    () => chmodSync(target, 0o644),
+    () => writeFileSync(join(root, "apps/oma/.tsbuildinfo"), "untrusted compiler cache"),
+    () => { mkdirSync(join(root, "apps/oma/dist/extra")); },
+  ]) {
+    assertRebuild(root, target, change, "workspace drift survived a cached build");
+    assert.deepEqual(readFileSync(target), original);
+    assert.equal(lstatSync(target).isSymbolicLink(), false);
+    assert.equal(statSync(target).mode & 0o777, 0o755);
+    assert.equal(existsSync(join(root, "apps/oma/dist/extra")), false);
+    assert.equal(statSync(unrelated).ino, unrelatedInode, "an unrelated package was recompiled");
+  }
+});
+
+test("workspace cache: dependency changes, added sources, config inheritance and asset edits invalidate their consumers", t => {
+  const root = fixture(t);
+  build(root);
+  const target = join(root, "apps/oma/dist/entry/oma.js");
+  assertRebuild(root, target, () => writeFileSync(join(root, "packages/contracts/src/index.ts"), "export const fixtureContract = 2;\n"),
+    "a changed dependency did not rebuild its consumer");
+  assert.match(readFileSync(join(root, "packages/contracts/dist/index.js"), "utf8"), /fixtureContract = 2/);
+  writeFileSync(join(root, "packages/contracts/src/added.ts"), "export const added = true;\n");
+  build(root);
+  assert.equal(existsSync(join(root, "packages/contracts/dist/added.js")), true, "a new compiler input was missed");
+  writeFileSync(join(root, "packages/contracts/compiler-options.json"), JSON.stringify({ compilerOptions: { removeComments: true } }));
+  const configPath = join(root, "packages/contracts/tsconfig.json");
+  const config = JSON.parse(readFileSync(configPath, "utf8"));
+  config.extends = "./compiler-options.json";
+  writeFileSync(configPath, JSON.stringify(config));
+  build(root);
+  assertRebuild(root, target, () => writeFileSync(join(root, "packages/contracts/compiler-options.json"), JSON.stringify({ compilerOptions: { removeComments: false } })),
+    "an inherited compiler option did not invalidate its consumers");
+  writeFileSync(join(root, "packages/domain/src/schema.sql"), "SELECT 2;\n");
+  build(root);
+  assert.equal(readFileSync(join(root, "packages/domain/dist/schema.sql"), "utf8"), "SELECT 2;\n");
+});
+
+test("workspace cache: changed external types and newly resolvable declarations cannot reuse old code", t => {
+  const root = fixture(t);
+  mkdirSync(join(root, "node_modules/fixture-types"));
+  writeFileSync(join(root, "node_modules/fixture-types/package.json"), JSON.stringify({ name: "fixture-types", types: "index.d.ts" }));
+  const external = join(root, "node_modules/fixture-types/index.d.ts");
+  writeFileSync(external, "export type Value = number;\n");
+  writeFileSync(join(root, "packages/contracts/src/index.ts"), 'import type { Value } from "fixture-types";\nexport const fixtureContract: Value = 1;\n');
+  build(root);
+  writeFileSync(external, "export type Value = string;\n");
+  let run = spawnSync(process.execPath, ["scripts/build-workspaces.mjs"], { cwd: root, encoding: "utf8", timeout: 120000 });
+  assert.notEqual(run.status, 0, "changed external types reused an old successful compile");
+  assert.match(run.stdout + run.stderr, /not assignable/);
+  writeFileSync(external, "export type Value = number;\n");
+  writeFileSync(join(root, "packages/contracts/src/index.ts"), 'import type { Value } from "./shape.js";\nexport const fixtureContract: Value = 1;\n');
+  writeFileSync(join(root, "packages/contracts/src/shape.d.ts"), "export type Value = number;\n");
+  build(root);
+  // shape.ts now wins over the old shape.d.ts, despite every previously read
+  // declaration remaining byte-for-byte identical.
+  writeFileSync(join(root, "packages/contracts/src/shape.ts"), "export type Value = string;\n");
+  run = spawnSync(process.execPath, ["scripts/build-workspaces.mjs"], { cwd: root, encoding: "utf8", timeout: 120000 });
+  assert.notEqual(run.status, 0, "newly resolvable input reused old code");
+  assert.match(run.stdout + run.stderr, /not assignable/);
+});
+
+test("workspace cache: inputs changed after the compiler read cannot certify stale outputs", t => {
+  for (const [file, next] of [
+    ["packages/contracts/src/index.ts", "export const fixtureContract = 2;\n"],
+    ["packages/contracts/tsconfig.json", JSON.stringify({ ...JSON.parse(FILES["packages/contracts/tsconfig.json"]),
+      compilerOptions: { ...JSON.parse(FILES["packages/contracts/tsconfig.json"]).compilerOptions, removeComments: true } })],
+    ["packages/domain/src/schema.sql", "SELECT 2;\n"],
+  ]) {
+    const root = fixture(t);
+    writeFileSync(join(root, "edit-after-compile.mjs"), `
+import cp from "node:child_process";
+import { writeFileSync } from "node:fs";
+import { syncBuiltinESMExports } from "node:module";
+const spawn = cp.spawnSync;
+cp.spawnSync = (...args) => {
+  const result = spawn(...args);
+  if (args[1]?.includes("-b")) writeFileSync(${JSON.stringify(join(root, file))}, ${JSON.stringify(next)});
+  return result;
+};
+syncBuiltinESMExports();
+`);
+    const result = spawnSync(process.execPath, ["--import", "./edit-after-compile.mjs", "scripts/build-workspaces.mjs"],
+      { cwd: root, encoding: "utf8", timeout: 120000 });
+    assert.notEqual(result.status, 0, `${file}: a stale compile was recorded as current`);
+    assert.match(result.stdout + result.stderr, /inputs changed during workspace build/);
+    build(root);
+    if (file.endsWith("index.ts")) assert.match(readFileSync(join(root, "packages/contracts/dist/index.js"), "utf8"), /fixtureContract = 2/);
+    if (file.endsWith("schema.sql")) assert.equal(readFileSync(join(root, "packages/domain/dist/schema.sql"), "utf8"), next);
+    assert.match(build(root).stdout, /Workspace build: 0\/3 recompiled/);
+  }
+});
+
+test("workspace build: dependency declaration assets precede consumers and cannot occupy compiler outputs", t => {
+  const root = fixture(t), manifestPath = join(root, "packages/contracts/package.json");
+  const manifest = JSON.parse(readFileSync(manifestPath, "utf8"));
+  manifest.oma = { assets: ["vendor"] };
+  writeFileSync(manifestPath, JSON.stringify(manifest));
+  mkdirSync(join(root, "packages/contracts/src/vendor"));
+  writeFileSync(join(root, "packages/contracts/src/vendor/api.d.ts"), "export type AssetType = 42;\n");
+  writeFileSync(join(root, "packages/contracts/src/index.ts"), 'export type { AssetType } from "./vendor/api.js";\n');
+  writeFileSync(join(root, "apps/oma/src/type-probe.ts"), 'import type { AssetType } from "@oma/contracts";\nexport const value: AssetType = "wrong";\n');
+  let run = spawnSync(process.execPath, ["scripts/build-workspaces.mjs"], { cwd: root, encoding: "utf8", timeout: 120000 });
+  assert.notEqual(run.status, 0, "a consumer compiled against a missing declaration asset");
+  assert.match(run.stdout + run.stderr, /not assignable to type '42'/);
+  writeFileSync(join(root, "apps/oma/src/type-probe.ts"), 'import type { AssetType } from "@oma/contracts";\nexport const value: AssetType = 42;\n');
+  build(root);
+  assert.match(build(root).stdout, /Workspace build: 0\/3 recompiled/);
+  manifest.oma.assets = ["index.js"];
+  writeFileSync(manifestPath, JSON.stringify(manifest));
+  writeFileSync(join(root, "packages/contracts/src/index.js"), "compiler output must never replace this asset\n");
+  run = spawnSync(process.execPath, ["scripts/build-workspaces.mjs"], { cwd: root, encoding: "utf8", timeout: 120000 });
+  assert.notEqual(run.status, 0);
+  assert.match(run.stdout + run.stderr, /asset overlaps compiler output/);
+});
+
+test("workspace cache: source asset permission changes update the installed mode", t => {
+  const root = fixture(t);
+  build(root);
+  chmodSync(join(root, "packages/domain/src/schema.sql"), 0o700);
+  build(root);
+  assert.equal(statSync(join(root, "packages/domain/dist/schema.sql")).mode & 0o7777, 0o700);
+  assert.match(build(root).stdout, /Workspace build: 0\/3 recompiled/);
 });

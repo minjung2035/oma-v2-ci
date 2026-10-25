@@ -284,7 +284,10 @@
   "packages/engine/src/oma-theme.ts",
   "packages/engine/src/open-tui-brand.ts",
   "packages/engine/src/package-resources.ts",
+  "packages/engine/src/personal-configuration.ts",
+  "packages/engine/src/personal-history.ts",
   "packages/engine/src/personal-ports.ts",
+  "packages/engine/src/personal-state.ts",
   "packages/engine/src/personal.ts",
   "packages/engine/src/pi-adapter.ts",
   "packages/engine/src/pi-compat/commands.ts",
@@ -712,8 +715,8 @@
    "K1-codecs -> K1-codecs": 28,
    "K2-mechanisms -> K0-values": 86,
    "K2-mechanisms -> K1-codecs": 10,
-   "K2-mechanisms -> K2-mechanisms": 87,
-   "K3-ledger -> K0-values": 21,
+   "K2-mechanisms -> K2-mechanisms": 88,
+   "K3-ledger -> K0-values": 22,
    "K3-ledger -> K1-codecs": 12,
    "K3-ledger -> K2-mechanisms": 1,
    "K3-ledger -> K3-ledger": 13
@@ -1744,6 +1747,11 @@
    },
    {
     "from": "packages/storage/src/store.ts",
+    "to": "packages/domain/src/admission.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/storage/src/store.ts",
     "to": "packages/domain/src/errors.ts",
     "kind": "runtime"
    },
@@ -2122,7 +2130,7 @@
     "packages/platform-linux/src/sandbox.ts",
     "apps/oma/src/platform/"
    ],
-   "files": 177
+   "files": 180
   },
   {
    "index": 5,
@@ -2145,19 +2153,19 @@
    "files": 91
   }
  ],
- "files": 526,
- "runtimeEdges": 1961,
- "typeOnlyEdges": 792,
+ "files": 529,
+ "runtimeEdges": 1968,
+ "typeOnlyEdges": 796,
  "runtimeEdgeMatrix": {
-  "L1-kernel -> L1-kernel": 363,
+  "L1-kernel -> L1-kernel": 365,
   "L2-facts -> L1-kernel": 39,
   "L2-facts -> L2-facts": 11,
   "L3-workflow -> L1-kernel": 244,
   "L3-workflow -> L3-workflow": 72,
-  "L4-orchestration -> L1-kernel": 471,
+  "L4-orchestration -> L1-kernel": 472,
   "L4-orchestration -> L2-facts": 1,
   "L4-orchestration -> L3-workflow": 29,
-  "L4-orchestration -> L4-orchestration": 241,
+  "L4-orchestration -> L4-orchestration": 245,
   "L5-entry -> L1-kernel": 178,
   "L5-entry -> L2-facts": 22,
   "L5-entry -> L3-workflow": 6,
@@ -2173,7 +2181,7 @@
  "runtimeCycles": [],
  "unionCycles": [],
  "fanIn": {
-  "packages/domain/src/errors.ts": 244,
+  "packages/domain/src/errors.ts": 245,
   "packages/domain/src/identifiers.ts": 93,
   "packages/domain/src/paths.ts": 35,
   "packages/storage/src/directory.ts": 35,
@@ -2186,8 +2194,8 @@
   "packages/domain/src/request-identity.ts": 22,
   "packages/domain/src/surface-bounds.ts": 21,
   "packages/protocol/src/frame.ts": 20,
-  "packages/process/src/run.ts": 19,
-  "packages/domain/src/utf8.ts": 18
+  "packages/native/src/cleanup.ts": 19,
+  "packages/process/src/run.ts": 19
  },
  "fanOut": {
   "apps/oma/src/entry/broker.ts": 34,
@@ -2208,16 +2216,16 @@
  },
  "external": {
   "@earendil-works/pi-ai": 2,
-  "@earendil-works/pi-coding-agent": 44,
+  "@earendil-works/pi-coding-agent": 47,
   "@earendil-works/pi-coding-agent/dist/utils/tools-manager.js": 1,
-  "@earendil-works/pi-tui": 10,
+  "@earendil-works/pi-tui": 11,
   "koffi": 6,
   "node:async_hooks": 4,
   "node:buffer": 1,
   "node:child_process": 7,
   "node:crypto": 56,
   "node:dns": 1,
-  "node:fs": 136,
+  "node:fs": 137,
   "node:fs/promises": 3,
   "node:http": 2,
   "node:https": 1,

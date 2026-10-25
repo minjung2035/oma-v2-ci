@@ -14,6 +14,9 @@ const ENGINE_PRIMITIVE_OWNERS = Object.freeze({
   // DR37: this pinned compatibility seam updates Pi's existing autocomplete
   // provider after its own installer completes; it owns no terminal layout.
   "packages/engine/src/pi-compat/interactive-tools.ts": Object.freeze(["CombinedAutocompleteProvider", "AutocompleteProvider"]),
+  // Public terminal injection replaces the private renderer field; only this
+  // SDK adapter constructs the default terminal, and the SDK owns its layout.
+  "packages/engine/src/pi-compat/interactive-mode.ts": Object.freeze(["ProcessTerminal"]),
   "packages/engine/src/open-tui-brand.ts": Object.freeze(["visibleWidth"]),
   "packages/tui/src/cells.ts": Object.freeze(["visibleWidth"]),
   "packages/tui/src/keys.ts": Object.freeze(["parseKey"]),
