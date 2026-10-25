@@ -172,3 +172,11 @@ namespace init이 writer를 함께 보유한 대조에서는 같은 EOF에 효�
 control과 Unix socket path 길이 setup 실패도 원본을 보존했다. 임의 후손·재시작·auth 전체
 qualification 또는 production journal 형식 채택으로 표시하지 않는다. 새 durable 형식을
 도입한다면 명세 §11과 registry의 별도 결정을 먼저 따른다.
+
+### OS 경계 시험 확대
+
+`f042b159`의 전체 local은3660/3660·skip0·입력 변경0이고 실제 CI의 Mac26/15·Ubuntu는
+각각30/30·build26/26이다. gate는 여전히 BLOCKED다. 사용자가 직접 Mac을 검증할 수 없으므로
+`test/native-os-contracts.test.mjs`를 양 OS의 실제 파일/FD/잠금/process/socket 경계 시험으로
+추가한다. mock으로 syscall을 대체하지 않으며 새 시험과 독립 Darwin 사례별3회 관측은
+이전 전체 PASS와 분리한다. 다음 실행의 결과는 validation 및 raw artifact가 소유한다.

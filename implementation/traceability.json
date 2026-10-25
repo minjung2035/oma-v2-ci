@@ -4964,7 +4964,10 @@
     ],
     "negativeTests": [
       "test/native-profile.test.mjs#native",
-      "test/native-primitives.test.mjs#the real kernel"
+      "test/native-primitives.test.mjs#the real kernel",
+      "test/native-os-contracts.test.mjs#real OS: an inherited descriptor",
+      "test/native-os-contracts.test.mjs#real OS: native root and file capabilities",
+      "test/native-os-contracts.test.mjs#real OS: peer UID"
     ],
     "evidence": null,
     "status": "unverified",
@@ -4987,7 +4990,10 @@
     ],
     "negativeTests": [
       "test/native-profile.test.mjs#native",
-      "test/native-primitives.test.mjs#the real kernel"
+      "test/native-primitives.test.mjs#the real kernel",
+      "test/native-os-contracts.test.mjs#real OS: an inherited descriptor",
+      "test/native-os-contracts.test.mjs#real OS: native root and file capabilities",
+      "test/native-os-contracts.test.mjs#real OS: peer UID"
     ],
     "evidence": null,
     "status": "unverified",
@@ -5012,7 +5018,10 @@
     "negativeTests": [
       "test/native-primitives.test.mjs#directory effects",
       "test/user-files.test.mjs#shared metadata publication:",
-      "test/durable-fs-faults.test.ts#P7"
+      "test/durable-fs-faults.test.ts#P7",
+      "test/native-os-contracts.test.mjs#real OS: no-replace publication",
+      "test/native-os-contracts.test.mjs#real OS: permission failure",
+      "test/native-os-contracts.test.mjs#real OS: a concurrent directory-to-symlink"
     ],
     "evidence": null,
     "status": "unverified",
@@ -5061,7 +5070,10 @@
     ],
     "negativeTests": [
       "test/native-profile.test.mjs#native",
-      "test/native-primitives.test.mjs#the real kernel"
+      "test/native-primitives.test.mjs#the real kernel",
+      "test/native-os-contracts.test.mjs#real OS: an inherited descriptor",
+      "test/native-os-contracts.test.mjs#real OS: native root and file capabilities",
+      "test/native-os-contracts.test.mjs#real OS: peer UID"
     ],
     "evidence": null,
     "status": "unverified",
@@ -5084,7 +5096,10 @@
     ],
     "negativeTests": [
       "test/native-profile.test.mjs#native",
-      "test/native-primitives.test.mjs#the real kernel"
+      "test/native-primitives.test.mjs#the real kernel",
+      "test/native-os-contracts.test.mjs#real OS: an inherited descriptor",
+      "test/native-os-contracts.test.mjs#real OS: native root and file capabilities",
+      "test/native-os-contracts.test.mjs#real OS: peer UID"
     ],
     "evidence": null,
     "status": "unverified",

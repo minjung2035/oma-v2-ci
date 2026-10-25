@@ -177,8 +177,21 @@ DR46 전환 기록: 위 T117의 network 차단 절과 그 --unshare-all 전용 f
 
 ## native 플랫폼 oracle (DR49)
 
+OS 경계의 회귀는 `test/native-os-contracts.test.mjs`가 실제 Linux/macOS kernel에서 수행한다.
+cross-process no-replace 게시 경쟁, SIGKILL과 상속 FD에 따른 flock 수명, exec의 CLOEXEC,
+다중 buffer directory 열거·FD 누수, raw/긴 symlink, 동시 directory/symlink 교체, 실제
+EACCES·EBADF와 primary/cleanup 오류 보존, 형제 process ancestry, kernel peer UID를 검사한다.
+각 fixture는 child의 실제 close 뒤 임시 트리를 정리한다. timeout은 성공이 아니다.
+
+Darwin gate 관측은 process/files/auth/socket-transfer/queued-transfer를 각각 독립 cwd와
+process에서3회씩 실행한다. 각 결과는 exit/signal/stdio·SDK/OS/image·source/driver/fixture
+digest와 정리 결과를 보존한다. 한 사례가 실패해도 다른 관측을 계속 수집하며, 그 실행의
+최종 상태는 SETUP_FAILED다. OBSERVED는 syscall 관측 완료를 뜻하며 gate PASS가 아니다.
+부분 primitive 성공과 반복 횟수는 임의 후손 종료·permission-independent pin/reopen·
+요청별 발신자 증명이나 실제 PID 재사용 시험을 대신하지 않는다.
+
 과거 VM의 MAC/MV/T 수용 번호·원문은 [폐기한 VM 시험 기록](archive/macos-vm-tests-2026-10-25/README.md)에
-보존한다. 그 결과는 native PASS에 합산하지 않는다. 현재 요구는 [NATIVE-001–009](macos-platform.md)과
+보존한다. 그 결과는 native PASS에 합산하지 않는다. 현재 요구는 [NATIVE-001–010](macos-platform.md)과
 [native 명세의 CI 계약](macos-native-spec.md#12-mac-없이-개발하는-ci-계약)이다. G-PROCESS·G-FILES·G-AUTH는
 각각 실제 Darwin kernel probe·공격 fixture·원시 artifact로 검증하며 OPEN/BLOCKED/SETUP_FAILED는 실패다.
 Linux의 공통 TS 시험과 Mac의 실제 OS 시험을 구분하고 전체 후손 종료·source quiescence·파일 원본·권한·

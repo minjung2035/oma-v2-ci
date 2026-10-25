@@ -242,8 +242,19 @@ static void queued_auth_probe(void) {
   shutdown(accepted, SHUT_RDWR); close(accepted); close(server);
   require(waitpid(holder, NULL, 0) == holder, "queued holder reap");
 }
-int main(void) {
+int main(int argc, char **argv) {
+  const char *names[] = { "process", "files", "auth", "socket-transfer", "queued-transfer" };
+  void (*probes[])(void) = { process_probe, file_probe, auth_probe, transferred_auth_probe, queued_auth_probe };
+  require(argc == 2, "one independent probe case required");
+  int selected = -1;
+  for (int i = 0; i < 5; ++i) if (strcmp(argv[1], names[i]) == 0) selected = i;
+  require(selected >= 0, "unknown probe case");
   setbuf(stdout, NULL);
-  int outside = open("outside", O_CREAT | O_EXCL | O_WRONLY, 0600); require(outside >= 0, "outside"); close(outside);
-  printf("{"); process_probe(); file_probe(); auth_probe(); transferred_auth_probe(); queued_auth_probe(); puts("}"); return 0;
+  if (selected == 1) {
+    int outside = open("outside", O_CREAT | O_EXCL | O_WRONLY, 0600);
+    require(outside >= 0, "outside"); close(outside);
+  }
+  printf("{\"case\":\"%s\"", names[selected]);
+  if (selected == 0) putchar(',');
+  probes[selected](); puts("}"); return 0;
 }

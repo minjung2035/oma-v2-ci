@@ -38,6 +38,9 @@ Linux/macOS 공통 native 실행을 실제 구현·검증하는 것이다. 이�
   tool-runtime·hashline·LSP는 새 공개 API로 연결하고 이전 contained-files export는 제거한다.
   Darwin 파일 primitive는 계속 미검증이며 효과 전에 거절한다. Linux 관련189/189·별도 SIGKILL17/17과
   독립 설치26/26을 입력 변경0으로 통과했다. 전체 local·Darwin 제품 지원 완료로 계산하지 않는다.
+- `f042b159`는 전체 local3660/3660·skip0·입력 변경0, 실제 Mac26/15·Ubuntu 공통 CI 각각30/30을
+  통과했다. 각 CI build26/26·동일 input이며 gate는 BLOCKED다. 사용자의 추가 지시로 OS 시험을
+  확대한다. 새 실제 OS 경계11개와 독립 Darwin15개 관측의 검증은 위 전체 PASS와 별도다.
 - 첫 전체 local은 FAIL52·SKIP70, 입력 변경0으로 끝났고 원시 실패를 보존했다. 유지되는
   회귀의 native fault/모듈 연결과 실제 bwrap 환경을 수리했다. 부분 시험 성공을 전체 PASS로
   표시하지 않는다. `982658de`의 수리 후 전체 local은 3640/3640 PASS, skip0·입력 변경0이다.
