@@ -35,6 +35,8 @@ import { StoreError } from "@oma/domain/errors";
 import { isValidSocietyName } from "@oma/domain/identifiers";
 import { projectGitPathAt } from "@oma/domain/paths";
 import { residentProjectGit } from "@oma/domain/resident-paths";
+import { SessionStorage } from "../runtime/session-storage.js";
+import type { StorageResident } from "../runtime/session-storage-state.js";
 function usage(): never {
     console.error("usage: broker.js --society <name> [--config <path>] [--state-root <dir> --run-root <dir>]");
     process.exit(4);
@@ -114,6 +116,9 @@ async function main(): Promise<void> {
     let stopping: Promise<void> | null = null;
     const preparationAbort = new AbortController();
     let preparation: ReturnType<typeof prepareSociety> | null = null;
+    let storagePreparation: Promise<void> | null = null;
+    let sessionStorage: SessionStorage | null = null;
+    let storageResidents: readonly StorageResident[] | null = null;
     let freshVerifiedMain: string | undefined;
     let principalHost: ReturnType<typeof openSupervisionChannel>;
     const stop = (code: number): Promise<void> => {
@@ -124,7 +129,13 @@ async function main(): Promise<void> {
         stopping = (async () => {
             if (preparation !== null)
                 await preparation.catch(() => { });
+            if (storagePreparation !== null)
+                await storagePreparation.catch(() => { });
             await lifetime.shutdown();
+            if (exitStatus === 0 && sessionStorage !== null && storageResidents !== null) {
+                try { await sessionStorage.archive(storageResidents); }
+                catch (error) { console.error("Session workspace reclamation did not finish; recovery data retained:", error instanceof Error ? error.message : String(error)); }
+            }
             principalHost?.close();
         })().then(() => { process.exitCode = exitStatus; }, error => {
             // P0V-58: e.g. a Resident whose end the drain could not prove. The
@@ -166,6 +177,25 @@ async function main(): Promise<void> {
         // No schema search, path flattening or cross-installation fallback.
         assertRuntimeAssets(runtimeAssets(cfg.installation.libdir), { schema: SCHEMA_PATH, systemd: UNIT_TPL_DIR });
         assertDeploymentDigest(cfg.installation.libdir, cfg.installation.deploymentDigest);
+        sessionStorage = SessionStorage.forSociety({ stateRoot, society, fence: claim.fence,
+            log: line => console.error(line), quiesce: (residents, action) => {
+                // SQLite is closed here. This projection is bound to its exact
+                // closed bytes by the checkpoint; it is not a replayed death proof.
+                const incarnations = new Map(residents.map(actor => [actor.name, actor.incarnation]));
+                const coldUnits = new UnitsModule(society, { node: cfg.installation.node, libdir: cfg.installation.libdir,
+                    state: stateRoot, society, agent: "", config: configPath, run: runRoot }, undefined,
+                    agent => incarnations.get(agent) ?? null);
+                for (const actor of residents) {
+                    if (action === "stop") coldUnits.stop(actor.name, actor.incarnation);
+                    if (!coldUnits.confirmDead(actor.name, actor.incarnation))
+                        throw new StoreError("RUN_TERMINATION_UNKNOWN", `workspace storage cannot prove ${actor.name} ended`);
+                }
+            } });
+        if (sessionStorage !== null) {
+            storagePreparation = sessionStorage.restore(preparationAbort.signal);
+            await storagePreparation;
+        }
+        if (stopping !== null) { await stopping; return; }
         const projectIdx = args.indexOf("--project-dir");
         if (projectIdx >= 0) {
             const projectDir = args[projectIdx + 1];
@@ -216,7 +246,11 @@ async function main(): Promise<void> {
         // endpoint, and credentials leave only on the channel that host holds --
         // never through a file, an environment or this process's own output.
         const broker = createBroker({ store: store, mail: mail, units: units, views: views, lifecycle: lifecycle, git: git, reviews: reviews, reconcile: reconcile, paths: { stateRoot, runRoot, society, hasGoal,
-            quiesceOnDrain: () => reconcile.quiesceForShutdown() }, limits: cfg.limits, lock: lock, principalHost: principalHost });
+            quiesceOnDrain: () => {
+                reconcile.quiesceForShutdown();
+                storageResidents = store.listAgents().filter(agent => agent.role === "resident")
+                    .map(agent => ({ name: agent.name, incarnation: agent.incarnation }));
+            } }, limits: cfg.limits, lock: lock, principalHost: principalHost });
         lifetime.attach(broker);
         const validateStoredProfiles = () => {
             for (const agent of store.listAgents()) {

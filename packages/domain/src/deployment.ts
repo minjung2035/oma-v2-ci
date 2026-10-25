@@ -97,3 +97,17 @@ export const DEPLOYMENT_LAYOUT = Object.freeze({
 export function isDeploymentDigest(value: unknown): value is string {
   return typeof value === "string" && /^[a-f0-9]{64}$/.test(value);
 }
+
+/** Host-only session storage tool. Both installer and execution owner verify
+ * these exact upstream bytes; a mutable local manifest is never a tool pin. */
+export const RESTIC_RELEASE = Object.freeze({
+  version: "0.19.1",
+  linux: Object.freeze({
+    x64: Object.freeze({ archive: "restic_0.19.1_linux_amd64.bz2",
+      archiveSha256: "f415415624dcc452f2a02b8c33641791a8c6d6d3b65bbb3543fcf9a25151585c",
+      binarySha256: "20d4142678d0d95ec11a4759def1b73fd9190abc9ca19e4b62d067c0b387e639" }),
+    arm64: Object.freeze({ archive: "restic_0.19.1_linux_arm64.bz2",
+      archiveSha256: "a5f64aaab53d51e311fa3829124c5b703f2d14cf187d8640b6be3b2b49376465",
+      binarySha256: "2fb45ac6f9071b6f20eb883953a188f9e7c7cb6bbe43c67a2e47ada4e85ee7f0" }),
+  }),
+});

@@ -1,5 +1,18 @@
 # OMA v2 — 현재 인계 (2026-10-25, 품질 후속 수정)
 
+DR48: 닫힌 Society의 repos/staging/Resident workspace·home를 프로젝트별 Restic 보관소에
+중복 제거해 저장·검증한 뒤 회수한다. Broker는 Store open/provision 전에 staged restore를,
+drain/native 종료와 Store.close 이후 archive를 소유한다. DB/mail/runner/Principal history는
+남긴다. ACL/xattr·special file·nested mount·복원 불가능한 소유권은 원본을 보존하고 회수하지
+않는다. 도구·키·checkpoint/closed DB identity가 확인되지 않는 cold 세션은 시작하지 않는다.
+setup은 `npm run setup:storage`, Linux x64/arm64 Restic0.19.1 official SHA256 pin이며 현재
+dev의 managed tool 설치를 완료했다. 전체 local4184/4184, build/strict typecheck/static gate,
+최신 App의 실제 Restic/SQLite 독립 설치 검사를 통과했다. 실행 입력은15681개06811f22…이며
+전후 변경0이다. 원시 결과는 `/home/dev/oma-audit-artifacts/session-storage-2026-10-25/`에 있다.
+결과를 기록한 뒤의 문서 차이는 별도 input relation에 남긴다. 실제 서비스/cgroup·Mac/VM·
+provider·power-loss 검증은 NOT_RUN이다. 자세한 최종 결과는 validation이 소유한다.
+과거 snapshot의 자동 forget/prune나 Principal Bash/권한 변경은 포함하지 않는다.
+
 Society 기동 후속으로 새 strict protocol clone 직후의 중복 전체 검사를 줄이고,
 스냅샷을 단일 Git 입력 스트림으로 전달한다. Linux의 상위 경로 검증은 held root
 아래 한 번의 openat2 walk로 수행하며 매 파일마다 현재 경로를 다시 확인한다.

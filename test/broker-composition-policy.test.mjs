@@ -17,7 +17,7 @@ import ts from "typescript";
  * and a stand-in that does would run the rest of a function the product ended. */
 class Exited extends Error {
 }
-async function compose(environment, { lockHeld = true, claim = "taken", cgroup = "0::/user.slice/app.slice/oma.scope", argv = ["--society", "fixture"], supervisionEstablished = true, repairFails = false, starts = lockHeld && claim !== "elsewhere" && claim !== "unhonourable" && supervisionEstablished && !repairFails } = {}) {
+async function compose(environment, { lockHeld = true, claim = "taken", cgroup = "0::/user.slice/app.slice/oma.scope", argv = ["--society", "fixture"], supervisionEstablished = true, repairFails = false, storage = false, restoreFails = false, starts = lockHeld && claim !== "elsewhere" && claim !== "unhonourable" && supervisionEstablished && !repairFails && !restoreFails } = {}) {
     const source = readFileSync(new URL("../apps/oma/src/entry/broker.ts", import.meta.url), "utf8");
     const compiled = ts.transpileModule(source, { compilerOptions: {
             module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022,
@@ -41,10 +41,14 @@ async function compose(environment, { lockHeld = true, claim = "taken", cgroup =
 
         "node:fs": { realpathSync: value => value },
         "../runtime/society-preparation.js": { prepareSociety: async () => { calls.push("prepare"); } },
+        "../runtime/session-storage.js": { SessionStorage: { forSociety: () => storage ? {
+            async restore() { calls.push("restore-workspaces"); if (restoreFails) throw Error("cold snapshot unreadable"); },
+            async archive() { calls.push("archive-workspaces"); },
+        } : null } },
         "node:path": path,
         "@oma/storage": { SCHEMA_PATH: "schema", Store: class {
                 constructor() { calls.push("Store"); }
-                close() { }
+                close() { calls.push("Store.close"); }
                 listAgents() { return []; }
                 getAgent() { return null; }
             } },
@@ -68,7 +72,8 @@ async function compose(environment, { lockHeld = true, claim = "taken", cgroup =
             } },
         "../broker/reconcile-composition.js": { createReconcileModule(_store, _mail, _git, reviews, _units, _lifecycle, options) { assert.equal(reviews, reviewOwner); calls.push("Reconcile"); paths.push(options); return {
                 async startup(activation, bootstrap) { assert.equal(activation, false); calls.push("recover"); await bootstrap(); },
-                async sweep() { calls.push("activate"); }
+                async sweep() { calls.push("activate"); },
+                quiesceForShutdown() { calls.push("native-quiescence"); }
             }; } },
         "../broker/broker-composition.js": { createBroker({ reviews, paths: options, principalHost }) {
                     assert.equal(reviews, reviewOwner);
@@ -124,9 +129,12 @@ async function compose(environment, { lockHeld = true, claim = "taken", cgroup =
         "@oma/process/host-loss": { stopOnHostLoss() { calls.push("host-loss"); } },
         "@oma/broker/lifetime": { BrokerLifetime: class {
                 permitsActivation = true;
-                retainStore() { }
+                storeClose = null;
+                retainStore(close) { this.storeClose = close; }
                 attach() { }
-                async shutdown() { calls.push("shutdown"); }
+                async shutdown() { calls.push("shutdown"); if (this.storeClose !== null) {
+                    paths.find(entry => "quiesceOnDrain" in entry)?.quiesceOnDrain(); this.storeClose(); this.storeClose = null;
+                } }
                 async start(phases) { await phases.recover(); await phases.listen(); await phases.notify(); await phases.activate(); }
             } },
         // Deliberately controlled qualification gates: this is wiring proof, not a supported deployment profile.
@@ -249,6 +257,18 @@ test("P1 composition root: the host going away stops the broker", async () => {
     supervision.onHostGone("the host is gone");
     await new Promise(resolve => setImmediate(resolve));
     assert.ok(calls.includes("shutdown"), "the broker did not stop when its host went away");
+});
+test("DR48 composition: cold restoration precedes SQLite and archival follows drain and Store.close", async () => {
+    const { calls, supervision } = await compose({ OMA_HOST_CHANNEL: "3" }, { storage: true });
+    assert.ok(calls.indexOf("restore-workspaces") < calls.indexOf("Store"));
+    supervision.onHostGone("host ended"); await new Promise(resolve => setImmediate(resolve));
+    assert.ok(calls.indexOf("native-quiescence") < calls.indexOf("Store.close"));
+    assert.ok(calls.indexOf("Store.close") < calls.indexOf("archive-workspaces"));
+});
+test("DR48 composition: an unreadable cold snapshot opens no Store and grants no activation", async () => {
+    const { calls, exitCode } = await compose(undefined, { storage: true, restoreFails: true });
+    assert.equal(exitCode, 1); assert.ok(calls.includes("restore-workspaces"));
+    for (const forbidden of ["Store", "Git", "Broker", "listen", "activate", "archive-workspaces"]) assert.equal(calls.includes(forbidden), false);
 });
 test("P1 composition root: the host's credential channel is the kind of descriptor the broker requires", async () => {
     // The guard above admits a pipe. This asserts the supervisor actually opens

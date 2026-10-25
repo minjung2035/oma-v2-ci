@@ -145,10 +145,14 @@ apps/oma/src/runtime/personal-settings.ts
 apps/oma/src/runtime/principal-delivery.ts
 apps/oma/src/runtime/project-binding.ts
 apps/oma/src/runtime/provision.ts
+apps/oma/src/runtime/restic-verification.ts
+apps/oma/src/runtime/restic.ts
 apps/oma/src/runtime/session-catalog.ts
 apps/oma/src/runtime/session-handoff.ts
 apps/oma/src/runtime/session-history.ts
 apps/oma/src/runtime/session-mode.ts
+apps/oma/src/runtime/session-storage-state.ts
+apps/oma/src/runtime/session-storage.ts
 apps/oma/src/runtime/society-lease.ts
 apps/oma/src/runtime/society-preparation.ts
 apps/oma/src/runtime/society-slot.ts
@@ -496,6 +500,7 @@ packages/review/src/types.ts
 packages/storage/package.json
 packages/storage/src/arrival-journal.ts
 packages/storage/src/batch-view.ts
+packages/storage/src/cache-trees.ts
 packages/storage/src/context-files.ts
 packages/storage/src/context-snapshot.ts
 packages/storage/src/context-stream.ts

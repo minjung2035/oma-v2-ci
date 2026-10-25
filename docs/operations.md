@@ -7,12 +7,36 @@
 ```sh
 npm ci
 npm run build
+npm run setup:storage
 npm install -g .
 cd /absolute/path/to/your/project
 oma
 ```
 
 프로젝트 디렉터리에서 `oma`로 시작한다. 엔진은 함께 배포되며 별도 Pi 설치를 요구하지 않는다. 기본 설정과 Society/Personal·로그인·package 동작은 아래 안내를 따른다.
+
+Society를 닫으면 Worker가 모두 멈춘 뒤 프로젝트별 Restic 보관소에 작업공간을 중복 제거해
+저장·검증하고 원래 clone을 회수한다. 재개할 때 복원한다. Git의 staged/unstaged·untracked·
+ignored 파일과 Worker home도 포함하며 대화·작업 DB·runner history는 세션에 그대로 남는다.
+실행 중인 세션의 독립 작업공간과 새로 생긴 고유 데이터 용량은 계속 필요하다. 보관·복원은
+파일 전체를 읽으므로 종료/재개에 추가 I/O가 든다. 강제 종료 전 보관하지 못한 세션은 원본을
+남기며, 그 세션을 다음에 정상 종료할 때 회수한다.
+
+보관소는 Society state root의 상위 `.session-storage/<SHA256(canonical project path)>`에 있다.
+**repository와 password를 함께 백업**하고 프로젝트의 `repository-ready`와 각 세션의
+`session-checkpoints`, `session-storage.json`, `session-storage.enabled` 및 DB를 함께 보존한다.
+password를 잃으면 복원할 수 없다. 다른 경로로 파일을 일부만 옮기거나 오래된 binary로 cold
+세션을 열지 않는다. 이 기능은 Git push나 branch를 새로 만들지 않으며 과거 snapshot을 자동
+삭제하지 않는다. 오래된 고유 데이터도 계속 저장되므로 총량이 무제한으로 일정해지지는 않는다.
+
+설정은 Linux x64/arm64(guest 포함)에서 공식 Restic 0.19.1을 고정 checksum으로 설치한다.
+실행에는 GNU tar, setup 단계에는 `/usr/bin/bzip2`도 필요하다.
+기존 파일과 checksum이 다르면 덮어쓰지 않는다. 도구가 없거나 저장 검증이 실패하면 원래
+작업공간을 유지하고 이유를 로그에 남긴다. cold 세션에서 도구가 없으면 위 setup 명령을 다시
+실행한다. 현재 verifier는 extended attributes/ACL·special file·nested mount가 있거나 읽을 수
+없는 파일, 현재 user/group 권한으로 소유권을 복원할 수 없는 파일이 있으면 회수를 거부하고
+원본을 보존한다. 실패한 복원 stage도 진단/복구를 위해
+보존하며 같은 snapshot을 정상 복원한 후 자동 회수한다. 세부 계약은 [DR48](design-revisions.md)을 따른다.
 
 **macOS에서는 이 checkout의 `npm install -g .`만으로 사용할 수 없다.** Darwin 진입점은 OMA.app의 host service, bundle 안의 helper·Git·release key·guest image를 요구하며 Personal의 credential 경로도 bundle의 Keychain helper에 의존한다. 현재 저장소에는 설치 가능한 OMA.app/VM 이미지 배포물이 없다. macOS 코드는 개발·검증 대상이며, 위 명령을 Mac용 설치 절차로 사용하지 않는다. `--host-only` package 관리 가능 여부는 전체 제품의 설치·실행 가능 여부와 별개다.
 

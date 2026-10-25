@@ -1,5 +1,40 @@
 # OMA v2 — 현재 검증 상태
 
+## DR48 세션 작업공간 보관 (2026-10-25)
+
+프로젝트별 pinned Restic 0.19.1 저장소와 Broker의 pre-provision restore/post-drain archive를
+연결했다. immutable checkpoint, hot/cold selection, closed SQLite identity, 현재 native 종료
+확인, leased stage와 실제 child close를 분리한다. ACL/xattr·special file·nested mount와 복원할
+수 없는 소유권은 회수를 거부한다. 기존 DB/mail/runner/Principal history를 제거하지 않는다.
+
+실제 Git fixture의 index/local refs/staged/unstaged/ignored·mode·symlink/hardlink 왕복과
+삭제/게시 후 EIO 재시도는 집중 검사에서 통과했다. 두 세션의 동일한 random 4MiB 파일을
+각각 보관했을 때 최종 전체 실행의 shared source 8388608 bytes 대비 unique stored data는
+4235172 bytes였다(`local-full-accepted.log`).
+원시 fixture 크기는 매 실행마다 달라지며 제품 전체 절감률로 해석하지 않는다.
+
+초기 손상 시험은 Restic tree cache가 손상된 repository pack을 가려 잘못 성공했다.
+--no-cache로 실제 repository를 읽게 수정한 후 실제 손상 pack·원본 보존 시험이 통과했다.
+추가 actual Store/SQLite 시험은 읽기 전용 조회가 만든 0바이트 WAL 때문에 cold 복원이
+막히는 결함을 검출했다. 빈 sidecar만 부재와 동등하게 취급하고 본문/비어 있지 않은 sidecar의
+byte identity는 유지한다. 실제 Store row·close/read-only/reopen 회귀를 추가했다. 이 결함을
+고치기 위해 첫 전체 local은390초에 SIGTERM으로 중단했으며 입력 changed[]다. 그 실행을
+전체 PASS로 계산하지 않는다(`local-full-final-status.json`, `actual-sqlite-diagnosis.log`).
+최종 `local-full-accepted`는 serial9/9·parallel4175/4175, 합계 **4184/4184 PASS**다.
+fail/cancel/skip/todo0, status0/signal null,951.28초이며 입력15681개
+`06811f22e03c6e8eca2e088c1780579a2c3f3525124ec1b3f4b48b4ee77a1c13`, 전후 changed[]다.
+최종 build·strict typecheck·architecture/transaction/durable-boundary/document/spec 검사를
+통과했다. 같은 입력의 최신 App 독립 설치에서 실제 Restic/Store close/read-only/reopen과
+4개 public entry·자체 declaration·설치 runtime을 통과했다. Domain/Native/Storage의 별도
+packed 설치도 PASS이며 그 이후 해당 package의 소스 변경은 없다. 설치된 `oma --help`와
+managed Restic0.19.1도 확인했다. 증거 소유자는
+`/home/dev/oma-audit-artifacts/session-storage-2026-10-25/verification-result.json`이다.
+
+전체 실행 후 결과·운영 안내·인계를 기록하며 입력 동일성을 소급하지 않는다. 그 차이는
+`post-runtime-input-relation.json`이 기록한다. 첫 실패/중단을 최종 PASS로 바꾸지 않는다.
+실제 systemd/cgroup, Mac/VM, provider, power-loss qualification은 NOT_RUN이다.
+새/변경 코드는 NOT_REVIEWED다.
+
 ## Society 기동 시간 개선 (2026-10-25)
 
 기준 commit은 `aa28212`다. 새 Human history mirror는 기존 strict protocol clone이
@@ -1024,7 +1059,7 @@ native·macOS VM boot·power loss는 미실행이다. 이전 kernel/crash PASS�
 충족했다고 주장할 수 없다. raw log는 `/tmp/oma-host-ownership-2026-10-09`에 보존한다.
 
 현재 구조 검사의 입력 identity(생성 자체는 runtime PASS가 아니다):
-verification input digest `9c5f4d99e6e4aee3e96ad9400ea64ca1b7bb09a5c37454cd4c3bbe6375750a12` (15673 files).
+verification input digest `bf286431ffb1095fcb3d8c71eef8cbb10fc6e744f34c1001628b04116a12f2a8` (15681 files).
 
 ## 이전 실행 결과: 지정한 제한 제거·기능 복구 (2026-10-09, DR37)
 

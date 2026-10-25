@@ -1641,6 +1641,39 @@
           "injection": "sigkill"
         }
       ]
+    },
+    {
+      "owner": "apps/oma/src/runtime/session-storage.ts#SessionStorage.archive",
+      "fact": "verified immutable snapshot/checkpoint and cold selection precede cache reclamation; interrupted deletion restores the same bytes",
+      "tests": [
+        {
+          "file": "test/session-storage.test.mjs",
+          "title": "failure after cold commit and partial reclamation recovers the exact checkpoint",
+          "injection": "in-process-fault"
+        }
+      ]
+    },
+    {
+      "owner": "apps/oma/src/runtime/session-storage.ts#SessionStorage.restore",
+      "fact": "verified staged restoration is recoverable while cold; hot selection follows complete publication",
+      "tests": [
+        {
+          "file": "test/session-storage.test.mjs",
+          "title": "interrupted publication keeps cold selection and recovers without replaying partial cache",
+          "injection": "in-process-fault"
+        }
+      ]
+    },
+    {
+      "owner": "apps/oma/src/runtime/session-storage.ts#SessionStorage.repository",
+      "fact": "private repository/key initialization and leased metadata stages survive failures without replacing recovery history",
+      "tests": [
+        {
+          "file": "test/session-storage.test.mjs",
+          "title": "failure after cold commit and partial reclamation recovers the exact checkpoint",
+          "injection": "in-process-fault"
+        }
+      ]
     }
   ]
 }

@@ -56,6 +56,22 @@ function lib(): typeof cached extends null
   return cached;
 }
 
+/** An attribute-bearing cache needs a richer verification protocol. Refuse
+ * reclamation rather than silently losing ACLs/capabilities/user attributes.
+ * The parent is held and the final component is inspected without following it. */
+let listExtended: ((path: string, list: null, size: number) => number) | undefined;
+export function assertNoExtendedAttributesAt(parent: number, name: string): void {
+  if (!name || name.includes("/") || name.includes("\0") || name === "." || name === "..") throw new TypeError("invalid attribute entry");
+  listExtended ??= load(null).func("long llistxattr(const char *path, void *list, unsigned long size)");
+  const size = listExtended(`/proc/self/fd/${parent}/${name}`, null, 0);
+  if (size < 0) {
+    const code = errno();
+    if (code === 95 /* EOPNOTSUPP: filesystem stores no attributes */) return;
+    throw new Error(`session extended attributes could not be observed (errno ${code})`);
+  }
+  if (size !== 0) throw new Error("session workspace has extended attributes; retained without reclamation");
+}
+
 const SOL_SOCKET = 1;
 const SO_PEERCRED = 17; // Linux
 

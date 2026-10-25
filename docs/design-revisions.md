@@ -2258,3 +2258,39 @@ integration test를 위해140개 내부 module을 public export하던 범위를 
 
 SDK 공개 hook이 없는 기존 기능은 단일 검증 adapter로 유지하고 host의 raw private cast를
 제거한다. 잔여 접점 수와 이유를 그대로 기록하며 private 의존 제거로 과장하지 않는다.
+
+## DR48 — 닫힌 Society 작업공간의 중복 제거 보관
+
+사용자는 세션마다 Worker clone이 계속 누적되는 문제의 해결과 공식 문서 조사 후 제안한
+프로젝트별 Restic 저장소 방식을 승인했다(2026-10-25). 이 결정은 §10의 clone 상시 보관을
+닫힌 세션의 복원 가능한 cache로 바꾼다. Worker마다 독립된 Git refs/index/worktree와 기존
+협업·push 권한은 유지한다. Git branch만으로 작업 중인 상태를 대체하지 않는다.
+
+Broker drain과 Store.close가 끝나고 모든 Resident의 현재 native 종료가 확인되어야 저장한다.
+repos, staging, 각 Resident의 workspace/home 전체를 --force로 읽는다. 숨김·ignored 파일,
+Git index/refs/reflog, 파일 bytes·mode/uid/gid/nanosecond mtime, symlink target과 내부 hardlink
+관계를 보존한다. 소유권을 현재 user/group 권한으로 복원할 수 있어야 한다. DB/WAL, mail,
+runner receipts/history, Principal 대화·private workspace는
+보관 대상에서 제외하고 원래 세션에 남긴다. 특수 파일·nested mount·extended attributes가
+있는 작업공간은 현 검증 형식의 범위를 넘으므로 원본을 남기고 회수하지 않는다.
+
+정확한 snapshot ID·전체 inventory metadata·authenticated dump와 GNU tar 원본 비교,
+원본 재해시·닫힌 DB identity·repository fsync를 모두 통과한 뒤 immutable checkpoint를
+발행한다. 영구 storage identity와 hot/cold selection을 내구성 있게 기록한 후에만 cache를
+지운다. exit3/incomplete·unknown·권한/검증 실패는 삭제 근거가 아니다. credential이나 기존
+repository가 사라져도 새 저장소나 키로 대체하지 않는다. quota·자동 forget/prune는 없다.
+DB 본문과 비어 있지 않은 WAL/journal은 정확한 bytes로 결박한다. 읽기 전용 SQLite 조회가
+만들 수 있는 0바이트 sidecar는 frame/rollback 데이터가 없으므로 부재와 같은 상태로 본다.
+
+재개는 SQLite open/provision 전에 현재 DB bytes와 checkpoint/project binding을 비교하고
+native 종료를 새로 확인한다. leased 임시 tree에서 restore --verify 후 전체 digest를 대조하고
+fsync한 뒤 게시한다. 게시 중 종료되면 cold selection을 유지해 다시 복원하며, 기존 DB에
+canonical repo와 checkpoint가 모두 없으면 새 history를 seed하지 않는다. 실패한 restore의
+임시 사본은 남기고 같은 checkpoint의 새 복원이 성공한 후 lease가 해제된 사본만 회수한다.
+
+저장소·password·캐시는 model mount 밖 Host 전용 경로에 둔다. 모든 Restic/검증 자식은 pinned
+실행 FD, society fence, 프로젝트 mutex와 stage lease를 상속하며 실제 close까지 기다린다.
+Restic Linux x64/arm64 0.19.1은 공식 release archive와 executable SHA-256을 고정하고 별도
+setup 단계에서 설치한다. shutdown에서 다운로드하지 않는다. 도구 없는 hot 세션은 원본을
+유지하고, cold 세션은 도구가 복구되기 전 시작하지 않는다. 실제 service/cgroup·Mac/VM 및
+power-loss qualification은 local filesystem/fault 검증과 구별한다. 새/변경 코드는 NOT_REVIEWED다.

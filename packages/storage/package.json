@@ -8,6 +8,10 @@
     "dist"
   ],
   "exports": {
+    "./cache-trees": {
+      "types": "./dist/cache-trees.d.ts",
+      "default": "./dist/cache-trees.js"
+    },
     "./batch-view": {
       "types": "./dist/batch-view.d.ts",
       "default": "./dist/batch-view.js"

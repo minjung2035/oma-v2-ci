@@ -146,10 +146,14 @@
   "apps/oma/src/runtime/principal-delivery.ts",
   "apps/oma/src/runtime/project-binding.ts",
   "apps/oma/src/runtime/provision.ts",
+  "apps/oma/src/runtime/restic-verification.ts",
+  "apps/oma/src/runtime/restic.ts",
   "apps/oma/src/runtime/session-catalog.ts",
   "apps/oma/src/runtime/session-handoff.ts",
   "apps/oma/src/runtime/session-history.ts",
   "apps/oma/src/runtime/session-mode.ts",
+  "apps/oma/src/runtime/session-storage-state.ts",
+  "apps/oma/src/runtime/session-storage.ts",
   "apps/oma/src/runtime/society-lease.ts",
   "apps/oma/src/runtime/society-preparation.ts",
   "apps/oma/src/runtime/society-slot.ts",
@@ -460,6 +464,7 @@
   "packages/review/src/types.ts",
   "packages/storage/src/arrival-journal.ts",
   "packages/storage/src/batch-view.ts",
+  "packages/storage/src/cache-trees.ts",
   "packages/storage/src/context-files.ts",
   "packages/storage/src/context-snapshot.ts",
   "packages/storage/src/context-stream.ts",
@@ -671,6 +676,7 @@
      "packages/protocol/src/alarm.ts",
      "packages/storage/src/arrival-journal.ts",
      "packages/storage/src/batch-view.ts",
+     "packages/storage/src/cache-trees.ts",
      "packages/storage/src/context-files.ts",
      "packages/storage/src/context-snapshot.ts",
      "packages/storage/src/context-stream.ts",
@@ -714,9 +720,9 @@
    "K0-values -> K0-values": 34,
    "K1-codecs -> K0-values": 74,
    "K1-codecs -> K1-codecs": 28,
-   "K2-mechanisms -> K0-values": 86,
+   "K2-mechanisms -> K0-values": 88,
    "K2-mechanisms -> K1-codecs": 10,
-   "K2-mechanisms -> K2-mechanisms": 88,
+   "K2-mechanisms -> K2-mechanisms": 92,
    "K3-ledger -> K0-values": 22,
    "K3-ledger -> K1-codecs": 12,
    "K3-ledger -> K2-mechanisms": 1,
@@ -1512,6 +1518,16 @@
     "kind": "runtime"
    },
    {
+    "from": "packages/storage/src/cache-trees.ts",
+    "to": "packages/domain/src/errors.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/storage/src/cache-trees.ts",
+    "to": "packages/domain/src/utf8.ts",
+    "kind": "runtime"
+   },
+   {
     "from": "packages/storage/src/context-files.ts",
     "to": "packages/domain/src/canonical-json.ts",
     "kind": "runtime"
@@ -2078,7 +2094,7 @@
     "packages/domain/src/resident-paths.ts",
     "packages/storage/src/store.ts"
    ],
-   "files": 155
+   "files": 156
   },
   {
    "index": 2,
@@ -2131,7 +2147,7 @@
     "packages/platform-linux/src/sandbox.ts",
     "apps/oma/src/platform/"
    ],
-   "files": 181
+   "files": 185
   },
   {
    "index": 5,
@@ -2154,23 +2170,23 @@
    "files": 91
   }
  ],
- "files": 530,
- "runtimeEdges": 1971,
- "typeOnlyEdges": 797,
+ "files": 535,
+ "runtimeEdges": 2005,
+ "typeOnlyEdges": 800,
  "runtimeEdgeMatrix": {
-  "L1-kernel -> L1-kernel": 365,
+  "L1-kernel -> L1-kernel": 371,
   "L2-facts -> L1-kernel": 39,
   "L2-facts -> L2-facts": 11,
   "L3-workflow -> L1-kernel": 245,
   "L3-workflow -> L3-workflow": 71,
-  "L4-orchestration -> L1-kernel": 472,
+  "L4-orchestration -> L1-kernel": 495,
   "L4-orchestration -> L2-facts": 1,
   "L4-orchestration -> L3-workflow": 29,
-  "L4-orchestration -> L4-orchestration": 246,
+  "L4-orchestration -> L4-orchestration": 250,
   "L5-entry -> L1-kernel": 178,
   "L5-entry -> L2-facts": 22,
   "L5-entry -> L3-workflow": 6,
-  "L5-entry -> L4-orchestration": 146,
+  "L5-entry -> L4-orchestration": 147,
   "L5-entry -> L5-entry": 140
  },
  "upwardTypeOnlyEdges": [
@@ -2182,24 +2198,24 @@
  "runtimeCycles": [],
  "unionCycles": [],
  "fanIn": {
-  "packages/domain/src/errors.ts": 245,
-  "packages/domain/src/identifiers.ts": 93,
+  "packages/domain/src/errors.ts": 250,
+  "packages/domain/src/identifiers.ts": 94,
+  "packages/storage/src/directory.ts": 38,
   "packages/domain/src/paths.ts": 35,
-  "packages/storage/src/directory.ts": 35,
+  "packages/native/src/files.ts": 35,
   "packages/protocol/src/host-guest.ts": 32,
   "packages/domain/src/canonical-json.ts": 31,
-  "packages/native/src/files.ts": 31,
-  "packages/storage/src/durable-fs.ts": 29,
+  "packages/storage/src/durable-fs.ts": 31,
+  "packages/domain/src/deployment.ts": 24,
   "packages/domain/src/derived.ts": 24,
-  "packages/domain/src/deployment.ts": 23,
+  "packages/native/src/cleanup.ts": 23,
   "packages/domain/src/request-identity.ts": 22,
   "packages/domain/src/surface-bounds.ts": 21,
-  "packages/native/src/cleanup.ts": 20,
-  "packages/protocol/src/frame.ts": 20,
-  "packages/process/src/run.ts": 19
+  "packages/domain/src/utf8.ts": 20,
+  "packages/protocol/src/frame.ts": 20
  },
  "fanOut": {
-  "apps/oma/src/entry/broker.ts": 34,
+  "apps/oma/src/entry/broker.ts": 35,
   "apps/oma/src/entry/oma-mac.ts": 25,
   "packages/mail/src/index.ts": 22,
   "packages/broker/src/index.ts": 21,
@@ -2224,23 +2240,23 @@
   "node:async_hooks": 4,
   "node:buffer": 1,
   "node:child_process": 7,
-  "node:crypto": 56,
+  "node:crypto": 58,
   "node:dns": 1,
-  "node:fs": 138,
+  "node:fs": 142,
   "node:fs/promises": 3,
   "node:http": 2,
   "node:https": 1,
   "node:module": 5,
   "node:net": 38,
   "node:os": 18,
-  "node:path": 160,
+  "node:path": 164,
   "node:perf_hooks": 5,
   "node:readline": 1,
   "node:sqlite": 4,
   "node:stream": 3,
   "node:stream/promises": 3,
   "node:string_decoder": 1,
-  "node:timers/promises": 2,
+  "node:timers/promises": 4,
   "node:tty": 1,
   "node:url": 14,
   "node:util": 5,

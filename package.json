@@ -9,6 +9,7 @@
   },
   "license": "UNLICENSED",
   "scripts": {
+    "setup:storage": "node scripts/install-restic.mjs",
     "build": "node scripts/build.mjs",
     "build:tui": "npm run build --workspace @oma/tui",
     "build:extension": "npm run build --workspace @oma/extension",

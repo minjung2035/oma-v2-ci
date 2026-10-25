@@ -135,6 +135,7 @@ jobs:
           run_check check-inventory 900 npm run check:inventory
           run_check typecheck 900 npm run typecheck
           run_check build 900 npm run build
+          run_check setup-storage 900 npm run setup:storage
           run_check check-package 900 npm run check:package
           run_check check-architecture 900 npm run check:architecture
           # Doc↔inventory pairing: check:architecture runs it in its chain too;
