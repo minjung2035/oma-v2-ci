@@ -114,6 +114,6 @@ export function createInternalDispatchDataPorts(
   return {
     store: internalStore,
     mail: internalMail,
-    principalInboxNewEntries: () => listOwnedDirectory(join(stateRoot, "mail", "inboxes", "principal", "new"), { required: true }).map(entry => entry.name),
+
   };
 }

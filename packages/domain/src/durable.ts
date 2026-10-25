@@ -104,6 +104,10 @@ const nullableMessagePlan: Check = (value) =>
 const nullableOperationId: Check = (value) =>
   value === null ? null : operationIdCheck(value);
 const nullableOid: Check = (value) => (value === null ? null : checkOid(value));
+const createFields = { kind: checkEnum(["agent.create"] as const), spec: resolvedSpecCheck, specHash: sha256Check,
+  parent: actorOrPrincipal, workspacePath: nonEmpty, initialMessage: nullableMessagePlan, existingCreation: nullableOperationId };
+const nativeCreateCheck = checkObject({ ...createFields, execution: checkEnum(["native"] as const) });
+const historicalCreateCheck = checkObject({ ...createFields, unitNames: checkArray(nonEmpty) });
 
 /** The domain policy owns context paths, closed fields, ordering and byte sums.
  * Accepted rows keep their exact bytes; this boundary never sorts or repairs them.
@@ -165,16 +169,7 @@ const checks = {
     topic: checkTopic,
     agent: actorOrPrincipal,
   }),
-  "agent.create": checkObject({
-    kind: checkEnum(["agent.create"] as const),
-    spec: resolvedSpecCheck,
-    specHash: sha256Check,
-    parent: actorOrPrincipal,
-    workspacePath: nonEmpty,
-    unitNames: checkArray(nonEmpty),
-    initialMessage: nullableMessagePlan,
-    existingCreation: nullableOperationId,
-  }),
+  "agent.create": value => nativeCreateCheck(value) === null ? null : historicalCreateCheck(value),
   "agent.start": checkObject({
     kind: checkEnum(["agent.start"] as const),
     agent: actorOrPrincipal,
@@ -298,8 +293,8 @@ export function operationPlanCheck(
           plan.spec.name,
         );
         if (
-          plan.unitNames.length !== expectedUnits.length ||
-          plan.unitNames.some((unit, index) => unit !== expectedUnits[index])
+          "unitNames" in plan && (plan.unitNames.length !== expectedUnits.length ||
+          plan.unitNames.some((unit, index) => unit !== expectedUnits[index]))
         )
           return "create unit identity mismatch";
         if (plan.existingCreation === context.operationId)

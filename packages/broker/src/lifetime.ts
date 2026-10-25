@@ -49,12 +49,17 @@ export class BrokerLifetime {
   private stopping = false;
   private runtime: LifetimeRuntime | null = null;
   private fallbackClose: (() => void) | null = null;
+  private nativeClose: (() => Promise<void>) | null = null;
   private starting: Promise<void> | null = null;
   private closing: Promise<void> | null = null;
   constructor(private readonly lock: LifetimeLock, private readonly graceSeconds: () => number) {}
   get phase(): LifetimePhase { return this.current; }
   get permitsActivation(): boolean { return !this.stopping && this.current === "ready"; }
   retainStore(close: () => void): void { this.fallbackClose = close; }
+  retainNative(close: () => Promise<void>): void {
+    if (this.nativeClose !== null || this.stopping) throw new StoreError("BROKER_UNAVAILABLE", "native execution owner is already retained or draining");
+    this.nativeClose = close;
+  }
   attach(runtime: LifetimeRuntime): void {
     if (this.runtime || this.stopping) throw new StoreError("INTERNAL_ERROR", "broker runtime lifetime already attached or draining");
     this.runtime = runtime;
@@ -76,8 +81,13 @@ export class BrokerLifetime {
     if (this.closing) return this.closing;
     this.stopping = true; this.current = "draining";
     this.runtime?.closeAdmission();
+    const native = this.nativeClose === null ? undefined : Promise.resolve().then(this.nativeClose);
+    if (native !== undefined) void native.catch(() => {});
     this.closing = (async () => {
-      if (this.starting) await settleWithin([this.starting], this.graceSeconds());
+      if (this.starting || native) await settleWithin([...(this.starting ? [this.starting] : []), ...(native ? [native] : [])], this.graceSeconds());
+      // Startup failure can be drained, but an unconfirmed native owner cannot
+      // release writer resources merely because its close promise settled.
+      await native;
       if (this.runtime) await this.runtime.drainAndClose();
       else if (this.fallbackClose) {
         await settleWithin([], this.graceSeconds());

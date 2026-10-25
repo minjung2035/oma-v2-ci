@@ -3,7 +3,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { once } from "node:events";
-import { spawnSandboxed } from "@oma/process/async";
+import { spawnSandboxed } from "@oma/platform-linux/worker-spawn";
 import { sandboxSeccompFilter } from "@oma/platform-linux/sandbox-seccomp";
 for (const filtered of [false, true])
     test(`DR27: private sandbox arguments preserve exact values and RPC stdin (filter=${filtered})`, { timeout: 15_000 }, async (t) => {

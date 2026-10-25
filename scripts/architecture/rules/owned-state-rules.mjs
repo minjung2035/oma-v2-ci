@@ -152,7 +152,6 @@ export const OWNED_STATE_EXEMPTIONS = Object.freeze({
   "apps/oma/src/runtime/provision.ts": "probes beside the owned ensures under the state root and the society layout -- a probe failure refuses, never reads as absent",
   "apps/oma/src/application/project-settings.ts": "the `.projects` listing under the data root whose non-ENOENT failure already refuses to the Human",
   "apps/oma/src/application/mail.ts": "the mailbox's journal and message reads under the state root -- an open or listing failure is rendered as the row's `unreadable` marker, never read as absent (arch §23.5)",
-  "packages/platform-linux/src/units.ts": "the caller's own systemd user directory -- ~/.config/systemd/user is the user's, never repaired",
   "packages/process/src/async.ts": "the caller-declared spool paths -- absolute paths each caller names under its own scratch or ledger directory; the runner opens what it was told to write",
   "packages/process/src/run.ts": "the same caller-declared spool paths opened for the child's descriptors -- the runner opens what it was told to write",
 });

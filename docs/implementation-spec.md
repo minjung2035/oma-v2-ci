@@ -112,7 +112,7 @@ A-008은 2026-09-28 사용자 결정으로 철회했다([DR20](design-revisions.
 
 **MUST [AUTH-002]** 관리 요청은 self 또는 `created_by` ancestry상의 descendant에만 해당 capability로 허용한다. Principal은 별도의 host 위임 범위 안에서 관리한다. sibling 정지·권한 증폭·자식 생성으로 quota 우회는 거절한다. status와 public operational logs 읽기는 사회 구성원에게 허용하되 host journal/secret은 제외한다. operation.get과 operation.read는 자기 actor의 key만 조회한다.
 
-**MUST [AUTH-003]** per-incarnation pathname listener에 actor를 고정하고 SO_PEERCRED 및 실제 systemd cgroup을 검증한다. 같은 UID, payload actor, 환경 변수, unit처럼 보이는 문자열은 증명이 아니다. 이전 incarnation 연결을 닫고 이후 요청을 `STALE_RUN`으로 거절한다. 실행 인증과 이미 접수된 broker-owned effect의 복구를 구분한다.
+**MUST [AUTH-003]** per-incarnation pathname listener에 actor를 고정하고 pinned connector, 각 수신 byte range의 실제 kernel sender, 현재 invocation의 pinned execution scope 및 trusted runner ancestry를 검증한다(DR49). Runner 관리 연결은 직접 spawn owner가 인계한 private socket과 immutable grant를 요구한다. 같은 UID, payload actor, 환경 변수, scope처럼 보이는 문자열, 양도받은 socket의 소지만으로 권한을 얻지 못한다. 이전 incarnation 연결을 닫고 이후 요청을 `STALE_RUN`으로 거절한다. 실행 인증과 이미 접수된 broker-owned effect의 복구를 구분한다.
 
 **SPIKE [S-01,S-02]** host PID 재사용을 피하는 peer 확인, Node binding, Principal attach credential 보호와 tool sandbox 검증은 release gate다. 검증 실패 시 UID-only fallback·무격리 fallback을 만들지 않는다. 판정([DR18](design-revisions.md)): peer 확인은 `SO_PEERCRED`와 cgroup identity(kernel lane), credential 보호와 tool 경계는 T114·SCN-B09·SCN-B10이 증거다.
 
@@ -128,6 +128,8 @@ A-008은 2026-09-28 사용자 결정으로 철회했다([DR20](design-revisions.
 | `S/project-binding.json` | D05의 host-only full canonical project binding; WP16 C2 gate 전 생성하지 않음 | 없음 |
 | `<config-index-root>/.oma-config/generations/<generation>/` | D02의 immutable host/models/roles/prompts; WP13 C2 gate, bounded retention 및 quiescent cleanup | 없음 |
 | `S/runtime.sqlite{,-wal,-shm}` | broker 상태, SQLite 관리 | 없음 |
+| `S/execution/scopes.jsonl` | DR51 version1 실행 관측 hash-chain; 재생 명령·accepted plan·권한 없음. unknown scope의 복구 fence | 없음 |
+| `S/logs/resident/<actor>/<시작-ms>-<invocation>.jsonl` | DR53 version1 trusted stdout/stderr 전체 bytes·운영 metadata. bounded preview와 별도이며 실행/receipt proof가 아님 | Human의 명시적 진단 정리까지 보존 |
 | `S/repos/project.git/` | 코드·게시 ref 원본, broker writer | `/git/project.git` RO |
 | `S/repos/context.git/` | 공유 의도 Git 원본 | 없음; snapshot만 공개 |
 | `S/seed/` | OPTIONAL 고정 reflink 원본 | 없음 |
@@ -380,7 +382,7 @@ Live batch.prepare/complete는 이 broker를 시작한 host endpoint에서만 �
 
 **S-01-CANDIDATE 판정 ([DR18](design-revisions.md)).** v1은 candidate check를 돌리지 않는다. candidate별 kernel 자원 한도가 검증되지 않은 채 host에서 candidate 코드를 돌리는 것은 검사가 없는 것보다 나쁘다. candidate는 만든 곳(그 Resident의 sandbox)에서 시험하고, 사람이 쓰는 CI는 게시된 ref를 그대로 받는다. nonempty `integration.checks`와 `sandbox.candidate`·`git.runCheck`는 `UNSUPPORTED_PROFILE`이다. checks를 자동으로 []로 바꾸어 회피하지 않는다. transient systemd-run/service/scope, userland polling, broker 전체 cgroup 한도만을 candidate별 격리로 취급하는 방식은 뒤에 이 기능을 더할 때도 허용하지 않는다.
 
-**MUST [INT-007]** 실제 spawn의 candidate OID/argv/env는 검증된 check snapshot과 정확히 같아야 한다. builder unit test만 통과하고 production이 다른 cwd/config/default를 쓰는 것을 금지한다. timeout/signal/검사 후손 잔존/관측 불명확은 CHECK_FAILED 또는 대조 전 pending/unknown이며 PASS가 아니다. host check exit 0만으로 아직 살아 있는 background process를 무시하고 종료했다고 기록하지 않는다. 실제 candidate 출처와 sandbox/종료 ownership를 production entrypoint 시험에서 확인한다. UX-09: sandbox checkout의 gitlink 거절은 bare exit이 아니라 `OMA_ERROR=UNSUPPORTED_PROFILE`와 gitlink마다 `OMA_GITLINK=<path>`를 stderr에 남기고, host는 그 marker로만 code를 분류한다 — 거절 marker가 없는 bare 125는 CHECK_FAILED로 남는다. 거절은 check argv 이전이며 경로는 sandbox 출력이 아니라 불변 candidate에서 다시 관측한다.
+**MUST [INT-007]** 실제 spawn의 candidate OID/argv/env는 검증된 check snapshot과 정확히 같아야 한다. builder unit test만 통과하고 production이 다른 cwd/config/default를 쓰는 것을 금지한다. timeout/signal/검사 후손 잔존/관측 불명확은 CHECK_FAILED 또는 대조 전 pending/unknown이며 PASS가 아니다. host check exit 0만으로 아직 살아 있는 background process를 무시하고 종료했다고 기록하지 않는다. 실제 candidate 출처와 sandbox/종료 ownership를 production entrypoint 시험에서 확인한다. UX-09의 setup 거절은 check argv가 상속하지 않는 close-on-exec private descriptor의 폐쇄형 상태로 전달한다(DR49). stdout/stderr의 marker는 분류 근거가 아니다. private setup 성공 후 bare 125는 CHECK_FAILED이며, private 상태 누락·부분 frame은 unknown이다. 거절은 check argv 이전이며 gitlink 경로는 불변 candidate에서 같은 Git owner가 다시 관측한다.
 
 **MUST [INT-003]** project main mutation은 repo별 메모리 mutex와 pending integrate operation 검사로 직렬화한다. 먼저 T-integrate-intent, 그 뒤 검사·Git CAS, 마지막 T-integrate-done다. crash 후 unresolved integrate가 있으면 새로운 main writer를 시작하지 않는다. CAS 바로 전에 main/policy/capability/stop intent를 재검사한다.
 
@@ -410,11 +412,11 @@ Live batch.prepare/complete는 이 broker를 시작한 host endpoint에서만 �
 
 ## 11. systemd와 lifecycle
 
-DR49 전환 중에는 아래 unit 계약을 Linux reference adapter의 검증 기준으로 유지한다.
-start/stop의 hint 차단 → 권한 철회 → 종료 요청 → 독립 후손 사망 판정은 공통
-`@oma/process/resident-supervisor`가 소유하며 Linux adapter가 실제 호출한다. 완료된 명령이나
-로그는 사망 증거가 아니다. 최종 native 실행은 manager 제거와 OS별 scope/auth 검증 후
-[새 native 계약](macos-platform.md)으로 수용한다. 이행 중 adapter 존재는 P4/P6 완료가 아니다.
+DR49로 Linux reference adapter와 systemd assets를 production에서 제거했다. 아래 UNIT-*는
+과거 unit 형식과 검토 ID를 보존하는 역사 계약이며 native 실행에 unit 설치를 요구하지 않는다.
+현재 실행의 대체 규범은 [NATIVE-011–016](macos-platform.md)이다. start/stop의 hint 차단 →
+권한 철회 → 종료 요청 → 독립 후손 사망 판정은 공통 `@oma/process/resident-supervisor`가
+소유한다. 완료된 명령이나 로그는 사망 증거가 아니다. Darwin gate와 전체 회귀의 판정은 별도다.
 
 **MUST [UNIT-001; arch §§6,15]** society별 허용 unit은 각 Resident의 service/path와 principal.path/principal-relay.service다. unit 이름은 `oma-<society>-<actor>.service/.path`, `oma-<society>-principal-relay.service`, `oma-<society>-principal.path`다. broker.service와 reconcile.service/timer는 존재하지 않는다 — broker는 제품이 foreground로 직접 실행하고 주기 reconcile은 broker process 안의 sweep이다. 이름 충돌 방지를 위해 Resident 이름 broker, principal-relay, reconcile도 금지한다.
 
@@ -1038,6 +1040,9 @@ checker's resolution through re-exported symbols. This syntax/equivalence test
 is not a substitute for the full pinned typecheck or runtime wire fixtures.
 
 ## Unit renderer 계약
+
+이 절의 UNIT-TPL-*는 DR49 이전의 역사 계약이다. 원래 ID·형식의 의미를 보존하며 새 설치나
+native 실행에 적용하지 않는다. 원본 renderer와 시험은 [보관 기록](archive/systemd-reference-2026-10-26/)에 있다.
 
 **MUST [UNIT-TPL-001]** 이 4개 `.in` 파일을 [상위 구현 계약](implementation-spec.md)의 UNIT 요구와 함께 사용한다: Resident당 service/path 한 쌍, Principal relay service와 principal path다. Resident service는 path가 시작하며 독립 enable target은 없다.
 

@@ -9,6 +9,21 @@ Linux/macOS 공통 native 실행을 실제 구현·검증하는 것이다. 이�
 
 ## 작업 상태
 
+- 2026-10-26 실제 경로 연결: 공통 ExecutionCoordinator + hash-chain journal + blocked
+  namespace gate를 Resident·candidate·quarantine에 연결했다. systemd/path/journald와
+  host relay production 경로를 제거했으며 Worker private argv의 owner는 Linux adapter다.
+  lifecycle/reconcile는 실제 async 효과와 마지막 authority 확인을 기다린다. 새 create는 v3이며
+  v2의 역사 plan·receipt를 native 완료로 다시 읽지 않는다. 로그 full spool은 별도 storage owner다.
+- 새 관련 시험은 Linux 실제 kernel/bwrap에서 33/33 PASS·skip0·입력 변경0이다.
+  `native-connected-fixed-{before,after}.json`과 `native-connected-fixed-real.log`에 원시 결과를
+  보존했다. 전체 회귀 PASS가 아니다. 제거된 systemd API를 참조하는 root/type/module 시험의
+  전환이 남았으며 root strict typecheck 첫 실행은 실패했다. 독립 workspace build는 26개가 성공했다.
+- 실제 SIGKILL 시험에서 witness 게시 뒤 gate가 닫힌 init이 살아 남는 결함을 재현했다.
+  DR54로 새 pidfd를 취득해 전체 identity 비교 후 종료하도록 수정했고 같은 지점의 실 프로세스
+  생존→종료→journal 정산을 확인했다. witness 없는 opening은 여전히 unknown으로 보존·차단한다.
+- 다음 작업: 실제 Resident/Broker 통합·backoff·로그 저장 회귀, 기존 시험의 native 전환,
+  전체 정적/독립 설치/전체 Linux 회귀, source 고정 push 및 실제 Darwin CI 결과 확인.
+  Darwin G-PROCESS/G-FILES/G-AUTH는 계속 OPEN이며 현재 Mac 제품 실행을 허용하지 않는다.
 - 작업 브랜치: `work/macos-native-20261025`. 최초 기준 `d5716459`, 첫 Darwin probe
   `d80035f7`, 공통 primitive·Restic 초기 연결 `adf20331`, VM 제거 `de0c8212`, 파일 capability `762c1604`, 공통 Resident 조정 `13d60492`를 push했다.
 - 시작 시 dirty 문서 변경은 보존·commit했고 원본 patch/untracked 사본도

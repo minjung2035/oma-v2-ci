@@ -1,6 +1,6 @@
 /** P6: read-only, phase-aware diagnostics. No Store writes or recovery imports. */
 import { join } from "node:path";
-import type { UnitObservation } from "@oma/contracts/runtime";
+import type { ExecutionObservation } from "@oma/contracts/runtime";
 import type { ContextEntry } from "@oma/contracts/values";
 import type { MessagePlan } from "@oma/contracts/durable";
 import type { GitReadPort } from "@oma/git/read-port";
@@ -17,7 +17,7 @@ export interface IntegrityOptions {
   readonly git?: GitReadPort & {
     contextTree?(repository: string, candidate: string, entries: readonly ContextEntry[]): FileObservation;
   };
-  readonly units?: (agent: AgentRow) => FileObservation<UnitObservation>;
+  readonly units?: (agent: AgentRow) => FileObservation<ExecutionObservation>;
   readonly mode?: "offline" | "live";
   readonly maxRows?: number;
   readonly maxIssues?: number;

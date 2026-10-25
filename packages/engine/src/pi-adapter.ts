@@ -2,7 +2,7 @@
  * hand it a prepared batch, and wait for the trusted boundary it reports.
  * How the process is started lives in `pi-spawn-plan.ts`.
  */
-import { spawnSandboxed, stopOwnedChild } from "@oma/process/async";
+import { stopOwnedChild } from "@oma/process/async";
 import { realpathSync } from "node:fs";
 import { basename, join } from "node:path";
 import type { PreparedBatch } from "@oma/contracts";
@@ -216,7 +216,7 @@ export class PiAdapter {
     const spawn = this.spawnPlan();
     // DR18 (D-5): a confined engine's sandbox filter reaches bubblewrap on the
     // descriptor only this parent holds, and nowhere else.
-    const child = spawnSandboxed([spawn.command, ...spawn.args], spawn.env, spawn.filter, spawn.cwd);
+    const child = this.effects.sandbox.spawn(spawn);
     let childClosed = false;
     let onClose!: () => void;
     const closed = new Promise<void>(resolve => {

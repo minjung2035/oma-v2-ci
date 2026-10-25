@@ -64,8 +64,6 @@ const LAYERS = Object.freeze([
     name: "L2-facts",
     prefixes: [
       "packages/tool-runtime/src/",
-      "packages/platform-linux/src/units/",
-      "packages/platform-linux/src/units.ts",
       "apps/oma/src/diagnostics/",
       "apps/oma/src/request-cache.ts",
     ],

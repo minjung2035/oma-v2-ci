@@ -20,7 +20,7 @@ import type { UnitObserve } from "@oma/contracts/runtime";
 /** Internal observation only. D04 does not authorize a new AgentStatus field.
  * Neither this timestamp nor status.get's collection time is runner evidence.
  */
-export interface StatusUnitObservation {
+export interface StatusExecutionObservation {
   readonly agent: Actor;
   readonly observedAtMs: number;
   readonly unknownReason: "unavailable" | "unknown-state" | null;
@@ -37,7 +37,7 @@ export function fieldEscape(value: string): string {
       : `\\x${character.charCodeAt(0).toString(16).padStart(2, "0")}`);
 }
 export class ViewsModule {
-  private observations: readonly StatusUnitObservation[] = [];
+  private observations: readonly StatusExecutionObservation[] = [];
   private projected: { readonly snapshot: StatusSnapshot; readonly agents: readonly AgentStatus[] } | null = null;
   /** The broker's memory-only runner-observation sink, looked up per agent.
    * `runner.observe` is the runner's own last word about what its engine was
@@ -47,7 +47,7 @@ export class ViewsModule {
   constructor(private readonly store: Store, private readonly stateRoot: string,
     private readonly society: string, private readonly principalProfile: string,
     private readonly viewLimits?: BatchViewLimits) {}
-  get unitObservations(): readonly StatusUnitObservation[] { return this.observations; }
+  get unitObservations(): readonly StatusExecutionObservation[] { return this.observations; }
   /** Wires the diagnostic the internal dispatcher keeps into the status
    * projection. Only `runnerObservedAtMs` reaches a view -- the timestamp of
    * the runner's last self-report, not a claim the run is doing it now --
@@ -208,7 +208,7 @@ export class ViewsModule {
     const read = this.store.pendingWorkRows();
     const pending = pendingWorkByAgent(read);
     const rows = agent === undefined ? read.agents : read.agents.filter(row => row.name === agent);
-    const observations: StatusUnitObservation[] = [];
+    const observations: StatusExecutionObservation[] = [];
     try {
       return rows.map(row => {
         const work = pending.get(row.name);

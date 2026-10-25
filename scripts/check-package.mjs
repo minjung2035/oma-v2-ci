@@ -10,7 +10,7 @@ export async function checkPackage(rootInput) {
   const { DEPLOYMENT_LAYOUT: layout } = await import(pathToFileURL(join(root, "packages/domain/dist/deployment.js")).href);
   const { assertRuntimeAssets, runtimeAssets } = await import(pathToFileURL(join(root, "apps/oma/dist/runtime/assets.js")).href);
   const paths = runtimeAssets(root);
-  assertRuntimeAssets(paths, { schema: join(root, layout.schema), systemd: join(root, layout.systemd) });
+  assertRuntimeAssets(paths, { schema: join(root, layout.schema) });
   function requiredFile(path) {
     if (!lstatSync(path, { throwIfNoEntry: false })?.isFile()) throw new Error(`missing/nonregular package file: ${relative(root, path)}`);
     const rel = relative(root, realpathSync(path));
@@ -23,13 +23,6 @@ export async function checkPackage(rootInput) {
     if ((lstatSync(command).mode & 0o111) === 0) throw new Error(`model command is not executable: ${layout.modelCommand}`);
     const { modelCommandScript } = await import(pathToFileURL(join(root, layout.modelCommandBuilder)).href);
     if (readFileSync(command, "utf8") !== modelCommandScript()) throw new Error(`model command differs from its owner: ${layout.modelCommand}`);
-  }
-  for (const [template, name] of Object.entries(layout.templateEntries)) {
-    const text = readFileSync(join(paths.systemd, template), "utf8");
-    const starts = text.split(/\r?\n/).filter(line => line.startsWith("ExecStart="));
-    if (starts.length !== 1 || !starts[0].startsWith(`ExecStart=@NODE@ @LIBDIR@/${layout.entries[name]} `))
-      throw new Error(`template/build entry mismatch: ${template}`);
-    if (text.includes("@LIBDIR@/dist/entry/")) throw new Error(`obsolete flattened entry: ${template}`);
   }
   const packageJson = JSON.parse(readFileSync(join(root, "package.json"), "utf8"));
   // DR18 (C2): the install command is the package's `oma` bin, and it is the
@@ -112,7 +105,7 @@ export async function checkPackage(rootInput) {
   }
   const files = [...new Set([...compiledFiles(join(root, layout.compiledRoot)),
     ...layout.workspaces.flatMap(workspace => compiledFiles(join(root, workspace.root, "dist")))])];
-  assertRuntimeAssets(paths, { schema: join(root, layout.schema), systemd: join(root, layout.systemd) }, moduleDirectories);
+  assertRuntimeAssets(paths, { schema: join(root, layout.schema) }, moduleDirectories);
   // Vendored bundled-extension payloads live under
   // packages/tool-NAME/dist/vendor/<bundle>/ and carry their own pinned
   // dependency closure in <bundle>/node_modules/ plus the bundle manifest's

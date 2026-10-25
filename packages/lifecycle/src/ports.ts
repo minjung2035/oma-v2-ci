@@ -1,5 +1,5 @@
 /** Lifecycle owns its exact live reads, captured acceptance writes and external effects. */
-import type { Actor, AuthContext, MessageId, MessagePlan, OperationId, RequestKey, UnitObservation } from "@oma/contracts";
+import type { Actor, AuthContext, MessageId, MessagePlan, OperationId, RequestKey, ExecutionObservation } from "@oma/contracts";
 import type { AgentRow, DeliveryRow, NewAgent, NewOperation } from "@oma/contracts/ledger";
 import type { SynchronousResult } from "@oma/contracts/durable";
 import type { ErrorCode } from "@oma/contracts/errors";
@@ -38,9 +38,9 @@ export interface LifecycleLedger {
 export interface LifecycleUnits {
   assertResidentNamesFree(agent: Actor): void;
   ensureResident(agent: Actor, profile: string, modelProfile: string): void;
-  start(agent: Actor, explicitRepair: boolean): void;
-  stop(agent: Actor, incarnation: number): UnitObservation;
-  observe(agent: Actor): UnitObservation;
+  start(agent: Actor, explicitRepair: boolean, authorize?: () => void): void | Promise<void>;
+  stop(agent: Actor, incarnation: number): ExecutionObservation | Promise<ExecutionObservation>;
+  observe(agent: Actor): ExecutionObservation;
   confirmDead(agent: Actor, incarnation: number): boolean;
 }
 export interface LifecycleWorkspace {

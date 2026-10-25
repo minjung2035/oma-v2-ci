@@ -21,10 +21,10 @@ export class GitModule {
   private readonly writers = new Set<"project" | "context">();
   constructor(private readonly store: GitLedger, mail: GitMessaging, private readonly repository: GitRepositoryPort,
     integration: IntegrationPolicy | null, integrationPolicyReader: IntegrationPolicyReader | null,
-    private readonly candidateCheck: ((candidate: Oid, check: FrozenCheck, cancellation?: AbortSignal) => Promise<void>) | null,
+    private readonly candidateCheck: ((candidate: Oid, check: FrozenCheck, cancellation: AbortSignal | undefined, authorize: () => void) => Promise<void>) | null,
     reviewAuthority: ReviewAuthority) {
     this.integrationCoordinator = new IntegrationCoordinator(store, {
-      ...repository.integration, runCheck: (candidate, check, signal) => this.runCheck(candidate, check, signal),
+      ...repository.integration, runCheck: (candidate, check, signal, authorize) => this.runCheck(candidate, check, signal, authorize),
     }, integration, integrationPolicyReader, mail, reviewAuthority);
     this.submissionCoordinator = new SubmitCoordinator({ stateRoot: repository.stateRoot, society: repository.society }, store, mail,
       repository.submission, repository.submissionPublication);
@@ -55,9 +55,9 @@ export class GitModule {
   }
   isPublished(oid: Oid): boolean { return observed(this.repository.integration.published(), "published refs").includes(oid); }
   private currentMain(): Oid { return observed(this.repository.integration.main(), "canonical main ref"); }
-  private runCheck(candidate: Oid, check: FrozenCheck, cancellation?: AbortSignal): Promise<void> {
+  private runCheck(candidate: Oid, check: FrozenCheck, cancellation: AbortSignal | undefined, authorize: () => void): Promise<void> {
     if (!this.candidateCheck) throw new StoreError("UNSUPPORTED_PROFILE", "trusted candidate check executor is unavailable");
-    return this.candidateCheck(candidate, check, cancellation);
+    return this.candidateCheck(candidate, check, cancellation, authorize);
   }
   publishContext(auth: AuthContext, key: string, input: ContextInput, bytes: AsyncIterable<Uint8Array>): Promise<Receipt> {
     return this.withWriter(() => this.contextCoordinator.publish(auth, key, input, bytes), "context");

@@ -32,10 +32,6 @@
       "types": "./dist/snapshot-reader.d.ts",
       "default": "./dist/snapshot-reader.js"
     },
-    "./cgroup": {
-      "types": "./dist/cgroup.d.ts",
-      "default": "./dist/cgroup.js"
-    },
     "./process-lock": {
       "types": "./dist/process-lock.d.ts",
       "default": "./dist/process-lock.js"
@@ -51,6 +47,22 @@
     "./process-observation": {
       "types": "./dist/process-observation.d.ts",
       "default": "./dist/process-observation.js"
+    },
+    "./pid-namespace": {
+      "types": "./dist/pid-namespace.d.ts",
+      "default": "./dist/pid-namespace.js"
+    },
+    "./control-socket": {
+      "types": "./dist/control-socket.d.ts",
+      "default": "./dist/control-socket.js"
+    },
+    "./unix-message": {
+      "types": "./dist/unix-message.d.ts",
+      "default": "./dist/unix-message.js"
+    },
+    "./descriptor-path": {
+      "types": "./dist/descriptor-path.d.ts",
+      "default": "./dist/descriptor-path.js"
     }
   },
   "scripts": {

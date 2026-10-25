@@ -1,4 +1,4 @@
-// MUST [S-01]: minimal native leaf for SO_PEERCRED, sd_notify and the
+// MUST [S-01]: minimal native leaf for SO_PEERCRED and the
 // REC-007 society lease through koffi FFI.
 import { closeSync, openSync, readlinkSync } from "node:fs";
 import { errno, load } from "koffi";
@@ -22,7 +22,6 @@ let cached: {
   ) => number;
   socket: (domain: number, type: number, proto: number) => number;
   connect: (fd: number, addr: Buffer, len: number) => number;
-  send: (fd: number, buf: Buffer, len: number, flags: number) => number;
   flock: (fd: number, op: number) => number;
   poll: (fds: ArrayBuffer, count: number, timeout: number) => number;
   bind: (fd: number, addr: Buffer, len: number) => number;
@@ -42,9 +41,6 @@ function lib(): typeof cached extends null
       socket: libc.func("int socket(int domain, int type, int protocol)"),
       connect: libc.func(
         "int connect(int fd, const void *addr, unsigned int len)",
-      ),
-      send: libc.func(
-        "int send(int fd, const void *buf, unsigned int len, int flags)",
       ),
       flock: libc.func("int flock(int fd, int operation)"),
       poll: libc.func("int poll(void *fds, unsigned long nfds, int timeout)"),
@@ -160,33 +156,6 @@ export function pidfdLiveness(fd: number): PidLiveness {
 }
 
 const AF_UNIX = 1;
-const SOCK_DGRAM = 2;
-
-/** MUST [UNIT-004]: sd_notify READY=1 over $NOTIFY_SOCKET (AF_UNIX dgram). */
-export function sdNotifyReady(notifySocket: string): boolean {
-  if (!notifySocket || notifySocket.includes("\0")) return false;
-  const path = notifySocket.startsWith("@")
-    ? `\0${notifySocket.slice(1)}`
-    : notifySocket;
-  if (Buffer.byteLength(path) > (notifySocket.startsWith("@") ? 108 : 107)) return false;
-  let fd = -1;
-  try {
-    fd = lib().socket(AF_UNIX, SOCK_DGRAM | 0o2000000 /* SOCK_CLOEXEC */, 0);
-    if (fd < 0) return false;
-    const addr = Buffer.alloc(110);
-    new DataView(addr.buffer, addr.byteOffset, addr.byteLength).setUint16(0, AF_UNIX, NATIVE_LE);
-    Buffer.from(path, "utf8").copy(addr, 2);
-    const r = lib().connect(fd, addr, 2 + Buffer.byteLength(path, "utf8"));
-    if (r < 0) return false;
-    const msg = Buffer.from("READY=1");
-    const n = lib().send(fd, msg, msg.length, 0);
-    return n === msg.length;
-  } catch {
-    return false;
-  } finally {
-    if (fd >= 0) closeSync(fd);
-  }
-}
 
 /** Taking a lock has three answers, not two, and the missing one is the
  * dangerous one: this process has it, another process has it, or this process

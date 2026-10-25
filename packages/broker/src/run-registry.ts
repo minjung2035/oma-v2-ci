@@ -18,7 +18,7 @@ type RunState =
   | { readonly phase: "revoked-awaiting-death" }
   | { readonly phase: "closed" };
 
-/** Owns the cgroup FD from opening through revoked-awaiting-death. */
+/** Owns the scope FD from opening through revoked-awaiting-death. */
 export class OwnedRun {
   private state: RunState = { phase: "opening" };
   private waiting = false;
@@ -31,9 +31,9 @@ export class OwnedRun {
   get lease(): RunLease | null { return this.state.phase === "live" ? this.state.lease : null; }
   population(): Population { return this.state.phase === "closed" ? "unknown" : this.pin.population(); }
   matches(path: string): boolean { return this.state.phase === "live" && this.pin.matches(path); }
-  confirmOpening(cgroup: string): void {
-    if (this.state.phase !== "opening" || !this.pin.matches(cgroup) || this.pin.population() !== "populated")
-      throw new StoreError("STALE_RUN", "opening run is revoked or its pinned cgroup changed");
+  confirmOpening(scope: string): void {
+    if (this.state.phase !== "opening" || !this.pin.matches(scope) || this.pin.population() !== "populated")
+      throw new StoreError("STALE_RUN", "opening run is revoked or its pinned scope changed");
   }
   publish(endpoint: RunEndpoint): RunLease {
     if (this.state.phase !== "opening") {
@@ -74,18 +74,18 @@ export class RunRegistry {
   }
   get(actor: Actor): OwnedRun | undefined { return this.records.get(actor); }
   values(): IterableIterator<OwnedRun> { return this.records.values(); }
-  begin(actor: Actor, incarnation: number, invocationId: string, cgroup: string): OwnedRun {
+  begin(actor: Actor, incarnation: number, invocationId: string, scope: string): OwnedRun {
     const previous = this.records.get(actor);
     if (previous?.invocationId === invocationId)
       throw new StoreError("STALE_RUN", "an invocation cannot acquire a second run identity");
     if (!Number.isSafeInteger(incarnation) || incarnation < 1)
       throw new StoreError("STORE_CORRUPT", "invalid next incarnation");
-    if (previous && !["empty", "removed"].includes(previous.population()))
-      throw new StoreError("RUN_TERMINATION_UNKNOWN", "previous invocation cgroup is not proven empty");
-    const pin = this.acquire(cgroup);
-    if (pin.population() !== "populated" || !pin.matches(cgroup)) {
+    if (previous && previous.population() !== "empty")
+      throw new StoreError("RUN_TERMINATION_UNKNOWN", "previous invocation scope is not proven empty");
+    const pin = this.acquire(scope);
+    if (pin.population() !== "populated" || !pin.matches(scope)) {
       pin.close();
-      throw new StoreError("AUTH_FAILED", "current runner cgroup is not proven populated");
+      throw new StoreError("AUTH_FAILED", "current runner scope is not proven populated");
     }
     const record = new OwnedRun(actor, incarnation, invocationId, pin);
     // Publish the fence before any endpoint/transaction callback can fail.
@@ -95,8 +95,8 @@ export class RunRegistry {
     return record;
   }
   /** D01/BATCH-004: while `actor`'s next run is opening, `begin` has proven its
-   * previous invocation's cgroup empty or removed (or this broker has run none
-   * since its startup quiesced every unit), and the next run has no endpoint.
+   * previous invocation's scope empty (or this broker has run none
+   * since its startup quiesced every scope), and the next run has no endpoint.
    * That is the only authority to settle the previous incarnation's receipts,
    * and it ends when the run is published, revoked or replaced. */
   settlementQuiescence(actor: Actor): SettlementQuiescence {

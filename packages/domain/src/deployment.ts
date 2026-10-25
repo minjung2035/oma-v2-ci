@@ -40,7 +40,6 @@ export const DEPLOYMENT_LAYOUT = Object.freeze({
   clientPreload: "apps/oma/dist/runtime/client-preload.js",
   contract: "packages/contracts/dist/index.js",
   schema: "packages/storage/dist/schema-v4.sql",
-  systemd: "packages/platform-linux/dist/systemd",
   extension: "packages/extension/dist/index.js",
   // BL2: the Personal host's `-e` path — the ask_user_question entry point is
   // its own extension file so Personal gets the tool without loading the
@@ -56,11 +55,9 @@ export const DEPLOYMENT_LAYOUT = Object.freeze({
   modelCommandBuilder: "packages/domain/dist/resident-paths.js",
   // TUI-002: `tui` is the host product entrypoint a Human runs. It has no
   // systemd unit, so it is absent from templateEntries by design.
-  entries: Object.freeze({ broker: "apps/oma/dist/entry/broker.js", preparation: "apps/oma/dist/entry/prepare-society.js", runner: "apps/oma/dist/entry/runner.js", host: "apps/oma/dist/entry/host.js", tui: "apps/oma/dist/entry/oma.js", interactive: "apps/oma/dist/entry/pi-interactive.js",
+  entries: Object.freeze({ candidateCheck: "apps/oma/dist/entry/candidate-check.js", quarantine: "apps/oma/dist/entry/quarantine.js", broker: "apps/oma/dist/entry/broker.js", preparation: "apps/oma/dist/entry/prepare-society.js", runner: "apps/oma/dist/entry/runner.js", tui: "apps/oma/dist/entry/oma.js", interactive: "apps/oma/dist/entry/pi-interactive.js",
     society: "apps/oma/dist/entry/oma-society.js", personalHost: "apps/oma/dist/entry/personal-host.js", personal: "apps/oma/dist/entry/pi-personal.js",
   }),
-  templateEntries: Object.freeze({ "resident.service.in": "runner",
-    "principal-relay.service.in": "host" } as const),
   // TUI-003: the host product's files, relative to the installation. The
   // installation is mounted into every Resident, so these are hidden there;
   // nothing a model runs may read the product surface's code.
@@ -108,4 +105,16 @@ export const RESTIC_RELEASE = Object.freeze({
       archiveSha256: "a5f64aaab53d51e311fa3829124c5b703f2d14cf187d8640b6be3b2b49376465",
       binarySha256: "2fb45ac6f9071b6f20eb883953a188f9e7c7cb6bbe43c67a2e47ada4e85ee7f0" }),
   }),
+  darwin: Object.freeze({
+    x64: Object.freeze({ archive: "restic_0.19.1_darwin_amd64.bz2",
+      archiveSha256: "c38d579622cf602f665234c5a8c315030b6cf70656028fe6dc29a786b60e5f35",
+      binarySha256: "b2b553b402b9971b0c3f673d880397a421526f55a08f21fe5b82b5dd9e049a08" }),
+    arm64: Object.freeze({ archive: "restic_0.19.1_darwin_arm64.bz2",
+      archiveSha256: "7be0a144ccc377880f294204aa271d76e4b79554b42a751151d425ce6ebac143",
+      binarySha256: "06582569ff2f10e1935a6f12187c76db02f0bae99e6e54098f2cdc374766d768" }),
+  }),
 });
+export function resticReleaseFor(platform: string, arch: string) {
+  if ((platform !== "linux" && platform !== "darwin") || (arch !== "x64" && arch !== "arm64")) return null;
+  return RESTIC_RELEASE[platform][arch];
+}

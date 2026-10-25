@@ -6,7 +6,6 @@ import { reused } from "@oma/domain/request-identity";
 import { type AgentRow } from "@oma/contracts/ledger";
 import { StoreError, acceptedFailure } from "@oma/domain/errors";
 import { resolvedSpecDigest } from "@oma/domain/spec-identity";
-import { residentUnitsFor } from "@oma/domain/derived";
 import { receiptOfOperation } from "@oma/protocol/receipt-projector";
 import { requestHash } from "@oma/domain/request-identity";
 import { resolvedSpecOf } from "@oma/domain/agent-spec";
@@ -73,7 +72,7 @@ export class CreateCoordinator {
         const { message: initialMessage, artifact } = await mail.freezeCreateInitial(auth, id, seed.name, seed.brief);
         scope.register({ operationId: id, resource: initialMessage.id, owner: artifact, observe: () => frozenMessageDisposition(this.store, id, initialMessage) });
         plans.push({ id, plan: { kind: "agent.create", spec, specHash: resolvedSpecDigest(spec), parent: "principal",
-          workspacePath: workspacePathAt(this.paths.stateRoot, seed.name), unitNames: residentUnitsFor(this.paths.society, seed.name), initialMessage, existingCreation: null } });
+          workspacePath: workspacePathAt(this.paths.stateRoot, seed.name), execution: "native", initialMessage, existingCreation: null } });
       }
       // All seed intentions and their registry/delivery links become visible together.
       this.store.transaction(tx => {
@@ -114,7 +113,7 @@ export class CreateCoordinator {
         if (this.store.getAgent(input.name)?.specHash !== specHash)
           throw new StoreError("AGENT_CONFLICT", "existing child spec changed before acceptance");
         const plan: LinkedCreatePlan = { kind: "agent.create", spec, specHash, parent: auth.actor,
-          workspacePath: workspacePathAt(this.paths.stateRoot, input.name), unitNames: residentUnitsFor(this.paths.society, input.name),
+          workspacePath: workspacePathAt(this.paths.stateRoot, input.name), execution: "native",
           initialMessage: null, existingCreation: original.id };
         return tx.acceptOperation({ id, actor: auth.actor, requestKey: key, requestHash: hash, kind: "agent.create",
           payloadJson: JSON.stringify(input), planJson: encodeOperationPlan(plan) });
@@ -139,7 +138,7 @@ export class CreateCoordinator {
         this.policy.assertRevision(revision);
         ({ spec, specHash } = this.policy.resolve(auth, input));
         const plan: PhysicalCreatePlan = { kind: "agent.create", spec, specHash, parent: auth.actor,
-          workspacePath: workspacePathAt(this.paths.stateRoot, input.name), unitNames: residentUnitsFor(this.paths.society, input.name), initialMessage, existingCreation: null };
+          workspacePath: workspacePathAt(this.paths.stateRoot, input.name), execution: "native", initialMessage, existingCreation: null };
         const raced = this.store.getAgent(input.name);
         if (raced) {
           if (raced.specHash !== specHash) throw new StoreError("AGENT_CONFLICT", `name ${input.name} already exists with a different resolved spec`);
@@ -208,10 +207,10 @@ export class CreateCoordinator {
     const plan = operation.plan;
     if (plan.existingCreation) throw new StoreError("AGENT_NOT_READY", "linked create awaits original creation");
     if (!plan.initialMessage) throw new StoreError("STORE_CORRUPT", "create plan has no initial message");
-    const expected = residentUnitsFor(this.paths.society, plan.spec.name);
-    if (!isWorkspacePathFor(plan.workspacePath, { stateRoot: this.paths.stateRoot, actor: plan.spec.name }) ||
-      plan.unitNames.length !== expected.length || plan.unitNames.some((name, index) => name !== expected[index]))
-      throw new StoreError("STORE_CORRUPT", "create path/unit identity mismatch");
+    if ("unitNames" in plan)
+      throw new StoreError("UNSUPPORTED_PROFILE", "accepted systemd installation intent is retained; native execution cannot complete it");
+    if (!isWorkspacePathFor(plan.workspacePath, { stateRoot: this.paths.stateRoot, actor: plan.spec.name }))
+      throw new StoreError("STORE_CORRUPT", "create workspace identity mismatch");
     const agent = this.store.getAgent(plan.spec.name);
     if (!agent || agent.specHash !== plan.specHash || resolvedSpecDigest(resolvedSpecOf(agent)) !== plan.specHash)
       throw new StoreError("STORE_CORRUPT", "create agent/spec mismatch");
@@ -246,7 +245,11 @@ export class CreateCoordinator {
     if (desired === "enabled" && this.paths.hasGoal()) {
       if (!allowActivation || this.paths.activationAllowed() !== true) return lifecycleReceipt(this.store, id);
       // No await between current identity/stop/activation checks and start.
-      this.units.start(plan.spec.name, false);
+      await this.units.start(plan.spec.name, false, () => {
+        const current = assertCurrent();
+        if (current.desired !== "enabled" || !this.paths.hasGoal() || !this.paths.activationAllowed())
+          throw new StoreError("STALE_RUN", "creation activation is no longer permitted");
+      });
     }
     this.store.transaction(tx => tx.setOperationSucceeded(id, JSON.stringify({ kind: "agent.create", agent: plan.spec.name, desired, remainingOperations: [] })));
     return lifecycleReceipt(this.store, id);

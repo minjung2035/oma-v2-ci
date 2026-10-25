@@ -1,6 +1,5 @@
 /** The application binds concrete owners to Broker's exact live capabilities. */
 import { dirname, join } from "node:path";
-import { pinCgroup } from "@oma/native/cgroup";
 import type { Actor, ProtocolLimits } from "@oma/contracts";
 import type { Store } from "@oma/storage";
 import type { MailModule } from "@oma/mail";
@@ -14,12 +13,13 @@ import { ensureOwnedDirectory, removeOwnedFile } from "@oma/storage/directory";
 import { clearSocketName } from "@oma/storage/socket-name";
 import { TransportSpool } from "@oma/storage/transport-spool";
 import type { ProcessLock } from "@oma/native/process-lock";
-import type { UnitsModule } from "@oma/platform-linux/units";
+import type { ExecutionObservation, ExecutionScopePin } from "@oma/contracts/runtime";
 import type { ViewsModule } from "../views.js";
 import { StatusRefresh } from "@oma/broker/status-refresh";
 import { Broker, type BrokerPaths, type PrincipalHostChannel } from "@oma/broker";
 import type { BrokerLedger, BrokerTransaction, BrokerDependencies, BrokerMail, BrokerUnits, BrokerViews, BrokerEffects, PublicReviewPort } from "@oma/broker/ports";
 import { createPublicDispatchPorts, createInternalDispatchDataPorts } from "./composition.js";
+import { credentialStream, prepareCredentialListener } from "@oma/platform-linux/credential-stream";
 
 export function brokerLedger(store: Store): BrokerLedger {
   return Object.freeze({
@@ -35,23 +35,28 @@ export function brokerLedger(store: Store): BrokerLedger {
   } satisfies BrokerLedger);
 }
 export interface BrokerComposition {
-  store: Store; mail: MailModule; units: UnitsModule; views: ViewsModule;
+  store: Store; mail: MailModule; units: BrokerExecution; views: ViewsModule;
   lifecycle: LifecycleModule; git: GitModule | null; reviews: PublicReviewPort | null;
   reconcile: ReconcileModule | null; paths: BrokerPaths; limits: ProtocolLimits;
   /** Already held before configuration/Store/recovery; its outer lifetime releases it. */
   lock: ProcessLock;
   principalHost?: PrincipalHostChannel | undefined;
 }
+export interface BrokerExecution extends BrokerUnits {
+  pin(scope: string): ExecutionScopePin;
+  observeStatus(actors: readonly Actor[]): Promise<ReadonlyMap<Actor, ExecutionObservation | "no-unit">>;
+}
 export function createBroker(input: BrokerComposition): Broker {
   const { store, mail, units, views, lifecycle, git, reviews, reconcile, paths, limits, lock, principalHost } = input;
   const status = new StatusRefresh(() => store.agentNames(), agents => units.observeStatus(agents));
   const dependencies: BrokerDependencies = {
-    acquireRunScope: pinCgroup,
+    acquireRunScope: scope => units.pin(scope),
     ledger: brokerLedger(store),
     mail: Object.freeze<BrokerMail>({ prepare: auth => mail.prepare(auth), complete: (auth, evidence) => mail.complete(auth, evidence),
       settleFromReceipt: (quiescence, batch) => mail.settleFromReceipt(quiescence, batch) }),
-    units: Object.freeze<BrokerUnits>({ observe: actor => units.observe(actor), unitCgroup: kind => units.unitCgroup(kind),
-      bindRunRevoker: revoke => { units.onRevokeRun = revoke; } }),
+    units: Object.freeze<BrokerUnits>({ observe: actor => units.observe(actor), scopeRoot: actor => units.scopeRoot(actor), runnerAlive: actor => units.runnerAlive(actor),
+      readLogs: (actor, since, limit) => units.readLogs(actor, since, limit),
+      bindRunRevoker: revoke => units.bindRunRevoker(revoke) }),
     views: Object.freeze<BrokerViews>({ refreshWorld: () => views.refreshWorld(), publishStatus: snapshot => views.publishStatus(snapshot),
       observeRunnerSource: read => views.observeRunnerSource(read) }),
     reconcile: reconcile === null ? null : Object.freeze({ sweep: () => reconcile.sweep() }),
@@ -59,6 +64,8 @@ export function createBroker(input: BrokerComposition): Broker {
     public: createPublicDispatchPorts(store, mail, status, views, lifecycle, git, reviews, limits),
     internal: createInternalDispatchDataPorts(store, mail, paths.stateRoot),
     effects: Object.freeze<BrokerEffects>({
+      prepareListener: prepareCredentialListener,
+      peerStream: credentialStream,
       bindAdmission: gate => bindAdmissionGate(store, gate),
       ensureRunRoot: () => ensureOwnedDirectory(paths.runRoot, dirname(paths.runRoot), 0o700),
       ensureActorDirectory: (actor, incarnation) => ensureOwnedDirectory(actorSocketDirectoryAt(paths.runRoot, actor, incarnation), dirname(paths.runRoot), 0o700),

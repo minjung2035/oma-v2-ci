@@ -8,6 +8,7 @@ import { openRegularBeneath, withinDirectory } from "@oma/native/files";
 import { startProcess } from "./async.js";
 import type { ProcessObservation } from "./command.js";
 import { SOCIETY_FENCE_ENV, SOCIETY_FENCE_FD } from "./fence.js";
+import { inheritedDescriptorPath } from "@oma/native/descriptor-path";
 
 export function requireResticSuccess(result: ProcessObservation): string {
   if (result.kind !== "exited" || result.exitCode !== 0)
@@ -33,7 +34,7 @@ export class ResticProcess {
     let failed: { error: unknown } | undefined;
     // Node's default pipe is a socketpair: Go cannot reopen that socket via
     // /dev/stdin (ENXIO). Pass the owned regular password descriptor as stdin.
-    const task = startProcess({ executable: "/proc/self/fd/3", argv: [...this.common, ...argv], stdinFd: own.password,
+    const task = startProcess({ executable: inheritedDescriptorPath(3, "execute"), argv: [...this.common, ...argv], stdinFd: own.password,
       cwd: own.source,
       env: { PATH: "/usr/bin:/bin", LANG: "C.UTF-8", LC_ALL: "C", TZ: "UTC", HOME: own.projectRoot,
         TMPDIR: own.stage, [SOCIETY_FENCE_ENV]: String(SOCIETY_FENCE_FD) },
@@ -54,7 +55,7 @@ export class ResticProcess {
   async backup(society: string, list: string): Promise<string> {
     const fd = withinDirectory(list, (parent, name) => openRegularBeneath(parent, name));
     return withAsyncCleanup(async () => {
-      const output = await this.execute(["backup", "--force", "--host", "oma", "--tag", society, "--files-from-raw", "/proc/self/fd/7"], { extra: [fd] });
+      const output = await this.execute(["backup", "--force", "--host", "oma", "--tag", society, "--files-from-raw", inheritedDescriptorPath(7, "read")], { extra: [fd] });
       const summaries = output.split("\n").filter(Boolean).map(line => JSON.parse(line) as Record<string, unknown>)
         .filter(value => value.message_type === "summary");
       const snapshot = summaries.length === 1 ? summaries[0]!.snapshot_id : null;

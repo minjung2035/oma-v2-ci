@@ -2,18 +2,18 @@ import type { RecoveryCounts } from "@oma/contracts/runtime";
 import type { SandboxHost, SandboxDirectories } from "@oma/contracts/runtime";
 /** Internal runtime orchestration contracts, not ledger or implementation owners. */
 import type { Actor } from "@oma/contracts/identity";
-import type { AgentStatus, PreparedBatch, RunLease, SandboxPlan, UnitObservation } from "@oma/contracts/runtime";
+import type { AgentStatus, PreparedBatch, RunLease, SandboxPlan, ExecutionObservation } from "@oma/contracts/runtime";
 import type { BatchViewLimits } from "@oma/contracts/host";
 
 /** Host-configured bounds shared by runtime composition and batch-view decoding. */
 export type { BatchViewLimits } from "@oma/contracts/host";
 
 /** Low-level blocking effects. The incarnation is mandatory death-proof input. */
-export interface SyncUnitsPort {
+export interface ResidentExecutionPort {
   ensureResident(agent: Actor, profile: string, modelProfile: string): void;
-  start(agent: Actor, explicitRepair: boolean): void;
-  stop(agent: Actor, incarnation: number): UnitObservation;
-  observe(agent: Actor): UnitObservation;
+  start(agent: Actor, explicitRepair: boolean, authorize?: () => void): Promise<void>;
+  stop(agent: Actor, incarnation: number): Promise<ExecutionObservation>;
+  observe(agent: Actor): ExecutionObservation;
   confirmDead(agent: Actor, incarnation: number): boolean;
 }
 

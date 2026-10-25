@@ -12,7 +12,7 @@ import { createCanonicalObserver, compareAndSwapCanonicalRef, authorizeCanonical
 import { GitPublicationObserver } from "./publication.js";
 import { ContextPublicationObserver } from "./context-publication.js";
 import { ContextRepository } from "./context-repository.js";
-import { QuarantineImporter } from "./quarantine.js";
+import { QuarantineImporter, type QuarantineExecution } from "./quarantine.js";
 
 export class GitRepository implements GitRepositoryPort {
   get stateRoot(): string { return this.paths.stateRoot; }
@@ -28,8 +28,8 @@ export class GitRepository implements GitRepositoryPort {
   readonly contextPublication: GitRepositoryPort["contextPublication"];
   constructor(private readonly paths: GitPaths, private readonly ledger: {
     submissions(): readonly OperationOf<"git.submit">[];
-  }) {
-    this.quarantine = new QuarantineImporter(paths, candidate => this.canonicalHas(candidate));
+  }, quarantine: QuarantineExecution | null = null) {
+    this.quarantine = new QuarantineImporter(paths, candidate => this.canonicalHas(candidate), quarantine);
     this.contextRepository = new ContextRepository(paths, this.observations);
     this.submissionPublication = new GitPublicationObserver(this.observations, paths.projectGit);
     this.contextPublication = new ContextPublicationObserver(this.observations, paths.contextGit);
@@ -50,7 +50,7 @@ export class GitRepository implements GitRepositoryPort {
     this.submission = {
       verifyObjectFormat: facts.verifyObjectFormat,
       canonicalHas: candidate => this.canonicalHas(candidate),
-      quarantineImport: (fd, candidate, exportRef, prerequisites) => this.quarantineImport(fd, candidate, exportRef, prerequisites),
+      quarantineImport: (fd, candidate, exportRef, prerequisites, authorize) => this.quarantineImport(fd, candidate, exportRef, prerequisites, authorize),
       publishRef: (ref, candidate) => this.publishRef(ref, candidate),
       observeRef: ref => this.observations.ref(paths.projectGit, ref),
     } satisfies GitRepositoryPort["submission"];
@@ -101,8 +101,8 @@ export class GitRepository implements GitRepositoryPort {
     const value = this.observations.commit(this.paths.projectGit, oid);
     return value.kind === "absent" ? false : observed(value, "canonical commit");
   }
-  private quarantineImport(bundleFd: number, candidate: Oid, exportRef: string, prerequisites: readonly Oid[]): Promise<void> {
-    return this.quarantine.importBundle(bundleFd, candidate, exportRef, prerequisites);
+  private quarantineImport(bundleFd: number, candidate: Oid, exportRef: string, prerequisites: readonly Oid[], authorize: () => void): Promise<void> {
+    return this.quarantine.importBundle(bundleFd, candidate, exportRef, prerequisites, authorize);
   }
   private publishRef(ref: string, candidate: Oid): void {
     const current = this.observations.ref(this.paths.projectGit, ref);

@@ -14,8 +14,8 @@ import type { PackageResourcePaths } from "@oma/contracts/assets";
 import { PI_AGENT_DIR_ENV } from "./pi-runtime.js";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
-import { RESIDENT_EGRESS_PORT, RESIDENT_INFERENCE_PORT, RESIDENT_PATHS, SANDBOX_EXECUTABLE, confinedPath } from "@oma/domain/resident-paths";
-import type { ResidentSandbox } from "./ports.js";
+import { RESIDENT_EGRESS_PORT, RESIDENT_INFERENCE_PORT } from "@oma/domain/resident-paths";
+import type { ResidentSandbox, PiSpawnPlan } from "./ports.js";
 import { type SandboxDirectories as ResidentDirectories, type SandboxHost } from "@oma/contracts/runtime";
 import type { ValidatedRunLease } from "@oma/protocol/run-lease";
 import { StoreError } from "@oma/domain/errors";
@@ -121,29 +121,11 @@ export interface PiAdapterOptions {
   readonly confinement: PiConfinement;
 }
 
-export interface PiSpawnPlan {
-  readonly command: string;
-  readonly args: string[];
-  readonly cwd: string;
-  readonly env: Record<string, string>;
-  /** A confined engine's sandbox filter: the bytes descriptor 3 carries to
-   * bubblewrap (SANDBOX_FILTER_FD, DR18). */
-  readonly filter?: Uint8Array;
-}
+export type { PiSpawnPlan } from "./ports.js";
 
 /** Maps a host path to the path the engine is told, exclusively through
  * the confined Resident's mount translation. */
 type PathView = (hostPath: string) => string;
-
-function pathView(options: PiAdapterOptions): PathView {
-  const confinement = options.confinement;
-  return path =>
-    // The lease socket is bind-mounted at a fixed path rather than under one of
-    // the directory roots, so it is the one entry the table cannot resolve.
-    path === confinement.lease.socketHostPath
-      ? RESIDENT_PATHS.socket
-      : confinedPath(confinement.host, confinement.directories, path);
-}
 
 /** AV13: set in a confined engine's environment, and nowhere else. The trusted
  * extension mirrors these two values (workspace-guard.ts; PI-001 keeps it from
@@ -279,7 +261,8 @@ export function planPiSpawn(sandbox: ResidentSandbox, options: PiAdapterOptions)
   assertModelScope(options.paths.workspace, [options.paths.sessionDir, options.paths.agentHome, options.paths.batchView,
     ...(options.paths.piAgentDir === undefined ? [] : [options.paths.piAgentDir])]);
   const confinement = options.confinement;
-  const inside = pathView(options);
+  const view = sandbox.pathView(confinement.host, confinement.lease, confinement.directories);
+  const inside: PathView = path => view.map(path);
   // `residentArgv` appends `node pi <piModeArgs>` itself, so the engine flags
   // travel as the host's Pi arguments and the entry is `host.pi`.
   const host = { ...confinement.host, piModeArgs: engineArgv(options, inside) };
@@ -296,7 +279,7 @@ export function planPiSpawn(sandbox: ResidentSandbox, options: PiAdapterOptions)
     // sandbox, the mount plan is the boundary of its tools (TSP-009).
     [TOOL_SCOPE_ENV]: TOOL_SCOPE_SANDBOX,
     ...(relay === undefined ? {} : {
-      OMA_INFERENCE_SOCKET: RESIDENT_PATHS.inference,
+      OMA_INFERENCE_SOCKET: view.inference,
       OMA_INFERENCE_PROVIDER: relay.provider,
       OMA_INFERENCE_PORT: String(RESIDENT_INFERENCE_PORT),
       OMA_INFERENCE_KEY: relay.placeholder,
@@ -308,7 +291,7 @@ export function planPiSpawn(sandbox: ResidentSandbox, options: PiAdapterOptions)
     // the production recipe shares the host/guest network and imposes no
     // namespace-based egress restriction.
     ...(confinement.egress === undefined ? {} : {
-      OMA_EGRESS_PROXY_SOCKET: RESIDENT_PATHS.egress,
+      OMA_EGRESS_PROXY_SOCKET: view.egress,
       OMA_EGRESS_PROXY_PORT: String(RESIDENT_EGRESS_PORT),
       HTTP_PROXY: `http://127.0.0.1:${RESIDENT_EGRESS_PORT}`,
       http_proxy: `http://127.0.0.1:${RESIDENT_EGRESS_PORT}`,
@@ -320,11 +303,6 @@ export function planPiSpawn(sandbox: ResidentSandbox, options: PiAdapterOptions)
       no_proxy: "127.0.0.1,localhost,::1",
     }),
   };
-  const plan = sandbox.residentArgv(host, confinement.lease, confinement.directories,
+  return sandbox.residentPlan(host, confinement.lease, confinement.directories,
     environment, relay?.socketHostPath, confinement.egress?.socketHostPath);
-  // WP27: the delivery path starts this plan through the owned spawn, which
-  // takes only an absolute executable; a bare `bwrap` was refused there, so no
-  // confined Resident could ever deliver a batch.
-  if (plan[0] !== "bwrap") throw new StoreError("UNSUPPORTED_PROFILE", "resident sandbox recipe does not start bubblewrap");
-  return { command: SANDBOX_EXECUTABLE, args: plan.slice(1), cwd: options.paths.workspace, env: {}, filter: sandbox.seccompFilter() };
 }

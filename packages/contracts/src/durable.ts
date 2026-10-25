@@ -56,9 +56,9 @@ export type OperationPlan =
   | { kind: 'mail.send' | 'agent.continue'; message: MessagePlan }
   | { kind: 'mail.ack'; recipient: Actor; message: MessageId }
   | { kind: 'route.follow' | 'route.unfollow'; topic: string; agent: Actor }
-  | { kind: 'agent.create'; spec: ResolvedAgentSpec; specHash: string; parent: Actor;
-      workspacePath: string; unitNames: string[]; initialMessage: MessagePlan | null;
-      existingCreation: OperationId | null }
+  | ({ kind: 'agent.create'; spec: ResolvedAgentSpec; specHash: string; parent: Actor;
+      workspacePath: string; initialMessage: MessagePlan | null; existingCreation: OperationId | null } &
+      ({ execution: 'native' } | { unitNames: string[] }))
   | { kind: 'agent.start' | 'agent.stop'; agent: Actor; previousIncarnation: number;
       desired: 'enabled' | 'stopped'; remainingOperations: OperationId[] }
   | { kind: 'git.submit'; candidate: Oid; exportRef: string; prerequisites: Oid[];

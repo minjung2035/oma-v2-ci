@@ -9,10 +9,10 @@ export interface ResidentExecutionBackend<Observation extends ExecutionObservati
   observe(actor: string): Observation;
   repairStartFailure(actor: string): void;
   enableWake(actor: string): void;
-  launch(actor: string): void;
+  launch(actor: string, authorize: () => void): void | Promise<void>;
   disableWake(actor: string): void;
   revoke(actor: string): void;
-  terminate(actor: string): void;
+  terminate(actor: string): void | Promise<void>;
   verifyWakeDisabled(actor: string): void;
   confirmDead(actor: string, incarnation: number): boolean;
 }
@@ -20,13 +20,13 @@ export interface ResidentExecutionBackend<Observation extends ExecutionObservati
 export class ResidentSupervisor<Observation extends ExecutionObservation> {
   constructor(private readonly backend: ResidentExecutionBackend<Observation>) {}
 
-  start(actor: string, explicitRepair: boolean): void {
+  async start(actor: string, explicitRepair: boolean, authorize: () => void = () => {}): Promise<void> {
     const backend = this.backend;
     backend.assertStartOwner(actor);
     const before = backend.observe(actor);
     if (explicitRepair && before.activeState === "failed") backend.repairStartFailure(actor);
     backend.enableWake(actor);
-    try { backend.launch(actor); }
+    try { await backend.launch(actor, authorize); }
     catch (error) {
       // A fresh explicit result may explain a completed refusal. It cannot
       // settle a command whose outcome is still unknown.
@@ -42,14 +42,14 @@ export class ResidentSupervisor<Observation extends ExecutionObservation> {
       throw new StoreError("RUN_TERMINATION_UNKNOWN", `execution activation not observed for ${actor}`);
   }
 
-  stop(actor: string, incarnation: number): Observation {
+  async stop(actor: string, incarnation: number): Promise<Observation> {
     const backend = this.backend, failures: unknown[] = [];
     // The lifecycle has committed stop intent. Disable hints first, revoke
     // endpoint/provider authority, then terminate and independently prove all
     // descendants ended. Every attempted cleanup retains its own failure.
     for (const action of [() => backend.disableWake(actor), () => backend.revoke(actor),
       () => backend.terminate(actor), () => backend.verifyWakeDisabled(actor)]) {
-      try { action(); } catch (error) { failures.push(error); }
+      try { await action(); } catch (error) { failures.push(error); }
     }
     let observation: Observation | undefined;
     try { observation = backend.observe(actor); } catch (error) { failures.push(error); }

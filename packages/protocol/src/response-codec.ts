@@ -88,7 +88,6 @@ const checks = {
   "runner.observe": checkObject({ accepted: exactlyTrue }),
   "principal.attach": checkObject({ actor: value => value === "principal" ? null : "expected principal", incarnation: nonnegative }),
   "principal.detach": checkObject({ detached: exactlyTrue }),
-  "host.principalRelay": checkObject({ moved: nonnegative, pending: nonnegative }),
 } satisfies Record<ReadResultMethod | keyof InternalMethods, Check>;
 function invalid(message: string): never { throw new StoreError("BROKER_UNAVAILABLE", `invalid broker response: ${message}`); }
 function record(value: unknown): value is Record<string, unknown> { return value !== null && typeof value === "object" && !Array.isArray(value); }

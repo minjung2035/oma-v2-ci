@@ -78,19 +78,14 @@
     "requirements": [
       "UNIT-007"
     ],
-    "owner": "packages/platform-linux/src/units.ts#UnitsModule",
-    "entrypoint": "packages/lifecycle/src/create.ts#CreateCoordinator",
+    "owner": "docs/archive/systemd-reference-2026-10-26/packages/platform-linux/src/units.ts#UnitsModule",
+    "entrypoint": "docs/archive/systemd-reference-2026-10-26/packages/platform-linux/src/units.ts#UnitsModule",
     "callPath": [
-      "packages/lifecycle/src/create.ts#CreateCoordinator",
-      "packages/lifecycle/src/create-publication.ts#CreationPublicationObserver",
-      "packages/platform-linux/src/units.ts#UnitsModule",
-      "packages/process/src/resident-supervisor.ts#ResidentSupervisor",
-      "packages/platform-linux/src/units/execute.ts#executeUnitCommand"
+      "docs/archive/systemd-reference-2026-10-26/packages/platform-linux/src/units.ts#UnitsModule",
+      "docs/archive/systemd-reference-2026-10-26/packages/platform-linux/src/units/execute.ts#executeUnitCommand"
     ],
     "negativeTests": [
-      "test/phase4.test.ts#UNIT",
-      "test/r37-preparation-boundaries.test.ts#R37",
-      "packages/process/test/resident-supervisor.test.mjs#resident policy"
+      "docs/archive/systemd-reference-2026-10-26/packages/platform-linux/test/r26-units-boundaries.test.mjs#R26"
     ]
   },
   {
@@ -942,9 +937,9 @@
       "UNIT-006"
     ],
     "owner": "packages/process/src/resident-supervisor.ts#ResidentSupervisor.startLimitStatus",
-    "entrypoint": "packages/platform-linux/src/units.ts#UnitsModule.startLimitStatus",
+    "entrypoint": "packages/process/src/resident-runtime.ts#ResidentRuntime.startLimitStatus",
     "callPath": [
-      "packages/platform-linux/src/units.ts#UnitsModule.startLimitStatus",
+      "packages/process/src/resident-runtime.ts#ResidentRuntime.startLimitStatus",
       "packages/process/src/resident-supervisor.ts#ResidentSupervisor.startLimitStatus"
     ],
     "negativeTests": [
@@ -973,6 +968,124 @@
       "test/workspace-boundaries.test.mjs#NATIVE-008: tool-files is independent",
       "test/contained-tools.test.ts#P0V-74 / R6-01: a write through a dangling link",
       "test/legacy-removals.test.mjs#NATIVE-010: the removed tool-runtime"
+    ]
+  },
+  {
+    "source": "docs/macos-platform.md",
+    "requirements": [
+      "NATIVE-011"
+    ],
+    "owner": "packages/process/src/owned-execution.ts#ExecutionCoordinator",
+    "entrypoint": "apps/oma/src/runtime/execution-runtime.ts#ExecutionRuntime",
+    "callPath": [
+      "apps/oma/src/runtime/execution-runtime.ts#ExecutionRuntime",
+      "packages/process/src/owned-execution.ts#ExecutionCoordinator",
+      "packages/storage/src/execution-journal.ts#ExecutionJournal"
+    ],
+    "negativeTests": [
+      "test/native-process-scope.test.mjs#native scope: cancellation after witness publication"
+    ]
+  },
+  {
+    "source": "docs/macos-platform.md",
+    "requirements": [
+      "NATIVE-012"
+    ],
+    "owner": "packages/process/src/owned-execution.ts#ExecutionCoordinator.recover",
+    "entrypoint": "apps/oma/src/entry/broker.ts#main",
+    "callPath": [
+      "apps/oma/src/entry/broker.ts#main",
+      "apps/oma/src/runtime/execution-runtime.ts#ExecutionRuntime.recover",
+      "packages/process/src/owned-execution.ts#ExecutionCoordinator.recover",
+      "packages/native/src/pid-namespace.ts#pinNamespaceInit"
+    ],
+    "negativeTests": [
+      "test/native-process-scope.test.mjs#native recovery: real owner SIGKILL"
+    ]
+  },
+  {
+    "source": "docs/macos-platform.md",
+    "requirements": [
+      "NATIVE-013"
+    ],
+    "owner": "packages/process/src/resident-runtime.ts#ResidentRuntime",
+    "entrypoint": "apps/oma/src/runtime/native-residents.ts#createNativeResidents",
+    "callPath": [
+      "apps/oma/src/runtime/native-residents.ts#createNativeResidents",
+      "packages/process/src/resident-runtime.ts#ResidentRuntime",
+      "packages/process/src/resident-supervisor.ts#ResidentSupervisor"
+    ],
+    "negativeTests": [
+      "packages/process/test/resident-supervisor.test.mjs#stop",
+      "test/native-git-execution.test.mjs#native quarantine"
+    ]
+  },
+  {
+    "source": "docs/macos-platform.md",
+    "requirements": [
+      "NATIVE-014"
+    ],
+    "owner": "packages/broker/src/peer-authenticator.ts#matchesPinnedSender",
+    "entrypoint": "packages/broker/src/index.ts#Broker",
+    "callPath": [
+      "packages/broker/src/index.ts#Broker",
+      "packages/platform-linux/src/credential-stream.ts#credentialStream",
+      "packages/process/src/observed-stream.ts#ObservedStream",
+      "packages/broker/src/peer-authenticator.ts#matchesPinnedSender"
+    ],
+    "negativeTests": [
+      "test/native-credential-stream.test.mjs#credential stream: live connector",
+      "test/native-unix-message.test.mjs#recvmsg actual ABI"
+    ]
+  },
+  {
+    "source": "docs/macos-platform.md",
+    "requirements": [
+      "NATIVE-015"
+    ],
+    "owner": "packages/protocol/src/persisted-formats.ts#classifyPersistedPlan",
+    "entrypoint": "packages/lifecycle/src/create.ts#CreateCoordinator",
+    "callPath": [
+      "packages/lifecycle/src/create.ts#CreateCoordinator",
+      "packages/protocol/src/operation-codec.ts#encodeOperationPlan",
+      "packages/protocol/src/persisted-formats.ts#classifyPersistedPlan"
+    ],
+    "negativeTests": [
+      "test/persisted-state-fuzz.test.ts#persisted"
+    ]
+  },
+  {
+    "source": "docs/macos-platform.md",
+    "requirements": [
+      "NATIVE-016"
+    ],
+    "owner": "packages/process/src/resident-logs.ts#residentLogView",
+    "entrypoint": "apps/oma/src/runtime/native-residents.ts#createNativeResidents",
+    "callPath": [
+      "apps/oma/src/runtime/native-residents.ts#createNativeResidents",
+      "packages/storage/src/resident-logs.ts#ResidentLogStore",
+      "packages/process/src/resident-logs.ts#residentLogView"
+    ],
+    "negativeTests": [
+      "packages/process/test/resident-logs.test.mjs#Resident log view"
+    ]
+  },
+  {
+    "source": "docs/macos-platform.md",
+    "requirements": [
+      "NATIVE-017"
+    ],
+    "owner": "packages/git/src/candidate-check.ts#CandidateSetupStatus",
+    "entrypoint": "apps/oma/src/runtime/candidate-checks.ts#CandidateChecks.run",
+    "callPath": [
+      "apps/oma/src/runtime/candidate-checks.ts#CandidateChecks.run",
+      "packages/git/src/candidate-check.ts#CandidateSetupStatus",
+      "apps/oma/src/entry/candidate-check.ts#status",
+      "packages/git/src/candidate-check.ts#executeCandidateCheck"
+    ],
+    "negativeTests": [
+      "test/native-git-execution.test.mjs#native candidate: revocation after exact checkout",
+      "test/candidate-checks.test.ts#INT-007/P0-1"
     ]
   }
 ]

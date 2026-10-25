@@ -19,7 +19,6 @@ import type { InternalStorePort, InternalMailPort, InternalPeerPort, InternalDis
 export function projectInternalPeers(peers: InternalPeerPort): InternalPeerPort {
   return {
     requireRunnerUnit: (peer, agent, invocationId) => peers.requireRunnerUnit(peer, agent, invocationId),
-    requireHostUnit: (peer, kind) => peers.requireHostUnit(peer, kind),
     runnerActor: peer => peers.runnerActor(peer),
     runnerAuth: (agent, incarnation, peer) => peers.runnerAuth(agent, incarnation, peer),
   };
@@ -164,16 +163,6 @@ export class InternalDispatcher {
             evidence,
           );
           return okAnswer(id, { completed: true });
-        }
-        case "host.principalRelay": {
-          peers.requireHostUnit(peer, "principal-relay");
-          const principal = store.getAgentIdentity("principal");
-          if (!principal) return okAnswer(id, { moved: 0, pending: 0 });
-          const newFiles = this.deps.principalInboxNewEntries();
-          return okAnswer(id, {
-            moved: mail.moveToCur("principal", newFiles),
-            pending: store.pendingDeliveryCount("principal"),
-          });
         }
         case "batch.read":
         case "principal.attach":

@@ -1009,7 +1009,7 @@ export function runArchitectureCheck(rootDir = process.cwd(), baseline = []) {
     roots: [
       "apps/oma/src/entry/broker.ts",
       "apps/oma/src/entry/runner.ts",
-      "apps/oma/src/entry/host.ts",
+      "apps/oma/src/entry/candidate-check.ts", "apps/oma/src/entry/quarantine.ts",
       "apps/oma/src/cli.ts",
       "packages/extension/src/index.ts",
     ],

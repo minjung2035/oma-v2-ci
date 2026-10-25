@@ -1,14 +1,14 @@
 /** Compile-only composition verification. Ports never import their implementors. */
 import type { StorePort } from "../ports/ledger.js";
 import type {
-  SyncUnitsPort,
+  ResidentExecutionPort,
   DerivedViewsPort,
   ReconcilePort,
   BoundRunnerPort,
   SandboxPort,
 } from "../ports/runtime.js";
 import type { Store } from "@oma/storage";
-import type { UnitsModule } from "@oma/platform-linux/units";
+import type { NativeResidents } from "../runtime/native-residents.js";
 import type { ViewsModule } from "../views.js";
 import type { ReconcileModule } from "@oma/reconcile";
 import type { RunnerModule } from "../runner.js";
@@ -23,7 +23,7 @@ export type ActualModuleConformance = {
   store: Conforms<StorePort, Store>;
   operationLookup: Conforms<OperationLookup, DecodedOperation>;
   receiptProjector: Conforms<ReceiptProjector, typeof receiptOfOperation>;
-  units: Conforms<SyncUnitsPort, UnitsModule>;
+  units: Conforms<ResidentExecutionPort, NativeResidents>;
   views: Conforms<DerivedViewsPort, ViewsModule>;
   reconcile: Conforms<ReconcilePort, ReconcileModule>;
   runner: Conforms<BoundRunnerPort, RunnerModule>;

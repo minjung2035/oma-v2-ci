@@ -15,6 +15,8 @@ import { packageStoreRoot } from "../runtime/packages/index.js";
 import { DEPLOYMENT_LAYOUT } from "@oma/domain/deployment";
 import { launchedLocation, type LaunchLocation } from "../runtime/assets.js";
 import { stopOnHostLoss } from "@oma/process/host-loss";
+import { Socket } from "node:net";
+import { closeOnExec } from "@oma/native/control-socket";
 
 function usage(): never {
   console.error("usage: runner.js --society <name> --agent <name> --config <path> --state-root <dir> --run-root <dir>");
@@ -35,6 +37,13 @@ let location: LaunchLocation;
 try { location = launchedLocation(args, society); }
 catch (error) { console.error(`runner: ${error instanceof Error ? error.message : String(error)}`); usage(); }
 const { stateRoot, runRoot, configPath } = location;
+// Fixed direct-spawn capability. No pathname or environment fallback. Mark
+// CLOEXEC before any engine/tool child can be created.
+const control = (() => {
+  try { closeOnExec(6); return new Socket({ fd: 6, readable: true, writable: true }); }
+  catch { console.error("runner: inherited control descriptor is unavailable"); process.exit(4); }
+})();
+control.on("error", () => {});
 try { assertNativeRuntime(); }
 catch (error) { console.error(`runner: ${error instanceof Error ? error.message : String(error)}`); process.exit(4); }
 const configuration = loadConfiguration(configPath);
@@ -117,7 +126,7 @@ const runner = new RunnerModule({ runRoot, stateRoot, society,
   coreExtension: join(cfg.installation.libdir, DEPLOYMENT_LAYOUT.extension),
   cli: join(cfg.installation.libdir, DEPLOYMENT_LAYOUT.cli),
   ...(packages === undefined ? {} : { packages }),
-  confinement }, agent, cfg.limits, profile);
+  confinement }, agent, cfg.limits, profile, control);
 let stopping = false;
 const stop = (): void => {
   if (stopping) return;

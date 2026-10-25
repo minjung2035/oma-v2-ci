@@ -17,12 +17,12 @@ import type { LifecycleUnits } from "./ports.js";
 
 /** Every Resident's path is disabled, even if its service is already dead.
  * Otherwise a queued mail/path activation can outlive an observed empty cgroup. */
-export function quiesceResidents(store: Pick<LifecycleLedger, "listAgents">, units: Pick<LifecycleUnits, "stop" | "confirmDead">): void {
+export async function quiesceResidents(store: Pick<LifecycleLedger, "listAgents">, units: Pick<LifecycleUnits, "stop" | "confirmDead">): Promise<void> {
   const failures: unknown[] = [];
   for (const agent of store.listAgents()) {
     if (agent.role !== "resident") continue;
     try {
-      units.stop(agent.name, agent.incarnation);
+      await units.stop(agent.name, agent.incarnation);
       if (!units.confirmDead(agent.name, agent.incarnation))
         throw new StoreError("RUN_TERMINATION_UNKNOWN", `cannot prove ${agent.name} terminated`);
     } catch (error) { failures.push(error); }
@@ -41,7 +41,7 @@ export class SocietyControl {
     if (auth.actor !== "principal" || auth.role !== "principal")
       throw new StoreError("CAPABILITY_DENIED", "only the Principal can open or close the society");
   }
-  set(auth: AuthContext, state: "open" | "closed", key: string): Receipt {
+  async set(auth: AuthContext, state: "open" | "closed", key: string): Promise<Receipt> {
     this.requirePrincipal(auth);
     let payload: { state: "open" | "closed" };
     try { payload = decodeMutationPayload("society.set", { state }); }
@@ -53,7 +53,7 @@ export class SocietyControl {
       const previous = this.store.retriedOperation(auth.actor, key);
       if (previous.kind !== "society.set") throw new StoreError("STORE_CORRUPT", "society request changed kind");
       try {
-        this.reconcile(previous, () => this.requirePrincipal(auth));
+        await this.reconcile(previous, () => this.requirePrincipal(auth));
         return this.receipt(previous.id);
       } catch (error) { throw acceptedFailure(error); }
     }
@@ -66,21 +66,21 @@ export class SocietyControl {
     });
     if (accepted === "retry") return receiptOfOperation(this.store.retriedOperation(auth.actor, key));
     try {
-      this.apply(id, state, wasOpen && state === "open", () => this.requirePrincipal(auth));
+      await this.apply(id, state, wasOpen && state === "open", () => this.requirePrincipal(auth));
       return this.receipt(id);
     } catch (error) { throw acceptedFailure(error); }
   }
-  reconcileById(id: string): void {
+  async reconcileById(id: string): Promise<void> {
     const operation = this.store.getOperationById(id);
     if (!operation || operation.kind !== "society.set") throw new StoreError("STORE_CORRUPT", "society recovery identity changed");
-    this.reconcile(operation);
+    await this.reconcile(operation);
   }
-  reconcile(operation: OperationOf<"society.set">, liveAuthority?: () => void): void {
+  async reconcile(operation: OperationOf<"society.set">, liveAuthority?: () => void): Promise<void> {
     if (operation.state !== "pending" && operation.state !== "unknown") return;
     if (this.store.latestSocietyAction()?.id !== operation.id) {
       this.store.transaction(tx => tx.setOperationUnknown(operation.id)); return;
     }
-    this.apply(operation.id, operation.plan.state, false, liveAuthority);
+    await this.apply(operation.id, operation.plan.state, false, liveAuthority);
   }
   private requireOpeningAuthority(): void {
     const principal = this.store.getAgent("principal");
@@ -89,12 +89,14 @@ export class SocietyControl {
     if (principal.desired !== "enabled" || !spec.capabilities.includes("agent.manage.descendants"))
       throw new StoreError("CAPABILITY_DENIED", "Principal cannot reopen society execution now");
   }
-  private apply(id: string, state: "open" | "closed", alreadyOpen: boolean, liveAuthority?: () => void): void {
+  private async apply(id: string, state: "open" | "closed", alreadyOpen: boolean, liveAuthority?: () => void): Promise<void> {
     try {
       // Pending open is fenced too: an unconfirmed close cannot be bypassed by
       // another key. Reopening re-proves quiescence before releasing activation.
-      if (!alreadyOpen) quiesceResidents(this.store, this.units);
+      if (!alreadyOpen) await quiesceResidents(this.store, this.units);
       this.store.transaction(tx => {
+        if (this.store.latestSocietyAction()?.id !== id)
+          throw new StoreError("STALE_RUN", "society intent changed while executions were stopping");
         // Reopening is a new permission to execute, not settlement of a past
         // physical effect. A recovered close still finishes its accepted fence.
         if (state === "open") { this.requireOpeningAuthority(); liveAuthority?.(); }

@@ -87,6 +87,14 @@
     "./project-preparation": {
       "types": "./dist/project-preparation.d.ts",
       "default": "./dist/project-preparation.js"
+    },
+    "./quarantine-worker": {
+      "types": "./dist/quarantine-worker.d.ts",
+      "default": "./dist/quarantine-worker.js"
+    },
+    "./candidate-check": {
+      "types": "./dist/candidate-check.d.ts",
+      "default": "./dist/candidate-check.js"
     }
   },
   "scripts": {

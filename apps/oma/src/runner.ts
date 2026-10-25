@@ -2,6 +2,7 @@ import { residentEngineEffects } from "./engine/resident-effects.js";
 // RUN-001/BATCH-001: runner policy is separate from transport mechanics.
 // A prepared batch remains durable until a pinned Pi boundary receipt completes it.
 import { join } from "node:path";
+import type { Socket } from "node:net";
 import type {
   ModelProfile,
   PreparedBatch,
@@ -111,6 +112,7 @@ export class RunnerModule {
     private readonly agent: string,
     private readonly limits?: ProtocolLimits,
     readonly profile?: RunnerProfile,
+    private readonly control?: Socket,
   ) {
     this.channel = new BrokerChannel(limits as ChannelLimits | undefined);
   }
@@ -127,7 +129,10 @@ export class RunnerModule {
   private async connect(): Promise<void> {
     if (this.stopped)
       throw new StoreError("BROKER_UNAVAILABLE", "runner has been stopped");
-    await this.channel.connect(join(this.paths.runRoot, "admin.sock"));
+    if (this.channel.connected) return;
+    if (this.control === undefined || this.control.destroyed)
+      throw new StoreError("BROKER_UNAVAILABLE", "runner has no live inherited control channel");
+    await this.channel.attach(this.control);
   }
   private async open(): Promise<void> {
     await this.connect();

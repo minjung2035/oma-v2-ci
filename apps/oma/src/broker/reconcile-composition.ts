@@ -23,8 +23,9 @@ export function createReconcileModule(store: Store, mail: ReconcileMail, git: Re
     observeAsync: (actor: string) => units.observeAsync(actor), observe: (actor: string) => units.observe(actor),
     confirmDead: (actor: string, incarnation: number) => units.confirmDead(actor, incarnation),
     stop: (actor: string, incarnation: number) => units.stop(actor, incarnation),
-    start: (actor: string, repair: boolean) => units.start(actor, repair),
+    start: (actor: string, repair: boolean, authorize?: () => void) => units.start(actor, repair, authorize),
     startLimitStatus: (actor: string) => units.startLimitStatus(actor),
+    restartDue: (actor: string) => units.restartDue?.(actor) === true,
   });
   return new ReconcileModule(reads, Object.freeze({ reconcileOperation: (id: string) => mail.reconcileOperation(id) }),
     git === null ? null : Object.freeze({ reconcile: (id: string) => git.reconcile(id) }),

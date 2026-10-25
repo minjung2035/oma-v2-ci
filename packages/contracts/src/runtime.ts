@@ -32,17 +32,21 @@ export interface RunLease { actor: Actor; incarnation: number; socketHostPath: s
 
 /** Transient execution status; neither current authority nor descendant death
  * proof. The existing status wire words remain unchanged. */
-export interface ExecutionObservation { activeState: string; subState: string; result: string; execMainStatus: number; invocationId: string }
-export interface UnitObservation extends ExecutionObservation { cgroup: string }
+export interface ExecutionObservation { activeState: string; subState: string; result: string; execMainStatus: number; invocationId: string; scope: string }
 
 /** A live kernel scope capability, not a durable DTO or authority token. The
  * common run owner cannot interpret the OS identity or infer death from EOF. */
 export interface ExecutionScopePin {
   readonly identity: unknown;
-  population(): "empty" | "populated" | "removed" | "unknown";
+  population(): "empty" | "populated" | "unknown";
   matches(scope: string): boolean;
   close(): void;
 }
+export interface ResidentLogEntry {
+  readonly actor: string; readonly invocationId: string; readonly incarnation: number | null;
+  readonly atMs: number; readonly stream: "stdout" | "stderr"; readonly bytes: Uint8Array;
+}
+export type ResidentLogObservation = { readonly kind: "entry"; readonly entry: ResidentLogEntry } | { readonly kind: "incomplete" };
 
 export interface SandboxPlan { argv: readonly string[]; env: Readonly<Record<string,string>>; inheritedFds: readonly number[] }
 
@@ -130,7 +134,7 @@ export interface PreacceptCollection {
 
 /** D01/BATCH-004: what a broker-owned settlement must hold. The next run of
  * `actor` has begun only after its previous invocation's cgroup was proven
- * empty or removed (or this broker's startup quiesced every unit before
+ * empty or removed (or this broker's startup quiesced every scope before
  * admitting runs), and no endpoint of that next run exists yet, so nothing at
  * `incarnation` can still act. `confirm` re-checks this immediately before the
  * ledger transition; it is not a flag that stays true. */
@@ -144,7 +148,7 @@ export interface StatusSnapshot {
   /** When this observation started; the time every value in it is about. */
   readonly observedAtMs: number;
   /** An agent absent here was not observed and is unknown. */
-  readonly units: ReadonlyMap<Actor, UnitObservation | "no-unit">;
+  readonly units: ReadonlyMap<Actor, ExecutionObservation | "no-unit">;
   readonly failure: "timeout" | "unavailable" | null;
 }
 

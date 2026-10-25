@@ -9,6 +9,12 @@ import { snapshotCommand, type CommandSpec, type ProcessObservation } from "./co
 // owner re-observes the prepared state quiescent (reverifyStale), which is
 // the authoritative startup recovery in this process's lifetime.
 const nativeClosures = new Set<Promise<void>>();
+/** A direct execution owner resolves only after its independent scope proof
+ * and cleanup. A rejected closure stays a shutdown fence for this process. */
+export function retainNativeExecution(closure: Promise<void>): void {
+  nativeClosures.add(closure);
+  void closure.then(() => nativeClosures.delete(closure), () => { /* retain the failed ownership proof */ });
+}
 const unprovenPreparations = new Set<PreparationExecutor>();
 export async function preparationShutdownBarrier(): Promise<void> {
   if (unprovenPreparations.size > 0) throw new StoreError("RUN_TERMINATION_UNKNOWN", "native preparation quiescence is unproven; retain writer resources for process termination");

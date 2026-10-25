@@ -11,6 +11,8 @@ const hook=registerHooks({resolve(specifier,context,next){
 }});
 const {Broker}=await import('@oma/broker');
 const {ProcessLock}=await import('@oma/native/process-lock');
+const {socketDescriptor}=await import('@oma/native/linux');
+const {enableUnixCredentials}=await import('@oma/native/unix-message');
 hook.deregister();assert.deepEqual(forbidden,[],'Broker import must not load concrete state or feature owners');
 assert.throws(()=>Reflect.construct(Broker,[{}, {}, {}]),{code:'BROKER_UNAVAILABLE'});
 const root=mkdtempSync(join(tmpdir(),'oma-installed-broker-')),runRoot=join(root,'run');mkdirSync(runRoot);
@@ -26,17 +28,18 @@ const dependencies={
  acquireRunScope:unavailable,
  ledger:{agentNames:()=>[],getAgent:()=>null,listAgents:()=>[],preparedBatches:()=>[],societyOpen:()=>true,transaction:unavailable},
  mail:{prepare:unavailable,complete:unavailable,settleFromReceipt:unavailable},
- units:{observe:unavailable,unitCgroup:unavailable,bindRunRevoker:callback=>{revoker=callback;}},
+ units:{observe:unavailable,scopeRoot:unavailable,runnerAlive:unavailable,readLogs:unavailable,bindRunRevoker:callback=>{revoker=callback;}},
  views:{refreshWorld(){},publishStatus(){},observeRunnerSource(){}},reconcile:null,status:{request:snapshot},public:pub,
  internal:{store:{getAgentIdentity:()=>null,pendingDeliveryCount:()=>0,getBatchAgent:()=>null,preparedBatchIds:()=>[]},
- mail:{prepare:unavailable,complete:unavailable,moveToCur:unavailable},principalInboxNewEntries:unavailable},
- effects:{bindAdmission:()=>{bound=true;},ensureRunRoot(){},ensureActorDirectory:unavailable,
+ mail:{prepare:unavailable,complete:unavailable,moveToCur:unavailable}},
+ effects:{prepareListener(server){const fd=socketDescriptor(server);assert.notEqual(fd,null);enableUnixCredentials(fd);},peerStream:unavailable,
+ bindAdmission:()=>{bound=true;},ensureRunRoot(){},ensureActorDirectory:unavailable,
  clearSocketName:path=>{assert.equal(existsSync(path),false);},removeStatusView(){},makeSpool:unavailable,closeLedger:()=>{closed=true;}},
 };
 const broker=new Broker(dependencies,{stateRoot:root,runRoot,society:'demo',hasGoal:()=>true},limits,lock);
 try{
  assert.equal(bound,true);await broker.start();assert.equal(typeof revoker,'function');
- assert.equal(existsSync(join(runRoot,'admin.sock')),true);assert.equal(existsSync(join(runRoot,'host.sock')),true);
+ assert.equal(existsSync(join(runRoot,'admin.sock')),true);assert.equal(existsSync(join(runRoot,'host.sock')),false);
  assert.equal(ProcessLock.tryAcquire(lockPath),null);
  const closing=broker.drainAndClose();assert.equal(broker.drainAndClose(),closing);await closing;
  assert.equal(closed,true);assert.equal(ProcessLock.tryAcquire(lockPath),null,'outer owner retains the lock after Broker drain');

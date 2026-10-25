@@ -59,6 +59,26 @@
     "./resident-supervisor": {
       "types": "./dist/resident-supervisor.d.ts",
       "default": "./dist/resident-supervisor.js"
+    },
+    "./owned-execution": {
+      "types": "./dist/owned-execution.d.ts",
+      "default": "./dist/owned-execution.js"
+    },
+    "./resident-runtime": {
+      "types": "./dist/resident-runtime.d.ts",
+      "default": "./dist/resident-runtime.js"
+    },
+    "./resident-logs": {
+      "types": "./dist/resident-logs.d.ts",
+      "default": "./dist/resident-logs.js"
+    },
+    "./observed-stream": {
+      "types": "./dist/observed-stream.d.ts",
+      "default": "./dist/observed-stream.js"
+    },
+    "./replace": {
+      "types": "./dist/replace.d.ts",
+      "default": "./dist/replace.js"
     }
   },
   "scripts": {

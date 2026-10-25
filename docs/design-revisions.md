@@ -2324,3 +2324,104 @@ NATIVE-001/007의 25개·허용 목록 불변으로 읽히는 부분은 새 NATI
 검사 허용 목록만 넓혀 책임 침범을 감추는 것은 계속 금지한다. 새 모듈이나 정당한 공개
 의존성을 설계할 수 없다는 제한은 두지 않는다. 기존 요구 ID·결정 원문·검토 기록은 보존하며
 wire·DB·accepted plan·receipt·현재 권한·unknown의 의미는 바꾸지 않는다.
+
+## DR51 — 직접 실행의 namespace witness와 복구 fence
+
+DR49의 Linux 직접 실행은 명령을 재생하지 않는 실행 관측 journal을 사용한다. 단일
+storage owner가 `S/execution/scopes.jsonl`에 version1 hash-chain frame을 append/fsync한다.
+frame은 owner root, 순서, 이전 hash와 opening/witness/closed만 담는다. slot과 실행 UUID,
+boot identity·namespace init의 host PID/start time·namespace inode만 기록하며 argv/env,
+credential, accepted 작업·plan·receipt·desired 상태는 넣지 않는다. DB4와 plan2는 유지한다.
+
+opening을 기록한 뒤 blocked namespace를 만들고, 실제 init을 pin한 witness를 flush한 뒤에만
+gate를 연다. 부모 EOF는 허가가 아니므로 init이 gate writer를 보유한다. 종료 요청은 현재
+owner가 가진 pidfd에만 보내고, init의 독립적인 kernel 종료 관측 후 closed를 기록한다.
+재시작은 journal의 명령을 실행하거나 PID로 신호를 보내지 않는다. 기존 witness가 끝났는지
+새로 관측하고, opening·부분 frame·관측 실패는 unknown fence로 남긴다. 최초 초기화는
+호출자가 확인한 fresh/명시적 전환 경계에서만 허용하며 missing journal을 empty로 만들지 않는다.
+
+이는 A-007/FS-002/FS-006의 실행 관측 저장 위치만 확장한다. 업무 entity·daemon·durable
+task queue를 추가하지 않으며 과거 사실이나 현재 권한의 의미를 바꾸지 않는다. Darwin의
+세 gate를 닫지 않는다. 공통 process owner·storage journal과 Linux native primitive를 분리한다.
+
+## DR52 — native 실행 intent와 과거 unit 설치 intent를 구분한다
+
+**관측.** native Resident가 기존 `agent.create.unitNames`를 새 실행 슬롯으로 해석하면,
+동일한 accepted bytes가 systemd 설치 대신 다른 효과를 뜻하게 된다. 비동기 종료·시작은
+대기 중 더 최신 lifecycle intent가 접수될 수도 있다.
+
+**결정.** 새 plan envelope는 v3이며 새 create intent는 `execution: "native"`를 명시한다.
+v2는 과거 사실의 읽기 형식으로만 유지한다. v2 create의 unitNames·terminal receipt는
+수정하지 않고, 끝나지 않은 unit 설치 intent는 native 효과로 완료 처리하지 않는다.
+새 v3 writer는 unitNames를 쓰지 않는다. DB 4·wire 1의 row·receipt 의미는 유지한다.
+공통 실행 관측은 OS 이름 없는 scope identity를 사용하고, 직접 상속한 runner 채널의
+권한과 수동 CLI의 process 관측을 구분한다. 비동기 준비 뒤 실행을 풀기 직전에 기존
+feature owner의 현재 권한·desired·GOAL·incarnation을 다시 검사한다. 이전 incarnation의
+stop과 더 최신 society intent에 의해 대체된 요청은 새 실행을 정지하거나 다시 열지 못한다.
+
+**바꾸는 규범.** DB-009·CREATE·UNIT·AUTH·REC의 native profile, plan format registry.
+기존 architecture 원문과 과거 검토·v2 bytes는 변경하지 않는다. 이 결정은 Darwin gate나
+현재 source의 실행 qualification을 통과시킨다는 뜻이 아니다.
+
+## DR53 — Resident 운영 로그의 공통 spool owner
+
+**관측.** journald를 제거한 뒤 bounded stdout/stderr head만 남기면 전체 출력이 사라지고,
+truncated preview를 전체 출력인 것처럼 읽게 된다.
+
+**결정.** trusted runner의 두 스트림은 공통 process owner가 64 KiB 이하 chunk로 drain하고,
+storage owner가 `S/logs/resident/<actor>/<시작-ms>-<invocation>.jsonl`에 version1 JSONL로
+보관한다. 각 frame은 actor·invocation·현재 live lease의 incarnation(lease 전에는 null)·시각·
+stream·원래 bytes의 base64를 가진다. 이는 운영 진단이며 transcript·provider credential·
+실행/receipt 증거가 아니다. 모든 bytes를 spool하고, 읽기 응답은 기존 logBytes/frameBytes의
+preview와 truncated를 유지한다. 정상 종료는 flush·close까지 owner가 맡으며 crash 뒤의
+불완전한 마지막 frame은 불완전한 진단으로 표시한다. 손상/읽기 실패를 빈 로그로 답하지 않는다.
+자동 만료나 용량 quota를 새로 만들지 않는다. 파일은 Human이 해당 Society의 진단을 명시적으로
+정리할 때까지 보존하며 ledger·history·receipt와 독립이다. 실행 중 inode 교체·hardlink를 따라
+기록하지 않는다. journald 명령은 native 기본 실행 의존에서 제거한다.
+
+**바꾸는 규범.** FS-002 allowlist·VIEW 운영 로그·UNIT native profile. 저장 bytes의 존재가
+실행 성공이나 임의 후손 종료를 증명하지 않으며 Darwin 파일 gate를 대신하지 않는다.
+
+## DR54 — 재시작은 저장 PID가 아니라 새로 결박한 kernel scope capability를 종료한다
+
+**관측.** 실제 Linux SIGKILL 시험에서 witness fsync 직후 gate가 닫힌 namespace init은
+broker와 bubblewrap monitor가 죽어도 남았다. bubblewrap의 `--die-with-parent`만으로
+pre-exec init까지 종료된다고 가정하면 안 된다. 읽기 전용 복구만으로는 이 실행을 정리할
+수 없었다. `test/native-process-scope.test.mjs`의 after-witness 경계와 원시 재현을 보존한다.
+
+**결정.** DR51의 관측 전용 복구를 다음으로 대체한다. 현재 Society tenure·single-writer·
+execution journal의 배타 소유자는, 저장 witness와 fresh 관측이 일치할 때 OS primitive에서
+새 namespace-init pin을 얻는다. 공통 TS owner가 그 pin의 boot·start·namespace 전체 identity를
+저장 witness와 다시 비교한다. 모두 일치할 때만 새 pidfd capability로 종료를 요청한다.
+저장된 숫자 PID로 signal하지 않는다. 불일치/관측 실패는 signal 권한이 아니며 재관측이
+필요하다. 종료 요청 뒤 실제 namespace 전체 종료 관측을 기다리고, 그 전에는 closed 기록·
+READY·workspace 재사용·archive/reclaim을 허용하지 않는다. 한 이전 실행의 실패가 다른
+실행의 종료 시도까지 생략하게 만들지 않는다. 복구에는 argv·명령 재생·actor 권한 복원이 없다.
+
+witness 없는 opening은 계속 unknown이다. 죽었다고 추정하거나 빈 초기 상태로 치환하지
+않는다. 새로 얻은 pin과 복구 task도 resource owner/drain/grace의 대상이며, Store open 이전의
+복구 중 중단도 같은 lifetime을 따른다. 성공적으로 완전히 drain된 owner는 새 실행을 영구히
+막은 상태에서만 이미 확인한 종료를 유지해 archive의 후속 확인에 사용한다.
+
+**바꾸는 규범.** NATIVE-011의 복구 집행, NATIVE-012. accepted plan·receipt·DB 형식은 바꾸지
+않는다. Darwin에는 검증된 scope pin이 없으므로 이 결정으로 G-PROCESS를 통과시키지 않는다.
+
+## DR55 — candidate의 최종 exec에 fresh authority와 private 상태 채널을 사용한다
+
+**문제.** checkout 준비와 실제 check argv exec 사이에는 비동기 Git 작업이 있다. sandbox
+진입 때 확인한 권한만으로 이후 exec를 허가하면 그 사이 stop·policy 변경을 놓친다. 또한
+check가 제어하는 stderr marker는 trusted setup 거절의 증거가 될 수 없다.
+
+**결정.** shared Git owner가 exact checkout·closed private setup protocol을 소유하고 Linux
+adapter는 sandbox argv/FD grammar만 소유한다. trusted helper는 checkout 뒤 private 준비
+frame을 보내고 별도 FD의 release byte를 기다린다. host는 현재 권한·취소 상태를 다시 보고
+release한다. EOF·부분 frame·반복/순서 오류·거절은 실행 허가가 아니며 protocol은 poison된다.
+상태 FD는 CLOEXEC, release FD는 exec 전에 닫는다. setup의 실패는 private 상태로만 분류하고
+check stdout/stderr는 진단으로만 취급한다. 전체 scope 사망은 기존 execution owner가 확인한다.
+
+**검증.** 실제 Linux candidate sandbox에서 두 번째 authority callback을 거절하여 check stdout이
+발생하지 않고 scope가 완전히 끝나는 것을 확인했다. 별도 시험으로 exec 뒤 상태 FD EBADF와
+stderr marker 위조의 CHECK_FAILED를 확인했다. G-PROCESS/G-FILES/G-AUTH 전체 통과는 아니다.
+
+**바꾸는 규범.** INT-007의 setup 증거, NATIVE-017. accepted candidate/argv/env/receipt의 뜻을
+바꾸지 않으며 과거 receipt를 현재 권한으로 다시 실행하지 않는다.

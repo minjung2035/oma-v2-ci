@@ -29,14 +29,14 @@ export class LifecycleModule {
     this.society = new SocietyControl(store, units, effects);
     this.registry = new RegistryOperations(store, effects);
   }
-  setSociety(auth: AuthContext, state: "open" | "closed", key: string): Receipt { return this.society.set(auth, state, key); }
-  reconcileSociety(id: string): void { this.society.reconcileById(id); }
+  setSociety(auth: AuthContext, state: "open" | "closed", key: string): Promise<Receipt> { return this.society.set(auth, state, key); }
+  reconcileSociety(id: string): Promise<void> { return this.society.reconcileById(id); }
   bootstrap(config: SeedConfig): Promise<void> { return this.creates.bootstrap(config); }
   create(auth: AuthContext, input: AgentCreateInput, key: string): Promise<Receipt> { return this.creates.create(auth, input, key); }
-  start(auth: AuthContext, agent: Actor, key: string): Receipt { return this.actions.start(auth, agent, key); }
-  stop(auth: AuthContext, agent: Actor, key: string): Receipt { return this.actions.stop(auth, agent, key); }
+  start(auth: AuthContext, agent: Actor, key: string): Promise<Receipt> { return this.actions.start(auth, agent, key); }
+  stop(auth: AuthContext, agent: Actor, key: string): Promise<Receipt> { return this.actions.stop(auth, agent, key); }
   ack(auth: AuthContext, message: MessageId, key: string): Receipt { return this.registry.ack(auth, message, key); }
   follow(auth: AuthContext, topic: string, subscribe: boolean, key: string): Receipt { return this.registry.follow(auth, topic, subscribe, key); }
   reconcileCreate(id: string, allowActivation = true): Promise<void> { return this.creates.reconcile(id, allowActivation); }
-  reconcileAction(id: string, allowActivation = true): void { this.actions.reconcile(id, allowActivation); }
+  reconcileAction(id: string, allowActivation = true): Promise<void> { return this.actions.reconcile(id, allowActivation); }
 }

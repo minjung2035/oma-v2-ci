@@ -18,7 +18,7 @@ if (process.argv.includes("--inventory")) {
   const config = ts.readConfigFile("tsconfig.json", ts.sys.readFile);
   if (config.error) throw new Error(ts.flattenDiagnosticMessageText(config.error.messageText, "\n"));
   const parsed = ts.parseJsonConfigFileContent(config.config, ts.sys, process.cwd());
-  const roots = ["apps/oma/src/entry/broker.ts", "apps/oma/src/entry/runner.ts", "apps/oma/src/entry/host.ts", "apps/oma/src/cli.ts", "packages/extension/src/index.ts"];
+  const roots = ["apps/oma/src/entry/broker.ts", "apps/oma/src/entry/runner.ts", "apps/oma/src/entry/candidate-check.ts", "apps/oma/src/entry/quarantine.ts", "apps/oma/src/cli.ts", "packages/extension/src/index.ts"];
   const { findings } = runtimeImportClosure({ rootDir: process.cwd(), roots, manifest: production, compilerOptions: parsed.options });
   const acceptance = inventoryAcceptance([...normativeSources, "docs/architecture.md"].map(source => ({ source, text: readFileSync(source, "utf8") })));
   // The generated inventory is not a complete dependency closure after a move.

@@ -403,8 +403,8 @@
   {
     "requirement": "AUTH-003",
     "source": "docs/implementation-spec.md",
-    "digest": "5be3a6a8c4144eeaaba0532dd9cc1da20fe18f85be783f022b40cbd2181981dd",
-    "normativeText": "**MUST [AUTH-003]** per-incarnation pathname listener에 actor를 고정하고 SO_PEERCRED 및 실제 systemd cgroup을 검증한다. 같은 UID, payload actor, 환경 변수, unit처럼 보이는 문자열은 증명이 아니다. 이전 incarnation 연결을 닫고 이후 요청을 `STALE_RUN`으로 거절한다. 실행 인증과 이미 접수된 broker-owned effect의 복구를 구분한다.",
+    "digest": "2d9155f413bffe98f52887f53a52d0b2386b131ce4d8fd3739b3f0f761daf344",
+    "normativeText": "**MUST [AUTH-003]** per-incarnation pathname listener에 actor를 고정하고 pinned connector, 각 수신 byte range의 실제 kernel sender, 현재 invocation의 pinned execution scope 및 trusted runner ancestry를 검증한다(DR49). Runner 관리 연결은 직접 spawn owner가 인계한 private socket과 immutable grant를 요구한다. 같은 UID, payload actor, 환경 변수, scope처럼 보이는 문자열, 양도받은 socket의 소지만으로 권한을 얻지 못한다. 이전 incarnation 연결을 닫고 이후 요청을 `STALE_RUN`으로 거절한다. 실행 인증과 이미 접수된 broker-owned effect의 복구를 구분한다.",
     "applicability": "unclassified",
     "rationale": "Requires production-path review; no inference from test names.",
     "owner": "packages/domain/src/authority.ts#assertCurrentActor",
@@ -1442,8 +1442,8 @@
   {
     "requirement": "INT-007",
     "source": "docs/implementation-spec.md",
-    "digest": "dbd588594c007cf8e5d71773cd662f98de6b9f0b30c9417f52353a008d50eb43",
-    "normativeText": "**MUST [INT-007]** 실제 spawn의 candidate OID/argv/env는 검증된 check snapshot과 정확히 같아야 한다. builder unit test만 통과하고 production이 다른 cwd/config/default를 쓰는 것을 금지한다. timeout/signal/검사 후손 잔존/관측 불명확은 CHECK_FAILED 또는 대조 전 pending/unknown이며 PASS가 아니다. host check exit 0만으로 아직 살아 있는 background process를 무시하고 종료했다고 기록하지 않는다. 실제 candidate 출처와 sandbox/종료 ownership를 production entrypoint 시험에서 확인한다. UX-09: sandbox checkout의 gitlink 거절은 bare exit이 아니라 `OMA_ERROR=UNSUPPORTED_PROFILE`와 gitlink마다 `OMA_GITLINK=<path>`를 stderr에 남기고, host는 그 marker로만 code를 분류한다 — 거절 marker가 없는 bare 125는 CHECK_FAILED로 남는다. 거절은 check argv 이전이며 경로는 sandbox 출력이 아니라 불변 candidate에서 다시 관측한다.",
+    "digest": "a78cc84e1d6e78eb95a5d5e0dcd159cf7ee10639108573f428cd51d57fc61f26",
+    "normativeText": "**MUST [INT-007]** 실제 spawn의 candidate OID/argv/env는 검증된 check snapshot과 정확히 같아야 한다. builder unit test만 통과하고 production이 다른 cwd/config/default를 쓰는 것을 금지한다. timeout/signal/검사 후손 잔존/관측 불명확은 CHECK_FAILED 또는 대조 전 pending/unknown이며 PASS가 아니다. host check exit 0만으로 아직 살아 있는 background process를 무시하고 종료했다고 기록하지 않는다. 실제 candidate 출처와 sandbox/종료 ownership를 production entrypoint 시험에서 확인한다. UX-09의 setup 거절은 check argv가 상속하지 않는 close-on-exec private descriptor의 폐쇄형 상태로 전달한다(DR49). stdout/stderr의 marker는 분류 근거가 아니다. private setup 성공 후 bare 125는 CHECK_FAILED이며, private 상태 누락·부분 frame은 unknown이다. 거절은 check argv 이전이며 gitlink 경로는 불변 candidate에서 같은 Git owner가 다시 관측한다.",
     "applicability": "unclassified",
     "rationale": "Requires production-path review; no inference from test names.",
     "owner": "apps/oma/src/runtime/candidate-checks.ts#CandidateChecks",
@@ -1709,19 +1709,14 @@
     "normativeText": "**MUST [UNIT-007]** systemctl effect 성공은 subprocess spawn이 아니라 정상 exit status와 해당 effect의 후속 actual observation으로 판정한다. nonzero/timeout/signal/malformed 결과를 성공으로 바꾸지 않는다. daemon-reload는 정상 exit와 대상 unit의 LoadState=loaded 및 렌더링한 설정 일치, enable/disable은 unit-file 상태, path start/stop은 path 실제 상태, service stop은 inactive와 cgroup 후손 사망을 확인한다. 관측 실패는 succeeded가 아니며 accepted op는 실제 효과를 대조한다. 짧게 실행 후 정상 종료한 Resident start는 동일 InvocationID의 정상 종료와 pending 재검사를 허용하되 전혀 시작 안 된 inactive와 구분한다. 정확한 systemd property/binding 증거는 S-01/S-06에 pin한다.",
     "applicability": "unclassified",
     "rationale": "Requires production-path review; no inference from test names.",
-    "owner": "packages/platform-linux/src/units.ts#UnitsModule",
-    "entrypoint": "packages/lifecycle/src/create.ts#CreateCoordinator",
+    "owner": "docs/archive/systemd-reference-2026-10-26/packages/platform-linux/src/units.ts#UnitsModule",
+    "entrypoint": "docs/archive/systemd-reference-2026-10-26/packages/platform-linux/src/units.ts#UnitsModule",
     "callPath": [
-      "packages/lifecycle/src/create.ts#CreateCoordinator",
-      "packages/lifecycle/src/create-publication.ts#CreationPublicationObserver",
-      "packages/platform-linux/src/units.ts#UnitsModule",
-      "packages/process/src/resident-supervisor.ts#ResidentSupervisor",
-      "packages/platform-linux/src/units/execute.ts#executeUnitCommand"
+      "docs/archive/systemd-reference-2026-10-26/packages/platform-linux/src/units.ts#UnitsModule",
+      "docs/archive/systemd-reference-2026-10-26/packages/platform-linux/src/units/execute.ts#executeUnitCommand"
     ],
     "negativeTests": [
-      "test/phase4.test.ts#UNIT",
-      "test/r37-preparation-boundaries.test.ts#R37",
-      "packages/process/test/resident-supervisor.test.mjs#resident policy"
+      "docs/archive/systemd-reference-2026-10-26/packages/platform-linux/test/r26-units-boundaries.test.mjs#R26"
     ],
     "evidence": null,
     "status": "unverified",
@@ -1764,9 +1759,9 @@
     "applicability": "unclassified",
     "rationale": "Requires production-path review; no inference from test names.",
     "owner": "packages/process/src/resident-supervisor.ts#ResidentSupervisor.startLimitStatus",
-    "entrypoint": "packages/platform-linux/src/units.ts#UnitsModule.startLimitStatus",
+    "entrypoint": "packages/process/src/resident-runtime.ts#ResidentRuntime.startLimitStatus",
     "callPath": [
-      "packages/platform-linux/src/units.ts#UnitsModule.startLimitStatus",
+      "packages/process/src/resident-runtime.ts#ResidentRuntime.startLimitStatus",
       "packages/process/src/resident-supervisor.ts#ResidentSupervisor.startLimitStatus"
     ],
     "negativeTests": [
@@ -5205,6 +5200,166 @@
       "packages/process/test/coalesced-wake.test.mjs#close leaves the active callback",
       "test/mail-arrival-durability.test.mjs#native wake:",
       "test/r37-recovery-observation.test.ts#R37: delayed recovery observation"
+    ],
+    "evidence": null,
+    "status": "unverified",
+    "verification": "NOT_RUN",
+    "invalidationReason": "authoritative owner, entrypoint, call path or negative-test locator changed"
+  },
+  {
+    "requirement": "NATIVE-011",
+    "source": "docs/macos-platform.md",
+    "digest": "eac592aad24a2f049ed3047562c5e85fa6aa3a523d15ffceeecab9dcca911e12",
+    "normativeText": "**MUST [NATIVE-011]** DR51의 직접 실행은 storage의 version1 journal에 opening을 먼저\n기록하고, blocked scope의 실제 kernel witness를 flush한 뒤 현재 권한을 확인해 gate를 연다.\n공통 process owner가 결과·drain·독립 scope 사망·journal retire를 조정한다. EOF·직접 child\nclose·성공한 kill은 전체 사망 증명이 아니다. unknown scope의 live pin과 journal을 유지하며\n재시작은 이전 witness 관측 없이 READY·새 실행·workspace 재사용·회수를 허용하지 않는다.\n관측 journal은 명령·accepted plan·receipt·credential·재생 queue가 아니며, 누락·손상·부분\nframe을 빈 scope 목록으로 읽지 않는다. 기록의 PID만으로 복구 중 신호를 보내지 않는다.",
+    "applicability": "unclassified",
+    "rationale": "Requires production-path review; no inference from test names.",
+    "owner": "packages/process/src/owned-execution.ts#ExecutionCoordinator",
+    "entrypoint": "apps/oma/src/runtime/execution-runtime.ts#ExecutionRuntime",
+    "callPath": [
+      "apps/oma/src/runtime/execution-runtime.ts#ExecutionRuntime",
+      "packages/process/src/owned-execution.ts#ExecutionCoordinator",
+      "packages/storage/src/execution-journal.ts#ExecutionJournal"
+    ],
+    "negativeTests": [
+      "test/native-process-scope.test.mjs#native scope: cancellation after witness publication"
+    ],
+    "evidence": null,
+    "status": "unverified",
+    "verification": "NOT_RUN",
+    "invalidationReason": "authoritative owner, entrypoint, call path or negative-test locator changed"
+  },
+  {
+    "requirement": "NATIVE-012",
+    "source": "docs/macos-platform.md",
+    "digest": "af2fb6612e75eaf5747f7cdd4b2308924f364a8a4dc88f60cced0da4fbab7698",
+    "normativeText": "**MUST [NATIVE-012]** DR54 복구는 현재 tenure와 journal의 배타 소유 하에서만 수행한다.\n저장 PID에 신호를 보내지 않고, 새로 얻은 namespace-init capability의 전체 identity가\n저장 witness와 일치하는지 공통 owner가 확인한 뒤 그 capability로만 종료한다. 실제 전체\n종료 관측 전에는 journal을 retire하지 않는다. pin 획득 실패·identity 변경·unknown과\nwitness 없는 opening은 새 효과나 빈 초기 상태를 허가하지 않는다.",
+    "applicability": "unclassified",
+    "rationale": "Requires production-path review; no inference from test names.",
+    "owner": "packages/process/src/owned-execution.ts#ExecutionCoordinator.recover",
+    "entrypoint": "apps/oma/src/entry/broker.ts#main",
+    "callPath": [
+      "apps/oma/src/entry/broker.ts#main",
+      "apps/oma/src/runtime/execution-runtime.ts#ExecutionRuntime.recover",
+      "packages/process/src/owned-execution.ts#ExecutionCoordinator.recover",
+      "packages/native/src/pid-namespace.ts#pinNamespaceInit"
+    ],
+    "negativeTests": [
+      "test/native-process-scope.test.mjs#native recovery: real owner SIGKILL"
+    ],
+    "evidence": null,
+    "status": "unverified",
+    "verification": "NOT_RUN",
+    "invalidationReason": "authoritative owner, entrypoint, call path or negative-test locator changed"
+  },
+  {
+    "requirement": "NATIVE-013",
+    "source": "docs/macos-platform.md",
+    "digest": "ef57f0d2b071a8793bceed4e8db320bf971ca13d5466be05255c063c117fcffa",
+    "normativeText": "**MUST [NATIVE-013]** foreground broker의 공통 Resident owner가 accepted profile/model 참조,\n현재 incarnation, wake·재시작·중지·로그 수명을 조정한다. slot별 실행 하나와 메모리 backoff를\n유지하며 timer는 hint만 보낸다. Linux systemd/path/journald 및 host relay fallback을 두지 않는다.\n실제 scope owner는 Resident·candidate·quarantine 모두에서 같은 journal/gate/death 정책을\n사용한다. 검증과 import는 별도 sandbox scope이며 첫 scope의 전체 종료 뒤에만 canonical RW를\n허용한다. 읽기 전용 canonical mount·held directory FD 결박·exact checkout을 pathname 재검사나\nshell script로 대체하지 않는다.",
+    "applicability": "unclassified",
+    "rationale": "Requires production-path review; no inference from test names.",
+    "owner": "packages/process/src/resident-runtime.ts#ResidentRuntime",
+    "entrypoint": "apps/oma/src/runtime/native-residents.ts#createNativeResidents",
+    "callPath": [
+      "apps/oma/src/runtime/native-residents.ts#createNativeResidents",
+      "packages/process/src/resident-runtime.ts#ResidentRuntime",
+      "packages/process/src/resident-supervisor.ts#ResidentSupervisor"
+    ],
+    "negativeTests": [
+      "packages/process/test/resident-supervisor.test.mjs#stop",
+      "test/native-git-execution.test.mjs#native quarantine"
+    ],
+    "evidence": null,
+    "status": "unverified",
+    "verification": "NOT_RUN",
+    "invalidationReason": "authoritative owner, entrypoint, call path or negative-test locator changed"
+  },
+  {
+    "requirement": "NATIVE-014",
+    "source": "docs/macos-platform.md",
+    "digest": "63ba4d5bc14013bc5c249e38f6ab1581e613e10d4f63f8c81574dc2b393bd229",
+    "normativeText": "**MUST [NATIVE-014]** Linux의 공개 socket은 SO_PASSCRED가 listener READY 전에 활성화되고,\nrecvmsg의 각 byte range가 still-pinned original connector의 PID/UID/GID에서 왔는지 공통 broker\nowner가 판정한다. SCM_RIGHTS 등 추가 ancillary는 전달된 FD를 모두 닫은 뒤 거절한다. Runner의\n관리 연결은 spawn owner가 private socketpair와 실제 trusted child pin을 인계한 경우만 허용한다.\nDarwin의 endpoint peer PID나 holder 관측을 이 per-range sender 증거의 대체로 사용하지 않는다.",
+    "applicability": "unclassified",
+    "rationale": "Requires production-path review; no inference from test names.",
+    "owner": "packages/broker/src/peer-authenticator.ts#matchesPinnedSender",
+    "entrypoint": "packages/broker/src/index.ts#Broker",
+    "callPath": [
+      "packages/broker/src/index.ts#Broker",
+      "packages/platform-linux/src/credential-stream.ts#credentialStream",
+      "packages/process/src/observed-stream.ts#ObservedStream",
+      "packages/broker/src/peer-authenticator.ts#matchesPinnedSender"
+    ],
+    "negativeTests": [
+      "test/native-credential-stream.test.mjs#credential stream: live connector",
+      "test/native-unix-message.test.mjs#recvmsg actual ABI"
+    ],
+    "evidence": null,
+    "status": "unverified",
+    "verification": "NOT_RUN",
+    "invalidationReason": "authoritative owner, entrypoint, call path or negative-test locator changed"
+  },
+  {
+    "requirement": "NATIVE-015",
+    "source": "docs/macos-platform.md",
+    "digest": "cbad24500e2d32ad6ee561ce2e289a2a3c7f48bd8fada375278161a33426fae6",
+    "normativeText": "**MUST [NATIVE-015]** 새 create plan은 version3의 `execution: \"native\"`를 기록한다(DR52).\nversion2 plan 및 terminal receipt는 원래 의미와 bytes로 읽으며, historical unit installation을\n요구하는 미완료 version2 intent를 native 실행 완료로 정산하지 않는다. 실행 journal과 로그를\naccepted plan·receipt·권한의 원본으로 사용하지 않는다.",
+    "applicability": "unclassified",
+    "rationale": "Requires production-path review; no inference from test names.",
+    "owner": "packages/protocol/src/persisted-formats.ts#classifyPersistedPlan",
+    "entrypoint": "packages/lifecycle/src/create.ts#CreateCoordinator",
+    "callPath": [
+      "packages/lifecycle/src/create.ts#CreateCoordinator",
+      "packages/protocol/src/operation-codec.ts#encodeOperationPlan",
+      "packages/protocol/src/persisted-formats.ts#classifyPersistedPlan"
+    ],
+    "negativeTests": [
+      "test/persisted-state-fuzz.test.ts#persisted"
+    ],
+    "evidence": null,
+    "status": "unverified",
+    "verification": "NOT_RUN",
+    "invalidationReason": "authoritative owner, entrypoint, call path or negative-test locator changed"
+  },
+  {
+    "requirement": "NATIVE-016",
+    "source": "docs/macos-platform.md",
+    "digest": "7e6c0a7ddfec623fcfd50816ee515c4aa75afcf2c270c51070de8b3861e9d376",
+    "normativeText": "**MUST [NATIVE-016]** DR53의 full diagnostic spool과 bounded public log view는 분리한다.\nactor·invocation·현재 incarnation·stream·시각과 원본 byte를 저장하고, 서로 다른 incarnation의\nUTF-8 조각을 합치지 않는다. 부분 frame·UTF-8 tail·읽기 실패를 성공한 빈 로그로 표시하지 않는다.",
+    "applicability": "unclassified",
+    "rationale": "Requires production-path review; no inference from test names.",
+    "owner": "packages/process/src/resident-logs.ts#residentLogView",
+    "entrypoint": "apps/oma/src/runtime/native-residents.ts#createNativeResidents",
+    "callPath": [
+      "apps/oma/src/runtime/native-residents.ts#createNativeResidents",
+      "packages/storage/src/resident-logs.ts#ResidentLogStore",
+      "packages/process/src/resident-logs.ts#residentLogView"
+    ],
+    "negativeTests": [
+      "packages/process/test/resident-logs.test.mjs#Resident log view"
+    ],
+    "evidence": null,
+    "status": "unverified",
+    "verification": "NOT_RUN",
+    "invalidationReason": "authoritative owner, entrypoint, call path or negative-test locator changed"
+  },
+  {
+    "requirement": "NATIVE-017",
+    "source": "docs/macos-platform.md",
+    "digest": "5371af1ef2325bce42fd909ce15cd92c0efab174fc1f3be7080700a937032439",
+    "normativeText": "**MUST [NATIVE-017]** DR55 candidate setup은 exact checkout 뒤 check argv를 exec하기 전에\nprivate 준비 상태를 보낸다. host가 현재 authority·취소 상태를 다시 확인하고 별도 private gate에\nrelease byte를 써야만 exec할 수 있다. EOF·준비 상태·로그만으로 gate를 열지 않는다. 상태 FD는\nclose-on-exec이고 release FD는 exec 전에 닫으며, check가 setup 상태를 위조할 수 없게 한다.\n첫 protocol·권한 오류는 poison되어 후속 frame으로 성공을 만들지 못한다.",
+    "applicability": "unclassified",
+    "rationale": "Requires production-path review; no inference from test names.",
+    "owner": "packages/git/src/candidate-check.ts#CandidateSetupStatus",
+    "entrypoint": "apps/oma/src/runtime/candidate-checks.ts#CandidateChecks.run",
+    "callPath": [
+      "apps/oma/src/runtime/candidate-checks.ts#CandidateChecks.run",
+      "packages/git/src/candidate-check.ts#CandidateSetupStatus",
+      "apps/oma/src/entry/candidate-check.ts#status",
+      "packages/git/src/candidate-check.ts#executeCandidateCheck"
+    ],
+    "negativeTests": [
+      "test/native-git-execution.test.mjs#native candidate: revocation after exact checkout",
+      "test/candidate-checks.test.ts#INT-007/P0-1"
     ],
     "evidence": null,
     "status": "unverified",

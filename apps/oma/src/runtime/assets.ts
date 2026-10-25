@@ -5,14 +5,14 @@ import { DEPLOYMENT_LAYOUT } from "@oma/domain/deployment";
 import { StoreError, unobserved } from "@oma/domain/errors";
 
 export interface RuntimeAssets {
-  readonly root: string; readonly schema: string; readonly systemd: string;
+  readonly root: string; readonly schema: string;
   readonly contract: string; readonly extension: string;
   readonly entries: Readonly<Record<keyof typeof DEPLOYMENT_LAYOUT.entries, string>>;
 }
 export function runtimeAssets(root: string): RuntimeAssets {
   if (!isAbsolute(root) || root === "/" || root.includes("\0") || normalize(root) !== root)
     throw new StoreError("UNSUPPORTED_PROFILE", "installation root must be a normalized absolute directory");
-  return Object.freeze({ root, schema: join(root, DEPLOYMENT_LAYOUT.schema), systemd: join(root, DEPLOYMENT_LAYOUT.systemd),
+  return Object.freeze({ root, schema: join(root, DEPLOYMENT_LAYOUT.schema),
     contract: join(root, DEPLOYMENT_LAYOUT.contract), extension: join(root, DEPLOYMENT_LAYOUT.extension),
     entries: Object.freeze(Object.fromEntries(Object.entries(DEPLOYMENT_LAYOUT.entries)
       .map(([name, path]) => [name, join(root, path)])) as RuntimeAssets["entries"]) });
@@ -21,8 +21,8 @@ export function runtimeAssets(root: string): RuntimeAssets {
  * directories. A wrong LIBDIR cannot silently combine two installations.
  * Call before opening Store or installing units, outside every Store transaction.
  */
-export function assertRuntimeAssets(assets: RuntimeAssets, observed: { schema: string; systemd: string }, moduleDirectories: readonly string[] = []): void {
-  if (assets.schema !== observed.schema || assets.systemd !== observed.systemd)
+export function assertRuntimeAssets(assets: RuntimeAssets, observed: { schema: string }, moduleDirectories: readonly string[] = []): void {
+  if (assets.schema !== observed.schema)
     throw new StoreError("UNSUPPORTED_PROFILE", "loaded modules and configured LIBDIR use different deployment layouts");
   const root = realpathSync(assets.root);
   const requireEntry = (path: string, directory: boolean): void => {
@@ -33,10 +33,9 @@ export function assertRuntimeAssets(assets: RuntimeAssets, observed: { schema: s
     if (resolved === ".." || resolved.startsWith(`..${sep}`) || isAbsolute(resolved))
       throw new StoreError("UNSUPPORTED_PROFILE", "deployment asset escapes installation root");
   };
-  requireEntry(assets.systemd, true); requireEntry(assets.schema, false); requireEntry(assets.contract, false); requireEntry(assets.extension, false);
+  requireEntry(assets.schema, false); requireEntry(assets.contract, false); requireEntry(assets.extension, false);
   for (const entry of Object.values(assets.entries)) requireEntry(entry, false);
   requireEntry(join(root, DEPLOYMENT_LAYOUT.modelCommandBuilder), false);
-  for (const template of Object.keys(DEPLOYMENT_LAYOUT.templateEntries)) requireEntry(join(assets.systemd, template), false);
   assertWorkspaceResolution(root, moduleDirectories);
 }
 

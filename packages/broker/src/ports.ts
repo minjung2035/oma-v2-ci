@@ -2,7 +2,7 @@
 import type {
   Actor, AuthContext, Failure, ProtocolLimits, PublicMethods, RequestKey, AgentCreateInput,
   Oid, MessageId, MailInput, Receipt, Json, AgentStatus, PreparedBatch, BoundaryEvidence,
-  UnitObservation, RunLease,
+  ExecutionObservation, RunLease,
 } from "@oma/contracts";
 import type { AgentRow, BatchRow } from "@oma/contracts/ledger";
 import type { SynchronousResult } from "@oma/contracts/durable";
@@ -12,7 +12,12 @@ import type { SettlementOutcome } from "@oma/domain/batch-settlement";
 import type { AdmissionGate } from "@oma/domain/admission";
 import type { PeerCred } from "@oma/native/linux";
 import type { ConnectionPeerPin } from "./peer-pin.js";
-export type BoundPeer = PeerCred & ConnectionPeerPin;
+import type { Socket, Server } from "node:net";
+import type { RpcSocket } from "./connection.js";
+export type BoundPeer = PeerCred & ConnectionPeerPin & {
+  /** Issued by the direct spawn owner, never decoded from a request. */
+  readonly inheritedRunner?: { readonly actor: Actor; readonly invocationId: string };
+};
 
 export interface PublicAgentView {
   readonly name: Actor;
@@ -37,10 +42,10 @@ export interface PublicViewsPort {
   readonly status: (agent: Actor | undefined, snapshot: StatusSnapshot) => AgentStatus[];
 }
 export interface PublicLifecyclePort {
-  readonly setSociety?: (auth: AuthContext, state: "open" | "closed", key: RequestKey) => Receipt;
+  readonly setSociety?: (auth: AuthContext, state: "open" | "closed", key: RequestKey) => Receipt | Promise<Receipt>;
   readonly create: (auth: AuthContext, input: AgentCreateInput, key: RequestKey) => Promise<Receipt>;
-  readonly start: (auth: AuthContext, agent: Actor, key: RequestKey) => Receipt;
-  readonly stop: (auth: AuthContext, agent: Actor, key: RequestKey) => Receipt;
+  readonly start: (auth: AuthContext, agent: Actor, key: RequestKey) => Receipt | Promise<Receipt>;
+  readonly stop: (auth: AuthContext, agent: Actor, key: RequestKey) => Receipt | Promise<Receipt>;
   readonly ack: (auth: AuthContext, message: MessageId, key: RequestKey) => Receipt;
   readonly follow: (auth: AuthContext, topic: string, subscribe: boolean, key: RequestKey) => Receipt;
 }
@@ -94,10 +99,6 @@ export interface InternalPeerPort {
     agent: Actor,
     invocationId?: string,
   ) => void;
-  readonly requireHostUnit: (
-    peer: BoundPeer,
-    kind: "principal-relay",
-  ) => void;
   readonly runnerActor: (peer: BoundPeer) => Actor;
   readonly runnerAuth: (
     agent: Actor,
@@ -108,7 +109,6 @@ export interface InternalPeerPort {
 export interface InternalDispatchDependencies {
   readonly store: InternalStorePort;
   readonly mail: InternalMailPort;
-  principalInboxNewEntries(): readonly string[];
   readonly peers: InternalPeerPort;
   isDraining(): boolean;
   assertAdmission(): void;
@@ -123,7 +123,7 @@ export type InternalAdmission = Pick<InternalDispatchDependencies, "isDraining" 
 export type PublicDispatchPorts = Pick<PublicDispatchDependencies,
   "store" | "mail" | "units" | "views" | "lifecycle" | "git" | "review" | "limits">;
 export type InternalDispatchDataPorts = Pick<InternalDispatchDependencies,
-  "store" | "mail" | "principalInboxNewEntries">;
+  "store" | "mail">;
 export interface BrokerTransaction { updateIncarnation(actor: Actor, incarnation: number): void }
 export interface BrokerLedger {
   agentNames(): Actor[];
@@ -139,8 +139,10 @@ export interface BrokerMail {
   settleFromReceipt(quiescence: SettlementQuiescence, batch: string): SettlementOutcome;
 }
 export interface BrokerUnits {
-  observe(actor: Actor): UnitObservation;
-  unitCgroup(kind: "principal-relay"): string;
+  observe(actor: Actor): ExecutionObservation;
+  scopeRoot(actor: Actor): { readonly pid: number; readonly startTime: string } | null;
+  runnerAlive(actor: Actor): boolean;
+  readLogs(actor: Actor, sinceSeconds: number, limit: number): Promise<{ text: string; truncated: boolean; observedAtMs: number }>;
   bindRunRevoker(revoke: (actor: Actor) => void): void;
 }
 export interface BrokerViews {
@@ -151,6 +153,8 @@ export interface BrokerViews {
 export interface BrokerReconcile { sweep(): Promise<RecoveryCounts> }
 export interface BrokerStatusRefresh { request(): Promise<StatusSnapshot> }
 export interface BrokerEffects {
+  prepareListener(server: Server): void;
+  peerStream(socket: Socket, authorizeSender: (sender: PeerCred | null) => boolean): RpcSocket;
   bindAdmission(gate: AdmissionGate): void;
   ensureRunRoot(): void;
   ensureActorDirectory(actor: Actor, incarnation: number): void;

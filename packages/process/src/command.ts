@@ -36,6 +36,9 @@ export interface Capture {
    * head (empty for the synchronous runner, which writes the file
    * descriptor-direct), and the file holds the stream's complete bytes. */
   readonly stdoutSpooledTo?: string; readonly stderrSpooledTo?: string;
+  /** Stderr was borrowed directly from the trusted caller; its empty capture
+   * is not an observation that the command emitted no diagnostics. */
+  readonly stderrForwarded?: true;
   readonly signal: NodeJS.Signals | null; readonly errorCode: string | null; readonly elapsedMs: number;
 }
 export type ProcessObservation = Capture & (

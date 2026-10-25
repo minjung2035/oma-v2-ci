@@ -29,7 +29,7 @@ export interface SubmitInput {
 export interface SubmitEffects {
   verifyObjectFormat(oids: readonly string[]): void;
   canonicalHas(candidate: Oid): boolean;
-  quarantineImport(fd: number, candidate: Oid, exportRef: string, prerequisites: readonly Oid[]): void | Promise<void>;
+  quarantineImport(fd: number, candidate: Oid, exportRef: string, prerequisites: readonly Oid[], authorize: () => void): void | Promise<void>;
   publishRef(ref: string, candidate: Oid): void;
   observeRef(ref: string): GitObservation<string>;
 }
@@ -141,7 +141,7 @@ export class SubmitCoordinator {
     const plan = operation.plan; let knowledge: EffectKnowledge = "none";
     try {
       if (plan.bundle) {
-        await withFrozenBundle(plan.bundle, fd => this.effects.quarantineImport(fd, plan.candidate, plan.exportRef, plan.prerequisites));
+        await withFrozenBundle(plan.bundle, fd => this.effects.quarantineImport(fd, plan.candidate, plan.exportRef, plan.prerequisites, () => this.publicationAuthority(operation.actor, auth)));
         requireFrozenBundle(plan.bundle); // asynchronous preparation did not authorize replacing the accepted input
       } else if (!this.effects.canonicalHas(plan.candidate)) throw new StoreError("PREREQUISITE_MISSING", "no bundle and candidate unknown to the broker");
       this.publicationAuthority(operation.actor, auth);
@@ -162,7 +162,7 @@ export class SubmitCoordinator {
         if (current.value !== plan.candidate) { this.store.transaction(tx => tx.setOperationUnknown(operation.id)); return; }
       } else if (current.kind === "absent") {
         if (plan.bundle) {
-          await withFrozenBundle(plan.bundle, fd => this.effects.quarantineImport(fd, plan.candidate, plan.exportRef, plan.prerequisites));
+          await withFrozenBundle(plan.bundle, fd => this.effects.quarantineImport(fd, plan.candidate, plan.exportRef, plan.prerequisites, () => this.publicationAuthority(operation.actor)));
           requireFrozenBundle(plan.bundle);
         } else if (!this.effects.canonicalHas(plan.candidate)) throw new StoreError("REF_STATE_UNKNOWN", "accepted candidate is unavailable in canonical objects");
         const fresh = this.effects.observeRef(plan.publishedRef);

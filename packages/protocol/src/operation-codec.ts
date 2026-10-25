@@ -30,6 +30,8 @@ import { operationResultCheck } from "@oma/domain/validation";
 
 /** New acceptance serialization only. Decoding never repairs stored bytes. */
 export function encodeOperationPlan(plan: OperationPlan): string {
+  if (plan.kind === "agent.create" && "unitNames" in plan)
+    throw new StoreError("UNSUPPORTED_PROFILE", "retired unit installation intents are read-only historical plans");
   return JSON.stringify({ version: PLAN_ENVELOPE_VERSION, intent: plan });
 }
 

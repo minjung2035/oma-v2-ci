@@ -3,7 +3,7 @@ import type { ReconcileLedger } from "@oma/reconcile/ports";
 /** Compile-only port and wire checks included by the root typecheck. */
 import type {
   Actor, AgentStatus, InternalMethods, InternalResults, OperationId, PublicMethod,
-  Receipt, RunLease, SandboxPlan, UnitObservation,
+  Receipt, RunLease, SandboxPlan, ExecutionObservation,
 } from "@oma/contracts";
 import type { Store } from "@oma/storage";
 import type { DecodedOperation as OperationRow } from "@oma/protocol/operation-codec";
@@ -11,13 +11,13 @@ import type { MailLedger } from "@oma/mail/ports";
 import type { GitLedger } from "@oma/git/ports";
 import type { ReviewLedger } from "@oma/review/ports";
 import type { LifecycleLedger } from "@oma/lifecycle/ports";
-import type { UnitsModule } from "@oma/platform-linux/units";
+import type { NativeResidents } from "#oma-test/app/runtime/native-residents";
 import type { ViewsModule } from "#oma-test/app/views";
 import type { ReconcileModule } from "@oma/reconcile";
 import type { RunnerModule } from "#oma-test/app/runner";
 import type { SandboxModule } from "@oma/platform-linux/sandbox";
 import type { StorePort, OperationReceiptPort } from "#oma-test/app/ports/ledger";
-import type { SyncUnitsPort, DerivedViewsPort, ReconcilePort, BoundRunnerPort, SandboxPort } from "#oma-test/app/ports/runtime";
+import type { ResidentExecutionPort, DerivedViewsPort, ReconcilePort, BoundRunnerPort, SandboxPort } from "#oma-test/app/ports/runtime";
 
 type Assert<T extends true> = T;
 type Equal<A, B> = [A] extends [B] ? ([B] extends [A] ? true : false) : false;
@@ -58,11 +58,11 @@ function lifecycleTransactionScope(ledger: LifecycleLedger) {
 }
 
 // Actual implementations must satisfy consumer-owned capabilities.
-function actualPorts(store: Store, units: UnitsModule, views: ViewsModule,
+function actualPorts(store: Store, units: NativeResidents, views: ViewsModule,
   reconcile: ReconcileModule, runner: RunnerModule, sandbox: SandboxModule) {
   return {
     store: store satisfies StorePort,
-    units: units satisfies SyncUnitsPort,
+    units: units satisfies ResidentExecutionPort,
     views: views satisfies DerivedViewsPort,
     reconcile: reconcile satisfies ReconcilePort,
     runner: runner satisfies BoundRunnerPort,
@@ -71,9 +71,9 @@ function actualPorts(store: Store, units: UnitsModule, views: ViewsModule,
 }
 
 type RowNotReceipt = Assert<Equal<ReturnType<Store["getOperation"]>, OperationRow | null>>;
-type EpochRequired = Assert<Equal<Parameters<UnitsModule["stop"]>, [Actor, number]>>;
-type StopIsObserved = Assert<Equal<ReturnType<UnitsModule["stop"]>, UnitObservation>>;
-type ObservationIsSynchronous = Assert<Equal<ReturnType<UnitsModule["observe"]>, UnitObservation>>;
+type EpochRequired = Assert<Equal<Parameters<NativeResidents["stop"]>, [Actor, number]>>;
+type StopIsObserved = Assert<Equal<ReturnType<NativeResidents["stop"]>, Promise<ExecutionObservation>>>;
+type ObservationIsSynchronous = Assert<Equal<ReturnType<NativeResidents["observe"]>, ExecutionObservation>>;
 type ViewIsSynchronous = Assert<Equal<ReturnType<ViewsModule["status"]>, AgentStatus[]>>;
 type MetricsPreserved = Assert<Equal<Awaited<ReturnType<ReconcileModule["sweep"]>>,
   { examined: number; repaired: number; remaining: number }>>;
@@ -89,12 +89,12 @@ type PublicWireUnchanged = Assert<Equal<PublicMethod,
   "git.known" | "git.submit" | "git.integrate" | "context.publish" |
   "operation.get" | "status.get" | "logs.read"
 >>;
-type InternalWireUnchanged = Assert<Equal<keyof InternalMethods,
+type InternalNativeWire = Assert<Equal<keyof InternalMethods,
   "runner.open" | "runner.pending" | "batch.prepare" | "batch.read" | "batch.complete" |
-  "runner.observe" | "principal.attach" | "principal.detach" | "host.principalRelay"
+  "runner.observe" | "principal.attach" | "principal.detach"
 >>;
 
-function rejectedChanges(store: Store, units: SyncUnitsPort, views: DerivedViewsPort,
+function rejectedChanges(store: Store, units: ResidentExecutionPort, views: DerivedViewsPort,
   reconcile: ReconcilePort, runner: BoundRunnerPort, sandbox: SandboxPort, lease: RunLease) {
   // @ts-expect-error The durable row still contains plan/hash/identity, not a wire receipt.
   const receipt: Receipt | null = store.getOperation("alice", "key");
@@ -102,10 +102,10 @@ function rejectedChanges(store: Store, units: SyncUnitsPort, views: DerivedViews
   const receiptPort: OperationReceiptPort = store;
   // @ts-expect-error Death-proof incarnation must not be erased.
   units.stop("alice");
-  // @ts-expect-error Synchronous effects cannot silently become async orchestration.
-  const asyncUnits: { observe(agent: Actor): Promise<UnitObservation> } = units;
+  // @ts-expect-error Diagnostic observation remains synchronous.
+  const asyncUnits: { observe(agent: Actor): Promise<ExecutionObservation> } = units;
   // @ts-expect-error Observation is synchronous, not a Promise-wrapped result.
-  const observation: Promise<UnitObservation> = units.observe("alice");
+  const observation: Promise<ExecutionObservation> = units.observe("alice");
   // @ts-expect-error Derived publication is synchronous at the current boundary.
   const publication: Promise<void> = views.refreshWorld();
   // @ts-expect-error Reconciliation must preserve its metrics result.
@@ -121,7 +121,7 @@ function rejectedChanges(store: Store, units: SyncUnitsPort, views: DerivedViews
 export type {
   RowNotReceipt, EpochRequired, StopIsObserved, ObservationIsSynchronous,
   ViewIsSynchronous, MetricsPreserved, RunnerIsBound, RunnerExitPreserved,
-  SandboxReturnsPlan, PublicWireUnchanged, InternalWireUnchanged,
+  SandboxReturnsPlan, PublicWireUnchanged, InternalNativeWire,
 };
 
 function recoveryHasNoLedgerWriter(ledger: ReconcileLedger) {

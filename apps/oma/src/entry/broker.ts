@@ -9,7 +9,7 @@ import { dirname, join } from "node:path";
 import { ensureOwnedUserDirectory } from "../runtime/user-files.js";
 import { Store, SCHEMA_PATH } from "@oma/storage";
 import { MailModule } from "@oma/mail";
-import { UnitsModule, UNIT_TPL_DIR, assertUserManagerReachable } from "@oma/platform-linux/units";
+import { createNativeResidents } from "../runtime/native-residents.js";
 import { ViewsModule } from "../views.js";
 import { LifecycleModule } from "@oma/lifecycle";
 import { Broker } from "@oma/broker";
@@ -17,6 +17,8 @@ import { HOST_CHANNEL_ENV, HOST_CHANNEL_FD } from "@oma/protocol/host-channel";
 import { openSupervisionChannel } from "../runtime/supervision-channel.js";
 import { GitModule } from "@oma/git";
 import { CandidateChecks } from "../runtime/candidate-checks.js";
+import { quarantineExecution } from "../runtime/quarantine-execution.js";
+import { ExecutionRuntime } from "../runtime/execution-runtime.js";
 import { observeProjectBinding, repairSociety } from "../runtime/provision.js";
 import { prepareSociety } from "../runtime/society-preparation.js";
 import { realpathSync } from "node:fs";
@@ -120,6 +122,7 @@ async function main(): Promise<void> {
     let preparation: ReturnType<typeof prepareSociety> | null = null;
     let storagePreparation: Promise<void> | null = null;
     let sessionStorage: SessionStorage | null = null;
+    let executions: ExecutionRuntime | null = null;
     let storageResidents: readonly StorageResident[] | null = null;
     let freshVerifiedMain: string | undefined;
     let principalHost: ReturnType<typeof openSupervisionChannel>;
@@ -173,23 +176,23 @@ async function main(): Promise<void> {
     }
     try {
         const cfg = loadConfig(configPath);
+        graceSeconds = cfg.limits.receiptWaitSeconds;
         if (cfg.society !== society)
             throw new StoreError("INVALID_REQUEST", "config society does not match the requested society");
         assertHostDirectoryLayout(cfg.installation.libdir);
         // No schema search, path flattening or cross-installation fallback.
-        assertRuntimeAssets(runtimeAssets(cfg.installation.libdir), { schema: SCHEMA_PATH, systemd: UNIT_TPL_DIR });
+        assertRuntimeAssets(runtimeAssets(cfg.installation.libdir), { schema: SCHEMA_PATH });
         assertDeploymentDigest(cfg.installation.libdir, cfg.installation.deploymentDigest);
+        executions = new ExecutionRuntime(stateRoot);
+        const nativeOwner = executions;
+        lifetime.retainNative(() => nativeOwner.close());
+        await executions.recover();
         sessionStorage = SessionStorage.forSociety({ stateRoot, society, fence: claim.fence,
             log: line => console.error(line), quiesce: (residents, action) => {
                 // SQLite is closed here. This projection is bound to its exact
                 // closed bytes by the checkpoint; it is not a replayed death proof.
-                const incarnations = new Map(residents.map(actor => [actor.name, actor.incarnation]));
-                const coldUnits = new UnitsModule(society, { node: cfg.installation.node, libdir: cfg.installation.libdir,
-                    state: stateRoot, society, agent: "", config: configPath, run: runRoot }, undefined,
-                    agent => incarnations.get(agent) ?? null);
                 for (const actor of residents) {
-                    if (action === "stop") coldUnits.stop(actor.name, actor.incarnation);
-                    if (!coldUnits.confirmDead(actor.name, actor.incarnation))
+                    if (!executions?.confirmDead(`resident:${actor.name}`))
                         throw new StoreError("RUN_TERMINATION_UNKNOWN", `workspace storage cannot prove ${actor.name} ended`);
                 }
             } });
@@ -217,25 +220,24 @@ async function main(): Promise<void> {
         }
         assertHostDirectoryLayout(cfg.installation.rootfs);
         assertStateRoot(stateRoot);
-        graceSeconds = cfg.limits.receiptWaitSeconds;
         const integrationPolicy = integrationPolicyFromConfig(cfg.integration);
         assertSupportedIntegration(snapshotIntegrationPolicy(integrationPolicy));
-        assertUserManagerReachable();
         const store = new Store(join(stateRoot, "runtime.sqlite"), undefined, { society });
         lifetime.retainStore(() => store.close());
         const mail = createMailModule({ stateRoot, society }, store, cfg.limits.replyReferences, cfg.limits.batchMaxMessages,
             cfg.limits, () => broker.hintWork());
-        const units = new UnitsModule(society, { node: cfg.installation.node, libdir: cfg.installation.libdir, state: stateRoot, society, agent: "",
-            config: configPath, run: runRoot }, undefined, agent => store.getAgent(agent)?.incarnation ?? null);
+        const units = createNativeResidents(store, executions, location, cfg,
+            (socket, peer) => broker.attachRunner(socket, peer), () => broker.hintWork(), (actor, invocation) => broker.residentIncarnation(actor, invocation));
         const views = new ViewsModule(store, stateRoot, society, cfg.principalProfile, cfg.limits);
         const resolveSpec = createChildSpecResolver(() => readCurrentHostPolicy(configPath, society), () => store.inTransaction);
         const gitPaths = { stateRoot, projectGit: projectGitPathAt(stateRoot), contextGit: join(stateRoot, "repos", "context.git"),
             worldDir: join(stateRoot, "world"), society,
             ownerSignal: preparationAbort.signal,
             checkRootfs: cfg.installation.rootfs, checkNode: cfg.installation.node, checkAssetsDir: cfg.installation.libdir, };
-        const checks = new CandidateChecks(gitPaths, undefined, undefined, preparationAbort.signal);
-        const { git, reviews } = createGitServices(gitPaths, store, mail, integrationPolicy, () => integrationPolicyFromConfig(readCurrentHostPolicy(configPath, society).integration), (candidate, check, cancellation) => checks.run(candidate, check, cancellation), { mailBodyBytes: cfg.limits.mailBodyBytes, subjectBytes: cfg.limits.subjectBytes,
-            bundleBytes: cfg.limits.bundleBytes });
+        const executionOwner = executions;
+        const checks = new CandidateChecks(gitPaths, (command, signal, authorize, inheritedFds, prepared) => executionOwner.run("candidate", command, signal, authorize, inheritedFds, undefined, prepared), undefined, preparationAbort.signal);
+        const { git, reviews } = createGitServices(gitPaths, store, mail, integrationPolicy, () => integrationPolicyFromConfig(readCurrentHostPolicy(configPath, society).integration), (candidate, check, cancellation, authorize) => checks.run(candidate, check, cancellation, authorize), { mailBodyBytes: cfg.limits.mailBodyBytes, subjectBytes: cfg.limits.subjectBytes,
+            bundleBytes: cfg.limits.bundleBytes }, quarantineExecution(gitPaths, executionOwner));
         const hasGoal = (): boolean => git.hasCommittedContext();
         const lifecycle = createLifecycleModule(store, units, { stateRoot, projectGit: projectGitPathAt(stateRoot), society,
             hasGoal, activationAllowed: () => lifetime.permitsActivation,
@@ -249,8 +251,8 @@ async function main(): Promise<void> {
         // endpoint, and credentials leave only on the channel that host holds --
         // never through a file, an environment or this process's own output.
         const broker = createBroker({ store: store, mail: mail, units: units, views: views, lifecycle: lifecycle, git: git, reviews: reviews, reconcile: reconcile, paths: { stateRoot, runRoot, society, hasGoal,
-            quiesceOnDrain: () => {
-                reconcile.quiesceForShutdown();
+            quiesceOnDrain: async () => {
+                await reconcile.quiesceForShutdown();
                 storageResidents = store.listAgents().filter(agent => agent.role === "resident")
                     .map(agent => ({ name: agent.name, incarnation: agent.incarnation }));
             } }, limits: cfg.limits, lock: lock, principalHost: principalHost });
@@ -280,15 +282,12 @@ async function main(): Promise<void> {
                 if (store.getAgent("principal")) {
                     for (const directory of ["new", "cur", "tmp"])
                         ensureOwnedUserDirectory(join(stateRoot, "mail", "inboxes", "principal", directory), stateRoot);
-                    units.ensurePrincipal();
                 }
             },
             listen: () => broker.start(),
             notify: () => {
-                const notified = broker.notifyReady();
-                if (process.env.NOTIFY_SOCKET && !notified)
-                    throw new StoreError("BROKER_UNAVAILABLE", "systemd READY notification failed");
-                console.error(notified ? "broker ready" : "broker listening (foreground, no systemd notification)");
+                broker.notifyReady();
+                console.error("broker ready");
             },
             activate: async () => { await reconcile.sweep(); views.refreshWorld(); },
         });

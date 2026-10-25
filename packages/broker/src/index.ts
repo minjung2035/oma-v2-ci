@@ -9,31 +9,28 @@ import { actorSocketDirectoryAt, actorSocketPathAt } from "@oma/domain/paths";
 import { encodeFrame } from "@oma/protocol/frame";
 import { BrokerListeners } from "./listeners.js";
 import { RpcConnection, NODE_ALARMS } from "./connection.js";
-import { PeerAuthenticator } from "./peer-authenticator.js";
+import { PeerAuthenticator, matchesPinnedSender } from "./peer-authenticator.js";
 import { type BoundPeer } from "./ports.js";
 import { PublicDispatcher } from "./public-dispatcher.js";
 import { InternalDispatcher, assertInternalAdmission, projectInternalPeers } from "./internal-dispatcher.js";
 import { type InternalAdmission } from "./ports.js";
-import { readUnitLogs } from "./logs.js";
 import { errorAnswer, okAnswer } from "./replies.js";
 import { RunRegistry } from "./run-registry.js";
 import { CoalescedWake } from "@oma/process/coalesced-wake";
 import { ProcessLock } from "@oma/native/process-lock";
 import { settleWithin } from "./lifetime.js";
-import { sdNotifyReady } from "@oma/native/linux";
 import { RECONCILE_INTERVAL_MS } from "@oma/domain/recovery-policy";
 import { STATUS_REFRESH_MS } from "@oma/protocol/status-view";
 import { PrincipalEndpoint, PrincipalHostEndpoint, type PrincipalHostChannel } from "./principal-endpoint.js";
 import { resolvedSpecOf } from "@oma/domain/agent-spec";
 export { boundedLogOutput } from "./logs.js";
-export { peerCgroup } from "./peer-authenticator.js";
 
 export interface BrokerPaths {
   stateRoot: string; runRoot: string; society: string; hasGoal: () => boolean;
   /** D03: the broker's Residents are bound to no fixed unit, so it stops them
    * itself on drain, after every dispatched task settles and before its Store
    * closes. */
-  quiesceOnDrain?: () => void;
+  quiesceOnDrain?: () => void | Promise<void>;
 }
 
 /** PR-001: a broker no host started opens no Principal endpoint at all, so
@@ -46,7 +43,6 @@ export const ACTOR_CONNECTIONS = 16;
 
 export class Broker {
   private adminServer: Server | null = null;
-  private hostServer: Server | null = null;
   private principalServer: Server | null = null;
   private principalHostServer: Server | null = null;
   private principalEndpoint: PrincipalEndpoint | null = null;
@@ -129,12 +125,11 @@ export class Broker {
     lock.assertHeld(lockPath);
     this.units.bindRunRevoker(actor => this.runLeases.get(actor)?.revoke());
     this.views.refreshWorld();
-    this.adminServer = this.listenInternal(join(this.paths.runRoot, "admin.sock"), "runner");
-    this.hostServer = this.listenInternal(join(this.paths.runRoot, "host.sock"), "host");
+    this.adminServer = this.listenOn(join(this.paths.runRoot, "admin.sock"), socket => socket.destroy());
     if (this.principalHost !== undefined) this.listenPrincipal(this.principalHost);
     const principalListeners = [this.principalServer, this.principalHostServer]
       .filter((server): server is Server => server !== null).map(server => this.listeners.ready(server));
-    this.starting = Promise.all([this.listeners.ready(this.adminServer), this.listeners.ready(this.hostServer),
+    this.starting = Promise.all([this.listeners.ready(this.adminServer),
       ...principalListeners]).then(() => {
       this.health.assertAdmission(); this.running = true;
       // Only now: a host told "ready" can register its session and expect both
@@ -155,18 +150,9 @@ export class Broker {
     void this.starting.catch(error => { this.health.observe(error); this.closeAdmission(); });
     return this.starting;
   }
-  notifyReady(): boolean {
+  notifyReady(): void {
     if (!this.running || this.draining) throw new StoreError("BROKER_UNAVAILABLE", "listeners are not ready");
     this.health.assertAdmission();
-    return sdNotifyReady(process.env.NOTIFY_SOCKET ?? "");
-  }
-  private listenInternal(path: string, channel: "runner" | "host"): Server {
-    this.dependencies.effects.clearSocketName(path);
-    const server = createServer({ allowHalfOpen: true }, socket => {
-      if (this.draining) { socket.destroy(); return; }
-      this.handleInternal(socket, channel);
-    });
-    this.listeners.listen(server, path); return server;
   }
   /** TUI-004: the endpoint the product's own Pi session reaches the society
    * through. It is a public actor endpoint like a Resident's, with one
@@ -211,11 +197,11 @@ export class Broker {
   }
   private listenOn(path: string, serve: (socket: Socket) => void): Server {
     this.dependencies.effects.clearSocketName(path);
-    const server = createServer({ allowHalfOpen: true }, socket => {
+    const server = createServer({ allowHalfOpen: true, pauseOnConnect: true }, socket => {
       if (this.draining) { socket.destroy(); return; }
       serve(socket);
     });
-    this.listeners.listen(server, path);
+    this.listeners.listen(server, path, () => this.dependencies.effects.prepareListener(server));
     return server;
   }
   private refreshViews(): void {
@@ -292,7 +278,7 @@ export class Broker {
     this.dependencies.effects.ensureActorDirectory(actor, incarnation);
     this.dependencies.effects.clearSocketName(path);
     const sockets = new Set<Socket>(); let revoked = false;
-    const server = createServer({ allowHalfOpen: true }, socket => {
+    const server = createServer({ allowHalfOpen: true, pauseOnConnect: true }, socket => {
       if (revoked || this.draining) return this.fail(socket, { code: "STALE_RUN", message: "run endpoint revoked", retry: "never" });
       sockets.add(socket); socket.once("close", () => sockets.delete(socket));
       this.handleActor(socket, actor, incarnation);
@@ -306,7 +292,7 @@ export class Broker {
       const run = this.runLeases.get(actor);
       if (run?.identity.incarnation === incarnation) { try { run.revoke(); } catch (error) { this.cleanupError(error); } }
     });
-    this.listeners.listen(server, path);
+    this.listeners.listen(server, path, () => this.dependencies.effects.prepareListener(server));
     return { socketHostPath: path, ready: this.listeners.ready(server), done: () => {
       if (revoked) return;
       revoked = true;
@@ -335,19 +321,25 @@ export class Broker {
     } catch (error) { this.health.observe(error); this.fail(socket, publicFailure(error)); }
     finally { if (!transferred) { try { peer?.releaseConnection(); } catch (error) { this.cleanupError(error); } } }
   }
-  private handleInternal(socket: Socket, channel: "runner" | "host"): void {
-    let peer: BoundPeer | null = null; let transferred = false;
-    try {
-      if (this.draining) throw new StoreError("BROKER_UNAVAILABLE", "broker is draining", { details: { reason: "draining" } });
-      peer = this.bindPeer(socket);
-      if (!peer || peer.uid !== (process.getuid?.() ?? -1)) throw new StoreError("AUTH_FAILED", "invalid internal peer credentials");
-      const credentials = peer;
-      this.serveFrames(socket, peer, (raw, stream) => this.dispatchInternal(raw, credentials, stream, channel), () => {
-        throw new StoreError("INVALID_REQUEST", "internal methods do not accept raw stream bodies");
-      });
-      transferred = true;
-    } catch (error) { this.health.observe(error); this.fail(socket, publicFailure(error)); }
-    finally { if (!transferred) { try { peer?.releaseConnection(); } catch (error) { this.cleanupError(error); } } }
+  /** Only App composition can supply this directly owned socket and kernel
+   * pin. No request, UID or pathname can mint an inherited runner grant. */
+  attachRunner(socket: Socket, peer: BoundPeer): void {
+    if (this.draining || !this.running || peer.inheritedRunner === undefined) {
+      socket.destroy(); peer.releaseConnection();
+      throw new StoreError("BROKER_UNAVAILABLE", "runner control owner is not ready");
+    }
+    socket.once("close", () => {
+      try { this.runLeases.get(peer.inheritedRunner!.actor)?.revoke(); }
+      catch (error) { this.cleanupError(error); }
+    });
+    this.serveFrames(socket, peer, (raw, stream) => this.dispatchInternal(raw, peer, stream, "runner"), () => {
+      throw new StoreError("INVALID_REQUEST", "runner control does not accept stream bodies");
+    }, true);
+    socket.resume();
+  }
+  residentIncarnation(actor: Actor, invocationId: string): number | null {
+    const run = this.runLeases.get(actor);
+    return run?.invocationId === invocationId ? run.lease?.incarnation ?? null : null;
   }
   private cleanupError(error: unknown): void {
     this.health.observe(error);
@@ -361,8 +353,10 @@ export class Broker {
   private serveFrames(socket: Socket, peer: BoundPeer,
     handle: (raw: Record<string, unknown>, stream: AsyncIterable<Uint8Array> | null) => Promise<object>,
     preflight: (raw: Record<string, unknown>) => void,
+    inheritedControl = false,
   ): void {
-    const connection = new RpcConnection({ socket, peer, limits: this.limits, makeSpool: descriptor => this.dependencies.effects.makeSpool(descriptor),
+    const transport = inheritedControl ? socket : this.dependencies.effects.peerStream(socket, sender => matchesPinnedSender(peer, sender));
+    const connection = new RpcConnection({ socket: transport, peer, inheritedControl, limits: this.limits, makeSpool: descriptor => this.dependencies.effects.makeSpool(descriptor),
       handle: async (raw, body) => {
         try { return await handle(raw, body); } catch (error) { this.health.observe(error); throw error; }
       },
@@ -401,7 +395,7 @@ export class Broker {
     this.publicDispatcher.preflight(auth, envelope);
   }
   private readLogs(agent: string, sinceSeconds: number): Promise<{ text: string; truncated: boolean; observedAtMs: number }> {
-    return readUnitLogs(this.paths.society, agent, sinceSeconds, this.limits.logBytes);
+    return this.units.readLogs(agent, sinceSeconds, this.limits.logBytes);
   }
   async dispatch(auth: AuthContext, request: Request, stream: AsyncIterable<Uint8Array> | null): Promise<object> {
     return this.publicDispatcher.dispatch(auth, request, stream);
@@ -422,15 +416,15 @@ export class Broker {
     // passes. A fallback here read EACCES or EIO as "no GOAL".
     if (!this.paths.hasGoal()) throw new StoreError("GOAL_REQUIRED", "shared GOAL not published yet");
     const active = this.runLeases.get(actor); const observation = this.units.observe(actor);
-    if (observation.activeState === "unknown" || observation.invocationId !== invocationId || !observation.cgroup) throw new StoreError("AUTH_FAILED", "runner invocation changed during open");
+    if (observation.activeState === "unknown" || observation.invocationId !== invocationId || !observation.scope) throw new StoreError("AUTH_FAILED", "runner invocation changed during open");
     if (active?.invocationId === invocationId) {
-      if (!active.lease || active.lease.incarnation !== agent.incarnation || !active.matches(observation.cgroup)) throw new StoreError("STALE_RUN", "run endpoint is revoked, replaced or failed");
+      if (!active.lease || active.lease.incarnation !== agent.incarnation || !active.matches(observation.scope)) throw new StoreError("STALE_RUN", "run endpoint is revoked, replaced or failed");
       return active.lease;
     }
     const next = agent.incarnation + 1;
     if (!Number.isSafeInteger(next)) throw new StoreError("STORE_CORRUPT", "incarnation exhausted");
     this.actorSocketDirectory(actor, next);
-    const record = this.runLeases.begin(actor, next, invocationId, observation.cgroup);
+    const record = this.runLeases.begin(actor, next, invocationId, observation.scope);
     let endpoint: ReturnType<Broker["listenActor"]> | null = null;
     try {
       // D01/WP07: settle the prepared batches from their own receipts before the
@@ -446,9 +440,9 @@ export class Broker {
       this.health.assertAdmission();
       const currentUnit = this.units.observe(actor);
       if (this.draining || !this.store.societyOpen() || this.runLeases.get(actor) !== record ||
-          currentUnit.activeState === "unknown" || currentUnit.invocationId !== invocationId || !currentUnit.cgroup)
+          currentUnit.activeState === "unknown" || currentUnit.invocationId !== invocationId || !currentUnit.scope)
         throw new StoreError("STALE_RUN", "run admission changed while the endpoint was opening");
-      record.confirmOpening(currentUnit.cgroup);
+      record.confirmOpening(currentUnit.scope);
       this.store.transaction(tx => {
         this.health.assertAdmission();
         const current = this.store.getAgent(actor);
@@ -466,7 +460,7 @@ export class Broker {
     }
   }
   /** D01/WP07 rollover boundary. `begin` has proven the previous invocation's
-   * cgroup empty or removed (or this broker's startup quiesced every unit and
+   * scope empty (or this broker's startup quiesced every scope and
    * has run none since), and the opening run has no endpoint yet: that is what
    * makes an absent receipt final for the run now ending. What each receipt
    * means is the receipt decision's (P0-2): a verified receipt of any of the
@@ -522,7 +516,7 @@ export class Broker {
       // A Resident whose end was not proven may still run, so the drain ends
       // with that failure once everything this broker holds is given back.
       let unproven: { readonly error: unknown } | null = null;
-      try { this.paths.quiesceOnDrain?.(); } catch (error) { this.cleanupError(error); unproven = { error }; }
+      try { await this.paths.quiesceOnDrain?.(); } catch (error) { this.cleanupError(error); unproven = { error }; }
       // No Store or pinned lease closes before all dispatched task owners settle.
       try { this.runLeases.close(); } catch (error) { this.cleanupError(error); }
       this.dependencies.effects.closeLedger();

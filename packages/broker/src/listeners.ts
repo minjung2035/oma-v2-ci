@@ -8,9 +8,11 @@ export class BrokerListeners {
   private readonly closing = new Set<Promise<void>>();
   constructor(private readonly onError: (error: unknown) => void) {}
 
-  listen(server: Server, path: string): void {
+  listen(server: Server, path: string, prepare: () => void = () => {}): void {
     const ready = new Promise<void>((resolve, reject) => {
-      server.once("listening", resolve);
+      server.once("listening", () => {
+        try { prepare(); resolve(); } catch (error) { this.onError(error); reject(error); }
+      });
       // The handler remains after bind: a late listener error belongs to this
       // owner too, even when the initial readiness promise already settled.
       server.on("error", error => { this.onError(error); reject(error); });

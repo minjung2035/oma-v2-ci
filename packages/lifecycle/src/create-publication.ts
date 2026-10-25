@@ -17,6 +17,7 @@ export class CreationPublicationObserver {
     private readonly workspace: Pick<LifecycleWorkspace, "observeProvisioningHead">) {}
   ready(operation: OperationOf<"agent.create">): CreationPublicationEvidence {
     const plan = operation.plan;
+    if ("unitNames" in plan) throw new StoreError("UNSUPPORTED_PROFILE", "historical unit installation intent cannot publish native readiness");
     if ((operation.state !== "pending" && operation.state !== "unknown") || plan.existingCreation !== null || plan.initialMessage === null)
       throw new StoreError("AGENT_NOT_READY", "creation publication requires the original accepted intent");
     if (!isWorkspacePathFor(plan.workspacePath, { stateRoot: this.stateRoot, actor: plan.spec.name }))
@@ -35,7 +36,7 @@ export class CreationPublicationObserver {
       if (head.status !== 0 || head.stdout.trim() !== plan.spec.from)
         throw new StoreError("STORE_CORRUPT", "creation workspace has no matching frozen base");
     }
-    // ensureResident includes durable installation and actual fragment/drop-in/resource verification.
+    // The native execution owner verifies the frozen references and owns the actor slot.
     this.units.ensureResident(plan.spec.name, plan.spec.profile, plan.spec.modelProfile);
     this.store.transaction(tx => {
       const current = this.store.getAgent(plan.spec.name);

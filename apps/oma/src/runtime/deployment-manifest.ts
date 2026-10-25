@@ -113,7 +113,7 @@ export function deploymentManifest(root: string): DeploymentManifest {
     rootFd = openDirectory(root.replace(/\/+$/, "") || "/");
     // Assets may be inside their workspace payload. Visit every file once;
     // a nested asset root is already covered by its parent payload tree.
-    const roots = [...new Set([DEPLOYMENT_LAYOUT.compiledRoot, dirname(DEPLOYMENT_LAYOUT.contract), DEPLOYMENT_LAYOUT.systemd,
+    const roots = [...new Set([DEPLOYMENT_LAYOUT.compiledRoot, dirname(DEPLOYMENT_LAYOUT.contract),
       ...DEPLOYMENT_LAYOUT.workspaces.map(workspace => `${workspace.root}/dist`)])];
     for (const path of roots.filter(path => !roots.some(parent => path.startsWith(`${parent}/`))))
       tree(rootFd, path, path);

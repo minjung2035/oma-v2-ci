@@ -12,6 +12,10 @@ export interface AsyncProcessOptions {
   /** Synchronous streaming consumer. Bytes are borrowed only for this call;
    * consumer failure terminates the owned child and remains unobserved. */
   readonly stdoutSink?: (bytes: Uint8Array) => void;
+  readonly stderrSink?: (bytes: Uint8Array) => void;
+  /** A trusted helper can pass its own stderr through without a second
+   * unbounded stream buffer. Caller owns this descriptor until child close. */
+  readonly stderrFd?: number;
   /** Host/coordinator cancellation only. Connection close must not cancel accepted work. */
   readonly signal?: AbortSignal;
   /** Pinned preparation commands may own a Linux process group, never a systemd scope. */
@@ -38,6 +42,8 @@ export function startProcess(source: CommandSpec, options: AsyncProcessOptions =
   const signal = options.signal;
   const inheritedFds = [...(options.inheritedFds ?? [])];
   if (inheritedFds.some(fd => !Number.isInteger(fd) || fd < 0)) throw new TypeError("invalid inherited descriptor");
+  if (options.stderrFd !== undefined && (!Number.isSafeInteger(options.stderrFd) || options.stderrFd < 0 || options.stderrSink !== undefined || spec.stderrSpool !== undefined))
+    throw new TypeError("invalid stderr descriptor or conflicting sink");
   const started = performance.now();
   let resolveResult!: (value: ProcessObservation) => void;
   let resolveClosed!: () => void;
@@ -50,7 +56,7 @@ export function startProcess(source: CommandSpec, options: AsyncProcessOptions =
   let child: ReturnType<typeof spawn>;
   try {
     child = spawn(spec.executable, [...spec.argv], { cwd: spec.cwd, env: { ...spec.env }, shell: false,
-      detached: ownGroup, stdio: [spec.stdinFd ?? "pipe", "pipe", "pipe", ...inheritedFds] });
+      detached: ownGroup, stdio: [spec.stdinFd ?? "pipe", "pipe", options.stderrFd ?? "pipe", ...inheritedFds] });
   } catch (error) { resolveResult(empty("spawn-failed", error)); resolveClosed(); return { result, closed, cancel() {} }; }
   const out: Buffer[] = [], err: Buffer[] = [];
   let outBytes = 0, errBytes = 0, outLimited = false, errLimited = false;
@@ -92,6 +98,7 @@ export function startProcess(source: CommandSpec, options: AsyncProcessOptions =
       stdoutTruncated: outLimited, stderrTruncated: errLimited,
       ...(outSpool === null ? {} : { stdoutSpooledTo: outSpool.path }),
       ...(errSpool === null ? {} : { stderrSpooledTo: errSpool.path }),
+      ...(options.stderrFd === undefined ? {} : { stderrForwarded: true as const }),
       signal: exitSignal, errorCode: processErrorCode(nativeError), elapsedMs: performance.now() - started };
     out.length = 0; err.length = 0;
     if (kind === "exited" && typeof exitCode === "number") resolveResult({ ...capture, kind, exitCode });
@@ -138,8 +145,9 @@ export function startProcess(source: CommandSpec, options: AsyncProcessOptions =
   const collect = (value: Buffer, output: boolean): void => {
     if (returned) return;
     if (!Buffer.isBuffer(value)) { terminate("unobserved"); return; }
-    if (output && options.stdoutSink !== undefined) {
-      try { options.stdoutSink(value); }
+    const sink = output ? options.stdoutSink : options.stderrSink;
+    if (sink !== undefined) {
+      try { sink(value); }
       catch (error) { nativeError ??= error; terminate("unobserved"); return; }
     }
     armSilence();
@@ -315,82 +323,31 @@ export function spawnSessionInteractive(executable: string, argv: readonly strin
   return spawn(executable, [...argv], { cwd, env: { ...env }, shell: false,
     stdio: ["inherit", "inherit", "inherit", historyLock, "ipc"] });
 }
-/** The pinned recipes' option grammar, not an allowlist of values. An option
- * value may itself be "--", "--args" or "--seccomp"; only option positions
- * carry meaning. The command and its arguments are never parsed here. */
-const SANDBOX_OPTION_ARITY: Readonly<Record<string, number>> = Object.freeze({
-  "--unshare-all": 0, "--share-net": 0, "--unshare-net": 0, "--unshare-pid": 0,
-  "--new-session": 0, "--die-with-parent": 0, "--clearenv": 0,
-  "--cap-drop": 1, "--seccomp": 1, "--proc": 1, "--dev": 1,
-  "--size": 1, "--tmpfs": 1, "--remount-ro": 1, "--chdir": 1,
-  "--ro-bind": 2, "--bind": 2, "--ro-bind-try": 2, "--symlink": 2, "--setenv": 2,
-});
-function sandboxCommandBoundary(args: readonly string[], filter: Uint8Array | undefined): number {
-  let filters = 0;
-  for (let index = 0; index < args.length;) {
-    const option = args[index]!;
-    if (option === "--") {
-      if (!args[index + 1]) break;
-      if (filters !== (filter === undefined ? 0 : 1))
-        throw new StoreError("UNSUPPORTED_PROFILE", "a sandbox's filter and its --seccomp 3 argument come together");
-      return index;
-    }
-    if (option === "--args")
-      throw new StoreError("UNSUPPORTED_PROFILE", "sandbox arguments already have a private descriptor owner");
-    if (!Object.hasOwn(SANDBOX_OPTION_ARITY, option))
-      throw new StoreError("UNSUPPORTED_PROFILE", "unsupported sandbox option");
-    const arity = SANDBOX_OPTION_ARITY[option]!;
-    if (index + arity >= args.length)
-      throw new StoreError("UNSUPPORTED_PROFILE", "sandbox option arguments are incomplete");
-    if (option === "--seccomp") {
-      if (args[index + 1] !== "3")
-        throw new StoreError("UNSUPPORTED_PROFILE", "a sandbox's filter and its --seccomp 3 argument come together");
-      filters++;
-    }
-    index += arity + 1;
+/** Explicit private bootstrap descriptors. OS adapters choose their grammar;
+ * this owner validates, copies, delivers and closes every pipe and child. */
+export function spawnWithPrivateInputs(executable: string, argv: readonly string[], cwd: string,
+  env: Readonly<Record<string, string>>, inputs: readonly { readonly fd: number; readonly bytes: Uint8Array }[]): ChildProcessWithoutNullStreams {
+  validDirectSpawn(executable, argv, cwd, env);
+  const slots = new Map<number, Buffer>();
+  for (const input of inputs) {
+    if (!Number.isSafeInteger(input.fd) || input.fd < 3 || input.fd > 0x7fffffff || slots.has(input.fd) || !(input.bytes instanceof Uint8Array))
+      throw new StoreError("UNSUPPORTED_PROFILE", "invalid or duplicate private input descriptor");
+    slots.set(input.fd, Buffer.from(input.bytes));
   }
-  throw new StoreError("UNSUPPORTED_PROFILE", "sandbox options require an explicit command boundary");
-}
-
-/** DR18 (D-5), P0V-102 (G05-03): hands a started sandbox its filter on the
- * descriptor bubblewrap reads it from. bubblewrap reads the program and
- * closes its end, which may reset ours; that is no failure of this process
- * (a program bubblewrap could not read fails bubblewrap, which its spawner
- * observes). The one writer of the filter, for every sandbox spawn. */
-export function deliverSandboxFilter(channel: unknown, filter: Uint8Array): void {
-  deliverSandboxBytes(channel, filter);
-}
-function deliverSandboxBytes(channel: unknown, bytes: Uint8Array): void {
-  const stream = channel as { on(event: "error", listener: () => void): void; end(bytes: Uint8Array): void } | null | undefined;
-  if (stream === null || stream === undefined || typeof stream.end !== "function")
-    throw new StoreError("INTERNAL_ERROR", "a sandbox started without its private input descriptor");
-  stream.on("error", () => {});
-  stream.end(bytes);
-}
-
-/** DR27/SB-001: sandbox options (including placeholder environment values)
- * reach bubblewrap through a private socket, while the command keeps its argv.
- * Slot 3 remains the seccomp filter; slot 4 never holds a sandbox lease; slot 5
- * carries NUL-separated options. Both sockets close after transmission, with
- * no temporary file. EPIPE is settled by observing the child's actual exit. */
-export function spawnSandboxed(argv: readonly string[], env: Readonly<Record<string, string>>, filter?: Uint8Array,
-  cwd = "/"): ChildProcessWithoutNullStreams {
-  if ((argv[0] !== "bwrap" && argv[0] !== "/usr/bin/bwrap") || argv.length < 2)
-    throw new StoreError("UNSUPPORTED_PROFILE", "sandbox spawn requires direct pinned bubblewrap argv");
-  const args = argv.slice(1);
-  validDirectSpawn("/usr/bin/bwrap", args, cwd, env);
-  const boundary = sandboxCommandBoundary(args, filter);
-  const options = args.slice(0, boundary);
-  const encoded = Buffer.from(options.map(value => value + "\0").join(""));
-  const child = spawn("/usr/bin/bwrap", ["--args", "5", ...args.slice(boundary)], { cwd, env: { ...env }, shell: false,
-    stdio: ["pipe", "pipe", "pipe", filter === undefined ? "ignore" : "pipe", "ignore", "pipe"] }) as ChildProcessWithoutNullStreams;
+  const stdio: ("pipe" | "ignore")[] = ["pipe", "pipe", "pipe"];
+  for (let fd = 3; fd <= Math.max(2, ...slots.keys()); fd++) stdio.push(slots.has(fd) ? "pipe" : "ignore");
+  const child = spawn(executable, [...argv], { cwd, env: { ...env }, shell: false, stdio }) as ChildProcessWithoutNullStreams;
   try {
-    deliverSandboxBytes(child.stdio.at(5), encoded);
-    if (filter !== undefined) deliverSandboxFilter(child.stdio[3], filter);
+    for (const [fd, bytes] of slots) {
+      const stream = child.stdio[fd] as { on(event: "error", listener: () => void): void; end(bytes: Uint8Array): void } | null;
+      if (!stream || typeof stream.end !== "function") throw new StoreError("INTERNAL_ERROR", "child has no owned private input pipe");
+      // EPIPE is an observation for the child owner, never permission to retry
+      // an effect. All other setup failures still terminate the owned child.
+      stream.on("error", () => {}); stream.end(bytes);
+    }
     return child;
   } catch (error) {
-    try { stopOwnedChild(child); }
-    catch (cleanup) { throw new AggregateError([error, cleanup], "Sandbox setup and cleanup failed"); }
+    try { stopOwnedChild(child); } catch (cleanup) { throw new AggregateError([error, cleanup], "Private child setup and cleanup failed"); }
     throw error;
   }
 }

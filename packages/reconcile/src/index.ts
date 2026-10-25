@@ -41,18 +41,18 @@ export class ReconcileModule {
   get unitDiagnostics(): readonly UnitRecoveryDiagnostic[] { return this.diagnostics; }
   private activation(allowed = true): boolean { return allowed && this.paths.activationAllowed() === true && this.store.societyOpen(); }
   /** Every resident gets its stop attempt; one unconfirmed death does not skip the rest. */
-  private quiesceResidents(): void {
-    this.effects.quiesceResidents();
+  private async quiesceResidents(): Promise<void> {
+    await this.effects.quiesceResidents();
   }
   /** D03: the drain of a broker whose Residents are bound to no unit. The
    * same per-resident stop and death proof as startup, so a later startup finds
    * nothing it has to stop. */
-  quiesceForShutdown(): void { this.quiesceResidents(); }
+  quiesceForShutdown(): Promise<void> { return this.quiesceResidents(); }
   async startup(allowActivation = true, prepare?: () => Promise<void>): Promise<void> {
     if (this.starting || this.inFlight) throw new StoreError("BROKER_UNAVAILABLE", "startup cannot share an active recovery pass");
     this.starting = true;
     try {
-      this.quiesceResidents();
+      await this.quiesceResidents();
       // DR10: before any request is admitted, and before bootstrap freezes its
       // own briefs. The state root is the Store's (store.ts planContext).
       this.collected = this.effects.collectUnacceptedArtifacts();
@@ -65,7 +65,7 @@ export class ReconcileModule {
         if (main === null || main.kind !== "present" || main.value !== fresh)
           await this.effects.assertCanonicalHealthy();
         // An earlier death observation is not a token valid across fsck's await.
-        this.quiesceResidents();
+        await this.quiesceResidents();
       }
       await prepare?.();
       const snapshot = [...new Set(this.store.recoverableOperations())];
@@ -103,10 +103,10 @@ export class ReconcileModule {
   }
   private async recover(operation: RecoveryRow, allowed: boolean): Promise<void> {
     switch (operation.kind) {
-        case "society.set": this.lifecycle.reconcileSociety(operation.id); return;
+        case "society.set": await this.lifecycle.reconcileSociety(operation.id); return;
         case "attest.record": case "mail.send": case "agent.continue": await this.mail.reconcileOperation(operation.id); return;
         case "agent.create": await this.lifecycle.reconcileCreate(operation.id, this.activation(allowed)); return;
-        case "agent.start": case "agent.stop": this.lifecycle.reconcileAction(operation.id, this.activation(allowed)); return;
+        case "agent.start": case "agent.stop": await this.lifecycle.reconcileAction(operation.id, this.activation(allowed)); return;
         case "git.submit": case "git.integrate": case "context.publish":
           if (!this.git) throw new StoreError("UNSUPPORTED_PROFILE", "Git recovery owner unavailable");
           await this.git.reconcile(operation.id); return;
@@ -167,7 +167,7 @@ export class ReconcileModule {
               const latest = this.store.getAgent(current.name);
               if (!latest || latest.incarnation !== current.incarnation ||
                 (latest.desired !== "stopped" && this.store.societyOpen())) continue;
-              this.units.stop(current.name, current.incarnation);
+              await this.units.stop(current.name, current.incarnation);
               diagnostics.push({ agent: current.name, outcome: "stopped", reason: null });
             } else diagnostics.push({ agent: current.name, outcome: "observed", reason: null });
             continue;
@@ -177,18 +177,25 @@ export class ReconcileModule {
           }
           if (current.desired === "enabled" && this.activation() && this.paths.hasGoal()) {
             const hasPendingWork = this.effects.hasPendingWork(current.name);
-            if (hasPendingWork && ["inactive", "dead"].includes(observation.activeState)) {
+            const restartDue = this.units.restartDue?.(current.name) === true;
+            const canStart = (state: string): boolean => hasPendingWork && ["inactive", "dead"].includes(state) || restartDue && state === "failed";
+            if (canStart(observation.activeState)) {
               const fresh = this.units.observe(current.name);
-              if (["inactive", "dead"].includes(fresh.activeState)) {
+              if (canStart(fresh.activeState)) {
                 // Current desired/incarnation/activation check -> start has no await.
                 const latest = this.store.getAgent(current.name);
                 if (!latest || latest.incarnation !== current.incarnation || latest.specHash !== current.specHash ||
                   latest.desired !== "enabled" || !this.activation() || !this.paths.hasGoal()) continue;
                 const final = this.units.observe(current.name);
-                if (!["inactive", "dead"].includes(final.activeState)) continue;
+                if (!canStart(final.activeState)) continue;
                 if (!this.units.confirmDead(current.name, current.incarnation))
                   throw new StoreError("RUN_TERMINATION_UNKNOWN", "previous execution scope is not confirmed dead");
-                this.units.start(current.name, false);
+                await this.units.start(current.name, false, () => {
+                  const currentNow = this.store.getAgent(current.name);
+                  if (!currentNow || currentNow.incarnation !== current.incarnation || currentNow.desired !== "enabled" ||
+                      !this.activation() || !this.paths.hasGoal())
+                    throw new StoreError("STALE_RUN", "reconcile activation changed before release");
+                });
                 diagnostics.push({ agent: current.name, outcome: "started", reason: null }); continue;
               }
               if (fresh.activeState === "unknown") throw new StoreError("RUN_TERMINATION_UNKNOWN", "final unit observation is unknown");

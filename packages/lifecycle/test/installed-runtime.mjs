@@ -31,15 +31,15 @@ rows[1].desired = "enabled"; rows[1].incarnation++;
 assert.throws(() => policy.requireManage(auth, "bob"), { code: "STALE_RUN" });
 
 const stopped = [];
-assert.throws(() => quiesceResidents(reader, {
+await assert.rejects(() => quiesceResidents(reader, {
   stop(name, incarnation) { stopped.push([name, incarnation]); },
   confirmDead(name) { return name !== "alice"; },
 }), { code: "RUN_TERMINATION_UNKNOWN" });
 assert.deepEqual(stopped, [["alice", 2], ["bob", 1]], "an unknown death must not skip the next Resident");
 stopped.length = 0;
-quiesceResidents(reader, { stop(name, incarnation) { stopped.push([name, incarnation]); }, confirmDead() { return true; } });
+await quiesceResidents(reader, { stop(name, incarnation) { stopped.push([name, incarnation]); }, confirmDead() { return true; } });
 assert.equal(stopped.length, 2);
-assert.throws(() => quiesceResidents(reader, {
+await assert.rejects(() => quiesceResidents(reader, {
   stop(name) { throw new StoreError(name === "bob" ? "STORE_CORRUPT" : "RUN_TERMINATION_UNKNOWN", name); },
   confirmDead() { assert.fail("a failed stop has no confirmed-death observation"); },
 }), { code: "STORE_CORRUPT" });

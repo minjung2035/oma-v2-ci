@@ -5,9 +5,10 @@ import { sha256Hex } from "@oma/domain/canonical-json";
 import { contextEntriesCheck } from "@oma/domain/context-policy";
 import { GitObserver } from "@oma/git/observe";
 import { runProcessSync, decodeProcessText } from "@oma/process/run";
-import { parseUnitObservation } from "@oma/platform-linux/units/observe";
+import { ExecutionJournal } from "@oma/storage/execution-journal";
+import { observeNamespaceProcess } from "@oma/native/pid-namespace";
 import { assertDirectory } from "@oma/storage/directory";
-import { unitNameFor, isPublishedRef } from "@oma/domain/derived";
+import { isPublishedRef } from "@oma/domain/derived";
 import { isValidFullOid, isValidSocietyName } from "@oma/domain/identifiers";
 
 export const DIAGNOSTIC_PROCESS_LIMITS = Object.freeze({ timeoutMs: 30000, maxCommands: 256, commandMs: 10000 });
@@ -23,9 +24,6 @@ export function createDiagnosticObservers(context, options = {}) {
   const environment = Object.freeze({ PATH: "/usr/bin:/bin", HOME: "/nonexistent", LANG: "C", LC_ALL: "C",
     GIT_CONFIG_NOSYSTEM: "1", GIT_CONFIG_GLOBAL: "/dev/null", GIT_OPTIONAL_LOCKS: "0",
     GIT_NO_REPLACE_OBJECTS: "1", GIT_NO_LAZY_FETCH: "1", GIT_TERMINAL_PROMPT: "0", GIT_ALLOW_PROTOCOL: "" });
-  const unitEnvironment = { PATH: "/usr/bin:/bin", LANG: "C", LC_ALL: "C" };
-  for (const key of ["HOME", "XDG_RUNTIME_DIR", "DBUS_SESSION_BUS_ADDRESS"])
-    if (process.env[key] !== undefined) unitEnvironment[key] = process.env[key];
   const run = (executable, argv, env, input, outputBytes) => {
     const remaining = Math.floor(deadline - now());
     if (remaining < 1 || commands >= limits.maxCommands) throw new Error("diagnostic command budget exhausted");
@@ -87,15 +85,14 @@ export function createDiagnosticObservers(context, options = {}) {
   };
   const units = agent => {
     try {
-      const name = unitNameFor(context.society, agent.name, "service");
-      const result = run("/usr/bin/systemctl", ["--user", "show", name,
-        "--property=ActiveState,SubState,Result,ExecMainStatus,ControlGroup,InvocationID"], unitEnvironment, undefined, 65536);
-      if (result.kind !== "exited" || result.exitCode !== 0 || result.stderr.length !== 0)
-        return { kind: "unknown", reason: "UNIT_COMMAND_UNAVAILABLE" };
-      const value = parseUnitObservation({ kind: "succeeded", status: 0, signal: null,
-        stdout: decodeProcessText(result.stdout), stderr: "" });
-      return value.activeState === "unknown" ? { kind: "unknown", reason: "UNIT_OBSERVATION_INVALID" } : { kind: "present", value };
-    } catch { return { kind: "unknown", reason: "UNIT_OBSERVATION_UNAVAILABLE" }; }
+      const entry = ExecutionJournal.inspect(context.stateRoot).find(value => value.slot === `resident:${agent.name}`);
+      if (!entry?.witness) return { kind: "unknown", reason: "EXECUTION_WITNESS_NOT_OBSERVED" };
+      const observation = observeNamespaceProcess(entry.witness.pid);
+      if (observation.kind === "unavailable") return { kind: "unknown", reason: "EXECUTION_PROCESS_UNAVAILABLE" };
+      const live = observation.kind === "running" && Object.keys(entry.witness).every(key => observation.identity[key] === entry.witness[key]);
+      return { kind: "present", value: { activeState: live ? "active" : "inactive", subState: live ? "scope-populated" : "scope-empty",
+        result: "unknown", execMainStatus: -1, invocationId: entry.execution.replaceAll("-", ""), scope: entry.execution } };
+    } catch { return { kind: "unknown", reason: "EXECUTION_OBSERVATION_UNAVAILABLE" }; }
   };
   // Diagnostics report an unavailable observation, not a failed repair. The
   // observer can refuse malformed arguments before its process runner is called.

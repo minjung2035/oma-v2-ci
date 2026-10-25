@@ -147,6 +147,14 @@
     "./restic-tool": {
       "types": "./dist/restic-tool.d.ts",
       "default": "./dist/restic-tool.js"
+    },
+    "./execution-journal": {
+      "types": "./dist/execution-journal.d.ts",
+      "default": "./dist/execution-journal.js"
+    },
+    "./resident-logs": {
+      "types": "./dist/resident-logs.d.ts",
+      "default": "./dist/resident-logs.js"
     }
   },
   "scripts": {

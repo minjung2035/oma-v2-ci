@@ -37,6 +37,9 @@ export interface RpcConnectionOptions {
   /** Synchronous envelope/channel/capability/descriptor checks, before any spool. */
   preflight(raw: Record<string, unknown>): void;
   alarms?: AlarmFactory; makeSpool: (descriptor: RawDescriptor) => ConnectionSpool;
+  /** A directly inherited, owner-bounded control channel can stay idle. A
+   * partial frame/body and every executing request retain their deadlines. */
+  inheritedControl?: boolean;
   onClosed?: () => void; onTask?: (task: Promise<void>) => void; onCleanupError?: (error: unknown) => void;
 }
 interface ReceiveTimers { idle: Alarm; receipt: Alarm | null }
@@ -72,7 +75,8 @@ export class RpcConnection {
   private alarm(seconds: number, error: StoreError): Alarm { return this.alarms.after(seconds, () => this.fatal(error)); }
   private idle(endSeen: boolean): Extract<State, { kind: "idle" }> {
     return { kind: "idle", endSeen, timers: {
-      idle: this.alarm(this.options.limits.idleStreamSeconds, new StoreError("DEADLINE_EXCEEDED", "idle RPC connection")),
+      idle: this.options.inheritedControl && this.decoder.bufferedBytes === 0 ? { cancel() {} } :
+        this.alarm(this.options.limits.idleStreamSeconds, new StoreError("DEADLINE_EXCEEDED", "idle RPC connection")),
       receipt: this.decoder.bufferedBytes ? this.receiptAlarm() : null,
     } };
   }

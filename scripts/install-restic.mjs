@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /** Explicit, pinned host dependency setup; never downloads during shutdown. */
-import { RESTIC_RELEASE } from "@oma/domain/deployment";
+import { RESTIC_RELEASE, resticReleaseFor } from "@oma/domain/deployment";
 import { createHash } from "node:crypto";
 import { closeSync, fchmodSync, fsyncSync } from "node:fs";
 import { join } from "node:path";
@@ -10,12 +10,12 @@ import { repairOwnedEntryMode } from "@oma/storage/directory";
 import { openRegularBeneath, withinDirectory } from "@oma/native/files";
 import { digestDescriptor } from "@oma/storage/cache-trees";
 
-if (process.platform !== "linux" || !Object.hasOwn(RESTIC_RELEASE.linux, process.arch))
-  throw new Error("Session storage setup currently supports Linux x64 and arm64 (including a Linux guest)");
+const pin = resticReleaseFor(process.platform, process.arch);
+if (pin === null) throw new Error("Session storage tool setup requires a pinned Linux/macOS x64 or arm64 release");
 const dataHome = process.env.XDG_DATA_HOME ?? (process.env.HOME ? join(process.env.HOME, ".local/share") : null);
 if (dataHome === null || !dataHome.startsWith("/")) throw new Error("An absolute HOME or XDG_DATA_HOME is required");
-const boundary = join(dataHome, "oma-toolchain"), directory = join(boundary, "restic", RESTIC_RELEASE.version, `linux-${process.arch}`);
-const target = join(directory, "restic"), pin = RESTIC_RELEASE.linux[process.arch];
+const boundary = join(dataHome, "oma-toolchain"), directory = join(boundary, "restic", RESTIC_RELEASE.version, `${process.platform}-${process.arch}`);
+const target = join(directory, "restic");
 const sha256 = bytes => createHash("sha256").update(bytes).digest("hex");
 ensureOwnedDurableDirectory(directory, boundary, 0o700);
 repairOwnedEntryMode(target);

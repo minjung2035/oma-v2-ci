@@ -6,10 +6,17 @@ export interface EngineStartEffects {
   readonly settings: EngineSettingsFiles;
   assertExtensions(extensions: readonly VerifiedExtension[]): void;
 }
+export interface PiSpawnPlan {
+  readonly command: string; readonly args: string[]; readonly cwd: string; readonly env: Record<string, string>;
+  readonly input?: Uint8Array;
+}
 export interface ResidentSandbox {
-  residentArgv(host: SandboxHost, lease: ValidatedRunLease, directories: SandboxDirectories,
-    environment: Readonly<Record<string, string>>, inferenceSocket?: string, egressSocket?: string): string[];
-  seccompFilter(): Uint8Array;
+  pathView(host: SandboxHost, lease: ValidatedRunLease, directories: SandboxDirectories): {
+    map(path: string): string; readonly inference: string; readonly egress: string;
+  };
+  residentPlan(host: SandboxHost, lease: ValidatedRunLease, directories: SandboxDirectories,
+    environment: Readonly<Record<string, string>>, inferenceSocket?: string, egressSocket?: string): PiSpawnPlan;
+  spawn(plan: PiSpawnPlan): import("@oma/process/async").ChildProcessWithoutNullStreams;
 }
 export interface ResidentEngineEffects extends EngineStartEffects { readonly sandbox: ResidentSandbox }
 export interface EngineLoginDirectory { ensureOwnedDirectory(path: string, boundary: string): void }

@@ -220,12 +220,12 @@ export function prepareResidentRootfs(
   const pass: Pass = { mode, boundary: rootfs, differing: [], corrected: [] };
   ensureOwned(rootfs, dirname(rootfs));
   const inside = (path: string): string => join(rootfs, path);
-  for (const path of ["/proc", "/dev", "/tmp", "/etc", dirname(RESIDENT_PATHS.node),
+  for (const path of ["/proc", "/dev", "/tmp", "/etc", "/quarantine", "/bundle", dirname(RESIDENT_PATHS.node),
     RESIDENT_PATHS.workspace, RESIDENT_PATHS.home, RESIDENT_PATHS.archive, RESIDENT_PATHS.workerArchive, RESIDENT_PATHS.selfMail,
     RESIDENT_PATHS.view, RESIDENT_PATHS.world, RESIDENT_PATHS.projectGit, RESIDENT_PATHS.projectMirror, RESIDENT_PATHS.sessions,
     RESIDENT_PATHS.libdir, RESIDENT_PATHS.packages])
     ensureOwned(inside(path), pass.boundary);
-  for (const path of [RESIDENT_PATHS.node, RESIDENT_PATHS.socket, RESIDENT_PATHS.inference, RESIDENT_PATHS.egress])
+  for (const path of ["/bundle/input.bundle", RESIDENT_PATHS.node, RESIDENT_PATHS.socket, RESIDENT_PATHS.inference, RESIDENT_PATHS.egress])
     ensureFile(inside(path), pass);
   // FI-2: the pinned Node's package managers, laid out as its distribution's
   // `bin/` is -- a relative link per command into a module mount target.

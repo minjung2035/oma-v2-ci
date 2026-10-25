@@ -21,6 +21,30 @@ gate를 닫지 않는다. OPEN은 exit 1, setup 실패는 exit 2다. CI artifact
 
 ## 진행 기록
 
+### 2026-10-26 직접 실행 연결
+
+공통 `ExecutionCoordinator`가 durable opening→blocked namespace witness flush→현재 권한→
+gate release→직접 child close와 전체 namespace 사망→journal retire를 소유한다.
+Resident는 공통 `ResidentRuntime`과 private socketpair를 사용하고 Linux leaf는 실제 PID2 child를
+따로 pin한다. 공개 byte stream은 각 recvmsg sender를 still-pinned connector와 비교한다.
+systemd/path/journald·host relay의 production 소스와 자산은 제거했다. 과거 원본은 archive에
+있으며 runtime fallback이나 새 source의 PASS가 아니다. accepted create v3·역사 v2의 구분은 DR52다.
+
+Candidate는 실제 read-only canonical mount에서 정확한 checkout을 만들고 같은 trusted child를
+check argv로 exec한다. setup 상태는 exec에서 닫히는 private FD로만 분류한다. quarantine은
+공통 TS로 verify 후 전체 scope 사망을 확인하고, 별도 import sandbox에만 canonical RW를 준다.
+첫 실제 시험의 `/quarantine` mount target 누락과 Worker private argv의 NUL 검증 누락을
+재현·수정했으며 실패 원시 로그도 보존했다.
+
+SIGKILL at opening/witness/effect/retire 경계를 실제 시험했다. witness 직후 init 생존 반례를
+DR54의 새 capability 복구로 수정했다. witness 없는 opening은 command를 재생하거나 빈
+목록으로 바꾸지 않으며 journal과 증거를 남긴다. 이 잔여 unknown과 기존 Linux state의 누락
+journal, historical v2 미완료 unit intent는 지원 완료로 숨기지 않는다.
+
+실제 관련 시험 33/33 결과와 source binding은 validation이 소유한다. 기존 root 시험의 제거된
+API 참조 전환, Resident/Broker 통합과 전체 Linux 회귀, 최종 owner/규범/격리 설치 검증은 진행 중이다.
+P4 Darwin 제품 집행과 G-PROCESS/G-FILES/G-AUTH는 계속 미해결이다.
+
 기존 변경은 `/home/dev/oma-audit-artifacts/native-2026-10-25/initial.patch`와
 `initial-untracked/`에 보존했다. 작업 브랜치는 `work/macos-native-20261025`이며
 master 병합·배포는 하지 않는다. 실제 실행 결과의 정본은 validation이다.

@@ -71,7 +71,50 @@ async context를 빌리지 않는다. broker 종료는 pending hint를 취소하
 
 ## 현재 구현의 한계
 
+**MUST [NATIVE-011]** DR51의 직접 실행은 storage의 version1 journal에 opening을 먼저
+기록하고, blocked scope의 실제 kernel witness를 flush한 뒤 현재 권한을 확인해 gate를 연다.
+공통 process owner가 결과·drain·독립 scope 사망·journal retire를 조정한다. EOF·직접 child
+close·성공한 kill은 전체 사망 증명이 아니다. unknown scope의 live pin과 journal을 유지하며
+재시작은 이전 witness 관측 없이 READY·새 실행·workspace 재사용·회수를 허용하지 않는다.
+관측 journal은 명령·accepted plan·receipt·credential·재생 queue가 아니며, 누락·손상·부분
+frame을 빈 scope 목록으로 읽지 않는다. 기록의 PID만으로 복구 중 신호를 보내지 않는다.
+
+**MUST [NATIVE-012]** DR54 복구는 현재 tenure와 journal의 배타 소유 하에서만 수행한다.
+저장 PID에 신호를 보내지 않고, 새로 얻은 namespace-init capability의 전체 identity가
+저장 witness와 일치하는지 공통 owner가 확인한 뒤 그 capability로만 종료한다. 실제 전체
+종료 관측 전에는 journal을 retire하지 않는다. pin 획득 실패·identity 변경·unknown과
+witness 없는 opening은 새 효과나 빈 초기 상태를 허가하지 않는다.
+
+**MUST [NATIVE-013]** foreground broker의 공통 Resident owner가 accepted profile/model 참조,
+현재 incarnation, wake·재시작·중지·로그 수명을 조정한다. slot별 실행 하나와 메모리 backoff를
+유지하며 timer는 hint만 보낸다. Linux systemd/path/journald 및 host relay fallback을 두지 않는다.
+실제 scope owner는 Resident·candidate·quarantine 모두에서 같은 journal/gate/death 정책을
+사용한다. 검증과 import는 별도 sandbox scope이며 첫 scope의 전체 종료 뒤에만 canonical RW를
+허용한다. 읽기 전용 canonical mount·held directory FD 결박·exact checkout을 pathname 재검사나
+shell script로 대체하지 않는다.
+
+**MUST [NATIVE-014]** Linux의 공개 socket은 SO_PASSCRED가 listener READY 전에 활성화되고,
+recvmsg의 각 byte range가 still-pinned original connector의 PID/UID/GID에서 왔는지 공통 broker
+owner가 판정한다. SCM_RIGHTS 등 추가 ancillary는 전달된 FD를 모두 닫은 뒤 거절한다. Runner의
+관리 연결은 spawn owner가 private socketpair와 실제 trusted child pin을 인계한 경우만 허용한다.
+Darwin의 endpoint peer PID나 holder 관측을 이 per-range sender 증거의 대체로 사용하지 않는다.
+
+**MUST [NATIVE-015]** 새 create plan은 version3의 `execution: "native"`를 기록한다(DR52).
+version2 plan 및 terminal receipt는 원래 의미와 bytes로 읽으며, historical unit installation을
+요구하는 미완료 version2 intent를 native 실행 완료로 정산하지 않는다. 실행 journal과 로그를
+accepted plan·receipt·권한의 원본으로 사용하지 않는다.
+
+**MUST [NATIVE-016]** DR53의 full diagnostic spool과 bounded public log view는 분리한다.
+actor·invocation·현재 incarnation·stream·시각과 원본 byte를 저장하고, 서로 다른 incarnation의
+UTF-8 조각을 합치지 않는다. 부분 frame·UTF-8 tail·읽기 실패를 성공한 빈 로그로 표시하지 않는다.
+
+**MUST [NATIVE-017]** DR55 candidate setup은 exact checkout 뒤 check argv를 exec하기 전에
+private 준비 상태를 보낸다. host가 현재 authority·취소 상태를 다시 확인하고 별도 private gate에
+release byte를 써야만 exec할 수 있다. EOF·준비 상태·로그만으로 gate를 열지 않는다. 상태 FD는
+close-on-exec이고 release FD는 exec 전에 닫으며, check가 setup 상태를 위조할 수 없게 한다.
+첫 protocol·권한 오류는 poison되어 후속 frame으로 성공을 만들지 못한다.
+
 Darwin CI에서 NOTE_TRACK 거절과 setsid 후손 생존, mode-000 event pin 거절을 실제로 관측했다.
-따라서 Mac native 제품 실행은 차단돼 있다. Linux의 Resident/candidate/systemd 의존 제거와
-Darwin primitive 연결을 포함한 잔여 작업을 native 지원 완료로 표시하지 않는다. 세부 구현·실패와
+따라서 Mac native 제품 실행은 차단돼 있다. Linux의 실제 경로 연결과 Darwin primitive 연결,
+전체 회귀·owner/규범 결박의 완료를 구분한다. 세부 구현·실패와
 재개점은 [전환 기록](implementation/native-transition.md)과 [인계](HANDOFF.md)를 따른다.

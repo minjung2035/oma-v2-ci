@@ -37,7 +37,7 @@ export interface IntegrationEffects {
    * added, so changed-path diffs cannot stand in for this observation. */
   gitlinks(candidate: Oid): GitObservation<readonly string[]>;
   compareAndSwap(base: Oid, candidate: Oid): RefAfterCas;
-  runCheck(candidate: Oid, check: FrozenCheck, cancellation?: AbortSignal): Promise<void>;
+  runCheck(candidate: Oid, check: FrozenCheck, cancellation: AbortSignal | undefined, authorize: () => void): Promise<void>;
   noopWitness?(ref: string): GitObservation<Oid>;
   authorizeNoop?(ref: string, candidate: Oid): GitObservation<Oid>;
   submitters?(base: Oid, candidate: Oid): readonly string[];
@@ -245,7 +245,12 @@ export class IntegrationCoordinator {
     try {
       if (!this.stillAtBase(operation)) return this.receipt(id);
       this.requireEligible(policy, plan.base, plan.candidate);
-      for (const check of policy.checks) await this.effects.runCheck(plan.candidate, check);
+      for (const check of policy.checks) await this.effects.runCheck(plan.candidate, check, undefined, () => {
+        this.requireExecuteAuthority(auth, true);
+        this.requireWriterSlot(id);
+        this.verifyCurrentPolicy(plan.policyRevision);
+        this.verifyAcceptedPolicy(policy, operation);
+      });
       if (!this.stillAtBase(operation)) return this.receipt(id);
       this.requireEligible(policy, plan.base, plan.candidate);
       this.verifyCurrentPolicy(plan.policyRevision);
@@ -302,27 +307,18 @@ export class IntegrationCoordinator {
       this.checking.set(plan.merge.request, cancellation);
       try {
         for (const check of policy.checks) {
-          await this.effects.runCheck(plan.candidate, check, cancellation.signal);
+          await this.effects.runCheck(plan.candidate, check, cancellation.signal, () => {
+            this.verifyCurrentPolicy(plan.policyRevision);
+            this.verifyAcceptedPolicy(policy, operation);
+            this.requireMergeAuthority(operation, plan.merge!.request);
+          });
           if (cancellation.signal.aborted) throw new StoreError("CANCELLED_BEFORE_COMMIT", "the request was cancelled during checks");
         }
       } finally { this.checking.delete(plan.merge.request); }
       if (!this.stillAtBase(operation)) return;
       this.requireEligible(policy, plan.base, plan.candidate);
       this.verifyCurrentPolicy(plan.policyRevision);
-      // Merge authority: the society is open; the requester exists, is still
-      // enabled (a stop/retire between review and CAS cancels the application),
-      // and still holds its durable git.submit capability.
-      if (!this.store.societyOpen()) throw new StoreError("AGENT_NOT_READY", "society execution is closed");
-      const requester = this.store.getAgent(operation.actor);
-      if (requester?.desired === "stopped" || requester?.desired === "retired")
-        throw new StoreError("CANCELLED_BEFORE_COMMIT", "stop or retire intent was accepted before main CAS");
-      if (!requester || !capabilitiesOf(requester).has("git.submit"))
-        throw new StoreError("CAPABILITY_DENIED", "the requester's current durable submit authority is unavailable");
-      // The last synchronous check before CAS: the request must still be ready
-      // (a cancel fact cancels; any other unreadiness is a conditions refusal).
-      if (this.reviewGate === null) throw new StoreError("STORE_CORRUPT", "review gate owner is unavailable");
-      this.reviewGate.assertApplicable(plan.merge.request);
-      this.requireWriterSlot(operation.id);
+      this.requireMergeAuthority(operation, plan.merge.request);
       knowledge = "possible";
       const after = this.effects.compareAndSwap(plan.base, plan.candidate);
       if (after.kind !== "candidate") { this.unknown(operation.id); return; }
@@ -367,7 +363,12 @@ export class IntegrationCoordinator {
       this.requireRecoveryAuthority(operation.actor);
       this.effects.verifyObjectFormat([plan.base, plan.candidate]);
       this.requireEligible(policy, plan.base, plan.candidate);
-      for (const check of policy.checks) await this.effects.runCheck(plan.candidate, check);
+      for (const check of policy.checks) await this.effects.runCheck(plan.candidate, check, undefined, () => {
+        this.requireRecoveryAuthority(operation.actor);
+        this.requireWriterSlot(operation.id);
+        this.verifyCurrentPolicy(plan.policyRevision);
+        this.verifyAcceptedPolicy(policy, operation);
+      });
       if (!this.stillAtBase(operation)) return;
       this.requireEligible(policy, plan.base, plan.candidate);
       this.verifyCurrentPolicy(plan.policyRevision);
@@ -386,4 +387,21 @@ export class IntegrationCoordinator {
       await this.succeed(operation);
     } catch (error) { this.rejectAccepted(operation.id, error, "recovering", knowledge); }
   }
+  private requireMergeAuthority(operation: OperationOf<"git.integrate">, request: OperationId): void {
+      // Merge authority: the society is open; the requester exists, is still
+      // enabled (a stop/retire between review and CAS cancels the application),
+      // and still holds its durable git.submit capability.
+      if (!this.store.societyOpen()) throw new StoreError("AGENT_NOT_READY", "society execution is closed");
+      const requester = this.store.getAgent(operation.actor);
+      if (requester?.desired === "stopped" || requester?.desired === "retired")
+        throw new StoreError("CANCELLED_BEFORE_COMMIT", "stop or retire intent was accepted before main CAS");
+      if (!requester || !capabilitiesOf(requester).has("git.submit"))
+        throw new StoreError("CAPABILITY_DENIED", "the requester's current durable submit authority is unavailable");
+      // The last synchronous check before CAS: the request must still be ready
+      // (a cancel fact cancels; any other unreadiness is a conditions refusal).
+      if (this.reviewGate === null) throw new StoreError("STORE_CORRUPT", "review gate owner is unavailable");
+      this.reviewGate.assertApplicable(request);
+      this.requireWriterSlot(operation.id);
+  }
+
 }

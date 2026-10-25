@@ -15,6 +15,7 @@ import { newSessionBirth, publishSessionBirth } from "../runtime/session-mode.js
 import { deploymentDigest } from "../runtime/deployment-manifest.js";
 import { packageStoreDir } from "../runtime/packages/index.js";
 import { collectManagedGenerations } from "@oma/config/generations";
+import { recoverExecutionState } from "../runtime/execution-runtime.js";
 import { ProjectSessionSettings } from "./project-session-settings.js";
 import type { SessionOwn } from "./settings.js";
 import { codeFor, exitFor } from "./exit.js";
@@ -138,6 +139,10 @@ export async function bootstrapSociety(options: {
         await tenure.end();
       fail(decision.kind === "refuse" ? `Cannot open this society from this project: ${surfaceWords(decision.reason, `Error code ${decision.code}`)}` :
         "This society has no project binding and is owned by another oma process", exitFor(decision.kind === "refuse" ? decision.code : "BROKER_UNAVAILABLE"));
+    }
+    if (tenure !== null) {
+      try { await recoverExecutionState(stateRoot, createdHere); }
+      catch (error) { await tenure.end(); fail(`Cannot recover native execution state: ${errorWords(error)}`, codeFor(error)); }
     }
     if (decision.kind === "publish" && tenure !== null) {
       try {

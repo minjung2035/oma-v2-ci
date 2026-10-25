@@ -43,6 +43,8 @@ const REMOVED_PATHS = Object.freeze([
   "src/domain", "src/protocol", "src/client", "src/tui", "src/process", "src/leaf.ts",
   "packages/domain/src/request-hash.ts",
   "packages/tui/src/open-tui-brand.ts",
+  "packages/platform-linux/src/units.ts", "packages/platform-linux/src/units", "packages/platform-linux/src/systemd",
+  "packages/native/src/cgroup.ts", "apps/oma/src/entry/host.ts",
   "src/units.ts",
   "src/units/execute.ts",
   "src/units/observe.ts",

@@ -21,7 +21,7 @@ export class LifecycleActions {
   constructor(private readonly store: LifecycleLedger, private readonly units: Pick<LifecycleUnits, "start" | "stop" | "observe" | "confirmDead">,
     private readonly paths: LifecyclePaths, private readonly policy: LifecyclePolicy, private readonly effects: Pick<LifecycleEffects, "nextOperationId">) {}
 
-  start(auth: AuthContext, agent: Actor, key: string): Receipt {
+  async start(auth: AuthContext, agent: Actor, key: string): Promise<Receipt> {
     assertActorIdentity(this.store, auth);
     const hash = requestHash("agent.start", { agent });
     const claim = this.store.claimKey(auth.actor, key, hash);
@@ -50,7 +50,7 @@ export class LifecycleActions {
     const observed = this.units.observe(agent);
     const alreadyRunning = target.desired === "enabled" && ["active", "activating"].includes(observed.activeState);
     if (!alreadyRunning && !this.units.confirmDead(agent, target.incarnation))
-      throw new StoreError("RUN_TERMINATION_UNKNOWN", `previous cgroup of ${agent} not confirmed dead`);
+      throw new StoreError("RUN_TERMINATION_UNKNOWN", `previous execution scope of ${agent} not confirmed dead`);
     const id = prior?.id ?? this.effects.nextOperationId();
     if (!prior) {
       const accepted = this.store.transaction(tx => {
@@ -72,14 +72,20 @@ export class LifecycleActions {
     // The start intent is accepted: a failure from here is reported as accepted.
     try {
       if (!this.currentIntent({ agent, desired: "enabled", previousIncarnation: target.incarnation }, id)) return this.unconfirmed(id);
-      try { if (!alreadyRunning) this.units.start(agent, true); }
+      try { if (!alreadyRunning) await this.units.start(agent, true, () => {
+        this.policy.requireManage(auth, agent);
+        this.requireStartRelease(auth.actor, agent);
+        if (!this.currentIntent({ agent, desired: "enabled", previousIncarnation: target.incarnation }, id) ||
+            !this.paths.hasGoal() || !this.paths.activationAllowed())
+          throw new StoreError("STALE_RUN", "accepted start is no longer current before execution");
+      }); }
       catch (error) { return this.unconfirmed(id, error); }
       this.store.transaction(tx => tx.setOperationSucceeded(id, JSON.stringify({ kind: "agent.start", agent, desired: "enabled", remainingOperations: [] })));
       return lifecycleReceipt(this.store, id);
     } catch (error) { throw acceptedFailure(error); }
   }
 
-  stop(auth: AuthContext, agent: Actor, key: string): Receipt {
+  async stop(auth: AuthContext, agent: Actor, key: string): Promise<Receipt> {
     assertActorIdentity(this.store, auth);
     const hash = requestHash("agent.stop", { agent });
     const claim = this.store.claimKey(auth.actor, key, hash);
@@ -115,7 +121,7 @@ export class LifecycleActions {
     try {
       if (!this.currentIntent({ agent, desired: "stopped", previousIncarnation: incarnation }, id)) return this.unconfirmed(id);
       try {
-        this.units.stop(agent, incarnation);
+        await this.units.stop(agent, incarnation);
         if (!this.units.confirmDead(agent, incarnation)) return this.unconfirmed(id);
       } catch (error) { return this.unconfirmed(id, error); }
       const remainingOperations = this.store.recoverableOperations().filter(value => value !== id);
@@ -124,7 +130,7 @@ export class LifecycleActions {
     } catch (error) { throw acceptedFailure(error); }
   }
 
-  reconcile(id: string, allowActivation = true): void {
+  async reconcile(id: string, allowActivation = true): Promise<void> {
     const operation = this.store.getOperationById(id);
     if (!operation || (operation.kind !== "agent.start" && operation.kind !== "agent.stop") ||
       (operation.state !== "pending" && operation.state !== "unknown")) return;
@@ -138,10 +144,14 @@ export class LifecycleActions {
         if (!["active", "activating"].includes(observed.activeState)) {
           if (!this.units.confirmDead(plan.agent, plan.previousIncarnation)) { this.unconfirmed(id); return; }
           if (!this.currentIntent(plan, id)) { this.unconfirmed(id); return; }
-          this.units.start(plan.agent, false);
+          await this.units.start(plan.agent, false, () => {
+            this.requireStartRelease(operation.actor, plan.agent);
+            if (!this.currentIntent(plan, id) || !this.paths.hasGoal() || !this.paths.activationAllowed())
+              throw new StoreError("STALE_RUN", "recovered start is no longer current before execution");
+          });
         }
       } else {
-        this.units.stop(plan.agent, plan.previousIncarnation);
+        await this.units.stop(plan.agent, plan.previousIncarnation);
         if (!this.units.confirmDead(plan.agent, plan.previousIncarnation)) { this.unconfirmed(id); return; }
       }
     } catch (error) { this.unconfirmed(id, error); return; }

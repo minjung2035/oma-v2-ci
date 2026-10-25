@@ -13,10 +13,10 @@
  * confirmDead and lifecycle actions observe the unit again, synchronously, at
  * the moment they act (WP23.04).
  */
-import type { Actor, UnitObservation } from "@oma/contracts";
+import type { Actor, ExecutionObservation } from "@oma/contracts";
 
 import type { StatusSnapshot } from "@oma/contracts/runtime";
-export type StatusObserver = (agents: readonly Actor[]) => Promise<ReadonlyMap<Actor, UnitObservation | "no-unit">>;
+export type StatusObserver = (agents: readonly Actor[]) => Promise<ReadonlyMap<Actor, ExecutionObservation | "no-unit">>;
 
 /** Status answers for up to 256 listed agents fit well inside this; beyond it
  * a caller is told unknown rather than kept waiting. */
@@ -57,7 +57,7 @@ export class StatusRefresh {
         const units = await this.observe(this.agents());
         return Object.freeze({ observedAtMs, units, failure: null });
       } catch {
-        return Object.freeze({ observedAtMs, units: new Map<Actor, UnitObservation>(), failure: "unavailable" as const });
+        return Object.freeze({ observedAtMs, units: new Map<Actor, ExecutionObservation>(), failure: "unavailable" as const });
       }
     })().finally(() => { if (this.running === run) this.running = null; });
     this.running = run;

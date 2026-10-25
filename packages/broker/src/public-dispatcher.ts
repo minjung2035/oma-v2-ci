@@ -135,7 +135,7 @@ export class PublicDispatcher {
         }
         case "society.set": {
           if (!lifecycle.setSociety) throw new StoreError("UNSUPPORTED_PROFILE", "society control owner unavailable");
-          return okAnswer(id, lifecycle.setSociety(auth, params.state, keyOf(request)));
+          return okAnswer(id, await lifecycle.setSociety(auth, params.state, keyOf(request)));
         }
         case "mail.send": {
           if (params.approvalFor) {
@@ -151,8 +151,8 @@ export class PublicDispatcher {
         case "mail.ack": return okAnswer(id, lifecycle.ack(auth, params.message, keyOf(request)));
         case "route.follow": return okAnswer(id, lifecycle.follow(auth, params.topic, true, keyOf(request)));
         case "route.unfollow": return okAnswer(id, lifecycle.follow(auth, params.topic, false, keyOf(request)));
-        case "agent.start": return okAnswer(id, lifecycle.start(auth, params.agent, keyOf(request)));
-        case "agent.stop": return okAnswer(id, lifecycle.stop(auth, params.agent, keyOf(request)));
+        case "agent.start": return okAnswer(id, await lifecycle.start(auth, params.agent, keyOf(request)));
+        case "agent.stop": return okAnswer(id, await lifecycle.stop(auth, params.agent, keyOf(request)));
         case "agent.create": return okAnswer(id, await lifecycle.create(auth, params, keyOf(request)));
         case "agent.continue": return okAnswer(id, await mail.send(auth, keyOf(request), { to: [auth.actor], subject: "continue", kind: "message", body: params.note }, { kind: "agent.continue", params: { note: params.note } }));
         case "agent.wait": return okAnswer(id, { accepted: this.deps.waitRun(auth, params.observe === true) });

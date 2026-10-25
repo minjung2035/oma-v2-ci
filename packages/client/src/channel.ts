@@ -23,6 +23,7 @@ interface Pending {
 }
 interface Generation {
   readonly socket: Socket; readonly parser: FrameParser;
+  readonly inherited: boolean;
   readonly connected: () => void; readonly connectFailed: (error: unknown) => void;
   state: "connecting" | "ready" | "closed";
   pending: Pending | null; idle: Timer | null; inboundBytes: number;
@@ -41,10 +42,17 @@ export class BrokerChannel {
   }
   connect(path: string): Promise<void> {
     this.close();
+    let socket: Socket;
+    try { socket = this.dial(path); } catch (error) { return Promise.reject(error); }
+    return this.adopt(socket, false);
+  }
+  /** One directly inherited endpoint, with no pathname reconnect. Its process
+   * owner bounds idle lifetime; frame and in-flight receipt limits still apply. */
+  attach(socket: Socket): Promise<void> { this.close(); return this.adopt(socket, true); }
+  get connected(): boolean { return this.generation?.state === "ready" && !this.generation.socket.destroyed; }
+  private adopt(socket: Socket, inherited: boolean): Promise<void> {
     return new Promise((resolve, reject) => {
-      let socket: Socket;
-      try { socket = this.dial(path); } catch (error) { reject(error); return; }
-      const generation: Generation = { socket, parser: new FrameParser(this.limits.frameBytes), state: "connecting", pending: null,
+      const generation: Generation = { socket, inherited, parser: new FrameParser(this.limits.frameBytes), state: "connecting", pending: null,
         connected: resolve, connectFailed: reject, idle: null, inboundBytes: 0, removeListeners: () => {} };
       this.generation = generation;
       const onConnect = (): void => {
@@ -78,12 +86,13 @@ export class BrokerChannel {
       socket.once("connect", onConnect); socket.on("data", onData); socket.on("drain", onDrain);
       socket.on("end", onEnd); socket.on("error", onError); socket.on("close", onClose);
       this.touch(generation);
+      if (inherited) onConnect();
     });
   }
   private current(generation: Generation): boolean { return this.generation === generation && generation.state !== "closed"; }
   private touch(generation: Generation): void {
     generation.idle?.cancel();
-    generation.idle = alarm(this.limits.idleStreamSeconds, () => this.fail(generation, unavailable("broker channel timed out")));
+    generation.idle = generation.inherited ? null : alarm(this.limits.idleStreamSeconds, () => this.fail(generation, unavailable("broker channel timed out")));
   }
   call<M extends RpcMethod>(method: M, params: Record<string, unknown>, options: ChannelCallOptions = {}): Promise<RpcReply<M>> {
     const generation = this.generation;
