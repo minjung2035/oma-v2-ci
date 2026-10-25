@@ -136,8 +136,69 @@ static void auth_probe(void) {
     result == 0 && peer == connector ? "true" : "false", result == 0 && peer == holder ? "true" : "false", kill(holder, 0) == 0 ? "true" : "false");
   shutdown(accepted, SHUT_RDWR); close(accepted); close(server);
 }
+static void send_descriptor(int transport, int fd) {
+  union { struct cmsghdr alignment; unsigned char bytes[CMSG_SPACE(sizeof(int))]; } control = {0};
+  char marker = 'f'; struct iovec vector = { &marker, 1 };
+  struct msghdr message = {0}; message.msg_iov = &vector; message.msg_iovlen = 1;
+  message.msg_control = control.bytes; message.msg_controllen = sizeof control.bytes;
+  struct cmsghdr *header = CMSG_FIRSTHDR(&message); require(header != NULL, "rights header");
+  header->cmsg_level = SOL_SOCKET; header->cmsg_type = SCM_RIGHTS; header->cmsg_len = CMSG_LEN(sizeof fd);
+  memcpy(CMSG_DATA(header), &fd, sizeof fd);
+  require(sendmsg(transport, &message, 0) == 1, "send rights");
+}
+static int receive_descriptor(int transport) {
+  union { struct cmsghdr alignment; unsigned char bytes[CMSG_SPACE(sizeof(int))]; } control = {0};
+  char marker = 0; struct iovec vector = { &marker, 1 };
+  struct msghdr message = {0}; message.msg_iov = &vector; message.msg_iovlen = 1;
+  message.msg_control = control.bytes; message.msg_controllen = sizeof control.bytes;
+  require(recvmsg(transport, &message, 0) == 1 && !(message.msg_flags & MSG_CTRUNC), "receive rights");
+  struct cmsghdr *header = CMSG_FIRSTHDR(&message);
+  require(marker == 'f' && header != NULL && header->cmsg_level == SOL_SOCKET && header->cmsg_type == SCM_RIGHTS &&
+    header->cmsg_len == CMSG_LEN(sizeof(int)), "received rights shape");
+  int fd = -1; memcpy(&fd, CMSG_DATA(header), sizeof fd); require(fd >= 0, "received descriptor"); return fd;
+}
+static void transferred_auth_probe(void) {
+  int transfer[2], hold[2];
+  require(socketpair(AF_UNIX, SOCK_STREAM, 0, transfer) == 0 && pipe(hold) == 0, "transfer channels");
+  int server = socket(AF_UNIX, SOCK_STREAM, 0); require(server >= 0, "transfer listener");
+  struct sockaddr_un address = {0}; address.sun_family = AF_UNIX; strcpy(address.sun_path, "transfer.sock");
+  require(bind(server, (struct sockaddr *)&address, sizeof address) == 0 && listen(server, 2) == 0, "transfer listen");
+  /* Holder and connector are siblings. The holder existed before the socket
+   * was connected and received it solely through SCM_RIGHTS, not fork. */
+  pid_t holder = fork(); require(holder >= 0, "unrelated holder");
+  if (holder == 0) {
+    close(transfer[0]); close(server); close(hold[0]); close(hold[1]);
+    int client = receive_descriptor(transfer[1]); close(transfer[1]);
+    require(write(client, "h", 1) == 1, "holder message");
+    char marker; while (read(client, &marker, 1) < 0 && errno == EINTR) {}
+    close(client); _exit(0);
+  }
+  pid_t connector = fork(); require(connector >= 0, "transfer connector");
+  if (connector == 0) {
+    close(transfer[1]); close(server); close(hold[1]);
+    int client = socket(AF_UNIX, SOCK_STREAM, 0);
+    require(client >= 0 && connect(client, (struct sockaddr *)&address, sizeof address) == 0, "transfer connect");
+    send_descriptor(transfer[0], client); close(transfer[0]);
+    char marker; while (read(hold[0], &marker, 1) < 0 && errno == EINTR) {}
+    close(hold[0]); close(client); _exit(0);
+  }
+  close(transfer[0]); close(transfer[1]); close(hold[0]);
+  int accepted = accept(server, NULL, NULL); require(accepted >= 0, "accept transferred socket");
+  char marker = 0; require(read(accepted, &marker, 1) == 1 && marker == 'h', "actual unrelated sender");
+  pid_t live_peer = 0, dead_peer = 0; socklen_t length = sizeof live_peer;
+  int live_error = getsockopt(accepted, SOL_LOCAL, LOCAL_PEERPID, &live_peer, &length) == 0 ? 0 : errno;
+  close(hold[1]); require(waitpid(connector, NULL, 0) == connector, "reap transferred connector");
+  length = sizeof dead_peer;
+  int dead_error = getsockopt(accepted, SOL_LOCAL, LOCAL_PEERPID, &dead_peer, &length) == 0 ? 0 : errno;
+  printf(",\"socketTransfer\":{\"holderIsConnectorDescendant\":false,\"messageFromHolder\":true,\"liveConnectorPeerErrno\":%d,\"liveConnectorPeerIsConnector\":%s,\"liveConnectorPeerIsHolder\":%s,\"deadConnectorPeerErrno\":%d,\"deadConnectorPeerIsConnector\":%s,\"deadConnectorPeerIsHolder\":%s,\"holderAlive\":%s}",
+    live_error, live_error == 0 && live_peer == connector ? "true" : "false", live_error == 0 && live_peer == holder ? "true" : "false",
+    dead_error, dead_error == 0 && dead_peer == connector ? "true" : "false", dead_error == 0 && dead_peer == holder ? "true" : "false",
+    kill(holder, 0) == 0 ? "true" : "false");
+  shutdown(accepted, SHUT_RDWR); close(accepted); close(server);
+  require(waitpid(holder, NULL, 0) == holder, "reap transferred holder");
+}
 int main(void) {
   setbuf(stdout, NULL);
   int outside = open("outside", O_CREAT | O_EXCL | O_WRONLY, 0600); require(outside >= 0, "outside"); close(outside);
-  printf("{"); process_probe(); file_probe(); auth_probe(); puts("}"); return 0;
+  printf("{"); process_probe(); file_probe(); auth_probe(); transferred_auth_probe(); puts("}"); return 0;
 }

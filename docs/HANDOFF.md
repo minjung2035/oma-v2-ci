@@ -8,10 +8,10 @@ Linux/macOS 공통 native 실행을 실제 구현·검증하는 것이다. 이�
 ## 작업 상태
 
 - 작업 브랜치: `work/macos-native-20261025`. 최초 기준 `d5716459`, 첫 Darwin probe
-  `d80035f7`, 공통 primitive·Restic 초기 연결 `adf20331`은 push했다.
+  `d80035f7`, 공통 primitive·Restic 초기 연결 `adf20331`, VM 제거 `de0c8212`, 파일 capability `762c1604`, 공통 Resident 조정 `13d60492`를 push했다.
 - 시작 시 dirty 문서 변경은 보존·commit했고 원본 patch/untracked 사본도
   `/home/dev/oma-audit-artifacts/native-2026-10-25/`에 보존했다.
-- VM 전용 App host/guest·entry·VZ·Swift VM helper·guest 자산·protocol은 제거 중이다.
+- VM 전용 App host/guest·entry·VZ·Swift VM helper·guest 자산·protocol은 실행 소스에서 제거했다.
   과거 VM 시험 원문은 `docs/archive/macos-vm-tests-2026-10-25/`에 보존하며 native PASS에 합산하지 않는다.
 - 실행/출력 수명은 process, 저장·tar/inventory 검증·package staging은 storage,
   인증/정산은 broker/domain, OS primitive는 native/platform-*가 맡는다. 아래 모듈이 App을
@@ -19,7 +19,8 @@ Linux/macOS 공통 native 실행을 실제 구현·검증하는 것이다. 이�
 - G-PROCESS/G-FILES/G-AUTH는 OPEN이다. Darwin에서 NOTE_TRACK ENOTSUP(45), setsid
   후손 생존, mode-000 event pin EACCES(13)을 실제 CI에서 확인했다. static 지원 거절과
   일부 primitive 성공을 gate 통과로 처리하지 않는다.
-- 현재 Mac 제품 진입은 효과 전에 차단한다. Linux의 Resident supervisor·systemd/journald
+- 실제 CI `40202613809`: Mac 26/15 common-runtime 각각 20/20, Ubuntu 19/19. 별도 gate job은 BLOCKED다.
+- 현재 Mac 제품 진입은 효과 전에 차단한다. Linux의 Resident wake/log·직접 실행·systemd/journald
   제거, sandbox scope proof, candidate/quarantine 연결, Darwin 파일 pin/auth, OS별 설치와
   최종 owner/규범/회귀 대조가 남았다. native 지원 완료가 아니다.
 

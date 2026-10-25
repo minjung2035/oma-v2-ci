@@ -20,14 +20,14 @@
 | 주제 | 실제 소유 코드 |
 |---|---|
 | 프로토콜 설정과 frame | [domain/protocol-limits.ts](../packages/domain/src/protocol-limits.ts), [domain/limits.ts](../packages/domain/src/limits.ts), [protocol/frame.ts](../packages/protocol/src/frame.ts) |
-| Host/guest protocol | [protocol/host-guest.ts](../packages/protocol/src/host-guest.ts) |
+| Broker supervision channel | [protocol/host-channel.ts](../packages/protocol/src/host-channel.ts) |
 | 설정 문서·소스 closure·extension 목록 | [config/operations.ts](../packages/config/src/operations.ts) |
 | 설정 generation 보존 | [config/generations.ts](../packages/config/src/generations.ts) |
 | 진단 읽기 | [storage/diagnostic-snapshot.ts](../packages/storage/src/diagnostic-snapshot.ts) |
 | 화면·표시·입력 | [domain/surface-bounds.ts](../packages/domain/src/surface-bounds.ts) |
 | child 출력·실행·침묵 관측 | [process/command.ts](../packages/process/src/command.ts), [process/async.ts](../packages/process/src/async.ts) |
 | contained 검색 | [tool-runtime/contained-search.ts](../packages/tool-runtime/src/contained-search.ts) |
-| VM·Keychain helper 관측 | [platform-mac/vz-driver.ts](../packages/platform-mac/src/vz-driver.ts), [keychain-client.ts](../packages/platform-mac/src/keychain-client.ts) |
+| Keychain primitive 관측 | [keychain-client.ts](../packages/platform-mac/src/keychain-client.ts) |
 
 실제 값은 상수뿐 아니라 caller가 넘긴 설정과 실행 경로를 함께 확인한다. 문서의 별도 숫자 목록을 정본으로 만들지 않는다.
 

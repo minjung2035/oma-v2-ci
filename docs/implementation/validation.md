@@ -16,6 +16,7 @@
 | `762c1604` 변경을 위한 Linux 실행 | 정식 build·typecheck PASS. config/generation/native/tar 30/30, package/세션 소유권 108/108 PASS. 전체 local은 미실행 |
 | `aea22ec0`: 실제 macOS 26/15 common-runtime | 25개 workspace build 성공. 양 OS 9/10 PASS·1 FAIL. 파일 생성 뒤 EACCES: Darwin arm64 openat 가변 인자 ABI 결함을 발견. 실패를 보존하고 수정 |
 | `762c1604`: 실제 macOS 26/15 common-runtime | build 성공, directory FFI 초기화가 없는 `readdir$INODE64` symbol을 요구해 실패. 수정 후 실제 OS 재실행 대기. Linux 성공으로 덮지 않음 |
+| `13d60492`: 실제 macOS 26/15·Ubuntu 공통 runtime | Mac 각각 20/20, Ubuntu 19/19 PASS. build 25/25. 별도 Darwin gate는 계속 OPEN/BLOCKED |
 | 실제 macOS 26/15 Keychain | 독립 Swift primitive SDK typecheck PASS. signed Keychain·release 실행·TCC는 미실행 |
 | 현재 source의 전체 local·독립 설치·최종 architecture/trace qualification | 미완료. 일부 이전 실행 PASS를 합산하지 않음 |
 
@@ -23,7 +24,8 @@
 [40197183201](https://github.com/minjung2035/oma-v2/actions/runs/40197183201),
 [40200893255](https://github.com/minjung2035/oma-v2/actions/runs/40200893255),
 [40201140402](https://github.com/minjung2035/oma-v2/actions/runs/40201140402),
-[40201962210](https://github.com/minjung2035/oma-v2/actions/runs/40201962210).
+[40201962210](https://github.com/minjung2035/oma-v2/actions/runs/40201962210),
+[40202613809](https://github.com/minjung2035/oma-v2/actions/runs/40202613809).
 모든 실패 artifact를 보존한다. 원시 local 로그는
 `/home/dev/oma-audit-artifacts/native-2026-10-25/`에 있다. 새/변경 source는 NOT_REVIEWED이며
 고정 architecture·authored review·과거 검토 기록은 변경하지 않는다.
@@ -98,7 +100,7 @@ DR48은 ACL/xattr·special file·nested mount·읽을 수 없는 파일·복원�
 
 아래 값은 **구조 검사의 현재 입력 identity**다. digest 생성은 runtime PASS를 만들지 않는다.
 
-verification input digest `e7dddddce2d3aa9209b5ffe9e623c85b74201771f1d216b58986d19c771c1486` (15674 files).
+verification input digest `bcb1b03b01d3605ef0155d0d14d201d35eea9747797109ccd42b8932f67359f2` (15564 files).
 
 현재 source 목록은 [production-files.txt](../../production-files.txt), per-file SHA-256은 [production-loc-hashes.json](../../production-loc-hashes.json)이 소유한다. `npm run check:inventory`는 cloc 없이 source bytes를 확인한다. `npm run evidence:refresh`의 구조 재생성과 실제 runtime 실행은 별도다.
 

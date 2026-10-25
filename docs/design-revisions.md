@@ -1568,7 +1568,7 @@ Git changeset 도구로 기록한다. 검증·실패 기록과 native 한계는
   검사하고 여러 유효한 줄의 합으로 연결을 거절하지 않는다. Keychain의 strict correlation과
   VM의 늦은 응답 처리 차이, credential refusal의 비밀 보호를 유지한다. EOF는 요청을 끝내며
   실제 helper exit만 VM 종료의 증거다. Swift/native 실행은 별도 Mac 검증 대상이다.
-- [ProjectMutations](../apps/oma/src/platform/guest/project-mutations.ts)는 mirror별 import·세션
+- [ProjectMutations](https://github.com/minjung2035/oma-v2/blob/adf20331c69406c124259367d9b644714697cd47/apps/oma/src/platform/guest/project-mutations.ts)는 mirror별 import·세션
   startup·bound society archive를 outcome 게시까지 직렬화한다. 서로 다른 mirror는 동시에
   진행할 수 있다. 모든 project role 설정을 쓰는 packages.replace는 같은 owner의 global exclusive
   구간을 사용한다. unbound archive도 owner에 등록해 package 설정 변경과 겹치지 않는다.
@@ -1592,7 +1592,7 @@ Git changeset 도구로 기록한다. 검증·실패 기록과 native 한계는
   availability budget인 60 s, archive key는 기존 30 s를 기본으로 사용한다. lock을 취득한 write의
   수명이나 상속한 helper의 실제 close를 대기 deadline으로 잘라 성공/실패로 바꾸지 않는다.
   OS writer 앞의 중복 promise queue는 제거해 같은 프로세스의 대기도 이 contention budget에 포함한다.
-- 공통 [RPC dispatcher](../apps/oma/src/platform/rpc-server.ts)는 HANDOFF와 Answer를 함께 소유한다.
+- 공통 [RPC dispatcher](https://github.com/minjung2035/oma-v2/blob/adf20331c69406c124259367d9b644714697cd47/apps/oma/src/platform/rpc-server.ts)는 HANDOFF와 Answer를 함께 소유한다.
   Host API와 Guest control/society가 이 module을 참조한다. Guest server의 peer authentication,
   hello·service startup 책임과 wire 버전·method·오류 의미는 유지한다.
 
@@ -2309,3 +2309,6 @@ Mac Society가 차단돼도 공통 코드와 독립적인 구현·시험은 계�
 기존 VM disk/state/archive·native history를 변환·삭제하지 않는다. 권한·accepted bytes·receipt·
 Store gate·incarnation 의미를 보존한다. 구현과 실제 증거는
 [전환 기록](implementation/native-transition.md)과 validation에 따로 기록한다.
+
+DR49에서 제거한 소스를 가리키는 이전 결정의 두 링크는 제거 전 immutable commit
+`adf20331`로 결박했다. 결정의 문장·ID·당시 의미와 과거 검토 원문은 유지한다.

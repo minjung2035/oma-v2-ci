@@ -848,44 +848,6 @@
       ]
     },
     {
-      "owner": "apps/oma/src/platform/guest/archive.ts#GuestArchives.create",
-      "fact": "the archive staging scratch under the request ledger (the manifest's scratch and the staged tar) is removed when the archive is made -- a dead archive's scratch does not survive it",
-      "tests": [
-        {
-          "file": "test/platform-archive.test.ts",
-          "title": "a stopped society's archive holds its files and their manifest",
-          "injection": "logical"
-        }
-      ]
-    },
-    {
-      "owner": "apps/oma/src/platform/guest/provision.ts#writeInstance",
-      "fact": "the data disk's instance record, written once at the first boot (MAC-303); P0V-106: published whole, never replaced by another instance's",
-      "tests": [
-        {
-          "file": "test/platform-provision.test.ts",
-          "title": "P0V-106 (X2-03): the data disk's record is published whole, never replaced by another instance's, and leaves no temporary",
-          "injection": "logical"
-        }
-      ]
-    },
-    {
-      "owner": "apps/oma/src/platform/guest/requests.ts#RequestLedger.run",
-      "fact": "macOS guesthost's request ledger: a keyed request's intent before its effect and its outcome after (MAC-240/241), each published once",
-      "tests": [
-        {
-          "file": "test/platform-request-ledger.test.ts",
-          "title": "P0-7/MAC-241: killed during its effect, a request is pending, and its retry runs it to one outcome",
-          "injection": "sigkill"
-        },
-        {
-          "file": "test/platform-request-ledger.test.ts",
-          "title": "P0-7/MAC-240: killed right after its outcome, a request's retry is answered from the record",
-          "injection": "sigkill"
-        }
-      ]
-    },
-    {
       "owner": "packages/git/src/canonical-health.ts#CanonicalHealthObserver.assertHealthy",
       "fact": "the canonical fsck diagnostic spool is collected when the health observation ends -- residue never blocks or survives the next observation",
       "tests": [
@@ -1013,7 +975,7 @@
       ]
     },
     {
-      "owner": "apps/oma/src/platform/package-staging.ts#linuxStaging",
+      "owner": "packages/storage/src/package-staging.ts#ownedStaging",
       "fact": "DR25/C20: a staged local package's copy under local/<name> is whole or absent -- published by one rename after a durable fill; a dead copy or an interrupted staging area is collected, never half-seen",
       "tests": [
         {
@@ -1237,7 +1199,7 @@
       ]
     },
     {
-      "owner": "packages/git/src/linux-project-preparation.ts#prepareProjectDirectory",
+      "owner": "packages/git/src/project-preparation.ts#prepareProjectDirectory",
       "fact": "a snapshot preparation retains its lease until its owner and descendants release it; partial cleanup is recoverable and never adopts an existing tree",
       "tests": [
         {
@@ -1254,22 +1216,6 @@
           "file": "test/project-preparation-boundaries.test.ts",
           "title": "failed preparation handoff releases its lease and collects only its own tree",
           "injection": "in-process-fault"
-        }
-      ]
-    },
-    {
-      "owner": "apps/oma/src/application/packages-apply.ts#applyOwnedPackageArchive",
-      "fact": "DR25 on macOS: the Mac's packages published as one immutable generation under the digest of what arrived, the store's link switched to it, what it replaced recorded once for the request, and the generations no engine can read collected; a run after a stop at any step ends where an uninterrupted one does",
-      "tests": [
-        {
-          "file": "test/platform-packages.test.ts",
-          "title": "DR25/mac: an application stopped after any of its steps, run again for the same request, ends where an uninterrupted one does",
-          "injection": "logical"
-        },
-        {
-          "file": "test/platform-packages.test.ts",
-          "title": "DR25/mac: packages.sync makes the Mac's packages the engine's store, turns them on in the named project, and follows a removal",
-          "injection": "logical"
         }
       ]
     },

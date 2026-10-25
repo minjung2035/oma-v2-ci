@@ -41,7 +41,7 @@ master 병합·배포는 하지 않는다. 실제 실행 결과의 정본은 val
   메모리에만 추가하며 durable checkpoint 형식·digest 정의는 바꾸지 않는다.
 
 P4의 Darwin 실행과 P6 제품 지원은 gate가 해결되기 전 완료로 판정하지 않는다.
-P2의 entry pin/reopen, P3의 Resident supervisor, P5의 quarantine/checker/설치, P6의 제품 실행 연결,
+P2의 entry pin/reopen, P3의 Resident wake·로그·backoff 전체 연결, P5의 quarantine/checker/설치, P6의 제품 실행 연결,
 P7의 최종 owner/규범 대조는 별도 잔여 작업이다. 공통 코드의 시험 성공을 해당 전체 단계의
 완료로 승격하지 않는다.
 
@@ -66,3 +66,21 @@ no-replace는 성공했으나 G-FILES 전체 통과가 아니다. peer PID의 fo
 연결/현재 소유자의 구분을 추가 검증할 입력이며 socket transfer 방어의 증명이 아니다.
 gate job은 exit 1/BLOCKED이고 artifact를 보존했다. 최초 held-root probe는 mode-000
 실패가 뒤 관측에 영향을 줬으므로 다음 실행에서 namespace 관측과 분리한다.
+
+### 공통 조정과 실제 Darwin 회귀
+
+`13d60492`에서 Resident start/stop 순서는 `process/resident-supervisor`가 소유하고
+Linux UnitsModule이 이 구현을 실제 호출한다. status·command 완료와 독립 scope death proof를
+분리하며 stop 중 한 단계 실패 뒤에도 revoke·terminate·사망 관측을 시도하고 오류를 보존한다.
+Linux 관련 회귀 92/92를 통과했다. systemd adapter는 이행 중 reference이며 manager 제거·
+공통 wake/log·직접 sandbox scope 연결이 남았다.
+
+[CI 40202613809](https://github.com/minjung2035/oma-v2/actions/runs/40202613809)의 실제
+macOS 26/15 arm64에서 common-runtime 각각 20/20, Ubuntu에서 19/19를 통과했다.
+같은 source의 별도 Darwin gate job은 OPEN/BLOCKED이며 통과로 합산하지 않는다.
+이 CI로 openat 가변 인자·64-bit dirent ABI 결함을 수정·검증했고 SDK layout을 assert했다.
+archive verifier 성공은 실제 macOS Restic round trip 또는 G-FILES 전체의 증거가 아니다.
+
+G-AUTH의 다음 실제 probe는 connector와 형제 process인 holder에 SCM_RIGHTS로 socket을
+전달하고 실제 holder의 메시지 전후 kernel peer PID를 관측한다. connector 생존·종료를
+따로 기록하며 이 probe만으로 PID 재사용·권한 전체 gate를 닫지 않는다.
