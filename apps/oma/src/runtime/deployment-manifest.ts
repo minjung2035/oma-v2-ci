@@ -1,12 +1,13 @@
 /** CFG-001: canonical byte pin for the OMA installation, not S-01 qualification.
  * The trusted installer supplies the expected digest out-of-band in host config.
  * No mutable manifest file is trusted, and no runtime state is written here. */
-import { constants, closeSync, fstatSync, readSync, opendirSync } from "node:fs";
+import { constants, closeSync, fstatSync, readSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { createHash } from "node:crypto";
 import { DEPLOYMENT_LAYOUT, isDeploymentDigest } from "@oma/domain/deployment";
 import { StoreError, unobserved } from "@oma/domain/errors";
 import { openBeneath, openDirectory, openRegularBeneath } from "@oma/native/files";
+import { directoryNames, statAt } from "@oma/native/posix-files";
 import { assertWorkspaceResolution } from "./assets.js";
 
 // The entry bound is sized for the compiled tree plus the vendored
@@ -97,23 +98,11 @@ export function deploymentManifest(root: string): DeploymentManifest {
       );
     const fd = openBeneath(parent, name, constants.O_RDONLY | constants.O_DIRECTORY);
     try {
-      const directory = opendirSync(`/proc/self/fd/${fd}`);
-      try {
-        for (
-          let child = directory.readSync();
-          child;
-          child = directory.readSync()
-        ) {
-          if (child.isDirectory()) tree(fd, child.name, `${path}/${child.name}`, depth + 1);
-          else if (child.isFile()) file(fd, child.name, `${path}/${child.name}`);
-          else
-            throw new StoreError(
-              "UNSUPPORTED_PROFILE",
-              "deployment contains a linked or special entry",
-            );
-        }
-      } finally {
-        directory.closeSync();
+      for (const name of directoryNames(fd)) {
+        const child = statAt(fd, name);
+        if (child.isDirectory()) tree(fd, name, `${path}/${name}`, depth + 1);
+        else if (child.isFile()) file(fd, name, `${path}/${name}`);
+        else throw new StoreError("UNSUPPORTED_PROFILE", "deployment contains a linked or special entry");
       }
     } finally {
       closeSync(fd);

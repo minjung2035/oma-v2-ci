@@ -178,7 +178,7 @@ DR46 전환 기록: 위 T117의 network 차단 절과 그 --unshare-all 전용 f
 ## native 플랫폼 oracle (DR49)
 
 과거 VM의 MAC/MV/T 수용 번호·원문은 [폐기한 VM 시험 기록](archive/macos-vm-tests-2026-10-25/README.md)에
-보존한다. 그 결과는 native PASS에 합산하지 않는다. 현재 요구는 [NATIVE-001–007](macos-platform.md)과
+보존한다. 그 결과는 native PASS에 합산하지 않는다. 현재 요구는 [NATIVE-001–008](macos-platform.md)과
 [native 명세의 CI 계약](macos-native-spec.md#12-mac-없이-개발하는-ci-계약)이다. G-PROCESS·G-FILES·G-AUTH는
 각각 실제 Darwin kernel probe·공격 fixture·원시 artifact로 검증하며 OPEN/BLOCKED/SETUP_FAILED는 실패다.
 Linux의 공통 TS 시험과 Mac의 실제 OS 시험을 구분하고 전체 후손 종료·source quiescence·파일 원본·권한·

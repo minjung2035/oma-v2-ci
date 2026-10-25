@@ -1,3 +1,4 @@
+import { renameAt, linkAt, unlinkAt } from "@oma/native/posix-files";
 /** CFG-002/TUI-002: bringing a society's state tree into existence.
  *
  * The broker refuses to start against a state tree that is not already there:
@@ -31,7 +32,7 @@
  * step.
  */
 import { randomBytes } from "node:crypto";
-import { closeSync, existsSync, fstatSync, linkSync, lstatSync, readdirSync, readFileSync, renameSync, unlinkSync } from "node:fs";
+import { closeSync, existsSync, fstatSync, lstatSync, readdirSync, readFileSync } from "node:fs";
 import { basename, dirname, join } from "node:path";
 import { StoreError, unobserved } from "@oma/domain/errors";
 import { isValidSocietyName } from "@oma/domain/identifiers";
@@ -43,7 +44,7 @@ import { repositoryHealthCommand } from "@oma/git/repository-health";
 import { ensureOwnedDurableDirectory, fsyncHeldDir, fsyncTree, writeExclusiveFsyncedFile } from "@oma/storage/durable-fs";
 import { ensureOwnedDirectory, removeOwnedFile } from "@oma/storage/directory";
 import { TreeLease, collectLeasedTree } from "@oma/storage/tree-lease";
-import { entryAt, openRegularBeneath, withinDirectory } from "@oma/native/files";
+import { openRegularBeneath, withinDirectory } from "@oma/native/files";
 import { hostSystemLayout, prepareResidentRootfs } from "@oma/platform-linux/resident-rootfs";
 import { projectGitPathAt, projectMirrorPathAt } from "@oma/domain/paths";
 
@@ -208,7 +209,7 @@ function ensureBareRepository(path: string, format = "sha1", clone?: {
     // exposed, and the name itself is durable before this reports success.
     fsyncTree(staging);
     // FS-005 / architecture section 4: the rename names both entries through one resolution of their parent.
-    try { withinDirectory(path, (directory, name) => { renameSync(entryAt(directory, stagingName), entryAt(directory, name)); fsyncHeldDir(directory, parent); }); }
+    try { withinDirectory(path, (directory, name) => { renameAt(directory, stagingName, directory, name); fsyncHeldDir(directory, parent); }); }
     catch (error) {
       const code = (error as NodeJS.ErrnoException).code;
       // The winner's repository is already there. Anything else is a real
@@ -526,7 +527,7 @@ export function publishProjectBinding(stateRoot: string, binding: Omit<ProjectBi
   // FS-005 / architecture section 4: the link, the cleanup and the flush address one resolution of the root.
   withinDirectory(final, (directory, name) => {
   try {
-    try { linkSync(entryAt(directory, temporaryName), entryAt(directory, name)); }
+    try { linkAt(directory, temporaryName, directory, name); }
     catch (error) {
       if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error;
       // Another start bound it first: the same binding is adoption, any other is a refusal.
@@ -537,7 +538,7 @@ export function publishProjectBinding(stateRoot: string, binding: Omit<ProjectBi
           observed.binding.canonicalProjectPath !== record.canonicalProjectPath)
         throw new StoreError("POLICY_CHANGED", "another binding was published for this state root");
     }
-  } finally { unlinkSync(entryAt(directory, temporaryName)); }
+  } finally { unlinkAt(directory, temporaryName); }
   fsyncHeldDir(directory, stateRoot);
   });
 }

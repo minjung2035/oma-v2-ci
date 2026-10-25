@@ -2,7 +2,7 @@
  * At most one entry descriptor and one source chunk are active. No whole-input
  * chunks array, concatenation, newline conversion or durable sidecar is used.
  */
-import { constants, closeSync, mkdirSync, writeFileSync, fchmodSync, fsyncSync, fstatSync, lstatSync, unlinkSync } from "node:fs";
+import { constants, closeSync, writeFileSync, fchmodSync, fsyncSync, fstatSync, lstatSync } from "node:fs";
 import { createHash, type Hash } from "node:crypto";
 import { basename, dirname, join } from "node:path";
 import type { BlobDescriptor, ContextEntry } from "@oma/contracts";
@@ -11,8 +11,9 @@ import { contextEntriesCheck, ContextTextValidator } from "@oma/domain/context-p
 import { contextStagingPathAt } from "@oma/domain/paths";
 import { assertDirectory } from "./directory.js";
 import { TreeLease, collectLeasedTree } from "./tree-lease.js";
-import { entryAt, openBeneath, openDirectory, closeEvery } from "@oma/native/files";
+import { openBeneath, openDirectory, closeEvery } from "@oma/native/files";
 import { ensureOwnedDurableDirectory, faultAt, fsyncDir, fsyncTree, isDurabilityFault, type DurabilityObserver } from "./durable-fs.js";
+import { mkdirAt, statAt, unlinkAt } from "@oma/native/posix-files";
 import type { PreacceptOwner } from "@oma/contracts/files";
 
 /** The staging root one preparation created exclusively, pinned at creation.
@@ -63,8 +64,8 @@ function acquireStagingRoot(staging: string, tree: string): PreparedContextTree 
   try {
     const parent = openDirectory(dirname(staging));
     try {
-      mkdirSync(entryAt(parent, basename(staging)), { mode: 0o700 });
-      const pinned = lstatSync(entryAt(parent, basename(staging)));
+      mkdirAt(parent, basename(staging), 0o700);
+      const pinned = statAt(parent, basename(staging));
       return new PreparedContextTree(tree, staging, { dev: pinned.dev, ino: pinned.ino }, lease);
     } finally { closeSync(parent); }
   } catch (error) { lease.release(); throw error; }
@@ -115,7 +116,7 @@ export async function prepareContextStream(
     let directory = treeFd;
     let name = entry.path;
     if (entry.path.startsWith("decisions/")) {
-      try { mkdirSync(entryAt(treeFd, "decisions"), { mode: 0o700 }); }
+      try { mkdirAt(treeFd, "decisions", 0o700); }
       catch (error) { if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error; }
       directory = openBeneath(treeFd, "decisions", constants.O_RDONLY | constants.O_DIRECTORY);
       name = entry.path.slice("decisions/".length);
@@ -200,11 +201,11 @@ export async function prepareContextStream(
         const relative = file.path.slice(tree.length + 1);
         const parent = dirname(relative) === "." ? treeFd : openBeneath(treeFd, dirname(relative), constants.O_RDONLY | constants.O_DIRECTORY);
         try {
-          const current = lstatSync(entryAt(parent, basename(relative)), { throwIfNoEntry: false });
+          const current = statAt(parent, basename(relative), { throwIfNoEntry: false });
           if (!current) continue;
           if (!current.isFile() || current.dev !== file.dev || current.ino !== file.ino)
             throw new StoreError("STORE_CORRUPT", "owned context preparation changed identity during cleanup");
-          unlinkSync(entryAt(parent, basename(relative))); fsyncSync(parent);
+          unlinkAt(parent, basename(relative)); fsyncSync(parent);
         } finally { if (parent !== treeFd) closeSync(parent); }
       } catch (failure) { failures.push(failure); }
     }

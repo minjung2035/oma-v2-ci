@@ -197,8 +197,53 @@ static void transferred_auth_probe(void) {
   shutdown(accepted, SHUT_RDWR); close(accepted); close(server);
   require(waitpid(holder, NULL, 0) == holder, "reap transferred holder");
 }
+/* A byte stream can already contain one sender's request when another process
+ * receives the descriptor. Record the credential independently before/after
+ * reading that first byte; current endpoint ownership is not per-byte origin. */
+static void queued_auth_probe(void) {
+  int transfer[2], ready[2], hold[2];
+  require(socketpair(AF_UNIX, SOCK_STREAM, 0, transfer) == 0 && pipe(ready) == 0 && pipe(hold) == 0, "queued channels");
+  int server = socket(AF_UNIX, SOCK_STREAM, 0); require(server >= 0, "queued listener");
+  struct sockaddr_un address = {0}; address.sun_family = AF_UNIX; strcpy(address.sun_path, "queued.sock");
+  require(bind(server, (struct sockaddr *)&address, sizeof address) == 0 && listen(server, 2) == 0, "queued listen");
+  pid_t holder = fork(); require(holder >= 0, "queued holder");
+  if (holder == 0) {
+    close(server); close(transfer[0]); close(ready[0]); close(hold[0]); close(hold[1]);
+    int client = receive_descriptor(transfer[1]); close(transfer[1]);
+    require(write(client, "h", 1) == 1 && write(ready[1], "r", 1) == 1, "queued holder wrote"); close(ready[1]);
+    char marker; while (read(client, &marker, 1) < 0 && errno == EINTR) {}
+    close(client); _exit(0);
+  }
+  pid_t connector = fork(); require(connector >= 0, "queued connector");
+  if (connector == 0) {
+    close(server); close(transfer[1]); close(ready[0]); close(ready[1]); close(hold[1]);
+    int client = socket(AF_UNIX, SOCK_STREAM, 0);
+    require(client >= 0 && connect(client, (struct sockaddr *)&address, sizeof address) == 0, "queued connect");
+    require(write(client, "c", 1) == 1, "request queued before transfer");
+    send_descriptor(transfer[0], client); close(transfer[0]);
+    char marker; while (read(hold[0], &marker, 1) < 0 && errno == EINTR) {}
+    close(hold[0]); close(client); _exit(0);
+  }
+  close(transfer[0]); close(transfer[1]); close(ready[1]); close(hold[0]);
+  int accepted = accept(server, NULL, NULL); require(accepted >= 0, "queued accept");
+  char marker; require(read(ready[0], &marker, 1) == 1 && marker == 'r', "both writers completed"); close(ready[0]);
+  pid_t before = 0, after = 0; socklen_t length = sizeof before;
+  int before_error = getsockopt(accepted, SOL_LOCAL, LOCAL_PEERPID, &before, &length) == 0 ? 0 : errno;
+  char first = 0, second = 0;
+  require(read(accepted, &first, 1) == 1 && first == 'c', "first queued byte is connector request");
+  length = sizeof after;
+  int after_error = getsockopt(accepted, SOL_LOCAL, LOCAL_PEERPID, &after, &length) == 0 ? 0 : errno;
+  require(read(accepted, &second, 1) == 1 && second == 'h', "second queued byte is holder write");
+  printf(",\"queuedTransfer\":{\"firstByteFromConnector\":true,\"secondByteFromHolder\":true,\"bothWritersAlive\":%s,\"beforeReadErrno\":%d,\"beforeReadPeerIsConnector\":%s,\"beforeReadPeerIsHolder\":%s,\"afterFirstReadErrno\":%d,\"afterFirstReadPeerIsConnector\":%s,\"afterFirstReadPeerIsHolder\":%s}",
+    kill(connector, 0) == 0 && kill(holder, 0) == 0 ? "true" : "false", before_error,
+    before_error == 0 && before == connector ? "true" : "false", before_error == 0 && before == holder ? "true" : "false",
+    after_error, after_error == 0 && after == connector ? "true" : "false", after_error == 0 && after == holder ? "true" : "false");
+  close(hold[1]); require(waitpid(connector, NULL, 0) == connector, "queued connector reap");
+  shutdown(accepted, SHUT_RDWR); close(accepted); close(server);
+  require(waitpid(holder, NULL, 0) == holder, "queued holder reap");
+}
 int main(void) {
   setbuf(stdout, NULL);
   int outside = open("outside", O_CREAT | O_EXCL | O_WRONLY, 0600); require(outside >= 0, "outside"); close(outside);
-  printf("{"); process_probe(); file_probe(); auth_probe(); transferred_auth_probe(); puts("}"); return 0;
+  printf("{"); process_probe(); file_probe(); auth_probe(); transferred_auth_probe(); queued_auth_probe(); puts("}"); return 0;
 }

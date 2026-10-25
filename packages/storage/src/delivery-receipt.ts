@@ -1,3 +1,4 @@
+import { unlinkAt } from "@oma/native/posix-files";
 import type { DeliveryReceipt, CheckedReceipt } from "@oma/contracts/runtime";
 import {
   closeSync,
@@ -5,7 +6,6 @@ import {
   fstatSync,
   fsyncSync,
   readSync,
-  unlinkSync,
   writeFileSync,
 } from "node:fs";
 import { basename, dirname, isAbsolute, join, normalize, relative, sep } from "node:path";
@@ -23,7 +23,7 @@ import {
   temporaryNameFor,
   type DurabilityObserver,
 } from "./durable-fs.js";
-import { entryAt, linkDescriptor, openBeneath, openDirectory, openRegularBeneath, closeEvery } from "@oma/native/files";
+import { linkDescriptor, openBeneath, openDirectory, openRegularBeneath, closeEvery } from "@oma/native/files";
 import { runnerReceiptPathAt, sessionDirPathAt } from "@oma/domain/paths";
 
 import { PI_ADAPTER_REVISION } from "@oma/protocol/delivery-boundary";
@@ -411,7 +411,7 @@ export function publishDeliveryReceipt(
     try { result = decodeDeliveryReceipt(parseJsonObject(requireBytes(readBoundedFd(published, maximum))).raw, batch, stateRoot); }
     finally { closeSync(published); }
     faultAt(faults, "destination-validate", "after-visible", path);
-    unlinkSync(entryAt(parent, temporaryName));
+    unlinkAt(parent, temporaryName);
     temporaryExists = false;
     faultAt(faults, "temporary-cleanup", "after-visible", temporaryPath);
     fsyncHeldDir(parent, dirname(path), faults);
@@ -420,7 +420,7 @@ export function publishDeliveryReceipt(
     crashed = isDurabilityFault(error);
     if (!crashed && temporaryExists) {
       try {
-        unlinkSync(entryAt(parent, temporaryName));
+        unlinkAt(parent, temporaryName);
         temporaryExists = false;
         faultAt(faults, "temporary-cleanup", "after-visible", temporaryPath);
         fsyncHeldDir(parent, dirname(path), faults);

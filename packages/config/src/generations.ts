@@ -35,7 +35,7 @@ import {
 } from "@oma/storage/durable-fs";
 import { removeOwnedFile, removeOwnedTree } from "@oma/storage/directory";
 import { assertManagedJournalFormat, MANAGED_JOURNAL } from "./state-format.js";
-import { entryAt, openBeneath, openRegularBeneath, withinDirectory } from "@oma/native/files";
+import { openBeneath, openRegularBeneath, withinDirectory } from "@oma/native/files";
 import { cleanupAll, withCleanup } from "@oma/native/cleanup";
 
 export const MANAGED_DIRECTORY = ".oma-config";

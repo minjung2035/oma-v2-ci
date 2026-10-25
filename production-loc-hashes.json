@@ -16,7 +16,7 @@
     },
     {
       "path": "apps/oma/src/application/local-packages.ts",
-      "sha256": "695bb366666e040809b2f6a7b2dc46b356086b7e3130f4649660256444b17993"
+      "sha256": "b19f98188567e44b05db446c7fab4c213e3e58c06b827d241fafb4ebb2d8b134"
     },
     {
       "path": "apps/oma/src/application/mail.ts",
@@ -332,7 +332,7 @@
     },
     {
       "path": "apps/oma/src/runtime/deployment-manifest.ts",
-      "sha256": "7bf80d66e05c757048f73fce4835f9046c72783ab08695a7deee27555c066ebf"
+      "sha256": "77e46e2520a281d7edbec90827e8d369198db40660436436b06d2471c89b09ee"
     },
     {
       "path": "apps/oma/src/runtime/extension-integrity.ts",
@@ -368,7 +368,7 @@
     },
     {
       "path": "apps/oma/src/runtime/packages/store.ts",
-      "sha256": "e9a09bfa94e3389ded74fc4e15800e971b7fd9dd7a92ef9de48ea53b64b39d15"
+      "sha256": "860433a06cf12390e1591b965c53a2476b00ee10fd395d8134cfaee9f70fbfa5"
     },
     {
       "path": "apps/oma/src/runtime/personal-models.ts",
@@ -392,7 +392,7 @@
     },
     {
       "path": "apps/oma/src/runtime/provision.ts",
-      "sha256": "b9449ee6e19a7a0b54151fb3661ffd2a58610ce0e393ba281f43aba5f654aa93"
+      "sha256": "89193a3dcdf1b4c80871af896a36259abe6fd05cfea4ffc07ce63273aa889819"
     },
     {
       "path": "apps/oma/src/runtime/session-catalog.ts",
@@ -564,7 +564,7 @@
     },
     {
       "path": "packages/config/src/generations.ts",
-      "sha256": "322dd8b047cbc7d4cf26a129a7cbf15b053b17468270354ce7f459ef4774709a"
+      "sha256": "938b54fe825fd5f474032e50730cf20edfcdc3f7436e7345314dfb6baf5961d5"
     },
     {
       "path": "packages/config/src/index.ts",
@@ -1160,7 +1160,7 @@
     },
     {
       "path": "packages/git/src/context-repository.ts",
-      "sha256": "30ef372f6e2972dd93eb46a0f2342f160073cfd4a9075a4ee19121b38aa822e9"
+      "sha256": "4d8a15f2d428e06d3f1dcfc04ccef505133b89136c5c285da470099faeab4018"
     },
     {
       "path": "packages/git/src/context.ts",
@@ -1192,7 +1192,7 @@
     },
     {
       "path": "packages/git/src/project-preparation.ts",
-      "sha256": "47109265d6f2e44b02081adc1437f70023ccbb3a9f4c6fb72edea636d9b7aab8"
+      "sha256": "97c0dcf115d1d32a664f36cf5663f3e7a1d72a3ee0c4e912d80455b1eedcc361"
     },
     {
       "path": "packages/git/src/project-snapshot.ts",
@@ -1204,7 +1204,7 @@
     },
     {
       "path": "packages/git/src/quarantine.ts",
-      "sha256": "c915449b8b729c10777be92f9c3a3051b8e261690902b354e28ffe4fe19e45d8"
+      "sha256": "74a417c490e40b2b2a82d5e6b005ab44c586b6d6c6daab32e786ed5bc1f8f78e"
     },
     {
       "path": "packages/git/src/read-port.ts",
@@ -1360,7 +1360,7 @@
     },
     {
       "path": "packages/native/src/linux.ts",
-      "sha256": "019539c26bcfcbdc50f8fa1298181c543fcc391537cba28f4dd0b6e092d1caa3"
+      "sha256": "9fcec657737cb6b672ed26fb163ca18691561efc4ad7d5867ff96852f3506684"
     },
     {
       "path": "packages/native/src/peer-uid.ts",
@@ -1368,7 +1368,7 @@
     },
     {
       "path": "packages/native/src/posix-files.ts",
-      "sha256": "ee8e64862ebd22d29f2b214268cc77b9ab1979150513de133c41d006627eb353"
+      "sha256": "f9696ea0a08c9d9ab9cb3a091d07ce6c468abf1c52237cafe87d7d2d3f75b3bf"
     },
     {
       "path": "packages/native/src/process-lock.ts",
@@ -1388,7 +1388,7 @@
     },
     {
       "path": "packages/platform-linux/src/resident-rootfs.ts",
-      "sha256": "ce512fbd3e50be03802d63762ee21a2c10af805dea413432d908806fe59c2aff"
+      "sha256": "96a0162cc14532dc63efa297e0337308b89b3b3b3084d837b4ca7ea65c5b89fc"
     },
     {
       "path": "packages/platform-linux/src/sandbox-seccomp.ts",
@@ -1692,7 +1692,7 @@
     },
     {
       "path": "packages/storage/src/cache-trees.ts",
-      "sha256": "32d07176bfebbac0f18d75befb7bb1dbfe341c4ec6144830354d910d7394746f"
+      "sha256": "34ea6fe555f3021f6596ebe552dc5b988837b8abca0d8281be226bf03a964e3e"
     },
     {
       "path": "packages/storage/src/context-files.ts",
@@ -1700,15 +1700,15 @@
     },
     {
       "path": "packages/storage/src/context-snapshot.ts",
-      "sha256": "c50eee8cc77c320ce318694ccace9c5f5479ab3fdcb7e9040c61af12b3d7b8af"
+      "sha256": "365fb003c1f94239f3d6f59345ab2686a8f1ae6f7bdd8c2dde04d0e3bd11ad2c"
     },
     {
       "path": "packages/storage/src/context-stream.ts",
-      "sha256": "a9b33257ad03d6cf43b745b56e87fb39ee58329b04f996f87767ab2dc584a3fa"
+      "sha256": "31ebd4631be320cfd91f5593e752f0e0da53e41afcd2c90e205695da8b925af7"
     },
     {
       "path": "packages/storage/src/delivery-receipt.ts",
-      "sha256": "3277206ba1e20a122e8ce23534198fdc3b856ae65684b295799b8c0b5c0090fb"
+      "sha256": "6b072275626cba3eeaf6c007a4ba25bd3116d5c298bbb19f161c203bb2c3aff2"
     },
     {
       "path": "packages/storage/src/diagnostic-snapshot.ts",
@@ -1720,7 +1720,7 @@
     },
     {
       "path": "packages/storage/src/durable-fs.ts",
-      "sha256": "9f184a6670d408c5d13cc33d0d59a3ba9a3c57bcda22346b6038782aa85bd182"
+      "sha256": "712b87e1731adf01ef9801b4b4927bf0ac5ca3c9868258c44a3f606d81035b60"
     },
     {
       "path": "packages/storage/src/facets.ts",
@@ -1732,7 +1732,7 @@
     },
     {
       "path": "packages/storage/src/immutable-file.ts",
-      "sha256": "5b616b648a602c124cac540289832ef024e7dcafc2a876f0b7334a1f250d20f1"
+      "sha256": "8fe397c105fa660175b7430ba40ee0152155a2e549d352a3740e8f2f6b527fd3"
     },
     {
       "path": "packages/storage/src/ledger-reader.ts",
@@ -1744,7 +1744,7 @@
     },
     {
       "path": "packages/storage/src/mailbox.ts",
-      "sha256": "bc2c90c601e590c5141bc2b88fdc86446d4743ade58a25b7434c765b7970aeac"
+      "sha256": "0e1f6bbff00de7909d4ed285df3198a95129602a20f35ced881a2dfa1c7229ec"
     },
     {
       "path": "packages/storage/src/operation-journal.ts",
@@ -1768,7 +1768,7 @@
     },
     {
       "path": "packages/storage/src/preaccept-artifact.ts",
-      "sha256": "268d177ff4caf313be154dbbbd8d98f3165568aeac7488139523383c193d3f8e"
+      "sha256": "96e2626818ff8fc3f23b3ac94ffc25d247150f93ade8a89aa7144b3b3f62808e"
     },
     {
       "path": "packages/storage/src/preaccept-collection.ts",
@@ -1816,7 +1816,7 @@
     },
     {
       "path": "packages/storage/src/submit-spool.ts",
-      "sha256": "5d002ddced89f509a1e3c8201b0f6d3d290a9f62530eda6a35d757c0997e0b73"
+      "sha256": "7a9cc78a2f33c8f49f3f71affd679e231bdeff2191cf4e155447d4c7d406f2ad"
     },
     {
       "path": "packages/storage/src/transaction.ts",
@@ -1828,7 +1828,7 @@
     },
     {
       "path": "packages/storage/src/transport-spool.ts",
-      "sha256": "4b097df4704ca11ff113e45507417195833686a4e7410db490d04fd206c33317"
+      "sha256": "e355290f4d28ea0f1770abc88711c677f8bfb07ff9af137f460c7af76c5d488a"
     },
     {
       "path": "packages/storage/src/tree-lease.ts",

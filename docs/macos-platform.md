@@ -48,6 +48,13 @@ lifecycle을 맡고, process는 실행 수명, broker/domain은 인증·권한 �
 Git은 Git 검증, native/platform-*는 OS primitive를 맡는다. 아래 모듈이 App을 참조하거나 같은
 정책을 OS별로 복제하지 않는다. 공통화를 위해 의존 허용 목록을 넓히거나 순환을 허용하지 않는다.
 
+**MUST [NATIVE-008]** DR50은 NATIVE-001/007의 모듈 수·의존 허용 목록에 관한 부분을
+다음 기준으로 대체한다. 25개는 출발점이며 고정 개수가 아니다. 기존 책임은 해당 모듈에서
+수정하고 새 독립 책임은 새 workspace로 분리할 수 있다. 각 모듈은 공개 API·직접 의존성·
+단방향 runtime/type DAG·독립 build/test/설치를 유지한다. 책임에 따른 새 공개 의존성은
+manifest·owner map·경계 검사·negative control과 함께 갱신한다. 허용 목록만 넓혀 private
+접근이나 책임 침범을 숨기지 않는다. 나머지 NATIVE-001/007 계약과 원래 ID의 기록은 보존한다.
+
 ## 현재 구현의 한계
 
 Darwin CI에서 NOTE_TRACK 거절과 setsid 후손 생존, mode-000 event pin 거절을 실제로 관측했다.

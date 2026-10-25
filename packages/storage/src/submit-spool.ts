@@ -1,14 +1,15 @@
 // FS/IPC: transport .wire copies and workflow upload.bundle names have different
 // owners. No accepted name is unlinked by connection cleanup or a failed retry.
 import {
-  constants, closeSync, writeFileSync, readSync, fstatSync, lstatSync,
+  constants, closeSync, writeFileSync, readSync, fstatSync,
   fchmodSync, fsyncSync,
 } from "node:fs";
 import { createHash } from "node:crypto";
 import { basename, dirname } from "node:path";
 import type { BlobDescriptor } from "@oma/contracts";
 import { StoreError } from "@oma/domain/errors";
-import { entryAt, openBeneath, openDirectory, openRegularBeneath } from "@oma/native/files";
+import { openBeneath, openDirectory, openRegularBeneath } from "@oma/native/files";
+import { statAt } from "@oma/native/posix-files";
 import { PreacceptArtifact, type PublishedIdentity } from "./preaccept-artifact.js";
 import { type PreacceptOwner } from "@oma/contracts/files";
 import { ensureOwnedDurableDirectory, fsyncDir } from "./durable-fs.js";
@@ -81,7 +82,7 @@ export async function prepareSubmitSpool(
         throw new StoreError("STREAM_INVALID", "bundle bytes or digest do not match the descriptor");
       fchmodSync(fd, 0o444);
       fsyncSync(fd);
-      const current = lstatSync(entryAt(parent, basename(path))); const pinned = fstatSync(fd);
+      const current = statAt(parent, basename(path)); const pinned = fstatSync(fd);
       if (!current.isFile() || current.dev !== pinned.dev || current.ino !== pinned.ino)
         throw new StoreError("STORE_CORRUPT", "prepared bundle name changed identity");
       if (identity === null || pinned.dev !== identity.dev || pinned.ino !== identity.ino)
@@ -107,7 +108,7 @@ function openVerifiedBundle(bundle: FrozenBundle): number {
   const parent = openDirectory(dirname(bundle.path));
   let fd: number | undefined;
   try {
-    const named = lstatSync(entryAt(parent, basename(bundle.path)));
+    const named = statAt(parent, basename(bundle.path));
     if (!named.isFile() || named.nlink !== 1 || named.size !== bundle.bytes)
       throw new StoreError("STORE_CORRUPT", "bundle type, link count or length changed");
     fd = openRegularBeneath(parent, basename(bundle.path));
@@ -123,7 +124,7 @@ function openVerifiedBundle(bundle: FrozenBundle): number {
       if (total > bundle.bytes) throw new StoreError("STORE_CORRUPT", "bundle grew while being read");
       hash.update(buffer.subarray(0, read));
     }
-    const after = fstatSync(fd); const currentName = lstatSync(entryAt(parent, basename(bundle.path)));
+    const after = fstatSync(fd); const currentName = statAt(parent, basename(bundle.path));
     if (total !== bundle.bytes || hash.digest("hex") !== bundle.sha256 ||
       after.nlink !== 1 || before.size !== after.size || before.mtimeMs !== after.mtimeMs || before.ctimeMs !== after.ctimeMs ||
       currentName.dev !== before.dev || currentName.ino !== before.ino || !currentName.isFile())

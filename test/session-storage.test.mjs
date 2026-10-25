@@ -174,25 +174,29 @@ test("failure after cold commit and partial reclamation recovers the exact check
 });
 
 test("interrupted publication keeps cold selection and recovers without replaying partial cache", async () => {
-  const f = fixture(), original = fs.renameSync;
+  const f = fixture(), original = fs.fsyncSync;
   try {
     const a = f.society("first"), before = await digestCacheTrees(a.stateRoot, a.roots);
     await a.storage.archive(a.residents);
     let injected = false;
-    fs.renameSync = function(from, to) {
-      if (String(from).endsWith("/staging") && String(to).endsWith("/staging") && !injected) {
+    fs.fsyncSync = function(fd) {
+      // renameat now publishes through held parents. Fail the source-parent
+      // flush after staging is visible, while cold selection still owns retry.
+      const parent = readlinkSync(`/proc/self/fd/${fd}`);
+      if (parent.startsWith(`${a.stateRoot}/.session-storage-stage-`) && parent.endsWith("/restored") &&
+          existsSync(join(a.stateRoot, "staging")) && !injected) {
         injected = true; throw Object.assign(Error("injected restore publication failure"), { code: "EIO" });
       }
-      return original.call(this, from, to);
+      return original(fd);
     };
     syncBuiltinESMExports();
     await assert.rejects(a.storage.restore(), /injected restore publication failure/);
     assert.equal(injected, true); assert.ok(selection(a).checkpoint);
-    fs.renameSync = original; syncBuiltinESMExports();
+    fs.fsyncSync = original; syncBuiltinESMExports();
     await a.storage.restore();
     assert.equal((await digestCacheTrees(a.stateRoot, a.roots)).digest, before.digest);
     assert.equal(readdirSync(a.stateRoot).some(name => name.startsWith(".session-storage-stage-")), false);
-  } finally { fs.renameSync = original; syncBuiltinESMExports(); f.close(); }
+  } finally { fs.fsyncSync = original; syncBuiltinESMExports(); f.close(); }
 });
 
 test("unreadable files and extended attributes retain the complete original workspace", async () => {

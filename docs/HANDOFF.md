@@ -4,6 +4,8 @@
 Linux/macOS 공통 native 실행을 실제 구현·검증하는 것이다. 이전 ‘문서 정리만 수행’ 범위를
 사용자 구현 지시가 대체했다. 사용자는 legacy fallback을 남기지 말고, 기존 25개 workspace
 의존 경계를 침범하지 말라고 명시했다. master 병합·배포는 하지 않는다.
+25개는 고정 개수가 아니다. 기존 책임은 해당 모듈에서 수정하고 새 독립 책임은
+25 + α개의 workspace로 분리하며, 공개 API·단방향 DAG·독립 build/test/설치를 유지한다.
 
 ## 작업 상태
 
@@ -15,7 +17,7 @@ Linux/macOS 공통 native 실행을 실제 구현·검증하는 것이다. 이�
   과거 VM 시험 원문은 `docs/archive/macos-vm-tests-2026-10-25/`에 보존하며 native PASS에 합산하지 않는다.
 - 실행/출력 수명은 process, 저장·tar/inventory 검증·package staging은 storage,
   인증/정산은 broker/domain, OS primitive는 native/platform-*가 맡는다. 아래 모듈이 App을
-  import하지 않는다. App은 API를 조립한다. 의존 허용 목록을 넓히지 않는다.
+  import하지 않는다. App은 API를 조립한다. 책임 없이 의존 허용 목록만 넓혀 통과시키지 않는다.
 - G-PROCESS/G-FILES/G-AUTH는 OPEN이다. Darwin에서 NOTE_TRACK ENOTSUP(45), setsid
   후손 생존, mode-000 event pin EACCES(13)을 실제 CI에서 확인했다. static 지원 거절과
   일부 primitive 성공을 gate 통과로 처리하지 않는다.
@@ -24,7 +26,8 @@ Linux/macOS 공통 native 실행을 실제 구현·검증하는 것이다. 이�
   connector 생존·종료 모두 kernel peer PID는 holder를 가리켰으나 G-AUTH 전체 증명은 아니다.
 - 첫 전체 local은 FAIL52·SKIP70, 입력 변경0으로 끝났고 원시 실패를 보존했다. 유지되는
   회귀의 native fault/모듈 연결과 실제 bwrap 환경을 수리했다. 부분 시험 성공을 전체 PASS로
-  표시하지 않으며 새 입력을 고정한 전체 재실행이 필요하다.
+  표시하지 않는다. `982658de`의 수리 후 전체 local은 3640/3640 PASS, skip0·입력 변경0이다.
+  이후 파일 handle 공통화 변경은 이 실행에 포함되지 않으며 별도 검증한다.
 - 현재 Mac 제품 진입은 효과 전에 차단한다. Linux의 Resident wake/log·직접 실행·systemd/journald
   제거, sandbox scope proof, candidate/quarantine 연결, Darwin 파일 pin/auth, OS별 설치와
   최종 owner/규범/회귀 대조가 남았다. native 지원 완료가 아니다.

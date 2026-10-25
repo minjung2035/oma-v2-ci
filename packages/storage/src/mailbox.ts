@@ -1,10 +1,11 @@
 /** Physical mailbox capability. Mail owns the decisions made through it. */
-import { closeSync, mkdirSync, renameSync, unlinkSync } from "node:fs";
+import { closeSync } from "node:fs";
 import { basename, dirname, join } from "node:path";
 import type { Actor, MessageId, MessagePlan } from "@oma/contracts";
 import { StoreError } from "@oma/domain/errors";
 import { mailInboxArrivalPathAt, mailInboxPathAt, mailObjectPathAt } from "@oma/domain/paths";
-import { entryAt, closeEvery } from "@oma/native/files";
+import { closeEvery } from "@oma/native/files";
+import { mkdirAt, renameAt, unlinkAt } from "@oma/native/posix-files";
 import { openOwnedDirectory, openOwnedDirectoryPath } from "./directory.js";
 import { ensureOwnedDurableDirectory, fsyncHeldDir } from "./durable-fs.js";
 import type { ImmutableObservation } from "@oma/contracts/files";
@@ -31,7 +32,7 @@ export class HeldMailInbox {
   }
   private child(name: "new" | "cur"): number {
     if (this.inbox === undefined) throw new StoreError("INTERNAL_ERROR", "mailbox has no held parent");
-    try { mkdirSync(entryAt(this.inbox, name), { mode: 0o755 }); }
+    try { mkdirAt(this.inbox, name, 0o755); }
     catch (error) { if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error; }
     const directory = openOwnedDirectory(this.inbox, name);
     try { fsyncHeldDir(this.inbox, this.directoryPath); return directory; }
@@ -51,9 +52,9 @@ export class HeldMailInbox {
     publishImmutableEntry(mailObjectPathAt(this.stateRoot, message.id), this.directory(folder), basename(path), path, message.sha256);
   }
   moveNewToCur(id: MessageId): void {
-    renameSync(entryAt(this.directory("new"), basename(this.path("new", id))), entryAt(this.directory("cur"), basename(this.path("cur", id))));
+    renameAt(this.directory("new"), basename(this.path("new", id)), this.directory("cur"), basename(this.path("cur", id)));
   }
-  removeNew(id: MessageId): void { unlinkSync(entryAt(this.directory("new"), basename(this.path("new", id)))); }
+  removeNew(id: MessageId): void { unlinkAt(this.directory("new"), basename(this.path("new", id))); }
   flushNew(): void { fsyncHeldDir(this.directory("new"), join(this.directoryPath, "new")); }
   flushCur(): void { fsyncHeldDir(this.directory("cur"), join(this.directoryPath, "cur")); }
   appendMailArrival(id: MessageId): void {

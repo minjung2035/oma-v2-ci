@@ -1,14 +1,15 @@
+import { unlinkAt } from "@oma/native/posix-files";
 // IPC-003: .wire is an ephemeral transport copy, never an accepted plan artifact.
 // Workflow staging/object paths are not registered with this cleanup owner.
 // FS-005 / architecture section 4: the staging directory is resolved once and held for the spool's life;
 // the file is written, read back and removed through that one resolution, and
 // its path is never looked up again.
-import { constants, fsyncSync, fstatSync, closeSync, unlinkSync, createReadStream, writeSync, type ReadStream } from "node:fs";
+import { constants, fsyncSync, fstatSync, closeSync, createReadStream, writeSync, type ReadStream } from "node:fs";
 import { dirname, join } from "node:path";
 import { createHash, randomUUID } from "node:crypto";
 import { StoreError } from "@oma/domain/errors";
 import { ensureOwnedDirectory } from "./directory.js";
-import { entryAt, openBeneath, openDirectory, openRegularBeneath, closeEvery } from "@oma/native/files";
+import { openBeneath, openDirectory, openRegularBeneath, closeEvery } from "@oma/native/files";
 
 import type { RawDescriptor, ExecutionBody, ConnectionSpool } from "@oma/contracts/files";
 
@@ -101,7 +102,7 @@ export class TransportSpool implements ConnectionSpool {
     }
     if (this.directory !== null) {
       const directory = this.directory; this.directory = null;
-      try { unlinkSync(entryAt(directory, this.name)); }
+      try { unlinkAt(directory, this.name); }
       catch (error) { if (!(error !== null && typeof error === "object" && "code" in error && error.code === "ENOENT")) first ??= error; }
       try { closeSync(directory); } catch (error) { first ??= error; }
     }

@@ -1,7 +1,8 @@
+import { mkdirAt } from "@oma/native/posix-files";
 /** CTX-003/004: canonical object and filesystem mechanisms. This owner never
  * chooses a new request, changes an accepted plan, or authorizes a main writer.
  */
-import { constants, closeSync, fchmodSync, mkdirSync, lstatSync, readlinkSync } from "node:fs";
+import { constants, closeSync, fchmodSync, lstatSync, readlinkSync } from "node:fs";
 import { dirname, join } from "node:path";
 import type { ContextEntry, Oid } from "@oma/contracts";
 import type { OperationOf, ValidatedPlan } from "@oma/protocol/operation-codec";
@@ -14,7 +15,7 @@ import { readContextEntry, assertContextDirectory } from "@oma/storage/context-f
 import { contextStagingPathAt, contextRevisionPathAt } from "@oma/domain/paths";
 import { TreeLease, treeQuiescence } from "@oma/storage/tree-lease";
 import { ensureOwnedDurableDirectory, fsyncDir, fsyncTree, writeExclusiveFsyncedFile } from "@oma/storage/durable-fs";
-import { entryAt, openBeneath, openDirectory, closeEvery } from "@oma/native/files";
+import { openBeneath, openDirectory, closeEvery } from "@oma/native/files";
 import { publishContextRevision, verifyContextRevision } from "@oma/storage/context-snapshot";
 import { runProcessSync, type ProcessObservation } from "@oma/process/run";
 import { PreparationExecutor, requirePreparedSuccess } from "@oma/process/preparation";
@@ -147,7 +148,7 @@ export class ContextRepository {
       const held = lease = TreeLease.take(staging);
       const stagingFd = openDirectory(staging);
       try {
-        mkdirSync(entryAt(stagingFd, "commit-work"), { mode: 0o700 });
+        mkdirAt(stagingFd, "commit-work", 0o700);
         workFd = openBeneath(stagingFd, "commit-work", constants.O_RDONLY | constants.O_DIRECTORY);
       } finally { closeSync(stagingFd); }
       fsyncDir(staging);

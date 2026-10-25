@@ -1,7 +1,8 @@
+import { mkdirAt } from "@oma/native/posix-files";
 /** P0-4/FS-005: a snapshot's owned preparation, held until its consumer ends.
  * Every Git child inherits the lease; an unobserved child keeps the tree. */
-import { constants, mkdirSync } from "node:fs";
-import { closeEvery, entryAt, openBeneath, withinDirectory } from "@oma/native/files";
+import { constants } from "node:fs";
+import { closeEvery, openBeneath, withinDirectory } from "@oma/native/files";
 import { openOwnedDirectoryPath, removeOwnedFile } from "@oma/storage/directory";
 import { TreeLease, collectLeasedTree } from "@oma/storage/tree-lease";
 
@@ -12,7 +13,7 @@ export function prepareProjectDirectory(path: string): ProjectPreparation {
   let made = false;
   let directory: number | undefined;
   try {
-    withinDirectory(path, (parent, name) => { mkdirSync(entryAt(parent, name), { mode: 0o700 }); made = true; });
+    withinDirectory(path, (parent, name) => { mkdirAt(parent, name, 0o700); made = true; });
     directory = openOwnedDirectoryPath(path);
     return {
       path, get descriptor() { return lease.descriptor; },

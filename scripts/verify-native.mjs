@@ -31,7 +31,7 @@ try {
   result.gates = {
     "G-PROCESS": { status: "OPEN", reason: "No complete arbitrary-descendant containment/death proof; see NOTE_TRACK and escaped process observations" },
     "G-FILES": { status: "OPEN", reason: "Primitive observations do not yet prove external executable binding, entry reopens or all namespace races" },
-    "G-AUTH": { status: "OPEN", reason: "Peer PID observations require further SCM_RIGHTS/socket-transfer and PID-reuse authorization proof" },
+    "G-AUTH": { status: "OPEN", reason: "Actual descriptor-transfer observations do not establish per-message origin, PID-reuse or whole authorization proof" },
   };
   result.status = "BLOCKED";
 } catch (error) { result.error = String(error); }

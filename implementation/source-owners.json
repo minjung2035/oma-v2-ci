@@ -892,6 +892,22 @@
     ]
   },
   {
+    "source": "docs/macos-platform.md",
+    "requirements": [
+      "NATIVE-008"
+    ],
+    "owner": "scripts/check-modules.mjs#moduleFindings",
+    "entrypoint": "scripts/check-modules.mjs#moduleFindings",
+    "callPath": [
+      "scripts/check-modules.mjs#moduleFindings"
+    ],
+    "negativeTests": [
+      "test/workspace-boundaries.test.mjs#workspace guard accepts declared public imports",
+      "test/workspace-boundaries.test.mjs#workspace guard includes type-only cycles",
+      "test/isolated-declarations.test.mjs#foreign declaration errors"
+    ]
+  },
+  {
     "source": "docs/implementation-spec.md",
     "requirements": [
       "UNIT-006"

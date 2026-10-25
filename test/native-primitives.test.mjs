@@ -1,10 +1,10 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, realpathSync, mkdirSync, closeSync, constants, readFileSync, writeFileSync, rmSync, renameSync, fstatSync } from "node:fs";
+import { mkdtempSync, realpathSync, mkdirSync, closeSync, constants, readFileSync, writeFileSync, rmSync, renameSync, fchmodSync, fstatSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { openDirectory, openBeneath } from "@oma/native/files";
-import { directoryNames, mkdirAt, unlinkAt, linkAt, renameAt } from "@oma/native/posix-files";
+import { directoryNames, mkdirAt, unlinkAt, linkAt, renameAt, readlinkAt, readlinkBytesAt, statAt, symlinkAt } from "@oma/native/posix-files";
 import { observeDarwinProcess, observeLinuxProcess } from "@oma/native/process-observation";
 import { hostProcessProbe } from "@oma/broker/process-ancestry";
 import { RestartPolicy } from "@oma/process/restart-policy";
@@ -23,13 +23,39 @@ test("directory effects remain on the held inode after a pathname replacement", 
     linkAt(held, "data", held, "published");
     assert.throws(() => linkAt(held, "data", held, "published"), { code: "EEXIST" });
     renameAt(held, "data", held, "renamed");
-    assert.deepEqual(directoryNames(held), ["published", "renamed", "안전"]);
-    assert.deepEqual(directoryNames(held), ["published", "renamed", "안전"], "each listing owns an independent cursor");
+    symlinkAt("\ufeff../밖", held, "link");
+    assert.equal(readlinkAt(held, "link"), "\ufeff../밖");
+    assert.deepEqual(readlinkBytesAt(held, "link"), Buffer.from("\ufeff../밖"));
+    assert.deepEqual(directoryNames(held), ["link", "published", "renamed", "안전"]);
+    assert.deepEqual(directoryNames(held), ["link", "published", "renamed", "안전"], "each listing owns an independent cursor");
     assert.equal(readFileSync(join(scratch, "moved", "published"), "utf8"), "pinned");
     assert.throws(() => readFileSync(join(scratch, "root", "published")), { code: "ENOENT" });
     assert.throws(() => unlinkAt(held, "../outside"), TypeError);
-    unlinkAt(held, "renamed"); unlinkAt(held, "published"); unlinkAt(held, "안전", true);
+    unlinkAt(held, "link"); unlinkAt(held, "renamed"); unlinkAt(held, "published"); unlinkAt(held, "안전", true);
     assert.ok(fstatSync(held).isDirectory());
+  } finally { closeSync(held); rmSync(scratch, { recursive: true, force: true }); }
+});
+
+test("entry metadata preserves nanoseconds and link identity; an unverified substrate refuses", () => {
+  const scratch = realpathSync(mkdtempSync(join(tmpdir(), "oma-native-stat-")));
+  const held = openDirectory(scratch);
+  try {
+    const fd = openBeneath(held, "data", constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL, 0o600);
+    let expected;
+    try { writeFileSync(fd, "bytes"); fchmodSync(fd, 0); expected = fstatSync(fd, { bigint: true }); }
+    finally { closeSync(fd); }
+    symlinkAt("data", held, "link");
+    if (process.platform === "darwin") {
+      // This is the actual current refusal, recorded separately from G-FILES.
+      // It never treats an I/O open as the missing permission-independent pin.
+      assert.throws(() => statAt(held, "data"), { code: "UNSUPPORTED_PROFILE" });
+    } else {
+      assert.deepEqual(statAt(held, "data", { bigint: true }), expected);
+      assert.equal(statAt(held, "link").isSymbolicLink(), true);
+      assert.equal(statAt(held, "missing", { throwIfNoEntry: false }), undefined);
+      assert.throws(() => statAt(held, "missing"), { code: "ENOENT" });
+    }
+    assert.throws(() => statAt(held, "../data", { throwIfNoEntry: false }), TypeError);
   } finally { closeSync(held); rmSync(scratch, { recursive: true, force: true }); }
 });
 

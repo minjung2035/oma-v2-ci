@@ -10,7 +10,7 @@ import { randomUUID } from "node:crypto";
 import { basename, dirname, join } from "node:path";
 import { StoreError } from "@oma/domain/errors";
 import { assertDirectory, ensureDirectory, ensureOwnedDirectory } from "./directory.js";
-import { entryAt, linkDescriptor, openBeneath, openDirectory, openRegularBeneath, withinDirectory } from "@oma/native/files";
+import { linkDescriptor, openBeneath, openDirectory, openRegularBeneath, withinDirectory } from "@oma/native/files";
 import { lockFileDescriptor } from "@oma/native/linux";
 
 /** P7 durability fault seam. It is confined to these leaf primitives and their

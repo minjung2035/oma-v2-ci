@@ -1,6 +1,6 @@
 /** Directory-relative effects. Publication/repair policy belongs to shared TS
  * storage owners. No pathname reconstructed from a directory FD is accepted. */
-import { closeSync, constants, fstatSync, type Stats } from "node:fs";
+import { closeSync, constants, fstatSync, type BigIntStats, type Stats } from "node:fs";
 import { decode, errno, load } from "koffi";
 import { getSystemErrorName } from "node:util";
 import { StoreError } from "@oma/domain/errors";
@@ -54,15 +54,18 @@ export function symlinkAt(target: string, fd: number, name: string): void {
   if (target.includes("\0")) throw new TypeError("invalid symlink target");
   checked((native ??= initialize()).symlink(target, fd, name));
 }
-export function readlinkAt(fd: number, name: string): string {
+export function readlinkBytesAt(fd: number, name: string): Buffer {
   entry(fd, name);
   const api = native ??= initialize();
   for (let capacity = 256; ; capacity *= 2) {
     const bytes = Buffer.alloc(capacity);
     const count = api.readlink(fd, name, bytes, bytes.length);
     if (count < 0) checked(-1);
-    if (count < capacity) return decodeUtf8(bytes.subarray(0, count));
+    if (count < capacity) return bytes.subarray(0, count);
   }
+}
+export function readlinkAt(fd: number, name: string): string {
+  return decodeUtf8(readlinkBytesAt(fd, name));
 }
 /** An independent directory cursor under the held inode. fdopendir owns only
  * the newly opened descriptor; neither cursor nor close changes the caller's
@@ -103,11 +106,31 @@ export function directoryNames(fd: number): string[] {
 /** A no-I/O entry observation. A platform without the necessary entry pin
  * refuses before opening a FIFO/device or repairing a re-resolved pathname. */
 export function statAt(fd: number, name: string): Stats;
+export function statAt(fd: number, name: string, options: { readonly bigint: true; readonly throwIfNoEntry?: true }): BigIntStats;
+export function statAt(fd: number, name: string, options: { readonly bigint: true; readonly throwIfNoEntry: false }): BigIntStats | undefined;
 export function statAt(fd: number, name: string, options: { readonly throwIfNoEntry: false }): Stats | undefined;
-export function statAt(fd: number, name: string, options?: { readonly throwIfNoEntry: false }): Stats | undefined {
+export function statAt(fd: number, name: string, options?: { readonly bigint?: boolean; readonly throwIfNoEntry?: boolean }): Stats | BigIntStats | undefined {
   entry(fd, name);
   let pin: number;
   try { pin = openBeneath(fd, name, 0o10000000 | constants.O_NOFOLLOW); }
-  catch (error) { if (options && (error as NodeJS.ErrnoException).code === "ENOENT") return undefined; throw error; }
-  return withCleanup(() => fstatSync(pin), () => closeSync(pin));
+  catch (error) { if (options?.throwIfNoEntry === false && (error as NodeJS.ErrnoException).code === "ENOENT") return undefined; throw error; }
+  return withCleanup(() => options?.bigint ? fstatSync(pin, { bigint: true }) : fstatSync(pin), () => closeSync(pin));
+}
+
+/** An attribute-bearing cache needs a richer verification protocol. Observation
+ * failures never mean that attributes are absent. The Linux proc path remains
+ * inside this leaf; Darwin needs an equally bound no-follow attribute primitive. */
+let listExtended: ((path: string, list: null, size: number) => number) | undefined;
+export function assertNoExtendedAttributesAt(parent: number, name: string): void {
+  entry(parent, name);
+  if (process.platform !== "linux")
+    throw new StoreError("UNSUPPORTED_PROFILE", "G-FILES: contained no-follow extended-attribute observation is unverified");
+  listExtended ??= load(null).func("long llistxattr(const char *path, void *list, unsigned long size)");
+  const size = listExtended(`/proc/self/fd/${parent}/${name}`, null, 0);
+  if (size < 0) {
+    const code = errno();
+    if (code === 95 /* EOPNOTSUPP: filesystem stores no attributes */) return;
+    throw new Error(`session extended attributes could not be observed (errno ${code})`);
+  }
+  if (size !== 0) throw new Error("session workspace has extended attributes; retained without reclamation");
 }

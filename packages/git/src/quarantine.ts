@@ -1,13 +1,14 @@
+import { mkdirAt } from "@oma/native/posix-files";
 /** Canonical bundle import runs in a disposable mount/pid/user namespace.
  * Commit content and prerequisites are verified before objects enter the owned
  * project. Broker cancellation, namespace death and the retained tree lease
  * own shutdown; uncertain outcomes retain their staging for fresh recovery. */
-import { closeSync, constants, fstatSync, mkdirSync, openSync, readSync } from "node:fs";
+import { closeSync, constants, fstatSync, openSync, readSync } from "node:fs";
 import { randomUUID } from "node:crypto";
 import { join } from "node:path";
 import { ensureOwnedDirectory } from "@oma/storage/directory";
 import { TreeLease, collectLeasedTree } from "@oma/storage/tree-lease";
-import { entryAt, withinDirectory } from "@oma/native/files";
+import { withinDirectory } from "@oma/native/files";
 import type { GitPaths } from "./paths.js";
 import { StoreError } from "@oma/domain/errors";
 import { decodeProcessText, type ProcessObservation } from "@oma/process/run";
@@ -148,7 +149,7 @@ export class QuarantineImporter {
         const lease = TreeLease.take(root);
         let settledNamespaceCommand = false;
         try {
-            withinDirectory(root, (parent, name) => mkdirSync(entryAt(parent, name), { mode: 0o700 }));
+            withinDirectory(root, (parent, name) => mkdirAt(parent, name, 0o700));
         }
         catch (error) {
             lease.release();

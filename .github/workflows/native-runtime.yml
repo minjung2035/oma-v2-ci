@@ -25,7 +25,8 @@ jobs:
           git rev-parse HEAD > .scratch/native-runtime/source-head.txt
           node --input-type=module -e 'console.log(JSON.stringify({platform:process.platform,arch:process.arch,versions:process.versions,image:process.env.ImageVersion}))' > .scratch/native-runtime/environment.json
           if ! npm ci > .scratch/native-runtime/install.log 2>&1; then cat .scratch/native-runtime/install.log; exit 1; fi
-      - name: Build the same 25 workspaces on the actual OS
+          node --input-type=module -e 'import {verificationInputDigest} from "./scripts/source-digest.mjs"; console.log(JSON.stringify(verificationInputDigest()))' > .scratch/native-runtime/verification-input.json
+      - name: Build the workspace graph on the actual OS
         run: |
           if ! npm run build:workspaces > .scratch/native-runtime/build.log 2>&1; then cat .scratch/native-runtime/build.log; exit 1; fi
       - name: Run shared production primitives and streaming verification

@@ -91,7 +91,10 @@ storage / config / tool-runtime
 | `@oma/platform-mac` | Seatbelt 계획/실행과 Darwin primitive 연결. VM lifecycle·project sync를 새 native supervisor로 이름만 바꿔 남기지 않는다 |
 | `@oma/app` | 플랫폼 adapter를 한 번 선택해 주입. domain·mail·review에 `process.platform` 분기를 퍼뜨리지 않는다 |
 
-새 `platform-common` 만능 package는 만들지 않는다. 기존 owner에 책임을 두며 runtime/type 의존 DAG와 독립 설치 검사를 유지한다.
+현재 25개 workspace는 고정 개수가 아니다. 기존 책임은 해당 owner에서 수정하고, 새 독립
+책임은 목적이 좁은 workspace로 분리해 25 + α개로 확장할 수 있다. runtime/type 의존 DAG와
+공개 exports·독립 build/test/설치를 유지한다. 여러 책임을 담는 `platform-common` 만능
+package나 private 구현 역참조로 경계를 우회하지 않는다.
 
 ### 3.2 최소 실행 계약
 

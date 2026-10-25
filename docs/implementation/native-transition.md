@@ -97,3 +97,19 @@ package 목록의 관측 실패는 기존 filesystem port로 검증한다. metad
 
 Linux PID namespace의 별도 물리 probe는 setup 실패로 끝났으며 scope proof로 사용하지
 않는다. runner/namespace-init/launcher 종료와 재시작 후 fence의 실제 연결은 미완료다.
+
+위 probe의 mount setup을 고친 별도 실행은 Linux 6.12.111·bwrap 0.12.0에서 runner,
+namespace init, launcher SIGKILL의 세 경우를 관측했다. setsid·double fork·FD 폐기 후손을
+포함해 pin한 process 세 개가 모두 종료했고 init pidfd readiness 뒤 후손 생존은 관측되지
+않았다. 원본 `linux-namespace-probe/result-v3.json`은 artifact 디렉터리에 있다.
+이는 재시작·fence·권한 연결을 증명하지 않으며 G-PROCESS를 닫지 않는다.
+
+`982658de`의 전체 local은 3640/3640 PASS·skip0·입력 변경0으로 끝났다. 이후 P2 변경은
+mailbox·context·spool·cache·package·provision·deployment·Git 준비의 상위 proc 경로를
+directory-relative API로 치환한다. nanosecond stat·symlink raw bytes와 게시/flush/cleanup
+순서를 보존하며, Darwin의 미검증 pin·attribute 관측은 효과 전에 거절한다. 이것만으로
+P2나 Darwin filesystem qualification 완료를 주장하지 않는다.
+
+현재 모듈 경계의 해석은 DR50/NATIVE-008을 따른다. 25개를 고정 개수로 두지 않으며,
+새 독립 책임은 새 workspace로 분리할 수 있다. 현재 파일 handle 연결에는 기존
+native/storage/config/Git/App owner가 맞으므로 새 만능 공통 모듈을 추가하지 않았다.

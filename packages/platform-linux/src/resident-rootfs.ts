@@ -1,3 +1,4 @@
+import { statAt, readlinkAt, unlinkAt, symlinkAt } from "@oma/native/posix-files";
 /** SB-001/002: the trusted rootfs a Resident runs on, made by OMA itself.
  *
  * SB-001 asks for a rootfs holding pinned tools and empty mount targets, and
@@ -32,7 +33,7 @@ import { StoreError, unobserved } from "@oma/domain/errors";
 import { DEPLOYMENT_LAYOUT } from "@oma/domain/deployment";
 import { RESIDENT_NODE_TOOLCHAIN, RESIDENT_PATHS, SYSTEM_BIND_CANDIDATES } from "@oma/domain/resident-paths";
 import { ensureOwnedDirectory } from "@oma/storage/directory";
-import { entryAt, openBeneath, openRegularBeneath, withinDirectory } from "@oma/native/files";
+import { openBeneath, openRegularBeneath, withinDirectory } from "@oma/native/files";
 
 export interface SystemLayout {
   /** Host paths bound read-only at the same path. */
@@ -49,7 +50,7 @@ function kind(path: string): "dir" | "file" | "link" | "absent" {
  * tree, so what is checked and what is then written are always the same entry,
  * named through one resolution of its parent. */
 function kindAt(parent: number, name: string): "dir" | "file" | "link" | "absent" {
-  return kindOf(lstatSync(entryAt(parent, name), { throwIfNoEntry: false }));
+  return kindOf(statAt(parent, name, { throwIfNoEntry: false }));
 }
 function kindOf(stat: ReturnType<typeof lstatSync> | undefined): "dir" | "file" | "link" | "absent" {
   if (!stat) return "absent";
@@ -156,17 +157,17 @@ function ensureLink(path: string, target: string, pass: Pass, retried = false): 
   withinDirectory(path, (parent, name) => {
     const found = kindAt(parent, name);
     if (found === "link") {
-      if (readlinkSync(entryAt(parent, name)) === target) return;
+      if (readlinkAt(parent, name) === target) return;
       if (pass.mode === "create") { pass.differing.push(path); return; }
       // Only a symlink is ever removed here, and only to point it back.
-      unlinkSync(entryAt(parent, name));
-      symlinkSync(target, entryAt(parent, name));
+      unlinkAt(parent, name);
+      symlinkAt(target, parent, name);
       pass.corrected.push(path);
       return;
     }
     if (found !== "absent")
       throw new StoreError("STORE_CORRUPT", `rootfs entry ${path} is not the expected link`);
-    try { symlinkSync(target, entryAt(parent, name)); }
+    try { symlinkAt(target, parent, name); }
     catch (error) { if (lostRace(error, retried)) { ensureLink(path, target, pass, true); return; } throw error; }
   });
 }

@@ -1,3 +1,4 @@
+import { unlinkAt } from "@oma/native/posix-files";
 /** Pre-accept artifact ownership.
  *
  * An immutable artifact published before its acceptance transaction belongs to
@@ -7,10 +8,10 @@
  * machine over a bundle name, so both answer to `PreacceptOwner` and every
  * coordinator settles them through one question.
  */
-import { closeSync, fstatSync, fsyncSync, unlinkSync } from "node:fs";
+import { closeSync, fstatSync, fsyncSync } from "node:fs";
 import { basename, dirname } from "node:path";
 import { StoreError } from "@oma/domain/errors";
-import { entryAt, openDirectory, openRegularBeneath } from "@oma/native/files";
+import { openDirectory, openRegularBeneath } from "@oma/native/files";
 
 import type { PreacceptOwner } from "@oma/contracts/files";
 
@@ -69,7 +70,7 @@ function removeOwnedInode(path: string, identity: PublishedIdentity): "removed" 
       const stat = fstatSync(fd);
       if (!stat.isFile() || stat.dev !== identity.dev || stat.ino !== identity.ino) return "identity-mismatch";
     } finally { closeSync(fd); }
-    try { unlinkSync(entryAt(parent, basename(path))); }
+    try { unlinkAt(parent, basename(path)); }
     catch (error) {
       if ((error as NodeJS.ErrnoException).code === "ENOENT") return "absent";
       throw error;

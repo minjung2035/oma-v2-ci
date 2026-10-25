@@ -6,7 +6,7 @@
 
 | 위치 | 책임 |
 |---|---|
-| [apps/oma/src](../apps/oma/src) | 제품 entry·application 조립·구체 Store와 effect 연결·세션·host/guest use case |
+| [apps/oma/src](../apps/oma/src) | 제품 entry·application 조립·구체 Store와 effect 연결·세션 use case |
 | [packages](../packages) | 기능별 workspace. 각 package가 명시적 exports·직접 의존성·build·test·자산을 소유 |
 | [test](../test) | 여러 package와 실제 App을 연결하는 통합·회귀 시험 |
 | [scripts](../scripts) | build·검증·inventory·독립 설치·도구 설치 명령 |
@@ -22,7 +22,7 @@
 | `@oma/contracts` | 공개 행위·fact·state의 타입 계약. 실행 효과 없음 |
 | `@oma/domain` | 식별자·값·정책·권한 판정의 순수 계산 |
 | `@oma/protocol` | request/result/session DTO·wire codec·receipt/status 표현 |
-| `@oma/native`, `@oma/process` | FD·filesystem containment·lock·PTY / 실제 child 종료·상속 fence·writer 대기 |
+| `@oma/native`, `@oma/process` | FD·filesystem containment·lock·peer/process primitive / 실제 child 종료·상속 fence·writer 대기 |
 | `@oma/storage`, `@oma/config` | SQLite ledger·transaction·파일 게시 / 설정 해석·검증·generation 게시 |
 | `@oma/mail`, `@oma/lifecycle` | 메일·batch·정산 / 생성·bootstrap·실행·종료·복구 판정 |
 | `@oma/git`, `@oma/review`, `@oma/reconcile` | Git 관측·검사·게시·CAS / review 권한·수락·진행 / pending 효과와 실제 상태 대조 |
@@ -31,7 +31,7 @@
 | `@oma/tui` | Control Panel·메일·설정·화면 표현 |
 | `@oma/extension`, `@oma/tool-runtime` | 신뢰된 OMA 확장 / provenance·tool surface·파일/실행 경계 |
 | `@oma/tool-lsp`, `@oma/tool-hashline`, `@oma/tool-web`, `@oma/tool-mcp` | 동봉 도구의 검증된 upstream payload와 OMA 연결 |
-| `@oma/platform-linux`, `@oma/platform-mac` | systemd·cgroup·bwrap·Linux guest 자산 / VZ·Keychain·bookmark·Mac 파일·Swift helper |
+| `@oma/platform-linux`, `@oma/platform-mac` | bwrap·seccomp·rootfs·이행 중 unit adapter / Darwin credential channel·독립 Keychain primitive |
 | `@oma/app` | 위 기능의 제품 조립과 물리 효과 연결. 공개 API는 installer assets·admin diagnostics |
 
 정확한 exports는 각 `package.json`, 허용 의존성과 private 경계는 [check-modules.mjs](../scripts/check-modules.mjs), 실제 import graph는 [dependency-graph.json](../implementation/evidence/dependency-graph.json)이 소유한다. 이 표는 OS 이식 가능성이나 독립 설치 PASS를 뜻하지 않는다.
@@ -59,7 +59,10 @@ Broker는 Store open/provision **이전**에 staged restore를 수행하고, dra
 
 ## Native 실행과 OS adapter
 
-App은 platform adapter를 선택하고 기존 25개 workspace의 public API를 조립한다. VM의
+App은 platform adapter를 선택하고 workspace의 public API를 조립한다. 현재 25개는
+출발점이며 수를 고정하지 않는다. 기존 책임은 해당 모듈에서 수정하고, 새 독립 책임은
+좁은 API·직접 의존성·build/test/설치 경계를 가진 새 workspace로 분리할 수 있다.
+다른 모듈의 private 구현 접근·순환 의존성·App 역의존으로 조립을 대신하지 않는다. VM의
 host/guest use case·RPC·VZ lifecycle·guest 자산은 제거했다. 과거 시험 원문은
 [VM 시험 보관 기록](archive/macos-vm-tests-2026-10-25/README.md)에 있으며 native proof로 사용하지 않는다.
 
@@ -94,4 +97,6 @@ DR49 native 전환에서 start/stop 순서와 관측 판정은 `process/resident
 Linux UnitsModule은 이를 실제 호출하고 unit 문법·manager 명령·cgroup 관측만 제공한다.
 이 adapter는 이행 중 reference이며 최종 manager 제거는 아직 남았다. Restic 명령/FD 수명은
 process, tar/inventory/tool 파일 검증과 package staging은 storage, 조립은 App이 소유한다.
-공통화 때문에 아래 모듈에서 App을 import하거나 workspace 의존 허용 목록을 넓히지 않는다.
+아래 모듈은 App을 import하지 않는다. 새 모듈이나 정당한 공개 의존성을 추가할 때는
+책임과 DAG를 먼저 명시하고 manifest·검사·독립 설치를 함께 갱신한다. 허용 목록만
+확장해 경계 위반을 숨기지 않는다.

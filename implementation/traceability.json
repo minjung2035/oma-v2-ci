@@ -5115,5 +5115,27 @@
     "status": "unverified",
     "verification": "NOT_RUN",
     "invalidationReason": "authoritative owner, entrypoint, call path or negative-test locator changed"
+  },
+  {
+    "requirement": "NATIVE-008",
+    "source": "docs/macos-platform.md",
+    "digest": "6e3b7b52afd5963caa2d7a8c5c8e7bee4a872954e0ebd1fb02f841653710f7b1",
+    "normativeText": "**MUST [NATIVE-008]** DR50은 NATIVE-001/007의 모듈 수·의존 허용 목록에 관한 부분을\n다음 기준으로 대체한다. 25개는 출발점이며 고정 개수가 아니다. 기존 책임은 해당 모듈에서\n수정하고 새 독립 책임은 새 workspace로 분리할 수 있다. 각 모듈은 공개 API·직접 의존성·\n단방향 runtime/type DAG·독립 build/test/설치를 유지한다. 책임에 따른 새 공개 의존성은\nmanifest·owner map·경계 검사·negative control과 함께 갱신한다. 허용 목록만 넓혀 private\n접근이나 책임 침범을 숨기지 않는다. 나머지 NATIVE-001/007 계약과 원래 ID의 기록은 보존한다.",
+    "applicability": "unclassified",
+    "rationale": "Requires production-path review; no inference from test names.",
+    "owner": "scripts/check-modules.mjs#moduleFindings",
+    "entrypoint": "scripts/check-modules.mjs#moduleFindings",
+    "callPath": [
+      "scripts/check-modules.mjs#moduleFindings"
+    ],
+    "negativeTests": [
+      "test/workspace-boundaries.test.mjs#workspace guard accepts declared public imports",
+      "test/workspace-boundaries.test.mjs#workspace guard includes type-only cycles",
+      "test/isolated-declarations.test.mjs#foreign declaration errors"
+    ],
+    "evidence": null,
+    "status": "unverified",
+    "verification": "NOT_RUN",
+    "invalidationReason": "authoritative owner, entrypoint, call path or negative-test locator changed"
   }
 ]

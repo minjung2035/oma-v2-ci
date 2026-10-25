@@ -1,4 +1,4 @@
-import { renameAt } from "@oma/native/posix-files";
+import { renameAt, statAt } from "@oma/native/posix-files";
 import { createEnginePackageDiscovery } from "@oma/engine/package-resources";
 import { PACKAGE_LOCAL_DIR } from "@oma/domain/package-policy";
 export { PACKAGE_LOCAL_DIR } from "@oma/domain/package-policy";
@@ -21,7 +21,7 @@ import { dirname, isAbsolute, join, relative, sep } from "node:path";
 import { closeSync, constants, fstatSync, lstatSync, openSync, realpathSync, renameSync } from "node:fs";
 import { lockFileDescriptor } from "@oma/native/linux";
 import { removeOwnedTree } from "@oma/storage/directory";
-import { entryAt, withinDirectory } from "@oma/native/files";
+import { withinDirectory } from "@oma/native/files";
 import { fsyncHeldDir } from "@oma/storage/durable-fs";
 import { StoreError, unobserved } from "@oma/domain/errors";
 import { PACKAGE_ENTRY_PREFIX, extensionEntryProblem } from "@oma/config/operations";
@@ -73,9 +73,9 @@ export function collectPackageGenerations(data: string, current: string, afterRe
       if (pinned.dev !== named.dev || pinned.ino !== named.ino) throw new StoreError("STORE_CORRUPT", "package generation inode changed during collection");
       const tombstone = collecting ? entry.name : `.collecting-${entry.name}`;
       if (!collecting) withinDirectory(root, (directory, name) => {
-        const now = lstatSync(entryAt(directory, name));
+        const now = statAt(directory, name);
         if (now.dev !== pinned.dev || now.ino !== pinned.ino ||
-            lstatSync(entryAt(directory, tombstone), { throwIfNoEntry: false }) !== undefined)
+            statAt(directory, tombstone, { throwIfNoEntry: false }) !== undefined)
           throw new StoreError("STORE_CORRUPT", "package collection names changed");
         // Record collection before deleting any member, including its lease
         // marker. A killed collector resumes this name even after partial removal.

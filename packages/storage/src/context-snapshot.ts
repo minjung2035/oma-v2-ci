@@ -3,7 +3,7 @@
  * source/commit-work and an existing revision are never removed or regenerated.
  * Context files use fixed 0644; mail's immutable-file 0444 policy is separate.
  */
-import { constants, closeSync, fchmodSync, fstatSync, lstatSync, readdirSync } from "node:fs";
+import { constants, closeSync, fchmodSync, fstatSync, lstatSync } from "node:fs";
 import { dirname, join } from "node:path";
 import type { ContextEntry } from "@oma/contracts";
 import { generateOperationId } from "@oma/native/identity";
@@ -15,9 +15,10 @@ import { contextRevisionPathAt } from "@oma/domain/paths";
 import { assertContextDirectory, readContextEntry } from "./context-files.js";
 import { ensureOwnedDurableDirectory, fsyncDir, fsyncTree, writeExclusiveFsyncedFile } from "./durable-fs.js";
 import { publishStagedDirectory, replaceDerivedSymlink } from "./staged-tree.js";
-import { entryAt, openBeneath, openDirectory } from "@oma/native/files";
+import { openBeneath, openDirectory } from "@oma/native/files";
 import { removeOwnedFile, removeOwnedTree } from "./directory.js";
 import { withCleanup } from "@oma/native/cleanup";
+import { directoryNames, statAt } from "@oma/native/posix-files";
 import { TreeLease, leasePathOf } from "./tree-lease.js";
 
 /** Complete permitted tree verification; no writes or silent byte repair.
@@ -31,9 +32,9 @@ export function verifyContextRevision(root: string | number, entries: readonly C
     if (fixedModes && (fstatSync(directory).mode & 0o777) !== 0o555) throw new StoreError("STORE_CORRUPT", "context revision directory mode differs");
     const expected = new Set(entries.map(entry => entry.path));
     const walk = (parent: number, relative = ""): void => {
-      for (const name of readdirSync(`/proc/self/fd/${parent}`)) {
+      for (const name of directoryNames(parent)) {
         const path = relative ? `${relative}/${name}` : name;
-        const stat = lstatSync(entryAt(parent, name));
+        const stat = statAt(parent, name);
         if (stat.isDirectory() && path === "decisions" && entries.some(entry => entry.path.startsWith("decisions/"))) {
           const child = openBeneath(parent, name, constants.O_RDONLY | constants.O_DIRECTORY);
           try {

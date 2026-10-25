@@ -2,14 +2,14 @@
  * Snapshot bytes are primary before these cache trees may be retired. No Git
  * is executed in a model-owned directory; links are data, never traversal. */
 import { createHash } from "node:crypto";
-import { closeSync, constants, fstatSync, lstatSync, readSync, readdirSync, readlinkSync, renameSync, type BigIntStats } from "node:fs";
+import { closeSync, constants, fstatSync, readSync, type BigIntStats } from "node:fs";
 import { basename, dirname, join } from "node:path";
 import { setImmediate } from "node:timers/promises";
 import { StoreError } from "@oma/domain/errors";
 import { decodeUtf8 } from "@oma/domain/utf8";
 import { cleanupAll, withAsyncCleanup, withCleanup } from "@oma/native/cleanup";
-import { assertNoExtendedAttributesAt } from "@oma/native/linux";
-import { entryAt, openBeneath, openDirectory, openRegularBeneath, withinDirectory } from "@oma/native/files";
+import { assertNoExtendedAttributesAt, directoryNames, readlinkBytesAt, renameAt, statAt } from "@oma/native/posix-files";
+import { openBeneath, openDirectory, openRegularBeneath, withinDirectory } from "@oma/native/files";
 import { fsyncHeldDir } from "./durable-fs.js";
 
 function same(before: BigIntStats, after: BigIntStats): boolean {
@@ -91,14 +91,14 @@ export async function digestCacheTrees(root: string, roots: readonly string[], s
   };
   const walk = async (parent: number, name: string, path: string): Promise<void> => {
     checkSignal(signal); await setImmediate();
-    const before = lstatSync(entryAt(parent, name), { bigint: true });
+    const before = statAt(parent, name, { bigint: true });
     if (before.dev !== device) throw new StoreError("UNSUPPORTED_PROFILE", "session storage refuses nested mounts; original workspace retained");
     if (Number(before.uid) !== owner || !groups.has(Number(before.gid)))
       throw new StoreError("UNSUPPORTED_PROFILE", "session ownership cannot be restored by this user; original workspace retained");
     assertNoExtendedAttributesAt(parent, name);
     if (before.isSymbolicLink()) {
-      const target = readlinkSync(entryAt(parent, name), { encoding: "buffer" });
-      if (!same(before, lstatSync(entryAt(parent, name), { bigint: true }))) throw new StoreError("REF_STATE_UNKNOWN", "session link changed");
+      const target = readlinkBytesAt(parent, name);
+      if (!same(before, statAt(parent, name, { bigint: true }))) throw new StoreError("REF_STATE_UNKNOWN", "session link changed");
       record(path, before, ["link", target.toString("base64")]); return;
     }
     if (!before.isFile() && !before.isDirectory())
@@ -108,7 +108,7 @@ export async function digestCacheTrees(root: string, roots: readonly string[], s
       if (!same(before, fstatSync(fd, { bigint: true }))) throw new StoreError("REF_STATE_UNKNOWN", "session entry changed");
       if (before.isDirectory()) {
         record(path, before, ["directory"]);
-        const names = readdirSync(`/proc/self/fd/${fd}`, { encoding: "buffer" }).map(decodeUtf8).sort();
+        const names = directoryNames(fd);
         for (const child of names) await walk(fd, child, `${path}/${child}`);
       } else {
         const identity = `${before.dev}:${before.ino}`, first = links.get(identity) ?? path;
@@ -149,7 +149,7 @@ export function moveCacheTree(root: string, from: string, to: string): void {
       withCleanup(() => {
         const sourceName = from.slice(sourceParent === "." ? 0 : sourceParent.length + 1);
         const targetName = to.slice(targetParent === "." ? 0 : targetParent.length + 1);
-        renameSync(entryAt(left, sourceName), entryAt(right, targetName));
+        renameAt(left, sourceName, right, targetName);
         fsyncHeldDir(left, join(root, sourceParent));
         if (right !== left) fsyncHeldDir(right, join(root, targetParent));
       }, () => { if (right !== held) closeSync(right); });

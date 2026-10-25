@@ -27,7 +27,7 @@ import {
   temporaryNameFor,
   type DurabilityObserver,
 } from "./durable-fs.js";
-import { entryAt, linkDescriptor, openDirectory, openRegularBeneath } from "@oma/native/files";
+import { linkDescriptor, openDirectory, openRegularBeneath } from "@oma/native/files";
 import type { PublishedIdentity } from "./preaccept-artifact.js";
 
 function checkedBytes(
