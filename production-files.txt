@@ -342,7 +342,6 @@ packages/native/src/peer-uid.ts
 packages/native/src/posix-files.ts
 packages/native/src/process-lock.ts
 packages/native/src/process-observation.ts
-packages/native/src/pty.ts
 packages/native/src/snapshot-reader.ts
 packages/platform-linux/package.json
 packages/platform-linux/src/resident-rootfs.ts

@@ -89,7 +89,7 @@
    },
    "BrokerDependencies": {
     "exported": true,
-    "sha256": "55b6f93a2d5398bf33f05973d7d5b5e569cd9f48c276ac38779b2338ce13789a"
+    "sha256": "43210bf1f509499aa1e0043cfeb712ef4ffbf8f4632ebdd8c31126ce040c5235"
    }
   },
   "packages/contracts/src/runtime.ts": {
@@ -115,7 +115,7 @@
    },
    "UnitObservation": {
     "exported": true,
-    "sha256": "adf5e9b72c97b2c746f2adf9966e1490268d47bf5185ff0f2a72e7bc2d2fc77b"
+    "sha256": "cca9e766f59fe8af7ccb56ce045f62caf3ccee0d9672d0c89e8b48dacbd548df"
    },
    "SandboxPlan": {
     "exported": true,
@@ -168,6 +168,14 @@
    "FencedEngine": {
     "exported": true,
     "sha256": "f872c74084e1b87a852976ee44c9c1aa4ebd599dd834f1b113ecbc0d21277996"
+   },
+   "ExecutionObservation": {
+    "exported": true,
+    "sha256": "b3487facd87b7ba9448bdb8fc2a7436e1425ebd1105b11881832a9197b21f93b"
+   },
+   "ExecutionScopePin": {
+    "exported": true,
+    "sha256": "2d0aaeebcf76522168f267ba5ae1e8c943364f5cb1b3e2da3189bf8188e37af9"
    }
   }
  }

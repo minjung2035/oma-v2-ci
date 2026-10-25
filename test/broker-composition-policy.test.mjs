@@ -1,3 +1,4 @@
+import * as nativeSupportMeaning from "#oma-test/app/runtime/native-support";
 import * as sessionHandoffMeaning from "@oma/protocol/session-handoff";
 import * as hostLossMeaning from "@oma/process/host-loss";
 import * as deploymentMeaning from "@oma/domain/deployment";
@@ -33,6 +34,7 @@ async function compose(environment, { lockHeld = true, claim = "taken", cgroup =
     const config = { society: "fixture", installation: { node: "node", libdir: "/lib", rootfs: "/rootfs", deploymentDigest: "a".repeat(64) },
         integration: { checks: [] }, limits: { receiptWaitSeconds: 1 }, agentProfiles: {}, modelProfiles: {} };
     const modules = {
+        "../runtime/native-support.js": nativeSupportMeaning,
 "@oma/protocol/session-handoff": sessionHandoffMeaning,
 "@oma/process/host-loss": hostLossMeaning,
 "@oma/domain/deployment": deploymentMeaning,

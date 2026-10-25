@@ -108,15 +108,15 @@ test("DR46 Linux: OS adapters use file APIs and named observations without borro
 
 test("DR46 Mac: native adapters cannot borrow SDK, application, ledger or Git workflow ownership", t => {
   const file = "packages/platform-mac/src/index.ts";
-  for (const name of ["@oma/config", "@oma/client", "@oma/storage", "@oma/review"])
+  for (const name of ["@oma/config", "@oma/client", "@oma/storage", "@oma/review", "@oma/git"])
     assert.match(inspect(t, {[file]: `import type { Value } from "${name}";`},
       {"platform-mac": {dependencies: {[name]: "0.1.0"}}}).join("\n"), /forbidden dependency/);
   for (const statement of ['import "@oma/git";', 'import type { Value } from "@oma/git";', 'type Value = import("@oma/git").Value;'])
-    assert.match(inspect(t, {[file]: statement}, {"platform-mac": {dependencies: {"@oma/git":"0.1.0"}}}).join("\n"), /Git host adapter API required/);
-  assert.deepEqual(inspect(t, {[file]:'import type { Value } from "@oma/git/project-preparation";',
-    "packages/git/src/project-preparation.ts":"export interface Value {}"},
-    {git:{exports:{".":{types:"./dist/index.d.ts",default:"./dist/index.js"},"./project-preparation":{types:"./dist/project-preparation.d.ts",default:"./dist/project-preparation.js"}}},
-    "platform-mac":{dependencies:{"@oma/git":"0.1.0"}}}), []);
+    assert.match(inspect(t, {[file]: statement}, {"platform-mac": {dependencies: {"@oma/git":"0.1.0"}}}).join("\n"), /forbidden dependency/);
+  assert.match(inspect(t, {[file]:'import type { Value } from "@oma/git/project-preparation";'},
+    {"platform-mac":{dependencies:{"@oma/git":"0.1.0"}}}).join("\n"), /forbidden dependency/);
+  assert.deepEqual(inspect(t, {[file]:'import type { Actor } from "@oma/contracts";'},
+    {"platform-mac":{dependencies:{"@oma/contracts":"0.1.0"}}}), []);
 });
 
 const privateAppMap = { "#oma-test/app/*": { types: "./apps/oma/dist/*.d.ts", default: "./apps/oma/dist/*.js" } };

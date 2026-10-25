@@ -105,28 +105,29 @@ test("AV-20261003-18: a failed context revision preparation releases its staging
     try { return (readlinkSync("/proc/self/fd/" + name)).includes(".prepare-") ? [Number(name)] : []; }
     catch { return []; }
   });
-  const original = fs.mkdirSync;
+  const original = fs.fsyncSync;
   let injected = 0;
   try {
-    (fs as { mkdirSync: typeof fs.mkdirSync }).mkdirSync = (...args: Parameters<typeof fs.mkdirSync>) => {
-      const leaf = String(args[0]).split("/").pop() ?? "";
-      if (leaf.startsWith(".prepare-")) {
+    // The owned directory now uses mkdirat. Fail its first actual flush
+    // after the staging lease was acquired, while the same owner guard is live.
+    fs.fsyncSync = fd => {
+      const path = readlinkSync(`/proc/self/fd/${fd}`);
+      if (path.split("/").pop()!.startsWith(".prepare-") && !path.endsWith(".lease") && injected === 0) {
         injected++;
-        if (injected === 1)
-          throw Object.assign(new Error("injected temporary mkdir failure after lease acquisition"), { code: "EMFILE" });
+        throw Object.assign(new Error("injected temporary flush failure after lease acquisition"), { code: "EMFILE" });
       }
-      return (original as (...a: Parameters<typeof fs.mkdirSync>) => ReturnType<typeof fs.mkdirSync>)(...args);
+      original(fd);
     };
     syncBuiltinESMExports();
     assert.throws(() => publishContextRevision(worldDir, candidate, entries, source), { code: "EMFILE" });
-    (fs as { mkdirSync: typeof fs.mkdirSync }).mkdirSync = original;
+    fs.fsyncSync = original;
     syncBuiltinESMExports();
     assert.equal(injected, 1, "the injected failure ran once, after the lease was taken");
     assert.deepEqual(leasedDescriptors(), [], "the lease descriptor was released, not stranded open");
     assert.equal(readdirSync(revisions).filter(name => name.startsWith(".prepare-") || name.endsWith(".lease")).length, 0,
       "the failed preparation's tree and lease are cleaned, not left active");
   } finally {
-    (fs as { mkdirSync: typeof fs.mkdirSync }).mkdirSync = original;
+    fs.fsyncSync = original;
     syncBuiltinESMExports();
     for (const fd of leasedDescriptors()) closeSync(fd);
   }
@@ -344,21 +345,25 @@ test("FJ-7: a cleanup failure while a context revision publish is already failin
     try { return (readlinkSync("/proc/self/fd/" + name)).includes(".prepare-") ? [Number(name)] : []; }
     catch { return []; }
   });
-  const originalMkdir = fs.mkdirSync;
-  const originalUnlink = fs.unlinkSync;
+  const originalFlush = fs.fsyncSync;
+  const originalOpen = fs.openSync;
+  let injected = false;
   try {
-    // The publish fails at the temporary's own mkdir (after the lease is
-    // taken); the lease's unlink during owned cleanup fails on top of that.
-    (fs as { mkdirSync: typeof fs.mkdirSync }).mkdirSync = (...args: Parameters<typeof fs.mkdirSync>) => {
-      if (String(args[0]).split("/").pop()!.startsWith(".prepare-"))
-        throw Object.assign(new Error("injected temporary mkdir failure"), { code: "EMFILE" });
-      return (originalMkdir as (...a: Parameters<typeof fs.mkdirSync>) => ReturnType<typeof fs.mkdirSync>)(...args);
+    fs.fsyncSync = fd => {
+      const path = readlinkSync(`/proc/self/fd/${fd}`);
+      if (!injected && path.split("/").pop()!.startsWith(".prepare-") && !path.endsWith(".lease")) {
+        injected = true;
+        throw Object.assign(new Error("injected temporary flush failure"), { code: "EMFILE" });
+      }
+      originalFlush(fd);
     };
-    (fs as { unlinkSync: typeof fs.unlinkSync }).unlinkSync = (path: fs.PathLike) => {
-      if (String(path).endsWith(".lease"))
+    fs.openSync = ((...args: Parameters<typeof fs.openSync>) => {
+      // Refuse opening the held parent for removal of the lease. Its name
+      // remains for recovery, while the lease's existing FD must still close.
+      if (String(args[0]) === "/" && (new Error().stack ?? "").includes("removeOwnedFile"))
         throw Object.assign(new Error("injected lease cleanup failure"), { code: "EIO" });
-      originalUnlink(path);
-    };
+      return originalOpen(...args);
+    }) as typeof fs.openSync;
     syncBuiltinESMExports();
     let failure: unknown = null;
     try { publishContextRevision(worldDir, candidate, entries, source); }
@@ -376,8 +381,8 @@ test("FJ-7: a cleanup failure while a context revision publish is already failin
     assert.equal(treeQuiescence(join(worldDir, "context", "revisions", stranded[0]!.slice(0, -".lease".length))).kind,
       "quiescent", "the stranded lease proves its writer is gone");
   } finally {
-    (fs as { mkdirSync: typeof fs.mkdirSync }).mkdirSync = originalMkdir;
-    (fs as { unlinkSync: typeof fs.unlinkSync }).unlinkSync = originalUnlink;
+    fs.fsyncSync = originalFlush;
+    fs.openSync = originalOpen;
     syncBuiltinESMExports();
     for (const fd of leasedDescriptors()) closeSync(fd);
   }

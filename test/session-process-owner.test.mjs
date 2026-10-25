@@ -30,13 +30,6 @@ function world() {
     require(name) { assert.ok(Object.hasOwn(deps, name), name); return deps[name]; } });
   return { ...module.exports, calls, child };
 }
-test('Guest terminal process: host-new request pipe is separate from screen and Society authority', () => {
-  const w = world(); w.spawnInTerminal('/fixture/node', [], '/fixture/cwd', {}, 73);
-  const [executable, argv, options] = w.calls[0];
-  assert.equal(executable, '/usr/bin/setsid'); assert.deepEqual(Array.from(argv), ['--ctty', '--', '/fixture/node']);
-  assert.deepEqual(Array.from(options.stdio), [73, 73, 'inherit', 'pipe']);
-  assert.equal(options.shell, false); assert.equal(options.detached, undefined);
-});
 test('Human session process: terminal, history lock and IPC have fixed separate descriptors', () => {
   const w = world(), argv = ['--fixture'], env = { HOME: '/fixture/home' };
   assert.equal(w.spawnSessionInteractive('/fixture/node', argv, '/fixture/cwd', env, 73), w.child);

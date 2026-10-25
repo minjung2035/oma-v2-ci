@@ -7,8 +7,7 @@
 //
 // The owned primitives (ensureOwnedDirectory, ensureOwnedDurableDirectory,
 // ensureOwnedUserDirectory, openOwnedDirectory*, listOwnedDirectory,
-// removeOwnedTree/File, repairOwnedEntryMode, ensureHostOwnedDirectory,
-// removeHostStaged, listHostStaged, lockedOwnedReplace) repair every
+// removeOwnedTree/File, repairOwnedEntryMode, lockedOwnedReplace) repair every
 // component from the caller's boundary down and refuse when repair or
 // observation stays uncertain. This rule keeps new call sites on them:
 //
@@ -126,7 +125,6 @@ export const OWNED_STATE_EXEMPTIONS = Object.freeze({
   "apps/oma/src/entry/personal-host.ts": "read-only birth/config metadata and the Human's actual cwd; the host owns no project permission repair and a failed probe refuses the launch",
   "packages/git/src/workspace.ts": "a metadata-only .git existence probe after owned staging preparation; the workspace's Git validation supplies the authoritative result, never a false absence on a failed open",
   "apps/oma/src/engine/settings-files.ts": "only Personal's trusted project scope ensures the Human's .pi directory; OMA's global scope uses lockedOwnedReplace and never rewrites project ancestor permissions",
-  "apps/oma/src/platform/guest/identity.ts": "image/boot attestation reads and the mounted instance record; a failed read refuses hello, never invents an identity or repairs a read-only image",
   "packages/platform-mac/src/record.ts": "read-only host-record decoding before a controller's ownership decision; a read failure refuses startup and never creates a replacement identity",
   "packages/storage/src/preaccept-collection.ts": "metadata probes after owned directory repair during lease-authorized collection; lstat needs no leaf read bits, and failures retain artifacts rather than authorizing collection",
   "apps/oma/src/runtime/assets.ts": "installation pin validation and a filesystem-type probe that may ascend into the Human's existing ancestors; unreadable assets refuse, never alter the pinned installation or user directories",
@@ -137,10 +135,7 @@ export const OWNED_STATE_EXEMPTIONS = Object.freeze({
   "apps/oma/src/application/settings.ts": "metadata-only configuration existence probes after source layout validation; an inaccessible existing source propagates an error instead of being treated as absent",
   "apps/oma/src/application/status-observation.ts": "best-effort read-only status view observation: a failed open is displayed as unavailable and never grants broker authority or permits mutation",
   "apps/oma/src/cli/effects/submit.ts": "a fresh mkdtemp under the OS temp directory -- the CLI caller's own scratch, not oma state",
-  "apps/oma/src/entry/guest-provision.ts": "the guest's own /proc/cmdline read and the chown of its data parts to the oma user -- deliberate ownership assignment, kernel paths are never repaired",
-  "apps/oma/src/entry/guest-session.ts": "the session holder's own listening socket in the oma user's runtime directory -- chmod of the name oma just made is the point",
   "apps/oma/src/application/society-transition.ts": "the principal-session listing under the state root whose failure already answers `said` -- it refuses to claim silence, and the runtime probe paths above it are the caller's own",
-  "apps/oma/src/entry/omahostd.ts": "the support directory's chmod -- the leaf's mode is set outright after the owned ensure -- and the state disk's O_EXCL create under it",
   "packages/tool-lsp/src/lsp-call-scope.ts": "a fresh mkdtemp under the OS temp directory -- the LSP child's own per-call scratch (HOME/XDG/TMP redirection), removed when the call ends; never an OMA-owned tail and never a user path (PI-001 keeps the extension off the storage imports)",
   "packages/tool-mcp/src/index.ts": "the MCP adapter's own state dir under the engine's agent dir -- ensure/chmod of the state root and scratch it just made, the oauth-file-key write, and the scratch/session rm -- engine-owned tails the adapter owns and rotates (PI-001 keeps the extension off the storage imports)",
   "packages/extension/src/mail-tools.ts": "a fresh mkdtemp under the model's own working directory -- the extension's own scratch (PI-001 keeps it off the storage imports)",
@@ -148,23 +143,8 @@ export const OWNED_STATE_EXEMPTIONS = Object.freeze({
   "packages/git/src/context-repository.ts": "the context repository's own probes beside its owned ensures -- lstat answers the work tree's shape and a failure refuses loudly",
   "packages/git/src/canonical-command.ts": "fresh mkdtemp directories under the OS temp directory -- the ls-tree and merge-tree output spool scratch, removed in the same call; never an OMA-owned tail",
   "packages/extension/src/index.ts": "the store root's realpath into the sandbox's read admissions -- a failure closes the admission (the store permits nothing), never opens it",
-  "apps/oma/src/platform/guest/archive.ts": "the archive scratch mkdtemp inside the request ledger the guest owns -- ensured owned by the ledger's constructor",
-  "apps/oma/src/platform/guest/egress.ts": "guesthost's own egress socket in the oma runtime directory -- chmod of the name oma just made is the point",
-  "apps/oma/src/platform/guest/host.ts": "the guest's societies listing whose failure propagates as the request's refusal -- never read as empty",
-  "packages/platform-linux/src/guest-system.ts": "the guest's own /proc, /sys and mounted device metadata; kernel paths are never repaired and raw observation errors propagate",
-  "apps/oma/src/platform/guest/receipt-wait.ts": "read-only current society configuration horizon; missing root means none, every other unobserved directory or config means unknown, which refuses freeze; no permission repair or state write",
-  "apps/oma/src/platform/guest/packages.ts": "the staged archive and project mirror probes inside the guest's oma-owned ledger -- existsSync's false refuses the replace, and a statSync failure refuses; never read as absent and applied anyway. The output spool is a fresh mkdtemp under the OS temp directory -- the call's own scratch, removed in the same call",
-  "apps/oma/src/platform/guest/project.ts": "the staged bundle and project mirror probes inside the guest's oma-owned ledger -- existsSync's false refuses the import, and a statSync failure refuses; never accepts a bundle that did not verify",
   "packages/native/src/pty.ts": "the pseudo-terminal slave under /dev/pts this process just made -- a kernel path, never repaired",
-  "apps/oma/src/platform/guest/server.ts": "the guest service's own listening socket in its systemd RuntimeDirectory -- chmod/chown of the name oma just made is the point",
-  "apps/oma/src/platform/guest/stream.ts": "the data directory's statfs probe -- a failure refuses the put, never reads as free space",
   "packages/platform-mac/src/archive-crypto.ts": "the archive's own O_EXCL output under the archives directory the service's owned ensure repaired",
-  "apps/oma/src/platform/host/guest-histories.ts": "the run token under the oma home read after the service's owned ensures, and the Human's own bookmarks -- resolved, never repaired",
-  "apps/oma/src/platform/host/host-api.ts": "omahostd's own Host API socket under its run directory -- chmod of the name oma just made is the point",
-  "apps/oma/src/platform/host/personal-seed.ts": "the run token under the oma home read after the service's owned ensures, and the Human's own bookmarks -- resolved, never repaired",
-  "apps/oma/src/platform/host/project.ts": "the transfer file sink under the run directory the service's owned ensure repaired",
-  "apps/oma/src/platform/host/service.ts": "the login token under the run directory and the socket chmod -- writes under directories the owned ensures already repaired",
-  "apps/oma/src/platform/host/snapshot.ts": "the APFS clone between snapshot names under the directory the service's owned ensure repaired",
   "apps/oma/src/runtime/egress-forwarder.ts": "the forwarder's own socket in the run's run-root directory -- chmod of the name oma just made is the point (DR18, D-10)",
   "apps/oma/src/runtime/connect-proxy.ts": "the delivery proxy's own socket beside the run's lease socket -- chmod of the name oma just made is the point (DR34)",
   "apps/oma/src/runtime/inference-relay.ts": "the relay's own socket in the run's run-root directory -- chmod of the name oma just made is the point",
@@ -175,7 +155,6 @@ export const OWNED_STATE_EXEMPTIONS = Object.freeze({
   "packages/platform-linux/src/units.ts": "the caller's own systemd user directory -- ~/.config/systemd/user is the user's, never repaired",
   "packages/process/src/async.ts": "the caller-declared spool paths -- absolute paths each caller names under its own scratch or ledger directory; the runner opens what it was told to write",
   "packages/process/src/run.ts": "the same caller-declared spool paths opened for the child's descriptors -- the runner opens what it was told to write",
-  "apps/oma/src/platform/guest/provision.ts": "a fresh mkdtemp under the OS temp directory -- the provisioning call's own spool scratch, removed when mkfs ends",
 });
 
 

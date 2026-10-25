@@ -39,15 +39,6 @@ export const fenceExemptSpawnOwners = Object.freeze({
     "bubblewrap confinement boundary; a listening lease inside a sandbox would be answerable from inside it",
   "packages/engine/src/pi-adapter.ts#deliver":
     "Resident engine started through the confinement boundary above",
-  // macos-platform §4.6: the guest's society session. Its program is the
-  // product's own `oma`, which takes the society lease itself (HostTenure) and
-  // hands it down to its engine and broker; the holder that starts it owns no
-  // society and has no lease to pass.
-  // macos-platform §2.1: the Mac's VM helper. It owns no society; the guest's
-  // societies are bounded by the VM, which runs inside the helper and ends
-  // with it, and the helper ends when omahostd's channel to it closes.
-  "packages/process/src/async.ts#spawnInTerminal":
-    "a society session's `oma`, which takes the society lease itself; its holder has none to hand down",
   // MODE-003/005: Personal is a separate Human session, not a Society role.
   // It holds a history-writer lock but no Society authority or writable state.
   "packages/process/src/async.ts#spawnSessionInteractive":

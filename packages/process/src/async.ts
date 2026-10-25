@@ -292,24 +292,6 @@ export function spawnSupervisedService(executable: string, argv: readonly string
  * 4 indistinguishable from a fence, and a child that read the environment
  * would pass the wrong descriptor down. */
 
-/** A program on a terminal (macos-platform §4.6): `terminal` is the slave
- * side of a pseudo-terminal this process opened, and becomes the child's
- * stdin and stdout. Its stderr is this process's (DR18, D-1): the screen is
- * shown on a Mac, and what the program writes there for diagnosis goes to
- * the guest's log with this process's own. The child leads a new session with it as its
- * controlling terminal -- util-linux `setsid --ctty`, which calls setsid(2)
- * and then TIOCSCTTY on its stdin -- so job control and window-size changes
- * reach it as they would under a terminal emulator. setsid execs the program,
- * so the child's pid is the program's. */
-export function spawnInTerminal(executable: string, argv: readonly string[], cwd: string,
-  env: Readonly<Record<string, string>>, terminal: number): ChildProcess {
-  validDirectSpawn(executable, argv, cwd, env);
-  if (!Number.isSafeInteger(terminal) || terminal < 0) throw new StoreError("UNSUPPORTED_PROFILE", "a terminal child needs its terminal descriptor");
-  return spawn("/usr/bin/setsid", ["--ctty", "--", executable, ...argv], { cwd, env: { ...env }, shell: false,
-    // MODE-006: a separate private request pipe, never terminal output or a
-    // Society fence. Only the holder observes it; the engine does not inherit it.
-    stdio: [terminal, terminal, "inherit", "pipe"] });
-}
 /** DR18 (D-9): a program the Human uses directly, on this process's own
  * terminal -- stdin, stdout and stderr inherited -- while this process waits.
  * It is started because this process holds the society lease, so it holds

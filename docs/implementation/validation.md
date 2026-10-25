@@ -17,6 +17,9 @@
 | `aea22ec0`: 실제 macOS 26/15 common-runtime | 25개 workspace build 성공. 양 OS 9/10 PASS·1 FAIL. 파일 생성 뒤 EACCES: Darwin arm64 openat 가변 인자 ABI 결함을 발견. 실패를 보존하고 수정 |
 | `762c1604`: 실제 macOS 26/15 common-runtime | build 성공, directory FFI 초기화가 없는 `readdir$INODE64` symbol을 요구해 실패. 수정 후 실제 OS 재실행 대기. Linux 성공으로 덮지 않음 |
 | `13d60492`: 실제 macOS 26/15·Ubuntu 공통 runtime | Mac 각각 20/20, Ubuntu 19/19 PASS. build 25/25. 별도 Darwin gate는 계속 OPEN/BLOCKED |
+| `0d471551`: 실제 macOS 26/15·Ubuntu 공통 runtime | Mac 각각 20/20, Ubuntu 19/19 PASS. 실제 SCM_RIGHTS 인계 뒤 peer PID는 connector 생존·종료 모두 holder를 가리켰다. PID 재사용·동시 메시지 인증 증명은 아니며 G-AUTH는 OPEN |
+| VM 제거 후 첫 고정 입력 전체 local | FAIL. serial 9개 중 PASS4·SKIP5, parallel 3644개 중 PASS3527·FAIL52·SKIP65. exit1, signal null, 입력 변경0. 전체 통과로 합산하지 않음 |
+| 위 실패 수리 후 부분 회귀 | strict typecheck·build·정적 gate PASS. 실제 bwrap 실행 16/16, Restic 복구/fault 12/12, 모듈/소유권 62/62, mjs 회귀 42/42, 구조/결박 8/8 PASS. 전체 재실행은 아직 미완료 |
 | 실제 macOS 26/15 Keychain | 독립 Swift primitive SDK typecheck PASS. signed Keychain·release 실행·TCC는 미실행 |
 | 현재 source의 전체 local·독립 설치·최종 architecture/trace qualification | 미완료. 일부 이전 실행 PASS를 합산하지 않음 |
 
@@ -25,10 +28,17 @@
 [40200893255](https://github.com/minjung2035/oma-v2/actions/runs/40200893255),
 [40201140402](https://github.com/minjung2035/oma-v2/actions/runs/40201140402),
 [40201962210](https://github.com/minjung2035/oma-v2/actions/runs/40201962210),
-[40202613809](https://github.com/minjung2035/oma-v2/actions/runs/40202613809).
+[40202613809](https://github.com/minjung2035/oma-v2/actions/runs/40202613809),
+[40202936879](https://github.com/minjung2035/oma-v2/actions/runs/40202936879).
 모든 실패 artifact를 보존한다. 원시 local 로그는
 `/home/dev/oma-audit-artifacts/native-2026-10-25/`에 있다. 새/변경 source는 NOT_REVIEWED이며
 고정 architecture·authored review·과거 검토 기록은 변경하지 않는다.
+
+첫 전체 실행의 입력은 `bcb1b03b01d3605ef0155d0d14d201d35eea9747797109ccd42b8932f67359f2`
+(15564개)이며 실행 전후 동일하다. 원시 결과는 위 artifact 디렉터리의
+`local-frozen.log`, `local-frozen-before.json`, `local-frozen-after.json`,
+`local-frozen-status.json`이 소유한다. 실제 bwrap을 private mount로 배치한 부분 시험은
+실제 service/cgroup 또는 manager 없는 제품 실행의 증거가 아니다.
 
 남은 구현은 [전환 기록](native-transition.md)을 따른다. 직접 실행 scope·auth·owned 파일
 pin/reopen·quarantine/checker·설치와 P7 최종 대조가 남아 있으며 full support 완료가 아니다.
@@ -100,7 +110,7 @@ DR48은 ACL/xattr·special file·nested mount·읽을 수 없는 파일·복원�
 
 아래 값은 **구조 검사의 현재 입력 identity**다. digest 생성은 runtime PASS를 만들지 않는다.
 
-verification input digest `bcb1b03b01d3605ef0155d0d14d201d35eea9747797109ccd42b8932f67359f2` (15564 files).
+verification input digest `7c71573c808ff941dd9849690bf895ccb8e8fe0907ad9616a9c73250dc559d4c` (15556 files).
 
 현재 source 목록은 [production-files.txt](../../production-files.txt), per-file SHA-256은 [production-loc-hashes.json](../../production-loc-hashes.json)이 소유한다. `npm run check:inventory`는 cloc 없이 source bytes를 확인한다. `npm run evidence:refresh`의 구조 재생성과 실제 runtime 실행은 별도다.
 

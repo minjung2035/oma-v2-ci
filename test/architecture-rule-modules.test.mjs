@@ -225,12 +225,12 @@ export function runCliProcess(run: CliRun) {
   return spawn(run.node, run.args, { /* society fence is absent */ stdio: [0, 1, 2] });
 }`,
   "packages/process/src/async.ts": `import { spawn } from "node:child_process";
-export function spawnInTerminal(program: string) {
+export function spawnSessionInteractive(program: string) {
   return spawn(program, [], { /* private handoff, not a society fence */ stdio: [0, 1, 2, "pipe"] });
 }`,
 }, root => {
   assert.equal(fenceFindings(root, "fence-propagation").length, 1);
-  assert.equal(fenceFindings(root, "fence-exemption-stale").some(value => value.reason.includes("spawnInTerminal passes")), false);
+  assert.equal(fenceFindings(root, "fence-exemption-stale").some(value => value.reason.includes("spawnSessionInteractive passes")), false);
 }));
 
 test("architecture fence rule rejects a written exemption for a spawn that is not there", () => withFixture({

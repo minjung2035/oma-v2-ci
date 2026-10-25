@@ -331,7 +331,6 @@
   "packages/native/src/posix-files.ts",
   "packages/native/src/process-lock.ts",
   "packages/native/src/process-observation.ts",
-  "packages/native/src/pty.ts",
   "packages/native/src/snapshot-reader.ts",
   "packages/platform-linux/src/resident-rootfs.ts",
   "packages/platform-linux/src/sandbox-seccomp.ts",
@@ -598,7 +597,6 @@
      "packages/native/src/posix-files.ts",
      "packages/native/src/process-lock.ts",
      "packages/native/src/process-observation.ts",
-     "packages/native/src/pty.ts",
      "packages/native/src/snapshot-reader.ts",
      "packages/process/src/async.ts",
      "packages/process/src/deadline.ts",
@@ -663,7 +661,7 @@
    "K0-values -> K0-values": 34,
    "K1-codecs -> K0-values": 64,
    "K1-codecs -> K1-codecs": 24,
-   "K2-mechanisms -> K0-values": 101,
+   "K2-mechanisms -> K0-values": 100,
    "K2-mechanisms -> K1-codecs": 10,
    "K2-mechanisms -> K2-mechanisms": 115,
    "K3-ledger -> K0-values": 22,
@@ -1122,11 +1120,6 @@
    },
    {
     "from": "packages/native/src/process-lock.ts",
-    "to": "packages/domain/src/errors.ts",
-    "kind": "runtime"
-   },
-   {
-    "from": "packages/native/src/pty.ts",
     "to": "packages/domain/src/errors.ts",
     "kind": "runtime"
    },
@@ -1806,6 +1799,13 @@
    "classificationsAreApproval": false,
    "edges": [
     {
+     "from": "apps/oma/src/application/local-packages.ts",
+     "to": "apps/oma/src/ports/package-files.ts",
+     "classification": "internal-port-contract",
+     "kernelUpward": false,
+     "coarseUpward": false
+    },
+    {
      "from": "apps/oma/src/diagnostics/integrity.ts",
      "to": "packages/git/src/read-port.ts",
      "classification": "implementation-knowledge-review",
@@ -2036,7 +2036,7 @@
     "packages/domain/src/resident-paths.ts",
     "packages/storage/src/store.ts"
    ],
-   "files": 161
+   "files": 160
   },
   {
    "index": 2,
@@ -2112,11 +2112,11 @@
    "files": 83
   }
  ],
- "files": 473,
- "runtimeEdges": 1660,
- "typeOnlyEdges": 744,
+ "files": 472,
+ "runtimeEdges": 1659,
+ "typeOnlyEdges": 745,
  "runtimeEdgeMatrix": {
-  "L1-kernel -> L1-kernel": 393,
+  "L1-kernel -> L1-kernel": 392,
   "L2-facts -> L1-kernel": 41,
   "L2-facts -> L2-facts": 11,
   "L3-workflow -> L1-kernel": 242,
@@ -2140,7 +2140,7 @@
  "runtimeCycles": [],
  "unionCycles": [],
  "fanIn": {
-  "packages/domain/src/errors.ts": 207,
+  "packages/domain/src/errors.ts": 206,
   "packages/domain/src/identifiers.ts": 82,
   "packages/storage/src/directory.ts": 35,
   "packages/native/src/files.ts": 34,
@@ -2178,13 +2178,13 @@
   "@earendil-works/pi-coding-agent": 47,
   "@earendil-works/pi-coding-agent/dist/utils/tools-manager.js": 1,
   "@earendil-works/pi-tui": 11,
-  "koffi": 7,
+  "koffi": 6,
   "node:async_hooks": 4,
   "node:buffer": 1,
   "node:child_process": 5,
   "node:crypto": 39,
   "node:dns": 1,
-  "node:fs": 106,
+  "node:fs": 105,
   "node:fs/promises": 2,
   "node:http": 2,
   "node:https": 1,
@@ -2200,7 +2200,7 @@
   "node:string_decoder": 1,
   "node:timers/promises": 4,
   "node:url": 12,
-  "node:util": 5,
+  "node:util": 4,
   "node:zlib": 1,
   "nodemailer": 1,
   "nodemailer/lib/mime-funcs": 1,

@@ -11,7 +11,7 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const modules: readonly [string, string][] = [
-  ["runtime/broker-supervisor.js", new URL(import.meta.resolve("#oma-test/app/runtime/broker-supervisor")).href],
+  ["process/restart-policy.js", import.meta.resolve("@oma/process/restart-policy")],
   ["client/transport.js", import.meta.resolve("@oma/client/transport")],
   ["protocol/alarm.js", import.meta.resolve("@oma/protocol/alarm")],
   ["runtime/principal-delivery.js", new URL(import.meta.resolve("#oma-test/app/runtime/principal-delivery")).href],

@@ -127,7 +127,6 @@ export const KERNEL_ZONES = Object.freeze([
       "packages/native/src/cgroup.ts",
       "packages/native/src/process-lock.ts",
       "packages/native/src/linux.ts",
-      "packages/native/src/pty.ts",
       "packages/native/src/peer-uid.ts",
       "packages/process/src/async.ts",
       "packages/native/src/cleanup.ts",

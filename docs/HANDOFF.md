@@ -20,6 +20,11 @@ Linux/macOS 공통 native 실행을 실제 구현·검증하는 것이다. 이�
   후손 생존, mode-000 event pin EACCES(13)을 실제 CI에서 확인했다. static 지원 거절과
   일부 primitive 성공을 gate 통과로 처리하지 않는다.
 - 실제 CI `40202613809`: Mac 26/15 common-runtime 각각 20/20, Ubuntu 19/19. 별도 gate job은 BLOCKED다.
+- `0d471551`의 CI `40202936879`에서도 위 공통 결과를 재현했다. 실제 SCM_RIGHTS 인계 뒤
+  connector 생존·종료 모두 kernel peer PID는 holder를 가리켰으나 G-AUTH 전체 증명은 아니다.
+- 첫 전체 local은 FAIL52·SKIP70, 입력 변경0으로 끝났고 원시 실패를 보존했다. 유지되는
+  회귀의 native fault/모듈 연결과 실제 bwrap 환경을 수리했다. 부분 시험 성공을 전체 PASS로
+  표시하지 않으며 새 입력을 고정한 전체 재실행이 필요하다.
 - 현재 Mac 제품 진입은 효과 전에 차단한다. Linux의 Resident wake/log·직접 실행·systemd/journald
   제거, sandbox scope proof, candidate/quarantine 연결, Darwin 파일 pin/auth, OS별 설치와
   최종 owner/규범/회귀 대조가 남았다. native 지원 완료가 아니다.

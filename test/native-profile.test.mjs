@@ -14,12 +14,12 @@ function fixture(t) {
     env: { ...process.env, HOME: root, XDG_DATA_HOME: join(root, "data"), XDG_RUNTIME_DIR: join(root, "run") },
     encoding: "utf8", timeout: 15000 }) };
 }
-test(`native ${process.platform}: public help needs no VM, manager, configuration or state creation`, t => {
+test("native entry: public help needs no VM, manager, configuration or state creation", t => {
   const f = fixture(t), result = f.run(["--help"]);
   assert.equal(result.status, 0, result.stderr); assert.match(result.stderr, /usage: oma/);
   assert.deepEqual(readdirSync(f.root), ["project"]);
 });
-test(`native ${process.platform}: retired VM commands refuse before any filesystem effect`, t => {
+test("native entry: retired VM commands refuse before any filesystem effect", t => {
   const f = fixture(t);
   for (const argv of [["attach", "demo"], ["open", "demo", "--project", "old"], ["bind", "demo"], ["stop"], ["status"], ["list"]]) {
     const result = f.run(argv);

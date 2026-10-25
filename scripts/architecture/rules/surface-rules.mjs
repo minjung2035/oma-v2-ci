@@ -636,12 +636,10 @@ const TERMINATION_SIGNALS = Object.freeze(["SIGHUP", "SIGINT", "SIGQUIT", "SIGTE
 const HOST_LOSS_OWNER = "packages/domain/src/host-signals.ts";
 const LISTENER_METHODS = new Set(["on", "once", "addListener", "prependListener", "prependOnceListener"]);
 /** The owners with a drain, not the birth-only router: the broker, a
- * Resident's runner, Society host, Personal child holder, pre-session chooser,
- * Mac service and attach client, guest session holder and guestctl. */
+ * Resident's runner, Society host, Personal child holder and pre-session chooser. */
 const DRAINING_PROCESSES = Object.freeze([
-  "apps/oma/src/entry/broker.ts", "apps/oma/src/entry/runner.ts", "apps/oma/src/entry/oma-society.ts", "apps/oma/src/entry/omahostd.ts",
+  "apps/oma/src/entry/broker.ts", "apps/oma/src/entry/runner.ts", "apps/oma/src/entry/oma-society.ts",
   "apps/oma/src/runtime/personal-session.ts", "packages/tui/src/session-mode.ts",
-  "apps/oma/src/entry/guest-session.ts", "apps/oma/src/entry/guestctl.ts", "apps/oma/src/platform/host/attach-client.ts",
 ]);
 function hostLossSignalRules(root, findings) {
   for (const file of authoredFiles(root)) {

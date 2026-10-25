@@ -1,3 +1,4 @@
+import * as posixFiles from "@oma/native/posix-files";
 /** Actual publication owner and real local FDs, with controlled I/O failures. */
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -28,6 +29,7 @@ for (const effectFails of [false, true]) for (const failures of [[], ['roles'], 
     const held = new Map(), attempted = [], closeErrors = new Map(failures.map(name => [name, Object.assign(new Error(`close ${name}`), { code: 'EIO' })]));
     const primary = new StoreError('STORE_CORRUPT', 'original publication failure');
     const deps = {
+      '@oma/native/posix-files': posixFiles,
       'node:fs': { ...fs, closeSync(fd) {
         const name = held.get(fd); attempted.push(name); fs.closeSync(fd);
         if (closeErrors.has(name)) throw closeErrors.get(name);

@@ -237,7 +237,8 @@ test("R38: the verification closure includes every class of local gate input", (
     "package.json", "package-lock.json", "tsconfig.json", "tsconfig.build.json", "packages/extension/tsconfig.json",
     "production-manifest.json", "production-files.txt",
     "production-loc-hashes.json", ".github/workflows/architecture-verification.yml",
-    "packages/platform-mac/src/vmhelper/Sources/oma-vmhelper/main.swift", "packages/platform-linux/src/guest/network/80-oma.network", ".gitignore",
+    "packages/platform-mac/src/keychain/main.swift", "packages/platform-mac/src/keychain/oma-keychain.entitlements",
+    ".github/workflows/native-runtime.yml", ".gitignore",
   ]) assert.ok(files.includes(required), required);
   assert.equal(files.includes("production-loc.json"), false);
   assert.equal(files.includes("production-measurement-hashes.json"), false);

@@ -151,23 +151,26 @@ test("corrupted backup data never replaces a partial cold cache", async () => {
 });
 
 test("failure after cold commit and partial reclamation recovers the exact checkpoint", async () => {
-  const f = fixture(), original = fs.rmdirSync;
+  const f = fixture(), original = fs.fsyncSync;
   try {
     const a = f.society("first"), before = await digestCacheTrees(a.stateRoot, a.roots);
     let injected = false;
-    fs.rmdirSync = function(path, ...rest) {
-      if (String(path).endsWith("/repos") && !injected) { injected = true; throw Object.assign(Error("injected reclaim failure"), { code: "EIO" }); }
-      return original.call(this, path, ...rest);
+    fs.fsyncSync = fd => {
+      const path = fs.readlinkSync(`/proc/self/fd/${fd}`);
+      if (path === join(a.stateRoot, "repos") && !injected && readdirSync(path).length === 0) {
+        injected = true; throw Object.assign(Error("injected reclaim failure"), { code: "EIO" });
+      }
+      original(fd);
     };
     syncBuiltinESMExports();
     await assert.rejects(a.storage.archive(a.residents), /injected reclaim failure/);
     assert.equal(injected, true); assert.ok(selection(a).checkpoint);
     assert.deepEqual(readdirSync(join(a.stateRoot, "repos")), []);
-    fs.rmdirSync = original; syncBuiltinESMExports();
+    fs.fsyncSync = original; syncBuiltinESMExports();
     await a.storage.restore();
     assert.equal((await digestCacheTrees(a.stateRoot, a.roots)).digest, before.digest);
     assert.equal(selection(a).checkpoint, null);
-  } finally { fs.rmdirSync = original; syncBuiltinESMExports(); f.close(); }
+  } finally { fs.fsyncSync = original; syncBuiltinESMExports(); f.close(); }
 });
 
 test("interrupted publication keeps cold selection and recovers without replaying partial cache", async () => {

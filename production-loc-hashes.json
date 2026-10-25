@@ -1,6 +1,6 @@
 {
   "kind": "oma-production-source-digests-v1",
-  "manifest": "cba950627cf18abcf90ebefadd5be8d0a1d946a530a7787bb72a9d0d4c1b0830",
+  "manifest": "e7256d96afc49108993e86d4fe9e853b56955c73ae72ebb86378caa02f36e4bd",
   "files": [
     {
       "path": "apps/oma/package.json",
@@ -16,7 +16,7 @@
     },
     {
       "path": "apps/oma/src/application/local-packages.ts",
-      "sha256": "575df1fb18a726db13e1fbe9d87dbd4f8903f45c08969a07a1a4d82c10d5fdb8"
+      "sha256": "695bb366666e040809b2f6a7b2dc46b356086b7e3130f4649660256444b17993"
     },
     {
       "path": "apps/oma/src/application/mail.ts",
@@ -248,7 +248,7 @@
     },
     {
       "path": "apps/oma/src/entry/oma-society.ts",
-      "sha256": "8039268818b4b3caef1b2988d668e434180efc8364c8f93f7af9b5fd17f25852"
+      "sha256": "7599d669a4cd336e10f9182a86f75f94cd97718d8696e92348d5cd1d58a1d01a"
     },
     {
       "path": "apps/oma/src/entry/oma.ts",
@@ -1336,7 +1336,7 @@
     },
     {
       "path": "packages/native/package.json",
-      "sha256": "999ee7dc5411fbdb584cc8c8362b3fa66761531566819bc4cf67705e80e51091"
+      "sha256": "aa9a2be76ee7e519a9881a0c5bb8815ae38dd373f3cb9e5669f9331373a6ad0b"
     },
     {
       "path": "packages/native/src/cgroup.ts",
@@ -1377,10 +1377,6 @@
     {
       "path": "packages/native/src/process-observation.ts",
       "sha256": "0f690d888f2daa5a69502f34914b9a81c66543e1860acc538335fce5a84ce979"
-    },
-    {
-      "path": "packages/native/src/pty.ts",
-      "sha256": "15fe248a90178978aa23f2acda87e6049ba9b6c784ae3d4ec9f04d7dd71fd30e"
     },
     {
       "path": "packages/native/src/snapshot-reader.ts",
@@ -1464,7 +1460,7 @@
     },
     {
       "path": "packages/process/src/async.ts",
-      "sha256": "5e3cfaead644aedb8d8486106a58aec4b0903054ad90661624f4afc9893d3847"
+      "sha256": "cb3e7d908ef945e59bf17b47269da681a713e393da3a9397ee83d7179ac43ffb"
     },
     {
       "path": "packages/process/src/command.ts",

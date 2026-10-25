@@ -1,3 +1,4 @@
+import { packageDirectories } from "#oma-test/app/platform/package-files";
 import { PACKAGE_INDEX_KIND, encodePackageIndex } from "#oma-test/app/runtime/packages/index";
 import { residentEngineEffects } from "#oma-test/app/engine/resident-effects";
 import { engineLoginDirectory } from "#oma-test/app/engine/start-effects";
@@ -662,31 +663,17 @@ test("DR25/C20: the index repairs `local/` before the engine lists it -- and ref
     writeFileSync(join(store, "local", "broken", "package.json"), JSON.stringify({ name: "broken", pi: { extensions: ["./e.ts"] } }));
     writeFileSync(join(store, "local", "broken", "e.ts"), "export default function () {}\n");
     writeFileSync(join(store, "settings.json"), JSON.stringify({ packages: ["local/wedge", "local/broken"] }));
-    const named = (path: fs.PathLike): string => {
-      const given = String(path);
-      if (!given.startsWith("/proc/self/fd/")) return given;
-      try { return fs.readlinkSync(given); } catch { return given; }
-    };
-    const original = fs.readdirSync;
-    t.mock.method(fs, "readdirSync", ((path: fs.PathLike, ...rest: unknown[]) => {
-      if (named(path) === broken) throw Object.assign(new Error("forced unreadable"), { code: "EACCES" });
-      return (original as (...args: unknown[]) => unknown[])(path, ...rest);
-    }) as typeof fs.readdirSync);
-    syncBuiltinESMExports();
-    try { await assert.rejects(writePackageIndex(store), { code: "BROKER_UNAVAILABLE" }); }
-    finally { t.mock.restoreAll(); syncBuiltinESMExports(); }
+    await assert.rejects(writePackageIndex(store, { ...packageDirectories,
+      list: path => path === broken ? null : packageDirectories.list(path),
+    }), { code: "BROKER_UNAVAILABLE" });
     assert.equal(readFileSync(join(store, PACKAGE_INDEX), "utf8"), previous,
       "the degraded index was refused: the file keeps its last truth");
     // A `local`-root source names the stage whole: `local` itself unlistable
     // is the same refusal.
     writeFileSync(join(store, "settings.json"), JSON.stringify({ packages: ["local"] }));
-    t.mock.method(fs, "readdirSync", ((path: fs.PathLike, ...rest: unknown[]) => {
-      if (named(path) === join(realpathSync(store), "local")) throw Object.assign(new Error("forced unreadable"), { code: "EACCES" });
-      return (original as (...args: unknown[]) => unknown[])(path, ...rest);
-    }) as typeof fs.readdirSync);
-    syncBuiltinESMExports();
-    try { await assert.rejects(writePackageIndex(store), { code: "BROKER_UNAVAILABLE" }); }
-    finally { t.mock.restoreAll(); syncBuiltinESMExports(); }
+    await assert.rejects(writePackageIndex(store, { ...packageDirectories,
+      list: path => path === join(realpathSync(store), "local") ? null : packageDirectories.list(path),
+    }), { code: "BROKER_UNAVAILABLE" });
     assert.equal(readFileSync(join(store, PACKAGE_INDEX), "utf8"), previous);
     // Unmocked and readable, the same write succeeds again.
     writeFileSync(join(store, "settings.json"), JSON.stringify({ packages: ["local/wedge", "local/broken"] }));
@@ -1013,30 +1000,16 @@ test("DR25/C20: an entry the sweep cannot read or a name that vanished is skippe
     const root = realpathSync(store);
     const broken = join(root, "local", "broken");
     const phantoms = new Map([[root, ".staging-local-phantom"], [join(root, "local", "foo"), "ghost-child"]]);
-    const named = (path: fs.PathLike): string => {
-      const given = String(path);
-      if (!given.startsWith("/proc/self/fd/")) return given;
-      try { return fs.readlinkSync(given); } catch { return given; }
-    };
-    const phantomDirent = (name: string, parentPath: string): fs.Dirent => ({ name, parentPath, path: parentPath,
-      isDirectory: () => false, isFile: () => true, isSymbolicLink: () => false, isBlockDevice: () => false,
-      isCharacterDevice: () => false, isFIFO: () => false, isSocket: () => false } as fs.Dirent);
-    const original = fs.readdirSync;
     const injected: string[] = [];
-    t.mock.method(fs, "readdirSync", ((path: fs.PathLike, ...rest: unknown[]) => {
-      const dir = named(path);
-      if (dir === broken)
-        throw Object.assign(new Error("forced unreadable"), { code: "EACCES" });
-      const listed = (original as (...args: unknown[]) => unknown[])(path, ...rest);
+    pruneLocalStage(store, { list: dir => {
+      if (dir === broken) return null;
+      const listed = packageDirectories.list(dir);
+      if (listed === null) return null;
       const phantom = phantoms.get(dir);
       if (phantom === undefined) return listed;
       injected.push(dir);
-      const options = rest[0] as { withFileTypes?: boolean } | undefined;
-      return [...listed, options?.withFileTypes ? phantomDirent(phantom, dir) : phantom];
-    }) as typeof fs.readdirSync);
-    syncBuiltinESMExports();
-    try { pruneLocalStage(store); }
-    finally { t.mock.restoreAll(); syncBuiltinESMExports(); }
+      return [...listed, { name: phantom, isDirectory: () => false, isFile: () => true, isSymbolicLink: () => false }];
+    } });
     assert.deepEqual([...new Set(injected)], [root, join(root, "local", "foo")],
       "the vanished names were really reported by their listings");
     assert.equal(existsSync(join(store, "local", "broken", "sub", "e.ts")), true, "an unlistable entry is kept whole");
@@ -1199,19 +1172,9 @@ test("DR25/C20: a source spelled absolutely or denormalized still names its stag
     // last truth rather than committing an empty one.
     const previous = readFileSync(join(store, PACKAGE_INDEX), "utf8");
     const stagePath = join(realpathSync(store), "local");
-    const named = (given: fs.PathLike): string => {
-      const words = String(given);
-      if (!words.startsWith("/proc/self/fd/")) return words;
-      try { return fs.readlinkSync(words); } catch { return words; }
-    };
-    const listing = fs.readdirSync;
-    t.mock.method(fs, "readdirSync", ((given: fs.PathLike, ...rest: unknown[]) => {
-      if (named(given) === stagePath) throw Object.assign(new Error("forced"), { code: "EACCES" });
-      return (listing as (...args: unknown[]) => unknown)(given, ...rest);
-    }) as typeof fs.readdirSync);
-    syncBuiltinESMExports();
-    try { await assert.rejects(writePackageIndex(store), { code: "BROKER_UNAVAILABLE" }); }
-    finally { t.mock.restoreAll(); syncBuiltinESMExports(); }
+    await assert.rejects(writePackageIndex(store, { ...packageDirectories,
+      list: path => path === stagePath ? null : packageDirectories.list(path),
+    }), { code: "BROKER_UNAVAILABLE" });
     assert.equal(readFileSync(join(store, PACKAGE_INDEX), "utf8"), previous,
       "an unlistable stage under a whole-stage spelling refuses the write");
   } finally {

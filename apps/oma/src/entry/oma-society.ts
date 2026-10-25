@@ -84,7 +84,7 @@ async function piPackages(dataRoot: string, project: string, decision: Extract<P
       env: process.env, packages: { store, args: run.args } });
     if (code === 0 && decision.command !== "list" && !args.includes("--help") && !args.includes("-h")) {
       const after = await writePackageIndex(store, packageDirectories);
-      pruneLocalStage(store);
+      pruneLocalStage(store, packageDirectories);
       const { ok, said } = applyPackageChange({ dataRoot, project, libdir, before, after, activate: packageActivation(run) });
       reconcilePersonalSettings({ dataRoot, libdir, packages: store });
       if (said.length > 0) humanStream().write(`${said.join("\n")}\n`);

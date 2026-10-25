@@ -81,6 +81,19 @@ macOS 26/15 arm64에서 common-runtime 각각 20/20, Ubuntu에서 19/19를 통�
 이 CI로 openat 가변 인자·64-bit dirent ABI 결함을 수정·검증했고 SDK layout을 assert했다.
 archive verifier 성공은 실제 macOS Restic round trip 또는 G-FILES 전체의 증거가 아니다.
 
-G-AUTH의 다음 실제 probe는 connector와 형제 process인 holder에 SCM_RIGHTS로 socket을
-전달하고 실제 holder의 메시지 전후 kernel peer PID를 관측한다. connector 생존·종료를
-따로 기록하며 이 probe만으로 PID 재사용·권한 전체 gate를 닫지 않는다.
+`0d471551`의 [CI 40202936879](https://github.com/minjung2035/oma-v2/actions/runs/40202936879)는
+connector와 형제 process인 holder에 SCM_RIGHTS로 socket을 전달했다. 실제 holder 메시지 뒤
+peer PID는 connector 생존·종료 양쪽에서 holder를 가리켰다. common-runtime 결과는 이전과
+같고 별도 gate는 BLOCKED다. PID 재사용·동시 인계/버퍼 메시지까지 검증하지 않았으므로
+G-AUTH를 닫지 않는다.
+
+### 전체 회귀의 첫 실패와 수리
+
+입력을 고정한 첫 전체 local은 52개 실패·70개 skip으로 끝났다. 원시 로그와 입력은
+validation에 보존했다. VM-only 시험·PTY·이미지 서명 도구는 실행 대상에서 제거하고
+원문을 archive에 보존했다. 유지되는 시험은 실제 native syscall에 fault를 주입하고,
+package 목록의 관측 실패는 기존 filesystem port로 검증한다. metadata 손상 수리·원본
+보존·primary/cleanup 오류 보존 oracle을 유지한다. 모듈 허용 경계는 확장하지 않았다.
+
+Linux PID namespace의 별도 물리 probe는 setup 실패로 끝났으며 scope proof로 사용하지
+않는다. runner/namespace-init/launcher 종료와 재시작 후 fence의 실제 연결은 미완료다.

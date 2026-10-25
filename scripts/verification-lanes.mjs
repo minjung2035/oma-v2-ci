@@ -586,7 +586,7 @@ export const lanes = Object.freeze({
     sourceFiles: ["test/native-primitives.test.mjs", "test/native-profile.test.mjs", "test/restic-tar.test.mjs",
       "packages/platform-linux/test/sandbox-seccomp.test.mjs"],
     requiredNames: ["directory effects remain on the held inode", "the real kernel process substrate",
-      "restart breaker counts only", "public help needs no VM", "retired VM commands refuse",
+      "restart breaker counts only", "native entry: public help needs no VM", "native entry: retired VM commands refuse",
       "dump verification consumes arbitrary chunk boundaries", "dump truncation, duplicate entries"],
     environment: "git-fs",
     timeoutSeconds: 900,

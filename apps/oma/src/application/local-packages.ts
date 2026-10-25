@@ -1,3 +1,4 @@
+import type { PackageDirectories } from "../ports/package-files.js";
 /** DR25/C20: `oma pi install` of a path on this machine.
  *
  * A local package is never used where it lies -- a Resident's sandbox could
@@ -353,7 +354,7 @@ function archiveName(source: string): string {
 /** Staged copies under `local/` -- and staging areas an interrupted install
  * left -- that no configured source still names are dead content. Runs after
  * each `oma pi` change: a removed local package's copy goes with its entry. */
-export function pruneLocalStage(store: string): void {
+export function pruneLocalStage(store: string, directories: Pick<PackageDirectories, "list"> = { list: listOwnedDirectory }): void {
   /** Dead content that cannot go yet is left for the next change's sweep: a
    * single bad entry -- one that vanished or changed type as the sweep
    * reached it, one a same-UID stray made unremovable -- never aborts the
@@ -386,7 +387,7 @@ export function pruneLocalStage(store: string): void {
    * directory that stays loses nothing. What still cannot be listed -- an
    * entry that vanished or stopped being a directory as the sweep reached
    * it -- is kept whole: dead content surviving one sweep beats a wedge. */
-  const list = listOwnedDirectory;
+  const list = directories.list;
   const top = list(root);
   if (top === null) return;
   for (const entry of top)

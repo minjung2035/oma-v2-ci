@@ -24,10 +24,6 @@
       "types": "./dist/peer-uid.d.ts",
       "default": "./dist/peer-uid.js"
     },
-    "./pty": {
-      "types": "./dist/pty.d.ts",
-      "default": "./dist/pty.js"
-    },
     "./identity": {
       "types": "./dist/identity.d.ts",
       "default": "./dist/identity.js"

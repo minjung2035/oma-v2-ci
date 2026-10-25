@@ -12,11 +12,11 @@ test('DR46 Broker filesystem: Principal listing repairs its owned leaf and prese
  }finally{f.close();}
 });
 test('DR46 Broker filesystem: missing or failed Principal listing refuses and never returns an empty success',()=>{
- const f=fixture();const realRead=fs.readdirSync;try{
+ const f=fixture();const realRead=fs.fstatSync;try{
  assert.throws(f.read);assert.equal(fs.existsSync(f.inbox),false,'a read does not create an absent mailbox');
  fs.mkdirSync(f.inbox,{recursive:true});const failure=Object.assign(new Error('injected listing failure'),{code:'EIO'});let descriptor;
- fs.readdirSync=(path,...args)=>{if(typeof path==='string'&&path.startsWith('/proc/self/fd/')){descriptor=Number(path.slice('/proc/self/fd/'.length));throw failure;}return realRead(path,...args);};syncBuiltinESMExports();
+ fs.fstatSync=(fd,...args)=>{if(fs.readlinkSync(`/proc/self/fd/${fd}`)===f.inbox){descriptor=fd;throw failure;}return realRead(fd,...args);};syncBuiltinESMExports();
  assert.throws(f.read,error=>error===failure);assert.equal(typeof descriptor,'number');
- fs.readdirSync=realRead;syncBuiltinESMExports();assert.throws(()=>fs.fstatSync(descriptor),{code:'EBADF'});
- }finally{fs.readdirSync=realRead;syncBuiltinESMExports();f.close();}
+ fs.fstatSync=realRead;syncBuiltinESMExports();assert.throws(()=>fs.fstatSync(descriptor),{code:'EBADF'});
+ }finally{fs.fstatSync=realRead;syncBuiltinESMExports();f.close();}
 });
