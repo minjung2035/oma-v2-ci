@@ -31,6 +31,9 @@ Linux/macOS 공통 native 실행을 실제 구현·검증하는 것이다. 이�
 - P3에서 COMMIT 뒤 materialization hint→Broker.hintWork→process CoalescedWake→Reconcile
   경로를 실제 연결했다. 활성 하나/pending 하나·owner async context·close/drain과 이전 scope
   confirmDead를 지킨다. 실제 직접 scope·공통 로그·Resident backoff 전체 연결은 여전히 남았다.
+- 최신 `663adda3` CI는 Mac26/15 각각28/28·Ubuntu27/27, 독립 설치25/25 PASS다. 같은 입력의
+  전체 local은3655개 중4개 fault/checkpoint 미도달로 실패했고 입력 변경0이다. 해당 실제
+  native 경계로 옮긴 관련35/35만 별도 통과했으며 전체 PASS로 합성하지 않는다.
 - 첫 전체 local은 FAIL52·SKIP70, 입력 변경0으로 끝났고 원시 실패를 보존했다. 유지되는
   회귀의 native fault/모듈 연결과 실제 bwrap 환경을 수리했다. 부분 시험 성공을 전체 PASS로
   표시하지 않는다. `982658de`의 수리 후 전체 local은 3640/3640 PASS, skip0·입력 변경0이다.

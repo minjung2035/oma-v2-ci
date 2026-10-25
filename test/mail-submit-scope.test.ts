@@ -18,7 +18,7 @@ import { removeTree } from "./fixtures/cleanup.js";
 import { gitAuth, gitFixture, seedGit, submitFixture } from "./fixtures/git-crash.js";
 
 const fs = createRequire(import.meta.url)("node:fs") as typeof import("node:fs");
-const native = { fsync: fs.fsyncSync, unlink: fs.unlinkSync };
+const native = { fsync: fs.fsyncSync, unlink: fs.unlinkSync, open: fs.openSync };
 const eio = () => Object.assign(new Error("injected filesystem failure"), { code: "EIO" });
 /** Patch a live builtin export for the production module and restore it. */
 async function patched<T>(t: TestContext, patch: () => void, action: () => Promise<T>): Promise<T> {
@@ -75,18 +75,26 @@ test("V20A: a refused mail acceptance whose cleanup also fails reports the refus
     f.store.transaction((tx) => tx.follow("work", "bob"));
     const real = f.store.transaction.bind(f.store);
     let refused = false;
+    let cleanupFaults = 0;
     const failure = await patched(t, () => {
       t.mock.method(f.store, "transaction", ((work: Parameters<Store["transaction"]>[0]) => {
         if (refused) return real(work);
         refused = true;
         throw new StoreError("BROKER_UNAVAILABLE", "injected acceptance refusal");
       }) as Store["transaction"]);
-      t.mock.method(fs, "unlinkSync", (path: Parameters<typeof native.unlink>[0]) => {
-        if (String(path).endsWith(".eml")) throw eio();
-        native.unlink(path);
-      });
+      t.mock.method(fs, "openSync", ((...args: Parameters<typeof native.open>) => {
+        const path = String(args[0]);
+        // Refuse the exact-inode reopen in owned cleanup, before unlinkat.
+        // Publication and the acceptance refusal still run their real paths.
+        if (/^\/proc\/self\/fd\/\d+$/.test(path) &&
+            (new Error().stack ?? "").includes("removeOwnedInode") && fs.readlinkSync(path).endsWith(".eml")) {
+          cleanupFaults++; throw eio();
+        }
+        return native.open(...args);
+      }) as typeof fs.openSync);
     }, () => f.mail.send(f.auth, "refused", f.input).then(() => null, (error: unknown) => error));
     assert.ok(failure instanceof AggregateError, String(failure));
+    assert.ok(cleanupFaults > 0, "the actual cleanup reopen must be faulted");
     assert.equal((failure.errors[0] as { code?: string }).code, "BROKER_UNAVAILABLE", "the refusal stays the first error");
     assert.ok(failure.errors.some((error: unknown) => (error as { code?: string }).code === "EIO"));
     assert.equal(f.store.getOperation("alice", "refused"), null);

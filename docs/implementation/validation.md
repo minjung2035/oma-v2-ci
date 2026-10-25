@@ -27,6 +27,9 @@
 | `8c9ef61d`: workspace 독립 설치 | **25/25 PASS**. tarball을 선언한 의존 closure만으로 설치하고 공개 entry·자체 declaration·해당 installed-runtime smoke 확인. 외부 SDK declaration 진단44개는 원시 로그에 별도 남음 |
 | `8c9ef61d`: 실제 Mac 26/15·Ubuntu CI | Mac 각각 21/21, Ubuntu 20/20 PASS. 세 OS의 input digest가 `ab24d1368aea45d3e95aee4c0417bd6e65c7404dbeed44685213dd59447111f8`(15556개)로 동일. gate job은 계속 BLOCKED |
 | P3 wake·CLI handle 연결 후 Linux 회귀 | build·strict typecheck·transaction 검사 PASS. captured T·wake·drain·현재 authority·CLI 입력 관련127/127, 실제 Mail→살아 있는 Broker hint 연결·same-key·rollback 관련30/30 PASS. 서로 다른 부분 실행이며 전체 PASS로 합성하지 않음 |
+| `663adda3`: 실제 Mac 26/15·Ubuntu CI와 독립 설치 | Mac 각각28/28·Ubuntu27/27, workspace 독립 설치25/25 PASS. 공통 CI 세 OS의 input digest `f7750bfd598ef32554bc06176af265645a69c2a2735a66393abcf847aaaa3292`(15558개) 동일. 별도 Darwin gate는 BLOCKED |
+| `663adda3`: 고정 입력 전체 local | FAIL. serial9 PASS, parallel3646 중 PASS3642·FAIL4. skip/cancel/todo0·exit1·signal null·입력 변경0. `local-p3{.log,-before.json,-after.json,-status.json}` 보존 |
+| 위 4개 fault/checkpoint 연결 수리 | 관련35/35 PASS·skip0·입력 변경0. input `046211bd0c8ecb72fb29129d4200559d680d5460495893dde6bb921f0575cc95`(15558개). `p3-fault-repairs{.log,-before.json,-after.json,-status.json}` 보존. 전체 PASS로 합성하지 않음 |
 | 실제 macOS 26/15 Keychain | 독립 Swift primitive SDK typecheck PASS. signed Keychain·release 실행·TCC는 미실행 |
 | 현재 source의 전체 local·독립 설치·최종 architecture/trace qualification | 미완료. 일부 이전 실행 PASS를 합산하지 않음 |
 
@@ -38,7 +41,8 @@
 [40202613809](https://github.com/minjung2035/oma-v2/actions/runs/40202613809),
 [40202936879](https://github.com/minjung2035/oma-v2/actions/runs/40202936879),
 [40205394437](https://github.com/minjung2035/oma-v2/actions/runs/40205394437),
-[40207646347](https://github.com/minjung2035/oma-v2/actions/runs/40207646347).
+[40207646347](https://github.com/minjung2035/oma-v2/actions/runs/40207646347),
+[40210726412](https://github.com/minjung2035/oma-v2/actions/runs/40210726412).
 모든 실패 artifact를 보존한다. 원시 local 로그는
 `/home/dev/oma-audit-artifacts/native-2026-10-25/`에 있다. 새/변경 source는 NOT_REVIEWED이며
 고정 architecture·authored review·과거 검토 기록은 변경하지 않는다.
@@ -132,7 +136,7 @@ DR48은 ACL/xattr·special file·nested mount·읽을 수 없는 파일·복원�
 
 아래 값은 **구조 검사의 현재 입력 identity**다. digest 생성은 runtime PASS를 만들지 않는다.
 
-verification input digest `f7750bfd598ef32554bc06176af265645a69c2a2735a66393abcf847aaaa3292` (15558 files).
+verification input digest `621206d5f8fc332e5a42260bcc49eafedb83442a4102ef2c977f0ff638e292f8` (15558 files).
 
 현재 source 목록은 [production-files.txt](../../production-files.txt), per-file SHA-256은 [production-loc-hashes.json](../../production-loc-hashes.json)이 소유한다. `npm run check:inventory`는 cloc 없이 source bytes를 확인한다. `npm run evidence:refresh`의 구조 재생성과 실제 runtime 실행은 별도다.
 

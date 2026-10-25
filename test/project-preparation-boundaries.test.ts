@@ -45,15 +45,14 @@ test("DR27/P0-4: failed preparation handoff releases its lease and collects only
   const tree = join(root, "snapshot");
   t.after(() => { t.mock.restoreAll(); syncBuiltinESMExports(); rmSync(root, { recursive: true, force: true }); });
   const before = readdirSync("/proc/self/fd").length;
-  const mkdir = fs.mkdirSync, close = fs.closeSync;
+  const close = fs.closeSync;
   const failure = new Error("parent close failed after creating tree");
-  let armed = false, injected = false;
-  t.mock.method(fs, "mkdirSync", ((...args: Parameters<typeof mkdir>) => {
-    const result = mkdir(...args); armed = true; return result;
-  }) as typeof mkdir);
+  let injected = false;
   t.mock.method(fs, "closeSync", (fd: number) => {
+    const parent = fs.readlinkSync(`/proc/self/fd/${fd}`);
     close(fd);
-    if (armed && !injected) { injected = true; throw failure; }
+    // mkdirat created the owned tree before its held parent is returned.
+    if (parent === root && existsSync(tree) && !injected) { injected = true; throw failure; }
   });
   syncBuiltinESMExports();
   assert.throws(() => prepareProjectDirectory(tree), error => error === failure);

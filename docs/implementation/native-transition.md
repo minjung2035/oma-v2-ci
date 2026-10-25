@@ -144,3 +144,21 @@ CLI context의 held-root 교체 회귀를 포함한 관련50/50과 wake/captured
 실제 Mail→살아 있는 Broker hint 연결을 포함한30/30을 통과했다. 서로 다른 부분 실행이며
 현재 입력의 전체 회귀·독립 설치·실제 Mac 결과는 별도로 다시 확인한다. 이전 partial 입력의
 독립 설치 결과를 마지막 storage transient 반환값 변경의 검증으로 재사용하지 않는다.
+
+`663adda3`의 [CI 40210726412](https://github.com/minjung2035/oma-v2/actions/runs/40210726412)는
+Mac 26/15 각각28/28·Ubuntu27/27, 최종 production 입력의 독립 workspace 설치25/25를
+통과했다. 별도 gate는 BLOCKED다. 전체 local은 입력 변경0으로 끝났으나 오래된 Node FS
+함수의 fault/checkpoint가 native 경로를 놓친4건이 실패했다. 실제 public mailbox move 직후,
+exact-inode cleanup reopen, 생성된 tree의 held-parent close로 옮긴 관련35/35를 통과했다.
+실제 SIGKILL·flush 순서·primary/cleanup 오류·잔존 object·lease/FD 회수 oracle을 유지했다.
+
+### Linux 직접 실행의 별도 물리 실험
+
+`linux-scope-recovery-probe/`는 아직 제품 형식이나 실행 backend가 아니다. 기록 게시 전
+차단·게시 뒤 차단·실행 뒤 owner/runner SIGKILL을 별도 실험했고 관측한 pin은 모두 종료했다.
+단순 block pipe는 writer EOF에서 release byte 없이도 효과를 냈다(`eof-result.json`).
+namespace init이 writer를 함께 보유한 대조에서는 같은 EOF에 효과가 없었고, owned init
+종료 뒤에도 효과가 없었다. 앞선 fixture가 writer를 두 대조 모두 상속시킨 무효 negative
+control과 Unix socket path 길이 setup 실패도 원본을 보존했다. 임의 후손·재시작·auth 전체
+qualification 또는 production journal 형식 채택으로 표시하지 않는다. 새 durable 형식을
+도입한다면 명세 §11과 registry의 별도 결정을 먼저 따른다.

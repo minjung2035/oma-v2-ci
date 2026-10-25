@@ -6,6 +6,7 @@ import { basename, join, dirname } from "node:path";
 import { Store } from "@oma/storage";
 import { MailModule, parseEmlHeaders } from "@oma/mail";
 import { publishImmutableFile } from "@oma/storage/immutable-file";
+import { HeldMailInbox } from "@oma/storage/mailbox";
 import type { AuthContext, MailInput } from "@oma/contracts";
 import { isValidFullOid } from "@oma/domain/identifiers";
 import { sha256Hex } from "@oma/domain/canonical-json";
@@ -69,6 +70,14 @@ fs.fstatSync = ((...args: Parameters<typeof fstat>) => {
   if (matches && !linkCheckpoint) { linkCheckpoint = true; checkpoint(); }
   return result;
 }) as typeof fs.fstatSync;
+if (point === "cur") {
+  const move = HeldMailInbox.prototype.moveNewToCur;
+  HeldMailInbox.prototype.moveNewToCur = function(message) {
+    move.call(this, message);
+    // The actual renameat completed; parent flush is still ahead of us.
+    checkpoint();
+  };
+}
 const rename = fs.renameSync;
 fs.renameSync = (source, destination) => {
   rename(source, destination);
@@ -76,7 +85,6 @@ fs.renameSync = (source, destination) => {
   // (/proc/self/fd/<n>/<name>); name the real destination the same way.
   const named = String(destination);
   const held = /^\/proc\/self\/fd\/\d+\/[^/]+$/.test(named) ? join(fs.readlinkSync(dirname(named)), basename(named)) : named;
-  if (point === "cur" && held.includes("/inboxes/a/cur/")) checkpoint();
   if (point === "ctx-link" && held === join(root, "world/context/current")) checkpoint();
   if (point === "boot-workspace" && held.endsWith("/workspace")) checkpoint();
 };

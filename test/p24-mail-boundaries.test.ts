@@ -14,6 +14,7 @@ import {
   normalizeStorageFailure,
 } from "@oma/domain/errors";
 import { observeImmutableFile } from "@oma/storage/immutable-file";
+import { HeldMailInbox } from "@oma/storage/mailbox";
 import { makeValidAgent } from "./fixtures/spec.js";
 
 function fixture() {
@@ -184,7 +185,7 @@ test("P04: first cur parent flush precedes removing new; a flush fault preserves
     const events: string[] = [];
     let fail = true;
     const sync = fs.fsyncSync;
-    const rename = fs.renameSync;
+    const move = HeldMailInbox.prototype.moveNewToCur;
     t.mock.method(fs, "fsyncSync", (fd: number) => {
       const path = fs.readlinkSync(`/proc/self/fd/${fd}`);
       if (path === mailbox && fail) {
@@ -197,14 +198,11 @@ test("P04: first cur parent flush precedes removing new; a flush fault preserves
       events.push(`fsync:${path}`);
     });
     t.mock.method(
-      fs,
-      "renameSync",
-      (source: fs.PathLike, destination: fs.PathLike) => {
-        rename(source, destination);
-        // AV5: the move names its entry through the held directory; the event
-        // records the directory that descriptor names, as the path did before.
-        const held = /^\/proc\/self\/fd\/(\d+)\/([^/]+)$/.exec(String(destination));
-        events.push(`rename:${held ? `${fs.readlinkSync(`/proc/self/fd/${held[1]}`)}/${held[2]}` : destination}`);
+      HeldMailInbox.prototype,
+      "moveNewToCur",
+      function(this: HeldMailInbox, message: Parameters<typeof move>[0]) {
+        move.call(this, message);
+        events.push(`rename:${to}`);
       },
     );
     syncBuiltinESMExports();
