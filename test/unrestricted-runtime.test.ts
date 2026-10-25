@@ -13,7 +13,7 @@ import { ConnectProxy, makePublicDial } from "#oma-test/app/runtime/connect-prox
 import { collectPackageGenerations, readPackageIndex, encodePackageIndex, PACKAGE_INDEX, PACKAGE_GENERATIONS, PACKAGE_READER_MARKER } from "#oma-test/app/runtime/packages/store";
 import { createContainedWriter } from "@oma/tool-runtime/contained-tools";
 import { planPiSpawn } from "@oma/engine/pi-spawn-plan";
-import { spawnSandboxed } from "@oma/process/async";
+import { spawnSandboxed } from "@oma/platform-linux/worker-spawn";
 import { residentOptions, prepareResident, RESIDENT_TEST_OPTIONS } from "./fixtures/resident.js";
 import { RESIDENT_PATHS } from "@oma/domain/resident-paths";
 
@@ -82,7 +82,7 @@ test("DR37: two actual confined Workers reach host TCP and UDP concurrently", RE
   const plan = planPiSpawn(residentEngineEffects.sandbox, { ...opts, profile: { ...opts.profile } }), at = plan.args.indexOf("--");
   const code = `const {createSocket}=await import('node:dgram');const r=await fetch('http://127.0.0.1:${(tcp.address() as { port: number }).port}/');console.log(await r.text());const s=createSocket('udp4');s.on('message',m=>{console.log(m.toString());s.close()});s.send('ping',${udp.address().port},'127.0.0.1');`;
   await Promise.all(Array.from({ length: 2 }, async () => {
-    const child = spawnSandboxed([plan.command, ...plan.args.slice(0, at + 1), RESIDENT_PATHS.node, "--input-type=module", "-e", code], plan.env, plan.filter);
+    const child = spawnSandboxed([plan.command, ...plan.args.slice(0, at + 1), RESIDENT_PATHS.node, "--input-type=module", "-e", code], plan.env, plan.input);
     let out = "", err = ""; child.stdout.on("data", b => { out += String(b); }); child.stderr.on("data", b => { err += String(b); });
     const [exit] = await once(child, "close"); assert.equal(exit, 0, err); assert.match(out, /tcp-ok/); assert.match(out, /udp-ok/);
   }));

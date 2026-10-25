@@ -10,13 +10,13 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Store } from "@oma/storage";
 import { SocietyControl } from "@oma/lifecycle/society";
-import type { UnitsModule } from "@oma/platform-linux/units";
+import type { FeatureExecution } from "./fixtures/execution.js";
 import type { AuthContext } from "@oma/contracts";
 import { ALL_CAPS } from "./fixtures/spec.js";
 
 for (const state of ["open", "closed"] as const) {
   for (const point of ["accepted", "settled", "unknown", "superseded"] as const) {
-    test(`DR27/P0-7: society ${state} SIGKILL after ${point} preserves its fence and same-key history`, t => {
+    test(`DR27/P0-7: society ${state} SIGKILL after ${point} preserves its fence and same-key history`, async t => {
       const root = mkdtempSync(join(tmpdir(), "oma-society-crash-"));
       let opened: Store | undefined;
       t.after(() => { opened?.close(); rmSync(root, { recursive: true, force: true }); });
@@ -39,12 +39,12 @@ for (const state of ["open", "closed"] as const) {
         const control = new SocietyControl(lifecycleLedger(store), units, { nextOperationId: generateOperationId });
         const auth = { actor: "principal", role: "principal", incarnation: 0, channel: "actor",
           capabilities: new Set(ALL_CAPS), peer: { pid: process.pid, uid: process.getuid(), gid: process.getgid(), cgroup: null } };
-        control.set(auth, "closed", "initial-close");
+        await control.set(auth, "closed", "initial-close");
         const point = ${JSON.stringify(point)}, state = ${JSON.stringify(state)};
         let prior;
         if (point === "superseded") {
-          dead = false; prior = control.set(auth, state, "target");
-          dead = true; control.set(auth, "open", "successor");
+          dead = false; prior = await control.set(auth, state, "target");
+          dead = true; await control.set(auth, "open", "successor");
         }
         dead = point !== "unknown";
         const exec = DatabaseSync.prototype.exec;
@@ -55,8 +55,8 @@ for (const state of ["open", "closed"] as const) {
             process.kill(process.pid, "SIGKILL");
           return result;
         };
-        if (point === "superseded") control.reconcileById(prior.operation);
-        else control.set(auth, state, "target");
+        if (point === "superseded") await control.reconcileById(prior.operation);
+        else await control.set(auth, state, "target");
         throw new Error("boundary not reached");
       `], { encoding: "utf8", timeout: 10_000 });
       assert.equal(child.error, undefined);
@@ -71,16 +71,16 @@ for (const state of ["open", "closed"] as const) {
       const stopped: string[] = [];
       const control = new SocietyControl(lifecycleLedger(store), { stop(agent: string) {
         assert.equal(store.societyOpen(), false); stopped.push(agent);
-      }, confirmDead() { return true; } } as unknown as UnitsModule, { nextOperationId: generateOperationId });
+      }, confirmDead() { return true; } } as unknown as FeatureExecution, { nextOperationId: generateOperationId });
       const auth: AuthContext = { actor: "principal", role: "principal", incarnation: 0, channel: "actor",
         capabilities: new Set(ALL_CAPS), peer: { pid: process.pid, uid: process.getuid!(), gid: process.getgid!(), cgroup: null } };
-      const receipt = control.set(auth, state, "target");
+      const receipt = (await control.set(auth, state, "target"));
       assert.equal(receipt.operation, original.id);
       assert.equal(receipt.state, point === "superseded" ? "unknown" : "succeeded");
       assert.equal(store.societyOpen(), point === "superseded" || state === "open");
       assert.deepEqual(stopped, point === "settled" || point === "superseded" ? [] : ["alice", "bob"]);
       const count = stopped.length;
-      assert.deepEqual(control.set(auth, state, "target"), receipt);
+      assert.deepEqual((await control.set(auth, state, "target")), receipt);
       assert.equal(stopped.length, count, "same key cannot repeat physical effects after settlement or supersession");
       assert.deepEqual(store.listAgents(), before, "society control never rewrites individual intent or incarnation");
       const current = store.getOperation("principal", "target")!;

@@ -236,7 +236,7 @@
     },
     {
       "path": "apps/oma/src/entry/broker.ts",
-      "sha256": "af022f5f17598ef5a5ac553be47c8e50e0a55433a494eda0c243cff96b208061"
+      "sha256": "3cf7353acf338cf0dd23250429adf726ca6d14b19ba71a024fb9deb332052338"
     },
     {
       "path": "apps/oma/src/entry/candidate-check.ts",
@@ -368,7 +368,7 @@
     },
     {
       "path": "apps/oma/src/runtime/native-residents.ts",
-      "sha256": "5192cf62fcf58c1486c293d6be6dbe066a03a4d4b09696ea1bbe13e89d3831ea"
+      "sha256": "1b5a23d6211dd3d797eacc0131df83d6a1760a6c0b20a4620dfb80c1104a62f5"
     },
     {
       "path": "apps/oma/src/runtime/native-support.ts",
@@ -1540,7 +1540,7 @@
     },
     {
       "path": "packages/process/src/resident-runtime.ts",
-      "sha256": "414ce4076b6d72255febac1128c14d8f92bbe0dd424474d44dc688749e87668b"
+      "sha256": "fcb9fb992b7c72f610e47058d66b701e86241788798187acc9aeb7ae1bdf52d0"
     },
     {
       "path": "packages/process/src/resident-supervisor.ts",

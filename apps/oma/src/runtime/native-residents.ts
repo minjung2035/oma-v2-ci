@@ -24,7 +24,13 @@ import { withCleanup } from "@oma/native/cleanup";
 export function createNativeResidents(store: Store, executions: ExecutionRuntime,
   location: { stateRoot: string; runRoot: string; society: string; configPath: string }, config: HostConfig,
   attach: (socket: Socket, peer: BoundPeer) => void, hint: () => void,
-  liveIncarnation: (actor: string, invocationId: string) => number | null) {
+  liveIncarnation: (actor: string, invocationId: string) => number | null,
+  launch: { readonly environment?: Readonly<NodeJS.ProcessEnv>; readonly toolSurface?: string } = {}) {
+  // The application owns the host launch environment and internal surface.
+  // Freeze them for this owner, including automatically created Residents;
+  // ambient changes during another launch cannot supply different bytes.
+  const environment = Object.freeze({ ...(launch.environment ?? process.env) });
+  const toolSurface = launch.toolSurface ?? encodedResidentToolSurface();
   const logs = new ResidentLogStore(location.stateRoot);
   const channels = new Map<string, { socket: Socket; peer: BoundPeer }>();
   let revoke: ((actor: string) => void) | undefined;
@@ -55,10 +61,10 @@ export function createNativeResidents(store: Store, executions: ExecutionRuntime
           const invocation = execution.replaceAll("-", "");
           log = logs.open(actor, invocation);
           sinks = residentLogSinks(actor, invocation, () => liveIncarnation(actor, invocation), entry => log!.append(entry));
-          const env: NodeJS.ProcessEnv = { ...process.env, INVOCATION_ID: execution.replaceAll("-", ""),
+          const env: NodeJS.ProcessEnv = { ...environment, INVOCATION_ID: execution.replaceAll("-", ""),
             OMA_PROFILE_HEX: Buffer.from(references.profile).toString("hex"),
             OMA_MODEL_PROFILE_HEX: Buffer.from(references.modelProfile).toString("hex"),
-            OMA_TOOL_SURFACE_HEX: Buffer.from(encodedResidentToolSurface()).toString("hex") };
+            OMA_TOOL_SURFACE_HEX: Buffer.from(toolSurface).toString("hex") };
           delete env.OMA_SOCIETY_FENCE_FD; delete env.OMA_HOST_CHANNEL;
           return runnerScope({ executable: config.installation.node,
             argv: [join(config.installation.libdir, "apps/oma/dist/entry/runner.js"), "--society", location.society,

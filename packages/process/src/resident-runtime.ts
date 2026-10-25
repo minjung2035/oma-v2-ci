@@ -36,6 +36,7 @@ const idle = (): ExecutionObservation => ({ activeState: "inactive", subState: "
 export class ResidentRuntime<Witness> {
   private readonly residents = new Map<string, Resident<Witness>>();
   private readonly supervisor: ResidentSupervisor<ExecutionObservation>;
+  private closing: Promise<void> | null = null;
   constructor(private readonly ports: ResidentRuntimePorts<Witness>, private readonly now: () => number = () => performance.now()) {
     this.supervisor = new ResidentSupervisor({
       assertStartOwner: actor => { this.ports.references(actor); },
@@ -69,7 +70,22 @@ export class ResidentRuntime<Witness> {
       throw new StoreError("AGENT_CONFLICT", "Resident execution slot is still owned");
   }
   start(actor: string, explicitRepair: boolean, authorize: () => void = () => {}): Promise<void> {
+    if (this.closing !== null) return Promise.reject(new StoreError("BROKER_UNAVAILABLE", "Resident owner is closing"));
     return this.supervisor.start(actor, explicitRepair, authorize);
+  }
+  /** Join hints, execution and diagnostic resources before ledger closure. */
+  close(): Promise<void> {
+    if (this.closing !== null) return this.closing;
+    this.closing = Promise.resolve().then(async () => {
+      const results = await Promise.allSettled([...this.residents.keys()].map(async actor => {
+        const incarnation = this.ports.incarnation(actor);
+        if (incarnation === null) throw new StoreError("RUN_TERMINATION_UNKNOWN", "Resident incarnation is unobserved during close");
+        await this.stop(actor, incarnation);
+      }));
+      const failures = results.filter((result): result is PromiseRejectedResult => result.status === "rejected");
+      if (failures.length) throw new AggregateError(failures.map(result => result.reason), "Resident close remains unconfirmed");
+    });
+    return this.closing;
   }
   stop(actor: string, incarnation: number): Promise<ExecutionObservation> {
     const current = this.ports.incarnation(actor);
@@ -185,7 +201,12 @@ export class ResidentRuntime<Witness> {
     record.abort?.abort();
     const task = (async () => {
       if (record.starting !== null) try { await record.starting; } catch { /* actual scope proof below */ }
-      if (record.ticket !== null) await record.ticket.stop();
+      if (record.ticket !== null) {
+        await record.ticket.stop();
+        // Includes diagnostic flush/FD closure. Its failure is recorded by the
+        // completion observer; death is independently checked below.
+        try { await record.ticket.completion; } catch { /* outcome remains unknown; resources settled */ }
+      }
       if (!this.ports.confirmDead(actor)) throw new StoreError("RUN_TERMINATION_UNKNOWN", "Resident scope termination is not confirmed");
       record.uncertain = false;
       record.observation = { ...record.observation, activeState: "inactive", subState: "dead" };

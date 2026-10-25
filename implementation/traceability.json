@@ -5254,8 +5254,8 @@
   {
     "requirement": "NATIVE-013",
     "source": "docs/macos-platform.md",
-    "digest": "ef57f0d2b071a8793bceed4e8db320bf971ca13d5466be05255c063c117fcffa",
-    "normativeText": "**MUST [NATIVE-013]** foreground broker의 공통 Resident owner가 accepted profile/model 참조,\n현재 incarnation, wake·재시작·중지·로그 수명을 조정한다. slot별 실행 하나와 메모리 backoff를\n유지하며 timer는 hint만 보낸다. Linux systemd/path/journald 및 host relay fallback을 두지 않는다.\n실제 scope owner는 Resident·candidate·quarantine 모두에서 같은 journal/gate/death 정책을\n사용한다. 검증과 import는 별도 sandbox scope이며 첫 scope의 전체 종료 뒤에만 canonical RW를\n허용한다. 읽기 전용 canonical mount·held directory FD 결박·exact checkout을 pathname 재검사나\nshell script로 대체하지 않는다.",
+    "digest": "04a9c7faff92c1d149cd44d6b5a2ae0ac11cfa8c2d773a41c0aa72746951d2ff",
+    "normativeText": "**MUST [NATIVE-013]** foreground broker의 공통 Resident owner가 accepted profile/model 참조,\n현재 incarnation, wake·재시작·중지·로그 수명을 조정한다. slot별 실행 하나와 메모리 backoff를\n유지하며 timer는 hint만 보낸다. Linux systemd/path/journald 및 host relay fallback을 두지 않는다.\nResident owner의 close는 새 start를 영구 차단하고 모든 slot의 정리를 시도한다. 중지와\nclose는 실제 scope 종료와 별도로 diagnostic flush·FD 반환의 completion도 기다리며,\napplication은 이 owner와 execution journal owner를 모두 정리한 뒤 Store를 닫는다.\n실제 scope owner는 Resident·candidate·quarantine 모두에서 같은 journal/gate/death 정책을\n사용한다. 검증과 import는 별도 sandbox scope이며 첫 scope의 전체 종료 뒤에만 canonical RW를\n허용한다. 읽기 전용 canonical mount·held directory FD 결박·exact checkout을 pathname 재검사나\nshell script로 대체하지 않는다.",
     "applicability": "unclassified",
     "rationale": "Requires production-path review; no inference from test names.",
     "owner": "packages/process/src/resident-runtime.ts#ResidentRuntime",
@@ -5263,11 +5263,15 @@
     "callPath": [
       "apps/oma/src/runtime/native-residents.ts#createNativeResidents",
       "packages/process/src/resident-runtime.ts#ResidentRuntime",
-      "packages/process/src/resident-supervisor.ts#ResidentSupervisor"
+      "packages/process/src/resident-supervisor.ts#ResidentSupervisor",
+      "packages/process/src/resident-runtime.ts#ResidentRuntime.close",
+      "apps/oma/src/entry/broker.ts#main"
     ],
     "negativeTests": [
       "packages/process/test/resident-supervisor.test.mjs#stop",
-      "test/native-git-execution.test.mjs#native quarantine"
+      "test/native-git-execution.test.mjs#native quarantine",
+      "test/native-resident-runtime.test.mjs#Resident close",
+      "test/scenario-society.test.ts#NATIVE-SCN-01"
     ],
     "evidence": null,
     "status": "unverified",

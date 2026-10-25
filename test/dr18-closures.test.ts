@@ -12,7 +12,7 @@ import { StoreError } from "@oma/domain/errors";
 import { RegistryOperations } from "@oma/lifecycle/registry-operations";
 import { makeValidAgent } from "./fixtures/spec.js";
 import { NON_LOCAL_FILESYSTEMS, assertStateRoot } from "#oma-test/app/runtime/assets";
-import { spawnSandboxed } from "@oma/process/async";
+import { spawnSandboxed } from "@oma/platform-linux/worker-spawn";
 
 const peer = { pid: 1, uid: 1000, gid: 1000, cgroup: null };
 

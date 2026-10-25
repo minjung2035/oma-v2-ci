@@ -6,38 +6,34 @@ import { createMailModule } from "#oma-test/app/broker/mail-composition";
 // A society and its Principal, composed the way `oma` composes them, with only
 // the model scripted (./scripted-provider.ts).
 //
-// Real: provisioning, the Store, the mail module, the broker and its Principal,
-// host, runner and actor endpoints, the bundled engine started by the
-// product's PrincipalSession with the trusted core extension, the model-facing
-// CLI that extension starts, the credential channel, the product's
-// PrincipalDelivery, and -- when a Resident is activated -- the product's own
-// runner process (apps/oma/dist/entry/runner.js) with its adapter and engine.
-// Stand-ins: the host's side of the supervision channel (this process is the
-// host, and registers its engine as `oma` does), and systemd: `ScenarioUnits`
-// answers what a unit manager would about the one Resident being run. A runner
-// runs confined in the generated rootfs through bubblewrap and the relay.
-// Missing bubblewrap is explicitly NOT_RUN. A runner shares this process's
-// cgroup, which a run pins, so each Resident can be activated once per broker;
-// `restartBroker` makes it activatable again.
+// Real: provisioning, Store, mail, broker and Principal endpoints, bundled Pi,
+// credential delivery, and PrincipalDelivery. Residents use createNativeResidents
+// with the production ExecutionRuntime, PID namespace, journal, private runner
+// channel and confined Worker. Candidate and quarantine use that same owner.
+// Only model replies and the host's Principal registration channel are scripted.
+// Actual native tests separately exercise crash, socket transfer and death gates.
 //
 // Scenarios assert durable facts -- ledger rows, mailbox files, receipts, the
 // session history -- not screen text.
 import assert from "node:assert/strict";
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { DatabaseSync } from "node:sqlite";
-import { execFileSync, spawn } from "node:child_process";
-import { createHash, randomBytes } from "node:crypto";
+import { execFileSync } from "node:child_process";
+import { createHash } from "node:crypto";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type { Actor, AuthContext, ProtocolLimits, Request, UnitObservation } from "@oma/contracts";
+import type { Actor, AuthContext, ProtocolLimits, Request, ExecutionObservation } from "@oma/contracts";
 import { Broker, type PrincipalHostChannel } from "@oma/broker";
 import { Store } from "@oma/storage";
 import { MailModule } from "@oma/mail";
-import type { UnitsModule } from "@oma/platform-linux/units";
+import { ExecutionJournal } from "@oma/storage/execution-journal";
+import { ExecutionRuntime } from "#oma-test/app/runtime/execution-runtime";
+import { createNativeResidents, type NativeResidents } from "#oma-test/app/runtime/native-residents";
+import { quarantineExecution } from "#oma-test/app/runtime/quarantine-execution";
+import { withAsyncCleanup } from "@oma/native/cleanup";
 import { validateConfig } from "@oma/config";
 import { defaultHostConfig } from "@oma/config/defaults";
 
-import { encodedResidentToolSurface } from "@oma/domain/tool-surface";
 import { GitModule } from "@oma/git";
 import { CandidateChecks } from "#oma-test/app/runtime/candidate-checks";
 import { integrationPolicyFromConfig } from "@oma/domain/integration-policy";
@@ -72,33 +68,6 @@ export const SCENARIO_LIMITS: ProtocolLimits = {
 };
 const SOCIETY = "demo";
 const REPO = process.cwd();
-const OWN_CGROUP = readFileSync("/proc/self/cgroup", "utf8").trim().split("\n")[0]!.slice(3);
-/** What a user manager would answer about units: the one Resident a scenario
- * is running is an active unit in this process's cgroup, with the invocation
- * id its runner was given; everything else is not running. */
-class ScenarioUnits {
-    running: {
-        readonly agent: Actor;
-        readonly invocationId: string;
-    } | null = null;
-    onRevokeRun: ((agent: Actor) => void) | undefined = undefined;
-    bindIncarnationReader(): void { }
-    observe(agent: Actor): UnitObservation {
-        return this.running?.agent === agent
-            ? { activeState: "active", subState: "running", result: "success", execMainStatus: 0, cgroup: OWN_CGROUP, invocationId: this.running.invocationId }
-            : { activeState: "inactive", subState: "dead", result: "success", execMainStatus: 0, cgroup: "", invocationId: "" };
-    }
-    observeAsync(agent: Actor): Promise<UnitObservation> { return Promise.resolve(this.observe(agent)); }
-    async observeStatus(agents: readonly Actor[]): Promise<ReadonlyMap<Actor, UnitObservation>> { return new Map(agents.map(agent => [agent, this.observe(agent)])); }
-    unitCgroup(): string { return ""; }
-    startLimitStatus(): string | null { return null; }
-    start(): void { }
-    stop(agent: Actor): UnitObservation { return this.observe(agent); }
-    confirmDead(agent: Actor): boolean { return this.running?.agent !== agent; }
-    ensureResident(): void { }
-    ensurePrincipal(): void { }
-    assertResidentNamesFree(): void { }
-}
 /** The host's side of the supervision channel, as `oma` holds it: grants and
  * refusals are recorded, and a session is registered through the listener the
  * broker installed, exactly as the real channel delivers one. */
@@ -195,7 +164,7 @@ export interface Scenario {
     archived(messageId: string): string;
     /** The society's configuration file, as the Control Panel edits it. */
     readonly configPath: string;
-    /** Runs a Resident once, as systemd starts its unit: the product's runner
+    /** Runs a Resident through the production native owner: the product's runner
      * opens a run, takes one prepared batch, delivers it into a fresh engine
      * (the scripted model answers) and completes it. Resolves when it exits. */
     activate(agent: string, timeoutMs?: number): Promise<{
@@ -237,19 +206,34 @@ export interface ScenarioOptions {
  * it (mail, views, lifecycle, Git with its quarantine and the host's current
  * integration policy). It owns the Store it is given: its drain closes it, as
  * the product's broker process does on its way out. */
-function composeBroker(root: string, runRoot: string, store: Store, host: HostSide, stand: ScenarioUnits, config: HostConfig, configPath: string, reviewBodyBytes?: number): Broker {
-    const units = stand as unknown as UnitsModule;
+async function composeBroker(root: string, runRoot: string, store: Store, host: HostSide, config: HostConfig, configPath: string,
+    options: ScenarioOptions, trust: Readonly<Record<string, string>>): Promise<{ broker: Broker; units: NativeResidents; executions: ExecutionRuntime }> {
+    const executions = new ExecutionRuntime(root);
+    await executions.recover();
+    let broker: Broker;
+    const units = createNativeResidents(store, executions, { stateRoot: root, runRoot, society: SOCIETY, configPath }, config,
+        (socket, peer) => broker.attachRunner(socket, peer), () => broker.hintWork(),
+        (actor, invocation) => broker.residentIncarnation(actor, invocation),
+        { environment: { ...process.env, ...trust, ...options.engineEnv },
+          ...(options.engineEnv?.OMA_TOOL_SURFACE === undefined ? {} : { toolSurface: options.engineEnv.OMA_TOOL_SURFACE }) });
     const mail = createMailModule({ stateRoot: root, society: SOCIETY }, store, 64, SCENARIO_LIMITS.batchMaxMessages, SCENARIO_LIMITS);
     const views = new ViewsModule(store, root, SOCIETY, "p");
     const gitPaths = { stateRoot: root, projectGit: projectGitPathAt(root), contextGit: join(root, "repos", "context.git"),
         worldDir: join(root, "world"), society: SOCIETY,
         checkRootfs: config.installation.rootfs, checkNode: config.installation.node, checkAssetsDir: config.installation.libdir, };
-    const checks = new CandidateChecks(gitPaths);
-    const { git, reviews } = createGitServices(gitPaths, store, mail, integrationPolicyFromConfig(config.integration), () => integrationPolicyFromConfig(readCurrentHostPolicy(configPath, SOCIETY).integration), (candidate, check) => checks.run(candidate, check), ...(reviewBodyBytes === undefined ? [] : [{ mailBodyBytes: reviewBodyBytes, subjectBytes: 512, bundleBytes: 256 * 1024 * 1024 }]));
+    const checks = new CandidateChecks(gitPaths, (command, signal, authorize, fds, prepared) => executions.run("candidate", command, signal, authorize, fds, undefined, prepared));
+    const { git, reviews } = createGitServices(gitPaths, store, mail, integrationPolicyFromConfig(config.integration), () => integrationPolicyFromConfig(readCurrentHostPolicy(configPath, SOCIETY).integration),
+        (candidate, check, cancellation, authorize) => checks.run(candidate, check, cancellation, authorize),
+        { mailBodyBytes: options.reviewBodyBytes ?? SCENARIO_LIMITS.mailBodyBytes, subjectBytes: SCENARIO_LIMITS.subjectBytes, bundleBytes: SCENARIO_LIMITS.bundleBytes },
+        quarantineExecution(gitPaths, executions));
     const resolveSpec = createChildSpecResolver(() => readCurrentHostPolicy(configPath, SOCIETY), () => store.inTransaction);
     const lifecycle = createLifecycleModule(store, units, { stateRoot: root, projectGit: projectGitPathAt(root), society: SOCIETY, hasGoal: () => true, activationAllowed: () => true,
         residentProjectGit: residentProjectGit() }, resolveSpec, mail);
-    return testBroker({ store: store, mail: mail, units: units, views: views, lifecycle: lifecycle, git: git, reviews: reviews, reconcile: null, paths: { stateRoot: root, runRoot, society: SOCIETY, hasGoal: () => true }, limits: SCENARIO_LIMITS, principalHost: host });
+    broker = testBroker({ store, mail, units, views, lifecycle, git, reviews, reconcile: null, paths: { stateRoot: root, runRoot, society: SOCIETY, hasGoal: () => true,
+        quiesceOnDrain: async () => {
+            await withAsyncCleanup(() => units.close(), () => executions.close());
+        } }, limits: SCENARIO_LIMITS, principalHost: host });
+    return { broker, units, executions };
 }
 export async function startScenario(options: ScenarioOptions = {}): Promise<Scenario> {
     // D03: a launched runner checks that its roots name this society under `oma`.
@@ -262,6 +246,7 @@ export async function startScenario(options: ScenarioOptions = {}): Promise<Scen
     // All bytes stay under base; parent /proc/fd links cannot cross bwrap's user namespace.
     const runRoot = physicalRunRoot;
     provisionSociety(root);
+    ExecutionJournal.initialize(root);
     // The society's configuration: the product's defaults with the scripted
     // model for Residents and the generated rootfs, so every runner is confined.
     const defaults = defaultHostConfig({ society: SOCIETY, node: process.execPath, libdir: REPO,
@@ -275,7 +260,6 @@ export async function startScenario(options: ScenarioOptions = {}): Promise<Scen
                         .filter(capability => options.submit !== false || capability !== "git.submit")] } } });
     const configPath = join(root, "config.json");
     writeFileSync(configPath, JSON.stringify(config, null, 2));
-    const units = new ScenarioUnits();
     const provider = await scriptedProvider(options.script ?? [], { tls: true });
     // The engines and the runner's relay trust the scripted provider's own
     // certificate; certificate checking stays on.
@@ -299,7 +283,7 @@ export async function startScenario(options: ScenarioOptions = {}): Promise<Scen
             tx.insertAgent(agentRow(name));
     });
     const host = new HostSide();
-    let broker = composeBroker(root, runRoot, store, host, units, config, configPath, options.reviewBodyBytes);
+    let { broker, units, executions } = await composeBroker(root, runRoot, store, host, config, configPath, options, trust);
     await broker.start();
     const runtime = resolvePiRuntime({ stateRoot: root, libdir: REPO });
     provider.configure(runtime.agentDir);
@@ -457,7 +441,7 @@ export async function startScenario(options: ScenarioOptions = {}): Promise<Scen
         async restartBroker() {
             await scenario.stopBroker();
             store = new Store(join(root, "runtime.sqlite"));
-            broker = composeBroker(root, runRoot, store, host, units, readCurrentHostPolicy(configPath, SOCIETY), configPath, options.reviewBodyBytes);
+            ({ broker, units, executions } = await composeBroker(root, runRoot, store, host, readCurrentHostPolicy(configPath, SOCIETY), configPath, options, trust));
             await broker.start();
             register();
         },
@@ -499,29 +483,31 @@ export async function startScenario(options: ScenarioOptions = {}): Promise<Scen
                 git(["clone", "--no-local", "--single-branch", "--branch", "main", projectGitPathAt(root), workspace]);
                 git(["remote", "set-url", "origin", residentProjectGit()], workspace);
             }
-            units.running = { agent, invocationId: randomBytes(16).toString("hex") };
+            // Retain this broker's owners. runner.open may still increment its
+            // incarnation; a later Store must not supply the old run's identity.
+            const owner = executions, residents = units, ledger = store;
+            let timer: ReturnType<typeof setTimeout> | undefined;
             try {
-                const child = spawn(process.execPath, [join(REPO, "apps/oma/dist/entry/runner.js"), "--society", SOCIETY, "--agent", agent,
-                    "--config", configPath, "--state-root", root, "--run-root", runRoot], {
-                    env: { ...trust, ...options.engineEnv, PATH: process.env.PATH ?? "/usr/bin:/bin", HOME: home, INVOCATION_ID: units.running.invocationId,
-                        OMA_PROFILE_HEX: Buffer.from(residentProfile, "utf8").toString("hex"),
-                        OMA_MODEL_PROFILE_HEX: Buffer.from(JSON.parse(store.getAgent(agent)!.specJson).modelProfile, "utf8").toString("hex"),
-                        // The unit channel carries the resident plan; a scenario that
-                        // needs a different engine surface overrides it here the way the
-                        // broker would render it -- as the hex channel, not ambient env.
-                        OMA_TOOL_SURFACE_HEX: Buffer.from(options.engineEnv?.OMA_TOOL_SURFACE ?? encodedResidentToolSurface(), "utf8").toString("hex") },
-                    stdio: ["ignore", "ignore", "pipe"]
-                });
-                let stderr = "";
-                child.stderr!.on("data", chunk => { stderr += String(chunk); });
-                const code = await new Promise<number | null>((resolve) => {
-                    const timer = setTimeout(() => { child.kill("SIGKILL"); }, timeoutMs);
-                    child.once("close", status => { clearTimeout(timer); resolve(status); });
-                });
-                return { code, stderr };
+                await residents.start(agent, true);
+                let timeout: Promise<unknown> | undefined;
+                let failure: unknown;
+                timer = setTimeout(() => {
+                    if (owner.confirmDead(`resident:${agent}`)) return;
+                    // The ledger stays open while this broker still owns a
+                    // populated scope. Stop the current grant, not the seed row.
+                    timeout = residents.stop(agent, ledger.getAgent(agent)!.incarnation).catch(error => { failure = error; });
+                }, timeoutMs);
+                while (!owner.confirmDead(`resident:${agent}`)) {
+                    if (failure !== undefined) throw failure;
+                    await new Promise(resolve => setTimeout(resolve, 20));
+                }
+                await timeout;
+                const observation = residents.observe(agent);
+                const logs = await residents.readLogs(agent, 3600, SCENARIO_LIMITS.logBytes);
+                return { code: observation.execMainStatus < 0 ? null : observation.execMainStatus, stderr: logs.text };
             }
             finally {
-                units.running = null;
+                clearTimeout(timer);
             }
         },
         async close() {
@@ -537,9 +523,9 @@ export async function startScenario(options: ScenarioOptions = {}): Promise<Scen
                     process.kill(pid, "SIGKILL");
                 }
                 catch { /* gone */ }
+            await session.exited;
             fence?.release();
-            await broker.drainAndClose().catch(() => undefined);
-            await provider.close();
+            await withAsyncCleanup(() => broker.drainAndClose(), () => provider.close());
             try {
                 store.close();
             }

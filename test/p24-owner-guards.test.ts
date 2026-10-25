@@ -128,13 +128,13 @@ test("P08: missing activation gates fail at construction and an explicit closed 
       { code: "UNSUPPORTED_PROFILE" },
     );
     f.controls.allowActivation = false;
-    assert.throws(() => f.lifecycle.start(f.auth, "a", "closed"), {
+    (await assert.rejects(async () => (await f.lifecycle.start(f.auth, "a", "closed")), {
       code: "AGENT_NOT_READY",
-    });
+    }));
     assert.equal(f.store.getOperation("manager", "closed"), null);
     assert.deepEqual(f.units.effects, []);
     f.controls.allowActivation = true;
-    assert.equal(f.lifecycle.start(f.auth, "a", "open").state, "succeeded");
+    assert.equal((await f.lifecycle.start(f.auth, "a", "open")).state, "succeeded");
     assert.equal(f.units.effects.length, 1);
   } finally {
     f.close();

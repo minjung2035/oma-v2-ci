@@ -9,7 +9,8 @@ import { dirname, join } from "node:path";
 import { ensureOwnedUserDirectory } from "../runtime/user-files.js";
 import { Store, SCHEMA_PATH } from "@oma/storage";
 import { MailModule } from "@oma/mail";
-import { createNativeResidents } from "../runtime/native-residents.js";
+import { createNativeResidents, type NativeResidents } from "../runtime/native-residents.js";
+import { withAsyncCleanup } from "@oma/native/cleanup";
 import { ViewsModule } from "../views.js";
 import { LifecycleModule } from "@oma/lifecycle";
 import { Broker } from "@oma/broker";
@@ -123,6 +124,7 @@ async function main(): Promise<void> {
     let storagePreparation: Promise<void> | null = null;
     let sessionStorage: SessionStorage | null = null;
     let executions: ExecutionRuntime | null = null;
+    let residents: NativeResidents | null = null;
     let storageResidents: readonly StorageResident[] | null = null;
     let freshVerifiedMain: string | undefined;
     let principalHost: ReturnType<typeof openSupervisionChannel>;
@@ -185,7 +187,7 @@ async function main(): Promise<void> {
         assertDeploymentDigest(cfg.installation.libdir, cfg.installation.deploymentDigest);
         executions = new ExecutionRuntime(stateRoot);
         const nativeOwner = executions;
-        lifetime.retainNative(() => nativeOwner.close());
+        lifetime.retainNative(() => withAsyncCleanup(async () => { await residents?.close(); }, () => nativeOwner.close()));
         await executions.recover();
         sessionStorage = SessionStorage.forSociety({ stateRoot, society, fence: claim.fence,
             log: line => console.error(line), quiesce: (residents, action) => {
@@ -228,6 +230,7 @@ async function main(): Promise<void> {
             cfg.limits, () => broker.hintWork());
         const units = createNativeResidents(store, executions, location, cfg,
             (socket, peer) => broker.attachRunner(socket, peer), () => broker.hintWork(), (actor, invocation) => broker.residentIncarnation(actor, invocation));
+        residents = units;
         const views = new ViewsModule(store, stateRoot, society, cfg.principalProfile, cfg.limits);
         const resolveSpec = createChildSpecResolver(() => readCurrentHostPolicy(configPath, society), () => store.inTransaction);
         const gitPaths = { stateRoot, projectGit: projectGitPathAt(stateRoot), contextGit: join(stateRoot, "repos", "context.git"),

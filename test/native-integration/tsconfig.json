@@ -1,0 +1,33 @@
+{
+  "extends": "../../tsconfig.json",
+  "compilerOptions": {
+    "noEmit": false,
+    "noEmitOnError": true,
+    "outDir": "../../dist",
+    "rootDir": "../..",
+    "sourceMap": false
+  },
+  "include": [
+    "../acceptance-auth.test.ts",
+    "../worker-autonomy.test.ts",
+    "../r16-run-registry.test.ts",
+    "../periodic-reconcile.test.ts",
+    "../mail-settlement-storage.test.ts",
+    "../unrestricted-admission.test.ts",
+    "../principal-stop-fence.test.ts",
+    "../p24-owner-guards.test.ts",
+    "../society-control.test.ts",
+    "../r37-recovery-observation.test.ts",
+    "../society-crash.test.ts",
+    "../dr18-closures.test.ts",
+    "../r37-async-process.test.ts",
+    "../session-resume.test.ts",
+    "../unrestricted-runtime.test.ts",
+    "../resident-sandbox-live.test.ts",
+    "../scenario-society.test.ts",
+    "../scenario-tool-surface.test.ts",
+    "../crash-boundaries.test.ts",
+    "../fixtures/crash-worker.ts",
+    "../fixtures/full-fs-harness.ts"
+  ]
+}

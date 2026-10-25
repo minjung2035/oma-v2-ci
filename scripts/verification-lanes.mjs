@@ -7,7 +7,6 @@ export const systemdTestFiles = Object.freeze([
   "phase4.test.js",
   "phase5.test.js",
   "phase8.test.js",
-  "crash-boundaries.test.js",
   "launch-topology.test.js",
   "cgroup-pin.test.js",
 ]);
@@ -489,7 +488,7 @@ export const lanes = Object.freeze({
   },
   kernel: {
     files: [
-      ...systemdTestFiles.filter((file) => file !== "crash-boundaries.test.js"),
+      ...systemdTestFiles,
       "peer-pid.test.js",
       "native-leaf.test.js",
       "runner-channel.test.js",
@@ -529,7 +528,7 @@ export const lanes = Object.freeze({
       "R33 existing SIGKILL",
       "S-05 recovery",
     ],
-    environment: "systemd",
+    environment: "git-fs",
     timeoutSeconds: 3600,
     proof:
       "primitive SIGSTOP/parent-SIGKILL and restart; not an entrypoint-crash or VM-power-loss attestation",

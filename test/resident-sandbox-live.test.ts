@@ -21,7 +21,7 @@ import { placeholderFor } from "@oma/engine/engine-auth";
 import { PiAdapter } from "@oma/engine/pi-adapter";
 import { hostSystemLayout, productSurfaceMasks } from "@oma/platform-linux/resident-rootfs";
 import { resolvePiRuntime } from "@oma/engine/pi-runtime";
-import { spawnSandboxed } from "@oma/process/async";
+import { spawnSandboxed } from "@oma/platform-linux/worker-spawn";
 import { PiRpcClient } from "@oma/engine/pi-rpc";
 import { decodeRunLease } from "@oma/protocol/run-lease";
 import { confinedPath } from "@oma/domain/resident-paths";
@@ -35,10 +35,10 @@ const bwrapAvailable = spawnSync("bwrap", ["--version"]).status === 0;
 
 /** DR18 (D-5): a probe run on the production plan gets the plan's filter on
  * descriptor 3, as the adapter gives it; bubblewrap reads it to the end. */
-function withFilter<T>(plan: { readonly filter?: Uint8Array }, run: (stdio: ["pipe", "pipe", "pipe", number]) => T): T {
+function withFilter<T>(plan: { readonly input?: Uint8Array }, run: (stdio: ["pipe", "pipe", "pipe", number]) => T): T {
   const dir = mkdtempSync(join(tmpdir(), "oma-filter-"));
   const path = join(dir, "filter.bpf");
-  writeFileSync(path, plan.filter ?? new Uint8Array());
+  writeFileSync(path, plan.input ?? new Uint8Array());
   const fd = openSync(path, "r");
   try { return run(["pipe", "pipe", "pipe", fd]); }
   finally { closeSync(fd); rmSync(dir, { recursive: true, force: true }); }
@@ -115,7 +115,7 @@ test("T117 a confined Resident reaches its provider only through the relay, with
       },
     });
     const plan = adapter.spawnPlan();
-    child = spawnSandboxed([plan.command, ...plan.args], plan.env, plan.filter);
+    child = spawnSandboxed([plan.command, ...plan.args], plan.env, plan.input);
     child.stderr.on("data", chunk => { stderr += String(chunk); });
     rpc = new PiRpcClient(child, { frameBytes: 1 << 20, idleStreamSeconds: 60, receiptWaitSeconds: 30 });
     await rpc.send({ id: "go", type: "prompt", message: "say hello" });
@@ -334,7 +334,7 @@ test("T117 a confined Resident loads the trusted extension and receives mail as 
       },
     });
     const plan = adapter.spawnPlan();
-    child = spawnSandboxed([plan.command, ...plan.args], plan.env, plan.filter);
+    child = spawnSandboxed([plan.command, ...plan.args], plan.env, plan.input);
     child.stderr.on("data", chunk => { stderr += String(chunk); });
     rpc = new PiRpcClient(child, { frameBytes: 262144, idleStreamSeconds: 60, receiptWaitSeconds: 30 });
     const events: { type: string; message?: { role?: string; customType?: string; stopReason?: string } }[] = [];

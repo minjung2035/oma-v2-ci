@@ -88,6 +88,9 @@ witness 없는 opening은 새 효과나 빈 초기 상태를 허가하지 않는
 **MUST [NATIVE-013]** foreground broker의 공통 Resident owner가 accepted profile/model 참조,
 현재 incarnation, wake·재시작·중지·로그 수명을 조정한다. slot별 실행 하나와 메모리 backoff를
 유지하며 timer는 hint만 보낸다. Linux systemd/path/journald 및 host relay fallback을 두지 않는다.
+Resident owner의 close는 새 start를 영구 차단하고 모든 slot의 정리를 시도한다. 중지와
+close는 실제 scope 종료와 별도로 diagnostic flush·FD 반환의 completion도 기다리며,
+application은 이 owner와 execution journal owner를 모두 정리한 뒤 Store를 닫는다.
 실제 scope owner는 Resident·candidate·quarantine 모두에서 같은 journal/gate/death 정책을
 사용한다. 검증과 import는 별도 sandbox scope이며 첫 scope의 전체 종료 뒤에만 canonical RW를
 허용한다. 읽기 전용 canonical mount·held directory FD 결박·exact checkout을 pathname 재검사나

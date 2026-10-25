@@ -6,13 +6,12 @@ import assert from "node:assert/strict";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type { UnitObservation } from "@oma/contracts";
+import type { ExecutionObservation } from "@oma/contracts";
 import { Store } from "@oma/storage";
 import { MailModule } from "@oma/mail";
-import { UnitsModule } from "@oma/platform-linux/units";
+import { PolicyExecution } from "./fixtures/execution.js";
 import { LifecycleModule } from "@oma/lifecycle";
 import { ReconcileModule } from "@oma/reconcile";
-import { parseUnitObservation } from "@oma/platform-linux/units/observe";
 import { makeValidAgent, makeValidResolvedSpec, ALL_CAPS } from "./fixtures/spec.js";
 import { gitAuth } from "./fixtures/git-crash.js";
 
@@ -21,22 +20,22 @@ function deferred() {
   const promise = new Promise<void>(yes => { resolve = yes; });
   return { promise, resolve };
 }
-const idle = parseUnitObservation({ kind: "succeeded", status: 0, signal: null, stderr: "",
-  stdout: `ActiveState=inactive\nSubState=dead\nResult=success\nExecMainStatus=0\nControlGroup=/oma-test\nInvocationID=${"1".repeat(32)}\n` });
-const unknown = parseUnitObservation({ kind: "unknown", status: null, signal: null, stderr: "", stdout: "" });
+const idle: ExecutionObservation = { activeState: "inactive", subState: "dead", result: "success",
+  execMainStatus: 0, scope: "", invocationId: "" };
+const unknown: ExecutionObservation = { ...idle, activeState: "unknown", result: "unknown", execMainStatus: -1 };
 
-// A scripted unit port checks coordinator ordering only. It is not substituted
-// into the actual-systemd death/isolation regression suite or its proof oracle.
-class ObservedUnits extends UnitsModule {
+// A scripted policy port checks ordering only. Actual native death and
+// isolation are tested with the production backend in native-*.test.mjs.
+class ObservedUnits extends PolicyExecution {
   readonly entered = deferred(); readonly release = deferred();
-  starts = 0; stops = 0; result: UnitObservation = idle;
+  starts = 0; stops = 0; result: ExecutionObservation = idle;
   deathConfirmed = false;
-  constructor(root: string) { super("crash", { node: process.execPath, libdir: process.cwd(), state: root, society: "crash", agent: "" }); }
-  override async observeAsync(): Promise<UnitObservation> { this.entered.resolve(); await this.release.promise; return this.result; }
-  override observe(): UnitObservation { return this.result; }
+  constructor(_root: string) { super(); }
+  override async observeAsync(): Promise<ExecutionObservation> { this.entered.resolve(); await this.release.promise; return this.result; }
+  override observe(): ExecutionObservation { return this.result; }
   override confirmDead(): boolean { return this.deathConfirmed; }
-  override start(): void { this.starts++; }
-  override stop(): UnitObservation { this.stops++; return idle; }
+  override start(_actor: string, _repair: boolean, authorize?: () => void): void { authorize?.(); this.starts++; }
+  override stop(): ExecutionObservation { this.stops++; return idle; }
 }
 
 for (const change of ["none", "stop", "incarnation", "shutdown", "unknown", "death-unknown"] as const) {

@@ -9,74 +9,15 @@ Linux/macOS 공통 native 실행을 실제 구현·검증하는 것이다. 이�
 
 ## 작업 상태
 
-- `64cb2cad` CI `40237516208`에서 공통 Mac26/15·Ubuntu 각54/54와 Ubuntu peer3/3·실행24/24가
-  실제 통과했다. 전역 userns 제한1을 유지한 bwrap별 AppArmor 권한을 사용했다. 양 Darwin gate는
-  각15개 실제 관측 후 계속 BLOCKED다. 원시 zip5개 SHA256을 확인해 `ci-64cb2cad/`에 보존했다.
-- 이후 env option grammar·log의 중간 hardlink/길이·diagnostic 오류 후 Resident stop 관측을
-  수정했다. 실제 OS/공통57/57와 별도 strict 부분 컴파일한 기존 policy/receipt/reconcile37/37가
-  입력 변경0으로 통과했다. 현재 root typecheck는 아직 FAIL이며, 제거된 unit API의 실제 시험
-  전환과 Native Resident/Broker 전체 통합이 남았다. policy fixture는 native gate proof가 아니다.
-- push된 구현 checkpoint는 `7707de9d117a3be1c571d7661732de69b18a9bb9`다. 실제 CI
-  `40235030613`의 Mac26/15·Ubuntu 공통은 각각54/54 PASS·동일 입력·build26/26이다.
-  Darwin gate는 각각15개 실제 관측 뒤 BLOCKED이며 완화하지 않았다. Ubuntu는 제거된
-  sd_notify import의 옛 시험이 실패해 후속 Linux 실행 시험이 미실행됐다. 해당 시험 이관과
-  실패와 독립적인 Linux 실행 step의 실행 조건 수리 후 다시 push/CI를 확인한다.
-- checkpoint의 workspace421/421과 독립 설치26/26이 통과했다. Root type/module 시험의
-  native 전환은 계속 남아 있다. public export 위반을 숨기려고 삭제된 export를 복구하지 않는다.
-- 2026-10-26 실제 경로 연결: 공통 ExecutionCoordinator + hash-chain journal + blocked
-  namespace gate를 Resident·candidate·quarantine에 연결했다. systemd/path/journald와
-  host relay production 경로를 제거했으며 Worker private argv의 owner는 Linux adapter다.
-  lifecycle/reconcile는 실제 async 효과와 마지막 authority 확인을 기다린다. 새 create는 v3이며
-  v2의 역사 plan·receipt를 native 완료로 다시 읽지 않는다. 로그 full spool은 별도 storage owner다.
-- 새 관련 시험은 Linux 실제 kernel/bwrap에서 33/33 PASS·skip0·입력 변경0이다.
-  `native-connected-fixed-{before,after}.json`과 `native-connected-fixed-real.log`에 원시 결과를
-  보존했다. 전체 회귀 PASS가 아니다. 제거된 systemd API를 참조하는 root/type/module 시험의
-  전환이 남았으며 root strict typecheck 첫 실행은 실패했다. 독립 workspace build는 26개가 성공했다.
-- 실제 SIGKILL 시험에서 witness 게시 뒤 gate가 닫힌 init이 살아 남는 결함을 재현했다.
-  DR54로 새 pidfd를 취득해 전체 identity 비교 후 종료하도록 수정했고 같은 지점의 실 프로세스
-  생존→종료→journal 정산을 확인했다. witness 없는 opening은 여전히 unknown으로 보존·차단한다.
-- 다음 작업: 실제 Resident/Broker 통합·backoff·로그 저장 회귀, 기존 시험의 native 전환,
-  전체 정적/독립 설치/전체 Linux 회귀, source 고정 push 및 실제 Darwin CI 결과 확인.
-  Darwin G-PROCESS/G-FILES/G-AUTH는 계속 OPEN이며 현재 Mac 제품 실행을 허용하지 않는다.
-- 작업 브랜치: `work/macos-native-20261025`. 최초 기준 `d5716459`, 첫 Darwin probe
-  `d80035f7`, 공통 primitive·Restic 초기 연결 `adf20331`, VM 제거 `de0c8212`, 파일 capability `762c1604`, 공통 Resident 조정 `13d60492`를 push했다.
-- 시작 시 dirty 문서 변경은 보존·commit했고 원본 patch/untracked 사본도
-  `/home/dev/oma-audit-artifacts/native-2026-10-25/`에 보존했다.
-- VM 전용 App host/guest·entry·VZ·Swift VM helper·guest 자산·protocol은 실행 소스에서 제거했다.
-  과거 VM 시험 원문은 `docs/archive/macos-vm-tests-2026-10-25/`에 보존하며 native PASS에 합산하지 않는다.
-- 실행/출력 수명은 process, 저장·tar/inventory 검증·package staging은 storage,
-  인증/정산은 broker/domain, OS primitive는 native/platform-*가 맡는다. 아래 모듈이 App을
-  import하지 않는다. App은 API를 조립한다. 책임 없이 의존 허용 목록만 넓혀 통과시키지 않는다.
-- G-PROCESS/G-FILES/G-AUTH는 OPEN이다. Darwin에서 NOTE_TRACK ENOTSUP(45), setsid
-  후손 생존, mode-000 event pin EACCES(13)을 실제 CI에서 확인했다. static 지원 거절과
-  일부 primitive 성공을 gate 통과로 처리하지 않는다.
-- 실제 CI `40202613809`: Mac 26/15 common-runtime 각각 20/20, Ubuntu 19/19. 별도 gate job은 BLOCKED다.
-- `0d471551`의 CI `40202936879`에서도 위 공통 결과를 재현했다. 실제 SCM_RIGHTS 인계 뒤
-  connector 생존·종료 모두 kernel peer PID는 holder를 가리켰으나 G-AUTH 전체 증명은 아니다.
-- `8c9ef61d`는 P2 관련 회귀192/192·독립 workspace 설치25/25 PASS다. CI `40207646347`의
-  공통 runtime은 Mac 26/15 각각21/21·Ubuntu20/20, 세 OS input digest가 동일하다. 별도 gate는
-  BLOCKED이며, queue한 connector 바이트를 읽기 전후 LOCAL_PEERPID가 holder인 반례를 보존했다.
-  이후 CLI context의 held descriptor 연결은 별도 진행·검증한다.
-- P3에서 COMMIT 뒤 materialization hint→Broker.hintWork→process CoalescedWake→Reconcile
-  경로를 실제 연결했다. 활성 하나/pending 하나·owner async context·close/drain과 이전 scope
-  confirmDead를 지킨다. 실제 직접 scope·공통 로그·Resident backoff 전체 연결은 여전히 남았다.
-- 최신 `663adda3` CI는 Mac26/15 각각28/28·Ubuntu27/27, 독립 설치25/25 PASS다. 같은 입력의
-  전체 local은3655개 중4개 fault/checkpoint 미도달로 실패했고 입력 변경0이다. 해당 실제
-  native 경계로 옮긴 관련35/35만 별도 통과했으며 전체 PASS로 합성하지 않는다.
-- 다음 P2 변경은 SDK 없는 파일 정책을 `@oma/tool-files`로 분리해 workspace를26개로 확장한다.
-  tool-runtime·hashline·LSP는 새 공개 API로 연결하고 이전 contained-files export는 제거한다.
-  Darwin 파일 primitive는 계속 미검증이며 효과 전에 거절한다. Linux 관련189/189·별도 SIGKILL17/17과
-  독립 설치26/26을 입력 변경0으로 통과했다. 전체 local·Darwin 제품 지원 완료로 계산하지 않는다.
-- `f042b159`는 전체 local3660/3660·skip0·입력 변경0, 실제 Mac26/15·Ubuntu 공통 CI 각각30/30을
-  통과했다. 각 CI build26/26·동일 input이며 gate는 BLOCKED다. 사용자의 추가 지시로 OS 시험을
-  확대한다. 새 실제 OS 경계11개와 독립 Darwin15개 관측의 검증은 위 전체 PASS와 별도다.
-- 첫 전체 local은 FAIL52·SKIP70, 입력 변경0으로 끝났고 원시 실패를 보존했다. 유지되는
-  회귀의 native fault/모듈 연결과 실제 bwrap 환경을 수리했다. 부분 시험 성공을 전체 PASS로
-  표시하지 않는다. `982658de`의 수리 후 전체 local은 3640/3640 PASS, skip0·입력 변경0이다.
-  이후 파일 handle 공통화 변경은 이 실행에 포함되지 않으며 별도 검증한다.
-- 현재 Mac 제품 진입은 효과 전에 차단한다. Linux의 Resident wake/log·직접 실행·systemd/journald
-  제거, sandbox scope proof, candidate/quarantine 연결, Darwin 파일 pin/auth, OS별 설치와
-  최종 owner/규범/회귀 대조가 남았다. native 지원 완료가 아니다.
+- 선택 native integration을 strict/noEmitOnError로 컴파일해 단일 고정 입력에서180/180·skip0으로 통과했다. 검증된 통합 변경과 CI 실행 연결을 다음 checkpoint로 push하고 실제 CI 결과를 확인한다. Root 전체 전환은 계속 진행 중이다.
+- 작업 브랜치는 `work/macos-native-20261025`다. 최신 push `6d8263eb`의 실제 CI `40239657753`는 공통 Mac26/15·Ubuntu 각54/54, Ubuntu peer3/3·native31/31이다. Darwin 양쪽은 각15개 실제 관측 후 OPEN/BLOCKED다. 원시 zip5개 SHA256과 전후 동일 input을 확인했다. 입력별 결과의 정본은 [validation](implementation/validation.md)이다.
+- 후속 작업 트리에서 실제 Native Resident/Broker/Pi 통합25/25와 실제 Resident6개 포함 수명34/34가 고정 입력으로 통과했다. 가짜 unit 관측·수동 runner spawn을 제거하고 자동 생성 첫 실행·현재 incarnation·receipt까지 실제 owner로 검증했다. 공통 Resident close는 diagnostic completion도 join하며 App lifetime이 Store 종료 전에 호출한다.
+- 기존 accepted fact/권한71/71, Worker38/38, durable SIGKILL46/46는 각각의 입력에서 통과했다. 과거 systemd 경계 원문은 archive에 보존하고 boot-execution/create-execution 경계는 새 이름으로 검증했다. 서로 다른 부분 PASS를 전체 PASS로 합산하지 않는다.
+- 최신 root 전체 strict typecheck는79개 진단으로 FAIL이다. 제거된 unit/host relay API를 쓰는 기존 시험과 실제 물리 시험의 전환, 전체 정적·Linux 회귀·최종 규범 대조가 남았다. 선택 native integration의 strict compile/실행은 root 전체 PASS의 대체가 아니다.
+- 새 선택 integration CI는 실제 Linux Native Resident/Pi·권한·receipt·SIGKILL 시험을 실행한다. 후속 변경 push·실제 CI 결과 확인을 계속해야 한다. Mac 공통 정책 시험과 Darwin의 실제 gate 관측은 별도이며, Mac 제품 진입은 효과 전에 차단한다.
+- witness 없는 opening, 기존 Linux state의 누락 execution journal, 미완료 historical v2 unit intent는 빈 초기 상태나 native 완료로 자동 전환하지 않는다. Darwin G-PROCESS/G-FILES/G-AUTH도 미해결이다. 재현 근거를 보존하고 독립 구현을 계속한다.
+- 프로덕션 VM·systemd/path/journald·host relay fallback은 제거했다. 26번째 SDK-free `@oma/tool-files`를 포함한 공개 API·단방향 runtime/type DAG를 유지한다. 실행 조정은 process, 저장은 storage, 인증·정산은 broker/domain, OS primitive는 native/platform owner에 둔다.
+- 최초 HEAD는 `d571645941e621eec6ccd91504cfbdc72389200d`다. 초기 dirty 사본은 `/home/dev/oma-audit-artifacts/native-2026-10-25/{initial.patch,initial-status.txt,initial-untracked/}`에 있다. Root README.md의 원래 사용자 변경은 보존하며 stage하지 않는다. master 병합·배포는 하지 않는다.
 
 ## 보존할 원칙
 

@@ -4,11 +4,11 @@ import { serializePlanIntent } from "./plan.js";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type { AuthContext, ProtocolLimits, UnitObservation } from "@oma/contracts";
+import type { AuthContext, ProtocolLimits, ExecutionObservation } from "@oma/contracts";
 import { Store } from "@oma/storage";
 import { MailModule } from "@oma/mail";
 import { LifecycleModule } from "@oma/lifecycle";
-import { UnitsModule } from "@oma/platform-linux/units";
+import { PolicyExecution } from "./execution.js";
 import { PublicDispatcher } from "@oma/broker/public-dispatcher";
 import { errorAnswer } from "@oma/broker/replies";
 import { publicFailure } from "@oma/domain/errors";
@@ -22,23 +22,24 @@ export type ActionKind = "agent.start" | "agent.stop";
  * management authority, public dispatch and LifecycleModule are production code.
  * This fixture is not a native socket, systemd or cgroup proof.
  */
-export class ObservedUnits extends UnitsModule {
+export class ObservedUnits extends PolicyExecution {
   readonly effects: Array<{ kind: "start" | "stop"; agent: string; incarnation?: number }> = [];
   active = false;
   deathKnown = true;
   failEffect = false;
-  override observe(_agent: string): UnitObservation {
+  override observe(_agent: string): ExecutionObservation {
     return { activeState: this.active ? "active" : "inactive", subState: this.active ? "running" : "dead",
-      result: "success", execMainStatus: 0, cgroup: this.active ? "/system.slice/oma-replay-a.service" : "",
+      result: "success", execMainStatus: 0, scope: this.active ? "/system.slice/oma-replay-a.service" : "",
       invocationId: "1".repeat(32) };
   }
   override confirmDead(_agent: string, _incarnation: number): boolean { return this.deathKnown && !this.active; }
-  override start(agent: string, _explicitRepair: boolean): void {
+  override start(agent: string, _explicitRepair: boolean, authorize?: () => void): void {
+    authorize?.();
     this.effects.push({ kind: "start", agent });
     if (this.failEffect) throw new Error("controlled unconfirmed start");
     this.active = true;
   }
-  override stop(agent: string, incarnation: number): UnitObservation {
+  override stop(agent: string, incarnation: number): ExecutionObservation {
     this.effects.push({ kind: "stop", agent, incarnation });
     if (this.failEffect) throw new Error("controlled unconfirmed stop");
     this.active = false;
@@ -58,7 +59,7 @@ export function lifecycleReplayFixture() {
     tx.insertAgent(makeValidAgent("manager", { createdBy: "principal" }));
     tx.insertAgent(makeValidAgent("a", { createdBy: "manager" }));
   });
-  const units = new ObservedUnits("replay", { node: process.execPath, libdir: process.cwd(), state: root, society: "replay", agent: "" }, join(root, "units"));
+  const units = new ObservedUnits();
   const mail = createMailModule({ stateRoot: root, society: "replay" }, store, 64);
   const controls = { hasGoal: true, allowActivation: true };
   const lifecycle = createLifecycleModule(store, units, { stateRoot: root, projectGit: join(root, "project.git"), society: "replay",

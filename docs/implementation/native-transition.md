@@ -41,9 +41,21 @@ DR54의 새 capability 복구로 수정했다. witness 없는 opening은 command
 목록으로 바꾸지 않으며 journal과 증거를 남긴다. 이 잔여 unknown과 기존 Linux state의 누락
 journal, historical v2 미완료 unit intent는 지원 완료로 숨기지 않는다.
 
-실제 관련 시험 33/33 결과와 source binding은 validation이 소유한다. 기존 root 시험의 제거된
-API 참조 전환, Resident/Broker 통합과 전체 Linux 회귀, 최종 owner/규범/격리 설치 검증은 진행 중이다.
+Resident/Broker/Pi 통합은 실제 Native owner·전용 runner channel·candidate/quarantine으로
+연결했다. 시나리오의 가짜 unit 관측·수동 runner spawn은 제거했다. 자동 생성의 첫 실행도
+같은 owner를 사용하며 host 환경·내부 tool plan은 owner 생성 때 명시적으로 결박한다.
+실제 시험에서 pre-run incarnation으로 stop하던 fixture와 scope 사망 뒤 diagnostic close를
+기다리지 않던 수명 경합을 확인했다. 공통 Resident close가 모든 slot과 diagnostic completion을
+join하고 새 start를 영구 거절하도록 수정했으며 App의 Native lifetime에 연결했다.
+실제 시나리오·crash·정책 시험의 입력별 결과는 validation이 소유한다. 기존 root 시험의 제거된
+API 참조 전환, 전체 Linux 회귀, 최종 owner/규범/격리 설치 검증은 진행 중이다.
 P4 Darwin 제품 집행과 G-PROCESS/G-FILES/G-AUTH는 계속 미해결이다.
+
+`test/native-integration/tsconfig.json`은 전환한 시험만 strict/noEmitOnError로 컴파일하는
+선택 목록이다. `scripts/test-native-integration.mjs`는 같은 목록에서 실행 파일을 도출한다.
+Linux CI의 실제 제품·SIGKILL 회귀 범위이며 root 전체 typecheck/회귀의 대체 판정이 아니다.
+과거 systemd의 boot-unit/create-unit 경계 ID는 재사용하지 않고 원문을 archive에 보존했다.
+현재 crash 시험은 boot-execution/create-execution과 실제 파일 게시·Git import 경계를 사용한다.
 
 기존 변경은 `/home/dev/oma-audit-artifacts/native-2026-10-25/initial.patch`와
 `initial-untracked/`에 보존했다. 작업 브랜치는 `work/macos-native-20261025`이며

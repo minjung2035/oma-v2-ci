@@ -19,7 +19,7 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { PiAdapter } from "@oma/engine/pi-adapter";
 import { residentOptions, prepareResident, RESIDENT_TEST_OPTIONS } from "./fixtures/resident.js";
-import { spawnSandboxed } from "@oma/process/async";
+import { spawnSandboxed } from "@oma/platform-linux/worker-spawn";
 import { RESIDENT_PATHS } from "@oma/domain/resident-paths";
 import { resolvePiRuntime } from "@oma/engine/pi-runtime";
 import { sessionArgv } from "@oma/engine/principal-session";
@@ -75,7 +75,7 @@ test("AV14 / arch §7: a Resident's activation resumes its existing session inst
     const adapter = new PiAdapter(residentEngineEffects, { ...options, limits: LIMITS });
     const plan = adapter.spawnPlan();
     const prior = priorSession(options.paths.sessionDir, RESIDENT_PATHS.workspace);
-    assert.equal(await openedSession(plan.command, plan.args, plan.cwd, plan.env, plan.filter), join(RESIDENT_PATHS.sessions, prior.split("/").at(-1)!),
+    assert.equal(await openedSession(plan.command, plan.args, plan.cwd, plan.env, plan.input), join(RESIDENT_PATHS.sessions, prior.split("/").at(-1)!),
       "the activation started a new session beside the one the Resident had");
   } finally { rmSync(root, { recursive: true, force: true }); }
 });

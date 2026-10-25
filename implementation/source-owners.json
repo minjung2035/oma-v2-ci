@@ -1013,11 +1013,15 @@
     "callPath": [
       "apps/oma/src/runtime/native-residents.ts#createNativeResidents",
       "packages/process/src/resident-runtime.ts#ResidentRuntime",
-      "packages/process/src/resident-supervisor.ts#ResidentSupervisor"
+      "packages/process/src/resident-supervisor.ts#ResidentSupervisor",
+      "packages/process/src/resident-runtime.ts#ResidentRuntime.close",
+      "apps/oma/src/entry/broker.ts#main"
     ],
     "negativeTests": [
       "packages/process/test/resident-supervisor.test.mjs#stop",
-      "test/native-git-execution.test.mjs#native quarantine"
+      "test/native-git-execution.test.mjs#native quarantine",
+      "test/native-resident-runtime.test.mjs#Resident close",
+      "test/scenario-society.test.ts#NATIVE-SCN-01"
     ]
   },
   {

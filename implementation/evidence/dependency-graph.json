@@ -2280,7 +2280,7 @@
   }
  ],
  "files": 494,
- "runtimeEdges": 1763,
+ "runtimeEdges": 1764,
  "typeOnlyEdges": 767,
  "runtimeEdgeMatrix": {
   "L1-kernel -> L1-kernel": 439,
@@ -2292,7 +2292,7 @@
   "L4-orchestration -> L2-facts": 1,
   "L4-orchestration -> L3-workflow": 25,
   "L4-orchestration -> L4-orchestration": 164,
-  "L5-entry -> L1-kernel": 153,
+  "L5-entry -> L1-kernel": 154,
   "L5-entry -> L2-facts": 19,
   "L5-entry -> L3-workflow": 8,
   "L5-entry -> L4-orchestration": 102,
@@ -2311,7 +2311,7 @@
   "packages/domain/src/identifiers.ts": 84,
   "packages/storage/src/directory.ts": 40,
   "packages/native/src/files.ts": 37,
-  "packages/native/src/cleanup.ts": 33,
+  "packages/native/src/cleanup.ts": 34,
   "packages/domain/src/paths.ts": 32,
   "packages/storage/src/durable-fs.ts": 31,
   "packages/domain/src/canonical-json.ts": 30,
@@ -2324,7 +2324,7 @@
   "packages/process/src/async.ts": 17
  },
  "fanOut": {
-  "apps/oma/src/entry/broker.ts": 38,
+  "apps/oma/src/entry/broker.ts": 39,
   "packages/mail/src/index.ts": 22,
   "apps/oma/src/entry/oma-society.ts": 21,
   "apps/oma/src/runtime/client-runtime.ts": 20,

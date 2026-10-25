@@ -216,19 +216,68 @@ test("SCN-L05: a Worker creates a peer; the first run reads its brief; retries r
     await principalSends(s, ["worker-a"], "Collaborate", "Create a peer.", "create-task");
     const create = (brief: string, request: string) => tools(call("bash", { command:
       `printf '%s' '${brief}' > brief.txt && oma agent create worker-n --from HEAD --file brief.txt --request ${request}` }));
-    s.script([create("Review the README.", "create-1"), create("Review the README.", "create-1"), create("Different task", "create-2"), text("Ready.")]);
+    const creatorReplies = [create("Review the README.", "create-1"), create("Review the README.", "create-1"), create("Different task", "create-2"), text("Ready.")];
+    let creatorStep = 0, childRead = false;
+    const creatorRequests: ChatRequest[] = [];
+    s.script(request => {
+      const brief = noticed(request).find(id => s.store.getDelivery(id, "worker-n") !== null);
+      if (brief) {
+        if (continuesTurn(request)) {
+          assert.match(lastResult(request), /Review the README/); childRead = true; return text("Read.");
+        }
+        return tools(call("oma_mail_read", { messageId: brief }));
+      }
+      creatorRequests.push(request);
+      return creatorReplies[creatorStep++] ?? text("Ready.");
+    });
     const creator = await s.activate("worker-a"); assert.equal(creator.code, 0, creator.stderr);
-    const results = toolResults(residentRequests(s).at(-1)!.body).map(result => result.text);
+    const results = toolResults(creatorRequests.at(-1)!).map(result => result.text);
     const created = receiptIn(results[0]!); assert.equal(created.state, "succeeded");
     assert.equal(receiptIn(results[1]!).operation, created.operation); assert.match(results[2]!, /AGENT_CONFLICT/);
     const agent = s.store.getAgent("worker-n")!; assert.deepEqual([agent.desired, agent.createdBy], ["enabled", "worker-a"]);
-    const [brief] = s.inbox("worker-n"); assert.ok(brief, "the peer has no initial brief");
-    s.script(request => continuesTurn(request) ? text("Read.") : tools(call("oma_mail_read", { messageId: noticed(request)[0]! })));
-    const run = await s.activate("worker-n"); assert.equal(run.code, 0, run.stderr);
-    assert.match(lastResult(residentRequests(s).at(-1)!.body), /Review the README/);
-    assert.equal(s.store.getDelivery(brief, "worker-n")?.presented, 1);
+    const [brief] = [...s.inbox("worker-n"), ...s.inbox("worker-n", "cur")]; assert.ok(brief, "the peer has no initial brief");
+    const id = brief.replace(/:2,.*$/, "");
+    const deadline = Date.now() + 30_000;
+    while ((!childRead || s.store.getDelivery(id, "worker-n")?.presented !== 1) && Date.now() < deadline)
+      await new Promise(resolve => setTimeout(resolve, 20));
+    assert.equal(childRead, true, "the automatically started first run did not read its brief");
+    assert.equal(s.store.getDelivery(id, "worker-n")?.presented, 1);
     assert.equal(s.operations("worker-a").filter(row => row.kind === "agent.create" && row.state === "succeeded").length, 1);
     assert.equal(s.operations("principal").filter(row => row.kind === "agent.create").length, 0);
+  });
+});
+
+test("NATIVE-SCN-01: accepted creation starts its first real Resident without a manual activation", TIMEOUT, async () => {
+  await withScenario({ residents: ["worker-a"] }, async s => {
+    await principalSends(s, ["worker-a"], "Create", "Create a peer with its initial brief.", "auto-create-task");
+    let childRead = false;
+    s.script(request => {
+      const brief = noticed(request).find(id => s.store.getDelivery(id, "worker-auto") !== null);
+      if (brief) {
+        if (continuesTurn(request)) {
+          assert.match(lastResult(request), /Read the exact initial brief/);
+          childRead = true;
+          return text("Read.");
+        }
+        return tools(call("oma_mail_read", { messageId: brief }));
+      }
+      return continuesTurn(request) ? text("Created.") : tools(call("bash", { command:
+        "printf '%s' 'Read the exact initial brief.' > auto-brief.txt && oma agent create worker-auto --from HEAD --file auto-brief.txt --request auto-create" }));
+    });
+    const creator = await s.activate("worker-a");
+    assert.equal(creator.code, 0, creator.stderr);
+    const deadline = Date.now() + 30_000;
+    while ((!childRead || s.store.preparedBatches("worker-auto").length > 0) && Date.now() < deadline)
+      await new Promise(resolve => setTimeout(resolve, 20));
+    assert.equal(childRead, true, "the native creation path did not run the new Resident");
+    const operation = s.store.getOperation("worker-a", "auto-create")!;
+    assert.equal(operation.state, "succeeded");
+    const [brief] = [...s.inbox("worker-auto"), ...s.inbox("worker-auto", "cur")];
+    assert.ok(brief);
+    const delivered = s.store.getDelivery(brief.replace(/:2,.*$/, ""), "worker-auto")!;
+    assert.equal(delivered.presented, 1);
+    assert.equal(s.store.getBatch(delivered.batchId!)?.state, "completed");
+    assert.ok(existsSync(runnerReceiptPathAt(s.root, "worker-auto", delivered.batchId!)));
   });
 });
 

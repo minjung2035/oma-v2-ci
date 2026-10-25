@@ -1,3 +1,4 @@
+import { spawnSandboxed } from "@oma/platform-linux/worker-spawn";
 import test from "node:test";
 import assert from "node:assert/strict";
 import childProcess from "node:child_process";
@@ -6,7 +7,7 @@ import { once } from "node:events";
 import { mkdtempSync, readdirSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { startProcess, runProcess, spawnSandboxed, stopOwnedChild } from "@oma/process/async";
+import { startProcess, runProcess, stopOwnedChild } from "@oma/process/async";
 import { runProcessSync } from "@oma/process/run";
 import { PreparationExecutor } from "@oma/process/preparation";
 import type { CommandSpec } from "@oma/process/command";

@@ -25,7 +25,7 @@ export function gitCommand(root: string, args: string[]): string {
         throw new Error(`git ${args.join(" ")}: ${out.stderr ?? out.error?.message ?? "unknown outcome"}`);
     return out.stdout.trim();
 }
-export function gitFixture(root: string, store: Store) {
+export function gitFixture(root: string, store: Store, options: { afterImport?: () => void } = {}) {
     const paths: GitPaths = {
         stateRoot: root, projectGit: join(root, "repos/project.git"), contextGit: join(root, "repos/context.git"), worldDir: join(root, "world"), society: "crash",
         checkRootfs: join(root, "native-fixture-rootfs"), checkNode: process.execPath, checkAssetsDir: process.cwd(),
@@ -41,8 +41,10 @@ export function gitFixture(root: string, store: Store) {
       async execute(request, authorize) {
         if (active !== null) throw new Error("test execution owner is already active or unconfirmed");
         const owner = new ExecutionRuntime(root); active = owner;
-        return withAsyncCleanup(() => quarantineExecution(paths, owner).execute(request, authorize),
+        const result = await withAsyncCleanup(() => quarantineExecution(paths, owner).execute(request, authorize),
           async () => { await owner.close(); active = null; });
+        if (request.phase === "import" && result.kind === "exited" && result.exitCode === 0) options.afterImport?.();
+        return result;
       },
     };
     const mail = createMailModule({ stateRoot: root, society: "crash" }, store, 64);

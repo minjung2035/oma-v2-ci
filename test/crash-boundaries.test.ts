@@ -17,8 +17,6 @@ import { gitFixture, gitAuth, seedGit, gitCommand, submitFixture } from "./fixtu
 import { lifecycleFixture } from "./fixtures/lifecycle-crash.js";
 import { removeTree } from "./fixtures/cleanup.js";
 
-import { requireSystemdTestManager } from "./fixtures/systemd.js";
-requireSystemdTestManager();
 const auth: AuthContext = { actor: "a", incarnation: 1, role: "resident", channel: "trusted-runner", capabilities: new Set(["mail.send"]), peer: { pid: process.pid, uid: process.getuid!(), gid: process.getgid!(), cgroup: null } };
 const input: MailInput = { to: ["a", "b", "c"], subject: "crash", kind: "message", body: "immutable payload" };
 const files = (path: string) => existsSync(path) ? readdirSync(path) : [];
@@ -275,7 +273,7 @@ for (const point of ["error-stage-before", "error-stage-after", "error-archive-b
   });
 }
 
-for (const point of ["boot-stage", "boot-intent", "boot-object", "boot-workspace", "boot-unit", "boot-ready", "boot-mail"]) {
+for (const point of ["boot-stage", "boot-intent", "boot-object", "boot-workspace", "boot-execution", "boot-ready", "boot-mail"]) {
   const format = point === "boot-intent" ? "sha256" : "sha1";
   test(`T39/LIFE-009/M-004 primitive SIGKILL at ${point} (${format}): frozen bootstrap converges without transaction I/O`, async () => {
     const root = mkdtempSync(join(tmpdir(), "oma-boot-crash-"));
@@ -326,7 +324,7 @@ for (const point of ["boot-stage", "boot-intent", "boot-object", "boot-workspace
   });
 }
 
-for (const point of ["create-stage", "create-intent", "create-object", "create-workspace", "create-unit", "create-ready", "create-mail"]) {
+for (const point of ["create-stage", "create-intent", "create-object", "create-workspace", "create-execution", "create-ready", "create-mail"]) {
   test(`T39/M-004 primitive SIGKILL at ${point}: one child and one initial mail`, async () => {
     const root = mkdtempSync(join(tmpdir(), "oma-create-crash-"));
     let store = new Store(join(root, "runtime.sqlite"));

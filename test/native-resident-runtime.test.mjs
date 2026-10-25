@@ -13,7 +13,12 @@ import { launchBlockedNamespace } from '@oma/platform-linux/namespace-execution'
 import { runnerScope } from '@oma/platform-linux/runner-scope';
 import { observeNamespaceProcess, pinNamespaceInit } from '@oma/native/pid-namespace';
 assert.equal(process.platform, 'linux');
-function fixture(t, program = 'setInterval(()=>{},1000)', completionError = null) {
+function deferred() {
+  let resolve;
+  const promise = new Promise(done => { resolve = done; });
+  return { promise, resolve };
+}
+function fixture(t, program = 'setInterval(()=>{},1000)', completionError = null, finalize = async () => {}) {
   const root = mkdtempSync(join(tmpdir(), 'oma-native-resident-')); ExecutionJournal.initialize(root);
   const journal = ExecutionJournal.open(root), owner = new ExecutionCoordinator(journal,
     witness => observeNamespaceProcess(witness.pid), witness => pinNamespaceInit(witness.pid));
@@ -28,15 +33,49 @@ function fixture(t, program = 'setInterval(()=>{},1000)', completionError = null
           env: { PATH: '/usr/bin:/bin', HOME: root }, timeoutMs: null, stdoutBytes: 4096, stderrBytes: 4096 }), { signal }) });
       // A diagnostic owner can fail after the physical scope completed. This
       // injects that policy error; kernel population and death stay real.
-      const ticket = completionError === null ? physical : Object.freeze({ ...physical,
-        completion: physical.completion.then(() => { throw completionError; }) });
+      const ticket = Object.freeze({ ...physical, completion: physical.completion.then(async result => {
+        await finalize(actor);
+        if (completionError !== null) throw completionError;
+        return result;
+      }) });
       tickets.push(ticket); return ticket;
     },
   }, () => clock);
-  t.after(async () => { await runtime.stop('alice', incarnation); await owner.drain(); journal.close(); rmSync(root, { recursive: true }); assert.deepEqual(errors, completionError === null ? [] : [completionError]); });
+  t.after(async () => { await runtime.close(); await owner.drain(); journal.close(); rmSync(root, { recursive: true }); assert.deepEqual(errors, completionError === null ? [] : [completionError]); });
   return { runtime, owner, journal, tickets, begins: () => begins, revocations: () => revocations, hints: () => hints,
     advance: milliseconds => { clock += milliseconds; }, epoch: value => { incarnation = value; } };
 }
+test('Resident stop joins diagnostic resources after actual kernel death', { timeout: 15000 }, async t => {
+  const entered = deferred(), flush = deferred(); let finished = false;
+  const f = fixture(t, undefined, null, async () => { entered.resolve(); await flush.promise; finished = true; });
+  t.after(() => flush.resolve());
+  await f.runtime.start('alice', false);
+  let settled = false;
+  const stopping = f.runtime.stop('alice', 1).then(() => { settled = true; });
+  await entered.promise;
+  assert.equal(f.owner.confirmDead('resident:alice'), true, 'kernel death is real and independent of the delayed diagnostic owner');
+  await setTimeout(20);
+  assert.equal(settled, false, 'stop must retain its owner until diagnostic resources settle');
+  flush.resolve(); await stopping;
+  assert.equal(finished, true); assert.deepEqual(f.journal.entries(), []);
+});
+test('Resident close coalesces, joins every actual scope and permanently closes start admission', { timeout: 15000 }, async t => {
+  const entered = deferred(), flush = deferred(); const finalized = [];
+  const f = fixture(t, undefined, null, async actor => {
+    finalized.push(actor); if (finalized.length === 2) entered.resolve(); await flush.promise;
+  });
+  t.after(() => flush.resolve());
+  await Promise.all([f.runtime.start('alice', false), f.runtime.start('bob', false)]);
+  const closing = f.runtime.close(); assert.equal(f.runtime.close(), closing);
+  let settled = false; void closing.then(() => { settled = true; });
+  await assert.rejects(f.runtime.start('alice', true), { code: 'BROKER_UNAVAILABLE' });
+  await entered.promise;
+  assert.equal(f.owner.confirmDead('resident:alice'), true); assert.equal(f.owner.confirmDead('resident:bob'), true);
+  await setTimeout(20); assert.equal(settled, false);
+  flush.resolve(); await closing;
+  assert.deepEqual(finalized.sort(), ['alice', 'bob']); assert.deepEqual(f.journal.entries(), []);
+  await assert.rejects(f.runtime.start('bob', true), { code: 'BROKER_UNAVAILABLE' });
+});
 test('Resident actual scope: concurrent starts share one launch and old stops cannot kill a later incarnation', { timeout: 15000 }, async t => {
   const f = fixture(t); f.runtime.ensureResident('alice', 'p', 'm');
   await Promise.all([f.runtime.start('alice', false), f.runtime.start('alice', false)]);

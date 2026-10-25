@@ -2,7 +2,7 @@ import { createMailModule } from "#oma-test/app/broker/mail-composition";
 // Isolated primitive crash worker: never imported by production.
 import fs from "node:fs";
 import { syncBuiltinESMExports } from "node:module";
-import { basename, join, dirname } from "node:path";
+import { join, dirname } from "node:path";
 import { Store } from "@oma/storage";
 import { MailModule, parseEmlHeaders } from "@oma/mail";
 import { publishImmutableFile } from "@oma/storage/immutable-file";
@@ -21,7 +21,9 @@ if (!root || !rawPoint) throw new Error("crash worker requires its owned root an
 const point = rawPoint.replace(/^create-/, "boot-");
 if (point.startsWith("ctx-accepted")) process.umask(0o077);
 const store = new Store(join(root, "runtime.sqlite"));
-const lifecycle = point.startsWith("boot-") ? lifecycleFixture(root, store) : null;
+const lifecycle = point.startsWith("boot-") ? lifecycleFixture(root, store, () => {
+  if (point === "boot-execution") checkpoint();
+}) : null;
 const mail = lifecycle?.mail ?? createMailModule({ stateRoot: root, society: "crash" }, store, 64, 24, TEST_VIEW_LIMITS);
 const checkpoint = () => {
   if (!process.send) throw new Error("parent IPC observation channel is missing");
@@ -40,6 +42,11 @@ fs.fsyncSync = fd => {
   const faultTarget = point.startsWith("error-stage-") ? path.startsWith(join(root, "staging/mail-objects") + "/")
     : /^error-(archive|recovery)-/.test(point) && path === join(root, "mail/archive/cur");
   const fail = () => { throw Object.assign(new Error(`injected ${point}`), { code: point.endsWith("before") ? "ENOSPC" : "EIO" }); };
+  // These held-parent flushes immediately follow the actual renameat. The
+  // destination must already exist, so an earlier directory fence is not the
+  // checkpoint and an obsolete pathname syscall cannot satisfy it.
+  if (point === "boot-workspace" && path.endsWith("/agents/child") && fs.existsSync(join(path, "workspace"))) checkpoint();
+  if (point === "ctx-link" && path === join(root, "world/context") && fs.existsSync(join(path, "current"))) checkpoint();
   if (faultTarget && point.endsWith("before")) fail();
   fsync(fd); synced.add(path);
   if (faultTarget) fail();
@@ -78,28 +85,11 @@ if (point === "cur") {
     checkpoint();
   };
 }
-const rename = fs.renameSync;
-fs.renameSync = (source, destination) => {
-  rename(source, destination);
-  // Contained publication renames through a held parent descriptor
-  // (/proc/self/fd/<n>/<name>); name the real destination the same way.
-  const named = String(destination);
-  const held = /^\/proc\/self\/fd\/\d+\/[^/]+$/.test(named) ? join(fs.readlinkSync(dirname(named)), basename(named)) : named;
-  if (point === "ctx-link" && held === join(root, "world/context/current")) checkpoint();
-  if (point === "boot-workspace" && held.endsWith("/workspace")) checkpoint();
-};
-const copy = fs.copyFileSync;
-fs.copyFileSync = (source, destination, mode) => {
-  // The cross-device publication path no longer calls copyFileSync; the "copy"
-  // boundary is injected through the durability seam on the primitive itself.
-  copy(source, destination, mode);
-};
 /** Preparation runs through the async process owner, so the same boundary must
  * observe cp.spawn as well as cp.spawnSync. */
 const spawnAsync = cp.spawn as (...args: unknown[]) => unknown;
 cp.spawn = ((command: unknown, args?: unknown, options?: unknown) => {
-  const argv = Array.isArray(args) ? args as string[] : [];
-  if (point === "submit-import" && command === "/usr/bin/unshare" && argv.includes("oma-quarantine")) checkpoint();
+  if (inTransaction) throw new Error("M-004: asynchronous subprocess inside Store.transaction callback");
   return spawnAsync(command, args, options);
 }) as unknown as typeof cp.spawn;
 const spawn = cp.spawnSync;
@@ -118,11 +108,9 @@ cp.spawnSync = new Proxy(spawn, {
     if (point === "int-before" && main && project) checkpoint();
     const result = Reflect.apply(target, receiver, args);
     if (result.status === 0 && !result.error && !result.signal) {
-      if (point === "boot-unit" && argv.includes("daemon-reload")) checkpoint();
       if (point === "int-cas" && main && project) checkpoint();
       if (point === "ctx-cas" && main && context) checkpoint();
       if (point === "submit-ref" && argv.includes("update-ref") && argv.some(arg => arg.startsWith("refs/oma/published/"))) checkpoint();
-      if (point === "submit-import" && args[0] === "/usr/bin/unshare" && argv.includes("oma-quarantine")) checkpoint();
     }
     return result;
   },
@@ -182,7 +170,8 @@ if (rawPoint.startsWith("create-")) {
   if (!lifecycle) throw new Error("missing lifecycle fixture");
   await lifecycle.lifecycle.bootstrap(lifecycle.config);
   for (const id of store.recoverableOperations()) await lifecycle.lifecycle.reconcileCreate(id, false);
-} else if (point.startsWith("submit-")) await submitFixture(root, gitFixture(root, store).git);
+} else if (point.startsWith("submit-")) await submitFixture(root, gitFixture(root, store,
+  point === "submit-import" ? { afterImport: checkpoint } : {}).git);
 else if (point.startsWith("int-")) {
   await gitFixture(root, store).git.integrate(gitAuth, "git-crash", { candidate: gitCommand(join(root, "seed"), ["rev-parse", "HEAD"]), expected: gitCommand(join(root, "seed"), ["rev-parse", "HEAD^"]) });
 } else if (point.startsWith("ctx-")) await contextFixture(gitFixture(root, store).git);
